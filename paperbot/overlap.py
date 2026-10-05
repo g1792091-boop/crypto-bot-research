@@ -131,7 +131,11 @@ def load_window(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = 
     ts = np.arange(start, end + 1, STEP_MS, dtype=np.int64)
     T = len(ts)
 
-    accts = _q(conn, "SELECT account_id, strategy, timeframe, kind, parent FROM accounts ORDER BY rowid").fetchall()
+    # paper v4: the 36, their coin flips and the extras only (the DeepSeek and reel accounts and the reel's 5m coin
+    # flips are other groups: mixed in, 171 DeepSeek accounts would make the groups and the crowding counts theirs)
+    accts = _q(conn, "SELECT account_id, strategy, timeframe, kind, parent FROM accounts WHERE kind IN "
+                     "('strategy', 'random', 'copy', 'newlab') AND NOT (kind = 'random' AND timeframe = '5m') "
+                     "ORDER BY rowid").fetchall()
     ids = [a[0] for a in accts]
     col = {a: j for j, a in enumerate(ids)}
     meta = [{"strategy": a[1], "timeframe": a[2], "kind": a[3], "parent": a[4]} for a in accts]

@@ -1,0 +1,124 @@
+/* Paper v4 dashboard: design tokens (from the owner-approved mockup, scratchpad mock/style.css).
+   Dark navy, ONE warm yellow accent, green/red only for meaning (up/down, ok/bad). Every colour a screen uses comes
+   from here: screens never write a hex value. Fonts are Google Fonts with system fallbacks (the page works without them). */
+:root {
+  color-scheme: dark;
+  /* surfaces */
+  --bg: #0a1020;
+  --dot: #141d34;
+  --frame: #0d1528;
+  --surface: #111a30;
+  --surface-2: #17223b;
+  --surface-3: #1d2a47;
+  --line: #1f2b47;
+  --line-2: #2d3c60;
+  /* ink */
+  --ink: #eef2f9;
+  --ink-2: #aeb8cd;
+  --muted: #7d89a5;
+  /* the one accent */
+  --accent: #f6c445;
+  --accent-hi: #ffd977;
+  --accent-ink: #1d1600;
+  --accent-soft: rgba(246, 196, 69, .12);
+  --accent-line: rgba(246, 196, 69, .5);
+  --accent-glow: rgba(246, 196, 69, .26);
+  /* meaning only */
+  --up: #34d39a;
+  --up-soft: rgba(52, 211, 154, .13);
+  --up-line: rgba(52, 211, 154, .45);
+  --down: #f4646b;
+  --down-soft: rgba(244, 100, 107, .13);
+  --down-line: rgba(244, 100, 107, .45);
+  --warn: #f39a3d;
+  --warn-soft: rgba(243, 154, 61, .14);
+  --warn-line: rgba(243, 154, 61, .45);
+  --amber-soft: rgba(243, 172, 61, .11);
+  --amber-line: rgba(243, 172, 61, .42);
+  --amber-ink: #f5d9a0;
+  --flash: rgba(246, 196, 69, .26);
+  --shim-a: #17223b;
+  --shim-b: #263459;
+  /* critical banner */
+  --crit-bg: #3a0d14;
+  --crit-line: #f4646b;
+  --crit-ink: #ffe3e5;
+  /* agent console */
+  --glass: rgba(10, 16, 32, .94);    /* sticky bars over the page (top bar, analysis tabs) */
+  --console: #0a1120;
+  --console-line: #24304d;
+  --console-tab: #24345a;
+  --term-yellow: #f0cf72;
+  --term-cyan: #6fd3ff;
+  /* LED balance bar */
+  --led-bg: #06170f;
+  --led-line: #1c4a33;
+  --led-green: #45d98a;
+  --led-digit: #f6c445;
+  --led-dim: #5f7d6b;
+  /* pixel office */
+  --wood: #a9855a;
+  --wood-2: #a27f55;
+  --wood-seam: #8f6e48;
+  --wall: #4b3624;
+  --wall-dark: #2b1f15;
+  --plate: #131926;
+  --plate-line: #3a4559;
+  --plate-ink: #eef1f6;
+  --desk: #6c4a2e;
+  --desk-top: #8b6343;
+  --monitor: #1b2130;
+  --screen: #4fd38f;
+  --table: #7d5838;
+  --table-edge: #563b24;
+  --bubble: #fbfaf4;
+  --bubble-ink: #141821;
+  --bubble-line: #141821;
+  --bubble-shadow: rgba(10, 16, 32, .45);
+  --sky: #8fc3e8;
+  --sun: #f7d56e;
+  --city: #2d405e;
+  --window-frame: #5b4431;
+  --clock-face: #f3efe4;
+  --clock-rim: #262c3a;
+  --clock-hand: #1a1f2b;
+  /* pixel figures (core/figure.js) */
+  --px-hair: #3b2b20;
+  --px-skin: #f0c8a0;
+  --px-eye: #1b1b1b;
+  --px-leg: #3a4350;
+  --px-foot: #1d2228;
+  --px-spec: #8b95a3;
+  --px-owner: #27314b;
+  --px-sat: 62%;
+  --px-lit: 52%;
+  /* avatars coloured by hue: hsl(var(--h) ...) */
+  --av-s: 45%; --av-bg-l: 21%; --av-ring-l: 58%; --av-ink-l: 82%; --av-line-l: 34%;
+  /* type: one scale */
+  --f-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif;
+  --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-pixel: "Silkscreen", "Nanum Gothic Coding", ui-monospace, monospace;
+  --f-led: "VT323", "Nanum Gothic Coding", ui-monospace, monospace;
+  --t-xs: 12px;
+  --t-sm: 13.5px;
+  --t-md: 15px;
+  --t-lg: 18px;
+  --t-xl: 24px;
+  --t-2xl: 34px;
+  --t-led: 46px;
+  /* radii, spacing, motion */
+  --r-xl: 26px;
+  --r-lg: 18px;
+  --r-md: 12px;
+  --r-sm: 8px;
+  --gap: 12px;
+  --gutter: 16px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --t-fast: .18s;      /* screen / tab transitions */
+  --t-count: 600ms;    /* number count-to (core/motion.js reads its own constant) */
+  /* shell */
+  --top-h: 56px;
+  --sub-h: 44px;
+  --bot-h: 62px;       /* phone bottom tab bar (plus the safe area) */
+  --page-max: 1320px;
+}

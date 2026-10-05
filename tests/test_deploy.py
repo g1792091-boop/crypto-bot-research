@@ -52,12 +52,26 @@ def test_failed_scheduled_jobs_send_one_korean_warning():
 
 def test_the_owners_check_of_the_units_shows_only_the_settings():
     """The owners' check after a deploy (`systemctl cat <the five jobs> | grep -E ...`): one line per setting, no
-    comment that only mentions one (7 failure hooks with the weekly rehearsal, the Obsidian export and the shadow test, 1 pinned Claude Code, 1 clean stop)."""
+    comment that only mentions one (a failure hook per job, the weekly rehearsal, the Obsidian export, the shadow test
+    and the DeepSeek nightly check among them; 1 pinned Claude Code, 1 clean stop)."""
     text = "\n".join(f"# /etc/systemd/system/{u}\n" + (DEPLOY / u).read_text(encoding="utf-8") for u in FA.JOBS_KO)
     for pat in (r"OnFailure|DISABLE_AUTOUPDATER|SuccessExitStatus",
                 r"^(OnFailure=|Environment=DISABLE_AUTOUPDATER|SuccessExitStatus=)"):
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
-        assert len(got) == 9 and sum("OnFailure" in ln for ln in got) == 7 == len(FA.JOBS_KO), (pat, got)
+        n = len(FA.JOBS_KO)
+        assert len(got) == n + 2 and sum("OnFailure" in ln for ln in got) == n, (pat, got)
+    # 9 jobs (paper v4): the 7 before, the DeepSeek nightly check and the nightly backup (owners' G29, G31): 11 lines
+    assert len(FA.JOBS_KO) == 9 and {"paperbot-dscheck.service", "paperbot-backup.service"} <= set(FA.JOBS_KO)
+
+
+def test_a_failed_backup_warns_and_the_dscheck_bar_cache_is_never_copied():
+    """G31: the nightly backup has the failure hook. The DeepSeek check's kline cache (dscheck/bars5m.db, public
+    final klines, regenerable) is in no backup or off-site list (both name databases one by one)."""
+    assert "OnFailure=paperbot-failed@%n.service" in _unit("paperbot-backup.service")["[Unit]"]
+    sh = (DEPLOY / "paperbot-backup.sh").read_text(encoding="utf-8")
+    names = re.search(r"^for f in ([^;]*); do", sh, re.M).group(1).split()
+    assert names == [n for n in off.DB_NAMES] and not any("dscheck" in n for n in names)
+    assert "dscheck" not in sh and "bars5m" not in sh
 
 
 def test_agents_unit_keeps_claude_code_from_updating_itself():

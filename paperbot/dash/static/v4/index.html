@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper v4</title>
+<meta name="description" content="모의 매매 봇 대시보드 (paper v4)">
+<meta name="theme-color" content="#0a1020">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<!-- the only outside host: Google Fonts (the page keeps working with system fonts when it is blocked) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- preload only: a stylesheet <link> here would block the first paint (and the app) while a hung font host never answers;
+     core/main.js adds the real stylesheet link after boot, so the page paints with system fonts first -->
+<link rel="preload" as="style" id="gfonts" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Nanum+Gothic+Coding:wght@400;700&family=Silkscreen:wght@400;700&family=VT323&display=swap">
+<link rel="stylesheet" href="/static/v4/tokens.css">
+<link rel="stylesheet" href="/static/v4/base.css">
+<link rel="stylesheet" href="/static/v4/components.css">
+</head>
+<body>
+<a class="skip" href="#screen">본문으로 건너뛰기</a>
+<div class="shell-top">
+  <div id="crit" class="crit" role="alert" hidden></div>
+  <header class="top">
+    <a class="brand" href="#/home" aria-label="Paper v4 홈">
+      <span class="bic" aria-hidden="true"><svg class="fig owner" viewBox="0 0 10 14" width="14" height="20" shape-rendering="crispEdges"><rect class="ph" x="2" y="0" width="6" height="2"/><rect class="ps" x="2" y="2" width="6" height="3"/><rect class="pe" x="3" y="3" width="1" height="1"/><rect class="pe" x="6" y="3" width="1" height="1"/><rect class="po" x="1" y="5" width="8" height="5"/><rect class="pt" x="4" y="5" width="2" height="3"/><rect class="pl" x="2" y="10" width="2" height="4"/><rect class="pl" x="6" y="10" width="2" height="4"/></svg></span>
+      <span class="brand-t">PAPER <b>V4</b></span>
+    </a>
+    <nav class="groups" id="groups" aria-label="메뉴"></nav>
+    <span class="grow"></span>
+    <button class="dchip" id="dchip" type="button" aria-expanded="false" aria-controls="rules"><b>D+—</b></button>
+    <button class="hdot" id="hdot" type="button" data-level="unknown" aria-label="서버 상태: 확인 중"><i></i></button>
+    <span class="mocktag" title="모든 계좌는 모의(가상 돈)입니다">모의</span>
+  </header>
+  <div id="rules" class="rules-pop" hidden></div>
+  <nav class="subtabs" id="subtabs" aria-label="화면"></nav>
+</div>
+<main id="screen" class="screen" tabindex="-1"></main>
+<nav class="botbar" id="botbar" aria-label="메뉴"></nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<noscript><p class="empty">이 화면은 자바스크립트가 필요합니다.</p></noscript>
+<script type="module" src="/static/v4/core/main.js"></script>
+</body>
+</html>

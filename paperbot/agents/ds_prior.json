@@ -1,0 +1,6107 @@
+{
+ "conclusion_ko": "딥시크 200 정의 44개는 5년 같은 자료로 342개 설정(정의 × 봉 × 연구 청산 2종)을 이미 사전 등록 시험했고 후보 0개였다(세 기간 모두 플러스 2개는 우연 수준). 릴스 5분 단타는 사전 등록한 H1이 불통과였고 격자 40개 설정 중 후보 0개였다. 그래서 이 숫자들은 설명 자료이고, 같은 것을 다시 시험해도 새 정보가 아니다. 라이브 계좌가 이 숫자보다 좋아도 30일 판정은 체크포인트가 한다",
+ "periods_ko": {
+  "cf": "2기 2024-07..2026-09 (확인)",
+  "is": "1기 2021-08..2024-06 (고르기)",
+  "pre": "3기 2020-01..2021-07 (최종)"
+ },
+ "source": "research/deepseek200/out (results, near_miss, per_family, summary); research/reel5m/out (results, near_miss, summary, h1)",
+ "strategies": {
+  "F10_M2022": {
+   "all3_positive": 1,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F10",
+   "family_gauntlet": {
+    "all3_positive": 1,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "ICT 모델",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [
+    {
+     "all3_positive": true,
+     "cf_mean_pct": 0.1555,
+     "cf_n": 91,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.0581,
+     "is_n": 116,
+     "p12": 0.3943,
+     "pre_mean_pct": 0.0266,
+     "pre_n": 41,
+     "tf": "4h"
+    }
+   ],
+   "strategy": "F10_M2022",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1992,
+     "cf_n": 1069,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1014,
+     "is_n": 1306,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2577,
+     "pre_n": 643,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1545,
+     "cf_n": 1058,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.051,
+     "is_n": 1299,
+     "p12": 0.9977,
+     "pre_mean_pct": -0.2015,
+     "pre_n": 639,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1331,
+     "cf_n": 598,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2043,
+     "is_n": 758,
+     "p12": 0.9994,
+     "pre_mean_pct": -0.2581,
+     "pre_n": 322,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1507,
+     "cf_n": 595,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1123,
+     "is_n": 750,
+     "p12": 0.9852,
+     "pre_mean_pct": -0.2636,
+     "pre_n": 320,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0515,
+     "cf_n": 348,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0564,
+     "is_n": 462,
+     "p12": 0.6814,
+     "pre_mean_pct": 0.124,
+     "pre_n": 185,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1492,
+     "cf_n": 348,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0779,
+     "is_n": 455,
+     "p12": 0.8327,
+     "pre_mean_pct": 0.4909,
+     "pre_n": 180,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": true,
+     "cf_mean_pct": 0.1555,
+     "cf_n": 91,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.0581,
+     "is_n": 116,
+     "p12": 0.3943,
+     "pre_mean_pct": 0.0266,
+     "pre_n": 41,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2552,
+     "cf_n": 89,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2575,
+     "is_n": 116,
+     "p12": 0.7506,
+     "pre_mean_pct": -0.6583,
+     "pre_n": 41,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F10_OTE": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F10",
+   "family_gauntlet": {
+    "all3_positive": 1,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "ICT 모델",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F10_OTE",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1173,
+     "cf_n": 11966,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1759,
+     "is_n": 16223,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0936,
+     "pre_n": 7018,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1202,
+     "cf_n": 11277,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1676,
+     "is_n": 15064,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1166,
+     "pre_n": 6575,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.14,
+     "cf_n": 5930,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1688,
+     "is_n": 8059,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1144,
+     "pre_n": 3595,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1326,
+     "cf_n": 5649,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1537,
+     "is_n": 7511,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1792,
+     "pre_n": 3344,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.159,
+     "cf_n": 2932,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2121,
+     "is_n": 3949,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2051,
+     "pre_n": 1736,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1479,
+     "cf_n": 2787,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.214,
+     "is_n": 3677,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2265,
+     "pre_n": 1597,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.307,
+     "cf_n": 757,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2567,
+     "is_n": 982,
+     "p12": 0.9709,
+     "pre_mean_pct": -0.0755,
+     "pre_n": 390,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.138,
+     "cf_n": 701,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0788,
+     "is_n": 898,
+     "p12": 0.7456,
+     "pre_mean_pct": 0.3013,
+     "pre_n": 375,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F11_PO3": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F11",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "유동성 스윕",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F11_PO3",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1598,
+     "cf_n": 4222,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1084,
+     "is_n": 5391,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3273,
+     "pre_n": 2296,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1407,
+     "cf_n": 4223,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1108,
+     "is_n": 5391,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3069,
+     "pre_n": 2296,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1958,
+     "cf_n": 4035,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1198,
+     "is_n": 5173,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3459,
+     "pre_n": 2197,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.172,
+     "cf_n": 3981,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1086,
+     "is_n": 5057,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2369,
+     "pre_n": 2135,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.22,
+     "cf_n": 3539,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1678,
+     "is_n": 4543,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3139,
+     "pre_n": 1896,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1813,
+     "cf_n": 3329,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.137,
+     "is_n": 4243,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.2599,
+     "pre_n": 1786,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0258,
+     "cf_n": 1575,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.145,
+     "is_n": 2016,
+     "p12": 0.7965,
+     "pre_mean_pct": -0.2396,
+     "pre_n": 778,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2502,
+     "cf_n": 1470,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.269,
+     "is_n": 1831,
+     "p12": 0.9871,
+     "pre_mean_pct": 0.0075,
+     "pre_n": 722,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F11_RAID": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F11",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "유동성 스윕",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F11_RAID",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1638,
+     "cf_n": 14006,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.152,
+     "is_n": 18138,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1648,
+     "pre_n": 7668,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1545,
+     "cf_n": 12836,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1364,
+     "is_n": 16549,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1761,
+     "pre_n": 7006,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1976,
+     "cf_n": 7321,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.138,
+     "is_n": 9258,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2709,
+     "pre_n": 3891,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1974,
+     "cf_n": 6771,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1565,
+     "is_n": 8536,
+     "p12": 1.0,
+     "pre_mean_pct": -0.255,
+     "pre_n": 3563,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1614,
+     "cf_n": 3733,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.263,
+     "is_n": 4788,
+     "p12": 1.0,
+     "pre_mean_pct": -0.121,
+     "pre_n": 1939,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1274,
+     "cf_n": 3400,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.304,
+     "is_n": 4398,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1024,
+     "pre_n": 1783,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0193,
+     "cf_n": 897,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3233,
+     "is_n": 1188,
+     "p12": 0.9511,
+     "pre_mean_pct": 0.3511,
+     "pre_n": 419,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1895,
+     "cf_n": 812,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2601,
+     "is_n": 1068,
+     "p12": 0.957,
+     "pre_mean_pct": 0.021,
+     "pre_n": 398,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F11_TSOUP": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F11",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "유동성 스윕",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F11_TSOUP",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.151,
+     "cf_n": 11757,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1584,
+     "is_n": 15140,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1704,
+     "pre_n": 6333,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1482,
+     "cf_n": 10871,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1583,
+     "is_n": 13886,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1872,
+     "pre_n": 5828,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1945,
+     "cf_n": 6132,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1724,
+     "is_n": 7696,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1547,
+     "pre_n": 3166,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.183,
+     "cf_n": 5687,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1696,
+     "is_n": 7034,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2077,
+     "pre_n": 2910,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1321,
+     "cf_n": 3132,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2605,
+     "is_n": 3932,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2897,
+     "pre_n": 1557,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1456,
+     "cf_n": 2873,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2468,
+     "is_n": 3613,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2141,
+     "pre_n": 1418,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1798,
+     "cf_n": 764,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2748,
+     "is_n": 955,
+     "p12": 0.9642,
+     "pre_mean_pct": 0.2221,
+     "pre_n": 362,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0972,
+     "cf_n": 697,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1473,
+     "is_n": 870,
+     "p12": 0.8009,
+     "pre_mean_pct": -0.1761,
+     "pre_n": 334,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F12_MSS": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F12",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "구조 전환 MSS",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F12_MSS",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1565,
+     "cf_n": 13796,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.188,
+     "is_n": 17661,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2416,
+     "pre_n": 8131,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.146,
+     "cf_n": 12591,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1703,
+     "is_n": 16024,
+     "p12": 1.0,
+     "pre_mean_pct": -0.209,
+     "pre_n": 7188,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.157,
+     "cf_n": 6772,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2235,
+     "is_n": 8714,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3562,
+     "pre_n": 3958,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1212,
+     "cf_n": 6167,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1859,
+     "is_n": 7861,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2447,
+     "pre_n": 3493,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2298,
+     "cf_n": 3360,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2525,
+     "is_n": 4366,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3477,
+     "pre_n": 1906,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2156,
+     "cf_n": 2987,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2288,
+     "is_n": 3892,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1038,
+     "pre_n": 1696,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3026,
+     "cf_n": 866,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.4451,
+     "is_n": 1077,
+     "p12": 0.9946,
+     "pre_mean_pct": -0.475,
+     "pre_n": 414,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3899,
+     "cf_n": 780,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.6177,
+     "is_n": 963,
+     "p12": 0.9994,
+     "pre_mean_pct": -0.1821,
+     "pre_n": 363,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F12_MSS_DISP": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F12",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "구조 전환 MSS",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F12_MSS_DISP",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1536,
+     "cf_n": 4545,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1662,
+     "is_n": 5727,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2401,
+     "pre_n": 2763,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.126,
+     "cf_n": 4408,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1255,
+     "is_n": 5565,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2157,
+     "pre_n": 2669,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1902,
+     "cf_n": 2409,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1553,
+     "is_n": 3140,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2595,
+     "pre_n": 1442,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1262,
+     "cf_n": 2321,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1395,
+     "is_n": 3001,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2073,
+     "pre_n": 1393,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1965,
+     "cf_n": 1204,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1868,
+     "is_n": 1676,
+     "p12": 0.9994,
+     "pre_mean_pct": -0.2893,
+     "pre_n": 730,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2078,
+     "cf_n": 1150,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1405,
+     "is_n": 1607,
+     "p12": 0.9951,
+     "pre_mean_pct": 0.0035,
+     "pre_n": 705,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0022,
+     "cf_n": 312,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0631,
+     "is_n": 421,
+     "p12": 0.5672,
+     "pre_mean_pct": 0.5542,
+     "pre_n": 156,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0102,
+     "cf_n": 304,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.1566,
+     "is_n": 399,
+     "p12": 0.367,
+     "pre_mean_pct": 0.1225,
+     "pre_n": 147,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F13_FVG_PD": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F13",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 1,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "프리미엄/디스카운트",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F13_FVG_PD",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1451,
+     "cf_n": 3616,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1146,
+     "is_n": 4116,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0097,
+     "pre_n": 1931,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1485,
+     "cf_n": 3585,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0725,
+     "is_n": 4084,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0214,
+     "pre_n": 1925,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1804,
+     "cf_n": 1801,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1309,
+     "is_n": 2085,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0273,
+     "pre_n": 927,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1673,
+     "cf_n": 1794,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1014,
+     "is_n": 2059,
+     "p12": 0.9999,
+     "pre_mean_pct": 0.088,
+     "pre_n": 900,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0778,
+     "cf_n": 847,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.0014,
+     "is_n": 1048,
+     "p12": 0.6735,
+     "pre_mean_pct": -0.0282,
+     "pre_n": 505,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0783,
+     "cf_n": 841,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.008,
+     "is_n": 1048,
+     "p12": 0.6685,
+     "pre_mean_pct": 0.0639,
+     "pre_n": 497,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.5317,
+     "cf_n": 231,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.2021,
+     "is_n": 257,
+     "p12": 0.7156,
+     "pre_mean_pct": 0.6167,
+     "pre_n": 121,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.0136,
+     "cf_n": 230,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1126,
+     "is_n": 254,
+     "p12": 0.5751,
+     "pre_mean_pct": 0.7556,
+     "pre_n": 120,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F13_RAID_PD": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F13",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 1,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "프리미엄/디스카운트",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F13_RAID_PD",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1628,
+     "cf_n": 13568,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1501,
+     "is_n": 17555,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1519,
+     "pre_n": 7437,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1561,
+     "cf_n": 12459,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1376,
+     "is_n": 16062,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1607,
+     "pre_n": 6832,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2042,
+     "cf_n": 7095,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1308,
+     "is_n": 8995,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2478,
+     "pre_n": 3777,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2102,
+     "cf_n": 6575,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1369,
+     "is_n": 8284,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2273,
+     "pre_n": 3472,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1697,
+     "cf_n": 3617,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2721,
+     "is_n": 4645,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1163,
+     "pre_n": 1875,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1505,
+     "cf_n": 3316,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.3007,
+     "is_n": 4293,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1045,
+     "pre_n": 1736,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.007,
+     "cf_n": 863,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3299,
+     "is_n": 1150,
+     "p12": 0.9444,
+     "pre_mean_pct": 0.4034,
+     "pre_n": 407,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.243,
+     "cf_n": 786,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2891,
+     "is_n": 1041,
+     "p12": 0.9762,
+     "pre_mean_pct": -0.1152,
+     "pre_n": 385,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F14_SMT": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F14",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 8,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "SMT 다이버전스",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F14_SMT",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1569,
+     "cf_n": 15922,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1097,
+     "is_n": 18487,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0069,
+     "pre_n": 7948,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1661,
+     "cf_n": 14923,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0991,
+     "is_n": 17308,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0318,
+     "pre_n": 7492,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1714,
+     "cf_n": 7805,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1549,
+     "is_n": 9106,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0699,
+     "pre_n": 4005,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1679,
+     "cf_n": 7470,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1587,
+     "is_n": 8571,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1085,
+     "pre_n": 3700,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.267,
+     "cf_n": 3938,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1536,
+     "is_n": 4705,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0082,
+     "pre_n": 1982,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1797,
+     "cf_n": 3695,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1076,
+     "is_n": 4467,
+     "p12": 0.9987,
+     "pre_mean_pct": -0.0493,
+     "pre_n": 1841,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1508,
+     "cf_n": 995,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2983,
+     "is_n": 1182,
+     "p12": 0.9237,
+     "pre_mean_pct": -0.2483,
+     "pre_n": 475,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.4156,
+     "cf_n": 925,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.3127,
+     "is_n": 1120,
+     "p12": 0.9816,
+     "pre_mean_pct": -0.3434,
+     "pre_n": 430,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F15_ASIA_BRK": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 6,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_ASIA_BRK",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1323,
+     "cf_n": 4073,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1807,
+     "is_n": 5069,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2431,
+     "pre_n": 2379,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1186,
+     "cf_n": 4073,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.149,
+     "is_n": 5069,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1687,
+     "pre_n": 2379,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1266,
+     "cf_n": 3889,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.25,
+     "is_n": 4830,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2123,
+     "pre_n": 2280,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1145,
+     "cf_n": 3849,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.226,
+     "is_n": 4775,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1718,
+     "pre_n": 2227,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1475,
+     "cf_n": 3421,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3239,
+     "is_n": 4270,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2199,
+     "pre_n": 2043,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1737,
+     "cf_n": 3196,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2915,
+     "is_n": 3997,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1405,
+     "pre_n": 1846,
+     "tf": "1h"
+    }
+   ]
+  },
+  "F15_ASIA_SWEEP": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 6,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_ASIA_SWEEP",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.196,
+     "cf_n": 3897,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1171,
+     "is_n": 5037,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2184,
+     "pre_n": 2250,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2005,
+     "cf_n": 3897,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1123,
+     "is_n": 5037,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2443,
+     "pre_n": 2250,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1983,
+     "cf_n": 3714,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1056,
+     "is_n": 4819,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3682,
+     "pre_n": 2134,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.195,
+     "cf_n": 3684,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0947,
+     "is_n": 4750,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3734,
+     "pre_n": 2087,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2858,
+     "cf_n": 3262,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1429,
+     "is_n": 4189,
+     "p12": 1.0,
+     "pre_mean_pct": -0.4608,
+     "pre_n": 1835,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2925,
+     "cf_n": 3104,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1076,
+     "is_n": 3935,
+     "p12": 1.0,
+     "pre_mean_pct": -0.482,
+     "pre_n": 1733,
+     "tf": "1h"
+    }
+   ]
+  },
+  "F15_LON_BRK": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 6,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_LON_BRK",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1859,
+     "cf_n": 4626,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1963,
+     "is_n": 5773,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2551,
+     "pre_n": 2556,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1451,
+     "cf_n": 4626,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1689,
+     "is_n": 5773,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1482,
+     "pre_n": 2556,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1756,
+     "cf_n": 4513,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2061,
+     "is_n": 5580,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3923,
+     "pre_n": 2467,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.112,
+     "cf_n": 4446,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1663,
+     "is_n": 5495,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2735,
+     "pre_n": 2434,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2097,
+     "cf_n": 4043,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.233,
+     "is_n": 4975,
+     "p12": 1.0,
+     "pre_mean_pct": -0.4775,
+     "pre_n": 2222,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2431,
+     "cf_n": 3748,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1449,
+     "is_n": 4560,
+     "p12": 1.0,
+     "pre_mean_pct": -0.327,
+     "pre_n": 2002,
+     "tf": "1h"
+    }
+   ]
+  },
+  "F15_OPEN0000": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 6,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_OPEN0000",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.158,
+     "cf_n": 4900,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1876,
+     "is_n": 6355,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1395,
+     "pre_n": 2811,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1622,
+     "cf_n": 4900,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1767,
+     "is_n": 6355,
+     "p12": 1.0,
+     "pre_mean_pct": -0.103,
+     "pre_n": 2811,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1588,
+     "cf_n": 4823,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2044,
+     "is_n": 6272,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0949,
+     "pre_n": 2774,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1223,
+     "cf_n": 4724,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1684,
+     "is_n": 6112,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0652,
+     "pre_n": 2698,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1979,
+     "cf_n": 4376,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2578,
+     "is_n": 5674,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1109,
+     "pre_n": 2516,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1072,
+     "cf_n": 4081,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2069,
+     "is_n": 5211,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.0288,
+     "pre_n": 2269,
+     "tf": "1h"
+    }
+   ]
+  },
+  "F15_OPEN0930": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 6,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_OPEN0930",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0892,
+     "cf_n": 4906,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1344,
+     "is_n": 6364,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2442,
+     "pre_n": 2818,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0795,
+     "cf_n": 4906,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0862,
+     "is_n": 6364,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.129,
+     "pre_n": 2818,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1054,
+     "cf_n": 4842,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1394,
+     "is_n": 6264,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2987,
+     "pre_n": 2786,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0677,
+     "cf_n": 4724,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0821,
+     "is_n": 6058,
+     "p12": 0.9925,
+     "pre_mean_pct": -0.1627,
+     "pre_n": 2678,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1353,
+     "cf_n": 4385,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1734,
+     "is_n": 5656,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2271,
+     "pre_n": 2490,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0514,
+     "cf_n": 4030,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1008,
+     "is_n": 5083,
+     "p12": 0.961,
+     "pre_mean_pct": -0.2178,
+     "pre_n": 2240,
+     "tf": "1h"
+    }
+   ]
+  },
+  "F15_ORB": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F15",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 38,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "세션 레인지·시가 편향",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F15_ORB",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1859,
+     "cf_n": 4916,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1906,
+     "is_n": 6385,
+     "p12": 1.0,
+     "pre_mean_pct": -0.099,
+     "pre_n": 2819,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1997,
+     "cf_n": 4916,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2048,
+     "is_n": 6385,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0531,
+     "pre_n": 2819,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2106,
+     "cf_n": 4846,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.219,
+     "is_n": 6297,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1057,
+     "pre_n": 2776,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1985,
+     "cf_n": 4744,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1795,
+     "is_n": 6143,
+     "p12": 1.0,
+     "pre_mean_pct": -0.027,
+     "pre_n": 2716,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2441,
+     "cf_n": 4251,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2576,
+     "is_n": 5531,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2209,
+     "pre_n": 2472,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2394,
+     "cf_n": 3949,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2148,
+     "is_n": 5062,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0829,
+     "pre_n": 2224,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0653,
+     "cf_n": 1751,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.404,
+     "is_n": 2207,
+     "p12": 0.9871,
+     "pre_mean_pct": -0.4432,
+     "pre_n": 933,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0774,
+     "cf_n": 1542,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.238,
+     "is_n": 1865,
+     "p12": 0.9034,
+     "pre_mean_pct": -0.0356,
+     "pre_n": 783,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F16_FIB382": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F16",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "피보나치 되돌림",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F16_FIB382",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1157,
+     "cf_n": 8116,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1586,
+     "is_n": 10874,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1923,
+     "pre_n": 4723,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1073,
+     "cf_n": 7970,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1595,
+     "is_n": 10579,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1764,
+     "pre_n": 4608,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1318,
+     "cf_n": 4038,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2295,
+     "is_n": 5492,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1575,
+     "pre_n": 2472,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1154,
+     "cf_n": 3966,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1731,
+     "is_n": 5371,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1269,
+     "pre_n": 2417,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.228,
+     "cf_n": 2125,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0507,
+     "is_n": 2908,
+     "p12": 0.9983,
+     "pre_mean_pct": 0.1335,
+     "pre_n": 1271,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2238,
+     "cf_n": 2087,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0891,
+     "is_n": 2839,
+     "p12": 0.9983,
+     "pre_mean_pct": 0.0007,
+     "pre_n": 1248,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3358,
+     "cf_n": 498,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.1346,
+     "is_n": 746,
+     "p12": 0.6253,
+     "pre_mean_pct": -0.3483,
+     "pre_n": 318,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3288,
+     "cf_n": 479,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0689,
+     "is_n": 738,
+     "p12": 0.6792,
+     "pre_mean_pct": -0.3232,
+     "pre_n": 297,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F16_FIB500": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F16",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "피보나치 되돌림",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F16_FIB500",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.125,
+     "cf_n": 8171,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.17,
+     "is_n": 11326,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1494,
+     "pre_n": 4942,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1276,
+     "cf_n": 7960,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.153,
+     "is_n": 10908,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1444,
+     "pre_n": 4783,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1598,
+     "cf_n": 4085,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2264,
+     "is_n": 5760,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0984,
+     "pre_n": 2563,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1455,
+     "cf_n": 4002,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1999,
+     "is_n": 5545,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1003,
+     "pre_n": 2462,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1992,
+     "cf_n": 2045,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2588,
+     "is_n": 2825,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1626,
+     "pre_n": 1317,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1555,
+     "cf_n": 1975,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2219,
+     "is_n": 2691,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1725,
+     "pre_n": 1280,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2774,
+     "cf_n": 499,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.4188,
+     "is_n": 714,
+     "p12": 0.99,
+     "pre_mean_pct": -0.8121,
+     "pre_n": 302,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0329,
+     "cf_n": 494,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2551,
+     "is_n": 669,
+     "p12": 0.8231,
+     "pre_mean_pct": -0.2703,
+     "pre_n": 296,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F16_FIB618": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F16",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "피보나치 되돌림",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F16_FIB618",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1062,
+     "cf_n": 7648,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1755,
+     "is_n": 10523,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1086,
+     "pre_n": 4533,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0921,
+     "cf_n": 7378,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1594,
+     "is_n": 10049,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1039,
+     "pre_n": 4302,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1706,
+     "cf_n": 3902,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2057,
+     "is_n": 5277,
+     "p12": 1.0,
+     "pre_mean_pct": -0.081,
+     "pre_n": 2385,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1762,
+     "cf_n": 3780,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1835,
+     "is_n": 5039,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0434,
+     "pre_n": 2263,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.22,
+     "cf_n": 1918,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2752,
+     "is_n": 2608,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2065,
+     "pre_n": 1123,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2171,
+     "cf_n": 1850,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2783,
+     "is_n": 2491,
+     "p12": 1.0,
+     "pre_mean_pct": -0.321,
+     "pre_n": 1071,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1256,
+     "cf_n": 458,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.5354,
+     "is_n": 669,
+     "p12": 0.9889,
+     "pre_mean_pct": -0.3944,
+     "pre_n": 267,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.1022,
+     "cf_n": 428,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2531,
+     "is_n": 631,
+     "p12": 0.7218,
+     "pre_mean_pct": 0.0562,
+     "pre_n": 259,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F16_FIB764": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F16",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "피보나치 되돌림",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F16_FIB764",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1352,
+     "cf_n": 6875,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1844,
+     "is_n": 9421,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1084,
+     "pre_n": 4013,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1421,
+     "cf_n": 6541,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1695,
+     "is_n": 8959,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1231,
+     "pre_n": 3796,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1735,
+     "cf_n": 3451,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1395,
+     "is_n": 4846,
+     "p12": 1.0,
+     "pre_mean_pct": -0.166,
+     "pre_n": 2093,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1771,
+     "cf_n": 3307,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1411,
+     "is_n": 4576,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1968,
+     "pre_n": 1976,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1706,
+     "cf_n": 1727,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1622,
+     "is_n": 2373,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.0549,
+     "pre_n": 1017,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.098,
+     "cf_n": 1646,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2079,
+     "is_n": 2253,
+     "p12": 0.9996,
+     "pre_mean_pct": -0.1413,
+     "pre_n": 965,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.483,
+     "cf_n": 436,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1452,
+     "is_n": 599,
+     "p12": 0.9428,
+     "pre_mean_pct": -0.6816,
+     "pre_n": 229,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1518,
+     "cf_n": 417,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1238,
+     "is_n": 554,
+     "p12": 0.7549,
+     "pre_mean_pct": -0.7133,
+     "pre_n": 223,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F17_Z": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F17",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "Z-score 평균회귀",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F17_Z",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1434,
+     "cf_n": 18118,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1377,
+     "is_n": 23064,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1228,
+     "pre_n": 10206,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1549,
+     "cf_n": 16616,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1103,
+     "is_n": 21029,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1336,
+     "pre_n": 9306,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1643,
+     "cf_n": 9074,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.123,
+     "is_n": 11518,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1493,
+     "pre_n": 5205,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1399,
+     "cf_n": 8358,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1226,
+     "is_n": 10453,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0576,
+     "pre_n": 4684,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1076,
+     "cf_n": 4427,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2134,
+     "is_n": 5776,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2862,
+     "pre_n": 2551,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1194,
+     "cf_n": 4086,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1631,
+     "is_n": 5218,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.208,
+     "pre_n": 2334,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2427,
+     "cf_n": 1112,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2649,
+     "is_n": 1394,
+     "p12": 0.9715,
+     "pre_mean_pct": -0.3396,
+     "pre_n": 631,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2245,
+     "cf_n": 1029,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2799,
+     "is_n": 1270,
+     "p12": 0.959,
+     "pre_mean_pct": -0.1986,
+     "pre_n": 546,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F17_Z_HL": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F17",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "Z-score 평균회귀",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F17_Z_HL",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.151,
+     "cf_n": 12580,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1481,
+     "is_n": 16623,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1186,
+     "pre_n": 7163,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1579,
+     "cf_n": 11597,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1307,
+     "is_n": 15249,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1134,
+     "pre_n": 6507,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.172,
+     "cf_n": 6200,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1324,
+     "is_n": 8004,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1519,
+     "pre_n": 3578,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1392,
+     "cf_n": 5711,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1346,
+     "is_n": 7316,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0841,
+     "pre_n": 3222,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1182,
+     "cf_n": 2968,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2348,
+     "is_n": 4023,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2158,
+     "pre_n": 1680,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1226,
+     "cf_n": 2765,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.174,
+     "is_n": 3671,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.4641,
+     "pre_n": 1562,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2141,
+     "cf_n": 730,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.248,
+     "is_n": 926,
+     "p12": 0.9437,
+     "pre_mean_pct": -0.8176,
+     "pre_n": 398,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.4524,
+     "cf_n": 678,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1085,
+     "is_n": 860,
+     "p12": 0.9503,
+     "pre_mean_pct": -0.5658,
+     "pre_n": 346,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F1_MOM_DIV": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F1",
+   "family_gauntlet": {
+    "all3_positive": 1,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "다이버전스",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F1_MOM_DIV",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1741,
+     "cf_n": 10025,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1448,
+     "is_n": 12409,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1642,
+     "pre_n": 5361,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1637,
+     "cf_n": 9780,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.149,
+     "is_n": 11968,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1555,
+     "pre_n": 5134,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1966,
+     "cf_n": 5154,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1685,
+     "is_n": 6407,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2605,
+     "pre_n": 2732,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1659,
+     "cf_n": 5046,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1188,
+     "is_n": 6113,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1315,
+     "pre_n": 2593,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1689,
+     "cf_n": 2733,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2084,
+     "is_n": 3343,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0038,
+     "pre_n": 1423,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1334,
+     "cf_n": 2660,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2188,
+     "is_n": 3234,
+     "p12": 0.9999,
+     "pre_mean_pct": 0.0741,
+     "pre_n": 1348,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.1871,
+     "cf_n": 641,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2319,
+     "is_n": 810,
+     "p12": 0.6134,
+     "pre_mean_pct": -0.0658,
+     "pre_n": 287,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.3202,
+     "cf_n": 605,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0944,
+     "is_n": 770,
+     "p12": 0.3209,
+     "pre_mean_pct": 0.3019,
+     "pre_n": 277,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F1_PVT_DIV": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F1",
+   "family_gauntlet": {
+    "all3_positive": 1,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "다이버전스",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F1_PVT_DIV",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1525,
+     "cf_n": 6598,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1272,
+     "is_n": 8493,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2452,
+     "pre_n": 3707,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1358,
+     "cf_n": 6282,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1144,
+     "is_n": 8091,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1947,
+     "pre_n": 3518,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.184,
+     "cf_n": 3237,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1935,
+     "is_n": 4213,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2566,
+     "pre_n": 1819,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1329,
+     "cf_n": 3107,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1557,
+     "is_n": 4007,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2447,
+     "pre_n": 1713,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1582,
+     "cf_n": 1664,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2408,
+     "is_n": 2107,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0609,
+     "pre_n": 904,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1141,
+     "cf_n": 1564,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.227,
+     "is_n": 1994,
+     "p12": 0.9997,
+     "pre_mean_pct": 0.0714,
+     "pre_n": 853,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.2916,
+     "cf_n": 393,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1533,
+     "is_n": 533,
+     "p12": 0.4224,
+     "pre_mean_pct": -0.1378,
+     "pre_n": 202,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.2228,
+     "cf_n": 373,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.2954,
+     "is_n": 511,
+     "p12": 0.1135,
+     "pre_mean_pct": -0.3752,
+     "pre_n": 188,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F1_RSI_DIV": {
+   "all3_positive": 1,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F1",
+   "family_gauntlet": {
+    "all3_positive": 1,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "다이버전스",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [
+    {
+     "all3_positive": true,
+     "cf_mean_pct": 0.1834,
+     "cf_n": 508,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0448,
+     "is_n": 674,
+     "p12": 0.3106,
+     "pre_mean_pct": 0.4562,
+     "pre_n": 246,
+     "tf": "4h"
+    }
+   ],
+   "strategy": "F1_RSI_DIV",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1665,
+     "cf_n": 8268,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1572,
+     "is_n": 10174,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2663,
+     "pre_n": 4430,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1505,
+     "cf_n": 8018,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1461,
+     "is_n": 9804,
+     "p12": 1.0,
+     "pre_mean_pct": -0.232,
+     "pre_n": 4233,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2006,
+     "cf_n": 4195,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1873,
+     "is_n": 5262,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2704,
+     "pre_n": 2243,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.151,
+     "cf_n": 4112,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1076,
+     "is_n": 5073,
+     "p12": 1.0,
+     "pre_mean_pct": -0.154,
+     "pre_n": 2150,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.177,
+     "cf_n": 2263,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2704,
+     "is_n": 2744,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0015,
+     "pre_n": 1184,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1727,
+     "cf_n": 2176,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2479,
+     "is_n": 2633,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0681,
+     "pre_n": 1142,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1222,
+     "cf_n": 538,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2024,
+     "is_n": 703,
+     "p12": 0.8474,
+     "pre_mean_pct": -0.2175,
+     "pre_n": 261,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": true,
+     "cf_mean_pct": 0.1834,
+     "cf_n": 508,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0448,
+     "is_n": 674,
+     "p12": 0.3106,
+     "pre_mean_pct": 0.4562,
+     "pre_n": 246,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F2_DEMARK": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F2",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 8,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "디마크 피벗",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F2_DEMARK",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1363,
+     "cf_n": 8217,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1761,
+     "is_n": 10675,
+     "p12": 1.0,
+     "pre_mean_pct": -0.242,
+     "pre_n": 4619,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1215,
+     "cf_n": 7539,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1566,
+     "is_n": 9710,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2606,
+     "pre_n": 4135,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1206,
+     "cf_n": 5690,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1806,
+     "is_n": 7447,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2667,
+     "pre_n": 3185,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1284,
+     "cf_n": 5446,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1517,
+     "is_n": 6966,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2169,
+     "pre_n": 2921,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1137,
+     "cf_n": 3856,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.135,
+     "is_n": 5052,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.1446,
+     "pre_n": 2132,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1495,
+     "cf_n": 3615,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0861,
+     "is_n": 4678,
+     "p12": 0.9979,
+     "pre_mean_pct": -0.0862,
+     "pre_n": 1972,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2593,
+     "cf_n": 1569,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2845,
+     "is_n": 1970,
+     "p12": 0.9973,
+     "pre_mean_pct": 0.116,
+     "pre_n": 786,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1467,
+     "cf_n": 1403,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.382,
+     "is_n": 1738,
+     "p12": 0.9912,
+     "pre_mean_pct": -0.3448,
+     "pre_n": 709,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F3_BOS": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F3",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "구조 돌파·공급수요",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F3_BOS",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1577,
+     "cf_n": 12492,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1939,
+     "is_n": 15935,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2383,
+     "pre_n": 7287,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1534,
+     "cf_n": 11740,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1611,
+     "is_n": 14758,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1709,
+     "pre_n": 6761,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1683,
+     "cf_n": 6389,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2449,
+     "is_n": 8030,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3224,
+     "pre_n": 3681,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1495,
+     "cf_n": 5948,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.189,
+     "is_n": 7540,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2413,
+     "pre_n": 3433,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1765,
+     "cf_n": 3251,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3435,
+     "is_n": 4086,
+     "p12": 1.0,
+     "pre_mean_pct": -0.4113,
+     "pre_n": 1890,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.148,
+     "cf_n": 3072,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2713,
+     "is_n": 3801,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1723,
+     "pre_n": 1747,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.105,
+     "cf_n": 789,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3969,
+     "is_n": 1006,
+     "p12": 0.9555,
+     "pre_mean_pct": 0.0518,
+     "pre_n": 465,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.03,
+     "cf_n": 736,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.5818,
+     "is_n": 951,
+     "p12": 0.9837,
+     "pre_mean_pct": -0.2616,
+     "pre_n": 436,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F3_BOS_ZONE": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F3",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "구조 돌파·공급수요",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F3_BOS_ZONE",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.151,
+     "cf_n": 5071,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1333,
+     "is_n": 6761,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1386,
+     "pre_n": 3014,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1327,
+     "cf_n": 4789,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1195,
+     "is_n": 6396,
+     "p12": 1.0,
+     "pre_mean_pct": -0.123,
+     "pre_n": 2854,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1351,
+     "cf_n": 2583,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1814,
+     "is_n": 3401,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1428,
+     "pre_n": 1613,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1414,
+     "cf_n": 2445,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1992,
+     "is_n": 3238,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2138,
+     "pre_n": 1524,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2617,
+     "cf_n": 1280,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1393,
+     "is_n": 1682,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.141,
+     "pre_n": 779,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2256,
+     "cf_n": 1224,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1837,
+     "is_n": 1602,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.0267,
+     "pre_n": 728,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2104,
+     "cf_n": 314,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1294,
+     "is_n": 434,
+     "p12": 0.7854,
+     "pre_mean_pct": -0.2713,
+     "pre_n": 151,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1148,
+     "cf_n": 300,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2072,
+     "is_n": 414,
+     "p12": 0.7787,
+     "pre_mean_pct": -0.4684,
+     "pre_n": 143,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F3_HHHL": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F3",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "구조 돌파·공급수요",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F3_HHHL",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1578,
+     "cf_n": 18760,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1854,
+     "is_n": 24542,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1499,
+     "pre_n": 11036,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1554,
+     "cf_n": 16968,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1648,
+     "is_n": 22121,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1373,
+     "pre_n": 9822,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1353,
+     "cf_n": 9484,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1743,
+     "is_n": 12369,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1696,
+     "pre_n": 5629,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1135,
+     "cf_n": 8650,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.143,
+     "is_n": 11128,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1608,
+     "pre_n": 5011,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1484,
+     "cf_n": 4781,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2579,
+     "is_n": 6327,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3718,
+     "pre_n": 2819,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1458,
+     "cf_n": 4362,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2642,
+     "is_n": 5690,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2867,
+     "pre_n": 2497,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2079,
+     "cf_n": 1203,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3369,
+     "is_n": 1607,
+     "p12": 0.9869,
+     "pre_mean_pct": 0.0943,
+     "pre_n": 657,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3681,
+     "cf_n": 1102,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2889,
+     "is_n": 1419,
+     "p12": 0.9916,
+     "pre_mean_pct": 0.5391,
+     "pre_n": 569,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F4_FAN": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F4",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "EMA 눌림·정렬",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F4_FAN",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1344,
+     "cf_n": 15454,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1465,
+     "is_n": 20409,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1681,
+     "pre_n": 9035,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1213,
+     "cf_n": 14394,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.129,
+     "is_n": 19009,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1292,
+     "pre_n": 8403,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1517,
+     "cf_n": 7545,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.169,
+     "is_n": 9902,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2261,
+     "pre_n": 4397,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1351,
+     "cf_n": 7037,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1343,
+     "is_n": 9237,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1353,
+     "pre_n": 4068,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2159,
+     "cf_n": 3763,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1415,
+     "is_n": 4835,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0023,
+     "pre_n": 2113,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2032,
+     "cf_n": 3532,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1088,
+     "is_n": 4536,
+     "p12": 1.0,
+     "pre_mean_pct": 0.1643,
+     "pre_n": 1950,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0404,
+     "cf_n": 932,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3169,
+     "is_n": 1160,
+     "p12": 0.9416,
+     "pre_mean_pct": 0.1664,
+     "pre_n": 459,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1612,
+     "cf_n": 883,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2063,
+     "is_n": 1068,
+     "p12": 0.9162,
+     "pre_mean_pct": -0.0481,
+     "pre_n": 439,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F4_PULL": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F4",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "EMA 눌림·정렬",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F4_PULL",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1297,
+     "cf_n": 10860,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.129,
+     "is_n": 14387,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1009,
+     "pre_n": 6360,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1299,
+     "cf_n": 9270,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1277,
+     "is_n": 12181,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1258,
+     "pre_n": 5339,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2099,
+     "cf_n": 5305,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.144,
+     "is_n": 7083,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1443,
+     "pre_n": 3173,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2012,
+     "cf_n": 4557,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1576,
+     "is_n": 6016,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1476,
+     "pre_n": 2663,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2852,
+     "cf_n": 2685,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1175,
+     "is_n": 3541,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0729,
+     "pre_n": 1489,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2635,
+     "cf_n": 2282,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1503,
+     "is_n": 2994,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0339,
+     "pre_n": 1240,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2967,
+     "cf_n": 665,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.2959,
+     "is_n": 822,
+     "p12": 0.432,
+     "pre_mean_pct": 0.8007,
+     "pre_n": 335,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1562,
+     "cf_n": 554,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.1551,
+     "is_n": 673,
+     "p12": 0.4678,
+     "pre_mean_pct": 0.5655,
+     "pre_n": 301,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F4_PULL_RSI": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F4",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "EMA 눌림·정렬",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F4_PULL_RSI",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1719,
+     "cf_n": 917,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2103,
+     "is_n": 927,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0598,
+     "pre_n": 395,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1895,
+     "cf_n": 916,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.145,
+     "is_n": 923,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0533,
+     "pre_n": 393,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2822,
+     "cf_n": 512,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0426,
+     "is_n": 541,
+     "p12": 0.9847,
+     "pre_mean_pct": 0.2415,
+     "pre_n": 238,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1638,
+     "cf_n": 510,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0681,
+     "is_n": 538,
+     "p12": 0.9381,
+     "pre_mean_pct": 0.4056,
+     "pre_n": 238,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.0374,
+     "cf_n": 254,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1019,
+     "is_n": 318,
+     "p12": 0.6258,
+     "pre_mean_pct": 0.2485,
+     "pre_n": 97,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.0713,
+     "cf_n": 254,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1611,
+     "is_n": 319,
+     "p12": 0.6835,
+     "pre_mean_pct": -0.0298,
+     "pre_n": 96,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.9598,
+     "cf_n": 59,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.2454,
+     "is_n": 82,
+     "p12": 0.7048,
+     "pre_mean_pct": -2.389,
+     "pre_n": 32,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.5184,
+     "cf_n": 59,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.9633,
+     "is_n": 80,
+     "p12": 0.2675,
+     "pre_mean_pct": -3.095,
+     "pre_n": 31,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F5_BOX": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F5",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 1,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "박스권",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F5_BOX",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1627,
+     "cf_n": 2951,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0956,
+     "is_n": 3122,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0816,
+     "pre_n": 1609,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1621,
+     "cf_n": 2773,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1223,
+     "is_n": 2969,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0905,
+     "pre_n": 1513,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0893,
+     "cf_n": 1290,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1486,
+     "is_n": 1343,
+     "p12": 0.999,
+     "pre_mean_pct": 0.0257,
+     "pre_n": 732,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0768,
+     "cf_n": 1224,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1266,
+     "is_n": 1264,
+     "p12": 0.9932,
+     "pre_mean_pct": 0.0586,
+     "pre_n": 705,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0317,
+     "cf_n": 655,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.0162,
+     "is_n": 666,
+     "p12": 0.5387,
+     "pre_mean_pct": -0.5109,
+     "pre_n": 310,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1184,
+     "cf_n": 624,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.1351,
+     "is_n": 645,
+     "p12": 0.4496,
+     "pre_mean_pct": -0.5888,
+     "pre_n": 299,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3293,
+     "cf_n": 166,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.099,
+     "is_n": 168,
+     "p12": 0.6723,
+     "pre_mean_pct": 0.218,
+     "pre_n": 92,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.413,
+     "cf_n": 160,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0568,
+     "is_n": 165,
+     "p12": 0.7382,
+     "pre_mean_pct": 0.8589,
+     "pre_n": 91,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F5_BOX_HTF": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F5",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 1,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "박스권",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F5_BOX_HTF",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1633,
+     "cf_n": 1303,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1337,
+     "is_n": 1276,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0206,
+     "pre_n": 624,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1731,
+     "cf_n": 1242,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1698,
+     "is_n": 1234,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0225,
+     "pre_n": 603,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.071,
+     "cf_n": 605,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1964,
+     "is_n": 556,
+     "p12": 0.9947,
+     "pre_mean_pct": -0.1185,
+     "pre_n": 278,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0801,
+     "cf_n": 576,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1991,
+     "is_n": 527,
+     "p12": 0.9934,
+     "pre_mean_pct": -0.0649,
+     "pre_n": 272,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2152,
+     "cf_n": 277,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0388,
+     "is_n": 269,
+     "p12": 0.8997,
+     "pre_mean_pct": -0.3975,
+     "pre_n": 129,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3387,
+     "cf_n": 267,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.056,
+     "is_n": 263,
+     "p12": 0.9751,
+     "pre_mean_pct": -0.3733,
+     "pre_n": 126,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -1.5374,
+     "cf_n": 50,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": 0.0945,
+     "is_n": 53,
+     "p12": 0.9736,
+     "pre_mean_pct": -1.3306,
+     "pre_n": 21,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -1.1468,
+     "cf_n": 49,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0138,
+     "is_n": 54,
+     "p12": 0.9111,
+     "pre_mean_pct": -1.1295,
+     "pre_n": 22,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F5_BOX_RSI": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F5",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 24,
+    "stage1": 1,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "박스권",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F5_BOX_RSI",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0803,
+     "cf_n": 284,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1786,
+     "is_n": 417,
+     "p12": 0.9935,
+     "pre_mean_pct": -0.2408,
+     "pre_n": 194,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1827,
+     "cf_n": 285,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2184,
+     "is_n": 419,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.2012,
+     "pre_n": 195,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1666,
+     "cf_n": 188,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1975,
+     "is_n": 235,
+     "p12": 0.98,
+     "pre_mean_pct": -0.1943,
+     "pre_n": 102,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1759,
+     "cf_n": 190,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.4403,
+     "is_n": 234,
+     "p12": 0.9999,
+     "pre_mean_pct": 0.0815,
+     "pre_n": 101,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.3229,
+     "cf_n": 122,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.0467,
+     "is_n": 169,
+     "p12": 0.2438,
+     "pre_mean_pct": -0.8564,
+     "pre_n": 57,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.3194,
+     "cf_n": 123,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": 0.0079,
+     "is_n": 170,
+     "p12": 0.219,
+     "pre_mean_pct": -1.3428,
+     "pre_n": 57,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.3665,
+     "cf_n": 39,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.4967,
+     "is_n": 52,
+     "p12": 0.6145,
+     "pre_mean_pct": -2.5514,
+     "pre_n": 14,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.7354,
+     "cf_n": 39,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.146,
+     "is_n": 53,
+     "p12": 0.7906,
+     "pre_mean_pct": -1.5952,
+     "pre_n": 14,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F6_VWAP_CROSS": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F6",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "VWAP",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F6_VWAP_CROSS",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1308,
+     "cf_n": 17483,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1413,
+     "is_n": 22671,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1081,
+     "pre_n": 9362,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1001,
+     "cf_n": 14797,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1249,
+     "is_n": 19047,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0784,
+     "pre_n": 7882,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0927,
+     "cf_n": 10506,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1713,
+     "is_n": 13623,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0669,
+     "pre_n": 5815,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0556,
+     "cf_n": 8901,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1275,
+     "is_n": 11522,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0011,
+     "pre_n": 4868,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0807,
+     "cf_n": 6112,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.162,
+     "is_n": 7849,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1419,
+     "pre_n": 3458,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0817,
+     "cf_n": 5334,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1077,
+     "is_n": 6815,
+     "p12": 0.9961,
+     "pre_mean_pct": 0.0016,
+     "pre_n": 2896,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0888,
+     "cf_n": 1924,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2326,
+     "is_n": 2405,
+     "p12": 0.9487,
+     "pre_mean_pct": -0.1749,
+     "pre_n": 973,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.1876,
+     "cf_n": 1655,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1865,
+     "is_n": 2136,
+     "p12": 0.5753,
+     "pre_mean_pct": -0.6962,
+     "pre_n": 902,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F6_VWAP_FAIL": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F6",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "VWAP",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F6_VWAP_FAIL",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1291,
+     "cf_n": 11547,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1576,
+     "is_n": 15528,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1158,
+     "pre_n": 6491,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1165,
+     "cf_n": 10291,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.149,
+     "is_n": 13766,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0806,
+     "pre_n": 5716,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1311,
+     "cf_n": 7661,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1551,
+     "is_n": 10066,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1456,
+     "pre_n": 4396,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1034,
+     "cf_n": 6742,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.124,
+     "is_n": 8803,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0878,
+     "pre_n": 3787,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1685,
+     "cf_n": 4834,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.195,
+     "is_n": 6344,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1576,
+     "pre_n": 2810,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0701,
+     "cf_n": 4243,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1475,
+     "is_n": 5543,
+     "p12": 0.9997,
+     "pre_mean_pct": -0.0756,
+     "pre_n": 2387,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1818,
+     "cf_n": 1466,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.211,
+     "is_n": 1861,
+     "p12": 0.9655,
+     "pre_mean_pct": -0.2819,
+     "pre_n": 774,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.115,
+     "cf_n": 1289,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2183,
+     "is_n": 1647,
+     "p12": 0.9217,
+     "pre_mean_pct": -0.7067,
+     "pre_n": 698,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F7_RF_ONLY": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F7",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "Range Filter 3중 일치",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F7_RF_ONLY",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1455,
+     "cf_n": 12241,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1793,
+     "is_n": 15593,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2968,
+     "pre_n": 7136,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1405,
+     "cf_n": 11175,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1599,
+     "is_n": 14347,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2572,
+     "pre_n": 6510,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1495,
+     "cf_n": 6149,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1986,
+     "is_n": 7612,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3843,
+     "pre_n": 3480,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1116,
+     "cf_n": 5605,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1112,
+     "is_n": 7042,
+     "p12": 1.0,
+     "pre_mean_pct": -0.195,
+     "pre_n": 3174,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1391,
+     "cf_n": 3065,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2033,
+     "is_n": 3925,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.4216,
+     "pre_n": 1704,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0763,
+     "cf_n": 2774,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1303,
+     "is_n": 3548,
+     "p12": 0.9757,
+     "pre_mean_pct": -0.227,
+     "pre_n": 1516,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1265,
+     "cf_n": 795,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.5596,
+     "is_n": 966,
+     "p12": 0.99,
+     "pre_mean_pct": -1.4619,
+     "pre_n": 469,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": 0.113,
+     "cf_n": 709,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1912,
+     "is_n": 881,
+     "p12": 0.6148,
+     "pre_mean_pct": -0.7184,
+     "pre_n": 431,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F7_RF_TRIPLE": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F7",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 16,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "Range Filter 3중 일치",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F7_RF_TRIPLE",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1373,
+     "cf_n": 27913,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1704,
+     "is_n": 36261,
+     "p12": 1.0,
+     "pre_mean_pct": -0.19,
+     "pre_n": 16354,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1158,
+     "cf_n": 23886,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1401,
+     "is_n": 30362,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1766,
+     "pre_n": 13791,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1322,
+     "cf_n": 13784,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1694,
+     "is_n": 17979,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2331,
+     "pre_n": 8158,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1135,
+     "cf_n": 11684,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1352,
+     "is_n": 14991,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1401,
+     "pre_n": 6822,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1615,
+     "cf_n": 6913,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1625,
+     "is_n": 8939,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1965,
+     "pre_n": 4066,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1438,
+     "cf_n": 5839,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1316,
+     "is_n": 7494,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1142,
+     "pre_n": 3373,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1316,
+     "cf_n": 1737,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.211,
+     "is_n": 2185,
+     "p12": 0.9405,
+     "pre_mean_pct": 0.1307,
+     "pre_n": 923,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2358,
+     "cf_n": 1463,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2719,
+     "is_n": 1833,
+     "p12": 0.9793,
+     "pre_mean_pct": -0.2158,
+     "pre_n": 780,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F8_VWICK": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F8",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 8,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "Virgin Wick POI",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F8_VWICK",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1167,
+     "cf_n": 5157,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1555,
+     "is_n": 5940,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0992,
+     "pre_n": 2900,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1452,
+     "cf_n": 5065,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1316,
+     "is_n": 5834,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1222,
+     "pre_n": 2875,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2412,
+     "cf_n": 2593,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1431,
+     "is_n": 2899,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1581,
+     "pre_n": 1477,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1794,
+     "cf_n": 2544,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1114,
+     "is_n": 2862,
+     "p12": 1.0,
+     "pre_mean_pct": -0.163,
+     "pre_n": 1452,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2913,
+     "cf_n": 1331,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1684,
+     "is_n": 1560,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.0448,
+     "pre_n": 714,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3463,
+     "cf_n": 1307,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2337,
+     "is_n": 1531,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1597,
+     "pre_n": 705,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2443,
+     "cf_n": 366,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3214,
+     "is_n": 391,
+     "p12": 0.8989,
+     "pre_mean_pct": 0.9825,
+     "pre_n": 167,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2025,
+     "cf_n": 361,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.3598,
+     "is_n": 379,
+     "p12": 0.8786,
+     "pre_mean_pct": 1.1318,
+     "pre_n": 162,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F9_BREAKER": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F9",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "FVG·오더 블록",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F9_BREAKER",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1436,
+     "cf_n": 9704,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1707,
+     "is_n": 11825,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2155,
+     "pre_n": 5505,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1351,
+     "cf_n": 9194,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1585,
+     "is_n": 11269,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1685,
+     "pre_n": 5195,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1029,
+     "cf_n": 4665,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1789,
+     "is_n": 5674,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2219,
+     "pre_n": 2596,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1175,
+     "cf_n": 4468,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2021,
+     "is_n": 5418,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1826,
+     "pre_n": 2452,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.237,
+     "cf_n": 2231,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3515,
+     "is_n": 2578,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0108,
+     "pre_n": 1266,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1758,
+     "cf_n": 2134,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2593,
+     "is_n": 2446,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0075,
+     "pre_n": 1202,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.3957,
+     "cf_n": 591,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1817,
+     "is_n": 705,
+     "p12": 0.963,
+     "pre_mean_pct": -0.4752,
+     "pre_n": 290,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.4157,
+     "cf_n": 565,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.3477,
+     "is_n": 652,
+     "p12": 0.9879,
+     "pre_mean_pct": 0.5551,
+     "pre_n": 275,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F9_FVG": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F9",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "FVG·오더 블록",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F9_FVG",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1243,
+     "cf_n": 12849,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1653,
+     "is_n": 15018,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1314,
+     "pre_n": 7130,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1188,
+     "cf_n": 12802,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1438,
+     "is_n": 14959,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1235,
+     "pre_n": 7144,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1312,
+     "cf_n": 6287,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1753,
+     "is_n": 7644,
+     "p12": 1.0,
+     "pre_mean_pct": -0.204,
+     "pre_n": 3533,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1219,
+     "cf_n": 6330,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1441,
+     "is_n": 7696,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1673,
+     "pre_n": 3504,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2055,
+     "cf_n": 3111,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2118,
+     "is_n": 4005,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0483,
+     "pre_n": 1773,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1746,
+     "cf_n": 3164,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1809,
+     "is_n": 4071,
+     "p12": 1.0,
+     "pre_mean_pct": 0.0372,
+     "pre_n": 1791,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2846,
+     "cf_n": 889,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1157,
+     "is_n": 1080,
+     "p12": 0.9124,
+     "pre_mean_pct": 0.3087,
+     "pre_n": 462,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2007,
+     "cf_n": 894,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.2742,
+     "is_n": 1089,
+     "p12": 0.9478,
+     "pre_mean_pct": -0.3422,
+     "pre_n": 445,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F9_IFVG": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F9",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "FVG·오더 블록",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F9_IFVG",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.123,
+     "cf_n": 8824,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1476,
+     "is_n": 10078,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2203,
+     "pre_n": 4886,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1075,
+     "cf_n": 8525,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1415,
+     "is_n": 9706,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1798,
+     "pre_n": 4659,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1478,
+     "cf_n": 4228,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1995,
+     "is_n": 4985,
+     "p12": 1.0,
+     "pre_mean_pct": -0.184,
+     "pre_n": 2295,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1351,
+     "cf_n": 4125,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1391,
+     "is_n": 4825,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1692,
+     "pre_n": 2169,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1937,
+     "cf_n": 2069,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1206,
+     "is_n": 2585,
+     "p12": 0.9997,
+     "pre_mean_pct": -0.0542,
+     "pre_n": 1140,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2489,
+     "cf_n": 1993,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0873,
+     "is_n": 2496,
+     "p12": 0.9997,
+     "pre_mean_pct": 0.1177,
+     "pre_n": 1090,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0912,
+     "cf_n": 625,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.3779,
+     "is_n": 669,
+     "p12": 0.9539,
+     "pre_mean_pct": -0.5957,
+     "pre_n": 276,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.0943,
+     "cf_n": 611,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.0858,
+     "is_n": 643,
+     "p12": 0.7059,
+     "pre_mean_pct": 0.1366,
+     "pre_n": 260,
+     "tf": "4h"
+    }
+   ]
+  },
+  "F9_OB": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 8,
+   "exit_note_ko": "연구는 ATR 청산 두 가지(X5_TRAIL2, X2_SL15_TP3)로 쟀음. 라이브 딥시크 계좌는 하우스 청산(2 ATR 손절 + 계단식 이익 잠금)이라 같은 신호라도 숫자가 다름",
+   "exits_ko": {
+    "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절, 최대 48봉",
+    "X5_TRAIL2": "2 ATR 손절 + 2 ATR 추적 손절, 최대 48봉"
+   },
+   "family": "F9",
+   "family_gauntlet": {
+    "all3_positive": 0,
+    "candidate": 0,
+    "configs": 32,
+    "stage1": 0,
+    "stage2": 0,
+    "stage3": 0
+   },
+   "family_ko": "FVG·오더 블록",
+   "group": "ds200",
+   "live_timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "near_miss": [],
+   "strategy": "F9_OB",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1476,
+     "cf_n": 12921,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1593,
+     "is_n": 15774,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1997,
+     "pre_n": 7204,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1465,
+     "cf_n": 12232,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1542,
+     "is_n": 14904,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1823,
+     "pre_n": 6716,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1614,
+     "cf_n": 6411,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.1553,
+     "is_n": 7922,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1403,
+     "pre_n": 3552,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1359,
+     "cf_n": 6085,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1466,
+     "is_n": 7447,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1674,
+     "pre_n": 3313,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2211,
+     "cf_n": 3076,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.2062,
+     "is_n": 3705,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1983,
+     "pre_n": 1738,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2163,
+     "cf_n": 2914,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.1805,
+     "is_n": 3506,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2445,
+     "pre_n": 1615,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2634,
+     "cf_n": 768,
+     "exit": "X5_TRAIL2",
+     "is_mean_pct": -0.4935,
+     "is_n": 963,
+     "p12": 0.9988,
+     "pre_mean_pct": -0.1563,
+     "pre_n": 417,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2082,
+     "cf_n": 724,
+     "exit": "X2_SL15_TP3",
+     "is_mean_pct": -0.3354,
+     "is_n": 890,
+     "p12": 0.9724,
+     "pre_mean_pct": 0.3997,
+     "pre_n": 397,
+     "tf": "4h"
+    }
+   ]
+  },
+  "REEL_H1": {
+   "all3_positive": 0,
+   "candidates": 0,
+   "configs": 40,
+   "exit_note_ko": "연구와 라이브 계좌가 같은 릴스 자체 청산(손절 = 이탈 뒤 최저가 − 0.05 ATR, 익절 = 직전 봉 윗선, 96봉)",
+   "group": "reel",
+   "h1": {
+    "config": [
+     "5m",
+     "BB_SMA200_CLOSE_LONG",
+     "SWING_BAND"
+    ],
+    "mean12_pct": -0.1247,
+    "n12": 35858,
+    "p12": 1.0,
+    "pass": false,
+    "pre_mean_pct": -0.1325,
+    "rule": "p12 < 0.05 (one-sided, day-clustered, periods 1+2 pooled) and period-3 mean net > 0"
+   },
+   "live_timeframes": [
+    "5m"
+   ],
+   "near_miss": [],
+   "strategy": "REEL_H1",
+   "tests": [
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.127,
+     "cf_n": 15899,
+     "entry": "BB_SMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": true,
+     "is_mean_pct": -0.1229,
+     "is_n": 19959,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1325,
+     "pre_n": 9261,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.129,
+     "cf_n": 30102,
+     "entry": "BB_SMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1247,
+     "is_n": 38777,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1257,
+     "pre_n": 16885,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1286,
+     "cf_n": 26250,
+     "entry": "BB_SMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1305,
+     "is_n": 33870,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1283,
+     "pre_n": 15725,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.127,
+     "cf_n": 49777,
+     "entry": "BB_SMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1282,
+     "is_n": 65308,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1249,
+     "pre_n": 28477,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1289,
+     "cf_n": 15708,
+     "entry": "BB_EMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1244,
+     "is_n": 19734,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1445,
+     "pre_n": 9327,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1304,
+     "cf_n": 29722,
+     "entry": "BB_EMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1251,
+     "is_n": 38338,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1354,
+     "pre_n": 16801,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1291,
+     "cf_n": 26033,
+     "entry": "BB_EMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1315,
+     "is_n": 33591,
+     "p12": 1.0,
+     "pre_mean_pct": -0.138,
+     "pre_n": 15866,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1276,
+     "cf_n": 49371,
+     "entry": "BB_EMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1285,
+     "is_n": 64767,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1328,
+     "pre_n": 28463,
+     "tf": "5m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1265,
+     "cf_n": 5319,
+     "entry": "BB_SMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1135,
+     "is_n": 6888,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0869,
+     "pre_n": 3152,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1397,
+     "cf_n": 10202,
+     "entry": "BB_SMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1179,
+     "is_n": 13284,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1067,
+     "pre_n": 5717,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1276,
+     "cf_n": 8984,
+     "entry": "BB_SMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1275,
+     "is_n": 11848,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1298,
+     "pre_n": 5404,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1381,
+     "cf_n": 17391,
+     "entry": "BB_SMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1212,
+     "is_n": 22919,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1333,
+     "pre_n": 9826,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1326,
+     "cf_n": 5202,
+     "entry": "BB_EMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.119,
+     "is_n": 6734,
+     "p12": 1.0,
+     "pre_mean_pct": -0.0994,
+     "pre_n": 3132,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1443,
+     "cf_n": 10081,
+     "entry": "BB_EMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1181,
+     "is_n": 13043,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1012,
+     "pre_n": 5604,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1304,
+     "cf_n": 8832,
+     "entry": "BB_EMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.13,
+     "is_n": 11609,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1409,
+     "pre_n": 5466,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.142,
+     "cf_n": 17280,
+     "entry": "BB_EMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.12,
+     "is_n": 22612,
+     "p12": 1.0,
+     "pre_mean_pct": -0.131,
+     "pre_n": 9725,
+     "tf": "15m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1732,
+     "cf_n": 2654,
+     "entry": "BB_SMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1243,
+     "is_n": 3402,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1229,
+     "pre_n": 1608,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1794,
+     "cf_n": 5206,
+     "entry": "BB_SMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1286,
+     "is_n": 6673,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1819,
+     "pre_n": 2883,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1788,
+     "cf_n": 4567,
+     "entry": "BB_SMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1405,
+     "is_n": 5960,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1168,
+     "pre_n": 2767,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1709,
+     "cf_n": 8943,
+     "entry": "BB_SMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1338,
+     "is_n": 11663,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1844,
+     "pre_n": 4912,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1684,
+     "cf_n": 2545,
+     "entry": "BB_EMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1414,
+     "is_n": 3312,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1362,
+     "pre_n": 1596,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1825,
+     "cf_n": 5131,
+     "entry": "BB_EMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1428,
+     "is_n": 6606,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1875,
+     "pre_n": 2831,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1857,
+     "cf_n": 4450,
+     "entry": "BB_EMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1532,
+     "is_n": 5835,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1256,
+     "pre_n": 2784,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1759,
+     "cf_n": 8858,
+     "entry": "BB_EMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1399,
+     "is_n": 11641,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1981,
+     "pre_n": 4884,
+     "tf": "30m"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1748,
+     "cf_n": 1256,
+     "entry": "BB_SMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1883,
+     "is_n": 1649,
+     "p12": 0.9998,
+     "pre_mean_pct": -0.2776,
+     "pre_n": 776,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1387,
+     "cf_n": 2541,
+     "entry": "BB_SMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1435,
+     "is_n": 3344,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.3308,
+     "pre_n": 1406,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1888,
+     "cf_n": 2216,
+     "entry": "BB_SMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.2163,
+     "is_n": 2927,
+     "p12": 1.0,
+     "pre_mean_pct": -0.1961,
+     "pre_n": 1358,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1697,
+     "cf_n": 4409,
+     "entry": "BB_SMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1574,
+     "is_n": 5868,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2609,
+     "pre_n": 2475,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2204,
+     "cf_n": 1209,
+     "entry": "BB_EMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.191,
+     "is_n": 1618,
+     "p12": 0.9999,
+     "pre_mean_pct": -0.2732,
+     "pre_n": 781,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1458,
+     "cf_n": 2496,
+     "entry": "BB_EMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1518,
+     "is_n": 3356,
+     "p12": 1.0,
+     "pre_mean_pct": -0.3515,
+     "pre_n": 1402,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2192,
+     "cf_n": 2151,
+     "entry": "BB_EMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.2049,
+     "is_n": 2848,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2015,
+     "pre_n": 1376,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1814,
+     "cf_n": 4383,
+     "entry": "BB_EMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1596,
+     "is_n": 5865,
+     "p12": 1.0,
+     "pre_mean_pct": -0.2677,
+     "pre_n": 2469,
+     "tf": "1h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2117,
+     "cf_n": 303,
+     "entry": "BB_SMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.006,
+     "is_n": 387,
+     "p12": 0.6796,
+     "pre_mean_pct": -0.2417,
+     "pre_n": 173,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1213,
+     "cf_n": 654,
+     "entry": "BB_SMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.0322,
+     "is_n": 810,
+     "p12": 0.6877,
+     "pre_mean_pct": -0.2938,
+     "pre_n": 319,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.4501,
+     "cf_n": 573,
+     "entry": "BB_SMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.2588,
+     "is_n": 691,
+     "p12": 0.989,
+     "pre_mean_pct": -0.0955,
+     "pre_n": 308,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2854,
+     "cf_n": 1149,
+     "entry": "BB_SMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1033,
+     "is_n": 1444,
+     "p12": 0.9635,
+     "pre_mean_pct": -0.2595,
+     "pre_n": 558,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.235,
+     "cf_n": 280,
+     "entry": "BB_EMA200_CLOSE_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.0831,
+     "is_n": 385,
+     "p12": 0.7501,
+     "pre_mean_pct": -0.1647,
+     "pre_n": 173,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.1058,
+     "cf_n": 633,
+     "entry": "BB_EMA200_CLOSE_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.0737,
+     "is_n": 811,
+     "p12": 0.7198,
+     "pre_mean_pct": -0.3323,
+     "pre_n": 313,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.4577,
+     "cf_n": 530,
+     "entry": "BB_EMA200_WICK_LONG",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.3166,
+     "is_n": 682,
+     "p12": 0.9924,
+     "pre_mean_pct": 0.0459,
+     "pre_n": 306,
+     "tf": "4h"
+    },
+    {
+     "all3_positive": false,
+     "cf_mean_pct": -0.2808,
+     "cf_n": 1122,
+     "entry": "BB_EMA200_WICK_BOTH",
+     "exit": "SWING_BAND",
+     "h1": false,
+     "is_mean_pct": -0.1103,
+     "is_n": 1438,
+     "p12": 0.9623,
+     "pre_mean_pct": -0.2567,
+     "pre_n": 544,
+     "tf": "4h"
+    }
+   ]
+  }
+ },
+ "totals": {
+  "ds200": {
+   "all3_positive": 2,
+   "candidates": 0,
+   "code_sha256": "3210c6024d39ec1bfd12e95d9c602510dac7667f1f955a5bae1dfc150d696b63",
+   "configs": 342,
+   "prereg_sha256": "c2113ffacd8085cdad2074c64d78e2e1bdb69d2e75d3cbe196326c7d3028783e",
+   "stage1": 2,
+   "stage2": 0,
+   "stage3": 0
+  },
+  "reel": {
+   "candidates": 0,
+   "code_sha256": "a824717e50b0a4f7e2890ceb1457a12ee096ebc36e8a56c56e30c7e77dfc0eda",
+   "configs": 40,
+   "h1_pass": false,
+   "prereg_sha256": "835f786a965b8d9a268a99c576128bb7789dc8ddf06212eefcba745f7aca402a"
+  }
+ },
+ "units_ko": "mean_pct = 거래당 순손익(진입가 대비 가격 %, 레버리지 없음, 연구 비용 뺀 뒤)"
+}

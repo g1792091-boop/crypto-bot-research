@@ -1,0 +1,8 @@
+@import url("server-kit.css");
+/* signals: 신호 (builder E). Rows: components.css .lrow; notes / counts: server-kit.css. */
+[data-screen="signals"] .signals-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { [data-screen="signals"] .signals-cols { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); } }
+[data-screen="signals"] .signals-row .rk { font-size: var(--t-xs); }
+[data-screen="signals"] .signals-row .lname { white-space: nowrap; }
+[data-screen="signals"] .signals-coin { color: var(--ink); font-weight: 700; }
+[data-screen="signals"] .tbl td, [data-screen="signals"] .tbl th { padding-inline: 6px; }

@@ -25,6 +25,22 @@ SPECS = {s: {"qty_step": 0.001, "min_notional": 5.0} for s in V3_SYMBOLS}
 T0 = 1_790_000_000_000 - 1_790_000_000_000 % DAY          # a UTC midnight (2026-09-22)
 
 
+class _LenientCells(dict):
+    """p_best_cells for the tests' made-up core names (A, GOOD, S0, X ...): p_best 0, as v3 gave every unknown cell
+    (paper v4 stops the verdict on a core cell missing from paperbot/p_best_cells.json: test_missing_core_cell_stops)."""
+
+    def __contains__(self, k):
+        return True
+
+    def get(self, k, d=None):
+        return dict.get(self, k) or {"signals": 0, "best": 0, "p_best": 0.0}
+
+
+@pytest.fixture(autouse=True)
+def _made_up_cells(monkeypatch):
+    monkeypatch.setattr(ck, "_P_BEST_CELLS", _LenientCells(ck.p_best_cells()))
+
+
 def synth_minutes(lo, hi, seed=1, vol=0.0012, gaps=0.0004, gap_size=0.03, mark_wicks=0.0):
     """Random-walk 1m bars for the six coins: occasional gaps at the open, mark price near last
     (with occasional mark-only wicks), funding every 8 hours."""
@@ -272,7 +288,11 @@ def test_synthetic_checkpoint_run(run_db, tmp_path):
     assert acc["GOOD@4h"]["status"] == ck.OBSERVE and acc["GOOD@4h"].get("p") is None
     assert acc["RANDOM_1@1h"]["status"] == ck.OBSERVE
     assert v["tested"] == 2 and v["luck_passed"] == 1
-    assert v["lucky_expected"] == pytest.approx(0.1) and v["lucky_if_uncorrected"] == pytest.approx(0.2)
+    # paper v4 (D5): the core family's own alpha, 0.07
+    assert v["lucky_expected"] == pytest.approx(0.07) and v["lucky_if_uncorrected"] == pytest.approx(0.14)
+    assert v["families"][0] == {"group": "core", "name": "매매법", "alpha": 0.07, "tested": 2, "luck_passed": 1,
+                                "lucky_expected": 0.07, "lucky_if_uncorrected": 0.14}
+    assert [f["tested"] for f in v["families"][1:]] == [0, 0] and v["n_bots"] == 200 and v["alpha"] == 0.1
     assert v["day"] == 30
     # the signal rate given to the bots is the account's own: 400 signals / (6 coins x 1h bars)
     bars = (cp - (T0 + 6 * 3_600_000)) // 3_600_000
@@ -499,7 +519,8 @@ def _snap(cp, accounts, initial=5000.0):
 def _acct(tf, n_trades, equity, lo, hi, created=None, kind="strategy", bust=False):
     return {"strategy": "X", "timeframe": tf, "kind": kind, "created_ts": created or T0 + 3_600_000, "parent": None,
             "wallet": equity, "bust": bust, "position": None, "mark": None, "equity": equity,
-            "trades": [list(t) for t in _trades(n_trades, lo, hi, 1.0)] if n_trades else [], "signals": {}}
+            "trades": [list(t) for t in _trades(n_trades, lo, hi, 1.0)] if n_trades else [],
+            "signals": {ck.day_str(created or T0 + 3_600_000): 10 * n_trades} if n_trades else {}}
 
 
 def test_first_eligible_at_30_trades():
@@ -529,20 +550,21 @@ def test_4h_observation_only():
     assert [t.aid for t in tasks] == ["A@1h"]
 
 
-def test_judged_timeframes_without_5m():
-    """5m was removed at the restart of 2026-10-04 (docs/paper-v3-rules-change-1.md): the judged timeframes are
-    15m / 30m / 1h, the originals' Q1 family holds at most 36 x 3 = 108 accounts, and a 5m account (none is
-    created any more) would never be judged."""
+def test_judged_timeframes_per_family():
+    """Paper v4 (D6): core and DeepSeek are judged on 15m / 30m / 1h (4h observation only), the reel on 5m; a core
+    5m account (none is created) is never judged; the coin flips never."""
     from paperbot.config import V3_STRATEGIES, V3_TRADE_TFS
     assert ck.JUDGED_TFS == ("15m", "30m", "1h") and ck.OBSERVE_TFS == ("4h",)
     assert ck.Q1_MAIN_FAMILY == V3_STRATEGIES * len(ck.JUDGED_TFS) == 108
-    assert "5m" not in ck.TF_MS and "5m" not in ck.TF_KO and set(ck.TF_MS) == set(V3_TRADE_TFS)
+    assert ck.JUDGED_BY_FAMILY == {"core": ("15m", "30m", "1h"), "ds200": ("15m", "30m", "1h"), "reel": ("5m",)}
+    assert set(ck.TF_MS) == set(V3_TRADE_TFS) | {"5m"} and ck.TF_KO["5m"] == "5분"
     cp = T0 + 30 * DAY
     accts = {f"S{k}@{tf}": _acct(tf, 80, 90_000.0, T0, cp) for k in range(V3_STRATEGIES) for tf in V3_TRADE_TFS}
     accts["OLD@5m"] = _acct("5m", 80, 90_000.0, T0, cp)
     rows, tasks = ck.plan(_snap(cp, accts), {}, {}, S)
     assert len(tasks) == ck.Q1_MAIN_FAMILY and {t.tf for t in tasks} == set(ck.JUDGED_TFS)
-    assert rows["OLD@5m"]["status"] == ck.OBSERVE and "5분봉" in rows["OLD@5m"]["reason"]
+    assert {t.group for t in tasks} == {"core"} and {t.exits for t in tasks} == {"house"}
+    assert rows["OLD@5m"]["status"] == ck.OBSERVE and "5분봉은 매매법 묶음의 판정 봉이 아님" in rows["OLD@5m"]["reason"]
     assert all(rows[f"S{k}@4h"]["status"] == ck.OBSERVE for k in range(V3_STRATEGIES))
 
 
@@ -633,7 +655,7 @@ def test_dashboard_endpoint(run_db, tmp_path):
     v = c.get("/api/checkpoint").json()
     assert v["ready"] and v["day"] == 30 and v["counts"][ck.PASS1] == 1
     assert {r["account_id"]: r["status"] for r in v["rows"]}["GOOD@4h"] == ck.OBSERVE
-    assert "checkpoint.js" in c.get("/").text
+    assert "checkpoint.js" in c.get("/v3").text            # the old page ('/' is the v4 dashboard since G1)
 
 
 # ---------------------------------------------------------------------------- extra accounts (paperbot/extras.py)
@@ -686,9 +708,9 @@ def test_originals_byte_identical_with_extra_in_shared_stage2_window():
                 assert pv1[aid][k] == pv0[aid][k], (kind, aid, k)
         assert groups1[:len(groups0)] == [{**g, "seconds": groups1[i]["seconds"]} for i, g in enumerate(groups0)]
         assert len(groups1) == len(groups0) + 1 and groups1[-1]["account_id"] == extra
-        if kind == "newlab":                       # family B: the originals' q too are unchanged
-            for aid in ("A@1h", "B@1h"):
-                assert rows1[aid]["q"] == rows0[aid]["q"] and "q_orig" not in rows1[aid]
+        # paper v4 (D5): copies and new-strategy accounts share the core family, so the originals' own BH is q_orig
+        for aid in ("A@1h", "B@1h"):
+            assert rows1[aid]["q_orig"] == rows0[aid]["q"] and "q_orig" not in rows0[aid]
 
 
 def test_extra_groups_own_seed_and_rule(monkeypatch):
@@ -710,24 +732,41 @@ def test_extra_groups_own_seed_and_rule(monkeypatch):
     assert groups[1]["seed"] == want and groups[1]["first_lock"] == 0.2 and groups[1]["stop_atr"] == 2.5
 
 
-def test_fdr_family_a_copies_family_b_newlab():
+def test_fdr_families_alpha_split():
+    """Paper v4 (owners' D5 (b)): core + copies of core parents + new-strategy accounts in one BH at 0.07, DeepSeek
+    (and a copy of a DeepSeek parent) at 0.025, the reel at 0.005; the alphas add up to the run's 0.10."""
+    assert sum(ck.FAMILY_ALPHA.values()) == pytest.approx(ck.ALPHA) and ck.FAMILIES == ("core", "ds200", "reel")
     cp = T0 + 30 * DAY
     accts = {f"S{k}@1h": _acct("1h", 40, 9000.0, T0, cp) for k in range(4)}
     accts["S0@1h~c1"] = _x("1h", 40, 9000.0, T0, cp, "copy", T0 - DAY)
+    accts["S0@1h~c1"]["parent"] = "S0@1h"
     accts["NL1@1h"] = _x("1h", 40, 9000.0, T0, cp, "newlab", T0 - DAY)
     accts["NL2@15m"] = _x("15m", 40, 9000.0, T0, cp, "newlab", T0 - DAY)
+    for k, d in enumerate(("F3_BOS", "F9_FVG", "F14_SMT")):
+        accts[f"{d}@1h"] = {**_acct("1h", 40, 9000.0, T0, cp, kind="ds200"), "strategy": d}
+    accts["F3_BOS@1h~c1"] = {**_x("1h", 40, 9000.0, T0, cp, "copy", T0 - DAY), "strategy": "F3_BOS",
+                             "parent": "F3_BOS@1h"}
+    accts["REEL_H1@5m"] = {**_acct("5m", 40, 9000.0, T0, cp, kind="reel"), "strategy": "REEL_H1"}
     s = _snap(cp, accts)
     rows, tasks = ck.plan(s, {}, {}, S)
+    fam = {t.aid: t.group for t in tasks}
+    assert fam == {**{f"S{k}@1h": "core" for k in range(4)}, "S0@1h~c1": "core", "NL1@1h": "core", "NL2@15m": "core",
+                   "F3_BOS@1h": "ds200", "F9_FVG@1h": "ds200", "F14_SMT@1h": "ds200", "F3_BOS@1h~c1": "ds200",
+                   "REEL_H1@5m": "reel"}
     p = {"S0@1h": 0.001, "S1@1h": 0.02, "S2@1h": 0.03, "S3@1h": 0.5, "S0@1h~c1": 0.004, "NL1@1h": 0.01,
-         "NL2@15m": 0.04}
+         "NL2@15m": 0.04, "F3_BOS@1h": 0.0001, "F9_FVG@1h": 0.3, "F14_SMT@1h": 0.6, "F3_BOS@1h~c1": 0.9,
+         "REEL_H1@5m": 0.004}
     summ = ck.decide(s, rows, tasks, {a: {"p": v} for a, v in p.items()})
-    fam_a = ["S0@1h", "S1@1h", "S2@1h", "S3@1h", "S0@1h~c1"]
-    qa, _ = ck.bh([p[a] for a in fam_a], ck.ALPHA)
-    for a, q in zip(fam_a, qa):
-        assert rows[a]["q"] == pytest.approx(q)
-    qb, _ = ck.bh([p["NL1@1h"], p["NL2@15m"]], ck.ALPHA)
-    assert rows["NL1@1h"]["q"] == pytest.approx(qb[0]) and rows["NL2@15m"]["q"] == pytest.approx(qb[1])
-    assert summ["tested"] == 5 and summ["family_b"]["tested"] == 2
+    for g, members, alpha in (("core", ["S0@1h", "S1@1h", "S2@1h", "S3@1h", "S0@1h~c1", "NL1@1h", "NL2@15m"], 0.07),
+                              ("ds200", ["F3_BOS@1h", "F9_FVG@1h", "F14_SMT@1h", "F3_BOS@1h~c1"], 0.025),
+                              ("reel", ["REEL_H1@5m"], 0.005)):
+        q, rej = ck.bh([p[a] for a in members], alpha)
+        for a, qi, ri in zip(members, q, rej):
+            assert rows[a]["q"] == pytest.approx(qi) and rows[a]["luck_pass"] == bool(ri) and rows[a]["alpha"] == alpha
+            assert rows[a]["group"] == g
+    assert rows["REEL_H1@5m"]["luck_pass"] is True                        # alone in its family: 0.004 <= 0.005
+    assert summ["tested"] == 12 and [f["tested"] for f in summ["families"]] == [7, 4, 1]
+    assert "family_b" not in summ
 
 
 def test_q_orig():
@@ -789,7 +828,7 @@ def _extras_paper_db(path, cp):
     return created
 
 
-def test_snapshot_v2_extras_and_v1_fields_unchanged(tmp_path):
+def test_snapshot_v3_extras_and_v1_fields_unchanged(tmp_path):
     from paperbot.agents import labtests as LT
     cp = T0 + 30 * DAY
     path = str(tmp_path / "p.db")
@@ -797,17 +836,24 @@ def test_snapshot_v2_extras_and_v1_fields_unchanged(tmp_path):
     conn = ck.ro_connect(path)
     snap = ck.freeze_snapshot(conn, cp)
     conn.close()
-    assert snap["version"] == 2
+    assert snap["version"] == 3
     o = snap["accounts"]["S@1h"]
     assert set(o) == {"strategy", "timeframe", "kind", "created_ts", "parent", "wallet", "bust", "halted",
-                      "position", "mark", "equity", "trades", "signals"}               # exactly the v1 fields
-    assert sum(o["signals"].values()) == 40
+                      "position", "mark", "equity", "trades", "signals",               # the v1 fields
+                      "group", "signals_long", "signals_coin"}                         # v3 (paper v4, D7)
+    assert sum(o["signals"].values()) == 40 and o["group"] == "core"
+    assert sum(o["signals_long"].values()) == 20                                      # every other one is long
+    assert {c for d in o["signals_coin"].values() for c in d} == {"BTCUSDT"}
+    assert sum(n for d in o["signals_coin"].values() for n in d.values()) == 40
+    assert snap["coverage"] == {"expected": {"core": 3}, "found": {"core": 3}, "missing": []}
     c = snap["accounts"]["S@1h~c1"]
     assert c["rule"] == {"stop_atr": 2.0, "first_lock": 0.1, "skip_tag": "추세 반대 진입"}
     # the parent's signals after the copy's start, minus the ones its tag drops (longs in a downtrend)
     want = sum(1 for k in range(40) if T0 + (k + 1) * 12 * 3_600_000 > created
                and not LT.has_tag("추세 반대 진입", 1 if k % 2 else -1, {"regime": "trend_down"}))
     assert sum(c["signals"].values()) == want and 0 < want < 40
+    assert sum(c["signals_long"].values()) == sum(1 for k in range(40) if k % 2 and T0 + (k + 1) * 12 * 3_600_000 > created
+                                                  and not LT.has_tag("추세 반대 진입", 1, {"regime": "trend_down"}))
     n = snap["accounts"]["NL1@1h"]
     assert sum(n["signals"].values()) == sum(1 for k in range(40) if T0 + (k + 1) * 12 * 3_600_000 >= created)
     assert [e["event"] for e in n["events"]] == ["created", "suspended", "code_accepted", "resumed"]
@@ -868,6 +914,7 @@ def test_extra_window_starts_over_at_its_accepted_code_change():
     def snap(cp):
         nl = _x("1h", 60, 9000.0, created, cp, "newlab", created)
         nl["events"] = list(ev)
+        nl["signals"] = {ck.day_str(created + k * DAY): 20 for k in range((cp - created) // DAY)}
         return _snap(cp, {"A@1h": _acct("1h", 60, 9000.0, T0, cp), "NL1@1h": nl})
     cp = T0 + 60 * DAY
     rows, tasks = ck.plan(snap(cp), {}, {}, S)

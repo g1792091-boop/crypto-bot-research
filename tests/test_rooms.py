@@ -640,7 +640,7 @@ def test_tick_without_any_database_yet(tmp_path):
                   QueueRunner({}), now_ms=QUIET, clock_ms=lambda: QUIET)
     assert out["rounds"] == [] and not out["skipped"]
     ro = R.open_ro(str(tmp_path / "a.db"))
-    assert ro.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 42
+    assert ro.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 47       # 42 + the five v4 specialist rooms
     assert not (tmp_path / "p.db").exists() and not (tmp_path / "i.db").exists()   # never created by the tick
 
 

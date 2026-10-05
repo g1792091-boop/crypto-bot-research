@@ -495,7 +495,7 @@ function propCard(p) {
   return `<div class="pcard"><div class="ttl">${lab ? `새 매매법 제안 #${esc(p.id)}${p.trial_id ? ` · 장부 #${esc(p.trial_id)}` : ""}`
       : `제안 #${esc(p.id)} · ${esc(p.strategy_ko || p.strategy || "")}`}</div>
     <div class="ln"><b>${esc(lab ? (prop.description_ko || (ch.account && ch.account.spec ? testKo(ch.account.spec) : "새 매매법")) : testKo(ch.test))}</b></div>
-    ${lab ? `<div class="ln">같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 확인하자는 제안</div>` : ""}
+    ${lab ? `<div class="ln">같은 규칙(기존 36과 같은 청산·크기·비용)의 새 paper 계좌로 새 자료에서 확인하자는 제안</div>` : ""}
     ${!lab && ch.account && ch.account.parent ? `<div class="ln">원본 계좌 ${esc(ch.account.parent)}와 같고 이 규칙 하나만 바꾼 새 paper 계좌</div>` : ""}
     ${ch.why ? `<div class="ln">이유: ${esc(ch.why)}</div>` : ""}
     ${ch.approver ? `<div class="ln">자율 승인관: ${ch.approver.approve ? "승인" : "거부"} — ${esc(ch.approver.reason || "")}</div>` : ""}

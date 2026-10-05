@@ -290,8 +290,9 @@ def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], l
                 "AND strategy NOT GLOB 'NL[0-9]*' GROUP BY status", (now - DAY_MS,))]
             al = {r[0]: int(r[1]) for r in c.execute(
                 "SELECT level, COUNT(*) FROM alerts WHERE ts > ? GROUP BY level", (now - DAY_MS,))}
+            crit = critical_split(c, now - DAY_MS)
         except sqlite3.Error as exc:
-            hb, run, sig, al = None, None, [], {}
+            hb, run, sig, al, crit = None, None, [], {}, critical_split(None, 0)
             problems.append(f"paper3.db를 읽지 못했습니다 ({type(exc).__name__})")
         finally:
             _close(c)
@@ -306,15 +307,30 @@ def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], l
                       "accounts": (run[1] or {}).get("accounts") if run else None,
                       "signals_24h": n_sig, "signals_late_24h": sum(int(r["n"]) for r in sig if r["status"] == "LATE"),
                       "avg_delay_s": _r(sum(delays) / len(delays) / 1000, 2) if delays else None,
-                      "alerts_24h": al}
+                      "alerts_24h": al, "liquidations_24h": crit["liquidations"], "busts_24h": crit["busts"],
+                      "critical_other_24h": crit["other"]}
         if age is None:
             problems.append("봇 생존 신호가 없습니다")
         elif age >= 90:
             problems.append(f"봇 생존 신호가 {_age_ko(age)} 전에 멈췄습니다")
         if data_age is not None and data_age >= 300:
             problems.append(f"1분봉이 {_age_ko(data_age)}째 들어오지 않습니다")
-        if al.get("CRITICAL"):
-            problems.append(f"지난 24시간 긴급 경고 {al['CRITICAL']}건")
+        # every liquidation is CRITICAL (engine.py): only one of the 36 or the reel makes the card red; DeepSeek, the
+        # coin flips and the extra accounts are a count line (G14). Any other CRITICAL alert is a problem. A bust is
+        # logged as WARN (engine.py): counted here whatever its level, the same way (36 / reel red, others a line).
+        liq, bust = crit["liquidations"], crit["busts"]
+
+        def per_group(d: dict, groups) -> str:
+            return " · ".join(f"{_group_ko(g)} {d[g]}건" for g in GROUP_LINE_ORDER if g in groups and d.get(g))
+        if crit["other"]:
+            problems.append(f"지난 24시간 긴급 경고 {crit['other']}건 (강제청산 빼고)")
+        for what, d in (("강제청산", liq), ("파산", bust)):
+            loud = sum(n for g, n in d.items() if g in LOUD_LIQ_GROUPS)
+            if loud:
+                problems.append(f"지난 24시간 {what} {loud}건 ({per_group(d, LOUD_LIQ_GROUPS)})")
+            quiet = [g for g, n in d.items() if g not in LOUD_LIQ_GROUPS and n]
+            if quiet:
+                warnings.append(f"지난 24시간 {what} {per_group(d, quiet)}")
         if al.get("WARN"):
             warnings.append(f"지난 24시간 주의 경고 {al['WARN']}건")
     # liquidation recorder (its own liq.db)
@@ -391,9 +407,47 @@ def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], l
     return out
 
 
+LIQ_LINE = re.compile(r"^\[([^\]\s]+)\] LIQUIDATED\b")
+BUST_LINE = re.compile(r"^\[([^\]\s]+)\] BUST\b")
+LOUD_LIQ_GROUPS = ("core", "reel")          # their liquidations and busts make the health card red (G14)
+GROUP_LINE_ORDER = ("core", "reel", "extra", "ds200", "flip", "other")
+
+
+def _group_ko(g: str) -> str:
+    from ..groups import GROUP_KO
+    return GROUP_KO.get(g, "기타")
+
+
+def critical_split(c: Optional[sqlite3.Connection], since_ms: int) -> dict:
+    """The alerts since ``since_ms``: the CRITICAL ones split into liquidations per group (the '[account] LIQUIDATED'
+    lines of engine.py, the account's group by its kind: accounts.GROUP_OF_KIND) and every other CRITICAL ("other"),
+    plus the busts per group ('[account] BUST: ...', whatever their level: engine.py logs them as WARN)."""
+    out: dict = {"liquidations": {}, "busts": {}, "other": 0}
+    if c is None:
+        return out
+    from ..accounts import GROUP_OF_KIND
+    kinds = {r[0]: r[1] for r in c.execute("SELECT account_id, kind FROM accounts")}
+    for level, text in c.execute("SELECT level, text FROM alerts WHERE ts > ? AND (level = 'CRITICAL' OR text LIKE "
+                                 "'[%] BUST%')", (since_ms,)):
+        text = str(text or "")
+        m = LIQ_LINE.match(text) if level == "CRITICAL" else None
+        b = None if m else BUST_LINE.match(text)
+        if m is None and b is None:
+            if level == "CRITICAL":
+                out["other"] += 1
+            continue
+        key = "liquidations" if m else "busts"
+        g = GROUP_OF_KIND.get(kinds.get((m or b).group(1)), "other")
+        out[key][g] = out[key].get(g, 0) + 1
+    return out
+
+
 # ---------------------------------------------------------------- 알림 기록
+ALERT_LEVELS = ("INFO", "WARN", "CRITICAL")
+
+
 def alert_history(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], limit: int = 200,
-                  failalert_dir: str = FAILALERT_DIR) -> dict:
+                  failalert_dir: str = FAILALERT_DIR, level: Optional[str] = None, exclude_info: bool = False) -> dict:
     """Every alert that is stored somewhere the dashboard can read. The Telegram messages themselves are not kept
     anywhere; what is kept: the live runner's alerts (paper3.db ``alerts``, every level), the nightly check's daily
     lines and mismatches (daily3.db), the checkpoint job's log (checkpoint.db ``job_log``), the agents tick's last
@@ -403,9 +457,18 @@ def alert_history(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[
     rows: list = []
     if c is not None:
         try:
+            # level=WARN / CRITICAL (or "WARN,CRITICAL"): only those levels; exclude_info: every level but INFO
+            # (G15: the operations alerts no longer scroll away under two INFO lines per trade)
+            lv = [x for x in (level or "").upper().split(",") if x in ALERT_LEVELS]
+            where, args = [], []
+            if lv:
+                where.append("level IN (%s)" % ",".join("?" * len(lv)))
+                args += lv
+            if exclude_info:
+                where.append("level != 'INFO'")
+            q = "SELECT ts, level, text FROM alerts" + (" WHERE " + " AND ".join(where) if where else "")
             rows = [{"ts": int(r["ts"]), "level": r["level"], "text": str(r["text"] or "")[:500], "source": "bot"}
-                    for r in c.execute("SELECT ts, level, text FROM alerts ORDER BY rowid DESC LIMIT ?",
-                                       (min(max(int(limit), 1), 500),))]
+                    for r in c.execute(q + " ORDER BY rowid DESC LIMIT ?", (*args, min(max(int(limit), 1), 500)))]
             out["sources"].append("paper3.db alerts")
         except sqlite3.Error:
             rows = []
@@ -485,7 +548,8 @@ def risk_view(paper_db: str, now_ms: int) -> dict:
         rt = RR.round_trip_of(c)
         rows = RR.closed(c, 0, now_ms, round_trip=rt)
         tab = RR.table(rows, lad["first_trigger"])
-        flips = RR.stats([t for *_x, t in RR.closed(c, 0, now_ms, kinds=("random",), round_trip=rt)],
+        # the 36's coin flips only (the v4 5m flips run the reel's exits: the reel's yardstick, not the 36's)
+        flips = RR.stats([t for _s, tf, t in RR.closed(c, 0, now_ms, kinds=("random",), round_trip=rt) if tf != "5m"],
                          lad["first_trigger"])
         sv = SV.table(c, now_ms, sizing_on=False)
     except sqlite3.Error as exc:
@@ -581,7 +645,7 @@ def map_view(data) -> dict:
     from ..agents.compare import win_loss_compare
     try:
         st = _cards(data, "strategy")
-        flips = _cards(data, "random")
+        flips = _cards(data, "random", tfs=CORE_FLIP_TFS)       # the 36's coin flips (the 5m ones are the reel's)
     except sqlite3.Error as exc:
         return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
     keep =("trades", "all", "by_coin", "by_side", "by_timeframe", "by_session", "by_weekday", "by_regime", "note")
@@ -591,12 +655,21 @@ def map_view(data) -> dict:
             "cap": MAP_CARDS, "small_n": 10}
 
 
-def _cards(data, kind: str) -> list:
-    """The latest ``MAP_CARDS`` closed trades of one account kind as cards (no stop what-ifs: not needed here)."""
+CORE_FLIP_TFS = ("15m", "30m", "1h", "4h")   # the coin flips the 36 are compared with (G21: not the reel's 5m flips)
+
+
+def _cards(data, kind: str, tfs: Optional[tuple] = None) -> list:
+    """The latest ``MAP_CARDS`` closed trades of one account kind as cards (no stop what-ifs: not needed here); with
+    ``tfs`` only those timeframes' accounts (the latest MAP_CARDS over them, newest first)."""
     from ..cards import cards_from_db
     c = data.conn()
     try:
-        return cards_from_db(c, data._round_trip(c), losses_only=False, limit=MAP_CARDS, kinds=(kind,))
+        rt = data._round_trip(c)
+        if tfs is None:
+            return cards_from_db(c, rt, losses_only=False, limit=MAP_CARDS, kinds=(kind,))
+        out = [x for tf in tfs for x in cards_from_db(c, rt, timeframe=tf, losses_only=False, limit=MAP_CARDS,
+                                                       kinds=(kind,))]
+        return sorted(out, key=lambda x: -int(x.get("exit_time") or 0))[:MAP_CARDS]
     finally:
         c.close()
 
@@ -866,9 +939,13 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
                          lambda: health(data, rooms, daily, checkpoint_db, liq, failalert_dir=failalert_dir))
 
     @app.get("/api/analysis/alerts")
-    def get_alert_history():
-        return small.get("alerts", ALERTS_TTL_S,
-                         lambda: alert_history(data, rooms, daily, checkpoint_db, failalert_dir=failalert_dir))
+    def get_alert_history(level: Optional[str] = None, exclude_info: int = 0, limit: int = 200):
+        asked = set((level or "").upper().split(","))
+        lv = ",".join(x for x in ALERT_LEVELS if x in asked)
+        n = min(max(int(limit), 1), 500)
+        return small.get(f"alerts:{lv}:{int(bool(exclude_info))}:{n}", ALERTS_TTL_S,
+                         lambda: alert_history(data, rooms, daily, checkpoint_db, limit=n, failalert_dir=failalert_dir,
+                                               level=lv or None, exclude_info=bool(exclude_info)))
 
     @app.get("/api/analysis/risk")
     def get_risk():

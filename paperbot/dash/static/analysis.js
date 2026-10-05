@@ -138,7 +138,7 @@
       <td data-k="차이" class="${ucls(s.gap_pp)}">${s.gap_pp == null ? "—" : (s.gap_pp > 0 ? "+" : "") + s.gap_pp + "%p"}</td>
       <td data-k="최대 낙폭">${s.max_dd_pct ? "-" + pc(s.max_dd_pct, 1) : "—"}</td>
       <td data-k="파산 확률" class="${s.p_bust_max && s.p_bust_max.p >= 0.05 ? "down" : ""}">${s.p_bust_max ? pc(s.p_bust_max.p, 1) : "—"}</td></tr>`).join("");
-    h += section("매매법별", ss ? `<div class="scroll"><table class="cards"><thead><tr><th class="l">매매법 (5개 봉 합계)</th><th>거래</th><th>승률</th><th>손익비</th><th>본전 승률</th><th>차이</th><th>최대 낙폭</th><th>파산 확률</th></tr></thead><tbody>${ss}</tbody></table></div>
+    h += section("매매법별", ss ? `<div class="scroll"><table class="cards"><thead><tr><th class="l">매매법 (4개 봉 합계)</th><th>거래</th><th>승률</th><th>손익비</th><th>본전 승률</th><th>차이</th><th>최대 낙폭</th><th>파산 확률</th></tr></thead><tbody>${ss}</tbody></table></div>
       <p class="muted">거래 ${d.small_n || 10}건 미만 매매법은 '표본 적음': 우연일 수 있습니다. ${esc(d.label || "")}</p>` : '<p class="muted">끝난 거래가 없습니다.</p>');
     return h;
   }

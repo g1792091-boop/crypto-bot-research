@@ -1,0 +1,423 @@
+// #/chart[/<SYMBOL>][?tf=15m&acct=<account id>] — 차트 (builder B, CONTRACT.md §4, INVENTORY §2). The bot's chart:
+// the vendored lightweight-charts (same origin), 15 intervals with a bar-close countdown on each (server clock),
+// one chosen account's entries and exits, this coin's open positions as lines with live P&L, the chosen account's
+// entry / stop / liquidation (and the reel's target), support / resistance, GH Coin plan lines (only while its recorder
+// runs), US macro release marks, armed price alerts. Prices come from the server: /api/ticker (store, 5 s) and
+// /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links only.
+import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features} from "../core/pb.js";
+import {normPos, reelExits, nameOf} from "./positions-kit.js";
+import {countdown, fundPct} from "./positions-book.js";
+import {sidePanels} from "./chart-panels.js";
+
+const TV_IV = {"1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "4h": "240", "6h": "360",
+  "8h": "480", "12h": "720", "1d": "D", "3d": "3D", "1w": "W", "1M": "M"};
+const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
+  "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};
+const TF_S = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800,
+  "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000};
+const LEVEL_TFS = ["15m", "30m", "1h", "4h"];                  // /api/levels answers for the traded house timeframes
+const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
+// [key, label, default on a PC, default on a phone]: on a phone the many line labels would cover the candles, so
+// the position and support / resistance lines start off there (one tap turns them on; the choice is remembered).
+const TOGGLES = [["mk", "진입·청산", true, true], ["pl", "포지션 선", true, false], ["sr", "지지·저항", true, false], ["ev", "경제지표", true, true],
+  ["al", "가격 알림 선", true, true], ["gh", "GH Coin 타점", false, false]];
+const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
+
+const decOf = priceDec;
+
+let alive = null;                       // the mounted screen's update(params) target
+
+export async function mount(el, ctx) {
+  ctx.setTitle("차트");
+  const p0 = ctx.params;
+  const savedShow = local.get("chart-show", {});
+  const st = {
+    sym: bars.SYMS.includes(p0.arg) ? p0.arg : local.get("chart-sym", "BTCUSDT"),
+    tf: TF_S[p0.query.tf] ? p0.query.tf : local.get("chart-tf", "15m"),
+    acct: p0.query.acct || "", board: null, show: Object.fromEntries(TOGGLES.map(([k, , d, dp]) => [k, savedShow[k] ?? (narrow() ? dp : d)])),
+    last: null, levels: null, gh: null, events: null, alerts: null, acctData: null, loadTok: 0, fitted: false,
+  };
+  if (!bars.SYMS.includes(st.sym)) st.sym = "BTCUSDT";
+  if (!TF_S[st.tf]) st.tf = "15m";
+
+  // ---------------------------------------------------------------- top: coins, price line, intervals
+  const coinBtns = new Map();
+  const coinBar = h("div", {class: "seg scroll chart-coins", role: "tablist", "aria-label": "코인"}, bars.SYMS.map((s) => {
+    const px = h("span", {class: "num"}, "—"), chg = h("small", {class: "num"}, "");
+    const b = h("button", {type: "button", role: "tab", "aria-selected": String(s === st.sym), onclick: () => setSym(s)},
+      h("b", null, fmt.coin(s)), s === "XRPUSDT" ? h("small", {class: "muted"}, "기록") : null, px, chg);
+    coinBtns.set(s, {b, px, chg});
+    return b;
+  }));
+  const pxBig = h("b", {class: "chart-px num"}, "—"), pxChg = h("span", {class: "num"}, ""), barLeft = h("b", {class: "num"}, "—");
+  const barLab = h("span", {class: "muted"});
+  const priceLine = h("div", {class: "chart-pline"}, h("span", {class: "chart-sym"}, ""), pxBig, pxChg, h("span", {class: "grow"}),
+    h("span", {class: "chart-cd"}, barLab, " ", barLeft));
+  const tfBtns = new Map();
+  const tfBar = h("div", {class: "chart-tfs", role: "tablist", "aria-label": "봉 (남은 시간)"}, bars.ALL_TFS.map((tf) => {
+    const left = h("small", {class: "num"}, "—");
+    const b = h("button", {type: "button", role: "tab", "aria-selected": String(tf === st.tf), onclick: () => setTf(tf), title: `${fmt.tfKo(tf)} 봉이 닫힐 때까지`},
+      h("span", null, h("i", {class: "chart-dot", "aria-hidden": "true"}), SHORT[tf]), left);
+    tfBtns.set(tf, {b, left});
+    return b;
+  }));
+
+  // ---------------------------------------------------------------- chart box + controls
+  const legend = h("div", {class: "chart-legend num"});
+  const box = h("div", {class: "chart-box"});
+  const wrap = h("div", {class: "chart-wrap"}, box, legend);
+  const acctSel = h("select", {class: "select chart-acct", "aria-label": "진입·청산을 볼 계좌"});
+  acctSel.addEventListener("change", () => { st.acct = acctSel.value; st.acctData = null; reflectUrl(); drawAccount(); });
+  const toggleBtns = TOGGLES.map(([k, label]) => {
+    const b = h("button", {type: "button", "aria-pressed": String(!!st.show[k]), dataset: {k}}, label);
+    b.addEventListener("click", () => {
+      st.show[k] = !st.show[k]; b.setAttribute("aria-pressed", String(st.show[k])); local.set("chart-show", st.show);
+      if (k === "mk" || k === "ev") drawMarkers(); if (k === "pl") drawPosLines(); if (k === "sr" || k === "gh") loadLevels();
+      if (k === "al") drawAlertLines();
+    });
+    return b;
+  });
+  const toggles = h("div", {class: "seg scroll chart-toggles", role: "group", "aria-label": "차트에 표시"}, toggleBtns);
+  const lvNote = h("p", {class: "pos-note"});
+  const tvA = h("a", {class: "btn-line", target: "_blank", rel: "noopener noreferrer"}, "트레이딩뷰에서 열기 ↗");
+  const cgLinks = h("span", {class: "chart-links"});
+  const links = h("div", {class: "chart-linkrow"}, tvA, cgLinks);
+
+  // ---------------------------------------------------------------- the ticker details
+  const tk = {mark: h("b", {class: "num"}, "—"), fund: h("b", {class: "num"}, "—"), fundLeft: h("span", {class: "muted num"}), hi: h("b", {class: "num"}, "—"),
+    lo: h("b", {class: "num"}, "—"), vol: h("b", {class: "num"}, "—"), pos: h("b", null, "—"), sess: h("p", {class: "pos-note"})};
+  const tickCard = ui.card({plate: "시세", sub: "서버 경유 · 5초마다"},
+    ui.kv([["마크 가격", tk.mark], ["펀딩비 / 다음까지", h("span", null, tk.fund, " ", tk.fundLeft)], ["이 코인 포지션", tk.pos],
+      ["24시간 고가", tk.hi], ["24시간 저가", tk.lo], ["24시간 거래대금", tk.vol]]), tk.sess);
+
+  const panels = sidePanels(ctx, {sym: st.sym, onPick: (id) => pickAccount(id), onAlerts: (d) => { st.alerts = d; drawAlertLines(); }});
+  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트"}, tfBar, wrap,
+    h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
+    ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
+  el.append(ui.screenHead("차트", "봇이 보는 시세와 모의 계좌의 진입·청산"), coinBar, priceLine,
+    h("div", {class: "chart-cols"}, h("div", {class: "stack"}, chartCard, links, tickCard), panels));
+
+  // ---------------------------------------------------------------- the chart
+  let C = null, series = null;
+  const lines = {pos: new Map(), acct: [], lv: [], al: []};
+  const rm = (l) => { try { series.removePriceLine(l); } catch (e) { /* gone */ } };
+  try {
+    C = await makeChart(box);
+    ctx.track(C.dispose);
+    series = C.chart.addCandlestickSeries(candleOptions());
+    C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
+  } catch (e) {
+    box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));
+  }
+
+  function paintLegend(d) {
+    if (!d) { legend.textContent = ""; return; }
+    const ch = d.open ? (d.close - d.open) / d.open : null;
+    legend.replaceChildren(h("b", null, `${fmt.coin(st.sym)} ${fmt.tfKo(st.tf)}`), ` 시 ${fmt.price(d.open)} 고 ${fmt.price(d.high)} 저 ${fmt.price(d.low)} 종 ${fmt.price(d.close)} `,
+      h("span", {class: fmt.tone(ch)}, fmt.pct(ch, 2)));
+  }
+
+  async function loadCandles() {
+    if (!series) return;
+    const tokn = ++st.loadTok, sym = st.sym, tf = st.tf;
+    let data = [];
+    try { data = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=500`); }
+    catch (e) { if (e && e.name === "AbortError") return; ctx.toast("가격 자료를 불러오지 못했습니다"); }
+    if (tokn !== st.loadTok || !ctx.alive()) return;
+    const dec = decOf(data.length ? data[data.length - 1].close : store.mark(sym));
+    series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
+    series.setData(data);
+    st.t0 = data.length ? data[0].time : 0;
+    st.last = data[data.length - 1] || null;
+    paintLegend(st.last);
+    C.chart.timeScale().fitContent();
+    drawMarkers(); drawPosLines(); drawAccount(); drawAlertLines(); loadLevels();
+  }
+  async function liveBar() {
+    if (!series || !st.last) return;
+    const sym = st.sym, tf = st.tf;
+    try {
+      const rows = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=2`);
+      if (sym !== st.sym || tf !== st.tf) return;
+      for (const c of rows) if (c.time >= st.last.time) { try { series.update(c); st.last = c; } catch (e) { /* older bar */ } }
+      paintLegend(st.last);
+    } catch (e) { /* next poll */ }
+  }
+
+  // ---------------------------------------------------------------- markers: the chosen account's trades + macro releases
+  async function eventsList() {
+    if (st.events && Date.now() - st.events.at < 600000) return st.events.list;
+    try { const d = await ctx.api("/api/events?days_back=60&days_ahead=1"); st.events = {at: Date.now(), list: d.events || []}; }
+    catch (e) { st.events = {at: Date.now(), list: []}; }
+    return st.events.list;
+  }
+  async function drawMarkers() {
+    if (!series) return;
+    const sym = st.sym, tf = st.tf, step = TF_S[tf], t0 = st.t0 || 0;
+    const marks = [];
+    if (st.show.ev && step < 86400) {
+      const now = serverNow() / 1000;
+      for (const e of await eventsList()) {
+        const s = Math.floor(e.ts_ms / 1000);
+        if (s >= t0 && s <= now) marks.push({time: s - (s % step), position: "aboveBar", color: tok("--accent"), shape: "square", text: e.kind});
+      }
+    }
+    if (st.show.mk && st.acct && st.acctData && st.acctData.account && st.acctData.account.account_id === st.acct) {
+      for (const t of st.acctData.trades || []) {
+        if (t.symbol !== sym || t.entry_time / 1000 < t0) continue;
+        const e = Math.floor(t.entry_time / 1000), x = Math.floor(t.exit_time / 1000);
+        marks.push({time: e - (e % step), position: t.side > 0 ? "belowBar" : "aboveBar", color: tok("--accent"),
+          shape: t.side > 0 ? "arrowUp" : "arrowDown", text: `${fmt.sideKo(t.side)} ${fmt.lev(t.leverage)}`});
+        marks.push({time: x - (x % step), position: t.side > 0 ? "aboveBar" : "belowBar", color: t.pnl > 0 ? tok("--up") : tok("--down"),
+          shape: "circle", text: `${fmt.reasonKo(t.exit_reason)} ${fmt.pct(t.roe, 0)}`});
+      }
+    }
+    if (sym !== st.sym || tf !== st.tf) return;
+    marks.sort((a, b) => a.time - b.time);
+    series.setMarkers(marks);
+  }
+
+  // ---------------------------------------------------------------- lines
+  const pnlShort = (pnl, roe) => `${fmt.pct(roe)} ${fmt.money(pnl, true)}`;
+  function drawPosLines() {
+    if (!series) return;
+    const list = st.show.pl && TF_S[st.tf] < 86400 && st.board ? st.board.accounts.filter((a) => a.position && a.position.symbol === st.sym && a.account_id !== st.acct)
+      .map((a) => ({a, p: normPos(a.position)})).sort((x, y) => x.p.entry - y.p.entry) : [];
+    const groups = [];
+    for (const x of list) {
+      const g = groups[groups.length - 1];
+      if (g && Math.abs(x.p.entry - g.price) / g.price < 0.0005) g.items.push(x); else groups.push({price: x.p.entry, items: [x]});
+    }
+    const m = store.mark(st.sym), want = new Map(), short = narrow();
+    for (const g of groups) {
+      const us = m ? g.items.map((x) => ({pnl: x.p.side * x.p.qty * (m - x.p.entry), margin: x.p.margin})) : [];
+      const pnl = us.reduce((s, u) => s + u.pnl, 0), mg = us.reduce((s, u) => s + u.margin, 0);
+      let title;
+      if (g.items.length === 1) {
+        const p = g.items[0].p;
+        title = short ? `${fmt.sideKo(p.side)}${m ? " " + fmt.pct(pnl / p.margin, 0) : ""}` : `${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${m ? " " + pnlShort(pnl, pnl / p.margin) : ""}`;
+      } else {
+        const L = g.items.filter((x) => x.p.side > 0).length, S = g.items.length - L;
+        title = short ? `${g.items.length}개` : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${m ? " 합계 " + pnlShort(pnl, mg ? pnl / mg : 0) : ""}`;
+      }
+      want.set(g.items.map((x) => x.a.account_id).join(",") + "@" + g.price,
+        {price: g.price, color: !m ? tok("--muted") : pnl >= 0 ? tok("--up") : tok("--down"), title});
+    }
+    for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); }
+    for (const [k, w] of want) {
+      const o = {price: w.price, color: w.color, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: w.title};
+      if (lines.pos.has(k)) lines.pos.get(k).applyOptions(o); else lines.pos.set(k, series.createPriceLine(o));
+    }
+  }
+  function drawAcctLines() {
+    if (!series) return;
+    lines.acct.forEach(rm); lines.acct = [];
+    const d = st.acctData;
+    if (!d || !d.account || d.account.account_id !== st.acct) return;
+    const a = (st.board && st.board.accounts.find((x) => x.account_id === st.acct)) || d.account;
+    const p = normPos(d.state && d.state.position);
+    if (!p || p.symbol !== st.sym) return;
+    const m = store.mark(p.symbol), pnl = m ? p.side * p.qty * (m - p.entry) : null;
+    const add = (price, color, style, title) => { if (price) lines.acct.push(series.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
+    add(p.entry, tok("--accent"), 0, `진입 ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${pnl != null ? " " + pnlShort(pnl, pnl / p.margin) : ""}`);
+    const reel = reelExits(a);
+    add(p.stop, !reel && p.lock_roe != null ? tok("--up") : tok("--down"), 2, reel ? "손절 (스윙 저점)" : p.lock_roe != null ? `잠금 +${fmt.num(p.lock_roe * 100, 0)}%` : "손절");
+    add(p.liq, tok("--warn"), 3, "청산가");
+    if (reel && p.target) add(p.target, tok("--up"), 2, "목표 (윗밴드)");
+  }
+  async function drawAccount() {
+    acctSel.value = st.acct;
+    if (st.acct && (!st.acctData || st.acctData.account.account_id !== st.acct)) {
+      const want = st.acct;
+      try {
+        const d = await ctx.api(`/api/account/${encodeURIComponent(want)}`);
+        if (want !== st.acct || !ctx.alive()) return;
+        st.acctData = d;
+      } catch (e) { if (!(e && e.name === "AbortError")) ctx.toast("계좌 자료를 불러오지 못했습니다"); return; }
+    }
+    drawMarkers(); drawAcctLines(); drawPosLines();
+  }
+  function drawAlertLines() {
+    if (!series) return;
+    lines.al.forEach(rm); lines.al = [];
+    if (!st.show.al) return;
+    for (const a of (st.alerts && st.alerts.alerts) || []) {
+      if (a.symbol !== st.sym || !a.armed) continue;
+      lines.al.push(series.createPriceLine({price: a.price, color: tok("--accent"), lineWidth: 1, lineStyle: 1, title: `알림 ${a.direction === "above" ? "↑" : "↓"}`}));
+    }
+  }
+  async function loadLevels() {
+    const sym = st.sym, tf = st.tf;
+    let lv = null, gb = null;
+    if (st.show.sr && LEVEL_TFS.includes(tf)) { try { lv = await ctx.api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { lv = null; } }
+    if (st.show.gh && features.ghcoin) { try { gb = await ctx.api("/api/ghcoin/board"); } catch (e) { gb = null; } }
+    if (sym !== st.sym || tf !== st.tf || !ctx.alive()) return;
+    st.levels = lv; st.gh = gb;
+    drawLevels();
+  }
+  function drawLevels() {
+    if (!series) return;
+    lines.lv.forEach(rm); lines.lv = [];
+    const add = (price, color, style, title) => { if (price) lines.lv.push(series.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
+    const note = [];
+    if (st.show.sr && st.levels && st.levels.levels) {
+      for (const side of ["resistance", "support"]) {
+        st.levels.levels.filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 3)
+          .forEach((x) => add(x.price, side === "resistance" ? tok("--down") : tok("--up"), 4, `${side === "resistance" ? "저항" : "지지"}${narrow() ? "" : " · " + x.ko}`));
+      }
+      note.push("지지·저항은 설명용입니다 (진입 연구에서 수익과 관계가 없었음).");
+    } else if (st.show.sr && !LEVEL_TFS.includes(st.tf)) note.push("지지·저항은 15분·30분·1시간·4시간 봉에만 있습니다.");
+    const g = st.show.gh && features.ghcoin && st.gh && st.gh.coins && st.gh.coins[st.sym];
+    if (g && g.side && g.entry) {
+      const k = `GH ${GH_KO[g.state] || g.state}`;
+      add(g.entry, tok("--accent"), 0, `${k} 진입`); add(g.sl, tok("--accent"), 2, `${k} 손절`);
+      add(g.tp1, tok("--accent"), 2, `${k} 익절1`); add(g.tp2, tok("--accent"), 3, `${k} 익절2`);
+    }
+    if (st.show.gh && features.ghcoin) note.push(!st.gh || !st.gh.alive ? "GH Coin 기록기 응답 없음." : g ? `GH Coin: ${GH_KO[g.state] || g.state}${g.why ? " · " + g.why : ""}` : "GH Coin: 이 코인 계획 없음.");
+    lvNote.textContent = note.join(" ");
+    lvNote.hidden = !note.length;
+  }
+
+  // ---------------------------------------------------------------- account picker (accounts of this interval)
+  function fillAccounts() {
+    const list = st.board ? st.board.accounts.filter((a) => a.timeframe === st.tf) : [];
+    const first = h("option", {value: ""}, !st.board ? "계좌 목록을 불러오는 중" : list.length ? `계좌를 고르면 진입·청산이 보입니다 (${fmt.int(list.length)}개)` :
+      st.tf === "1d" ? "일봉은 기록만 합니다 (계좌 없음)" : `${fmt.tfKo(st.tf)} 봉에는 계좌가 없습니다`);
+    const groups = fmt.GROUPS.map((g) => {
+      const mine = list.filter((a) => fmt.groupOf(a) === g.id);
+      return mine.length ? h("optgroup", {label: g.ko}, mine.map((a) => h("option", {value: a.account_id},
+        `${a.position && a.position.symbol === st.sym ? "● " : ""}${nameOf(a)}`))) : null;
+    });
+    acctSel.replaceChildren(first, ...groups.filter(Boolean));
+    if (!list.some((a) => a.account_id === st.acct)) { if (st.acct && st.board) { st.acct = ""; st.acctData = null; } }
+    acctSel.value = st.acct;
+    acctSel.disabled = !list.length;
+  }
+  const traded = () => new Set(((st.board && st.board.accounts) || []).map((a) => a.timeframe));
+  function paintTfs() {
+    const tr = traded();
+    for (const [tf, x] of tfBtns) { x.b.setAttribute("aria-selected", String(tf === st.tf)); x.b.classList.toggle("bot", tr.has(tf)); }
+  }
+
+  // ---------------------------------------------------------------- the ticker (store) and the clocks
+  function paintTicker() {
+    const all = store.get("ticker") || {};
+    for (const [s, x] of coinBtns) {
+      const t = all[s];
+      x.px.textContent = t ? fmt.price(t.c ?? t.mark) : "—";
+      x.chg.textContent = t && t.p != null ? fmt.pct(Number(t.p) / 100, 2) : "";
+      x.chg.className = "num " + (t ? fmt.tone(t.p) : "");
+    }
+    const t = all[st.sym];
+    priceLine.firstChild.textContent = `${fmt.coin(st.sym)}USDT`;
+    pxBig.textContent = t ? fmt.price(t.c ?? t.mark) : "—";
+    pxBig.className = "chart-px num " + (t ? fmt.tone(t.p) : "");
+    pxChg.textContent = t && t.p != null ? `24시간 ${fmt.pct(Number(t.p) / 100, 2)}` : "";
+    pxChg.className = "num " + (t ? fmt.tone(t.p) : "");
+    tk.mark.textContent = t ? fmt.price(t.mark) : "—";
+    tk.fund.textContent = t ? fundPct(t.r) : "—";
+    tk.fund.className = "num " + (t ? fmt.tone(-Number(t.r || 0)) : "");
+    tk.hi.textContent = t ? fmt.price(t.h) : "—";
+    tk.lo.textContent = t ? fmt.price(t.l) : "—";
+    tk.vol.textContent = t && t.q != null ? `${fmt.compact(t.q)} USDT` : "—";
+    st.fundT = t && t.T;
+    const n = st.board ? st.board.accounts.filter((a) => a.position && a.position.symbol === st.sym).length : null;
+    tk.pos.textContent = n == null ? "—" : `${fmt.int(n)}개 계좌`;
+  }
+  function tick() {
+    const now = serverNow();
+    for (const [tf, x] of tfBtns) {
+      x.left.textContent = bars.closeIn(tf, now);
+      const end = bars.barEnd(tf, now);
+      x.b.classList.toggle("soon", end != null && end - now <= 60000);
+    }
+    barLab.textContent = `${fmt.tfKo(st.tf)}${fmt.tfKo(st.tf).endsWith("봉") ? "" : "봉"} 마감까지`;
+    barLeft.textContent = bars.closeIn(st.tf, now);
+    tk.fundLeft.textContent = st.fundT ? countdown(st.fundT) : "";
+    const ss = bars.session(now), us = bars.usMarket(now);
+    tk.sess.textContent = `지금 ${ss.weekend ? "주말 · " : ""}${ss.ko} (한국 시각) · 미국 증시 ${us.text}`;
+  }
+
+  // ---------------------------------------------------------------- links (new tab only; the page loads nothing from these hosts)
+  function paintLinks() {
+    const c = encodeURIComponent(fmt.coin(st.sym));
+    tvA.href = `https://www.tradingview.com/chart/?symbol=BINANCE:${c}USDT.P&interval=${TV_IV[st.tf] || "15"}`;
+    cgLinks.replaceChildren(...[["코인글래스 차트", `https://www.coinglass.com/tv/Binance_${c}USDT`],
+      ["청산 지도", "https://www.coinglass.com/pro/futures/LiquidationMap"],
+      ["청산 히트맵", "https://www.coinglass.com/pro/futures/LiquidationHeatMap"],
+      [`${fmt.coin(st.sym)} 파생 정보`, `https://www.coinglass.com/currencies/${c}`]].map(([t, u]) =>
+      h("a", {class: "btn-line", href: u, target: "_blank", rel: "noopener noreferrer"}, t, " ↗")));
+  }
+
+  // ---------------------------------------------------------------- changes
+  function reflectUrl() {
+    const want = ctx.href("chart", st.sym, {tf: st.tf, acct: st.acct || null});
+    if (location.hash !== want) window.history.replaceState(null, "", want);
+  }
+  function setSym(s) {
+    if (!bars.SYMS.includes(s) || s === st.sym) return;
+    st.sym = s; local.set("chart-sym", s);
+    for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
+    lines.pos.forEach(rm); lines.pos.clear();
+    paintTicker(); paintLinks(); fillAccounts(); panels.setSym(s); reflectUrl();
+    loadCandles();
+  }
+  function setTf(tf) {
+    if (!TF_S[tf] || tf === st.tf) return;
+    st.tf = tf; local.set("chart-tf", tf);
+    paintTfs(); fillAccounts(); paintLinks(); tick(); reflectUrl();
+    loadCandles();
+  }
+  function pickAccount(id) {
+    const a = st.board && st.board.accounts.find((x) => x.account_id === id);
+    if (!a) return;
+    st.acct = id; st.acctData = null;
+    if (!st.show.mk) { st.show.mk = true; toggleBtns[0].setAttribute("aria-pressed", "true"); local.set("chart-show", st.show); }
+    if (a.timeframe !== st.tf && TF_S[a.timeframe]) { st.tf = a.timeframe; local.set("chart-tf", st.tf); paintTfs(); paintLinks(); tick(); fillAccounts(); reflectUrl(); loadCandles(); }
+    else { fillAccounts(); reflectUrl(); drawAccount(); }
+    box.scrollIntoView({behavior: motion.reduced() ? "auto" : "smooth", block: "center"});
+  }
+  alive = (params) => {
+    const s = bars.SYMS.includes(params.arg) ? params.arg : st.sym;
+    const tf = TF_S[params.query.tf] ? params.query.tf : st.tf;
+    const acct = params.query.acct || "";
+    const symCh = s !== st.sym, tfCh = tf !== st.tf, acCh = acct !== st.acct;
+    if (!symCh && !tfCh && !acCh) return;
+    st.sym = s; st.tf = tf; st.acct = acct; st.acctData = null;
+    for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
+    lines.pos.forEach(rm); lines.pos.clear();
+    paintTicker(); paintTfs(); paintLinks(); fillAccounts(); tick(); panels.setSym(s);
+    if (symCh || tfCh) loadCandles(); else drawAccount();
+  };
+  ctx.track(() => { alive = null; });
+
+  // ---------------------------------------------------------------- wiring
+  paintTicker(); paintTfs(); paintLinks(); tick();
+  ctx.watch("board", (b) => {
+    if (!b) return;
+    const first = !st.board;
+    st.board = b;
+    fillAccounts(); paintTfs(); paintTicker(); panels.onBoard(b);
+    if (first && st.acct) {
+      const a = b.accounts.find((x) => x.account_id === st.acct);
+      if (a && a.timeframe !== st.tf && TF_S[a.timeframe]) { st.tf = a.timeframe; paintTfs(); fillAccounts(); paintLinks(); tick(); loadCandles(); return; }
+    }
+    drawPosLines(); drawAccount();
+  });
+  ctx.watch("ticker", () => { paintTicker(); drawPosLines(); drawAcctLines(); panels.onTicker(); });
+  ctx.on("trades", (rows) => {
+    panels.onTrades(rows);
+    if (st.acct && rows.some((t) => t.account_id === st.acct)) { st.acctData = null; drawAccount(); }
+  });
+  ctx.on("features", () => { panels.onFeatures(); toggleBtns[5].hidden = !features.ghcoin; });
+  toggleBtns[5].hidden = !features.ghcoin;
+  ctx.every(1000, tick, {now: false});
+  ctx.every(5000, liveBar, {now: false});
+  ctx.every(120000, loadLevels, {now: false});
+  ctx.every(15000, () => panels.alerts().load(), {now: true});
+  await Promise.all([store.need("board", 60000).catch(() => null), loadCandles()]);
+}
+
+export function update(params) { if (alive) alive(params); }
+
+export function unmount() { alive = null; }

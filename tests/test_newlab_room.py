@@ -389,7 +389,7 @@ def test_the_lab_room_exists_with_its_speakers_and_on_the_dashboard(world):
     speakers |= {r for r, _ in RM.team_plan(TR.Due(LAB, "owner", 1, {}, "owner"))}
     assert set(room["members"]) == speakers and set(room["members"]) <= set(R.ROLE_NAMES)
     assert LAB in TR.all_rooms() and LAB not in R.TEAM_ROOMS
-    assert len(R.room_specs()) == 42
+    assert len(R.room_specs()) == 47           # 42 + the five v4 specialist rooms (DeepSeek families, the reel)
     for turn in RM.LAB_TURNS:
         assert RM.role_model("researcher", turn) == "sonnet"
         assert RM.LAB_DUTY[turn] in RM.system_prompt("researcher", turn)

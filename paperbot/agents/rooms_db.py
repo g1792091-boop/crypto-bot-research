@@ -46,7 +46,7 @@ from typing import Any, Iterable, Optional
 
 from ..ledger import SCHEMA as _LEDGER_SCHEMA
 from ..sessions import KST
-from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS
+from .roster3 import ALL_ROLES, GROUP_ROLE_OF_ROOM, GROUP_SPECIALISTS, STRATEGY_KO, TEAMS
 
 # ---------------------------------------------------------------- vocabulary
 MESSAGE_KINDS = ("trigger", "analysis", "challenge", "expert", "revision", "code_result", "verdict",
@@ -93,7 +93,15 @@ LAB_ROOM = "team:lab"
 LAB_TITLE = "새 매매법 연구실"
 LAB_ROOM_MEMBERS = ("researcher", "devils_advocate", "team_lead")
 
-ROLE_NAMES = {r[0]: r[1] for r in ROLES + SPECIALISTS}
+# The v4 specialist rooms (owners 2026-10-05; groups.V4_ROLES): one per new specialist, kind 'team' (the rooms table's
+# CHECK allows only 'strategy' and 'team'), room id ``team:<key>``. Members: the specialist (it speaks first) and the
+# lead (summary). Their meetings: the DeepSeek / reel accounts' losses, busts and weekly review (triggers.py
+# ``_group_rooms``) and the owners' posts. Not in TEAM_ROOMS (those are the roster's five teams).
+GROUP_ROOMS = tuple(GROUP_ROLE_OF_ROOM)
+GROUP_ROOM_MEMBERS = {room: (role, "team_lead") for room, role in GROUP_ROLE_OF_ROOM.items()}
+GROUP_ROOM_TITLES = {f"team:{r[0][len('spec_'):]}": f"{r[1]} 방" for r in GROUP_SPECIALISTS}
+
+ROLE_NAMES = {r[0]: r[1] for r in ALL_ROLES}
 ROLE_NAMES.update({"code": "코드(자동 계산)", "owner": "두 분", "system": "시스템"})
 
 # ---------------------------------------------------------------- schemas
@@ -440,7 +448,8 @@ def open_ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
 
 # ---------------------------------------------------------------- rooms
 def room_specs() -> list[dict]:
-    """The 42 rooms: 5 team rooms, the new-strategy lab, then one room per strategy (roster order)."""
+    """The 47 rooms: 5 team rooms, the new-strategy lab, one room per strategy (roster order), then the five v4
+    specialist rooms (DeepSeek families and the reel, ``GROUP_ROOMS``)."""
     team_names = dict(TEAMS)
     out = []
     for t in TEAM_ROOMS:
@@ -454,6 +463,9 @@ def room_specs() -> list[dict]:
     for s, ko in STRATEGY_KO.items():
         out.append({"room_id": strategy_room_id(s), "kind": "strategy", "strategy": s, "title": ko,
                     "members": [f"spec_{s}", *STRATEGY_ROOM_ROLES]})
+    for room in GROUP_ROOMS:
+        out.append({"room_id": room, "kind": "team", "strategy": None, "title": GROUP_ROOM_TITLES[room],
+                    "members": list(GROUP_ROOM_MEMBERS[room])})
     return out
 
 

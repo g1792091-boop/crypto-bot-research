@@ -609,10 +609,11 @@ def test_long_ai_text_is_cut_and_the_day_budget_holds(world):
 
 def test_constants_follow_the_repo():
     from paperbot.agents import riskreward
-    from paperbot.config import V3_ACCOUNTS, V3_TRADE_TFS
+    from paperbot.config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS, V3_TRADE_TFS
     from paperbot.obsidian_sources import TFS
     assert TFS == V3_TRADE_TFS and U.SMALL_N == riskreward.SMALL_N == 10
-    assert len(STRATEGY_KO) == 36 and V3_ACCOUNTS == 156
+    # paper v4 (G9): the export counts the v4 shape (config's computed totals; the home reads the accounts table)
+    assert len(STRATEGY_KO) == 36 and V4_ACCOUNTS == sum(V4_GROUP_ACCOUNTS.values())
     assert N.OBSERVE_DAYS == 21 and N.PERIOD_DAYS == 30
 
 

@@ -1,8 +1,17 @@
-"""30-day checkpoint verdicts for the paper v3 run (docs/paper-v3-rules.md section 4, confirmed
-addendum docs/paper-v3-rules-addendum.md Q1-Q3; the addendum's '확정 내용' table wins).
+"""30-day checkpoint verdicts of the paper run (v3: docs/paper-v3-rules.md section 4, confirmed addendum
+docs/paper-v3-rules-addendum.md Q1-Q3, the addendum's '확정 내용' table wins; paper v4 since the 2026-10 restart:
+docs/paper-v4-verdict.md, which records this file's sha256 and wins where it differs from the v3 text below).
+
+Paper v4 (owners' decisions D5, D6, D7 of 2026-10-05; section "Paper v4" at the end of this docstring has the details)
+    Four groups of original accounts: core (the 36, kind "strategy"), ds200 (44 DeepSeek-200 definitions), reel
+    (REEL_H1@5m) and the coin flips. Judged: core and ds200 on 15m / 30m / 1h, the reel on 5m; 4h and the coin flips
+    are observation only. Three FDR families with their own Benjamini-Hochberg (alpha-split, sum 0.10): core + copies
+    of core parents + new-strategy accounts at 0.07, ds200 (+ its copies) at 0.025, reel at 0.005. 10,000 coin-flip
+    bots per judged account (the weekly rehearsal 2,000). The bots copy the account's own long share, its coin set
+    and its ET-session bar mask; the reel's bots trade with the reel's own exits.
 
     python -m paperbot.checkpoint run  --db paper3.db --out checkpoint.db [--cache DIR] [--date YYYY-MM-DD]
-        [--brackets FILE | --allow-example-brackets] [--bots 2000]
+        [--brackets FILE | --allow-example-brackets] [--bots N]
     python -m paperbot.checkpoint show --out checkpoint.db [--date YYYY-MM-DD]
 
 When
@@ -46,11 +55,12 @@ Extra accounts (paperbot/extras.py: copies and new-strategy accounts)
     name only the affected extras.
 
 Q1 luck test
-    Per judged account, 2,000 coin-flip bots run over the same window with the same rules and the
-    same starting equity; each coin and bar of the account's timeframe fires with probability = the
+    Per judged account, coin-flip bots (v3: 2,000; paper v4: ``N_BOTS``) run over the same window with the same
+    rules and the same starting equity; each coin and bar of the account's timeframe fires with probability = the
     account's own signal rate in that window (signals / (6 coins x bars)), side 50/50 (as
-    research/paper_rules/rules_bt.py ``random_signals``). p = (bots >= account + 1) / (2,000 + 1).
-    Benjamini-Hochberg at FDR 10% over every account tested at that checkpoint.
+    research/paper_rules/rules_bt.py ``random_signals``). p = (bots >= account + 1) / (bots + 1).
+    Benjamini-Hochberg over every account tested at that checkpoint (v3: one family at 0.10; paper v4: per family,
+    ``FAMILY_ALPHA``, ``method_ko`` says it in Korean).
 
     The bots run on the real 1m bars of the window (last and mark price, real funding times and
     rates) from Binance's public REST API, cached per coin and UTC day under ``--cache``, through a
@@ -70,6 +80,33 @@ Q1 luck test
 The job never writes paper3.db (opened ``mode=ro``); everything goes to ``--out``.
 Other code (agents, dashboard) reads results with ``latest_verdict``, ``account_status`` and
 ``statuses``.
+
+Paper v4 (owners' decisions of 2026-10-05; docs/paper-v4-verdict.md records this file's sha256)
+    Groups and families. Every account row of the snapshot (version 3) and of the verdict carries its family
+    (``account_family``): "core" = kind strategy, copies of a core parent and new-strategy accounts; "ds200" = the
+    DeepSeek-200 accounts and copies of them; "reel" = REEL_H1@5m (and copies of it); "flip" = the coin flips (never
+    judged). Judged timeframes (D6, ``JUDGED_BY_FAMILY``): core and ds200 15m / 30m / 1h, reel 5m; 4h is observation
+    only for every group.
+    FDR (D5 (b), ``FAMILY_ALPHA``): Benjamini-Hochberg inside each family at its own alpha, core 0.07, ds200 0.025,
+    reel 0.005; the run's FDR stays <= 0.10 because the families' FDRs add up. A family with no judged account tests
+    nothing. ``q_orig`` = the BH of the family's original accounts alone, shown when extras share the family.
+    Bots (``N_BOTS`` 10,000; the weekly rehearsal ``REHEARSAL_BOTS`` 2,000). One pass per (family, timeframe, window);
+    the core passes keep the v3 seed, the others add ``FAMILY_SALT``, so the 36's p-values do not depend on whether the
+    other groups exist. What the bots copy from their account (D7): the signal rate in the window, now per coin it can
+    trade and per bar it can fire on; the long share of its signals in the window (``signals_long`` / ``signals``; a
+    v2 snapshot without side counts keeps 50/50); its coin set (``COIN_EXCLUDE``: F14_SMT never trades BTC); its
+    ET-session bar mask (``SESSION_RULES``, US Eastern wall clock of the bar's open with the US DST rule, for the five
+    F15 session definitions); p_best: a core cell's own share (the cell must exist, ``MissingCell``), 0 for DeepSeek,
+    the reel and new-strategy accounts. The reel's bots trade with the reel's own exits (``simulate_reel_bots``: the
+    stop = the lowest low of the last 12 closed 5m bars minus 0.05 x ATR14, the first target the signal bar's upper
+    band, then each closed 5m bar's band, the skip rules, the 96-bar time exit, no ladder; tested trade for trade
+    against paperbot/reel_engine.py ``ReelEngine``).
+    Holds and warnings. An account with trades but no recorded signal in its window is held (its rate would be 0
+    and every bot would end flat: M9); fewer signals than trades is a warning. An account created before the
+    checkpoint but missing from the runner's ``day:<date>`` state is held and listed (snapshot ``coverage``: expected
+    vs found per group; M10). A restart whose recorded changes touch trading code warns with the groups it restarts
+    (runinfo.groups_hit: the shared trading code every group, the DeepSeek or reel code that group only) and puts the
+    note on those groups' rows only (D8, M12).
 """
 
 from __future__ import annotations
@@ -91,8 +128,8 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .config import (V3_JUDGED_TFS, V3_OBSERVE_TFS, V3_P_BEST, V3_Q1_MAIN_FAMILY, V3_STOP_ATR, V3_SYMBOLS, Settings,
-                     v3_settings)
+from .config import (DS200_IDS, REEL_NAME, REEL_TF, V3_JUDGED_TFS, V3_OBSERVE_TFS, V3_P_BEST, V3_Q1_MAIN_FAMILY,
+                     V3_STOP_ATR, V3_SYMBOLS, V4_GROUPS, Settings, v3_settings)
 from .levrule import GROUP_SALT, edges as _quality_edges
 from .margin import Brackets
 from .notify import INFO, WARN, day_ko
@@ -101,18 +138,37 @@ MIN = 60_000
 DAY_MS = 86_400_000
 PERIOD_DAYS = 30
 MIN_TRADES = 30
-N_BOTS = 2000
-ALPHA = 0.10
-# The run's timeframes (config.V3_TRADE_TFS). 5m was removed with the restart of 2026-10-04
-# (docs/paper-v3-rules-change-1.md): no 5m account exists, and any other timeframe is never judged.
-OBSERVE_TFS = V3_OBSERVE_TFS                   # 4h: observation only (Q3)
-JUDGED_TFS = V3_JUDGED_TFS                     # 15m / 30m / 1h
-Q1_MAIN_FAMILY = V3_Q1_MAIN_FAMILY             # 36 x 3 = 108 strategy accounts can enter the originals' Q1 family
-TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": 60 * MIN, "4h": 240 * MIN}
-TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+N_BOTS = 10_000                # paper v4 (owners' D5): the ds200 family needs >= 132 / 0.025 = 5,280 (v3: 2,000)
+REHEARSAL_BOTS = 2_000         # the weekly rehearsal (checkpoint_preview): a pipeline check, not a verdict
+ALPHA = 0.10                   # the whole run's FDR: the sum of the families' alphas
+# Paper v4 FDR families (owners' D5 (b), alpha-split): each family has its own Benjamini-Hochberg at its alpha. The
+# overall FDR stays <= sum = 0.10 (FDR_total <= sum of the families' FDRs). Copies join their parent's family,
+# new-strategy accounts the core family.
+FAMILY_ALPHA = {"core": 0.07, "ds200": 0.025, "reel": 0.005}
+FAMILIES = tuple(FAMILY_ALPHA)
+FAMILY_KO = {"core": "매매법", "ds200": "딥시크", "reel": "5분 단타"}
+# Judged timeframes per family (config.V4_GROUPS, owners' D6): core and ds200 15m / 30m / 1h, the reel 5m.
+JUDGED_BY_FAMILY = {g: tuple(V4_GROUPS[g]["judged"]) for g in FAMILIES}
+OBSERVE_TFS = V3_OBSERVE_TFS                   # 4h: observation only (Q3), every group
+JUDGED_TFS = V3_JUDGED_TFS                     # the core group's 15m / 30m / 1h
+Q1_MAIN_FAMILY = V3_Q1_MAIN_FAMILY             # 36 x 3 = 108 core accounts can enter the core family
+TF_MS = {"5m": 5 * MIN, "15m": 15 * MIN, "30m": 30 * MIN, "1h": 60 * MIN, "4h": 240 * MIN}
+TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+# Seed salt of each family's bot passes (the core passes keep the v3 seed, so the 36's bots are exactly what they
+# would be without the other groups).
+FAMILY_SALT = {"core": None, "ds200": 0xD5200, "reel": 0x5EE15}
+# The coins an account can trade (owners' D7): F14_SMT compares a coin with BTC and never trades BTC itself.
+COIN_EXCLUDE = {"F14_SMT": ("BTCUSDT",)}
+# The ET-session definitions (DeepSeek F15, research/deepseek200/lib_c.py session_signals; 15m / 30m / 1h only): the
+# signal bars on which they can fire at all, by the US Eastern wall-clock minute of the bar's OPEN (US DST rule):
+# ("window", from, to) = from <= minute < to; ("judge", t_ref) = the one judging bar of the ET day: the first bar at
+# or after the bar holding t_ref whose close is at or after t_ref + 60 minutes.
+SESSION_RULES = {"F15_ASIA_BRK": ("window", 0, 480), "F15_ASIA_SWEEP": ("window", 0, 480),
+                 "F15_LON_BRK": ("window", 300, 720), "F15_OPEN0930": ("judge", 570), "F15_OPEN0000": ("judge", 0)}
 ATR_PREFIX_BARS = 300          # TF bars before the window for ATR14 (Wilder; (13/14)^300 ~ 2e-10)
 NO_VERDICT_DAYS = 180          # addendum Q3: still < 30 trades at day 180 -> '판정 불가'
-SNAPSHOT_VERSION = 2          # 2: extras carry rule / events / skipped bars (originals' fields unchanged)
+SNAPSHOT_VERSION = 3          # 2: extras carry rule / events / skipped bars; 3 (v4): every account also carries
+#                               "group", "signals_long" and "signals_coin", the snapshot "coverage" (v2 fields unchanged)
 ORIG = "orig"
 EXTRA_KINDS = ("copy", "newlab")
 EXTRAS_ONLY_KO = "추가 계좌만 해당"
@@ -201,7 +257,9 @@ def run_facts(conn: sqlite3.Connection) -> dict:
     """Run start (first account creation), starting equity and fee from the run state."""
     st = conn.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
     run = json.loads(st[0]) if st else {}
-    r = conn.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')").fetchone()
+    from .accounts import ORIGINAL_KINDS
+    r = conn.execute(f"SELECT MIN(created_ts) FROM accounts WHERE kind IN ({','.join('?' * len(ORIGINAL_KINDS))})",
+                     ORIGINAL_KINDS).fetchone()
     start = r[0] if r and r[0] is not None else None
     if start is None:
         r = conn.execute("SELECT MIN(started_ts) FROM runs").fetchone()
@@ -212,15 +270,27 @@ def run_facts(conn: sqlite3.Connection) -> dict:
 
 
 def _trading_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
-    """Starts of the runner whose recorded changes touch fills, exits or sizing (Q5)."""
-    from .runinfo import WATCHED
-    trading = {k for k, _, t in WATCHED if t}
+    """Starts of the runner whose recorded changes touch fills, exits or sizing (Q5). Paper v4 (D8): also the group
+    keys (runinfo.GROUP_WATCHED: the DeepSeek and the reel code); each entry names the groups whose window it restarts
+    (``groups``: runinfo.groups_hit; a shared trading key hits every group)."""
+    from . import runinfo as RI
+    trading = {k for k, _, t in RI.WATCHED if t}
+    group_keys = {k for k, _, t in getattr(RI, "GROUP_WATCHED", ()) if t}
     out = []
     for ts, data in conn.execute("SELECT started_ts, data FROM runs WHERE started_ts < ? ORDER BY id", (upto,)):
-        ch = [c for c in json.loads(data).get("changes", []) if c in trading]
+        ch = [c for c in json.loads(data).get("changes", []) if c in trading or c in group_keys]
         if ch:
-            out.append({"ts": int(ts), "changes": ch})
+            out.append({"ts": int(ts), "changes": ch, "groups": list(_groups_hit(ch))})
     return out
+
+
+def _groups_hit(keys) -> tuple:
+    """runinfo.groups_hit, or every group when that module does not have it."""
+    try:
+        from .runinfo import groups_hit
+    except ImportError:
+        return ("core", "ds200", "reel", "flip", "extra")
+    return tuple(groups_hit(keys))
 
 
 def _extras_state(conn: sqlite3.Connection) -> dict:
@@ -249,19 +319,21 @@ def _extra_code_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
 
 
 def _extra_signals(conn: sqlite3.Connection, kind: str, strat: str, tf: str, parent: Optional[str], created: int,
-                   cp_ts: int, rule: dict, timeline: list, symbols) -> dict:
+                   cp_ts: int, rule: dict, timeline: list, symbols, longs: Optional[dict] = None,
+                   coins: Optional[dict] = None) -> dict:
     """{day: n} of an extra's signals from its start: a copy's parent rows while it was active (minus the ones
-    its skip tag drops), a new-strategy account's own rows."""
+    its skip tag drops), a new-strategy account's own rows. ``longs`` / ``coins`` (dicts, filled when given): the
+    same rows' {day: long signals} and {day: {symbol: n}} (snapshot v3)."""
     from .daily3 import extra_status
     from .extras import skip_hit
     src_strat, src_tf = (parent.split("@", 1) if kind == "copy" and parent and "@" in parent else (strat, tf))
-    q = ("SELECT bar_close, side, data FROM signal_log WHERE strategy = ? AND timeframe = ? AND bar_close >= ? "
+    q = ("SELECT bar_close, side, data, symbol FROM signal_log WHERE strategy = ? AND timeframe = ? AND bar_close >= ? "
          f"AND bar_close < ? AND status IN ({','.join('?' * len(SIGNAL_STATUSES))}) "
          f"AND symbol IN ({','.join('?' * len(symbols))})")
     out: dict = {}
     x = {"timeline": timeline}
     tag = rule.get("skip_tag")
-    for bc, side, data in conn.execute(q, (src_strat, src_tf, created, cp_ts, *SIGNAL_STATUSES, *symbols)):
+    for bc, side, data, sym in conn.execute(q, (src_strat, src_tf, created, cp_ts, *SIGNAL_STATUSES, *symbols)):
         if kind == "copy":
             if bc <= created or extra_status(x, int(bc) - MIN) != "active":
                 continue
@@ -274,6 +346,11 @@ def _extra_signals(conn: sqlite3.Connection, kind: str, strat: str, tf: str, par
                     continue
         d = day_str(int(bc) // DAY_MS * DAY_MS)
         out[d] = out.get(d, 0) + 1
+        if longs is not None and int(side) > 0:
+            longs[d] = longs.get(d, 0) + 1
+        if coins is not None:
+            coins.setdefault(d, {})
+            coins[d][sym] = coins[d].get(sym, 0) + 1
     return out
 
 
@@ -294,18 +371,40 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
                                          "WHERE exit_time < ? ORDER BY id", (cp_ts,)):
         trades.setdefault(aid, []).append([int(et), int(xt), round(float(pnl), 8)])
     sig: dict[tuple, dict] = {}
-    q = ("SELECT strategy, timeframe, bar_close / 86400000 AS d, COUNT(*) FROM signal_log "
+    sig_long: dict[tuple, dict] = {}
+    sig_coin: dict[tuple, dict] = {}
+    q = ("SELECT strategy, timeframe, bar_close / 86400000 AS d, symbol, side > 0, COUNT(*) FROM signal_log "
          f"WHERE bar_close < ? AND status IN ({','.join('?' * len(SIGNAL_STATUSES))}) "
-         f"AND symbol IN ({','.join('?' * len(symbols))}) GROUP BY strategy, timeframe, d")
-    for strat, tf, d, n in conn.execute(q, (cp_ts, *SIGNAL_STATUSES, *symbols)):
-        sig.setdefault((strat, tf), {})[day_str(int(d) * DAY_MS)] = int(n)
+         f"AND symbol IN ({','.join('?' * len(symbols))}) GROUP BY strategy, timeframe, d, symbol, side > 0")
+    for strat, tf, d, sym, is_long, n in conn.execute(q, (cp_ts, *SIGNAL_STATUSES, *symbols)):
+        day = day_str(int(d) * DAY_MS)
+        key = (strat, tf)
+        sig.setdefault(key, {})[day] = sig.get(key, {}).get(day, 0) + int(n)
+        if is_long:
+            sig_long.setdefault(key, {})[day] = sig_long.get(key, {}).get(day, 0) + int(n)
+        cd = sig_coin.setdefault(key, {}).setdefault(day, {})
+        cd[sym] = cd.get(sym, 0) + int(n)
     accounts = {}
     xstate = None
-    for aid, strat, tf, kind, created, parent, adata in conn.execute(
-            "SELECT account_id, strategy, timeframe, kind, created_ts, parent, data FROM accounts ORDER BY rowid"):
-        e = engines.get(aid)
-        if e is None or created >= cp_ts:
+    rows_all = conn.execute("SELECT account_id, strategy, timeframe, kind, created_ts, parent, data FROM accounts "
+                            "ORDER BY rowid").fetchall()
+    kinds = {r[0]: r[3] for r in rows_all}
+    expected: dict[str, int] = {}
+    found: dict[str, int] = {}
+    missing: list[dict] = []
+    for aid, strat, tf, kind, created, parent, adata in rows_all:
+        if created >= cp_ts:
             continue
+        grp = account_family(kind, strat, parent, kinds)
+        expected[grp] = expected.get(grp, 0) + 1
+        e = engines.get(aid)
+        if e is None:
+            # M10: an account the runner did not save at the checkpoint is not dropped silently: it is listed, held
+            # (no verdict) and warned about, naming its group
+            missing.append({"account_id": aid, "strategy": strat, "timeframe": tf, "kind": kind,
+                            "created_ts": int(created), "parent": parent, "group": grp})
+            continue
+        found[grp] = found.get(grp, 0) + 1
         pos = e.get("position")
         mark = None
         cpos = None
@@ -321,6 +420,7 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
             "wallet": round(float(e["wallet"]), 8), "bust": bool(e.get("bust")), "halted": bool(e.get("halted")),
             "position": cpos, "mark": mark, "equity": round(equity, 8),
             "trades": trades.get(aid, []), "signals": sig.get((strat, tf), {}),
+            "group": grp, "signals_long": sig_long.get((strat, tf), {}), "signals_coin": sig_coin.get((strat, tf), {}),
         }
         if kind in EXTRA_KINDS:
             from .daily3 import EXTRA_STATUS
@@ -344,8 +444,11 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
             a["rule"] = rule
             a["events"] = [{k: ev.get(k) for k in ("ts", "event", "code", "detail", "effective") if k in ev}
                            for ev in evs]
+            xl: dict = {}
+            xc: dict = {}
             a["signals"] = _extra_signals(conn, kind, strat, tf, parent, int(created), cp_ts, rule,
-                                          [list(t) for t in tl], symbols)
+                                          [list(t) for t in tl], symbols, longs=xl, coins=xc)
+            a["signals_long"], a["signals_coin"] = xl, xc
             if kind == "newlab":
                 runs = (xstate.get("health") or {}).get("skipped_runs") or []
                 a["skipped_runs"] = [[int(r0), int(r1)] for r0, r1 in runs if int(r1) >= int(created)
@@ -358,6 +461,7 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
                 "trading_changes": _trading_changes(conn, cp_ts),
                 "extra_code_changes": _extra_code_changes(conn, cp_ts)},
         "symbols": list(symbols), "accounts": accounts,
+        "coverage": {"expected": expected, "found": found, "missing": missing},
     }
 
 
@@ -409,6 +513,8 @@ def period_stats(acct: dict, lo: int, hi: int, s: Settings, initial: float) -> d
     lo_d, hi_d = day_str(lo), day_str(hi - 1)
     sigs = sum(v for d, v in acct["signals"].items() if lo_d <= d <= hi_d)
     out = {"trades": n, "pnl": pnl, "signals": sigs}
+    if "signals_long" in acct:                  # snapshot v3: the long share of the window's signals (D7)
+        out["signals_long"] = sum(v for d, v in acct["signals_long"].items() if lo_d <= d <= hi_d)
     if "skipped_runs" in acct:
         out["skipped_bars"] = skipped_bars(acct["skipped_runs"], acct["timeframe"], lo, hi, acct["created_ts"])
     return out
@@ -430,11 +536,91 @@ def skipped_bars(runs, tf: str, lo: int, hi: int, created: int) -> int:
     return n
 
 
-def signal_rate(signals: int, tf: str, lo: int, hi: int, coins: int = 6, skipped: int = 0) -> float:
+def signal_rate(signals: int, tf: str, lo: int, hi: int, coins: int = 6, skipped: int = 0,
+                session: Optional[str] = None) -> float:
+    """Signals per coin and bar of the window: ``signals`` / (``coins`` x bars closing in [lo, hi), minus the
+    ``skipped`` ones). ``session``: an ET-session definition (SESSION_RULES): only the bars it can fire on count."""
     span = TF_MS[tf]
     first = -(-lo // span) * span
     bars = max(0, (hi - 1 - first) // span + 1) if hi > first else 0
+    if session is not None and bars:
+        bars = int(np.count_nonzero(session_mask(session, tf, first + np.arange(bars, dtype=np.int64) * span)))
     return signals / max(coins * max(bars - int(skipped), 0), 1)
+
+
+# ====================================================================== v4 groups, coin sets and session masks
+def account_family(kind: Optional[str], strategy: Optional[str], parent: Optional[str] = None,
+                   kinds: Optional[dict] = None) -> str:
+    """The verdict family of an account (D5): "core" (kind strategy, a copy of a core parent, a new-strategy
+    account), "ds200", "reel", or "flip" (the coin flips, never judged). A copy joins its parent's family (the parent's
+    kind from ``kinds`` {account_id: kind}, else its strategy name)."""
+    if kind == "random":
+        return "flip"
+    if kind == "copy":
+        pk = (kinds or {}).get(parent) if parent else None
+        if pk is None and isinstance(parent, str) and "@" in parent:
+            pname = parent.split("@", 1)[0]
+            pk = "ds200" if pname in DS200_IDS else "reel" if pname == REEL_NAME else "strategy"
+        if pk is None:
+            pk = "ds200" if strategy in DS200_IDS else "reel" if strategy == REEL_NAME else "strategy"
+        return account_family(pk, strategy)
+    if kind == "ds200":
+        return "ds200"
+    if kind == "reel":
+        return "reel"
+    return "core"                  # "strategy", "newlab" (and an unknown kind: never a group of its own)
+
+
+def _nth_sunday(year: int, month: int, nth: int) -> int:
+    d = dt.date(year, month, 1)
+    first = d + dt.timedelta(days=(6 - d.weekday()) % 7)
+    return (first - dt.date(1970, 1, 1)).days + 7 * (nth - 1)
+
+
+def et_offset_minutes(ms: int) -> int:
+    """UTC offset of US Eastern time at ``ms`` in minutes (-240 EDT / -300 EST): DST from the second Sunday of March
+    07:00 UTC to the first Sunday of November 06:00 UTC (US rule since 2007, as lib_c.et_offset_minutes)."""
+    y = dt.datetime.fromtimestamp(int(ms) / 1000, dt.timezone.utc).year
+    a = _nth_sunday(y, 3, 2) * DAY_MS + 7 * 3_600_000
+    b = _nth_sunday(y, 11, 1) * DAY_MS + 6 * 3_600_000
+    return -240 if a <= int(ms) < b else -300
+
+
+def et_minute(ms: int) -> int:
+    """Minute of the day on the US Eastern wall clock at ``ms`` (UTC epoch milliseconds)."""
+    wall = int(ms) + et_offset_minutes(ms) * MIN
+    return int(wall % DAY_MS // MIN)
+
+
+def session_mask(name: Optional[str], tf: str, closes) -> np.ndarray:
+    """For bars of ``tf`` closing at ``closes`` (ms): can the ET-session definition ``name`` fire on that bar
+    (SESSION_RULES, by the ET minute of the bar's open)? All True for a name without a session rule."""
+    closes = np.asarray(closes, np.int64).reshape(-1)
+    rule = SESSION_RULES.get(name) if name else None
+    if rule is None:
+        return np.ones(len(closes), bool)
+    span = TF_MS[tf]
+    tfm = span // MIN
+    mins = np.array([et_minute(int(t) - span) for t in closes], np.int64)
+    if rule[0] == "window":
+        return (mins >= rule[1]) & (mins < rule[2])
+    tref = int(rule[1])
+    r0 = tref // tfm * tfm
+    s0 = max(r0, -(-(tref + 60 - tfm) // tfm) * tfm)
+    return mins == s0
+
+
+def session_of(strategy: Optional[str], kind: Optional[str]) -> Optional[str]:
+    """The session rule an account's bots follow: a DeepSeek ET-session definition (or a copy of one), else None."""
+    return strategy if strategy in SESSION_RULES and kind in ("ds200", "copy") else None
+
+
+def coins_of(strategy: Optional[str], kind: Optional[str], symbols=V3_SYMBOLS) -> tuple:
+    """The coins an account can trade (D7): every trade coin, F14_SMT (and a copy of it) without BTC."""
+    out = tuple(symbols)
+    if kind in ("ds200", "copy") and strategy in COIN_EXCLUDE:
+        out = tuple(x for x in out if x not in COIN_EXCLUDE[strategy])
+    return out
 
 
 # ====================================================================== Q1 statistics
@@ -678,31 +864,49 @@ def p_best_cells() -> dict:
     return _P_BEST_CELLS
 
 
-def cell_p_best(strategy: str, tf: str) -> float:
+class MissingCell(LookupError):
+    """A core account whose strategy x timeframe is not in p_best_cells.json (a renamed or misspelled cell): its bots'
+    'best' share is unknown, so the verdict stops instead of comparing it with all-'normal' bots (paper v4, M3)."""
+
+
+def cell_p_best(strategy: str, tf: str, strict: bool = False) -> float:
     """The Q1 bots' 'best' share for an account of ``strategy`` x ``tf``: that cell's own 5-year share of 'best'
-    signals (0 for a cell without quality edges, or one not in the file)."""
-    c = p_best_cells().get(f"{strategy}|{tf}")
+    signals (0 for a cell without quality edges; a cell not in the file: 0, or ``MissingCell`` when ``strict``)."""
+    cells = p_best_cells()
+    key = f"{strategy}|{tf}"
+    if strict and key not in cells:
+        raise MissingCell(f"paperbot/p_best_cells.json has no cell {key} (a core account must have one)")
+    c = cells.get(key)
     return float(c["p_best"]) if c else 0.0
 
 
-def account_p_best(a: dict) -> float:
-    """p_best of the bots compared with account ``a`` (snapshot row): a strategy account its own cell, a copy its
-    parent's cell (the copy trades its parent's signals and strength), a new-strategy account 0 (no edges)."""
-    if a.get("kind") == "newlab":
+def account_p_best(a: dict, kinds: Optional[dict] = None) -> float:
+    """p_best of the bots compared with account ``a`` (snapshot row): a core strategy account its own cell (which must
+    exist, ``MissingCell``), a copy of a core account its parent's cell (the copy trades its parent's signals and
+    strength), a new-strategy account 0 (no edges), the DeepSeek and reel accounts and their copies 0 by rule (always
+    'normal', owners' D7), the coin flips 0 (never judged)."""
+    kind = a.get("kind")
+    if kind == "newlab":
+        return 0.0
+    fam = a.get("group") or account_family(kind, a.get("strategy"), a.get("parent"), kinds)
+    if fam != "core":
         return 0.0
     strat, tf = a.get("strategy"), a.get("timeframe")
     parent = a.get("parent")
-    if a.get("kind") == "copy" and isinstance(parent, str) and "@" in parent:
+    if kind == "copy" and isinstance(parent, str) and "@" in parent:
         strat, tf = parent.split("@", 1)
-    return cell_p_best(strat, tf)
+    return cell_p_best(strat, tf, strict=kind in ("strategy", "copy"))
 
 
-def random_draws(rng: np.random.Generator):
+def random_draws(rng: np.random.Generator, long_share=None):
     """Coin-flip signals as in rules_bt.random_signals: each coin and bar fires with the bot's
-    rate, side 50/50."""
+    rate, side long with probability ``long_share`` (None: 50/50, the v3 rule; paper v4 (D7): the compared account's
+    own long share, one float or one per bot). The random stream is the same for every share."""
+    p = 0.5 if long_share is None else np.asarray(long_share, float)
+
     def draw(ts: int, idx: np.ndarray, rates: np.ndarray, n_coins: int):
         fire = rng.random((len(idx), n_coins)) < rates[idx, None]
-        side = np.where(rng.random((len(idx), n_coins)) < 0.5, 1, -1)
+        side = np.where(rng.random((len(idx), n_coins)) < (p[idx, None] if np.ndim(p) else p), 1, -1)
         return fire, side
     return draw
 
@@ -721,7 +925,8 @@ def group_draws(rng: np.random.Generator, p_best):
 def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: Settings,
                   brackets: dict, specs: Optional[dict] = None, seed=0, draw=None,
                   initial: Optional[float] = None, stop_atr: float = V3_STOP_ATR,
-                  atr: Optional[tuple] = None, p_best=None, group_draw=None) -> dict:
+                  atr: Optional[tuple] = None, p_best=None, group_draw=None, long_share=None,
+                  coin_mask=None, bar_mask=None, exits: str = "house") -> dict:
     """Coin-flip accounts on real 1m bars, the paper engine's rules (see the module docstring).
 
     ``m`` must start early enough for ATR14 of the first signal bar (``ATR_PREFIX_BARS``); the
@@ -729,7 +934,18 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
     i fires with ``rates[i]``. With the "quality_v1" leverage rule each signal is 'best' with probability
     ``p_best`` (one float, or one per bot; default config.V3_P_BEST[tf]) and sizes with that group's chain
     (``group_draw(ts, idx, n_coins)`` -> bool array replaces the draw in tests). Returns final evaluated equity per
-    bot (``equity``), wallet, bust flags and entered-trade counts."""
+    bot (``equity``), wallet, bust flags and entered-trade counts.
+
+    Paper v4 (D7): ``long_share`` (float or one per bot) is the bots' long probability (None = 50/50);
+    ``coin_mask`` (bool, (C,) or (N, C)) the coins a bot may trade; ``bar_mask(ts, idx)`` -> bool per bot in ``idx``
+    whether it may fire on the bar closing at ``ts`` (ET-session definitions). The masks act after the draws, so the
+    random stream does not depend on them. ``exits="reel"``: the reel's own exits (``simulate_reel_bots``)."""
+    if exits == "reel":
+        return simulate_reel_bots(m, tf, lo, hi, rates, s, brackets, specs, seed=seed, draw=draw, initial=initial,
+                                  atr=atr, p_best=p_best, group_draw=group_draw, coin_mask=coin_mask,
+                                  bar_mask=bar_mask)
+    if exits != "house":
+        raise ValueError(f"unknown exits {exits!r}")
     specs = specs or {}
     syms = m.symbols
     C = len(syms)
@@ -739,11 +955,12 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
     span = TF_MS[tf]
     ends, atr_tab = atr if atr is not None else tf_atr(m, tf)
     atr_at = {int(t): atr_tab[i] for i, t in enumerate(ends)}
-    draw = draw or random_draws(np.random.default_rng(seed))
+    draw = draw or random_draws(np.random.default_rng(seed), long_share)
     quality = s.leverage_rule == "quality_v1"
     if quality and group_draw is None:
         gseed = (list(seed) if isinstance(seed, (list, tuple)) else [int(seed)]) + [GROUP_SALT]
         group_draw = group_draws(np.random.default_rng(gseed), V3_P_BEST.get(tf, 0.0) if p_best is None else p_best)
+    cmask = None if coin_mask is None else np.asarray(coin_mask, bool)
     br = [_BracketArrays.of(brackets[x]) for x in syms]
     steps = [(specs.get(x, {}).get("qty_step", 0.0), specs.get(x, {}).get("min_notional", 0.0)) for x in syms]
     w = m.window(lo, hi)
@@ -827,6 +1044,10 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
             if len(free) and a is not None:
                 fire, sd = draw(ts, free, rates, C)
                 bestm = group_draw(ts, free, C) if quality else None
+                if cmask is not None:
+                    fire = fire & (cmask[free] if cmask.ndim == 2 else cmask[None, :])
+                if bar_mask is not None:
+                    fire = fire & np.asarray(bar_mask(ts, free), bool).reshape(-1, 1)
                 got = np.zeros(len(free), bool)
                 for k in range(C):            # coin priority; sizing failure -> next coin
                     if np.isnan(o[k]) or not (np.isfinite(a[k]) and a[k] > 0):
@@ -933,6 +1154,276 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
     return {"equity": eq, "wallet": wallet, "bust": bust, "trades": ntr, "open": inpos}
 
 
+# ====================================================================== the reel's bots (paper v4, owners' D2 (ii), D4, D7)
+REEL_STOP_LOOKBACK = 12        # the bots' swing low: the lowest low of the last 12 closed 5m bars (signal bar included)
+
+
+@dataclass
+class FiveMin:
+    """5m bars built from the 1m bars (as ``tf_atr``: a 5m bar with no 1m bar is left out), per coin: ``ends`` (B,)
+    close times; ``atr`` (B, C) ATR14 (Wilder) of the bar closing there (NaN for an empty bar); ``stop_low`` (B, C)
+    the lowest low of the last REEL_STOP_LOOKBACK present bars up to it; ``upper`` (B, C) the upper Bollinger band
+    (20, 2, population std; reel_engine.upper_band, the engine's own formula) of the last 20 present closes; and
+    ``tgt`` (T, C) for every minute of ``m``: the upper band of the last present 5m bar that closed at or before
+    that minute's 5m bucket (the reel's resting target during that minute); ``close`` (B, C) the bar's close (the last
+    present 1m close, NaN for an empty bar)."""
+    ends: np.ndarray
+    atr: np.ndarray
+    stop_low: np.ndarray
+    upper: np.ndarray
+    tgt: np.ndarray
+    close: np.ndarray
+
+
+def five_min_table(m: Minutes, atr: Optional[tuple] = None) -> FiveMin:
+    from .reel_engine import BB_LEN, upper_band
+    span = TF_MS[REEL_TF]
+    per = span // MIN
+    ends, atr_tab = atr if atr is not None else tf_atr(m, REEL_TF)
+    C = len(m.symbols)
+    B = len(ends)
+    stop_low = np.full((B, C), np.nan)
+    upper = np.full((B, C), np.nan)
+    tgt = np.full((len(m.ts), C), np.nan)
+    if B == 0:
+        return FiveMin(ends, atr_tab, stop_low, upper, tgt, np.full((0, C), np.nan))
+    a0 = int(np.searchsorted(m.ts, int(ends[0]) - span))
+    sl = slice(a0, a0 + B * per)
+    shape = (B, per, C)
+    with np.errstate(all="ignore"), _quiet():
+        lo5 = np.nanmin(m.l[sl].reshape(shape), axis=1)
+        cc = m.c[sl].reshape(shape)
+    present = ~np.isnan(cc)
+    last_idx = per - 1 - np.argmax(present[:, ::-1, :], axis=1)
+    close = np.take_along_axis(cc, last_idx[:, None, :], axis=1)[:, 0, :]
+    has = present.any(axis=1)
+    bucket = m.ts - m.ts % span
+    for k in range(C):
+        ok = np.nonzero(has[:, k])[0]
+        if not len(ok):
+            continue
+        lows, closes = lo5[ok, k], close[ok, k]
+        for i in range(len(ok)):
+            j0 = max(0, i - REEL_STOP_LOOKBACK + 1)
+            stop_low[ok[i], k] = float(np.min(lows[j0:i + 1])) if i >= REEL_STOP_LOOKBACK - 1 else np.nan
+            if i >= BB_LEN - 1:
+                upper[ok[i], k] = upper_band(closes[i - BB_LEN + 1:i + 1])
+        # the target of a minute: the band of the last present 5m bar with close time <= the minute's bucket
+        pe = ends[ok]
+        pos = np.searchsorted(pe, bucket, side="right") - 1
+        good = pos >= 0
+        tgt[good, k] = upper[ok[pos[good]], k]
+    close = np.where(has, close, np.nan)
+    return FiveMin(ends, atr_tab, stop_low, upper, tgt, close)
+
+
+def simulate_reel_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: Settings, brackets: dict,
+                       specs: Optional[dict] = None, seed=0, draw=None, initial: Optional[float] = None,
+                       atr: Optional[tuple] = None, p_best=None, group_draw=None, coin_mask=None,
+                       bar_mask=None, five: Optional[FiveMin] = None) -> dict:
+    """Coin-flip accounts on real 1m bars with the reel's own exits (paperbot/reel_engine.py ``ReelEngine``, as the
+    REEL_H1@5m account and the three 5m coin flips trade; owners' D2 (ii), D4, D7): long only; each coin and 5m bar
+    fires with the bot's rate; the stop is the lowest low of the last 12 closed 5m bars (signal bar included) minus
+    0.05 x ATR14 (5m); the first target is the signal bar's upper band, then at every 5m close the band of that bar;
+    skipped (next coin) when the stop is at or above the fill or the fill at or above the first target; the stop
+    first, a target hit only when the high trades through it (filled at the target, maker fee; a bar that opens
+    through it at its open); the time exit at the close of the 96th 5m bar at risk (market); no ladder; 'normal'
+    leverage (p_best 0, config.V3_P_BEST["5m"]); liquidation on mark, funding, bust as ``simulate_bots``. A test
+    checks it trade for trade against ``ReelEngine``."""
+    from .reel_engine import FIVE_MS, MAX_HOLD_5M, STOP_BUF_ATR
+    if tf != REEL_TF:
+        raise ValueError(f"the reel's exits trade {REEL_TF} only, not {tf}")
+    specs = specs or {}
+    syms = m.symbols
+    C = len(syms)
+    N = len(rates)
+    rates = np.asarray(rates, float)
+    init = s.initial_equity if initial is None else initial
+    span = TF_MS[tf]
+    five = five if five is not None else five_min_table(m, atr)
+    row_of = {int(t): i for i, t in enumerate(five.ends)}
+    draw = draw or random_draws(np.random.default_rng(seed), 1.0)
+    quality = s.leverage_rule == "quality_v1"
+    if quality and group_draw is None:
+        gseed = (list(seed) if isinstance(seed, (list, tuple)) else [int(seed)]) + [GROUP_SALT]
+        group_draw = group_draws(np.random.default_rng(gseed), V3_P_BEST.get(tf, 0.0) if p_best is None else p_best)
+    cmask = None if coin_mask is None else np.asarray(coin_mask, bool)
+    br = [_BracketArrays.of(brackets[x]) for x in syms]
+    steps = [(specs.get(x, {}).get("qty_step", 0.0), specs.get(x, {}).get("min_notional", 0.0)) for x in syms]
+    a0 = int(np.searchsorted(m.ts, lo))
+    w = m.window(lo, hi)
+    tgt_w = five.tgt[a0:a0 + len(w.ts)]
+    taker, maker, slip = s.taker_fee, s.maker_fee, s.slippage_frac
+
+    wallet = np.full(N, float(init))
+    bust = np.zeros(N, bool)
+    inpos = np.zeros(N, bool)
+    coin = np.zeros(N, np.int64)
+    qty = np.zeros(N)
+    entry = np.zeros(N)
+    stop = np.zeros(N)
+    liq = np.zeros(N)
+    margin = np.zeros(N)
+    mmr = np.zeros(N)
+    cum = np.zeros(N)
+    tend = np.zeros(N, np.int64)
+    ntr = np.zeros(N, np.int64)
+    last_mark = np.full(C, np.nan)
+    allidx = np.arange(N)
+    T = len(w.ts)
+    bidx = np.nonzero(w.ts % span == 0)[0]
+
+    def close(j, px, liquidate, fee_rate):
+        """Close positions j (long) at prices px (liquidate: lose the isolated margin; a loss beyond the margin is a
+        liquidation, as the engine's ``_close``)."""
+        gross = qty[j] * (px - entry[j])
+        liqd = liquidate | (gross < -margin[j])
+        wallet[j] = np.where(liqd, wallet[j] - margin[j], wallet[j] + gross - qty[j] * px * fee_rate)
+        inpos[j] = False
+        bust[j] |= wallet[j] < s.bust_below
+
+    t = -1
+    while True:
+        t += 1
+        if t >= T:
+            break
+        if not inpos.any():
+            nb = bidx[np.searchsorted(bidx, t):]
+            if not len(nb) or bust.all():
+                break
+            t = int(nb[0])
+        ts = int(w.ts[t])
+        o, h, l, c = w.o[t], w.h[t], w.l[t], w.c[t]
+        mo, ml, mc = w.mo[t], w.ml[t], w.mc[t]                 # long only: the mark high is never needed
+        mo = np.where(np.isnan(mo), o, mo)
+        ml = np.where(np.isnan(ml), l, ml)
+        mc = np.where(np.isnan(mc), c, mc)
+        tg = tgt_w[t]
+        # ---- funding first (engine.step), as simulate_bots
+        fr = w.fr[t]
+        if not np.all(np.isnan(fr)):
+            j = allidx[inpos]
+            if len(j):
+                k = coin[j]
+                rate = fr[k]
+                ok = ~np.isnan(rate) & ~np.isnan(o[k])
+                j, k, rate = j[ok], k[ok], rate[ok]
+                if len(j):
+                    pay = qty[j] * mo[k] * rate
+                    wallet[j] -= pay
+                    margin[j] -= pay
+                    with np.errstate(all="ignore"):
+                        liq[j] = np.maximum((margin[j] + cum[j] - qty[j] * entry[j]) / (qty[j] * mmr[j] - qty[j]), 0.0)
+        entered = None
+        # ---- entries: signals of the 5m bar that closed at this minute's open
+        if ts % span == 0:
+            free = allidx[~inpos & ~bust]
+            r = row_of.get(ts)
+            if len(free) and r is not None:
+                a = five.atr[r]
+                fire, _sd = draw(ts, free, rates, C)
+                bestm = group_draw(ts, free, C) if quality else None
+                if cmask is not None:
+                    fire = fire & (cmask[free] if cmask.ndim == 2 else cmask[None, :])
+                if bar_mask is not None:
+                    fire = fire & np.asarray(bar_mask(ts, free), bool).reshape(-1, 1)
+                got = np.zeros(len(free), bool)
+                for k in range(C):            # coin priority; a skip or a sizing failure -> next coin
+                    if np.isnan(o[k]) or not (np.isfinite(a[k]) and a[k] > 0):
+                        continue
+                    st_k = five.stop_low[r, k] - STOP_BUF_ATR * a[k]
+                    tg0 = five.upper[r, k]
+                    fill_k = o[k] * (1 + slip)
+                    if not (np.isfinite(st_k) and np.isfinite(tg0)) or st_k >= fill_k or fill_k >= tg0:
+                        continue              # the reel's skip rules (no position, the next coin is tried)
+                    cand = np.nonzero(fire[:, k] & ~got)[0]
+                    if not len(cand):
+                        continue
+                    j = free[cand]
+                    n_ = len(j)
+                    rz = size_vec(s, wallet[j], np.ones(n_), np.full(n_, fill_k), np.full(n_, st_k),
+                                  np.full(n_, a[k]), br[k], *steps[k], best=None if bestm is None else bestm[cand, k])
+                    okc = rz["ok"]
+                    j = j[okc]
+                    got[cand[okc]] = True
+                    q_ = rz["qty"][okc]
+                    inpos[j] = True
+                    coin[j] = k
+                    qty[j] = q_
+                    entry[j] = fill_k
+                    stop[j] = st_k
+                    liq[j] = rz["liq"][okc]
+                    margin[j] = rz["margin"][okc]
+                    mmr[j] = rz["mmr"][okc]
+                    cum[j] = rz["cum"][okc]
+                    wallet[j] -= q_ * fill_k * taker
+                    tend[j] = ts - ts % FIVE_MS + MAX_HOLD_5M * FIVE_MS
+                    ntr[j] += 1
+                entered = free[got]
+        # ---- exits (ReelEngine._handle_exit)
+        j = allidx[inpos]
+        if len(j):
+            k = coin[j]
+            ok = ~np.isnan(o[k])
+            j, k = j[ok], k[ok]
+        if len(j):
+            # the time exit fell in a gap of 1m bars: market at this open
+            late = ts >= tend[j]
+            if late.any():
+                close(j[late], o[k[late]] * (1 - slip), False, taker)
+                j, k = j[~late], k[~late]
+        if len(j):
+            eb = np.zeros(len(j), bool)
+            if entered is not None and len(entered):
+                eb = np.isin(j, entered)
+            tj = tg[k]
+            done = np.zeros(len(j), bool)
+            g_liq = ~eb & (mo[k] <= liq[j])
+            if g_liq.any():
+                close(j[g_liq], liq[j[g_liq]], True, 0.0)
+                done |= g_liq
+            g_st = ~eb & ~done & (o[k] <= stop[j])
+            if g_st.any():
+                close(j[g_st], o[k[g_st]] * (1 - slip), False, taker)
+                done |= g_st
+            g_tp = ~eb & ~done & (o[k] > tj)
+            if g_tp.any():
+                close(j[g_tp], o[k[g_tp]], False, maker)
+                done |= g_tp
+            hit = ~done & (l[k] <= stop[j])
+            if hit.any():
+                close(j[hit], stop[j[hit]] * (1 - slip), False, taker)
+                done |= hit
+            hl = ~done & (ml[k] <= liq[j])
+            if hl.any():
+                close(j[hl], liq[j[hl]], True, 0.0)
+                done |= hl
+            htp = ~done & (h[k] > tj)
+            if htp.any():
+                close(j[htp], tj[htp], False, maker)
+                done |= htp
+            # the time exit at the close of the 96th 5m bar at risk
+            te = ~done & (ts + MIN >= tend[j])
+            if te.any():
+                close(j[te], c[k[te]] * (1 - slip), False, taker)
+        if inpos.any():
+            present = ~np.isnan(c)
+            last_mark[present] = mc[present]
+
+    for k in range(C):
+        mk_k = np.where(np.isnan(w.mc[:, k]), w.c[:, k], w.mc[:, k])
+        ok_k = np.nonzero(~np.isnan(mk_k))[0]
+        if len(ok_k):
+            last_mark[k] = mk_k[ok_k[-1]]
+    eq = wallet.copy()
+    j = allidx[inpos]
+    if len(j):
+        mk = last_mark[coin[j]]
+        gross = qty[j] * (mk - entry[j])
+        eq[j] += np.where(gross < -margin[j], -margin[j], gross - qty[j] * mk * (taker + slip))
+    return {"equity": eq, "wallet": wallet, "bust": bust, "trades": ntr, "open": inpos}
+
+
 # ====================================================================== the verdict
 @dataclass
 class Task:
@@ -947,6 +1438,11 @@ class Task:
     stop_atr: float = V3_STOP_ATR
     first_lock: Optional[float] = None
     p_best: Optional[float] = None   # quality_v1 bots' 'best' share (plan: account_p_best); None = V3_P_BEST[tf]
+    group: str = "core"              # paper v4: the FDR family (account_family); the originals' passes are per family
+    long_share: Optional[float] = None   # the bots' long probability (the account's own share, D7); None = 50/50
+    coins: Optional[tuple] = None    # the coins the bots may trade (coins_of); None = every trade coin
+    session: Optional[str] = None    # an ET-session definition's bar mask (SESSION_RULES); None = every bar
+    exits: str = "house"             # "house" (simulate_bots) or "reel" (simulate_reel_bots)
 
 
 def _prior(out: sqlite3.Connection, date: str) -> dict:
@@ -972,22 +1468,53 @@ def q5_restart(a: dict, cp: int) -> Optional[int]:
     return out
 
 
+def _bots_of(a: dict, fam: str, st: dict) -> dict:
+    """The Task fields that make the account's bots fair (owners' D7): its long share in the window (None when the
+    snapshot has no side counts: 50/50 as v3), its coin set, its ET-session bar mask, the reel's exits."""
+    strat = a.get("strategy")
+    parent = a.get("parent")
+    if a.get("kind") == "copy" and isinstance(parent, str) and "@" in parent:
+        strat = parent.split("@", 1)[0]
+    kind = a.get("kind")
+    src_kind = "ds200" if kind == "copy" and fam == "ds200" else kind
+    longs = st.get("signals_long")
+    share = None
+    if fam == "reel":
+        share = 1.0
+    elif longs is not None and st["signals"] > 0:
+        share = float(longs) / float(st["signals"])
+    return {"long_share": share, "coins": coins_of(strat, src_kind), "session": session_of(strat, src_kind),
+            "exits": "reel" if fam == "reel" else "house"}
+
+
+def _rate_problem(st: dict) -> Optional[str]:
+    """M9: an account with trades but no recorded signal in its window cannot get a fair coin-flip rate (rate 0: every
+    bot ends flat, so any gain would 'beat' them)."""
+    if st["trades"] >= 1 and st["signals"] == 0:
+        return f"신호 기록 0건인데 거래 {st['trades']}건: 우연 기준을 계산할 수 없음 (신호 기록 확인 필요)"
+    return None
+
+
 def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, list[Task]]:
     """Per-account decisions that need no bots, and the Q1 tasks for the rest. An extra account's window
-    starts at its creation, or later at its last accepted code change (``q5_restart``)."""
+    starts at its creation, or later at its last accepted code change (``q5_restart``). Paper v4: every row carries
+    its FDR family (``group``); judged timeframes per family (JUDGED_BY_FAMILY); an account with trades but no
+    recorded signal is held (M9); an account the runner did not save at the checkpoint is held (M10)."""
     cp = snap["cp_ts"]
     init = snap["run"]["initial_equity"]
     rows, tasks = {}, []
+    kinds = {aid: a.get("kind") for aid, a in snap["accounts"].items()}
     for aid, a in snap["accounts"].items():
         tf = a["timeframe"]
         extra = a["kind"] in EXTRA_KINDS
+        fam = a.get("group") or account_family(a["kind"], a.get("strategy"), a.get("parent"), kinds)
         lo = a["created_ts"]
         restart = q5_restart(a, cp) if extra else None
         if restart is not None and restart > lo:
             lo = restart
         st1 = period_stats(a, lo, cp, s, init)
         base = {"strategy": a["strategy"], "timeframe": tf, "kind": a["kind"], "equity": a["equity"],
-                "bust": a["bust"], "trades_total": st1["trades"]}
+                "bust": a["bust"], "trades_total": st1["trades"], "group": fam}
         pr = prior.get(aid)
         if extra:
             base["created_ts"] = a["created_ts"]
@@ -1002,16 +1529,20 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
                    "first_lock": rl.get("first_lock")}
         else:
             tkw = {}
-        # the bots' 'best' share: the account's own cell (a copy its parent's; a new-strategy account 0)
-        tkw["p_best"] = account_p_best(a)
-        if a["kind"] == "random":
+        if a["kind"] == "random" or fam not in FAMILIES:
             rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": "동전 봇 기준 계좌 (판정 안 함, 눈으로 보는 기준)"}
             continue
-        if tf not in JUDGED_TFS:
+        judged = JUDGED_BY_FAMILY[fam]
+        if tf not in judged:
             why = ("4시간봉은 처음부터 관찰용 (Q3)" if tf in OBSERVE_TFS else
-                   f"{tf}는 판정하는 봉이 아님 (5분봉은 2026-10-04 실험에서 뺐음, 규칙 변경 1)")
+                   f"{TF_KO.get(tf, tf)}봉은 {FAMILY_KO[fam]} 묶음의 판정 봉이 아님 "
+                   f"(판정: {', '.join(TF_KO.get(x, x) for x in judged)})")
             rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": why}
             continue
+        # the bots' 'best' share: the account's own cell (a copy its parent's; a new-strategy, DeepSeek or reel
+        # account 0); a core cell missing from p_best_cells.json stops the verdict (MissingCell)
+        tkw["p_best"] = account_p_best(a, kinds)
+        tkw["group"] = fam
         if pr and pr["status"] in (FAIL, PASS2):
             rows[aid] = {**base, "status": pr["status"], "stage": pr.get("stage"),
                          "reason": f"{pr.get('decided', pr['date'])} 판정 유지: {pr.get('reason', '')}",
@@ -1023,13 +1554,22 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
             eq0 = prev["accounts"][aid]["equity"] if prev and aid in prev["accounts"] else None
             st2 = period_stats(a, plo, cp, s, init)
             scaled = st2["pnl"] * init / eq0 if eq0 and eq0 > 0 else st2["pnl"]
+            bk = _bots_of(a, fam, st2)
             r = {**base, "stage": "2차", "window": [plo, cp], "trades": st2["trades"], "pnl": st2["pnl"],
                  "pnl_scaled": scaled, "start_equity": eq0, "signals": st2["signals"],
-                 "rate": signal_rate(st2["signals"], tf, plo, cp, skipped=st2.get("skipped_bars", 0))}
+                 "rate": signal_rate(st2["signals"], tf, plo, cp, coins=len(bk["coins"]),
+                                     skipped=st2.get("skipped_bars", 0), session=bk["session"])}
             if st2.get("skipped_bars"):
                 r["skipped_bars"] = st2["skipped_bars"]
+            _bots_row(r, bk)
+            bad = _rate_problem(st2)
+            if bad:
+                rows[aid] = {**r, "status": HOLD, "reason": "2차: " + bad, "notes": [f"{aid}: {bad}"]}
+                continue
+            if st2["signals"] < st2["trades"]:
+                r.setdefault("notes", []).append(f"{aid}: 신호 {st2['signals']}건 < 거래 {st2['trades']}건 (신호 기록 확인 필요)")
             rows[aid] = r
-            tasks.append(Task(aid, "2차", tf, plo, cp, init + scaled, r["rate"], **tkw))
+            tasks.append(Task(aid, "2차", tf, plo, cp, init + scaled, r["rate"], **tkw, **bk))
             continue
         # not yet judged
         # Q5 restart of an extra: judge only the window on the accepted code (equity as if it began there)
@@ -1048,37 +1588,73 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
                 why += f" · {NO_VERDICT_DAYS}일까지 {MIN_TRADES}건 미달: 판정 불가"
             rows[aid] = {**r, "status": HOLD, "reason": why}
             continue
-        r.update(stage="1차", rate=signal_rate(st1["signals"], tf, lo, cp, skipped=st1.get("skipped_bars", 0)))
+        bk = _bots_of(a, fam, st1)
+        bad = _rate_problem(st1)
+        if bad:
+            rows[aid] = {**r, "status": HOLD, "reason": bad, "notes": [f"{aid}: {bad}"]}
+            continue
+        r.update(stage="1차", rate=signal_rate(st1["signals"], tf, lo, cp, coins=len(bk["coins"]),
+                                               skipped=st1.get("skipped_bars", 0), session=bk["session"]))
         if st1.get("skipped_bars"):
             r["skipped_bars"] = st1["skipped_bars"]
+        _bots_row(r, bk)
+        if st1["signals"] < st1["trades"]:
+            r.setdefault("notes", []).append(f"{aid}: 신호 {st1['signals']}건 < 거래 {st1['trades']}건 (신호 기록 확인 필요)")
         rows[aid] = r
-        tasks.append(Task(aid, "1차", tf, lo, cp, init + pnl1 if restarted else a["equity"], r["rate"], **tkw))
+        tasks.append(Task(aid, "1차", tf, lo, cp, init + pnl1 if restarted else a["equity"], r["rate"], **tkw, **bk))
+    for x in (snap.get("coverage") or {}).get("missing") or []:
+        aid = x["account_id"]
+        why = "체크포인트 상태 저장에 이 계좌가 없음 (러너 확인 필요): 이번 판정 없음"
+        row = {"strategy": x.get("strategy"), "timeframe": x.get("timeframe"), "kind": x.get("kind"),
+               "group": x.get("group"), "equity": None, "bust": None, "trades_total": None, "status": HOLD,
+               "stage": None, "reason": why, "missing": True, "notes": [f"{aid}: {why}"]}
+        pr = prior.get(aid)
+        if pr and pr["status"] in (FAIL, PASS2) and pr.get("created_ts") == (x.get("created_ts") if
+                                                                            x.get("kind") in EXTRA_KINDS else None):
+            # a final verdict stays final even when the account is missing this time
+            row.update(status=pr["status"], stage=pr.get("stage"), decided=pr.get("decided", pr["date"]),
+                       p=pr.get("p"), q=pr.get("q"),
+                       reason=f"{pr.get('decided', pr['date'])} 판정 유지: {pr.get('reason', '')} ({why})")
+        rows[aid] = row
     return rows, tasks
+
+
+def _bots_row(r: dict, bk: dict) -> None:
+    """What the account's bots copy, on its verdict row (D7)."""
+    r["bots_rule"] = {"long_share": None if bk["long_share"] is None else round(bk["long_share"], 6),
+                      "coins": len(bk["coins"]), "session": bk["session"], "exits": bk["exits"]}
 
 
 def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: Settings, brackets: dict,
               specs: dict, n_bots: int, seed_base: int, initial: float, log=None) -> tuple[dict, list[dict]]:
     """Q1 for every task: all tasks with the same timeframe and window share one vectorised pass
-    (each account gets its own ``n_bots`` bots at its own rate). Returns ({aid: p}, groups)."""
+    (each account gets its own ``n_bots`` bots at its own rate). Returns ({aid: p}, groups).
+
+    Paper v4: the originals run one pass per (family, timeframe, window); the core family keeps the v3 seed (so the
+    36's bots do not depend on the other groups), the others add their FAMILY_SALT. Each pass gives every account's
+    bots its long share, coin set and session mask (D7); the reel's pass trades with the reel's exits."""
     from dataclasses import replace as _replace
     groups: dict[tuple, list[Task]] = {}
-    for t in tasks:                                  # the originals: one group per (tf, window), as always
+    for t in tasks:                                  # the originals: one group per (family, tf, window)
         if t.cls == ORIG:
-            groups.setdefault((t.tf, t.lo, t.hi), []).append(t)
-    order = sorted(groups.items(), key=lambda kv: (kv[0][1], TF_MS[kv[0][0]]))
-    extra = sorted(((t.tf, t.lo, t.hi, t.cls), [t]) for t in tasks if t.cls != ORIG)
-    order += sorted(extra, key=lambda kv: (kv[0][1], TF_MS[kv[0][0]], kv[0][3]))   # each extra alone, after
+            groups.setdefault((t.tf, t.lo, t.hi, t.group), []).append(t)
+    fam_rank = {g: i for i, g in enumerate(FAMILIES)}
+    order = sorted(groups.items(), key=lambda kv: (fam_rank.get(kv[0][3], 9), kv[0][1], TF_MS[kv[0][0]]))
+    extra = sorted(((t.tf, t.lo, t.hi, t.group, t.cls), [t]) for t in tasks if t.cls != ORIG)
+    order += sorted(extra, key=lambda kv: (kv[0][1], TF_MS[kv[0][0]], kv[0][4]))   # each extra alone, after
     pvals, info = {}, []
     for key, ts in order:
-        tf, lo, hi = key[:3]
+        tf, lo, hi, fam = key[:4]
         t0 = time.time()
         pre = ATR_PREFIX_BARS * TF_MS[tf]
         start = lo - lo % TF_MS[tf] - pre
         m = minutes_for(start, hi)
         rates = np.repeat([t.rate for t in ts], n_bots)
         seed = [seed_base, TF_MS[tf] // MIN, lo // MIN % 2**31]
+        if FAMILY_SALT.get(fam) is not None:
+            seed = seed + [FAMILY_SALT[fam]]
         gs, stop_atr = s, V3_STOP_ATR
-        if len(key) == 4:                            # an extra: its own seed and its own rule
+        if len(key) == 5:                            # an extra: its own seed and its own rule
             x = ts[0]
             seed = seed + [int(hashlib.sha256(x.aid.encode()).hexdigest()[:8], 16)]
             if x.first_lock is not None and float(x.first_lock) != s.ladder_first_lock:
@@ -1086,8 +1662,9 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
             stop_atr = float(x.stop_atr)
         shares = [V3_P_BEST.get(tf, 0.0) if t.p_best is None else float(t.p_best) for t in ts]
         p_best = shares[0] if len(set(shares)) == 1 else np.repeat(shares, n_bots)   # one per account's bots
+        kw = _pass_rules(ts, n_bots, tf, getattr(m, "symbols", V3_SYMBOLS))
         res = simulate_bots(m, tf, lo, hi, rates, gs, brackets, specs, seed=seed, initial=initial, stop_atr=stop_atr,
-                            p_best=p_best)
+                            p_best=p_best, **kw)
         for i, t in enumerate(ts):
             bots = res["equity"][i * n_bots:(i + 1) * n_bots]
             pvals[t.aid] = {"p": luck_p(t.value, bots), "bots_median": float(np.median(bots)),
@@ -1099,7 +1676,9 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
                "seed": seed, "seconds": round(sec, 1)}
         if gs.leverage_rule == "quality_v1":
             row["p_best"] = shares[0] if len(set(shares)) == 1 else {t.aid: p for t, p in zip(ts, shares)}
-        if len(key) == 4:
+        if fam != "core" or kw:
+            row.update(group=fam, exits=kw.get("exits", "house"))
+        if len(key) == 5:
             row.update(account_id=ts[0].aid, stop_atr=stop_atr, first_lock=gs.ladder_first_lock)
         info.append(row)
         if log:
@@ -1107,24 +1686,106 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
     return pvals, info
 
 
+def _pass_rules(ts: list[Task], n_bots: int, tf: str, symbols) -> dict:
+    """simulate_bots keywords of one pass from its tasks (D7): per-bot long shares, coin masks and session masks
+    (each left out when no task of the pass needs it, so a v3-shaped pass is exactly the v3 call), the exits."""
+    kw: dict = {}
+    if any(t.long_share is not None for t in ts):
+        kw["long_share"] = np.repeat([0.5 if t.long_share is None else float(t.long_share) for t in ts], n_bots)
+    if any(t.coins is not None and set(t.coins) != set(symbols) for t in ts):
+        rows = [[(t.coins is None) or (x in t.coins) for x in symbols] for t in ts]
+        kw["coin_mask"] = np.repeat(np.array(rows, bool), n_bots, axis=0)
+    sess = sorted({t.session for t in ts if t.session})
+    if sess:
+        sid = np.repeat([sess.index(t.session) if t.session else -1 for t in ts], n_bots)
+        span = TF_MS[tf]
+
+        def bar_mask(ts_: int, idx: np.ndarray) -> np.ndarray:
+            ok = np.array([bool(session_mask(x, tf, [ts_])[0]) for x in sess] + [True])
+            return ok[sid[idx]]
+        bar_mask.span = span      # noqa: for tests
+        kw["bar_mask"] = bar_mask
+    ex = {t.exits for t in ts}
+    if len(ex) != 1:
+        raise ValueError(f"one pass cannot mix exits {sorted(ex)}")
+    if ex != {"house"}:
+        kw["exits"] = ex.pop()
+    return kw
+
+
+def _pct(a: float) -> str:
+    return f"{a * 100:g}%"
+
+
+def _tfs_ko(tfs) -> str:
+    return "·".join(TF_KO.get(t, t) for t in tfs)
+
+
+def method_ko(group: Optional[str] = None, n_bots: int = N_BOTS) -> str:
+    """How the verdict judges, in one short Korean line built from the code (``N_BOTS``, ``FAMILY_ALPHA``, the judged
+    timeframes per family; never typed in), for the owners' texts (agents' facts, the dashboard, Obsidian; gap G18).
+    ``group``: None for the whole run; a family ("core", "ds200", "reel") or a display group ("extra" reads as the
+    core family it joins, "flip" says it is never judged)."""
+    if group == "flip":
+        return f"동전 봇은 비교 기준 (판정 안 함) · 판정 계좌마다 같은 봉 동전 봇 {n_bots:,}개와 비교"
+    fam = "core" if group in ("extra", "copy", "newlab", "strategy") else group
+    if fam in FAMILY_ALPHA:
+        note = " (복사·새 매매법 계좌 포함)" if group == "extra" or fam == "core" else ""
+        return (f"같은 봉 동전 봇 {n_bots:,}개와 비교 · {FAMILY_KO[fam]} 묶음{note} 운 기준 FDR "
+                f"{_pct(FAMILY_ALPHA[fam])} · 판정 봉 {_tfs_ko(JUDGED_BY_FAMILY[fam])}"
+                + (f" · {_tfs_ko(OBSERVE_TFS)}봉은 관찰용" if fam != "reel" else ""))
+    fams = " · ".join(f"{FAMILY_KO[g]} {_pct(a)}({_tfs_ko(JUDGED_BY_FAMILY[g])})" for g, a in FAMILY_ALPHA.items())
+    return (f"같은 봉 동전 봇 {n_bots:,}개와 비교 · 운 기준 FDR 묶음별 {fams} · 합계 {_pct(sum(FAMILY_ALPHA.values()))}"
+            f" · {_tfs_ko(OBSERVE_TFS)}봉은 관찰용")
+
+
+def family_table(alphas: Optional[dict] = None, n_bots: int = N_BOTS, families: Optional[list] = None) -> list[dict]:
+    """The FDR families as rows for the dashboard (G20): family, Korean name, alpha, judged timeframes, method_ko, and
+    from a verdict's ``families`` its "tested" / "luck_passed". ``alphas``: a verdict's ``family_alpha`` (default
+    FAMILY_ALPHA)."""
+    al = dict(FAMILY_ALPHA if alphas is None else alphas)
+    done = {f.get("group"): f for f in families or [] if isinstance(f, dict)}
+    return [{"family": g, "name": FAMILY_KO.get(g, g), "alpha": al.get(g),
+             "judged_tfs": list(JUDGED_BY_FAMILY.get(g, ())), "method_ko": method_ko(g, n_bots),
+             **{k: done[g][k] for k in ("tested", "luck_passed") if k in done.get(g, {})}}
+            for g in list(FAMILIES) + [g for g in al if g not in FAMILIES]]
+
+
+def family_alphas(alpha: float = ALPHA) -> dict:
+    """The families' alphas (D5): FAMILY_ALPHA, scaled when the total ``alpha`` differs from ALPHA."""
+    if alpha == ALPHA:
+        return dict(FAMILY_ALPHA)
+    return {g: alpha * a / ALPHA for g, a in FAMILY_ALPHA.items()}
+
+
 def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float = ALPHA) -> dict:
+    """Benjamini-Hochberg per FDR family at its alpha (paper v4, owners' D5 (b): core + copies of core parents +
+    new-strategy accounts 0.07, ds200 0.025, reel 0.005; the overall FDR <= 0.10), then the 1st / 2nd check rules."""
     init = snap["run"]["initial_equity"]
     kind = {aid: a.get("kind") for aid, a in snap["accounts"].items()}
     tested_all = [t for t in tasks if t.aid in pvals]
-    # family A: the originals and the copies (Q7); family B: the new-strategy accounts (their own BH)
-    tested = [t for t in tested_all if kind.get(t.aid) != "newlab"]
-    fam_b = [t for t in tested_all if kind.get(t.aid) == "newlab"]
-    q, rej = bh([pvals[t.aid]["p"] for t in tested], alpha)
-    qb, rejb = bh([pvals[t.aid]["p"] for t in fam_b], alpha)
-    origs = [t for t in tested if kind.get(t.aid) not in EXTRA_KINDS]
-    if len(origs) != len(tested):               # copies in family A: the originals' own BH, for transparency
-        qo, _ro = bh([pvals[t.aid]["p"] for t in origs], alpha)          # (without copies q_orig == q)
-        for t, qi in zip(origs, qo):
-            rows[t.aid]["q_orig"] = float(qi)
-    for t, qi, ri in list(zip(tested, q, rej)) + list(zip(fam_b, qb, rejb)):
+    alphas = family_alphas(alpha)
+    bad = sorted({t.group for t in tested_all if t.group not in alphas})
+    if bad:
+        raise ValueError(f"tasks of unknown FDR families {bad}")
+    fams, done = [], []
+    for g in FAMILIES:
+        tg = [t for t in tested_all if t.group == g]
+        q, rej = bh([pvals[t.aid]["p"] for t in tg], alphas[g])
+        origs = [t for t in tg if kind.get(t.aid) not in EXTRA_KINDS]
+        if len(origs) != len(tg):               # extras in the family: the originals' own BH, for transparency
+            qo, _ro = bh([pvals[t.aid]["p"] for t in origs], alphas[g])   # (without extras q_orig == q)
+            for t, qi in zip(origs, qo):
+                rows[t.aid]["q_orig"] = float(qi)
+        n_rej = int(rej.sum()) if len(tg) else 0
+        fams.append({"group": g, "name": FAMILY_KO[g], "alpha": alphas[g], "tested": len(tg), "luck_passed": n_rej,
+                     "lucky_expected": round(alphas[g] * n_rej, 3),
+                     "lucky_if_uncorrected": round(alphas[g] * len(tg), 3)})
+        done += [(t, qi, ri, alphas[g]) for t, qi, ri in zip(tg, q, rej)]
+    for t, qi, ri, ag in done:
         r = rows[t.aid]
         r.update(pvals[t.aid])
-        r.update(q=float(qi), luck_pass=bool(ri))
+        r.update(q=float(qi), luck_pass=bool(ri), alpha=ag)
         if t.stage == "1차":
             fails = []
             if r["equity"] <= init:
@@ -1151,18 +1812,11 @@ def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float 
     for aid, r in rows.items():
         if r.get("stage") and "status" not in r:      # a task without a p (should not happen)
             r.update(status=HOLD, reason="우연 기준 계산 없음")
-    m = len(tested)
-    n_rej = int(rej.sum()) if m else 0
     counts = {k: sum(1 for r in rows.values() if r["status"] == k) for k in STATUSES}
-    out = {"tested": m, "luck_passed": n_rej,
-           "lucky_expected": round(alpha * n_rej, 3),
-           "lucky_if_uncorrected": round(alpha * m, 3),
-           "counts": counts}
-    if fam_b:
-        nb = int(rejb.sum())
-        out["family_b"] = {"tested": len(fam_b), "luck_passed": nb, "lucky_expected": round(alpha * nb, 3),
-                           "lucky_if_uncorrected": round(alpha * len(fam_b), 3),
-                           "what": "새 매매법 계좌끼리 따로 FDR (Q-7 기본값)"}
+    out = {"tested": sum(f["tested"] for f in fams), "luck_passed": sum(f["luck_passed"] for f in fams),
+           "lucky_expected": round(sum(f["alpha"] * f["luck_passed"] for f in fams), 3),
+           "lucky_if_uncorrected": round(sum(f["alpha"] * f["tested"] for f in fams), 3),
+           "counts": counts, "families": fams}
     return out
 
 
@@ -1180,10 +1834,14 @@ def verdict_text(v: dict) -> str:
                  for aid, r in new if r["status"] == st]
         if names:
             L += ["", f"{st}"] + names[:12] + ([f"외 {len(names) - 12}개"] if len(names) > 12 else [])
-    L += ["", f"운 기준: 동전 봇 {v['n_bots']:,}개, FDR {int(v['alpha'] * 100)}%",
+    L += ["", f"운 기준: 동전 봇 {v['n_bots']:,}개, FDR "
+          + (f"묶음별 · 합계 {v['alpha'] * 100:g}%" if v.get("families") else f"{int(v['alpha'] * 100)}%"),
           f"검정 {v['tested']}개 중 통과 {v['luck_passed']}개",
           f"운으로 기대되는 합격 ≤ {v['lucky_expected']:.1f}개",
           f"(보정 없었다면 {v['lucky_if_uncorrected']:.1f}개)"]
+    if v.get("families"):                     # paper v4: one line per FDR family (alpha-split, D5)
+        L += ["묶음별 (FDR 나눔)"] + [f"- {f.get('name', f['group'])}: 검정 {f['tested']}개 중 통과 {f['luck_passed']}개 "
+                                    f"(FDR {f['alpha'] * 100:g}%)" for f in v["families"]]
     if v.get("warnings"):
         L += ["", "⚠ 주의"] + [_warning_ko(w) for w in v["warnings"]]
     L += ["", "자세히: 대시보드 순위표 '체크포인트 판정'"]
@@ -1192,9 +1850,11 @@ def verdict_text(v: dict) -> str:
 
 def _warning_ko(w: str) -> str:
     """'2026-10-12 재시작 때 체결·청산·사이즈 관련 변경(trading_code). Q5: …' -> two short lines."""
-    m = re.match(r"(\d{4}-\d{2}-\d{2}) 재시작 때 체결·청산·사이즈 관련 변경\(.*?\)\. Q5", w)
+    m = re.match(r"(\d{4}-\d{2}-\d{2}) 재시작 때 체결·청산·사이즈 관련 변경\((.*?)\)\. Q5", w)
     if m:
-        return f"- {day_ko(m[1])} 재시작 때 체결·청산·사이즈 코드 변경:\n  30일을 다시 셀지 규칙 관리자 확인 필요"
+        g = re.search(r"해당 묶음: ([^;)]*)", m[2])
+        who = f" ({g[1]})" if g else ""
+        return f"- {day_ko(m[1])} 재시작 때 체결·청산·사이즈 코드 변경{who}:\n  30일을 다시 셀지 규칙 관리자 확인 필요"
     return f"- {w}"
 
 
@@ -1205,8 +1865,16 @@ def _names_ko(accounts: dict) -> dict:
         from .agents.roster3 import STRATEGY_KO
     except Exception:  # noqa: BLE001  (names are cosmetic)
         STRATEGY_KO = {}
+    try:
+        from .groups import label_ko
+    except Exception:  # noqa: BLE001  (names are cosmetic)
+        def label_ko(strategy, timeframe=None):
+            return None
     pre = {"copy": "복제 ", "newlab": "새 매매법 "}
-    return {aid: f"{pre.get(r.get('kind'), '')}{STRATEGY_KO.get(r['strategy'], r['strategy'])} "
+
+    def name(r):
+        return STRATEGY_KO.get(r["strategy"]) or label_ko(r["strategy"]) or r["strategy"]
+    return {aid: f"{pre.get(r.get('kind'), '')}{name(r)} "
                  f"{TF_KO.get(r['timeframe'], r['timeframe'])}" for aid, r in accounts.items()}
 
 
@@ -1236,13 +1904,21 @@ def judge(out: sqlite3.Connection, date: str, minutes_for, s: Settings, brackets
     warnings = []
     for ch in snap["run"].get("trading_changes", []):
         if start is not None and ch["ts"] > start:
-            warnings.append(f"{day_str(ch['ts'])} 재시작 때 체결·청산·사이즈 관련 변경({', '.join(ch['changes'])}). "
-                            "Q5: 영향받는 계좌의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")
+            hit = ch.get("groups")
+            names = "·".join(GROUP_NAME_KO.get(g, g) for g in hit) if hit else "전체"
+            text = (f"{day_str(ch['ts'])} 재시작 때 체결·청산·사이즈 관련 변경({', '.join(ch['changes'])}; 해당 묶음: {names}). "
+                    "Q5: 영향받는 계좌의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")
+            warnings.append(text)
+            if hit is not None:               # v4 (D8, M12): the note goes on the hit groups' rows only
+                for aid, r in rows.items():
+                    if r.get("group") in hit:
+                        r.setdefault("notes", []).append(text)
     warnings += extra_warnings(snap, rows)
+    warnings += group_warnings(snap, rows)
     v = {"date": date, "cp_ts": snap["cp_ts"], "day": int((snap["cp_ts"] - floor_day(start)) // DAY_MS) if start else None,
-         "snapshot_sha256": sha, "alpha": alpha, "n_bots": n_bots, "initial_equity": init,
-         "groups": groups, "warnings": warnings, "accounts": rows, **summary,
-         "runtime_s": round(time.time() - t0, 1)}
+         "snapshot_sha256": sha, "alpha": alpha, "family_alpha": family_alphas(alpha), "n_bots": n_bots,
+         "initial_equity": init, "groups": groups, "warnings": warnings, "accounts": rows, **summary,
+         "coverage": _coverage_of(snap), "runtime_s": round(time.time() - t0, 1)}
     v["text"] = verdict_text(v)
     now = now_ms if now_ms is not None else int(time.time() * 1000)
     with out:
@@ -1251,6 +1927,51 @@ def judge(out: sqlite3.Connection, date: str, minutes_for, s: Settings, brackets
                         [(date, aid, r["status"], r.get("stage"), r.get("p"), r.get("q"), canonical(r))
                          for aid, r in rows.items()])
     return v
+
+
+GROUP_NAME_KO = {**FAMILY_KO, "flip": "동전", "extra": "추가 계좌"}
+
+
+def _coverage_of(snap: dict) -> dict:
+    """Expected vs found accounts per group (snapshot v3 ``coverage``; a v2 snapshot: the found ones only)."""
+    cov = snap.get("coverage")
+    if cov:
+        return {"expected": dict(cov.get("expected") or {}), "found": dict(cov.get("found") or {}),
+                "missing": [x["account_id"] for x in cov.get("missing") or []]}
+    found: dict = {}
+    for a in snap["accounts"].values():
+        g = a.get("group") or account_family(a.get("kind"), a.get("strategy"), a.get("parent"))
+        found[g] = found.get(g, 0) + 1
+    return {"expected": None, "found": found, "missing": []}
+
+
+def group_warnings(snap: dict, rows: dict) -> list[str]:
+    """Paper v4 warnings that name the affected group only (M9, M10): accounts missing from the runner's state,
+    accounts held for a zero signal count, accounts with fewer signals than trades."""
+    out = []
+    by: dict[str, list] = {}
+    for x in (snap.get("coverage") or {}).get("missing") or []:
+        by.setdefault(x.get("group") or "?", []).append(x["account_id"])
+    for g, ids in sorted(by.items()):
+        out.append(f"상태 저장에 없는 계좌 {len(ids)}개 ({GROUP_NAME_KO.get(g, g)}만 해당: {', '.join(sorted(ids)[:8])}"
+                   f"{' 외' if len(ids) > 8 else ''}): 이번 판정에서 보류")
+    zero: dict[str, list] = {}
+    short: dict[str, list] = {}
+    for aid, r in rows.items():
+        if r.get("missing"):
+            continue
+        for n in r.get("notes") or []:
+            if "신호 기록 0건" in n:
+                zero.setdefault(r.get("group") or "?", []).append(aid)
+            elif "신호 " in n and "< 거래" in n:
+                short.setdefault(r.get("group") or "?", []).append(aid)
+    for g, ids in sorted(zero.items()):
+        out.append(f"신호 기록 0건인데 거래가 있는 계좌 {len(ids)}개 ({GROUP_NAME_KO.get(g, g)}만 해당: "
+                   f"{', '.join(sorted(ids)[:8])}{' 외' if len(ids) > 8 else ''}): 보류, 신호 기록 확인 필요")
+    for g, ids in sorted(short.items()):
+        out.append(f"신호가 거래보다 적은 계좌 {len(ids)}개 ({GROUP_NAME_KO.get(g, g)}만 해당: "
+                   f"{', '.join(sorted(ids)[:8])}{' 외' if len(ids) > 8 else ''}): 신호 기록 확인 필요")
+    return out
 
 
 def extra_warnings(snap: dict, rows: dict) -> list[str]:
@@ -1439,16 +2160,27 @@ def dashboard_view(path: str) -> dict:
     if v is None:
         return {"ready": False}
     order = {PASS2: 0, PASS1: 1, FAIL: 2, HOLD: 3, OBSERVE: 4}
+    from .accounts import GROUP_OF_KIND
+    al = v.get("family_alpha") or family_alphas(v.get("alpha", ALPHA))
     rows = []
     for aid, r in v["accounts"].items():
+        # "family": the verdict family (a copy its parent's, a new-strategy account core, the coin flips "flip");
+        # "group": the display group (accounts.GROUP_OF_KIND: copies and new-lab accounts are "extra"); "alpha_family":
+        # the family's FDR alpha (None for a family that is never judged); "alpha" the one its q was judged at
+        fam = r.get("group") or account_family(r.get("kind"), r.get("strategy"))
         rows.append({"account_id": aid, "status": r["status"], "stage": r.get("stage"), "timeframe": r["timeframe"],
                      "trades": r.get("trades", r.get("trades_total")), "equity": r.get("equity"),
-                     "pnl": r.get("pnl"), "p": r.get("p"), "q": r.get("q"), "reason": r.get("reason", "")})
+                     "pnl": r.get("pnl"), "p": r.get("p"), "q": r.get("q"), "reason": r.get("reason", ""),
+                     "group": GROUP_OF_KIND.get(r.get("kind"), fam), "family": fam, "alpha_family": al.get(fam),
+                     "alpha": r.get("alpha")})
     rows.sort(key=lambda r: (order.get(r["status"], 9), r["q"] if r["q"] is not None else 2, r["account_id"]))
+    table = family_table(al, v.get("n_bots", N_BOTS), v.get("families"))
     return {"ready": True, "date": v["date"], "day": v.get("day"), "counts": v["counts"], "tested": v["tested"],
             "luck_passed": v["luck_passed"], "lucky_expected": v["lucky_expected"],
             "lucky_if_uncorrected": v["lucky_if_uncorrected"], "alpha": v["alpha"], "n_bots": v["n_bots"],
-            "snapshot_sha256": v["snapshot_sha256"], "warnings": v.get("warnings", []), "rows": rows}
+            "snapshot_sha256": v["snapshot_sha256"], "warnings": v.get("warnings", []), "rows": rows,
+            "families": v.get("families", []), "coverage": v.get("coverage"),
+            "family_alpha": dict(al), "family_table": table, "method_ko": method_ko(None, v.get("n_bots", N_BOTS))}
 
 
 # ====================================================================== CLI

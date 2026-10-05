@@ -1,6 +1,6 @@
 # GH Coin 타점 기록기
 
-친구분이 만든 GH Coin의 **"실시간 종합 지표 타점"**을 서버에서 따로 돌려, 156개 paper 계좌(2026-10-04 재시작 전에는 195개)와 **같은 기간에 나란히** 비교하는 기록기입니다.
+친구분이 만든 GH Coin의 **"실시간 종합 지표 타점"**을 서버에서 따로 돌려, paper 계좌(paper v4: 331개)와 **같은 기간에 나란히** 비교하는 기록기입니다.
 
 ## 무엇을 하나
 - GH Coin 코드를 **고치지 않고 그대로** 씁니다. `deploy/ghcoin.commit`에 적힌 커밋(브랜치 `claude/eloquent-johnson-nnt7gh`)에서 네 파일만 `/opt/ghcoin`으로 복사합니다(`deploy/install.sh`).

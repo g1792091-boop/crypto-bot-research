@@ -1,0 +1,37 @@
+/* Builder D's shared agent pieces (screens/rooms-kit.js): rule cards with folded raw JSON, code-result cards, stance
+   pills, meeting result pills, the agents banner. Loaded once by office / rooms / digest / debate. Tokens only. */
+.rk-body { display: grid; gap: 8px; min-width: 0; }
+.rk-pre .clamp, .rk-pre.clamp { white-space: pre-line; }
+.rk-body .clamp { white-space: pre-line; }
+.rk-rules { display: grid; gap: 6px; }
+.rk-rule { display: grid; gap: 4px; padding: 9px 10px; border-radius: 8px; background: var(--surface-2); font-size: var(--t-xs); line-height: 1.55; min-width: 0; }
+.rk-rule-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rk-rule-h b { color: var(--accent); }
+.rk-rule-t { color: var(--ink); overflow-wrap: anywhere; }
+.rk-rule .disclosure .linkish { color: var(--muted); font: 700 var(--t-xs)/1.3 var(--f-term); }
+.rk-raw { margin: 4px 0 0; padding: 8px; border-radius: 6px; background: var(--console); color: var(--ink-2); font: 400 var(--t-xs)/1.5 var(--f-term); white-space: pre-wrap; word-break: break-all; }
+
+.rk-code { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); min-width: 0; font-family: var(--f-body); }
+.rk-code-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink-2); font-size: var(--t-xs); }
+.rk-code-h b { color: var(--ink); }
+.rk-code-h .pp { margin-left: auto; }
+.rk-code ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; color: var(--ink-2); font-size: var(--t-xs); }
+.rk-code-av { display: grid; place-items: center; width: 18px; height: 20px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-pixel); flex: none; }
+
+.rk-res { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font: 700 var(--t-xs)/1.2 var(--f-body); white-space: nowrap; }
+.rk-res.done { background: var(--surface-2); color: var(--ink); }
+.rk-res.none { border: 1px dashed var(--line-2); color: var(--muted); }
+.rk-res.live { border: 1px solid var(--accent-line); color: var(--accent); }
+.rk-res.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--up); }
+.rk-res.bad { color: var(--down); background: var(--down-soft); }
+.rk-res.warn { color: var(--warn); background: var(--warn-soft); }
+
+.rk-banner { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line-2); color: var(--ink-2); font: 400 var(--t-sm)/1.55 var(--f-body); }
+.rk-banner b { color: var(--ink); }
+.rk-banner.bad { border: 1px solid var(--down-line); background: var(--down-soft); }
+.rk-banner.bad b { color: var(--down); }
+
+.rk-amber { margin: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--amber-line); background: var(--amber-soft); color: var(--amber-ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.rk-stance { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink-2); font-size: var(--t-xs); }
+.rk-code .rk-body, .rm-dec .rk-body { font-size: var(--t-sm); line-height: 1.6; }
+.rk-code .disclosure .linkish, .rk-rule .disclosure .linkish { color: var(--muted); font: 700 var(--t-xs)/1.3 var(--f-term); }

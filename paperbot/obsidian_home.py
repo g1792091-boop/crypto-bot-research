@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 from collections import Counter
 
-from .obsidian_notes import (FOLDERS, LEGEND, PERIOD_DAYS, Ctx, Vault, check_name, day_name, hero, initial_equity, stat_row,
-                             strat_link, week_name)
+from .obsidian_notes import (FOLDERS, LEGEND, METHOD_KO, PERIOD_DAYS, TF_KO, Ctx, Vault, check_name, day_name, hero,
+                             initial_equity, stat_row, strat_link, week_name)
+from .agents.roster3 import ALL_ROLES
+from .config import V4_ACCOUNTS
 from .obsidian_sources import split_account
 from .obsidian_util import (MOCHA, TYPE_COLORS, badge, bar, callout, fnum, iso_week, kst_day, kst_dt, kst_min, link, mermaid,
                             pct, table, usd)
 
-FLOW = """flowchart LR
-  BN(["바이낸스 공개 시세"]) --> L3["live3 모의 매매 엔진<br/>(156개 계좌, 주문 없음)"]
+FLOW_TEMPLATE = """flowchart LR
+  BN(["바이낸스 공개 시세"]) --> L3["live3 모의 매매 엔진<br/>(__N_ACC__개 계좌, 주문 없음)"]
   L3 --> P3[("paper3.db")]
   P3 --> D3["밤 점검 09:20"]
   D3 --> DB3[("daily3.db")]
@@ -33,6 +35,36 @@ FLOW = """flowchart LR
   OB --> V{{"이 볼트 (마크다운 파일)"}}
   V --> OWN(["두 분: 폰·PC에서 읽기"])
   OWN -.->|"메모는 99 내 메모에만"| V"""
+FLOW = FLOW_TEMPLATE.replace("__N_ACC__", str(V4_ACCOUNTS))        # the run shape from config (paper v4)
+
+
+def flow(d=None) -> str:
+    """The data-flow chart with the accounts table's own count of original accounts (groups.shape_from_db, G9); the
+    config's v4 count when the table is empty or missing."""
+    n = ((getattr(d, "shape", None) or {}).get("originals") if d is not None else None) or V4_ACCOUNTS
+    return FLOW_TEMPLATE.replace("__N_ACC__", str(n))
+
+
+def group_rows(d) -> list[list]:
+    """One row per account group (G9): the accounts table's own shape (groups.shape_from_db, loaded by
+    obsidian_sources.load_paper) with the closed trades and busts of that group's accounts."""
+    from .accounts import GROUP_OF_KIND
+    from .groups import GROUP_KO
+    shape = (getattr(d, "shape", None) or {}).get("groups") or {}
+    trades: Counter = Counter()
+    busts: Counter = Counter()
+    for a, s in d.trade_stats.items():
+        trades[GROUP_OF_KIND.get(d.accounts.get(a, {}).get("kind"), "other")] += s["n"]
+    for a, e in d.engines.items():
+        if e.get("bust"):
+            busts[GROUP_OF_KIND.get(d.accounts.get(a, {}).get("kind"), "other")] += 1
+    rows = []
+    for g, e in shape.items():
+        tfs = "·".join(TF_KO.get(tf, tf) for tf in sorted(e.get("tfs") or {}, key=lambda t: list(TF_KO).index(t)
+                                                            if t in TF_KO else 9))
+        rows.append([GROUP_KO.get(g, g), e.get("accounts", 0), e.get("judged", 0) or "-", tfs or "-", trades.get(g, 0),
+                     busts.get(g, 0)])
+    return rows
 
 
 def build_home(v: Vault) -> None:
@@ -41,6 +73,8 @@ def build_home(v: Vault) -> None:
     start, ref = ctx.run_start_ms, (d.snapshot_ms or ctx.now_ms)
     day_no = min(ctx.day_no, PERIOD_DAYS)
     n_acc = len(d.accounts)
+    n_orig = (getattr(d, "shape", None) or {}).get("originals") or V4_ACCOUNTS
+    grows = group_rows(d)
     n_tr = sum(s["n"] for a, s in d.trade_stats.items() if d.accounts.get(a, {}).get("kind") == "strategy")
     strat_eq = [e for a, (e, _) in d.equity.items() if d.accounts.get(a, {}).get("kind") == "strategy" and e is not None]
     busts = sum(1 for a, e in d.engines.items() if e.get("bust") and d.accounts.get(a, {}).get("kind") == "strategy")
@@ -74,7 +108,8 @@ def build_home(v: Vault) -> None:
   section 판정
   1차 체크포인트 :milestone, cp1, {g(ctx.cp1_ms)}, 0d"""
     body = [
-        hero("Paper v3 연구실", "36개 매매법 · 156개 모의 계좌 · 72명의 AI 직원 — 두 분을 위한 지식 볼트"),
+        hero("Paper v4 연구실", f"잠긴 36개 매매법 · 딥시크 · 릴스 5분 단타 · {n_orig}개 모의 계좌 · {len(ALL_ROLES)}명의 AI 직원 "
+             "— 두 분을 위한 지식 볼트"),
         LEGEND + "\n",
         callout("pb-stat", f"지금 {min(day_no + 1, PERIOD_DAYS)}일째 / 30일 " + badge("code").replace("\n", ""),
                 f"<progress value=\"{day_no}\" max=\"{PERIOD_DAYS}\"></progress> `{bar(day_no / PERIOD_DAYS)}`\n\n" +
@@ -82,8 +117,12 @@ def build_home(v: Vault) -> None:
                           ("1차 체크포인트", f"{kst_day(ctx.cp1_ms)} (D-{cp_left})"), ("계좌", str(n_acc or "-")),
                           ("끝난 거래", f"{n_tr}건"), ("파산 계좌", str(busts))]).rstrip()),
         callout("warning", "30일 전에는 결론이 없습니다",
-                "아래 숫자는 모두 중간 기록입니다. 매매법이 실력이 있는지는 첫 체크포인트에서 코드가 동전 봇 2,000개와 비교해 "
-                "판정합니다. 표본이 10건 미만이면 '표본 적음', 30건 미만이면 판정 보류 수준으로 표시합니다."),
+                "아래 숫자는 모두 중간 기록입니다. 매매법이 실력이 있는지는 첫 체크포인트에서 코드가 판정합니다(" + METHOD_KO
+                + "). 표본이 10건 미만이면 '표본 적음', 30건 미만이면 판정 보류 수준으로 표시합니다."),
+        ("## 그룹별 계좌 " + badge("code") + "\n"
+         + table(["그룹", "계좌", "판정 대상", "봉", "끝난 거래", "파산"], grows, ["l", "r", "r", "l", "r", "r"])
+         + "\n그룹은 섞지 않습니다: 아래 분포·마감 이유는 잠긴 매매법 계좌만입니다. 딥시크·릴스·동전은 그룹마다 따로 봅니다.\n")
+        if grows else "",
         "## 바로가기",
         table(["바로가기", "무엇이 있나요"], [
             [link("실험 개요", "01 실험"), "규칙 한눈에 · 타임라인 · 레버리지 계단 · 체크포인트 판정"],
@@ -107,7 +146,7 @@ def build_home(v: Vault) -> None:
          f"\n시작 금액 {usd(ini)}. 순위가 아니라 분포입니다.\n") if strat_eq else "아직 계좌 자료가 없습니다.\n",
         pie,
         "## 30일 일정\n" + mermaid(gantt),
-        "## 자료는 이렇게 흐릅니다\n" + mermaid(FLOW),
+        "## 자료는 이렇게 흐릅니다\n" + mermaid(flow(d)),
         callout("info", "이 볼트는 어떻게 만들어지나요",
                 "매일 09:50(KST) 서버가 에이전트의 DB와 저장소 문서를 **읽기만 해서** 이 마크다운 파일들을 새로 만듭니다. "
                 "원본 기억(DB)은 그대로이고, 여기서 고친 것은 원본에 반영되지 않습니다. 직접 쓰는 메모는 `99 내 메모`에 두세요. "
@@ -131,7 +170,7 @@ def build_guide(v: Vault) -> None:
         ["파산", "계좌 평가금이 $10 아래로 떨어져 그 계좌를 멈춘 것."],
         ["동전 던지기 봇", "신호와 방향을 우연으로 정하는 봇. 실력이 없는 쪽의 기준선입니다."],
         ["p값", "실력이 없어도 이만큼 나올 확률. 작을수록 우연이 아닐 가능성이 큽니다."],
-        ["FDR 10%", "여러 계좌를 한꺼번에 볼 때 우연히 합격하는 것을 걸러내는 보정."],
+        ["FDR(그룹별)", "여러 계좌를 한꺼번에 볼 때 우연히 합격하는 것을 걸러내는 보정. 이번 실행: " + METHOD_KO],
         ["체크포인트", "시작 후 30일마다 코드가 모든 계좌를 한 번에 판정하는 날."],
         ["그림자", "계좌 없이 '만약 이렇게 했다면'을 기록만 하는 것. 규칙은 바꾸지 않습니다."],
         ["표본 적음", "거래가 10건 미만이라 우연이 결과를 설명할 수 있다는 표시(30건 미만은 판정 보류 수준)."],
@@ -155,8 +194,8 @@ def build_guide(v: Vault) -> None:
 
 def build_system_map(v: Vault) -> None:
     body = [hero("시스템 지도", "자료가 어디서 만들어져 어디로 가는지. 이 볼트는 맨 끝의 읽기 전용 사본입니다"),
-            mermaid(FLOW),
-            "## 한 줄씩\n- **live3**: 바이낸스 공개 시세로 156개 모의 계좌를 돌립니다. 주문은 없습니다.\n"
+            mermaid(flow(v.ctx.data)),
+            f"## 한 줄씩\n- **live3**: 바이낸스 공개 시세로 {V4_ACCOUNTS}개 모의 계좌를 돌립니다. 주문은 없습니다.\n"
             "- **밤 점검 / 체크포인트**: 어제를 다시 계산해 맞춰 보고, 30일마다 공식 판정을 합니다.\n"
             "- **에이전트 회의**: 15분마다 한 번, 회의가 필요한 방만 엽니다. 기억은 agents3.db에 쌓입니다.\n"
             "- **대시보드**: 두 분이 글을 쓰고 승인을 누르는 곳. inbox.db의 유일한 기록자입니다.\n"
@@ -164,7 +203,7 @@ def build_system_map(v: Vault) -> None:
             "캔버스 버전: `시스템 지도.canvas`\n\n" + link("홈") + " · " + link("읽는 법")]
     v.add(FOLDERS["home"], "시스템 지도", "\n".join(body), type="허브", tags=["허브", "그림"], css=("pb-hub",), source="doc")
     nodes = [
-        ("bn", "text", "**바이낸스**\n공개 시세(읽기)", 0, 0, "1"), ("l3", "text", "**live3 엔진**\n156개 모의 계좌\n주문 없음", 320, 0, "4"),
+        ("bn", "text", "**바이낸스**\n공개 시세(읽기)", 0, 0, "1"), ("l3", "text", f"**live3 엔진**\n{V4_ACCOUNTS}개 모의 계좌\n주문 없음", 320, 0, "4"),
         ("p3", "text", "`paper3.db`\n거래·평가금", 640, 0, "3"), ("d3", "text", "**밤 점검**\n09:20 KST\n`daily3.db`", 640, 180, "5"),
         ("cp", "text", "**체크포인트**\n30일마다\n`checkpoint.db`", 640, 360, "5"), ("ag", "text", "**에이전트 회의**\n15분마다\n`agents3.db`", 960, 180, "6"),
         ("ds", "text", "**대시보드**\n두 분 글·승인\n`inbox.db`", 960, 400, "2"), ("ob", "text", "**옵시디언 내보내기**\n읽기 전용\n매일 09:50", 1280, 180, "4"),

@@ -21,7 +21,7 @@ import pytest
 
 from paperbot import launchcheck as L
 from paperbot.agents import labdata as LD
-from paperbot.config import V3_ACCOUNTS, V3_RANDOM_SEEDS, V3_STRATEGIES, V3_SYMBOLS, V3_TRADE_TFS
+from paperbot.config import V3_RANDOM_SEEDS, V3_STRATEGIES, V3_SYMBOLS, V3_TRADE_TFS
 
 NOW = int(datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc).timestamp() * 1000)
 MIN, DAY = 60_000, 86_400_000
@@ -107,7 +107,7 @@ class Server:
         self.etc, self.app, self.lib, self.backups, self.repo = (
             str(tmp_path / n) for n in ("etc", "app", "lib", "backups", "repo"))
         for d in (self.etc, self.app, self.lib, self.backups, os.path.join(self.repo, ".git"),
-                  os.path.join(self.lib, "exec"), os.path.join(self.app, "docs")):
+                  os.path.join(self.lib, "exec"), os.path.join(self.app, "docs"), os.path.join(self.lib, "dscheck")):
             os.makedirs(d, exist_ok=True)
         self.owners: dict = {}
         self.calls: list = []
@@ -123,7 +123,8 @@ class Server:
         with open(os.path.join(self.app, "VERSION.json"), "w") as fh:
             json.dump({"commit": COMMIT, "tag": None, "dirty": False, "source": "install.sh",
                        "installed_at": "2026-10-01T03:00:00Z"}, fh)
-        for name in ("paper-v3-rules", "paper-v3-rules-addendum", "paper-v3-rules-change-1", "levrule-eval"):
+        for name in ("paper-v3-rules", "paper-v3-rules-addendum", "paper-v3-rules-change-1", "levrule-eval",
+                     "paper-v4-rules", "paper-v4-verdict", "levrule-eval-v4"):
             data = f"rules {name}\n".encode()
             with open(os.path.join(self.app, "docs", f"{name}.md"), "wb") as fh:
                 fh.write(data)
@@ -165,23 +166,32 @@ class Server:
             ref[src]["5m_BTCUSD"] = {"digest": LD.content_digest(arrs), "bars": 10}
         return ref
 
-    def make_db(self, start, heartbeat=None, brackets=LIVE_BRACKETS, commit=COMMIT, health="fresh", tfs=V3_TRADE_TFS):
+    def make_db(self, start, heartbeat=None, brackets=LIVE_BRACKETS, commit=COMMIT, health="fresh", tfs=None,
+                drop=(), run_extra=None):
         """paper3.db written by the bot's own store (WAL, like the server's), then closed: the bot stopped.
         ``health``: the bot's 'health' row ("fresh": 1m bars 30 s behind, last dead-man ping 30 s ago).
-        ``tfs``: the original accounts' timeframes (36 strategies + 3 coin-flip accounts on each)."""
+        ``tfs``: None = the paper v4 account set (config.v4_account_defs, 331, without the ids in ``drop``); a tuple =
+        a v3 run's accounts on these timeframes (36 strategies + 3 coin-flip accounts on each, settings "paper-v3")."""
+        from paperbot.config import v4_account_defs
         from paperbot.store3 import Store3
         s = Store3(os.path.join(self.lib, "paper3.db"))
         if start is not None:
             n = 0
-            for tf in tfs:
+            if tfs is None:
+                for d in v4_account_defs([f"S{k}" for k in range(V3_STRATEGIES)]):
+                    aid = f"{d['strategy']}@{d['timeframe']}"
+                    if aid not in drop:
+                        s.add_account(aid, d["strategy"], d["timeframe"], d["kind"], start, "paper-v4", None, d["data"])
+                        n += 1
+            for tf in tfs or ():
                 for k in range(V3_STRATEGIES):
-                    s.add_account(f"S{k}@{tf}", f"S{k}", tf, "strategy", start, "v3")
+                    s.add_account(f"S{k}@{tf}", f"S{k}", tf, "strategy", start, "paper-v3")
                 for k in V3_RANDOM_SEEDS:
-                    s.add_account(f"RANDOM_{k}@{tf}", f"RANDOM_{k}", tf, "random", start, "v3")
+                    s.add_account(f"RANDOM_{k}@{tf}", f"RANDOM_{k}", tf, "random", start, "paper-v3")
                 n += V3_STRATEGIES + len(V3_RANDOM_SEEDS)
             s.add_run(start, {})
             s.put_state("run", start, {"accounts": n, "brackets": brackets, "taker_fee": 0.0005, "commit": commit,
-                                       "restored": False})
+                                       "restored": False, **(run_extra or {})})
         if heartbeat is not None:
             s.put_state("heartbeat", heartbeat, {"steps": 100, "last_step": heartbeat - 90_000})
             if health == "fresh":
@@ -824,7 +834,7 @@ def test_backup_chat_is_checked_and_tested_when_set(tmp_path):
 def test_code_version_rules_and_clone(tmp_path):
     srv = Server(tmp_path)
     lines = L.check_code(srv.ctx())
-    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 4개" in lines[1][1]     # + docs/levrule-eval.md
+    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 7개" in lines[1][1]     # v3 4 + v4 3
     srv.head = "e" * 40
     srv.cmd_out[(VENV, "-c", "import paperbot")] = (1, "", "/opt/paperbot/venv/bin/python: No module named 'paperbot'")
     lines = L.check_code(srv.ctx())
@@ -872,35 +882,130 @@ def test_paper_db_before_the_start(tmp_path):
 def test_paper_db_after_the_start(tmp_path):
     srv = Server(tmp_path, "after")
     lines = L.check_paper_db(srv.ctx(), "after")
-    assert st(lines) == [L.OK, L.OK, L.OK, L.OK] and "1분봉 정상" in lines[1][1]
-    assert f"계좌 {V3_ACCOUNTS}개" in lines[2][1] and "계좌 156개" in lines[2][1]
-    assert "0.0500%" in lines[2][1] and "거래소 실제 값" in lines[2][1]
+    assert st(lines) == [L.OK] * 6 and "1분봉 정상" in lines[1][1]
+    assert "계좌 331개" in lines[2][1] and "0.0500%" in lines[2][1] and "거래소 실제 값" in lines[2][1]
+    assert lines[3][1].startswith("원래 계좌 331개 = 매매법 144 · 딥시크 171 · 릴스 5분 단타 1 · 동전 15")
+    assert "5분봉 4개" in lines[3][1] and lines[4] == (L.OK, "멈춘(동결된) 계좌 0개 (held = 0)")
     lines = L.check_paper_db(srv.ctx(), "after", True)
-    assert st(lines) == [L.OK] * 5 and "healthchecks.io에 핑을 보내고 있음: 마지막 50초 전" in lines[2][1]
+    assert st(lines) == [L.OK] * 7 and "healthchecks.io에 핑을 보내고 있음: 마지막 50초 전" in lines[2][1]
     stale = L.check_paper_db(srv.ctx(now_ms=lambda: NOW + 10 * MIN), "after")
     assert stale[0][0] == L.FIX and "620초 전" in stale[0][1]
     os.remove(os.path.join(srv.lib, "paper3.db"))
     srv.make_db(start=NOW - MIN, heartbeat=None, brackets="EXAMPLE TABLE (not exchange data)", commit="f" * 40)
     lines = L.check_paper_db(srv.ctx(), "after")
-    assert st(lines) == [L.FIX, L.FIX, L.NOTE, L.OK] and "400일치" in lines[0][1] and "예시" in lines[1][1]
+    assert st(lines) == [L.FIX, L.FIX, L.NOTE, L.OK, L.OK, L.OK] and "400일치" in lines[0][1] and "예시" in lines[1][1]
     os.remove(os.path.join(srv.lib, "paper3.db"))
     assert "아직 없습니다" in fixes(L.check_paper_db(srv.ctx(), "after"))[0]
 
 
 def test_paper_db_from_the_run_before_the_5m_removal(tmp_path):
-    """5m was removed with the restart of 2026-10-04: a paper3.db with 5m original accounts is the old run."""
-    assert V3_ACCOUNTS == 156 and "5m" not in V3_TRADE_TFS
+    """A paper3.db of the v3 run (before or after the 5m removal of 2026-10-04) is [고칠 것] with the reset command."""
+    assert "5m" not in V3_TRADE_TFS
     srv = Server(tmp_path, "after")
     os.remove(os.path.join(srv.lib, "paper3.db"))
     srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, tfs=("5m",) + V3_TRADE_TFS)
     lines = L.check_paper_db(srv.ctx(), "after")
     f = fixes(lines)
-    assert len(f) == 1 and "5분봉" in f[0] and "39개" in f[0] and "paperbot-reset.sh" in f[0]
+    assert len(f) == 1 and "paper v3 실행 2026-10-04 재시작 전" in f[0] and "195개" in f[0]
+    assert "paperbot-reset.sh --yes" in f[0] and "server-setup-v4.md" in f[0] and "331개" in f[0]
     assert "계좌 195개" in lines[2][1]
-    os.remove(os.path.join(srv.lib, "paper3.db"))
-    srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, tfs=("15m", "30m", "1h"))
+    for tfs in (V3_TRADE_TFS, ("15m", "30m", "1h")):        # the v3 run of 2026-10-04 (and a short one)
+        os.remove(os.path.join(srv.lib, "paper3.db"))
+        srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, tfs=tfs)
+        f = fixes(L.check_paper_db(srv.ctx(), "after"))
+        n = 39 * len(tfs)
+        assert len(f) == 1 and f"paper v3 실행의 DB입니다(원래 계좌 {n}개" in f[0] and "paperbot-reset.sh --yes" in f[0]
+        assert "재시작 전" not in f[0]
+
+
+def test_a_v4_db_that_differs_from_the_rules_is_for_the_developer_never_the_reset(tmp_path):
+    srv = Server(tmp_path, "after")
+    path = os.path.join(srv.lib, "paper3.db")
+    assert fixes(L.check_paper_db(srv.ctx(), "after")) == []
+    for drop, word in ((("REEL_H1@5m",), "원래 계좌 330개"), (("F9_FVG@4h", "S3@15m"), "원래 계좌 329개")):
+        os.remove(path)
+        srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, drop=drop)
+        f = fixes(L.check_paper_db(srv.ctx(), "after"))
+        assert len(f) == 1 and word in f[0] and "개발자" in f[0] and "paperbot-reset.sh" not in f[0], f
+    # a DeepSeek account on 5m (a timeframe its group does not trade)
+    from paperbot.store3 import Store3
+    db = Store3(path)
+    db.add_account("F9_FVG@5m", "F9_FVG", "5m", "ds200", NOW - 2 * 3_600_000, "paper-v4")
+    db.close()
+    f = fixes(L.check_paper_db(srv.ctx(), "after"))
+    assert len(f) == 1 and "그룹이 쓰지 않는 봉의 계좌 1개" in f[0] and "paperbot-reset.sh" not in f[0]
+
+
+def test_accounts_made_on_two_utc_days_are_flagged(tmp_path):
+    from paperbot.store3 import Store3
+    srv = Server(tmp_path, "after")
+    path = os.path.join(srv.lib, "paper3.db")
+    os.remove(path)
+    srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, drop=("REEL_H1@5m",))
+    db = Store3(path)
+    db.add_account("REEL_H1@5m", "REEL_H1", "5m", "reel", NOW - 2 * 3_600_000 + DAY, "paper-v4", None,
+                   {"group": "reel", "family": None, "exits": "reel"})
+    db.close()
+    f = fixes(L.check_paper_db(srv.ctx(), "after"))
+    assert len(f) == 1 and "UTC 날짜가 2개" in f[0]
+
+
+def test_frozen_accounts_of_this_start_are_a_fix(tmp_path):
+    """A HeldEngine (the reel's engine code failed to load at the start) never trades: [고칠 것], from the start
+    record's own list or from the load's CRITICAL alerts of this start (never an older start's)."""
+    from paperbot.store3 import Store3
+    srv = Server(tmp_path, "after")
+    path = os.path.join(srv.lib, "paper3.db")
+    start = NOW - 2 * 3_600_000
+    db = Store3(path)
+    db.alert(start - 3_000, "CRITICAL", "[REEL_H1@5m] engine code failed to load, account held: ImportError: x")
+    db.alert(start - 5 * MIN, "CRITICAL", "[RANDOM_1@5m] engine code failed to load, account held: ImportError: x")
+    db.close()
+    f = fixes(L.check_paper_db(srv.ctx(), "after"))
+    assert len(f) == 1 and "멈춘(동결된) 원래 계좌 2개: RANDOM_1@5m, REEL_H1@5m" in f[0]
+    # a newer start without the problem: the old start's alerts are not this start's
+    db = Store3(path)
+    db.add_run(NOW - MIN, {})
+    db.put_state("run", NOW - MIN, {"accounts": 331, "brackets": LIVE_BRACKETS, "taker_fee": 0.0005, "commit": COMMIT,
+                                     "restored": True})
+    db.close()
     lines = L.check_paper_db(srv.ctx(), "after")
-    assert [x for x in lines if x[0] == L.NOTE and "117개" in x[1] and "156개" in x[1]]
+    assert fixes(lines) == [] and (L.OK, "멈춘(동결된) 계좌 0개 (held = 0)") in lines
+    # the runner's own list in the start record
+    os.remove(path)
+    srv.make_db(start=start, heartbeat=NOW - 20_000, run_extra={"held": ["F9_FVG@15m"]})
+    f = fixes(L.check_paper_db(srv.ctx(), "after"))
+    assert len(f) == 1 and "원래 계좌 1개: F9_FVG@15m" in f[0]
+    # a frozen extra account is a note
+    os.remove(path)
+    srv.make_db(start=start, heartbeat=NOW - 20_000)
+    db = Store3(path)
+    db.put_state("extras", NOW, {"accounts": {"NL1@1h": {"status": "held"}, "NL2@1h": {"status": "active"}}})
+    db.close()
+    lines = L.check_paper_db(srv.ctx(), "after")
+    assert fixes(lines) == [] and any(x[0] == L.NOTE and "멈춘 추가 계좌 1개: NL1@1h" in x[1] for x in lines)
+
+
+def test_db_option_checks_only_that_database(tmp_path):
+    """``--db``: a staging run's database anywhere, checked as after the start, nothing else on the server."""
+    srv = Server(tmp_path, "after")
+    stage = tmp_path / "staging"
+    stage.mkdir()
+    os.replace(os.path.join(srv.lib, "paper3.db"), stage / "paper4.db")
+    for sfx in ("-wal", "-shm"):
+        if os.path.exists(os.path.join(srv.lib, "paper3.db" + sfx)):
+            os.replace(os.path.join(srv.lib, "paper3.db" + sfx), str(stage / "paper4.db") + sfx)
+    out: list = []
+    with open(os.path.join(srv.app, "VERSION.json"), "w") as fh:     # production runs other code than the staging run
+        json.dump({"commit": "a" * 40, "dirty": False}, fh)
+    assert L.main(["--db", str(stage / "paper4.db")], ctx=srv.ctx(), out=out.append) == 0
+    assert not [x for x in out if "restart paperbot-live3" in x]
+    text = "\n".join(out)
+    assert "원래 계좌 331개" in text and "held = 0" in text and "== 결론" in text and "paper v4 started: 331" in text
+    assert not srv.calls and not srv.http                    # no systemctl, no network
+    out.clear()
+    assert L.main(["--db", str(tmp_path / "none.db")], ctx=srv.ctx(), out=out.append) == 1
+    assert any("none.db가 아직 없습니다" in x for x in out)
 
 
 # ---------------------------------------------------------------- agent rooms
@@ -1287,7 +1392,10 @@ def test_executor_must_follow_an_original_strategy_account(tmp_path):
     path = os.path.join(srv.etc, "executor.json")
     for acct, want, word in (("V45_AMB@15m", L.OK, "원래 매매법 계좌"), ("V45_AMB@15m~c1", L.FIX, "복제 계좌"),
                              ("NL1@1h", L.FIX, "새 매매법 계좌"), ("RANDOM_1@15m", L.FIX, "동전 봇 계좌"),
-                             ("NL7@4h", L.FIX, "추가 계좌 이름"), ("S9@5m", L.NOTE, "찾지 못해")):
+                             ("NL7@4h", L.FIX, "추가 계좌"), ("S9@5m", L.NOTE, "찾지 못해"),
+                             # paper v4: never a DeepSeek, reel or 5m coin-flip account, found or not
+                             ("F9_FVG@15m", L.FIX, "딥시크 계좌"), ("REEL_H1@5m", L.FIX, "릴스 5분 단타 계좌"),
+                             ("RANDOM_2@5m", L.FIX, "동전 봇 계좌")):
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"account": acct, "mode": "testnet"}, fh)
         [(status, text)] = L.check_executor_account(srv.ctx())
@@ -1296,9 +1404,24 @@ def test_executor_must_follow_an_original_strategy_account(tmp_path):
     assert any(title == "주문 실행기가 따라 할 계좌" for title, _lines in sections)
 
 
-def test_the_confirmed_rules_documents_still_match_their_hashes():
+def test_the_confirmed_rules_documents_still_match_their_hashes(monkeypatch):
     """The owners confirmed and hashed the rules (2026-10-01): an edit without a new, agreed hash fails the
-    launch check and makes every restart report a rules change (2026-10-03: an AI-cap line was edited by mistake)."""
+    launch check and makes every restart report a rules change (2026-10-03: an AI-cap line was edited by mistake).
+    Paper v4: its three documents are hashed only after their final text (plan section 6, after the integration
+    step); until its hash file exists a v4 document is not judged here (the server's launch check and
+    deploy/rehearse-reset.sh still say [고칠 것] / [실패], so an unhashed release never gets past the rehearsal); once
+    the hash file exists it must match."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    v4 = [r for r in L.RULES_SUMS if "v4" in r]
+    assert v4 == ["docs/paper-v4-rules.sha256", "docs/paper-v4-verdict.sha256", "docs/levrule-eval-v4.sha256"]
+    pending = [r for r in v4 if not os.path.exists(os.path.join(root, r))]
+    monkeypatch.setattr(L, "RULES_SUMS", tuple(r for r in L.RULES_SUMS if r not in pending))
     lines = L.rules_lines(root)
     assert all(kind != "고칠 것" for kind, *_ in lines), lines
+
+
+def test_the_v4_rules_hash_files_are_the_run_records_rules():
+    """launchcheck's hash files cover exactly runinfo.RULES_FILES (the run record's 'rules' key)."""
+    from paperbot import runinfo
+    docs = [r[:-len(".sha256")] + ".md" for r in L.RULES_SUMS]
+    assert sorted(docs) == sorted(runinfo.RULES_FILES)

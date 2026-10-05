@@ -19,13 +19,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "deploy", "paperbot-reset.sh")
 TEXT = open(SCRIPT, encoding="utf-8").read()
 NEVER_ARCHIVED = ("agents3.db", "inbox.db", "liq.db", "market.db", "flow.db", "paper.db", "ghcoin", "lab", "exec",
-                  "failalert", "price_alerts.json")
+                  "failalert", "price_alerts.json", "debate", "shadow200", "obsidian")
 
 
 def _list(name):
     m = re.search(rf'^{name}="([^"]*)"$', TEXT, re.M)
     assert m, name
-    return m.group(1).split()
+    return [w for w in m.group(1).split() if w != "\\"]            # (a line continuation)
 
 
 def test_bash_syntax():
@@ -48,7 +48,7 @@ def test_strict_mode_and_modes():
 def test_the_archive_lists_never_hold_memory_or_market_data():
     archived = _list("ARCHIVE_DBS") + _list("ARCHIVE_FILES")
     assert set(archived) == {"paper3.db", "daily3.db", "checkpoint.db", "tradealerts.json", "evening-latest.json",
-                             "checkpoint_bars", "rehearsal"}
+                             "checkpoint_bars", "rehearsal", "dscheck"}
     for name in NEVER_ARCHIVED:
         assert name not in archived, name
         assert name in _list("KEEP"), name
@@ -63,6 +63,11 @@ def test_the_archive_lists_never_hold_memory_or_market_data():
 def test_moved_items_are_only_the_lists():
     """Every `mv` of the real run moves "$DATA/$f..." with $f from ARCHIVE_DBS / ARCHIVE_FILES."""
     mvs = [ln.strip() for ln in TEXT.splitlines() if re.match(r"\s*(if .*then )?mv ", ln.strip()) or " mv \"$DATA" in ln]
+    # the one exception: the DeepSeek check's bar cache (regenerable public klines) goes back from the archive
+    back = [m for m in mvs if '"$DATA/dscheck/"' in m]
+    assert back == ['if [ -e "$g" ]; then mv "$g" "$DATA/dscheck/"; fi'], back
+    assert '"$ARCH/dscheck/$DSCHECK_CACHE"' in TEXT and _list("DSCHECK_CACHE") == ["bars5m.db"]
+    mvs = [m for m in mvs if m not in back]
     assert mvs and all('"$DATA/$f' in m and '"$ARCH/"' in m for m in mvs), mvs
     loops = re.findall(r"for f in (\$\w+); do\n(?:.*\n){0,3}?.*mv \"\$DATA", TEXT)
     assert set(loops) == {"$ARCHIVE_DBS", "$ARCHIVE_FILES"}
@@ -174,7 +179,10 @@ def test_dry_run_changes_nothing(env):
     assert r.returncode == 0, r.stdout + r.stderr
     out = r.stdout
     assert "[멈출 것] paperbot-live3 paperbot-dash paperbot-agents.timer (" in out
+    # without --agents-off the agents' tick comes back like the rest (owners' D15: P11's must-items landed)
     assert "[끝나고 다시 켤 것] paperbot-live3 paperbot-dash paperbot-agents.timer\n" in out
+    assert "[꺼 둘 것]" not in out and "[에이전트 회의] 다시 켬(지금처럼)" in out
+    assert "[계속 돌 것] paperbot-shadow200.timer" in out
     assert "  paper3.db" in out and "  tradealerts.json" in out and "  checkpoint_bars" in out
     keep = out.split("[그대로 둘 것]")[1].split("[agents3.db")[0]
     assert "agents3.db" in keep and "inbox.db" in keep and "price_alerts.json" in keep and "liq.db" in keep
@@ -185,6 +193,18 @@ def test_dry_run_changes_nothing(env):
     assert "[옮기기 전에 새 백업] paperbot-backup.service" in out
     assert "paperbot-offsite.timer가 켜져 있지 않아 건너뜁니다" in out
     assert not (env["tmp"] / "backups").exists()
+
+
+def test_dry_run_with_agents_off_shows_the_tick_kept_off_and_what_stops(env):
+    env["env"]["FAKE_ENABLED"] = "paperbot-obsidian.timer"
+    r = _run(env, "--dry-run", "--agents-off")
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = r.stdout
+    assert "[끝나고 다시 켤 것] paperbot-live3 paperbot-dash\n" in out
+    assert ("[꺼 둘 것] paperbot-agents.timer (--agents-off: 에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음."
+            in out)
+    assert "[꺼 둘 것] paperbot-obsidian.timer (리셋 뒤 점검을 마치고 두 분이 켬" in out
+    assert "[에이전트 회의] 꺼짐(--agents-off)" in out
 
 
 def test_dry_run_shows_the_offsite_copy_when_its_timer_is_enabled(env):
@@ -243,9 +263,13 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     stops = [c for c in calls if c.startswith("stop")]
     starts = [c for c in calls if c.startswith("start")]
     assert stops == ["stop " + " ".join(ALL_UNITS)]                    # every loaded unit, whatever its state
-    # the fresh backup runs after everything stopped and before the move; no off-site copy (timer not enabled)
+    # the fresh backup runs after everything stopped and before the move; no off-site copy (timer not enabled);
+    # the agents' tick comes back without --agents-off (owners' D15)
     assert starts == ["start paperbot-backup.service",
                       "start paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
+    assert not any(c.startswith("disable") for c in calls)
+    assert "에이전트 회의(paperbot-agents.timer): 켜짐" in r.stdout.split("요약")[1]
+    assert "에이전트 꺼짐" not in r.stdout
     assert calls.index("start paperbot-backup.service") > calls.index(stops[0])
     out = r.stdout
     assert "no process has the run files open" in out and "요약" in out and "봇이 아직 새 계좌를 만들지 않았습니다" in out
@@ -256,7 +280,7 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     assert (day / "paper3.db").read_text() == "x" and (day / "daily3.db").exists()
 
 
-ALL_UNITS = [u for u in _list("SERVICES") + _list("TIMERS") if u != "\\"]   # (a line continuation)
+ALL_UNITS = _list("SERVICES") + _list("TIMERS")
 
 
 def _starts(env):
@@ -531,3 +555,215 @@ def test_the_doc_budget_box_and_the_env_template_hold_the_same_lines():
     ex = open(os.path.join(ROOT, "deploy", "agents.env.example"), encoding="utf-8").read().splitlines()
     assert [ln for ln in ex if ln.startswith("AGENTS_BUDGET=")] == [want]
     assert [ln for ln in ex if ln.startswith("AGENTS_RESEARCH_EVERY_MIN=")] == ["AGENTS_RESEARCH_EVERY_MIN=180"]
+
+
+# ---------------------------------------------------------------------------------- paper v4 (owners 2026-10-05)
+def test_v4_stop_lists_hold_the_debate_room_obsidian_and_dscheck_never_the_shadow_test():
+    """The debate room reads paper3.db all the time and the Obsidian export / DeepSeek check read the run's files:
+    stopped while the files move. The DeepSeek-200 shadow test (own database, pinned T0) is never stopped."""
+    assert "paperbot-debate" in _list("SERVICES")
+    for u in ("paperbot-obsidian.timer", "paperbot-dscheck.timer"):
+        assert u in _list("TIMERS")
+    for u in ("paperbot-obsidian.service", "paperbot-dscheck.service"):
+        assert u in _list("JOBS")
+    for name in ("SERVICES", "TIMERS", "JOBS"):
+        assert not [u for u in _list(name) if "shadow200" in u], name
+    # every unit file the lists name exists in deploy/
+    for u in _list("SERVICES") + _list("TIMERS") + _list("JOBS"):
+        f = u if "." in u else u + ".service"
+        assert os.path.exists(os.path.join(ROOT, "deploy", f)), f
+    assert _list("AFTER_CHECK_TIMERS") == ["paperbot-obsidian.timer", "paperbot-shadow200.timer",
+                                           "paperbot-dscheck.timer"]
+    # the same three timers install.sh leaves alone while resetting (it prints each one's state)
+    inst = open(os.path.join(ROOT, "deploy", "install.sh"), encoding="utf-8").read()
+    assert "for t in " + " ".join(_list("AFTER_CHECK_TIMERS")) + "; do" in inst
+
+
+def test_v4_install_runs_in_resetting_mode_and_the_after_check_timers_stay_off(env):
+    """--agents-on (the default, said explicitly) brings the tick back; the Obsidian export and the DeepSeek check are
+    stopped and kept off (disabled, not started) whatever they were; the shadow test is never touched; the DeepSeek
+    check's bar cache stays in place while its run summaries are archived."""
+    stub = env["tmp"] / "install.sh"
+    stub.write_text('#!/bin/bash\necho "resetting=${PAPERBOT_RESETTING:-}" >> "%s"\n' % (env["tmp"] / "installed"))
+    env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
+                      FAKE_ACTIVE="paperbot-live3 paperbot-dash paperbot-debate paperbot-agents.timer "
+                                  "paperbot-obsidian.timer paperbot-shadow200.timer",
+                      FAKE_ENABLED="paperbot-agents.timer paperbot-dscheck.timer")
+    ds = env["data"] / "dscheck"
+    (ds / "days").mkdir(parents=True)
+    (ds / "last.txt").write_text("old run\n")
+    (ds / "days" / "2026-10-04.json").write_text("{}")
+    (ds / "bars5m.db").write_text("cache")
+    r = _run(env, "--agents-on", "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (env["tmp"] / "installed").read_text() == "resetting=1\n"
+    calls = env["log"].read_text().splitlines()
+    stops = [c for c in calls if c.startswith("stop")]
+    assert len(stops) == 1 and "paperbot-debate" in stops[0] and "paperbot-obsidian.timer" in stops[0]
+    assert "shadow200" not in " ".join(c for c in calls if c.startswith(("stop", "start", "disable")))
+    assert _starts(env)[-1] == "start paperbot-live3 paperbot-dash paperbot-debate paperbot-agents.timer"
+    assert [c for c in calls if c.startswith("disable")] == ["disable paperbot-obsidian.timer paperbot-dscheck.timer"]
+    out = r.stdout
+    assert "[꺼 둘 것] paperbot-obsidian.timer (리셋 뒤 점검을 마치고" in out and "에이전트 꺼짐" not in out
+    assert ("점검에 [고칠 것]이 없으면 켜기: sudo systemctl enable --now paperbot-obsidian.timer paperbot-shadow200.timer "
+            "paperbot-dscheck.timer") in out
+    assert "리셋 뒤 점검을 마치고 켤 타이머(지금 상태):" in out and "paperbot-dscheck.timer: 자동 시작" in out
+    # the run's dscheck summaries are archived, the bar cache is not
+    arch = next((env["data"] / "archive").iterdir())
+    assert (arch / "dscheck" / "last.txt").exists() and (arch / "dscheck" / "days" / "2026-10-04.json").exists()
+    assert not (arch / "dscheck" / "bars5m.db").exists()
+    assert sorted(os.listdir(ds)) == ["bars5m.db"] and (ds / "bars5m.db").read_text() == "cache"
+
+
+def test_v4_agents_off_keeps_the_tick_off_and_says_what_stops(env):
+    stub = env["tmp"] / "install.sh"
+    stub.write_text("#!/bin/bash\ntrue\n")
+    env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
+                      FAKE_ENABLED="paperbot-agents.timer")
+    r = _run(env, "--yes", "--agents-off")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = env["log"].read_text().splitlines()
+    assert _starts(env)[-1] == "start paperbot-live3 paperbot-dash"
+    assert "disable paperbot-agents.timer" in calls
+    assert calls.index("disable paperbot-agents.timer") < calls.index(_starts(env)[-1])
+    summary = r.stdout.split("요약")[1]
+    assert "!! 에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음 (paperbot-agents.timer 꺼짐, --agents-off)" in summary
+    assert "sudo systemctl enable --now paperbot-agents.timer" in summary
+
+
+def test_v4_flags_in_any_order_and_unknown_ones_refused():
+    for args in (["--agents-off"], ["--force-again"], ["--yes", "--dry-run"], ["--yes", "--agent-off"],
+                 ["--yes", "--agents-on", "--agents-off"], ["--agents-off", "--dry-run", "--agents-on"]):
+        r = subprocess.run(["bash", SCRIPT, *args], capture_output=True, text=True)
+        assert r.returncode == 2 and "--agents-off" in r.stdout, args
+    assert 'AGENTS_OFF_KO="에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음"' in TEXT
+    from paperbot import launchcheck as L
+    assert L.AGENTS_OFF_KO == "에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음"
+    assert "5m accounts are gone" not in TEXT and "156" not in TEXT and "144" not in TEXT
+
+
+REHEARSE = os.path.join(ROOT, "deploy", "rehearse-reset.sh")
+
+
+def test_rehearse_script_syntax():
+    subprocess.run(["bash", "-n", REHEARSE], check=True)
+    sc = shutil.which("shellcheck")
+    if sc is not None:
+        r = subprocess.run([sc, REHEARSE], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout
+    text = open(REHEARSE, encoding="utf-8").read()
+    assert "set -Eeuo pipefail" in text and "PAPERBOT_LIB=\"$W/lib\"" in text
+    # it never acts on the real server: the reset only ever gets the fake systemctl and the stub install
+    assert 'PAPERBOT_SYSTEMCTL="$W/stub/systemctl"' in text and 'PAPERBOT_INSTALL="$W/stub/install.sh"' in text
+    for line in text.splitlines():
+        code = line.split("#", 1)[0]
+        assert not re.search(r"\brm\s+-|\bmv\s", code), line
+        assert not re.search(r'REAL_SYSTEMCTL"? (stop|start|disable|enable|restart)', code), line
+
+
+def test_rehearse_reset_on_copies_passes_and_leaves_the_source_alone(tmp_path):
+    """The whole rehearsal on a fake server: a v3 paper3.db, the agents' and the owners' databases; a fake "real"
+    systemctl that only answers questions. The source folder is unchanged; every check passes."""
+    if os.geteuid() != 0:
+        pytest.skip("the script refuses to run without root")
+    from paperbot.store3 import Store3
+    src = tmp_path / "src"
+    src.mkdir()
+    st = Store3(str(src / "paper3.db"))
+    for tf in ("15m", "30m", "1h", "4h"):
+        for k in range(36):
+            st.add_account(f"S{k}@{tf}", f"S{k}", tf, "strategy", 1_790_000_000_000, "paper-v3")
+    st.commit()
+    st.close()
+    a = R.open_agents(str(src / "agents3.db"))
+    R.ensure_rooms(a)
+    a.execute("INSERT INTO cursors VALUES ('loss:strat:V45_AMB', '5')")
+    a.commit()
+    a.close()
+    R.open_inbox_rw(str(src / "inbox.db")).close()
+    (src / "tradealerts.json").write_text("{}")
+    real = tmp_path / "systemctl"
+    real.write_text("""#!/bin/bash
+cmd="$1"; shift
+u="${@: -1}"
+echo "$cmd $*" >> "%s"
+case "$cmd" in
+  is-active) case "$u" in paperbot-live3|paperbot-debate|paperbot-agents.timer|paperbot-obsidian.timer|\
+paperbot-shadow200.timer) [ "$1" = --quiet ] || echo active; exit 0;; esac; [ "$1" = --quiet ] || echo inactive; exit 3 ;;
+  is-enabled) case "$u" in paperbot-live3|paperbot-agents.timer) exit 0;; esac; exit 1 ;;
+  show) echo loaded ;;
+  *) echo "NOT ALLOWED $cmd" >> "%s"; exit 1 ;;
+esac
+""" % (tmp_path / "real.log", tmp_path / "real.log"))
+    real.chmod(0o755)
+    before = _tree_hash(src)
+    env = dict(os.environ, PAPERBOT_LIB=str(src), REHEARSE_BASE=str(tmp_path / "base"), PAPERBOT_ETC=str(tmp_path / "etc"),
+               PAPERBOT_PY=sys.executable, PAPERBOT_RESET_USER="", REHEARSE_REAL_SYSTEMCTL=str(real), ALLOW_DIRTY="1",
+               PAPERBOT_RESET_POLL="0")
+    r = subprocess.run(["bash", REHEARSE], capture_output=True, text=True, env=env, timeout=300)
+    out = r.stdout
+    from paperbot import launchcheck as L
+    hashed = all(k == "OK" for k, _ in L.rules_lines(ROOT))
+    if hashed:                       # the release: every check passes
+        assert r.returncode == 0, out[-3000:] + r.stderr[-2000:]
+        assert "[실패" not in out and "[OK] 연습 리셋 통과" in out
+    else:                            # the v4 documents are not hashed yet (before the release): only that check fails
+        assert r.returncode == 1, out[-3000:] + r.stderr[-2000:]
+        assert [ln for ln in out.splitlines() if ln.startswith("[실패")] == [
+            "[실패] 규칙 문서(v3·v4)가 해시 파일과 같음 (launchcheck와 같은 점검)", "[실패 1개] 위 [실패] 줄과 "
+            + out.split("[실패 1개] 위 [실패] 줄과 ")[1].splitlines()[0]]
+    for word in ("paperbot-debate 멈춤 목록에 있음", "paperbot-obsidian.timer 멈춤 목록에 있음",
+                 "shadow200)은 멈추지 않음", "에이전트 회의 타이머는 다시 켬(--agents-off 없음",
+                 "딥시크 밤 재계산 타이머는 다시 켜지 않음", "원래 계좌 331개 = 매매법 144",
+                 "PAPERBOT_RESETTING=1"):
+        assert word in out, word
+    assert _tree_hash(src) == before                               # the real folder is only read
+    assert "NOT ALLOWED" not in (tmp_path / "real.log").read_text()
+
+
+GUIDE = os.path.join(ROOT, "docs", "server-setup-v4.md")
+
+
+def test_v4_guide_has_the_staging_run_the_reset_and_no_v3_numbers():
+    text = open(GUIDE, encoding="utf-8").read()
+    for word in ("156", "144", "5분봉 제외", "뺐음"):
+        assert word not in text, word
+    # the staging run: its own unit, database and env file without Telegram / healthchecks, the 01:00 boundary
+    assert "sudo systemd-run --unit=paper4-staging --collect --uid=paperbot --gid=paperbot" in text
+    assert "--db /var/lib/paperbot/staging/paper4.db" in text and "01:00" in text
+    assert "grep -E '^BINANCE_API_(KEY|SECRET)='" in text and "TELEGRAM|DEADMAN" in text
+    assert "멈춤 기준" in text and "60초" in text and "30초" in text
+    # the commands it names exist with these options
+    assert "sudo bash deploy/rehearse-reset.sh" in text and os.path.exists(REHEARSE)
+    assert "sudo bash deploy/paperbot-reset.sh --yes" in text and "--agents-off" in TEXT and "--agents-off" in text
+    assert "--agents-off" in open(REHEARSE, encoding="utf-8").read()
+    assert "--force-again" in text and "paperbot.launchcheck --stage after" in text
+    from paperbot import launchcheck as L
+    assert "--db" in open(L.__file__, encoding="utf-8").read()
+    after = re.search(r"enable --now (paperbot-obsidian\.timer [^\n`]*)", text).group(1).split()
+    assert after == _list("AFTER_CHECK_TIMERS")
+    assert "되돌리기" in text and "/opt/crypto-bot-research.old" in text
+
+
+def test_v4_guide_python_boxes_run_on_a_v4_database(tmp_path):
+    """Every `python - <db> <<'PY'` box of the guide runs on a v4-shaped database (read-only) without an error."""
+    from paperbot.config import v4_account_defs
+    from paperbot.store3 import Store3
+    db = str(tmp_path / "paper4.db")
+    st = Store3(db)
+    for d in v4_account_defs([f"S{k}" for k in range(36)]):
+        st.add_account(f"{d['strategy']}@{d['timeframe']}", d["strategy"], d["timeframe"], d["kind"], 1, "paper-v4",
+                       None, d["data"])
+    st.conn.execute("INSERT INTO signal_log (bar_close, timeframe, strategy, symbol, side, delay_ms, status) "
+                    "VALUES (4 * 3600 * 1000, '5m', 'REEL_H1', 'BTCUSDT', 1, 9000, 'SUBMITTED')")
+    st.conn.execute("INSERT INTO signal_log (bar_close, timeframe, strategy, symbol, side, delay_ms, status) "
+                    "VALUES (4 * 3600 * 1000, '15m', 'F9_FVG', 'ETHUSDT', -1, 21000, 'SUBMITTED')")
+    st.commit()
+    st.close()
+    text = open(GUIDE, encoding="utf-8").read()
+    boxes = re.findall(r"python - [^\n]*<<'PY'\n(.*?)\nPY\n", text, re.S)
+    assert len(boxes) == 2
+    for code in boxes:
+        r = subprocess.run([sys.executable, "-", db], input=code, capture_output=True, text=True, timeout=60)
+        assert r.returncode == 0, r.stderr
+        assert "REEL_H1" in r.stdout

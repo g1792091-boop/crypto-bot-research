@@ -4,11 +4,13 @@
   side, timeframe, entry session (Korea time), weekday/weekend and market regime at entry: trades, wins, losses,
   win rate and P&L per group, plus how wins and losses were held. The staff read where losses gather and wins do
   not; groups under ``min_n`` trades are marked as too small to mean anything.
-- ``ranking(conn, ...)``: the strategies ranked by the P&L of their four timeframe accounts (5m removed 2026-10-04) (wallet against the
-  starting equity), the top and bottom ``k`` with their own comparison, against the coin-flip accounts.
+- ``ranking(conn, ...)``: the 36 locked strategies ranked by the P&L of their timeframe accounts (config.V3_TRADE_TFS;
+  wallet against the starting equity), the top and bottom ``k`` with their own comparison, against the coin-flip
+  accounts of the same timeframes. Paper v4 (owners 2026-10-05): only the 36 are ranked (``names_ko``, the roster);
+  DeepSeek, the reel and the 5m coin flips get one compact line each in ``groups``, never a place in the ranking.
 
-Descriptive only: nothing here changes an account. A strategy's 30-day verdict is the checkpoint's (coin flips x
-2,000), not this ranking.
+Descriptive only: nothing here changes an account. A strategy's 30-day verdict is the checkpoint's (same-bar coin
+flips, per-group FDR: agents/facts.method_ko), not this ranking.
 """
 
 from __future__ import annotations
@@ -20,6 +22,9 @@ from typing import Iterable, Optional
 from ..config import V3_TRADE_TFS
 from ..sessions import session_of
 
+# paper v4: the original groups that are not ranked (one compact line each in ``ranking()["groups"]``)
+OTHER_GROUPS = ("ds200", "reel")
+GROUP_LINE_KO = {"ds200": "딥시크", "reel": "릴스 5분 단타", "flip_5m": "5분봉 동전"}
 SESSION_KO = {"asia": "아시아장(09-16)", "europe": "유럽장(16-22)", "us": "미국장(22-05)", "dawn": "새벽(05-09)"}
 KST_MS = 9 * 3_600_000
 
@@ -108,12 +113,19 @@ def ranking(conn: sqlite3.Connection, initial: float, round_trip: float, k: int 
     w = wallets(conn)
     per: dict = {}
     flips = []
+    others: dict = {}
     for aid, (kind, strat, tf, wal, bust) in w.items():
         wal = initial if wal is None else float(wal)
-        if kind == "random":
+        if kind == "random" and tf in V3_TRADE_TFS:
             flips.append({"account": aid, "timeframe": tf, "pnl": round(wal - initial, 2), "bust": bust})
             continue
-        if kind != "strategy":
+        if kind in OTHER_GROUPS or (kind == "random" and tf not in V3_TRADE_TFS):
+            g = others.setdefault("flip_5m" if kind == "random" else kind, {"accounts": 0, "pnl": 0.0, "busts": 0})
+            g["accounts"] += 1
+            g["pnl"] += wal - initial
+            g["busts"] += int(bust)
+            continue
+        if kind != "strategy" or (names_ko is not None and strat not in names_ko):
             continue
         s = per.setdefault(strat, {"strategy": strat, "name_ko": (names_ko or {}).get(strat, strat), "pnl": 0.0,
                                    "accounts": {}, "busts": 0})
@@ -152,13 +164,19 @@ def ranking(conn: sqlite3.Connection, initial: float, round_trip: float, k: int 
                              for t in tags[:6]]})
     flips.sort(key=lambda f: -f["pnl"])
     mean = round(sum(f["pnl"] for f in flips) / len(flips), 2) if flips else None
-    return {"strategies": len(rows), "picked": out,
+    groups = {g: {"name_ko": GROUP_LINE_KO.get(g, g), "accounts": v["accounts"], "pnl": round(v["pnl"], 2),
+                  "pnl_per_account": round(v["pnl"] / v["accounts"], 2) if v["accounts"] else None, "busts": v["busts"]}
+              for g, v in sorted(others.items(), key=lambda kv: list(GROUP_LINE_KO).index(kv[0])
+                                 if kv[0] in GROUP_LINE_KO else len(GROUP_LINE_KO))}
+    return {"strategies": len(rows), "picked": out, "groups": groups,
             "coin_flips": {"best": flips[:3], "worst": flips[-3:][::-1], "mean_pnl": mean,
                            "accounts_per_strategy": len(V3_TRADE_TFS),
                            "mean_pnl_per_strategy": None if mean is None else round(mean * len(V3_TRADE_TFS), 2)},
-            "note": "순위는 4개 봉 계좌 손익 합계(코드 집계), pnl_per_account는 그 계좌당 평균. 동전 봇 mean_pnl은 계좌 "
-                    "하나의 평균이라 pnl_per_account와 비교함(mean_pnl_per_strategy = 매매법 하나의 봉 계좌 4개 합으로 친 값). 30일 판정은 체크포인트"
-                    "(동전 봇 2,000개 비교)가 함. 거래 30건 미만이면 상위·하위 모두 운일 수 있음"}
+            "note": f"순위는 잠긴 매매법 36개만, 봉 계좌 {len(V3_TRADE_TFS)}개 손익 합계(코드 집계), pnl_per_account는 그 계좌당 "
+                    "평균. 동전 봇 mean_pnl은 같은 봉의 계좌 하나의 평균이라 pnl_per_account와 비교함(mean_pnl_per_strategy = "
+                    f"매매법 하나의 봉 계좌 {len(V3_TRADE_TFS)}개 합으로 친 값). groups는 딥시크·릴스 5분 단타·5분봉 동전의 "
+                    "계좌당 평균(순위에 넣지 않음). 30일 판정은 체크포인트(동전 봇 비교)가 함. 거래 30건 미만이면 상위·하위 "
+                    "모두 운일 수 있음"}
 
 
 def _trade(c: dict) -> dict:

@@ -13,6 +13,17 @@ every line kept), so a gap that liquidates 30 accounts is not 30 messages (Teleg
 group). Telegram's 429 'retry after N s' is honoured: ``TelegramNotifier.send`` (the oneshot jobs) waits once, at
 most ``RETRY_WAIT_MAX_S``; the live runner's ``Router`` never sleeps in the trading loop and sends the refused
 message again on a later step, once N seconds have passed (review 2026-10-04, M-2).
+
+Paper v4 (owners' D10, 2026-10-05): a paper liquidation's first line says 모의 ('모의 강제청산 · …'; a bundle:
+'긴급 N건 · 모의 강제청산 k'), liquidations stay loud for every group; the hourly digest lists the lines of the 36, the
+reel and the extras and gives the DeepSeek accounts and the coin flips one count line per group (``Digest``); the
+start line names the run and its split by group ('▶️ 봇 시작 · 모의 v4 · 계좌 331개', '매매법 144 · 딥시크 171 · …');
+the DeepSeek definitions and the reel are named from paperbot/groups.py (``who``).
+
+Gap pass (G27, G13): the v4 groups' frozen alert texts (paperbot/sigservice.py ``DS_TIMEOUT_TEXT`` and the rest) are
+worded here, and the Router keeps the DeepSeek timeouts in the hourly digest (one count line; ONE loud WARN a KST day
+once ``Router.DS_TIMEOUT_LOUD`` of them have come). Every message Telegram accepts adds 1 to ``tg_sends(day, kind, n)``
+(``count_send``) in its own file tgsends.db beside paper3.db (never in paper3.db).
 """
 
 from __future__ import annotations
@@ -37,6 +48,69 @@ PREFIX = {CRITICAL: "🚨 ", WARN: "⚠ ", INFO: ""}
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 
 _clock = time.time          # seconds; tests and the sample generator pin it (the KST time line of a message)
+
+# Paper v4's group alert texts as patterns (gap G27). The texts are FROZEN in paperbot/sigservice.py (a trading file
+# in the shared hash set: fixed at day 0), which also holds these patterns (``DS_TIMEOUT_RE`` ...). The Router takes
+# sigservice's own pattern when it can import it (``group_pattern``); these copies serve the processes that never load
+# the signal service (failalert, the dashboard, the trade alerts), and tests/test_notify.py checks they equal
+# sigservice's, so a changed text fails a test instead of slipping past the digest.
+DS_TIMEOUT_RE = r"^\[ds200\] DeepSeek signal workers timed out after (\d+)s; DeepSeek signals skipped at (\d+) for (.+)$"
+DS_FAILED_RE = r"^\[ds200\] DeepSeek signals failed at (\d+) \((.*)\); the other groups run on$"
+REEL_FAILED_RE = r"^\[reel\] 5m signals \(reel and 5m coin flips\) failed at (\d+) \((.*)\); the other groups run on$"
+REFUSED_RE = r"^\[(ds200|reel)\] signal code refused, this group's signals stop \(the other groups run on\): (.*)$"
+GROUP_PATTERNS = {"DS_TIMEOUT_RE": DS_TIMEOUT_RE, "DS_FAILED_RE": DS_FAILED_RE, "REEL_FAILED_RE": REEL_FAILED_RE,
+                  "REFUSED_RE": REFUSED_RE}
+
+
+def group_pattern(name: str) -> "re.Pattern":
+    """sigservice's frozen pattern ``name`` when the signal service can be imported (the live runner has it loaded
+    already), else this module's copy. Never raises for a missing module."""
+    try:
+        from . import sigservice
+        return re.compile(getattr(sigservice, name))
+    except Exception:  # noqa: BLE001  (a light process without pandas / the signal service: the copy)
+        return re.compile(GROUP_PATTERNS[name])
+
+
+# The Telegram send counter (gap G13; the dashboard's /api/v4/server shows today's and the week's count). Every
+# message Telegram accepted adds 1 to tg_sends(day = KST date 'YYYY-MM-DD', kind = level) in its own file tgsends.db
+# beside paper3.db (``TG_SENDS_DB``, or $PAPERBOT_TG_SENDS_DB; the dashboard reads it there, never paper3.db): paper3.db belongs to the live runner (another connection writing it
+# could wait on the runner's open transaction inside the trading loop) and the agents' unit sees it read-only. One
+# short connection, at most ``TG_SENDS_WAIT_S`` of busy wait, no fsync; a count that cannot be written is skipped,
+# never the reason a send fails.
+TG_SENDS_DB = "/var/lib/paperbot/tgsends.db"     # its own file next to paper3.db (dash/app.py TG_SENDS_FILE)
+TG_SENDS_WAIT_S = 0.2
+TG_SENDS_SCHEMA = "CREATE TABLE IF NOT EXISTS tg_sends(day TEXT, kind TEXT, n INTEGER, PRIMARY KEY(day, kind))"
+
+
+def tg_sends_path() -> Optional[str]:
+    """The counter database: $PAPERBOT_TG_SENDS_DB, else ``TG_SENDS_DB`` when its folder exists (none on a dev box)."""
+    p = os.environ.get("PAPERBOT_TG_SENDS_DB") or TG_SENDS_DB
+    return p if p and os.path.isdir(os.path.dirname(os.path.abspath(p))) else None
+
+
+def count_send(kind: str, path: Optional[str] = None) -> bool:
+    """Add 1 to today's (KST) ``kind`` count. True when written; False (never raises) when there is no counter
+    database or it could not be written in ``TG_SENDS_WAIT_S``."""
+    try:
+        path = path or tg_sends_path()
+        if not path:
+            return False
+        import sqlite3
+        day = time.strftime("%Y-%m-%d", time.gmtime(_clock() + 9 * 3600))
+        c = sqlite3.connect(path, timeout=TG_SENDS_WAIT_S)
+        try:
+            c.execute("PRAGMA synchronous=OFF")
+            c.execute(TG_SENDS_SCHEMA)
+            c.execute("INSERT INTO tg_sends(day, kind, n) VALUES(?, ?, 1) "
+                      "ON CONFLICT(day, kind) DO UPDATE SET n = n + 1", (day, str(kind)))
+            c.commit()
+        finally:
+            c.close()
+        return True
+    except Exception as exc:  # noqa: BLE001  (a count, never a lost message)
+        print(f"telegram send counter not written: {type(exc).__name__}: {exc}"[:300], file=sys.stderr)
+        return False
 
 
 # ---------------------------------------------------------------- number and name helpers (every sender uses them)
@@ -100,10 +174,46 @@ def _strategy_ko() -> dict:
         return {}
 
 
+def _v4_label(strat: str) -> Optional[str]:
+    """The paper v4 name of a DeepSeek definition ('딥시크 F9_FVG (FVG·오더 블록)') or of the reel, from the display
+    module (paperbot/groups.py, imported only here, when a message is worded); None for anything else or when the
+    module cannot be read (names are cosmetic)."""
+    try:
+        from .groups import label_ko
+        return label_ko(strat)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _ds_ids() -> frozenset:
+    """The 44 DeepSeek definition ids (config.DS200_FAMILY, already loaded by the runner); empty when unreadable."""
+    global _DS_IDS
+    if _DS_IDS is None:
+        try:
+            from .config import DS200_FAMILY
+            _DS_IDS = frozenset(DS200_FAMILY)
+        except Exception:  # noqa: BLE001
+            return frozenset()
+    return _DS_IDS
+
+
+_DS_IDS: Optional[frozenset] = None
+
+
+def _reel_name() -> str:
+    try:
+        from .config import REEL_NAME
+        return REEL_NAME
+    except Exception:  # noqa: BLE001
+        return "REEL_H1"
+
+
 def who(book: str, kind: Optional[str] = None) -> str:
     """An account as the owners read it: 'S2_ST_ROC@15m' -> '슈퍼트렌드·ROC 15분', a copy 'S2_ST_ROC@1h~c1' ->
     '복제 슈퍼트렌드·ROC 1시간', a new-strategy account 'NL2@15m' -> '새 매매법 NL2 15분', 'RANDOM_3@1h' ->
-    '동전 봇 3 1시간'. ``kind`` (accounts.kind) decides when given; anything unknown is returned as it came."""
+    '동전 봇 3 1시간' (the 5m ones too: 'RANDOM_1@5m' -> '동전 봇 1 5분'), a DeepSeek account 'F9_FVG@15m' ->
+    '딥시크 F9_FVG (FVG·오더 블록) 15분', the reel 'REEL_H1@5m' -> '릴스 5분 단타 (볼린저 20·2 + 200선)' (its name
+    already says 5분). ``kind`` (accounts.kind) decides when given; anything unknown is returned as it came."""
     strat, _, tf = str(book).partition("@")
     copy = re.fullmatch(r"(.+?)~c(\d+)", tf)
     if copy:
@@ -115,10 +225,14 @@ def who(book: str, kind: Optional[str] = None) -> str:
         return f"동전 봇 {strat.rsplit('_', 1)[-1]} {t}"
     if kind == "newlab" or (kind is None and re.fullmatch(r"NL\d+", strat)):
         return f"새 매매법 {strat} {t}"
-    name = _strategy_ko().get(strat, strat)
+    name = _strategy_ko().get(strat)
+    reel = strat == _reel_name()
+    if name is None and (reel or strat in _ds_ids()):
+        name = _v4_label(strat)
+    name = name or strat
     if kind == "copy" or (kind is None and copy):
         return f"복제 {name} {t}"
-    return f"{name} {t}"
+    return name if reel and t in name else f"{name} {t}"
 
 
 _who = who          # the old name
@@ -169,18 +283,21 @@ def _brackets_ko(src: str) -> str:
     return src
 
 
-def _accounts_n() -> int:
+def _accounts_n() -> Optional[int]:
+    """The run's original accounts (paper v4: 331, computed from config.V4_GROUPS, never typed; the runner refuses a
+    database whose account set differs from it), or None when unreadable (the text then has no number)."""
     try:
-        from .config import V3_ACCOUNTS
-        return int(V3_ACCOUNTS)
+        from .config import V4_ACCOUNTS
+        return int(V4_ACCOUNTS)
     except Exception:  # noqa: BLE001
-        return 156
+        return None
 
 
 def _code_error(kind: str, what: str, head: str, body: str) -> str:
     mod = re.search(r"from '([\w.]+)'", what)
     where = f" ({mod[1].rsplit('.', 1)[-1]})" if mod else ""
-    return f"{head}\n\n{body}\n원래 계좌 {_accounts_n()}개는 그대로 돎\n오류: {kind}{where}"
+    n = _accounts_n()
+    return f"{head}\n\n{body}\n원래 계좌{f' {n}개' if n else ''}는 그대로 돎\n오류: {kind}{where}"
 
 
 def _codes_ko() -> dict:
@@ -221,11 +338,44 @@ def _new_account(m) -> str:
     return f"🆕 새 계좌 시작 · {who(aid)}\n\n{body}제안 #{pid} (두 분 승인)"
 
 
+def _group_ko() -> dict:
+    """{group: Korean name} of the paper v4 account groups (paperbot/groups.py GROUP_KO); {} when unreadable."""
+    try:
+        from .groups import GROUP_KO
+        return dict(GROUP_KO)
+    except Exception:  # noqa: BLE001  (names are cosmetic)
+        return {}
+
+
+def _split(total: int, given: Optional[str]) -> Optional[str]:
+    """'매매법 144 · 딥시크 171 · 5분 단타 1 · 동전 15' (+ ' · 추가 계좌 n'): the banner's own split ('core 144, ds200
+    171, ...' in brackets) when it carries one, else the paper v4 run shape (config.V4_GROUP_ACCOUNTS, the set the
+    runner checks the database against) with the rest of ``total`` as extra accounts; None when neither fits."""
+    ko_ = _group_ko()
+    if given:
+        pairs = re.findall(r"([a-z0-9_]+)\s+(\d+)", given)
+        if pairs:
+            return " · ".join(f"{ko_.get(g, g)} {n}" for g, n in pairs)
+    try:
+        from .config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS
+        rest = int(total) - int(V4_ACCOUNTS)
+        if rest < 0:
+            return None
+        parts = [f"{ko_.get(g, g)} {n}" for g, n in V4_GROUP_ACCOUNTS.items()]
+        return " · ".join(parts + ([f"{ko_.get('extra', 'extra')} {rest}"] if rest else []))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _run_started(m) -> str:
-    fresh = m[1] == "started"
-    fee = float(m[4])
-    return (f"▶️ 봇 {'시작' if fresh else '재시작'} · 계좌 {m[2]}개\n\n"
-            f"{'새로 시작' if fresh else '이어서 돌림'}\n레버리지 구간: {_brackets_ko(m[3])}\n수수료 {fee:g}%")
+    """The runner's start line: 'paper v<N> (started|resumed): <n> accounts[ (<split>)], brackets: <src>, taker fee
+    <x>%' (paper v4 and later also get the run name and the split by group)."""
+    version, fresh, total, given, src, fee = int(m[1]), m[2] == "started", int(m[3]), m[4], m[5], float(m[6])
+    run = f"모의 v{version} · " if version >= 4 else ""
+    split = _split(total, given) if version >= 4 else None
+    return (f"▶️ 봇 {'시작' if fresh else '재시작'} · {run}계좌 {total}개\n\n"
+            f"{'새로 시작' if fresh else '이어서 돌림'}\n" + (f"{split}\n" if split else "")
+            + f"레버리지 구간: {_brackets_ko(src)}\n수수료 {fee:g}%")
 
 
 def _tfs(text: str) -> str:
@@ -237,7 +387,7 @@ def _tfs(text: str) -> str:
 # of a message (``ko``); a format may return several lines. Anything else is unchanged.
 KO_LINES = (
     (r"\[([^\]]+)\] LIQUIDATED (\w+?)(?:USDT)? (\d+)x lost margin ([\d.]+)",
-     lambda m: f"강제청산 · {who(m[1])}\n\n{m[2]} {m[3]}배\n증거금 {money(float(m[4]))} 전액 손실\n{now_kst()}"),
+     lambda m: f"모의 강제청산 · {who(m[1])}\n\n{m[2]} {m[3]}배\n증거금 {money(float(m[4]))} 전액 손실\n{now_kst()}"),
     (r"\[([^\]]+)\] BUST: bust: equity (-?[\d.]+) below ([\d.]+)",
      lambda m: f"{who(m[1])} 파산 · 잔고 {money(_floor(m[2]))} (파산선 {money(float(m[3]))})"),
     (r"\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity (-?[\d.]+)",
@@ -248,6 +398,18 @@ KO_LINES = (
     (r"signal workers did not answer within (\d+)s; signals skipped at (\d+) for (.+)",
      lambda m: f"신호 건너뜀 · {hm(m[2])} 봉\n\n신호 계산이 {m[1]}초 안에 안 끝남\n건너뛴 봉: {_tfs(m[3])}\n"
                "계산 프로세스를 새로 띄움 · 봇은 계속 돎"),
+    # paper v4's group texts (frozen in sigservice.py, G27): the other groups' signals are never affected
+    (DS_TIMEOUT_RE,
+     lambda m: f"딥시크 신호 건너뜀 · {hm(m[2])} 봉\n\n딥시크 신호 계산이 {m[1]}초 안에 안 끝남\n건너뛴 봉: {_tfs(m[3])}\n"
+               "매매법·5분 단타 신호는 정상 · 봇은 계속 돎"),
+    (DS_FAILED_RE,
+     lambda m: f"딥시크 신호 실패 · {hm(m[1])} 봉\n\n오류: {m[2]}\n그 봉의 딥시크 신호만 빠짐 · 다른 무리는 계속 돎"),
+    (REEL_FAILED_RE,
+     lambda m: f"5분 단타 신호 실패 · {hm(m[1])} 봉\n\n오류: {m[2]}\n그 봉의 5분 단타·5분 동전 신호만 빠짐 · "
+               "다른 무리는 계속 돎"),
+    (REFUSED_RE,
+     lambda m: f"{_group_ko().get(m[1], m[1])} 신호 코드 거부 · 이 무리 신호 멈춤\n\n이유: {m[2]}\n"
+               "다른 무리는 계속 돎 · 이 무리의 열린 포지션은 규칙대로"),
     (r"data gap at (\d+): no bar for (.+)",
      lambda m: f"1분봉 빠짐 · {hm(m[1])}\n\n{_coins(m[2])}\n그 코인은 그 1분을 건너뜀"),
     (r"(\w+?)USDT: exchange returned no bars for (\d+) min from (\d+)",
@@ -258,7 +420,8 @@ KO_LINES = (
      lambda m: f"바이낸스 접속 차단\n\n봇이 멈췄습니다\n응답: {_http_ko(m[1])}\n{now_kst()}"),
     (r"local clock off by (-?\d+) ms from Binance; using server time",
      lambda m: f"서버 시계 어긋남\n\n바이낸스와 {round(abs(int(m[1])) / 1000, 2):g}초 차이\n바이낸스 시각으로 계산 중 (조치 불필요)"),
-    (r"paper v3 (started|resumed): (\d+) accounts, brackets: (.+), taker fee ([\d.]+)%", _run_started),
+    (r"paper v(\d+) (started|resumed): (\d+) accounts(?: \(([^)]*)\))?, brackets: (.+), taker fee ([\d.]+)%",
+     _run_started),
     (r"\[extra\] extras code failed to load: (\w+)(?::\s*(.*))?",
      lambda m: _code_error(m[1], m[2] or "", "추가 계좌 코드 오류", "추가 계좌가 저장된 상태로 멈춤")),
     (r"\[extra\] extras could not start: (\w+)(?::\s*(.*))?",
@@ -299,14 +462,23 @@ def ko(text: str) -> str:
 _BUST = re.compile(r"\[([^\]]+)\] BUST: bust: equity (-?[\d.]+) below ([\d.]+)")
 _DD = re.compile(r"\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity (-?[\d.]+)")
 _MORE = re.compile(r"외 (\d+)건 \(대시보드 알림 목록\)$")
+_GROUPED = re.compile(r"(\S+) 계좌 경고 (\d+)건: (.*) \(대시보드 알림 목록\)$")
 _SCREEN = "(대시보드 '서버 상태 → 경고')"
 
 
 def _digest_ko(lines: list[str], extras: bool) -> str:
-    busts, dds, other, ops, more = [], [], [], 0, 0
+    busts, dds, other, ops, more, grouped = [], [], [], 0, 0, []
+    counted: dict[str, dict] = {}            # a coin flip's line (listed in the record): counted here (owners' D10)
     for ln in lines:
-        b, d, mo = _BUST.match(ln), _DD.match(ln), _MORE.match(ln)
-        if b:
+        b, d, mo, g = _BUST.match(ln), _DD.match(ln), _MORE.match(ln), _GROUPED.match(ln)
+        cg = count_only_group(ln) if (b or d) and not extras else None
+        if g:
+            grouped.append(f"- {g[1]} {g[2]}건 · {g[3]}")
+        elif cg:
+            c = counted.setdefault(cg, {})
+            k = "파산" if b else "낙폭"
+            c[k] = c.get(k, 0) + 1
+        elif b:
             busts.append(f"- {who(b[1])} · 잔고 {money(_floor(b[2]))} (파산선 {money(float(b[3]))})")
         elif d:
             dds.append((int(d[3]), float(d[2]), f"- {who(d[1])} · -{d[3]}% · 잔고 {money(float(d[4]))}"))
@@ -316,9 +488,11 @@ def _digest_ko(lines: list[str], extras: bool) -> str:
             ops += 1                       # operational notes (codes, ms boundaries): the count only
         elif ln.strip():
             other.append("- " + _one_line(ko(ln)))
+    for cg, c in counted.items():
+        grouped.append(f"- {COUNT_ONLY_KO.get(cg, cg)} {sum(c.values())}건 · " + " · ".join(f"{k} {n}" for k, n in c.items()))
     if extras:
         title = "📉 추가 계좌 경고 · 지난 1시간"
-    elif busts or dds:
+    elif busts or dds or grouped:
         title = "📉 파산·낙폭 모음 · 지난 1시간"
     else:
         title = "📋 알림 모음 · 지난 1시간"
@@ -327,8 +501,10 @@ def _digest_ko(lines: list[str], extras: bool) -> str:
         L += ["", f"파산 {len(busts)}건"] + busts
     if dds:
         L += ["", f"낙폭 경고 {len(dds)}건"] + [x[2] for x in sorted(dds, key=lambda x: (-x[0], -x[1]))]
+    if grouped:
+        L += ["", "개수만 (계좌별 줄은 대시보드)"] + grouped
     if other:
-        L += ["", f"{'그 밖의 알림' if busts or dds else '알림'} {len(other)}건"] + other
+        L += ["", f"{'그 밖의 알림' if busts or dds or grouped else '알림'} {len(other)}건"] + other
     if ops:
         L += ["", f"운영 메모 {ops}건 {_SCREEN}"]
     if more:
@@ -363,7 +539,9 @@ def render(text: str) -> str:
         if m:
             body = [ln for ln in lines[1:] if ln.strip()]
             items = [_urgent_item(ln) if not _MORE.match(ln) else f"외 {_MORE.match(ln)[1]}건 {_SCREEN}" for ln in body]
-            return "\n".join([f"{m[1] or ''}긴급 {m[2]}건", ""] + items + [now_kst()])
+            liq = sum(1 for ln in body if re.match(KO_LINES[0][0], ln))
+            head = f"{m[1] or ''}긴급 {m[2]}건" + (f" · 모의 강제청산 {liq}" if liq else "")
+            return "\n".join([head, ""] + items + [now_kst()])
         return "\n".join(ko(line) for line in lines)
     except Exception:  # noqa: BLE001
         return text
@@ -465,6 +643,7 @@ class TelegramNotifier:
         except Exception as exc:  # delivery failure must not stop trading logic
             print(f"telegram send failed: {type(exc).__name__}", file=sys.stderr)
             return False, None
+        count_send(level)               # G13: never raises, never delays past TG_SENDS_WAIT_S
         return True, None
 
 
@@ -492,11 +671,38 @@ def retry_after(exc: urllib.error.HTTPError) -> float:
 
 
 KO_KINDS = (("BUST", "파산"), ("drawdown", "낙폭"), ("ENGINE HALTED", "정지"), ("LIQUIDATED", "강제청산"))
+# Owners' D10 (paper v4): the hourly digest lists the lines of the 36, the reel and the extras; the DeepSeek accounts
+# and the coin flips get one count line per group. Worded here, without the display module: the digest runs in the
+# runner's loop. The DeepSeek lines become one count line in the digest's own text (``RECORD_COUNT_GROUPS``: 171
+# accounts would push the others out of the lines listed); a coin flip's line stays listed in that text exactly as in
+# v3 (15 accounts; the record of a v3-shaped run stays byte-identical, tests/test_extras_parity.py) and Telegram
+# counts it (``_digest_ko``).
+COUNT_ONLY_KO = {"ds200": "딥시크", "flip": "동전"}
+RECORD_COUNT_GROUPS = ("ds200",)
+_BOOK = re.compile(r"\[([^\]~]+)@([0-9a-z]+)\] ")
+
+
+def count_only_group(text: str) -> Optional[str]:
+    """"ds200" / "flip" for a per-account line ('[F9_FVG@15m] drawdown ...', '[RANDOM_2@5m] BUST: ...') of a group
+    the digest only counts; None for every other line (the 36, the reel, copies and new-lab accounts, the Router's
+    notes). Never raises."""
+    try:
+        m = _BOOK.match(text)
+        if not m or m[2] not in TF_KO:
+            return None
+        if re.fullmatch(r"RANDOM_\d+", m[1]):
+            return "flip"
+        return "ds200" if m[1] in _ds_ids() else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 class Digest:
     """Collects per-account WARN messages (bust, drawdown levels) and sends them
-    as one silent message per interval, so the 156 original accounts (and the extras) cannot flood a phone.
+    as one silent message per interval, so the original accounts (and the extras) cannot flood a phone. The
+    DeepSeek accounts' lines (owners' D10, ``RECORD_COUNT_GROUPS``) become one count line, so they never push the
+    36's and the reel's lines out of the ``max_lines`` listed; the coin flips' lines stay listed here and are counted
+    in the Telegram wording.
 
     ``add`` never sends; ``flush(now_ms)`` sends when the interval has passed
     (or at once with ``force``) and returns the text it sent, if any. ``note(key, text)`` keeps one summary
@@ -533,9 +739,29 @@ class Digest:
             kind = next((ko for key, ko in KO_KINDS if key in t), "기타")
             counts[kind] = counts.get(kind, 0) + 1
         head = "알림 모음: " + " · ".join(f"{k} {n}" for k, n in counts.items())
-        lines = self.items[:self.max_lines]
-        more = len(self.items) - len(lines)
-        text = "\n".join([head] + lines + list(self.notes.values()) + ([f"외 {more}건 (대시보드 알림 목록)"] if more else []))
+        listed, grouped = self.items, {}
+        try:
+            split = [(g if g in RECORD_COUNT_GROUPS else None, t) for t, g in
+                     ((t, count_only_group(t)) for t in self.items)]
+            if any(g for g, _ in split):
+                listed = [t for g, t in split if g is None]
+                for g, t in split:
+                    if g is not None:
+                        grouped.setdefault(g, []).append(t)
+        except Exception:  # noqa: BLE001  (the digest goes out as before)
+            listed, grouped = self.items, {}
+        lines = listed[:self.max_lines]
+        more = len(listed) - len(lines)
+        group_lines = []
+        for g in sorted(grouped, key=lambda g: list(COUNT_ONLY_KO).index(g) if g in COUNT_ONLY_KO else 99):
+            per = {}
+            for t in grouped[g]:
+                kind = next((ko for key, ko in KO_KINDS if key in t), "기타")
+                per[kind] = per.get(kind, 0) + 1
+            group_lines.append(f"{COUNT_ONLY_KO.get(g, g)} 계좌 경고 {len(grouped[g])}건: "
+                               + " · ".join(f"{k} {n}" for k, n in per.items()) + " (대시보드 알림 목록)")
+        text = "\n".join([head] + lines + list(self.notes.values()) + group_lines
+                         + ([f"외 {more}건 (대시보드 알림 목록)"] if more else []))
         self.forward.send(INFO, text)
         self.items = []
         self.notes = {}
@@ -573,6 +799,7 @@ class Router:
     SKEW_LOUD_MS = 5_000
     TIMEOUT_QUIET_MS = 6 * 3_600_000
     TIMEOUT_RING_EVERY = 12
+    DS_TIMEOUT_LOUD = 12            # DeepSeek timeouts in a KST day before its ONE loud WARN (about 3 h of 15m bars)
     URGENT_MAX_LINES = 40           # lines of one '긴급 알림 N건' message (about 2,000 characters; Telegram's limit 4,096)
     RETRY_MAX = 3                   # sends of one message refused with 429 before it is dropped (the alerts table has it)
     RETRY_WAIT_MAX_MS = 120_000     # the longest a 429 holds the queue (Telegram asks 5-40 s)
@@ -598,11 +825,17 @@ class Router:
         self.last_timeout_loud: Optional[int] = None
         self.timeouts = 0               # digest count (since the digest last went out)
         self.timeouts_since_loud = 0    # further timeouts since the last loud one
+        # DeepSeek timeouts (G27): sigservice's frozen DS_TIMEOUT_TEXT, never the core group's timeout rule
+        self.ds_re = group_pattern("DS_TIMEOUT_RE")
+        self.ds_timeouts = 0            # digest count (since the digest last went out)
+        self.ds_day: Optional[str] = None
+        self.ds_today = 0
+        self.ds_loud = False
 
     def send(self, level: str, text: str):
         try:
             if level != CRITICAL:
-                for rule in (self._gap, self._skew, self._timeout):
+                for rule in (self._gap, self._skew, self._timeout, self._ds_timeout):
                     done, res = rule(level, text)
                     if done:
                         return res
@@ -719,6 +952,30 @@ class Router:
             self.timeouts = 0
         self.timeouts += 1
         self.digest.note("timeouts", f"신호 건너뜀 {self.timeouts}번 더 (마지막 {hm(m[1])} 봉: {_tfs(m[2])})")
+        return True, None
+
+    def _ds_timeout(self, level, text):
+        """A DeepSeek timeout (owners' D10/D11: DeepSeek is counted, not rung): one count line in the hourly digest;
+        ONE loud WARN in a KST day once ``DS_TIMEOUT_LOUD`` of them have come that day (DeepSeek keeps missing
+        boundaries). The 36's signals are not affected by it (sigservice runs DeepSeek after the core orders)."""
+        m = self.ds_re.match(text)
+        if not m:
+            return False, None
+        day = kst(self.clock(), "%Y-%m-%d")
+        if self.ds_day != day:
+            self.ds_day, self.ds_today, self.ds_loud = day, 0, False
+        self.ds_today += 1
+        if "ds_timeouts" not in self.digest.notes:    # the digest went out: count afresh
+            self.ds_timeouts = 0
+        self.ds_timeouts += 1
+        self.digest.note("ds_timeouts", f"딥시크 신호 건너뜀 {self.ds_timeouts}번 (마지막 {hm(m[2])} 봉: {_tfs(m[3])}, "
+                                        f"{m[1]}초 안에 안 끝남 · 매매법 신호는 정상)")
+        if self.ds_today >= self.DS_TIMEOUT_LOUD and not self.ds_loud:
+            self.ds_loud = True
+            return True, self.deliver(WARN, f"딥시크 신호 건너뜀 많음 · 오늘 {self.ds_today}번\n\n"
+                                            f"마지막 {hm(m[2])} 봉: {_tfs(m[3])} ({m[1]}초 안에 안 끝남)\n"
+                                            "매매법·5분 단타 신호는 정상 · 봇은 계속 돎\n"
+                                            "오늘 나머지는 매시 알림 모음(무음)에")
         return True, None
 
 

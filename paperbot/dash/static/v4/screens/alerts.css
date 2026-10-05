@@ -1,0 +1,10 @@
+@import url("server-kit.css");
+/* alerts: 알림 기록 (builder E). Rows and notes: server-kit.css. */
+[data-screen="alerts"] .alerts-body { display: grid; gap: 16px; min-width: 0; }
+[data-screen="alerts"] .alerts-body > .stack { max-width: 920px; }
+[data-screen="alerts"] .alerts-row .body { font-size: var(--t-sm); }
+[data-screen="alerts"] .server-counts a { margin-left: auto; font-size: var(--t-xs); }
+@media (min-width: 1100px) {
+  [data-screen="alerts"] .alerts-body > .stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: none; align-items: start; }
+  [data-screen="alerts"] .alerts-body > .stack > .card:only-child { grid-column: 1 / -1; max-width: 960px; }
+}

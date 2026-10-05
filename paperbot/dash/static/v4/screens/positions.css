@@ -1,0 +1,27 @@
+@import url("positions-kit.css");
+/* positions: 포지션 (builder B). The card, meter, book and trade rows come from positions-kit.css (shared with chart
+   and account); this file lays out the screen. */
+.positions-sum .stats b { font-size: var(--t-lg); }
+.positions-sum .stats .num { font-size: var(--t-lg); }
+.positions-bw { display: grid; gap: 6px; }
+.positions-bw:empty { display: none; }
+.positions-bwl { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; color: var(--ink); text-decoration: none; font-size: var(--t-sm); min-width: 0; }
+.positions-bwl:hover b:first-of-type { text-decoration: underline; }
+.positions-bwl .muted { font-size: var(--t-xs); }
+.positions-bwn { min-width: 0; max-width: 100%; display: inline-flex; }
+.positions-groups { margin: 0; font-size: var(--t-xs); }
+.positions-coins-bar { min-width: 0; }
+.positions-coins-bar .seg button { height: 34px; }
+.positions-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) {
+  .positions-cols { grid-template-columns: minmax(0, 1fr) 340px; }
+  .positions-side { position: sticky; top: calc(var(--top-h) + var(--sub-h) + 12px); }
+}
+.positions-tabs .seg button { height: 34px; }
+.positions-filters { gap: 8px; }
+.positions-filters .select { min-height: 34px; }
+[data-screen="positions"] .plist { display: grid; gap: 8px; }
+.positions-line { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.positions-line b { color: var(--ink); } .positions-line b.up { color: var(--up); } .positions-line b.down { color: var(--down); }
+.positions-sum { gap: 10px; }
+.positions-sum .disclosure .region { padding-top: 8px; }

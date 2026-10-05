@@ -1,0 +1,65 @@
+/* 홈 묶음 shared pieces (home-shared.js): group cards, ranking rows, top / bottom lists, list filters, progress.
+   @import-ed by home.css, board.css and checkpoint.css (a screen's css loads only on first use). Tokens only. */
+
+/* ---------------------------------------------------------------- sections and plates rows */
+.home-sec { display: grid; gap: 10px; min-width: 0; }
+.home-sec-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.home-hint { font-size: var(--t-xs); }
+@media (max-width: 559px) { .home-hint { display: none; } }
+.home-small { font-size: var(--t-xs); line-height: 1.55; }
+
+/* ---------------------------------------------------------------- group cards */
+.home-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 760px) { .home-groups { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; } }
+.home-gcard { appearance: none; text-align: left; min-width: 0; display: grid; gap: 3px; align-content: start; padding: 12px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  transition: border-color var(--t-fast), background-color var(--t-fast), transform var(--t-fast) var(--ease); }
+.home-gcard:hover { border-color: var(--line-2); }
+.home-gcard:active { transform: scale(.985); }
+.home-gcard[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.home-gcard .gn { font-weight: 700; font-size: var(--t-sm); }
+.home-gcard .gc { color: var(--muted); font-size: var(--t-xs); line-height: 1.45; }
+.home-gcard .gmw { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.home-gcard .gm { font-size: var(--t-lg); font-weight: 700; line-height: 1.3; }
+.home-gcard .gmw small { color: var(--muted); font-size: var(--t-xs); }
+.home-gcard .gs { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
+.home-gcard .gb { color: var(--muted); font-size: var(--t-xs); line-height: 1.5; }
+.home-gcard .pp { padding: 0 6px; line-height: 1.5; }
+.card .home-gcard { background: var(--surface-2); border-color: transparent; }
+.card .home-gcard[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------------------------------------------------------------- ranking rows (a link each) */
+a.home-row { color: inherit; text-decoration: none; transition: background-color var(--t-fast); }
+a.home-row:focus-visible { outline-offset: -2px; }
+.home-row .ret { text-align: right; }
+.home-row .lname { color: var(--ink); }
+.home-row .meta { line-height: 1.6; }
+.home-row .meta .pp { line-height: 1.45; }
+.home-pos { color: var(--accent); }
+.home-fam { color: var(--ink-2); }
+
+/* top 5 / bottom 5 */
+.home-tb { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .home-tb { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; } }
+.home-tb > :only-child { grid-column: 1 / -1; }
+.home-tbcol { min-width: 0; }
+.home-tbcol .tb-h { display: flex; align-items: baseline; gap: 8px; font-size: var(--t-xs); color: var(--muted); padding: 2px 2px 6px; }
+.home-tbcol .tb-h b { color: var(--ink); font-size: var(--t-sm); }
+
+/* list filters */
+.home-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.home-tfs { min-width: 0; max-width: 100%; }
+.home-tfs .seg button { height: 32px; }
+.home-sort { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--muted); }
+.home-sort .select { height: 34px; }
+.home-count { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+.home-filters + .pagerwrap, .home-filters { margin-bottom: 2px; }
+
+/* progress (neutral: progress is not a verdict) */
+.home-ckp { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--t-sm); color: var(--ink-2); }
+.home-ckp b { color: var(--ink); }
+
+/* the 참고 glyph of a ranking row (neutral: before the verdict a comparison is never a pass or a fail) */
+.home-row .vsg { color: var(--ink-2); white-space: nowrap; }
+.home-row .vsg b { font-weight: 700; font-size: .9em; }
+.home-vsfoot b { color: var(--ink-2); }

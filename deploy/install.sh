@@ -12,6 +12,11 @@
 # the internet. Safe to run again: to update, `git pull` then run it again. It refuses
 # uncommitted changes, stops the running services only for the swap, and keeps the
 # previous code in /opt/crypto-bot-research.old for a rollback.
+# PAPERBOT_RESETTING=1 (set by deploy/paperbot-reset.sh for the v4 restart, docs/server-setup-v4.md): the Obsidian
+# export, the DeepSeek-200 shadow test and the DeepSeek nightly recompute check are installed as usual but their timers
+# are NOT switched on here (the reset stops them and checks the new run first); the script prints each one's real
+# state (systemctl is-enabled / is-active: a timer enabled before stays enabled here, the reset decides) and points to
+# docs/server-setup-v4.md for which to turn on after the reset checks. Without the variable everything is as before.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -100,6 +105,9 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/failalert
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/rehearsal
 # the DeepSeek-200 forward shadow test's database (docs: research/deepseek200/FORWARD_TEST_PLAN.md): the only folder that job writes
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/shadow200
+# the DeepSeek nightly recompute check (paperbot/dscheck.py): its bar cache and its one-line summary for the 09:20 report;
+# the only folder that job writes
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/dscheck
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -135,7 +143,8 @@ if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
   # wait for a running one to finish so it never reads a half-swapped tree.
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
-paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service paperbot-shadow200.service"
+paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service paperbot-shadow200.service \
+paperbot-dscheck.service"
   n=0
   # A oneshot job reports "activating" (not "active") while it runs, so is-active alone never waits for it.
   while busy="$(for j in $JOBS; do case "$(systemctl show -p ActiveState --value "$j" 2>/dev/null)" in
@@ -223,6 +232,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
          paperbot-rehearsal.service paperbot-rehearsal.timer paperbot-obsidian.service paperbot-obsidian.timer \
          paperbot-shadow200.service paperbot-shadow200.timer \
+         paperbot-dscheck.service paperbot-dscheck.timer \
          paperbot-failed@.service paperbot-debate.service \
          paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
@@ -237,10 +247,26 @@ fi
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then
   echo "weekly checkpoint rehearsal installed but off; to turn it on once: sudo systemctl enable --now paperbot-rehearsal.timer"
 fi
-# The Obsidian export is read-only and free (no key, no network, no order): its nightly timer is switched on here.
-systemctl enable --now paperbot-obsidian.timer >/dev/null 2>&1 || echo "obsidian timer could not be enabled: sudo systemctl enable --now paperbot-obsidian.timer"
-# The DeepSeek-200 shadow test is record-only (public bars, no key, no order, no account, its own database): its timer is switched on here.
-systemctl enable --now paperbot-shadow200.timer >/dev/null 2>&1 || echo "shadow200 timer could not be enabled: sudo systemctl enable --now paperbot-shadow200.timer"
+if [ "${PAPERBOT_RESETTING:-0}" = "1" ]; then
+  # Called by the v4 reset (deploy/paperbot-reset.sh): it stopped these timers and checks the new run first. Installed
+  # above, NOT switched on here (no enable, no start); a timer that is still enabled from before is left as it is and
+  # the reset decides (it keeps the Obsidian export and the DeepSeek check off). Each one's REAL state is printed.
+  echo "리셋 중: 아래 타이머는 설치만 했고 여기서 켜거나 끄지 않았습니다(지금 실제 상태):"
+  for t in paperbot-obsidian.timer paperbot-shadow200.timer paperbot-dscheck.timer; do
+    en="$(systemctl is-enabled "$t" 2>/dev/null || true)"
+    ac="$(systemctl is-active "$t" 2>/dev/null || true)"
+    echo "  $t: 자동 시작 ${en:-알 수 없음}, 지금 ${ac:-알 수 없음}"
+  done
+  echo "  어느 것을 언제 켤지: docs/server-setup-v4.md 5단계(리셋 뒤 점검 launchcheck --stage after를 마친 뒤)"
+else
+  # The Obsidian export is read-only and free (no key, no network, no order): its nightly timer is switched on here.
+  systemctl enable --now paperbot-obsidian.timer >/dev/null 2>&1 || echo "obsidian timer could not be enabled: sudo systemctl enable --now paperbot-obsidian.timer"
+  # The DeepSeek-200 shadow test is record-only (public bars, no key, no order, no account, its own database): its timer is switched on here.
+  systemctl enable --now paperbot-shadow200.timer >/dev/null 2>&1 || echo "shadow200 timer could not be enabled: sudo systemctl enable --now paperbot-shadow200.timer"
+  # The DeepSeek nightly recompute check is read-only (paper3.db opened read-only, public bars, no key, no order, no
+  # Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
+  systemctl enable --now paperbot-dscheck.timer >/dev/null 2>&1 || echo "dscheck timer could not be enabled: sudo systemctl enable --now paperbot-dscheck.timer"
+fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then
   echo "paperbot-debate is running the previous code; restart it yourself when ready:"

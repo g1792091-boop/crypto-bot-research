@@ -1,0 +1,20 @@
+@import url("positions-kit.css");
+/* account: 계좌 (builder B). */
+.account-back { justify-self: start; display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
+.account-back:hover { color: var(--accent); }
+.account-head { margin-top: -8px; }
+.account-head h1 { overflow-wrap: anywhere; }
+.account-pills { gap: 6px; margin-top: -6px; }
+.account-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) { .account-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 420px); } }
+.account-led .led-num { display: block; font-size: min(var(--t-led), 11vw); color: var(--led-digit); }
+.account-led .led-sm { display: block; font-size: min(var(--t-2xl), 8vw); }
+.account-led { flex-wrap: wrap; row-gap: 8px; }
+.account-led > div { min-width: 0; }
+.account-led > .r { margin-left: auto; }
+.account-wallet .stats b { font-size: var(--t-md); }
+.account-eq { height: 220px; border-radius: var(--r-md); overflow: hidden; }
+.account-eq.none { height: auto; }
+.account-candles { height: 320px; border-radius: var(--r-md); overflow: hidden; }
+.account-spec { margin: 0; padding: 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink-2); font: 400 var(--t-xs)/1.5 var(--f-term); white-space: pre-wrap; overflow-wrap: anywhere; }
+.account-ev { font-size: var(--t-xs); color: var(--ink-2); }

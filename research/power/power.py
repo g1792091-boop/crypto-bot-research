@@ -1,6 +1,13 @@
 """Statistical power of the 30-day checkpoint (owners approved 2026-10-04): if an account had a TRUE edge of
 +X net ROE per trade over a coin flip, how likely would it pass the day-30 / day-60 / day-90 checkpoint
-(addendum Q1-Q3: 2,000 coin-flip bots per account, Benjamini-Hochberg at FDR 10% over the accounts tested)?
+(v3: addendum Q1-Q3, 2,000 coin-flip bots per account, Benjamini-Hochberg at FDR 10% over the accounts tested)?
+
+Paper v4 (2026-10-05, version 2 of out/power.json): the verdict schemes are compared side by side (``SCHEMES``):
+"split" = the owners' choice D5 (b), the core family (108 judged accounts of the 36) at alpha 0.07 with 10,000 bots
+(the DeepSeek family 132 at 0.025, the reel alone at 0.005); "one" = option (a), one BH family over all 241 judged
+accounts at 0.10 with 10,000 bots; "v3" = the v3 rule (108 at 0.10, 2,000 bots) for reference. The reel (5m) gets its
+own pool: random long entries with the reel's own exits (paperbot/reel_engine.py ``simulate_exit`` on 5m bars, the
+PREREG's low-first order) at the reel's H1 signal rate (config.V4_FLIP5M), 'normal' leverage; judged alone at 0.005.
 
     python3 research/power/power.py run [--out research/power/out/power.json] [--reps 4000] [--null 20000]
     python3 research/power/power.py selftest
@@ -71,12 +78,30 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "power.jso
 DATA = os.path.join(ROOT, "data", "pre2021")
 CARDS = os.path.join(ROOT, "research", "strategy_profiles", "out_binance", "cards.json")
 from paperbot.config import (V3_OBSERVE_TFS, V3_Q1_MAIN_FAMILY, V3_STRATEGIES,  # noqa: E402
-                             V3_TRADE_TFS)
-TFS = V3_TRADE_TFS                                  # 15m, 30m, 1h, 4h (5m removed 2026-10-04)
+                             V3_TRADE_TFS, V4_FLIP5M, V4_GROUP_JUDGED, V4_JUDGED_ACCOUNTS)
+TFS = V3_TRADE_TFS                                  # 15m, 30m, 1h, 4h: the core group's (house exits)
+REEL_TF = "5m"                                      # the reel's pool (its own exits), judged alone
 EDGES = (0.0, 0.005, 0.01, 0.02, 0.05, 0.10)      # + net ROE per trade (0.01 = +1% of the margin)
 FAMILIES = (V3_Q1_MAIN_FAMILY, V3_STRATEGIES * len(V3_TRADE_TFS))   # (108, 144): the judged ones, every strategy acct
-NO_5M = ("5m removed from the experiment on 2026-10-04 with the restart (docs/paper-v3-rules-change-1.md): "
-         "5-year data -2.3% equity per trade, 34 of 36 cells significantly negative")
+# Paper v4 verdict schemes (owners' D5): family = accounts in the target's BH family, alpha, bots per account.
+# "split" is the chosen one (checkpoint.FAMILY_ALPHA); "one" the single family over every judged account.
+SCHEMES = {
+    "split": {"family": V4_GROUP_JUDGED["core"], "alpha": 0.07, "n_bots": 10_000,
+              "what": "owners' D5 (b): core family 108 at FDR 7%, 10,000 bots"},
+    "one": {"family": V4_JUDGED_ACCOUNTS, "alpha": 0.10, "n_bots": 10_000,
+            "what": "D5 (a): one family over all 241 judged accounts at FDR 10%, 10,000 bots"},
+    "v3": {"family": V3_Q1_MAIN_FAMILY, "alpha": 0.10, "n_bots": 2_000,
+           "what": "the v3 rule: 108 at FDR 10%, 2,000 bots (reference)"},
+}
+REEL_SCHEMES = {
+    "split": {"family": V4_GROUP_JUDGED["reel"], "alpha": 0.005, "n_bots": 10_000,
+              "what": "owners' D5 (b): the reel alone at FDR 0.5%, 10,000 bots"},
+    "one": {"family": V4_JUDGED_ACCOUNTS, "alpha": 0.10, "n_bots": 10_000,
+            "what": "D5 (a): one family over all 241 judged accounts at FDR 10%, 10,000 bots"},
+}
+CHOSEN = "split"
+NO_5M = ("5m removed for the 36 on 2026-10-04 (docs/paper-v3-rules-change-1.md): 5-year data -2.3% equity per trade, "
+         "34 of 36 cells significantly negative; paper v4's only 5m account is the reel (own exits, judged alone)")
 SEEDS = (1, 2, 3)
 SEED = 20261004
 PERIOD_DAYS = 30
@@ -263,6 +288,92 @@ def build_pool(bars: dict, tf: str, rate: float, seeds=SEEDS, window_days: int =
             "rate_per_day": float(ok.sum() / alive_days) if alive_days else 0.0, "windows": wins}
 
 
+def build_reel_pool(bars: dict, rate: float, seeds=SEEDS, window_days: int = PERIOD_DAYS,
+                    max_windows: Optional[int] = None) -> dict:
+    """Coin-flip trades with the reel's own exits (paper v4, the reel's control; owners' D2 (ii), D4) on 5m bars:
+    each coin and bar fires long with ``rate`` while the account is flat (coin priority, one position), the stop = the
+    lowest low of the last 12 bars (signal bar included) - 0.05 x ATR14, the first target the signal bar's upper band
+    (then each bar's previous band), skip when stop >= fill or fill >= the first target, the 96-bar time exit
+    (``reel_engine.simulate_exit``, the PREREG's low-first order); entry at the next bar's open + slippage, 'normal'
+    leverage (30x / 30%, then 20x / 20%; config.V3_P_BEST["5m"] = 0), the exchange brackets of rules_bt; costs: taker
+    on entry, stop and time exits, maker on the target; funding left out (holds of at most 8 hours). Coins are aligned
+    on their common bar times (a bar missing for one coin is dropped for all). Same shape as ``build_pool``."""
+    import pandas as pd
+    import rules_bt as RB
+    from paperbot.config import v3_settings
+    from paperbot.reel_engine import MAX_HOLD_5M, STOP_BUF_ATR, simulate_exit, upper_bands
+    from paperbot.sizing import size_position
+    s = v3_settings()
+    coins = [c for c in RB.COINS if c in bars]
+    common = bars[coins[0]]["ts"]
+    for c in coins[1:]:
+        common = np.intersect1d(common, bars[c]["ts"])
+    cols = {}
+    for c in coins:
+        b = bars[c]
+        ix = np.searchsorted(b["ts"], common)
+        o, h, lo, cl, a = (np.asarray(b[k], float)[ix] for k in ("o", "h", "l", "c", "atr"))
+        cols[c] = {"open": o, "high": h, "low": lo, "close": cl, "atr": a, "upper": upper_bands(cl),
+                   "low12": pd.Series(lo).rolling(12, min_periods=12).min().to_numpy()}
+    n = len(common)
+    span = window_days * 288
+    t_lo = WARMUP_BARS
+    edges = list(range(t_lo, n - span, span))
+    if max_windows is not None:
+        edges = edges[:max_windows]
+    R, MF, wins = [], [], []
+    alive_days = 0.0
+    taker, maker, slip = s.taker_fee, s.maker_fee, s.slippage_frac
+    for seed in seeds:
+        rng = np.random.default_rng([SEED, int(seed), 5])
+        for w0 in edges:
+            w1 = w0 + span
+            wallet, trades, bust_at = float(s.initial_equity), 0, None
+            j = w0
+            while j < w1 - 1:
+                fire = rng.random(len(coins)) < rate
+                done = False
+                for ci in np.nonzero(fire)[0]:
+                    x = cols[coins[ci]]
+                    a, e = x["atr"][j], j + 1
+                    if not (np.isfinite(a) and a > 0 and np.isfinite(x["low12"][j]) and np.isfinite(x["upper"][j])):
+                        continue
+                    fill = x["open"][e] * (1 + slip)
+                    stop = x["low12"][j] - STOP_BUF_ATR * a
+                    if stop >= fill or fill >= x["upper"][j]:
+                        continue
+                    d = size_position(s, wallet, 1, fill, stop, "normal", RB.BRACKETS, atr=a)
+                    if not d.ok:
+                        continue
+                    last = min(e + MAX_HOLD_5M, w1)
+                    xi, px, why = simulate_exit({k: x[k][:last] for k in ("open", "high", "low", "close", "upper")},
+                                                e, fill, stop)
+                    if xi is None:
+                        continue
+                    out = px * (1 - slip) if why in ("SL", "TIME", "EOD") else px
+                    fee = d.qty * fill * taker + d.qty * out * (maker if why == "TP" else taker)
+                    pnl = max(d.qty * (out - fill) - fee, -d.margin)
+                    R.append(pnl / d.margin)
+                    MF.append(d.margin / wallet)
+                    wallet += pnl
+                    trades += 1
+                    j = xi + 1
+                    done = True
+                    break
+                if not done:
+                    j += 1
+                if wallet < s.bust_below:
+                    bust_at = j
+                    break
+            end = bust_at if bust_at is not None else w1
+            alive_days += max(0.0, (end - w0) / 288.0)
+            wins.append({"bust": bust_at is not None, "trades": trades})
+    R_a, MF_a = np.asarray(R, float), np.asarray(MF, float)
+    ok = np.isfinite(R_a) & np.isfinite(MF_a) & (MF_a > 0)
+    return {"R": R_a[ok], "mf": MF_a[ok], "trades": int(ok.sum()), "alive_days": alive_days,
+            "rate_per_day": float(ok.sum() / alive_days) if alive_days else 0.0, "windows": wins}
+
+
 # ---------------------------------------------------------------- 2. Monte Carlo accounts
 def simulate_accounts(R: np.ndarray, mf: np.ndarray, rate_per_day: float, n: int, edge: float, rng,
                       bust_frac: float, periods: int = len(CHECKPOINTS), period_days: int = PERIOD_DAYS,
@@ -390,8 +501,10 @@ def checkpoint_pass(acc: dict, nulls: dict, family: int, rng, n_bots: int, alpha
 
 # ---------------------------------------------------------------- the whole grid
 def power_grid(pools: dict, edges=EDGES, families=FAMILIES, reps: int = 4000, n_null: int = 20000,
-               seed: int = SEED, numbers: Optional[dict] = None) -> dict:
-    """{tf: {"pool": ..., "rows": [per edge: pass probabilities per family]}} from ``pools`` (build_pool)."""
+               seed: int = SEED, numbers: Optional[dict] = None, schemes: Optional[dict] = None) -> dict:
+    """{tf: {"pool": ..., "rows": [per edge: pass probabilities per family]}} from ``pools`` (build_pool).
+    ``schemes`` ({name: {family, alpha, n_bots}}, paper v4): rows carry ``scheme_<name>`` instead of
+    ``family_<n>`` (``families`` is then not used)."""
     nb = numbers or v3_numbers()
     bust_frac = nb["bust_below"] / nb["initial"]
     out = {}
@@ -420,20 +533,31 @@ def power_grid(pools: dict, edges=EDGES, families=FAMILIES, reps: int = 4000, n_
             acc = simulate_accounts(R, mf, rate, reps, float(x), rng, bust_frac)
             row = {"edge_roe": x, "mean_roe": round(float(R.mean() + x), 5) if len(R) else None,
                    "median_equity_30d": round(float(np.median(acc["equity"][:, 0])), 4)}
-            for fam in families:
-                res = checkpoint_pass(acc, nulls, fam, np.random.default_rng([seed, ti, xi, fam]),
-                                      nb["n_bots"], nb["alpha"], nb["min_trades"])
-                row[f"family_{fam}"] = {k: round(v, 4) for k, v in res.items()}
+            if schemes:
+                for si, (name, sc) in enumerate(schemes.items()):
+                    res = checkpoint_pass(acc, nulls, int(sc["family"]),
+                                          np.random.default_rng([seed, ti, xi, int(sc["family"]), si]),
+                                          int(sc["n_bots"]), float(sc["alpha"]), nb["min_trades"])
+                    row[f"scheme_{name}"] = {k: round(v, 4) for k, v in res.items()}
+            else:
+                for fam in families:
+                    res = checkpoint_pass(acc, nulls, fam, np.random.default_rng([seed, ti, xi, fam]),
+                                          nb["n_bots"], nb["alpha"], nb["min_trades"])
+                    row[f"family_{fam}"] = {k: round(v, 4) for k, v in res.items()}
             rows.append(row)
         out[tf] = {"pool": info, "rows": rows, "observation_only": tf in V3_OBSERVE_TFS}
     return out
 
 
-def summary_ko(results: dict, family: int = FAMILIES[0], numbers: Optional[dict] = None) -> list[str]:
-    """'진짜 엣지가 거래당 +X%라면 30일에 합격할 확률 ...' lines and what limits them (code-written)."""
+def summary_ko(results: dict, family: int = FAMILIES[0], numbers: Optional[dict] = None,
+               key: Optional[str] = None) -> list[str]:
+    """'진짜 엣지가 거래당 +X%라면 30일에 합격할 확률 ...' lines and what limits them (code-written). ``key``: the row
+    key to read (default ``family_<family>``; paper v4: ``scheme_split``)."""
     from paperbot.checkpoint import TF_KO
     nb = numbers or v3_numbers()
-    judged = {tf: v for tf, v in results.items() if v.get("rows") and not v.get("observation_only")}
+    key = key or f"family_{family}"
+    judged = {tf: v for tf, v in results.items() if v.get("rows") and not v.get("observation_only")
+              and key in v["rows"][0]}
     lines = []
     edges = [r["edge_roe"] for r in next(iter(judged.values()))["rows"]] if judged else []
     for xi, x in enumerate(edges):
@@ -441,7 +565,7 @@ def summary_ko(results: dict, family: int = FAMILIES[0], numbers: Optional[dict]
             continue
         parts = []
         for tf, v in judged.items():
-            f = v["rows"][xi][f"family_{family}"]
+            f = v["rows"][xi][key]
             txt = f"{TF_KO.get(tf, tf)} {f['p_pass1_d30'] * 100:.0f}%"
             if f["p_judged_by_d30"] < 0.5:
                 txt += f"(30일엔 대부분 거래 30건 미만, 60일까지 {f['p_pass1_by_d60'] * 100:.0f}%)"
@@ -457,8 +581,47 @@ def summary_ko(results: dict, family: int = FAMILIES[0], numbers: Optional[dict]
     return lines
 
 
+def scheme_lines(results: dict, schemes: dict = SCHEMES, reel: Optional[dict] = None) -> list[str]:
+    """The D5 comparison in one line per edge that matters (code-written): the 36's chance of a 1st pass at day 30
+    under each scheme, and the reel's under its own."""
+    from paperbot.checkpoint import TF_KO
+    out = []
+    judged = {tf: v for tf, v in results.items() if v.get("rows") and not v.get("observation_only")
+              and tf != REEL_TF}
+    for x in (0.05, 0.10):
+        parts = []
+        for name in ("split", "one"):
+            vals = []
+            for tf, v in judged.items():
+                r = next((r for r in v["rows"] if r["edge_roe"] == x), None)
+                if r and f"scheme_{name}" in r:
+                    vals.append(f"{TF_KO.get(tf, tf)} {r[f'scheme_{name}']['p_pass1_d30'] * 100:.0f}%")
+            if vals:
+                sc = schemes[name]
+                parts.append(f"{'나눔(b)' if name == 'split' else '한 묶음(a)'} {sc['family']}개·FDR {sc['alpha'] * 100:g}%: "
+                             + ", ".join(vals))
+        if parts:
+            out.append(f"엣지 +{x * 100:g}%일 때 매매법 36의 30일 1차 합격 확률 — " + " / ".join(parts))
+    rv = results.get(REEL_TF)
+    if rv and rv.get("rows"):
+        for x in (0.05, 0.10):
+            r = next((r for r in rv["rows"] if r["edge_roe"] == x), None)
+            if r and "scheme_split" in r:
+                out.append(f"엣지 +{x * 100:g}%일 때 5분 단타(릴스)의 30일 1차 합격 확률: 혼자 FDR 0.5% "
+                           f"{r['scheme_split']['p_pass1_d30'] * 100:.0f}%"
+                           + (f", 한 묶음(a) {r['scheme_one']['p_pass1_d30'] * 100:.0f}%" if "scheme_one" in r else ""))
+    for name, sc in schemes.items():
+        if name == "v3":
+            continue
+        thr = sc["alpha"] / sc["family"]
+        k = int(math.floor(thr * (sc["n_bots"] + 1) - 1 + 1e-9))
+        out.append(f"{'나눔(b)' if name == 'split' else '한 묶음(a)'}: 판정 계좌 {sc['family']}개에서 혼자 FDR을 통과하려면 "
+                   f"p ≤ {thr:.5f}: 동전 봇 {sc['n_bots']:,}개 중 앞선 봇이 {max(k, 0)}개 이하")
+    return out
+
+
 def run(out_path: str = OUT, reps: int = 4000, n_null: int = 20000, seed: int = SEED, data_dir: str = DATA,
-        tfs=TFS, edges=EDGES) -> dict:
+        tfs=TFS, edges=EDGES, reel: bool = True) -> dict:
     t0 = time.time()
     L = lib()
     rates = card_rates()
@@ -471,22 +634,43 @@ def run(out_path: str = OUT, reps: int = 4000, n_null: int = 20000, seed: int = 
         print(f"pool {tf}: {pools[tf]['trades']} trades, {pools[tf]['rate_per_day'] * 30:.0f}/30d, {pool_s[tf]}s",
               flush=True)
     t2 = time.time()
-    res = power_grid(pools, edges=edges, reps=reps, n_null=n_null, seed=seed)
+    res = power_grid(pools, edges=edges, reps=reps, n_null=n_null, seed=seed, schemes=SCHEMES)
     mc_s = round(time.time() - t2, 1)
     for tf in res:
         res[tf]["pool"]["signals_per_day_median"] = round(rates[tf][0], 3)
         res[tf]["pool"]["rate_per_coin_bar"] = round(rates[tf][1], 6)
+    if reel:
+        t1 = time.time()
+        rp = build_reel_pool(load_bars(REEL_TF, data_dir), float(V4_FLIP5M["rate"]))
+        pool_s[REEL_TF] = round(time.time() - t1, 1)
+        print(f"pool {REEL_TF} (reel exits): {rp['trades']} trades, {rp['rate_per_day'] * 30:.0f}/30d, "
+              f"{pool_s[REEL_TF]}s", flush=True)
+        t3 = time.time()
+        rr = power_grid({REEL_TF: rp}, edges=edges, reps=reps, n_null=n_null, seed=seed + 5, schemes=REEL_SCHEMES)
+        mc_s = round(mc_s + time.time() - t3, 1)
+        rr[REEL_TF]["pool"]["rate_per_coin_bar"] = round(float(V4_FLIP5M["rate"]), 6)
+        rr[REEL_TF]["pool"]["rate_label"] = V4_FLIP5M.get("label")
+        rr[REEL_TF]["exits"] = "reel"
+        res[REEL_TF] = rr[REEL_TF]
     nb = v3_numbers()
-    doc = {"version": 1, "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"),
+    doc = {"version": 2, "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"),
            "script": "research/power/power.py run", "seed": seed, "reps": reps, "null_accounts": n_null,
-           "edges_roe": list(edges), "families": list(FAMILIES), "checkpoints": list(CHECKPOINTS),
+           "edges_roe": list(edges), "schemes": SCHEMES, "reel_schemes": REEL_SCHEMES, "chosen": CHOSEN,
+           "checkpoints": list(CHECKPOINTS),
            "rules": nb, "leverage": leverage_doc(), "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
-           "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day)",
-           "timeframes": list(tfs), "no_5m": NO_5M,
+           "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day); "
+                         "5m: config.V4_FLIP5M (the reel's H1 signal rate)",
+           "timeframes": list(tfs) + ([REEL_TF] if reel else []), "no_5m": NO_5M,
            "addendum_trades_30d_median": {k: v for k, v in {"5m": 144, "15m": 104, "30m": 56, "1h": 27, "4h": 1}.items()
                                           if k in tfs},
-           "results": res, "summary_ko": summary_ko(res, numbers=nb),
+           "results": res,
+           "summary_ko": summary_ko({k: v for k, v in res.items() if k != REEL_TF},
+                                    numbers={**nb, "alpha": SCHEMES[CHOSEN]["alpha"],
+                                             "n_bots": SCHEMES[CHOSEN]["n_bots"]},
+                                    family=SCHEMES[CHOSEN]["family"], key=f"scheme_{CHOSEN}") + scheme_lines(res),
            "assumptions": ["trades drawn independently from the coin-flip pool (no streaks or regime changes)",
+                           "5m: the reel's control pool (random long entries, the reel's own exits on 5m bars, "
+                           "low-first inside a bar, no funding); the reel is judged alone",
                            "the same edge on every trade: net ROE + X (a liquidation still loses at most the margin)",
                            "coin-flip trade shape from 2020-01..2021-08 bars, the median strategy's signal rate",
                            "the other accounts in the FDR family have no edge (p uniform)",
@@ -543,12 +727,13 @@ def main(argv=None) -> int:
     r.add_argument("--reps", type=int, default=4000)
     r.add_argument("--null", type=int, default=20000)
     r.add_argument("--seed", type=int, default=SEED)
+    r.add_argument("--no-reel", action="store_true", help="leave out the reel's 5m pool")
     sub.add_parser("selftest")
     a = ap.parse_args(argv)
     if a.cmd == "selftest":
         selftest()
         return 0
-    doc = run(a.out, a.reps, a.null, a.seed)
+    doc = run(a.out, a.reps, a.null, a.seed, reel=not a.no_reel)
     print(json.dumps({"summary_ko": doc["summary_ko"], "runtime_s": doc["runtime_s"]}, ensure_ascii=False, indent=1))
     return 0
 

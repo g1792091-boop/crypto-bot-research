@@ -80,8 +80,8 @@ def test_settings_validation():
 
 
 def test_p_best_constants_are_frozen_and_documented():
-    assert set(V3_P_BEST) == set(V3_TRADE_TFS)
-    assert V3_P_BEST == {"15m": 0.2155, "30m": 0.2170, "1h": 0.2157, "4h": 0.2095}
+    assert set(V3_P_BEST) == set(V3_TRADE_TFS) | {"5m"} and V3_P_BEST["5m"] == 0.0   # paper v4: 5m always "normal"
+    assert V3_P_BEST == {"15m": 0.2155, "30m": 0.2170, "1h": 0.2157, "4h": 0.2095, "5m": 0.0}
     src = inspect.getsource(C)
     for s in ("Computed once on 2026-10-04", "231,908 / 1,075,951", "111,710 / 514,899", "46,973 / 217,799",
               "2,589 / 12,357", "quality_edges.json", "V3_BEST_FALLS_TO_NORMAL"):
@@ -91,7 +91,7 @@ def test_p_best_constants_are_frozen_and_documented():
         assert V3_P_BEST[tf] == round(b / n, 4)
     doc = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
                             "paper-v3-rules-change-1.md"), encoding="utf-8").read()
-    assert all(f"**{V3_P_BEST[tf]:.4f}**" in doc for tf in V3_P_BEST) and "B로 가자" in doc
+    assert all(f"**{V3_P_BEST[tf]:.4f}**" in doc for tf in V3_TRADE_TFS) and "B로 가자" in doc
 
 
 # ------------------------------------------------------------------ the group of a signal
@@ -478,7 +478,10 @@ def test_power_pool_uses_the_rule():
     assert abs(share - V3_P_BEST["15m"]) < 4 * np.sqrt(V3_P_BEST["15m"] * (1 - V3_P_BEST["15m"]) / 4000)
     assert PW.leverage_doc()["p_best"] == V3_P_BEST and PW.LEVERAGE_RULE == C.V3_LEVERAGE_RULE
     doc = json.load(open(os.path.join(root, "research", "power", "out", "power.json")))
-    assert doc["leverage"]["rule"] == "quality_v1" and doc["leverage"]["p_best"] == V3_P_BEST
+    assert doc["leverage"]["rule"] == "quality_v1"
+    # the v3 run's power.json has no "5m" entry (5m: 0.0 since paper v4, the same draw as before); a rerun adds it
+    assert {tf: v for tf, v in doc["leverage"]["p_best"].items() if tf != "5m"} == \
+        {tf: V3_P_BEST[tf] for tf in V3_TRADE_TFS} and doc["leverage"]["p_best"].get("5m", 0.0) == 0.0
 
 
 def test_symbols_cover_the_coin_keys():

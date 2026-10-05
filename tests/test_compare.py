@@ -38,8 +38,9 @@ def _db(tmp_path):
         for tf in ("5m", "15m"):
             c.execute("INSERT INTO accounts VALUES (?,?,?,?)", (f"{s}@{tf}", s, tf, "strategy"))
             eng[f"{s}@{tf}"] = {"wallet": 5000 + (3 - i) * 100 * (1 if tf == "5m" else 2), "bust": False}
-    c.execute("INSERT INTO accounts VALUES ('RANDOM_1@5m', 'RANDOM_1', '5m', 'random')")
-    eng["RANDOM_1@5m"] = {"wallet": 4900}
+    # the coin flip of a core timeframe (the 5m coin flips are the reel's comparison since paper v4: not this baseline)
+    c.execute("INSERT INTO accounts VALUES ('RANDOM_1@15m', 'RANDOM_1', '15m', 'random')")
+    eng["RANDOM_1@15m"] = {"wallet": 4900}
     c.execute("INSERT INTO state VALUES ('accounts', 1, ?)", (json.dumps({"engines": eng}),))
     c.commit()
     return c
@@ -65,3 +66,27 @@ def test_ranking_text_compares_per_account_numbers_with_the_coin_flip_mean(tmp_p
     # a strategy's sum is over its accounts, the coin-flip mean is one account's: both are shown per account
     assert "\n1. A +$900 (계좌당 +$450) · " in text
     assert "\n동전 봇 계좌당 평균 -$100" in text and "합으로 치면" not in text          # no 4- or 5-account sum
+
+
+def test_v4_ranks_only_the_36_and_keeps_other_groups_on_one_line(tmp_path):
+    """Paper v4 (owners 2026-10-05): DeepSeek and the reel are never ranked with the 36 (even when they are the worst),
+    the 5m coin flips are not the baseline, and the Telegram text carries the reel's line but no DeepSeek P&L."""
+    from paperbot.agents import rooms as RM
+    c = _db(tmp_path)
+    eng = json.loads(c.execute("SELECT data FROM state").fetchone()[0])["engines"]
+    for aid, s, tf, kind, w in (("F3_BOS@15m", "F3_BOS", "15m", "ds200", 100.0),
+                                ("F9_FVG@1h", "F9_FVG", "1h", "ds200", 3000.0),
+                                ("REEL_H1@5m", "REEL_H1", "5m", "reel", 5250.0),
+                                ("RANDOM_2@5m", "RANDOM_2", "5m", "random", 1.0)):
+        c.execute("INSERT INTO accounts VALUES (?,?,?,?)", (aid, s, tf, kind))
+        eng[aid] = {"wallet": w, "bust": w < 10}
+    c.execute("UPDATE state SET data = ?", (json.dumps({"engines": eng}),))
+    names = {s: s for s in "ABCD"}
+    r = C.ranking(c, 5000.0, 0.0014, k=2, names_ko=names, cards_fn=lambda s: [])
+    assert {p["strategy"] for p in r["picked"]} <= set(names) and r["strategies"] == 4
+    assert r["coin_flips"]["mean_pnl"] == -100.0                       # RANDOM_1@15m only, not the 5m flip
+    assert r["groups"]["ds200"] == {"name_ko": "딥시크", "accounts": 2, "pnl": -6900.0, "pnl_per_account": -3450.0,
+                                    "busts": 0}
+    assert r["groups"]["reel"]["pnl_per_account"] == 250.0 and r["groups"]["flip_5m"]["busts"] == 1
+    text = RM.compose_ranking(r, None)
+    assert "릴스 5분 단타 +$250" in text and "딥시크" not in text and "-$3,450" not in text

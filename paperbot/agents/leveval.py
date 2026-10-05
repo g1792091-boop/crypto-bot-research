@@ -28,6 +28,8 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ..config import V3_TRADE_TFS
+
 DOC = "docs/levrule-eval.md"
 MIN_TRADES = 10
 ALPHA = 0.10
@@ -38,9 +40,15 @@ DAY_MS = 86_400_000
 GROUPS = ("best", "normal")
 GROUP_KO = {"best": "좋은 자리", "normal": "보통"}
 KINDS = ("strategy", "random")
+# paper v4 (owners' D12, docs/levrule-eval-v4.md): the population is the locked 36 x their 4 timeframes and the 12
+# coin flips of the same timeframes, as pre-registered for v3. The 5m coin flips (kind 'random' too, the reel's
+# comparison) and every other group (DeepSeek, the reel: other kinds) never enter it.
+POPULATION_TFS = V3_TRADE_TFS
+POPULATION_DOC = "docs/levrule-eval-v4.md"
 LEVERAGES = (50, 40, 30, 20)
 BEFORE_KO = "30일 판정 전 결론 없음"
-LABEL = "미리 정한 방법(docs/levrule-eval.md)으로만 평가"
+RULES_DOC = "docs/paper-v4-rules.md"          # the run's rules (G19: the v4 documents are cited, the method stays DOC)
+LABEL = f"미리 정한 방법(docs/levrule-eval.md, v4 대상 {POPULATION_DOC})으로만 평가"
 DECISION_KO = {"keep": "규칙 B 유지(다음 30일)", "fixed20": "다음 창은 모든 신호 20배·증거금 20% 고정"}
 NOTE = ("r = 손익 ÷ (증거금 × 레버리지) = 노출 1단위당 수익(수수료·펀딩 뺀 순). 칸 = 계좌(매매법 × 봉), 두 묶음 모두 "
         "10건 이상인 칸만. D_s = 매매법 칸 평균(좋은 자리 − 보통), D_c = 동전 봇의 같은 차이, 주 단위 블록 부트스트랩 "
@@ -82,15 +90,17 @@ def window(paper_ro: sqlite3.Connection, now_ms: int) -> dict:
 
 # ---------------------------------------------------------------- reading trades
 def trade_rows(paper_ro: sqlite3.Connection, since: int, until: int, kinds: tuple = KINDS,
-               strategies: Optional[list] = None) -> list[dict]:
-    """The closed trades entered in [since, until) and closed before ``until`` on accounts of ``kinds``: one dict
-    per trade {kind, account, strategy, tf, group, lev, r, roe, eq, win, entry, signal_ts, symbol}. A trade without
-    a group (not "best" / "normal": before rule B) or without margin / leverage is left out."""
-    ks = list(kinds)
+               strategies: Optional[list] = None, timeframes: tuple = POPULATION_TFS) -> list[dict]:
+    """The closed trades entered in [since, until) and closed before ``until`` on accounts of ``kinds`` on
+    ``timeframes`` (the pre-registered population: the core timeframes, D12): one dict per trade {kind, account,
+    strategy, tf, group, lev, r, roe, eq, win, entry, signal_ts, symbol}. A trade without a group (not "best" /
+    "normal": before rule B) or without margin / leverage is left out."""
+    ks, tfs = list(kinds), list(timeframes)
     sql = ("SELECT a.kind, a.account_id, a.strategy, a.timeframe, t.pnl, t.roe, t.leverage, t.equity_after, "
            "t.entry_time, t.data FROM trades t JOIN accounts a ON a.account_id = t.account_id "
-           f"WHERE a.kind IN ({','.join('?' * len(ks))}) AND t.entry_time >= ? AND t.entry_time < ? AND t.exit_time < ?")
-    args: list = [*ks, int(since), int(until), int(until)]
+           f"WHERE a.kind IN ({','.join('?' * len(ks))}) AND a.timeframe IN ({','.join('?' * len(tfs))}) "
+           "AND t.entry_time >= ? AND t.entry_time < ? AND t.exit_time < ?")
+    args: list = [*ks, *tfs, int(since), int(until), int(until)]
     if strategies:
         sql += f" AND a.strategy IN ({','.join('?' * len(strategies))})"
         args += list(strategies)
@@ -301,7 +311,8 @@ def levrule_eval(paper_ro: Optional[sqlite3.Connection], since: Optional[int] = 
         groups[g] = {"strategy": group_stats(sg), "coin_flips": group_stats(fg),
                      "strategy_by_leverage": by_leverage(sg), "coin_flips_by_leverage": by_leverage(fg),
                      "coin_flips_at_strategy_mix": reweighted(fg, sg)}
-    out = {"label": LABEL, "doc": DOC, "status": "decided" if decided else "interim",
+    out = {"label": LABEL, "doc": DOC, "population_doc": POPULATION_DOC, "rules_doc": RULES_DOC,
+           "status": "decided" if decided else "interim",
            "status_ko": ("30일 판정: " + DECISION_KO[dec["decision"]]) if decided else BEFORE_KO,
            "window": {"start": start, "until": cp, "to": to},
            "trades": {"strategy": len(strat), "coin_flips": len(flips)},
@@ -334,7 +345,7 @@ def compact(ev: dict) -> dict:
     if ev.get("error") or ev.get("status") == "no_run":
         return {k: ev.get(k) for k in ("error", "status", "status_ko", "doc") if ev.get(k) is not None}
     g = ev.get("groups") or {}
-    out = {"status": ev["status"], "status_ko": ev["status_ko"], "doc": DOC,
+    out = {"status": ev["status"], "status_ko": ev["status_ko"], "doc": DOC, "population_doc": POPULATION_DOC,
            "trades": [((g.get("best") or {}).get("strategy") or {}).get("trades", 0),
                       ((g.get("normal") or {}).get("strategy") or {}).get("trades", 0)],
            "mean_r": [((g.get("best") or {}).get("strategy") or {}).get("mean_r"),
@@ -387,7 +398,7 @@ def strategy_line(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms:
         m = _mean(xs)
         return f"{name} {len(xs)}건" + ("" if m is None else f" 노출당 {m * 100:+.3f}%")
     status = "30일 판정 결과는 rr·체크포인트 회의" if win["decided"] else BEFORE_KO
-    return f"{part('좋은 자리', b)} · {part('보통', n)} ({status}, docs/levrule-eval.md로만 평가)"
+    return f"{part('좋은 자리', b)} · {part('보통', n)} ({status}, docs/levrule-eval.md·{POPULATION_DOC}로만 평가)"
 
 
 def dash_view(paper_ro: Optional[sqlite3.Connection], now_ms: int) -> dict:

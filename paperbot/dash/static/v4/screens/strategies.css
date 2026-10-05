@@ -1,0 +1,119 @@
+/* strategies: 매매법 (builder C). Screen-only rules; tokens and components come from the shared css. Phones first:
+   one column in reading order; from 1000 px two columns (chart side / rule and records side). */
+[data-screen="strategies"] .small { font-size: var(--t-xs); }
+[data-screen="strategies"] .strat-intro { font-size: var(--t-sm); line-height: 1.6; }
+[data-screen="strategies"] .strat-filters { gap: 8px; }
+[data-screen="strategies"] .strat-row .lname { white-space: normal; }
+[data-screen="strategies"] .strat-row .rk { min-width: 30px; }
+[data-screen="strategies"] .strat-rule1 { flex-basis: 100%; color: var(--ink-2); }
+[data-screen="strategies"] .nm2 { min-width: 0; overflow-wrap: anywhere; }
+
+/* rule lines, exits, raw text */
+.strat-lines { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); }
+.strat-lines.small { font-size: var(--t-xs); color: var(--ink-2); }
+.strat-lines li::marker { color: var(--accent); }
+.strat-exits { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); font-size: var(--t-xs); }
+.strat-exits > b { color: var(--ink-2); font-size: var(--t-xs); }
+.strat-raw { margin: 6px 0 0; padding: 10px 12px; max-height: 340px; overflow: auto; border-radius: var(--r-sm); border: 1px dashed var(--line-2);
+  background: var(--console); color: var(--ink-2); font: 400 var(--t-xs)/1.65 var(--f-term); white-space: pre-wrap; overflow-wrap: anywhere; }
+.strat-famline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--t-sm); }
+.strat-recline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--t-sm); color: var(--ink-2); }
+
+/* DeepSeek family view: definition cards */
+.strat-defs { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .strat-defs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.strat-defcard .card-h .sub { font-family: var(--f-term); }
+.strat-reel { max-width: 860px; }
+
+/* detail: head */
+.strat-dhead { display: grid; gap: 10px; }
+.strat-back { justify-self: start; }
+.strat-dtitle { display: grid; gap: 4px; min-width: 0; }
+.strat-dtitle h1 { font: 800 var(--t-xl)/1.25 var(--f-body); overflow-wrap: anywhere; }
+
+/* detail: phone = one column in this order; PC = two columns */
+.strat-grid { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.strat-col { display: contents; }
+.strat-o1 { order: 1; } .strat-o2 { order: 2; } .strat-o3 { order: 3; } .strat-o4 { order: 4; }
+.strat-o5 { order: 5; } .strat-o6 { order: 6; } .strat-o7 { order: 7; } .strat-o8 { order: 8; }
+@media (min-width: 1000px) {
+  .strat-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; }
+  .strat-col { display: grid; gap: var(--gap); min-width: 0; align-content: start; }
+}
+
+/* chart */
+.strat-chartbox { position: relative; width: 100%; height: 340px; border-radius: var(--r-md); overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+@media (min-width: 1000px) { .strat-chartbox { height: 440px; } }
+.strat-legend { font-size: var(--t-xs); color: var(--ink-2); }
+.strat-chartnote { font-size: var(--t-xs); }
+.strat-mk[aria-pressed="true"] { border-color: var(--accent-line); color: var(--accent); }
+.strat-chartcard .card-h .acts { flex-wrap: wrap; }
+
+/* condition checklist */
+.strat-condhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--t-xs); }
+.strat-cgrid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .strat-cgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.strat-cside { display: grid; gap: 6px; min-width: 0; }
+.strat-chead { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-sm); }
+.strat-conds { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.strat-conds li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); }
+.strat-conds .st { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; }
+.strat-conds li.on { color: var(--ink); }
+.strat-conds li.on .st { color: var(--accent); font-weight: 700; }
+.strat-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--muted); transform: translateY(-1px); }
+.strat-conds li.on .strat-dot { background: var(--accent); border-color: var(--accent); }
+.strat-near { padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); font-size: var(--t-sm); font-weight: 700; }
+.strat-marks { display: grid; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: var(--t-sm); overflow-wrap: anywhere; }
+.strat-marks p { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+/* accounts: one tile per timeframe */
+.strat-tiles { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 560px) { .strat-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .strat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.strat-tile { display: grid; gap: 3px; align-content: start; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); text-decoration: none; transition: border-color var(--t-fast); }
+.strat-tile:hover { border-color: var(--accent-line); }
+.strat-tile.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.strat-tile .k { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.strat-tile b { font-size: var(--t-md); }
+.strat-tile .s { color: var(--ink-2); font-size: var(--t-xs); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.strat-tile .pp { justify-self: start; white-space: normal; }
+.strat-stats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.strat-stats .stat b { font-size: var(--t-md); white-space: normal; }
+
+/* wins vs losses split */
+.strat-split { display: grid; }
+.strat-srow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) 64px 84px; gap: 4px 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.strat-srow > .num { text-align: right; }
+.strat-sp { grid-column: 1 / -1; }
+.strat-sp:empty { display: none; }
+@media (min-width: 560px) { .strat-srow { grid-template-columns: minmax(90px, 1fr) minmax(80px, 1.4fr) 70px 92px 74px; } .strat-sp { grid-column: auto; } .strat-sp:empty { display: block; } }
+
+/* signal log rows */
+.strat-sig .rk { font-size: var(--t-xs); }
+
+/* loss cards and loss patterns */
+.strat-lcard { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); font-size: var(--t-sm); overflow-wrap: anywhere; }
+.strat-lhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.strat-lcard p { display: block; }
+.strat-tags { gap: 4px; }
+.strat-tagrows { display: grid; }
+.strat-tagrow { display: grid; gap: 4px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.strat-tagbars { display: grid; grid-template-columns: auto minmax(0, 1fr) 42px auto minmax(0, 1fr) 42px; gap: 6px; align-items: center; font-size: var(--t-xs); }
+.strat-tagbars .k { color: var(--muted); }
+.strat-tagbars .num { text-align: right; }
+.strat-bar { display: block; height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.strat-bar i { display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; transition: width .6s var(--ease); }
+.strat-bar.down i { background: var(--down); } .strat-bar.up i { background: var(--up); }
+
+.strat-row .lname { color: var(--ink); }
+.strat-row .ret { text-align: right; }
+.strat-row .meta { line-height: 1.6; }
+.strat-row .meta .pp { line-height: 1.45; }
+.strat-tile .pp.ref { display: inline-block; white-space: normal; line-height: 1.45; padding: 2px 8px; }
+
+@media (min-width: 900px) { .strat-famseg.seg.scroll { flex-wrap: wrap; overflow: visible; } }
+[data-screen="strategies"] .disclosure > .linkish { font-size: var(--t-sm); }
+[data-screen="strategies"] .disclosure .region { margin-top: 6px; }
+
+.strat-nav { gap: 8px; }
+.strat-jump { max-width: min(100%, 320px); min-height: 32px; }

@@ -14,6 +14,12 @@ default today UTC) and the trade minimum change only inside this process. ``--ca
 only complete past days are cached, so a rehearsal fills it ahead of the real verdict. Run it as the paperbot
 user (the cache files must stay the job's); the signed leverage-bracket call needs the key of live.env.
 
+Paper v4: the rehearsal runs 2,000 coin-flip bots per account by default (``checkpoint.REHEARSAL_BOTS``; a pipeline
+check, the real verdict uses 10,000), and its summary adds the accounts per group (expected from the accounts table vs
+found in the runner's state), the families' counts, the accounts held for a zero signal count, and the projected
+runtime of the real verdict (this run's verdict time x 10,000 / bots). On a checkpoint day (day 30, 60, ... of the
+run) the weekly rehearsal does not run (``status: skipped``): the real verdict needs the CPU and memory that day.
+
 ``--rehearsal-dir`` (the weekly timer, deploy/paperbot-rehearsal.service): the output is a fresh
 ``DIR/rehearsal-<UTC time>.db``, a JSON summary ``DIR/rehearsal-<UTC time>.json`` (``summary_of``: status,
 runtime, accounts in the snapshot, warnings, zero-rate accounts, counts by status) is written next to it and
@@ -53,12 +59,37 @@ def summary_of(v: Optional[dict], *, as_of: Optional[str], days: Optional[int], 
     if v is not None:
         accts = v.get("accounts") or {}
         rates = {a: r.get("rate") for a, r in accts.items() if r.get("rate") is not None}
-        s.update(accounts_in_snapshot=len(accts), tested=v.get("tested"), warnings=list(v.get("warnings") or []),
+        cov = v.get("coverage") or {}
+        found = cov.get("found")
+        s.update(accounts_in_snapshot=sum(found.values()) if found else len(accts), tested=v.get("tested"),
+                 warnings=list(v.get("warnings") or []),
                  zero_rate_accounts=sorted(a for a, x in rates.items() if x == 0),
                  rate_min=min(rates.values()) if rates else None, rate_max=max(rates.values()) if rates else None,
                  counts=dict(v.get("counts") or {}), verdict_runtime_s=v.get("runtime_s"),
                  snapshot_sha256=v.get("snapshot_sha256"))
+        if cov:
+            expected = cov.get("expected")
+            s.update(accounts_expected=sum(expected.values()) if expected else None,
+                     missing_accounts=list(cov.get("missing") or []),
+                     by_group=_by_group(accts, expected or {}, found or {}))
+        if v.get("families") is not None:
+            s["families"] = [dict(f) for f in v["families"]]
+        s["held_zero_signals"] = sorted(a for a, r in accts.items() if "신호 기록 0건" in (r.get("reason") or ""))
+        if bots and v.get("runtime_s") is not None:
+            s["projected_runtime_s_real"] = round(float(v["runtime_s"]) * ck.N_BOTS / max(int(bots), 1), 1)
+            s["n_bots_real"] = ck.N_BOTS
     return s
+
+
+def _by_group(accts: dict, expected: dict, found: dict) -> dict:
+    """{group: {"expected", "found", "tested", "counts": {status: n}}} from the verdict rows (paper v4)."""
+    out: dict = {}
+    for g in sorted(set(expected) | set(found) | {r.get("group") for r in accts.values() if r.get("group")}):
+        rows = [r for r in accts.values() if r.get("group") == g]
+        out[g] = {"expected": expected.get(g), "found": found.get(g, 0),
+                  "tested": sum(1 for r in rows if r.get("p") is not None),
+                  "counts": {k: sum(1 for r in rows if r.get("status") == k) for k in ck.STATUSES}}
+    return out
 
 
 def _write_json(path: str, data: dict) -> None:
@@ -103,7 +134,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--as-of", help="the date to judge as if it were a checkpoint (YYYY-MM-DD, default today UTC)")
     ap.add_argument("--cache", default=None, help="1m bar cache directory (default: <out dir>/checkpoint_bars)")
     ap.add_argument("--min-trades", type=int, default=10, help="trades for a verdict here (the real one: 30)")
-    ap.add_argument("--bots", type=int, default=500, help="coin-flip bots per account (the real one: 2,000)")
+    ap.add_argument("--bots", type=int, default=ck.REHEARSAL_BOTS,
+                    help=f"coin-flip bots per account (default {ck.REHEARSAL_BOTS:,}; the real one: {ck.N_BOTS:,})")
     args = ap.parse_args(argv)
     if bool(args.out) == bool(args.rehearsal_dir):
         print("거부: --out(새 파일) 또는 --rehearsal-dir(폴더) 중 하나만 주세요")
@@ -124,6 +156,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         os.makedirs(folder, exist_ok=True)
         stem = os.path.join(folder, PREFIX + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
         args.out, summary_path = stem + ".db", stem + ".json"
+    if args.rehearsal_dir:
+        day = checkpoint_day_today(args.db, args.as_of)
+        if day:
+            print(f"INFO: 오늘은 {day}일 판정일: 실제 판정이 CPU·메모리를 쓰므로 주간 연습은 건너뜀")
+            s = summary_of(None, as_of=args.as_of, days=day, out=None, started=time.time(), finished=time.time(),
+                           status="skipped", error=f"day {day} is a checkpoint day", min_trades=args.min_trades,
+                           bots=args.bots)
+            _write_json(summary_path, s)
+            _write_json(os.path.join(os.path.dirname(summary_path), LATEST), s)
+            return 0
     out = os.path.realpath(args.out)
     if os.path.exists(out) or out == os.path.realpath(REAL_OUT):
         print(f"거부: {args.out}은(는) 이미 있는 파일이거나 실제 판정 파일입니다. 새 파일 이름을 주세요 "
@@ -150,6 +192,25 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print(f"지난 연습 {len(gone)}개 파일 정리 (최근 {args.keep}번만 보관)")
         print(f"요약: {summary_path}")
     return code
+
+
+def checkpoint_day_today(db: str, as_of: Optional[str] = None, now_ms: Optional[int] = None) -> Optional[int]:
+    """The run day (30, 60, ...) when ``as_of`` (default today, UTC) is a checkpoint day of the run in ``db``, else
+    None (also when the run has not started)."""
+    try:
+        conn = ck.ro_connect(db)
+        try:
+            start = ck.run_facts(conn)["start_ts"]
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001  (no run, no skip: the rehearsal itself reports the problem)
+        return None
+    if start is None:
+        return None
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    day = (ck.day_ms(as_of) if as_of else ck.floor_day(now)) - ck.floor_day(start)
+    d = int(day // ck.DAY_MS)
+    return d if d >= ck.PERIOD_DAYS and d % ck.PERIOD_DAYS == 0 else None
 
 
 def _run(args, out: str, ctx: dict) -> tuple[int, Optional[dict]]:
@@ -193,7 +254,9 @@ def _run(args, out: str, ctx: dict) -> tuple[int, Optional[dict]]:
     v = done[0]
     rates = [r["rate"] for r in v["accounts"].values() if r.get("rate") is not None]
     print(f"\n미리보기 끝: {time.time() - t0:.0f}초 (바이낸스에서 새로 받은 1분봉 코인·날짜 {bars.fetched_days}개), 스냅샷 계좌 "
-          f"{len(v['accounts'])}개, 우연 기준 검정 {v['tested']}개, 주의 {len(v['warnings'])}건"
+          f"{sum((v.get('coverage') or {}).get('found', {}).values()) or len(v['accounts'])}개"
+          f"{' (없는 계좌 ' + str(len(v['coverage']['missing'])) + '개)' if (v.get('coverage') or {}).get('missing') else ''}, "
+          f"우연 기준 검정 {v['tested']}개, 주의 {len(v['warnings'])}건"
           + (f", 신호 비율 {min(rates):.4f}~{max(rates):.4f} (0인 계좌 {rates.count(0)}개)" if rates else ""))
     print(f"실제 checkpoint.db와 텔레그램은 건드리지 않았습니다. 계좌별 결과: cd {os.getcwd()} && sudo -u paperbot "
           f"{sys.executable} -m paperbot.checkpoint show --out {out} · 다 보면 지워도 됩니다: sudo rm {out}*")

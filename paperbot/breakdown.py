@@ -37,9 +37,12 @@ def _cell(rows: list[dict], min_n: int) -> dict:
 
 
 def load_trades(conn: sqlite3.Connection, since_ms: Optional[int] = None) -> list[dict]:
-    """Closed trades of the original accounts (kind strategy or random) with their account and kind."""
+    """Closed trades of the 36's accounts (kind strategy) and of their coin flips (kind random on the 36's timeframes:
+    the paper v4 5m flips run the reel's own exits and are the reel's yardstick, not the 36's) with account and kind.
+    The DeepSeek and reel accounts (kinds ds200 / reel) are not in this card."""
     q = ("SELECT t.account_id, a.kind, t.symbol, t.entry_time, t.pnl, t.roe, t.data FROM trades t "
-         "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind IN ('strategy', 'random')")
+         "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind IN ('strategy', 'random') "
+         "AND NOT (a.kind = 'random' AND a.timeframe = '5m')")
     args: tuple = ()
     if since_ms is not None:
         q += " AND t.entry_time >= ?"

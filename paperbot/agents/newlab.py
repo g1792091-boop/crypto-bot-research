@@ -7,8 +7,8 @@ Grammar (``normalize_spec``; tables in paperbot/agents/newlab_signals.py):
    "entry": {"family": <one of 30 library triggers>, "params": {...one allowed value set...}},
    "filters": [<0..2 of trend_ema, adx, htf_trend, vol_regime, session, distinct kinds>],
    "direction": "long|short|both"}            (+ free-text "name"/"idea", not part of the strategy)
-  Exits are never part of a spec: always the paper v3 rules (next-bar-open entry, 2 x ATR14 stop,
-  20-50x size_position, stepped profit lock, real costs), so a passing strategy runs as a paper
+  Exits are never part of a spec: always the paper v4 core group's rules (the v3 rules carried over: next-bar-open
+  entry, 2 x ATR14 stop, 20-50x size_position, stepped profit lock, real costs), so a passing strategy runs as a paper
   account unchanged. ``spec_hash`` of the canonical form: the same strategy is never tested twice.
 
 Outcomes: every signal on the six coins through ``labtests.signal_outcomes`` (profiles.py
@@ -105,7 +105,7 @@ def normalize_spec(spec: Any) -> dict:
     keys = set(spec)
     bad_exit = sorted(k for k in keys if _word(k) in EXIT_KEYS)
     if bad_exit:
-        raise SpecError("청산·손절·레버리지는 고를 수 없습니다. 항상 paper v3 규칙(2 ATR 손절, 20~50배 자동, "
+        raise SpecError("청산·손절·레버리지는 고를 수 없습니다. 항상 paper v4 매매법 그룹 규칙(2 ATR 손절, 20~50배 자동, "
                         f"계단식 익절)입니다. 빼 주세요: {', '.join(bad_exit)}.")
     unknown = sorted(keys - {"timeframe", "entry", "filters", "direction", "v", *NOTE_KEYS})
     if unknown:
@@ -225,7 +225,7 @@ def describe_ko(spec: dict) -> str:
 def grammar_help_ko() -> str:
     """The grammar in plain Korean, for the prompts."""
     lines = [f"새 매매법 문법({GRAMMAR_VERSION}). JSON 하나: timeframe, entry{{family, params}}, filters(0~2개), "
-             "direction. 청산은 고를 수 없음(항상 paper v3: 2 ATR 손절, 20~50배 자동, 계단식 익절).",
+             "direction. 청산은 고를 수 없음(항상 paper v4 매매법 그룹 규칙: 2 ATR 손절, 20~50배 자동, 계단식 익절).",
              f"timeframe: {', '.join(TFS)}", "direction: long, short, both", "entry.family (허용 params):"]
     for fam, (names, grid, vol, group, ko) in FAMILIES.items():
         opts = " / ".join(", ".join(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}" for k, v in zip(names, g))
@@ -472,7 +472,7 @@ def run_new_strategy(spec: Any, data: Optional[LT.LabData], n_tests_so_far: int,
     result = {"ok": True, "status": "done", "spec": sp, "spec_hash": h, "notes": spec_notes(spec),
               "grammar": GRAMMAR_VERSION, "prereg": PREREG, "description_ko": describe_ko(sp),
               "timeframe": sp["timeframe"], "n_tests_so_far": n, "test_number": n + 1, "counts_as_test": True,
-              "exits": "paper v3 (labtests.signal_outcomes: profiles.py _sizer/_scan, 2 ATR stop, stepped lock)",
+              "exits": "paper v4 core rules (labtests.signal_outcomes: profiles.py _sizer/_scan, 2 ATR stop, stepped lock)",
               "block": "week (Monday 00:00 UTC)", "n_boot": {"1": N_BOOT_P1, "2": N_BOOT, "3": N_BOOT,
                                                               "coinflip": N_BOOT},
               "coinflip_reps": max(1, int(reps)),
@@ -610,8 +610,8 @@ def proposal_of(result: dict, n_tests_now: Optional[int] = None) -> Optional[dic
         return None
     sp = result["spec"]
     return {"kind": "new_paper_account", "needs_owner_ok": True, "spec": sp, "spec_hash": result["spec_hash"],
-            "timeframe": sp["timeframe"], "rules": "paper v3 (exits, sizing and costs unchanged)",
+            "timeframe": sp["timeframe"], "rules": "paper v4 core rules (exits, sizing and costs unchanged)",
             "description_ko": result.get("description_ko"), "gate": g,
-            "summary_ko": ("새 매매법이 5년 시험 관문을 통과했습니다. 같은 규칙(paper v3)의 새 paper 계좌로 "
+            "summary_ko": ("새 매매법이 5년 시험 관문을 통과했습니다. 같은 규칙(paper v4 매매법 그룹)의 새 paper 계좌로 "
                            "새 자료에서 확인하자는 제안입니다. 두 분 OK가 있어야 시작합니다.\n"
                            + result.get("summary_ko", ""))}

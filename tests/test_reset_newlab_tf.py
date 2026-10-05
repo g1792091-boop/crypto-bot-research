@@ -8,7 +8,7 @@ from paperbot import extras as X
 from paperbot.config import V3_TRADE_TFS
 from tests.extras_world import MIN, T0, World
 
-NO_5M = "5분봉은 2026-10-04부터 실험에서 뺐음"
+NO_5M = "paper v4의 5분봉은 릴스 5분 단타(REEL_H1)와 그 비교용 동전 3개만 씀"
 
 
 def test_run_timeframe_refusal():
@@ -22,6 +22,7 @@ def test_run_timeframe_refusal():
     assert X.run_timeframe_refusal("5m", ("5m", "15m", "30m", "1h", "4h")) == ""
     assert X.run_timeframe_refusal("5m", None).startswith(NO_5M)          # no set given: the run's (V3_TRADE_TFS)
     assert "spec_invalid" in X.PERMANENT                                  # the agents tick closes such a proposal
+    assert "뺐음" not in X.NO_5M_KO and "릴스 5분 단타" in X.NO_5M_KO          # paper v4: 5m is the reel's path only
 
 
 def test_a_5m_new_strategy_is_refused_and_a_1h_one_starts(tmp_path):

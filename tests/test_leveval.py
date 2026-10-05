@@ -401,7 +401,11 @@ def test_new_routes_need_the_login_and_answer_bounded(tmp_path):
     assert a["trades"][0]["why"]["group"] in ("best", "normal") and a["trades"][0]["why"]["short_ko"]
     assert "tier" in c.get("/api/trades").json()[0]
     s = c.get("/api/summary").json()["restart"]
-    assert s["ready"] and s["rules_ko"].startswith("5분봉 제외") and s["doc"] == "/api/doc/rules-change-1"
+    # paper v4 (owners 2026-10-05): the banner names the v4 rules (dash RULES_V4_KO); its document link is the v4 rules
+    # once docs/paper-v4-rules.md is in docs/, the v3 rules change before that
+    from paperbot.dash.app import RULES_V4_KO
+    assert s["ready"] and s["rules_ko"] == RULES_V4_KO and "5분봉 제외" not in s["rules_ko"]
+    assert s["doc"] in ("/api/doc/rules-v4", "/api/doc/rules-change-1")
 
 
 def test_new_routes_with_missing_or_empty_databases(tmp_path):
@@ -424,18 +428,18 @@ def test_new_routes_with_missing_or_empty_databases(tmp_path):
 
 
 def test_restart_banner_math():
-    from paperbot.dash.app import RULES_CHANGE_1_KO, restart_banner
+    from paperbot.dash.app import RULES_V4_KO, restart_banner
     start = START + 15 * HOUR                                   # 2026-10-05 15:00 UTC (00:00 KST 10-06)
     cp1 = START + 30 * DAY                                      # 2026-11-04 00:00 UTC = 09:00 KST
     b = restart_banner(start, start)
     assert (b["day"], b["of"], b["checkpoint"], b["verdict_ts"], b["verdict_mmdd"]) == (0, 30, 1, cp1, "11/04")
-    assert b["text"] == "새 실험 D+0 / 30 · 첫 판정 11/04" and b["rules_ko"] == RULES_CHANGE_1_KO
+    assert b["text"] == "새 실험 D+0 / 30 · 첫 판정 11/04" and b["rules_ko"] == RULES_V4_KO
     assert restart_banner(start, START + DAY + HOUR)["text"] == "새 실험 D+1 / 30 · 첫 판정 11/04"
     assert restart_banner(start, cp1 - 1)["day"] == 29
     late = restart_banner(start, cp1)
     assert late["day"] == 30 and late["checkpoint"] == 2 and late["text"] == "새 실험 D+30 · 2번째 판정 12/04"
     assert restart_banner(None, cp1)["ready"] is False
-    assert RULES_CHANGE_1_KO == "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 8초 뒤 읽기"
+    assert "5분봉 제외" not in RULES_V4_KO and "딥시크" in RULES_V4_KO            # the v4 run trades 5m (the reel)
 
 
 def test_pages_have_the_new_views():

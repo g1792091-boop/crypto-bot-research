@@ -20,7 +20,11 @@ from paperbot.store3 import Store3
 
 NOW = int(dt.datetime(2026, 10, 4, 22, 10, tzinfo=KST).timestamp() * 1000)
 OLD_START = int(dt.datetime(2026, 9, 30, 21, 0, tzinfo=KST).timestamp() * 1000)
-RESTART_KO = "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 8초 뒤 읽기)"
+# the paper v4 restart text (owners 2026-10-05): written from config.V4_GROUPS, never typed in (no "5분봉 제외")
+RESTART_KO = ("실험을 2026-10-04에 처음부터 다시 시작함 (paper v4: $5,000 계좌 331개 = 매매법 36개 × 15분·30분·1시간·4시간 + "
+              "딥시크 정의 44개(39개 15분·30분·1시간·4시간, 5개 15분·30분·1시간, 171계좌) + 릴스 5분 단타 1개(5분봉, 자기 청산 "
+              "규칙) + 동전 15개(5분봉 3개 포함). 매매법 36개는 5분봉 없음, 5분봉은 릴스와 그 비교용 동전만. 좋은 자리 "
+              "50·40배·보통 30·20배(비중=배수%), 딥시크·릴스는 늘 보통. 1분봉 8초 뒤 읽기)")
 GATE_OK = {"pass": True, "n_trials": 3}
 
 RUN_BOUND = {"loss:strat:V45_AMB": "812", "loss:team:lab": "799", "weekly:strat:N17_KC_RSI": "640",
@@ -176,6 +180,8 @@ def test_apply_keeps_memory_resets_run_bound_state_and_backs_up_first(lib):
     m = json.loads(cur[RR.MARKER])
     assert m["day_kst"] == "2026-10-04" and m["archive"] == str(lib["arch"]) and m["text_ko"] == RESTART_KO
     assert (m["old_run_start"], m["old_originals"], m["old_5m_accounts"]) == (OLD_START, 10, 2)
+    assert m["old_groups"] == {"core": 5, "ds200": 0, "reel": 0, "flip": 5} and m["old_shape"] == "v3"
+    assert (m["new_run"], m["new_accounts"]) == ("paper-v4", 331)
     new_notes = after["notes"][len(agents_before["notes"]):]
     assert len(new_notes) == n_rooms == res["rooms_told"]
     assert {n[2] for n in new_notes} == {r[0] for r in after["rooms"]}
@@ -399,3 +405,98 @@ def test_guard_ignores_an_old_marker_and_a_missing_agents_db(lib, tmp_path):
     assert RR.repeat_reason(str(paper), str(tmp_path / "none.db"), NOW + 60_000) is None
     (tmp_path / "bad.db").write_text("not a database")
     assert RR.repeat_reason(str(tmp_path / "bad.db"), lib["agents"], NOW + 60_000) is None
+
+
+# ---------------------------------------------------------------------------------- paper v4 (owners 2026-10-05)
+def _v4_db(path, start=NOW, version="paper-v4", drop=None, extra=None):
+    from paperbot.config import v4_account_defs
+    st = Store3(str(path))
+    for d in v4_account_defs([f"S{k}" for k in range(36)]):
+        aid = f"{d['strategy']}@{d['timeframe']}"
+        if aid == drop:
+            continue
+        st.add_account(aid, d["strategy"], d["timeframe"], d["kind"], start, version, None, d["data"])
+    for row in extra or ():
+        st.add_account(*row)
+    st.commit()
+    st.close()
+    return str(path)
+
+
+def test_the_v4_text_is_the_v4_run_and_never_the_v3_wording():
+    from paperbot.config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS
+    t = RR.WHAT_CHANGED_KO
+    assert RR.restart_text("2026-10-04") == RESTART_KO
+    assert "5분봉 제외" not in t and "뺐음" not in t and "156" not in t and "144" not in t
+    assert f"계좌 {V4_ACCOUNTS}개" in t and f"{V4_GROUP_ACCOUNTS['ds200']}계좌" in t and "릴스 5분 단타" in t
+    assert RR.what_changed_ko() == t
+
+
+def test_paper_facts_of_a_v4_db_has_nothing_off_its_timeframes(tmp_path):
+    f = RR.paper_facts(_v4_db(tmp_path / "paper3.db"))
+    assert f["off_tf"] == 0 and f["originals"] == 331 and f["shape"] == "v4" and f["utc_days"] == 1
+    assert f["groups"] == {"core": 144, "ds200": 171, "reel": 1, "flip": 15}
+    assert f["by_tf"] == {"5m": 4, "15m": 83, "30m": 83, "1h": 83, "4h": 78}
+    assert f["start"] == NOW and f["versions"] == ["paper-v4"]
+
+
+def test_paper_facts_tell_a_v3_db_and_a_wrong_v4_db(tmp_path):
+    st = Store3(str(tmp_path / "v3.db"))
+    for tf in ("15m", "30m", "1h", "4h"):
+        for k in range(36):
+            st.add_account(f"S{k}@{tf}", f"S{k}", tf, "strategy", OLD_START, "paper-v3")
+        for k in (1, 2, 3):
+            st.add_account(f"RANDOM_{k}@{tf}", f"RANDOM_{k}", tf, "random", OLD_START, "paper-v3")
+    st.commit()
+    st.close()
+    f = RR.paper_facts(str(tmp_path / "v3.db"))
+    assert (f["shape"], f["originals"], f["off_tf"]) == ("v3", 156, 0)
+    # one DeepSeek account missing, a strategy account on 5m, an F15 session definition on 4h, the reel on 15m
+    bad = _v4_db(tmp_path / "bad.db", drop="F1_RSI_DIV@15m",
+                 extra=[("S0@5m", "S0", "5m", "strategy", NOW, "paper-v4"),
+                        ("F15_ASIA_BRK@4h", "F15_ASIA_BRK", "4h", "ds200", NOW, "paper-v4"),
+                        ("REEL_H1@15m", "REEL_H1", "15m", "reel", NOW, "paper-v4")])
+    f = RR.paper_facts(bad)
+    assert f["off_tf"] == 3 and f["shape"] == "other" and f["originals"] == 333
+    assert RR.paper_facts(_v4_db(tmp_path / "v.db", version="paper-v3"))["shape"] == "other"
+    assert RR.paper_facts(str(tmp_path / "none.db")) == {}
+
+
+def test_start_info_counts_every_group(tmp_path, capsys):
+    p = _v4_db(tmp_path / "paper3.db", start=NOW + 7_000)
+    info = RR.start_info(p)
+    assert info["accounts"] == 331 and info["shape"] == "v4" and info["utc_days"] == 1
+    assert info["timeframes"] == ["15m", "1h", "30m", "4h", "5m"]
+    assert info["groups"] == {"core": 144, "ds200": 171, "reel": 1, "flip": 15}
+    capsys.readouterr()
+    assert RR.main(["start", "--paper-db", p]) == 0
+    out = capsys.readouterr().out
+    assert "원래 계좌 331개" in out and "매매법 144 · 딥시크 171 · 릴스 5분 단타 1 · 동전 15" in out and "!!" not in out
+
+
+def test_start_info_warns_on_a_short_account_set(tmp_path, capsys):
+    p = _v4_db(tmp_path / "paper3.db", drop="REEL_H1@5m")
+    assert RR.main(["start", "--paper-db", p]) == 0
+    out = capsys.readouterr().out
+    assert "원래 계좌 330개" in out and "!! 계좌가 아직 규칙의 331개" in out
+
+
+@pytest.mark.parametrize("acct, bad", [("V45_AMB@15m", ""), ("V45_AMB@4h", ""), ("V45_AMB@5m", "봉"),
+                                       ("F9_FVG@15m", "딥시크"), ("REEL_H1@5m", "릴스"), ("RANDOM_1@1h", "동전"),
+                                       ("V45_AMB@15m~c1", "추가 계좌"), ("NL3@1h", "추가 계좌"), ("x", "봉")])
+def test_the_executor_may_follow_only_a_core_account(tmp_path, acct, bad):
+    why = RR.executor_problem(acct)
+    assert (why == "") == (bad == "") and bad in why
+    exe = tmp_path / "executor.json"
+    exe.write_text(json.dumps({"account": acct}), encoding="utf-8")
+    w = RR.config_warnings(str(tmp_path / "none.json"), str(exe))
+    assert (w == []) == (bad == "")
+
+
+def test_plan_shows_the_new_run_and_the_old_runs_shape(lib, capsys):
+    import shutil
+    shutil.copy(lib["arch"] / "paper3.db", lib["data"] / "paper3.db")
+    assert RR.main(["plan", "--lib", str(lib["data"]), "--etc", str(lib["data"] / "no-etc")]) == 0
+    out = capsys.readouterr().out
+    assert "[새 실행] paper v4: $5,000 계좌 331개" in out
+    assert "원래 계좌 10개(매매법 5 · 동전 5; v4 규칙 밖 봉 1개)" in out

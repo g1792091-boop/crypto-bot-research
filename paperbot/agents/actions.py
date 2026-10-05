@@ -59,6 +59,8 @@ except ImportError:  # pragma: no cover
     _nl = None
 
 ALLOWED_ACTIONS = ("note", "hypothesis", "request_test", "propose_copy", "flag_owners", "no_action")
+# The five v4 specialist rooms (G7): note, flag_owners, no_action only (defined with the roles, roster3)
+from .roster3 import GROUP_ACTIONS, GROUP_ACTIONS_KO  # noqa: E402,F401  (re-exported)
 ACTION_KO = {"note": "메모 남기기", "hypothesis": "가설 기록", "request_test": "5년 시험 요청",
              "propose_copy": "복제 계좌 제안", "flag_owners": "두 분께 알림", "no_action": "행동 없음"}
 FLAG_LEVELS = (INFO, WARN)
@@ -433,11 +435,22 @@ def _stored(trial: Optional[dict]) -> tuple[Optional[str], dict]:
 FINAL_TEST_STATUSES = ("passed", "failed", "described")   # a trial with one of these is never re-run
 
 
+def lab_strategies() -> tuple:
+    """The names the 5-year lab can test: the 36 locked strategies (strategy_view_defs.NAMES), never a DeepSeek
+    definition, the reel or a coin flip (its data and its gate are the 36's; G7)."""
+    from ..strategy_view_defs import NAMES
+    return tuple(NAMES)
+
+
 def request_test(env: ActionEnv, a: dict) -> dict:
     """Run (or reuse) one fixed test for the room's strategy. Returns trial_id, status
     (passed / failed / described / no_data / error), result, gate, n_trials and whether an
     earlier identical test was reused. The gate is labtests.gate with this room's test count
-    (Bonferroni); nobody can change it afterwards."""
+    (Bonferroni); nobody can change it afterwards. A room whose strategy is not one of the 36
+    (``lab_strategies``) is refused before anything is recorded: no trial, no test number (G7)."""
+    if env.strategy not in lab_strategies():
+        return _done("request_test", False, "5년 시험은 잠긴 매매법 36개만 할 수 있습니다(이 방의 매매법은 시험 대상 아님)",
+                     refused=True, strategy=env.strategy)
     spec = dict(a["test"])
     spec["strategy"] = env.strategy          # always the room's strategy, never the model's
     old = R.find_trial(env.conn, env.strategy, spec, kind="test")
@@ -846,7 +859,7 @@ def newlab_propose(env: ActionEnv, trial: dict) -> dict:
         env.conn.rollback()
         raise
     env.post("action", f"📄 새 매매법 제안 #{pid} (장부 #{tid}): {desc}\n5년 시험 관문을 통과했습니다(새 매매법 시험 {n_now + 1:,}번 "
-                       "기준으로 다시 판정해도 통과). 같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 "
+                       "기준으로 다시 판정해도 통과). 같은 규칙(paper v4 매매법 그룹: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 "
                        "확인하자는 제안이며, 두 분 OK가 있어야 시작합니다. 대시보드 '에이전트 방' → 새 매매법 연구실에서 "
                        "승인/거절할 수 있습니다. " + start_text(env.paper_ro),
              {"newlab": True, "action": "newlab_proposal", "trial_id": tid, "proposal_id": pid, "proposal": prop})

@@ -444,9 +444,12 @@ def closed(paper_ro: sqlite3.Connection, since_ms: int, until_ms: int, kinds: tu
     (and ``strategies`` when given). Read-only."""
     rt = round_trip_of(paper_ro) if round_trip is None else round_trip
     ks = list(kinds)
+    # the core timeframes only (paper v4): the 5m coin flips are kind 'random' too, but the reel's comparison (long
+    # only, the reel's exits), never the 36's coin-flip baseline; every other kind read here trades on these anyway
     sql = ("SELECT a.strategy, a.timeframe, t.data FROM trades t JOIN accounts a ON a.account_id = t.account_id "
-           f"WHERE a.kind IN ({','.join('?' * len(ks))}) AND t.exit_time >= ? AND t.exit_time < ?")
-    args: list = [*ks, int(since_ms), int(until_ms)]
+           f"WHERE a.kind IN ({','.join('?' * len(ks))}) AND a.timeframe IN ({','.join('?' * len(V3_TRADE_TFS))}) "
+           "AND t.exit_time >= ? AND t.exit_time < ?")
+    args: list = [*ks, *V3_TRADE_TFS, int(since_ms), int(until_ms)]
     ss = list(strategies or [])
     if ss:
         sql += f" AND a.strategy IN ({','.join('?' * len(ss))})"

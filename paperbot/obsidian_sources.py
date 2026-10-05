@@ -65,6 +65,7 @@ class Data:
     run_start_ms: Optional[int] = None
     run_info: dict = field(default_factory=dict)
     accounts: dict = field(default_factory=dict)          # account_id -> {strategy, timeframe, kind, created_ts, parent}
+    shape: dict = field(default_factory=dict)             # groups.shape_from_db: the run shape the accounts table holds
     equity: dict = field(default_factory=dict)            # account_id -> (equity, drawdown)
     engines: dict = field(default_factory=dict)           # account_id -> engine state (bust, halted, max_drawdown...)
     trade_stats: dict = field(default_factory=dict)       # account_id -> stats dict (see load_trades)
@@ -128,6 +129,11 @@ def load_paper(conn: Optional[sqlite3.Connection], d: Data) -> None:
     for aid, strat, tf, kind, created, parent in _all(
             conn, "SELECT account_id, strategy, timeframe, kind, created_ts, parent FROM accounts ORDER BY account_id"):
         d.accounts[aid] = {"strategy": strat, "timeframe": tf, "kind": kind, "created_ts": created, "parent": parent}
+    try:                     # paper v4 (G9): per-group counts as the accounts table holds them (never config's numbers)
+        from .groups import shape_from_db
+        d.shape = shape_from_db(conn) if d.accounts else {}
+    except (sqlite3.Error, TypeError, ValueError):
+        d.shape = {}
     starts = [a["created_ts"] for a in d.accounts.values() if a["kind"] in ("strategy", "random")]
     if starts:
         d.run_start_ms = int(min(starts))

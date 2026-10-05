@@ -210,7 +210,7 @@ def test_activation_happy_path(world):
     for (s, tf, r), (pid, tid), aid in zip(rules, pids, list(rows)[:3]):
         a = rows[aid]
         assert (a["strategy"], a["timeframe"], a["kind"], a["created_ts"], a["parent"]) == (s, tf, "copy", B, f"{s}@{tf}")
-        assert a["settings_version"] == "paper-v3"
+        assert a["settings_version"] == "paper-v4"
         d = json.loads(a["data"])
         t = w.R.get_trial(w.agents, tid)
         p = w.R.get_proposal(w.agents, pid)
@@ -1310,3 +1310,48 @@ def test_a_failed_bind_still_sends_the_extras_critical_lines(tmp_path, monkeypat
     assert any(lvl == "CRITICAL" and "LIQUIDATED" in t and aid in t for lvl, t in note.messages)
     assert not w2.ext.outbox
     w2.close()
+
+
+# ============================================================================ paper v4 (owners 2026-10-05)
+def test_v4_no_copy_of_a_deepseek_or_reel_parent():
+    """D9: a copy proposal whose parent is a DeepSeek definition or the reel is refused for good, also when the
+    signal service's names include them (the 5m reel and the DeepSeek names are never copy parents)."""
+    from paperbot.config import DS200_IDS, REEL_NAME
+    names = names36()
+    for s, tf in (("F9_FVG", "15m"), ("F15_ORB", "4h"), (REEL_NAME, "5m")):
+        spec = {"template": "stop_atr", "strategy": s, "timeframe": tf, "k": 2.5}
+        for ns in (names, names + list(DS200_IDS) + [REEL_NAME]):
+            assert X.rule_of_trial_spec(spec, ns) == (None, None, None, X.NO_COPY_KO)
+    ok = X.rule_of_trial_spec({"template": "stop_atr", "strategy": names[0], "timeframe": "15m", "k": 2.5}, names)
+    assert ok[0] is not None and ok[3] == ""
+    assert X.NO_COPY_PARENTS == frozenset(DS200_IDS) | {REEL_NAME}
+    bad = {"template": "stop_atr", "strategy": ["F9_FVG"], "timeframe": "15m", "k": 2.5}    # never a TypeError
+    assert X.rule_of_trial_spec(bad, names)[3] == "strategy not one of the 36"
+
+
+def test_v4_a_deepseek_copy_proposal_is_refused_permanently(world):
+    w = world
+    w.service.names = names36() + ["F9_FVG"]
+    pid, _ = w.copy_proposal(strategy="F9_FVG", tf="15m")
+    w.boundary(T0 + 5 * MIN)
+    rf = w.refused(pid)
+    assert rf is not None and rf["code"] == "spec_invalid" and rf["permanent"] is True
+    assert rf["detail"] == X.NO_COPY_KO and not w.extras_rows()
+
+
+def test_v4_run_start_and_status_count_every_original_kind(world):
+    """The run start is the earliest original account of any original kind (ds200 and reel too); the status command
+    lists only the extra accounts."""
+    w = world
+    assert w.ext.activator.run_start() == T0
+    w.store.add_account("F9_FVG@15m", "F9_FVG", "15m", "ds200", T0 - 60_000, "paper-v4", None,
+                        {"group": "ds200", "family": "F9", "exits": "house"})
+    w.store.add_account("REEL_H1@5m", "REEL_H1", "5m", "reel", T0 - 120_000, "paper-v4", None,
+                        {"group": "reel", "family": None, "exits": "reel"})
+    w.store.add_account("V45_AMB@15m~c9", "V45_AMB", "15m", "copy", T0 - 999_000, "paper-v4", "V45_AMB@15m", {"v": 1})
+    w.store.commit()
+    assert w.ext.activator.run_start() == T0 - 120_000
+    w.boundary(T0 + 5 * MIN)
+    w.store.commit()
+    text = X.status_text(w.db)
+    assert "V45_AMB@15m~c9" in text and "F9_FVG@15m" not in text and "REEL_H1@5m" not in text

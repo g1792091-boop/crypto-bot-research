@@ -1,9 +1,12 @@
-# 30-day checkpoint verdicts (paperbot/checkpoint.py; docs/paper-v3-rules.md 4 + addendum Q1-Q3).
-# Reads paper3.db read-only (mode=ro), writes only checkpoint.db and the 1m bar cache. Most runs find
-# nothing due and exit at once; on a checkpoint day the coin-flip comparison takes about 10 minutes of
-# one core, at low priority so the live runner keeps its CPU.
+# 30-day checkpoint verdicts (paperbot/checkpoint.py; docs/paper-v4-verdict.md, v3: docs/paper-v3-rules.md 4 +
+# addendum Q1-Q3). Reads paper3.db read-only (mode=ro), writes only checkpoint.db and the 1m bar cache. Most runs
+# find nothing due and exit at once. Paper v4: on a checkpoint day the coin-flip comparison runs 10,000 bots for each
+# of up to 241 judged accounts (core, DeepSeek, reel): measured about 1.5-2 hours on the 4-core development box at day
+# 30, more at day 60 (60-day windows plus the 2nd checks), at low priority so the live runner keeps its CPU.
+# TimeoutStartSec and MemoryMax below are provisional: set them from the staging measurement
+# (checkpoint_preview --bots 10000 on the staging db; docs/server-setup-v4.md) before day 30.
 [Unit]
-Description=paperbot v3 checkpoint verdicts (day 30, 60, 90, ...)
+Description=paperbot v4 checkpoint verdicts (day 30, 60, 90, ...)
 After=network-online.target
 # a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
 OnFailure=paperbot-failed@%n.service
@@ -16,7 +19,10 @@ EnvironmentFile=/etc/paperbot/live.env
 Nice=15
 IOSchedulingClass=idle
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.checkpoint run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/checkpoint.db --cache /var/lib/paperbot/checkpoint_bars
-TimeoutStartSec=3h
+TimeoutStartSec=8h
+# one pass holds at most 44 accounts x 10,000 bots (the DeepSeek 15m family): a few hundred MB; 3G leaves the live
+# runner and the agents their memory on the 8 GB server
+MemoryMax=3G
 # Writes only /var/lib/paperbot (checkpoint.db, the bar cache, and the -shm file its read-only
 # connection to paper3.db needs); paper3.db itself is opened mode=ro by the code. The env file is read
 # by systemd before the sandbox applies, so the job keeps its variables but cannot open the file.

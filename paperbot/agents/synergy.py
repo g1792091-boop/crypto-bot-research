@@ -39,6 +39,8 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ..config import V3_TRADE_TFS
+
 DAY_MS = 86_400_000
 KMIN, KMAX = 2, 5
 BEAM = 200                 # best combinations of size k-1 extended to size k (k >= 4 or when C(n, k) is large)
@@ -103,7 +105,9 @@ def daily(paper_ro: sqlite3.Connection, now_ms: int, kinds: tuple = ("strategy",
         strat.setdefault(s, np.zeros(D))[i] += p
         acct.setdefault(aid, np.zeros(D))[i] += p
     try:
-        for aid, kind, s in paper_ro.execute("SELECT account_id, kind, strategy FROM accounts"):
+        for aid, kind, s, tf in paper_ro.execute("SELECT account_id, kind, strategy, timeframe FROM accounts"):
+            if kind == "random" and tf not in V3_TRADE_TFS:
+                continue            # a 5m coin flip: the reel's comparison (paper v4), not the 36's
             if kind == "strategy":
                 members.setdefault(s, set()).add(aid)
                 strat.setdefault(s, np.zeros(D))

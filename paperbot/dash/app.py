@@ -1,4 +1,6 @@
-"""Paper v3 dashboard: read-only web view of paper3.db (docs/dashboard.md).
+"""Paper v4 dashboard: read-only web view of paper3.db (docs/dashboard.md). '/' serves the v4 page
+(static/v4/index.html), '/v3' the old one ('예전 화면'); both sit behind the same login, which comes back to the page
+that sent it (/login?next=<same-origin path>).
 
     DASH_PASSWORD_HASH=... DASH_SECRET=... python -m paperbot.dash --db paper3.db --port 8080 \
         --agents-db agents3.db --inbox-db inbox.db
@@ -22,6 +24,11 @@
   Coinglass links are loaded by the browser only; this server never fetches them.
 - Binds to 127.0.0.1 by default. Reach it through Tailscale or an SSH tunnel;
   never expose it directly (see docs/dashboard.md).
+- Paper v4 groups (paperbot/groups.py, display only): every /api/board row carries its group (core = the 36,
+  ds200 = DeepSeek, reel = the 5m reel, flip = coin flips, extra = copies / new-lab), the DeepSeek family and the
+  account's exit rule; the run shape is counted from the accounts table (``run_shape``), never typed in. The DeepSeek
+  coin-flip comparison is reference only ("참고": the flips draw "best" leverage, DeepSeek never does), and the
+  DeepSeek P&L is shown in its own group view only (owners' D11; the page's group switch).
 """
 
 from __future__ import annotations
@@ -35,7 +42,9 @@ import hmac
 import json
 import math
 import os
+import re
 import sqlite3
+import statistics
 import sys
 import threading
 import time
@@ -47,18 +56,178 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from ..config import V3_ACCOUNTS, V3_JUDGED_TFS, V3_Q1_MAIN_FAMILY, V3_STRATEGIES, V3_TRADE_TFS
+from ..config import (DS200_FAMILY, FIVE_M_MAX_DELAY_MS, REEL_NAME, REEL_TF, V3_TRADE_TFS, V4_ACCOUNTS, V4_GROUPS,
+                      v4_tfs_of)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
+# the paper v4 dashboard (static/v4/index.html) is the page at '/'; the old one stays reachable at '/v3' ('예전 화면')
+V4_INDEX = os.path.join(STATIC, "v4", "index.html")
+OLD_INDEX = os.path.join(STATIC, "index.html")
 COOKIE = "pb_session"
 SESSION_S = 7 * 86400
-# the run's traded timeframes (config.V3_TRADE_TFS: 15m / 30m / 1h / 4h; 5m was removed with the restart of
-# 2026-10-04, docs/paper-v3-rules-change-1.md). 5m stays a chart interval only (CANDLE_INTERVALS).
-TRADE_TFS = tuple(V3_TRADE_TFS)
-# what the browser shows as the run's shape (/api/board 'run_shape'): never hard-coded in the static files
-RUN_SHAPE = {"trade_tfs": list(V3_TRADE_TFS), "judged_tfs": list(V3_JUDGED_TFS), "accounts": V3_ACCOUNTS,
-             "strategy_accounts": V3_STRATEGIES * len(V3_TRADE_TFS), "q1_family": V3_Q1_MAIN_FAMILY}
+# timeframes in display order (5m: the v4 reel and its three coin flips only)
+TF_ORDER = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M")
+# the 36's traded timeframes (config.V3_TRADE_TFS: 15m / 30m / 1h / 4h; the core group never trades 5m)
+CORE_TFS = tuple(V3_TRADE_TFS)
+# every timeframe some v4 group trades (config.V4_GROUPS: 5m for the reel and its coin flips, 15m-4h for the rest)
+TRADE_TFS = tuple(tf for tf in TF_ORDER if any(tf in spec["tfs"] for spec in V4_GROUPS.values()))
+# support / resistance lines (/api/levels) on the 36's timeframes only (5m stays a chart interval for them)
+LEVEL_TFS = CORE_TFS
+# the paper v4 groups in display order and the original ones (paperbot/groups.py; config.V4_GROUPS has the rules)
+GROUP_ORDER = ("core", "ds200", "reel", "flip", "extra")
+# the groups the home summary's best / worst lists span (the DeepSeek P&L stays inside its own group view, D11)
+MAIN_GROUPS = ("core", "reel", "extra")
+# the page's group views (app.js GROUP_VIEWS / inView) as SQL on the accounts table ``a`` (/api/trades?group=): "main" =
+# the 36, the reel and the extras (the default); "reel" = the 5m card: the reel with its three 5m coin flips as its
+# labelled comparison. A view, not a count: the 5m flips count in the coin-flip group everywhere (owners' decision;
+# groups.group_of is the one source: summary.today.by_group, run_shape, the health card)
+VIEW_SQL = {"main": "a.kind IN ('strategy', 'reel', 'copy', 'newlab')", "core": "a.kind = 'strategy'",
+            "ds200": "a.kind = 'ds200'", "reel": "(a.kind = 'reel' OR (a.kind = 'random' AND a.timeframe = '5m'))",
+            "flip": "a.kind = 'random'", "extra": "a.kind IN ('copy', 'newlab')"}
+# the signal service's limits (sigservice.SignalService defaults; tests/test_dash_v4groups.py checks them)
+SIGNAL_LIMITS = {"max_delay_ms": 180_000, "max_delay_ms_5m": FIVE_M_MAX_DELAY_MS, "timeout_s": 120}
+
+
+def strategy_tfs(strategy: str) -> tuple:
+    """The timeframes one strategy name trades: a DeepSeek definition its own (3 or 4), the reel 5m, any other name
+    (the 36) the core timeframes."""
+    if strategy in DS200_FAMILY:
+        return tuple(v4_tfs_of("ds200", strategy))
+    if strategy == REEL_NAME:
+        return (REEL_TF,)
+    return CORE_TFS
+
+
+ACCOUNT_LINE = re.compile(r"^\[([^\]\s]+@[^\]\s]+)\] ")
+
+
+def account_line(text) -> Optional[str]:
+    """The account id of a per-account alert line ('[F9_FVG@15m] LIQUIDATED ...', '[A@1h] BUST: ...'); None else."""
+    m = ACCOUNT_LINE.match(text) if isinstance(text, str) else None
+    return m.group(1) if m else None
+
+
+def signal_group(strategy: str) -> str:
+    """The group of a signal_log row by its strategy name: a DeepSeek definition, the reel, a coin flip (RANDOM_k)
+    or the 36 (core)."""
+    if strategy in DS200_FAMILY:
+        return "ds200"
+    if strategy == REEL_NAME:
+        return "reel"
+    return "flip" if isinstance(strategy, str) and strategy.startswith("RANDOM_") else "core"
+
+
+def signals_by_group(rows: list) -> list:
+    """[{group, timeframe, status, n, avg_delay, max_delay}] from per-strategy signal_log counts (status: G15, a stopped
+    DeepSeek timeframe is visible next to the 36's)."""
+    acc: dict = {}
+    for r in rows:
+        k = (signal_group(r["strategy"]), r["timeframe"], r["status"])
+        e = acc.setdefault(k, {"n": 0, "dsum": 0.0, "dn": 0, "max_delay": None})
+        e["n"] += int(r["n"] or 0)
+        e["dsum"] += float(r["dsum"] or 0)
+        e["dn"] += int(r["dn"] or 0)
+        if r["max_delay"] is not None:
+            e["max_delay"] = r["max_delay"] if e["max_delay"] is None else max(e["max_delay"], r["max_delay"])
+    order = {g: i for i, g in enumerate(GROUP_ORDER)}
+    return [{"group": g, "timeframe": tf, "status": st, "n": e["n"],
+             "avg_delay": e["dsum"] / e["dn"] if e["dn"] else None, "max_delay": e["max_delay"]}
+            for (g, tf, st), e in sorted(acc.items(), key=lambda kv: (order.get(kv[0][0], 9), _tf_key(kv[0][1]), kv[0][2]))]
+
+
+def signals_by_tf(rows: list) -> list:
+    """[{timeframe, status, n, avg_delay}] (ordered by timeframe, status: SQL's GROUP BY order) from the per-strategy
+    signal_log counts (the /api/status rows the pages have always read)."""
+    acc: dict = {}
+    for r in rows:
+        e = acc.setdefault((r["timeframe"], r["status"]), [0, 0.0, 0])
+        e[0] += int(r["n"] or 0)
+        e[1] += float(r["dsum"] or 0)
+        e[2] += int(r["dn"] or 0)
+    return [{"timeframe": tf, "status": st, "n": n, "avg_delay": ds / dn if dn else None}
+            for (tf, st), (n, ds, dn) in sorted(acc.items())]
+
+
+def strategy_kind(strategy: str) -> str:
+    """The original accounts' kind of one strategy name: 'ds200' for a DeepSeek definition, 'reel' for the reel,
+    'strategy' for any other name (the 36; a copy carries its parent's name but is not the strategy's account)."""
+    if strategy in DS200_FAMILY:
+        return "ds200"
+    return "reel" if strategy == REEL_NAME else "strategy"
+
+
+def names_ko() -> dict:
+    """Korean names of every strategy name: the 36 (roster3.STRATEGY_KO, the names Telegram uses), the DeepSeek
+    definitions and the reel (groups.label_ko)."""
+    from .. import groups as G
+    from ..agents.roster3 import STRATEGY_KO
+    out = {d: G.label_ko(d) for d in DS200_FAMILY}
+    out[REEL_NAME] = G.label_ko(REEL_NAME)
+    out.update(STRATEGY_KO)
+    return out
+
+
+def _tf_key(tf: str) -> int:
+    return TF_ORDER.index(tf) if tf in TF_ORDER else len(TF_ORDER)
+
+
+def run_shape(conn) -> dict:
+    """What the browser shows as the run's shape (/api/board 'run_shape'), counted from the accounts table
+    (groups.shape_from_db), never hard-coded in the static files and never typed in here:
+    accounts (the original accounts), all_accounts (with the extras), strategy_accounts (the 36's accounts),
+    q1_family (the 36's judged accounts), judged (every judged original), trade_tfs (every original account's
+    timeframe), core_tfs (the 36's), judged_tfs (the 36's judged timeframes), judged_by_group, groups ({group:
+    {accounts, tfs: {tf: n}, judged}}). An empty table (before the first start) gives the v4 rule's numbers
+    (config.V4_GROUPS), marked source "config"."""
+    from .. import groups as G
+    s = G.shape_from_db(conn)
+    grp = s["groups"]
+    judged_by = {g: list(V4_GROUPS[g]["judged"]) for g in ("core", "ds200", "reel")}
+    if not s["accounts"]:
+        from ..config import V4_GROUP_ACCOUNTS, V4_GROUP_JUDGED, V4_GROUP_TF_COUNTS
+        grp = {g: {"accounts": V4_GROUP_ACCOUNTS[g], "tfs": dict(V4_GROUP_TF_COUNTS[g]),
+                   "judged": V4_GROUP_JUDGED.get(g, 0)} for g in V4_GROUPS}
+        originals, total, source = V4_ACCOUNTS, V4_ACCOUNTS, "config"
+    else:
+        originals, total, source = s["originals"], s["accounts"], "accounts_table"
+    tfs_of = lambda gs: sorted({tf for g in gs for tf in (grp.get(g) or {}).get("tfs", {})}, key=_tf_key)  # noqa: E731
+    core_tfs = tfs_of(("core",)) or list(CORE_TFS)
+    return {"source": source, "accounts": originals, "all_accounts": total,
+            "strategy_accounts": (grp.get("core") or {}).get("accounts", 0),
+            "q1_family": (grp.get("core") or {}).get("judged", 0),
+            "judged": sum(int((grp.get(g) or {}).get("judged", 0)) for g in ("core", "ds200", "reel")),
+            "trade_tfs": tfs_of(("core", "ds200", "reel", "flip")) or core_tfs, "core_tfs": core_tfs,
+            "judged_tfs": [tf for tf in judged_by["core"]], "judged_by_group": judged_by,
+            "groups": {g: grp[g] for g in sorted(grp, key=lambda k: GROUP_ORDER.index(k) if k in GROUP_ORDER else 9)},
+            "versions": s.get("versions", [])}
+
+
+def _finite_or_none(x) -> Optional[float]:
+    try:
+        f = float(x)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def board_position(pos: dict, exits: Optional[str]) -> dict:
+    """An open position as /api/board sends it. The reel's own exits (exits "reel": reel_engine.py) add the moving
+    target ``tp`` (the previous closed 5m bar's upper Bollinger band, a resting limit) and the time exit
+    ``time_exit``; a house-exit position has no fixed target (its tp_price is NaN: ladder) and gets ``tp`` None."""
+    sig = pos.get("signal") if isinstance(pos.get("signal"), dict) else {}
+    meta = sig.get("meta") if isinstance(sig.get("meta"), dict) else {}
+    st = meta.get("reel_exit") if isinstance(meta.get("reel_exit"), dict) else {}
+    reel = exits == "reel"
+    tp = _finite_or_none(pos.get("tp_price")) if reel else None      # (also as tp_price: the engine state's name)
+    return {"symbol": pos["symbol"], "side": pos["side"], "qty": pos["qty"],
+            "entry": pos["entry_price"], "entry_time": pos["entry_time"],
+            "leverage": pos["leverage"], "margin": pos["margin"], "stop": pos["stop_price"],
+            "stop_initial": pos.get("stop_initial"), "lock_roe": pos.get("lock_roe"),
+            "liq": pos["liq_price"], "exits": exits or "house",
+            "tp": tp, "tp_price": tp,
+            "time_exit": st.get("end") if reel and isinstance(st.get("end"), (int, float)) else None}
+BOARD_TTL_S = 2.0            # Data.board() reused this long without a database read (G17), then while unchanged
 DIGEST_TTL_S = 120           # /api/digest/staff reused this long
 EQUITY_MAX_POINTS = 1_500    # /api/account/<id> equity series at most this long (first, last, each bucket's min and max)
 TRADES_TTL_S = 600           # /api/digest/week and tf reused this long: they decode every closed trade since the start
@@ -130,6 +299,13 @@ class Data:
     def __init__(self, db: str, daily_db: Optional[str] = None):
         self.db = db
         self.daily_db = daily_db
+        # board(): the last result and the database marks it was computed from (G17: every open page's live stream
+        # asked for it every 3 s, a GROUP BY over all trades plus 331 engines each time)
+        self._board_hit: Optional[tuple] = None   # (marks, board, time.monotonic() of the last marks check)
+        self._board_lock = threading.Lock()
+        self.board_ttl_s = BOARD_TTL_S
+        self._curves: dict = {}                 # /api/v4/curves: per step, the finished steps (Data.curves)
+        self._curve_lock = threading.Lock()
 
     def _daily(self) -> Optional[sqlite3.Connection]:
         if not self.daily_db or not os.path.exists(self.daily_db):
@@ -145,16 +321,16 @@ class Data:
     def cards(self, strategy: Optional[str], tf: Optional[str], days: Optional[float], limit: int,
               losses_only: bool = True) -> list[dict]:
         """Trade cards of the last ``days`` days (all history when None). For one strategy (the strategy tab and
-        its 30-day tag shares) only its own accounts (kind 'strategy'): a copy account carries its parent's
-        strategy name, but its trades follow another rule and are not the strategy's."""
-        from ..agents.roster3 import STRATEGY_KO
+        its 30-day tag shares) only its own original accounts (kind 'strategy', 'ds200' or 'reel': strategy_kind): a
+        copy account carries its parent's strategy name, but its trades follow another rule and are not the
+        strategy's."""
         from ..cards import cards_from_db
         since = 0 if days is None else int(time.time() * 1000 - days * 86_400_000)
         d = self._daily()
         try:
             with self.conn() as c:
                 return cards_from_db(c, self._round_trip(c), strategy, tf, losses_only, since, limit, d,
-                                     STRATEGY_KO, kinds=("strategy",) if strategy else None)
+                                     names_ko(), kinds=(strategy_kind(strategy),) if strategy else None)
         finally:
             if d is not None:
                 d.close()
@@ -210,11 +386,59 @@ class Data:
                 "description_ko": d.get("description_ko"), "proposal_id": src.get("proposal_id"),
                 "extra_status": extra_status(xstate, a["account_id"])}
 
+    @staticmethod
+    def _group_fields(a: dict) -> dict:
+        """The paper v4 facts of an accounts row (paperbot/groups.py, display only): group (core / ds200 / reel / flip /
+        extra; "other" for a kind it does not know), the DeepSeek family, the exit rule the account runs
+        (accounts.exits_of: "reel" for the reel and the v4 5m coin flips, else "house") and a Korean name for a
+        DeepSeek definition, the reel or a 5m coin flip (None for the others: the page names them as before).
+        ``vs_random_ref``: the coin-flip comparison is reference only (DeepSeek: always "normal" leverage, the flips
+        draw "best" 21% of the time, so they are not a fair yardstick)."""
+        from .. import groups as G
+        from ..accounts import exits_of
+        g = G.group_of(a)
+        try:
+            exits = exits_of(a.get("kind"), a.get("timeframe"), a.get("data")) if g != "other" else None
+        except Exception:  # noqa: BLE001  (a broken data column never hides the account)
+            exits = None
+        return {"group": g, "family": G.family_of(a), "exits": exits,
+                "name_ko": G.label_ko(a.get("strategy"), a.get("timeframe")), "vs_random_ref": g == "ds200"}
+
     def extras_state(self, c) -> Optional[dict]:
         st = self.state(c, "extras")
         return st[1] if st and isinstance(st[1], dict) and st[1].get("v") == 1 else None
 
+    @staticmethod
+    def _board_mark(c) -> tuple:
+        """What board() is computed from, as cheap marks: the state rows it reads (the engines, the extras, the run;
+        their time and size), the last trade id and the accounts table's size. Equal marks = the same board."""
+        st = tuple(tuple(r) for r in c.execute(
+            "SELECT k, ts, length(data) FROM state WHERE k IN ('accounts', 'extras', 'run') ORDER BY k"))
+        t = c.execute("SELECT MAX(id) FROM trades").fetchone()
+        a = c.execute("SELECT COUNT(*), MAX(rowid) FROM accounts").fetchone()
+        return st, tuple(t), tuple(a)
+
     def board(self) -> dict:
+        """The leaderboard (/api/board, the live stream, the CSV export), NaN / infinity sent as null (json_finite).
+        Reused for ``board_ttl_s`` (2 s) without looking at the database, then computed again only when the
+        database marks (_board_mark) changed; the result is shared between callers: never change it in place (copy a
+        row first)."""
+        hit = self._board_hit
+        now = time.monotonic()
+        if hit is not None and now - hit[2] < self.board_ttl_s:
+            return hit[1]
+        with self.conn() as c:
+            mark = self._board_mark(c)
+        if hit is not None and hit[0] == mark:
+            with self._board_lock:
+                self._board_hit = (mark, hit[1], now)
+            return hit[1]
+        b = json_finite(self._board())
+        with self._board_lock:
+            self._board_hit = (mark, b, now)
+        return b
+
+    def _board(self) -> dict:
         with self.conn() as c:
             accts = [dict(r) for r in c.execute(
                 "SELECT account_id, strategy, timeframe, kind, created_ts, parent, data FROM accounts ORDER BY rowid")]
@@ -226,7 +450,9 @@ class Data:
                 "SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END) AS gross_win, SUM(CASE WHEN pnl < 0 THEN pnl ELSE 0 END) AS gross_loss, "
                 "SUM(exit_reason = 'LOCK') AS locks, MAX(exit_time) AS last_exit, "
                 "AVG(leverage) AS avg_lev FROM trades GROUP BY account_id")}
+            shape = run_shape(c)
         for a in accts:
+            a.update(self._group_fields(a))                 # (reads the data column: group, family, exits)
             a.update(self._extra_fields(a, xstate))         # (drops the raw data column)
         rows = []
         for a in accts:
@@ -242,13 +468,10 @@ class Data:
                 "gross_win": s.get("gross_win") or 0.0, "gross_loss": s.get("gross_loss") or 0.0,
                 "locks": s.get("locks") or 0, "avg_leverage": s.get("avg_lev"),
                 "last_exit": s.get("last_exit"),
-                "position": None if not pos else {
-                    "symbol": pos["symbol"], "side": pos["side"], "qty": pos["qty"],
-                    "entry": pos["entry_price"], "entry_time": pos["entry_time"],
-                    "leverage": pos["leverage"], "margin": pos["margin"], "stop": pos["stop_price"],
-                    "stop_initial": pos.get("stop_initial"), "lock_roe": pos.get("lock_roe"),
-                    "liq": pos["liq_price"]},
+                "position": None if not pos else board_position(pos, a.get("exits")),
             })
+        # the best coin flip per timeframe: the comparison of every group on that timeframe (the reel's on 5m are the
+        # three 5m flips with the reel's own exits, owners' D4; DeepSeek's is marked reference only, vs_random_ref)
         best_random = {}
         for r in rows:
             if r["kind"] == "random" and r["wallet"] is not None:
@@ -256,13 +479,18 @@ class Data:
         for r in rows:
             b = best_random.get(r["timeframe"])
             r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
-            if r["kind"] in ("copy", "newlab"):
+            if r["kind"] in ("copy", "newlab") or r["group"] == "other":
                 r["beats_random"] = None   # started later than the coin-flip accounts: their wallets are not comparable
+        from .. import groups as G
         from ..agents.roster3 import STRATEGY_KO
-        # strategy_ko: the names every Telegram message uses (app.js name() shows them, the code in a tooltip)
+        # strategy_ko: the names every Telegram message uses (app.js name() shows them, the code in a tooltip);
+        # names_ko: the DeepSeek definitions and the reel (groups.label_ko), group_ko / family_ko: the group switch
+        names_ko = {d: G.label_ko(d) for d in DS200_FAMILY}
+        names_ko[REEL_NAME] = G.label_ko(REEL_NAME)
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
                 "initial": self.initial(), "extras_runtime": xstate, "strategy_ko": dict(STRATEGY_KO),
-                "run_shape": RUN_SHAPE}
+                "names_ko": names_ko, "group_ko": dict(G.GROUP_KO), "family_ko": dict(G.DS_FAMILY_KO),
+                "default_groups": list(G.DEFAULT_SHOWN_GROUPS), "run_shape": shape}
 
     def initial(self) -> float:
         """Starting wallet of every account: what the running bot recorded, else the rule."""
@@ -281,6 +509,7 @@ class Data:
                 "FROM trades WHERE account_id = ? ORDER BY id DESC LIMIT 500", (aid,))]
             from .. import levwhy as LW
             oc = LW.entered_outcomes(c, aid)                # the sizing's rejected candidates, per entry
+            fixed_normal = a["kind"] in ("ds200", "reel") or (a["kind"] == "random" and a["timeframe"] == REEL_TF)
             for t in trades:
                 d = json.loads(t.pop("data"))
                 t.update(side=d["side"], entry_price=d["entry_price"], exit_price=d["exit_price"],
@@ -290,6 +519,9 @@ class Data:
                     t["why"] = LW.compact(LW.for_trade(d, oc))
                 except Exception:  # noqa: BLE001  (an explanation never hides the trade)
                     t["why"] = None
+                if fixed_normal:                            # DeepSeek, the reel, the 5m flips: always 'normal'
+                    t["why"] = {**(t["why"] or {"leverage": t["leverage"]}), "short_ko": FIXED_NORMAL_KO,
+                                "fixed": "normal"}
             eq = [{"t": r["ts"], "v": r["equity"]} for r in c.execute(
                 "SELECT ts, equity FROM equity WHERE account_id = ? ORDER BY ts", (aid,))]
             eq_points = len(eq)
@@ -306,6 +538,7 @@ class Data:
                 except Exception:  # noqa: BLE001
                     pos_why = None
         acc = dict(a)
+        acc.update(self._group_fields(acc))     # group, family, exits (the reel's own exits: no ladder), name_ko
         extra = None
         if acc.get("kind") in ("copy", "newlab"):
             extra = {**self._extra_fields(dict(acc), xstate), "kind": acc["kind"], "parent": acc.get("parent"),
@@ -328,6 +561,9 @@ class Data:
         out = {}
         with self.conn() as c:
             st = self.state(c, "accounts")
+            fixed = {r[0] for r in c.execute(
+                "SELECT account_id FROM accounts WHERE kind IN ('ds200', 'reel') OR (kind = 'random' AND timeframe = ?)",
+                (REEL_TF,))}
             for aid, e in ((st[1].get("engines") or {}) if st else {}).items():
                 p = (e or {}).get("position")
                 if not isinstance(p, dict):
@@ -335,7 +571,13 @@ class Data:
                 try:
                     out[aid] = {**LW.compact(LW.for_position(c, aid, p)), "entry_time": p.get("entry_time")}
                 except Exception:  # noqa: BLE001
-                    continue
+                    if aid not in fixed:
+                        continue
+                    out[aid] = {"entry_time": p.get("entry_time"), "leverage": p.get("leverage")}
+                if aid in fixed:
+                    # DeepSeek, the reel and its 5m coin flips always trade at the 'normal' multiple (no 'best' search:
+                    # p_best 0), so there is no rejected higher step to explain
+                    out[aid].update(short_ko=FIXED_NORMAL_KO, fixed="normal")
         return {"positions": out}
 
     def status(self) -> dict:
@@ -346,20 +588,32 @@ class Data:
                 "SELECT ts, level, text FROM alerts WHERE level != 'INFO' ORDER BY rowid DESC LIMIT 50")]
             # the original accounts' signals only: a new-strategy account's own rows (strategy 'NL<n>', written
             # after the originals' compute) are not theirs (as in agents/packets3.py)
-            sig = [dict(r) for r in c.execute(
-                "SELECT timeframe, status, COUNT(*) AS n, AVG(delay_ms) AS avg_delay FROM signal_log "
-                "WHERE bar_close > ? AND strategy NOT GLOB 'NL[0-9]*' GROUP BY timeframe, status",
-                (int(time.time() * 1000) - 86_400_000,))]
+            since = int(time.time() * 1000) - 86_400_000
+            # one pass over the day's signal_log: per (strategy, timeframe, status); the per-timeframe rows
+            # (signals_24h) and the per-group rows (signals_by_group) are summed from it
+            by_strategy = [dict(r) for r in c.execute(
+                "SELECT strategy, timeframe, status, COUNT(*) AS n, SUM(delay_ms) AS dsum, COUNT(delay_ms) AS dn, "
+                "MAX(delay_ms) AS max_delay FROM signal_log WHERE bar_close > ? AND strategy NOT GLOB 'NL[0-9]*' "
+                "GROUP BY strategy, timeframe, status", (since,))]
+            # the operations alerts (signal timeouts, data, the nightly check, ...) apart from the per-account lines
+            # ('[A@15m] LIQUIDATED', '... BUST', drawdowns), which a liquidation burst of 171 DeepSeek accounts would
+            # otherwise push out of the last 50 (G15)
+            ops = [dict(r) for r in c.execute(
+                "SELECT ts, level, text FROM alerts WHERE level != 'INFO' ORDER BY rowid DESC LIMIT 1000")]
         return {"now": int(time.time() * 1000), "heartbeat": hb, "run": run, "alerts": alerts,
-                "signals_24h": sig}
+                "ops_alerts": [a for a in ops if not account_line(a.get("text"))][:50],
+                "signals_24h": signals_by_tf(by_strategy), "signals_by_group": signals_by_group(by_strategy),
+                "limits": dict(SIGNAL_LIMITS)}
 
     def summary(self, now_ms: Optional[int] = None) -> dict:
         """Experiment progress (day n of 30, next checkpoint, observation period) and today's summary (KST day)."""
+        from ..accounts import GROUP_OF_KIND, ORIGINAL_KINDS
         from ..checkpoint import PERIOD_DAYS, checkpoint_ts
         now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         day_ms, kst = 86_400_000, 9 * 3_600_000
         with self.conn() as c:
-            r = c.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')").fetchone()
+            r = c.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN (%s)" % ",".join("?" * len(ORIGINAL_KINDS)),
+                          ORIGINAL_KINDS).fetchone()
             start = int(r[0]) if r and r[0] is not None else None
             xs = self.extras_state(c)
             since = (now + kst) // day_ms * day_ms - kst                     # 00:00 KST today
@@ -386,15 +640,30 @@ class Data:
             rs = start
         out["restart"] = restart_banner(rs, now)
         per: dict = {}
+        group = {}
         for x in rows:
             per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
-        rank = sorted(per.items(), key=lambda kv: kv[1])
+            group[x["account_id"]] = GROUP_OF_KIND.get(x["kind"], "other")
+
+        def ranked(gs) -> tuple[list, list]:
+            rank = sorted(((a, p) for a, p in per.items() if group[a] in gs), key=lambda kv: kv[1])
+            return ([{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
+                    [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0])
         strat = [x for x in rows if x["kind"] == "strategy"]
+        # best / worst: the 36, the reel and the extras (the DeepSeek P&L only in its own group, D11; the coin flips are
+        # the yardstick); by_group: each group's own numbers (the page shows the groups its switch selects)
+        best, worst = ranked(MAIN_GROUPS)
+        by_group = {}
+        for g in GROUP_ORDER:
+            xs = [x for x in rows if group[x["account_id"]] == g]
+            gb, gw = ranked((g,))
+            by_group[g] = {"trades": len(xs), "pnl": round(sum(x["pnl"] for x in xs), 2),
+                           "wins": sum(x["pnl"] > 0 for x in xs), "liquidations": sum(x["exit_reason"] == "LIQ" for x in xs),
+                           "best": gb, "worst": gw}
         out["today"] = {"since": since, "trades": len(rows), "pnl": round(sum(x["pnl"] for x in strat), 2),
                         "wins": sum(x["pnl"] > 0 for x in strat), "strategy_trades": len(strat),
                         "liquidations": sum(x["exit_reason"] == "LIQ" for x in rows),
-                        "best": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
-                        "worst": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0]}
+                        "best": best, "worst": worst, "by_group": by_group}
         try:   # the next US macro releases of data/macro_events.csv (events.py); [] when none is registered
             from .. import events
             out["events"] = [e.as_dict() for e in events.all_events() if e.ts_ms >= now][:3]
@@ -466,12 +735,16 @@ class Data:
         init = b.get("initial") or 0
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["계좌", "종류", "매매법", "봉", "잔고", "수익률", "거래", "승률", "최대 낙폭", "파산", "동전 봇보다 나음"])
+        w.writerow(["계좌", "종류", "매매법", "봉", "잔고", "수익률", "거래", "승률", "최대 낙폭", "파산", "동전 봇보다 나음",
+                    "그룹", "딥시크 계열", "청산 방식"])
         for a in b["accounts"]:
             wal = a.get("wallet")
             w.writerow([a["account_id"], a.get("kind"), a.get("strategy"), a.get("timeframe"),
                         "" if wal is None else round(wal, 2), "" if wal is None or not init else round(wal / init - 1, 6),
-                        a.get("trades"), a.get("win_rate"), a.get("max_drawdown"), a.get("bust"), a.get("beats_random")])
+                        a.get("trades"), a.get("win_rate"), a.get("max_drawdown"), a.get("bust"),
+                        ("참고 " if a.get("vs_random_ref") and a.get("beats_random") is not None else "")
+                        + ("" if a.get("beats_random") is None else str(a.get("beats_random"))),
+                        a.get("group"), a.get("family") or "", a.get("exits") or ""])
         return "\ufeff" + buf.getvalue()
 
     def signals(self, tf: Optional[str], limit: int, symbol: Optional[str] = None) -> list[dict]:
@@ -495,11 +768,15 @@ class Data:
             a = c.execute("SELECT COALESCE(MAX(rowid), 0) FROM alerts").fetchone()[0]
         return int(t), int(a)
 
-    def trades(self, symbol: Optional[str], timeframe: Optional[str], limit: int) -> list[dict]:
+    def trades(self, symbol: Optional[str], timeframe: Optional[str], limit: int, group: Optional[str] = None) -> list[dict]:
+        """The latest closed trades (newest first), of one coin / timeframe / group view (VIEW_SQL) when given."""
+        from ..accounts import GROUP_OF_KIND
         q = ("SELECT t.id, t.account_id, t.symbol, t.entry_time, t.exit_time, t.exit_reason, t.leverage, t.pnl, "
              "t.roe, t.equity_after, t.data, a.strategy, a.timeframe, a.kind FROM trades t "
              "JOIN accounts a ON a.account_id = t.account_id")
         where, args = [], []
+        if group in VIEW_SQL:
+            where.append(VIEW_SQL[group])
         if symbol:
             where.append("t.symbol = ?")
             args.append(symbol)
@@ -515,8 +792,81 @@ class Data:
         for r in rows:
             d = json.loads(r.pop("data"))
             r.update(side=d["side"], entry_price=d["entry_price"], exit_price=d["exit_price"],
-                     lock_roe=d.get("lock_roe"), tier=d.get("tier"))
+                     lock_roe=d.get("lock_roe"), tier=d.get("tier"), group=GROUP_OF_KIND.get(r.get("kind"), "other"))
         return rows
+
+    def curves(self, step_ms: int = 3_600_000, now_ms: Optional[int] = None) -> dict:
+        """/api/v4/curves: the original accounts' equity over the run (paper3.db ``equity``, every 5 minutes per
+        account): each account's last value in each ``step`` (carried forward while it has none), the median per kind
+        (strategy = the 36, ds200, reel, random = all 15 coin flips, random_5m = the reel's three 5m flips) and the
+        sum over every original account. Points are the end of each step (the running step: now). Incremental: the
+        finished steps are kept, only the new rows are read (one indexed query per account)."""
+        from ..accounts import ORIGINAL_KINDS
+        step = min(CURVE_STEPS, key=lambda x: abs(x - int(step_ms)))
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        with self._curve_lock:
+            with self.conn() as c:
+                accts = [(r[0], r[1], r[2]) for r in c.execute(
+                    "SELECT account_id, kind, timeframe FROM accounts WHERE kind IN (%s)"
+                    % ",".join("?" * len(ORIGINAL_KINDS)), ORIGINAL_KINDS)]
+                r = c.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN (%s)"
+                              % ",".join("?" * len(ORIGINAL_KINDS)), ORIGINAL_KINDS).fetchone()
+                start = int(r[0]) if r and r[0] is not None else None
+                out = {"initial": self.initial(), "step": step, "start": start, "keys": list(CURVE_KEYS),
+                       "t": [], "median": {k: [] for k in CURVE_KEYS}, "total": []}
+                if start is None or not accts:
+                    return out
+                key_of = {aid: curve_keys(kind, tf) for aid, kind, tf in accts}
+                st = self._curves.get(step)
+                cur_b = now // step
+                if st is None or st["start"] != start:          # a new run (or the first call): from its start, at
+                    # most the last CURVE_MAX_POINTS steps (equity is written every 5 minutes for every account)
+                    st = {"start": start, "done_b": max(start // step, cur_b - CURVE_MAX_POINTS) - 1, "last": {},
+                          "t": [], "median": {k: [] for k in CURVE_KEYS}, "total": []}
+                from_ts = max(start, (st["done_b"] + 1) * step)
+                new: dict = {}
+                for aid, _k, _tf in accts:
+                    for b, eq, _ts in c.execute("SELECT ts / ? AS b, equity, MAX(ts) FROM equity "
+                                                "WHERE account_id = ? AND ts >= ? GROUP BY b", (step, aid, from_ts)):
+                        new.setdefault(int(b), {})[aid] = float(eq)
+            last = dict(st["last"])
+
+            def point(vals: dict) -> tuple:
+                xs: dict = {k: [] for k in CURVE_KEYS}
+                tot = 0.0
+                for a, v in vals.items():
+                    for k in key_of.get(a, ()):
+                        xs[k].append(v)
+                    if a in key_of:
+                        tot += v
+                return {k: round(statistics.median(x), 2) if x else None for k, x in xs.items()}, round(tot, 2)
+            # steps that ended CURVE_SETTLE_MS ago are kept (a late equity row of theirs is in by then); the newer
+            # ones and the running step are shown, computed again next time
+            settled_b = (now - CURVE_SETTLE_MS) // step
+
+            def add(b: int, dst: dict, ts: int) -> None:
+                last.update(new.get(b, {}))
+                if not last:
+                    return
+                med, tot = point(last)
+                dst["t"].append(ts)
+                for k in CURVE_KEYS:
+                    dst["median"][k].append(med[k])
+                dst["total"].append(tot)
+            for b in range(st["done_b"] + 1, settled_b):
+                add(b, st, (b + 1) * step)
+            st["done_b"], st["last"] = max(st["done_b"], settled_b - 1), dict(last)
+            for k in ("t", "total"):
+                del st[k][:-CURVE_MAX_POINTS]
+            for v in st["median"].values():
+                del v[:-CURVE_MAX_POINTS]
+            self._curves[step] = st
+            tmp = {"t": list(st["t"]), "total": list(st["total"]), "median": {k: list(v) for k, v in st["median"].items()}}
+            for b in range(st["done_b"] + 1, cur_b + 1):
+                add(b, tmp, now if b == cur_b else (b + 1) * step)
+            t, total, mk = tmp["t"], tmp["total"], tmp["median"]
+        n = CURVE_MAX_POINTS
+        return {**out, "t": t[-n:], "median": {k: v[-n:] for k, v in mk.items()}, "total": total[-n:]}
 
     def since(self, trade_id: int, alert_row: int) -> dict:
         with self.conn() as c:
@@ -579,32 +929,37 @@ TICKER_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUS
 _TICKER_CACHE: dict = {}
 
 
+def _ticker_row(s: str) -> dict:
+    row: dict = {}
+    try:
+        with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/ticker/24hr?symbol={s}", timeout=5) as r:
+            t = json.loads(r.read())
+        row.update(c=float(t["lastPrice"]), p=float(t["priceChangePercent"]), h=float(t["highPrice"]),
+                   l=float(t["lowPrice"]), q=float(t["quoteVolume"]))
+    except Exception:  # noqa: BLE001  (one coin missing is shown as "—")
+        pass
+    try:
+        with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={s}", timeout=5) as r:
+            m = json.loads(r.read())
+        row.update(mark=float(m["markPrice"]), r=float(m["lastFundingRate"]), T=int(m["nextFundingTime"]))
+    except Exception:  # noqa: BLE001
+        pass
+    return row
+
+
 def fetch_ticker() -> dict:
     """24h change/high/low/quote volume, mark price and funding of the 7 coins, fetched by the server.
     The page normally gets these from Binance's WebSocket in the browser; where that is blocked (some
-    networks, some phones) it polls this instead. Per-symbol requests (weight 1 each, 14 per refresh) and a
-    5 s cache shared by every viewer, so the bot's own Binance weight budget is never at risk."""
+    networks, some phones) it polls this instead (the v4 page's main price source). Per-symbol requests (weight 1
+    each, 14 per refresh: the all-symbol forms weigh 40 + 10), the 7 coins in parallel, and a 5 s cache shared by
+    every viewer, so the bot's own Binance weight budget is never at risk."""
+    from concurrent.futures import ThreadPoolExecutor
     hit = _TICKER_CACHE.get("t")
     if hit and time.time() - hit[0] < 5:
         return hit[1]
-    out: dict = {}
-    for s in TICKER_SYMBOLS:
-        row: dict = {}
-        try:
-            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/ticker/24hr?symbol={s}", timeout=5) as r:
-                t = json.loads(r.read())
-            row.update(c=float(t["lastPrice"]), p=float(t["priceChangePercent"]), h=float(t["highPrice"]),
-                       l=float(t["lowPrice"]), q=float(t["quoteVolume"]))
-        except Exception:  # noqa: BLE001  (one coin missing is shown as "—")
-            pass
-        try:
-            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={s}", timeout=5) as r:
-                m = json.loads(r.read())
-            row.update(mark=float(m["markPrice"]), r=float(m["lastFundingRate"]), T=int(m["nextFundingTime"]))
-        except Exception:  # noqa: BLE001
-            pass
-        if row:
-            out[s] = row
+    with ThreadPoolExecutor(max_workers=len(TICKER_SYMBOLS)) as ex:
+        rows = list(ex.map(_ticker_row, TICKER_SYMBOLS))
+    out = {s: row for s, row in zip(TICKER_SYMBOLS, rows) if row}
     _TICKER_CACHE["t"] = (time.time(), out)
     return out
 
@@ -730,28 +1085,216 @@ def fetch_frame(symbol: str, interval: str, limit: int = 1500):
     return df
 
 
-def view_bars(tf: str) -> int:
-    """History for a strategy view: the live signal service's window (two warm-ups), at most 6,000
-    bars (four requests), so indicators that depend on their start match the bot's."""
+TF_MINUTES = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
+V4_COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")   # DeepSeek and the reel: no XRP
+
+
+def view_bars(tf: str, strategy: Optional[str] = None) -> int:
+    """History for a strategy view: the live signal service's window, so indicators that depend on their start match
+    the bot's. The 36: two warm-ups, at most 6,000 bars (four requests). A DeepSeek definition: its live window
+    (config.DS_WINDOW_5M 5m bars as chart bars: 15m 5,763, 30m 2,883, 1h 3,000, 4h 2,400). The reel:
+    config.REEL_WINDOW_5M 5m bars."""
+    from ..config import DS_WINDOW_5M, REEL_WINDOW_5M
+    if strategy == REEL_NAME:
+        return int(REEL_WINDOW_5M)
+    if strategy in DS200_FAMILY and tf in DS_WINDOW_5M and tf in TF_MINUTES:
+        return int(DS_WINDOW_5M[tf] * 5 // TF_MINUTES[tf])
     from .. import sweepsig
     lib = sweepsig.lib()
     return int(min(6000, max(1500, 2 * lib.warmup_bars(tf) + 3)))
 
 
 # ---------------------------------------------------------------- app
-def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
-    """Meeting messages written by the v3 agent pipelines (their own database)."""
+FEED_ROOM_COLUMNS = ("room_id", "round_id", "speaker_name")
+
+
+def agent_feed(agents_db: Optional[str], limit: int = 200, after_id: int = 0) -> list[dict]:
+    """Meeting messages of agents3.db, newest first (``after_id``: only newer ones), each with its room, its meeting
+    (round) and the speaker's name when the table has them (the agent rooms' messages: None otherwise)."""
     if not agents_db or not os.path.exists(agents_db):
         return []
     c = sqlite3.connect(f"file:{urllib.parse.quote(os.path.abspath(agents_db))}?mode=ro", uri=True, timeout=5)
     c.row_factory = sqlite3.Row
     try:
-        return [dict(r) for r in c.execute(
-            "SELECT id, ts, meeting, role, kind, text, data FROM messages ORDER BY id DESC LIMIT ?", (limit,))]
+        have = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
+        extra = [x for x in FEED_ROOM_COLUMNS if x in have]
+        rows = [dict(r) for r in c.execute(
+            "SELECT id, ts, meeting, role, kind, text, data%s FROM messages WHERE id > ? ORDER BY id DESC LIMIT ?"
+            % "".join(f", {x}" for x in extra), (max(int(after_id), 0), min(max(int(limit), 1), 1000)))]
+        for r in rows:
+            for x in FEED_ROOM_COLUMNS:
+                r.setdefault(x, None)
+        return rows
     except sqlite3.OperationalError:
         return []
     finally:
         c.close()
+
+
+def stream_event(data: "Data", rooms: "Rooms", st: dict) -> str:
+    """One /api/stream event ('data: {...}' + blank line): the trades and non-INFO alerts after the page's cursors
+    (``st`` trade_id / alert_row, moved on here), the board rows that changed since the last event (wallet, trades,
+    bust, position), the heartbeat and the agent rooms with new messages (``st`` room_msg). Strict JSON: a NaN or an
+    infinity anywhere (an open position's NaN target, a trade's NaN) is sent as null, so the page's JSON.parse never
+    drops the event (G12)."""
+    # new agent-room messages (agents3.db max(id)): the page refreshes the rooms that changed
+    st["room_msg"], rooms_changed = rooms.since(st["room_msg"])
+    d = data.since(st["trade_id"], st["alert_row"])
+    if d["trades"]:
+        st["trade_id"] = d["trades"][-1]["id"]
+    if d["alerts"]:
+        st["alert_row"] = d["alerts"][-1]["rid"]
+    b = data.board()                       # finite already (json_finite), shared: read only
+    slim = {r["account_id"]: [r["wallet"], r["trades"], r["bust"], r["position"]] for r in b["accounts"]}
+    last = st.get("last_board")
+    changed = {k: v for k, v in slim.items() if last is None or last.get(k) != v}
+    st["last_board"] = slim
+    payload = {"ts": b["ts"], "changed": changed, "trades": d["trades"], "alerts": d["alerts"],
+               "heartbeat": d["heartbeat"], "room_msg": st["room_msg"], "rooms": rooms_changed}
+    return f"data: {json.dumps(json_finite(payload), allow_nan=False)}\n\n"
+
+
+# ---------------------------------------------------------------- server facts (/api/v4/server)
+_CPU_LAST: dict = {}            # the previous /proc/stat sample: {"t": monotonic s, "total": jiffies, "idle": jiffies}
+_DB_SIZES: list = []            # (ts ms, bytes of the three databases) samples of this process: the daily growth
+SERVER_TTL_S = 5
+
+
+def _cpu_sample(path: str) -> tuple[int, int]:
+    with open(path, encoding="ascii") as fh:
+        vals = [int(x) for x in fh.readline().split()[1:9]]      # user nice system idle iowait irq softirq steal
+    return sum(vals), vals[3] + (vals[4] if len(vals) > 4 else 0)
+
+
+def cpu_facts(path: str = "/proc/stat") -> Optional[dict]:
+    """{"pct", "cores"}: the busy share since the previous call (1 s .. 10 min ago), else over a 0.25 s sample."""
+    try:
+        total, idle = _cpu_sample(path)
+        prev = dict(_CPU_LAST)
+        if not prev or not 1 <= time.monotonic() - prev["t"] <= 600 or total <= prev["total"]:
+            time.sleep(0.25)
+            prev = {"t": time.monotonic(), "total": total, "idle": idle}
+            total, idle = _cpu_sample(path)
+        _CPU_LAST.update(t=time.monotonic(), total=total, idle=idle)
+        dt = total - prev["total"]
+        pct = 100.0 * (1 - (idle - prev["idle"]) / dt) if dt > 0 else None
+    except (OSError, ValueError, IndexError):
+        return None
+    return {"pct": None if pct is None else round(min(max(pct, 0.0), 100.0), 1), "cores": os.cpu_count()}
+
+
+def mem_facts(path: str = "/proc/meminfo") -> Optional[dict]:
+    """{"used_mb", "total_mb"}: total minus what the kernel can hand out (MemAvailable)."""
+    try:
+        kb = {}
+        with open(path, encoding="ascii") as fh:
+            for line in fh:
+                k, _, v = line.partition(":")
+                kb[k.strip()] = int(v.split()[0])
+        total, avail = kb["MemTotal"], kb.get("MemAvailable", kb.get("MemFree", 0))
+    except (OSError, ValueError, KeyError, IndexError):
+        return None
+    return {"used_mb": round((total - avail) / 1024, 1), "total_mb": round(total / 1024, 1)}
+
+
+def disk_facts(path: str) -> Optional[dict]:
+    """{"used_gb", "total_gb"} of the file system that holds the databases."""
+    try:
+        v = os.statvfs(path)
+    except OSError:
+        return None
+    gb = 1024 ** 3
+    return {"used_gb": round((v.f_blocks - v.f_bfree) * v.f_frsize / gb, 2), "total_gb": round(v.f_blocks * v.f_frsize / gb, 2)}
+
+
+def _file_bytes(path: Optional[str]) -> Optional[int]:
+    """A SQLite database's size with its write-ahead log; None when it is not there."""
+    if not path or not os.path.exists(path):
+        return None
+    return sum(os.path.getsize(p) for p in (path, path + "-wal") if os.path.exists(p))
+
+
+def db_facts(paper_db: str, agents_db: Optional[str], daily_db: Optional[str], now_ms: int) -> dict:
+    """{"paper3_mb", "agents3_mb", "daily3_mb", "growth_mb_day"}: the growth from this process's samples (None until
+    they span 6 hours: the dashboard keeps no size log of its own)."""
+    sizes = {k: _file_bytes(p) for k, p in (("paper3", paper_db), ("agents3", agents_db), ("daily3", daily_db))}
+    total = sum(v for v in sizes.values() if v)
+    if not _DB_SIZES or now_ms - _DB_SIZES[-1][0] >= 3_600_000:
+        _DB_SIZES.append((now_ms, total))
+        del _DB_SIZES[:-200]
+    first = next(((t, b) for t, b in _DB_SIZES if now_ms - t <= 8 * 86_400_000), None)
+    span = (now_ms - first[0]) if first else 0
+    growth = (total - first[1]) / 1024 ** 2 / (span / 86_400_000) if first and span >= 6 * 3_600_000 else None
+    out = {f"{k}_mb": None if v is None else round(v / 1024 ** 2, 1) for k, v in sizes.items()}
+    out["growth_mb_day"] = None if growth is None else round(growth, 1)
+    return out
+
+
+def signal_time(c, now_ms: int) -> list:
+    """[{tf, bar_close, max_delay_ms, limit_ms, last_bar_close, last_delay_ms}]: per timeframe, the boundary of the
+    last 24 hours whose signals waited longest (its slowest signal against the timeframe's limit) and the newest
+    boundary (paper3.db signal_log; one indexed range per timeframe: siglog_tf)."""
+    out = []
+    since = now_ms - 86_400_000
+    for tf in TF_MINUTES:                      # the timeframes the accounts trade (5m .. 4h)
+        r = c.execute("SELECT bar_close, MAX(delay_ms) FROM signal_log WHERE timeframe = ? AND bar_close > ? "
+                      "AND delay_ms IS NOT NULL AND strategy NOT GLOB 'NL[0-9]*'", (tf, since)).fetchone()
+        if r is None or r[1] is None:
+            continue
+        last = c.execute("SELECT bar_close, MAX(delay_ms) FROM signal_log WHERE timeframe = ? AND bar_close = "
+                         "(SELECT MAX(bar_close) FROM signal_log WHERE timeframe = ?) AND strategy NOT GLOB 'NL[0-9]*'",
+                         (tf, tf)).fetchone()
+        out.append({"tf": tf, "bar_close": r[0], "max_delay_ms": r[1],
+                    "limit_ms": SIGNAL_LIMITS["max_delay_ms_5m"] if tf == REEL_TF else SIGNAL_LIMITS["max_delay_ms"],
+                    "last_bar_close": last[0] if last else None, "last_delay_ms": last[1] if last else None})
+    return out
+
+
+TG_SENDS_FILE = "tgsends.db"    # the Telegram send counter's own file next to paper3.db (no Telegram sender writes
+                                # into the trading database)
+
+
+def telegram_counts(c, now_ms: int, sends_db: Optional[str] = None) -> Optional[dict]:
+    """{"today", "week"}: messages sent to Telegram, from a ``tg_sends(day, kind, n)`` table (KST days 'YYYY-MM-DD',
+    written by the senders): in paper3.db (``c``) or in its own file ``sends_db`` (tgsends.db next to paper3.db);
+    None while no sender keeps that count."""
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    day = datetime.datetime.fromtimestamp(now_ms / 1000, kst).date()
+    week0 = (day - datetime.timedelta(days=6)).isoformat()
+
+    def count(conn) -> Optional[dict]:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tg_sends'").fetchone():
+            return None
+        today = conn.execute("SELECT COALESCE(SUM(n), 0) FROM tg_sends WHERE day = ?", (day.isoformat(),)).fetchone()[0]
+        week = conn.execute("SELECT COALESCE(SUM(n), 0) FROM tg_sends WHERE day >= ? AND day <= ?",
+                            (week0, day.isoformat())).fetchone()[0]
+        return {"today": int(today or 0), "week": int(week or 0)}
+    v = count(c)
+    if v is None and sends_db and os.path.exists(sends_db):
+        try:
+            with contextlib.closing(sqlite3.connect(_ro_uri(sends_db), uri=True, timeout=2)) as t:
+                v = count(t)
+        except sqlite3.Error:
+            v = None
+    return v
+
+
+def server_facts(data: "Data", agents_db: Optional[str], daily_db: Optional[str], now_ms: Optional[int] = None) -> dict:
+    """/api/v4/server: CPU, memory, the data disk, the database sizes, the signal time per timeframe and the
+    Telegram count. A part that cannot be read is None ('수집 전' on the page), never a made-up number."""
+    now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    out: dict = {"now": now, "cpu": cpu_facts(), "mem": mem_facts(),
+                 "disk": disk_facts(os.path.dirname(os.path.abspath(data.db))),
+                 "db": db_facts(data.db, agents_db, daily_db, now), "signal_time": [], "telegram": None,
+                 "services": None, "limits": dict(SIGNAL_LIMITS)}
+    try:
+        with contextlib.closing(data.conn()) as c:
+            out["signal_time"] = signal_time(c, now)
+            out["telegram"] = telegram_counts(c, now, os.path.join(os.path.dirname(os.path.abspath(data.db)),
+                                                                   TG_SENDS_FILE))
+    except sqlite3.Error as exc:
+        out["error"] = f"paper3.db를 읽지 못함: {type(exc).__name__}"
+    return out
 
 
 # ---------------------------------------------------------------- agent rooms
@@ -831,9 +1374,27 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
     return d
 
 
+def group_role_of_room(room_id: str) -> Optional[str]:
+    """The v4 group-specialist role key of a room ('team:ds_structure' -> 'ds_structure'); None for every other room."""
+    from .. import groups as G
+    key = room_id[len("team:"):] if isinstance(room_id, str) and room_id.startswith("team:") else None
+    return key if key in G.ROLE_KO else None
+
+
 def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
     """Plain Korean: when the staff of this room meet by themselves (no one has to type)."""
     from ..agents.roster3 import STRATEGY_KO
+    key = group_role_of_room(room_id)
+    if key is not None:     # the five v4 specialist rooms (agents/triggers.py group_loss / group_bust / group_weekly)
+        from .. import groups as G
+        whose = "5분봉 단타 계좌(비교: 5분봉 동전 3개)" if key == "reel_5m" else f"딥시크 {len(G.role_members(key))}개 정의의 계좌"
+        loss = ("손실이 3건 쌓이면(6시간 간격, 하루 2번까지)" if key == "reel_5m"
+                else "새 손실이 5건 쌓이면(하루 1번까지)")
+        from ..agents.roster3 import GROUP_ROLE_OF_ROOM
+        rooms_in_order = list(GROUP_ROLE_OF_ROOM)          # triggers.GROUP_ROOMS: the weekly review day by room order
+        wd = WEEKDAY_KO[rooms_in_order.index(room_id) % 7] + "요일" if room_id in rooms_in_order else "주 1회"
+        return (f"{G.ROLE_KO[key]}: {whose}에 {loss}, 계좌가 파산하면(하루 1번 묶음), 거래가 30건 더 쌓인 뒤 "
+                f"{wd} 주간 검토 때 스스로 회의를 엽니다. 기존 36개 방의 AI 호출은 쓰지 않고 남는 몫만 씁니다.")
     d = _trigger_defaults(hours)
     hh = lambda h: f"{h:02d}:00"  # noqa: E731
     if room_id.startswith("strat:"):
@@ -841,7 +1402,7 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
         s = room_id[len("strat:"):]
         wd = WEEKDAY_KO[names.index(s) % 7] if s in names else "정해진"
         gap_h = int(d["loss_min_gap_ms"] // 3_600_000)
-        tf = (f", 5개 봉 계좌의 성적이 크게 갈리면 {hh(d['tf_split_hour_kst'])} 봉 비교 회의(봉 비교 분석가 참석)로"
+        tf = (f", {len(CORE_TFS)}개 봉 계좌의 성적이 크게 갈리면 {hh(d['tf_split_hour_kst'])} 봉 비교 회의(봉 비교 분석가 참석)로"
               if d["tf_split_hour_kst"] >= 0 else "")
         return (f"새 손실이 {d['loss_min_count']}건 쌓이면 (같은 방은 {gap_h}시간 간격), 계좌가 파산하면, "
                 f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때{tf} 스스로 회의를 엽니다.")
@@ -941,6 +1502,51 @@ def office_schedule(now_ms: int, hours: Optional[dict] = None) -> dict:
     return {"slots": slots, "next": nxt, "source": "tick" if hours else "defaults"}
 
 
+FIXED_NORMAL_KO = "딥시크·5분봉은 규칙상 늘 보통 배수"
+# /api/v4/curves: the steps it answers in (15 minutes, 1 hour, 4 hours, 1 day), its series and its longest answer
+CURVE_STEPS = (900_000, 3_600_000, 14_400_000, 86_400_000)
+CURVE_KEYS = ("strategy", "ds200", "reel", "random", "random_5m")
+CURVE_MAX_POINTS = 2_000
+CURVE_SETTLE_MS = 15 * 60_000       # a step is kept once it ended this long ago
+
+
+def curve_keys(kind: str, timeframe: str) -> tuple:
+    """The /api/v4/curves series an original account counts in: its kind, and random_5m for a 5m coin flip."""
+    return (kind, "random_5m") if kind == "random" and timeframe == REEL_TF else (kind,)
+GZIP_MIN_BYTES = 1024        # responses at least this big are sent gzip-compressed when the browser accepts it
+NO_GZIP_PATHS = ("/api/stream",)   # the live stream (text/event-stream) is never compressed: a gzip buffer would hold
+                                   # its events back (older Starlette versions compress streams without flushing)
+
+
+class GZipExceptStream:
+    """Starlette's GZipMiddleware for every response except the live stream (G17: /api/board is ~220 KB of JSON)."""
+
+    def __init__(self, app, minimum_size: int = GZIP_MIN_BYTES):
+        from starlette.middleware.gzip import GZipMiddleware
+        self.app = app
+        self.gz = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") not in NO_GZIP_PATHS:
+            await self.gz(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+def safe_next(path: Optional[str]) -> bool:
+    """A login ``next`` this server may send the browser to: a same-origin path ('/...', never '//host', a
+    backslash, a control character or the login page itself)."""
+    return (isinstance(path, str) and 0 < len(path) <= 2000 and path.startswith("/") and not path.startswith("//")
+            and "\\" not in path and not any(ord(ch) < 32 or ord(ch) == 127 for ch in path)
+            and not path.startswith("/login") and not path.startswith("/api/"))
+
+
+def login_redirect(path: str, query: str = "") -> str:
+    """'/login?next=<path>' for a page asked without a session (the path and its query string; '/' when unsafe)."""
+    nxt = path + (f"?{query}" if query else "")
+    return "/login?next=" + urllib.parse.quote(nxt if safe_next(nxt) else "/", safe="/")
+
+
 def same_origin(req: Request) -> bool:
     """Write endpoints: refuse a request whose Origin header is present and is not this site, scheme
     included (http://host is not https://host), and any browser request marked cross-site. The
@@ -982,10 +1588,12 @@ class Rooms:
         self.owners = tuple(owners)
         self._caps: Optional[dict] = None
         self.specs = {s["room_id"]: s for s in rooms_db.room_specs()}
+        from ..agents import roster3
         from ..agents.roster3 import ROLES, SPECIALISTS, room_duty
-        # the duty a member has in the rooms (what the room staff can really do), not the v3 roster's
+        # the duty a member has in the rooms (what the room staff can really do), not the v3 roster's; the five v4
+        # group specialists (DeepSeek families, the reel: roster3.GROUP_SPECIALISTS) are specialists too
         self.roles = {r[0]: {"id": r[0], "name": r[1], "team": r[2], "duty": room_duty(r[0])}
-                      for r in ROLES + SPECIALISTS}
+                      for r in ROLES + SPECIALISTS + tuple(getattr(roster3, "GROUP_SPECIALISTS", ()))}
 
     # -- connections
     @contextlib.contextmanager
@@ -1380,10 +1988,14 @@ class Rooms:
 
     # -- the meeting room view (/api/office)
     def _role(self, role: str) -> dict:
-        """{name, short name, team} of a room member; a specialist is named after its strategy."""
+        """{name, short name, team} of a room member; a specialist is named after its strategy, a v4 group
+        specialist (spec_<key>, groups.V4_ROLES) after its role ('구조·유동성 담당'), with ``group_role`` = key."""
+        from .. import groups as G
         from ..agents.roster3 import STRATEGY_KO
         if role.startswith("spec_"):
             s = role[len("spec_"):]
+            if s in G.ROLE_KO:
+                return {"name": self.R.role_name(role), "label": G.ROLE_KO[s], "team": "specialist", "group_role": s}
             return {"name": self.R.role_name(role), "label": STRATEGY_KO.get(s, s), "team": "specialist"}
         r = self.roles.get(role)
         return {"name": r["name"] if r else self.R.role_name(role), "label": None, "team": r["team"] if r else ""}
@@ -1481,7 +2093,9 @@ class Rooms:
         now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         day0 = self.R.kst_day_start_ms(now)
         tk = _trigger_ko()
-        zones = [{"room_id": rid, "title": s["title"], "members": list(s["members"])}
+        # every team room, the five v4 group-specialist rooms (team:<key>, groups.V4_ROLES) among them, marked
+        zones = [{"room_id": rid, "title": s["title"], "members": list(s["members"]),
+                  "group_role": group_role_of_room(rid)}
                  for rid, s in self.specs.items() if s["kind"] == "team"]
         out: dict = {"ready": False, "now": now, "day": self.R.kst_day(now), "zones": zones,
                      "strategy_members": list(self.R.STRATEGY_ROOM_ROLES), "running": [], "recent": [],
@@ -1705,12 +2319,30 @@ def _storable(text: str) -> bool:
         return False
 
 
-# the restarted run's rules change in one line (docs/paper-v3-rules-change-1.md), for the home banner
-RULES_CHANGE_1_KO = "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 8초 뒤 읽기"
+# the paper v4 run's rules in one line (docs/paper-v4-rules.md), the banner on every view (summary.js)
+RULES_V4_KO = ("기존 36 · 딥시크 44 · 5분봉 단타 1 · 동전 봇 · 좋은 자리 50/40배, 보통 30/20배(딥시크·5분봉은 늘 보통), "
+               "비중=배수% · 5분봉 단타는 자체 청산(스윙 저점 손절·볼린저 윗선 익절·8시간) · 1분봉 8초 뒤 읽기")
+RULES_V4_LABEL = "v4 규칙"
 # documents the dashboard serves read-only as text (GET /api/doc/<name>); nothing else under docs/
-DOCS = {"rules-change-1": "paper-v3-rules-change-1.md", "levrule-eval": "levrule-eval.md"}
+DOCS = {"rules-change-1": "paper-v3-rules-change-1.md", "levrule-eval": "levrule-eval.md",
+        "rules-v4": "paper-v4-rules.md", "verdict-v4": "paper-v4-verdict.md", "levrule-eval-v4": "levrule-eval-v4.md"}
 DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs")
 DOC_MAX_BYTES = 200_000
+
+
+def _doc_link(name: str, fallback: str) -> str:
+    """/api/doc/<name> when that document is in docs/ (the v4 documents land with the restart), else the fallback's."""
+    return f"/api/doc/{name if os.path.isfile(os.path.join(DOCS_DIR, DOCS[name])) else fallback}"
+
+
+def verdict_method() -> dict:
+    """How the day-30 verdict judges (checkpoint.N_BOTS same-bar coin flips, the per-group error budget
+    checkpoint.FAMILY_ALPHA, owners' D5), as numbers and one Korean line ``method_ko`` (never typed in here)."""
+    from .. import checkpoint as CP
+    n = int(getattr(CP, "N_BOTS", 0) or 0)
+    alpha = dict(getattr(CP, "FAMILY_ALPHA", {}) or {})
+    # the one method text (G18): checkpoint.method_ko, the same line the agents' facts and Obsidian read
+    return {"method_ko": CP.method_ko(None, n), "n_bots": n, "family_alpha": alpha}
 
 
 def restart_banner(start_ts: Optional[int], now_ms: int) -> dict:
@@ -1718,7 +2350,10 @@ def restart_banner(start_ts: Optional[int], now_ms: int) -> dict:
     since 00:00 UTC of the start day (the checkpoint clock: day 30 is the first verdict, checkpoint_ts), the verdict
     date in KST (09:00). After the first verdict the next one is named instead."""
     from ..checkpoint import PERIOD_DAYS, checkpoint_ts
-    out: dict = {"rules_ko": RULES_CHANGE_1_KO, "doc": "/api/doc/rules-change-1", "levrule_doc": "/api/doc/levrule-eval"}
+    out: dict = {"rules_ko": RULES_V4_KO, "rules_label": RULES_V4_LABEL, **verdict_method(),
+                 "doc": _doc_link("rules-v4", "rules-change-1"),
+                 "verdict_doc": _doc_link("verdict-v4", "rules-change-1"),
+                 "levrule_doc": _doc_link("levrule-eval-v4", "levrule-eval")}
     if start_ts is None:
         return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
     day_ms = 86_400_000
@@ -1748,7 +2383,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         # the dashboard creates its tables in inbox.db: never in another process's database
         raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")
     warm_imports()
-    app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="paper v4", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(GZipExceptStream, minimum_size=GZIP_MIN_BYTES)
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
                   owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
@@ -1765,7 +2401,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         if not authed(req):
             if path.startswith("/api/"):
                 return JSONResponse({"error": "login required"}, status_code=401)
-            return RedirectResponse("/login")
+            # back to the same page after logging in (login.html follows ?next=, same-origin paths only)
+            return RedirectResponse(login_redirect(path, req.url.query))
         resp = await call_next(req)
         resp.headers["Cache-Control"] = "no-store"
         return resp
@@ -1806,16 +2443,26 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/")
     def index():
-        return FileResponse(os.path.join(STATIC, "index.html"))
+        """The paper v4 dashboard (static/v4/index.html; its files load from /static/v4/)."""
+        return FileResponse(V4_INDEX)
+
+    @app.get("/v4")
+    def index_v4():
+        return FileResponse(V4_INDEX)
+
+    @app.get("/v3")
+    def index_v3():
+        """The old dashboard ('예전 화면' in the v4 menu): same login, same data."""
+        return FileResponse(OLD_INDEX)
 
     @app.get("/api/board")
     def board():
         b = data.board()
         # running extras whose proposal is missing or no longer approved (the agents tick flags them)
         orph = rooms.orphans() if any(r.get("kind") in ("copy", "newlab") for r in b["accounts"]) else {}
-        for r in b["accounts"]:
-            r["orphan"] = r["account_id"] in orph if r.get("kind") in ("copy", "newlab") else None
-        return b
+        rows = [{**r, "orphan": r["account_id"] in orph if r.get("kind") in ("copy", "newlab") else None}
+                for r in b["accounts"]]           # (copies: the board is shared with the other callers)
+        return {**b, "accounts": rows}
 
     @app.get("/api/account/{aid}")
     def account(aid: str):
@@ -1867,8 +2514,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return data.signals(tf, limit, symbol)
 
     @app.get("/api/trades")
-    def trades(symbol: Optional[str] = None, tf: Optional[str] = None, limit: int = 200):
-        return data.trades(symbol, tf, limit)
+    def trades(symbol: Optional[str] = None, tf: Optional[str] = None, limit: int = 200, group: Optional[str] = None):
+        return data.trades(symbol, tf, limit, group)
 
     @app.get("/api/agents/roster")
     def agents_roster():
@@ -1935,25 +2582,34 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def get_strategy_view(strategy: str, tf: str = "1h", symbol: str = "BTCUSDT"):
         """The strategy's own indicator lines and its entry conditions on the last closed bar, plus the
         entry marks of its latest signal on this timeframe and coin (descriptive, see entry_marks.py)."""
-        from ..strategy_views import render, views
-        if symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"):
+        from ..strategy_views import has_view, render
+        v4 = strategy in DS200_FAMILY or strategy == REEL_NAME
+        if symbol not in (V4_COINS if v4 else TICKER_SYMBOLS):   # DeepSeek and the reel trade the six coins (no XRP)
             raise HTTPException(400, "unknown symbol")
-        if tf not in TRADE_TFS:
+        if tf not in strategy_tfs(strategy):          # each group's own timeframes (the reel 5m only, the 36 never 5m)
             raise HTTPException(400, "unknown timeframe")
         try:
-            known = strategy in views()
+            known = has_view(strategy)                # the 36 (NAMES) and every v4 view that loads now
         except ImportError:
             known = False
         if not known:
             raise HTTPException(404, "no chart view for this strategy yet")
-        df = frames(symbol, tf, view_bars(tf))
+        n = view_bars(tf, strategy)
+        try:
+            df = frames(symbol, tf, n)
+            btc = None
+            if strategy == "F14_SMT" and symbol != "BTCUSDT":   # SMT compares with BTC's bars of the same timeframe
+                btc = frames("BTCUSDT", tf, n)        # (matched on ts, as lib_c does; passed as the view's argument)
+        except Exception:  # noqa: BLE001  (Binance unreachable or refusing: no chart, never a 500)
+            raise HTTPException(503, "no price data")
         if df is None or len(df) < 50:
             raise HTTPException(503, "no price data")
-        key = (strategy, tf, symbol, str(df["ts"].iloc[-1]))
+        key = (strategy, tf, symbol, str(df["ts"].iloc[-1]),
+               None if btc is None or not len(btc) else str(btc["ts"].iloc[-1]))
         if key not in view_cache:
             if len(view_cache) > 256:
                 view_cache.clear()
-            view_cache[key] = render(strategy, df, tf)
+            view_cache[key] = render(strategy, df, tf, symbol=symbol, btc=btc)
         try:  # read fresh on every call: the signal is logged a few seconds after the bar closes
             last = data.last_marks(strategy, tf, symbol)
         except sqlite3.Error:
@@ -1961,16 +2617,31 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return {**view_cache[key], "last_signal": last}
 
     @app.get("/api/strategies")
-    def get_strategies():
+    def get_strategies(all: int = 0):  # noqa: A002  (the query parameter's name)
+        """The 36 (roster order) with their 5-year style. ``all=1`` adds the 44 DeepSeek definitions (PREREG order)
+        and the reel, each with its kind, group, family, Korean name (groups.label_ko) and timeframes; the 36 then
+        carry kind 'strategy' and group 'core' too."""
         from ..agents.packets3 import CARDS
         from ..agents.roster3 import STRATEGY_KO
         prof = {}
         if os.path.exists(CARDS):
             with open(CARDS) as fh:
                 prof = {c["strategy"]: c for c in json.load(fh)["cards"]}
-        return [{"strategy": k, "name_ko": v, "style": prof.get(k, {}).get("style"),
-                 "hold": prof.get(k, {}).get("hold"), "rare": prof.get(k, {}).get("rare")}
-                for k, v in STRATEGY_KO.items()]
+        out = [{"strategy": k, "name_ko": v, "style": prof.get(k, {}).get("style"),
+                "hold": prof.get(k, {}).get("hold"), "rare": prof.get(k, {}).get("rare")}
+               for k, v in STRATEGY_KO.items()]
+        if not all:
+            return out
+        from .. import groups as G
+        from ..config import DS200_DEFS
+        for x in out:
+            x.update(kind="strategy", group="core", family=None, tfs=list(CORE_TFS))
+        out += [{"strategy": d, "name_ko": G.label_ko(d), "kind": "ds200", "group": "ds200", "family": fam,
+                 "family_ko": G.DS_FAMILY_KO.get(fam), "tfs": list(strategy_tfs(d)), "style": None, "hold": None,
+                 "rare": None} for d, fam, _tfs in DS200_DEFS]
+        out.append({"strategy": REEL_NAME, "name_ko": G.label_ko(REEL_NAME), "kind": "reel", "group": "reel",
+                    "family": None, "tfs": [REEL_TF], "style": None, "hold": None, "rare": None})
+        return out
 
     risk_cache: dict = {}
 
@@ -1980,6 +2651,18 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         timeframe accounts' deepest drawdown and the highest account bust probability (accounts with >= 20 trades)."""
         from ..agents.packets3 import profile_card
         c = profile_card(strategy)
+        if c is None and (strategy in DS200_FAMILY or strategy == REEL_NAME):
+            # a DeepSeek definition or the reel: its 5-year research card (ds_profiles.py: the research exits, labelled
+            # as such; the reel's are its own live exits)
+            # (``card``: the same research in agents/packets3.profile_card's shape, ds_profiles.card: what the
+            # specialists' packets read, one row per timeframe with the research exit closest to the live one)
+            from .. import ds_profiles
+            try:
+                c = ds_profiles.profile(strategy)
+                if c is not None:
+                    c = {**c, "card": ds_profiles.card(strategy)}
+            except Exception:  # noqa: BLE001  (a missing or changed research file: no card, never a 500)
+                c = None
         if c is None:
             raise HTTPException(404, "unknown strategy")
         hit = risk_cache.get(strategy)
@@ -1998,9 +2681,38 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             risk_cache[strategy] = hit = (time.time(), val)
         return {**c, "live_risk": hit[1]}
 
+    curve_cache: dict = {}
+
+    @app.get("/api/v4/curves")
+    def get_curves(step: int = 3_600_000):
+        """The original accounts' equity over the run: median per kind and the total (Data.curves; 60 s cache)."""
+        hit = curve_cache.get(step)
+        if hit and time.time() - hit[0] < 60:
+            return hit[1]
+        try:
+            v = json_finite(data.curves(step))
+        except sqlite3.Error as exc:
+            raise HTTPException(503, f"paper3.db를 읽지 못함: {type(exc).__name__}")
+        if len(curve_cache) > 8:
+            curve_cache.clear()
+        curve_cache[step] = (time.time(), v)
+        return v
+
+    server_cache: dict = {}
+
+    @app.get("/api/v4/server")
+    def get_server():
+        """CPU, memory, disk, database sizes, signal time per timeframe, Telegram count (server_facts; 5 s cache)."""
+        hit = server_cache.get("v")
+        if hit and time.time() - hit[0] < SERVER_TTL_S:
+            return hit[1]
+        v = json_finite(server_facts(data, agents_db, daily_db))
+        server_cache["v"] = (time.time(), v)
+        return v
+
     @app.get("/api/agents/feed")
-    def agents_feed(limit: int = 200):
-        return agent_feed(agents_db, min(max(limit, 1), 1000))
+    def agents_feed(limit: int = 200, after_id: int = 0):
+        return agent_feed(agents_db, min(max(limit, 1), 1000), after_id)
 
     # ------------------------------------------------ agent rooms: reads (agents3.db, read-only)
     def _room(room_id: str) -> str:
@@ -2280,7 +2992,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         from .. import entry_marks
         if symbol not in TICKER_SYMBOLS:
             raise HTTPException(400, "unknown symbol")
-        if tf not in TRADE_TFS:
+        if tf not in LEVEL_TFS:
             return {"levels": [], "note": "no levels for this timeframe"}
         df = frames(symbol, tf, entry_marks.chart_bars(tf))
         if df is None or len(df) < 320:
@@ -2323,27 +3035,14 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/stream")
     async def stream(req: Request, trade_id: int = 0, alert_row: int = 0, room_msg: int = 0):
         async def gen():
-            nonlocal trade_id, alert_row, room_msg
-            last_board = None
-            if not trade_id and not alert_row:   # a new page starts from now, not from the first trade
-                trade_id, alert_row = data.latest_ids()
-            if not room_msg:
-                room_msg = rooms.last_id()
+            st = {"trade_id": trade_id, "alert_row": alert_row, "room_msg": room_msg, "last_board": None}
+            if not st["trade_id"] and not st["alert_row"]:   # a new page starts from now, not from the first trade
+                st["trade_id"], st["alert_row"] = data.latest_ids()
+            if not st["room_msg"]:
+                st["room_msg"] = rooms.last_id()
             while not await req.is_disconnected():
-                # new agent-room messages (agents3.db max(id)): the page refreshes the rooms that changed
-                room_msg, rooms_changed = rooms.since(room_msg)
-                d = data.since(trade_id, alert_row)
-                if d["trades"]:
-                    trade_id = d["trades"][-1]["id"]
-                if d["alerts"]:
-                    alert_row = d["alerts"][-1]["rid"]
-                b = data.board()
-                slim = {r["account_id"]: [r["wallet"], r["trades"], r["bust"], r["position"]] for r in b["accounts"]}
-                changed = {k: v for k, v in slim.items() if last_board is None or last_board.get(k) != v}
-                last_board = slim
-                payload = {"ts": b["ts"], "changed": changed, "trades": d["trades"], "alerts": d["alerts"],
-                           "heartbeat": d["heartbeat"], "room_msg": room_msg, "rooms": rooms_changed}
-                yield f"data: {json.dumps(payload)}\n\n"
+                # (in a worker thread: the database reads never hold up the other pages' requests)
+                yield await asyncio.to_thread(stream_event, data, rooms, st)
                 await asyncio.sleep(3)
         return StreamingResponse(gen(), media_type="text/event-stream")
 

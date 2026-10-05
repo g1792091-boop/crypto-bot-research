@@ -57,7 +57,7 @@ def test_schema_creation_is_idempotent_and_keeps_rows(tmp_path):
     assert {"rooms", "rounds", "messages", "notes", "trials", "trial_results", "proposals", "cursors",
             "agent_calls"} <= _tables(c)
     assert c.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-    assert c.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 42
+    assert c.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 47
     assert c.execute("SELECT text FROM messages WHERE id = ?", (mid,)).fetchone()[0] == "첫 메시지"
     assert R.get_cursor(c, "k") == 7
     c.close()
@@ -108,12 +108,16 @@ def test_existing_dashboard_feed_query_still_works(db):
 
 
 # ---------------------------------------------------------------- rooms
-def test_ensure_rooms_creates_42_rooms_with_the_right_members(db):
+def test_ensure_rooms_creates_47_rooms_with_the_right_members(db):
     path, conn = db
     rooms = {r[0]: r for r in conn.execute("SELECT room_id, kind, strategy, title, members, created_ts FROM rooms")}
-    assert len(rooms) == 42
+    assert len(rooms) == 47                  # 42 + the five v4 specialist rooms (DeepSeek families, the reel)
     assert {k for k in rooms if k.startswith("team:")} == {"team:market", "team:risk", "team:ops", "team:review",
-                                                          "team:lead", "team:lab"}
+                                                          "team:lead", "team:lab", *R.GROUP_ROOMS}
+    for room in R.GROUP_ROOMS:
+        r = R.get_room(conn, room)
+        assert r["kind"] == "team" and r["strategy"] is None and r["members"][1:] == ["team_lead"]
+        assert r["members"][0].startswith("spec_") and set(r["members"]) <= set(R.ROLE_NAMES)
     for s, ko in STRATEGY_KO.items():
         r = R.get_room(conn, f"strat:{s}")
         assert r["kind"] == "strategy" and r["strategy"] == s and r["title"] == ko
@@ -134,7 +138,7 @@ def test_ensure_rooms_creates_42_rooms_with_the_right_members(db):
     assert R.ensure_rooms(conn, ts=NOW + 2) == 0
     assert R.get_room(conn, "strat:DOGE")["members"][0] == "spec_DOGE"
     assert R.get_room(conn, "strat:DOGE")["created_ts"] == NOW
-    assert conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 42
+    assert conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 47
 
 
 def test_room_id_helpers():
@@ -180,7 +184,7 @@ def test_rooms_overview(db):
     R.add_proposal(conn, "strat:DOGE", "DOGE", t, {"template": "stop_atr", "k": 2.5}, PASS, "awaiting_owner", ts=NOW)
     ro = R.open_ro(path)
     ov = R.rooms_overview(ro, NOW)
-    assert len(ov) == 42 and ov[0]["room_id"] == "team:market"
+    assert len(ov) == 47 and ov[0]["room_id"] == "team:market"
     d = next(o for o in ov if o["room_id"] == "strat:DOGE")
     assert d["title"] == "도지 봇(친구분)" and d["last_kind"] == "analysis" and d["last_id"] == 2
     assert len(d["last_text"]) == 140 and d["last_text"].endswith("…")
@@ -368,7 +372,7 @@ def test_read_only_opener_refuses_writes(db, inbox, tmp_path):
         R.post(ro, "team:ops", None, "m", "ops_auditor", None, "system", "x")
     with pytest.raises(sqlite3.OperationalError):
         R.set_cursor(ro, "x", 1)
-    assert ro.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 42
+    assert ro.execute("SELECT COUNT(*) FROM rooms").fetchone()[0] == 47
     ro.close()
     ipath, ic = inbox
     iro = R.open_ro(ipath)

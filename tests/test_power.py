@@ -6,7 +6,6 @@ learning meeting, the 30-day checkpoint meeting)."""
 
 import json
 import os
-import re
 import sys
 
 import numpy as np
@@ -97,26 +96,48 @@ def test_a_tiny_seeded_grid_on_synthetic_bars_is_monotone_and_repeatable():
 
 
 def test_the_committed_result_and_its_reader():
+    """power.json version 2 (paper v4): the owners' scheme D5 (b) "split" (core 108 at FDR 7%, 10,000 bots) next to
+    (a) "one" (241 at 10%) and the v3 rule, and the reel's own 5m pool judged alone at 0.5%."""
     doc = P.json.load(open(P.OUT, encoding="utf-8"))
-    # 5m removed 2026-10-04 (docs/paper-v3-rules-change-1.md): judged 36 x 15m/30m/1h = 108, every strategy acct 144
-    assert doc["version"] == 1 and doc["edges_roe"][0] == 0.0 and doc["families"] == [108, 144]
-    assert doc["families"] == list(P.FAMILIES) and P.FAMILIES[0] == CP.Q1_MAIN_FAMILY == PW.FAMILY
-    assert doc["timeframes"] == ["15m", "30m", "1h", "4h"] and "5m" not in doc["results"] and "5m" in doc["no_5m"]
+    assert doc["version"] == 2 and doc["edges_roe"][0] == 0.0 and doc["chosen"] == "split" == PW.SCHEME
+    assert doc["schemes"]["split"]["family"] == CP.Q1_MAIN_FAMILY == PW.FAMILY == 108
+    assert doc["schemes"]["split"]["alpha"] == CP.FAMILY_ALPHA["core"] and doc["schemes"]["split"]["n_bots"] == CP.N_BOTS
+    assert doc["schemes"]["one"]["family"] == 241 and doc["schemes"]["one"]["alpha"] == CP.ALPHA
+    assert doc["reel_schemes"]["split"] == {**doc["reel_schemes"]["split"], "family": 1,
+                                            "alpha": CP.FAMILY_ALPHA["reel"], "n_bots": CP.N_BOTS}
+    assert doc["timeframes"] == ["15m", "30m", "1h", "4h", "5m"] and doc["results"]["5m"]["exits"] == "reel"
     assert doc["rules"]["n_bots"] == CP.N_BOTS and doc["rules"]["alpha"] == CP.ALPHA
-    for tf in CP.JUDGED_TFS:
+    for tf in CP.JUDGED_TFS + ("5m",):
         rows = doc["results"][tf]["rows"]
         assert [r["edge_roe"] for r in rows] == doc["edges_roe"]
-        assert rows[0]["family_108"]["p_pass1_by_d90"] <= 0.01                     # no edge: (almost) never
-        assert rows[-1]["family_108"]["p_pass1_by_d90"] >= rows[0]["family_108"]["p_pass1_by_d90"]
+        for k in ("scheme_split", "scheme_one"):
+            assert rows[0][k]["p_pass1_by_d90"] <= 0.01                         # no edge: (almost) never
+            assert rows[-1][k]["p_pass1_by_d90"] >= rows[0][k]["p_pass1_by_d90"]
+    # the split gives the 36 at least the power of one family over 241 (+10% edge, 15m and 30m)
+    for tf in ("15m", "30m"):
+        r = doc["results"][tf]["rows"][-1]
+        assert r["scheme_split"]["p_pass1_d30"] >= r["scheme_one"]["p_pass1_d30"] - 0.02
     assert doc["results"]["4h"]["observation_only"] is True
-    assert not any(re.search(r"(?<![0-9])5분", x) for x in doc["summary_ko"]) and any("108개" in x for x in doc["summary_ko"])
+    assert doc["results"]["5m"]["pool"]["rate_per_coin_bar"] == pytest.approx(0.013319)
+    assert any("108개·FDR 7%" in x and "241개·FDR 10%" in x for x in doc["summary_ko"])
+    assert any("5분 단타" in x for x in doc["summary_ko"])
     assert doc["runtime_s"]["total"] < 300 and any(x.startswith("진짜 엣지가 거래당 +") for x in doc["summary_ko"])
     b = PW.brief()
-    assert b["lines_ko"] == doc["summary_ko"] and set(b["table"]) == {"15m", "30m", "1h"} and b["family"] == 108
-    assert "5분봉" in b["no_5m"] and "108" in b["no_5m"]
+    assert b["lines_ko"] == doc["summary_ko"] and set(b["table"]) == {"15m", "30m", "1h", "5m"} and b["family"] == 108
+    assert b["alpha"] == 0.07 and b["n_bots"] == 10_000 and b["timeframes"]["5m"]["reel"]
+    assert "5분 단타" in b["no_5m"] and "108" in b["no_5m"]
     assert b["table"]["15m"][0][0] == 0.0 and len(b["table"]["15m"][0]) == 4 and b["timeframes"]["4h"]["observation_only"]
     assert len(json.dumps(b, ensure_ascii=False)) < 5000
     assert PW.brief(path="/nonexistent.json") == {"error": "검정력 결과 파일 없음 (research/power/out/power.json)"}
+    assert "error" in PW.brief(scheme="nope")                                   # a missing scheme is an error
+
+
+def test_reel_pool_on_synthetic_5m_bars():
+    bars = P.synth_bars(n=6000, tf="5m", seed=3)
+    pool = P.build_reel_pool(bars, 0.02, seeds=(1,), window_days=5, max_windows=3)
+    assert pool["trades"] > 30 and (pool["R"] >= -1.0 - 1e-9).all() and 0 < pool["mf"].max() <= 0.30 + 1e-9
+    assert set(np.round(pool["mf"], 2)) <= {0.3, 0.2}                          # 'normal': 30% or 20% of the wallet
+    assert P.build_reel_pool(bars, 0.02, seeds=(1,), window_days=5, max_windows=3)["trades"] == pool["trades"]
 
 
 def test_the_saturday_learning_packet_carries_the_power(world):

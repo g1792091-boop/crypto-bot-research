@@ -67,6 +67,17 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    paced over the day, so it only uses spare calls; exempt from the
                                    room's daily cap (the budget bounds it).
 
+    group_loss    5  team:<role>   paper v4 (owners 2026-10-05): the five specialist rooms of the DeepSeek-200 families
+    group_bust    5  team:<role>   and the 5m reel (roster3.GROUP_SPECIALISTS; an account's room is groups.role_of of
+    group_weekly  5  team:<role>   its strategy). A DeepSeek room's loss digest: >= ``group_ds_loss_min_count`` (5) new
+                                   losses, at most one a day (``group_ds_loss_gap_ms``); the reel room: >= 3 new losses,
+                                   6h apart, at most 2 a KST day. Busts of a room are batched, one meeting a day. The
+                                   weekly review on the room's weekday (Monday.. by room order) once 30 trades closed
+                                   since the last one. Every one runs on spare AI calls only (class 'research': never
+                                   the reserved, owner, bust or review calls the 36 keep; the budget is unchanged), after
+                                   every meeting of the 36 (priority 5), on its own line ``group_meetings_per_day`` (5)
+                                   over the five rooms. The 36's rooms never see a DeepSeek or reel trade (kind filters).
+
 Extra paper accounts (agents/extra_accounts.py): a copy account's losses, bust and trades count in its
 parent strategy's room (loss_cluster, bust, weekly: accounts of kind 'strategy' or 'copy'); the
 new-strategy accounts (kind 'newlab') have the same three triggers in team:lab (``_lab_accounts``: cursors
@@ -123,7 +134,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Union
 
-from .roster3 import STRATEGY_KO
+from .roster3 import GROUP_ROLE_OF_ROOM, STRATEGY_KO
 
 MIN_MS = 60_000
 HOUR_MS = 3_600_000
@@ -140,18 +151,25 @@ ANALYSES = {"cost_review": (0, "team:ops"), "combo_review": (1, "team:risk"), "c
             "learning_review": (5, "team:lead"), "rr_review": (3, "team:review"), "risk_review": (4, "team:risk")}
 ANALYSIS_KO = {"cost_review": "비용·체결 회의", "combo_review": "조합·동시 손실 회의", "coin_review": "코인·장세 회의",
                "learning_review": "학습 정리 회의", "rr_review": "손익비·청산 회의", "risk_review": "낙폭·파산 위험 회의"}
+# paper v4 (owners 2026-10-05): the five specialist rooms of the DeepSeek families and the reel (rooms_db.GROUP_ROOMS)
+GROUP_ROOMS = tuple(GROUP_ROLE_OF_ROOM)
+GROUP_TRIGGERS = ("group_loss", "group_bust", "group_weekly")
+GROUP_KINDS = ("ds200", "reel")            # accounts.ORIGINAL_KINDS the specialist rooms cover
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
-            "market_move", "ranking", "tf_split", *ANALYSES, "event_review", "bull_bear")
+            "market_move", "ranking", "tf_split", *ANALYSES, "event_review", "bull_bear", *GROUP_TRIGGERS)
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3, "ranking": 3,
             "evening": 3, "bull_bear": 3, "weekly": 4, "tf_split": 4, **{k: 4 for k in ANALYSES}, "event_review": 4,
-            "research": 5}
+            "research": 5, **{k: 5 for k in GROUP_TRIGGERS}}
 # Sub-budget class of each trigger (the rooms engine keeps one AI budget per class). The weekly analyses and the
 # event review are analysis meetings that can wait a day: the weekly reviews' class; the daily debate is a fixed
 # daily meeting: the scheduled class (reserved, like the 08:00 / 14:00 / 22:00 meetings).
 TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss", "market_move": "loss",
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled", "ranking": "scheduled",
                  "bull_bear": "scheduled", "weekly": "weekly", "tf_split": "weekly", **{k: "weekly" for k in ANALYSES},
-                 "event_review": "weekly", "research": "research"}
+                 "event_review": "weekly", "research": "research",
+                 # the v4 specialist rooms run on spare calls only (the lab's class: it leaves the reserved classes, the
+                 # owner share, the bust reserve and lab_review_keep_calls of the 36's reviews untouched)
+                 **{k: "research" for k in GROUP_TRIGGERS}}
 # the coins of the daily debate, one a day in this order (the bot's own coins, config.V3_SYMBOLS)
 BULL_BEAR_COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
 SKIPPED_CURSOR = "meetings:skipped"   # why a weekly analysis / event review / ranking review / Sunday report did not
@@ -165,18 +183,33 @@ STOP_BLOCKS = {"budget_class": None, "budget_total": CLASSES, "budget_week": CLA
                "budget_subcap": ()}      # a reduced cap (class minus the bust / critical reserve): nothing
 
 # (kind, level, text fragment) for paper3.db alerts; the first match wins, "" matches any text.
+def _ds_timeout_fragment() -> str:
+    """The frozen DeepSeek timeout text's fixed head (G27): sigservice.DS_TIMEOUT_HEAD up to its first field, read
+    from the trading file itself (never retyped here); the same words when that module cannot be imported."""
+    try:
+        from ..sigservice import DS_TIMEOUT_HEAD
+        head = DS_TIMEOUT_HEAD.split("{", 1)[0].strip()
+    except Exception:  # noqa: BLE001  (an import problem there must not stop the agents)
+        head = ""
+    return head or "[ds200] DeepSeek signal workers timed out after"
+
+
+DS_TIMEOUT_FRAGMENT = _ds_timeout_fragment()
 INCIDENT_ALERTS = (
     ("liquidation", "CRITICAL", "LIQUIDATED"),
     ("engine_halted", "CRITICAL", "ENGINE HALTED"),
     ("critical", "CRITICAL", ""),
     ("signal_timeout", "WARN", "did not answer within"),
+    # the DeepSeek map's own timeout (sigservice.DS_TIMEOUT_TEXT, WARN): its own kind, never the core's signal_timeout
+    ("ds_signal_timeout", "WARN", DS_TIMEOUT_FRAGMENT),
     ("data_gap", "WARN", "data gap at"),
     ("data_gap", "WARN", "no new closed bars"),
     ("data_gap", "WARN", "history incomplete"),
     ("data_gap", "WARN", "returned no bars"),
 )
 INCIDENT_KO = {"liquidation": "강제청산", "engine_halted": "계좌 정지", "critical": "긴급 알림",
-               "signal_timeout": "신호 계산 시간 초과", "data_gap": "데이터 끊김",
+               "signal_timeout": "신호 계산 시간 초과", "ds_signal_timeout": "딥시크 신호 계산 시간 초과",
+               "data_gap": "데이터 끊김",
                "parity_mismatch": "재계산 불일치", "no_snapshot": "재계산 못 함(00:00 상태 저장 없음)",
                "missing_bars": "빠진 1분봉"}
 
@@ -186,7 +219,15 @@ def strat_room(strategy: str) -> str:
 
 
 def all_rooms() -> tuple[str, ...]:
-    return tuple(strat_room(s) for s in STRATEGIES) + TEAM_ROOMS + (LAB_ROOM,)
+    return tuple(strat_room(s) for s in STRATEGIES) + TEAM_ROOMS + (LAB_ROOM,) + GROUP_ROOMS
+
+
+def group_room_of(strategy: Optional[str]) -> Optional[str]:
+    """The v4 specialist room of a DeepSeek definition or the reel (groups.role_of); None for any other strategy."""
+    from ..groups import role_of
+    key = role_of(strategy) if isinstance(strategy, str) else None
+    room = f"team:{key}" if key else None
+    return room if room in GROUP_ROLE_OF_ROOM else None
 
 
 @dataclass
@@ -288,6 +329,15 @@ class TriggerPolicy:
     # meetings opened only by extra accounts' trades (copies, new-strategy accounts) per KST day, all rooms
     # together: their own line, never the originals' room slots (env AGENTS_EXTRAS_MEETINGS_PER_DAY)
     extras_meetings_per_day: int = 6
+    # the v4 specialist rooms (owners 2026-10-05): their meetings a KST day over the five rooms (their own line; env
+    # AGENTS_GROUP_MEETINGS_PER_DAY, 0 = none), a DeepSeek room's loss digest (new losses, gap), the reel room's
+    group_meetings_per_day: int = 5
+    group_ds_loss_min_count: int = 5
+    group_ds_loss_gap_ms: int = 24 * HOUR_MS
+    group_reel_loss_min_count: int = 3
+    group_reel_loss_gap_ms: int = 6 * HOUR_MS
+    group_reel_loss_max_per_day: int = 2
+    group_bust_gap_ms: int = 24 * HOUR_MS     # a room's busts are batched: one meeting a day
     max_items: int = 30                      # evidence rows copied into Due.data
 
 
@@ -484,6 +534,11 @@ class _Rooms:
         """Meetings opened only by extra accounts' trades today, in every room (their own daily line)."""
         return sum(1 for r in self.rounds if r["extras"] and r["started_ts"] >= self.day_start and self._counted(r))
 
+    def group_today(self) -> int:
+        """The v4 specialist rooms' own meetings today (their own daily line)."""
+        return sum(1 for r in self.rounds if r["trigger"] in GROUP_TRIGGERS and r["started_ts"] >= self.day_start
+                   and self._counted(r))
+
     def room_full(self, room: str, trigger: str, extra: int = 0) -> bool:
         """The room's daily cap. Until an owner round has run today, ``owner_reserved_per_room_day``
         slots are kept for the owners' posts (other triggers stop earlier)."""
@@ -530,10 +585,47 @@ def _strategy_cursors(st: _Rooms, room: str, hwm: int) -> dict:
     return {f"loss:{room}": str(hwm)} if st.p.any_round_resets_losses else {}
 
 
+# An account's alert ("[id@tf] ...") opens an incident only for these groups (G26, groups.TRADE_ALERT_GROUPS): the 36,
+# the reel and the extras. DeepSeek and the coin flips are counted, not met about (their liquidations and busts stay
+# in the hourly digest and the dashboard). An ENGINE HALTED opens one for every group (the code needs a person).
+INCIDENT_GROUPS = ("core", "reel", "extra")
+INCIDENT_EVERY_GROUP = ("engine_halted",)
+
+
+def _account_groups(paper_ro) -> dict:
+    """{account_id: group} from paper3.db (accounts.GROUP_OF_KIND); {} when it cannot be read."""
+    from ..accounts import GROUP_OF_KIND
+    return {a: GROUP_OF_KIND.get(k, "other") for a, k in _rows(paper_ro, "SELECT account_id, kind FROM accounts")}
+
+
+def _alert_account(text: str) -> Optional[str]:
+    """The account id of an account's alert ("[F9_FVG@15m] LIQUIDATED ..."); None for a group or service text."""
+    t = text or ""
+    if not t.startswith("["):
+        return None
+    end = t.find("]")
+    aid = t[1:end] if end > 1 else ""
+    return aid if "@" in aid else None
+
+
+def _first_account_ts(paper_ro) -> Optional[int]:
+    r = _one(paper_ro, "SELECT MIN(created_ts) FROM accounts")
+    return _int(r[0]) if r and r[0] is not None else None
+
+
+def _day_start_ms(day: str) -> Optional[int]:
+    """00:00 UTC of a nightly report's day (daily3's day: a UTC date)."""
+    try:
+        return int(dt.datetime.strptime(str(day), "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------- triggers
 def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
     p, room = st.p, "team:ops"
     items: list[dict] = []
+    groups = _account_groups(paper_ro)
     cur_a = st.cursor_int("incident:alert_rowid")
     top = _one(paper_ro, "SELECT MAX(rowid) FROM alerts")       # read BEFORE the scan (no row is skipped)
     hwm_a = max(cur_a, _int(top[0]) if top else 0)
@@ -548,6 +640,10 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
             continue
         kind = next((k for k, lvl, frag in p.incident_alerts
                      if level == lvl and (not frag or frag in (text or ""))), None)
+        aid = _alert_account(text)
+        if kind and aid is not None and kind not in INCIDENT_EVERY_GROUP \
+                and groups.get(aid, "core") not in INCIDENT_GROUPS:
+            kind = None                     # a DeepSeek or coin-flip account's alert: counted elsewhere (G26)
         if kind:
             items.append({"source": "alert", "rowid": int(rowid), "ts": int(ts), "kind": kind,
                           "level": level, "text": (text or "")[:300]})
@@ -555,6 +651,13 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
     if not cur_d:
         cur_d = kst_date(st.now - p.incident_lookback_ms - DAY_MS)
     hwm_d = cur_d
+    first = _first_account_ts(paper_ro)
+
+    def _started_that_day(d: str) -> bool:
+        # day 0 (G25): the run's first accounts were made after that day's 00:00 UTC, so there is no 00:00 snapshot
+        # to replay from; daily3 says so and no incident opens
+        start = _day_start_ms(d)
+        return first is not None and start is not None and first > start
     for day, ts, data in _rows(daily_ro, "SELECT day, ts, data FROM reports WHERE day > ? ORDER BY day",
                                (cur_d,)):
         hwm_d = max(hwm_d, day)
@@ -569,7 +672,8 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
             found.append(("parity_mismatch", {"mismatched_accounts": _int(par["mismatched_accounts"]),
                                               "accounts": _int(par.get("accounts")),
                                               **({"early_kline": early} if early else {})}))
-        elif isinstance(par, str) and p.nightly_no_snapshot:
+        elif isinstance(par, str) and p.nightly_no_snapshot and not rep.get("start_day") \
+                and not _started_that_day(day):
             found.append(("no_snapshot", {"parity": par[:200]}))
         dq = rep.get("data_quality") or {}
         missing = {s: _int(q.get("missing")) for s, q in dq.items()
@@ -848,6 +952,8 @@ def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
     for s in got.get("split") or []:
         if len(out) + taken >= p.tf_split_per_day:
             break
+        if s not in STRATEGY_KO:
+            continue            # only the 36 have a strategy room (a DeepSeek or reel name never takes a place)
         room = strat_room(s)
         key = f"tf_split:{s}:{day}"
         # what find_due would drop anyway does not take one of the day's places (another strategy gets it)
@@ -1165,6 +1271,116 @@ def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
+def _group_accounts(paper_ro) -> dict[str, tuple]:
+    """{account_id: (strategy, timeframe, kind, room)} of the accounts the v4 specialist rooms cover."""
+    out = {}
+    for aid, s, tf, k in _rows(paper_ro, "SELECT account_id, strategy, timeframe, kind FROM accounts WHERE kind IN "
+                                         f"({','.join('?' * len(GROUP_KINDS))})", GROUP_KINDS):
+        room = group_room_of(s)
+        if room is not None:
+            out[aid] = (s, tf, k, room)
+    return out
+
+
+def _group_rooms(paper_ro, st: _Rooms) -> list[Due]:
+    """The v4 specialist rooms (``GROUP_ROOMS``): their accounts' loss digest, batched busts and weekly review. Every
+    Due carries ``group`` (its own daily line in ``find_due``). Cursors ``loss:<room>``, ``bust:<account>``,
+    ``weekly:<room>`` (reset with the others when paper3.db is replaced)."""
+    p = st.p
+    accts = _group_accounts(paper_ro)
+    if not accts:
+        return []
+    from ..cards import card
+    hwm = _trade_hwm(paper_ro)
+    rooms: dict[str, dict] = {}
+    for aid, (s, tf, k, room) in accts.items():
+        rooms.setdefault(room, {})[aid] = (s, tf, k)
+    out: list[Due] = []
+    title = {r: t for r, t in ((room, _group_title(room)) for room in rooms)}
+    if "group_loss" in p.enabled:
+        cur = {room: st.cursor_int(f"loss:{room}") for room in rooms}
+        rows = _rows(paper_ro, "SELECT t.id, t.account_id, t.exit_time, t.pnl, t.data FROM trades t JOIN accounts a "
+                               "ON a.account_id = t.account_id WHERE a.kind IN "
+                               f"({','.join('?' * len(GROUP_KINDS))}) AND t.id > ? AND t.id <= ? AND t.exit_time >= ? "
+                               "AND t.pnl < 0 ORDER BY t.id",
+                     (*GROUP_KINDS, min(cur.values(), default=0), hwm, st.now - p.loss_lookback_ms))
+        by_room: dict[str, list] = {}
+        for r in rows:
+            a = accts.get(r[1])
+            if a is not None and r[0] > cur[a[3]]:
+                by_room.setdefault(a[3], []).append(r)
+        rt = _round_trip(paper_ro) if by_room else 0.0
+        for room, lst in by_room.items():
+            reel = all(rooms[room][r[1]][2] == "reel" for r in lst)
+            need = p.group_reel_loss_min_count if reel else p.group_ds_loss_min_count
+            gap = p.group_reel_loss_gap_ms if reel else p.group_ds_loss_gap_ms
+            last = st.last_ok_start(room, "group_loss")
+            if len(lst) < need or (last is not None and st.now - last < gap):
+                continue
+            if reel and sum(1 for x in st.rounds if x["room_id"] == room and x["trigger"] == "group_loss"
+                            and x["started_ts"] >= st.day_start and st._counted(x)) >= p.group_reel_loss_max_per_day:
+                continue
+            tfs: dict[str, int] = {}
+            defs: dict[str, int] = {}
+            reasons: dict[str, int] = {}
+            for r in lst:
+                s, tf, _k = rooms[room][r[1]]
+                tfs[tf] = tfs.get(tf, 0) + 1
+                defs[s] = defs.get(s, 0) + 1
+                try:
+                    c = card(r[1], json.loads(r[4]), rt)
+                    reasons[c["reason"]] = reasons.get(c["reason"], 0) + 1
+                except (KeyError, TypeError, ValueError):
+                    pass
+            text = (f"{title[room]}: 새 손실 {len(lst)}건 (" + ", ".join(f"{tf} {n}건" for tf, n in tfs.items())
+                    + f") · 정의 {len(defs)}개")
+            out.append(_due(st, room, "group_loss", f"group_loss:{room}:{lst[-1][0]}@{lst[-1][2]}",
+                            min(r[2] for r in lst), {f"loss:{room}": str(hwm)}, text, group=True, losses=len(lst),
+                            trade_ids=[r[0] for r in lst][-p.max_items:], accounts=sorted({r[1] for r in lst}),
+                            by_timeframe=tfs, by_definition=dict(sorted(defs.items(), key=lambda kv: -kv[1])),
+                            exit_reasons=reasons, oldest_exit=min(r[2] for r in lst),
+                            newest_exit=max(r[2] for r in lst)))
+    if "group_bust" in p.enabled:
+        busts = busts_of(paper_ro)
+        for room, members in rooms.items():
+            got = {a: busts[a] for a in members if a in busts and st.cursor(f"bust:{a}") is None}
+            if not got:
+                continue
+            last = st.last_ok_start(room, "group_bust")
+            if last is not None and st.now - last < p.group_bust_gap_ms:
+                continue                    # batched: the next one a day after the last
+            aids = sorted(got)
+            out.append(_due(st, room, "group_bust", "group_bust:" + ",".join(f"{a}@{got[a]}" for a in aids),
+                            min(got.values()), {f"loss:{room}": str(hwm), **{f"bust:{a}": str(got[a]) for a in aids}},
+                            f"{title[room]}: 계좌 파산 {len(aids)}개 (" + ", ".join(aids[:6])
+                            + (" …" if len(aids) > 6 else "") + ")", group=True, accounts=aids))
+    if "group_weekly" in p.enabled:
+        for room, members in rooms.items():
+            slot = weekly_slot(st.now, GROUP_ROOMS.index(room))
+            slot_day = kst_date(slot)
+            key = f"group_weekly:{room}:{slot_day}"
+            if st.handled(room, "group_weekly", key):
+                continue
+            cur = st.cursor_int(f"weekly:{room}")
+            ids = sorted(members)
+            q = (f"SELECT COUNT(*) FROM trades WHERE account_id IN ({','.join('?' * len(ids))}) AND id > ?")
+            r = _one(paper_ro, q + " AND exit_time < ?", (*ids, cur, slot + DAY_MS))
+            if r is None or int(r[0]) < p.weekly_min_trades:
+                continue
+            n = _one(paper_ro, q, (*ids, cur))
+            n = int(r[0]) if n is None else int(n[0])
+            late = "" if slot_day == kst_date(st.now) else f" ({slot_day} 검토를 미뤘던 것)"
+            out.append(_due(st, room, "group_weekly", key, slot, {f"loss:{room}": str(hwm), f"weekly:{room}": str(hwm)},
+                            f"{title[room]} 주간 검토: 지난 검토 뒤 거래 {n}건{late}", group=True, trades=n,
+                            slot_day=slot_day))
+    return out
+
+
+def _group_title(room: str) -> str:
+    from .rooms_db import GROUP_ROOM_TITLES
+    return GROUP_ROOM_TITLES.get(room, room)
+
+
 def _scheduled(st: _Rooms, paper_ro=None) -> list[Due]:
     """The morning, ranking and evening meetings, once per KST day from their hour (window ``meeting_window_ms``).
     The ranking review waits for a fresh run's first trades (``fresh_run_data``, as of its slot; with ``paper_ro``):
@@ -1326,6 +1542,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     if "research" in p.enabled:
         found += _research(st)
     found += _lab_accounts(paper_ro, st)
+    if any(t in p.enabled for t in GROUP_TRIGGERS):
+        found += _group_rooms(paper_ro, st)
 
     ok: list[Due] = []
     for d in found:
@@ -1357,6 +1575,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     picked: list[Due] = []
     per_room: dict[str, int] = {}
     extras_used = st.extras_today()
+    group_used = st.group_today()
     for d in ok:
         if len(picked) >= p.max_rounds_per_tick:
             break
@@ -1367,6 +1586,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
             # opened only by extra accounts' trades: their own daily line, never the room's slots
             if extras_used >= p.extras_meetings_per_day:
                 continue
+        elif d.data.get("group") and group_used >= p.group_meetings_per_day:
+            continue            # the v4 specialist rooms' own daily line (never the 36 rooms' slots: other rooms)
         elif st.room_full(room, d.trigger, per_room.get(room, 0)):
             continue
         after = d.data.get("after")
@@ -1378,6 +1599,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         picked.append(d)
         per_room[room] = per_room.get(room, 0) + 1
         extras_used += 1 if d.data.get("extras") else 0
+        group_used += 1 if d.data.get("group") else 0
     return picked
 
 

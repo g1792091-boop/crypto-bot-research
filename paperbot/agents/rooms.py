@@ -135,7 +135,8 @@ from . import rooms_db as R
 from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
-from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS, room_duty
+from . import facts as F
+from .roster3 import ALL_ROLES, GROUP_ROLE_OF_ROOM, STRATEGY_KO, TEAMS, room_duty
 from .runner import (MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached,
                      auth_preflight, billing_warnings, call_charge, force_sonnet, input_estimate, packet_payload,
                      tier_model)
@@ -152,13 +153,14 @@ INSTRUCTION = ("표준입력으로 받은 JSON 패킷만 근거로, 시스템 �
 TELEGRAM_LIMIT = 3900
 
 # duty: what the role does in the rooms (roster3.ROOM_DUTY), not its wider v3 roster duty
-ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty(r[0])} for r in ROLES + SPECIALISTS}
+ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty(r[0])} for r in ALL_ROLES}
 TEAM_KO = dict(TEAMS)
 TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
               "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토",
               "research": "새 매매법 연구", "market_move": "시세 급변 회의", "ranking": "순위 검토",
               "tf_split": "봉 비교 회의", **TR.ANALYSIS_KO, "event_review": "경제지표 복기 회의",
-              "bull_bear": "낙관·비관 토론"}
+              "bull_bear": "낙관·비관 토론", "group_loss": "그룹 손실 묶음 복기", "group_bust": "그룹 파산 복기",
+              "group_weekly": "그룹 주간 검토"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
 # Loss-card tags that describe the chart at entry (cards.TAGS) vs. how the trade was held.
@@ -292,8 +294,7 @@ LIBRARY_PRIOR_KO = (
     "있었지만 낙폭이 크고 롱·숏이 기간마다 엇갈렸음(예: 거래량 3배 급증 진입은 고르는 구간에서 롱 손실·숏 이익). "
     "잠긴 36개 매매법도 같은 자료에서 비용을 넘지 못함. 이 실험실의 청산은 paper v3(2 ATR 손절, 계단식 익절)로 "
     "라이브러리 청산과 다르고, 필터(ADX, 위 시간봉 추세, 변동성 국면, 시간대)와 방향(롱만·숏만)이 새로 들어갈 수 있음. "
-    "5분봉은 2026-10-04 두 분 결정으로 실험에서 뺐음 — 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실. 이번 실행의 "
-    "계좌는 15분·30분·1시간·4시간봉뿐이라 새 매매법도 그 봉에서 고름.")
+    + F.five_m_ko() + ". 새 매매법은 잠긴 36개와 같은 15분·30분·1시간·4시간봉에서만 고름.")
 
 
 def lab_ready(lab: Any) -> bool:
@@ -364,7 +365,8 @@ class RoomsPolicy:
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
     # spread over the KST day, not all at 00:00; tf_split shares the weekly reviews' class and keeps what they keep
-    paced_triggers: tuple = ("loss_cluster", "weekly", "research", "tf_split", *TR.ANALYSES, "event_review")
+    paced_triggers: tuple = ("loss_cluster", "weekly", "research", "tf_split", *TR.ANALYSES, "event_review",
+                             *TR.GROUP_TRIGGERS)
     # paced (loss_cluster / weekly) calls also leave, inside the total and 7-day caps, the unused part of
     # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
     # owners' posts or a bust waiting for midnight
@@ -844,7 +846,7 @@ def stop_blocks(stopped: str, cls: str) -> list[str]:
 
 
 CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실·파산 복기", "scheduled": "정기 회의",
-            "weekly": "주간 검토·봉 비교", "research": "새 매매법 연구"}
+            "weekly": "주간 검토·봉 비교", "research": "새 매매법 연구·딥시크·릴스 방(남는 한도)"}
 
 
 def limit_why_ko(stopped: Optional[str], cls: str, detail: str) -> str:
@@ -1041,6 +1043,8 @@ ENV_INTS = {
     "AGENTS_OBSERVE_DAYS": ("observe_days", OBSERVE_DAYS_DEFAULT),
     "AGENTS_NEWLAB_CAP_TOTAL": ("newlab_cap_total", 0),
     "AGENTS_EXTRAS_MEETINGS_PER_DAY": ("triggers.extras_meetings_per_day", 0),
+    # the v4 specialist rooms' (DeepSeek families, the reel) meetings a KST day, all five rooms together (0 = none)
+    "AGENTS_GROUP_MEETINGS_PER_DAY": ("triggers.group_meetings_per_day", 0),
     "AGENTS_COPY_CAP_PER_STRATEGY": ("copy_cap_per_strategy", 0),
     "AGENTS_COPY_CAP_TOTAL": ("copy_cap_total", 0),
     "AGENTS_FLAG_MAX_PER_DAY": ("flag_max_per_day", 0),
@@ -1154,6 +1158,9 @@ def budget_warnings(policy: RoomsPolicy) -> list[str]:
     rc = int(p.budgets.get("research", (0, 0))[0])
     if p.triggers.research_every_ms > 0 and rc < 3:
         out.append(f"research={rc} is less than one lab meeting (3 calls): the new-strategy lab can never meet")
+    if p.triggers.group_meetings_per_day > 0 and rc < 2:
+        out.append(f"research={rc} is less than one v4 specialist-room meeting (2 calls): the DeepSeek and reel rooms "
+                   "can never meet (they run on the research class's spare calls)")
     for cls, (_c, t) in sorted(p.budgets.items()):
         if int(t) < p.est_call_tokens:
             out.append(f"{cls} tokens {int(t):,} are less than one call ({p.est_call_tokens:,} tokens charged "
@@ -1230,8 +1237,10 @@ def evening_room(p: RoomsPolicy, call_tokens: int = TYPICAL_CALL_TOKENS) -> Opti
 # ---------------------------------------------------------------- prompts
 @lru_cache(maxsize=None)
 def _read_prompt(name: str) -> str:
+    """A prompt file with the run's facts filled in (agents/facts.py: ``{{RUN_FACTS}}``, ``{{ORIGINALS}}``,
+    ``{{FIVE_M}}``): fixed text built from config, never room data."""
     with open(os.path.join(PROMPT_DIR, name), encoding="utf-8") as fh:
-        return fh.read().strip()
+        return F.fill(fh.read().strip())
 
 
 def system_prompt(role: str, turn: str, meeting: str = "") -> str:
@@ -1319,7 +1328,9 @@ CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "ro
               "survival",
               # the 30-day checkpoint meeting's real-trading readiness and the checkpoint's power (agents/readiness.py,
               # agents/power.py; added 2026-10-04)
-              "readiness")
+              "readiness",
+              # the v4 specialist rooms' accounts (group_accounts_packet; paper v4, 2026-10-05)
+              "group_accounts")
 
 
 def _model_written(path: str, given: Optional[dict]) -> bool:
@@ -1365,7 +1376,10 @@ def _findings(items: Any, given: dict, where: str, problems: list, n: int = 8) -
 
 
 def _proposal(out: dict, key: str, given: dict) -> dict:
-    return A.validate(out.get(key), strategy=(given.get("room") or {}).get("strategy"))[0]
+    room = given.get("room") or {}
+    # the v4 specialist rooms: note, the owners' alert or nothing (G7, actions.GROUP_ACTIONS)
+    allow = A.GROUP_ACTIONS if room.get("room_id") in GROUP_ROLE_OF_ROOM else A.ALLOWED_ACTIONS
+    return A.validate(out.get(key), strategy=room.get("strategy"), allow=allow)[0]
 
 
 def check_analysis(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
@@ -1780,17 +1794,46 @@ def stop_whatif(cards: list[dict]) -> dict:
     return out
 
 
+def loss_scope(strategy: str) -> tuple[Optional[str], tuple, Optional[set], dict]:
+    """Whose loss cards ``_losses`` reads (G3/G4): (strategy filter, account kinds, member names, Korean names).
+    The 36: their own name and kind 'strategy' (as in v3). A v4 specialist role (its key, ``spec_<key>`` or its room
+    ``team:<key>``): every DeepSeek definition / the reel it covers (groups.role_members), any original kind. Any other
+    name (a DeepSeek id, the reel): that name, any original kind (accounts.ORIGINAL_KINDS; a coin flip's name is
+    RANDOM_k, so it never matches). Copies and new-lab accounts are never in (``extra_accounts`` shows them)."""
+    from ..accounts import ORIGINAL_KINDS
+    from ..groups import ROLE_KO, label_ko, role_members
+    if strategy in STRATEGY_KO:
+        return strategy, ("strategy",), None, STRATEGY_KO
+    key = str(strategy or "")
+    for pre in ("team:", "spec_"):
+        if key.startswith(pre) and key[len(pre):] in ROLE_KO:
+            key = key[len(pre):]
+    if key in ROLE_KO:
+        members = set(role_members(key))
+        return None, tuple(ORIGINAL_KINDS), members, {m: label_ko(m) or m for m in members}
+    return strategy, tuple(ORIGINAL_KINDS), None, {strategy: label_ko(strategy) or strategy}
+
+
 def _losses(ctx: RoundContext, strategy: str, due: TR.Due) -> dict:
     from ..cards import cards_from_db, tag_stats
     if ctx.paper_ro is None:
         return {"error": "paper3.db 없음"}
     rt = round_trip(ctx.paper_ro)
+    name, kinds, members, names_ko = loss_scope(strategy)
+    # a role reads every account of its members: the newest cards of the original kinds, then its members' only
+    widen = 1 if members is None else 20
+
+    def mine(cards: list, n: int) -> list:
+        if members is None:
+            return cards[:n]
+        return [c for c in cards if str(c.get("account_id", "")).split("@")[0] in members][:n]
     try:
         # the strategy's own accounts only: its copies are shown apart (``extra_accounts``), never merged in
-        raw = cards_from_db(ctx.paper_ro, rt, strategy=strategy, losses_only=True, limit=ctx.policy.loss_cards,
-                            daily_conn=ctx.daily_ro, names_ko=STRATEGY_KO, kinds=("strategy",))
-        window = cards_from_db(ctx.paper_ro, rt, strategy=strategy, losses_only=False, limit=ctx.policy.tag_window,
-                               kinds=("strategy",))
+        raw = mine(cards_from_db(ctx.paper_ro, rt, strategy=name, losses_only=True,
+                                 limit=ctx.policy.loss_cards * widen, daily_conn=ctx.daily_ro, names_ko=names_ko,
+                                 kinds=kinds), ctx.policy.loss_cards)
+        window = mine(cards_from_db(ctx.paper_ro, rt, strategy=name, losses_only=False,
+                                    limit=ctx.policy.tag_window * widen, kinds=kinds), ctx.policy.tag_window)
     except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
         return {"error": f"손실 카드를 만들지 못함: {type(exc).__name__}"}
     since = due.data.get("oldest_exit")
@@ -2633,10 +2676,12 @@ TEAM_VIEW = {
     "exit_timing": ("exits",),             # the risk-reward / exit meeting (its packet ``rr`` is the main part)
     # the drawdown / bust risk meeting: its packet ``survival`` (with ``survival.backtest_gap``) is the main part
     "validator": ("meta",),
+    # the v4 specialist rooms: their own packet ``group_accounts`` is the main part; the board's group section next to it
+    **{role: ("meta", "groups") for role in GROUP_ROLE_OF_ROOM.values()},
 }
 OWNER_RESPONDERS = {"team:market": ("chart_regime", "strategist"), "team:risk": ("risk_officer",),
                     "team:ops": ("ops_auditor",), "team:review": ("pnl_reviewer",), "team:lead": (),
-                    LAB_ROOM: ("researcher",)}
+                    LAB_ROOM: ("researcher",), **{room: (role,) for room, role in GROUP_ROLE_OF_ROOM.items()}}
 
 
 def _norm_name(t: str) -> str:
@@ -2678,6 +2723,10 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     if room == LAB_ROOM and trig in ("loss_cluster", "bust", "weekly"):
         # the new-strategy accounts' losses, busts and weekly review (packet: lab_accounts)
         return [("researcher", "team"), ("devils_advocate", "challenge"), lead]
+    if room in GROUP_ROLE_OF_ROOM and trig in TR.GROUP_TRIGGERS:
+        # the v4 specialist rooms (packet: group_accounts): the room's specialist, then the lead's summary; two calls of
+        # spare AI budget (class 'research')
+        return [(GROUP_ROLE_OF_ROOM[room], "team"), lead]
     if trig == "morning":
         return [("chart_regime", "team"), ("derivs_flow", "team"), ("strategist", "team"),
                 ("devils_advocate", "challenge"), lead]
@@ -2775,6 +2824,11 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if room == LAB_ROOM:                      # an owner post in the lab: what the lab has tested so far
         rnd.base["lab"] = lab_overview(ctx)
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
+    if room in GROUP_ROLE_OF_ROOM:            # a v4 specialist room: its accounts (DeepSeek families or the reel)
+        rnd.base["group_accounts"] = group_accounts_packet(ctx, room, rnd.due)
+        if rnd.due.trigger in TR.GROUP_TRIGGERS:
+            # its members' loss cards, tags and wins against losses (G4; the same section a strategy room has)
+            rnd.base["losses"] = _losses(ctx, room, rnd.due)
     if rnd.due.trigger == "market_move":
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
     if rnd.due.trigger == "ranking":
@@ -2786,7 +2840,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         except Exception as exc:  # noqa: BLE001  (the meeting still runs and says the numbers are missing)
             rnd.base[root] = {"error": f"자료를 만들지 못함: {type(exc).__name__}"}
     kind = room.split(":", 1)[1] if ":" in room else room
-    members = R.LAB_ROOM_MEMBERS if room == LAB_ROOM else R.TEAM_ROOM_MEMBERS.get(kind, ())
+    members = (R.LAB_ROOM_MEMBERS if room == LAB_ROOM else R.GROUP_ROOM_MEMBERS[room] if room in R.GROUP_ROOM_MEMBERS
+               else R.TEAM_ROOM_MEMBERS.get(kind, ()))
     mentioned = owner_mentions(rnd, members)
     if mentioned:
         rnd.base["owner_mentions"] = [{"role": r, "name": role_ko(r)} for r in mentioned]
@@ -3268,37 +3323,72 @@ def fetch_market_moves(now_ms: Optional[int] = None, timeout: float = 5.0,
 
 def market_move_packet(ctx: RoundContext, due: TR.Due) -> dict:
     """What moved (code numbers) and our open paper positions on those coins at the last price: long/short count,
-    margin, unrealized P&L before exit fees, positions within 3% of liquidation. Read-only."""
+    margin, unrealized P&L before exit fees, positions within 3% of liquidation. Read-only. ``exposure[coin]`` holds
+    every account's sum (as before) and ``by_group`` the same per account group, the 36's group first (G26)."""
+    from ..groups import GROUPS
     moves = [m for m in (due.data.get("moves") or []) if isinstance(m, dict)]
-    eng = {}
+    eng, kinds = {}, {}
     if ctx.paper_ro is not None:
         try:
             r = ctx.paper_ro.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
             eng = (json.loads(r[0]) or {}).get("engines", {}) if r else {}
         except (sqlite3.Error, ValueError, TypeError):
             eng = {}
+        try:
+            kinds = dict(ctx.paper_ro.execute("SELECT account_id, kind FROM accounts").fetchall())
+        except sqlite3.Error:
+            kinds = {}
     expo = {}
+
+    def blank() -> dict:
+        return {"long": 0, "short": 0, "margin": 0.0, "upnl": 0.0, "near_liq": 0}
     for m in moves:
         sym, px = m["symbol"], float(m["last"])
-        e = {"long": 0, "short": 0, "margin": 0.0, "upnl": 0.0, "near_liq": 0, "accounts_near_liq": []}
+        e = {**blank(), "accounts_near_liq": []}
+        bg: dict = {"core": blank()}
         for aid, a in eng.items():
             p = (a or {}).get("position")
             if not p or p.get("symbol") != sym:
                 continue
+            g = bg.setdefault(account_group(aid, kinds.get(aid)), blank())
             side = int(p.get("side") or 0)
-            e["long" if side > 0 else "short"] += 1
-            e["margin"] += float(p.get("margin") or 0)
-            e["upnl"] += side * float(p.get("qty") or 0) * (px - float(p.get("entry_price") or px))
+            up = side * float(p.get("qty") or 0) * (px - float(p.get("entry_price") or px))
             liq = p.get("liq_price")
-            if liq and abs(px - float(liq)) / px < MOVE_NEAR_LIQ:
-                e["near_liq"] += 1
-                if len(e["accounts_near_liq"]) < 10:
-                    e["accounts_near_liq"].append(aid)
-        e["margin"], e["upnl"] = round(e["margin"], 2), round(e["upnl"], 2)
+            near = bool(liq and abs(px - float(liq)) / px < MOVE_NEAR_LIQ)
+            for x in (e, g):
+                x["long" if side > 0 else "short"] += 1
+                x["margin"] += float(p.get("margin") or 0)
+                x["upnl"] += up
+                x["near_liq"] += int(near)
+            if near and len(e["accounts_near_liq"]) < 10:
+                e["accounts_near_liq"].append(aid)
+        for x in (e, *bg.values()):
+            x["margin"], x["upnl"] = round(x["margin"], 2), round(x["upnl"], 2)
+        order = {g: k for k, g in enumerate(GROUPS)}
+        e["by_group"] = dict(sorted(((g, v) for g, v in bg.items() if g == "core" or v["long"] or v["short"]),
+                                    key=lambda kv: order.get(kv[0], len(order))))
         expo[sym] = e
     return {"moves": moves, "exposure": expo,
             "note": "코드 집계: 지난 1시간 고가·저가가 1시간 전 가격에서 움직인 폭, 지금 열린 paper 포지션(마크 대신 직전 5분봉 종가, "
-                    "나갈 때 수수료 전). 직원은 주문·규칙 변경을 할 수 없음"}
+                    "나갈 때 수수료 전). by_group은 같은 숫자를 계좌 그룹별로(매매법 36개 먼저; 그룹을 섞어 판단하지 않음). "
+                    "직원은 주문·규칙 변경을 할 수 없음"}
+
+
+def account_group(aid: str, kind: Optional[str] = None) -> str:
+    """The group of an account (accounts.GROUP_OF_KIND by its kind; without a row, by its id: a copy 'S@tf~c1' is an
+    extra, RANDOM_k a coin flip, a DeepSeek id or the reel its group, any other name the 36's)."""
+    from ..accounts import GROUP_OF_KIND
+    from ..config import DS200_FAMILY, REEL_NAME
+    if kind:
+        return GROUP_OF_KIND.get(kind, "other")
+    name = str(aid).split("@")[0]
+    if "~" in str(aid):
+        return "extra"
+    if name.startswith("RANDOM_"):
+        return "flip"
+    if name in DS200_FAMILY:
+        return "ds200"
+    return "reel" if name == REEL_NAME else "core"
 
 
 def compose_market_move(pk: dict, lead: Optional[dict], now_ms: Optional[int] = None) -> str:
@@ -3313,7 +3403,19 @@ def compose_market_move(pk: dict, lead: Optional[dict], now_ms: Optional[int] = 
         L += ["", (f"{c} " if len(moves) > 1 else "")
               + f"{px(m['ref'])} → {px(m['last'])} (고 {px(m['high'])} · 저 {px(m['low'])})"]
         e = (pk.get("exposure") or {}).get(m["symbol"]) or {}
-        if e:
+        bg = e.get("by_group") if isinstance(e.get("by_group"), dict) else None
+        if e and bg:
+            # G26: the 36's line first (with margin and P&L), then one count line per other group
+            from ..groups import GROUP_KO
+            for g, v in bg.items():
+                if g == "core":
+                    L.append(f"우리 계좌 · {GROUP_KO['core']}: 롱 {v['long']} · 숏 {v['short']}")
+                    L.append(f"증거금 ${v['margin']:,.0f} · 평가 {_usd0(v['upnl'])}")
+                else:
+                    L.append(f"{GROUP_KO.get(g, g)}: 롱 {v['long']} · 숏 {v['short']}")
+            if e.get("near_liq"):
+                L.append(f"청산가 3% 안 {e['near_liq']}개")
+        elif e:
             L.append(f"우리 계좌: 롱 {e['long']} · 숏 {e['short']}")
             L.append(f"증거금 ${e['margin']:,.0f} · 평가 {_usd0(e['upnl'])}")
             if e.get("near_liq"):
@@ -3382,6 +3484,12 @@ def compose_ranking(pk: dict, lead: Optional[dict], hour: int = 14) -> str:
     fl = (pk.get("coin_flips") or {}).get("mean_pnl")
     if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the strategy sums
         L += ["", f"동전 봇 계좌당 평균 {_usd0(fl)}"]
+    reel = (pk.get("groups") or {}).get("reel") or {}
+    if reel.get("pnl_per_account") is not None:
+        # paper v4: the reel next to the 36 (never ranked with them); DeepSeek and the coin flips are never in a Telegram
+        # with their P&L (owners' D10 / D11: counts only, DeepSeek P&L in its own dashboard group)
+        L.append(f"{reel.get('name_ko', '릴스 5분 단타')} {_usd0(reel['pnl_per_account'])}"
+                 + (" (파산)" if reel.get("busts") else ""))
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
     if lines:
         L += ["", "팀장 요약"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
@@ -3494,8 +3602,24 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
     L += ["", "숫자(코드 계산)"]
     today = board.get("today") or {}
     if today:
-        L.append(f"거래 {today.get('trades', 0)}건 · 이긴 {today.get('wins', 0)}건 · {usd(float(today.get('net_pnl') or 0))} (동전 봇 포함)")
-        L.append(f"파산 누적 {today.get('busts_total', 0)}개")
+        # paper v4: the board's today is the core group's (the 36 and their 12 coin flips); each other group one line
+        L.append(f"매매법 거래 {today.get('trades', 0)}건 · 이긴 {today.get('wins', 0)}건 · "
+                 f"{usd(float(today.get('net_pnl') or 0))} (동전 봇 포함)")
+        L.append(f"매매법 파산 누적 {today.get('busts_total', 0)}개")
+    for g, e in (board.get("groups") or {}).items():
+        if g in ("core", "note") or not isinstance(e, dict) or not e.get("accounts"):
+            continue
+        if g == "flip":
+            e = (e.get("by_timeframe") or {}).get(F.facts()["five_minute"]["timeframe"])
+            if not e:
+                continue
+            name = "5분봉 동전"
+        else:
+            name = {"reel": "릴스 5분 단타"}.get(g) or e.get("name_ko", g)
+        # owners' D10 / D11: the reel with its P&L; DeepSeek and the coin flips by counts only (DeepSeek P&L is shown in
+        # its own dashboard group, never in a Telegram)
+        pnl = f"{usd(float(e.get('net_pnl_24h') or 0))} · " if g == "reel" else ""
+        L.append(f"{name}: 거래 {e.get('trades_24h', 0)}건 · {pnl}파산 누적 {e.get('busts', 0)}개")
     rounds = [r for r in _today_rounds(ctx, day0) if r["status"] in ("done", "no_action")]
     late = R.kst_day(ctx.now_ms) != day                   # the 22:00 meeting ran after midnight
     since = f"{day_ko(day)} 0시부터 " if late else ""
@@ -3662,6 +3786,90 @@ def lab_accounts_packet(ctx: RoundContext, new_since: Optional[int] = None) -> l
                                                "trades", "wins", "pnl")},
                     "recent_losses": [_compact_card(c, new_since) for c in cs]})
     return out
+
+
+GROUP_PACKET_CARDS = 20          # the newest loss cards a v4 specialist room's packet carries (tokens)
+
+
+def group_accounts_packet(ctx: RoundContext, room: str, due: Optional[TR.Due] = None) -> dict:
+    """A v4 specialist room's accounts (code only, read-only): per definition (and timeframe) the trades, wins, P&L,
+    wallet and bust; the newest loss cards of the room (``new``: the ones this meeting was called for); for the
+    reel room its 5m coin flips next to it (the reel's comparison). Never the 36's numbers."""
+    from ..cards import cards_from_db
+    from ..groups import family_of, label_ko
+    if ctx.paper_ro is None:
+        return {"error": "paper3.db 없음"}
+    try:
+        r = ctx.paper_ro.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
+        eng = (json.loads(r[0]) or {}).get("engines", {}) if r else {}
+        accts = {aid: (s, tf, k, d) for aid, s, tf, k, d in ctx.paper_ro.execute(
+            "SELECT account_id, strategy, timeframe, kind, data FROM accounts WHERE kind IN "
+            f"({','.join('?' * len(TR.GROUP_KINDS))})", TR.GROUP_KINDS) if TR.group_room_of(s) == room}
+        stats = {aid: (int(n), int(w or 0), float(p or 0)) for aid, n, w, p in ctx.paper_ro.execute(
+            "SELECT account_id, COUNT(*), SUM(pnl > 0), SUM(pnl) FROM trades GROUP BY account_id")}
+    except (sqlite3.Error, TypeError, ValueError) as exc:
+        return {"error": f"그룹 계좌를 읽지 못함: {type(exc).__name__}"}
+    from ..config import V3_INITIAL
+    defs: dict = {}
+    for aid, (s, tf, k, d) in sorted(accts.items()):
+        n, w, p = stats.get(aid, (0, 0, 0.0))
+        e = eng.get(aid) or {}
+        row = defs.setdefault(s, {"strategy": s, "label_ko": label_ko(s, tf) or s,
+                                  "family": family_of({"kind": k, "strategy": s, "data": d}), "trades": 0, "wins": 0,
+                                  "pnl": 0.0, "busts": 0, "timeframes": {}})
+        row["timeframes"][tf] = {"trades": n, "wins": w, "pnl": _r(p, 2),
+                                 "wallet": _r(float(e.get("wallet", V3_INITIAL)), 2), "bust": bool(e.get("bust"))}
+        row["trades"] += n
+        row["wins"] += w
+        row["pnl"] += p
+        row["busts"] += int(bool(e.get("bust")))
+    rows = sorted(defs.values(), key=lambda x: x["pnl"])
+    for x in rows:
+        x["pnl"] = _r(x["pnl"], 2)
+        x["win_rate"] = _r(x["wins"] / x["trades"], 3) if x["trades"] else None
+    new_since = (due.data.get("oldest_exit") if due is not None else None)
+    try:
+        cs = [c for c in cards_from_db(ctx.paper_ro, round_trip(ctx.paper_ro), losses_only=True, limit=400,
+                                       daily_conn=ctx.daily_ro, kinds=TR.GROUP_KINDS) if c["account_id"] in accts]
+    except (sqlite3.Error, KeyError, TypeError, ValueError):
+        cs = []
+    out = {"room": room, "accounts": len(accts), "definitions": rows,
+           "recent_losses": [_compact_card(c, new_since) for c in cs[:GROUP_PACKET_CARDS]],
+           "note": ("코드 집계. 이 방이 맡은 계좌만(잠긴 36개 숫자와 섞지 않음). 거래 30건 미만이면 우연일 수 있어 가설로만. "
+                    "규칙·계좌는 바꿀 수 없고 복제 계좌·5년 시험도 없음(딥시크·릴스 계좌는 60일 전 복제 없음)")}
+    out.update(_group_research(sorted({v[0] for v in accts.values()})))
+    if any(v[2] == "reel" for v in accts.values()):
+        flips = []
+        for aid, tf, k in ctx.paper_ro.execute("SELECT account_id, timeframe, kind FROM accounts WHERE kind = 'random' "
+                                                "AND timeframe = ?", (F.facts()["five_minute"]["timeframe"],)):
+            n, w, p = stats.get(aid, (0, 0, 0.0))
+            e = eng.get(aid) or {}
+            flips.append({"account_id": aid, "trades": n, "wins": w, "pnl": _r(p, 2),
+                          "wallet": _r(float(e.get("wallet", V3_INITIAL)), 2), "bust": bool(e.get("bust"))})
+        out["coin_flips_5m"] = flips
+        out["coin_flips_note"] = "같은 5분봉, 롱만, 릴스와 같은 청산의 동전 던지기 3개(비교용, 판정 대상 아님)"
+    return out
+
+
+def _group_research(names: list) -> dict:
+    """What the five years already said about a v4 room's definitions (G6, agents/ds_prior.json), compact: per name
+    the configurations tested, candidates, all-three-periods-positive count, near misses (and the reel's H1)."""
+    from . import ds_prior
+    rows, concl = {}, None
+    for s in names:
+        try:
+            p = ds_prior.prior(s)
+        except (OSError, ValueError, TypeError):
+            p = None
+        if not p:
+            continue
+        concl = p.get("conclusion_ko")
+        rows[s] = {"configs": p.get("configs"), "candidates": p.get("candidates"),
+                   "all3_positive": p.get("all3_positive"), "near_miss": len(p.get("near_miss") or []),
+                   **({"h1": p["h1"]} if p.get("h1") else {})}
+    if not rows:
+        return {}
+    return {"research_prior": rows, "research_prior_note": concl}
 
 
 def _describe(NL: Any, spec: Any) -> str:
@@ -4636,7 +4844,7 @@ _PROBE = {"incident": "team:ops", "owner": "team:lead", "loss_cluster": f"strat:
           "evening": "team:lead", "weekly": f"strat:{TR.STRATEGIES[0]}", "research": LAB_ROOM,
           "ranking": "team:review", "market_move": "team:market", "tf_split": f"strat:{TR.STRATEGIES[0]}",
           **{k: room for k, (_wd, room) in TR.ANALYSES.items()}, "event_review": "team:market",
-          "bull_bear": "team:market"}
+          "bull_bear": "team:market", **{k: TR.GROUP_ROOMS[0] for k in TR.GROUP_TRIGGERS}}
 
 
 def deferred_triggers(ctx: RoundContext) -> list[str]:

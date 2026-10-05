@@ -1,0 +1,66 @@
+/* home: 홈 · 요약 (builder A). Screen-only rules; tokens and components come from the shared css. */
+@import url("home-shared.css");
+
+/* ---------------------------------------------------------------- layout: one column on a phone, two on a PC */
+[data-screen="home"] .home-wrap { display: grid; gap: 16px; min-width: 0; }
+[data-screen="home"] .home-col { display: grid; gap: 16px; min-width: 0; align-content: start; }
+@media (min-width: 1100px) {
+  [data-screen="home"] .home-wrap { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; }
+}
+/* below a PC width the two columns melt into one list in the approved reading order: headline, balance, groups,
+   top / bottom 5, then today, the meeting strip, the full list and the way in */
+@media (max-width: 1099px) {
+  [data-screen="home"] .home-wrap, [data-screen="home"] .home-col { display: contents; }
+  [data-screen="home"] .home-o1 { order: 1; } [data-screen="home"] .home-o2 { order: 2; }
+  [data-screen="home"] .home-o3 { order: 3; } [data-screen="home"] .home-o4 { order: 4; }
+  [data-screen="home"] .home-o5 { order: 5; } [data-screen="home"] .home-o6 { order: 6; }
+  [data-screen="home"] .home-o7 { order: 7; } [data-screen="home"] .home-o8 { order: 8; }
+}
+
+/* ---------------------------------------------------------------- headline card */
+.home-hrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.home-dcount { font: 700 var(--t-lg)/1 var(--f-pixel); color: var(--ink-2); white-space: nowrap; }
+.home-dcount b { color: var(--accent); }
+.home-hero h2 { font: 900 var(--t-xl)/1.28 var(--f-body); letter-spacing: -.03em; text-wrap: balance; }
+.home-hsub { color: var(--ink-2); font-size: var(--t-sm); }
+.home-curve1 { margin: 0; }
+/* the checkpoint in one line (neutral: progress is not a verdict) */
+.home-ckl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 8px 10px; border-radius: var(--r-sm, 8px); border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
+.home-ckl b { color: var(--ink); }
+.home-ckl:hover { border-color: var(--line-2); }
+.home-cka { margin-left: auto; color: var(--accent); font-weight: 700; }
+.home-hero .legend b { font-weight: 700; }
+.home-hero .legend > div > :last-child { min-width: 58px; text-align: right; }
+.home-wl { display: grid; gap: 6px; font-size: var(--t-sm); }
+.home-wl .up, .home-wl .down { font-weight: 700; }
+
+/* ---------------------------------------------------------------- today */
+.home-tlist { display: grid; }
+.home-trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 10px; padding: 9px 2px; border-top: 1px solid var(--line); }
+.home-tlist .home-trow:first-child { border-top: 0; padding-top: 2px; }
+.home-trow .tn { font-weight: 700; font-size: var(--t-sm); }
+.home-trow .tv { font-weight: 700; font-size: var(--t-sm); }
+.home-trow .tm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); font-size: var(--t-xs); }
+.home-bwh { color: var(--muted); font-size: var(--t-xs); font-weight: 700; padding-top: 4px; }
+.home-next:empty { display: none; }
+.home-next { display: grid; gap: 4px; }
+.card ul.home-nextl { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: var(--t-xs); color: var(--ink-2); }
+.home-nextl b { color: var(--ink); font-weight: 700; }
+
+/* ---------------------------------------------------------------- 최근 회의 (three lines -> 회의실) */
+.home-meets { display: grid; }
+.home-mrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 6px 2px;
+  border-top: 1px solid var(--line); color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
+.home-meets .home-mrow:first-child { border-top: 0; }
+.home-mrow:hover { background: var(--surface-2); }
+.home-mrow .rk { font: 700 var(--t-xs)/1 var(--f-term); color: var(--muted); }
+.home-mt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-mt b { color: var(--ink); }
+
+/* ---------------------------------------------------------------- the way in */
+[data-screen="home"] .card ol.home-flow { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.home-flow li { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2);
+  color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; }
+.home-flow li .n { font: 700 10px/1 var(--f-pixel); color: var(--accent); }
+.home-how .btn-y { min-height: 36px; }

@@ -1,5 +1,5 @@
 "use strict";
-// 매매법 tab: one strategy at a time. Its timeframe accounts (TRADE_TFS), its entries on the chart,
+// 매매법 tab: one strategy at a time. Its timeframe accounts (CORE_TFS: the 36's), its entries on the chart,
 // its 5-year character (same rules), and the loss cards built by code at every losing close.
 // Uses helpers and state from app.js ($, api, esc, fmt, pct, px, cls, coin, css, tsKo, state, openAccount).
 const ss = {list: null, name: null, tf: "1h", sym: "BTCUSDT", filter: "", tab: "cards", markers: true,
@@ -71,7 +71,7 @@ function renderLive() {
   const r = liveRec(stratAccts(ss.name));
   const lr = ss.profile && ss.profile.strategy === ss.name ? ss.profile.live_risk : null;
   const usd0 = (x) => x == null ? "—" : `${x < 0 ? "-" : "+"}$${fmt(Math.abs(x), 0)}`;
-  el.innerHTML = r.trades ? `<div class="lv"><b>실전 기록 (5개 봉 합계)</b> <span>${r.wins}승 ${r.losses}패</span>
+  el.innerHTML = r.trades ? `<div class="lv"><b>실전 기록 (4개 봉 합계)</b> <span>${r.wins}승 ${r.losses}패</span>
     <span>승률 <b>${Math.round(r.rate * 100)}%</b></span><span>손익 <b class="${cls(r.pnl)}">${usd0(r.pnl)}</b></span>
     <span>평균 이익 <b class="up">${usd0(r.avgW)}</b></span><span>평균 손실 <b class="down">${usd0(r.avgL)}</b></span>
     <span title="평균 이익 ÷ 평균 손실. 승률이 낮아도 이게 크면 남을 수 있음">손익비 <b>${r.ratio == null ? "—" : r.ratio.toFixed(2)}</b></span>
@@ -82,7 +82,7 @@ function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
 // from a position anywhere (trade chart box, position tables): this strategy, at that account's timeframe and coin
 function openStrategy(name, tf, sym) {
   ss.name = name;
-  if (tf && TRADE_TFS.includes(tf)) ss.tf = tf;   // an untraded timeframe (1d, an old 5m account) keeps the tab's own
+  if (tf && CORE_TFS.includes(tf)) ss.tf = tf;    // an untraded timeframe (1d, a 5m account) keeps the tab's own
   if (sym && TRADE_SYMS.includes(sym)) ss.sym = sym;
   show("strat");
 }
@@ -109,7 +109,7 @@ async function renderStrat() {
 
 function renderAccts() {
   document.querySelectorAll("#s-tf button").forEach((b) => b.classList.toggle("on", b.dataset.tf === ss.tf));
-  $("s-accts").innerHTML = TRADE_TFS.map((tf) => {
+  $("s-accts").innerHTML = CORE_TFS.map((tf) => {
     const a = state.board && state.board.accounts.find((x) => x.account_id === `${ss.name}@${tf}`);
     const w = a ? (a.wallet ?? INITIAL) : null;
     let s = !a ? "—" : a.trades ? `${a.wins}승 ${a.losses}패 · ${Math.round(a.trades ? a.wins / a.trades * 100 : 0)}%` : "거래 없음";

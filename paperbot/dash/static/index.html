@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Paper v3</title>
+<title>Paper v4 · 예전 화면</title>
 <!-- phone home-screen shortcut (no service worker: nothing is cached offline) -->
 <link rel="manifest" href="/static/manifest.json">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
@@ -12,13 +12,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Paper v3">
+<meta name="apple-mobile-web-app-title" content="Paper v4">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <header class="topbar">
-  <span class="brand">PAPER <span>V3</span></span>
+  <a class="brand" href="/" title="새 화면 (paper v4 대시보드)">PAPER <span>V4</span> <small>예전 화면 · 새 화면 →</small></a>
   <nav class="nav" id="nav">
     <button data-v="trade" class="on">트레이드</button>
     <button data-v="pos">포지션</button>
@@ -151,7 +151,7 @@
       <div class="sprof" id="s-profile"></div>
     </div>
     <div class="sside">
-      <div class="ph"><span class="t">5개 봉 계좌</span></div>
+      <div class="ph"><span class="t">봉별 계좌</span></div>
       <div id="s-accts" class="saccts"></div>
       <div id="s-live" class="slive"></div>
       <div class="ph tabs" id="s-tabs"><button data-t="cards" class="on">손실 카드</button><button data-t="tags">손실 패턴</button></div>
@@ -166,13 +166,17 @@
     <div class="ph"><span class="t">오늘 요약 · 한국 시간 0시부터</span><span class="grow"></span><small class="muted" id="today-at"></small></div>
     <div class="body"><div class="tiles" id="today-tiles"></div><div id="today-list"></div></div>
   </div>
+  <div class="tiles gcards" id="gcards" aria-label="그룹 요약 (누르면 그 그룹 보기)"></div>
+  <div class="filters">
+    <div class="seg" id="f-group" aria-label="그룹"><button data-g="main" class="on">기존 36 + 5분봉</button></div>
+  </div>
   <div class="tiles" id="tiles"></div>
   <div class="filters">
     <div class="seg" id="f-tf">
       <button data-tf="" class="on">전체</button><button data-tf="15m">15분</button>
       <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
     </div>
-    <div class="seg" id="f-kind"><button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button><button data-k="copy">복제</button><button data-k="newlab">새 매매법</button></div>
+    <div class="seg" id="f-kind" hidden><button data-k="" class="on">전체</button><button data-k="copy">복제</button><button data-k="newlab">새 매매법</button></div>
     <select id="f-sort" aria-label="정렬">
       <option value="wallet">잔고순</option><option value="trades">거래 수순</option><option value="win">승률순</option>
       <option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
@@ -288,7 +292,7 @@
 <!-- ========================================================= signals -->
 <section class="view" id="v-signals"><div class="page">
   <div class="filters"><div class="seg" id="sig-tf">
-    <button data-tf="" class="on">전체</button><button data-tf="15m">15분</button>
+    <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
     <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일봉(기록)</button>
   </div></div>
   <div class="card scroll"><table><thead><tr><th class="l">봉 마감</th><th class="l">봉</th><th class="l">매매법</th><th class="l">코인</th>

@@ -415,6 +415,19 @@ def copy_accounts(conn) -> set:
         return set()
 
 
+def own_exit_accounts(conn) -> set:
+    """Ids of the original accounts that do not run the house exits (paper v4: the reel and the three 5m coin flips,
+    paperbot/reel_engine.py; ``accounts.exits_of`` from the accounts row). Every variant here changes one house
+    exit or sizing rule (2 ATR stop, ladder lock, time stop, leverage) and ``base`` is the house rules, so none of
+    them describes these accounts' trades: they get no trade shadows (counted in info["own_exit_trades"])."""
+    from .accounts import ORIGINAL_KINDS, exits_of
+    try:
+        rows = conn.execute("SELECT account_id, kind, timeframe, data FROM accounts").fetchall()
+    except Exception:  # noqa: BLE001  a database without the accounts table
+        return set()
+    return {aid for aid, kind, tf, data in rows if kind in ORIGINAL_KINDS and exits_of(kind, tf, data) != "house"}
+
+
 def first_signal(conn, start: int, end: int) -> Optional[int]:
     """Earliest signal bar close (within LOOKBACK_MS) among the day's closed trades, if before ``start``."""
     bcs = [t["signal_ts"] + 1 for _, t in closed_trades(conn, start, end)]
@@ -440,7 +453,9 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
     """Rows for the shadows table (one per closed trade and variant) and counts of trades left out.
     ``steps`` must reach back to the earliest signal (``first_signal``); ``make_signal`` is daily3's.
     Trades of copy accounts are left out (counted in info["copy_trades"]); new-strategy accounts' trades are
-    shadowed like the others (their signal rows are their own).
+    shadowed like the others (their signal rows are their own). Trades of accounts with their own exits (paper v4's
+    reel and 5m coin flips, ``own_exit_accounts``) are left out (counted in info["own_exit_trades"]); the DeepSeek
+    accounts run the house exits and are shadowed like the 36.
     ``quality``: also run the quality variant (docs/observation-shadows-2.md) for every trade whose
     signal has a usable strength record; the others are counted in info["no_quality"] (by reason in
     info["no_quality_reasons"]).
@@ -461,9 +476,13 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
     if extra4:
         info.update(extra4=True, no_leverage4=0)
     copies = copy_accounts(conn)
+    own = own_exit_accounts(conn)
     for aid, t in closed_trades(conn, start, end):
         if aid in copies:                       # a copy repeats its parent's signal: the parent's shadow is it
             info["copy_trades"] = info.get("copy_trades", 0) + 1
+            continue
+        if aid in own:                          # the reel's own exits: the house-exit variants do not apply
+            info["own_exit_trades"] = info.get("own_exit_trades", 0) + 1
             continue
         info["closed"] += 1
         bc = t["signal_ts"] + 1

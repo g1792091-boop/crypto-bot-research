@@ -1,0 +1,16 @@
+@import url("rooms-kit.css");
+/* debate: 24시간 토론방 (builder D, feature). Tokens only. */
+[data-screen="debate"] .db-body { display: grid; gap: 12px; min-width: 0; }
+[data-screen="debate"] .db-body .plist { display: grid; gap: 8px; }
+[data-screen="debate"] .db-round { display: grid; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid var(--console-line); background: var(--console); font-family: var(--f-term); min-width: 0; }
+[data-screen="debate"] .db-rh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: var(--t-sm); color: var(--term-yellow); }
+[data-screen="debate"] .db-rh time { color: var(--muted); font-size: var(--t-xs); }
+[data-screen="debate"] .db-msgs { display: grid; gap: 8px; }
+[data-screen="debate"] .db-msg { display: grid; gap: 2px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+[data-screen="debate"] .db-who { color: var(--term-cyan); font-weight: 700; font-size: var(--t-xs); }
+[data-screen="debate"] .db-wrap { white-space: normal; overflow: visible; }
+[data-screen="debate"] .db-total { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; font-size: var(--t-sm); }
+[data-screen="debate"] .db-total b { justify-self: start; }
+[data-screen="debate"] .db-sp { gap: 6px; }
+[data-screen="debate"] .lrow .lname.db-wrap { font-weight: 400; }
+[data-screen="debate"] .db-total .notyet { justify-self: start; }

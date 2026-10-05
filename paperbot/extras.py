@@ -59,7 +59,7 @@ import time
 from typing import Any, Callable, Optional
 
 from .accounts import ORIGINAL_KINDS, HeldEngine
-from .config import V3_STOP_ATR, V3_TRADE_TFS, Settings
+from .config import DS200_IDS, REEL_NAME, V3_STOP_ATR, V3_TRADE_TFS, Settings
 from .engine import PaperEngine, engine_state, restore_engine
 from .health import sd_notify
 from .models import Signal, SignalOutcome
@@ -246,6 +246,12 @@ def parse_rule(rule: Any) -> Optional[dict]:
     return None if x is None else {"template": t, param: x}
 
 
+# paper v4 (owners' D9, docs/paper-v4-rules.md): no copy account of a DeepSeek or reel parent (the runner refuses it
+# for good, 'spec_invalid'); copies stay copies of the 36 (their parent must be a kind 'strategy' account, check C9).
+NO_COPY_PARENTS = frozenset(DS200_IDS) | {REEL_NAME}
+NO_COPY_KO = "딥시크·릴스 5분 단타 계좌는 복제 계좌를 만들지 않음(v4 규칙 D9)"
+
+
 def rule_of_trial_spec(spec: Any, names) -> tuple[Optional[dict], Optional[str], Optional[str], str]:
     """(rule, strategy, timeframe, why) from a copy trial's spec, which must be exactly
     {"template", "strategy", "timeframe", <param>} with values the runtime allows."""
@@ -258,6 +264,8 @@ def rule_of_trial_spec(spec: Any, names) -> tuple[Optional[dict], Optional[str],
     if set(spec) != {"template", "strategy", "timeframe", param}:
         return None, None, None, "trial spec keys"
     s, tf = spec.get("strategy"), spec.get("timeframe")
+    if isinstance(s, str) and s in NO_COPY_PARENTS:
+        return None, None, None, NO_COPY_KO
     if not isinstance(s, str) or s not in set(names):
         return None, None, None, "strategy not one of the 36"
     if tf not in TRADE_TFS:
@@ -455,13 +463,17 @@ def parse_copy(account: Any, trial: dict, p: dict, names) -> tuple[dict, str, st
     return rule, s, tf, content_key_copy(rule)
 
 
-NO_5M_KO = "5분봉은 2026-10-04부터 실험에서 뺐음(docs/paper-v3-rules-change-1.md)"
+# paper v4 (docs/paper-v4-rules.md): the run's 5m accounts are the reel and its three 5m coin flips only (their own
+# exits); the 36, their copies and the new-strategy accounts trade the core group's timeframes
+NO_5M_KO = ("paper v4의 5분봉은 릴스 5분 단타(REEL_H1)와 그 비교용 동전 3개만 씀(자기 청산 규칙, docs/paper-v4-rules.md): "
+            "매매법 36개·복제 계좌·새 매매법 계좌는 5분봉 없음")
 
 
 def run_timeframe_refusal(tf: Any, run_tfs: Optional[Any] = None) -> str:
     """Why a new-strategy account cannot start on ``tf`` ('' when it can). The lab grammar (NEWLAB_V1) still
-    allows 5m, the run does not: the account must be on one of the run's timeframes, config.V3_TRADE_TFS (the
-    signal service's ``trade_tfs``, which is that tuple in the live runner)."""
+    allows 5m, the run does not: the account must be on one of the core group's timeframes, config.V3_TRADE_TFS (the
+    signal service's ``trade_tfs``, which is that tuple in the live runner; paper v4's 5m path for the reel and its
+    coin flips is separate and never in it)."""
     allowed = tuple(run_tfs) if run_tfs else V3_TRADE_TFS
     if tf in allowed:
         return ""
@@ -1523,8 +1535,10 @@ class Activator:
         x.cfg = cfg
 
     def run_start(self) -> Optional[int]:
+        """The run's start: its earliest original account (every original kind, accounts.ORIGINAL_KINDS)."""
+        q = ",".join("?" * len(ORIGINAL_KINDS))
         r = self.x.store.conn.execute(
-            "SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')").fetchone()
+            f"SELECT MIN(created_ts) FROM accounts WHERE kind IN ({q})", ORIGINAL_KINDS).fetchone()
         return None if r is None or r[0] is None else int(r[0])
 
     def _set_dbs(self, agents: str, inbox: str) -> None:
@@ -1978,8 +1992,9 @@ def status_text(paper_db: str) -> str:
     conn = sqlite3.connect(uri, uri=True)
     try:
         r = conn.execute("SELECT ts, data FROM state WHERE k = ?", (STATE_KEY,)).fetchone()
+        q = ",".join("?" * len(ORIGINAL_KINDS))
         rows = conn.execute("SELECT account_id, kind, created_ts, parent FROM accounts "
-                            "WHERE kind NOT IN ('strategy', 'random') ORDER BY rowid").fetchall()
+                            f"WHERE kind NOT IN ({q}) ORDER BY rowid", ORIGINAL_KINDS).fetchall()
     finally:
         conn.close()
     if r is None:

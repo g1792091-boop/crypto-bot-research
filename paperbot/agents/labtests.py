@@ -436,6 +436,14 @@ class LabData:
 # ---------------------------------------------------------------------------------------------
 # specs
 # ---------------------------------------------------------------------------------------------
+def not_lab_strategy(name: str) -> bool:
+    """A name of a paper-v4 group outside the 36 (a DeepSeek definition, the reel, a coin flip): the 5-year lab has
+    no data or gate for it (G7). The rooms refuse every name outside strategy_view_defs.NAMES before a trial is
+    recorded (actions.request_test); this is the lab's own guard for the names that are certainly not the 36's."""
+    from ..config import DS200_FAMILY, REEL_NAME
+    return name in DS200_FAMILY or name == REEL_NAME or name.startswith("RANDOM_")
+
+
 def normalize_spec(spec: Any, strategy: Optional[str] = None) -> dict:
     """The allowed form of a test request, or SpecError (Korean message). ``strategy`` (the
     room's strategy) is enforced when given: a room can only test its own strategy."""
@@ -451,6 +459,8 @@ def normalize_spec(spec: Any, strategy: Optional[str] = None) -> dict:
         s = strategy
     if not isinstance(s, str) or not _STRAT_RE.match(s):
         raise SpecError("시험할 전략 이름이 없습니다.")
+    if not_lab_strategy(s):
+        raise SpecError("5년 시험은 잠긴 매매법 36개만 할 수 있습니다(딥시크·릴스·동전 계좌는 시험 대상 아님).")
     out: dict = {"template": t, "strategy": s}
     tf = spec.get("timeframe")
     if t in DESCRIPTIVE:

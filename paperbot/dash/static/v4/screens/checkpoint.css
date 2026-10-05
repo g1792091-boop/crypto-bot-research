@@ -1,0 +1,51 @@
+/* checkpoint: 30일 판정 (builder A). Screen-only rules; tokens and components come from the shared css. */
+@import url("home-shared.css");
+
+.ck-body { display: grid; gap: 16px; min-width: 0; }
+.ck-grid { display: grid; gap: 16px; min-width: 0; }
+@media (min-width: 1100px) { .ck-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; } }
+
+/* countdown */
+.ck-dtext { font: 700 var(--t-md)/1 var(--f-pixel); color: var(--ink-2); white-space: nowrap; }
+.ck-dtext b { color: var(--accent); }
+.ck-big { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ck-d { font: 400 64px/.85 var(--f-led); color: var(--accent); text-shadow: 0 0 18px var(--accent-glow); letter-spacing: .02em; }
+.ck-bigt { display: grid; gap: 4px; min-width: 0; }
+.ck-when { font-weight: 700; font-size: var(--t-md); }
+.ck-left { color: var(--ink-2); font-size: var(--t-sm); }
+
+/* who is judged */
+.ck-total { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; font-size: var(--t-sm); color: var(--ink-2); }
+.ck-total b { font-size: var(--t-xl); color: var(--ink); }
+.ck-grps { display: grid; gap: 10px; }
+@media (min-width: 760px) { .ck-grps { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
+.ck-grp { display: grid; gap: 7px; padding: 12px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; }
+.ck-grph { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--t-sm); }
+.ck-grph .muted { font-size: var(--t-xs); }
+.ck-tfs { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: var(--t-xs); }
+.card ul.ck-out { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--t-sm); color: var(--ink-2); }
+.ck-out:empty { display: none; }
+.ck-out b { color: var(--ink); }
+
+/* how the verdict works */
+[data-screen="checkpoint"] .card ol.ck-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ck-steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; }
+.ck-n { display: grid; place-items: center; height: 26px; border-radius: 4px; border: 1px solid var(--plate-line); background: var(--plate); color: var(--accent);
+  font: 700 var(--t-xs)/1 var(--f-pixel); }
+.ck-steps b { font-size: var(--t-sm); }
+.ck-steps p { color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+
+/* after the verdict */
+.ck-vt { font: 800 var(--t-lg)/1.35 var(--f-body); }
+.ck-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 760px) { .ck-counts { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.ck-st.good { --st: var(--up); }
+.ck-st b { color: var(--st, var(--ink)); }
+.ck-st.thin b { color: var(--ink-2); }
+.ck-warn { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--amber-line); background: var(--amber-soft); color: var(--amber-ink); font-size: var(--t-sm); }
+.card .ck-warn ul { padding-left: 18px; }
+.ck-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.ck-row .rk { font-family: var(--f-body); }
+.ck-row a.lname { color: var(--ink); text-decoration: none; }
+.ck-row a.lname:hover { text-decoration: underline dotted; }
+.ck-reason { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--t-xs); min-width: 0; }

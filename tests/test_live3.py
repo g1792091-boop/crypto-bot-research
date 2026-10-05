@@ -100,8 +100,11 @@ def test_no_5m_accounts():
 
 
 def test_live_account_set_from_the_locked_library(tmp_path):
-    """The accounts cmd_run opens: the locked library's 36 strategies on the traded timeframes, nothing on 5m."""
+    """The core group cmd_run opens: the locked library's 36 strategies on the core timeframes, nothing on 5m; the
+    whole paper v4 set (live3.v4_defs) adds DeepSeek, the reel and the 5m coin flips, and only those two names on 5m."""
     from paperbot import sweepsig
+    from paperbot.config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS
+    from paperbot.live3 import check_book, group_split, v4_defs
     from paperbot.sigservice import strategy_names
     names = strategy_names(sweepsig.lib())
     assert len(names) == V3_STRATEGIES
@@ -112,6 +115,15 @@ def test_live_account_set_from_the_locked_library(tmp_path):
     assert not [a for a in book.engines if a.endswith("@5m")]
     tfs = [r[0] for r in store.conn.execute("SELECT timeframe FROM accounts")]
     assert len(tfs) == V3_ACCOUNTS and "5m" not in tfs
+    want = v4_defs(names)
+    assert want[:V3_ACCOUNTS] == [dict(d, data=want[k]["data"]) for k, d in enumerate(account_defs(names, TRADE_TFS))]
+    store = Store3(str(tmp_path / "v4.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store, None, {})
+    book.open_accounts(want, 0)
+    check_book(book, want)
+    assert len(book.engines) == V4_ACCOUNTS == 331 and group_split(book) == V4_GROUP_ACCOUNTS
+    assert sorted(a for a in book.engines if a.endswith("@5m")) == ["RANDOM_1@5m", "RANDOM_2@5m", "RANDOM_3@5m",
+                                                                    "REEL_H1@5m"]
 
 
 # ---------------------------------------------------------------------------- the extras hook (paperbot/extras.py)
@@ -249,6 +261,14 @@ def test_signal_service_never_computes_5m():
     assert svc.due(day + 3 * FIVE) == ["15m"] and svc.due(day) == ["15m", "30m", "1h", "4h", "1d"]
     # the rate file still holds a 5m rate (research output): it is never reached, 5m is never due
     assert not [tf for k in range(288) for tf in svc.due(day + k * FIVE) if tf == "5m"]
+    assert not svc.due_5m(day + FIVE)                                            # the 5m path is off unless asked
+    # paper v4: the 5m accounts run on their own path (compute_5m), never as a core timeframe (no 36 on 5m, no
+    # draw from the core rate file's 5m rate)
+    from paperbot.live3 import service_options
+    v4 = SignalService(V3_SYMBOLS, (), {"5m": 1.0, "15m": 0.0}, lib=Lib(), procs=1, **service_options())
+    assert v4.trade_tfs == V3_TRADE_TFS and "5m" not in v4.windows and "5m" not in v4.ds_tfs
+    assert not [tf for k in range(288) for tf in v4.due(day + k * FIVE) + v4.due_ds(day + k * FIVE) if tf == "5m"]
+    assert all(v4.due_5m(day + k * FIVE) for k in range(288)) and not v4.due_5m(day + MIN)
 
 
 # ---------------------------------------------------------------- SIGTERM (review 3c M-1)
@@ -282,8 +302,17 @@ class FakeRest:
 
 
 class FakeService:
-    def __init__(self, symbols, record_only, rates, procs=4):
+    def __init__(self, symbols, record_only, rates, procs=4, **kw):
         self.symbols, self.windows, self.lib = list(symbols), {"15m": 10}, None
+        self.keep, self.ds_tfs, self.five_m, self.refused = 10, (), False, {}
+        from collections import deque
+        self.hist = {s: deque(maxlen=120_000) for s in self.symbols}
+
+    def verify_groups(self):
+        return {}
+
+    def pop_refusals(self):
+        return []
 
     def bootstrap(self, s, rows):
         pass
@@ -317,7 +346,7 @@ class FakeFeed:
 
 L3._rest, L3._notifier, L3.LiveFeed, L3.Digest = FakeRest, FileNotifier, FakeFeed, KeptDigest
 L3.start_extras = lambda *a: (None, None)
-SS.SignalService, SS.strategy_names = FakeService, lambda lib: ["S2_ST_ROC"]
+SS.SignalService, SS.strategy_names = FakeService, lambda lib: ["S2_ST_ROC"] + [f"X{k}" for k in range(35)]
 sys.exit(L3.main(["run", "--db", db, "--allow-example-brackets", "--poll", "0.2"]))
 '''
 
@@ -355,7 +384,8 @@ def test_sigterm_ends_the_run_cleanly_and_sends_the_pending_digest(tmp_path):
     assert any("파산 1" in text and "S2_ST_ROC@1h" in text for _, text in lines), lines
     import sqlite3
     c = sqlite3.connect(str(tmp_path / "paper3.db"))
-    assert c.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == len(V3_TRADE_TFS) * (1 + len(V3_RANDOM_SEEDS))
+    from paperbot.config import V4_ACCOUNTS
+    assert c.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == V4_ACCOUNTS
     c.close()
 
 

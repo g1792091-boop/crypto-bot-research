@@ -19,7 +19,7 @@ account, a meeting or a cursor.
   cursor ``security:check`` once a KST day and the weekly report shows it in one line.
 
 P&L here is the sum of CLOSED trades' net P&L (fees and funding included), i.e. the wallet's change without the
-open positions. A strategy's 30-day verdict is the checkpoint's (coin flips x 2,000), never these numbers.
+open positions. A strategy's 30-day verdict is the checkpoint's (agents/facts.method_ko), never these numbers.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from typing import Any, Iterable, Optional
 
 from ..cards import REASON_KO
 from ..config import V3_TRADE_TFS
+from . import facts as F
 from . import rooms_db as R
 
 TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
@@ -95,9 +96,11 @@ def _closed(paper_ro: sqlite3.Connection, since_ms: int = 0, until_ms: Optional[
             kinds: Iterable[str] = ("strategy",)) -> list[tuple]:
     """(account_id, kind, strategy, timeframe, trade dict) of trades closed in [since, until), oldest first."""
     ks = list(kinds)
+    # the core timeframes only (paper v4): a 5m coin flip (kind 'random', the reel's comparison) is never the 36's
     sql = ("SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.data FROM trades t JOIN accounts a "
-           f"ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * len(ks))}) AND t.exit_time >= ?")
-    args: list = [*ks, int(since_ms)]
+           f"ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * len(ks))}) "
+           f"AND a.timeframe IN ({','.join('?' * len(TFS))}) AND t.exit_time >= ?")
+    args: list = [*ks, *TFS, int(since_ms)]
     if until_ms is not None:
         sql += " AND t.exit_time < ?"
         args.append(int(until_ms))
@@ -337,8 +340,8 @@ def day_digest(agents_ro: Optional[sqlite3.Connection], day: str) -> dict:
 # ---------------------------------------------------------------- staff
 def _team_of() -> dict:
     try:
-        from .roster3 import ROLES, SPECIALISTS
-        return {r[0]: r[2] for r in ROLES + SPECIALISTS}
+        from .roster3 import ALL_ROLES
+        return {r[0]: r[2] for r in ALL_ROLES}
     except ImportError:  # pragma: no cover
         return {}
 
@@ -517,7 +520,8 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
             out["initial"] = initial_equity(paper_ro) if not initial else float(initial)
             both = _closed(paper_ro, p0, now, kinds=("strategy", "random"))
             accts = paper_ro.execute("SELECT account_id, kind, strategy, timeframe, created_ts FROM accounts "
-                                     "WHERE kind IN ('strategy', 'random')").fetchall()
+                                     f"WHERE kind IN ('strategy', 'random') AND timeframe IN ({','.join('?' * len(TFS))})",
+                                     TFS).fetchall()
             first = paper_ro.execute("SELECT MIN(created_ts) FROM accounts WHERE kind = 'strategy'").fetchone()
             busts = paper_ro.execute("SELECT ts, text FROM alerts WHERE ts >= ? AND ts < ? AND text LIKE '%BUST%' "
                                      "ORDER BY ts", (w0, now)).fetchall()
@@ -649,7 +653,7 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
             sec = None
         out["security"] = sec if isinstance(sec, dict) and now - int(sec.get("ts") or 0) <= 8 * DAY_MS else None
     out["note"] = ("최근 7일(코드 계산, 끝난 거래 손익·수수료와 펀딩 포함). 7일 성적은 운이 큼: 30일 판정은 체크포인트"
-                   "(동전 봇 2,000개 비교)가 함")
+                   f"({F.method_ko()})가 함")
     return out
 
 

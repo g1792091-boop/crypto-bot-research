@@ -165,16 +165,16 @@ def test_packet_stays_bounded_with_many_strategies(tmp_path):
     w = World(tmp_path)
     for s in range(36):
         name = f"X{s:02d}"
-        for tf in ("5m", "15m", "30m", "1h", "4h"):
+        for tf in ("15m", "30m", "1h", "4h"):          # the 36's timeframes (no 5m strategy account since 2026-10-04)
             w.store.add_account(f"{name}@{tf}", name, tf, "strategy", T1 - 30 * 24 * HOUR, "paper-v3")
             for k in range(12):
                 w.store.trade(f"{name}@{tf}", rec(name, tf, (-1) ** k * (k + s % 7), T1 - (k * 7 + s) * HOUR,
                                                   symbol=("BTCUSDT", "ETHUSDT")[k % 2]))
     w.store.commit()
     pk = EM.packet(w.paper(), NOW)
-    assert pk["trades"] == 36 * 5 * 12 and EM.compact_bytes(pk) < EM.MAX_BYTES
+    assert pk["trades"] == 36 * 4 * 12 and EM.compact_bytes(pk) < EM.MAX_BYTES
     brief = EM.strategy_brief(w.paper(), "X03", NOW)
-    assert brief["trades"] == 60 and EM.compact_bytes(brief) < EM.BRIEF_MAX_BYTES
+    assert brief["trades"] == 48 and EM.compact_bytes(brief) < EM.BRIEF_MAX_BYTES
     assert brief["buckets"]["hold"] and "unknown" not in brief["buckets"].get("liq", {})
 
 

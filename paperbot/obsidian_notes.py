@@ -14,14 +14,20 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from .agents.roster3 import MEETINGS, ROLES, SPECIALISTS, STRATEGY_KO, TEAMS
+from .agents.roster3 import ALL_ROLES, GROUP_SPECIALISTS, MEETINGS, ROLES, STRATEGY_KO, TEAMS
+from .agents.facts import facts as _facts
+from .config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS, V4_GROUP_JUDGED
 from .obsidian_sources import TFS, Data, read_text, recorded_hash, sha256_file, split_account, split_sections
 from .obsidian_util import (DAY_MS, KST, MOCHA, normalize_md, badge, bar, callout, fnum, frontmatter, iso_week, kst_day, kst_dt,
                             kst_min, kst_stamp, link, mean, mermaid, num, pct, quote, safe_name, sanitize, small_flag,
                             table, usd, redact)
 
 GENERATED_BY = "paperbot.obsidian_export"
-TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+# the day-30 verdict and the exits in words, from the agents' one source (agents/facts.py, built from the checkpoint and
+# config; G18, G5): never a typed bot count, one FDR for the whole run or the ladder for the reel
+METHOD_KO = _facts()["method_ko"]
+EXITS_KO = _facts()["exits_ko"]
 INITIAL = 5000.0
 OBSERVE_DAYS = 21
 PERIOD_DAYS = 30
@@ -70,7 +76,7 @@ def strat_link(sid: str, alias: Optional[str] = None) -> str:
 
 
 ROLE_BY_ID = {r[0]: r for r in ROLES}
-ROLE_NAME = {r[0]: r[1] for r in ROLES + SPECIALISTS}
+ROLE_NAME = {r[0]: r[1] for r in ALL_ROLES}
 TEAM_NAME = dict(TEAMS)
 
 
@@ -506,8 +512,8 @@ def build_strategy_hub(v: Vault, rows: list, profiles: dict) -> None:
     body = [hero("매매법 36개", "한 매매법 = 4개 봉(15분·30분·1시간·4시간) 계좌. 이름을 누르면 카드가 열립니다."),
             LEGEND + "\n",
             callout("warning", "순위가 아닙니다", "표는 매매법 번호순입니다. 어느 매매법이 실력이 있는지는 30일 체크포인트에서 "
-                    "코드가 동전 봇 2,000개와 비교해 판정합니다(" + link("체크포인트 판정") + "). 지금 숫자는 중간 기록입니다."),
-            stat_row([("매매법", "36"), ("계좌", f"{sum(1 for a in d.accounts.values() if a['kind'] == 'strategy') or 144}"),
+                    "코드가 판정합니다(" + METHOD_KO + ", " + link("체크포인트 판정") + "). 지금 숫자는 중간 기록입니다."),
+            stat_row([("매매법", "36"), ("계좌", f"{sum(1 for a in d.accounts.values() if a['kind'] == 'strategy') or V4_GROUP_ACCOUNTS['core']}"),
                       ("지금까지 끝난 거래", f"{n_all}건"), ("시작 금액", usd(initial_equity(ctx)))]),
             "## 전체 표 " + badge("code"),
             table(["매매법", "번호", "5년 성격", "거래", "평균 평가금", "시작 대비", "파산 계좌", "표본"], tbl,
@@ -532,10 +538,11 @@ def build_coin_flips(v: Vault) -> None:
                      pct(e / ini - 1, 1) if e is not None else "-", n, pct(st["wins"] / n, 0, False) if n else "-",
                      small_flag(n) or "-"])
     body = [hero("동전 던지기 봇", "실력이 없는 봇이 우연히 얼마나 버는지 보는 기준선"),
-            "동전 던지기 봇은 봉마다 3개씩 모두 12개입니다. 신호도 방향도 우연으로 뽑고, 손절·계단 익절·레버리지 규칙은 "
-            "매매법과 같습니다. 매매법이 이 봇들보다 낫다는 것만으로는 부족하고, 30일 체크포인트에서 코드가 동전 봇 2,000개를 "
-            "새로 돌려 p값과 FDR 10%로 판정합니다 (" + link("체크포인트 판정") + ").\n",
-            "## 12개 계좌 " + badge("code"),
+            f"동전 던지기 봇은 봉마다 3개씩 모두 {V4_GROUP_ACCOUNTS['flip']}개입니다(5분봉 3개 포함). 신호도 방향도 우연으로 뽑고, 손절·계단 익절·레버리지 규칙은 "
+            "매매법과 같습니다(5분봉 동전 3개는 릴스와 같은 자기 청산으로 릴스의 비교용). 매매법이 이 봇들보다 낫다는 것만으로는 "
+            "부족하고, 30일 체크포인트에서 코드가 판정합니다: " + METHOD_KO + " (" + link("체크포인트 판정") + ").\n",
+            f"## {sum(1 for a in d.accounts.values() if a['kind'] == 'random') or V4_GROUP_ACCOUNTS['flip']}개 계좌 "
+            + badge("code"),
             table(["계좌", "봉", "상태", "평가금", "시작 대비", "거래", "승률", "표본"], rows,
                   ["l", "l", "l", "r", "r", "r", "r", "l"]) or "아직 계좌 자료가 없습니다.\n",
             "\n" + link("매매법 목록") + " · " + link("홈")]
@@ -546,9 +553,10 @@ def build_coin_flips(v: Vault) -> None:
 
 def build_extra_accounts(v: Vault) -> None:
     ctx, d = v.ctx, v.ctx.data
+    from .accounts import ORIGINAL_KINDS
     rows = []
     for aid, a in sorted(d.accounts.items()):
-        if a["kind"] in ("strategy", "random"):
+        if a["kind"] in ORIGINAL_KINDS:          # the originals of every group (DeepSeek, the reel too) are not extras
             continue
         st = d.trade_stats.get(aid)
         e = acct_equity(ctx, aid)
@@ -556,7 +564,7 @@ def build_extra_accounts(v: Vault) -> None:
     props = d.proposals
     prow = [[p["id"], kst_min(p["ts"]), p.get("strategy") or "-", (p.get("change") or {}).get("kind", "copy"),
              p["status"], p.get("decided_by") or "-"] for p in props[-30:]]
-    body = [hero("추가 계좌와 제안", "에이전트가 제안해 승인된 복사 계좌·새 매매법 계좌(원본 156개와 따로 셈)"),
+    body = [hero("추가 계좌와 제안", f"에이전트가 제안해 승인된 복사 계좌·새 매매법 계좌(원본 {V4_ACCOUNTS}개와 따로 셈)"),
             "원본 계좌는 에이전트가 바꿀 수 없습니다. 개선안은 코드 관문(5년 시험)을 통과하고 승인된 것만 **새 계좌**로 따로 "
             "돌립니다. 관찰 기간(시작 후 21일) 동안은 복사 제안이 없습니다.\n",
             "## 추가 계좌 " + badge("code"),
@@ -647,7 +655,8 @@ def build_staff(v: Vault) -> None:
         trows.append([link(team_note(tid), tname), n,
                       ", ".join(link(role_note(r[0]), r[1]) for r in team_roles.get(tid, [])[:4]) if tid != "specialist" else "36개 매매법별 전담"])
     mrows = [[name, when] for _, name, when in MEETINGS]
-    body = [hero("직원 72명", "역할 36명 + 매매법 전담 36명, 12개 팀. 모두 AI이고 주문은 낼 수 없습니다."),
+    body = [hero(f"직원 {len(ALL_ROLES)}명", f"역할 36명 + 매매법 전담 36명 + 딥시크·릴스 담당 {len(GROUP_SPECIALISTS)}명, 12개 팀. "
+                 "모두 AI이고 주문은 낼 수 없습니다."),
             "에이전트는 **읽고 의견을 낼 뿐** 주문을 내지 않고 원본 계좌와 규칙을 바꾸지 못합니다. 숫자는 코드가 계산하고, "
             "직원은 그 숫자를 읽고 해석합니다.\n",
             "## 팀\n" + table(["팀", "인원", "주요 역할"], trows, ["l", "r", "l"]),
@@ -710,19 +719,24 @@ def org_canvas(v: Vault) -> str:
 
 # ================================================================== 01 experiment
 RULES_ROWS = [
-    ("계좌", "매매법 36개 × 봉 4개(15분·30분·1시간·4시간) = 144개 + 동전 던지기 봇 봉마다 3개 = 12개, 합계 **156개**. 계좌마다 $5,000, 충전 없음"),
+    ("계좌", f"매매법 36개 × 봉 4개 = {V4_GROUP_ACCOUNTS['core']}개 + 딥시크 {V4_GROUP_ACCOUNTS['ds200']}개 + 릴스 5분 단타 "
+            f"{V4_GROUP_ACCOUNTS['reel']}개 + 동전 던지기 {V4_GROUP_ACCOUNTS['flip']}개(5분봉 포함), 합계 **{V4_ACCOUNTS}개**. "
+            "계좌마다 $5,000, 충전 없음"),
     ("코인", "BTC, ETH, SOL, DOGE, LTC, BCH 6개 (XRP는 신호 기록만, 일봉은 신호만)"),
     ("진입", "확정된 봉에서 신호 계산 → 그 순간 시장가 + 슬리피지 0.02%. 계좌마다 포지션 1개, 코인 순서 BTC → ETH → SOL → DOGE → LTC → BCH"),
-    ("손절", "진입가 − 방향 × 2 × ATR14 (신호 봉)"),
-    ("익절", "계단 잠금: 순 ROE +12%에서 +10% 잠금, +17%에서 +15%, 이후 5%마다. 잠금은 올라가기만 함. 고정 익절·시간 청산 없음"),
+    ("손절", "진입가 − 방향 × 2 × ATR14 (신호 봉; 하우스 청산 계좌)"),
+    ("익절", "계단 잠금: 순 ROE +12%에서 +10% 잠금, +17%에서 +15%, 이후 5%마다. 잠금은 올라가기만 함. 고정 익절·시간 청산 없음 "
+           "(하우스 청산: 매매법 36개·딥시크·15분~4시간 동전·추가 계좌)"),
+    ("릴스·5분봉 동전 청산", EXITS_KO["reel"] + " · " + EXITS_KO["flip"].split(" / ")[0]),
     ("레버리지·증거금", "**규칙 B (2026-10-04)**: 진입 품질 'best' 신호는 50배·증거금 50% → 안 되면 40배·40% → 30배·30% → 20배·20%. 나머지 신호는 30배·30% → 20배·20%"),
     ("크기 조건", "거래소 레버리지 구간 허용 + 손절이 청산가보다 max(1 ATR, 0.2%) 안쪽 + 손절 손실(비용 포함) ≤ 자금의 15%. 모두 안 되면 진입하지 않고 이유를 기록"),
     ("파산", "자금 $10 미만이면 그 계좌 정지"),
     ("비용", "수수료 0.05%, 슬리피지 0.02%, 펀딩은 실제 펀딩비와 실제 시각"),
     ("관찰 기간", "시작 후 21일 동안은 복사·새 계좌 제안이 없습니다"),
     ("체크포인트", "시작 후 30, 60, 90 … 180일. 계좌(매매법 × 봉)마다 거래 30건을 넘긴 첫 판정일에 1차 판정. "
-                  "코드가 동전 봇 2,000개와 비교(p값)하고 FDR 10%로 보정. 1차 판정 대상은 15분·30분·1시간 108개 계좌, 4시간은 관찰용"),
-    ("30일 고정", "새 시작부터 **30일 동안 규칙과 매매 코드는 그대로**입니다. 바꾸려면 v4로 올리고 새 계좌로만 돌립니다"),
+                  f"{METHOD_KO}. 1차 판정 대상은 그룹마다 따로(매매법 {V4_GROUP_JUDGED['core']}개 · 딥시크 "
+                  f"{V4_GROUP_JUDGED['ds200']}개 · 5분 단타 {V4_GROUP_JUDGED['reel']}개), 4시간은 관찰용"),
+    ("30일 고정", "새 시작부터 **30일 동안 규칙과 매매 코드는 그대로**입니다. 바꾸려면 다음 버전(v5)으로 올리고 새 계좌로만 돌립니다"),
 ]
 
 
@@ -735,9 +749,10 @@ def build_experiment(v: Vault) -> None:
     day_show = min(day_no + 1, PERIOD_DAYS)
     info = d.run_info
     # rules at a glance
-    body = [hero("실험 규칙 한눈에", "paper v3 규칙 + 규칙 변경 1 (2026-10-04)의 요약. 원문은 08 규칙·문서."), LEGEND + "\n",
+    body = [hero("실험 규칙 한눈에", "paper v4 규칙의 요약 (v3 규칙에서 이어받은 것 포함). 원문은 08 규칙·문서."), LEGEND + "\n",
             table(["항목", "내용"], [[a, b] for a, b in RULES_ROWS]),
-            callout("info", "원문", f"{link('규칙 변경 1 (2026-10-04)')} · {link('규칙 본문 v3')} · {link('규칙 보충안')} · "
+            callout("info", "원문", f"{link('규칙 본문 v4')} · {link('판정 방법 v4')} · {link('레버리지 규칙 B 평가 v4')} · "
+                    f"{link('규칙 변경 1 (2026-10-04)')} · {link('규칙 본문 v3')} · {link('규칙 보충안')} · "
                     f"{link('레버리지 규칙 B 평가 방법')} · {link('규칙 문서 목록')}"),
             callout("warning", "30일 전에는 결론이 없습니다",
                     "첫 체크포인트(시작 후 30일) 전의 모든 숫자는 중간 기록입니다. 어느 매매법이 좋다·나쁘다는 판정은 "
@@ -791,7 +806,7 @@ def build_experiment(v: Vault) -> None:
   section 판정
   1차 체크포인트 (30일) :milestone, cp1, {g(cp1)}, 0d
   2차 체크포인트 (60일) :milestone, cp2, {g(cp1 + 30 * DAY_MS)}, 0d"""
-    ev_rows = [[g(start), "실험 시작 (156개 계좌 $5,000)",
+    ev_rows = [[g(start), f"실험 시작 ({len(d.accounts) or V4_ACCOUNTS}개 계좌 $5,000)",
                 f"코드 버전 {str(info.get('commit') or '-')[:10]}"],
                [g(obs_end), "관찰 기간 끝 (이후 복사 제안 가능)", "시작 + 21일"],
                [g(cp1), "1차 체크포인트 판정", "코드가 스냅샷으로 판정"]]
@@ -829,15 +844,15 @@ def build_experiment(v: Vault) -> None:
         head = [callout("note", "아직 판정이 없습니다",
                         f"첫 체크포인트는 {kst_stamp(cp1)}입니다. 그때까지 어느 매매법도 합격·불합격이 아닙니다.")]
         table_md = ""
-    body = [hero("체크포인트 판정", "30일마다 코드가 동전 봇 2,000개와 비교해 판정 (p값, FDR 10%)"), LEGEND + "\n"] + head + [table_md,
+    body = [hero("체크포인트 판정", "30일마다 코드가 판정: " + METHOD_KO), LEGEND + "\n"] + head + [table_md,
             "## 판정 규칙\n- 거래 30건 미만: 판단 보류\n- 1차: 평가금 > 시작 금액, 동전 봇 비교로 우연 기준 통과(p, 보정 q), 파산 아님\n"
             "- 2차: 1차 통과 계좌만, 그다음 30일의 새 거래로 다시\n- 2차까지 통과해야 '실거래 검토 대상'\n",
             "근거: " + link("규칙 보충안") + " · " + link("타임라인") + " · " + link("홈")]
     v.add(FOLDERS["exp"], "체크포인트 판정", "\n".join(body), type="규칙", tags=["규칙", "실험"], css=("pb-rules",), source="code",
           props={"n_verdicts": len(d.verdict_rows), "date": vv["date"] if vv else None})
     # overview hub
-    n_acc = len(d.accounts) or 156
-    body = [hero("실험 개요", "paper v3: 36개 매매법을 모의 계좌 156개로 30일 동안 규칙 고정 상태에서 지켜보는 실험"),
+    n_acc = len(d.accounts) or V4_ACCOUNTS
+    body = [hero("실험 개요", f"paper v4: 잠긴 36개 매매법·딥시크·릴스 5분 단타를 모의 계좌 {V4_ACCOUNTS}개로 규칙 고정 상태에서 지켜보는 실험"),
             callout("pb-stat", "지금", stat_row([("일차", f"{min(day_show, 30)}/30"), ("계좌", str(n_acc)),
                                                ("관찰 기간 끝", kst_day(obs_end)), ("1차 체크포인트", kst_day(cp1))]).rstrip()),
             "- " + link("실험 규칙 한눈에") + "\n- " + link("타임라인") + "\n- " + link("레버리지 계단") + "\n- " + link("체크포인트 판정") +

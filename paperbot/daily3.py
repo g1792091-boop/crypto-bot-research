@@ -1,4 +1,4 @@
-"""Nightly checks for the paper v3 run (separate process, its own database).
+"""Nightly checks for the paper run (v3, and v4 with its account groups; separate process, its own database).
 
     python -m paperbot.daily3 run --db paper3.db --out daily3.db [--day YYYY-MM-DD] [--no-notify]
         [--brackets FILE | --allow-example-brackets]
@@ -19,6 +19,13 @@ For one UTC day (default: yesterday):
    (state ``extras`` events). A copy that lost one boundary's signal in a restart
    (killed between the originals' commit and the copy's) is reported for that copy
    only, as "추가 계좌 재시작 틈".
+   Paper v4 (owners' D2 (ii), D4): the original accounts are every kind in ``accounts.ORIGINAL_KINDS`` (core
+   "strategy", coin flips "random", DeepSeek "ds200", the reel "reel"), all on the book's settings. The reel and the
+   three 5m coin flips replay on their live engine class (``engine_classes``: paperbot/reel_engine.py ``ReelEngine``,
+   the reel's own exits) and their signals are rebuilt from the entry levels the runner logged (signal_log data
+   ``reel``: absolute stop, first target, the 19 closes; ``make_signal``). A logged ``stop_dist`` is used when present.
+   The report splits parity and the day's trades by group (``parity.groups``, ``trades.groups``) and the 09:20 text
+   reads "재계산 일치 331/331 (매매법 144/144 · 딥시크 171/171 · 5분 단타 1/1 · 동전 15/15)".
    Early 1m klines (``explain_mismatches``): the live feed takes a 1m kline as soon as the minute has closed and
    never reads it again, so a kline read within a second of its close can miss the minute's last trades (a less
    extreme high/low); live then exits later than the replay on the final klines. A mismatch is labelled
@@ -49,6 +56,9 @@ For one UTC day (default: yesterday):
      fixed 20x / 30x / 40x / 50x with margin = leverage % (lev20m20 .. lev50m50), and per account the shadow
      equity curves of the leverage variants and the base (daily3.db shadow_curves, obsshadows.write_curves).
    Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
+   Accounts with their own exits (paper v4's reel and 5m coin flips) run their limit and skipped shadows on their own
+   engine; they get no stop what-ifs and no trade variants (both vary the house exits they do not use); a signal the
+   reel's own entry rules skipped is no "skipped" shadow. DeepSeek runs the house exits and is shadowed like the 36.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
 4. Realistic stop slippage (descriptive, paperbot/slipcost.py): for every SL / LOCK / LIQ exit of the day, where a
@@ -61,6 +71,18 @@ For one UTC day (default: yesterday):
    page, paced); exits past a cap or a failed request are recorded with their status, never fatal.
 5. Cost at a larger size (descriptive): from the day's fill_costs book reads, the slippage if the order had been
    2x / 5x / 10x the paper size, per coin and timeframe (report ``size_costs``; slipcost.summarize_size_costs).
+
+Paper v4 additions to the report and the 09:20 text (gap pass, owners 2026-10-05):
+- The run's start day (G25): the day the run started after its 00:00 UTC has no ``day:<date>`` snapshot by design.
+  When the original accounts' MIN(created_ts) is after the day's start, the report says so (``start_day``; parity
+  stays a string) and the 09:20 text is the silent INFO line "시작한 날: 재계산 없음", not the WARN "재계산 못 함".
+- Shadows and the stop slippage by group (G28): ``shadows.groups`` and ``stop_slippage.groups``. The text gives
+  numbers for the groups with per-trade Telegram (core, reel, extras; groups.TRADE_ALERT_GROUPS) and one count line
+  for DeepSeek; the coin flips stay in the report only. The stop-slippage caps read the core / reel exits first
+  (``STOP_GROUP_RANK``), so a busy DeepSeek night cannot crowd them out.
+- The DeepSeek nightly recomputation (paperbot/dscheck.py, 00:30 UTC): its last one-line summary
+  (``dscheck.read_summary``) is a line of the text. That check runs after this report, so the line is the night
+  before's (it names its own day); "결과 없음" when it has not run (its timer is switched on after the reset checks).
 
 paper3.db is opened read-only; results go to ``--out``.
 """
@@ -79,7 +101,7 @@ from typing import Optional
 
 import numpy as np
 
-from .accounts import DAY_MS, day_key
+from .accounts import DAY_MS, GROUP_OF_KIND, ORIGINAL_KINDS, HeldEngine, day_key, original_engine_cls
 from .aggregate import TF_MS
 from .binance import BinanceError, BinanceREST, bars_from_klines
 from .config import V3_STOP_ATR, V3_SYMBOLS, Settings, v3_settings
@@ -91,6 +113,7 @@ from .obsshadows import LOOKBACK_MS, first_signal, summarize, trade_shadows, wri
 
 MIN = 60_000
 LIMIT_ATR = 0.25
+DSCHECK_DIR = "/var/lib/paperbot/dscheck"     # paperbot/dscheck.py DEFAULT_OUT (its last.txt: one Korean line)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS reports (day TEXT PRIMARY KEY, ts INTEGER NOT NULL, data TEXT NOT NULL);
@@ -149,16 +172,62 @@ def day_signals(conn, start: int, end: int, with_data: bool = False) -> dict[int
     return out
 
 
-def make_signal(d: dict, stop_atr: float = V3_STOP_ATR, ref: Optional[float] = None) -> Signal:
+def make_signal(d: dict, stop_atr: Optional[float] = None, ref: Optional[float] = None) -> Signal:
     """The signal_log row as the runner submitted it. With the row's ``data`` (``day_signals(with_data=True)``)
     the signal carries its ctx as the live one does, so the quality_v1 leverage group (levrule: the recorded
-    strength) is the live account's; without it a strategy signal has no strength and sizes as "normal"."""
-    meta = {"stop_dist": stop_atr * d["atr"], "ref_price": ref if ref is not None else d["ref_price"],
+    strength) is the live account's; without it a strategy signal has no strength and sizes as "normal".
+
+    Stop: ``stop_atr`` x ATR when given (the stop what-ifs, a copy's own stop); otherwise the row's logged
+    ``data.stop_dist`` when the runner recorded one, else V3_STOP_ATR x ATR (every house signal of v3 and v4).
+    A row whose data carries ``reel`` (paper v4: the reel and the 5m coin flips, the entry levels sigservice put
+    into the live signal's ``meta["reel"]``, paperbot/reelsig.py) is rebuilt as the reel's signal
+    (paperbot/reel_engine.py contract): the absolute stop ``reel.stop``, the first target ``reel.up_band`` as
+    ``tp_price``, ``meta["reel"]`` as logged and no ``stop_dist`` (``stop_atr`` does not apply). A logged
+    ``data.lev_group`` is carried as ``meta["lev_group"]`` (levrule.signal_group reads it first)."""
+    data = _data_of(d) if "data" in d else {}
+    ref_price = ref if ref is not None else d["ref_price"]
+    reel = data.get("reel")
+    if isinstance(reel, dict):
+        meta = {"ref_price": ref_price, "ref_time": d["ref_time"], "delay_ms": d["delay_ms"],
+                "account": f"{d['strategy']}@{d['timeframe']}", "reel": reel}
+        if isinstance(data.get("ctx"), dict):
+            meta["ctx"] = data["ctx"]
+        if data.get("lev_group") is not None:
+            meta["lev_group"] = data["lev_group"]
+        return Signal(ts=d["bar_close"] - 1, symbol=d["symbol"], timeframe=d["timeframe"], strategy_id=d["strategy"],
+                      side=int(d["side"]), stop_price=_num(reel.get("stop")), tier="best",
+                      tp_price=_num(reel.get("up_band")), atr=d["atr"], meta=meta)
+    if stop_atr is None and _num(data.get("stop_dist")) > 0:
+        dist = float(data["stop_dist"])
+    else:
+        dist = (V3_STOP_ATR if stop_atr is None else stop_atr) * d["atr"]
+    meta = {"stop_dist": dist, "ref_price": ref_price,
             "ref_time": d["ref_time"], "delay_ms": d["delay_ms"], "account": f"{d['strategy']}@{d['timeframe']}"}
     if "data" in d:
         meta["ctx"] = _ctx_of(d)
+    if data.get("lev_group") is not None:
+        meta["lev_group"] = data["lev_group"]
     return Signal(ts=d["bar_close"] - 1, symbol=d["symbol"], timeframe=d["timeframe"], strategy_id=d["strategy"],
                   side=int(d["side"]), stop_price=0.0, tier="best", atr=d["atr"], meta=meta)
+
+
+def _num(x) -> float:
+    """A finite float, else NaN (a malformed logged level: the engine then rejects the signal as live did)."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return float("nan")
+    return v if np.isfinite(v) else float("nan")
+
+
+def _data_of(d: dict) -> dict:
+    """A signal_log row's data JSON as a dict ({} when missing or malformed)."""
+    raw = d.get("data")
+    try:
+        data = raw if isinstance(raw, dict) else json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 # ---------------------------------------------------------------- 1. replay parity
@@ -170,7 +239,8 @@ def extras_of(conn) -> dict:
     stop_atr, skip_tag, timeline [(effective ms, status)]}} (``{}`` for a database without extras)."""
     from .extras import parse_rule, rule_fields
     rows = conn.execute("SELECT account_id, kind, parent, created_ts, data FROM accounts "
-                        "WHERE kind NOT IN ('strategy', 'random') ORDER BY rowid").fetchall()
+                        f"WHERE kind NOT IN ({', '.join('?' * len(ORIGINAL_KINDS))}) ORDER BY rowid",
+                        ORIGINAL_KINDS).fetchall()
     if not rows:
         return {}
     st = conn.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
@@ -193,6 +263,69 @@ def extras_of(conn) -> dict:
     return out
 
 
+def account_rows(conn) -> dict:
+    """{aid: {"kind", "timeframe", "data"}} of the accounts table ({} for a database without one)."""
+    try:
+        rows = conn.execute("SELECT account_id, kind, timeframe, data FROM accounts").fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {aid: {"kind": kind, "timeframe": tf, "data": data} for aid, kind, tf, data in rows}
+
+
+def engine_classes(conn, rows: Optional[dict] = None) -> dict:
+    """{aid: engine class} of the ORIGINAL accounts that the live book does not run on ``PaperEngine``, built the way
+    AccountBook builds them (``accounts.original_engine_cls`` from the row's kind, timeframe and data): paper v4's
+    reel and 5m coin flips run ``paperbot.reel_engine.ReelEngine`` (owners' D2 (ii), D4); when that class cannot be
+    loaded the live book holds those accounts (``HeldEngine``) and so does the replay. Every other account (all of a
+    v3 database) is absent: ``PaperEngine``, exactly as before."""
+    out = {}
+    for aid, r in (account_rows(conn) if rows is None else rows).items():
+        if r["kind"] not in ORIGINAL_KINDS:
+            continue
+        try:
+            cls = original_engine_cls(r["kind"], r["timeframe"], r["data"])
+        except Exception:  # noqa: BLE001  as live: a reel engine module that fails to load holds its accounts
+            cls = HeldEngine
+        if cls is not None:
+            out[aid] = cls
+    return out
+
+
+def run_start_ts(conn) -> Optional[int]:
+    """MIN(created_ts) of the run's ORIGINAL accounts (the run's start; extras start later), None without them."""
+    try:
+        r = conn.execute(f"SELECT MIN(created_ts) FROM accounts WHERE kind IN ({', '.join('?' * len(ORIGINAL_KINDS))})",
+                         ORIGINAL_KINDS).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return int(r[0]) if r and r[0] is not None else None
+
+
+def dscheck_line(out_dir: Optional[str]) -> Optional[str]:
+    """The DeepSeek nightly recomputation's last one-line summary (paperbot/dscheck.py ``read_summary``), None when
+    it never ran or cannot be read. Never raises."""
+    if not out_dir:
+        return None
+    try:
+        from .dscheck import read_summary
+    except Exception:  # noqa: BLE001  (its module needs pandas and the research code: read the file itself)
+        read_summary = None
+    try:
+        if read_summary is not None:
+            return read_summary(out_dir)
+        with open(os.path.join(out_dir, "last.txt"), encoding="utf-8") as fh:
+            return fh.readline().strip() or None
+    except Exception:  # noqa: BLE001  (a line of the report, never the night's failure)
+        return None
+
+
+def account_groups(conn, rows: Optional[dict] = None) -> dict:
+    """{aid: group} for the report's split (accounts.GROUP_OF_KIND: core, ds200, reel, flip, extra; "other" for an
+    unknown kind)."""
+    return {aid: GROUP_OF_KIND.get(r["kind"], "other") for aid, r in (account_rows(conn) if rows is None
+                                                                       else rows).items()}
+
+
 def extra_status(x: dict, ts: int) -> str:
     """An extra's state at time ``ts`` (the last timeline entry at or before it)."""
     cur = "active"
@@ -205,27 +338,27 @@ def extra_status(x: dict, ts: int) -> str:
 
 
 def _ctx_of(d: dict) -> dict:
-    raw = d.get("data")
-    try:
-        data = raw if isinstance(raw, dict) else json.loads(raw or "{}")
-    except (TypeError, ValueError):
-        return {}
-    ctx = data.get("ctx") if isinstance(data, dict) else None
+    ctx = _data_of(d).get("ctx")
     return ctx if isinstance(ctx, dict) else {}
 
 
 def replay(settings: Settings, brackets, specs, snapshot: dict, signals: dict, steps,
-           extras: Optional[dict] = None) -> dict[str, list]:
+           extras: Optional[dict] = None, engine_cls: Optional[dict] = None) -> dict[str, list]:
     """Replay the day from the 00:00 snapshot. ``extras`` (``extras_of``): the extra accounts' own rules,
-    starts during the day and suspended / held intervals; the original accounts use ``settings`` unchanged."""
+    starts during the day and suspended / held intervals; the original accounts use ``settings`` unchanged.
+    ``engine_cls`` (``engine_classes``): the original accounts with their own engine class (paper v4: the reel and
+    the 5m coin flips replay on ``ReelEngine`` with the reel's exits, their signals rebuilt by ``make_signal``
+    from the logged entry levels); every other account replays on ``PaperEngine``."""
     from .extras import settings_for, skip_hit
     extras = extras or {}
+    engine_cls = engine_cls or {}
     engines = {}
 
     def make(aid):
         x = extras.get(aid)
-        return PaperEngine(settings if x is None else settings_for(settings, x["rule"]), brackets,
-                           symbol_specs=specs, book=aid)
+        if x is None:
+            return engine_cls.get(aid, PaperEngine)(settings, brackets, symbol_specs=specs, book=aid)
+        return PaperEngine(settings_for(settings, x["rule"]), brackets, symbol_specs=specs, book=aid)
     for aid, st in snapshot["engines"].items():
         e = make(aid)
         restore_engine(e, st)
@@ -520,7 +653,8 @@ def feed_warnings(conn, symbol: str, lo: int, hi: int) -> Optional[list[dict]]:
 
 def explain_mismatches(conn, rest, settings: Settings, brackets, specs, snapshot: dict, signals: dict, steps,
                        replayed: dict, stored: dict, mism: list[dict], start: int, end: int,
-                       extras: Optional[dict] = None, window_ms: int = EARLY_WINDOW_MS) -> dict:
+                       extras: Optional[dict] = None, window_ms: int = EARLY_WINDOW_MS,
+                       engine_cls: Optional[dict] = None) -> dict:
     """Label the mismatches an early 1m kline explains (``early_kline`` True, ``label``, ``proof``) and say why
     the others are not (``early_kline_check``). ``replayed``: the day's replay (trades exiting before ``end``),
     ``stored``: the live trades, ``steps``: the day's final steps. Returns the report's summary (live bars seen,
@@ -536,7 +670,7 @@ def explain_mismatches(conn, rest, settings: Settings, brackets, specs, snapshot
     live_mism: set = set()
     if live:
         rep_live = replay(settings, brackets, specs, snapshot, signals, steps_on_live_bars(steps, live),
-                          extras=extras)
+                          extras=extras, engine_cls=engine_cls)
         cmp_live = compare({a: [t for t in ts if t.exit_time < end] for a, ts in rep_live.items()}, stored)
         live_mism = {m["account_id"] for m in cmp_live}
         only = sorted(live_mism - {m["account_id"] for m in mism})
@@ -632,9 +766,11 @@ def explain_mismatches(conn, rest, settings: Settings, brackets, specs, snapshot
 
 
 # ---------------------------------------------------------------- 2. shadows
-def _alone(settings: Settings, brackets, specs, sig: Signal, steps, i0: int) -> tuple[Optional[object], bool]:
-    """Run one signal on a fresh account (settings.initial_equity) from step index i0. Returns (trade or None, resolved)."""
-    e = PaperEngine(settings, brackets, symbol_specs=specs, book="shadow")
+def _alone(settings: Settings, brackets, specs, sig: Signal, steps, i0: int,
+           cls=PaperEngine) -> tuple[Optional[object], bool]:
+    """Run one signal on a fresh account (settings.initial_equity) from step index i0. Returns (trade or None, resolved).
+    ``cls``: the account's engine class (``engine_classes``; the reel's exits for the reel and the 5m coin flips)."""
+    e = cls(settings, brackets, symbol_specs=specs, book="shadow")
     e.submit(sig)
     for ts, bars, funding in steps[i0:]:
         e.step({s: b for s, b in bars.items() if s in brackets}, funding)
@@ -666,9 +802,14 @@ def limit_fill(sig_row: dict, steps, i0: int) -> Optional[tuple[int, float]]:
 
 
 def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end: int, steps) -> list[dict]:
+    """Limit, skipped and stop what-if rows. An account with its own engine (``engine_classes``: paper v4's reel and
+    5m coin flips) runs its limit and skipped shadows on that engine (the reel's exits), gets no skipped shadow for a
+    signal its own entry rules skipped (reason "reel: ...": no trade under its rules) and no stop what-ifs (those vary
+    the house 2 ATR stop, which it does not use)."""
     idx = {ts: k for k, (ts, _, _) in enumerate(steps)}
     rows = []
     ext = extras_of(conn)
+    ecls = engine_classes(conn)
     sigs = day_signals(conn, start - 1, end - 1, with_data=True)     # data: the leverage group's strength
     for bc, lst in sigs.items():
         i0 = idx.get(bc)
@@ -683,7 +824,8 @@ def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end
             if fill is not None:
                 k, px = fill
                 t, resolved = _alone(settings, brackets, specs,
-                                     replace(make_signal(d, ref=px), ts=steps[k][0] - 1), steps, k)
+                                     replace(make_signal(d, ref=px), ts=steps[k][0] - 1), steps, k,
+                                     cls=ecls.get(aid, PaperEngine))
                 if t is not None:
                     # a resting limit pays the maker fee and no entry slippage
                     roe = t.roe + t.leverage * (settings.taker_fee - settings.maker_fee + settings.slippage_frac)
@@ -691,8 +833,10 @@ def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end
             rows.append({"key": key, "day": day, "kind": "limit", "account_id": aid, "symbol": d["symbol"],
                          "timeframe": d["timeframe"], "side": d["side"], "filled": int(fill is not None),
                          "roe": roe, "exit_reason": reason, "resolved": int(resolved), "data": "{}"})
-    q = ("SELECT account_id, data FROM outcomes WHERE status = 'SKIPPED' AND step_ts >= ? AND step_ts < ?")
-    for aid, data in conn.execute(q, (start, end)):
+    q = ("SELECT account_id, reason, data FROM outcomes WHERE status = 'SKIPPED' AND step_ts >= ? AND step_ts < ?")
+    for aid, why, data in conn.execute(q, (start, end)):
+        if aid in ecls and str(why or "").startswith("reel:"):
+            continue                    # the reel's own skip rule: no trade under its rules, nothing missed
         s = json.loads(data)["signal"]
         bc = s["ts"] + 1
         i0 = idx.get(bc)
@@ -706,29 +850,33 @@ def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end
             acc_settings = settings_for(settings, x["rule"])
         else:
             acc_settings = settings
-        t, resolved = _alone(acc_settings, brackets, specs, sig, steps, i0)
+        t, resolved = _alone(acc_settings, brackets, specs, sig, steps, i0, cls=ecls.get(aid, PaperEngine))
         rows.append({"key": f"skipped|{aid}|{s['symbol']}|{bc}", "day": day, "kind": "skipped",
                      "account_id": aid, "symbol": s["symbol"], "timeframe": s["timeframe"], "side": s["side"],
                      "filled": None, "roe": None if t is None else t.roe,
                      "exit_reason": None if t is None else t.exit_reason, "resolved": int(resolved), "data": "{}"})
-    rows += stop_shadows(settings, brackets, specs, conn, day, start, end, steps, sigs, idx, ext)
+    rows += stop_shadows(settings, brackets, specs, conn, day, start, end, steps, sigs, idx, ext, own=set(ecls))
     return rows
 
 
 def stop_shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end: int, steps,
-                 sigs: dict, idx: dict, ext: Optional[dict] = None) -> list[dict]:
+                 sigs: dict, idx: dict, ext: Optional[dict] = None, own: Optional[set] = None) -> list[dict]:
     """For every losing trade (stop or liquidation) whose signal bar closed in the day: the
     same signal alone with a 1.5 / 2.5 / 3 ATR stop (leverage re-chosen by the same rules).
     Feeds the loss cards (cards.py). A copy account's cards read these rows under its parent's id (the copy
     repeats the parent's signal), so a parent signal is also computed when only a copy of it lost (the parent
     won or was not in it): such a row has ``actual_roe`` None and ``copies`` (left out of the day's summary,
-    which is about the original accounts' losses)."""
+    which is about the original accounts' losses). ``own``: accounts with their own exits (paper v4's reel and 5m
+    coin flips): no house-stop what-ifs."""
     rows = []
+    own = own or set()
     q = ("SELECT account_id, data FROM trades WHERE exit_reason IN ('SL', 'LIQ') "
          "AND entry_time >= ? AND entry_time < ?")
     parent_of = {aid: x["parent"] for aid, x in (ext or {}).items() if x.get("kind") == "copy" and x.get("parent")}
     lost, copy_lost = {}, {}
     for aid, data in conn.execute(q, (start, end + DAY_MS)):
+        if aid in own:
+            continue
         t = json.loads(data)
         lost[(aid, t["symbol"], t["signal_ts"] + 1)] = t
         if aid in parent_of:
@@ -853,13 +1001,21 @@ def _enough_for(stops: list[tuple[int, float]], start: int, window_ms: int):
     return check
 
 
+# Which coin-minutes the stop-slippage caps read first (G28): the groups the owners read trade by trade (core, reel)
+# before the extras, then DeepSeek and the coin flips; an unknown group (a database without accounts) as core.
+STOP_GROUP_RANK = {"core": 0, "reel": 0, "other": 0, "extra": 1, "ds200": 2, "flip": 2}
+
+
 def stop_slippage(conn, rest, settings: Settings, day: str, start: int, end: int, sleep=time.sleep,
                   window_ms: Optional[int] = None) -> tuple[list[dict], dict]:
     """(one row per SL / LOCK / LIQ exit in [start, end), summary). Never raises for a failed request: the
-    exits of that coin-minute get ``status = 'api_error'``; past a cap ``'cap'``."""
+    exits of that coin-minute get ``status = 'api_error'``; past a cap ``'cap'``. Paper v4: the coin-minutes holding
+    a core or reel exit are read first (``STOP_GROUP_RANK``, then the most exit notional first), and the summary
+    adds ``groups`` ({group: slipcost.stop_cell}) for the 09:20 split."""
     from . import slipcost as SC
     window_ms = SC.WINDOW_MS if window_ms is None else window_ms
     meta = _accounts_meta(conn)
+    grp = account_groups(conn)
     q = ("SELECT account_id, data FROM trades WHERE exit_time >= ? AND exit_time < ? AND exit_reason IN "
          f"({', '.join('?' * len(SC.STOP_REASONS))}) ORDER BY id")
     exits = []
@@ -879,7 +1035,9 @@ def stop_slippage(conn, rest, settings: Settings, day: str, start: int, end: int
     groups: dict = {}
     for t in exits:
         groups.setdefault((t["symbol"], _minute(int(t["exit_time"]))), []).append(t)
-    order = sorted(groups.items(), key=lambda kv: (-sum(float(t["qty"]) * float(t["exit_price"]) for t in kv[1]),
+    order = sorted(groups.items(), key=lambda kv: (min(STOP_GROUP_RANK.get(grp.get(t["account_id"], "other"), 2)
+                                                       for t in kv[1]),
+                                                   -sum(float(t["qty"]) * float(t["exit_price"]) for t in kv[1]),
                                                    kv[0][1], kv[0][0]))
     budget = {"pages": STOP_MAX_TOTAL_PAGES}
     rows, fails, pages0, read = [], 0, budget["pages"], 0
@@ -920,6 +1078,10 @@ def stop_slippage(conn, rest, settings: Settings, day: str, start: int, end: int
     summary = SC.summarize_stops(rows, settings.slippage_frac)
     summary["api"] = {"coin_minutes": len(order), "read": read, "pages": pages0 - budget["pages"],
                       "window_ms": window_ms}
+    by: dict = {g: [] for g in set(grp.values()) if g != "extra"}
+    for r in rows:
+        by.setdefault(grp.get(r["account_id"], "other"), []).append(r)
+    summary["groups"] = _group_dict({g: SC.stop_cell(v) for g, v in by.items()})
     return rows, summary
 
 
@@ -945,9 +1107,10 @@ def write_stop_slips(out: sqlite3.Connection, day: str, rows: list[dict]) -> Non
 
 def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings, brackets, specs,
             day: str, horizon_days: int = 3, early_window_ms: int = EARLY_WINDOW_MS, stop_slip: bool = False,
-            sleep=time.sleep) -> dict:
+            sleep=time.sleep, dscheck_dir: Optional[str] = None) -> dict:
     """One night. ``stop_slip`` (the nightly command's default): also the realistic stop slippage (4), which
-    reads aggTrades; ``sleep`` paces those pages."""
+    reads aggTrades; ``sleep`` paces those pages. ``dscheck_dir`` (the nightly command: ``DSCHECK_DIR``): a run
+    with DeepSeek accounts adds the DeepSeek recomputation's last line (``report["dscheck"]``, None when none)."""
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     end = start + DAY_MS
     now = rest.server_time()
@@ -961,15 +1124,28 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
         report["strength"] = day_counts(conn, start, end)
     except Exception as exc:  # noqa: BLE001  a count only
         report["strength"] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    acc = account_rows(conn)
+    groups = account_groups(conn, acc)
     snap = conn.execute("SELECT data FROM state WHERE k = ?", (day_key(start),)).fetchone()
     if snap is None:
-        report["parity"] = "no 00:00 snapshot for this day (runner not running then)"
+        first = run_start_ts(conn)
+        if first is not None and first > start:
+            # the run started after this day's 00:00 UTC: no snapshot by design (G25), not a stopped runner
+            hhmm = dt.datetime.fromtimestamp(first / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
+            report["parity"] = (f"start day: the run started at {hhmm} UTC, after this day's 00:00 snapshot "
+                                "(nothing to replay)" if first < end else
+                                f"before the run: it started at {hhmm} UTC (nothing to replay)")
+            report["start_day"] = {"run_start": first, "before_run": first >= end}
+        else:
+            report["parity"] = "no 00:00 snapshot for this day (runner not running then)"
         mism = []
     else:
         ext = extras_of(conn)
+        ecls = engine_classes(conn, acc)                          # the reel and the 5m coin flips: ReelEngine
         snap_d = json.loads(snap[0])
-        sigs = day_signals(conn, start, end, with_data=True)    # data: skip tags and the leverage group's strength
-        rep = replay(settings, brackets, specs, snap_d, sigs, day_steps, extras=ext)
+        sigs = day_signals(conn, start, end, with_data=True)    # data: skip tags, the leverage group's strength,
+        #                                                         the reel's entry levels
+        rep = replay(settings, brackets, specs, snap_d, sigs, day_steps, extras=ext, engine_cls=ecls)
         rep_day = {a: [t for t in ts if t.exit_time < end] for a, ts in rep.items()}
         stored = stored_trades(conn, start, end)
         mism = compare(rep_day, stored)
@@ -977,7 +1153,7 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             label_crash_gaps(mism, ext, conn)
         gaps = sum(1 for m in mism if m.get("crash_gap"))
         early = explain_mismatches(conn, rest, settings, brackets, specs, snap_d, sigs, day_steps, rep_day, stored,
-                                   mism, start, end, extras=ext, window_ms=early_window_ms)
+                                   mism, start, end, extras=ext, window_ms=early_window_ms, engine_cls=ecls)
         n_early = early["early_kline"]
         report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism) - gaps - n_early}
         if n_early:
@@ -986,6 +1162,8 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             report["parity"]["live_bars"] = {"bars": early["live_bars"], **(early.get("live_bars_replay") or {})}
         if ext:
             report["parity"].update(extra_accounts=sum(1 for a in rep if a in ext), crash_gaps=gaps)
+        report["parity"]["groups"] = parity_groups(rep, mism, groups)
+    report["trades"] = trade_counts(conn, start, end, groups)
     sh = shadows(settings, brackets, specs, conn, day, start, end, steps)
     # trades that closed today but were entered earlier need the steps from their signal on
     first = first_signal(conn, start, end)
@@ -1009,6 +1187,7 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             "turned_positive": sum(1 for r in v if r["roe"] > 0),
             "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
         }
+    report["shadows"]["groups"] = shadow_groups(sh, groups)
     report["shadows"]["trade_variants"] = summarize(tv, tv_info)
     sh += tv
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
@@ -1025,6 +1204,8 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             report["stop_slippage"] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
     if slips is not None:
         write_stop_slips(out, day, slips)
+    if dscheck_dir and "ds200" in groups.values():
+        report["dscheck"] = dscheck_line(dscheck_dir)
     out.execute("DELETE FROM mismatches WHERE day = ?", (day,))
     out.executemany("INSERT INTO mismatches VALUES (?,?,?)", [(day, m["account_id"], json.dumps(m)) for m in mism])
     out.executemany("INSERT OR REPLACE INTO shadows VALUES (:key,:day,:kind,:account_id,:symbol,:timeframe,:side,"
@@ -1035,12 +1216,130 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     return report
 
 
+GROUP_ORDER = ("core", "ds200", "reel", "flip", "extra", "other")
+
+
+def _group_dict(d: dict) -> dict:
+    """``d`` in the report's group order (core, ds200, reel, flip, extra, then any other)."""
+    def key(g):
+        return GROUP_ORDER.index(g) if g in GROUP_ORDER else len(GROUP_ORDER), g
+    return {g: d[g] for g in sorted(d, key=key)}
+
+
+def parity_groups(replayed: dict, mism: list[dict], groups: dict) -> dict:
+    """The parity split by account group (paper v4: core, ds200, reel, flip, extra; ``account_groups``):
+    {group: {"accounts", "ok", "mismatched", "early_kline", "crash_gaps"}}. "accounts" counts the replayed accounts as
+    ``parity.accounts`` does; a mismatch is counted once, as a restart gap, an early 1m kline or a real mismatch (the
+    sum of "mismatched" is ``parity.mismatched_accounts``)."""
+    out: dict = {}
+
+    def slot(aid):
+        return out.setdefault(groups.get(aid, "other"),
+                              {"accounts": 0, "ok": 0, "mismatched": 0, "early_kline": 0, "crash_gaps": 0})
+    for aid in replayed:
+        slot(aid)["accounts"] += 1
+    for m in mism:
+        x = slot(m["account_id"])
+        x["crash_gaps" if m.get("crash_gap") else "early_kline" if m.get("early_kline") else "mismatched"] += 1
+    for x in out.values():
+        x["ok"] = x["accounts"] - x["mismatched"] - x["early_kline"] - x["crash_gaps"]
+    return _group_dict(out)
+
+
+def shadow_groups(sh: list[dict], groups: dict) -> dict:
+    """The limit and skipped shadows by account group (G28): {group: {"limit_signals", "limit_filled",
+    "limit_mean_roe", "skipped"}}; every group of the run's original accounts is listed (0 when it had none)."""
+    per: dict = {g: [] for g in set(groups.values()) if g != "extra"}
+    for r in sh:
+        if r["kind"] in ("limit", "skipped"):
+            per.setdefault(groups.get(r["account_id"], "other"), []).append(r)
+    out = {}
+    for g, rs in per.items():
+        lim = [r for r in rs if r["kind"] == "limit"]
+        roes = [r["roe"] for r in lim if r["roe"] is not None]
+        out[g] = {"limit_signals": len(lim), "limit_filled": sum(int(r["filled"] or 0) for r in lim),
+                  "limit_mean_roe": float(np.mean(roes)) if roes else None,
+                  "skipped": sum(1 for r in rs if r["kind"] == "skipped")}
+    return _group_dict(out)
+
+
+def trade_counts(conn, start: int, end: int, groups: dict) -> dict:
+    """{"total": n, "groups": {group: n}} of the trades that closed in [start, end) (paper3.db trades); every group
+    of the run's original accounts is listed, with 0 when it had none (an empty reel day shows)."""
+    per = {g: 0 for g in set(groups.values()) if g != "extra"}
+    total = 0
+    for aid, n in conn.execute("SELECT account_id, COUNT(*) FROM trades WHERE exit_time >= ? AND exit_time < ? "
+                               "GROUP BY account_id", (start, end)):
+        g = groups.get(aid, "other")
+        per[g] = per.get(g, 0) + int(n)
+        total += int(n)
+    return {"total": total, "groups": _group_dict(per)}
+
+
+def _split_text(parts: list[tuple[str, str]]) -> str:
+    from .groups import GROUP_KO
+    return " (" + " · ".join(f"{GROUP_KO.get(g, g)} {v}" for g, v in parts) + ")" if parts else ""
+
+
+def _groups_of(d) -> dict:
+    """A report's split by group when it says something (two groups or more), else {}."""
+    return d if isinstance(d, dict) and len(d) > 1 else {}
+
+
+# G28: the 09:20 text gives numbers for the groups the owners follow trade by trade (groups.TRADE_ALERT_GROUPS; an
+# unknown group with them) and ONE count line for DeepSeek; the coin flips' shadows stay in the report only.
+NUMBER_GROUPS = ("core", "reel", "extra", "other")
+COUNT_LINE_GROUP = "ds200"
+
+
+def _v4_split(*splits) -> bool:
+    """Is this a paper v4 report (a DeepSeek or reel group in a split)? A v3 report keeps its text."""
+    return any(isinstance(s, dict) and ("ds200" in s or "reel" in s) for s in splits)
+
+
+def _gko(g: str) -> str:
+    try:
+        from .groups import GROUP_KO
+        return GROUP_KO.get(g, g)
+    except Exception:  # noqa: BLE001
+        return g
+
+
+def _shadow_lines(sh: dict, slip: dict, usd) -> list[str]:
+    """The limit / skipped / stop-slippage lines of a paper v4 report, split by group (G28)."""
+    sg = sh.get("groups") if isinstance(sh.get("groups"), dict) else {}
+    gg = slip.get("groups") if isinstance(slip.get("groups"), dict) else {}
+    num = [g for g in NUMBER_GROUPS if g in sg and (g in ("core", "reel") or sg[g].get("limit_signals")
+                                                     or sg[g].get("skipped"))]
+    out = []
+    if num:
+        out.append("지정가였다면 체결 " + " · ".join(f"{_gko(g)} {sg[g].get('limit_filled', 0)}/"
+                                             f"{sg[g].get('limit_signals', 0)}" for g in num))
+        out.append("포지션 중이라 놓친 신호 " + " · ".join(f"{_gko(g)} {sg[g].get('skipped', 0)}" for g in num))
+    for g in NUMBER_GROUPS:
+        c = gg.get(g) or {}
+        if c.get("measured"):
+            out.append(f"손절 체결 {_gko(g)} {c['measured']}건: 실제 {c['real_bps_median']:.1f}bp vs paper "
+                       f"{c['paper_bps_median']:.1f}bp")
+            out.append(f"→ paper보다 {usd(c['diff_usd_total'])}")
+    d, ds = sg.get(COUNT_LINE_GROUP), gg.get(COUNT_LINE_GROUP)
+    if d is not None or ds is not None:
+        d = d or {}
+        out.append(f"{_gko(COUNT_LINE_GROUP)} (개수만): 지정가 체결 {d.get('limit_filled', 0)}/{d.get('limit_signals', 0)}"
+                   f" · 놓친 신호 {d.get('skipped', 0)}"
+                   + (f" · 손절 {int((ds or {}).get('exits') or 0)}건" if ds is not None else ""))
+    return out
+
+
 def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> list[tuple[str, str]]:
     """ONE owner message from one nightly report (routing in docs/paper-v3-rules-addendum.md; owners' Telegram
     layout 2026-10-04): loud only for a real parity mismatch (CRITICAL) or a missing 00:00 snapshot (WARN);
     everything else (mismatches proven to be early 1m klines, ``parity.early_kline``, which are not counted in
     ``mismatched_accounts``; bars only on the live record; an extra's restart gap; missing 1m bars) is a line of
-    the silent INFO summary (and the agents open no incident meeting for early klines)."""
+    the silent INFO summary (and the agents open no incident meeting for early klines).
+    A paper v4 report (``parity.groups``, ``trades.groups``) adds the split by group: "재계산 일치 331/331 (매매법
+    144/144 · 딥시크 171/171 · 5분 단타 1/1 · 동전 15/15)", the groups of the mismatched accounts and the trades by
+    group; a report without them, or with one group only, reads as before."""
     from .notify import day_ko, usd
     day = day_ko(report["day"])
     level, head, lines = INFO, [f"🔎 매일 점검 · {day}"], []
@@ -1050,13 +1349,16 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
     if isinstance(par, dict):
         early = int(par.get("early_kline") or 0)
         ok = par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0) - early
+        pg = _groups_of(par.get("groups"))
         if par["mismatched_accounts"]:
             level = CRITICAL
-            head = [f"재계산 불일치 · {day}", "", f"계좌 {par['mismatched_accounts']}개의 거래가 paper와 다름"]
+            head = [f"재계산 불일치 · {day}", "", f"계좌 {par['mismatched_accounts']}개의 거래가 paper와 다름"
+                    + _split_text([(g, x["mismatched"]) for g, x in pg.items() if x.get("mismatched")])]
             if early:
                 head.append(f"(그 밖에 {early}개는 확정 전 1분봉: 정상)")
             head += ["운영 감사관 확인 필요", "자세히: daily3.db mismatches", "", "매일 점검"]
-        lines.append(f"재계산 일치 {ok}/{par['accounts']}")
+        lines.append(f"재계산 일치 {ok}/{par['accounts']}"
+                     + _split_text([(g, f"{x['ok']}/{x['accounts']}") for g, x in pg.items()]))
         if early and not par["mismatched_accounts"]:
             lines.append(f"({early}개는 확정 전 1분봉: 정상)")
         only_live = (par.get("live_bars") or {}).get("only_on_live_bars") or []
@@ -1065,15 +1367,24 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
                          "(완성된 1분봉으로는 일치, daily3.db reports)")
         if par.get("crash_gaps"):
             lines.append(f"{CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 신호 1개를 놓침 (원래 계좌와는 무관)")
+    elif report.get("start_day"):
+        # the run's start day (G25): no 00:00 snapshot by design; silent, no incident (agents read ``start_day``)
+        lines.append("시작 전 날: 재계산 없음 (봇이 아직 안 돌던 날)" if report["start_day"].get("before_run") else
+                     "시작한 날: 재계산 없음 (09:00 상태 저장 뒤에 시작 · 첫 재계산은 내일 09:20)")
     else:
         level = WARN
         head = [f"재계산 못 함 · {day}", "", "그날 09:00(한국) 상태 저장이 없음", "봇이 그때 멈춰 있었음", "", "매일 점검"]
     if trades_day is not None:
-        lines.append(f"거래 {trades_day}건")
+        tg = _groups_of((report.get("trades") or {}).get("groups") if isinstance(report.get("trades"), dict) else None)
+        lines.append(f"거래 {trades_day}건" + _split_text(list(tg.items())))
     sh = report.get("shadows", {})
-    if sh:
+    slip = report.get("stop_slippage") or {}
+    v4 = _v4_split(sh.get("groups") if sh else None, slip.get("groups"))
+    if sh and not v4:
         lines.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
         lines.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
+    elif v4:
+        lines += _shadow_lines(sh or {}, slip, usd)
     try:
         from .strengthwatch import summary_line
         st_line = summary_line(report.get("strength"))
@@ -1083,10 +1394,12 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
         lines.append(st_line)
     lines.append(f"빠진 1분봉 {sum(missing.values())}"
                  + (" (" + ", ".join(f"{s.replace('USDT', '')} {n}" for s, n in missing.items()) + ")" if missing else ""))
-    ov = ((report.get("stop_slippage") or {}).get("overall") or {})
-    if ov.get("measured"):
+    ov = slip.get("overall") or {}
+    if ov.get("measured") and not v4:
         lines.append(f"손절 체결 {ov['measured']}건: 실제 {ov['real_bps_median']:.1f}bp vs paper {ov['paper_bps_median']:.1f}bp")
         lines.append(f"→ paper보다 {usd(ov['diff_usd_total'])}")
+    if "dscheck" in report:            # a run with DeepSeek accounts: the night before's recomputation, its own day
+        lines.append(report["dscheck"] or "딥시크 밤 재계산: 결과 없음 (점검이 아직 안 돌았거나 타이머가 꺼짐)")
     text = "\n".join(head + ([""] if level == INFO else []) + lines)
     msgs = [(level, text)]
     for level, text in msgs:
@@ -1110,6 +1423,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                          "the minute (default %(default)s)")
     ap.add_argument("--no-stop-slip", action="store_true",
                     help="skip the realistic stop slippage (4; it reads public aggTrades, a few minutes a night)")
+    ap.add_argument("--dscheck-dir", default=DSCHECK_DIR,
+                    help="the DeepSeek recomputation's folder (paperbot/dscheck.py --out; its last.txt is a line of "
+                         "the 09:20 text; default %(default)s)")
     args = ap.parse_args(argv)
     if not os.path.exists(args.db):       # right after a reset, before the bot created paper3.db: nothing to check
         print(f"INFO: {args.db} does not exist yet (new run not started): nothing to check, skipped")
@@ -1126,7 +1442,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     out.execute("PRAGMA journal_mode=WAL")
     out.executescript(SCHEMA)
     report = run_day(conn, out, rest, settings, brackets, specs, day, early_window_ms=args.early_window_ms,
-                     stop_slip=not args.no_stop_slip)
+                     stop_slip=not args.no_stop_slip, dscheck_dir=args.dscheck_dir)
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     n = conn.execute("SELECT COUNT(*) FROM trades WHERE exit_time >= ? AND exit_time < ?",
                      (start, start + DAY_MS)).fetchone()[0]

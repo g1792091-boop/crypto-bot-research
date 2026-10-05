@@ -1,0 +1,1773 @@
+{
+ "budget": {
+  "bust_reserve_calls": 8,
+  "classes": {
+   "incident": [
+    15,
+    400000
+   ],
+   "loss": [
+    48,
+    1400000
+   ],
+   "owner": [
+    20,
+    500000
+   ],
+   "research": [
+    24,
+    700000
+   ],
+   "scheduled": [
+    20,
+    600000
+   ],
+   "weekly": [
+    20,
+    550000
+   ]
+  },
+  "critical_reserve_calls": 5,
+  "extras_meetings_per_day": 6,
+  "max_calls_per_tick": 12,
+  "max_rounds_per_room_day": 4,
+  "max_rounds_per_tick": 4,
+  "total": [
+   120,
+   3400000
+  ],
+  "week": [
+   600,
+   17000000
+  ]
+ },
+ "budget_classes": [
+  "incident",
+  "owner",
+  "loss",
+  "scheduled",
+  "weekly",
+  "research"
+ ],
+ "incident_kinds": [
+  "critical",
+  "data_gap",
+  "engine_halted",
+  "liquidation",
+  "missing_bars",
+  "no_snapshot",
+  "parity_mismatch",
+  "signal_timeout"
+ ],
+ "meeting_kinds": {
+  "analysis_ko": {
+   "coin_review": "코인·장세 회의",
+   "combo_review": "조합·동시 손실 회의",
+   "cost_review": "비용·체결 회의",
+   "learning_review": "학습 정리 회의",
+   "risk_review": "낙폭·파산 위험 회의",
+   "rr_review": "손익비·청산 회의"
+  },
+  "lead_extra": [
+   "bull_bear",
+   "learning_review"
+  ],
+  "lead_hypothesis": [
+   "ranking",
+   "cost_review",
+   "combo_review",
+   "coin_review",
+   "rr_review",
+   "risk_review"
+  ],
+  "meeting_file": {
+   "bull_bear": "rooms_meeting_bull_bear.md",
+   "coin_review": "rooms_meeting_coin.md",
+   "combo_review": "rooms_meeting_combo.md",
+   "cost_review": "rooms_meeting_cost.md",
+   "event_review": "rooms_meeting_event.md",
+   "learning_review": "rooms_meeting_learning.md",
+   "risk_review": "rooms_meeting_risk.md",
+   "rr_review": "rooms_meeting_rr.md"
+  },
+  "meeting_packets": {
+   "bull_bear": "committee",
+   "checkpoint": "readiness",
+   "coin_review": "coins",
+   "combo_review": "combo",
+   "cost_review": "cost",
+   "event_review": "event",
+   "learning_review": "learning",
+   "risk_review": "survival",
+   "rr_review": "rr"
+  },
+  "roster": [
+   "morning",
+   "evening",
+   "weekly",
+   "incident"
+  ],
+  "trigger_ko": [
+   "bull_bear",
+   "bust",
+   "checkpoint",
+   "coin_review",
+   "combo_review",
+   "cost_review",
+   "evening",
+   "event_review",
+   "incident",
+   "learning_review",
+   "loss_cluster",
+   "market_move",
+   "morning",
+   "owner",
+   "ranking",
+   "research",
+   "risk_review",
+   "rr_review",
+   "tf_split",
+   "weekly"
+  ]
+ },
+ "packet_sections": {
+  "board": [
+   "breakdown",
+   "by_coin",
+   "by_strategy",
+   "execution",
+   "exits",
+   "extras",
+   "league",
+   "meta",
+   "nightly",
+   "pass_check",
+   "today"
+  ],
+  "league_tf": [
+   "above_start",
+   "beat_all_coin_flips",
+   "bust",
+   "coin_flip_wallets",
+   "median_wallet",
+   "open_positions",
+   "strategy_accounts"
+  ],
+  "meta": [
+   "accounts",
+   "days_running",
+   "extra_accounts",
+   "min_n",
+   "no_5m",
+   "original_accounts",
+   "pass_check_note",
+   "rules",
+   "rules_change",
+   "settings_version",
+   "timeframes",
+   "units"
+  ],
+  "strategy_room": [
+   "extra_accounts",
+   "extra_accounts_note",
+   "losses",
+   "meeting",
+   "notes",
+   "owner_messages",
+   "owner_messages_note",
+   "role",
+   "room",
+   "room_messages",
+   "rules",
+   "specialist",
+   "this_round",
+   "trials",
+   "turn"
+  ],
+  "strategy_room_losses": [
+   "n_new",
+   "n_recent",
+   "new_loss_tags",
+   "note",
+   "recent",
+   "recent_wins",
+   "stop_whatif",
+   "tag_stats",
+   "tag_window_losses",
+   "tag_window_trades",
+   "win_loss"
+  ],
+  "strategy_room_rules": [
+   "allowed_actions",
+   "copy_slots",
+   "min_trades_for_pattern",
+   "next_test_can_pass_gate",
+   "next_test_p_threshold",
+   "note",
+   "observation",
+   "owner_ok_required",
+   "p_floor",
+   "passed_trials",
+   "running_copies",
+   "tests",
+   "trials_so_far"
+  ],
+  "strategy_room_specialist": [
+   "by_strategy",
+   "checkpoint",
+   "copies",
+   "entry_moment",
+   "league",
+   "meta",
+   "pass_check",
+   "profile",
+   "recent_period",
+   "research",
+   "risk_reward",
+   "strategy",
+   "survival"
+  ],
+  "team_lead": [
+   "board",
+   "meeting",
+   "notes",
+   "owner_messages",
+   "owner_messages_note",
+   "role",
+   "room",
+   "room_messages",
+   "this_round",
+   "today_rounds",
+   "turn",
+   "waiting_for_owners"
+  ],
+  "team_room": [
+   "board",
+   "meeting",
+   "notes",
+   "owner_messages",
+   "owner_messages_note",
+   "role",
+   "room",
+   "room_messages",
+   "this_round",
+   "turn"
+  ],
+  "team_view": {
+   "bear": [
+    "market",
+    "macro"
+   ],
+   "bull": [
+    "market",
+    "macro"
+   ],
+   "chart_regime": [
+    "market",
+    "by_coin",
+    "breakdown",
+    "macro"
+   ],
+   "code_reviewer": [
+    "nightly",
+    "execution",
+    "today"
+   ],
+   "coin_compare": [
+    "by_coin",
+    "breakdown"
+   ],
+   "combo_synergy": [
+    "league",
+    "today"
+   ],
+   "data_quality": [
+    "nightly",
+    "execution",
+    "today"
+   ],
+   "derivs_flow": [
+    "market",
+    "execution",
+    "nightly",
+    "macro"
+   ],
+   "devils_advocate": [
+    "market",
+    "league",
+    "today",
+    "breakdown"
+   ],
+   "exec_cost": [
+    "execution",
+    "nightly"
+   ],
+   "exit_timing": [
+    "exits"
+   ],
+   "league_referee": [
+    "meta",
+    "league",
+    "checkpoint",
+    "pass_check",
+    "pass_summary"
+   ],
+   "learning": [
+    "meta"
+   ],
+   "macro_corr": [
+    "macro",
+    "market",
+    "by_coin"
+   ],
+   "news_calendar": [
+    "macro",
+    "market"
+   ],
+   "ops_auditor": [
+    "today",
+    "execution",
+    "nightly"
+   ],
+   "performance": [
+    "league",
+    "by_strategy",
+    "today"
+   ],
+   "pnl_reviewer": [
+    "today",
+    "exits",
+    "loss_tags_24h",
+    "by_coin",
+    "breakdown"
+   ],
+   "regime_perf": [
+    "market",
+    "breakdown"
+   ],
+   "researcher": [
+    "meta"
+   ],
+   "risk_officer": [
+    "league",
+    "today",
+    "exits",
+    "pass_summary",
+    "macro",
+    "shock"
+   ],
+   "rule_keeper": [
+    "meta",
+    "checkpoint",
+    "pass_summary",
+    "league"
+   ],
+   "strategist": [
+    "market",
+    "league",
+    "today",
+    "by_strategy",
+    "breakdown",
+    "macro"
+   ],
+   "team_lead": [
+    "meta",
+    "today",
+    "league",
+    "checkpoint",
+    "pass_summary",
+    "readiness"
+   ],
+   "validator": [
+    "meta"
+   ],
+   "whatif": [
+    "exits",
+    "stop_whatif_24h",
+    "nightly"
+   ]
+  },
+  "today": [
+   "alerts",
+   "biggest_losses",
+   "busts_total",
+   "net_pnl",
+   "trades",
+   "wins"
+  ]
+ },
+ "roles": [
+  "chart_regime",
+  "derivs_flow",
+  "macro_corr",
+  "news_calendar",
+  "similar_pattern",
+  "strategist",
+  "devils_advocate",
+  "risk_officer",
+  "ops_auditor",
+  "performance",
+  "validator",
+  "combo_synergy",
+  "league_referee",
+  "data_quality",
+  "code_reviewer",
+  "test_writer",
+  "team_lead",
+  "pnl_reviewer",
+  "whatif",
+  "researcher",
+  "algo_discovery",
+  "self_improve",
+  "cio",
+  "approver",
+  "learning",
+  "tf_compare",
+  "coin_compare",
+  "regime_perf",
+  "exec_cost",
+  "entry_timing",
+  "exit_timing",
+  "rule_keeper",
+  "security",
+  "bull",
+  "bear",
+  "live_readiness",
+  "spec_S1_EMA_RSI_CHOP",
+  "spec_S2_ST_ROC",
+  "spec_S3_CMO_SANDWICH",
+  "spec_S4_BB_BBP",
+  "spec_S5_DONCHIAN_MFI",
+  "spec_S6_EMA_DMI_ADX",
+  "spec_N01_ST_EMA",
+  "spec_N02_ST_KST",
+  "spec_N03_ADX_GC",
+  "spec_N04_ST_KLINGER",
+  "spec_N05_PSAR_POC",
+  "spec_N06_MACD_ORB",
+  "spec_N07_ICHI_CMO",
+  "spec_N08_ICHI_WR",
+  "spec_N09_ALLIG_AROON",
+  "spec_N10_HA_PSAR",
+  "spec_N11_BREAKAWAY",
+  "spec_N12_ICHI_AO",
+  "spec_N13_3OUTSIDE",
+  "spec_N14_ICHI_RSI",
+  "spec_N15_KC_AO",
+  "spec_N16_BBRSI",
+  "spec_N17_KC_RSI",
+  "spec_N18_VWMA_MACD",
+  "spec_N19_FIB_CHOP",
+  "spec_N20_EMA9_CHOP",
+  "spec_N21_ST_RSI_ADX",
+  "spec_N22_VORTEX_PSAR",
+  "spec_N23_HA_ST",
+  "spec_N24_DMI",
+  "spec_N25_DST_CCI",
+  "spec_V39_ALL",
+  "spec_V45_AMB",
+  "spec_OBV_S",
+  "spec_OBV_B",
+  "spec_DOGE"
+ ],
+ "rooms": {
+  "strat:DOGE": {
+   "kind": "strategy",
+   "members": [
+    "spec_DOGE",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "DOGE",
+   "title": "도지 봇(친구분)"
+  },
+  "strat:N01_ST_EMA": {
+   "kind": "strategy",
+   "members": [
+    "spec_N01_ST_EMA",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N01_ST_EMA",
+   "title": "슈퍼트렌드·EMA"
+  },
+  "strat:N02_ST_KST": {
+   "kind": "strategy",
+   "members": [
+    "spec_N02_ST_KST",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N02_ST_KST",
+   "title": "슈퍼트렌드·KST"
+  },
+  "strat:N03_ADX_GC": {
+   "kind": "strategy",
+   "members": [
+    "spec_N03_ADX_GC",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N03_ADX_GC",
+   "title": "ADX·골든크로스"
+  },
+  "strat:N04_ST_KLINGER": {
+   "kind": "strategy",
+   "members": [
+    "spec_N04_ST_KLINGER",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N04_ST_KLINGER",
+   "title": "슈퍼트렌드·클링거"
+  },
+  "strat:N05_PSAR_POC": {
+   "kind": "strategy",
+   "members": [
+    "spec_N05_PSAR_POC",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N05_PSAR_POC",
+   "title": "PSAR·POC 캔들"
+  },
+  "strat:N06_MACD_ORB": {
+   "kind": "strategy",
+   "members": [
+    "spec_N06_MACD_ORB",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N06_MACD_ORB",
+   "title": "MACD·시가범위 돌파"
+  },
+  "strat:N07_ICHI_CMO": {
+   "kind": "strategy",
+   "members": [
+    "spec_N07_ICHI_CMO",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N07_ICHI_CMO",
+   "title": "일목·CMO"
+  },
+  "strat:N08_ICHI_WR": {
+   "kind": "strategy",
+   "members": [
+    "spec_N08_ICHI_WR",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N08_ICHI_WR",
+   "title": "일목·윌리엄스%R"
+  },
+  "strat:N09_ALLIG_AROON": {
+   "kind": "strategy",
+   "members": [
+    "spec_N09_ALLIG_AROON",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N09_ALLIG_AROON",
+   "title": "앨리게이터·아룬"
+  },
+  "strat:N10_HA_PSAR": {
+   "kind": "strategy",
+   "members": [
+    "spec_N10_HA_PSAR",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N10_HA_PSAR",
+   "title": "하이킨아시·PSAR"
+  },
+  "strat:N11_BREAKAWAY": {
+   "kind": "strategy",
+   "members": [
+    "spec_N11_BREAKAWAY",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N11_BREAKAWAY",
+   "title": "브레이크어웨이 패턴"
+  },
+  "strat:N12_ICHI_AO": {
+   "kind": "strategy",
+   "members": [
+    "spec_N12_ICHI_AO",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N12_ICHI_AO",
+   "title": "일목·AO"
+  },
+  "strat:N13_3OUTSIDE": {
+   "kind": "strategy",
+   "members": [
+    "spec_N13_3OUTSIDE",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N13_3OUTSIDE",
+   "title": "쓰리 아웃사이드"
+  },
+  "strat:N14_ICHI_RSI": {
+   "kind": "strategy",
+   "members": [
+    "spec_N14_ICHI_RSI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N14_ICHI_RSI",
+   "title": "일목·RSI"
+  },
+  "strat:N15_KC_AO": {
+   "kind": "strategy",
+   "members": [
+    "spec_N15_KC_AO",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N15_KC_AO",
+   "title": "켈트너·AO"
+  },
+  "strat:N16_BBRSI": {
+   "kind": "strategy",
+   "members": [
+    "spec_N16_BBRSI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N16_BBRSI",
+   "title": "볼린저 RSI"
+  },
+  "strat:N17_KC_RSI": {
+   "kind": "strategy",
+   "members": [
+    "spec_N17_KC_RSI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N17_KC_RSI",
+   "title": "켈트너·RSI"
+  },
+  "strat:N18_VWMA_MACD": {
+   "kind": "strategy",
+   "members": [
+    "spec_N18_VWMA_MACD",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N18_VWMA_MACD",
+   "title": "VWMA·MACD"
+  },
+  "strat:N19_FIB_CHOP": {
+   "kind": "strategy",
+   "members": [
+    "spec_N19_FIB_CHOP",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N19_FIB_CHOP",
+   "title": "피보나치·초피"
+  },
+  "strat:N20_EMA9_CHOP": {
+   "kind": "strategy",
+   "members": [
+    "spec_N20_EMA9_CHOP",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N20_EMA9_CHOP",
+   "title": "EMA9·초피(숏)"
+  },
+  "strat:N21_ST_RSI_ADX": {
+   "kind": "strategy",
+   "members": [
+    "spec_N21_ST_RSI_ADX",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N21_ST_RSI_ADX",
+   "title": "슈퍼트렌드·RSI·ADX"
+  },
+  "strat:N22_VORTEX_PSAR": {
+   "kind": "strategy",
+   "members": [
+    "spec_N22_VORTEX_PSAR",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N22_VORTEX_PSAR",
+   "title": "볼텍스·PSAR"
+  },
+  "strat:N23_HA_ST": {
+   "kind": "strategy",
+   "members": [
+    "spec_N23_HA_ST",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N23_HA_ST",
+   "title": "하이킨아시·슈퍼트렌드"
+  },
+  "strat:N24_DMI": {
+   "kind": "strategy",
+   "members": [
+    "spec_N24_DMI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N24_DMI",
+   "title": "DMI"
+  },
+  "strat:N25_DST_CCI": {
+   "kind": "strategy",
+   "members": [
+    "spec_N25_DST_CCI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "N25_DST_CCI",
+   "title": "더블 슈퍼트렌드·CCI"
+  },
+  "strat:OBV_B": {
+   "kind": "strategy",
+   "members": [
+    "spec_OBV_B",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "OBV_B",
+   "title": "OBV 돌파형"
+  },
+  "strat:OBV_S": {
+   "kind": "strategy",
+   "members": [
+    "spec_OBV_S",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "OBV_S",
+   "title": "OBV 추세형"
+  },
+  "strat:S1_EMA_RSI_CHOP": {
+   "kind": "strategy",
+   "members": [
+    "spec_S1_EMA_RSI_CHOP",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S1_EMA_RSI_CHOP",
+   "title": "EMA·RSI·초피"
+  },
+  "strat:S2_ST_ROC": {
+   "kind": "strategy",
+   "members": [
+    "spec_S2_ST_ROC",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S2_ST_ROC",
+   "title": "슈퍼트렌드·ROC"
+  },
+  "strat:S3_CMO_SANDWICH": {
+   "kind": "strategy",
+   "members": [
+    "spec_S3_CMO_SANDWICH",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S3_CMO_SANDWICH",
+   "title": "CMO·샌드위치 캔들"
+  },
+  "strat:S4_BB_BBP": {
+   "kind": "strategy",
+   "members": [
+    "spec_S4_BB_BBP",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S4_BB_BBP",
+   "title": "볼린저 스퀴즈·BBP"
+  },
+  "strat:S5_DONCHIAN_MFI": {
+   "kind": "strategy",
+   "members": [
+    "spec_S5_DONCHIAN_MFI",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S5_DONCHIAN_MFI",
+   "title": "돈치안·MFI"
+  },
+  "strat:S6_EMA_DMI_ADX": {
+   "kind": "strategy",
+   "members": [
+    "spec_S6_EMA_DMI_ADX",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "S6_EMA_DMI_ADX",
+   "title": "EMA·DMI·ADX"
+  },
+  "strat:V39_ALL": {
+   "kind": "strategy",
+   "members": [
+    "spec_V39_ALL",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "V39_ALL",
+   "title": "V3.9"
+  },
+  "strat:V45_AMB": {
+   "kind": "strategy",
+   "members": [
+    "spec_V45_AMB",
+    "entry_timing",
+    "exit_timing",
+    "whatif",
+    "devils_advocate",
+    "validator",
+    "approver"
+   ],
+   "strategy": "V45_AMB",
+   "title": "V4.5"
+  },
+  "team:lab": {
+   "kind": "team",
+   "members": [
+    "researcher",
+    "devils_advocate",
+    "team_lead"
+   ],
+   "strategy": null,
+   "title": "새 매매법 연구실"
+  },
+  "team:lead": {
+   "kind": "team",
+   "members": [
+    "team_lead",
+    "league_referee",
+    "rule_keeper"
+   ],
+   "strategy": null,
+   "title": "총괄"
+  },
+  "team:market": {
+   "kind": "team",
+   "members": [
+    "chart_regime",
+    "derivs_flow",
+    "strategist",
+    "devils_advocate",
+    "team_lead"
+   ],
+   "strategy": null,
+   "title": "시장분석팀"
+  },
+  "team:ops": {
+   "kind": "team",
+   "members": [
+    "ops_auditor",
+    "data_quality",
+    "code_reviewer",
+    "team_lead"
+   ],
+   "strategy": null,
+   "title": "운영·검증팀"
+  },
+  "team:review": {
+   "kind": "team",
+   "members": [
+    "pnl_reviewer",
+    "whatif",
+    "risk_officer",
+    "team_lead"
+   ],
+   "strategy": null,
+   "title": "손익 복기팀"
+  },
+  "team:risk": {
+   "kind": "team",
+   "members": [
+    "risk_officer",
+    "team_lead"
+   ],
+   "strategy": null,
+   "title": "리스크팀"
+  }
+ },
+ "scheduled": {
+  "analyses": {
+   "coin_review": [
+    2,
+    "team:review"
+   ],
+   "combo_review": [
+    1,
+    "team:risk"
+   ],
+   "cost_review": [
+    0,
+    "team:ops"
+   ],
+   "learning_review": [
+    5,
+    "team:lead"
+   ],
+   "risk_review": [
+    4,
+    "team:risk"
+   ],
+   "rr_review": [
+    3,
+    "team:review"
+   ]
+  },
+  "env_hours": {
+   "AGENTS_BULL_BEAR_HOUR": [
+    "bull_bear_hour_kst",
+    12
+   ],
+   "AGENTS_COIN_REVIEW_HOUR": [
+    "coin_review_hour_kst",
+    11
+   ],
+   "AGENTS_COMBO_REVIEW_HOUR": [
+    "combo_review_hour_kst",
+    11
+   ],
+   "AGENTS_COST_REVIEW_HOUR": [
+    "cost_review_hour_kst",
+    11
+   ],
+   "AGENTS_EVENT_REVIEW_HOUR": [
+    "event_review_hour_kst",
+    11
+   ],
+   "AGENTS_LEARNING_REVIEW_HOUR": [
+    "learning_review_hour_kst",
+    11
+   ],
+   "AGENTS_RISK_REVIEW_HOUR": [
+    "risk_review_hour_kst",
+    11
+   ],
+   "AGENTS_RR_REVIEW_HOUR": [
+    "rr_review_hour_kst",
+    11
+   ]
+  },
+  "research_every_ms": 3600000,
+  "server_hours": {
+   "analysis_min_days": 7,
+   "analysis_min_trades": 200,
+   "analysis_weekdays": {
+    "coin_review": 2,
+    "combo_review": 1,
+    "cost_review": 0,
+    "learning_review": 5,
+    "risk_review": 4,
+    "rr_review": 3
+   },
+   "bull_bear": 12,
+   "coin_review": 11,
+   "combo_review": 11,
+   "cost_review": 11,
+   "evening": 22,
+   "event_review": 11,
+   "learning_review": 11,
+   "loss_min_count": 2,
+   "loss_min_gap_ms": 7200000,
+   "morning": 8,
+   "ranking": 14,
+   "risk_review": 11,
+   "rr_review": 11,
+   "tf_split": 18,
+   "weekly_report": 21
+  },
+  "weekly_report": [
+   6,
+   21
+  ]
+ },
+ "strategies": [
+  "S1_EMA_RSI_CHOP",
+  "S2_ST_ROC",
+  "S3_CMO_SANDWICH",
+  "S4_BB_BBP",
+  "S5_DONCHIAN_MFI",
+  "S6_EMA_DMI_ADX",
+  "N01_ST_EMA",
+  "N02_ST_KST",
+  "N03_ADX_GC",
+  "N04_ST_KLINGER",
+  "N05_PSAR_POC",
+  "N06_MACD_ORB",
+  "N07_ICHI_CMO",
+  "N08_ICHI_WR",
+  "N09_ALLIG_AROON",
+  "N10_HA_PSAR",
+  "N11_BREAKAWAY",
+  "N12_ICHI_AO",
+  "N13_3OUTSIDE",
+  "N14_ICHI_RSI",
+  "N15_KC_AO",
+  "N16_BBRSI",
+  "N17_KC_RSI",
+  "N18_VWMA_MACD",
+  "N19_FIB_CHOP",
+  "N20_EMA9_CHOP",
+  "N21_ST_RSI_ADX",
+  "N22_VORTEX_PSAR",
+  "N23_HA_ST",
+  "N24_DMI",
+  "N25_DST_CCI",
+  "V39_ALL",
+  "V45_AMB",
+  "OBV_S",
+  "OBV_B",
+  "DOGE"
+ ],
+ "team_plans": {
+  "bull_bear@team:market": [
+   [
+    "bull",
+    "team"
+   ],
+   [
+    "bear",
+    "team"
+   ],
+   [
+    "risk_officer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "bust@team:lab": [
+   [
+    "researcher",
+    "team"
+   ],
+   [
+    "devils_advocate",
+    "challenge"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "checkpoint@team:lead": [
+   [
+    "league_referee",
+    "team"
+   ],
+   [
+    "rule_keeper",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "coin_review@team:review": [
+   [
+    "coin_compare",
+    "team"
+   ],
+   [
+    "regime_perf",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "combo_review@team:risk": [
+   [
+    "combo_synergy",
+    "team"
+   ],
+   [
+    "risk_officer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "cost_review@team:ops": [
+   [
+    "exec_cost",
+    "team"
+   ],
+   [
+    "ops_auditor",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "evening@team:lead": [
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "evening@team:review": [
+   [
+    "pnl_reviewer",
+    "team"
+   ],
+   [
+    "whatif",
+    "team"
+   ],
+   [
+    "risk_officer",
+    "team"
+   ]
+  ],
+  "event_review@team:market": [
+   [
+    "news_calendar",
+    "team"
+   ],
+   [
+    "macro_corr",
+    "team"
+   ],
+   [
+    "chart_regime",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "incident@team:ops#data_gap": [
+   [
+    "ops_auditor",
+    "team"
+   ],
+   [
+    "data_quality",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "incident@team:ops#liquidation": [
+   [
+    "ops_auditor",
+    "team"
+   ],
+   [
+    "code_reviewer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "learning_review@team:lead": [
+   [
+    "performance",
+    "team"
+   ],
+   [
+    "learning",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "loss_cluster@team:lab": [
+   [
+    "researcher",
+    "team"
+   ],
+   [
+    "devils_advocate",
+    "challenge"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "market_move@team:market": [
+   [
+    "chart_regime",
+    "team"
+   ],
+   [
+    "derivs_flow",
+    "team"
+   ],
+   [
+    "strategist",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "morning@team:market": [
+   [
+    "chart_regime",
+    "team"
+   ],
+   [
+    "derivs_flow",
+    "team"
+   ],
+   [
+    "strategist",
+    "team"
+   ],
+   [
+    "devils_advocate",
+    "challenge"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:lab": [
+   [
+    "researcher",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:lead": [
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:market": [
+   [
+    "chart_regime",
+    "team"
+   ],
+   [
+    "strategist",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:ops": [
+   [
+    "ops_auditor",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:review": [
+   [
+    "pnl_reviewer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "owner@team:risk": [
+   [
+    "risk_officer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "ranking@team:review": [
+   [
+    "performance",
+    "team"
+   ],
+   [
+    "pnl_reviewer",
+    "team"
+   ],
+   [
+    "risk_officer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "research@team:lab": [
+   [
+    "researcher",
+    "lab_inventor"
+   ],
+   [
+    "devils_advocate",
+    "lab_skeptic"
+   ],
+   [
+    "team_lead",
+    "lab_lead"
+   ]
+  ],
+  "risk_review@team:risk": [
+   [
+    "risk_officer",
+    "team"
+   ],
+   [
+    "validator",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "rr_review@team:review": [
+   [
+    "exit_timing",
+    "team"
+   ],
+   [
+    "whatif",
+    "team"
+   ],
+   [
+    "pnl_reviewer",
+    "team"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ],
+  "weekly@team:lab": [
+   [
+    "researcher",
+    "team"
+   ],
+   [
+    "devils_advocate",
+    "challenge"
+   ],
+   [
+    "team_lead",
+    "lead"
+   ]
+  ]
+ },
+ "team_room_members": {
+  "lead": [
+   "team_lead",
+   "league_referee",
+   "rule_keeper"
+  ],
+  "market": [
+   "chart_regime",
+   "derivs_flow",
+   "strategist",
+   "devils_advocate",
+   "team_lead"
+  ],
+  "ops": [
+   "ops_auditor",
+   "data_quality",
+   "code_reviewer",
+   "team_lead"
+  ],
+  "review": [
+   "pnl_reviewer",
+   "whatif",
+   "risk_officer",
+   "team_lead"
+  ],
+  "risk": [
+   "risk_officer",
+   "team_lead"
+  ]
+ },
+ "teams": [
+  "market",
+  "plan",
+  "risk",
+  "ops",
+  "dev",
+  "lead",
+  "review",
+  "evolve",
+  "compare",
+  "timing",
+  "safety",
+  "specialist"
+ ],
+ "trigger_class": {
+  "bull_bear": "scheduled",
+  "bust": "loss",
+  "checkpoint": "scheduled",
+  "coin_review": "weekly",
+  "combo_review": "weekly",
+  "cost_review": "weekly",
+  "evening": "scheduled",
+  "event_review": "weekly",
+  "incident": "incident",
+  "learning_review": "weekly",
+  "loss_cluster": "loss",
+  "market_move": "loss",
+  "morning": "scheduled",
+  "owner": "owner",
+  "ranking": "scheduled",
+  "research": "research",
+  "risk_review": "weekly",
+  "rr_review": "weekly",
+  "tf_split": "weekly",
+  "weekly": "weekly"
+ },
+ "trigger_priority": {
+  "bull_bear": 3,
+  "bust": 2,
+  "checkpoint": 3,
+  "coin_review": 4,
+  "combo_review": 4,
+  "cost_review": 4,
+  "evening": 3,
+  "event_review": 4,
+  "incident": 0,
+  "learning_review": 4,
+  "loss_cluster": 2,
+  "market_move": 2,
+  "morning": 3,
+  "owner": 1,
+  "ranking": 3,
+  "research": 5,
+  "risk_review": 4,
+  "rr_review": 4,
+  "tf_split": 4,
+  "weekly": 4
+ },
+ "trigger_rooms": [
+  "strat:S1_EMA_RSI_CHOP",
+  "strat:S2_ST_ROC",
+  "strat:S3_CMO_SANDWICH",
+  "strat:S4_BB_BBP",
+  "strat:S5_DONCHIAN_MFI",
+  "strat:S6_EMA_DMI_ADX",
+  "strat:N01_ST_EMA",
+  "strat:N02_ST_KST",
+  "strat:N03_ADX_GC",
+  "strat:N04_ST_KLINGER",
+  "strat:N05_PSAR_POC",
+  "strat:N06_MACD_ORB",
+  "strat:N07_ICHI_CMO",
+  "strat:N08_ICHI_WR",
+  "strat:N09_ALLIG_AROON",
+  "strat:N10_HA_PSAR",
+  "strat:N11_BREAKAWAY",
+  "strat:N12_ICHI_AO",
+  "strat:N13_3OUTSIDE",
+  "strat:N14_ICHI_RSI",
+  "strat:N15_KC_AO",
+  "strat:N16_BBRSI",
+  "strat:N17_KC_RSI",
+  "strat:N18_VWMA_MACD",
+  "strat:N19_FIB_CHOP",
+  "strat:N20_EMA9_CHOP",
+  "strat:N21_ST_RSI_ADX",
+  "strat:N22_VORTEX_PSAR",
+  "strat:N23_HA_ST",
+  "strat:N24_DMI",
+  "strat:N25_DST_CCI",
+  "strat:V39_ALL",
+  "strat:V45_AMB",
+  "strat:OBV_S",
+  "strat:OBV_B",
+  "strat:DOGE",
+  "team:market",
+  "team:risk",
+  "team:ops",
+  "team:review",
+  "team:lead",
+  "team:lab"
+ ],
+ "triggers": [
+  "incident",
+  "owner",
+  "loss_cluster",
+  "bust",
+  "checkpoint",
+  "morning",
+  "evening",
+  "weekly",
+  "research",
+  "market_move",
+  "ranking",
+  "tf_split",
+  "cost_review",
+  "combo_review",
+  "coin_review",
+  "learning_review",
+  "rr_review",
+  "risk_review",
+  "event_review",
+  "bull_bear"
+ ],
+ "turns": {
+  "checks": [
+   "approver",
+   "challenge",
+   "expert",
+   "lab_inventor",
+   "lab_lead",
+   "lab_skeptic",
+   "lead",
+   "revision",
+   "specialist",
+   "team",
+   "validator"
+  ],
+  "expert_file": {
+   "entry_timing": "rooms_entry_timing.md",
+   "exit_timing": "rooms_exit_timing.md",
+   "tf_compare": "rooms_tf_compare.md",
+   "whatif": "rooms_whatif.md"
+  },
+  "lab_turns": [
+   "lab_inventor",
+   "lab_skeptic",
+   "lab_lead"
+  ],
+  "owner_responders": {
+   "team:lab": [
+    "researcher"
+   ],
+   "team:lead": [],
+   "team:market": [
+    "chart_regime",
+    "strategist"
+   ],
+   "team:ops": [
+    "ops_auditor"
+   ],
+   "team:review": [
+    "pnl_reviewer"
+   ],
+   "team:risk": [
+    "risk_officer"
+   ]
+  },
+  "schemas": [
+   "approver",
+   "challenge",
+   "expert",
+   "lab_inventor",
+   "lab_lead",
+   "lab_skeptic",
+   "lead",
+   "revision",
+   "specialist",
+   "team",
+   "validator"
+  ],
+  "strategy_experts": [
+   "entry_timing",
+   "exit_timing",
+   "whatif"
+  ],
+  "strategy_room_roles": [
+   "entry_timing",
+   "exit_timing",
+   "whatif",
+   "devils_advocate",
+   "validator",
+   "approver"
+  ],
+  "turn_file": {
+   "approver": "rooms_approver.md",
+   "challenge": "rooms_devils_advocate.md",
+   "lab_inventor": "rooms_lab_inventor.md",
+   "lab_lead": "rooms_lab_lead.md",
+   "lab_skeptic": "rooms_lab_skeptic.md",
+   "lead": "rooms_team_lead.md",
+   "revision": "rooms_revision.md",
+   "specialist": "rooms_specialist.md",
+   "team": "rooms_team.md",
+   "validator": "rooms_validator.md"
+  }
+ }
+}

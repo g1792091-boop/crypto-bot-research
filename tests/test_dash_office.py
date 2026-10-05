@@ -129,8 +129,9 @@ def test_today_finished_meetings_counts_and_latest_strategy_rooms(db):
     assert o["today"]["meetings"] == 4 and o["today"]["ai_calls"] == 5      # the dead row started today too
     assert o["today"]["by_room"]["team:market"] == 1
     assert [x["room_id"] for x in o["latest_strategy"]] == [f"strat:{S}", f"strat:{S}"]
+    # the five teams, the lab and (paper v4) the five group specialists' rooms (rooms_db.GROUP_ROOMS)
     assert [z["room_id"] for z in o["zones"]] == ["team:market", "team:risk", "team:ops", "team:review", "team:lead",
-                                                   "team:lab"]
+                                                   "team:lab", *R.GROUP_ROOMS]
     assert o["strategy_members"] == list(R.STRATEGY_ROOM_ROLES)
 
 
@@ -185,7 +186,7 @@ def test_a_missing_empty_or_unreadable_agents_db(tmp_path):
     o = Rooms(missing, None).office(now_ms=NOW)
     assert o["ready"] is False and o["running"] == [] and o["recent"] == [] and o["today"]["meetings"] == 0
     assert o["schedule"]["source"] == "defaults" and o["schedule"]["next"]["hhmm"] == "12:00"
-    assert len(o["zones"]) == 6 and "team_lead" in o["roles"] and not os.path.exists(missing)
+    assert len(o["zones"]) == 6 + len(R.GROUP_ROOMS) and "team_lead" in o["roles"] and not os.path.exists(missing)
     empty = str(tmp_path / "empty.db")
     sqlite3.connect(empty).close()                  # a database with no tables yet: nothing to show, no error
     o = Rooms(empty, None).office(now_ms=NOW)

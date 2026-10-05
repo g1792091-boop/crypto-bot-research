@@ -1,0 +1,11 @@
+/* _kit: the component sheet (not a tab). */
+.kit-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 760px) { .kit-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kit-g { appearance: none; text-align: left; min-width: 0; display: grid; gap: 3px; padding: 12px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); transition: border-color var(--t-fast), background-color var(--t-fast); }
+.kit-g[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.kit-med { font-size: var(--t-lg); }
+.kit-figs { gap: 10px 14px; padding: 8px; border-radius: 6px; border: 3px solid var(--wall); background-color: var(--wood);
+  background-image: repeating-linear-gradient(90deg, transparent 0 15px, var(--wood-seam) 15px 16px); }
+.kit-fig { display: grid; justify-items: center; }
+.kit-say { max-width: 360px; padding-bottom: 12px; }

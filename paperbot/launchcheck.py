@@ -1,7 +1,9 @@
-"""Paper v3 launch check: is this server ready to start the paper bot, and does it run as it should?
+"""Paper launch check (v3, and the paper v4 run since the 2026-10 restart): is this server ready to start the paper
+bot, and does it run as it should?
 
     cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage before
     cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after
+    cd <repo> && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.launchcheck --db <paper db>
 
     --stage before|after   before: everything filled in and installed, nothing started yet (default);
                            after: the bot, dashboard, recorders and timers run, the bot's heartbeat is fresh
@@ -10,6 +12,16 @@
     --agents auto|yes|no   the agent rooms: yes = required, no = not checked, auto (default) = required once
                            agents.env has a Claude token or paperbot-agents.timer is enabled, else shown as [참고]
     --skip-lab             do not re-hash the 5-year lab files (a minute or so of disk reads)
+    --db PATH              check only this run database (a staging run, a rehearsal copy): the bot's heartbeat, its
+                           start record, the v4 account set per group, frozen (held) accounts, signal strength;
+                           nothing else on the server is looked at (implies --stage after)
+
+The account set (paper v4, docs/paper-v4-rules.md): every original account kind (accounts.ORIGINAL_KINDS) counted per
+group and timeframe against config.V4_GROUPS (331: the 36 on 15m / 30m / 1h / 4h, the DeepSeek definitions on their
+own timeframes, the reel and three coin flips on 5m, three coin flips on each core timeframe), all made on one UTC day
+by a paper-v4 runner. A database of the v3 run is [고칠 것] with the reset command; any other difference is
+[고칠 것] for the developer (never the reset: that would archive a running v4 run). A frozen account (HeldEngine:
+its engine code could not be loaded at the start, accounts.AccountBook) is [고칠 것].
 
 Prints one Korean line per check: [OK], [고칠 것] (fix it before going on; the exit code is 1 while one is
 left) or [참고] (worth knowing; read it, usually nothing to do), then a verdict. Exit code 0 only when
@@ -64,7 +76,7 @@ from types import SimpleNamespace
 from typing import Callable, Iterable, Optional, Sequence
 
 from .binance import FAPI, BinanceError, BinanceREST, RegionBlocked
-from .config import V3_ACCOUNTS, V3_SYMBOLS, V3_TRADE_TFS, v3_settings
+from .config import V3_SYMBOLS, V4_ACCOUNTS, V4_GROUP_ACCOUNTS, V4_VERSION, v3_settings
 from .sessions import KST
 
 OK, FIX, NOTE = "OK", "고칠 것", "참고"
@@ -170,7 +182,15 @@ EXTRA_SERVICES = ("paperbot-ghcoin.service", "paperbot-tgtrades.service")
 OFFSITE_TIMER = "paperbot-offsite.timer"
 # optional: installed by install.sh but left off (the owners turn it on once, docs/server-setup-v3.md); when it is
 # installed its state is shown as [참고] only, never [고칠 것]: the weekly checkpoint rehearsal (checkpoint_preview)
-OPTIONAL_TIMERS = ("paperbot-rehearsal.timer", "paperbot-obsidian.timer", "paperbot-shadow200.timer")
+OPTIONAL_TIMERS = ("paperbot-rehearsal.timer", "paperbot-obsidian.timer", "paperbot-shadow200.timer",
+                   "paperbot-dscheck.timer")
+# paper v4 reset (deploy/paperbot-reset.sh AFTER_CHECK_TIMERS): installed by the reset but left off; the owners turn
+# them on after this check (docs/server-setup-v4.md step 5). Off after a reset is a [참고] with that one command.
+AFTER_CHECK_TIMERS = ("paperbot-obsidian.timer", "paperbot-shadow200.timer", "paperbot-dscheck.timer")
+# what the owners lose while the agents' tick is off (the same words as deploy/paperbot-reset.sh AGENTS_OFF_KO)
+AGENTS_OFF_KO = "에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음"
+# the bot's start line (live3: settings.version "paper-v4" -> "paper v4 started: N accounts (...)"), from config
+RUN_NAME = V4_VERSION.replace("paper-v", "paper v")
 # optional, paid: the 24-hour debate room. Installed by install.sh and left off; shown as [참고] unless the owners
 # turned it on, and then a missing key is a [고칠 것]. Never part of INSTALLED (not installed is not a problem).
 DEBATE_UNIT = "paperbot-debate.service"
@@ -182,7 +202,10 @@ UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256",
               "docs/paper-v3-rules-change-1.sha256",    # change 1: 5m removed at the restart of 2026-10-04
-              "docs/levrule-eval.sha256")               # how rule B is judged at day 30 (pre-registered)
+              "docs/levrule-eval.sha256",               # how rule B is judged at day 30 (pre-registered)
+              # paper v4 (2026-10): the run's rules, its verdict method, rule B's v4 population (D12); the same files
+              # as runinfo.RULES_FILES' v4 part. Missing or changed = [고칠 것] (hashed before the reset).
+              "docs/paper-v4-rules.sha256", "docs/paper-v4-verdict.sha256", "docs/levrule-eval-v4.sha256")
 
 # the paper key must be read-only: any of these on is a problem (Binance apiRestrictions fields)
 TRADE_PERMS = {"enableFutures": "선물 거래", "enableSpotAndMarginTrading": "현물·마진 거래", "enableMargin": "마진",
@@ -1200,19 +1223,33 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool,
                 if st(job).get("Result") not in (None, "", "success"):
                     out.append(note(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
                                     f"journalctl -u {_short(job)} -n 50"))
+        later = [u for u in AFTER_CHECK_TIMERS if st(u).get("LoadState") == "loaded"
+                 and not (_enabled(st(u)) and st(u).get("ActiveState") == "active")]
+        if later:                                       # the v4 reset leaves them off on purpose: never a FIX
+            out.append(note(f"리셋 뒤 꺼 둔 타이머 {len(later)}개: {', '.join(_short(u) for u in later)}. 이 점검에 "
+                            f"[고칠 것]이 없으면 켜기: sudo systemctl enable --now {' '.join(AFTER_CHECK_TIMERS)} "
+                            "(docs/server-setup-v4.md 5단계)"))
         cp = st("paperbot-checkpoint.service")
         if cp.get("Result") not in (None, "", "success"):
             out.append(note("paperbot-checkpoint의 지난 실행이 실패했습니다: 봇이 paper3.db를 만들기 전 한 번은 괜찮습니다. "
                             "계속되면 journalctl -u paperbot-checkpoint -n 50"))
     off = [u for u in AGENT_TIMERS if not (_enabled(st(u)) and st(u).get("ActiveState") == "active")]
     if stage == "after" and agents_wanted:
-        out += [timer_line(u, st(u), True) for u in AGENT_TIMERS]
+        for u in AGENT_TIMERS:
+            if u == "paperbot-agents.timer" and u in off:
+                # the v4 reset's --agents-off (owners' D15) keeps it off on purpose: a [참고] saying what stops
+                out.append(note(f"{AGENTS_OFF_KO} (paperbot-agents.timer 꺼짐: 리셋을 --agents-off로 했거나 아직 "
+                                "켜지 않음). 개발자가 '에이전트 v4 준비 끝'이라고 하면 "
+                                "sudo systemctl enable --now paperbot-agents.timer"))
+            else:
+                out.append(timer_line(u, st(u), True))
     elif off and stage == "before" and agents_wanted:
         # the expected state before the start: the verdict's start command turns them on with the rest
         out.append(ok(f"에이전트 방 타이머는 아직 꺼져 있음: {', '.join(_short(u) for u in off)} (시작 명령이 함께 켭니다)"))
     elif off:
         out.append(note(f"에이전트 방 타이머 꺼져 있음: {', '.join(off)} (Claude 로그인·5년 자료·드라이런을 마친 뒤 "
-                        "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer)"))
+                        "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer)"
+                        + (f". {AGENTS_OFF_KO}" if "paperbot-agents.timer" in off else "")))
     else:
         out.append(ok("에이전트 방 타이머 켜짐 (paperbot-agents, paperbot-labmonthly)"))
     ag = st("paperbot-agents.service")
@@ -1325,6 +1362,11 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
                        f"sudo chown -R {EXEC_USER}:{ctx.user} {exec_dir} (그 사용자가 없으면 먼저 {INSTALL})"))
     elif not out:
         out.append(ok(f"데이터 폴더 주인 {ctx.user}, 주문 실행기 폴더 {EXEC_USER} (다른 사용자 소유 파일 없음)"))
+    # the DeepSeek nightly recompute check's folder (install.sh and the reset make it, paperbot 750); its service can
+    # make it itself, so a missing folder is a [참고] (a foreign owner is caught above)
+    if ctx.stat(ctx.lib) is not None and ctx.stat(os.path.join(ctx.lib, "dscheck")) is None:
+        out.append(note(f"{os.path.join(ctx.lib, 'dscheck')} 폴더가 없습니다(딥시크 밤 재계산 점검): "
+                        f"sudo install -d -o {ctx.user} -g {ctx.user} -m 750 {os.path.join(ctx.lib, 'dscheck')}"))
     return out
 
 
@@ -1389,21 +1431,60 @@ def open_ro(path: str) -> sqlite3.Connection:
     return conn
 
 
+HELD_RE = re.compile(r"^\[(?P<aid>[^\]]+)\] engine code failed to load, account held")
+HELD_LOOKBACK_MS = 10 * 60_000     # the load's alerts come just before the start record (server time, then bootstrap)
+
+
+def held_accounts(conn: sqlite3.Connection, tables: set, run: Optional[dict], run_ts: Optional[int]) -> list[str]:
+    """The original accounts this start froze (``HeldEngine``): the start record's own list when the runner writes
+    one (``run["held"]``), plus the CRITICAL alerts "[<id>] engine code failed to load, account held" of this start
+    (accounts.AccountBook._original_how; written at the load, just before the start record)."""
+    out = set()
+    if isinstance(run, dict) and isinstance(run.get("held"), (list, tuple)):
+        out |= {str(a) for a in run["held"]}
+    if "alerts" in tables and run_ts is not None:
+        lo = int(run_ts) - HELD_LOOKBACK_MS
+        if "runs" in tables:                    # never an alert of the start before this one
+            prev = conn.execute("SELECT started_ts FROM runs WHERE started_ts < ? ORDER BY started_ts DESC LIMIT 1",
+                                (int(run_ts),)).fetchone()
+            if prev is not None and prev[0] is not None:
+                lo = max(lo, int(prev[0]) + 1)
+        for (text,) in conn.execute("SELECT text FROM alerts WHERE ts >= ? AND text LIKE '%account held%'", (lo,)):
+            m = HELD_RE.match(str(text))
+            if m:
+                out.add(m.group("aid"))
+    return sorted(out)
+
+
+def extras_held(conn: sqlite3.Connection, tables: set) -> list[str]:
+    """Extra accounts (copies, new strategies) the extras runtime holds frozen (state 'extras', status 'held')."""
+    if "state" not in tables:
+        return []
+    row = conn.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
+    try:
+        st = json.loads(row[0]) if row and row[0] else {}
+    except (TypeError, ValueError):
+        return []
+    acc = st.get("accounts") if isinstance(st, dict) else None
+    if not isinstance(acc, dict):
+        return []
+    return sorted(str(a) for a, v in acc.items() if isinstance(v, dict) and v.get("status") == "held")
+
+
 def read_paper_db(path: str) -> dict:
     """Run start, heartbeat, this start's record and the bot's health row (bar lag, dead-man pings) from
-    paper3.db, opened read-only."""
+    paper3.db, opened read-only; the original accounts per group (paper v4, resetrun.facts_of_rows) and the accounts
+    this start froze."""
+    from .resetrun import facts_of_rows, original_rows
     conn = open_ro(path)
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         one = lambda q: (conn.execute(q).fetchone() or (None,))[0]          # noqa: E731
         start = None
-        originals = off_tf = None
+        originals = off_tf = facts = None
         if "accounts" in tables:
-            start = one("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')")
-            originals = one("SELECT COUNT(*) FROM accounts WHERE kind IN ('strategy', 'random')")
-            marks = ",".join("?" * len(V3_TRADE_TFS))
-            off_tf = (conn.execute(f"SELECT COUNT(*) FROM accounts WHERE kind IN ('strategy', 'random') AND "
-                                   f"timeframe NOT IN ({marks})", V3_TRADE_TFS).fetchone() or (0,))[0]
+            facts = facts_of_rows(original_rows(conn))
+            start, originals, off_tf = facts["start"], facts["originals"], facts["off_tf"]
         if start is None and "runs" in tables:
             start = one("SELECT MIN(started_ts) FROM runs")
         hb = run = run_ts = health = health_ts = None
@@ -1415,12 +1496,15 @@ def read_paper_db(path: str) -> dict:
             row = conn.execute("SELECT ts, data FROM state WHERE k = 'health'").fetchone()
             if row and row[1]:
                 health_ts, health = row[0], json.loads(row[1])
+        run = run if isinstance(run, dict) else None
+        run_ts = None if run_ts is None else int(run_ts)
         return {"start": None if start is None else int(start), "heartbeat": None if hb is None else int(hb),
-                "run": run if isinstance(run, dict) else None, "run_ts": None if run_ts is None else int(run_ts),
+                "run": run, "run_ts": run_ts,
                 "health": health if isinstance(health, dict) else None,
                 "health_ts": None if health_ts is None else int(health_ts),
                 "originals": None if originals is None else int(originals),
-                "originals_off_tf": None if off_tf is None else int(off_tf)}
+                "originals_off_tf": None if off_tf is None else int(off_tf), "facts": facts,
+                "held": held_accounts(conn, tables, run, run_ts), "extras_held": extras_held(conn, tables)}
     finally:
         conn.close()
 
@@ -1487,8 +1571,11 @@ def bot_health_lines(db: dict, now: int, deadman_set: bool) -> list[Line]:
     return out
 
 
-def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line]:
-    path = os.path.join(ctx.lib, "paper3.db")
+def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False, path: Optional[str] = None) -> list[Line]:
+    """``path``: another run database (``--db``: a staging run, a rehearsal copy); its runner's code is then not
+    compared with the installed code (a staging run uses its own checkout)."""
+    other_db = path is not None
+    path = path or os.path.join(ctx.lib, "paper3.db")
     now = ctx.now_ms()
     if ctx.stat(path) is None:
         if stage == "before":
@@ -1537,15 +1624,24 @@ def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line
         else:
             out.append(note(f"계좌 {run.get('accounts', '?')}개, 레버리지 구간: {src or '?'} (거래소에서 지금 받은 값이 "
                             f"아님. --brackets 파일을 따로 준 것이 아니면 개발자에게){rest}"))
-        ver = installed_version(ctx) or {}
+        ver = {} if other_db else (installed_version(ctx) or {})
         if run.get("commit") and ver.get("commit") and run["commit"] != ver["commit"]:
             out.append(note(f"봇이 설치된 코드({str(ver['commit'])[:10]})가 아닌 {str(run['commit'])[:10]}로 돌고 있습니다: "
                             "sudo systemctl restart paperbot-live3"))
     out += account_set_lines(db)
+    out += held_lines(db)
     out += strength_lines(path)
     if start is not None:
         out.append(ok(f"첫 시작 {kst_text(start)}(한국 시간)"))
     return out
+
+
+def check_run_db(ctx: Ctx, path: str) -> list[Line]:
+    """``--db PATH``: only one run database (a staging run, a rehearsal copy), as after the start: the bot's heartbeat
+    and health, its start record, the v4 account set, frozen accounts, signal strength. Read-only."""
+    if not os.path.isfile(path):
+        return [fix(f"{path}가 아직 없습니다: 봇이 이 DB로 시작하지 못했습니다(journalctl로 그 봇의 기록을 보세요)")]
+    return check_paper_db(ctx, "after", False, path=os.path.abspath(path))
 
 
 STRENGTH_RECENT = 20      # the last strategy signals of cells with quality edges that must carry a strength score
@@ -1578,20 +1674,66 @@ def strength_lines(path: str, n: int = STRENGTH_RECENT) -> list[Line]:
                  "계속되면 개발자에게")]
 
 
+RESET_CMD = "sudo bash deploy/paperbot-reset.sh --yes"
+
+
+def _groups_text(groups: dict) -> str:
+    from .resetrun import groups_text
+    return groups_text(groups)
+
+
 def account_set_lines(db: dict) -> list[Line]:
-    """The original accounts are the rules' set (config.V3_ACCOUNTS: 36 strategies + 3 coin-flip accounts on each
-    of 15m / 30m / 1h / 4h). A 5m account means paper3.db is the run before the restart of 2026-10-04
-    (docs/paper-v3-rules-change-1.md: 5m removed)."""
-    n, off = db.get("originals"), db.get("originals_off_tf")
+    """The original accounts are the v4 rules' set (config.V4_GROUPS, docs/paper-v4-rules.md): per group and timeframe,
+    made by a paper-v4 runner, all on one UTC day. A database of the v3 run (only the 36 and the coin flips, made by a
+    v3 runner) is [고칠 것] with the reset command; any other difference is [고칠 것] for the developer, never the
+    reset (a running v4 run would be archived)."""
+    f = db.get("facts") or {}
+    n = db.get("originals")
     if not n:
         return []
-    if off:
-        return [fix(f"paper3.db에 규칙에 없는 봉(5분봉 등)의 원래 계좌가 {off}개 있습니다: 2026-10-04 재시작 전 실행의 "
-                    "DB입니다(5분봉은 뺐음, docs/paper-v3-rules-change-1.md). sudo bash deploy/paperbot-reset.sh --yes "
-                    "로 처음부터 다시 시작합니다")]
-    if n != V3_ACCOUNTS:
-        return [note(f"원래 계좌가 {n}개입니다(규칙은 {V3_ACCOUNTS}개): 개발자에게 알리세요")]
-    return []
+    groups = _groups_text(f.get("groups") or {})
+    if f.get("shape") == "v3":
+        five = (f.get("by_tf") or {}).get("5m", 0)
+        when = " 2026-10-04 재시작 전 실행(매매법 5분봉 있음)" if five else ""
+        return [fix(f"paper3.db가 paper v3 실행{when}의 DB입니다(원래 계좌 {n}개: {groups}). 규칙은 paper v4 계좌 "
+                    f"{V4_ACCOUNTS}개({_groups_text(V4_GROUP_ACCOUNTS)}): docs/server-setup-v4.md대로 {RESET_CMD} 로 "
+                    "처음부터 다시 시작합니다")]
+    out: list[Line] = []
+    if f.get("shape") != "v4":
+        why = []
+        if f.get("off_tf"):
+            why.append(f"그룹이 쓰지 않는 봉의 계좌 {f['off_tf']}개(예: 매매법 5분봉)")
+        if f.get("versions") and f["versions"] != [V4_VERSION]:
+            why.append(f"설정 버전 {'/'.join(f['versions'])}(규칙은 {V4_VERSION})")
+        if n != V4_ACCOUNTS or not why:
+            why.append(f"원래 계좌 {n}개({groups}), 규칙은 {V4_ACCOUNTS}개({_groups_text(V4_GROUP_ACCOUNTS)})")
+        out.append(fix("paper3.db의 계좌가 v4 규칙과 다릅니다: " + "; ".join(why) + ". 처음부터 다시 시작하지 말고 "
+                       "(돌던 실행이 보관 폴더로 감) 이 줄을 개발자에게 보내세요"))
+    else:
+        out.append(ok(f"원래 계좌 {n}개 = {groups} (paper v4 규칙과 같음, 5분봉 "
+                      f"{(f.get('by_tf') or {}).get('5m', 0)}개: 릴스 5분 단타와 동전만)"))
+    if (f.get("utc_days") or 0) > 1:
+        out.append(fix(f"원래 계좌를 만든 UTC 날짜가 {f['utc_days']}개입니다(한 번에 만들어야 함): 늦게 만든 계좌는 30일 판정이 "
+                       "다음 판정으로 밀립니다. 개발자에게 알리세요"))
+    return out
+
+
+def held_lines(db: dict) -> list[Line]:
+    """Frozen accounts of this start: an original one is [고칠 것] (it neither trades nor manages its position: the
+    engine code of its group could not be loaded); a frozen extra account is [참고] (paperbot/extras.py reports why)."""
+    if not db.get("originals"):
+        return []
+    held, xh = list(db.get("held") or []), list(db.get("extras_held") or [])
+    out: list[Line] = []
+    if held:
+        out.append(fix(f"멈춘(동결된) 원래 계좌 {len(held)}개: {', '.join(held[:8])}{' …' if len(held) > 8 else ''}. "
+                       "그 계좌의 청산·진입 코드를 불러오지 못해 저장된 상태 그대로 멈춰 있습니다(다른 계좌는 정상): "
+                       "대시보드 알림의 'engine code failed to load'를 개발자에게 보내세요"))
+    else:
+        out.append(ok("멈춘(동결된) 계좌 0개 (held = 0)"))
+    if xh:
+        out.append(note(f"멈춘 추가 계좌 {len(xh)}개: {', '.join(xh[:8])} (python -m paperbot.extras status 로 이유 확인)"))
+    return out
 
 
 # an extra paper account's id (paperbot/extras.py: a copy "S@15m~c1", a new strategy "NL1@1h")
@@ -1626,8 +1768,12 @@ def check_executor_account(ctx: Ctx) -> list[Line]:
             kind = row[0] if row else None
         except sqlite3.Error:
             kind = None
-    if EXTRA_ACCOUNT_RE.search(acct) or (kind is not None and kind != "strategy"):
-        what = {"copy": "복제 계좌", "newlab": "새 매매법 계좌", "random": "동전 봇 계좌"}.get(kind, "추가 계좌 이름")
+    from .resetrun import executor_problem
+    name_why = executor_problem(acct)
+    if EXTRA_ACCOUNT_RE.search(acct) or (kind is not None and kind != "strategy") or (kind is None and name_why
+                                                                                       and "봉" not in name_why):
+        what = {"copy": "복제 계좌", "newlab": "새 매매법 계좌", "random": "동전 봇 계좌", "ds200": "딥시크 계좌",
+                "reel": "릴스 5분 단타 계좌"}.get(kind, name_why if kind is None and name_why else "추가 계좌 이름")
         return [fix(f"주문 실행기가 따라 할 계좌 {acct}는 원래 매매법 계좌가 아닙니다({what}). 실행기는 아직 이런 계좌를 "
                     "거부하지 않아 실제 돈으로 따라 하게 됩니다 → /etc/paperbot/executor.json의 account를 원래 매매법 "
                     "계좌(예: V45_AMB@15m)로 바꾸세요 (docs/extra-accounts.md 9장)")]
@@ -1971,7 +2117,7 @@ def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence
         out(f"     시작하고 10~15분 뒤 확인: {AFTER_CMD}")
     else:
         out(f"[{OK}] 봇이 정상으로 돌고 있습니다 (참고 {n_note}개: 읽어만 보세요). healthchecks.io가 'up'인지, 텔레그램에 "
-            "'paper v3 started'가 왔는지 눈으로도 보세요.")
+            f"'{RUN_NAME} started: {V4_ACCOUNTS} accounts'가 왔는지 눈으로도 보세요.")
     return 0
 
 
@@ -1984,10 +2130,16 @@ def main(argv: Optional[list[str]] = None, ctx: Optional[Ctx] = None,
     ap.add_argument("--ping", action="store_true", help="one ping to DEADMAN_URL")
     ap.add_argument("--agents", choices=("auto", "yes", "no"), default="auto")
     ap.add_argument("--skip-lab", action="store_true", help="do not re-hash the 5-year lab files")
+    ap.add_argument("--db", help="check only this run database (staging, rehearsal copy); implies --stage after")
     args = ap.parse_args(argv)
+    if args.db:
+        args.stage = "after"
     ctx = ctx or Ctx()
     out(f"paperbot 시작 점검 ({'시작 전' if args.stage == 'before' else '시작 후'}): "
         f"{kst_text(ctx.now_ms())} 한국 시간, 실행 사용자 {ctx.username}")
+    if args.db:
+        out(f"실행 DB만 점검(--db): {args.db}. 서버의 나머지(설정·서비스·텔레그램)는 보지 않습니다")
+        return report([(f"실행 DB ({args.db})", guard(check_run_db, ctx, args.db))], "after", (), out)
     sections, secrets, start_cmd = run_checks(ctx, args.stage, args.send_test, args.ping, args.agents, args.skip_lab)
     return report(sections, args.stage, secrets, out, start_cmd)
 

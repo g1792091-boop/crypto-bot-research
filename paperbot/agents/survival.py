@@ -43,6 +43,7 @@ from typing import Any, Iterable, Optional
 import numpy as np
 
 from ..config import V3_TRADE_TFS
+from .facts import originals_ko as _originals_ko
 
 DAY_MS = 86_400_000
 KST_MS = 9 * 3_600_000
@@ -347,10 +348,26 @@ def sizing(returns: Iterable[float], seed: int = SEED, paths: int = SIZING_PATHS
 
 
 # ---------------------------------------------------------------- reading paper3.db
-def _accounts(paper_ro: sqlite3.Connection, kinds: tuple, strategies: Optional[list]) -> dict:
+def own_kinds_tfs(strategy: str) -> tuple[tuple, tuple]:
+    """(kinds, timeframes) of a strategy's own original accounts (G3): a DeepSeek definition its kind 'ds200' on its
+    own timeframes (config.v4_tfs_of), the reel 'reel' on 5m, any other name the 36's ('strategy', the core
+    timeframes)."""
+    from ..config import DS200_FAMILY, REEL_NAME, v4_tfs_of
+    if strategy in DS200_FAMILY:
+        return ("ds200",), tuple(v4_tfs_of("ds200", strategy))
+    if strategy == REEL_NAME:
+        return ("reel",), tuple(v4_tfs_of("reel", strategy))
+    return ("strategy",), tuple(V3_TRADE_TFS)
+
+
+def _accounts(paper_ro: sqlite3.Connection, kinds: tuple, strategies: Optional[list],
+              tfs: Optional[tuple] = None) -> dict:
+    # the core timeframes unless the caller gives an account's own (paper v4): a 5m coin flip is the reel's
+    # comparison, never the 36's
+    tfs = tuple(tfs) if tfs else tuple(V3_TRADE_TFS)
     sql = (f"SELECT account_id, kind, strategy, timeframe, created_ts FROM accounts "
-           f"WHERE kind IN ({','.join('?' * len(kinds))})")
-    args: list = list(kinds)
+           f"WHERE kind IN ({','.join('?' * len(kinds))}) AND timeframe IN ({','.join('?' * len(tfs))})")
+    args: list = [*kinds, *tfs]
     if strategies:
         sql += f" AND strategy IN ({','.join('?' * len(strategies))})"
         args += list(strategies)
@@ -460,14 +477,14 @@ def account_row(aid: str, meta: dict, curve: Optional[tuple], trades: list, eng:
 
 def table(paper_ro: sqlite3.Connection, now_ms: int, strategies: Optional[Iterable[str]] = None,
           kinds: tuple = ("strategy", "random"), mc: bool = True, sizing_on: bool = True, paths: int = PATHS,
-          seed: int = SEED) -> dict:
+          seed: int = SEED, tfs: Optional[tuple] = None) -> dict:
     """{"accounts": {id: account_row}, "strategies": {s: group}, "timeframes": {tf: group}, "coin_flips": group,
     "busted": [ids], "runtime_s"}. A group = the summed equity curve's numbers, the combined trades' streak and worst
     day, its accounts' busts, and the Monte Carlo per account summarised (highest and mean P(bust), the
     lowest sizing k)."""
     t0 = time.perf_counter()
     ss = list(strategies) if strategies is not None else None
-    acc = _accounts(paper_ro, kinds, ss)
+    acc = _accounts(paper_ro, kinds, ss, tfs)
     ids = sorted(acc)
     initial = initial_of(paper_ro)
     bb = bust_line()
@@ -507,7 +524,7 @@ def table(paper_ro: sqlite3.Connection, now_ms: int, strategies: Optional[Iterab
     flips = []
     for a in ids:
         m = acc[a]
-        if m["kind"] == "strategy":
+        if m["kind"] in ("strategy", "ds200", "reel"):          # an original strategy account of any group
             by_s.setdefault(m["strategy"], []).append(a)
             by_tf.setdefault(m["timeframe"], []).append(a)
         elif m["kind"] == "random":
@@ -570,8 +587,8 @@ HOW_TO_READ = (
     "중앙값·하위 5%. 거래 20건 미만 계좌는 too_few(흉내 내지 않음). 과거 거래가 앞으로도 같은 모양으로 나온다는 "
     "가정이라 실제 위험보다 작거나 클 수 있음. sizing.k = 같은 거래를 k배 크기로 했다면 100거래 안에 -50%가 될 확률이 "
     "1% 아래인 가장 큰 k(1보다 작으면 지금보다 작게). kelly = 승률과 손익비(자금 대비)로 계산한 켈리, half_kelly = 그 절반"
-    "(0 이하면 no edge). 크기 숫자는 설명용: 156개 계좌의 크기 규칙은 30일 동안 고정이고 바꾸려면 두 분 결정과 규칙 "
-    "v4가 필요")
+    "(0 이하면 no edge). 크기 숫자는 설명용: " + _originals_ko() + "의 크기 규칙은 30일 동안 고정이고 바꾸려면 두 분 결정과 "
+    "새 규칙 버전이 필요")
 
 
 def _r3(x: Any) -> Any:
@@ -676,8 +693,9 @@ def strategy_brief(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms
     drawdown, P(bust), P(-50%), sizing k and half-Kelly, and its backtest gap flag per timeframe."""
     if paper_ro is None:
         return {"error": "paper3.db 없음"}
+    kinds, tfs = own_kinds_tfs(strategy)
     try:
-        tab = table(paper_ro, now_ms, strategies=[strategy], kinds=("strategy",))
+        tab = table(paper_ro, now_ms, strategies=[strategy], kinds=kinds, tfs=tfs)
     except sqlite3.Error as exc:
         return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
     g = tab["strategies"].get(strategy)
@@ -742,9 +760,11 @@ def week_brief(paper_ro: Optional[sqlite3.Connection], now_ms: int, names_ko: Op
 
 
 def dash_strategy(paper_ro: sqlite3.Connection, strategy: str, now_ms: int) -> dict:
-    """The strategy tab's 최대 낙폭 and 파산 확률: the four accounts' summed curve and the highest account P(bust)
-    among the accounts with >= ``MIN_TRADES`` closed trades (None when none has)."""
-    tab = table(paper_ro, now_ms, strategies=[strategy], kinds=("strategy",), sizing_on=False)
+    """The strategy tab's 최대 낙폭 and 파산 확률: the strategy's own accounts' summed curve (the 36: four timeframes;
+    a DeepSeek definition: its own timeframes; the reel: its 5m account, ``own_kinds_tfs``) and the highest account
+    P(bust) among the accounts with >= ``MIN_TRADES`` closed trades (None when none has)."""
+    kinds, tfs = own_kinds_tfs(strategy)
+    tab = table(paper_ro, now_ms, strategies=[strategy], kinds=kinds, sizing_on=False, tfs=tfs)
     g = tab["strategies"].get(strategy) or {}
     c = g.get("curve") or {}
     out = {"max_dd_pct": c.get("max_dd_pct"), "max_dd_usd": c.get("max_dd_usd"), "max_dd_at": c.get("max_dd_at"),

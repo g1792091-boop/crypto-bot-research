@@ -151,11 +151,20 @@ def _validate(item: Any, paper, daily, now_ms: int) -> tuple[Optional[dict], str
 
 
 # ---------------------------------------------------------------- grading (when the horizon is reached)
+OLD_RUN_KO = "이전 실행에서 한 주장(실험을 다시 시작해 새 실행 숫자로 채점하지 않음)"
+
+
 def grade(kind: str, params: dict, ts: int, paper: Optional[sqlite3.Connection], daily: Optional[sqlite3.Connection],
           now_ms: int) -> Optional[dict]:
     """None while the horizon is not reached, else {"status": "graded"|"void"|"expired", "outcome": "hit"|"miss"|
-    "void: ..."|"expired", "detail": {...}}. Never raises (an unreadable database leaves the claim open)."""
+    "void: ..."|"expired", "detail": {...}}. Never raises (an unreadable database leaves the claim open).
+    A claim made before the current run started (paper v4 restart, owners 2026-10-05: its run_start differs) is
+    void, whatever its kind: it is never graded against the new run's accounts."""
     try:
+        start = run_start(paper)
+        if start is not None and (int(ts) < start or (kind == "busts_by_day" and params.get("start_ts") is not None
+                                                       and int(params["start_ts"]) != start)):
+            return _void(OLD_RUN_KO, claim_ts=int(ts), run_start=start)
         res = _grade(kind, params, paper, daily, now_ms)
     except (sqlite3.Error, TypeError, ValueError, KeyError):
         return None

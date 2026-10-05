@@ -1,4 +1,4 @@
-"""The agents' side of the one-time clean restart (deploy/paperbot-reset.sh, owners' decision 2026-10-04).
+"""The agents' side of a clean restart (deploy/paperbot-reset.sh; v3 2026-10-04, paper v4 2026-10, owners' decisions).
 
     python -m paperbot.resetrun plan  --lib /var/lib/paperbot                       (read-only: what would change)
     python -m paperbot.resetrun apply --lib /var/lib/paperbot --archive <run dir>   (backup, then reset)
@@ -21,6 +21,8 @@ Every persistent state on the server, and what the restart does with it:
     rehearsal/ (+bars/)        rehearsal (weekly preview)    yes: previews of the old run           ARCHIVED (new empty dir)
     tradealerts.json           tgtrades                      yes: last paper3 trade id, open pos.   ARCHIVED
     evening-latest.json        evening (v2, paper.db)        v2 output, regenerated                 ARCHIVED
+    dscheck/ (last.*, days/)   dscheck (DeepSeek nightly)    yes: the run's recompute summaries     ARCHIVED (new empty dir)
+    dscheck/bars5m.db          dscheck (kline cache)         no: final public 5m klines             kept (moved back)
     agents3.db                 agents tick, labmonthly       memory; a few cursors (below)          KEPT, cursors reset
     agents3.db.lock            agents tick (lock file)       no                                     kept
     inbox.db                   dashboard                     no: owners' posts, approvals, alerts   KEPT (backup only)
@@ -59,8 +61,14 @@ days or inbox ids (owner:*, inbox:*, telegram:*, analysis:*, move:*, tf_split:*,
 incident:report_day, flag_*, newlab_*, policy:*, usage_scale, tick:last, ...) and stay.
 
 The restart is recorded in the cursor ``run:restarted`` ({ts, day_kst, archive, old_run_start, history}) and told
-to the staff once per room (a note and a system line: "실험을 <day>에 처음부터 다시 시작함 (5분봉 제외, 1분봉 8초 뒤
-읽기)"), so they never read the old run's numbers as the new run's.
+to the staff once per room (a note and a system line: "실험을 <day>에 처음부터 다시 시작함 (paper v4: ...)", the run
+shape written from config.V4_GROUPS, never typed in), so they never read the old run's numbers as the new run's.
+
+Paper v4 (docs/paper-v4-rules.md): the run has four groups of original accounts (accounts.ORIGINAL_KINDS: core
+"strategy", DeepSeek "ds200", the 5m reel "reel", coin flips "random"); ``paper_facts`` reads a paper3.db per group and
+says whether it is the v4 shape (``shape``), and an account on a timeframe its group does not trade is "off_tf"
+(a v4 database has none; a 5m strategy account of the run before 2026-10-04 is one). The order executor may only
+follow a core account (one of the 36 on 15m / 30m / 1h / 4h): ``executor_problem``.
 """
 
 from __future__ import annotations
@@ -69,6 +77,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -76,7 +85,9 @@ import urllib.parse
 from typing import Any, Optional
 
 from . import checkpoint as CP
-from .config import V3_ACCOUNTS, V3_TRADE_TFS
+from .accounts import GROUP_OF_KIND, ORIGINAL_KINDS
+from .config import (DS200_DEFS, DS200_IDS, DS200_TFS, REEL_NAME, REEL_TF, V3_RANDOM_SEEDS, V3_STRATEGIES,
+                     V3_TRADE_TFS, V4_ACCOUNTS, V4_FLIP_TFS, V4_GROUP_ACCOUNTS, V4_GROUP_TF_COUNTS, V4_VERSION)
 from .agents import extra_accounts as XA
 from .agents import rooms_db as R
 from .agents import triggers as TR
@@ -99,7 +110,33 @@ PREFIX_RULES = tuple(r for r in CURSOR_RULES if r[0].endswith(":"))
 EXACT_RULES = dict(r for r in CURSOR_RULES if not r[0].endswith(":"))
 OPEN_STATUSES = R.ACTIVE_PROPOSAL_STATUSES                # awaiting_owner, approved
 BACKUP_NAMES = {"agents3.db": "agents3-before-reset.db", "inbox.db": "inbox-before-reset.db"}
-WHAT_CHANGED_KO = "5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 8초 뒤 읽기"
+TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+GROUPS = ("core", "ds200", "reel", "flip")                  # the original groups (accounts.GROUP_OF_KIND values)
+GROUP_KO = {"core": "매매법", "ds200": "딥시크", "reel": "릴스 5분 단타", "flip": "동전"}
+DS_TFS_OF = {d[0]: d[2] for d in DS200_DEFS}
+FLIP_NAMES = tuple(f"RANDOM_{k}" for k in V3_RANDOM_SEEDS)
+
+
+def _tfs_ko(tfs) -> str:
+    return "·".join(TF_KO.get(tf, tf) for tf in tfs)
+
+
+def what_changed_ko() -> str:
+    """The v4 run in one Korean line, every number from config (the run shape), none typed in."""
+    full = sum(1 for d in DS200_DEFS if tuple(d[2]) == tuple(DS200_TFS))
+    part = [d for d in DS200_DEFS if tuple(d[2]) != tuple(DS200_TFS)]
+    ds = f"딥시크 정의 {len(DS200_DEFS)}개({full}개 {_tfs_ko(DS200_TFS)}"
+    if part:
+        ds += f", {len(part)}개 {_tfs_ko(part[0][2])}"
+    flip5 = V4_GROUP_TF_COUNTS["flip"].get(REEL_TF, 0)
+    return (f"paper v4: $5,000 계좌 {V4_ACCOUNTS}개 = 매매법 {V3_STRATEGIES}개 × {_tfs_ko(V3_TRADE_TFS)} + "
+            f"{ds}, {V4_GROUP_ACCOUNTS['ds200']}계좌) + 릴스 5분 단타 {V4_GROUP_ACCOUNTS['reel']}개({TF_KO[REEL_TF]}봉, "
+            f"자기 청산 규칙) + 동전 {V4_GROUP_ACCOUNTS['flip']}개({TF_KO[REEL_TF]}봉 {flip5}개 포함). 매매법 "
+            f"{V3_STRATEGIES}개는 {TF_KO[REEL_TF]}봉 없음, {TF_KO[REEL_TF]}봉은 릴스와 그 비교용 동전만. 좋은 자리 50·40배·보통 "
+            "30·20배(비중=배수%), 딥시크·릴스는 늘 보통. 1분봉 8초 뒤 읽기")
+
+
+WHAT_CHANGED_KO = what_changed_ko()
 
 
 def kst_day(ms: int) -> str:
@@ -193,8 +230,64 @@ def get_marker(conn: sqlite3.Connection) -> Optional[dict]:
     return v if isinstance(v, dict) else None
 
 
+def allowed_tf(kind: str, strategy: str, timeframe: str) -> bool:
+    """Does the v4 run trade this original account's timeframe (config.V4_GROUPS)? The 36 on 15m / 30m / 1h / 4h,
+    each DeepSeek definition on its own timeframes, the reel on 5m only, the coin flips on 5m .. 4h."""
+    if kind == "strategy":
+        return timeframe in V3_TRADE_TFS
+    if kind == "ds200":
+        return timeframe in DS_TFS_OF.get(strategy, ())
+    if kind == "reel":
+        return strategy == REEL_NAME and timeframe == REEL_TF
+    if kind == "random":
+        return strategy in FLIP_NAMES and timeframe in V4_FLIP_TFS
+    return False
+
+
+def facts_of_rows(rows) -> dict:
+    """``paper_facts`` of (strategy, timeframe, kind, created_ts, settings_version) rows of original accounts."""
+    groups = {g: 0 for g in GROUPS}
+    by = {g: {} for g in GROUPS}
+    by_tf: dict = {}
+    off = 0
+    versions, days, start = set(), set(), None
+    for strategy, tf, kind, created, ver in rows:
+        g = GROUP_OF_KIND.get(kind)
+        if g in groups:
+            groups[g] += 1
+            by[g][tf] = by[g].get(tf, 0) + 1
+        by_tf[tf] = by_tf.get(tf, 0) + 1
+        off += not allowed_tf(kind, strategy, tf)
+        versions.add(str(ver))
+        if created is not None:
+            start = int(created) if start is None else min(start, int(created))
+            days.add(int(created) // 86_400_000)
+    n = sum(groups.values())
+    kinds = {g for g, k in groups.items() if k}
+    if n and by == {g: dict(V4_GROUP_TF_COUNTS[g]) for g in GROUPS} and versions == {V4_VERSION} and not off:
+        shape = "v4"
+    elif n and kinds <= {"core", "flip"} and V4_VERSION not in versions:
+        shape = "v3"                                     # only the 36 and the coin flips, made by a v3 runner
+    else:
+        shape = "other" if n else None
+    return {"start": start, "originals": n, "off_tf": off, "groups": groups, "by_tf": by_tf, "by_group_tf": by,
+            "versions": sorted(versions), "utc_days": len(days), "shape": shape}
+
+
+def original_rows(conn: sqlite3.Connection) -> list:
+    """(strategy, timeframe, kind, created_ts, settings_version) of the original accounts (a column a database lacks
+    reads as NULL: the repeat guard must still see the run's start in a hand-made or older accounts table)."""
+    have = {r[1] for r in conn.execute("PRAGMA table_info(accounts)")}
+    cols = ", ".join(c if c in have else "NULL" for c in ("strategy", "timeframe", "kind", "created_ts",
+                                                           "settings_version"))
+    q = ",".join("?" * len(ORIGINAL_KINDS))
+    return conn.execute(f"SELECT {cols} FROM accounts WHERE kind IN ({q})", ORIGINAL_KINDS).fetchall()
+
+
 def paper_facts(path: str) -> dict:
-    """The run in a paper3.db (read-only): start, original accounts, those on 5m. {} when missing/unreadable."""
+    """The run in a paper3.db (read-only): start, original accounts per group and per timeframe, those on a timeframe
+    their group does not trade in v4 ("off_tf"), the settings versions, how many UTC days the accounts were made on
+    and the run's shape ("v4", "v3" or "other"). {} when missing/unreadable."""
     try:
         conn = _ro(path)
     except sqlite3.Error:
@@ -202,14 +295,34 @@ def paper_facts(path: str) -> dict:
     if conn is None:
         return {}
     try:
-        q = ",".join("?" * len(V3_TRADE_TFS))
-        r = conn.execute(f"SELECT MIN(created_ts), COUNT(*), SUM(timeframe NOT IN ({q})) "
-                         "FROM accounts WHERE kind IN ('strategy', 'random')", V3_TRADE_TFS).fetchone()
-        return {"start": None if r[0] is None else int(r[0]), "originals": int(r[1] or 0), "off_tf": int(r[2] or 0)}
+        return facts_of_rows(original_rows(conn))
     except sqlite3.Error:
         return {}
     finally:
         conn.close()
+
+
+def groups_text(groups: dict) -> str:
+    """'매매법 n · 딥시크 n · 릴스 5분 단타 n · 동전 n' (groups with accounts only)."""
+    return " · ".join(f"{GROUP_KO[g]} {groups[g]}" for g in GROUPS if groups.get(g))
+
+
+def executor_problem(acct: str) -> str:
+    """'' when the order executor may follow ``acct`` (a core account: one of the 36 on a core timeframe), else why
+    not in Korean. Names only (no database): the executor's paper account must never be a DeepSeek, reel, coin-flip
+    or extra account (they never went through the live-safety review)."""
+    name, _, tf = acct.rpartition("@")
+    if "~c" in tf or "~c" in name or re.match(r"^NL[0-9]+$", name or ""):
+        return "추가 계좌(복제·새 매매법)"
+    if name in DS200_IDS:
+        return "딥시크 계좌"
+    if name == REEL_NAME:
+        return "릴스 5분 단타 계좌"
+    if name.startswith("RANDOM_"):
+        return "동전 계좌"
+    if not name or tf not in V3_TRADE_TFS:
+        return f"새 실행의 매매법 계좌에 없는 봉({tf or '?'})"
+    return ""
 
 
 def config_warnings(extras_json: str, executor_json: str) -> list[str]:
@@ -240,8 +353,10 @@ def config_warnings(extras_json: str, executor_json: str) -> list[str]:
             acct = (json.load(fh) or {}).get("account")
     except (OSError, ValueError, AttributeError):
         acct = None
-    if isinstance(acct, str) and acct.rsplit("@", 1)[-1] not in V3_TRADE_TFS:
-        out.append(f"{executor_json}의 account={acct}: 새 실행에는 없는 봉입니다(주문 실행기는 켜기 전에 바꾸세요)")
+    why = executor_problem(acct) if isinstance(acct, str) else ""
+    if why:
+        out.append(f"{executor_json}의 account={acct}: {why}입니다. 주문 실행기는 매매법 {V3_STRATEGIES}개의 "
+                   f"{'·'.join(V3_TRADE_TFS)} 계좌만 따라 합니다(켜기 전에 바꾸세요)")
     return out
 
 
@@ -347,9 +462,9 @@ def apply(agents_path: str, inbox_path: str, archive: str, now_ms: Optional[int]
         # 3. tell every room once (a note: the packets show the newest notes; a line: the room's history)
         if not already:
             facts = paper_facts(old_paper) if old_paper else {}
-            text = (f"{restart_text(day)}. 이 날 전의 회의·메모에 나온 거래·손익·계좌 숫자는 이전 실행(보관됨) 것이고, "
-                    f"새 실행은 $5,000 계좌 {V3_ACCOUNTS}개({'·'.join(V3_TRADE_TFS)})로 다시 셈. 시험 장부와 시험 수, 메모, "
-                    "채점 기록은 그대로 이어짐.")
+            text = (f"{restart_text(day)}. 이 날 전의 회의·메모에 나온 거래·손익·계좌 숫자는 이전 실행(30일 판정 없이 "
+                    "보관됨) 것이고, 새 실행은 처음부터 다시 셈. 그룹(매매법·딥시크·릴스 5분 단타·동전)은 따로 세고, 매매법 "
+                    f"{V3_STRATEGIES}개의 순위·판정에 다른 그룹을 섞지 않음. 시험 장부와 시험 수, 메모, 채점 기록은 그대로 이어짐.")
             for room, strat in conn.execute("SELECT room_id, strategy FROM rooms ORDER BY room_id").fetchall():
                 conn.execute("INSERT INTO notes (ts, room_id, strategy, text, round_id) VALUES (?,?,?,?,NULL)",
                              (now, room, strat, text))
@@ -360,7 +475,9 @@ def apply(agents_path: str, inbox_path: str, archive: str, now_ms: Optional[int]
                                                      if old else [])
             marker = {"ts": now, "day_kst": day, "archive": archive, "text_ko": restart_text(day),
                       "old_run_start": facts.get("start"), "old_originals": facts.get("originals"),
-                      "old_5m_accounts": facts.get("off_tf"), "history": hist}
+                      "old_5m_accounts": (facts.get("by_tf") or {}).get("5m", 0) if facts else None,
+                      "old_groups": facts.get("groups"), "old_shape": facts.get("shape"),
+                      "new_run": V4_VERSION, "new_accounts": V4_ACCOUNTS, "history": hist}
             conn.execute("INSERT INTO cursors (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
                          (MARKER, json.dumps(marker, ensure_ascii=False, sort_keys=True)))
         conn.commit()
@@ -383,19 +500,21 @@ def start_info(paper_db: str, wait_s: float = 0.0, poll_s: float = 5.0) -> Optio
             conn = CP.ro_connect(paper_db)
             try:
                 facts = CP.run_facts(conn)
-                n = conn.execute("SELECT timeframe, COUNT(*) FROM accounts WHERE kind IN ('strategy', 'random') "
-                                 "GROUP BY timeframe").fetchall()
+                rows = original_rows(conn)
             finally:
                 conn.close()
         except (FileNotFoundError, sqlite3.Error):
-            facts, n = {"start_ts": None}, []
-        start = facts.get("start_ts")
-        if start is not None and n:                       # the original accounts exist (not only a runs row)
+            facts, rows = {"start_ts": None}, []
+        mine = facts_of_rows(rows)
+        # the start: checkpoint.run_facts (the verdict's own rule), else the earliest original account
+        start = facts.get("start_ts") if facts.get("start_ts") is not None else mine["start"]
+        if start is not None and rows:                    # the original accounts exist (not only a runs row)
             cp = CP.checkpoint_ts(start, 1)
             return {"start": start, "start_kst": kst_text(start), "checkpoint": cp,
                     "checkpoint_kst": kst_text(cp), "checkpoint_day": CP.day_str(cp),
                     "observe_end_kst": kst_text(start + 21 * CP.DAY_MS),
-                    "accounts": sum(c for _, c in n), "timeframes": sorted(tf for tf, _ in n)}
+                    "accounts": mine["originals"], "timeframes": sorted(mine["by_tf"]),
+                    "groups": mine["groups"], "shape": mine["shape"], "utc_days": mine["utc_days"]}
         if time.time() >= end:
             return None
         time.sleep(poll_s)
@@ -458,8 +577,11 @@ def _print_plan(lib: str, warnings: list) -> int:
     if marker:
         print(f"[이미 기록된 재시작] {marker.get('day_kst')} {marker.get('archive')}")
     if facts:
+        shape = {"v4": "v4 실행", "v3": "v3 실행(이번에 보관할 것)"}.get(facts.get("shape"), "모양이 규칙과 다름")
         print(f"[지금 paper3.db] 시작 {kst_text(facts['start']) if facts.get('start') else '-'} KST, 원래 계좌 "
-              f"{facts.get('originals')}개(그중 5분봉 등 규칙 밖 {facts.get('off_tf')}개)")
+              f"{facts.get('originals')}개({groups_text(facts.get('groups') or {}) or '-'}; v4 규칙 밖 봉 "
+              f"{facts.get('off_tf')}개), {shape}")
+    print(f"[새 실행] {WHAT_CHANGED_KO}")
     for w in warnings:
         print(f"[설정 확인] {w}")
     return 0
@@ -516,7 +638,13 @@ def main(argv: Optional[list] = None) -> int:
     if info is None:
         print(f"봇이 아직 새 계좌를 만들지 않았습니다({a.paper_db})")
         return 3
-    print(f"새 실행 시작 {info['start_kst']} KST, 원래 계좌 {info['accounts']}개 ({'/'.join(info['timeframes'])})")
+    print(f"새 실행 시작 {info['start_kst']} KST, 원래 계좌 {info['accounts']}개 ({'/'.join(info['timeframes'])}; "
+          f"{groups_text(info.get('groups') or {})})")
+    if info.get("accounts") != V4_ACCOUNTS or info.get("shape") != "v4":
+        print(f"!! 계좌가 아직 규칙의 {V4_ACCOUNTS}개({groups_text(V4_GROUP_ACCOUNTS)})와 다릅니다: 1~2분 뒤 다시 보고, 그래도 "
+              "같으면 launchcheck --stage after를 돌려 개발자에게 보내세요")
+    if (info.get("utc_days") or 0) > 1:
+        print("!! 계좌를 만든 UTC 날짜가 둘 이상입니다(일부 계좌의 30일 판정이 밀림): 개발자에게 알리세요")
     print(f"첫 30일 판정 {info['checkpoint_kst']} KST (UTC {info['checkpoint_day']} 00:00, checkpoint.checkpoint_ts), "
           f"관찰 기간 끝(최소 21일) {info['observe_end_kst']} KST")
     return 0

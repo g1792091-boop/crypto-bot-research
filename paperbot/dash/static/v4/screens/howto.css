@@ -1,0 +1,34 @@
+@import url("server-kit.css");
+/* howto: 어떻게 돌아가나 (builder E, mockup screen 04). The 예시 box: server-kit.css .server-term. */
+.howto-hero { gap: 14px; }
+.howto-kicker { display: flex; align-items: center; gap: 12px; color: var(--accent); font: 700 var(--t-sm)/1 var(--f-body); letter-spacing: .2em; }
+.howto-kicker::before { content: ""; width: 30px; height: 1px; background: var(--accent-line); }
+.howto-title { font: 900 var(--t-2xl)/1.2 var(--f-body); letter-spacing: -.03em; }
+
+/* six step tabs: 3 x 2 on a phone, one row on a wider screen; only the open step is yellow */
+.howto-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+@media (min-width: 760px) { .howto-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.howto-tab { appearance: none; display: flex; align-items: center; justify-content: center; gap: 5px; height: 40px; padding: 0 6px; min-width: 0;
+  border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body);
+  white-space: nowrap; overflow: hidden; transition: background-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast); }
+.howto-tab .sn { font-family: var(--f-term); }
+.howto-tab:hover { color: var(--ink); }
+.howto-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 14px var(--accent-glow); }
+
+.howto-panel { display: grid; gap: 12px; min-width: 0; outline: none; touch-action: pan-y; }
+.howto-eye { color: var(--accent); font: 700 var(--t-xs)/1 var(--f-body); letter-spacing: .14em; }
+.howto-h { font: 900 var(--t-xl)/1.28 var(--f-body); letter-spacing: -.03em; }
+.howto-p { color: var(--ink-2); font-size: var(--t-sm); line-height: 1.75; max-width: 70ch; }
+.howto-acts { padding-top: 2px; }
+.howto-nav { padding-top: 6px; border-top: 1px solid var(--line); }
+@media (min-width: 900px) { .howto-panel .server-term { max-width: 640px; } }
+
+/* who trades / AI staff / all paper */
+.howto-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { .howto-cols { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); } }
+.howto-groups { display: grid; gap: 8px; }
+.howto-g { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.howto-g b { font-size: var(--t-sm); }
+.howto-n { color: var(--accent); font: 700 var(--t-xs)/1.6 var(--f-term); white-space: nowrap; }
+.howto-g p { grid-column: 1 / -1; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
+.howto-paper { border-color: var(--accent-line); }

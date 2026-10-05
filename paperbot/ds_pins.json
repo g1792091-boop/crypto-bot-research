@@ -1,0 +1,10 @@
+{
+ "about": "sha256 pins of the DeepSeek-200 live signal code (paper v4, group ds200; paperbot/dssig.py checks them before it loads lib_c). lib_c.py must also equal research/deepseek200/out/summary.json code_sha256['lib_c.py'] (the 5-year run's own pin) and PREREG_DEEPSEEK200.md must equal PREREG_DEEPSEEK200.sha256. summary.json pins only lib_c.py, so the library and vendor files lib_c imports are pinned here. Part of the DS hash set: a change here restarts the DeepSeek window only. Never edit during the run.",
+ "lib_c.py": "3210c6024d39ec1bfd12e95d9c602510dac7667f1f955a5bae1dfc150d696b63",
+ "files": {
+  "research/library/lib.py": "5c3e1083c734e8079df64d3a501ef7c7b0fbb8819c7c67087ba01ff213a999ce",
+  "research/search/search.py": "06920240b6f56e954e1896c16fed7c58b8fb8b3d95d73109efa0d1dcced43ce3",
+  "third_party/sweep/harness/vendor/fg_indicators.py": "bf43c1b805463a012c76dec0114adff027a06e23dfc7268e092c496ff35fdb8d",
+  "third_party/sweep/harness/vendor/pine_indicators.py": "938c954509ced6c9bf869512efc60233bd510fe76bb1e49b41f75ab08e41b2ff"
+ }
+}

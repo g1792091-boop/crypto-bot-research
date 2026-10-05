@@ -29,6 +29,10 @@ import json
 import sqlite3
 from typing import Any, Optional
 
+from ..config import V4_GROUP_ACCOUNTS
+
+CORE_N = V4_GROUP_ACCOUNTS["core"]     # the locked 36 x their timeframes (kind 'strategy'; config, never typed)
+
 SHOCKS = (-0.20, -0.10, -0.05, 0.05, 0.10, 0.20)
 ALL = "ALL"
 LABEL = "설명용, 판정 아님"
@@ -198,7 +202,7 @@ HOW_TO_READ = ("가격이 한 번에 shock(0.10 = +10%)만큼 뛰거나 떨어�
                "청산가에 닿으면 강제청산(증거금 전부 잃음), 아니면 손절·잠금선을 지나간 포지션은 손절가가 아니라 충격 뒤 가격에 "
                "체결(갭, 슬리피지·수수료 포함), 나머지는 열린 채 평가 손익만 바뀜. coin = 그 코인만 움직임, ALL = 모든 코인이 "
                "같이 움직임. table.<코인>.<충격> = columns 순서의 숫자(positions = 영향받는 포지션 수, liquidated = 강제청산, stopped = 손절·잠금 체결). change_usd = 계좌들의 평가 자금 변화 합($, 음수 = 손실), loss_usd = 손실 난 포지션만의 합, "
-               "share_of_equity = 매매법 계좌 144개 평가 자금 합 대비 비율(-0.01 = -1%), busted = 충격으로 파산선 아래로 간 계좌. "
+               f"share_of_equity = 잠긴 매매법 계좌 {CORE_N}개 평가 자금 합 대비 비율(-0.01 = -1%), busted = 충격으로 파산선 아래로 간 계좌. "
                "가격은 지금 시세(live_bars 마지막 종가), 마크 가격 = 마지막 체결가로 가정")
 
 
@@ -239,7 +243,8 @@ def compact(paper_ro: Optional[sqlite3.Connection]) -> dict:
             "worst_scenario": None if worst is None else {k: worst[k] for k in ("coin", "shock", "liquidated",
                                                                                  "stopped", "change_usd")},
             "note": ("코드 계산: 지금 열린 포지션에 가격이 한 번에 ±10%·±20% 움직이면(갭: 손절은 충격 뒤 가격에 체결, 청산가를 "
-                     "지나면 강제청산) 계좌 144개 평가 자금이 얼마나 바뀌는지(share_of_equity, -0.01 = -1%). 설명용, 판정 아님")}
+                     f"지나면 강제청산) 잠긴 매매법 계좌 {CORE_N}개 평가 자금이 얼마나 바뀌는지(share_of_equity, -0.01 = -1%). "
+                     "설명용, 판정 아님(딥시크·릴스 계좌는 이 계산에 없음)")}
 
 
 def dash_view(paper_ro: sqlite3.Connection) -> dict:

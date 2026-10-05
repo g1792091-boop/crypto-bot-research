@@ -5,10 +5,32 @@ debate, 2026-10-04).
 Each role: id, Korean name, team, model tier (opus = judgement-heavy, sonnet = repeated
 analysis), when it works, what it does, and ``start``: "now" (from the first paper day) or
 the condition that brings it in. The dashboard shows this list; the v3 pipelines use it.
-Agents never place orders and cannot change the original accounts (156 since the restart of 2026-10-04).
+Agents never place orders and cannot change the original accounts (the run's shape: agents/facts.py).
+
+Paper v4 (owners 2026-10-05): five more specialists in the specialist team, ``GROUP_SPECIALISTS``, one per v4
+specialist room (groups.V4_ROLES): four for the DeepSeek-200 families and one for the 5m reel strategy. The 36
+strategy specialists and the 12 teams stay as they were. ``ALL_ROLES`` is every role a room can seat.
 """
 
 from __future__ import annotations
+
+from ..config import REEL_NAME, V3_TRADE_TFS
+from ..groups import V4_ROLES
+from .facts import FLIP5M_EXIT_KO, REEL_EXIT_KO, method_ko
+
+# The five v4 specialist rooms (DeepSeek families, the reel; G7): a note, the owners' alert or nothing. No hypothesis
+# (its scoring reads the 36's accounts), no 5-year test (the lab's data and the gate are the 36's) and no copy (D9).
+# actions.GROUP_ACTIONS is this tuple (rooms._proposal enforces it).
+GROUP_ACTIONS = ("note", "flag_owners", "no_action")
+GROUP_ACTIONS_KO = "note(메모)·flag_owners(두 분께 알림)·no_action(행동 없음) 세 가지만"
+
+_METHOD_KO = method_ko()           # the day-30 verdict in one line (G18: never a typed bot count or one FDR)
+# exits wording (G5): the ladder and the ATR what-ifs are the house exits' (the 36, DeepSeek, the core-timeframe coin
+# flips); the reel and the 5m coin flips have their own exits
+_HOUSE_ONLY_KO = "하우스 청산 계좌(잠긴 36개·딥시크·15분~4시간 동전)만 해당. 릴스와 5분봉 동전은 자기 청산이라 잠금·ATR 가정 없음"
+
+_N_TF = len(V3_TRADE_TFS)          # a locked strategy's accounts (15m / 30m / 1h / 4h)
+_TFS_KO = "·".join({"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}.get(t, t) for t in V3_TRADE_TFS)
 
 TEAMS = (
     ("market", "① 시장분석팀"),
@@ -52,7 +74,7 @@ ROLES = (
     ("combo_synergy", "조합 시너지 분석가", "ops", "sonnet", "주간",
      "여러 매매법이 동시에 같은 방향일 때 성적(합의 신호), 동시 손실·꼬리 상관", "now"),
     ("league_referee", "리그 심판", "ops", "sonnet", "매일, 주간",
-     "체크포인트 판정(규칙 보충안 Q1: 계좌마다 동전 봇 2,000개 + FDR 10%)의 p·q와 결과를 그대로 전하고 실력인지 운인지 "
+     f"체크포인트 판정({_METHOD_KO})의 p·q와 결과를 그대로 전하고 실력인지 운인지 "
      "설명. 판정은 코드, 봉별 동전 봇 3개 비교는 참고용", "now"),
     ("data_quality", "데이터 품질 감시관", "ops", "sonnet", "매일",
      "빠진 봉, 튀는 가격, 거래소 점검, 마크 가격·펀딩 이상. 이상 데이터로 생긴 거래 표시", "now"),
@@ -79,7 +101,7 @@ ROLES = (
     ("learning", "학습 관리 에이전트", "evolve", "sonnet", "주간",
      "배운 점 정리, 가설 장부(지금까지 시험한 것과 결과) 관리, 시도 횟수 집계", "now"),
     ("tf_compare", "봉 비교 분석가", "compare", "sonnet", "주간",
-     "같은 매매법의 15분~4시간 계좌 비교(5분봉은 2026-10-04 실험에서 뺐음). 이웃 봉에서 함께 좋아야 믿을 만함", "now"),
+     f"같은 매매법의 {_TFS_KO} 계좌 비교(잠긴 36개는 5분봉 계좌 없음). 이웃 봉에서 함께 좋아야 믿을 만함", "now"),
     ("coin_compare", "코인 비교 분석가", "compare", "sonnet", "주간",
      "매매법별 코인 성적, 순서 때문에 놓친 신호의 결과", "now"),
     ("regime_perf", "장세별 성과 분석가", "compare", "sonnet", "주간",
@@ -106,8 +128,8 @@ ROLES = (
      "테스트넷 연습 시작 후"),
 )
 
-# Strategy specialists (added 2026-09-30 at the owners' request): one per strategy, covering its four
-# timeframe accounts (15m / 30m / 1h / 4h; 5m removed 2026-10-04). Same template, different dossier. Loss cards are written by code the moment a
+# Strategy specialists (added 2026-09-30 at the owners' request): one per strategy, covering its
+# timeframe accounts (config.V3_TRADE_TFS; the 36 have no 5m account). Same template, different dossier. Loss cards are written by code the moment a
 # trade closes; the specialist reads them in real time only for urgent triggers (within the daily AI
 # budget) and weekly once the strategy has 30 new trades. Proposals go to the hypothesis ledger,
 # then a 5-year backtest by code, then validator -> approver -> a new copy account.
@@ -127,9 +149,24 @@ STRATEGY_KO = {
 }
 SPECIALISTS = tuple(
     (f"spec_{k}", f"{v} 전담", "specialist", "sonnet", "손절 즉시(긴급만), 주 1회",
-     f"{v} 매매법({k})의 4개 봉 계좌만 담당. 손절 카드로 원인 분석, 개선 가설 작성(5년 백테스트 통과 후 새 계좌)",
+     f"{v} 매매법({k})의 {_N_TF}개 봉 계좌만 담당. 손절 카드로 원인 분석, 개선 가설 작성(5년 백테스트 통과 후 새 계좌)",
      "now")
     for k, v in STRATEGY_KO.items())
+
+# The v4 specialists (owners 2026-10-05: "5 new specialist roles instead of 44"): one per v4 specialist room
+# (groups.V4_ROLES, room ``team:<key>``), in the specialist team. Each covers the DeepSeek-200 accounts of its
+# families on every timeframe they trade (F11_PO3, Power of 3, sits with the session role), or the reel's one 5m
+# account. Their meetings (triggers ``group_loss`` / ``group_bust`` / ``group_weekly``) run on spare AI calls only
+# (budget class 'research'), so they never take the 36 rooms' calls; the budget itself is unchanged.
+GROUP_ROLE_PREFIX = "spec_"
+GROUP_SPECIALISTS = tuple(
+    (f"{GROUP_ROLE_PREFIX}{key}", ko, "specialist", "sonnet", "손실 묶음(하루 1번까지), 파산(하루 1번 묶음), 주 1회",
+     (f"딥시크 200 정의 중 {'·'.join(fams + ids)} 계열의 모든 봉 계좌 담당" if fams else
+      f"인스타 릴스 5분 단타({', '.join(ids)}) 5분봉 계좌 담당(비교: 5분봉 동전 3개)")
+     + ". 손실 카드와 성적으로 원인 분석(복제 계좌·5년 시험 없음, 결론은 팀장 요약)", "now")
+    for key, ko, fams, ids in V4_ROLES)
+GROUP_ROLE_OF_ROOM = {f"team:{key}": f"{GROUP_ROLE_PREFIX}{key}" for key, _ko, _f, _i in V4_ROLES}
+ALL_ROLES = ROLES + SPECIALISTS + GROUP_SPECIALISTS
 
 # What each role does in the agent ROOMS (docs/agent-rooms.md): shown as the member's duty on the
 # dashboard and given to the model as its '담당:' line. Worded within what room staff can do: read the
@@ -139,8 +176,8 @@ SPECIALISTS = tuple(
 ROOM_DUTY = {
     "devils_advocate": "앞 사람(전담 에이전트·전략가)의 분석과 제안에 반대 근거를 내고 동의·반대·시험 필요 중 하나로 판정",
     "entry_timing": "코드가 계산한 진입 순간의 차트 상황(추세 반대, 추격 등)과 새 손실을 읽고 의견",
-    "exit_timing": "첫 익절 잠금 근처까지 갔다가 진 손실 등 청산 기록을 읽고 의견",
-    "whatif": "밤 점검이 계산한 '손절을 1.5·2.5·3 ATR로 했다면' 결과를 읽고 의견(손실 거래만 본 결과)",
+    "exit_timing": f"첫 익절 잠금 근처까지 갔다가 진 손실 등 청산 기록을 읽고 의견({_HOUSE_ONLY_KO})",
+    "whatif": f"밤 점검이 계산한 '손절을 1.5·2.5·3 ATR로 했다면' 결과를 읽고 의견(손실 거래만 본 결과, {_HOUSE_ONLY_KO})",
     "validator": "코드가 계산한 5년 시험 결과를 쉬운 말로 설명(통과·불통과는 코드가 정함). 금요일 낙폭·파산 위험 회의에서는 "
                  "코드가 계산한 실전 대 5년 백테스트 차이를 설명",
     "approver": "관문을 통과한 시험의 복제 계좌 제안을 승인·거부(기본 설정에서 처음 60일은 두 분 확인을 기다리고, "
@@ -154,7 +191,7 @@ ROOM_DUTY = {
     "ops_auditor": "사고 때 코드가 모은 알림·밤 점검 기록을 읽고 원인과 영향 설명",
     "data_quality": "빠진 봉·튀는 가격 기록을 읽고 영향 설명",
     "code_reviewer": "사고 때 코드가 모은 오류·알림 기록을 읽고 원인 추정(코드를 읽거나 고치지 못함)",
-    "league_referee": "체크포인트 공식 판정(동전 봇 2,000개 + FDR, 규칙 보충안 Q1)의 p·q와 리그 성적을 읽고 실력인지 운인지 "
+    "league_referee": f"체크포인트 공식 판정({_METHOD_KO})의 p·q와 리그 성적을 읽고 실력인지 운인지 "
                       "설명(판정은 코드, 동전 봇 3개 비교는 참고용)",
     "rule_keeper": "고정된 규칙·합격 기준이 지켜지는지 점검(규칙·기준을 바꾸지 못함)",
     # the meetings added 2026-10-04 (owners' choice): every number in them is code's, the staff read and interpret
@@ -171,14 +208,22 @@ ROOM_DUTY = {
                      "(인터넷·뉴스는 볼 수 없음)",
     "macro_corr": "패킷에 있는 경제지표 일정·BTC·ETH 움직임·장세 숫자로 발표와 우리 계좌 반응의 관계를 해석(패킷에 없는 "
                   "금리·달러 자료는 '모름')",
-    "tf_compare": "봉 비교 회의에서 이 매매법의 4개 봉 숫자와 다른 매매법들의 봉별 패턴(코드 집계)을 나란히 보고, 같은 봉 "
+    "tf_compare": f"봉 비교 회의에서 이 매매법의 {_N_TF}개 봉 숫자와 다른 매매법들의 봉별 패턴(코드 집계)을 나란히 보고, 같은 봉 "
                   "패턴이 다른 매매법에도 있는지 설명",
     "bull": "그날의 코인이 앞으로 24시간 오를 근거를 코드가 계산한 숫자로 제시(토론용, 거래로 이어지지 않음)",
     "bear": "그날의 코인이 앞으로 24시간 내릴 근거를 코드가 계산한 숫자로 제시(토론용, 거래로 이어지지 않음)",
-    **{f"spec_{k}": (f"{v} 매매법({k})의 4개 봉 계좌를 맡음. 코드가 만든 손실 카드와 성적을 읽고 원인을 분석해 "
+    **{f"spec_{k}": (f"{v} 매매법({k})의 {_N_TF}개 봉 계좌를 맡음. 코드가 만든 손실 카드와 성적을 읽고 원인을 분석해 "
                      "여섯 가지 행동 중 하나를 제안(5년 시험 요청 포함. 관문을 통과하면 자율 승인관이 판단하고, "
                      "기본 설정에서 처음 60일은 두 분 확인도 기다림. 복제 계좌는 복제 기능이 생긴 뒤에만)")
           for k, v in STRATEGY_KO.items()},
+    # the v4 specialist rooms (owners 2026-10-05; G7): note, the owners' alert or nothing (actions.GROUP_ACTIONS: no
+    # hypothesis, no 5-year test, no copy of a DeepSeek or reel account, D9). The reel's role states its own exits (G5).
+    **{r[0]: (f"{r[1]}: 이 방이 맡은 계좌의 손실 카드·성적·파산을 코드가 만든 패킷(group_accounts, losses)으로 읽고, "
+              "정의(계열)·봉·코인별로 무엇이 잃는지 설명. 결론은 팀장이 세 줄로 요약(규칙·계좌는 못 바꿈). "
+              f"할 수 있는 행동은 {GROUP_ACTIONS_KO}: 가설 기록·5년 시험·복제 제안은 없고 코드가 '행동 없음'으로 바꿈"
+              + (f". 이 계좌({REEL_NAME})의 청산은 {REEL_EXIT_KO}. 비교용 5분봉 동전 3개는 {FLIP5M_EXIT_KO}. "
+                 "하우스 청산의 계단식 잠금·ATR 손절 가정은 이 방에 해당 없음" if REEL_NAME in r[5] else ""))
+       for r in GROUP_SPECIALISTS},
 }
 
 
@@ -186,7 +231,7 @@ def room_duty(role: str) -> str:
     """The role's duty in the rooms (``ROOM_DUTY``), else its roster duty."""
     if role in ROOM_DUTY:
         return ROOM_DUTY[role]
-    return next((r[5] for r in ROLES + SPECIALISTS if r[0] == role), "")
+    return next((r[5] for r in ALL_ROLES if r[0] == role), "")
 
 
 MEETINGS = (
@@ -201,10 +246,12 @@ def roster() -> dict:
     return {
         "teams": [{"id": t, "name": n} for t, n in TEAMS],
         "roles": [{"id": r[0], "name": r[1], "team": r[2], "model": r[3], "when": r[4], "duty": r[5],
-                   "start": r[6]} for r in ROLES + SPECIALISTS],
+                   "start": r[6]} for r in ALL_ROLES],
         "meetings": [{"id": m[0], "name": m[1], "when": m[2]} for m in MEETINGS],
     }
 
 
 assert len(ROLES) == 36 and len({r[0] for r in ROLES}) == 36
 assert len(SPECIALISTS) == 36
+assert len(GROUP_SPECIALISTS) == 5 and not {r[0] for r in GROUP_SPECIALISTS} & {r[0] for r in ROLES + SPECIALISTS}
+assert len(TEAMS) == 12

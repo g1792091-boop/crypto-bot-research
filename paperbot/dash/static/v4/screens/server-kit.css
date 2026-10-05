@@ -1,0 +1,67 @@
+/* 서버 group kit (builder E): shared by server, alerts, signals, howto, faq (@imported by each of their css files).
+   Tokens only; the gauge, plate, pill and list classes come from components.css. */
+
+/* the three state colours, one line */
+.server-states { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.server-states i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--st); }
+
+/* a plate heading for a group (gauges, tiles) */
+.server-sech { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.server-sech .muted { font-size: var(--t-xs); }
+.server-gsec { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.server-gauges { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.server-gauges > .gauge { grid-column: 1 / -1; }
+/* 수집 전: one compact line, two to a row (its meaning is in the title, the caption and the FAQ) */
+.server-gauges > .gauge.idle { grid-column: auto; padding: 10px 12px; align-content: center; }
+.server-gauges > .gauge.idle:only-child { grid-column: 1 / -1; }
+.gauge.idle .g-val { display: none; }
+.gauge.idle .g-name { font-weight: 500; color: var(--ink-2); }
+.server-gauges .gauge { transition: border-color .3s var(--ease); }
+.server-gauges .gauge.bad { border-color: var(--down-line); }
+.server-gauges .gauge.warn { border-color: var(--warn-line); }
+.server-gauges .g-val .num { font-size: var(--t-sm); }
+
+/* health tiles */
+.server-tiles { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 760px) { .server-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.server-tile { position: relative; display: grid; gap: 3px; align-content: start; min-width: 0; padding: 10px 12px 10px 14px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid transparent; overflow: hidden; }
+.server-tile::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--st); }
+.server-tile .k { color: var(--muted); font-size: var(--t-xs); }
+.server-tile .v { color: var(--st); font-size: var(--t-md); line-height: 1.35; overflow-wrap: anywhere; }
+.server-tile.none .v { color: var(--ink-2); }
+.server-tile .s { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.server-tile.bad { border-color: var(--down-line); background: var(--down-soft); }
+
+/* one muted line under a card */
+
+/* a status line with its dot (ok / warn / bad) */
+.server-dotline { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.server-dotline > i { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--st); box-shadow: 0 0 0 4px var(--st-soft); }
+
+/* lines of problems (red) and things to check (amber) */
+.server-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.server-lines li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 8px 10px; border-radius: var(--r-sm);
+  font-size: var(--t-sm); line-height: 1.5; background: var(--st-soft); border: 1px solid transparent; }
+.server-lines li::before { content: "!"; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: var(--st); color: var(--bg);
+  font: 700 var(--t-xs)/1 var(--f-pixel); }
+.server-lines li.warn::before { content: "·"; }
+
+/* a time-stamped row (alerts, jobs, signals): left time, body, right side */
+.server-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px 2px; border-top: 1px solid var(--line); align-items: start; min-width: 0; }
+.server-row:first-child { border-top: 0; }
+.server-row .t { font: 400 var(--t-xs)/1.4 var(--f-term); color: var(--muted); white-space: nowrap; }
+.server-row .body { min-width: 0; font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.server-row .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; color: var(--muted); font-size: var(--t-xs); }
+.server-row .side-r { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
+/* counts strip (24 h numbers) */
+.server-counts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-sm); color: var(--ink-2); }
+.server-counts b { color: var(--ink); }
+
+/* a console-style box (예시, document text) */
+.server-term { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--console); border: 1px solid var(--console-line);
+  font: 400 var(--t-sm)/1.65 var(--f-term); min-width: 0; }
+.server-term .th { color: var(--term-yellow); font-size: var(--t-xs); font-weight: 700; }
+.server-term .tl { color: var(--ink); overflow-wrap: anywhere; }
+.server-term .tl::before { content: "> "; color: var(--term-cyan); }

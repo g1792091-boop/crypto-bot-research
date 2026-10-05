@@ -1,0 +1,37 @@
+# DeepSeek nightly recompute check (paperbot/dscheck.py, paper v4 plan section 12): yesterday's DeepSeek signals
+# recomputed from full history with the pinned research/deepseek200/lib_c.py and compared with the live signal_log rows.
+# NOT trading: paper3.db is opened read-only (mode=ro, query_only), no order, no account, no Telegram of its own;
+# public 5m klines only (no key). Writes only /var/lib/paperbot/dscheck: its kline cache and last.txt, the one-line
+# summary the 09:20 report reads. Exit 1 = a mismatch beyond the documented 1-bar data differences, 2 = it could not
+# run (pins, bars); both send the owners' one Korean warning (paperbot-failed@). Started by paperbot-dscheck.timer.
+[Unit]
+Description=paperbot DeepSeek nightly recompute check (read-only, no orders)
+After=network-online.target paperbot-daily3.service
+Wants=network-online.target
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# no EnvironmentFile: no key and no token are needed, and /etc/paperbot is hidden below
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.dscheck run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/dscheck
+# Below the live runner: low CPU and disk priority, bounded memory and time.
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=1G
+TimeoutStartSec=1h
+# As paperbot-obsidian.service: /var/lib/paperbot stays writable for the sandbox only because SQLite needs the -shm file
+# next to a live WAL database even for a read-only connection; paper3.db itself is read-only here (ReadOnlyPaths) and
+# the code opens it read-only. The -wal file is NOT listed (a listed file is pinned to the inode it had at start).
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/shadow200 -/var/lib/paperbot/lab /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

@@ -55,3 +55,73 @@ def test_only_a_unit_name_is_accepted(tmp_path):
     for bad in ("../x", "a b", ".hidden"):
         assert FA.main([bad], env={}, notifier=note, now_ms=T, state_dir=str(tmp_path)) == 2
     assert note.messages == [] and not os.listdir(tmp_path)
+
+
+def _paper_db(path, run=None, accounts=0):
+    import json
+    import sqlite3
+    c = sqlite3.connect(path)
+    c.executescript("CREATE TABLE state (k TEXT PRIMARY KEY, ts INTEGER, data TEXT);"
+                    "CREATE TABLE accounts (account_id TEXT PRIMARY KEY, kind TEXT);")
+    if run is not None:
+        c.execute("INSERT INTO state VALUES ('run', 1, ?)", (json.dumps(run),))
+    c.executemany("INSERT INTO accounts VALUES (?, 'strategy')", [(f"A{k}@15m",) for k in range(accounts)])
+    c.commit()
+    c.close()
+
+
+def test_the_account_count_comes_from_the_database_not_the_code(tmp_path):
+    """Paper v4 (plan T5): '봇(계좌 N개)' is the runner's own count (paper3.db state 'run'), else the accounts table;
+    with no readable database the warning names no number (never the old 156)."""
+    run_db, rows_db = str(tmp_path / "run.db"), str(tmp_path / "rows.db")
+    _paper_db(run_db, run={"accounts": 333, "settings": "paper-v4"}, accounts=5)
+    _paper_db(rows_db, accounts=7)
+    assert FA.accounts_n(run_db) == 333 and FA.accounts_n(rows_db) == 7
+    assert FA.accounts_n(str(tmp_path / "none.db")) is None and FA.accounts_n(None) is None
+    (tmp_path / "junk.db").write_bytes(b"not a database")
+    assert FA.accounts_n(str(tmp_path / "junk.db")) is None
+    note = ListNotifier()
+    for k, db in enumerate((run_db, rows_db, str(tmp_path / "none.db"))):
+        FA.main(["paperbot-daily3.service"], env=FAILED, notifier=note, now_ms=T, state_dir=str(tmp_path / f"s{k}"),
+                db=db)
+    texts = [t for _, t in note.messages]
+    assert "\n봇(계좌 333개)은 그대로 돎\n" in texts[0] and "\n봇(계좌 7개)은 그대로 돎\n" in texts[1]
+    assert "\n봇은 그대로 돎\n" in texts[2] and not any("156" in t for t in texts)
+    before = os.path.getmtime(run_db)
+    FA.main(["paperbot-agents.service", "--db", run_db], env=FAILED, notifier=note, now_ms=T,
+            state_dir=str(tmp_path / "s9"))
+    assert "계좌 333개" in note.messages[-1][1] and os.path.getmtime(run_db) == before          # read-only
+
+
+def test_every_unit_that_names_the_handler_has_a_korean_name():
+    """A new unit with OnFailure=paperbot-failed@ must be named in JOBS_KO (plan T11), else the owners get its raw
+    unit name."""
+    import glob
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    units = [os.path.basename(p) for p in glob.glob(os.path.join(root, "deploy", "*.service"))
+             if "OnFailure=paperbot-failed@" in open(p, encoding="utf-8").read()]
+    assert units and sorted(u for u in units if u not in FA.JOBS_KO) == []
+
+
+def test_the_deepseek_check_says_what_its_exit_codes_mean(tmp_path):
+    note = ListNotifier()
+    for k, status in enumerate(("1", "2")):
+        FA.main(["paperbot-dscheck.service"], env={"MONITOR_SERVICE_RESULT": "exit-code", "MONITOR_EXIT_STATUS": status},
+                notifier=note, now_ms=T, state_dir=str(tmp_path / str(k)))
+    assert note.messages[0][1].startswith("작업 실패 · 딥시크 신호 밤 재계산 점검(09:30)\n\n오류로 끝남 (종료 코드 1): 다시 계산한")
+    assert "핀) 확인이나 봉 받기" in note.messages[1][1] and "last.txt" in note.messages[1][1]
+
+
+def test_the_backup_and_the_deepseek_check_have_korean_names_once(tmp_path):
+    """G29 / G31: the DeepSeek check and the database backup are named (each once: a dict key), and the backup says
+    what its exit code 1 means (a copy failed; the 14 days of older copies stay)."""
+    assert {"paperbot-dscheck.service", "paperbot-backup.service"} <= set(FA.JOBS_KO)
+    import inspect
+    src = inspect.getsource(FA)
+    assert src.count('"paperbot-dscheck.service": (') == 1 and src.count('"paperbot-backup.service": (') == 1
+    note = ListNotifier()
+    FA.main(["paperbot-backup.service"], env={"MONITOR_SERVICE_RESULT": "exit-code", "MONITOR_EXIT_STATUS": "1"},
+            notifier=note, now_ms=T, state_dir=str(tmp_path))
+    text = note.messages[0][1]
+    assert text.startswith("작업 실패 · 데이터베이스 백업(08:40)\n\n오류로 끝남 (종료 코드 1): 데이터베이스 사본 하나 이상을")
+    assert "sudo journalctl -u paperbot-backup -n 50" in text and "sudo systemctl start paperbot-backup" in text

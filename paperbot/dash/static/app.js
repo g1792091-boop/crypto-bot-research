@@ -1,19 +1,25 @@
 "use strict";
-// Paper v3 dashboard. Server data: /api/* (read-only store). Live prices: Binance public streams in the browser.
+// Paper v4 dashboard, the old screen (/v3, "예전 화면"). Server data: /api/* (read-only store). Live prices: Binance public streams in the browser.
 const SYMS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"];
 const TRADE_SYMS = SYMS.slice(0, 6);
 const TF_KO = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간", "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일봉", "3d": "3일봉", "1w": "주봉", "1M": "월봉"};
 // seconds per bar (a month counted as 30 days: only used to place markers, never for the countdown)
 const TF_SEC = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600,
   "8h": 28800, "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000};
-// the run's traded timeframes and size (config.V3_TRADE_TFS etc.; 5m was removed with the restart of 2026-10-04 and
-// is a chart interval only). /api/board 'run_shape' refills these in place (applyRunShape): the other files share them.
-const TRADE_TFS = ["15m", "30m", "1h", "4h"];
+// the run's timeframes and size. /api/board 'run_shape' (counted from the accounts table, paper v4) refills these in
+// place (applyRunShape): the other files share them. The defaults are the v4 rule's (config.V4_GROUPS) until it comes.
+// TRADE_TFS: every timeframe some account trades (5m: the reel and its three coin flips only); CORE_TFS: the 36's
+// (never 5m; the strategy and digest tabs); JUDGED_TFS: the 36's judged timeframes (4h observed).
+const TRADE_TFS = ["5m", "15m", "30m", "1h", "4h"];
+const CORE_TFS = ["15m", "30m", "1h", "4h"];
 const JUDGED_TFS = ["15m", "30m", "1h"];
-const RUN = {accounts: 156, strategy_accounts: 144, q1_family: 108};
+const RUN = {accounts: 331, strategy_accounts: 144, q1_family: 108, judged: 241};
+// per group: {core|ds200|reel: [judged timeframes]} and {group: {accounts, tfs: {tf: n}, judged}}
+const JUDGED_BY_GROUP = {core: ["15m", "30m", "1h"], ds200: ["15m", "30m", "1h"], reel: ["5m"]};
+const RUN_GROUPS = {};
 // the chart's account features (entries, exits, position lines, S/R) exist on the accounts' own timeframes only
 const botTf = (tf) => TRADE_TFS.includes(tf);
-const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료"};
+const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료", TIME: "시간 청산"};
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음(미진입)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
 // engine outcomes of a signal (outcomes.status); FILTERED: a copy account's own rule skipped the entry
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
@@ -24,17 +30,41 @@ let INITIAL = 5000;   // replaced by the bot's own value from /api/board
 function applyRunShape(r) {
   if (!r) return;
   if (Array.isArray(r.trade_tfs) && r.trade_tfs.length) TRADE_TFS.splice(0, TRADE_TFS.length, ...r.trade_tfs);
+  if (Array.isArray(r.core_tfs) && r.core_tfs.length) CORE_TFS.splice(0, CORE_TFS.length, ...r.core_tfs);
   if (Array.isArray(r.judged_tfs) && r.judged_tfs.length) JUDGED_TFS.splice(0, JUDGED_TFS.length, ...r.judged_tfs);
+  if (r.judged_by_group && typeof r.judged_by_group === "object")
+    for (const [g, tfs] of Object.entries(r.judged_by_group)) if (Array.isArray(tfs)) JUDGED_BY_GROUP[g] = tfs.slice();
+  if (r.groups && typeof r.groups === "object") {
+    for (const k of Object.keys(RUN_GROUPS)) delete RUN_GROUPS[k];
+    Object.assign(RUN_GROUPS, r.groups);
+  }
   for (const k of Object.keys(RUN)) if (typeof r[k] === "number") RUN[k] = r[k];
   // counts written in the page itself (<span data-run="strategy_accounts">)
   if (typeof document !== "undefined" && document.querySelectorAll)
     document.querySelectorAll("[data-run]").forEach((el) => { if (RUN[el.dataset.run] != null) el.textContent = RUN[el.dataset.run]; });
 }
 const $ = (id) => document.getElementById(id);
+// Paper v4 groups (/api/board rows carry group, family, exits: paperbot/groups.py). The group switch on the 순위표
+// (default: the 36 + the 5m reel + the extra accounts, owners' plan) applies to every account list, position list,
+// chart line and P&L on the page: the DeepSeek P&L is shown only while its own group is chosen (owners' D11).
+const GROUP_VIEWS = [["main", "기존 36 + 5분봉"], ["core", "기존 36"], ["ds200", "딥시크 44"], ["reel", "5분봉"],
+  ["flip", "동전 봇"], ["extra", "추가 계좌"]];
+const KIND_GROUP = {strategy: "core", random: "flip", ds200: "ds200", reel: "reel", copy: "extra", newlab: "extra"};
+const groupOf = (a) => (a && a.group) || KIND_GROUP[a && a.kind] || "other";
+// is an account in a group view: "main" = the 36, the reel and the extras; "reel" = the reel and its 5m coin flips
+function inView(a, v) {
+  const g = groupOf(a);
+  v = v || state.group;
+  if (v === "main") return g === "core" || g === "reel" || g === "extra";
+  if (v === "reel") return g === "reel" || (g === "flip" && a.timeframe === "5m");
+  return g === v;
+}
+let savedGroup = null;
+try { savedGroup = localStorage.getItem("pb-group"); } catch (e) { /* storage blocked */ }
 const state = {
   board: null, mark: {}, fund: {}, tick: {}, sym: "BTCUSDT", tf: "15m", acct: "", markers: true, view: "trade",
   sideTab: "pos", botTab: "allpos", account: null, sigTf: "", bf: {tf: "", kind: "", sort: "wallet"},
-  lastCandle: null,
+  lastCandle: null, group: GROUP_VIEWS.some(([k]) => k === savedGroup) ? savedGroup : "main",
 };
 
 // ------------------------------------------------------------ helpers
@@ -53,7 +83,7 @@ const extraLabel = (aid) => {
 };
 // a strategy's Korean name, as every Telegram message writes it (agents/roster3 STRATEGY_KO via /api/board)
 const stratKo = (s) => String(s).startsWith("RANDOM_") ? String(s).replace("RANDOM_", "동전 봇 ")
-  : (state.board && state.board.strategy_ko && state.board.strategy_ko[s]) || s;
+  : (state.board && ((state.board.strategy_ko && state.board.strategy_ko[s]) || (state.board.names_ko && state.board.names_ko[s]))) || s;
 const name = (a) => a.label_ko || (EXTRA_KINDS.includes(a.kind) && a.account_id && extraLabel(a.account_id))
   || `${stratKo(a.strategy)} · ${TF_KO[a.timeframe] || a.timeframe}`;
 // pills of an extra account: what it is (copy / new) and the runner's status when it is not running normally
@@ -66,11 +96,16 @@ function extraPills(a) {
   if (a.orphan) h += ' <span class="tag bust" title="에이전트 쪽 제안이 없거나 승인 상태가 아님">제안 상태와 달리 실행 중</span>';
   return h;
 }
+// the reel and its 5m coin flips run their own exits (reel_engine.py): no ladder, a moving target, a time exit
+const REEL_EXITS_KO = "스윙 저점 손절 · 직전 5분봉 볼린저 윗선 익절(5분마다 바뀜) · 96봉(8시간) 시간 청산 · 사다리 없음";
+function groupPills(a) {
+  return a && a.exits === "reel" ? ` <span class="tag" title="${REEL_EXITS_KO}">자체 청산</span>` : "";
+}
 const sideTag = (s) => s > 0 ? '<span class="tag long">롱</span>' : '<span class="tag short">숏</span>';
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 async function api(path) {
   const r = await fetch(path, {credentials: "same-origin"});
-  if (r.status === 401) { location.href = "/login"; throw new Error("login"); }
+  if (r.status === 401) { location.href = "/login?next=" + encodeURIComponent(location.pathname + location.hash); throw new Error("login"); }
   if (!r.ok) throw new Error(path + " " + r.status);
   return r.json();
 }
@@ -88,6 +123,10 @@ function alertKo(text) {
     return `${idName(m[1])} 강제청산: ${coin(m[2])} ${m[3]}배, 증거금 $${m[4]} 손실`;
   if ((m = t.match(/^signal workers did not answer within (\d+)s; signals skipped at (\d+) for (.+)/)))
     return `신호 계산 ${m[1]}초 초과로 ${tsKo(+m[2])} 봉 신호 건너뜀: ${m[3].split(", ").map((x) => TF_KO[x] || x).join(", ")}`;
+  // paper v4 group texts (sigservice.py): "[ds200] " / "[reel] " name a group, never an account
+  if ((m = t.match(/^\[ds200\] DeepSeek signal workers timed out after (\d+)s; DeepSeek signals skipped at (\d+) for (.+)/)))
+    return `딥시크 그룹: 신호 계산 ${m[1]}초 초과로 ${tsKo(+m[2])} 봉 딥시크 신호 건너뜀: ${m[3].split(", ").map((x) => TF_KO[x] || x).join(", ")}`;
+  if ((m = t.match(/^\[(ds200|reel)\] (.*)/))) return `${m[1] === "ds200" ? "딥시크" : "5분봉"} 그룹: ${m[2]}`;
   if ((m = t.match(/^data gap at (\d+): no bar for (.+)/))) return `데이터 누락 ${tsKo(+m[1])}: ${m[2]}`;
   if (/^no new closed bars/.test(t)) return "새 1분봉이 들어오지 않음: " + t;
   if (/^5m history incomplete/.test(t)) return "5분봉 기록 불완전으로 신호 계산 건너뜀";
@@ -168,7 +207,10 @@ function livePnl(p) {   // p: board position {symbol, side, qty, entry, margin}
   const pnl = p.side * p.qty * (m - p.entry);
   return {m, pnl, roe: pnl / p.margin};
 }
-const positions = () => (state.board ? state.board.accounts.filter((a) => a.position) : []);
+// the open positions of the accounts in the chosen group view (the switch on the 순위표)
+const positions = () => (state.board ? state.board.accounts.filter((a) => a.position && inView(a)) : []);
+// a trade row (/api/trades) of an account in the chosen view (an account the board does not know yet is shown)
+const tradeInView = (t) => { const a = state.byId && state.byId[t.account_id]; return !a || inView(a); };
 
 // ------------------------------------------------------------ theme and nav
 function themeInit() {
@@ -346,7 +388,10 @@ async function drawTradeMarkers(t0) {
     if (p && p.symbol === state.sym) {
       state.entryLine = tseries.createPriceLine({price: p.entry, color: css("--series"), lineWidth: 1, title: entryTitle(p)});
       tlines.push(state.entryLine);
-      tlines.push(tseries.createPriceLine({price: p.stop, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2,
+      if (p.exits === "reel") {   // the reel's own exits: swing-low stop and the band target, no ladder lock
+        tlines.push(tseries.createPriceLine({price: p.stop, color: css("--down"), lineWidth: 1, lineStyle: 2, title: "손절(스윙 저점)"}));
+        if (p.tp) tlines.push(tseries.createPriceLine({price: p.tp, color: css("--up"), lineWidth: 1, lineStyle: 2, title: "익절 목표(볼린저 윗선)"}));
+      } else tlines.push(tseries.createPriceLine({price: p.stop, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2,
         title: p.lock_roe ? `잠금 +${Math.round(p.lock_roe * 100)}%` : "손절"}));
       tlines.push(tseries.createPriceLine({price: p.liq, color: css("--accent"), lineWidth: 1, lineStyle: 3, title: "청산가"}));
     }
@@ -361,7 +406,7 @@ function setSym(s) {
 }
 function fillAcctFilter() {
   const sel = $("acct-filter"); const cur = state.acct;
-  const list = state.board ? state.board.accounts.filter((a) => a.timeframe === state.tf) : [];
+  const list = state.board ? state.board.accounts.filter((a) => a.timeframe === state.tf && inView(a)) : [];
   sel.innerHTML = `<option value="">${state.tf === "1d" ? "일봉은 기록 전용 (계좌 없음)" : !botTf(state.tf) ? (list.length ? `${TF_KO[state.tf] || state.tf}: 지금 매매하지 않는 봉 (진입·청산 표시 없음)` : `${TF_KO[state.tf] || state.tf}에는 계좌가 없음 (진입·청산 표시 없음)`) : "계좌를 고르면 진입·청산이 표시됩니다"}</option>` +
     list.map((a) => `<option value="${esc(a.account_id)}">${esc(name(a))}</option>`).join("");
   sel.value = list.some((a) => a.account_id === cur) ? cur : "";
@@ -420,9 +465,10 @@ seg("bot-tabs", "t", (t) => { state.botTab = t; renderBottom(); });
 function posRows(list, withCoin) {
   if (!list.length) return '<p class="empty">열린 포지션이 없습니다</p>';
   return `<table><thead><tr><th class="l">계좌</th>${withCoin ? '<th class="l">코인</th>' : ""}<th class="l">방향</th><th>배수</th>
-    ${withCoin ? "<th>진입가</th>" : ""}<th>평가 ROE</th><th>손절/잠금</th><th class="l">보기</th></tr></thead><tbody>` + list.map((a) => {
+    ${withCoin ? "<th>진입가</th>" : ""}<th>평가 ROE</th><th>손절/잠금·목표</th><th class="l">보기</th></tr></thead><tbody>` + list.map((a) => {
     const p = a.position, u = livePnl(p);
-    const stop = p.lock_roe ? `<span class="up">+${Math.round(p.lock_roe * 100)}% 잠금</span>` : px(p.stop);
+    const stop = p.exits === "reel" ? `${px(p.stop)} <small class="muted" title="${REEL_EXITS_KO}">목표 ${p.tp ? px(p.tp) : "—"}</small>`
+      : p.lock_roe ? `<span class="up">+${Math.round(p.lock_roe * 100)}% 잠금</span>` : px(p.stop);
     const strat = a.kind === "strategy" || a.kind === "copy";
     return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l" title="${esc(a.account_id)}">${esc(name(a))}</td>${withCoin ? `<td class="l">${coin(p.symbol)}</td>` : ""}
       <td class="l">${sideTag(p.side)}</td><td>${p.leverage}배</td>${withCoin ? `<td class="mono">${px(p.entry)}</td>` : ""}
@@ -446,7 +492,7 @@ function bindAccountClicks(root) {
 async function renderSide() {
   const el = $("side-body");
   if (state.sideTab === "pos") el.innerHTML = posRows(positions().filter((a) => a.position.symbol === state.sym), false);
-  else if (state.sideTab === "trades") el.innerHTML = tradeRows(await api(`/api/trades?symbol=${state.sym}&limit=100`).catch(() => []), false);
+  else if (state.sideTab === "trades") el.innerHTML = tradeRows((await api(`/api/trades?symbol=${state.sym}&limit=100&group=${state.group}`).catch(() => [])).filter(tradeInView), false);
   else {
     const rows = await api(`/api/signals?symbol=${state.sym}&limit=150`).catch(() => []);
     el.innerHTML = rows.length ? `<table><thead><tr><th class="l">봉 마감</th><th class="l">봉</th><th class="l">매매법</th><th class="l">방향</th>
@@ -460,39 +506,48 @@ async function renderSide() {
 async function renderBottom() {
   const el = $("bot-body");
   if (state.botTab === "allpos") el.innerHTML = posRows(positions(), true);
-  else if (state.botTab === "alltrades") el.innerHTML = tradeRows(await api("/api/trades?limit=150").catch(() => []), true);
+  else if (state.botTab === "alltrades") el.innerHTML = tradeRows((await api(`/api/trades?limit=150&group=${state.group}`).catch(() => [])).filter(tradeInView), true);
   else el.innerHTML = tfSummary();
   bindAccountClicks(el);
 }
+// rows per (group, timeframe) of the groups in the chosen view; the coin flips are the yardstick column (their own rows
+// only in the 동전 봇 view) and the extras one line of their own, never inside the original accounts' numbers
+const GROUP_ROW_KO = {core: "기존 36", ds200: "딥시크", reel: "5분봉 단타", flip: "동전 봇", extra: "추가 계좌"};
+const REF_NOTE = "참고: 딥시크는 늘 '보통' 배수인데 동전 봇은 21%를 '좋은 자리' 배수로 거래해 공정한 기준이 아님";
 function median(xs) { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 function tfSummary() {
   if (!state.board) return "";
-  const extras = state.board.accounts.filter((a) => EXTRA_KINDS.includes(a.kind));
-  const rows = TRADE_TFS.map((tf) => {
-    // the original accounts of this timeframe only: the extras are counted once, in their own line below
-    const all = state.board.accounts.filter((a) => a.timeframe === tf && !EXTRA_KINDS.includes(a.kind));
-    const st = all.filter((a) => a.kind === "strategy"), rnd = all.filter((a) => a.kind === "random");
-    const w = st.map((a) => a.wallet ?? INITIAL);
-    const best = st.reduce((b, a) => (!b || (a.wallet ?? INITIAL) > (b.wallet ?? INITIAL)) ? a : b, null);
-    return `<tr><td class="l">${TF_KO[tf]}</td><td>${st.length}</td><td>${all.filter((a) => a.position).length}</td>
+  const accts = state.board.accounts;
+  const extras = accts.filter((a) => EXTRA_KINDS.includes(a.kind) && inView(a));
+  let gs = ["core", "ds200", "reel"].filter((g) => accts.some((a) => groupOf(a) === g && inView(a)));
+  if (!gs.length && accts.some((a) => groupOf(a) === "flip" && inView(a))) gs = ["flip"];
+  const top = (xs) => xs.reduce((b, a) => (!b || (a.wallet ?? INITIAL) > (b.wallet ?? INITIAL)) ? a : b, null);
+  const rows = gs.map((g) => TRADE_TFS.map((tf) => {
+    const st = accts.filter((a) => a.timeframe === tf && groupOf(a) === g && inView(a));
+    if (!st.length) return "";
+    const rnd = accts.filter((a) => a.timeframe === tf && a.kind === "random");
+    const w = st.map((a) => a.wallet ?? INITIAL), best = top(st);
+    const ref = g === "ds200" ? ` <small class="muted" title="${REF_NOTE}">참고</small>` : "";
+    return `<tr><td class="l">${GROUP_ROW_KO[g]} · ${TF_KO[tf] || tf}</td><td>${st.length}</td><td>${st.filter((a) => a.position).length}</td>
       <td>${st.filter((a) => a.bust).length}</td><td class="mono">$${fmt(median(w))}</td>
-      <td class="l">${best ? esc(best.strategy) + ` <span class="mono ${cls((best.wallet ?? INITIAL) - INITIAL)}">$${fmt(best.wallet ?? INITIAL)}</span>` : "—"}</td>
-      <td class="mono">$${fmt(Math.max(...rnd.map((a) => a.wallet ?? INITIAL), 0))}</td>
-      <td>${st.filter((a) => a.beats_random).length}</td></tr>`;
-  }).join("");
-  // the extra accounts in one line of their own (never inside the strategy accounts' numbers)
-  const xbest = extras.reduce((b, a) => (!b || (a.wallet ?? INITIAL) > (b.wallet ?? INITIAL)) ? a : b, null);
+      <td class="l">${best ? esc(stratKo(best.strategy)) + ` <span class="mono ${cls((best.wallet ?? INITIAL) - INITIAL)}">$${fmt(best.wallet ?? INITIAL)}</span>` : "—"}</td>
+      <td class="mono">${rnd.length ? "$" + fmt(Math.max(...rnd.map((a) => a.wallet ?? INITIAL))) : "—"}</td>
+      <td>${g === "flip" ? "—" : st.filter((a) => a.beats_random).length + ref}</td></tr>`;
+  }).join("")).join("");
+  // the extra accounts in one line of their own (never inside the original accounts' numbers)
+  const xbest = top(extras);
   const xrow = extras.length ? `<tr><td class="l">추가 계좌</td><td>${extras.length}</td><td>${extras.filter((a) => a.position).length}</td>
       <td>${extras.filter((a) => a.bust).length}</td><td class="mono">$${fmt(median(extras.map((a) => a.wallet ?? INITIAL)))}</td>
       <td class="l">${xbest ? esc(name(xbest)) + ` <span class="mono ${cls((xbest.wallet ?? INITIAL) - INITIAL)}">$${fmt(xbest.wallet ?? INITIAL)}</span>` : "—"}</td>
       <td class="mono">—</td><td title="늦게 시작해 처음부터 돈 동전 봇과 잔고를 비교하지 않음">—</td></tr>` : "";
-  return `<table><thead><tr><th class="l">봉</th><th>매매법 계좌</th><th>포지션</th><th>파산</th><th>잔고 중앙값</th>
+  return `<table><thead><tr><th class="l">그룹 · 봉</th><th>계좌</th><th>포지션</th><th>파산</th><th>잔고 중앙값</th>
     <th class="l">최고 계좌</th><th>동전 봇 최고</th><th>동전 봇보다 나음</th></tr></thead><tbody>${rows}${xrow}</tbody></table>`;
 }
 
 // ------------------------------------------------------------ board
 async function loadBoard() {
   state.board = await api("/api/board");
+  state.byId = Object.fromEntries(state.board.accounts.map((a) => [a.account_id, a]));
   if (state.board.initial) INITIAL = state.board.initial;
   applyRunShape(state.board.run_shape);
   if (!$("acct-filter").options.length || $("acct-filter").options.length === 1) fillAcctFilter();
@@ -502,24 +557,94 @@ async function loadBoard() {
   // the strategy tab's live record (wins, losses, P&L) follows a closed trade too
   if (state.view === "strat" && typeof renderSList === "function") { renderSList(); renderLive(); renderAccts(); }
 }
-seg("f-tf", "tf", (v) => { state.bf.tf = v; renderBoard(); });
-seg("f-kind", "k", (v) => { state.bf.kind = v; renderBoard(); });
+// the group switch (GROUP_VIEWS): built once; a choice is remembered in this browser and redraws every view
+function setGroup(v) {
+  if (!GROUP_VIEWS.some(([k]) => k === v)) return;
+  state.group = v;
+  try { localStorage.setItem("pb-group", v); } catch (e) { /* private window */ }
+  document.querySelectorAll("#f-group button").forEach((x) => x.classList.toggle("on", x.dataset.g === v));
+  renderBoard(); fillAcctFilter(); renderPosLines(); renderSide(); renderBottom();
+  if (typeof document.dispatchEvent === "function" && typeof Event === "function") document.dispatchEvent(new Event("pb-group"));
+}
+function buildGroupSwitch() {
+  const el = $("f-group");
+  if (!el) return;
+  el.innerHTML = GROUP_VIEWS.map(([k, label]) => `<button data-g="${k}" class="${k === state.group ? "on" : ""}">${label}</button>`).join("");
+  el.querySelectorAll("button").forEach((b) => b.onclick = () => setGroup(b.dataset.g));
+}
+buildGroupSwitch();
+// the timeframe buttons of the chosen view (5m only where the view has 5m accounts: the reel and its coin flips)
+let tfSegKey = "";
+function buildTfSeg(tfs) {
+  const key = tfs.join(",");
+  if (!state.bf.tf || !tfs.includes(state.bf.tf)) state.bf.tf = "";
+  if (key + "|" + state.bf.tf === tfSegKey) return;
+  tfSegKey = key + "|" + state.bf.tf;
+  $("f-tf").innerHTML = `<button data-tf="" class="${state.bf.tf ? "" : "on"}">전체</button>` +
+    tfs.map((tf) => `<button data-tf="${tf}" class="${state.bf.tf === tf ? "on" : ""}">${TF_KO[tf] || tf}</button>`).join("");
+  seg("f-tf", "tf", (v) => { state.bf.tf = v; renderBoard(); });
+}
 $("f-sort").onchange = (e) => { state.bf.sort = e.target.value; renderBoard(); };
+// copies / new strategies inside a view that has extra accounts (the group switch chooses the groups)
+seg("f-kind", "k", (v) => { state.bf.kind = v; renderBoard(); });
+// group summary cards (기존 36 / 딥시크 44 / 5분봉 / 동전 봇, + 추가 계좌 when there is one); a tap chooses that view.
+// The DeepSeek card shows counts only until its own view is chosen (owners' D11: its P&L stays in its own group).
+const CARD_GROUPS = [["core", "기존 36"], ["ds200", "딥시크 44"], ["reel", "5분봉"], ["flip", "동전 봇"], ["extra", "추가 계좌"]];
+function groupStats(list) {
+  const w = list.map((a) => a.wallet ?? INITIAL);
+  return {n: list.length, pos: list.filter((a) => a.position).length, bust: list.filter((a) => a.bust).length,
+    above: w.filter((x) => x > INITIAL).length, beats: list.filter((a) => a.beats_random).length, med: median(w)};
+}
+function groupCards(all) {
+  return CARD_GROUPS.map(([g, label]) => {
+    const list = all.filter((a) => groupOf(a) === g);
+    if (!list.length && g === "extra") return "";
+    const s = groupStats(list), on = state.group === g || (state.group === "main" && ["core", "reel", "extra"].includes(g));
+    let v, sub;
+    if (!list.length) { v = "—"; sub = "아직 계좌 없음"; }
+    else if (g === "ds200" && state.group !== "ds200") {
+      v = `${s.n}개`; sub = `포지션 ${s.pos} · 파산 ${s.bust}<br><span class="muted">손익은 눌러서 딥시크 보기에서만</span>`;
+    } else if (g === "reel") {
+      const r = list[0], w = r.wallet ?? INITIAL;
+      const f5 = all.filter((a) => a.kind === "random" && a.timeframe === r.timeframe);
+      const fb = f5.length ? Math.max(...f5.map((a) => a.wallet ?? INITIAL)) : null;
+      v = `$${fmt(w)} <small class="${cls(w - INITIAL)}">${pct(w / INITIAL - 1)}</small>`;
+      sub = `거래 ${r.trades} · ${r.position ? "포지션 중" : "대기"}${r.bust ? " · 파산" : ""}<br>5분 동전 봇 ${f5.length}개 최고 ${fb == null ? "—" : "$" + fmt(fb)}`;
+    } else {
+      v = `$${fmt(s.med)} <small class="muted">중앙값</small>`;
+      sub = `계좌 ${s.n} · 포지션 ${s.pos} · 파산 ${s.bust}` + (g === "flip" || g === "extra" ? ""
+        : `<br>$${fmt(INITIAL, 0)} 넘음 ${s.above} · 동전 봇보다 나음 ${s.beats}${g === "ds200" ? ` <span class="muted" title="${REF_NOTE}">(참고)</span>` : ""}`);
+    }
+    return `<button class="tile gcard${on ? " on" : ""}" data-g="${g}"><div class="k">${label}</div><div class="v">${v}</div><div class="s">${sub}</div></button>`;
+  }).join("");
+}
 function renderBoard() {
   const b = state.board; if (!b) return;
-  const all = b.accounts, strat = all.filter((a) => a.kind === "strategy");
-  const extras = all.filter((a) => EXTRA_KINDS.includes(a.kind)), orig = all.length - extras.length;
-  const nc = extras.filter((a) => a.kind === "copy").length;
+  const all = b.accounts, view = all.filter((a) => inView(a));
+  const gc = $("gcards");
+  if (gc) {
+    gc.innerHTML = groupCards(all);
+    gc.querySelectorAll("button.gcard[data-g]").forEach((x) => x.onclick = () => setGroup(x.dataset.g));
+  }
+  const judged = view.filter((a) => !["flip", "extra"].includes(groupOf(a)));   // the accounts compared with the coin flips
+  const per = {};
+  view.forEach((a) => { const g = groupOf(a); per[g] = (per[g] || 0) + 1; });
+  const ds = state.group === "ds200";
+  const nx = per.extra || 0;
   $("tiles").innerHTML = [
-    ["계좌", extras.length ? `${orig} + 추가 ${extras.length}` : all.length,
-      `매매법 ${strat.length} · 동전 봇 ${orig - strat.length}` + (extras.length ? ` · 복제 ${nc} · 새 매매법 ${extras.length - nc}` : "")],
-    ["포지션 중", all.filter((a) => a.position).length, "지금 열린 포지션"],
-    ["$" + fmt(INITIAL, 0) + " 넘은 매매법", strat.filter((a) => (a.wallet ?? INITIAL) > INITIAL).length, `${strat.length}개 중`],
-    ["동전 봇보다 나은 매매법", strat.filter((a) => a.beats_random).length, "같은 봉 동전 봇 3개 최고보다 잔고가 큼"],
-    ["파산", all.filter((a) => a.bust).length, "잔고 $10 미만으로 정지"],
+    ["계좌", nx && nx < view.length ? `${view.length - nx} + 추가 ${nx}` : view.length,
+      Object.entries(per).map(([g, n]) => `${GROUP_ROW_KO[g] || g} ${n}`).join(" · ") || "—"],
+    ["포지션 중", view.filter((a) => a.position).length, "지금 열린 포지션"],
+    ["$" + fmt(INITIAL, 0) + " 넘은 계좌", judged.filter((a) => (a.wallet ?? INITIAL) > INITIAL).length, `${judged.length}개 중 (동전 봇·추가 계좌 빼고)`],
+    ["동전 봇보다 나은 계좌", judged.filter((a) => a.beats_random).length + (ds ? ' <small class="muted">참고</small>' : ""),
+      "같은 봉 동전 봇 3개 최고보다 잔고가 큼" + (ds ? " · 딥시크는 참고만" : "")],
+    ["파산", view.filter((a) => a.bust).length, "잔고 $10 미만으로 정지"],
   ].map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
-  const f = state.bf;
-  const rows = all.filter((a) => (!f.tf || a.timeframe === f.tf) && (!f.kind || a.kind === f.kind));
+  buildTfSeg(TRADE_TFS.filter((tf) => view.some((a) => a.timeframe === tf)));
+  const f = state.bf, fk = $("f-kind");
+  if (fk) fk.hidden = !nx;
+  if (!nx) f.kind = "";
+  const rows = view.filter((a) => (!f.tf || a.timeframe === f.tf) && (!f.kind || a.kind === f.kind));
   const key = {wallet: (a) => -(a.wallet ?? INITIAL), trades: (a) => -a.trades, win: (a) => -(a.win_rate ?? -1),
     dd: (a) => a.max_drawdown ?? 0, name: (a) => name(a)}[f.sort];
   rows.sort((x, y) => { const p = key(x), q = key(y); return p < q ? -1 : p > q ? 1 : 0; });
@@ -532,8 +657,10 @@ function renderBoard() {
       st = `<span class="tag acc">● ${coin(p.symbol)} ${p.side > 0 ? "롱" : "숏"} ${p.leverage}배${u ? ` <span class="${cls(u.roe)}">${pct(u.roe)}</span>` : ""}</span>`;
     }
     const vs = a.kind === "random" ? '<span class="muted">기준</span>'
-      : a.beats_random == null ? "—" : a.beats_random ? '<span class="up">✓ 나음</span>' : '<span class="down">✕ 못함</span>';
-    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name" title="${esc(a.account_id)}">${esc(name(a))}${extraPills(a)}</td>
+      : a.beats_random == null ? "—"
+      : a.vs_random_ref ? `<span class="muted" title="${REF_NOTE}">${a.beats_random ? "✓ 나음" : "✕ 못함"} · 참고</span>`
+      : a.beats_random ? '<span class="up">✓ 나음</span>' : '<span class="down">✕ 못함</span>';
+    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name" title="${esc(a.account_id)}">${esc(name(a))}${extraPills(a)}${groupPills(a)}</td>
       <td class="mono" data-k="잔고">$${fmt(w)}</td><td class="mono ${cls(ret)}" data-k="수익률">${pct(ret)}</td><td data-k="거래">${a.trades}</td>
       <td data-k="승률">${a.win_rate == null ? "—" : Math.round(a.win_rate * 100) + "%"}${a.trades ? ` <small class="muted">${a.wins}승 ${a.losses}패</small>` : ""}</td>
       <td class="mono" data-k="최대 낙폭">${a.max_drawdown ? "-" + (a.max_drawdown * 100).toFixed(1) + "%" : "—"}</td>
@@ -613,20 +740,21 @@ function renderAccount(d) {
   $("acct-empty").hidden = true; $("acct").hidden = false;
   const a = d.account, st = d.state || {}, trades = d.trades;
   const w = st.wallet ?? INITIAL, n = trades.length, wins = trades.filter((t) => t.pnl > 0).length;
-  const locks = trades.filter((t) => t.exit_reason === "LOCK").length;
+  const reel = a.exits === "reel";      // the reel's own exits: target (TP) and time exits instead of the ladder lock
+  const locks = trades.filter((t) => t.exit_reason === (reel ? "TP" : "LOCK")).length;
   $("a-csv").href = "/api/export/trades.csv?account=" + encodeURIComponent(a.account_id);
-  $("a-title").innerHTML = esc(name({...a, label_ko: d.extra ? d.extra.label_ko : null})) + (d.extra ? extraPills({...a, ...d.extra}) : "");
+  $("a-title").innerHTML = esc(name({...a, label_ko: d.extra ? d.extra.label_ko : null})) + (d.extra ? extraPills({...a, ...d.extra}) : "") + groupPills(a);
   $("a-tiles").innerHTML = [
     ["잔고", "$" + fmt(w), pct(w / INITIAL - 1)],
     ["거래", n, `승률 ${n ? Math.round(wins / n * 100) + "%" : "—"}`],
-    ["익절 잠금 청산", locks, n ? Math.round(locks / n * 100) + "%" : ""],
+    [reel ? "익절 목표 청산" : "익절 잠금 청산", locks, (n ? Math.round(locks / n * 100) + "%" : "") + (reel ? ` · 시간 청산 ${trades.filter((t) => t.exit_reason === "TIME").length}` : "")],
     ["최대 낙폭", st.max_drawdown ? "-" + (st.max_drawdown * 100).toFixed(1) + "%" : "—", st.bust ? "파산" : ""],
     ["신호", Object.values(d.signals).reduce((s, x) => s + x, 0),
       `${OUTCOME_KO.ENTERED} ${d.signals.ENTERED || 0} · ${OUTCOME_KO.SKIPPED} ${d.signals.SKIPPED || 0} · ${OUTCOME_KO.REJECTED} ${d.signals.REJECTED || 0}`
         + (d.signals.FILTERED ? ` · ${OUTCOME_KO.FILTERED} ${d.signals.FILTERED}` : "")],
   ].map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
   renderExtraInfo(d.extra);
-  renderAcctPos(st.position, d.position_why);
+  renderAcctPos(st.position, d.position_why, a.exits);
   acharts.forEach((c) => c.remove()); acharts = [];
   if (window.LightweightCharts) {
     const el = $("a-eq"); const c = LightweightCharts.createChart(el, chartOpts(el)); acharts.push(c);
@@ -665,10 +793,25 @@ function renderExtraInfo(x) {
     ${ev ? `<ul class="reasons">${ev}</ul>` : ""}
     <div class="muted">원본 ${RUN.accounts}개 계좌와 따로 셉니다. 시작된 계좌는 규칙대로 돌고, 거절로 멈출 수 없습니다.</div></div>`;
 }
-function renderAcctPos(p, why) {
+// the reel's time exit of a saved position (reel_engine.py: signal.meta.reel_exit.end), null for any other
+const reelEnd = (p) => { const m = p && p.signal && p.signal.meta, st = m && m.reel_exit; return st && typeof st.end === "number" ? st.end : null; };
+function renderAcctPos(p, why, exits) {
   const el = $("a-pos");
   if (!p) { el.innerHTML = '<span class="muted">없음</span>'; return; }
   const u = livePnl({symbol: p.symbol, side: p.side, qty: p.qty, entry: p.entry_price, margin: p.margin});
+  if (exits === "reel") {     // no ladder lock: the swing-low stop, the moving band target and the time exit
+    el.innerHTML = `<div style="margin-bottom:8px">${coin(p.symbol)} ${sideTag(p.side)} <b>${p.leverage}배</b> <span class="tag" title="${REEL_EXITS_KO}">자체 청산</span></div><div class="kv">
+    <div><span>현재가(마크)</span>${u ? px(u.m) : "—"}</div>
+    <div><span>평가 손익 (ROE)</span><b class="${u ? cls(u.pnl) : ""}">${u ? (u.pnl > 0 ? "+" : "") + fmt(u.pnl) + " (" + pct(u.roe) + ")" : "—"}</b></div>
+    <div><span>진입가</span>${px(p.entry_price)}</div>
+    <div><span>손절(스윙 저점)</span>${px(p.stop_price)}</div>
+    <div><span>익절 목표(직전 5분봉 볼린저 윗선)</span>${p.tp_price == null ? "—" : px(p.tp_price)}</div>
+    <div><span>시간 청산</span>${tsKo(reelEnd(p))}</div><div><span>청산가</span>${px(p.liq_price)}</div>
+    <div><span>증거금</span>$${fmt(p.margin)}</div><div><span>진입 시각</span>${tsKo(p.entry_time)}</div></div>
+    <div class="muted">${REEL_EXITS_KO}</div>
+    ${why && typeof whyHtml === "function" ? `<div class="why">왜 ${p.leverage}배: ${whyHtml(why)}</div>` : ""}`;
+    return;
+  }
   el.innerHTML = `<div style="margin-bottom:8px">${coin(p.symbol)} ${sideTag(p.side)} <b>${p.leverage}배</b></div><div class="kv">
     <div><span>현재가(마크)</span>${u ? px(u.m) : "—"}</div>
     <div><span>평가 손익 (ROE)</span><b class="${u ? cls(u.pnl) : ""}">${u ? (u.pnl > 0 ? "+" : "") + fmt(u.pnl) + " (" + pct(u.roe) + ")" : "—"}</b></div>
@@ -703,7 +846,10 @@ async function drawAcctCandles(d) {
   const p = d.state && d.state.position;
   if (p && p.symbol === sym) {
     s.createPriceLine({price: p.entry_price, color: css("--series"), lineWidth: 1, title: "진입"});
-    s.createPriceLine({price: p.stop_price, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2, title: p.lock_roe ? "잠금" : "손절"});
+    if (d.account.exits === "reel") {
+      s.createPriceLine({price: p.stop_price, color: css("--down"), lineWidth: 1, lineStyle: 2, title: "손절(스윙 저점)"});
+      if (p.tp_price != null) s.createPriceLine({price: p.tp_price, color: css("--up"), lineWidth: 1, lineStyle: 2, title: "익절 목표(볼린저 윗선)"});
+    } else s.createPriceLine({price: p.stop_price, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2, title: p.lock_roe ? "잠금" : "손절"});
     s.createPriceLine({price: p.liq_price, color: css("--accent"), lineWidth: 1, lineStyle: 3, title: "청산가"});
   }
   c.timeScale().fitContent();
@@ -750,7 +896,10 @@ function stream() {
     if (d.rooms && Object.keys(d.rooms).length && typeof onRoomsStream === "function") onRoomsStream(d.rooms);
     if (d.rooms && Object.keys(d.rooms).length && typeof onOfficeStream === "function") onOfficeStream();
     if (Object.keys(d.changed).length) loadBoard();
-    d.trades.forEach((t) => toast(`${idName(t.account_id)} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
+    // a toast per closed trade of the 36, the reel and the extras only (owners' D10: DeepSeek and the coin flips are
+    // counted, not announced; a liquidation of any group still comes as a CRITICAL alert below)
+    d.trades.filter((t) => { const a = state.byId && state.byId[t.account_id]; return !a || ["core", "reel", "extra"].includes(groupOf(a)); })
+      .forEach((t) => toast(`${idName(t.account_id)} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
     d.alerts.filter(toastWorthy).forEach((a) => toast(`⚠ ${alertKo(a.text)}`));
     if (d.trades.length && state.view === "trade") { if (state.sideTab === "trades") renderSide(); if (state.botTab === "alltrades") renderBottom(); loadTradeChart(); }
     if (state.view === "account" && state.account && d.trades.some((t) => t.account_id === state.account.account.account_id)) openAccount(state.account.account.account_id);
@@ -840,7 +989,7 @@ setInterval(() => {
   }
   if (state.view === "board") renderBoard();
   // (with its 'why this leverage' line: the 1 s refresh used to drop it)
-  if (state.view === "account" && state.account) renderAcctPos(state.account.state && state.account.state.position, state.account.position_why);
+  if (state.view === "account" && state.account) renderAcctPos(state.account.state && state.account.state.position, state.account.position_why, state.account.account.exits);
 }, 1000);
 
 // ------------------------------------------------------------ start

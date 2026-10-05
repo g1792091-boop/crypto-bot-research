@@ -1,4 +1,4 @@
-"""All paper v3 accounts in one process: one ``PaperEngine`` per account.
+"""All paper accounts in one process: one ``PaperEngine`` per account.
 
 An account is one strategy on one timeframe (``"V45_AMB@15m"``), a coin-flip
 account (``"RANDOM_1@15m"``), or an extra account started by the runtime from an
@@ -10,17 +10,21 @@ After every step the book writes each engine's state to the store, so a
 restart continues exactly where it stopped (``AccountBook.load``).
 
 The original accounts (kinds in ``ORIGINAL_KINDS``) always get the book's own
-settings object, ``PaperEngine``, the book's digest and notifier. Only an extra
-account may be built differently: ``load(make_of)`` and ``add_extra`` take
-per-account settings / engine class / digest / forward notifier, and
-``HeldEngine`` keeps an account frozen.
+settings object, the book's digest and notifier, and the engine class of their
+exit rule (``original_engine_cls``: ``PaperEngine``, or for the paper v4 reel and
+its 5m coin flips ``paperbot.reel_engine.ReelEngine``). Only an extra account may
+be built differently: ``load(make_of)`` and ``add_extra`` take per-account
+settings / engine class / digest / forward notifier, and ``HeldEngine`` keeps an
+account frozen.
 """
 
 from __future__ import annotations
 
+import json
+import time
 from typing import Callable, Iterable, Optional
 
-from .config import Settings
+from .config import Settings, v4_exits
 from .engine import PaperEngine, engine_state, restore_engine
 from .margin import Brackets
 from .models import Bar, Signal
@@ -29,7 +33,12 @@ from .store3 import Store3
 
 STATE_KEY = "accounts"
 DAY_MS = 86_400_000
-ORIGINAL_KINDS = ("strategy", "random")
+# Kinds of the original accounts (paper v4: "ds200" = the DeepSeek-200 definitions, "reel" = the 5m reel strategy).
+# Every other kind ("copy", "newlab") is an extra account (paperbot/extras.py).
+ORIGINAL_KINDS = ("strategy", "random", "ds200", "reel")
+# The group of each account kind (display and reports, paperbot/groups.py; config.V4_GROUPS has the run shape).
+GROUP_OF_KIND = {"strategy": "core", "random": "flip", "ds200": "ds200", "reel": "reel",
+                 "copy": "extra", "newlab": "extra"}
 
 
 def day_key(ts: int) -> str:
@@ -67,6 +76,33 @@ class HeldEngine(PaperEngine):
 
     def submit(self, signal: Signal) -> None:
         return None
+
+
+def exits_of(kind: str, timeframe: str, data=None) -> str:
+    """The exit rule an original account runs: "reel" for kind "reel"; for a 5m coin flip only when its accounts row
+    records it (``data["exits"] == "reel"``, written by config.v4_account_defs), so a 5m coin flip of an older run
+    or test world (no such data) keeps the house exits it was created with; "house" for everything else."""
+    if kind == "reel":
+        return "reel"
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            data = None
+    if isinstance(data, dict) and data.get("exits") == "reel" and v4_exits(kind, timeframe) == "reel":
+        return "reel"
+    return "house"
+
+
+def original_engine_cls(kind: str, timeframe: str, data=None):
+    """The engine class of an original account: None (= ``PaperEngine``, exactly as before) for the house exits,
+    ``paperbot.reel_engine.ReelEngine`` for the reel's own exits (``exits_of``: the reel and the v4 5m coin flips).
+    The reel module is imported only when such an account exists; an import error propagates (the book then holds
+    that account)."""
+    if exits_of(kind, timeframe, data) != "reel":
+        return None
+    from .reel_engine import ReelEngine
+    return ReelEngine
 
 
 def hold_others(row: dict) -> Optional[dict]:
@@ -122,9 +158,24 @@ class AccountBook:
             self.store.add_account(aid, d["strategy"], d["timeframe"], d["kind"], now_ms,
                                    self.s.version, d.get("parent"), d.get("data"))
             if aid not in self.engines:
-                self.engines[aid] = self._make(aid)
+                self.engines[aid] = self._make(aid, **self._original_how(aid, d["kind"], d["timeframe"], d.get("data")))
                 self.meta[aid] = {"strategy": d["strategy"], "timeframe": d["timeframe"], "kind": d["kind"]}
         self.store.commit()
+
+    def _original_how(self, aid: str, kind: str, timeframe: str, data=None) -> dict:
+        """``_make`` keyword arguments of an original account: {} (the defaults, PaperEngine) unless its exit rule
+        needs another engine class (``original_engine_cls``). If that class cannot be loaded the account is held at
+        its saved state (CRITICAL alert) and every other account runs on."""
+        if kind not in ORIGINAL_KINDS:
+            return {}
+        try:
+            cls = original_engine_cls(kind, timeframe, data)
+        except Exception as exc:  # noqa: BLE001  a broken reel engine module holds the reel accounts only
+            text = f"[{aid}] engine code failed to load, account held: {type(exc).__name__}: {exc}"[:300]
+            self.store.alert(self._now or int(time.time() * 1000), CRITICAL, text)
+            self.notifier.send(CRITICAL, text)
+            return {"cls": HeldEngine}
+        return {} if cls is None else {"cls": cls}
 
     def load(self, make_of: Optional[Callable[[dict], Optional[dict]]] = None) -> bool:
         """Rebuild every account listed in the store and restore its state.
@@ -140,6 +191,8 @@ class AccountBook:
                         how = make_of(a)
                     except Exception:  # noqa: BLE001  an extra the runtime cannot build is held, never fatal
                         how = None if a.get("kind") in ORIGINAL_KINDS else {"cls": HeldEngine}
+                if how is None:     # an original account (or no make_of): its exit rule's engine class
+                    how = self._original_how(a["account_id"], a.get("kind"), a.get("timeframe"), a.get("data"))
                 self.engines[a["account_id"]] = self._make(a["account_id"], **(how or {}))
                 self.meta[a["account_id"]] = {k: a[k] for k in ("strategy", "timeframe", "kind")}
         got = self.store.get_state(STATE_KEY)

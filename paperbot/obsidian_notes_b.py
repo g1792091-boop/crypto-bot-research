@@ -61,6 +61,8 @@ RESEARCH_MAP = [
     ("DeepSeek 200개 사전 등록", "research/deepseek200/PREREG_DEEPSEEK200.md", "outline"),
 ]
 RULES_DOCS = [
+    ("규칙 본문 v4", "docs/paper-v4-rules.md"), ("판정 방법 v4", "docs/paper-v4-verdict.md"),
+    ("레버리지 규칙 B 평가 v4", "docs/levrule-eval-v4.md"),
     ("규칙 본문 v3", "docs/paper-v3-rules.md"), ("규칙 보충안", "docs/paper-v3-rules-addendum.md"),
     ("규칙 변경 1 (2026-10-04)", "docs/paper-v3-rules-change-1.md"), ("레버리지 규칙 B 평가 방법", "docs/levrule-eval.md"),
     ("관찰 그림자 1", "docs/observation-shadows.md"), ("관찰 그림자 2", "docs/observation-shadows-2.md"),

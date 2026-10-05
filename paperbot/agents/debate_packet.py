@@ -20,11 +20,22 @@ import sqlite3
 import urllib.parse
 from typing import Any, Optional
 
+from . import facts as F
+
 DAY_MS = 86_400_000
 KST_MS = 9 * 3_600_000
 MAX_PACKET_TOKENS = 3500           # the packet alone (the stable system prompt, ~2k, comes on top); owners pay per token
 MIN_N = 30                         # below this many trades an account's numbers are 'small sample' (packets3 default)
-OBSERVE_UNTIL = "2026-10-26"       # the owners' observation period for the 195 -> 156 accounts
+# the owners' observation period: the run's start + 21 days (rooms.OBSERVE_DAYS_DEFAULT; computed from the run, never a
+# typed date: paper v4, owners 2026-10-05, D13)
+OBSERVE_DAYS = 21
+
+
+def observe_until(start_ms: Optional[int]) -> Optional[str]:
+    """The KST date the observation period ends (inclusive): run start + ``OBSERVE_DAYS``; None when unknown."""
+    if start_ms is None:
+        return None
+    return kst_day(int(start_ms) + OBSERVE_DAYS * DAY_MS)
 
 # (key, Korean name) in agenda order
 TOPICS = (
@@ -300,7 +311,8 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
             "meta": {"now_kst": kst_day(now_ms), "run_day": None if days is None else f"D+{int(days)}",
                      "days_running": days, "accounts": meta.get("accounts"),
                      "run_restarted": meta.get("run_restarted"),
-                     "observation": f"{OBSERVE_UNTIL}까지 관찰 기간: 195→156 계좌 규칙 변경 제안 금지(아이디어만)",
+                     "observation": (f"{observe_until(start) or f'시작 후 {OBSERVE_DAYS}일'}까지 관찰 기간: "
+                                     f"{F.originals_ko()} 규칙 변경 제안 금지(아이디어만)"),
                      "checkpoint": _checkpoint(checkpoint_path, now_ms, start),
                      "units": "ROE·수익률은 비율(0.10 = +10%), 지갑은 USDT(시작 5,000)"},
             "league": _league(board),

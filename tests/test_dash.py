@@ -57,7 +57,9 @@ def test_password_and_token():
 def test_login_required(client):
     assert client.get("/api/board").status_code == 401
     r = client.get("/", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"] == "/login"
+    assert r.status_code in (302, 307) and r.headers["location"] == "/login?next=/"     # back to '/' after the login
+    r = client.get("/v3", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "/login?next=/v3"
     assert client.post("/api/login", json={"password": "wrong"}).status_code == 401
 
 
@@ -202,11 +204,11 @@ def test_timeframe_summary_counts_an_extra_once_and_never_against_the_coin_flips
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
                         "app.js")
     src = open(path, encoding="utf-8").read()
-    parts = ["const state = {board: null}; let INITIAL = 5000;",
-             "const esc = (s) => String(s ?? ''); const name = (a) => a.label_ko || a.account_id;"]
-    for n in ("TF_KO", "TRADE_TFS", "EXTRA_KINDS", "fmt", "cls"):
+    parts = ["const state = {board: null, group: 'main'}; let INITIAL = 5000;",
+             "const esc = (s) => String(s ?? ''); const name = (a) => a.label_ko || a.account_id; const stratKo = (s) => s;"]
+    for n in ("TF_KO", "TRADE_TFS", "EXTRA_KINDS", "fmt", "cls", "KIND_GROUP", "groupOf", "GROUP_ROW_KO", "REF_NOTE"):
         parts.append(re.search(r"^const %s = .*?;$" % n, src, re.M).group(0))
-    for n in ("median", "tfSummary"):
+    for n in ("median", "inView", "tfSummary"):
         parts.append(re.search(r"^function %s\(.*?^}$" % n, src, re.S | re.M).group(0))
     body = """
 const pos = {symbol: "BTCUSDT", side: 1};
@@ -220,7 +222,7 @@ console.log(JSON.stringify(rows));"""
     r = subprocess.run([node, "-e", "\n".join(parts) + "\n" + body], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     rows = {row[0]: row for row in _json.loads(r.stdout)}
-    assert rows["15분"][1:3] == ["1", "0"]             # one strategy account, no position in the 15m line
+    assert rows["기존 36 · 15분"][1:3] == ["1", "0"]    # one strategy account, no position in the 15m line
     assert rows["추가 계좌"][1:3] == ["1", "1"]         # the copy's position, counted once
     assert rows["추가 계좌"][7] == "—"
     # the board API: no coin-flip comparison for an extra
@@ -562,6 +564,8 @@ console.log(JSON.stringify([name({strategy: "S2_ST_ROC", timeframe: "15m", kind:
 
 
 def test_checkpoint_card_shows_progress_before_the_first_verdict():
+    """Paper v4: the judged accounts of each verdict family (the 36 and DeepSeek on 15m / 30m / 1h, the reel on 5m;
+    4h, the coin flips and a leftover 5m account of the 36 are not judged), counts only."""
     import json
     out = _node("""
 const els = {}; const $ = (id) => (els[id] = els[id] || {textContent: "", innerHTML: ""});
@@ -569,19 +573,20 @@ const api = async () => ({ready: false});
 const document = {querySelectorAll: () => []};
 const setInterval = () => 0;
 const TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
-const JUDGED_TFS = ["15m", "30m", "1h"];
+const JUDGED_BY_GROUP = {core: ["15m", "30m", "1h"], ds200: ["15m", "30m", "1h"], reel: ["5m"]};
 const esc = (s) => String(s); const fmt = (x) => String(x); const idName = (id) => id;
 const acct = (tf, trades, kind) => ({account_id: "S@" + tf, timeframe: tf, trades, kind: kind || "strategy"});
 const state = {board: {accounts: [acct("15m", 31), acct("15m", 29), acct("30m", 30), acct("1h", 0), acct("4h", 80),
-  acct("15m", 90, "random"), acct("5m", 50)]}};
+  acct("15m", 90, "random"), acct("5m", 50), acct("15m", 40, "ds200"), acct("4h", 50, "ds200"), acct("5m", 35, "reel"),
+  acct("5m", 99, "random")]}};
 """ + _static("checkpoint.js") + """
 setTimeout(() => console.log(JSON.stringify(els["ckpt-body"].innerHTML.replace(/\\s+/g, " "))), 20);""")
     html = json.loads(out)
     assert "진행 상황, 판정 아님:" in html
-    # 4h is observed and a leftover 5m account (an old run) is not judged
-    assert "판정 대상 4개" in html and "30건 이상인 계좌 <b>2개</b> (15분 1 · 30분 1 · 1시간 0)" in html
-    assert __import__("re").search(r"(?<![0-9])5분", html) is None
-    assert "합격" in html and "동전 봇 2,000개" in html                     # says how the verdict is made, no preview
+    assert "판정 대상 6개" in html and "30건 이상인 계좌 <b>4개</b>" in html
+    assert "기존 36 <b>2/4</b> (15분 1 · 30분 1 · 1시간 0)" in html
+    assert "딥시크 <b>1/1</b> (15분 1 · 30분 0 · 1시간 0)" in html and "5분봉 단타 <b>1/1</b> (5분 1)" in html
+    assert "합격" in html and "보류" in html and "$" not in html          # says how the verdict is made, no preview
 
 
 def test_trade_reading_digests_are_reused_for_ten_minutes(client, monkeypatch):
@@ -608,65 +613,86 @@ def test_trade_reading_digests_are_reused_for_ten_minutes(client, monkeypatch):
             in _static("breakdown.js"))
 
 
-def test_dashboard_trades_the_runs_timeframes_only_and_no_filter_offers_5m(client):
-    """5m was removed with the restart of 2026-10-04 (docs/paper-v3-rules-change-1.md): the dashboard's traded
-    timeframes are config.V3_TRADE_TFS, the account counts come from config (156 / 144), and no account or
-    signal filter offers 5m. 5m stays a chart interval (CANDLE_INTERVALS, the trade chart's own buttons)."""
+def test_dashboard_timeframes_and_run_shape_come_from_the_accounts_table(client):
+    """Paper v4: the run shape (/api/board 'run_shape') is counted from the accounts table (groups.shape_from_db), never
+    typed in; the 36's timeframes stay 15m-4h (no 5m filter for them), 5m is traded by the reel and its coin flips only,
+    and the page's defaults before /api/board are the v4 rule's (config.V4_*)."""
     import json
     import re
 
     import paperbot.dash.app as A
-    from paperbot.config import V3_ACCOUNTS, V3_JUDGED_TFS, V3_STRATEGIES, V3_TRADE_TFS
-    assert A.TRADE_TFS == tuple(V3_TRADE_TFS) and "5m" not in A.TRADE_TFS and "5m" in A.CANDLE_INTERVALS
+    from paperbot.config import (V3_JUDGED_TFS, V3_TRADE_TFS, V4_ACCOUNTS, V4_GROUP_ACCOUNTS, V4_GROUP_JUDGED, V4_GROUPS,
+                                 V4_JUDGED_ACCOUNTS)
+    assert A.CORE_TFS == tuple(V3_TRADE_TFS) and "5m" not in A.CORE_TFS and A.LEVEL_TFS == A.CORE_TFS
+    assert A.TRADE_TFS == ("5m",) + tuple(V3_TRADE_TFS) and "5m" in A.CANDLE_INTERVALS
     client.post("/api/login", json={"password": "correct horse battery"})
-    shape = client.get("/api/board").json()["run_shape"]
-    assert shape["trade_tfs"] == list(V3_TRADE_TFS) and shape["judged_tfs"] == list(V3_JUDGED_TFS)
-    assert shape["accounts"] == V3_ACCOUNTS == 156 and shape["strategy_accounts"] == V3_STRATEGIES * len(V3_TRADE_TFS) == 144
+    shape = client.get("/api/board").json()["run_shape"]            # the fixture: A@15m (the 36) + RANDOM_1@15m
+    assert shape["source"] == "accounts_table" and shape["accounts"] == 2 and shape["strategy_accounts"] == 1
+    assert shape["trade_tfs"] == ["15m"] and shape["core_tfs"] == ["15m"] and shape["judged_tfs"] == list(V3_JUDGED_TFS)
+    assert shape["q1_family"] == 1 == shape["judged"] and set(shape["groups"]) == {"core", "flip"}
     assert client.get("/api/strategy/V45_AMB", params={"tf": "5m"}).status_code == 400
-    # app.js: its defaults match config before /api/board arrives, and the board refills them in place
+    # app.js: its defaults match config's v4 rule before /api/board arrives, and the board refills them in place
     src = _static("app.js")
-    parts = [re.search(r"^const %s = .*?;$" % n, src, re.M).group(0) for n in ("TRADE_TFS", "JUDGED_TFS", "RUN")]
+    parts = [re.search(r"^const %s = .*?;$" % n, src, re.M).group(0)
+             for n in ("TRADE_TFS", "CORE_TFS", "JUDGED_TFS", "RUN", "JUDGED_BY_GROUP", "RUN_GROUPS")]
     parts.append(re.search(r"^function applyRunShape\(.*?^}$", src, re.S | re.M).group(0))
     out = json.loads(_node("\n".join(parts) + """
-const before = [TRADE_TFS.slice(), JUDGED_TFS.slice(), Object.assign({}, RUN)]; const ref = TRADE_TFS;
-applyRunShape({trade_tfs: ["30m", "1h"], judged_tfs: ["30m"], accounts: 7});
-console.log(JSON.stringify([before, ref === TRADE_TFS, TRADE_TFS, JUDGED_TFS, RUN.accounts]));"""))
-    assert out[0] == [list(V3_TRADE_TFS), list(V3_JUDGED_TFS),
-                      {"accounts": V3_ACCOUNTS, "strategy_accounts": 144, "q1_family": A.V3_Q1_MAIN_FAMILY}]
-    assert out[1:] == [True, ["30m", "1h"], ["30m"], 7]
-    # no account / signal / strategy filter offers 5m; the trade chart still may show it (chart interval only)
+const before = [TRADE_TFS.slice(), CORE_TFS.slice(), JUDGED_TFS.slice(), Object.assign({}, RUN), JSON.parse(JSON.stringify(JUDGED_BY_GROUP))];
+const ref = [TRADE_TFS, CORE_TFS];
+applyRunShape({trade_tfs: ["5m", "1h"], core_tfs: ["1h"], judged_tfs: ["1h"], accounts: 7, judged_by_group: {reel: ["5m"]},
+  groups: {reel: {accounts: 1}}});
+console.log(JSON.stringify([before, ref[0] === TRADE_TFS && ref[1] === CORE_TFS, TRADE_TFS, CORE_TFS, JUDGED_TFS, RUN.accounts, RUN_GROUPS]));"""))
+    assert out[0] == [["5m"] + list(V3_TRADE_TFS), list(V3_TRADE_TFS), list(V3_JUDGED_TFS),
+                      {"accounts": V4_ACCOUNTS, "strategy_accounts": V4_GROUP_ACCOUNTS["core"], "q1_family": V4_GROUP_JUDGED["core"],
+                       "judged": V4_JUDGED_ACCOUNTS},
+                      {g: list(V4_GROUPS[g]["judged"]) for g in ("core", "ds200", "reel")}]
+    assert out[1:] == [True, ["5m", "1h"], ["1h"], ["1h"], 7, {"reel": {"accounts": 1}}]
+    # the account filters: the board's timeframe buttons are built per group at run time (5m only where a group
+    # trades it), the signals tab offers 5m (the reel's signals), the strategy tab (the 36) never does
     html = _static("index.html")
-    for seg in ("f-tf", "sig-tf", "s-tf"):
+    def tfs_of(seg):
         block = re.search(r'id="%s">(.*?)</div>' % seg, html, re.S).group(1)
-        tfs = [t for t in re.findall(r'data-tf="([^"]*)"', block) if t and t != "1d"]
-        assert tfs == list(V3_TRADE_TFS), seg
+        return [t for t in re.findall(r'data-tf="([^"]*)"', block) if t and t != "1d"]
+    assert tfs_of("s-tf") == list(V3_TRADE_TFS) and tfs_of("f-tf") == list(V3_TRADE_TFS)
+    assert tfs_of("sig-tf") == ["5m"] + list(V3_TRADE_TFS)
+    assert 'id="f-group"' in html and 'id="gcards"' in html
+    kinds = re.findall(r'data-k="([^"]*)"', re.search(r'id="f-kind"[^>]*>(.*?)</div>', html, re.S).group(1))
+    assert kinds == ["", "copy", "newlab"]                     # the group switch replaced strategy / coin-flip kinds
     assert 'data-tf="5m"' in re.search(r'id="tf-seg">(.*?)</div>', html, re.S).group(1)
-    # no static file hard-codes the old run's counts or a 5m account list
+    assert "buildTfSeg(TRADE_TFS.filter((tf) => view.some((a) => a.timeframe === tf)))" in src
+    # no static file hard-codes an old run's counts or the old banner
     for f in os.listdir(STATIC):
         if f.endswith((".js", ".html")):
             s = _static(f)
-            assert not re.search(r"(?<![0-9])(195|180)개", s), f
-            assert '["5m", "15m", "30m", "1h"' not in s, f
+            assert not re.search(r"(?<![0-9])(195|180|156)개", s), f
+            assert "5분봉 제외" not in s, f
     assert "state.board.run_shape" in src and 'tf: "15m"' in src            # the trade chart opens on 15m
+    for f in ("strat.js", "digest.js"):                                     # the 36's tabs: their own timeframes only
+        assert "CORE_TFS" in _static(f) and "TRADE_TFS" not in _static(f), f
 
 
-def test_a_leftover_5m_account_does_not_break_the_timeframe_summary():
-    """An account left on 5m (an old run's database) is not given a line of its own and does not throw."""
+def test_the_timeframe_summary_has_a_line_per_group_and_timeframe_with_accounts():
+    """Paper v4: one line per (group, timeframe) that has accounts in the chosen view, never an empty line (a 5m line
+    only where a group trades 5m: the reel), and an unknown account kind is left out (fail safe), without throwing."""
     import json
     import re
     src = _static("app.js")
-    parts = ["const state = {board: null}; let INITIAL = 5000;",
-             "const esc = (s) => String(s ?? ''); const name = (a) => a.label_ko || a.account_id;"]
-    for n in ("TF_KO", "TRADE_TFS", "EXTRA_KINDS", "fmt", "cls"):
+    parts = ["const state = {board: null, group: 'main'}; let INITIAL = 5000;",
+             "const esc = (s) => String(s ?? ''); const name = (a) => a.label_ko || a.account_id; const stratKo = (s) => s;"]
+    for n in ("TF_KO", "TRADE_TFS", "EXTRA_KINDS", "fmt", "cls", "KIND_GROUP", "groupOf", "GROUP_ROW_KO", "REF_NOTE"):
         parts.append(re.search(r"^const %s = .*?;$" % n, src, re.M).group(0))
-    for n in ("median", "tfSummary"):
+    for n in ("median", "inView", "tfSummary"):
         parts.append(re.search(r"^function %s\(.*?^}$" % n, src, re.S | re.M).group(0))
     out = json.loads(_node("\n".join(parts) + """
 state.board = {accounts: [
-  {account_id: "A@5m", strategy: "A", timeframe: "5m", kind: "strategy", wallet: 4000, position: null},
-  {account_id: "A@15m", strategy: "A", timeframe: "15m", kind: "strategy", wallet: 5000, position: null}]};
-console.log(JSON.stringify(tfSummary().split("<tr>").slice(2).map((r) => r.replace(/<[^>]+>/g, " ").trim().split(/\\s+/)[0])));"""))
-    assert out == ["15분", "30분", "1시간", "4시간"]
+  {account_id: "REEL_H1@5m", strategy: "REEL_H1", timeframe: "5m", kind: "reel", group: "reel", wallet: 4000, position: null},
+  {account_id: "A@15m", strategy: "A", timeframe: "15m", kind: "strategy", wallet: 5000, position: null},
+  {account_id: "F9_FVG@15m", strategy: "F9_FVG", timeframe: "15m", kind: "ds200", group: "ds200", wallet: 5000, position: null},
+  {account_id: "X@15m", strategy: "X", timeframe: "15m", kind: "mystery", wallet: 5000, position: null}]};
+const firsts = () => tfSummary().split("<tr>").slice(2).map((r) => r.split("</td>")[0].replace(/<[^>]+>/g, "").trim());
+const main = firsts(); state.group = "ds200"; const ds = firsts();
+console.log(JSON.stringify([main, ds, tfSummary().includes("참고")]));"""))
+    assert out == [["기존 36 · 15분", "5분봉 단타 · 5분"], ["딥시크 · 15분"], True]
 
 
 def test_an_account_holding_a_position_opens(tmp_path):
@@ -711,7 +737,8 @@ def test_phone_layout_fixes_stay():
     css = open(os.path.join(st, "style.css"), encoding="utf-8").read()
     js = open(os.path.join(st, "app.js"), encoding="utf-8").read()
     assert ".pcards { grid-template-columns: minmax(0, 1fr); }" in css and "tr.why-row td .why { position: sticky" in css
-    assert "renderAcctPos(state.account.state && state.account.state.position, state.account.position_why)" in js
+    assert ("renderAcctPos(state.account.state && state.account.state.position, state.account.position_why, "
+            "state.account.account.exits)") in js
 
 
 def test_account_equity_is_downsampled_keeping_first_last_and_extremes(tmp_path):

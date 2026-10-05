@@ -9,7 +9,12 @@ import pytest
 
 from paperbot import checkpoint as ck
 from paperbot import checkpoint_preview as pv
-from test_checkpoint import BR, DAY, SPECS, _paper_db, _trades, synth_minutes
+from test_checkpoint import BR, DAY, SPECS, _LenientCells, _paper_db, _trades, synth_minutes
+
+
+@pytest.fixture(autouse=True)
+def _made_up_cells(monkeypatch):
+    monkeypatch.setattr(ck, "_P_BEST_CELLS", _LenientCells(ck.p_best_cells()))
 
 
 class _Rest:
@@ -122,6 +127,11 @@ def test_weekly_rehearsal_writes_a_fresh_file_a_summary_and_keeps_the_last_four(
     assert s["accounts_in_snapshot"] == 2 and s["counts"][ck.PASS1] == 1 and s["counts"][ck.HOLD] == 1
     assert s["zero_rate_accounts"] == [] and s["rate_min"] > 0 and isinstance(s["warnings"], list)
     assert s["runtime_s"] >= 0 and s["out"].endswith(dbs[-1]) and s["bots"] == 100 and s["min_trades"] == 10
+    # paper v4: expected vs found per group, the families, the projected runtime of the real 10,000-bot verdict
+    assert s["accounts_expected"] == 2 and s["missing_accounts"] == [] and s["held_zero_signals"] == []
+    assert s["by_group"]["core"]["expected"] == 2 and s["by_group"]["core"]["found"] == 2
+    assert s["by_group"]["core"]["tested"] == 1 and [f["group"] for f in s["families"]] == ["core", "ds200", "reel"]
+    assert s["n_bots_real"] == ck.N_BOTS and s["projected_runtime_s_real"] >= s["verdict_runtime_s"]
     assert ck.verdict(s["out"], ck.day_str(today))["day"] == 8
     assert _sha(path) == before and not os.path.exists(pv.REAL_OUT)
 
@@ -164,3 +174,28 @@ def test_summary_of_counts_zero_rate_accounts():
     assert s["zero_rate_accounts"] == ["A@1h"] and (s["rate_min"], s["rate_max"]) == (0.0, 0.01)
     assert s["accounts_in_snapshot"] == 3 and s["runtime_s"] == 2.5 and s["started_utc"] == "1970-01-01T00:00:00Z"
     assert s["warnings"] == ["w"] and s["counts"] == {"PASS1": 1} and s["tested"] == 1
+
+
+def test_rehearsal_default_bots_and_checkpoint_day_skip(world, tmp_path, monkeypatch, capsys):
+    """Paper v4: 2,000 bots by default (the real verdict 10,000); on day 30, 60, ... the weekly rehearsal does not
+    run (the real verdict needs the machine that day) and says so in its summary."""
+    import json
+
+    import paperbot.live as live
+    path, today = world
+    assert ck.REHEARSAL_BOTS == 2000
+    seen = []
+    real = ck.run_due
+    monkeypatch.setattr(ck, "run_due", lambda *a, **kw: seen.append(kw["n_bots"]) or real(*a, **kw))
+    assert pv.main(["--db", path, "--out", str(tmp_path / "p.db"), "--as-of", ck.day_str(today)]) == 0
+    assert seen == [2000]
+    assert pv.checkpoint_day_today(path, ck.day_str(today)) is None                 # day 8
+    assert pv.checkpoint_day_today(path, ck.day_str(today + 22 * DAY)) == 30
+    assert pv.checkpoint_day_today(path, ck.day_str(today + 52 * DAY)) == 60
+    monkeypatch.setattr(live, "_rest", lambda: pytest.fail("Binance called on a checkpoint day"))
+    folder = tmp_path / "rehearsal"
+    monkeypatch.setattr(pv, "checkpoint_day_today", lambda db, as_of=None: 30)
+    assert pv.main(["--db", path, "--rehearsal-dir", str(folder)]) == 0
+    s = json.loads((folder / "latest.json").read_text())
+    assert s["status"] == "skipped" and s["days"] == 30 and not list(folder.glob("rehearsal-*.db"))
+    assert "판정일" in capsys.readouterr().out

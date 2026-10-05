@@ -1,16 +1,32 @@
-"""Paper v3 live runner: the original accounts (config.V3_ACCOUNTS = 156: 36 strategies and 3 coin-flip
-accounts on each of 15m, 30m, 1h and 4h) on live Binance data (docs/paper-v3-rules.md; 5m removed on
-2026-10-04, docs/paper-v3-rules-change-1.md).
+"""Paper live runner: the original accounts on live Binance data. Paper v4 (docs/paper-v4-rules.md; config.V4_GROUPS,
+config.V4_ACCOUNTS = 331): the core group (the 36 locked strategies on 15m, 30m, 1h and 4h; 5m removed for them on
+2026-10-04, docs/paper-v3-rules-change-1.md), the DeepSeek-200 definitions (39 x 4 + 5 x 3), the reel REEL_H1 on 5m
+and the coin flips RANDOM_1..3 on 5m, 15m, 30m, 1h and 4h.
 
-    python -m paperbot.live3 run --db paper3.db [--brackets FILE | --allow-example-brackets]
+    python -m paperbot.live3 run --db paper3.db [--brackets FILE | --allow-example-brackets] [--no-extras] [--no-telegram]
     python -m paperbot.live3 status --db paper3.db
 
 Every poll: closed 1m bars (last and mark price, funding) for the six coins and
 XRP -> every account's engine steps (entries, stops, profit locks, funding) ->
-5m bars (the internal base bars, not a traded timeframe) -> at each 5m boundary
-the signal service computes the traded timeframes that close there (none at a
-boundary that is not a 15m close) and submits the signals; they fill on the next
-step at the price read right after the computation.
+5m bars (the internal base bars) -> at each 5m boundary, after the last 1m bar of
+that 5m bar: first the 5m path (the reel and the 5m coin flips, in this process),
+then the core timeframes that close there (the locked Pool map; their signals are
+submitted at once), then the DeepSeek timeframes (a second Pool map with its own
+timeout). Signals fill on the next step at the price read right after their
+computation. Nothing the 5m path or the DeepSeek map does can stop the core
+group's submits (each has its own fence and error class); the DeepSeek map never
+delays them, the 5m path costs them its compute time (about 0.1-0.8 s, sigservice).
+
+The v4 groups' alerts use sigservice's frozen texts (``DS_TIMEOUT_TEXT`` and the rest); their counters are
+health "ds_timeouts", "ds_errors", "reel_errors" (never "signal_timeouts", the core group's). The DeepSeek job's
+answer at every DeepSeek boundary is recorded in state "dsrun:<UTC day>" (``Runner3._ds_record``) for
+paperbot/dscheck.py.
+
+Start: the database must be this run's (``check_database``: a new file, or one whose
+run version is config.V4_VERSION and whose original accounts are exactly
+config.v4_account_defs); anything else is refused with a message. The DeepSeek and
+reel pins are checked once (``SignalService.verify_groups``): a failing group starts
+refused (its signals stop, one CRITICAL line) and every other group runs.
 
 Restart: the account states, the last processed minute and the pending signals
 are in the store. On start the runner reloads them, rebuilds the 5m history
@@ -25,7 +41,9 @@ rolls back its writes and keeps the originals running), and ``post_batch(now)`` 
 end of a poll (the extras' Telegram messages). Before a boundary's compute the
 extras cost the originals nothing but their engines' step: they fetch no order book
 (fill costs) and send no message. Only one runner may write a database at a
-time (a lock on the database file itself).
+time (a lock on the database file itself). ``--no-extras`` (staging) starts no
+extras runtime (any extra account is held); ``--no-telegram`` (staging) prints the
+messages instead of sending them.
 
 No orders are ever sent; the Binance key, if set, must be read-only.
 """
@@ -41,32 +59,127 @@ import sys
 import time
 from typing import Callable, Optional
 
-from .accounts import ORIGINAL_KINDS, AccountBook, hold_others
+from .accounts import GROUP_OF_KIND, ORIGINAL_KINDS, AccountBook, hold_others
 from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
-from .config import V3_RANDOM_SEEDS, V3_SYMBOLS, v3_settings
+from .config import (DS200_TFS, DS_WINDOW_5M, FIVE_M_MAX_DELAY_MS, REEL_WINDOW_5M, V3_RANDOM_SEEDS, V3_SYMBOLS,
+                     V4_FLIP5M, V4_GROUPS, V4_VERSION, v3_settings, v4_account_defs)
 from .feed import LiveFeed
 from .fillcost import LIMIT as FILL_DEPTH, FillProbe
 from . import sweepsig
 from .health import DeadMan, sd_notify
 from .live import _notifier, _rest, load_brackets
-from .notify import CRITICAL, INFO, WARN, Digest, Notifier, Router
+from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Digest, Notifier, Router
 from .runinfo import change_text, changes, run_record
-from .sigservice import SignalTimeout
+from .sigservice import (DS_ERROR_TEXT, DS_FAILED_TEXT, DS_TIMEOUT_TEXT, REEL_ERROR_TEXT, REEL_FAILED_TEXT,
+                         REFUSED_TEXT, DsTimeout, SignalTimeout, one_line)
 from .store3 import Store3
 from .strengthwatch import StrengthWatch
 
 MIN = 60_000
 FIVE = TF_MS["5m"]
+DAY = 86_400_000
+# paper3.db state key of the DeepSeek job's record of a UTC day (``Runner3._ds_record``; read by paperbot/dscheck.py):
+# "dsrun:<YYYY-MM-DD>", the day of the bar that closes at the boundary (bar_close in (day 00:00, next day 00:00]).
+DS_RUN_KEY = "dsrun:"
 RECORD_ONLY = ("XRPUSDT",)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RANDOM_RATES = os.path.join(ROOT, "research", "paper_rules", "out", "summary.json")
 
 
 def account_defs(strategies, tfs, seeds=V3_RANDOM_SEEDS) -> list[dict]:
+    """The v3 account set (the core group and its coin flips on ``tfs``); the v4 runner opens ``v4_defs``."""
     defs = [{"strategy": s, "timeframe": tf, "kind": "strategy"} for tf in tfs for s in strategies]
     defs += [{"strategy": f"RANDOM_{k}", "timeframe": tf, "kind": "random"} for tf in tfs for k in seeds]
     return defs
+
+
+def v4_defs(core_names) -> list[dict]:
+    """Every original account of the paper v4 run (config.v4_account_defs: strategy, timeframe, kind and data
+    {group, family, exits}); the first 156 are ``account_defs(core_names, V3_TRADE_TFS)`` in the same order."""
+    return v4_account_defs(core_names)
+
+
+def service_options() -> dict:
+    """The SignalService switches of the paper v4 run: the DeepSeek timeframes, the 5m path (reel + 5m coin flips at
+    config.V4_FLIP5M) and its max delay (owners' D16)."""
+    return {"ds_tfs": DS200_TFS, "five_m": True, "flip5m": dict(V4_FLIP5M), "max_delay_ms_5m": FIVE_M_MAX_DELAY_MS}
+
+
+def _data(raw) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    try:
+        d = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def _shape(defs) -> dict:
+    return {d.get("account_id") or f"{d['strategy']}@{d['timeframe']}":
+            (d["kind"], _data(d.get("data")).get("group"), _data(d.get("data")).get("exits")) for d in defs}
+
+
+def check_database(store: Store3, want: list[dict], version: str) -> None:
+    """Refuse (SystemExit with the reason) a database that is not this run's: its last run's rule version is not
+    ``version``, an original account was created under another version, or its original accounts (id, kind, group,
+    exit rule) are not exactly ``want``. A new database (no original account, no run) passes."""
+    prev = store.get_state("run")
+    if prev is not None and prev[1].get("settings") != version:
+        raise SystemExit(f"this database was run under {prev[1].get('settings')!r}, the runner is {version!r}: "
+                         "start with a new --db file (the reset script archives the old one)")
+    rows = [a for a in store.accounts() if a.get("kind") in ORIGINAL_KINDS]
+    if not rows:
+        return
+    other = sorted({a.get("settings_version") for a in rows} - {version}, key=str)
+    if other:
+        raise SystemExit(f"this database holds original accounts of {other}, the runner is {version!r}: "
+                         "start with a new --db file")
+    have, need = _shape(rows), _shape(want)
+    if have != need:
+        missing = sorted(set(need) - set(have))
+        extra = sorted(set(have) - set(need))
+        diff = sorted(a for a in set(have) & set(need) if have[a] != need[a])
+        raise SystemExit(f"this database's original accounts differ from the run's {len(need)}: "
+                         f"{len(missing)} missing {missing[:5]}, {len(extra)} not in the run {extra[:5]}, "
+                         f"{len(diff)} with another kind / group / exit rule {diff[:5]}. Start with a new --db file.")
+
+
+def check_book(book: AccountBook, want: list[dict]) -> None:
+    """After the accounts are opened or loaded: the book's original accounts are exactly ``want``."""
+    have = {aid for aid, m in book.meta.items() if (m or {}).get("kind") in ORIGINAL_KINDS}
+    need = set(_shape(want))
+    if have != need:
+        raise SystemExit(f"the book holds {len(have)} original accounts, the run has {len(need)} "
+                         f"(missing {sorted(need - have)[:5]}, extra {sorted(have - need)[:5]})")
+
+
+def check_history(service) -> None:
+    """The 5m history the service keeps covers every window that reads it: the DeepSeek windows, the reel window and
+    the new-strategy (extras) windows (newlab_live.NEWLAB_WINDOW_5M; skipped when that code cannot be imported)."""
+    need = [DS_WINDOW_5M[tf] for tf in getattr(service, "ds_tfs", ())]
+    if getattr(service, "five_m", False):
+        need.append(REEL_WINDOW_5M)
+    try:
+        from .newlab_live import NEWLAB_WINDOW_5M
+        need += list(NEWLAB_WINDOW_5M.values())
+    except Exception:  # noqa: BLE001  the extras' own check (newlab_live.register) still refuses a too-long window
+        pass
+    lens = [h.maxlen for h in service.hist.values()]
+    have = min(lens) if lens else 0
+    if need and (have is None or have < max(need)):
+        raise SystemExit(f"signal history keeps {have} 5m bars, the windows need {max(need)}")
+
+
+def group_split(book: AccountBook) -> dict:
+    """{group: original accounts} of the book in config.V4_GROUPS order, then "extra" for every other account."""
+    out = {g: 0 for g in V4_GROUPS}
+    for m in book.meta.values():
+        g = GROUP_OF_KIND.get((m or {}).get("kind"), "extra")
+        g = g if g in out else "extra"
+        out[g] = out.get(g, 0) + 1
+    return {g: n for g, n in out.items() if n or g in V4_GROUPS}
 
 
 def random_rates(path: str = RANDOM_RATES) -> dict:
@@ -117,6 +230,15 @@ class Runner3:
         self.deadman = deadman
         self.digest = digest
         self.signal_timeouts = 0
+        self.ds_timeouts = 0        # DeepSeek map timeouts (never counted in signal_timeouts, the core group's)
+        self.ds_errors = 0          # DeepSeek error lines (one coin's job) and DeepSeek path failures
+        self.reel_errors = 0        # 5m path error lines (one coin's reel / flip computation) and 5m path failures
+        self.group_errors = 0       # failures caught by the v4 groups' fences (5m path, DeepSeek)
+        self.ds_last: dict = {}     # DeepSeek timeframe -> last boundary its job answered
+        self.reel_last = None       # last 5m boundary the 5m path ran
+        self._failed_sent: set = set()      # groups whose path failure was sent to Telegram (the first of a run)
+        self._dsrun = None          # (state key, record) of the DeepSeek job's record of the current day
+        self.ds_record_errors = 0
         self.fills = fills  # order-book cost of each entry / exit (records only, never a fill)
         # extras (paperbot/extras.py): called after the originals' boundary commit as
         # post_boundary(boundary: int, submitted: list[tuple[str, Signal]], timed_out: bool)
@@ -189,6 +311,10 @@ class Runner3:
         self.store.put_state("health", now, {
             "last_bar": last, "lag_ms": None if last is None else now - (last + MIN),
             "signal_timeouts": self.signal_timeouts,
+            "ds_timeouts": self.ds_timeouts, "ds_errors": self.ds_errors, "reel_errors": self.reel_errors,
+            "group_errors": self.group_errors, "ds_last": dict(self.ds_last), "reel_last": self.reel_last,
+            "ds_record_errors": self.ds_record_errors,
+            "groups_refused": dict(getattr(self.service, "refused", None) or {}),
             "pool_restarts": getattr(self.service, "pool_restarts", 0),
             "fill_cost_errors": None if self.fills is None else self.fills.errors,
             "strength_failures": None if self.strength is None else dict(self.strength.total),
@@ -199,9 +325,13 @@ class Runner3:
     def _signals(self, boundary: int) -> None:
         if not self.service.complete(boundary):
             self.store.alert(self.now_ms(), WARN, f"5m history incomplete at {boundary}; signals skipped")
+            due_ds = getattr(self.service, "due_ds", None)
+            for tf in (due_ds(boundary) if due_ds is not None else []):
+                self._ds_record(boundary, tf, "incomplete")
             return
         due = self.service.due(boundary)
         submitted, timed_out = [], False
+        self._five_m(boundary, submitted)          # paper v4: the reel and the 5m coin flips first (in-process)
         for k, tf in enumerate(due):
             try:
                 rows, subs, reports = self.service.compute(boundary, tf, self.now_ms, self.prices)
@@ -220,6 +350,7 @@ class Runner3:
                 if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
                     self.book.submit(aid, sig)
                     submitted.append((aid, sig))
+        timed_out = self._deepseek(boundary, submitted) or timed_out   # paper v4: after every core submit
         if submitted and self.strength is not None:
             try:
                 self.strength.observe(boundary, submitted)
@@ -239,6 +370,135 @@ class Runner3:
                 self.store.alert(self.now_ms(), CRITICAL, text)
                 self.store.commit()
                 self.notifier.send(CRITICAL, text)
+
+    # ------------------------------------------------------------ paper v4 groups (fenced: never stop the core)
+    def _take(self, boundary: int, tf: str, rows, subs, reports, submitted: list, label: str) -> None:
+        """Log a v4 group's rows and errors (sigservice's frozen DS_ERROR_TEXT / REEL_ERROR_TEXT) and submit its
+        signals (as the core loop does for its own)."""
+        self.store.log_signals(rows)
+        text = DS_ERROR_TEXT if label == "ds200" else REEL_ERROR_TEXT
+        for r in reports:
+            for e in r.get("errors", []):
+                if label == "ds200":
+                    self.ds_errors += 1
+                else:
+                    self.reel_errors += 1
+                self.store.alert(self.now_ms(), WARN, text.format(tf=tf, symbol=r.get("symbol"), error=one_line(e)))
+        for aid, sig in subs:
+            if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
+                self.book.submit(aid, sig)
+                submitted.append((aid, sig))
+
+    def _refusals(self) -> None:
+        pop = getattr(self.service, "pop_refusals", None)
+        for group, why in (pop() if pop is not None else []):
+            text = REFUSED_TEXT.format(group=group, why=one_line(why))
+            self.store.alert(self.now_ms(), CRITICAL, text)
+            self.notifier.send(CRITICAL, text)
+
+    def _group_failed(self, group: str, boundary: int, exc: Exception) -> None:
+        """A v4 group's path failed at ``boundary`` (caught by its fence): one WARN alert (sigservice's frozen
+        DS_FAILED_TEXT / REEL_FAILED_TEXT); the first of each group in a run also goes to Telegram."""
+        self.group_errors += 1
+        if group == "ds200":
+            self.ds_errors += 1
+        else:
+            self.reel_errors += 1
+        text = (DS_FAILED_TEXT if group == "ds200" else REEL_FAILED_TEXT).format(
+            boundary=boundary, error=one_line(f"{type(exc).__name__}: {exc}", 200))
+        self.store.alert(self.now_ms(), WARN, text)
+        if group not in self._failed_sent:
+            self._failed_sent.add(group)
+            try:
+                self.notifier.send(WARN, text)
+            except Exception:  # noqa: BLE001  the alerts table has it
+                pass
+
+    def _ds_record(self, boundary: int, tf: str, status: str, reports=()) -> None:
+        """The DeepSeek job's record of ``boundary`` for ``tf`` in paper3.db state ``DS_RUN_KEY + <UTC day>``
+        (paperbot/dscheck.py reads it: an absent signal_log row is "no signal" only on a coin the job answered for).
+        {"v": 1, "day": "YYYY-MM-DD", "tfs": {tf: {"<boundary>": {"s": status, "ok": [symbols], "no": {symbol:
+        why}, "err": {symbol: errors}}}}}; status "ran" (the job answered: "ok" = the coins it computed, every fired
+        definition of them is a signal_log row, whatever its status; "no" = the coins it did not compute, with the
+        reason; "err", only when there is one = the problems a computed coin reported, e.g. "F14_SMT: no BTC bars":
+        that definition may be missing on that coin), "timeout" (the
+        DeepSeek map timed out at this boundary, DS_TIMEOUT_TEXT), "refused" (the group's code is refused), "failed"
+        (the DeepSeek path failed, DS_FAILED_TEXT), "incomplete" (the 5m history was incomplete: no signal of any group
+        at this boundary). A boundary missing from the record was not reached by the runner (stopped, or the extras'
+        catch-up). A record only: a failure is counted (health "ds_record_errors") and never stops anything."""
+        try:
+            day = time.strftime("%Y-%m-%d", time.gmtime((int(boundary) - 1) // 1000))
+            key = DS_RUN_KEY + day
+            if self._dsrun is None or self._dsrun[0] != key:
+                prev = self.store.get_state(key)
+                data = prev[1] if prev is not None and isinstance(prev[1], dict) else {}
+                if data.get("v") != 1 or not isinstance(data.get("tfs"), dict):
+                    data = {"v": 1, "day": day, "tfs": {}}
+                self._dsrun = (key, data)
+            data = self._dsrun[1]
+            entry: dict = {"s": status}
+            if status == "ran":
+                coins = set(self.trade_symbols)
+                entry["ok"] = sorted(r["symbol"] for r in reports if r.get("ready") and r.get("symbol") in coins)
+                entry["no"] = {r["symbol"]: one_line(r.get("why") or "; ".join(r.get("errors") or []) or "not ready",
+                                                     160)
+                               for r in reports if not r.get("ready") and r.get("symbol") in coins}
+                err = {r["symbol"]: one_line("; ".join(str(e) for e in r["errors"]), 300)
+                       for r in reports if r.get("ready") and r.get("symbol") in coins and r.get("errors")}
+                if err:
+                    entry["err"] = err
+            data["tfs"].setdefault(tf, {})[str(int(boundary))] = entry
+            self.store.put_state(key, self.now_ms(), data)
+        except Exception:  # noqa: BLE001  a record only
+            self.ds_record_errors += 1
+
+    def _five_m(self, boundary: int, submitted: list) -> None:
+        """The 5m path (``SignalService.compute_5m``) at a 5m boundary; a service without one (v3, tests) skips it."""
+        fn = getattr(self.service, "compute_5m", None)
+        if fn is None or not self.service.due_5m(boundary):
+            return
+        try:
+            rows, subs, reports = fn(boundary, self.now_ms, self.prices)
+            self._take(boundary, "5m", rows, subs, reports, submitted, "reel")
+            self.reel_last = boundary
+        except Exception as exc:  # noqa: BLE001  the core group's compute follows regardless
+            self._group_failed("reel", boundary, exc)
+        self._refusals()
+
+    def _deepseek(self, boundary: int, submitted: list) -> bool:
+        """The DeepSeek timeframes due at ``boundary`` (``SignalService.compute_ds``), after every core submit.
+        Returns True when the DeepSeek map timed out (the rest of its timeframes at this boundary are skipped)."""
+        fn = getattr(self.service, "compute_ds", None)
+        if fn is None:
+            return False
+        due = self.service.due_ds(boundary)
+        out = False
+        for k, tf in enumerate(due):
+            try:
+                rows, subs, reports = fn(boundary, tf, self.now_ms, self.prices)
+                self._take(boundary, tf, rows, subs, reports, submitted, "ds200")
+            except DsTimeout:
+                self.ds_timeouts += 1
+                out = True
+                text = DS_TIMEOUT_TEXT.format(secs=f"{float(getattr(self.service, 'ds_timeout_s', 0)):.0f}",
+                                              boundary=boundary, tfs=", ".join(due[k:]))
+                self.store.alert(self.now_ms(), WARN, text)
+                for t in due[k:]:
+                    self._ds_record(boundary, t, "timeout")
+                self.notifier.send(WARN, text)
+                break
+            except Exception as exc:  # noqa: BLE001
+                self._group_failed("ds200", boundary, exc)
+                for t in due[k:]:
+                    self._ds_record(boundary, t, "failed")
+                break
+            if "ds200" in (getattr(self.service, "refused", None) or {}):
+                self._ds_record(boundary, tf, "refused")
+            else:
+                self._ds_record(boundary, tf, "ran", reports)
+                self.ds_last[tf] = boundary
+        self._refusals()
+        return out
 
 
 def start_extras(store: Store3, notifier: Notifier, db: str, settings):
@@ -349,8 +609,8 @@ def stop_on_sigterm() -> tuple[StopFlag, Callable[[], None]]:
 
 
 def cmd_run(args) -> int:
-    from .sigservice import TRADE_TFS, SignalService, strategy_names
-    notifier = _notifier()
+    from .sigservice import SignalService, strategy_names
+    notifier = ConsoleNotifier() if getattr(args, "no_telegram", False) else _notifier()
     rest = _rest()
     syms = list(V3_SYMBOLS)
     over = {}
@@ -358,6 +618,8 @@ def cmd_run(args) -> int:
         rates = [float(rest.commission_rate(s)["takerCommissionRate"]) for s in syms]
         over["taker_fee"] = max(rates)
     settings = v3_settings(**over)
+    if settings.version != V4_VERSION:
+        raise SystemExit(f"the rules say {settings.version!r}, this runner runs {V4_VERSION!r}")
     brackets, src = load_brackets(rest, syms, args.brackets, args.allow_example_brackets)
     specs = rest.exchange_info(syms)
     store = Store3(args.db)
@@ -366,8 +628,15 @@ def cmd_run(args) -> int:
     # noisy lines (1m gaps, clock skew, repeated signal timeouts) go to the hourly digest (notify.Router)
     notifier = Router(notifier, digest)
     book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
-    service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
-    ext, make_of = start_extras(store, notifier, args.db, settings)
+    service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs, **service_options())
+    check_history(service)
+    want = v4_defs(strategy_names(service.lib))
+    check_database(store, want, settings.version)       # before anything is loaded or written
+    group_locks = service.verify_groups()               # DeepSeek / reel pins: a failing group starts refused
+    if getattr(args, "no_extras", False):
+        ext, make_of = None, hold_others
+    else:
+        ext, make_of = start_extras(store, notifier, args.db, settings)
     restored = book.load(make_of=make_of)
     if restored:
         prev = store.get_state("run")
@@ -380,14 +649,15 @@ def cmd_run(args) -> int:
         resume = book.last_ts + MIN
         start = resume - resume % FIVE
     else:
-        book.open_accounts(account_defs(strategy_names(service.lib), TRADE_TFS), now)
+        book.open_accounts(want, now)
         resume = None
         start = now - now % FIVE
-    hist_from = start - max(service.windows.values()) * FIVE - FIVE
+    check_book(book, want)
+    hist_from = start - service.keep * FIVE - FIVE
     for s in service.symbols:
         service.bootstrap(s, fetch_5m(rest, s, hist_from, start))
         sd_notify("WATCHDOG=1")  # bootstrap takes minutes; tell systemd it is progressing
-    rec = run_record(settings, brackets, src, sys.argv, signal_lock=sweepsig.verify())
+    rec = run_record(settings, brackets, src, sys.argv, signal_lock=sweepsig.verify(), group_locks=group_locks)
     ch = changes(store.last_run(), rec)
     rec["changes"] = [c["key"] for c in ch]
     store.add_run(now, rec)
@@ -396,12 +666,22 @@ def cmd_run(args) -> int:
         level = WARN if any(c["trading"] for c in ch) else INFO
         store.alert(now, level, text)
         notifier.send(level, text)
+    split = group_split(book)
     store.put_state("run", now, {"settings": settings.version, "taker_fee": settings.taker_fee,
                                  "initial_equity": settings.initial_equity, "commit": rec["commit"], "dirty": rec["dirty"],
                                  "brackets": src, "accounts": len(book.engines), "restored": restored,
-                                 "resume_from": resume, "feed_start": start})
+                                 "resume_from": resume, "feed_start": start, "groups": split,
+                                 "groups_refused": dict(service.refused),
+                                 "extras": "off (--no-extras)" if getattr(args, "no_extras", False) else "on"})
     store.commit()
-    notifier.send(INFO, f"paper v3 {'resumed' if restored else 'started'}: {len(book.engines)} accounts, "
+    for group, why in service.pop_refusals():           # one CRITICAL line per refused group
+        text = REFUSED_TEXT.format(group=group, why=one_line(why))
+        store.alert(now, CRITICAL, text)
+        notifier.send(CRITICAL, text)
+    store.commit()
+    run_name = settings.version.replace("paper-v", "paper v")
+    notifier.send(INFO, f"{run_name} {'resumed' if restored else 'started'}: {len(book.engines)} accounts "
+                        f"({', '.join(f'{g} {n}' for g, n in split.items())}), "
                         f"brackets: {src}, taker fee {settings.taker_fee:.4%}")
     feed = LiveFeed(rest, syms + list(RECORD_ONLY), start_time=start,
                     on_event=lambda lvl, txt: (store.alert(int(time.time() * 1000), lvl, txt),
@@ -464,6 +744,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     r.add_argument("--procs", type=int, default=4)
     r.add_argument("--poll", type=float, default=5.0)
     r.add_argument("--max-polls", type=int)
+    r.add_argument("--no-extras", action="store_true",
+                   help="staging: start no extras runtime (any extra account is held at its saved state)")
+    r.add_argument("--no-telegram", action="store_true",
+                   help="staging: print the messages instead of sending them to Telegram")
     s = sub.add_parser("status")
     s.add_argument("--db", default="paper3.db")
     args = ap.parse_args(argv)

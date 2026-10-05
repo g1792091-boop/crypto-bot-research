@@ -1,7 +1,9 @@
 // ------------------------------------------------------------ positions (exchange-style, live)
 // Every open paper position like an exchange's position list: unrealized P&L and ROI on the live mark price
 // (same as the Binance app: before the exit fee), size, margin, entry / mark / liquidation price, the stop and the
-// profit lock, plus the coin's order book. Nothing here trades: there are no order buttons.
+// profit lock (the reel and its 5m coin flips: the swing-low stop, the moving band target and the time exit instead,
+// no ladder), plus the coin's order book. Nothing here trades: there are no order buttons. The list follows the
+// 순위표's group switch (app.js positions()).
 const pv = {sym: "", sort: "pnl", tab: "pos", why: {}, whyAt: 0};
 const LOCK = {first: 0.10, step: 0.05, gap: 0.02};   // config.py ladder (ladder.py): arms at lock + gap net ROE
 
@@ -111,6 +113,11 @@ function bookHtml(sym, n) {
 }
 
 function lockText(p, u) {
+  if (p.exits === "reel") {   // reel_engine.py: a resting limit at the previous closed 5m bar's upper band, no lock
+    const tpPnl = p.tp ? p.side * p.qty * (p.tp - p.entry) : null;
+    return `익절 목표 ${p.tp ? px(p.tp) : "—"}${tpPnl != null ? ` <span class="muted">닿으면</span> <b class="${cls(tpPnl)}">${usdt(tpPnl)}</b>` : ""}
+      (직전 5분봉 볼린저 윗선, 5분마다 바뀜) · 시간 청산 ${tsKo(p.time_exit)} · 사다리 없음`;
+  }
   if (p.lock_roe) {
     const nx = p.lock_roe + LOCK.step;
     return `<span class="up">순 ROE +${Math.round(p.lock_roe * 100)}% 잠금 중</span> (손절선이 수익 쪽) · 다음: +${Math.round((nx + LOCK.gap) * 100)}% 되면 +${Math.round(nx * 100)}% 잠금`;
@@ -135,7 +142,7 @@ function posCard(x) {
       <div><span>마크 가격</span><b>${m ? px(m) : "—"}</b></div>
       <div><span>청산가</span><b class="accent">${px(p.liq)}</b></div>
     </div>
-    <div class="pc-tpsl"><span>손절 ${px(p.stop)}</span> <span class="muted">닿으면</span> <b class="${cls(stopPnl)}">${usdt(stopPnl)}</b>
+    <div class="pc-tpsl"><span>손절${p.exits === "reel" ? "(스윙 저점)" : ""} ${px(p.stop)}</span> <span class="muted">닿으면</span> <b class="${cls(stopPnl)}">${usdt(stopPnl)}</b>
       <span class="muted">(${pct(stopPnl / p.margin, 1)})</span></div>
     <div class="pc-tpsl muted">${lockText(p, u)}</div>
     ${whyLine(a.account_id, p)}
@@ -168,15 +175,18 @@ function orderRows(list) {
   return `<div class="scroll"><table><thead><tr><th class="l">계좌</th><th class="l">코인</th><th class="l">종류</th><th>발동 가격</th><th>지금과 거리</th><th>발동 시 손익</th></tr></thead><tbody>` +
     list.map(({a, p, u}) => {
       const pnl = p.side * p.qty * (p.stop - p.entry), m = u ? u.m : null;
-      return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l">${esc(name(a))}</td><td class="l">${coin(p.symbol)} ${sideTag(p.side)}</td>
-        <td class="l">${p.lock_roe ? `익절 잠금 +${Math.round(p.lock_roe * 100)}% (스탑 마켓)` : "손절 (스탑 마켓)"}</td><td class="mono">${px(p.stop)}</td>
-        <td class="mono">${m ? pct(Math.abs(m - p.stop) / m, 2).replace("+", "") : "—"}</td><td class="mono ${cls(pnl)}">${usdt(pnl)}</td></tr>`;
+      const row = (kind, price, gain) => `<tr class="click" data-id="${esc(a.account_id)}"><td class="l">${esc(name(a))}</td><td class="l">${coin(p.symbol)} ${sideTag(p.side)}</td>
+        <td class="l">${kind}</td><td class="mono">${px(price)}</td>
+        <td class="mono">${m ? pct(Math.abs(m - price) / m, 2).replace("+", "") : "—"}</td><td class="mono ${cls(gain)}">${usdt(gain)}</td></tr>`;
+      if (p.exits === "reel")     // the reel's own exits: the stop and the resting band target (moves every 5m bar)
+        return row("손절 · 스윙 저점 (스탑 마켓)", p.stop, pnl) + (p.tp ? row("익절 목표 · 볼린저 윗선 (지정가, 5분마다 바뀜)", p.tp, p.side * p.qty * (p.tp - p.entry)) : "");
+      return row(p.lock_roe ? `익절 잠금 +${Math.round(p.lock_roe * 100)}% (스탑 마켓)` : "손절 (스탑 마켓)", p.stop, pnl);
     }).join("") + "</tbody></table></div>";
 }
 async function renderPvHist() {
   const el = $("pv-list");
   const kst = 9 * 3.6e6, day0 = Math.floor((Date.now() + kst) / 864e5) * 864e5 - kst;   // 00:00 KST, as the summary card
-  const rows = (await api("/api/trades?limit=500").catch(() => [])).filter((t) => t.exit_time >= day0 && (!pv.sym || t.symbol === pv.sym));
+  const rows = (await api(`/api/trades?limit=500&group=${state.group}`).catch(() => [])).filter((t) => t.exit_time >= day0 && (!pv.sym || t.symbol === pv.sym) && tradeInView(t));
   if (pv.tab !== "hist") return;
   const tot = rows.reduce((s, t) => s + (t.pnl || 0), 0);
   el.innerHTML = `<div class="muted" style="margin:6px 2px">오늘(한국 0시 이후) 청산 ${rows.length}건 · 합계 <b class="${cls(tot)}">${usdt(tot)} USDT</b> (수수료 뒤)</div>` + tradeRows(rows, true);

@@ -1,0 +1,23 @@
+/* board: 순위표 (builder A). Screen-only rules; tokens and components come from the shared css. */
+@import url("home-shared.css");
+
+[data-screen="board"] .board-csv { gap: 6px; }
+[data-screen="board"] .board-csv .btn-line { min-height: 34px; }
+.board-grid { display: grid; gap: 16px; min-width: 0; }
+.board-grid2 { display: grid; gap: 16px; min-width: 0; }
+@media (min-width: 1100px) {
+  .board-grid2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); align-items: start; }
+}
+.board-stats .stat b { font-size: var(--t-md); }
+@media (min-width: 760px) { .board-stats .stat b { font-size: var(--t-lg); } }
+
+/* 봉별 요약: a small table that scrolls inside itself on a phone */
+[data-screen="board"] .tbl td a.board-best { color: var(--ink); text-decoration: none; display: inline-flex; align-items: baseline; gap: 6px; max-width: 260px; }
+[data-screen="board"] .tbl td a.board-best:hover .nm2 { text-decoration: underline dotted; }
+[data-screen="board"] .board-best .nm2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* extra accounts */
+.board-xrow .rk { font-family: var(--f-body); }
+.board-rule { flex-basis: 100%; color: var(--ink-2); }
+.board-all[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.board-tfbody { min-width: 0; }

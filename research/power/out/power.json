@@ -1,6 +1,6 @@
 {
- "version": 1,
- "generated": "2026-10-04",
+ "version": 2,
+ "generated": "2026-10-05",
  "script": "research/power/power.py run",
  "seed": 20261004,
  "reps": 4000,
@@ -13,10 +13,41 @@
   0.05,
   0.1
  ],
- "families": [
-  108,
-  144
- ],
+ "schemes": {
+  "split": {
+   "family": 108,
+   "alpha": 0.07,
+   "n_bots": 10000,
+   "what": "owners' D5 (b): core family 108 at FDR 7%, 10,000 bots"
+  },
+  "one": {
+   "family": 241,
+   "alpha": 0.1,
+   "n_bots": 10000,
+   "what": "D5 (a): one family over all 241 judged accounts at FDR 10%, 10,000 bots"
+  },
+  "v3": {
+   "family": 108,
+   "alpha": 0.1,
+   "n_bots": 2000,
+   "what": "the v3 rule: 108 at FDR 10%, 2,000 bots (reference)"
+  }
+ },
+ "reel_schemes": {
+  "split": {
+   "family": 1,
+   "alpha": 0.005,
+   "n_bots": 10000,
+   "what": "owners' D5 (b): the reel alone at FDR 0.5%, 10,000 bots"
+  },
+  "one": {
+   "family": 241,
+   "alpha": 0.1,
+   "n_bots": 10000,
+   "what": "D5 (a): one family over all 241 judged accounts at FDR 10%, 10,000 bots"
+  }
+ },
+ "chosen": "split",
  "checkpoints": [
   30,
   60,
@@ -26,7 +57,7 @@
   "initial": 5000.0,
   "bust_below": 10.0,
   "stop_atr": 2.0,
-  "n_bots": 2000,
+  "n_bots": 10000,
   "alpha": 0.1,
   "min_trades": 30
  },
@@ -36,7 +67,8 @@
    "15m": 0.2155,
    "30m": 0.217,
    "1h": 0.2157,
-   "4h": 0.2095
+   "4h": 0.2095,
+   "5m": 0.0
   },
   "best_falls_to_normal": true,
   "tiers": [
@@ -72,14 +104,15 @@
   "note": "coin flips drawn 'best' with p_best[tf] (owners 2026-10-04, docs/paper-v3-rules-change-1.md)"
  },
  "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
- "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day)",
+ "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day); 5m: config.V4_FLIP5M (the reel's H1 signal rate)",
  "timeframes": [
   "15m",
   "30m",
   "1h",
-  "4h"
+  "4h",
+  "5m"
  ],
- "no_5m": "5m removed from the experiment on 2026-10-04 with the restart (docs/paper-v3-rules-change-1.md): 5-year data -2.3% equity per trade, 34 of 36 cells significantly negative",
+ "no_5m": "5m removed for the 36 on 2026-10-04 (docs/paper-v3-rules-change-1.md): 5-year data -2.3% equity per trade, 34 of 36 cells significantly negative; paper v4's only 5m account is the reel (own exits, judged alone)",
  "addendum_trades_30d_median": {
   "15m": 104,
   "30m": 56,
@@ -107,18 +140,29 @@
      "edge_roe": 0.0,
      "mean_roe": -0.02929,
      "median_equity_30d": 0.2848,
-     "family_108": {
-      "p_pass1_d30": 0.0015,
-      "p_pass1_by_d30": 0.0015,
-      "p_pass1_by_d60": 0.0015,
-      "p_pass1_by_d90": 0.0015,
+     "scheme_split": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
+     "scheme_one": {
+      "p_pass1_d30": 0.0008,
+      "p_pass1_by_d30": 0.0008,
+      "p_pass1_by_d60": 0.0008,
+      "p_pass1_by_d90": 0.0008,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
       "p_pass1_d30": 0.001,
       "p_pass1_by_d30": 0.001,
       "p_pass1_by_d60": 0.001,
@@ -134,22 +178,33 @@
      "edge_roe": 0.005,
      "mean_roe": -0.02429,
      "median_equity_30d": 0.3326,
-     "family_108": {
-      "p_pass1_d30": 0.0013,
-      "p_pass1_by_d30": 0.0013,
-      "p_pass1_by_d60": 0.0013,
-      "p_pass1_by_d90": 0.0013,
+     "scheme_split": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0003,
-      "p_pass1_by_d30": 0.0003,
-      "p_pass1_by_d60": 0.0003,
-      "p_pass1_by_d90": 0.0003,
+     "scheme_one": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -161,7 +216,18 @@
      "edge_roe": 0.01,
      "mean_roe": -0.01929,
      "median_equity_30d": 0.3775,
-     "family_108": {
+     "scheme_split": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
       "p_pass1_d30": 0.0013,
       "p_pass1_by_d30": 0.0013,
       "p_pass1_by_d60": 0.0013,
@@ -172,11 +238,11 @@
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0008,
-      "p_pass1_by_d30": 0.0008,
-      "p_pass1_by_d60": 0.0008,
-      "p_pass1_by_d90": 0.0008,
+     "scheme_v3": {
+      "p_pass1_d30": 0.0022,
+      "p_pass1_by_d30": 0.0022,
+      "p_pass1_by_d60": 0.0022,
+      "p_pass1_by_d90": 0.0022,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -188,24 +254,35 @@
      "edge_roe": 0.02,
      "mean_roe": -0.00929,
      "median_equity_30d": 0.5302,
-     "family_108": {
-      "p_pass1_d30": 0.0077,
-      "p_pass1_by_d30": 0.0077,
-      "p_pass1_by_d60": 0.0077,
-      "p_pass1_by_d90": 0.0077,
+     "scheme_split": {
+      "p_pass1_d30": 0.0085,
+      "p_pass1_by_d30": 0.0085,
+      "p_pass1_by_d60": 0.0085,
+      "p_pass1_by_d90": 0.0085,
+      "p_pass2_by_d60": 0.0003,
+      "p_pass2_by_d90": 0.0003,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.0063,
+      "p_pass1_by_d30": 0.0063,
+      "p_pass1_by_d60": 0.0063,
+      "p_pass1_by_d90": 0.0063,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.007,
-      "p_pass1_by_d30": 0.007,
-      "p_pass1_by_d60": 0.007,
-      "p_pass1_by_d90": 0.007,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
+     "scheme_v3": {
+      "p_pass1_d30": 0.0083,
+      "p_pass1_by_d30": 0.0083,
+      "p_pass1_by_d60": 0.0083,
+      "p_pass1_by_d90": 0.0083,
+      "p_pass2_by_d60": 0.0003,
+      "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
@@ -215,22 +292,33 @@
      "edge_roe": 0.05,
      "mean_roe": 0.02071,
      "median_equity_30d": 1.4131,
-     "family_108": {
-      "p_pass1_d30": 0.118,
-      "p_pass1_by_d30": 0.118,
-      "p_pass1_by_d60": 0.118,
-      "p_pass1_by_d90": 0.118,
-      "p_pass2_by_d60": 0.0135,
-      "p_pass2_by_d90": 0.0135,
+     "scheme_split": {
+      "p_pass1_d30": 0.1393,
+      "p_pass1_by_d30": 0.1393,
+      "p_pass1_by_d60": 0.1393,
+      "p_pass1_by_d90": 0.1393,
+      "p_pass2_by_d60": 0.0215,
+      "p_pass2_by_d90": 0.0215,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.1175,
-      "p_pass1_by_d30": 0.1175,
-      "p_pass1_by_d60": 0.1175,
-      "p_pass1_by_d90": 0.1175,
+     "scheme_one": {
+      "p_pass1_d30": 0.1128,
+      "p_pass1_by_d30": 0.1128,
+      "p_pass1_by_d60": 0.1128,
+      "p_pass1_by_d90": 0.1128,
+      "p_pass2_by_d60": 0.0145,
+      "p_pass2_by_d90": 0.0145,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.119,
+      "p_pass1_by_d30": 0.119,
+      "p_pass1_by_d60": 0.119,
+      "p_pass1_by_d90": 0.119,
       "p_pass2_by_d60": 0.015,
       "p_pass2_by_d90": 0.015,
       "p_judged_by_d30": 1.0,
@@ -242,24 +330,35 @@
      "edge_roe": 0.1,
      "mean_roe": 0.07071,
      "median_equity_30d": 6.9798,
-     "family_108": {
-      "p_pass1_d30": 0.7927,
-      "p_pass1_by_d30": 0.7927,
-      "p_pass1_by_d60": 0.7927,
-      "p_pass1_by_d90": 0.7927,
-      "p_pass2_by_d60": 0.6195,
-      "p_pass2_by_d90": 0.6195,
+     "scheme_split": {
+      "p_pass1_d30": 0.8305,
+      "p_pass1_by_d30": 0.8305,
+      "p_pass1_by_d60": 0.8305,
+      "p_pass1_by_d90": 0.8305,
+      "p_pass2_by_d60": 0.6843,
+      "p_pass2_by_d90": 0.6843,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.7827,
-      "p_pass1_by_d30": 0.7827,
-      "p_pass1_by_d60": 0.7827,
-      "p_pass1_by_d90": 0.7827,
-      "p_pass2_by_d60": 0.6115,
-      "p_pass2_by_d90": 0.6115,
+     "scheme_one": {
+      "p_pass1_d30": 0.8047,
+      "p_pass1_by_d30": 0.8047,
+      "p_pass1_by_d60": 0.8047,
+      "p_pass1_by_d90": 0.8047,
+      "p_pass2_by_d60": 0.6485,
+      "p_pass2_by_d90": 0.6485,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.783,
+      "p_pass1_by_d30": 0.783,
+      "p_pass1_by_d60": 0.783,
+      "p_pass1_by_d90": 0.783,
+      "p_pass2_by_d60": 0.608,
+      "p_pass2_by_d90": 0.608,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
@@ -288,22 +387,33 @@
      "edge_roe": 0.0,
      "mean_roe": -0.02455,
      "median_equity_30d": 0.6412,
-     "family_108": {
-      "p_pass1_d30": 0.0005,
-      "p_pass1_by_d30": 0.0005,
-      "p_pass1_by_d60": 0.0005,
-      "p_pass1_by_d90": 0.0005,
+     "scheme_split": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0005,
-      "p_pass1_by_d30": 0.0005,
-      "p_pass1_by_d60": 0.0005,
-      "p_pass1_by_d90": 0.0005,
+     "scheme_one": {
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0,
+      "p_pass1_by_d90": 0.0,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0003,
+      "p_pass1_by_d30": 0.0003,
+      "p_pass1_by_d60": 0.0003,
+      "p_pass1_by_d90": 0.0003,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -315,7 +425,18 @@
      "edge_roe": 0.005,
      "mean_roe": -0.01955,
      "median_equity_30d": 0.6737,
-     "family_108": {
+     "scheme_split": {
+      "p_pass1_d30": 0.0008,
+      "p_pass1_by_d30": 0.0008,
+      "p_pass1_by_d60": 0.0008,
+      "p_pass1_by_d90": 0.0008,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
       "p_pass1_d30": 0.0003,
       "p_pass1_by_d30": 0.0003,
       "p_pass1_by_d60": 0.0003,
@@ -326,11 +447,11 @@
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0008,
-      "p_pass1_by_d30": 0.0008,
-      "p_pass1_by_d60": 0.0008,
-      "p_pass1_by_d90": 0.0008,
+     "scheme_v3": {
+      "p_pass1_d30": 0.0005,
+      "p_pass1_by_d30": 0.0005,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -342,22 +463,33 @@
      "edge_roe": 0.01,
      "mean_roe": -0.01455,
      "median_equity_30d": 0.7314,
-     "family_108": {
-      "p_pass1_d30": 0.0015,
-      "p_pass1_by_d30": 0.0015,
-      "p_pass1_by_d60": 0.0015,
-      "p_pass1_by_d90": 0.0015,
+     "scheme_split": {
+      "p_pass1_d30": 0.0018,
+      "p_pass1_by_d30": 0.0018,
+      "p_pass1_by_d60": 0.0018,
+      "p_pass1_by_d90": 0.0018,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.002,
-      "p_pass1_by_d30": 0.002,
-      "p_pass1_by_d60": 0.002,
-      "p_pass1_by_d90": 0.002,
+     "scheme_one": {
+      "p_pass1_d30": 0.0013,
+      "p_pass1_by_d30": 0.0013,
+      "p_pass1_by_d60": 0.0013,
+      "p_pass1_by_d90": 0.0013,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0015,
+      "p_pass1_by_d30": 0.0015,
+      "p_pass1_by_d60": 0.0015,
+      "p_pass1_by_d90": 0.0015,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -369,22 +501,33 @@
      "edge_roe": 0.02,
      "mean_roe": -0.00455,
      "median_equity_30d": 0.8242,
-     "family_108": {
-      "p_pass1_d30": 0.0027,
-      "p_pass1_by_d30": 0.0027,
-      "p_pass1_by_d60": 0.0027,
-      "p_pass1_by_d90": 0.0027,
+     "scheme_split": {
+      "p_pass1_d30": 0.0025,
+      "p_pass1_by_d30": 0.0025,
+      "p_pass1_by_d60": 0.0025,
+      "p_pass1_by_d90": 0.0025,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0018,
-      "p_pass1_by_d30": 0.0018,
-      "p_pass1_by_d60": 0.0018,
-      "p_pass1_by_d90": 0.0018,
+     "scheme_one": {
+      "p_pass1_d30": 0.002,
+      "p_pass1_by_d30": 0.002,
+      "p_pass1_by_d60": 0.002,
+      "p_pass1_by_d90": 0.002,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0043,
+      "p_pass1_by_d30": 0.0043,
+      "p_pass1_by_d60": 0.0043,
+      "p_pass1_by_d90": 0.0043,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -396,24 +539,35 @@
      "edge_roe": 0.05,
      "mean_roe": 0.02545,
      "median_equity_30d": 1.1885,
-     "family_108": {
-      "p_pass1_d30": 0.026,
-      "p_pass1_by_d30": 0.026,
-      "p_pass1_by_d60": 0.026,
-      "p_pass1_by_d90": 0.026,
+     "scheme_split": {
+      "p_pass1_d30": 0.028,
+      "p_pass1_by_d30": 0.028,
+      "p_pass1_by_d60": 0.028,
+      "p_pass1_by_d90": 0.028,
       "p_pass2_by_d60": 0.0003,
       "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.0245,
-      "p_pass1_by_d30": 0.0245,
-      "p_pass1_by_d60": 0.0245,
-      "p_pass1_by_d90": 0.0245,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
+     "scheme_one": {
+      "p_pass1_d30": 0.0225,
+      "p_pass1_by_d30": 0.0225,
+      "p_pass1_by_d60": 0.0225,
+      "p_pass1_by_d90": 0.0225,
+      "p_pass2_by_d60": 0.0003,
+      "p_pass2_by_d90": 0.0003,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0238,
+      "p_pass1_by_d30": 0.0238,
+      "p_pass1_by_d60": 0.0238,
+      "p_pass1_by_d90": 0.0238,
+      "p_pass2_by_d60": 0.0003,
+      "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
@@ -423,24 +577,35 @@
      "edge_roe": 0.1,
      "mean_roe": 0.07545,
      "median_equity_30d": 2.1991,
-     "family_108": {
-      "p_pass1_d30": 0.227,
-      "p_pass1_by_d30": 0.227,
-      "p_pass1_by_d60": 0.2273,
-      "p_pass1_by_d90": 0.2273,
-      "p_pass2_by_d60": 0.0467,
-      "p_pass2_by_d90": 0.0467,
+     "scheme_split": {
+      "p_pass1_d30": 0.2492,
+      "p_pass1_by_d30": 0.2492,
+      "p_pass1_by_d60": 0.2495,
+      "p_pass1_by_d90": 0.2495,
+      "p_pass2_by_d60": 0.0537,
+      "p_pass2_by_d90": 0.0537,
       "p_judged_by_d30": 0.9998,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.2072,
-      "p_pass1_by_d30": 0.2072,
-      "p_pass1_by_d60": 0.2075,
-      "p_pass1_by_d90": 0.2075,
-      "p_pass2_by_d60": 0.0377,
-      "p_pass2_by_d90": 0.0377,
+     "scheme_one": {
+      "p_pass1_d30": 0.215,
+      "p_pass1_by_d30": 0.215,
+      "p_pass1_by_d60": 0.2152,
+      "p_pass1_by_d90": 0.2152,
+      "p_pass2_by_d60": 0.0413,
+      "p_pass2_by_d90": 0.0413,
+      "p_judged_by_d30": 0.9998,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.219,
+      "p_pass1_by_d30": 0.219,
+      "p_pass1_by_d60": 0.2193,
+      "p_pass1_by_d90": 0.2193,
+      "p_pass2_by_d60": 0.0445,
+      "p_pass2_by_d90": 0.0445,
       "p_judged_by_d30": 0.9998,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
@@ -469,10 +634,10 @@
      "edge_roe": 0.0,
      "mean_roe": -0.01675,
      "median_equity_30d": 0.9063,
-     "family_108": {
+     "scheme_split": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0003,
+      "p_pass1_by_d60": 0.0,
       "p_pass1_by_d90": 0.0005,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
@@ -480,7 +645,18 @@
       "p_judged_by_d60": 0.879,
       "p_judged_by_d90": 0.9998
      },
-     "family_144": {
+     "scheme_one": {
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0,
+      "p_pass1_by_d90": 0.0005,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 0.009,
+      "p_judged_by_d60": 0.879,
+      "p_judged_by_d90": 0.9998
+     },
+     "scheme_v3": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
       "p_pass1_by_d60": 0.0003,
@@ -496,18 +672,29 @@
      "edge_roe": 0.005,
      "mean_roe": -0.01175,
      "median_equity_30d": 0.9269,
-     "family_108": {
+     "scheme_split": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.001,
-      "p_pass1_by_d90": 0.001,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0063,
       "p_judged_by_d60": 0.8818,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
+     "scheme_one": {
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 0.0063,
+      "p_judged_by_d60": 0.8818,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
       "p_pass1_by_d60": 0.0003,
@@ -523,22 +710,33 @@
      "edge_roe": 0.01,
      "mean_roe": -0.00675,
      "median_equity_30d": 0.9392,
-     "family_108": {
+     "scheme_split": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0022,
-      "p_pass1_by_d90": 0.0022,
+      "p_pass1_by_d60": 0.002,
+      "p_pass1_by_d90": 0.002,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0073,
       "p_judged_by_d60": 0.8755,
       "p_judged_by_d90": 0.9998
      },
-     "family_144": {
+     "scheme_one": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0013,
-      "p_pass1_by_d90": 0.0013,
+      "p_pass1_by_d60": 0.0015,
+      "p_pass1_by_d90": 0.0015,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 0.0073,
+      "p_judged_by_d60": 0.8755,
+      "p_judged_by_d90": 0.9998
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0018,
+      "p_pass1_by_d90": 0.0018,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0073,
@@ -550,22 +748,33 @@
      "edge_roe": 0.02,
      "mean_roe": 0.00325,
      "median_equity_30d": 0.9691,
-     "family_108": {
+     "scheme_split": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0025,
-      "p_pass1_by_d90": 0.0025,
+      "p_pass1_by_d60": 0.0027,
+      "p_pass1_by_d90": 0.003,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0085,
       "p_judged_by_d60": 0.866,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
+     "scheme_one": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
       "p_pass1_by_d60": 0.0027,
-      "p_pass1_by_d90": 0.0027,
+      "p_pass1_by_d90": 0.003,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 0.0085,
+      "p_judged_by_d60": 0.866,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0003,
+      "p_pass1_by_d30": 0.0003,
+      "p_pass1_by_d60": 0.0027,
+      "p_pass1_by_d90": 0.003,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0085,
@@ -577,22 +786,33 @@
      "edge_roe": 0.05,
      "mean_roe": 0.03325,
      "median_equity_30d": 1.0915,
-     "family_108": {
+     "scheme_split": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0105,
-      "p_pass1_by_d90": 0.0112,
+      "p_pass1_by_d60": 0.0123,
+      "p_pass1_by_d90": 0.0132,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.007,
       "p_judged_by_d60": 0.8762,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
+     "scheme_one": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0115,
-      "p_pass1_by_d90": 0.012,
+      "p_pass1_by_d60": 0.008,
+      "p_pass1_by_d90": 0.0083,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 0.007,
+      "p_judged_by_d60": 0.8762,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0105,
+      "p_pass1_by_d90": 0.0115,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.007,
@@ -604,22 +824,33 @@
      "edge_roe": 0.1,
      "mean_roe": 0.08325,
      "median_equity_30d": 1.313,
-     "family_108": {
-      "p_pass1_d30": 0.001,
-      "p_pass1_by_d30": 0.001,
-      "p_pass1_by_d60": 0.0833,
-      "p_pass1_by_d90": 0.0935,
+     "scheme_split": {
+      "p_pass1_d30": 0.0013,
+      "p_pass1_by_d30": 0.0013,
+      "p_pass1_by_d60": 0.094,
+      "p_pass1_by_d90": 0.1057,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 0.005,
       "p_judged_by_d60": 0.8745,
       "p_judged_by_d90": 1.0
      },
-     "family_144": {
-      "p_pass1_d30": 0.001,
-      "p_pass1_by_d30": 0.001,
-      "p_pass1_by_d60": 0.0845,
-      "p_pass1_by_d90": 0.0955,
+     "scheme_one": {
+      "p_pass1_d30": 0.0013,
+      "p_pass1_by_d30": 0.0013,
+      "p_pass1_by_d60": 0.0795,
+      "p_pass1_by_d90": 0.0897,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0003,
+      "p_judged_by_d30": 0.005,
+      "p_judged_by_d60": 0.8745,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_v3": {
+      "p_pass1_d30": 0.0008,
+      "p_pass1_by_d30": 0.0008,
+      "p_pass1_by_d60": 0.0867,
+      "p_pass1_by_d90": 0.0958,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 0.005,
@@ -641,19 +872,207 @@
    },
    "rows": [],
    "observation_only": true
+  },
+  "5m": {
+   "pool": {
+    "trades_in_pool": 12898,
+    "alive_days": 984.9,
+    "trades_per_30d": 392.9,
+    "coin_flip_mean_roe": -0.02878,
+    "coin_flip_win_rate": 0.4706,
+    "mean_margin_share": 0.2791,
+    "null_bust_30d": 0.0377,
+    "null_median_equity_30d": 0.0201,
+    "rules_bt_windows": 33,
+    "rules_bt_bust_30d": 0.0909,
+    "rate_per_coin_bar": 0.013319,
+    "rate_label": "matched"
+   },
+   "rows": [
+    {
+     "edge_roe": 0.0,
+     "mean_roe": -0.02878,
+     "median_equity_30d": 0.0196,
+     "scheme_split": {
+      "p_pass1_d30": 0.0015,
+      "p_pass1_by_d30": 0.0015,
+      "p_pass1_by_d60": 0.0015,
+      "p_pass1_by_d90": 0.0015,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.0005,
+      "p_pass1_by_d30": 0.0005,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.005,
+     "mean_roe": -0.02378,
+     "median_equity_30d": 0.0334,
+     "scheme_split": {
+      "p_pass1_d30": 0.0047,
+      "p_pass1_by_d30": 0.0047,
+      "p_pass1_by_d60": 0.0047,
+      "p_pass1_by_d90": 0.0047,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.01,
+     "mean_roe": -0.01878,
+     "median_equity_30d": 0.059,
+     "scheme_split": {
+      "p_pass1_d30": 0.0083,
+      "p_pass1_by_d30": 0.0083,
+      "p_pass1_by_d60": 0.0083,
+      "p_pass1_by_d90": 0.0083,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.003,
+      "p_pass1_by_d30": 0.003,
+      "p_pass1_by_d60": 0.003,
+      "p_pass1_by_d90": 0.003,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.02,
+     "mean_roe": -0.00878,
+     "median_equity_30d": 0.1847,
+     "scheme_split": {
+      "p_pass1_d30": 0.0777,
+      "p_pass1_by_d30": 0.0777,
+      "p_pass1_by_d60": 0.0777,
+      "p_pass1_by_d90": 0.0777,
+      "p_pass2_by_d60": 0.0055,
+      "p_pass2_by_d90": 0.0055,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.0385,
+      "p_pass1_by_d30": 0.0385,
+      "p_pass1_by_d60": 0.0385,
+      "p_pass1_by_d90": 0.0385,
+      "p_pass2_by_d60": 0.0013,
+      "p_pass2_by_d90": 0.0013,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.05,
+     "mean_roe": 0.02122,
+     "median_equity_30d": 4.656,
+     "scheme_split": {
+      "p_pass1_d30": 0.9025,
+      "p_pass1_by_d30": 0.9025,
+      "p_pass1_by_d60": 0.9025,
+      "p_pass1_by_d90": 0.9025,
+      "p_pass2_by_d60": 0.8183,
+      "p_pass2_by_d90": 0.8183,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 0.8017,
+      "p_pass1_by_d30": 0.8017,
+      "p_pass1_by_d60": 0.8017,
+      "p_pass1_by_d90": 0.8017,
+      "p_pass2_by_d60": 0.646,
+      "p_pass2_by_d90": 0.646,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.1,
+     "mean_roe": 0.07122,
+     "median_equity_30d": 1037.0805,
+     "scheme_split": {
+      "p_pass1_d30": 1.0,
+      "p_pass1_by_d30": 1.0,
+      "p_pass1_by_d60": 1.0,
+      "p_pass1_by_d90": 1.0,
+      "p_pass2_by_d60": 1.0,
+      "p_pass2_by_d90": 1.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "scheme_one": {
+      "p_pass1_d30": 1.0,
+      "p_pass1_by_d30": 1.0,
+      "p_pass1_by_d60": 1.0,
+      "p_pass1_by_d90": 1.0,
+      "p_pass2_by_d60": 1.0,
+      "p_pass2_by_d90": 1.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    }
+   ],
+   "observation_only": false,
+   "exits": "reel"
   }
  },
  "summary_ko": [
   "진짜 엣지가 거래당 +0.5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 0%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
   "진짜 엣지가 거래당 +1%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 0%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
   "진짜 엣지가 거래당 +2%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 1%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
-  "진짜 엣지가 거래당 +5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 12%, 30분 3%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 1%)",
-  "진짜 엣지가 거래당 +10%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 79%, 30분 23%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 8%)",
+  "진짜 엣지가 거래당 +5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 14%, 30분 3%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 1%)",
+  "진짜 엣지가 거래당 +10%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 83%, 30분 25%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 9%)",
   "동전 봇의 거래당 평균 순 ROE: 15분 -2.9%, 30분 -2.5%, 1시간 -1.7%. 엣지가 이만큼을 넘어야 계좌가 시작 금액 위로 갈 수 있음(1차 조건)",
-  "판정 계좌 108개에서 혼자 FDR을 통과하려면 p ≤ 0.00093: 동전 봇 2,000개를 모두 이겨야 함(p = 1/2,001)"
+  "엣지 +5%일 때 매매법 36의 30일 1차 합격 확률 — 나눔(b) 108개·FDR 7%: 15분 14%, 30분 3%, 1시간 0% / 한 묶음(a) 241개·FDR 10%: 15분 11%, 30분 2%, 1시간 0%",
+  "엣지 +10%일 때 매매법 36의 30일 1차 합격 확률 — 나눔(b) 108개·FDR 7%: 15분 83%, 30분 25%, 1시간 0% / 한 묶음(a) 241개·FDR 10%: 15분 80%, 30분 22%, 1시간 0%",
+  "엣지 +5%일 때 5분 단타(릴스)의 30일 1차 합격 확률: 혼자 FDR 0.5% 90%, 한 묶음(a) 80%",
+  "엣지 +10%일 때 5분 단타(릴스)의 30일 1차 합격 확률: 혼자 FDR 0.5% 100%, 한 묶음(a) 100%",
+  "나눔(b): 판정 계좌 108개에서 혼자 FDR을 통과하려면 p ≤ 0.00065: 동전 봇 10,000개 중 앞선 봇이 5개 이하",
+  "한 묶음(a): 판정 계좌 241개에서 혼자 FDR을 통과하려면 p ≤ 0.00041: 동전 봇 10,000개 중 앞선 봇이 3개 이하"
  ],
  "assumptions": [
   "trades drawn independently from the coin-flip pool (no streaks or regime changes)",
+  "5m: the reel's control pool (random long entries, the reel's own exits on 5m bars, low-first inside a bar, no funding); the reel is judged alone",
   "the same edge on every trade: net ROE + X (a liquidation still loses at most the margin)",
   "coin-flip trade shape from 2020-01..2021-08 bars, the median strategy's signal rate",
   "the other accounts in the FDR family have no edge (p uniform)",
@@ -661,12 +1080,13 @@
  ],
  "runtime_s": {
   "pool": {
-   "15m": 1.3,
-   "30m": 1.6,
-   "1h": 0.3,
-   "4h": 0.1
+   "15m": 2.2,
+   "30m": 2.7,
+   "1h": 0.5,
+   "4h": 0.1,
+   "5m": 9.7
   },
-  "monte_carlo": 3.3,
-  "total": 7.8
+  "monte_carlo": 9.1,
+  "total": 26.0
  }
 }

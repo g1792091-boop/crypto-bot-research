@@ -5,8 +5,11 @@
 # restarted on every commit and never finished on a large paper3.db). The backup is not a writer of
 # any database. A copy that fails makes the unit fail (exit status), after the old copies are pruned;
 # a copy that hangs is stopped after 30 minutes (the unit fails then too).
+# A failed backup sends the owners' one Korean warning (paperbot-failed@, owners' G31): before, only the next
+# morning's off-site check or launchcheck noticed it.
 [Unit]
 Description=paperbot database backup
+OnFailure=paperbot-failed@%n.service
 
 [Service]
 Type=oneshot

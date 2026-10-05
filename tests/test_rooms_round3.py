@@ -65,7 +65,9 @@ def test_checkpoint_meeting_waits_for_the_verdict_and_the_staff_read_it(tmp_path
     assert set(ref["pass_check"]["N17_KC_RSI@15m"]) >= {"status"} and \
         ref["pass_check"]["N17_KC_RSI@15m"]["status"] in ("small_sample", "above_3_coin_flips", "below")
     assert "checkpoint" in runner.calls[1]["packet"]["board"] and "checkpoint" in runner.calls[2]["packet"]["board"]
-    assert "board.checkpoint" in runner.calls[0]["system"] and "Q1" in runner.calls[0]["system"]
+    # paper v4 (G18): the verdict method is the one text built from the checkpoint (agents/facts.method_ko)
+    from paperbot.agents.facts import facts
+    assert "board.checkpoint" in runner.calls[0]["system"] and facts()["method_ko"] in runner.calls[0]["system"]
     # the meeting is held once
     assert w.tick(QueueRunner({}), DAY30 + 30 * MIN)["rounds"] == []
 
@@ -113,8 +115,11 @@ def test_specialist_gets_its_own_checkpoint_rows(tmp_path):
 
 def test_roster_and_prompts_name_the_q1_verdict():
     from paperbot.agents.roster3 import ROLES, room_duty
-    assert "2,000" in room_duty("league_referee") and "참고용" in room_duty("league_referee")
-    assert "2,000" in next(r[5] for r in ROLES if r[0] == "league_referee")
+    from paperbot.agents.facts import facts
+    method = facts()["method_ko"]                  # paper v4 (G18): one verdict text, never a typed bot count
+    assert method in room_duty("league_referee") and "참고용" in room_duty("league_referee")
+    assert method in next(r[5] for r in ROLES if r[0] == "league_referee")
+    assert "2,000" not in room_duty("league_referee")
     assert "board.checkpoint" in RM.system_prompt("league_referee", "team")
     assert "specialist.checkpoint" in RM.system_prompt("spec_N17_KC_RSI", "specialist")
     assert "pass_check.V45_AMB" not in RM.system_prompt("league_referee", "team")
@@ -244,7 +249,7 @@ def test_evening_numbers_say_the_coin_flips_are_in_the_pnl(tmp_path):
     ctx = RM.RoundContext(agents_conn=w.agents, paper_ro=None, daily_ro=None, inbox_ro=None, runner=None, lab=None,
                           now_ms=QUIET)
     text = RM.compose_evening(ctx, {"today": {"trades": 3, "net_pnl": -12.5, "wins": 1, "busts_total": 0}}, LEAD)
-    assert "\n거래 3건 · 이긴 1건 · -$12 (동전 봇 포함)\n" in text
+    assert "\n매매법 거래 3건 · 이긴 1건 · -$12 (동전 봇 포함)\n" in text
 
 
 # ------------------------------------------------------------------ the reason line of a paced stop
