@@ -10,7 +10,9 @@ const EXIT_KO = {LOCK: "익절 잠금", TP: "목표가 도달", SL: "손절", TI
 // ---------------------------------------------------------------- 손익비·위험
 // ?group= (analysis.js 묶음): d.group says whose trades these are. DeepSeek (d.no_money): the server sent no money, and
 // nothing is listed per definition; the reel: its own exits (목표가 / 손절 / 시간 청산, no ladder), its 5m coin flips.
-const REEL_RULE = "릴스 규칙: 롱만 · 손절 = 직전 5분봉 12개의 최저가 바로 아래 · 목표 = 직전 봉의 볼린저 윗선 · 96봉(8시간)이 지나면 청산. 계단 잠금은 없습니다.";
+// the reel's own exits in the words of account.js (reel_engine.py): its stop is the swing low (the 5m coin flips' is the
+// low of the previous 12 bars), the target the previous 5m bar's upper band, a 96-bar time exit, no ladder
+const REEL_RULE = "릴스 규칙: 롱만 · 손절 = 스윙 저점 아래 고정 · 목표 = 직전 5분봉의 볼린저(20, 2) 윗밴드 (5분마다 옮겨짐) · 96봉(8시간)이 지나면 청산. 계단 잠금은 없습니다.";
 export function risk(d, env) {
   const a = d.all || {}, f = d.coin_flips || {}, dd = d.drawdown || {}, g = a.giveback || {}, r = d.rules || {};
   const grp = d.group || "core", W = groupWords(grp), money = !d.no_money && W.money;  // no_money: DeepSeek
@@ -31,7 +33,7 @@ export function risk(d, env) {
     h("p", {class: "an-note"}, W.flipNote,
       (a.trades || 0) < 30 || (f.trades || 0) < 30 ? [" ", ui.pill("표본 적음", "thin"), ` 30건 미만인 쪽이 있습니다 (${grp === "core" ? "매매법" : W.short} ${fmt.int(a.trades || 0)}건 · ${W.flips} ${fmt.int(f.trades || 0)}건).`] : null),
     d.house_exits === false ? h("p", {class: "an-note"}, REEL_RULE)
-      : h("p", {class: "an-note"}, `지금 규칙: 손절 ${fmt.num(r.stop_atr, 1)} ATR · 레버리지 ${r.leverage || "—"} · 최고 수익 ${fmt.pct(r.first_trigger, 0)}에서 ${fmt.pct(r.first_lock, 0)} 잠금.${grp === "ds200" ? " 딥시크는 규칙상 늘 보통 배수입니다." : ""} 이 규칙은 손익비가 낮고 본전 승률이 높게 나오는 것이 설계상 자연스럽습니다.`),
+      : h("p", {class: "an-note"}, `지금 규칙: 손절 ${fmt.num(r.stop_atr, 1)} ATR · 레버리지 ${grp === "ds200" ? "늘 보통 배수 (30배, 안 되면 20배)" : r.leverage || "—"} · 최고 수익 ${fmt.pct(r.first_trigger, 0)}에서 ${fmt.pct(r.first_lock, 0)} 잠금. 이 규칙은 손익비가 낮고 본전 승률이 높게 나오는 것이 설계상 자연스럽습니다.`),
     ui.refNote(env.verdictTs)));
   // how winners gave back and how trades ended
   const ex = a.exit_share || {};

@@ -50,6 +50,7 @@ export async function mount(el, ctx) {
   const pick = (id) => (shown().some((v) => v.id === id) ? id : "risk");
   st.tab = pick(ctx.params.arg || local.get("an-tab", "risk"));
   st.group = okGroup(((ctx.params && ctx.params.query) || {}).group || local.get("an-group", "core"));
+  local.set("an-group", st.group);   // a ?group= link is remembered like a tap (a later tab change drops it from the address)
 
   const segSlot = h("div", {class: "an-tabs"});
   const groupSeg = ui.seg(GROUPS.map((g) => ({id: g.id, label: g.label, title: g.title})), st.group, (id) => setGroup(id), {label: "묶음 고르기"});
@@ -64,6 +65,14 @@ export async function mount(el, ctx) {
     st.group = id;
     local.set("an-group", id);
     groupSeg.set(id);
+    // an old ?group= in the address would bring the old group back on reload: drop it (the choice is remembered)
+    const q = (ctx.params && ctx.params.query) || {};
+    if (q.group != null) {
+      const rest = {...q};
+      delete rest.group;
+      try { window.history.replaceState(null, "", ctx.href("analysis", st.tab, rest)); } catch { /* keep the hash */ }
+      ctx.params = {...ctx.params, query: rest};
+    }
     load(false);
   }
 
@@ -90,7 +99,9 @@ export async function mount(el, ctx) {
     const g = ++st.gen;
     desc.textContent = v.desc;
     groupRow.hidden = v.groups === "any";
-    if (v.groups === "core" && st.group !== "core") { closeTab(); put(body, coreOnly(v)); motion.swap(body); return; }
+    if (v.groups === "core" && st.group !== "core") {   // the 5-minute refresh (force) changes nothing here: no motion
+      closeTab(); put(body, coreOnly(v)); if (!force) motion.swap(body); return;
+    }
     if (v.groups === "groups" && st.group !== "core") {
       path = v.gpath || path;
       path += `${path.includes("?") ? "&" : "?"}group=${encodeURIComponent(st.group)}`;

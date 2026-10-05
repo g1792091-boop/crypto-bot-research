@@ -199,3 +199,15 @@ def test_risk_and_map_never_print_deepseek_money():
     for src in (risk, where, kit, _read("analysis.js")):
         assert "innerHTML" not in src and "toLocaleString" not in src
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", src.replace("#/", ""))
+
+
+def test_review_fixes_address_and_wording():
+    js, risk = _read("analysis.js"), _read("analysis-risk.js")
+    # a ?group= link is remembered, and a later switch drops the stale ?group= from the address (a reload must not
+    # bring the old group back)
+    assert 'local.set("an-group", st.group)' in js and "delete rest.group" in js
+    # the reel's stop is its swing low (reel_engine.py); 'the previous 12 bars' is the 5m coin flips' stop
+    rule = re.search(r'const REEL_RULE = "([^"]*)"', risk).group(1)
+    assert "스윙 저점" in rule and "12개" not in rule
+    # DeepSeek always trades the normal tier (config: ds200 always "normal"): its rule line never says 50x
+    assert '"늘 보통 배수 (30배, 안 되면 20배)"' in risk
