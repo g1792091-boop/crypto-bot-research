@@ -1,8 +1,10 @@
 // 분석: 코인·장세 지도 / 코인·시간대 / 진입 순간 / 상황 태그 (builder C; old analysis.js rMap / rEntry, breakdown.js,
 // strat.js loss patterns across all accounts). Where the trades made and lost money, cut many ways. Descriptive only:
 // many cells are looked at, so one odd cell is a hypothesis, never a rule. Coin flips are the 참고 baseline (refNote).
+// 코인·장세 지도 and 코인·시간대 follow the 묶음 switch (?group=, d.group): DeepSeek (d.no_money) is counts and win rates
+// only, with no per-account list.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
-import {viewHead, thin, cell, cmpList, dimSeg, acctLabel} from "./analysis-kit.js";
+import {viewHead, thin, cell, cmpList, dimSeg, acctLabel, groupWords} from "./analysis-kit.js";
 import {tagRows} from "./strategies-panels.js";
 
 // ---------------------------------------------------------------- 코인·장세 지도 (/api/analysis/map)
@@ -10,10 +12,12 @@ const MAP_DIMS = [["by_coin", "코인"], ["by_regime", "진입 때 장세"], ["b
 const VOL_KO = {low: "낮음", mid: "보통", high: "높음", unknown: "모름"};
 export function map(d, env) {
   const s = d.strategy || {}, f = d.coin_flips || {}, min = d.small_n || 10;
-  const out = [viewHead({plate: "코인·장세 지도", q: "어디서 벌고 어디서 잃었나",
-    meta: `최근 끝난 거래 최대 ${fmt.int(d.cap)}건 기준 · 기존 36 매매법 ${fmt.int(s.trades || 0)}건 · 동전 봇 ${fmt.int(f.trades || 0)}건`, at: d.computed_at, stale: d.stale,
-    read: `한 칸 = 거래 수 · 이긴 비율 · 손익 합계. ${fmt.int(min)}건 미만 칸은 표본 적음(결론 없음). 동전 봇(무작위 진입)은 같은 칸의 비교 기준입니다.`,
-    warn: [thin(s.trades || 0, 30, "매매법 계좌 끝난 거래")]})];
+  const grp = d.group || "core", W = groupWords(grp), noMoney = !!d.no_money || !W.money;
+  const out = [viewHead({plate: "코인·장세 지도", q: noMoney ? "어디서 이기고 어디서 졌나" : "어디서 벌고 어디서 잃었나",
+    meta: `최근 끝난 거래 최대 ${fmt.int(d.cap)}건 기준 · ${W.who} ${fmt.int(s.trades || 0)}건 · ${W.flips} ${fmt.int(f.trades || 0)}건`, at: d.computed_at, stale: d.stale,
+    read: `한 칸 = 거래 수 · 이긴 비율${noMoney ? "" : " · 손익 합계"}. ${fmt.int(min)}건 미만 칸은 표본 적음(결론 없음). ${W.flips}(무작위 진입)은 같은 칸의 비교 기준입니다.`,
+    warn: [thin(s.trades || 0, 30, `${grp === "core" ? "매매법" : W.short} 계좌 끝난 거래`),
+      noMoney ? h("p", {class: "an-read"}, ui.pill("돈 숫자 없음", "ref"), " 딥시크는 거래 수와 이긴 비율만 봅니다.") : null]})];
   if (!s.trades) { out.push(ui.card({}, ui.empty("아직 끝난 거래가 없습니다."))); return out; }
   const dims = MAP_DIMS.filter(([k]) => Object.keys(s[k] || {}).length || Object.keys(f[k] || {}).length);
   const eb = d.entry_buckets;
@@ -27,18 +31,19 @@ export function map(d, env) {
       const src = k === "eb_vol" ? eb.volatility : eb.weekday;
       put(body, h("div", {class: "an-cmp"}, Object.entries(src).map(([b, c]) => h("div", {class: "an-cmprow one"},
         h("b", {class: "an-cmpk"}, k === "eb_vol" ? VOL_KO[b] || b : b),
-        h("span", null, c && c.n ? [cell({n: c.n, wr: c.wr}, min), ` · 평균 ROE `, h("b", {class: fmt.tone(c.roe)}, fmt.pct(c.roe))] : "—")))),
+        h("span", null, c && c.n ? [cell({n: c.n, wr: c.wr}, min, noMoney), ` · 평균 ROE `, h("b", {class: fmt.tone(c.roe)}, fmt.pct(c.roe))] : "—")))),
         h("p", {class: "an-note"}, k === "eb_vol" ? "같은 코인·봉의 지난 30일과 비교한 진입 때 변동성 ('진입 순간' 계산에서 옴)." : "진입한 요일 (한국 시간)."));
     } else {
       const keys = [...new Set([...Object.keys(s[k] || {}), ...Object.keys(f[k] || {})])];
-      put(body, cmpList(keys.map((x) => ({label: k === "by_timeframe" ? fmt.tfKo(x) : x, a: cell((s[k] || {})[x], min), b: cell((f[k] || {})[x], min)}))));
+      put(body, cmpList(keys.map((x) => ({label: k === "by_timeframe" ? fmt.tfKo(x) : x, a: cell((s[k] || {})[x], min, noMoney), b: cell((f[k] || {})[x], min, noMoney)})),
+        grp === "core" ? {} : {a: W.short, b: `${W.flips} (참고)`}));
     }
     if (anim) motion.swap(body);
   }
   paint(false);
   out.push(ui.card({plate: "나눠 보기"}, seg.el, body,
-    !eb ? h("p", {class: "an-note"}, "'진입 순간'을 한 번 열면 그 계산으로 변동성·요일 칸이 여기에 붙습니다.") : null,
-    s.note ? ui.moreText(s.note, 2, "an-note") : null, ui.refNote(env.verdictTs), ui.assume()));
+    !eb && grp === "core" ? h("p", {class: "an-note"}, "'진입 순간'을 한 번 열면 그 계산으로 변동성·요일 칸이 여기에 붙습니다.") : null,
+    s.note ? ui.moreText(s.note, 2, "an-note") : null, ui.refNote(env.verdictTs), noMoney ? null : ui.assume()));
   return out;
 }
 
@@ -48,21 +53,24 @@ const WIN = {funding: "펀딩 정산 ±10분", us_open: "미국장 개장 ±1시
 const WD = {Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일"};
 export function sessions(d, env) {
   const min = d.min_n || 30;
+  const grp = d.group || "core", W = groupWords(grp), noMoney = !!d.no_money || !W.money;
   const out = [viewHead({plate: "코인·시간대", q: "어느 코인, 어느 시간에 잘 됐나",
-    meta: `기존 36 매매법 계좌의 끝난 거래 ${fmt.int(d.trades)}건 · 칸마다 ${fmt.int(min)}건 미만은 결론 아님`, at: d.computed_at, stale: d.stale,
-    read: "진입한 때(한국 시간)로 나눈 성적입니다. 동전 봇 칸은 같은 기준의 우연 기준(참고)입니다.",
-    warn: [thin(d.trades, min, "끝난 거래")]})];
+    meta: `${W.who} 계좌의 끝난 거래 ${fmt.int(d.trades)}건${d.flip_trades != null ? ` · ${W.flips} ${fmt.int(d.flip_trades)}건` : ""} · 칸마다 ${fmt.int(min)}건 미만은 결론 아님`, at: d.computed_at, stale: d.stale,
+    read: `진입한 때(한국 시간)로 나눈 성적입니다. ${W.flips} 칸은 같은 기준의 우연 기준(참고)입니다.`,
+    warn: [thin(d.trades, min, "끝난 거래"),
+      noMoney ? h("p", {class: "an-read"}, ui.pill("돈 숫자 없음", "ref"), " 딥시크는 거래 수와 이긴 비율만 봅니다. 계좌별 목록도 없습니다.") : null]})];
   const tabs = [{id: "coin", label: "코인"}];
   if (d.sessions) tabs.push({id: "ses", label: "시간대"}, {id: "win", label: "특별 시간"}, {id: "wd", label: "요일"});
   if (d.volatility) tabs.push({id: "vol", label: "변동성 급등"});
   const body = h("div");
   const seg = dimSeg("bd", tabs, "coin", () => paint(true), true);
-  const c2 = (c) => cell(c ? {n: c.n, win_rate: c.win_rate, pnl: c.pnl, status: c.status} : null, min);
+  const c2 = (c) => cell(c ? {n: c.n, win_rate: c.win_rate, pnl: c.pnl, status: c.status} : null, min, noMoney);
+  const coinCols = grp === "core" ? {label: "코인"} : {label: "코인", a: W.short, b: `${W.flips} (참고)`};
   function paint(anim) {
     const k = seg.get();
     if (k === "coin") {
-      put(body, cmpList(Object.entries(d.by_coin || {}).map(([sym, c]) => ({label: fmt.coin(sym), a: c2(c.strategies), b: c2(c.coin_flips)})), {label: "코인"}),
-        h("div", {class: "an-best"}, h("b", null, "코인마다 잘 된 계좌 (10건 이상)"),
+      put(body, cmpList(Object.entries(d.by_coin || {}).map(([sym, c]) => ({label: fmt.coin(sym), a: c2(c.strategies), b: c2(c.coin_flips)})), coinCols),
+        noMoney ? null : h("div", {class: "an-best"}, h("b", null, "코인마다 잘 된 계좌 (10건 이상)"),
           Object.entries(d.by_coin || {}).some(([, c]) => (c.best || []).length)
             ? Object.entries(d.by_coin || {}).filter(([, c]) => (c.best || []).length).map(([sym, c]) => h("p", null, h("b", null, fmt.coin(sym)), " ",
               c.best.map((b, i) => [i ? " · " : "", h("a", {href: env.ctx.href("account", b.account)}, acctLabel(b.account)), " ", h("span", {class: fmt.tone(b.pnl)}, fmt.money(b.pnl, true))])))
@@ -85,7 +93,7 @@ export function sessions(d, env) {
   paint(false);
   out.push(ui.card({plate: "나눠 보기"}, seg.el, body,
     h("p", {class: "an-note"}, "설명용 표입니다. 이 표로 계좌 규칙을 바꾸지 않습니다. 패턴이 보이면 에이전트가 5년치로 시험하고, 통과하면 새 계좌로 비교합니다."),
-    ui.refNote(env.verdictTs), ui.assume()));
+    ui.refNote(env.verdictTs), noMoney ? null : ui.assume()));
   return out;
 }
 
