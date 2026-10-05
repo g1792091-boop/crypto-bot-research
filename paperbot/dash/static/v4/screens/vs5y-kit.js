@@ -8,7 +8,8 @@
 // unit, and the card says so.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 
-const WORD = {similar: ["비슷", "thin"], differs: ["다름", "warn"], fewer: ["적음", "thin"], small: ["표본 적음", "thin"]};
+// neutral pills only: 다름 is "look here", never a warning or a fail (a live number above the research is 다름 too)
+const WORD = {similar: ["비슷", "thin"], differs: ["다름", ""], fewer: ["적음", "thin"], small: ["표본 적음", "thin"]};
 const ROWS = [
   {k: "per_day", ko: "하루 거래", fmt: (v) => fmt.num(v, v != null && v < 10 ? 2 : 1)},
   {k: "roe", ko: "거래당 ROE", fmt: (v) => (v == null ? "—" : fmt.pct(v, 2))},

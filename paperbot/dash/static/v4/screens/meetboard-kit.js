@@ -80,7 +80,8 @@ export function meetBoard(ctx, o = {}) {
   function render() {
     const d = st.d;
     if (st.gone) { put(list, ui.empty("회의 결론 보고판은 서버를 고친 뒤 보입니다")); put(foot); return; }
-    if (!d) return;
+    // a failed first answer: say so with a retry (never a shimmer that runs forever); a later failure keeps the last answer
+    if (!d) { if (st.err) put(list, ui.errorBox(st.err, () => { put(list, motion.shimmer(3)); reload(); })); return; }
     nMeet.update(d.n || 0); nDec.update(d.decided || 0); nDis.update(d.split || 0);
     const first = st.seen === null;
     const seen = st.seen || new Set();
@@ -97,7 +98,10 @@ export function meetBoard(ctx, o = {}) {
     put(foot, d.more ? h("a", {class: "mb-more", href: ctx.href("digest", "day")}, `오늘 끝난 회의 ${fmt.int(d.finished)}개 중 ${fmt.int(d.more)}개 더 보기 →`) : null);
   }
 
-  feed(ctx, (d, gone) => { if (gone) st.gone = true; else if (d) st.d = d; render(); });
+  const reload = feed(ctx, (d, gone, err) => {
+    if (gone) st.gone = true; else if (d) { st.d = d; st.err = null; } else st.err = err || true;
+    render();
+  });
   card.office = (of) => { st.office = of || null; renderNow(); if (st.d && !(st.d.lines || []).length) render(); };
   return card;
 }
