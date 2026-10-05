@@ -219,6 +219,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-t .nm { min-width: 150px; }
 .term-t .nm a { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); text-decoration: none; max-width: 230px; overflow: hidden; }
 .term-t .nm a:hover .an-n { text-decoration: underline; }
+.term-t .nm a .an-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-t .side { padding: 1px 6px; font-size: var(--t-xs); }
 .term-t .an-tf { font-size: var(--t-2xs); padding: 0 3px; line-height: 1.4; }
 .term-coin { border: 0; background: none; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); padding: 2px 4px; border-radius: 3px; cursor: pointer; }
@@ -227,9 +228,10 @@ a.term-fr:hover { background: var(--surface-2); }
 /* ---------------------------------------------------------------- right column */
 .term-mine { flex: 1 1 0; min-height: 96px; }
 .term-mine .term-pb { padding: 2px 6px; }
-.term-cr { display: grid; grid-template-columns: 28px minmax(0, 1fr) 30px 52px 60px; gap: 4px; align-items: center; padding: 4px 2px; border-bottom: 1px solid var(--line);
+.term-cr { display: grid; grid-template-columns: 28px minmax(0, 1fr) 36px 58px 74px; gap: 4px; align-items: center; padding: 4px 2px; border-bottom: 1px solid var(--line);
   color: inherit; text-decoration: none; }
-.term-cr.hd { color: var(--muted); font-size: var(--t-xs); padding-block: 2px; }
+.term-cr.hd { color: var(--muted); font-size: var(--t-xs); padding-block: 2px; white-space: nowrap; }
+.term-cr.hd > span { overflow: hidden; text-overflow: ellipsis; }
 .term-cr.hd > span:nth-child(n+3) { text-align: right; }
 a.term-cr:hover { background: var(--surface-2); }
 .term-cr .side { padding: 1px 4px; font-size: var(--t-xs); justify-self: start; }
@@ -314,6 +316,12 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
   .term-mine { min-height: 150px; }
   .term-pnl .note { display: none; }
+}
+/* 1200-1439 px: slimmer side columns and no leverage column (the fills feed and the account page still show it), so
+   the table keeps P&L, ROE and the liquidation price in view at the bigger type */
+@media (max-width: 1439px) {
+  .term-grid { grid-template-columns: 272px minmax(0, 1fr) 304px; }
+  .term-t .xn { display: none; }
 }
 /* a tablet or a narrow PC window (760-1199 px): the chart and the table first, then the two side columns, page scroll */
 @media (max-width: 1199px) {
