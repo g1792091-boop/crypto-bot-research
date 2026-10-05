@@ -154,6 +154,8 @@ button.flc-c:hover { border-color: var(--line-2); transform: translateY(-1px); }
 .flc-acct .go { display: none; }
 .flc-pnl { margin: 0; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: var(--t-sm); }
 .flc-pnl b.up { color: var(--up); } .flc-pnl b.down { color: var(--down); }
+.flc-links { gap: 8px; }
+.flc-links .btn-line { min-height: 36px; }
 @media (prefers-reduced-motion: reduce) { button.flc-c, .flc-c::before, .flc-bar .b { transition: none; } }
 .fl-clip { margin: -6px 0 0; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
 .fl-clip b { color: var(--ink); }

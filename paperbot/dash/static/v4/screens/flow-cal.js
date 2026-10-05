@@ -6,6 +6,7 @@
 // never a zero; today is marked 진행 중; one day is mostly luck and the card says so; DeepSeek accounts carry 참고.
 import {h, s, put, ui, fmt, motion, local} from "../core/pb.js";
 import {LANES, SHORT} from "./flow-kit.js";
+import {nav as storyNav} from "./story-kit.js";
 
 export const CAL_API = "/api/v4/flow/calendar";
 const WD = ["월", "화", "수", "목", "금", "토", "일"];
@@ -151,6 +152,15 @@ export function calendar(ctx) {
     }));
   }
 
+  /** The picked day elsewhere: its highlight story (#/story/<YYYY-MM-DD>; closing the story comes back here) and its
+   *  meeting conclusions (#/digest/day?d=<YYYY-MM-DD>). */
+  function dayLinks(day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) return null;
+    return h("div", {class: "row wrap flc-links"},
+      h("a", {class: "btn-line", href: ctx.href("story", day), onclick: () => { storyNav.from = location.hash || ctx.href("flow"); }}, "그날 하이라이트"),
+      h("a", {class: "btn-line", href: ctx.href("digest", "day", {d: day})}, "그날 회의 결론"));
+  }
+
   function showDay(user) {
     const c = st.cal;
     const d = c && (c.days || []).find((x) => x.d === st.day);
@@ -160,7 +170,8 @@ export function calendar(ctx) {
     const when = h("div", {class: "flc-dh"}, h("b", null, fmt.date(d.ts)), h("span", {class: "muted"}, `${fmt.int(d.i + 1)}일째`),
       d.state === "today" ? ui.pill(`진행 중 · ${fmt.hm(c.now)}까지`, "accent") : null);
     if (!x) {
-      put(detail, when, h("p", {class: "flc-nodata"}, d.state === "empty" ? "이날은 잔고 기록이 없습니다 (봇이 멈췄거나 기록 전). 0으로 채우지 않습니다." : "이 묶음은 이날 기록이 없습니다."));
+      put(detail, when, h("p", {class: "flc-nodata"}, d.state === "empty" ? "이날은 잔고 기록이 없습니다 (봇이 멈췄거나 기록 전). 0으로 채우지 않습니다." : "이 묶음은 이날 기록이 없습니다."),
+        dayLinks(d.d));
       if (user) motion.swap(detail);
       return;
     }
@@ -181,7 +192,8 @@ export function calendar(ctx) {
         ui.stat("강제청산", fmt.int(x.liq), x.busts ? h("span", {class: "s down"}, `파산 ${fmt.int(x.busts)}`) : h("span", {class: "s"}, "파산 0"))),
       one ? acct("그날 계좌", best) : h("div", {class: "flc-accts"}, acct("가장 많이 오른 계좌", best), acct("가장 많이 내린 계좌", worst)),
       h("p", {class: "flc-pnl"}, h("span", {class: "muted"}, "그날 닫힌 거래 손익 합"), h("b", {class: ["num", fmt.tone(x.pnl)]}, fmt.usdt(x.pnl, true))),
-      ui.assume("closed", "계좌 변화 = 그날 끝 잔고 ÷ 전날 끝 잔고"));
+      ui.assume("closed", "계좌 변화 = 그날 끝 잔고 ÷ 전날 끝 잔고"),
+      dayLinks(d.d));
     if (user) motion.swap(detail);
   }
 
