@@ -71,35 +71,13 @@ export function vaultNotes(S) {
   const hours = Object.entries(B.hours || {}).filter(([, h]) => h.n >= 3).map(([hr, h]) => `| ${hr}시 | ${h.n} | ${Math.round(h.wins / h.n * 100)}% | ${h.pnl.toFixed(2)} |`).join("\n");
   out["리스크/학습된 리스크·시간대.md"] = `# 학습된 리스크·시간대\n[[00 홈]] · [[리스크/정책]]\n\n## 시간대별 성적\n| 시간 | 거래 | 승률 | 손익$ |\n|---|---|---|---|\n${hours || "| — | | | |"}\n\n## 손절 함정 (비슷한 자리 회피)\n` + ((B.traps || []).slice(0, 30).map(t => `- ${esc(t.coin || "")} ${esc(t.regime || "")} ${t.dir > 0 ? "롱" : "숏"} ROE ${t.roe ?? ""}`).join("\n") || "- (없음)");
   { const mem = B.mem || [], st = B.st || {}, C = n.calls || {}, ln = (t) => mem.filter(m => m.type === t).slice(0, 12).map(m => `- ${esc(m.text)} _(강도 ${m.w} · ${m.hits}회)_`).join("\n") || "- 아직 없음";
-    { const H = n.hold, M = n.mood, A = n.adj;
-      out["뇌/관망 규칙·감정·조정 채점.md"] = `# 🧘 관망 규칙집 · 🎭 감정 · 🗂 익절·손절 조정
-[[00 홈]]
-
-`
-        + (M ? `## 데스크 감정 (코드 계산)
-- 공포 ${M.fear}/10 · 탐욕 ${M.greed}/10 · 피로 ${M.fatigue}/10(${M.L}연패) · 확신 ${M.conf}/10${n.fng ? ` · 공포탐욕지수 ${n.fng.v}(${n.fng.label}, 어제 ${n.fng.y ?? "?"})` : ""}
-${(M.notes || []).map(x => "- " + x).join("
-")}
-
-` : "")
-        + (H ? `## 관망 규칙집 v${H.ver}
-${(H.rules || []).map(r => `- ${r.on ? "✅" : "⬜"} ${r.on ? r.text : r.label}${r.score?.n ? ` (관망 채점: 손절 먼저 ${r.score.right}/${r.score.n})` : ""}`).join("
-")}
-
-`
-          + (H.eval ? `지난 점검: 데스크 재연 ${H.eval.base.all.n}건 평균 ${H.eval.base.all.mean}R · 전반 ${H.eval.base.h1.mean} / 후반 ${H.eval.base.h2.mean}
-
-` : "")
-          + `### 변경 이력
-${(H.log || []).map(x => `- ${new Date(x.t).toLocaleString("ko-KR")} v${x.ver} ${x.kind} (${x.src}): ${x.e} — ${x.why}`).join("
-") || "- 아직 없음"}
-
-` : "")
-        + (A ? `## 익절·손절 조정 채점 (조정 안 했다면과 비교한 ΔR)
-${Object.entries(A.stat || {}).map(([k, v]) => `- ${k}: ${v.n}건 누적 ${v.dR}R`).join("
-") || "- 아직 없음"}${A.off ? "
-- ⛔ AI 가격 조정 일시 중지 중(손해 누적)" : ""}
-` : ""); }
+    { const H = n.hold, M = n.mood, A = n.adj, NL = "\n";
+      out["뇌/관망 규칙·감정·조정 채점.md"] = `# 🧘 관망 규칙집 · 🎭 감정 · 🗂 익절·손절 조정${NL}[[00 홈]]${NL}${NL}`
+        + (M ? `## 데스크 감정 (코드 계산)${NL}- 공포 ${M.fear}/10 · 탐욕 ${M.greed}/10 · 피로 ${M.fatigue}/10(${M.L}연패) · 확신 ${M.conf}/10${n.fng ? ` · 공포탐욕지수 ${n.fng.v}(${n.fng.label}, 어제 ${n.fng.y ?? "?"})` : ""}${NL}${(M.notes || []).map(x => "- " + x).join(NL)}${NL}${NL}` : "")
+        + (H ? `## 관망 규칙집 v${H.ver}${NL}${(H.rules || []).map(r => `- ${r.on ? "✅" : "⬜"} ${r.on ? r.text : r.label}${r.score?.n ? ` (관망 채점: 손절 먼저 ${r.score.right}/${r.score.n})` : ""}`).join(NL)}${NL}${NL}`
+          + (H.eval ? `지난 점검: 데스크 재연 ${H.eval.base.all.n}건 평균 ${H.eval.base.all.mean}R · 전반 ${H.eval.base.h1.mean} / 후반 ${H.eval.base.h2.mean}${NL}${NL}` : "")
+          + `### 변경 이력${NL}${(H.log || []).map(x => `- ${new Date(x.t).toLocaleString("ko-KR")} v${x.ver} ${x.kind} (${x.src}): ${x.e} — ${x.why}`).join(NL) || "- 아직 없음"}${NL}${NL}` : "")
+        + (A ? `## 익절·손절 조정 채점 (조정 안 했다면과 비교한 ΔR)${NL}${Object.entries(A.stat || {}).map(([k, v]) => `- ${k}: ${v.n}건 누적 ${v.dR}R`).join(NL) || "- 아직 없음"}${A.off ? NL + "- ⛔ AI 가격 조정 일시 중지 중(손해 누적)" : ""}${NL}` : ""); }
     out["뇌/핵심 규칙·교훈·추천 채점.md"] = `# 🧠 뇌가 진입 전에 쓰는 것\n[[00 홈]] · 누적: 교훈 ${st.lessons || 0} · 함정 ${st.traps || 0} · 승격 ${st.promoted || 0} · 진입 차단 ${st.avoided || 0} · 리스크 절반 ${st.softened || 0} · 망각 ${st.forgot || 0}\n\n## 핵심 규칙 (같은 결과 3회↑)\n${ln("핵심")}\n\n## 교훈\n${ln("교훈")}\n\n## ⚡ 손매매 추천 채점 (시장가 · 실시간 진입)\n익절1 먼저 ${C.wr ?? "—"}% · 채점 ${C.done || 0}건 · 합계 ${C.sumR || 0}R · 추적 중 ${C.open || 0}\n\n| 코인 | 방향 | 출처 | 등급 | 결과 | R |\n|---|---|---|---|---|---|\n`
       + (C.list || []).map(c => `| ${c.ko} | ${c.side > 0 ? "롱" : "숏"} | ${c.src} | ${c.grade || ""} | ${c.res || "추적 중"} | ${c.R ?? ""} |`).join("\n"); }
   out["프롬프트/차트 분석 프롬프트.md"] = `# 차트 분석 프롬프트 (Claude Code · Claudian · OpenClaw 에서 그대로 붙여 쓰기)

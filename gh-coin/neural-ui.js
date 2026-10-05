@@ -7,6 +7,8 @@ const money = (v) => (v >= 0 ? "+" : "−") + "$" + Math.abs(v).toLocaleString(u
 const ago = (t) => { const s = (Date.now() - t) / 1000 | 0; return s < 60 ? s + "s" : (s / 60 | 0) + "m"; };
 const fmtp = (v) => v == null ? "–" : v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? (+v).toFixed(2) : (+v).toPrecision(4);
 
+// 피드 기록은 neural.js 의 note() 로(예전엔 여기서 정의 안 된 feed() 를 불러 버튼마다 "feed is not defined" 오류)
+const feed = (t) => { try { N?.note?.(t); } catch (e) { console.warn(e); } };
 export async function openNeural(ctx = {}) {
   N = await import("./neural.js");
   close();

@@ -202,6 +202,7 @@ export function load() {
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...S, trades: S.trades.slice(0, 80), feed: S.feed.slice(0, 40) })); } catch (e) {} }
 export function reset() { const keep = S?.eng?.stats, hb = S?.hold; S = blank(); if (keep) S.eng.stats = keep; S.hold = HR.normBook(hb); save(); return S; }   // 자본만 초기화(전략 검증 기록은 유지)
 const feed = (t) => { S.feed.unshift({ t: Date.now(), text: t }); if (S.feed.length > 40) S.feed.pop(); };
+export function note(t) { load(); feed(String(t)); save(); }   // 화면(neural-ui)에서 버튼 결과를 피드에 남길 때
 
 // 💵 자금·낙폭 방어
 export function equity() { return +(BANKROLL + (S?.pnl || 0)).toFixed(2); }

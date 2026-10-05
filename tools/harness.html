@@ -42,6 +42,18 @@ try {
     await T._term()._marketEntry(); await new Promise(r => setTimeout(r, 1500));
     const pn = document.querySelector(".nt-mkt"); if (pn) { pn.style.maxHeight = "none"; const sec = [...pn.querySelectorAll(".nt-mkt-sec")].find(x => x.textContent.includes("시간봉별")); sec?.scrollIntoView({block: "start"}); }
     document.title = "DONE"; await new Promise(r => setTimeout(r, 60e3)); }
+  if (q === "click") {   // 뉴럴 데스크 버튼을 실제로 눌러 오류·설정 반영 확인 + 뉴트론 스냅샷·볼트 노트 생성
+    const errs = []; addEventListener("error", e => errs.push(String(e.message))); addEventListener("unhandledrejection", e => errs.push(String(e.reason?.message || e.reason)));
+    const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 5000));
+    const N = await import("../gh-coin/neural.js"), got = [];
+    for (const [attr, val] of [["data-sty", "swing"], ["data-tpm", "bal"], ["data-levm", "min"], ["data-sty", "auto"], ["data-tpm", "ev"], ["data-levm", "fw"]]) {
+      const b = document.querySelector(`[${attr}="${val}"]`); if (!b) { got.push(attr + "=" + val + " 버튼 없음"); continue; }
+      b.click(); await new Promise(r => setTimeout(r, 400)); const c = N.cfg(); const on = document.querySelector(`[${attr}="${val}"]`)?.classList.contains("on");
+      got.push(`${attr}=${val} → cfg ${c.style}/${c.tpMode}/${c.levMode} · 화면 ✓ ${on}`); }
+    out.clicks = got; out.feed = N.state().feed.slice(0, 6).map(f => f.text);
+    const NT = await import("../gh-coin/neutron.js"), snap = await NT.snapshot(), notes = NT.vaultNotes(snap);
+    out.neutron = {hold: !!snap.neural?.hold, mood: !!snap.neural?.mood, notes: Object.keys(notes).length, holdNote: (notes["뇌/관망 규칙·감정·조정 채점.md"] || "").slice(0, 300)};
+    out.errs = errs; }
   if (q === "ui") {   // 뉴럴 데스크 화면을 띄우고 &find=글자 가 있는 줄로 스크롤 → 스크린샷용
     const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 9000));
     const f = new URLSearchParams(location.search).get("find"); if (f) { const el = [...document.querySelectorAll(".nsub")].find(e => e.textContent.includes(f)); el?.scrollIntoView({ block: "start" }); out.found = !!el; }
