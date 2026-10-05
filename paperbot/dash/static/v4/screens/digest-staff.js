@@ -8,6 +8,22 @@ import {avatarFor, ACTION_KO, VERDICT_KO} from "./rooms-kit.js";
 const TEAM_KO = {market: "시장분석", plan: "매매 계획", risk: "리스크", ops: "운영·검증", dev: "개발", lead: "총괄", review: "손익 복기",
   evolve: "자기진화", compare: "비교분석", timing: "타점분석", safety: "안전·실거래", specialist: "매매법 전담"};
 
+/** 동의 / 반대 / 보완 shares of one staff member's replies (r.agree / r.disagree / r.add): [{k, n, w}] with w the
+ *  share in % (one decimal), or null when there is no reply yet. Counts only. */
+export function reactShares(r) {
+  const parts = [["agree", "동의"], ["disagree", "반대"], ["add", "보완"]].map(([k, ko]) => ({k, ko, n: Math.max(0, Number((r || {})[k]) || 0)}));
+  const tot = parts.reduce((a, x) => a + x.n, 0);
+  if (!tot) return null;
+  return parts.map((x) => ({...x, w: Math.round((x.n / tot) * 1000) / 10}));
+}
+/** The one-line colour bar of the replies (teal agree, pink disagree, yellow add; the same tokens in both skins). */
+function reactBar(r) {
+  const sh = reactShares(r);
+  if (!sh) return h("span", {class: "dg-rbar none"}, h("span", {class: "dg-rbar-t muted"}, "반응 아직 없음"));
+  return h("span", {class: "dg-rbar", role: "img", "aria-label": `반응 ${sh.map((x) => `${x.ko} ${x.n}`).join(" · ")}`},
+    h("span", {class: "dg-rbar-l", "aria-hidden": "true"}, sh.filter((x) => x.n).map((x) => h("i", {class: x.k, style: {"--w": `${x.w}%`}, title: `${x.ko} ${x.n}`}))));
+}
+
 export function makeStaff(ctx) {
   const st = {days: 7, d: null, req: 0};
   const seg = ui.seg([{id: "1", label: "하루"}, {id: "7", label: "7일"}, {id: "30", label: "30일"}], "7", (v) => { st.days = +v; load(); }, {label: "기간"});
@@ -28,6 +44,7 @@ export function makeStaff(ctx) {
       h("span", {class: "lname"}, s.name, h("small", {class: "muted"}, ` ${TEAM_KO[s.team] || ""}`)),
       h("span", {class: "ret"}, `발언 ${fmt.int(s.turns)}`),
       h("span", {class: "meta"},
+        reactBar(r),
         h("span", null, `회의 ${fmt.int(s.meetings)}`),
         h("span", null, `반응 동의 ${fmt.int(r.agree || 0)} · `, h("span", {class: r.disagree ? "down" : ""}, `반대 ${fmt.int(r.disagree || 0)}`), ` · 보완 ${fmt.int(r.add || 0)}`),
         h("span", null, `받은 반대 ${fmt.int(rb.disagree || 0)}`),
@@ -83,7 +100,10 @@ export function makeStaff(ctx) {
     grades.set(d.recent_grades || [], true);
     note.textContent = d.note || "";
     if (!tiles.isConnected) put(body, tiles,
-      ui.card({plate: "직원별", sub: "발언이 있는 직원만 · 10명씩"}, list.el),
+      ui.card({plate: "직원별", sub: "발언이 있는 직원만 · 10명씩"},
+        h("p", {class: "dg-rkey"}, h("span", null, "색 막대 = 이 직원이 남의 말에 한 반응"),
+          h("span", null, h("i", {class: "agree"}), "동의"), h("span", null, h("i", {class: "disagree"}), "반대"), h("span", null, h("i", {class: "add"}), "보완")),
+        list.el),
       debateBox,
       ui.card({plate: "최근 채점된 예측", sub: "가설을 쓴 뒤 들어간 거래로 코드가 판정"}, grades.el), note);
   }

@@ -10,16 +10,35 @@ const dayKeyNow = () => fmt.dayKey(serverNow());
 const shift = (day, n) => fmt.dayKey(Date.parse(`${day}T12:00:00+09:00`) + n * 86400000);
 const dayMs = (day) => Date.parse(`${day}T12:00:00+09:00`);
 
+/** The kinds of a day's meetings by trigger, most first: [{id, ko, n}]. */
+export function meetingKinds(ms) {
+  const by = new Map();
+  for (const m of ms || []) {
+    const k = m.trigger || "";
+    if (!by.has(k)) by.set(k, {id: k, ko: triggerKo(m) || "기타", n: 0});
+    by.get(k).n++;
+  }
+  return [...by.values()].sort((a, b) => b.n - a.n);
+}
+/** The meetings of one kind ("" = every kind), only the decided ones (status "done") when decided. */
+export const filterMeetings = (ms, kind, decided) =>
+  (ms || []).filter((m) => (!kind || (m.trigger || "") === kind) && (!decided || m.status === "done"));
+
 export function makeDay(ctx) {
-  const st = {day: dayKeyNow(), d: null, open: new Set(), msgs: new Map(), req: 0, roles: {}};
+  const st = {day: dayKeyNow(), d: null, open: new Set(), msgs: new Map(), req: 0, roles: {}, ms: [], kind: "", decided: false};
   const label = h("b", {class: "dg-dlabel"});
   const prev = h("button", {class: "btn-line", type: "button", "aria-label": "전날", onclick: () => go(shift(st.day, -1))}, "←");
   const next = h("button", {class: "btn-line", type: "button", "aria-label": "다음 날", onclick: () => go(shift(st.day, 1))}, "→");
   const today = h("button", {class: "btn-line", type: "button", onclick: () => go(dayKeyNow())}, "오늘");
   const sumLine = h("p", {class: "dg-sum"});
-  const pager = ui.pager({size: 10, empty: "이날 열린 회의가 없습니다", row: (m) => row(m)});
+  const pager = ui.pager({size: 10, empty: "아직 없음", row: (m) => row(m)});
+  // filters: the meeting kind (meetings[].trigger: 아침 회의, 손실 묶음 복기, 새 매매법 연구, 순위 검토, 봉 비교 회의 ...)
+  // and 결정 난 것만 (status "done"); per visit, the day's own kinds only
+  const chipBox = h("div", {class: "dg-chips", hidden: true});
+  const decidedBtn = h("button", {class: "dg-chip dg-decided", type: "button", "aria-pressed": "false",
+    onclick: () => { st.decided = !st.decided; decidedBtn.setAttribute("aria-pressed", String(st.decided)); paintList(false); }}, "결정 난 것만");
   const body = h("div", {class: "dg-dbody"}, motion.shimmer(4));
-  const el = h("div", {class: "dg-day stack"}, h("div", {class: "dg-nav"}, prev, label, next, today), sumLine, body,
+  const el = h("div", {class: "dg-day stack"}, h("div", {class: "dg-nav"}, prev, label, next, today), sumLine, chipBox, body,
     h("p", {class: "rk-note"}, "최신 회의가 위. 결론 요약과 숫자는 코드가 정리한 것이고, 발언 전문은 '방 열기'에서 봅니다. 단계는 실제로 말한 차례만 켜집니다."));
 
   function go(day) { if (day > dayKeyNow()) return; ctx.go("digest", "day", day === dayKeyNow() ? null : {d: day}); }
@@ -123,17 +142,34 @@ export function makeDay(ctx) {
     if (req !== st.req || !ctx.alive()) return;
     const same = st.d && JSON.stringify(st.d.meetings) === JSON.stringify(d.meetings);
     st.d = d;
-    if (d.error) { body.replaceChildren(ui.empty(String(d.error))); sumLine.textContent = ""; return; }
+    if (d.error) { body.replaceChildren(ui.empty(String(d.error))); sumLine.textContent = ""; st.ms = []; paintChips(); return; }
     const ms = (d.meetings || []).slice().reverse();
-    const kinds = Object.entries(d.by_trigger || {}).sort((a, b) => b[1].meetings - a[1].meetings).map(([tr, k]) => `${triggerKo({trigger: tr, trigger_ko: k.trigger_ko})} ${fmt.int(k.meetings)}`).join(" · ");
+    // the kinds of meeting are the chips under this line (counts on each chip)
     const disOpen = ms.filter((m) => m.open_disagreement).length;
     put(sumLine,"회의 ", h("b", null, fmt.int(d.n || 0)), " · 갈린 채 끝남 ", h("b", null, fmt.int(disOpen)),
       " · 직원끼리 반대 ", h("b", null, fmt.int(d.disagreements || 0)), " · AI 호출 ", h("b", null, fmt.int(d.calls || 0)),
-      ` · 토큰 ${fmt.compact(d.tokens || 0)}`, kinds ? h("span", {class: "muted"}, ` · ${kinds}`) : null);
+      ` · 토큰 ${fmt.compact(d.tokens || 0)}`);
     if (!pager.el.isConnected) body.replaceChildren(pager.el);
-    if (!same) pager.set(ms, true);
+    st.ms = ms;
+    if (!same) { paintChips(); paintList(true); }
     const target = query && query.r ? el.querySelector(`.dg-row[data-round="${window.CSS.escape(String(query.r))}"]`) : null;
     if (target) requestAnimationFrame(() => target.scrollIntoView({block: "start", behavior: motion.reduced() ? "auto" : "smooth"}));
+  }
+
+  // ---------------------------------------------------------------- kind chips + 결정 난 것만
+  function paintChips() {
+    const kinds = meetingKinds(st.ms);
+    if (st.kind && !kinds.some((k) => k.id === st.kind)) st.kind = "";
+    chipBox.hidden = !st.ms.length;
+    if (!st.ms.length) { chipBox.replaceChildren(); return; }
+    const chip = (id, label, n) => h("button", {class: "dg-chip", type: "button", "aria-pressed": String(st.kind === id),
+      onclick: () => { st.kind = id; paintChips(); paintList(false); }}, label, h("small", {class: "num"}, fmt.int(n)));
+    chipBox.replaceChildren(h("div", {class: "dg-chiprow", role: "group", "aria-label": "회의 종류"},
+      chip("", "전부", st.ms.length), ...kinds.map((k) => chip(k.id, k.ko, k.n))), decidedBtn);
+  }
+  /** keep: a refresh of the same filter (stay on the page); a filter change starts at page 1. */
+  function paintList(keep) {
+    pager.set(filterMeetings(st.ms, st.kind, st.decided), keep);
   }
 
   return {el, show: load, refresh: () => { if (st.day === dayKeyNow()) load({d: st.day}); }, setRoles(r) { st.roles = r || {}; }};

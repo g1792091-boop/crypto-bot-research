@@ -63,3 +63,28 @@
 [data-screen="digest"] .dg-full { margin: 6px 0 0; padding: 10px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font: 400 var(--t-xs)/1.6 var(--f-term); white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-screen="digest"] .dg-tfrow .lname a { color: var(--ink); text-decoration: none; }
 [data-screen="digest"] .dg-in .disclosure .linkish, [data-screen="digest"] .card .disclosure .linkish { font-size: var(--t-xs); }
+
+/* 다듬기 7-2: the conclusions tab's kind chips + 결정 난 것만, and the staff reply bar (teal agree / pink disagree /
+   yellow add: --term-cyan / --down / --term-yellow exist in both skins) */
+[data-screen="digest"] .dg-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+[data-screen="digest"] .dg-chips[hidden] { display: none; }
+[data-screen="digest"] .dg-chiprow { display: flex; gap: 6px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+[data-screen="digest"] .dg-chip { appearance: none; flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); cursor: pointer; white-space: nowrap; }
+[data-screen="digest"] .dg-chip small { color: var(--muted); font-weight: 700; }
+[data-screen="digest"] .dg-chip[aria-pressed="true"] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--ink); }
+[data-screen="digest"] .dg-chip[aria-pressed="true"] small { color: var(--accent); }
+[data-screen="digest"] .dg-decided { border-style: dashed; }
+[data-screen="digest"] .dg-rbar { flex: 1 0 100%; display: flex; align-items: center; min-width: 0; }
+[data-screen="digest"] .dg-rbar-l { display: flex; width: 100%; max-width: 360px; height: 6px; border-radius: 6px; overflow: hidden; background: var(--surface-3); }
+[data-screen="digest"] .dg-rbar-l i { display: block; flex: 0 0 var(--w); height: 100%; }
+[data-screen="digest"] .dg-rbar-l i + i { box-shadow: -1px 0 0 var(--surface); }
+[data-screen="digest"] .dg-rbar-l i.agree { background: var(--term-cyan); }
+[data-screen="digest"] .dg-rbar-l i.disagree { background: var(--down); }
+[data-screen="digest"] .dg-rbar-l i.add { background: var(--term-yellow); }
+[data-screen="digest"] .dg-rbar-t { font-size: var(--t-xs); }
+[data-screen="digest"] .dg-rkey { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--muted); font-size: var(--t-xs); }
+[data-screen="digest"] .dg-rkey i { display: inline-block; width: 10px; height: 6px; margin-right: 4px; border-radius: 3px; vertical-align: 1px; }
+[data-screen="digest"] .dg-rkey i.agree { background: var(--term-cyan); }
+[data-screen="digest"] .dg-rkey i.disagree { background: var(--down); }
+[data-screen="digest"] .dg-rkey i.add { background: var(--term-yellow); }
