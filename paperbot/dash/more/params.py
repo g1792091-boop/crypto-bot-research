@@ -217,8 +217,8 @@ def _core(strategy: str, doc: dict) -> dict:
         "meaning_ko": (f"돈을 버는 '마법의 숫자'는 찾지 못했습니다. 36개 매매법 전체로 변형 {study['variants']:,}개 중 세 기간 "
                        f"모두 플러스는 {study['positive_all3']}개였고, 이 수는 '숫자는 결과와 상관없다'고 가정해도 우연히 "
                        f"나오는 만큼입니다. 특정 숫자에서만 좋은 뾰족한 곳은 {study['shapes']['sharp']}개였습니다."),
-        "positive_note_ko": ("세 기간 모두 플러스인 변형이 있어도 대부분 이웃 숫자는 플러스가 아닌 외딴 점이고 거래가 적은 칸에서 "
-                             "나왔습니다. 그래서 채택하지 않았습니다 (사전 등록 규칙)."),
+        "positive_note_ko": ("36개 전체로 보면 세 기간 모두 플러스였던 변형은 대부분 이웃 숫자가 플러스가 아닌 외딴 점이었고, "
+                             "그 수도 우연 수준이라 사전 등록 규칙대로 어느 변형도 채택하지 않았습니다."),
         "source": "paperbot/agents/research_prior.json (research/entry_study, RESULTS_ENTRY_BC.md C)",
     }
 
