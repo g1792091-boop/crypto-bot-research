@@ -4,6 +4,8 @@
 // numbers are '중간 숫자' with refNote. Shadow curves come from the server only; with none it says 수집 전.
 import {h, put, ui, fmt, motion, makeChart, tok} from "../core/pb.js";
 import {viewHead, thin, dimSeg, acctLabel} from "./analysis-kit.js";
+import {limitEntry} from "./analysis-limit.js";
+import {driftCard} from "./analysis-drift.js";
 
 const GKO = {best: "좋은 자리", normal: "보통"};
 const rp = (x) => (x == null ? "—" : `${fmt.num(x * 100, 3, true)}%`);       // per unit of exposure, small numbers
@@ -94,6 +96,7 @@ export function shadows(d, env) {
     out.push(ui.card({plate: "규칙별"}, seg.el, body));
   }
   out.push(shadowCurves(d, env));
+  { const lim = limitEntry(d); if (lim) out.push(lim); out.push(driftCard(env)); }     // ana8B: entry cost cards
   if (d.note) out.push(h("p", {class: "an-note an-foot"}, d.note));
   return out;
 }
@@ -227,12 +230,13 @@ export function ghcoin(d, env) {
 }
 
 // ---------------------------------------------------------------- 45개 질문 (feature; /api/analysis/questions)
-const QST = {done: ["답 있음", "good"], partial: ["일부", "accent"], todo: ["아직", "thin"], na: ["해당 없음", ""]};
+const QST = {done: ["답 있음", "good"], partial: ["일부", "accent"], todo: ["아직", "thin"], na: ["해당 없음", ""], checking: ["확인 중", "thin"]};
 export function questions(d) {
   const c = d.counts || {};
   const out = [viewHead({plate: "45개 질문", q: `질문 ${fmt.int(d.total || 0)}개 점검표`, meta: [d.source ? `출처 ${d.source}` : null, d.updated].filter(Boolean).join(" · "),
-    read: "질문마다 지금 답이 있는지 표시합니다: 답 있음 · 일부 · 아직 · 해당 없음."})];
+    read: "질문마다 지금 답이 있는지 표시합니다: 답 있음 · 일부 · 아직 · 해당 없음 · 확인 중. 일부 = 기존 36만 답하거나 한쪽만 답함."})];
   out.push(h("div", {class: "stats s4"}, ui.stat("답 있음", fmt.int(c.done || 0)), ui.stat("일부", fmt.int(c.partial || 0)), ui.stat("아직", fmt.int(c.todo || 0)), ui.stat("해당 없음", fmt.int(c.na || 0))));
+  if (c.checking) out.push(h("p", {class: "an-note"}, `확인 중 ${fmt.int(c.checking)}개: 코드로 아직 확인하지 못한 질문 (추측해서 표시하지 않음).`));
   const pg = ui.pager({size: 10, row: (q) => h("div", {class: "lrow an-row", role: "listitem"}, h("span", {class: "rk"}, `${q.n}.`),
     h("span", {class: "lname an-wrap"}, q.q), h("span", {class: "ret"}, ui.pill(...(QST[q.status] || QST.todo))),
     h("span", {class: "meta"}, q.group ? h("span", null, q.group) : null, q.where ? h("span", null, `어디서: ${q.where}`) : null, q.note ? h("span", null, q.note) : null))});

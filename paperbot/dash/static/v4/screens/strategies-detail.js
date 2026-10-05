@@ -11,6 +11,7 @@ import {stratChart, loadView} from "./strategies-chart.js";
 import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "./strategies-panels.js";
 import {profileCard} from "./grid-kit.js";
 import {reelDuel} from "./reel-duel.js";
+import {stratShadows} from "./strategies-shadows.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -99,6 +100,7 @@ export function detailView(ctx, st, name) {
 
   const left = h("div", {class: "strat-col"}, chartCard, condCard, sigCard);
   const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, profCard, lossCardEl);
+  { const ss = stratShadows(ctx, name, kind); if (ss) right.append(ss); }     // ana8B: this strategy's shadows + 5-year cells
   const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers

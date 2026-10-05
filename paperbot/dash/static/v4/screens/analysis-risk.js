@@ -3,6 +3,7 @@
 // HONESTY: the readiness marks are neutral words (충족 / 아님 / 판단 전), never green ✓ / red ✕; money has assume().
 import {h, put, ui, fmt} from "../core/pb.js";
 import {viewHead, thin, pp, acctLabel, shareBar, dimSeg} from "./analysis-kit.js";
+import {streakCard} from "./analysis-streak.js";
 
 const EXIT_KO = {LOCK: "익절 잠금", SL: "손절", LIQ: "강제청산", other: "기타 (시간·정지 등)"};
 
@@ -63,6 +64,7 @@ export function risk(d, env) {
       s.p_bust_max ? h("span", null, `파산 확률 ${fmt.pct(s.p_bust_max.p, 1, false)}`) : null,
       ui.smallSample(s.trades, d.small_n || 10), s.busted ? ui.pill(`파산 ${fmt.int(s.busted)}`, "bad") : null))});
   pg.set(d.strategies || []);
+  { const sk = streakCard(d, env); if (sk) out.push(sk); }      // ana8B: losing streaks in context, every group
   out.push(ui.card({plate: "매매법별", sub: "봉 계좌 합계 · 오른쪽 숫자 = 승률 − 본전 승률"}, pg.el,
     h("p", {class: "an-note"}, `거래 ${fmt.int(d.small_n || 10)}건 미만은 표본 적음: 우연일 수 있습니다. ${d.label || ""}`)));
   return out;

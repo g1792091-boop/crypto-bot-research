@@ -1,6 +1,367 @@
 {
-  "source": null,
-  "updated": null,
-  "note": "The owners' 45-question coverage checklist for the dashboard's '45개 질문' page (paperbot/dash/analysis.py questions). Empty until the source list is added: each item {\"n\": 1, \"q\": \"질문\", \"status\": \"done|partial|todo|na\", \"where\": \"어디서 답하는지\", \"note\": \"한 줄\", \"group\": \"묶음(선택)\"}.",
-  "questions": []
+ "source": "45개 질문 감사 (2026-10-04 16:09 KST) · 상태는 3cd850a 코드로 다시 확인",
+ "updated": "2026-10-06",
+ "note": "The owners' 45-question coverage checklist for the dashboard's '45개 질문' page (paperbot/dash/analysis.py questions). Each item {\"n\", \"q\", \"status\": \"done|partial|todo|na|checking\", \"where\", \"note\", \"group\"}. Statuses were re-checked against the code at 3cd850a (grep), not copied from the audit; an item only the 36 core strategies answer is 'partial' (v4 groups); an unverified item is 'checking' (확인 중). Task #72 refreshes them.",
+ "questions": [
+  {
+   "n": 1,
+   "q": "각 계좌가 같은 봉 동전 봇보다 나은가? 운으로 나올 합격 수는 보정했나?",
+   "status": "done",
+   "where": "판정 화면 · checkpoint.py (동전 봇 10,000개, 묶음별 FDR)",
+   "note": "답은 30일째 판정에서 나옴. 그 전 숫자는 참고",
+   "group": "엣지·운"
+  },
+  {
+   "n": 2,
+   "q": "1차 합격 계좌가 다음 30일 새 거래에서도 버티나?",
+   "status": "done",
+   "where": "checkpoint.py 2차 확인 (보충 규칙 Q3)",
+   "note": "60일째부터 답이 나옴",
+   "group": "엣지·운"
+  },
+  {
+   "n": 3,
+   "q": "30일 전에 판정을 미리 돌려 볼 수 있나?",
+   "status": "done",
+   "where": "paperbot-rehearsal 타이머 (매주 수요일 12:30 KST, checkpoint_preview)",
+   "note": "따로 만든 파일에만 씀. 진짜 판정이 아님",
+   "group": "엣지·운"
+  },
+  {
+   "n": 4,
+   "q": "30건·30일로 진짜 엣지를 가려낼 수 있나 (검정력)?",
+   "status": "done",
+   "where": "agents/power.py (research/power) · 30일 점검 회의·토요일 학습 회의",
+   "note": "직원 자료로만 봄. 대시보드 화면은 없음",
+   "group": "엣지·운"
+  },
+  {
+   "n": 5,
+   "q": "5년 과거 자료에서 이 36개에 엣지가 있었나?",
+   "status": "done",
+   "where": "매매법 상세 '5년 성적' 카드 · 전담 직원 자료 (research_prior)",
+   "note": "5년 연구에서 비용을 넘는 엣지 0개. 카드 크기 규칙은 v3 기준",
+   "group": "엣지·운"
+  },
+  {
+   "n": 6,
+   "q": "비용을 빼기 전에는 벌었나? 비용 때문에 손실이 됐나?",
+   "status": "partial",
+   "where": "월요일 비용 회의 (meetings.cost_packet)",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "비용·체결"
+  },
+  {
+   "n": 7,
+   "q": "호가창에서 우리 크기 주문의 미끄러짐이 가정(0.02%)보다 큰가?",
+   "status": "partial",
+   "where": "fillcost.py → 월요일 회의 (봉별 중앙값·상위 10%)",
+   "note": "코인별로는 아직 안 나눔. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "비용·체결"
+  },
+  {
+   "n": 8,
+   "q": "손절이 손절가보다 얼마나 나쁘게 체결되나?",
+   "status": "partial",
+   "where": "slipcost.py (밤 점검이 공개 체결로 추정, stop_slips) · 월요일 회의",
+   "note": "추정치. 진짜 값은 실거래 때만. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "비용·체결"
+  },
+  {
+   "n": 9,
+   "q": "신호 뒤 체결까지 얼마나 늦고, 그 사이 가격이 얼마나 움직이나?",
+   "status": "done",
+   "where": "월요일 회의 (_signal_delay) · 분석 › 그림자 비교 › 진입 가격 차이",
+   "note": "가격 차이 카드는 묶음별 (딥시크·5분 단타·동전 포함)",
+   "group": "비용·체결"
+  },
+  {
+   "n": 10,
+   "q": "지정가로 들어갔다면 체결됐고 더 나았나?",
+   "status": "partial",
+   "where": "분석 › 그림자 비교 › 지정가 진입 (시작부터 누적, 묶음별)",
+   "note": "월요일 비용 회의 자료에는 아직 하루치만",
+   "group": "비용·체결"
+  },
+  {
+   "n": 11,
+   "q": "최대 낙폭, 지금 낙폭, 연속 손실, 최악의 날은?",
+   "status": "partial",
+   "where": "agents/survival.py (금요일 회의) · 분석 › 손익비·위험",
+   "note": "연패 카드는 묶음별. 나머지는 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 12,
+   "q": "이대로 가면 파산이나 −50%가 될 확률은? 얼마나 작게 걸어야 하나?",
+   "status": "partial",
+   "where": "survival.simulate·sizing · 분석 › 손익비·위험",
+   "note": "겪은 거래만 다시 뽑음 (겪지 않은 꼬리는 빠짐). 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 13,
+   "q": "레버리지를 낮추면 손실 매매법이 플러스로 바뀌나?",
+   "status": "partial",
+   "where": "레버리지 그림자 10~50배 · 분석 › 그림자 비교 · 목요일 회의",
+   "note": "설명용. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 14,
+   "q": "계좌들이 같은 코인·같은 방향에 몰려 함께 지나?",
+   "status": "partial",
+   "where": "화요일 회의 (combo_packet) · 분석 › 계좌 겹침",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 15,
+   "q": "가격이 한 번에 크게 튀면 지금 포지션은 얼마나 잃나?",
+   "status": "partial",
+   "where": "agents/shock.py · 분석 › 충격 테스트",
+   "note": "열린 포지션만. 거래소 장애는 안 봄. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 16,
+   "q": "시장에 강제청산이 쏟아질 때 우리 거래 성적은?",
+   "status": "partial",
+   "where": "agents/entrymoment.py 청산 쏠림 구간 · 분석 › 진입 순간",
+   "note": "liq.db 기록이 있어야 함. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "위험"
+  },
+  {
+   "n": 17,
+   "q": "코인별로 다른가?",
+   "status": "partial",
+   "where": "breakdown · 수요일 회의 (coin_packet) · 분석 › 코인·장세 지도",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 18,
+   "q": "장세(추세·박스)별로 다른가?",
+   "status": "partial",
+   "where": "context.py · coin_packet · 분석 › 코인·장세 지도",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 19,
+   "q": "시간대, 평일·주말, 요일별로 다른가?",
+   "status": "partial",
+   "where": "sessions·breakdown · 분석 › 코인·시간대 · 진입 순간 (요일)",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 20,
+   "q": "변동성(ATR 백분위) 수준별로 다른가?",
+   "status": "partial",
+   "where": "agents/entrymoment.py 변동성 3구간 · 분석 › 진입 순간",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 21,
+   "q": "펀딩 정산 시각이나 펀딩비가 높을 때 다른가?",
+   "status": "partial",
+   "where": "정산 ±10분 (sessions) · 진입 때 펀딩비 구간 (entrymoment)",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 22,
+   "q": "경제지표 발표 전후에 다른가?",
+   "status": "partial",
+   "where": "meetings.event_packet · 분석 › 상황 태그",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 23,
+   "q": "봉(15분~4시간)별로 다른가?",
+   "status": "checking",
+   "where": "18:00 봉 비교 회의 (digest.tf_split) · 매매법 × 봉 지도",
+   "note": "딥시크·5분 단타까지 나누는지 아직 확인 못 함",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 24,
+   "q": "상승장·하락장이 바뀌어도 되나?",
+   "status": "partial",
+   "where": "5년 시험 세 기간 관문 (labtests.gate)",
+   "note": "30일 실험은 국면이 한두 개뿐. 연구에서만 봄",
+   "group": "언제·어디서"
+  },
+  {
+   "n": 25,
+   "q": "자기 지표 값(진입 세기)이 강할수록 결과가 나은가?",
+   "status": "partial",
+   "where": "agents/entrymoment.py 진입 세기 구간 · 분석 › 진입 순간",
+   "note": "설명용. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 26,
+   "q": "캔들 모양(몸통, 꼬리, 종가 위치)이 결과와 관계있나?",
+   "status": "partial",
+   "where": "agents/entrymoment.py 캔들 구간 · 분석 › 진입 순간",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 27,
+   "q": "추세 반대·상위 봉 반대·ADX 약함 같은 상황이 손실과 관계있나?",
+   "status": "partial",
+   "where": "context.py · cards.TAGS·tag_stats · 분석 › 상황 태그",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 28,
+   "q": "지지·저항이나 추세선 근처 진입이 문제인가?",
+   "status": "partial",
+   "where": "entry_marks 지지·저항 태그",
+   "note": "추세선은 연구에서만 (후보 0개)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 29,
+   "q": "많이 오른 뒤 따라 들어가면 나쁜가?",
+   "status": "partial",
+   "where": "cards.TAGS · tags.py E1·B2",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 30,
+   "q": "여러 매매법이 같이 신호 낸 자리와 혼자 들어간 자리가 다른가?",
+   "status": "partial",
+   "where": "화요일 회의 (meetings._consensus)",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "진입 품질"
+  },
+  {
+   "n": 31,
+   "q": "손익비, 본전 승률, 청산 이유 비율은?",
+   "status": "partial",
+   "where": "riskreward · 목요일 회의 · 분석 › 손익비·위험",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "청산 품질"
+  },
+  {
+   "n": 32,
+   "q": "이긴 거래가 최고점에서 얼마나 돌려줬나? 첫 잠금이 맞나?",
+   "status": "partial",
+   "where": "riskreward 돌려준 몫 · 잠금 15·20·30% 그림자",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "청산 품질"
+  },
+  {
+   "n": 33,
+   "q": "손절 2 ATR이 맞나? 이긴 거래가 반대로 얼마나 밀렸나?",
+   "status": "partial",
+   "where": "riskreward · 손절 1.5·2.5·3 ATR 그림자 · 5년 levstop",
+   "note": "매매법 상세에 이 매매법 그림자와 5년 칸. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "청산 품질"
+  },
+  {
+   "n": 34,
+   "q": "오래 들고 있던 거래가 더 나쁜가?",
+   "status": "partial",
+   "where": "entrymoment 보유 시간 구간 · 시간 청산 그림자",
+   "note": "기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "청산 품질"
+  },
+  {
+   "n": 35,
+   "q": "5년 시험 예상과 지금 paper 성적이 다른가?",
+   "status": "partial",
+   "where": "agents/btgap.py (금요일 회의)",
+   "note": "5년 카드는 v3 크기 규칙. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "견고함"
+  },
+  {
+   "n": 36,
+   "q": "설정값을 조금 바꿔도 결과가 비슷한가?",
+   "status": "partial",
+   "where": "research/entry_study 설정값 시험 (1,680건) · research_prior",
+   "note": "연구에서만 봄",
+   "group": "견고함"
+  },
+  {
+   "n": 37,
+   "q": "여러 번 시험해서 생기는 우연은 보정했나?",
+   "status": "done",
+   "where": "판정 FDR · 방 관문 (0.05 ÷ 시험 수) · 연구실 시험 수",
+   "note": "직원이 보는 설명용 숫자는 시험 수에 안 들어감",
+   "group": "견고함"
+  },
+  {
+   "n": 38,
+   "q": "데이터에 빠진 봉, 튀는 가격, 펀딩 이상이 있나?",
+   "status": "done",
+   "where": "daily3.data_quality · 데이터 품질 감시관 · 서버 건강 카드",
+   "note": "",
+   "group": "견고함"
+  },
+  {
+   "n": 39,
+   "q": "시간이 지나며 성적이 변하나?",
+   "status": "partial",
+   "where": "labmonthly (매달 새 기간) · 주간 성적표",
+   "note": "실험 중 전반·후반 비교는 아직 없음",
+   "group": "견고함"
+  },
+  {
+   "n": 40,
+   "q": "한 번에 포지션 하나라서 놓친 신호가 결과를 바꾸나?",
+   "status": "partial",
+   "where": "daily3 놓친 신호 그림자",
+   "note": "누적 요약은 아직. 직원 자료는 하루치",
+   "group": "견고함"
+  },
+  {
+   "n": 41,
+   "q": "여러 매매법을 같이 돌리면 위험이 나뉘나? 어디에 얼마씩?",
+   "status": "partial",
+   "where": "분석 › 조합 시너지 · 계좌 겹침 (합친 낙폭)",
+   "note": "배분 규칙은 아직 없음. 기존 36만 셈 (딥시크·5분 단타는 빠짐)",
+   "group": "포트폴리오"
+  },
+  {
+   "n": 42,
+   "q": "실거래 조건(200건, 국면 2개, 비용 비율 등)을 코드가 확인하나?",
+   "status": "done",
+   "where": "agents/readiness.py · 분석 › 실전 준비도",
+   "note": "표시만 함. 실거래는 두 분이 정함",
+   "group": "실거래"
+  },
+  {
+   "n": 43,
+   "q": "직원 가설이 실제로 맞았나? 토론이 동전보다 나은가?",
+   "status": "done",
+   "where": "agents/scorecard.py · 직원 성적표 · 토론 채점",
+   "note": "",
+   "group": "과정 점검"
+  },
+  {
+   "n": 44,
+   "q": "같은 시험이나 가설을 반복하고 있지 않나?",
+   "status": "done",
+   "where": "meetings.learning_packet 반복 표시 · 연구실 중복 확인",
+   "note": "",
+   "group": "과정 점검"
+  },
+  {
+   "n": 45,
+   "q": "실제 주문은 안전하고 실제 비용은 얼마인가? 금액을 키우면?",
+   "status": "partial",
+   "where": "executor·risk·mainnet (실거래 때만) · slipcost 큰 금액 계산",
+   "note": "live-safety 5장의 남은 틈은 실거래 전에 따로",
+   "group": "실거래"
+  }
+ ]
 }
