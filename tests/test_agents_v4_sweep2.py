@@ -77,7 +77,9 @@ def test_a_deepseek_alert_with_money_is_kept_as_a_room_note(tmp_path):
     w.tick(runner, QUIET, notifier=n)
     assert n.messages == []
     notes = R.room_notes(w.agents, "team:ds_structure", 5)
-    assert len(notes) == 1 and "알림 대신 메모" in notes[0]["text"] and "-120 USDT" in notes[0]["text"]
+    # the note keeps the words, not the amount (the next meeting's packet reads the room notes back)
+    assert len(notes) == 1 and "알림 대신 메모" in notes[0]["text"] and "구조 방 (금액 생략) 손실" in notes[0]["text"]
+    assert not DM.has_money(notes[0]["text"])
     assert f"flag_owners:group:{R.kst_day(QUIET)}" not in w.cursors()
 
 
@@ -94,12 +96,12 @@ def test_the_reel_room_alert_may_name_its_money(tmp_path):
 
 # ------------------------------------------------------------------ 11: DeepSeek money strict (D11)
 def _money_keys(obj, path=""):
-    """Every money number (dsmoney.MONEY_KEYS) at any depth, as paths."""
+    """Every money number (dsmoney.is_money_key: MONEY_KEYS, any pnl / wallet / equity / usdt key) at any depth."""
     from paperbot.agents import dsmoney as DM
     out = []
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k in DM.MONEY_KEYS and not isinstance(v, (dict, list)):
+            if DM.is_money_key(k) and not isinstance(v, (dict, list)):
                 out.append(f"{path}.{k}")
             out += _money_keys(v, f"{path}.{k}")
     elif isinstance(obj, list):
@@ -165,6 +167,12 @@ def test_a_group_experts_note_is_kept_and_read_back_next_meeting(tmp_path):
     r2 = QueueRunner({"spec_ds_structure": [team_answer("s")], "team_lead": [LEAD]})
     w.tick(r2, QUIET + 26 * HOUR)
     assert [n["text"] for n in r2.calls[0]["packet"]["notes"]] == [note]
+    # a DeepSeek room's note keeps its words, not a money amount (D11)
+    w.ds_losses("F3_BOS@15m", 6, t=QUIET + 52 * HOUR)
+    r3 = QueueRunner({"spec_ds_structure": [{**team_answer("s"), "note": "F3_BOS 손실 합 -135 USDT"}],
+                      "team_lead": [LEAD]})
+    w.tick(r3, QUIET + 52 * HOUR)
+    assert R.room_notes(w.agents, "team:ds_structure", 1)[0]["text"] == "F3_BOS 손실 합 (금액 생략)"
     # a note in a 36 team room's answer is dropped (only the group rooms have the note action there)
     assert "note" not in RM.check_team({**team_answer("x"), "note": "n"}, {"room": {"room_id": "team:risk"}})[0]
 
@@ -226,6 +234,7 @@ def test_a_deepseek_room_packet_has_roe_and_counts_but_no_money(tmp_path):
     for c in runner.calls:                              # the specialist and the lead
         pk = c["packet"]
         assert _money_keys(pk["group_accounts"]) == [], c["role"]
+        assert pk["losses"].get("recent") and _money_keys(pk["losses"]) == [], c["role"]     # win_loss had P&L
         assert _money_keys(pk["board"]["groups"]["ds200"]) == [], c["role"]
         assert "net_pnl" in pk["board"]["groups"]["core"] or "core" not in pk["board"]["groups"]
     ga = runner.calls[0]["packet"]["group_accounts"]

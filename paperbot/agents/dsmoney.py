@@ -22,9 +22,14 @@ DS_MONEY_STRICT = True
 # digest.tf_stats, cards): dropped from a DeepSeek cell while strict
 MONEY_KEYS = frozenset({"pnl", "net_pnl", "net_pnl_24h", "wallet", "median_wallet", "gross_before_costs", "costs",
                         "cost_per_trade", "fees", "funding", "equity_after", "margin", "pnl_before_costs", "gross_pnl"})
+# and any other key naming money (avg_pnl, pnl_per_account, final_equity, change_usd, wallet_usdt, balance, ...)
+_MONEY_KEY = re.compile(r"(?i)pnl|wallet|equity|usdt|usd$|balance")
 
 # a money amount in model-written text: USDT / $ / 달러 next to digits (full-width forms folded first)
 _MONEY = re.compile(r"(?i)\$\s*[+-]?\d|\d\s*\$|\d\s*(?:usdt|usd|달러)|(?:usdt|달러)\s*[+-]?\d")
+# the whole amount, for redact(): '-120.5 USDT', '$35', 'USDT 1,200', '35달러'
+_AMOUNT = re.compile(r"(?i)[+-]?\$\s*[+-]?\d[\d,]*(?:\.\d+)?|[+-]?\d[\d,]*(?:\.\d+)?\s*(?:\$|usdt|usd|달러)"
+                     r"|(?:usdt|usd|달러)\s*[+-]?\d[\d,]*(?:\.\d+)?")
 
 STRICT_NOTE_KO = "딥시크는 돈 숫자를 말하지 않음 (개수·비율만: 거래 수, 승률, 파산, ROE %, 같은 봉 동전 대비 부호)"
 
@@ -34,6 +39,16 @@ def has_money(text: Any) -> bool:
     if not isinstance(text, str) or not text:
         return False
     return bool(_MONEY.search(unicodedata.normalize("NFKC", text)))
+
+
+def redact(text: Any) -> str:
+    """``text`` with every money amount replaced by '(금액 생략)' (full-width forms folded first)."""
+    return _AMOUNT.sub("(금액 생략)", unicodedata.normalize("NFKC", str(text or "")))
+
+
+def is_money_key(k: Any) -> bool:
+    """True for a key that carries money (MONEY_KEYS, or a name with pnl / wallet / equity / usdt / usd / balance)."""
+    return k in MONEY_KEYS or bool(_MONEY_KEY.search(str(k)))
 
 
 def _num(x: Any) -> Optional[float]:
@@ -66,11 +81,11 @@ def sign_vs(mine: Optional[dict], flips: Optional[dict]) -> Optional[str]:
 
 
 def scrub(obj: Any) -> Any:
-    """``obj`` with every MONEY_KEYS number removed at any depth (a MONEY_KEYS key holding a table, such as a room's
-    ``costs`` per definition, stays and is scrubbed inside)."""
+    """``obj`` with every money number (``is_money_key``) removed at any depth (a money key holding a table, such as a
+    room's ``costs`` per definition, stays and is scrubbed inside)."""
     if isinstance(obj, dict):
         return {k: scrub(v) for k, v in obj.items()
-                if not (k in MONEY_KEYS and (v is None or isinstance(v, (int, float, str))))}
+                if not (is_money_key(k) and (v is None or isinstance(v, (int, float, str))))}
     if isinstance(obj, list):
         return [scrub(v) for v in obj]
     return obj

@@ -2837,7 +2837,7 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["group_accounts"] = _ds_strict_room(room, group_accounts_packet(ctx, room, rnd.due))
         if rnd.due.trigger in TR.GROUP_TRIGGERS:
             # its members' loss cards, tags and wins against losses (G4; the same section a strategy room has)
-            rnd.base["losses"] = _losses(ctx, room, rnd.due)
+            rnd.base["losses"] = _ds_strict_room(room, _losses(ctx, room, rnd.due))
     if rnd.due.trigger == "market_move":
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
     if rnd.due.trigger == "ranking":
@@ -2979,17 +2979,21 @@ GROUP_NOTE_FMT = ('  "note": "다음 회의에 남길 방 메모 한 줄(이 방
 
 def _group_notes(rnd: _Round) -> list[dict]:
     """The notes the v4 specialists of this meeting wrote in their team answers (check_team keeps ``note`` in these
-    rooms only), stored as room notes by actions.note; the next meeting's packet carries them (``notes``)."""
+    rooms only), stored as room notes by actions.note; the next meeting's packet carries them (``notes``). In a
+    DeepSeek room, while dsmoney.DS_MONEY_STRICT, money amounts are left out of the note (D11)."""
+    from ..config import REEL_NAME
+    from . import dsmoney as DM
+    strict = DM.DS_MONEY_STRICT and rnd.room != TR.group_room_of(REEL_NAME)
     out = []
     for v in list(rnd.this_round.values()):
         if isinstance(v, dict) and v.get("note") and v.get("role") in GROUP_ROLE_OF_ROOM.values():
-            out.append(A.note(rnd.env(v["role"]), {"text": v["note"]}))
+            out.append(A.note(rnd.env(v["role"]), {"text": DM.redact(v["note"]) if strict else v["note"]}))
     return out
 
 
 def _ds_strict_room(room: str, pk: Any) -> Any:
     """D11 (dsmoney.DS_MONEY_STRICT): a DeepSeek room's ``group_accounts`` as ROE %, win rates and counts (no P&L,
-    wallet or USDT); the reel room's as it is."""
+    wallet or USDT; its ``losses`` section likewise, money keys dropped at any depth); the reel room's as it is."""
     from ..config import REEL_NAME, V3_INITIAL
     from . import dsmoney as DM
     if not DM.DS_MONEY_STRICT or room == TR.group_room_of(REEL_NAME):
@@ -3020,7 +3024,8 @@ def _group_flag(rnd: _Round, flag: dict) -> dict:
     env = rnd.env("team_lead")
     text = str(flag.get("text") or "")
     if DM.DS_MONEY_STRICT and rnd.room != TR.group_room_of(REEL_NAME) and DM.has_money(text):
-        res = A.note(env, {"text": ("두 분께 알림 대신 메모(딥시크 방 알림에는 금액을 쓰지 않음): " + text)[:800]})
+        # the amounts are left out of the note too: the next meeting's packet reads the room notes back
+        res = A.note(env, {"text": ("두 분께 알림 대신 메모(딥시크 방 알림에는 금액을 쓰지 않음): " + DM.redact(text))[:800]})
         rnd.system("딥시크 방 알림에 금액이 들어 있어 텔레그램으로 보내지 않고 방 메모로 남겼습니다.",
                    {"action": "flag_owners", "sent": False, "reason": "ds_money"})
         return {**res, "action": "flag_owners", "sent": False, "kept_as_note": True}
@@ -3033,9 +3038,10 @@ def _group_flag(rnd: _Round, flag: dict) -> dict:
     # the 36's counter is put back after the send: the group rooms' alert is counted only here
     shared = f"flag_owners:{R.kst_day(env.now_ms)}"
     before = R.get_cursor(env.conn, shared)
+    R.set_cursor(env.conn, key, used + 1)     # before the send, like actions.flag_owners: a kill after it still counts
     res = A.flag_owners(replace(env, flag_max_per_day=int(before or 0) + 1), flag)
-    if res.get("sent") or (res.get("ok") is False and not res.get("duplicate")):
-        R.set_cursor(env.conn, key, used + 1)
+    if res.get("duplicate"):                  # a re-run meeting sent nothing: not counted
+        R.set_cursor(env.conn, key, used)
     if before is None:
         env.conn.execute("DELETE FROM cursors WHERE k = ?", (shared,))
         env.conn.commit()
