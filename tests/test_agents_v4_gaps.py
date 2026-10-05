@@ -151,6 +151,40 @@ def test_a_group_room_gets_its_members_loss_cards_and_research(tmp_path):
     assert "note" in runner.calls[0]["system"] and "flag_owners" in runner.calls[0]["system"]
 
 
+def test_a_group_room_packet_has_costs_and_the_deepseek_riskreward_table(tmp_path):
+    """A12: costs (digest.tf_stats) for the reel and each 5m flip; compact costs per DeepSeek definition x timeframe
+    and the riskreward table of kind ds200 for the room's members only; entrymoment/synergy said to be core-only."""
+    import json as _json
+    w = V4World(tmp_path)
+    w.ds_losses("F3_BOS@15m", 6)
+    w.ds_losses("F16_FIB382@15m", 2)                  # another room's
+    runner = QueueRunner({"spec_ds_structure": [team_answer("r")], "team_lead": [LEAD]})
+    w.tick(runner, QUIET)
+    pk = runner.calls[0]["packet"]["group_accounts"]
+    assert set(pk["costs"]) == {"F3_BOS"} and pk["costs"]["F3_BOS"]["15m"]["trades"] == 6
+    assert set(pk["costs"]["F3_BOS"]["15m"]) <= {"trades", "win_rate", "pnl", "move_before_costs",
+                                                  "gross_before_costs", "costs", "cost_per_trade", "cost_vs_gross",
+                                                  "hold_min"}
+    assert set(pk["riskreward"]) == {"F3_BOS"} and pk["riskreward"]["F3_BOS"]["all"]["trades"] == 6
+    assert "by_tf" not in pk["riskreward"]["F3_BOS"]          # 6 < SMALL_N: no timeframe cell
+    assert "진입 순간" in pk["core_only_note"] and "시너지" in pk["core_only_note"]
+    assert len(_json.dumps(pk, ensure_ascii=False)) < 40_000
+
+
+def test_the_reel_room_packet_has_costs_for_the_reel_and_each_5m_flip(tmp_path):
+    w = V4World(tmp_path)
+    w.ds_losses(f"{REEL_NAME}@5m", 3)
+    w.trade("RANDOM_2@5m", 4.0, QUIET - HOUR)
+    runner = QueueRunner({"spec_reel_5m": [team_answer("r")], "team_lead": [LEAD]})
+    w.tick(runner, QUIET)
+    pk = runner.calls[0]["packet"]["group_accounts"]
+    reel = pk["definitions"][0]["timeframes"]["5m"]["costs"]
+    assert reel["trades"] == 3 and "cost_vs_gross" in reel and "move_before_costs" in reel
+    by = {f["account_id"]: f["costs"] for f in pk["coin_flips_5m"]}
+    assert by["RANDOM_2@5m"]["trades"] == 1 and by["RANDOM_1@5m"] == {"trades": 0}
+    assert "costs_note" in pk and "riskreward" not in pk and "core_only_note" in pk
+
+
 # ------------------------------------------------------------------ G7: the five roles' actions and the lab
 def test_group_rooms_allow_only_note_flag_and_nothing():
     assert roster3.GROUP_ACTIONS == A.GROUP_ACTIONS == ("note", "flag_owners", "no_action")

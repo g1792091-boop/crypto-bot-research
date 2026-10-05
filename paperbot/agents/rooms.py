@@ -3853,6 +3853,83 @@ def group_accounts_packet(ctx: RoundContext, room: str, due: Optional[TR.Due] = 
                           "wallet": _r(float(e.get("wallet", V3_INITIAL)), 2), "bust": bool(e.get("bust"))})
         out["coin_flips_5m"] = flips
         out["coin_flips_note"] = "같은 5분봉, 롱만, 릴스와 같은 청산의 동전 던지기 3개(비교용, 판정 대상 아님)"
+        # A12: the 5m analysis promised 2026-10-05 14:33: costs against the gross move (digest.tf_stats) for the
+        # reel and each of its 5m flips, side by side
+        try:
+            costs = _group_costs(ctx.paper_ro, [a for a, v in accts.items() if v[2] == "reel"] +
+                                 [f["account_id"] for f in flips])
+        except sqlite3.Error:
+            costs = {}
+        for f in flips:
+            f["costs"] = costs.get(f["account_id"], {"trades": 0})
+        for x in rows:
+            for tf, cell in x["timeframes"].items():
+                cell["costs"] = costs.get(f"{x['strategy']}@{tf}", {"trades": 0})
+        out["costs_note"] = COSTS_NOTE
+    if any(v[2] == "ds200" for v in accts.values()):
+        out.update(_ds_room_analyses(ctx, accts))
+    out["core_only_note"] = ("진입 순간(봉 모양)·시너지 분석은 잠긴 36개 매매법에만 있음(딥시크·릴스 계좌에는 없음). "
+                             "이 방의 분석은 위의 손실 카드·비용·손익비 숫자까지")
+    return out
+
+
+COSTS_NOTE = ("costs = 끝난 거래 숫자(digest.tf_stats): move_before_costs 거래 방향 평균 가격 움직임, cost_per_trade "
+              "거래당 수수료+펀딩, cost_vs_gross 비용 ÷ 비용 전 손익 절댓값 합(1보다 크면 비용이 움직임보다 큼), "
+              "hold_min 평균 보유(분). 30건 미만이면 우연일 수 있음")
+_COST_KEYS = ("trades", "win_rate", "pnl", "move_before_costs", "gross_before_costs", "costs", "cost_per_trade",
+              "cost_vs_gross", "hold_min")
+
+
+def _group_costs(paper_ro: sqlite3.Connection, aids: list, compact: bool = False) -> dict:
+    """digest.tf_stats per account (its closed trades), the compact keys only when ``compact``."""
+    from .digest import tf_stats
+    if not aids:
+        return {}
+    by: dict = {a: [] for a in aids}
+    for aid, data in paper_ro.execute(f"SELECT account_id, data FROM trades WHERE account_id IN "
+                                      f"({','.join('?' * len(aids))}) ORDER BY exit_time, id", list(aids)):
+        try:
+            d = json.loads(data)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(d, dict) and "pnl" in d:
+            by[aid].append(d)
+    out = {}
+    for a, ts in by.items():
+        st = tf_stats(ts)
+        out[a] = {k: st[k] for k in _COST_KEYS if k in st} if compact else st
+    return out
+
+
+def _ds_room_analyses(ctx: RoundContext, accts: dict) -> dict:
+    """A12: a DeepSeek room's costs (compact digest.tf_stats per definition x timeframe, on its rows' timeframes)
+    and its risk-reward table (riskreward.table of kind 'ds200', this room's definitions only; tiny cells, a
+    timeframe cell only once it is not small). Since the start, code only."""
+    from . import riskreward as RRW
+    ds = {aid: v for aid, v in accts.items() if v[2] == "ds200"}
+    members = sorted({v[0] for v in ds.values()})
+    out: dict = {}
+    try:
+        cost = _group_costs(ctx.paper_ro, sorted(ds), compact=True)
+        out["costs"] = {s: {tf: cost[aid] for aid, (s2, tf, _k, _d) in sorted(ds.items())
+                            if s2 == s and cost.get(aid, {}).get("trades")} for s in members}
+        out["costs"] = {s: v for s, v in out["costs"].items() if v}
+        out["costs_note"] = COSTS_NOTE
+    except sqlite3.Error as exc:
+        out["costs"] = {"error": type(exc).__name__}
+    try:
+        lad = RRW.ladder()
+        rows = RRW.closed(ctx.paper_ro, 0, int(ctx.now_ms) + 1, kinds=("ds200",), strategies=members)
+        tab = RRW.table(rows, lad["first_trigger"])
+        out["riskreward"] = {s: {"all": RRW.tiny(e["all"]),
+                                 **({"by_tf": bt} if (bt := {tf: RRW.tiny(c) for tf, c in e["by_tf"].items()
+                                                              if not c.get("small")}) else {})}
+                             for s, e in sorted(tab["strategies"].items())}
+        out["riskreward_note"] = ("손익비 표(riskreward.tiny, 시작부터): payoff 평균 이익÷평균 손실(자금 대비), "
+                                  "breakeven_win_rate 본전 승률, gap_pp 실제 승률 − 본전 승률(%p). 봉별 칸은 거래가 "
+                                  f"{RRW.SMALL_N}건 이상일 때만. 판정 아님")
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        out["riskreward"] = {"error": type(exc).__name__}
     return out
 
 
