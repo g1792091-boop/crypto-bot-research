@@ -690,6 +690,21 @@ def _drop_empty4(cells: Optional[dict]) -> Optional[dict]:
     return {k: c for k, c in cells.items() if not (k in SHADOW_VARIANTS4 + SHADOW_MARGIN4 and c == {"trades": 0})}
 
 
+def checkpoint1_ko(paper_ro: Optional[sqlite3.Connection]) -> str:
+    """The day-30 checkpoint of the run in paper3.db as 'YYYY-MM-DD HH:MM KST' (checkpoint.checkpoint_ts(start, 1),
+    the date the checkpoint itself uses); '시작 후 30일' when the run start is unknown. Never raises."""
+    import datetime as _dt
+    try:
+        from ..checkpoint import checkpoint_ts, run_facts
+        start = run_facts(paper_ro).get("start_ts") if paper_ro is not None else None
+        if start is None:
+            return "시작 후 30일"
+        t = _dt.datetime.fromtimestamp(checkpoint_ts(int(start), 1) / 1000 + 9 * 3600, _dt.timezone.utc)
+        return t.strftime("%Y-%m-%d %H:%M KST")
+    except Exception:  # noqa: BLE001  (a date in a note)
+        return "시작 후 30일"
+
+
 def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.Connection], now_ms: int,
               days: int = 7, round_trip: Optional[float] = None, names_ko: Optional[dict] = None) -> dict:
     """The Thursday 손익비·청산 회의 packet: all strategies and the coin flips in full (both windows), each strategy's
@@ -743,7 +758,7 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
         "note": ("같은 거래를 레버리지만(lev30·40·50, 크기 조건 그대로) 또는 처음 손절폭만(stopw: 실제와 같은 레버리지, "
                  "15% 상한·청산가 여유 없이, 청산은 적용) 바꾼 기록. 전체 숫자는 all_strategies, lev30~50의 플러스 전환은 "
                  "lower_leverage, stop_turns = base(2 ATR) 마이너스→그 손절폭 플러스(turns_positive)와 반대(turns_negative). "
-                 "30일 체크포인트(2026-11-01) 전 결론 없음")}
+                 f"30일 체크포인트({checkpoint1_ko(paper_ro)}) 전 결론 없음")}
     # docs/observation-shadows-4.md: fixed take-profits (no ladder) and the ladder capped at 2R
     shadows["tp_variants"] = {
         "doc": "docs/observation-shadows-4.md", "variants_ko": SHADOW_KO4, "columns": SHADOW4_COLUMNS,
