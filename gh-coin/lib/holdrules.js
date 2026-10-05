@@ -17,6 +17,10 @@ export const RULES = [
   { id: "rsiN",   label: "RSI 중립 구간(50±p)이면 관망",         on: false, p: 10,  steps: [5, 8, 10, 12], test: (x, p) => x.rsi != null && Math.abs(x.rsi - 50) < p },
   { id: "rsiX",   label: "롱은 RSI 과매수·숏은 과매도면 자제",     on: false, p: 70,  steps: [65, 70, 75, 80], test: (x, p) => x.rsi != null && (x.side > 0 ? x.rsi > p : x.rsi < 100 - p) },
   { id: "fng",    label: "공포탐욕 극단 반대쪽 진입 금지",         on: false, p: 20,  steps: [15, 20, 25], test: (x, p) => x.fng != null && (x.side > 0 ? x.fng > 100 - p : x.fng < p) },
+  // 2026-10-06 실측: 1시간봉 매매에 '15분 추세 같은 방향'은 단독으로 −0.046 → −0.016R(전·후반 개선)이지만, 위 EMA 배열 규칙과 겹쳐 규칙집 위에서는 차이 없음 → 기본 꺼짐(진화가 켤 수 있음)
+  { id: "ltf",    label: "하위 시간봉 추세가 반대면 관망(1시간봉은 15분·15분봉은 5분)", on: false, p: null, test: x => x.ltf != null && x.ltf === -x.side },
+  // 15분봉 매매: 1시간·4시간 추세가 모두 같은 방향일 때만 −0.123 → −0.084R(전·후반 개선, 여전히 마이너스라 실전 투입은 워크포워드 관문이 결정)
+  { id: "scalp",  label: "스캘핑(5·15분 신호)은 1시간·4시간 추세가 모두 같은 방향일 때만", on: true, p: null, test: x => x.small === true && !(x.htf === x.side && x.up2 === x.side) },
 ];
 export const RULE_BY = Object.fromEntries(RULES.map(r => [r.id, r]));
 export function defaultBook() { return { ver: 1, rules: Object.fromEntries(RULES.map(r => [r.id, { on: r.on, p: r.p && typeof r.p === "object" ? { ...r.p } : r.p }])), log: [] }; }

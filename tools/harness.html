@@ -39,7 +39,7 @@ try {
     const N = await import("../gh-coin/neural.js"), S = N.load(); out.fng = await N.fngCheck(true);
     await N.step(); const sym = "SOLUSDT", px = S.dec[sym]?.price; out.px = px;
     if (px) { S.pos[sym] = {sym, ko: "SOL", side: 1, entry: px * 0.985, price: px, sl: px * 0.985 * 1.0008, tp: px * 1.02, liq: px * 0.94, lev: 20, margin: 25, notional: 500, risk: 5, riskPct: 0.5, rr: 2, slPct: 1, tpPct: 2, rDist: px * 0.985 * 0.01, be: true, beAt: Date.now() - 20 * 60e3, roe: 0, proe: 0, seed: 2.5, vkey: "ema_pullback@60", name: "테스트 포지션", cat: "추세", tf: "60", why: "harness", regime: "", trader: "자체 엔진", t: Date.now() - 3 * 3600e3, deadline: Date.now() + 40 * 3600e3, feat: {}, bReg: "" }; }
-    if (new URLSearchParams(location.search).get("ai") === "1") { await N.modelStep(); out.review2 = S.review2; }
+    if (new URLSearchParams(location.search).get("ai") === "1") { await N.modelStep(); out.review2 = S.review2; out.lv = S.pos[sym]?.lv; out.mtf = N.mtfText(sym); }
     await N.step(); out.afterRun = S.pos[sym] && {run: S.pos[sym].run, tp: S.pos[sym].tp, sl: S.pos[sym].sl, keep: S.pos[sym].keep, adj: (S.pos[sym].adj || []).map(a => a.kind + "/" + a.by), deadlineH: Math.round((S.pos[sym].deadline - Date.now()) / 3600e3)};
     if (S.pos[sym]) { S.pos[sym].sl = px * 1.01; S.pos[sym].chk = 0; } await N.step();   // 손절선을 현재가 위로 → 다음 스텝에서 청산 → 조정 채점 대기열
     out.closed = !S.pos[sym]; out.adjQ = (S.adjQ || []).length; await N.scoreAdj(true); out.adj = N.adjState();

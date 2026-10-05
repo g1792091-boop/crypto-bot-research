@@ -321,12 +321,15 @@ function markPos(P, price) { const proe = (price - P.entry) / P.entry * P.side *
 //   동시 포지션 상한 · 제외 코인 · 하루 최대 진입 수(과매매 방지 = PDT 대응) · 청산 후 같은 코인 재진입 쿨다운
 // tpMode(익절 방식) · levMode(레버리지 방식) — 기본은 실측 기대값이 가장 높은 지금 방식. 6코인 1년 실측(관망 규칙집 적용 데스크 재연):
 //   ev 매매법 기본 손익비(대부분 1:2) 승률 41% · +0.158R/건  ·  bal 1:1.5 승률 43% · +0.091R  ·  wr 1:1 승률 52% · +0.074R
-const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30, tpMode: "ev", levMode: "fw" };
+const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30, tpMode: "ev", levMode: "fw", style: "auto" };
+// 매매 스타일: auto(검증 통과한 것 전부) · swing(1시간·4시간 신호만) · scalp(5·15분 신호만). 어느 쪽이든 워크포워드 관문·관망 규칙은 그대로.
+export const STYLES_KO = { auto: "자동(검증된 것 전부)", swing: "스윙(1시간·4시간)", scalp: "스캘핑(5·15분)" };
+const styleOk = tf => { const st = cfg().style; return st === "swing" ? tf === "60" || tf === "240" : st === "scalp" ? tf === "5" || tf === "15" : true; };
 export const TP_MODES = { ev: { ko: "기대값 우선(매매법 기본 손익비)", rr: null, wr: 41, exp: 0.158 }, bal: { ko: "균형(1:1.5)", rr: 1.5, wr: 43, exp: 0.091 }, wr: { ko: "승률 우선(1:1)", rr: 1, wr: 52, exp: 0.074 } };
 export const cfg = () => ({ ...CFG0, ...(load().cfg || {}) });
 export function setCfg(patch = {}) { load(); const c = { ...cfg(), ...patch };
   c.maxPos = Math.max(1, Math.min(6, Math.round(+c.maxPos || 4))); c.dailyMax = Math.max(1, Math.min(50, Math.round(+c.dailyMax || 12))); c.coolMin = Math.max(0, Math.min(240, Math.round(+c.coolMin || 0)));
-  if (!TP_MODES[c.tpMode]) c.tpMode = "ev"; if (c.levMode !== "min") c.levMode = "fw";
+  if (!TP_MODES[c.tpMode]) c.tpMode = "ev"; if (c.levMode !== "min") c.levMode = "fw"; if (!STYLES_KO[c.style]) c.style = "auto";
   if (patch.tpMode && patch.tpMode !== (S.cfg?.tpMode || "ev")) S.eng.calibAt = 0;   // 익절 방식이 바뀌면 자체 백테스트를 그 방식으로 다시
   c.exclude = (Array.isArray(c.exclude) ? c.exclude : String(c.exclude || "").split(/[,\s]+/)).map(x => String(x).toUpperCase().replace(/USDT$/, "")).filter(x => COINS.some(([ko]) => ko === x));
   S.cfg = c; save(); return c; }
@@ -432,6 +435,12 @@ function trendOf(I, i) {
   const dir = e20 > e50 && c > e50 ? 1 : e20 < e50 && c < e50 ? -1 : 0;
   return { dir, strong: (rg.key === "상승추세" && dir > 0) || (rg.key === "하락추세" && dir < 0), key: rg.key, adx: rg.adx ? Math.round(rg.adx) : null };
 }
+// t 시각에 이미 마감된 봉 기준 추세(백테스트·실시간 공통 — 미래 봉을 보지 않음)
+function trendAtT(mk, t) { if (!mk?.I) return null; const cs = mk.cs, step = cs.length > 1 ? cs[1].t - cs[0].t : 60e3; let lo = 0, hi = cs.length - 1, k = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (cs[m].t + step <= t) { k = m; lo = m + 1; } else hi = m - 1; } return k < 60 ? null : trendOf(mk.I, k)?.dir ?? null; }
+const LOWER_OF = { "60": "15", "15": "5", "5": "1", "240": "60" };
+// 관망 규칙 맥락의 시간봉 정보: ltf(하위 시간봉 추세) · up2(4시간 추세) · small(5·15분 신호)
+function tfCtx(tf, t, get) { const lo = LOWER_OF[tf]; return { ltf: lo ? trendAtT(get(lo), t) : null, up2: tf === "5" || tf === "15" ? trendAtT(get("240"), t) : null, small: tf === "5" || tf === "15" }; }
 export const MTF = [["1", "1분"], ["5", "5분"], ["15", "15분"], ["60", "1시간"], ["240", "4시간"]];
 export function mtfText(sym) { const m = S?.mtf?.[sym]; if (!m) return ""; return "시간봉별 추세: " + MTF.filter(([k]) => m[k]).map(([k, ko]) => `${ko} ${m[k].dir > 0 ? "상승" : m[k].dir < 0 ? "하락" : "중립"}${m[k].strong ? "(강)" : ""}`).join(" · "); }
 
@@ -473,7 +482,7 @@ export async function step() {
         const v = V.find(x => x.vkey === P.vkey); if (v?.exit) { v.prep?.(mk.cs); if (v.exit(mk.I, i, P.side)) closeP(sym, price, "청산신호"); } }
       if (S.pos[sym] || (S.cool[sym] || 0) > Date.now() || S.queue.some(x => x.sym === sym) || cfg().exclude.includes(ko)) continue;
       const cands = [];
-      for (const v of V.filter(x => x.tf === tf && isActive(x))) {
+      for (const v of V.filter(x => x.tf === tf && isActive(x) && styleOk(x.tf))) {
         v.prep?.(mk.cs); const s = v.sig(mk.I, i); if (!s) continue;
         if (v.regimes && !v.regimes.includes(reg.key)) continue;
         if (H && !ENG.htfAllows(v, s.side, hb)) continue;
@@ -486,7 +495,7 @@ export async function step() {
       if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
       // 🧘 관망 규칙집(실데이터로 검증된 것만 켜짐 · 스스로 고침) + 피로(연속 손실 휴식) + 낙폭 서킷브레이커. 막은 신호도 따라가 채점한다.
-      { const ctx = HR.ctxAt(ENG, mk.I, i, H, s.side, barT + TFMIN[tf] * 60e3, { fng: S.fng?.v ?? null }), hk = HR.check(S.hold, ctx), rest = HR.restUntil(S.hold, closedSeq()), now = Date.now();
+      { const tcl = barT + TFMIN[tf] * 60e3, ctx = HR.ctxAt(ENG, mk.I, i, H, s.side, tcl, { fng: S.fng?.v ?? null, ...tfCtx(tf, tcl, k => MK[sym + "|" + k]) }), hk = HR.check(S.hold, ctx), rest = HR.restUntil(S.hold, closedSeq()), now = Date.now();
         const rule = (S.halt || 0) > now ? "halt" : rest > now ? "streak" : hk?.block, why = rule === "halt" ? "낙폭 서킷브레이커(24시간 신규 진입 중지)" : rule === "streak" ? `${HR.ruleText("streak", S.hold.rules.streak.p)} — ${Math.ceil((rest - now) / 3600e3)}시간 남음` : hk?.why;
         if (rule) { shadowAdd({ sym, ko, side: s.side, sl: s.sl, rr: rrFor(v), px: price, name: v.name, rule }); feed(`🧘 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호(${v.name}) 관망 — ${why}`); continue; } }
       const wh = await whaleSignal(sym).catch(() => null);
@@ -577,7 +586,7 @@ export async function calibrate() {
       const r = ENG.simulate(v, d.I, d.cs, { sym, H: HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, atrK: 1, be: 1, rr: TP_MODES[cfg().tpMode]?.rr ?? null });
       (pool[v.vkey] ||= []).push(...r.trades.map(t => ({ R: +t.R.toFixed(3), t1: t.t1, src: "bt", reg: t.reg })));
       if (!v.exp) { const idx = d.idx ||= new Map(d.cs.map((b, k) => [b.t, k])), Hh = HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, ms = TFMIN[v.tf] * 60e3;
-        for (const t of r.trades) { const ie = idx.get(t.t0); if (ie == null || ie < 1) continue; HT.push({ s: sym, t: t.t0, t1: t.t1, R: t.R, ...HR.ctxAt(ENG, d.I, ie - 1, Hh, t.side, d.cs[ie - 1].t + ms, { fng: fngHist?.[new Date(t.t0).toISOString().slice(0, 10)] ?? null }) }); } }
+        for (const t of r.trades) { const ie = idx.get(t.t0); if (ie == null || ie < 1) continue; HT.push({ s: sym, t: t.t0, t1: t.t1, R: t.R, ...HR.ctxAt(ENG, d.I, ie - 1, Hh, t.side, d.cs[ie - 1].t + ms, { fng: fngHist?.[new Date(t.t0).toISOString().slice(0, 10)] ?? null, ...tfCtx(v.tf, d.cs[ie - 1].t + ms, k => D[k]) }) }); } }
       await new Promise(r => { try { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); } catch (e) { setTimeout(r, 0); } }); }
     feed(`🔬 ${ko} 백테스트 완료`);
   }
@@ -704,6 +713,27 @@ function researchText(sym) { const r = S.research?.[sym]; if (!r) return ""; ret
 let prRot = 0, prAt = 0;
 const Rnow = p => ((p.price - p.entry) * p.side) / (p.rDist || 1);
 const posAtr = p => p.atr || (() => { const m = MK[p.sym + "|" + p.tf]; return m ? m.I.atr[m.I.n - 2] : null; })();
+// 🧱 매수벽·매도벽(실시간 호가, 평균의 3배 이상 · ±3% 안) + 지지·저항(1시간봉 확정 스윙 고점·저점) — 포지션 관리 AI 의 익절·손절 근거
+//   실측(1년): 지지·저항으로 익절을 당기거나 '앞 저항이 가까우면 진입 안 함'은 오히려 나빠짐(−0.046 → −0.052 · −0.096R) → 진입 규칙에는 쓰지 않는다.
+//   벽은 과거 기록이 없어 백테스트가 안 된다 → AI 가 벽·레벨을 근거로 익절·손절을 옮기면 조정 채점에 '벽/레벨'로 따로 집계해 남길지 정한다.
+const _lv = {};
+async function levelsFor(sym) {
+  const c = _lv[sym]; if (c && Date.now() - c.t < 60e3) return c;
+  const price = S.dec[sym]?.price; if (!price) return null;
+  let bid = null, ask = null;
+  try { const F = await import("../nuri-ai/flow.js"), ob = (await F.orderBook({ symbol: sym, exchange: "binancef", depth: 500 })).data;
+    const strong = w => (w || []).filter(x => (x.xAvg ?? 0) >= 3 && Math.abs(x.distPct) <= 3);
+    bid = strong(ob.bidWalls).sort((a, b) => b.price - a.price)[0] || null; ask = strong(ob.askWalls).sort((a, b) => a.price - b.price)[0] || null; } catch (e) {}
+  const m = MK[sym + "|60"]; let sup = null, res = null;
+  if (m?.I) { const i = m.I.n - 2; res = (m.I.swH[i] || []).filter(p => p > price).sort((a, b) => a - b)[0] ?? null; sup = (m.I.swL[i] || []).filter(p => p < price).sort((a, b) => b - a)[0] ?? null; }
+  return (_lv[sym] = { t: Date.now(), price, bid: bid && { price: bid.price, usd: Math.round(bid.notional), x: +(bid.xAvg || 0).toFixed(1) }, ask: ask && { price: ask.price, usd: Math.round(ask.notional), x: +(ask.xAvg || 0).toFixed(1) }, sup, res });
+}
+const pctOf = (p, px) => `${p >= px ? "+" : ""}${((p / px - 1) * 100).toFixed(2)}%`;
+export function levelsText(L) { if (!L) return ""; const px = L.price, o = [];
+  if (L.ask) o.push(`매도벽 ${fmt(L.ask.price)}(${pctOf(L.ask.price, px)} · $${(L.ask.usd / 1e6).toFixed(2)}M · 평균×${L.ask.x})`);
+  if (L.bid) o.push(`매수벽 ${fmt(L.bid.price)}(${pctOf(L.bid.price, px)} · $${(L.bid.usd / 1e6).toFixed(2)}M · 평균×${L.bid.x})`);
+  if (L.res != null) o.push(`저항 ${fmt(L.res)}(${pctOf(L.res, px)})`); if (L.sup != null) o.push(`지지 ${fmt(L.sup)}(${pctOf(L.sup, px)})`);
+  return o.join(" · "); }
 function draftOf(p) {
   if (p.be && !p.run) return { kind: "run", why: "+1R 도달 → 익절 풀고 ATR×3 추적(실측 우위)" };
   return { kind: "hold", why: p.run ? "추적 중" : "아직 +1R 전" };
@@ -733,8 +763,9 @@ function applyAdj(p, kind, by, price, why) {
 async function reviewPositions(cm) {
   const P = Object.values(S.pos); if (!P.length || !cm.length || Date.now() - prAt < 5 * 60e3) return; prAt = Date.now();
   const tgt = cm[prRot++ % cm.length], off = (S.adjOff || 0) > Date.now();
+  for (const p of P) { try { p.lv = levelsText(await levelsFor(p.sym)); } catch (e) {} }
   const rows = P.map(p => { const d = draftOf(p), rg = S.regime[p.sym] || {}, a = posAtr(p); return { symbol: p.ko, side: p.side > 0 ? "long" : "short", entry: p.entry, price: p.price, R: +Rnow(p).toFixed(2), sl: p.sl, tp: p.tp ?? "없음(추적 중)",
-    breakeven: p.be, running: !!p.run, atr: a ? +(+a).toPrecision(4) : null, strategy: p.name, regime: rg.label, htf: rg.htf, adx: rg.adx, minutes: Math.round((Date.now() - p.t) / 60e3), trends: mtfText(p.sym).replace("시간봉별 추세: ", ""), draft: d.kind, draft_why: d.why }; });
+    breakeven: p.be, running: !!p.run, atr: a ? +(+a).toPrecision(4) : null, strategy: p.name, regime: rg.label, htf: rg.htf, adx: rg.adx, minutes: Math.round((Date.now() - p.t) / 60e3), trends: mtfText(p.sym).replace("시간봉별 추세: ", ""), levels: p.lv || "", draft: d.kind, draft_why: d.why }; });
   const sys = `<role>
 너는 코인 선물 포지션 관리자다. 보유 포지션마다 결정 하나를 고른다. 숫자 계산과 최종 검증은 코드가 한다.
 </role>
@@ -745,7 +776,9 @@ close: 지금 정리. 이익 +0.5R 이상이거나, -0.3R 이하인데 상위 �
 breakeven: 손절을 본전으로. +0.5R 이상일 때.
 run: 익절가를 풀고 손절을 ATR×3 뒤에서 따라간다. breakeven 이 true(+1R 을 찍음)일 때만. 6개 코인 1년 실측에서 고정 익절보다 나았다.${off ? "\n(지금은 AI 의 손절·익절 가격 조정이 채점 결과 손해라 잠시 꺼져 있다 — trail·tp 는 쓰지 않는다.)" : `
 trail: 손절을 price 로 올린다. breakeven 이 true 일 때만, 현재가에서 ATR×1.5 이상 떨어진 곳. 손절을 넓히는(불리한 쪽으로 옮기는) 것은 금지.
-tp: 익절가를 price 로 바꾼다. 진입가에서 1R~4R. 원래보다 멀리 늘리는 건 htf 가 포지션 방향과 같고 adx 25 이상일 때만.`}
+tp: 익절가를 price 로 바꾼다. 진입가에서 1R~4R. 원래보다 멀리 늘리는 건 htf 가 포지션 방향과 같고 adx 25 이상일 때만.
+levels 의 매도벽·저항(롱) / 매수벽·지지(숏)가 익절가보다 가까우면 tp 를 그 바로 앞으로 당길 수 있고, 손절은 매수벽·지지(롱) 바로 뒤로 올릴 수 있다(trail 규칙 안에서). reason 에 어떤 벽·레벨인지 쓴다 — 결과는 따로 채점된다.
+trends 는 1분~4시간 추세다. 작은 분봉이 모두 반대로 돌았으면 close·breakeven 의 근거가 될 수 있다.`}
 </decisions>
 <rules>
 - 롱: 손절 < 현재가 < 익절 · 숏: 익절 < 현재가 < 손절.
@@ -794,7 +827,7 @@ export async function scoreAdj(force = false) {
     const mk = await getTF(q.sym, q.tf || "60").catch(() => null); if (!mk) continue;
     for (const a of q.adj) { const st = a.kind === "keep" ? a.alt : a.prev; if (!st) continue;
       const cf = cfExit(q, st, mk.cs, mk.I, a.t), pret = (cf.px - q.entry) / q.entry * q.side - FW.fee, cfR = Math.max(-q.margin, q.notional * pret) / (q.risk || 1), dR = +(q.R - cfR).toFixed(2);
-      const who = a.by === "자체 엔진" ? "자체 엔진" : "AI", A = ((S.adjStat ||= {})[who] ||= { n: 0, dR: 0, plus: 0 }), K = ((S.adjKind ||= {})[a.kind] ||= { n: 0, dR: 0 });
+      const who = a.by === "자체 엔진" ? "자체 엔진" : "AI", A = ((S.adjStat ||= {})[who] ||= { n: 0, dR: 0, plus: 0 }), kk = a.kind + (/벽|지지|저항/.test(a.why || "") ? "·벽/레벨" : ""), K = ((S.adjKind ||= {})[kk] ||= { n: 0, dR: 0 });
       A.n++; A.dR = +(A.dR + dR).toFixed(2); if (dR > 0) A.plus++; K.n++; K.dR = +(K.dR + dR).toFixed(2);
       (S.adjLog ||= []).unshift({ t: Date.now(), ko: q.ko, kind: a.kind, by: a.by === "자체 엔진" ? a.by : shortMd(a.by), R: q.R, cfR: +cfR.toFixed(2), dR, open: !cf.done }); S.adjLog = S.adjLog.slice(0, 20);
       feed(`🧮 조정 채점: ${q.ko} ${a.kind}(${a.by === "자체 엔진" ? "엔진" : shortMd(a.by)}) → 실제 ${q.R}R vs 그대로였다면 ${cfR.toFixed(2)}R = ${dR >= 0 ? "+" : ""}${dR}R`);
@@ -1175,6 +1208,7 @@ export async function tick() {
     if (autoK % 20 === 7) scoreCalls().catch(() => {});
     if (autoK % 20 === 13) { scoreShadow().catch(() => {}); scoreAdj().catch(() => {}); }
     if (autoK % 300 === 2) fngCheck().catch(() => {});
+    if (autoK % 10 === 3) for (const p of Object.values(S.pos)) levelsFor(p.sym).then(L => { if (S.pos[p.sym]) p.lv = levelsText(L); }).catch(() => {});   // 🧱 보유 코인의 벽·지지·저항(1분마다)
     if (autoK % 30 === 3) researchStrategies().catch(() => {});
     if (autoK % 50 === 8) newsCheck().catch(() => {});
     if (autoK % 80 === 40) designStrategy().catch(() => {});
