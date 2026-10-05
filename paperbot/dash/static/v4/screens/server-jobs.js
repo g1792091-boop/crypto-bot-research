@@ -49,7 +49,7 @@ function jobRow(job, hl, now, sj) {
     h("div", {class: "body"}, h("b", null, job.ko), h("span", {class: "server-what"}, job.what)),
     h("div", {class: "side-r"}, sideMark(job, fail, sys, now)),
     h("div", {class: "meta"}, h("span", null, "마지막 ", lastNode),
-      h("span", null, `다음 ${nx ? `${dayTime(nx, now)} · ${rel(nx, now)}` : off ? "— (꺼짐)" : "—"}`)));
+      h("span", null, `다음 ${nx ? `${dayTime(nx, now)} · ${rel(nx, now)}` : off ? (sys.state === "missing" ? "— (설치 안 됨)" : "— (꺼짐)") : "—"}`)));
 }
 
 export function jobsCard() {

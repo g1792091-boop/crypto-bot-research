@@ -115,7 +115,9 @@ function byTfCard(d, env) {
     {label: "36 수수료", get: (tf) => cellOf(t.core && t.core[tf], "fees")},
     {label: "36 실제", get: (tf) => cellOf(t.core && t.core[tf], "after")},
     {label: "동전 실제", get: (tf) => cellOf(t.flip_same && t.flip_same[tf], "after", true)},
-    {label: "거래 (36 / 동전)", get: (tf) => `${fmt.int((t.core && t.core[tf] && t.core[tf].trades) || 0)} / ${fmt.int((t.flip_same && t.flip_same[tf] && t.flip_same[tf].trades) || 0)}`},
+    {label: "거래 (36 / 동전)", get: (tf) => {
+      const a = (t.core && t.core[tf] && t.core[tf].trades) || 0, b = (t.flip_same && t.flip_same[tf] && t.flip_same[tf].trades) || 0;
+      return h("span", null, `${fmt.int(a)} / ${fmt.int(b)}`, Math.min(a, b) < 20 ? [" ", ui.smallSample(Math.min(a, b), 20)] : null); }},
   ], tfs), ui.refNote(env && env.verdictTs), ui.assume());
 }
 
@@ -162,7 +164,8 @@ export function costLine(ctx) {
     const g = (d && d.groups) || {}, c = g.core && g.core.per_trade, f = g.flip_same && g.flip_same.per_trade;
     el.hidden = !c;
     if (!c) return;
-    el.replaceChildren(h("b", null, "비용"), ` 기존 36 거래 한 번에 수수료 `, h("b", {class: "num down"}, fmt.pct(-c.fees, 2)),
+    el.replaceChildren(h("b", null, "비용"), ` 기존 36 거래 한 번에 `,
+      g.core.trades < 20 ? [ui.smallSample(g.core.trades, 20), " "] : null, `수수료 `, h("b", {class: "num down"}, fmt.pct(-c.fees, 2)),
       ` · 수수료 전 `, h("b", {class: ["num", fmt.tone(c.before)]}, fmt.pct(c.before, 2)), ` → 실제 `,
       h("b", {class: ["num", fmt.tone(c.after)]}, fmt.pct(c.after, 2)),
       ...(f ? [` · 동전 봇 실제 `, h("b", {class: "num ink2"}, fmt.pct(f.after, 2)), " (참고)"] : []),

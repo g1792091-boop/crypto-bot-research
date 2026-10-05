@@ -36,7 +36,8 @@ export function seatsCard() {
     h("span", null, h("i", {class: "ck-seat", style: {"--f": "60%", "--p": "60%"}}), "채운 만큼 = 거래 수 / 30"),
     h("span", null, h("i", {class: "ck-seat", style: {"--f": "35%", "--p": "80%"}}), "옅은 부분 = 지금 속도로 판정 날까지"),
     h("span", null, h("i", {class: "ck-seat proj", style: {"--f": "45%", "--p": "100%"}}), "점선 = 지금 속도면 30건"),
-    h("span", null, h("i", {class: "ck-seat full", style: {"--f": "100%", "--p": "100%"}}), "꽉 참 = 30건 넘음"));
+    h("span", null, h("i", {class: "ck-seat full", style: {"--f": "100%", "--p": "100%"}}), "꽉 참 = 30건 넘음"),
+    h("span", null, "파산한 계좌는 거래가 더 늘지 않아 미리 그리지 않음"));
   const card = ui.card({plate: "판정 무대", sub: "좌석표 · 진행 상황, 판정 아님"}, head, blocks, legend,
     h("p", {class: "muted home-small"}, `한 칸 = 판정받는 계좌 하나. 거래 ${MIN_TRADES}건을 채워야 판정을 받고, 못 채우면 '보류'입니다. 칸 색은 거래 수일 뿐 잘하고 못함이 아닙니다. 지금 속도는 바뀔 수 있어 범위로만 씁니다.`));
   const prevFull = new Set();
@@ -55,7 +56,8 @@ export function seatsCard() {
       let full = 0;
       const seats = mine.map((a) => {
         const n = a.trades || 0;
-        const pr = p && p.show ? project(n, p.factor) : {mid: n, lo: n, hi: n};
+        // a bust account trades no more: its count stays where it is (no pace projection)
+        const pr = p && p.show && !a.bust ? project(n, p.factor) : {mid: n, lo: n, hi: n};
         if (n >= MIN_TRADES) full += 1;
         reach.now += n >= MIN_TRADES ? 1 : 0;
         reach.lo += pr.lo >= MIN_TRADES ? 1 : 0;
@@ -116,10 +118,10 @@ export function powerCard(ctx) {
     const r1 = x.rows.find((r) => Math.abs(r.edge - 0.01) < 1e-9);
     const sch = x.reel ? d.reel : d.core;
     lead.replaceChildren(
-      h("span", null, `${TF_LABEL[tf]} 계좌가 정말로 거래마다 +5%씩 더 벌어도 30일에 1차 합격할 확률은 `),
+      h("span", null, `${TF_LABEL[tf]} 계좌가 정말로 같은 봉 동전 봇보다 거래마다 +5%씩 더 벌어도 30일에 1차 합격할 확률은 `),
       h("b", {class: "num"}, r5 ? pctTxt(r5.d30) : "—"),
       h("span", null, r1 ? `, +1%라면 ${pctTxt(r1.d30)}입니다.` : "입니다."));
-    const head = h("div", {class: "ck-pw-row ck-pw-h", "aria-hidden": "true"}, h("span", null, "진짜 실력 (거래당)"),
+    const head = h("div", {class: "ck-pw-row ck-pw-h", "aria-hidden": "true"}, h("span", null, "진짜 실력 (동전 봇보다, 거래당)"),
       ...[30, 60, 90].map((k) => h("span", null, `${k}일까지`)));
     const bar = (v) => h("span", {class: "ck-pw-c"}, h("i", {style: {"--w": `${Math.round(Math.max(0, Math.min(1, v || 0)) * 100)}%`}}),
       h("b", {class: "num"}, pctTxt(v)));

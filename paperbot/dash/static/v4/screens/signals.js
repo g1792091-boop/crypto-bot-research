@@ -42,7 +42,8 @@ export async function mount(el, ctx) {
   const grpBody = h("div", {class: "stack tight"});
   const grpCard = ui.card({plate: "묶음별 신호", sub: "최근 24시간 · 묶음 × 봉"}, grpBody,
     note("숫자 = 신호 수, 주황 '늦음' = 한도를 넘겨 진입하지 않은 신호. · = 그 묶음은 그 봉에 계좌가 없음. "
-      + "다른 봉은 신호가 있는데 한 봉만 0이면 주황으로 표시합니다 (멈췄는지 확인; 신호가 드문 4시간봉은 빼고)."));
+      + "다른 봉은 신호가 있는데 한 봉만 0이면 주황으로 표시합니다 (멈췄는지 확인; 신호가 드문 4시간봉은 빼고). "
+      + "추가 계좌(복제)는 원본과 같은 신호를 써서 기존 36에 함께 셉니다."));
   const gst = {status: null, board: null};
   const paintGroups = () => {
     const rows = gst.status && Array.isArray(gst.status.signals_by_group) ? gst.status.signals_by_group : null;
@@ -99,9 +100,11 @@ export async function mount(el, ctx) {
 
 export function unmount() {}
 
-// the server's group keys (paperbot/groups.py, dash/app.py signal_group) in the owners' order and words
-const SIG_GROUPS = [["core", "기존 36"], ["ds200", "딥시크"], ["reel", "5분봉"], ["flip", "동전 봇"], ["extra", "추가 계좌"]];
-const KIND_GROUP = {strategy: "core", ds200: "ds200", reel: "reel", random: "flip", copy: "extra", newlab: "extra"};
+// the server's group keys (paperbot/groups.py, dash/app.py signal_group) in the owners' order and words. No 추가 계좌
+// row: the server never counts one (a copy trades on its original's signals, counted with the 36; the new-strategy
+// lab's NL rows are left out of /api/status), so a row there would be all zeros.
+const SIG_GROUPS = [["core", "기존 36"], ["ds200", "딥시크"], ["reel", "5분봉"], ["flip", "동전 봇"]];
+const KIND_GROUP = {strategy: "core", ds200: "ds200", reel: "reel", random: "flip"};
 const RARE_TF = new Set(["4h", "1d"]);
 
 /** status.signals_by_group [{group, timeframe, status, n}] + the board's accounts -> a small group x timeframe table. */
