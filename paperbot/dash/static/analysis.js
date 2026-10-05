@@ -420,15 +420,56 @@
   }
 
   // ------------------------------------------------------------ 24시간 토론방 (회의실 view)
+  // paperbot-debate (own paid-API service, docs/debate-room.md). Read-only: debate.db is opened read-only by the server.
+  const DB_CLS = {"돌고 있음": "up", "멈춤": "down", "키 없음": "down", "꺼짐": "muted"};
+  const hm = (ts) => { const d = new Date(ts + 9 * 3600000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; };
+  const money = (x) => (x == null || isNaN(x) ? "—" : "$" + Number(x).toFixed(2));
+  function debateHtml(d) {
+    const st = d.state_ko || "꺼짐";
+    let h = `<p><b class="${DB_CLS[st] || ""}">${esc(st)}</b>${d.reason ? ` <span class="muted">· ${esc(d.reason)}</span>` : ""}</p>`;
+    const sp = d.spend;
+    if (sp) {
+      h += `<p class="muted">이번 달 ${money(sp.month)} / 한도 ${money(sp.cap)}${sp.pct != null ? ` (${sp.pct}%)` : ""} · 오늘 ${money(sp.day)} · 모델 ${esc(d.model || "—")} · ${d.every_min || "—"}분마다` +
+        `${d.last_round_ts ? ` · 마지막 토론 ${hm(d.last_round_ts)}` : ""}${d.skipped_24h ? ` · 하루 안에 건너뜀 ${d.skipped_24h}번(바뀐 것 없음)` : ""}</p>`;
+    }
+    h += `<p class="an-warn">${esc(d.caution || "")}</p>`;
+    const rs = d.rounds || [];
+    const ok = rs.filter((r) => r.messages && r.messages.length);
+    const skipped = rs.filter((r) => r.status === "skipped").length;
+    const bad = rs.filter((r) => r.status === "error" || r.status === "aborted").slice(0, 3);
+    if (ok.length) {
+      h += `<div class="an-h"><b>최근 토론</b><span class="muted">새것부터</span></div>` + ok.slice(0, 4).map((r) =>
+        `<div class="an-wrap"><small class="muted">${hm(r.ts)} · ${esc(r.topic || "")} · ${money(r.cost_usd)}</small></div>` +
+        `<ul class="an-q">${r.messages.map((m) => `<li><span class="an-qs muted">${esc(m.stance || "·")}</span><div><b>${esc(m.speaker)}</b><div class="an-wrap">${esc(m.text)}</div></div></li>`).join("")}</ul>`).join("");
+    } else {
+      h += `<p class="muted">${esc(d.note || "아직 토론 글이 없습니다")}</p>`;
+    }
+    if (skipped) h += `<p class="muted">건너뛴 회차 ${skipped}번: 새 청산·알림·밤 점검이 없어 같은 이야기를 되풀이하지 않았습니다.</p>`;
+    if (bad.length) h += `<p class="muted">최근 오류: ${bad.map((r) => `${hm(r.ts)} ${esc((r.error || r.status).slice(0, 80))}`).join(" / ")}</p>`;
+    const hy = d.hypotheses || [];
+    h += `<div class="an-h"><b>가설 (코드가 채점)</b><span class="muted">메뉴에 있는 것만 · 결론 아님</span></div>`;
+    h += hy.length ? `<ul class="an-q">${hy.slice(0, 12).map((x) => {
+      const c = x.status === "graded" ? (String(x.outcome).startsWith("hit") ? "up" : "down") : "muted";
+      return `<li><div class="an-wrap"><b class="${c}">${esc(x.status_ko)}</b> <span class="tag">${esc(x.speaker || "")}</span> ${esc(x.claim || x.kind || "")}` +
+        `<br><small class="muted">${esc(x.horizon || "")}${x.status === "dropped" ? " · " + esc(x.outcome || "") : ""}</small></div></li>`; }).join("")}</ul>` : '<p class="muted">아직 없음</p>';
+    const sb = d.scoreboard;
+    if (sb && sb.speakers && Object.keys(sb.speakers).length) {
+      h += `<p class="muted">적중 기록: ${Object.entries(sb.speakers).map(([k, v]) => `${esc(k)} ${v.hit}/${v.graded}${v.small ? "(표본 적음)" : ""}`).join(" · ")}` +
+        ` — 채점된 가설이 ${sb.small_below || 10}개 미만이면 표본이 적어 아무것도 말해 주지 못합니다.</p>`;
+    }
+    const id = d.ideas || [];
+    h += `<div class="an-h"><b>새 매매법 연구실에 줄 아이디어</b><span class="muted">시험 전의 생각</span></div>`;
+    h += id.length ? `<ul class="an-q">${id.slice(0, 8).map((x) => `<li><span class="an-qs muted">${hm(x.ts).split(" ")[0]}</span><div class="an-wrap">${esc(x.text)}${x.tag ? ` <span class="tag">${esc(x.tag)}</span>` : ""}</div></li>`).join("")}</ul>` : '<p class="muted">아직 없음</p>';
+    return h;
+  }
   async function loadDebate() {
     const el = $("debate-body");
     if (!el) return;
     let d;
     try { d = await api("/api/debate"); } catch (e) { return; }
-    $("debate-at").textContent = d.ready ? `${(d.messages || []).length}개 글` : "준비 중";
-    if (!d.ready) { el.innerHTML = `<p class="muted">${esc(d.note || "24시간 토론방 — 준비 중")}. 에이전트들이 하루 종일 장을 두고 토론하는 방입니다. 준비되면 여기에 글이 나타납니다.</p>`; return; }
-    el.innerHTML = (d.messages || []).length ? `<ul class="an-q">${d.messages.map((m) => `<li><span class="an-qs muted">${esc(m.stance || "·")}</span><div><b>${esc(m.speaker)}</b> <small class="muted">${tsKo(m.ts)}${m.topic ? " · " + esc(m.topic) : ""}</small><div class="an-wrap">${esc(m.text)}</div></div></li>`).join("")}</ul>`
-      : `<p class="muted">${esc(d.note || "아직 토론 글이 없습니다")}</p>`;
+    $("debate-at").textContent = d.state_ko || (d.ready ? `${(d.messages || []).length}개 글` : "꺼짐");
+    if (!d.ready) { el.innerHTML = `<p><b class="muted">꺼짐</b></p><p class="muted">${esc(d.note || "24시간 토론방 — 꺼짐")}. 에이전트와 별도로, 두 분이 API 키를 넣고 켜면 하루 종일 장을 두고 토론하는 방입니다 (docs/debate-room.md).</p>`; return; }
+    el.innerHTML = debateHtml(d);
   }
 
   // ------------------------------------------------------------ start

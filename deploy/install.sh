@@ -6,6 +6,8 @@
 # Does: system packages, firewall (SSH only), user "paperbot" and the order executor's own user "paperbot-exec",
 # Python venv, directories, env-file templates (root:paperbot 640; executor.env root:root 600), systemd units
 # (installed, NOT started).
+# The 24-hour debate room (paperbot-debate: paid Anthropic API, docs/debate-room.md) is installed, never enabled or
+# started here, and it is not among the services this script stops for the code swap.
 # Does not: put any key or password anywhere, start trading, or open the dashboard to
 # the internet. Safe to run again: to update, `git pull` then run it again. It refuses
 # uncommitted changes, stops the running services only for the swap, and keeps the
@@ -50,6 +52,17 @@ if [ "$(id -u paperbot-exec)" = "$(id -u paperbot)" ] || [ "$(id -u paperbot-exe
   echo "user paperbot-exec must be its own user (not paperbot, not root): sudo userdel paperbot-exec, then run this again"
   exit 1
 fi
+# The 24-hour debate room's own user (docs/debate-room.md): primary group paperbot-debate, extra group paperbot, so it can
+# READ the bot's databases, and /etc/paperbot/debate.env (root:paperbot-debate 640, below) is readable by it alone: user
+# paperbot (agents, dashboard, live runner) is not in that group and never sees the paid API key.
+getent group paperbot-debate >/dev/null || groupadd --system paperbot-debate
+id paperbot-debate >/dev/null 2>&1 || useradd --system --gid paperbot-debate --groups paperbot --no-create-home \
+  --home-dir /var/lib/paperbot/debate --shell /usr/sbin/nologin paperbot-debate
+id -nG paperbot-debate | tr ' ' '\n' | grep -qx paperbot || usermod -a -G paperbot paperbot-debate
+if [ "$(id -u paperbot-debate)" = "$(id -u paperbot)" ] || [ "$(id -u paperbot-debate)" = 0 ]; then
+  echo "user paperbot-debate must be its own user (not paperbot, not root): sudo userdel paperbot-debate, then run this again"
+  exit 1
+fi
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbot
 # 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab;
 # same build as the research, checked file by file against paperbot/agents/labdata_reference.json)
@@ -72,8 +85,15 @@ if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
       || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
   done
 fi
+# the debate room's only writable folder (debate.db): owner paperbot-debate, group paperbot reads it (the dashboard,
+# user paperbot, shows it read-only; setgid keeps new files in group paperbot). Nothing else writes here.
+install -d -o paperbot-debate -g paperbot -m 2750 /var/lib/paperbot/debate
+chown -R paperbot-debate:paperbot /var/lib/paperbot/debate
+chmod -R u+rwX,g+rX,g-w,o-rwx /var/lib/paperbot/debate
 # GH Coin call recorder output (docs/ghcoin-recorder.md)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
+# nightly Obsidian vault export (docs/obsidian-vault.md): the only folder that job writes
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/obsidian
 # the failure alert's one-a-day stamps (deploy/paperbot-failed@.service)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/failalert
 # the weekly checkpoint rehearsal's files and its own bar cache (deploy/paperbot-rehearsal.service)
@@ -113,7 +133,7 @@ if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
   # wait for a running one to finish so it never reads a half-swapped tree.
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
-paperbot-offsite.service paperbot-rehearsal.service"
+paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service"
   n=0
   # A oneshot job reports "activating" (not "active") while it runs, so is-active alone never waits for it.
   while busy="$(for j in $JOBS; do case "$(systemctl show -p ActiveState --value "$j" 2>/dev/null)" in
@@ -169,6 +189,23 @@ for f in live dash agents; do
   fi
   [ -f /etc/paperbot/$f.env ] && chmod 640 /etc/paperbot/$f.env && chown root:paperbot /etc/paperbot/$f.env
 done
+# The debate room's paid API key: root:paperbot-debate 640 (never paperbot's group). Created from the template only when
+# missing, with the two Telegram lines copied from agents.env (same bot and chat); an existing file is never overwritten
+# and no value is printed. The key itself is typed by the owners with sudoedit (docs/debate-room.md).
+if [ ! -f /etc/paperbot/debate.env ] && [ -f "$APP/deploy/debate.env.example" ]; then
+  install -o root -g paperbot-debate -m 640 "$APP/deploy/debate.env.example" /etc/paperbot/debate.env
+  if [ -f /etc/paperbot/agents.env ]; then
+    for k in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_CRITICAL; do
+      line="$(grep -E "^${k}=." /etc/paperbot/agents.env | tail -n 1 || true)"
+      if [ -n "$line" ]; then
+        sed -i "/^${k}=/d" /etc/paperbot/debate.env
+        printf '%s\n' "$line" >> /etc/paperbot/debate.env
+      fi
+    done
+    unset line
+  fi
+fi
+[ -f /etc/paperbot/debate.env ] && chmod 640 /etc/paperbot/debate.env && chown root:paperbot-debate /etc/paperbot/debate.env
 # The executor's order keys: root only. systemd reads the file for paperbot-executor.service (and the drill wrapper
 # deploy/paperbot-exec.sh) before it drops to the paperbot-exec user; the agents and the dashboard cannot open the
 # file, and as another user (paperbot) they cannot read the keys from the executor's /proc/<pid>/environ either.
@@ -182,8 +219,9 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
-         paperbot-rehearsal.service paperbot-rehearsal.timer \
-         paperbot-failed@.service paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
+         paperbot-rehearsal.service paperbot-rehearsal.timer paperbot-obsidian.service paperbot-obsidian.timer \
+         paperbot-failed@.service paperbot-debate.service \
+         paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
@@ -195,6 +233,15 @@ fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then
   echo "weekly checkpoint rehearsal installed but off; to turn it on once: sudo systemctl enable --now paperbot-rehearsal.timer"
+fi
+# The Obsidian export is read-only and free (no key, no network, no order): its nightly timer is switched on here.
+systemctl enable --now paperbot-obsidian.timer >/dev/null 2>&1 || echo "obsidian timer could not be enabled: sudo systemctl enable --now paperbot-obsidian.timer"
+# The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
+if systemctl is-active --quiet paperbot-debate 2>/dev/null; then
+  echo "paperbot-debate is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-debate"
+elif ! systemctl is-enabled --quiet paperbot-debate 2>/dev/null; then
+  echo "24-hour debate room installed but off (paid API); to set it up and turn it on: docs/debate-room.md"
 fi
 if [ -n "$RUNNING" ]; then
   systemctl start $RUNNING

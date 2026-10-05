@@ -1742,8 +1742,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                failalert_dir: Optional[str] = None) -> FastAPI:
     # checkpoint verdicts (paperbot/checkpoint.py): by default checkpoint.db next to paper3.db, read-only
     checkpoint_db = checkpoint_db or os.path.join(os.path.dirname(os.path.abspath(db)), "checkpoint.db")
-    # the 24-hour debate room (dash/analysis.py debate): by default debate.db next to paper3.db, read-only
-    debate_db = debate_db or os.path.join(os.path.dirname(os.path.abspath(db)), "debate.db")
+    # the 24-hour debate room (dash/analysis.py debate): by default debate/debate.db next to paper3.db, read-only
+    debate_db = debate_db or os.path.join(os.path.dirname(os.path.abspath(db)), "debate", "debate.db")
     if inbox_db and any(other and same_file(inbox_db, other) for other in (db, daily_db, agents_db)):
         # the dashboard creates its tables in inbox.db: never in another process's database
         raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")

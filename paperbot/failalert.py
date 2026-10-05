@@ -27,6 +27,8 @@ JOBS_KO = {
     "paperbot-daily3.service": ("매일 점검(09:20)", "내일 09:20에 다시 돎"),
     "paperbot-labmonthly.service": ("매달 재검사", "다음 달 6일에 다시 돎\n지금 다시: sudo systemctl start paperbot-labmonthly"),
     "paperbot-agents.service": ("에이전트 회의", "15분마다 다시 시도"),
+    "paperbot-obsidian.service": ("옵시디언 볼트 갱신(09:50)",
+                                  "내일 09:50에 다시 돎\n지금 다시: sudo systemctl start paperbot-obsidian"),
     "paperbot-rehearsal.service": ("판정 미리 연습(매주 수요일)",
                                    "다음 주 수요일 12:30에 다시 돎 (진짜 판정에는 영향 없음)\n"
                                    "지금 다시: sudo systemctl start paperbot-rehearsal"),

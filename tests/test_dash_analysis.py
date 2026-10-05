@@ -193,7 +193,9 @@ def test_debate_room_reads_a_future_table_read_only(tmp_path, env):
     assert AN.debate(path)["ready"] is False
     c = env["client"]
     _login(c)
-    assert c.get("/api/debate").json()["note"] == "24시간 토론방 — 준비 중"
+    off = c.get("/api/debate").json()                              # no debate.db: the service was never started
+    assert off["ready"] is False and off["state"] == "off" and off["state_ko"] == "꺼짐" and "꺼짐" in off["note"]
+    assert off["rounds"] == [] and off["hypotheses"] == [] and off["ideas"] == []
     d = sqlite3.connect(path)
     d.execute("CREATE TABLE debate_messages (id INTEGER PRIMARY KEY, ts INTEGER, speaker TEXT, stance TEXT, "
               "topic TEXT, text TEXT)")

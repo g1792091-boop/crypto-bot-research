@@ -422,6 +422,7 @@ sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage before --send
 **통과 조건:** `[고칠 것]` 줄이 하나도 없고, 맨 아래 결론이 `[OK] 시작 준비가 끝났습니다`로 시작하면 통과입니다. 모든 줄이 `[OK]`일 필요는 없습니다.
 - 제대로 준비된 서버에서도 늘 나오는 `[참고]`는 하나입니다: `이제 체크가 켜졌습니다: 약 6분 …`(`--ping`을 붙이면 나옴. 아래 "바로 11번으로"의 이유입니다).
 - 4-3을 건너뛰었으면 `서버 밖 백업 …` `[참고]`가 하나 더 나옵니다. 4-3을 하고 이 점검을 다시 합니다.
+- 설치 스크립트가 24시간 토론방(유료 API, `docs/debate-room.md`)을 설치해 두었으면 `24시간 토론방(유료 API)은 설치만 되어 있고 꺼져 있습니다` `[참고]`가 늘 하나 나옵니다(쓰지 않으면 그대로 두세요. 이 서버에 아직 설치되지 않았다면 `설치되어 있지 않습니다`).
 - 그 밖의 `[참고]`(예: Tailscale 키 만료 날짜, CPU·메모리가 권장보다 적음)는 그 줄을 읽고, 할 일이 적혀 있으면 합니다. 모르겠으면 그 줄을 개발자에게 보여 줍니다.
 - `[고칠 것]`이 있으면 해당 단계로 돌아가 고친 뒤 이 점검을 다시 합니다: 바이낸스 키 → 4-1, 텔레그램 → 4-2, 서버 밖 백업 → 4-3, healthchecks → 5, 대시보드 → 6, Tailscale → 7, 에이전트 로그인 → 8, 5년 자료 → 9, 설치·서비스 → 3.
 - 에이전트 방(8~9번)이 아직 덜 됐는데 봇부터 켜고 싶으면 끝에 `--agents no`를 붙여 점검합니다. 에이전트 줄은 건너뛰고, 결론의 시작 명령에서도 에이전트 타이머가 빠집니다. 그때는 11번 상자 대신 그 결론 줄의 `시작:` 뒤 명령으로 켜고, 8~9번을 마친 뒤 `sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer`로 에이전트를 켭니다.
@@ -486,7 +487,7 @@ cd /opt/crypto-bot-research
 sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after
 ```
 - 통과 조건은 10번과 같습니다: `[고칠 것]` 줄이 없고, 맨 아래 결론이 `[OK] 봇이 정상으로 돌고 있습니다`로 시작하면 됩니다.
-- 제대로 돌면 `[참고]`는 보통 하나도 없습니다. 봇이 1분봉을 받고 있는지, 봇이 healthchecks에 신호를 보내고 있는지, 강제청산 기록기가 연결돼 있는지도 이 점검이 봅니다.
+- 제대로 돌면 `[참고]`는 토론방 줄(꺼져 있다는 것) 하나 말고는 보통 없습니다. 봇이 1분봉을 받고 있는지, 봇이 healthchecks에 신호를 보내고 있는지, 강제청산 기록기가 연결돼 있는지도 이 점검이 봅니다.
 - 시작한 지 10분이 안 됐으면 `봇이 아직 준비 중입니다`나 `첫 healthchecks.io 핑을 기다리는 중` `[참고]`가 나옵니다. 몇 분 뒤 다시 합니다.
 - `[고칠 것]`이 있으면 그 줄의 안내대로 합니다. 모르겠으면 13-7 "문제가 생기면"을 봅니다.
 
@@ -914,6 +915,15 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 - **알림:** 새 계좌 시작은 텔레그램 무음, 추가 계좌의 낙폭·파산은 "추가 계좌 알림 모음"(한 시간에 한 번, 무음), 멈춤·정지는
   CRITICAL로 바로 옵니다.
 - **판정:** 추가 계좌는 자기가 시작된 날부터 30일을 세고, 동전 봇도 자기 묶음으로 따로 돌려 원래 계좌들의 판정은 그대로입니다.
+
+## 24시간 토론방 (선택, 유료 API, `paperbot/agents/debate.py`)
+AI들이 paper 실험의 숫자를 두고 하루 종일 짧게 토론하는 방입니다. **두 분의 Anthropic API 크레딧(유료)** 으로 돌고, 에이전트 방(Claude Max 구독)과는 따로이며 구독이 API로 바뀌지 않습니다. 자세한 것은 `docs/debate-room.md`.
+
+- **설치만 되고 꺼져 있습니다:** `deploy/install.sh`가 사용자 `paperbot-debate`, 폴더 `/var/lib/paperbot/debate`, 키 파일 틀 `/etc/paperbot/debate.env`(root:paperbot-debate 640, 에이전트·대시보드·봇은 읽을 수 없음), 서비스 파일을 만듭니다. 켜지도, 코드 교체 때 멈추거나 다시 시작하지도 않습니다.
+- **켜기:** 콘솔에서 크레딧·지출 한도·키를 만들고, `SUDO_EDITOR=nano sudoedit /etc/paperbot/debate.env`로 키를 편집기 안에서만 넣은 뒤 `sudo systemctl enable --now paperbot-debate`. 키를 채팅이나 명령줄에 쓰지 않습니다. 먼저 `once --dry-run`으로 비용을 재 볼 수 있습니다(키·API 없이).
+- **끄기:** `sudo systemctl disable --now paperbot-debate`. 코드 업데이트 뒤에는 `sudo systemctl restart paperbot-debate`.
+- **돈:** 월 한도(기본 $40, 80%에서 경고, 95%에서 멈춤)는 코드가 세는 부드러운 한도이고, 진짜 한도는 콘솔의 지출 한도입니다. 처음에는 $5~10 선불과 60분 간격을 권합니다(`docs/debate-room.md`).
+- 이 방은 주문·규칙·계좌·코드·봇 DB를 건드리지 않고 읽기만 합니다.
 
 ## 실거래 준비 (이 문서 범위 밖)
 테스트넷 주문 연습과 실거래는 `docs/live-safety.md` 3장을 따릅니다. 주문 키는 `live.env`가 아니라 root만 읽을 수 있는 `/etc/paperbot/executor.env`에 넣고, 주문 실행기(`paperbot-executor`)는 그 문서의 순서대로 사람이 직접 켭니다. paper 봇의 읽기 전용 키를 주문 키로 쓰지 않습니다.

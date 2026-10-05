@@ -117,8 +117,11 @@ CLAUDE_TOKEN_RE = re.compile(r"sk-ant-oat\d\d-[A-Za-z0-9_-]+")
 CLAUDE_TOKEN_MIN_TAIL = 60
 
 # env file -> (owner, group, mode) as deploy/install.sh makes them
+DEBATE_USER = "paperbot-debate"             # the 24-hour debate room's own user (paid API key, docs/debate-room.md)
 ENV_SPECS = {"live": ("root", USER, 0o640), "dash": ("root", USER, 0o640),
-             "agents": ("root", USER, 0o640), "executor": ("root", "root", 0o600)}
+             "agents": ("root", USER, 0o640), "executor": ("root", "root", 0o600),
+             # the paid API key: its own group, so user paperbot (agents, dashboard, live runner) cannot read it
+             "debate": ("root", DEBATE_USER, 0o640)}
 LIVE_REQUIRED = ("BINANCE_API_KEY", "BINANCE_API_SECRET", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_CRITICAL",
                  "DEADMAN_URL")
 LIVE_OPTIONAL = ("TELEGRAM_CHAT_WARN", "TELEGRAM_CHAT_INFO")
@@ -131,11 +134,16 @@ EXCHANGE_KEYS = ("BINANCE_API_KEY", "BINANCE_API_SECRET") + ORDER_KEYS
 ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
 CLAUDE_KEY = "CLAUDE_CODE_OAUTH_TOKEN"
+DEBATE_KEY = "ANTHROPIC_API_KEY"            # only /etc/paperbot/debate.env may hold it (checked in every other env file)
 FORBIDDEN = {
     "live": {**{k: "주문용 키·스위치는 executor.env(root만 읽음)에만 둡니다" for k in ORDER_KEYS},
-             CLAUDE_KEY: "Claude 토큰은 agents.env에만 둡니다"},
+             CLAUDE_KEY: "Claude 토큰은 agents.env에만 둡니다",
+             DEBATE_KEY: "유료 API 키는 debate.env(24시간 토론방 전용)에만 둡니다"},
     "dash": {**{k: "대시보드에는 거래소 키가 필요 없습니다" for k in EXCHANGE_KEYS},
-             CLAUDE_KEY: "대시보드에는 Claude 토큰이 필요 없습니다"},
+             CLAUDE_KEY: "대시보드에는 Claude 토큰이 필요 없습니다",
+             DEBATE_KEY: "유료 API 키는 debate.env(24시간 토론방 전용)에만 둡니다"},
+    "debate": {**{k: "토론방에는 거래소 키가 필요 없습니다" for k in EXCHANGE_KEYS},
+               CLAUDE_KEY: "토론방은 구독 토큰이 아니라 API 키(debate.env)를 씁니다"},
     "agents": {**{k: "AI 회의가 Claude 구독이 아니라 사용량 과금으로 바뀝니다" for k in ENV_BILLING},
                **{k: "에이전트는 거래소 키를 갖지 않습니다" for k in EXCHANGE_KEYS}},
 }
@@ -162,10 +170,13 @@ EXTRA_SERVICES = ("paperbot-ghcoin.service", "paperbot-tgtrades.service")
 OFFSITE_TIMER = "paperbot-offsite.timer"
 # optional: installed by install.sh but left off (the owners turn it on once, docs/server-setup-v3.md); when it is
 # installed its state is shown as [참고] only, never [고칠 것]: the weekly checkpoint rehearsal (checkpoint_preview)
-OPTIONAL_TIMERS = ("paperbot-rehearsal.timer",)
+OPTIONAL_TIMERS = ("paperbot-rehearsal.timer", "paperbot-obsidian.timer")
+# optional, paid: the 24-hour debate room. Installed by install.sh and left off; shown as [참고] unless the owners
+# turned it on, and then a missing key is a [고칠 것]. Never part of INSTALLED (not installed is not a problem).
+DEBATE_UNIT = "paperbot-debate.service"
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
 ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS + EXTRA_SERVICES
-             + ("paperbot-offsite.service",) + OPTIONAL_TIMERS
+             + ("paperbot-offsite.service", DEBATE_UNIT) + OPTIONAL_TIMERS
              + tuple(u.replace(".timer", ".service") for u in OPTIONAL_TIMERS))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
@@ -388,6 +399,8 @@ def read_env(ctx: Ctx, name: str) -> EnvFile:
         return ef
     if ef.info is None or name == "executor":
         return ef
+    if name == "debate" and ctx.euid != 0:
+        return ef                         # the paid key is readable by its own user and root only: nothing to read here
     try:
         with open(ef.path, encoding="utf-8") as fh:
             text = fh.read()
@@ -523,6 +536,8 @@ def check_env_files(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool) -> 
             out.append(fix(f"{name}.env를 읽을 수 없습니다({ef.error}): sudo로 실행하세요 (root 또는 sudo -u paperbot)"))
             continue
         if not ef.exists:
+            if name == "debate":
+                continue                  # check_debate says whether the (optional, paid) debate room is installed
             required = name in ("live", "dash") or (name == "agents" and agents_wanted)
             out.append((fix if required else note)(
                 f"{ef.path}가 없습니다" + (f": 설치 스크립트가 만듭니다 ({INSTALL})" if required else
@@ -554,6 +569,7 @@ def check_env_files(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool) -> 
     out += _values_line(agents, AGENTS_REQUIRED, fix if agents_wanted else note,
                         "" if agents_wanted else "에이전트 방을 켤 때 채웁니다")
     out += _telegram_format(agents) + _claude_token_format(agents, fix if agents_wanted else note)
+    out += _telegram_format(envs["debate"])
     return out
 
 
@@ -1805,6 +1821,65 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     return out
 
 
+# ---------------------------------------------------------------- the 24-hour debate room (optional, paid API)
+DEBATE_KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")
+DEBATE_DIR_MODE = ("paperbot-debate", "paperbot", 0o2750)    # owner, group, mode of /var/lib/paperbot/debate
+
+
+def check_debate(ctx: Ctx, states: Optional[dict], envs: dict[str, EnvFile]) -> list[Line]:
+    """Not installed or installed but off: [참고] only. Turned on: the key must be there (else [고칠 것]) and look like a key,
+    the key file must be root:paperbot-debate 640 (check_env_files; user paperbot cannot read it), the service
+    user and its folder must exist, and the last round, this month's spend against the cap are shown. The key is
+    never printed (report() scrubs every env value)."""
+    st = (states or {}).get(DEBATE_UNIT) or {}
+    ef = envs["debate"]
+    if st.get("LoadState") != "loaded":
+        return [note("24시간 토론방(paperbot-debate, 유료 API)은 설치되어 있지 않습니다 (선택): 설치 스크립트를 다시 돌리면 "
+                     "설치만 되고 켜지지 않습니다. 설명: docs/debate-room.md")]
+    on = _enabled(st) or _active(st)
+    level = fix if on else note
+    out: list[Line] = []
+    if ctx.user_id(DEBATE_USER) is None:
+        out.append(level(f"토론방 사용자 {DEBATE_USER}가 없습니다: {INSTALL}"))
+    if not on:
+        out.append(note("24시간 토론방(유료 API)은 설치만 되어 있고 꺼져 있습니다. 쓰려면 docs/debate-room.md 순서대로 "
+                        "키를 넣고 sudo systemctl enable --now paperbot-debate"))
+    if ctx.euid != 0 and ef.exists:
+        out.append(note(f"토론방 설정(debate.env)은 root만 열어 볼 수 있습니다(키 보호): sudo로 실행하면 키가 들어 있는지도 확인합니다"))
+    elif ef.exists and not ef.error:
+        key = ef.get(DEBATE_KEY)
+        if key and not DEBATE_KEY_RE.fullmatch(key):
+            out.append(level("debate.env의 ANTHROPIC_API_KEY 모양이 API 키(sk-ant-…, 공백 없음)가 아닙니다: 콘솔에서 받은 키를 "
+                             "sudoedit로 다시 붙여 넣으세요"))
+        if on and not key:
+            out.append(fix("24시간 토론방이 켜져 있는데 debate.env에 ANTHROPIC_API_KEY가 비어 있습니다: "
+                           "sudoedit /etc/paperbot/debate.env 에 키를 넣고 sudo systemctl restart paperbot-debate"))
+    elif on and not ef.exists:
+        out.append(fix(f"24시간 토론방이 켜져 있는데 {ef.path}가 없습니다: {INSTALL}"))
+    d = ctx.stat(os.path.join(ctx.lib, "debate"))
+    if d is not None and (d.owner, d.group, d.mode) != DEBATE_DIR_MODE:
+        out.append(level(f"{ctx.lib}/debate 권한이 {d.owner}:{d.group} {d.mode:o}입니다 (맞는 값 {DEBATE_DIR_MODE[0]}:"
+                         f"{DEBATE_DIR_MODE[1]} {DEBATE_DIR_MODE[2]:o}): {INSTALL}"))
+    if on:
+        from .agents import debate as DB
+        s = DB.summary(os.path.join(ctx.lib, "debate", "debate.db"), ctx.now_ms())
+        if not s.get("ready"):
+            out.append(note("24시간 토론방이 켜져 있지만 아직 토론 기록이 없습니다: 켠 직후라면 첫 회차까지 기다리세요. "
+                            "오래됐다면 journalctl -u paperbot-debate -n 30"))
+        else:
+            sp = s["spend"]
+            last = "아직 없음" if not s.get("last_round_ts") else kst_text(s["last_round_ts"])
+            line = (f"24시간 토론방 {s['state_ko']}: 마지막 토론 {last}, 이번 달 ${sp['month']:.2f} / 한도 ${sp['cap']:g}"
+                    + (f" ({sp['pct']}%)" if sp.get("pct") is not None else "") + f", {s.get('every_min')}분마다")
+            if s["state"] == "running":
+                out.append(ok(line))
+            elif s["state"] == "no_key":
+                out.append(fix(line + f" — {s.get('reason')}"))
+            else:
+                out.append(note(line + (f" — {s.get('reason')}" if s.get("reason") else "")))
+    return out
+
+
 # ---------------------------------------------------------------- run and report
 def guard(fn: Callable[..., list], *args, level: Callable[[str], Line] = fix) -> list[Line]:
     """A check that breaks is reported as one line (``level``: [고칠 것], or [참고] for an optional part);
@@ -1847,6 +1922,7 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
         ("서비스", guard(check_units, states, stage, wanted, ctx.mono_us())),
         ("서버 밖 백업 (텔레그램)", guard(check_offsite, live, states, level=note)),
         ("주문 실행기 사용자 (키 분리)", guard(check_executor_user, ctx, states)),
+        ("24시간 토론방 (유료 API, 선택)", guard(check_debate, ctx, states, envs, level=note)),
         ("주문 실행기가 따라 할 계좌", guard(check_executor_account, ctx)),
         ("데이터", guard(check_data_dir, ctx) + guard(check_paper_db, ctx, stage, bool(live.get("DEADMAN_URL")))
          + (guard(check_liq, ctx) if stage == "after" else [])),

@@ -32,15 +32,16 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
                                     reference lines, and the leverage equity curves (``?account=`` one account's)
 - ``GET /api/analysis/questions``   ⑦ the 45-question checklist (paperbot/dash/questions45.json, see below)
 - ``GET /api/analysis/alerts``      알림 기록: what is stored somewhere readable (see ``alert_history``)
-- ``GET /api/debate``               the 24-hour debate room: empty until the debate service exists (see ``debate``)
+- ``GET /api/debate``               the 24-hour debate room (paperbot/agents/debate.py, own service; see ``debate``)
 
 The 45-question checklist reads ``paperbot/dash/questions45.json``:
 ``{"source": "<doc it was taken from>", "updated": "YYYY-MM-DD", "questions": [{"n": 1, "q": "질문", "status":
 "done|partial|todo|na", "where": "어디서 답하는지", "note": "한 줄"}]}``. An empty list shows '준비 중'.
 
-The 24-hour debate room reads, read-only, ``debate.db`` next to paper3.db (``create_app(debate_db=...)`` overrides):
-table ``debate_messages(id INTEGER PRIMARY KEY, ts INTEGER, speaker TEXT, stance TEXT, topic TEXT, text TEXT)``;
-the debate service, when it exists, is that file's only writer. No file or no table: ``ready: false``.
+The 24-hour debate room reads, read-only, ``debate/debate.db`` next to paper3.db (``create_app(debate_db=...)``
+overrides): tables debate_messages, debate_rounds, debate_hypotheses, debate_ideas, debate_state; the debate service
+(paperbot-debate, its own user and its own paid API key) is that file's only writer. No file or no table: ``ready:
+false`` and the page shows '꺼짐'.
 """
 
 from __future__ import annotations
@@ -814,10 +815,17 @@ def questions(path: str = QUESTIONS_FILE) -> dict:
             **({} if qs else {"note": "45개 질문 점검표가 아직 비어 있습니다 (준비 중)"})}
 
 
-# ---------------------------------------------------------------- 24-hour debate room (future, read-only)
+# ---------------------------------------------------------------- 24-hour debate room (read-only)
 def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS) -> dict:
-    out = {"ready": False, "messages": [], "title": "24시간 토론방", "note": "24시간 토론방 — 준비 중",
-           "source": os.path.basename(debate_db) if debate_db else None}
+    """The 24-hour debate room (paperbot/agents/debate.py, a separate paid-API service; docs/debate-room.md): its latest
+    rounds (newest first, each with its turns), spend against the monthly cap, status (돌고 있음 / 멈춤 + reason /
+    키 없음 / 꺼짐), hypotheses with their grading, ideas and per-speaker hit rates, all from debate.db opened read-only.
+    ``messages`` (oldest first) keeps the old shape. No file or no table: ``ready: false``, ``state: "off"``."""
+    from ..agents import debate as DB
+    out = {"ready": False, "messages": [], "title": "24시간 토론방", "note": "24시간 토론방 — 꺼짐: 아직 시작한 적이 없습니다",
+           "source": os.path.basename(debate_db) if debate_db else None, "state": "off", "state_ko": DB.STATE_KO["off"],
+           "reason": "서비스가 켜져 있지 않거나 아직 시작한 적이 없습니다", "rounds": [], "hypotheses": [], "ideas": [],
+           "caution": DB.CAUTION_KO}
     c = ro_connect(debate_db)
     if c is None:
         return out
@@ -831,7 +839,11 @@ def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS) -> dict:
         return out
     finally:
         _close(c)
-    return {**out, "ready": True, "messages": rows[::-1], "note": "" if rows else "아직 토론 글이 없습니다"}
+    out.update(ready=True, messages=rows[::-1], note="" if rows else "아직 토론 글이 없습니다")
+    s = DB.summary(debate_db, rounds=15)
+    if s.get("ready"):
+        out.update({k: v for k, v in s.items() if k not in ("ready", "caution")})
+    return out
 
 
 # ---------------------------------------------------------------- routes

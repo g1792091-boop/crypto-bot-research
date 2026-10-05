@@ -730,6 +730,7 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .an-q li.an-qg { display: block; padding: 10px 12px 4px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .an-qs { flex: none; width: 22px; text-align: center; font-weight: 700; }
 #debate { margin-top: 12px; }
+#debate .an-qs { width: 40px; font-size: 11px; line-height: 1.7; }
 @media (max-width: 720px) {
   .an-grid th, .an-grid td { padding: 5px 6px; font-size: 11.5px; }
   .an-t th, .an-t td { padding: 5px 4px; }

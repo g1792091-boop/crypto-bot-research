@@ -1,0 +1,66 @@
+# 24-hour debate room (docs/debate-room.md): ONE call to the Anthropic Messages API every DEBATE_EVERY_MIN minutes
+# (paid, the owners' own API key) returns a short Korean debate about the paper run's numbers. A separate service on
+# purpose: the agent rooms run on the Claude Max subscription and must never see this key or switch to paid API.
+#
+# Installed by deploy/install.sh but NEVER enabled or started there (and not in the units it stops for a code swap):
+# the owners turn it on once, after putting the key in /etc/paperbot/debate.env (docs/debate-room.md):
+#   sudo systemctl enable --now paperbot-debate
+# A new code version is picked up with:   sudo systemctl restart paperbot-debate
+#
+# Own user paperbot-debate (primary group paperbot-debate, extra group paperbot so it can READ the bot's databases).
+# The key file /etc/paperbot/debate.env is root:paperbot-debate 640: user paperbot (agents, dashboard, live runner) is
+# not in that group and cannot read it, and cannot read this process's /proc/<pid>/environ either (another user).
+# systemd reads EnvironmentFile= as root before the sandbox applies; nothing this process starts can open /etc/paperbot.
+# It writes ONLY /var/lib/paperbot/debate (debate.db; the dashboard reads it read-only, files are 640 group paperbot).
+# It never places an order, edits a rule or account, or writes to any bot database. No OnFailure hook: the service
+# sends its own Telegram warning per cause (at most one an hour) and backs off by itself; it does not crash-loop.
+# Exit status 2 = a bad DEBATE_* value: not restarted (fix debate.env, then restart).
+# SIGTERM (systemctl stop / restart): the call in progress finishes, its result is committed, then it exits.
+[Unit]
+Description=paperbot 24-hour debate room (paid Anthropic API, read-only on the bot)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=paperbot-debate
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+# ANTHROPIC_API_KEY, DEBATE_*, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_CRITICAL. Template: deploy/debate.env.example
+EnvironmentFile=/etc/paperbot/debate.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.agents.debate run
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+# SIGTERM to the main process only; it finishes the call it is in (up to its own timeouts) and exits
+KillMode=mixed
+TimeoutStopSec=90
+Nice=10
+CPUWeight=20
+MemoryHigh=768M
+MemoryMax=1G
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Everything is read-only except the debate folder. The bot's databases are not listed file by file (a listed file
+# stays pinned to its old inode after a restore); the code opens them read-only (file:...?mode=ro) in any case.
+ReadWritePaths=/var/lib/paperbot/debate
+ReadOnlyPaths=/var/lib/paperbot
+# No other secret and no other service's data is visible: all of /etc/paperbot (the other env files: exchange keys,
+# the agents' login token, the dashboard secret), the order executor's folder, the backups, the agents' Claude
+# Code login and the lab caches. A missing path ('-') is skipped.
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/backups/paperbot -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/lib/paperbot/lab -/var/lib/paperbot/inbox.db
+
+[Install]
+WantedBy=multi-user.target

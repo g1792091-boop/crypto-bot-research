@@ -52,12 +52,12 @@ def test_failed_scheduled_jobs_send_one_korean_warning():
 
 def test_the_owners_check_of_the_units_shows_only_the_settings():
     """The owners' check after a deploy (`systemctl cat <the five jobs> | grep -E ...`): one line per setting, no
-    comment that only mentions one (5 failure hooks with the weekly rehearsal, 1 pinned Claude Code, 1 clean stop)."""
+    comment that only mentions one (6 failure hooks with the weekly rehearsal and the Obsidian export, 1 pinned Claude Code, 1 clean stop)."""
     text = "\n".join(f"# /etc/systemd/system/{u}\n" + (DEPLOY / u).read_text(encoding="utf-8") for u in FA.JOBS_KO)
     for pat in (r"OnFailure|DISABLE_AUTOUPDATER|SuccessExitStatus",
                 r"^(OnFailure=|Environment=DISABLE_AUTOUPDATER|SuccessExitStatus=)"):
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
-        assert len(got) == 7 and sum("OnFailure" in ln for ln in got) == 5 == len(FA.JOBS_KO), (pat, got)
+        assert len(got) == 8 and sum("OnFailure" in ln for ln in got) == 6 == len(FA.JOBS_KO), (pat, got)
 
 
 def test_agents_unit_keeps_claude_code_from_updating_itself():

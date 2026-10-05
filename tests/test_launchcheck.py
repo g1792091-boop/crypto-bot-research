@@ -119,7 +119,7 @@ class Server:
         self.owners[self.etc] = (0o750, "root", "paperbot")
         self.owners[os.path.join(self.etc, "executor.env")] = (0o600, "root", "root")
         self.owners[os.path.join(self.lib, "exec")] = (0o750, L.EXEC_USER, "paperbot")   # deploy/install.sh
-        self.uids = {"root": 0, "paperbot": 998, L.EXEC_USER: 997}
+        self.uids = {"root": 0, "paperbot": 998, L.EXEC_USER: 997, L.DEBATE_USER: 996}
         with open(os.path.join(self.app, "VERSION.json"), "w") as fh:
             json.dump({"commit": COMMIT, "tag": None, "dirty": False, "source": "install.sh",
                        "installed_at": "2026-10-01T03:00:00Z"}, fh)
@@ -1015,25 +1015,34 @@ def notes(out):
     return [r for r in out.splitlines() if r.startswith("[참고] ")]
 
 
+def install_debate(srv):
+    """install.sh installs the 24-hour debate room's unit and leaves it off (paid API, docs/debate-room.md)."""
+    srv.units[L.DEBATE_UNIT] = {"LoadState": "loaded", "UnitFileState": "disabled", "ActiveState": "inactive"}
+
+
 def test_a_healthy_server_shows_only_the_notes_the_guide_names(tmp_path, lab_ref):
     """docs/server-setup-v3.md 10 and 12 name the [참고] lines a correctly set-up server shows: keep them
     in step with the guide."""
     srv = Server(tmp_path / "b", "before")
     install_offsite(srv, "before")
+    install_debate(srv)
     code, out = run_main(srv, lab_ref, ["--stage", "before", "--send-test", "--ping"])
     assert code == 0, out
-    assert len(notes(out)) == 1 and notes(out)[0].startswith("[참고] 이제 체크가 켜졌습니다: 약 6분"), out
+    assert len(notes(out)) == 2 and notes(out)[0].startswith("[참고] 이제 체크가 켜졌습니다: 약 6분"), out
+    assert "24시간 토론방(유료 API)은 설치만 되어 있고 꺼져 있습니다" in notes(out)[1], out
     assert out.splitlines()[-2].startswith("[OK] 시작 준비가 끝났습니다")
     assert out.splitlines()[-2].endswith("paperbot-labmonthly.timer paperbot-offsite.timer")
     srv = Server(tmp_path / "a", "after")
     install_offsite(srv, "after")
+    install_debate(srv)
     code, out = run_main(srv, lab_ref, ["--stage", "after"])
-    assert code == 0 and notes(out) == [], out
+    assert code == 0 and len(notes(out)) == 1 and "설치만 되어 있고 꺼져 있습니다" in notes(out)[0], out
     assert out.splitlines()[-1].startswith("[OK] 봇이 정상으로 돌고 있습니다")
-    # the server's install.sh does not install the off-site copy yet: one more note, with its install command
+    # the server's install.sh does not install the off-site copy or the debate room yet: one note each
     srv = Server(tmp_path / "a2", "after")
     code, out = run_main(srv, lab_ref, ["--stage", "after"])
-    assert code == 0 and len(notes(out)) == 1 and L.OFFSITE_INSTALL in notes(out)[0]
+    assert code == 0 and len(notes(out)) == 2 and L.OFFSITE_INSTALL in "".join(notes(out)), out
+    assert any("설치되어 있지 않습니다" in n and "paperbot-debate" in n for n in notes(out))
 
 
 def test_start_command_follows_the_agent_rooms(tmp_path, lab_ref):
