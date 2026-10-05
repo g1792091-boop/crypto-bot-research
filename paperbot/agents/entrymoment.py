@@ -926,7 +926,7 @@ def group_brief(rows: list, families: Optional[dict] = None, flip_rows: Optional
         if ftab is not None:
             ftab.pop(dim, None)
         left.append(dim)
-    if not _fits(out, left + ["families.stage"], max_bytes) and "families" in out:
+    if not _fits(out, left, max_bytes) and "families" in out:
         out["families"] = {f: _bare(c) for f, c in out["families"].items()}
         left.append("families.stage")
     if left:
