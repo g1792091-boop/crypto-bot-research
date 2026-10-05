@@ -47,10 +47,14 @@ TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster
               "tf_split": "봉 비교 회의", "cost_review": "비용·체결 회의", "combo_review": "조합·동시 손실 회의",
               "coin_review": "코인·장세 회의", "learning_review": "학습 정리 회의", "rr_review": "손익비·청산 회의",
               "risk_review": "낙폭·파산 위험 회의", "event_review": "경제지표 복기 회의", "bull_bear": "낙관·비관 토론",
-              "run_restart": "실험 재시작"}
+              "run_restart": "실험 재시작",
+              # paper v4: the five DeepSeek / reel specialist rooms' meetings (agents/triggers.GROUP_TRIGGERS)
+              "group_loss": "딥시크·릴스 손실 묶음 복기", "group_bust": "딥시크·릴스 파산 복기",
+              "group_weekly": "딥시크·릴스 주간 검토"}
 GROUPS = (("market", "시장·일정 회의", ("morning", "evening", "ranking", "bull_bear", "market_move", "event_review",
                                        "checkpoint")),
-          ("loss", "손실·긴급 회의", ("loss_cluster", "bust", "incident", "owner")),
+          ("loss", "손실·긴급 회의", ("loss_cluster", "bust", "incident", "owner", "group_loss", "group_bust",
+                                       "group_weekly")),
           ("weekly", "주간·분석 회의", ("weekly", "tf_split", "cost_review", "combo_review", "coin_review",
                                        "learning_review", "rr_review", "risk_review", "research", "run_restart")))
 WEEKLY_TRIGGERS = GROUPS[2][2]
@@ -76,6 +80,10 @@ def strat_link(sid: str, alias: Optional[str] = None) -> str:
 
 
 ROLE_BY_ID = {r[0]: r for r in ROLES}
+# paper v4: the five DeepSeek / reel specialists (spec_ds_structure ...) and their rooms (team:ds_structure ...)
+GROUP_ROLE_BY_ID = {r[0]: r for r in GROUP_SPECIALISTS}
+GROUP_ROOM_TITLES = {f"team:{r[0][len('spec_'):]}": f"{r[1]} 방" for r in GROUP_SPECIALISTS}
+GROUP_ROLE_OF_ROOM = {f"team:{r[0][len('spec_'):]}": r[0] for r in GROUP_SPECIALISTS}
 ROLE_NAME = {r[0]: r[1] for r in ALL_ROLES}
 TEAM_NAME = dict(TEAMS)
 
@@ -90,11 +98,36 @@ def role_note(rid: str) -> str:
 
 
 def role_link(rid: str) -> str:
-    if rid in ROLE_BY_ID:
+    if rid in ROLE_BY_ID or rid in GROUP_ROLE_BY_ID:
         return link(role_note(rid), ROLE_NAME[rid])
     if rid.startswith("spec_") and rid[5:] in STRATEGY_KO:
         return strat_link(rid[5:], ROLE_NAME.get(rid))
     return ROLE_NAME.get(rid, rid)
+
+
+def group_role_lines(rid: str) -> list:
+    """A DeepSeek / reel specialist's note: the definitions it covers, by family (paper v4); [] for other roles."""
+    if rid not in GROUP_ROLE_BY_ID:
+        return []
+    from .groups import DS_FAMILY_KO, REEL_KO, role_members
+    from .config import DS200_FAMILY, REEL_NAME
+    by: dict = {}
+    for s in role_members(rid[len("spec_"):]):
+        by.setdefault(DS200_FAMILY.get(s), []).append(s)
+    rows = [[link(ds_family_note(f), f"{f} {DS_FAMILY_KO[f]}"), ", ".join(ss)] for f, ss in by.items() if f]
+    if REEL_NAME in by.get(None, []):
+        rows.append([link(REEL_NOTE, REEL_KO), REEL_NAME])
+    return ["## 맡은 계좌\n" + table(["계열", "정의"], rows),
+            f"회의 방: **{GROUP_ROOM_TITLES.get('team:' + rid[len('spec_'):], '')}** · 할 수 있는 일: 메모·두 분께 알림·없음 "
+            "(복제 계좌·5년 시험 없음, 결론은 팀장 요약). 딥시크·릴스 계좌는 60일 전 복제 없음\n"]
+
+
+def ds_family_note(fam: str) -> str:
+    from .groups import DS_FAMILY_KO
+    return safe_name(f"딥시크 {fam} {DS_FAMILY_KO.get(fam, fam)}")
+
+
+REEL_NOTE = "릴스 5분 단타"
 
 
 def room_name_ko(room_id: str) -> str:
@@ -103,6 +136,8 @@ def room_name_ko(room_id: str) -> str:
         return STRATEGY_KO.get(room_id[6:], room_id)
     if room_id == "team:lab":
         return "새 매매법 연구실"
+    if room_id in GROUP_ROOM_TITLES:
+        return GROUP_ROOM_TITLES[room_id]
     t = room_id.split(":", 1)[-1]
     return team_note(t) if t in TEAM_NAME else room_id
 
@@ -518,7 +553,8 @@ def build_strategy_hub(v: Vault, rows: list, profiles: dict) -> None:
             "## 전체 표 " + badge("code"),
             table(["매매법", "번호", "5년 성격", "거래", "평균 평가금", "시작 대비", "파산 계좌", "표본"], tbl,
                   ["l", "l", "l", "r", "r", "r", "r", "l"]),
-            "## 함께 보기\n- " + link("동전 던지기 봇") + " (비교 기준 12개)\n- " + link("추가 계좌") +
+            "## 함께 보기\n- " + link("딥시크·릴스") + " (딥시크 44개 정의 · 릴스 5분 단타, 따로 판정)\n- "
+            + link("동전 던지기 봇") + " (비교 기준 12개)\n- " + link("추가 계좌") +
             "\n- " + link("5년 매매법 성격 카드") + "\n- " + link("직원 목록") + "\n- " + link("홈")]
     v.add(FOLDERS["strat"], "매매법 목록", "\n".join(body), type="허브", tags=["허브", "전략"], css=("pb-hub",),
           source="code", props={"n_strategies": 36})
@@ -589,23 +625,27 @@ def build_staff(v: Vault) -> None:
         if tid == "specialist":
             for sid, ko in STRATEGY_KO.items():
                 rows.append([strat_link(sid, f"{ko} 전담"), "sonnet", "손절 즉시(긴급만), 주 1회"])
+            for g in GROUP_SPECIALISTS:           # paper v4: DeepSeek families and the reel
+                rows.append([link(role_note(g[0]), g[1]), g[3], g[4]])
             rows_t = table(["전담", "모델", "일하는 때"], rows)
         else:
             for r in rs:
                 cnt = d.room_messages.get(r[0], [0, 0])
                 rows.append([link(role_note(r[0]), r[1]), r[3], r[4], cnt[0], r[6]])
             rows_t = table(["역할", "모델", "일하는 때", "발언 수", "시작"], rows, ["l", "l", "l", "r", "l"])
-        body = [hero(tname, f"역할 {len(rs) if tid != 'specialist' else 36}명 · 직원 조직도의 한 칸"),
+        n_t = len(rs) if tid != "specialist" else 36 + len(GROUP_SPECIALISTS)
+        body = [hero(tname, f"역할 {n_t}명 · 직원 조직도의 한 칸"
+                     + (f" (매매법 전담 36명 + 딥시크·릴스 담당 {len(GROUP_SPECIALISTS)}명)" if tid == "specialist" else "")),
                 rows_t, "\n" + link("조직도") + " · " + link("직원 목록")]
         v.add(FOLDERS["staff"], team_note(tid), "\n".join(body), type="직원", tags=["직원", "팀"], css=("pb-staff",),
-              sub="팀", props={"team": tid, "n_roles": len(rs)}, source="doc")
-    for r in ROLES:
+              sub="팀", props={"team": tid, "n_roles": n_t}, source="doc")
+    for r in ROLES + GROUP_SPECIALISTS:
         rid, name, tid, model, when, duty, start = r
         cnt = d.room_messages.get(rid, [0, 0])
         calls = d.calls_by_role.get(rid, [0, 0])
         sc = score.get(rid)
         body = [hero(name, f"{TEAM_NAME[tid]} · 모델 {model} · {when}"),
-                f"**하는 일**: {duty}\n", f"**시작 조건**: {start}\n",
+                f"**하는 일**: {duty}\n", f"**시작 조건**: {'실험 시작부터' if start == 'now' else start}\n"] + group_role_lines(rid) + [
                 "## 활동 기록 " + badge("code"),
                 stat_row([("방에서 발언", f"{cnt[0]}번"), ("마지막 발언", kst_min(cnt[1]) if cnt[1] else "-"),
                           ("AI 호출", f"{calls[0]}회"), ("사용 토큰", f"{calls[1]:,}")])]
@@ -628,7 +668,7 @@ def build_staff(v: Vault) -> None:
               legend="코드 계산 + AI 작성(표시됨)")
     # scorecard
     srows = []
-    for r in ROLES:
+    for r in ROLES + GROUP_SPECIALISTS:
         cnt = d.room_messages.get(r[0], [0, 0])
         calls = d.calls_by_role.get(r[0], [0, 0])
         sc = score.get(r[0])
@@ -651,9 +691,10 @@ def build_staff(v: Vault) -> None:
     # hub
     trows = []
     for tid, tname in TEAMS:
-        n = len(team_roles.get(tid, [])) if tid != "specialist" else 36
+        n = len(team_roles.get(tid, [])) if tid != "specialist" else 36 + len(GROUP_SPECIALISTS)
         trows.append([link(team_note(tid), tname), n,
-                      ", ".join(link(role_note(r[0]), r[1]) for r in team_roles.get(tid, [])[:4]) if tid != "specialist" else "36개 매매법별 전담"])
+                      ", ".join(link(role_note(r[0]), r[1]) for r in team_roles.get(tid, [])[:4]) if tid != "specialist" else
+                      "36개 매매법별 전담 + " + ", ".join(link(role_note(g[0]), g[1]) for g in GROUP_SPECIALISTS)])
     mrows = [[name, when] for _, name, when in MEETINGS]
     body = [hero(f"직원 {len(ALL_ROLES)}명", f"역할 36명 + 매매법 전담 36명 + 딥시크·릴스 담당 {len(GROUP_SPECIALISTS)}명, 12개 팀. "
                  "모두 AI이고 주문은 낼 수 없습니다."),
@@ -672,6 +713,7 @@ def build_staff(v: Vault) -> None:
         lines.append("    direction TB")
         if tid == "specialist":
             lines.append('    spec_all["매매법 전담 36명<br/>(매매법마다 1명)"]')
+            lines.append(f'    spec_v4["딥시크·릴스 담당 {len(GROUP_SPECIALISTS)}명<br/>(계열·릴스마다 1명)"]')
         else:
             for r in team_roles.get(tid, []):
                 lines.append(f'    r_{r[0]}["{r[1]}"]')
@@ -860,3 +902,164 @@ def build_experiment(v: Vault) -> None:
             callout("danger", "실제 돈이 아닙니다", "이 실험은 모의(paper) 계좌입니다. 주문 기능은 없고 거래소 키는 읽기 전용입니다."),
             ]
     v.add(FOLDERS["exp"], "실험 개요", "\n".join(body), type="허브", tags=["허브", "실험"], css=("pb-hub",), source="code")
+
+
+# ================================================================== 02 매매법: DeepSeek families and the reel (paper v4)
+_DEFS_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dash", "static", "v4", "screens",
+                        "strategies-defs.js")
+_NAMES_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dash", "static", "v4", "core", "names.js")
+_JS_STR = re.compile(r'"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`')
+
+
+def _js_strings(src: str, p: Optional[str] = None) -> list:
+    out = []
+    for a, b in _JS_STR.findall(src):
+        x = a if a else b
+        if p is not None:
+            x = x.replace("${p}", p)
+        out.append(x.replace('\\"', '"'))
+    return out
+
+
+def plain_rules() -> dict:
+    """The owners' plain-Korean rule lines of the 44 DeepSeek definitions and the reel, read from the dashboard's
+    own table (dash/static/v4/screens/strategies-defs.js, written from the pre-registrations; the one place they
+    live) and its names (core/names.js). {"families": {F1: line}, "defs": {id: [lines]}, "names": {id: name},
+    "reel": {"desc": str, "lines": [...]}}; empty parts when the files are missing or changed shape."""
+    out: dict = {"families": {}, "defs": {}, "names": {}, "reel": {}}
+    src = read_text(_DEFS_JS) or ""
+    for fid, desc in re.findall(r'\{id: "(F\d+)", desc: "((?:[^"\\]|\\.)*)"\}', src):
+        out["families"][fid] = desc
+    fib = re.search(r"const fib = \(p\) => \(\{lines: \[(.*?)\]\}\);", src)
+    for line in src.splitlines():
+        m = re.match(r'\s*(F\d+_[A-Z0-9_]+): \{fam: "F\d+", lines: \[(.*)\]\},?\s*$', line)
+        if m:
+            out["defs"][m.group(1)] = _js_strings(m.group(2))
+            continue
+        m = re.match(r'\s*(F\d+_[A-Z0-9_]+): \{fam: "F\d+", \.\.\.fib\("([^"]+)"\)\},?\s*$', line)
+        if m and fib:
+            out["defs"][m.group(1)] = _js_strings(fib.group(1), m.group(2))
+    rm = re.search(r"export const REEL = \{(.*?)\n\};", src, re.S)
+    if rm:
+        d = re.search(r'\n\s*desc: "((?:[^"\\]|\\.)*)"', rm.group(1))
+        ls = re.search(r"\n\s*lines: \[(.*?)\]", rm.group(1), re.S)
+        out["reel"] = {"desc": d.group(1) if d else "", "lines": _js_strings(ls.group(1)) if ls else []}
+    names = read_text(_NAMES_JS) or ""
+    nm = re.search(r"export const DS_NAME_KO = \{(.*?)\n\};", names, re.S)
+    if nm:
+        out["names"] = dict(re.findall(r'\n\s*(F\d+_[A-Z0-9_]+): "((?:[^"\\]|\\.)*)"', nm.group(1)))
+    return out
+
+
+def _research_line(sid: str) -> tuple:
+    """(rows, conclusion) of a v4 strategy's 5-year card (ds_profiles.card): per timeframe the research exit's
+    trades per day and net % per trade in each period; ([], None) without the research files."""
+    try:
+        from . import ds_profiles as DP
+        c = DP.card(sid)
+    except Exception:  # noqa: BLE001  (a description only)
+        c = None
+    if not c:
+        return [], None
+    rows = [[TF_KO.get(r["tf"], r["tf"]), c.get("exit") or r.get("exit"), fnum(r["trades_per_day"], 1),
+             f"{fnum(r['net_pct_is'], 3)}% · {fnum(r['net_pct_cf'], 3)}% · {fnum(r['net_pct_pre'], 3)}%",
+             pct(r["win_rate"], 0, False) if r.get("win_rate") is not None else "-"] for r in c["rows"]]
+    return rows, (c.get("research") or {}).get("conclusion_ko")
+
+
+def _group_counts(ctx: Ctx, ids: list) -> tuple:
+    """(accounts, trades, busts) of a v4 strategy's accounts (counts only: owners' D10/D11 keep DeepSeek money in
+    its own group view on the dashboard)."""
+    d = ctx.data
+    aids = [a for a, x in d.accounts.items() if x["strategy"] in ids and x["kind"] in ("ds200", "reel")]
+    trades = sum((d.trade_stats.get(a) or {}).get("n", 0) for a in aids)
+    busts = sum(1 for a in aids if (d.engines.get(a) or {}).get("bust"))
+    return aids, trades, busts
+
+
+def build_v4_groups(v: Vault) -> None:
+    """One note per DeepSeek family (its definitions in plain Korean, their 5-year research rows and live counts),
+    the reel's note and the hub '딥시크·릴스'. Counts only for the live DeepSeek accounts; nothing here is a verdict."""
+    from .config import DS200_DEFS, REEL_NAME
+    from .groups import DS_FAMILY_KO, REEL_KO, V4_ROLES, role_of
+    ctx = v.ctx
+    pr = plain_rules()
+    fams: dict = {}
+    for did, fam, _tfs in DS200_DEFS:
+        fams.setdefault(fam, []).append(did)
+    hub_rows = []
+    for fam, ids in fams.items():
+        roles = []
+        for did in ids:
+            r = role_of(did)
+            if r and f"spec_{r}" not in roles:
+                roles.append(f"spec_{r}")
+        _a, trades, busts = _group_counts(ctx, ids)
+        rows = []
+        for did in ids:
+            aids, n, b = _group_counts(ctx, [did])
+            rule = " · ".join(sanitize(x, 200) for x in pr["defs"].get(did, [])) or "규칙 원문: PREREG_DEEPSEEK200.md 5절"
+            rows.append([f"**{did}** {sanitize(pr['names'].get(did, ''), 60)}", rule,
+                         ", ".join(TF_KO.get(ctx.data.accounts[a]["timeframe"], ctx.data.accounts[a]["timeframe"])
+                                   for a in sorted(aids)) or "-", n, b or "-"])
+        res = []
+        concl = None
+        for did in ids:
+            rr, concl = _research_line(did)
+            res += [[did] + x for x in rr]
+        body = [hero(f"딥시크 {fam} {DS_FAMILY_KO[fam]}", f"딥시크 200 정의 {len(ids)}개 · 담당 "
+                     + ", ".join(ROLE_NAME.get(r, r) for r in roles)),
+                LEGEND + "\n",
+                (sanitize(pr["families"].get(fam, ""), 300) + "\n") if pr["families"].get(fam) else "",
+                callout("warning", "판정 전 기록입니다", "딥시크 계좌의 손익은 대시보드 딥시크 묶음에서만 봅니다(두 분 D11). "
+                        "여기는 거래 수와 파산 수만 적습니다. 30일 판정 전 숫자는 모두 참고입니다."),
+                "## 정의와 규칙 " + badge("doc"),
+                table(["정의", "규칙(쉬운 말)", "봉", "거래", "파산"], rows, ["l", "l", "l", "r", "r"]),
+                "## 5년 연구 " + badge("code") + "\n거래당 순손익(가격 %, 레버리지 없음, 연구 청산 X5_TRAIL2 = 라이브의 계단 "
+                "잠금과 다름) 1기 · 2기 · 3기.\n",
+                table(["정의", "봉", "연구 청산", "하루 거래", "순손익 1·2·3기", "승률"], res,
+                      ["l", "l", "l", "r", "r", "r"]) if res else "연구 파일이 없습니다.\n",
+                (callout("info", "5년 연구 결론", sanitize(concl, 300)) if concl else ""),
+                "\n" + " · ".join(link(role_note(r), ROLE_NAME.get(r, r)) for r in roles) + " · " + link("딥시크·릴스")
+                + " · " + link("매매법 목록")]
+        name = ds_family_note(fam)
+        v.add(FOLDERS["strat"], name, "\n".join(x for x in body if x), type="전략", tags=["전략", "딥시크"],
+              css=("pb-strategy",), sub="딥시크", source="mixed",
+              props={"family": fam, "definitions": len(ids), "trades": trades, "busts": busts})
+        hub_rows.append([link(name, f"{fam} {DS_FAMILY_KO[fam]}"), len(ids),
+                         ", ".join(link(role_note(r), ROLE_NAME.get(r, r)) for r in roles), trades, busts or "-"])
+    # the reel
+    aids, n, b = _group_counts(ctx, [REEL_NAME])
+    rr, concl = _research_line(REEL_NAME)
+    reel = pr.get("reel") or {}
+    flips = sorted(a for a, x in ctx.data.accounts.items() if x["kind"] == "random" and x["timeframe"] == "5m")
+    fn = sum((ctx.data.trade_stats.get(a) or {}).get("n", 0) for a in flips)
+    body = [hero(REEL_KO, f"{REEL_NAME} · 5분봉 계좌 {len(aids) or 1}개 · 담당 {ROLE_NAME.get('spec_reel_5m', '')}"),
+            LEGEND + "\n",
+            (sanitize(reel.get("desc", ""), 300) + "\n") if reel.get("desc") else "",
+            "## 규칙 " + badge("doc") + "\n" + "\n".join(f"- {sanitize(x, 200)}" for x in reel.get("lines", [])),
+            "\n## 청산\n" + sanitize(EXITS_KO.get("reel", ""), 400) + "\n",
+            "## 비교 기준 " + badge("code") + f"\n같은 5분봉·롱만·같은 청산의 동전 던지기 {len(flips)}개가 기준입니다"
+            f"(끝난 거래 {fn}건). 동전 봇 숫자는 개수로만 셉니다.\n",
+            "## 지금까지 " + badge("code") + "\n" + stat_row([("끝난 거래", f"{n}건"), ("파산", str(b))]),
+            callout("warning", "판정 전 기록입니다", "30일 판정 전 숫자는 모두 참고입니다. 판정은 체크포인트가 동전 봇과 "
+                    "비교해 코드로만 합니다(" + METHOD_KO + ")."),
+            "## 5년 연구 " + badge("code") + "\n거래당 순손익(가격 %, 레버리지 없음, 연구와 라이브가 같은 청산) 1기 · 2기 · 3기.\n",
+            table(["봉", "청산", "하루 거래", "순손익 1·2·3기", "승률"], rr, ["l", "l", "r", "r", "r"]) if rr else
+            "연구 파일이 없습니다.\n",
+            (callout("info", "5년 연구 결론", sanitize(concl, 300)) if concl else ""),
+            "\n" + link(role_note("spec_reel_5m"), ROLE_NAME.get("spec_reel_5m")) + " · " + link("딥시크·릴스") + " · "
+            + link("동전 던지기 봇") + " · " + link("매매법 목록")]
+    v.add(FOLDERS["strat"], REEL_NOTE, "\n".join(x for x in body if x), type="전략", tags=["전략", "릴스"],
+          css=("pb-strategy",), source="mixed", props={"strategy": REEL_NAME, "trades": n, "busts": b})
+    # hub
+    body = [hero("딥시크·릴스", f"딥시크 200 정의 {len(DS200_DEFS)}개({len(fams)}개 계열)와 릴스 5분 단타. "
+                 f"담당 {len(V4_ROLES)}명"),
+            LEGEND + "\n",
+            callout("warning", "잠긴 36개와 섞지 않습니다", "묶음마다 따로 판정합니다(" + METHOD_KO + "). 딥시크 손익은 대시보드 "
+                    "딥시크 묶음에서만 보고 여기는 개수만 적습니다."),
+            "## 딥시크 계열\n" + table(["계열", "정의", "담당", "거래", "파산"], hub_rows, ["l", "r", "l", "r", "r"]),
+            "## 릴스\n- " + link(REEL_NOTE, REEL_KO),
+            "\n" + link("매매법 목록") + " · " + link("직원 목록") + " · " + link("홈")]
+    v.add(FOLDERS["strat"], "딥시크·릴스", "\n".join(body), type="허브", tags=["허브", "전략", "딥시크"],
+          css=("pb-hub",), source="mixed", props={"families": len(fams), "definitions": len(DS200_DEFS)})

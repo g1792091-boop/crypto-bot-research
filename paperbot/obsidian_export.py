@@ -101,6 +101,7 @@ def generate(data, now_ms: int, repo_dir: str) -> dict[str, bytes]:
     NB.prepare(ctx)
     v = N.Vault(ctx)
     N.build_strategies(v)
+    N.build_v4_groups(v)          # paper v4: DeepSeek families, the reel, their hub
     N.build_staff(v)
     N.build_experiment(v)
     NB.build_meetings(v)
