@@ -66,4 +66,21 @@
 .chart-al-row.mine b { color: var(--accent); }
 .chart-al-acts { display: flex; gap: 6px; justify-content: flex-end; }
 .chart-al-note { grid-column: 1 / -1; color: var(--muted); font-size: var(--t-xs); overflow-wrap: anywhere; }
+/* 거래 채우기: at 1280 px and wider the side panels are stacked cards (chart-panels.js STACK), not one tab */
+.chart-side { min-width: 0; }
+.chart-side.wide .chart-panels { position: static; }
+.chart-stack { gap: 12px; }
+.chart-stackp { gap: 8px; }
+.chart-stackp .pager-bar, .chart-stackp .pager { margin-top: 0; }
+/* 이 코인 시장 지표 (market-live.js coinFlowCard) */
+[data-screen="chart"] .mk-cf { display: grid; gap: 10px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 760px) { [data-screen="chart"] .mk-cf { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+[data-screen="chart"] .mk-cf-c { display: grid; gap: 2px; min-width: 0; }
+[data-screen="chart"] .mk-cf-c > span { font-size: var(--t-xs); color: var(--muted); }
+[data-screen="chart"] .mk-cf-c small { font-size: var(--t-xs); color: var(--ink-2); }
+[data-screen="chart"] .mk-cf .up { color: var(--up); } [data-screen="chart"] .mk-cf .down { color: var(--down); }
+[data-screen="chart"] .mk-cf-s { grid-column: 1 / -1; display: grid; gap: 2px; font-size: var(--t-xs); color: var(--muted); }
+[data-screen="chart"] .mk-cf-s .spark { width: 100%; height: 30px; }
+[data-screen="chart"] .mk-cf-hint { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+[data-screen="chart"] .mk-cf .mk-wait { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--ink-2); font-size: var(--t-sm); }
 .chart-panels .lrow .meta a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 8px; margin: -6px 0; border-radius: 8px; border: 1px solid var(--line-2); text-decoration: none; font-weight: 700; }

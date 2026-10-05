@@ -9,7 +9,7 @@ export * as derive from "./derive.js";
 export {figure, clock, windowArt, TEAM_HUE} from "./figure.js";
 export {skyPhase, PHASE_KO, stratFigure, stratHue} from "./figure.js";
 export {consolePanel} from "./console.js";
-export {alertKo, criticalLines} from "./alerts.js";
+export {alertKo, criticalLines, tradeAlert} from "./alerts.js";
 export {store} from "./store.js";
 export {features} from "./features.js";
 export {bus, api, apiText, post, serverNow, ApiError, stream} from "./api.js";

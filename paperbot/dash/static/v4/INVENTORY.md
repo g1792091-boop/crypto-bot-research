@@ -364,3 +364,20 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 지금 열린 포지션 | 홈 under the head card: 기존 36 / 5분봉 / 추가 계좌 positions (봉·매매법, 코인, 롱/숏 + 배수, 진입, 손절 or 잠금 ROE, live ROE at the mark, tint on change), ROE order, row opens the account; "그 밖에 딥시크 n · 동전 봇 n 포지션 (개수만)" | `/api/board` positions + store `ticker` mark |
 | 방금 끝난 거래 + 오늘 잘한·못한 계좌 | 홈 full-width card: last 12 closed trades (newest close first) of 기존 36 / 5분봉 / 추가 (시각, 봉·매매법, 코인, 방향 + 배수, 익절 잠금 / 손절 / 시간, ROE, USDT), new rows slide in on the stream's trade event; 오늘 가장 잘한 / 못한 계좌 3 (기존 36, USDT, 참고, 표본 적음 under 30 trades) | `/api/trades?group=main&limit=12`, `/api/trades?group=core&limit=2000` (existing) |
 | 회의 카운트다운 + 오늘 일정 | 홈 '오늘 회의 일정' (ticking countdown to the next fixed meeting; each meeting 예정 / 진행 중 / 끝 / 지남 with one line on what it reviews); the 0 / 0 / 0 board comes back once a meeting ran today; 회의 요약 › 회의 결론 shows the same card on a day without meetings | `/api/office` schedule / running / recent (existing) |
+
+## 거래 화면 채우기 (fill-trade)
+
+Market-native data and wide layouts for 거래 and 알림 기록 (dashboard + read-only server). Tests: tests/test_dash_fill_trade.py.
+
+| Addition | Screen / place | Server (read-only) |
+|---|---|---|
+| 코인 온도판 | 시장, top: 7 tiles (price glows only when it really moved, 24h %, place inside the 24h low-high range, 24h 거래대금, funding with countdown; XRP 기록만); a tile opens 차트 | none (store ticker, /api/ticker) |
+| 시장 파생 지표판 | 시장 (screens/market-live.js `flowBoard`): per traded coin 미결제약정 USDT with 1h / 24h change, 24h sparklines of OI and 롱/숏, 롱/숏 (전체 계좌) now vs 24h ago, 고수 포지션 롱/숏, 테이커 매수/매도 1시간, 프리미엄; plain hints (롱 쏠림, 미결제 급증 ...) with their fixed rules shown; no flow.db = 수집 전 | `/api/v4/flowlive` (dash/more/flowlive.py `flow_live`, flow.db `mode=ro`, 60 s cache) |
+| 시장 강제청산 보드 | 시장 (market-live.js `liqBoard`): per coin long vs short liquidated USDT over 1h and 24h as split bars, the biggest single one, the latest 5 (new ones slide in); stale recorder (2 h without a row) says so; 1-per-second undercount note | `/api/v4/flowlive/liq` (flowlive.py `liq_board`, liq.db `mode=ro`, 20 s cache) |
+| 경제발표 일정 'null' 고침 | 시장 › 미국 경제발표 일정: no stray "null" text under the list | none |
+| 포지션 펼쳐 보기 | 포지션 at 1280 px and wider: every card open in a 2-3 column grid (v3 포지션), 12 per page; a phone keeps the accordion | none (/api/board + ticker) |
+| 위험 사다리 | 포지션 side column (screens/positions-risk.js): open positions ranked by % distance from the mark to the liquidation price, with the distance to the stop / lock line; bars move with the 5 s mark, a row within 1 % pulses; distances only, no money (DeepSeek and coin flips listed with their group) | none |
+| 알림 진입·청산 한국어 | 알림 기록 rows and every `alertKo` user: the engine's ENTRY / EXIT lines as "V4.4_TREND · 4시간 진입: LTC 숏 30배 (보통 자리)" with chips 증거금 / 손절 / 청산가 (exit: 손익 / ROE / 잔고); DeepSeek (F*) and coin flips (RANDOM_*) without margin, P&L, ROE or balance (D10/D11) | none (core/alerts.js `tradeAlert`) |
+| 알림 24시간 막대 | 알림 기록, right column at 1500 px+ (below on a phone): hourly bars of 긴급 / 주의 / 정보 and of 진입 / 청산 alert lines for the last 24 h; hours older than the newest 500 rows are hatched (모름, not 0) | `/api/analysis/alerts?limit=500` |
+| 차트 패널 쌓기 | 차트 at 1280 px+: 이 코인 포지션, 최근 신호, 시장 강제청산, 가격 알림 as stacked cards; 체결 / 호가 stay as tabs; a phone keeps one tab at a time | none |
+| 이 코인 시장 지표 | 차트, under 시세: the chosen coin's 미결제약정 (1h / 24h), 롱/숏, 고수 포지션, 테이커, 강제청산 1h / 24h and the biggest one, OI sparkline, hints; link to 시장 | `/api/v4/flowlive`, `/api/v4/flowlive/liq` |

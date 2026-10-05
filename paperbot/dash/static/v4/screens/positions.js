@@ -6,6 +6,7 @@
 import {h, ui, fmt, store, local, motion, serverNow} from "../core/pb.js";
 import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo, sideCounts, oneSided, SKEW_MIN, SKEW_SHARE} from "./positions-kit.js";
 import {coinHead, bookPanel} from "./positions-book.js";
+import {riskLadder} from "./positions-risk.js";
 
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const SORTS = [["pnl", "수익 큰 순"], ["loss", "손실 큰 순"], ["new", "최근 진입"], ["liq", "청산 가까운 순"]];
@@ -23,6 +24,9 @@ export async function mount(el, ctx) {
     board: null, why: {}, open: new Set(), firstOpen: true, trades: null, tradesErr: null, tradesDirty: true, countsKey: "",
   };
   const cards = new Map();            // account_id -> {key, el}: reused, so a number counts from its last value
+  // 거래 채우기: at 1280 px and wider every card is open in a 2-3 column grid (v3 포지션); a phone keeps the accordion
+  const wideMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
+  let wide = !!(wideMq && wideMq.matches);
   const markOf = (s) => store.mark(s);
   // price since the entry on each card: one /api/candles (5m, the last 24 h) per coin, asked when a card needs it
   // and again only after 5 minutes (never on a timer); the last point is the live mark the page already has
@@ -62,6 +66,9 @@ export async function mount(el, ctx) {
   const tabBar = h("div", {class: "positions-tabs"});
   const tabBody = h("div", {class: "stack"});
   const side = h("div", {class: "stack positions-side"});
+  const ladder = riskLadder(ctx);
+  const sideBook = h("div", {class: "stack"});
+  side.append(ladder.el, sideBook);
   el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션 · 주문 버튼 없음"), sumCard, coinBar,
     h("div", {class: "positions-cols"}, h("div", {class: "stack", dataset: {tour: "positions"}}, tabBar, tabBody), side));
 
@@ -139,11 +146,11 @@ export async function mount(el, ctx) {
   grpSel.addEventListener("change", () => { st.grp = grpSel.value; local.set("pos-grp", st.grp); st.countsKey = ""; renderAll(false); });
   const cardOf = (x) => {
     const id = x.a.account_id, w = st.why[id];
-    const key = [x.pos.symbol, x.pos.entry_time, x.pos.stop, x.pos.lock_roe, x.pos.liq, x.pos.margin, x.pos.target, x.pos.timeExit,
+    const key = [wide ? "w" : "n", x.pos.symbol, x.pos.entry_time, x.pos.stop, x.pos.lock_roe, x.pos.liq, x.pos.margin, x.pos.target, x.pos.timeExit,
       w ? `${w.entry_time}:${w.leverage}:${w.group}` : ""].join("|");
     let c = cards.get(id);
     if (!c || c.key !== key) {
-      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: st.open.has(id), href: ctx.href, caption: true,
+      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: wide || st.open.has(id), href: ctx.href, caption: !wide,
         onToggle: (aid, o) => { if (o) st.open.add(aid); else st.open.delete(aid); }});
       c = {key, el: elc};
       cards.set(id, c);
@@ -153,9 +160,11 @@ export async function mount(el, ctx) {
     needPx(x.pos.symbol);
     return c.el;
   };
-  const posPager = ui.pager({size: 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
-  const posPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, grpSel, sortSel), posPager.el,
-    h("p", {class: "pos-note"}, "한 줄을 누르면 펼쳐집니다. 미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다."),
+  const posPager = ui.pager({size: wide ? 12 : 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
+  const posNote = h("p", {class: "pos-note"});
+  const notePos = () => { posNote.textContent = (wide ? "넓은 화면이라 모든 카드를 펼쳐 둡니다. " : "한 줄을 누르면 펼쳐집니다. ") + "미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다."; };
+  notePos();
+  const posPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, grpSel, sortSel), posPager.el, posNote,
     ui.assume("open"));
 
   // ---------------------------------------------------------------- tab: 손절·잠금 주문
@@ -260,7 +269,7 @@ export async function mount(el, ctx) {
     sideSym = sym;
     head = coinHead(sym, {chartHref: ctx.href("chart", sym)});
     if (!book) book = bookPanel(ctx, sym, {rows: 7}); else book.setSym(sym);
-    side.replaceChildren(ui.card({plate: "호가", acts: [bookSel]}, head, book));
+    sideBook.replaceChildren(ui.card({plate: "호가", acts: [bookSel]}, head, book));
     head.update(store.get("ticker"));
     book.load();
   };
@@ -288,16 +297,28 @@ export async function mount(el, ctx) {
     }
     renderSum();
     renderSide();
+    ladder.set(all.filter(inScope), markOf);
     if (st.tab === "trd" && st.trades) renderTrades(false);
   }
   const onTicker = (tk) => {
     for (const c of cards.values()) if (c.el.isConnected) { c.el.update(markOf(c.el.pos.symbol)); sparkOf(c.el); }
     if (st.firstOpen && st.board) renderAll(true);
     renderSum();
+    if (st.board) ladder.set(positions().filter(inScope), markOf);
     if (head) head.update(tk);
   };
 
   // ---------------------------------------------------------------- wiring
+  const onWide = () => {
+    const w = !!(wideMq && wideMq.matches);
+    if (w === wide) return;
+    wide = w;
+    el.classList.toggle("positions-wide", wide);
+    notePos();
+    renderAll(true);
+  };
+  el.classList.toggle("positions-wide", wide);
+  if (wideMq) { wideMq.addEventListener("change", onWide); ctx.track(() => wideMq.removeEventListener("change", onWide)); }
   renderTabBar();
   showTab(false);
   renderSide();

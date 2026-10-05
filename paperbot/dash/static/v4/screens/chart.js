@@ -9,6 +9,7 @@ import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOpti
 import {normPos, reelExits, nameOf} from "./positions-kit.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
+import {coinFlowCard} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
@@ -100,8 +101,10 @@ export async function mount(el, ctx) {
   const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, wrap, tv.el,
     h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
     ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
+  const flowCard = coinFlowCard(ctx, st.sym);           // 이 코인 시장 지표 (flow.db + liq.db, /api/v4/flowlive)
+  ctx.every(30000, () => flowCard.load(), {now: true});
   el.append(ui.screenHead("차트", "봇이 보는 시세와 모의 계좌의 진입·청산"), coinBar, priceLine,
-    h("div", {class: "chart-cols"}, h("div", {class: "stack"}, chartCard, links, tickCard), panels));
+    h("div", {class: "chart-cols"}, h("div", {class: "stack"}, chartCard, links, tickCard, flowCard), panels));
 
   // ---------------------------------------------------------------- the chart
   let C = null, series = null;
@@ -374,7 +377,7 @@ export async function mount(el, ctx) {
     st.sym = s; local.set("chart-sym", s);
     for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
     lines.pos.forEach(rm); lines.pos.clear();
-    paintTicker(); paintLinks(); fillAccounts(); panels.setSym(s); reflectUrl();
+    paintTicker(); paintLinks(); fillAccounts(); panels.setSym(s); flowCard.setSym(s); reflectUrl();
     loadCandles();
   }
   function setTf(tf) {
@@ -402,7 +405,7 @@ export async function mount(el, ctx) {
     st.sym = s; st.tf = tf; st.acct = acct; st.acctData = null;
     for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
     lines.pos.forEach(rm); lines.pos.clear();
-    paintTicker(); paintTfs(); paintLinks(); fillAccounts(); tick(); panels.setSym(s);
+    paintTicker(); paintTfs(); paintLinks(); fillAccounts(); tick(); panels.setSym(s); flowCard.setSym(s);
     if (symCh || tfCh) loadCandles(); else drawAccount();
   };
   ctx.track(() => { alive = null; });

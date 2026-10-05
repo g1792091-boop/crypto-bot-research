@@ -33,6 +33,7 @@ MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
 MODULES += ("radar",)                          # 신호 레이더 (36개 조건 켜짐 수)
+MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시장 강제청산 보드 (flow.db, liq.db)
 
 
 def register_all(app, **kw) -> dict:
