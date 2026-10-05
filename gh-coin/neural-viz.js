@@ -7,6 +7,15 @@ const fx = v => v == null || !Number.isFinite(+v) ? "—" : Math.abs(v) >= 1000 
 const HC = { pink: "#f06a8a", red: "#e8505b", blue: "#4f7df5", teal: "#22b8b0", purple: "#9b6cf0", green: "#2fb36d", orange: "#f39c28", gray: "#8a93a3" };
 const PILL = ["#f06a8a", "#2fb36d", "#9b6cf0", "#4f7df5", "#f39c28", "#22b8b0"];
 let frameN = 0, t0 = performance.now();
+// 성능: 화면 밖이면 그리지 않고(0.5초마다 확인), 초당 30장으로 제한
+function due(el, ms = 33) { const now = performance.now();
+  if (el._visAt == null || now - el._visAt > 500) { el._visAt = now; const r = el.getBoundingClientRect(); el._vis = r.bottom > 0 && r.top < (window.innerHeight || 900) && r.width > 0; }
+  if (!el._vis || now - (el._ft || 0) < ms) return false; el._ft = now; return true; }
+// 구슬 스프라이트: 프레임마다 그라디언트를 새로 만들지 않고 한 번 그려 둔 그림을 찍는다
+const SPR = new Map();
+function sprite(c0, c1, c2) { const k = c0 + c1 + (c2 || ""); let cv = SPR.get(k); if (cv) return cv;
+  cv = document.createElement("canvas"); cv.width = cv.height = 48; const g = cv.getContext("2d"), gr = g.createRadialGradient(24 - 7, 24 - 7, 1, 24, 24, 23);
+  gr.addColorStop(0, c0); if (c2) { gr.addColorStop(0.35, c1); gr.addColorStop(1, c2); } else gr.addColorStop(1, c1); g.fillStyle = gr; g.beginPath(); g.arc(24, 24, 23, 0, 7); g.fill(); SPR.set(k, cv); return cv; }
 
 /* ══════════════════════ ① NEURAL SHELL ══════════════════════ */
 export const SHELL_CSS = `
@@ -93,14 +102,15 @@ export function renderShell(el, s, N) {
 }
 // 머리카락 선: 카드 앵커 사이를 베지어로 잇고, 매 프레임 조금씩 흔들림. 지금 일하는 흐름은 색으로 강조.
 export function frameShell(el) {
-  if (!el?._init) return;
+  if (!el?._init || !due(el)) return;
   frameN++; const T = (performance.now() - t0) / 1000;
   const tt = el.querySelector("[data-vzt]"), ff = el.querySelector("[data-vzf]"); if (tt) tt.textContent = `${String(Math.floor(T / 60) % 60).padStart(2, "0")}.${String(Math.floor(T) % 60).padStart(2, "0")}`; if (ff) ff.textContent = frameN;
   const stage = el.querySelector(".vz-stage"), svg = el.querySelector(".vz-wires"), bus = el.querySelector(".vz-bus"); if (!stage || !svg || !bus) return;
-  const R0 = stage.getBoundingClientRect(); if (!R0.width) return;
-  const box = n => { const r = n.getBoundingClientRect(); return { l: r.left - R0.left, r: r.right - R0.left, t: r.top - R0.top, b: r.bottom - R0.top, y: (r.top + r.bottom) / 2 - R0.top }; };
-  const cols = [0, 1, 2, 3].map(i => [...el.querySelectorAll(`.c${i} .vz-card`)].map(n => ({ id: n.dataset.vz, ...box(n) })));
-  const B = box(bus), tick = bus.querySelector(".vz-tick"); if (tick) tick.style.top = `${10 + Math.min(1, (el._q || 0) / 3) * (B.b - B.t - 50) + (el._q ? Math.sin(T * 2) * 6 : 0)}px`;
+  // 카드 위치는 0.6초마다만 다시 잰다(매 프레임 측정은 레이아웃 계산을 강제해 느림)
+  let lay = el._lay; if (!lay || performance.now() - lay.t > 600) { const r0 = stage.getBoundingClientRect(); if (!r0.width) return;
+    const bx = n => { const r = n.getBoundingClientRect(); return { l: r.left - r0.left, r: r.right - r0.left, t: r.top - r0.top, b: r.bottom - r0.top, y: (r.top + r.bottom) / 2 - r0.top }; };
+    lay = el._lay = { t: performance.now(), R0: { width: r0.width, height: r0.height }, cols: [0, 1, 2, 3].map(i => [...el.querySelectorAll(`.c${i} .vz-card`)].map(n => ({ id: n.dataset.vz, ...bx(n) }))), B: bx(bus) }; }
+  const { R0, cols, B } = lay, tick = bus.querySelector(".vz-tick"); if (tick) tick.style.top = `${10 + Math.min(1, (el._q || 0) / 3) * (B.b - B.t - 50) + (el._q ? Math.sin(T * 2) * 6 : 0)}px`;
   if (!el._wires || el._wires.sig !== cols.map(c => c.length).join(",")) {
     const W = [], rnd = (a, b) => a + Math.random() * (b - a);
     for (const c of cols[0]) for (let k = 0; k < 16; k++) W.push({ a: c.id, side: "r", b: "bus", ya: rnd(0.2, 0.8), yb: rnd(0.02, 0.98), ph: rnd(0, 7), k: rnd(0.3, 0.7) });
@@ -122,7 +132,7 @@ export function frameShell(el) {
     const p = paths[i]; if (!p) return;
     p.setAttribute("d", `M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 + dx).toFixed(1)},${(y1 + sw).toFixed(1)} ${(x2 - dx).toFixed(1)},${(y2 - sw).toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`);
     const hot = (live.scan && (w.b === live.scan || w.a === live.scan)) || (live.scanCoin && w.a === live.scanCoin);
-    p.setAttribute("stroke", hot ? "#4f7df5" : "rgba(20,22,28,.42)"); p.setAttribute("stroke-width", hot ? "1.3" : w.a === "left" ? "0.45" : "0.6");
+    if (w.hot !== !!hot) { w.hot = !!hot; p.setAttribute("stroke", hot ? "#4f7df5" : "rgba(20,22,28,.42)"); p.setAttribute("stroke-width", hot ? "1.3" : w.a === "left" ? "0.45" : "0.6"); }
   });
 }
 
@@ -185,6 +195,7 @@ export function renderBrain(el, s, G) {
   const cells = [...open.map(() => "r"), ...tr.map(t => t.R >= 0.5 ? "a" : t.R <= -0.5 ? "d" : "s")].slice(0, 32); while (cells.length < 32) cells.push("");
   set(".vb-pl", `<div class="vb-ph">⚡ 내 손매매 추천 채점 <em>● LIVE</em></div>
     <div class="vb-sum"><span>익절1 먼저 <b>${C.wr == null ? "—" : C.wr + "%"}</b></span><span>채점 <b>${C.done || 0}</b></span><span>합계 <b style="color:${(C.sumR || 0) >= 0 ? "#3fd18a" : "#ff5a6a"}">${(C.sumR || 0) >= 0 ? "+" : ""}${C.sumR || 0}R</b></span><span>추적 중 <b>${C.open || 0}</b></span></div>
+    ${Object.keys(C.byGrade || {}).length ? `<div class="vb-leg" style="margin-bottom:5px">${Object.entries(C.byGrade).map(([g, x]) => `<span>${E(g)} <b style="color:#e6ebf3">${Math.round(x.w / x.n * 100)}%</b> (${x.n}건 · ${x.R >= 0 ? "+" : ""}${x.R}R)</span>`).join("")}</div>` : ""}
     <div class="vb-call">${callRows || `<div style="grid-template-columns:1fr;color:#56637a">⚡ 시장가 버튼을 누르거나 실시간 진입이 '유력·보통'을 내면 여기서 손절/익절1 중 먼저 닿은 쪽으로 채점 → 뇌가 학습</div>`}</div>
     <div class="vb-ph" style="margin-top:8px">데모 거래 판독 <em style="color:#6d7a8f">최근 32</em></div><div class="vb-plate">${cells.map(c => `<i class="${c}"></i>`).join("")}</div>
     <div class="vb-leg"><span><i style="background:#ff9a3c"></i>익절</span><span><i style="background:#f6c20a"></i>소폭</span><span><i style="background:#8a1f2b"></i>손절</span><span><i style="background:#9b6cf0"></i>보유</span></div>`);
@@ -193,7 +204,7 @@ export function renderBrain(el, s, G) {
 }
 // 3D 이중 나선 + 기억 분자 클러스터 (깊이 정렬)
 export function frameBrain(el) {
-  const cv = el?.querySelector?.(".vb-stage canvas"); if (!cv) return;
+  const cv = el?.querySelector?.(".vb-stage canvas"); if (!cv || !due(el)) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight; if (W < 50 || H < 50) return;
   if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
@@ -205,8 +216,8 @@ export function frameBrain(el) {
   for (let k = 0; k < M; k++) {
     const y = top + (bot - top) * (k / (M - 1)), a = k * 0.16 + rot;
     for (const [st, off] of [[0, 0], [1, Math.PI]]) { const x = Math.cos(a + off) * R, z = Math.sin(a + off) * R; const p = proj(x, y, z);
-      items.push({ z, draw: () => { const r = (6.5 + 3 * (z / R + 1) / 2) * p.s; const gr = g.createRadialGradient(p.X - r * 0.3, p.Y - r * 0.3, 1, p.X, p.Y, r);
-        const c = st ? (k % 3 ? ["#ffe7d6", "#c9b1a8"] : ["#ff6b4a", "#8a1f1f"]) : ["#ffd27a", "#d96a12"]; gr.addColorStop(0, c[0]); gr.addColorStop(1, c[1]); g.fillStyle = gr; g.globalAlpha = 0.55 + 0.45 * (z / R + 1) / 2; g.beginPath(); g.arc(p.X, p.Y, r, 0, 7); g.fill(); g.globalAlpha = 1; } }); }
+      items.push({ z, draw: () => { const r = (6.5 + 3 * (z / R + 1) / 2) * p.s;
+        const c = st ? (k % 3 ? ["#ffe7d6", "#c9b1a8"] : ["#ff6b4a", "#8a1f1f"]) : ["#ffd27a", "#d96a12"]; g.globalAlpha = 0.55 + 0.45 * (z / R + 1) / 2; g.drawImage(sprite(c[0], c[1]), p.X - r, p.Y - r, r * 2, r * 2); g.globalAlpha = 1; } }); }
     if (k % 5 === 0) { const m = sorted[Math.floor(k / M * sorted.length)], col = m ? BT[m.type] || "#8899aa" : "#334"; const pa = proj(Math.cos(a) * R, y, Math.sin(a) * R), pb = proj(Math.cos(a + Math.PI) * R, y, Math.sin(a + Math.PI) * R);
       items.push({ z: (Math.sin(a) + Math.sin(a + Math.PI)) * R / 2 - 1, draw: () => { g.strokeStyle = col; g.globalAlpha = 0.35; g.lineWidth = 1; g.beginPath(); g.moveTo(pa.X, pa.Y); g.lineTo(pb.X, pb.Y); g.stroke(); g.globalAlpha = 1; } }); }
   }
@@ -219,8 +230,8 @@ export function frameBrain(el) {
     const anchor = proj(Math.cos(ang - 0.5) * R, y, Math.sin(ang - 0.5) * R), pb = proj(base.x, base.y, base.z);
     items.push({ z: base.z - 2, draw: () => { g.strokeStyle = "rgba(255,120,180,.35)"; g.lineWidth = 0.8; g.beginPath(); g.moveTo(anchor.X, anchor.Y); for (let q = 1; q <= 6; q++) { const u = q / 6; g.lineTo(anchor.X + (pb.X - anchor.X) * u + Math.sin(T * 2 + q + i) * 3, anchor.Y + (pb.Y - anchor.Y) * u + Math.cos(T * 2 + q) * 3); } g.stroke(); } });
     atoms.forEach((a, j) => { const p = proj(a.x, a.y, a.z);
-      items.push({ z: a.z, draw: () => { const r = (j ? 4.2 : 6.5) * p.s; const gr = g.createRadialGradient(p.X - r * 0.35, p.Y - r * 0.35, 0.5, p.X, p.Y, r); gr.addColorStop(0, "#ffffff"); gr.addColorStop(0.35, col); gr.addColorStop(1, "rgba(0,0,0,.6)");
-        g.fillStyle = gr; g.globalAlpha = 0.5 + 0.5 * Math.max(0, Math.min(1, (a.z / (R * 2.6) + 1) / 2)); g.beginPath(); g.arc(p.X, p.Y, r, 0, 7); g.fill(); g.globalAlpha = 1;
+      items.push({ z: a.z, draw: () => { const r = (j ? 4.2 : 6.5) * p.s;
+        g.globalAlpha = 0.5 + 0.5 * Math.max(0, Math.min(1, (a.z / (R * 2.6) + 1) / 2)); g.drawImage(sprite("#ffffff", col, "rgba(0,0,0,.6)"), p.X - r, p.Y - r, r * 2, r * 2); g.globalAlpha = 1;
         if (j) { const p0 = proj(atoms[0].x, atoms[0].y, atoms[0].z); g.strokeStyle = col; g.globalAlpha = 0.4; g.lineWidth = 0.8; g.beginPath(); g.moveTo(p0.X, p0.Y); g.lineTo(p.X, p.Y); g.stroke(); g.globalAlpha = 1; } } }); });
     hovC.push({ n, p: pb, col });
     items.push({ z: base.z + 0.5, draw: () => { if (base.z < -R) return; g.font = "600 10px ui-monospace,monospace"; g.fillStyle = "#e9eef6"; g.textAlign = "left"; const tx = pb.X + 12, ty = pb.Y - 6;

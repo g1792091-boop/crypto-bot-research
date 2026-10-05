@@ -625,6 +625,7 @@ async function scanStep(cm) {
   try { await coinResearch(sym); } catch (e) {} try { await whaleSignal(sym); } catch (e) {}
   let myRead = null; try { myRead = await CL.readNow(sym, ["5", "15", "60"]); } catch (e) {}
   const myTxt = myRead && Object.keys(myRead).length ? Object.entries(myRead).map(([tf, xs]) => `${tf === "60" ? "1시간" : tf + "분"}: ${xs.map(x => x.name + (x.dir > 0 ? "↑" : x.dir < 0 ? "↓" : "·")).join(" ")}`).join(" / ") : "";
+  const brainTxt = [...BRAIN.recallType("핵심", 2, ko), ...BRAIN.recallType("교훈", 2, ko)].join(" / ").slice(0, 260);
   S.scan = { model: shortMd(tgt.model), ko, sym, regime: `${rg.label || "판단중"} · 시장 읽기`, t: Date.now() };
   let raw = "", route;
   try {
@@ -632,7 +633,7 @@ async function scanStep(cm) {
       { role: "system", content: '너는 코인 선물 시장 분석가다. 주어진 자료만 보고 앞으로 1시간 방향을 판단한다. 반드시 JSON 한 줄: {"bias":1|0|-1,"conf":0~100,"note":"한국어 한 문장"}' },
       { role: "user", content: `${ko} 현재가 ${price} · 1시간봉 국면: ${rg.label || "?"} (ADX ${rg.adx ?? "?"}) · 4시간 추세: ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"}
 시장 요약: ${br}
-피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}${myTxt ? "\n사용자 차트 터미널 보조지표 현재 방향: " + myTxt : ""}
+피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}${myTxt ? "\n사용자 차트 터미널 보조지표 현재 방향: " + myTxt : ""}${brainTxt ? "\n과거에서 배운 것(참고): " + brainTxt : ""}
 JSON만:` }],
       role: "fast", target: tgt, fallback: false, json: true, maxTokens: 120, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { (S.scans ||= {})[tgt.model] = { ko, sym, err: String(e?.message || e).slice(0, 40), t: Date.now() }; return; }
@@ -671,8 +672,13 @@ async function flowFacts(sym) {
     } catch (e) { return `${label}: 조회 실패(${String(e.message || e).slice(0, 30)})`; } }));
   return res;
 }
+function pickApprover(cm) {
+  const k = mRot++, acc = c => { const M = S.models[c.model]; return M && M.scanN >= 8 ? (M.scanHit || 0) / M.scanN : 0; };
+  const best = [...cm].sort((a, b) => acc(b) - acc(a))[0];
+  return (k % 3 !== 2 && best && acc(best) >= 0.55) ? best : cm[k % cm.length];
+}
 async function approveNext(cm) {
-  const it = S.queue[0], tgt = cm[mRot++ % cm.length], v = VMAP()[it.vkey]; if (!v) { S.queue.shift(); return; }
+  const it = S.queue[0], tgt = pickApprover(cm), v = VMAP()[it.vkey]; if (!v) { S.queue.shift(); return; }
   const plan = ENG.frameworkPlan({ sym: it.sym, entry: S.dec[it.sym]?.price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: riskFor(v, it.side), equity: equity() });
   if (!plan || plan.skip) { S.queue.shift(); feed(`${it.ko} ${it.name} 보류 — ${plan?.skip || "계획 실패"}`); return; }
   S.scan = { model: shortMd(tgt.model), ko: it.ko, sym: it.sym, regime: `${it.regime} · ${it.name} 승인 검토`, t: Date.now() };
@@ -887,7 +893,7 @@ export function trackCall(c = {}) {
   const L = (S.calls ||= []); if (L.some(x => !x.res && x.sym === c.sym && x.side === c.side && Date.now() - x.t < 30 * 60e3)) return false;
   const f0 = S.feat[c.sym] || {};
   L.unshift({ id: Date.now().toString(36), sym: c.sym, ko: c.ko || c.sym.replace("USDT", ""), side: c.side, entry: +c.entry, sl: +c.sl, tp1: +c.tp1, grade: c.grade || "", src: c.src || "시장가", t: Date.now(), feat: { ...f0 }, reg: BRAIN.regimeOf(f0) });
-  S.calls = L.slice(0, 40); save(); return true;
+  S.calls = L.slice(0, 120); save(); return true;
 }
 let callAt = 0;
 async function scoreCalls() {
@@ -910,7 +916,8 @@ async function scoreCalls() {
   save();
 }
 export function callStats() { load(); const L = S.calls || [], done = L.filter(x => x.res && x.res !== "무승부"), w = done.filter(x => x.res === "익절1").length;
-  return { n: L.length, open: L.filter(x => !x.res).length, done: done.length, wins: w, wr: done.length ? Math.round(w / done.length * 100) : null, sumR: +done.reduce((a, x) => a + (x.R || 0), 0).toFixed(2), list: L.slice(0, 8).map(({ feat, ...x }) => x) }; }
+  const byGrade = {}; for (const x of done) { const g = byGrade[x.grade || "기타"] ||= { n: 0, w: 0, R: 0 }; g.n++; if (x.res === "익절1") g.w++; g.R = +(g.R + (x.R || 0)).toFixed(2); }
+  return { n: L.length, open: L.filter(x => !x.res).length, done: done.length, wins: w, wr: done.length ? Math.round(w / done.length * 100) : null, sumR: +done.reduce((a, x) => a + (x.R || 0), 0).toFixed(2), byGrade, list: L.slice(0, 8).map(({ feat, ...x }) => x) }; }
 
 // ⏱ 상시 자동 실행(패널을 닫아도 돈다): 시세·포지션·신호(6초) · AI 승인 · 뇌 정리(1분) · 웹 리서치(3분) · 뉴스 위험(5분) · 매매법 개발(8분) · 전략 회의(10분)
 let autoTimer = 0, autoK = 0, ticking = false;
