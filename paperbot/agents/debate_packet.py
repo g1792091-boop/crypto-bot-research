@@ -242,9 +242,6 @@ def group_counts(board: dict) -> dict:
     return {g: v.get("accounts") for g, v in (board.get("groups") or {}).items() if isinstance(v, dict)}
 
 
-TABLES_SCOPE_KO = ("league·totals·last_24h·rank·tf·coin·exits는 잠긴 매매법 36개 계좌와 같은 봉 동전 봇만"
-                   "(accounts_in_tables개). 딥시크·릴스 5분 단타·5분봉 동전은 groups에 계좌 수만, 숫자는 "
-                   "groups_compare·ds_families 주제에만. 섞지 않음")
 # short lines (the packet cuts any text over 200 characters): the honesty rules of the two group topics
 GROUP_NOTES_KO = ["참고일 뿐: 30일 체크포인트(meta.checkpoint) 전에는 어느 묶음·가족이 낫다는 결론이 없음",
                   "묶음마다 계좌 수·봉·거래 수가 달라 합계 손익을 바로 견주지 않음: 같은 봉의 동전 봇(coin_flip, 무작위 진입·"
@@ -390,7 +387,7 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
         core = {
             "meta": {"now_kst": kst_day(now_ms), "run_day": None if days is None else f"D+{int(days)}",
                      "days_running": days, "accounts_in_tables": meta.get("accounts"),
-                     "groups": group_counts(board), "tables_scope": TABLES_SCOPE_KO,
+                     "groups": group_counts(board),
                      "run_restarted": meta.get("run_restarted"),
                      "observation": (f"{observe_until(start) or f'시작 후 {OBSERVE_DAYS}일'}까지 관찰 기간: "
                                      f"{F.originals_ko()} 규칙 변경 제안 금지(아이디어만)"),

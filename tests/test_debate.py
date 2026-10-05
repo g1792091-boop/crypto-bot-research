@@ -618,6 +618,7 @@ def test_sonnet_55_effort_low_is_sent_and_its_thinking_is_in_the_cost_and_the_ca
     assert body["model"] == "claude-sonnet-5-5" and body["max_tokens"] == 1500
     assert body["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert "temperature" not in body and body["messages"][-1]["role"] == "user"           # no sampling, no prefill
+    assert "meta.accounts_in_tables" in body["system"][0]["text"] and "groups_compare" in body["system"][0]["text"]
     want = (1500 * 2.0 + 1100 * 10.0 + 1700 * 2.0 * 0.1) / 1e6
     rd = rows(svc, "SELECT out_tokens, cost_usd, status, turns FROM debate_rounds")[0]
     assert rd == (1100, pytest.approx(want), "ok", 4)                       # the thinking is in out_tokens and cost
@@ -666,7 +667,7 @@ def test_the_debate_room_runs_on_the_v4_shape(tmp_path, monkeypatch):
         pk = b["packet"]
         assert b["tokens"] <= P.MAX_PACKET_TOKENS, b["topic"]
         assert pk["meta"]["groups"] == V4_GROUP_ACCOUNTS and pk["meta"]["accounts_in_tables"] == 156
-        assert "딥시크" in pk["meta"]["tables_scope"] and "331" in pk["meta"]["observation"]
+        assert "331" in pk["meta"]["observation"] and "tables_scope" not in pk["meta"]      # said in the cached prompt
         assert b["topic"] == P.TOPICS[i][0] and pk["unusual"] == []         # the group line jumps nothing
         assert any(a["text"].startswith("[ds200] signal code refused") for a in pk.get("alerts", []))
         assert not any("[F9_FVG@15m]" in a["text"] for a in pk.get("alerts", []))    # a DeepSeek account: counted
