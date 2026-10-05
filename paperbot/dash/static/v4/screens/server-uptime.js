@@ -31,15 +31,17 @@ export function uptimeCard(ctx) {
       h("span", null, h("i", {class: "up-sw zero"}), " 멈춤"), h("span", null, h("i", {class: "up-sw rs"}), " 재시작"), h("span", null, h("i", {class: "up-sw nt"}), " 밤 점검"),
       h("span", null, h("i", {class: "up-sw na"}), " 시작 전·아직")),
     stops,
-    ui.note("1분봉을 실제로 처리한 기록(live_bars)으로 셉니다. 꾸민 숫자는 없습니다. 밤 점검 = 그날 거래를 다시 계산해서 계좌가 모두 같은지 본 결과."));
+    ui.note("1분봉을 실제로 처리한 기록(live_bars)으로 셉니다. 꾸민 숫자는 없습니다. 재시작 뒤 밀린 분을 따라잡아 처리한 것도 처리로 셉니다(그때는 재시작 표시로 봅니다). 밤 점검 = 그날 거래를 다시 계산해서 계좌가 모두 같은지 본 결과."));
 
   function render(d) {
     if (!d || !d.ready) { put(headline, h("span", {class: "muted"}, (d && d.why) || "아직 기록이 없습니다.")); put(grid); put(stops); return; }
     const sh = d.share;
     const tone = sh == null ? "" : sh >= 0.995 ? "up" : sh >= 0.95 ? "warn" : "down";
+    // every stop's minutes (the server's stops_min; the list it sends keeps only the last 50 stops)
+    const stopMin = d.stops_min != null ? d.stops_min : (d.stops || []).reduce((a, x) => a + x.min, 0);
     put(headline, h("b", {class: "up-big " + tone}, `${d.days}일 가동 ${pctKo(sh)}`),
-      h("span", null, d.stops_n ? ` · 멈춤 ${fmt.int(d.stops_n)}번 (총 ${fmt.int(d.stops.reduce((a, x) => a + x.min, 0))}분)` : " · 멈춤 없음"),
-      d.missing_min && d.missing_min > (d.stops || []).reduce((a, x) => a + x.min, 0) ? h("span", {class: "muted"}, ` · 그 밖에 빠진 분 ${fmt.int(d.missing_min - d.stops.reduce((a, x) => a + x.min, 0))}분`) : null,
+      h("span", null, d.stops_n ? ` · 멈춤 ${fmt.int(d.stops_n)}번 (총 ${fmt.int(stopMin)}분)` : " · 멈춤 없음"),
+      d.missing_min && d.missing_min > stopMin ? h("span", {class: "muted"}, ` · 그 밖에 빠진 분 ${fmt.int(d.missing_min - stopMin)}분`) : null,
       d.restarts && d.restarts.length ? h("span", {class: "muted"}, ` · 재시작 ${fmt.int(d.restarts.length)}번`) : null);
     const rsHours = new Set((d.restarts || []).map((r) => Math.floor((r.ts - d.first_day) / 3600000)));
     const nights = new Map((d.nightly || []).map((n) => [n.day, n]));

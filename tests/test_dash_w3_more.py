@@ -124,7 +124,7 @@ def test_uptime_counts_minutes_stops_restarts_and_night_checks(tmp_path):
         d = U.uptime(c, ddb, 7, NOW)
     assert d["ready"] and d["days"] == 7 and len(d["rows"]) == 7
     assert d["stops_n"] == 1 and d["stops"][0]["min"] == 10 and d["stops"][0]["from"] == stop0
-    assert d["missing_min"] == 10
+    assert d["missing_min"] == 10 and d["stops_min"] == 10
     assert d["expected_min"] - d["stepped_min"] == 10 and 0.99 < d["share"] < 1
     assert [r["ts"] for r in d["restarts"]] == [stop0 + 10 * MIN]
     assert d["nightly"] == [{"day": "2026-10-05", "ts": START + DAY - 9 * H + 30 * MIN, "accounts": 6, "mismatched": 1}]
@@ -137,11 +137,19 @@ def test_uptime_counts_minutes_stops_restarts_and_night_checks(tmp_path):
     assert rows["2026-10-01"] == [None] * 24
 
 
+def test_uptime_stop_total_counts_every_stop_not_only_the_listed_ones(tmp_path, monkeypatch):
+    db, ddb, _s = make_world(tmp_path)
+    monkeypatch.setattr(U, "STOPS_MAX", 0)
+    with _ro(db) as c:
+        d = U.uptime(c, ddb, 7, NOW)
+    assert d["stops"] == [] and d["stops_n"] == 1 and d["stops_min"] == 10
+
+
 def test_uptime_without_gaps_and_before_any_account(tmp_path):
     db, ddb, _s = make_world(tmp_path, gap=False)
     with _ro(db) as c:
         d = U.uptime(c, ddb, 30, NOW)
-    assert d["stops_n"] == 0 and d["missing_min"] == 0 and d["share"] == 1.0 and len(d["rows"]) == 30
+    assert d["stops_n"] == 0 and d["missing_min"] == 0 and d["stops_min"] == 0 and d["share"] == 1.0 and len(d["rows"]) == 30
     st = Store3(str(tmp_path / "e.db"))
     st.conn.close()
     with _ro(str(tmp_path / "e.db")) as c:
@@ -216,6 +224,10 @@ def test_page_files_keep_the_honesty_and_safety_rules():
     shape = _src("screens", "analysis-shape.js")
     assert shape.count("ui.refNote(env.verdictTs)") == 2 and shape.count("ui.assume()") == 2
     assert "참고" in _src("screens", "road-kit.js") and "기록 없음" in _src("screens", "road-kit.js")
+    road = _src("screens", "road-kit.js")
+    assert "일째" not in road and "s0.restart" in road                   # one day count: the checkpoint clock's D+n
+    assert "stops_min" in _src("screens", "server-uptime.js")
+    assert "ui.smallSample(tot.core" in shape and "ui.smallSample(tot.flip" in shape
     for p in FILES_CSS:
         s = _src(*p)
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", s), p                   # colours only from tokens

@@ -115,7 +115,8 @@ def uptime(c: sqlite3.Connection, daily_db: Optional[str], days: int, now: int) 
     return {"ready": True, "days": days, "now": now, "start": int(start), "first_day": first_day, "until": t_end,
             "expected_min": int(expected), "stepped_min": int(len(mins)),
             "share": (len(mins) / expected) if expected else None,
-            "missing_min": int(missing), "stops": stops[-STOPS_MAX:], "stops_n": len(stops),
+            "missing_min": int(missing), "stops": stops[max(0, len(stops) - STOPS_MAX):], "stops_n": len(stops),
+            "stops_min": int(sum(x["min"] for x in stops)),           # every stop's minutes (the list keeps the last 50)
             "stop_min_rule": STOP_MIN, "rows": rows, "restarts": restarts, "nightly": nightly(daily_db, first_day),
             "note": "1분봉을 실제로 처리한 분 수 (live_bars) · 재시작 = runs · 밤 점검 = daily3 보고"}
 

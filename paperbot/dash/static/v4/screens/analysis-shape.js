@@ -97,6 +97,7 @@ export function heatCard(env) {
 
 // ---------------------------------------------------------------- 거래 결과 분포
 const EDGE_KO = ["−20", "−10", "−5", "−2", "0", "+2", "+5", "+10", "+20"];
+const SMALL_DIST = 20;          // a group's shares from fewer trades than this carry 표본 적음 (CONTRACT §1.5 default)
 export function outcomeCard(env) {
   return lazyCard(env, {plate: "거래 결과 분포", cls: "ash-dist", sub: "거래 한 번이 계좌 잔고를 몇 % 바꿨나"}, (d) => {
     const x = d.dist || {}, cs = x.core_share || [], fs = x.flip_share || [], bins = x.bins || [];
@@ -117,8 +118,9 @@ export function outcomeCard(env) {
       h("span", null, h("i", {class: "sw flip"}), ` 같은 봉 동전 봇 (${fmt.int(tot.flip || 0)}건, 참고)`)),
     h("div", {class: "ash-plot"}, cols, axis), h("p", {class: "ash-unit"}, "가로: 거래 한 번의 결과 (거래 전 잔고 대비 %) · 세로: 그 묶음 거래 중 비율"),
     detail,
-    ui.kv([["기존 36", `이긴 거래 ${share("core")} · 강제청산 ${fmt.int(liq.core || 0)}건`],
-      ["같은 봉 동전 봇 (참고)", `이긴 거래 ${share("flip")} · 강제청산 ${fmt.int(liq.flip || 0)}건`]]),
+    // a group with few trades says so (CONTRACT §1.5): its shares can be luck
+    ui.kv([["기존 36", [`이긴 거래 ${share("core")} · 강제청산 ${fmt.int(liq.core || 0)}건 `, ui.smallSample(tot.core || 0, SMALL_DIST)]],
+      ["같은 봉 동전 봇 (참고)", [`이긴 거래 ${share("flip")} · 강제청산 ${fmt.int(liq.flip || 0)}건 `, ui.smallSample(tot.flip || 0, SMALL_DIST)]]]),
     h("p", {class: "an-note"}, "구간은 숫자를 보기 전에 정해 두었습니다. 수수료·펀딩이 들어간 실제 결과입니다. 동전 봇은 같은 봉(15분·30분·1시간·4시간)만, 5분 동전 봇은 5분봉 단타와 비교하므로 뺐습니다."),
     ui.refNote(env.verdictTs), ui.assume()];
   });

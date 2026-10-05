@@ -65,11 +65,17 @@ export function pixelRoad(ctx, opts = {}) {
     const obs = s0.observe_until ? kstDay(s0.observe_until - 1) : null;
     const ctxd = {events: st.events, obsDay: obs};
     const days = c.days;
-    const ti = days.findIndex((e) => e.state === "today");
+    // today = the server's KST day (a today without a single record is still today, never "after the verdict")
+    let ti = days.findIndex((e) => e.d === c.today);
+    if (ti < 0) ti = days.findIndex((e) => e.state === "today");
     const moved = st.today != null && ti > st.today;
     st.today = ti;
     const last = days[days.length - 1];
-    put(head, h("b", null, ti >= 0 ? `${ti}일째` : "판정 뒤"), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`),
+    // D+n is the checkpoint clock's day (summary.restart, the same number as the top chip and the home card); the
+    // cells are Korea-time dates, so they carry dates, never a second day count that could disagree with D+n
+    const rs = s0.restart && s0.restart.ready ? s0.restart : null;
+    const now = ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤";
+    put(head, h("b", null, now), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`),
       h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`));
     road.style.setProperty("--n", String(days.length));
     put(road, days.map((e, i) => {
@@ -83,7 +89,7 @@ export function pixelRoad(ctx, opts = {}) {
       if (e.verdict) cls.push("proad-goal");
       const mk = e.state === "future" && !e.verdict ? marksOf(e, ctxd).filter((m) => m.k !== "bust") : marksOf(e, ctxd);
       const word = e.state === "future" ? "앞으로" : e.state === "empty" ? "기록 없음" : chg != null ? `기존 36 중앙값 ${fmt.pct(chg, 2)} (참고)` : "변화 없음";
-      const label = `${i}일째 ${fmt.date(e.ts)} · ${word}${e.verdict ? " · 판정 날" : ""}${mk.length ? " · " + mk.map((m) => m.t).join(" · ") : ""}`;
+      const label = `${fmt.date(e.ts)}${i === ti ? " (오늘)" : ""} · ${word}${e.verdict ? " · 판정 날" : ""}${mk.length ? " · " + mk.map((m) => m.t).join(" · ") : ""}`;
       const kids = [
         h("span", {class: "proad-fig"}, i === ti ? [figure({kind: "owner", size: 10, cls: moved ? "proad-step" : ""}), figure({kind: "owner", size: 10, i: 1, cls: moved ? "proad-step" : ""})]
           : e.verdict ? flag() : null),
