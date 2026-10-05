@@ -15,7 +15,7 @@ function ensureCss() {
 }
 
 const dayLabel = (ts) => { const k = new Date(ts + 9 * 3600000); return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${WD[k.getUTCDay()]}`; };
-const pctKo = (x) => (x == null ? "—" : `${(Math.floor(x * 1000) / 10).toFixed(1)}%`);      // floored: never rounds up to 100 %
+const pctKo = (x) => (x == null ? "—" : fmt.pct(Math.floor(x * 1000) / 1000, 1, false));      // floored: never rounds up to 100 %
 
 export function uptimeCard(ctx) {
   ensureCss();

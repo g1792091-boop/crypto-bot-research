@@ -1,6 +1,6 @@
 /* 서버·비용 › 가동 기록 (screens/server-uptime.js): days x 24 hour pixel cells + a night-check column. Tokens only. */
 .up-card { margin-top: 12px; }
-.up-line { margin: 4px 0 0; font-size: var(--t-sm); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 0 2px; align-items: baseline; }
+.up-line { margin: 4px 0 0; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6; }
 .up-big { font-size: var(--t-lg); color: var(--ink); margin-right: 4px; font-variant-numeric: tabular-nums; }
 .up-big.up { color: var(--up); }
 .up-big.warn { color: var(--warn); }
