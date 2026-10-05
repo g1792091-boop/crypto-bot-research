@@ -90,3 +90,35 @@ a.an-row { color: inherit; text-decoration: none; transition: background-color v
 .an-glabel { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
 .an-gacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .an-gacts button { min-height: 36px; }
+/* ---- 비용 (wave 2 part B, analysis-costs.js): waterfall, per-trade rows (coin flips dashed), slippage bars ---- */
+.an-cost-wf { display: grid; gap: 6px; }
+.an-cost-svg { width: 100%; max-width: 520px; height: auto; display: block; }
+.an-cost-zero { stroke: var(--line-2); stroke-width: 1; }
+.an-cost-link { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.an-cost-bar { rx: 2; }
+.an-cost-bar.up { fill: var(--up); } .an-cost-bar.down { fill: var(--down); }
+.an-cost-bar.cost { fill: var(--warn); } .an-cost-bar.flat { fill: var(--line-2); }
+.an-cost-val { fill: var(--ink); font: 700 11px var(--f-term); }
+.an-cost-lab { fill: var(--muted); font-size: 11px; }
+.an-cost-rows { display: grid; gap: 6px; }
+.an-cost-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.an-cost-row.flip { border-style: dashed; background: transparent; }
+.an-cost-row.flip .an-cost-k { color: var(--ink-2); }
+.an-cost-k { font-size: var(--t-sm); }
+.an-cost-k small { color: var(--muted); font-weight: 400; }
+.an-cost-nums { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: var(--t-xs); }
+.an-cost-nums i { font-style: normal; color: var(--muted); }
+.an-cost-feebar { display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.an-cost-feebar i { display: block; height: 100%; width: var(--w, 0%); background: var(--warn); }
+@media (min-width: 760px) {
+  .an-cost-row { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 120px; align-items: center; }
+}
+.an-cost-h { margin: 6px 0 2px; font-size: var(--t-sm); color: var(--ink); display: flex; gap: 6px; align-items: center; }
+.an-cost-bars { display: grid; gap: 5px; }
+.an-cost-brow { display: grid; grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-size: var(--t-xs); }
+.an-cost-brow .k { color: var(--ink-2); }
+.an-cost-brow .t { height: 10px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.an-cost-brow .t i { display: block; height: 100%; width: var(--w, 0%); }
+.an-cost-brow .t.paper i { background: var(--muted); }
+.an-cost-brow .t.real i { background: var(--warn); }
+.an-cost-brow b { text-align: right; }

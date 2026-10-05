@@ -23,3 +23,15 @@
 .board-tfbody { min-width: 0; }
 
 /* motion (board-motion.js): the arrow / small line / tint rules live in home-shared.css (home's 상위·하위 uses them too) */
+
+/* coin flips in the list (wave 2 part B, home-shared.js withFlips / flipRow): a dimmed, dashed row with a coin, no rank */
+[data-screen="board"] .board-fliprow { border-top: 1px dashed var(--line-2); border-bottom: 1px dashed var(--line-2); opacity: .78;
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--surface-2) 6px 7px); }
+[data-screen="board"] .board-fliprow + .lrow { border-top-color: transparent; }
+[data-screen="board"] .board-fliprow .lname { color: var(--ink-2); font-weight: 600; }
+[data-screen="board"] .board-fliprow .meta { color: var(--muted); }
+[data-screen="board"] .board-fliprow:hover { opacity: 1; }
+[data-screen="board"] .board-coin { display: inline-block; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid var(--muted); background: radial-gradient(circle, var(--ink-2) 0 2px, transparent 2.5px); vertical-align: -2px; }
+[data-screen="board"] .board-flipfoot { display: block; }
+[data-screen="board"] .board-flipfoot .board-coin { width: 12px; height: 12px; margin-right: 6px; }

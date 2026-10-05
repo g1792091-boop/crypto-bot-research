@@ -14,6 +14,7 @@ import {storyRing} from "./story-kit.js";
 import {raceParts} from "./flow-kit.js";
 import {rowMotion} from "./board-motion.js";
 import {reelDuel} from "./reel-duel.js";
+import {costLine} from "./analysis-costs.js";
 
 const DECISION_KO = {done: "결정", no_action: "행동 없음", failed: "멈춤", stopped_budget: "한도로 멈춤"};
 
@@ -79,7 +80,8 @@ export async function mount(el, ctx) {
   const todayBody = h("div", {class: "stack tight"}, motion.shimmer(3));
   const nextEl = h("div", {class: "home-next"});
   const todaySub = h("span", {class: "sub"});
-  const todayCard = ui.card({plate: "오늘", cls: "home-today home-o2", acts: [todaySub]}, todayBody, nextEl, ui.assume());
+  const todayCard = ui.card({plate: "오늘", cls: "home-today home-o2", acts: [todaySub]}, todayBody, nextEl,
+    costLine(ctx), ui.assume());                                     // wave 2 part B: 비용 한 줄 (analysis-costs.js)
 
   // ---------------------------------------------------------------- 6. 최근 회의 (three stored lines -> 회의실)
   const meetBody = h("div", {class: "home-meets", role: "list"}, motion.shimmer(2));

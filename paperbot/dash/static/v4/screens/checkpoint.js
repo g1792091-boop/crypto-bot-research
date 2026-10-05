@@ -6,6 +6,7 @@
 // account); progress bars are the neutral accent colour; DeepSeek accounts appear only as group counts.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {expInfo, judgedProgress, progBar, verdictDate as vDate, MIN_TRADES} from "./home-shared.js";
+import {seatsCard, powerCard, stamp, luckDots} from "./checkpoint-stage.js";
 
 const ST_CLS = {"2차 통과": "good", "1차 합격": "good", "불합격": "bad", "보류": "thin", "관찰용": "thin"};
 const ST_ORDER = ["2차 통과", "1차 합격", "불합격", "보류", "관찰용"];
@@ -55,6 +56,11 @@ export async function mount(el, ctx) {
       h("p", null, "4시간봉 계좌는 관찰용이라 판정하지 않고, 실제로 돌고 있는 동전 봇 계좌는 비교 기준입니다. 추가 계좌(복제·새 매매법)는 자기 시작일부터 30일이 지난 판정일에 따로 묶어 봅니다."))),
     h("p", {class: "muted home-small"}, "판정이 나오면 이 화면에 상태별 개수, 계좌마다 p·q·이유, 저장본 해시가 나옵니다."));
 
+  // 판정 무대 (wave 2 part B): the seat map and what a 30-day verdict can tell (checkpoint-stage.js)
+  const seats = seatsCard();
+  const power = powerCard(ctx);
+  power.load();
+
   function renderCountdown() {
     const x = expInfo(st.summary);
     if (!x) {
@@ -93,6 +99,8 @@ export async function mount(el, ctx) {
       h("p", {class: "muted home-small"}, `거래 수만 셉니다. 합격·불합격을 미리 보여 주지 않습니다. 판정일에 ${MIN_TRADES}건이 안 된 계좌는 '보류'입니다. 판정 대상은 서버 설정(15분·30분·1시간, 5분봉 매매법은 5분)을 따릅니다.`),
     ];
     put(targetBody, out);
+    const x = expInfo(st.summary);
+    seats.update(st.board, st.summary, x && x.verdictTs);
   }
 
   // ================================================================ after the verdict
@@ -138,7 +146,7 @@ export async function mount(el, ctx) {
     const v = st.ck;
     const c = v.counts || {};
     const x = expInfo(st.summary);
-    put(vHead,
+    put(vHead, stamp(v),
       h("p", {class: "ck-vt"}, `${v.day ?? "—"}일째 판정 · ${vDate(v.date)} 09:00 (한국 시각)`),
       h("p", {class: "muted home-small"}, "저장본 해시 ", h("span", {class: "mono", title: v.snapshot_sha256 || ""}, String(v.snapshot_sha256 || "—").slice(0, 12)),
         " · 판정은 이 저장본만 읽었습니다", x && x.verdictTs ? ` · 다음 판정 ${fmt.date(x.verdictTs)} 09:00` : ""));
@@ -147,7 +155,8 @@ export async function mount(el, ctx) {
     put(vLuck,
       h("p", {class: "ink2"}, `검정한 계좌 ${fmt.int(v.tested)}개 중 운 시험 통과 ${fmt.int(v.luck_passed)}개. 운만으로도 합격처럼 보일 수 있는 수는 많아야 ${fmt.num(v.lucky_expected, 1)}개입니다 (보정을 안 했다면 ${fmt.num(v.lucky_if_uncorrected, 1)}개).`),
       h("p", {class: "muted home-small"}, v.method_ko ? `${v.method_ko} · p = 계좌보다 잘한 동전 봇 비율, q = 보정한 값`
-        : `${v.n_bots ? `계좌마다 동전 봇 ${fmt.int(v.n_bots)}개와 비교` : ui.methodKo()}${v.alpha != null ? ` · 오류 한도 ${fmt.pct(v.alpha, 1, false)} 보정` : ""} · p = 계좌보다 잘한 동전 봇 비율, q = 보정한 값`));
+        : `${v.n_bots ? `계좌마다 동전 봇 ${fmt.int(v.n_bots)}개와 비교` : ui.methodKo()}${v.alpha != null ? ` · 오류 한도 ${fmt.pct(v.alpha, 1, false)} 보정` : ""} · p = 계좌보다 잘한 동전 봇 비율, q = 보정한 값`),
+      luckDots(v));
     const w = v.warnings || [];
     put(vWarn, w.length ? h("div", {class: "ck-warn", role: "note"}, h("b", null, "주의할 점"), h("ul", null, w.map((t) => h("li", null, String(t))))) : null);
     applyRows(true);
@@ -158,8 +167,8 @@ export async function mount(el, ctx) {
     const mode = st.ck && st.ck.ready ? "after" : "before";
     if (mode !== st.mode) {
       st.mode = mode;
-      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, targetCard), howCard));
-      else put(body, h("div", {class: "stack"}, verdictCards, ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
+      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, seats, targetCard), h("div", {class: "stack"}, power, howCard)));
+      else put(body, h("div", {class: "stack"}, verdictCards, power, ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
       motion.swap(body);
     }
     if (mode === "before") { renderCountdown(); renderTargets(); } else renderVerdict();

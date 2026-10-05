@@ -86,3 +86,9 @@
 }
 /* PC: the head card is wide, so the race gets more height (the chart reads its box height when it draws) */
 @media (min-width: 1100px) { [data-screen="home"] .home-race .fk-race { height: 150px !important; } }
+/* wave 2 part B: the one cost line in 오늘 (analysis-costs.js costLine) -> 분석 › 비용 */
+[data-screen="home"] .an-cost-home { display: block; padding: 8px 0 2px; border-top: 1px dashed var(--line-2); color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.7; text-decoration: none; }
+[data-screen="home"] .an-cost-home[hidden] { display: none; }
+[data-screen="home"] .an-cost-home > b:first-child { color: var(--ink); margin-right: 2px; }
+[data-screen="home"] .an-cost-home .an-cost-go { color: var(--accent); white-space: nowrap; }
