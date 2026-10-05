@@ -12,7 +12,7 @@ AI들이 paper 실험의 숫자를 두고 하루 종일 짧게 토론하는 방�
 - 토론 내용은 AI가 쓴 **의견**입니다. 숫자 자체도 이 방이 아니라 대시보드의 원래 화면이 기준입니다.
 
 ## 비용 (먼저 `once --dry-run`으로 직접 재 보세요)
-한 회차는 API 호출 **한 번**입니다(토론 전체가 한 답에 들어 있음). 고정 앞부분(규칙·역할·메뉴, 약 1,700 토큰)에 `cache_control`을 붙여 두고, 회차마다 바뀌는 자료는 작게(주제 하나, 평균 약 1,400 토큰, 상한 3,500) 만듭니다. 출력은 `max_tokens` 900으로 막습니다.
+한 회차는 API 호출 **한 번**입니다(토론 전체가 한 답에 들어 있음). 고정 앞부분(규칙·역할·메뉴, 약 1,700 토큰)에 `cache_control`을 붙여 두고, 회차마다 바뀌는 자료는 작게(주제 하나, 평균 약 1,400~1,600 토큰, 상한 3,500) 만듭니다. 출력은 `max_tokens`로 막습니다: 기본 900, 생각을 하는 모델(Sonnet 5.5)은 생각과 답을 합쳐 1,500(생각 토큰도 이 상한 안에 들어감).
 
 서버에서 키 없이, API 호출 없이 재는 법(안 쓰고 숫자만 봅니다):
 ```
@@ -35,9 +35,39 @@ cd /opt/crypto-bot-research && sudo -u paperbot-debate /opt/paperbot/venv/bin/py
 
 - **건너뛰기**: 지난 토론 뒤 청산이 10건 미만이고 새 경고 알림도, 새 밤 점검도 없으면 그 회차는 API를 부르지 않고 '건너뜀(바뀐 것 없음)'으로만 기록합니다(비용 0). 30%는 가정일 뿐이고, 실제 비율은 청산이 얼마나 자주 나느냐에 달렸습니다(청산이 자주 나면 거의 건너뛰지 않음). 6시간 동안 건너뛰기만 했으면 한 번은 돌립니다. 기준은 `DEBATE_MIN_NEW_TRADES`.
 - **출력이 값의 절반 이상**입니다(Haiku: 출력 800토큰 $0.0040, 입력 3,100토큰 $0.0031). 비용을 줄이려면 간격을 늘리는 것이 가장 확실하고, 그다음이 발언 수(`DEBATE_TURNS` 3)입니다.
-- **프롬프트 캐시**: 고정 앞부분은 약 1,700토큰이라 Haiku 4.5의 캐시 최소 길이(4,096토큰)에 못 미쳐 캐시되지 않고, 5분 캐시는 10분 이상 간격에서는 어차피 사라집니다. 그래서 위 표는 캐시 없이 셉니다. 코드는 간격이 50분 이하면 1시간짜리 캐시 표시(쓰기 2배, 읽기 0.1배)를 붙여 두므로, 모델의 최소 길이를 넘으면 `status`에 캐시 읽기가 잡히고 회당 최대 약 $0.0015(Haiku) 아낍니다. 50분보다 길면 표시를 붙이지 않습니다(쓰기 할증만 내고 못 읽으므로).
-- Sonnet 5.5는 기본으로 '생각'을 하고 그 토큰도 출력으로 청구됩니다. Sonnet을 쓰려면 `DEBATE_THINKING=between_tools`(생각 끄기)나 `DEBATE_EFFORT=low`를 넣으세요. 위 표는 생각 토큰을 뺀 값입니다.
+- **프롬프트 캐시**: 고정 앞부분은 약 1,700토큰이라 Haiku 4.5의 캐시 최소 길이(4,096토큰)에 못 미쳐 캐시되지 않고(Sonnet 5.5는 최소 512토큰이라 캐시됨: 아래 "Sonnet 5.5로 켜기"), 5분 캐시는 10분 이상 간격에서는 어차피 사라집니다. 그래서 위 표는 캐시 없이 셉니다. 코드는 간격이 50분 이하면 1시간짜리 캐시 표시(쓰기 2배, 읽기 0.1배)를 붙여 두므로, 모델의 최소 길이를 넘으면 `status`에 캐시 읽기가 잡히고 회당 최대 약 $0.0015(Haiku) 아낍니다. 50분보다 길면 표시를 붙이지 않습니다(쓰기 할증만 내고 못 읽으므로).
+- Sonnet 5.5는 기본으로 '생각'을 하고 그 토큰도 출력으로 청구됩니다(API의 `usage.output_tokens`에 들어 있어 코드의 비용·월 한도에도 그대로 셈). `DEBATE_EFFORT=low`(요청의 `output_config.effort`로 보냄)는 생각을 짧게 하고, `DEBATE_THINKING=between_tools`는 생각을 끕니다. `DEBATE_THINKING=disabled`는 Sonnet 5.5가 거절하므로(400) 서비스가 시작하지 않고 고칠 방법을 알려 줍니다. 위 표는 생각 토큰을 뺀 값입니다.
 - 월 한도 `DEBATE_MONTHLY_USD_CAP`(기본 $40)은 코드가 API가 알려 준 사용량으로 세는 **부드러운 한도**입니다. 한도의 80%에서 텔레그램 경고 한 번, 95%부터 호출을 멈추고(그 회차의 최악 비용이 한도를 넘을 때도 시작하지 않음) 다음 달(한국 시간 1일)에 저절로 이어집니다. 그래서 한도를 넘지 못하지만, **진짜 안전장치는 Anthropic 콘솔의 지출 한도**입니다. 둘 다 설정하세요. 폭주를 막는 시간당 한도(`DEBATE_HOURLY_USD_CAP`, 기본 월 한도÷24)도 있습니다.
+
+## Sonnet 5.5로 켜기 (두 분 결정 2026-10-05: Sonnet 5.5, 30분, 월 $30, effort low)
+paper v4 재시작 뒤 점검이 끝나면 켭니다. 크레딧은 **$30 선불**, 콘솔 지출 한도 **$30**, 자동 충전(auto reload) **끔**.
+
+`debate.env`에 넣을 줄(키 넣는 법은 아래 "서버에서 켜기"의 `sudoedit`; 키는 편집기 안에만, 채팅·명령줄에는 절대 쓰지 않기):
+```
+DEBATE_MODEL=claude-sonnet-5-5
+DEBATE_EVERY_MIN=30
+DEBATE_MONTHLY_USD_CAP=30
+DEBATE_EFFORT=low
+```
+`DEBATE_THINKING`과 `DEBATE_MAX_TOKENS`는 비워 둡니다(생각은 Sonnet 5.5 기본, 출력 상한은 생각까지 담는 1,500이 저절로 쓰임).
+
+순서(서버에서):
+1. 키 없이 비용 재 보기: `cd /opt/crypto-bot-research && sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (키·API 호출 없음. 위 네 줄을 넣은 뒤 돌리면 설정 모델·간격·한도로 계산합니다)
+2. 키 넣기: `SUDO_EDITOR=nano sudoedit /etc/paperbot/debate.env` (위 네 줄도 이때 고침)
+3. 켜기: `sudo systemctl enable --now paperbot-debate`
+4. 확인: `sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate status` 의 첫 줄이 `돌고 있음`이고 둘째 줄이 `모델 claude-sonnet-5-5 (effort low) (생각 adaptive(기본)), 30분 간격`. `journalctl -u paperbot-debate -n 20 --no-pager` 에 `회차 0 … 출력 N 토큰(생각 블록 n개 포함), $0.0…`.
+
+**v4 모양에서 잰 비용**(키·API 없이 `once --dry-run`을 v4 합성 자료, 331계좌·6일·거래 4,410건에 돌린 값, 2026-10-05): 고정 앞부분 약 1,721토큰, 회차 자료 평균 1,578(가장 큰 것 2,047)토큰, 출력 추정 800토큰.
+
+| Sonnet 5.5, 30분 | 회당 | 한 달(1,440회, 건너뛰기 없음) |
+|---|---|---|
+| 캐시 없이 | $0.0146 | $21.02 |
+| 고정 앞부분 캐시(1시간 캐시, 읽기 0.1배) | $0.0115 | $16.56 |
+| 생각 토큰 회당 평균 100개마다 | +$0.0010 | +$1.44 |
+
+- 생각은 effort low에서 짧지만 양은 모델이 정합니다. 위 표에 생각을 더하면 회당 평균 생각이 300토큰일 때 한 달 약 $21~25, 600토큰이면 약 $25~30입니다. 코드는 월 $30의 95%($28.50)에서 멈추고 다음 달에 이어 가므로 넘지 않습니다. 실제 값은 켠 다음 날 `status`의 "최근 7일 회당 평균"(API가 알려 준 출력 토큰, 생각 포함)으로 확인하세요.
+- 계좌가 331개라 30분마다 새 청산이 10건을 넘는 일이 거의 늘 있어 **건너뛰기는 거의 일어나지 않는다고 보고** 셉니다(위 표는 건너뛰기 0%).
+- 토론 자료의 표(league, 순위, 봉별, 코인별, 청산 방식)는 잠긴 매매법 36개 계좌와 같은 봉의 동전 봇만 셉니다. 딥시크·릴스 5분 단타·5분봉 동전은 `meta.groups`에 그룹별 계좌 수로만 들어가고 섞지 않습니다. `[ds200] …` 같은 그룹 알림 줄은 알림 목록에는 보이지만 계좌의 긴급 상황으로 세지 않습니다(주제를 끌어오지 않음). 가설은 여전히 36개 매매법 계좌만 다룹니다.
 
 ## 작게 시작하기: 선불 $5~10, 60분 간격
 1. 아래 "계정·크레딧·키 만들기"를 하되 크레딧은 **$5 또는 $10 선불**, 자동 충전은 **끕니다**.
@@ -112,7 +142,7 @@ journalctl -u paperbot-debate -n 30 --no-pager
 대시보드 카드는 `돌고 있음`, `멈춤`(이유 한 줄), `키 없음`, `꺼짐`(서비스가 안 돌거나 한 번도 안 켠 상태)을 보여 주고, 이번 달 사용액과 한도, 최근 토론(새것부터), 가설과 채점 결과, 아이디어, 사람별 적중 기록(표본이 작으면 그렇다고 표시)을 읽기 전용으로 보여 줍니다. `debate.db`가 없어도 '꺼짐'으로 정상 표시됩니다.
 
 ## 설정 한눈에 (`/etc/paperbot/debate.env`, `deploy/debate.env.example`)
-`ANTHROPIC_API_KEY`(필수), `DEBATE_MODEL`(기본 `claude-haiku-4-5-20251001`), `DEBATE_EVERY_MIN`(기본 20), `DEBATE_MONTHLY_USD_CAP`(기본 40), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_CRITICAL`, 선택: `DEBATE_PRICE_IN`/`DEBATE_PRICE_OUT`, `DEBATE_HOURLY_USD_CAP`, `DEBATE_DAILY_USD_CAP`, `DEBATE_TURNS`(3~5), `DEBATE_MAX_TOKENS`(기본 900), `DEBATE_MIN_NEW_TRADES`(기본 10), `DEBATE_THINKING`, `DEBATE_EFFORT`. 잘못된 값이 있으면 서비스는 오류를 내고 시작하지 않습니다(자동 재시작 없음, `journalctl -u paperbot-debate`).
+`ANTHROPIC_API_KEY`(필수), `DEBATE_MODEL`(기본 `claude-haiku-4-5-20251001`), `DEBATE_EVERY_MIN`(기본 20), `DEBATE_MONTHLY_USD_CAP`(기본 40), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_CRITICAL`, 선택: `DEBATE_PRICE_IN`/`DEBATE_PRICE_OUT`, `DEBATE_HOURLY_USD_CAP`, `DEBATE_DAILY_USD_CAP`, `DEBATE_TURNS`(3~5), `DEBATE_MAX_TOKENS`(기본 900, 생각하는 모델은 1,500), `DEBATE_MIN_NEW_TRADES`(기본 10), `DEBATE_THINKING`(비움 / adaptive / between_tools(Sonnet 5.5만) / disabled(Sonnet 5.5·Opus 5.5는 거절)), `DEBATE_EFFORT`(비움 / low / medium / high; Haiku 4.5는 비워 둠). 모델이 거절할 조합은 시작할 때 막습니다. 잘못된 값이 있으면 서비스는 오류를 내고 시작하지 않습니다(자동 재시작 없음, `journalctl -u paperbot-debate`).
 
 ## 기술 메모 (개발자용)
 - 호출: 표준 라이브러리 `urllib`로 `POST https://api.anthropic.com/v1/messages`(헤더 `x-api-key`, `anthropic-version: 2023-06-01`), 시스템 블록에 `cache_control`, 응답의 `usage`로 비용 계산(입력, 출력, 캐시 읽기 0.1배, 캐시 쓰기 1.25배/2배). 호출 안에서 429·5xx·네트워크 오류만 2번(2초, 6초, `retry-after`) 다시 시도하고, 그 뒤는 서비스의 지수 백오프(1분~30분)입니다. 답이 `max_tokens`에서 잘리면 끝난 발언까지는 저장합니다(돈을 낸 만큼 씀).
