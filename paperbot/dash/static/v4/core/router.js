@@ -59,8 +59,8 @@ async function show(params) {
   let {name} = params;
   let meta = SCREENS[name];
   if (!meta) { name = DEFAULT; meta = SCREENS[name]; params = {...params, name, arg: null}; }
-  if (meta.feature && features.probed && !features[meta.feature]) {
-    toast(`${meta.ko}: 아직 켜지지 않은 기능입니다`);
+  if (meta.feature && (features.probed || meta.feature === "wide") && !features[meta.feature]) {
+    toast(meta.feature === "wide" ? `${meta.ko}: PC 화면 (창이 좁아 홈으로 갑니다)` : `${meta.ko}: 아직 켜지지 않은 기능입니다`);
     location.replace(href(DEFAULT));
     return;
   }
