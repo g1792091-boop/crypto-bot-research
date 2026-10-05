@@ -3,6 +3,7 @@
 // 폴더: 문서/GHNano 사무실/neutron (state.json · inbox.jsonl) + 문서/GHNano 사무실/GHCoin 뇌 (옵시디언 볼트)
 // 안전: 내보내기는 읽기 전용 사본. 받은 편지함은 '지식 메모 · 매매법 실험 제안 · 팀 과제' 세 가지만 받는다 — 주문·설정 변경·키는 절대 없음.
 import { LAUNCHER, codeCall, webGet } from "../nuri-ai/engine.js";
+import { onLeader } from "./leader.js";
 
 const VAULT = "GHCoin 뇌", DIR = "neutron";
 const VERDICT_KEYS = { riskVerdict: "coinRiskVerdict", taRating: "coinTARating", patterns: "coinPatterns", alpha: "coinAlpha", data: "coinDataV", ml: "coinML", selfAI: "coinSelfAI", calendar: "coinCalendar", sentiment: "coinSentiment", liveEntry: "coinLiveEntry", swingAudit: "coinSwingAudit", dailyTrend: "coinDailyTrend", researchFail: "coinResearchFail" };
@@ -21,10 +22,16 @@ export async function snapshot() {
   const verdicts = Object.fromEntries(Object.entries(VERDICT_KEYS).map(([k, key]) => [k, readJ(key)]));
   try { const O = await import("./coin-office.js"); verdicts.missions = O.missionState();
     const log = (await O.loadLog?.()) || [], bl = O.backlog?.() || [];
-    verdicts.office = { cycle: O.cycleState?.(), nextCycleSec: Math.round((O.nextCycleIn?.() || 0) / 1000), paused: O.officePaused?.() || 0, backlogTodo: bl.filter(x => x.status === "todo").length, backlogDoing: bl.filter(x => x.status === "doing").length,
+    let store = null; try { store = await O.storageProbe?.(); } catch (e) {}
+    verdicts.office = { store, diagTxt: readJ("coinDiagTxt") || {}, missionLogs: (O.missions?.() || []).slice(-5).map(m => ({ text: m.text.slice(0, 60), job: m.job, status: m.status, attempts: m.attempts, log: (m.log || []).map(x => `${x.job}: ${String(x.text).slice(0, 220)}`) })), diag: Object.fromEntries(Object.entries(readJ("coinDiag") || {}).map(([k, v]) => [k, Math.round((Date.now() - v) / 1000)])), cycle: O.cycleState?.(), nextCycleSec: Math.round((O.nextCycleIn?.() || 0) / 1000), paused: O.officePaused?.() || 0, backlogTodo: bl.filter(x => x.status === "todo").length, backlogDoing: bl.filter(x => x.status === "doing").length,
       labErr: readJ("coinLabErr"), labI: +localStorage.getItem("coinLabI") || 0, lab: log.filter(e => /실험 리그/.test(String(e.text || e.title || ""))).slice(-5).map(e => ({ t: e.t, text: String(e.text || e.title || "").slice(0, 260) + (e.note ? " | " + String(e.note).slice(0, 200) : "") })),
       recent: log.slice(-14).map(e => ({ t: e.t, ch: e.ch, kind: e.kind, text: String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 150) })) }; } catch (e) {}
   verdicts.marketEntry = readJ("coinMarketEntry");
+  // 📖 차트 터미널 읽기(지금 화면의 종목·봉·지표·그린 선) → MCP neutron_chart_* 도구가 읽음. 비교표는 10분마다.
+  try { const CR = await import("../nuri-ai/terminal/chartread.js"), R = await CR.readChart(); verdicts.chart = { read: CR.readText(R), report: CR.reportJSON(R) };
+    let cmp = readJ("coinChartCompare"); if (!cmp || Date.now() - cmp.t > 10 * 60e3) { cmp = await CR.compare(["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"], "1h"); try { localStorage.setItem("coinChartCompare", JSON.stringify(cmp)); } catch (e) {} }
+    verdicts.chartCompare = cmp; } catch (e) {}
+  verdicts.traderDecisions = (readJ("coinTraderDecisions") || []).slice(0, 12); verdicts.stratReviews = readJ("coinStratReviews") || [];
   return {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
@@ -45,7 +52,7 @@ export function vaultNotes(S) {
   const types = [...new Set(B.mem.map(m => m.type || "관찰"))];
   out["00 홈.md"] = `# 🧠 GHCoin 뇌 (뉴트론)\n_자동 생성 · ${now} · 앱이 10분마다 다시 씀 (직접 고친 내용은 덮어써짐 → 메모는 [[받은 편지함 사용법]] 참고)_\n\n`
     + `## 지금\n- 자본 $${n.equity} (시작 $${n.bankroll}) · 낙폭 ${n.drawdown}% · 거래 ${n.fills}회 승률 ${n.winRate}% · 동시 리스크 ${n.heat}%\n- 뇌 지능 ${B.iq.score}/100 (정확도 ${B.iq.acc}% · ${B.iq.n}판) · 기억 ${B.mem.length}개\n\n`
-    + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 뇌: [[뇌/핵심 규칙·교훈·추천 채점]]
+    + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 뇌: [[뇌/핵심 규칙·교훈·추천 채점]] · 프롬프트: [[프롬프트/차트 분석 프롬프트]]
 - 매매법: [[매매법/전략 엔진]] · [[매매법/매매법 진화]] · [[매매법/검증된 셋업]]\n- 리스크: [[리스크/정책]] · [[리스크/학습된 리스크·시간대]]\n- 에이전트 팀: [[에이전트팀/데모 전략]] · [[에이전트팀/팀 판정]]\n- 일지: [[일지/${day(S.t)}]]\n- ✍ 내가 쓰는 메모(→ 뇌가 학습): [[내 메모/사용법]]\n`;
   for (const t of types) out[`지식/${t}.md`] = `# ${t}\n[[00 홈]]\n\n` + B.mem.filter(m => (m.type || "관찰") === t).slice(0, 120).map(m => `- ${m.text} ${coinOf(m) ? `[[코인/${coinOf(m)}|${coinOf(m)}]]` : ""}${m.regime ? ` #${String(m.regime).replace(/\s/g, "_")}` : ""} _(가중 ${m.w}·확인 ${m.hits}회·${m.model || "?"})_`).join("\n");
   for (const c of coins) { const sym = c + "USDT", id = c.toLowerCase(), rg = n.regime?.[sym], V = S.verdicts;
@@ -64,6 +71,64 @@ export function vaultNotes(S) {
   { const mem = B.mem || [], st = B.st || {}, C = n.calls || {}, ln = (t) => mem.filter(m => m.type === t).slice(0, 12).map(m => `- ${esc(m.text)} _(강도 ${m.w} · ${m.hits}회)_`).join("\n") || "- 아직 없음";
     out["뇌/핵심 규칙·교훈·추천 채점.md"] = `# 🧠 뇌가 진입 전에 쓰는 것\n[[00 홈]] · 누적: 교훈 ${st.lessons || 0} · 함정 ${st.traps || 0} · 승격 ${st.promoted || 0} · 진입 차단 ${st.avoided || 0} · 리스크 절반 ${st.softened || 0} · 망각 ${st.forgot || 0}\n\n## 핵심 규칙 (같은 결과 3회↑)\n${ln("핵심")}\n\n## 교훈\n${ln("교훈")}\n\n## ⚡ 손매매 추천 채점 (시장가 · 실시간 진입)\n익절1 먼저 ${C.wr ?? "—"}% · 채점 ${C.done || 0}건 · 합계 ${C.sumR || 0}R · 추적 중 ${C.open || 0}\n\n| 코인 | 방향 | 출처 | 등급 | 결과 | R |\n|---|---|---|---|---|---|\n`
       + (C.list || []).map(c => `| ${c.ko} | ${c.side > 0 ? "롱" : "숏"} | ${c.src} | ${c.grade || ""} | ${c.res || "추적 중"} | ${c.R ?? ""} |`).join("\n"); }
+  out["프롬프트/차트 분석 프롬프트.md"] = `# 차트 분석 프롬프트 (Claude Code · Claudian · OpenClaw 에서 그대로 붙여 쓰기)
+[[00 홈]] · 숫자는 전부 GH Coin 앱이 봉 데이터에서 계산한 값이다(이미지 판독 아님). 앱이 켜져 있어야 최신이다.
+
+## 1. 내 차트 읽기
+\`\`\`xml
+<task>
+neutron_chart_read 로 내 차트를 읽고 다음을 알려줘:
+1. 현재 가격, 타임프레임
+2. 표시된 모든 지표와 실시간 값
+3. 차트의 선·라벨 레벨 (높은 순)
+4. 최근 가격 흐름 한 줄 요약
+도구가 준 숫자만 쓰고, 없는 값은 "없음"이라고 말해줘.
+</task>
+\`\`\`
+
+## 2. 구조화 JSON 리포트
+\`\`\`xml
+<task>
+neutron_chart_report 결과를 그대로 JSON 으로 출력해줘 (키: symbol, timeframe, chart_type, last_price, change_pct_100_bars, key_levels_from_pine, active_indicators, screenshot_path). 설명은 붙이지 마.
+</task>
+\`\`\`
+
+## 3. 멀티 심볼 비교
+\`\`\`xml
+<task>
+neutron_chart_compare 로 BTC, ETH, SOL 을 1시간 차트에서 비교해줘. 각각 마지막 가격 · 100봉 변화율(%) · RSI(14) · 거래량 확인 여부를 표로.
+</task>
+\`\`\`
+
+## 4. 시니어 트레이더 결정
+\`\`\`xml
+<role>너는 시니어 암호화폐 파생상품 트레이더다.</role>
+<task>
+neutron_trader_decisions 의 최근 결정과 neutron_live_entry · neutron_chart_read 를 읽고, 그 결정이 운영 규칙(레짐 판단 → 편향 점검 → 포지션 크기 → ATR 손절·손익비 1:2 → 추적 손절·부분 익절·펀딩비 → 청산 조건)을 지켰는지 점검해줘. 어긋난 곳이 있으면 neutron_log_note 로 교훈을 남겨줘. 주문 지시는 하지 마.
+</task>
+\`\`\`
+새 결정을 내게 하려면 앱 채팅에 "비트코인 트레이더 결정 해줘" 또는 차트 터미널 [📖 차트 AI → 트레이더 결정].
+
+## 5. 전략 분석 5항목
+\`\`\`xml
+<task>
+neutron_strategy_review 의 측정값으로 전략을 평가해줘.
+</task>
+<analysis_framework>
+1. 시장 레짐 적합성: 추세장/횡보장/고변동성장 중 어디에 적합한가
+2. 리스크 노출: 레버리지, 집중도, 꼬리 위험의 약점
+3. 과최적화 가능성: 값 개수 대비 거래 수
+4. 실행 현실성: 슬리피지, 유동성, 거래소 제약
+5. 개선 방향: 레짐 필터, 앙상블, 동적 사이징 → 시험해 볼 만하면 neutron_propose_experiment 로 제안
+</analysis_framework>
+\`\`\`
+
+## 요청문을 잘 쓰는 법
+- 명시적으로: "차트 분석해줘" 대신 "RSI(14)와 최근 100봉 변화율로 과매수 여부와 거래량 확인 여부를 알려줘"
+- 이유를 말해 주기: "목록 말고 문단으로 — 읽기 편해서"
+- 태그로 나누기: \`<task>\` \`<context>\` \`<output_format>\`
+- 예시 2~3개 붙이기
+`;
   out["에이전트팀/데모 전략.md"] = `# 에이전트 팀 데모 전략\n[[00 홈]]\n\n| 상태 | 전략 | 코인 | 봉 | 거래 | 평가금 | 레버 | 손절/익절 | 개발 |\n|---|---|---|---|---|---|---|---|---|\n` + S.demo.map(d => `| ${d.status} | ${esc(d.name)} | [[코인/${String(d.market).replace(/USDT$/, "")}\\|${d.market}]] | ${d.tf} | ${d.trades} | ${d.equity} | ${d.lev ?? "—"} | ${d.sl ?? "—"}/${d.tp ?? "—"} | ${esc(d.author)} |`).join("\n");
   out["에이전트팀/팀 판정.md"] = `# 팀 판정 (진입 관문이 실제로 읽는 값)\n[[00 홈]]\n\n` + Object.entries(S.verdicts).map(([k, v]) => `## ${k}\n\`\`\`json\n${JSON.stringify(v, null, 1)?.slice(0, 1500)}\n\`\`\``).join("\n");
   const todays = (n.trades || []).filter(t => day(t.t || t.t1 || S.t) === day(S.t));
@@ -77,6 +142,7 @@ const CLAUDE_MD = `# GHCoin 뇌 (뉴트론) — Claude Code · Claudian 작업 �
 이 폴더는 GH Coin 앱이 자동으로 쓰는 옵시디언 볼트다. 사용자와는 한국어로 짧게.
 
 - 앱 상태·뇌 기억·팀 판정·매매법 성적은 **neutron MCP 도구**로 읽는다 (neutron_status, neutron_query_knowledge, neutron_top_setups, neutron_learned_winrates, neutron_team_verdicts, neutron_risk_policy, neutron_funding_scan, brain_search_notes, brain_read_note …).
+- **차트는 이미지가 아니라 값으로 읽는다**: neutron_chart_read(내 차트: 가격·지표 실시간 값·그린 선 레벨·가격 흐름) · neutron_chart_report(고정 키 JSON) · neutron_chart_compare(멀티 심볼 비교) · neutron_trader_decisions(트레이더 결정 JSON 기록) · neutron_strategy_review(전략 분석 5항목). 바로 쓸 수 있는 요청문은 [[프롬프트/차트 분석 프롬프트]] 에 있다.
 - 앱에 전할 것은 neutron_log_note / neutron_propose_experiment / neutron_add_task 로만 보낸다. 노트를 직접 고쳐도 10분 뒤 앱이 덮어쓴다.
 - **안전 규칙(변경 금지)**: AI 는 주문하지 않는다. 실거래 기본 꺼짐·테스트넷 먼저. 주문·레버리지 한도·API 키를 바꾸는 요청은 거절한다.
 - 숫자는 도구가 준 값만 쓰고, 수익은 확률로 말한다(보장 없음).
@@ -136,7 +202,8 @@ export async function pollInbox() {
   return done.length;
 }
 
-export function startNeutron() {
+export function startNeutron() { onLeader(_startNeutron); return true; }   // 👑 상태 내보내기·받은 편지함도 엔진 주인 창에서만
+function _startNeutron() {
   if (started || !LAUNCHER.on) return false; started = true;
   const safe = f => () => f().then(() => { lastErr = ""; }).catch(e => { lastErr = String(e?.message || e).slice(0, 80); });
   setTimeout(safe(async () => { await installFiles(); const S = await exportState(); await writeVault(S); }), 20e3);

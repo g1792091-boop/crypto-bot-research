@@ -4,6 +4,7 @@
 import { candlesFor, TOOLS } from "../nuri-ai/agent.js";
 import { brainStream, settings, saveSettings, PROVIDERS, modelKind, ollamaModels, ollamaPull, webSearch } from "../nuri-ai/engine.js";
 import * as BRAIN from "./brain.js";
+import { onLeader } from "./leader.js";   // 👑 매매 엔진은 한 창에서만
 import * as ENG from "./strategies.js";
 import * as CL from "./chartlab.js";
 
@@ -462,7 +463,7 @@ export async function calibrate() {
     for (const v of V) { const d = D[v.tf]; if (!d) continue;
       const r = ENG.simulate(v, d.I, d.cs, { sym, H: HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, atrK: 1, be: 1 });
       (pool[v.vkey] ||= []).push(...r.trades.map(t => ({ R: +t.R.toFixed(3), t1: t.t1, src: "bt", reg: t.reg })));
-      await new Promise(r => setTimeout(r, 0)); }
+      await new Promise(r => { try { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); } catch (e) { setTimeout(r, 0); } }); }
     feed(`🔬 ${ko} 백테스트 완료`);
   }
   for (const v of V) { const bt = (pool[v.vkey] || []).sort((a, b) => a.t1 - b.t1).slice(-40), live = (S.eng.stats[v.vkey]?.tr || []).filter(t => t.src === "live");
@@ -680,6 +681,40 @@ function pickApprover(cm) {
   const best = [...cm].sort((a, b) => acc(b) - acc(a))[0];
   return (k % 3 !== 2 && best && acc(best) >= 0.55) ? best : cm[k % cm.length];
 }
+// 승인 지시문(사용자 제공 프롬프트 가이드 3-6 적용: XML 로 역할·규칙·예시·출력 분리 + 이유 설명 + 서로 다른 입출력 예시 2개)
+//   이전 지시문은 '거절 사유 예' 목록을 한 줄로 나열해, 작은 모델이 그 목록을 통째로 베껴 거절하는 일이 잦았다(앵무새 답).
+export const APPROVE_SYS = `<role>
+너는 코인 선물 데스크의 진입 승인 담당이다. 규칙 기반 전략이 낸 신호 하나를 <facts> 의 맥락으로 검토해 승인 또는 거절한다.
+</role>
+
+<context>
+레버리지·손절·포지션 크기는 코드가 이미 계산했다(20배 이상, 손절은 청산거리의 40% 이하, 1회 손실 0.5~1%). 신호 자체도 과거 검증을 통과한 전략에서 나왔다.
+그래서 기본은 승인이고, <facts> 에 신호와 강하게 반대되는 '구체적인 사실'이 있을 때만 거절한다.
+</context>
+
+<rules>
+- reason 에는 <facts> 에 실제로 적힌 사실 한 가지를 숫자와 함께 쓴다. 일반론이나 여러 사유의 나열은 쓰지 않는다(근거가 없는 거절은 검증된 신호를 버리는 손실이기 때문이다).
+- 거절할 만한 경우: 4시간 추세가 신호와 반대 / 뉴스 심리 점수가 신호와 반대로 ±2 이상 / 고래·호가·펀딩이 신호와 강하게 반대 / 직전에 이미 크게 움직여 추격인 경우.
+- risk 는 0.5 가 기본, 근거가 아주 뚜렷할 때만 1.
+- 아래 예시 문장을 그대로 쓰지 않는다. 지금 <facts> 의 숫자로 새로 쓴다.
+</rules>
+
+<examples>
+<example>
+<facts>BTC 롱 신호 · 4시간 추세 상승 · 뉴스 심리 +1 · 고래 순매수 62%</facts>
+<output>{"approve":true,"risk":0.5,"reason":"4시간 추세가 상승이고 고래 순매수 62%로 신호 방향과 같음"}</output>
+</example>
+<example>
+<facts>SOL 롱 신호 · 4시간 추세 하락 · 펀딩 +0.06%(롱 과열)</facts>
+<output>{"approve":false,"risk":0.5,"reason":"4시간 추세가 하락인데 펀딩 +0.06%로 롱이 과열"}</output>
+</example>
+</examples>
+
+<output_format>
+JSON 한 줄만: {"approve":true|false,"risk":0.5|1,"reason":"한국어 한 문장"}
+</output_format>`;
+// 앵무새 답 감지: 예전 지시문의 사유 목록이나 예시 문장을 그대로 베낀 reason
+const echoReason = r => { const t = String(r || ""); return (t.match(/상위 추세 역행|뉴스 위험|횡보장에서 추세전략|직전 급등락 추격|실시간 수급/g) || []).length >= 2 || /고래 순매수 62%|펀딩 \+0\.06%/.test(t); };
 async function approveNext(cm) {
   const it = S.queue[0], tgt = pickApprover(cm), v = VMAP()[it.vkey]; if (!v) { S.queue.shift(); return; }
   const plan = ENG.frameworkPlan({ sym: it.sym, entry: S.dec[it.sym]?.price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: riskFor(v, it.side), equity: equity() });
@@ -693,10 +728,9 @@ async function approveNext(cm) {
   let raw = "", route;
   try {
     route = await brainStream({ messages: [
-      { role: "system", content: `너는 코인 선물 데스크의 진입 승인 담당 AI다. 규칙 기반 전략이 낸 신호를 맥락으로 검토해 승인/거절한다. 레버리지·손절·사이즈는 청산공식 프레임워크(20x 이상, 손절=청산거리 40% 이하, 1회 손실 0.5~1%)가 이미 계산했다.
-거절 사유 예: 상위 추세 역행, 뉴스 위험, 횡보장에서 추세전략, 직전 급등락 추격, 실시간 수급(고래 순매매·호가 불균형·OI/펀딩 과밀)이 신호 방향과 강하게 반대. 근거가 충분하면 승인. risk는 0.5(기본) 또는 1(아주 확실할 때만).
-반드시 JSON 한 줄: {"approve":true,"risk":0.5,"reason":"한 문장"}` },
-      { role: "user", content: `${it.ko} ${it.side > 0 ? "롱" : "숏"} 신호 · 전략: ${it.name} · 근거: ${it.why}
+      { role: "system", content: APPROVE_SYS },
+      { role: "user", content: `<facts>
+${it.ko} ${it.side > 0 ? "롱" : "숏"} 신호 · 전략: ${it.name} · 근거: ${it.why}
 국면(1H): ${it.regime} · 상위추세(4H): ${it.htf > 0 ? "상승" : it.htf < 0 ? "하락" : "중립"} · 시장: ${S.brief?.[it.sym]?.text || ""}
 이 전략 최근 성적: ${it.st.n}건 승률 ${it.st.wr}% 기대값 ${it.st.mean >= 0 ? "+" : ""}${it.st.mean}R (자체백테스트 ${it.st.bt}·실전 ${it.st.live})
 계획: ${plan.lev}x · 손절 ${plan.slPct}% · 익절 ${plan.tpPct}% (1:${plan.rr}) · 청산거리 ${plan.liqPct}% · 리스크 $${plan.risk}
@@ -707,7 +741,9 @@ ${it.whale ? WC.explain(it.whale) : "고래 신호 없음"}
 실시간 수급(팀 도구로 방금 조회):
 ${flow.join(" / ")}
 참고 지식: ${kn || "없음"}
-JSON만:` }],
+</facts>
+
+JSON 한 줄만:` }],
       role: "fast", target: tgt, fallback: true, json: true, maxTokens: 140, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) {
     mFails++; if (e?.status === 429 || /한도/.test(e?.message || "")) mBackoff = Date.now() + Math.min(90e3, 15e3 * mFails);
@@ -720,6 +756,8 @@ JSON만:` }],
   let j = {}; try { j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); } catch (e) {}
   const approve = j.approve === true || /"approve"\s*:\s*true/i.test(raw) || (j.approve == null && /승인/.test(raw) && !/거절/.test(raw));
   const reason = String(j.reason || "").slice(0, 60);
+  // 사유 목록·예시를 그대로 베낀 거절은 판단이 아니므로 버리고, 검증된 신호를 기본 리스크로 집행한다
+  if (!approve && echoReason(j.reason)) { M.echo = (M.echo || 0) + 1; feed(`[${shortMd(name)}] ${it.ko} ${it.name} 거절 사유가 지시문을 그대로 베낀 답 → 무시하고 자체 엔진이 기본 리스크로 집행`); openFrom(it, "자체 엔진"); save(); return; }
   if (!approve) { M.rejected++; feed(`[${shortMd(name)}] ${it.ko} ${it.name} 거절 — ${reason || "근거 부족"}`); return; }
   M.approved++;
   const risk = (+j.risk >= 1 && it.st.mean > 0.2) ? FW.maxRisk * riskFactor() : undefined;
@@ -895,7 +933,7 @@ export function trackCall(c = {}) {
   load(); if (!c.sym || !c.side || !c.entry || !c.sl || !c.tp1) return false;
   const L = (S.calls ||= []); if (L.some(x => !x.res && x.sym === c.sym && x.side === c.side && Date.now() - x.t < 30 * 60e3)) return false;
   const f0 = S.feat[c.sym] || {};
-  L.unshift({ id: Date.now().toString(36), sym: c.sym, ko: c.ko || c.sym.replace("USDT", ""), side: c.side, entry: +c.entry, sl: +c.sl, tp1: +c.tp1, grade: c.grade || "", src: c.src || "시장가", t: Date.now(), feat: { ...f0 }, reg: BRAIN.regimeOf(f0) });
+  L.unshift({ id: Date.now().toString(36), sym: c.sym, ko: c.ko || c.sym.replace("USDT", ""), side: c.side, entry: +c.entry, sl: +c.sl, tp1: +c.tp1, grade: c.grade || "", src: c.src || "시장가", t: Date.now(), feat: { ...f0 }, reg: BRAIN.regimeOf(f0), judges: Array.isArray(c.judges) ? c.judges.filter(j => j && j.who && (j.stance === "찬성" || j.stance === "반대")).slice(0, 4) : [] });
   S.calls = L.slice(0, 120); save(); return true;
 }
 let callAt = 0;
@@ -910,6 +948,8 @@ async function scoreCalls() {
     if (!res) continue;
     const rD = Math.abs(c.entry - c.sl), px = res === "손절" ? c.sl : res === "익절1" ? c.tp1 : (S.dec[c.sym]?.price || c.entry), R = rD ? +(((px - c.entry) * c.side) / rD).toFixed(2) : 0;
     Object.assign(c, { res, at, R }); const d = c.side > 0 ? "롱" : "숏";
+    // 🧑‍⚖️ 메타 심판(Actor → Judge → Meta-Judge · arXiv:2509.09751 의 3역할 폐루프 개념): 토론에서 찬성/반대한 심판을 실제 결과로 채점 → 다음 토론에서 그 심판의 반대에 주는 무게가 달라진다
+    if (res !== "무승부") for (const j of c.judges || []) { const J = (S.judge ||= {})[j.who] ||= { n: 0, ok: 0 }; J.n++; if ((j.stance === "찬성") === (res === "익절1")) J.ok++; }
     if (res === "손절") { BRAIN.learnLoss({ coin: c.ko, regime: c.reg, feat: c.feat || {}, dir: c.side, roe: (px / c.entry - 1) * 100 * c.side });
       BRAIN.learn({ type: "교훈", coin: c.ko, regime: c.reg, text: `[${c.src}${c.grade ? " " + c.grade : ""}] ${c.reg} ${d} 추천이 손절 먼저 — 같은 자리 다시 나오면 관망`, model: "추천 채점", w: 1.6 }); }
     else if (res === "익절1") BRAIN.learn({ type: "패턴", coin: c.ko, regime: c.reg, text: `[${c.src}${c.grade ? " " + c.grade : ""}] ${c.reg} ${d} 추천 익절1 먼저 +${R}R`, model: "추천 채점", w: 1.6 });
@@ -918,9 +958,12 @@ async function scoreCalls() {
   }
   save();
 }
+export function judgeStats() { load(); return Object.fromEntries(Object.entries(S.judge || {}).map(([k, v]) => [k, { n: v.n, ok: v.ok, acc: v.n ? Math.round(v.ok / v.n * 100) : null }])); }
+// 심판의 '반대'에 줄 무게: 채점 8건 미만 = 1(보통) · 적중 45% 미만 = 0(무시) · 55% 이상 = 2(혼자서도 한 단계 내림)
+export function judgeWeight(who) { load(); const j = (S.judge || {})[who]; if (!j || j.n < 8) return 1; const a = j.ok / j.n; return a < 0.45 ? 0 : a >= 0.55 ? 2 : 1; }
 export function callStats() { load(); const L = S.calls || [], done = L.filter(x => x.res && x.res !== "무승부"), w = done.filter(x => x.res === "익절1").length;
   const byGrade = {}; for (const x of done) { const g = byGrade[x.grade || "기타"] ||= { n: 0, w: 0, R: 0 }; g.n++; if (x.res === "익절1") g.w++; g.R = +(g.R + (x.R || 0)).toFixed(2); }
-  return { n: L.length, open: L.filter(x => !x.res).length, done: done.length, wins: w, wr: done.length ? Math.round(w / done.length * 100) : null, sumR: +done.reduce((a, x) => a + (x.R || 0), 0).toFixed(2), byGrade, list: L.slice(0, 8).map(({ feat, ...x }) => x) }; }
+  return { n: L.length, open: L.filter(x => !x.res).length, done: done.length, wins: w, wr: done.length ? Math.round(w / done.length * 100) : null, sumR: +done.reduce((a, x) => a + (x.R || 0), 0).toFixed(2), byGrade, judges: judgeStats(), list: L.slice(0, 8).map(({ feat, ...x }) => x) }; }
 
 // ⏱ 상시 자동 실행(패널을 닫아도 돈다): 시세·포지션·신호(6초) · AI 승인 · 뇌 정리(1분) · 웹 리서치(3분) · 뉴스 위험(5분) · 매매법 개발(8분) · 전략 회의(10분)
 let autoTimer = 0, autoK = 0, ticking = false;
@@ -938,7 +981,8 @@ export async function tick() {
   } finally { ticking = false; }
   return state();
 }
-export function startAuto() { if (autoTimer) return; try { seedKnowledge(); } catch (e) {} autoTimer = setInterval(() => tick().catch(() => {}), 6000); tick().catch(() => {}); }
+export function startAuto() { onLeader(_startAuto); }
+function _startAuto() { if (autoTimer) return; try { seedKnowledge(); } catch (e) {} autoTimer = setInterval(() => tick().catch(() => {}), 6000); tick().catch(() => {}); }
 export function stopAuto() { clearInterval(autoTimer); autoTimer = 0; }
 export const autoRunning = () => !!autoTimer;
 

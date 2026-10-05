@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- 개발용 확인 페이지 (tools/headless-run.mjs 가 연다). ?t=store|compare|chart|trader|review|mission  ·  &ai=1 이면 로컬 Ollama 사용  ·  &text=지시문 --><html lang="ko"><head><meta charset="utf-8"><title>RUN</title></head><body>
+<script type="module">
+const out = {}; const q = new URLSearchParams(location.search).get("t");
+try {
+  const ai = new URLSearchParams(location.search).get("ai") === "1";
+  if (ai) localStorage.setItem("coinTeamLocal", "1");
+  const O = await import("../gh-coin/coin-office.js");
+  await O.loadLog();
+  if (ai) { const m = await O.refreshOllama(); out.models = m; }
+  if (q === "mission") {
+    const text = new URLSearchParams(location.search).get("text") || "솔라나 1시간봉 추세추종 매매법 만들어줘";
+    O.ask(text, {room: "dev"}).catch(() => {});
+    const t0 = Date.now(); let M = null;
+    while (Date.now() - t0 < 25 * 60e3) { await new Promise(r => setTimeout(r, 5000)); M = O.missions().slice(-1)[0]; document.title = "RUN " + (M ? M.attempts + "/" + M.plan.length + " " + M.status : "-"); if (M && M.status !== "doing") break; }
+    for (let k = 0; k < 60; k++) { if ((await O.loadLog()).some(e => e.kind === "mission" && e.t >= t0)) break; await new Promise(r => setTimeout(r, 4000)); }   // 완성 보고서(요약 포함)가 올라올 때까지
+    const log = await O.loadLog(), P = await import("../nuri-ai/paper.js"), book = await P.loadBook();
+    out.mission = M && {status: M.status, attempts: M.attempts, plan: M.plan, log: M.log.map(x => x.job + ": " + x.text)};
+    out.report = (log.filter(e => e.kind === "mission").slice(-1)[0]?.text || "").slice(0, 3500);
+    out.notes = log.filter(e => e.kind === "system" && /🦴|🔧|🧪|📌/.test(e.text || "")).map(e => e.text.slice(0, 170));
+    out.models_used = [...new Set(log.filter(e => e.kind === "agent" && e.model).map(e => e.model))];
+    out.book = book.strategies.map(x => ({name: x.name, market: x.market, tf: x.tf, exp: !!x.exp, lev: x.spec?.risk?.leverage}));
+  }
+  if (q === "trader") {
+    const pos = new URLSearchParams(location.search).get("pos");   // pos=win(이익 중인 롱) · pos=stop(손절선을 넘은 롱) → 차트에 그린 포지션 도구를 흉내 내 관리 판단을 시험
+    if (pos) { const CR = await import("../nuri-ai/terminal/chartread.js"), px = (await CR.compare(["BTCUSDT"], "1h")).rows[0].last_price;
+      const d = pos === "win" ? {e: px * 0.98, sl: px * 0.965, tp: px * 1.04} : {e: px * 1.03, sl: px * 1.01, tp: px * 1.08};
+      localStorage.setItem("nuri:term:draw:binancef:BTCUSDT", JSON.stringify([{type: "long", pts: [{t: 1, p: d.e}, {t: 1, p: d.sl}, {t: 1, p: d.tp}, {t: 2, p: d.e}]}])); }
+    const r = await O.traderDecision({sym: "BTCUSDT", interval: "1h"}); out.r = r; }
+  if (q === "review") { const SK = await import("../gh-coin/lib/skeletons.js"); const v = SK.variant(7, "revert", "솔라나"); const r = await O.strategyReview({spec: {...v, symbol: "SOLUSDT", interval: "1h"}, market: "SOLUSDT", tf: "60"}); out.r = r && {name: r.name, trades: r.trades, pf: r.pf, score: r.score, rows: r.rows, text: r.text}; }
+  if (q === "chart") { const r = await O.chartAnalyze({sym: "ETHUSDT", interval: "4h"}); out.r = {facts: r.facts, keys: Object.keys(r.json), text: r.text}; }
+  if (q === "compare") { const r = await O.chartCompare({post: false}); out.r = r; }
+  if (q === "store") { out.r = await O.storageProbe(); }
+} catch (e) { out.err = String(e?.stack || e).slice(0, 1500); }
+document.body.innerText = JSON.stringify(out); document.title = "DONE";
+</script></body></html>

@@ -100,7 +100,7 @@ export async function hyperopt(Q, spec, cs, {epochs = 60, loss = "SharpeDaily", 
     s = {...s, risk: {...s.risk, ...risk}};
     try { s = Q.normalizeSpec(s); } catch(err){ continue; }
     tried.push({spec: s, ...score(s), vals, risk});
-    if (e % 6 === 5){ onProgress?.(e + 1, epochs); await new Promise(r => setTimeout(r, 0)); }   // 화면이 멈추지 않게
+    if (e % 6 === 5){ onProgress?.(e + 1, epochs); await new Promise(r => { try { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); } catch (e) { setTimeout(r, 0); } }); }   // 화면이 멈추지 않게
   }
   const ranked = [...tried].sort((a, b) => a.loss - b.loss), best = ranked[0], valid = tried.filter(x => x.loss < 1e9).length;
   // 검증: 전체 데이터로 walk-forward (뒤 30% = 하이퍼옵트가 한 번도 못 본 구간)

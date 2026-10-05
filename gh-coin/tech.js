@@ -203,5 +203,11 @@ export const TECH = [
   {repo: "yuxuan-lou/ClawTrade · VTSTech/AgentNova(→AgentKthx) · UVLabs/HyperLLM-4b", lic: "각 OSS(개념만)", teams: ["hq"], status: "참고 — 이미 같은 구조 보유/해당 없음",
     what: "ClawTrade: AI 는 브로커에 직접 접근 불가·하드코딩 안전 규칙(= live.js 보호 파일·한도) · AgentNova: 로컬 모델 자율 에이전트·하트비트(= 사무실 cycle·Ollama) · HyperLLM-4b: LoRA 어댑터뿐(GGUF 없음)·Hyperliquid 전용이라 Ollama 로 못 씀",
     where: "—"},
+  {repo: "사용자 제공 차트 분석 프롬프트 묶음(3-1~3-6) · TradingView MCP 도구 순서", lic: "프롬프트 구조(개념만)", teams: ["ind", "entry", "bt", "dev"], status: "적용 — 차트 터미널 📖 차트 AI",
+    what: "내 차트 읽기(가격·지표 실시간 값·그린 선 레벨·가격 흐름) · 고정 키 JSON 리포트 · 멀티 심볼 비교 · 시니어 트레이더 결정 JSON(규칙은 코드가 집행·감사 기록) · 전략 분석 5항목(레짐·리스크·과최적화·실행·개선) · 로컬 모델용 짧은 XML 지시문(형식 통과 0/6 → 5/6 실측)",
+    where: "nuri-ai/terminal/chartread.js · terminal.js _chartRead · coin-office.js chartAnalyze/chartCompare/traderDecision/strategyReview · lib/stratreview.js · lib/specprompt.js · mcp neutron_chart_*"},
+  {repo: "pandas-ta · TA-Lib 캔들 패턴(이름·정의) · arXiv DeepSupp 2507.01971 · Meta-Learning RL 2509.09751 · FineFT 2512.23773 · RegimeNAS 2508.11338", lic: "개념만", teams: ["pattern", "sr", "entry"], status: "일부 적용 · 일부 시험 후 미채택",
+    what: "캔들 패턴 24종 + 실측 등급(약한 우위 4 · 역효과 3 · 나머지 우위 없음) · 토론 심판 채점(메타 심판) · 레짐 분류. 미채택: DBSCAN 지지·저항(차이 없음) · 고변동성 진입 금지(전후반 뒤집힘)",
+    where: "nuri-ai/terminal/candlepat.js · ind.js candles · neural.js judgeWeight"},
 ];
-export const TECH_REPOS = 72;   // + Obsidian 6종 + MCP·Claudian·brain-mcp·Sharpe·ocean-agent·ClawTrade·AgentNova·HyperLLM
+export const TECH_REPOS = 74;   // + Obsidian 6종 + MCP·Claudian·brain-mcp·Sharpe·ocean-agent·ClawTrade·AgentNova·HyperLLM

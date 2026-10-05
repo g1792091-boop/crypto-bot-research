@@ -85,7 +85,7 @@ function regimeOf(F){
   return {trend: tr > rg, label: tr + rg === 0 ? "?" : tr > rg ? "추세장" : "횡보장", tr, rg, volRank: F.vol_rank, rvol: F.rvol};
 }
 
-const tick = () => new Promise(r => setTimeout(r, 0));
+const tick = () => new Promise(r => { try { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); } catch (e) { setTimeout(r, 0); } });   // 창이 가려져도 밀리지 않는 양보(setTimeout 0 은 숨은 창에서 1분에 한 번으로 묶임)
 // 한 시간대의 모든 지표 계산 → 점수·표·레벨
 export async function analyzeTF(cs, {yieldEvery = 24} = {}){
   const bars = toBars(cs), n = bars.length, price = bars[n - 1].close, votes = [], levels = [], F = {};

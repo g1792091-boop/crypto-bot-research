@@ -252,3 +252,11 @@ button.busy span { color: #5b8cff; }
 .nt-mylab-tb{width:100%;border-collapse:collapse;font-size:11.5px;margin:4px 0}.nt-mylab-tb th{color:#787b86;font-weight:600;text-align:left;padding:3px 4px;border-bottom:1px solid #2a2e39}.nt-mylab-tb td{padding:3px 4px}
 .nt-mkt .nt-row button{background:#2a2e39;border:1px solid #363a45;color:#d1d4dc;border-radius:5px;padding:4px 10px;cursor:pointer;margin:4px 0}
 .nt-mkt-live{font-size:11px;color:#ffcf6a;display:flex;align-items:center;gap:3px;margin-left:auto}.nt-mkt-live+button{margin-left:6px!important}
+
+/* 📖 차트 AI 패널 */
+.nt-read-btn{background:linear-gradient(90deg,#00b8a9,#2979ff)!important;color:#fff!important;font-weight:700;border-color:#00b8a9!important}
+.nt-read{border-color:#00b8a988;width:min(540px,calc(100% - 24px))}
+.nt-read-tabs{display:flex;gap:4px;margin:0 0 8px;flex-wrap:wrap}.nt-read-tabs button{background:#1e222d;border:1px solid #363a45;color:#9aa4b6;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11.5px}.nt-read-tabs button.on{background:#00b8a9;border-color:#00b8a9;color:#06110f;font-weight:700}
+.nt-read-t{width:100%;border-collapse:collapse;font-size:11.5px}.nt-read-t td,.nt-read-t th{padding:3px 6px;border-bottom:1px solid #232733;text-align:left;vertical-align:top}.nt-read-t th{color:#9aa4b6;font-weight:600}
+.nt-read-pre{background:#0b0e14;border:1px solid #232733;border-radius:6px;padding:8px;max-height:300px;overflow:auto;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;color:#c8d1e0;white-space:pre-wrap;word-break:break-all}
+.nt-read-ai{line-height:1.6}

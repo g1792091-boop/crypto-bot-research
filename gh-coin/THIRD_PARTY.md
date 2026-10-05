@@ -109,3 +109,22 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | López de Prado, *Advances in Financial ML* 트리플 배리어 (mlfinlab · finmlkit `TBMLabel`) | 익절선·손절선·시간 만료 중 먼저 닿는 것으로 유사상황 승률·기대값 |
 | pkg-support-resistance (클러스터링) · TradingView "Support & Resistance KDE" | 스윙 피벗 군집 + 터치 강도 지지·저항 |
 | TradingView "Order Book Ultimate" · nssanta/quant-order-book | 호가 벽(평균 대비 배수) + 스냅샷 간 유지 추적 + ±1% 불균형 |
+
+## 📖 차트 분석 터미널 자료 묶음 (10/5) — 사용자 제공 목록, 개념·프롬프트 구조만 (코드 복사 없음)
+
+저장소 존재 여부는 2026-10-05 에 확인(HTTP 200). `Ruby-xantho/chart-to-code` · `twopirllc/pandas-ta` · `deepentropy/numta` 는 그 주소에 없었음(404).
+
+| 출처 | 적용 |
+|---|---|
+| 사용자 제공 프롬프트 3-1·3-2·3-3 (TradingView MCP 용 차트 읽기·JSON 리포트·멀티 심볼 비교) | 우리 차트 터미널 값으로 구현: `nuri-ai/terminal/chartread.js` · 터미널 [📖 차트 AI] · MCP `neutron_chart_read/report/compare` |
+| 사용자 제공 프롬프트 3-4 (시니어 파생상품 트레이더 운영 규칙·결정 JSON) | `coin-office.js traderDecision` — 규칙을 코드가 집행, AI 는 근거·확신도만(더 보수적으로만), 감사 기록 |
+| 사용자 제공 프롬프트 3-5 (전략 분석 5항목) | `lib/stratreview.js` (레짐·리스크·과최적화·실행·개선을 코드로 측정) + AI 해설 |
+| Anthropic 프롬프트 가이드 요약(3-6: 명시·이유·XML 구조·예시) | `lib/specprompt.js`(매매법 설계) · 승인 지시문 `APPROVE_SYS` · 위 기능들의 지시문 |
+| pandas-ta · TA-Lib 캔들 패턴 목록(이름·정의) | `nuri-ai/terminal/candlepat.js` 24종 직접 구현 + 실측 등급표 |
+| arXiv:2507.01971 DeepSupp (어텐션 + DBSCAN 지지선) | 군집 단계(DBSCAN)만 시험 → 지금 방식과 차이 없음(51.1% vs 51.1%, 무작위 50.7%) → **미채택**, 화면에 "반등 예측력 확인 안 됨" 표기 |
+| arXiv:2509.09751 Meta-Learning RL (Actor → Judge → Meta-Judge) | 3역할 폐루프 개념만: 토론 심판(팀·뉴럴 모델)의 찬반을 실제 결과로 채점해 반대의 무게 조절(`neural.js judgeWeight`) |
+| arXiv:2512.23773 FineFT (능력 경계·OOD) · arXiv:2508.11338 RegimeNAS · PVinh-Quant/Kairos-v2 (레짐) | 레짐(추세/횡보/고변동성) 분류만 채택. '고변동성 진입 금지'는 시험 결과 전·후반이 뒤집혀(0.76 → 1.03) **미채택** |
+| TauricResearch/TradingAgents · virattt/ai-hedge-fund · Ganador1/FenixAI_tradingBot · gugu-2/Vector-Osiris | 이미 같은 구조 보유(투자위원회 · 자체 뇌) — 추가 없음 |
+| warren618/AlphaForge · perpsignal (선물 백테스트 현실성) | 이미 보유(다음 봉 시가 체결 · 펀딩 차감 · 청산 · 슬리피지) — 추가 없음 |
+| Fincept Terminal · MarketTerminal · OpenTerminalUI · profitmaker · hypeterminal · bbterm 등 터미널 | 구조 참고만. Tauri/React 재작성·TradingView 위젯(라이선스·값 읽기 불가)은 적용하지 않음 |
+| chart-to-code(VLM) · rl-trading-binance · advanced-ml-crypto-trading-bot 등 학습형 | 4GB GPU·브라우저 앱에서 학습 불가 + 이미지 판독보다 값 계산이 정확 → 적용하지 않음 |

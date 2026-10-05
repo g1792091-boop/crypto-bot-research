@@ -1,3 +1,4 @@
+import { detectAll, verified, statOf, gradeOf } from "./candlepat.js";
 // 자체 보조지표 라이브러리 (브라우저에서 계산 — 개수 제한 없음)
 // 공식은 TradingView Pine ta.* 와 같게 맞춤 (EMA/RMA SMA 시드, RSI/ATR Wilder 등)
 
@@ -748,20 +749,46 @@ Object.assign(INDICATORS, {
     });
     return { plots: [{ name: "TD", type: "signals", data: s }] };
   } },
-  candles: { name: "캔들 패턴", group: "신호 · 패턴", pane: "main", desc: "장악형·망치형·유성형·샛별형·석별형 (몸통이 ATR 절반 이상일 때만)", params: { min_body_atr: 0.5 }, compute: (c, p) => {
-    const a = atr(c, 14), e = ema(src(c), 20), s = sig(c.length);
-    for (let i = 2; i < c.length; i++) {
-      const b = c[i], q = c[i - 1], r = c[i - 2]; if (a[i] == null || e[i] == null) continue;
-      const body = Math.abs(b.close - b.open), rng = b.high - b.low || 1e-12, up = b.high - Math.max(b.open, b.close), lw = Math.min(b.open, b.close) - b.low;
-      const big = body >= p.min_body_atr * a[i];
-      if (big && b.close > b.open && q.close < q.open && b.close >= q.open && b.open <= q.close) s[i] = { dir: 1, text: "장악형" };
-      else if (big && b.close < b.open && q.close > q.open && b.close <= q.open && b.open >= q.close) s[i] = { dir: -1, text: "장악형" };
-      else if (lw >= 2 * body && up <= 0.3 * rng && rng >= a[i] && b.close < e[i]) s[i] = { dir: 1, text: "망치형" };
-      else if (up >= 2 * body && lw <= 0.3 * rng && rng >= a[i] && b.close > e[i]) s[i] = { dir: -1, text: "유성형" };
-      else if (r.close < r.open && Math.abs(r.close - r.open) >= a[i] * 0.8 && Math.abs(q.close - q.open) <= a[i] * 0.3 && b.close > b.open && b.close > (r.open + r.close) / 2) s[i] = { dir: 1, text: "샛별형" };
-      else if (r.close > r.open && Math.abs(r.close - r.open) >= a[i] * 0.8 && Math.abs(q.close - q.open) <= a[i] * 0.3 && b.close < b.open && b.close < (r.open + r.close) / 2) s[i] = { dir: -1, text: "석별형" };
-    }
+  candles: { name: "캔들 패턴 (24종 · 실측 등급)", group: "신호 · 패턴", pane: "main", desc: "캔들 패턴 24종(장악·망치·교수·역망치·유성·샛별·석별·잠자리/비석 도지·잉태·관통·흑운·적삼병·흑삼병·집게·장대봉·삼법·키커·삼내·삼외·샅바). 2026-10-05 실측(6코인×3개 봉, 패턴 뒤 6봉): 약한 우위(★, +2~5%p)는 샛별형▲·비석 도지▼·잉태형▲▼ 뿐, 장악형·삼외형▼은 오히려 기준선보다 낮음(역효과). verified_only=1 이면 ★만 표시", params: { min_body_atr: 0.5, verified_only: 1 }, compute: (c, p) => {
+    const s = sig(c.length), ok = verified(), all = detectAll(c, { minBodyAtr: p.min_body_atr });
+    for (let i = 0; i < c.length; i++) { const L = all[i]; if (!L) continue;
+      const best = L.map((x) => ({ ...x, v: ok.has(x.key + (x.dir > 0 ? "+" : "-")) })).sort((x, y) => y.v - x.v)[0];
+      if (+p.verified_only && !best.v) continue;
+      const r = statOf(best.key, best.dir);
+      s[i] = { dir: best.dir, text: best.text + (best.v ? "★" : ""), ...(r ? { stat: { n: r[0], hit: r[1], base: r[2], grade: gradeOf(r) } } : {}) }; }
     return { plots: [{ name: "패턴", type: "signals", data: s }] };
+  } },
+  // ---------- pandas-ta 대조로 채운 지표 10종 (2026-10-05 · 공식만 직접 구현): KDJ · APO · PVO · RVGI · TRIMA · TTM 추세 · 가속 밴드 · 이격도(BIAS) · 심리선(PSL) · CFO
+  kdj: { name: "KDJ", group: "오실레이터", pane: "sub", desc: "스토캐스틱 변형. K·D 에 J(=3K−2D)를 더해 과열을 빨리 보여 줌. 80 위 과매수 · 20 아래 과매도", params: { length: 9, signal: 3 }, compute: (c, p) => {
+    const n = c.length, K = Array(n).fill(null), Dd = Array(n).fill(null), J = Array(n).fill(null); let k = 50, d = 50;
+    for (let i = 0; i < n; i++) { if (i < p.length - 1) continue; let hh = -Infinity, ll = Infinity; for (let j = i - p.length + 1; j <= i; j++) { hh = Math.max(hh, c[j].high); ll = Math.min(ll, c[j].low); }
+      const rsv = hh > ll ? (c[i].close - ll) / (hh - ll) * 100 : 50; k = ((p.signal - 1) * k + rsv) / p.signal; d = ((p.signal - 1) * d + k) / p.signal; K[i] = k; Dd[i] = d; J[i] = 3 * k - 2 * d; }
+    return { plots: [line("K", K, C.b), line("D", Dd, C.a), line("J", J, C.c)], levels: [20, 80] };
+  } },
+  apo: { name: "APO (절대 가격 오실레이터)", group: "오실레이터", pane: "sub", desc: "빠른 EMA − 느린 EMA (가격 단위). 0 위 = 상승 모멘텀", params: { fast: 12, slow: 26 }, compute: (c, p) => { const x = src(c), v = sub(ema(x, p.fast), ema(x, p.slow)); return { plots: [hist("APO", v, signColors(v))], levels: [0] }; } },
+  pvo: { name: "PVO (% 거래량 오실레이터)", group: "거래량", pane: "sub", desc: "거래량의 MACD. 0 위 = 거래량이 평소보다 늘어나는 중", params: { fast: 12, slow: 26, signal: 9 }, compute: (c, p) => {
+    const x = c.map((b) => b.volume || 0), f = ema(x, p.fast), sl = ema(x, p.slow), v = f.map((a, i) => a == null || !sl[i] ? null : (a - sl[i]) / sl[i] * 100), sg = ema(v, p.signal), h = sub(v, sg);
+    return { plots: [hist("히스토그램", h, signColors(h)), line("PVO", v, C.b), line("시그널", sg, C.a)], levels: [0] };
+  } },
+  rvgi: { name: "RVGI (상대 활력 지수)", group: "오실레이터", pane: "sub", desc: "종가가 시가보다 얼마나 위에서 끝나는지(몸통/범위). RVGI 가 시그널을 위로 넘으면 상승 쪽", params: { length: 10 }, compute: (c, p) => {
+    const num = swma(c.map((b) => b.close - b.open)), den = swma(c.map((b) => b.high - b.low)), v = ratio(sma(num, p.length), sma(den, p.length)), sg = swma(v);
+    return { plots: [line("RVGI", v, C.d), line("시그널", sg, C.f)], levels: [0] };
+  } },
+  trima: { name: "TRIMA 삼각 이동평균", group: "추세", pane: "main", desc: "이동평균을 한 번 더 평균해 가운데에 무게를 둔 부드러운 이평", params: { length: 20 }, compute: (c, p) => { const n1 = Math.ceil((p.length + 1) / 2), n2 = Math.floor(p.length / 2) + 1; return { plots: [line("TRIMA", sma(sma(src(c), n1), n2), C.e)] }; } },
+  ttm_trend: { name: "TTM 추세", group: "추세", pane: "sub", desc: "종가가 최근 N봉 중간값(hl2) 평균 위면 +1(상승), 아래면 −1(하락)", params: { length: 6 }, compute: (c, p) => {
+    const m = sma(src(c, "hl2"), p.length), v = c.map((b, i) => m[i] == null ? null : b.close > m[i] ? 1 : -1);
+    return { plots: [hist("TTM", v, v.map((x) => x == null ? null : x > 0 ? "rgba(34,176,125,.85)" : "rgba(229,72,77,.85)"))], levels: [0] };
+  } },
+  accbands: { name: "가속 밴드", group: "변동성", pane: "main", desc: "고가·저가를 봉 범위만큼 넓혀 평균한 밴드. 상단 돌파 = 가속 상승, 하단 이탈 = 가속 하락", params: { length: 20, mult: 4 }, compute: (c, p) => {
+    const w = c.map((b) => (b.high + b.low) ? p.mult * (b.high - b.low) / (b.high + b.low) : 0), up = sma(c.map((b, i) => b.high * (1 + w[i])), p.length), lo = sma(c.map((b, i) => b.low * (1 - w[i])), p.length);
+    return { plots: [line("상단", up, C.b), line("중앙", sma(src(c), p.length), C.g), line("하단", lo, C.b)] };
+  } },
+  bias: { name: "이격도 (BIAS %)", group: "오실레이터", pane: "sub", desc: "종가가 이동평균에서 몇 % 떨어져 있는지. 크게 벌어지면 되돌림 가능성", params: { length: 26 }, compute: (c, p) => { const x = src(c), m = sma(x, p.length), v = x.map((a, i) => m[i] ? (a - m[i]) / m[i] * 100 : null); return { plots: [line("BIAS", v, C.a)], levels: [0] }; } },
+  psl: { name: "심리선 (PSL)", group: "오실레이터", pane: "sub", desc: "최근 N봉 중 오른 봉의 비율(%). 75 위 과열 · 25 아래 침체", params: { length: 12 }, compute: (c, p) => { const up = c.map((b, i) => i && b.close > c[i - 1].close ? 1 : 0), v = sma(up, p.length).map((x) => x == null ? null : x * 100); return { plots: [line("PSL", v, C.e)], levels: [25, 50, 75] }; } },
+  cfo: { name: "CFO (샹드 예측 오실레이터)", group: "오실레이터", pane: "sub", desc: "종가가 N봉 회귀선 예측값에서 몇 % 벗어났는지. 0 위 = 추세보다 강함", params: { length: 9 }, compute: (c, p) => {
+    const x = src(c), n = p.length, v = Array(x.length).fill(null), mx = (n - 1) / 2; let sxx = 0; for (let k = 0; k < n; k++) sxx += (k - mx) ** 2;
+    for (let i = n - 1; i < x.length; i++) { let my = 0; for (let k = 0; k < n; k++) my += x[i - n + 1 + k]; my /= n; let sxy = 0; for (let k = 0; k < n; k++) sxy += (k - mx) * (x[i - n + 1 + k] - my); const fc = my + (sxy / sxx) * (n - 1 - mx); v[i] = x[i] ? (x[i] - fc) / x[i] * 100 : null; }
+    return { plots: [line("CFO", v, C.c)], levels: [0] };
   } },
   // ---------- 스마트머니 (SMC)
   structure: { name: "시장 구조 (BOS · CHoCH)", group: "스마트머니 (SMC)", pane: "main", desc: "스윙 고점·저점을 종가로 돌파하면 BOS(추세 지속), 반대 방향 첫 돌파는 CHoCH(추세 전환). 점선 = 아직 안 깨진 스윙 레벨", params: { length: 5 }, compute: (c, p) => {
