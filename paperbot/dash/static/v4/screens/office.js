@@ -6,6 +6,7 @@
 import {h, put, ui, fmt, store, features, consolePanel} from "../core/pb.js";
 import {makeFloor} from "./office-floor.js";
 import {makeFeed} from "./office-feed.js";
+import {makeWall, countdown} from "./office-wall.js";
 import {STEPS, statusPill, stripLead, agentsState, agentsBanner, syncUnread, roomIdKo, triggerKo} from "./rooms-kit.js";
 
 const NOTE = "말풍선은 회의 기록에 저장된 실제 마지막 발언(첫 문장)입니다. 직원의 AI 차례가 끝나 기록될 때마다 바뀌며 실시간 타이핑이 아닙니다. " +
@@ -22,6 +23,12 @@ export async function mount(el, ctx) {
   const top = h("div", {class: "of-top", "aria-live": "polite"});
   const banner = h("div", {class: "of-banner"});
   const floor = makeFloor(ctx);
+  const wall = makeWall(ctx);
+  floor.setWall(wall.el);
+  // the status line's live countdown to the next fixed meeting (a real scheduled time from /api/office)
+  const cdEl = h("b", {class: "of-cd num"});
+  const paintCd = () => { const n = st.o && st.o.schedule && st.o.schedule.next; const t = countdown(n && n.at_ms); cdEl.textContent = t ? ` · ${t} 남음` : ""; };
+  ctx.every(1000, paintCd);
   const feed = makeFeed(ctx, () => renderConsole());
   let con = makeConsole();
   const main = h("div", {class: "of-main"}, floor.el, con);
@@ -53,7 +60,7 @@ export async function mount(el, ctx) {
       h("b", {class: "of-now"}, run.length ? `지금 회의 ${fmt.int(run.length)}개` : "지금 회의 없음"),
       run.length ? h("span", {class: "of-now-t"}, run.map((m) => `${m.title} ${triggerKo(m)}`).join(" · ")) : null,
       h("span", {class: "grow"}),
-      h("span", {class: "of-stats"}, "오늘 회의 ", h("b", null, fmt.int(today.meetings || 0)), " · AI 호출 ", h("b", null, fmt.int(today.ai_calls || 0)), ` · ${next}`),
+      h("span", {class: "of-stats"}, "오늘 회의 ", h("b", null, fmt.int(today.meetings || 0)), " · AI 호출 ", h("b", null, fmt.int(today.ai_calls || 0)), ` · ${next}`, cdEl),
       h("button", {class: "btn-line of-jump", type: "button", onclick: () => con.scrollIntoView({block: "start", behavior: "smooth"})}, "콘솔 ↓"));
     const slots = (o.schedule && o.schedule.slots) || [];
     slotsEl.textContent = slots.length ? `정기 회의 (한국 시간): ${slots.map((x) => `${x.hhmm} ${triggerKo(x)}`).join(" · ")}. 손실·사고·두 분 글·연구 회의는 정해진 시각 없이 열립니다.` : "";
@@ -117,7 +124,7 @@ export async function mount(el, ctx) {
   ctx.watch("office", (o, k, err) => {
     if (!o) { if (err && !st.o) floor.el.replaceChildren(ui.errorBox(err, () => store.refresh("office").catch(() => {}))); return; }
     st.o = o;
-    renderTop(); renderFloor();
+    renderTop(); renderFloor(); wall.update(o); paintCd();
     const key = (o.recent || []).map((r) => r.round_id).join(",");
     if (key !== st.doneKey) { const firstLoad = !st.doneKey && st.done === null; st.doneKey = key; if (!firstLoad) loadDone(); }
   });

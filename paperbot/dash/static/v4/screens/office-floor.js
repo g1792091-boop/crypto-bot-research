@@ -256,6 +256,8 @@ export function makeFloor(ctx) {
     });
     if (!st.ceo) { st.ceo = ceoNode(); grid.append(st.ceo); tickTime(); }
     st.ceo.style.order = "999";
+    // fill-people: the 상황판 wall screen in the wood next to the 대표실 (office-wall.js)
+    if (st.wall) { if (st.wall.parentNode !== grid) grid.append(st.wall); st.wall.style.order = "1000"; }
     setOwner(owner, first);
     quietRow.hidden = !quietRow.children.length;
     // real meeting start: its members walk from where they stood to the table
@@ -280,5 +282,5 @@ export function makeFloor(ctx) {
   // crossing the phone width redraws the quiet rooms as chips or as rooms
   const onWidth = () => { if (st.args) update(...st.args); };
   if (phone.addEventListener) { phone.addEventListener("change", onWidth); ctx.track(() => phone.removeEventListener("change", onWidth)); }
-  return {el, update};
+  return {el, update, setWall: (node) => { st.wall = node; }};
 }
