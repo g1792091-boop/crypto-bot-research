@@ -300,7 +300,7 @@ function riskFor(v, side) {
   const th = BRAIN.timeAdvice(new Date().getHours()); if (th && th.n >= 8 && !th.good) r *= 0.5;   // 학습상 안 되는 시간대
   return Math.max(0.0025, r);
 }
-const rrFor = v => Math.max(1.3, Math.min(3, S.eng.rr[v.vkey] ?? v.rr));
+const rrFor = v => { const m = TP_MODES[cfg().tpMode]?.rr; return m ?? Math.max(1.3, Math.min(3, S.eng.rr[v.vkey] ?? v.rr)); };
 
 // ── 시세 캐시 (메모리) ──
 const MK = {};   // `${sym}|${tf}` → {cs, I, at}
@@ -319,10 +319,15 @@ async function getTF(sym, tf, n = 420) {
 function markPos(P, price) { const proe = (price - P.entry) / P.entry * P.side * 100; P.proe = +proe.toFixed(3); P.roe = +(proe * P.lev).toFixed(2); P.price = price; return proe; }
 // siropkin/robinhood-ai-trading-bot 의 제약(포트폴리오 상한·제외 종목·최소/최대 금액·PDT 제한)을 선물용으로:
 //   동시 포지션 상한 · 제외 코인 · 하루 최대 진입 수(과매매 방지 = PDT 대응) · 청산 후 같은 코인 재진입 쿨다운
-const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30 };
+// tpMode(익절 방식) · levMode(레버리지 방식) — 기본은 실측 기대값이 가장 높은 지금 방식. 6코인 1년 실측(관망 규칙집 적용 데스크 재연):
+//   ev 매매법 기본 손익비(대부분 1:2) 승률 41% · +0.158R/건  ·  bal 1:1.5 승률 43% · +0.091R  ·  wr 1:1 승률 52% · +0.074R
+const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30, tpMode: "ev", levMode: "fw" };
+export const TP_MODES = { ev: { ko: "기대값 우선(매매법 기본 손익비)", rr: null, wr: 41, exp: 0.158 }, bal: { ko: "균형(1:1.5)", rr: 1.5, wr: 43, exp: 0.091 }, wr: { ko: "승률 우선(1:1)", rr: 1, wr: 52, exp: 0.074 } };
 export const cfg = () => ({ ...CFG0, ...(load().cfg || {}) });
 export function setCfg(patch = {}) { load(); const c = { ...cfg(), ...patch };
   c.maxPos = Math.max(1, Math.min(6, Math.round(+c.maxPos || 4))); c.dailyMax = Math.max(1, Math.min(50, Math.round(+c.dailyMax || 12))); c.coolMin = Math.max(0, Math.min(240, Math.round(+c.coolMin || 0)));
+  if (!TP_MODES[c.tpMode]) c.tpMode = "ev"; if (c.levMode !== "min") c.levMode = "fw";
+  if (patch.tpMode && patch.tpMode !== (S.cfg?.tpMode || "ev")) S.eng.calibAt = 0;   // 익절 방식이 바뀌면 자체 백테스트를 그 방식으로 다시
   c.exclude = (Array.isArray(c.exclude) ? c.exclude : String(c.exclude || "").split(/[,\s]+/)).map(x => String(x).toUpperCase().replace(/USDT$/, "")).filter(x => COINS.some(([ko]) => ko === x));
   S.cfg = c; save(); return c; }
 function heat() { let r = 0; for (const P of Object.values(S.pos)) r += P.be ? 0 : (P.risk || 0); return r; }
@@ -360,7 +365,7 @@ function openFrom(it, trader, riskOverride, note) {
   if ((it.side > 0 && price <= it.sl) || (it.side < 0 && price >= it.sl)) { feed(`${it.ko} ${it.name} 신호 무효 — 가격이 이미 손절선 너머`); return false; }
   const v = VMAP()[it.vkey]; if (!v) return false;
   const r = it.exp ? 0.0025 : Math.max(0.0025, (riskOverride ?? riskFor(v, it.side)) * tc.mul); if (tc.why) note = (note ? note + " · " : "") + "팀: " + tc.why;
-  const plan = ENG.frameworkPlan({ sym: it.sym, entry: price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: r, equity: equity() });
+  const plan = ENG.frameworkPlan({ sym: it.sym, entry: price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: r, equity: equity(), levMode: C.levMode });
   if (!plan || plan.skip) { feed(`${it.ko} ${it.name} 보류 — ${plan?.skip || "계획 실패"}`); return false; }
   if (heat() + plan.risk > FW.maxHeat * equity()) { feed(`${it.ko} 보류 — 동시 보유 리스크 한도(자본 ${FW.maxHeat * 100}%)`); return false; }
   const feat = S.feat[it.sym] || {};
@@ -370,7 +375,7 @@ function openFrom(it, trader, riskOverride, note) {
     hour: new Date().getHours(), spike: !!S.brief?.[it.sym]?.spike, feat: { ...feat }, bReg: BRAIN.regimeOf(feat) };
   if (trader !== "자체 엔진") { const M = model(trader); M.opened = (M.opened || 0) + 1; }
   S.day.n = (S.day.n || 0) + 1;
-  feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · SL ${plan.slPct}% / TP ${plan.tpPct}%(손익비 1:${plan.rr}) · 리스크 $${plan.risk}(${plan.riskPct}%)${note ? " · " + note : ""}`);
+  feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · 손절 가격 −${plan.slPct}% / 익절 +${plan.tpPct}%(손익비 1:${plan.rr}) · 손절 시 −$${plan.risk}(자본 ${plan.riskPct}%) · ROE로는 −${Math.round(plan.slPct * plan.lev)}%${note ? " · " + note : ""}`);
   return true;
 }
 function closeP(sym, px, why, at) {
@@ -554,7 +559,7 @@ export async function calibrate() {
   try { evolveFrom(ALL); V = variants(); } catch (e) { feed(`🧬 매매법 진화 실패(${String(e?.message || e).slice(0, 40)})`); }
   for (const { ko, sym, D, H } of ALL) {
     for (const v of V) { const d = D[v.tf]; if (!d) continue;
-      const r = ENG.simulate(v, d.I, d.cs, { sym, H: HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, atrK: 1, be: 1 });
+      const r = ENG.simulate(v, d.I, d.cs, { sym, H: HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, atrK: 1, be: 1, rr: TP_MODES[cfg().tpMode]?.rr ?? null });
       (pool[v.vkey] ||= []).push(...r.trades.map(t => ({ R: +t.R.toFixed(3), t1: t.t1, src: "bt", reg: t.reg })));
       if (!v.exp) { const idx = d.idx ||= new Map(d.cs.map((b, k) => [b.t, k])), Hh = HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, ms = TFMIN[v.tf] * 60e3;
         for (const t of r.trades) { const ie = idx.get(t.t0); if (ie == null || ie < 1) continue; HT.push({ s: sym, t: t.t0, t1: t.t1, R: t.R, ...HR.ctxAt(ENG, d.I, ie - 1, Hh, t.side, d.cs[ie - 1].t + ms, { fng: fngHist?.[new Date(t.t0).toISOString().slice(0, 10)] ?? null }) }); } }
@@ -891,7 +896,7 @@ JSON 한 줄만: {"approve":true|false,"risk":0.5|1,"reason":"한국어 한 문�
 const echoReason = r => { const t = String(r || ""); return (t.match(/상위 추세 역행|뉴스 위험|횡보장에서 추세전략|직전 급등락 추격|실시간 수급/g) || []).length >= 2 || /고래 순매수 62%|펀딩 \+0\.06%/.test(t); };
 async function approveNext(cm) {
   const it = S.queue[0], tgt = pickApprover(cm), v = VMAP()[it.vkey]; if (!v) { S.queue.shift(); return; }
-  const plan = ENG.frameworkPlan({ sym: it.sym, entry: S.dec[it.sym]?.price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: riskFor(v, it.side), equity: equity() });
+  const plan = ENG.frameworkPlan({ sym: it.sym, entry: S.dec[it.sym]?.price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: riskFor(v, it.side), equity: equity(), levMode: cfg().levMode });
   if (!plan || plan.skip) { S.queue.shift(); feed(`${it.ko} ${it.name} 보류 — ${plan?.skip || "계획 실패"}`); return; }
   S.scan = { model: shortMd(tgt.model), ko: it.ko, sym: it.sym, regime: `${it.regime} · ${it.name} 승인 검토`, t: Date.now() };
   const nw = S.news && Date.now() - S.news.t < 3600e3 ? `뉴스 심리 ${S.news.score > 0 ? "+" : ""}${S.news.score}(${S.news.reason || ""})` : "뉴스 정보 없음";

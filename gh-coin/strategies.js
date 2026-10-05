@@ -21,13 +21,16 @@ export const FW = {
 export const levCapOf = sym => sym === "BTCUSDT" ? 200 : 100;
 
 // 손절거리(분수) → 프레임워크 레버리지. 손절이 너무 넓어 20x에서도 규칙 위반이면 null(진입 금지).
-export function frameworkPlan({ sym, entry, side, slPrice, cat, rr, riskPct, equity }) {
+// levMode "min": 레버리지를 최소 20배로 고정(손절이 청산거리의 40% 이하일 때). 1회 손실 금액·명목은 그대로이고 증거금만 커져
+//   ROE 출렁임(손절 시 −40% 안팎 → −15% 안팎)이 작아지고 청산가가 더 멀어진다. 기본 "fw" = 손절폭에서 역산(사용자 프레임워크).
+export function frameworkPlan({ sym, entry, side, slPrice, cat, rr, riskPct, equity, levMode = "fw" }) {
   let s = Math.abs(entry - slPrice) / entry;
   if (!(s > 0)) return null;
   const cap = FW.slCapByCat[cat] ?? 0.02;
   if (s > cap) return { skip: `손절폭 ${(s * 100).toFixed(2)}% > ${cat} 상한 ${(cap * 100).toFixed(1)}% (20x 규칙 위반 → 진입 금지)` };
   if (s < FW.slFloor) { s = FW.slFloor; slPrice = side > 0 ? entry * (1 - s) : entry * (1 + s); }
-  const lev = Math.max(FW.minLev, Math.min(levCapOf(sym), Math.floor(FW.slShareOfLiq / s)));
+  const levFw = Math.max(FW.minLev, Math.min(levCapOf(sym), Math.floor(FW.slShareOfLiq / s)));
+  const lev = levMode === "min" && s <= FW.slShareOfLiq * 0.95 / FW.minLev ? FW.minLev : levFw;
   const liqDist = 0.95 / lev;
   const r = Math.min(FW.maxRisk, Math.max(0.0025, riskPct ?? FW.baseRisk));
   let notional = equity * r / (s + FW.fee);                 // 손절 시 손실(수수료 포함) = 자본×r

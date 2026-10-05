@@ -27,6 +27,8 @@ export async function openNeural(ctx = {}) {
       b.disabled = false; b.textContent = t0; ST = N.state(); render(); }; }
   // 📈 내 차트 지표 데스크 버튼(지금 점검·복사) — 렌더가 3초마다 바뀌므로 위임
   root.querySelector("[data-neurons]")?.addEventListener("click", async (ev) => {
+    const tm = ev.target.closest("[data-tpm]"); if (tm) { const n = N.setCfg({ tpMode: tm.dataset.tpm }); feed(`🎯 익절 방식: ${N.TP_MODES[n.tpMode].ko} — 다음 진입부터 (자체 백테스트도 이 방식으로 다시)`); ST = N.state(); render(); return; }
+    const lm = ev.target.closest("[data-levm]"); if (lm) { const n = N.setCfg({ levMode: lm.dataset.levm }); feed(`🎯 레버리지 방식: ${n.levMode === "min" ? "20배 고정" : "손절폭에서 역산"} — 다음 진입부터`); ST = N.state(); render(); return; }
     const cp = ev.target.closest("[data-cdcopy]"); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.cdcopy); cp.textContent = "복사됨"; } catch (e) {} return; }
     const go = ev.target.closest("[data-cdgo]"); if (go) { go.disabled = true; go.textContent = "점검 중…"; try { await N.chartDesk(true); } catch (e) { feed("📈 점검 실패: " + (e?.message || e)); } ST = N.state(); render(); }
   });
@@ -115,6 +117,8 @@ function robinLine(s) {
     + `<div class="brow"><span class="bt pur">고래</span><span class="btx" title="감지→필터→리스크→신호 · 30분 뒤 채점">${(w?.last || []).map(x => `${E(x.sym.replace("USDT", ""))} ${x.dir > 0 ? "▲" : "▼"}${Math.abs(x.netPct)}%`).join(" · ") || "승인된 고래 신호 없음"} <small class="dim">· 적중 ${tr?.n ? Math.round(tr.acc * 100) + "% (" + tr.n + "회)" : "학습 중"}</small></span></div>`
     + (rv ? `<div class="brow"><span class="bt up">관리</span><span class="btx" title="${E((rv.dropped || []).join(" / "))}">${E(rv.by)}: ${E((rv.done || []).join(" · ") || "모두 유지")}${rv.dropped?.length ? ` <small class="dim">· 검증 탈락 ${rv.dropped.length}건</small>` : ""}${rv.schema ? ' <small class="dim">· 스키마</small>' : ""} <small class="dim">${ago(rv.t)} 전</small></span></div>` : "")
     + (() => { let cs = []; try { cs = N.chartStrategies?.() || []; } catch (e) {} return cs.length ? `<div class="brow"><span class="bt up">내지표</span><span class="btx" title="차트 터미널 🔬 내 지표 연구소에서 데모 투입한 매매법 — 자체 백테스트 + 최근 기대값 +0.1R↑ 이어야 실제 데모 진입">${cs.map(x => `${x.active ? "✅" : "··"} ${E(x.name)}@${x.tf}${x.stat.n ? ` ${x.stat.mean >= 0 ? "+" : ""}${x.stat.mean}R/${x.stat.n}` : " (검증 대기)"}`).join(" · ")}</span></div>` : ""; })()
+    + `<div class="brow"><span class="bt warn">익절</span><span class="btx wrap" title="6코인 1년 실측(관망 규칙 적용). 손익비를 줄이면 승률은 오르지만 건당 기대값은 내려갑니다">${Object.entries(N.TP_MODES || {}).map(([k, m]) => `<button class="nd-mini${(c.tpMode || "ev") === k ? " on" : ""}" data-tpm="${k}">${(c.tpMode || "ev") === k ? "✓ " : ""}${E(m.ko)} <small>승률 ${m.wr}% · +${m.exp}R</small></button>`).join(" ")}</span></div>`
+    + `<div class="brow"><span class="bt warn">레버</span><span class="btx wrap" title="1회 손실 금액은 둘 다 같습니다(자본의 0.25~1%). 20배 고정은 증거금이 커지는 대신 ROE 출렁임이 작고 청산가가 멀어집니다">${[["fw", "손절폭에서 역산(기본 · 20~200배)"], ["min", "20배 고정(ROE 덜 출렁임)"]].map(([k, ko]) => `<button class="nd-mini${(c.levMode || "fw") === k ? " on" : ""}" data-levm="${k}">${(c.levMode || "fw") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`
     + `<div class="brow"><span class="bt dim">한도</span><span class="btx">동시 ${c.maxPos ?? 4}개 · 오늘 진입 ${s.dayN ?? 0}/${c.dailyMax ?? 12} · 쿨다운 ${c.coolMin ?? 30}분${c.exclude?.length ? " · 제외 " + c.exclude.join(",") : ""}</span></div>`;
 }
 // 🎭 감정 · 🧘 관망 규칙집 · 🗂 익절·손절 조정 채점 — 전부 코드가 계산·검증한 숫자
@@ -195,14 +199,14 @@ function render() {
   for (const tr of (s.traders || [])) if (tr.prov !== "self" && Array.isArray(tr.pos)) for (const p of tr.pos) allPos.push({ ...p, who: tr.name });
   const posList = allPos.length ? allPos.map(p => {
     const uPnl = p.margin != null ? p.margin * (p.roe || 0) / 100 : 0;
-    return `<div class="prow ${p.roe >= 0 ? "up" : "dn"}"><div class="pr1"><b>${E(p.ko)}</b> <span class="${p.side > 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.lev || "?"}x</span> <small class="dim">${E(p.who)}</small><span class="pr-roe ${p.roe >= 0 ? "up" : "dn"}">${p.roe >= 0 ? "+" : ""}${(p.roe || 0).toFixed(1)}%</span></div><div class="pr2 dim">증거금 $${(p.margin || 0).toFixed(0)} · 진입 ${fmtp(p.entry)} → ${fmtp(p.price)} · <span class="${uPnl >= 0 ? "up" : "dn"}">${uPnl >= 0 ? "+" : "−"}$${Math.abs(uPnl).toFixed(2)}</span> · 청산 ${fmtp(p.liq)}</div>${p.name ? `<div class="pr2 dim">${E(p.name)} · 손절 ${fmtp(p.sl)}${p.run ? "(추적)" : p.be ? "(본절)" : ""} · 익절 ${p.tp != null ? fmtp(p.tp) : "풀림 — ATR×3 추적"} · 1:${p.rr} · 리스크 $${p.risk}</div>` : ""}</div>`;
+    return `<div class="prow ${p.roe >= 0 ? "up" : "dn"}"><div class="pr1"><b>${E(p.ko)}</b> <span class="${p.side > 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.lev || "?"}x</span> <small class="dim">${E(p.who)}</small><span class="pr-roe ${p.roe >= 0 ? "up" : "dn"}">${p.roe >= 0 ? "+" : ""}${(p.roe || 0).toFixed(1)}%</span></div><div class="pr2 dim">증거금 $${(p.margin || 0).toFixed(0)} · 진입 ${fmtp(p.entry)} → ${fmtp(p.price)} · <span class="${uPnl >= 0 ? "up" : "dn"}">${uPnl >= 0 ? "+" : "−"}$${Math.abs(uPnl).toFixed(2)}</span> · 청산 ${fmtp(p.liq)}</div>${p.name ? `<div class="pr2 dim">${E(p.name)} · 손절 ${fmtp(p.sl)}${p.run ? "(추적)" : p.be ? "(본절)" : ` <b class="dn">가격 −${p.slPct ?? "?"}%</b>`} · 익절 ${p.tp != null ? `${fmtp(p.tp)} <b class="up">+${p.tpPct ?? "?"}%</b>` : "풀림 — ATR×3 추적"} · 1:${p.rr} · 손절 시 −$${p.risk}(자본 ${p.riskPct ?? "?"}%)</div>` : ""}</div>`;
   }).join("") : `<div class="dim" style="padding:6px">열린 포지션 없음 — 신호가 나오면 진입합니다</div>`;
   root.querySelector("[data-markets]").innerHTML = `<div class="nd-mgrid">${grid}</div><div class="pos-h">열린 포지션 ${allPos.length}</div>${posList}`;
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
-  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
+  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}" title="AI 가 설계한 매매법의 백테스트 수익률 — 실제 데모 거래가 아님">백테 ${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
-    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)}</span></div>`
+    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span>${(() => { const pm = t.entry && t.exit ? +((t.exit - t.entry) / t.entry * t.side * 100).toFixed(2) : null; return `<b class="${(pm ?? t.roe) >= 0 ? "up" : "dn"}" title="가격 움직임(레버리지 전). ROE ${t.roe}%">${pm != null ? `가격 ${pm >= 0 ? "+" : ""}${pm}%` : `${t.roe}%`}</b>`; })()}<span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)} · <small>ROE ${t.roe >= 0 ? "+" : ""}${t.roe}%</small></span></div>`
   ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
   // ⚡ 실시간 진입 카드
   const rtEl = root.querySelector("[data-rt]");
@@ -308,6 +312,7 @@ function inject() {
 .nd-h::before{content:"";position:absolute;left:0;top:0;width:3px;height:12px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2));box-shadow:0 0 6px rgba(34,211,238,.4)}
 .nd-h small{color:#4b5568;letter-spacing:.3px;text-transform:none}
 .nd-mini{margin-left:auto;background:rgba(22,30,44,.7);border:1px solid var(--line2);color:#8a93a6;padding:2px 8px;border-radius:5px;cursor:pointer;font:10px ui-monospace,monospace;letter-spacing:0;text-transform:none;transition:.15s}.nd-mini:hover{background:#1c2740;color:var(--accent);border-color:rgba(34,211,238,.4)}
+.btx .nd-mini{margin:2px 4px 2px 0}.btx.wrap{white-space:normal}.nd-mini.on{border-color:rgba(52,211,153,.6);color:#6ee7b7;background:rgba(16,40,32,.7)}
 .nd-brain canvas{cursor:crosshair}
 .nd-pnl .nd-big b{font-size:42px;font-weight:800;line-height:1;letter-spacing:-.5px}
 .nd-pnl .nd-big b.up{background:linear-gradient(90deg,#26d07c,#86f7bd);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -351,7 +356,7 @@ function inject() {
 .btx{color:#b3bccb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brow small{color:#5a6374;text-align:right}
 .nsub{color:#7f8ca3;font-size:10px;margin:10px 0 4px;letter-spacing:1px;text-transform:uppercase}
 .nd-tr{display:flex;flex-direction:column;gap:1px}
-.trow{display:grid;grid-template-columns:44px 52px 74px 64px 76px minmax(0,1fr);gap:7px;align-items:center;padding:4px 4px;border-bottom:1px solid rgba(20,28,42,.7)}
+.trow{display:grid;grid-template-columns:44px 52px 74px 96px 76px minmax(0,1fr);gap:7px;align-items:center;padding:4px 4px;border-bottom:1px solid rgba(20,28,42,.7)}
 .trow>b:first-of-type{color:#e6ebf5}
 @media(max-width:760px){.nd-grid{grid-template-columns:1fr;grid-template-rows:none}.nd-grid>.nd-card{grid-column:1 !important;grid-row:auto !important;min-height:220px}.nd-pnl,.nd-mkt{min-height:auto}.nd-brand{font-size:12px;letter-spacing:1px}}`;
   document.head.appendChild(st);
