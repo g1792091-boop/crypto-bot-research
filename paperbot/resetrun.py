@@ -59,7 +59,7 @@ days or inbox ids (owner:*, inbox:*, telegram:*, analysis:*, move:*, tf_split:*,
 incident:report_day, flag_*, newlab_*, policy:*, usage_scale, tick:last, ...) and stay.
 
 The restart is recorded in the cursor ``run:restarted`` ({ts, day_kst, archive, old_run_start, history}) and told
-to the staff once per room (a note and a system line: "실험을 <day>에 처음부터 다시 시작함 (5분봉 제외, 1분봉 5초 뒤
+to the staff once per room (a note and a system line: "실험을 <day>에 처음부터 다시 시작함 (5분봉 제외, 1분봉 8초 뒤
 읽기)"), so they never read the old run's numbers as the new run's.
 """
 
@@ -99,7 +99,7 @@ PREFIX_RULES = tuple(r for r in CURSOR_RULES if r[0].endswith(":"))
 EXACT_RULES = dict(r for r in CURSOR_RULES if not r[0].endswith(":"))
 OPEN_STATUSES = R.ACTIVE_PROPOSAL_STATUSES                # awaiting_owner, approved
 BACKUP_NAMES = {"agents3.db": "agents3-before-reset.db", "inbox.db": "inbox-before-reset.db"}
-WHAT_CHANGED_KO = "5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 5초 뒤 읽기"
+WHAT_CHANGED_KO = "5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 8초 뒤 읽기"
 
 
 def kst_day(ms: int) -> str:

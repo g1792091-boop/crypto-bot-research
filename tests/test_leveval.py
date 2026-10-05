@@ -295,7 +295,7 @@ def test_restart_line_for_meta():
     c.execute("CREATE TABLE cursors (k TEXT PRIMARY KEY, v TEXT)")
     assert P3.run_restarted(c) is None
     c.execute("INSERT INTO cursors VALUES (?, ?)", ("run:restarted", json.dumps(
-        {"day_kst": "2026-10-04", "text_ko": "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 5초 뒤 읽기)"})))
+        {"day_kst": "2026-10-04", "text_ko": "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 8초 뒤 읽기)"})))
     line = P3.run_restarted(c)
     assert line.startswith("실험을 2026-10-04에 처음부터 다시 시작함") and "이전 실행" in line and "\n" not in line
     from paperbot import resetrun
@@ -435,7 +435,7 @@ def test_restart_banner_math():
     late = restart_banner(start, cp1)
     assert late["day"] == 30 and late["checkpoint"] == 2 and late["text"] == "새 실험 D+30 · 2번째 판정 12/04"
     assert restart_banner(None, cp1)["ready"] is False
-    assert RULES_CHANGE_1_KO == "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 5초 뒤 읽기"
+    assert RULES_CHANGE_1_KO == "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 8초 뒤 읽기"
 
 
 def test_pages_have_the_new_views():

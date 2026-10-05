@@ -1706,7 +1706,7 @@ def _storable(text: str) -> bool:
 
 
 # the restarted run's rules change in one line (docs/paper-v3-rules-change-1.md), for the home banner
-RULES_CHANGE_1_KO = "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 5초 뒤 읽기"
+RULES_CHANGE_1_KO = "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 8초 뒤 읽기"
 # documents the dashboard serves read-only as text (GET /api/doc/<name>); nothing else under docs/
 DOCS = {"rules-change-1": "paper-v3-rules-change-1.md", "levrule-eval": "levrule-eval.md"}
 DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs")

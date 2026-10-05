@@ -32,7 +32,7 @@ class LiveFeed:
                  clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
                  on_event: Optional[Callable[[str, str], None]] = None,
                  clock_check_every: int = 60, max_clock_skew_ms: int = 1000,
-                 settle_ms: int = 5_000):
+                 settle_ms: int = 8_000):
         self.rest = rest
         self.symbols = list(symbols)
         self.grace_ms = grace_ms

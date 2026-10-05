@@ -108,7 +108,7 @@ def test_signed_request_requires_keys_and_signs():
 
 def test_feed_never_passes_forming_bar_and_backfills():
     syms = ["BTCUSDT", "ETHUSDT"]
-    fake = FakeBinance(syms, T0 + 10 * MIN + 5_000)  # bar 10 is forming
+    fake = FakeBinance(syms, T0 + 10 * MIN + 9_000)  # bar 10 is forming, bar 9 settled (8 s)
     events = []
     feed = LiveFeed(rest_for(fake), syms, start_time=T0 + 3 * MIN,
                     clock_ms=lambda: fake.now, on_event=lambda l, t: events.append((l, t)))
@@ -127,11 +127,11 @@ def test_feed_waits_settle_ms_after_close_before_reading_a_bar():
     syms = ["BTCUSDT"]
     fake = FakeBinance(syms, T0 + 10 * MIN + 2_000)  # bar 9 closed 2 s ago
     feed = LiveFeed(rest_for(fake), syms, start_time=T0 + 3 * MIN, clock_ms=lambda: fake.now)
-    assert feed.settle_ms == 5_000
+    assert feed.settle_ms == 8_000
     assert [t for t, _, _ in feed.poll()] == [T0 + i * MIN for i in range(3, 9)]
-    fake.now = T0 + 10 * MIN + 4_000
+    fake.now = T0 + 10 * MIN + 7_000
     assert feed.poll() == []
-    fake.now = T0 + 10 * MIN + 5_500
+    fake.now = T0 + 10 * MIN + 8_500
     assert [t for t, _, _ in feed.poll()] == [T0 + 9 * MIN]
     quick = LiveFeed(rest_for(fake), syms, start_time=T0 + 3 * MIN, clock_ms=lambda: fake.now, settle_ms=0)
     assert [t for t, _, _ in quick.poll()][-1] == T0 + 9 * MIN
