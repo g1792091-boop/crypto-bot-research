@@ -1,0 +1,103 @@
+/* 흐름 kit (screens/flow-kit.js): the group race chart, its labels and the small home card. Loaded by flow.css
+   (@import) and, on home, by raceMini (a link to this file). One fixed colour per group, tokens only:
+   기존 36 = the accent yellow, 딥시크 = terminal cyan, 5분봉 = a magenta on the avatar recipe, 동전 봇 = grey (the
+   baseline: band + dashed median). Identity is never colour alone: labels and legends name every line. */
+[data-screen="flow"], .fk-minicard {
+  --c-core: var(--accent);
+  --c-ds: var(--term-cyan);
+  --c-m5: hsl(300 var(--av-s) var(--av-ring-l));
+  --c-coin: var(--ink-2);
+}
+
+/* swatches (legend, labels, table, calendar): each carries its group's class; "band" = the coin flips' band */
+.fk-sw { display: inline-block; flex: none; width: 12px; height: 4px; border-radius: 2px; background: var(--c-coin); }
+.fk-sw.core { background: var(--c-core); }
+.fk-sw.ds { background: var(--c-ds); }
+.fk-sw.m5 { background: var(--c-m5); }
+.fk-sw.band { height: 9px; border-radius: 2px; background: var(--line-2); border-top: 2px dashed var(--c-coin); }
+
+/* the chart box: svg underneath, html labels on top */
+.fk-race { position: relative; width: 100%; min-width: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.fk-race .fk-svg { position: absolute; inset: 0; }
+.fk-race svg { display: block; }
+.fk-chart .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; transition: opacity var(--t-fast) var(--ease), stroke-width var(--t-fast) var(--ease); }
+.fk-chart .ln.core { stroke: var(--c-core); }
+.fk-chart .ln.ds { stroke: var(--c-ds); }
+.fk-chart .ln.m5 { stroke: var(--c-m5); }
+.fk-chart .ln.coin { stroke: var(--c-coin); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.fk-chart .ln.f5 { stroke: var(--c-m5); stroke-width: 1.2; stroke-dasharray: 1 3; opacity: 0; }
+.fk-race.show-f5 .fk-chart .ln.f5 { opacity: .9; }
+.fk-chart .fk-band { fill: var(--c-coin); opacity: .13; }
+.fk-race.focused .fk-chart .ln:not(.on):not(.f5) { opacity: .22; }
+.fk-race.focused .fk-chart .ln.on { stroke-width: 2.6; }
+.fk-chart .fk-head { stroke: var(--surface); stroke-width: 2; fill: var(--c-coin); transition: opacity var(--t-fast); }
+.fk-chart .fk-head.core { fill: var(--c-core); } .fk-chart .fk-head.ds { fill: var(--c-ds); } .fk-chart .fk-head.m5 { fill: var(--c-m5); }
+.fk-chart .fk-head.dim { opacity: .3; }
+.fk-chart .fk-link { stroke: var(--c-coin); stroke-width: 1; stroke-dasharray: 2 3; opacity: .55; }
+.fk-chart .fk-link.core { stroke: var(--c-core); } .fk-chart .fk-link.ds { stroke: var(--c-ds); } .fk-chart .fk-link.m5 { stroke: var(--c-m5); }
+.fk-race.focused .fk-chart .fk-link { opacity: .2; }
+.fk-chart .fk-hatch { fill: var(--line); }
+.fk-chart .fk-future { opacity: .55; }
+.fk-chart .fk-left { fill: var(--muted); font: 700 10px var(--f-pixel); letter-spacing: .04em; }
+.fk-chart .fk-left.big { fill: var(--ink-2); font: 400 12px var(--f-pixel); }
+.fk-chart .fk-ev rect { fill: var(--amber-ink); }
+.fk-chart .fk-ev text { fill: var(--amber-ink); font: 700 9px var(--f-body); opacity: .85; }
+.fk-chart .fk-vline { stroke: var(--accent-line); stroke-width: 1; stroke-dasharray: 3 3; }
+.fk-chart .fk-flag rect { fill: var(--ink-2); }
+.fk-chart .fk-flag .f1 { fill: var(--accent); } .fk-chart .fk-flag .f2 { fill: var(--surface); }
+.fk-chart .fk-vlab { fill: var(--accent); font-weight: 700; }
+.fk-chart .ax.now { fill: var(--ink-2); font-weight: 700; }
+.fk-chart .fk-bust { fill: var(--down); }
+.fk-chart .fk-bustl { stroke: var(--down-line); stroke-width: 1; }
+.fk-chart .fk-cross { stroke: var(--ink-2); stroke-width: 1; opacity: .7; }
+.fk-chart .fk-hit { fill: transparent; cursor: crosshair; }
+
+/* labels at the right edge: they glide to their line's height and change places when the order changes */
+.fk-labels { position: absolute; inset: 0; pointer-events: none; }
+.fk-lab { position: absolute; left: 0; top: 0; display: grid; gap: 0; padding: 2px 6px 3px; border-radius: 7px; background: var(--glass);
+  border: 1px solid var(--line-2); transition: transform .32s var(--ease), opacity var(--t-fast); will-change: transform; overflow: hidden; }
+.fk-lab .fk-l1 { display: flex; align-items: center; gap: 5px; font: 700 10.5px/1.35 var(--f-body); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fk-lab .fk-l2 { display: flex; align-items: baseline; gap: 5px; font: 800 12.5px/1.25 var(--f-body); color: var(--ink); white-space: nowrap; }
+.fk-lab .fk-rk { font: 400 11px var(--f-pixel); color: var(--muted); min-width: 8px; }
+.fk-lab .fk-vv.up { color: var(--up); } .fk-lab .fk-vv.down { color: var(--down); }
+.fk-lab.core { border-color: var(--accent-line); }
+.fk-lab.dim { opacity: .35; }
+.fk-lab.fk-bump { animation: fk-bump .5s var(--ease); }
+@keyframes fk-bump { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 40% { box-shadow: 0 0 0 4px var(--accent-glow); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.fk-chip { position: absolute; left: 0; bottom: 2px; width: 140px; white-space: nowrap; text-align: center; padding: 2px 6px; border-radius: 6px; pointer-events: none;
+  background: var(--surface-3); color: var(--ink); font: 700 10.5px/1.5 var(--f-term); border: 1px solid var(--line-2); }
+
+/* legend chips (tap = that group in front) */
+.fk-legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.fk-lg { appearance: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: 9px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); cursor: pointer;
+  transition: background-color var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
+.fk-lg small { color: var(--muted); font-weight: 400; }
+.fk-lg:hover { border-color: var(--accent-line); }
+.fk-lg[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); border-color: var(--ink-2); }
+
+/* the designed empty state: the road and its flag, no line */
+.fk-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; padding: 12px;
+  border: 1px dashed var(--line-2); border-radius: var(--r-md); color: var(--muted); font-size: var(--t-xs); }
+.fk-empty b { color: var(--ink-2); font: 400 13px var(--f-pixel); letter-spacing: .04em; }
+.fk-empty span { max-width: 30em; }
+.fk-empty .fk-road { width: 120px; height: 24px; }
+.fk-empty .fk-road .r { fill: var(--line-2); } .fk-empty .fk-road .d { fill: var(--muted); } .fk-empty .fk-road .p { fill: var(--ink-2); }
+.fk-empty .fk-road .f1 { fill: var(--accent); } .fk-empty .fk-road .f2 { fill: var(--surface); }
+.fk-empty.mini { grid-auto-flow: column; gap: 10px; border-style: dashed; }
+.fk-empty.mini .fk-road { width: 60px; height: 12px; }
+
+/* the small home card */
+.fk-minicard .fk-mtop { display: flex; align-items: center; gap: 8px; justify-content: space-between; color: var(--muted); font-size: var(--t-xs); }
+.fk-minicard .fk-race { border-radius: var(--r-sm); background: var(--surface-2); }
+.fk-mlist { list-style: none; margin: 0; padding: 0 !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px !important; counter-reset: fk; }
+.fk-mlist li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: var(--t-sm); counter-increment: fk; }
+.fk-mlist li::before { content: counter(fk); font: 400 11px var(--f-pixel); color: var(--muted); width: 9px; }
+.fk-mlist .fk-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.fk-mlist b { margin-left: auto; font-weight: 800; }
+.fk-mlist b.up { color: var(--up); } .fk-mlist b.down { color: var(--down); }
+@media (prefers-reduced-motion: reduce) {
+  .fk-lab, .fk-chart .ln, .fk-lg { transition: none; }
+  .fk-lab.fk-bump { animation: none; }
+}
+.fk-chart .fk-head.out { stroke: var(--ink); stroke-width: 1.5; }
