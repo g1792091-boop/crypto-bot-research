@@ -432,6 +432,7 @@ def test_money_and_comparison_captions_are_the_shared_ones():
 def test_no_outside_hosts_except_google_fonts_and_new_tab_links():
     allowed_resource = {"fonts.googleapis.com", "fonts.gstatic.com"}
     link_only = {"www.coinglass.com", "www.tradingview.com", "kr.tradingview.com"}     # <a target=_blank> only
+    frame_only = {"s.tradingview.com"}        # the opt-in 거래소 차트 iframe (sandboxed, cross-origin; tests/test_dash_tvopt.py)
     for p in _files():
         src = _read(p)
         assert "wss://" not in src and "new WebSocket(" not in src, p              # prices come through the server
@@ -441,6 +442,8 @@ def test_no_outside_hosts_except_google_fonts_and_new_tab_links():
                 continue
             if host in allowed_resource:
                 assert p.endswith("index.html"), (p, host)
+            elif host in frame_only:
+                assert p.endswith(os.path.join("screens", "chart-tv.js")), (p, host)
             else:
                 assert host in link_only and p.endswith(os.path.join("screens", "chart.js")), (p, host)
 

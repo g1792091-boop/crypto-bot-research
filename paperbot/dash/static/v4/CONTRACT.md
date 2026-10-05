@@ -19,6 +19,7 @@ The architect has built the shared foundation. Five builders now fill the screen
 - Import shared code from `../core/pb.js` only.
 - No outside hosts. Prices come from `/api/ticker` and `/api/candles` (no Binance WebSocket). Charts use the vendored lightweight-charts through `core/lwc.js`.
 - The only outside links allowed are TradingView and Coinglass, as `target="_blank" rel="noopener"` anchors in `chart.js`. `tests/test_dash_v4.py` enforces this.
+- One outside frame (10/06, owners' opt-in): the 차트 screen's **거래소 차트** tab shows TradingView's page in a sandboxed cross-origin `<iframe>` built only while that tab is open (`screens/chart-tv.js`; INVENTORY §17). No outside `<script>` ever. `tests/test_dash_tvopt.py` enforces this.
 
 ### Text safety
 
@@ -280,7 +281,7 @@ Old features are mapped row by row in `INVENTORY.md`. Every row assigned to you 
   - `/api/candles?limit=2` every 5 s for the forming bar
   - `serverNow()` for countdowns
 - Side panels as tabs. Price alerts: add / delete / rearm via `post()`, showing the server's Korean error text.
-- TradingView and Coinglass as new-tab links.
+- TradingView and Coinglass as new-tab links; TradingView also as the opt-in 거래소 차트 tab (sandboxed iframe, `screens/chart-tv.js`).
 - On phones: chart first (height about 55vh), panels below as tabs.
 
 **market (시장)**
