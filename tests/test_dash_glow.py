@@ -433,6 +433,20 @@ def test_every_relay_listener_uses_the_one_connection_and_the_light_listens_only
     assert "listenTicks" in _read("core", "sound.js") and "listenTicks" in _read("screens", "terminal-live.js")
 
 
+def test_light_button_stays_short_where_its_full_label_would_push_the_terminal_header_past_its_edge():
+    # measured in a browser (1920 px window): the terminal's chart header fits '조명 깜박 · 번쩍임 자주 ▾' from 1700 px at
+    # 글자 크기 보통 and from 1840 px at 크게; at 아주 크게 it never fits (it cut off 일 / 차트 화면 at 1920 px, which the old
+    # 번쩍임 select did not), so there the button keeps the short '조명 깜박 ▾' (the flash setting stays in the menu)
+    fx = _code(_read("core", "chartfx.js"))
+    assert 'h("span", {class: "cfx-lf"}, " · 번쩍임 ", fNow)' in fx
+    css = _read("core", "chartfx.css")
+    assert "@media (max-width: 1699px) { .cfx-lbtn .cfx-lf { display: none; } }" in css
+    assert '@media (max-width: 1839px) { html[data-text="lg"] .cfx-lbtn .cfx-lf { display: none; } }' in css
+    assert 'html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }' in css
+    # phones: the menu is a sheet above the bottom tab bar (its own token, not a copied number)
+    assert "bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));" in css
+
+
 # ---------------------------------------------------------------- 프리미엄 지표 (SMC) on synthetic candles
 SYN = """
 // a downtrend (lower highs 95, 91), a rally that breaks the last lower high (CHoCH up), a higher high (BoS up) with an
@@ -588,7 +602,10 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert 'role: "menuitemradio"' in fx and "(기본)" in fx
     # the decorative blink is named as such, with no number: the chip says what the light follows right now
     raw = _read("core", "chartfx.js")
-    assert 'LIGHT_DECO = "조명 깜박: 지금은 체결 소식이 없어 은은한 장식 깜박 (시장 자료 아님)"' in raw
+    # (the relay may be live while nothing it sends is followed: another coin's smallest are skipped, so the words say
+    # "nothing to follow", not "no trades")
+    assert 'LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)"' in raw
+    assert "7개 코인 중 이 코인이 가장 밝게" in raw.split("LIGHT_REAL = ")[1].split("\n")[0]
     assert "blink.src() === \"real\" ? LIGHT_REAL : blink.src() === \"deco\" ? LIGHT_DECO" in fx
     # the screens keep the old name for the control (flashSel) and hand the deck the coin on screen
     for scr in ("terminal-chart.js", "chart.js"):

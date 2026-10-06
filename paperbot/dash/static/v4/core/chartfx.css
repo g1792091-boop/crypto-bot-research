@@ -122,12 +122,15 @@
 .cfx-msub { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: var(--t-2xs); }
 .cfx-lmenu .cfx-mnote { max-width: 250px; }
 /* narrower windows: the button says only the light ('조명 깜박 ▾', narrower than the old 번쩍임 select); the flash
-   setting stays in the menu and the button's tooltip */
+   setting stays in the menu and the button's tooltip. The full label fits the terminal's chart header from 1700 px at
+   글자 크기 보통, from 1840 px at 크게 and never at 아주 크게 (the header would pass its edge, cutting off 일 / 차트 화면) */
 @media (max-width: 1699px) { .cfx-lbtn .cfx-lf { display: none; } }
+@media (max-width: 1839px) { html[data-text="lg"] .cfx-lbtn .cfx-lf { display: none; } }
+html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }
 /* phones: the button sits mid-row, so a menu hanging from it could pass the screen's left edge; it opens as a sheet
    inside the 16 px gutters, above the bottom tab bar */
 @media (max-width: 599px) {
-  .cfx-lmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); min-width: 0;
+  .cfx-lmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px)); min-width: 0;
     max-height: 64vh; overflow-y: auto; }
   .cfx-lmenu .cfx-mnote { max-width: none; }
 }

@@ -43,10 +43,10 @@ import {smcPrimitive} from "./smcdraw.js";
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
-export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게)";
-export const LIGHT_DECO = "조명 깜박: 지금은 체결 소식이 없어 은은한 장식 깜박 (시장 자료 아님)";
+export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게 · 7개 코인 중 이 코인이 가장 밝게)";
+export const LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)";
 export const LIGHT_NOTE = "깜박: 바이낸스 실제 체결을 따라 파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색이 잠깐 켜집니다 "
-  + "(클수록 밝고 길게 · 7개 코인 중 지금 코인이 가장 밝게). 체결 소식이 2초 넘게 없으면 은은한 장식 깜박 (시장 자료 아님). 이 기기에만 기억합니다.";
+  + "(클수록 밝고 길게 · 7개 코인 중 지금 코인이 가장 밝게). 따라갈 체결이 2초 넘게 없으면 은은한 장식 깜박 (시장 자료 아님). 이 기기에만 기억합니다.";
 const LIGHT_SHORT = {blink: "깜박", steady: "켜짐", off: "끔"};
 const LIGHT_SUB = {blink: "실제 체결 따라", steady: "예전처럼"};
 const FLASH_SUB = {often: "큰 체결마다", normal: "고래·큰 청산·우리 체결만"};

@@ -6,11 +6,11 @@
 // (node-tested, tests/test_dash_glow.py); the layer is core/chartfx.js, and so is the per-device setting '번쩍임'.
 // HONESTY: only push() starts a flash and only a real event calls push(): no timer ever invents one. The single
 // setTimeout below only plays an event that really arrived while the previous flash was still on screen.
-// prefers-reduced-motion: no flash at all (the steady Premium / Discount light stays; it never moves by itself).
+// prefers-reduced-motion: no flash at all (the Premium / Discount halves only fade slowly then: core/blink.js CALM).
 
 export const ENVELOPE = {inMs: 200, holdMs: 1500, holdSmallMs: 600, outMs: 400};
 /** '번쩍임' per device: 자주 (default) every real big trade, at most one start per 0.9 s; 보통 only the big ones (고래, a
- *  large liquidation, our own fills), at most one per 2.5 s; 끄기 none (the ambient tint stays). */
+ *  large liquidation, our own fills), at most one per 2.5 s; 끄기 none (the '조명' setting alone decides the halves). */
 export const FLASH_MODES = [{id: "often", ko: "자주", gapMs: 900, bigOnly: false}, {id: "normal", ko: "보통", gapMs: 2500, bigOnly: true},
   {id: "off", ko: "끄기", gapMs: Infinity, bigOnly: true}];
 export const DEFAULT_FLASH = "often";
