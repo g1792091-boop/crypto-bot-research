@@ -105,11 +105,11 @@ function topCard({d, vts, v}) {
   let sel = Math.min(Number(local.get(`c5-top-${v}`, 0)) || 0, top.length - 1);
   const list = h("div", {class: "c5-list", role: "list"});
   const rows = top.map((t, i) => {
-    const r = h("button", {class: ["lrow click c5-row", i === sel ? "on" : ""], type: "button", role: "listitem", "aria-pressed": String(i === sel),
+    const r = h("button", {class: ["lrow click c5-row", i === sel ? "on" : ""], type: "button", "aria-pressed": String(i === sel),
       onclick: () => pick(i)},
     h("span", {class: "rk"}, `${fmt.int(i + 1)}위`),
     h("span", {class: "lname c5-wrap"}, t.units.map((u) => nm(d, u)).join(" + ")),
-    h("span", {class: ["ret num", fmt.tone(t.mean_month)]}, `월 ${fmt.pct(t.mean_month, 1)}`),
+    h("span", {class: ["ret num", fmt.tone(t.mean_month, fmt.pct(t.mean_month, 1))]}, `월 ${fmt.pct(t.mean_month, 1)}`),
     h("span", {class: "meta"},
       h("span", null, `${fmt.int(t.k)}개 · 점수 ${fmt.num(t.score, 2)}`),
       h("span", null, `5년 거래 ${fmt.int(t.trades)}건`),
@@ -117,7 +117,7 @@ function topCard({d, vts, v}) {
       h("span", null, `최대 낙폭 ${dol(-t.dd_usd)}`),
       h("span", null, `이긴 달 ${fmt.pct(t.win_months, 0, false)}`),
       h("span", null, `분산 효과 ${t.div == null ? "—" : fmt.num(t.div, 2)}`)));
-    list.append(r);
+    list.append(h("div", {role: "listitem", class: "c5-li"}, r));
     return r;
   });
   function pick(i) {
@@ -224,7 +224,7 @@ function walkCard({d, vts, v}) {
   const a = count(wf), b = count(fl);
   const row = (r, flip) => h("div", {class: "c5-wf", role: "listitem"},
     h("div", {class: "c5-wf-h"}, h("b", null, `${r.pick_year}년에 고른 1위 → ${r.test_year}년`),
-      h("span", {class: ["num", fmt.tone(r.mean_month_next)]}, ` 그해 한 달 평균 ${fmt.pct(r.mean_month_next, 1)}`)),
+      h("span", {class: ["num", fmt.tone(r.mean_month_next, fmt.pct(r.mean_month_next, 1))]}, ` 그해 한 달 평균 ${fmt.pct(r.mean_month_next, 1)}`)),
     flip ? null : h("p", {class: "c5-wf-n"}, (r.units || []).map((u) => nm(d, u)).join(" + ")),
     h("div", {class: "c5-wf-bar", title: `전체 조합 중 ${fmt.pct(r.beat_share, 0, false)}보다 높음`},
       h("i", {style: {"--w": (Math.max(0, Math.min(1, r.beat_share || 0)) * 100).toFixed(1) + "%"}}),
@@ -327,7 +327,7 @@ function mergedCard({d}) {
   const pg = ui.pager({size: 5, empty: "규칙이 없습니다", row: (r, i) => h("div", {class: "lrow c5-mrow", role: "listitem"},
     h("span", {class: "rk"}, `${fmt.int(i + 1)}`),
     h("span", {class: "lname c5-wrap"}, ruleWords(d, r)),
-    h("span", {class: ["ret num", fmt.tone(r.mean)]}, fmt.pct(r.mean, 2)),
+    h("span", {class: ["ret num", fmt.tone(r.mean, fmt.pct(r.mean, 2))]}, fmt.pct(r.mean, 2)),
     h("span", {class: "meta"},
       h("span", null, `거래 ${fmt.int(r.n)}건 · 이긴 거래 ${fmt.pct(r.win, 0, false)}`),
       (r.alone || []).filter(Boolean).length ? h("span", null, "혼자일 때 ", (r.alone || []).map((a) => (a ? fmt.pct(a.mean, 2) : "—")).join(" / ")) : null,

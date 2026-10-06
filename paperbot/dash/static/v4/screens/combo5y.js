@@ -13,3 +13,5 @@ export async function mount(el, ctx) {
     body);
   await render5y(ctx, body);
 }
+
+export function unmount() {}
