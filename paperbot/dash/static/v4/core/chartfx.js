@@ -45,8 +45,8 @@ export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
 export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게)";
 export const LIGHT_DECO = "조명 깜박: 지금은 체결 소식이 없어 은은한 장식 깜박 (시장 자료 아님)";
-export const LIGHT_NOTE = "깜박: 바이낸스 실제 체결(7개 코인, 지금 코인은 더 밝게)이 파는 쪽으로 몰리면 위 빨강, 사는 쪽이면 아래 하늘색이 잠깐 켜집니다. "
-  + "클수록 밝고 깁니다. 체결 소식이 2초 넘게 없으면 은은한 장식 깜박입니다 (시장 자료 아님). 이 기기에만 기억합니다.";
+export const LIGHT_NOTE = "깜박: 바이낸스 실제 체결을 따라 파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색이 잠깐 켜집니다 "
+  + "(클수록 밝고 길게 · 7개 코인 중 지금 코인이 가장 밝게). 체결 소식이 2초 넘게 없으면 은은한 장식 깜박 (시장 자료 아님). 이 기기에만 기억합니다.";
 const LIGHT_SHORT = {blink: "깜박", steady: "켜짐", off: "끔"};
 const LIGHT_SUB = {blink: "실제 체결 따라", steady: "예전처럼"};
 const FLASH_SUB = {often: "큰 체결마다", normal: "고래·큰 청산·우리 체결만"};
@@ -478,9 +478,9 @@ export function chartDeck(o) {
   const fItems = new Map(FLASH_MODES.map((m) => [m.id, radio(m.ko, FLASH_SUB[m.id], () => setFlash(m.id))]));
   const lNote = h("p", {class: "cfx-mnote"});
   const lmenu = h("div", {class: "cfx-menu cfx-lmenu", role: "menu", hidden: true, "aria-label": "조명과 번쩍임"},
-    h("p", {class: "cfx-mhd"}, "조명 · 위 빨강 Premium / 아래 하늘색 Discount"),
+    h("p", {class: "cfx-mhd"}, "조명 (위 빨강 · 아래 하늘색)"),
     h("div", {class: "cfx-mgrp", role: "group", "aria-label": "조명"}, [...lItems.values()]),
-    h("p", {class: "cfx-mhd"}, "번쩍임 · 큰 체결·청산·우리 체결"),
+    h("p", {class: "cfx-mhd"}, "번쩍임 (큰 체결 · 청산 · 우리 체결)"),
     h("div", {class: "cfx-mgrp", role: "group", "aria-label": "번쩍임"}, [...fItems.values()]),
     lNote);
   const lNow = h("b", {class: "cfx-lnow"}), fNow = h("b", {class: "cfx-lnow"});
