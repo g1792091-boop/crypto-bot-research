@@ -17,6 +17,7 @@
 .path-fcell { display: flex; min-width: 0; }
 .path-fseg { --cut: 9px; flex: 1 1 auto; display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0;
   min-height: calc((150px - var(--i, 0) * 14px) * var(--ts, 1)); padding: 8px 10px; text-decoration: none; color: var(--ink-2);
+  border: 0; font: inherit; cursor: pointer; text-align: center;
   background: var(--surface-3); clip-path: polygon(0 0, 100% var(--cut), 100% calc(100% - var(--cut)), 0 100%);
   transition: background-color .25s var(--ease), color .25s var(--ease); }
 .path-fseg:hover, .path-fseg:focus-visible { background: var(--surface-2); color: var(--ink); }

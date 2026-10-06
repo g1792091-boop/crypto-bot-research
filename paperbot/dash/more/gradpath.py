@@ -220,6 +220,12 @@ def trial_wait(kind: str, status: Optional[str], body: dict, prop: Optional[dict
     return "코드가 돌리기를 기다림", ""
 
 
+def _prop_rank(prop: dict) -> int:
+    """Where a test with a proposal sorts: approved first, then waiting for the owners, a refused one with the failures."""
+    st = prop.get("effective_status") or prop.get("status")
+    return {"approved": 0, "awaiting_owner": 0}.get(st, 4)
+
+
 def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observe: dict) -> dict:
     if agents_ro is None:
         return _stage("tests", state="off", none_ko="아직 없음: 시험 장부(agents3.db)를 읽을 수 없습니다", go=go("rooms", LAB_ROOM))
@@ -243,7 +249,7 @@ def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observ
         if p.get("trial_id") is not None and p.get("status") != "blocked_cap":
             props.setdefault(int(p["trial_id"]), p)
     rows = []
-    for t in R.trial_history(agents_ro, kinds=("test", "newlab"), limit=200):
+    for t in R.trial_history(agents_ro, kinds=("test", "newlab"), limit=500):
         res = t.get("result") or {}
         st = res.get("status")
         body = res.get("result") if isinstance(res.get("result"), dict) else {}
@@ -259,8 +265,8 @@ def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observ
             sub = f"기존 매매법 숫자 시험 #{t['id']}"
             where = go("rooms", t.get("room_id"))
         rows.append(dict(item(str(title), wait, sub=sub, ts=int(t.get("ts") or 0), tone=tone, go=where,
-                              tag=STATUS_KO.get(st, _cut(st, 20))), status=st,
-                         rank=0 if prop is not None else TEST_ADVANCED.get(st, 7)))
+                              tag=STATUS_KO.get(st, _cut(st, 20))),
+                         rank=_prop_rank(prop) if prop is not None else TEST_ADVANCED.get(st, 7)))
     rows.sort(key=lambda x: (x["rank"], -(x["ts"] or 0)))
     for r in rows:
         r.pop("rank", None)
@@ -272,8 +278,8 @@ def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observ
     head = f"시험 {total:,}번 · 통과 {passed:,} · 탈락 {sum(bad.values()):,}"
     return _stage("tests", count=total, state="has" if total else "none", parts=parts, items=rows[:ITEMS], head=head,
                   passed=passed, go=go("rooms", LAB_ROOM),
-                  none_ko=("아직 없음" + (f": 관찰 기간({observe.get('until_ko')}까지)에는 연구실이 제안하지 않습니다"
-                                          if observe.get("observing") else "")))
+                  none_ko=("아직 없음: 연구실이 아직 5년 시험을 돌리지 않았습니다"
+                           + (f" (관찰 기간 {observe.get('until_ko')}까지는 통과해도 제안하지 않음)" if observe.get("observing") else "")))
 
 
 # ---------------------------------------------------------------- 3. paper accounts
@@ -328,7 +334,7 @@ def paper_stage(board: dict, min_trades: int, verdict_ko: str) -> dict:
 
 # ---------------------------------------------------------------- 4. the 30-day verdict
 def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_trades: int) -> dict:
-    from ...checkpoint import FAIL, HOLD, OBSERVE, PASS1, PASS2
+    from ...checkpoint import FAIL, HOLD, OBSERVE, OBSERVE_TFS, PASS1, PASS2
     nts = (next_cp or {}).get("ts")
     if not cp or not cp.get("ready"):
         left = _days_left(nts, now)
@@ -339,10 +345,10 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
             gs = [a for a in accts if a.get("group") == g]
             if not gs:
                 continue
-            judged = [a for a in gs if a.get("timeframe") != "4h"]
+            judged = [a for a in gs if a.get("timeframe") not in OBSERVE_TFS]
             ok = sum(int(a.get("trades") or 0) >= min_trades for a in judged)
             wait = (f"판정 받을 거래 {min_trades}건 채운 계좌 {ok:,}/{len(judged):,}" if judged else "모두 관찰용(4시간봉)")
-            rows.append(item(f"{GROUP_KO[g]}", wait, sub="4시간봉은 관찰용이라 판정하지 않음" if g in ("core", "ds200") else "",
+            rows.append(item(f"{GROUP_KO[g]}", wait, sub="4시간봉은 관찰용이라 판정하지 않음" if len(judged) < len(gs) else "",
                              go=go("checkpoint"), tag="판정 전"))
         return _stage("verdict", count=None, state="wait", head=f"판정 전 · {when}", items=rows,
                       none_ko=f"판정 전: {when}", when_ko=when, next_ts=nts, go=go("checkpoint"))
@@ -467,6 +473,20 @@ def path_view(data, rooms, paper_db: str, debate_db: Optional[str], checkpoint_d
             "stages": stages, "frontier": frontier}
 
 
+def fresh_cached(heavy, key: str) -> Optional[dict]:
+    """분석 › 실전 준비도's own cached answer (dash/analysis.Heavy) while it is within its time to live, else None (then
+    path_view computes it itself): an old answer is never shown as today's."""
+    lock, cache = getattr(heavy, "lock", None), getattr(heavy, "cache", None)
+    if lock is None or not isinstance(cache, dict):
+        return None
+    with lock:
+        hit = cache.get(key)
+    if not hit or time.time() - hit[0] >= hit[2]:
+        return None
+    v = hit[1]
+    return v if isinstance(v, dict) and not v.get("error") and not v.get("pending") else None
+
+
 def register(app, ctx) -> dict:
     from ..analysis import Heavy
     heavy = getattr(app.state, "analysis", None)
@@ -476,9 +496,7 @@ def register(app, ctx) -> dict:
     debate_db = getattr(ctx, "debate_db", None) or os.path.join(os.path.dirname(os.path.abspath(ctx.db)), "debate", "debate.db")
 
     def make() -> dict:
-        rd = heavy.peek("readiness")              # 분석 › 실전 준비도's own cached answer when it is there
-        fresh = rd if isinstance(rd, dict) and not rd.get("error") and not rd.get("pending") else None
-        return path_view(ctx.data, ctx.rooms, ctx.db, debate_db, ctx.checkpoint_db, _now(), fresh)
+        return path_view(ctx.data, ctx.rooms, ctx.db, debate_db, ctx.checkpoint_db, _now(), fresh_cached(heavy, "readiness"))
 
     @app.get("/api/v4/gradpath")
     def get_gradpath():

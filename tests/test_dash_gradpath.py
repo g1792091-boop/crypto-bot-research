@@ -235,6 +235,18 @@ def test_ready_stage_counts_conditions_after_the_verdict():
     assert GP.ready_stage({"error": "paper3.db 없음"}, False, None, 0)["state"] == "off"
 
 
+def test_readiness_is_reused_only_while_fresh():
+    from paperbot.dash.analysis import Heavy
+    hv = Heavy()
+    good = {"summary": {"met_all": 0}}
+    hv.cache["readiness"] = (time.time(), good, 600)
+    assert GP.fresh_cached(hv, "readiness") is good
+    hv.cache["readiness"] = (time.time() - 601, good, 600)                    # expired: computed again, never shown old
+    assert GP.fresh_cached(hv, "readiness") is None
+    hv.cache["readiness"] = (time.time(), {"error": "x"}, 60)
+    assert GP.fresh_cached(hv, "readiness") is None and GP.fresh_cached(hv, "nothing") is None
+
+
 def test_trial_wait_words():
     obs = {"observing": True, "until_ko": "10/27"}
     assert GP.trial_wait("newlab", "passed", {}, None, obs) == ("관찰 기간 10/27까지 제안 없음", "accent")
@@ -272,6 +284,7 @@ def test_route_menu_icon_and_files():
     assert "USDT" not in js and "fmt.money" not in js and "fmt.usdt" not in js      # no money on this page
     assert "d.pending" in js and "ctx.timeout(load" in js                            # the background answer: retried
     assert "설명용, 판정 아님" in js
+    assert 'h("button", {type: "button", class: ["path-fseg"' in js                 # the hash stays the router's
     assert "gradpath" in _read("INVENTORY.md") and "#/path" in _read("INVENTORY.md")
     assert not re.search(r"font(-size)?:[^;}]*\dpx", css)                          # sizes only as --t-* tokens
     from paperbot.dash import more

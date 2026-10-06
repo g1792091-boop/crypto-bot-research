@@ -36,9 +36,10 @@ function funnel(d, ctx) {
   const blocks = st.map((x, i) => {
     const w = countWords(x);
     const here = x.id === front;
-    return h("a", {class: ["path-fseg", here ? "here" : "", x.count ? "has" : "dim", x.state === "wait" ? "wait" : ""],
-      href: "#path-" + x.id, style: {"--i": String(i)}, "aria-label": `${x.ko}: ${w.big} ${w.small}`,
-      onclick: (e) => { e.preventDefault(); const t = document.getElementById("path-" + x.id); if (t) t.scrollIntoView({behavior: motion.reduced() ? "auto" : "smooth", block: "start"}); }},
+    // a button, not an anchor: the hash belongs to the router (#/path), the block only scrolls to its card
+    return h("button", {type: "button", class: ["path-fseg", here ? "here" : "", x.count ? "has" : "dim", x.state === "wait" ? "wait" : ""],
+      style: {"--i": String(i)}, "aria-label": `${x.ko}: ${w.big} ${here ? "지금 여기" : w.small}`,
+      onclick: () => { const t = document.getElementById("path-" + x.id); if (t) t.scrollIntoView({behavior: motion.reduced() ? "auto" : "smooth", block: "start"}); }},
     h("span", {class: "path-fno"}, STEP[i] || ""),
     h("span", {class: "path-fko"}, x.ko),
     h("b", {class: "path-fbig num"}, w.big),
