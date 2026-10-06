@@ -191,6 +191,9 @@ AFTER_CHECK_TIMERS = ("paperbot-obsidian.timer", "paperbot-shadow200.timer", "pa
 AGENTS_OFF_KO = "에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음"
 # the bot's start line (live3: settings.version "paper-v4" -> "paper v4 started: N accounts (...)"), from config
 RUN_NAME = V4_VERSION.replace("paper-v", "paper v")
+# ... as Telegram words it (notify._run_started): '▶️ 봇 시작 · 모의 v4 · 계좌 331개' on a first start, '봇 재시작 · … 이어서
+# 돌림' after an install or any restart (live3 logs 'paper v4 resumed: …' then)
+RUN_KO = V4_VERSION.replace("paper-v", "모의 v")
 # optional, paid: the 24-hour debate room. Installed by install.sh and left off; shown as [참고] unless the owners
 # turned it on, and then a missing key is a [고칠 것]. Never part of INSTALLED (not installed is not a problem).
 DEBATE_UNIT = "paperbot-debate.service"
@@ -2125,7 +2128,8 @@ def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence
         out(f"     시작하고 10~15분 뒤 확인: {AFTER_CMD}")
     else:
         out(f"[{OK}] 봇이 정상으로 돌고 있습니다 (참고 {n_note}개: 읽어만 보세요). healthchecks.io가 'up'인지, 텔레그램에 "
-            f"'{RUN_NAME} started: {V4_ACCOUNTS} accounts'가 왔는지 눈으로도 보세요.")
+            f"'봇 시작 · {RUN_KO} · 계좌 {V4_ACCOUNTS}개'(처음 시작) 또는 '봇 재시작 · {RUN_KO} · 계좌 {V4_ACCOUNTS}개 … "
+            f"이어서 돌림'(설치·재시작 뒤)이 왔는지 눈으로도 보세요.")
     return 0
 
 
