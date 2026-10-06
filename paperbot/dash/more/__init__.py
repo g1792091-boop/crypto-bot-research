@@ -28,6 +28,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     regime5y 장세 스위치: 5년 장세별 성적 + 장세 스위치 걸어가며 확인 (data/regime5y.json) + 모의 거래 장세별 (분석 › 장세 스위치)
     luck    운 vs 실력: 여러 개를 한꺼번에 시험하는 곳마다 시험 수, 통과 기준, 운으로 나올 수, 실제 통과 (분석 › 운 vs 실력,
             홈·판정의 작은 카드; background, cached)
+    gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
 """
 from __future__ import annotations
 
@@ -48,6 +49,7 @@ MODULES += ("movers",)                         # term-v2: 급등 · 급락 · �
 MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보강 + 청산 이유 (background, cached)
 MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as committed + live trades by regime, background)
 MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
+MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
 
 
 def register_all(app, **kw) -> dict:
