@@ -1,8 +1,10 @@
 """Dashboard v4, fewer clicks (owners 10/06: "들어가는 클릭버튼이 너무 많아서 들어가서 보는게 귀찮다"), with the menu
-where the owners want it (10/06 13:27: "클릭하는 버튼들이 다 왼쪽으로 바꼈네??", "들어가면 요약화면이 아니라 차트화면부터"):
-the top bar by default with a dropdown of every screen per group, the left rail as a stored choice (메뉴 위치), the
-terminal as the start screen, the side panel for accounts / strategies / trades, 찾기 ('/'), the number keys 1-9 and the
-phone's sideways swipe. Static checks on the v4 files, plus the pure parts in node (search, routes, the stored choice)."""
+where the owners want it (10/06 ~14:00, with a photo of the old v3 tab bar: "클릭해서 바로 들어갈수있는 버튼들을 많이
+만들어줬으면", "왼쪽에 그림으로 되어있는데 너무 헷갈려"; 13:27: "들어가면 요약화면이 아니라 차트화면부터"): every screen its
+own text button in one strip under the top bar (no icons, no group to open first), the left rail as a stored choice
+(메뉴 위치), the terminal as the start screen, the side panel for accounts / strategies / trades, 찾기 ('/'), the number
+keys 1-9 and the phone's sideways swipe. Static checks on the v4 files, plus the pure parts in node (search, routes, the
+stored choice)."""
 import json
 import os
 import re
@@ -35,7 +37,7 @@ def _node(body: str) -> dict:
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-# ---------------------------------------------------------------- the menu: top bar by default, the left rail by choice
+# ---------------------------------------------------------------- the menu: the strip on top by default, the left rail by choice
 def _node_dom(body: str) -> dict:
     """node with a fake <html> (dataset) and a fake localStorage, for core/navpos.js."""
     node = shutil.which("node")
@@ -52,33 +54,50 @@ def _node_dom(body: str) -> dict:
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-def test_index_has_the_top_menu_the_rail_the_crumb_and_the_find_button():
+def _media(css: str, head: str) -> str:
+    """The body of the first `@media ... {` block whose head starts with `head` (to its closing line)."""
+    block = css[css.index(head):]
+    return block[:block.index("\n}\n") + 3]
+
+
+def test_index_has_the_strip_the_rail_the_crumb_and_the_find_button():
     html = _read("index.html")
-    # the group bar + sub tabs are the menu (the default); the rail is there for the 왼쪽 choice; the phone bar stays
-    for x in ('<nav class="groups" id="groups" aria-label="메뉴"></nav>', 'id="subtabs"', 'id="botbar"',
-              '<nav class="rail" id="rail" aria-label="모든 화면"></nav>'):
+    # the strip under the top bar is the menu (the default); the rail is there for the 왼쪽 choice; the phone bar stays
+    for x in ('<nav class="subtabs strip" id="subtabs" aria-label="화면 메뉴"></nav>', 'id="botbar"',
+              '<nav class="rail" id="rail" aria-label="모든 화면"></nav>', '<span class="toptools" id="toptools"></span>'):
         assert x in html, x
+    assert 'id="groups"' not in html and "gbtn" not in html                              # the group bar + dropdowns are gone
+    assert not os.path.exists(os.path.join(V4, "core", "topnav.js"))
     assert 'id="crumb"' in html and 'id="findbtn"' in html and "단축키 /" in html
     assert '<link rel="stylesheet" href="/static/v4/core/nav.css">' in html
+    # the top bar keeps the brand mark, 찾기, the D+n chip and the health dot (the bell and the speaker join at boot)
+    top = html[html.index('<header class="top">'):html.index("</header>")]
+    for x in ('class="brand"', 'id="findbtn"', 'id="dchip"', 'id="hdot"', 'class="mocktag"'):
+        assert x in top, x
+    shell = _read("core/shell.js")
+    assert "bellButton()" in shell and "soundButton()" in shell
 
 
-def test_top_menu_is_the_default_and_the_rail_only_a_choice():
-    """Owners 10/06 13:27: "클릭하는 버튼들이 다 왼쪽으로 바꼈네??" - the top bar is back on a PC by default."""
+def test_strip_is_the_default_and_the_rail_only_a_choice():
+    """Owners 10/06 13:27: "클릭하는 버튼들이 다 왼쪽으로 바꼈네??" - the menu is on top by default; 10/06 ~14:00: as v3's
+    tab bar, every screen a direct text button."""
     css = _nocomment(_read("core/nav.css"))
     assert re.search(r"^\.rail \{ display: none; \}", css, re.M)                        # no rail unless chosen
-    block = css[css.index("@media (min-width: 1200px)"):]
-    block = block[:block.index("\n}\n") + 3]
-    # every rule that hides the top menu or shows the rail is under [data-nav="left"]
-    for rule in ('--sub-h: 0px', "padding-left: var(--rail-w)", ".groups { display: none !important; }", ".subtabs { display: none; }",
-                 ".crumb { display: flex; }", ".rail { position: fixed;"):
-        line = next(x for x in block.splitlines() if rule in x)
+    left = _media(css, "@media (min-width: 1200px) {\n  :root[data-nav=\"left\"]")
+    # every rule that hides the strip or shows the rail is under [data-nav="left"]
+    for rule in ('--sub-h: 0px', "padding-left: var(--rail-w)", ".subtabs { display: none; }", ".crumb { display: flex; }", ".rail { position: fixed;"):
+        line = next(x for x in left.splitlines() if rule in x)
         assert ':root[data-nav="left"]' in line, line
-    assert ".subtabs .navsw { display: inline-flex; }" in block                         # the switch from 1200 px
-    assert re.search(r"^\.navsw \{ display: none; \}", css, re.M)                       # and only there
-    # a long tab row (서버 under 크게 / 아주 크게) never pushes it out of view: it sticks to the row's right edge
-    assert ".subtabs .navsw { margin-left: 6px; position: sticky; right: 0; z-index: 1; background: var(--bg); }" in css
-    # nothing outside [data-nav="left"] hides the group bar or the sub tabs any more
-    assert css.count(".groups { display: none !important; }") == 1 and css.count(".subtabs { display: none; }") == 1
+    assert css.count(".subtabs { display: none; }") == 1                                # nothing else hides the strip
+    assert ".groups" not in css and ".gmenu" not in css and ".gw" not in css             # the old group bar is gone
+    assert ".groups" not in _nocomment(_read("base.css"))
+    # a PC window with the strip: the header spans the window and the buttons wrap (never a sideways scroll there)
+    pc = _media(css, "@media (min-width: 1200px) {\n  :root:not([data-nav=\"left\"])")
+    assert ':root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; }' in pc
+    assert ':root:not([data-nav="left"]) .subtabs { flex-wrap: wrap; overflow: visible;' in pc
+    # the settings move to the top bar there; below 1200 px they stay at the strip's end
+    assert ':root:not([data-nav="left"]) .strip-tools { display: none; }' in pc and ':root:not([data-nav="left"]) .toptools { display: inline-flex; }' in pc
+    assert re.search(r"^\.toptools \{ display: none;", css, re.M) and re.search(r"^\.navsw \{ display: none; \}", css, re.M)
     out = _node_dom("console.log(JSON.stringify({def: nav.DEFAULT_NAV, ids: nav.NAV_POS.map((x) => x.id), ko: nav.NAV_POS.map((x) => x.ko)}));")
     assert out == {"def": "top", "ids": ["top", "left"], "ko": ["위", "왼쪽"]}
     main = _read("core/main.js")
@@ -97,7 +116,7 @@ def test_menu_position_is_stored_per_device_and_survives_blocked_storage():
     o.blocked = nav.currentNavPos(); o.bset = nav.setNavPos("top"); o.bhtml = document.documentElement.dataset.nav; o.bnow = nav.navPosNow();
     o.seen2 = seen;
     console.log(JSON.stringify(o));""")
-    assert out["def"] == "top" and out["applied"] == "top"                      # nothing stored: the top bar
+    assert out["def"] == "top" and out["applied"] == "top"                      # nothing stored: the strip on top
     assert out["set"] == "left" and out["stored"] == '"left"' and out["html"] == "left"
     assert out["again"] == "left" and out["bad"] == "left" and out["seen1"] == ["left"]   # same / unknown: no event
     assert out["weird"] == "top" and out["back"] == "left"
@@ -111,11 +130,21 @@ def test_menu_position_is_stored_per_device_and_survives_blocked_storage():
     assert '"aria-pressed"' in js and 'h("span", {class: "k"}, "메뉴 위치")' in js and '"aria-label": "메뉴 위치"' in js
 
 
-def test_menu_position_switch_is_where_the_owners_look_and_redraws():
+def test_settings_sit_in_the_top_bar_on_a_pc_and_at_the_strips_end_below():
     shell = _read("core/shell.js")
-    subtabs = shell[shell.index('put($("#subtabs")'):shell.index("/** 찾기 at the start")]
-    assert "navPosSwitch());" in subtabs                                                # the end of the sub tabs row
-    assert subtabs.index("textSwitch(") < subtabs.index("navPosSwitch()")
+    strip = shell[shell.index("renderStrip(p.name, badges, {"):shell.index('const tt = $("#toptools");')]
+    # below 1200 px: 글자 크기, 화면 색, 예전 화면 at the strip's end; 찾기 + the one-button 글자 크기 at its start
+    assert "lead: [findTab(), textCycle(() => remount())]," in strip
+    assert "tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink()]," in strip
+    # a PC: the full switches from 1680 px, one small button each below, 예전 화면 and 메뉴 위치 (the settings panel's hook)
+    top = shell[shell.index('const tt = $("#toptools");'):]
+    top = top[:top.index("\n}\n")]
+    assert 'h("span", {class: "tt-full"}, textSwitch(() => remount()), skinSwitch(() => remount()))' in top
+    assert 'h("span", {class: "tt-mini"}, textCycle(() => remount()), skinCycle(() => remount()))' in top
+    assert "oldLink(), navPosSwitch());" in top
+    assert 'const oldLink = () => h("a", {class: "oldui", href: "/v3"' in shell
+    css = _nocomment(_read("core/nav.css"))
+    assert "@media (min-width: 1680px) { .toptools .tt-full { display: inline-flex; } .toptools .tt-mini { display: none; } }" in css
     rail = _read("core/rail.js")
     assert 'h("div", {class: "rail-foot"}, navPosSwitch(),' in rail                     # and the rail's foot
     navpos = shell[shell.index('bus.on("navpos", (id) => {'):]
@@ -125,66 +154,121 @@ def test_menu_position_switch_is_where_the_owners_look_and_redraws():
     assert "setNavPos(" in inv and "currentNavPos()" in inv and "메뉴 위치" in inv            # the settings panel's hook
 
 
-def test_group_dropdowns_list_every_screen_with_icon_name_and_key():
-    t = _read("core/topnav.js")
-    assert "export function renderGroups(cur, badges)" in t
-    assert 'h("button", {type: "button", class: "gbtn"' in t
-    assert '"aria-expanded": "false", "aria-controls": `gm-${g.id}`' in t                # a disclosure: button + its list
-    assert "menuScreens(g, features)" in t                                              # every screen of the group
-    assert "screenIcon(n)" in t and 'h("span", {class: "gm-t"}, m.ko)' in t and 'h("kbd"' in t and "keyOf(n)" in t
-    assert '"aria-current": n === cur ? "page" : null' in t and '"aria-current": g.id === gid ? "true" : null' in t
-    assert "badges[n]" in t and '"꺼짐"' in t
-    # mouse hover (mouse only), click / tap toggles, keyboard, Esc, outside press, a chosen screen closes it
-    assert 'e.pointerType !== "mouse"' in t and '"pointerenter"' in t and '"pointerleave"' in t
-    assert "if (st.open === g.id && st.pinned) closeGroupMenu();" in t and "else openGroupMenu(g.id, true);" in t
-    for k in ('"ArrowDown"', '"ArrowUp"', '"Home"', '"End"', '"ArrowRight"', '"ArrowLeft"', '"Escape"'):
-        assert k in t, k
-    assert 'document.addEventListener("pointerdown"' in t and "w.contains(e.target)" in t
-    assert '"focusout"' in t and 'e.target.closest(".gm-a")' in t
-    assert "st.cur === cur && (st.pinned || st.hover === st.open) ? st.open : null" in t    # a new screen closes it
-    shell = _read("core/shell.js")
-    assert "renderGroups(p.name, badges);" in shell and 'put($("#groups")' not in shell
+def test_strip_is_one_text_button_per_screen_like_v3():
+    t = _read("core/strip.js")
+    assert "export function renderStrip(cur, badges, {lead = [], tools = []} = {})" in t
+    assert "navGroups(features)" in t                                                   # every menu screen, from routes.js
+    assert "screenIcon" not in t and "icon(" not in t and "<svg" not in t                 # text only, no pictures
+    # one link per button: the current one lit, the dot of news, 꺼짐, the number key in the tooltip
+    assert 'h("a", {class: ["sb", off ? "off" : ""], href: href(it.to), "aria-current": on ? "page" : null, title: tip,' in t
+    assert '"aria-keyshortcuts": k' in t and "숫자 키 ${k}" in t
+    assert 'news ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null' in t and '"꺼짐"' in t
+    assert "it.screens.includes(cur)" in t and "it.screens.some((n) => badges[n])" in t
+    assert 'h("div", {class: "sg", role: "group", "aria-label": g.ko' in t                # the groups, named for screen readers
+    # the focus and the sideways scroll survive a redraw; the current button is brought into view (that row only)
+    assert "nav.replaceChildren(...lead, ...groups, h(\"span\", {class: \"strip-tools\"}, tools));" in t
+    assert 'b.focus({preventScroll: true})' in t and "nav.scrollTo({left:" in t and "scrollIntoView" not in t
+    # the wheel scrolls the sideways row (a mouse below 1200 px), never the page there
+    assert 'nav.addEventListener("wheel"' in t and "{passive: false}" in t and "nav.scrollLeft += e.deltaY;" in t
     css = _nocomment(_read("core/nav.css"))
-    assert ".gmenu { position: absolute;" in css and '.gm-a[aria-current="page"]' in css
-    # the rows carry data-screen: screens/terminal.css' bare [data-screen="terminal"] { gap: 0 } must not reach them
-    assert '[data-screen="terminal"] { gap: 0; }' in _read("screens/terminal.css")
-    assert ".gmenu .gm-a, .rail .rail-a { gap: 10px; }" in css
-    assert "@media (prefers-reduced-motion: reduce) { .gw[data-open] .gmenu { animation: none; }" in css
-    base = _nocomment(_read("base.css"))
-    assert '.groups .gbtn[aria-current="true"] { color: var(--accent-ink); background: var(--accent); }' in base
+    # v3: plain text, the current one bold with an accent underline; a lit button is as wide as an unlit one
+    assert '.sb[aria-current="page"] { color: var(--ink); font-weight: 700; }' in css
+    assert '.sb[aria-current="page"]::after { content: ""; position: absolute;' in css and "background: var(--accent);" in css
+    assert '.sb-t::after { content: attr(data-t) / ""; height: 0; overflow: hidden; visibility: hidden; font-weight: 700; }' in css
+    assert ".strip .sg + .sg::before {" in css and ".strip .sg[data-rowstart]::before { display: none; }" in css
+    assert ".strip { column-gap: 15px; }" in css                                         # a wrapped row starts flush
+    # the phone's 찾기 stays at the row's left edge
+    assert ".strip .findsub { position: sticky; left: 0;" in css
+    shell = _read("core/shell.js")
+    assert "renderStrip(p.name, badges, {" in shell and "renderGroups" not in shell and 'put($("#subtabs")' not in shell
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css) and not re.search(r"\brgba?\(\s*\d", css)   # tokens only
 
 
-def test_menu_screens_and_keys_in_node():
+def test_strip_height_is_measured_into_sub_h():
+    """The screens' sticky parts sit under the strip however many rows it has (1 on a 1920 window, 2 when it wraps)."""
+    t = _read("core/strip.js")
+    assert 'root.style.setProperty("--sub-h", `${px}px`)' in t and "nav.offsetHeight" in t
+    assert "new ResizeObserver(() => measure())" in t and "document.fonts.ready.then(measure" in t
+    assert 'g.toggleAttribute("data-rowstart", top != null && t > top + 4);' in t
+    base = _nocomment(_read("base.css"))
+    sub = next(x for x in base.splitlines() if x.startswith(".subtabs {"))
+    assert "min-height: 44px;" in sub and "var(--sub-h)" not in sub                      # it never reads what it writes
+    # the screens keep reading --sub-h for their sticky tops and heights
+    assert "var(--sub-h)" in _read("screens/terminal.css") and "var(--sub-h)" in _read("screens/chart.css")
+
+
+def test_menu_order_captions_keys_and_new_screens_in_node():
+    out = _node("""
+    const pc = routes.navGroups({wide: true}), phone = routes.navGroups({wide: false, debate: false}), all = routes.navGroups(true);
+    const flat = (gs) => gs.flatMap((g) => g.items.map((it) => it.id));
+    const o = {groups: pc.map((g) => [g.group, g.ko]), pc: flat(pc), phone: flat(phone), help: pc[4].items.find((it) => it.id === "help"),
+      keys: routes.KEYS, keyOf: ["terminal", "home", "strategies", "server", "flow", "debate"].map(routes.keyOf),
+      label: ["home", "agents", "trade"].map(routes.navLabel)};
+    // a screen added to a group in routes.js shows in the menu by itself (조합 성과 / 졸업 길 are coming)
+    routes.SCREENS.combo = {ko: "조합 성과", group: "strat", title: "조합 성과"};
+    routes.GROUPS.find((g) => g.id === "strat").screens.push("combo");
+    o.added = routes.navGroups({wide: true})[2].items.map((it) => it.ko);
+    // a group added to GROUPS but not to NAV comes last under its own name
+    routes.SCREENS.lab = {ko: "실험실", group: "lab", title: "실험실"};
+    routes.GROUPS.push({id: "lab", ko: "실험실", screens: ["lab"]});
+    o.extra = routes.navGroups({wide: true}).map((g) => g.ko);
+    console.log(JSON.stringify(o));""")
+    assert out["groups"] == [["trade", "거래"], ["home", "성적"], ["strat", "매매법"], ["agents", "AI 직원"], ["server", "서버"]]
+    assert out["pc"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
+                         "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
+    assert out["phone"] == [x for x in out["pc"] if x != "terminal"]                     # the PC 터미널 is off a phone's menu; 토론방 stays
+    assert out["help"] == {"id": "help", "ko": "도움말", "to": "howto", "screens": ["howto", "faq"]}
+    assert out["keys"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies"]
+    assert out["keyOf"] == ["1", "5", "9", None, "7", None]
+    assert out["label"] == ["성적", "AI 직원", "거래"]
+    assert out["added"] == ["매매법", "한눈 지도", "분석", "조합 성과"]
+    assert out["extra"] == ["거래", "성적", "매매법", "AI 직원", "서버", "실험실"]
     out = _node("""
     const g = (id) => routes.GROUPS.find((x) => x.id === id);
-    console.log(JSON.stringify({
-      tradePc: routes.menuScreens(g("trade"), {wide: true}), tradePhone: routes.menuScreens(g("trade"), {wide: false}),
-      home: routes.menuScreens(g("home"), {}), agents: routes.menuScreens(g("agents"), {debate: false}),
-      keys: ["terminal", "home", "server", "flow", "debate"].map(routes.keyOf)}));""")
-    assert out["tradePc"] == ["terminal", "positions", "chart", "market"]
-    assert out["tradePhone"] == ["positions", "chart", "market"]                         # the PC 터미널 is off a phone's menu
+    console.log(JSON.stringify({tradePc: routes.menuScreens(g("trade"), {wide: true}), tradePhone: routes.menuScreens(g("trade"), {wide: false}),
+      tradeAll: routes.menuScreens(g("trade"), true), home: routes.menuScreens(g("home"), {}), agents: routes.menuScreens(g("agents"), {debate: false})}));""")
+    assert out["tradePc"] == out["tradeAll"] == ["terminal", "positions", "chart", "market"]
+    assert out["tradePhone"] == ["positions", "chart", "market"]
     assert out["home"] == ["home", "board", "flow", "checkpoint"]                        # hidden screens (계좌, 하이라이트) out
     assert out["agents"] == ["office", "rooms", "digest", "debate"]                      # 토론방 stays (greyed 꺼짐)
-    assert out["keys"] == ["1", "2", "9", None, None]
+
+
+def test_help_button_keeps_both_screens_one_click_away():
+    routes = _read("core/routes.js")
+    assert 'export const JOINED = [{id: "help", ko: "도움말", screens: ["howto", "faq"]}];' in routes
+    t = _read("core/strip.js")
+    assert "export function joinedTabs(name)" in t and '"aria-current": n === name ? "page" : null' in t
+    assert 'export {joinedTabs} from "./strip.js";' in _read("core/pb.js")
+    # each of the two screens shows the switch right under its title
+    assert 'ui.screenHead("어떻게 돌아가나", "한 거래가 신호에서 판정까지 지나가는 여섯 단계"), joinedTabs("howto"),' in _read("screens/howto.js")
+    assert 'el.append(ui.screenHead("자주 묻는 질문", "짧게 묻고 짧게 답합니다"), joinedTabs("faq"));' in _read("screens/faq.js")
+    css = _nocomment(_read("core/nav.css"))
+    assert '.jt-a[aria-current="page"] {' in css
+    # 찾기 still finds each by its own name, and by 도움말
+    f = _read("core/find.js")
+    assert 'const j = JOINED.find((x) => x.screens.includes(n));' in f and "sub: navLabel(g.id)" in f
 
 
 def test_left_rail_reads_by_itself():
     rail = _read("core/rail.js")
     assert "export function renderRail(cur, badges, onRedraw)" in rail
-    assert "GROUPS.map(" in rail and "visibleScreens(g)" in rail                         # every group, every menu screen
-    assert '"aria-current": n === cur ? "page" : null' in rail                           # the current one lit
-    assert 'h("span", {class: "rail-t", "aria-hidden": "true"}, m.ko)' in rail            # the Korean name beside the icon
-    assert 'h("p", {class: "rail-h", id: `rh-${g.id}`}, g.ko)' in rail and '"aria-labelledby": `rh-${g.id}`' in rail   # headings
-    assert "badges[n]" in rail and '"ndot"' in rail and "keyOf(n)" in rail
+    assert "navGroups(features).map(" in rail                                            # the very buttons of the strip
+    assert '"aria-current": it.screens.includes(cur) ? "page" : null' in rail             # the current one lit
+    assert 'h("span", {class: "rail-t", "aria-hidden": "true"}, it.ko)' in rail           # the Korean name beside the icon
+    assert 'h("p", {class: "rail-h", id: `rh-${g.group}`}, g.ko)' in rail and '"aria-labelledby": `rh-${g.group}`' in rail   # headings
+    assert "it.screens.some((n) => badges[n])" in rail and '"ndot"' in rail and "keyOf(it.to)" in rail
     assert "textCycle(onRedraw)" in rail and "skinCycle(onRedraw)" in rail and 'href: "/v3"' in rail
     assert 'role: "tooltip"' not in rail                                                 # no hover-only labels any more
     shell = _read("core/shell.js")
     assert "renderRail(p.name, badges, () => remount())" in shell
+    assert 'h("span", {class: "crumb-g"}, navLabel(gid))' in shell                       # "성적 › 요약"
     css = _nocomment(_read("core/nav.css"))
     assert ":root[data-nav=\"left\"] { --rail-w: calc(184px * var(--ts)); --sub-h: 0px; }" in css   # grows with 글자 크기
     assert '.rail-a[aria-current="page"] { color: var(--ink); background: var(--accent-soft);' in css
     assert ".rail-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in css
+    # the rows carry data-screen: screens/terminal.css' bare [data-screen="terminal"] { gap: 0 } must not reach them
+    assert '[data-screen="terminal"] { gap: 0; }' in _read("screens/terminal.css")
+    assert ".rail .rail-a { gap: 10px; }" in css
     # every visible screen has its own pixel icon
     routes = _read("core/routes.js")
     sicon = routes[routes.index("const SICON = {"):routes.index("export const screenIcon")]
@@ -193,15 +277,30 @@ def test_left_rail_reads_by_itself():
             assert re.search(rf"\n  {n}: ", sicon), n
 
 
+def test_phone_keeps_its_bottom_bar_and_gets_the_same_buttons_in_one_sideways_row():
+    shell = _read("core/shell.js")
+    assert 'put($("#botbar"), GROUPS.map((g) => link(g)));' in shell                      # the 5 groups as before
+    base = _nocomment(_read("base.css"))
+    assert "@media (min-width: 900px) { .botbar { display: none; } body { padding-bottom: 0; } }" in base
+    sub = next(x for x in base.splitlines() if x.startswith(".subtabs {"))
+    assert "overflow-x: auto;" in sub and "flex-wrap" not in sub                         # one row that scrolls sideways
+    t = _read("core/strip.js")
+    assert 'const scrolls = (nav) => getComputedStyle(nav).flexWrap === "nowrap";' in t
+    assert "if (moved) center(nav, !first);" in t                                        # a new screen: its button in view
+    # the swipe on the screen leaves the strip alone (it scrolls sideways itself)
+    k = _read("core/navkeys.js")
+    assert "e.scrollWidth > e.clientWidth + 2" in k
+
+
 def test_start_screen_is_the_terminal_and_home_stays_reachable():
     """Owners 10/06 13:27: "대시보드 들어가면 요약화면이 나오는게 아니라 사진속 차트화면부터"."""
     routes = _read("core/routes.js")
-    # a PC window (900 px, where the top menu shows and the terminal fits without sideways scrolling); the terminal
-    # itself exists from 760 px, so the start screen is never a switched-off one
+    # a PC window (900 px, where the phone's bottom bar goes and the terminal fits without sideways scrolling); the
+    # terminal itself exists from 760 px, so the start screen is never a switched-off one
     assert "export const LANDING_MIN_PX = 900;" in routes and 'return wide ? "terminal" : "chart";' in routes
     assert 'export const DEFAULT = "home";' in routes                                     # unknown names: 홈, never a loop
     assert 'matchMedia("(min-width: 760px)")' in _read("core/features.js")               # the terminal's own width
-    assert "@media (min-width: 900px) { .groups { display: flex; }" in _read("base.css")   # the top menu's width
+    assert "@media (min-width: 900px) { .botbar { display: none; }" in _read("base.css")  # the phone bar's width
     # a PC screen opened on a phone goes to the start screen there (the 차트), named in the toast
     router = _read("core/router.js")
     assert 'const to = meta.feature === "wide" ? landing() : DEFAULT;' in router and "location.replace(href(to));" in router
@@ -212,7 +311,7 @@ def test_start_screen_is_the_terminal_and_home_stays_reachable():
     story = _read("screens/story.js")
     assert "else ctx.go(landing());" in story and 'ctx.go("home")' not in story
     assert 'export {href, SCREENS, GROUPS, landing} from "./routes.js";' in _read("core/pb.js")
-    # the brand mark opens the start screen and says so; 홈 stays in its group, the number key 2, #/home
+    # the brand mark opens the start screen and says so; 홈 (요약) stays a button, the number key 5, #/home
     html = _read("index.html")
     assert '<a class="brand" href="#/" aria-label="Paper v4 첫 화면">' in html and 'href="#/home"' not in html
     shell = _read("core/shell.js")
@@ -229,7 +328,19 @@ def test_start_screen_is_the_terminal_and_home_stays_reachable():
     for w, want in (("390", "chart"), ("759", "chart"), ("760", "chart"), ("899", "chart"), ("900", "terminal"), ("1100", "terminal"),
                     ("1920", "terminal")):
         assert out[w] == [want, want, want], (w, out[w])
-    assert out["home"] == "home" and out["keys"] == 2
+    assert out["home"] == "home" and out["keys"] == 5
+
+
+def test_tour_starts_with_the_strip():
+    tour = _read("core/tour.js")
+    steps = re.findall(r'\{go: "(\w+)", sel: \[(.*?)\], t: "([^"]+)"', tour)
+    assert steps[0] == ("home", '"#subtabs, #rail"', "화면 버튼")                        # the strip, or the rail when chosen
+    assert "글자 버튼" in tour and "숫자 1-9는 앞의 아홉 버튼" in tour and "옆으로 밀어서" in tour
+    assert '"#toptools .oldui, .subtabs .oldui, .rail-old"' in tour                     # 예전 화면 wherever it sits
+    assert "#groups" not in tour and ".gbtn" not in tour
+    # one entry may list several selectors (the first shown wins): the tour reads them with querySelectorAll
+    assert "for (const el of document.querySelectorAll(sel)) if (visible(el)) return el;" in tour
+
 
 
 # ---------------------------------------------------------------- the side panel
@@ -297,8 +408,10 @@ def test_side_panel_counts_deepseek_and_coin_flips_only_outside_their_group():
 
 # ---------------------------------------------------------------- 찾기, number keys, swipe
 def test_number_keys_and_slash():
+    """1-9 = the strip's first nine buttons (owners 10/06 ~14:00), shown in each button's tooltip."""
     out = _node("console.log(JSON.stringify(routes.KEYS));")
-    assert out == ["terminal", "home", "positions", "strategies", "board", "office", "chart", "market", "server"]
+    assert out == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies"]
+    assert "export const KEYS = navGroups(true).flatMap((g) => g.items.map((it) => it.to)).slice(0, 9);" in _read("core/routes.js")
     k = _read("core/navkeys.js")
     assert "e.ctrlKey || e.metaKey || e.altKey || e.isComposing || typing(e.target) || findOpen()" in k
     assert 'if (e.key === "/") { e.preventDefault(); openFind(); return; }' in k
@@ -329,15 +442,15 @@ def test_phone_swipe_moves_inside_the_group_and_leaves_charts_and_tables_alone()
     assert "Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)" in k
     assert 'e.tagName === "CANVAS"' in k and "e.scrollWidth > e.clientWidth + 2" in k and "[data-noswipe]" in k
     assert "export function neighbour(cur, dir)" in k and "list[i + dir] || null" in k
-    # the phone's 찾기 sits in the sub-tab row (2 taps to any account)
+    # the phone's 찾기 sits first in the menu strip (2 taps to any account)
     shell = _read("core/shell.js")
-    assert "textCycle(() => remount()), findTab()," in shell
+    assert "lead: [findTab(), textCycle(() => remount())]," in shell
     css = _nocomment(_read("core/nav.css"))
     assert "@media (max-width: 459px) { .findbtn { display: none; } .findsub { display: inline-flex; } }" in css
 
 
 def test_new_nav_files_follow_the_text_rules():
-    for rel in ("core/rail.js", "core/topnav.js", "core/navpos.js", "core/drawer.js", "core/find.js", "core/navkeys.js", "core/search.js",
+    for rel in ("core/rail.js", "core/strip.js", "core/navpos.js", "core/drawer.js", "core/find.js", "core/navkeys.js", "core/search.js",
                 "screens/account-peek.js"):
         src = _read(rel)
         for bad in ("innerHTML", "insertAdjacentHTML", "outerHTML", "DOMParser", "eval(", "toLocaleString", "Intl.NumberFormat", "localStorage"):

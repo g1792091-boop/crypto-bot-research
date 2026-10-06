@@ -43,11 +43,8 @@
 .sb .ndot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 /* the end of the row below 1200 px: 글자 크기 · 화면 색 · 예전 화면 (core/shell.js; on a PC they are in the top bar) */
 .strip-tools { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
-/* the sideways row: a soft fade on the side that has more */
-.strip[data-more="r"] { -webkit-mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent); }
-.strip[data-more="l"] { -webkit-mask-image: linear-gradient(90deg, transparent, var(--bg) 28px); mask-image: linear-gradient(90deg, transparent, var(--bg) 28px); }
-.strip[data-more="lr"] { -webkit-mask-image: linear-gradient(90deg, transparent, var(--bg) 28px, var(--bg) calc(100% - 28px), transparent);
-  mask-image: linear-gradient(90deg, transparent, var(--bg) 28px, var(--bg) calc(100% - 28px), transparent); }
+/* the phone's 찾기 (first in the row) stays at the row's left edge while the buttons slide under it */
+.strip .findsub { position: sticky; left: 0; z-index: 2; box-shadow: calc(var(--gutter) * -1) 0 0 6px var(--bg), 12px 0 10px -2px var(--bg); }
 /* a PC window (1200 px and up), menu on top: the header spans the window and the buttons wrap instead of scrolling
    (one row at 1920 px with 보통; a tidy second row on a narrower window or with 크게 / 아주 크게; a group never splits) */
 @media (min-width: 1200px) {
@@ -80,7 +77,6 @@
 @media (min-width: 1200px) {
   :root[data-nav="left"] { --rail-w: calc(184px * var(--ts)); --sub-h: 0px; }
   :root[data-nav="left"] body { padding-left: var(--rail-w); }
-  :root[data-nav="left"] .groups { display: none !important; }
   :root[data-nav="left"] .subtabs { display: none; }
   :root[data-nav="left"] .crumb { display: flex; }
   :root[data-nav="left"] .rail { position: fixed; left: 0; top: 0; bottom: 0; z-index: 35; width: var(--rail-w); display: flex; flex-direction: column;

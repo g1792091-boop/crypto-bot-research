@@ -5,7 +5,7 @@
 // nothing is fetched here. An account found here opens in a mixed view, so a DeepSeek / coin-flip account is counted
 // only (CONTRACT §1).
 import {h, $} from "./dom.js";
-import {SCREENS, GROUPS, KEYS, href, screenIcon} from "./routes.js";
+import {SCREENS, GROUPS, KEYS, JOINED, href, screenIcon, navLabel} from "./routes.js";
 import {features} from "./features.js";
 import {store} from "./store.js";
 import {acctName, stratKo, tfKo, GROUP_KO, groupOf} from "./fmt.js";
@@ -19,7 +19,10 @@ function screenItems() {
       const m = SCREENS[n];
       if (!m || m.hidden || (m.feature && !features[m.feature])) continue;
       const k = KEYS.indexOf(n);
-      out.push({kind: "screen", id: n, label: m.ko, code: n, words: `${m.title || ""} ${ALIAS[n] || ""}`, sub: g.ko, key: k < 0 ? null : String(k + 1)});
+      // the menu's group caption under the name (성적 for 요약 ...); a screen behind a shared button is found by its name too (도움말)
+      const j = JOINED.find((x) => x.screens.includes(n));
+      out.push({kind: "screen", id: n, label: m.ko, code: n, words: `${m.title || ""} ${ALIAS[n] || ""}${j ? " " + j.ko : ""}`, sub: navLabel(g.id),
+        key: k < 0 ? null : String(k + 1)});
     }
   }
   return out;

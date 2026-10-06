@@ -1,9 +1,10 @@
 // Fewer clicks (owners 10/06), the keyboard and the thumb:
-//   1-9  jump to 터미널 · 홈 · 포지션 · 매매법 · 순위표 · 회의실 · 차트 · 시장 · 서버 (routes.js KEYS; the top bar's group
-//        lists and the left rail show the number). Never while typing in a box, never with Ctrl / Alt / Cmd.
+//   1-9  the menu strip's first nine buttons: 터미널 · 포지션 · 차트 · 시장 · 요약 · 순위표 · 흐름 · 판정 · 매매법
+//        (routes.js KEYS, from the strip's order; each button's tooltip and the left rail show the number). Never while
+//        typing in a box, never with Ctrl / Alt / Cmd.
 //   /    opens 찾기 (core/find.js).
-//   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the sub tabs' order).
-//        Not on a chart, a table or a row that scrolls sideways itself, a form field, or a slider.
+//   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the strip's order).
+//        Not on a chart, a table or a row that scrolls sideways itself (the strip too), a form field, or a slider.
 import {SCREENS, GROUPS, KEYS, href, parseHash} from "./routes.js";
 import {features} from "./features.js";
 import {toast} from "./ui.js";

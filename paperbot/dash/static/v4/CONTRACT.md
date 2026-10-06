@@ -201,7 +201,7 @@ Rules:
 - `figure`, `clock`, `windowArt`, `TEAM_HUE`
 - `consolePanel({title, tabs, foot, maxHeight, max})` → `.setLines(lines)`, `.push(line)`, `.showEmpty(text)`, `.setFoot`, `.clearFilter`. A line is `{id, type: "ev"|"st"|"dis"|"bad", tabs: ["agent"|"trade"|"debate"], meeting, ts, who, text, start, onOpen}`
 - `alertKo(text)` (English engine alerts → Korean), `criticalLines`
-- `store`, `features`, `bus`, `api`, `apiText`, `post`, `serverNow`, `stream`, `ApiError`, `href`, `SCREENS`, `GROUPS`, `setBadge(screen, on)`, `startTour`
+- `store`, `features`, `bus`, `api`, `apiText`, `post`, `serverNow`, `stream`, `ApiError`, `href`, `SCREENS`, `GROUPS`, `setBadge(screen, on)`, `joinedTabs(screen)` (the 도움말 switch, core/strip.js), `startTour`
 - `bars`: `ALL_TFS`, `SYMS`, `TRADE_SYMS`, `TF_MS`, `barEnd`, `closeIn`, `session`, `usMarket`
 - `loadLwc`, `makeChart(el)` → `{chart, L, dispose}`, `chartOptions` (Korea-time axis), `candleOptions`, `tok`, `kstTick`, `priceDec`: lightweight-charts v4, same origin
 - `DS_FAMILY_KO`, `DS_NAME_KO`, `dsFamilyOf`: the v4 name table (`core/names.js`)
@@ -453,8 +453,9 @@ What the integrator changed, so later work starts from the same place:
   - CSS: `.screen > .scr` and `.card` are one `minmax(0, 1fr)` column; `a.lrow` links; `--glass` for sticky bars.
   - Kit css (`server-kit.css`, `rooms-kit.css`) is `@import`ed by each screen's css, like `home-shared.css` and `positions-kit.css` (no JS loaders).
 - **Wording:** the verdict compares each account with **10,000** same-bar coin flips (`checkpoint.N_BOTS`); `ui.refNote`, the rules panel, 판정 and FAQ all say so, and a test ties the number to `checkpoint.py`.
-- **Tour (`core/tour.js`):** 7 steps across 홈 → 포지션 → 회의실 → 서버. A step names its screen (`go`) and its targets in order (`[data-tour="headline"|"groups"|"positions"|"office"]`, then a shell element). Keep those `data-tour` attributes when you change those screens.
-- **Old UI link:** 예전 화면 ↗ at the end of the 서버 group's sub tabs (`core/shell.js`).
+- **Tour (`core/tour.js`):** 7 steps: the menu strip, then 요약 → 포지션 → 회의실 → 서버. A step names its screen (`go`) and its targets in order (`[data-tour="headline"|"positions"|"office"]`, then a shell element; one entry may list several selectors, the first shown wins). Keep those `data-tour` attributes when you change those screens.
+- **Old UI link:** 예전 화면 ↗ in the top bar on a PC, at the end of the menu strip on a phone (`core/shell.js`).
+- **Menu (`core/strip.js`, nav-v3):** every screen of `routes.js` GROUPS (not `hidden`, `feature` while it runs) is its own text button in the strip under the top bar, in `NAV` order (거래 · 성적 · 매매법 · AI 직원 · 서버); a new screen needs only its line in SCREENS and its name in its group's `screens`. `JOINED` makes one button for several screens (도움말 = howto + faq); each of those screens puts `joinedTabs(name)` (pb.js) under its title. Sticky parts of a screen sit under `calc(var(--top-h) + var(--sub-h))`: `--sub-h` is the strip's measured height (two rows when it wraps).
 - **h():** `on*` attributes take functions only (a string handler is dropped); `srcdoc` / `formaction` are never set.
 - **Tests** (`tests/test_dash_v4.py`): every import resolves to an export, every file is reachable (no dead copies), screens reach core through `pb.js` (pure data `names.js` excepted), screen css has no colour literals, every old `/api` route is still called, every called route exists or is a listed NEEDS SERVER probe that degrades to 수집 전, the tour's targets exist, the captions are the shared ones.
 

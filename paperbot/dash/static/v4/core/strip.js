@@ -9,7 +9,8 @@
 //   PC (1200 px and up)  the buttons wrap: one row on a 1920 window at 보통, a tidy second row on a narrower window or
 //                        with 크게 / 아주 크게 (a group never splits; the line before a group that starts a row goes)
 //   below 1200 px        the same buttons as one row that scrolls sideways (swipe; a mouse wheel scrolls it too), the
-//                        current one brought into view; the phone's bottom bar stays as it was (core/shell.js)
+//                        current one brought into view; on a phone 찾기 stays at its left edge; the phone's bottom bar
+//                        stays as it was (core/shell.js)
 // The row's real height goes to --sub-h on <html>, so the screens' sticky parts sit under it however many rows it has.
 // Drawn into #subtabs by core/shell.js on every route / feature / badge change (the focus and the scroll survive).
 // Look: core/nav.css (.strip, .sb). The left rail (core/rail.js) lists the same buttons when chosen (메뉴 위치 왼쪽).
@@ -39,7 +40,7 @@ function button(it, cur, badges) {
   news ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
 }
 
-/** After a draw or a resize: the row's height to --sub-h, the group lines at a row's start hidden, the fade marks. */
+/** After a draw or a resize: the row's height to --sub-h, and the group lines at a row's start hidden. */
 function measure() {
   const nav = bar();
   if (!nav) return;
@@ -52,13 +53,6 @@ function measure() {
     g.toggleAttribute("data-rowstart", top != null && t > top + 4);
     top = t;
   }
-  edges(nav);
-}
-/** data-more="l" / "r" / "lr": there is more of the row to that side (a soft fade there, core/nav.css). */
-function edges(nav) {
-  const max = nav.scrollWidth - nav.clientWidth;
-  const v = max > 2 ? `${nav.scrollLeft > 2 ? "l" : ""}${nav.scrollLeft < max - 2 ? "r" : ""}` : "";
-  if ((nav.dataset.more || "") !== v) { if (v) nav.dataset.more = v; else delete nav.dataset.more; }
 }
 
 function wire(nav) {
@@ -70,7 +64,6 @@ function wire(nav) {
     nav.scrollLeft += e.deltaY;
     e.preventDefault();
   }, {passive: false});
-  nav.addEventListener("scroll", () => edges(nav), {passive: true});
   if (typeof ResizeObserver === "function") st.ro = new ResizeObserver(() => measure());
   else window.addEventListener("resize", measure);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure, () => {});
@@ -80,9 +73,12 @@ function wire(nav) {
 function center(nav, smooth) {
   const a = nav.querySelector('.sb[aria-current="page"]');
   if (!a || !scrolls(nav)) return;
+  // the phone's 찾기 stays at the row's left edge (sticky): the middle of what is left of the row
+  const stuck = [...nav.querySelectorAll(".findsub")].find((x) => x.offsetParent !== null);
   const r = a.getBoundingClientRect(), n = nav.getBoundingClientRect();
-  if (r.left >= n.left + 24 && r.right <= n.right - 24 && !smooth) return;
-  const left = nav.scrollLeft + (r.left + r.width / 2) - (n.left + n.width / 2);
+  const from = stuck ? stuck.getBoundingClientRect().right : n.left;
+  if (r.left >= from + 24 && r.right <= n.right - 24 && !smooth) return;
+  const left = nav.scrollLeft + (r.left + r.width / 2) - (from + n.right) / 2;
   nav.scrollTo({left: Math.max(0, left), behavior: smooth && !reduced() ? "smooth" : "auto"});
 }
 

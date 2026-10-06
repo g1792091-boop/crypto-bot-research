@@ -87,7 +87,7 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- tour + logout
   const tourCard = ui.card({plate: "안내와 로그아웃"},
-    h("p", {class: "ink2"}, "처음 들어왔을 때 나온 7단계 안내를 다시 볼 수 있습니다. 메뉴의 다섯 묶음을 하나씩 짚어 줍니다."),
+    h("p", {class: "ink2"}, "처음 들어왔을 때 나온 7단계 안내를 다시 볼 수 있습니다. 화면 버튼 줄부터 요약 · 포지션 · 회의실 · 서버까지 하나씩 짚어 줍니다."),
     h("div", {class: "row wrap"},
       h("button", {class: "btn-y", type: "button", onclick: () => { window.scrollTo(0, 0); startTour(); }}, "안내 다시 보기"),
       h("button", {class: "btn-line", type: "button", onclick: logout}, "로그아웃")),

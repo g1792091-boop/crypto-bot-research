@@ -46,11 +46,11 @@ function renderNav() {
     h("b", null, meta.ko));
   // the phone's bottom bar: the 5 groups as before (a tap opens the group's first screen)
   put($("#botbar"), GROUPS.map((g) => link(g)));
-  // the menu strip: every screen its own text button (core/strip.js). At its start on a phone: 글자 크기 (one button)
-  // and 찾기; at its end below 1200 px: 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js), 화면 색 (AI / 클래식,
+  // the menu strip: every screen its own text button (core/strip.js). At its start on a phone: 찾기 (it stays at the
+  // row's left edge) and 글자 크기 (one button); at its end below 1200 px: 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js), 화면 색 (AI / 클래식,
   // core/skin.js) and the old dashboard (served at /v3; '/' is this page)
   renderStrip(p.name, badges, {
-    lead: [textCycle(() => remount()), findTab()],
+    lead: [findTab(), textCycle(() => remount())],
     tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink()],
   });
   // a PC window with the menu on top (1200 px and up): the same settings sit in the top bar, so the strip keeps its

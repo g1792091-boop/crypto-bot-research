@@ -3,7 +3,7 @@
 //   "classic" the first navy + yellow look
 // The viewer's choice is a per-device convenience (local storage through dom.js `local`, wrapped in try/catch): a
 // private window simply gets the default. Applied at boot (core/main.js) before the shell draws; switched from the
-// small "화면 색" control at the end of the 서버 group's tabs (core/shell.js). Charts read their colours from the tokens
+// small "화면 색" control in the top bar on a PC, at the menu strip's end below 1200 px (core/shell.js). Charts read their colours from the tokens
 // when they are drawn, so a switch draws the current screen again (router.remount).
 import {h, local} from "./dom.js";
 
