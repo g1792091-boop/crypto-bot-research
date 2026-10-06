@@ -31,6 +31,7 @@
 .drw-mi small { color: var(--muted); font-size: var(--t-2xs); font-weight: 500; }
 .drw-mi:hover, .drw-mi:focus-visible { background: var(--surface-2); outline: none; }
 .drw-mi.alert { color: var(--accent); }
+.drw-mi small.drw-off { color: var(--warn); }
 .drw-mi.bad { color: var(--down); }
 .drw-input { position: absolute; z-index: 8; width: 190px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--draw); background: var(--surface);
   color: var(--ink); font: 500 var(--t-sm)/1 var(--f-body); }

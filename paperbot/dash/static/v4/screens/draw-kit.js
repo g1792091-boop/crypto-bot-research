@@ -271,7 +271,8 @@ export function drawTools(o) {
     const item = (text, fn, cls) => h("button", {type: "button", role: "menuitem", class: ["drw-mi", cls || ""], onclick: (e) => { e.stopPropagation(); closeMenu(); fn(); }}, text);
     st.menu = h("div", {class: "drw-menu", role: "menu", "aria-label": "차트 메뉴"},
       h("p", {class: "drw-mh num"}, `${fmt.coin(sym)} ${fmt.price(price)}`),
-      item(["이 가격에 알림", h("small", null, off ? `보내는 프로그램이 꺼져 있음 (켜지면 울림)${dir}` : `텔레그램 소리 알림${dir}`)], () => makeAlert(sym, price), "alert"),
+      item(["이 가격에 알림", h("small", null, `텔레그램 소리 알림${dir}`),
+        off ? h("small", {class: "drw-off"}, "지금은 보내는 프로그램이 꺼져 있어, 켜진 뒤부터 울립니다") : null], () => makeAlert(sym, price), "alert"),
       item("여기에 가로선 긋기", () => add({id: newId(), t: "h", p: price})),
       hit ? item("이 그림 지우기", () => remove(hit.id), "bad") : null,
       item("닫기", () => {}));

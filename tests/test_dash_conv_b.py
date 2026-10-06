@@ -387,7 +387,7 @@ def test_compare_page_never_says_the_research_used_todays_rules():
 def test_chart_alert_never_promises_a_ring_while_the_sender_is_off():
     dk = _read("screens/draw-kit.js")
     assert "a.sender_alive" in dk and "features.priceSender" in dk
-    assert "켜지면 그때부터 울립니다" in dk and "보내는 프로그램이 꺼져 있음" in dk
+    assert "켜지면 그때부터 울립니다" in dk and "지금은 보내는 프로그램이 꺼져 있어" in dk
 
 
 def test_a_finger_drawing_or_moving_a_drawing_does_not_scroll_the_page():
