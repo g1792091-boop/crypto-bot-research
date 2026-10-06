@@ -1102,11 +1102,14 @@ def list_rows(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None
 
 
 def who_was_right(conn: Optional[sqlite3.Connection], recent: int = 20) -> dict:
-    """The staff board's '누가 맞았나' block: tiles, base rates, per-role rows and the latest results (≤ 20)."""
+    """The staff board's '누가 맞았나' block: tiles, base rates, per-role rows and the latest results (≤ 20).
+    ``active``: sides were ever on (the seats cursor) or a dispute exists; False = the feature never ran (AGENTS_SIDES
+    off, the default), so the dashboard hides the card instead of describing an attacker who does not exist."""
     b = board(conn)
     t = b["totals"]
     rates = b["base_rates"]
-    return {"tiles": {"settled": rates["all"]["settled"], "attacker_won": rates["all"]["attacker_won"],
+    return {"active": seats_written(conn) is not None or bool(_rows(conn, limit=1)),
+            "tiles": {"settled": rates["all"]["settled"], "attacker_won": rates["all"]["attacker_won"],
                       "attacker_share": rates["all"]["attacker_share"], "pending": t["pending"],
                       "conceded": t["conceded"], "talk_only": t["talk_only"], "gave_up": t["gave_up"]},
             "base_rates": rates, "roles": b["roles"], "small": b["small"], "min": SMALL, "coin_flip": 0.5,

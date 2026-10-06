@@ -534,6 +534,7 @@ def test_the_day_digest_and_the_staff_board_show_who_was_right(world, monkeypatc
 def test_no_dispute_means_no_board_rows_and_no_week_line(world):
     b = DG.staff_board(world.agents, QUIET_, 7)
     assert b["who_was_right"]["tiles"]["settled"] == 0 and b["who_was_right"]["roles"] == []
+    assert b["who_was_right"]["active"] is False            # sides never on: the dashboard hides the card
     rep = DG.week_report(world.paper(), world.agents, SUNDAY)
     assert rep["who_was_right"] is None and "누가 맞았나" not in DG.compose_week(rep)
     from paperbot.agents import meetings as MT

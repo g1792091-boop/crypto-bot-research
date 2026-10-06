@@ -64,6 +64,9 @@ function resultRow(d) {
 /** The staff board's '누가 맞았나 (실험 전체)' card from /api/digest/staff's who_was_right. */
 export function whoWasRightCard(w) {
   if (!w) return null;
+  // CONTRACT 1.7: sides never on (AGENTS_SIDES off, the server's `active` false) and no dispute: hide the card, never
+  // a card that describes an attacker who does not exist (an older server without the flag keeps the empty card)
+  if (w.active === false) return null;
   const t = w.tiles || {}, br = w.base_rates || {};
   const roles = (w.roles || []).filter((r) => r.settled || r.pending || r.conceded || r.talk_only || r.gave_up);
   const sub = "실험 전체 · 코드가 시험 결과로 채점";

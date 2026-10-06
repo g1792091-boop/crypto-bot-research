@@ -856,9 +856,16 @@ def test_a_room_shows_no_sides_while_they_were_never_on(env, monkeypatch):
     _login(c)
     t = c.get("/api/trials", params={"strategy": S}).json()
     assert t["sides"] is None and t["disputes"] == []
+    from paperbot.agents import disputes as DS
+    a = R.open_ro(env["agents"])
+    try:
+        assert DS.who_was_right(a)["active"] is False                    # sides never on: the staff card is hidden
+    finally:
+        a.close()
     _with_disputes(env, monkeypatch, seats=False)
     d = c.get("/api/disputes", params={"room": ROOM}).json()
     assert d["seats"] is None and len(d["disputes"]) == 2               # disputes stay visible, the seats do not
+    assert c.get("/api/digest/staff").json()["who_was_right"]["active"] is True
 
 
 def _render_kit(script: str) -> dict:
@@ -891,6 +898,7 @@ const room = {sides: {advocate: {name: "켈트너·RSI 전담", record_side: {wo
               status: "open", status_ko: "앞으로 거래로 확인 중"}], base_rates: w.base_rates};
 const t = (n) => (n ? D.walk(n).text : null);
 console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRightCard({tiles: {}, roles: [], recent: []})),
+  wroff: t(K.whoWasRightCard({active: false, tiles: {}, roles: [], recent: []})),
   chip: t(K.rightChip(w.roles[0])), nochip: t(K.rightChip({settled: 0, pending: 0})), room: t(K.roomSides(room)),
   noroom: t(K.roomSides({sides: null, disputes: []})), wait: t(K.labIntake(null)),
   queue: t(K.labIntake({items: [{source: "meeting", description_ko: "N17_KC_RSI 1h: 스킵", status: "tested",
@@ -912,6 +920,7 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
     assert "동전 던지기 (기준)" in card and "50%" in card and "표본 적음" in card and "기준 비율로만 맞혔다면 1.0개" in card
     assert "공격할 때 1/3" in card and "말로만 1" in card and "“잠금이 낮음”" in card and "5년 시험 #41" in card
     assert "아직 다툼이 없습니다" in got["none"] and "동전 던지기 50%" in got["none"]
+    assert got["wroff"] is None                    # sides never on (the server's active: false): no card (CONTRACT 1.7)
     assert got["chip"].startswith("누가 맞았나 1/3 · 기준 1.0") and got["nochip"] is None   # the base rate on the chip itself
     assert "편드는 직원" in got["room"] and "공격하는 직원" in got["room"] and "앞으로 40건 중 12건" in got["room"]
     assert "동전 던지기 50%" in got["room"] and got["noroom"] is None
