@@ -60,6 +60,8 @@ export function paneResize(ctx, {root, grid, left, right, mid, strip, table}) {
     if (!on) return;
     const dl = left.offsetWidth, dr = right.offsetWidth, dt = table.offsetHeight;       // the original sizes (no override now)
     const lim = limits(dl, dr);
+    for (const x of [hL, hR]) x.hidden = !lim.ok;                    // a handle that could not move anything is not shown
+    hT.hidden = !lim.okT;
     let l = dl, r = dr, t = dt;
     if ((rs.l != null || rs.r != null) && lim.ok) {
       l = clamp(rs.l ?? dl, lim.minL, lim.maxL(rs.r ?? dr));
@@ -77,12 +79,11 @@ export function paneResize(ctx, {root, grid, left, right, mid, strip, table}) {
   }
   /** the handles sit in the gaps: measured from the boxes themselves */
   function place() {
-    if (hL.hidden) return;
+    const lim = cur.lim;
+    if (!lim) return;
     hL.style.left = px(left.offsetLeft + left.offsetWidth + GAP / 2);
     hR.style.left = px(right.offsetLeft - GAP / 2);
     hT.style.top = px(table.offsetTop - GAP / 2);
-    const lim = cur.lim;
-    if (!lim) return;
     const info = (el, now, min, max, lab) => {
       el.setAttribute("aria-valuemin", String(Math.round(min))); el.setAttribute("aria-valuemax", String(Math.round(max)));
       el.setAttribute("aria-valuenow", String(Math.round(now))); el.setAttribute("aria-valuetext", `${lab} ${Math.round(now)}픽셀`);

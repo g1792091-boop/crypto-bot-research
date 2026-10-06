@@ -121,7 +121,10 @@ export function bandLine(ctx) {
     }
   }
 
-  async function loadBell() {
+  let bellAt = 0;
+  async function loadBell(gap = 0) {
+    if (Date.now() - bellAt < gap) return;                        // a room event asks at most every 20 s (core/bell.js's own gap)
+    bellAt = Date.now();
     try {
       const d = await ctx.api("/api/v4/bell");
       bell = {n: d && d.ready ? Number(d.n) || 0 : null, failed: !(d && d.ready), loaded: true};
@@ -137,7 +140,7 @@ export function bandLine(ctx) {
   ctx.on("stream:state", () => paintStatus());
   ctx.every(5000, paintStatus, {now: false});        // the heartbeat's age is recomputed from its real timestamp (text only)
   ctx.every(60000, loadBell, {now: true});
-  ctx.on("rooms", () => loadBell());
+  ctx.on("rooms", () => loadBell(20000));
   if (typeof ResizeObserver === "function") { const ro = new ResizeObserver(() => fit()); ro.observe(el); ctx.track(() => ro.disconnect()); }
   render();
   return {el, fit};
