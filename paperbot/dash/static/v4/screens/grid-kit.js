@@ -230,7 +230,8 @@ export function profileCard(ctx, key, o = {}) {
     if (g !== st.gen || !ctx.alive()) return;
     st.d = d;
     if (o.head) headSlot.replaceChildren(headBlock(d));
-    body.replaceChildren(...(d.group === "ds200" ? dsCounts(ctx, d) : d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)));
+    // (a null part would print as the text "null")
+    body.replaceChildren(...(d.group === "ds200" ? dsCounts(ctx, d) : d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)).filter((x) => x != null));
     if (animate) motion.swap(body);
   }
 

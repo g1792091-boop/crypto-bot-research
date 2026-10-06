@@ -13,6 +13,7 @@ import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
 import {termChip, termify} from "./faq-terms.js";
+import {whyCard} from "./account-why.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -163,9 +164,9 @@ export async function mount(el, ctx) {
     const plainHead = () => [h("div", {class: "scr-head account-head"}, h("h1", null, name), h("span", {class: "sub"}, sub)),
       h("div", {class: "row wrap account-pills"}, pills)];
     const headSlot = h("div", {class: "stack account-top"});
-    view.plain = () => { headSlot.replaceChildren(...plainHead()); if (ref) headSlot.append(ref); };
+    view.plain = () => { headSlot.replaceChildren(...plainHead().filter(Boolean)); if (ref) headSlot.append(ref); };
     let refSlot = null;
-    if (isExtra || (view.prof && view.prof.id === acc.account_id && view.prof.missing)) { headSlot.append(...plainHead()); refSlot = ref; }
+    if (isExtra || (view.prof && view.prof.id === acc.account_id && view.prof.missing)) { headSlot.append(...plainHead().filter(Boolean)); refSlot = ref; }
     else {
       if (!view.prof || view.prof.id !== acc.account_id) {
         const prof = {id: acc.account_id, missing: false};
@@ -181,13 +182,18 @@ export async function mount(el, ctx) {
     }
     const same = sameStrip(a, board, init);
     view.same = same;
+    // 왜 이 수익률인가 (account-why.js): fees, funding, exit reasons, win rate vs break-even, the biggest losses
+    const flipMed = board ? derive.groupStats(board).flipMedByTf[a.timeframe] : null;
+    const why = whyCard(a, d, {initial: init, wallet: row && row.wallet != null ? row.wallet : stt.wallet ?? null, flipMed,
+      total: row && row.trades != null ? row.trades : null, href: ctx.href, countOnly: a.kind === "ds200"});
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
-    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
+    // (replaceChildren / append print a null as the text "null": the optional parts are filtered out first)
+    el.replaceChildren(...[backLink(), headSlot, why, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
-        h("div", {class: "stack"}, rules, extra, tradesCard)));
+        h("div", {class: "stack"}, rules, extra, tradesCard))].filter(Boolean));
 
     // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
     termify(walletCard);

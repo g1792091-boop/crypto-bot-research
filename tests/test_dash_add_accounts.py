@@ -94,3 +94,40 @@ def test_grid_default_colour_is_the_accounts_own_return():
     mark = re.search(r"\.gk-vsm \{([^}]*)\}", css).group(1)
     assert "--up" not in mark and "--down" not in mark and "--t-2xs" in mark
     assert 'heatCell(reel, {mode: "own", vsMark: true' in g
+
+
+# ---------------------------------------------------------------- 계좌: 왜 이 수익률인가
+def test_why_card_numbers_from_the_trades():
+    out = _node("const W = await import('{base}/account-why.js');", """
+      const t = (id, pnl, fees, funding, r, sym) => ({id, pnl, fees, funding, exit_reason: r, symbol: sym || "BTCUSDT", exit_time: id});
+      const rows = [t(1, -200, 20, 5, "SL"), t(2, 60, 18, 1, "LOCK"), t(3, -400, 25, -2, "LIQ"), t(4, 62, 18, 0, "LOCK"),
+                    t(5, -100, 15, 3, "SL"), t(6, 58, 17, 1, "LOCK")];
+      const s = W.whyStats(rows, {initial: 5000, wallet: 4480, flipMed: 4700, total: 9});
+      const f = W.waterfall(s);
+      const none = W.whyStats([], {initial: 5000, wallet: 5000});
+      console.log(JSON.stringify({s, f, none}));""")
+    s, f = out["s"], out["f"]
+    assert s["n"] == 6 and s["total"] == 9 and s["capped"] is True          # the server's latest rows only: said so
+    assert abs(s["net"] - (-520)) < 1e-9 and abs(s["fees"] - 113) < 1e-9 and abs(s["funding"] - 8) < 1e-9
+    assert abs(s["gross"] - (-520 + 113 + 8)) < 1e-9                          # pnl = before − fees − funding (engine)
+    assert [r["reason"] for r in s["byReason"]] == ["SL", "LOCK", "LIQ"]
+    assert [r["n"] for r in s["byReason"]] == [2, 3, 1] and s["byReason"][2]["pnl"] == -400
+    assert abs(s["winRate"] - 0.5) < 1e-9 and abs(s["avgWin"] - 60) < 1e-9 and abs(s["avgLoss"] - 700 / 3) < 1e-9
+    assert abs(s["breakeven"] - (700 / 3) / (60 + 700 / 3)) < 1e-9            # avg loss / (avg win + avg loss)
+    assert [x["id"] for x in s["big"]] == [3, 1, 5] and abs(s["bigShare"] - 1) < 1e-9
+    assert abs(s["ret"] - (-0.104)) < 1e-9 and abs(s["flipRet"] - (-0.06)) < 1e-9 and abs(s["rest"] - (-0.044)) < 1e-9
+    assert [x["key"] for x in f] == ["gross", "fees", "funding", "net"]
+    assert f[1]["from"] == f[0]["to"] and abs(f[2]["to"] - s["net"]) < 1e-9 and f[3]["from"] == 0
+    assert out["none"]["n"] == 0 and out["none"]["winRate"] is None and out["none"]["breakeven"] is None
+
+
+def test_why_card_wiring_and_deepseek_counts_only():
+    acc, why, css = _read("account.js"), _read("account-why.js"), _read("account.css")
+    assert 'whyCard(a, d, {initial: init' in acc and 'countOnly: a.kind === "ds200"' in acc
+    assert ".filter(Boolean));" in acc                                       # no "null" text between the cards
+    # DeepSeek: exit-reason counts only, no money anywhere in that branch
+    branch = why[why.index("if (o.countOnly) {"):why.index("const kids = [], secs = [];")]
+    assert "fmt.money" not in branch and "signed(" not in branch and "pnl" not in branch.replace("no money", "")
+    assert 'ui.assume("closed"' in why and "ui.smallSample(s.n)" in why
+    assert 'fmt.groupOf(a) !== "extra"' in why and 'a.kind !== "random"' in why   # no coin-flip line for extras / flips
+    assert re.search(r"\.acw-fbar\.cost \{ background: var\(--warn\); \}", css)
