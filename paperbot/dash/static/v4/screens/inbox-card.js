@@ -96,8 +96,13 @@ export function proposalCard(c, o) {
   const od = c.owner_decision;
 
   function decideBox() {
-    if (od && !od.applied) {
-      return h("p", {class: "ibx-done"}, "두 분 결정: ", h("b", null, od.decision === "approve" ? "승인" : "거절"), ` · ${decisionWhen(agentsState(o.ov).st)}`);
+    if (c.again_sent) return h("p", {class: "ibx-done"}, "두 분 결정: ", h("b", null, "다시 승인"), " · 실행기가 다음 차례(다음 5분 봉 경계)에 다시 확인하고 시작합니다");
+    if (od && !od.applied && !st.confirm) {
+      // as the room: an approve click not applied yet (and no account started) can still be turned into a reject
+      const turn = od.decision === "approve" && c.effective_status === "approved" && !c.account_running;
+      return h("div", {class: "stack tight"},
+        h("p", {class: "ibx-done"}, "두 분 결정: ", h("b", null, od.decision === "approve" ? "승인" : "거절"), ` · ${decisionWhen(agentsState(o.ov).st)}`),
+        turn ? h("div", {class: "row wrap"}, h("button", {class: "btn-line bad", type: "button", onclick: () => { st.confirm = {dec: "reject", note: ""}; paint(); }}, "거절로 바꾸기")) : null);
     }
     if (st.confirm) {
       const ap = st.confirm.dec === "approve";
@@ -125,7 +130,12 @@ export function proposalCard(c, o) {
     const note = h("input", {class: "search ibx-note", type: "text", maxlength: 1000, placeholder: "메모 (선택)", "aria-label": "메모"});
     const ask = (dec) => { st.confirm = {dec, note: note.value}; paint(); };
     if (stale) return h("div", {class: "stack tight"}, h("p", {class: "ibx-warn"}, "이 방 시험이 늘어 지금 기준으로는 코드 관문을 통과하지 못합니다. 승인할 수 없고 거절만 할 수 있습니다."),
-      h("div", {class: "row wrap"}, h("button", {class: "btn-line bad", type: "button", onclick: () => ask("reject")}, "거절")));
+      h("div", {class: "row wrap"}, h("button", {class: "btn-line bad", type: "button", onclick: () => ask("reject")}, c.again ? "거절로 바꾸기" : "거절")));
+    // approved before, but the runner starts it only after one more click (the room's '다시 승인')
+    if (c.again) return h("div", {class: "ibx-decide"}, h("p", {class: "ibx-done"}, "승인했지만 실행기가 아직 시작하지 않았습니다: ",
+      h("b", null, (c.runtime_refusal && c.runtime_refusal.text_ko) || "한 번 더 승인 필요")), note, h("div", {class: "row wrap"},
+      h("button", {class: "btn-y", type: "button", onclick: () => ask("approve")}, "다시 승인"),
+      h("button", {class: "btn-line bad", type: "button", onclick: () => ask("reject")}, "거절로 바꾸기")));
     return h("div", {class: "ibx-decide"}, note, h("div", {class: "row wrap"},
       h("button", {class: "btn-y", type: "button", onclick: () => ask("approve")}, "승인"),
       h("button", {class: "btn-line bad", type: "button", onclick: () => ask("reject")}, "거절")));
@@ -135,10 +145,11 @@ export function proposalCard(c, o) {
 
   const b = bar(c);
   const run = c.account_running, ref = c.runtime_refusal;
-  return h("article", {class: ["card", "ibx-card", od && !od.applied ? "done" : ""], id: `ibx-${c.id}`, "aria-label": `제안 #${c.id}`},
+  return h("article", {class: ["card", "ibx-card", (od && !od.applied) || c.again_sent ? "done" : ""], id: `ibx-${c.id}`, "aria-label": `제안 #${c.id}`},
     h("div", {class: "ibx-head"},
       h("span", {class: "ibx-no"}, `제안 #${c.id}`),
       h("span", {class: "ibx-kind"}, c.kind === "newlab" ? "새 매매법 계좌" : "복제 계좌"),
+      c.again ? ui.pill("다시 승인 필요", "warn") : null,
       h("a", {class: "ibx-room", href: ctx.href("rooms", c.room_id)}, c.room_title || c.room_id, " →"),
       h("span", {class: "grow"}), h("time", {class: "muted"}, fmt.kst(c.ts))),
     h("p", {class: "ibx-title"}, c.kind === "newlab" ? "새 매매법: " : `${c.parent ? fmt.idName(c.parent) : c.strategy_ko || ""} · 바꾸는 한 가지 `,
@@ -156,6 +167,6 @@ export function proposalCard(c, o) {
       h("section", {class: "ibx-sec ibx-yes"}, h("h3", null, "승인하면"), h("ul", null, fx.yes.map((x) => h("li", null, x)))),
       h("section", {class: "ibx-sec ibx-no"}, h("h3", null, "안 누르면"), h("ul", null, fx.no.map((x) => h("li", null, x))))),
     run ? h("p", null, ui.pill("계좌 시작됨", "good"), ` ${run.label_ko || fmt.idName(run.account_id)}${run.extra_status && run.extra_status !== "active" ? ` · ${EXTRA_KO[run.extra_status] || run.extra_status}` : ""}`) : null,
-    !run && ref ? h("p", {class: "muted"}, `실행기: ${ref.text_ko || ref.code}${RE_APPROVE.includes(ref.code) ? " (한 번 더 승인 필요)" : ""}`) : null,
+    !run && ref && !c.again && !c.again_sent ? h("p", {class: "muted"}, `실행기: ${ref.text_ko || ref.code}${RE_APPROVE.includes(ref.code) ? " (한 번 더 승인 필요)" : ""}`) : null,
     box);
 }

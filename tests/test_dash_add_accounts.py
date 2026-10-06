@@ -408,3 +408,62 @@ def test_inbox_page_words_and_one_way_to_approve():
     bell = _read("bell.js", os.path.join(V4, "core"))
     assert 'href: href("inbox")' in bell and "bell-pop" not in bell
     assert 'href: ctx.href("inbox", null, {p: p.id})' in _read("rooms-side.js") and "inboxGuide(ctx)" in _read("home.js")
+
+
+# ---------------------------------------------------------------- review fixes (adversarial pass)
+def test_approvals_lists_an_approved_proposal_the_runner_waits_to_be_approved_again(tmp_path):
+    """The room's '다시 승인' (runner refusal stale_ok / owner_click_missing) is in the 결재함 too, through the same decide."""
+    from fastapi.testclient import TestClient
+    from paperbot.agents import extra_accounts as X
+    from paperbot.agents import rooms_db as R
+    from paperbot.dash.app import create_app
+    from paperbot.store3 import Store3
+    db, ag, ib, pid, _old = _approvals_world(tmp_path)
+    c = R.open_agents(ag)
+    trial = c.execute("SELECT trial_id FROM proposals WHERE id = ?", (pid,)).fetchone()[0]
+    acc = X.copy_account(R.get_trial(c, trial))
+    ts = T0 + 7
+    again = R.add_proposal(c, "strat:S5_DONCHIAN_MFI", "S5_DONCHIAN_MFI", trial, {"kind": "copy", "account": acc, "test": acc["rule"]},
+                           {"pass": True, "n_trials": 3, "reasons": ["① 통과"]}, "awaiting_owner", ts=ts)
+    R.set_proposal_status(c, again, "approved", "owner:두 분", ts=ts + 1)
+    c.close()
+    st = Store3(db)
+    st.put_state("extras", T0, {"v": X.V, "refused": {str(again): {"code": "stale_ok", "proposal_ts": ts, "since": ts + 2}}})
+    st.commit()
+    st.conn.close()
+    cl = TestClient(create_app(db, None, b"s" * 32, agents_db=ag, inbox_db=ib))
+    d = cl.get("/api/v4/approvals").json()
+    got = {x["id"]: x for x in d["waiting"]}
+    assert set(got) == {pid, again} and got[again]["again"] is True and got[pid]["again"] is False
+    assert got[again]["periods"] and again not in [x["id"] for x in d["past"]]
+    r = cl.post(f"/api/proposals/{again}/decide", json={"decision": "approve"}, headers={"origin": "http://testserver"})
+    assert r.status_code == 200, r.text                              # the existing route's own 'again' rule took it
+    d = cl.get("/api/v4/approvals").json()
+    assert again not in [x["id"] for x in d["waiting"]]              # clicked again after the refusal: the runner's turn now
+    assert [x["id"] for x in d["decided"]] == [again] and d["decided"][0]["again_sent"] is True
+    card = _read("inbox-card.js")
+    assert '"다시 승인"' in card and '"거절로 바꾸기"' in card and card.count("ctx.post(") == 1
+
+
+def test_review_fixes_bars_colours_guide_and_counts():
+    out = _node("const A = await import('{base}/analysis.js'); const G = await import('{base}/inbox-guide.js'); const E = await import('{base}/rooms-evidence.js');", """
+      const acc = (n) => ({kind: "strategy", trades: n, timeframe: "15m"});
+      const board = {accounts: Array.from({length: 287}, () => acc(25)).concat([acc(3)])};       // 287 / 288 done
+      const syn = {accounts: Array.from({length: 4}, () => acc(9))};                               // average 9 >= 5
+      const D = 86400000, p = {start: 0, observe_until: 21 * D, owner_ok_until: 60 * D, first_owner_decision_ts: null};
+      const groups = [{claim: "a", items: [{name: "x", path: "losses.n"}, {name: "y", path: "board.today.trades"}]},
+                      {claim: "b", items: [{name: "x", path: "losses.n"}]}];
+      console.log(JSON.stringify({risk: A.waitBars("risk", {}, "core", board)[0].share,
+        syn: A.waitBars("synergy", {min_trades: 5, waiting: true}, "core", syn)[0].share,
+        guide: [G.guideShows(p, 21 * D - 9 * 3600000 - D - 1, 0), G.guideShows(p, 21 * D - 9 * 3600000 - D, 0)],
+        evn: E.evidenceCount(groups)}));""")
+    assert out["risk"] <= 0.99 and out["syn"] <= 0.99           # not full: never "100%" while the view still waits
+    assert out["guide"] == [False, True]                          # from 00:00 KST of the day before (not that time of day)
+    assert out["evn"] == 2                                        # a source two claims share counts once
+    cp = _read("account-copy.js")
+    assert 'h("b", {class: "num"}, pp(d.diff))' in cp and "ui.refNote(null" in cp   # the copy − parent gap: no up / down colour
+    assert "나중에 시작한 복제 계좌라 순위표에서는 동전 봇과 견주지 않습니다" in _read("account.js")
+    grid, kit = _read("grid.js"), _read("grid-kit.js")
+    assert 'local.get("grid-color-v", 0) !== 2' in grid and 'st.color === "vs") { st.color = "own"' in grid
+    assert '{mode: "own", vsMark: !ds, href: ctx.href("account", a.id), i}' in kit and 'const mode = ds ? "own" : "vs"' not in kit
+    assert "CSS.escape(String(p))" in _read("inbox.js")

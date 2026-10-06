@@ -67,7 +67,7 @@ export async function mount(el, ctx) {
     body.replaceChildren(...kids);
     if (st.first) {
       st.first = false;
-      const t = st.focus ? body.querySelector(`#ibx-${window.CSS && CSS.escape ? CSS.escape(String(st.focus)) : String(st.focus)}`) : null;
+      const t = st.focus ? body.querySelector(`#ibx-${CSS.escape(String(st.focus))}`) : null;
       if (t) { t.scrollIntoView({block: "start", behavior: motion.reduced() ? "auto" : "smooth"}); motion.play(t, "enter"); }
     }
   }
@@ -93,7 +93,7 @@ export async function mount(el, ctx) {
 
   current = (params) => {
     const p = (params.query || {}).p;
-    if (p && st.d) { const t = body.querySelector(`#ibx-${p}`); if (t) t.scrollIntoView({block: "start"}); }
+    if (p && st.d) { const t = body.querySelector(`#ibx-${CSS.escape(String(p))}`); if (t) t.scrollIntoView({block: "start"}); }
   };
   ctx.track(() => { current = null; });
   await load();

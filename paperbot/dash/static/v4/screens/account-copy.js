@@ -63,13 +63,15 @@ export function copyCard(ctx, id, onData) {
         h("td", {class: ["num", r.tone ? fmt.tone(r.pv) : ""]}, r.parent),
         h("td", {class: ["num", r.tone ? fmt.tone(r.cv) : ""]}, r.copy)))))));
     if (!d.count_only && d.diff != null) {
-      out.push(h("p", {class: "acc-line"}, "같은 기간 복제 − 원본: ", h("b", {class: ["num", fmt.tone(d.diff)]}, pp(d.diff)), " ",
+      // the difference stays in the plain ink colour (no green / red): it is not a verdict on the changed rule
+      out.push(h("p", {class: "acc-line"}, "같은 기간 복제 − 원본: ", h("b", {class: "num"}, pp(d.diff)), " · 판정 아님 ",
         small ? ui.smallSample(Math.min(d.copy.trades || 0, d.parent.trades || 0), d.small_n || 30) : null,
         small ? h("span", {class: "muted"}, ` 거래가 ${fmt.int(d.small_n || 30)}건 넘게 쌓여야 차이를 믿을 수 있습니다.`) : null));
     }
     if (!d.count_only && d.flips && d.flips.median_ret != null) {
       out.push(h("p", {class: "acc-line"}, ui.pill("", "ref"), ` 같은 기간 ${d.timeframe === "5m" ? "5분봉" : `${tf}봉`} 동전 봇 ${fmt.int(d.flips.n)}개 중앙값 `,
-        h("b", {class: ["num", fmt.tone(d.flips.median_ret)]}, fmt.pct(d.flips.median_ret, 1)), " · 판정 아님"));
+        h("b", {class: ["num", fmt.tone(d.flips.median_ret)]}, fmt.pct(d.flips.median_ret, 1)), " · 판정 아님"),
+        ui.refNote(null, "복제 계좌는 시작하고 30일이 지난 뒤의 판정 날에 따로 판정합니다."));
     }
     out.push(h("p", {class: "note"}, "둘 다 복제가 시작한 뒤 끝난 거래만 셉니다 (원본이 그때 열어 둔 거래 하나는 들어갈 수 있음). 바꾼 규칙이 나았는지는 거래가 쌓인 뒤에 봅니다 (지금 차이는 판정이 아님)."),
       d.count_only ? h("p", {class: "note"}, ui.pill("딥시크는 개수만", "ref"), " 돈 숫자는 딥시크 묶음 화면에서 봅니다.")

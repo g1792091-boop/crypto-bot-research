@@ -88,7 +88,9 @@ export function waitBars(id, d, group, board, now = Date.now()) {
     if (p.total) bars = [{label: `조합 점수 · 36 계좌 평균 거래 ${fmt.int(need)}건 필요`, share: Math.min(1, p.avg / need), full: !d.waiting && p.avg >= need,
       words: `지금 계좌당 평균 ${fmt.num(p.avg, 1)}건 · 가장 많은 계좌 ${fmt.int(p.max)}건`}];
   }
-  bars = bars.filter(Boolean);
+  // a bar that is not full never reads 100 % (143 / 144 rounds to 99 %, not 100 %; the synergy bar's average can pass
+  // its mark while the server still waits): 100 % only when the view really opened
+  bars = bars.filter(Boolean).map((b) => (b.full ? b : {...b, share: Math.min(b.share, 0.99)}));
   return bars.length && bars.some((b) => !b.full) ? bars : null;
 }
 const FRESH_MS = 5 * 60 * 1000;

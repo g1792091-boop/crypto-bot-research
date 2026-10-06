@@ -280,7 +280,9 @@ export async function mount(el, ctx) {
   function refBox(a, board, init) {
     const g = fmt.groupOf(a);
     if (a.kind === "random") return h("p", {class: "refnote"}, h("b", null, "비교 기준"), " · 이 계좌가 동전 봇입니다. 다른 계좌를 이 계좌들과 견줍니다.");
-    if (g === "extra") return h("p", {class: "refnote"}, h("b", null, "따로 셈"), " · 나중에 시작한 추가 계좌라 동전 봇과 견주지 않습니다.");
+    if (g === "extra") return h("p", {class: "refnote"}, h("b", null, "따로 셈"), a.kind === "copy"
+      ? " · 나중에 시작한 복제 계좌라 순위표에서는 동전 봇과 견주지 않습니다 (위 '원본 vs 복제' 카드만 같은 기간으로 잰 참고 줄을 둡니다)."
+      : " · 나중에 시작한 추가 계좌라 동전 봇과 견주지 않습니다.");
     const s = store.get("summary");
     const vts = s && s.next_checkpoint && s.next_checkpoint.ts;
     if (a.kind === "ds200") return h("div", {class: "stack tight"}, h("div", {class: "row wrap"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref")), ui.refNote(vts));

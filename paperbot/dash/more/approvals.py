@@ -5,8 +5,9 @@ place, and the past decisions. Read-only over agents3.db, inbox.db and paper3.db
 
 Approving and rejecting stay exactly where they were: POST /api/proposals/<id>/decide (dash/app.py Rooms.decide, with
 all its checks: the code gate, the gate judged again with the room's tests now, the owners' earlier reject, a started
-account). This route only reads. Per waiting proposal (``waiting``; an owners' click that the agents tick has not applied
-yet: ``decided``):
+account). This route only reads. Per waiting proposal (``waiting``; an approved one the runner will start only after
+one more click, as the room's '다시 승인': ``again`` true; an owners' click that the agents tick has not applied yet:
+``decided``):
 
 - the proposal row as /api/proposals sends it (effective status, the owners' click, the gate now, the running account,
   the runner's refusal, whether the runner's extra-account feature is on)
@@ -39,6 +40,7 @@ PAST_MAX = 20
 SPEAK = ("analysis", "challenge", "expert", "revision", "verdict")
 VERDICT_KO = {"agree": ("찬성", "for"), "disagree": ("반대", "against"), "needs_test": ("시험 더 필요", "against")}
 DECIDER_KO = {"owner": "두 분", "approver": "승인관(AI)", "code": "코드"}
+RE_APPROVE = ("stale_ok", "owner_click_missing")   # agents/extra_accounts.RE_APPROVE: the runner needs one more click
 TEXT_MAX = 180
 
 
@@ -216,11 +218,24 @@ def view(rooms, db: str, now_ms: Optional[int] = None) -> dict:
             card["title_ko"] = _cut(prop.get("description_ko") or "", 200) or None
             card["decider_ko"] = decider(p)
             open_now = p.get("status") == "awaiting_owner"
-            if open_now and a is not None:
+            # approved, but the runner refused to start it until the owners click once more (stale_ok: given before
+            # its extra-account feature started; owner_click_missing): the room's '다시 승인', here too
+            ref = p.get("runtime_refusal") if isinstance(p.get("runtime_refusal"), dict) else {}
+            again = (p.get("status") == "approved" and not p.get("account_running") and eff == "approved"
+                     and not (od and not od.get("applied")) and ref.get("code") in RE_APPROVE)
+            # the owners clicked approve again after the runner's refusal: it re-checks at its next pass (no button)
+            sent = bool(again and od.get("decision") == "approve" and isinstance(ref.get("since"), (int, float))
+                        and int(od.get("ts") or 0) > int(ref["since"]))
+            card["again"], card["again_sent"] = again and not sent, sent
+            if (open_now or again) and a is not None:
                 trial = rooms.R.get_trial(a, int(p["trial_id"])) if p.get("trial_id") else None
                 card["periods"] = period_rows(card["kind"], trial)
                 card["voices"] = voices(a, _round_of(a, int(p["id"]), trial), rooms.roles, ch.get("approver"))
-            if open_now and eff == "awaiting_owner":
+            if sent:
+                decided.append(card)
+            elif again:
+                waiting.append(card)
+            elif open_now and eff == "awaiting_owner":
                 waiting.append(card)
             elif open_now:                      # the owners clicked; the agents tick applies it within 15 minutes
                 decided.append(card)

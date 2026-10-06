@@ -310,14 +310,15 @@ export function dsCounts(ctx, d) {
 function strategyBody(ctx, d) {
   const c = d.combined || {};
   const ds = d.group === "ds200";
-  const mode = ds ? "own" : "vs";
-  const tiles = h("div", {class: ["gk-tfrow", ds ? "own" : ""]}, (d.accounts || []).map((a, i) => h("div", {class: "gk-tf"},
+  // review 10/06 (as the map): the colour is each account's own return (a −58 % account is never gold); the coin-flip
+  // comparison is the small neutral ▲ / ▼ in the corner (참고), DeepSeek without it
+  const tiles = h("div", {class: "gk-tfrow own"}, (d.accounts || []).map((a, i) => h("div", {class: "gk-tf"},
     h("span", {class: "k"}, fmt.tfKo(a.tf)),
     heatCell({id: a.id, s: a.strategy, tf: a.tf, g: a.group, ret: a.ret, vs: a.vs, n: a.trades, bust: a.bust, open: a.open},
-      {mode, href: ctx.href("account", a.id), i}))));
+      {mode: "own", vsMark: !ds, href: ctx.href("account", a.id), i}))));
   const vsLine = ds
     ? h("p", {class: "gk-vsline"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref"), " 칸 색 = 자기 수익률")
-    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (칸 색)`);
+    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 칸 색 = 자기 수익률 · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (칸 구석 ▲ / ▼)`);
   const stats = [
     ui.stat("최대 낙폭", c.mdd_max == null ? "—" : fmt.pct(-c.mdd_max, 1), "가장 깊은 봉 계좌"),
     ui.stat("승률", c.win_rate == null ? "—" : fmt.pct(c.win_rate, 0, false), c.trades ? `${fmt.int(c.wins)}승 ${fmt.int(c.trades - c.wins)}패` : "거래 없음"),

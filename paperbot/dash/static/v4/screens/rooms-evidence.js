@@ -152,5 +152,5 @@ export function evidenceList(groups) {
   h("p", {class: "rm-evn"}, "근거 = 직원이 본 자료의 이름 (코드가 만든 자료에 실제로 있는 칸만 남깁니다)"));
 }
 
-/** How many sources a message cites (for the "근거 n곳" label). */
-export const evidenceCount = (groups) => groups.reduce((n, g) => n + g.items.length, 0);
+/** How many different sources a message cites (for the "근거 n곳" label; a path two claims share counts once). */
+export const evidenceCount = (groups) => new Set(groups.flatMap((g) => g.items.map((it) => it.path || it.name))).size;

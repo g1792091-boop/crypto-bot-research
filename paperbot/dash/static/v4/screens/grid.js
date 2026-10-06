@@ -41,6 +41,12 @@ export async function mount(el, ctx) {
   const st = {tab: okTab(q.g) || okTab(local.get("grid-tab", "core")) || "core", sort: local.get("grid-sort", "name"),
     days: String(local.get("grid-days", "30")), color: local.get("grid-color", "own"), dsColor: local.get("grid-dscolor", "own"), y5: null, d: null, gen: 0, painted: false, prev: new Map(), reel: null};
   if (!COLORS.some((x) => x.id === st.color)) st.color = "own";
+  // once per device (review 10/06): a "vs" kept from before the change (the old default, often re-picked only to go
+  // back to it) is reset to the new default 자기 수익률; a "vs" chosen after this is honoured
+  if (local.get("grid-color-v", 0) !== 2) {
+    if (st.color === "vs") { st.color = "own"; local.set("grid-color", "own"); }
+    local.set("grid-color-v", 2);
+  }
   if (!DS_COLORS.some((x) => x.id === st.dsColor)) st.dsColor = "own";
   if (!SORTS.some((x) => x.id === st.sort)) st.sort = "name";
   if (!PERIODS.some((x) => x.id === st.days)) st.days = "30";

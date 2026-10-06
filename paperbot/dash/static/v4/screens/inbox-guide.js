@@ -1,5 +1,5 @@
-// 홈 · 결재함 안내 카드 (review addition 8: "10/26부터 첫 결정 때까지 홈에 안내 카드 한 장"). From the day before the
-// observation period ends (no copy proposals before it) until the owners' first approve / reject click, or until they
+// 홈 · 결재함 안내 카드 (review addition 8: "10/26부터 첫 결정 때까지 홈에 안내 카드 한 장"). From 00:00 KST of the day
+// before the observation period ends (no copy proposals before it) until the owners' first approve / reject click, or until they
 // close it on this device: what will come, the three things to judge, what happens when they do nothing, and a button
 // to the 결재함. Dates come from /api/v4/approvals `period` (the run's start + 21 days, the runner's own floor when later;
 // the owners' OK period of at least 60 days); nothing is typed in. A failed load shows nothing (no claim either way).
@@ -13,12 +13,17 @@ export function guideShows(p, now, dismissed) {
   if (dismissed || !p || p.start == null || p.observe_until == null) return false;
   if (p.first_owner_decision_ts) return false;                          // the owners decided once: they know the way
   if (p.owner_ok_until && now >= p.owner_ok_until) return false;        // past the owners' OK period
-  return now >= p.observe_until - DAY;                                   // from the day before proposals can come
+  // from 00:00 KST of the day before the first day proposals can come (10/27 11:46 -> from 10/26 00:00, not 10/26 11:46)
+  return now >= fmt.kstMidnight(p.observe_until) - DAY;
 }
 
 export function inboxGuide(ctx) {
   const el = h("section", {class: "card ibx-guide", hidden: true, "aria-label": "결재함 안내"});
   if (local.get(GUIDE_KEY, 0)) return el;
+  // weeks before the card can show (the shared summary already says when the observation period ends; its date is
+  // never later than the 결재함's), the home page does not ask the 결재함 at all
+  const s = ctx.store.get("summary");
+  if (s && s.observe_until && Math.max(s.now || 0, Date.now()) < fmt.kstMidnight(s.observe_until) - DAY) return el;
   ctx.api("/api/v4/approvals").then((d) => {
     const p = d && d.period;
     if (!ctx.alive() || !guideShows(p, (d && d.now) || Date.now(), local.get(GUIDE_KEY, 0))) return;
