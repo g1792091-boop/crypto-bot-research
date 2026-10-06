@@ -336,6 +336,10 @@ def test_every_chart_has_the_fullscreen_button_and_charts_screen_uses_one_relay(
     fc = _read("core", "fullchart.js")
     assert 'e.key !== "Escape"' in fc and '"fullscreenchange"' in fc and '"hashchange"' in fc and "requestFullscreen" in fc
     assert "가로로 돌리면" in fc and "setTimeout" not in fc and "setInterval" not in fc     # nothing on a timer
+    # a card drawn again while big (the 계좌 page after a fill) hands over to its new frame or frees the page; the late
+    # fullscreenchange of the old frame does not put the new one back (only a frame that really was full screen)
+    assert "new MutationObserver(" in fc and "x.o.label === old.o.label" in fc and "enter(next, true)" in fc
+    assert "if (mo) { mo.disconnect(); mo = null; }" in fc and "cur.real && document.fullscreenElement !== cur.frame" in fc
     ch = _read("screens", "charts.js")
     assert ch.count("tickStream(ctx)") == 1 and "new EventSource" not in ch           # ONE relay connection for the screen
     assert "lite: true" in ch and "key: GRID_DECK.key" in ch and "ui.assume(\"open\"" in ch

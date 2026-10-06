@@ -20,6 +20,22 @@ const icon = (on) => s("svg", {viewBox: "0 0 16 16", width: "14", height: "14", 
   on ? ICON_OFF() : ICON_ON());
 
 const live = (it) => !!it && !!it.frame && document.contains(it.frame);
+
+// A screen may draw its chart card again while it is big (the 계좌 page reloads after a fill of that account): the
+// old frame leaves the page without leave(), which would keep the page's scroll locked. While a chart is big, a
+// MutationObserver notices that; a new frame of the same chart (same label) takes over, else the page is released.
+let mo = null;
+function watchDetach() {
+  if (mo || typeof MutationObserver !== "function") return;
+  mo = new MutationObserver(() => {
+    if (!cur || live(cur)) return;
+    const old = cur;
+    const next = [...items].find((x) => x !== old && live(x) && x.o.label === old.o.label);
+    leave();
+    if (next) enter(next, true);                // the CSS layer only (the browser's full screen needs a tap)
+  });
+  mo.observe(document.body, {childList: true, subtree: true});
+}
 const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 40 && r.height > 40 && r.bottom > 0 && r.top < innerHeight; };
 /** The chart "f" acts on: the one under the mouse (or holding the focus), else the biggest one on screen. */
 function pick() {
@@ -42,7 +58,7 @@ function paintBtn(it, on) {
   it.btn.setAttribute("aria-label", lab); it.btn.title = lab;
 }
 
-function enter(it) {
+function enter(it, cssOnly = false) {
   if (!live(it)) return false;
   if (cur && cur !== it) leave();
   cur = it;
@@ -58,8 +74,13 @@ function enter(it) {
   document.addEventListener("keydown", onKey, true);
   document.addEventListener("fullscreenchange", onFs);
   window.addEventListener("hashchange", onRoute);
+  watchDetach();
   // the browser's real full screen on top (not on an iPhone, where only video may; the CSS layer is enough there)
-  try { if (f.requestFullscreen && !document.fullscreenElement) f.requestFullscreen({navigationUI: "hide"}).catch(() => {}); } catch (e) { /* CSS only */ }
+  // (`real`: this frame really is the browser's full screen; only then does leaving it put the chart back)
+  it.real = false;
+  try {
+    if (!cssOnly && f.requestFullscreen && !document.fullscreenElement) f.requestFullscreen({navigationUI: "hide"}).then(() => { if (cur === it) it.real = true; }).catch(() => {});
+  } catch (e) { /* CSS only */ }
   if (it.o.onChange) { try { it.o.onChange(true); } catch (e) { /* the chart still fills the screen */ } }
   return true;
 }
@@ -69,6 +90,7 @@ export function leave() {
   const it = cur;
   if (!it) return false;
   cur = null;
+  if (mo) { mo.disconnect(); mo = null; }
   document.removeEventListener("keydown", onKey, true);
   document.removeEventListener("fullscreenchange", onFs);
   window.removeEventListener("hashchange", onRoute);
@@ -90,7 +112,9 @@ function onKey(e) {
   e.preventDefault();
   leave();
 }
-function onFs() { if (cur && !document.fullscreenElement) leave(); }        // the browser's own Esc / gesture left full screen
+// the browser's own Esc / gesture left full screen (not the late event of an old frame that a redraw replaced: the new
+// frame never got the browser's full screen, it is the CSS layer only)
+function onFs() { if (cur && cur.real && document.fullscreenElement !== cur.frame) leave(); }
 function onRoute() { leave(); }
 
 /** The key "f" (core/navkeys.js): the big chart back to normal, else the chart under the mouse (or the biggest) big.
