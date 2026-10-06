@@ -93,6 +93,7 @@ MIN_VP_LOSSES = 4                  # volume_profile: losses with a 매물대 rig
 VP_KINDS = {51: "매물 최다 가격", 52: "매물대 위 끝", 53: "매물대 아래 끝"}   # entry_marks.KIND_KO (sr.py level kinds)
 VP_NEAR_ATR = 1.0                  # 'right ahead': the nearest level in the trade's direction within this many ATR
 MIN_DS_TRADES = 30
+WEEK_CARDS_MAX = 20000              # the week's cards (_week): far above a week of the 36's closed trades
 REGIME_KO = {"trend_up": "상승 추세", "trend_down": "하락 추세", "box": "박스권", "chop": "방향 없는 횡보"}
 TFS = ("15m", "30m", "1h", "4h")   # config.V3_TRADE_TFS (no 5m: v4 has no 5m strategy account)
 # labtests.SKIP_TAGS and TEMPLATES (frozen; read from labtests when it imports, these only when it cannot)
@@ -355,8 +356,8 @@ def q_worst_vs_flip(paper: sqlite3.Connection, agents: Optional[sqlite3.Connecti
     return out
 
 
-def q_loss_tag(paper: sqlite3.Connection, now_ms: int) -> Optional[Question]:
-    cs = _strategy_cards(paper, now_ms - 7 * DAY_MS, now_ms + 1, limit=2000)
+def q_loss_tag(paper: sqlite3.Connection, now_ms: int, cs: Optional[list] = None) -> Optional[Question]:
+    cs = _week(paper, now_ms) if cs is None else cs
     rows = [r for r in _tag_rows(cs) if r["losses"] + r["wins"] >= MIN_TAGGED
             and r["loss_share"] is not None and r["win_share"] is not None and r["loss_share"] > r["win_share"]]
     if not rows:
@@ -400,8 +401,9 @@ def _session_utc(ms: int) -> str:
 
 
 def _week(paper: sqlite3.Connection, now_ms: int) -> list[dict]:
-    """The 36's closed trades of the last 7 days as cards (the cell, pair and 매물대 kinds share them)."""
-    return _strategy_cards(paper, now_ms - 7 * DAY_MS, now_ms + 1, limit=4000)
+    """The 36's closed trades of the last 7 days as cards (the tag, cell, pair and 매물대 kinds share them). The cap is
+    far above a week of the 36 (a cut list would make '최근 7일' a smaller window than it says): about 1 s at the cap."""
+    return _strategy_cards(paper, now_ms - 7 * DAY_MS, now_ms + 1, limit=WEEK_CARDS_MAX)
 
 
 def _cells(cs: list[dict], key_fn) -> dict:
@@ -1105,7 +1107,7 @@ def candidates(paper_path: Optional[str], daily_path: Optional[str], agents_path
                 _note(f"week cards failed: {type(exc).__name__}: {exc}")
             for fn in (lambda: q_event(paper, board, now_ms, seen, start), lambda: q_big_losses(paper, now_ms),
                        lambda: q_loss_traits(paper, now_ms), lambda: q_best_luck(paper, agents, board, now_ms),
-                       lambda: q_tf_split(paper, agents, board, now_ms), lambda: q_loss_tag(paper, now_ms),
+                       lambda: q_tf_split(paper, agents, board, now_ms), lambda: q_loss_tag(paper, now_ms, week),
                        lambda: q_session_cell(paper, now_ms, week), lambda: q_coin_cell(paper, now_ms, week),
                        lambda: q_regime_cell(paper, now_ms, week), lambda: q_pairs(paper, now_ms, week),
                        lambda: q_volume_profile(paper, agents, now_ms, week), lambda: q_ds_counts(board, now_ms),

@@ -19,8 +19,8 @@ Daily budget (the statistical price of every counted test, not only CPU), per KS
 'tested' events: debate <= ``lab_intake_debate_per_day`` (hard max 2), meeting <= ``dispute_tests_per_day`` (only
 while ``sides`` is on, and one counted test per strategy room per ``dispute_room_gap_days``), owner <=
 ``lab_intake_owner_per_day``. A source whose budget is 0 is off: its rows wait (and expire). With every source off
-``tick`` runs nothing and creates no table; it only sets budgets saved by an earlier pass to 0 (the dashboard reads
-them), so turning the sources off never leaves old quotas on show.
+``tick`` runs nothing and creates no table; it only sets budgets saved by an earlier pass to 0 and clears a saved
+'why the queue waits' line (the dashboard reads both), so turning the sources off never leaves old quotas on show.
 
 ``run_due`` NEVER proposes anything: a pass waits in the ledger like any lab pass, and rooms.newlab_tick proposes it
 after the observation period, judged again with n at that time; copies only come from a strategy room's meeting.
@@ -840,6 +840,9 @@ def tick(ctx: Any, debate_db: Optional[str], now: int) -> dict:
             saved = R.get_cursor(ctx.agents_conn, LIMITS_CURSOR)
             if saved is not None and saved != lim:
                 R.set_cursor(ctx.agents_conn, LIMITS_CURSOR, lim)
+            # nor an old 'why the queue waits' line (no engine / no data / exhausted): nothing waits on the lab now
+            if R.get_cursor(ctx.agents_conn, BLOCKED_CURSOR) is not None:
+                R.set_cursor(ctx.agents_conn, BLOCKED_CURSOR, None)
         except sqlite3.Error:
             pass
         return {"enabled": False}

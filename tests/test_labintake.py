@@ -467,8 +467,11 @@ def test_turning_every_source_off_clears_the_saved_quotas(tmp_path, noise):
     try:
         LI.tick(make_ctx(c, noise, lab_intake_debate_per_day=2, lab_intake_owner_per_day=3), None, NOW)
         assert LI.today(c, NOW)["sources"]["debate"]["limit"] == 2
+        R.set_cursor(c, LI.BLOCKED_CURSOR, {"ts": NOW, "why": "no_data"})          # an earlier pass found no data
+        assert LI.today(c, NOW)["blocked_ko"]
         assert LI.tick(make_ctx(c, noise), None, NOW + MIN) == {"enabled": False}
         assert R.get_cursor(c, LI.LIMITS_CURSOR) == {"debate": 0, "meeting": 0, "owner": 0}
+        assert LI.today(c, NOW + MIN)["blocked"] is None and LI.today(c, NOW + MIN)["blocked_ko"] == ""   # no old line
         assert {s: v["limit"] for s, v in LI.today(c, NOW + MIN)["sources"].items()} == {"debate": 0, "meeting": 0,
                                                                                         "owner": 0}
         assert LI.overview(c, NOW + MIN)["today"]["owner"] == {"used": 0, "limit": 0}

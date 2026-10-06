@@ -109,3 +109,20 @@ def test_one_broken_question_kind_never_stops_the_bank(world, monkeypatch):
     assert "big_losses" not in kinds and "worst_vs_flip" not in kinds and {"retro", "coverage"} <= kinds
     monkeypatch.setattr(DQ, "q_retro", boom)
     assert DQ.candidates(world["paper"], world["daily"], world["agents"], TQ.NOW, covered_since=TQ.NOW)
+
+
+def test_the_week_is_the_whole_week_of_the_36(tmp_path):
+    """'최근 7일' means it: a busy week of the 36 (over the old 4,000-card cut) is read whole, and the loss-tag kind
+    reads the same week as the cell, pair and 매물대 kinds."""
+    from debate_world import make_world
+    from paperbot.agents import debate_packet as P
+    w = make_world(tmp_path, TQ.NOW, days=8, per_day=1500, v4=True)
+    c = P.open_ro(w["paper"])
+    try:
+        n = c.execute("SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id WHERE "
+                      "a.kind = 'strategy' AND t.exit_time >= ? AND t.exit_time < ?",
+                      (TQ.NOW - 7 * TF.DAY, TQ.NOW + 1)).fetchone()[0]
+        assert n > 4000 and len(DQ._week(c, TQ.NOW)) == n
+        assert DQ.q_loss_tag(c, TQ.NOW, []) is None                   # the shared week, never a second, shorter read
+    finally:
+        c.close()
