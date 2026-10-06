@@ -1,0 +1,76 @@
+/* 분석 › 장세 스위치 (screens/analysis-regime.js). Tokens only; font sizes only var(--t-*). Works at 390 px. */
+.rg-big { margin: 0; font: 800 var(--t-lg)/1.45 var(--f-body); color: var(--ink); overflow-wrap: anywhere; }
+.rg-say { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.65; overflow-wrap: anywhere; }
+.rg-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.rg-stats .stat .s { color: var(--muted); font-size: var(--t-xs); line-height: 1.45; }
+.rg-meds { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.rg-med { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); border-left: 3px solid var(--line-2); min-width: 0; }
+.rg-med b { font-size: var(--t-sm); color: var(--ink-2); }
+.rg-med .num { font-size: var(--t-lg); font-weight: 800; }
+.rg-med small { font-size: var(--t-xs); }
+
+.rg-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rg-chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; white-space: nowrap; }
+.rg-chip.trend, .rg-med.trend { border-color: var(--accent-line); }
+.rg-chip.shock, .rg-med.shock { border-color: var(--warn-line); }
+.rg-chip.range, .rg-med.range { border-color: var(--cmp-lo); }
+.rg-chip.normal, .rg-med.normal { border-color: var(--line-2); }
+.rg-med.trend { border-left-color: var(--accent); }
+.rg-med.shock { border-left-color: var(--warn); }
+.rg-med.range { border-left-color: var(--cmp-lo); }
+
+.rg-defs { display: grid; gap: 6px; }
+.rg-def { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); }
+.rg-def:first-child { border-top: 0; }
+.rg-def .rg-chip { justify-self: start; }
+.rg-def-t { color: var(--ink-2); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.rg-def small { font-size: var(--t-xs); white-space: nowrap; }
+
+.rg-filters { display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.rg-filters .seg { max-width: 100%; }
+.rg-item { border-top: 1px solid var(--line); min-width: 0; }
+.rg-row { appearance: none; width: 100%; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 6px 10px;
+  align-items: center; padding: 10px 6px; margin: 0; border: 0; border-radius: 6px; background: transparent; color: inherit;
+  font: inherit; font-size: var(--t-sm); text-align: left; cursor: pointer; min-height: 44px; }
+.rg-row:hover { background: var(--surface-2); }
+.rg-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rg-row.win { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.rg-row .an { min-width: 0; }
+.rg-mid { min-width: 0; }
+.rg-end { display: grid; justify-items: end; gap: 2px; }
+.rg-end small { font-size: var(--t-xs); white-space: nowrap; }
+.rg-row[aria-expanded="true"] { background: var(--surface-2); }
+.rg-detail { display: grid; gap: 8px; padding: 6px 6px 14px; min-width: 0; }
+.rg-in { color: var(--accent); font-size: var(--t-xs); font-weight: 700; }
+.rg-two { display: inline-grid; gap: 1px; justify-items: end; }
+.rg-two small { font-size: var(--t-xs); }
+.rg-verdict { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); border: 1px dashed var(--line-2); color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.rg-verdict.on { border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--ink); }
+.rg-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.rg-norule { font-size: var(--t-xs); }
+
+@media (max-width: 560px) {
+  .rg-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .rg-mid { grid-column: 1 / -1; grid-row: 2; }
+  .rg-def { grid-template-columns: 64px minmax(0, 1fr); }
+  .rg-def small { grid-column: 2; }
+}
+.rg-two.l { justify-items: start; }
+.rg-two.l .rg-in { font-size: var(--t-2xs); }
+.rg-wf { display: grid; gap: 8px; }
+.rg-wfp { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }
+.rg-wfk { font-size: var(--t-sm); color: var(--ink); }
+.rg-wfc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rg-wfa { display: grid; gap: 2px; align-content: start; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); min-width: 0; }
+.rg-wfa.hi { border-color: var(--accent-line); }
+.rg-wfl { color: var(--muted); font-size: var(--t-xs); }
+.rg-wfa b { font-size: var(--t-md); }
+.rg-wfa small { font-size: var(--t-xs); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .rg-wfc { grid-template-columns: minmax(0, 1fr); } }
+/* the paper trades by regime: cells wrap at " · " (never inside a number), so the coin-flip column stays on a phone */
+.rg-nw { white-space: nowrap; }
+.rg-live { min-width: 0; max-width: 100%; }
+.rg-live .tbl td { white-space: normal; }
+.rg-live .rg-two > * { text-align: right; }
+@media (max-width: 560px) { .rg-live .tbl th, .rg-live .tbl td { padding: 8px 4px; } .rg-live .tbl th { white-space: normal; } }
