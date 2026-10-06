@@ -2724,12 +2724,12 @@ def _settle_dispute(rnd: _Round, t2: Optional[dict], t4: Optional[dict], attacke
         return {"status": "unreadable"}
     who = role_ko(attacker)
     if t2.get("verdict") == "agree":
-        rnd.system(f"🏳️ 공격 포기: {who}이(가) 편드는 직원에게 동의해 이번 회의에는 다툼이 없습니다.",
+        rnd.system(f"🏳️ 공격 포기({who}): 공격하는 직원이 편드는 직원에게 동의해 이번 회의에는 다툼이 없습니다.",
                    {"sides": True, "gave_up": attacker})
         return {"status": "gave_up"}
     settle = t2.get("settle")
     if not isinstance(settle, dict):
-        rnd.system(f"시험 없는 반대(말로만 반대)로 기록: {who}이(가) 반대했지만 가릴 시험을 정하지 않아 다툼을 열지 "
+        rnd.system(f"시험 없는 반대(말로만 반대)로 기록: 공격하는 직원({who})이 반대했지만 가릴 시험을 정하지 않아 다툼을 열지 "
                    "않았습니다. 직원 성적표에 '말로만'으로 셉니다.", {"sides": True, "talk_only": attacker})
         return {"status": "talk_only"}
     conceded = bool(t4 and t4.get("concede") is True)
@@ -5462,7 +5462,7 @@ class DryRunRunner:
         if turn in ("specialist", "revision"):
             ans: dict = {"headline": head, "findings": [{"claim": "회의 계기 확인", "kind": "fact", "evidence": ev}],
                          "proposal": {"action": "note", "text": "(dry-run) 메모"}}
-        elif turn == "challenge":
+        elif turn in ("challenge", "attack"):          # attack: sides on (design #102 C), the attack is given up
             ans = {"headline": head, "objections": [], "verdict": "agree"}
         elif turn == "expert":
             ans = {"headline": head, "findings": [], "verdict": "agree", "suggestion": None}
