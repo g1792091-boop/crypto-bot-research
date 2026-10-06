@@ -227,17 +227,19 @@ def curves(trades: list[dict], clones: list[dict], series: list[dict], start_ms:
     by_trade: dict = {}
     for cl in clones:
         by_trade.setdefault(cl["trade_id"], []).append(cl)
+    for v in by_trade.values():
+        v.sort(key=lambda x: x["k"])
     kmax = min([len(v) for v in by_trade.values()] or [0])
     # per trade -------------------------------------------------------------------------------------------------
     comp = [t for t in trades if t["status"] == "closed" and t["trade_id"] in by_trade and kmax > 0
             and all(x["status"] == "closed" for x in by_trade[t["trade_id"]])]
     comp.sort(key=lambda t: (int(t["exit_ms"]), t["trade_id"]))
-    awaiting = sum(1 for t in trades if t["status"] == "closed" and t not in comp)
+    comp_ids = {t["trade_id"] for t in comp}
+    awaiting = sum(1 for t in trades if t["status"] == "closed" and t["trade_id"] not in comp_ids)
     pts = []
     if comp and kmax:
         member_net = np.array([t["net"] for t in comp], float) * 100.0
-        flip = np.array([[sorted(by_trade[t["trade_id"]], key=lambda x: x["k"])[i]["net"] for i in range(kmax)] for t in comp],
-                        float) * 100.0
+        flip = np.array([[by_trade[t["trade_id"]][i]["net"] for i in range(kmax)] for t in comp], float) * 100.0
         cum_m = np.cumsum(member_net)
         cum_f = np.cumsum(flip, axis=0)                      # (n, kmax)
         p10, p50, p90 = _quantiles(cum_f.T)
@@ -271,7 +273,7 @@ def curves(trades: list[dict], clones: list[dict], series: list[dict], start_ms:
         for k in range(kmax):
             wt = []
             for t in real:
-                cl = sorted(by_trade.get(t["trade_id"], []), key=lambda x: x["k"])
+                cl = by_trade.get(t["trade_id"], [])
                 if len(cl) <= k:
                     continue
                 x = cl[k]
