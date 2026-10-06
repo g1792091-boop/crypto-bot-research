@@ -15,6 +15,7 @@ import {profileCard} from "./grid-kit.js";
 import {termChip, termify} from "./faq-terms.js";
 import {whyCard} from "./account-why.js";
 import {copyCard} from "./account-copy.js";
+import {tradeMeetSlot} from "./meet-links.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -186,7 +187,8 @@ export async function mount(el, ctx) {
     // 왜 이 수익률인가 (account-why.js): fees, funding, exit reasons, win rate vs break-even, the biggest losses
     const flipMed = board ? derive.groupStats(board).flipMedByTf[a.timeframe] : null;
     const why = whyCard(a, d, {initial: init, wallet: row && row.wallet != null ? row.wallet : stt.wallet ?? null, flipMed,
-      total: row && row.trades != null ? row.trades : null, href: ctx.href, countOnly: a.kind === "ds200"});
+      total: row && row.trades != null ? row.trades : null, href: ctx.href, countOnly: a.kind === "ds200",
+      chip: (t) => tradeMeetSlot(ctx, t)});
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
@@ -216,7 +218,9 @@ export async function mount(el, ctx) {
     const link = h("a", {class: "account-replay", href: ctx.href("replay", String(t.id)), title: "이 거래를 봉 차트에서 다시 보기",
       "aria-label": `${fmt.coin(t.symbol)} 거래 다시보기`}, h("span", {class: "pl", "aria-hidden": "true"}, "▶"), "다시보기");
     const meta = row.querySelector(".meta");
-    if (meta) meta.append(link); else row.append(link);
+    // a losing trade: the loss meeting that looked at it (meet-links.js; nothing until a meeting stored its id)
+    const meet = tradeMeetSlot(ctx, t);
+    if (meta) meta.append(link, meet); else row.append(link, meet);
     return row;
   }
 

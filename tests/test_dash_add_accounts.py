@@ -215,3 +215,90 @@ def test_copy_card_rows_and_wiring():
     src = _read("account-copy.js")
     assert "/api/v4/copycmp/" in src and "ui.errorBox(e, load)" in src and "ui.smallSample(" in src
     assert 'a.kind === "copy" ? copyCard(ctx, acc.account_id)' in _read("account.js")
+
+
+# ---------------------------------------------------------------- 손실 거래 <-> 회의
+def _agents(path, rounds):
+    from paperbot.agents import rooms_db as R
+    c = R.open_agents(path)
+    R.ensure_rooms(c, ts=T0 - 100 * H)
+    for room, trig, data, started in rounds:
+        c.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, ended_ts, status, decision) VALUES (?,?,?,?,?,?,?)",
+                  (room, trig, json.dumps(data), started, started + 600_000, "done", json.dumps({"summary_ko": "🧾 결정: 가설 기록"})))
+    c.commit()
+    c.close()
+    return path
+
+
+def _ids_of(db, aid):
+    import sqlite3
+    c = sqlite3.connect(db)
+    out = [(r[0], r[1]) for r in c.execute("SELECT id, exit_time FROM trades WHERE account_id = ? ORDER BY id", (aid,))]
+    c.close()
+    return out
+
+
+def test_loss_meetings_link_their_trades_both_ways(tmp_path):
+    import sqlite3
+    from paperbot.dash.more import losslinks as LL
+    db = _paper(str(tmp_path / "paper3.db"))
+    copy = _ids_of(db, "S@15m~c1")                    # two losing copy trades, exits T0+2h and T0+4h
+    ds = _ids_of(db, "D@15m")[0]
+    ag = _agents(str(tmp_path / "agents3.db"), [
+        ("strat:S", "loss_cluster", {"trade_ids": [copy[0][0], copy[1][0]], "oldest_exit": copy[0][1], "newest_exit": copy[1][1]},
+         T0 + 5 * H),
+        # an older meeting (before a restore) that stored the same ids for other trades: its window does not match
+        ("strat:S", "loss_cluster", {"trade_ids": [copy[0][0]], "oldest_exit": T0 - 50 * H, "newest_exit": T0 - 49 * H}, T0 - 48 * H),
+        ("team:ds_structure", "group_loss", {"trade_ids": [ds[0]], "oldest_exit": ds[1], "newest_exit": ds[1]}, T0 + 3 * H),
+        ("strat:S", "morning", {"trade_ids": [copy[0][0]]}, T0 + 6 * H),                  # not a loss meeting: ignored
+    ])
+    a = sqlite3.connect(ag)
+    a.row_factory = sqlite3.Row
+    rounds = LL.load_rounds(a)
+    a.close()
+    assert sorted(r["trigger"] for r in rounds.values()) == ["group_loss", "loss_cluster", "loss_cluster"]
+    idx = LL.index(rounds)
+    p = sqlite3.connect(db)
+    p.row_factory = sqlite3.Row
+    titles = {"strat:S": "S 방"}
+    got = LL.for_trades(rounds, idx, p, [copy[0][0], copy[1][0], 999], titles, {"loss_cluster": "손실 묶음 복기"})
+    first = got[str(copy[0][0])]
+    assert len(first) == 1 and first[0]["started_ts"] == T0 + 5 * H       # the old meeting's window does not match
+    assert first[0]["trigger_ko"] == "손실 묶음 복기" and first[0]["room_title"] == "S 방"
+    assert got["999"] == []
+    rr = LL.for_rounds(rounds, p, sorted(rounds), titles, {})
+    new_id = next(k for k, v in rounds.items() if v["started_ts"] == T0 + 5 * H)
+    old_id = next(k for k, v in rounds.items() if v["started_ts"] == T0 - 48 * H)
+    ds_id = next(k for k, v in rounds.items() if v["trigger"] == "group_loss")
+    assert [t["id"] for t in rr[str(new_id)]["trades"]] == [copy[0][0], copy[1][0]] and rr[str(new_id)]["stored"] == 2
+    assert rr[str(old_id)]["trades"] == [] and rr[str(old_id)]["stored"] == 1          # stored, but not these trades
+    dst = rr[str(ds_id)]["trades"][0]
+    assert dst["count_only"] is True and "pnl" not in dst and "roe" not in dst          # DeepSeek: counted only
+    assert rr[str(new_id)]["trades"][0]["pnl"] == -400.0
+    p.close()
+    assert LL._ids("3,a,3,-1,4", 10) == [3, 4]
+
+
+def test_loss_links_route_and_page_wiring(tmp_path):
+    from fastapi.testclient import TestClient
+    from paperbot.dash.app import create_app
+    db = _paper(str(tmp_path / "paper3.db"))
+    copy = _ids_of(db, "S@15m~c1")
+    ag = _agents(str(tmp_path / "agents3.db"), [
+        ("strat:S", "loss_cluster", {"trade_ids": [copy[0][0]], "oldest_exit": copy[0][1], "newest_exit": copy[0][1]}, T0 + 5 * H)])
+    before = open(db, "rb").read(), open(ag, "rb").read()
+    c = TestClient(create_app(db, None, b"s" * 32, agents_db=ag, inbox_db=str(tmp_path / "inbox.db")))
+    d = c.get(f"/api/v4/losslinks?trades={copy[0][0]},{copy[1][0]}&rounds=1").json()
+    assert d["ready"] is True and len(d["trades"][str(copy[0][0])]) == 1 and d["trades"][str(copy[1][0])] == []
+    assert d["rounds"]["1"]["stored"] == 1 and d["rounds"]["1"]["trades"][0]["id"] == copy[0][0]
+    assert c.get("/api/v4/losslinks").json() == {"ready": True}
+    assert (open(db, "rb").read(), open(ag, "rb").read()) == before          # read-only
+    ml = _read("meet-links.js")
+    assert "/api/v4/losslinks?" in ml and "never \"회의 없음\"" in ml and '"개수만"' in ml
+    assert "tradeMeetSlot(ctx, t)" in _read("account.js") and "tradeMeetSlot(ctx, t)" in _read("replay.js")
+    assert "tradeMeetSlot(ctx, t, {nested: true})" in _read("home-live.js")
+    assert "LOSS_TRIGGERS.includes(m.trigger) ? roundTradesSlot(ctx, m.round_id)" in _read("digest-board.js")
+    assert "LOSS_TRIGGERS.includes(m.meeting) ? roundTradesSlot(ctx, m.round_id)" in _read("rooms-chat.js")
+    out = _node("const M = await import('{base}/meet-links.js');",
+                "console.log(JSON.stringify([M.nameOf('S5_DONCHIAN_MFI@15m~c1'), M.nameOf('S5_DONCHIAN_MFI@15m')]));")
+    assert out[0].endswith("복제 c1") and "~" not in out[0] and "15분" in out[1]

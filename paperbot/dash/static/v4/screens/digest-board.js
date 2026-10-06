@@ -11,6 +11,7 @@ import {h, put, ui, fmt, motion, serverNow, store} from "../core/pb.js";
 import {statusPill, stripLead, triggerKo, whyOf, ACTION_KO, roomAvatar, roleName} from "./rooms-kit.js";
 import {pixAvatar, gradesByRole, hypStatus, wilsonLow, dayLabel} from "./agents-ui.js";
 import {meetSchedule} from "./home-live.js";
+import {roundTradesSlot, LOSS_TRIGGERS} from "./meet-links.js";
 
 const METRIC_KO = {mean_roe: "거래당 평균 ROE", win_rate: "승률", lock_share: "익절 잠금 비율", loss_tag_share: "손실 중 그 특징 비율"};
 const pctish = (m, v) => (m === "mean_roe" ? fmt.pct(v, 1) : fmt.pct(v, 0, false));
@@ -68,6 +69,8 @@ export function makeBoard(ctx) {
         h("dt", null, "왜"), h("dd", null, why || triggerKo(m)),
         h("dt", null, "다음"), h("dd", null, act ? h("b", {class: "db2-act"}, act) : h("span", {class: "muted"}, "기록 없음"),
           m.open_disagreement ? h("span", {class: "db2-dis"}, ` · 갈린 의견: ${m.open_disagreement}`) : null)),
+      // a loss meeting: the trades it was about, each to its replay (meet-links.js)
+      LOSS_TRIGGERS.includes(m.trigger) ? roundTradesSlot(ctx, m.round_id) : null,
       h("div", {class: "db2-f"}, h("span", {class: "muted"}, `AI ${fmt.int(m.calls)}회 · 발언 ${fmt.int((m.speakers || []).length)}번`), h("span", {class: "grow"}),
         h("a", {class: "btn-line", href: ctx.href("digest", "day", {d: dayKey(m.started_ts), r: m.round_id})}, "회의 기록"),
         h("a", {class: "btn-y", href: ctx.href("rooms", m.room_id)}, "방 열기")));

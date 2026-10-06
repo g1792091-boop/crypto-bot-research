@@ -6,7 +6,7 @@
 //   ③ by exit reason: count and money (손절 / 익절 잠금 / 강제청산 …)
 //   ④ win rate vs the rate the average win / loss needs to break even
 //   ⑤ the biggest three losses, their share of all losses, each with its replay (and the meeting about it, when one
-//      stored its trade id: account-links.js)
+//      stored its trade id: meet-links.js)
 // HONESTY: DeepSeek accounts get exit-reason COUNTS only (no money, owners' D10 / D11, CONTRACT §1.3), coin flips are
 // the yardstick (no comparison with themselves), extra accounts are counted apart (no coin-flip line); the trades are
 // the server's latest 500 at most, and the card says so when the account has more; small samples say so.
@@ -75,7 +75,7 @@ function fallRow(st, lo, hi) {
 
 /**
  * The card. a: the account row (kind, timeframe, group), d: /api/account answer, o: {initial, wallet, flipMed, total,
- * href (ctx.href), countOnly (DeepSeek), links: {trade id: [meeting]} (account-links.js; optional), linkChip(meeting)}.
+ * href (ctx.href), countOnly (DeepSeek), chip(trade): the loss meeting of a trade (meet-links.js; optional)}.
  */
 export function whyCard(a, d, o = {}) {
   const trades = (d && d.trades) || [];
@@ -126,13 +126,12 @@ export function whyCard(a, d, o = {}) {
       : s.wins ? "아직 진 거래가 없습니다." : "아직 이긴 거래가 없습니다.")));
   // ⑤ the biggest losses
   if (s.big.length) {
-    const links = o.links || {};
     secs.push(h("div", {class: "acw-sec"}, h("p", {class: "acw-k"}, `가장 큰 손실 ${fmt.int(s.big.length)}건이 전체 손실의 `, h("b", {class: "num"}, fmt.pct(s.bigShare, 0, false))),
       h("div", {class: "acw-big3", role: "list"}, s.big.map((t) => h("div", {class: "acw-brow", role: "listitem"},
         h("span", {class: "acw-bt"}, fmt.kst(t.exit_time)), h("span", null, `${fmt.coin(t.symbol)} ${fmt.reasonKo(t.exit_reason)}`),
         h("b", {class: "num down"}, signed(t.pnl)),
         o.href && t.id != null ? h("a", {class: "acw-replay", href: o.href("replay", String(t.id)), title: "이 거래를 봉 차트에서 다시 보기"}, "▶ 다시보기") : null,
-        o.linkChip && links[t.id] && links[t.id].length ? o.linkChip(links[t.id][0]) : null)))));
+        o.chip ? o.chip(t) : null)))));
   }
   kids.push(h("div", {class: "acw-body"}, secs));
   return ui.card({plate, cls: "acw", sub: `닫힌 거래 ${fmt.int(s.n)}건으로 계산`}, kids, capNote, ui.assume("closed", "거래마다 나갈 때 수수료·펀딩 뒤"));

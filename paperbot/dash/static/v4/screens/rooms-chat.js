@@ -17,6 +17,7 @@ import {KIND_KO, SPEAKING, VERDICT_KO, stanceOf, answerOf, dataOf, bodyLines, me
 import {recordBox, stratOf} from "./rooms-record.js";
 import {typeBadges, msgTypes, forOwners, pixAvatar, refsOf, miniCards, dayLabel} from "./agents-ui.js";
 import {evidenceGroups, evidenceList, evidenceCount} from "./rooms-evidence.js";
+import {roundTradesSlot, LOSS_TRIGGERS} from "./meet-links.js";
 
 const PAGE = 60;
 const MAX_CHARS = 1000;
@@ -138,7 +139,8 @@ export function makeChat(ctx, hooks) {
       n = h("div", {class: "cl ev rm-act"}, h("span", {class: "bl"}, "▪ "), `> [실행] ${stripLead(m.text)} `, h("time", null, `(${fmt.hm(m.ts)})`));
     } else if (m.kind === "decision") {
       n = h("div", {class: "rm-dec"}, h("div", {class: "rk-code-h"}, h("b", null, "회의 결론"), typeBadges(m), h("span", {class: "muted"}, "숫자는 코드가 정리"), timeEl(m.ts)),
-        messageBody(stripLead(m.text).split("\n"), {lines: 3}), minis(m));
+        messageBody(stripLead(m.text).split("\n"), {lines: 3}), minis(m),
+        LOSS_TRIGGERS.includes(m.meeting) ? roundTradesSlot(ctx, m.round_id) : null);     // the losses it was about
     } else if (m.kind === "code_result") {
       n = codeNode(m);
     } else if (m.kind === "owner") {

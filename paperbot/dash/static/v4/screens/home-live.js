@@ -6,6 +6,7 @@
 // (funding time, meeting hour); flashes only when a value really changed; DeepSeek and coin flips are counts only here
 // (owners' D10 / D11: no money, no ROE for them outside the DeepSeek screen).
 import {h, put, ui, fmt, motion} from "../core/pb.js";
+import {tradeMeetSlot} from "./meet-links.js";
 
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const LIVE_GROUPS = new Set(["core", "m5", "extra"]);        // money shown: 기존 36 / 5분봉 / 추가 계좌
@@ -168,7 +169,7 @@ export function tradesCard(ctx) {
       h("span", {class: "hl-pname"}, h("span", {class: "hl-tf"}, nm.tf), h("span", {class: "hl-nm"}, nm.name)),
       h("span", {class: "hl-pcoin"}, h("b", null, fmt.coin(t.symbol)), " ", ui.sideTag(t.side), h("span", {class: "muted num"}, ` ${fmt.lev(t.leverage)}`)),
       h("span", {class: ["hl-why", t.exit_reason === "SL" || t.exit_reason === "LIQ" ? "down" : t.exit_reason === "LOCK" || t.exit_reason === "TP" ? "up" : "muted"]}, fmt.reasonKo(t.exit_reason)),
-      ret, usd);
+      ret, usd, tradeMeetSlot(ctx, t, {nested: true}));        // a losing trade: the loss meeting about it (meet-links.js)
   };
   function renderBW(rows) {
     const since = fmt.kstMidnight();
