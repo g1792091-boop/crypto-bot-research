@@ -349,7 +349,9 @@ def test_the_read_back_reaches_the_next_packet(world, tmp_path):
     pk = json.loads(user.split("자료(JSON)입니다.\n", 1)[1])
     assert pk["idea_factory"]["goal"] == DF.GOAL_KO and pk["idea_factory"]["slot_candidates"][0]["id"] == 1
     assert pk["question"]["question_ko"] and "market" in pk and "note" in pk["market"]
-    assert svc.db.get("last_question_kind") != rows(svc, "SELECT question_kind FROM debate_rounds WHERE round_id = 1")[0][0]
+    kinds = [r[0] for r in rows(svc, "SELECT question_kind FROM debate_rounds WHERE status = 'ok' ORDER BY round_id")]
+    assert kinds[0] != kinds[1] and "retro" not in kinds        # `once` asks the rotation's next question, not the retro
+    assert svc.db.get("last_question_kind") == kinds[1]
 
 
 def test_the_debate_service_never_loads_rooms_and_reads_agents3_read_only(world, tmp_path):

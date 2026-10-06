@@ -171,7 +171,7 @@ DEBATE_DEEP=1
 ```
 `DEBATE_MAX_TOKENS`는 비워 둡니다(아이디어 공장은 저절로 2,000). 콘솔의 지출 한도도 $70 이상으로 올리세요. 에이전트 쪽 `/etc/paperbot/agents.env`에는 `AGENTS_LAB_INTAKE_DEBATE_PER_DAY=2`(이 줄이 없으면 고른 아이디어를 에이전트 쪽이 가져가지 않아 시험되지 않고, 3일이 지나면 다시 보지 않음).
 
-순서: ① 비용 재 보기 `sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EFFORT=low DEBATE_EVERY_MIN=20 DEBATE_MONTHLY_USD_CAP=70 DEBATE_DAILY_USD_CAP=3 DEBATE_MODE=factory DEBATE_LAB_PER_DAY=2 DEBATE_DEEP=1 /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (고정 앞부분 약 6,300토큰, 질문 종류별 크기, 깊은 토론 줄, 합계가 나오면 됨) → ② 위 줄을 `sudoedit`로 넣기 → ③ `sudo systemctl restart paperbot-debate` → ④ 깊은 토론을 바로 한 번 보고 싶으면 `... debate once --deep`(한도는 그대로 지킴).
+순서: ① 비용 재 보기 `sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EFFORT=low DEBATE_EVERY_MIN=20 DEBATE_MONTHLY_USD_CAP=70 DEBATE_DAILY_USD_CAP=3 DEBATE_MODE=factory DEBATE_LAB_PER_DAY=2 DEBATE_DEEP=1 /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (고정 앞부분 약 6,300토큰, 질문 종류별 크기, 깊은 토론 줄, 합계가 나오면 됨) → ② 위 줄을 `sudoedit`로 넣기 → ③ `sudo systemctl restart paperbot-debate` → ④ 깊은 토론을 바로 한 번 보고 싶으면 `... debate once --deep`(한도는 그대로 지킴, 그날 몫으로 세어 그날 20:00에는 다시 하지 않음). `once`(보통 회차)는 돌아가는 순서의 다음 질문을 묻고, 새 질문이 없을 때만 '지난 아이디어 돌아보기'를 묻습니다.
 
 ### 되돌리기 (코드 바꿀 필요 없음)
 `DEBATE_MODE=classic`(또는 줄을 지움) 후 `sudo systemctl restart paperbot-debate`. 예전 방식이 그대로 돌고(같은 프롬프트·같은 요청), 깊은 토론도 멈춥니다. 이미 시험 줄에 간 아이디어의 결과는 계속 받아 둡니다. 시험만 멈추려면 에이전트 쪽 `AGENTS_LAB_INTAKE_DEBATE_PER_DAY=0`. 표와 기록은 남습니다.

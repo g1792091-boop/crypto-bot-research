@@ -1144,7 +1144,9 @@ class Service:
             self.db.conn.commit()
             return why_cap
         if self.cfg.factory:
-            return self.factory_round(now, fp, forced=forced)
+            # `once` (force) asks the rotation's next question and falls back to the retro question only when nothing
+            # is fresh; the 6-hour forced round asks the retro question
+            return self.factory_round(now, fp, forced=forced and not force, anyway=force)
         return self.round(now, fp, dry_run=dry_run)
 
     def _paid(self, res: dict, cfg: Config, deep: bool = False) -> tuple:
@@ -1334,10 +1336,11 @@ class Service:
         self.db.conn.commit()
         return {**checked, "id": iid}
 
-    def factory_round(self, now: int, fp: dict, forced: bool = False) -> str:
+    def factory_round(self, now: int, fp: dict, forced: bool = False, anyway: bool = False) -> str:
         """One factory round: code picks the question (no fresh question: a free 'no_question' skip), builds the packet
         with the question and the lab read-back, assigns the sides, ONE API call, then stores the turns with their
-        sides and the one lab idea after the code check. Same money rules as a classic round."""
+        sides and the one lab idea after the code check. Same money rules as a classic round. ``forced``: the 6-hour
+        round (the retro question); ``anyway``: `once`, never a skip (the retro question when nothing is fresh)."""
         from . import debate_factory as DF
         from . import debate_questions as DQ
         cfg = self.cfg
@@ -1348,7 +1351,10 @@ class Service:
         try:
             try:
                 board, cands = self._question_bank(now)
-                q = DQ.pick(cands, self.db.asked(), self.db.get("last_question_kind"), now, force=forced)
+                asked, last_kind = self.db.asked(), self.db.get("last_question_kind")
+                q = DQ.pick(cands, asked, last_kind, now, force=forced)
+                if q is None and anyway:
+                    q = DQ.pick(cands, asked, last_kind, now, force=True)
                 if q is None:
                     self.record_round(now, "skipped", kind="factory",
                                       error="no_question: 새로 물을 질문이 없음(같은 질문은 하루 3번까지, 같은 종류는 연달아 "
