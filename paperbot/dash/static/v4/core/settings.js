@@ -101,11 +101,11 @@ function screenSection() {
   const cur = local.get(START_KEY, "");
   const sel = h("select", {class: "select set-sel", "aria-label": "첫 화면",
     onchange: () => { setPref(START_KEY, sel.value); repaint(); }},
-  h("option", {value: ""}, `자동 (이 화면 크기: ${autoStart()})`),
+  h("option", {value: ""}, `자동 (지금: ${autoStart()})`),
   GROUPS.map((g) => h("optgroup", {label: g.ko}, g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden).map((n) =>
     h("option", {value: n}, SCREENS[n].ko + (SCREENS[n].feature === "wide" ? " (PC 화면)" : ""))))));
   sel.value = typeof cur === "string" && SCREENS[cur] && !SCREENS[cur].hidden ? cur : "";
-  const startRow = row("첫 화면", "주소만 열었을 때 처음 보이는 화면 · 'PC 화면'은 휴대폰에서 자동대로", sel);
+  const startRow = row("첫 화면", "주소만 열었을 때 처음 보이는 화면 · 자동 = 창 크기대로 · 'PC 화면'은 휴대폰에서 자동대로", sel);
   const swipeRow = row("휴대폰 옆으로 밀기", "화면을 옆으로 밀면 같은 묶음의 다음·이전 화면으로 (차트·표 위는 제외)",
     toggle("휴대폰 옆으로 밀기", swipeOn(), (on) => setPref(SWIPE_KEY, on)));
   return section("screen", "화면", null, skinRow, textRow, startRow, swipeRow);

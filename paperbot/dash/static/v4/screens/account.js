@@ -142,9 +142,12 @@ export async function mount(el, ctx) {
     } else posEl = ui.card({plate: "열린 포지션"}, ui.empty("지금 열린 포지션이 없습니다"));
 
     // ---------------------------------------------------------------- charts and trades
-    const eqBox = h("div", {class: "account-eq"});
-    const eqCard = ui.card({plate: "자본 곡선", sub: `기록 ${fmt.int(d.equity_points || 0)}점${(d.equity || []).length < (d.equity_points || 0) ? ` · 화면에는 ${fmt.int(d.equity.length)}점으로 줄임` : ""}`},
-      eqBox, ui.assume("closed", "점선은 시작 잔고"));
+    const eqBox = h("div", {class: "account-eq", "data-fc-grow": ""});
+    // 차트 크게 보기 for the curve too (core/fullchart.js), once there is a curve to see (2 points or more)
+    const eqFs = (d.equity || []).length >= 2 ? fullChart({ctx, label: "자본 곡선"}) : null;
+    const eqCard = ui.card({plate: "자본 곡선", sub: `기록 ${fmt.int(d.equity_points || 0)}점${(d.equity || []).length < (d.equity_points || 0) ? ` · 화면에는 ${fmt.int(d.equity.length)}점으로 줄임` : ""}`,
+      acts: eqFs ? [eqFs] : null}, eqBox, ui.assume("closed", "점선은 시작 잔고"));
+    if (eqFs) eqFs.bind(eqCard);
     const syms = [...new Set(trades.map((t) => t.symbol).concat(pos ? [pos.symbol] : []))];
     const symSel = h("select", {class: "select", "aria-label": "코인"}, (syms.length ? syms : ["BTCUSDT"]).map((s) => h("option", {value: s}, fmt.coin(s))));
     if (pos) symSel.value = pos.symbol;

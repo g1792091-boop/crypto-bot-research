@@ -29,7 +29,7 @@ import {reduced, visible} from "./motion.js";
 import {flashScheduler, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
 import {smcAll, splitOf, zoneOf} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
-import {onPref} from "./prefs.js";
+import {onPref, setPref} from "./prefs.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
@@ -210,7 +210,11 @@ export function chartDeck(o) {
     data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
   };
   const subs = [];
-  const save = () => local.set(key, {off: [...st.off], hide: [...st.hide].slice(-60)});
+  // the same storage key as before, now through core/prefs.js: other decks of this key on the screen (the 여러 차트
+  // cells share "grid") follow at once, and a later save of theirs cannot drop a line hidden here; this deck skips its
+  // own echo (`saving`)
+  let saving = false;
+  const save = () => { saving = true; try { setPref(key, {off: [...st.off], hide: [...st.hide].slice(-60)}); } finally { saving = false; } };
   const shown = (g) => !st.off.has(g);
 
   // ---------------------------------------------------------------- layers (under the transparent chart canvas)
@@ -553,12 +557,16 @@ export function chartDeck(o) {
   // the deck is on screen, under the same storage keys as the deck's own menu and select; the deck follows at once
   const prefOffs = [
     onPref(key, (v) => {
+      if (saving) return;
       const x = v && typeof v === "object" ? v : {};
+      const was = st.off;
       st.off = new Set(Array.isArray(x.off) ? x.off.filter((g) => groups.includes(g)) : []);
       st.hide = new Set(Array.isArray(x.hide) ? x.hide.slice(-60) : []);
-      for (const g of groups) applyGroup(g, true);
+      // only the groups that changed are drawn again (a line hidden in another 여러 차트 cell: no 프리미엄 지표 recount)
+      const moved = groups.filter((g) => was.has(g) !== st.off.has(g));
+      for (const g of moved) applyGroup(g, true);
       revis();
-      for (const fn of subs) fn(null);
+      if (moved.length) for (const fn of subs) fn(null);
     }),
     onPref(FLASH_KEY, (v) => {
       fmode = modeOf(v).id;

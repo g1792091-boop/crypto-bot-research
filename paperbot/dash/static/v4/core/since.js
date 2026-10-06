@@ -17,7 +17,7 @@ import {store} from "./store.js";
 import {money, int, kst, hm, mmdd, dur, idName, reasonKo, coin, tone, pct} from "./fmt.js";
 import {href} from "./routes.js";
 import {alertKo} from "./alerts.js";
-import {ASSUME_KO} from "./ui.js";
+import {ASSUME_KO, toast} from "./ui.js";
 import {reduced} from "./motion.js";
 
 const KEY = "since-last";
@@ -182,8 +182,10 @@ export function serverRows(d, jobs, health, after) {
   }
   const failed = jobs && jobs.available && jobs.jobs ? Object.entries(jobs.jobs).filter(([, j]) => j && j.ok === false && Number(j.last_ms) > after) : [];
   if (failed.length) out.push(row("!", "warn", `예약 작업 실패 ${int(failed.length)}개`, failed.map(([u, j]) => `${JOB_KO[u] || u} (${kst(j.last_ms)})`).join(" · "), null, link));
-  if (health && (health.level === "bad" || health.level === "warn") && (health.problems || []).length) {
-    out.push(row("!", health.level === "bad" ? "down" : "warn", health.level === "bad" ? "지금 문제 있음" : "지금 확인할 것 있음", String(health.problems[0]), null, link));
+  // the health card's level: "bad" lists problems, "warn" only warnings (analysis.py health: problems first)
+  const said = health ? (health.level === "bad" ? health.problems : health.level === "warn" ? health.warnings : null) : null;
+  if (Array.isArray(said) && said.length) {
+    out.push(row("!", health.level === "bad" ? "down" : "warn", health.level === "bad" ? "지금 문제 있음" : "지금 확인할 것 있음", String(said[0]), null, link));
   }
   return out;
 }
@@ -219,7 +221,8 @@ export async function openAway(range, o = {}) {
     api("/api/v4/jobs").catch(() => null), store.need("health", 120000).catch(() => null)]);
   busy = false;
   if (o.auto && (sheet || /^#\/story\b/.test(location.hash) || document.querySelector(".tour-card"))) return;
-  if (!d) { if (!o.auto) closeSheet(); return; }
+  // the server did not answer: say so on a press (an open card stays as it was); nothing on the automatic opening
+  if (!d) { if (!o.auto) toast("자는 동안 요약을 불러오지 못했습니다 · 잠시 뒤 다시 눌러 주세요"); return; }
   if (sheet && o.keep) closeSheet(true);
   renderAway(d, {after: d.after, id: id === "away" && !away ? "8h" : id, words, jobs, health, away});
 }
@@ -239,9 +242,12 @@ export function awayParts(d, o = {}) {
   const tiles = GROUPS.filter(([g]) => g !== "extra" || G.extra).map((x) => tile(x, G[x[0]]));
   const M = d.meetings || {};
   const S = d.server || {};
-  // the bot's stops need its 1-minute records: without them the card says it could not tell (never "no stop")
+  // the bot's stops need its 1-minute records, the timers' runs need systemd (/api/v4/jobs): without them the card
+  // says it could not tell (never "no stop", never "no failed job")
+  const jobsKnown = !!(o.jobs && o.jobs.available);
   const srv = [...serverRows(d, o.jobs, o.health, d.after),
-    S.known === false ? noneRow("■", "봇 멈춤", "봇 가동 기록(1분봉)이 아직 없습니다", href("server"), "확인 못 함") : null].filter(Boolean);
+    S.known === false ? noneRow("■", "봇 멈춤", "봇 가동 기록(1분봉)이 아직 없습니다", href("server"), "확인 못 함") : null,
+    jobsKnown ? null : noneRow("!", "예약 작업", "이 서버의 예약 작업 기록을 읽지 못했습니다", href("server"), "확인 못 함")].filter(Boolean);
   const vts = d.verdict_ts;
   const leftKo = verdictLeft(d);
   const sh = (t) => h("p", {class: "since-sh"}, t);
@@ -251,13 +257,16 @@ export function awayParts(d, o = {}) {
     tradeRow(d, "worst") || noneRow("▼", "가장 크게 잃은 거래", "기존 36 · 5분봉 · 추가 계좌의 닫힌 거래", href("board")),
     bustRow(d) || noneRow("✕", "파산 · 강제청산", null, href("alerts")),
     sh("회의 · 알림"),
-    meetingRow(d) || noneRow("◆", "끝난 회의", M.error ? "회의 기록을 읽지 못했습니다" : "결론을 내고 끝난 회의", href("digest")),
+    meetingRow(d) || (M.error ? noneRow("◆", "끝난 회의", "회의 기록을 읽지 못했습니다", href("digest"), "확인 못 함")
+      : noneRow("◆", "끝난 회의", "결론을 내고 끝난 회의", href("digest"))),
     alertRow(d) || noneRow("!", "봇 알림", "주의 · 긴급 알림", href("alerts")),
     sh("서버"),
     ...(srv.length ? srv : [noneRow("■", "서버 문제", "멈춤 · 재시작 · 실패한 작업", href("server"))]),
     sh("판정"),
     ...milestoneRows(d),
-    vts ? row("D-", "accent", `판정까지 ${leftKo}`, `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 ${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
+    // after the first verdict the server names the next one (restart_banner): "D+35 · 다음 판정 12/04", not "D+35 / 30"
+    vts ? row("D-", "accent", `판정까지 ${leftKo}`, (Number(d.dn) > Number(d.of || 30) ? `D+${int(d.dn)} · 다음 판정 ` : `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 `)
+      + `${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
       : noneRow("D-", "판정까지", "봇이 아직 첫 계좌를 만들지 않았습니다", href("checkpoint")),
   ];
   const span = dur((d.now - d.after) / 1000);

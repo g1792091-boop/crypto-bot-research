@@ -38,4 +38,6 @@ html.fc-lock { overflow: hidden; }
   .fc-on [data-fc-grow], .fc-on.term-chart > .term-pb { min-height: 170px !important; }
   .fc-x { top: 4px; right: 6px; width: 32px; height: 32px; }
 }
+/* a phone: a 32 px square (the touch-target floor), the word goes */
+@media (max-width: 759px) { .fc-btn { height: 32px; } }
 @media (max-width: 599px) { .fc-btn .fc-bt { display: none; } .fc-btn { width: 32px; padding: 0; justify-content: center; } }

@@ -225,17 +225,25 @@ def test_away_card_lists_every_section_and_counts_deepseek_only():
     const D = await import('file://{os.path.join(ROOT, "tests", "anasyn_dom.mjs")}');
     const S = await import(CORE + '/since.js');
     const d = {json.dumps(away)};
-    const p = S.awayParts(d, {{id: "8h", words: "최근 8시간"}}); p.sub = p.sub.join("");
+    const J = {{available: true, jobs: {{}}}};
+    const p = S.awayParts(d, {{id: "8h", words: "최근 8시간", jobs: J}}); p.sub = p.sub.join("");
     const srv = S.serverRows({{server: {{known: true, stops_n: 1, stop_min: 40, longest: {{from: {T0}, to: {T0 + 40 * MIN}, min: 40, ongoing: true}}, restarts: [{T0 + HOUR}],
       nightly: [{{day: "2026-10-02", accounts: 10, mismatched: 2}}, {{day: "2026-10-03", accounts: 10, mismatched: 0}}]}}}},
       {{available: true, jobs: {{"paperbot-backup": {{ok: false, last_ms: {T0 + 2 * HOUR}}}, "paperbot-daily3": {{ok: true, last_ms: {T0 + 2 * HOUR}}},
-        "paperbot-offsite": {{ok: false, last_ms: {T0 - HOUR}}}}}}}, {{level: "warn", problems: ["신호가 늦습니다"]}}, {T0});
+        "paperbot-offsite": {{ok: false, last_ms: {T0 - HOUR}}}}}}}, {{level: "warn", problems: [], warnings: ["신호가 늦습니다"]}}, {T0});
+    // the health card's real shapes: "bad" carries problems; "ok" nothing to say
+    const bad = S.serverRows({{server: {{known: true, stops_n: 0, restarts: [], nightly: []}}}}, null, {{level: "bad", problems: ["봇이 멈췄습니다"], warnings: ["밤 점검 늦음"]}}, {T0});
+    const fine = S.serverRows({{server: {{known: true, stops_n: 0, restarts: [], nightly: []}}}}, null, {{level: "ok", problems: [], warnings: []}}, {T0});
+    // systemd did not answer (or the jobs request failed) and agents3.db is missing: 확인 못 함, never 없음
+    const noJobs = S.awayParts({{...d, meetings: {{finished: 0, decided: 0, lines: [], error: "agents3.db 없음"}}}}, {{id: "8h", words: "최근 8시간", jobs: {{available: false, jobs: {{}}}}}});
+    const after30 = S.awayParts({{...d, dn: 35, of: 30}}, {{id: "8h", words: "최근 8시간", jobs: J}});
     const r = S.rangeAfter("away", {T0 + 10 * HOUR}, {{from: {T0 + HOUR}, to: {T0 + 9 * HOUR}}});
     const r2 = S.rangeAfter("away", {T0 + 10 * HOUR}, null);
-    const unk = S.awayParts({{...d, server: {{known: false, stops: [], stops_n: 0, restarts: [], nightly: []}}}}, {{id: "8h", words: "최근 8시간"}});
+    const unk = S.awayParts({{...d, server: {{known: false, stops: [], stops_n: 0, restarts: [], nightly: []}}}}, {{id: "8h", words: "최근 8시간", jobs: J}});
     const lastDay = S.verdictLeft({{verdict_ts: {T0 + 5 * HOUR}, now: {T0}, days_left: 1}});
     console.log(JSON.stringify({{tiles: D.walk(p.tiles), rows: D.walk(p.rows), title: p.title, sub: p.sub, srv: D.walk(srv).text, nsrv: srv.length,
-      r, r2: r2[0], unk: D.walk(unk.rows).text, lastDay}}));
+      r, r2: r2[0], unk: D.walk(unk.rows).text, lastDay, bad: D.walk(bad).text, nfine: fine.length, noJobs: D.walk(noJobs.rows).text,
+      after30: D.walk(after30.rows).text}}));
     """, dom=True)
     t = out["tiles"]["text"]
     assert "기존 36" in t and "120.50 USDT" in t and "딥시크 44" in t and "건수만" in t and "5분봉" in t and "동전 봇" in t
@@ -255,6 +263,14 @@ def test_away_card_lists_every_section_and_counts_deepseek_only():
     # no 1-minute records: the card says it could not tell, never "no stop"
     assert "봇 멈춤" in out["unk"] and "확인 못 함" in out["unk"] and "봇 가동 기록(1분봉)이 아직 없습니다" in out["unk"]
     assert out["lastDay"] == "5시간"                                     # the verdict's last day counts hours
+    # the health card: a problem at "bad", nothing at "ok" (a warning alone was dropped before: the "warn" case read
+    # problems, which the server leaves empty at that level)
+    assert "지금 문제 있음" in out["bad"] and "봇이 멈췄습니다" in out["bad"] and "밤 점검 늦음" not in out["bad"]
+    assert out["nfine"] == 0
+    nj = out["noJobs"]
+    assert "예약 작업" in nj and "예약 작업 기록을 읽지 못했습니다" in nj and "회의 기록을 읽지 못했습니다" in nj
+    assert nj.count("확인 못 함") == 2 and "서버 문제" not in nj                # never "no server problem" without the timers
+    assert "D+35 · 다음 판정" in out["after30"] and "/ 30" not in out["after30"]
 
 
 def test_grid_cells_are_cleaned_and_only_our_groups_can_be_laid_over():
@@ -292,6 +308,10 @@ def test_settings_panel_is_wired_everywhere_and_uses_the_same_keys():
     assert 'FLASH_KEY = "chart-flash"' in fx and "export {FLASH_KEY};" in fx and "onPref(key, (v) =>" in fx and "onPref(FLASH_KEY, (v) =>" in fx
     assert 'const key = "cfx-" + (o.key || "chart");' in fx                 # the decks' storage keys are unchanged
     assert "export function deckState(key, groups, defaults)" in fx
+    # a deck saves through prefs (the 여러 차트 cells share one key: a line hidden in one cell is not dropped by another's
+    # save) and skips its own echo; only the groups that changed are drawn again
+    assert "setPref(key, {off: [...st.off], hide: [...st.hide].slice(-60)})" in fx and "if (saving) return;" in fx
+    assert "local.set(key, {off" not in fx and "for (const g of moved) applyGroup(g, true);" in fx
     main = _read("core", "main.js")
     assert main.index("startSettings();") < main.index("startSince();")
     nk = _read("core", "navkeys.js")
@@ -309,7 +329,8 @@ def test_settings_panel_is_wired_everywhere_and_uses_the_same_keys():
 def test_every_chart_has_the_fullscreen_button_and_charts_screen_uses_one_relay():
     for rel, mark in (("screens/terminal-chart.js", "fs.bind(el)"), ("screens/chart.js", "fs.bind(chartCard)"),
                       ("screens/strategies-detail.js", ".bind(chartCard)"), ("screens/account.js", "fs.bind(candleCard)"),
-                      ("screens/charts.js", "fs.bind(root)")):
+                      ("screens/charts.js", "fs.bind(root)"), ("screens/account.js", "eqFs.bind(eqCard)"),
+                      ("screens/replay.js", "fs.bind(chartCard)")):
         src = _read(*rel.split("/"))
         assert "fullChart(" in src and mark in src, rel
     fc = _read("core", "fullchart.js")
@@ -331,6 +352,15 @@ def test_since_job_names_match_the_server_screen():
         assert f'"{u}": "{ko}"' in since, u
     assert "AWAY_MS = 3 * 3600000" in since and "prev != null && serverNow() - prev >= GAP_MS" in since
     assert '"/api/v4/jobs"' in since and "localStorage" not in since and "innerHTML" not in since
+
+
+def test_touch_targets_on_a_phone_are_32px():
+    st = _nocomment(_read("core", "settings.css"))
+    assert re.search(r"\.set-sw \{[^}]*height: 32px", st) and re.search(r"\.set-try \{[^}]*min-height: 32px", st)
+    fc = _nocomment(_read("core", "fullchart.css"))
+    assert "@media (max-width: 759px) { .fc-btn { height: 32px; } }" in fc
+    cg = _nocomment(_read("screens", "charts.css"))
+    assert ".cg-sel { height: 32px; }" in cg and ".cg-ov { order: 1; width: auto; flex: 1 1 100%; }" in cg
 
 
 def test_new_css_uses_tokens_and_the_font_floor():

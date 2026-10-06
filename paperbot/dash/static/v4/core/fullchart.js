@@ -1,4 +1,4 @@
-// 차트 크게 보기 (owners 10/06: "클릭이 너무 많다"): every chart (터미널, 차트, 매매법, 계좌, 여러 차트의 칸) gets a
+// 차트 크게 보기 (owners 10/06: "클릭이 너무 많다"): every chart (터미널, 차트, 매매법, 계좌 + 자본 곡선, 다시보기, 여러 차트의 칸) gets a
 // '크게' button; the key "f" does the same for the chart under the mouse (else the biggest one on screen) and Esc (or
 // the ✕, or "f" again) puts it back. The chart's own frame (its header with the interval buttons and the '선' menu, the
 // chart, its legend) fills the window: CSS first (a fixed layer, core/fullchart.css; it works on every phone), and the
