@@ -177,7 +177,12 @@ export function startTv(o = {}) {
   const c = cfg();
   if (o.secs != null) c.secs = clampSecs(o.secs);
   if (Array.isArray(o.screens)) c.screens = readTv({screens: o.screens}).screens;
-  if (!list().length) { toast("고른 화면이 이 창 크기에서는 없습니다 (터미널은 PC 화면)"); return false; }
+  if (!list().length) {
+    // a phone that remembered 'on' with 터미널 alone: it is off here (so t starts it, never a silent 'stop')
+    if (c.on) { c.on = false; save(); paintChip(); }
+    toast("고른 화면이 이 창 크기에서는 없습니다 (터미널은 PC 화면)");
+    return false;
+  }
   c.on = true;
   save();
   listen();

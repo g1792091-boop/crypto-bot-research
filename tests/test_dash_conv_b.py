@@ -405,3 +405,10 @@ def test_rail_star_count_and_home_strip_size():
     assert "\nonFavs(() => { paintBtn(); if (st.pop && !st.pop.hidden) paint(); });" in pop
     strip = _read("screens/home-favs.js")
     assert "const CHIPS = 20;" in strip and "kids.slice(0, CHIPS)" in strip
+
+
+def test_tv_remembered_on_with_nothing_to_show_turns_itself_off():
+    """A narrow window that remembered 'on' with 터미널 alone: TV mode is off there (checked in a browser: before, the
+    page kept 'on' with no rotation, so t answered 'TV 자동 넘김을 끝냈습니다')."""
+    tv = _read("core/tvmode.js")
+    assert "if (c.on) { c.on = false; save(); paintChip(); }" in tv
