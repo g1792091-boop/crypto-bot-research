@@ -131,3 +131,87 @@ def test_why_card_wiring_and_deepseek_counts_only():
     assert 'ui.assume("closed"' in why and "ui.smallSample(s.n)" in why
     assert 'fmt.groupOf(a) !== "extra"' in why and 'a.kind !== "random"' in why   # no coin-flip line for extras / flips
     assert re.search(r"\.acw-fbar\.cost \{ background: var\(--warn\); \}", css)
+
+
+# ---------------------------------------------------------------- a small paper3.db for the server routes
+H = 3_600_000
+T0 = 1_790_000_000_000          # the copy's start
+
+
+def _trade(st, aid, entry, exit_t, pnl, roe, reason="SL", fees=2.0, funding=0.5, sym="BTCUSDT"):
+    from paperbot.models import TradeRecord
+    strat, tf = aid.split("~")[0].split("@")
+    st.trade(aid, TradeRecord(strategy_id=strat, symbol=sym, timeframe=tf, side=1, signal_ts=entry - 1, entry_time=entry,
+                              entry_price=100.0, exit_time=exit_t, exit_price=99.0, exit_reason=reason, qty=1.0, leverage=30,
+                              tier="normal", margin=100.0, stop_price=99.0, tp_price=float("nan"), liq_price=97.0, fees=fees,
+                              funding=funding, pnl=pnl, roe=roe, price_move=-0.01, mae_price=99.0, mfe_price=100.0,
+                              equity_after=0.0, score=0.0, context={}))
+
+
+def _paper(path):
+    from paperbot.store3 import Store3
+    st = Store3(path)
+    st.add_account("S@15m", "S", "15m", "strategy", T0 - 100 * H, "v4")
+    st.add_account("S@15m~c1", "S", "15m", "copy", T0, "v4", "S@15m", {"v": 1, "rule": {"template": "stop_atr", "k": 2.5},
+                                                                       "label_ko": "S 15분 복제 c1"})
+    st.add_account("D@15m", "D", "15m", "ds200", T0 - 100 * H, "v4", None, {"group": "x"})
+    for k in (1, 2, 3):
+        st.add_account(f"RANDOM_{k}@15m", f"RANDOM_{k}", "15m", "random", T0 - 100 * H, "v4")
+    st.equity("S@15m", T0 - 100 * H, 5000.0, 0.0)
+    st.equity("S@15m", T0 - H, 2000.0, 0.0)          # the parent's balance when the copy starts
+    st.equity("S@15m", T0 + 5 * H, 2200.0, 0.0)
+    st.equity("S@15m~c1", T0, 5000.0, 0.0)
+    st.equity("S@15m~c1", T0 + 5 * H, 4500.0, 0.0)
+    for k, (a, b) in enumerate(((4000.0, 4400.0), (5000.0, 4500.0), (3000.0, 3300.0)), 1):
+        st.equity(f"RANDOM_{k}@15m", T0 - 2 * H, a, 0.0)
+        st.equity(f"RANDOM_{k}@15m", T0 + 5 * H, b, 0.0)
+    _trade(st, "S@15m", T0 - 3 * H, T0 - 2 * H, -300.0, -0.3)                       # before the copy: left out
+    _trade(st, "S@15m", T0 + H, T0 + 2 * H, 150.0, 0.15, "LOCK", fees=4.0, funding=1.0)
+    _trade(st, "S@15m", T0 + 3 * H, T0 + 4 * H, 50.0, 0.05, "LOCK", fees=6.0, funding=1.0)
+    _trade(st, "S@15m~c1", T0 + H, T0 + 2 * H, -400.0, -0.08, "SL", fees=10.0, funding=2.0)
+    _trade(st, "S@15m~c1", T0 + 3 * H, T0 + 4 * H, -100.0, -0.02, "LIQ", fees=10.0, funding=3.0)
+    _trade(st, "D@15m", T0 + H, T0 + 2 * H, -10.0, -0.1)
+    st.put_state("accounts", T0 + 5 * H, {"engines": {"S@15m": {"wallet": 2200.0}, "S@15m~c1": {"wallet": 4500.0},
+                                                      "RANDOM_1@15m": {"wallet": 4400.0}, "RANDOM_2@15m": {"wallet": 4500.0},
+                                                      "RANDOM_3@15m": {"wallet": 3300.0}}})
+    st.commit()
+    st.conn.close()
+    return path
+
+
+def test_copy_vs_parent_over_the_same_period(tmp_path):
+    from fastapi import HTTPException
+    from paperbot.dash.more import copycmp as CC
+    db = _paper(str(tmp_path / "paper3.db"))
+    before = open(db, "rb").read()
+    d = CC.compare(db, "S@15m~c1", now_ms=T0 + 6 * H)
+    assert d["parent_id"] == "S@15m" and d["rule_ko"] == "손절 2.5 ATR" and d["since"] == T0 and not d["count_only"]
+    p, c = d["parent"], d["copy"]
+    assert p["trades"] == 2 and p["wins"] == 2                       # the trade it entered before the copy existed: out
+    assert abs(p["ret"] - (2200 / 2000 - 1)) < 1e-9                  # from ITS balance at the copy's start, not 5,000
+    assert abs(c["ret"] - (4500 / 5000 - 1)) < 1e-9 and c["liquidations"] == 1
+    assert abs(p["fees_share"] - 10 / 2000) < 1e-9 and abs(c["fees_share"] - 20 / 5000) < 1e-9
+    assert abs(p["mean_roe"] - 0.1) < 1e-9 and c["small"] is True
+    assert abs(d["diff"] - (c["ret"] - p["ret"])) < 1e-9
+    assert d["flips"]["n"] == 3 and abs(d["flips"]["median_ret"] - 0.1) < 1e-9   # 4400/4000, 4500/5000, 3300/3000
+    cur = d["curve"]
+    assert cur["copy"][0] == 0 and cur["parent"][0] == 0             # both lines start at 0 % on the copy's first day
+    assert abs(cur["parent"][-1] - 0.1) < 1e-9 and abs(cur["copy"][-1] + 0.1) < 1e-9
+    with pytest.raises(HTTPException) as e:
+        CC.compare(db, "S@15m", now_ms=T0 + 6 * H)                      # not a copy
+    assert e.value.status_code == 404
+    assert open(db, "rb").read() == before                            # read-only
+
+
+def test_copy_card_rows_and_wiring():
+    out = _node("const C = await import('{base}/account-copy.js');", """
+      const d = {count_only: false, parent: {trades: 2, win_rate: 1, ret: 0.1, mean_roe: 0.1, fees_share: 0.005, funding_share: 0.001, liquidations: 0},
+                 copy: {trades: 2, win_rate: 0, ret: -0.1, mean_roe: -0.05, fees_share: 0.004, funding_share: 0.001, liquidations: 1}};
+      console.log(JSON.stringify({rows: C.copyRows(d), ds: C.copyRows({...d, count_only: true}).map((r) => r.k)}));""")
+    ks = [r["k"] for r in out["rows"]]
+    assert ks[0] == "기간 수익률" and "거래당 ROE (평균)" in ks and "수수료 (시작 잔고 대비)" in ks
+    assert out["rows"][0]["parent"] == "+10.0%" and out["rows"][0]["copy"] == "−10.0%"
+    assert out["ds"] == ["거래 (이 기간에 들어간 것)", "이긴 비율", "강제청산"]       # a DeepSeek copy: counts only
+    src = _read("account-copy.js")
+    assert "/api/v4/copycmp/" in src and "ui.errorBox(e, load)" in src and "ui.smallSample(" in src
+    assert 'a.kind === "copy" ? copyCard(ctx, acc.account_id)' in _read("account.js")

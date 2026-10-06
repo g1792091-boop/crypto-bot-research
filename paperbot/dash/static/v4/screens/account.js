@@ -14,6 +14,7 @@ import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDE
 import {profileCard} from "./grid-kit.js";
 import {termChip, termify} from "./faq-terms.js";
 import {whyCard} from "./account-why.js";
+import {copyCard} from "./account-copy.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -190,7 +191,9 @@ export async function mount(el, ctx) {
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
     // (replaceChildren / append print a null as the text "null": the optional parts are filtered out first)
-    el.replaceChildren(...[backLink(), headSlot, why, same ? same.el : null, candleCard,
+    // 원본 vs 복제 over the same period (an approved copy only; account-copy.js loads its own answer)
+    const cmp = a.kind === "copy" ? copyCard(ctx, acc.account_id) : null;
+    el.replaceChildren(...[backLink(), headSlot, cmp, why, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard))].filter(Boolean));

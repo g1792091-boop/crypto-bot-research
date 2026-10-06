@@ -29,6 +29,10 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     luck    운 vs 실력: 여러 개를 한꺼번에 시험하는 곳마다 시험 수, 통과 기준, 운으로 나올 수, 실제 통과 (분석 › 운 vs 실력,
             홈·판정의 작은 카드; background, cached)
     gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
+    copycmp  원본 vs 복제: an approved copy next to its parent over the same period (계좌 화면, 결재함 지난 결정)
+    losslinks 손실 거래 <-> 회의: the trade ids the loss meetings stored, both ways (계좌·다시보기·회의 요약·에이전트 방)
+    approvals 결재함: the proposals that wait for the owners with their 5-year table, for / against lines and what
+            approving does; past decisions (approving itself stays POST /api/proposals/<id>/decide)
 """
 from __future__ import annotations
 
@@ -50,6 +54,7 @@ MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보�
 MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as committed + live trades by regime, background)
 MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
 MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
+MODULES += ("copycmp", "losslinks", "approvals")   # add-accounts: 원본 vs 복제, 손실 거래 <-> 회의, 결재함
 
 
 def register_all(app, **kw) -> dict:
