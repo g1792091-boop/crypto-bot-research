@@ -5,7 +5,7 @@
 // HONESTY (CONTRACT.md section 1): comparisons with the coin flips are '참고' pills in neutral colours (never a pass or
 // fail before /api/checkpoint says ready); a DeepSeek account gets nothing per account beyond the bare '참고' pill;
 // late-started extras are never compared; small samples say 표본 적음.
-import {h, put, ui, fmt, derive, local, stratFigure} from "../core/pb.js";
+import {h, put, ui, fmt, derive, local, stratFigure, fav} from "../core/pb.js";
 
 // wave 2 ⑦: the strategy's own pixel character in front of its name (no idle motion in lists)
 const fig = (a, size) => stratFigure({strategy: a.strategy, kind: a.kind, size, cls: "row-fig"});
@@ -123,7 +123,7 @@ export function rankRow(a, o) {
   meta.push(refTag(a, o.gs), ...extraPills(a));
   return h("a", {class: ["lrow", "click", "home-row", co ? "count-only" : ""], href: o.href(a.account_id), role: "listitem", title: a.account_id},
     h("span", {class: "rk"}, o.rk == null ? "—" : fmt.int(o.rk)),
-    h("span", {class: "lname"}, fig(a, 20), ui.acctLabel(a)),
+    h("span", {class: "lname"}, fig(a, 20), fav.favMark("account", a.account_id), ui.acctLabel(a)),
     co ? h("span", {class: "ret muted", title: "딥시크·동전 봇은 섞인 목록에서 돈 숫자와 순위를 보이지 않습니다 (개수만)"}, "개수만")
       : h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)),
     h("span", {class: "meta"}, meta));
@@ -295,7 +295,10 @@ export function rankList(ctx, o = {}) {
   if (sortSel) sortSel.addEventListener("change", () => { st.sort = sortSel.value; if (o.memo) local.set(o.memo + "-sort", st.sort); apply(false); });
   const countEl = h("span", {class: "home-count"});
   const foot = h("div");
-  const filters = h("div", {class: "home-filters"}, tfBox, sortSel ? h("label", {class: "home-sort"}, h("span", null, "정렬"), sortSel) : null);
+  // ★ 즐겨찾기만 (conv-b, o.favs): the starred accounts and the accounts of the starred strategies, remembered per list
+  const favSw = o.favs ? fav.favFilter({memo: o.memo ? o.memo + "-favonly" : null, title: "별(★)을 누른 계좌와, 별을 누른 매매법의 봉 계좌만 보기",
+    onChange: () => { apply(false); if (o.onFavs) o.onFavs(); }}) : null;
+  const filters = h("div", {class: "home-filters"}, tfBox, favSw, sortSel ? h("label", {class: "home-sort"}, h("span", null, "정렬"), sortSel) : null);
   const list = ui.searchList({size: 10, placeholder: "이름·코드 찾기 (예: 돈치안, F9, REEL)",
     match: (a, q) => !a._flip && !a._flipMed && (fmt.acctName(a).toLowerCase().includes(q) || String(a.account_id).toLowerCase().includes(q)
       || (famKo(a) || "").toLowerCase().includes(q)),
@@ -318,6 +321,8 @@ export function rankList(ctx, o = {}) {
     tfSeg();
     let rows = derive.ranked(st.board, st.group);
     if (st.tf !== "all") rows = rows.filter((a) => a.timeframe === st.tf);
+    const only = favPred();
+    if (only) rows = rows.filter(only);
     const s = SORTS.find((x) => x.id === st.sort) || SORTS[0];
     rows.sort((x, y) => { const p = s.key(x), q = s.key(y); return p < q ? -1 : p > q ? 1 : x.ret === y.ret ? 0 : y.ret - x.ret; });
     // accounts with no closed trade and no open position: after the ranked ones, '—' instead of a rank number;
@@ -327,12 +332,20 @@ export function rankList(ctx, o = {}) {
     rows.forEach((a) => { a._rk = derive.unranked(a) || derive.countOnlyIn(a, st.group) ? null : ++rk; });
     countEl.textContent = `${groupKo(st.group)}${st.tf !== "all" ? " · " + fmt.tfKo(st.tf) : ""} · ${fmt.int(rows.length)}계좌`;
     // 순위표 only (o.flips, wave 2 part B): the same-bar coin flips sit at their real place in a 수익률 list
-    const fl = o.flips && st.sort === "ret" ? withFlips(rows, st) : null;
+    const fl = o.flips && st.sort === "ret" && !only ? withFlips(rows, st) : null;     // ★ only: no flip rows between them
     list.set(fl ? fl.items : rows, keep);
     put(foot, vsFoot(st.group), fl ? flipFoot(fl, st.group) : null);
   }
+  /** null, or the '★ 즐겨찾기만' test of a row (a starred account, or an account of a starred strategy). */
+  function favPred() {
+    if (!favSw || !favSw.on()) return null;
+    const f = fav.favs(), acc = new Set(f.account), strat = new Set(f.strategy);
+    return (a) => acc.has(a.account_id) || (strat.has(a.strategy) && a.kind !== "random");
+  }
+  // a star added or taken anywhere on the page: the rows (their ★ marks, and the list when the switch is on) follow
+  if (favSw) ctx.track(fav.onFavs(() => { if (st.board) apply(true); }));
   return {
-    el: h("div", {class: "stack tight"}, list.el, foot), countEl,
+    el: h("div", {class: "stack tight"}, list.el, foot), countEl, favPred, favEl: favSw,
     set(board, gs, group, keep = true) {
       const changed = group !== st.group;
       st.board = board; st.gs = gs; st.group = group;

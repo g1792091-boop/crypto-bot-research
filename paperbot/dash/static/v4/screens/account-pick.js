@@ -2,7 +2,7 @@
 // marker labels (shorter when the markers are crowded, so '롱 30배' and '익절 잠금 +20%' never pile up).
 // HONESTY: the picker shows names, groups, trade counts and whether a position is open: no money (a mixed list with
 // DeepSeek and the coin flips, D10/D11).
-import {h, ui, fmt, derive} from "../core/pb.js";
+import {h, ui, fmt, derive, fav} from "../core/pb.js";
 import {savedGroup, groupKo} from "./home-shared.js";
 
 export const LEAD_BARS = 40;        // bars before the first trade on the coin
@@ -53,14 +53,23 @@ export function accountPicker(ctx, board, o = {}) {
   const def = defaultAccount(board, o.last);
   const defRow = rows.find((a) => a.account_id === def);
   const row = (a) => h("a", {class: "lrow click acp-row", role: "listitem", href: ctx.href("account", a.account_id), title: a.account_id},
-    h("span", {class: "lname"}, ui.acctLabel(a)),
+    h("span", {class: "lname"}, fav.favMark("account", a.account_id), ui.acctLabel(a)),
     h("span", {class: "acp-g"}, groupKo(fmt.groupOf(a))),
     h("span", {class: "meta"}, h("span", null, `거래 ${fmt.int(a.trades || 0)}건`),
       a.position ? h("span", {class: "acp-pos"}, `● ${fmt.coin(a.position.symbol)} ${fmt.sideKo(a.position.side)}`) : h("span", {class: "muted"}, "대기"),
       a.bust ? ui.pill("파산", "bad") : null));
-  const list = ui.searchList({size: 12, placeholder: "이름·코드 찾기 (예: V4.3, 돈치안, REEL)", row,
-    match: (a, q) => fmt.acctName(a).toLowerCase().includes(q) || String(a.account_id).toLowerCase().includes(q), empty: "맞는 계좌가 없습니다"});
-  list.set(rows, false);
+  // ★ 즐겨찾기만 (conv-b): the starred accounts and the accounts of the starred strategies (remembered on this device)
+  const shown = () => {
+    if (!favSw.on()) return rows;
+    const f = fav.favs(), acc = new Set(f.account), strat = new Set(f.strategy);
+    return rows.filter((a) => acc.has(a.account_id) || (strat.has(a.strategy) && a.kind !== "random"));
+  };
+  const favSw = fav.favFilter({memo: "acp-favonly", onChange: () => list.set(shown(), false)});
+  const list = ui.searchList({size: 12, placeholder: "이름·코드 찾기 (예: V4.3, 돈치안, REEL)", row, filters: h("div", {class: "row wrap"}, favSw),
+    match: (a, q) => fmt.acctName(a).toLowerCase().includes(q) || String(a.account_id).toLowerCase().includes(q),
+    empty: "맞는 계좌가 없습니다 (★ 즐겨찾기만이 켜져 있으면 별을 누른 계좌만 보입니다)"});
+  list.set(shown(), false);
+  if (ctx.track) ctx.track(fav.onFavs(() => list.set(shown(), true)));
   const quick = defRow ? ui.card({plate: o.last === def ? "지난번 본 계좌" : "저장된 묶음의 1위", cls: "acp-quick"},
     h("div", {class: "acp-qrow"}, h("b", null, ui.acctLabel(defRow)), h("span", {class: "muted"}, `${groupKo(fmt.groupOf(defRow))} · 거래 ${fmt.int(defRow.trades || 0)}건`),
       h("span", {class: "grow"}), h("a", {class: "btn-y", href: ctx.href("account", def)}, "이 계좌 열기"))) : null;

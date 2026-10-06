@@ -4,7 +4,7 @@
 // signal log → the 5-year card → loss cards / loss patterns. Old strat.js, everything kept (INVENTORY section 5).
 // HONESTY: money has assume(); the coin-flip comparison is the 참고 pill + refNote (36 only, never ✓/✕); DeepSeek accounts
 // get no per-account comparison; small samples say 표본 적음; what the server lacks says 준비 전 / 수집 전.
-import {h, put, ui, fmt, motion, local, bars} from "../core/pb.js";
+import {h, put, ui, fmt, motion, local, bars, fav, cmp} from "../core/pb.js";
 import {DS_DEFS, FAMILY, REEL, STATUS_KO} from "./strategies-defs.js";
 import {paramsCard} from "./strategies-params.js";
 import {accountsOf, record, splitTrades, nameKo, groupOfStrategy, strategyIndex, TF_ORDER} from "./strategies-calc.js";
@@ -66,7 +66,9 @@ export function detailView(ctx, st, name) {
     peers.map((x) => h("option", {value: x.id}, `${x.fam ? x.fam + " " : ""}${x.ko}`))) : null;
   if (jump) { jump.value = name; jump.addEventListener("change", () => ctx.go("strategies", jump.value)); }
   const head = h("div", {class: "strat-dhead"},
-    h("div", {class: "row wrap strat-nav"}, h("a", {class: "btn-line strat-back", href: ctx.href("strategies", null, group !== "core" ? {g: group} : null)}, "← 매매법 목록"), jump),
+    h("div", {class: "row wrap strat-nav"}, h("a", {class: "btn-line strat-back", href: ctx.href("strategies", null, group !== "core" ? {g: group} : null)}, "← 매매법 목록"), jump,
+      // conv-b: ★ 즐겨찾기 and 비교에 추가 (매매법 비교, #/compare)
+      fav.starBtn("strategy", name, {text: true, label: ko}), cmp.cmpBtn(name, {label: ko})),
     h("div", {class: "strat-dtitle"}, h("div", {class: "row wrap"}, ui.plate(GROUP_PLATE[group]), famLine,
       meta && meta.rare ? ui.pill("신호 드묾", "warn") : null),
       h("h1", null, ko), h("span", {class: "muted mono small"}, name)));

@@ -8,7 +8,7 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local, fav, cmp} from "../core/pb.js";
 import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
@@ -184,7 +184,10 @@ export async function mount(el, ctx) {
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
-    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
+    // conv-b: ★ 즐겨찾기 and 비교에 추가 (매매법 비교, #/compare) beside the way back
+    el.replaceChildren(h("div", {class: "row wrap account-nav"}, backLink(), h("span", {class: "grow"}),
+      fav.starBtn("account", acc.account_id, {text: true, label: name}), cmp.cmpBtn(acc.account_id, {label: name})),
+    headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));

@@ -10,7 +10,7 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, fav} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
@@ -58,7 +58,8 @@ export async function mount(el, ctx) {
   }));
   const pxBig = h("b", {class: "chart-px num"}, "—"), pxChg = h("span", {class: "num"}, ""), barLeft = h("b", {class: "num"}, "—");
   const barLab = h("span", {class: "muted"});
-  const priceLine = h("div", {class: "chart-pline"}, h("span", {class: "chart-sym"}, ""), pxBig, pxChg, h("span", {class: "grow"}),
+  const favSlot = h("span", {class: "chart-fav"});           // conv-b: ★ this coin (core/favs.js)
+  const priceLine = h("div", {class: "chart-pline"}, h("span", {class: "chart-sym"}, ""), favSlot, pxBig, pxChg, h("span", {class: "grow"}),
     h("span", {class: "chart-cd"}, barLab, " ", barLeft));
   const tfBtns = new Map();
   const tfBar = h("div", {class: "chart-tfs", role: "tablist", "aria-label": "봉 (남은 시간)"}, bars.ALL_TFS.map((tf) => {
@@ -318,6 +319,7 @@ export async function mount(el, ctx) {
     }
     const t = all[st.sym];
     priceLine.firstChild.textContent = `${fmt.coin(st.sym)}USDT`;
+    if (favSlot.dataset.sym !== st.sym) { favSlot.dataset.sym = st.sym; favSlot.replaceChildren(fav.starBtn("coin", st.sym, {label: fmt.coin(st.sym)})); }
     motion.tickPrice(pxBig, t ? (t.c ?? t.mark) : null, t ? fmt.price(t.c ?? t.mark) : "—", st.sym);
     pxBig.className = "chart-px num " + (t ? fmt.tone(t.p) : "");
     pxChg.textContent = t && t.p != null ? `24시간 ${fmt.pct(Number(t.p) / 100, 2)}` : "";

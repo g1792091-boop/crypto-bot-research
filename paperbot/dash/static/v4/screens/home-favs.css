@@ -1,19 +1,22 @@
 /* 홈 › ★ 즐겨찾기 strip (conv-b, screens/home-favs.js): one row of chips under the screen head; it scrolls sideways
    inside itself (never the page). Tokens only, font sizes only var(--t-*). */
 .hf { display: grid; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); }
-.hf-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: var(--t-sm); }
+.hf-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; font-size: var(--t-sm); }
 .hf-head b { color: var(--ink); }
 .hf-star { color: var(--series-core); }
 .hf-n { color: var(--muted); font-size: var(--t-xs); }
 .hf-note { margin-left: auto; color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.hf-row { display: flex; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
-.hf-chip { flex: none; display: inline-flex; align-items: baseline; gap: 6px; max-width: 320px; min-height: 36px; padding: 8px 12px; border-radius: 10px;
+.hf-row { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+@media (max-width: 759px) { .hf-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; } }
+.hf-chip { flex: none; display: inline-flex; align-items: baseline; gap: 6px; max-width: min(440px, 100%); min-height: 36px; padding: 8px 12px; border-radius: 10px;
   border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); text-decoration: none; font-size: var(--t-sm); white-space: nowrap; }
 .hf-chip:hover { border-color: var(--series-core); }
 .hf-k { color: var(--muted); font-size: var(--t-2xs); }
 .hf-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hf-v { font-weight: 700; }
+.hf-v.hf-thin { color: var(--muted); text-decoration: underline dashed var(--line-2); text-underline-offset: 3px; }
+.hf-thinnote { color: var(--muted); font-size: var(--t-2xs); }
+.hf-thinnote[hidden] { display: none; }
 .hf-pos { color: var(--accent); font-size: var(--t-xs); }
-.hf-chip .pp { font-size: var(--t-2xs); }
 .hf-empty { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.5; white-space: normal; }
 @media (max-width: 599px) { .hf-note { display: none; } }
