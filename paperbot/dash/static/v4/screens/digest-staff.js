@@ -4,6 +4,7 @@
 // rates (a coin flip 50 %, "always up" on the same days) as the server computes them. GET /api/digest/staff?days=N.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {avatarFor, ACTION_KO, VERDICT_KO} from "./rooms-kit.js";
+import {staffBoard} from "./digest-board.js";
 
 const TEAM_KO = {market: "시장분석", plan: "매매 계획", risk: "리스크", ops: "운영·검증", dev: "개발", lead: "총괄", review: "손익 복기",
   evolve: "자기진화", compare: "비교분석", timing: "타점분석", safety: "안전·실거래", specialist: "매매법 전담"};
@@ -99,7 +100,7 @@ export function makeStaff(ctx) {
     list.set(staff.filter((s) => s.turns || (s.predictions || {}).graded), true);
     grades.set(d.recent_grades || [], true);
     note.textContent = d.note || "";
-    if (!tiles.isConnected) put(body, tiles,
+    if (!tiles.isConnected) put(body, tiles, staffBoard(ctx),
       ui.card({plate: "직원별", sub: "발언이 있는 직원만 · 10명씩"},
         h("p", {class: "dg-rkey"}, h("span", null, "색 막대 = 이 직원이 남의 말에 한 반응"),
           h("span", null, h("i", {class: "agree"}), "동의"), h("span", null, h("i", {class: "disagree"}), "반대"), h("span", null, h("i", {class: "add"}), "보완")),
