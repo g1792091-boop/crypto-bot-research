@@ -250,12 +250,12 @@ def test_relay_event_maps_sell_to_the_red_top_buy_to_the_cyan_bottom_bigger_is_b
     assert m["other"][0] is None                                                         # another coin's smallest: skipped
     assert all(o["k"] < x["k"] and o["hold"] < x["hold"] for o, x in zip(m["other"][1:], m["mine"][1:]))
     assert m["bad"][0] is None and m["bad"][1] is None and m["bad"][2]["b"] == 1 and m["bad"][3]["b"] == 4
-    assert m["nosym"]["k"] == 0.42                                                       # no coin given: full strength
+    assert m["nosym"]["k"] == 0.55                                                       # no coin given: full strength
     assert out["r1"] is True and out["r2"] is True
     top, bot = out["top"], out["bot"]
     # b 4 sell: the top rises in 0.2 s at full strength, holds 1.2 s, fades in 0.4 s; the bottom blinks on its own
     assert top[0] == {"on": 100, "k": 1, "off": 100 + 200 + 1200, "dark": 100 + 200 + 1200 + 400}
-    assert bot[0]["on"] == 300 and bot[0]["k"] == 0.42 and bot[0]["off"] == 300 + 200 + 400
+    assert bot[0]["on"] == 300 and bot[0]["k"] == 0.55 and bot[0]["off"] == 300 + 200 + 400
     first = [e for e in out["log"] if e["t"] == 100][0]
     assert first == {"t": 100, "half": "top", "k": 1, "ms": 200, "kind": "in"}
 
@@ -264,7 +264,7 @@ def test_a_lit_half_goes_dark_before_the_next_real_blink_and_a_stronger_event_on
     out = _node(BLINK + """
       const A = mk(); A.b.sync();
       const R = (b) => BL.relayBlink({s: "BTCUSDT", side: "sell", b}, "BTCUSDT");
-      A.st.t = 0; A.b.real(R(1));                  // lights the top (0.42)
+      A.st.t = 0; A.b.real(R(1));                  // lights the top (0.55)
       A.st.t = 150; const up = A.b.real(R(3));     // stronger while lit: brighter at once, same end
       A.st.t = 300; const wait = A.b.real(R(2));   // weaker while lit: waits for the dark gap
       const pending = A.b.half("top").wait && A.b.half("top").wait.k;
@@ -279,8 +279,8 @@ def test_a_lit_half_goes_dark_before_the_next_real_blink_and_a_stronger_event_on
       D.run(8000);
       console.log(JSON.stringify({up, wait, pending, A: blinks(A.st.log, "top"), raise: A.st.log.filter((e) => e.ms === 120),
         C: blinks(C.st.log, "top"), D: blinks(D.st.log, "top"), dark: [...BL.FAST.dark]}));""")
-    assert out["up"] is True and out["wait"] is False and out["pending"] == 0.58
-    assert out["raise"] == [{"t": 150, "half": "top", "k": 0.78, "ms": 120, "kind": "in"}]
+    assert out["up"] is True and out["wait"] is False and out["pending"] == 0.7
+    assert out["raise"] == [{"t": 150, "half": "top", "k": 0.85, "ms": 120, "kind": "in"}]
     a = out["A"]
     assert a[0]["on"] == 0 and a[0]["off"] == 200 + 400                                 # the raise keeps the end
     assert a[1]["on"] >= a[0]["dark"] + out["dark"][0]                                    # then the waiting one, after the gap
@@ -289,8 +289,8 @@ def test_a_lit_half_goes_dark_before_the_next_real_blink_and_a_stronger_event_on
     for x, y in zip(c, c[1:]):
         assert y["on"] - x["dark"] >= out["dark"][0]                                      # dark between every two blinks
         assert x["off"] - x["on"] <= 200 + 1200                                           # never on for long
-    assert len([x for x in out["D"] if x["k"] > 0.4]) == 1                                # the stale one never played
-    assert all(x["k"] <= 0.4 for x in out["D"][1:])                                       # (later: the soft fallback)
+    assert len([x for x in out["D"] if x["k"] > 0.5]) == 1                                # the stale one never played
+    assert all(x["k"] <= 0.45 for x in out["D"][1:])                                      # (later: the soft fallback)
 
 
 def test_fallback_blinks_softly_and_irregularly_only_after_two_quiet_seconds():
@@ -314,10 +314,10 @@ def test_fallback_blinks_softly_and_irregularly_only_after_two_quiet_seconds():
     assert len(gaps) > 5                                                                   # irregular moments
     assert {x["on"] for x in top} != {x["on"] for x in bot}                               # the halves are independent
     assert out["src"][0][1] == "deco"
-    # with real events coming, every blink is a real one (k 0.58 = b 2); the decorative ones start 2 s after the last
+    # with real events coming, every blink is a real one (k 0.7 = b 2); the decorative ones start 2 s after the last
     real_end = 7600
     for x in out["rtop"] + out["rbot"]:
-        assert x["k"] == 0.58 or x["on"] >= real_end + 2000, x
+        assert x["k"] == 0.7 or x["on"] >= real_end + 2000, x
     assert any(x["on"] >= real_end + 2000 for x in out["rtop"] + out["rbot"])             # ... and come back after
     assert out["rsrc"][0][1] == "real" and out["rsrc"][-1][1] == "deco"
 
@@ -564,7 +564,9 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert "setInterval" not in fx and "setInterval" not in _code(_read("core", "blink.js"))
     assert "requestAnimationFrame" not in _code(_read("core", "blink.js"))
     # each blink is one CSS opacity transition on its own layer, set by the blinker's apply (no canvas work per blink)
-    assert 'el.style.transition = ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none";' in fx
+    # (inline !important: the reduced-motion rule in components.css would turn the calm fade into an abrupt on / off)
+    assert 'el.style.setProperty("transition", ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none", "important");' in fx
+    assert "*, *::before, *::after { animation: none !important; transition: none !important;" in _read("components.css")
     assert "el.style.opacity = String(Math.round(k * 1000) / 1000);" in fx
     assert "const halfEl = {top: ambDn, bottom: ambUp};" in fx               # tone down = red = Premium top
     css = _read("core", "chartfx.css")

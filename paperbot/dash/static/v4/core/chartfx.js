@@ -449,7 +449,9 @@ export function chartDeck(o) {
     reduced, visible, mode: () => (st.ai ? lmode : "off"),
     apply(half, k, ms, kind) {
       const el = halfEl[half];
-      el.style.transition = ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none";
+      // "important": under prefers-reduced-motion components.css stops every transition (!important), which would
+      // turn the calm slow fade (blink.js CALM) into an abrupt on / off; this one opacity fade is the calm version
+      el.style.setProperty("transition", ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none", "important");
       el.style.opacity = String(Math.round(k * 1000) / 1000);
     },
     onSrc: () => paintChip(),

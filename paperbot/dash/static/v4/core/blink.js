@@ -27,11 +27,11 @@ export const HALVES = ["top", "bottom"];          // top = the red Premium half,
 export const QUIET_MS = 2000;                     // no real event this long: the soft decorative blink takes over
 export const WAIT_MS = 1500;                      // a real event waiting for its half's dark gap longer than this is dropped
 export const STEADY_K = 0.56;                     // 계속 켜짐: the old steady strength (the tokens are a strong blink's peak)
-/** size bucket -> strength (0-1, the layer's opacity) and hold (ms) */
-export const BUCKETS = {1: {k: 0.42, hold: 400}, 2: {k: 0.58, hold: 600}, 3: {k: 0.78, hold: 850}, 4: {k: 1, hold: 1200}};
-export const OTHER_COIN = {k: 0.65, hold: 0.8};   // another coin's event (b 2-4): dimmer and shorter
+/** size bucket -> strength (0-1, the layer's opacity: b 1 about the old steady light, b 4 about twice it) and hold (ms) */
+export const BUCKETS = {1: {k: 0.55, hold: 400}, 2: {k: 0.7, hold: 600}, 3: {k: 0.85, hold: 850}, 4: {k: 1, hold: 1200}};
+export const OTHER_COIN = {k: 0.75, hold: 0.8};   // another coin's event (b 2-4): dimmer and shorter
 /** the timing: FAST normally, CALM under prefers-reduced-motion. dark = the dark gap after a blink; deco = the fallback */
-export const FAST = {inMs: 200, outMs: 400, dark: [350, 900], kMax: 1, deco: {k: [0.2, 0.4], hold: [350, 900], gap: [500, 2600]}};
+export const FAST = {inMs: 200, outMs: 400, dark: [350, 900], kMax: 1, deco: {k: [0.25, 0.45], hold: [350, 900], gap: [500, 2600]}};
 export const CALM = {inMs: 1400, outMs: 1800, dark: [2600, 4200], kMax: 0.6, hold: [1200, 2200],
   deco: {k: [0.18, 0.34], hold: [1400, 2400], gap: [2600, 6000]}};
 export const RAISE_MS = 120;                      // a stronger event while its half is lit: brighter at once, same end

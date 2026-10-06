@@ -121,6 +121,9 @@
 .cfx-ck.cfx-rd { border-radius: 50%; }
 .cfx-msub { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: var(--t-2xs); }
 .cfx-lmenu .cfx-mnote { max-width: 250px; }
+/* narrower windows: the button says only the light ('조명 깜박 ▾', narrower than the old 번쩍임 select); the flash
+   setting stays in the menu and the button's tooltip */
+@media (max-width: 1699px) { .cfx-lbtn .cfx-lf { display: none; } }
 .cfx-light { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 13px; border: 1px solid var(--line-2);
   color: var(--ink-2); font: 600 var(--t-2xs)/1 var(--f-body); cursor: help; white-space: nowrap; }
 .cfx-light[hidden] { display: none; }
