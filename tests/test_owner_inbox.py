@@ -282,6 +282,9 @@ def test_a_free_repeat_answers_the_owners_without_a_new_test(world, noise, tmp_p
     assert sorted(c["status"] for c in cards) == ["duplicate", "tested"] and A.newlab_count(world.agents) == 1
     dup = next(c for c in cards if c["status"] == "duplicate")
     assert dup["counted"] is False and dup["result_ko"].startswith("이미 시험함")
+    # the queue line of the repeat never says it will be counted (it is answered from the ledger for free)
+    q = [m["text"] for m in lab_lines(world) if m["text"].startswith(f"🧪 두 분 시험 요청 {dup['label_ko'][3:]}:")]
+    assert len(q) == 1 and "다시 돌리지 않고" in q[0] and "시험 수에 들어감" not in q[0]
     assert any(m["text"].startswith(f"🧪 두 분 시험 요청 {dup['label_ko'][3:]} 결과") for m in lab_lines(world))
 
 

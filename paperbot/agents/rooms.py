@@ -3285,6 +3285,15 @@ def lab_translate_packet(ctx: RoundContext, reqs: list[dict]) -> dict:
                          "되지는 않음. 두 분이 양식에서 고른 시간봉·롱숏(모름 제외)과 다르게 옮기면 코드가 approx로 돌림. 링크는 열 수 없음")}}
 
 
+def _owner_repeat(conn: sqlite3.Connection, row: dict) -> bool:
+    """Is this queued request a test the ledger already has (a newlab spec already tested, or a labtest with an
+    identical final trial)? labintake.run_due answers it for free; the room line must not say it will be counted."""
+    try:
+        return LI._free_answer(conn, row) is not None or LI._reusable(conn, row)
+    except (sqlite3.Error, ValueError, TypeError, KeyError):
+        return False
+
+
 def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) -> list[dict]:
     """Code after the translator: every request is re-made and queued by labintake.enqueue_owner (exact -> queued within
     the owners' daily budget, approx -> waits for the owners' click, none / outside the grammar -> refused, nothing
@@ -3331,7 +3340,11 @@ def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) ->
                 said.append("빠짐·바뀜: " + " / ".join(meta["lost"]))
             said_ko = f"\n번역가 설명 — {' · '.join(said)}" if said else ""
             reasons = " · ".join(meta.get("reasons_ko") or [])
-            if st == "queued":
+            if st == "queued" and _owner_repeat(conn, row):
+                # the same test is already in the ledger: answered from it for free (labintake.run_due), never 'counted'
+                body = (f"옮김: {LI.FIDELITY_KO['exact']}(진입 규칙 그대로) → 같은 시험이 장부에 이미 있어 다시 돌리지 않고 그때 결과를 "
+                        "알려 드립니다(시험 수에 넣지 않음, 오늘 몫도 쓰지 않음).")
+            elif st == "queued":
                 used = LI.used_today(conn, "owner", ctx.clock())
                 body = (f"옮김: {LI.FIDELITY_KO['exact']}(진입 규칙 그대로) → 오늘 두 분 몫({used}/{lim}) 안에서 코드가 5년 시험을 "
                         "돌립니다(시험 수에 들어감). 몫이 찼으면 다음 날로 넘어갑니다.")
