@@ -24,23 +24,39 @@ export const SHAPE7 = {
 };
 export const ATK7 = 0.009;
 export const STEP7 = 0.08;               // two / four note runs: 80 ms apart
-export const BUY_PEAK = 0.24, SELL_PEAK = 0.36;   // per unit of loudness v; sells +3.5 dB like the stream
+export const DBL7 = 0.085;               // 띠띠: the same note twice, 85 ms apart (the stream's queued trades)
+export const UNIT7 = 0.26;               // a sell beep's peak per unit of loudness v; every level below is x this
+/** The stream's kinds (census of 97 s of clean stream audio, analysis.md): [notes, levels x UNIT7, start s, shapes].
+ *  one = 띵 (62 % of the events), dbl = 띠띠, pair = 띠링, run = 띠리리링 (buy) / 띠릭 (sell) for the biggest trades;
+ *  a run's last note sounds twice, the second louder, as in the stream. Sells are +3.5 dB over buys, runs ~+10 dB. */
+export const KINDS7 = {
+  buy: {
+    one: [["E5"], [0.63], [0], ["std"]],
+    dbl: [["E5", "E5"], [0.44, 0.44], [0, DBL7], ["std", "std"]],
+    pair: [["E5", "Gs5"], [1.2, 1.2], [0, STEP7], ["std", "std"]],
+    run: [["E5", "Gs5", "B5", "E6", "E6"], [0.56, 0.56, 0.56, 1.03, 1.84], [0, 0.08, 0.16, 0.24, 0.325], ["std", "std", "std", "long", "long"]],
+  },
+  sell: {
+    one: [["B4"], [1], [0], ["std"]],
+    dbl: [["B4", "B4"], [0.7, 0.7], [0, DBL7], ["std", "std"]],
+    pair: [["B4", "G4"], [1.6, 1.43], [0, STEP7], ["std", "std"]],
+    run: [["B4", "Fs4", "D4", "B3", "B3"], [0.8, 1.67, 1.67, 1.77, 3.75], [0, 0.08, 0.16, 0.24, 0.315], ["std", "short", "short", "std", "long"]],
+  },
+};
+/** size -> kind: < 1.5 one (relay buckets 1-2), < 2.5 pair (bucket 3), else run (bucket 4). */
+export const kindOf7 = (size) => (size >= 2.5 ? "run" : size >= 1.5 ? "pair" : "one");
 
 const tri = (f, at, peak, shape) => ({w: "triangle", f, at, peak, atk: ATK7, parts: SHAPE7[shape]});
 
-/** The layer's trade sound: dir > 0 buy (upper notes), < 0 sell (lower); size < 1.5 one note, < 2.5 two, else four. */
-export function tick7(dir, size, v) {
-  const buy = dir > 0, s = Number(size) || 1;
-  const k = s >= 2.5 ? 4 : s >= 1.5 ? 2 : 1;
-  const base = (buy ? BUY_PEAK : SELL_PEAK) * v;
-  const N = NOTE7;
-  let fs, lv, sh;
-  if (k === 1) { fs = [buy ? N.E5 : N.B4]; lv = [1]; sh = ["std"]; }
-  else if (k === 2) { fs = buy ? [N.E5, N.Gs5] : [N.B4, N.G4]; lv = [1.05, 1.05]; sh = ["std", "std"]; }
-  else if (buy) { fs = [N.E5, N.Gs5, N.B5, N.E6]; lv = [0.8, 0.8, 0.8, 1.4]; sh = ["std", "std", "std", "long"]; }
-  else { fs = [N.B4, N.Fs4, N.D4, N.B3]; lv = [0.4, 1.15, 1.05, 1.15]; sh = ["std", "short", "short", "long"]; }
-  const voices = fs.map((f, i) => tri(f, i * STEP7, base * lv[i], sh[i]));
-  return k === 1 ? {f: fs[0], v, voices} : {fs, gaps: fs.slice(1).map(() => STEP7), v, voices};
+/** The layer's trade sound: dir > 0 buy (the upper notes), < 0 sell (the lower). `kind`: one | dbl | pair | run
+ *  (default: from the size). f (one note) or fs + gaps (several) for the tests and the label; voices = the plan. */
+export function tick7(dir, size, v, kind) {
+  const kn = Object.hasOwn(KINDS7.buy, kind || "") ? kind : kindOf7(Number(size) || 1);
+  const [names, lv, at, sh] = KINDS7[dir > 0 ? "buy" : "sell"][kn];
+  const fs = names.map((n) => NOTE7[n]);
+  const voices = fs.map((f, i) => tri(f, at[i], UNIT7 * v * lv[i], sh[i]));
+  return fs.length === 1 ? {f: fs[0], v, kind: kn, voices}
+    : {fs, gaps: at.slice(1).map((t, i) => Math.round((t - at[i]) * 1000) / 1000), v, kind: kn, voices};
 }
 
 // ---------------------------------------------------------------- B: the sparkle run
