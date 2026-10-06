@@ -310,8 +310,8 @@ def test_settings_panel_is_wired_everywhere_and_uses_the_same_keys():
     assert "export function deckState(key, groups, defaults)" in fx
     # a deck saves through prefs (the 여러 차트 cells share one key: a line hidden in one cell is not dropped by another's
     # save) and skips its own echo; only the groups that changed are drawn again
-    assert "setPref(key, {off: [...st.off], hide: [...st.hide].slice(-60)})" in fx and "if (saving) return;" in fx
-    assert "local.set(key, {off" not in fx and "for (const g of moved) applyGroup(g, true);" in fx
+    assert "local.set(key, v);" in fx and "tellPref(key, v)" in fx and "if (saving) return;" in fx
+    assert "for (const g of moved) applyGroup(g, true);" in fx
     main = _read("core", "main.js")
     assert main.index("startSettings();") < main.index("startSince();")
     nk = _read("core", "navkeys.js")
