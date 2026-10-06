@@ -9,7 +9,9 @@ import {h} from "./dom.js";
 import {bus, syncClock} from "./api.js";
 
 export const IDLE_RELOAD_MS = 5 * 60 * 1000;
+export const AUTO_AGAIN_MS = 10 * 60 * 1000;
 const AWAY_CHECK_MS = 60 * 1000;
+const AUTO_KEY = "pb4-autoreload";
 
 /** The fingerprint the page was opened with (null when the page was not served by '/', e.g. a direct file link). */
 export const pageVer = () => {
@@ -18,11 +20,15 @@ export const pageVer = () => {
 };
 
 /** Whether a newer page should load by itself now: a hidden page, or one left alone for IDLE_RELOAD_MS with nothing
- *  typed into a text box. */
-export function autoReloadOk({hidden, idleMs, typing}) {
+ *  typed into a text box. Once per new version: last = {ver, at} of this tab's last reload by itself; a page that
+ *  comes back still behind the server for the same version (something in between answered with older code) does not
+ *  reload itself again within AUTO_AGAIN_MS (the chip stays for a click), so a tab can never loop. */
+export function autoReloadOk({hidden, idleMs, typing, ver = null, last = null, now = Date.now()}) {
   if (typing) return false;
+  if (last && ver && last.ver === ver && now - Number(last.at || 0) < AUTO_AGAIN_MS) return false;
   return !!hidden || idleMs >= IDLE_RELOAD_MS;
 }
+const lastAuto = () => { try { return JSON.parse(sessionStorage.getItem(AUTO_KEY) || "null"); } catch (e) { return null; } };
 
 let chip = null, newVer = null, lastInput = Date.now(), timer = null;
 const typing = () => [...document.querySelectorAll("input:not([type=checkbox]):not([type=radio]):not([type=search]), textarea")]
@@ -30,7 +36,10 @@ const typing = () => [...document.querySelectorAll("input:not([type=checkbox]):n
 function reload() { try { location.reload(); } catch (e) { /* nothing */ } }
 function check() {
   if (!newVer) return;
-  if (autoReloadOk({hidden: document.visibilityState === "hidden", idleMs: Date.now() - lastInput, typing: typing()})) reload();
+  if (!autoReloadOk({hidden: document.visibilityState === "hidden", idleMs: Date.now() - lastInput, typing: typing(),
+    ver: newVer, last: lastAuto()})) return;
+  try { sessionStorage.setItem(AUTO_KEY, JSON.stringify({ver: newVer, at: Date.now()})); } catch (e) { /* no storage: still once per check */ }
+  reload();
 }
 function show(ver) {
   newVer = ver;

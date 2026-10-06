@@ -476,15 +476,19 @@ What the integrator changed, so later work starts from the same place:
   cards, overlap, breakdown, levels) 30 s, POST 30 s. A timeout or a lost connection is an `ApiError` with
   `kind: "timeout" | "network"` (status 0), so the next poll asks again; a left screen's abort stays an `AbortError`.
 - **The live stream heals itself**: 12 s without an event (the server writes every 3 s) = a dead connection, made again
-  at once (also on showing the page again and on `online`); a tab hidden for 2 minutes lets it go and resumes when
-  shown (after a short gap from the server's `cursor`, so no trade or alert is skipped). `stream.state`:
+  at once (also on showing the page again and on `online`); a tab hidden for 2 minutes lets it go and connects again
+  when shown. A gap under 2 minutes resumes from the server's `cursor` (no trade or alert skipped); a longer one starts
+  from now (`stream.resumed` false) and the shell reads the recent trades again for the banner. The browser's own
+  retry of a resumed address is replaced at once (it would replay everything since that old cursor). `stream.state`:
   `connecting | open | error | reconnecting | paused | idle`; `stream.fresh()` = open with an event in the last 12 s.
   `criticalLines({..., link})` shows '대시보드 연결 다시 잡는 중' after 5 s of trouble and blames the bot only with a
   heartbeat a live connection brought.
 - **Versioned files** (`dash/assets.py`): the page loads from `/static/v-<content hash>/v4/...`, kept a year. Never write
   an absolute `/static/v4/...` address in a screen: load css / files relative to the module,
   `new URL("x.css", import.meta.url).href` (tests/test_dash_reliability.py fails otherwise). `/api/time` carries the
-  server's `ver`; `core/version.js` shows '새 버전 준비됨 · 눌러서 새로고침' and reloads a hidden or 5-minute-idle tab.
+  server's `ver`; `core/version.js` shows '새 버전 준비됨 · 눌러서 새로고침' and reloads a hidden or 5-minute-idle tab
+  (once per new version: a tab that comes back still behind keeps the chip and never loops). A file is kept a year
+  only while it is the very file the version was taken from (an update landing between two looks is revalidated).
 - **No endless decoration**: a glow or blink runs 2-3 times on a real change, then stays lit; animate `opacity` /
   `transform` of a layer (a `::before` / `::after`), never `box-shadow` / `background` in a loop. A list that updates
   every few seconds changes its numbers in place and rebuilds only when its rows or order change.

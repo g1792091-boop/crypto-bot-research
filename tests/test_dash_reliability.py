@@ -307,7 +307,23 @@ document.visibilityState = 'visible';
 A.stream.lastEventAt = Date.now() - 300000;
 A.checkStream();
 const es3 = made[2];
-console.log(JSON.stringify({fresh1, closed1: es1.closed, url2: es2.url, url3: es3.url, paused, states,
+// the browser's own retry of a resumed connection (same address, old cursor): never let it replay what was seen
+es3.onopen();
+es3.onmessage({data: JSON.stringify({ts: 2, changed: {}, trades: [{id: 60}], alerts: [], heartbeat: null, room_msg: 9, rooms: {}, cursor: [60, 8]})});
+A.stream.lastEventAt = Date.now() - 13000; A.stream.openAt = Date.now() - 20000;
+A.checkStream();
+const es4 = made[3];
+es4.onopen();
+es4.onerror();                       // dropped; the browser retries the same address by itself (readyState 0)
+const seen = [];
+A.bus.on('trades', (t) => seen.push(...t.map((x) => x.id)));
+const msg4 = es4.onmessage;
+es4.onopen();                        // ... and gets through: replaced at once, from the cursor now
+const replay = {closed4: es4.closed, n: made.length, url5: made[4] && made[4].url};
+// what the old address would have replayed (trades after 41, seen already) never reaches the screens
+msg4({data: JSON.stringify({ts: 3, changed: {}, trades: [{id: 50}, {id: 60}], alerts: [], heartbeat: null, room_msg: 9, rooms: {}, cursor: [60, 8]})});
+replay.seen = seen;
+console.log(JSON.stringify({fresh1, closed1: es1.closed, url2: es2.url, url3: es3.url, paused, states, replay,
   url: [A.streamUrl([5, 6], 2, 1000), A.streamUrl([5, 6], 2, 200000), A.streamUrl(null, 0, null)]}));
 process.exit(0);
 """, _STREAM_SETUP)
@@ -317,6 +333,8 @@ process.exit(0);
     assert out["url3"] == "/api/stream?room_msg=9"
     assert out["states"][:3] == ["connecting", "open", "reconnecting"] and "paused" in out["states"]
     assert out["url"] == ["/api/stream?trade_id=5&alert_row=6&room_msg=2", "/api/stream?room_msg=2", "/api/stream"]
+    # a resumed connection's own browser retry would replay from its old cursor: replaced by one from the cursor now
+    assert out["replay"] == {"closed4": True, "n": 5, "url5": "/api/stream?trade_id=60&alert_row=8&room_msg=9", "seen": []}
 
 
 def test_a_dead_page_connection_gets_its_own_line_and_never_blames_the_bot():
@@ -370,6 +388,10 @@ const r = {
   idle: V.autoReloadOk({hidden: false, idleMs: V.IDLE_RELOAD_MS, typing: false}),
   busy: V.autoReloadOk({hidden: false, idleMs: 60000, typing: false}),
   typing: V.autoReloadOk({hidden: true, idleMs: V.IDLE_RELOAD_MS, typing: true}),
+  // once per new version: back from a reload by itself and still behind for the same version -> the chip only
+  again: V.autoReloadOk({hidden: true, idleMs: 0, typing: false, ver: 'b', last: {ver: 'b', at: 1000}, now: 1000 + 60000}),
+  later: V.autoReloadOk({hidden: true, idleMs: 0, typing: false, ver: 'b', last: {ver: 'b', at: 1000}, now: 1000 + V.AUTO_AGAIN_MS}),
+  other: V.autoReloadOk({hidden: true, idleMs: 0, typing: false, ver: 'c', last: {ver: 'b', at: 1000}, now: 1000 + 60000}),
   states: [ui.loadState(undefined, null), ui.loadState(undefined, new Error('x')), ui.loadState({a: 1}, new Error('x')), ui.loadState([], null)],
   ko: [ui.failKo({status: 404}), ui.failKo({kind: 'timeout'}), ui.failKo({kind: 'network'}), ui.failKo(new Error('x'))],
   bw: H.bestWorstOf({trades: 9, accounts: 3, best: [{account_id: 'S1@15m', pnl: 5, n: 2, strategy: 'S1', timeframe: '15m', kind: 'strategy'}], worst: []}),
@@ -378,6 +400,7 @@ const r = {
 console.log(JSON.stringify(r));
 """)
     assert out["hidden"] and out["idle"] and not out["busy"] and not out["typing"]
+    assert not out["again"] and out["later"] and out["other"]
     assert out["states"] == ["loading", "failed", "stale", "ok"]
     assert out["ko"] == ["이 자료가 서버에 없습니다", "서버가 제때 답하지 않았습니다", "서버에 닿지 못했습니다 (연결 끊김)", "불러오지 못했습니다"]
     assert out["bw"] == {"best": [{"id": "S1@15m", "strategy": "S1", "timeframe": "15m", "kind": "strategy", "pnl": 5, "n": 2}],

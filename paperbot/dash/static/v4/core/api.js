@@ -128,7 +128,7 @@ export const HIDDEN_CLOSE_MS = 120000;
 export const LINK_GRACE_MS = 5000;
 const RESUME_MS = 120000;           // a gap shorter than this picks the trades and alerts up where they stopped
 const WATCH_MS = 3000;
-export const stream = {state: "idle", since: 0, lastEventAt: 0, heartbeat: null, es: null, cursor: null, roomMsg: 0, reconnects: 0,
+export const stream = {state: "idle", since: 0, lastEventAt: 0, heartbeat: null, es: null, cursor: null, roomMsg: 0, reconnects: 0, resumed: false,
   /** LIVE means really live: the stream is connected AND the bot's heartbeat is fresh (< 90 s). */
   live() { return this.state === "open" && !!this.heartbeat && Date.now() - Number(this.heartbeat[0]) < 90000; },
   /** The page's own connection to the dashboard is up (an event in the last 12 s). */
@@ -162,11 +162,22 @@ export function startStream() {
   clearTimeout(retryT);
   startWatch();
   const gap = stream.lastEventAt ? Date.now() - stream.lastEventAt : null;
-  const es = new EventSource(streamUrl(stream.cursor, stream.roomMsg, gap));
+  // resumed: this connection picks the trades and alerts up where the last one stopped (a short gap); otherwise it
+  // starts from now, and a page that keeps its own list of recent trades reads them again (core/shell.js)
+  stream.resumed = !!(stream.cursor && gap != null && gap < RESUME_MS);
+  const url = streamUrl(stream.cursor, stream.roomMsg, gap);
+  const es = new EventSource(url);
   stream.es = es;
   stream.openAt = Date.now();
   if (stream.state !== "reconnecting" && stream.state !== "error") setState("connecting");
-  es.onopen = () => { if (stream.es !== es) return; retryMs = 5000; stream.lastEventAt = Date.now(); setState("open"); };
+  let opens = 0;
+  es.onopen = () => {
+    if (stream.es !== es) return;
+    // the browser's own retry of a dropped connection asks the same address again: one that carried a cursor would
+    // replay every trade and alert since that old cursor (seen already). Made again here from the cursor now instead.
+    if (++opens > 1 && url.includes("trade_id=")) { reconnectStream(); return; }
+    retryMs = 5000; stream.lastEventAt = Date.now(); setState("open");
+  };
   es.onerror = () => {
     if (stream.es !== es) return;
     setState("error");

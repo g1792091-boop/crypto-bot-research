@@ -198,8 +198,15 @@ export function startShell() {
   store.watch("board", () => {});
   bus.on("alerts", (a) => { st.alerts = [...a, ...st.alerts].slice(0, 100); renderHealth(); });
   bus.on("trades", (t) => { st.trades = [...t, ...st.trades].slice(0, 300); renderHealth(); });
-  // the page's own connection (core/api.js): any state but open (or a hidden tab's pause) counts as down from its start
-  bus.on("stream:state", (s) => { st.streamErrSince = s === "open" || s === "paused" ? null : (st.streamErrSince || Date.now()); renderHealth(); });
+  // the page's own connection (core/api.js): any state but open (or a hidden tab's pause) counts as down from its start.
+  // A connection made again that starts from now (a hidden tab's pause, a gap over 2 minutes) skipped the trades in
+  // between: the recent trades are read again, so a liquidation burst meanwhile still shows in the banner
+  let opened = false;
+  bus.on("stream:state", (s) => {
+    st.streamErrSince = s === "open" || s === "paused" ? null : (st.streamErrSince || Date.now());
+    if (s === "open") { if (opened && !stream.resumed) loadRecentTrades(); opened = true; }
+    renderHealth();
+  });
   // the live dot breathes once per REAL new heartbeat (the stream repeats the last one every 3 s: same ts, no pulse)
   let hbTs = null;
   bus.on("heartbeat", (hb) => {
