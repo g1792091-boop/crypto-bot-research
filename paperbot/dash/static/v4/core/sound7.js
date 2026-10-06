@@ -1,16 +1,18 @@
 // Live sound engine v7 "영상 기계음" (owners 10/06: "기계소리랑 똑같이"): the machine sounds of the YouTube live stream the
-// owners pointed at, rebuilt by synthesis only (no recording is shipped or embedded). Measured from the owners' four
-// screen recordings (scratchpad/sound7/analysis.md); three kinds of sound were found in the stream:
-//   A  the trade notes (almost all of the stream): a plain TRIANGLE wave (partials 1, 3, 5, 7 at -19, -28, -34 dB, no
-//      even ones), ~9 ms linear rise, then a two-part fall (64 % with a 43 ms time constant, 36 % with 240 ms: -11 dB at
-//      100 ms, -20 dB at ~320 ms). Buys are the E-major notes E5 659.26 / G#5 830.61 / B5 987.77 / E6 1318.51, sells
-//      B4 493.88 / G4 392 / F#4 369.99 / D4 293.66 / B3 246.94, sells 1.5 x (+3.5 dB) louder. One note for an ordinary
-//      trade, two (E5 G#5 | B4 G4, 80 ms apart) for a bigger one, four (E5 G#5 B5 E6 | B4 F#4 D4 B3) for the biggest.
-//   B  a bright rising "띠리리링" (twice in two minutes): sine notes F4 G4 C5 E5 73.5 ms apart, each ~85 ms long, with a
-//      glassy sparkle at 19 x and 21 x the note that sounds again ~100 ms later; E5 rings on.
-//   C  a mallet "띵 딩 딩 딩 딩" (twice in two minutes): D6 D6 C6 D6 B5 (1176.7 / 1047.5 / 989.1 Hz) 100-170 ms apart, each
-//      a struck tone (fundamental rings ~0.5 s, an inharmonic 4.39 x partial gone in ~35 ms, a 10 x partial, a 230 Hz
-//      thump) with a short noisy click 2-11 kHz.
+// owners pointed at, rebuilt by synthesis only (no recording is shipped or embedded). Measured from the owners' screen
+// recordings (scratchpad/sound7/analysis.md: 97 s of clean stream audio, music / speech / phone UI left out). Found:
+//   A  the trade notes (almost all of the stream, ~1.07 sounds a second): a plain TRIANGLE wave (partials 1, 3, 5, 7 at
+//      -19, -28, -34 dB, no even ones), ~9 ms rise, then a two-part fall (64 % with a 43 ms time constant, 36 % with
+//      240 ms: -11 dB at 100 ms, -20 dB at ~300 ms). Buys are the E-major notes E5 659.26 / G#5 830.61 / B5 987.77 / E6
+//      1318.51, sells B4 493.88 / G4 392 / F#4 369.99 / D4 293.66 / B3 246.94 (+-2 cents), sells +4 dB. The kinds, in the
+//      owners' words: 띵 one note (62 % of the sounds), 띠링 two notes 80 ms apart (9 %), 띠리리링 (buy) / 띠릭 (sell)
+//      four notes 80 ms apart + the last again louder (11 %), 띠띠 the same note twice 85 ms apart (4 %), 겹침 several
+//      of these at once (15 %).
+//   B  "반짝 띠리리링" (2 in the clips): sine notes F4 G4 C5 E5 73.5 ms apart, each ~85 ms long, with a glassy sparkle
+//      at 19 x and 21 x the note that sounds again ~100 ms later, a soft thud per step; E5 rings on.
+//   C  "딩딩 딩 딩 딩" (3 in the clips): D6 D6 C6 D6 B5 (1176.7 / 1047.5 / 989.1 Hz) 100-170 ms apart, each a struck tone
+//      (fundamental rings ~0.5 s, an inharmonic 4.39 x partial gone in ~60 ms, a 10 x partial, a 230 Hz thump) with a
+//      short noisy click 2-11 kHz.
 // A sound is a PLAN (a list of voices with exact gain automation); render() turns it into WebAudio nodes on the given
 // bus. The same plan is rendered offline (scratchpad/sound7/py/render7.py) and compared with the recordings, so the
 // numbers below are the ones that were measured and checked. Pure module: no AudioContext, no DOM, no timers.
