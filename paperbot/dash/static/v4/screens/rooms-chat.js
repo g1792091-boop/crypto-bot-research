@@ -16,8 +16,10 @@ import {KIND_KO, SPEAKING, VERDICT_KO, stanceOf, answerOf, dataOf, bodyLines, me
   stripLead, roomAvatar, pendingHint, agentsState, keptHoursKo, scheduleOf} from "./rooms-kit.js";
 import {recordBox, stratOf} from "./rooms-record.js";
 import {typeBadges, msgTypes, forOwners, pixAvatar, refsOf, miniCards, dayLabel} from "./agents-ui.js";
+import {labRequestForm} from "./labreq-kit.js";
 
 const PAGE = 60;
+const LAB_ROOM = "team:lab";
 const MAX_CHARS = 1000;
 const GROUP_MS = 10 * 60000;          // a speaker's next message within this, same meeting: grouped under the first
 const FILTERS = [{id: "all", label: "전체"}, {id: "result", label: "결론만"}, {id: "owner", label: "두 분 메모"}];
@@ -60,10 +62,14 @@ export function makeChat(ctx, hooks) {
   const mention = h("div", {class: "rm-mention", role: "listbox", hidden: true});
   const send = h("button", {class: "btn-y rm-send", type: "submit"}, "보내기");
   const form = h("form", {class: "rm-compose"}, mention, input, h("div", {class: "rm-cfoot"}, count, h("span", {class: "grow"}), send));
+  // the lab room only: the owners' guided '🧪 이 매매법 시험해줘' form (labreq-kit.js, #103); its on / off state is the
+  // server's (/api/lab/intake owner block), read when the room opens
+  const labForm = labRequestForm(ctx, {onSent: (d) => { if (st.id === LAB_ROOM) addPending(d); hooks.sideChanged(); }});
+  labForm.hidden = true;
   const foot = h("p", {class: "rm-foot"});
   const empty = h("div", {class: "rm-empty"}, ui.empty("왼쪽에서 방을 고르세요"));
   const body = h("div", {class: "rm-chatin", hidden: true}, head, pin, waitBtn, runLine, tools, fBar,
-    h("div", {class: "rm-scrollwrap"}, scroller, newBtn), form, foot);
+    h("div", {class: "rm-scrollwrap"}, scroller, newBtn), labForm, form, foot);
   const el = h("section", {class: "rm-chat", "aria-label": "방 대화"}, empty, body);
 
   scroller.addEventListener("scroll", () => { if (nearBottom()) newBtn.hidden = true; });
@@ -272,6 +278,7 @@ export function makeChat(ctx, hooks) {
       clear(list); list.append(motion.shimmer(4));
       fBar.hidden = true; newBtn.hidden = true; none.hidden = true;
       input.value = ""; grow();
+      loadLabOwner(id);
     }
     renderHead();
     let d;
@@ -393,17 +400,27 @@ export function makeChat(ctx, hooks) {
       input.value = ""; grow();
       const a = agentsState(st.ov), hint = pendingHint(a.st, (curOv() || {}).owner_wait, (st.ov || {}).rounds_per_room_day, keptHoursKo((st.ov || {}).hours));
       ctx.toast(a.st === "ok" ? `전달했습니다. ${hint}` : `저장했습니다. ${hint}`);
-      if (id === st.id && d) {
-        st.pending.push(d);
-        const ph = list.querySelector(".rm-emptyroom");
-        if (ph) ph.remove();
-        renderPending(); apply(false);
-        const last = list.lastElementChild;
-        if (last) motion.popBubble(last);
-        requestAnimationFrame(() => toBottom(true));
-      }
+      if (id === st.id && d) addPending(d);
     } catch (err) { ctx.toast((err && err.detail) || "보내지 못했습니다. 잠시 뒤 다시 시도해 주세요"); } finally { send.disabled = false; }
   });
+  /** A post the server stored (전달 대기 until the staff read it): shown at the end of the room at once. */
+  function addPending(d) {
+    if (!d) return;
+    st.pending.push(d);
+    const ph = list.querySelector(".rm-emptyroom");
+    if (ph) ph.remove();
+    renderPending(); apply(false);
+    const last = list.lastElementChild;
+    if (last) motion.popBubble(last);
+    requestAnimationFrame(() => toBottom(true));
+  }
+  async function loadLabOwner(id) {
+    labForm.hidden = id !== LAB_ROOM;
+    if (id !== LAB_ROOM) return;
+    let d = null;
+    try { d = await ctx.api("/api/lab/intake?limit=1"); } catch { d = null; }   // an older server: the form says it cannot send
+    if (st.id === id && ctx.alive()) labForm.setOwner(d && d.owner);
+  }
 
   return {el, open, fetchNew, renderHead, current: () => st.id,
     setOv(ov) { const was = !!(curOv() || {}).running; st.ov = ov; if (st.id) { renderHead(); if (was !== !!(curOv() || {}).running) renderPending(); } },

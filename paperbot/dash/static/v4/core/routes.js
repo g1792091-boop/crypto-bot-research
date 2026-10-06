@@ -32,6 +32,7 @@ export const SCREENS = {
   replay: {ko: "다시보기", group: "strat", title: "거래 다시보기", hidden: true},
   analysis: {ko: "분석", group: "strat", title: "분석"},
   path: {ko: "졸업 길", group: "strat", title: "졸업 길"},
+  nextver: {ko: "다음 버전", group: "strat", title: "다음 버전 후보", hidden: true},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},

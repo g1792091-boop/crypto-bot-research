@@ -1,4 +1,5 @@
 @import url("rooms-kit.css");
+@import url("labreq-kit.css");
 /* rooms: 에이전트 방 (builder D). A messenger inside the dark console frame (mockup section 06): room list | chat | info
    side by side from 1100 px, one pane at a time below that. Tokens only. */
 [data-screen="rooms"] .rm-frame { border-radius: var(--r-lg); padding: 14px; gap: 12px; }

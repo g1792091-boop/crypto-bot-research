@@ -7,6 +7,7 @@
 import {h, ui, fmt, motion} from "../core/pb.js";
 import {specKo, avatarFor, agentsState, keptHoursKo, scheduleOf} from "./rooms-kit.js";
 import {roomSides, labIntake} from "./disputes-kit.js";
+import {ownerRequests} from "./labreq-kit.js";
 
 const PSTATUS_KO = {awaiting_owner: "두 분 확인 대기", approved: "승인됨", rejected: "거절됨", blocked_gate: "코드 관문에서 막힘", blocked_cap: "복제 한도로 막힘"};
 const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안", newlab: "새 매매법 시험"};
@@ -23,7 +24,7 @@ function decisionWhen(st) {
 }
 
 export function makeSide(ctx, hooks) {
-  const st = {id: null, room: null, side: null, confirm: null, req: 0, usage: null};
+  const st = {id: null, room: null, side: null, confirm: null, req: 0, usage: null, labConfirm: {id: null, dec: null}};
   const back = h("button", {class: "btn-line rm-back", type: "button", onclick: () => hooks.pane("chat")}, "← 대화");
   const titleEl = h("b", {class: "rm-stitle"}, "방 정보");
   const body = h("div", {class: "rm-sbody"}, ui.empty("방을 고르면 정보가 나옵니다"));
@@ -188,6 +189,9 @@ export function makeSide(ctx, hooks) {
     // design 102 C: a strategy room's sides and disputes; the lab room's shared test queue
     if (disputes) kids.push(roomSides({sides: disputes.seats, disputes: disputes.disputes, base_rates: disputes.base_rates}));
     if (st.id === LAB_ROOM) kids.push(labIntake(intake));
+    // #103: the owners' own test requests, their translation and the 시험하기 / 그만두기 click (labreq-kit.js)
+    if (st.id === LAB_ROOM) kids.push(ownerRequests(ctx, intake && intake.owner, {confirm: st.labConfirm,
+      onDecided: (id, d) => { if (d) load(); else render(); }}));
     kids.push(usageBlock(st.usage));
     body.replaceChildren(...kids.filter(Boolean));
   }

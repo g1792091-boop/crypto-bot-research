@@ -1,0 +1,25 @@
+/* 다음 버전 (#/nextver, screens/nextver.js): 후보 장부 · 주장별 성적표 · 못 하는 아이디어. Tokens only (both skins), every
+   font size a --t-* token; phones first (one column, rows wrap, no sideways scroll). */
+[data-screen="nextver"] { gap: 14px; }
+[data-screen="nextver"] .nv-body { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  align-items: start; min-width: 0; }
+.nv-list { display: grid; gap: 8px; min-width: 0; }
+.nv-row, .nv-study { display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2);
+  text-decoration: none; min-width: 0; font: 400 var(--t-xs)/1.55 var(--f-body); }
+a.nv-row:hover, a.nv-row:focus-visible { background: var(--surface-3, var(--surface-2)); outline: 1px solid var(--accent-line); }
+.nv-rh { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.nv-rh time { margin-left: auto; }
+.nv-title { color: var(--ink); font: 700 var(--t-sm)/1.45 var(--f-body); overflow-wrap: anywhere; }
+.nv-sub, .nv-quote, .nv-luck { margin: 0; overflow-wrap: anywhere; }
+.nv-quote { color: var(--ink-2); font-style: italic; }
+.nv-luckbox { display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line-2); font-size: var(--t-xs); }
+.nv-luckbox:empty { display: none; }
+.nv-luck b { color: var(--ink); }
+.nv-go { justify-self: start; color: var(--accent); font-weight: 700; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
+.nv-grades, .nv-tally, .nv-why { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--t-xs); color: var(--ink-2); }
+.nv-grades { padding-left: 0; list-style: none; }
+.nv-bars { display: grid; gap: 4px; margin: 2px 0; }
+.nv-bar { display: grid; grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr) 3.5em; align-items: center; gap: 8px; font-size: var(--t-xs); }
+.nv-bar b { text-align: right; color: var(--ink); font-family: var(--f-term); }
+.nv-bar .prog i.nv-base { background: var(--muted); }
+.nv-foot { margin: 0; font-size: var(--t-xs); }
