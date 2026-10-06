@@ -154,3 +154,15 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | 주간 최대 손실 15% → 자동 중단 | `weekGate()` — 주초 자본 대비 15% 손실이면 다음 주 월요일까지 신규 진입 중지 |
 | Shadow Mode · 멀티 AI 경쟁·자기학습(NOFX) · 다중 에이전트 합의 · 레짐 필터 · EMA200 · ATR 사이징 · 일일 손실 한도 | 이미 있음(관망 채점·모델 리더보드·토론·국면·상위 추세·프레임워크) |
 | MCP·플러그인 설치(거래소 주문 MCP · 원격 신호 MCP) | 설치하지 않음 — 거래소 주문 도구는 'AI 는 주문하지 않음' 규칙과 충돌, 원격 MCP 는 대화 내용이 외부 서버로 감. 참고용 다운로드만 |
+
+### 2026-10-06 (3) — DeepSeek 목록 3 (AI 모델·에이전트 팀·'뉴트론'·20배 진입 도구) + 지난 목록의 다음 후보
+받은 것: `문서/GH Coin 참고자료/2026-10-06 DeepSeek 목록 3/` (github 18 · npm 4 · pip 3, 설치·실행 안 함). 제외: pragma-openclaw(밈코인 스캘핑). 없는 저장소 4개.
+| 출처 | 적용 |
+|---|---|
+| tradeblocks parameter-study-selection (K개 중 최고 선택의 운 · E[max z]) | `robust.js luckBar/expMaxZ` → `neural.js vstat().luck` — 운 범위 매매법은 최소 리스크 0.25% · 엔진 줄 '운범위' |
+| tradeblocks monte-carlo · cubexch backtester 관문(파산 확률·낙폭 95%) | `robust.js ruinMC()` 블록 부트스트랩 → `hygiene()` 에 포함(>50% 탈락 · >5% 경고) · 검증 보강 표에 표시 |
+| tradeblocks streak-analysis (runs 검정) | `robust.js runsTest()` → 관망 점검에 손실 뭉침 z 표시. 1년 실측 z=−13~−17(손실 뒤 손실 76% vs 64%) → 연속 손실 휴식 근거 확인 |
+| opensqt risk_monitor (시장 전체 급락 정지) | `neural.js step()` 5/6코인 1분봉 SMA20 아래 + 거래량 3배 → 30분 신규 진입 중지(관망 채점 'panic') |
+| cryptozavr volatility_regime (극단 변동성 회피) | 실측 0.158 → 0.065~0.119R(나빠짐) → 미채택 |
+| '뉴트론'(Neutron 결제 MCP · zyfai · KAIA) | 블록체인 결제·지갑 도구 — 우리 뉴트론(뇌·MCP)과 무관 → 적용 안 함 |
+| '20배 손절 5%' | 청산거리(~4.75%)보다 멀어 틀림 → 기존 프레임워크(손절 ≤ 청산거리 40%) 유지 |

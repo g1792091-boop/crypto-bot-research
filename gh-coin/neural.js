@@ -8,7 +8,8 @@ import { onLeader } from "./leader.js";   // 👑 매매 엔진은 한 창에서
 import * as ENG from "./strategies.js";
 import * as CL from "./chartlab.js";
 import * as HR from "./lib/holdrules.js";   // 🧘 관망 규칙집(스스로 고치고 검증해 유지/되돌림)
-import * as OS from "./lib/olschema.js";    // 🧾 로컬 모델 JSON 스키마 강제
+import * as OS from "./lib/olschema.js";
+import * as RB0 from "./lib/robust.js";   // 운 보정 기준선 · runs 검정    // 🧾 로컬 모델 JSON 스키마 강제
 
 // 📚 코인 선물 매매법 지식베이스 — 뇌에 '매매법·지식·대응'을 처음부터 깔아둔다(교훈 외에 실제 매매법 지식).
 const STRATEGY_KB = [
@@ -293,7 +294,8 @@ const VMAP = () => Object.fromEntries(variants().map(v => [v.vkey, v]));
 function vstat(vkey) {
   const st = S.eng.stats[vkey]; if (!st || !st.tr?.length) return { n: 0, mean: 0, wr: 0, live: 0, bt: 0 };
   const last = st.tr.slice(-SEL.K), n = last.length, mean = n ? last.reduce((a, t) => a + t.R, 0) / n : 0;
-  return { n, mean: +mean.toFixed(3), wr: n ? Math.round(last.filter(t => t.R > 0).length / n * 100) : 0, live: st.tr.filter(t => t.src === "live").length, bt: st.tr.filter(t => t.src === "bt").length, all: st.tr.length };
+  const sd = n > 1 ? Math.sqrt(last.reduce((a, t) => a + (t.R - mean) ** 2, 0) / (n - 1)) : 0, bar = RB0.luckBar(Math.max(2, S.eng.K || 40), sd, n);
+  return { n, mean: +mean.toFixed(3), sd: +sd.toFixed(3), bar: +bar.toFixed(3), luck: mean < bar, wr: n ? Math.round(last.filter(t => t.R > 0).length / n * 100) : 0, live: st.tr.filter(t => t.src === "live").length, bt: st.tr.filter(t => t.src === "bt").length, all: st.tr.length };
 }
 // 활성 = 최근 성과로 검증됨(워크포워드). 5·15분봉 스캘핑은 수수료 비중이 커서 더 높은 기준(검증상 마이너스 경향)
 function isActive(v) {
@@ -310,6 +312,8 @@ function kellyQ(vkey) { const tr = (S.eng.stats[vkey]?.tr || []).slice(-SEL.K); 
 function riskFor(v, side) {
   const s = vstat(v.vkey); let r = s.n >= 15 && s.mean > 0.25 ? FW.maxRisk : FW.baseRisk;
   { const kq = kellyQ(v.vkey); if (kq != null && kq < r) r = Math.max(0.0025, kq); }
+  // 운 보정: 매매법 ~40개 중 최근 성적이 좋은 것을 고르므로, 평균이 '운만으로도 나오는 최댓값'(표준오차 × E[max z]) 아래면 최소 리스크로만
+  if (s.n >= 8 && s.luck) r = Math.min(r, 0.0025);
   r *= riskFactor();
   const nw = S.news; if (nw && Date.now() - nw.t < 3600e3) { if (side > 0 && nw.score <= -1) r *= 0.5; if (side < 0 && nw.score >= 1) r *= 0.5; }
   const th = BRAIN.timeAdvice(new Date().getHours()); if (th && th.n >= 8 && !th.good) r *= 0.5;   // 학습상 안 되는 시간대
@@ -462,6 +466,11 @@ export function mtfText(sym) { const m = S?.mtf?.[sym]; if (!m) return ""; retur
 // ── 한 스텝: 코인별 시세 → 포지션 관리 → 국면 판정 → 검증된 전략 신호 → 승인 대기열 ──
 export async function step() {
   load();
+  // 🚨 시장 전체 급락 정지(개념: opensqt risk_monitor): 6코인 중 5개 이상이 1분봉 SMA20 아래 + 거래량 평균 3배↑ → 30분 신규 진입 중지(막은 신호도 채점)
+  //   1분봉은 과거가 짧아 백테스트로 검증하지 못한 안전장치 → 막은 신호를 '관망 채점'(panic)으로 따로 집계해 손해면 알 수 있게 한다.
+  try { const C1 = {}; let down = 0, n = 0; for (const [, sy] of COINS) { const m = MK[sy + "|1"]; if (!m?.cs?.length) continue; const cs = m.cs, i = cs.length - 2; if (i < 25) continue; n++;
+      let sma = 0, va = 0; for (let j = i - 19; j <= i; j++) { sma += cs[j].c; va += cs[j].v; } sma /= 20; va /= 20; if (cs[i].c < sma && cs[i].v > 3 * va) down++; }
+    if (n >= 5 && down >= 5 && !((S.panic || 0) > Date.now())) { S.panic = Date.now() + 30 * 60e3; feed(`🚨 시장 전체 급락 감지 — ${down}/${n}개 코인이 1분봉 20평균 아래 + 거래량 3배 → 30분 신규 진입 중지`); } } catch (e) {}
   // ⛔ 낙폭 서킷브레이커(ffrdm·FenixAI): 고점 대비 30% 이상 잃으면 24시간 신규 진입 중지(같은 고점에서는 한 번만 — 영구 정지 방지)
   { const eq = equity(), pk = Math.max(S.peak || BANKROLL, eq); if ((pk - eq) / pk >= 0.3 && S.haltPk !== pk) { S.halt = Date.now() + 24 * 3600e3; S.haltPk = pk; feed(`⛔ 고점 대비 낙폭 ${((pk - eq) / pk * 100).toFixed(1)}% → 24시간 신규 진입 중지(보유 포지션 관리는 계속)`); } }
   if (!olInit || S.epoch % 20 === 0) { olInit = true; refreshOllama(); }
@@ -513,7 +522,7 @@ export async function step() {
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
       // 🧘 관망 규칙집(실데이터로 검증된 것만 켜짐 · 스스로 고침) + 피로(연속 손실 휴식) + 낙폭 서킷브레이커. 막은 신호도 따라가 채점한다.
       { const tcl = barT + TFMIN[tf] * 60e3, ctx = HR.ctxAt(ENG, mk.I, i, H, s.side, tcl, { fng: S.fng?.v ?? null, ...tfCtx(tf, tcl, k => MK[sym + "|" + k]) }), hk = HR.check(S.hold, ctx), rest = HR.restUntil(S.hold, closedSeq()), now = Date.now();
-        const rule = (S.halt || 0) > now ? "halt" : rest > now ? "streak" : hk?.block, why = rule === "halt" ? "낙폭 서킷브레이커(24시간 신규 진입 중지)" : rule === "streak" ? `${HR.ruleText("streak", S.hold.rules.streak.p)} — ${Math.ceil((rest - now) / 3600e3)}시간 남음` : hk?.why;
+        const rule = (S.halt || 0) > now ? "halt" : (S.panic || 0) > now ? "panic" : rest > now ? "streak" : hk?.block, why = rule === "halt" ? "낙폭 서킷브레이커(24시간 신규 진입 중지)" : rule === "panic" ? "시장 전체 급락 정지(30분)" : rule === "streak" ? `${HR.ruleText("streak", S.hold.rules.streak.p)} — ${Math.ceil((rest - now) / 3600e3)}시간 남음` : hk?.why;
         if (rule) { shadowAdd({ sym, ko, side: s.side, sl: s.sl, rr: rrFor(v), px: price, name: v.name, rule }); feed(`🧘 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호(${v.name}) 관망 — ${why}`); continue; } }
       const wh = await whaleSignal(sym).catch(() => null);
       (S.sigLog ||= []).push({ sym, side: s.side, sl: s.sl, rr: rrFor(v), vkey: v.vkey, name: v.name, tf, mean: st.mean, n: st.n, wr: st.wr, t: Date.now(), px: price }); if (S.sigLog.length > 60) S.sigLog.splice(0, S.sigLog.length - 60);
@@ -579,7 +588,8 @@ function holdEvolve(HT) {
     feed(`🧘 관망 규칙 v${S.hold.ver} 채택(${pick.src === "AI" ? "AI 제안 " + prop.by : "코드 탐색"}): ${HR.editText(pick.e)} — ${pick.why}`);
     BRAIN.learn({ type: "지식", text: `관망 규칙 v${S.hold.ver}: ${HR.editText(pick.e)} (${pick.why})`, model: "관망 규칙 진화", w: 2, key: "hold:" + pick.e.id }); }
   const top = ev.tried.filter(x => x.sc).sort((a, b) => (b.d ?? -9) - (a.d ?? -9)).slice(0, 5);
-  S.holdEval = { t: Date.now(), n: HT.length, base: ev.base, cool: !!(ev.adopted && !pick), top: top.map(x => ({ e: HR.editText(x.e), src: x.src, ok: x.ok, why: x.why })) };
+  let runs = null; try { const nb = JSON.parse(JSON.stringify(S.hold)); nb.rules.streak.on = false; runs = RB0.runsTest(HR.replay(HT, nb, cfg().maxPos).sort((a, b) => a.t1 - b.t1).map(x => x.R > 0)); } catch (e) {}
+  S.holdEval = { t: Date.now(), n: HT.length, base: ev.base, runs, liveRuns: RB0.runsTest([...(S.trades || [])].reverse().map(t => t.R > 0)), cool: !!(ev.adopted && !pick), top: top.map(x => ({ e: HR.editText(x.e), src: x.src, ok: x.ok, why: x.why })) };
   feed(`🧘 관망 규칙 점검: 지금 규칙집으로 데스크 재연 ${ev.base.all.n}건 평균 ${ev.base.all.mean}R(승률 ${ev.base.all.wr}%) · 전반 ${ev.base.h1.mean} / 후반 ${ev.base.h2.mean} · 수정 후보 ${ev.tried.length}개${pick ? "" : ev.adopted ? " → 더 나은 수정 있음(12시간 대기)" : " → 유지"}`);
 }
 export async function calibrate() {
@@ -611,6 +621,7 @@ export async function calibrate() {
     S.eng.stats[v.vkey] = { tr: [...bt, ...live].slice(-60) }; }
   try { holdEvolve(HT); } catch (e) { feed(`🧘 관망 규칙 점검 실패(${String(e?.message || e).slice(0, 40)})`); }
   const act = V.filter(isActive), summ = V.map(v => ({ v, s: vstat(v.vkey) })).filter(x => x.s.n).sort((a, b) => b.s.mean - a.s.mean);
+  S.eng.K = V.length;
   S.eng.calibAt = Date.now(); S.eng.calib = { at: Date.now(), active: act.map(v => v.vkey), top: summ.slice(0, 5).map(x => `${x.v.name}@${x.v.tf}: ${x.s.mean >= 0 ? "+" : ""}${x.s.mean}R(${x.s.n}건 승률${x.s.wr}%)`) };
   feed(`🔬 자체 백테스트 끝 — 지금 실전 투입(검증 통과) ${act.length}개: ${act.map(v => v.name + "@" + v.tf).join(", ") || "없음 → 기다림(억지 진입 안 함)"}`);
   calibrating = false; save();

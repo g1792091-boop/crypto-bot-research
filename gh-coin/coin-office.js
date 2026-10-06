@@ -1375,7 +1375,7 @@ async function research(lane = "std"){
       p: pt.p ?? null, mwPos: mw.positive ?? null, mwTotal: mw.total ?? null, sqn: Number.isFinite(an.sqn) ? +an.sqn.toFixed(2) : null};
     const days = Math.max(1, (cs.at(-1).t - cs[0].t) / 864e5), f2 = x => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(2);
     table(L.bt, L.checker, `🔬 ${spec.name} 검증 보강`, ["항목", "값", "뜻"], [["SQN", `${f2(an.sqn)} (${an.sqnGrade})`, "√거래수 × 평균/표준편차 — 2 이상 보통, 3 이상 좋음"], ["VWR", f2(an.vwr), "일정한 성장선에서 덜 흔들릴수록 높음"], ["최장 물림", `${an.maxddLen}봉`, "고점 회복까지 걸린 가장 긴 기간"], ["연승/연패", `${an.streakWon}/${an.streakLost}`, ""],
-      ["운일 확률 p", f2(pt.p), pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 가능성 큼(주의)"], ["부트스트랩 샤프 90% 구간", bs ? `${f2(bs.lo)} ~ ${f2(bs.hi)}` : "—", "0 아래가 넓으면 불안정"], ["5구간 이익", `${mw.positive}/${mw.total}`, "기간별로 고르게 버는지"],
+      ["운일 확률 p", f2(pt.p), pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 가능성 큼(주의)"], ["몬테카를로 파산 확률(거래 순서 1000번 섞기)", hy.mc ? `${(hy.mc.pRuin * 100).toFixed(0)}% · 낙폭 95% ${hy.mc.dd95}%` : "—", hy.mc ? (hy.mc.pRuin > 0.5 ? "절반 넘게 반토막 → 탈락" : hy.mc.pRuin > 0.05 ? "실거래 기준(5%) 초과 — 레버리지·크기 주의" : "낮음") : "거래 부족"], ["부트스트랩 샤프 90% 구간", bs ? `${f2(bs.lo)} ~ ${f2(bs.hi)}` : "—", "0 아래가 넓으면 불안정"], ["5구간 이익", `${mw.positive}/${mw.total}`, "기간별로 고르게 버는지"],
       ["손실함수 Sharpe/Sortino/Calmar", `${f2(-H.LOSSES.SharpeDaily.f(bt.trades, 10000, days))} / ${f2(-H.LOSSES.SortinoDaily.f(bt.trades, 10000, days))} / ${f2(-H.LOSSES.Calmar.f(bt.trades, 10000, days))}`, "freqtrade 하이퍼옵트 기준값"], ["위생", hy.ok ? (hy.warns.join(", ") || "이상 없음") : hy.fails.join(", "), ""], ...(vchk.fails.length ? [["제약 경고", vchk.fails.map(f => f.text).join(", "), "Warn"]] : [])],
       "참고 지표 · 통과 판정은 위 코드 관문(70/30 워크포워드)이 함");
     if (wf.pass){ const rv = SD.propose(spec, {author: a.name, why: "백테스트 통과"}); SD.decide(spec.name, rv.id, true, {who: v.name, why: "코드 관문 통과"}); }
@@ -2773,7 +2773,7 @@ async function presetJob(){
       const spec = Q.normalizeSpec({...pr.spec, symbol: mk.market, interval: IV_NAME[mk.tf] || "4h", risk: {...(pr.spec.risk || {}), ...COSTS[mk.cls]}});
       const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
       let robust = null;
-      if (RB){ const pt = RB.permutationTest(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5); robust = {ok: (pt.p == null || pt.p <= 0.1) && (mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6)), p: pt.p ?? null, mwPos: mw.positive, mwTotal: mw.total, sqn: null}; }
+      if (RB){ const pt = RB.permutationTest(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5), hy = RB.hygiene(bt); robust = {ok: (pt.p == null || pt.p <= 0.1) && (mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6)) && hy.ok !== false, p: pt.p ?? null, mwPos: mw.positive, mwTotal: mw.total, sqn: null, mc: hy.mc || null}; }
       const oos = wf.oos || {}, trust = trustScore({ret: +(oos.return_pct ?? 0), wr: +(oos.win_rate ?? 0), pf: oos.profit_factor ?? null, n: oos.n_trades ?? 0, robust});
       results.push({pr, spec, wf, trust, robust});
       rows.push([pr.name, pc(+(bt.stats.return_pct ?? 0)), String(bt.stats.n_trades ?? 0), bt.stats.profit_factor ?? "—", wf.pass ? "✅" : "—", `${trust} ${trustGrade(trust).split(" ")[0]}`]);
