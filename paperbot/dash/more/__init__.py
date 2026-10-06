@@ -22,6 +22,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     people  오늘 코드 기록: 묶음별 오늘 거래·손실 카드 수, 매매법 방의 최근 거래·신호 (회의실 상황판, 에이전트 방)
     ticks   실시간 체결 바탕음: 바이낸스 aggTrade 소켓 하나를 모든 화면이 나눠 씀 (/api/v4/ticks, 소리를 켠 화면만)
     movers  급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 전체 (터미널 윗줄, 요청 2개를 60초 캐시)
+    combo   조합 성과 (#/combo): 고른 매매법·봉 계좌를 합친 곡선과 숫자, 전체 상관 지도, 합친 규칙 실험 (paper3.db만 읽음)
 """
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ MODULES += ("radar",)                          # 신호 레이더 (36개 조건 
 MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시장 강제청산 보드 (flow.db, liq.db)
 MODULES += ("people",)                         # fill-people: 상황판 + strategy room record
 MODULES += ("movers",)                         # term-v2: 급등 · 급락 · 음펀비 (시장 전체, 60 s cache)
+MODULES += ("combo",)                          # combo-paper: 조합 성과 (합친 곡선, 상관 지도, 합친 규칙)
 
 
 def register_all(app, **kw) -> dict:
