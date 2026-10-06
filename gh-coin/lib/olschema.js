@@ -39,4 +39,4 @@ export const SCAN_SCHEMA = { type: "object", properties: { bias: { type: "intege
 export const NEWS_SCHEMA = { type: "object", properties: { score: { type: "integer", enum: [-2, -1, 0, 1, 2] }, event: { type: "boolean" }, reason: { type: "string" } }, required: ["score", "event", "reason"] };
 /** 포지션 관리: 보유 코인만(enum) · 허용 결정만(enum) */
 export const posSchema = syms => ({ type: "object", properties: { decisions: { type: "array", minItems: syms.length, maxItems: Math.max(1, syms.length), items: { type: "object", properties: {
-  symbol: { type: "string", enum: syms }, decision: { type: "string", enum: ["hold", "keep_tp", "close", "breakeven", "run", "trail", "tp"] }, price: { type: "number" }, reason: { type: "string" } }, required: ["symbol", "decision", "reason"] } } }, required: ["decisions"] });
+  symbol: { type: "string", enum: syms }, decision: { type: "string", enum: ["hold", "close", "breakeven", "trail", "tp"]   /* run·keep_tp 제외: 익절 풀고 추적은 표본외에서 손해 */ }, price: { type: "number" }, reason: { type: "string" } }, required: ["symbol", "decision", "reason"] } } }, required: ["decisions"] });

@@ -340,15 +340,23 @@ function markPos(P, price) { const proe = (price - P.entry) / P.entry * P.side *
 //   동시 포지션 상한 · 제외 코인 · 하루 최대 진입 수(과매매 방지 = PDT 대응) · 청산 후 같은 코인 재진입 쿨다운
 // tpMode(익절 방식) · levMode(레버리지 방식) — 기본은 실측 기대값이 가장 높은 지금 방식. 6코인 1년 실측(관망 규칙집 적용 데스크 재연):
 //   ev 매매법 기본 손익비(대부분 1:2) 승률 41% · +0.158R/건  ·  bal 1:1.5 승률 43% · +0.091R  ·  wr 1:1 승률 52% · +0.074R
-const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30, tpMode: "ev", levMode: "fw", style: "auto" };
-// 매매 스타일: auto(검증 통과한 것 전부) · swing(1시간·4시간 신호만) · scalp(5·15분 신호만). 어느 쪽이든 워크포워드 관문·관망 규칙은 그대로.
-export const STYLES_KO = { auto: "자동(검증된 것 전부)", swing: "스윙(1시간·4시간)", scalp: "스캘핑(5·15분)" };
-const styleOk = tf => { const st = cfg().style; return st === "swing" ? tf === "60" || tf === "240" : st === "scalp" ? tf === "5" || tf === "15" : true; };
+const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30, tpMode: "ev", levMode: "fw", styles: { scalp: false, day: true, swing: true } };   // 스캘핑은 표본외에서 모든 구간 손실 → 기본 끔(켤 수 있음)
+// 스타일별 표본외 검증(앱 체계 그대로 · 고정 익절 · 2023-01~2025-09 기존 6코인 / 처음 보는 4코인) — 버튼·성적표에 그대로 보여 준다
+export const STYLE_OOS = { scalp: { r: -0.045, r2: -0.051, n: 2208, note: "모든 구간 손실 · 낙폭95% 50~60%" }, day: { r: 0.071, r2: 0.053, n: 1244, note: "처음 보는 기간·코인에서도 플러스" }, swing: { r: 0.38, r2: 0.75, n: 16, note: "거래가 너무 적어 판단 불가(일봉 눌림 매수 라인은 별도 검증 통과)" } };
+// 매매 스타일 3가지(켜고 끄기, 여러 개 동시): 스캘핑 = 5·15분봉 신호 · 단타 = 1시간봉 · 스윙 = 4시간봉(+사무실의 일봉 스윙 라인).
+//   어느 스타일이든 워크포워드 관문(최근 성적)·관망 규칙집·운 보정은 똑같이 걸린다.
+export const STYLES_KO = { scalp: "스캘핑(5·15분)", day: "단타(1시간)", swing: "스윙(4시간·일봉)" };
+export const styleOf = tf => tf === "5" || tf === "15" ? "scalp" : tf === "60" ? "day" : tf === "240" ? "swing" : "day";
+const styleOk = tf => { const st = cfg().styles || {}, k = styleOf(tf); return k === "scalp" ? st.scalp === true : st[k] !== false; };
 export const TP_MODES = { ev: { ko: "기대값 우선(매매법 기본 손익비)", rr: null, wr: 41, exp: 0.158 }, bal: { ko: "균형(1:1.5)", rr: 1.5, wr: 43, exp: 0.091 }, wr: { ko: "승률 우선(1:1)", rr: 1, wr: 52, exp: 0.074 } };
-export const cfg = () => ({ ...CFG0, ...(load().cfg || {}) });
+export const cfg = () => { const sv = load().cfg || {}, c = { ...CFG0, ...sv };   // 예전 저장본(style 하나)은 세 스타일로 읽는다
+  if (!sv.styles && sv.style) c.styles = sv.style === "scalp" ? { scalp: true, day: false, swing: false } : sv.style === "swing" ? { scalp: false, day: true, swing: true } : { ...CFG0.styles };
+  return c; };
 export function setCfg(patch = {}) { load(); const c = { ...cfg(), ...patch };
   c.maxPos = Math.max(1, Math.min(6, Math.round(+c.maxPos || 4))); c.dailyMax = Math.max(1, Math.min(50, Math.round(+c.dailyMax || 12))); c.coolMin = Math.max(0, Math.min(240, Math.round(+c.coolMin || 0)));
-  if (!TP_MODES[c.tpMode]) c.tpMode = "ev"; if (c.levMode !== "min") c.levMode = "fw"; if (!STYLES_KO[c.style]) c.style = "auto";
+  if (!TP_MODES[c.tpMode]) c.tpMode = "ev"; if (c.levMode !== "min") c.levMode = "fw";
+  if (!c.styles || typeof c.styles !== "object") c.styles = c.style === "scalp" ? { scalp: true, day: false, swing: false } : c.style === "swing" ? { scalp: false, day: true, swing: true } : { ...CFG0.styles };   // 예전 설정(style 하나) 옮기기
+  c.styles = { scalp: c.styles.scalp === true, day: c.styles.day !== false, swing: c.styles.swing !== false }; if (!c.styles.scalp && !c.styles.day && !c.styles.swing) c.styles.day = true; delete c.style;
   if (patch.tpMode && patch.tpMode !== (S.cfg?.tpMode || "ev")) S.eng.calibAt = 0;   // 익절 방식이 바뀌면 자체 백테스트를 그 방식으로 다시
   c.exclude = (Array.isArray(c.exclude) ? c.exclude : String(c.exclude || "").split(/[,\s]+/)).map(x => String(x).toUpperCase().replace(/USDT$/, "")).filter(x => COINS.some(([ko]) => ko === x));
   S.cfg = c; save(); return c; }
@@ -412,7 +420,7 @@ function closeP(sym, px, why, at) {
   const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
   if (base === "손절" || base === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;
   S.cool[sym] = Math.max(S.cool[sym] || 0, Date.now() + cfg().coolMin * 60e3);   // 어떤 청산이든 설정한 분만큼 같은 코인 재진입 금지   // 쿨다운: 손절 후 2봉 재진입 금지
-  S.trades.unshift({ ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, at: at || null, t: Date.now() });
+  S.trades.unshift({ tf: P.tf, style: styleOf(P.tf), ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, at: at || null, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
   // 학습: 뉴런(시각화) · 뇌 지능 · 시간대 · 급변동 · 교훈/패턴
   const good = pret > 0 ? 1 : -1;
@@ -517,13 +525,15 @@ export async function step() {
       if (!cands.length) continue;
       const shr = x => x.st.mean * x.st.n / (x.st.n + 60);   // 승자의 저주 보정(ocean_agent 개념): 적은 표본의 높은 평균은 부풀려져 있다 → 순위만 수축값으로
       cands.sort((a, b) => shr(b) - shr(a)); const { v, s, st } = cands[0];
-      if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
-      if (!weekGate()) { feed(`${ko} 신호(${v.name}) 무시 — 이번 주 손실 한도 ${WEEK_STOP * 100}% 도달(다음 주 월요일까지 신규 진입 중지)`); continue; }
-      if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
+      const blocked = why => { (S.lastBlock ||= {})[styleOf(tf)] = { why, ko, name: v.name, t: Date.now() }; };
+      (S.lastSig ||= {})[styleOf(tf)] = { ko, name: v.name, side: s.side, t: Date.now() };
+      if (!dayGate()) { blocked(`오늘 손실 한도 ${FW.dailyStop * 100}%`); feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
+      if (!weekGate()) { blocked(`이번 주 손실 한도 ${WEEK_STOP * 100}%`); feed(`${ko} 신호(${v.name}) 무시 — 이번 주 손실 한도 ${WEEK_STOP * 100}% 도달(다음 주 월요일까지 신규 진입 중지)`); continue; }
+      if (S.news?.blockUntil > Date.now()) { blocked("주요 일정·뉴스 위험 구간"); feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
       // 🧘 관망 규칙집(실데이터로 검증된 것만 켜짐 · 스스로 고침) + 피로(연속 손실 휴식) + 낙폭 서킷브레이커. 막은 신호도 따라가 채점한다.
       { const tcl = barT + TFMIN[tf] * 60e3, ctx = HR.ctxAt(ENG, mk.I, i, H, s.side, tcl, { fng: S.fng?.v ?? null, ...tfCtx(tf, tcl, k => MK[sym + "|" + k]) }), hk = HR.check(S.hold, ctx), rest = HR.restUntil(S.hold, closedSeq()), now = Date.now();
         const rule = (S.halt || 0) > now ? "halt" : (S.panic || 0) > now ? "panic" : rest > now ? "streak" : hk?.block, why = rule === "halt" ? "낙폭 서킷브레이커(24시간 신규 진입 중지)" : rule === "panic" ? "시장 전체 급락 정지(30분)" : rule === "streak" ? `${HR.ruleText("streak", S.hold.rules.streak.p)} — ${Math.ceil((rest - now) / 3600e3)}시간 남음` : hk?.why;
-        if (rule) { shadowAdd({ sym, ko, side: s.side, sl: s.sl, rr: rrFor(v), px: price, name: v.name, rule }); feed(`🧘 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호(${v.name}) 관망 — ${why}`); continue; } }
+        if (rule) { blocked(`관망 — ${why}`); shadowAdd({ sym, ko, side: s.side, sl: s.sl, rr: rrFor(v), px: price, name: v.name, rule, tf }); feed(`🧘 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호(${v.name}) 관망 — ${why}`); continue; } }
       const wh = await whaleSignal(sym).catch(() => null);
       (S.sigLog ||= []).push({ sym, side: s.side, sl: s.sl, rr: rrFor(v), vkey: v.vkey, name: v.name, tf, mean: st.mean, n: st.n, wr: st.wr, t: Date.now(), px: price }); if (S.sigLog.length > 60) S.sigLog.splice(0, S.sigLog.length - 60);
       S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, regKey: reg.key, htf: hb?.bias ?? 0, st, t: Date.now(), px0: price, whale: wh });
@@ -535,9 +545,8 @@ export async function step() {
   //   보기·AI 자료용이다. 진입 규칙은 그대로(5·15분 매매는 수수료 때문에 실측 우위 없음 → 관망 규칙의 상위 추세가 기준).
   for (const [, sym] of COINS) { const mt = ((S.mtf ||= {})[sym] ||= {}); for (const tf of ["5", "15", "60", "240"]) { const mk = MK[sym + "|" + tf]; if (mk?.I) mt[tf] = trendOf(mk.I, mk.I.n - 2); } }
   const cm = connectedModels();
-  // 🏃 +1R 을 찍은 포지션: 코드 초안(익절 풀고 ATR×3 추적, 실측 우위)을 AI 가 15분 안에 다르게 정하지 않으면 자체 엔진이 적용.
-  //   AI 모델이 없거나, AI 의 익절·손절 조정이 원래 계획보다 손해로 채점돼 꺼져 있으면 바로 적용.
-  for (const P of Object.values(S.pos)) if (P.be && !P.run && (!P.keep || (S.adjOff || 0) > Date.now()) && (!cm.length || (S.adjOff || 0) > Date.now() || Date.now() - (P.beAt || P.t) > 15 * 60e3)) applyAdj(P, "run", "자체 엔진", null, "코드 초안 자동 적용");
+  // 🏃 (꺼짐) +1R 뒤 자동으로 익절 풀고 추적하던 것 — 1년 실측에서는 좋아 보였지만 표본외(2023~2025·처음 보는 4코인)에서 고정 익절보다 나빠 끔.
+  //   (예전: AI 모델이 없거나 AI 조정이 꺼져 있으면 엔진이 바로 적용했음 — 지금은 자동 적용 없음)
   // 대기열: AI 모델이 승인하거나, 모델이 없거나 20초 안에 응답이 없으면 자체 엔진이 집행
   S.queue = S.queue.filter(it => { if (Date.now() - it.t > 240e3) return false; if (!cm.length || Date.now() - it.t > 90e3) { openFrom(it, "자체 엔진"); return false; } return true; });   // 1시간봉 신호라 90초 대기는 무해
   S.epoch++;
@@ -734,7 +743,7 @@ async function coinResearch(sym) {
 function researchText(sym) { const r = S.research?.[sym]; if (!r) return ""; return `1년 범위 ${fmt(r.lo)}~${fmt(r.hi)} 중 ${r.pos}% 위치 · 7일 ${r.r7}% · 30일 ${r.r30}% · 1년 ${r.r365}%${r.fund ? ` · 거래소 펀딩 평균 ${r.fund.avg}%(${r.fund.ko})` : ""}`; }
 // ══ 🗂 포지션 관리 — 익절가·손절가를 AI 가 스스로 바꾸되, 코드가 초안을 내고 범위를 검증하고 결과를 채점한다 ══
 //   하이브리드(DeepSeek 정리 문서 · Yaass1ne/mt5-ftmo-trader 의 'LLM 은 거부·조정만, 숫자는 코드' · finagent 의 가격 부등호 명시 · siropkin 의 환각 필터):
-//   ① 코드 초안: +1R 을 찍었으면 '익절 풀고 ATR×3 추적'(6코인 1년 실측 평균 −0.046R → −0.002R, 전·후반 모두 개선)
+//   ① 코드 초안: 고정 익절 유지(처음엔 '익절 풀고 ATR×3 추적'이었으나 표본외 검증에서 손해로 확인돼 바꿈 — 아래 draftOf)
 //   ② AI 결정: hold / close / breakeven / run / trail(손절 올리기) / tp(익절가 바꾸기) — 로컬 모델은 JSON 스키마로 보유 코인·결정만 쓰게 강제
 //   ③ 코드 검증: 손절을 넓히는 것 금지 · 롱은 손절<현재가<익절(숏은 반대) · 손절 올리기는 +1R 이후·현재가에서 ATR×1.5 이상 · 익절 연장은 상위 추세 같은 방향+ADX 25 이상
 //   ④ 채점: 청산 뒤 '조정하지 않았다면'(원래 계획 그대로)을 같은 봉으로 다시 돌려 차이(ΔR)를 기록. AI 조정이 10건 이상 누적 손해면 3일간 코드 초안만 쓴다(ATLAS 의 유지/되돌림).
@@ -762,10 +771,9 @@ export function levelsText(L) { if (!L) return ""; const px = L.price, o = [];
   if (L.bid) o.push(`매수벽 ${fmt(L.bid.price)}(${pctOf(L.bid.price, px)} · $${(L.bid.usd / 1e6).toFixed(2)}M · 평균×${L.bid.x})`);
   if (L.res != null) o.push(`저항 ${fmt(L.res)}(${pctOf(L.res, px)})`); if (L.sup != null) o.push(`지지 ${fmt(L.sup)}(${pctOf(L.sup, px)})`);
   return o.join(" · "); }
-function draftOf(p) {
-  if (p.be && !p.run) return { kind: "run", why: "+1R 도달 → 익절 풀고 ATR×3 추적(실측 우위)" };
-  return { kind: "hold", why: p.run ? "추적 중" : "아직 +1R 전" };
-}
+// 2026-10-06 표본외 검증(tools/oos-check.mjs, 앱 체계 그대로 2023~2025 · 처음 보는 4코인): 단타에서 '+1R 뒤 익절 풀고 ATR×3 추적'은
+//   −0.053R / −0.016R 로 고정 익절(+0.071R / +0.053R)보다 나빴다(고를 때 쓴 1년에서만 좋아 보였음) → 초안은 고정 익절 유지, 자동 적용 없음.
+function draftOf(p) { return { kind: "hold", why: p.run ? "추적 중" : p.be ? "본절 이동 후 고정 익절 유지(표본외 검증)" : "아직 +1R 전" }; }
 function applyAdj(p, kind, by, price, why) {
   const prev = { sl: p.sl, tp: p.tp, be: p.be, run: !!p.run, deadline: p.deadline }, side = p.side, atr = posAtr(p), r = Rnow(p), v = VMAP()[p.vkey];
   const fail = m => ({ ok: false, why: `${p.ko}: ${m}` });
@@ -798,11 +806,10 @@ async function reviewPositions(cm) {
 너는 코인 선물 포지션 관리자다. 보유 포지션마다 결정 하나를 고른다. 숫자 계산과 최종 검증은 코드가 한다.
 </role>
 <decisions>
-hold: 지금은 바꾸지 않는다(draft 가 run 이면 15분 뒤 코드가 적용한다).
-keep_tp: draft 의 run 을 거부하고 고정 익절을 유지한다. reason 에 <positions> 의 숫자 근거가 꼭 있어야 한다.
+hold: 그대로 둔다(고정 익절 유지 — 표본외 검증에서 가장 나았다).
 close: 지금 정리. 이익 +0.5R 이상이거나, -0.3R 이하인데 상위 추세(htf)가 반대일 때만.
 breakeven: 손절을 본전으로. +0.5R 이상일 때.
-run: 익절가를 풀고 손절을 ATR×3 뒤에서 따라간다. breakeven 이 true(+1R 을 찍음)일 때만. 6개 코인 1년 실측에서 고정 익절보다 나았다.${off ? "\n(지금은 AI 의 손절·익절 가격 조정이 채점 결과 손해라 잠시 꺼져 있다 — trail·tp 는 쓰지 않는다.)" : `
+run: (쓰지 않는다 — 표본외 검증에서 고정 익절보다 나빴다.)${off ? "\n(지금은 AI 의 손절·익절 가격 조정이 채점 결과 손해라 잠시 꺼져 있다 — trail·tp 는 쓰지 않는다.)" : `
 trail: 손절을 price 로 올린다. breakeven 이 true 일 때만, 현재가에서 ATR×1.5 이상 떨어진 곳. 손절을 넓히는(불리한 쪽으로 옮기는) 것은 금지.
 tp: 익절가를 price 로 바꾼다. 진입가에서 1R~4R. 원래보다 멀리 늘리는 건 htf 가 포지션 방향과 같고 adx 25 이상일 때만.
 levels 의 매도벽·저항(롱) / 매수벽·지지(숏)가 익절가보다 가까우면 tp 를 그 바로 앞으로 당길 수 있고, 손절은 매수벽·지지(롱) 바로 뒤로 올릴 수 있다(trail 규칙 안에서). reason 에 어떤 벽·레벨인지 쓴다 — 결과는 따로 채점된다.
@@ -826,6 +833,7 @@ JSON: {"decisions":[{"symbol":"BTC","decision":"hold","price":0,"reason":"한 �
     const sym0 = String(d?.symbol || "").toUpperCase().replace(/USDT$/, ""), p = P.find(x => x.ko === sym0), dec = String(d?.decision || "").toLowerCase(), why = String(d?.reason || "").slice(0, 60);
     if (!p || !S.pos[p.sym]) { dropped.push(`${sym0 || "?"}: 보유하지 않은 종목`); continue; }
     if (off && (dec === "trail" || dec === "tp")) { dropped.push(`${p.ko}: 가격 조정 일시 중지 중`); continue; }
+    if (dec === "run" || dec === "keep_tp") { dropped.push(`${p.ko}: '${dec}' 는 쓰지 않음(익절 풀고 추적은 표본외 검증에서 손해)`); continue; }
     const dr = draftOf(p);
     if (dec === "hold") continue;   // '안 바꿈' = 이의 없음. 작은 모델은 거의 항상 hold 라고 답해서, 이것을 거부로 치면 실측 우위가 있는 초안이 늘 막힌다(2026-10-06 qwen2.5:3b 5/5 hold)
     if (dec === "keep_tp") { if (dr.kind !== "run" || p.keep || off) continue; if (!/\d/.test(why)) { dropped.push(`${p.ko}: 초안 거부에 숫자 근거 없음`); continue; }
@@ -1013,7 +1021,9 @@ JSON 한 줄만:` }] }));
   const reason = String(j.reason || "").slice(0, 60);
   // 사유 목록·예시를 그대로 베낀 거절은 판단이 아니므로 버리고, 검증된 신호를 기본 리스크로 집행한다
   if (!approve && echoReason(j.reason)) { M.echo = (M.echo || 0) + 1; feed(`[${shortMd(name)}] ${it.ko} ${it.name} 거절 사유가 지시문을 그대로 베낀 답 → 무시하고 자체 엔진이 기본 리스크로 집행`); openFrom(it, "자체 엔진"); save(); return; }
-  if (!approve) { M.rejected++; feed(`[${shortMd(name)}] ${it.ko} ${it.name} 거절 — ${reason || "근거 부족"}`); return; }
+  if (!approve) { M.rejected++; feed(`[${shortMd(name)}] ${it.ko} ${it.name} 거절 — ${reason || "근거 부족"}`);
+    try { shadowAdd({ sym: it.sym, ko: it.ko, side: it.side, sl: it.sl, rr: rrFor(v), px: S.dec[it.sym]?.price || it.px0, name: it.name, rule: "AI거절", tf: v.tf, by: shortMd(name) }); } catch (e) {}
+    return; }
   M.approved++;
   const risk = (+j.risk >= 1 && it.st.mean > 0.2) ? FW.maxRisk * riskFactor() : undefined;
   openFrom(it, name, risk, reason ? `승인: ${reason}` : "AI 승인");
@@ -1272,7 +1282,7 @@ export function state() {
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), calls: callStats(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
     chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
-    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
+    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, score: scorecard(), mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
     pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 64), feed: S.feed.slice(0, 24) };
@@ -1293,3 +1303,31 @@ function learnedWinrates(V) {
 }
 function selfPnl() { let m = 0; for (const n in S.models) m += S.models[n].pnl; return S.pnl - m; }
 function fmt(v) { return v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(2) : v.toPrecision(4); }
+
+// ══ 📋 스타일별 성적표 (스캘핑 · 단타 · 스윙) — 실제 데모 성적 vs 백테스트 기대 · 기능별 채점 · 왜 진입 안 하나 ══
+export function scorecard() {
+  load(); const now = Date.now(), V = variants(), C = cfg(), out = {};
+  const m = (a, f) => a.length ? +(a.reduce((x, t) => x + f(t), 0) / a.length).toFixed(3) : null;
+  for (const st of ["scalp", "day", "swing"]) {
+    const tr = (S.trades || []).filter(t => (t.style || (t.tf ? styleOf(t.tf) : null)) === st), w7 = tr.filter(t => now - t.t < 7 * 864e5);
+    const vs = V.filter(v => styleOf(v.tf) === st).map(v => ({ v, s: vstat(v.vkey) })), act = vs.filter(x => isActive(x.v)), exp = m(act, x => x.s.mean);
+    const open = Object.values(S.pos).filter(p => styleOf(p.tf) === st).length, mo = mood(), lb = S.lastBlock?.[st], ls = S.lastSig?.[st];
+    let status;
+    if (st === "scalp" ? C.styles?.scalp !== true : C.styles?.[st] === false) status = st === "scalp" ? `꺼짐 — 표본외 검증 ${STYLE_OOS.scalp.r}R(손실)이라 기본 꺼짐 · ⚙ 매매 설정에서 켤 수 있음` : "꺼짐(⚙ 매매 설정)";
+    else if (mo.halt) status = "낙폭 서킷브레이커로 신규 진입 중지";
+    else if ((S.panic || 0) > now) status = "시장 전체 급락 정지(30분)";
+    else if (mo.rest) status = `연속 손실 휴식 중(${Math.ceil((mo.rest - now) / 3600e3)}시간 남음)`;
+    else if (!act.length) status = `검증 통과 매매법 없음 — 최근 성적이 기준(+0.1R${st === "scalp" ? ", 스캘핑은 +0.15R·15건" : ""}) 미달이라 대기`;
+    else if (open) status = `포지션 ${open}개 보유 중`;
+    else if (lb && now - lb.t < 6 * 3600e3) status = `최근 신호 ${lb.ko} ${lb.name} — ${lb.why}`;
+    else status = `검증 통과 ${act.length}개 · 다음 ${st === "scalp" ? "15분" : st === "day" ? "1시간" : "4시간"}봉 마감 때 신호 확인`;
+    out[st] = { ko: STYLES_KO[st], on: st === "scalp" ? C.styles?.scalp === true : C.styles?.[st] !== false, oos: STYLE_OOS[st], n: tr.length, wr: tr.length ? Math.round(tr.filter(t => t.R > 0).length / tr.length * 100) : null, avgR: m(tr, t => t.R || 0),
+      pnl: +tr.reduce((x, t) => x + (t.pnl || 0), 0).toFixed(2), n7: w7.length, pnl7: +w7.reduce((x, t) => x + (t.pnl || 0), 0).toFixed(2), exp, nAct: act.length, nLuck: act.filter(x => x.s.luck).length, open, status, lastSig: ls || null };
+  }
+  // ③ AI 대 엔진: AI 가 승인한 거래 vs 엔진 혼자 집행한 거래 · AI 거절 채점(거절한 신호가 손절 먼저 = AI 가 맞음)
+  const ai = (S.trades || []).filter(t => t.model), eng = (S.trades || []).filter(t => !t.model), rej = S.holdScore?.["AI거절"] || null;
+  const hs = Object.entries(S.holdScore || {}).filter(([k]) => k !== "AI거절").map(([k, h]) => ({ rule: k, n: h.n, right: h.right, missedR: h.R }));
+  return { styles: out, ai: { n: ai.length, avgR: m(ai, t => t.R || 0), wr: ai.length ? Math.round(ai.filter(t => t.R > 0).length / ai.length * 100) : null },
+    engine: { n: eng.length, avgR: m(eng, t => t.R || 0), wr: eng.length ? Math.round(eng.filter(t => t.R > 0).length / eng.length * 100) : null },
+    aiReject: rej ? { n: rej.n, right: rej.right, pct: rej.n ? Math.round(rej.right / rej.n * 100) : null, missedR: rej.R } : null, hold: hs, adj: S.adjStat || {}, t: now };
+}

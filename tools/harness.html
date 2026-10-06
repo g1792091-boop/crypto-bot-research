@@ -46,10 +46,11 @@ try {
     const errs = []; addEventListener("error", e => errs.push(String(e.message))); addEventListener("unhandledrejection", e => errs.push(String(e.reason?.message || e.reason)));
     const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 5000));
     const N = await import("../gh-coin/neural.js"), got = [];
-    for (const [attr, val] of [["data-sty", "swing"], ["data-tpm", "bal"], ["data-levm", "min"], ["data-sty", "auto"], ["data-tpm", "ev"], ["data-levm", "fw"]]) {
+    for (const [attr, val] of [["data-sty", "scalp"], ["data-tpm", "bal"], ["data-levm", "min"], ["data-sty", "scalp"], ["data-tpm", "ev"], ["data-levm", "fw"]]) {
       const b = document.querySelector(`[${attr}="${val}"]`); if (!b) { got.push(attr + "=" + val + " 버튼 없음"); continue; }
       b.click(); await new Promise(r => setTimeout(r, 400)); const c = N.cfg(); const on = document.querySelector(`[${attr}="${val}"]`)?.classList.contains("on");
-      got.push(`${attr}=${val} → cfg ${c.style}/${c.tpMode}/${c.levMode} · 화면 ✓ ${on}`); }
+      got.push(`${attr}=${val} → 스타일 ${JSON.stringify(c.styles)} · ${c.tpMode}/${c.levMode} · 화면 ✓ ${on}`); }
+    out.score = N.state().score; document.querySelector("[data-bk]")?.click(); await new Promise(r => setTimeout(r, 800)); out.bk = document.querySelector(".nd-bk")?.innerText?.slice(0, 200);
     out.clicks = got; out.feed = N.state().feed.slice(0, 6).map(f => f.text);
     const NT = await import("../gh-coin/neutron.js"), snap = await NT.snapshot(), notes = NT.vaultNotes(snap);
     out.neutron = {hold: !!snap.neural?.hold, mood: !!snap.neural?.mood, notes: Object.keys(notes).length, holdNote: (notes["뇌/관망 규칙·감정·조정 채점.md"] || "").slice(0, 300)};

@@ -15,6 +15,21 @@ export async function openNeural(ctx = {}) {
   root = document.createElement("div"); root.id = "ndesk"; root.innerHTML = SHELL; document.body.appendChild(root);
   inject();
   root.querySelector("[data-x]").onclick = close;
+  // 💾 백업·복구 창
+  root.querySelector("[data-bk]").onclick = async () => {
+    const old = root.querySelector(".nd-bk"); if (old) { old.remove(); return; }
+    const B = await import("./backup.js"), box = document.createElement("div"); box.className = "nd-bk"; root.appendChild(box);
+    const draw = async (msg = "") => { const st = B.backupState(), list = await B.listBackups();
+      box.innerHTML = `<b>💾 데모 기록 백업</b> <span class="dim">· 1시간마다 자동 · 하루 1개 보관</span><div class="dim" style="margin:4px 0">${st.on ? (st.t ? `마지막 백업 ${new Date(st.t).toLocaleString("ko-KR")} · ${(st.bytes / 1024).toFixed(0)}KB${st.paper != null ? ` · 데모 전략 ${st.paper}개` : ""}` : "아직 백업 없음(앱 시작 3분 뒤 첫 백업)") : "GHCoin.exe 로 실행했을 때만 파일 백업이 됩니다"}${st.err ? ` · ⚠ ${E(st.err)}` : ""}</div>${msg ? `<div style="color:#6ee7b7;margin:4px 0">${E(msg)}</div>` : ""}
+        <button class="nd-mini" data-bknow>지금 백업</button> <button class="nd-mini" data-bkx>닫기</button>
+        <div style="margin-top:6px">${list.length ? list.map(f => `<div class="bkr"><span>${E(f.name)} <small class="dim">${E(f.size)}</small></span>${f.name === "before-restore.json" ? `<small class="dim">복구 직전 상태</small>` : ""}<button class="nd-mini" data-bkr="${E(f.name)}">이걸로 복구</button></div>`).join("") : `<div class="dim">백업 파일 없음</div>`}</div>
+        <div class="dim" style="margin-top:6px">복구하면 지금 상태는 before-restore.json 으로 먼저 남기고, 고른 백업으로 덮어쓴 뒤 창을 새로고침합니다. API 키 등 설정은 백업·복구하지 않습니다.</div>`; };
+    box.onclick = async ev => { const t = ev.target;
+      if (t.closest("[data-bkx]")) return box.remove();
+      if (t.closest("[data-bknow]")) { try { const r = await B.backupNow("수동"); draw(`백업 완료 · ${(r.bytes / 1024).toFixed(0)}KB`); } catch (e) { draw("백업 실패: " + (e.message || e)); } return; }
+      const rb = t.closest("[data-bkr]"); if (rb) { if (!confirm(`${rb.dataset.bkr} 로 데모 기록을 되살릴까요? (지금 상태는 before-restore.json 으로 따로 남깁니다)`)) return;
+        try { const r = await B.restore(rb.dataset.bkr); alert(`복구 완료(${new Date(r.t).toLocaleString("ko-KR")} 백업 · 키 ${r.keys}개${r.paper != null ? ` · 데모 전략 ${r.paper}개` : ""}). 창을 새로고침합니다.`); location.reload(); } catch (e) { draw("복구 실패: " + (e.message || e)); } } };
+    draw(); };
   root.querySelector("[data-reset]").onclick = () => { if (confirm("뉴럴 데스크의 가상 성적·학습 가중치를 모두 초기화할까요?")) { N.reset(); render(); } };
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   // ⚡ 실시간 진입: 지금 분석 (사무실 runLiveEntry 와 같은 엔진·토론)
@@ -30,7 +45,7 @@ export async function openNeural(ctx = {}) {
   // 📈 내 차트 지표 데스크 버튼(지금 점검·복사) — 렌더가 3초마다 바뀌므로 위임
   root.addEventListener("click", async (ev) => {
     const tm = ev.target.closest("[data-tpm]"); if (tm) { const n = N.setCfg({ tpMode: tm.dataset.tpm }); feed(`🎯 익절 방식: ${N.TP_MODES[n.tpMode].ko} — 다음 진입부터 (자체 백테스트도 이 방식으로 다시)`); ST = N.state(); render(); return; }
-    const sy = ev.target.closest("[data-sty]"); if (sy) { const n = N.setCfg({ style: sy.dataset.sty }); feed(`🎯 매매 스타일: ${N.STYLES_KO[n.style]} — 다음 신호부터`); ST = N.state(); render(); return; }
+    const sy = ev.target.closest("[data-sty]"); if (sy) { const c0 = N.cfg(), k = sy.dataset.sty, cur = k === "scalp" ? c0.styles?.scalp === true : c0.styles?.[k] !== false, n = N.setCfg({ styles: { ...(c0.styles || {}), [k]: !cur } }); feed(`🎯 매매 스타일: ${Object.entries(N.STYLES_KO).filter(([x]) => n.styles[x]).map(([, ko]) => ko).join(" · ") || "없음"} — 다음 신호부터`); ST = N.state(); render(); return; }
     const lm = ev.target.closest("[data-levm]"); if (lm) { const n = N.setCfg({ levMode: lm.dataset.levm }); feed(`🎯 레버리지 방식: ${n.levMode === "min" ? "20배 고정" : "손절폭에서 역산"} — 다음 진입부터`); ST = N.state(); render(); return; }
     const cp = ev.target.closest("[data-cdcopy]"); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.cdcopy); cp.textContent = "복사됨"; } catch (e) {} return; }
     const go = ev.target.closest("[data-cdgo]"); if (go) { go.disabled = true; go.textContent = "점검 중…"; try { await N.chartDesk(true); } catch (e) { feed("📈 점검 실패: " + (e?.message || e)); } ST = N.state(); render(); }
@@ -115,10 +130,20 @@ function chartDeskLine(s) {
   return h;
 }
 // ⚙ 매매 설정(항상 보이는 '가상 자본' 카드): 스타일 · 익절 방식 · 레버리지 방식 — 기본값은 실측 기대값이 가장 높은 쪽
+// 📋 스타일별 성적표(②) · AI 대 엔진(③) · 왜 진입 안 하나(⑧)
+function scoreHtml(s) {
+  const S = s.score; if (!S) return "";
+  const r = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v}`, rows = ["scalp", "day", "swing"].map(k => { const x = S.styles[k]; if (!x) return "";
+    return `<div class="sc-row${x.on ? "" : " off"}"><b>${E(x.ko)}</b><span title="실제 데모 거래(전체 · 최근 7일)">${x.n ? `${x.n}건 · 승률 ${x.wr}% · 평균 ${r(x.avgR)}R · <i class="${x.pnl >= 0 ? "up" : "dn"}">${x.pnl >= 0 ? "+" : "−"}$${Math.abs(x.pnl).toFixed(1)}</i>` : "실전 거래 없음"}${x.n7 ? ` <small class="dim">(7일 ${x.n7}건 ${x.pnl7 >= 0 ? "+" : "−"}$${Math.abs(x.pnl7).toFixed(1)})</small>` : ""}</span><span class="dim" title="기대 = 지금 실전에 쓰는(검증 통과) 매매법들의 최근 20건 평균(부풀려지기 쉬움) · 표본외 = 앱 체계 그대로 처음 보는 기간(2023~2025)에서 잰 거래당 평균">기대 ${r(x.exp)}R · 표본외 ${x.oos ? r(x.oos.r) : "—"}R · 통과 ${x.nAct}개${x.nLuck ? `(운범위 ${x.nLuck})` : ""}</span><small class="sc-why">${x.on ? "▶ " : ""}${E(x.status)}</small></div>`; }).join("");
+  const ai = S.ai, en = S.engine, rj = S.aiReject;
+  const aiLine = `<div class="brow"><span class="bt pur">AI 대 엔진</span><span class="btx wrap" title="AI 가 승인한 거래와 엔진 혼자 집행한 거래의 실제 성적 · AI 가 거절한 신호를 끝까지 따라가 '손절 먼저'면 AI 가 맞은 것">AI 승인 거래 ${ai.n ? `${ai.n}건 평균 ${r(ai.avgR)}R(승률 ${ai.wr}%)` : "없음"} · 엔진 단독 ${en.n ? `${en.n}건 평균 ${r(en.avgR)}R(승률 ${en.wr}%)` : "없음"} · AI 거절 ${rj?.n ? `${rj.n}건 중 맞음 ${rj.right}건(${rj.pct}%)${rj.missedR > 0 ? ` · 놓친 ${rj.missedR}R` : ""}` : "채점 대기"}</span></div>`;
+  const hold = (S.hold || []).filter(h => h.n), holdLine = hold.length ? `<div class="brow"><span class="bt warn">관망 채점</span><span class="btx wrap">${hold.map(h => `${E(h.rule)} ${h.right}/${h.n} 맞음${h.missedR > 0 ? `(놓친 ${h.missedR}R)` : ""}`).join(" · ")}</span></div>` : "";
+  return `<div class="nsub">📋 스타일별 성적표 <span class="dim">· 실제 데모 vs 검증 기대 · ▶ 지금 상태(왜 진입 안 하나)</span></div><div class="sc-tbl">${rows}</div>${aiLine}${holdLine}`;
+}
 function setRows(c = {}) {
   return `<div class="nsub" style="margin-top:8px">⚙ 매매 설정 <span class="dim">(누르면 다음 진입부터 적용)</span></div>`
     + `<div class="brow"><span class="bt warn">익절</span><span class="btx wrap" title="6코인 1년 실측(관망 규칙 적용). 손익비를 줄이면 승률은 오르지만 건당 기대값은 내려갑니다">${Object.entries(N.TP_MODES || {}).map(([k, m]) => `<button class="nd-mini${(c.tpMode || "ev") === k ? " on" : ""}" data-tpm="${k}">${(c.tpMode || "ev") === k ? "✓ " : ""}${E(m.ko)} <small>승률 ${m.wr}% · +${m.exp}R</small></button>`).join(" ")}</span></div>`
-    + `<div class="brow"><span class="bt warn">스타일</span><span class="btx wrap" title="어느 쪽이든 최근 성적(워크포워드)이 플러스인 매매법만 실제로 진입합니다. 스캘핑은 1시간·4시간 추세가 모두 같은 방향일 때만(관망 규칙).">${Object.entries(N.STYLES_KO || {}).map(([k, ko]) => `<button class="nd-mini${(c.style || "auto") === k ? " on" : ""}" data-sty="${k}">${(c.style || "auto") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`
+    + `<div class="brow"><span class="bt warn">스타일</span><span class="btx wrap" title="눌러서 켜고 끄기(여러 개 동시). 어느 스타일이든 최근 성적(워크포워드)이 기준 이상인 매매법만 실제로 진입하고, 관망 규칙·운 보정이 똑같이 걸립니다. 스캘핑은 1시간·4시간 추세가 같은 방향일 때만.">${Object.entries(N.STYLES_KO || {}).map(([k, ko]) => { const on = k === "scalp" ? c.styles?.scalp === true : c.styles?.[k] !== false, o = N.STYLE_OOS?.[k]; return `<button class="nd-mini${on ? " on" : ""}" data-sty="${k}" title="${o ? `표본외 검증(앱 체계 그대로·고정 익절): 2023~2025 ${o.r >= 0 ? "+" : ""}${o.r}R/거래 · 처음 보는 4코인 ${o.r2 >= 0 ? "+" : ""}${o.r2}R · ${o.note}` : ""}">${on ? "✓ " : "○ "}${ko}${o ? ` <small>${o.r >= 0 ? "+" : ""}${o.r}R</small>` : ""}</button>`; }).join(" ")}</span></div>`
     + `<div class="brow"><span class="bt warn">레버</span><span class="btx wrap" title="1회 손실 금액은 둘 다 같습니다(자본의 0.25~1%). 20배 고정은 증거금이 커지는 대신 ROE 출렁임이 작고 청산가가 멀어집니다">${[["fw", "손절폭에서 역산(기본 · 20~200배)"], ["min", "20배 고정(ROE 덜 출렁임)"]].map(([k, ko]) => `<button class="nd-mini${(c.levMode || "fw") === k ? " on" : ""}" data-levm="${k}">${(c.levMode || "fw") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`;
 }
 function robinLine(s) {
@@ -216,8 +241,8 @@ function render() {
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
   const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}" title="AI 가 설계한 매매법의 백테스트 수익률 — 실제 데모 거래가 아님">백테 ${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
-  root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
-    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span>${(() => { const pm = t.entry && t.exit ? +((t.exit - t.entry) / t.entry * t.side * 100).toFixed(2) : null; return `<b class="${(pm ?? t.roe) >= 0 ? "up" : "dn"}" title="가격 움직임(레버리지 전). ROE ${t.roe}%">${pm != null ? `가격 ${pm >= 0 ? "+" : ""}${pm}%` : `${t.roe}%`}</b>`; })()}<span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)} · <small>ROE ${t.roe >= 0 ? "+" : ""}${t.roe}%</small></span></div>`
+  root.querySelector("[data-trades]").innerHTML = scoreHtml(s) + `<div class="nsub" style="margin-top:8px">최근 데모 거래 · 매매법 설계</div>` + des + (s.trades.length ? s.trades.map(t =>
+    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}${t.style ? ` <small class="dim">${t.style === "scalp" ? "스캘" : t.style === "day" ? "단타" : "스윙"}</small>` : ""}</span>${(() => { const pm = t.entry && t.exit ? +((t.exit - t.entry) / t.entry * t.side * 100).toFixed(2) : null; return `<b class="${(pm ?? t.roe) >= 0 ? "up" : "dn"}" title="가격 움직임(레버리지 전). ROE ${t.roe}%">${pm != null ? `가격 ${pm >= 0 ? "+" : ""}${pm}%` : `${t.roe}%`}</b>`; })()}<span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)} · <small>ROE ${t.roe >= 0 ? "+" : ""}${t.roe}%</small></span></div>`
   ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
   // ⚡ 실시간 진입 카드
   const rtEl = root.querySelector("[data-rt]");
@@ -284,14 +309,14 @@ const SHELL = `
 <div class="nd-top"><span class="nd-brand"><span class="nd-live"></span>GH&nbsp;COIN <em>뉴럴 데스크</em></span><span class="nd-tag">AI 모델이 직접 매매·복기·학습 · 집단 뇌 · 가상자금</span>
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
   <span class="nd-cfg" data-auto title="레버리지·시드비중·손절·익절은 AI 모델이 상황에 맞게 스스로 정합니다 (사용자 조절 아님)"></span>
-  <button class="nd-btn" data-cfg title="동시 포지션 상한 · 하루 최대 진입 · 재진입 쿨다운 · 제외 코인">⚙ 한도</button><button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
+  <button class="nd-btn" data-cfg title="동시 포지션 상한 · 하루 최대 진입 · 재진입 쿨다운 · 제외 코인">⚙ 한도</button><button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-bk title="데모 기록(뉴럴 데스크·뇌·데모 장부·사무실 기록)을 1시간마다 파일로 백업 — 여기서 지금 백업하거나 되살리기">💾 백업</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div><div class="nd-setx" data-setx></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>입력 카드 → SHARED SURFACE(주문 대기열 게이트) → 매매법 → AI 워커 → 출력 · 실데이터</small></div><div class="vz-shell" data-vzshell></div></div>
   <div class="nd-card nd-rtcard"><div class="nd-h">⚡ 실시간 진입 <small>손매매용 · 시장가 기준 · 에이전트 팀 ↔ 뉴럴 데스크 토론 · 주문은 직접</small><span class="rt-coins" data-rtcoins></span><button class="nd-mini" data-rtgo title="지금 모든 코인을 다시 분석하고 토론합니다">전체 분석</button></div><div class="nd-rt" data-rt></div></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
-  <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 매매법 설계</div><div class="nd-tr" data-trades></div></div>
+  <div class="nd-card nd-trades"><div class="nd-h">📋 스타일별 성적표 · 데모 거래</div><div class="nd-tr" data-trades></div></div>
   <div class="nd-card nd-brain"><div class="nd-h">🧠 자체 뇌 FOUNDRY <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><div class="vb" data-vzbrain></div></div>
 </div>`;
 
@@ -323,7 +348,7 @@ function inject() {
 .nd-h::before{content:"";position:absolute;left:0;top:0;width:3px;height:12px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2));box-shadow:0 0 6px rgba(34,211,238,.4)}
 .nd-h small{color:#4b5568;letter-spacing:.3px;text-transform:none}
 .nd-mini{margin-left:auto;background:rgba(22,30,44,.7);border:1px solid var(--line2);color:#8a93a6;padding:2px 8px;border-radius:5px;cursor:pointer;font:10px ui-monospace,monospace;letter-spacing:0;text-transform:none;transition:.15s}.nd-mini:hover{background:#1c2740;color:var(--accent);border-color:rgba(34,211,238,.4)}
-.btx .nd-mini{margin:2px 4px 2px 0}.tfrow{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}.tfc{font:10px ui-monospace,monospace;padding:0 4px;border-radius:4px;border:1px solid rgba(60,72,92,.5);opacity:.75}.tfc.st{opacity:1;font-weight:700;border-color:currentColor}.btx.wrap{white-space:normal}.nd-mini.on{border-color:rgba(52,211,153,.6);color:#6ee7b7;background:rgba(16,40,32,.7)}
+.btx .nd-mini{margin:2px 4px 2px 0}.sc-tbl{display:flex;flex-direction:column;gap:4px;margin:4px 0 6px}.sc-row{display:grid;grid-template-columns:110px minmax(0,1.4fr) minmax(0,1fr);gap:4px 10px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:rgba(14,20,33,.6);font-size:11.5px}.sc-row.off{opacity:.45}.sc-row .sc-why{grid-column:1/-1;color:#9fb3cf}.sc-row i{font-style:normal}.nd-bk{position:absolute;right:14px;top:56px;z-index:30;width:360px;max-height:60vh;overflow:auto;background:#0d1422;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;box-shadow:0 18px 40px rgba(0,0,0,.6);font-size:12px}.nd-bk .bkr{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(40,52,72,.5)}.tfrow{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}.tfc{font:10px ui-monospace,monospace;padding:0 4px;border-radius:4px;border:1px solid rgba(60,72,92,.5);opacity:.75}.tfc.st{opacity:1;font-weight:700;border-color:currentColor}.btx.wrap{white-space:normal}.nd-mini.on{border-color:rgba(52,211,153,.6);color:#6ee7b7;background:rgba(16,40,32,.7)}
 .nd-brain canvas{cursor:crosshair}
 .nd-pnl .nd-big b{font-size:42px;font-weight:800;line-height:1;letter-spacing:-.5px}
 .nd-pnl .nd-big b.up{background:linear-gradient(90deg,#26d07c,#86f7bd);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}

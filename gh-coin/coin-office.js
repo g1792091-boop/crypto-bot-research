@@ -916,6 +916,7 @@ function _startCycle(){
   refreshOllama();   // 내 PC Ollama 설치 모델을 직원 후보로 올림
   import("./neural.js").then(N => N.startAuto?.()).catch(() => {});   // 뉴럴 데스크·자체 뇌도 앱이 켜지면 상시 실행(패널 열 필요 없음)
   import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});
+  import("./backup.js").then(M => M.startBackup?.()).catch(() => {});   // 💾 데모 기록 1시간마다 파일 백업(엔진 주인 창)
   // ⚡ 실시간 진입: 3분마다 자동 분석(토론은 유력·보통 후보만, 같은 자리 10분에 한 번)
   if (!startCycle._rt){ startCycle._rt = setInterval(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 3 * 60e3); setTimeout(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 40e3); }   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
   if (!startCycle._ms){ startCycle._ms = 1; setTimeout(() => { const d = missions().filter(m => m.status === "doing"); if (d.length){ post({ch: "hq", kind: "system", text: `📌 끝내지 못한 지시 ${d.length}건을 이어서 합니다: ${d.map(m => `"${m.text.slice(0, 30)}"(${m.attempts}/${m.plan.length})`).join(" · ")}`}); missionStep().catch(() => {}); } }, 60e3); }
@@ -2799,15 +2800,19 @@ async function presetJob(){
 
 /* ---- 📈 스윙 라인 — 일봉 추세추종 뼈대를 6코인 묶음으로 검증해 통과한 것만 데모 장부에 올린다 (코드 검증 · AI 호출 없음) ----
    근거(2026-10-05 실데이터): 1시간·4시간 지표 매매법 216개는 처음 보는 구간에서 우위 없음(묶음 손익비 0.84), 일봉 추세추종만 4년 묶음 손익비 1.5~1.9. lib/swing.js 머리말 참고. */
+// ⑤ 스윙 라인 코인 확대(2026-10-06): 기존 6코인 + 처음 보는 4코인(ADA·AVAX·LINK·LTC). 4코인 표본외 실측에서 '상승 추세 속 과매도 눌림 매수'만
+//   통과(4/4코인 이익 · 손익비 1.70 · 승률 71%), 추세추종 뼈대는 손익비 0.9~1.34 로 약해짐 → 새 4코인에는 눌림 매수만 데모 투입(장부 칸 32개 아끼기).
+const SWING_EXTRA = [{sym: "ADAUSDT", ko: "ADA", id: "ada"}, {sym: "AVAXUSDT", ko: "AVAX", id: "avax"}, {sym: "LINKUSDT", ko: "LINK", id: "link"}, {sym: "LTCUSDT", ko: "LTC", id: "ltc"}];
 async function swingJob(){
+  const SC = [...COINS, ...SWING_EXTRA.filter(x => !COINS.some(c => c.sym === x.sym))];
   const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), SW = await lib("swing"), RB = await lib("robust"), lead = agentById("trader") || agentById("qa");
-  const data = {}; for (const c of COINS){ try { data[c.sym] = await kl(c.sym, "D", 1500); } catch(e){} }
+  const data = {}; for (const c of SC){ try { data[c.sym] = await kl(c.sym, "D", 1500); } catch(e){} }
   if (Object.keys(data).length < 3){ post({ch: "demo", kind: "system", text: "일봉 캔들을 못 받아 스윙 라인 검증을 건너뜁니다"}); return; }
   const rows = SW.audit(Q, RB, data, COSTS.crypto), trends = {};
-  for (const c of COINS){ const t = SW.dailyTrend(Q, data[c.sym]); if (t) trends[c.id] = t; }
+  for (const c of SC){ const t = SW.dailyTrend(Q, data[c.sym]); if (t) trends[c.id] = t; }
   writeJ("coinDailyTrend", trends);
   // 오늘(어제 일봉 마감 기준) 코인별 검증 셋업 신호·대기 타점 → 뉴럴 데스크 카드·알림
-  const today = {}; for (const c of COINS){ try { const ls = SW.liveSetups(Q, data[c.sym], rows, c.sym); if (ls) today[c.id] = {ko: c.ko, setups: ls.setups.map(x => ({name: x.name, side: x.side, wr: x.wr, pf: x.pf, n: x.n, entry: x.entry, sl: x.sl, slPct: x.slPct, lev: x.lev, exitKo: x.exitKo, chased: x.chased})), watch: ls.watch, rsi2: ls.rsi2}; } catch(e){} }
+  const today = {}; for (const c of SC){ try { const ls = SW.liveSetups(Q, data[c.sym], rows, c.sym); if (ls) today[c.id] = {ko: c.ko, setups: ls.setups.map(x => ({name: x.name, side: x.side, wr: x.wr, pf: x.pf, n: x.n, entry: x.entry, sl: x.sl, slPct: x.slPct, lev: x.lev, exitKo: x.exitKo, chased: x.chased})), watch: ls.watch, rsi2: ls.rsi2}; } catch(e){} }
   const prevSet = readJ("coinDailySetups", {}); writeJ("coinDailySetups", {t: Date.now(), coins: today});
   for (const [id, v] of Object.entries(today)) for (const x of v.setups.filter(x => !x.chased)){ const k = id + x.name; if ((prevSet.coins?.[id]?.setups || []).some(y => id + y.name === k)) continue;
     const msg = `📅 일봉 검증 셋업: ${v.ko} ${x.side > 0 ? "롱" : "숏"} — ${x.name} (승률 ${x.wr}% · 손익비 ${x.pf} · ${x.n}건) · 시장가 ${x.entry} · 손절 ${x.sl}(−${x.slPct}%) · ≤${x.lev}배 · ${x.exitKo}`;
@@ -2822,15 +2827,16 @@ async function swingJob(){
   // 더는 통과 못 하는 뼈대는 (포지션이 없을 때) 내린다 → 스스로 교체
   for (const s0 of book.strategies.filter(x => x.status === "active" && x.lane === "swing" && !x.pos)) if (!pass.some(r => r.name === s0.name)){ s0.retiredWhy = "스윙 재검증 탈락"; await P.setStatus(s0.id, "retired").catch(() => {}); retired++; }
   for (const r of pick){ const seed = SW.SEEDS.find(x => x.key === r.key);
-    for (const c of COINS){ if (!data[c.sym]) continue;
+    for (const c of SC){ if (!data[c.sym]) continue;
+      if (SWING_EXTRA.some(x => x.sym === c.sym) && !COINS.some(x => x.sym === c.sym) && r.key !== "dip_rsi2") continue;   // 새 코인은 표본외에서 통과한 눌림 매수만
       if (book.strategies.some(x => x.status === "active" && x.name === seed.name && x.market === c.sym)) continue;
       try { await P.addStrategy({spec: Q.normalizeSpec(SW.specOf(seed, c.sym, COSTS.crypto)), market: c.sym, exchange: "binancef", tf: "D", author: "스윙 라인(코드 검증)", cls: "crypto", mname: `${c.ko} 선물`, lane: "swing",
         wf: {is: {ret: 0, dd: 0, win: 0, pf: r.pf1, n: Math.floor(r.n / 2)}, oos: {ret: 0, dd: 0, win: 0, pf: r.pf2, n: Math.ceil(r.n / 2)}}, robust: {ok: true, p: r.p, mwPos: null, mwTotal: null, sqn: null}, crossCoin: {profitable: r.pos, total: r.coins}}); added++; } catch(e){}
     } }
-  const tl = COINS.map(c => trends[c.id] ? `${c.ko} ${trends[c.id].label}(50일선 ${trends[c.id].distPct >= 0 ? "+" : ""}${trends[c.id].distPct}%)` : "").filter(Boolean).join(" · ");
+  const tl = SC.map(c => trends[c.id] ? `${c.ko} ${trends[c.id].label}(50일선 ${trends[c.id].distPct >= 0 ? "+" : ""}${trends[c.id].distPct}%)` : "").filter(Boolean).join(" · ");
   post({ch: "demo", kind: "system", text: `📈 스윙 라인: 통과 ${pass.length}/${rows.length}개 뼈대${added ? ` · 데모 투입 ${added}건(${pick.map(r => r.name.replace("스윙 · ", "")).join(" + ")})` : ""}${retired ? ` · 재검증 탈락 ${retired}건 내림` : ""} · 지금 일봉 추세: ${tl}`});
   addNote("demo", `스윙 라인 검증: 통과 ${pass.length}/${rows.length} · 1위 ${rows[0]?.name} 묶음 손익비 ${rows[0]?.pf}`, "스윙");
-  try { const B = await import("./brain.js"); B.learn({type: "지식", text: `일봉 추세추종(${rows[0]?.name.replace("스윙 · ", "")}) 4년 6코인 묶음 손익비 ${rows[0]?.pf} · 1시간·4시간 지표 매매법은 처음 보는 구간 우위 없음(0.84)`, model: "스윙 검증", w: 3, key: "swing:audit"}); } catch(e){}
+  try { const B = await import("./brain.js"); B.learn({type: "지식", text: `일봉 추세추종(${rows[0]?.name.replace("스윙 · ", "")}) 4년 ${Object.keys(data).length}코인 묶음 손익비 ${rows[0]?.pf} · 1시간·4시간 지표 매매법은 처음 보는 구간 우위 없음(0.84)`, model: "스윙 검증", w: 3, key: "swing:audit"}); } catch(e){}
   fire({kind: "liveentry"});
 }
 // 💾 저장소 점검: 데모 장부·기록은 IndexedDB 에 저장되는데, 쓰기가 실패하면 엔진(idb)이 조용히 메모리로만 돌린다(앱을 닫으면 사라짐).
