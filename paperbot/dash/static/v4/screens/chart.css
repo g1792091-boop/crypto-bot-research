@@ -59,8 +59,8 @@
 .chart-panels { gap: 10px; }
 @media (min-width: 1000px) { .chart-panels { position: sticky; top: calc(var(--top-h) + var(--sub-h) + 12px); } }
 .chart-warn { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--ink); font-size: var(--t-xs); }
-.chart-liqbar { height: 6px; border-radius: 6px; background: var(--up-soft); overflow: hidden; }
-.chart-liqbar i { display: block; height: 100%; background: var(--down); }
+.chart-liqbar { height: 6px; border-radius: 6px; background: var(--down-soft); overflow: hidden; }          /* one colour rule: 롱 청산 = up, 숏 청산 = down (core/liqkit.js) */
+.chart-liqbar i { display: block; height: 100%; background: var(--up); }
 /* price alerts */
 .chart-al-t { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
 .chart-al-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; }

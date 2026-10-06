@@ -85,7 +85,8 @@
 .mk-hints b { color: var(--ink-2); }
 .mk-lk { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
 .mk-lk i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.mk-lk i.l, .mk-lb-bar i.l { background: var(--down); } .mk-lk i.s, .mk-lb-bar i.s { background: var(--up); }
+/* one colour rule for liquidations (core/liqkit.js): the side that was liquidated, 롱 청산 = up, 숏 청산 = down, like the terminal */
+.mk-lk i.l, .mk-lb-bar i.l { background: var(--up); } .mk-lk i.s, .mk-lb-bar i.s { background: var(--down); }
 .mk-lr { display: grid; grid-template-columns: 52px minmax(0, 1fr) 88px; gap: 4px 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); }
 .mk-lr-c { font-size: var(--t-sm); }
 .mk-lr-bars { display: grid; gap: 4px; min-width: 0; }

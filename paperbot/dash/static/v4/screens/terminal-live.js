@@ -8,7 +8,7 @@
 // HONESTY: no message, no motion (no timer animates anything); the feed is labelled as the whole market's trades, not
 // ours; nothing under prefers-reduced-motion; the page's one relay connection (core/ticks.js) is closed while the page is
 // hidden, and this screen's listener leaves when the screen is left.
-import {h, put, ui, fmt, motion, listenTicks, ticksState} from "../core/pb.js";
+import {h, put, ui, fmt, motion, listenTicks, ticksState, liqkit} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell, marketChip} from "./terminal-kit.js";
 
 export const BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)";
@@ -19,8 +19,8 @@ const live = () => motion.visible() && !motion.reduced();
 const two = (x) => String(x).padStart(2, "0");
 /** Korea time hh:mm:ss of a trade (ms). */
 export const hms = (ms) => { const d = new Date(Number(ms) + 9 * 3.6e6); return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`; };
-/** $412K / $1.25M */
-export const usdK = (x) => "$" + (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : `${fmt.num(x / 1e3, 0)}K`);
+/** $412K / $1.25M: the one money format of the terminal's market lists (core/liqkit.js usdShort) */
+export const usdK = liqkit.usdShort;
 
 /**
  * A one-shot light on a real tick: data-hit="up" | "down" restarts the element's CSS animation (terminal.css), which
@@ -135,7 +135,7 @@ export function bigFeed(ctx) {
         const span = Number(b.span) || 0;
         if (m.state === "live" && span > 0) {
           ratioK.textContent = span >= 290 ? "최근 5분" : `최근 ${fmt.int(Math.max(1, Math.round(span / 60)))}분`;
-          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
+          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · ${usdK(n)}`);
         }
         if (fresh.size || m.first || was !== m.state) { render(fresh); if (fresh.size) ping(el); }   // (a new state: the empty line says it)
       } else if (was !== m.state) render(new Set());

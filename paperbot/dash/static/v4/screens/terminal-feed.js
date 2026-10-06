@@ -10,7 +10,7 @@
 //     count rows per minute (no money of theirs here). The recent entries' long / short bar beneath.
 // A row that really arrived while the page is open slides in from the top with one brief glow; ages ('6s', '4m') are
 // repainted by the terminal's 1 s clock tick (text only).
-import {h, put, ui, fmt, motion, bars, features, local} from "../core/pb.js";
+import {h, put, ui, fmt, motion, bars, features, local, liqkit} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 
@@ -215,7 +215,7 @@ export function fillsFeed(ctx) {
 }
 
 // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
-const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
+const {usdShort, liqTone, liqKo, liqTag, LIQ_WHAT, LIQ_TIP} = liqkit;      // the one colour rule and money format (core/liqkit.js)
 
 /** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq every 10 s while the recorder runs. Two views (owners 10/06
  *  13:23: the box stood almost empty with only the chosen coin): 전체 시장 (default; every coin Binance liquidates, the
@@ -235,7 +235,7 @@ export function liqFeed(ctx, st, onNew) {
     }));
   // "바이낸스 시장 전체 (우리 봇 아님)": the "시장" chip and the ⓘ (the terminal's footer says it once in full)
   const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true, acts: [modeBar], lead: [marketChip(`바이낸스 ${MARKET_LABEL} 강제청산`)],
-    info: `바이낸스 ${MARKET_LABEL} 강제청산 · 바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다 · 막대 = 최근 1시간 롱·숏 금액`}, list);
+    info: `바이낸스 ${MARKET_LABEL} 강제청산 · ${LIQ_TIP} · 바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다 · 막대 = 최근 1시간 롱·숏 금액`}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   const seen = new Set();
   let key = null, busy = false, last = {key: null, rows: []};
@@ -269,18 +269,18 @@ export function liqFeed(ctx, st, onNew) {
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.symbol}:${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
-        const lg = r.liquidated === "long", mine = r.symbol === want;
+        const lg = r.liquidated === "long", mine = r.symbol === want, tone = liqTone(r.liquidated);
         const node = h("div", {class: ["term-fr", "liq", all ? "anyc" : "", lg ? "lg" : "sh", r.usd >= 100000 ? "bigl" : "", all && mine ? "mine" : ""], role: "listitem",
-          title: `${fmt.coin(r.symbol)} ${lg ? "롱" : "숏"} 포지션 강제청산 · ${fmt.price(r.price)} · $${usdK(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
-        h("span", {class: ["term-lb", lg ? "up" : "down"]}, lg ? "LONG" : "SHORT"),
+          title: `${fmt.coin(r.symbol)} ${liqKo(r.liquidated)}: ${LIQ_WHAT[r.liquidated] || ""} · ${fmt.price(r.price)} · ${usdShort(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
+        h("span", {class: ["term-lb", tone]}, liqTag(r.liquidated)),
         all ? h("b", {class: "term-lc"}, fmt.coin(r.symbol)) : null,
-        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, "$" + usdK(r.usd)), ageCell(r.ts));
+        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, usdShort(r.usd)), ageCell(r.ts));
         if (isNew) nNew++;
         if (isNew && mine) arrived.push(r);
-        if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
+        if (isNew && live()) motion.fillIn(node, tone);
         return node;
       }) : ui.empty(all ? "최근 기록 없음" : "최근 1시간 기록 없음"));
-      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
+      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · ${usdShort(n)}`);
       if (nNew && live()) ping(el);
       // the chart flashes once for the chosen coin's really new ones
       if ((arrived.length || (!all && had !== rows.length)) && onNew) onNew(arrived);
