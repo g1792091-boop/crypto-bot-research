@@ -146,7 +146,10 @@ export function luckMini(ctx, o = {}) {
       .sort((a, b) => (a.part === "now" ? 0 : 1) - (b.part === "now" ? 0 : 1)).slice(0, 3);
     put(body, h("div", {class: "lk-mlist", role: "list"}, [ck, ...rest].filter(Boolean).map((r) => miniRow(r, ctx))));
     const sm = d.summary || {};
-    put(foot, `시험하는 곳 ${fmt.int(sm.places || rows.length)}곳 · 숫자가 있는 곳 ${fmt.int(sm.with_data || 0)}곳 · 운보다 확실히 많은 곳 ${fmt.int((sm.more || []).length)}곳`);
+    const named = (ids) => (ids || []).map((id) => { const r = rows.find((x) => x.id === id); return r ? r.short || r.title : id; });
+    const moreIds = named(sm.more);
+    put(foot, `시험하는 곳 ${fmt.int(sm.places || rows.length)}곳 · 숫자가 있는 곳 ${fmt.int(sm.with_data || 0)}곳 · 운보다 확실히 많은 곳 ${fmt.int(moreIds.length)}곳`,
+      moreIds.length ? ` (${moreIds.join(", ")})` : "");
   });
   return el;
 }
