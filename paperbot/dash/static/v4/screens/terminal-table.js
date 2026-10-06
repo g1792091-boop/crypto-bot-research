@@ -8,6 +8,7 @@
 import {h, put, ui, fmt, store, motion, local} from "../core/pb.js";
 import {normPos} from "./positions-kit.js";
 import {panel, ratioBar} from "./terminal-kit.js";
+import {failNote, retrier} from "./terminal-state.js";      // term-plus: loading / failed / really empty are three different things
 
 const MAX = 40;
 export const MONEY_G = new Set(["core", "m5", "extra"]);
@@ -20,7 +21,7 @@ const TAB_NOTE = {
 
 /** bottomTable(ctx, st, onPick) -> {el, setSym, onBoard, onTicker, onTrades} */
 export function bottomTable(ctx, st, onPick) {
-  const t = {tab: local.get("term-tab", "pos"), g: local.get("term-tg", ""), board: null, trades: null, busy: false};
+  const t = {tab: local.get("term-tab", "pos"), g: local.get("term-tg", ""), board: null, trades: null, busy: false, boardFailed: false, boardAt: 0, tradesFailed: false};
   if (t.g && !MONEY_G.has(t.g)) t.g = "";
   const tabs = ui.seg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], t.tab,
     (id) => { t.tab = id; local.set("term-tab", id); render(true); }, {label: "아래 표"});
@@ -56,7 +57,17 @@ export function bottomTable(ctx, st, onPick) {
     return ds || coin ? `딥시크 ${fmt.int(ds)} · 동전 봇 ${fmt.int(coin)}개 열림 (건수만) · ` : "";
   };
 
+  const retryBoard = () => { store.refresh("board").catch(() => {}); };
+  /** the board has not been read yet (불러오는 중) or could not be read (불러오지 못함): never "열린 포지션이 없습니다" */
+  const noBoard = (what) => {
+    put(foot, h("span", {class: "muted"}, h("a", {href: ctx.href("positions")}, "포지션 화면 →")));
+    return t.boardFailed ? failNote(what, {retry: retryBoard}) : motion.shimmer(3);
+  };
+  /** a board that was read once but could not be refreshed: the numbers stay, marked old */
+  const staleNote = () => (t.board && t.boardFailed
+    ? h("span", {class: "down"}, `새로 받지 못함 · ${fmt.ago(t.boardAt)} 자료 · `) : null);
   function posTable() {
+    if (!t.board) return noBoard("열린 포지션 (순위 자료)");
     const all = open();
     const xs = all.sort((x, y) => Math.abs(pnlOf(y) ?? 0) - Math.abs(pnlOf(x) ?? 0)).slice(0, MAX);
     const rows = xs.map((x) => {
@@ -73,13 +84,17 @@ export function bottomTable(ctx, st, onPick) {
         h("td", {class: "r num muted xs"}, x.p.entry_time ? fmt.kst(x.p.entry_time) : "—"));
     });
     const n = all.length;
-    put(foot, h("span", {class: "muted"}, counted(), n > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(n)}개는 ` : "",
+    put(foot, h("span", {class: "muted"}, staleNote(), counted(), n > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(n)}개는 ` : "",
       h("a", {href: ctx.href("positions")}, "포지션 화면 →")));
     return rows.length ? table([["계좌"], ["코인"], ["방향"], ["배수", "r xn"], ["진입가", "r xe"], ["마크", "r xm"], ["미실현 (USDT)", "r"], ["ROE", "r"], ["청산가", "r"],
       ["손절·잠금", "r"], ["진입", "r xs"]], rows) : ui.empty("열린 포지션이 없습니다");
   }
   function fillsTable() {
-    if (!t.trades) { loadTrades(); return motion.shimmer(3); }
+    if (!t.trades) {
+      if (t.tradesFailed) { put(foot, h("span", {class: "muted"}, h("a", {href: ctx.href("positions")}, "체결 기록 전체 →"))); return failNote("체결 기록", {retry: () => { t.tradesFailed = false; loadTrades(); }}); }
+      loadTrades();
+      return motion.shimmer(3);
+    }
     const byId = new Map(((t.board && t.board.accounts) || []).map((a) => [a.account_id, a]));
     const gOf = (x) => (byId.get(x.account_id) ? fmt.groupOf(byId.get(x.account_id)) : fmt.SERVER_GROUP[x.group]);
     const rows = t.trades.filter((x) => MONEY_G.has(gOf(x)) && (!t.g || gOf(x) === t.g)).slice(0, MAX).map((x) =>
@@ -93,6 +108,7 @@ export function bottomTable(ctx, st, onPick) {
       : ui.empty("체결이 아직 없습니다");
   }
   function stopsTable() {
+    if (!t.board) return noBoard("손절 주문 (순위 자료)");
     const xs = open().filter((x) => x.p.stop).map((x) => {
       const m = store.mark(x.p.symbol);
       return {...x, m, d: m ? Math.abs(m - x.p.stop) / m : null};
@@ -105,7 +121,7 @@ export function bottomTable(ctx, st, onPick) {
         h("td", {class: ["r", "num", x.d != null && x.d < 0.005 ? "down" : ""]}, x.d == null ? "—" : fmt.pct(x.d, 2, false)),
         h("td", {class: "r num warn-t"}, fmt.price(x.p.liq)));
     });
-    put(foot, h("span", {class: "muted"}, "모의 계좌의 손절·잠금 가격 (실제 주문 아님)"));
+    put(foot, h("span", {class: "muted"}, staleNote(), "모의 계좌의 손절·잠금 가격 (실제 주문 아님)"));
     return rows.length ? table([["계좌"], ["코인"], ["방향"], ["종류"], ["가격", "r"], ["지금", "r"], ["거리", "r"], ["청산가", "r"]], rows) : ui.empty("걸린 손절이 없습니다");
   }
   function render(user) {
@@ -131,16 +147,24 @@ export function bottomTable(ctx, st, onPick) {
   async function loadTrades() {
     if (t.busy) return;
     t.busy = true;
-    try { t.trades = await ctx.api("/api/trades?limit=60"); } catch (e) { if (!t.trades) t.trades = []; }
+    try { t.trades = await ctx.api("/api/trades?limit=60"); t.tradesFailed = false; trRetry.ok(); }
+    catch (e) {
+      if (e && e.name === "AbortError") { t.busy = false; return; }
+      t.tradesFailed = true;                       // (the old list, if any, stays: it is not "no fills")
+      trRetry.fail();
+    }
     finally { t.busy = false; }
     if (ctx.alive() && t.tab === "fills") render(false);
   }
+  const trRetry = retrier(ctx, () => { t.tradesFailed = false; loadTrades(); });
   let trT = null;
   ctx.track(() => clearTimeout(trT));
   return {
     el,
     setSym() { render(false); },
-    onBoard(b) { t.board = b; render(false); },
+    onBoard(b, fresh = true) { t.board = b; if (fresh) { t.boardFailed = false; t.boardAt = Date.now(); } render(false); },
+    /** The board could not be read (failed) or is back: the table says so instead of "열린 포지션이 없습니다". */
+    onBoardFailed(failed) { if (t.boardFailed === failed) return; t.boardFailed = failed; render(false); },
     onTicker() { render(false); },
     // a new closed trade: the 체결 tab asks again (once per burst); other tabs ask when they are opened next
     onTrades() {

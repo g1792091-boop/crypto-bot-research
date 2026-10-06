@@ -7,6 +7,7 @@
    hidden ([data-still]). */
 @import url("positions-kit.css");
 @import url("flow-kit.css");
+@import url("terminal-plus.css");
 
 /* the shell's page column is 1320 px: the terminal (and the header rows above it, so the edges line up) take the window */
 .screen:has(> .scr[data-screen="terminal"]) { max-width: none; padding: 8px 10px 10px; }

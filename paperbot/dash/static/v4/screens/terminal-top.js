@@ -9,7 +9,10 @@ import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js"
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
 import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
+import {topStats} from "./terminal-stats.js";      // term-plus: 미결제약정 · 롱/숏 · 24시간 범위 (terminal-stats.js)
+import {usdKo} from "./market-live.js";
 
+const FUND_HOT = 0.0005;          // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
 const two = (x) => String(x).padStart(2, "0");
@@ -23,6 +26,8 @@ export function topBar(ctx, st) {
   const px = h("b", {class: "term-px num"}, "—"), chg = h("span", {class: "term-chg num"}, "");
   const stat = (k, cls) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: ["term-st", cls || ""]}, h("span", null, k), v)}; };
   const vol = stat("24시간 거래대금"), fund = stat("펀딩 / 다음까지", "fund");
+  const fundK = fund.el.firstChild;
+  const extra = topStats(ctx, st);
   const sess = h("span", {class: "term-sess"}), clock = h("b", {class: "term-clock num"}, "—");
   // the live dot: lit while the market-trade relay is really connected, one pulse per real relay message
   const liveDot = h("i", {class: "term-live", "aria-hidden": "true"});
@@ -58,30 +63,43 @@ export function topBar(ctx, st) {
   const track = h("div", {class: "term-marq-in"});
   const marq = h("div", {class: "term-marq", role: "marquee", "aria-label": "최근 AI 회의 결론"}, track);
   const line = h("div", {class: "term-mline"}, h("a", {class: "term-mlab", href: ctx.href("digest", "day"), title: "회의 요약 열기"}, "AI 회의 결론"), meetN, marq);
-  const el = h("header", {class: "term-top", "aria-label": "시세 요약"},
-    h("div", {class: "term-row"},
+  const rowEl = h("div", {class: "term-row"},
       h("div", {class: "term-id"}, symEl, perp),
       h("div", {class: "term-pxbox"}, px, chg),
-      h("div", {class: "term-stats"}, vol.el, fund.el),
+      h("div", {class: "term-stats"}, vol.el, fund.el, extra.el),
       h("i", {class: "term-vsep", "aria-hidden": "true"}),
       movers,
-      h("span", {class: "grow"}), sndHint, sess, clockBox),
-    line);
+      h("span", {class: "grow"}), sndHint, sess, clockBox);
+  const el = h("header", {class: "term-top", "aria-label": "시세 요약"}, rowEl, line);
+  // the new market cells give way before anything is clipped (terminal-stats.js fit: the row or the movers box would cut)
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => extra.fit(rowEl, movers));
+    ro.observe(rowEl); ro.observe(movers);
+    ctx.track(() => ro.disconnect());
+  }
 
   let fundT = null, sig = "";
   function paint(tk) {
     const t = tk && tk[st.sym];
     symEl.textContent = `${fmt.coin(st.sym)}USDT`;
+    extra.onTicker(tk);                                      // (the 24시간 범위 cell reads the same ticker)
     if (!t) { px.textContent = "—"; return; }
     const p = Number(t.c ?? t.mark);
     if (Date.now() - relayAt > RELAY_FRESH_MS || px.dataset.pk !== st.sym) motion.tickPrice(px, p, fmt.price(p), st.sym);   // glows only on a real move
     px.classList.toggle("up", Number(t.p) > 0); px.classList.toggle("down", Number(t.p) < 0);
     chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
     chg.className = "term-chg num " + fmt.tone(t.p);
-    vol.v.textContent = t.q != null ? fmt.compact(t.q) : "—";
-    vol.el.title = `24시간 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
+    // the same amount reads the same on every screen (차트 · 시장 print it with usdKo too): 12.0억 USDT, not 1.2B
+    vol.v.textContent = t.q != null ? `${usdKo(t.q)} USDT` : "—";
+    vol.el.title = `24시간 거래대금 ${t.q != null ? `${usdKo(t.q)} USDT` : "— (불러오지 못함)"} · 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
     fundT = t.T || null;
-    put(fund.v, h("span", {class: fmt.tone(-Number(t.r || 0))}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
+    // funding is not a gain or a loss: a plus rate is not pink (review 10/06). Neutral ink with WHO pays in words; the
+    // caution colour only when it is 5 times the usual 0.01 % or more
+    const r = Number(t.r), hot = Number.isFinite(r) && Math.abs(r) >= FUND_HOT;
+    fundK.textContent = !Number.isFinite(r) || r === 0 ? "펀딩 / 다음까지" : r > 0 ? "펀딩 (롱이 냄) / 다음까지" : "펀딩 (숏이 냄) / 다음까지";
+    fund.el.title = Number.isFinite(r) ? `펀딩 ${fundPct(r)}: ${r > 0 ? "롱이 숏에게" : r < 0 ? "숏이 롱에게" : "아무도 안"} 냅니다 (8시간마다) · 보통은 +0.0100% · ${fmt.num(FUND_HOT * 100, 2)}% 이상 쏠리면 주의 색`
+      : "펀딩: 이 코인의 펀딩을 받지 못했습니다 (불러오지 못함)";
+    put(fund.v, h("span", {class: hot ? "warn-t" : ""}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
   }
 
   // ---- movers: /api/v4/movers every minute (the server's own 60 s cache: one Binance fetch a minute for everybody)
@@ -135,7 +153,7 @@ export function topBar(ctx, st) {
 
   return {
     el,
-    setSym() { relayAt = 0; paint(store.get("ticker")); },
+    setSym() { relayAt = 0; paint(store.get("ticker")); extra.setSym(st.sym); },
     onTicker: paint,
     /** Every relay message: the dot says the relay's real state and pulses once per message that carried trades. */
     onRelay(m) {
