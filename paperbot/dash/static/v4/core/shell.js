@@ -16,12 +16,9 @@ import {criticalLines} from "./alerts.js";
 import {skinSwitch} from "./skin.js";
 import {textCycle, textSwitch} from "./textsize.js";
 import {remount} from "./router.js";
+import {renderRail, visibleScreens} from "./rail.js";
 
 const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
-
-function visibleScreens(g) {
-  return g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden && (!SCREENS[n].feature || features[SCREENS[n].feature]));
-}
 
 function renderNav() {
   const p = parseHash(location.hash);
@@ -31,6 +28,11 @@ function renderNav() {
     dataset: {group: g.id}}, icon(g.id), h("span", null, g.ko),
     g.screens.some((n) => badges[n]) ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
   put($("#groups"), GROUPS.map((g) => link(g)));
+  // the PC rail (every screen one click away, >= 1200 px) and the "묶음 › 화면" line that stands in for the group bar there
+  renderRail(p.name, badges, () => remount());
+  const crumb = $("#crumb");
+  if (crumb) put(crumb, h("span", {class: "crumb-g"}, (GROUPS.find((x) => x.id === gid) || GROUPS[0]).ko), h("span", {"aria-hidden": "true"}, " › "),
+    h("b", null, meta.title || meta.ko));
   put($("#botbar"), GROUPS.map((g) => link(g)));
   const g = GROUPS.find((x) => x.id === gid) || GROUPS[0];
   put($("#subtabs"), textCycle(() => remount()), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
