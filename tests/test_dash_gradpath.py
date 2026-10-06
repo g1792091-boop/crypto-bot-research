@@ -125,12 +125,13 @@ def test_where_each_test_is_stuck(answer):
     # the number test is named the lab's way, with the strategy's Korean name (not its code)
     num = by["기존 매매법 숫자 시험 #3"]
     assert "손절폭" in num["title"] and "S5_DONCHIAN_MFI" not in num["title"]
+    assert "1시간봉" in num["title"] and " 1h" not in num["title"]                # the owners' timeframe words
 
 
 def test_paper_stage_says_how_many_trades_are_missing(answer):
     paper = _stage(answer, "paper")
     core = next(i for i in paper["items"] if i["tag"] == "기존 36")
-    assert re.search(r"거래 30건 넘은 계좌 \d+/144 · 가운데 계좌는 거래 \d+건 더 필요", core["wait"])
+    assert re.search(r"거래 30건 넘은 계좌 \d+/144 · 거래 수가 가운데인 계좌는 \d+건 더 필요", core["wait"])
     assert core["go"] == {"name": "board", "arg": None, "query": {"group": "core"}}
 
 
@@ -270,7 +271,9 @@ def test_paper_stage_lists_extra_accounts_with_trades_missing():
     extra = next(i for i in p["items"] if i["tag"] == "추가")
     assert extra["title"] == "복사 계좌 1" and extra["wait"] == "거래 23건 더 필요"
     core = next(i for i in p["items"] if i["tag"] == "기존 36")
-    assert core["wait"] == "거래 30건 넘은 계좌 1/2 · 가운데 계좌는 거래 0건 더 필요"
+    assert core["wait"] == "거래 30건 넘은 계좌 1/2 · 거래 수가 가운데인 계좌는 20건 더 필요"   # lower middle (10, 40)
+    one = GP.paper_stage(_board([("REEL@5m", "reel", "5m", 6, "reel")]), 30, "")
+    assert one["items"][0]["wait"] == "거래 24건 더 필요 (판정 최소 30건)"
     assert GP.paper_stage({}, 30, "")["state"] == "none"
 
 

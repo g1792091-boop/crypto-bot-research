@@ -192,7 +192,10 @@ def _test_title(spec: dict) -> str:
     """The lab's own Korean words for a number test (agents/labtests.describe_ko), else the template name."""
     try:
         from ...agents.labtests import describe_ko
-        return describe_ko({**spec, "strategy": _name(spec.get("strategy"))})
+        from ...checkpoint import TF_KO
+        tf = spec.get("timeframe")                      # '30m' -> '30분봉' (the owners' words, like fmt.tfKo + 봉)
+        return describe_ko({**spec, "strategy": _name(spec.get("strategy")),
+                            "timeframe": f"{TF_KO[tf]}봉" if tf in TF_KO else tf})
     except Exception:  # noqa: BLE001  (an older spec without a field: its template name)
         bits = [str(spec.get(k)) for k in ("strategy", "timeframe", "template") if spec.get(k)]
         return " · ".join(bits)
@@ -358,16 +361,19 @@ def paper_stage(board: dict, min_trades: int, verdict_ko: str) -> dict:
         if not e:
             continue
         ns = sorted(e["list"])
-        med = ns[len(ns) // 2] if ns else 0
+        med = ns[(len(ns) - 1) // 2] if ns else 0          # the lower middle: never rounds the wait down
         parts.append({"k": g, "ko": GROUP_KO[g], "n": e["n"], "trades": e["trades"], "enough": e["enough"],
                       "go": go("board", group=g)})
         if g == "extra":
             continue                                   # the extra accounts are listed one by one below
         if e["enough"] >= e["n"]:
             wait = f"모든 계좌가 판정 최소 거래 {min_trades}건을 넘김 · {verdict_ko}"
+        elif e["n"] == 1:
+            wait = f"거래 {max(0, min_trades - med):,}건 더 필요 (판정 최소 {min_trades}건)"
         else:
-            wait = (f"거래 {min_trades}건 넘은 계좌 {e['enough']:,}/{e['n']:,} · 가운데 계좌는 거래 "
-                    f"{max(0, min_trades - med):,}건 더 필요")
+            need = min_trades - med
+            wait = (f"거래 {min_trades}건 넘은 계좌 {e['enough']:,}/{e['n']:,} · "
+                    + (f"거래 수가 가운데인 계좌는 {need:,}건 더 필요" if need > 0 else f"거래 수가 가운데인 계좌도 {min_trades}건 넘김"))
         sub = f"계좌 {e['n']:,}개 · 닫힌 거래 {e['trades']:,}건" + (f" · 파산 {e['bust']:,}" if e["bust"] else "")
         rows.append(item(f"{GROUP_KO[g]} 계좌들", wait, sub=sub, go=go("board", group=g), tag=GROUP_KO[g],
                          tone="accent" if e["enough"] else ""))
@@ -405,6 +411,8 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
         left = _days_left(nts, now)
         if overdue(next_cp, False):
             when = "첫 판정일 지남 · 판정 기록 기다림"
+        elif not nts:                                   # no account yet (paper3.db empty): no start, no date
+            when = "첫 판정 날짜는 봇이 첫 계좌를 만들면 정해짐"
         else:
             when = f"{_mmdd(nts)} 첫 판정" + (f" (D-{left})" if left is not None and left > 0 else " (오늘)" if left == 0 else "")
         rows = []
@@ -477,7 +485,7 @@ def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], bes
             wait = (f"거래 200건 넘은 계좌 {ok:,}개" if ok else f"가장 많은 계좌도 거래 {max(0, 200 - best_trades):,}건 더 필요")
         elif cid in PERF_CONDS and not cp_ready:
             wait = ("1차 판정 다음 30일 뒤" if cid == "second_check" else "판정 기록이 생기면 셈" if overdue(next_cp, False)
-                    else f"{_mmdd(nts)} 판정 뒤에 셈")
+                    else f"{_mmdd(nts)} 판정 뒤에 셈" if nts else "첫 판정 뒤에 셈")
         elif cid in ("cost_ratio", "testnet"):
             wait = "실거래 쪽 기록이라 두 분이 확인"
         else:
