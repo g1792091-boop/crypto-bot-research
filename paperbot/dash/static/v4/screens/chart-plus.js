@@ -100,8 +100,24 @@ export function chartPlus(o) {
     if (cut > 0) bits.push(room.n ? `이 화면은 높이가 모자라 ${fmt.int(room.n)}개만 보입니다` : "이 화면은 높이가 모자라 아래 칸을 못 그립니다 (차트 화면에서는 보입니다)");
     return say("panes", "아래 칸", bits.join(" · "));
   }
+  /** the terminal's chart panel cannot spare two or three note lines: with less than 44 px over the candles' minimum the notes
+   *  become ONE line (each one's own words in order, the whole text in its tooltip) */
+  function tight() {
+    const pb = below.parentElement;
+    if (!o.minMain || !pb) return false;
+    let others = 0;
+    for (const c of pb.children) if (c !== wrap && c !== below && !c.classList.contains("term-ckey") && c.offsetParent !== null) others += c.offsetHeight;
+    return pb.clientHeight - others - o.minMain < 44;
+  }
+  function merged(rows) {
+    const p = h("p", {class: "cfxp-n", dataset: {k: "all"}});
+    rows.forEach((r, i) => { if (i) p.append(" ┃ "); p.append(...r.childNodes); });
+    p.title = rows.map((r) => r.title).join("\n");
+    return p;
+  }
   function paintNotes() {
-    const rows = [liqNote(), stopNote(), paneNote()].filter(Boolean);
+    let rows = [liqNote(), stopNote(), paneNote()].filter(Boolean);
+    if (rows.length > 1 && tight()) rows = [merged(rows)];
     notes.replaceChildren(...rows);
     notes.hidden = !rows.length;
     below.hidden = !rows.length && !shown.length;
@@ -128,8 +144,10 @@ export function chartPlus(o) {
   }
   function layout() {
     const sw = narrow() ? STRIP_W_PHONE : STRIP_W, k = Math.max(1, (parseFloat(tok("--t-2xs")) || 12) / 12);     // 글자 크기 크게 / 아주 크게: wider strips
-    const wl = st.liq ? Math.round(sw.liq * k) : 0, ws = st.stops ? Math.round(sw.stops * k) : 0, w = wl + ws;
-    liqHost.hidden = !st.liq; stopHost.hidden = !st.stops; strips.hidden = !w;
+    // a phone has no room for two strips beside the axis: our own map keeps its strip, the market's price bars wait (the bubbles stay)
+    const showLiq = st.liq && !(narrow() && st.stops);
+    const wl = showLiq ? Math.round(sw.liq * k) : 0, ws = st.stops ? Math.round(sw.stops * k) : 0, w = wl + ws;
+    liqHost.hidden = !showLiq; stopHost.hidden = !st.stops; strips.hidden = !w;
     liqHost.style.width = wl + "px"; stopHost.style.width = ws + "px";
     wrap.style.setProperty("--cfxp-w", w + "px");
     below.style.setProperty("--cfxp-w", w + "px");
@@ -199,7 +217,7 @@ export function chartPlus(o) {
     items.set(id, b);
     return b;
   };
-  const roomNote = h("p", {class: "cfx-mnote cfxp-roomnote", hidden: true}, "이 화면은 차트가 낮아서 아래 칸을 켤 자리가 없습니다. 차트 화면에서는 켤 수 있습니다.");
+  const roomNote = h("p", {class: "cfx-mnote cfxp-roomnote", hidden: true}, "이 화면은 차트가 낮아서 아래 칸이 다 들어가지 않습니다. 차트 화면에서는 모두 보입니다.");
   const sec = h("div", {class: "cfxp-sec", role: "group", "aria-label": "차트에 더 얹기"},
     h("p", {class: "cfx-mhd"}, "겹쳐 보기 (처음엔 꺼 둠)"),
     item("liq", "시장 강제청산 거품", "바이낸스 전체", st.liq, () => setLiq(!st.liq)),
@@ -217,7 +235,7 @@ export function chartPlus(o) {
       b.setAttribute("aria-checked", String(st.panes.includes(id)));
       b.setAttribute("aria-disabled", String(noRoom));
     }
-    roomNote.hidden = !noRoom;
+    roomNote.hidden = !(noRoom || (!!o.minMain && st.panes.length > shown.length));       // saved panes that do not fit here are explained in the menu too
   }
   if (deck.menuEl) {
     deck.menuEl.classList.add("cfxp-two");

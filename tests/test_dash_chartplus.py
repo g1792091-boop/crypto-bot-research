@@ -397,7 +397,7 @@ def test_everything_is_off_until_chosen_and_remembered_per_device():
 
 def test_each_chart_screen_makes_one_call_and_css_comes_with_it():
     tc, ch = _src("screens", "terminal-chart.js"), _src("screens", "chart.js")
-    assert tc.count("chartPlus({") == 1 and 'key: "term"' in tc and "minMain: 210" in tc and 'from "./chart-plus.js"' in tc
+    assert tc.count("chartPlus({") == 1 and 'key: "term"' in tc and "minMain: 230" in tc and 'from "./chart-plus.js"' in tc
     assert ch.count("chartPlus({") == 1 and 'key: "chart"' in ch and "minMain" not in ch
     assert '@import url("chart-plus.css")' in _src("screens", "terminal.css") and '@import url("chart-plus.css")' in _src("screens", "chart.css")
     css = _src("screens", "chart-plus.css")
