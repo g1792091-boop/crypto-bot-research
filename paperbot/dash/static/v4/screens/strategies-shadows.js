@@ -58,7 +58,9 @@ export function stratShadows(ctx, name, kind) {
   if (kind && kind !== "strategy") return null;
   const body = h("div", {class: "stack tight"}, motion.shimmer(3));
   const link = h("a", {class: "btn-line", href: ctx.href("analysis", "shadows")}, "전체 그림자 비교 →");
-  const card = ui.card({plate: "이 매매법 그림자", sub: "규칙 하나만 바꿨다면 · 설명용"}, body, link);
+  // ana7b: the what-if lab opened on this strategy (its controls, its 5-year cells and its own shadows side by side)
+  const lab = h("a", {class: "btn-line", href: ctx.href("whatif", null, {strategy: name})}, "만약 실험실에서 이 매매법 →");
+  const card = ui.card({plate: "이 매매법 그림자", sub: "규칙 하나만 바꿨다면 · 설명용"}, body, h("div", {class: "row wrap"}, link, lab));
   card.style.order = "9";             // after the loss cards on a phone (strategies.css strat-o1..o8)
   let tries = 0;
   const load = () => ctx.api(`/api/analysis/shadows?strategy=${encodeURIComponent(name)}`).then((D) => {

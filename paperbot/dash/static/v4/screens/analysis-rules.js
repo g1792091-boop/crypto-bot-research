@@ -78,6 +78,9 @@ export function shadows(d, env) {
     meta: `밤 점검이 다시 돌린 base 그림자 ${fmt.int(base.trades || 0)}건 · 거래당 자금 대비 ${fmt.pct(base.mean_eq, 2)}${d.label ? " · " + d.label : ""}`, at: d.computed_at, stale: d.stale,
     read: "기존 36 매매법의 같은 거래를 규칙 하나만 바꿔 다시 계산합니다. 차이 = 그 그림자 평균 − 같은 거래의 base 평균. 나음·나쁨 = 같은 거래끼리 비교한 비율.",
     warn: [d.error ? d.error : null, thin(base.trades || 0, 30, "base 그림자 거래")]})];
+  // ana7b: one setting at a time next to its 5-year result and the coin flips
+  out.push(h("p", {class: "an-note"}, "설정 하나를 골라 5년 결과·동전 봇과 나란히 보려면 ",
+    h("a", {href: env.ctx.href("whatif")}, "만약 실험실 →")));
   const groups = d.groups || [];
   if (groups.length) {
     const body = h("div");
