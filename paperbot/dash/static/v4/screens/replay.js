@@ -11,6 +11,7 @@
 import {h, ui, fmt, motion, local, makeChart, candleOptions, tok, priceDec, fullChart} from "../core/pb.js";
 import {exitKo, entryWho, stopPath, eventLines, caption, startBar, notes, summary} from "./replay-story.js";
 import {tradeRow} from "./positions-kit.js";
+import {tradeMeetSlot} from "./meet-links.js";
 
 const BASE_MS = 650;          // one bar at 1x
 const DWELL_MS = 1500;        // a moment with an event stays this much longer (time to read its caption)
@@ -110,7 +111,7 @@ export async function mount(el, ctx) {
     const hero = ui.card({hero: true, cls: "rp-hero", label: "거래 요약"},
       h("div", {class: "rp-who"}, ui.plate("다시보기"),
         h("a", {class: "rp-acct", href: ctx.href("account", t.account_id), title: t.account_id}, ui.acctLabel(a)),
-        a.kind === "ds200" ? ui.pill("참고", "ref") : null),
+        a.kind === "ds200" ? ui.pill("참고", "ref") : null, tradeMeetSlot(ctx, t)),
       h("div", {class: "rp-line"}, h("b", {class: "rp-sym"}, `${fmt.coin(t.symbol)}USDT`), ui.sideTag(t.side),
         h("span", {class: "muted"}, `격리 ${fmt.lev(t.leverage)} · ${fmt.dur(t.hold_s)} 보유`),
         h("span", {class: "rp-reason " + (t.exit_reason === "LIQ" ? "down" : t.pnl > 0 ? "up" : "")}, exitKo(d))),

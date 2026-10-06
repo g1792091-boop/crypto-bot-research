@@ -370,7 +370,8 @@ def test_every_chart_has_the_fullscreen_button_and_charts_screen_uses_one_relay(
         assert "fullChart(" in src and mark in src, rel
     # an extra account (no same-strategy strip) no longer shows the word "null" (native replaceChildren with a null)
     acc = _read("screens", "account.js")
-    assert "el.replaceChildren(...[backLink(), headSlot, same ? same.el : null, candleCard," in acc and 'ui.assumeLine(["closed", "open"])].filter(Boolean));' in acc
+    # (wave-a merge: add-accounts' 원본 vs 복제 and '왜' cards, both optional, sit after the head in the same filtered list)
+    assert "el.replaceChildren(...[backLink(), headSlot, cmp, why, same ? same.el : null, candleCard," in acc and 'ui.assumeLine(["closed", "open"])].filter(Boolean));' in acc
     # the 자본 곡선 cannot be scrolled or zoomed: at a new size it fills the width again
     assert "subscribeSizeChange(() => c.chart.timeScale().fitContent())" in _read("screens", "account.js")
     fc = _read("core", "fullchart.js")

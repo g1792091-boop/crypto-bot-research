@@ -11,6 +11,7 @@ import {h, put, ui, fmt, derive, motion, stream, startTour, local} from "../core
 import {groupCards, topBottom, groupKo, savedGroup, expInfo, judgedProgress, ORDER, MIN_TRADES} from "./home-shared.js";
 import {todayStats, TODAY_KO, TODAY_ORDER} from "./home-today.js";
 import {storyRing} from "./story-kit.js";
+import {inboxGuide} from "./inbox-guide.js";
 import {raceParts} from "./flow-kit.js";
 import {rowMotion} from "./board-motion.js";
 import {reelDuel} from "./reel-duel.js";
@@ -120,7 +121,8 @@ export async function mount(el, ctx) {
   // ★ 즐겨찾기 (conv-b, home-favs.js): the starred strategies / accounts / coins, right under the head
   const favs = favStrip(ctx);
   favs.classList.add("home-o0");
-  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), favs, h("div", {class: "home-band"}, ring, market),
+  // add-accounts: the 결재함 guide (inbox-guide.js), only from the day before copy proposals can come until the first decision
+  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), inboxGuide(ctx), favs, h("div", {class: "home-band"}, ring, market),
     h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
       h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
     trCard, led, groupSec,

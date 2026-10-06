@@ -1,0 +1,28 @@
+/* 손실 거래 <-> 회의 (meet-links.js): the meeting chip on a losing trade and a loss meeting's '근거 거래' list. Tokens
+   only (both skins); @imported by account.css, replay.css, rooms-kit.css and home-live.css. */
+.ml-slot:empty, .ml-round:empty { display: none; }
+/* a slot in a wrapping flex row (계좌 trade meta, the why card's biggest losses) never grows past its row: the chip
+   cuts with … instead of pushing the page sideways at 390 px */
+.ml-slot { display: inline-flex; min-width: 0; max-width: 100%; }
+.ml-chip { display: inline-flex; align-items: center; gap: 2px; min-height: 28px; max-width: 100%; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--ink); font-size: var(--t-xs); font-weight: 600;
+  text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-chip:hover, .ml-chip:focus-visible { border-color: var(--accent); }
+.ml-chip .ml-k { color: var(--accent); }
+.ml-chip .ml-go { color: var(--accent); }
+.ml-round { display: grid; gap: 6px; }
+.ml-open { justify-self: start; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--accent-line);
+  background: var(--accent-soft); color: var(--accent); font: 700 var(--t-xs) var(--f-body); cursor: pointer; }
+.ml-open:hover { border-color: var(--accent); }
+.ml-list { display: grid; gap: 2px; }
+.ml-list[hidden] { display: none; }
+.ml-trow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 32px; padding: 4px 8px; border-radius: var(--r-sm);
+  color: var(--ink-2); font-size: var(--t-xs); text-decoration: none; background: var(--surface-2); }
+.ml-trow:hover { color: var(--ink); }
+.ml-trow .ml-tt { font-family: var(--f-term); color: var(--muted); }
+.ml-trow b.up { color: var(--up); }
+.ml-trow b.down, .ml-trow .down { color: var(--down); }
+.ml-trow .ml-go { margin-left: auto; color: var(--accent); font-weight: 700; }
+.ml-note { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
+/* inside the home list rows (home-live.js, one grid per row): the chip takes its own line under the row */
+.hl-trow .ml-slot { grid-column: 2 / -1; justify-self: start; min-width: 0; max-width: 100%; }

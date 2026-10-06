@@ -66,7 +66,11 @@
 [data-screen="rooms"] .rm-point { color: var(--ink-2); overflow-wrap: anywhere; }
 [data-screen="rooms"] .rm-bub { display: grid; gap: 8px; padding: 10px 12px; border-radius: 4px 14px 14px 14px; background: var(--surface); border: 1px solid hsl(var(--h, 210) var(--av-s) var(--av-line-l));
   font: 400 var(--t-sm)/1.6 var(--f-term); color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
-[data-screen="rooms"] .rm-ev { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); font-size: var(--t-xs); word-break: break-all; }
+[data-screen="rooms"] .rm-ev { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+/* add-accounts: 근거 per claim, in plain words (rooms-evidence.js) */
+[data-screen="rooms"] .rm-evs { display: grid; gap: 8px; margin-top: 4px; }
+[data-screen="rooms"] .rm-evc { margin: 0; color: var(--ink); font-size: var(--t-xs); }
+[data-screen="rooms"] .rm-evn { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
 [data-screen="rooms"] .rm-msg.owner { grid-template-columns: minmax(0, 1fr) 34px; }
 [data-screen="rooms"] .rm-msg.owner .rav { grid-column: 2; grid-row: 1; }
 [data-screen="rooms"] .rm-msg.owner .rm-mbody { grid-column: 1; grid-row: 1; justify-items: end; }
@@ -110,6 +114,7 @@
 [data-screen="rooms"] .rm-prop { display: grid; gap: 6px; padding: 10px; border-radius: 8px; background: var(--surface-2); font-size: var(--t-xs); line-height: 1.55; }
 [data-screen="rooms"] .rm-ptitle { color: var(--accent); font-weight: 700; }
 [data-screen="rooms"] .rm-prop ul { margin: 0; padding-left: 18px; }
+[data-screen="rooms"] .rm-prop .rm-ibx { justify-self: start; display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 700; text-decoration: none; }
 [data-screen="rooms"] .rm-decide { display: grid; gap: 6px; }
 [data-screen="rooms"] .rm-note { height: 36px; }
 [data-screen="rooms"] .rm-confirm { display: grid; gap: 8px; padding: 10px; border-radius: 8px; border: 1px solid var(--warn-line); background: var(--warn-soft); }

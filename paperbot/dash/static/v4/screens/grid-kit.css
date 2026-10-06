@@ -34,6 +34,9 @@
 a.gk-cell:hover { border-color: var(--ink-2); transform: translateY(-1px); z-index: 1; }
 a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
 .gk-cell small { display: inline-flex; align-items: center; gap: 4px; }
+/* add-accounts: the coin-flip comparison as a neutral mark beside the trade count when the colour is the account's own return */
+.gk-vsm { font: 700 var(--t-2xs)/1 var(--f-body); font-style: normal; color: var(--ink-2); }
+.gk-cell[data-b="4"] .gk-vsm, .gk-cell[data-b="-4"] .gk-vsm { color: inherit; opacity: .8; }
 .gk-dot { flex: none; width: 6px; height: 6px; background: var(--term-yellow); box-shadow: 0 0 0 1.5px var(--bg); }
 .gk-cell.sw { min-height: 0; height: 14px; padding: 0; border-radius: 3px; }
 .gk-flash { animation: gkFlash 1.2s var(--ease) 1; }

@@ -211,7 +211,9 @@ def test_wiring():
     assert 'href("analysis", "sessions")' in b and 'ctx.watch("ticker"' in b
     a = _read("screens", "account.js")
     assert "accountPicker(" in a and "setVisibleLogicalRange(win)" in a and "profDraws ? null : eqCard" in a
-    assert re.search(r"backLink\(\), headSlot, same \? same\.el : null, candleCard", a)
+    # the coin chart right under the profile card and the same-strategy strip (review 10/06, add-accounts: the
+    # '왜 이 수익률인가' card and an approved copy's 원본 vs 복제 card sit between the profile and the strip)
+    assert re.search(r"backLink\(\), headSlot, cmp, why, same \? same\.el : null, candleCard", a)
     of = _read("screens", "office-floor.js")
     assert "st.wall.style.order = \"1000\"" in of
     o = _read("screens", "office.js")
