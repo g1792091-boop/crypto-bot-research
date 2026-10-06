@@ -22,6 +22,7 @@ import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
 import {drawTools} from "./draw-kit.js";
 import {failNote, retrier} from "./terminal-state.js";      // term-plus: a failed load is told and retried, never an empty chart
+import {chartPlus} from "./chart-plus.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -254,6 +255,9 @@ export function termChart(ctx, st, onTf) {
         onAlertAdded: () => loadAlerts()});
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);
+      // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
+      try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 230}); }
+      catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);

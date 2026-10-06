@@ -13,6 +13,7 @@ import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOpti
   bigEvent, liqEvent, ownEvent, fundkit, onPref, fullChart, fav} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
+import {chartPlus} from "./chart-plus.js";
 import {tickStream} from "./terminal-live.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
@@ -147,6 +148,9 @@ export async function mount(el, ctx) {
     draw = drawTools({ctx, chart: C.chart, series, wrap, box, deck, sym: () => st.sym, tf: () => st.tf, step: () => TF_S[st.tf] || 900,
       onAlertAdded: () => panels.alerts().load()});
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn, draw.toggle, fs);
+    // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
+    try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "chart", sym: () => st.sym, tf: () => st.tf}); }
+    catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));

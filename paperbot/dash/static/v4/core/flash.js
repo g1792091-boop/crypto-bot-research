@@ -10,7 +10,7 @@
 // setTimeout below only plays an event that really arrived while the previous flash was still on screen.
 // prefers-reduced-motion: no flash at all (the Premium / Discount halves only fade slowly then: core/blink.js CALM).
 
-import {liqTone} from "./liqkit.js";
+import {liqTone, liqKo} from "./liqkit.js";
 
 export const ENVELOPE = {inMs: 200, holdMs: 1500, holdSmallMs: 600, outMs: 400};
 /** '번쩍임' per device: 자주 (default) every real big trade, at most one start per 0.9 s; 보통 only the big ones (고래, a
@@ -40,7 +40,7 @@ export function liqEvent(r) {
   const u = Number(r && r.usd) || 0;
   if (u <= 0 || (r.liquidated !== "long" && r.liquidated !== "short")) return null;
   return {tone: liqTone(r.liquidated), k: clamp(0.35 + 0.22 * (Math.log10(u) - 4), 0.35, 1), big: u >= BIG_LIQ_USD,
-    why: r.liquidated === "long" ? "롱 청산" : "숏 청산"};
+    why: liqKo(r.liquidated)};
 }
 /** Our own bot's real fill on this coin -> an accent flash (counts as big: it passes 보통). */
 export const ownEvent = () => ({tone: "accent", k: 0.6, big: true, own: true, why: "우리 봇 체결"});
