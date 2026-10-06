@@ -7,9 +7,15 @@
 // The idea factory (DEBATE_MODE=factory, owners 10/06): five specialist seats (FACTORY_CAST) instead of the five
 // personalities; each stored turn carries the side code assigned (찬성 / 반대 / 심판, rooms-kit sideChip) and, in the daily
 // deep debate, its part (주장 / 반박 / 심판). Older rounds keep the names they were stored with (CAST).
+// Design step 6: a factory / deep round opens with the code's question pinned first (its kind in Korean, "코드가 고른
+// 질문": not a bubble, nobody in the room said it), the cast strip and the sides line show each seat's side of THAT round
+// (the code rotates the 2-2 split every round), the deep debate's three calls are split by a divider per part (1 주장 →
+// 2 반박 → 3 심판, each call read the earlier ones), and the 심판's one lab idea closes the conversation as its card
+// (debate-idea.js: the code check, the daily pick, the lab's ①-⑥ result, who was right).
 // HONESTY: every bubble is a stored turn (no typing effect, nothing invented); every string is a text node (h()).
 import {h, ui, fmt, motion, stratFigure} from "../core/pb.js";
 import {sideChip} from "./rooms-kit.js";
+import {ideaCard} from "./debate-idea.js";
 
 /** The classic cast: the five debate roles (paperbot/agents/debate.py ROLES) and the 사회자 who writes the round's 정리
  *  note. Rounds stored before the idea factory (and DEBATE_MODE=classic) use these names. */
@@ -58,14 +64,56 @@ export function avatar(speaker, size = 34) {
 export function castStrip(round, o = {}) {
   const n = {};
   for (const m of (round && round.messages) || []) n[isNote(m) ? "정리" : m.speaker] = (n[isNote(m) ? "정리" : m.speaker] || 0) + 1;
+  const sides = sidesOf(round);
   const said = (c) => !round ? c.job : c.id === "정리" ? (n[c.id] ? "정리함" : "정리 없음") : n[c.id] ? `${fmt.int(n[c.id])}번 말함` : "이번엔 차례 없음";
   return h("ul", {class: "db-cast", "aria-label": "토론 참가자"}, castList(round, !!o.factory).map((c) => h("li", {class: ["db-castm", !round || n[c.id] ? "" : "quiet"],
-    style: {"--h": c.hue}, title: `${c.name}: ${c.job}`}, avatar(c.id, 30), h("b", null, c.name), h("small", null, said(c)))));
+    style: {"--h": c.hue}, title: `${c.name}: ${c.job}`}, avatar(c.id, 30), h("b", null, c.name), h("small", null, said(c)),
+    // the side the code gave this seat in this round (stored on its turns; a classic round has none)
+    sides[c.id] ? sideChip(sides[c.id]) : null)));
+}
+
+/** {speaker: 찬성 | 반대 | 심판} of a round, from its stored turns (the code's side; {} for a classic round). */
+export function sidesOf(round) {
+  const out = {};
+  for (const m of (round && round.messages) || []) if (m.side && !isNote(m) && !out[m.speaker]) out[m.speaker] = m.side;
+  return out;
+}
+
+/** The round's sides in one line: 찬성 a · b / 반대 c · d / 심판 (the code's 2-2 split, a new one every round). */
+export function sidesLine(round) {
+  const s = sidesOf(round);
+  const by = (side) => Object.keys(s).filter((k) => s[k] === side).map((k) => castOf(k).name);
+  const pro = by("찬성"), con = by("반대"), judge = by("심판");
+  if (!pro.length && !con.length && !judge.length) return null;
+  const grp = (side, names) => names.length ? h("span", {class: "db-sg"}, sideChip(side), h("span", null, names.join(" · "))) : null;
+  return h("div", {class: "db-sides", "aria-label": "이번 회차 편"}, h("span", {class: "db-sides-k"}, "편 (코드가 정함 · 회차마다 바뀜)"),
+    grp("찬성", pro), grp("반대", con), grp("심판", judge));
+}
+
+/** The deep debate's three calls (debate.DEEP_PARTS) and what each one read. */
+export const DEEP_PART_KO = {"주장": [1, "찬성 두 자리 · 첫 번째 호출"], "반박": [2, "반대 두 자리 · 두 번째 호출, 주장을 읽고"],
+  "심판": [3, "심판 · 세 번째 호출, 주장과 반박을 읽고"]};
+/** The parts a deep round really stored, in order (each word once). */
+export const partsOf = (round) => [...new Set(((round && round.messages) || []).map((m) => m.part).filter((p) => DEEP_PART_KO[p]))];
+
+/** The code's question of a factory / deep round, pinned first: its kind in Korean and the question text. Not a
+ *  bubble: the code picked it from the bot's data, nobody in the room said it. */
+export function questionPin(round) {
+  const q = (round && round.question) || null;
+  if (!q) return null;
+  const deep = round.kind === "deep";
+  return h("div", {class: ["db-qpin", deep ? "deep" : ""]},
+    h("div", {class: "db-qh"}, h("span", {class: "db-qk"}, deep ? "오늘의 깊은 토론 질문" : "이번 회차 질문"),
+      q.kind_ko ? h("span", {class: "db-kind"}, q.kind_ko) : null, h("small", null, "코드가 봇 자료에서 고름")),
+    h("p", {class: "db-qt"}, q.ko || round.topic || "질문 없음"));
 }
 
 /**
- * roundChat(round, {flashTo}) -> the conversation of one stored round: bubbles in order, the 정리 note pinned last.
- * round: /api/debate chat[] item {round_id, ts, topic, cost_usd, turns, cut, messages}.
+ * roundChat(round, {flashTo, question, idea}) -> the conversation of one stored round: bubbles in order, the 정리 note
+ * pinned last. round: /api/debate chat[] item {round_id, ts, topic, cost_usd, turns, cut, messages; a factory / deep
+ * round also kind, question, idea}. A factory / deep round opens with the code's question (question: false when the
+ * screen's head already shows it), a deep round has a divider per part, and the 심판's idea card closes it (idea: false
+ * to leave it out).
  */
 export function roundChat(round, o = {}) {
   const ms = (round && round.messages) || [];
@@ -73,17 +121,33 @@ export function roundChat(round, o = {}) {
   const note = ms.filter(isNote).pop();
   const nodes = [];
   const list = h("div", {class: "db-list", role: "log", "aria-label": "토론 대화"});
+  if (o.question !== false && round && round.question) list.append(questionPin(round));
+  const deep = !!round && round.kind === "deep";
+  // the deep debate: each call's turns in a column of their own under the part's header (주장 → 반박 → 심판); the
+  // columns sit side by side on a wide screen
+  const cols = deep ? h("div", {class: "db-parts"}) : null;
+  let part = null, col = null;
   turns.forEach((m, i) => {
+    if (deep && m.part && m.part !== part && DEEP_PART_KO[m.part]) {
+      part = m.part;
+      col = h("section", {class: "db-partcol", "aria-label": `${DEEP_PART_KO[part][0]} ${part}`},
+        h("div", {class: "db-partdiv"}, h("b", null, `${DEEP_PART_KO[part][0]} ${part}`), h("span", null, DEEP_PART_KO[part][1])));
+      cols.append(col);
+      if (!cols.parentNode) list.append(cols);
+    }
     // the bubble a turn answers: the latest earlier turn of that speaker
     let target = null;
     if (m.reply_to) for (let j = i - 1; j >= 0; j--) if (turns[j].speaker === m.reply_to) { target = j; break; }
     const n = bubble(m, i, round, target == null ? null : () => jump(nodes[target]));
     nodes.push(n);
-    list.append(n);
+    (col || list).append(n);
   });
   if (round && round.cut) list.append(h("p", {class: "db-sys"}, "AI 답이 길이 한도에서 잘려 끝난 발언까지만 저장됐습니다"));
   if (note) list.append(noteNode(note, round));
   else list.append(h("p", {class: "db-sys"}, "이번 회차에는 정리 글이 없습니다"));
+  // the idea factory: the 심판's one lab idea after the code's check (a factory round that stored none says so)
+  if (o.idea !== false && round && round.idea) list.append(ideaNode(round.idea));
+  else if (o.idea !== false && round && round.question) list.append(h("p", {class: "db-sys"}, "이번 회차에는 저장된 시험 아이디어가 없습니다"));
   function jump(n) {
     if (!n) return;
     n.scrollIntoView({block: "nearest", behavior: motion.reduced() ? "auto" : "smooth"});
@@ -117,6 +181,14 @@ function noteNode(m, round) {
       h("div", {class: "db-mh"}, h("b", {class: "db-who"}, "사회자"), h("span", {class: "db-tag"}, "이번 회차 정리"),
         round && round.ts ? h("time", null, fmt.hm(round.ts)) : null),
       h("p", {class: "db-pin-t"}, String(m.text || "").replace(/^\s*정리\s*[:：]\s*/, ""))));
+}
+
+/** The 심판's idea as the conversation's last card (the judge's seat and colour; the card's words are labelled AI / 코드). */
+function ideaNode(idea) {
+  const c = castOf("심판");
+  return h("div", {class: "db-pin db-idpin", style: {"--h": c.hue}},
+    avatar("심판"),
+    h("div", {class: "db-mb"}, ideaCard(idea)));
 }
 
 /** One line of a round's note (the history row), '' when it has none. */

@@ -269,7 +269,8 @@ def test_the_factory_rounds_carry_side_part_and_question_only_where_stored(tmp_p
     c.close()
     d = AN.debate_chat(path, NOW)
     deep = d["chat"][0]
-    assert deep["kind"] == "deep" and deep["question"] == {"kind": "big_losses", "ko": "오늘 가장 크게 잃은 거래"}
+    assert deep["kind"] == "deep" and deep["question"] == {"kind": "big_losses", "kind_ko": "오늘 큰 손실",
+                                                           "ko": "오늘 가장 크게 잃은 거래"}
     assert [(m.get("side"), m.get("part")) for m in deep["messages"]] == [
         ("찬성", "주장"), ("반대", "반박"), ("심판", "심판"), (None, None)]                 # unknown words: dropped
     old = d["chat"][1]
@@ -300,7 +301,9 @@ console.log(JSON.stringify({
     assert out["who"] == ["차트 분석가", "퀀트", "리스크 책임자", "시장 분석가", "심판"]
     assert out["sides"][0] == [["rk-side pro", "찬성"]] and out["sides"][1] == [["rk-side con", "반대"]]
     assert out["sides"][4] == [["rk-side judge", "심판"]] and out["part"] == ["주장"]
-    assert out["strip"][:5] == ["차트 분석가1번 말함", "리스크 책임자1번 말함", "퀀트1번 말함", "시장 분석가1번 말함", "심판1번 말함"]
+    # each seat with the side the code gave it in this round (the chip after the count)
+    assert out["strip"][:5] == ["차트 분석가1번 말함찬성", "리스크 책임자1번 말함찬성", "퀀트1번 말함반대", "시장 분석가1번 말함반대",
+                                "심판1번 말함심판"]
     assert out["classic"][:3] == ["낙관론자", "비관론자", "회의론자"]            # before any round, classic mode
     assert out["before"][:5] == ["차트 분석가", "리스크 책임자", "퀀트", "시장 분석가", "심판"]
     assert out["is"] == [True, False, True] and out["names"][-1] == "사회자" and out["shared"]
@@ -344,10 +347,13 @@ def test_wiring_honesty_and_layout():
     for gone in ('"강세"', '"약세"', "db-vs", "이번 회차에 발언 없음", "typing", "setInterval", "innerHTML"):
         assert gone not in every, gone
     # the room: chat + the status column, the older rounds folded, the honesty line under the chat
-    assert 'import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";' in js["debate.js"]
+    assert ('import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST, sidesLine} from "./debate-chat.js";'
+            in js["debate.js"])
     assert 'import {makeSide, usd4} from "./debate-side.js";' in js["debate.js"]
     assert "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다" in js["debate.js"] and "의견이지 사실이 아닙니다" in js["debate.js"]
-    assert "history.set(chat.slice(1), true)" in js["debate.js"] and 'motion.expand(region, open)' in js["debate.js"]
+    # the earlier rounds: every finished round but the one in the room (the deep debate has its own block)
+    assert "history.set(rest, true)" in js["debate.js"] and 'motion.expand(region, open)' in js["debate.js"]
+    assert "chat.filter((r) => r !== shown)" in js["debate.js"]
     assert "store.refresh(\"debate\")" in js["debate.js"] and "ctx.every(1000" in js["debate.js"]
     # the countdown reads the server's schedule first (the old guess only for an older server)
     assert "d.next && d.next.ts" in js["debate-side.js"] and "countdown(nx.ts, serverNow())" in js["debate-side.js"]

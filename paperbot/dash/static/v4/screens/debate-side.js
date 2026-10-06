@@ -7,6 +7,9 @@
 // HONESTY: "토론 중" only while the service says running (its heartbeat is fresh: debate.summary turns a stale one into
 // 꺼짐); "지금 회차 진행 중" only while the newest stored round is 'running'; costs are the API's own usage numbers
 // (real money, not paper money); nothing is animated to look busy. Every string is a text node.
+// The idea factory (design step 6): the state block says what today's factory did (ideas handed to the lab's 5-year
+// queue against the daily share, candidates, the next pick); the cost block gives the daily deep debate's own month
+// line (its spend against its share, inside the month's cap). Only when /api/debate sends `factory`.
 import {h, put, ui, fmt, local, serverNow} from "../core/pb.js";
 import {countdown} from "./office-wall.js";
 
@@ -29,6 +32,23 @@ export function roundKo(r, newest, running) {
   if (r.status === "aborted") return ["중단", "is-bad", why || "서비스가 도중에 멈춤", ""];
   const tag = (why.match(/^([a-z_]+):/) || [])[1];
   return ["오류", "is-bad", `${CAUSE[tag] || "실패"}${r.cost_usd ? ` · ${usd4(r.cost_usd)}` : ""}`, ""];
+}
+
+/** The idea factory's line in the state block: "아이디어 공장 · 오늘 5년 시험 줄 0/2 · 후보 4 · 다음 고르기 21:00". */
+export function factoryLine(f) {
+  if (!f) return null;
+  if (f.mode !== "factory") return h("p", {class: "db-small"}, `토론 방식: ${f.mode_ko || "예전 토론"} · 아이디어 공장 기록은 왼쪽(아래)에 남아 있습니다`);
+  const t = f.today || {};
+  return h("p", {class: "db-small db-fline"}, h("b", null, "아이디어 공장"),
+    ` · 오늘 5년 시험 줄 ${fmt.int(t.queued || 0)}/${fmt.int(t.cap || 0)} · 후보 ${fmt.int(t.candidates || 0)}`
+    + (t.next_pick_ts ? ` · 다음 고르기 ${fmt.hm(t.next_pick_ts)}` : ""));
+}
+/** The daily deep debate's own month line (inside the month's cap), when it is on or has run. */
+export function deepCost(f) {
+  const d = f && f.deep;
+  if (!d || (!d.on && !d.round)) return null;
+  return h("p", {class: "db-small"}, `깊은 토론 몫 이번 달 ${usd4(d.month)}${d.cap != null ? ` / ${usd(d.cap)}` : ""}`
+    + ` · ${d.model || "따로 정한 모델"} · 하루 한 번 세 번 호출 · 월 한도 안에서 씀`);
 }
 
 export function makeSide(ctx) {
@@ -84,6 +104,7 @@ export function makeSide(ctx) {
       d.reason ? h("p", {class: "db-reason"}, d.reason) : null,
       nextBox,
       h("p", {class: "db-small"}, every ? `${fmt.int(every)}분마다 한 회차 · 새 소식이 없으면 비용 없이 건너뜁니다` : "주기를 아직 모릅니다"),
+      factoryLine(d.factory),
       ui.kv([["마지막 토론", d.last_round_ts ? `${fmt.kst(d.last_round_ts)} (${fmt.ago(d.last_round_ts)})` : "아직 없음"],
         ["모델", d.model || "—"]]));
     // cost
@@ -97,7 +118,8 @@ export function makeSide(ctx) {
         h("i", {style: {"--w": `${(p * 100).toFixed(1)}%`}}), h("span", {class: "db-c80", title: "80%: 텔레그램 경고"}), h("span", {class: "db-c95", title: "95%: 그달은 멈춤"})),
       h("p", {class: "db-small"}, `한도의 ${fmt.int(Math.round(p * 100))}% · 80%에서 경고, 95%부터 그달은 멈추고 다음 달 1일(한국 시간)에 이어집니다`),
       td ? h("p", {class: "db-small"}, `오늘 토론 ${fmt.int(td.ok)}번 · 건너뜀 ${fmt.int(td.skipped)}번 · 오류 ${fmt.int(td.error)}번`) : null,
-      avg && avg.rounds_7d ? h("p", {class: "db-small"}, `회차당 평균 ${usd4(avg.cost_usd)} (최근 7일 ${fmt.int(avg.rounds_7d)}회)`) : null);
+      avg && avg.rounds_7d ? h("p", {class: "db-small"}, `회차당 평균 ${usd4(avg.cost_usd)} (최근 7일 ${fmt.int(avg.rounds_7d)}회)`) : null,
+      deepCost(d.factory));
     // timeline: the newest rounds of every kind
     const tl = (d.timeline || (d.rounds || []).map((r) => ({...r, why: String(r.error || "").replace(/^unchanged:\s*/, "")}))).slice(0, 12);
     const run = d.state === "running";

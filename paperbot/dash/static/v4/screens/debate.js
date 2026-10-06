@@ -10,11 +10,18 @@
 // status column (debate-side.js: 토론 중 / 쉬는 중, the next round's countdown from the server's schedule, the month's
 // cost against the cap with today's, the last 12 rounds, the hypotheses ledger); on a phone it folds into one line on
 // top. When the room is off: what it is, that it costs nothing now, and the three steps to turn it on.
+// The idea factory (design step 6, DEBATE_MODE=factory): the head shows the code's question with its kind, the seats
+// as specialist characters with the side the code gave each this round (찬성 / 반대 / 심판), the conversation ends with
+// the 심판's idea card (debate-idea.js); under the room the daily deep debate as its own highlighted block (three
+// calls, debate-factory.js deepBlock) and the 아이디어 공장 card (today's hand-off to the lab, the last 20 ideas, the
+// record next to the lab's base rates, 왜 떨어졌나). Classic rounds (the five personalities) render as before.
 // HONESTY: every bubble is a stored turn (text nodes, no typing effect); it is ONE AI speaking every role (said under
 // the chat); nothing here changes an order, a rule or an account.
 import {h, ui, fmt, motion, store, serverNow} from "../core/pb.js";
-import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";
+import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST, sidesLine} from "./debate-chat.js";
 import {makeSide, usd4} from "./debate-side.js";
+import {factoryCard, deepBlock} from "./debate-factory.js";
+import {stageChip} from "./debate-idea.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("24시간 토론방");
@@ -26,6 +33,7 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- the room (chat | status)
   const side = makeSide(ctx);
   const subjectK = h("small", null, "이번 회차 주제");
+  const kindChip = h("span", {class: "db-kind", hidden: true});
   const subject = h("b", {class: "db-topic"});
   const meta = h("span", {class: "db-meta"});
   const castBox = h("div", {class: "db-castbox"});
@@ -34,10 +42,13 @@ export async function mount(el, ctx) {
   const scroller = h("div", {class: "db-scroll"}, startLine, chatBox);
   // the seats in the head: the shown round's cast (the idea factory's specialists or the classic five)
   const avs = h("span", {class: "db-avs", "aria-hidden": "true"}, CAST.slice(0, 5).map((c) => avatar(c.id, 22)));
-  const head = h("div", {class: "db-head"}, avs, h("div", {class: "db-ht"}, subjectK, subject), meta);
+  const head = h("div", {class: "db-head"}, avs, h("div", {class: "db-ht"}, h("span", {class: "db-htk"}, subjectK, kindChip), subject), meta);
   const factoryMode = () => !!(st.d && st.d.factory && st.d.factory.mode === "factory");
   const seats = (r) => avs.replaceChildren(...castList(r, factoryMode()).slice(0, 5).map((c) => avatar(c.id, 22)));
-  const honest = h("p", {class: "db-honest"}, "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다. 말풍선은 저장된 글 그대로(실시간 타이핑 아님)이고, ",
+  const HONEST_CLASSIC = "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다. ";
+  const HONEST_FACTORY = "AI 하나가 전문가 네 자리와 심판, 사회자를 모두 맡아 말하는 방입니다. 찬성·반대는 코드가 회차마다 정한 편이라 자기 생각이 아닐 수 있습니다. ";
+  const honestWho = h("span", null, HONEST_CLASSIC);
+  const honest = h("p", {class: "db-honest"}, honestWho, "말풍선은 저장된 글 그대로(실시간 타이핑 아님)이고, ",
     "의견이지 사실이 아닙니다. 이 방은 주문·규칙·계좌를 바꾸지 않습니다.");
   const live = h("section", {class: "db-room", "aria-label": "지금 토론"}, head, castBox, scroller, honest);
   const history = ui.pager({size: 5, empty: "지난 토론이 아직 없습니다", row: (r) => histRow(r)});
@@ -45,10 +56,15 @@ export async function mount(el, ctx) {
     h("h3", null, "지난 토론", h("small", null, "새것부터 · 누르면 대화 전체")), history.el);
   const ideas = ui.pager({size: 4, empty: "아직 없음", row: (x) => h("div", {class: "db-idea", role: "listitem"},
     h("time", null, fmt.mmdd(x.ts)), h("span", null, x.text), x.tag ? ui.pill(x.tag, "thin") : null)});
-  const ideaCard = h("section", {class: "db-sec", "aria-label": "새 매매법 연구실에 줄 아이디어"},
-    h("h3", null, "새 매매법 연구실에 줄 아이디어", h("small", null, "시험 전의 생각 · 결론 아님")), ideas.el);
+  const ideaTitle = h("h3", null, "새 매매법 연구실에 줄 아이디어", h("small", null, "시험 전의 생각 · 결론 아님"));
+  const ideaCard = h("section", {class: "db-sec", "aria-label": "새 매매법 연구실에 줄 아이디어"}, ideaTitle, ideas.el);
+  // the idea factory: the daily deep debate (its own highlighted block) and the 아이디어 공장 card
+  const deep = deepBlock();
+  const factory = factoryCard();
+  deep.el.hidden = true;
+  factory.el.hidden = true;
   const caution = h("p", {class: "rk-banner db-caution"});
-  const main = h("div", {class: "db-main"}, live, histCard, ideaCard, caution);
+  const main = h("div", {class: "db-main"}, live, deep.el, factory.el, histCard, ideaCard, caution);
   const frame = h("section", {class: "console db-frame", "aria-label": "24시간 토론방"},
     h("div", {class: "con-head"}, h("span", {class: "con-title"}, "24시간 토론방"), h("span", {class: "grow"}),
       h("span", {class: "db-conhint"}, "유료 API · 의견일 뿐")),
@@ -59,11 +75,16 @@ export async function mount(el, ctx) {
   function histRow(r) {
     const region = h("div", {class: "db-hbody", hidden: true});
     const note = noteLine(r);
+    const q = r.question || null;
     const btn = h("button", {class: "db-hrow", type: "button", "aria-expanded": "false"},
       h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)),
-      h("span", {class: "db-hmain"}, h("b", null, r.topic || "주제 없음"), note ? h("span", {class: "db-hnote"}, note) : null),
+      h("span", {class: "db-hmain"}, h("b", null, r.topic || "주제 없음"),
+        // a factory / deep round: its question kind and the 심판's idea stage; a classic round: its 정리 line
+        q ? h("span", {class: "db-hkind"}, r.kind === "deep" ? ui.pill("깊은 토론", "accent") : null, q.kind_ko ? h("span", null, q.kind_ko) : null,
+          r.idea ? stageChip(r.idea) : null) : null,
+        note ? h("span", {class: "db-hnote"}, note) : null),
       h("span", {class: "db-hmeta"}, `발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`,
-        hasReplies(r) ? null : h("small", null, "예전 형식")),
+        hasReplies(r) || q ? null : h("small", null, "예전 형식")),
       h("i", {class: "db-hchev", "aria-hidden": "true"}, "›"));
     btn.addEventListener("click", () => {
       const open = btn.getAttribute("aria-expanded") !== "true";
@@ -79,7 +100,7 @@ export async function mount(el, ctx) {
     return ui.card({plate: "꺼짐", sub: "아직 시작 전", cls: "db-off"},
       h("div", {class: "row wrap"}, ui.pill("꺼짐", "thin"), h("b", null, "아직 시작 전 · 켜면 하루 종일 토론")),
       h("p", {class: "ink2"}, (d && d.note) || "24시간 토론방은 아직 한 번도 돌지 않았습니다."),
-      h("p", {class: "rk-note"}, "에이전트 회의와 별도로, 두 분이 API 키를 넣고 켜면 하루 종일 다섯 역할(낙관·비관·회의·리스크·퀀트)이 장을 두고 서로 대화하는 방입니다 (유료 API, 월 한도). 주문·규칙·계좌는 바꾸지 않습니다. 지금은 비용이 들지 않습니다."),
+      h("p", {class: "rk-note"}, "에이전트 회의와 별도로, 두 분이 API 키를 넣고 켜면 하루 종일 다섯 자리가 장을 두고 서로 대화하는 방입니다 (유료 API, 월 한도). 예전 방식은 낙관·비관·회의·리스크·퀀트, 아이디어 공장 방식은 차트 분석가·리스크 책임자·퀀트·시장 분석가·심판이 코드가 고른 질문으로 맞붙어 5년 시험 아이디어 하나를 냅니다. 주문·규칙·계좌는 바꾸지 않습니다. 지금은 비용이 들지 않습니다."),
       h("ol", {class: "db-steps"},
         step(1, "키 없이 비용 재 보기 · ", "python -m paperbot.agents.debate once --dry-run"),
         step(2, "키와 한도 넣기 (편집기 안에만) · ", "sudoedit /etc/paperbot/debate.env"),
@@ -111,16 +132,22 @@ export async function mount(el, ctx) {
     const fresh = st.shown != null;
     st.shown = r.round_id;
     // a factory round's topic is the question code picked; the deep debate is the day's one in three calls
-    subjectK.textContent = r.kind === "deep" ? "오늘의 깊은 토론 질문 (세 번에 나눠 부름)" : r.kind ? "이번 회차 질문" : "이번 회차 주제";
-    subject.textContent = r.topic || "주제 없음";
+    subjectK.textContent = r.kind === "deep" ? "오늘의 깊은 토론 질문 (세 번에 나눠 부름)" : r.kind ? "이번 회차 질문 · 코드가 고름" : "이번 회차 주제";
+    const q = r.question || null;
+    kindChip.textContent = q && q.kind_ko ? q.kind_ko : "";
+    kindChip.hidden = !(q && q.kind_ko);
+    subject.textContent = (q && q.ko) || r.topic || "주제 없음";
+    honestWho.textContent = r.kind ? HONEST_FACTORY : HONEST_CLASSIC;
     seats(r);
     // the deep debate runs on its own model (three calls): say which, so its bubbles are not read as the regular model's
     meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`
       + (r.kind === "deep" && r.model ? ` · ${r.model} 3번 호출` : ""));
-    castBox.replaceChildren(castStrip(r));
+    // a factory round: the seats with the side the code gave each this round, and the sides in one line
+    const sl = r.kind ? sidesLine(r) : null;
+    castBox.replaceChildren(...[castStrip(r), sl].filter(Boolean));
     startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
       h("time", null, fmt.hm(r.ts)));
-    chatBox.replaceChildren(roundChat(r));
+    chatBox.replaceChildren(roundChat(r, {question: false}));
     if (fresh) motion.slideIn(chatBox);             // a new stored round arrived since the last paint
   }
 
@@ -128,12 +155,22 @@ export async function mount(el, ctx) {
     st.d = d || null;
     if (!d || !d.ready) { st.shown = null; wrap.replaceChildren(offCard(d)); return; }
     const chat = chatOf(d);
+    const f = d.factory || null;
     side.render(d);
-    renderLive(chat[0] || null);
+    // the deep debate has its own block: the room shows the newest regular round (the deep one only when it is all)
+    const deepId = f && f.deep && f.deep.round ? f.deep.round.round_id : null;
+    const shown = chat.find((r) => r.round_id !== deepId) || chat[0] || null;
+    renderLive(shown);
+    deep.render(f);
+    factory.render(f && (f.mode === "factory" || (f.ideas || []).length) ? f : null);
     // the earlier debates: redrawn only when the list of rounds changed (a poll must not fold a conversation being read)
-    const hk = chat.slice(1).map((r) => r.round_id).join(",");
-    if (hk !== st.hist) { st.hist = hk; history.set(chat.slice(1), true); }
+    const rest = chat.filter((r) => r !== shown);
+    const hk = rest.map((r) => r.round_id).join(",");
+    if (hk !== st.hist) { st.hist = hk; history.set(rest, true); }
+    // the classic room's idea notes (debate_ideas): the factory writes none, so the card shows only when there are some
     ideas.set(d.ideas || [], true);
+    ideaCard.hidden = !!f && !(d.ideas || []).length;
+    ideaTitle.firstChild.textContent = f ? "예전 토론의 아이디어 메모" : "새 매매법 연구실에 줄 아이디어";
     caution.replaceChildren(h("b", null, "읽을 때 주의"), h("span", null, d.caution || "AI가 쓴 토론이라 사실이 아니라 의견입니다."));
     if (!frame.isConnected) wrap.replaceChildren(frame);
   }

@@ -92,6 +92,7 @@ READINESS_ROWS = 40
 DEBATE_ROWS = 50
 DEBATE_CHAT_ROUNDS = 10      # /api/debate `chat`: the newest finished debates with their turns (screens/debate.js)
 DEBATE_TIMELINE = 12         # /api/debate `timeline`: the newest rounds of every kind (debated / skipped / failed)
+DEBATE_FACTORY_IDEAS = 20    # /api/debate `factory.ideas`: the idea factory's newest ideas (screens/debate.js 아이디어 공장)
 QUESTIONS_MAX = 200
 DAY_MS = 86_400_000
 NO_DATA = "아직 자료가 없습니다"
@@ -1238,13 +1239,93 @@ def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS, now_ms: Optional[
     s = DB.summary(debate_db, rounds=15)
     if s.get("ready"):
         out.update({k: v for k, v in s.items() if k not in ("ready", "caution")})
-    out.update(debate_chat(debate_db, int(time.time() * 1000) if now_ms is None else now_ms))
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    out.update(debate_chat(debate_db, now))
+    # the idea factory (debate.py DEBATE_MODE=factory): the screen's 아이디어 공장 card, the deep debate and the record
+    # (``debate_factory_view``) in place of the summary's shorter block; nothing when the factory never ran
+    fv = debate_factory_view(debate_db, now)
+    if fv:
+        out["factory"] = fv
     return out
 
 
 DEBATE_REPLY_STANCES = ("동의", "반대", "보완", "질문")
 DEBATE_SIDES = ("찬성", "반대", "심판")            # debate_factory.SIDES: assigned by code
 DEBATE_PARTS = ("주장", "반박", "심판")            # debate.DEEP_PARTS: the daily deep debate's three calls
+DEBATE_ROUND_KINDS = ("factory", "deep")          # debate_factory.ROUND_KINDS (NULL: a classic round)
+DEBATE_CHECK_MARKS = ("①", "②", "③", "④", "⑤", "⑥")
+DEBATE_ROUND_COLS = ("kind", "question_kind", "question_ko", "lab_idea_id")
+DEBATE_FACTORY_CAUTION_KO = ("AI 한 명이 다섯 자리를 맡아 코드가 정한 편을 변호한 기록이라 사람 성적이 아닙니다. 연구실 5년 시험은 "
+                             "통과가 드물어 반대 편은 평소 비율만으로도 거의 늘 맞습니다: 평소 비율보다 많이 맞아야 의미가 있습니다.")
+
+
+def _jl(raw: Any) -> Any:
+    try:
+        return json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+    except (TypeError, ValueError):
+        return None
+
+
+def _table_cols(c: sqlite3.Connection, table: str) -> set:
+    return {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+
+
+def _kind_ko(kind: Any) -> str:
+    """The question kind in Korean (debate_questions.KIND_KO; '' for an unknown kind or when the module cannot load)."""
+    try:
+        from ..agents.debate_questions import KIND_KO
+    except Exception:  # noqa: BLE001  (the words are optional; the stored question text is shown either way)
+        return ""
+    return KIND_KO.get(str(kind or ""), "")
+
+
+def _chat_messages(c: sqlite3.Connection, round_id: int, mcols: set) -> list:
+    extra = ", ".join(x if x in mcols else f"NULL AS {x}" for x in ("reply_to", "reply_stance", "side", "part"))
+    msgs = []
+    for m in c.execute(f"SELECT id, speaker, stance, text, {extra} FROM debate_messages WHERE round_id = ? ORDER BY id",
+                       (round_id,)):
+        rs = str(m["reply_stance"] or "")
+        one = {"id": int(m["id"]), "speaker": str(m["speaker"] or "")[:40], "stance": str(m["stance"] or "")[:20],
+               "text": str(m["text"] or "")[:1000], "reply_to": str(m["reply_to"])[:40] if m["reply_to"] else None,
+               "reply_stance": rs if rs in DEBATE_REPLY_STANCES else None}
+        # the code's side (찬성 / 반대 / 심판) and the deep debate's part: only when stored, only known words
+        if m["side"] in DEBATE_SIDES:
+            one["side"] = m["side"]
+        if m["part"] in DEBATE_PARTS:
+            one["part"] = m["part"]
+        msgs.append(one)
+    return msgs
+
+
+def _round_idea(c: sqlite3.Connection, r: Any, have_ideas: bool) -> Optional[dict]:
+    """The one lab idea a factory / deep round stored (debate_rounds.lab_idea_id, else the newest idea of that round)."""
+    if not have_ideas:
+        return None
+    iid = r["lab_idea_id"]
+    if iid is not None:
+        row = c.execute("SELECT * FROM debate_lab_ideas WHERE id = ?", (int(iid),)).fetchone()
+    else:
+        row = c.execute("SELECT * FROM debate_lab_ideas WHERE round_id = ? ORDER BY id DESC LIMIT 1",
+                        (int(r["round_id"]),)).fetchone()
+    return debate_idea({k: row[k] for k in row.keys()}) if row is not None else None
+
+
+def _chat_round(c: sqlite3.Connection, r: Any, mcols: set, have_ideas: bool) -> Optional[dict]:
+    """One finished round as the chat shows it; None when its turns were pruned."""
+    msgs = _chat_messages(c, int(r["round_id"]), mcols)
+    if not msgs:
+        return None
+    row = {"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "topic": str(r["topic"] or "")[:120],
+           "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
+           "model": str(r["model"] or "")[:60], "cut": "max_tokens" in str(r["error"] or ""), "messages": msgs}
+    if r["kind"] in DEBATE_ROUND_KINDS:
+        row["kind"] = r["kind"]
+        qk = str(r["question_kind"] or "")[:40]
+        row["question"] = {"kind": qk, "kind_ko": _kind_ko(qk), "ko": str(r["question_ko"] or "")[:300]}
+        idea = _round_idea(c, r, have_ideas)
+        if idea is not None:
+            row["idea"] = idea
+    return row
 
 
 def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT_ROUNDS,
@@ -1258,10 +1339,12 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
       answer was cut at max_tokens (the complete turns were kept).
     - ``timeline``: the newest rounds of every kind, newest first, ``{round_id, ts, status, cost_usd, turns, topic,
       why}``; ``why`` is the stored reason of a skipped round (without the service's tag: 'unchanged: ', the factory's
-      'no_question: ', the deep debate's 'deep_cap: ' ...) or the stored, already redacted error text.
+      'no_question: ', the deep debate's 'deep_cap: ' ...) or the stored, already redacted error text; a factory or
+      deep round also its ``kind``.
     - the idea factory (DEBATE_MODE=factory): a message's ``side`` (찬성 / 반대 / 심판, assigned by code) and, in the
-      daily deep debate, its ``part`` (주장 / 반박 / 심판), only when stored; a factory or deep round's ``kind`` and
-      ``question`` {kind, ko}. A classic round or an older debate.db has none of these keys.
+      daily deep debate, its ``part`` (주장 / 반박 / 심판), only when stored; a factory or deep round's ``kind``,
+      ``question`` {kind, kind_ko, ko} and ``idea`` (the 심판's one lab idea after the code's check, ``debate_idea``).
+      A classic round or an older debate.db has none of these keys.
     - ``next``: the service's own schedule from debate_state, as Service.due_ms() computes it: ``{ts, kind, every_min}``,
       ts = max(last attempt + interval, backoff end), kind 'retry' while a failure is unresolved; None when unknown.
     - ``today``: the KST day's rounds ``{ok, skipped, error, cost_usd}`` (error counts error and aborted rounds).
@@ -1270,43 +1353,27 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
     if c is None:
         return {}
     try:
-        cols = {r[1] for r in c.execute("PRAGMA table_info(debate_messages)")}
-        extra = ", ".join(x if x in cols else f"NULL AS {x}" for x in ("reply_to", "reply_stance", "side", "part"))
-        # the idea factory (debate.py DEBATE_MODE=factory): a round's kind and question; added columns, absent before
-        rcols = {r[1] for r in c.execute("PRAGMA table_info(debate_rounds)")}
-        rextra = ", ".join(x if x in rcols else f"NULL AS {x}" for x in ("kind", "question_kind", "question_ko"))
+        mcols = _table_cols(c, "debate_messages")
+        # the idea factory (debate.py DEBATE_MODE=factory): a round's kind, question and idea; added columns, absent before
+        rcols = _table_cols(c, "debate_rounds")
+        rextra = ", ".join(x if x in rcols else f"NULL AS {x}" for x in DEBATE_ROUND_COLS)
+        have_ideas = bool(_table_cols(c, "debate_lab_ideas"))
         chat = []
         for r in c.execute(f"SELECT round_id, ts, topic, cost_usd, turns, model, error, {rextra} FROM debate_rounds "
                            "WHERE status = 'ok' ORDER BY round_id DESC LIMIT ?", (max(1, min(int(rounds), 30)),)).fetchall():
-            msgs = []
-            for m in c.execute(f"SELECT id, speaker, stance, text, {extra} FROM debate_messages WHERE round_id = ? "
-                               "ORDER BY id", (r["round_id"],)):
-                rs = str(m["reply_stance"] or "")
-                one = {"id": int(m["id"]), "speaker": str(m["speaker"] or "")[:40], "stance": str(m["stance"] or "")[:20],
-                       "text": str(m["text"] or "")[:1000], "reply_to": str(m["reply_to"])[:40] if m["reply_to"] else None,
-                       "reply_stance": rs if rs in DEBATE_REPLY_STANCES else None}
-                # the code's side (찬성 / 반대 / 심판) and the deep debate's part: only when stored, only known words
-                if m["side"] in DEBATE_SIDES:
-                    one["side"] = m["side"]
-                if m["part"] in DEBATE_PARTS:
-                    one["part"] = m["part"]
-                msgs.append(one)
-            if msgs:
-                row = {"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "topic": str(r["topic"] or "")[:120],
-                       "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
-                       "model": str(r["model"] or "")[:60], "cut": "max_tokens" in str(r["error"] or ""),
-                       "messages": msgs}
-                if r["kind"] in ("factory", "deep"):
-                    row["kind"] = r["kind"]
-                    row["question"] = {"kind": str(r["question_kind"] or "")[:40], "ko": str(r["question_ko"] or "")[:300]}
+            row = _chat_round(c, r, mcols, have_ideas)
+            if row is not None:
                 chat.append(row)
         tl = []
-        for r in c.execute("SELECT round_id, ts, status, cost_usd, turns, topic, error FROM debate_rounds "
+        for r in c.execute(f"SELECT round_id, ts, status, cost_usd, turns, topic, error, {rextra} FROM debate_rounds "
                            "ORDER BY round_id DESC LIMIT ?", (max(1, min(int(timeline), 50)),)):
             why = re.sub(r"^(unchanged|no_question|deep_cap|cap|day|hour):\s*", "", str(r["error"] or ""))[:160]
-            tl.append({"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "status": str(r["status"] or "")[:20],
-                       "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
-                       "topic": str(r["topic"] or "")[:120], "why": why})
+            one = {"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "status": str(r["status"] or "")[:20],
+                   "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
+                   "topic": str(r["topic"] or "")[:120], "why": why}
+            if r["kind"] in DEBATE_ROUND_KINDS:
+                one["kind"] = r["kind"]
+            tl.append(one)
         st = {k: v for k, v in c.execute("SELECT k, v FROM debate_state WHERE k IN ('last_attempt', 'backoff:until', 'run')")}
         day0 = (now_ms + 9 * 3_600_000) // DAY_MS * DAY_MS - 9 * 3_600_000
         today = {"ok": 0, "skipped": 0, "error": 0, "cost_usd": 0.0}
@@ -1322,6 +1389,281 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
     finally:
         _close(c)
     return {"chat": chat, "timeline": tl, "today": today, "next": _debate_next(st)}
+
+
+# ---------------------------------------------------------------- the idea factory (debate.py DEBATE_MODE=factory)
+def _f(x: Any) -> Optional[float]:
+    if isinstance(x, bool):
+        return None
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if v == v and abs(v) != float("inf") else None
+
+
+def _pct_ko(x: Any) -> str:
+    v = _f(x)
+    return "" if v is None else f"{v * 100:+.2f}%"
+
+
+def _pp_ko(x: Any) -> str:
+    v = _f(x)
+    return "" if v is None else f"{v * 100:+.2f}%p"
+
+
+def _p_ko(x: Any) -> str:
+    v = _f(x)
+    return "" if v is None else " (p=" + (f"{v:.1e}" if v < 0.001 else f"{v:.2f}") + ")"
+
+
+def _check_num_ko(engine: str, mark: str, det: dict) -> str:
+    """The plain number behind one check of a 5-year result (labintake's detail: the code's own numbers), '' when the
+    detail has none for that check."""
+    p1 = det.get("p1") if isinstance(det.get("p1"), dict) else {}
+    p2 = det.get("p2") if isinstance(det.get("p2"), dict) else {}
+    if engine == "newlab":
+        if mark == "①" and _pct_ko(p1.get("mean_roe")):
+            return f"1기간 거래당 {_pct_ko(p1.get('mean_roe'))}{_p_ko(p1.get('p'))}"
+        if mark == "②" and _f(p1.get("trades")) is not None:
+            return f"1기간 거래 {int(_f(p1.get('trades'))):,}건"
+        if mark == "③" and _pct_ko(p2.get("mean_roe")):
+            return f"2기간 거래당 {_pct_ko(p2.get('mean_roe'))}{_p_ko(p2.get('p'))}"
+        if mark == "⑥" and _pp_ko(p1.get("coinflip_diff")):
+            return f"동전과 차이 {_pp_ko(p1.get('coinflip_diff'))}{_p_ko(p1.get('coinflip_p'))}"
+        return ""
+    if mark == "①" and _pp_ko(p1.get("diff")):
+        return f"1기간 개선 {_pp_ko(p1.get('diff'))}{_p_ko(p1.get('p'))}"
+    if mark == "②" and _pp_ko(p2.get("diff")):
+        return f"2기간 개선 {_pp_ko(p2.get('diff'))}{_p_ko(p2.get('p'))}"
+    if mark == "⑤" and _f(p1.get("variant_trades")) is not None:
+        return f"1기간 거래 {int(_f(p1.get('variant_trades'))):,}건"
+    return ""
+
+
+def _idea_checks(engine: str, det: dict) -> list:
+    """The ①-⑥ checklist of a 5-year result: [{mark, name_ko, ok (True / False / None = not reached), num_ko}]; []
+    when the stored detail has no checks."""
+    from ..agents import labintake as LI
+    checks = det.get("checks") if isinstance(det.get("checks"), dict) else {}
+    if not checks:
+        return []
+    names = LI.NEWLAB_CHECK_KO if engine == "newlab" else LI.LABTEST_CHECK_KO
+    out = []
+    for k, m in LI.CHECK_MARKS.items():
+        v = checks.get(k)
+        out.append({"mark": m, "name_ko": names.get(m, ""), "ok": v if isinstance(v, bool) else None,
+                    "num_ko": _check_num_ko(engine, m, det)})
+    return out
+
+
+def _idea_stage(row: dict, det: dict) -> tuple:
+    """(stage, Korean, tone) of one idea, from the code's stored words only: the lab's status when the agents took it,
+    else the daily pick's queue status, else the code check. tone: the chip's colour class."""
+    from ..agents import debate_factory as DF
+    from ..agents import labintake as LI
+    from ..agents.rooms_db import NEWLAB_PASSED
+    ls, v, eng = row.get("lab_status"), det.get("verdict"), row.get("engine")
+    if ls in ("tested", "reused", "duplicate"):
+        prev = "" if ls == "tested" else " (이전 결과)"
+        if v == "passed" or (eng == "newlab" and v in NEWLAB_PASSED):
+            return "passed", "통과" + prev, "good"
+        if v == "failed":
+            return "failed", "불통과" + prev, "bad"
+        if v == "described":
+            return "tested", "설명용 시험(판정 없음)", "thin"
+        return "tested", LI.STATUS_KO.get(ls, ls), "thin"
+    if ls == "running":
+        return "running", "시험 중", "accent"
+    if ls in ("queued", "needs_owner_ok"):
+        return "lab_queued", "연구실 시험 줄에서 대기", "accent"
+    if ls == "expired":
+        return "expired", "기한 지남(시험 안 함)", "thin"
+    if ls in ("bad_spec", "refused"):
+        return "lab_refused", "연구실이 거절", "warn"
+    if ls:
+        return "not_run", LI.STATUS_KO.get(ls, str(ls)), "warn"
+    q, cs = row.get("queue_status"), row.get("check_status")
+    if q == "queued":
+        return "queued", "오늘 시험 줄", "accent"
+    if q == "candidate":
+        return "candidate", "후보", "accent"
+    if q == "not_picked":
+        return "not_picked", "이번엔 안 뽑힘", "thin"
+    if cs == "duplicate":
+        old = row.get("old_trial_id")
+        return "duplicate", f"이미 시험함 #{int(old)}" if isinstance(old, int) else "이미 시험함", "thin"
+    if cs == "near_duplicate":
+        return "near_duplicate", "비슷한 실패 시험 있음", "warn"
+    if cs in ("bad_spec", "cannot_express", "refused", "missing", "repeat"):
+        return cs, DF.CHECK_KO.get(cs, cs), "thin" if cs in ("missing", "repeat") else "warn"
+    return "other", str(row.get("check_ko") or cs or "—")[:60], "thin"
+
+
+def debate_idea(row: dict) -> dict:
+    """One idea of the idea factory as the screen shows it (debate.db debate_lab_ideas; the debate service wrote it
+    after its code check, debate_factory.sync_lab wrote the lab's code result back): the 심판's words (claim / pro /
+    con, at most 200 characters each, shown as quotes), the code's words (description_ko: what the lab would run;
+    check_ko; queue_ko; the lab's result_ko), the stage chip, the ①-⑥ checklist with the code's numbers once tested and
+    which side was right. Never a number this side worked out."""
+    from ..agents import debate_factory as DF
+    from ..agents import labintake as LI
+    eng = str(row.get("engine") or "")
+    det = _jl(row.get("lab_detail")) if row.get("lab_detail") else {}
+    det = det if isinstance(det, dict) else {}
+    names = LI.NEWLAB_CHECK_KO if eng == "newlab" else LI.LABTEST_CHECK_KO
+    cc = row.get("con_check") if row.get("con_check") in DEBATE_CHECK_MARKS else None
+    side = row.get("settled_side") if row.get("settled_side") in ("찬성", "반대") else None
+    hit = row.get("con_check_hit")
+    stage, stage_ko, tone = _idea_stage(row, det)
+    qk = str(row.get("question_kind") or "")[:40]
+    old = row.get("old_trial_id")
+    out = {"id": int(row["id"]), "ts": int(row.get("ts") or 0), "round_id": row.get("round_id"),
+           "round_kind": row.get("round_kind") if row.get("round_kind") in DEBATE_ROUND_KINDS else None,
+           "question_kind": qk, "question_kind_ko": _kind_ko(qk), "question_ko": str(row.get("question_ko") or "")[:300],
+           "engine": eng, "engine_ko": LI.ENGINE_KO.get(eng, "시험으로 못 옮김" if eng == "none" else eng),
+           "strategy": str(row.get("strategy") or "")[:64] or None,
+           "description_ko": str(row.get("description_ko") or "")[:300], "claim_ko": str(row.get("claim_ko") or "")[:200],
+           "pro_ko": str(row.get("pro_ko") or "")[:200], "con_ko": str(row.get("con_ko") or "")[:200],
+           "con_check": cc, "con_check_ko": names.get(cc, "") if cc else "",
+           "check_status": str(row.get("check_status") or ""),
+           "check_ko": str(row.get("check_ko") or DF.CHECK_KO.get(row.get("check_status"), "") or "")[:200],
+           "old_trial_id": int(old) if isinstance(old, int) else None,
+           "queue_status": str(row.get("queue_status") or ""),
+           "queue_ko": str(row.get("queue_ko") or DF.QUEUE_KO.get(row.get("queue_status"), "") or "")[:160],
+           "slot": str(row.get("slot") or "")[:40] or None,
+           "stage": stage, "stage_ko": stage_ko, "tone": tone,
+           "settled_side": side, "con_check_hit": int(hit) if hit in (0, 1) and cc else None}
+    if row.get("lab_status"):
+        ls = str(row["lab_status"])
+        n = row.get("lab_test_number") if isinstance(row.get("lab_test_number"), int) else None
+        n = n if n is not None else (det.get("test_number") if isinstance(det.get("test_number"), int) else None)
+        out["lab"] = {"status": ls, "status_ko": LI.STATUS_KO.get(ls, ls),
+                      "trial_id": row.get("lab_trial_id") if isinstance(row.get("lab_trial_id"), int) else None,
+                      "test_number": n, "n_trials": det.get("n_trials") if isinstance(det.get("n_trials"), int) else None,
+                      "threshold": _f(det.get("threshold")), "verdict": det.get("verdict"),
+                      "result_ko": str(row.get("lab_result_ko") or "")[:300], "ts": row.get("lab_ts"),
+                      "checks": _idea_checks(eng, det),
+                      "failed": [m for m in (det.get("failed_checks") or []) if m in DEBATE_CHECK_MARKS]}
+    return out
+
+
+def _deep_today(c: sqlite3.Connection, now_ms: int, at: Any) -> dict:
+    """Today's deep debate (KST): when it becomes due (DEBATE_DEEP_AT) and the newest deep round of the day, if any
+    ({round_id, ts, status, why}: the stored reason of a skip or the redacted error)."""
+    day0 = (now_ms + 9 * 3_600_000) // DAY_MS * DAY_MS - 9 * 3_600_000
+    m = re.match(r"^(\d{1,2}):(\d{2})$", str(at or ""))
+    due = None
+    if m and int(m.group(1)) < 24 and int(m.group(2)) < 60:
+        due = day0 + (int(m.group(1)) * 60 + int(m.group(2))) * 60_000
+    r = c.execute("SELECT round_id, ts, status, error FROM debate_rounds WHERE kind = 'deep' AND ts >= ? AND ts < ? "
+                  "ORDER BY round_id DESC LIMIT 1", (day0, day0 + DAY_MS)).fetchone()
+    last = None
+    if r is not None:
+        why = re.sub(r"^(deep_cap|cap|day|hour):\s*", "", str(r["error"] or ""))[:160]
+        last = {"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "status": str(r["status"] or "")[:20], "why": why}
+    return {"due_ts": due, "last": last}
+
+
+def debate_factory_view(debate_db: Optional[str], now_ms: int, ideas: int = DEBATE_FACTORY_IDEAS) -> dict:
+    """The 아이디어 공장 card of the 24시간 토론방 screen (design step 6), read-only from debate.db only (the debate
+    service wrote every row; debate_factory.sync_lab brought the lab's code results back; the lab's base rates are the
+    ones the service last read from the agents' ledger, debate_state 'factory:base_rates'):
+
+    - ``mode`` / ``mode_ko`` / ``goal`` / ``lab_per_day``
+    - ``today``: ``{day, queued, cap, candidates, next_pick_ts}``: ideas handed to the lab's 5-year queue today against
+      the daily share (DEBATE_LAB_PER_DAY), candidates waiting for the next pick and when that pick is (09:00 / 21:00)
+    - ``ideas``: the newest ``ideas`` ideas (``debate_idea``)
+    - ``record``: of this room's ideas the lab really tested: tested, passed, which side was right (찬성 = passed,
+      반대 = failed) next to what the lab's usual pass rate alone would give, the check 반대 named (hits next to that
+      check's usual fail share), the lab's own base rates per engine, ``small`` under debate_grade.SMALL_GRADED
+    - ``why_fail``: per engine, how often each check ①-⑥ failed among this room's tested ideas, next to the lab's share
+    - ``deep``: the daily deep debate: on / model / due time / its own month line (spent vs cap), today's state and the
+      newest finished deep round as the chat shows it (three parts)
+    Nothing ({}) when the factory never ran (classic mode with no idea and no factory round) or the file is unreadable."""
+    c = ro_connect(debate_db)
+    if c is None:
+        return {}
+    try:
+        from ..agents import debate_factory as DF
+        from ..agents import debate_grade as G
+        from ..agents import labintake as LI
+        from ..agents.debate import MODE_KO
+        tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if not {"debate_state", "debate_rounds", "debate_messages"} <= tables:
+            return {}
+        st = {k: _jl(v) for k, v in c.execute("SELECT k, v FROM debate_state")}
+        run = st.get("run") if isinstance(st.get("run"), dict) else {}
+        mode = str(run.get("mode") or "classic")
+        rcols = _table_cols(c, "debate_rounds")
+        have_ideas = "debate_lab_ideas" in tables
+        any_idea = have_ideas and c.execute("SELECT 1 FROM debate_lab_ideas LIMIT 1").fetchone() is not None
+        any_round = "kind" in rcols and c.execute(
+            "SELECT 1 FROM debate_rounds WHERE kind IN ('factory', 'deep') LIMIT 1").fetchone() is not None
+        if mode != "factory" and not any_idea and not any_round:
+            return {}
+        per_day = int(_f(run.get("lab_per_day")) or 0)
+        day = G.kst_day(now_ms)
+        today = {"day": day, "queued": 0, "cap": per_day, "candidates": 0, "next_pick_ts": None}
+        rows: list = []
+        why = {e: {"tests": 0, "failed": {m: 0 for m in DEBATE_CHECK_MARKS}} for e in ("newlab", "labtest")}
+        if have_ideas:
+            today["queued"] = int(c.execute("SELECT COUNT(*) FROM debate_lab_ideas WHERE queue_status = 'queued' AND "
+                                            "slot LIKE ?", (f"slot:{day}:%",)).fetchone()[0])
+            today["candidates"] = int(c.execute("SELECT COUNT(*) FROM debate_lab_ideas WHERE queue_status = "
+                                                "'candidate'").fetchone()[0])
+            rows = [debate_idea({k: r[k] for k in r.keys()}) for r in c.execute(
+                "SELECT * FROM debate_lab_ideas ORDER BY id DESC LIMIT ?", (max(1, min(int(ideas), 50)),)).fetchall()]
+            for eng, det in c.execute("SELECT engine, lab_detail FROM debate_lab_ideas WHERE lab_status = 'tested'"):
+                d = _jl(det)
+                if eng not in why or not isinstance(d, dict):
+                    continue
+                why[eng]["tests"] += 1
+                for m in d.get("failed_checks") or []:
+                    if m in why[eng]["failed"]:
+                        why[eng]["failed"][m] += 1
+        if mode == "factory" and per_day > 0:
+            sl = DF.open_slot(now_ms, per_day)
+            today["next_pick_ts"] = sl[2] if sl else None
+        fr = (G.factory_record(c) if have_ideas else None) or {}
+        base = st.get("factory:base_rates") if isinstance(st.get("factory:base_rates"), dict) else {}
+        lab = {}
+        for e in ("newlab", "labtest"):
+            b = base.get(e) if isinstance(base.get(e), dict) else {}
+            lab[e] = {"tests": int(_f(b.get("tests")) or 0), "passed": int(_f(b.get("passed")) or 0),
+                      "pass_rate": _f(b.get("pass_rate"))}
+            fs = b.get("fail_share") if isinstance(b.get("fail_share"), dict) else {}
+            why[e]["lab_tests"] = lab[e]["tests"]
+            why[e]["lab_share"] = {m: _f(fs.get(m)) for m in DEBATE_CHECK_MARKS if _f(fs.get(m)) is not None}
+        why["newlab"]["names_ko"], why["labtest"]["names_ko"] = LI.NEWLAB_CHECK_KO, LI.LABTEST_CHECK_KO
+        record = {"ideas": int(fr.get("ideas") or 0), "tested": int(fr.get("tested") or 0),
+                  "settled": int(fr.get("settled") or 0), "passed": int(fr.get("찬성_right") or 0),
+                  "pro_right": int(fr.get("찬성_right") or 0), "con_right": int(fr.get("반대_right") or 0),
+                  "pro_expected": fr.get("찬성_expected"), "con_expected": fr.get("반대_expected"),
+                  "con_check_graded": int(fr.get("con_check_graded") or 0),
+                  "con_check_hits": int(fr.get("con_check_hits") or 0), "con_check_expected": fr.get("con_check_expected"),
+                  "base_known": bool(fr.get("base_rates_known")), "small": bool(fr.get("small", True)),
+                  "small_below": G.SMALL_GRADED, "lab": lab, "coin_flip": 0.5}
+        deep_cfg = run.get("deep") if isinstance(run.get("deep"), dict) else {}
+        deep = {"on": bool(deep_cfg.get("on")), "model": str(deep_cfg.get("model") or "")[:60] or None,
+                "at": str(deep_cfg.get("at") or "")[:5] or None, "cap": _f(deep_cfg.get("cap")),
+                "month": round(_f(st.get(f"spend:deepmonth:{day[:7]}")) or 0.0, 4), "today": None, "round": None}
+        if "kind" in rcols:
+            deep["today"] = _deep_today(c, now_ms, deep["at"])
+            mcols = _table_cols(c, "debate_messages")
+            rextra = ", ".join(x if x in rcols else f"NULL AS {x}" for x in DEBATE_ROUND_COLS)
+            for r in c.execute(f"SELECT round_id, ts, topic, cost_usd, turns, model, error, {rextra} FROM debate_rounds "
+                               "WHERE kind = 'deep' AND status = 'ok' ORDER BY round_id DESC LIMIT 3").fetchall():
+                deep["round"] = _chat_round(c, r, mcols, have_ideas)
+                if deep["round"] is not None:
+                    break
+    except sqlite3.Error:
+        return {}
+    finally:
+        _close(c)
+    return {"mode": mode, "mode_ko": MODE_KO.get(mode, mode), "goal": DF.GOAL_KO, "lab_per_day": per_day,
+            "today": today, "ideas": rows, "record": record, "why_fail": why, "deep": deep,
+            "caution": DEBATE_FACTORY_CAUTION_KO}
 
 
 def _debate_next(st: dict) -> Optional[dict]:
