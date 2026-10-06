@@ -43,6 +43,19 @@ def _node(body: str, store: dict | None = None) -> dict:
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
+def _mulberry32(seed: int, n: int) -> list:
+    """sound7.js noise7() in Python (the offline renderer's copy)."""
+    M = 0xFFFFFFFF
+    a, out = seed & M, []
+    for _ in range(n):
+        a = (a + 0x6D2B79F5) & M
+        t = a
+        t = ((t ^ (t >> 15)) * (t | 1)) & M
+        t = (t ^ ((t + (((t ^ (t >> 7)) * (t | 61)) & M)) & M)) & M
+        out.append(((t ^ (t >> 14)) & M) / 4294967296 * 2 - 1)
+    return out
+
+
 def test_trade_kinds_are_the_streams_notes_timing_and_levels():
     out = _node(f"""const m = await import('{CORE}/sound7.js');
     const out = {{note: m.NOTE7, shape: m.SHAPE7, atk: m.ATK7, kinds: {{}}}};
@@ -109,7 +122,7 @@ def test_render_uses_only_the_given_bus_and_stops_everything():
       noise: Array.from(m.noise7(4, 7)).map((x) => Math.round(x * 1e6) / 1e6)}};""")
     assert out["ends"] == ["gain"] and out["speakers"] is False                 # everything ends on the given bus
     assert out["started"] == out["stops"] + out["buffers"] and out["late"] and out["bad"] == 0
-    assert out["noise"] == [-0.765633, 0.796614, -0.474689, 0.931599]             # deterministic (the offline mirror)
+    assert out["noise"] == pytest.approx(_mulberry32(7, 4), abs=2e-6)       # deterministic: the offline mirror has the same
     src = _read("core", "sound7.js")
     code = re.sub(r"^\s*//.*$", "", src, flags=re.M)
     for bad in ("destination", "setTimeout", "setInterval", "fetch(", "decodeAudioData", "XMLHttpRequest", "Audio(",
