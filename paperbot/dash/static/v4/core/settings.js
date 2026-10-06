@@ -1,6 +1,6 @@
 // 설정 한 곳 (owners 10/06: "클릭이 너무 많다"): ONE panel for every per-device choice that used to be spread over the
 // header (화면 색 · 글자 크기 · the speaker menu), the chart headers (번쩍임 · '선' menu · 진입·청산 / 가격 알림 선 / GH Coin
-// toggles), the phone swipe and the start screen. Opened by the gear (top bar from 460 px, the PC rail's foot, the phone's
+// toggles), the phone swipe and the start screen. Opened by the gear (the top bar from 1200 px, the PC rail's foot, below 1200 px the
 // sub-tab row), the key "," and the speaker menu's last line. Every row applies at once and writes the SAME storage key
 // as the control it mirrors (nothing migrated, the old controls keep working):
 //   skin "skin" (core/skin.js) · text "text" (core/textsize.js) · start "start" + swipe "swipe" (core/prefs.js, new)
@@ -47,7 +47,7 @@ const st = {open: false, el: null, scrim: null, back: null, section: null};
 export const settingsOpen = () => st.open;
 
 // ---------------------------------------------------------------- the open buttons
-/** The top bar's gear (from 460 px; core/settings.css). */
+/** The top bar's gear (from 1200 px; core/settings.css). */
 export function gearButton() {
   return h("button", {class: "setbtn", id: "setbtn", type: "button", "aria-haspopup": "dialog", "aria-label": "설정 (단축키 ,)", title: "설정 (,)",
     onclick: () => openSettings()}, gearIcon(), h("span", {class: "setbtn-t"}, "설정"));

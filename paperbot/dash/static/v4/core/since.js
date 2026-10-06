@@ -55,7 +55,7 @@ const R = (x, y, w, hh) => s("rect", {x, y, width: w, height: hh});
 const moonIcon = () => s("svg", {viewBox: "0 0 16 16", width: "16", height: "16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   [R(6, 1, 4, 1), R(4, 2, 3, 1), R(3, 3, 2, 2), R(2, 5, 2, 6), R(3, 11, 2, 2), R(4, 13, 3, 1), R(6, 14, 4, 1), R(10, 13, 3, 1), R(12, 12, 2, 1),
     R(11, 3, 1, 1), R(13, 6, 1, 1), R(12, 8, 1, 1)]);
-/** The top bar's 자는 동안 button (from 760 px; core/settings.css): the card on demand. */
+/** The top bar's 자는 동안 button (from 1200 px; core/settings.css): the card on demand. */
 export function awayButton() {
   return h("button", {class: "awaybtn", id: "awaybtn", type: "button", "aria-haspopup": "dialog", "aria-label": "자는 동안: 자리 비운 사이 바뀐 것",
     title: "자는 동안 (자리 비운 사이 바뀐 것)", onclick: () => openAway()}, moonIcon(), h("span", {class: "awaybtn-t"}, "자는 동안"));
@@ -224,6 +224,11 @@ export async function openAway(range, o = {}) {
 }
 
 function renderAway(d, o) { open(d, awayParts(d, o)); }
+/** "29일" to the next verdict (the server's whole days), "5시간" on its last day (09:00 Korea time). */
+export function verdictLeft(d) {
+  const ms = Number(d.verdict_ts) - Number(d.now);
+  return Number.isFinite(ms) && ms < 86400000 ? dur(Math.max(0, ms) / 1000) : `${int(d.days_left)}일`;
+}
 
 /** The 자는 동안 card's parts {plate, title, sub, seg, tiles, rows} for one /api/v4/since answer (o: {id, words, jobs,
  *  health, away}): every section is there, an empty one as a 없음 row. */
@@ -235,7 +240,7 @@ export function awayParts(d, o = {}) {
   const srv = serverRows(d, o.jobs, o.health, d.after);
   const S = d.server || {};
   const vts = d.verdict_ts;
-  const left = d.days_left;
+  const leftKo = verdictLeft(d);
   const sh = (t) => h("p", {class: "since-sh"}, t);
   const rows = [
     sh("거래 · 파산"),
@@ -249,7 +254,7 @@ export function awayParts(d, o = {}) {
     ...(srv.length ? srv : [noneRow("■", "서버 문제", S.known === false ? "봇 가동 기록이 아직 없어 멈춤은 확인하지 못했습니다" : "멈춤 · 재시작 · 실패한 작업", href("server"))]),
     sh("판정"),
     ...milestoneRows(d),
-    vts ? row("D-", "accent", left > 0 ? `판정까지 ${int(left)}일` : "오늘이 판정 날입니다", `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 ${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
+    vts ? row("D-", "accent", `판정까지 ${leftKo}`, `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 ${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
       : noneRow("D-", "판정까지", "봇이 아직 첫 계좌를 만들지 않았습니다", href("checkpoint")),
   ];
   const span = dur((d.now - d.after) / 1000);
@@ -258,7 +263,7 @@ export function awayParts(d, o = {}) {
     RANGES.filter((r) => r.id !== "away" || o.away).map((r) => h("button", {type: "button", "aria-pressed": String(r.id === o.id),
       title: r.id === "away" && o.away ? `${kst(o.away.from)} ~ ${kst(o.away.to)} 자리 비움` : null,
       onclick: () => { if (r.id !== o.id) openAway(r.id, {keep: true}); }}, r.ko)));
-  return {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts && left > 0 ? ` · 판정까지 ${int(left)}일` : "",
+  return {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts ? ` · 판정까지 ${leftKo}` : "",
     d.clamped_by === "week" ? " · 그보다 전 일은 알림 기록에" : ""], seg, tiles, rows};
 }
 

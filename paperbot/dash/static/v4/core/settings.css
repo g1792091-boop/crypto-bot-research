@@ -7,13 +7,12 @@
   border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 .setbtn:hover, .awaybtn:hover { color: var(--ink); border-color: var(--accent-line); }
 .setbtn svg, .awaybtn svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
-/* icon only below 1200 px (the group bar needs the room); the gear leaves the top bar under 460 px (the sub-tab row has it) */
+/* in the top bar from 1200 px only (below it the group bar and the D+ chip need the room): the gear moves to the start
+   of the sub-tab row (next to 찾기 on a phone), 자는 동안 is in 설정 › 바로가기 (and opens by itself after 3 hours away) */
 .setsub { display: none; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
   background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); }
 .setsub svg { width: 14px; height: 14px; color: var(--accent); }
-@media (max-width: 1199px) { .setbtn, .awaybtn { width: 34px; padding: 0; justify-content: center; } .setbtn-t, .awaybtn-t { display: none; } }
-@media (max-width: 759px) { .awaybtn { display: none; } }
-@media (max-width: 459px) { .setbtn { display: none; } .setsub { display: inline-flex; } }
+@media (max-width: 1199px) { .setbtn, .awaybtn { display: none; } .setsub { display: inline-flex; } }
 .setcyc { appearance: none; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--line-2);
   background: var(--surface); color: var(--accent); }
 .setcyc:hover { border-color: var(--accent-line); box-shadow: 0 0 10px var(--edge-glow); }

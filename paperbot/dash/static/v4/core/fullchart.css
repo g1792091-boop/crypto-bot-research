@@ -28,7 +28,14 @@ html.fc-lock { overflow: hidden; }
 .fc-rot { display: none; color: var(--ink-2); }
 /* a phone held upright: the hint to turn it sideways (nothing is forced); the header keeps clear of the ✕ */
 @media (orientation: portrait) and (max-width: 759px) { .fc-rot { display: inline; } .fc-esc { display: none; } }
-.fc-on .card-h, .fc-on .term-ph { padding-right: 52px; }
+.fc-on > :first-child { padding-right: 52px !important; }       /* the frame's head keeps clear of the ✕ */
 /* a phone: the 차트 screen's account picker, toggles and level note step aside for the chart (the caption stays) */
-@media (max-width: 759px) { .fc-on.chart-card > :is(.chart-ctrl, .chart-toggles, .pos-note) { display: none !important; } }
+@media (max-width: 759px), (max-height: 560px) { .fc-on.chart-card > :is(.chart-ctrl, .chart-toggles, .pos-note) { display: none !important; } }
+/* a phone turned sideways (a short window): tighter edges, no hint line, the chart keeps at least a usable height */
+@media (max-height: 560px) {
+  .fc-frame.fc-on { gap: 4px; padding: 6px 10px !important; }
+  .fc-on .fc-hint { display: none; }
+  .fc-on [data-fc-grow], .fc-on.term-chart > .term-pb { min-height: 170px !important; }
+  .fc-x { top: 4px; right: 6px; width: 32px; height: 32px; }
+}
 @media (max-width: 599px) { .fc-btn .fc-bt { display: none; } .fc-btn { width: 32px; padding: 0; justify-content: center; } }
