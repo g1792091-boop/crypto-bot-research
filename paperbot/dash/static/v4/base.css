@@ -1,4 +1,4 @@
-/* Paper v4 dashboard: reset, type and the shell (top bar, 5-group nav, sub tabs, phone bottom bar, the D+n chip,
+/* Paper v4 dashboard: reset, type and the shell (top bar, the menu strip, phone bottom bar, the D+n chip,
    the health dot, the critical banner, the screen container, toast, tour). Components: components.css. */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -42,13 +42,6 @@ em { font-style: normal; color: var(--accent); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font: 700 var(--t-sm)/1 var(--f-pixel); letter-spacing: .06em; white-space: nowrap; }
 .brand .bic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); }
 .brand b { color: var(--accent); font-weight: 700; }
-.groups { display: none; gap: 2px; margin-left: 12px; }
-/* a group is a button that opens the list of all its screens (core/topnav.js; the list's look: core/nav.css .gmenu) */
-.groups .gbtn { appearance: none; border: 0; background: transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px 0 12px; border-radius: 10px; color: var(--ink-2); font: 700 var(--t-sm)/1 var(--f-body); white-space: nowrap; transition: background-color var(--t-fast), color var(--t-fast); }
-.groups .gbtn:hover, .groups .gw[data-open] .gbtn { color: var(--ink); background: var(--surface); }
-.groups .gbtn[aria-current="true"] { color: var(--accent-ink); background: var(--accent); }
-.groups .gbtn svg, .botbar a svg { width: 16px; height: 16px; flex: none; }
-@media (min-width: 900px) { .groups { display: flex; } .brand-t { display: inline; } }
 .brand-t { display: none; }
 @media (min-width: 420px) { .brand-t { display: inline; } }
 
@@ -87,22 +80,22 @@ em { font-style: normal; color: var(--accent); }
 .crit-row button, .crit-row a { appearance: none; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--down-line); background: transparent; color: var(--crit-ink); font: 700 var(--t-xs)/1 var(--f-body); text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
 @media (max-width: 559px) { .crit-in { padding-block: 6px; gap: 4px; } .crit-row { font-size: var(--t-xs); } .crit-row .ic { width: 18px; height: 18px; } }
 
-/* sub tabs of the current group */
-.subtabs { max-width: var(--page-max); margin-inline: auto; padding: 0 var(--gutter); height: var(--sub-h); display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+/* the menu strip under the top bar: every screen its own text button (core/strip.js; the buttons' look and the PC
+   wrap: core/nav.css). One row that scrolls sideways; its real height (one row, or two when it wraps on a PC) is
+   measured into --sub-h, so it never reads --sub-h itself */
+.subtabs { max-width: var(--page-max); margin-inline: auto; padding: 0 var(--gutter); min-height: 44px; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .subtabs::-webkit-scrollbar { display: none; }
-.subtabs a { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; border: 1px solid transparent; transition: color var(--t-fast), border-color var(--t-fast), background-color var(--t-fast); }
-.subtabs a:hover { color: var(--ink); }
-.subtabs a[aria-current="page"] { color: var(--ink); border-color: var(--line-2); background: var(--surface); }
-.subtabs a .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.subtabs a.oldui { border: 1px dashed var(--line-2); color: var(--ink-2); }
-/* the skin switch (core/skin.js): two small buttons before 예전 화면, pushed to the end of the 서버 tabs */
-.skinsw { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px; border: 1px solid var(--line-2); }
+/* 예전 화면 ↗ (the old dashboard at /v3): at the strip's end, or in the top bar on a PC (core/shell.js) */
+a.oldui { flex: none; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--line-2); color: var(--ink-2); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
+a.oldui:hover { color: var(--ink); border-color: var(--accent-line); }
+/* the skin switch (core/skin.js): two small buttons at the strip's end, between 글자 크기 and 예전 화면 */
+.skinsw { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px; border: 1px solid var(--line-2); }
 .skinsw .k { padding: 0 6px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 .skinsw button { appearance: none; height: 28px; padding: 0 9px; border-radius: 7px; border: 0; background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
 .skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-/* 글자 크기 (core/textsize.js): the same small control, first at the end of the tabs; 화면 색 follows right after it */
+/* 글자 크기 (core/textsize.js): the same small control, first at the strip's end; 화면 색 follows right after it */
 .textsw + .skinsw { margin-left: 6px; }
-/* 글자 크기 on a phone: one cycling button first in the sub-tab row (the full control is at the far end of that row) */
+/* 글자 크기 on a phone: one cycling button first in the strip (the full control is at the far end of that row) */
 .textcyc { display: none; flex: none; align-items: baseline; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
   background: var(--surface); color: var(--ink); font: 800 var(--t-sm)/1 var(--f-body); cursor: pointer; }
 .textcyc small { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); }
@@ -119,7 +112,7 @@ em { font-style: normal; color: var(--accent); }
 /* phone bottom tab bar */
 .botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--botbar); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .botbar a { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--muted); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); position: relative; }
-.botbar a svg { width: 20px; height: 20px; }
+.botbar a svg { width: 20px; height: 20px; flex: none; }
 .botbar a[aria-current="page"] { color: var(--accent); }
 .botbar a[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
 .botbar a .ndot { position: absolute; top: 8px; right: calc(50% - 16px); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }

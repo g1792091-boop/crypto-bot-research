@@ -1,28 +1,28 @@
-// The shell around every screen: the 5-group nav (top on a PC, each group with a dropdown of all its screens,
-// core/topnav.js; or the left rail by choice, core/rail.js + core/navpos.js; bottom tab bar on a phone), the current
-// group's sub tabs, the one-line "D+n/30 · 판정 날짜 · 관찰 ~날짜" chip that expands to the rules, the ONE health dot (red when
-// something is down; it pulses once per real new heartbeat), the speaker button of the live sound (core/sound.js) and
-// the sticky red banner for critical alerts (bust, liquidation burst, feed stale).
+// The shell around every screen: the menu (every screen its own text button in one strip under the top bar, like v3,
+// core/strip.js; or the left rail by choice, core/rail.js + core/navpos.js; the phone's bottom tab bar of the 5 groups),
+// the one-line "D+n/30 · 판정 날짜 · 관찰 ~날짜" chip that expands to the rules, the ONE health dot (red when something
+// is down; it pulses once per real new heartbeat), the speaker button of the live sound (core/sound.js) and the sticky
+// red banner for critical alerts (bust, liquidation burst, feed stale).
 import {h, put, clear, $, local} from "./dom.js";
 import {api, bus, stream} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {GROUPS, SCREENS, href, icon, parseHash, screenIcon, landing} from "./routes.js";
+import {GROUPS, SCREENS, href, icon, parseHash, screenIcon, landing, navLabel} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
 import {expand, pulseLive} from "./motion.js";
 import {soundButton, startSound} from "./sound.js";
 import {bellButton, startBell} from "./bell.js";
 import {setMethod, botsKo, methodKo} from "./ui.js";
 import {criticalLines} from "./alerts.js";
-import {skinSwitch} from "./skin.js";
+import {skinSwitch, skinCycle} from "./skin.js";
 import {textCycle, textSwitch} from "./textsize.js";
 import {remount} from "./router.js";
 import {renderRail, visibleScreens} from "./rail.js";
-import {renderGroups} from "./topnav.js";
+import {renderStrip} from "./strip.js";
 import {navPosSwitch} from "./navpos.js";
 import {openFind} from "./find.js";
 
-const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
+const badges = {};       // screen -> true (a small dot after its button, e.g. new room messages)
 
 function renderNav() {
   const p = parseHash(location.hash);
@@ -31,11 +31,9 @@ function renderNav() {
   const link = (g, cls) => h("a", {href: href(visibleScreens(g)[0] || g.screens[0]), class: cls, "aria-current": g.id === gid ? "page" : null,
     dataset: {group: g.id}}, icon(g.id), h("span", null, g.ko),
     g.screens.some((n) => badges[n]) ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
-  // the top bar's groups, each opening a list of all its screens (one click to any screen; core/topnav.js)
-  renderGroups(p.name, badges);
-  // the left rail (a choice, "메뉴 위치", >= 1200 px) and the "묶음 › 화면" line that stands in for the group bar there
+  // the left rail (a choice, "메뉴 위치", >= 1200 px) and the "묶음 › 화면" line that stands in for the strip there
   renderRail(p.name, badges, () => remount());
-  // the brand mark opens the start screen (the 터미널; the phone's 차트), named as such: 홈 is one click away in its group
+  // the brand mark opens the start screen (the 터미널; the phone's 차트), named as such: 홈 (요약) is one click away
   const brand = $(".brand");
   if (brand) {
     const to = landing();
@@ -44,23 +42,27 @@ function renderNav() {
     brand.title = `첫 화면: ${SCREENS[to].ko}`;
   }
   const crumb = $("#crumb");
-  if (crumb) put(crumb, h("span", {class: "crumb-g"}, (GROUPS.find((x) => x.id === gid) || GROUPS[0]).ko), h("span", {class: "crumb-s", "aria-hidden": "true"}, "›"),
+  if (crumb) put(crumb, h("span", {class: "crumb-g"}, navLabel(gid)), h("span", {class: "crumb-s", "aria-hidden": "true"}, "›"),
     h("b", null, meta.ko));
+  // the phone's bottom bar: the 5 groups as before (a tap opens the group's first screen)
   put($("#botbar"), GROUPS.map((g) => link(g)));
-  const g = GROUPS.find((x) => x.id === gid) || GROUPS[0];
-  put($("#subtabs"), textCycle(() => remount()), findTab(), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
-    SCREENS[n].ko, SCREENS[n].soft && !features[SCREENS[n].soft] ? h("span", {class: "pp thin", style: {marginLeft: "6px", opacity: ".75"}, title: "아직 켜지지 않음"}, "꺼짐") : null, badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null)),
-  // 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js) at the end of every group's tabs, so it is one tap away on the
-  // screen being read (on a phone the one-button textCycle at the start of the row stands in for it); the screen colours (AI / 클래식, core/skin.js) and the old dashboard (served at /v3; '/' is this
-  // page) stay one tap away next to it at the end of the 서버 group's menu
-  textSwitch(() => remount()),
-  g.id === "server" ? skinSwitch(() => remount()) : null,
-  g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null,
-  // 메뉴 위치 위 / 왼쪽 (core/navpos.js) at the very end: shown from 1200 px, where the left rail can be chosen
-  navPosSwitch());
+  // the menu strip: every screen its own text button (core/strip.js). At its start on a phone: 글자 크기 (one button)
+  // and 찾기; at its end below 1200 px: 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js), 화면 색 (AI / 클래식,
+  // core/skin.js) and the old dashboard (served at /v3; '/' is this page)
+  renderStrip(p.name, badges, {
+    lead: [textCycle(() => remount()), findTab()],
+    tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink()],
+  });
+  // a PC window with the menu on top (1200 px and up): the same settings sit in the top bar, so the strip keeps its
+  // row for the screens (one row at 1920 px), with 메뉴 위치 위 / 왼쪽 (core/navpos.js): the full switches from 1680 px,
+  // one small button each below that (core/nav.css .toptools); the left layout has them at the rail's foot
+  const tt = $("#toptools");
+  if (tt) put(tt, h("span", {class: "tt-full"}, textSwitch(() => remount()), skinSwitch(() => remount())),
+    h("span", {class: "tt-mini"}, textCycle(() => remount()), skinCycle(() => remount())), oldLink(), navPosSwitch());
 }
-/** 찾기 at the start of the phone's sub-tab row (the top bar has no room for it under 460 px): two taps to any
- *  account or strategy. Shown below 760 px only (core/nav.css). */
+const oldLink = () => h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗"));
+/** 찾기 at the start of the phone's menu strip (the top bar has no room for it under 460 px): two taps to any
+ *  account or strategy. Shown below 460 px only (core/nav.css). */
 const findTab = () => h("button", {type: "button", class: "findsub", "aria-label": "찾기: 화면, 매매법, 계좌", onclick: () => openFind()},
   screenIcon("analysis"), "찾기");
 export function setBadge(screen, on) {

@@ -1,67 +1,83 @@
-/* Fewer clicks (owners 10/06), the menu where the owners want it (10/06 13:27: "클릭하는 버튼들이 다 왼쪽으로 바꼈네??"):
-   the top bar's group lists (core/topnav.js), the left rail as a choice (core/rail.js, core/navpos.js, "메뉴 위치"), the
-   "묶음 › 화면" line and the 찾기 button in the top bar, the side panel (core/drawer.js, screens/account-peek.js) and
-   the 찾기 box (core/find.js). Tokens only (both skins), font sizes only var(--t-*) (tests/test_dash_read.py). */
+/* Fewer clicks (owners 10/06), the menu where the owners want it (10/06 ~14:00, with a photo of the v3 tab bar:
+   "클릭해서 바로 들어갈수있는 버튼들", "왼쪽에 그림으로 되어있는데 너무 헷갈려"): the menu strip, every screen its own text
+   button (core/strip.js), the left rail as a choice (core/rail.js, core/navpos.js, "메뉴 위치"), the "묶음 › 화면" line
+   and the 찾기 button in the top bar, the side panel (core/drawer.js, screens/account-peek.js) and the 찾기 box
+   (core/find.js). Tokens only (both skins), font sizes only var(--t-*) (tests/test_dash_read.py). */
 
 /* ---------------------------------------------------------------- top bar: 찾기 button, 묶음 › 화면 */
 .findbtn { appearance: none; flex: none; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border-radius: 10px;
   border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 .findbtn:hover { color: var(--ink); border-color: var(--accent-line); }
 .findbtn svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
-.findbtn kbd, .gm-a kbd, .rail-k, .find kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px;
+.findbtn kbd, .rail-k, .find kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px;
   border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2); font: 700 var(--t-2xs)/1 var(--f-term); }
 @media (max-width: 759px) { .findbtn { width: 34px; padding: 0; justify-content: center; } .findbtn-t, .findbtn kbd { display: none; } }
 .crumb { display: none; margin: 0 0 0 14px; align-items: baseline; gap: 2px; min-width: 0; color: var(--muted); font: 700 var(--t-sm)/1 var(--f-body); white-space: nowrap; }
 .crumb b { color: var(--ink); font-weight: 800; }
 .crumb-s { margin: 0 7px; color: var(--line-2); }
-/* the phone's 찾기 (start of the sub-tab row; the top bar keeps it from 460 px up) */
+/* the phone's 찾기 (start of the menu strip; the top bar keeps it from 460 px up) */
 .findsub { display: none; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
   background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); }
 .findsub svg { width: 14px; height: 14px; color: var(--accent); }
 @media (max-width: 459px) { .findbtn { display: none; } .findsub { display: inline-flex; } }
 
-/* ---------------------------------------------------------------- the top bar's group lists (900 px and up) */
-.gw { position: relative; display: flex; }
-.groups .gbtn .gcar { margin-left: -1px; color: currentColor; opacity: .7; font-size: var(--t-2xs); transition: transform var(--t-fast) var(--ease); }
-.groups .gw[data-open] .gcar { transform: rotate(180deg); }
-.groups .gbtn .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.groups .gbtn[aria-current="true"] .ndot { background: var(--accent-ink); }
-/* 900-1199 px: a little tighter, so the ▾ marks do not squeeze the D+n chip */
-@media (max-width: 1199px) { .groups .gbtn { gap: 4px; padding: 0 7px; } }
-.gmenu { position: absolute; left: 0; top: calc(100% + 8px); z-index: 40; min-width: 236px; padding: 6px; border-radius: 12px; border: 1px solid var(--line-2);
-  background: var(--surface); box-shadow: 0 18px 40px var(--card-shadow, transparent); }
-.gmenu::before { content: ""; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }   /* the mouse's bridge from the button */
-.gw[data-open] .gmenu { animation: gm-in .14s var(--ease); }
-@keyframes gm-in { from { opacity: 0; transform: translateY(-4px); } }
-.gm-h { margin: 0; padding: 6px 10px 7px; color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); letter-spacing: .04em; }
-.gmenu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.gm-a { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 8px 0 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none;
-  font: 700 var(--t-sm)/1.2 var(--f-body); white-space: nowrap; }
-.gm-ic { flex: none; display: grid; place-items: center; width: 18px; color: var(--muted); }
-.gm-ic svg { width: 16px; height: 16px; }
-.gm-t { flex: 1 1 auto; min-width: 0; }
-.gm-a:hover, .gm-a:focus-visible { color: var(--ink); background: var(--surface-2); }
-.gm-a:hover .gm-ic, .gm-a:focus-visible .gm-ic { color: var(--ink-2); }
-.gm-a[aria-current="page"] { color: var(--ink); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-.gm-a[aria-current="page"] .gm-ic { color: var(--accent); }
-.gm-a.off .gm-t { color: var(--muted); }
-.gm-a .ndot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.gm-a kbd { color: var(--muted); }
-@media (prefers-reduced-motion: reduce) { .gw[data-open] .gmenu { animation: none; } .groups .gbtn .gcar { transition: none; } }
-/* the menu rows carry data-screen (the focus is kept across a redraw by it): a screen's own bare [data-screen="…"] rule
-   (screens/terminal.css `[data-screen="terminal"] { gap: 0 }`, loaded once the start screen has been shown) must not
-   squeeze the 터미널 row's icon against its name */
-.gmenu .gm-a, .rail .rail-a { gap: 10px; }
+/* ---------------------------------------------------------------- the menu strip (core/strip.js) */
+/* like v3: plain text buttons in one row, the current one bold with an accent underline, a dot after a screen with
+   news; groups are set apart by a thin line. Below 1200 px the row scrolls sideways (base.css .subtabs) */
+.strip { column-gap: 15px; }
+.strip .sg { flex: none; position: relative; display: inline-flex; align-items: center; }
+/* the line between two groups sits in the gap; a group that starts a wrapped row has none (core/strip.js marks it) */
+.strip .sg + .sg::before { content: ""; position: absolute; left: -8px; top: 50%; width: 1px; height: 18px; margin-top: -9px; background: var(--line-2); }
+.strip .sg[data-rowstart]::before { display: none; }
+.sb { position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px; height: 38px; padding: 0 9px; border-radius: 7px;
+  color: var(--ink-2); text-decoration: none; font: 500 var(--t-sm)/1 var(--f-body); white-space: nowrap; transition: color var(--t-fast), background-color var(--t-fast); }
+/* the name and an invisible bold copy share one cell, so a button is as wide lit as unlit (lighting one moves nothing) */
+.sb-t { display: inline-grid; }
+.sb-t::after { content: attr(data-t) / ""; height: 0; overflow: hidden; visibility: hidden; font-weight: 700; }
+.sb:hover { color: var(--ink); background: var(--surface); }
+.sb[aria-current="page"] { color: var(--ink); font-weight: 700; }
+.sb[aria-current="page"]::after { content: ""; position: absolute; left: 9px; right: 9px; bottom: 1px; height: 2px; border-radius: 2px; background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow); }
+.sb.off .sb-t { color: var(--muted); }
+.sb .pp { padding: 0 5px; }
+.sb .ndot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+/* the end of the row below 1200 px: 글자 크기 · 화면 색 · 예전 화면 (core/shell.js; on a PC they are in the top bar) */
+.strip-tools { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+/* the sideways row: a soft fade on the side that has more */
+.strip[data-more="r"] { -webkit-mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent); }
+.strip[data-more="l"] { -webkit-mask-image: linear-gradient(90deg, transparent, var(--bg) 28px); mask-image: linear-gradient(90deg, transparent, var(--bg) 28px); }
+.strip[data-more="lr"] { -webkit-mask-image: linear-gradient(90deg, transparent, var(--bg) 28px, var(--bg) calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, var(--bg) 28px, var(--bg) calc(100% - 28px), transparent); }
+/* a PC window (1200 px and up), menu on top: the header spans the window and the buttons wrap instead of scrolling
+   (one row at 1920 px with 보통; a tidy second row on a narrower window or with 크게 / 아주 크게; a group never splits) */
+@media (min-width: 1200px) {
+  :root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; }
+  :root:not([data-nav="left"]) .subtabs { flex-wrap: wrap; overflow: visible; padding-block: 3px; row-gap: 2px; }
+  :root:not([data-nav="left"]) .strip-tools { display: none; }
+  :root:not([data-nav="left"]) .toptools { display: inline-flex; }
+}
+/* the top bar's settings on a PC with the menu on top: 글자 크기 (one button) · 화면 색 · 예전 화면 · 메뉴 위치 */
+.toptools { display: none; flex: none; align-items: center; gap: 6px; margin-right: 4px; }
+.toptools .textcyc, .toptools .navsw, .toptools .tt-mini { display: inline-flex; }
+.toptools .tt-mini { align-items: center; gap: 6px; }
+.toptools .tt-full { display: none; align-items: center; gap: 6px; }
+.toptools .navsw button { padding: 0 8px; }
+@media (min-width: 1680px) { .toptools .tt-full { display: inline-flex; } .toptools .tt-mini { display: none; } }
+@media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
+
+/* the 도움말 button's screens (어떻게 돌아가나, 자주 묻는 질문): a small switch under their title (core/strip.js joinedTabs) */
+.jtabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: -6px; }
+.jt-k { margin-right: 4px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); }
+.jt-a { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); color: var(--ink-2);
+  text-decoration: none; font: 700 var(--t-sm)/1 var(--f-body); white-space: nowrap; }
+.jt-a:hover { color: var(--ink); border-color: var(--accent-line); }
+.jt-a[aria-current="page"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
 /* ---------------------------------------------------------------- 메뉴 위치 (core/navpos.js) and the left rail */
-/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up). At the end of the sub tabs it
-   stays in view even when the row is longer than the window (the 서버 tabs with 화면 색 and 예전 화면 under 크게 /
-   아주 크게): it sticks to the row's right edge and the rest slides under it */
+/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up), at the strip's end */
 .navsw { display: none; }
-.subtabs .navsw { margin-left: 6px; position: sticky; right: 0; z-index: 1; background: var(--bg); }
 .rail { display: none; }
 @media (min-width: 1200px) {
-  .subtabs .navsw { display: inline-flex; }
   :root[data-nav="left"] { --rail-w: calc(184px * var(--ts)); --sub-h: 0px; }
   :root[data-nav="left"] body { padding-left: var(--rail-w); }
   :root[data-nav="left"] .groups { display: none !important; }
@@ -75,6 +91,10 @@
 .rail-g + .rail-g { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
 .rail-h { margin: 0; padding: 5px 10px 4px; color: var(--muted); font: 700 var(--t-2xs)/1.2 var(--f-body); letter-spacing: .04em; }
 .rail-g.cur .rail-h { color: var(--accent); }
+/* the rows carry data-screen (the focus is kept across a redraw by it): a screen's own bare [data-screen="…"] rule
+   (screens/terminal.css `[data-screen="terminal"] { gap: 0 }`, loaded once the start screen has been shown) must not
+   squeeze the 터미널 row's icon against its name */
+.rail .rail-a { gap: 10px; }
 .rail-a { position: relative; flex: none; display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 6px 0 10px; border-radius: 8px;
   color: var(--ink-2); text-decoration: none; font: 700 var(--t-xs)/1.2 var(--f-body); transition: color var(--t-fast), background-color var(--t-fast); }
 .rail-ic { flex: none; display: grid; place-items: center; width: 18px; color: var(--muted); }
