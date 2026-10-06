@@ -315,6 +315,8 @@ def test_wiring_tokens_and_text_safety():
     for bad in ("innerHTML", "insertAdjacentHTML", "outerHTML", "toLocaleString", "Intl.NumberFormat", "eval("):
         assert bad not in src
     assert "ctx.timeout(() => { if (!dead) ask(); }, RETRY_MS);" in src and "ctx.track(() => { dead = true; });" in src
+    for f in ("analysis.css", "home.css", "checkpoint.css"):                # the kit's look comes with each screen
+        assert '@import url("luck-kit.css");' in _read(f), f
     css = _read("luck-kit.css")
     for m in re.finditer(r"font(?:-size)?:\s*([^;}]+)", css):
         val = m.group(1)

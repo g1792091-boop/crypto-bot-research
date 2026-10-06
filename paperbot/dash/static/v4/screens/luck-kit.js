@@ -7,6 +7,7 @@
 // HONESTY: every number is the server's; a place without its file or database says 준비 중, a small sample waits with
 // its real threshold (analysis-kit.js progressBar); before the 30-day verdict nothing hints at a pass (판정 전); the
 // pills are neutral (no green / red); DeepSeek rows carry counts only (the server sends no money). 설명용, 판정 아님.
+// Its look: luck-kit.css, @imported by analysis.css, home.css and checkpoint.css.
 import {h, ui, fmt, put, motion} from "../core/pb.js";
 import {viewHead, progressBar} from "./analysis-kit.js";
 
@@ -16,11 +17,6 @@ const REFRESH_MS = 10 * 60 * 1000;
 const PILL = {more: "accent", some: "warn", like_luck: "thin", none: "thin", waiting: "thin", before: "ref", preparing: "thin"};
 const PILL_KO = {more: "운보다 확실히 많음", some: "운보다 조금 많음", like_luck: "운과 비슷", none: "통과 0", waiting: "기다리는 중",
   before: "판정 전", preparing: "준비 중"};
-
-function ensureCss() {
-  if (typeof document === "undefined" || !document.head || document.querySelector("link[data-luck-kit]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/luck-kit.css", dataset: {luckKit: "1"}}));
-}
 
 const num = (x, dec = 2) => (x == null ? "—" : fmt.num(x, Number(x) >= 10 ? 0 : dec));
 const linkOf = (ctx, w) => (w && w.screen && ctx && ctx.href ? ctx.href(w.screen, w.arg || null, w.query || undefined) : null);
@@ -95,7 +91,6 @@ export function whyCard(d) {
 
 /** The 분석 › 운 vs 실력 tab: head, why, the run's own places, the 5-year studies. */
 export function luckView(d, env) {
-  ensureCss();
   const rows = Array.isArray(d.rows) ? d.rows : [];
   const ctx = env && env.ctx;
   const sm = d.summary || {};
@@ -131,7 +126,6 @@ function follow(ctx, paint) {
 
 /** 홈 (요약): one compact card. The 30-day verdict's row first, then up to three places that have numbers. */
 export function luckMini(ctx, o = {}) {
-  ensureCss();
   const body = h("div", {class: "stack tight"}, motion.shimmer(2));
   const foot = h("p", {class: "muted lk-note"});
   const more = h("a", {class: "btn-line", href: ctx.href("analysis", "luck")}, "전체 보기 →");
@@ -165,7 +159,6 @@ function miniRow(r, ctx) {
 
 /** 판정: the verdict's own luck numbers (before: how strict the rule is; after: passed vs luck). */
 export function luckCheck(ctx, o = {}) {
-  ensureCss();
   const body = h("div", {class: "stack tight"}, motion.shimmer(3));
   const more = h("a", {class: "btn-line", href: ctx.href("analysis", "luck")}, "다른 곳도 보기 →");
   const el = ui.card({plate: "운 vs 실력", sub: "설명용, 판정 아님", cls: ["lk-check", o.cls || ""].join(" "), acts: [more]}, body);

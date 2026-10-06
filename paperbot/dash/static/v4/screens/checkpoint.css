@@ -1,6 +1,7 @@
 /* checkpoint: 30일 판정 (builder A). Screen-only rules; tokens and components come from the shared css. */
 @import url("home-shared.css");
 @import url("road-kit.css");
+@import url("luck-kit.css");
 
 .ck-body { display: grid; gap: 16px; min-width: 0; }
 .ck-grid { display: grid; gap: 16px; min-width: 0; }
