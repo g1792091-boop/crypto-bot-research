@@ -25,9 +25,12 @@ const OPEN_KEY = "debate-side-open";
 /** One timeline row's [label, tone, detail, small line] from a stored round. */
 export function roundKo(r, newest, running) {
   const why = String(r.why || "");
-  if (r.status === "ok") return ["토론함", "is-ok", `${usd4(r.cost_usd)} · 발언 ${fmt.int(r.turns || 0)}개${why ? " · 일부 잘림" : ""}`, r.topic || ""];
+  // the idea factory's daily deep debate says so (three calls on its own model: a bigger cost than a regular round)
+  if (r.status === "ok") return ["토론함", "is-ok", `${r.kind === "deep" ? "깊은 토론 · " : ""}${usd4(r.cost_usd)} · 발언 ${fmt.int(r.turns || 0)}개${why ? " · 일부 잘림" : ""}`, r.topic || ""];
   // the service's own reason ("새 청산 4건(기준 10건), 새 알림 없음, 새 밤 점검 없음"): its first part says enough
-  if (r.status === "skipped") return ["건너뜀", "is-skip", "새 소식 없음 · 비용 0", why.split(/,\s*/)[0]];
+  // a factory round skips when no question is fresh, the deep debate when a cap would be crossed: their own reason whole
+  if (r.status === "skipped") return ["건너뜀", "is-skip", r.kind === "deep" ? "깊은 토론 건너뜀 · 비용 0" : r.kind ? "새로 물을 질문 없음 · 비용 0" : "새 소식 없음 · 비용 0",
+    r.kind ? why : why.split(/,\s*/)[0]];
   if (r.status === "running") return newest && running ? ["토론 중", "is-live", "AI 답을 기다리는 중", ""] : ["기록 중", "is-skip", "끝난 기록이 아직 없음", ""];
   if (r.status === "aborted") return ["중단", "is-bad", why || "서비스가 도중에 멈춤", ""];
   const tag = (why.match(/^([a-z_]+):/) || [])[1];

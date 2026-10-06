@@ -380,6 +380,20 @@ console.log(JSON.stringify({{
     assert out["classicLine"].startswith("토론 방식: 예전 토론(성격 다섯)") and out["noDeep"] is None
 
 
+def test_the_timeline_says_what_a_factory_or_deep_round_did():
+    out = _node("""
+const S = await import('@S/debate-side.js');
+const why = '새로 물을 질문이 없음(같은 질문은 하루 3번까지, 같은 종류는 연달아 묻지 않음)';
+console.log(JSON.stringify({
+  q: S.roundKo({status: 'skipped', kind: 'factory', why}), deep: S.roundKo({status: 'skipped', kind: 'deep', why: '깊은 토론 건너뜀(하루 사용 한도에 닿음)'}),
+  ok: S.roundKo({status: 'ok', kind: 'deep', cost_usd: 0.1138, turns: 5, topic: 'q', why: ''}),
+  classic: S.roundKo({status: 'skipped', why: '새 청산 4건(기준 10건), 새 알림 없음'})}));
+""")
+    assert out["q"] == ["건너뜀", "is-skip", "새로 물을 질문 없음 · 비용 0", "새로 물을 질문이 없음(같은 질문은 하루 3번까지, 같은 종류는 연달아 묻지 않음)"]
+    assert out["deep"][2] == "깊은 토론 건너뜀 · 비용 0" and out["ok"][2] == "깊은 토론 · $0.1138 · 발언 5개"
+    assert out["classic"] == ["건너뜀", "is-skip", "새 소식 없음 · 비용 0", "새 청산 4건(기준 10건)"]   # unchanged
+
+
 # ---------------------------------------------------------------- wiring
 def test_wiring_and_css():
     js = _code(_read("debate.js"))
