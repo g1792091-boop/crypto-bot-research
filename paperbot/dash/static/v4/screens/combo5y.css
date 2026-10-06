@@ -1,0 +1,5 @@
+@import url("combo-5y.css");
+/* #/combo5y (screens/combo5y.js): the page frame; the cards' look is combo-5y.css (imported here, and linked by
+   combo-5y.js itself when another screen shows the cards). */
+[data-screen="combo5y"] .c5-links { margin: 0 0 10px; }
+[data-screen="combo5y"] .c5-page { min-width: 0; }

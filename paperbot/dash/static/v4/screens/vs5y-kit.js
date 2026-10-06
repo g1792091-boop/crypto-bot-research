@@ -69,6 +69,9 @@ export function vs5yCard(ctx, name, kind, o = {}) {
       small ? h("p", {class: "vs-smallnote"}, ui.pill("표본 적음", "thin"), ` 거래 ${fmt.int(nw.n || 0)}건: ${fmt.int(d.min_n || 20)}건이 되면 줄마다 비슷·다름이 나옵니다`) : null,
       h("p", {class: "note"}, `지금 = ${fmt.tfKo(t.tf)} 계좌의 끝난 거래 ${fmt.int(nw.n || 0)}건 (${fmt.num(nw.days || 0, 1)}일)`,
         counts ? " · 딥시크는 계좌마다 거래 수만 보여 드립니다" : f ? ` · 동전 봇 = 같은 봉 ${fmt.int(f.accounts)}개의 중간값 (거래 ${fmt.int(f.n)}건)` : " · 같은 봉 동전 봇 없음"),
+      // combo-5y: the 5-year months of this timeframe (each month a fresh $5,000 account, v4 rules)
+      t.month5y && t.month5y.n ? h("p", {class: "note"}, `5년 한 달 (매달 $5,000로 새로 시작, v4 규칙): 중앙값 ${fmt.pct(t.month5y.median, 1)} · 이긴 달 ${fmt.pct(t.month5y.pos_share, 0, false)} · 좋은 달 ${fmt.pct(t.month5y.best, 0)} · 나쁜 달 ${fmt.pct(t.month5y.worst, 0)} · `,
+        h("a", {href: ctx.href("analysis", "monthly5y")}, "분석 › 5년 월별 →")) : null,
     ];
   }
 

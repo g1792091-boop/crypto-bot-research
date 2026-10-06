@@ -1,0 +1,28 @@
+/* 분석 › 5년 월별 (screens/analysis-monthly.js). Tokens only; every font size a --t-* token; both skins. */
+.am-row { grid-template-columns: minmax(28px, auto) minmax(0, 1fr) auto; }
+.am-row .ret { text-align: right; white-space: nowrap; }
+.am-rank { color: var(--muted); font-size: var(--t-xs); font-weight: 600; }
+.am-stripbox { grid-column: 2 / -1; min-width: 0; display: grid; gap: 2px; }
+.am-strip { display: block; width: 100%; height: 26px; border-radius: 4px; background: var(--surface-2); }
+.am-strip .am-zero { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 2; }
+.am-strip .am-tick { stroke: var(--ink-2); stroke-width: 1.4; opacity: .55; }
+.am-strip .am-tick.up { stroke: var(--up); opacity: .7; }
+.am-strip .am-tick.down { stroke: var(--down); opacity: .55; }
+.am-strip .am-med { stroke: var(--ink); stroke-width: 3; opacity: .6; }
+.am-strip .am-now { stroke: var(--accent); stroke-width: 4; }
+.am-scale { position: relative; display: flex; justify-content: space-between; font-size: var(--t-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.am-scale .am-z { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); }
+.am-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); margin: 4px 0; }
+.am-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.am-legend .sw { display: inline-block; width: 4px; height: 14px; border-radius: 1px; background: var(--ink-2); opacity: .6; }
+.am-legend .sw.med { width: 5px; background: var(--ink); }
+.am-legend .sw.now { width: 6px; background: var(--accent); opacity: 1; }
+.am-more { grid-column: 2 / -1; min-width: 0; }
+.am-detail { padding: 8px 0 4px; min-width: 0; }
+.am-sub { margin: 0; font-size: var(--t-xs); color: var(--muted); font-weight: 700; }
+.am-bars { display: block; width: 100%; height: 80px; border-bottom: 1px solid var(--line); }
+.am-bars .am-zero { stroke: var(--line-2); stroke-width: 1; }
+.am-bars .am-bar { fill: var(--ink-2); opacity: .5; }
+.am-bars .am-bar.up { fill: var(--up); opacity: .75; }
+.am-bars .am-bar.down { fill: var(--down); opacity: .65; }
+.am-axis { display: flex; justify-content: space-between; font-size: var(--t-2xs); color: var(--muted); }

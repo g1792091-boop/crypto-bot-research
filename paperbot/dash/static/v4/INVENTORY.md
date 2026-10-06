@@ -513,3 +513,8 @@ only on its own group screens, D10 / D11); the reel can be added with its note (
 | 5년 기준 `#/combo/y5` | another builder's `screens/combo-5y.js` (`render5y(ctx, el)`), imported on demand; '5년 백테스트 결과 준비 중' until it exists | — |
 | 조합 시너지 rows (분석) | each top row opens `#/combo/build?u=<its strategies>` | `/api/analysis/synergy` (unchanged) |
 | 최대 낙폭 labels | 매매법 프로필 카드: '최대 낙폭 · 계좌 하나' (the deepest single timeframe account); 매매법 상세: '최대 낙폭 · 합친 곡선' (the summed curve). Numbers unchanged | unchanged |
+## 5년 조합 시험 (combo-5y; docs/combo5y.md; tests/test_combo5y_core.py, test_combo5y_engine.py, test_dash_combo5y.py)
+
+- **#/combo5y** (`screens/combo5y.js` → `screens/combo-5y.js` `render5y(ctx, el)`, look `combo-5y.css`): 매매법 › 5년 조합. 커밋된 5년 계산(`paperbot/dash/data/combo5y.json`, 오프라인 생성기 `paperbot/dash/tools/combo5y.py`)을 `GET /api/v4/combo5y`(dash/more/combo5y.py)로 읽음. 카드: 어떤 매매법으로 찾았나(36개 전부 / 거래가 있는 것만) · 점수 높은 조합(누르면 5년 월별 누적 곡선 vs 구성 매매법 vs 같은 크기 동전 봇 띠) · 다음 해에도 통했나(달력 해 walk-forward) · 5년 상관 지도(하루 손익 상관 / 나쁜 날 겹침 / 같이 잃은 날; 겹침·같이 잃은 날은 쌍의 순서로 색칠) · 신호 합치기(시험 수, 우연 거르기 두 단계, 상위 15개와 세 구간) · 한 계좌로 합치면 · 어떻게 계산했나(연구 숫자와 맞춰 보기, 선택 편향). 조합 화면(#/combo)이 같은 `render5y`를 불러 씀.
+- **분석 › 5년 월별** (`screens/analysis-monthly.js`, `GET /api/v4/combo5y/monthly`): 기존 36 매매법마다 5년 62달의 한 달 수익률(매달 $5,000로 새로 시작) 눈금과, 지금 실험이 같은 시간까지 자른 5년 달들 사이 어디쯤인지(닫힌 거래만, 하루 안은 시간 비율로 나눔, 같은 값은 가운데 순위, 닫힌 거래 0건이면 "기다리는 중", 20건 미만 표본 적음, 채워지는 중 막대). 매매법 상세의 5년 시험 vs 지금 표에 봉별 한 달 요약 한 줄(vs5y `month5y`).
+- 딥시크는 들어가지 않음 (5년 조합 시험은 기존 36과 동전 봇만). 설명용, 판정 아님.

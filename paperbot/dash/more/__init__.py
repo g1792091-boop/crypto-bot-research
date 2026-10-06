@@ -30,6 +30,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
             홈·판정의 작은 카드; background, cached)
     gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
     combo   조합 성과 (#/combo): 고른 매매법·봉 계좌를 합친 곡선과 숫자, 전체 상관 지도, 합친 규칙 실험 (paper3.db만 읽음)
+    combo5y 5년 조합 시험 (커밋된 data/combo5y.json, #/combo5y) + 분석 › 5년 월별 (지금 실험이 5년 달 중 어디쯤)
 """
 from __future__ import annotations
 
@@ -52,6 +53,7 @@ MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as 
 MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
 MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
 MODULES += ("combo",)                          # combo-paper: 조합 성과 (합친 곡선, 상관 지도, 합친 규칙)
+MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 5년 월별 (committed JSON)
 
 
 def register_all(app, **kw) -> dict:

@@ -8,6 +8,7 @@
 //   좋은 자리 vs 보통 levrule · 그림자 비교 shadows · 계좌 겹침 /api/overlap · 조합 시너지 synergy (analysis-rules.js)
 //   운 vs 실력 luck (/api/v4/luck, luck-kit.js: every place that tests many things, luck alone vs really passed)
 //   손실 크기 규칙 size (/api/v4/size5y + /cell, analysis-size.js; the 36 only, the same 5-year trades under other sizes)
+//   5년 월별 monthly5y (/api/v4/combo5y/monthly, analysis-monthly.js: the 36's 5-year months and the paper run so far)
 //   GH Coin /api/ghcoin (only while its recorder runs) · 45개 질문 questions (only when filled)
 // 건강 점검 moved to 서버·비용 and 알림 기록 to 알림 기록 (builder E). A {pending: true} answer shows the shimmer and asks
 // again after 3 s (the server computes heavy views in the background). The last view is remembered (local).
@@ -26,6 +27,7 @@ import * as C from "./analysis-costs.js";
 import * as E from "./analysis-exits.js";
 import * as RG from "./analysis-regime.js";
 import * as L from "./luck-kit.js";
+import * as M from "./analysis-monthly.js";
 
 const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
@@ -40,6 +42,7 @@ const VIEWS = [
   {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, groups: "core", desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},
   {id: "overlap", label: "계좌 겹침", path: "/api/overlap?days=7", render: X.overlap, groups: "core", desc: "같이 움직이는 계좌와 한 코인에 몰린 순간"},
   {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, groups: "core", desc: "매매법 여러 개를 같이 돌렸다면"},
+  {id: "monthly5y", label: "5년 월별", path: "/api/v4/combo5y/monthly", render: M.monthly5y, groups: "core", desc: "매매법마다 지난 5년 한 달 수익률 분포와, 지금 실험이 그 안 어디쯤인지"},
   {id: "shock", label: "충격 테스트", path: "/api/analysis/shock", render: R.shock, groups: "core", desc: "가격이 한 번에 크게 움직이면 지금 포지션은"},
   {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, groups: "core", desc: "실거래 전에 정한 조건 8개를 계좌마다"},
   {id: "luck", label: "운 vs 실력", path: "/api/v4/luck", render: L.luckView, groups: "any", desc: "여러 개를 한꺼번에 시험하는 곳마다: 운으로 통과할 수와 실제로 통과한 수"},
