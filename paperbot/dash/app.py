@@ -232,6 +232,7 @@ def board_position(pos: dict, exits: Optional[str]) -> dict:
             "time_exit": st.get("end") if reel and isinstance(st.get("end"), (int, float)) else None}
 BOARD_TTL_S = 2.0            # Data.board() reused this long without a database read (G17), then while unchanged
 DIGEST_TTL_S = 120           # /api/digest/staff reused this long
+LAB_INTAKE_TTL_S = 60        # /api/lab/intake reused this long (the agents pass writes it every 15 minutes)
 EQUITY_MAX_POINTS = 1_500    # /api/account/<id> equity series at most this long (first, last, each bucket's min and max)
 TRADES_TTL_S = 600           # /api/digest/week and tf reused this long: they decode every closed trade since the start
 OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
@@ -2897,6 +2898,23 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             with rooms.ro(rooms.agents_db) as a:
                 return DG.staff_board(a, int(time.time() * 1000), n)
         return _digest_cached(f"staff:{n}", make)
+
+    @app.get("/api/lab/intake")
+    def get_lab_intake(source: Optional[str] = None, limit: int = 30):
+        """The shared lab intake queue (paperbot/agents/labintake.py, code only): the newest cards (debate ideas,
+        meeting disputes, the owners' requests) with status and the code's result line, today's budget per source and
+        why the lab waits, and the 'why it failed' board over every new-strategy test. Read-only, reused 60 s."""
+        from ..agents import labintake as LI
+        if source and source not in LI.SOURCES:
+            raise HTTPException(400, "source는 debate, meeting, owner 중 하나")
+        n = min(max(int(limit), 1), 100)
+
+        def make():
+            now = int(time.time() * 1000)
+            with rooms.ro(rooms.agents_db) as a:
+                return {"cards": LI.view(a, source or None, n), "today": LI.today(a, now), "why_fail": LI.why_fail(a),
+                        "status_ko": LI.STATUS_KO, "source_ko": LI.SOURCE_KO, "engine_ko": LI.ENGINE_KO}
+        return _digest_cached(f"lab_intake:{source or ''}:{n}", make, LAB_INTAKE_TTL_S)
 
     @app.get("/api/digest/week")
     def get_digest_week():
