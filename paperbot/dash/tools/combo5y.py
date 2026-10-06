@@ -38,11 +38,12 @@ What (every choice is fixed here, before looking at any combination result):
    median and 75th percentile of EVERY 2-5 combination's year N+1 score. The 36 x 36 daily P&L correlation, its
    clusters (>= 0.7, agents/meetings.corr_clusters), the worst-day overlap (of each one's worst 5% days, the
    share that were the other's worst days too: a tail dependence; a correlation on the union of both worst-day sets
-   would be negative by construction), the co-loss ratio (days both lost / days either lost). The top 10 with their monthly curve, drawdown, return, winning-month
-   share and diversification ratio (members' own max drawdowns added up / the combination's). The search runs twice:
-   over all 36 (as specified) and, added AFTER seeing the first run, over the strategies with at least
-   ``MIN_UNIT_TRADES`` closed trades in the 62 monthly accounts (every strategy loses under these rules, so a strategy
-   that hardly trades wins the score by doing nothing; the JSON and the page say so).
+   would be negative by construction), the co-loss ratio (days both lost / days either lost). The top 10 with their
+   monthly curve, drawdown, return, winning-month share and diversification ratio (members' own max drawdowns added
+   up / the combination's). The search runs twice: over all 36 (as specified) and, added AFTER seeing the first
+   run, over the strategies with at least ``MIN_UNIT_TRADES`` closed trades in the 62 monthly accounts (every
+   strategy loses under these rules, so a strategy that hardly trades wins the score by doing nothing; the JSON and
+   the page say so).
 3. MERGED SIGNAL RULES (c). On the cached signal arrays, no look-ahead (a signal on bar t is known at its close, the
    entry is bar t + 1): AND (A and B, same coin and side, within k bars: k = 0, 1, 3), FILTER (A only when B's latest
    signal within N bars, B's own bar t included, is on the same side: N = 4, 16), VOTE (at least K of the 36 on the
