@@ -15,7 +15,7 @@ import {h, $} from "./dom.js";
 import {GROUPS, SCREENS, href, icon, screenIcon, keyOf, menuScreens} from "./routes.js";
 import {features} from "./features.js";
 
-const st = {open: null, pinned: false, openT: 0, closeT: 0, wired: false, cur: null};
+const st = {open: null, pinned: false, openT: 0, closeT: 0, wired: false, cur: null, hover: null};
 const OPEN_DELAY = 90, CLOSE_DELAY = 260;
 
 const bar = () => $("#groups");
@@ -121,8 +121,9 @@ export function renderGroups(cur, badges) {
   const gid = (SCREENS[cur] || SCREENS.home).group;
   const act = document.activeElement && nav.contains(document.activeElement) ? document.activeElement : null;
   const focusKey = act ? (act.dataset.screen ? `.gm-a[data-screen="${act.dataset.screen}"]` : act.dataset.group ? `.gbtn[data-group="${act.dataset.group}"]` : null) : null;
-  // a redraw for a badge or a feature keeps the open list; a new screen closes it (number keys, swipe, a link)
-  const open = st.cur === cur ? st.open : null, pinned = st.pinned;
+  // a redraw for a badge or a feature keeps the open list (one the mouse has already left closes); a new screen
+  // closes it (number keys, swipe, a link)
+  const open = st.cur === cur && (st.pinned || st.hover === st.open) ? st.open : null, pinned = st.pinned;
   st.cur = cur;
   clearTimers();
   st.open = null; st.pinned = false;
@@ -147,6 +148,7 @@ export function renderGroups(cur, badges) {
     const w = h("div", {class: "gw", dataset: {gw: g.id}}, btn, menu);
     w.addEventListener("pointerenter", (e) => {
       if (e.pointerType !== "mouse") return;
+      st.hover = g.id;
       clearTimeout(st.closeT);
       if (st.open === g.id) return;
       clearTimeout(st.openT);
@@ -155,6 +157,7 @@ export function renderGroups(cur, badges) {
     });
     w.addEventListener("pointerleave", (e) => {
       if (e.pointerType !== "mouse") return;
+      if (st.hover === g.id) st.hover = null;
       clearTimeout(st.openT);
       if (st.open === g.id && !st.pinned) st.closeT = setTimeout(() => { if (st.open === g.id && !st.pinned) closeGroupMenu(); }, CLOSE_DELAY);
     });

@@ -116,7 +116,9 @@ def test_menu_position_switch_is_where_the_owners_look_and_redraws():
     assert subtabs.index("textSwitch(") < subtabs.index("navPosSwitch()")
     rail = _read("core/rail.js")
     assert 'h("div", {class: "rail-foot"}, navPosSwitch(),' in rail                     # and the rail's foot
-    assert 'bus.on("navpos", () => { renderNav(); remount(); });' in shell              # any caller: menu + screen redrawn
+    navpos = shell[shell.index('bus.on("navpos", (id) => {'):]
+    assert navpos.index("renderNav(); remount();") < navpos.index("});")                 # any caller: menu + screen redrawn
+    assert '.navsw button[data-nav="${id}"]' in navpos                                   # the keyboard focus follows the switch
     inv = _read("INVENTORY.md")
     assert "setNavPos(" in inv and "currentNavPos()" in inv and "메뉴 위치" in inv            # the settings panel's hook
 
@@ -137,7 +139,7 @@ def test_group_dropdowns_list_every_screen_with_icon_name_and_key():
         assert k in t, k
     assert 'document.addEventListener("pointerdown"' in t and "w.contains(e.target)" in t
     assert '"focusout"' in t and 'e.target.closest(".gm-a")' in t
-    assert "st.cur === cur ? st.open : null" in t                                       # a new screen closes it
+    assert "st.cur === cur && (st.pinned || st.hover === st.open) ? st.open : null" in t    # a new screen closes it
     shell = _read("core/shell.js")
     assert "renderGroups(p.name, badges);" in shell and 'put($("#groups")' not in shell
     css = _nocomment(_read("core/nav.css"))

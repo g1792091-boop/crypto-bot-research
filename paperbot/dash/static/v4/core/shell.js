@@ -180,7 +180,12 @@ export function startShell() {
   bus.on("features", renderNav);
   // 메뉴 위치 changed (the control here, in the rail, or the settings panel through setNavPos): the menu and the screen
   // are drawn again (the screen's width changes by the rail's)
-  bus.on("navpos", () => { renderNav(); remount(); });
+  bus.on("navpos", (id) => {
+    const fromSwitch = !!(document.activeElement && document.activeElement.closest && document.activeElement.closest(".navsw"));
+    renderNav(); remount();
+    // a keyboard user who switched keeps the focus on the switch, now in its other place (the rail's foot / the tabs)
+    if (fromSwitch) { const b = [...document.querySelectorAll(`.navsw button[data-nav="${id}"]`)].find((x) => x.offsetParent !== null); if (b) b.focus({preventScroll: true}); }
+  });
   const chip = $("#dchip");
   chip.addEventListener("click", () => setRules(chip.getAttribute("aria-expanded") !== "true"));
   bus.on("route", () => setRules(false));
