@@ -46,7 +46,9 @@ def levels_of(df, tf: str, sr=None) -> dict:
     sr = sr or entry_marks.sr_module()
     if df is None or len(df) < BARS:
         return {"ready": False, "why": "bars"}
-    with entry_marks._contained():
+    # (no entry_marks._contained() here: volume_profile is pure numpy and imports nothing, while that guard swaps sys.path and the
+    # warnings filters of the whole process, which a request thread running next to others should not do; errstate is per thread)
+    with np.errstate(all="ignore"):
         n = len(df)
         vp = sr.volume_profile(np.asarray(df["high"], float), np.asarray(df["low"], float), np.asarray(df["close"], float),
                                np.asarray(df["volume"], float), np.array([n - 1]))
