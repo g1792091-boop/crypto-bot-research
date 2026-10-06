@@ -168,8 +168,8 @@ def test_live_view_waits_before_enough_trades(tmp_path, doc):
     build(db, days=1, hours_into_last=1)
     called = []
     d = RG.live_view(db, lambda *a: called.append(a) or [], doc, 0)
-    if d["trades"] < RG.LIVE_MIN:
-        assert d["waiting"] and "rows" not in d and not called
+    assert d["trades"] < RG.LIVE_MIN
+    assert d["waiting"] and "rows" not in d and not called           # nothing is fetched before the bar is full
     assert RG.live_view(str(tmp_path / "none.db"), None, doc, 0)["error"]
 
 
