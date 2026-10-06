@@ -352,7 +352,7 @@ export async function mount(el, ctx) {
     // a refresh that failed while the live stream is not bringing the positions either: the last data stays, dimmed
     const old = !!err && !stream.fresh();
     put(staleSlot, old ? ui.staleNote(err, store.meta("board").okAt, () => store.refresh("board").catch(() => {})) : null);
-    ui.dim(tabBody, old);
+    for (const x of [sumCard, coinBar, tabBody]) ui.dim(x, old);      // the summary and the coin counts are that data too
   });
   if (!st.board) renderAll(true);
   ctx.watch("levwhy", (w) => { if (w && w.positions) { st.why = w.positions; if (st.board) renderAll(true); } });
