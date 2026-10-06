@@ -1,5 +1,6 @@
-"""The shared lab intake queue: ideas from the 24-hour debate room, from meeting disputes and (later) from the owners
-wait here until code runs them as real, counted 5-year tests. No AI calls here.
+"""The shared lab intake queue: ideas from the 24-hour debate room, from meeting disputes and from the owners' own test
+requests ('🧪 이 매매법 시험해줘', the lab room's form; see the owners' section at the end) wait here until code runs them
+as real, counted 5-year tests. No AI calls here.
 
 Only code decides what gets tested and when. Every test goes through ``actions.newlab_test`` (a new strategy in
 newlab's grammar, counted in the lab's n, docs/newlab-prereg.md section 5) or ``actions.request_test`` (one of the
