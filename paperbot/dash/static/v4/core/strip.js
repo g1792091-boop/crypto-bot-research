@@ -31,7 +31,10 @@ function button(it, cur, badges) {
   const off = it.screens.every((n) => SCREENS[n].soft && !features[SCREENS[n].soft]);
   const news = it.screens.some((n) => badges[n]);
   const k = keyOf(it.to);
-  const what = it.screens.length > 1 ? it.screens.map((n) => SCREENS[n].ko).join(" · ") : (m.title || m.ko);
+  // the tooltip: the screen's full title when it says more ("판정 (30일 판정)", "요약 (홈)"), the screens behind a shared
+  // button, 꺼짐, the number key
+  const what = it.screens.length > 1 ? it.screens.map((n) => SCREENS[n].ko).join(" · ")
+    : m.title && m.title !== m.ko ? `${m.ko} (${m.title})` : m.ko;
   const tip = `${what}${off ? " (아직 켜지지 않음)" : ""}${k ? ` · 숫자 키 ${k}` : ""}`;
   return h("a", {class: ["sb", off ? "off" : ""], href: href(it.to), "aria-current": on ? "page" : null, title: tip,
     "aria-keyshortcuts": k, dataset: {sb: it.id}},
@@ -95,7 +98,7 @@ export function renderStrip(cur, badges, {lead = [], tools = []} = {}) {
   const focusId = act && act.dataset.sb ? act.dataset.sb : null;
   const first = st.cur == null, moved = st.cur !== cur;
   st.cur = cur;
-  const groups = navGroups(features).map((g) => h("div", {class: "sg", role: "group", "aria-label": g.ko, title: g.ko, dataset: {group: g.group}},
+  const groups = navGroups(features).map((g) => h("div", {class: "sg", role: "group", "aria-label": g.ko, dataset: {group: g.group}},
     g.items.map((it) => button(it, cur, badges))));
   const keepX = nav.scrollLeft;
   nav.replaceChildren(...lead, ...groups, h("span", {class: "strip-tools"}, tools));
