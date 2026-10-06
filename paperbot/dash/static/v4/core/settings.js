@@ -25,6 +25,7 @@ import {LIGHT_MODES, lightModeOf} from "./blink.js";
 import {NAV_POS, navPosNow, setNavPos} from "./navpos.js";
 import {GROUP_KO, deckState, deckValue, FLASH_KEY, LIGHT_KEY} from "./chartfx.js";
 import * as sound from "./sound.js";
+import {tvSection} from "./tvmode.js";
 import {GROUPS, SCREENS, mainLanding} from "./routes.js";
 import {START_KEY, SWIPE_KEY, GRID_KEY, GRID_DECK, setPref, onPref, swipeOn} from "./prefs.js";
 import {remount} from "./router.js";
@@ -213,6 +214,11 @@ function soundSection() {
     h("p", {class: "set-note"}, "소리별 켜기·끄기"), evRows);
 }
 
+/** TV 자동 넘김 (conv-b, core/tvmode.js): its own controls (how long a screen stays, which screens, 시작 / 끝내기) inside
+ *  the panel; 시작 closes the panel. It only changes which real screen is shown. */
+const tvPanelSection = () => section("tv", "TV 자동 넘김", "사무실 TV에 켜 두면 고른 화면이 차례로 넘어갑니다 (t 키로도 켜고 끕니다)",
+  h("div", {class: "set-tv"}, tvSection(() => closeSettings())));
+
 function goSection() {
   return section("go", "바로가기", null,
     h("div", {class: "set-links"},
@@ -221,12 +227,12 @@ function goSection() {
       h("button", {type: "button", class: "btn-line", onclick: () => { closeSettings(); startTour(); }}, "안내 다시 보기"),
       h("a", {class: "btn-line", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면 ↗")),
     h("p", {class: "set-keys"}, h("kbd", null, "/"), " 찾기 · ", h("kbd", null, ","), " 설정 · ", h("kbd", null, "f"), " 차트 크게 (차트 위에서) · ",
-      h("kbd", null, "Esc"), " 닫기 · ", h("kbd", null, "1"), "~", h("kbd", null, "9"), " 화면 이동"));
+      h("kbd", null, "t"), " TV 자동 넘김 · ", h("kbd", null, "Esc"), " 닫기 · ", h("kbd", null, "1"), "~", h("kbd", null, "9"), " 화면 이동"));
 }
 
 // ---------------------------------------------------------------- the panel
 function body() {
-  return [screenSection(), chartSection(), soundSection(), goSection(),
+  return [screenSection(), chartSection(), soundSection(), tvPanelSection(), goSection(),
     h("p", {class: "set-foot"}, "이 설정은 이 기기(이 브라우저)에만 기억됩니다. 다른 휴대폰·PC는 각자 따로입니다.")];
 }
 function repaint() {
@@ -249,7 +255,7 @@ function findKey(root, [rowT, t]) {
   return null;
 }
 
-/** Open the panel (section: "screen" | "chart" | "sound" | "go" scrolls to it). */
+/** Open the panel (section: "screen" | "chart" | "sound" | "tv" | "go" scrolls to it). */
 export function openSettings(sectionId) {
   if (st.open) { if (sectionId) scrollTo(sectionId); return; }
   leaveFull();                // a chart in the browser's full screen would hide the panel: it goes back first

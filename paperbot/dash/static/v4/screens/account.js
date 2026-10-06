@@ -8,7 +8,7 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local, fullChart} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local, fullChart, fav, cmp} from "../core/pb.js";
 import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
@@ -67,7 +67,14 @@ export async function mount(el, ctx) {
     await render(d, gen);
   }
 
-  const backLink = () => h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+  // the way back; on a shown account (view.nav, set by render) the same row carries ★ 즐겨찾기 and '＋ 비교에 추가' (conv-b)
+  const backLink = () => {
+    const a = h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+    const n = view.nav;
+    view.nav = null;
+    return n ? h("div", {class: "row wrap account-nav"}, a, h("span", {class: "grow"}),
+      fav.starBtn("account", n.id, {text: true, label: n.name}), cmp.cmpBtn(n.id, {label: n.name})) : a;
+  };
 
   async function render(d, gen) {
     const board = await store.need("board", 120000).catch(() => null);
@@ -192,6 +199,7 @@ export async function mount(el, ctx) {
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
     // the money caption once for the page (owners 10/06 ~14:00, "작은 글씨가 반복된다"): the cards keep only their own
     // short notes (점선 · 수익률 · 거래마다 나갈 때 비용)
+    view.nav = {id: acc.account_id, name};          // conv-b: backLink() carries ★ 즐겨찾기 and 비교에 추가 for this account
     // (the DOM's own replaceChildren writes a null as the word "null": an extra account has no same-strategy strip)
     el.replaceChildren(...[backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},

@@ -5,7 +5,7 @@
 // session and the KST clock. Under it one slow line of the latest real AI meeting conclusions (/api/office: finished
 // meetings' decision lines; '회의 중' only from office.running). The office is read through the shared store like 홈
 // (every 30 s and when a room changes).
-import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
+import {h, put, fmt, store, motion, bars, serverNow, sound, fav} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
 import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
@@ -20,6 +20,7 @@ const pct2 = (v) => fmt.pctOf(v, 2, true);
 /** topBar(ctx, st) -> {el, setSym, onTicker(map), onRelay, onTick, tick()} */
 export function topBar(ctx, st) {
   const symEl = h("b", {class: "term-sym"}), perp = h("span", {class: "term-perp"}, "무기한 · 모의");
+  const favSlot = h("span", {class: "term-fav"});          // conv-b: ★ this coin (core/favs.js)
   const px = h("b", {class: "term-px num"}, "—"), chg = h("span", {class: "term-chg num"}, "");
   const stat = (k, cls) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: ["term-st", cls || ""]}, h("span", null, k), v)}; };
   const vol = stat("24시간 거래대금"), fund = stat("펀딩 / 다음까지", "fund");
@@ -60,7 +61,7 @@ export function topBar(ctx, st) {
   const line = h("div", {class: "term-mline"}, h("a", {class: "term-mlab", href: ctx.href("digest", "day"), title: "회의 요약 열기"}, "AI 회의 결론"), meetN, marq);
   const el = h("header", {class: "term-top", "aria-label": "시세 요약"},
     h("div", {class: "term-row"},
-      h("div", {class: "term-id"}, symEl, perp),
+      h("div", {class: "term-id"}, symEl, favSlot, perp),
       h("div", {class: "term-pxbox"}, px, chg),
       h("div", {class: "term-stats"}, vol.el, fund.el),
       h("i", {class: "term-vsep", "aria-hidden": "true"}),
@@ -72,6 +73,7 @@ export function topBar(ctx, st) {
   function paint(tk) {
     const t = tk && tk[st.sym];
     symEl.textContent = `${fmt.coin(st.sym)}USDT`;
+    if (favSlot.dataset.sym !== st.sym) { favSlot.dataset.sym = st.sym; favSlot.replaceChildren(fav.starBtn("coin", st.sym, {label: fmt.coin(st.sym)})); }
     if (!t) { px.textContent = "—"; return; }
     const p = Number(t.c ?? t.mark);
     if (Date.now() - relayAt > RELAY_FRESH_MS || px.dataset.pk !== st.sym) motion.tickPrice(px, p, fmt.price(p), st.sym);   // glows only on a real move

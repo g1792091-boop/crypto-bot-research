@@ -25,3 +25,6 @@ export {onPref, setPref, GRID_KEY, GRID_DECK} from "./prefs.js";
 export {fullChart} from "./fullchart.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
 export * as sound from "./sound.js";
+// conv-b: ★ 즐겨찾기 (core/favs.js) and 비교에 추가 (core/cmp.js); TV 자동 넘김 (core/tvmode.js) is wired in core only
+export * as fav from "./favs.js";
+export * as cmp from "./cmp.js";

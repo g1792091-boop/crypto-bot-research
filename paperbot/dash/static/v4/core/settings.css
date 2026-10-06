@@ -85,6 +85,10 @@ html.set-open { overflow: hidden; }
 .set-chip[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
 .set-back { min-height: 32px; }
 
+/* TV 자동 넘김 (core/tvmode.js tvSection inside the panel; its .tvp-* look is core/tvmode.css) */
+.set-tv { padding: 10px 12px 4px; }
+.set-tv .tvp-acts { justify-content: flex-start; }
+
 /* sound */
 .set-range { display: flex; align-items: center; gap: 10px; width: min(220px, 100%); }
 .set-range input { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }

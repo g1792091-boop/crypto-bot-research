@@ -10,7 +10,7 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent, onPref, fullChart} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, onPref, fullChart, fav} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
@@ -18,6 +18,7 @@ import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
+import {drawTools} from "./draw-kit.js";
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
   "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};
@@ -58,7 +59,8 @@ export async function mount(el, ctx) {
   }));
   const pxBig = h("b", {class: "chart-px num"}, "—"), pxChg = h("span", {class: "num"}, ""), barLeft = h("b", {class: "num"}, "—");
   const barLab = h("span", {class: "muted"});
-  const priceLine = h("div", {class: "chart-pline"}, h("span", {class: "chart-sym"}, ""), pxBig, pxChg, h("span", {class: "grow"}),
+  const favSlot = h("span", {class: "chart-fav"});           // conv-b: ★ this coin (core/favs.js)
+  const priceLine = h("div", {class: "chart-pline"}, h("span", {class: "chart-sym"}, ""), favSlot, pxBig, pxChg, h("span", {class: "grow"}),
     h("span", {class: "chart-cd"}, barLab, " ", barLeft));
   const tfBtns = new Map();
   const tfBar = h("div", {class: "chart-tfs", role: "tablist", "aria-label": "봉 (남은 시간)"}, bars.ALL_TFS.map((tf) => {
@@ -127,7 +129,7 @@ export async function mount(el, ctx) {
     h("div", {class: "chart-cols"}, h("div", {class: "stack"}, chartCard, links, tickCard, flowCard), panels));
 
   // ---------------------------------------------------------------- the chart
-  let C = null, series = null, deck = null;
+  let C = null, series = null, deck = null, draw = null;
   try {
     C = await makeChart(box, {timeScale: {rightOffset: 26}});
     ctx.track(C.dispose);
@@ -135,7 +137,12 @@ export async function mount(el, ctx) {
     deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol"],
       defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null, sym: () => st.sym, legend});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
-    fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn, fs);
+    // conv-b: 그리기 + the right-click / long-press '이 가격에 알림' (the existing /api/price-alerts route; the 가격 알림
+    // pane reloads and draws the new line). Nothing here is on by default: the 그리기 button starts off, the alert lines
+    // are the owner's own (armed alerts of this coin) and show like any line of the '가격 알림 선' choice
+    draw = drawTools({ctx, chart: C.chart, series, wrap, box, deck, sym: () => st.sym, tf: () => st.tf, step: () => TF_S[st.tf] || 900,
+      onAlertAdded: () => panels.alerts().load()});
+    fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn, draw.toggle, fs);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));
@@ -158,6 +165,7 @@ export async function mount(el, ctx) {
     const dec = decOf(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
     deck.setData(data);
+    if (draw) draw.setKey();                 // this coin + timeframe's own drawings (conv-b)
     st.t0 = data.length ? data[0].time : 0;
     st.last = data[data.length - 1] || null;
     paintLegend(st.last);
@@ -330,6 +338,7 @@ export async function mount(el, ctx) {
     }
     const t = all[st.sym];
     priceLine.firstChild.textContent = `${fmt.coin(st.sym)}USDT`;
+    if (favSlot.dataset.sym !== st.sym) { favSlot.dataset.sym = st.sym; favSlot.replaceChildren(fav.starBtn("coin", st.sym, {label: fmt.coin(st.sym)})); }
     motion.tickPrice(pxBig, t ? (t.c ?? t.mark) : null, t ? fmt.price(t.c ?? t.mark) : "—", st.sym);
     pxBig.className = "chart-px num " + (t ? fmt.tone(t.p) : "");
     pxChg.textContent = t && t.p != null ? `24시간 ${fmt.pct(Number(t.p) / 100, 2)}` : "";

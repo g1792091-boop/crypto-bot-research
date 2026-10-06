@@ -493,3 +493,24 @@ Status after the review pass (team P10 is adding these to `app.py`): **#1 arrive
 8. **Entry point:** `/login` sends the owners to `/` (the old UI), and `/static/manifest.json` has `start_url: "/"`. v4 already sends an expired session to `/login?next=<path+hash>`. Server side: `login.html` honours `next` only when it starts with `/` and not `//` (else `/`); serve `static/v4/index.html` at `/` or add `GET /v4` when the owners switch, and point `manifest.start_url` there.
 9. **`/api/levwhy` for DeepSeek and the 5m accounts:** `short_ko` says "N배 (위 단계가 안 된 이유 기록 못 찾음)", which reads like a fault; under rules change 1 they always trade at the 보통 multiple (`config.py`). Send `short_ko: "딥시크·5분봉은 규칙상 늘 보통 배수"` (or `fixed: "normal"`) for kinds `ds200`, `reel` and `random` at 5m. The page already replaces the text.
 10. **Compression:** add Starlette `GZipMiddleware(minimum_size=1024)` (skip `text/event-stream`): `/api/board` is about 220 KB of JSON per poll. The page already patches the board from the stream's `changed` map instead of re-downloading it on every event.
+
+## 7. conv-b additions (즐겨찾기 · 차트 그리기 + 가격 알림 · 매매법 비교 · TV 자동 넘김)
+
+- **pb.js exports** `fav` (core/favs.js: `starBtn(kind, id, {text, label})` for kind `strategy` / `account` / `coin`,
+  `favMark`, `favFilter({memo, onChange})`, `favs()`, `onFavs(fn)` — track the remover with `ctx.track`) and `cmp`
+  (core/cmp.js: `cmpBtn(id, {label})` = '＋ 비교에 추가', `picks()`, `readPicks`, `isFlipId`). Both per device only
+  (`local`), never sent to the server. A star is a bookmark, never a ranking; a list that shows a starred DeepSeek /
+  coin-flip account outside its own group still counts it only (`derive.countOnlyIn`).
+- **매매법 비교** (`#/compare`, `/api/v4/compare`): DeepSeek picks are compared by counts only (the server sends no
+  money, rate, curve, coin-flip rank or 5-year return for them); coin flips are the yardstick, never a pick; extras
+  (late start, another rule) get no coin-flip or 5-year side; every number says 설명용, 판정 아님 and 동전 봇 순위 is
+  참고 with `ui.refNote` (and 표본 적음 under 30 trades). 합친 곡선 최대 낙폭 is the drawdown of the line as drawn (its
+  last point, the wallets now, counts). The 5-year side is the research under its own rules (the 36: the v3 leverage
+  rule, every signal taken; a research exit that is not the live one is named): the card says so, never "the same
+  rules as now".
+- **차트 그리기** (`screens/draw-kit.js`, any chart built on `chartDeck`): `drawTools({ctx, chart, series, wrap, box, deck,
+  sym, tf, step, onAlertAdded})`; '이 가격에 알림' only through `POST /api/price-alerts` (the sender is unchanged). The
+  menu and the answer read the sender's state (`features.priceSender`, then the route's own `sender_alive`): while
+  paperbot-tgtrades is off they say the alert is saved and rings once it is back, never "텔레그램으로 알립니다".
+- **TV 자동 넘김** (`core/tvmode.js`): key t, the rail's TV, the 서버 sub-tab row; `tvSection(onDone)` is the same
+  controls for a settings panel. It only changes which real screen is shown (no invented activity).

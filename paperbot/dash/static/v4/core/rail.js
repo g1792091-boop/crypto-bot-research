@@ -4,8 +4,9 @@
 // (routes.js navGroups: the same order, captions and the one 도움말 button): each a row with its pixel icon AND its
 // Korean name, the group captions as headings, the current screen lit with the accent (a bar on its left), the number
 // key in grey at the row's end, the small dot of a screen with news, 꺼짐 on a feature that is off. One click to any
-// screen. At its foot: 메뉴 위치, 설정 (the gear, core/settings.js), 글자 크기, 화면 색 and 예전 화면 (they sit in the top bar
-// in the top layout, the gear too).
+// screen. At its foot: 메뉴 위치, then a row of small buttons (★ 즐겨찾기, core/favpop.js; TV 자동 넘김, core/tvmode.js,
+// the rail is hidden while it runs; 설정, the gear, core/settings.js; 화면 색; 예전 화면) with 글자 크기 under it (in the
+// top layout they sit in the top bar, the ★ and the gear too; below 1200 px at the strip's end).
 // Shown only on a window at least 1200 px wide with data-nav="left" (core/nav.css); below that the strip is the menu
 // in both layouts. Drawn by core/shell.js on every route / feature / badge change.
 import {h, $} from "./dom.js";
@@ -15,6 +16,8 @@ import {textCycle} from "./textsize.js";
 import {skinCycle} from "./skin.js";
 import {navPosSwitch} from "./navpos.js";
 import {settingsRail} from "./settings.js";
+import {favRailBtn} from "./favpop.js";
+import {tvRailBtn} from "./tvmode.js";
 
 /** The screens of a group the menu shows now (hidden ones out, PC-only / feature screens only while they run). */
 export function visibleScreens(g) {
@@ -49,8 +52,10 @@ export function renderRail(cur, badges, onRedraw) {
   const scroller = nav.querySelector(".rail-in");
   const keep = scroller ? scroller.scrollTop : 0;
   nav.replaceChildren(h("div", {class: "rail-in"}, groups),
+    // the foot: 메뉴 위치, then ★ 즐겨찾기 · TV · 설정 · 화면 색 · 예전 화면 in a row of small buttons and 글자 크기 under them
     h("div", {class: "rail-foot"}, navPosSwitch(),
-      h("div", {class: "rail-tools"}, settingsRail(), textCycle(onRedraw), skinCycle(onRedraw),
-        h("a", {class: "rail-old", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)", "aria-label": "예전 화면 (/v3)"}, "v3"))));
+      h("div", {class: "rail-tools"}, favRailBtn(), tvRailBtn(), settingsRail(), skinCycle(onRedraw),
+        h("a", {class: "rail-old", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)", "aria-label": "예전 화면 (/v3)"}, "v3"),
+        textCycle(onRedraw))));
   if (keep) nav.querySelector(".rail-in").scrollTop = keep;
 }

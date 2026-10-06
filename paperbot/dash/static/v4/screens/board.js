@@ -31,7 +31,9 @@ export async function mount(el, ctx) {
   const moNote = h("div");
   const tbCard = ui.card({plate: "상위·하위", cls: "board-tb"}, stats, tb, moNote);
   const rowMo = rowMotion(ctx, el);         // ▲▼ since the last visit, small equity lines, a tint on a real change
-  const list = rankList(ctx, {sorts: true, full: true, memo: "board-list", flips: true});   // coin flips in place (참고)
+  // coin flips in place (참고); ★ 즐겨찾기만 (conv-b): the 표 view follows the same switch
+  const list = rankList(ctx, {sorts: true, full: true, memo: "board-list", flips: true, favs: true,
+    onFavs: () => { if (st.view === "table" && st.board) table.set(st.board, st.gs, st.sel, list.favPred()); }});
   const refBox = h("div");
   // 카드 / 표 (fill-people): the dense v3 table, 50 rows a page; the choice is remembered on this device
   const table = boardTable(ctx, {onRender: () => paintRoe(table.el, st.board, (s) => ctx.store.mark(s))});
@@ -41,11 +43,12 @@ export async function mount(el, ctx) {
     list.el.hidden = st.view === "table";
     table.el.hidden = st.view !== "table";
     put(viewSeg, ui.seg([{id: "card", label: "카드"}, {id: "table", label: "표"}], st.view, (id) => {
-      st.view = id; local.set("board-view", id); paintView(); if (id === "table" && st.board) table.set(st.board, st.gs, st.sel);
+      st.view = id; local.set("board-view", id); paintView(); if (id === "table" && st.board) table.set(st.board, st.gs, st.sel, list.favPred());
     }, {label: "보기 고르기"}));
   };
   paintView();
-  const listCard = ui.card({plate: "전체 목록", acts: [viewSeg, list.countEl]}, list.el, table.el, refBox,
+  // the ★ 즐겨찾기만 switch sits in the card head, so the 카드 and 표 views share it
+  const listCard = ui.card({plate: "전체 목록", acts: [list.favEl, viewSeg, list.countEl]}, list.el, table.el, refBox,
     ui.assume(null, "수익률·잔고는 닫힌 거래 기준 (열린 포지션 손익 제외)"));
   const tfBody = h("div", {class: "board-tfbody"});
   const tfCard = ui.card({plate: "봉별 요약", sub: "참고"}, tfBody,
@@ -151,7 +154,7 @@ export async function mount(el, ctx) {
     rowMo.update(b, st.sel);
     tb.set(b, gs, st.sel);
     list.set(b, gs, st.sel, !animate);
-    if (st.view === "table") table.set(b, gs, st.sel);
+    if (st.view === "table") table.set(b, gs, st.sel, list.favPred());
     paintRoe(el, b, (s) => ctx.store.mark(s));
     put(moNote, rowMo.note(st.sel));
     put(tfBody, tfTable());

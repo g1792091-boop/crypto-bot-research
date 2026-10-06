@@ -14,6 +14,8 @@ import {parseHash, PEEKABLE} from "./routes.js";
 import {makeCtx, loadCss} from "./router.js";
 import {shimmer} from "./motion.js";
 import {errorBox} from "./ui.js";
+import {starBtn} from "./favs.js";
+import {cmpBtn} from "./cmp.js";
 
 const st = {open: false, spec: null, ctx: null, opener: null, pending: null, gen: 0, hideT: null};
 let ui = null;
@@ -44,9 +46,10 @@ function build() {
   const full = h("a", {class: "peek-full", href: "#/home", dataset: {full: "1"}}, "전체 화면으로", h("span", {"aria-hidden": "true"}, " ↗"));
   const x = h("button", {type: "button", class: "peek-x", "aria-label": "닫기 (Esc)", title: "닫기 (Esc)", onclick: () => closePeek()}, "✕");
   const pills = h("div", {class: "peek-pills"});
+  const mine = h("div", {class: "peek-mine"});           // conv-b: ★ 즐겨찾기 + 비교에 추가 of an account / a strategy
   const body = h("div", {class: "peek-b"});
   const panel = h("aside", {class: "peek", id: "peek", role: "dialog", "aria-modal": "true", "aria-labelledby": "peek-t", hidden: true, tabindex: "-1"},
-    h("header", {class: "peek-h"}, h("div", {class: "peek-ht"}, kind, title, sub, pills), h("div", {class: "peek-acts"}, full, x)), body);
+    h("header", {class: "peek-h"}, h("div", {class: "peek-ht"}, kind, title, sub, pills, mine), h("div", {class: "peek-acts"}, full, x)), body);
   const scrim = h("div", {class: "peek-scrim", hidden: true, "aria-hidden": "true", onclick: () => closePeek()});
   document.body.append(scrim, panel);
   panel.addEventListener("keydown", (e) => {
@@ -57,7 +60,7 @@ function build() {
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
-  ui = {panel, scrim, title, kind, sub, pills, full, x, body};
+  ui = {panel, scrim, title, kind, sub, pills, mine, full, x, body};
   return ui;
 }
 
@@ -95,6 +98,9 @@ export async function openPeek(spec, o = {}) {
   requestAnimationFrame(() => { ui.panel.classList.add("in"); ui.scrim.classList.add("in"); });
   ui.full.setAttribute("href", spec.full);
   setHead({title: spec.id});
+  const favKind = spec.kind === "account" ? "account" : spec.kind === "strategy" ? "strategy" : null;
+  ui.mine.replaceChildren(...(favKind ? [starBtn(favKind, spec.id, {text: true}), cmpBtn(spec.id)].filter(Boolean) : []));
+  ui.mine.hidden = !favKind;
   ui.body.replaceChildren(shimmer(5, true));
   ui.body.scrollTop = 0;
   if (!was) ui.x.focus({preventScroll: true});

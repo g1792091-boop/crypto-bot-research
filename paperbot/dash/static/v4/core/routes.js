@@ -15,7 +15,7 @@ import {START_KEY} from "./prefs.js";
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "charts", "market"]},
-  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path", "combo", "combo5y", "whatif"]},
+  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "compare", "path", "combo", "combo5y", "whatif"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
 ];
@@ -36,6 +36,7 @@ export const SCREENS = {
   grid: {ko: "한눈 지도", group: "strat", title: "한눈 지도"},
   replay: {ko: "다시보기", group: "strat", title: "거래 다시보기", hidden: true},
   analysis: {ko: "분석", group: "strat", title: "분석"},
+  compare: {ko: "비교", group: "strat", title: "매매법 비교"},
   path: {ko: "졸업 길", group: "strat", title: "졸업 길"},
   combo: {ko: "조합 성과", group: "strat", title: "조합 성과"},
   combo5y: {ko: "5년 조합", group: "strat", title: "5년 조합 시험"},
@@ -127,6 +128,9 @@ const SICON = {
   strategies: ICON.strat,
   grid: () => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => R(1 + 5 * i, 1 + 5 * j, 4, 4))),
   analysis: () => [R(3, 1, 6, 2), R(1, 3, 2, 6), R(9, 3, 2, 6), R(3, 9, 6, 2), R(10, 10, 2, 2), R(12, 12, 3, 3)],
+  // 매매법 비교: two lines side by side (one solid, one dotted)
+  compare: () => [R(1, 9, 2, 2), R(3, 7, 2, 2), R(5, 8, 2, 2), R(7, 5, 2, 2), R(9, 6, 2, 2), R(11, 3, 2, 2), R(13, 1, 2, 2),
+    R(1, 14, 2, 1), R(4, 13, 2, 1), R(7, 14, 2, 1), R(10, 12, 2, 1), R(13, 11, 2, 1)],
   path: () => [R(1, 1, 14, 2), R(2, 3, 12, 2), R(4, 5, 8, 2), R(5, 7, 6, 2), R(6, 9, 4, 2), R(7, 11, 2, 4)],
   combo: () => [R(1, 2, 5, 5), R(10, 2, 5, 5), R(6, 10, 5, 5), R(6, 4, 4, 1), R(3, 7, 1, 3), R(3, 10, 3, 1), R(12, 7, 1, 3), R(11, 10, 2, 1)],
   // 5년 조합: two linked blocks (a combination) over a row of bars

@@ -2,7 +2,7 @@
 // 승률 (n승 n패), 최대 낙폭, 상태 (the open position with its live ROE, home-shared posChip / paintRoe), 동전 봇 대비 (참고).
 // HONESTY: in a mixed list (전체) a DeepSeek or coin-flip row is COUNTED ONLY (거래 · 승패 · 상태 without money, D10/D11);
 // inside its own group (딥시크 / 동전 봇) the row shows what the card list there shows. 동전 봇 대비 is a neutral glyph (참고).
-import {h, put, fmt, derive} from "../core/pb.js";
+import {h, put, fmt, derive, fav} from "../core/pb.js";
 import {posChip, refTag, groupKo} from "./home-shared.js";
 
 export const PAGE = 50;
@@ -72,7 +72,7 @@ export function boardTable(ctx, o = {}) {
     return h("tr", {class: ["click", a.kind === "random" ? "bt-flip" : ""], onclick: () => ctx.go("account", a.account_id)},
       h("td", {class: "num"}, a._rk == null ? "—" : fmt.int(a._rk)),
       h("td", {class: "l"}, h("a", {class: "bt-name", href: ctx.href("account", a.account_id), title: a.account_id,
-        onclick: (e) => e.stopPropagation()}, fmt.acctName(a)),
+        onclick: (e) => e.stopPropagation()}, fav.favMark("account", a.account_id), fmt.acctName(a)),
       st.group === "all" ? h("span", {class: "bt-g"}, groupKo(fmt.groupOf(a))) : null),
       h("td", {class: "num"}, m ? fmt.money(a.wallet ?? init) : dash),
       h("td", {class: ["num", m ? fmt.tone(a.ret) : ""]}, m ? fmt.pct(a.ret) : "—"),
@@ -100,10 +100,12 @@ export function boardTable(ctx, o = {}) {
   }
   return {
     el,
-    set(board, gs, group) {
+    /** only: null, or the ★ 즐겨찾기만 test of a row (home-shared rankList favPred; conv-b). */
+    set(board, gs, group, only) {
       if (group !== st.group) st.page = 0;
       st.group = group; st.gs = gs;
       let rows = derive.ranked(board, group);
+      if (only) rows = rows.filter(only);
       rows = derive.mixedOrder(rows.filter((a) => !derive.unranked(a)).sort((x, y) => y.ret - x.ret).concat(rows.filter(derive.unranked)), group);
       let rk = 0;
       st.rows = rows.map((a, i) => ({...a, _at: i, _rk: derive.unranked(a) || derive.countOnlyIn(a, group) ? null : ++rk}));

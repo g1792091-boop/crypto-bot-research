@@ -616,7 +616,7 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     # the 차트 screen keeps the old name for the control (flashSel); the terminal's narrow header has the same items in
     # one '보기 ▾' menu (owners 10/06 ~14:00: every timeframe button visible); both hand the deck the coin on screen
     assert "deck.flashSel" in _code(_read("screens", "chart.js"))
-    assert "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);" in _code(_read("screens", "terminal-chart.js"))
+    assert "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in _code(_read("screens", "terminal-chart.js"))
     for scr in ("terminal-chart.js", "chart.js"):
         assert "sym: () => st.sym" in _read("screens", scr), scr
     # 클래식: the light tokens are transparent

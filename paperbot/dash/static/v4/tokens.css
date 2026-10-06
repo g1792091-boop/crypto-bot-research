@@ -156,6 +156,15 @@
   --series-ds: var(--term-cyan);
   --series-m5: hsl(300 var(--av-s) var(--av-ring-l));
   --series-coin: var(--ink-2);
+  /* 매매법 비교 (conv-b, screens/compare.js): the 2-4 picks' lines, each also named and drawn in its own dash; they
+     follow the skin through the tokens they point at (never up / down) */
+  --pick-1: var(--series-core);
+  --pick-2: var(--series-ds);
+  --pick-3: rgb(196, 100, 196);   /* = --series-m5 (hsl(300 45% 58%), the avatars are one set for both skins) written as rgb: lightweight-charts throws on hsl() */
+  --pick-4: var(--smc-bos);
+  /* 차트 그리기 (conv-b, screens/draw-kit.js): the viewer's own lines / boxes / notes, in a hue nothing else on a
+     chart uses (not up / down, not the accent, not the 프리미엄 지표 blues and greys) */
+  --draw: rgb(196, 100, 196);
   /* type: one scale */
   --f-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif;
   --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;

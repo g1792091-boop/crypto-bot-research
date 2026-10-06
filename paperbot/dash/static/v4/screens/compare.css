@@ -1,0 +1,69 @@
+/* 매매법 비교 (conv-b, screens/compare.js): the picker, the summed curves, the side-by-side tables. Each pick has its
+   colour (--pick-1..4, tokens.css) AND its own line style (solid / dashed / long dashes / dotted), so it is never told
+   apart by colour alone. The waiting bars come from analysis.css (analysis-kit waitCard). Tokens only, font sizes only
+   var(--t-*); wide tables scroll inside .tbl-wrap (never the page). */
+@import url("analysis.css");
+
+[data-screen="compare"] .cmp-picks { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.cmp-pick { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; max-width: 100%; padding: 4px 4px 4px 12px; border-radius: 10px;
+  border: 1px solid var(--c, var(--line-2)); background: var(--surface-2); font-size: var(--t-sm); min-width: 0; }
+.cmp-pick b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-pick small { font-size: var(--t-2xs); white-space: nowrap; }
+/* a phone: the name wins the room (the code is in the search results and the 표 heads already) */
+@media (max-width: 599px) { .cmp-pick small { display: none; } .cmp-pick { flex: 1 1 100%; } .cmp-pick b { flex: 1 1 auto; } }
+.cmp-x { appearance: none; flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2);
+  font: 700 var(--t-sm)/1 var(--f-body); cursor: pointer; }
+.cmp-x:hover { color: var(--down); border-color: var(--down-line); }
+/* the swatch: the pick's colour in its own dash */
+.cmp-sw { flex: none; display: inline-block; width: 22px; height: 0; border-top: 3px solid var(--c, var(--ink-2)); }
+.cmp-sw.d1 { border-top-style: dashed; }
+.cmp-sw.d2 { border-top: 0; height: 3px; background: repeating-linear-gradient(90deg, var(--c, var(--ink-2)) 0 8px, transparent 8px 12px); }
+.cmp-sw.d3 { border-top-style: dotted; }
+.cmp-res, .cmp-favs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.cmp-res:empty, .cmp-favs:empty { display: none; }
+.cmp-add { appearance: none; display: inline-flex; align-items: baseline; gap: 2px; min-height: 32px; max-width: 100%; padding: 6px 10px; border-radius: 9px;
+  border: 1px dashed var(--line-2); background: transparent; color: var(--ink); font: 500 var(--t-xs)/1.3 var(--f-body); text-align: left; cursor: pointer; }
+.cmp-add:hover { border-color: var(--accent-line); border-style: solid; }
+.cmp-add b { font-weight: 700; }
+.cmp-favk { align-self: center; font-size: var(--t-xs); }
+.cmp-none { margin: 0; font-size: var(--t-sm); }
+.cmp-hint { margin: 0; color: var(--accent); font-size: var(--t-sm); font-weight: 700; }
+
+/* the chart */
+.cmp-chart { position: relative; height: 320px; min-width: 0; border-radius: var(--r-sm); overflow: hidden; }
+@media (max-width: 599px) { .cmp-chart { height: 240px; } }
+.cmp-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-sm); }
+.cmp-lg { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.cmp-lg small { font-size: var(--t-2xs); }
+
+/* the tables: the row names on the left, one column per pick */
+.cmp-tbl { min-width: 560px; }
+.cmp-tbl th, .cmp-tbl td { vertical-align: top; }
+.cmp-tbl th.cmp-th { min-width: 150px; text-align: left; white-space: normal; }
+.cmp-th b { display: block; margin-top: 4px; color: var(--ink); font-size: var(--t-sm); white-space: normal; }
+.cmp-th small { display: block; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; }
+.cmp-tbl th.cmp-rowh { min-width: 150px; white-space: normal; }
+.cmp-rowh b { display: block; font-size: var(--t-sm); }
+.cmp-rowh small { display: block; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; }
+.cmp-tbl td.num { text-align: left; }
+.cmp-cell { display: grid; gap: 2px; }
+.cmp-cell small { font-size: var(--t-2xs); color: var(--ink-2); }
+.cmp-co { font-size: var(--t-xs); }
+/* a phone: one block per pick (the same rows), no sideways table */
+.cmp-stack { display: none; }
+@media (max-width: 599px) {
+  [data-screen="compare"] .cmp-scroll { display: none; }
+  .cmp-stack { display: grid; gap: 10px; }
+}
+.cmp-sitem { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-2));
+  background: var(--surface-2); min-width: 0; }
+.cmp-shead { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); }
+.cmp-shead b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-shead small { margin-left: auto; font-size: var(--t-2xs); white-space: nowrap; }
+.cmp-kv { margin: 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 6px 10px; font-size: var(--t-sm); }
+.cmp-kv dt { color: var(--ink-2); }
+.cmp-kv dd { margin: 0; text-align: right; }
+.cmp-kv dd .cmp-cell { justify-items: end; }
+.cmp-foot { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+.cmp-foot a { color: var(--accent); }
+.cmp-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--ink-2); font-size: var(--t-sm); }
