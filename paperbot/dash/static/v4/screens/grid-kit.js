@@ -129,9 +129,10 @@ export function heatCell(c, o = {}) {
     href: o.href || null, dataset: {b: b == null ? "" : String(b)}, style: o.i != null ? {"--i": o.i} : null,
     title: words.join(" · "), "aria-label": words.join(", ")},
   h("b", {class: "num"}, c.bust ? "파산" : cellPct(c.ret)),
-  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`),
-  // vsMark (own colours): the coin-flip comparison only as a small neutral ▲ / ▼ in the corner (참고), never the colour
-  o.vsMark && !grey && !c.bust && c.vs != null && c.vs !== 0 ? h("i", {class: "gk-vsm", "aria-hidden": "true"}, c.vs > 0 ? "▲" : "▼") : null);
+  // vsMark (own colours): the coin-flip comparison only as a small neutral ▲ / ▼ beside the trade count (참고), never the
+  // colour (beside the count, not in the corner: a phone cell's corner sits on the return's "%")
+  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`,
+    o.vsMark && !grey && !c.bust && c.vs != null && c.vs !== 0 ? h("i", {class: "gk-vsm", "aria-hidden": "true"}, c.vs > 0 ? "▲" : "▼") : null));
   return el;
 }
 
@@ -318,7 +319,7 @@ function strategyBody(ctx, d) {
       {mode: "own", vsMark: !ds, href: ctx.href("account", a.id), i}))));
   const vsLine = ds
     ? h("p", {class: "gk-vsline"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref"), " 칸 색 = 자기 수익률")
-    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 칸 색 = 자기 수익률 · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (칸 구석 ▲ / ▼)`);
+    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 칸 색 = 자기 수익률 · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (거래 수 옆 ▲ / ▼)`);
   const stats = [
     ui.stat("최대 낙폭", c.mdd_max == null ? "—" : fmt.pct(-c.mdd_max, 1), "가장 깊은 봉 계좌"),
     ui.stat("승률", c.win_rate == null ? "—" : fmt.pct(c.win_rate, 0, false), c.trades ? `${fmt.int(c.wins)}승 ${fmt.int(c.trades - c.wins)}패` : "거래 없음"),

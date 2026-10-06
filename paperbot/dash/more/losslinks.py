@@ -170,7 +170,9 @@ def register(app, ctx) -> dict:
             if time.time() - st["at"] >= TTL_S:
                 a = R.open_ro(getattr(ctx, "agents_db", None))
                 try:
-                    rounds = load_rounds(a)
+                    # a file that cannot be opened right now (a restore's stale -wal, a moment between files) after one
+                    # that could: the last index stays (each link is still checked against the trade's exit time)
+                    rounds = None if a is None and st["rounds"] else load_rounds(a)
                 finally:
                     if a is not None:
                         a.close()

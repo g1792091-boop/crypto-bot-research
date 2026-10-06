@@ -467,3 +467,15 @@ def test_review_fixes_bars_colours_guide_and_counts():
     assert 'local.get("grid-color-v", 0) !== 2' in grid and 'st.color === "vs") { st.color = "own"' in grid
     assert '{mode: "own", vsMark: !ds, href: ctx.href("account", a.id), i}' in kit and 'const mode = ds ? "own" : "vs"' not in kit
     assert "CSS.escape(String(p))" in _read("inbox.js")
+
+
+def test_grid_mark_beside_the_count_and_reel_flip_words():
+    """The ▲ / ▼ sits in the trade-count line (a phone cell's corner is on the return's "%"), never absolutely placed;
+    the 5분봉 coin flips are long-only (never "방향만 동전으로" for them)."""
+    css = _read("grid-kit.css")
+    mark = re.search(r"\.gk-vsm \{([^}]*)\}", css).group(1)
+    assert "position: absolute" not in mark
+    kit = _read("grid-kit.js")
+    assert re.search(r'`\$\{fmt\.int\(c\.n\)\}건`,\s*\n\s*o\.vsMark && !grey', kit)       # the mark inside the count line
+    why = _read("account-why.js")
+    assert "롱만 무작위로 들어간 계좌" in why and "롱만 무작위로 들어가도" in why

@@ -321,7 +321,7 @@ export async function mount(el, ctx) {
     const title = st.tab === "core" ? "기존 36 × 봉" : st.tab === "ds" ? "딥시크 44 × 봉" : "5분봉 · 릴스와 동전 3개";
     const sub = mode === "y5" ? (st.tab === "ds" ? "색 = 5년 과거 시험의 거래 한 건 평균 (레버리지 없이 가격 %) · 참고" : "색 = 5년 과거 시험의 거래 한 건 평균 ROE (증거금 대비) · 참고")
       : mode === "pos" ? "빛나는 칸 = 지금 포지션이 열린 계좌 · % = 지금 평가 ROE (마크 가격)"
-      : st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비) · 칸 구석 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고)"
+      : st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비) · 거래 수 옆 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고)"
         : "색 = 같은 봉 동전 봇 중앙값과의 차이 (참고) · 크게 잃은 칸도 동전 봇이 더 잃었으면 진한 색입니다") : st.tab === "ds" ? "색 = 자기 수익률 · 계좌마다 동전 봇과 비교하지 않음"
         : "색 = 자기 수익률 · ▲ / ▼ = 5분봉 동전 3개 중앙값보다 위 / 아래 (참고)";
     put(mapCard, h("div", {class: "card-h grid-maph"}, ui.plate(title), st.tab === "core" ? colorBox : st.tab === "ds" ? dsColorBox : null), h("p", {class: "grid-mapsub"}, sub), ...kids);
@@ -354,7 +354,7 @@ export async function mount(el, ctx) {
               : "칸 색 = 그 계좌의 자기 수익률 (시작 대비: 초록 벌었음, 빨강 잃었음). 맨 위 줄이 같은 봉 동전 봇 중앙값입니다.")
             : null,
           mode === "own" && st.tab !== "ds"
-            ? h("li", null, h("span", {class: "gk-legvs", "aria-hidden": "true"}, "▲▼"), h("span", null, "칸 구석 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고, 판정 아님). 차이 크기는 색 '동전 봇 대비'에서 봅니다."))
+            ? h("li", null, h("span", {class: "gk-legvs", "aria-hidden": "true"}, "▲▼"), h("span", null, "거래 수 옆 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고, 판정 아님). 차이 크기는 색 '동전 봇 대비'에서 봅니다."))
             : mode === "own" ? null
             : h("li", null, `칸 색 = 그 계좌 수익률에서 같은 봉 동전 봇 3개 중앙값을 뺀 차이. 진할수록 차이가 큽니다 (${step(0)} · ${step(1)} · ${step(2)} · ${step(3)} 기준).`),
           h("li", null, "칸 안 큰 숫자 = 그 계좌 수익률, 작은 숫자 = 닫힌 거래 수."),

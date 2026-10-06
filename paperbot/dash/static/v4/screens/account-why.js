@@ -98,9 +98,13 @@ export function whyCard(a, d, o = {}) {
     h("p", {class: "acw-big"}, h("span", {class: "num"}, fmt.money(s.initial)), " → ", h("b", {class: ["num", fmt.tone(s.ret)]}, s.wallet == null ? "—" : fmt.money(s.wallet)),
       s.ret != null ? h("span", {class: ["num", fmt.tone(s.ret)]}, ` (${fmt.pct(s.ret, 1)})`) : null),
     flipOk ? h("p", {class: "acw-line"}, ui.pill("", "ref"), ` 같은 ${a.timeframe === "5m" ? "5분봉 동전 3개" : `${fmt.tfKo(a.timeframe)}봉 동전 봇`} 중앙값 `,
-      h("b", {class: ["num", fmt.tone(s.flipRet)]}, fmt.pct(s.flipRet, 1)), " (같은 시장·같은 청산 규칙으로 방향만 동전으로 정한 계좌) · 이 계좌와의 차이 ",
+      h("b", {class: ["num", fmt.tone(s.flipRet)]}, fmt.pct(s.flipRet, 1)), a.timeframe === "5m"
+        ? " (같은 시장·같은 청산 규칙으로 롱만 무작위로 들어간 계좌) · 이 계좌와의 차이 "
+        : " (같은 시장·같은 청산 규칙으로 방향만 동전으로 정한 계좌) · 이 계좌와의 차이 ",
       h("b", {class: "num"}, `${fmt.num(s.rest * 100, 1, true)}%p`), " · 판정 아님") : null,
-    a.kind === "random" ? h("p", {class: "acw-line"}, "이 계좌가 동전 봇(비교 기준)입니다. 방향을 동전으로 정해도 이만큼 움직였다는 기준선입니다.") : null));
+    a.kind === "random" ? h("p", {class: "acw-line"}, a.timeframe === "5m"
+      ? "이 계좌가 5분봉 동전 봇(릴스의 비교 기준)입니다. 롱만 무작위로 들어가도 이만큼 움직였다는 기준선입니다."
+      : "이 계좌가 동전 봇(비교 기준)입니다. 방향을 동전으로 정해도 이만큼 움직였다는 기준선입니다.") : null));
   // ② the waterfall
   const steps = waterfall(s);
   const vals = steps.flatMap((x) => [x.from, x.to]);
