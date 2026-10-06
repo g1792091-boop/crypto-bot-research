@@ -53,7 +53,8 @@ import {smcPrimitive} from "./smcdraw.js";
 import {edgeLayout} from "./edgelabels.js";
 import {onPref, tellPref, setPref} from "./prefs.js";
 
-export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
+export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선",
+  vp: "매물대"};                   // vp: screens/chart-vp.js (the 설정 panel names it too, before any chart was opened)
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수 · 롱 청산, 빨간 번쩍 = 큰 매도 · 숏 청산 (강제청산은 정리된 쪽의 색: 롱 = 하늘색, 숏 = 빨강) · 바이낸스 실제 체결";
 export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게 · 7개 코인 중 이 코인이 가장 밝게)";
@@ -851,7 +852,14 @@ export function chartDeck(o) {
   function openMenu(on) {
     menu.hidden = !on;
     menuBtn.setAttribute("aria-expanded", String(on));
-    if (on) { paintMenu(); const f = menu.querySelector("button"); if (f) f.focus(); }
+    if (on) { paintMenu(); keepInView(); const f = menu.querySelector("button"); if (f) f.focus(); }
+  }
+  /** the menu hangs from the button's right edge; with chart-plus's second column it is ~520 px wide, and on a 1280 px
+   *  terminal the button sits too far left for that: the menu is moved right until it is inside the window (8 px air) */
+  function keepInView() {
+    menu.style.removeProperty("right");
+    const r = menu.getBoundingClientRect();
+    if (r.left < 8) menu.style.right = `${Math.round(r.left - 8)}px`;
   }
   if (ctx && ctx.listen) {
     ctx.listen(document, "pointerdown", (e) => { if (!menu.hidden && !menuWrap.contains(e.target)) openMenu(false); });

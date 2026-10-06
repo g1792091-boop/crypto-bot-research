@@ -43,6 +43,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
     chartplus  차트 위 얹기: 시장 강제청산 거품·가격대 막대 (liq.db, 봉 단위로 합침, 20초) + 아래 칸의 미결제약정·롱/숏·펀딩
                (바이낸스 공개 주소를 서버가 받아 캐시, 짧은 제한 시간, 실패는 못 불러옴으로 따로)
+    vplevels   봇 매물대: 봇이 쓰는 매물 최다 가격 · 매물대 위/아래 끝 (차트·터미널의 매물대 겹침선과 비교, 읽기만)
 """
 from __future__ import annotations
 
@@ -71,6 +72,7 @@ MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
 MODULES += ("chartplus",)                      # chart-plus: 차트 위 시장 청산 거품·가격대 막대 + 아래 칸의 시장 자료 (liq.db, Binance by the server)
+MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물대 (POC / VAH / VAL, kinds 51-53) for the chart overlay
 
 
 def register_all(app, **kw) -> dict:

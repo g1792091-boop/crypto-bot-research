@@ -23,6 +23,7 @@ import {posLines} from "./chart-lines.js";
 import {drawTools} from "./draw-kit.js";
 import {failNote, retrier} from "./terminal-state.js";      // term-plus: a failed load is told and retried, never an empty chart
 import {chartPlus} from "./chart-plus.js";
+import {vpAttach, vpPrepare} from "./chart-vp.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -48,11 +49,12 @@ export function termChart(ctx, st, onTf) {
   const cfail = h("div", {class: "term-cfail2", hidden: true});
   const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip, cfail);
   const keyLine = h("div", {class: "term-ckey"});
+  const vpHost = h("div", {class: "vp-host"});             // 매물대's legend row (screens/chart-vp.js), filled once the chart exists
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
   // 차트 크게 보기 (core/fullchart.js): the whole panel (its interval buttons and '선' menu too) fills the window; key "f"
   const fs = fullChart({ctx, label: "터미널 차트"});
-  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, vpHost, keyLine);
   fs.bind(el);
   const moreA = el.head.querySelector(".term-more");
 
@@ -245,8 +247,10 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"], defaults: {sr: false},
+      vpPrepare("term", false);                           // 매물대 is opt-in here (the declutter); a device with saved choices starts with it off too
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], defaults: {sr: false, vp: false},
         sym: () => st.sym, legend});
+      vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, legend, sym: () => st.sym, tf: () => st.tf});
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
       // conv-b: 그리기 (lines, boxes, notes per coin + timeframe on this device; off until the owner presses it) and the
       // right-click '이 가격에 알림' (the existing /api/price-alerts route); the armed alerts of this coin are the deck's

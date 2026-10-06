@@ -216,7 +216,7 @@ def test_calm_default_parts_and_opt_in_menus_remembered_per_device():
     assert 'under.dataset.words = part("words") ? "1" : "";' in fx
     # the terminal: 지지·저항 opt-in too; the light, the flash and the parts in one '보기 ▾' menu
     tc = _code(_read("screens", "terminal-chart.js"))
-    assert 'defaults: {sr: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
+    assert 'defaults: {sr: false, vp: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
     assert 'LEVEL_TFS.includes(st.tf) && deck.shown("sr")' in tc            # the key line names only what is drawn
     assert '"보기 ▾"' in fx and "viewBtn," in fx
 
