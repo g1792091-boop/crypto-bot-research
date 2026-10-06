@@ -156,6 +156,12 @@
   --series-ds: var(--term-cyan);
   --series-m5: hsl(300 var(--av-s) var(--av-ring-l));
   --series-coin: var(--ink-2);
+  /* 매매법 비교 (conv-b, screens/compare.js): the 2-4 picks' lines, each also named and drawn in its own dash; they
+     follow the skin through the tokens they point at (never up / down) */
+  --pick-1: var(--series-core);
+  --pick-2: var(--series-ds);
+  --pick-3: var(--series-m5);
+  --pick-4: var(--smc-bos);
   /* type: one scale */
   --f-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif;
   --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;

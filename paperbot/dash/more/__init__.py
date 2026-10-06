@@ -24,6 +24,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     movers  급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 전체 (터미널 윗줄, 요청 2개를 60초 캐시)
     synplus 조합 시너지 보강: 같이 망하는 날, 같이 들어간 진입, 다음 기간에도 통할까, 한 계좌로 합치면 (분석 › 조합 시너지)
     exits   청산 이유 + 역행·순행 (분석 › 청산 이유, ?group=core|ds200|reel; 딥시크는 거래 수와 비율만)
+    compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
 """
 from __future__ import annotations
 
@@ -41,6 +42,7 @@ MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시�
 MODULES += ("people",)                         # fill-people: 상황판 + strategy room record
 MODULES += ("movers",)                         # term-v2: 급등 · 급락 · 음펀비 (시장 전체, 60 s cache)
 MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보강 + 청산 이유 (background, cached)
+MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
 
 
 def register_all(app, **kw) -> dict:
