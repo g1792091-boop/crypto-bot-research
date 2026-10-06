@@ -143,18 +143,23 @@ async function accountPeek(spec, ctx, {setHead, body}) {
       h("div", {class: "stats"}, ui.stat("닫힌 거래", `${fmt.int(n)}건`), ui.stat("지금", pos0 ? `${fmt.coin(pos0.symbol)} ${fmt.sideKo(pos0.side)}` : "대기")),
       h("p", {class: "pos-note"}, a.kind === "ds200" ? "딥시크 계좌는 계좌별 수익을 보지 않습니다: 묶음 중앙값으로만 봅니다 (딥시크 묶음 화면)."
         : a.kind === "random" ? "동전 봇은 비교 기준이라 섞인 목록에서는 개수만 봅니다 (동전 봇 묶음 화면에서 손익)." : COUNT_ONLY_WHY));
-  } else if (isExtra) {
-    const w = a.wallet == null ? stt.wallet ?? init : a.wallet;
-    const wins = trades.filter((t) => t.pnl > 0).length;
-    const mdd = stt.max_drawdown ?? a.max_drawdown;
-    summary = ui.card({plate: "요약", cls: "pk-card"},
-      h("div", {class: "stats"}, ui.stat("잔고 (USDT)", fmt.money(w)), ui.stat("수익률", h("b", {class: fmt.tone(w / init - 1)}, fmt.pct(w / init - 1, 2))),
-        ui.stat("거래", `${fmt.int(n)}건`, n ? `승률 ${fmt.pct(wins / n, 0, false)}` : ""), ui.stat("최대 낙폭", mdd ? fmt.pct(-mdd, 1) : "—")),
-      h("p", {class: "pos-note"}, "나중에 시작한 추가 계좌: 원래 계좌들과 따로 셉니다."), ui.assume());
   } else {
-    const prof = profileCard(ctx, acc.account_id, {head: false, cls: "pk-prof"});
-    prof.load();
-    summary = prof.el;
+    // plain numbers: an extra account (not on the map), or a profile card the server does not have (404)
+    const plain = () => {
+      const w = a.wallet == null ? stt.wallet ?? init : a.wallet;
+      const wins = trades.filter((t) => t.pnl > 0).length;
+      const mdd = stt.max_drawdown ?? a.max_drawdown;
+      return ui.card({plate: "요약", cls: "pk-card"},
+        h("div", {class: "stats"}, ui.stat("잔고 (USDT)", fmt.money(w)), ui.stat("수익률", h("b", {class: fmt.tone(w / init - 1)}, fmt.pct(w / init - 1, 2))),
+          ui.stat("거래", `${fmt.int(n)}건`, n ? `승률 ${fmt.pct(wins / n, 0, false)}` : ""), ui.stat("최대 낙폭", mdd ? fmt.pct(-mdd, 1) : "—")),
+        isExtra ? h("p", {class: "pos-note"}, "나중에 시작한 추가 계좌: 원래 계좌들과 따로 셉니다.") : null, ui.assume());
+    };
+    if (isExtra) summary = plain();
+    else {
+      const prof = profileCard(ctx, acc.account_id, {head: false, cls: "pk-prof", onMissing: () => { if (prof.el.isConnected) prof.el.replaceWith(plain()); }});
+      prof.load();
+      summary = prof.el;
+    }
   }
   const chart = coinChart(ctx, a, d, co);
   const pos = normPos(stt.position);
@@ -195,7 +200,7 @@ async function strategyPeek(spec, ctx, {setHead, body}) {
     rows.length ? h("div", {class: "pk-tfs"}, rows.map(tfRow)) : ui.empty("아직 이 매매법의 계좌가 없습니다"),
     !co && rows.length ? ui.assume("closed", "수익률 = 지금 잔고 ÷ 시작 잔고") : null);
   // the profile card: DeepSeek strategies get their counts there (grid-kit's own rule)
-  const prof = profileCard(ctx, name, {cls: "pk-prof"});
+  const prof = profileCard(ctx, name, {cls: "pk-prof", onMissing: () => prof.el.remove()});
   prof.load();
   // the rule in short
   const meta = (Array.isArray(list36) ? list36 : []).find((s) => s.strategy === name) || null;
@@ -213,7 +218,7 @@ async function strategyPeek(spec, ctx, {setHead, body}) {
   const open = rows.filter((a) => normPos(a.position));
   if (open.length) posSlot.append(...open.slice(0, 4).map((a) => positionBlock(ctx, a, normPos(a.position), {wallet: a.wallet, co: isCo(a)})));
   // the accounts' own records: the chart of one of them (the one in a position, else 1h, else the first) and the trades
-  if (!rows.length) return;
+  if (!rows.length) { tradeSlot.replaceChildren(ui.card({plate: "최근 거래", cls: "pk-card"}, ui.empty("아직 이 매매법의 계좌가 없습니다"))); return; }
   const pick = rows.find((a) => a.position) || rows.find((a) => a.timeframe === "1h") || rows[0];
   const details = await Promise.all(rows.map((a) => ctx.api(`/api/account/${encodeURIComponent(a.account_id)}`).catch(() => null)));
   if (!ctx.alive()) return;
