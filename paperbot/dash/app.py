@@ -652,7 +652,7 @@ class Data:
             out["day"] = (now - (start - start % day_ms)) // day_ms + 1
             vc = clock(start, now, ledger, day_state)
             out["next_checkpoint"] = {"k": vc["k"], "ts": vc["ts"], "day": vc["day"], "due": vc["due"],
-                                      "state": vc["state"]}
+                                      "state": vc["state"], "late": vc["late"]}
             out["verdict_clock"] = vc
             floor = (xs or {}).get("observe_until")
             obs = floor if isinstance(floor, int) and not isinstance(floor, bool) else start + 21 * day_ms

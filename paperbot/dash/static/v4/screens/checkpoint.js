@@ -88,6 +88,7 @@ export async function mount(el, ctx) {
   function alarmText(c) {
     if (c.state === "failed") return `판정 계산이 오류로 멈췄습니다${c.error_kind ? ` (${c.error_kind})` : ""}. 매시 35분에 저절로 다시 시도합니다. 계속되면 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
     if (c.state === "unknown") return "판정 기록(checkpoint.db)을 읽지 못했습니다. 결과가 없다는 뜻이 아닙니다 · 1분 뒤 다시 확인합니다.";
+    if (c.late && c.state === "computing") return `판정 작업이 저장본을 잠근 지 ${c.snapshot_ts ? fmt.dur(Math.max(0, serverNow() - c.snapshot_ts) / 1000) : "한참"} 지났는데 결과가 아직 저장되지 않았습니다. 작업이 서버의 메모리·시간 한도로 멈췄을 수 있습니다 (그러면 매시 35분에 다시 계산합니다). 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
     if (c.late) return "09:00이 지나고 1시간 40분이 넘었는데 판정 작업이 아무 기록도 남기지 않았습니다. 서버 › 예약 작업에서 '30일 판정' 타이머가 켜져 있는지 봐 주세요.";
     return "";
   }

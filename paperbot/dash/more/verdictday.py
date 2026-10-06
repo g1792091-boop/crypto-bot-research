@@ -15,6 +15,7 @@ The verdict-day clock (``clock``)
                        ``LATE_MS``: neither the 09:35 run nor its retry left anything)
         waiting_state  the job ran but the runner had not saved its ``day:<date>`` state (job_log "판정 대기")
         computing      the job froze the snapshot (checkpoint.db snapshots) and is comparing with the coin flips
+                       (``late`` after ``SLOW_MS`` without a stored verdict: a run killed by its limits logs nothing)
         failed         the job logged an error for that date (job_log "판정 오류"; it retries every hour at :35)
         unknown        checkpoint.db could not be read: never shown as "no verdict"
         ended          past day 180 (checkpoint.NO_VERDICT_DAYS): no more verdicts
@@ -53,6 +54,9 @@ MIN_MS = 60_000
 KST_MS = 9 * HOUR_MS
 JOB_MINUTE = 35                     # deploy/paperbot-checkpoint.timer: hourly at :35 UTC (09:35 KST on the day)
 LATE_MS = 100 * MIN_MS              # due this long with no line from the job: its 09:35 run and the 10:35 retry left nothing
+SLOW_MS = 4 * HOUR_MS               # computing this long after the snapshot was frozen: day 30 took about 1.5-2 h on the
+                                    # development box; a run killed by its own limits (paperbot-checkpoint.service
+                                    # MemoryMax / TimeoutStartSec) leaves no error line, so 'computing' would never end
 LEDGER_TIMEOUT_S = 2.0
 TTL_S = 30.0
 JOBS_TTL_S = 60.0
@@ -217,6 +221,7 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
             out["state"] = "failed"
         elif snap:
             out["state"] = "computing"
+            out["late"] = now - int(snap) > SLOW_MS
         elif wait:
             out["state"] = "waiting_state"
         else:
@@ -251,6 +256,8 @@ def texts(c: dict) -> dict:
         sko = STATE_KO.get(st, "")
         if st == "waiting_job" and c.get("late"):
             sko = "판정 작업이 아직 돌지 않았습니다"
+        elif st == "computing" and c.get("late"):
+            sko = f"동전 봇 비교 계산이 {SLOW_MS // HOUR_MS}시간 넘게 끝나지 않음"
         elif st == "waiting_job" and c["now"] >= (c.get("job_ts") or 0):
             sko = "곧 계산 시작 (매시 35분)"
         passed, rest = f"{c['day']}일 판정 날", sko

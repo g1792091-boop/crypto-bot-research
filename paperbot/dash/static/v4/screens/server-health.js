@@ -105,7 +105,7 @@ export function tiles(hl, o = {}) {
     // the verdict-day clock (summary next_checkpoint, dash/more/verdictday.py): a passed checkpoint stays 'due' until
     // its verdict is stored; days left in words, never 'D-' (review 10/06 fix 1, change 13)
     const nx = cp.next;
-    const due = !!(nx && nx.due), bad = due && (nx.state === "failed" || nx.state === "unknown");
+    const due = !!(nx && nx.due), bad = due && (nx.state === "failed" || nx.state === "unknown" || !!nx.late);
     out.push(tile({k: "30일 판정", v: due ? (bad ? "확인 필요" : "계산 중") : cp.ready && !nx ? `${cp.date} 판정 끝`
       : nx && nx.ts ? `${fmt.int(Math.max(0, Math.ceil((nx.ts - now) / 864e5)))}일 남음` : "시작 전",
       s: due ? `${fmt.int(nx.day)}일 판정 날 · 결과 저장 전 (판정 화면에서 진행 확인)`

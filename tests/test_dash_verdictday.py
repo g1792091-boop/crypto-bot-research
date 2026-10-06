@@ -184,7 +184,25 @@ def test_the_snapshot_frozen_means_computing(tmp_path):
     paper, out = _state(tmp_path, "snap")
     c = _clock(paper, out, CP1 + H)
     assert (c["k"], c["due"], c["state"], c["snapshot_ts"]) == (1, True, "computing", CP1 + 36 * MIN)
-    assert c["line_ko"] == "30일 판정 날 · 동전 봇 비교 계산 중"
+    assert c["line_ko"] == "30일 판정 날 · 동전 봇 비교 계산 중" and not c["late"]
+    assert c["chip_ko"]["opt"] == " · 결과 계산 중"
+
+
+def test_computing_over_four_hours_asks_for_a_look(tmp_path):
+    """A run killed by its own limits (MemoryMax / TimeoutStartSec of paperbot-checkpoint.service) leaves no error line:
+    'computing' must not go on forever without a word."""
+    paper, out = _state(tmp_path, "snap")
+    assert not _clock(paper, out, CP1 + 36 * MIN + 4 * H)["late"]
+    c = _clock(paper, out, CP1 + 37 * MIN + 4 * H)
+    assert (c["state"], c["late"], c["due"], c["k"]) == ("computing", True, True, 1)
+    assert c["line_ko"] == "30일 판정 날 · 동전 봇 비교 계산이 4시간 넘게 끝나지 않음"
+    assert c["chip_ko"]["opt"] == " · 확인 필요" and "12/04" not in json.dumps(c, ensure_ascii=False)
+    assert V.SLOW_MS == 4 * H
+    from paperbot.dash.app import Data
+    nc = Data(paper, checkpoint_db=out).summary(CP1 + 37 * MIN + 4 * H)["next_checkpoint"]
+    assert (nc["k"], nc["due"], nc["state"], nc["late"]) == (1, True, "computing", True)
+    js = open(os.path.join(V4, "screens", "server-health.js"), encoding="utf-8").read()
+    assert "!!nx.late" in js
 
 
 def test_no_trace_100_minutes_after_0900_is_late(tmp_path):
@@ -464,6 +482,7 @@ def test_page_clock_words(tmp_path):
               "unknown": V.clock(START, CP1 + 5 * MIN, None)}
     clocks["wait"] = {**clocks["wait"], "state": "waiting_job", "snapshot_ts": None, "saved_ts": CP1}
     clocks["failed"] = {**clocks["snap"], "state": "failed", "error_kind": "ConnectionError"}
+    clocks["slow"] = {**clocks["snap"], "late": True, "now": clocks["snap"]["snapshot_ts"] + 5 * H}
     now = {k: c["now"] for k, c in clocks.items()}
     out_ = _node("core/verdictday.js", f"const C = {json.dumps(clocks)}; const N = {json.dumps(now)}; const r = {{}};\n"
                  "for (const k of Object.keys(C)) r[k] = {big: m.bigWords(C[k], N[k]), steps: m.dueSteps(C[k], N[k]).map((s) => s.state),"
@@ -476,6 +495,8 @@ def test_page_clock_words(tmp_path):
     assert out_["wait"]["steps"] == ["done", "wait", "wait", "wait"] and out_["wait"]["notes"][1] == "09:35에 시작"
     assert out_["failed"]["big"]["big"] == "확인 필요" and out_["failed"]["steps"][2] == "bad" and "ConnectionError" in out_["failed"]["notes"][2]
     assert out_["unknown"]["big"]["big"] == "확인 필요" and "done" not in out_["unknown"]["steps"]
+    assert out_["slow"]["big"]["big"] == "확인 필요" and out_["slow"]["steps"] == ["done", "done", "bad", "wait"]
+    assert out_["slow"]["notes"][2] == "계산 중 · 5시간째 · 너무 오래 걸림"
     assert out_["left"] == "28일 18시간 59분" and out_["line"] == "30일 판정 날 · 동전 봇 비교 계산 중"
     assert out_["snap"]["when"] == "첫 판정 · 11월 4일 (수) 09:00 (한국 시각)"
 

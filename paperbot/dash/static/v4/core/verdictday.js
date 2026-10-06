@@ -68,6 +68,7 @@ export function dueSteps(c, now = serverNow()) {
     : now < c.job_ts ? {state: "wait", note: `${hm(c.job_ts)}에 시작`}
     : {state: "now", note: c.next_try_ts ? `다음 실행 ${hm(c.next_try_ts)}` : "곧 시작"};
   const s3 = failed ? {state: "bad", note: `오류${c.error_kind ? ` (${c.error_kind})` : ""} · ${c.next_try_ts ? `${hm(c.next_try_ts)}에` : "매시 35분에"} 다시 시도`}
+    : snap && c.late ? {state: "bad", note: `계산 중 · ${dur((now - snap) / 1000)}째 · 너무 오래 걸림`}
     : snap ? {state: "now", note: `계산 중 · ${dur((now - snap) / 1000)}째`}
     : {state: "wait", note: "저장본이 잠긴 뒤"};
   return [
