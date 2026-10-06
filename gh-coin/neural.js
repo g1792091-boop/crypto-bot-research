@@ -206,12 +206,18 @@ export function note(t) { load(); feed(String(t)); save(); }   // 화면(neural-
 
 // 💵 자금·낙폭 방어
 export function equity() { return +(BANKROLL + (S?.pnl || 0)).toFixed(2); }
-function riskFactor() { const eq = equity(), peak = Math.max(S?.peak || BANKROLL, eq); if (eq < BANKROLL * 0.9) return 0.5; if (eq < peak * 0.93) return 0.5; return 1; }
+// 낙폭 단계별 리스크 축소(개념: himself65/trade-skills 'drawdown governor'): 고점 대비 −5% → ×0.75 · −10% → ×0.5 (시작 자본 −10% 아래도 ×0.5). 고점 −30% 는 24시간 신규 진입 중지(서킷브레이커).
+function riskFactor() { const eq = equity(), peak = Math.max(S?.peak || BANKROLL, eq), dd = peak > 0 ? 1 - eq / peak : 0;
+  if (eq < BANKROLL * 0.9 || dd >= 0.10) return 0.5; if (dd >= 0.05) return 0.75; return 1; }
 function bumpPeak() { if (S) S.peak = Math.max(S.peak || BANKROLL, equity()); }
-export const riskMode = () => riskFactor() < 1 ? "방어(리스크 절반)" : "정상";
+export const riskMode = () => { const f = riskFactor(); return f <= 0.5 ? "방어(리스크 절반)" : f < 1 ? "주의(리스크 ×0.75)" : "정상"; };
 export const LEV_CAP = ENG.levCapOf;
 const today = () => new Date().toISOString().slice(0, 10);
 function dayGate() { const d = today(); if (S.day.d !== d) S.day = { d, pnl: 0, eq0: equity() }; return S.day.pnl > -FW.dailyStop * S.day.eq0; }
+// 주간 손실 한도(DeepSeek 문서 '주간 최대 손실 15% → 자동 중단'): 이번 주(월요일 시작) 손실이 주초 자본의 15%에 닿으면 다음 주까지 신규 진입 중지
+const WEEK_STOP = 0.15;
+const weekKey = () => { const d = new Date(), k = new Date(d); k.setHours(0, 0, 0, 0); k.setDate(k.getDate() - ((k.getDay() + 6) % 7)); return k.toISOString().slice(0, 10); };
+function weekGate() { const w = weekKey(); if (!S.week || S.week.w !== w) S.week = { w, pnl: 0, eq0: equity() }; return S.week.pnl > -WEEK_STOP * S.week.eq0; }
 
 // ── 🎭 데스크 감정 상태 — 모델이 스스로 '느낌'을 지어내지 않게, 코드가 성적·낙폭·시장 지수로 계산한다(FenixAI·ffrdm 의 감정/피로 개념) ──
 //   효과는 실측된 것만: 피로(연속 손실) → 관망 규칙집의 휴식 · 공포(낙폭) → 리스크 절반(riskFactor) · 낙폭 30% → 24시간 신규 진입 중지.
@@ -227,7 +233,8 @@ export function mood() {
   const notes = [];
   if ((S.halt || 0) > now) notes.push(`낙폭 서킷브레이커 — ${Math.ceil((S.halt - now) / 3600e3)}시간 신규 진입 중지`);
   if (rest > now) notes.push(`${L}연속 손실 → 휴식 ${Math.ceil((rest - now) / 3600e3)}시간 남음`);
-  if (riskFactor() < 1) notes.push("낙폭 방어 — 리스크 절반");
+  if (riskFactor() < 1) notes.push(`낙폭 방어 — 리스크 ×${riskFactor()}`);
+  if (S.week && S.week.w === weekKey() && S.week.pnl <= -WEEK_STOP * S.week.eq0) notes.push(`이번 주 손실 한도 ${WEEK_STOP * 100}% — 다음 주까지 신규 진입 중지`);
   if (W >= 3) notes.push(`${W}연속 이익 — 비중 유지(축소는 실측상 손해)`);
   return { fear, greed, fatigue, conf, L, W, dd: +dd.toFixed(1), act, rest: rest > now ? rest : 0, halt: (S.halt || 0) > now ? S.halt : 0, fng: f, notes };
 }
@@ -294,8 +301,15 @@ function isActive(v) {
   const s = vstat(v.vkey), low = v.tf === "5" || v.tf === "15";
   return low ? (s.n >= SEL.lowTfMinN && s.mean > SEL.lowTfThr) : (s.n >= SEL.minN && s.mean > SEL.thr);
 }
+// 켈리 ¼ 상한(DeepSeek 문서 '0.25x Kelly' · 표준 공식 f = p − (1−p)/b): 최근 거래의 승률 p 와 평균 이익/평균 손실 b 로 계산.
+//   우위가 얇은 매매법은 1회 리스크를 자동으로 줄이고(최소 0.25%), 우위가 뚜렷하면 기존 상한(1%)이 그대로 걸린다. 15건 미만이면 적용 안 함.
+function kellyQ(vkey) { const tr = (S.eng.stats[vkey]?.tr || []).slice(-SEL.K); if (tr.length < 15) return null;
+  const w = tr.filter(t => t.R > 0), l = tr.filter(t => t.R <= 0); if (!w.length || !l.length) return null;
+  const p = w.length / tr.length, b = (w.reduce((a, t) => a + t.R, 0) / w.length) / Math.max(0.05, -l.reduce((a, t) => a + t.R, 0) / l.length);
+  return Math.max(0, p - (1 - p) / b) / 4; }
 function riskFor(v, side) {
   const s = vstat(v.vkey); let r = s.n >= 15 && s.mean > 0.25 ? FW.maxRisk : FW.baseRisk;
+  { const kq = kellyQ(v.vkey); if (kq != null && kq < r) r = Math.max(0.0025, kq); }
   r *= riskFactor();
   const nw = S.news; if (nw && Date.now() - nw.t < 3600e3) { if (side > 0 && nw.score <= -1) r *= 0.5; if (side < 0 && nw.score >= 1) r *= 0.5; }
   const th = BRAIN.timeAdvice(new Date().getHours()); if (th && th.n >= 8 && !th.good) r *= 0.5;   // 학습상 안 되는 시간대
@@ -305,7 +319,7 @@ const rrFor = v => { const m = TP_MODES[cfg().tpMode]?.rr; return m ?? Math.max(
 
 // ── 시세 캐시 (메모리) ──
 const MK = {};   // `${sym}|${tf}` → {cs, I, at}
-async function getTF(sym, tf, n = 420) {
+async function getTF(sym, tf, n = 1000) {   // 1000봉: EMA200 이 백테스트(1500봉)와 같아지는 길이(tools/bias-check.mjs: 420봉이면 EMA200 ~0.1% 차이)
   const k = sym + "|" + tf; let cs;
   try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: tf }, n)).cs; } catch (e) { return MK[k] || null; }
   if (!cs || cs.length < 220) return MK[k] || null;
@@ -388,7 +402,7 @@ function closeP(sym, px, why, at) {
   const pret = (px - P.entry) / P.entry * P.side - FW.fee;
   let pnl = base === "청산" ? -P.margin : Math.max(-P.margin, P.notional * pret); if (!Number.isFinite(pnl)) pnl = 0;
   const R = P.risk ? pnl / P.risk : 0, roe = P.margin ? pnl / P.margin * 100 : 0;
-  S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak(); dayGate(); S.day.pnl += pnl;
+  S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak(); dayGate(); S.day.pnl += pnl; weekGate(); S.week.pnl += pnl;
   if (P.trader !== "자체 엔진") { const M = model(P.trader); M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; }
   // 전략 성적(실전) 기록 → 워크포워드 선별에 즉시 반영
   const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
@@ -464,7 +478,7 @@ export async function step() {
       if (P0 && Date.now() - Math.max(P0.t, P0.chk || 0) > 4.5 * 3600e3) { try { const c5 = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "5" }, 1000)).cs; bars = [...c5.filter(b => b.t < cs1[0].t).map(b => ({ ...b, dur: 300e3 })), ...cs1]; feed(`${ko} 마지막 확인 이후 ${Math.round((Date.now() - Math.max(P0.t, P0.chk || 0)) / 3600e3)}시간을 5분봉으로 되짚어 익절·손절 확인`); } catch (e) {} }
       manage(sym, price, bars); }
     // 국면(1시간봉) + 상위 추세(4시간봉)
-    const m60 = await getTF(sym, "60"), m240 = await getTF(sym, "240", 400);
+    const m60 = await getTF(sym, "60"), m240 = await getTF(sym, "240", 1000);
     if (m60) { const i = m60.I.n - 2, rg = ENG.regimeAt(m60.I, i); const hb = m240 ? ENG.htfBiasAt(m240.H ||= ENG.prepareHTF(q, m240.cs), Date.now()) : { bias: 0 };
       S.regime[sym] = { key: rg.key, label: rg.label, adx: rg.adx ? Math.round(rg.adx) : null, htf: hb.bias }; }
     S.dec[sym] = { price, dir: S.regime[sym]?.htf || 0, conf: S.regime[sym]?.adx ?? 0, regime: S.regime[sym]?.label || "판단중" };
@@ -492,8 +506,10 @@ export async function step() {
         cands.push({ v, s, st: vstat(v.vkey) });
       }
       if (!cands.length) continue;
-      cands.sort((a, b) => b.st.mean - a.st.mean); const { v, s, st } = cands[0];
+      const shr = x => x.st.mean * x.st.n / (x.st.n + 60);   // 승자의 저주 보정(ocean_agent 개념): 적은 표본의 높은 평균은 부풀려져 있다 → 순위만 수축값으로
+      cands.sort((a, b) => shr(b) - shr(a)); const { v, s, st } = cands[0];
       if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
+      if (!weekGate()) { feed(`${ko} 신호(${v.name}) 무시 — 이번 주 손실 한도 ${WEEK_STOP * 100}% 도달(다음 주 월요일까지 신규 진입 중지)`); continue; }
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
       // 🧘 관망 규칙집(실데이터로 검증된 것만 켜짐 · 스스로 고침) + 피로(연속 손실 휴식) + 낙폭 서킷브레이커. 막은 신호도 따라가 채점한다.
       { const tcl = barT + TFMIN[tf] * 60e3, ctx = HR.ctxAt(ENG, mk.I, i, H, s.side, tcl, { fng: S.fng?.v ?? null, ...tfCtx(tf, tcl, k => MK[sym + "|" + k]) }), hk = HR.check(S.hold, ctx), rest = HR.restUntil(S.hold, closedSeq()), now = Date.now();
@@ -1254,7 +1270,7 @@ export function state() {
 function regStat(vkey, reg) { let n = 0, r = 0; for (const t of S.eng.stats[vkey]?.tr || []) if (t.reg === reg) { n++; r += t.R; } return { n, mean: n ? r / n : 0 }; }
 function setups(engine) {
   return engine.filter(e => e.n >= 8 && e.mean > 0).map(e => ({ vkey: e.vkey, name: e.name, tf: e.tf, mean: e.mean, wr: e.wr, n: e.n, active: e.active,
-    score: +(e.mean * (e.wr / 100) * Math.min(1, e.n / 20) * 100).toFixed(1) })).sort((a, b) => b.score - a.score).slice(0, 12);
+    score: +(e.mean * (e.wr / 100) * (e.all || e.n) / ((e.all || e.n) + 60) * 100).toFixed(1) })).sort((a, b) => b.score - a.score).slice(0, 12);   // 표본 수축 n/(n+60)
 }
 // 학습된 승률: 매매법 × 시장 국면별 실측(백테스트+실전) — 어떤 장에서 통하는지
 function learnedWinrates(V) {

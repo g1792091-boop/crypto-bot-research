@@ -11,7 +11,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| 코드 | 이 브랜치에 전부 있음. 10/6 DeepSeek 문서 적용(🧘 관망 규칙집 자기 진화·🎭 감정·😱 공포탐욕·🗂 익절/손절 AI 조정+채점·🧾 로컬 모델 JSON 스키마, 5-21번)이 최신 |
+| 코드 | 이 브랜치에 전부 있음. 10/6 DeepSeek 목록 2 적용(5-22: 미래 누설 검사·¼ 켈리·주간 한도) · DeepSeek 문서 적용(🧘 관망 규칙집 자기 진화·🎭 감정·😱 공포탐욕·🗂 익절/손절 AI 조정+채점·🧾 로컬 모델 JSON 스키마, 5-21번)이 최신 |
 | GitHub 반영 | **이 PC에서만 커밋된 상태가 있을 수 있음.** 이어받기 전에 `git status` / `git log origin/claude/eloquent-ride-3o1bqv..HEAD` 로 확인하고 올릴 것 (아래 9번) |
 | 배포 exe (`dist/`) | **최신** (10/6 5-21 포함 재빌드 — 앱 창으로는 아직 안 켜 봄). push 여부만 확인 |
 | 자동 테스트 | 저장소에 고정된 테스트 묶음 **없음**. 그때그때 Node 스크립트 · 브라우저로 확인함 (4번) |
@@ -334,6 +334,13 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
   - 매매 스타일 버튼: 자동 / 스윙(1시간·4시간) / 스캘핑(5·15분) — `cfg().style`, 어느 쪽이든 워크포워드 관문·관망 규칙 그대로.
   - AI 설계 매매법 줄은 '백테 −17%'로 표시(실제 데모 거래가 아님을 구분).
 - 확인: 하네스 `?t=neural`(실데이터 백테스트 + 규칙집 진화 v1→v2 채택 + 가짜 포지션 추적·청산·채점) · `&ai=1`(qwen2.5:3b 스키마 포지션 관리) · `?t=ui&find=…` 스크린샷.
+
+### 5-22. DeepSeek 목록 2 — Claude 플러그인·스킬·MCP + '승률' 매매법 (10/6)
+- 받은 것: `문서/GH Coin 참고자료/2026-10-06 DeepSeek 목록/` (github 25 · npm 9+릴리스 · pip 9, **설치·실행 안 함**). 목록·위험·실측은 그 폴더의 `00 읽어보기.md`.
+- 위험(서브에이전트 코드 검토): whitebit-mcp(외부 서버로 인자 전송) · crossfin(EVM 개인키) · AlgoVault('90.8%'는 PFE) · CloddsBot(pump.fun·~/.ssh·설치 후 스크립트) · xchange-mcp(키를 호스팅 서버로) · ocean-agent(Solana 개인키 메인넷 기본) · Tradecraft brain-ecosystem-mcp(curl|bash) · tradeblocks/JacobHsu `.claude` 설정(자동 훅·키 echo). 거래소 주문 MCP 는 안전 규칙상 설치 안 함.
+- '승률' 주장 실측(6코인·수수료): 펀딩 극단 평균회귀 −0.06~−0.07R · Markov 일봉 49%/−0.13 · RSI 다이버전스 1h −0.12~−0.16 / 4h +0.15(후반 −0.06, 20배로는 13건 −0.15) · OI 다이버전스 +0.058(20일, 후반 −0.17) · 코인·방향 잠금 / 변동성 관문 개선 없음 → 전부 미채택.
+- 적용: `tools/bias-check.mjs`(freqtrade lookahead·recursive 개념 — 21개 매매법 미래 누설 없음, EMA200 시작 길이 의존 발견 → 실시간 봉 420→1000) · `kellyQ()` ¼ 켈리 리스크 상한 · `weekGate()` 주간 손실 15% · 낙폭 단계 축소(−5% ×0.75, −10% ×0.5) · 매매법 순위 표본 수축 n/(n+60)(ocean_agent).
+- 다음 후보(검토 보고서): 다중 비교 보정(40개 중 최고를 고르는 운 — tradeblocks parameter-study-selection) · 블록 부트스트랩 몬테카를로 · 연속 손익 runs 검정 · 시장 전체 급락 정지(opensqt).
 
 ---
 
