@@ -18,7 +18,10 @@ const SORTS = [{id: "name", label: "이름"}, {id: "good", label: "높은 순"}]
 const PERIODS = [{id: "30", label: "30일"}, {id: "7", label: "7일"}];
 // fill-strat: '5년 시험' (the 5-year past test per trade, so the map has colour on day 1, 참고) and '지금 포지션' (the
 // cells holding a position now, lit, with the live ROE at the mark price)
-const COLORS = [{id: "vs", label: "동전 봇 대비"}, {id: "own", label: "자기 수익률"}, {id: "y5", label: "5년 시험"}, {id: "pos", label: "지금 포지션"}];
+// review 10/06: the default is the account's own return (mint / pink: money made or lost). As the default, 동전 봇 대비
+// painted a −58 % account gold (good-looking) because the coin flips lost more; it is the second choice now, and in
+// 자기 수익률 the comparison stays visible only as a small neutral ▲ / ▼ in each cell's corner (참고)
+const COLORS = [{id: "own", label: "자기 수익률"}, {id: "vs", label: "동전 봇 대비"}, {id: "y5", label: "5년 시험"}, {id: "pos", label: "지금 포지션"}];
 const DS_COLORS = [{id: "own", label: "자기 수익률"}, {id: "y5", label: "5년 시험"}, {id: "pos", label: "지금 포지션"}];
 const LIVE = new Set(["y5", "pos"]);
 const COLS = ["15m", "30m", "1h", "4h"];
@@ -36,8 +39,8 @@ export async function mount(el, ctx) {
   ctx.setTitle("한눈 지도");
   const q = ctx.params.query || {};
   const st = {tab: okTab(q.g) || okTab(local.get("grid-tab", "core")) || "core", sort: local.get("grid-sort", "name"),
-    days: String(local.get("grid-days", "30")), color: local.get("grid-color", "vs"), dsColor: local.get("grid-dscolor", "own"), y5: null, d: null, gen: 0, painted: false, prev: new Map(), reel: null};
-  if (!COLORS.some((x) => x.id === st.color)) st.color = "vs";
+    days: String(local.get("grid-days", "30")), color: local.get("grid-color", "own"), dsColor: local.get("grid-dscolor", "own"), y5: null, d: null, gen: 0, painted: false, prev: new Map(), reel: null};
+  if (!COLORS.some((x) => x.id === st.color)) st.color = "own";
   if (!DS_COLORS.some((x) => x.id === st.dsColor)) st.dsColor = "own";
   if (!SORTS.some((x) => x.id === st.sort)) st.sort = "name";
   if (!PERIODS.some((x) => x.id === st.days)) st.days = "30";
@@ -51,7 +54,7 @@ export async function mount(el, ctx) {
   const colorBox = h("span", {class: "grid-opt"}, h("span", {class: "k"}, "색"), colorSeg);
   const dsColorSeg = ui.seg(DS_COLORS, st.dsColor, (id) => { st.dsColor = id; local.set("grid-dscolor", id); st.prev.clear(); st.painted = false; paint(true); }, {label: "색"});
   const dsColorBox = h("span", {class: "grid-opt"}, h("span", {class: "k"}, "색"), dsColorSeg);
-  const modeNow = () => (st.tab === "ds" ? st.dsColor : st.tab === "core" ? st.color : "vs");
+  const modeNow = () => (st.tab === "ds" ? st.dsColor : st.tab === "core" ? st.color : "own");     // 5분봉: own + ▲ / ▼
   // the 5-year rows: research files only (one small answer, cached an hour on the server); fetched once
   async function loadY5() {
     if (st.y5) return st.y5;
@@ -140,8 +143,14 @@ export async function mount(el, ctx) {
       : [`${fmt.int(n.total)}칸`, `동전 봇보다 위 ${fmt.int(n.up)}`, `비슷 ${fmt.int(n.mid)}`, `아래 ${fmt.int(n.down)}`];
     if (n.grey) words.push(`거래 적음 ${fmt.int(n.grey)}`);
     if (n.bust) words.push(`파산 ${fmt.int(n.bust)}`);
+    // 자기 수익률 on the 36 / the reel: the coin-flip comparison as counts (the ▲ / ▼ marks), 참고
+    let vsLine = null;
+    if (mode === "own" && st.tab !== "ds") {
+      const xs = cells.filter((c) => !c.bust && c.n >= MIN_COLOR && c.vs != null);
+      if (xs.length) vsLine = h("p", {class: "note"}, `▲ 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(xs.filter((c) => c.vs > 0).length)} · ▼ 아래 ${fmt.int(xs.filter((c) => c.vs < 0).length)} (참고, 판정 아님)`);
+    }
     put(summary, segs.length && cells.length > 3 ? h("div", {class: ["grid-bar", mode === "own" ? "own" : ""], role: "img", "aria-label": words.join(", ")}, segs) : null,
-      h("p", {class: "grid-sumtxt"}, ui.pill("", "ref"), words.join(" · ")),
+      h("p", {class: "grid-sumtxt"}, ui.pill("", "ref"), words.join(" · ")), vsLine,
       h("p", {class: "note"}, `${periodKo(st.d)} · ${fmt.mmdd(st.d.from)}부터 지금까지 · 닫힌 거래 기준`));
   }
 
@@ -197,7 +206,7 @@ export async function mount(el, ctx) {
         const c = r.cells[tf], href = c ? ctx.href("account", c.id) : null;
         if (mode === "y5") return y5Cell(c, (y5[r.s] || {}).tfs ? y5[r.s].tfs[tf] : null, (y5[r.s] || {}).unit, {href, label: r.name, noneTitle});
         if (mode === "pos") return posCell(c, c ? by.get(c.id) : null, markOf, {href, label: r.name, noneTitle});
-        return heatCell(c, {mode, href, label: r.name, noneTitle});
+        return heatCell(c, {mode, href, label: r.name, noneTitle, vsMark: mode === "own" && group !== "ds200"});
       }));
   }
 
@@ -269,11 +278,11 @@ export async function mount(el, ctx) {
   function m5Map(d) {
     const reel = d.cells.find((c) => c.g === "reel");
     const fl = d.cells.filter((c) => c.g === "flip" && c.tf === "5m");
-    paintSummary(reel ? [reel] : [], "vs");
+    paintSummary(reel ? [reel] : [], "own");
     const f5 = (d.flips || {})["5m"] || {};
     const strip = h("div", {class: "grid-strip", role: "list"},
       h("div", {class: "grid-sc reel", role: "listitem"}, h("span", {class: "k"}, "릴스 5분 단타"),
-        heatCell(reel, {mode: "vs", href: reel ? ctx.href("account", reel.id) : null, label: "릴스 5분 단타", noneTitle: "릴스 계좌가 없습니다"})),
+        heatCell(reel, {mode: "own", vsMark: true, href: reel ? ctx.href("account", reel.id) : null, label: "릴스 5분 단타", noneTitle: "릴스 계좌가 없습니다"})),
       fl.map((c) => h("div", {class: "grid-sc flip", role: "listitem"}, h("span", {class: "k"}, nameOf(c).replace("동전 봇", "동전")),
         h("a", {class: "gk-cell ref", href: ctx.href("account", c.id), title: `${nameOf(c)} · 5분 · 수익률 ${fmt.pct(c.ret)} · 거래 ${fmt.int(c.n)}건 (비교 기준)`},
           h("b", {class: "num"}, cellPct(c.ret)), h("small", {class: "num"}, `${fmt.int(c.n)}건`)))));
@@ -283,7 +292,7 @@ export async function mount(el, ctx) {
     }
     return [h("p", {class: "ink2 grid-m5intro"}, "릴스 5분 단타는 자기 청산 규칙(스윙 저점 손절 · 윗밴드 목표 · 96봉 시간 청산)으로 돕니다. 같은 청산으로 롱만 하는 5분봉 동전 봇 3개가 비교 기준입니다 (동전 봇에서 셈)."),
       strip,
-      h("p", {class: "grid-sumtxt"}, ui.pill("", "ref"), `5분봉 동전 ${fmt.int(f5.n || 0)}개 중앙값 ${cellPct(f5.median)} · 릴스 칸 색 = 그 중앙값과의 차이`),
+      h("p", {class: "grid-sumtxt"}, ui.pill("", "ref"), `5분봉 동전 ${fmt.int(f5.n || 0)}개 중앙값 ${cellPct(f5.median)} · 릴스 칸 색 = 자기 수익률, ▲ / ▼ = 그 중앙값보다 위 / 아래`),
       st.reel ? h("div", {class: "grid-reelwrap"}, ui.plate("릴스 5분 단타 프로필"), st.reel.el) : null];
   }
 
@@ -306,8 +315,9 @@ export async function mount(el, ctx) {
     const title = st.tab === "core" ? "기존 36 × 봉" : st.tab === "ds" ? "딥시크 44 × 봉" : "5분봉 · 릴스와 동전 3개";
     const sub = mode === "y5" ? (st.tab === "ds" ? "색 = 5년 과거 시험의 거래 한 건 평균 (레버리지 없이 가격 %) · 참고" : "색 = 5년 과거 시험의 거래 한 건 평균 ROE (증거금 대비) · 참고")
       : mode === "pos" ? "빛나는 칸 = 지금 포지션이 열린 계좌 · % = 지금 평가 ROE (마크 가격)"
-      : st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비)" : "색 = 같은 봉 동전 봇 중앙값과의 차이 (참고)") : st.tab === "ds" ? "색 = 자기 수익률 · 계좌마다 동전 봇과 비교하지 않음"
-        : "색 = 5분봉 동전 3개 중앙값과의 차이 (참고)";
+      : st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비) · 칸 구석 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고)"
+        : "색 = 같은 봉 동전 봇 중앙값과의 차이 (참고) · 크게 잃은 칸도 동전 봇이 더 잃었으면 진한 색입니다") : st.tab === "ds" ? "색 = 자기 수익률 · 계좌마다 동전 봇과 비교하지 않음"
+        : "색 = 자기 수익률 · ▲ / ▼ = 5분봉 동전 3개 중앙값보다 위 / 아래 (참고)";
     put(mapCard, h("div", {class: "card-h grid-maph"}, ui.plate(title), st.tab === "core" ? colorBox : st.tab === "ds" ? dsColorBox : null), h("p", {class: "grid-mapsub"}, sub), ...kids);
     // a cell whose colour step changed since the last answer flashes once (real data only, never on the first paint)
     const first = !st.painted;
@@ -334,7 +344,12 @@ export async function mount(el, ctx) {
         h("ul", {class: "grid-keys"},
           mode === "own"
             ? h("li", null, st.tab === "ds" ? "칸 색 = 그 계좌의 자기 수익률 (시작 대비). 딥시크는 계좌마다 동전 봇과 견주지 않고, 위 '중앙값' 줄처럼 묶음으로만 봅니다."
+              : st.tab === "m5" ? "릴스 칸 색 = 릴스의 자기 수익률 (시작 대비: 초록 벌었음, 빨강 잃었음). 옆 칸이 비교 기준인 5분봉 동전 3개입니다."
               : "칸 색 = 그 계좌의 자기 수익률 (시작 대비: 초록 벌었음, 빨강 잃었음). 맨 위 줄이 같은 봉 동전 봇 중앙값입니다.")
+            : null,
+          mode === "own" && st.tab !== "ds"
+            ? h("li", null, h("span", {class: "gk-legvs", "aria-hidden": "true"}, "▲▼"), h("span", null, "칸 구석 ▲ / ▼ = 같은 봉 동전 봇 중앙값보다 위 / 아래 (참고, 판정 아님). 차이 크기는 색 '동전 봇 대비'에서 봅니다."))
+            : mode === "own" ? null
             : h("li", null, `칸 색 = 그 계좌 수익률에서 같은 봉 동전 봇 3개 중앙값을 뺀 차이. 진할수록 차이가 큽니다 (${step(0)} · ${step(1)} · ${step(2)} · ${step(3)} 기준).`),
           h("li", null, "칸 안 큰 숫자 = 그 계좌 수익률, 작은 숫자 = 닫힌 거래 수."),
           h("li", null, h("span", {class: "gk-cell sw grey", "aria-hidden": "true"}), h("span", null, `빗금 = 거래 ${fmt.int(MIN_COLOR)}건 미만이라 색 없음`)),

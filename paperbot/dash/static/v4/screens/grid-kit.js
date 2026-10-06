@@ -120,16 +120,18 @@ export function heatCell(c, o = {}) {
   const b = grey || c.bust ? null : bin(v);
   const tf = fmt.tfKo(c.tf);
   const words = [`${o.label || nameOf(c)} · ${tf}`, `수익률 ${fmt.pct(c.ret)}`, `거래 ${fmt.int(c.n)}건`];
-  if (o.mode !== "own" && c.vs != null) words.push(`같은 봉 동전 봇 중앙값과 ${vsWords(c.vs)} (참고)`);
+  if ((o.mode !== "own" || o.vsMark) && c.vs != null) words.push(`같은 봉 동전 봇 중앙값과 ${vsWords(c.vs)} (참고)`);
   if (grey) words.push("거래가 적어 색 없음");
   else if (c.n < SMALL) words.push("표본 적음");
   if (c.open) words.push("지금 포지션 있음");
   if (c.bust) words.push("파산");
-  const el = h(o.href ? "a" : "span", {class: ["gk-cell", grey ? "grey" : "", c.bust ? "bust" : "", !grey && c.n < SMALL ? "small" : ""],
+  const el = h(o.href ? "a" : "span", {class: ["gk-cell", o.mode === "own" ? "own" : "", grey ? "grey" : "", c.bust ? "bust" : "", !grey && c.n < SMALL ? "small" : ""],
     href: o.href || null, dataset: {b: b == null ? "" : String(b)}, style: o.i != null ? {"--i": o.i} : null,
     title: words.join(" · "), "aria-label": words.join(", ")},
   h("b", {class: "num"}, c.bust ? "파산" : cellPct(c.ret)),
-  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`));
+  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`),
+  // vsMark (own colours): the coin-flip comparison only as a small neutral ▲ / ▼ in the corner (참고), never the colour
+  o.vsMark && !grey && !c.bust && c.vs != null && c.vs !== 0 ? h("i", {class: "gk-vsm", "aria-hidden": "true"}, c.vs > 0 ? "▲" : "▼") : null);
   return el;
 }
 

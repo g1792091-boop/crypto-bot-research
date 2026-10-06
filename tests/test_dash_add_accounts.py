@@ -80,3 +80,17 @@ def test_evidence_paths_read_in_korean_and_never_as_json():
     assert out["v"][0] == "0.1235" and out["v"][1] == "1,235" and out["v"][2] is None and out["v"][3] == "a, b"
     src = _read("rooms-chat.js")
     assert "JSON.stringify(x)" not in src and "evidenceList(evg)" in src
+
+
+# ---------------------------------------------------------------- 한눈 지도: own return first
+def test_grid_default_colour_is_the_accounts_own_return():
+    g, kit, css = _read("grid.js"), _read("grid-kit.js"), _read("grid-kit.css")
+    colors = re.search(r"const COLORS = \[([^\]]*)\]", g).group(1)
+    assert re.findall(r'id: "(\w+)"', colors)[:2] == ["own", "vs"]           # 자기 수익률 first, 동전 봇 대비 second
+    assert 'local.get("grid-color", "own")' in g and 'st.color = "own"' in g
+    assert 'vsMark: mode === "own" && group !== "ds200"' in g                 # DeepSeek never gets the coin-flip mark
+    assert "o.vsMark && !grey && !c.bust" in kit and '"▲" : "▼"' in kit
+    # the mark is neutral (never the up / down colours) and the 5분봉 strip is coloured by its own return too
+    mark = re.search(r"\.gk-vsm \{([^}]*)\}", css).group(1)
+    assert "--up" not in mark and "--down" not in mark and "--t-2xs" in mark
+    assert 'heatCell(reel, {mode: "own", vsMark: true' in g
