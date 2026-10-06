@@ -7,7 +7,7 @@
 // HONESTY: "토론 중" only while the service says running (its heartbeat is fresh: debate.summary turns a stale one into
 // 꺼짐); "지금 회차 진행 중" only while the newest stored round is 'running'; costs are the API's own usage numbers
 // (real money, not paper money); nothing is animated to look busy. Every string is a text node.
-import {h, put, ui, fmt, local} from "../core/pb.js";
+import {h, put, ui, fmt, local, serverNow} from "../core/pb.js";
 import {countdown} from "./office-wall.js";
 
 const usd = fmt.usd;
@@ -144,7 +144,7 @@ export function makeSide(ctx) {
     const d = st.d;
     if (!d) return;
     const nx = nextOf(d);
-    const t = nx ? countdown(nx.ts) : null;
+    const t = nx ? countdown(nx.ts, serverNow()) : null;           // the server's clock (the page's may be off)
     nextNum.textContent = nx ? (t || "곧") : "—";
     nextWhat.textContent = !nx ? "" : t ? " 남음" : " · 차례가 됐습니다 (30초 안에 시작하거나 건너뜁니다)";
     sumNext.textContent = nx ? `${nx.kind === "retry" ? "다시 시도" : "다음 회차"} ${t || "곧"}` : "";

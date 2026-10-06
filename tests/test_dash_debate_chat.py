@@ -291,7 +291,7 @@ def test_wiring_honesty_and_layout():
     assert "history.set(chat.slice(1), true)" in js["debate.js"] and 'motion.expand(region, open)' in js["debate.js"]
     assert "store.refresh(\"debate\")" in js["debate.js"] and "ctx.every(1000" in js["debate.js"]
     # the countdown reads the server's schedule first (the old guess only for an older server)
-    assert "d.next && d.next.ts" in js["debate-side.js"] and "countdown(nx.ts)" in js["debate-side.js"]
+    assert "d.next && d.next.ts" in js["debate-side.js"] and "countdown(nx.ts, serverNow())" in js["debate-side.js"]
     assert '"다시 시도까지"' in js["debate-side.js"] and '"다음 회차까지"' in js["debate-side.js"]
     # 토론 중 only from the service's state; the in-flight line only from the newest stored round
     assert 'running: ["토론 중", "live"]' in js["debate-side.js"] and 'paused: ["쉬는 중", "warn"]' in js["debate-side.js"]

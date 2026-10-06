@@ -12,7 +12,7 @@
 // top. When the room is off: what it is, that it costs nothing now, and the three steps to turn it on.
 // HONESTY: every bubble is a stored turn (text nodes, no typing effect); it is ONE AI speaking every role (said under
 // the chat); nothing here changes an order, a rule or an account.
-import {h, ui, fmt, motion, store} from "../core/pb.js";
+import {h, ui, fmt, motion, store, serverNow} from "../core/pb.js";
 import {roundChat, castStrip, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";
 import {makeSide, usd4} from "./debate-side.js";
 
@@ -134,7 +134,7 @@ export async function mount(el, ctx) {
   // the countdown each second; about a minute after a round was due, ask the server once for what happened
   ctx.every(1000, () => {
     const nx = side.tick();
-    if (nx && nx.ts && Date.now() > nx.ts + 60000 && st.poked !== nx.ts) {
+    if (nx && nx.ts && serverNow() > nx.ts + 60000 && st.poked !== nx.ts) {
       st.poked = nx.ts;
       store.refresh("debate").catch(() => {});
     }
