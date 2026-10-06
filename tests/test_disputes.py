@@ -269,6 +269,8 @@ def test_vs_flip_hit_miss_void_and_expiry(conn, tmp_path):
     p.add("RANDOM_1@4h", T0 + 2 * DAY + 60_000, -0.1, n=10)
     [g] = DS.grade_due(conn, p.ro(), T0 + 3 * DAY)
     assert (g["dispute_id"], g["winner"]) == (miss["id"], "b")
+    # the advocate's win names only the sample (20 trades), never "동전보다 나음" about the strategy (CONTRACT 1.3)
+    assert "편드는 직원(이 20건 평균이 동전보다 높음) 맞음" in g["line_ko"] and "동전보다 나음" not in g["line_ko"]
     void = _fwd(conn, p.ro(), "vs_flip", tf="30m", now=T0 + 4 * DAY)
     p.add(f"{S}@30m", T0 + 4 * DAY + 60_000, 0.2, n=20)
     p.add("RANDOM_1@30m", T0 + 4 * DAY + 60_000, 0.1, n=9)                       # 9 < 20 / 2

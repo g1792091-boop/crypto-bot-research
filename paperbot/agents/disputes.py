@@ -830,7 +830,10 @@ def forward_verdict(d: dict, paper_ro: Optional[sqlite3.Connection], now_ms: int
     won = ms is not None and mf is not None and ms <= mf
     return {"status": "settled", "winner": "a" if won else "b", "mirror": mirror,
             "numbers": {"n": len(s_roe), "mean": ms, "flip_n": len(f_roe), "flip_mean": mf},
-            "line_ko": (f"{'공격하는 직원(우위 없음)' if won else '편드는 직원(동전보다 나음)'} 맞음(거래 {len(s_roe)}건 평균 "
+            # the advocate's label says only what the N trades show (their mean above the flips'), never that the strategy
+            # is 'better than the coin flips': 20-60 trades before the 30-day verdict are no pass hint (CONTRACT 1.3)
+            "line_ko": (f"{'공격하는 직원(우위 없음)' if won else f'편드는 직원(이 {len(s_roe)}건 평균이 동전보다 높음)'} 맞음(거래 "
+                        f"{len(s_roe)}건 평균 "
                         f"{_pct(ms)} vs 동전 {len(f_roe)}건 {_pct(mf)}) · {mtxt} · 동전 50%에 가까운 확인이라 규칙 근거 아님")}
 
 
@@ -1102,11 +1105,14 @@ def list_rows(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None
 
 
 def who_was_right(conn: Optional[sqlite3.Connection], recent: int = 20) -> dict:
-    """The staff board's '누가 맞았나' block: tiles, base rates, per-role rows and the latest results (≤ 20)."""
+    """The staff board's '누가 맞았나' block: tiles, base rates, per-role rows and the latest results (≤ 20).
+    ``active``: sides were ever on (the seats cursor) or a dispute exists; False = the feature never ran (AGENTS_SIDES
+    off, the default), so the dashboard hides the card instead of describing an attacker who does not exist."""
     b = board(conn)
     t = b["totals"]
     rates = b["base_rates"]
-    return {"tiles": {"settled": rates["all"]["settled"], "attacker_won": rates["all"]["attacker_won"],
+    return {"active": seats_written(conn) is not None or bool(_rows(conn, limit=1)),
+            "tiles": {"settled": rates["all"]["settled"], "attacker_won": rates["all"]["attacker_won"],
                       "attacker_share": rates["all"]["attacker_share"], "pending": t["pending"],
                       "conceded": t["conceded"], "talk_only": t["talk_only"], "gave_up": t["gave_up"]},
             "base_rates": rates, "roles": b["roles"], "small": b["small"], "min": SMALL, "coin_flip": 0.5,

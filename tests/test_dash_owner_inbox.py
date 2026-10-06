@@ -249,11 +249,30 @@ def test_the_next_version_views_grade_every_candidate_and_read_only(env):
     cant = NV.cantdo_view(env["agents"], deb)
     srcs = sorted(x["source"] for x in cant["items"])
     assert srcs == ["debate", "owner"] and cant["debate"] == 1 and cant["owner"] == 1
+    assert cant["started"] is True                          # the queue ran (its tables) and the factory collected
     owner = next(x for x in cant["items"] if x["source"] == "owner")
     assert owner["reasons_ko"] == [LI.OWNER_REASON_KO["pattern"]] and owner["quote"] == "머리어깨 숏"
     tally = {r["code"]: (r["none"], r["approx"]) for r in cant["by_reason"]}
     assert tally == {"pattern": (1, 0), "param_off_grid": (0, 1)}
     assert _digest(env["agents"]) == before and _digest(deb) == dbefore
+
+
+def test_the_cantdo_tab_says_not_started_while_no_source_ever_ran(tmp_path):
+    """Every source off (the defaults): no queue tables, a classic debate.db with only the empty idea table. The
+    answer carries started False (the screen says 모으기 전), never a bare 0개 that reads like a finished count."""
+    agents = str(tmp_path / "agents3.db")
+    c = R.open_agents(agents)
+    R.ensure_rooms(c, ts=1)
+    c.close()
+    deb = tmp_path / "debate.db"
+    d = sqlite3.connect(str(deb))
+    DF.ensure(d)
+    d.close()
+    cant = NV.cantdo_view(agents, str(deb))
+    assert cant["started"] is False and cant["total"] == 0
+    assert NV.cantdo_view(None, None)["started"] is False
+    nv = _read("screens", "nextver.js")
+    assert "c.started === false" in nv and "아직 모으기 전입니다" in nv
 
 
 def test_the_routes_answer_behind_the_login(env):
@@ -280,8 +299,34 @@ def test_the_goal_line_reuses_the_luck_calc_numbers_and_counts_today(env):
     assert g["tests_today"] == {"tests": 5, "passed": 2, "newlab": 2, "room": 3}
     assert g["parts"][2] == "판정 날짜는 봇이 첫 계좌를 만들면 정해짐"                    # no paper3.db
     assert "0.07개" in g["parts"][1] and "후보 1개" in g["parts"][1]
+    # a candidate carries the chance luck alone gives that many (1 - 0.95 x 0.975 = 7.4%): '1 > 0.07' is not 'real'
+    assert "운만으로 1개 이상 나올 확률 7%" in g["parts"][1]
     empty = GL.goal(None, None, None, env["now"])
     assert empty["parts"][:2] == ["오늘 5년 시험 0개(통과 0)", "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"]
+
+
+def test_the_goal_line_odds_only_with_a_candidate(monkeypatch):
+    """No candidate: no odds (nothing to explain); a candidate unlikely by luck says '1% 미만', never 0%."""
+    for nl, want in (({"tested": 57, "passed": 0, "luck": 0.2356, "tail": 1.0}, None),
+                     ({"tested": 57, "passed": 1, "luck": 0.2356, "tail": 0.2131}, "운만으로 1개 이상 나올 확률 21%"),
+                     ({"tested": 57, "passed": 3, "luck": 0.2356, "tail": 0.0013}, "운만으로 3개 이상 나올 확률 1% 미만")):
+        monkeypatch.setattr(GL, "newlab_luck", lambda _a, nl=nl: dict(nl))
+        p2 = GL.goal(None, None, None, 1_790_000_000_000)["parts"][1]
+        assert ("확률" in p2) is (want is not None) and (want is None or want in p2), p2
+
+
+def test_the_goal_line_never_reads_a_failed_read_as_zero(env):
+    """CONTRACT 1.6: a ledger (or paper3.db) that cannot be read says so; it never becomes '0 tests', 'no test yet' or
+    'the bot has no account yet' (on 홈 and in the evening Telegram)."""
+    bad = sqlite3.connect(":memory:")            # opens, but every query fails (no such table)
+    try:
+        g = GL.goal(bad, bad, None, env["now"])
+    finally:
+        bad.close()
+    assert g["tests_today"].get("error") and g["newlab"].get("error") and g["verdict"].get("error")
+    assert g["parts"] == ["오늘 5년 시험 수는 시험 장부를 읽지 못해 모름", "동전보다 나은 새 매매법 후보 수는 시험 장부를 읽지 못해 모름",
+                          "판정 날짜는 계좌 기록을 읽지 못해 모름"]
+    assert "0개" not in g["text_ko"] and "없음" not in g["text_ko"] and "정해짐" not in g["text_ko"]
 
 
 def test_the_verdict_day_follows_the_checkpoint_clock(tmp_path):

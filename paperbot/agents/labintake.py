@@ -942,8 +942,9 @@ def today(conn_ro: Optional[sqlite3.Connection], now: int, lim: Optional[dict] =
         if lim is None:
             lim = R.get_cursor(conn_ro, LIMITS_CURSOR) or {}
         blocked = R.get_cursor(conn_ro, BLOCKED_CURSOR)
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
         lim, blocked = lim or {}, None
+        out["error"] = type(exc).__name__      # the budgets are unknown: the dashboard says so, never '꺼짐'
     have = exists(conn_ro)
     for s in SOURCES:
         used = waiting = 0
@@ -1282,10 +1283,11 @@ def owner_block(conn_ro: Optional[sqlite3.Connection], inbox_ro: Optional[sqlite
     """The dashboard's '두 분 시험 요청' block: on / off (the owners' daily budget the agents last saved), today's requests
     and tests against their caps, the cards, and the fixed words the form shows."""
     lim = 0
+    err = None
     try:
         saved = R.get_cursor(conn_ro, LIMITS_CURSOR) if conn_ro is not None else None
-    except sqlite3.Error:
-        saved = None
+    except sqlite3.Error as exc:
+        saved, err = None, type(exc).__name__
     if isinstance(saved, dict):
         try:
             lim = max(0, int(saved.get("owner") or 0))
@@ -1301,6 +1303,10 @@ def owner_block(conn_ro: Optional[sqlite3.Connection], inbox_ro: Optional[sqlite
             "requests_max": OWNER_REQUESTS_PER_DAY, "cards": owner_cards(conn_ro, inbox_ro, limit),
             "mark": LAB_REQUEST_MARK, "link_note_ko": LINK_NOTE_KO, "exits_ko": OWNER_EXITS_KO,
             "not_tested_ko": NOT_TESTED_KO, "timeframes": list(REQUEST_TFS), "sides": list(REQUEST_SIDES),
-            "off_ko": ("시험 요청은 아직 꺼져 있습니다(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0). 켜지면 대화 아래에 "
+            # an unreadable ledger is not 'off': the form stays closed and the words say why (never the setting)
+            **({"error": err} if err else {}),
+            "off_ko": (f"시험 요청 상태를 읽지 못했습니다(에이전트 기록 agents3.db 읽기 실패: {err}). 잠시 뒤 다시 열어 주세요"
+                       if err else
+                       "시험 요청은 아직 꺼져 있습니다(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0). 켜지면 대화 아래에 "
                        "'🧪 이 매매법 시험해줘' 양식이 나오고, 보낸 요청을 연구원이 문법으로 옮기고 코드가 하루 몫만큼 5년 시험을 "
                        "돌립니다.")}

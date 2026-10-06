@@ -1,7 +1,7 @@
 """목표 진척도 한 줄 (owners' round 2, 10/06): how far the project is from its goal, in one line of code text that the
 dashboard's 홈 shows on top and the 22:00 evening Telegram can carry (rooms.compose_evening, AGENTS_GOAL_LINE=1):
 
-    오늘 5년 시험 3개(통과 0) · 동전보다 나은 새 매매법 후보 0개(시험 57개라 운만으로도 많아야 0.24개) · 첫 판정 D-23(11/04)
+    오늘 5년 시험 3개(통과 0) · 동전보다 나은 새 매매법 후보 0개(시험 57개라 운만으로도 많아야 0.23개) · 첫 판정 D-23(11/04)
 
 - tests today: the counted 5-year tests whose first result was written in today's KST day (the lab's 'newlab' trials and
   the strategy rooms' 'test' trials that ran: passed / failed / described; one that could not run is not a test), and
@@ -38,7 +38,8 @@ def days_left(ts: int, now: int) -> int:
 
 
 def tests_today(agents_ro: Optional[sqlite3.Connection], now: int) -> dict:
-    """{tests, passed, newlab, room}: counted 5-year tests whose first result came in today's KST day."""
+    """{tests, passed, newlab, room}: counted 5-year tests whose first result came in today's KST day. A ledger that
+    cannot be read sets ``error`` (the line then says so: a failed read is never '0 tests')."""
     out = {"tests": 0, "passed": 0, "newlab": 0, "room": 0}
     if agents_ro is None:
         return out
@@ -48,7 +49,8 @@ def tests_today(agents_ro: Optional[sqlite3.Connection], now: int) -> dict:
             "SELECT t.kind, r.status FROM trials t JOIN trial_results r ON r.id = "
             "(SELECT MIN(id) FROM trial_results WHERE trial_id = t.id) "
             "WHERE t.kind IN ('newlab', 'test') AND r.ts >= ? AND r.ts < ?", (day0, day0 + DAY_MS)).fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
+        out["error"] = type(exc).__name__
         return out
     for kind, status in rows:
         if status not in RAN:
@@ -61,7 +63,8 @@ def tests_today(agents_ro: Optional[sqlite3.Connection], now: int) -> dict:
 
 def newlab_luck(agents_ro: Optional[sqlite3.Connection]) -> dict:
     """{tested, passed, luck, tail}: every new-strategy test (all rooms), the latest-result passes, what luck alone gives
-    under the gate's growing strictness (the luck-calc's harmonic sum and Poisson-binomial tail, dash/more/luck.py)."""
+    under the gate's growing strictness (the luck-calc's harmonic sum and Poisson-binomial tail, dash/more/luck.py).
+    A ledger that cannot be read sets ``error`` (never 'no test yet')."""
     from ..dash.more.luck import ALPHA, pb_tail
     out = {"tested": 0, "passed": 0, "luck": 0.0, "tail": None}
     if agents_ro is None:
@@ -70,7 +73,8 @@ def newlab_luck(agents_ro: Optional[sqlite3.Connection]) -> dict:
         rows = agents_ro.execute(
             "SELECT t.id, (SELECT r.status FROM trial_results r WHERE r.trial_id = t.id ORDER BY r.id DESC LIMIT 1) "
             "FROM trials t WHERE t.kind = 'newlab' ORDER BY t.id").fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
+        out["error"] = type(exc).__name__
         return out
     n = len(rows)
     passed = sum(1 for _tid, st in rows if st in R.NEWLAB_PASSED)
@@ -84,15 +88,17 @@ def verdict_day(paper_ro: Optional[sqlite3.Connection], checkpoint_db: Optional[
     (``ready``), and ``overdue`` when a verdict day passed but checkpoint.db has no verdict yet."""
     from .. import checkpoint as CK
     from .readiness import checkpoint_view
-    start = None
+    start, err = None, None
     if paper_ro is not None:
         try:
             start = CK.run_facts(paper_ro).get("start_ts")
-        except (sqlite3.Error, ValueError, TypeError):
-            start = None
+        except (sqlite3.Error, ValueError, TypeError) as exc:
+            start, err = None, type(exc).__name__
     cp = checkpoint_view(checkpoint_db) if checkpoint_db else {"ready": False}
     out: dict = {"k": None, "ts": None, "mmdd": None, "left": None, "ready": bool(cp.get("ready")), "overdue": False,
                  "date": cp.get("date"), "ended": False}
+    if err:
+        out["error"] = err               # paper3.db unreadable: never 'the bot has no account yet'
     if not start:
         return out
     k = 1
@@ -118,14 +124,25 @@ def goal(agents_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlite3.Con
     t = tests_today(agents_ro, now)
     nl = newlab_luck(agents_ro)
     v = verdict_day(paper_ro, checkpoint_db, now)
-    p1 = f"오늘 5년 시험 {t['tests']:,}개(통과 {t['passed']:,})"
-    if nl["tested"]:
+    # a ledger that could not be read says so: never '0 tests' or 'no test yet' made of a failed read
+    p1 = "오늘 5년 시험 수는 시험 장부를 읽지 못해 모름" if t.get("error") else \
+        f"오늘 5년 시험 {t['tests']:,}개(통과 {t['passed']:,})"
+    if nl.get("error"):
+        p2 = "동전보다 나은 새 매매법 후보 수는 시험 장부를 읽지 못해 모름"
+    elif nl["tested"]:
+        # with a candidate, the chance that luck alone gives that many (the luck-calc's tail): '1개 vs 많아야 0.23개'
+        # alone reads as 'real', while luck gives 1 or more about one time in five
+        tail = nl.get("tail")
+        odds = (f" · 운만으로 {nl['passed']:,}개 이상 나올 확률 " + ("1% 미만" if tail < 0.01 else f"{tail * 100:.0f}%")
+                if nl["passed"] and tail is not None else "")
         p2 = (f"동전보다 나은 새 매매법 후보 {nl['passed']:,}개(시험 {nl['tested']:,}개라 운만으로도 많아야 "
-              f"{_num(nl['luck'])}개)")
+              f"{_num(nl['luck'])}개{odds})")
     else:
         p2 = "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"
     if v.get("ended"):
         p3 = f"판정 기간 끝({v['end_day']}일 뒤로는 새 판정 없이 관찰만)"
+    elif v.get("error"):
+        p3 = "판정 날짜는 계좌 기록을 읽지 못해 모름"
     elif v["ts"] is None:
         p3 = "판정 날짜는 봇이 첫 계좌를 만들면 정해짐"
     elif v["overdue"]:

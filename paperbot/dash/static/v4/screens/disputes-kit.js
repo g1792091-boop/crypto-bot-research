@@ -64,6 +64,9 @@ function resultRow(d) {
 /** The staff board's '누가 맞았나 (실험 전체)' card from /api/digest/staff's who_was_right. */
 export function whoWasRightCard(w) {
   if (!w) return null;
+  // CONTRACT 1.7: sides never on (AGENTS_SIDES off, the server's `active` false) and no dispute: hide the card, never
+  // a card that describes an attacker who does not exist (an older server without the flag keeps the empty card)
+  if (w.active === false) return null;
   const t = w.tiles || {}, br = w.base_rates || {};
   const roles = (w.roles || []).filter((r) => r.settled || r.pending || r.conceded || r.talk_only || r.gave_up);
   const sub = "실험 전체 · 코드가 시험 결과로 채점";
@@ -119,6 +122,9 @@ export function roomSides(d) {
 export function labIntake(d) {
   if (!d || d.error) return h("section", {class: "rm-sec"}, h("h3", null, "5년 시험 대기열"),
     h("p", null, ui.notYet("수집 전", "시험 대기열이 아직 이 서버에 없습니다")));
+  // the budgets could not be read (today.error): never '꺼짐' or '대기 중인 시험이 없습니다' made of a failed read
+  if (d.today && d.today.error) return h("section", {class: "rm-sec"}, h("h3", null, "5년 시험 대기열"),
+    h("p", null, ui.notYet("읽지 못함", "에이전트 기록(agents3.db)을 읽지 못했습니다. 잠시 뒤 다시 열어 주세요")));
   // the server's shape (agents/labintake.py view / today): {cards: [...], today: {sources: {debate|meeting|owner: {used,
   // limit, waiting}}, blocked_ko}}; older probe shapes are still read
   const items = d.cards || d.items || d.view || [];
