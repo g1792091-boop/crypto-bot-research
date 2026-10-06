@@ -370,7 +370,7 @@ def test_vp_study_by_hand(tmp_path):
         {"test": "P1", "random_same_effect_p1": True, "mean0_p1": -0.03, "mean0_p2": -0.02, "mean0_p3": -0.04},
         {"test": "P1", "random_same_effect_p1": False, "mean0_p1": -0.01, "mean0_p2": 0.005, "mean0_p3": -0.02}]}),
         encoding="utf-8")
-    s = EM.vp_study_5y(("15m", "1h", "4h"), desc, str(cand))
+    s = EM.vp_study_5y(("15m", "1h", "4h"), desc, str(cand), str(tmp_path / "no_official.json"))
     assert s["available"] and s["tfs"] == ["15m", "1h"]                     # no 4h in the file: left out
     r15 = s["rows"][0]
     assert r15["same_sign_3"] is True and r15["random_same_sign_3"] is False
@@ -382,13 +382,43 @@ def test_vp_study_by_hand(tmp_path):
     assert c["kept_side_roe_max"] == 0.005
     assert "후보 2개 중 1개" in s["verdict_ko"] and "모두 시장 전체" not in s["verdict_ko"]
     assert "손실입니다" not in s["verdict_ko"]                              # one kept side above 0: not said
+    # one candidate is not market-wide: 'no edge found' is not said either, and no official run was read
+    assert "찾지 못했습니다" not in s["verdict_ko"] and "가설" in s["verdict_ko"]
+    assert s["official"] is None and s["same_conclusion"] is False and "사전 등록한 원래" not in s["verdict_ko"]
+
+
+def _cand(path, trials, cands):
+    path.write_text(json.dumps({"trials": trials, "candidates": cands}), encoding="utf-8")
+    return str(path)
+
+
+def test_vp_study_names_the_preregistered_run_and_the_rerun(tmp_path):
+    desc = _desc(tmp_path, (0.01,) * 3, (0.01,) * 3, (0.01,) * 3)
+    mw = {"test": "P1", "random_same_effect_p1": True, "mean0_p1": -0.03, "mean0_p2": -0.02, "mean0_p3": -0.04}
+    rerun = _cand(tmp_path / "rerun.json", 12, [mw, mw, mw])
+    official = _cand(tmp_path / "official.json", 10, [mw, {**mw, "mean0_p2": -0.05}])
+    s = EM.vp_study_5y(("15m",), desc, rerun, official)
+    v = s["verdict_ko"]
+    assert s["official"]["tests"] == 10 and s["official"]["candidates"] == 2 and s["same_conclusion"] is True
+    # each run with its own counts: the table's numbers are the re-run's, the document's the pre-registered run's
+    assert "찾지 못했습니다" in v and "사전 등록한 원래 결과(검정 10개)에서는 세 기간을 통과한 후보 2개 중 2개" in v
+    assert "다시 돌린 결과(검정 12개, 아래 표의 숫자)에서는 후보 3개 중 3개" in v and "−4.0% ~ −2.0%로 손실" in v
+    # the official run with a candidate the random entries did not share: 'no edge found' is not said
+    official2 = _cand(tmp_path / "official2.json", 10, [mw, {**mw, "random_same_effect_p1": False}])
+    s = EM.vp_study_5y(("15m",), desc, rerun, official2)
+    assert s["same_conclusion"] is False and "찾지 못했습니다" not in s["verdict_ko"]
+    # a read file with no candidate is not 'could not read the file'
+    s = EM.vp_study_5y(("15m",), desc, _cand(tmp_path / "zero.json", 12, []), official)
+    assert "후보는 0개" in s["verdict_ko"] and "읽지 못함" not in s["verdict_ko"]
+    assert "검정 10개, 후보 2개" in s["verdict_ko"]
 
 
 def test_vp_study_missing_files(tmp_path):
     assert EM.vp_study_5y(desc_path=str(tmp_path / "nope.json"))["available"] is False
     desc = _desc(tmp_path, (0.01,) * 3, (0.01,) * 3, (0.01,) * 3)
-    s = EM.vp_study_5y(("15m",), desc, str(tmp_path / "nope.json"))
+    s = EM.vp_study_5y(("15m",), desc, str(tmp_path / "nope.json"), str(tmp_path / "nope2.json"))
     assert s["available"] and s["candidates"] is None and "설명용" in s["verdict_ko"]
+    assert s["official"] is None and s["same_conclusion"] is False
 
 
 def test_vp_study_reads_the_committed_files_honestly():
@@ -404,11 +434,20 @@ def test_vp_study_reads_the_committed_files_honestly():
     c = s["candidates"]
     assert c["candidates"] >= 1 and c["market_wide"] == c["candidates"] and c["kept_side_roe_max"] < 0
     assert "찾지 못했습니다" in s["verdict_ko"] and "설명용" in s["verdict_ko"]
+    # the pre-registered run (RESULTS_ENTRY_A.md: 290 tests, 2 candidates) is named with its own counts, never the
+    # re-run's 292 / 3 under the 'pre-registered' label
+    with open(EM.STUDY_OFFICIAL_CAND, encoding="utf-8") as fh:
+        off = json.load(fh)
+    o = s["official"]
+    assert (o["tests"], o["candidates"]) == (off["trials"], len(off["candidates"])) and o["market_wide"] == o["candidates"]
+    assert f"사전 등록한 원래 결과(검정 {o['tests']}개)" in s["verdict_ko"] and s["same_conclusion"] is True
+    with open(EM.STUDY_CAND, encoding="utf-8") as fh:
+        assert f"다시 돌린 결과(검정 {json.load(fh)['trials']}개" in s["verdict_ko"]
     assert EM.vp_study_5y(("5m",))["tfs"] == ["5m"]
 
 
 def test_the_study_files_are_only_read(tmp_path):
-    before = {p: open(p, "rb").read() for p in (EM.STUDY_DESC, EM.STUDY_CAND)}
+    before = {p: open(p, "rb").read() for p in (EM.STUDY_DESC, EM.STUDY_CAND, EM.STUDY_OFFICIAL_CAND)}
     EM._STUDY_CACHE.clear()
     EM.vp_study_5y()
     assert {p: open(p, "rb").read() for p in before} == before

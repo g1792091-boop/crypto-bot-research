@@ -148,7 +148,7 @@ BUCKETS = {
     "sr_ahead": ("매물대", "스윙", "전일·전주", "라운드", "상위 봉", "unknown"),
     "sr_room": ("바로 앞", "가까움", "보통", "멂", "unknown"),
     "va_pos": ("매물대 위", "70% 구간 안", "매물대 아래", "최다 가격 근처", "unknown"),
-    "body":("<0.3", "0.3-1", "1+", "unknown"),
+    "body": ("<0.3", "0.3-1", "1+", "unknown"),
     "wick_against": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
     "wick_with": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
     "close_loc": ("weak", "mid", "strong", "unknown"),
@@ -172,8 +172,8 @@ HOW_TO_READ = ("진입 순간의 모습별 끝난 거래 성적(코드 계산). 
                "반대 쪽. trend_stage 추세 단계(EMA20에서 거래 방향으로 ATR 몇 배: 0 미만 역방향, 0~1 초입, 1~2 중간, 2 이상 "
                "막판), range_pos 최근 범위 안 위치(거래 방향 기준 0.33 미만 아래쪽, 0.67 이상 위쪽), trend_align 이 봉·상위 "
                "봉 장세가 거래와 같은 방향/반대(하나라도 반대면 반대)/횡보·불분명. sr_ahead 거래 방향 앞 첫 가격대 종류, "
-               "sr_room 거기까지 ATR, va_pos 종가가 200봉 매물대(거래량 70%) 위·안·아래(롱·숏 뜻 다름). unknown = 자료 "
-               "없음")
+               "sr_room 거기까지 ATR, va_pos 종가가 200봉 매물대(거래량 70%) 위·안·아래·최다 가격 근처(롱·숏 뜻 다름). "
+               "unknown = 자료 없음")
 EQ_READ = "eq 자금 대비 평균 손익. "            # HOW_TO_READ's line on the eq column (left out where there is no money)
 NOTE = ("설명용 집계일 뿐 규칙이 아님. 칸을 아주 많이 보므로(multiple_comparisons) 20칸 중 1칸쯤은 우연만으로 달라 보임: "
         "칸 차이는 가설로만, 나중 거래로 확인할 예측을 붙여 남김")
@@ -1094,6 +1094,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 STUDY_OUT = os.path.join(ROOT, "research", "entry_study", "out_binance")
 STUDY_DESC = os.path.join(STUDY_OUT, "sr_descriptive.json")
 STUDY_CAND = os.path.join(STUDY_OUT, "sr_candidates.json")
+# the pre-registered run itself (PREREG_ENTRY.md fixes its data; RESULTS_ENTRY_A.md reports it): out_binance is the
+# Binance futures re-run of the same code ("NOT the pre-registered result", its own sr_candidates.json says)
+STUDY_OFFICIAL_CAND = os.path.join(ROOT, "research", "entry_study", "out", "sr_candidates.json")
 STUDY_DOC = "research/entry_study/RESULTS_ENTRY_A.md"
 STUDY_RECHECK_DOC = "research/binance_data/RESULTS_BINANCE.md"
 VP_FAMILY = 5                                     # sr.py FAMILY_NAME[5] = volume_profile (room_type)
@@ -1141,14 +1144,42 @@ def _same_sign(periods: list, key: str) -> bool:
     return len(ds) == len(STUDY_PERIODS) and (all(d > 0 for d in ds) or all(d < 0 for d in ds))
 
 
+def _cand_summary(path: str) -> Optional[dict]:
+    """The counts of one sr_candidates.json (None when missing or broken): tests, candidates, how many were
+    market-wide (the random entries showed the same effect), P2 candidates, and the range of the kept side's mean ROE
+    over the three periods (P1 keeps group 0 = no level ahead before the first lock; P2 group 1 = a level behind
+    before the stop)."""
+    try:
+        cand = _load_study(path)
+        cs = [c for c in cand.get("candidates") or [] if isinstance(c, dict)]
+        kept = [_f(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) for c in cs for p, _l in STUDY_PERIODS
+                if _num(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) is not None]
+        return {"tests": int(_f(cand.get("trials"))), "candidates": len(cs),
+                "market_wide": sum(1 for c in cs if c.get("random_same_effect_p1")),
+                "p2_candidates": sum(1 for c in cs if c.get("test") == "P2"),
+                "kept_side_roe_min": round(min(kept), 4) if kept else None,
+                "kept_side_roe_max": round(max(kept), 4) if kept else None}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def _no_edge(c: Optional[dict]) -> bool:
+    """Every candidate market-wide and every kept side still a loss (or no candidate at all)."""
+    return bool(c) and c["market_wide"] == c["candidates"] and (
+        not c["candidates"] or (c["kept_side_roe_max"] is not None and c["kept_side_roe_max"] < 0))
+
+
 def vp_study_5y(tfs: tuple = ("15m", "30m", "1h", "4h"), desc_path: str = STUDY_DESC,
-                cand_path: str = STUDY_CAND) -> dict:
+                cand_path: str = STUDY_CAND, official_path: str = STUDY_OFFICIAL_CAND) -> dict:
     """The 5-year entry study A on the 매물대 (research/entry_study, Binance futures re-run in out_binance; read only).
     Per timeframe and period: the share of the trades whose nearest level ahead was a 매물대 level (POC / VAH / VAL),
     their mean net ROE against all the timeframe's trades', for the 36 pooled ('strategies') and the random entries
-    ('random'). ``same_sign_3`` = that difference had the same sign in all three periods. ``candidates`` = the study's
-    pre-registered candidates (any level, not only 매물대) and how many showed the same effect on random entries. The
-    plain lines are built from these counts; the descriptive rows were never tested (PREREG section 2)."""
+    ('random'). ``same_sign_3`` = that difference had the same sign in all three periods. ``candidates`` = the
+    re-run's candidates of the pre-registered tests (any level, not only 매물대) and how many showed the same effect on
+    random entries; ``official`` = the same counts of the pre-registered run itself (research/entry_study/out, the
+    numbers RESULTS_ENTRY_A.md reports); ``same_conclusion`` = in both every candidate was market-wide and its kept
+    side still lost. The plain lines are built from these counts; the descriptive rows were never tested (PREREG
+    section 2)."""
     try:
         desc = _load_study(desc_path)
     except (OSError, ValueError):
@@ -1176,32 +1207,34 @@ def vp_study_5y(tfs: tuple = ("15m", "30m", "1h", "4h"), desc_path: str = STUDY_
     out["same_sign_3"], out["random_same_sign_3"] = k, kr
     out["headline_ko"] = (f"매물대가 앞에 있던 거래의 평균 ROE가 그 봉 전체 평균보다 세 기간 모두 같은 쪽(모두 덜 나쁨 또는 "
                           f"모두 더 나쁨)이었던 봉: 매매법 {k}/{len(rows)}, 무작위 진입 {kr}/{len(rows)}")
-    try:
-        cand = _load_study(cand_path)
-        cs = [c for c in cand.get("candidates") or [] if isinstance(c, dict)]
-        # the side each candidate would keep: P1 = no level ahead before the first lock (group 0), P2 = a level
-        # behind before the stop (group 1)
-        kept = [_f(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) for c in cs for p, _l in STUDY_PERIODS
-                if _num(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) is not None]
-        out["candidates"] = {"tests": int(_f(cand.get("trials"))), "candidates": len(cs),
-                             "market_wide": sum(1 for c in cs if c.get("random_same_effect_p1")),
-                             "p2_candidates": sum(1 for c in cs if c.get("test") == "P2"),
-                             "kept_side_roe_min": round(min(kept), 4) if kept else None,
-                             "kept_side_roe_max": round(max(kept), 4) if kept else None}
-    except (OSError, ValueError, TypeError, AttributeError):
-        out["candidates"] = None
-    c = out["candidates"]
+    out["candidates"] = _cand_summary(cand_path)
+    out["official"] = _cand_summary(official_path)
+    c, o = out["candidates"], out["official"]
+    # the numbers in the rows below are the re-run's; the pre-registered run's own counts are named next to them, so
+    # the line never contradicts RESULTS_ENTRY_A.md (290 tests, 2 candidates there)
+    out["same_conclusion"] = _no_edge(c) and _no_edge(o)
     if c and c["candidates"]:
         all_mw = c["market_wide"] == c["candidates"]
         loss = c["kept_side_roe_max"] is not None and c["kept_side_roe_max"] < 0
+        pre = (f"사전 등록한 원래 결과(검정 {o['tests']}개)에서는 세 기간을 통과한 후보 {o['candidates']}개 중 "
+               f"{o['market_wide']}개가 무작위 진입에서도 같은 효과였습니다. " if o else "")
         out["verdict_ko"] = (
-            f"5년 진입 연구 A(사전 등록, 검정 {c['tests']}개)에서 매물대를 포함한 지지·저항으로 매매법 고유의 효과는 "
-            f"찾지 못했습니다. 세 기간을 통과한 후보 {c['candidates']}개 중 {c['market_wide']}개가 무작위 진입에서도 같은 "
-            f"효과{'(모두 시장 전체의 성질)' if all_mw else ''}였고"
-            + (f", 걸러서 남긴 쪽 거래도 세 기간 평균 ROE {_pct_ko(c['kept_side_roe_min'])} ~ "
-               f"{_pct_ko(c['kept_side_roe_max'])}로 손실" if loss else "")
-            + f"입니다. 손절 뒤 지지선(P2) 후보는 {c['p2_candidates']}개. 아래 매물대 줄은 설명용 표로, 검정·판정에 쓰지 "
-              "않았습니다.")
+            ("5년 진입 연구 A에서 매물대를 포함한 지지·저항으로 매매법 고유의 효과는 찾지 못했습니다. "
+             if _no_edge(c) and (o is None or _no_edge(o)) else
+             "5년 진입 연구 A의 지지·저항(매물대 포함) 후보입니다. 후보는 규칙이 아니라 나중 거래로 확인할 가설입니다. ")
+            + pre
+            + f"바이낸스 선물 자료로 다시 돌린 결과(검정 {c['tests']}개, 아래 표의 숫자)에서는 후보 {c['candidates']}개 중 "
+              f"{c['market_wide']}개가 무작위 진입에서도 같은 효과{'(모두 시장 전체의 성질)' if all_mw else ''}였"
+            + (f"고, 걸러서 남긴 쪽 거래도 세 기간 평균 ROE {_pct_ko(c['kept_side_roe_min'])} ~ "
+               f"{_pct_ko(c['kept_side_roe_max'])}로 손실입니다" if loss else "습니다")
+            + f". 손절 뒤 지지선(P2) 후보는 {c['p2_candidates']}개"
+            + (f"(원래 결과 {o['p2_candidates']}개)" if o else "")
+            + ". 아래 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다.")
+    elif c:
+        out["verdict_ko"] = (f"5년 진입 연구 A를 바이낸스 선물 자료로 다시 돌린 결과(검정 {c['tests']}개, 아래 표의 숫자)에서 세 "
+                             "기간을 통과한 후보는 0개입니다"
+                             + (f"(사전 등록한 원래 결과: 검정 {o['tests']}개, 후보 {o['candidates']}개)" if o else "")
+                             + ". 아래 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다.")
     else:
         out["verdict_ko"] = ("5년 진입 연구 A의 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다(후보 파일을 읽지 못함: "
                              f"{STUDY_DOC} 참고).")

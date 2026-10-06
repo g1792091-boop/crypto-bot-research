@@ -128,6 +128,6 @@ function study(s, grp) {
       {label: "무작위 진입 차이", get: (x) => rn(x, (v) => h("span", {class: fmt.tone(v.diff)}, pp(v.diff * 100, 2)))},
     ], rows),
     h("p", {class: "an-note"}, `매매법 = 기존 36개 매매법의 5년 신호 합산(코인·매매법 합침), 무작위 진입 = 같은 봉·코인에서 무작위로 들어간 거래.${grp === "ds200" ? " 딥시크 정의는 이 연구에 없어 기존 36의 숫자를 참고로만 둡니다." : ""}${grp === "reel" ? " 5분봉 줄은 기존 36의 과거 5분봉 신호이며 릴스 자체는 이 연구에 없습니다." : ""}`),
-    h("p", {class: "an-note"}, `${fmt.int(STUDY_SMALL)}건 미만 칸은 표본 적음(연구 문서의 * 표시와 같은 선). 숫자는 5년 연구를 바이낸스 선물 자료로 다시 돌린 결과이고, 사전 등록한 원래 자료의 결과도 결론이 같습니다.`),
+    h("p", {class: "an-note"}, `${fmt.int(STUDY_SMALL)}건 미만 칸은 표본 적음(연구 문서의 * 표시와 같은 선). 표의 숫자는 5년 연구를 바이낸스 선물 자료로 다시 돌린 결과이고, 연구 문서의 숫자는 사전 등록한 원래 자료의 결과입니다${s.same_conclusion ? " (결론은 같음: 후보는 모두 무작위 진입에도 같은 효과)" : ""}.`),
     h("p", {class: "an-note an-wrap", title: [src.numbers, src.recheck_doc].filter(Boolean).join(" · ")}, `문서: ${src.doc || "research/entry_study/RESULTS_ENTRY_A.md"}`));
 }
