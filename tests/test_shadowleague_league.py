@@ -8,7 +8,7 @@ import sqlite3
 import numpy as np
 import pytest
 
-from shadowleague_world import (HOUR, MIN, SEEDS, T0, FakeExchange, make_member, now_after_bar, open_store, series_arrays)
+from shadowleague_world import (HOUR, MIN, T0, FakeExchange, make_member, now_after_bar, open_store, series_arrays)
 from paperbot.agents import committee as CM
 from paperbot.shadowleague import account as AC
 from paperbot.shadowleague import clones as CL
@@ -24,6 +24,13 @@ TABLES = ("members", "feeds", "bars", "series_state", "signals", "trades", "clon
 BOOKKEEPING = {"members": {"created_ms", "activated_ms", "last_tick_ms"}, "series_state": {"updated_ms"},
                "signals": {"recorded_ms"}, "trades": {"recorded_ms", "closed_ms"}, "clones": {"created_ms", "resolved_ms"},
                "feeds": {"last_fetch_ms", "last_ok_ms", "next_try_ms"}}
+
+
+@pytest.fixture(autouse=True)
+def unhurried(monkeypatch):
+    """A busy test machine must not turn a slow tick into a 'timed out' one: the wall-time tests set their own limits."""
+    monkeypatch.setattr(LG, "WORK_S", 1e6)
+    monkeypatch.setattr(LG, "HARD_S", 1e6)
 
 
 @pytest.fixture(autouse=True)
@@ -231,7 +238,7 @@ def test_a_failing_feed_is_an_error_with_its_reason_never_nothing(tmp_path):
     ex.fail = 99
     ex.now_ms = now_after_bar("1h", 1099)
     lg = LG.League(st, (m,), ex.get)
-    out = lg.tick(ex.now_ms)
+    lg.tick(ex.now_ms)
     s = st.series(m.member_id, "BTC", "1h")
     assert s["status"] == "error" and "TimeoutError" in s["note"] and s["last_bar_ms"] is None
     f = st.feed("BTC", "1h")
@@ -413,8 +420,8 @@ def test_every_trade_has_k_clones_with_its_own_distances_and_the_study_s_exit(tm
 def test_a_clone_that_enters_after_the_real_trade_waits_and_never_reads_future_bars(tmp_path):
     ex, m, st = world(tmp_path, k=50)
     st, _ = ticks(st, ex, m, [1259])                            # the signal at bar 1252 entered at 1253 and closed at 1256
-    t = st.trades(m.member_id)[0]
-    cl = [c for c in st.clones_of(m.member_id)]
+    assert len(st.trades(m.member_id)) == 1
+    cl = list(st.clones_of(m.member_id))
     future = [c for c in cl if c["target_ms"] > T0 + 1259 * HOUR]
     assert future and all(c["status"] == "pending" and c["entry_ms"] is None for c in future)
     assert all(c["status"] == "closed" for c in cl if c["target_ms"] + 48 * HOUR <= T0 + 1259 * HOUR)
@@ -558,7 +565,6 @@ def test_the_account_equals_the_studys_owners_curve_on_real_simulated_trades(tmp
     if not SO.available():
         pytest.skip("the study's environment cannot be loaded here")
     orig = SO.load_original()
-    sys_path = __import__("sys").path
     from paperbot.shadowleague import sim
     rows = []
     for seed, coin in ((10, "BTCUSD"), (1, "ETHUSD"), (24, "SOLUSD")):

@@ -3,7 +3,6 @@ Nothing here touches the network or the research environment."""
 
 from __future__ import annotations
 
-import gzip
 import os
 import urllib.parse
 

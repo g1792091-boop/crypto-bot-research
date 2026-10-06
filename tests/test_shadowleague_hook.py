@@ -33,6 +33,12 @@ def tick(world, policy, get=None, now=QUIET):
                    policy=policy, now_ms=now, clock_ms=lambda: now, price_get=get)
 
 
+def unhurried(monkeypatch):
+    """A busy test machine must not make a slow league tick 'time out' (the cap itself is tested separately)."""
+    monkeypatch.setattr(HK, "WORK_S", 1e6)
+    monkeypatch.setattr(HK, "WALL_S", 1e6)
+
+
 def block_import(monkeypatch):
     """Make 'from ..shadowleague import hook' fail: the import of the hook is the first thing an ON tick does."""
     import paperbot.shadowleague as pkg
@@ -80,6 +86,7 @@ def test_off_changes_nothing_no_file_no_query_not_even_an_import(world, monkeypa
 
 
 def test_on_one_league_tick_runs_inside_the_agents_tick_and_writes_only_its_own_database(world, monkeypatch):
+    unhurried(monkeypatch)
     ex, member, t0 = league_exchange()
     monkeypatch.setattr(HK, "MEMBERS", (member,))
     paper_before = open(world.paths["paper"], "rb").read()
@@ -98,6 +105,7 @@ def test_on_one_league_tick_runs_inside_the_agents_tick_and_writes_only_its_own_
 
 
 def test_a_second_pass_continues_from_the_cursor_and_the_same_pass_twice_adds_nothing(world, monkeypatch):
+    unhurried(monkeypatch)
     ex, member, t0 = league_exchange(hours=1700)
     monkeypatch.setattr(HK, "MEMBERS", (member,))
     pol = RM.RoomsPolicy(shadow_league=True)
@@ -116,6 +124,7 @@ def test_a_second_pass_continues_from_the_cursor_and_the_same_pass_twice_adds_no
 
 
 def test_without_a_price_source_the_pass_goes_on_and_the_league_says_error(world, monkeypatch):
+    unhurried(monkeypatch)
     ex, member, t0 = league_exchange()
     monkeypatch.setattr(HK, "MEMBERS", (member,))
     out = tick(world, RM.RoomsPolicy(shadow_league=True), None)                     # price_get=None, like the unit tests

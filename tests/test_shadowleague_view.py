@@ -16,25 +16,37 @@ from paperbot.shadowleague import account as AC
 from paperbot.shadowleague import league as LG
 from paperbot.shadowleague import study as SD
 from paperbot.shadowleague import view as V
-from paperbot.shadowleague.store import Store
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+@pytest.fixture(autouse=True)
+def unhurried(monkeypatch):
+    """A busy test machine must not turn a slow tick into a 'timed out' one: the wall-time tests set their own limits."""
+    monkeypatch.setattr(LG, "WORK_S", 1e6)
+    monkeypatch.setattr(LG, "HARD_S", 1e6)
 
 
 @pytest.fixture(scope="module")
 def db(tmp_path_factory):
     """A league database after a whole synthetic run (6 trades, 60 clones, K = 10)."""
     tmp = tmp_path_factory.mktemp("view")
-    ex, m, st = world(tmp)
-    st, _ = ticks(st, ex, m, ALL)
+    mp = pytest.MonkeyPatch()
+    mp.setattr(LG, "WORK_S", 1e6)                                   # (module scope: the per-test fixture is not active yet)
+    mp.setattr(LG, "HARD_S", 1e6)
+    try:
+        ex, m, st = world(tmp)
+        st, _ = ticks(st, ex, m, ALL)
+    finally:
+        mp.undo()
     return {"path": st.path, "member": m, "now": ex.now_ms, "store": st}
 
 
 # ------------------------------------------------------------------------------------------------ states
 def test_no_database_is_not_started(tmp_path):
     p = str(tmp_path / "shadow_league.db")
-    assert V.overview(p) == {"state": "not_started", "label_ko": LABEL_KO}
-    assert V.member(p, "zoneflip") == {"state": "not_started", "label_ko": LABEL_KO}
+    assert V.overview(p) == {"state": "not_started"}
+    assert V.member(p, "zoneflip") == {"state": "not_started"}
     assert not os.path.exists(p)                                   # reading never creates the file
 
 
@@ -49,7 +61,7 @@ def test_an_unreadable_database_is_an_error_with_a_reason_never_empty(tmp_path):
     p = tmp_path / "shadow_league.db"
     p.write_bytes(b"this is not a database " * 200)
     for out in (V.overview(str(p)), V.member(str(p), "zoneflip")):
-        assert out["state"] == "error" and out["reason"] and out["label_ko"] == LABEL_KO
+        assert set(out) == {"state", "reason"} and out["state"] == "error" and out["reason"]
     (tmp_path / "dir.db").mkdir()
     assert V.overview(str(tmp_path / "dir.db"))["state"] == "error"
     st = open_store(tmp_path, "cut.db")

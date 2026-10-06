@@ -32,7 +32,6 @@ from typing import Any, Callable, Optional, Protocol
 
 import numpy as np
 
-from . import LABEL_KO
 from . import account as AC
 from . import clones as CL
 from . import feed as FD
@@ -138,7 +137,9 @@ class League:
         self.clock = clock
 
     # ------------------------------------------------------------------------------------------------ the tick
-    def tick(self, now_ms: int, work_s: float = WORK_S, hard_s: float = HARD_S) -> dict:
+    def tick(self, now_ms: int, work_s: Optional[float] = None, hard_s: Optional[float] = None) -> dict:
+        work_s = WORK_S if work_s is None else work_s            # looked up now, so a test can lift the limits
+        hard_s = HARD_S if hard_s is None else hard_s
         t0 = self.clock()
         work_end, hard_end = t0 + work_s, t0 + hard_s
         st = self.store

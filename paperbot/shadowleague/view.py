@@ -3,9 +3,9 @@
     overview(path)                -> {"state": "ok", "members": [card, ...], ...}
     member(path, member_id)       -> {"state": "ok", "card", "curve", "table", "trades", "comparison", "study", ...}
 
-Every view starts with a ``state``: "not_started" (no database file yet, or no member row in it: the switch was never
-on), "error" with a ``reason`` (the file exists but cannot be read: a failed load never reads as 'nothing'), or "ok".
-Every dict that carries numbers also carries ``label_ko`` = "참고용, 판정 아님". Times are UTC milliseconds; percentages
+Every view starts with a ``state``: exactly {"state": "not_started"} (no database file yet, or no member row in it: the
+switch was never on), exactly {"state": "error", "reason": ...} (the file exists but cannot be read: a failed load never
+reads as 'nothing'), or "ok". Every dict that carries numbers also carries ``label_ko`` = "참고용, 판정 아님". Times are UTC milliseconds; percentages
 are percent (1.5 = 1.5 %), at 1x leverage and after the study's costs unless the key says gross.
 
 The shapes are listed in docs/shadow-league.md ('대시보드용 읽기 도우미') and fixed by tests/test_shadowleague_view.py.
@@ -38,8 +38,11 @@ SIGNAL_KO = {"candidate": "후보", "pending_entry": "다음 봉 시가 진입 �
 LAST_TRADES = 50
 
 
+NOT_STARTED = {"state": "not_started"}
+
+
 def _err(reason: str) -> dict:
-    return {"state": "error", "reason": reason, "label_ko": LABEL_KO}
+    return {"state": "error", "reason": reason}
 
 
 def _open(path: str):
@@ -47,7 +50,7 @@ def _open(path: str):
     try:
         return open_ro(path), None
     except FileNotFoundError:
-        return None, {"state": "not_started", "label_ko": LABEL_KO}
+        return None, dict(NOT_STARTED)
     except sqlite3.Error as exc:
         return None, _err(f"{type(exc).__name__}: {exc}")
 
@@ -146,7 +149,7 @@ def overview(path: str, now_ms: Optional[int] = None) -> dict:
     try:
         rows = [dict(r) for r in c.execute("SELECT * FROM members ORDER BY member_id")]
         if not rows:
-            return {"state": "not_started", "label_ko": LABEL_KO}
+            return dict(NOT_STARTED)
         meta = c.execute("SELECT v FROM league_meta WHERE k = 'last_tick'").fetchone()
         return {"state": "ok", "label_ko": LABEL_KO, "as_of_ms": now, "schema_version": schema_version(c),
                 "last_tick": json.loads(meta[0]) if meta else None, "members": [_card(c, r, now) for r in rows]}
@@ -315,7 +318,7 @@ def member(path: str, member_id: str, now_ms: Optional[int] = None) -> dict:
     try:
         row = c.execute("SELECT * FROM members WHERE member_id = ?", (member_id,)).fetchone()
         if row is None:
-            return {"state": "not_started", "label_ko": LABEL_KO}
+            return dict(NOT_STARTED)
         row = dict(row)
         spec = _spec(row)
         study = STUDIES.get(spec.get("study", ""))
