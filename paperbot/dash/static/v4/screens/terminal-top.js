@@ -45,9 +45,10 @@ export function topBar(ctx, st) {
     return {s, v, el: h("div", {class: "term-mv"}, h("span", {class: "term-mvk"}, k), h("span", {class: "term-mvl"}, s, v))};
   };
   const mUp = mover("급등", "up"), mDn = mover("급락", "down"), mNeg = mover("음펀비", "down");
-  const mCap = h("span", {class: "term-mvcap"}, MARKET_LABEL);
+  const mWhen = h("span", null, "(우리 봇 아님)");
+  const mCap = h("span", {class: "term-mvcap", title: `바이낸스 USD-M 무기한 전체에서 1분마다 (${MARKET_LABEL})`}, h("b", null, "시장 전체"), mWhen);
   const movers = h("div", {class: "term-movers", role: "group", "aria-label": `급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 ${MARKET_LABEL}`},
-    mUp.el, mDn.el, mNeg.el, mCap);
+    mCap, mUp.el, mDn.el, mNeg.el);
 
   // the meetings line: a label, a running count (real), the conclusions (duplicated once for a seamless loop; the copy is
   // hidden from screen readers)
@@ -96,7 +97,7 @@ export function topBar(ctx, st) {
     one(mUp, ok && d.up[0], (r) => pct2(r.pct), ok && d.up, "24시간 가장 많이 오른 코인");
     one(mDn, ok && d.down[0], (r) => pct2(r.pct), ok && d.down, "24시간 가장 많이 내린 코인");
     one(mNeg, ok && d.neg[0], (r) => fmt.num(r.rate * 100, 4, true) + "%", ok && d.neg, "펀딩비가 가장 낮은 코인 (숏이 롱에게 냄)");
-    mCap.textContent = ok && d.stale ? `${MARKET_LABEL} · ${fmt.hm(d.ts)} 값` : MARKET_LABEL;
+    mWhen.textContent = ok && d.stale ? `(우리 봇 아님) · ${fmt.hm(d.ts)} 값` : "(우리 봇 아님)";
   }
   paintMovers(null);
   const loadMovers = async () => {

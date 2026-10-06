@@ -73,7 +73,8 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term-mvl { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .term-mvs { font-weight: 800; font-size: var(--t-sm); color: var(--ink); max-width: calc(110px * var(--ts)); overflow: hidden; text-overflow: ellipsis; }
 .term-mvv { font-size: var(--t-sm); font-weight: 700; }
-.term-mvcap { flex: none; max-width: calc(92px * var(--ts)); color: var(--muted); font-size: var(--t-2xs); line-height: 1.25; white-space: normal; }
+.term-mvcap { flex: none; display: grid; gap: 3px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.15; white-space: nowrap; padding-right: 2px; }
+.term-mvcap b { color: var(--accent-hi); font-weight: 700; }
 .term-movers.none .term-mvs { color: var(--muted); font-weight: 600; }
 .term-movers.stale .term-mvl { opacity: .7; }
 .term-sess { flex: none; padding: 3px 8px; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent-hi); font-weight: 700; font-size: var(--t-2xs);
@@ -132,7 +133,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-fr > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .term-age { justify-self: end; color: var(--muted); font-size: var(--t-2xs); }
 /* 실시간 큰 체결: ▲ coin · price · 고래 · $ · age, tinted by side */
-.term-fr.big { grid-template-columns: calc(54px * var(--ts)) minmax(0, 1fr) auto calc(54px * var(--ts)) calc(22px * var(--ts)); column-gap: 4px; }
+.term-fr.big { grid-template-columns: calc(62px * var(--ts)) minmax(0, 1fr) auto calc(54px * var(--ts)) calc(22px * var(--ts)); column-gap: 4px; }
 .term-fr.big::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55; }
 .term-fr.big.buy::before { background: linear-gradient(90deg, var(--up-soft), transparent 75%); }
 .term-fr.big.sell::before { background: linear-gradient(90deg, var(--down-soft), transparent 75%); }
@@ -210,7 +211,8 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-rb.inline .term-rb-k { display: contents; }
 .term-rb.inline .term-rb-t { order: 2; flex: 1 1 auto; min-width: 60px; }
 .term-rb.inline .term-rb-l:first-child { order: 1; } .term-rb.inline .term-rb-l:last-child { order: 3; }
-.term-rb.wide { width: calc(230px * var(--ts)); flex: none; }
+.term-rb.wide { flex: none; }
+.term-rb.wide .term-rb-t { flex: 0 0 calc(150px * var(--ts)); }
 
 /* ---------------------------------------------------------------- chart */
 .term-chart .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; padding: 0; }
@@ -269,7 +271,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-ut b { color: var(--ink); font-size: var(--t-xs); }
 .term-utot { font-size: var(--t-sm); padding: 0 3px; border-radius: 3px; font-weight: 800; }
 .term-ut .term-utot.up { color: var(--up); } .term-ut .term-utot.down { color: var(--down); }
-.term-sel { height: 26px; min-height: 0; padding: 0 24px 0 8px; font-size: var(--t-xs); font-weight: 700; flex: none; }
+.term-sel { width: auto; min-width: 0; max-width: calc(120px * var(--ts)); height: 26px; min-height: 0; padding: 0 24px 0 8px; font-size: var(--t-xs); font-weight: 700; flex: none; }
 .term-tw { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 .term-t { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
 .term-t th { position: sticky; top: 0; z-index: 1; background: var(--tp); color: var(--muted); font-weight: 600; font-size: var(--t-2xs); text-align: left; padding: 5px 8px;
@@ -288,7 +290,9 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-t td > b.num { font-weight: 700; }
 .term-coin { border: 0; background: none; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); padding: 2px 4px; border-radius: 3px; cursor: pointer; }
 .term-coin:hover, .term-coin.on { color: var(--accent-hi); background: var(--accent-soft); }
-.term-table .term-pf { padding: 4px 10px 5px; }
+.term-table .term-pf { padding: 4px 10px 5px; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.term-table .term-pf > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.term-table .term-pf > :last-child { flex: none; }
 
 /* ---------------------------------------------------------------- the right column */
 .term-right { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -308,7 +312,8 @@ a.term-cr:hover { background: var(--surface-2); }
 .term-cr > .num { text-align: right; }
 .term-roe { padding: 0 3px; border-radius: 3px; }
 .term-cr .term-lq { color: var(--warn); font-size: var(--t-xs); }
-.term-cpo { margin: 0; padding: 6px 4px 4px; font-size: var(--t-2xs); }
+.term-cpo { margin: 0; padding: 4px 4px 2px; font-size: var(--t-2xs); }
+.term-mine .term-cp .empty { padding: 8px 4px 4px; }
 .term-book .pos-book { gap: 0; }
 .term-book .pos-bk { padding: 1px 6px; font-size: var(--t-xs); }
 .term-book .pos-bk.mid { padding: 4px 6px; margin: 2px 0; font-size: var(--t-md); text-shadow: 0 0 10px var(--accent-glow); }
@@ -386,7 +391,7 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-row { gap: 14px; }
   .term-stats, .term-movers { gap: 14px; }
   .term-sess { display: none; }                           /* the session is in the clock's title */
-  .term-rb.wide { width: calc(170px * var(--ts)); }
+  .term-rb.wide .term-rb-t { flex-basis: calc(90px * var(--ts)); }
 }
 /* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
    page still show them); the top line drops the meetings label's room to the movers */
@@ -395,10 +400,15 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-t .xn, .term-t .xe { display: none; }
   .term-t .nm { max-width: calc(164px * var(--ts)); }
   .term-perp { display: none; }
-  .term-mvs { max-width: calc(76px * var(--ts)); }
+  .term-row, .term-stats, .term-movers { gap: 12px; }
+  .term-mvs { max-width: calc(62px * var(--ts)); }
+  .term-mvs, .term-mvv, .term-st > b { font-size: var(--t-xs); }
+  .term-snd { padding: 0 8px; }
   .term-px { font-size: var(--t-lg); }
-  .term-rb.wide { width: calc(130px * var(--ts)); }
+  .term-rb.wide .term-rb-t { flex-basis: calc(48px * var(--ts)); }
   .term-table .term-ph { gap: 8px; }
+  .term-ut.n { display: none; }                           /* the open count is in the 포지션 tab */
+  .term-table .seg button { padding: 0 9px; }
 }
 /* a short PC window (1440x900 and below): the lists keep their rows, the chart its height */
 @media (max-height: 959px) and (min-width: 1200px) {
@@ -411,9 +421,9 @@ a.term-cr:hover { background: var(--surface-2); }
 @media (max-height: 819px) and (min-width: 1200px) {
   .term-mline { display: none; }
   .term-blab { display: none; }
-  .term-cc { min-height: calc(24px * var(--ts)); }
-  .term-cc .dv { display: none; }
-  .term-mid { grid-template-rows: auto minmax(0, 1fr) 190px; }
+  .term-cc { min-height: calc(27px * var(--ts)); }
+  .term-pchart { height: calc(92px * var(--ts)); }
+  .term-mid { grid-template-rows: auto minmax(0, 1fr) 204px; }
 }
 /* 크게 / 아주 크게: wider side columns so the lists keep their names and numbers */
 @media (min-width: 1200px) {

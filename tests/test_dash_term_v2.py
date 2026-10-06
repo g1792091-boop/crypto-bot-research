@@ -151,8 +151,10 @@ JS = ["terminal.js", "terminal-kit.js", "terminal-top.js", "terminal-feed.js", "
 def test_top_strip_wires_the_movers_labelled_market_wide():
     top = _src("screens", "terminal-top.js")
     assert '"/api/v4/movers"' in top and "ctx.every(60000" in top
-    for w in ("급등", "급락", "음펀비", "시장 전체 (우리 봇 아님)", "24시간 거래대금", "펀딩"):
+    for w in ("급등", "급락", "음펀비", '"시장 전체"', '"(우리 봇 아님)"', "MARKET_LABEL", "24시간 거래대금", "펀딩"):
         assert w in top, w
+    # the label comes first in the strip, so a narrow window cuts the last mover, never the label
+    assert "mCap, mUp.el, mDn.el, mNeg.el" in top
     assert "수집 전" in top                                                    # no answer yet: no made-up mover
     assert "stale" in top
 

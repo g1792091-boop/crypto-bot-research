@@ -33,7 +33,7 @@ export function coinPositions(ctx, st) {
     el.sub.textContent = board ? `${fmt.coin(st.sym)} · ${fmt.int(xs.length)}개 · 롱 ${fmt.int(L)} · 숏 ${fmt.int(xs.length - L)}` : "";
     const nDs = all.filter((a) => fmt.groupOf(a) === "ds").length, nCoin = all.filter((a) => fmt.groupOf(a) === "coin").length;
     other.hidden = !(nDs || nCoin);
-    other.textContent = `딥시크 ${fmt.int(nDs)}개 · 동전 봇 ${fmt.int(nCoin)}개도 이 코인에 열려 있음 (건수만)`;
+    other.textContent = `딥시크 ${fmt.int(nDs)} · 동전 봇 ${fmt.int(nCoin)}개도 열림 (건수만)`;
     const nodes = xs.slice(0, 20).map((x) => {
       const id = x.a.account_id, key = `${st.sym}|${x.p.entry_time}|${x.p.liq}`;
       let r = rows.get(id);
@@ -77,9 +77,9 @@ export function pnlPanel(ctx) {
   const todayV = h("b", {class: "num term-tdv"}, "—"), todayK = h("span", {class: "term-tdk"}, "");
   const calMonth = h("span", {class: "term-calm num"}, "");
   const calBox = h("div", {class: "term-cal"});
-  const legend = h("div", {class: "term-plg"}, h("span", null, h("i", {class: "k-line", "aria-hidden": "true"}), "누적 수익"),
-    h("span", null, h("i", {class: "k-bar", "aria-hidden": "true"}), "일별 수익"));
-  const el = panel("수익 차트", {cls: "term-pnl", sub: "기존 36 · 실현", acts: [legend, ui.pill("", "ref")]},
+  const legend = h("div", {class: "term-plg", title: "선 = 누적 실현 수익 · 막대 = 그날 실현 수익"}, h("span", null, h("i", {class: "k-line", "aria-hidden": "true"}), "누적"),
+    h("span", null, h("i", {class: "k-bar", "aria-hidden": "true"}), "일별"));
+  const el = panel("수익 차트", {cls: "term-pnl", acts: [legend, ui.pill("", "ref")]},
     h("div", {class: "term-phero"}, meta, h("span", {class: "term-pnum"}, big, unit)),
     chartBox,
     h("div", {class: "term-today"}, h("span", {class: "term-tdt"}, "오늘 수익"), todayK, h("span", {class: "grow"}), todayV, h("span", {class: "term-punit"}, "USDT")),
@@ -116,7 +116,7 @@ export function pnlPanel(ctx) {
       s("circle", {class: ["end", up ? "up" : "dn"], cx: X(end[0]).toFixed(1), cy: Y(end[1]).toFixed(1), r: 2.6}),
       s("text", {class: "ax", x: W - 42, y: Y(hi - pad) + 9}, short(hi - pad)),
       short(lo + pad) !== short(hi - pad) ? s("text", {class: "ax", x: W - 42, y: Y(lo + pad)}, short(lo + pad)) : null,
-      s("text", {class: "ax", x: W - 42, y: Y(0) + 4}, "0"),
+      hi - pad > 0 && lo + pad < 0 ? s("text", {class: "ax", x: W - 42, y: Y(0) + 4}, "0") : null,
     ].filter(Boolean);
     // daily bars: that day's realized P&L, centred on the day
     const mx = Math.max(1, ...days.map((x) => Math.abs(Number(x.g[K].pnl) || 0)));
@@ -156,7 +156,7 @@ export function pnlPanel(ctx) {
     const tot = days.length ? days.reduce((acc, d) => acc + (Number(d.g[K].pnl) || 0), 0) : null;
     const n = days.reduce((acc, d) => acc + (Number(d.g[K].trades) || 0), 0), w = days.reduce((acc, d) => acc + (Number(d.g[K].wins) || 0), 0);
     motion.countTo(big, tot, {dec: 2, sign: true, tone: true, glow: true});
-    meta.textContent = days.length ? `${fmt.int(days.length)}일 · 거래 ${fmt.int(n)} · 이긴 거래 ${fmt.int(w)}${cal.seasons > 1 ? " · 이번 판정 구간" : ""}` : "";
+    meta.textContent = `기존 36${days.length ? ` · ${fmt.int(days.length)}일 · 거래 ${fmt.int(n)} · 이김 ${fmt.int(w)}${cal.seasons > 1 ? " · 이번 판정 구간" : ""}` : ""}`;
     const td = days.find((d) => d.state === "today");
     const tv = td ? Number(td.g[K].pnl) || 0 : null;
     motion.countTo(todayV, tv, {dec: 2, sign: true, tone: true});

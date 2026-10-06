@@ -29,7 +29,7 @@ export function bottomTable(ctx, st, onPick) {
   const tbl = h("div", {class: "term-tw"});
   const foot = h("div", {class: "term-pf row"});
   const el = panel("우리 봇", {cls: "term-table", lead: [tabs],
-    acts: [grp, ratio, h("span", {class: "term-ut"}, "열린 ", openN), h("span", {class: "term-ut"}, "미실현 합계 ", total, " USDT")]}, tbl, foot);
+    acts: [grp, ratio, h("span", {class: "term-ut n"}, "열린 ", openN), h("span", {class: "term-ut"}, "미실현 합계 ", total, " USDT")]}, tbl, foot);
   const cells = new Map();          // account id -> {pnl, roe} elements (reused so numbers roll)
 
   const money = (a) => MONEY_G.has(fmt.groupOf(a));
