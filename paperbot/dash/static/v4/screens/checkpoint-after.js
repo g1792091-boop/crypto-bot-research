@@ -178,8 +178,8 @@ export function afterCard(ctx) {
     try { st.list = await ctx.api("/api/v4/verdictday/after"); } catch (e) {
       if (e && e.name === "AbortError") { st.busy = false; return; }
       st.list = {failed: true};
-      st.failedAt = Date.now();
     }
+    if (st.list && (st.list.failed || st.list.error)) st.failedAt = Date.now();     // asked again a minute later
     st.busy = false;
     if (!ctx.alive()) return;
     put(ckBox, checklist(st.list, ctx));
@@ -208,7 +208,7 @@ export function afterCard(ctx) {
       loadedFor = ck.date;
       put(ckBox, checklist(null, ctx)); put(lvBox, levruleLine(undefined, ctx));
       loadList(); loadLev();
-    } else if (st.list && st.list.failed && Date.now() - st.failedAt >= 60000) loadList();     // once a minute, not per render
+    } else if (st.list && (st.list.failed || st.list.error) && Date.now() - st.failedAt >= 60000) loadList();     // once a minute, not per render
   };
   return card;
 }
