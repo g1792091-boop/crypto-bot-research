@@ -153,7 +153,9 @@ export async function mount(el, ctx) {
   };
   const coMark = () => h("span", {class: "muted cmp-co", title: "딥시크는 섞인 화면에서 돈 숫자를 보이지 않습니다 (거래 수만)"}, "거래 수만");
   /** Side by side: a table (one column per pick) from 600 px, one block per pick on a phone (compare.css). */
-  function table(items, rows) {
+  function table(items, rowsIn) {
+    // DeepSeek picks alone: only the count rows (a table of '거래 수만' cells says nothing)
+    const rows = items.every((x) => x.counts_only) ? rowsIn.filter((r) => r.money === false) : rowsIn;
     const val = (x, r) => (x.counts_only && r.money !== false ? coMark() : r.get(x));
     const wide = h("div", {class: "tbl-wrap cmp-scroll"}, h("table", {class: "tbl cmp-tbl"},
       h("thead", null, h("tr", null, h("th", {class: "l cmp-rowh", scope: "col"}, ""), items.map(head))),
@@ -241,15 +243,19 @@ export async function mount(el, ctx) {
     }
     if (money.length) kids.push(chartCard);
     kids.push(ui.card({plate: "주요 숫자", sub: d.label || "설명용, 판정 아님"}, table(items, MAIN),
-      ui.refNote(verdictTs(), "동전 봇 순위는 같은 봉 동전 봇 묶음(RANDOM_1~3)을 같은 봉끼리 더해 견준 참고 숫자입니다."),
-      ui.assume(null, "수익률·낙폭·손익비는 닫힌 거래 기준")));
+      money.length ? ui.refNote(verdictTs(), "동전 봇 순위는 같은 봉 동전 봇 묶음(RANDOM_1~3)을 같은 봉끼리 더해 견준 참고 숫자입니다.")
+        : ui.note("딥시크끼리는 거래 수와 지금 포지션만 나란히 봅니다."),
+      money.length ? ui.assume(null, "수익률·낙폭·손익비는 닫힌 거래 기준") : null));
     kids.push(ui.card({plate: "봉별로 나눠 보기", sub: "참고"}, tfTable(items),
       ui.note("동전 대비 = 같은 봉 동전 봇 수익률 중앙값과의 차이 (참고, 판정 아님). 늦게 시작한 추가 계좌는 견주지 않습니다.")));
     // the research is NOT the live rules (vs5y-kit says the same on the strategy page): the 36's 5-year cards used the v3
     // leverage rule, every signal was taken (a live account holds one position at a time), and some research exits differ
     const exitDiff = items.filter((x) => x.y5 && x.y5.exit && x.y5.same_exits_as_live === false)
       .map((x) => `${x.name}: 5년 연구 청산(${x.y5.exit})은 지금 계좌 청산과 다름`);
-    kids.push(ui.card({plate: "5년 시험", sub: "연구 결과 · 지난 5년 · 지금 규칙과 일부 다름"}, y5Table(items),
+    if (items.every((x) => x.counts_only)) {
+      kids.push(ui.card({plate: "5년 시험", sub: "딥시크는 이 화면에서 안 보임"},
+        h("p", {class: "ink2"}, "딥시크 정의의 5년 연구 숫자는 섞인 화면에서 보이지 않습니다. 각 정의의 매매법 화면(딥시크)에서 봅니다.")));
+    } else kids.push(ui.card({plate: "5년 시험", sub: "연구 결과 · 지난 5년 · 지금 규칙과 일부 다름"}, y5Table(items),
       ui.note(["기존 36의 '건당'은 증거금 대비 거래 한 번의 평균 ROE (5년 시험은 예전 v3 배수 규칙), 5분봉은 배수 없이 가격 % (1배)입니다. ",
         "5년 시험은 신호를 모두 따로 잡아서 지금 계좌(한 번에 한 포지션)보다 거래가 많은 게 보통입니다. ",
         ...exitDiff.map((t) => `${t}. `), "5년 숫자는 성격을 보는 참고이지 실력의 증거가 아닙니다."].join(""))));

@@ -412,3 +412,11 @@ def test_tv_remembered_on_with_nothing_to_show_turns_itself_off():
     page kept 'on' with no rotation, so t answered 'TV 자동 넘김을 끝냈습니다')."""
     tv = _read("core/tvmode.js")
     assert "if (c.on) { c.on = false; save(); paintChip(); }" in tv
+
+
+def test_compare_deepseek_only_shows_the_count_rows():
+    page = _read("screens/compare.js")
+    assert 'items.every((x) => x.counts_only) ? rowsIn.filter((r) => r.money === false) : rowsIn' in page
+    assert "딥시크 정의의 5년 연구 숫자는 섞인 화면에서 보이지 않습니다" in page
+    assert '!x.trades ? h("span", {class: "muted"}, "거래 전 (아직 견줄 것 없음)")' in page        # no rank before a trade
+    assert "autoscaleInfoProvider: minSpan" in page
