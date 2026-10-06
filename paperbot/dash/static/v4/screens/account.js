@@ -95,7 +95,8 @@ export async function mount(el, ctx) {
     // ---------------------------------------------------------------- wallet (LED) + stats
     const walletEl = h("b", {class: "led-num num"}), retEl = h("b", {class: "led-sm num"});
     const pnlSum = trades.reduce((s, t) => s + (Number(t.pnl) || 0), 0);
-    const led = h("div", {class: "pnl account-led"}, h("div", null, h("span", {class: "k"}, "잔고 (USDT)"), walletEl),
+    // (the money caption: an ⓘ here, the page's one line at the bottom; owners 10/06 ~14:00 "said once")
+    const led = h("div", {class: "pnl account-led"}, h("div", null, h("span", {class: "k"}, "잔고 (USDT) ", ui.infoTip(ui.ASSUME_KO, "잔고")), walletEl),
       h("div", {class: "r"}, h("span", {class: "k"}, `시작 ${fmt.money(init)} 대비`), retEl));
     if (view.prev != null) { walletEl.dataset.v = String(view.prev); retEl.dataset.v = String(view.prev / init - 1); }
     view.led = (w) => { if (w != null) view.prev = w; motion.countTo(walletEl, w, {dec: 2}); motion.countTo(retEl, w == null ? null : w / init - 1, {format: "pct", dec: 2, tone: true}); };
@@ -136,7 +137,7 @@ export async function mount(el, ctx) {
     const pos = normPos(stt.position);
     let posEl;
     if (pos) {
-      view.card = posCard(a, pos, {why: d.position_why, wallet: stt.wallet ?? a.wallet, data, href: ctx.href, noAccountLink: true, noName: true, caption: false});
+      view.card = posCard(a, pos, {why: d.position_why, wallet: stt.wallet ?? a.wallet, data, href: ctx.href, noAccountLink: true, noName: true, caption: "tip"});
       view.card.update(store.mark(pos.symbol));
       posEl = h("div", {class: "stack tight"}, ui.plate("열린 포지션"), view.card);
     } else posEl = ui.card({plate: "열린 포지션"}, ui.empty("지금 열린 포지션이 없습니다"));

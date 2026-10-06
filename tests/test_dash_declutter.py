@@ -125,6 +125,36 @@ def test_the_deck_places_every_right_edge_name_in_one_column():
     assert ".cfx-lead[data-dir=\"up\"]" in css and ".cfx-lead[data-dir=\"down\"]" in css
 
 
+
+def test_names_keep_clear_of_the_left_pills_and_name_only_drawn_zones():
+    """Review (10/06): in a narrow pane (the left menu with bigger type) a right-edge name sat on a left pill; a zone
+    scrolled out to the right of the pane still had a name."""
+    fx = _code(_read("core", "chartfx.js"))
+    lay = fx[fx.index("function layoutNames()"):fx.index("function paintNamesMore()")]
+    assert "it.L._top = Math.round(Math.min(top, pane.h - PILL_H));" in fx              # layoutPills keeps each pill's top
+    assert "pb.push({t: L._top, b: L._top + PILL_H, r: 6 + L.pill.offsetWidth})" in lay
+    assert "left = pane.w - 4 - nameW(g.text)" in lay and "lay.hidden.push(g)" in lay     # it goes to "+N" and the hover tag
+    assert lay.index("lay.hidden.push(g)") < lay.index("shownNames = lay.shown; hiddenNames = lay.hidden;")
+    items = fx[fx.index("function nameItems()"):fx.index("function layoutNames()")]
+    assert "if (x == null || x > pane.w) continue;" in items
+    # the indicator key wraps before it runs under the "+N" chip
+    assert 'over.classList.toggle("nmore", !!n);' in fx
+    assert ".cfx-over.nmore .cfx-smckey { max-width: calc(100% - 44px - 7.5em); }" in _read("core", "chartfx.css")
+
+
+def test_bottom_table_head_wraps_instead_of_cutting_its_totals():
+    """Review (10/06): below 1600 px at 크게 / 아주 크게 the table head ran 100-280 px past its panel ("미실" cut, and the
+    page scrolled sideways with the left menu); it wraps now, and the ⓘ follows the tabs whose note it carries."""
+    css = _read("screens", "terminal.css")
+    assert ".term-table .term-ph { flex-wrap: wrap; gap: 4px 10px; min-height: 36px; }" in css
+    assert ".term-table .term-ph h2, .term-table .term-ph .term-phs:empty { display: none; }" in css
+    assert "tabs.after(el.tip);" in _read("screens", "terminal-table.js")
+    # slimmer timeframe buttons below 1600 px keep the chart head on one line at 1440 / 아주 크게
+    block = css[css.index("@media (max-width: 1599px) {\n  .term-fx .cfx-light"):]
+    block = block[:block.index("\n}\n")]
+    assert ".term-chart .term-tfs button { padding-inline: 6px; }" in block
+
+
 # ---------------------------------------------------------------- 4. the calm default
 def test_nearest_zones_pick_one_above_and_one_below():
     out = _node("""
@@ -227,7 +257,12 @@ def test_positions_and_account_print_the_shared_caption_once():
     assert 'ui.screenHead("포지션", "모의 계좌의 열린 포지션")' in pos
     acc = _read("screens", "account.js")
     assert "ui.assume(" not in acc and acc.count('ui.assumeLine(["closed", "open"])') == 1
-    assert 'noName: true, caption: false});' in acc
+    # the two big money numbers keep an ⓘ with their own caption (review: "each money card keeps an ⓘ")
+    assert 'noName: true, caption: "tip"});' in acc
+    assert '"잔고 (USDT) ", ui.infoTip(ui.ASSUME_KO, "잔고")' in acc
+    kit = _read("screens", "positions-kit.js")
+    assert 'o.caption === "tip" ? [" ", ui.infoTip(ui.ASSUME_OPEN_KO, "미실현 손익")] : null' in kit
+    assert 'o.caption === false || o.caption === "tip" || co ? null : ui.assume("open"),' in kit
     for note in ("점선은 시작 잔고", "손익은 거래마다 나갈 때 수수료·펀딩 뒤", "수익률 = 지금 잔고 ÷ 시작 잔고"):
         assert f'ui.note("{note}")' in acc, note
 

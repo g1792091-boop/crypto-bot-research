@@ -445,7 +445,8 @@ export function chartDeck(o) {
         continue;
       }
       it.L.pill.hidden = false;
-      it.L.pill.style.transform = `translateY(${Math.round(Math.min(top, pane.h - PILL_H))}px)`;
+      it.L._top = Math.round(Math.min(top, pane.h - PILL_H));       // (the right-edge names keep clear of it)
+      it.L.pill.style.transform = `translateY(${it.L._top}px)`;
       it.L.pill.classList.toggle("off", Math.abs(top - want) > 1);
       bottom = top + PILL_H;
       prev = {L: it.L, more: []};
@@ -479,10 +480,21 @@ export function chartDeck(o) {
   const pool = [];
   let shownNames = [], hiddenNames = [], hov = null;
   const nameH = () => Math.round(st.col.fs * 1.25 + 4);             // .cfx-name: --t-2xs, line-height 1.25, 2 px padding
+  let mctx = null;
+  /** a name tag's width without reading the DOM (.cfx-name: 600 --t-2xs --f-term, 11 px padding) */
+  function nameW(s) {
+    if (mctx == null) { try { mctx = document.createElement("canvas").getContext("2d") || false; } catch (e) { mctx = false; } }
+    if (!mctx) return s.length * st.col.fs * 0.9 + 12;
+    mctx.font = `600 ${st.col.fs}px ${st.col.font || "monospace"}`;
+    return mctx.measureText(s).width + 12;
+  }
   function nameItems() {
     const out = lineWords();
     const v = smcView();
+    const ts = chart.timeScale();
     for (const z of (v && v.zones) || []) {
+      const x = ts.logicalToCoordinate(z.i);
+      if (x == null || x > pane.w) continue;                        // not drawn (scrolled back before it): no name
       const mid = (z.top + z.bot) / 2, text = z.kind === "ob" ? (z.dir > 0 ? "OB+" : "OB−") : "FVG";
       out.push({id: `z:${z.kind}:${z.i}:${z.dir}`, price: mid, y: series.priceToCoordinate(mid), text, tone: z.kind,
         title: `${text} ${z.kind === "ob" ? "주문 블록" : "가격 공백"} ${fmtPrice(z.bot)} – ${fmtPrice(z.top)} (프리미엄 지표 · 신호 아님)`});
@@ -493,6 +505,18 @@ export function chartDeck(o) {
     const items = nameItems().filter((x) => x.y != null && x.y >= 0 && x.y <= pane.h);
     const last = st.data[st.data.length - 1], H = nameH();
     const lay = edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo: 2, hi: pane.h - 2});
+    // a narrow pane (the left menu with bigger type): a name that would sit on one of our left pills goes to the "+N"
+    // list and the hover tag instead, so a name and a pill never cover each other
+    const pb = [];
+    for (const L of lines.values()) if (L.pill && !L.pill.hidden && L._top != null) pb.push({t: L._top, b: L._top + PILL_H, r: 6 + L.pill.offsetWidth});
+    if (pb.length) {
+      const keep = [];
+      for (const g of lay.shown) {
+        const top = g.ly - H / 2, bot = top + H, left = pane.w - 4 - nameW(g.text);
+        if (pb.some((q) => q.t < bot + 2 && top - 2 < q.b && left - 6 < q.r)) lay.hidden.push(g); else keep.push(g);
+      }
+      lay.shown = keep;
+    }
     shownNames = lay.shown; hiddenNames = lay.hidden;
     while (pool.length < shownNames.length) {
       const lead = h("i", {class: "cfx-lead", "aria-hidden": "true"}), el = h("span", {class: "cfx-name num"}, h("span"), lead);
@@ -524,6 +548,7 @@ export function chartDeck(o) {
   function paintNamesMore() {
     const n = hiddenNames.length;
     namesMore.hidden = !n;
+    over.classList.toggle("nmore", !!n);
     if (!n) { if (!namesList.hidden) openNames(false); return; }
     const t = `이름 +${n}`;
     if (namesMore.textContent !== t) namesMore.textContent = t;

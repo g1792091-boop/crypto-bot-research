@@ -105,6 +105,8 @@
 .cfx-smckey { position: absolute; left: 44px; bottom: 6px; padding: 2px 7px; border-radius: 3px; background: var(--pill-bg); color: var(--muted);
   font: 500 var(--t-2xs)/1.3 var(--f-body); }
 .cfx-smckey[hidden] { display: none; }
+/* (a narrow pane) the key wraps before it would run under the names' "+N" chip in the bottom-right corner */
+.cfx-over.nmore .cfx-smckey { max-width: calc(100% - 44px - 7.5em); }
 
 /* our last-price tag on the right axis (the 차트 screen; the terminal has its own .term-ptag with the countdown) */
 .cfx-tag { position: absolute; left: 0; top: 0; z-index: 4; height: 20px; display: grid; place-items: center; border-radius: 3px 0 0 3px;

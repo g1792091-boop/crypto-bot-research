@@ -38,6 +38,7 @@ export function bottomTable(ctx, st, onPick) {
   // 10/06 ~14:00: not under the table as well)
   const el = panel("우리 봇", {cls: "term-table", lead: [tabs], info: TAB_NOTE.pos,
     acts: [grp, ratio, h("span", {class: "term-ut n"}, "열린 ", openN), h("span", {class: "term-ut"}, "미실현 합계 ", total, " USDT")]}, tbl, foot);
+  tabs.after(el.tip);               // (the head's title is hidden here: the ⓘ follows the tabs whose note it carries)
   const cells = new Map();          // account id -> {pnl, roe} elements (reused so numbers roll)
 
   const money = (a) => MONEY_G.has(fmt.groupOf(a));

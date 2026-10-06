@@ -255,6 +255,8 @@ a.term-fr:hover { background: var(--surface-2); }
 @media (max-width: 1599px) {
   .term-fx .cfx-light { padding: 0 8px; }
   .term-fx .cfx-light > span { display: none; }
+  /* (review) slimmer timeframe buttons: the head stays one line at 1440 / 아주 크게, 1280 / 크게 and 1200 / 보통 */
+  .term-chart .term-tfs button { padding-inline: 6px; }
 }
 .term-tip { position: absolute; left: 0; top: 0; z-index: 6; display: grid; gap: 3px; max-width: 220px; padding: 6px 9px; border-radius: 5px; pointer-events: none;
   background: var(--glass); border: 1px solid var(--warn); color: var(--ink); font-size: var(--t-xs); box-shadow: 0 6px 18px var(--card-shadow, transparent); }
@@ -270,8 +272,10 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-cfail { padding: 20px; }
 
 /* ---------------------------------------------------------------- bottom table: one head line (tabs · ALL · share · count · total) */
-.term-table .term-ph { flex-wrap: nowrap; gap: 12px; min-height: 36px; }
-.term-table .term-ph h2 { display: none; }
+/* (a narrow middle column, e.g. the left menu with bigger type: the head wraps instead of pushing the page sideways;
+   every item is flex: none, so it wraps only when it would overflow) */
+.term-table .term-ph { flex-wrap: wrap; gap: 4px 10px; min-height: 36px; }
+.term-table .term-ph h2, .term-table .term-ph .term-phs:empty { display: none; }
 .term-table .term-ph .seg { flex: none; }
 .term-table .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr); padding: 0 6px; }
 .term-table .seg button { height: 26px; padding: 0 12px; font-size: var(--t-xs); border-radius: 5px; }
