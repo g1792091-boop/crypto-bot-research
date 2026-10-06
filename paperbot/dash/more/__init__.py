@@ -31,6 +31,11 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
     combo   조합 성과 (#/combo): 고른 매매법·봉 계좌를 합친 곡선과 숫자, 전체 상관 지도, 합친 규칙 실험 (paper3.db만 읽음)
     combo5y 5년 조합 시험 (커밋된 data/combo5y.json, #/combo5y) + 분석 › 5년 월별 (지금 실험이 5년 달 중 어디쯤)
+    indranges  좋은 수치 찾기: 진입 때 숫자 구간별 성적 (5년: 커밋된 data/indranges.json, 지금 실험: 기존 36의 진입)
+    liqentry   강제청산 직후 진입 (liq.db; 5·15·60분, 청산당한 쪽과 같은 방향 / 반대 방향, ?group=; 딥시크는 수만)
+    holdcmp    그냥 들고 있었다면 / 반대로 했다면 (코인 그냥 들고 있기·바구니, 거래를 거꾸로 한 대충 계산, ?group=)
+    ghagree    GH Coin과 같은 방향일 때 (ghcoin/calls.jsonl; 같은 방향 / 반대 / 타점 없음, ?group=; 딥시크는 수만)
+    (a7kit: the four views' shared helpers, not a route module)
 """
 from __future__ import annotations
 
@@ -54,6 +59,7 @@ MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (backg
 MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
 MODULES += ("combo",)                          # combo-paper: 조합 성과 (합친 곡선, 상관 지도, 합친 규칙)
 MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 5년 월별 (committed JSON)
+MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수치 · 강제청산 직후 · 들고 있었다면 · GH Coin 방향
 
 
 def register_all(app, **kw) -> dict:

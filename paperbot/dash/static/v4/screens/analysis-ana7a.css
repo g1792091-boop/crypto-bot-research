@@ -1,0 +1,113 @@
+/* 분석 ana7a: 좋은 수치 찾기, 강제청산 직후, 들고 있었다면, GH Coin 방향 (analysis-indr.js, analysis-liqent.js,
+   analysis-hold.js, analysis-ghagree.js, analysis-a7kit.js). @imported by analysis.css. Tokens only (both skins); text
+   sizes only as --t-* tokens (12px floor). Up / down colours only where a cell passed every check (더 좋음 / 더 나쁨) or
+   for a real gain / loss; everything else stays in ink tokens. */
+
+/* one cell as words */
+.a7-cell { display: inline; line-height: 1.7; min-width: 0; }
+.a7-dot { color: var(--muted); white-space: pre; }
+
+/* label → our group / coin flips (stacked on phones, three columns on wide screens) */
+.a7-cmp { display: grid; min-width: 0; }
+.a7-cmprow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 2px; border-top: 1px solid var(--line);
+  font-size: var(--t-sm); min-width: 0; }
+.a7-cmprow:first-child { border-top: 0; }
+.a7-cmphead { display: none; }
+.a7-cmpk { display: grid; gap: 1px; min-width: 0; }
+.a7-cmpk small { color: var(--muted); font-size: var(--t-xs); line-height: 1.4; }
+.a7-cmpv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.a7-tag { font-style: normal; color: var(--muted); font-size: var(--t-xs); min-width: 64px; }
+@media (min-width: 760px) {
+  .a7-cmprow { grid-template-columns: minmax(150px, .9fr) minmax(0, 1.3fr) minmax(0, 1.3fr); gap: 12px; align-items: center; }
+  .a7-cmphead { display: grid; color: var(--muted); font-size: var(--t-xs); font-weight: 700; padding-top: 2px; }
+  .a7-tag { display: none; }
+}
+
+/* a bar from the middle line: right = better / up, left = worse / down */
+.a7-div { position: relative; display: block; height: 10px; border-radius: 6px; background: var(--surface-3); min-width: 60px; }
+.a7-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-2); }
+.a7-fill { position: absolute; top: 1px; bottom: 1px; width: var(--w, 0%); border-radius: 4px; background: var(--ink-2); opacity: .55;
+  transition: width .6s var(--ease); }
+.a7-fill.pos { left: 50%; } .a7-fill.neg { right: 50%; }
+.a7-fill.up { background: var(--up); opacity: 1; } .a7-fill.down { background: var(--down); opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .a7-fill { transition: none; } }
+
+/* range rows: label | bar | value | status */
+.a7-rows { display: grid; min-width: 0; }
+.a7-row { display: grid; grid-template-columns: minmax(118px, 1fr) minmax(120px, 1.4fr) minmax(130px, 1fr) minmax(76px, auto);
+  gap: 6px 14px; align-items: center; padding: 9px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); min-width: 0; }
+.a7-row:first-child { border-top: 0; }
+.a7-row.marked { background: var(--surface-2); border-radius: var(--r-sm); }
+.a7-k, .a7-v { display: grid; gap: 1px; min-width: 0; }
+.a7-k small, .a7-v small { color: var(--muted); font-size: var(--t-xs); line-height: 1.35; }
+.a7-bar { display: grid; gap: 3px; min-width: 0; }
+.a7-bar small { font-size: var(--t-xs); }
+.a7-st { justify-self: end; }
+.a7-plain { color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
+.a7-row.paper { grid-template-columns: minmax(118px, 1fr) minmax(0, 1.4fr) minmax(90px, auto); }
+.a7-row.coin { grid-template-columns: minmax(90px, .8fr) minmax(120px, 1.6fr) minmax(130px, 1fr); }
+.a7-v.five { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 6px; color: var(--ink-2); }
+@media (max-width: 640px) {
+  .a7-row, .a7-row.paper, .a7-row.coin { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
+  .a7-row .a7-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .a7-row .a7-st { order: 2; }
+  .a7-row .a7-bar { grid-column: 1 / -1; order: 3; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+  .a7-row .a7-v { grid-column: 1 / -1; order: 4; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .a7-row.paper .a7-v.five { grid-column: auto; order: 2; }
+  .a7-row.paper .a7-v:not(.five) { order: 3; }
+  .a7-row.coin .a7-v { grid-column: auto; order: 2; display: grid; justify-items: end; }
+  .a7-row.coin .a7-bar { order: 3; }
+}
+
+.a7-help { margin: 0 0 6px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.a7-help b { color: var(--ink); }
+.a7-legend { margin: 6px 0 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.6; }
+.a7-segrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; margin-bottom: 6px; }
+.a7-segrow .seg { max-width: 100%; }
+.a7-note { color: var(--muted); font-size: var(--t-xs); }
+.a7-pick { min-width: 0; max-width: 100%; flex: 1 1 220px; }
+.a7-edges .tbl td, .a7-edges .tbl th { white-space: nowrap; }
+.a7-mrow .lname { white-space: normal; line-height: 1.45; }
+.a7-mrow .lname small { font-size: var(--t-xs); }
+.a7-say { margin: 6px 0 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.65; }
+.a7-methods ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.a7-methods b { color: var(--ink); }
+
+/* 한눈에 tiles */
+.a7-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+@media (min-width: 900px) { .a7-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.a7-tile { display: grid; gap: 3px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface-2); min-width: 0; border-left: 3px solid var(--line-2); }
+.a7-tile.me { border-left-color: var(--series-core); }
+.a7-tile.mir { border-left-color: var(--accent-line); border-left-style: dashed; }
+.a7-tile.flip { border-left-color: var(--series-coin); }
+.a7-tile.bas { border-left-color: var(--cmp-lo); }
+.a7-tk { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.4; }
+.a7-tv { font-size: var(--t-lg); line-height: 1.25; color: var(--ink); overflow-wrap: anywhere; }
+.a7-tile small { color: var(--muted); font-size: var(--t-xs); line-height: 1.4; }
+
+/* the curve card: line colours and the legend swatches */
+.a7-legend2 { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); margin-bottom: 4px; }
+.a7-legend2 span { display: inline-flex; align-items: center; gap: 6px; }
+.a7-sw { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--accent); }
+.a7-sw.a7-l-core { border-top-color: var(--series-core); } .a7-sw.a7-l-ds { border-top-color: var(--series-ds); }
+.a7-sw.a7-l-m5 { border-top-color: var(--series-m5); }
+.a7-sw.a7-l-mir { border-top: 2px dashed var(--accent-line); }
+.a7-sw.lc { border-top: 2px dashed var(--ink-2); }
+.a7-sw.a7-l-bas { border-top: 2px solid var(--cmp-lo); }
+.chart .a7-l-core, .chart .a7-l-ds, .chart .a7-l-m5, .chart .a7-l-mir, .chart .a7-l-bas { fill: none; stroke-width: 1.7; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke; }
+.chart .a7-l-core { stroke: var(--series-core); } .chart .a7-l-ds { stroke: var(--series-ds); } .chart .a7-l-m5 { stroke: var(--series-m5); }
+.chart .a7-l-mir { stroke: var(--accent-line); stroke-dasharray: 5 3; }
+.chart .a7-l-bas { stroke: var(--cmp-lo); }
+
+/* GH Coin calls per coin */
+.a7-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.a7-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px;
+  font-size: var(--t-xs); color: var(--ink-2); }
+.a7-chip b { color: var(--ink); }
+.a7-coin .meta { line-height: 1.6; }
+
+/* 매매법별: the chosen strategy's own paper entries under its 5-year ranges */
+.a7-sp { display: grid; gap: 6px; min-width: 0; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-2); }
+.a7-v .pp { justify-self: start; }
