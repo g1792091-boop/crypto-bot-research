@@ -173,8 +173,10 @@ def stale_wal(path: str) -> bool:
 def open_ro(path: str) -> sqlite3.Connection:
     """A read-only connection (autocommit, so the caller opens one BEGIN for a consistent read). FileNotFoundError when the
     file is not there, sqlite3.Error / OSError when it cannot be read."""
-    if not os.path.isfile(path):
+    if not os.path.exists(path):
         raise FileNotFoundError(path)
+    if not os.path.isfile(path):
+        raise OSError(f"{path} is not a file")
     if stale_wal(path):
         raise sqlite3.DatabaseError("restored database with an old -wal next to it")
     uri = "file:" + urllib.parse.quote(os.path.abspath(path)) + "?mode=ro"
@@ -192,6 +194,8 @@ def open_ro(path: str) -> sqlite3.Connection:
 def reason_ko(exc: BaseException) -> str:
     """A plain-Korean reason for a read that failed (the raw text goes next to it, for whoever fixes it)."""
     msg = str(exc).lower()
+    if "is not a file" in msg:
+        return "그 자리에 파일이 아니라 다른 것(폴더 등)이 있어요"
     if isinstance(exc, PermissionError) or "unable to open" in msg:
         return "파일을 열지 못했어요(읽기 권한이나 위치를 확인해야 해요)"
     if "not a database" in msg or "malformed" in msg or "corrupt" in msg or "old -wal" in msg:
@@ -557,7 +561,9 @@ def build(path: Optional[str], member_id: Optional[str] = None, now_ms: Optional
         if "members" not in tables:
             return {**base, "state": "error", "reason": "OperationalError: no such table: members",
                     "reason_ko": reason_ko(sqlite3.OperationalError("no such table")), "path": path}
-        rows = _rows(conn, "SELECT * FROM members ORDER BY member_id")
+        known = list(KNOWN_MEMBERS)               # the members this page names come first, in its own order; the rest by id
+        rows = sorted(_rows(conn, "SELECT * FROM members ORDER BY member_id"),
+                      key=lambda r: (known.index(r["member_id"]) if r["member_id"] in known else len(known), r["member_id"]))
         if not rows:
             return {**base, "state": "not_started", "reason": "no_member", "reason_ko": "기록 파일은 있지만 멤버가 아직 한 명도 없어요."}
         meta = {r["k"]: r["v"] for r in conn.execute("SELECT k, v FROM league_meta")} if "league_meta" in tables else {}

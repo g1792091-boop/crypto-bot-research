@@ -57,7 +57,7 @@ def test_one_start_screen_rule_for_the_router_and_the_settings_panel():
     assert out["pcOnly"] == "chart" and out["pcOnlyWide"] == "terminal" and out["auto"] == "terminal"
     assert out["min"] == 900
     assert out["trade"] == ["terminal", "positions", "chart", "charts", "market"]
-    assert out["strat"] == ["strategies", "grid", "analysis", "compare", "path", "combo", "combo5y", "whatif"]
+    assert out["strat"] == ["strategies", "grid", "analysis", "compare", "path", "combo", "combo5y", "whatif", "league"]
     st = _read("core", "settings.js")
     assert "const autoStart = () => SCREENS[mainLanding()].ko;" in st and "LANDING_MIN_PX" not in st
     rt = _read("core", "routes.js")
