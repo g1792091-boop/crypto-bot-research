@@ -78,7 +78,7 @@ const glowR = {
       // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
       c.imageSmoothingEnabled = true;
       try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
-      for (const [S, a] of [[3, 0.55], [8, 0.75]]) {
+      for (const [S, a] of [[3, 0.5], [8, 0.6]]) {
         const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
         const off = small(S, ow, oh), o2 = off.getContext("2d");
         o2.clearRect(0, 0, ow, oh);
