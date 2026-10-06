@@ -122,7 +122,9 @@ def test_real_events_map_to_the_owners_motifs():
     assert r["burst"] == ["c_liq", "c_tp"]                     # a burst = at most two different motifs, rarest first
     assert r["msNo"] is None and r["ms10"] == "d10-7" and r["msV"] == "verdict-7"
     assert out["names"] == ["c_tp", "c_sl", "c_liq", "c_entry", "c_meet", "c_liq", "c_tp"]
-    assert out["first"]["fs"] == [493.88, 659.26, 987.77]
+    # the default engine is v7 (owners 10/06): 익절 = the stream's sparkle run F4 G4 C5 E5; the v6 notes
+    # [493.88, 659.26, 987.77] are still MOTIFS.c_tp and play when 칩튠(이전) is chosen (tests/test_dash_sound_v7.py)
+    assert out["first"]["fs"] == [349.23, 392.0, 523.25, 659.26]
 
 
 def test_deepseek_and_coin_flips_only_feed_the_layer():
