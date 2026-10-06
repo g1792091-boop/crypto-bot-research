@@ -2447,7 +2447,7 @@ def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] 
     if start_ts is None:
         return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
     c = clock(int(start_ts), int(now_ms), ledger, day_state)
-    n, k, cp, mmdd = c["n"], c["k"], c["ts"], c["mmdd"]
+    n, k, cp, mmdd = c["n"], c["k"], c["ts"], c["mmdd"] or "—"          # "—": past day 180, no verdict left
     if c["state"] == "ended":
         text = f"새 실험 D+{n} · 판정 끝"
     elif c["due"]:

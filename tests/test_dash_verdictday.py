@@ -241,6 +241,9 @@ def test_past_day_180_there_is_no_next_verdict():
            "snapshots": {}, "log": {}}
     c = V.clock(START, ck.checkpoint_ts(START, 6) + 2 * H, led)
     assert c["state"] == "ended" and c["ts"] is None and not c["due"] and c["last"]["day"] == 180
+    from paperbot.dash.app import restart_banner
+    b = restart_banner(START, ck.checkpoint_ts(START, 6) + 2 * H, led)
+    assert b["verdict_mmdd"] == "—" and b["text"].endswith("판정 끝") and b["chip_ko"]["opt"] == " · 판정 끝"
 
 
 # ---------------------------------------------------------------- every place that shows the countdown or the verdict

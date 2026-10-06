@@ -158,7 +158,7 @@
 .cka-c.none { border-style: dotted; color: var(--muted); }
 a.cka-c:hover { border-color: var(--accent); }
 .cka-more { justify-self: start; }
-@media (max-width: 899px) { .cka-map:not(.all) .cka-blk:nth-child(n+2) { display: none; } }
+@media (max-width: 899px) { .cka-map:not(.all) .cka-blk:nth-child(n+2) { display: none; } .cka-c { min-height: 32px; } }
 @media (min-width: 900px) { .cka-more { display: none; } }
 .card ul.cka-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: var(--t-sm); color: var(--ink-2); }
 .cka-groups b { color: var(--ink); }

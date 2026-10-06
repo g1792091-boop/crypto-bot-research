@@ -268,7 +268,15 @@ export async function mount(el, ctx) {
   } else st.ck = ck;
   ctx.watch("summary", (s) => { if (s) { st.summary = s; askVerdict(s); if (st.ck) render(); } });
   ctx.watch("board", (b) => { if (b) { st.board = b; if (st.ck) render(); } });
-  ctx.watch("checkpoint", (v) => { if (v) { st.ck = v; render(); } });
+  ctx.watch("checkpoint", (v) => {
+    if (!v) return;
+    st.ck = v;
+    // a verdict newer than the summary's clock (stored between two summary polls): ask the clock again at once, so the
+    // countdown names the next checkpoint together with the result
+    const last = vday.vclock(st.summary) && vday.vclock(st.summary).last;
+    if (v.ready && (!last || last.date !== v.date)) ctx.store.refresh("summary").catch(() => {});
+    render();
+  });
   ctx.every(60000, loadVd, {now: true});
   ctx.every(60000, () => renderCountdown(), {now: false});
 }
