@@ -7,6 +7,7 @@
 //   코인·장세 지도 map · 코인·시간대 /api/breakdown · 진입 순간 entry · 상황 태그 /api/cards/stats   (analysis-where.js)
 //   좋은 자리 vs 보통 levrule · 그림자 비교 shadows · 계좌 겹침 /api/overlap · 조합 시너지 synergy (analysis-rules.js)
 //   운 vs 실력 luck (/api/v4/luck, luck-kit.js: every place that tests many things, luck alone vs really passed)
+//   손실 크기 규칙 size (/api/v4/size5y + /cell, analysis-size.js; the 36 only, the same 5-year trades under other sizes)
 //   GH Coin /api/ghcoin (only while its recorder runs) · 45개 질문 questions (only when filled)
 // 건강 점검 moved to 서버·비용 and 알림 기록 to 알림 기록 (builder E). A {pending: true} answer shows the shimmer and asks
 // again after 3 s (the server computes heavy views in the background). The last view is remembered (local).
@@ -20,6 +21,7 @@ import {tradeProgress, runDays, waitCard} from "./analysis-kit.js";
 import * as R from "./analysis-risk.js";
 import * as W from "./analysis-where.js";
 import * as X from "./analysis-rules.js";
+import * as SZ from "./analysis-size.js";
 import * as C from "./analysis-costs.js";
 import * as E from "./analysis-exits.js";
 import * as RG from "./analysis-regime.js";
@@ -34,6 +36,7 @@ const VIEWS = [
   {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "groups", desc: "들어가는 봉의 모습별 성적"},
   {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, groups: "any", desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
   {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, groups: "core", desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
+  {id: "size", label: "손실 크기 규칙", path: "/api/v4/size5y", render: SZ.size, groups: "core", fixed: true, desc: "같은 5년 거래에 크기만 바꾸면: 손절 한 번 = 잔고 0.5·1·2%, 배수 절반, 지금 v4"},
   {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, groups: "core", desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},
   {id: "overlap", label: "계좌 겹침", path: "/api/overlap?days=7", render: X.overlap, groups: "core", desc: "같이 움직이는 계좌와 한 코인에 몰린 순간"},
   {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, groups: "core", desc: "매매법 여러 개를 같이 돌렸다면"},
@@ -240,7 +243,8 @@ export async function mount(el, ctx) {
   ctx.on("features", () => { const t = pick(st.tab); renderSeg(); if (t !== st.tab) go(t, false); });
   await load(false);
   // views go stale with new trades: refresh the visible one every 5 minutes (each route is cached on the server too)
-  ctx.every(FRESH_MS, () => load(true), {now: false});
+  // (a view of a committed file, fixed: true, is left alone: a refresh would only close what the owner opened)
+  ctx.every(FRESH_MS, () => { if (!(VIEWS.find((x) => x.id === st.tab) || {}).fixed) load(true); }, {now: false});
 }
 
 export function update(params) { if (current) current(params); }

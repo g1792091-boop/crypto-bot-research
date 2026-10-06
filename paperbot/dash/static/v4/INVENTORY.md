@@ -451,6 +451,12 @@ The chart deck's Premium / Discount light (터미널 chart and 차트 screen, AI
 | Calm and paused | prefers-reduced-motion: slow fades (1.4 s in, 1.8 s out, seconds of dark between), no flash. A hidden page: every timer stops, both halves dark, the relay connection closed | — |
 | One relay connection | core/ticks.js: the sound layer, the terminal's lists / lights and the chart light share the page's ONE `/api/v4/ticks` EventSource (it was one per part); open while a part listens and the page is visible, closed when hidden and after the last listener; a late listener gets the kept large orders once. The chart light listens even with the sound off | `/api/v4/ticks` (unchanged; one listener per page) |
 | Not changed | 매매법 / 계좌 charts carry only the candle glow (no Premium / Discount light), so nothing there blinks; 클래식 stays plain | — |
+## size5y: 손실 크기 규칙 (owners' idea 6; dashboard only, read-only, pre-registered in docs/size5y.md; tests/test_dash_size5y.py, tests/test_size5y.py)
+
+| What | Where it shows | Server |
+|---|---|---|
+| 손실 크기 규칙 tab | 분석 › 손실 크기 규칙 (after 좋은 자리 vs 보통; screens/analysis-size.js + .css, core only): the same 5-year entries and exits of the 36 (v4 path, 30-day $5,000 accounts) with only the position size changed: 지금 v4 / 손절 한 번 = 잔고 0.5 · 1 · 2% / 배수 절반. Head, caveat card (설명용, 판정 아님; the live rule does not change before the verdict; the 36 were chosen on this data; exits fixed), 쉬운 말로 (sentences built only from the file's pooled numbers, timeframe switch), 규칙 비교 (rules as columns: 5년 뒤 잔고, 1년 평균, 최대 낙폭, 가장 나쁜 달, 플러스인 달, Calmar-like, 파산한 칸, 늘어난 칸, 지는 거래 한 번, 30일 계좌; timeframe and 5년 / 2021-22 / 2023-24 / 2025-26 switches; coin flips with the same rule as 참고 + refNote; assume()), 모은 36 · 달별 잔고 (log-scale monthly curves, one line per rule), 매매법마다 (144 rows, 10 per page; tap: the cell's rule table and curves). The 늘어난 칸 count says how many of them took under 20 trades; a coin-flip sentence carries refNote; the view is `fixed: true` in VIEWS, so the 5-minute refresh leaves it (and an opened row) alone | `/api/v4/size5y` (dash/more/size5y.py: paperbot/dash/data/size5y.json as committed, written offline by paperbot/dash/tools/size5y.py; per-cell curves left out) |
+| 매매법마다 drill-down | the same tab: one strategy x timeframe's rules side by side (5년, the three periods, bust month, loss per losing trade, 30-day share positive) and its monthly curves; 표본 적음 under 20 path trades | `/api/v4/size5y/cell?s=&tf=` |
 
 ## 클릭 줄이기 (nav-rail; owners 10/06 "들어가는 클릭버튼이 너무 많아서 들어가서 보는게 귀찮다"; tests/test_dash_nav.py)
 

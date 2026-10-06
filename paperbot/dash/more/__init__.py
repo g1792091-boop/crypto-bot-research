@@ -15,6 +15,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     power   판정 감도: 진짜 실력별 30·60·90일 합격 확률 (research/power/out/power.json, 판정 화면)
     brief   오늘의 회의 결론 보고판 (홈 · 대표실 책상)
     vs5y    5년 시험 vs 지금 vs 동전 봇 (매매법 상세, 봉마다)
+    size5y  손실 크기 규칙: 같은 5년 진입·청산에 크기 규칙만 바꿔 (data/size5y.json, 분석 › 손실 크기 규칙)
     bell        결재함 종 (머리글: 두 분 승인을 기다리는 제안 수)
     uptime      가동 기록 (서버·비용: 시간마다 처리한 분, 재시작, 밤 점검)
     tradeshape  요일×시간 열지도 + 거래 결과 분포 (분석)
@@ -36,6 +37,7 @@ from types import SimpleNamespace
 MODULES = ("flow", "grid", "story", "since", "replay", "params")
 MODULES += ("jobs", "costs", "power")          # wave 2 part B
 MODULES += ("brief", "vs5y")                    # wave 2 part C
+MODULES += ("size5y",)                         # 손실 크기 규칙 (5년 JSON as committed, re-read on change)
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
