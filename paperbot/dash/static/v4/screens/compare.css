@@ -60,7 +60,7 @@
 .cmp-shead { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); }
 .cmp-shead b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-shead small { margin-left: auto; font-size: var(--t-2xs); white-space: nowrap; }
-.cmp-kv { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; font-size: var(--t-sm); }
+.cmp-kv { margin: 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 6px 10px; font-size: var(--t-sm); }
 .cmp-kv dt { color: var(--ink-2); }
 .cmp-kv dd { margin: 0; text-align: right; }
 .cmp-kv dd .cmp-cell { justify-items: end; }

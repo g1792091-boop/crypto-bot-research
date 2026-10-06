@@ -182,7 +182,7 @@ export async function mount(el, ctx) {
     // a rank on a handful of trades is luck more than skill: it says 표본 적음 next to it (like the 순위표's 동전 ▲▼)
     {k: "동전 봇 순위 (참고)", s: "같은 봉 동전 봇 몇 개보다 수익률이 높은지", get: (x) => (x.extra ? h("span", {class: "muted"}, "비교 안 함 (늦게 시작)")
       : !x.trades ? h("span", {class: "muted"}, "거래 전 (아직 견줄 것 없음)")
-      : x.flip ? h("span", null, `동전 봇 ${fmt.int(x.flip.n)}개 중 ${fmt.int(x.flip.above)}개보다 높음`, x.trades < SMALL ? h("small", {class: "muted"}, " · 표본 적음") : null) : "—")},
+      : x.flip ? h("span", null, `${fmt.int(x.flip.n)}개 중 ${fmt.int(x.flip.above)}개보다 높음`, x.trades < SMALL ? h("small", {class: "muted"}, " · 표본 적음") : null) : "—")},
     {k: "지금 포지션", s: "열린 것", money: false, get: (x) => `${fmt.int(x.open)}개`},
     {k: "파산 계좌", s: "잔고 10 USDT 미만", get: (x) => fmt.int(x.bust)},
   ];
