@@ -232,6 +232,13 @@ def test_ready_stage_counts_conditions_after_the_verdict():
                                                    "by_condition": {}}}, False, {"ts": NOW + 20 * 86_400_000}, 6)
     w = {i["title"]: i["wait"] for i in before["items"]}
     assert w["시작 후 30일"] == "30일까지 28일 더" and w["거래 200건"] == "가장 많은 계좌도 거래 194건 더 필요"
+    # with the run start: the KST day the 30 days are reached, counted like the verdict's D-day
+    start = NOW - int(2.4 * 86_400_000)
+    dated = GP.ready_stage({**rd, "summary": {**rd["summary"], "met_all": 0, "days_running": 2.4}}, False, None, 6,
+                           start, NOW)
+    want = GP._mmdd(start + 30 * 86_400_000)
+    got = next(i["wait"] for i in dated["items"] if i["title"] == "시작 후 30일")
+    assert got.startswith(f"{want}에 30일 채움 (D-") and int(got.split("D-")[1].rstrip(")")) in (27, 28)
     assert w["국면 2개 이상 플러스"].endswith("판정 뒤에 셈")
     assert GP.ready_stage({"pending": True}, False, None, 0)["state"] == "pending"
     assert GP.ready_stage({"error": "paper3.db 없음"}, False, None, 0)["state"] == "off"

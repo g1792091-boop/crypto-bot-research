@@ -462,9 +462,13 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
 
 
 # ---------------------------------------------------------------- 5. ready for live
-def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], best_trades: int) -> dict:
+def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], best_trades: int,
+                start: Optional[int] = None, now: Optional[int] = None) -> dict:
     """The readiness conditions (agents/readiness via dash/analysis.readiness_view) and what each waits for.
-    ``best_trades``: the most closed trades of one 기존 36 account (the board), for '거래 N건 더 필요'."""
+    ``best_trades``: the most closed trades of one 기존 36 account (the board), for '거래 N건 더 필요'. ``start`` / ``now``:
+    the run start (the original accounts' creation, the same as readiness' run_start) to name the day 30 is reached
+    in KST calendar days, the way the verdict's D-day counts (30 full days end the day after the 09:00 verdict)."""
+    from ...agents.readiness import NEED_DAYS
     if not isinstance(rd, dict) or rd.get("pending"):
         return _stage("ready", state="pending", none_ko="계산 중", go=go("analysis", "ready"))
     if rd.get("error"):
@@ -480,7 +484,14 @@ def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], bes
         ok = int(v.get("✅") or 0)
         if cid == "day30":
             days = float(s.get("days_running") or 0)
-            wait = "시작 후 30일 지남" if days >= 30 else f"30일까지 {max(1, math.ceil(30 - days)):,}일 더"
+            reach = int(start) + NEED_DAYS * DAY_MS if start else None
+            left = _days_left(reach, int(now)) if reach and now else None
+            if days >= NEED_DAYS:
+                wait = "시작 후 30일 지남"
+            elif left is not None:
+                wait = f"{_mmdd(reach)}에 30일 채움" + (f" (D-{left})" if left > 0 else " (오늘)")
+            else:
+                wait = f"30일까지 {max(1, math.ceil(NEED_DAYS - days)):,}일 더"
         elif cid == "trades200":
             wait = (f"거래 200건 넘은 계좌 {ok:,}개" if ok else f"가장 많은 계좌도 거래 {max(0, 200 - best_trades):,}건 더 필요")
         elif cid in PERF_CONDS and not cp_ready:
@@ -535,7 +546,7 @@ def path_view(data, rooms, paper_db: str, debate_db: Optional[str], checkpoint_d
         readiness = readiness_view(paper_db, checkpoint_db, now, next_cp)
     best = max([int(a.get("trades") or 0) for a in (board or {}).get("accounts") or []
                 if isinstance(a, dict) and a.get("group") == "core"] or [0])
-    s5 = ready_stage(readiness, bool(cp.get("ready")), next_cp, best)
+    s5 = ready_stage(readiness, bool(cp.get("ready")), next_cp, best, summ.get("start"), now)
     stages = [s1, s2, s3, s4, s5]
     frontier = None
     for st in stages:
