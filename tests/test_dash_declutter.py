@@ -155,6 +155,16 @@ def test_bottom_table_head_wraps_instead_of_cutting_its_totals():
     assert ".term-chart .term-tfs button { padding-inline: 6px; }" in block
 
 
+def test_header_menus_stay_inside_the_window():
+    """Review (10/06): '보기 ▾' (two columns, opening to the right of its button) ran up to 200 px past the right edge at
+    1200 / 아주 크게 and with the left menu at 1280 / 1200: the page scrolled sideways and half the menu was cut."""
+    fx = _code(_read("core", "chartfx.js"))
+    fit = fx[fx.index("function fit(box)"):fx.index("function dropdown(")]
+    assert "if (r.right > vw - 8) dx = vw - 8 - r.right;" in fit and "if (r.left + dx < 8) dx = 8 - r.left;" in fit
+    drop = fx[fx.index("function dropdown("):fx.index("const smcItems")]
+    assert "paintMenu(); paintLight(); fit(box);" in drop
+
+
 # ---------------------------------------------------------------- 4. the calm default
 def test_nearest_zones_pick_one_above_and_one_below():
     out = _node("""

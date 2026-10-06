@@ -794,12 +794,22 @@ export function chartDeck(o) {
     ctx.listen(document, "pointerdown", (e) => { if (!menu.hidden && !menuWrap.contains(e.target)) openMenu(false); });
     ctx.listen(document, "keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { openMenu(false); menuBtn.focus(); } });
   }
+  /** An open menu stays inside the window (review: '보기 ▾' opens to the right of its button and, two columns wide, ran
+   *  past the right edge when the head had wrapped or the left menu was on: the page scrolled sideways). */
+  function fit(box) {
+    box.style.transform = "";
+    const r = box.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+    let dx = 0;
+    if (r.right > vw - 8) dx = vw - 8 - r.right;
+    if (r.left + dx < 8) dx = 8 - r.left;
+    if (dx) box.style.transform = `translateX(${Math.round(dx)}px)`;
+  }
   /** One more header menu (프리미엄 지표 ▾, 보기 ▾): its button opens / closes it, a tap outside or Escape closes it. */
   function dropdown(btn, box, wrapEl) {
     const open = (on) => {
       box.hidden = !on;
       btn.setAttribute("aria-expanded", String(on));
-      if (on) { paintMenu(); paintLight(); const f = box.querySelector('[aria-checked="true"]') || box.querySelector("button"); if (f) f.focus(); }
+      if (on) { paintMenu(); paintLight(); fit(box); const f = box.querySelector('[aria-checked="true"]') || box.querySelector("button"); if (f) f.focus(); }
     };
     btn.addEventListener("click", (e) => { e.stopPropagation(); open(box.hidden); });
     if (ctx && ctx.listen) {
