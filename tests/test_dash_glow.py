@@ -113,7 +113,7 @@ def test_flash_modes_reduced_motion_and_stale_events():
       console.log(JSON.stringify({n1, n2, n_before, normal: N.st.played, o1, off: O.st.played.length, r1,
         reduced: R.st.played.length, stale: Q.st.played.length, modes: F.FLASH_MODES.map((m) => [m.id, m.ko, m.gapMs])}));""")
     assert out["n1"] is False and out["n2"] is True and out["n_before"] == 1
-    assert [p["tone"] for p in out["normal"]] == ["down", "accent"] and out["normal"][1]["t"] == 2500
+    assert [p["tone"] for p in out["normal"]] == ["up", "accent"] and out["normal"][1]["t"] == 2500     # a long liquidation = the 롱 colour (up), term-plus
     assert out["o1"] is False and out["off"] == 0
     assert out["r1"] is False and out["reduced"] == 0                     # prefers-reduced-motion: no flash at all
     assert out["stale"] == 1
@@ -129,7 +129,8 @@ def test_flash_event_tones_and_strengths():
     assert out["buy"]["tone"] == "up" and out["sell"]["tone"] == "down" and out["bad"] is None
     assert out["buy"]["k"] < out["sell"]["k"] < out["whale"]["k"] == 1
     assert out["buy"]["big"] is False and out["whale"]["big"] is True
-    assert out["lg"]["tone"] == "down" and out["sh"]["tone"] == "up"                # long liquidated = red, short = cyan
+    # ONE colour rule for liquidations (core/liqkit.js, review 10/06): the colour of the side that was liquidated, like every other 롱 / 숏
+    assert out["lg"]["tone"] == "up" and out["sh"]["tone"] == "down"                # 롱 청산 = up (cyan), 숏 청산 = down (red)
     assert out["lg"]["big"] is False and out["sh"]["big"] is True and out["sh"]["k"] > out["lg"]["k"]
     assert out["own"]["tone"] == "accent"
 
@@ -598,7 +599,7 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert ".cfx-tag[data-hit] { animation: none; }" in rm
     # the legend in the chart header (the light chip's tooltip) and the '조명 · 번쩍임' menu
     assert "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)" in fx
-    assert "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)" in fx
+    assert "하늘색 번쩍 = 큰 매수 · 롱 청산, 빨간 번쩍 = 큰 매도 · 숏 청산 (강제청산은 정리된 쪽의 색: 롱 = 하늘색, 숏 = 빨강) · 바이낸스 실제 체결" in fx
     assert '"aria-label": "조명과 번쩍임"' in fx and 'FLASH_KEY = "chart-flash"' in fx and 'LIGHT_KEY = "chart-light"' in fx
     # per device: read through local, written through core/prefs.js setPref (it stores under the same key, then every listener
     # follows: this deck's onPref(LIGHT_KEY) -> lightSync, the other decks, the 설정 panel's 차트 조명 row)

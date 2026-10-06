@@ -5,10 +5,14 @@
 // session and the KST clock. Under it one slow line of the latest real AI meeting conclusions (/api/office: finished
 // meetings' decision lines; '회의 중' only from office.running). The office is read through the shared store like 홈
 // (every 30 s and when a room changes).
-import {h, put, fmt, store, motion, bars, serverNow, sound, fav} from "../core/pb.js";
+import {h, put, fmt, store, motion, bars, serverNow, sound, fav, fundkit} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
 import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
+import {topStats} from "./terminal-stats.js";      // term-plus: 미결제약정 · 롱/숏 · 24시간 범위 (terminal-stats.js)
+import {usdKo} from "./market-live.js";
+
+const {FUND_HOT} = fundkit;      // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
 
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
@@ -24,6 +28,8 @@ export function topBar(ctx, st) {
   const px = h("b", {class: "term-px num"}, "—"), chg = h("span", {class: "term-chg num"}, "");
   const stat = (k, cls) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: ["term-st", cls || ""]}, h("span", null, k), v)}; };
   const vol = stat("24시간 거래대금"), fund = stat("펀딩 / 다음까지", "fund");
+  const fundK = fund.el.firstChild;
+  const extra = topStats(ctx, st);
   const sess = h("span", {class: "term-sess"}), clock = h("b", {class: "term-clock num"}, "—");
   // the live dot: lit while the market-trade relay is really connected, one pulse per real relay message
   const liveDot = h("i", {class: "term-live", "aria-hidden": "true"});
@@ -59,44 +65,58 @@ export function topBar(ctx, st) {
   const track = h("div", {class: "term-marq-in"});
   const marq = h("div", {class: "term-marq", role: "marquee", "aria-label": "최근 AI 회의 결론"}, track);
   const line = h("div", {class: "term-mline"}, h("a", {class: "term-mlab", href: ctx.href("digest", "day"), title: "회의 요약 열기"}, "AI 회의 결론"), meetN, marq);
-  const el = h("header", {class: "term-top", "aria-label": "시세 요약"},
-    h("div", {class: "term-row"},
+  const rowEl = h("div", {class: "term-row"},
       h("div", {class: "term-id"}, symEl, favSlot, perp),
       h("div", {class: "term-pxbox"}, px, chg),
-      h("div", {class: "term-stats"}, vol.el, fund.el),
+      h("div", {class: "term-stats"}, vol.el, fund.el, extra.el),
       h("i", {class: "term-vsep", "aria-hidden": "true"}),
       movers,
-      h("span", {class: "grow"}), sndHint, sess, clockBox),
-    line);
+      h("span", {class: "grow"}), sndHint, sess, clockBox);
+  const el = h("header", {class: "term-top", "aria-label": "시세 요약"}, rowEl, line);
+  // the new market cells give way before anything is clipped (terminal-stats.js fit: the row or the movers box would cut)
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => extra.fit(rowEl, movers));
+    ro.observe(rowEl); ro.observe(movers);
+    ctx.track(() => ro.disconnect());
+  }
 
   let fundT = null, sig = "";
   function paint(tk) {
     const t = tk && tk[st.sym];
     symEl.textContent = `${fmt.coin(st.sym)}USDT`;
     if (favSlot.dataset.sym !== st.sym) { favSlot.dataset.sym = st.sym; favSlot.replaceChildren(fav.starBtn("coin", st.sym, {label: fmt.coin(st.sym)})); }
+    extra.onTicker(tk);                                      // (the 24시간 범위 cell reads the same ticker)
     if (!t) { px.textContent = "—"; return; }
     const p = Number(t.c ?? t.mark);
     if (Date.now() - relayAt > RELAY_FRESH_MS || px.dataset.pk !== st.sym) motion.tickPrice(px, p, fmt.price(p), st.sym);   // glows only on a real move
     px.classList.toggle("up", Number(t.p) > 0); px.classList.toggle("down", Number(t.p) < 0);
     chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
     chg.className = "term-chg num " + fmt.tone(t.p);
-    vol.v.textContent = t.q != null ? fmt.compact(t.q) : "—";
-    vol.el.title = `24시간 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
+    // the same amount reads the same on every screen (차트 · 시장 print it with usdKo too): 12.0억 USDT, not 1.2B
+    put(vol.v, t.q != null ? [usdKo(t.q), h("span", {class: "term-vun"}, " USDT")] : "—");
+    vol.el.title = `24시간 거래대금 ${t.q != null ? `${usdKo(t.q)} USDT` : "— (불러오지 못함)"} · 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
     fundT = t.T || null;
-    put(fund.v, h("span", {class: fmt.tone(-Number(t.r || 0))}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
+    // funding is not a gain or a loss: a plus rate is not pink (review 10/06). Neutral ink with WHO pays in words; the
+    // caution colour only when it is 5 times the usual 0.01 % or more
+    const r = Number(t.r), hot = Number.isFinite(r) && Math.abs(r) >= FUND_HOT;
+    // (the words in the parentheses give way first when the row is tight: terminal-stats.js fit() sets .term-tight; the tooltip keeps them)
+    put(fundK, "펀딩", !Number.isFinite(r) || r === 0 ? null : h("span", {class: "term-fwho"}, r > 0 ? " (롱이 냄)" : " (숏이 냄)"), " / 다음까지");
+    fund.el.title = Number.isFinite(r) ? `펀딩 ${fundPct(r)}: ${r > 0 ? "롱이 숏에게" : r < 0 ? "숏이 롱에게" : "아무도 안"} 냅니다 (8시간마다) · 보통은 +0.0100% · ${fmt.num(FUND_HOT * 100, 2)}% 이상 쏠리면 주의 색`
+      : "펀딩: 이 코인의 펀딩을 받지 못했습니다 (불러오지 못함)";
+    put(fund.v, h("span", {class: hot ? "warn-t" : ""}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
   }
 
   // ---- movers: /api/v4/movers every minute (the server's own 60 s cache: one Binance fetch a minute for everybody)
-  function paintMovers(d) {
+  function paintMovers(d, failed) {
     const ok = d && d.ready;
     movers.classList.toggle("none", !ok);
     movers.classList.toggle("stale", !!(ok && d.stale));
     const one = (m, row, val, list, what) => {
-      m.s.textContent = row ? fmt.coin(row.s) : ok ? "없음" : "수집 전";
+      m.s.textContent = row ? fmt.coin(row.s) : ok ? "없음" : failed ? "—" : "수집 전";
       m.v.textContent = row ? val(row) : "";
       m.el.title = ok && list && list.length
         ? `${what} (${MARKET_LABEL}, 바이낸스 USD-M 무기한 ${fmt.int(d.n)}개 중)\n${list.map((r, i) => `${i + 1}. ${fmt.coin(r.s)} ${val(r)}`).join("\n")}`
-        : `${what}: 아직 받은 값이 없습니다`;
+        : `${what}: ${failed ? "불러오지 못함 (잠시 뒤 다시 받습니다)" : "아직 받은 값이 없습니다"}`;
     };
     one(mUp, ok && d.up[0], (r) => pct2(r.pct), ok && d.up, "24시간 가장 많이 오른 코인");
     one(mDn, ok && d.down[0], (r) => pct2(r.pct), ok && d.down, "24시간 가장 많이 내린 코인");
@@ -104,8 +124,10 @@ export function topBar(ctx, st) {
     mWhen.textContent = ok && d.stale ? `${fmt.hm(d.ts)} 값` : "";
   }
   paintMovers(null);
+  let moversGot = false;
   const loadMovers = async () => {
-    try { const d = await ctx.api("/api/v4/movers"); if (ctx.alive()) paintMovers(d); } catch (e) { /* the last answer stays */ }
+    try { const d = await ctx.api("/api/v4/movers"); if (ctx.alive()) { paintMovers(d); moversGot = true; } }
+    catch (e) { if (!moversGot && !(e && e.name === "AbortError") && ctx.alive()) paintMovers(null, true); /* the last answer stays */ }
   };
   ctx.every(60000, loadMovers, {now: true});
 
@@ -128,7 +150,10 @@ export function topBar(ctx, st) {
     // about 40 px a second whatever the length (the line is read, not chased)
     requestAnimationFrame(() => { track.style.setProperty("--dur", Math.max(30, Math.round(one.scrollWidth / 40)) + "s"); track.classList.add("run"); });
   }
-  const office = async (age) => { try { const o = await store.need("office", age); if (ctx.alive()) meetings(o); } catch (e) { if (!sig) meetings(null); } };
+  const office = async (age) => {
+    try { const o = await store.need("office", age); if (ctx.alive()) meetings(o); }
+    catch (e) { if (!sig && ctx.alive()) put(track, h("span", {class: "term-mi muted"}, "회의 기록을 불러오지 못함 · 30초마다 다시 시도 중")); }
+  };
   office(25000);
   ctx.every(30000, () => office(25000), {now: false});
   let roomT = null;
@@ -137,7 +162,7 @@ export function topBar(ctx, st) {
 
   return {
     el,
-    setSym() { relayAt = 0; paint(store.get("ticker")); },
+    setSym() { relayAt = 0; paint(store.get("ticker")); extra.setSym(st.sym); },
     onTicker: paint,
     /** Every relay message: the dot says the relay's real state and pulses once per message that carried trades. */
     onRelay(m) {

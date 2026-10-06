@@ -10,7 +10,7 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent, onPref, fullChart, fav} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, fundkit, onPref, fullChart, fav} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
@@ -19,6 +19,9 @@ import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
 import {drawTools} from "./draw-kit.js";
+import {coinPosCell, coinMarks} from "./terminal-coinpos.js";      // term-plus: 코인마다 우리 포지션 몇 개 (the terminal's strip has it too)
+
+const {fundTone, fundWho} = fundkit;      // one funding colour rule (not a loss colour)
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
   "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};
@@ -51,12 +54,13 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- top: coins, price line, intervals
   const coinBtns = new Map();
   const coinBar = h("div", {class: "seg scroll chart-coins", role: "tablist", "aria-label": "코인"}, bars.SYMS.map((s) => {
-    const px = h("span", {class: "num"}, "—"), chg = h("small", {class: "num"}, "");
+    const px = h("span", {class: "num"}, "—"), chg = h("small", {class: "num"}, ""), pos = coinPosCell();
     const b = h("button", {type: "button", role: "tab", "aria-selected": String(s === st.sym), onclick: () => setSym(s)},
-      h("b", null, fmt.coin(s)), s === "XRPUSDT" ? h("small", {class: "muted"}, "기록") : null, px, chg);
-    coinBtns.set(s, {b, px, chg});
+      h("b", null, fmt.coin(s)), s === "XRPUSDT" ? h("small", {class: "muted"}, "기록") : null, px, chg, pos);
+    coinBtns.set(s, {b, px, chg, pos});
     return b;
   }));
+  const coinMarks_ = coinMarks();
   const pxBig = h("b", {class: "chart-px num"}, "—"), pxChg = h("span", {class: "num"}, ""), barLeft = h("b", {class: "num"}, "—");
   const barLab = h("span", {class: "muted"});
   const favSlot = h("span", {class: "chart-fav"});           // conv-b: ★ this coin (core/favs.js)
@@ -336,6 +340,7 @@ export async function mount(el, ctx) {
       x.chg.textContent = t && t.p != null ? fmt.pct(Number(t.p) / 100, 2) : "";
       x.chg.className = "num " + (t ? fmt.tone(t.p) : "");
     }
+    if (st.board) coinMarks_.paint(coinBtns, st.board, false);        // (the unrealized sign follows the mark prices)
     const t = all[st.sym];
     priceLine.firstChild.textContent = `${fmt.coin(st.sym)}USDT`;
     if (favSlot.dataset.sym !== st.sym) { favSlot.dataset.sym = st.sym; favSlot.replaceChildren(fav.starBtn("coin", st.sym, {label: fmt.coin(st.sym)})); }
@@ -345,7 +350,7 @@ export async function mount(el, ctx) {
     pxChg.className = "num " + (t ? fmt.tone(t.p) : "");
     motion.tickPrice(tk.mark, t ? t.mark : null, t ? fmt.price(t.mark) : "—", st.sym);
     tk.fund.textContent = t ? fundPct(t.r) : "—";
-    tk.fund.className = "num " + (t ? fmt.tone(-Number(t.r || 0)) : "");
+    tk.fund.className = "num " + (t ? fundTone(t.r) : ""); tk.fund.title = t ? fundWho(t.r) : "";
     tk.hi.textContent = t ? fmt.price(t.h) : "—";
     tk.lo.textContent = t ? fmt.price(t.l) : "—";
     tk.vol.textContent = t && t.q != null ? `${usdKo(t.q)} USDT` : "—";      // 만 / 억 like 시장 (fix: no 'B' / 'K' on one screen)
@@ -432,8 +437,8 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- wiring
   paintTicker(); paintTfs(); paintLinks(); tick();
-  ctx.watch("board", (b) => {
-    if (!b) return;
+  ctx.watch("board", (b, k, err) => {
+    if (!b) { coinMarks_.paint(coinBtns, null, !!err); return; }
     const first = !st.board;
     st.board = b;
     fillAccounts(); paintTfs(); paintTicker(); panels.onBoard(b);

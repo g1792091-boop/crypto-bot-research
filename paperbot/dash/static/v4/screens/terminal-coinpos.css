@@ -1,0 +1,16 @@
+/* 코인마다 우리 포지션 (terminal-coinpos.js): the second line of a coin button on the terminal's strip and the chart screen's coin row.
+   롱 in the up colour, 숏 in the down colour (the terminal's side colours), a dot for the sign of the unrealized P&L; one accent light on the
+   coin's button when a position there really is new (hit("own"): a real board update, never a timer; none under reduced motion). */
+.term-wpos { font-size: var(--t-2xs); line-height: 1.25; white-space: nowrap; font-weight: 600; }
+.term-wpos .up { color: var(--up); } .term-wpos .down { color: var(--down); }
+.term-wdot { display: inline-block; width: 7px; height: 7px; margin-left: 7px; border-radius: 50%; background: var(--muted); }
+.term-wdot.up { background: var(--up); box-shadow: 0 0 5px var(--up-glow, var(--up-line)); }
+.term-wdot.down { background: var(--down); box-shadow: 0 0 5px var(--down-glow, var(--down-line)); }
+.term-wdot.flat { background: var(--muted); }
+.term-wr[data-hit="own"], .chart-coins button[data-hit="own"] { animation: term-row-own 1.2s ease-out 1; }
+@keyframes term-row-own { 0% { background-color: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent), inset 0 0 16px -6px var(--accent-glow); } 100% { background-color: transparent; box-shadow: inset 0 -2px 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .term-wr[data-hit="own"], .chart-coins button[data-hit="own"] { animation: none; } }
+/* the chart screen's chosen coin button is filled with the accent: its words use the accent's ink, the dot keeps its colour inside a ring */
+.chart-coins button[aria-selected="true"] .term-wpos, .chart-coins button[aria-selected="true"] .term-wpos .up,
+.chart-coins button[aria-selected="true"] .term-wpos .down { color: var(--accent-ink); }
+.chart-coins button[aria-selected="true"] .term-wdot { box-shadow: 0 0 0 2px var(--accent-ink); }

@@ -21,6 +21,7 @@ import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
 import {drawTools} from "./draw-kit.js";
+import {failNote, retrier} from "./terminal-state.js";      // term-plus: a failed load is told and retried, never an empty chart
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -43,7 +44,8 @@ export function termChart(ctx, st, onTf) {
   const tag = h("div", {class: "term-ptag", hidden: true}, h("b", {class: "num"}, "—"), h("small", {class: "num"}, "—"));
   const dot = h("i", {class: "term-dot", hidden: true, "aria-hidden": "true"});
   const tip = h("div", {class: "term-tip", hidden: true, role: "tooltip"});
-  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip);
+  const cfail = h("div", {class: "term-cfail2", hidden: true});
+  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip, cfail);
   const keyLine = h("div", {class: "term-ckey"});
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
@@ -109,10 +111,17 @@ export function termChart(ctx, st, onTf) {
   async function loadCandles() {
     if (!series) return;
     const tk = ++loadTok, sym = st.sym, tf = st.tf;
-    let data = [];
+    let data = [], failed = false;
     try { data = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=500`); }
-    catch (e) { if (e && e.name === "AbortError") return; ctx.toast("가격 자료를 불러오지 못했습니다"); }
+    catch (e) { if (e && e.name === "AbortError") return; failed = true; }
     if (tk !== loadTok || !ctx.alive()) return;
+    // a failed load is not an empty market: the chart says so and asks again (5 · 15 · 30 · 60 s) until the bars arrive
+    if (!Array.isArray(data) || !data.length) { failed = true; data = []; }      // (no bars at all is not a quiet market either)
+    if (failed) {
+      put(cfail, failNote(`${fmt.coin(sym)} ${SHORT[tf]} 봉 (가격 자료)`, {retry: () => { candleRetry.stop(); loadCandles(); }}));
+      cfail.hidden = false;
+      candleRetry.fail();
+    } else { cfail.hidden = true; candleRetry.ok(); }
     const dec = priceDec(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
     deck.setData(data);
@@ -146,7 +155,7 @@ export function termChart(ctx, st, onTf) {
   async function eventsList() {
     if (events && Date.now() - events.at < 600000) return events.list;
     try { const d = await ctx.api("/api/events?days_back=60&days_ahead=1"); events = {at: Date.now(), list: d.events || []}; }
-    catch (e) { events = {at: Date.now(), list: []}; }
+    catch (e) { return events ? events.list : []; }            // (a failure is not cached as "no events": the next load asks again)
     return events.list;
   }
   async function loadTrades() {
@@ -227,6 +236,7 @@ export function termChart(ctx, st, onTf) {
     loadCandles();
   }
 
+  const candleRetry = retrier(ctx, () => loadCandles());
   const ready = (async () => {
     try {
       C = await makeChart(box, {rightPriceScale: {borderColor: tok("--line-2"), scaleMargins: {top: 0.08, bottom: 0.08}},

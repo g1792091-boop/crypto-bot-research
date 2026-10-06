@@ -1,12 +1,16 @@
 // The chart's event light (owners 10/06, from the reference video measured frame by frame; "많이 자주"): a real
 // market event of the coin on screen washes the whole chart pane once — rises ~0.2 s, holds (0.6 s for an ordinary big
 // trade, ~1.5 s for a 고래 / a large liquidation), fades ~0.4 s — then the chart is plain again until the next real
-// event. Cyan for a big taker BUY / a short liquidated, red for a big SELL / a long liquidated (Binance's real trades:
-// the server relay and the liquidation recorder), the accent for our own bot's real fill. Pure scheduling here
+// event. Cyan for a big taker BUY, red for a big SELL (Binance's real trades: the server relay); a LIQUIDATION takes the
+// colour of the side that was liquidated, the same rule as every other 롱 / 숏 on the terminal (core/liqkit.js: 롱 청산 =
+// cyan, 숏 청산 = red; review 10/06: the terminal and the 시장 board used opposite colours); the accent for our own bot's
+// real fill. Pure scheduling here
 // (node-tested, tests/test_dash_glow.py); the layer is core/chartfx.js, and so is the per-device setting '번쩍임'.
 // HONESTY: only push() starts a flash and only a real event calls push(): no timer ever invents one. The single
 // setTimeout below only plays an event that really arrived while the previous flash was still on screen.
 // prefers-reduced-motion: no flash at all (the Premium / Discount halves only fade slowly then: core/blink.js CALM).
+
+import {liqTone} from "./liqkit.js";
 
 export const ENVELOPE = {inMs: 200, holdMs: 1500, holdSmallMs: 600, outMs: 400};
 /** '번쩍임' per device: 자주 (default) every real big trade, at most one start per 0.9 s; 보통 only the big ones (고래, a
@@ -30,11 +34,12 @@ export function bigEvent(r) {
   return {tone: r.side === "buy" ? "up" : "down", k: r.w ? 1 : clamp(0.35 + 0.13 * Math.log2(x), 0.35, 0.8), big: !!r.w,
     why: r.w ? "고래 체결" : "큰 체결"};
 }
-/** A market liquidation row {liquidated: "long" | "short", usd} -> an event (long liquidated = red, short = cyan). */
+/** A market liquidation row {liquidated: "long" | "short", usd} -> an event (the colour of the liquidated side, liqkit:
+ *  롱 청산 = up / cyan, 숏 청산 = down / red). */
 export function liqEvent(r) {
   const u = Number(r && r.usd) || 0;
   if (u <= 0 || (r.liquidated !== "long" && r.liquidated !== "short")) return null;
-  return {tone: r.liquidated === "long" ? "down" : "up", k: clamp(0.35 + 0.22 * (Math.log10(u) - 4), 0.35, 1), big: u >= BIG_LIQ_USD,
+  return {tone: liqTone(r.liquidated), k: clamp(0.35 + 0.22 * (Math.log10(u) - 4), 0.35, 1), big: u >= BIG_LIQ_USD,
     why: r.liquidated === "long" ? "롱 청산" : "숏 청산"};
 }
 /** Our own bot's real fill on this coin -> an accent flash (counts as big: it passes 보통). */

@@ -6,8 +6,11 @@
 //   강제청산 /api/v4/flowlive/liq (liq.db, the public forced-order stream): long vs short liquidated USDT over 1 h and
 //            24 h, the biggest single one, the latest 5 sliding in when they are new.
 // Missing files say 수집 전 / 기록기 멈춤, never a zero. Nothing here touches a paper account.
-import {h, ui, fmt, store, motion, bars, serverNow} from "../core/pb.js";
+import {h, ui, fmt, store, motion, bars, serverNow, liqkit, fundkit} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
+
+const {fundTone, fundWho} = fundkit;       // one funding colour rule (not a loss colour)
+const {usdShort, liqTone, liqKo, LIQ_TIP} = liqkit;       // one colour rule (롱 청산 = up, 숏 청산 = down: the terminal's) and one money format ($K/M)
 
 /** Where the price sits in the 24 h range: 0 = at the low, 1 = at the high (null without a range). */
 export function rangePos(c, lo, hi) {
@@ -72,7 +75,7 @@ export function tempBoard(ctx) {
       t.hi.textContent = x.h == null ? "—" : fmt.price(Number(x.h));
       t.vol.textContent = x.q == null ? "—" : `${usdKo(x.q)} USDT`;
       t.fund.textContent = fundPct(x.r);
-      t.fund.className = "num " + fmt.tone(-Number(x.r || 0));
+      t.fund.className = "num " + fundTone(x.r); t.fund.title = fundWho(x.r);
       t.T = x.T || null;
     }
     tick();
@@ -139,9 +142,9 @@ export function liqBoard(ctx) {
   const bar = (o, label) => {
     const sp = split(o.long_usd, o.short_usd);
     return h("div", {class: "mk-lb"}, h("span", {class: "mk-lb-k"}, label),
-      h("div", {class: "mk-lb-bar", role: "img", "aria-label": `${label} 롱 청산 ${usdKo(o.long_usd)} · 숏 청산 ${usdKo(o.short_usd)} USDT`},
+      h("div", {class: "mk-lb-bar", role: "img", "aria-label": `${label} 롱 청산 ${usdShort(o.long_usd)} · 숏 청산 ${usdShort(o.short_usd)}`},
         sp ? [h("i", {class: "l", style: {width: `${(sp.long * 100).toFixed(1)}%`}}), h("i", {class: "s", style: {width: `${(sp.short * 100).toFixed(1)}%`}})] : h("i", {class: "z"})),
-      h("span", {class: "mk-lb-v"}, h("b", {class: "down num"}, usdKo(o.long_usd)), " · ", h("b", {class: "up num"}, usdKo(o.short_usd))));
+      h("span", {class: "mk-lb-v"}, h("b", {class: [liqTone("long"), "num"]}, usdShort(o.long_usd)), " · ", h("b", {class: [liqTone("short"), "num"]}, usdShort(o.short_usd))));
   };
   const paint = () => {
     if (!d) return;
@@ -151,18 +154,18 @@ export function liqBoard(ctx) {
     }
     body.replaceChildren(
       ...(d.stale ? [h("p", {class: "down"}, `마지막 기록이 ${fmt.ago(d.last_record_ts, serverNow())}: 기록기가 멈췄을 수 있어 아래 0은 '모름'일 수 있습니다`)] : []),
-      h("div", {class: "mk-lk"}, h("span", null, h("i", {class: "l"}), "롱 청산 (가격이 내려 롱이 털림)"), h("span", null, h("i", {class: "s"}), "숏 청산 (가격이 올라 숏이 털림)"), h("span", {class: "muted"}, "USDT")),
+      h("div", {class: "mk-lk", title: LIQ_TIP}, h("span", null, h("i", {class: "l"}), "롱 청산 (가격이 내려 롱이 털림)"), h("span", null, h("i", {class: "s"}), "숏 청산 (가격이 올라 숏이 털림)"), h("span", {class: "muted"}, "색 = 정리된 쪽 · 달러")),
       ...(d.coins || []).map((x) => h("div", {class: "mk-lr"},
         h("b", {class: "mk-lr-c"}, fmt.coin(x.symbol)),
         h("div", {class: "mk-lr-bars"}, bar(x.h1, "1시간"), bar(x.h24, d.partial_24h ? "24시간*" : "24시간")),
-        h("span", {class: "mk-lr-big"}, x.biggest ? [h("small", null, "가장 큰 한 건"), h("b", {class: ["num", x.biggest.liquidated === "long" ? "down" : "up"]}, usdKo(x.biggest.usd)),
+        h("span", {class: "mk-lr-big"}, x.biggest ? [h("small", null, "가장 큰 한 건"), h("b", {class: ["num", liqTone(x.biggest.liquidated)]}, usdShort(x.biggest.usd)),
           h("small", null, `${x.biggest.liquidated === "long" ? "롱" : "숏"} · ${whenKo(x.biggest.ts)}`)] : h("small", {class: "muted"}, "24시간 0건")))));
     const rows = (d.latest || []).map((r) => {
       const k = `${r.symbol}|${r.ts}|${r.usd}`;
       const row = h("div", {class: "mk-lfr", role: "listitem"}, h("span", {class: "num muted"}, whenKo(r.ts)), h("b", null, fmt.coin(r.symbol)),
-        h("span", {class: r.liquidated === "long" ? "down" : "up"}, r.liquidated === "long" ? "롱 청산" : "숏 청산"),
-        h("span", {class: "num"}, fmt.price(r.price)), h("b", {class: "num"}, `${usdKo(r.usd)} USDT`));
-      if (seen.size && !seen.has(k)) motion.fillIn(row, r.liquidated === "long" ? "down" : "up");
+        h("span", {class: liqTone(r.liquidated)}, liqKo(r.liquidated)),
+        h("span", {class: "num"}, fmt.price(r.price)), h("b", {class: "num"}, usdShort(r.usd)));
+      if (seen.size && !seen.has(k)) motion.fillIn(row, liqTone(r.liquidated));
       return [k, row];
     });
     for (const [k] of rows) seen.add(k);
@@ -199,9 +202,9 @@ export function coinFlowCard(ctx, sym0) {
       x ? cell("롱/숏 (전체 계좌)", h("b", {class: "num"}, ratio(x.ls_global)), `24시간 전 ${ratio(x.ls_global_24h)}`) : null,
       x ? cell("고수 포지션 롱/숏", h("b", {class: "num"}, ratio(x.ls_top)), `24시간 전 ${ratio(x.ls_top_24h)}`) : null,
       x ? cell("테이커 매수/매도 1시간", h("b", {class: ["num", x.taker_1h > 1 ? "up" : x.taker_1h < 1 ? "down" : ""]}, ratio(x.taker_1h)), null) : null,
-      q ? cell("강제청산 1시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: "down"}, usdKo(q.h1.long_usd)), " · ", h("span", {class: "up"}, usdKo(q.h1.short_usd))), "USDT") : cell("강제청산", ui.notYet()),
-      q ? cell("강제청산 24시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: "down"}, usdKo(q.h24.long_usd)), " · ", h("span", {class: "up"}, usdKo(q.h24.short_usd))),
-        q.biggest ? `가장 큰 한 건 ${usdKo(q.biggest.usd)} (${q.biggest.liquidated === "long" ? "롱" : "숏"} ${whenKo(q.biggest.ts)})` : "24시간 0건") : null,
+      q ? cell("강제청산 1시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: liqTone("long")}, usdShort(q.h1.long_usd)), " · ", h("span", {class: liqTone("short")}, usdShort(q.h1.short_usd))), "롱 · 숏 (달러)") : cell("강제청산", ui.notYet()),
+      q ? cell("강제청산 24시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: liqTone("long")}, usdShort(q.h24.long_usd)), " · ", h("span", {class: liqTone("short")}, usdShort(q.h24.short_usd))),
+        q.biggest ? `가장 큰 한 건 ${usdShort(q.biggest.usd)} (${q.biggest.liquidated === "long" ? "롱" : "숏"} ${whenKo(q.biggest.ts)})` : "24시간 0건") : null,
       x ? h("div", {class: "mk-cf-s"}, h("span", null, "미결제약정 24시간"), ui.sparkline((x.oi_series || []).map((p) => p[1]), {w: 240, h: 30, cls: "lc", label: "미결제약정 24시간"})) : null,
       x && x.hints && x.hints.length ? h("div", {class: "mk-cf-hint"}, x.hints.map((k) => ui.pill((rules[k] || {}).ko || k, "warn", (rules[k] || {}).rule))) : null,
     ];

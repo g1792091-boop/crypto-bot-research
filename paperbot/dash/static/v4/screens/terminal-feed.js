@@ -10,9 +10,11 @@
 //     count rows per minute (no money of theirs here). The recent entries' long / short bar beneath.
 // A row that really arrived while the page is open slides in from the top with one brief glow; ages ('6s', '4m') are
 // repainted by the terminal's 1 s clock tick (text only).
-import {h, put, ui, fmt, motion, bars, features, local} from "../core/pb.js";
+import {h, put, ui, fmt, motion, bars, features, local, liqkit} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
+import {failNote, retrier} from "./terminal-state.js";
+import {coinPosCell, coinMarks} from "./terminal-coinpos.js";      // term-plus: 코인마다 우리 포지션 몇 개
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
 const GH_TONE = {long: "up", longWait: "up", short: "down", shortWait: "down"};
@@ -30,15 +32,18 @@ export function watchList(ctx, st, onPick) {
   const rows = new Map();
   const list = h("div", {class: "term-wl", role: "listbox", "aria-label": "코인 고르기 (서버 경유 5초 · 실시간 체결이 오면 바로)"}, bars.SYMS.map((s) => {
     const px = h("span", {class: "num term-wpx"}, "—"), chg = h("span", {class: "num term-wch"}, ""), gh = h("span", {class: "term-wgh", hidden: !features.ghcoin});
+    const pos = coinPosCell();
     const b = h("button", {type: "button", class: "term-wr", role: "option", "aria-selected": String(s === st.sym), onclick: () => onPick(s),
       title: s === "XRPUSDT" ? "XRP: 기록만 (매매하지 않는 코인)" : `${fmt.coin(s)} 보기`},
-    h("b", null, fmt.coin(s)), px, chg, gh);
-    rows.set(s, {b, px, chg, gh, last: null, at: 0, lit: 0});
+    h("b", null, fmt.coin(s)), px, chg, gh, pos);
+    rows.set(s, {b, px, chg, gh, pos, last: null, at: 0, lit: 0});
     return b;
   }));
   const el = h("nav", {class: "term-coins", "aria-label": "관심 종목"}, list);
   el.head = null;
   let gh = null;
+  const marks = coinMarks();
+  let board = null, boardFailed = false;
   async function loadGh() {
     const on = features.ghcoin;
     for (const r of rows.values()) r.gh.hidden = !on;
@@ -58,6 +63,7 @@ export function watchList(ctx, st, onPick) {
     el,
     setSym(s) { for (const [k, r] of rows) r.b.setAttribute("aria-selected", String(k === s)); },
     onTicker(tk) {
+      if (board) marks.paint(rows, board, false);                  // the unrealized sign follows the mark prices
       for (const [s, r] of rows) {
         const t = tk[s];
         if (!t) continue;
@@ -68,6 +74,8 @@ export function watchList(ctx, st, onPick) {
       }
     },
     onFeatures: loadGh,
+    /** The board (or null with failed = true when it could not be read): each coin's 롱 / 숏 count under its name. */
+    onBoard(b, failed) { board = b || board; boardFailed = !b && !!failed; marks.paint(rows, board, boardFailed); },
     /** One real relay event {s, side, p}: that coin's row shows the traded price and lights once (teal when the
      *  price went up or buyers led, pink when it went down or sellers led), at most twice a second per row. */
     onTick(ev) {
@@ -172,7 +180,7 @@ export function fillsFeed(ctx) {
     const keep = new Set(ms.map((m) => m.id));
     for (const k of st.nodes.keys()) if (!keep.has(k)) st.nodes.delete(k);
     for (const e of st.ev) e.live = false;
-    if (!nodes.length) put(list, ui.empty("아직 체결이 없습니다"));
+    if (!nodes.length) put(list, st.seedFailed ? failNote("우리 봇 체결 기록", {retry: seed}) : ui.empty("아직 체결이 없습니다"));
     else list.replaceChildren(...nodes);
     if (ms.some((m) => m.live) && live()) ping(el);
     // long / short share of the last 100 entries (every group: the market side our bots took; counts, not money)
@@ -184,12 +192,18 @@ export function fillsFeed(ctx) {
 
   async function seed() {
     let rows = [];
-    try { rows = await ctx.api("/api/trades?limit=120"); } catch (e) { if (e && e.name === "AbortError") return; }
+    try { rows = await ctx.api("/api/trades?limit=120"); st.seedFailed = false; again.ok(); }
+    catch (e) {
+      if (e && e.name === "AbortError") return;
+      st.seedFailed = true;                       // (not "아직 체결이 없습니다": the list says it could not be read and asks again)
+      again.fail();
+    }
     if (!ctx.alive()) return;
     for (const t of rows || []) for (const e of fromTrade(t, false)) add(e, false);
-    st.seeded = true;
+    st.seeded = !st.seedFailed;
     render();
   }
+  const again = retrier(ctx, () => seed());
   const ready = seed();
   return {
     el, ready,
@@ -215,7 +229,7 @@ export function fillsFeed(ctx) {
 }
 
 // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
-const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
+const {usdShort, liqTone, liqKo, liqTag, LIQ_WHAT, LIQ_TIP} = liqkit;      // the one colour rule and money format (core/liqkit.js)
 
 /** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq every 10 s while the recorder runs. Two views (owners 10/06
  *  13:23: the box stood almost empty with only the chosen coin): 전체 시장 (default; every coin Binance liquidates, the
@@ -235,7 +249,7 @@ export function liqFeed(ctx, st, onNew) {
     }));
   // "바이낸스 시장 전체 (우리 봇 아님)": the "시장" chip and the ⓘ (the terminal's footer says it once in full)
   const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true, acts: [modeBar], lead: [marketChip(`바이낸스 ${MARKET_LABEL} 강제청산`)],
-    info: `바이낸스 ${MARKET_LABEL} 강제청산 · 바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다 · 막대 = 최근 1시간 롱·숏 금액`}, list);
+    info: `바이낸스 ${MARKET_LABEL} 강제청산 · ${LIQ_TIP} · 바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다 · 막대 = 최근 1시간 롱·숏 금액`}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   const seen = new Set();
   let key = null, busy = false, last = {key: null, rows: []};
@@ -269,18 +283,18 @@ export function liqFeed(ctx, st, onNew) {
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.symbol}:${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
-        const lg = r.liquidated === "long", mine = r.symbol === want;
+        const lg = r.liquidated === "long", mine = r.symbol === want, tone = liqTone(r.liquidated);
         const node = h("div", {class: ["term-fr", "liq", all ? "anyc" : "", lg ? "lg" : "sh", r.usd >= 100000 ? "bigl" : "", all && mine ? "mine" : ""], role: "listitem",
-          title: `${fmt.coin(r.symbol)} ${lg ? "롱" : "숏"} 포지션 강제청산 · ${fmt.price(r.price)} · $${usdK(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
-        h("span", {class: ["term-lb", lg ? "up" : "down"]}, lg ? "LONG" : "SHORT"),
+          title: `${fmt.coin(r.symbol)} ${liqKo(r.liquidated)}: ${LIQ_WHAT[r.liquidated] || ""} · ${fmt.price(r.price)} · ${usdShort(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
+        h("span", {class: ["term-lb", tone]}, liqTag(r.liquidated)),
         all ? h("b", {class: "term-lc"}, fmt.coin(r.symbol)) : null,
-        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, "$" + usdK(r.usd)), ageCell(r.ts));
+        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, usdShort(r.usd)), ageCell(r.ts));
         if (isNew) nNew++;
         if (isNew && mine) arrived.push(r);
-        if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
+        if (isNew && live()) motion.fillIn(node, tone);
         return node;
       }) : ui.empty(all ? "최근 기록 없음" : "최근 1시간 기록 없음"));
-      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
+      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · ${usdShort(n)}`);
       if (nNew && live()) ping(el);
       // the chart flashes once for the chosen coin's really new ones
       if ((arrived.length || (!all && had !== rows.length)) && onNew) onNew(arrived);
