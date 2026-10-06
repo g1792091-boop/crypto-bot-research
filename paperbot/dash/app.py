@@ -977,10 +977,14 @@ def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
     url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
     with urllib.request.urlopen(url, timeout=10) as r:
         rows = json.loads(r.read())
-    # volume (base asset) feeds the chart's volume bars (v4 chart deck); older pages ignore the extra key.
-    # "buy" = taker buy base asset volume (kline field 9): the 매물대 profile's 매수 part, 매도 = volume - buy
+    # volume (base asset) feeds the chart's volume bars (v4 chart deck); older pages ignore the extra key
     out = [{"time": int(k[0]) // 1000, "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
-            "close": float(k[4]), "volume": float(k[5]), **({"buy": float(k[9])} if len(k) > 9 else {})} for k in rows]
+            "close": float(k[4]), "volume": float(k[5])} for k in rows]
+    # "buy" = taker buy base asset volume (kline field 9): the 매물대 profile's 매수 part, 매도 = volume - buy (a row
+    # without the field, a test's fake kline, gets no key: never a made-up zero)
+    for row, k in zip(out, rows):
+        if len(k) > 9:
+            row["buy"] = float(k[9])
     _CANDLE_CACHE[key] = (time.time(), out)
     return out
 

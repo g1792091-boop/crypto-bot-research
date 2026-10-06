@@ -566,7 +566,7 @@ def test_deck_lines_are_thin_out_of_the_autoscale_and_click_to_hide_is_remembere
     for w in ("포지션 선", "손절·잠금", "지지·저항", "프리미엄 지표", "경제지표", "거래량", "모두 보기", "모두 숨기기"):
         assert w in fx, w
     for scr in ("terminal-chart.js", "chart.js"):
-        assert 'groups: ["pos", "risk", "sr", "smc", "ev", "vol"]' in _read("screens", scr), scr
+        assert 'groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"]' in _read("screens", scr), scr          # (vp-chart: + 매물대)
 
 
 def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():

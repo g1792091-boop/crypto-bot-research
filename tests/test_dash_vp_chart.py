@@ -266,6 +266,7 @@ def test_both_screens_load_the_style_and_it_uses_only_tokens():
     for name in ("chart.css", "terminal.css"):
         assert '@import url("chart-vp.css");' in _read("screens", name)
     css = _read("screens", "chart-vp.css")
+    assert '.chart-card[data-view="tv"] > .vp-host { display: none; }' in css       # the 거래소 차트 tab shows only the exchange's page
     code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", code) and not re.search(r"\brgba?\(", code)
     assert all(float(m) >= 12 for m in re.findall(r"font[^;{]*?(\d+(?:\.\d+)?)px", code))

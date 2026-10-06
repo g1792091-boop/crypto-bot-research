@@ -66,7 +66,6 @@ class BotProfile:
         self.frames, self.tfs, self.clock = frames, tuple(tfs), clock
         self.lock = threading.Lock()
         self.good: dict = {}                    # (symbol, tf) -> (checked at, answer)
-        self.calls = 0
 
     def get(self, symbol: str, tf: str) -> dict:
         if tf not in self.tfs:
@@ -77,7 +76,6 @@ class BotProfile:
         if hit and self.clock() - hit[0] < 30:                  # the bar rarely changes inside 30 s: no fetch at all
             return hit[1]
         try:
-            self.calls += 1
             df = _POOL.submit(self.frames, symbol, tf, FETCH_BARS).result(timeout=TIMEOUT_S)
             out = {**levels_of(df, tf), "symbol": symbol}
         except Exception:  # noqa: BLE001  (Binance slow (TimeoutError) / down / bad bars: the last good answer, else 503)

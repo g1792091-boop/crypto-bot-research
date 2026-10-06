@@ -19,7 +19,6 @@ import {RANGES, RANGE_KO, APPROX, LEVEL_TFS, MIN_GAP_MS, rowCount, rangeSpec, vi
 
 GROUP_KO.vp = "매물대";                 // the deck's '선' menu lists a group by this name
 const PREF = "vp-";                     // per device: {range, bot} (on / off itself is the deck's)
-const MEASURE_MS = 500;
 const fontOf = (col, vr, w = 600) => `${w} ${col.fs * vr}px ${col.font}`;
 
 /** The vp group's start state on a device that saved its deck choices before this group existed (the deck would treat a
@@ -54,12 +53,18 @@ export function volText(x) {
  *   legend: the screen's OHLC legend element over the chart (the labels keep under it when it reaches their column).
  */
 export function vpAttach(o) {
+  try { return attach(o); } catch (e) {                         // a bug here must never take the chart down with it
+    if (o.host) put(o.host, h("div", {class: "vp-key"}, h("span", {class: "vp-meta bad", "data-note": "1"}, "매물대를 그리지 못했습니다")));
+    return null;
+  }
+}
+function attach(o) {
   const {chart, series, deck, wrap, box, ctx} = o;
   const saved = local.get(PREF + o.key, null) || {};
   const st = {
     range: RANGES.some((r) => r.id === saved.range) ? saved.range : "view", bot: saved.bot !== false,
     col: colours(), prof: null, structSig: "", liveSig: "", rb: null, rkey: "", rseq: 0, rerr: null, rbusy: false,
-    botLv: null, bkey: "", berr: null, hover: -1, res: 0, resAt: 0, resDirty: true, computes: 0, paneW: 0, paneH: 0, symTf: "", metaTxt: null,
+    botLv: null, bkey: "", berr: null, hover: -1, res: 0, resAt: 0, resDirty: true, computes: 0, paneW: 0, paneH: 0, symTf: "", metaTxt: null, arr: null, arrId: 0,
   };
   const savePref = () => local.set(PREF + o.key, {range: st.range, bot: st.bot});
   let api = null, g = null, inView = false;
@@ -98,16 +103,18 @@ export function vpAttach(o) {
       : "봇은 15분 · 30분 · 1시간 · 4시간 봉에서만 매물대를 씁니다";
     const p = st.prof, stats = [], notes = [];
     keyEl.dataset.split = p && p.ok && !p.split ? "0" : "1";
-    if (st.range !== "view" && st.rbusy && !st.rb) notes.push(`${RANGE_KO[st.range]} 불러오는 중…`);
+    const have = st.range === "view" || (st.rb && st.rb.mode === st.range && st.rb.sym === o.sym());      // the asked range's bars are here
+    if (st.range !== "view" && st.rbusy && !have) notes.push(`${RANGE_KO[st.range]} 불러오는 중…`);
     else if (st.rerr) notes.push(`${RANGE_KO[st.range]} 자료를 불러오지 못했습니다`);
     else if (p && p.ok) {
-      stats.push(`봉 ${fmt.int(p.bars)}개`);
+      stats.push(`${st.range === "today" ? "5분 " : st.range === "week" ? "15분 " : ""}봉 ${fmt.int(p.bars)}개`);
       if (p.split) stats.push(`매수 비율 ${fmt.num(p.buyRatio * 100, 0)}%`); else notes.push("합계만 (이 자료에는 매수·매도 구분이 없습니다)");
     } else if (p && p.why === "novol") notes.push("이 봉들에는 거래량 자료가 없습니다");
     else if (p && p.why === "flat") notes.push("가격 변화가 없어 칸을 나눌 수 없습니다");
     else if (!p) notes.push("계산 중…");
     if (st.bot && botOk && st.berr) notes.push("봇 기준선을 불러오지 못했습니다");
     else if (st.bot && botOk && st.botLv && st.botLv.why) notes.push("봇 기준선: 봉이 모자라 계산하지 못했습니다");
+    else if (st.bot && botOk && st.botLv && st.botLv.stale) notes.push("봇 기준선은 조금 전 자료입니다 (새로 받지 못함)");
     const txt = [...stats, ...notes].join(" · ");
     if (txt !== st.metaTxt) { st.metaTxt = txt; put(meta, txt); meta.dataset.note = notes.length ? "1" : ""; }     // (a pan recomputes often: touch the DOM only for news)
     const bad = !!(st.rerr || (st.bot && botOk && st.berr));
@@ -158,6 +165,7 @@ export function vpAttach(o) {
   /** The bars of the chosen range and the numbers that say whether they (struct) or just their newest bar (live) changed. */
   function select(H) {
     const data = deck.data(), s = o.sym(), t = o.tf(), rows = rowCount(H);
+    if (data !== st.arr) { st.arr = data; st.arrId++; }              // setData hands the deck a new array: another coin or interval, a reload
     let list = null, i0 = 0, i1 = -1, seq = 0;
     if (st.range === "view") {
       let rg = null;
@@ -167,11 +175,12 @@ export function vpAttach(o) {
     } else if (st.rb && st.rb.sym === s && st.rb.mode === st.range) { list = st.rb.rows; i0 = 0; i1 = list.length - 1; seq = st.rb.seq; }
     const first = list && i1 >= i0 ? list[i0] : null, last = list && i1 >= i0 ? list[i1] : null;
     return {list, i0, i1, rows,
-      struct: [st.range, s, t, rows, i1 - i0, first ? first.time : 0, st.range === "view" ? 0 : seq].join("|"),
+      struct: [st.range, s, t, rows, i1 - i0, first ? first.time : 0, st.range === "view" ? st.arrId : seq].join("|"),
       live: last ? [last.time, last.high, last.low, last.volume, last.buy].join(":") : ""};
   }
   function recompute(sel) {
     st.computes++;
+    if (st.hover !== -1) { st.hover = -1; tip.hidden = true; }                 // rows may now be other rows
     keyEl.dataset.computes = String(st.computes);                                // (what the browser checks read: how often the profile was rebuilt)
     st.prof = sel.list && sel.i1 >= sel.i0 ? buildProfile(sel.list.slice(sel.i0, sel.i1 + 1), {n: sel.rows}) : {ok: false, why: "nobars"};
     paintKey();
@@ -188,7 +197,7 @@ export function vpAttach(o) {
 
   // ---------------------------------------------------------------- geometry (media pixels) for the renderers
   /** The names column at the pane's right edge (core/chartfx.js): room for "손절 ×2"-sized tags at least, wider when a
-   *  longer one is shown (measured at most twice a second; it only grows until the coin or interval changes). */
+   *  longer one is shown (measured when a name changes and every 4 s; it only grows until the coin or interval changes). */
   function reserve(W) {
     const base = Math.min(Math.round(st.col.fs * 5.4 + 14), Math.round(W * 0.24));
     const now = Date.now();
@@ -196,6 +205,8 @@ export function vpAttach(o) {
       st.resDirty = false; st.resAt = now;
       let r = base;
       for (const el of wrap.querySelectorAll(".cfx-name:not([hidden])")) r = Math.max(r, el.offsetWidth + 12);
+      // another overlay that lives at the price axis can ask for more room: --cfx-axis-pad (px) on the chart's wrap
+      r = Math.max(r, (parseFloat(getComputedStyle(wrap).getPropertyValue("--cfx-axis-pad")) || 0) + 8);
       st.res = Math.max(st.res, r);
     }
     return Math.min(Math.max(st.res, base), Math.round(W * 0.4));
@@ -281,6 +292,7 @@ export function vpAttach(o) {
         if (gg.vah.y != null) line(gg.vah.y, 0.45, true, true);
         if (gg.val.y != null) line(gg.val.y, 0.45, true, true);
         // the rows: 매수 next to the right edge, 매도 on its left; the value area brighter, the POC row brightest
+        c.setLineDash([]);
         const xr = Math.round(gg.x1 * hr);
         for (const r of gg.rows) {
           const inVa = r.i >= p.vaLo && r.i <= p.vaHi, isPoc = r.i === p.poc, hov = r.i === st.hover;
@@ -339,7 +351,7 @@ export function vpAttach(o) {
     const pt = p && p.point, gg = g, pr = st.prof;
     if (!gg || !pr || !pr.ok || !pt || pt.x < gg.x0 || pt.x > gg.x1 + 2) { hideTip(); return; }
     const r = gg.rows.find((q) => pt.y >= q.y0 && pt.y <= q.y1);
-    if (!r) { hideTip(); return; }
+    if (!r || pt.x < gg.x1 - Math.max(r.len, 24) - 4) { hideTip(); return; }          // over the row's own bar (a short one gets a little slack)
     const txt = rowText(pr, r.i, {price: fmt.price, vol: (x) => `${volText(x)} ${fmt.coin(o.sym())}`}) + (r.i === pr.poc ? " · POC (가장 많이 거래된 가격)" : "");
     if (tip.textContent !== txt) tip.textContent = txt;
     tip.hidden = false;
@@ -352,6 +364,7 @@ export function vpAttach(o) {
   function sync() {
     const live = on();
     keyEl.hidden = !live;
+    if (o.host) o.host.hidden = !live;                          // (a .card is a grid with a gap: an empty slot would still take room)
     if (live) { st.structSig = ""; paintKey(); } else { tip.hidden = true; st.hover = -1; }
     redraw();
   }

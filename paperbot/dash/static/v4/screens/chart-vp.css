@@ -4,6 +4,7 @@
    on the chart canvas (a series primitive), so the AI and 클래식 skins differ only by their tokens. */
 .vp-host { min-width: 0; container: vphost / inline-size; }
 .vp-host:empty { display: none; }
+.chart-card[data-view="tv"] > .vp-host { display: none; }       /* the 거래소 차트 tab: the bot-only parts hide (chart.css) */
 .vp-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 10px; border-top: 1px solid var(--line); color: var(--ink-2);
   font: 500 var(--t-xs)/1.3 var(--f-body); }
 .vp-key[hidden] { display: none; }

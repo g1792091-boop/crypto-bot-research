@@ -49,7 +49,7 @@
 .chart-linkrow { display: flex; flex-wrap: wrap; gap: 6px; }
 /* 우리 차트 | 거래소 차트 (TradingView opt-in: a sandboxed cross-origin iframe, chart-tv.js) */
 .chart-views button { height: 34px; padding: 0 14px; }
-.chart-card[data-view="tv"] > :is(.chart-wrap, .vp-host, .chart-ctrl, .chart-toggles, .pos-note, .assume) { display: none; }
+.chart-card[data-view="tv"] > :is(.chart-wrap, .chart-ctrl, .chart-toggles, .pos-note, .assume) { display: none; }
 .chart-tv { display: grid; gap: 6px; min-width: 0; }
 .chart-tv-slot { height: 60vh; min-height: 360px; max-height: 600px; border-radius: var(--r-md); overflow: hidden;
   border: 1px solid var(--line); background: var(--surface-2); }
