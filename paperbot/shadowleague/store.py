@@ -414,23 +414,10 @@ class Store:
             (int(keep[0][0]), int(keep[-1][0]), len(rows), holes, coin, tf))
         return {"added": len(rows), "holes": holes, "dropped": dropped}
 
-    def prune_bars(self, coin: str, tf: str, tf_ms: int, keep: int = KEEP_BARS) -> int:
-        f = self.feed(coin, tf)
-        if not f or f["last_bar_ms"] is None:
-            return 0
-        cut = int(f["last_bar_ms"]) - keep * tf_ms
-        cur = self.conn.execute("DELETE FROM bars WHERE coin = ? AND tf = ? AND t_ms < ?", (coin, tf, cut))
-        return cur.rowcount
-
     def feed_ok(self, coin: str, tf: str, now_ms: int) -> None:
         self.conn.execute("UPDATE feeds SET state = 'ok', error = NULL, error_since_ms = NULL, error_count = 0, "
                           "last_fetch_ms = ?, last_ok_ms = ?, next_try_ms = NULL WHERE coin = ? AND tf = ?",
                           (int(now_ms), int(now_ms), coin, tf))
-
-    def feed_checked(self, coin: str, tf: str, now_ms: int) -> None:
-        """A look at the feed that needed no request (nothing was due): its state is unchanged."""
-        self.conn.execute("UPDATE feeds SET last_fetch_ms = COALESCE(last_fetch_ms, ?) WHERE coin = ? AND tf = ?",
-                          (int(now_ms), coin, tf))
 
     def feed_error(self, coin: str, tf: str, now_ms: int, reason: str, next_try_ms: int) -> None:
         self.conn.execute(

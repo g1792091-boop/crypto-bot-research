@@ -44,7 +44,7 @@ DAY_MS = 86_400_000
 MAX_CHUNK_BARS = 2000             # new bars of one series handled in one tick (a long gap finishes over several ticks)
 WORK_S = 14.0                     # no new series is started after this many seconds of a tick
 HARD_S = 20.0                     # no network request is started that could end after this
-STALE_MS = 6 * 3_600_000          # a member whose last tick is older than this reads 'off' on the card
+STALE_MS = 3 * 3_600_000          # a member whose last tick is older than this reads 'off' on the card
 
 
 class Detector(Protocol):
@@ -205,10 +205,19 @@ class League:
         st, tfm = self.store, FD.TF_MS[tf]
         out = {"signals": 0, "opened": 0, "closed": 0, "clones": 0}
         feed = st.feed(coin, tf)
+        prior = st.series(m.member_id, coin, tf)
+        if (prior and prior["status"] in ("recording", "error") and feed and feed["last_bar_ms"] is not None
+                and prior["last_bar_ms"] == feed["last_bar_ms"]):
+            self._finish_status(m, coin, tf, prior, feed, sync, now_ms, tfm)           # nothing new since the cursor
+            return out
         arr = st.load_bars(coin, tf)
         n_all = len(arr["t"])
         need = int(m.detector.min_bars)
         have = int(feed["n_ingested"]) if feed else 0
+        if n_all == 0 and FD.anchor_ms(m.start_ms, tf) > FD.latest_closed_open(now_ms, tf):
+            st.put_series(m.member_id, coin, tf, "waiting", now_ms, warm_have=have, warm_need=need,
+                          note="시작일 전 (아직 받을 봉이 없음)")
+            return out
         if n_all == 0 or have < need:
             if feed and feed["state"] == "error" and have == 0:
                 st.put_series(m.member_id, coin, tf, "error", now_ms, warm_have=have, warm_need=need,
@@ -223,7 +232,6 @@ class League:
             st.put_series(m.member_id, coin, tf, "waiting", now_ms, warm_have=have, warm_need=need,
                           note="시작일 전 (봉만 모으는 중)")
             return out
-        prior = st.series(m.member_id, coin, tf)
         last_done = prior["last_bar_ms"] if prior else None
         i0 = 0 if last_done is None else int(np.searchsorted(t, last_done, side="right"))
         if i0 < n_all:

@@ -5,6 +5,9 @@ What the agents service has today (checked 2026-10-06):
     one row per coin per minute it stepped on, since the run's start and never pruned. That is days of history, not the
     33 days 200 bars of 4h need (and 300 bars of 4h are 50 days), so it cannot start this detector on 1h / 4h bars for
     weeks. It is therefore not used here.
+  * market.db ``kline5m`` (the signal recorder's 5-minute archive, paperbot/archive.py, written by paperbot-record): bars
+    since the recorder's first run on the server, not guaranteed to reach back 50 days for every coin and not readable
+    from the agents tick's own paths; also not used.
   * public Binance USD-M klines, no key, which the agents tick already reads (committee.klines / committee.http_get,
     6 second timeout; rooms.fetch_market_moves, market_move meetings). The league reuses exactly that code through the
     ``get`` function the tick hands it (rooms.CM_HTTP_GET; tests give a fake, nothing here opens a socket itself).

@@ -350,6 +350,14 @@ def test_before_the_start_date_it_only_collects_bars(tmp_path):
     assert st.series(m.member_id, "BTC", "1h")["status"] == "recording"
 
 
+def test_a_start_date_far_ahead_is_waiting_not_warming_and_asks_for_nothing(tmp_path):
+    ex, m, st = world(tmp_path, start=T0 + 3500 * HOUR)             # its history would begin at bar 2500; now is bar 100
+    ex.now_ms = now_after_bar("1h", 100)
+    LG.League(st, (m,), ex.get).tick(ex.now_ms)
+    s = st.series(m.member_id, "BTC", "1h")
+    assert s["status"] == "waiting" and "시작일 전" in s["note"] and ex.requests == []
+
+
 # ------------------------------------------------------------------------------------------------ several coins and timeframes
 def test_several_coins_and_timeframes_are_followed_independently(tmp_path):
     coins, tfs = ("BTC", "ETH"), ("1h", "4h")
