@@ -124,15 +124,15 @@ const noneRow = (ic, title, detail, link) => h("a", {class: "since-row none", hr
   h("span", {class: "since-t"}, h("b", null, title), detail ? h("span", null, detail) : null),
   h("span", {class: "since-v since-none"}, "없음"));
 
-function tradeRows(d) {
-  const out = [];
-  for (const [k, ic, cls, word] of [["best", "▲", "up", "가장 크게 번 거래"], ["worst", "▼", "down", "가장 크게 잃은 거래"]]) {
-    const t = d[k];
-    if (t) out.push(row(ic, cls, word, `${idName(t.account_id)} · ${coin(t.symbol)} · ${reasonKo(t.exit_reason)}`,
-      `${money(t.pnl, true)}`, href("account", t.account_id), tone(t.pnl, money(t.pnl, true))));
-  }
-  return out;
+const TRADE_KO = {best: ["▲", "up", "가장 크게 번 거래"], worst: ["▼", "down", "가장 크게 잃은 거래"]};
+/** The best ("best") or worst ("worst") closed trade of 기존 36 · 5분봉 · 추가 계좌 (the server never names another
+ *  group's trade), null when there is none. */
+function tradeRow(d, k) {
+  const t = d[k], [ic, cls, word] = TRADE_KO[k];
+  return t ? row(ic, cls, word, `${idName(t.account_id)} · ${coin(t.symbol)} · ${reasonKo(t.exit_reason)}`,
+    `${money(t.pnl, true)}`, href("account", t.account_id), tone(t.pnl, money(t.pnl, true))) : null;
 }
+const tradeRows = (d) => [tradeRow(d, "best"), tradeRow(d, "worst")].filter(Boolean);
 function bustRow(d) {
   const T = d.trades || {}, B = d.busts || {n: 0};
   if (!B.n && !T.liquidations) return null;
@@ -223,12 +223,15 @@ export async function openAway(range, o = {}) {
   renderAway(d, {after: d.after, id: id === "away" && !away ? "8h" : id, words, jobs, health, away});
 }
 
-function renderAway(d, o) {
+function renderAway(d, o) { open(d, awayParts(d, o)); }
+
+/** The 자는 동안 card's parts {plate, title, sub, seg, tiles, rows} for one /api/v4/since answer (o: {id, words, jobs,
+ *  health, away}): every section is there, an empty one as a 없음 row. */
+export function awayParts(d, o = {}) {
   const T = d.trades || {total: 0, groups: {}};
   const G = T.groups || {};
   const tiles = GROUPS.filter(([g]) => g !== "extra" || G.extra).map((x) => tile(x, G[x[0]]));
   const M = d.meetings || {};
-  const best = tradeRows(d);
   const srv = serverRows(d, o.jobs, o.health, d.after);
   const S = d.server || {};
   const vts = d.verdict_ts;
@@ -236,8 +239,8 @@ function renderAway(d, o) {
   const sh = (t) => h("p", {class: "since-sh"}, t);
   const rows = [
     sh("거래 · 파산"),
-    best.find((x) => x.querySelector(".since-ic.up")) || noneRow("▲", "가장 크게 번 거래", "기존 36 · 5분봉 · 추가 계좌의 닫힌 거래", href("board")),
-    best.find((x) => x.querySelector(".since-ic.down")) || noneRow("▼", "가장 크게 잃은 거래", "기존 36 · 5분봉 · 추가 계좌의 닫힌 거래", href("board")),
+    tradeRow(d, "best") || noneRow("▲", "가장 크게 번 거래", "기존 36 · 5분봉 · 추가 계좌의 닫힌 거래", href("board")),
+    tradeRow(d, "worst") || noneRow("▼", "가장 크게 잃은 거래", "기존 36 · 5분봉 · 추가 계좌의 닫힌 거래", href("board")),
     bustRow(d) || noneRow("✕", "파산 · 강제청산", null, href("alerts")),
     sh("회의 · 알림"),
     meetingRow(d) || noneRow("◆", "끝난 회의", M.error ? "회의 기록을 읽지 못했습니다" : "결론을 내고 끝난 회의", href("digest")),
@@ -255,9 +258,8 @@ function renderAway(d, o) {
     RANGES.filter((r) => r.id !== "away" || o.away).map((r) => h("button", {type: "button", "aria-pressed": String(r.id === o.id),
       title: r.id === "away" && o.away ? `${kst(o.away.from)} ~ ${kst(o.away.to)} 자리 비움` : null,
       onclick: () => { if (r.id !== o.id) openAway(r.id, {keep: true}); }}, r.ko)));
-  open(d, {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts && left > 0 ? ` · 판정까지 ${int(left)}일` : "",
-    d.clamped_by === "week" ? " · 그보다 전 일은 알림 기록에" : ""],
-    seg, tiles, rows, label: "자는 동안 바뀐 것"});
+  return {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts && left > 0 ? ` · 판정까지 ${int(left)}일` : "",
+    d.clamped_by === "week" ? " · 그보다 전 일은 알림 기록에" : ""], seg, tiles, rows};
 }
 
 // ---------------------------------------------------------------- the frame both use

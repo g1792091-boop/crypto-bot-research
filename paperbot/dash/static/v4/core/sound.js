@@ -67,13 +67,14 @@ const gainOf = () => cfg.vol / 100;      // the picker's bus exactly (owners 10/
 const HOURS_KEY = "snd-hours", EV_KEY = "snd-ev";
 export const DEFAULT_HOURS = {from: 0, to: 7};
 const hourOf = (v, d) => { const n = Number(v); return v !== null && v !== "" && Number.isInteger(n) && n >= 0 && n <= 23 ? n : d; };
-function sanitizeHours(o) {
+/** {from, to} of whole Korea-time hours 0-23; a missing or bad one keeps `base`'s (the defaults, or the hours now). */
+function sanitizeHours(o, base = DEFAULT_HOURS) {
   const x = o && typeof o === "object" ? o : {};
-  return {from: hourOf(x.from, DEFAULT_HOURS.from), to: hourOf(x.to, DEFAULT_HOURS.to)};
+  return {from: hourOf(x.from, base.from), to: hourOf(x.to, base.to)};
 }
 export const hours = sanitizeHours(local.get(HOURS_KEY, null));
 export function setHours(patch) {
-  Object.assign(hours, sanitizeHours({...hours, ...(patch || {})}));
+  Object.assign(hours, sanitizeHours(patch, hours));
   local.set(HOURS_KEY, {from: hours.from, to: hours.to});
   bus.emit("sound:cfg", {...cfg});
 }
