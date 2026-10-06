@@ -57,9 +57,9 @@ export function bandLine(ctx) {
     const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit, failedKeys});
     status.className = `term-bc2 c-status ${s.level}`;
     put(status, h("i", {class: "term-bdot", "aria-hidden": "true"}), h("b", null, s.text),
-      hbAge != null ? h("span", {class: "muted num"}, ` · 봇 신호 ${fmt.dur(hbAge)} 전`) : null);
+      hbAge != null ? h("span", {class: "muted num"}, ` · 봇 생존 신호 ${fmt.dur(hbAge)} 전`) : null);
     status.title = `${s.text}${s.detail ? `: ${s.detail}` : ""}${hbAge != null ? ` · 봇 생존 신호 ${fmt.dur(hbAge)} 전` : ""} · 누르면 서버 화면`
-      + (s.level === "ok" ? " (상태 카드가 정상이고 빨간 알림이 없고 봇 신호가 방금 왔을 때만 '이상 없음')" : "");
+      + (s.level === "ok" ? " (상태 카드가 정상이고 빨간 알림이 없고 봇 생존 신호가 방금 왔을 때만 '이상 없음')" : "");
   }
   function paintDay(sm) {
     const d = dayInfo(sm.v, serverNow());

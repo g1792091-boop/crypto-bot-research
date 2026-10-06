@@ -79,3 +79,24 @@ export function timeTicks(x0, x1, max, fmtHm, fmtMd) {
   }
   return out;
 }
+
+/**
+ * The x-axis ticks that fit between the left label (where the line starts: "10/03 23:42" in the first days, "09/06" later) and the right
+ * label "지금" without touching either, nor each other (reviewer 10/06: "10/03 23:42" ran into a "10/05" tick on a 3-day-old run).
+ * Widths come from the font size (fpx = the --t-2xs token: 12 / 13.5 / 15 px at the three 글자 크기), not from a fixed guess.
+ * -> [{t, label, x}] with x in the svg's own units (the line starts at 4 and spans pw).
+ */
+export function axisTicks(ta, tb, pw, fpx, leftLen, fmtHm, fmtMd) {
+  const cw = fpx * 0.62, tickW = 5 * cw, gap = 8;              // a tick label is 5 characters ("12:00" / "10/05")
+  const X = (t) => 4 + ((t - ta) / Math.max(1, tb - ta)) * pw;
+  const minX = 4 + leftLen * cw + gap + tickW / 2;
+  const maxX = pw + 4 - 2 * fpx - gap - tickW / 2;             // "지금" is 2 wide letters ending at pw + 4
+  const out = [];
+  for (const k of timeTicks(ta, tb, Math.max(2, Math.floor(pw / (tickW + 26))), fmtHm, fmtMd)) {
+    const x = X(k.t);
+    if (x < minX || x > maxX) continue;
+    if (out.length && x - out[out.length - 1].x < tickW + 10) continue;
+    out.push({...k, x});
+  }
+  return out;
+}

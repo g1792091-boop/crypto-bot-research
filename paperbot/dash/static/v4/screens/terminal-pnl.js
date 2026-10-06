@@ -14,7 +14,7 @@ import {h, s, put, ui, fmt, motion, local, serverNow} from "../core/pb.js";
 import {CAL_API} from "./flow-cal.js";
 import {panel} from "./terminal-kit.js";
 import {failNote, retrier} from "./terminal-state.js";
-import {series, windowsFor, timeTicks, H} from "./terminal-pnl-calc.js";
+import {series, windowsFor, axisTicks, H} from "./terminal-pnl-calc.js";
 
 const WD = ["월", "화", "수", "목", "금", "토", "일"];
 const K = "core";                                     // the calendar answer's key of 기존 36
@@ -101,11 +101,10 @@ export function pnlPanel(ctx) {
     }
     // time ticks: real clock times while the run is young, dates later; the left edge says where the line starts, the right "지금"
     const leftLab = tb - ta > 3 * 86400000 ? fmt.mmdd(ta) : fmt.kst(ta);
-    const minX = 4 + leftLab.length * 7 + 14, maxX = pw + 4 - 46;                // never over the left label or "지금"
-    const ticks = timeTicks(ta, tb, Math.max(2, Math.floor(pw / 70)), fmt.hm, fmt.mmdd).filter((k) => X(k.t) >= minX && X(k.t) <= maxX);
-    for (const k of ticks) {
-      kids.push(s("line", {class: "tk", x1: X(k.t).toFixed(1), x2: X(k.t).toFixed(1), y1: lh + bh, y2: lh + bh + 3}),
-        s("text", {class: "ax mid", x: X(k.t).toFixed(1), y: Hh - 3}, k.label));
+    const fpx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--t-2xs")) || 12;      // (the labels grow with 글자 크기)
+    for (const k of axisTicks(ta, tb, pw, fpx, leftLab.length, fmt.hm, fmt.mmdd)) {                              // never over the left label, "지금" or each other
+      kids.push(s("line", {class: "tk", x1: k.x.toFixed(1), x2: k.x.toFixed(1), y1: lh + bh, y2: lh + bh + 3}),
+        s("text", {class: "ax mid", x: k.x.toFixed(1), y: Hh - 3}, k.label));
     }
     kids.push(s("text", {class: "ax", x: 4, y: Hh - 3}, leftLab), s("text", {class: "ax end now", x: pw + 4, y: Hh - 3}, "지금"));
     return s("svg", {class: "term-psvg", viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img",

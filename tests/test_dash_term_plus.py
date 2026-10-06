@@ -459,9 +459,32 @@ def test_band_never_says_ok_beside_the_red_banner_and_the_top_row_gives_way_in_o
     band = _code(_read("screens", "terminal-band.js"))
     assert 'document.getElementById("crit")' in band and ".crit-row > .grow" in band           # the shell's banner is read, whatever it lists
     stats = _code(_read("screens", "terminal-stats.js"))
-    assert 'row.classList.add("term-tight")' in stats and stats.index('classList.add("term-tight")') < stats.index("c.hidden = true")   # short words first, cells after
+    assert 'row.classList.add("term-tight")' in stats and stats.index('classList.add("term-tight")') > stats.index("c.hidden = true")   # cells first, short words only if still clipping
     top = _code(_read("screens", "terminal-top.js"))
     assert "term-fwho" in top and "term-vun" in top
     assert ".term-tight .term-vun, .term-tight .term-fwho { display: none; }" in _read("screens", "terminal-plus.css")
     pnl = _read("screens", "terminal-pnl.js")
     assert "이번 판정 구간" in pnl and "todayK.title" in pnl
+
+
+def test_pnl_axis_ticks_never_touch_the_left_label_the_right_label_or_each_other():
+    out = _node("""
+      const D = P.D, H = P.H, bad = [], seen = new Set();
+      const hm = (t) => String(new Date(t + 9 * H).getUTCHours()).padStart(2, "0") + ":00", md = (t) => "10/05";
+      for (const span of [3 * H, 6 * H, 20 * H, D, 2 * D, 3 * D - 1, 3 * D + 1, 5 * D, 14 * D, 31 * D, 120 * D])
+        for (const pw of [150, 230, 300, 420]) for (const fpx of [12, 13.5, 15]) {
+          const ta = 1_790_000_000_000, tb = ta + span, leftLen = span > 3 * D ? 5 : 11;
+          const cw = fpx * 0.62, tw = 5 * cw, ts = P.axisTicks(ta, tb, pw, fpx, leftLen, hm, md);
+          seen.add(ts.length);
+          let prev = 4 + leftLen * cw;                                                   // where the left label ends
+          for (const k of ts) {
+            if (k.x - tw / 2 < prev + 6) bad.push(["left/neighbour", span / H, pw, fpx, k.x]);
+            prev = k.x + tw / 2;
+          }
+          if (ts.length && prev > pw + 4 - 2 * fpx - 6) bad.push(["right", span / H, pw, fpx, prev]);
+        }
+      console.log(JSON.stringify({bad, counts: [...seen].sort()}));""", [PNL])
+    assert out["bad"] == []
+    assert max(out["counts"]) >= 2                                                      # (not satisfied by drawing nothing at all)
+    src = _read("screens", "terminal-pnl.js")
+    assert "axisTicks(" in src and "--t-2xs" in src                                    # the label widths follow the 글자 크기 token

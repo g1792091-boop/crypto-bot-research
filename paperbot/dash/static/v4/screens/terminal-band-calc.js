@@ -81,7 +81,7 @@ export function statusOf({health, healthFailed, hbAgeS, critical, failedKeys}) {
   const first = (health.problems || [])[0] || (health.warnings || [])[0] || null;
   if (health.level === "bad") return {level: "bad", text: "문제 있음", detail: first};
   if (health.level === "warn") return {level: "warn", text: "확인할 것 있음", detail: first};
-  if (hbAgeS == null) return {level: "unknown", text: "봇 신호 확인 중", detail: "봇 생존 신호를 아직 받지 못했습니다"};
+  if (hbAgeS == null) return {level: "unknown", text: "봇 생존 신호 확인 중", detail: "봇 생존 신호를 아직 받지 못했습니다"};
   if (hbAgeS > 120) return {level: "bad", text: "문제 있음", detail: "봇 생존 신호가 오래 없습니다"};
   const miss = Array.isArray(failedKeys) ? failedKeys : [];
   if (miss.length) return {level: "warn", text: "일부 자료를 못 받음", detail: `${miss.join(" · ")} 불러오지 못함 (봇 상태 카드는 정상)`};

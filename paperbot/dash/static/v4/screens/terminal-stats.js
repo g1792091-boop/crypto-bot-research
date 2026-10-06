@@ -126,9 +126,10 @@ export function topStats(ctx, st) {
       for (const c of order) c.hidden = false;
       row.classList.remove("term-tight");
       const tight = () => row.scrollWidth > row.clientWidth + 1 || (movers && movers.scrollWidth > movers.clientWidth + 1);
-      // first the short words give way ("(롱이 냄)", "USDT": their tooltips keep them), only then the cells themselves
-      if (tight()) row.classList.add("term-tight");
       for (const c of order) { if (!tight()) break; c.hidden = true; }
+      // every cell is gone and the row still clips (a big 글자 크기 on a small window): the short words give way too ("(롱이 냄)", "USDT";
+      // their tooltips keep them) before anything is cut
+      if (tight()) row.classList.add("term-tight");
     },
   };
 }
