@@ -121,6 +121,8 @@ export function ds5yCard(ctx) {
           `설정 ${fmt.int(s.configs ?? D.done)}개 → 1단계 ${fmt.int(s.stage1 ?? 0)} → 2단계 ${fmt.int(s.stage2 ?? 0)} → 3단계 ${fmt.int(s.stage3 ?? 0)} · 여러 번 시험한 운 보정(BH) 통과 ${fmt.int(s.bh12_all ?? 0)} → 후보 ${fmt.int(s.candidate ?? 0)}개`,
           ". 세 기간 모두 플러스였던 설정 ", `${fmt.int(s.all_three_periods_positive ?? 0)}개 (342개면 우연으로도 몇 개는 나옴).`)];
     }
+    // a results.csv that is there but cannot be read is not "not started": say what happened
+    if (D.error) return [h("p", {class: "ds5-wait"}, ui.pill("결과 파일을 읽지 못함", "warn"), " ", D.error)];
     const wait = D.state === "absent" ? "아직 시작 안 함 / 서버에서 계산 중" : "서버에서 계산 중";
     return [h("p", {class: "ds5-wait"}, ui.pill(wait, "warn")),
       progress(D.done || 0, D.total || 342, D.state === "absent" ? "결과 파일 없음" : "5년 계산 진행", D.absent_ko || ""),

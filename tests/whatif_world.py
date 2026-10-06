@@ -1,9 +1,10 @@
-"""A synthetic daily3.db of nightly shadows for the 만약 실험실 (tests/test_dash_whatif.py and the ana7b screenshot
+"""A synthetic daily3.db of nightly shadows for the 만약 실험실 (tests/test_dash_whatif_ds5y.py and the ana7b screenshot
 harness), built from a synthetic paper3.db (tests/anasyn_world.py): for every closed trade of the 36's accounts, the
 15m-4h coin flips and the DeepSeek accounts, one ``base`` row (its P&L on equity) and one row per shadow variant
 (paperbot/obsshadows.py names) with a deterministic shift, a few unresolved rows and a few 'not entered' rows, keyed
 like the real job (``<kind>|<account>|<symbol>|<bar close>``, day = the trade's exit UTC day). The real daily3.py
-schema; one report row per day. Deterministic (``seed``).
+schema; one report row per day, written at the next day's 00:20 UTC as the timer does, so with ``until_ms`` only the
+days whose nightly check has already run by then get rows (today's trades have no shadow yet). Deterministic (``seed``).
 
     from whatif_world import build_daily
     info = build_daily(paper_db, daily_db)          # {"rows", "trades", "days"}
@@ -30,6 +31,11 @@ def _day(ms: int) -> str:
     return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y-%m-%d")
 
 
+def _report_ts(day: str) -> int:
+    """When the nightly check of ``day`` (UTC) runs: the next day 00:20 UTC (deploy/paperbot-daily3.timer)."""
+    return int(dt.datetime.fromisoformat(day).replace(tzinfo=dt.timezone.utc).timestamp() * 1000) + 86_400_000 + 20 * 60_000
+
+
 def build_daily(paper_db: str, daily_db: str, seed: int = 5, open_share: float = 0.03, until_ms: int | None = None) -> dict:
     """Shadows for every closed trade (exit before ``until_ms`` when given) of kinds strategy / random (15m-4h) / ds200."""
     rng = random.Random(seed)
@@ -43,6 +49,8 @@ def build_daily(paper_db: str, daily_db: str, seed: int = 5, open_share: float =
     for aid, sym, exit_t, reason, data, kind, tf in got:
         if kind not in ("strategy", "random", "ds200") or tf == "5m" or (until_ms is not None and exit_t >= until_ms):
             continue
+        if until_ms is not None and _report_ts(_day(int(exit_t))) > until_ms:
+            continue                                   # that day's nightly check has not run yet
         t = json.loads(data)
         before = float(t["equity_after"]) - float(t["pnl"])
         if before <= 0:
@@ -68,8 +76,7 @@ def build_daily(paper_db: str, daily_db: str, seed: int = 5, open_share: float =
             rows.append((key, day, v, aid, sym, tf, int(t["side"]), 1, pv / 0.3, r, 1, json.dumps({"pnl_equity": pv})))
     d.executemany("INSERT INTO shadows VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     for day in sorted(days):
-        ts = int(dt.datetime.fromisoformat(day).replace(tzinfo=dt.timezone.utc).timestamp() * 1000) + 86_400_000 + 20 * 60_000
-        d.execute("INSERT INTO reports VALUES (?, ?, ?)", (day, ts, json.dumps({"parity": {"accounts": 0}})))
+        d.execute("INSERT INTO reports VALUES (?, ?, ?)", (day, _report_ts(day), json.dumps({"parity": {"accounts": 0}})))
     d.commit()
     d.close()
     return {"rows": len(rows), "trades": n, "days": sorted(days)}
