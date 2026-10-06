@@ -255,7 +255,8 @@ def test_the_policy_caps_the_owners_budget_and_reads_the_goal_line_switch():
         RM.policy_from_env({"AGENTS_GOAL_LINE": "2"})
     env = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy", "agents.env.example"),
                encoding="utf-8").read()
-    assert "\n#AGENTS_GOAL_LINE=1" in env and "\nAGENTS_GOAL_LINE=" not in env
+    # the commented line shows the default (off); its comment gives the value that turns it on
+    assert "\n#AGENTS_GOAL_LINE=0" in env and "켤 때: AGENTS_GOAL_LINE=1" in env and "\nAGENTS_GOAL_LINE=" not in env
 
 
 def test_the_translator_prompt_and_plan():
