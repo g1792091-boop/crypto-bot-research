@@ -11,7 +11,7 @@ import {s} from "./dom.js";
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
-  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path", "combo", "combo5y"]},
+  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path", "combo", "combo5y", "whatif"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
 ];
@@ -34,6 +34,7 @@ export const SCREENS = {
   path: {ko: "졸업 길", group: "strat", title: "졸업 길"},
   combo: {ko: "조합 성과", group: "strat", title: "조합 성과"},
   combo5y: {ko: "5년 조합", group: "strat", title: "5년 조합 시험"},
+  whatif: {ko: "만약 실험실", group: "strat", title: "만약 실험실"},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},
@@ -109,6 +110,8 @@ const SICON = {
   combo: () => [R(1, 2, 5, 5), R(10, 2, 5, 5), R(6, 10, 5, 5), R(6, 4, 4, 1), R(3, 7, 1, 3), R(3, 10, 3, 1), R(12, 7, 1, 3), R(11, 10, 2, 1)],
   // 5년 조합: two linked blocks (a combination) over a row of bars
   combo5y: () => [R(1, 2, 6, 6), R(9, 2, 6, 6), R(7, 4, 2, 2), R(3, 4, 2, 2), R(11, 4, 2, 2), R(1, 11, 14, 1), R(1, 13, 3, 2), R(6, 12, 3, 3), R(11, 13, 4, 2)],
+  // 만약 실험실: two slider tracks with their knobs (settings to try)
+  whatif: () => [R(1, 4, 14, 1), R(4, 2, 3, 5), R(1, 11, 14, 1), R(9, 9, 3, 5)],
   office: () => [R(3, 2, 3, 3), R(10, 2, 3, 3), R(1, 6, 14, 3), R(3, 9, 1, 5), R(12, 9, 1, 5)],
   rooms: () => [R(4, 1, 8, 1), R(4, 1, 1, 13), R(11, 1, 1, 13), R(2, 14, 12, 1), R(9, 7, 1, 2)],
   digest: () => [R(1, 2, 14, 1), R(1, 2, 1, 9), R(14, 2, 1, 9), R(1, 10, 14, 1), R(3, 11, 2, 3), R(4, 5, 8, 1), R(4, 7, 5, 1)],

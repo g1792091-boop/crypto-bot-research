@@ -36,6 +36,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     holdcmp    그냥 들고 있었다면 / 반대로 했다면 (코인 그냥 들고 있기·바구니, 거래를 거꾸로 한 대충 계산, ?group=)
     ghagree    GH Coin과 같은 방향일 때 (ghcoin/calls.jsonl; 같은 방향 / 반대 / 타점 없음, ?group=; 딥시크는 수만)
     (a7kit: the four views' shared helpers, not a route module)
+    whatiflab  만약 실험실 (#/whatif): 시험한 설정만 고르는 손절·익절·잠금·시간·레버리지, 5년 결과 + 밤 그림자 (기존 36만)
+    ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
 """
 from __future__ import annotations
 
@@ -60,6 +62,7 @@ MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; 
 MODULES += ("combo",)                          # combo-paper: 조합 성과 (합친 곡선, 상관 지도, 합친 규칙)
 MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 5년 월별 (committed JSON)
 MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수치 · 강제청산 직후 · 들고 있었다면 · GH Coin 방향
+MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 
 
 def register_all(app, **kw) -> dict:

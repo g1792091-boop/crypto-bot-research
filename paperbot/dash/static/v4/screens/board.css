@@ -1,5 +1,6 @@
 /* board: 순위표 (builder A). Screen-only rules; tokens and components come from the shared css. */
 @import url("home-shared.css");
+@import url("board-ds5y.css");
 
 [data-screen="board"] .board-csv { gap: 6px; }
 [data-screen="board"] .board-csv .btn-line { min-height: 34px; }
