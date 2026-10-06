@@ -119,7 +119,8 @@ function stopLine(a, pos) {
 /**
  * posCard(a, pos, o) -> element with .update(mark) (call it with real mark prices only: the P&L counts to them).
  * a: board account row (kind, timeframe, strategy, wallet); pos: normPos(); o: {why, wallet, data (account.data),
- * collapsible, open, href (ctx.href), onChart, caption, countOnly}. countOnly (D10/D11): side, leverage, prices and
+ * collapsible, open, href (ctx.href), onChart, caption (false: none; "tip": an ⓘ on the P&L instead, the page prints
+ * the caption once), countOnly}. countOnly (D10/D11): side, leverage, prices and
  * distances only: no P&L, ROI, margin, size or "what the stop pays" line, and a neutral price line.
  */
 export function posCard(a, pos, o = {}) {
@@ -159,11 +160,12 @@ export function posCard(a, pos, o = {}) {
     h("div", {class: "pos-spark-g"}));
   const body = [
     co ? h("p", {class: "pos-plain pos-count-only"}, h("b", null, COUNT_ONLY_KO), " · ", COUNT_ONLY_WHY) :
-      h("div", {class: "pnl pos-led"}, h("div", null, h("span", {class: "k"}, "미실현 손익 (USDT)"), pnlEl),
+      h("div", {class: "pnl pos-led"}, h("div", null, h("span", {class: "k"}, "미실현 손익 (USDT)",
+        o.caption === "tip" ? [" ", ui.infoTip(ui.ASSUME_OPEN_KO, "미실현 손익")] : null), pnlEl),
         h("div", {class: "r"}, h("span", {class: "k"}, "ROI"), roiEl)),
     sparkBox,
     whyBox(a, pos, o.why, co ? null : o.wallet), ui.kv(pairs), meter, co ? null : stopLine(a, pos), ruleLine(a, pos), acts,
-    o.caption === false || co ? null : ui.assume("open"),
+    o.caption === false || o.caption === "tip" || co ? null : ui.assume("open"),
   ];
   const head = h("div", {class: "pos-top"}, h("span", {class: "pos-sym"}, `${fmt.coin(pos.symbol)}USDT`), h("span", {class: "muted pos-perp"}, "무기한"),
     ui.sideTag(pos.side), h("span", {class: "muted"}, `격리 ${fmt.lev(pos.leverage)}`), h("span", {class: "grow"}),

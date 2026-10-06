@@ -9,7 +9,7 @@
 // ours; nothing under prefers-reduced-motion; the page's one relay connection (core/ticks.js) is closed while the page is
 // hidden, and this screen's listener leaves when the screen is left.
 import {h, put, ui, fmt, motion, listenTicks, ticksState} from "../core/pb.js";
-import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
+import {panel, ratioBar, ping, ageCell, marketChip} from "./terminal-kit.js";
 
 export const BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)";
 export const BIG_SHOW = 20;                         // rows on screen (the relay keeps 40)
@@ -65,18 +65,17 @@ export function bigFeed(ctx) {
   const stateEl = h("span", {class: "term-bst", "data-s": "off"}, h("i", {"aria-hidden": "true"}), h("span", null, "연결 전"));
   const ratio = ratioBar([{key: "buy", label: "매수", tone: "up"}, {key: "sell", label: "매도", tone: "down"}], {label: "최근 5분 큰 체결 매수·매도 금액"});
   const ratioK = h("span", {class: "term-rbk"}, "최근 5분");
-  const minNote = h("span", {class: "term-bmin"});
-  const label = h("p", {class: "note term-blab"}, h("b", null, BIG_LABEL), " ", minNote);
-  const el = panel("실시간 큰 체결", {cls: "term-bigp", sub: MARKET_LABEL, scroll: true, acts: [stateEl]}, list);
-  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio), label));
+  // the words "바이낸스 시장 전체 체결 (우리 봇 아님)" and the thresholds: the "시장" chip and the ⓘ in the head (owners
+  // 10/06 ~14:00: said once, in the terminal's footer, not under every list)
+  const el = panel("실시간 큰 체결", {cls: "term-bigp", lead: [marketChip(BIG_LABEL)], info: BIG_LABEL, scroll: true, acts: [stateEl]}, list);
+  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   put(list, ui.empty("시장 체결을 기다리는 중"));
 
   const keyOf = (r) => `${r.t}:${r.s}:${r.side}:${r.usd}`;
   function paintMin() {
     const m = st.min || {};
     const f = (s) => (m[s] ? usdK(m[s]) : "—");
-    minNote.textContent = `· 주문 한 번에 BTC ${f("BTCUSDT")} · ETH ${f("ETHUSDT")} · 나머지 ${f("SOLUSDT")} 이상 · 고래 = ${fmt.int(st.wx)}배 이상`;
-    label.title = BIG_LABEL + " " + minNote.textContent;      // (a short footer hides the thresholds: the tooltip keeps them)
+    el.tip.set(`${BIG_LABEL} · 주문 한 번에 BTC ${f("BTCUSDT")} · ETH ${f("ETHUSDT")} · 나머지 ${f("SOLUSDT")} 이상 · 고래 = ${fmt.int(st.wx)}배 이상`);
   }
   paintMin();
   // one dense line per order (term v2): ▲ / ▼ coin · price · 고래 · $ · age, the row tinted by its side

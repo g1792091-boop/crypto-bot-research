@@ -1,13 +1,14 @@
 // 터미널 top strip (term v2, owners 10/06: "HelloQuant 터미널처럼 한 줄로 읽히게"): the coin and its big price (a teal /
 // pink glow only when the price really moved), the 24 h change, the 24 h quote volume, funding and the time to the next
 // funding, then 급등 · 급락 · 음펀비 over EVERY Binance USD-M perpetual (/api/v4/movers: the server asks Binance twice a
-// minute at most for everybody; labelled 시장 전체 (우리 봇 아님)), the session and the KST clock. Under it one slow line
-// of the latest real AI meeting conclusions (/api/office: finished meetings' decision lines; '회의 중' only from
-// office.running). The office is read through the shared store like 홈 (every 30 s and when a room changes).
+// minute at most for everybody; a "시장" chip says 시장 전체 (우리 봇 아님) in its tooltip, owners 10/06 ~14:00), the
+// session and the KST clock. Under it one slow line of the latest real AI meeting conclusions (/api/office: finished
+// meetings' decision lines; '회의 중' only from office.running). The office is read through the shared store like 홈
+// (every 30 s and when a room changes).
 import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
-import {MARKET_LABEL} from "./terminal-kit.js";
+import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
 
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
@@ -45,8 +46,9 @@ export function topBar(ctx, st) {
     return {s, v, el: h("div", {class: "term-mv"}, h("span", {class: "term-mvk"}, k), h("span", {class: "term-mvl"}, s, v))};
   };
   const mUp = mover("급등", "up"), mDn = mover("급락", "down"), mNeg = mover("음펀비", "down");
-  const mWhen = h("span", null, "(우리 봇 아님)");
-  const mCap = h("span", {class: "term-mvcap", title: `바이낸스 USD-M 무기한 전체에서 1분마다 (${MARKET_LABEL})`}, h("b", null, "시장 전체"), mWhen);
+  // the whole market's: a "시장" chip (its tooltip has the words; owners 10/06 ~14:00: the terminal's footer says it once)
+  const mWhen = h("span", {class: "term-mvwhen num"}, "");
+  const mCap = h("span", {class: "term-mvcap"}, marketChip(`급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 전체에서 1분마다 (${MARKET_LABEL})`), mWhen);
   const movers = h("div", {class: "term-movers", role: "group", "aria-label": `급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 ${MARKET_LABEL}`},
     mCap, mUp.el, mDn.el, mNeg.el);
 
@@ -97,7 +99,7 @@ export function topBar(ctx, st) {
     one(mUp, ok && d.up[0], (r) => pct2(r.pct), ok && d.up, "24시간 가장 많이 오른 코인");
     one(mDn, ok && d.down[0], (r) => pct2(r.pct), ok && d.down, "24시간 가장 많이 내린 코인");
     one(mNeg, ok && d.neg[0], (r) => fmt.num(r.rate * 100, 4, true) + "%", ok && d.neg, "펀딩비가 가장 낮은 코인 (숏이 롱에게 냄)");
-    mWhen.textContent = ok && d.stale ? `(우리 봇 아님) · ${fmt.hm(d.ts)} 값` : "(우리 봇 아님)";
+    mWhen.textContent = ok && d.stale ? `${fmt.hm(d.ts)} 값` : "";
   }
   paintMovers(null);
   const loadMovers = async () => {

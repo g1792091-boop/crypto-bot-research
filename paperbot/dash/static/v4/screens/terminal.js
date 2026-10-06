@@ -14,14 +14,14 @@
 // 60 s cache). HONESTY: every glow or slide follows a real change (a new price, a new fill, a new liquidation, a P&L
 // that moved), none under prefers-reduced-motion or while the page is hidden; paper only, no order buttons; DeepSeek
 // and coin-flip money is never shown here (counts only).
-import {h, store, local, motion, bars, features} from "../core/pb.js";
+import {h, ui, store, local, motion, bars, features} from "../core/pb.js";
 import {topBar} from "./terminal-top.js";
 import {watchList, fillsFeed, liqFeed} from "./terminal-feed.js";
 import {termChart} from "./terminal-chart.js";
 import {coinPositions, pnlPanel} from "./terminal-side.js";
 import {bottomTable} from "./terminal-table.js";
 import {bookPanel} from "./positions-book.js";
-import {panel, duoSwitch, ping, ages} from "./terminal-kit.js";
+import {panel, duoSwitch, ping, ages, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 
 export async function mount(el, ctx) {
@@ -50,13 +50,17 @@ export async function mount(el, ctx) {
   const pnl = pnlPanel(ctx);
   const table = bottomTable(ctx, st, pick);
 
-  const bookP = panel("호가", {sub: "위 20개 기준", cls: "term-book"}, book);
+  const bookP = panel("호가", {sub: "위 20개 기준", cls: "term-book", lead: [marketChip("바이낸스 실제 호가 (시장 전체 · 우리 봇 주문 아님)")]}, book);
   const left = h("aside", {class: "term-col term-left", "aria-label": "실시간 큰 체결, 시장 강제청산, 우리 봇 체결"}, big.el, liq.el, fills.el);
   const mid = h("div", {class: "term-mid"}, watch.el, chart.el, table.el);
   const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인과 수익"}, mine.el, bookP, pnl.el);
   // this coin's positions and the order book share one place (a small switch in both heads; terminal.css)
   duoSwitch(right, "duo", [{id: "pos", label: "포지션", panel: mine.el}, {id: "book", label: "호가", panel: bookP}], (id) => { if (id === "book") book.load(); });
-  const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right));
+  // the captions said ONCE (owners 10/06 ~14:00, "작은 글씨가 패널마다 반복된다"): this one slim line for the whole
+  // terminal; every panel keeps an ⓘ with its own exact note, the market panels a "시장" chip
+  const foot = ui.assumeLine(["closed", "open"], `'시장' 표시 = 바이낸스 ${MARKET_LABEL} · 딥시크·동전 봇은 건수만`);
+  foot.classList.add("term-foot");
+  const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right), foot);
   el.append(h("h1", {class: "term-sr"}, "터미널"), root);
 
   // page hidden: the slow lines and breathing marks stop (CSS reads data-still); reduced motion is handled in CSS

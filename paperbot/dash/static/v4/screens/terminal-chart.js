@@ -10,6 +10,11 @@
 // market trades of the relay (core/blink.js; the coin on screen brightest), and flashes once on a real big trade / liquidation / our fill of
 // this coin; our lines are 1 px with a compact pill at the left (click to hide), never in the autoscale, an edge
 // marker when off the price range; the '선' menu, 프리미엄 지표 (core/smc.js) and the volume bars along the bottom.
+// Declutter (owners 10/06 ~14:00): the right-edge names are collision-free (core/edgelabels.js, at most 6, merged
+// "손절 ×2"); the default ("기본") is calm: the light, the equilibrium line, the nearest OB and FVG on each side, our
+// position lines (with their stops); 지지·저항 and every other 프리미엄 지표 part are opt-in (per device). The header
+// keeps every timeframe button: the light, the flash and the 프리미엄 지표 parts share one '보기 ▾' menu, and the
+// head wraps before it would cut a button (terminal.css).
 import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec, chartDeck,
   bigEvent, liqEvent, ownEvent} from "../core/pb.js";
 import {panel, ping} from "./terminal-kit.js";
@@ -165,8 +170,11 @@ export function termChart(ctx, st, onTf) {
     marks.sort((a, b) => a.time - b.time);
     deck.setMarkers(marks);
     put(keyLine, h("span", null, h("i", {class: "k-ar"}), "우리 진입"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
-      h("span", null, h("i", {class: "k-ev"}), "경제지표 (올리면 이름)"), h("span", null, h("i", {class: "k-ln"}), "진입선·손절선 (기존 36·5분봉·추가) · 이름표를 누르면 숨김"),
-      LEVEL_TFS.includes(st.tf) ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null);
+      // (one line at 1280 px: the details are in the tooltips)
+      h("span", {title: "마우스를 올리면 지표 이름과 한국 시각"}, h("i", {class: "k-ev"}), "경제지표"),
+      h("span", {title: "기존 36 · 5분봉 · 추가 계좌의 진입선과 손절·잠금선 · 왼쪽 이름표를 누르면 그 선만 숨김 · 오른쪽 이름은 선에 마우스를 올리거나 누르면 더 보임"},
+        h("i", {class: "k-ln"}), "우리 진입·손절선"),
+      LEVEL_TFS.includes(st.tf) && deck.shown("sr") ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null);
   }
   function drawPos() {
     if (!deck) return;
@@ -204,9 +212,11 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"], sym: () => st.sym});
-      deck.onToggle((g) => { if (g === "ev" || g == null) drawMarks(); });
-      put(fxSlot, deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"], defaults: {sr: false},
+        sym: () => st.sym, legend});
+      deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
+      // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
+      put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);

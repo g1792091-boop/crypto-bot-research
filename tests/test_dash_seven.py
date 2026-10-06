@@ -48,7 +48,9 @@ def test_account_strip_links_and_deepseek_counts_only():
     # DeepSeek and the coin flips: the closed-trade count and one 참고 pill, never a return, a wallet or USDT per account
     assert 'const ds = a.kind === "ds200", counts = ds || a.kind === "random";' in strip
     assert 'const val = counts ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);' in strip
-    assert 'counts ? ui.pill("", "ref") : null' in strip and 'counts ? null : ui.assume("closed"' in strip
+    assert 'counts ? ui.pill("", "ref") : null' in strip and 'counts ? null : ui.note("수익률 = 지금 잔고 ÷ 시작 잔고")' in strip
+    # the money caption once for the page (owners 10/06 ~14:00): the line at the bottom, the cards keep short notes
+    assert 'ui.assumeLine(["closed", "open"])' in js and "ui.assume(" not in js
     # the strip lives under the profile card and follows the board
     assert "el.replaceChildren(backLink(), headSlot, same ? same.el : null," in js
     assert "if (view.same) view.same.update(b);" in js

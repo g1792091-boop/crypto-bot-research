@@ -3,7 +3,7 @@
 //     a tap picks the coin for the whole terminal;
 //   - 시장 강제청산: the chosen coin's forced liquidations across Binance (/api/liq every 10 s, while the recorder runs:
 //     features.liq), dense single-line rows LONG / SHORT · price · $ · age, the 1-hour long / short $ bar beneath;
-//     the whole market's, labelled 시장 전체 (우리 봇 아님);
+//     the whole market's: a "시장" chip, the words in its ⓘ and the terminal's one footer line (owners 10/06 ~14:00);
 //   - 우리 봇 체결: OUR bots' fills as they happen. Closed trades from /api/trades (then the stream's `trades` events) and
 //     entries from the board's positions (a position with a new entry time in a real board update is a new entry).
 //     기존 36, the 5분봉 reel and the extra accounts are named one by one; DeepSeek and the coin flips are folded into
@@ -11,7 +11,7 @@
 // A row that really arrived while the page is open slides in from the top with one brief glow; ages ('6s', '4m') are
 // repainted by the terminal's 1 s clock tick (text only).
 import {h, put, ui, fmt, motion, bars, features, local} from "../core/pb.js";
-import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
+import {panel, ratioBar, ping, ageCell, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
@@ -92,8 +92,10 @@ export function fillsFeed(ctx) {
   const list = h("div", {class: "term-feed term-fl", role: "list", "aria-live": "off"});
   const ratio = ratioBar([{key: "L", label: "롱", tone: "up"}, {key: "S", label: "숏", tone: "down"}], {label: "최근 진입 롱·숏"});
   const ratioK = h("span", {class: "term-rbk"}, "최근 진입");
-  const el = panel("우리 봇 체결", {cls: "term-fills", sub: "딥시크·동전 봇은 건수만", scroll: true}, list);
-  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio), ui.assume()));
+  // the money caption: the ⓘ here and the terminal's one footer line (owners 10/06 ~14:00: not under every list)
+  const el = panel("우리 봇 체결", {cls: "term-fills", sub: "딥시크·동전 봇은 건수만", scroll: true,
+    info: `우리 봇의 진입·청산 · 청산 손익: ${ui.ASSUME_KO} · 진입은 가격만 · 딥시크·동전 봇은 건수만 (돈은 그 묶음 화면에서)`}, list);
+  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
 
   const add = (e, isLive) => {
     if (st.seen.has(e.key)) return false;
@@ -231,9 +233,10 @@ export function liqFeed(ctx, st, onNew) {
       modeBtns.set(id, b);
       return b;
     }));
-  const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true, acts: [modeBar]}, list);
-  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio),
-    h("p", {class: "note term-blab", title: "바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다"}, h("b", null, `바이낸스 ${MARKET_LABEL}`), " · 코인마다 1초에 1건만 기록")));
+  // "바이낸스 시장 전체 (우리 봇 아님)": the "시장" chip and the ⓘ (the terminal's footer says it once in full)
+  const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true, acts: [modeBar], lead: [marketChip(`바이낸스 ${MARKET_LABEL} 강제청산`)],
+    info: `바이낸스 ${MARKET_LABEL} 강제청산 · 바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다 · 막대 = 최근 1시간 롱·숏 금액`}, list);
+  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   const seen = new Set();
   let key = null, busy = false, last = {key: null, rows: []};
   function setMode(id) {

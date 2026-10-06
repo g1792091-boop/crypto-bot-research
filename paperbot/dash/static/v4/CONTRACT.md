@@ -60,6 +60,7 @@ The architect has built the shared foundation. Five builders now fill the screen
    - `ui.assume("open")` goes under unrealized P&L. That P&L is at the mark price and before the exit fee, and the caption says so.
    - The LED bar prints its own caption.
    - The screenshot check fails a screen that shows `USDT` without one.
+   - **Say it once** (owners 10/06 ~14:00, "작은 글씨가 패널마다 반복된다"): a screen whose cards share the same assumptions prints them ONCE, in one slim line (`ui.assumeLine(["closed", "open"], extra)`: `ui.ASSUME_ALL_KO`, or the closed / open caption alone), and each money panel or card that stands on its own (the terminal's panels, 계좌's 잔고 and 열린 포지션, 포지션's summary) keeps an ⓘ (`ui.infoTip(text)`) whose tooltip / tap bubble carries that card's exact caption and note. Market panels (the whole Binance market, not our bots) carry a tiny "시장" chip whose tooltip says so; the screen's line says it in full. Used by 터미널 (one footer line), 계좌 (one line at the bottom) and 포지션 (one caption per tab, an ⓘ on the unrealized total). The words still come only from core/ui.js (tests/test_dash_v4.py).
 3. **No pass/fail hint before the checkpoint verdict.**
    - Any comparison with coin flips is labelled 참고 and carries `ui.refNote(verdictTs)` ("판정은 30일째 … 지금 비교는 합격·불합격을 뜻하지 않습니다").
    - No p-values, no ✓ / ✕, no green/red "passes" before `/api/checkpoint` says `ready: true`.

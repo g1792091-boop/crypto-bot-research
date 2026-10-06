@@ -32,6 +32,8 @@
   box-shadow: inset 0 -30px 30px -26px var(--amb-up-edge); }
 .cfx-zw { position: absolute; right: 64px; opacity: .6; font: 600 var(--t-2xs)/1 var(--f-term); letter-spacing: .02em; }
 .cfx-zw[hidden], .cfx-under:not([data-split="1"]) > .cfx-zw, .cfx-under[data-light="off"] > .cfx-zw { display: none; }
+/* the words are opt-in (프리미엄 지표 ▾ › Premium·Discount 글자; owners 10/06 ~14:00: a calm default) */
+.cfx-under:not([data-words="1"]) > .cfx-zw { display: none; }
 .cfx-zw[data-tone="down"] { top: calc(var(--split, 50%) - 18px); color: var(--amb-down-ink); }
 .cfx-zw[data-tone="up"] { top: calc(var(--split, 50%) + 6px); color: var(--amb-up-ink); }
 /* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */
@@ -72,9 +74,39 @@
 .cfx-em[data-tone="down"] { --pc: var(--down); --pl: var(--down-line); }
 .cfx-em[data-tone="accent"] { --pc: var(--accent); --pl: var(--accent-line); }
 .cfx-em[data-tone="warn"] { --pc: var(--warn); --pl: var(--warn-line); }
+/* the right-edge names (core/edgelabels.js via chartfx.js layoutNames, owners 10/06 ~14:00): one small name per line
+   next to the price axis, never on top of another; a nudged name has a thin leader (an L of two 1 px borders) back to
+   its line; the hover / tap tag names a hidden one; the "+N" chip lists them */
+.cfx-names { position: absolute; inset: 0; }
+.cfx-name, .cfx-ntag, .cfx-nli { --nc: var(--muted); }
+.cfx-name[data-tone="up"], .cfx-ntag[data-tone="up"], .cfx-nli[data-tone="up"] { --nc: var(--up); }
+.cfx-name[data-tone="down"], .cfx-ntag[data-tone="down"], .cfx-nli[data-tone="down"] { --nc: var(--down); }
+.cfx-name[data-tone="accent"], .cfx-ntag[data-tone="accent"], .cfx-nli[data-tone="accent"] { --nc: var(--accent); }
+.cfx-name[data-tone="warn"], .cfx-ntag[data-tone="warn"], .cfx-nli[data-tone="warn"] { --nc: var(--warn); }
+.cfx-name[data-tone="ob"], .cfx-ntag[data-tone="ob"], .cfx-nli[data-tone="ob"] { --nc: var(--smc-ob); }
+.cfx-name[data-tone="fvg"], .cfx-ntag[data-tone="fvg"], .cfx-nli[data-tone="fvg"] { --nc: var(--smc-fvg); }
+.cfx-name { position: absolute; right: 4px; top: 0; display: block; padding: 2px 5px 2px 6px; border-radius: 3px; white-space: nowrap; pointer-events: auto;
+  cursor: default; background: var(--pill-bg); color: var(--nc); box-shadow: inset 2px 0 0 var(--nc); font: 600 var(--t-2xs)/1.25 var(--f-term); }
+.cfx-name[hidden], .cfx-lead[hidden], .cfx-ntag[hidden] { display: none; }
+.cfx-lead { position: absolute; right: 100%; width: 6px; border-left: 1px solid var(--nc); opacity: .75; pointer-events: none; }
+.cfx-lead[data-dir="up"] { border-bottom: 1px solid var(--nc); }
+.cfx-lead[data-dir="down"] { border-top: 1px solid var(--nc); }
+.cfx-ntag { position: absolute; right: 4px; top: 0; z-index: 2; padding: 2px 6px; border-radius: 3px; white-space: nowrap; pointer-events: none;
+  background: var(--glass); color: var(--ink); box-shadow: 0 0 0 1px var(--nc), 0 4px 14px var(--card-shadow, transparent); font: 600 var(--t-2xs)/1.25 var(--f-term); }
+.cfx-edgel { display: contents; }
+.cfx-nmore { pointer-events: auto; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--line-2); background: var(--pill-bg); color: var(--ink-2);
+  font: 600 var(--t-2xs)/1.2 var(--f-term); cursor: pointer; white-space: nowrap; }
+.cfx-nmore:hover, .cfx-nmore[aria-expanded="true"] { color: var(--ink); border-color: var(--accent-line); }
+.cfx-nmore[hidden], .cfx-nlist[hidden] { display: none; }
+.cfx-nlist { position: absolute; right: 0; bottom: calc(100% + 4px); display: grid; gap: 2px; max-height: 220px; overflow-y: auto; padding: 6px 9px;
+  border-radius: 6px; background: var(--glass); border: 1px solid var(--line-2); pointer-events: auto; box-shadow: 0 8px 22px var(--card-shadow, transparent); }
+.cfx-nli { color: var(--nc); font: 600 var(--t-2xs)/1.45 var(--f-term); white-space: nowrap; text-align: right; }
+.cfx-nli b { color: var(--ink); font-weight: 600; }
 .cfx-smckey { position: absolute; left: 44px; bottom: 6px; padding: 2px 7px; border-radius: 3px; background: var(--pill-bg); color: var(--muted);
   font: 500 var(--t-2xs)/1.3 var(--f-body); }
 .cfx-smckey[hidden] { display: none; }
+/* (a narrow pane) the key wraps before it would run under the names' "+N" chip in the bottom-right corner */
+.cfx-over.nmore .cfx-smckey { max-width: calc(100% - 44px - 7.5em); }
 
 /* our last-price tag on the right axis (the 차트 screen; the terminal has its own .term-ptag with the countdown) */
 .cfx-tag { position: absolute; left: 0; top: 0; z-index: 4; height: 20px; display: grid; place-items: center; border-radius: 3px 0 0 3px;
@@ -96,7 +128,7 @@
   font: 600 var(--t-xs)/1 var(--f-body); cursor: pointer; white-space: nowrap; }
 .cfx-mbtn:hover, .cfx-smcbtn:hover { color: var(--ink); border-color: var(--accent-line); }
 .cfx-mbtn[aria-expanded="true"] { color: var(--ink); border-color: var(--accent-line); }
-.cfx-smcbtn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); box-shadow: 0 0 10px var(--accent-glow); }
+.cfx-smcbtn[aria-pressed="true"], .cfx-smcbtn.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); box-shadow: 0 0 10px var(--accent-glow); }
 .cfx-mcount { color: var(--muted); font-size: var(--t-2xs); }
 .cfx-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 210px; display: grid; gap: 2px; padding: 6px; border-radius: 8px;
   background: var(--glass); border: 1px solid var(--line-2); box-shadow: 0 10px 28px var(--card-shadow, transparent); }
@@ -107,10 +139,17 @@
 .cfx-mi[hidden] { display: none; }
 .cfx-ck { flex: none; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line-2); }
 .cfx-mi[aria-checked="true"] .cfx-ck { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--surface); }
-.cfx-mrow { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
+.cfx-mrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 2px; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
 .cfx-mrow .cfx-mi { justify-content: center; font-size: var(--t-xs); }
 .cfx-mback { color: var(--accent); }
 .cfx-mnote { margin: 4px 4px 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.4; white-space: normal; max-width: 220px; }
+/* '프리미엄 지표 ▾' (the parts on / off) and '보기 ▾' (light · flash · parts in one menu for a narrow header: it opens
+   to the right of its button, two columns on a PC) */
+.cfx-smcmenu { min-width: 270px; width: max-content; max-width: calc(100vw - 32px); }
+.cfx-vmenu { left: 0; right: auto; width: max-content; max-width: calc(100vw - 32px); max-height: min(78vh, 600px); overflow-y: auto; }
+.cfx-vmenu.two { grid-template-columns: minmax(240px, auto) minmax(250px, auto); column-gap: 14px; align-items: start; }
+.cfx-vcol { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.cfx-vbtn.on { color: var(--accent); border-color: var(--accent-line); }
 /* the '조명 · 번쩍임' menu (the light: 깜박 / 계속 켜짐 / 끄기; the flash: 자주 / 보통 / 끄기) */
 .cfx-mwrap[hidden] { display: none; }
 .cfx-lbtn .cfx-lnow { color: var(--ink); font-weight: 700; }
@@ -133,6 +172,11 @@ html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }
   .cfx-lmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px)); min-width: 0;
     max-height: 64vh; overflow-y: auto; }
   .cfx-lmenu .cfx-mnote { max-width: none; }
+  .cfx-smcmenu, .cfx-vmenu { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));
+    min-width: 0; max-height: 64vh; overflow-y: auto; }
+  .cfx-vmenu.two { grid-template-columns: minmax(0, 1fr); }
+  .cfx-smcmenu .cfx-mi, .cfx-vmenu .cfx-mi { white-space: normal; }
+  .cfx-smcmenu .cfx-mnote, .cfx-vmenu .cfx-mnote { max-width: none; }
 }
 .cfx-light { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 13px; border: 1px solid var(--line-2);
   color: var(--ink-2); font: 600 var(--t-2xs)/1 var(--f-body); cursor: help; white-space: nowrap; }

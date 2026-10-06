@@ -199,7 +199,8 @@ export function scaleStrip(mode) {
 const PERIODS = [{id: "7", label: "7일"}, {id: "30", label: "30일"}];
 
 /**
- * profileCard(ctx, key, {head, onMissing, cls, days}) -> {el, load(), set(days)}.
+ * profileCard(ctx, key, {head, onMissing, cls, days, once}) -> {el, load(), set(days)}. once: no money caption of its own
+ * (the page says it once; the card keeps its own note).
  * key: an account id (S5_DONCHIAN_MFI@15m) or a strategy name. head: show the name / chips / identicon block (the
  * account page uses it as its title; the strategies list already shows the name). onMissing(): a 404 (an extra
  * account is not on the map: the caller shows its own head).
@@ -264,7 +265,8 @@ export function profileCard(ctx, key, o = {}) {
       vsStat(d, vsTxt)];
     const notes = [];
     if (d.group === "core" || d.group === "reel" || d.group === "ds200") notes.push(ui.refNote(verdictTs(), d.group === "ds200" ? "딥시크는 계좌마다 동전 봇과 비교하지 않습니다." : null));
-    notes.push(ui.assume("closed", `수익률·곡선은 닫힌 거래 기준 · ${periodKo(d)}`));
+    // o.once: the page prints the money caption once at its bottom (account.js, owners 10/06 ~14:00): only the card's own words
+    notes.push(o.once ? ui.note(`수익률·곡선은 닫힌 거래 기준 · ${periodKo(d)}`) : ui.assume("closed", `수익률·곡선은 닫힌 거래 기준 · ${periodKo(d)}`));
     return [h("div", {class: "gk-top"}, retBlock(d.ret, `수익률 · ${periodKo(d)}`, d.w0, d.w), curve), h("div", {class: "stats s4 gk-stats"}, stats), ...notes];
   }
 

@@ -23,9 +23,20 @@
 //              pill at the LEFT edge inside the pane, only a small tag on the right axis; never in the autoscale (the
 //              candles keep filling the pane); a line off the price range becomes a small ▲ / ▼ edge marker.
 //              Nearby pills are offset, then merged ("+N"), never overlapping. Clicking a pill (or its ×) hides it.
-//   menu       '선' in the chart header: the line groups on / off, 모두 보기 / 모두 숨기기, the hidden lines back.
-//              Remembered per device (dom.js local, try/catch inside).
+//   names      (owners 10/06 ~14:00: "손절 · OB · FVG · 저항 · 지지 … 겹쳐서 지저분하다") every named line and the drawn
+//              OB / FVG zones get ONE small name next to the price axis, laid out by core/edgelabels.js: lines at
+//              almost the same price share a name ("손절 ×2"), names closer than one label height are nudged apart
+//              (with a thin leader to their line), at most 6 are shown (the nearest to the price); the others, the
+//              equilibrium and the liquidity lines show their name and price on hover / tap of the line, and a "+N"
+//              chip lists them.
+//   menu       '선' in the chart header: the line groups on / off, 기본으로, 모두 보기 / 모두 숨기기, the hidden lines
+//              back. Remembered per device (dom.js local, try/catch inside).
 //   smc        프리미엄 지표: core/smc.js on the closed candles shown, drawn by core/smcdraw.js (an indicator, labelled).
+//              Calm by default (owners 10/06 ~14:00, "기본"): the equilibrium line and the nearest OB and FVG above and
+//              below the price; BSL / SSL, BoS / CHoCH, OTE, trendlines, leg %, Premium / Discount words and the
+//              other OB / FVG boxes are opt-in items of the '프리미엄 지표 ▾' menu (SMC_PARTS, per device).
+//   보기 ▾     the same light / flash / 프리미엄 지표 items in one menu for a narrow header (the terminal: every
+//              timeframe button stays visible down to a 1200 px window).
 //   volume     translucent up / down volume bars along the bottom (an overlay price scale of their own).
 // HONESTY: every motion answers a real change (a new price, a real event); the one exception is the light's soft
 // decorative blink while no real trade arrives (core/blink.js), which carries no label or number and is named
@@ -37,8 +48,9 @@ import {reduced, visible} from "./motion.js";
 import {flashScheduler, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
 import {blinker, relayBlink, LIGHT_MODES, DEFAULT_LIGHT, lightModeOf} from "./blink.js";
 import {listenTicks} from "./ticks.js";
-import {smcAll, splitOf, zoneOf} from "./smc.js";
+import {smcAll, splitOf, zoneOf, nearestZones} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
+import {edgeLayout} from "./edgelabels.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
@@ -51,6 +63,22 @@ const LIGHT_SHORT = {blink: "깜박", steady: "켜짐", off: "끔"};
 const LIGHT_SUB = {blink: "실제 체결 따라", steady: "예전처럼"};
 const FLASH_SUB = {often: "큰 체결마다", normal: "고래·큰 청산·우리 체결만"};
 export const SMC_NOTE = "프리미엄 지표: 화면의 캔들로 계산한 참고선 (스윙·구조·OB·FVG·OTE) · 매매 신호 아님";
+/** 프리미엄 지표 parts (owners 10/06 ~14:00): `def` = on in the calm default ("기본"); every other part is opt-in. */
+export const SMC_PARTS = [
+  {id: "eq", ko: "중간선 (Equilibrium)", sub: "빨강·하늘색이 나뉘는 값", def: true},
+  {id: "near", ko: "가까운 OB·FVG", sub: "지금 가격 위·아래 하나씩", def: true},
+  {id: "zones", ko: "OB·FVG 최근 것 모두", def: false},
+  {id: "liq", ko: "유동성 BSL·SSL", def: false},
+  {id: "struct", ko: "구조 BoS·CHoCH", def: false},
+  {id: "ote", ko: "되돌림 OTE 0.62·0.79", def: false},
+  {id: "trend", ko: "추세선 (대각선)", def: false},
+  {id: "legs", ko: "스윙 등락 %", def: false},
+  {id: "words", ko: "Premium·Discount 글자", def: false},
+];
+const SMC_DEF = SMC_PARTS.filter((x) => x.def).map((x) => x.id);
+/** The right edge shows at most this many line names (the nearest to the price); the rest on hover / tap. */
+export const NAMES_MAX = 6;
+const DECK_V = 2;                  // the saved per-device state's version: 2 = the calm default of 10/06 ~14:00
 const SMC_KEY = "프리미엄 지표 · 계산한 참고선 · 신호 아님";
 /** The AI skin (the default) has the light; 클래식 stays plain. */
 export const isAi = () => typeof document !== "undefined" && document.documentElement.dataset.skin !== "classic";
@@ -194,25 +222,36 @@ export function candleGlow(chart, series) {
  * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag, sym}) -> deck
  *   wrap: the positioned box around the chart element `box` (the layers sit in it, the pills over the pane)
  *   key: per-device memory name ("term" | "chart"); groups: the ids the '선' menu lists (GROUP_KO)
+ *   defaults: {group: on?} the "기본" state of those groups (else all on; on a phone pos / risk / sr / smc off)
  *   tag: true draws our own last-price tag on the right axis (glows, pulses on a real new price)
  *   sym: () -> the coin on screen (its relay events light the halves at full strength; others dimmer)
- * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn, lightChip,
- *        lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), place, ready}
+ *   legend: the screen's OHLC legend element over the chart (the right-edge names start under it when it reaches them)
+ * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn ('프리미엄 지표 ▾'),
+ *        lightChip, lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), viewBtn (one
+ *        '보기 ▾' menu with the light, the flash and the 프리미엄 지표 parts, for a narrow header), place, ready}
  */
 export function chartDeck(o) {
   const {chart, series, wrap, box, ctx} = o;
   const key = "cfx-" + (o.key || "chart");
   const groups = o.groups || ["pos", "risk", "sr", "smc", "ev", "vol"];
-  const saved = local.get(key, null) || {};
+  const raw = local.get(key, null);
+  const saved = raw && typeof raw === "object" ? raw : {};
+  // a device that saved its choice before the calm default (10/06 ~14:00) starts once from the new "기본"; the lines it
+  // hid one by one stay hidden
+  const fresh = saved.v !== DECK_V;
   const defOff = groups.filter((g) => (o.defaults && g in o.defaults ? !o.defaults[g] : (narrow() && ["pos", "risk", "sr", "smc"].includes(g))));
+  const partIds = SMC_PARTS.map((x) => x.id);
   const st = {
-    off: new Set(Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
+    off: new Set(!fresh && Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
     hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : []),
+    parts: new Set(!fresh && Array.isArray(saved.smc) ? saved.smc.filter((x) => partIds.includes(x)) : SMC_DEF),
     data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, split: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
   };
   const subs = [];
-  const save = () => local.set(key, {off: [...st.off], hide: [...st.hide].slice(-60)});
+  const save = () => local.set(key, {v: DECK_V, off: [...st.off], hide: [...st.hide].slice(-60), smc: [...st.parts]});
   const shown = (g) => !st.off.has(g);
+  /** a 프리미엄 지표 part is drawn: the indicator on and that part chosen */
+  const part = (id) => shown("smc") && st.parts.has(id);
 
   // ---------------------------------------------------------------- layers (under the transparent chart canvas)
   wrap.classList.add("cfx");
@@ -225,9 +264,16 @@ export function chartDeck(o) {
   const wDisc = h("span", {class: "cfx-zw", dataset: {tone: "up"}}, "Discount");
   const under = h("div", {class: "cfx-under", "aria-hidden": "true"}, depth, ambDn, ambUp, wPrem, wDisc, flashEl);
   const pills = h("div", {class: "cfx-pills"});
-  const edgeTop = h("div", {class: "cfx-edge top"}), edgeBot = h("div", {class: "cfx-edge bot"});
+  // the ▼ markers and the names' "+N" chip share the bottom-right corner (paintEdge fills only its own list)
+  const edgeTop = h("div", {class: "cfx-edge top"}), edgeBot = h("div", {class: "cfx-edgel"});
+  const namesMore = h("button", {type: "button", class: "cfx-nmore num", hidden: true, "aria-expanded": "false", onclick: (e) => { e.stopPropagation(); openNames(namesList.hidden); }});
+  const namesList = h("div", {class: "cfx-nlist", hidden: true, role: "list", "aria-label": "가려진 선 이름"});
+  const edgeBotRow = h("div", {class: "cfx-edge bot"}, edgeBot, namesMore, namesList);
   const smcKey = h("div", {class: "cfx-smckey", hidden: true, title: SMC_NOTE}, SMC_KEY);
-  const over = h("div", {class: "cfx-over"}, pills, edgeTop, edgeBot, smcKey);
+  // the right-edge names (core/edgelabels.js): a few reused name tags and their leaders, and the hover / tap tag
+  const names = h("div", {class: "cfx-names"});
+  const hoverTag = h("div", {class: "cfx-ntag num", hidden: true, role: "status"});
+  const over = h("div", {class: "cfx-over"}, pills, names, hoverTag, edgeTop, edgeBotRow, smcKey);
   const tagEl = o.tag ? h("div", {class: "cfx-tag", hidden: true}, h("b", {class: "num"}, "—")) : null;
   wrap.prepend(under);
   wrap.append(over);
@@ -368,6 +414,7 @@ export function chartDeck(o) {
     }
     layoutPills();
     placeSplit();
+    layoutNames();
     if (tagEl) {
       const d = st.data[st.data.length - 1], y = d ? series.priceToCoordinate(d.close) : null;
       if (y == null || y < 0 || y > pane.h) tagEl.hidden = true;
@@ -399,7 +446,8 @@ export function chartDeck(o) {
         continue;
       }
       it.L.pill.hidden = false;
-      it.L.pill.style.transform = `translateY(${Math.round(Math.min(top, pane.h - PILL_H))}px)`;
+      it.L._top = Math.round(Math.min(top, pane.h - PILL_H));       // (the right-edge names keep clear of it)
+      it.L.pill.style.transform = `translateY(${it.L._top}px)`;
       it.L.pill.classList.toggle("off", Math.abs(top - want) > 1);
       bottom = top + PILL_H;
       prev = {L: it.L, more: []};
@@ -425,6 +473,149 @@ export function chartDeck(o) {
       `${arrow} ${fmtPrice(L.spec.price)} · ${L.spec.pill.short || L.spec.pill.text}`)),
     list.length > EDGE_MAX ? h("span", {class: "cfx-em num", dataset: {tone: "flat"}}, `+${list.length - EDGE_MAX}`) : null].filter(Boolean));
   }
+
+  // ---------------------------------------------------------------- the right-edge names (core/edgelabels.js)
+  // One small name per line next to the price axis: our named lines (저항 / 지지 / 잠금 / 손절 / 알림 …, lineWords
+  // below) and the OB / FVG zones 프리미엄 지표 draws now. Merged, nudged apart, at most NAMES_MAX (the nearest to the
+  // price); a nudged name has a thin leader to its line. Reused nodes, moved with a transform: no DOM churn per frame.
+  const pool = [];
+  let shownNames = [], hiddenNames = [], hov = null;
+  const nameH = () => Math.round(st.col.fs * 1.25 + 4);             // .cfx-name: --t-2xs, line-height 1.25, 2 px padding
+  let mctx = null;
+  /** a name tag's width without reading the DOM (.cfx-name: 600 --t-2xs --f-term, 11 px padding) */
+  function nameW(s) {
+    if (mctx == null) { try { mctx = document.createElement("canvas").getContext("2d") || false; } catch (e) { mctx = false; } }
+    if (!mctx) return s.length * st.col.fs * 0.9 + 12;
+    mctx.font = `600 ${st.col.fs}px ${st.col.font || "monospace"}`;
+    return mctx.measureText(s).width + 12;
+  }
+  function nameItems() {
+    const out = lineWords();
+    const v = smcView();
+    const ts = chart.timeScale();
+    for (const z of (v && v.zones) || []) {
+      const x = ts.logicalToCoordinate(z.i);
+      if (x == null || x > pane.w) continue;                        // not drawn (scrolled back before it): no name
+      const mid = (z.top + z.bot) / 2, text = z.kind === "ob" ? (z.dir > 0 ? "OB+" : "OB−") : "FVG";
+      out.push({id: `z:${z.kind}:${z.i}:${z.dir}`, price: mid, y: series.priceToCoordinate(mid), text, tone: z.kind,
+        title: `${text} ${z.kind === "ob" ? "주문 블록" : "가격 공백"} ${fmtPrice(z.bot)} – ${fmtPrice(z.top)} (프리미엄 지표 · 신호 아님)`});
+    }
+    return out;
+  }
+  function layoutNames() {
+    const items = nameItems().filter((x) => x.y != null && x.y >= 0 && x.y <= pane.h);
+    const last = st.data[st.data.length - 1], H = nameH();
+    // the screen's OHLC legend line (o.legend, top left): when it reaches the names' column, the names start under it
+    let lo = 2, hi = pane.h - 2;
+    const lg = o.legend;
+    if (lg && lg.textContent && lg.offsetLeft + lg.offsetWidth - pane.x > pane.w - 180) lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);
+    // our ▲ / ▼ markers (lines off the price range, layoutPills) hold the top / bottom right corners; the "+N" chip shares
+    // the bottom one: the names keep clear of them
+    const rowH = H + 6;
+    if (edgeTop.childElementCount) lo = Math.max(lo, 4 + edgeTop.offsetHeight + 2);
+    if (edgeBot.childElementCount) hi = Math.min(hi, pane.h - 4 - Math.max(rowH, edgeBotRow.offsetHeight) - 2);
+    // a narrow pane (the left menu with bigger type): a name that would sit on one of our left pills goes to the "+N"
+    // list and the hover tag instead, so a name and a pill never cover each other
+    const pb = [];
+    for (const L of lines.values()) if (L.pill && !L.pill.hidden && L._top != null) pb.push({t: L._top, b: L._top + PILL_H, r: 6 + L.pill.offsetWidth});
+    const run = (top) => {
+      // a short pane shows only as many names as fit one under another (dodge would squeeze them onto each other)
+      const fitN = Math.max(0, Math.min(NAMES_MAX, Math.floor((top - lo) / (H + 1))));
+      const lay = edgeLayout(items, {price: last ? last.close : null, max: fitN, H: H + 1, lo, hi: top});
+      if (pb.length) {
+        const keep = [];
+        for (const g of lay.shown) {
+          const y0 = g.ly - H / 2, y1 = y0 + H, left = pane.w - 4 - nameW(g.text);
+          if (pb.some((q) => q.t < y1 + 2 && y0 - 2 < q.b && left - 6 < q.r)) lay.hidden.push(g); else keep.push(g);
+        }
+        lay.shown = keep;
+      }
+      return lay;
+    };
+    let lay = run(hi);
+    if (lay.hidden.length && !edgeBot.childElementCount) {            // the "+N" chip will show: keep its corner free
+      const hi2 = pane.h - 4 - rowH - 2;
+      if (lay.shown.some((g) => g.ly + H / 2 > hi2)) lay = run(hi2);
+    }
+    shownNames = lay.shown; hiddenNames = lay.hidden;
+    while (pool.length < shownNames.length) {
+      const lead = h("i", {class: "cfx-lead", "aria-hidden": "true"}), el = h("span", {class: "cfx-name num"}, h("span"), lead);
+      names.append(el);
+      pool.push({el, txt: el.firstChild, lead});
+    }
+    pool.forEach((t, i) => {
+      const g = shownNames[i];
+      if (!g) { t.el.hidden = true; return; }
+      if (t.txt.textContent !== g.text) t.txt.textContent = g.text;
+      if (t.el.dataset.tone !== g.tone) t.el.dataset.tone = g.tone;
+      const tt = g.items.map((x) => x.title || `${x.text} ${fmtPrice(x.price)}`).join("\n");
+      if (t.el.title !== tt) t.el.title = tt;
+      t.el.hidden = false;
+      const top = Math.round(g.ly - H / 2), rel = g.y - top;          // the line's height inside the name's box
+      t.el.style.transform = `translateY(${top}px)`;
+      const off = Math.abs(g.ly - g.y) >= 3;
+      t.lead.hidden = !off;
+      if (off) {
+        t.lead.dataset.dir = rel < H / 2 ? "up" : "down";
+        t.lead.style.top = Math.round(Math.min(rel, H / 2)) + "px";
+        t.lead.style.height = Math.max(1, Math.round(Math.abs(rel - H / 2))) + "px";
+      }
+    });
+    paintNamesMore();
+    if (hov) showHover(hov.y, 0, hov);
+  }
+  // the names that did not get a place: a "+N" chip (its list on a tap), and each one on hover / tap of its line
+  function paintNamesMore() {
+    const n = hiddenNames.length;
+    namesMore.hidden = !n;
+    over.classList.toggle("nmore", !!n);
+    if (!n) { if (!namesList.hidden) openNames(false); return; }
+    const t = `이름 +${n}`;
+    if (namesMore.textContent !== t) namesMore.textContent = t;
+    namesMore.title = `가려진 선 이름 ${n}개 · 선에 마우스를 올리거나 누르면 보입니다\n` + hiddenNames.map((g) => `${g.text} ${fmtPrice(g.price)}`).join("\n");
+    if (!namesList.hidden) fillNames();
+  }
+  function fillNames() {
+    const key = hiddenNames.map((g) => g.text + fmtPrice(g.price)).join("|");
+    if (namesList._key === key) return;
+    namesList._key = key;
+    namesList.replaceChildren(...hiddenNames.slice().sort((a, b) => b.price - a.price).map((g) =>
+      h("span", {class: "cfx-nli num", role: "listitem", dataset: {tone: g.tone}}, `${g.text} `, h("b", null, fmtPrice(g.price)))));
+  }
+  function openNames(on) {
+    namesList.hidden = !on;
+    namesMore.setAttribute("aria-expanded", String(on));
+    if (on) { namesList._key = null; fillNames(); }
+  }
+  // lines named only on hover / tap: the equilibrium, the liquidity lines, the OTE edges (when they are drawn)
+  function hoverOnly() {
+    const v = smcView(), out = [];
+    if (!v) return out;
+    if (v.eq && v.range) out.push({text: "중간선 (Equilibrium)", price: v.range.eq, tone: "flat"});
+    for (const q of v.liq || []) out.push({text: q.kind === "BSL" ? "BSL 위쪽 유동성" : "SSL 아래쪽 유동성", price: q.price, tone: "flat"});
+    if (v.ote && v.range) v.range.ote.forEach((p, i) => out.push({text: `OTE ${i ? "0.79" : "0.62"}`, price: p, tone: "flat"}));
+    return out;
+  }
+  /** The hover / tap tag: the name and price of the hidden name or hover-only line nearest to ``y`` (within tol px). */
+  function showHover(y, tol, keep) {
+    let it = keep || null;
+    if (!keep && y != null) {
+      let bd = tol;
+      for (const g of hiddenNames) { const d = Math.abs(g.y - y); if (d <= bd) { it = {text: g.text, price: g.price, tone: g.tone}; bd = d; } }
+      for (const x of hoverOnly()) { const yy = series.priceToCoordinate(x.price); if (yy != null && Math.abs(yy - y) < bd) { it = x; bd = Math.abs(yy - y); } }
+    }
+    const yy = it ? series.priceToCoordinate(it.price) : null;
+    if (!it || yy == null || yy < 0 || yy > pane.h) { hov = null; hoverTag.hidden = true; return; }
+    hov = {...it, y: yy};
+    const t = `${it.text} ${fmtPrice(it.price)}`;
+    if (hoverTag.textContent !== t) hoverTag.textContent = t;
+    hoverTag.dataset.tone = it.tone;
+    hoverTag.hidden = false;
+    hoverTag.style.transform = `translateY(${Math.round(yy - nameH() / 2)}px)`;
+  }
+  chart.subscribeCrosshairMove((p) => showHover(p && p.point ? p.point.y : null, 6));
+  chart.subscribeClick((p) => showHover(p && p.point ? p.point.y : null, 14));
+  if (ctx && ctx.listen) ctx.listen(document, "pointerdown", (e) => { if (!namesList.hidden && !edgeBotRow.contains(e.target)) openNames(false); });
 
   // ---------------------------------------------------------------- ambient (blinking halves) + flash
   let fmode = modeOf(local.get(FLASH_KEY, DEFAULT_FLASH)).id;
@@ -479,15 +670,26 @@ export function chartDeck(o) {
   // calm slow fades, no flash whatever is chosen.
   const radio = (label, sub, fn) => h("button", {type: "button", class: "cfx-mi", role: "menuitemradio", "aria-checked": "false", onclick: fn},
     h("i", {class: "cfx-ck cfx-rd", "aria-hidden": "true"}), h("span", null, label), sub ? h("small", {class: "cfx-msub"}, sub) : null);
-  const lItems = new Map(LIGHT_MODES.map((m) => [m.id, radio(m.id === DEFAULT_LIGHT ? `${m.ko} (기본)` : m.ko, LIGHT_SUB[m.id], () => setLight(m.id))]));
-  const fItems = new Map(FLASH_MODES.map((m) => [m.id, radio(m.ko, FLASH_SUB[m.id], () => setFlash(m.id))]));
-  const lNote = h("p", {class: "cfx-mnote"});
-  const lmenu = h("div", {class: "cfx-menu cfx-lmenu", role: "menu", hidden: true, "aria-label": "조명과 번쩍임"},
-    h("p", {class: "cfx-mhd"}, "조명 (위 빨강 · 아래 하늘색)"),
-    h("div", {class: "cfx-mgrp", role: "group", "aria-label": "조명"}, [...lItems.values()]),
-    h("p", {class: "cfx-mhd"}, "번쩍임 (큰 체결 · 청산 · 우리 체결)"),
-    h("div", {class: "cfx-mgrp", role: "group", "aria-label": "번쩍임"}, [...fItems.values()]),
-    lNote);
+  // (the same items are built twice: here and in the '보기 ▾' menu below; paintLight sets every copy)
+  const lItems = new Map(LIGHT_MODES.map((m) => [m.id, []])), fItems = new Map(FLASH_MODES.map((m) => [m.id, []])), lNotes = [];
+  const lightItems = () => {
+    const note = h("p", {class: "cfx-mnote"});
+    lNotes.push(note);
+    return [h("p", {class: "cfx-mhd"}, "조명 (위 빨강 · 아래 하늘색)"),
+      h("div", {class: "cfx-mgrp", role: "group", "aria-label": "조명"}, LIGHT_MODES.map((m) => {
+        const b = radio(m.id === DEFAULT_LIGHT ? `${m.ko} (기본)` : m.ko, LIGHT_SUB[m.id], () => setLight(m.id));
+        lItems.get(m.id).push(b);
+        return b;
+      })),
+      h("p", {class: "cfx-mhd"}, "번쩍임 (큰 체결 · 청산 · 우리 체결)"),
+      h("div", {class: "cfx-mgrp", role: "group", "aria-label": "번쩍임"}, FLASH_MODES.map((m) => {
+        const b = radio(m.ko, FLASH_SUB[m.id], () => setFlash(m.id));
+        fItems.get(m.id).push(b);
+        return b;
+      })),
+      note];
+  };
+  const lmenu = h("div", {class: "cfx-menu cfx-lmenu", role: "menu", hidden: true, "aria-label": "조명과 번쩍임"}, lightItems());
   const lNow = h("b", {class: "cfx-lnow"}), fNow = h("b", {class: "cfx-lnow"});
   const lbtn = h("button", {type: "button", class: "cfx-mbtn cfx-lbtn", "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": "조명과 번쩍임",
     onclick: (e) => { e.stopPropagation(); openLight(lmenu.hidden); }},
@@ -505,11 +707,11 @@ export function chartDeck(o) {
   function setLight(id) { lmode = lightModeOf(id).id; local.set(LIGHT_KEY, lmode); lightSync(); }
   function setFlash(id) { fmode = modeOf(id).id; local.set(FLASH_KEY, fmode); if (fmode === "off") sched.cancel(); paintLight(); }
   function paintLight() {
-    for (const [id, b] of lItems) b.setAttribute("aria-checked", String(id === lmode));
-    for (const [id, b] of fItems) b.setAttribute("aria-checked", String(id === fmode));
+    for (const [id, bs] of lItems) for (const b of bs) b.setAttribute("aria-checked", String(id === lmode));
+    for (const [id, bs] of fItems) for (const b of bs) b.setAttribute("aria-checked", String(id === fmode));
     lNow.textContent = LIGHT_SHORT[lmode]; fNow.textContent = modeOf(fmode).ko;
     lbtn.title = `조명: ${lightModeOf(lmode).ko} · 번쩍임: ${modeOf(fmode).ko} (누르면 바꾸기 · 이 기기에만 기억)`;
-    lNote.textContent = LIGHT_NOTE + (reduced() ? " 움직임 줄이기 설정이라 천천히 바뀝니다." : "");
+    for (const n of lNotes) n.textContent = LIGHT_NOTE + (reduced() ? " 움직임 줄이기 설정이라 천천히 바뀝니다." : "");
     paintChip();
   }
   /** the mode on the layers (CSS: the words go with the light when it is off), the halves, the relay listener */
@@ -549,11 +751,29 @@ export function chartDeck(o) {
   }
 
   // ---------------------------------------------------------------- 프리미엄 지표
-  // the words of our lines (저항 / 지지 / 잠금 / 손절 / 알림 …) are placed with the indicators' words at the right edge
+  // the names of our lines (저항 / 지지 / 잠금 / 손절 / 알림 …) go to the right edge with the zones' (layoutNames)
   const lineWords = () => [...lines.values()].filter((L) => L.vis && L.spec.label && L.y != null)
-    .map((L) => ({s: L.spec.label, price: L.spec.price, c: st.col[L.spec.tone] || st.col.flat}));
-  const smcP = smcPrimitive({chart, series, get: () => (shown("smc") ? st.smc : null), col: () => st.col, extra: lineWords,
-    zoneWords: () => !st.ai});                             // the AI skin's split already says Premium / Discount
+    .map((L) => ({id: L.spec.id, price: L.spec.price, y: L.y, text: L.spec.label, tone: TONES.includes(L.spec.tone) ? L.spec.tone : "flat", n: L.spec.count || 1,
+      title: `${L.spec.label}${L.spec.count > 1 ? ` ×${L.spec.count}` : ""} ${fmtPrice(L.spec.price)}`}));
+  /** What 프리미엄 지표 draws now (core/smcdraw.js): the parts that are on; "가까운 OB·FVG" = the nearest live order block
+   *  and open gap above and below the price now (core/smc.js nearestZones). null while the indicator is off. */
+  function smcView() {
+    const r = st.smc;
+    if (!r || !shown("smc")) return null;
+    const P = st.parts, last = st.data[st.data.length - 1], px = last ? last.close : null;
+    const zones = [], seen = new Set();
+    const add = (z, kind) => {
+      if (!z) return;
+      const k = `${kind}:${z.i}:${z.dir}:${z.top}`;
+      if (!seen.has(k)) { seen.add(k); zones.push({...z, kind}); }
+    };
+    if (P.has("near")) { for (const z of nearestZones(r.obsAll, px)) add(z, "ob"); for (const z of nearestZones(r.fvgsAll, px)) add(z, "fvg"); }
+    if (P.has("zones")) { for (const z of r.obs) add(z, "ob"); for (const z of r.fvgs) add(z, "fvg"); }
+    // the AI skin's light already washes the halves and carries the Premium / Discount words (CSS, data-words)
+    return {range: r.range, eq: P.has("eq"), ote: P.has("ote"), words: P.has("words") && !st.ai, tint: !st.ai, zones,
+      liq: P.has("liq") ? r.liq : [], structure: P.has("struct") ? r.structure : [], trend: P.has("trend") ? r.trend : [], legs: P.has("legs") ? r.legs : []};
+  }
+  const smcP = smcPrimitive({chart, series, get: smcView, col: () => st.col});
   series.attachPrimitive(smcP);
   function computeSmc() {
     // closed candles only (a forming bar can still change); the AI skin's split uses the dealing range even with the
@@ -566,7 +786,7 @@ export function chartDeck(o) {
     smcP.request(); schedule();
   }
 
-  // ---------------------------------------------------------------- the '선' menu + the 프리미엄 지표 button
+  // ---------------------------------------------------------------- the '선' menu, '프리미엄 지표 ▾' and '보기 ▾'
   const mItems = new Map();
   const hiddenBtn = h("button", {type: "button", class: "cfx-mi cfx-mback", onclick: () => { st.hide.clear(); save(); revis(); }});
   const menu = h("div", {class: "cfx-menu", role: "menu", hidden: true, "aria-label": "차트 선 보이기"},
@@ -577,6 +797,7 @@ export function chartDeck(o) {
       return b;
     }),
     h("div", {class: "cfx-mrow"},
+      h("button", {type: "button", class: "cfx-mi", title: "처음 모습: 차분한 차트 (지지·저항 등은 꺼 둠)", onclick: () => setDefault()}, "기본으로"),
       h("button", {type: "button", class: "cfx-mi", onclick: () => setAll(true)}, "모두 보기"),
       h("button", {type: "button", class: "cfx-mi", onclick: () => setAll(false)}, "모두 숨기기")),
     hiddenBtn,
@@ -584,8 +805,6 @@ export function chartDeck(o) {
   const menuBtn = h("button", {type: "button", class: "cfx-mbtn", "aria-haspopup": "menu", "aria-expanded": "false", title: "차트에 보일 선 고르기",
     onclick: (e) => { e.stopPropagation(); openMenu(menu.hidden); }}, "선 ", h("span", {class: "cfx-mcount num"}), " ▾");
   const menuWrap = h("span", {class: "cfx-mwrap"}, menuBtn, menu);
-  const smcBtn = groups.includes("smc") ? h("button", {type: "button", class: "cfx-smcbtn", "aria-pressed": String(shown("smc")), title: SMC_NOTE,
-    onclick: () => toggle("smc")}, "프리미엄 지표") : null;
   function openMenu(on) {
     menu.hidden = !on;
     menuBtn.setAttribute("aria-expanded", String(on));
@@ -595,28 +814,103 @@ export function chartDeck(o) {
     ctx.listen(document, "pointerdown", (e) => { if (!menu.hidden && !menuWrap.contains(e.target)) openMenu(false); });
     ctx.listen(document, "keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { openMenu(false); menuBtn.focus(); } });
   }
+  /** An open menu stays inside the window (review: '보기 ▾' opens to the right of its button and, two columns wide, ran
+   *  past the right edge when the head had wrapped or the left menu was on: the page scrolled sideways). */
+  function fit(box) {
+    box.style.transform = "";
+    const r = box.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+    let dx = 0;
+    if (r.right > vw - 8) dx = vw - 8 - r.right;
+    if (r.left + dx < 8) dx = 8 - r.left;
+    if (dx) box.style.transform = `translateX(${Math.round(dx)}px)`;
+  }
+  /** One more header menu (프리미엄 지표 ▾, 보기 ▾): its button opens / closes it, a tap outside or Escape closes it. */
+  function dropdown(btn, box, wrapEl) {
+    const open = (on) => {
+      box.hidden = !on;
+      btn.setAttribute("aria-expanded", String(on));
+      if (on) { paintMenu(); paintLight(); fit(box); const f = box.querySelector('[aria-checked="true"]') || box.querySelector("button"); if (f) f.focus(); }
+    };
+    btn.addEventListener("click", (e) => { e.stopPropagation(); open(box.hidden); });
+    if (ctx && ctx.listen) {
+      ctx.listen(document, "pointerdown", (e) => { if (!box.hidden && !wrapEl.contains(e.target)) open(false); });
+      ctx.listen(document, "keydown", (e) => { if (e.key === "Escape" && !box.hidden) { open(false); btn.focus(); } });
+    }
+  }
+  // 프리미엄 지표 parts: clear on / off items (menuitemcheckbox), 기본으로 / 모두 끄기; built for each menu that lists them
+  const smcItems = new Map(SMC_PARTS.map((x) => [x.id, []]));
+  const smcList = () => [
+    h("p", {class: "cfx-mhd"}, "프리미엄 지표 (화면 캔들로 계산한 참고선)"),
+    h("div", {class: "cfx-mgrp", role: "group", "aria-label": "프리미엄 지표"}, SMC_PARTS.map((x) => {
+      const b = h("button", {type: "button", class: "cfx-mi", role: "menuitemcheckbox", "aria-checked": String(part(x.id)), onclick: () => setPart(x.id, !part(x.id))},
+        h("i", {class: "cfx-ck", "aria-hidden": "true"}), h("span", null, x.ko), x.sub ? h("small", {class: "cfx-msub"}, x.sub) : null);
+      smcItems.get(x.id).push(b);
+      return b;
+    })),
+    h("div", {class: "cfx-mrow"},
+      h("button", {type: "button", class: "cfx-mi", title: "중간선 + 가까운 OB·FVG만", onclick: () => smcDefault()}, "기본으로"),
+      h("button", {type: "button", class: "cfx-mi", onclick: () => smcOff()}, "모두 끄기")),
+    h("p", {class: "cfx-mnote"}, "매매 신호가 아닌 참고선입니다 · 선에 마우스를 올리거나 누르면 이름과 가격 · 이 기기에만 기억")];
+  let smcBtn = null, smcB = null;
+  if (groups.includes("smc")) {
+    const box = h("div", {class: "cfx-menu cfx-smcmenu", role: "menu", hidden: true, "aria-label": "프리미엄 지표 고르기"}, smcList());
+    smcB = h("button", {type: "button", class: ["cfx-smcbtn", shown("smc") ? "on" : ""], "aria-haspopup": "menu", "aria-expanded": "false", title: SMC_NOTE},
+      "프리미엄 지표 ▾");
+    smcBtn = h("span", {class: "cfx-mwrap cfx-smcwrap"}, smcB, box);
+    dropdown(smcB, box, smcBtn);
+  }
+  // '보기 ▾' (a narrow header, the terminal): the light and the flash (AI skin) and the 프리미엄 지표 parts in one menu
+  const vbox = h("div", {class: ["cfx-menu", "cfx-vmenu", st.ai ? "two" : ""], role: "menu", hidden: true, "aria-label": "차트 보기 고르기"},
+    st.ai ? h("div", {class: "cfx-vcol"}, lightItems()) : null,
+    groups.includes("smc") ? h("div", {class: "cfx-vcol"}, smcList()) : null);
+  const vbtn = h("button", {type: "button", class: "cfx-mbtn cfx-vbtn", "aria-haspopup": "menu", "aria-expanded": "false",
+    title: `${st.ai ? "조명 · 번쩍임 · " : ""}프리미엄 지표 고르기 (이 기기에만 기억)`}, "보기 ▾");
+  const viewBtn = h("span", {class: "cfx-mwrap cfx-vwrap"}, vbtn, vbox);
+  dropdown(vbtn, vbox, viewBtn);
   function paintMenu() {
     for (const [g, b] of mItems) b.setAttribute("aria-checked", String(shown(g)));
-    if (smcBtn) smcBtn.setAttribute("aria-pressed", String(shown("smc")));
+    for (const [id, bs] of smcItems) for (const b of bs) b.setAttribute("aria-checked", String(part(id)));
+    if (smcB) smcB.classList.toggle("on", shown("smc"));            // (a menu button: the "on" look is a class, not aria-pressed)
+    vbtn.classList.toggle("on", shown("smc"));
+    under.dataset.words = part("words") ? "1" : "";                // the AI light's Premium / Discount words: opt-in
     const nHid = [...lines.values()].filter((L) => st.hide.has(L.spec.id)).length;
     hiddenBtn.hidden = !nHid;
     hiddenBtn.textContent = `숨긴 선 ${nHid}개 다시 보기`;
-    const offN = groups.filter((g) => !shown(g)).length;
+    const offN = groups.filter((g) => !shown(g) && !defOff.includes(g)).length;        // off beyond the calm default
     menuBtn.querySelector(".cfx-mcount").textContent = offN || nHid ? `${offN ? "끔 " + offN : ""}${offN && nHid ? " · " : ""}${nHid ? "숨김 " + nHid : ""}` : "";
     smcKey.hidden = !shown("smc") || !st.smc;
   }
   function toggle(g, on = !shown(g)) {
     if (on) st.off.delete(g); else st.off.add(g);
+    if (g === "smc" && on && !st.parts.size) st.parts = new Set(SMC_DEF);
     save(); applyGroup(g);
   }
   function setAll(on) {
     for (const g of groups) if (on) st.off.delete(g); else st.off.add(g);
     if (on) st.hide.clear();
+    if (on && !st.parts.size) st.parts = new Set(SMC_DEF);
     save();
     for (const g of groups) applyGroup(g, true);
     revis();
     for (const fn of subs) fn(null);
   }
+  /** 기본으로: the calm default of every group and part, the hidden lines back */
+  function setDefault() {
+    st.off = new Set(defOff); st.parts = new Set(SMC_DEF); st.hide.clear();
+    save();
+    for (const g of groups) applyGroup(g, true);
+    revis();
+    for (const fn of subs) fn(null);
+  }
+  /** one 프리미엄 지표 part on / off: with the indicator off, choosing a part turns it on with that part alone */
+  function setPart(id, on) {
+    if (!shown("smc")) { if (!on) return; st.off.delete("smc"); st.parts = new Set([id]); }
+    else if (on) st.parts.add(id);
+    else { st.parts.delete(id); if (!st.parts.size) st.off.add("smc"); }
+    save(); applyGroup("smc");
+  }
+  function smcDefault() { st.off.delete("smc"); st.parts = new Set(SMC_DEF); save(); applyGroup("smc"); }
+  function smcOff() { st.off.add("smc"); save(); applyGroup("smc"); }
   function applyGroup(g, quiet) {
     if (g === "vol") paintVol();
     if (g === "smc") computeSmc();
@@ -686,6 +980,6 @@ export function chartDeck(o) {
     /** A real event of the coin on screen: {tone: "up" | "down" | "accent", k: 0..1, why} (AI skin only). */
     flash(ev) { if (st.ai) sched.push(ev); },
     onToggle(fn) { subs.push(fn); },
-    menuBtn: menuWrap, smcBtn, lightChip, lightMenu: flashSel, flashSel,
+    menuBtn: menuWrap, smcBtn, lightChip, lightMenu: flashSel, flashSel, viewBtn,
   };
 }

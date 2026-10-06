@@ -151,8 +151,12 @@ JS = ["terminal.js", "terminal-kit.js", "terminal-top.js", "terminal-feed.js", "
 def test_top_strip_wires_the_movers_labelled_market_wide():
     top = _src("screens", "terminal-top.js")
     assert '"/api/v4/movers"' in top and "ctx.every(60000" in top
-    for w in ("급등", "급락", "음펀비", '"시장 전체"', '"(우리 봇 아님)"', "MARKET_LABEL", "24시간 거래대금", "펀딩"):
+    # labelled the whole market's: a "시장" chip whose tooltip says 시장 전체 (우리 봇 아님) (owners 10/06 ~14:00: the
+    # sentence once, in the terminal's footer line)
+    for w in ("급등", "급락", "음펀비", "marketChip(", "MARKET_LABEL", "24시간 거래대금", "펀딩"):
         assert w in top, w
+    assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in _src("screens", "terminal-kit.js")
+    assert "`'시장' 표시 = 바이낸스 ${MARKET_LABEL}" in _src("screens", "terminal.js")
     # the label comes first in the strip, so a narrow window cuts the last mover, never the label
     assert "mCap, mUp.el, mDn.el, mNeg.el" in top
     assert "수집 전" in top                                                    # no answer yet: no made-up mover
@@ -168,8 +172,9 @@ def test_left_column_stacks_three_lists_with_ratio_bars_and_no_switch():
     assert '"LONG"' in feed and '"SHORT"' in feed and "/api/liq" in feed
     kit = _src("screens", "terminal-kit.js")
     assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in kit
-    assert "sub: MARKET_LABEL" in live and 'h("b", null, BIG_LABEL)' in live                 # 실시간 큰 체결: head + footer
-    assert "바이낸스 ${MARKET_LABEL}" in feed                                                  # 시장 강제청산: footer
+    assert "lead: [marketChip(BIG_LABEL)], info: BIG_LABEL" in live                          # 실시간 큰 체결: chip + ⓘ
+    assert "lead: [marketChip(`바이낸스 ${MARKET_LABEL} 강제청산`)]" in feed                  # 시장 강제청산: chip + ⓘ
+    assert "info: `바이낸스 ${MARKET_LABEL} 강제청산" in feed
     assert "export const age" in kit and "ageCell(r.t)" in live and "ageCell(r.ts)" in feed   # ages '6s' / '4m'
     assert "ages(left)" in js and "ctx.every(1000" in js
     css = _src("screens", "terminal.css")
@@ -180,7 +185,9 @@ def test_right_column_profit_card_calendar_and_no_order_buttons():
     side = _src("screens", "terminal-side.js")
     for w in ("이 코인 포지션", "수익 차트", "오늘 수익", "수익 캘린더", "기존 36", "판정이 아닙니다", "수집 전", "기록 없음"):
         assert w in side, w
-    assert 'ui.assume("open")' in side and "ui.assume()" in side and 'ui.pill("", "ref")' in side
+    # the money captions: each panel's ⓘ carries its exact one, the terminal's footer line says both once
+    assert "ROE: ${ui.ASSUME_OPEN_KO}" in side and "${ui.ASSUME_KO}" in side and 'ui.pill("", "ref")' in side
+    assert 'ui.assumeLine(["closed", "open"]' in _src("screens", "terminal.js")
     assert "CAL_API" in side and ".pnl" in side                               # the calendar answer's realized P&L
     code = _code(side)
     assert ".g.ds200" not in code and ".g.flip" not in code and 'g["ds200"]' not in code

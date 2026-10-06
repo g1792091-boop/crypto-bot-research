@@ -10,9 +10,12 @@
 //   range       the dealing range of the last major leg: premium / discount around the equilibrium, OTE 0.62-0.79
 //   trend       lines through the last two major highs and the last two major lows
 //   legs        % move of the last major legs (↓1.87%)
-// Every list is cut to the most recent few so the chart stays readable.
+// Every list is cut to the most recent few so the chart stays readable; obsAll / fvgsAll keep every live zone (the
+// most recent 40) so the chart's calm default (owners 10/06 ~14:00, "기본") can pick the nearest OB and FVG above and
+// below the price (nearestZones).
 
 export const LIMITS = {structure: 3, obs: 1, fvgs: 2, liq: 2, legs: 5};
+const ZONES_KEPT = 40;
 
 const avgRange = (bars) => {
   let s = 0, n = 0;
@@ -161,7 +164,7 @@ export function legs(z) {
  */
 export function smcAll(bars, o = {}) {
   const k = o.k || 3, lim = {...LIMITS, ...(o.lim || {})};
-  const empty = {pivots: [], zz: [], structure: [], obs: [], fvgs: [], liq: [], range: null, trend: [], legs: []};
+  const empty = {pivots: [], zz: [], structure: [], obs: [], fvgs: [], obsAll: [], fvgsAll: [], liq: [], range: null, trend: [], legs: []};
   const b = (bars || []).filter((x) => x && [x.open, x.high, x.low, x.close].every(Number.isFinite));
   if (b.length < 30) return empty;
   const ar = avgRange(b);
@@ -177,11 +180,31 @@ export function smcAll(bars, o = {}) {
     structure: last(br, lim.structure),
     obs: [...last(obs.filter((x) => x.dir > 0), lim.obs), ...last(obs.filter((x) => x.dir < 0), lim.obs)],
     fvgs: last(fv, lim.fvgs),
+    obsAll: last(obs, ZONES_KEPT), fvgsAll: last(fv, ZONES_KEPT),
     liq: [...last(liq.filter((x) => x.kind === "BSL"), lim.liq), ...last(liq.filter((x) => x.kind === "SSL"), lim.liq)],
     range: dealingRange(zz),
     trend: trendlines(zz),
     legs: last(legs(zz), lim.legs),
   };
+}
+
+/**
+ * nearestZones(zones, price) -> [the nearest zone above the price, the nearest below] (either may be null). A zone
+ * above lies over the price (its bottom over it), one below under it; a zone the price is inside counts on the side
+ * of its middle, at distance 0. Ties: the more recent zone (the later origin bar).
+ */
+export function nearestZones(zones, price) {
+  let up = null, dn = null, du = Infinity, dd = Infinity;
+  if (!Number.isFinite(price)) return [null, null];
+  for (const z of zones || []) {
+    if (!z || !(z.top >= z.bot)) continue;
+    const inside = z.bot <= price && price <= z.top;
+    const above = inside ? (z.top + z.bot) / 2 >= price : z.bot > price;
+    const d = inside ? 0 : above ? z.bot - price : price - z.top;
+    if (above && (d < du || (d === du && up && z.i > up.i))) { up = z; du = d; }
+    if (!above && (d < dd || (d === dd && dn && z.i > dn.i))) { dn = z; dd = d; }
+  }
+  return [up, dn];
 }
 
 // ---------------------------------------------------------------- the chart's Premium / Discount light (chartfx.js)
