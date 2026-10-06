@@ -12,7 +12,7 @@
 //   legs        % move of the last major legs (↓1.87%)
 // Every list is cut to the most recent few so the chart stays readable.
 
-export const LIMITS = {structure: 4, obs: 2, fvgs: 3, liq: 2, legs: 5};
+export const LIMITS = {structure: 3, obs: 1, fvgs: 2, liq: 2, legs: 5};
 
 const avgRange = (bars) => {
   let s = 0, n = 0;

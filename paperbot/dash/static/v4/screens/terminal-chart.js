@@ -20,7 +20,8 @@ const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h":
 const LEVEL_TFS = ["15m", "30m", "1h", "4h"];
 const MAIN = new Set(["core", "m5", "extra"]);
 const TF_S = Object.fromEntries(Object.entries(bars.TF_MS).map(([k, v]) => [k, v / 1000]));
-const RELAY_FRESH_MS = 6000;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
+const RELAY_FRESH_MS = 6000;
+const narrowBox = () => typeof matchMedia === "function" && matchMedia("(max-width: 1279px)").matches;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
 
 /** termChart(ctx, st, onTf) -> {el, ready, setSym, onTicker, onBoard, onTrades, onTick, flash, tick} */
 export function termChart(ctx, st, onTf) {
@@ -95,8 +96,7 @@ export function termChart(ctx, st, onTf) {
     last = data[data.length - 1] || null;
     lastPx = null;
     paintLegend(last); paintTag(false);
-    C.chart.timeScale().fitContent();
-    C.chart.timeScale().scrollToPosition(6, false);
+    deck.showRecent(narrowBox() ? 120 : 220, narrowBox() ? 12 : 26);
     drawPos(); loadTrades(); loadLevels(); drawMarks();
     requestAnimationFrame(place);
   }
@@ -199,7 +199,7 @@ export function termChart(ctx, st, onTf) {
   const ready = (async () => {
     try {
       C = await makeChart(box, {rightPriceScale: {borderColor: tok("--line-2"), scaleMargins: {top: 0.08, bottom: 0.08}},
-        timeScale: {rightOffset: 6}, grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}}});
+        timeScale: {rightOffset: 26}, grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}}});
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});

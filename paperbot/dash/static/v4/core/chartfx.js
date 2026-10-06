@@ -31,6 +31,7 @@ export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지�
 export const AMBIENT_TIP = "빨간 빛 = 가격이 50봉 평균 아래 / 하늘색 = 위";
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
 export const SMC_NOTE = "프리미엄 지표: 화면의 캔들로 계산한 참고선 (스윙·구조·OB·FVG·OTE) · 매매 신호 아님";
+const SMC_KEY = "프리미엄 지표 · 계산한 참고선 · 신호 아님";
 /** The AI skin (the default) has the light; 클래식 stays plain. */
 export const isAi = () => typeof document !== "undefined" && document.documentElement.dataset.skin !== "classic";
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
@@ -80,7 +81,7 @@ export function chartDeck(o) {
   const under = h("div", {class: "cfx-under", "aria-hidden": "true"}, depth, ambUp, ambDn, flashEl);
   const pills = h("div", {class: "cfx-pills"});
   const edgeTop = h("div", {class: "cfx-edge top"}), edgeBot = h("div", {class: "cfx-edge bot"});
-  const smcKey = h("div", {class: "cfx-smckey", hidden: true}, SMC_NOTE);
+  const smcKey = h("div", {class: "cfx-smckey", hidden: true, title: SMC_NOTE}, SMC_KEY);
   const over = h("div", {class: "cfx-over"}, pills, edgeTop, edgeBot, smcKey);
   const tagEl = o.tag ? h("div", {class: "cfx-tag", hidden: true}, h("b", {class: "num"}, "—")) : null;
   wrap.prepend(under);
@@ -198,29 +199,37 @@ export function chartDeck(o) {
       target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize, mediaSize}) => {
         const col = st.col;
         c.save();
+        const labels = [];
         for (const L of lines.values()) {
           if (!L.vis || L.y == null || L.y < 0 || L.y > mediaSize.height) continue;
           const sp = L.spec, colr = col[sp.tone] || col.flat;
           const y = Math.round(L.y * vr) + 0.5 * (Math.round(vr) % 2), lw = Math.max(1, Math.round(vr));
-          const x0 = 0;
           c.setLineDash(sp.dash === 1 ? [5 * hr, 4 * hr] : sp.dash === 2 ? [1.5 * hr, 3 * hr] : []);
           c.lineWidth = lw;
           c.strokeStyle = colr;
           if (st.ai && sp.glow !== false) {
             c.shadowColor = sp.tone === "up" ? col.upGlow : sp.tone === "down" ? col.downGlow : col.accentGlow;
             c.shadowBlur = 5 * hr; c.globalAlpha = (sp.alpha ?? 0.6) * 0.7;
-            c.beginPath(); c.moveTo(x0, y); c.lineTo(bitmapSize.width, y); c.stroke();
+            c.beginPath(); c.moveTo(0, y); c.lineTo(bitmapSize.width, y); c.stroke();
             c.shadowBlur = 0;
           }
           c.globalAlpha = sp.alpha ?? 0.6;
-          c.beginPath(); c.moveTo(x0, y); c.lineTo(bitmapSize.width, y); c.stroke();
-          if (sp.label) {                                      // a level's word at the right end (no box)
-            c.setLineDash([]);
-            c.globalAlpha = 0.85;
-            c.font = `600 ${col.fs * vr}px ${col.font}`;
-            c.textAlign = "right"; c.textBaseline = "bottom"; c.fillStyle = colr;
-            c.fillText(sp.label, bitmapSize.width - 6 * hr, y - 2 * vr);
-          }
+          c.beginPath(); c.moveTo(0, y); c.lineTo(bitmapSize.width, y); c.stroke();
+          if (sp.label) labels.push({s: sp.label, y: L.y - 2, c: colr});
+        }
+        // a level's / stop's word just above its line, right-aligned short of the right edge (the indicators' labels
+        // sit at the edge itself); words never overlap: sorted by height and pushed apart
+        labels.sort((a, b) => a.y - b.y);
+        let prev = -Infinity;
+        c.setLineDash([]);
+        c.font = `600 ${col.fs * vr}px ${col.font}`;
+        c.textAlign = "right"; c.textBaseline = "bottom";
+        c.shadowColor = col.bg; c.shadowBlur = 3 * hr; c.globalAlpha = 0.9;
+        for (const t of labels) {
+          const y = Math.max(t.y, prev + col.fs + 2);
+          prev = y;
+          c.fillStyle = t.c;
+          c.fillText(t.s, bitmapSize.width - 58 * hr, Math.round(y * vr));
         }
         c.restore();
       });
@@ -362,9 +371,9 @@ export function chartDeck(o) {
     const key = list.map((L) => L.spec.id + L.spec.pill.text).join("|");
     if (el._key === key) return;
     el._key = key;
-    el.replaceChildren(...list.slice(0, EDGE_MAX).map((L) => h("span", {class: "cfx-em num", dataset: {tone: L.spec.tone}, title: `${L.spec.pill.title || L.spec.pill.text} · 화면 ${arrow === "▲" ? "위" : "아래"}`},
+    el.replaceChildren(...[...list.slice(0, EDGE_MAX).map((L) => h("span", {class: "cfx-em num", dataset: {tone: L.spec.tone}, title: `${L.spec.pill.title || L.spec.pill.text} · 화면 ${arrow === "▲" ? "위" : "아래"}`},
       `${arrow} ${fmtPrice(L.spec.price)} · ${L.spec.pill.short || L.spec.pill.text}`)),
-    list.length > EDGE_MAX ? h("span", {class: "cfx-em num", dataset: {tone: "flat"}}, `+${list.length - EDGE_MAX}`) : null);
+    list.length > EDGE_MAX ? h("span", {class: "cfx-em num", dataset: {tone: "flat"}}, `+${list.length - EDGE_MAX}`) : null].filter(Boolean));
   }
 
   // ---------------------------------------------------------------- ambient + flash
@@ -483,7 +492,7 @@ export function chartDeck(o) {
     index();
     series.setData(st.data);
     st.lastPx = null;
-    paintVol(); computeSmc(); paintAmbient(true); schedule();
+    paintVol(); computeSmc(); paintAmbient(true); if (tagEl) paintTag(false); schedule();
   }
   /** A newer or the forming bar. real: the price came from a real new trade / poll (the tag pulses once if it moved). */
   function update(c, real = true) {
@@ -524,8 +533,15 @@ export function chartDeck(o) {
   if (ctx && ctx.track) ctx.track(() => { if (st.raf) cancelAnimationFrame(st.raf); });
   paintMenu();
 
+  /** Show the most recent ``n`` bars with room on the right for the line labels (like the reference terminal). */
+  function showRecent(n = 220, right = 24) {
+    const len = st.data.length, ts = chart.timeScale();
+    if (len <= n) { ts.fitContent(); ts.scrollToPosition(Math.min(right, Math.round(len / 10)), false); return; }
+    ts.setVisibleLogicalRange({from: len - n, to: len - 1 + right});
+  }
+
   return {
-    setData, update, setMarkers, setLines, place: schedule, shown, data: () => st.data,
+    setData, update, setMarkers, setLines, showRecent, place: schedule, shown, data: () => st.data,
     /** A real event of the coin on screen: {tone: "up" | "down" | "accent", k: 0..1, why} (AI skin only). */
     flash(ev) { if (st.ai) sched.push(ev); },
     onToggle(fn) { subs.push(fn); },

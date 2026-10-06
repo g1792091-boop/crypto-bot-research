@@ -91,9 +91,10 @@ export function smcPrimitive(o) {
       zone(rg.i, Math.max(a, b), Math.min(a, b), col.ote, 0.09, null, 0.4);
       const ya = Y(a), yb = Y(b), xo = X(rg.i);
       if (ya != null && yb != null && xo != null && xo < W) {
-        v.t.push({s: "0.62", x: R, y: ya, c: col.ote, align: "right"});
-        v.t.push({s: "0.79", x: R, y: yb, c: col.ote, align: "right"});
-        v.t.push({s: "OTE", x: R - 40, y: (ya + yb) / 2, c: col.ote, align: "right"});
+        const xl = Math.max(0, xo) + 4;                           // at the zone's start: the right edge is for OB / FVG
+        v.t.push({s: "0.62", x: xl, y: ya, c: col.ote});
+        v.t.push({s: "0.79", x: xl, y: yb, c: col.ote});
+        v.t.push({s: "OTE", x: xl + 34, y: (ya + yb) / 2, c: col.ote});
       }
     }
     for (const g of d.fvgs) zone(g.i, g.top, g.bot, col.fvg, 0.1, "FVG", 0.3);
@@ -130,11 +131,23 @@ export function smcPrimitive(o) {
     }
   }
 
+  /** Right-edge labels never overlap: sorted by height, pushed apart 14 px; the same word next to itself shows once. */
+  function spread() {
+    const edge = v.t.filter((t) => t.align === "right").sort((a, b) => a.y - b.y);
+    let prev = null;
+    for (const t of edge) {
+      if (prev && t.s === prev.s && t.y - prev.y < 14) { t.skip = true; continue; }
+      if (prev && t.y < prev.y + 14) t.y = prev.y + 14;
+      prev = t;
+    }
+    v.t = v.t.filter((t) => !t.skip);
+  }
+
   return {
     attached(p) { api = p; },
     detached() { api = null; },
     paneViews: () => [{zOrder: () => "bottom", renderer: () => zr}, {zOrder: () => "normal", renderer: () => lr}],
-    updateAllViews: compute,
+    updateAllViews() { compute(); spread(); },
     request() { if (api) api.requestUpdate(); },
   };
 }

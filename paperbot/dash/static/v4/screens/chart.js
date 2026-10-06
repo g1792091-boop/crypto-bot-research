@@ -5,8 +5,15 @@
 // runs), US macro release marks, armed price alerts. Prices come from the server: /api/ticker (store, 5 s) and
 // /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links; the opt-in second
 // tab 거래소 차트 shows TradingView's own page in a sandboxed cross-origin iframe (chart-tv.js), built only while open.
-import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features} from "../core/pb.js";
+// The chart deck (core/chartfx.js, the same as the terminal's): the AI skin's glow, 50-bar-average light and event
+// flashes (a real big trade from the server relay, a market liquidation, our own fill of this coin), 1 px lines with a
+// compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
+// menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
+import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
+  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
+import {posLines} from "./chart-lines.js";
+import {tickStream} from "./terminal-live.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
@@ -18,10 +25,9 @@ const TF_S = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 360
   "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000};
 const LEVEL_TFS = ["15m", "30m", "1h", "4h"];                  // /api/levels answers for the traded house timeframes
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
-// [key, label, default on a PC, default on a phone]: on a phone the many line labels would cover the candles, so
-// the position and support / resistance lines start off there (one tap turns them on; the choice is remembered).
-const TOGGLES = [["mk", "진입·청산", true, true], ["pl", "포지션 선", true, false], ["sr", "지지·저항", true, false], ["ev", "경제지표", true, true],
-  ["al", "가격 알림 선", true, true], ["gh", "GH Coin 타점", false, false]];
+// [key, label, default on a PC, default on a phone]. The position / support-resistance / macro / volume groups are in
+// the chart deck's '선' menu (on a phone the position and level lines start off there; remembered per device).
+const TOGGLES = [["mk", "진입·청산", true, true], ["al", "가격 알림 선", true, true], ["gh", "GH Coin 타점", false, false]];
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 
 const decOf = priceDec;
@@ -73,12 +79,14 @@ export async function mount(el, ctx) {
     const b = h("button", {type: "button", "aria-pressed": String(!!st.show[k]), dataset: {k}}, label);
     b.addEventListener("click", () => {
       st.show[k] = !st.show[k]; b.setAttribute("aria-pressed", String(st.show[k])); local.set("chart-show", st.show);
-      if (k === "mk" || k === "ev") drawMarkers(); if (k === "pl") drawPosLines(); if (k === "sr" || k === "gh") loadLevels();
+      if (k === "mk") drawMarkers(); if (k === "gh") loadLevels();
       if (k === "al") drawAlertLines();
     });
     return b;
   });
   const toggles = h("div", {class: "seg scroll chart-toggles", role: "group", "aria-label": "차트에 표시"}, toggleBtns);
+  const tgl = (k) => toggleBtns[TOGGLES.findIndex((x) => x[0] === k)];
+  const fxBar = h("div", {class: "chart-fx"});          // the deck's controls (filled once the chart exists)
   const lvNote = h("p", {class: "pos-note"});
   const tvA = h("a", {class: "btn-line", target: "_blank", rel: "noopener noreferrer"}, "트레이딩뷰에서 열기 ↗");
   const cgLinks = h("span", {class: "chart-links"});
@@ -98,7 +106,7 @@ export async function mount(el, ctx) {
   const viewSeg = ui.seg([{id: "bot", label: "우리 차트"}, {id: "tv", label: "거래소 차트", title: "트레이딩뷰 화면 (바깥 사이트)"}], "bot",
     (v) => setView(v), {label: "차트 종류"});
   viewSeg.classList.add("chart-views");
-  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, wrap, tv.el,
+  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, fxBar, wrap, tv.el,
     h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
     ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
   const flowCard = coinFlowCard(ctx, st.sym);           // 이 코인 시장 지표 (flow.db + liq.db, /api/v4/flowlive)
@@ -107,13 +115,15 @@ export async function mount(el, ctx) {
     h("div", {class: "chart-cols"}, h("div", {class: "stack"}, chartCard, links, tickCard, flowCard), panels));
 
   // ---------------------------------------------------------------- the chart
-  let C = null, series = null;
-  const lines = {pos: new Map(), acct: [], lv: [], al: []};
-  const rm = (l) => { try { series.removePriceLine(l); } catch (e) { /* gone */ } };
+  let C = null, series = null, deck = null;
   try {
-    C = await makeChart(box);
+    C = await makeChart(box, {timeScale: {rightOffset: 26}});
     ctx.track(C.dispose);
-    series = C.chart.addCandlestickSeries(candleOptions());
+    series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineStyle: 2, priceLineWidth: 1});
+    deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol"],
+      defaults: narrow() ? {pos: false, sr: false, smc: false} : null});
+    deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
+    fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));
@@ -135,11 +145,11 @@ export async function mount(el, ctx) {
     if (tokn !== st.loadTok || !ctx.alive()) return;
     const dec = decOf(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
-    series.setData(data);
+    deck.setData(data);
     st.t0 = data.length ? data[0].time : 0;
     st.last = data[data.length - 1] || null;
     paintLegend(st.last);
-    C.chart.timeScale().fitContent();
+    deck.showRecent(narrow() ? 90 : 200, narrow() ? 10 : 26);
     drawMarkers(); drawPosLines(); drawAccount(); drawAlertLines(); loadLevels();
   }
   async function liveBar() {
@@ -148,7 +158,7 @@ export async function mount(el, ctx) {
     try {
       const rows = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=2`);
       if (sym !== st.sym || tf !== st.tf) return;
-      for (const c of rows) if (c.time >= st.last.time) { try { series.update(c); st.last = c; } catch (e) { /* older bar */ } }
+      for (const c of rows) if (c.time >= st.last.time && deck.update(c, true)) st.last = c;
       paintLegend(st.last);
     } catch (e) { /* next poll */ }
   }
@@ -164,11 +174,11 @@ export async function mount(el, ctx) {
     if (!series) return;
     const sym = st.sym, tf = st.tf, step = TF_S[tf], t0 = st.t0 || 0;
     const marks = [];
-    if (st.show.ev && step < 86400) {
+    if (deck.shown("ev") && step < 86400) {
       const now = serverNow() / 1000;
       for (const e of await eventsList()) {
         const s = Math.floor(e.ts_ms / 1000);
-        if (s >= t0 && s <= now) marks.push({time: s - (s % step), position: "aboveBar", color: tok("--accent"), shape: "square", text: e.kind});
+        if (s >= t0 && s <= now) marks.push({time: s - (s % step), position: "aboveBar", color: tok("--accent"), shape: "square", text: e.kind, glow: false});
       }
     }
     if (st.show.mk && st.acct && st.acctData && st.acctData.account && st.acctData.account.account_id === st.acct) {
@@ -183,59 +193,38 @@ export async function mount(el, ctx) {
     }
     if (sym !== st.sym || tf !== st.tf) return;
     marks.sort((a, b) => a.time - b.time);
-    series.setMarkers(marks);
+    deck.setMarkers(marks);
   }
 
-  // ---------------------------------------------------------------- lines
-  const pnlShort = (pnl, roe) => `${fmt.pct(roe)} ${fmt.money(pnl, true)}`;
+  // ---------------------------------------------------------------- lines (the deck: 1 px, a pill at the left, click to hide)
   function drawPosLines() {
-    if (!series) return;
-    const list = st.show.pl && TF_S[st.tf] < 86400 && st.board ? st.board.accounts.filter((a) => a.position && a.position.symbol === st.sym && a.account_id !== st.acct)
-      .map((a) => ({a, p: normPos(a.position)})).sort((x, y) => x.p.entry - y.p.entry) : [];
-    const groups = [];
-    for (const x of list) {
-      const g = groups[groups.length - 1];
-      if (g && Math.abs(x.p.entry - g.price) / g.price < 0.0005) g.items.push(x); else groups.push({price: x.p.entry, items: [x]});
-    }
-    const m = store.mark(st.sym), want = new Map(), short = narrow();
-    for (const g of groups) {
-      // D10/D11: DeepSeek / coin-flip positions are counted on the line but add no money to its label
-      const money = g.items.filter((x) => !countOnly(x.a, ""));
-      const us = m ? money.map((x) => ({pnl: x.p.side * x.p.qty * (m - x.p.entry), margin: x.p.margin})) : [];
-      const pnl = us.reduce((s, u) => s + u.pnl, 0), mg = us.reduce((s, u) => s + u.margin, 0);
-      const showM = m && us.length > 0;
-      let title;
-      if (g.items.length === 1) {
-        const p = g.items[0].p;
-        title = short ? `${fmt.sideKo(p.side)}${showM ? " " + fmt.pct(pnl / p.margin, 0) : ""}` : `${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${showM ? " " + pnlShort(pnl, pnl / p.margin) : ""}`;
-      } else {
-        const L = g.items.filter((x) => x.p.side > 0).length, S = g.items.length - L;
-        title = short ? `${g.items.length}개` : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${showM ? (money.length < g.items.length ? ` 합계(${money.length}개) ` : " 합계 ") + pnlShort(pnl, mg ? pnl / mg : 0) : ""}`;
-      }
-      want.set(g.items.map((x) => x.a.account_id).join(",") + "@" + g.price,
-        {price: g.price, color: !showM ? tok("--muted") : pnl >= 0 ? tok("--up") : tok("--down"), title});
-    }
-    for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); }
-    for (const [k, w] of want) {
-      const o = {price: w.price, color: w.color, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: w.title};
-      if (lines.pos.has(k)) lines.pos.get(k).applyOptions(o); else lines.pos.set(k, series.createPriceLine(o));
-    }
+    if (!deck) return;
+    // D10/D11: DeepSeek / coin-flip positions are counted on the line but add no money to its pill (chart-lines.js)
+    const accts = TF_S[st.tf] < 86400 && st.board ? st.board.accounts.filter((a) => a.position && a.position.symbol === st.sym && a.account_id !== st.acct) : [];
+    deck.setLines("pos", posLines(accts, store.mark(st.sym), {stops: 4}));
+    const now = new Set(accts.map((a) => a.account_id + "@" + (a.position.entry_time || a.position.entry_price || a.position.entry)));
+    if (st.seenPos && [...now].some((k) => !st.seenPos.has(k))) deck.flash(ownEvent());     // a real new entry fill
+    if (st.board) st.seenPos = now;
   }
   function drawAcctLines() {
-    if (!series) return;
-    lines.acct.forEach(rm); lines.acct = [];
-    const d = st.acctData;
-    if (!d || !d.account || d.account.account_id !== st.acct) return;
-    const a = (st.board && st.board.accounts.find((x) => x.account_id === st.acct)) || d.account;
-    const p = normPos(d.state && d.state.position);
-    if (!p || p.symbol !== st.sym) return;
-    const m = store.mark(p.symbol), pnl = m && !countOnly(a, "") ? p.side * p.qty * (m - p.entry) : null;
-    const add = (price, color, style, title) => { if (price) lines.acct.push(series.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
-    add(p.entry, tok("--accent"), 0, `진입 ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${pnl != null ? " " + pnlShort(pnl, pnl / p.margin) : ""}`);
-    const reel = reelExits(a);
-    add(p.stop, !reel && p.lock_roe != null ? tok("--up") : tok("--down"), 2, reel ? "손절 (스윙 저점)" : p.lock_roe != null ? (countOnly(a, "") ? "잠금선" : `잠금 +${fmt.num(p.lock_roe * 100, 0)}%`) : "손절");
-    add(p.liq, tok("--warn"), 3, "청산가");
-    if (reel && p.target) add(p.target, tok("--up"), 2, "목표 (윗밴드)");
+    if (!deck) return;
+    const d = st.acctData, out = [];
+    const a = d && d.account && d.account.account_id === st.acct ? (st.board && st.board.accounts.find((x) => x.account_id === st.acct)) || d.account : null;
+    const p = a ? normPos(d.state && d.state.position) : null;
+    if (p && p.symbol === st.sym) {
+      const m = store.mark(p.symbol), co = countOnly(a, ""), pnl = m && !co ? p.side * p.qty * (m - p.entry) : null;
+      const reel = reelExits(a), id = "a:" + st.acct;
+      const kids = [];
+      const add = (k, price, tone, dash, label) => { if (price) { out.push({id: `${id}:${k}`, parent: id, group: "risk", price, tone, dash, alpha: 0.6, axis: true, label}); kids.push(`${id}:${k}`); } };
+      add("stop", p.stop, !reel && p.lock_roe != null ? "up" : "down", 1, reel ? "손절 (스윙 저점)" : p.lock_roe != null ? (co ? "잠금선" : `잠금 +${fmt.num(p.lock_roe * 100, 0)}%`) : "손절");
+      add("liq", p.liq, "warn", 2, "청산가");
+      if (reel && p.target) add("tp", p.target, "up", 1, "목표 (윗밴드)");
+      out.unshift({id, group: "pos", price: p.entry, tone: "accent", dash: 0, alpha: 0.8, axis: true,
+        pill: {text: [`진입 ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`, pnl != null && p.margin ? fmt.pct(pnl / p.margin, 1) : null].filter(Boolean).join(" · "),
+          short: `고른 계좌 ${fmt.sideKo(p.side)}`, title: `${nameOf(a)} · 진입 ${fmt.price(p.entry)}${pnl != null ? " · 미실현 ROE (마크 가격, 나갈 때 수수료 전)" : ""}`,
+          chips: kids.length ? [{text: "손절·청산", ids: kids, title: "이 계좌의 손절·청산가 선 보이기·숨기기"}] : []}});
+    }
+    deck.setLines("acct", out);
   }
   async function drawAccount() {
     acctSel.value = st.acct;
@@ -250,42 +239,46 @@ export async function mount(el, ctx) {
     drawMarkers(); drawAcctLines(); drawPosLines();
   }
   function drawAlertLines() {
-    if (!series) return;
-    lines.al.forEach(rm); lines.al = [];
-    if (!st.show.al) return;
-    for (const a of (st.alerts && st.alerts.alerts) || []) {
-      if (a.symbol !== st.sym || !a.armed) continue;
-      lines.al.push(series.createPriceLine({price: a.price, color: tok("--accent"), lineWidth: 1, lineStyle: 1, title: `알림 ${a.direction === "above" ? "↑" : "↓"}`}));
+    if (!deck) return;
+    const out = [];
+    if (st.show.al) {
+      for (const a of (st.alerts && st.alerts.alerts) || []) {
+        if (a.symbol !== st.sym || !a.armed) continue;
+        out.push({id: `al:${a.id ?? a.price}`, group: "al", price: a.price, tone: "accent", dash: 2, alpha: 0.6, axis: true, glow: false,
+          label: `알림 ${a.direction === "above" ? "↑" : "↓"}`});
+      }
     }
+    deck.setLines("al", out);
   }
   async function loadLevels() {
     const sym = st.sym, tf = st.tf;
     let lv = null, gb = null;
-    if (st.show.sr && LEVEL_TFS.includes(tf)) { try { lv = await ctx.api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { lv = null; } }
+    if (deck && deck.shown("sr") && LEVEL_TFS.includes(tf)) { try { lv = await ctx.api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { lv = null; } }
     if (st.show.gh && features.ghcoin) { try { gb = await ctx.api("/api/ghcoin/board"); } catch (e) { gb = null; } }
     if (sym !== st.sym || tf !== st.tf || !ctx.alive()) return;
     st.levels = lv; st.gh = gb;
     drawLevels();
   }
   function drawLevels() {
-    if (!series) return;
-    lines.lv.forEach(rm); lines.lv = [];
-    const add = (price, color, style, title) => { if (price) lines.lv.push(series.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
-    const note = [];
-    if (st.show.sr && st.levels && st.levels.levels) {
+    if (!deck) return;
+    const out = [];
+    const add = (id, group, price, tone, dash, label) => { if (price) out.push({id, group, price, tone, dash, alpha: 0.5, axis: false, glow: false, label}); };
+    const note = [], sr = deck.shown("sr");
+    if (sr && st.levels && st.levels.levels) {
       for (const side of ["resistance", "support"]) {
         st.levels.levels.filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 3)
-          .forEach((x) => add(x.price, side === "resistance" ? tok("--down") : tok("--up"), 4, `${side === "resistance" ? "저항" : "지지"}${narrow() ? "" : " · " + x.ko}`));
+          .forEach((x, i) => add(`lv:${side}:${i}`, "sr", x.price, side === "resistance" ? "down" : "up", 2, `${side === "resistance" ? "저항" : "지지"}${narrow() ? "" : " · " + x.ko}`));
       }
       note.push("지지·저항은 설명용입니다 (진입 연구에서 수익과 관계가 없었음).");
-    } else if (st.show.sr && !LEVEL_TFS.includes(st.tf)) note.push("지지·저항은 15분·30분·1시간·4시간 봉에만 있습니다.");
+    } else if (sr && !LEVEL_TFS.includes(st.tf)) note.push("지지·저항은 15분·30분·1시간·4시간 봉에만 있습니다.");
     const g = st.show.gh && features.ghcoin && st.gh && st.gh.coins && st.gh.coins[st.sym];
     if (g && g.side && g.entry) {
       const k = `GH ${GH_KO[g.state] || g.state}`;
-      add(g.entry, tok("--accent"), 0, `${k} 진입`); add(g.sl, tok("--accent"), 2, `${k} 손절`);
-      add(g.tp1, tok("--accent"), 2, `${k} 익절1`); add(g.tp2, tok("--accent"), 3, `${k} 익절2`);
+      add("gh:e", "gh", g.entry, "accent", 0, `${k} 진입`); add("gh:sl", "gh", g.sl, "accent", 1, `${k} 손절`);
+      add("gh:tp1", "gh", g.tp1, "accent", 1, `${k} 익절1`); add("gh:tp2", "gh", g.tp2, "accent", 2, `${k} 익절2`);
     }
     if (st.show.gh && features.ghcoin) note.push(!st.gh || !st.gh.alive ? "GH Coin 기록기 응답 없음." : g ? `GH Coin: ${GH_KO[g.state] || g.state}${g.why ? " · " + g.why : ""}` : "GH Coin: 이 코인 계획 없음.");
+    deck.setLines("lv", out);
     lvNote.textContent = note.join(" ");
     lvNote.hidden = !note.length;
   }
@@ -379,7 +372,7 @@ export async function mount(el, ctx) {
     if (!bars.SYMS.includes(s) || s === st.sym) return;
     st.sym = s; local.set("chart-sym", s);
     for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
-    lines.pos.forEach(rm); lines.pos.clear();
+    st.seenPos = null; st.liqSeen = null;
     paintTicker(); paintLinks(); fillAccounts(); panels.setSym(s); flowCard.setSym(s); reflectUrl();
     loadCandles();
   }
@@ -394,7 +387,7 @@ export async function mount(el, ctx) {
     if (!a) return;
     st.acct = id; st.acctData = null;
     if (st.view === "tv") setView("bot");                 // entries and exits are drawn on 우리 차트 only
-    if (!st.show.mk) { st.show.mk = true; toggleBtns[0].setAttribute("aria-pressed", "true"); local.set("chart-show", st.show); }
+    if (!st.show.mk) { st.show.mk = true; tgl("mk").setAttribute("aria-pressed", "true"); local.set("chart-show", st.show); }
     if (a.timeframe !== st.tf && TF_S[a.timeframe]) { st.tf = a.timeframe; local.set("chart-tf", st.tf); paintTfs(); paintLinks(); tick(); fillAccounts(); reflectUrl(); loadCandles(); }
     else { fillAccounts(); reflectUrl(); drawAccount(); }
     box.scrollIntoView({behavior: motion.reduced() ? "auto" : "smooth", block: "center"});
@@ -407,7 +400,7 @@ export async function mount(el, ctx) {
     if (!symCh && !tfCh && !acCh) return;
     st.sym = s; st.tf = tf; st.acct = acct; st.acctData = null;
     for (const [k, x] of coinBtns) x.b.setAttribute("aria-selected", String(k === s));
-    lines.pos.forEach(rm); lines.pos.clear();
+    st.seenPos = null; st.liqSeen = null;
     paintTicker(); paintTfs(); paintLinks(); fillAccounts(); tick(); panels.setSym(s); flowCard.setSym(s);
     if (symCh || tfCh) loadCandles(); else drawAccount();
   };
@@ -429,10 +422,33 @@ export async function mount(el, ctx) {
   ctx.watch("ticker", () => { paintTicker(); drawPosLines(); drawAcctLines(); panels.onTicker(); });
   ctx.on("trades", (rows) => {
     panels.onTrades(rows);
+    if (deck && (rows || []).some((t) => t.symbol === st.sym)) deck.flash(ownEvent());          // our bot's real exit fill
     if (st.acct && rows.some((t) => t.account_id === st.acct)) { st.acctData = null; drawAccount(); }
   });
-  ctx.on("features", () => { panels.onFeatures(); toggleBtns[5].hidden = !features.ghcoin; });
-  toggleBtns[5].hidden = !features.ghcoin;
+  ctx.on("features", () => { panels.onFeatures(); tgl("gh").hidden = !features.ghcoin; });
+  tgl("gh").hidden = !features.ghcoin;
+
+  // ---------------------------------------------------------------- the light's real events (AI skin only)
+  // a new big taker trade of this coin (the server's relay, the same feed as the terminal's 실시간 큰 체결) and a new
+  // market liquidation (the recorder, while it runs) flash the chart once; the first answer of each is the past
+  if (chartAi()) {
+    const ticks = tickStream(ctx);
+    ticks.on((m) => {
+      if (!m.first && m.big && Array.isArray(m.big.rows)) for (const r of m.big.rows) if (r && r.s === st.sym && deck) deck.flash(bigEvent(r));
+    });
+    ticks.start();
+    ctx.every(10000, async () => {
+      if (!features.liq || !deck || document.hidden) return;
+      const sym = st.sym;
+      try {
+        const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(sym)}&minutes=60`);
+        if (sym !== st.sym || !ctx.alive()) return;
+        const keys = (d.rows || []).map((r) => `${r.ts}:${r.usd}:${r.price}`);
+        if (st.liqSeen) (d.rows || []).forEach((r, i) => { if (!st.liqSeen.has(keys[i])) deck.flash(liqEvent(r)); });
+        st.liqSeen = new Set(keys);
+      } catch (e) { /* next poll */ }
+    }, {now: true});
+  }
   ctx.every(1000, tick, {now: false});
   ctx.every(5000, liveBar, {now: false});
   ctx.every(120000, loadLevels, {now: false});
