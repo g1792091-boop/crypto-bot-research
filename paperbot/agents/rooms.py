@@ -43,6 +43,10 @@ Strategy room (strat:<S>), at most 6 calls:
     change it); a copy proposal after a passing gate (re-judged with the room's current number of
     tests) goes to the T6 approver, whose "yes" code refuses when the gate failed or the copy cap
     is full.
+    With sides on (policy ``sides``, AGENTS_SIDES=1; off by default; ``_strategy_round_sides``): T1 the advocate
+    (no test in T1) -> T2 the attacker dealt by code (agents/disputes.py) names one flaw and the test that settles
+    it -> [an expert only when named or ``dispute_expert``] -> T4 the advocate concedes or holds -> code opens the
+    dispute, graded later by code (who was right); the validator speaks only on a passing gate.
 Team rooms (team:*), at most 6 calls (the longest plan, 5 turns, plus one retry): morning, evening
 (review team, then the lead's three lines to Telegram), incident, checkpoint and owner rounds, with
 the roster3 roles. Added 2026-10-04 (owners' choice): the four weekly analyses (cost, combo, coin / regime,
@@ -2728,10 +2732,10 @@ def _settle_dispute(rnd: _Round, t2: Optional[dict], t4: Optional[dict], attacke
         rnd.system(f"시험 없는 반대(말로만 반대)로 기록: {who}이(가) 반대했지만 가릴 시험을 정하지 않아 다툼을 열지 "
                    "않았습니다. 직원 성적표에 '말로만'으로 셉니다.", {"sides": True, "talk_only": attacker})
         return {"status": "talk_only"}
-    if t4 is not None and (t4.get("responds_to") or {}).get("role") != attacker:
-        rnd.system(f"편드는 직원이 최종안에서 공격({who})에 직접 답하지 않았습니다(코드는 '버팀'으로 봅니다).",
-                   {"sides": True, "no_reply_to_attack": True})
     conceded = bool(t4 and t4.get("concede") is True)
+    if t4 is not None and not conceded and (t4.get("responds_to") or {}).get("role") != attacker:
+        rnd.system(f"편드는 직원이 최종안에서 공격({who})에 직접 답하지 않았습니다(인정하지 않았으니 코드는 '버팀'으로 봅니다).",
+                   {"sides": True, "no_reply_to_attack": True})
     ctx = rnd.ctx
     try:
         o = DS.open_dispute(ctx.agents_conn, room_id=rnd.room, round_id=rnd.round_id, strategy=rnd.strategy,
