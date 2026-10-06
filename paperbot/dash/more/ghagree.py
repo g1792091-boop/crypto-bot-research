@@ -110,8 +110,8 @@ def view(paper_db: str, now_ms: int, group: str = "core") -> dict:
     a, f = split(mine, gh), split(flips, gh)
     with_call = len(a["same"]) + len(a["opposite"])
     out.update({"since": start, "trades": len(mine), "flip_trades": len(flips), "with_call": with_call,
-                "group": {k: K.cell(a[k]) for k in ("same", "opposite", "none")} | {"before": a["before"],
-                                                                                    "open_at_entry": a["open_at_entry"]},
+                "mine": {k: K.cell(a[k]) for k in ("same", "opposite", "none")} | {"before": a["before"],
+                                                                                   "open_at_entry": a["open_at_entry"]},
                 "coin_flips": {k: K.cell(f[k]) for k in ("same", "opposite", "none")} | {"before": f["before"],
                                                                                          "open_at_entry": f["open_at_entry"]},
                 "per_coin": {s: {"calls": len(v[0])} for s, v in sorted(gh["by_sym"].items())}})

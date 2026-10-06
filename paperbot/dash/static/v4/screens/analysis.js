@@ -6,6 +6,8 @@
 //   코인·장세 지도 map · 코인·시간대 /api/breakdown · 진입 순간 entry · 상황 태그 /api/cards/stats   (analysis-where.js)
 //   좋은 자리 vs 보통 levrule · 그림자 비교 shadows · 계좌 겹침 /api/overlap · 조합 시너지 synergy (analysis-rules.js)
 //   GH Coin /api/ghcoin (only while its recorder runs) · 45개 질문 questions (only when filled)
+//   ana7a: 좋은 수치 찾기 indranges (analysis-indr.js) · 강제청산 직후 liqentry (analysis-liqent.js, only with the
+//   liquidation recorder) · 들고 있었다면 hold (analysis-hold.js) · GH Coin 방향 ghagree (analysis-ghagree.js, with GH Coin)
 // 건강 점검 moved to 서버·비용 and 알림 기록 to 알림 기록 (builder E). A {pending: true} answer shows the shimmer and asks
 // again after 3 s (the server computes heavy views in the background). The last view is remembered (local).
 // 묶음 (gapA, the 20:09 promise): 기존 36 / 딥시크 44 / 5분봉 above the view. Views marked `groups` ask the server for
@@ -20,6 +22,10 @@ import * as W from "./analysis-where.js";
 import * as X from "./analysis-rules.js";
 import * as C from "./analysis-costs.js";
 import * as E from "./analysis-exits.js";
+import {indranges} from "./analysis-indr.js";
+import {liqentry} from "./analysis-liqent.js";
+import {holdcmp} from "./analysis-hold.js";
+import {ghagree} from "./analysis-ghagree.js";
 
 const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
@@ -27,6 +33,9 @@ const VIEWS = [
   {id: "map", label: "코인·장세 지도", path: "/api/analysis/map", render: W.map, groups: "groups", desc: "코인·장세·시간대·방향·봉별로 어디서 벌고 잃었나"},
   {id: "sessions", label: "코인·시간대", path: "/api/breakdown", render: W.sessions, groups: "groups", gpath: "/api/analysis/breakdown", desc: "코인별, 평일·주말 × 시간대, 펀딩·미국장 개장·지표 발표 시간"},
   {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "groups", desc: "들어가는 봉의 모습별 성적"},
+  {id: "indranges", label: "좋은 수치 찾기", path: "/api/v4/indranges", render: indranges, groups: "core", desc: "들어갈 때 RSI·변동성·추세 세기 같은 숫자가 어느 구간이면 결과가 좋았나 (5년 과거 시험 + 지금 실험)"},
+  {id: "liqentry", label: "강제청산 직후", path: "/api/v4/liqentry", render: liqentry, groups: "groups", feature: "liq", desc: "큰 강제청산이 터지고 5·15·60분 안에 같은 코인에 들어간 거래"},
+  {id: "hold", label: "들고 있었다면", path: "/api/v4/holdcmp", render: holdcmp, groups: "groups", desc: "매매 없이 코인을 그냥 들고 있었다면, 거래를 거꾸로 했다면 (대충 계산)"},
   {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, groups: "any", desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
   {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, groups: "core", desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
   {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, groups: "core", desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},
@@ -36,6 +45,7 @@ const VIEWS = [
   {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, groups: "core", desc: "실거래 전에 정한 조건 8개를 계좌마다"},
   {id: "costs", label: "비용", path: "/api/v4/costs", render: C.costs, groups: "any", desc: "수수료·펀딩이 깎아 먹는 몫과 실제 호가였다면 (추정)"},
   {id: "ghcoin", label: "GH Coin", path: "/api/ghcoin", render: X.ghcoin, feature: "ghcoin", groups: "any", desc: "GH Coin 타점 기록 (따로 도는 기록기)"},
+  {id: "ghagree", label: "GH Coin 방향", path: "/api/v4/ghagree", render: ghagree, feature: "ghcoin", groups: "groups", desc: "GH Coin 타점과 같은 방향 / 반대 방향 / 타점 없을 때 우리 진입의 성적"},
   {id: "questions", label: "45개 질문", path: "/api/analysis/questions", render: X.questions, feature: "questions", groups: "any", desc: "질문마다 답이 있는지"},
 ];
 // the server's group keys (paperbot/groups.py), labels as on 격자 (grid.js) and 홈's group cards
