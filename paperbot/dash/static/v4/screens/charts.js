@@ -119,7 +119,7 @@ export async function mount(el, ctx) {
       const list = overlayAccounts(st.board, cell.sym);
       const has = list.some((a) => a.account_id === cell.acct);
       const first = h("option", {value: ""}, !st.board ? "포지션 불러오는 중" : list.length ? `포지션 선 없음 · ${fmt.int(list.length)}개 열림` : "열린 우리 포지션 없음");
-      const opts = list.length ? [h("option", {value: "all"}, `이 코인 우리 포지션 전부 (${fmt.int(list.length)}개)`),
+      const opts = list.length ? [h("option", {value: "all"}, `우리 포지션 전부 (${fmt.int(list.length)}개)`),
         h("optgroup", {label: "한 계좌만"}, list.map((a) => { const p = normPos(a.position); return h("option", {value: a.account_id},
           `${nameOf(a)} · ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`); }))] : [];
       // a chosen account whose position has closed stays listed (so the choice is not lost silently) and says so

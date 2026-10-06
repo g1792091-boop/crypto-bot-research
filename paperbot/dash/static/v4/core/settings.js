@@ -25,6 +25,7 @@ import {reduced} from "./motion.js";
 import {openAway} from "./since.js";
 import {startTour} from "./tour.js";
 import {toast} from "./ui.js";
+import {leave as leaveFull} from "./fullchart.js";
 
 // the chart decks the panel lists: [deck key, 이름, its '선' groups, the screen's own first choice (null: the deck's rule)]
 export const DECKS = [
@@ -52,7 +53,7 @@ export function gearButton() {
   return h("button", {class: "setbtn", id: "setbtn", type: "button", "aria-haspopup": "dialog", "aria-label": "설정 (단축키 ,)", title: "설정 (,)",
     onclick: () => openSettings()}, gearIcon(), h("span", {class: "setbtn-t"}, "설정"));
 }
-/** The phone's gear at the start of the sub-tab row (next to 찾기; core/shell.js). */
+/** The gear at the start of the sub-tab row below 1200 px (next to 찾기 on a phone; core/shell.js). */
 export const settingsTab = () => h("button", {type: "button", class: "setsub", "aria-label": "설정", onclick: () => openSettings()}, gearIcon(), "설정");
 /** The PC rail's foot (core/rail.js): a small round gear above 글자 크기 / 화면 색. */
 export const settingsRail = () => h("button", {type: "button", class: "setcyc", "aria-label": "설정: 이 기기의 모든 선택 (단축키 ,)", title: "설정 (,)",
@@ -228,6 +229,7 @@ function findKey(root, [rowT, t]) {
 /** Open the panel (section: "screen" | "chart" | "sound" | "go" scrolls to it). */
 export function openSettings(sectionId) {
   if (st.open) { if (sectionId) scrollTo(sectionId); return; }
+  leaveFull();                // a chart in the browser's full screen would hide the panel: it goes back first
   st.open = true;
   st.back = document.activeElement;
   const phone = typeof matchMedia === "function" && !matchMedia("(min-width: 760px)").matches;
