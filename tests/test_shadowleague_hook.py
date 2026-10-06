@@ -162,12 +162,14 @@ def test_the_wall_time_cap_is_at_most_twenty_seconds_and_is_handed_to_the_tick(w
     assert seen["hard_s"] <= 20.0 and seen["work_s"] < seen["hard_s"]
 
 
-def test_the_agents_service_unit_is_unchanged():
-    r = subprocess.run(["git", "-C", ROOT, "show", f"{BASE}:deploy/paperbot-agents.service"], capture_output=True)
-    if r.returncode != 0:
-        pytest.skip("the base commit is not in this clone")
-    assert open(os.path.join(ROOT, "deploy", "paperbot-agents.service"), "rb").read() == r.stdout
-    assert b"ReadWritePaths=/var/lib/paperbot" in r.stdout            # the league's file goes there: nothing to change
+def test_the_agents_service_unit_is_unchanged(have_base):
+    """No commit of the shadow league touches the unit (the league's file goes into /var/lib/paperbot, which it may write).
+    Judged by the league's own commits, so later, unrelated edits of the unit by other people do not fail this."""
+    unit = "deploy/paperbot-agents.service"
+    for sha in _feature_commits():
+        assert unit not in _files_of(sha), f"{sha[:7]} changes {unit}"
+    assert "ReadWritePaths=/var/lib/paperbot" in open(os.path.join(ROOT, unit), encoding="utf-8").read()
+    assert unit not in _git("status", "--porcelain", "-uall").stdout.decode()
 
 
 # ------------------------------------------------------------------------------------------------ template and docs
@@ -226,14 +228,33 @@ def test_the_runinfo_hash_of_every_frozen_set_equals_the_base_commit(have_base):
     assert RI.code_hashes()["trading_code"] == RI.files_hash(RI.TRADING_FILES)
 
 
-def test_no_frozen_path_changed_since_the_base_commit(have_base):
+def _feature_commits() -> list:
+    """The commits after the base that touch the shadow league (its package, tests, fixtures or doc). After a merge into a
+    branch that keeps moving, other people's commits (research, studies, dashboards) come along: they are not this test's
+    business, so the proof is about what THESE commits changed."""
+    out = _git("log", "--format=%H", f"{BASE}..HEAD", "--", "paperbot/shadowleague", "tests/test_shadowleague_hook.py",
+               "tests/test_shadowleague_league.py", "tests/test_shadowleague_parity.py", "tests/test_shadowleague_view.py",
+               "tests/shadowleague_world.py", "tests/shadowleague_original.py", "tests/data/shadowleague",
+               "tests/data/zoneflip_original", "docs/shadow-league.md")
+    return out.stdout.decode().split()
+
+
+def _files_of(sha: str) -> set:
+    return set(_git("show", "--name-only", "--format=", "-m", "--first-parent", sha).stdout.decode().split())
+
+
+def test_no_frozen_path_changed_by_the_shadow_league_commits(have_base):
     listed = {p for paths in _frozen_sets().values() for p in paths}
-    changed = set(_git("diff", "--name-only", BASE).stdout.decode().split())                 # committed and uncommitted
-    changed |= {ln[3:].strip() for ln in _git("status", "--porcelain", "-uall").stdout.decode().splitlines()}
-    assert changed, "the branch changed nothing?"
+    commits = _feature_commits()
+    assert commits, "no commit of the shadow league since the base?"
+    changed: set = set()
+    for sha in commits:
+        changed |= _files_of(sha)
+    changed |= {ln[3:].strip() for ln in _git("status", "--porcelain", "-uall").stdout.decode().splitlines()}   # uncommitted
     hits = sorted(p for p in changed if _frozen_path(p, listed))
     assert hits == [], hits
     assert any(p.startswith("paperbot/shadowleague/") for p in changed)
+    assert "paperbot/agents/rooms.py" not in listed             # the one existing code file the hook touches is not frozen
 
 
 def test_no_frozen_python_file_imports_the_new_code():

@@ -649,6 +649,14 @@ def test_the_account_follows_the_owners_rules():
     assert AC.OWN_LIQ == pytest.approx(0.045) and AC.OWN_EXPO == 4.0 and AC.OWN_MARGIN == 0.2 and AC.START_EQUITY == 5000.0
 
 
+def test_an_adverse_move_of_exactly_the_liquidation_level_liquidates_and_a_hair_less_does_not():
+    """The study's rule is 'liquidated = -mae >= OWN_LIQ' (research/search/search.py owners_book): equality liquidates."""
+    on = AC.run_account([_t("x", "BTC", 10, 20, 0.01, mae=-AC.OWN_LIQ)])[0]
+    off = AC.run_account([_t("y", "BTC", 10, 20, 0.01, mae=-(AC.OWN_LIQ - 1e-9))])[0]
+    assert on["liquidated"] and on["ret"] == pytest.approx(-AC.OWN_MARGIN)
+    assert not off["liquidated"] and off["ret"] == pytest.approx(4 * 0.01)
+
+
 def test_an_open_taken_trade_blocks_every_later_one_and_is_not_marked_to_market():
     tr = [_t("a", "BTC", 10, 20, 0.02), {"trade_id": "o", "coin": "BTC", "tf": "1h", "entry_ms": 30, "exit_ms": None,
                                          "net": None, "mae": None}, _t("z", "ETH", 99, 120, 0.5)]
