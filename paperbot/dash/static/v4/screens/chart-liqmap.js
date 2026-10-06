@@ -211,7 +211,8 @@ export function liqMap(o) {
     if (!row) { tip.hide(); return; }
     const price = series.coordinateToPrice(row.y), wr = wrap.getBoundingClientRect();
     tip.show([h("b", null, `${price == null ? "" : fmt.price(price) + " 근처"}`),
-      h("span", {class: "up"}, `롱 청산 ${koUsdt(row.long)}`), h("span", {class: "down"}, `숏 청산 ${koUsdt(row.short)}`),
+      h("span", {class: toneOf("long")}, row.long > 0 ? `롱 청산 ${koUsdt(row.long)}` : "롱 청산 기록 없음"),
+      h("span", {class: toneOf("short")}, row.short > 0 ? `숏 청산 ${koUsdt(row.short)}` : "숏 청산 기록 없음"),
       h("small", {class: "muted"}, "보이는 봉 동안의 합계 · 바이낸스 전체 (우리 봇 아님)")], e.clientX - wr.left, e.clientY - wr.top, strip.parentElement.offsetLeft);
   });
   strip.addEventListener("pointerleave", () => tip.hide());

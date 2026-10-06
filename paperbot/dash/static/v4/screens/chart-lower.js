@@ -67,7 +67,7 @@ export function lowerPanes(o) {
         handleScroll: false, handleScale: false,
         crosshair: {mode: 0, horzLine: {visible: false, labelVisible: false}},
         grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}},
-        layout: {background: {color: tok("--surface")}},
+        layout: {background: {color: tok("--surface")}, attributionLogo: false},        // (the main chart above carries the attribution)
         localization: {priceFormatter: (v) => priceFmt(id, v)},
       });
     } catch (e) {
@@ -147,18 +147,18 @@ export function lowerPanes(o) {
       }
     } else if (!p.data) {
       can = false;
-      why = p.err ? (p.err.message || "바이낸스에서 못 불러옴") : "불러오는 중…";
+      why = p.err ? `${p.err.message || "바이낸스에서 못 불러옴"} · 30초마다 다시 받아 봅니다` : "불러오는 중…";
       chip = p.err ? "못 불러옴" : "";
     } else {
       const d = p.data;
       if (p.id === "fund") {
         const al = alignFunding(d.points, times, step), pal = palette();
         hist = cs.map((c, i) => (al[i] ? {time: c.time, value: al[i].v, color: Math.abs(al[i].v) >= FUND_WARN ? pal.warn : pal.muted} : {time: c.time}));
-        al.forEach((x, i) => { if (x) p.vals.set(cs[i].time, {v: x.v, n: x.n}); });
+        al.forEach((x, i) => { if (x) p.vals.set(cs[i].time, {v: x.v, n: x.n, ts: x.ts}); });
       } else {
         const al = alignSeries(d.points, times, step, d.period_s);
         line = cs.map((c, i) => (al[i] ? {time: c.time, value: al[i].v} : {time: c.time}));
-        al.forEach((x, i) => { if (x) p.vals.set(cs[i].time, {v: x.v, x: x.x, carried: x.carried}); });
+        al.forEach((x, i) => { if (x) p.vals.set(cs[i].time, {v: x.v, x: x.x, ts: x.ts, carried: x.carried}); });
       }
       if (d.stale) { chip = "마지막 값 (새로 못 받음)"; why = d.why_ko || ""; }
       else if (cs.length && cs[0].time * 1000 < d.oldest - d.period_s * 1000 && p.id !== "fund") chip = "앞쪽은 바이낸스 자료 없음 (최근 30일)";
@@ -183,10 +183,11 @@ export function lowerPanes(o) {
     const el = p.ui.val;
     if (!x) { el.textContent = p.can ? "—" : ""; return; }
     const hov = time != null && p.vals.has(time);
-    if (p.id === "cvd") el.textContent = `${hov ? fmt.kst(t * 1000) + " · " : ""}누적 ${fmt.num(x.v, decFor(x.v), true)} ${fmt.coin(o.sym())}`;
-    else if (p.id === "oi") el.textContent = `${hov ? fmt.kst(t * 1000) + " · " : ""}${koUsdt(x.v)}`;
-    else if (p.id === "ls") el.textContent = `${hov ? fmt.kst(t * 1000) + " · " : ""}${fmt.num(x.v, 2)}${x.x != null ? ` (롱 ${fmt.pct(x.x, 0, false)})` : ""}`;
-    else el.textContent = `${hov ? fmt.kst(t * 1000) + " · " : ""}${fmt.pct(x.v, 4)}${x.n > 1 ? ` (${x.n}번 합)` : ""}`;
+    const pre = hov ? fmt.kst(t * 1000) + " · " : "", asOf = !hov && x.ts ? ` · ${fmt.hm(x.ts)} 기준` : "";       // the last value says when Binance recorded it
+    if (p.id === "cvd") el.textContent = `${pre}누적 ${fmt.num(x.v, decFor(x.v), true)} ${fmt.coin(o.sym())}`;
+    else if (p.id === "oi") el.textContent = `${pre}${koUsdt(x.v)}${asOf}`;
+    else if (p.id === "ls") el.textContent = `${pre}${fmt.num(x.v, 2)}${x.x != null ? ` (롱 ${fmt.pct(x.x, 0, false)})` : ""}${asOf}`;
+    else el.textContent = `${pre}${fmt.pct(x.v, 4)}${x.n > 1 ? ` (${x.n}번 합)` : ""}${asOf}`;
   }
   function fail(p, why) {
     p.can = false;
@@ -238,10 +239,8 @@ export function lowerPanes(o) {
       const t = q && q.time != null ? q.time : null;
       paintVal(p, t);
       const cs = candles(), c = t != null ? cs.find((x) => x.time === t) : null;
-      const d = deck.data();
       try { if (c && p.can) chart.setCrosshairPosition(c.close, t, o.series); else chart.clearCrosshairPosition(); } catch (e) { /* older build */ }
       for (const q2 of panes.values()) if (q2 !== p && q2.C && q2.built) paintVal(q2, t);
-      void d;
     } finally { relaying--; }
   }
 

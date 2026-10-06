@@ -68,7 +68,9 @@
 @media (max-width: 599px) {
   .cfxp-pane { height: var(--cfxp-ph, 84px); }
   .cfxp-pp { display: none; }
-  .cfxp-n { font-size: var(--t-2xs); }
+  /* a note shows two lines; a tap opens the whole text */
+  .cfxp-n { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+  .cfxp-n.open { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cfxp-tip { transition: none; }

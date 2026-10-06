@@ -57,8 +57,9 @@ export function stopMap(o) {
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
     if (!on) return;
-    const p = palette(), lh = p.fs + 2, headH = 2 * lh + 4;
+    const p = palette(), lh = p.fs + 2;
     c.font = `600 ${p.fs}px ${p.font}`; c.textBaseline = "top"; c.textAlign = "left";
+    const stack = W < c.measureText("우리 계좌").width + 8, headH = (stack ? 3 : 2) * lh + 4;       // a narrow strip stacks its header
     const m = mark(), my = m ? series.priceToCoordinate(m) : null;
     if (my != null && my >= 0 && my <= H) { c.globalAlpha = 0.5; c.fillStyle = p.ink2; c.fillRect(0, Math.round(my), W, 1); c.globalAlpha = 1; }
     if (!items.length) {
@@ -81,9 +82,9 @@ export function stopMap(o) {
     }
     c.globalAlpha = 0.9; c.fillStyle = p.surface; c.fillRect(0, 0, W, headH);            // the header sits on a plate over the marks
     c.globalAlpha = 1; c.textBaseline = "top"; c.textAlign = "left";
-    c.fillStyle = p.muted; c.fillText("우리 계좌", 4, 3);
+    c.fillStyle = p.muted; c.fillText(stack ? "우리" : "우리 계좌", 4, 3);
     c.fillStyle = p.warn; c.fillText("손절", 4, 3 + lh);
-    c.fillStyle = p.down; c.fillText("청산", 4 + c.measureText("손절 ").width, 3 + lh);
+    c.fillStyle = p.down; c.fillText("청산", stack ? 4 : 4 + c.measureText("손절 ").width, 3 + (stack ? 2 : 1) * lh);
   }
 
   // ---------------------------------------------------------------- "이 가격이면"

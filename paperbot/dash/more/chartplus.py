@@ -129,9 +129,11 @@ def _gaps(c: sqlite3.Connection, lo: int, now: int) -> tuple:
 def liq_bars(liq_path: Optional[str], symbol: str, t0_s: int, step_s: int, now_ms: int) -> dict:
     """The answer of /api/v4/chartplus/liq (pure given the file: tested without the server)."""
     note = NOTE_LIQ_KO
-    c = _ro(liq_path)
-    if c is None:
+    if not liq_path or not os.path.exists(liq_path):
         return {"ready": False, "recorder": False, "why": "liq.db 없음 (강제청산 기록기가 아직 돌지 않음)", "note_ko": note}
+    c = _ro(liq_path)
+    if c is None:                                   # the file is there but cannot be opened: not "no recorder", not "no liquidations"
+        return {"ready": False, "failed": True, "recorder": True, "why": "liq.db를 열지 못함", "note_ko": note}
     lo, step_ms = int(t0_s) * 1000, int(step_s) * 1000
     try:
         start, gaps = _gaps(c, lo, now_ms)

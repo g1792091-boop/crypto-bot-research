@@ -13,7 +13,7 @@
 // the candles. The 차트 screen's chart box has its own height, the panes simply add under it.
 // Hooks into the screens: ONE call each after the deck exists (terminal-chart.js, chart.js); the deck's onData / menuEl /
 // onToggle(…, how) (core/chartfx.js) are the only other touch points.
-import {h, fmt} from "../core/pb.js";
+import {h, fmt, tok} from "../core/pb.js";
 import {liqMap} from "./chart-liqmap.js";
 import {stopMap} from "./chart-stopmap.js";
 import {lowerPanes, PANES} from "./chart-lower.js";
@@ -22,8 +22,9 @@ import {WORDS, readState, saveState, PANE_IDS} from "./chart-plus-kit.js";
 
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 const STRIP_W = {liq: 56, stops: 60};
-const STRIP_W_PHONE = {liq: 44, stops: 52};
-const PANE_H = {max: 84, min: 56};
+const STRIP_W_PHONE = {liq: 38, stops: 46};
+const PANE_H = {max: 88, min: 56};            // a pane's height: 56 px at the least, 88 px at the most (the terminal: 76, see fit())
+const TERM_PANE_MAX = 76;
 
 /**
  * chartPlus({ctx, deck, chart, series, wrap, box, key, sym, tf, minMain}) -> {state}
@@ -44,6 +45,8 @@ export function chartPlus(o) {
   wrap.after(below);
   ctx.track(() => { strips.remove(); below.remove(); wrap.classList.remove("cfxp-has"); wrap.style.removeProperty("--cfxp-w"); if (below.parentElement) below.parentElement.classList.remove("cfxp-nokey"); });
 
+  let cur = {sym: o.sym(), tf: o.tf()};           // the coin and bar width of the candles on screen (changes when the deck gets new candles)
+  const symNow = () => cur.sym, tfNow = () => cur.tf;
   const views = {liq: {kind: "off"}, stops: {kind: "off"}, panes: []};
   let raf = 0, shown = [], room = {n: 2, h: PANE_H.max};
   function scheduleLayout() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; layout(); }); }
@@ -51,9 +54,15 @@ export function chartPlus(o) {
 
   // ---------------------------------------------------------------- the note rows (what is on, and what it is not)
   const dot = (side) => h("i", {class: ["cfxp-dot", side], dataset: {tone: LIQ_TONE[side]}, "aria-hidden": "true"});
+  const openNotes = new Set();               // a phone shows two lines of a note; a tap opens the whole text (kept across refreshes)
   const say = (k, head, ...rest) => {
-    const p = h("p", {class: "cfxp-n", dataset: {k}}, h("b", null, head), " · ", ...rest);
+    const p = h("p", {class: ["cfxp-n", openNotes.has(k) ? "open" : ""], dataset: {k}}, h("b", null, head), " · ", ...rest);
     p.title = p.textContent;
+    p.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      if (openNotes.has(k)) openNotes.delete(k); else openNotes.add(k);
+      p.classList.toggle("open", openNotes.has(k));
+    });
     return p;
   };
   function liqNote() {
@@ -63,7 +72,7 @@ export function chartPlus(o) {
     if (v.kind === "loading") return say("liq", k, "불러오는 중…");
     if (v.kind === "failed") return say("liq", k, "못 불러옴: 거품과 막대를 그리지 않았습니다 ", h("button", {type: "button", class: "cfxp-retry", onclick: () => L.reload()}, "다시 시도"));
     if (v.kind === "nofile") return say("liq", k, "기록기 자료가 없습니다 (서버에서 강제청산 기록기가 켜지면 보입니다)");
-    if (o.tf() === "1M") return say("liq", k, "월봉에서는 쓰지 않습니다");
+    if (tfNow() === "1M") return say("liq", k, "월봉에서는 쓰지 않습니다");
     const d = v.data || {}, since = d.since_ts ? `${fmt.kst(d.since_ts)}부터 ` : "";
     if (v.kind === "empty") return say("liq", k, `이 구간에 기록된 청산이 없습니다 (${since}기록기가 들은 것 기준 · 바이낸스 시장 전체, 우리 봇 아님)`);
     const parts = [`${WORDS.liq} · ${since}기록기가 들은 것만 · 코인마다 1초에 1건만 알려 줘서 실제보다 적음 · `, dot("long"), "롱 ", dot("short"), "숏 청산, 원 크기 = 금액"];
@@ -100,9 +109,9 @@ export function chartPlus(o) {
   }
 
   // (the three parts report into the notes at once, so the note functions above are defined first)
-  const L = liqMap({ctx, chart, series, wrap, deck, strip: liqHost, sym: o.sym, tf: o.tf, report: (v) => { views.liq = v; paintNotes(); }});
-  const S = stopMap({ctx, chart, series, wrap, deck, strip: stopHost, sym: o.sym, report: (v) => { views.stops = v; paintNotes(); }});
-  const P = lowerPanes({ctx, chart, series, deck, host: panesEl, sym: o.sym, tf: o.tf, onClose: (id) => togglePane(id, false),
+  const L = liqMap({ctx, chart, series, wrap, deck, strip: liqHost, sym: symNow, tf: tfNow, report: (v) => { views.liq = v; paintNotes(); }});
+  const S = stopMap({ctx, chart, series, wrap, deck, strip: stopHost, sym: symNow, report: (v) => { views.stops = v; paintNotes(); }});
+  const P = lowerPanes({ctx, chart, series, deck, host: panesEl, sym: symNow, tf: tfNow, onClose: (id) => togglePane(id, false),
     report: (v) => { views.panes = v; paintNotes(); }});
 
   // ---------------------------------------------------------------- the strips' column, the chart box's width, the panes' room
@@ -110,16 +119,16 @@ export function chartPlus(o) {
     const want = st.panes;
     if (!want.length) return {n: 0, h: PANE_H.max};
     const pb = below.parentElement;
-    if (!o.minMain || !pb) return {n: Math.min(2, want.length), h: PANE_H.max};
+    if (!o.minMain || !pb) return {n: Math.min(2, want.length), h: narrow() ? 84 : PANE_H.max};
     let others = 0;
     for (const c of pb.children) if (c !== wrap && c !== below && !c.classList.contains("term-ckey") && c.offsetParent !== null) others += c.offsetHeight;
-    const budget = pb.clientHeight - others - o.minMain - (notes.hidden ? 0 : notes.offsetHeight);
+    const budget = pb.clientHeight - others - o.minMain - notesH();
     const n = Math.max(0, Math.min(want.length, Math.floor(budget / PANE_H.min)));
-    return {n, h: n ? Math.max(PANE_H.min, Math.min(PANE_H.max, Math.floor(budget / n))) : PANE_H.max, budget};
+    return {n, h: n ? Math.max(PANE_H.min, Math.min(TERM_PANE_MAX, Math.floor(budget / n))) : PANE_H.max, budget};
   }
   function layout() {
-    const sw = narrow() ? STRIP_W_PHONE : STRIP_W;
-    const wl = st.liq ? sw.liq : 0, ws = st.stops ? sw.stops : 0, w = wl + ws;
+    const sw = narrow() ? STRIP_W_PHONE : STRIP_W, k = Math.max(1, (parseFloat(tok("--t-2xs")) || 12) / 12);     // 글자 크기 크게 / 아주 크게: wider strips
+    const wl = st.liq ? Math.round(sw.liq * k) : 0, ws = st.stops ? Math.round(sw.stops * k) : 0, w = wl + ws;
     liqHost.hidden = !st.liq; stopHost.hidden = !st.stops; strips.hidden = !w;
     liqHost.style.width = wl + "px"; stopHost.style.width = ws + "px";
     wrap.style.setProperty("--cfxp-w", w + "px");
@@ -141,7 +150,7 @@ export function chartPlus(o) {
       paintNotes();
     }
     panesEl.style.setProperty("--cfxp-ph", room.h + "px");
-    if (below.parentElement) below.parentElement.classList.toggle("cfxp-nokey", !!shown.length);
+    if (below.parentElement && o.minMain) below.parentElement.classList.toggle("cfxp-nokey", !notes.hidden || !!shown.length);
     below.hidden = notes.hidden && !shown.length;
     menuPaint();
   }
@@ -172,7 +181,13 @@ export function chartPlus(o) {
     if (!pb) return true;
     let others = 0;
     for (const c of pb.children) if (c !== wrap && c !== below && !c.classList.contains("term-ckey") && c.offsetParent !== null) others += c.offsetHeight;
-    return pb.clientHeight - others - o.minMain - (notes.hidden ? 0 : notes.offsetHeight) >= PANE_H.min;
+    return pb.clientHeight - others - o.minMain - notesH() >= PANE_H.min;
+  }
+  /** the height of the liquidation and stop-map notes (the line about panes that do not fit is not counted: it is the answer to this) */
+  function notesH() {
+    let t = 0;
+    for (const c of notes.children) if (c.dataset.k !== "panes") t += c.offsetHeight;
+    return t + (t ? 5 : 0);
   }
   function layoutNow() { paintNotes(); layout(); if (deck.place) deck.place(); }
 
@@ -217,7 +232,11 @@ export function chartPlus(o) {
       layoutNow();
     }
   });
-  deck.onData((how) => { L.onData(how); S.onData(how); P.onData(how); if (how === "set") scheduleLayout(); });
+  deck.onData((how) => {
+    if (how === "set") cur = {sym: o.sym(), tf: o.tf()};
+    L.onData(how); S.onData(how); P.onData(how);
+    if (how === "set") scheduleLayout();
+  });
 
   // ---------------------------------------------------------------- start from what this device chose
   if (st.liq) L.setOn(true);
