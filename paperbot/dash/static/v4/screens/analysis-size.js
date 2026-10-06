@@ -24,6 +24,15 @@ export function mrow(a, keys) {
   return o;
 }
 
+/** Cells of one timeframe key ("all" = the 144) that ended above $5,000 in period ``pk`` under ``rule`` with fewer than
+ *  ``min`` trades taken in that account: the "늘어난 칸" count includes them, and the page says how many. */
+export function upThin(doc, key, pk, rule, min = 20) {
+  return (doc.cells || []).filter((c) => (key === "all" || c.tf === key)).filter((c) => {
+    const m = mrow(((c.r || {})[rule] || {})[pk], doc.m_keys);
+    return m.mult != null && m.mult > 1 && (m.taken ?? 0) < min;
+  }).length;
+}
+
 /** Plain sentences from the pooled numbers of one timeframe key (never typed-in results). */
 export function reading(doc, key = "all") {
   const P = ((doc.pooled || {})[key]) || {}, F = ((doc.flips || {})[key]) || {};
@@ -34,7 +43,7 @@ export function reading(doc, key = "all") {
   if (!n) return [];
   const out = [];
   const lv4 = (P.v4 || {}).loss_med, l1 = (P.r1 || {}).loss_med, lh = (P.half || {}).loss_med;
-  out.push(`지금 v4 규칙에서는 지는 거래 한 번에 잔고의 ${pc1(lv4)}(가운데 값)를 잃었고, 가장 크게는 ${pc1((P.v4 || {}).loss_max)}를 잃었습니다. 1% 규칙에서는 ${pc1(l1)}였습니다.`);
+  out.push(`지금 v4 규칙에서는 지는 거래 한 번에 보통 잔고의 ${pc1(lv4)}(칸들의 가운데 값)를 잃었고, 가장 크게는 ${pc1((P.v4 || {}).loss_max)}를 잃었습니다. 1% 규칙에서는 ${pc1(l1)}였습니다.`);
   const pair = `5년 뒤 잔고가 시작의 ${mx(v4.mult)} → ${mx(r1.mult)}`;
   const ret = r1.mult == null || v4.mult == null ? ""
     : r1.mult <= v4.mult ? `대신 수익은 줄었습니다 (${pair})`
@@ -43,14 +52,22 @@ export function reading(doc, key = "all") {
   const b = (r) => ((P[r] || {}).full || {}).busts ?? 0, up = (r) => ((P[r] || {}).full || {}).up ?? 0;
   out.push(`5년 한 계좌가 파산한 칸: v4 ${fmt.int(b("v4"))}칸 → 1% 규칙 ${fmt.int(b("r1"))}칸 → 0.5% 규칙 ${fmt.int(b("r05"))}칸 (${fmt.int(n)}칸 중).`);
   if (r05.mult != null && r05.mult < 1) {
-    out.push(`그래도 0.5% 규칙에서도 5년 뒤 $5,000보다 늘어난 칸은 ${fmt.int(up("r05"))}칸뿐입니다 (v4 ${fmt.int(up("v4"))}칸). 거래당 평균이 마이너스면 크기를 줄여도 잃는 속도만 느려집니다.`);
+    const u = up("r05"), thin = upThin(doc, key, "full", "r05");
+    const few = !thin ? "" : thin >= u ? ` ${u === 1 ? "그 1칸도" : `그 ${fmt.int(u)}칸 모두`} 5년 동안 거래가 20건도 안 되는 칸입니다.` : ` 그중 ${fmt.int(thin)}칸은 5년 동안 거래가 20건도 안 되는 칸입니다.`;
+    out.push(`${u ? `그래도 0.5% 규칙에서도 5년 뒤 $5,000보다 늘어난 칸은 ${fmt.int(u)}칸뿐입니다 (v4 ${fmt.int(up("v4"))}칸).` : `0.5% 규칙에서도 5년 뒤 $5,000보다 늘어난 칸은 하나도 없습니다 (v4 ${fmt.int(up("v4"))}칸).`}${few} 거래당 평균이 마이너스면 크기를 줄여도 잃는 속도만 느려집니다.`);
   }
-  if (lh != null && lv4 != null && Math.abs(lh - lv4) < 0.25 * lv4) {
-    out.push(`배수 절반은 거의 같았습니다 (지는 거래 한 번 ${pc1(lv4)} → ${pc1(lh)}, 5년 배수 ${mx(v4.mult)} → ${mx(half.mult)}). 잔고가 $5,000 근처일 때 좋은 자리는 v4가 거래소 한도 때문에 50·40배를 못 쓰고 30배 · 증거금 30%로 들어가는데 절반 규칙은 25배 · 증거금 50%로 오히려 크게 들어가고, 손절이 먼 자리에서는 v4가 '손절 손실 ≤ 잔고 15%' 확인에 걸려 20배로 내려가는 반면 절반 규칙은 15배 · 30%로 들어가 비슷합니다. 크기가 정말 절반이 되는 건 손절이 가까운 보통 자리뿐입니다.`);
+  if (lh != null && lv4 != null && lv4 > 0) {
+    const nums = `지는 거래 한 번 ${pc1(lv4)} → ${pc1(lh)}, 5년 배수 ${mx(v4.mult)} → ${mx(half.mult)}`;
+    out.push(Math.abs(lh - lv4) < 0.15 * lv4 ? `배수 절반은 v4와 거의 같았습니다 (${nums}).`
+      : lh > lv4 ? `배수 절반은 오히려 v4보다 한 번에 더 잃었습니다 (${nums}).`
+        : lh > 0.6 * lv4 ? `배수 절반은 v4보다 덜 잃었지만 절반까지 줄지는 않았습니다 (${nums}).` : `배수 절반은 한 번에 잃는 크기가 크게 줄었습니다 (${nums}).`);
+    if (lh > 0.6 * lv4) {
+      out.push("왜 절반이 안 되나: 잔고 $5,000 근처에서 v4는 거래소 한도 때문에 좋은 자리도 30배 · 증거금 30%로 들어가고, 손절이 먼 자리는 '손절 손실 ≤ 잔고 15%' 확인에 걸려 20배 · 증거금 20%까지 내려갑니다. 배수 절반 규칙은 같은 자리에 증거금을 더 쓰는 앞 단계(25배 · 50%, 20배 · 40%, 15배 · 30%)로 들어가서 크기가 비슷하거나 오히려 큽니다. 크기가 정말 절반이 되는 건 손절이 가까운 보통 자리(30배 → 15배)뿐입니다.");
+    }
   }
   const f4 = mrow(((F.v4 || {}).full || {}).m, K), f1 = mrow(((F.r1 || {}).full || {}).m, K);
   if (f4.mult != null && f1.mult != null) {
-    out.push(`참고: 동전 봇도 같은 규칙을 달면 ${mx(f4.mult)} → ${mx(f1.mult)}였습니다. 크기 규칙은 매매법이 아니라 '얼마나 걸었나'만 바꿉니다.`);
+    out.push(`참고: 동전 봇(무작위 진입)에 같은 규칙을 달아도 지금 v4 → 1% 규칙이 ${mx(f4.mult)} → ${mx(f1.mult)}였습니다. 크기 규칙은 매매법이 아니라 '얼마나 걸었나'만 바꿉니다.`);
   }
   return out;
 }
@@ -80,12 +97,12 @@ function compareCard(doc, env) {
     const pp = (r) => (P[r.key] || {})[pk] || {};
     const rowsB = [
       {label: "파산한 칸 (잔고 $10 미만)", get: (r) => cell(`${fmt.int(pp(r).busts ?? 0)} / ${fmt.int(pp(r).n ?? 0)}`)},
-      {label: "$5,000보다 늘어난 칸", get: (r) => cell(`${fmt.int(pp(r).up ?? 0)} / ${fmt.int(pp(r).n ?? 0)}`)},
+      {label: "$5,000보다 늘어난 칸", get: (r) => { const t = upThin(doc, key, pk, r.key); return cell(`${fmt.int(pp(r).up ?? 0)} / ${fmt.int(pp(r).n ?? 0)}${t ? ` (${fmt.int(t)}칸은 거래 20건 미만)` : ""}`); }},
       {label: "칸마다 배수의 가운데 값", get: (r) => cell(mx(pp(r).med_mult))},
       {label: "칸마다 최대 낙폭의 가운데 값", get: (r) => cell(pc0(pp(r).med_mdd))},
     ];
     const rowsC = pk === "full" ? [
-      {label: "지는 거래 한 번 (가운데 / 최대)", get: (r) => cell(`${pc1((P[r.key] || {}).loss_med)} / ${pc1((P[r.key] || {}).loss_max)}`)},
+      {label: "지는 거래 한 번 (칸들의 가운데 / 가장 큰)", get: (r) => cell(`${pc1((P[r.key] || {}).loss_med)} / ${pc1((P[r.key] || {}).loss_max)}`)},
       {label: "30일 계좌: 파산한 창", get: (r) => cell(`${fmt.int(((P[r.key] || {}).w30 || [])[1] ?? 0)} / ${fmt.int(((P[r.key] || {}).w30 || [])[0] ?? 0)}`)},
       {label: "30일 계좌: 플러스로 끝난 비율", get: (r) => cell(pc0(((P[r.key] || {}).w30 || [])[2]))},
       {label: "30일 계좌: 가운데 수익 (칸들의 가운데) / 가장 나쁜", get: (r) => { const w = (P[r.key] || {}).w30 || []; return cell(`${pc1(w[3], true)} / ${pc1(w[4], true)}`, w[3]); }},
@@ -245,27 +262,31 @@ function caveatCard(doc) {
       h("li", null, `좋은 자리 여부는 v4 비율대로 무작위로 정했습니다. 잔고가 $${fmt.int(a.bust_below ?? 10)} 아래로 가면 그 계좌는 멈춥니다(파산). 규칙과 숫자는 결과를 보기 전에 ${doc.prereg || "docs/size5y.md"}에 적어 두었습니다.`)));
 }
 
-function readingCard(doc) {
+function readingCard(doc, env) {
   const box = h("div", {class: "sz-read"});
   const tf = dimSeg("sz-rtf", TF_OPTS, "all", () => draw(), true);
   function draw() {
     const lines = reading(doc, tf.get());
-    put(box, ...(lines.length ? lines.map((l, i) => h(i ? "p" : "h2", {class: i ? "sz-say" : "sz-big"}, l)) : [h("p", {class: "muted"}, "숫자가 없습니다.")]));
+    const flips = ((doc.flips || {})[tf.get()]) != null;
+    put(box, ...(lines.length ? lines.map((l, i) => h(i ? "p" : "h2", {class: i ? "sz-say" : "sz-big"}, l)) : [h("p", {class: "muted"}, "숫자가 없습니다.")]),
+      lines.length && flips ? ui.refNote(env.verdictTs, "동전 봇 문장은 같은 크기 규칙을 무작위 진입에 단 것입니다.") : null);
   }
   draw();
   return ui.card({plate: "쉬운 말로", sub: "숫자는 아래 표와 같은 파일에서"}, h("div", {class: "sz-filters"}, tf.el), box, ui.assume("closed", ASSUME_5Y));
 }
 
 // ---------------------------------------------------------------- 손실 크기 규칙 (/api/v4/size5y)
+const ym = (x) => (typeof x === "string" && x.length >= 7 ? `${x.slice(0, 4)}년 ${Number(x.slice(5, 7))}월` : "—");
+
 export function size(d, env) {
   const a = d.account || {};
   const n = (d.cells || []).length;
   const out = [viewHead({plate: "손실 크기 규칙", q: "손절 한 번에 잃는 크기를 줄였다면, 5년 동안 무엇이 달라졌을까?",
     meta: `5년 과거 시험 · 기존 36 × 15분·30분·1시간·4시간 = ${fmt.int(n)}칸 · 칸마다 $${fmt.int(a.initial ?? 5000)} 계좌`, at: d.generated_at,
-    read: "같은 진입과 같은 청산에 크기만 바꿔 다섯 규칙을 나란히 놓았습니다: 지금 v4, 손절 한 번 = 잔고 0.5% · 1% · 2%, 배수 절반. 표는 규칙이 열, 곡선은 규칙마다 한 줄입니다."})];
+    read: `'5년 과거 시험'은 ${ym(a.start)} ~ ${ym(a.end)}의 실제 바이낸스 선물 가격으로 기존 36개를 지금 모의 계좌(v4) 규칙대로 다시 돌려 본 것입니다. 여기서는 같은 진입과 같은 청산에 크기만 바꿔 다섯 규칙을 나란히 놓았습니다: 지금 v4, 손절 한 번 = 잔고 0.5% · 1% · 2%, 배수 절반. 표는 규칙이 열, 곡선은 규칙마다 한 줄입니다.`})];
   if (d.unavailable) { out.push(ui.card({plate: "손실 크기 규칙"}, h("p", {class: "muted"}, d.note || "준비 중입니다."))); return out; }
   const par = d.parity || {};
-  out.push(caveatCard(d), readingCard(d), compareCard(d, env), curvesCard(d), listCard(d, env),
+  out.push(caveatCard(d), readingCard(d, env), compareCard(d, env), curvesCard(d), listCard(d, env),
     h("p", {class: "an-note an-foot"}, `손실 크기 규칙: 기존 36 · 5년 과거 시험 · ${d.label || "설명용, 판정 아님"} · 사전 등록 ${d.prereg || "docs/size5y.md"}`,
       par.windows ? ` · 엔진 맞춰 보기: 30일 계좌 ${fmt.int(par.windows)}개에서 v4 다시 계산 = 엔진 (차이 최대 $${fmt.num(par.max_diff || 0, 2)})` : ""));
   return out;

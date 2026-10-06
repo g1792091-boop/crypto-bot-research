@@ -150,3 +150,52 @@ def test_css_tokens_only():
     for m in re.finditer(r"font\s*:\s*([^;]+);", css):
         if m.group(1).strip() != "inherit":
             assert "var(--t-" in m.group(1), m.group(0)
+
+
+# ---------------------------------------------------------------- review fixes (the reading on the real file, node)
+def _node_reading(keys=("all", "15m", "30m", "1h", "4h")):
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    js = os.path.join(SCREENS, "analysis-size.js")
+    script = (f"import fs from 'fs'; const m = await import({json.dumps('file://' + js)});"
+              f"const doc = JSON.parse(fs.readFileSync({json.dumps(SZ.DATA)}, 'utf8'));"
+              f"const out = {{}}; for (const k of {json.dumps(list(keys))}) out[k] = {{lines: m.reading(doc, k),"
+              f" thin: ['v4','r05','r1','r2','half'].map((r) => m.upThin(doc, k, 'full', r))}};"
+              f"out.empty = m.reading({{pooled: {{}}, m_keys: doc.m_keys}}, 'all');"
+              f"console.log(JSON.stringify(out));")
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_reading_counts_thin_cells_and_says_nothing_it_cannot_back(doc):
+    out = _node_reading()
+    assert out["empty"] == []
+    for key in ("all", "15m", "30m", "1h", "4h"):
+        lines = out[key]["lines"]
+        text = " ".join(lines)
+        assert not re.search(r"(?<![0-9])0칸뿐", text) and "NaN" not in text and "undefined" not in text
+        # the "늘어난 칸" sentence says how many of them took under 20 trades (counted from the cells themselves)
+        rows = [c for c in doc["cells"] if key == "all" or c["tf"] == key]
+        thin = sum(1 for c in rows if c["r"]["r05"]["full"][0] > 1 and c["r"]["r05"]["full"][7] < 20)
+        assert out[key]["thin"][1] == thin
+        if thin:
+            assert "20건도 안 되는" in text
+        # "거의 같았습니다" only when the loss per losing trade is within 15%
+        P = doc["pooled"][key]
+        lv4, lh = P["v4"]["loss_med"], P["half"]["loss_med"]
+        assert ("배수 절반은 v4와 거의 같았습니다" in text) == (abs(lh - lv4) < 0.15 * lv4)
+    assert "그중 4칸은 5년 동안 거래가 20건도 안 되는 칸" in " ".join(out["all"]["lines"])
+
+
+def test_reading_card_carries_refnote_and_the_view_is_not_refreshed():
+    js = _read("analysis-size.js")
+    assert "function readingCard(doc, env)" in js and "readingCard(d, env)" in js
+    assert js.count("ui.refNote(env.verdictTs") >= 2
+    assert "5년 과거 시험'은" in js and "바이낸스 선물 가격" in js
+    an = _read("analysis.js")
+    assert re.search(r'\{id: "size",[^}]*fixed: true', an)
+    assert "if (!(VIEWS.find((x) => x.id === st.tab) || {}).fixed) load(true);" in an
