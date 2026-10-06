@@ -15,7 +15,7 @@ export const KST = 9 * H;
 /** The bucket size for a span: 1 hour up to 3 days, 4 hours up to 14 days, then 1 day. */
 export const pickStep = (spanMs) => (spanMs <= 3 * D ? H : spanMs <= 14 * D ? 4 * H : D);
 /** The END of the KST-aligned bucket of ``step`` ms that holds the instant ``t`` (an hour end at exactly 13:00 holds 12:00-13:00). */
-export const bucketEnd = (t, step) => Math.ceil((t - 1 + KST) / step) * step - KST;
+export const bucketEnd = (t, step) => Math.ceil((t + KST) / step) * step - KST;
 
 /** The windows the page offers, each only when it is shorter than what there is to show (else it would equal 전체). */
 export const WINDOWS = [{id: "24h", ko: "24시간", ms: D}, {id: "7d", ko: "7일", ms: 7 * D}, {id: "30d", ko: "30일", ms: 30 * D}, {id: "all", ko: "전체", ms: null}];

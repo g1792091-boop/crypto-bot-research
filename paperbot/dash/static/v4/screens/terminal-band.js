@@ -6,7 +6,7 @@
 // HONESTY: every chip says only what its data says. A number that was not read is "—" with the tooltip "불러오지 못함"
 // (or "불러오는 중"), never 0; 이상 없음 appears ONLY when the health card was read and says ok, no critical line stands and
 // the bot's heartbeat is known and fresh (terminal-band-calc.js statusOf); every comparison with the coin flips is marked
-// 참고 + 아직 운일 수 있음 and is never a pass or a fail (CONTRACT §1); DeepSeek and coin-flip accounts are counted only.
+// 참고 + 아직 운일 수 있음 and is never a verdict (CONTRACT §1); DeepSeek and coin-flip accounts are counted only.
 // When the window is too narrow the lowest-priority chips go first (fit(): 결재 → 판정 대상 → 오늘 → 위 a/n → 중앙값), no
 // text is ever clipped. Nothing moves except text: no animation, no timer that invents a change (the heartbeat age is
 // recomputed from the stream's real last heartbeat every 5 s).
@@ -71,13 +71,13 @@ export function bandLine(ctx) {
       put(med, h("span", null, "기존 36 중앙값 "), c.medRet == null ? dash() : h("b", {class: ["num", fmt.tone(c.medRet, fmt.pct(c.medRet))]}, fmt.pct(c.medRet)),
         c.coinRet == null ? null : [h("span", {class: "muted"}, " / 동전 봇 "), h("b", {class: ["num", fmt.tone(c.coinRet, fmt.pct(c.coinRet))]}, fmt.pct(c.coinRet))],
         ui.pill("", "ref"));
-      med.title = "닫힌 거래까지 반영한 잔고 기준 중앙값 (기존 36 계좌 vs 동전 봇 계좌) · 참고일 뿐 판정(30일째) 전에는 합격·불합격이 아닙니다 · 누르면 순위표";
+      med.title = "닫힌 거래까지 반영한 잔고 기준 중앙값 (기존 36 계좌 vs 동전 봇 계좌) · 참고일 뿐입니다 · 판정은 30일째에 정합니다 (그 전의 비교는 판정이 아닙니다) · 누르면 순위표";
       if (!c.vsN) { put(above, h("span", null, "동전 봇 중앙값보다 위 "), dash()); above.title = "같은 봉 동전 봇이 아직 없어 비교할 수 없습니다"; }
       else {
         put(above, h("span", null, "같은 봉 동전 봇 중앙값보다 위 "), h("b", {class: "num"}, `${fmt.int(c.above)}/${fmt.int(c.vsN)}`),
           h("span", {class: "muted"}, " · 아직 운일 수 있음"));
         above.title = `기존 36의 계좌 ${fmt.int(c.vsN)}개 중 ${fmt.int(c.above)}개가 같은 봉 동전 봇 중앙값보다 잔고가 위 (아래 ${fmt.int(c.below)}개) · 참고 · `
-          + "거래가 적을 때는 운으로도 이만큼 나옵니다: 아직 운일 수 있음 · 합격·불합격은 30일째 판정이 정합니다 · 누르면 순위표";
+          + "거래가 적을 때는 운으로도 이만큼 나옵니다: 아직 운일 수 있음 · 판정은 30일째에 정합니다 · 누르면 순위표";
       }
     }
     if (!j) { put(judged, h("span", null, `판정 대상 ${MIN_TRADES}건 넘음 `), dash()); judged.title = `판정 대상 계좌: ${why}`; }

@@ -248,6 +248,7 @@ def test_terminal_says_the_captions_once():
     kit = _read("screens", "terminal-kit.js")
     assert 'const tip = o.info ? ui.infoTip(o.info, `${title} 설명`) : null;' in kit and "export const marketChip" in kit
     side, feed, live, table = (_read("screens", f) for f in ("terminal-side.js", "terminal-feed.js", "terminal-live.js", "terminal-table.js"))
+    side += _read("screens", "terminal-pnl.js")                      # term-plus: the 수익 차트 card (and its ⓘ) moved there
     assert side.count("info: `") == 2 and "중간 기록일 뿐 판정이 아닙니다" in side
     assert feed.count("info: `") == 2 and "marketChip(" in feed and "info: BIG_LABEL" in live and "marketChip(BIG_LABEL)" in live
     assert "info: TAB_NOTE.pos" in table and "el.tip.set(TAB_NOTE[t.tab] || TAB_NOTE.pos);" in table

@@ -24,6 +24,7 @@ import {bookPanel} from "./positions-book.js";
 import {panel, duoSwitch, ping, ages, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 import {bandLine} from "./terminal-band.js";
+import {paneResize} from "./terminal-resize.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("터미널");
@@ -66,6 +67,8 @@ export async function mount(el, ctx) {
   top.el.insertBefore(band.el, top.el.querySelector(".term-mline"));
   const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right), foot);
   el.append(h("h1", {class: "term-sr"}, "터미널"), root);
+  // term-plus: drag handles between the columns and between the chart and the table (sizes remembered per device, T = 차트 ↔ 표)
+  paneResize(ctx, {root, grid: root.querySelector(".term-grid"), left, right, mid, strip: watch.el, table: table.el});
 
   // page hidden: the slow lines and breathing marks stop (CSS reads data-still); reduced motion is handled in CSS
   const still = () => { root.dataset.still = document.hidden ? "1" : ""; };

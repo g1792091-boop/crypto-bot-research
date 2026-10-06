@@ -159,7 +159,7 @@ def test_wiring_count_only_and_words():
     # the position lines moved to the shared chart deck helper (chart-lines.js, used by 차트 and the terminal)
     assert 'g.items.filter((x) => !countOnly(x.a, ""))' in _read(SCR, "chart-lines.js") and "posLines(" in chart and "usdKo(t.q)" in chart
     cp = _read(SCR, "chart-panels.js")
-    assert 'countOnly(x.a, "")' in cp and "usdKo(x)" in cp
+    assert 'countOnly(x.a, "")' in cp and "usdShort(" in cp          # liquidation sizes: one money format ($K / $M, core/liqkit.js), term-plus
     hs = _read(SCR, "home-shared.js")
     assert 'derive.countOnlyIn(a, "all")' in hs and "derive.mixedOrder(" in hs
     assert "derive.mixedOrder(" in _read(SCR, "board-table.js")

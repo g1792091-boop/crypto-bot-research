@@ -90,3 +90,30 @@ a.term-bc2:hover > span:first-child, a.term-bc2:hover b { text-decoration: under
 @media (prefers-reduced-motion: reduce) {
   .term-wr[data-hit="own"] { animation: none; }
 }
+
+/* ---------------------------------------------------------------- drag handles (terminal-resize.js) */
+.term-grid, .term-mid { position: relative; }
+.term[data-rsc] .term-grid { grid-template-columns: var(--rs-l) minmax(0, 1fr) var(--rs-r); }
+.term[data-rsh] .term-mid { grid-template-rows: auto minmax(0, 1fr) var(--rs-t); }
+.term-rs { position: absolute; z-index: 7; display: flex; align-items: center; justify-content: center; touch-action: none; outline: none; }
+.term-rs[hidden] { display: none; }
+.term-rs.v { top: 0; bottom: 0; width: 14px; margin-left: -7px; cursor: col-resize; }
+.term-rs.hz { left: 0; right: 0; height: 14px; margin-top: -7px; cursor: row-resize; }
+.term-rs-grip { display: block; border-radius: 3px; background: var(--line-2); opacity: .55; transition: background .15s var(--ease), opacity .15s var(--ease), box-shadow .15s var(--ease); }
+.term-rs.v .term-rs-grip { width: 3px; height: 34px; }
+.term-rs.hz .term-rs-grip { height: 3px; width: 34px; }
+.term-rs:hover .term-rs-grip, .term-rs:focus-visible .term-rs-grip, .term-rs.on .term-rs-grip { background: var(--accent); opacity: 1; box-shadow: 0 0 8px var(--accent-glow); }
+.term-rs:focus-visible .term-rs-grip { outline: 2px solid var(--accent-line); outline-offset: 3px; }
+.term-rs.v:hover::before, .term-rs.v:focus-visible::before, .term-rs.v.on::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: var(--accent-line); }
+.term-rs.hz:hover::before, .term-rs.hz:focus-visible::before, .term-rs.hz.on::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--accent-line); }
+html.term-rsing, html.term-rsing * { user-select: none !important; }
+html.term-rsing { cursor: grabbing; }
+@media (max-width: 1199px), (max-height: 639px) { .term-rs { display: none; } }
+@media (prefers-reduced-motion: reduce) { .term-rs-grip { transition: none; } }
+
+/* the chart's candle load failed: the words over the empty chart (terminal-chart.js), asked again by a timer that really runs */
+.term-cfail2 { position: absolute; left: 50%; top: 42%; z-index: 8; transform: translate(-50%, -50%); max-width: min(520px, 86%); border-radius: 6px;
+  background: var(--glass, var(--surface)); box-shadow: 0 6px 18px var(--card-shadow, transparent); }
+.term-cfail2[hidden] { display: none; }
+.term-cfail2 .term-fail { margin: 0; }
+.term-cal > .term-fail, .term-cal > .term-pnone { grid-column: 1 / -1; margin: 0; }

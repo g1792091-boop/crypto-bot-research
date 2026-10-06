@@ -103,16 +103,16 @@ export function topBar(ctx, st) {
   }
 
   // ---- movers: /api/v4/movers every minute (the server's own 60 s cache: one Binance fetch a minute for everybody)
-  function paintMovers(d) {
+  function paintMovers(d, failed) {
     const ok = d && d.ready;
     movers.classList.toggle("none", !ok);
     movers.classList.toggle("stale", !!(ok && d.stale));
     const one = (m, row, val, list, what) => {
-      m.s.textContent = row ? fmt.coin(row.s) : ok ? "없음" : "수집 전";
+      m.s.textContent = row ? fmt.coin(row.s) : ok ? "없음" : failed ? "—" : "수집 전";
       m.v.textContent = row ? val(row) : "";
       m.el.title = ok && list && list.length
         ? `${what} (${MARKET_LABEL}, 바이낸스 USD-M 무기한 ${fmt.int(d.n)}개 중)\n${list.map((r, i) => `${i + 1}. ${fmt.coin(r.s)} ${val(r)}`).join("\n")}`
-        : `${what}: 아직 받은 값이 없습니다`;
+        : `${what}: ${failed ? "불러오지 못함 (잠시 뒤 다시 받습니다)" : "아직 받은 값이 없습니다"}`;
     };
     one(mUp, ok && d.up[0], (r) => pct2(r.pct), ok && d.up, "24시간 가장 많이 오른 코인");
     one(mDn, ok && d.down[0], (r) => pct2(r.pct), ok && d.down, "24시간 가장 많이 내린 코인");
@@ -120,8 +120,10 @@ export function topBar(ctx, st) {
     mWhen.textContent = ok && d.stale ? `${fmt.hm(d.ts)} 값` : "";
   }
   paintMovers(null);
+  let moversGot = false;
   const loadMovers = async () => {
-    try { const d = await ctx.api("/api/v4/movers"); if (ctx.alive()) paintMovers(d); } catch (e) { /* the last answer stays */ }
+    try { const d = await ctx.api("/api/v4/movers"); if (ctx.alive()) { paintMovers(d); moversGot = true; } }
+    catch (e) { if (!moversGot && !(e && e.name === "AbortError") && ctx.alive()) paintMovers(null, true); /* the last answer stays */ }
   };
   ctx.every(60000, loadMovers, {now: true});
 
@@ -144,7 +146,10 @@ export function topBar(ctx, st) {
     // about 40 px a second whatever the length (the line is read, not chased)
     requestAnimationFrame(() => { track.style.setProperty("--dur", Math.max(30, Math.round(one.scrollWidth / 40)) + "s"); track.classList.add("run"); });
   }
-  const office = async (age) => { try { const o = await store.need("office", age); if (ctx.alive()) meetings(o); } catch (e) { if (!sig) meetings(null); } };
+  const office = async (age) => {
+    try { const o = await store.need("office", age); if (ctx.alive()) meetings(o); }
+    catch (e) { if (!sig && ctx.alive()) put(track, h("span", {class: "term-mi muted"}, "회의 기록을 불러오지 못함 · 30초마다 다시 시도 중")); }
+  };
   office(25000);
   ctx.every(30000, () => office(25000), {now: false});
   let roomT = null;
