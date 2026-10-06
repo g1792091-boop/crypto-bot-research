@@ -199,15 +199,17 @@ def test_after_the_verdict_passed_accounts_and_deepseek_counts_only():
             {"account_id": "DS_X@1h", "status": PASS1, "group": "ds200", "trades": 50},
             {"account_id": "DS_Y@1h", "status": FAIL, "group": "ds200", "trades": 50},
             {"account_id": "S9@15m", "status": HOLD, "group": "core", "trades": 12},
-            {"account_id": "S9@4h", "status": OBSERVE, "group": "core", "trades": 40}]
-    cp = {"ready": True, "date": "2026-11-04", "counts": {PASS1: 2, PASS2: 1, FAIL: 1, HOLD: 1, OBSERVE: 1}, "rows": rows}
+            {"account_id": "S9@4h", "status": OBSERVE, "group": "core", "trades": 40},
+            {"account_id": "RANDOM_2@1h", "status": PASS1, "group": "flip", "trades": 40}]
+    cp = {"ready": True, "date": "2026-11-04", "counts": {PASS1: 3, PASS2: 1, FAIL: 1, HOLD: 1, OBSERVE: 1}, "rows": rows}
     v = GP.verdict_stage(cp, {}, None, NOW, 30)
-    assert v["count"] == 3 and v["state"] == "has"
+    assert v["count"] == 3 and v["state"] == "has"                                 # the coin flip is no candidate
+    assert {p["k"]: p["n"] for p in v["parts"]}[PASS1] == 2 and "RANDOM" not in json.dumps(v)
     accts = [i["acct"] for i in v["items"] if i["acct"]]
     assert "S5_DONCHIAN_MFI@1h" in accts and "S2_ST_ROC@30m" in accts
     assert not any(str(a).startswith("DS_") for a in accts)                        # never one DeepSeek account
     ds = next(i for i in v["items"] if i["tag"] == "딥시크")
-    assert ds["wait"] == f"{PASS1} 1 · {FAIL} 1" and not ds["acct"]
+    assert ds["wait"] == f"묶음 숫자: {PASS1} 1 · {FAIL} 1" and not ds["acct"]
     assert next(i for i in v["items"] if i["acct"] == "S2_ST_ROC@30m")["wait"].startswith("2차 통과")
     hold = next(i for i in v["items"] if i["tag"] == HOLD)
     assert hold["wait"] == "보류: 거래 18건 더 필요"

@@ -346,14 +346,14 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
                              go=go("checkpoint"), tag="판정 전"))
         return _stage("verdict", count=None, state="wait", head=f"판정 전 · {when}", items=rows,
                       none_ko=f"판정 전: {when}", when_ko=when, next_ts=nts, go=go("checkpoint"))
-    counts = cp.get("counts") or {}
-    rows_cp = [r for r in cp.get("rows") or [] if isinstance(r, dict)]
+    # the coin flips are the yardstick, never a candidate: left out of the counts and the list
+    rows_cp = [r for r in cp.get("rows") or [] if isinstance(r, dict) and r.get("group") != "flip"]
     passed = [r for r in rows_cp if r.get("status") in (PASS1, PASS2)]
     by_group: dict = {}
     for r in rows_cp:
         by_group.setdefault(r.get("group") or "other", {}).setdefault(r.get("status"), 0)
         by_group[r.get("group") or "other"][r.get("status")] += 1
-    parts = [{"k": s, "ko": s, "n": int(counts.get(s) or sum(1 for r in rows_cp if r.get("status") == s))}
+    parts = [{"k": s, "ko": s, "n": sum(1 for r in rows_cp if r.get("status") == s)}
              for s in (PASS2, PASS1, FAIL, HOLD, OBSERVE)]
     items = []
     for r in passed:
@@ -365,7 +365,7 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
                           go=go("account", r.get("account_id")), tag=st, acct=r.get("account_id")))
     ds = by_group.get("ds200") or {}
     if ds:
-        items.append(item("딥시크 (묶음 숫자만)", " · ".join(f"{k} {v:,}" for k, v in ds.items() if k), sub="계좌별로는 보이지 않음 (참고)",
+        items.append(item("딥시크 (묶음 숫자만)", "묶음 숫자: " + " · ".join(f"{k} {v:,}" for k, v in ds.items() if k), sub="계좌별로는 보이지 않음 (참고)",
                           go=go("checkpoint"), tag="딥시크"))
     held = [r for r in rows_cp if r.get("status") == HOLD and r.get("group") != "ds200"]
     for r in held[:2]:
