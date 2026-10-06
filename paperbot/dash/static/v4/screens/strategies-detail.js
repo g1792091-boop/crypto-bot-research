@@ -189,7 +189,8 @@ export function detailView(ctx, st, name) {
       ui.stat("평균 이익 · 손실", h("b", {class: "num"}, h("span", {class: "up"}, fmt.money(r.avgW, true)), " · ", h("span", {class: "down"}, fmt.money(r.avgL, true))),
         r.ratio == null ? "손익비 —" : `손익비 ${fmt.num(r.ratio, 2)}`),
       ui.stat("본전 승률", r.be == null ? "—" : fmt.pct(r.be, 0, false), "이 평균이면 이만큼 이겨야 본전"),
-      lr && lr.max_dd_pct != null ? ui.stat("최대 낙폭", fmt.pct(-lr.max_dd_pct, 1), lr.max_dd_at ? `바닥 ${lr.max_dd_at}` : "봉 계좌 합친 자금") : null,
+      // the summed curve of the timeframe accounts (the profile card's '최대 낙폭 · 계좌 하나' is the deepest single one)
+      lr && lr.max_dd_pct != null ? ui.stat("최대 낙폭 · 합친 곡선", fmt.pct(-lr.max_dd_pct, 1), `봉 계좌를 더한 자금${lr.max_dd_at ? ` · 바닥 ${lr.max_dd_at}` : ""}`) : null,
       lr && lr.p_bust != null ? ui.stat("파산 확률", fmt.pct(lr.p_bust, 1, false), "지난 거래로 30일 흉내 · 설명용") : null);
     const list = rows.length ? h("div", {class: "strat-tiles"}, tiles) : ui.empty("이 매매법의 계좌가 아직 없습니다");
     put(acctEl, list, stats, ui.smallSample(r.trades) ? h("p", {class: "muted small"}, ui.smallSample(r.trades), " 거래가 30건 미만이라 숫자가 우연일 수 있습니다.") : null,

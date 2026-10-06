@@ -287,7 +287,7 @@ def test_paper_stage_lists_extra_accounts_with_trades_missing():
 # ---------------------------------------------------------------- the screen
 def test_route_menu_icon_and_files():
     routes = _read("core", "routes.js")
-    assert '{id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path"]}' in routes
+    assert re.search(r'\{id: "strat", ko: "매매법", screens: \[[^\]]*"path"[^\]]*\]\}', routes)
     assert 'path: {ko: "졸업 길", group: "strat", title: "졸업 길"}' in routes
     assert re.search(r"\n  path: \(\) => \[", routes)
     js, css = _read("screens", "path.js"), _read("screens", "path.css")

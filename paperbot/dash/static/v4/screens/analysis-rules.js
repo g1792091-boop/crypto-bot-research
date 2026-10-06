@@ -190,7 +190,9 @@ export function synergy(d, env) {
     out.push(synPlus(env));       // ana-syn: the added cards wait on their own real thresholds (filling bars)
     return out;
   }
-  const pg = ui.pager({size: 8, empty: "조합이 없습니다", row: (r) => h("div", {class: "lrow an-row", role: "listitem"},
+  // each row opens 조합 성과 with that combination preloaded (#/combo/build?u=<strategy codes>)
+  const pg = ui.pager({size: 8, empty: "조합이 없습니다", row: (r) => h(r.units ? "a" : "div", {class: "lrow an-row", role: "listitem",
+    href: r.units ? env.ctx.href("combo", "build", {u: r.units.join(","), from: "synergy"}) : null, title: r.units ? "조합 성과에서 이 조합 열기" : null},
     h("span", {class: "rk"}, `${fmt.int(r.k || r.names.length)}개`), h("span", {class: "lname an-wrap"}, r.names.join(" + ")),
     h("span", {class: ["ret num", fmt.tone(r.return_pct)]}, fmt.pct(r.return_pct)),
     h("span", {class: "meta"}, h("span", null, `최대 낙폭 ${r.max_dd_pct ? fmt.pct(-r.max_dd_pct, 1) : "—"}`), h("span", null, `점수 ${fmt.num(r.score, 2)}`),

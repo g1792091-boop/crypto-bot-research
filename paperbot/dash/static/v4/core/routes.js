@@ -11,7 +11,7 @@ import {s} from "./dom.js";
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
-  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path"]},
+  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path", "combo"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
 ];
@@ -32,6 +32,7 @@ export const SCREENS = {
   replay: {ko: "다시보기", group: "strat", title: "거래 다시보기", hidden: true},
   analysis: {ko: "분석", group: "strat", title: "분석"},
   path: {ko: "졸업 길", group: "strat", title: "졸업 길"},
+  combo: {ko: "조합 성과", group: "strat", title: "조합 성과"},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},
@@ -104,6 +105,7 @@ const SICON = {
   grid: () => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => R(1 + 5 * i, 1 + 5 * j, 4, 4))),
   analysis: () => [R(3, 1, 6, 2), R(1, 3, 2, 6), R(9, 3, 2, 6), R(3, 9, 6, 2), R(10, 10, 2, 2), R(12, 12, 3, 3)],
   path: () => [R(1, 1, 14, 2), R(2, 3, 12, 2), R(4, 5, 8, 2), R(5, 7, 6, 2), R(6, 9, 4, 2), R(7, 11, 2, 4)],
+  combo: () => [R(1, 2, 5, 5), R(10, 2, 5, 5), R(6, 10, 5, 5), R(6, 4, 4, 1), R(3, 7, 1, 3), R(3, 10, 3, 1), R(12, 7, 1, 3), R(11, 10, 2, 1)],
   office: () => [R(3, 2, 3, 3), R(10, 2, 3, 3), R(1, 6, 14, 3), R(3, 9, 1, 5), R(12, 9, 1, 5)],
   rooms: () => [R(4, 1, 8, 1), R(4, 1, 1, 13), R(11, 1, 1, 13), R(2, 14, 12, 1), R(9, 7, 1, 2)],
   digest: () => [R(1, 2, 14, 1), R(1, 2, 1, 9), R(14, 2, 1, 9), R(1, 10, 14, 1), R(3, 11, 2, 3), R(4, 5, 8, 1), R(4, 7, 5, 1)],
