@@ -1,4 +1,5 @@
 @import url("positions-kit.css");
+@import url("chart-plus.css");
 /* chart: 차트 (builder B). Coins strip, price line, the interval strip with countdowns, the chart box, side panels. */
 .chart-coins { gap: 6px; }
 .chart-coins button { height: auto; min-height: 44px; padding: 6px 10px; display: grid; grid-template-columns: auto auto; column-gap: 6px; row-gap: 1px;

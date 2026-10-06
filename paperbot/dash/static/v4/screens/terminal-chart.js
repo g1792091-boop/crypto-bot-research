@@ -20,6 +20,7 @@ import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, cand
 import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
+import {chartPlus} from "./chart-plus.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -217,6 +218,8 @@ export function termChart(ctx, st, onTf) {
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);
+      // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
+      chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 210});
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);

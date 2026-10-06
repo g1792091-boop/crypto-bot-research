@@ -980,6 +980,10 @@ def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
     # volume (base asset) feeds the chart's volume bars (v4 chart deck); older pages ignore the extra key
     out = [{"time": int(k[0]) // 1000, "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
             "close": float(k[4]), "volume": float(k[5])} for k in rows]
+    # kline field 9 = the taker BUY volume (base asset) of the bar: the chart's CVD pane (buy minus sell per bar) reads it
+    for row, k in zip(out, rows):
+        if len(k) > 9:
+            row["taker_buy"] = float(k[9])
     _CANDLE_CACHE[key] = (time.time(), out)
     return out
 

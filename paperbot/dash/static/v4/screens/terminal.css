@@ -7,6 +7,7 @@
    hidden ([data-still]). */
 @import url("positions-kit.css");
 @import url("flow-kit.css");
+@import url("chart-plus.css");
 
 /* the shell's page column is 1320 px: the terminal (and the header rows above it, so the edges line up) take the window */
 .screen:has(> .scr[data-screen="terminal"]) { max-width: none; padding: 8px 10px 10px; }
@@ -226,7 +227,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-rb.wide .term-rb-t { flex: 0 0 calc(150px * var(--ts)); }
 
 /* ---------------------------------------------------------------- chart */
-.term-chart .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; padding: 0; }
+.term-chart .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; padding: 0; }
 .term-tfs { display: flex; gap: 2px; }
 .term-tfs button { padding: 3px 8px; border: 0; border-radius: 4px; background: none; color: var(--ink-2); font: 600 var(--t-xs)/1.2 var(--f-body); cursor: pointer; }
 .term-tfs button:hover { color: var(--ink); background: var(--surface-2); }

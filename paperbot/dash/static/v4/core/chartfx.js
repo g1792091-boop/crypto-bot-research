@@ -892,7 +892,7 @@ export function chartDeck(o) {
     save();
     for (const g of groups) applyGroup(g, true);
     revis();
-    for (const fn of subs) fn(null);
+    for (const fn of subs) fn(null, on ? "all" : "none");
   }
   /** 기본으로: the calm default of every group and part, the hidden lines back */
   function setDefault() {
@@ -900,7 +900,7 @@ export function chartDeck(o) {
     save();
     for (const g of groups) applyGroup(g, true);
     revis();
-    for (const fn of subs) fn(null);
+    for (const fn of subs) fn(null, "default");
   }
   /** one 프리미엄 지표 part on / off: with the indicator off, choosing a part turns it on with that part alone */
   function setPart(id, on) {
@@ -920,6 +920,7 @@ export function chartDeck(o) {
 
   // ---------------------------------------------------------------- data in
   function index() { st.idx = new Map(st.data.map((b, i) => [b.time, i])); }
+  const dataSubs = [];
   function setData(data) {
     st.col = colours();
     st.data = (data || []).slice();
@@ -928,6 +929,7 @@ export function chartDeck(o) {
     st.lastPx = null;
     st.zone = null;
     paintVol(); computeSmc(); if (tagEl) paintTag(false); schedule();
+    for (const fn of dataSubs) fn("set");
   }
   /** A newer or the forming bar. real: the price came from a real new trade / poll (the tag pulses once if it moved). */
   function update(c, real = true) {
@@ -940,6 +942,7 @@ export function chartDeck(o) {
     if (isNew) computeSmc();
     if (tagEl) paintTag(real);
     schedule();
+    for (const fn of dataSubs) fn(isNew ? "new" : "bar");
     return true;
   }
   function paintTag(real) {
@@ -980,6 +983,11 @@ export function chartDeck(o) {
     /** A real event of the coin on screen: {tone: "up" | "down" | "accent", k: 0..1, why} (AI skin only). */
     flash(ev) { if (st.ai) sched.push(ev); },
     onToggle(fn) { subs.push(fn); },
+    /** fn(how) after the candles were replaced ("set") or a bar changed / arrived ("bar" / "new"): the add-ons of
+     *  screens/chart-plus.js (liquidation bubbles, our stop map, the lower panes) follow the candles through it. */
+    onData(fn) { dataSubs.push(fn); },
+    /** the '선' menu's box: chart-plus.js adds its own section (겹쳐 보기 · 아래 칸) to it */
+    menuEl: menu,
     menuBtn: menuWrap, smcBtn, lightChip, lightMenu: flashSel, flashSel, viewBtn,
   };
 }

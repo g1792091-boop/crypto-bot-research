@@ -13,6 +13,7 @@ import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOpti
   bigEvent, liqEvent, ownEvent} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
+import {chartPlus} from "./chart-plus.js";
 import {tickStream} from "./terminal-live.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
@@ -124,6 +125,8 @@ export async function mount(el, ctx) {
       defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null, sym: () => st.sym, legend});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
+    // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
+    chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "chart", sym: () => st.sym, tf: () => st.tf});
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));
