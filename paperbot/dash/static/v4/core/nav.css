@@ -95,13 +95,18 @@
 .skincyc:hover, .rail-old:hover { border-color: var(--accent-line); }
 .rail-old { display: grid; place-items: center; height: 32px; padding: 0 9px; border-radius: 8px; border: 1px dashed var(--line-2); color: var(--ink-2); text-decoration: none;
   font: 700 var(--t-2xs)/1 var(--f-term); }
-/* a short window (1280 x 800): tighter rows so every screen still fits without scrolling the rail */
-@media (max-height: 880px) {
+/* a shorter window (a 1080 screen's browser, 1280 x 800): tighter rows so every screen still fits without scrolling
+   the rail; a very short one (about 700) tighter still (the rail scrolls inside itself only below that) */
+@media (max-height: 959px) {
   .rail-in { padding: 4px 8px 6px; }
   .rail-a { min-height: 27px; }
   .rail-h { padding: 3px 10px 2px; }
   .rail-g + .rail-g { margin-top: 3px; padding-top: 3px; }
   .rail-foot { gap: 6px; padding: 7px 8px 8px; }
+}
+@media (max-height: 759px) {
+  .rail-a { min-height: 24px; }
+  .rail-h { padding: 2px 10px 1px; }
 }
 
 /* ---------------------------------------------------------------- the side panel */
