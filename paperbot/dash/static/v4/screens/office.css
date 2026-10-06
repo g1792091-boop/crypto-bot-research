@@ -220,3 +220,5 @@
 [data-screen="office"] .osc-st.done { color: var(--up); border-color: var(--up-line); }
 [data-screen="office"] .osc-li.is-next .osc-st { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 [data-screen="office"] .osc-foot { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+/* a phone: hours sit close on the track, so only the next one keeps its label (the list below names them all) */
+@media (max-width: 759px) { [data-screen="office"] .osc-mark:not(.is-next) b { visibility: hidden; } [data-screen="office"] .osc-track { margin-inline: 8px; } }
