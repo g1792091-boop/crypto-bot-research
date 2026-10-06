@@ -8,7 +8,9 @@
 @media (min-width: 1100px) { .ck-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; } }
 
 /* countdown */
-.ck-dtext { font: 700 var(--t-md)/1 var(--f-pixel); color: var(--ink-2); white-space: nowrap; }
+.ck-dtext { font: 700 var(--t-sm)/1.2 var(--f-body); color: var(--ink-2); white-space: nowrap; }
+/* the plate row (home.css has the same rule, but 판정 can be opened first) */
+.ck-hero .home-hrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .ck-dtext b { color: var(--accent); }
 .ck-big { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .ck-d { font: 400 calc(64px * var(--ts))/.85 var(--f-led); color: var(--accent); text-shadow: 0 0 18px var(--accent-glow); letter-spacing: .02em; }
@@ -104,3 +106,71 @@
 .ck-lead-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .ck-lead-bar i { display: block; width: var(--w, 0%); height: 100%; background: var(--accent); }
 .ck-lead-pace { grid-column: 1 / -1; color: var(--ink-2); font-size: var(--t-xs); }
+
+/* ---- the verdict-day clock (review 10/06 fix 1, change 13; checkpoint.js renderCountdown): the big number is the days
+   left only ('29일 남음'); on the verdict day the card shows where the job is, a red line when it needs a look. ---- */
+.ck-dwrap { display: inline-flex; align-items: baseline; gap: 6px; }
+.ck-du { font-size: var(--t-md); font-weight: 700; color: var(--ink-2); }
+.ck-isdue .ck-d { font: 800 var(--t-2xl)/1.1 var(--f-body); text-shadow: none; }
+.ck-d.bad { color: var(--down); }
+.ck-alarm { margin: 0; padding: 9px 12px; border-radius: var(--r-sm); border: 1px solid var(--down-line); background: var(--down-soft); color: var(--ink);
+  font-size: var(--t-sm); line-height: 1.55; }
+.card ol.ck-due { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ck-dstep { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: start; padding: 7px 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: var(--surface-2); }
+.ck-dstep > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.ck-dstep b { font-size: var(--t-sm); }
+.ck-dstep small { font-size: var(--t-xs); color: var(--ink-2); }
+.ck-dt { font: 700 var(--t-xs)/1.6 var(--f-pixel); color: var(--muted); }
+.ck-dstep.done { border-color: var(--accent-line); }
+.ck-dstep.done .ck-dt, .ck-dstep.done small { color: var(--accent); }
+.ck-dstep.now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
+.ck-dstep.bad { border-color: var(--down-line); background: var(--down-soft); }
+.ck-dstep.bad small { color: var(--ink); }
+.ck-dstep.wait { opacity: .78; }
+.ck-bad { margin: 0; color: var(--down); font-size: var(--t-sm); }
+.ck-seatsnote { margin: 0; }
+
+/* ---- 판정 기계 (checkpoint-machine.js) ---- */
+.ckm .kv { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.ckm .kv dd { font-weight: 400; line-height: 1.5; }
+.ckm .kv dd b { font-weight: 700; }
+
+/* ---- 판정 뒤 할 일 (checkpoint-after.js): lines, the 매매법 × 봉 map, the real-trading checklist, the links ---- */
+.cka-head { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
+.card ul.cka-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cka-lines li { padding-left: 16px; position: relative; font-size: var(--t-sm); line-height: 1.55; color: var(--ink-2); }
+.cka-lines li::before { content: "◆"; position: absolute; left: 0; top: 0; color: var(--accent); font-size: var(--t-2xs); line-height: 2; }
+.cka-lines b { color: var(--ink); }
+.card h3.cka-h3 { margin: 6px 0 0; font-size: var(--t-md); }
+.cka-mh { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 58px); gap: 4px; font-size: var(--t-xs); color: var(--muted); max-width: 420px; }
+.cka-mh span:not(:first-child) { text-align: center; }
+.cka-map { display: grid; gap: 3px 18px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .cka-map { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); } .cka-mh { max-width: 360px; } }
+.cka-mrow { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 58px); gap: 4px; align-items: center; min-width: 0; }
+.cka-mn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); }
+.cka-c { display: grid; place-items: center; min-height: 26px; border-radius: 5px; border: 1px solid var(--line-2); font-size: var(--t-xs); font-weight: 700;
+  color: var(--ink-2); text-decoration: none; background: var(--surface-2); }
+.cka-c.good { color: var(--up); border-color: var(--up-line); background: var(--up-soft); }
+.cka-c.bad { color: var(--down); border-color: var(--down-line); background: var(--down-soft); }
+.cka-c.thin { border-style: dashed; color: var(--muted); }
+.cka-c.none { border-style: dotted; color: var(--muted); }
+a.cka-c:hover { border-color: var(--accent); }
+.cka-more { justify-self: start; }
+@media (max-width: 899px) { .cka-map:not(.all) .cka-mrow:nth-child(n+13) { display: none; } }
+@media (min-width: 900px) { .cka-more { display: none; } }
+.card ul.cka-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: var(--t-sm); color: var(--ink-2); }
+.cka-groups b { color: var(--ink); }
+.cka-ck { display: grid; gap: 8px; }
+.cka-ckrow { display: grid; gap: 6px; padding: 9px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.cka-ckh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.cka-ckh .lname { font-weight: 700; color: var(--ink); text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cka-ckh .muted { font-size: var(--t-xs); }
+.cka-ckc { display: flex; flex-wrap: wrap; gap: 4px; }
+.cka-links { display: grid; gap: 8px; }
+@media (min-width: 900px) { .cka-links { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cka-link { display: grid; gap: 4px; align-content: start; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); min-width: 0;
+  font-size: var(--t-sm); color: var(--ink-2); line-height: 1.55; }
+.cka-link .k { font-size: var(--t-xs); color: var(--muted); font-weight: 700; }
+.cka-link b { color: var(--ink); }
+.cka-link .btn-line { margin-top: 4px; }

@@ -5,7 +5,7 @@
 // HONESTY (CONTRACT.md section 1): comparisons with the coin flips are '참고' pills in neutral colours (never a pass or
 // fail before /api/checkpoint says ready); a DeepSeek account gets nothing per account beyond the bare '참고' pill;
 // late-started extras are never compared; small samples say 표본 적음.
-import {h, put, ui, fmt, derive, local, stratFigure} from "../core/pb.js";
+import {h, put, ui, fmt, derive, local, stratFigure, vday} from "../core/pb.js";
 
 // wave 2 ⑦: the strategy's own pixel character in front of its name (no idle motion in lists)
 const fig = (a, size) => stratFigure({strategy: a.strategy, kind: a.kind, size, cls: "row-fig"});
@@ -39,16 +39,21 @@ export const savedGroup = (key, d = "core") => {
 };
 
 // ---------------------------------------------------------------- the D+n numbers (same rules as the top chip)
+// The checkpoint is the server's verdict-day clock (summary.verdict_clock, dash/more/verdictday.py): a checkpoint that
+// has passed stays the one named (due) until its verdict is stored, so the verdict morning never jumps to the next one.
+// line: the one sentence of every screen ("30일 중 N일 지남 · 판정까지 M일 (11/04 09:00)").
 const DAY = 86400000;
 export function expInfo(s, now = Date.now()) {
   if (!s || s.start == null) return null;
   const rs = s.restart || {};
   const cp = s.next_checkpoint || {};
+  const c = vday.vclock(s);
   const day = rs.ready ? rs.day : (s.day || 1) - 1;
   const of = rs.ready ? rs.of : s.period_days || 30;
   const verdictTs = rs.ready ? rs.verdict_ts : cp.ts;
-  const left = verdictTs ? Math.max(0, Math.ceil((verdictTs - now) / DAY)) : null;
-  return {day, of, verdictTs, left, observing: !!s.observing, observeUntil: s.observe_until, k: cp.k || 1};
+  const left = c && c.left != null ? c.left : verdictTs ? Math.max(0, Math.ceil((verdictTs - now) / DAY)) : null;
+  return {day, of, verdictTs, left, observing: !!s.observing, observeUntil: s.observe_until, k: (c && c.k) || cp.k || 1,
+    clock: c, due: !!(c ? c.due : cp.due), state: c ? c.state : cp.state || null, last: c ? c.last : null, line: vday.lineKo(s)};
 }
 
 /** A verdict's UTC date "2026-10-28" (00:00 UTC = 09:00 KST that day) -> "10월 28일 (수)". */

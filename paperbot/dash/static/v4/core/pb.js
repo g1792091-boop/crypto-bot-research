@@ -22,3 +22,4 @@ export {bigEvent, liqEvent, ownEvent, FLASH_MODES} from "./flash.js";
 export {listenTicks, ticksState} from "./ticks.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
 export * as sound from "./sound.js";
+export * as vday from "./verdictday.js";

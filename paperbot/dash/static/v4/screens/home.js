@@ -127,10 +127,14 @@ export async function mount(el, ctx) {
     const s = st.summary, gs = st.gs;
     const x = expInfo(s);
     if (x) {
-      put(dcount, h("b", null, `D+${x.day}`), ` / ${x.of}`);
+      // the verdict-day clock's one sentence (review 10/06 change 13; a passed checkpoint stays until its verdict is
+      // stored, fix 1): "30일 중 N일 지남" here, "판정까지 M일 (11/04 09:00)" below
+      const c = x.clock;
+      put(dcount, c ? h("b", null, c.passed_ko) : [h("b", null, `D+${x.day}`), ` / ${x.of}`]);
       const n = gs ? gs.total.n : null;
       const xn = gs && gs.groups.extra ? gs.groups.extra.n : 0;
-      hsub.textContent = `${x.k > 1 ? `${x.k}번째` : "첫"} 판정 ${fmt.date(x.verdictTs)} 09:00 · ${fmt.int(x.left)}일 남음 · D+는 매일 한국 09:00에 +1`
+      hsub.textContent = (c ? `${c.rest_ko}${c.due ? " · 결과는 판정 화면에" : " · 지난 날은 매일 한국 09:00에 +1"}`
+        : `${x.k > 1 ? `${x.k}번째` : "첫"} 판정 ${fmt.date(x.verdictTs)} 09:00 · ${fmt.int(x.left)}일 남음`)
         + (n != null ? ` · 계좌 ${fmt.int(n - xn)}개${xn ? ` + 추가 ${fmt.int(xn)}개` : ""}` : "");
       put(refBox, ui.refNote(x.verdictTs));
     } else {
@@ -163,6 +167,12 @@ export async function mount(el, ctx) {
       put(ckLine, h("a", {class: "home-ckl", href: href("checkpoint")}, h("span", {class: "muted"}, `${ck.day ?? "—"}일째 판정`),
         ui.pill(`통과 ${fmt.int((c["2차 통과"] || 0) + (c["1차 합격"] || 0))}`, "good"), ui.pill(`불합격 ${fmt.int(c["불합격"] || 0)}`, "bad"),
         ui.pill(`보류 ${fmt.int(c["보류"] || 0)}`, "thin"), h("span", {class: "home-cka", "aria-hidden": "true"}, "→")));
+      return;
+    }
+    const x = expInfo(st.summary);
+    if (x && x.clock && x.clock.due && !(ck && ck.ready)) {        // the verdict morning: where the job is, never progress
+      put(ckLine, h("a", {class: "home-ckl", href: href("checkpoint")}, h("b", null, x.clock.passed_ko), h("span", {class: "muted"}, ` · ${x.clock.state_ko}`),
+        h("span", {class: "home-cka", "aria-hidden": "true"}, " →")));
       return;
     }
     const p = judgedProgress(b);
@@ -286,7 +296,7 @@ export async function mount(el, ctx) {
   const onSummary = (s) => {
     if (!s) return;
     st.summary = s;
-    renderHero(); renderNext(); renderToday(); renderLed();
+    renderHero(); renderNext(); renderToday(); renderLed(); renderCheckpoint();
   };
 
   // first data before the first paint (the router's shimmer covers this wait); the shell keeps board and summary warm

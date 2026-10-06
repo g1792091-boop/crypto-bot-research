@@ -7,6 +7,7 @@ import {startShell} from "./shell.js";
 import {startRouter} from "./router.js";
 import {maybeStartTour} from "./tour.js";
 import {startSince} from "./since.js";
+import {startVerdictBand} from "./verdictday.js";
 import {applySkin} from "./skin.js";
 import {applyText} from "./textsize.js";
 import {applyNavPos} from "./navpos.js";
@@ -39,6 +40,7 @@ function boot() {
   setInterval(syncClock, 600000);
   maybeStartTour();
   startSince();            // "지난번 본 뒤로" sheet (never on the first visit)
+  startVerdictBand();      // "판정 결과가 나왔습니다 → 보기" once per verdict on every screen (core/verdictday.js)
   attachFonts();
 }
 

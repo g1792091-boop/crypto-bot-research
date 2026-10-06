@@ -209,8 +209,10 @@ function pDday(d, env) {
   // one cell per day D+0 .. D+(of-1); the flag is D+of, the verdict day
   const cells = Array.from({length: of}, (_, i) => h("i", {class: [i < now ? "done" : "", i === now ? "now" : "", !d.today && i === at ? "at" : ""]}));
   return h("div", {class: "sp sp-dday"}, kick(7, "판정까지"),
-    h("div", {class: "sp-dbig"}, h("span", {class: "sp-led num"}, left == null ? "—" : left > 0 ? `D-${left}` : "D-DAY"),
-      h("span", {class: "sp-dsub"}, d.verdict_ts ? `첫 판정 ${fmt.date(d.verdict_ts)} 09:00` : "판정 날짜 확인 중")),
+    // the verdict-day clock's words (review 10/06 fix 1, change 13): days left, never 'D-' next to 'D+'; a verdict day
+    // whose result is not stored yet stays the one named
+    h("div", {class: "sp-dbig"}, h("span", {class: "sp-led num"}, left == null ? "—" : d.verdict_due ? "판정 날" : left > 0 ? `${left}일 남음` : "판정 날"),
+      h("span", {class: "sp-dsub"}, d.verdict_ts ? `${(d.verdict_k || 1) > 1 ? `${d.verdict_k}번째` : "첫"} 판정 ${fmt.date(d.verdict_ts)} 09:00${d.verdict_due ? " · 결과 계산 중" : ""}` : "판정 날짜 확인 중")),
     h("div", {class: "sp-road", role: "img", "aria-label": `${of}일 중 ${now}일 지남`},
       h("div", {class: "sp-cells", style: {"--of": of}}, cells), h("span", {class: "sp-flag"}, pixIcon("flag", 30))),
     h("div", {class: "sp-roadl"}, h("span", null, "D+0"), h("span", null, d.today ? `지금 D+${d.dn_now}` : `이날 D+${d.dn} · 지금 D+${d.dn_now}`), h("span", null, `D+${of} 판정`)),

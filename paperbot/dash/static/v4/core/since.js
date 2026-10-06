@@ -111,9 +111,14 @@ function render(d, after) {
     const l = (A.latest || [])[0];
     rows.push(row("!", "warn", `봇 알림 ${int(A.n)}${A.capped ? "+" : ""}개`, l ? alertKo(l.text) : null, null, href("alerts")));
   }
+  // the day count and the verdict in the verdict-day clock's words (dash/more/verdictday.py, review 10/06 fix 1 and
+  // change 13): a verdict day that passed says whether its result is stored yet, never "결과를 봅니다" before it is
   for (const m of d.milestones || []) {
-    if (m.kind === "day") rows.push(row("D+", "accent", `실험 D+${m.from} → D+${m.to}`, d.verdict_ts ? `첫 판정 ${kst(d.verdict_ts)}` : null, null, href("checkpoint")));
-    else if (m.kind === "verdict") rows.push(row("◆", "accent", `${int(m.k * (d.of || 30))}일째 판정 날이 지났습니다`, "판정 화면에서 결과를 봅니다", null, href("checkpoint")));
+    if (m.kind === "day") rows.push(row("D+", "accent", `실험 ${int(m.from)}일 → ${int(m.to)}일 지남`, d.line_ko || (d.verdict_ts ? `판정 ${kst(d.verdict_ts)}` : null), null, href("checkpoint")));
+    else if (m.kind === "verdict") rows.push(m.judged
+      ? row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, "판정 화면에서 봅니다 (그래서 이제 뭐가 바뀌나까지)", null, href("checkpoint"))
+      : row("◆", "accent", `${int(m.k * 30)}일 판정 날 · 결과 계산 중`, "계산은 09:35부터 · 결과가 저장되면 판정 화면에 바로 나옵니다 (지금 상황도 판정 화면에)", null, href("checkpoint")));
+    else if (m.kind === "verdict_result") rows.push(row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, `${kst(m.ts)} 저장 · 판정 화면에서 봅니다`, null, href("checkpoint")));
     else if (m.kind === "observe_end") rows.push(row("◆", "accent", "관찰 기간이 끝났습니다", "이제 에이전트가 새 계좌를 제안할 수 있습니다 (두 분 승인 후 시작)", null, href("rooms")));
   }
   const title = !d.clamped ? `지난번(${kst(after)}) 본 뒤로` : d.clamped_by === "start" ? "실험 시작부터 바뀐 것" : "최근 7일 동안 바뀐 것";

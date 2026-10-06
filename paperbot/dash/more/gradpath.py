@@ -394,9 +394,13 @@ def paper_stage(board: dict, min_trades: int, verdict_ko: str) -> dict:
 
 # ---------------------------------------------------------------- 4. the 30-day verdict
 def overdue(next_cp: Optional[dict], cp_ready: bool) -> bool:
-    """The first verdict day has passed (dash.app summary already names the next one) but checkpoint.db has no verdict
-    yet (the hourly checkpoint job has not written it, or it failed)."""
-    return not cp_ready and int((next_cp or {}).get("k") or 1) > 1
+    """The first verdict day has passed but checkpoint.db has no verdict yet (the hourly checkpoint job has not written
+    it, or it failed). The summary's verdict-day clock (dash/more/verdictday.py) keeps that checkpoint as the next one
+    and says ``due``; a summary without the clock named the next one instead (k > 1)."""
+    nc = next_cp or {}
+    if "due" in nc:
+        return not cp_ready and bool(nc.get("due"))
+    return not cp_ready and int(nc.get("k") or 1) > 1
 
 
 def _is_ds(r: dict) -> bool:

@@ -28,6 +28,10 @@ a.proad-c:focus-visible { outline: none; }
 .proad-mk.ev { background: var(--warn); }
 .proad-mk.obs { background: var(--accent); }
 .proad-mk.bust { background: var(--down); }
+.proad-mk.rh { background: var(--ink-2); }
+.proad-mk.rhbad { background: var(--down); box-shadow: inset 0 0 0 1px var(--ink); }
+.proad-mk.dst { background: transparent; box-shadow: inset 0 0 0 1px var(--warn); }
+.proad-next { font-size: var(--t-xs); }
 .proad-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; font-size: var(--t-xs); color: var(--muted); }
 .proad-legend span { display: inline-flex; align-items: center; gap: 3px; }
 .proad-sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; border: 1px solid var(--line-2); }

@@ -260,8 +260,10 @@ def _named(a: dict, p: Optional[dict]) -> dict:
     return out
 
 
-def story(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], day: Optional[str], now: int) -> dict:
-    """The story of one Korea-time day (see the module docstring). ValueError when the day is not a day of the run."""
+def story(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], day: Optional[str], now: int,
+          ledger: Optional[dict] = None) -> dict:
+    """The story of one Korea-time day (see the module docstring). ValueError when the day is not a day of the run.
+    ``ledger``: verdictday.read_ledger(checkpoint.db), so the verdict named is the verdict-day clock's."""
     from ..app import restart_banner
     from ...groups import DS_FAMILY_KO
     start = run_start(c)
@@ -339,11 +341,12 @@ def story(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], day: Opti
     bust = {"liquidations": sum(liq.values()), "liq_by_group": liq, "busts": len(went), "bust_by_group": bust_by,
             "named": [{**{k: a[k] for k in ("account_id", "strategy", "timeframe", "kind", "group")},
                        "ts": dead[a["account_id"]]} for a in named[:5]]}
-    rs = restart_banner(start, now)
+    rs = restart_banner(start, now, ledger)
     out = {
         "ready": True, "day": day, "today": day == today, "now": now, "t0": t0, "t1": t1, "start": start,
         "dn": day_n(start, end - 1), "dn_now": day_n(start, now), "of": rs.get("of"),
         "verdict_ts": rs.get("verdict_ts"), "verdict_mmdd": rs.get("verdict_mmdd"),
+        "verdict_k": rs.get("checkpoint"), "verdict_due": rs.get("due"), "line_ko": rs.get("line_ko"),
         "days_left": max(0, -(-(int(rs["verdict_ts"]) - now) // DAY_MS)) if rs.get("verdict_ts") else None,
         "days": run_days(start, now),
         "trades": trades, "groups": by,
@@ -362,9 +365,10 @@ def register(app, ctx) -> dict:
     lock = threading.Lock()
 
     def compute(day: Optional[str], now: int) -> dict:
+        from .verdictday import read_ledger
         with contextlib.closing(data.conn()) as c:
             with rooms.ro(rooms.agents_db) as a:
-                return story(c, a, day, now)
+                return story(c, a, day, now, read_ledger(getattr(ctx, "checkpoint_db", None)))
 
     @app.get("/api/v4/story")
     def get_story(day: Optional[str] = None):

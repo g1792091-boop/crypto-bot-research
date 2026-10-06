@@ -4,11 +4,21 @@
 // rows with p, q and the reason, and the snapshot hash.
 // HONESTY: nothing here hints at a pass or a fail before the verdict (no p-values, no ticks, no green/red per
 // account); progress bars are the neutral accent colour; DeepSeek accounts appear only as group counts.
-import {h, put, ui, fmt, motion} from "../core/pb.js";
+//
+// The verdict-day clock (review 10/06 fix 1, change 13; summary.verdict_clock, dash/more/verdictday.py): the countdown
+// stays on a checkpoint until its verdict is stored. On the verdict morning the card says where the job is (09:00
+// 저장 → 09:35 저장본 잠금 → 동전 봇 비교 계산 → 결과), with a red line when the job failed, left no trace for 100
+// minutes or checkpoint.db could not be read; the summary is asked every minute, and the stored verdict switches the
+// page at once. One sentence for the day ("30일 중 N일 지남 · 판정까지 M일"); the big number is the days left only.
+// After the verdict: 판정 뒤 할 일 (checkpoint-after.js) on top, then the counts, the next checkpoint's countdown and
+// the 판정 기계 card (checkpoint-machine.js), the rows, the seats.
+import {h, put, ui, fmt, motion, vday, serverNow} from "../core/pb.js";
 import {expInfo, judgedProgress, progBar, verdictDate as vDate, MIN_TRADES} from "./home-shared.js";
 import {seatsCard, powerCard, stamp, luckDots} from "./checkpoint-stage.js";
 import {pixelRoad} from "./road-kit.js";
 import {luckCheck} from "./luck-kit.js";
+import {afterCard} from "./checkpoint-after.js";
+import {machineCard} from "./checkpoint-machine.js";
 
 const ST_CLS = {"2차 통과": "good", "1차 합격": "good", "불합격": "bad", "보류": "thin", "관찰용": "thin"};
 const ST_ORDER = ["2차 통과", "1차 합격", "불합격", "보류", "관찰용"];
@@ -33,21 +43,29 @@ function steps() {
 
 export async function mount(el, ctx) {
   ctx.setTitle("30일 판정");
-  const st = {summary: null, board: null, ck: null, mode: null, filter: "judged"};
+  const st = {summary: null, board: null, ck: null, mode: null, filter: "judged", vd: null, asked: null};
   const head = ui.screenHead("30일 판정", "계좌마다 동전 봇과 비교해 합격·불합격을 정하는 날");
   const body = h("div", {class: "ck-body"});
   el.append(head, pixelRoad(ctx, {card: true}), body);         // the 30-day road (road-kit.js, wave 3)
 
-  // ================================================================ before the verdict
-  const big = h("b", {class: "ck-d"}, "D-—");
+  // ================================================================ the countdown (the verdict-day clock)
+  const big = h("b", {class: "ck-d"}, "—");
+  const bigU = h("span", {class: "ck-du"});
   const when = h("span", {class: "ck-when"});
   const left = h("span", {class: "ck-left"});
-  const dprog = h("div", {class: "prog", role: "progressbar", "aria-label": "30일 중 지난 날", "aria-valuemin": "0", "aria-valuemax": "30"}, h("i"));
+  const dprog = h("div", {class: "prog", role: "progressbar", "aria-label": "판정까지 지난 날", "aria-valuemin": "0", "aria-valuemax": "30"}, h("i"));
   const dtext = h("span", {class: "ck-dtext"});
+  const steps4 = h("ol", {class: "ck-due", hidden: true, "aria-label": "판정 날 진행"});
+  const alarm = h("p", {class: "ck-alarm", role: "alert", hidden: true});
+  const para = h("p", {class: "ink2"});
+  const proj = h("p", {class: "muted home-small", hidden: true});
   const heroCard = ui.card({hero: true, cls: "ck-hero", label: "판정까지 남은 날"},
     h("div", {class: "home-hrow"}, ui.plate("30일 판정"), dtext),
-    h("div", {class: "ck-big"}, big, h("div", {class: "ck-bigt"}, when, left)), dprog,
-    h("p", {class: "ink2"}, `그날 계좌마다 ${ui.botsKo()}와 비교해서 합격·불합격을 정합니다. 그 전까지는 어떤 계좌도 합격도 불합격도 아닙니다. 지금 다른 화면에서 보이는 동전 봇 비교는 모두 '참고'입니다.`));
+    h("div", {class: "ck-big"}, h("span", {class: "ck-dwrap"}, big, bigU), h("div", {class: "ck-bigt"}, when, left)), dprog,
+    alarm, steps4, para, proj);
+  const machine = machineCard(ctx);
+  const after = afterCard(ctx);
+  const seatsNote = h("p", {class: "muted home-small ck-seatsnote"});
   const targetBody = h("div", {class: "stack"});
   const targetCard = ui.card({plate: "판정 대상", sub: "진행 상황, 판정 아님"}, targetBody);
   const howCard = ui.card({plate: "판정 방법", sub: "쉬운 말로"}, steps(),
@@ -65,21 +83,55 @@ export async function mount(el, ctx) {
   // 운 vs 실력 (luck-kit.js): how many accounts could look like a pass by luck alone, before and after the verdict
   const luck = luckCheck(ctx);
 
+  // the red line under a verdict day that needs a look (the job failed, left nothing for 100 minutes, or checkpoint.db
+  // could not be read: never shown as 'no verdict')
+  function alarmText(c) {
+    if (c.state === "failed") return `판정 계산이 오류로 멈췄습니다${c.error_kind ? ` (${c.error_kind})` : ""}. 매시 35분에 저절로 다시 시도합니다. 계속되면 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
+    if (c.state === "unknown") return "판정 기록(checkpoint.db)을 읽지 못했습니다. 결과가 없다는 뜻이 아닙니다 · 1분 뒤 다시 확인합니다.";
+    if (c.late) return "09:00이 지나고 1시간 40분이 넘었는데 판정 작업이 아무 기록도 남기지 않았습니다. 서버 › 예약 작업에서 '30일 판정' 타이머가 켜져 있는지 봐 주세요.";
+    return "";
+  }
   function renderCountdown() {
     const x = expInfo(st.summary);
     if (!x) {
-      big.textContent = "시작 전"; put(when, "봇이 아직 첫 계좌를 만들지 않았습니다"); put(left); dtext.textContent = "";
+      big.textContent = "시작 전"; bigU.textContent = ""; put(when, "봇이 아직 첫 계좌를 만들지 않았습니다"); put(left); dtext.textContent = "";
       return;
     }
-    const ms = Math.max(0, x.verdictTs - Date.now());
-    const dTxt = `D-${fmt.int(x.left)}`;
-    if (big.textContent !== dTxt && /^D-\d/.test(big.textContent)) motion.flash(big);    // a new day, not the first paint
-    big.textContent = dTxt;
-    when.textContent = `${x.k > 1 ? `${x.k}번째 판정 · ` : "첫 판정 · "}${fmt.date(x.verdictTs)} 09:00 (한국 시각)`;
-    left.textContent = ms > 0 ? `${fmt.dur(ms / 1000)}${ms >= 86400000 ? ` ${fmt.dur((ms % 86400000) / 1000)}` : ""} 남음` : "판정 시각이 지났습니다 · 결과를 기다리는 중";
-    dtext.replaceChildren(h("b", null, `D+${x.day}`), ` / ${x.of}`);
-    dprog.firstChild.style.setProperty("--p", Math.max(0, Math.min(100, x.day / x.of * 100)) + "%");
-    dprog.setAttribute("aria-valuemax", String(x.of)); dprog.setAttribute("aria-valuenow", String(x.day));
+    const c = x.clock;
+    const now = serverNow();
+    if (!c) {                     // an older server without the clock: the plain countdown, never 'D-' next to 'D+'
+      big.textContent = `${fmt.int(x.left)}일`; bigU.textContent = "남음";
+      when.textContent = `${x.k > 1 ? `${x.k}번째 판정 · ` : "첫 판정 · "}${fmt.date(x.verdictTs)} 09:00 (한국 시각)`;
+      left.textContent = ""; dtext.textContent = `${x.of}일 중 ${x.day}일 지남`;
+      return;
+    }
+    const bw = vday.bigWords(c, now);
+    if (big.textContent !== bw.big && big.textContent !== "—") motion.flash(big);    // a new day, not the first paint
+    big.textContent = bw.big; bigU.textContent = bw.unit;
+    const bad = c.due && !!alarmText(c);
+    heroCard.classList.toggle("ck-isdue", !!c.due); big.classList.toggle("bad", bad);
+    dtext.textContent = c.passed_ko || "";
+    when.textContent = vday.whenKo(c);
+    const ms = vday.msLeft(c, now);
+    left.textContent = c.state === "ended" ? "180일 실험이 끝나 더 이상 판정이 없습니다"
+      : c.due ? (c.state_ko || "") : `정확히 ${vday.leftWords(ms)} 남음`;
+    const p = c.due ? 100 : Math.max(0, Math.min(100, c.n / c.of * 100));
+    dprog.firstChild.style.setProperty("--p", p + "%");
+    dprog.setAttribute("aria-valuemax", String(c.of)); dprog.setAttribute("aria-valuenow", String(c.due ? c.of : c.n));
+    const at = alarmText(c);
+    alarm.hidden = !(c.due && at); alarm.textContent = c.due ? at : "";
+    steps4.hidden = !c.due;
+    if (c.due) {
+      put(steps4, vday.dueSteps(c, now).map((s) => h("li", {class: ["ck-dstep", s.state]},
+        h("span", {class: "ck-dt", "aria-hidden": "true"}, s.t || "·"),
+        h("span", null, h("b", null, s.label), h("small", null, s.note)))));
+    }
+    para.textContent = c.due ? "결과가 저장되기 전까지는 어떤 계좌도 합격도 불합격도 아닙니다. 이 화면은 1분마다 확인하고, 결과가 저장되면 바로 결과 화면으로 바뀝니다."
+      : c.k > 1 ? `그날 1차 합격 계좌는 2차 확인(그 30일의 새 거래 30건 이상 · 그 기간 플러스 · 운 시험 다시)을, 보류 계좌는 1차 판정을 다시 받습니다. 판정은 ${ui.botsKo()}와 비교합니다.`
+      : `그날 계좌마다 ${ui.botsKo()}와 비교해서 합격·불합격을 정합니다. 그 전까지는 어떤 계좌도 합격도 불합격도 아닙니다. 지금 다른 화면에서 보이는 동전 봇 비교는 모두 '참고'입니다.`;
+    const m = st.vd && st.vd.machine;
+    proj.hidden = !(m && m.projected_s && c.state !== "ended");
+    proj.textContent = m && m.projected_s ? `판정 계산은 보통 09:35에 시작해 약 ${fmt.dur(m.projected_s)} 걸립니다 (마지막 판정 연습 기준 예상).` : "";
   }
 
   const prevReady = new Map();          // group id -> the count shown last time (it counts from there when it grows)
@@ -167,15 +219,44 @@ export async function mount(el, ctx) {
   }
 
   // ================================================================ which view
+  // before the first verdict: the countdown (on the verdict morning: where the job is) with the seats and the 판정 기계;
+  // after it: 판정 뒤 할 일 on top, the counts and the next checkpoint's countdown side by side, the rows, the seats
   function render() {
     const mode = st.ck && st.ck.ready ? "after" : "before";
     if (mode !== st.mode) {
       st.mode = mode;
-      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, seats, targetCard), h("div", {class: "stack"}, power, luck, howCard)));
-      else put(body, h("div", {class: "stack"}, verdictCards, luck, power, ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
+      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, seats, targetCard), h("div", {class: "stack"}, machine, power, luck, howCard)));
+      else put(body, h("div", {class: "stack"}, after,
+        h("div", {class: "ck-grid"}, h("div", {class: "stack"}, verdictCards[0], verdictCards[1]), h("div", {class: "stack"}, heroCard, machine)),
+        verdictCards[2], h("div", {class: "ck-grid"}, h("div", {class: "stack"}, seats, seatsNote), h("div", {class: "stack"}, luck, power)),
+        ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
       motion.swap(body);
     }
-    if (mode === "before") { renderCountdown(); renderTargets(); } else renderVerdict();
+    renderCountdown(); renderTargets();
+    if (mode === "after") {
+      renderVerdict();
+      after.update({ck: st.ck, board: st.board, summary: st.summary, vd: st.vd});
+      seatsNote.textContent = `${vDate(st.ck.date)} 판정에서 이미 정해진 계좌(불합격 · 2차 통과)도 칸에 있습니다. 1차 합격 계좌의 2차 확인은 그 뒤 새 거래 30건으로 셉니다.`;
+    }
+  }
+
+  // the verdict-day card (판정 기계, the lead's meeting): asked every minute (cached 30 s on the server)
+  async function loadVd() {
+    try { st.vd = await ctx.api("/api/v4/verdictday"); } catch (e) {
+      if (e && e.name === "AbortError") return;
+      st.vd = {failed: true};
+    }
+    if (!ctx.alive()) return;
+    machine.update(st.vd);
+    if (st.ck) render();
+  }
+  // a verdict stored while the page is open: the summary (asked every minute) names it, so the verdict is asked at once
+  function askVerdict(s) {
+    const c = vday.vclock(s);
+    const last = c && c.last;
+    if (!last || (st.ck && st.ck.ready && st.ck.date === last.date) || st.asked === last.date) return;
+    st.asked = last.date;
+    ctx.store.refresh("checkpoint").catch(() => { st.asked = null; });
   }
 
   put(body, motion.shimmer(4, true));
@@ -185,10 +266,11 @@ export async function mount(el, ctx) {
   if (ck instanceof Error) {
     put(body, ui.errorBox(ck, () => ctx.store.refresh("checkpoint").catch(() => {})));
   } else st.ck = ck;
-  ctx.watch("summary", (s) => { if (s) { st.summary = s; if (st.ck) render(); } });
+  ctx.watch("summary", (s) => { if (s) { st.summary = s; askVerdict(s); if (st.ck) render(); } });
   ctx.watch("board", (b) => { if (b) { st.board = b; if (st.ck) render(); } });
   ctx.watch("checkpoint", (v) => { if (v) { st.ck = v; render(); } });
-  ctx.every(60000, () => { if (st.mode === "before") renderCountdown(); }, {now: false});
+  ctx.every(60000, loadVd, {now: true});
+  ctx.every(60000, () => renderCountdown(), {now: false});
 }
 
 export function unmount() {}

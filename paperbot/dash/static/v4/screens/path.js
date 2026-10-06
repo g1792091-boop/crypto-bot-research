@@ -46,10 +46,12 @@ function funnel(d, ctx) {
     h("span", {class: "path-fsm"}, here ? "지금 여기" : w.small));
   });
   const day = d.dplus != null ? `D+${fmt.int(d.dplus)}` : "";
-  // the next verdict: after the first one "다음 판정"; its day passed without a record yet (hourly job) -> say so
+  // the next verdict: after the first one "다음 판정"; its day passed without a record yet (hourly job) -> say so (the
+  // verdict-day clock keeps a passed checkpoint as the next one, due, until its verdict is stored: dash/more/verdictday.py)
   const nc = d.next_checkpoint;
-  const nxt = !nc || !nc.ts ? "" : d.verdict_ready ? `다음 판정 ${fmt.mmdd(nc.ts)}`
-    : (nc.k || 1) > 1 ? "첫 판정 기록 기다림" : `첫 판정 ${fmt.mmdd(nc.ts)}`;
+  const waiting = nc && (nc.due != null ? nc.due : !d.verdict_ready && (nc.k || 1) > 1);
+  const nxt = !nc || !nc.ts ? "" : waiting ? ((nc.k || 1) > 1 ? `${nc.k}번째 판정 기록 기다림` : "첫 판정 기록 기다림")
+    : d.verdict_ready ? `다음 판정 ${fmt.mmdd(nc.ts)}` : `첫 판정 ${fmt.mmdd(nc.ts)}`;
   const obs = d.observe && d.observe.observing ? `관찰 기간 ${d.observe.until_ko}까지 (제안 없음)` : "";
   return h("section", {class: "path-term", "aria-label": "졸업 길 깔때기"},
     h("div", {class: "path-tline"}, h("span", {class: "path-prompt"}, "›"), h("span", {class: "path-tcmd"}, "졸업 길"),

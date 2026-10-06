@@ -6,10 +6,14 @@
 // releases (/api/events), the day the observation ends (proposals may start), busts that day (all groups, counted).
 // Tapping a past day opens that day's 하이라이트 (#/story/<day>). When the day really changes while the page is open,
 // the figures take one step (reduced motion: none). Asked every 5 minutes (paused while hidden); its look: road-kit.css.
-import {h, s, put, ui, fmt, figure, motion} from "../core/pb.js";
+// The verdict road (review 10/06 addition 13, /api/v4/verdictday milestones): the Wednesday rehearsals (ran / failed),
+// the end of US daylight saving time, the verdict day's steps (09:00 저장 · 09:35 계산 · 총괄 판정 회의) in the cell's words
+// and the next checkpoint (2차 확인) next to the flag; the head is the verdict-day clock's one sentence (change 13).
+import {h, s, put, ui, fmt, figure, motion, vday} from "../core/pb.js";
 
 const CAL_API = "/api/v4/flow/calendar";
 const EV_API = "/api/events?days_back=40&days_ahead=40";
+const VD_API = "/api/v4/verdictday";
 const REFRESH_MS = 5 * 60 * 1000;
 const FULL_CHG = 0.03;             // a day's median move of 3 % or more gets the full tint
 
@@ -24,12 +28,20 @@ const flag = () => s("svg", {class: "proad-flag", viewBox: "0 0 7 9", width: "10
 
 const kstDay = (ms) => { const k = new Date(ms + 9 * 3600000); return k.toISOString().slice(0, 10); };
 
-/** The day's marks: [{k: "ev"|"obs"|"bust", t: text}] */
+/** The day's marks: [{k: "ev"|"obs"|"bust"|"rh"|"rhbad"|"dst"|"vd", t: text}]. rh / rhbad / dst / vd are the
+ *  verdict road's milestones (review 10/06 addition 13, /api/v4/verdictday milestones): the Wednesday rehearsals (ran /
+ *  failed), the end of US daylight saving time (the 5 US-session strategies signal an hour later in Korea time), the
+ *  verdict day's steps (vd: in the cell's words only, the flag is its mark). */
 function marksOf(e, ctxd) {
   const out = [];
   const evs = (ctxd.events || []).filter((x) => kstDay(x.ts_ms) === e.d);
   if (evs.length) out.push({k: "ev", t: evs.map((x) => `${x.name_ko || x.kind} ${fmt.hm(x.ts_ms)}`).join(", ")});
   if (ctxd.obsDay && ctxd.obsDay === e.d) out.push({k: "obs", t: "관찰 기간 끝 · 이때부터 에이전트가 새 계좌를 제안할 수 있음"});
+  for (const m of (ctxd.milestones || []).filter((x) => kstDay(x.ts) === e.d)) {
+    if (m.kind === "rehearsal") out.push({k: m.state === "failed" ? "rhbad" : "rh", t: m.ko});
+    else if (m.kind === "dst") out.push({k: "dst", t: `${fmt.hm(m.ts)} ${m.ko}`});
+    else if (m.kind === "verdict") out.push({k: "vd", t: m.ko});
+  }
   const busts = e.g ? Object.values(e.g).reduce((a, x) => a + (x && x.busts ? x.busts : 0), 0) : 0;
   if (busts) out.push({k: "bust", t: `파산 ${busts}개 (모든 묶음)`});
   return out;
@@ -38,16 +50,18 @@ function marksOf(e, ctxd) {
 /** pixelRoad(ctx, {card}) -> element. card: wrap in its own card with a plate and the legend (판정 screen). */
 export function pixelRoad(ctx, opts = {}) {
   ensureCss();
-  const st = {cal: null, events: null, summary: null, today: null, err: null};
+  const st = {cal: null, events: null, summary: null, today: null, err: null, milestones: null, next: null};
   const road = h("div", {class: "proad-road", role: "list", "aria-label": "30일 길: 하루 한 칸"});
   const head = h("div", {class: "proad-head"});
   const legend = h("p", {class: "proad-legend"},
     h("span", null, h("i", {class: "proad-sw up"}), h("i", {class: "proad-sw down"}), " 그날 기존 36 중앙값이 오른·내린 정도 (참고)"),
     h("span", null, h("i", {class: "proad-mk ev"}), " 미국 지표"),
     h("span", null, h("i", {class: "proad-mk obs"}), " 제안 시작"),
+    h("span", null, h("i", {class: "proad-mk rh"}), " 판정 연습 (수)"),
+    h("span", null, h("i", {class: "proad-mk dst"}), " 미국 서머타임 끝"),
     h("span", null, h("i", {class: "proad-mk bust"}), " 파산"),
     h("span", null, h("i", {class: "proad-sw none"}), " 기록 없음"));
-  const mini = h("p", {class: "proad-legend proad-mini"}, "한 칸 = 하루 · 색 = 그날 기존 36 중앙값이 오른·내린 정도 (참고) · 누르면 그날 하이라이트");
+  const mini = h("p", {class: "proad-legend proad-mini"}, "한 칸 = 하루 · 색 = 그날 기존 36 중앙값이 오른·내린 정도 (참고) · 아래 점 = 일정 (지표 · 판정 연습 · 서머타임 끝) · 누르면 그날 하이라이트");
   const box = h("div", {class: "proad" + (opts.card ? " proad-in-card" : " proad-compact")}, opts.card ? head : null, road, opts.card ? legend : mini);
   const root = opts.card ? ui.card({plate: "30일 길", cls: "proad-card", acts: [h("a", {class: "btn-line", href: ctx.href("flow")}, "날짜별 →")]}, box, ui.note("지난 칸을 누르면 그날의 하이라이트가 열립니다."))
     : box;
@@ -63,7 +77,7 @@ export function pixelRoad(ctx, opts = {}) {
     }
     const s0 = st.summary || {};
     const obs = s0.observe_until ? kstDay(s0.observe_until - 1) : null;
-    const ctxd = {events: st.events, obsDay: obs};
+    const ctxd = {events: st.events, obsDay: obs, milestones: st.milestones};
     const days = c.days;
     // today = the server's KST day (a today without a single record is still today, never "after the verdict")
     let ti = days.findIndex((e) => e.d === c.today);
@@ -71,12 +85,14 @@ export function pixelRoad(ctx, opts = {}) {
     const moved = st.today != null && ti > st.today;
     st.today = ti;
     const last = days[days.length - 1];
-    // D+n is the checkpoint clock's day (summary.restart, the same number as the top chip and the home card); the
-    // cells are Korea-time dates, so they carry dates, never a second day count that could disagree with D+n
-    const rs = s0.restart && s0.restart.ready ? s0.restart : null;
-    const now = ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤";
-    put(head, h("b", null, now), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`),
-      h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`));
+    // the verdict-day clock's one sentence (summary.verdict_clock: the same words as the top chip, the home card and
+    // 판정, review 10/06 change 13); the cells are Korea-time dates, so they carry dates, never a second day count
+    const vc = vday.vclock(s0);
+    const rs = s0.restart && s0.restart.ready ? s0.restart : null;          // an older server: the restart banner's D+n
+    const nxt = st.next && opts.card ? h("span", {class: "muted proad-next", title: st.next.ko}, ` · 다음 ${fmt.mmdd(st.next.ts)} 2차 확인`) : null;
+    put(head, vc ? [h("b", null, vc.passed_ko), h("span", {class: "muted"}, ` · ${vc.rest_ko}`)]
+      : [h("b", null, ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤"), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`)],
+    h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`, nxt));
     road.style.setProperty("--n", String(days.length));
     put(road, days.map((e, i) => {
       const chg = e.g && e.g.core ? e.g.core.chg : null;
@@ -87,9 +103,10 @@ export function pixelRoad(ctx, opts = {}) {
         else cls.push("proad-flat");
       }
       if (e.verdict) cls.push("proad-goal");
-      const mk = e.state === "future" && !e.verdict ? marksOf(e, ctxd).filter((m) => m.k !== "bust") : marksOf(e, ctxd);
+      const all = e.state === "future" && !e.verdict ? marksOf(e, ctxd).filter((m) => m.k !== "bust") : marksOf(e, ctxd);
+      const mk = all.filter((m) => m.k !== "vd");        // the verdict day's steps: words only (the flag is its mark)
       const word = e.state === "future" ? "앞으로" : e.state === "empty" ? "기록 없음" : chg != null ? `기존 36 중앙값 ${fmt.pct(chg, 2)} (참고)` : "변화 없음";
-      const label = `${fmt.date(e.ts)}${i === ti ? " (오늘)" : ""} · ${word}${e.verdict ? " · 판정 날" : ""}${mk.length ? " · " + mk.map((m) => m.t).join(" · ") : ""}`;
+      const label = `${fmt.date(e.ts)}${i === ti ? " (오늘)" : ""} · ${word}${e.verdict ? " · 판정 날" : ""}${all.length ? " · " + all.map((m) => m.t).join(" · ") : ""}`;
       const kids = [
         h("span", {class: "proad-fig"}, i === ti ? [figure({kind: "owner", size: 10, cls: moved ? "proad-step" : ""}), figure({kind: "owner", size: 10, i: 1, cls: moved ? "proad-step" : ""})]
           : e.verdict ? flag() : null),
@@ -104,9 +121,15 @@ export function pixelRoad(ctx, opts = {}) {
 
   async function load() {
     try {
-      const [cal, ev] = await Promise.all([ctx.api(CAL_API), st.events ? Promise.resolve({events: st.events}) : ctx.api(EV_API).catch(() => ({events: []}))]);
+      // the verdict road's milestones are optional: a failed ask leaves the marks out (the cells still say the dates)
+      const [cal, ev, vd] = await Promise.all([ctx.api(CAL_API), st.events ? Promise.resolve({events: st.events}) : ctx.api(EV_API).catch(() => ({events: []})),
+        ctx.api(VD_API).catch(() => null)]);
       if (!ctx.alive()) return;
       st.cal = cal; st.events = (ev && ev.events) || [];
+      if (vd && Array.isArray(vd.milestones)) {
+        st.milestones = vd.milestones;
+        st.next = vd.milestones.find((m) => m.kind === "next") || null;
+      }
       render();
     } catch (e) {
       if (!ctx.alive()) return;
