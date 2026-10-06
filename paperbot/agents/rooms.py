@@ -3315,6 +3315,12 @@ def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) ->
             row = LI.latest(conn, got["id"]) or {}
             meta = row.get("meta") or {}
             fid, st = meta.get("fidelity"), row.get("status")
+            if not got.get("created"):
+                # a retried meeting: the row (and its code line) is the first translation's, never a second one
+                out.append({"intake_id": got["id"], "message_id": m["id"], "index": i, "status": st,
+                            "status_ko": LI.STATUS_KO.get(st or "", st), "fidelity": fid,
+                            "description_ko": row.get("description_ko", ""), "again": True})
+                continue
             label = LI.owner_label(row)
             head = f"🧪 두 분 시험 요청 {label}: {row.get('description_ko', '')}"
             said = []

@@ -184,6 +184,31 @@ def test_code_refuses_what_the_translator_could_not_put_into_the_grammar(world, 
     assert any("777" in p for p in problems[0]["data"]["problems"])
 
 
+def test_a_retried_meeting_never_queues_or_announces_a_request_twice(tmp_path):
+    c = R.open_agents(str(tmp_path / "a.db"))
+    R.ensure_rooms(c)
+
+    class Rnd:                                   # the parts of rooms._Round that queue_owner_requests uses
+        def __init__(self):
+            self.ctx = RM.RoundContext(agents_conn=c, paper_ro=None, daily_ro=None, inbox_ro=None, runner=None, lab=None,
+                                       now_ms=QUIET, policy=RM.RoomsPolicy(lab_intake_owner_per_day=1), clock_ms=lambda: QUIET)
+            self.posts = []
+
+        def post(self, role, kind, text, data=None):
+            self.posts.append(text)
+
+        def system(self, text, data=None):
+            self.posts.append(text)
+    t1 = {"requests": [{"message_id": 7, **exact()}]}
+    first, again = Rnd(), Rnd()
+    a = RM.queue_owner_requests(first, t1, [{"id": 7}])
+    b = RM.queue_owner_requests(again, {"requests": [{"message_id": 7, **approx()}]}, [{"id": 7}])
+    assert a[0]["intake_id"] == b[0]["intake_id"] and b[0]["again"] is True and b[0]["status"] == "queued"
+    assert len(first.posts) == 1 and again.posts == []                          # the first translation stands
+    assert len(LI.owner_cards(c)) == 1
+    c.close()
+
+
 def test_no_translation_records_nothing_and_asks_to_post_again(world, noise):
     world.say(LAB, LI.request_text({"entry": "a"}), QUIET - 10 * MIN)
     runner = QueueRunner({"researcher": ["읽을 수 없는 답", "또 읽을 수 없는 답"], "team_lead": [LEAD]})
