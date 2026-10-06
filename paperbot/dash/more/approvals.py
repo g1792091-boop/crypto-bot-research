@@ -223,9 +223,11 @@ def view(rooms, db: str, now_ms: Optional[int] = None) -> dict:
             ref = p.get("runtime_refusal") if isinstance(p.get("runtime_refusal"), dict) else {}
             again = (p.get("status") == "approved" and not p.get("account_running") and eff == "approved"
                      and not (od and not od.get("applied")) and ref.get("code") in RE_APPROVE)
-            # the owners clicked approve again after the runner's refusal: it re-checks at its next pass (no button)
-            sent = bool(again and od.get("decision") == "approve" and isinstance(ref.get("since"), (int, float))
-                        and int(od.get("ts") or 0) > int(ref["since"]))
+            # the owners clicked approve again after the runner's stale_ok refusal: it re-checks at its next pass (no
+            # button). owner_click_missing keeps its button: only the owner who decided can mend it (another owner's
+            # click leaves the refusal as it was, and the card must not look done)
+            sent = bool(again and ref.get("code") == "stale_ok" and od.get("decision") == "approve"
+                        and isinstance(ref.get("since"), (int, float)) and int(od.get("ts") or 0) > int(ref["since"]))
             card["again"], card["again_sent"] = again and not sent, sent
             if (open_now or again) and a is not None:
                 trial = rooms.R.get_trial(a, int(p["trial_id"])) if p.get("trial_id") else None
