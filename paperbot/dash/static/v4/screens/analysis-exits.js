@@ -51,7 +51,7 @@ export function exits(d, env) {
     read: d.house_exits === false
       ? "릴스는 자기 규칙으로 나갑니다: 손절(스윙 저점 아래), 목표가(볼린저 윗밴드), 96봉(8시간) 시간 청산. 이유마다 몇 건이었고 그 거래들이 어땠는지 봅니다."
       : "기존 규칙은 2 ATR 손절, 그리고 이익이 나면 손절선을 계단처럼 올려 이익을 잠급니다(+12%에 닿으면 +10% 잠금, 그 뒤 5%씩). 잠금 단계마다, 손절·강제청산마다 몇 건이었고 그 거래들이 어땠는지 봅니다.",
-    warn: [!money ? h("p", {class: "an-read"}, ui.pill("돈 숫자 없음", "ref"), " 딥시크는 거래 수와 비율만 봅니다 (평균 ROE와 R 크기도 빼고).") : null]})];
+    warn: [!money ? h("p", {class: "an-read"}, ui.pill("돈 숫자 없음", "ref"), " 딥시크는 거래 수와 비율만 봅니다 (손익률·R 크기 없음).") : null]})];
   if (d.error) { out.push(ui.card({plate: "청산 이유"}, h("p", {class: "muted"}, String(d.error)))); return out; }
   if (d.waiting) {
     out.push(waitCard("청산 이유", [{label: `${W.short} 끝난 거래 ${fmt.int(min)}건 필요`, share: Math.min(1, n / min),
