@@ -242,7 +242,9 @@ function walkCard({d, vts, v}) {
   const wf = p.walk_forward || [], fl = p.walk_forward_flips || [];
   const nUnits = (p.units || []).length || 36;
   if (!wf.length) return null;
-  const count = (rows) => ({med: rows.filter((r) => r.score_next > r.median_next).length, p75: rows.filter((r) => r.score_next > r.p75_next).length, n: rows.length});
+  const count = (rows) => ({med: rows.filter((r) => r.score_next > r.median_next).length, p75: rows.filter((r) => r.score_next > r.p75_next).length, n: rows.length,
+    rmed: rows.filter((r) => r.return_next != null && r.ret_median_next != null && r.return_next > r.ret_median_next).length,
+    rp75: rows.filter((r) => r.return_next != null && r.ret_p75_next != null && r.return_next > r.ret_p75_next).length});
   const a = count(wf), b = count(fl);
   const row = (r, flip) => h("div", {class: "c5-wf", role: "listitem"},
     h("div", {class: "c5-wf-h"}, h("b", null, `${r.pick_year}년에 고른 1위 → ${r.test_year}년`),
@@ -251,11 +253,12 @@ function walkCard({d, vts, v}) {
     h("div", {class: "c5-wf-bar", title: `전체 조합 중 ${fmt.pct(r.beat_share, 0, false)}보다 높음`},
       h("i", {style: {"--w": (Math.max(0, Math.min(1, r.beat_share || 0)) * 100).toFixed(1) + "%"}}),
       h("span", {class: "c5-mk m50"}), h("span", {class: "c5-mk m75"})),
-    h("p", {class: "c5-wf-t"}, `점수: 고른 조합 ${fmt.num(r.score_next, 3)} · 그해 모든 조합(${fmt.int(r.n_combos)}개) 중앙값 ${fmt.num(r.median_next, 3)} · 상위 25% 선 ${fmt.num(r.p75_next, 3)} · 이긴 비율 ${fmt.pct(r.beat_share, 0, false)}`),
-    r.mean_month_median_next != null ? h("p", {class: "c5-wf-t"}, `한 달 평균: 고른 조합 ${fmt.pct(r.mean_month_next, 1)} · 모든 조합 중앙값 ${fmt.pct(r.mean_month_median_next, 1)} · 상위 25% 선 ${fmt.pct(r.mean_month_p75_next, 1)} · 이긴 비율 ${fmt.pct(r.ret_beat_share, 0, false)}`) : null);
+    h("p", {class: "c5-wf-t"}, `점수: 고른 조합 ${fmt.num(r.score_next, 3)} · 그해 모든 조합(${fmt.int(r.n_combos)}개) 중앙값 ${fmt.num(r.median_next, 3)} · 상위 25% 선 ${fmt.num(r.p75_next, 3)} · 모든 조합 중 ${fmt.pct(r.beat_share, 0, false)}보다 높음`),
+    r.mean_month_median_next != null ? h("p", {class: "c5-wf-t"}, `한 달 평균: 고른 조합 ${fmt.pct(r.mean_month_next, 1)} · 모든 조합 중앙값 ${fmt.pct(r.mean_month_median_next, 1)} · 상위 25% 선 ${fmt.pct(r.mean_month_p75_next, 1)} · 모든 조합 중 ${fmt.pct(r.ret_beat_share, 0, false)}보다 높음`) : null);
   return ui.card({plate: "다음 해에도 통했나", sub: "한 해에 고른 1위를 다음 해에 그대로 돌렸다면"},
-    h("p", {class: "c5-sum"}, `매매법 ${fmt.int(nUnits)}개: ${fmt.int(a.n)}번 중 그해 중앙값을 넘은 해 ${fmt.int(a.med)}번, 상위 25%에 든 해 ${fmt.int(a.p75)}번`,
-      fl.length ? ` · 동전 봇 ${fmt.int(nUnits)}개로 같은 시험: 중앙값 넘음 ${fmt.int(b.med)}번, 상위 25% ${fmt.int(b.p75)}번` : ""),
+    h("p", {class: "c5-sum"}, `매매법 ${fmt.int(nUnits)}개: ${fmt.int(a.n)}번 중 고른 조합이 다음 해 모든 조합의 가운데를 넘은 해는 점수로 ${fmt.int(a.med)}번(상위 25% ${fmt.int(a.p75)}번), 한 달 평균 수익으로 ${fmt.int(a.rmed)}번(상위 25% ${fmt.int(a.rp75)}번).`,
+      fl.length ? ` 동전 봇 ${fmt.int(nUnits)}개로 같은 시험(참고): 점수로 ${fmt.int(b.med)}번, 수익으로 ${fmt.int(b.rmed)}번.` : "",
+      (p.top || []).some((t) => t.trades != null && t.trades < 62) ? " 고른 조합에 거의 거래하지 않는 매매법이 들어 있으면 '덜 잃어서' 위에 섭니다." : ""),
     h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다. 거의 모든 조합이 내리막만 탄 해에는 점수가 −1 근처에 몰리므로 한 달 평균 수익도 함께 봅니다."),
     h("div", {class: "c5-wfs", role: "list"}, wf.map((r) => row(r, false))),
     fl.length ? ui.disclosure(`동전 봇 ${fmt.int(nUnits)}개로 같은 시험 (참고)`, h("div", {class: "c5-wfs", role: "list"}, fl.map((r) => row(r, true)))) : null,
@@ -362,8 +365,9 @@ function mergedCard({d}) {
       (r.alone || []).filter(Boolean).length ? h("span", null, "혼자일 때 ", (r.alone || []).map((a) => (a ? fmt.pct(a.mean, 2) : "—")).join(" / ")) : null,
       h("span", {class: "c5-wins"}, (r.w || []).map((w, j) => h("i", {class: ["c5-win", w[1] == null ? "" : fmt.tone(w[1])], title: `${winLabels[j]} 거래 ${fmt.int(w[0])}건`},
         `${winLabels[j]} ${w[1] == null ? "—" : fmt.pct(w[1], 2)}`))),
+      r.bh ? (r.shuffle_pass ? ui.pill("두 단계 다 넘음", "accent") : ui.pill("거르기 1만 넘음", "thin")) : ui.pill("보정 못 넘음", "warn", "여러 번 시험한 것을 보정하면 우연과 구별되지 않음"),
       r.consistent ? ui.pill("세 구간 모두 +", "thin") : null,
-      r.null_rank_p != null ? h("span", null, r.shuffle_pass ? "섞은 비교보다 높음" : "섞은 비교와 비슷") : null))});
+      r.null_rank_p != null ? h("span", null, r.shuffle_pass ? "섞은 비교보다 높음 (그래도 보정 전)" : "섞은 비교와 비슷") : null))});
   pg.set((m.survivors && m.survivors.length ? m.survivors : m.top) || []);
   const sg = m.singles || {};
   return ui.card({plate: "신호 합치기", sub: "두 매매법 신호를 묶은 새 규칙"},
@@ -373,7 +377,7 @@ function mergedCard({d}) {
       ui.stat("우연 거르기 1", fmt.int(m.bh_pass), `여러 번 시험 보정 (${fmt.pct(m.fdr, 0, false)})`),
       ui.stat("둘 다 넘음", fmt.int(m.both_pass), "+ 시간 섞은 비교")),
     h("p", {class: "c5-sum"}, m.both_pass ? `${fmt.int(m.trials)}개를 시험해 두 단계를 모두 넘은 규칙 ${fmt.int(m.both_pass)}개 (아래).`
-      : `${fmt.int(m.trials)}개를 시험해 두 단계를 모두 넘은 규칙은 없습니다. 아래는 그중 숫자가 가장 나았던 ${fmt.int((m.top || []).length)}개입니다 (넘지 못함).`),
+      : `${fmt.int(m.trials)}개를 시험해 두 단계를 모두 넘은 규칙은 없습니다. 아래는 그중 숫자가 가장 나았던 ${fmt.int((m.top || []).length)}개입니다 (넘지 못함). ${fmt.int(m.tested)}개 가운데 가장 좋아 보이는 것만 골랐으므로 이 숫자들은 운이 섞여 부풀려져 있습니다.`),
     h("p", {class: "an-note"}, "오른쪽 = 거래 한 건이 계좌에 남긴 평균 손익 (보통 배수 30배·30%, 수수료·펀딩 뒤) · 세 구간 = 2021-22 / 2023-24 / 2025-26 평균 · 섞은 비교 = 짝 신호를 시간만 밀어서 39번 다시 계산"),
     pg.el,
     ui.table([{label: "종류", l: true, get: ([k]) => FAM_KO[k]}, {label: "시험", get: ([, f]) => fmt.int(f.trials)}, {label: "판단", get: ([, f]) => fmt.int(f.tested)},

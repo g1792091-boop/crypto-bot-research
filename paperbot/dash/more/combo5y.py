@@ -14,9 +14,14 @@ since the run start (kind 'strategy', 15m-4h), cached ``TTL_S``. Only the 36 and
 DeepSeek is not part of the 5-year combination test (no DeepSeek number of any kind here).
 
 Comparing "so far": the 5-year months start on the 1st with $5,000 per account, the paper run started on its own day.
-Each 5-year month's realized P&L by the end of day ``d`` (d = the paper run's elapsed days, rounded up, 1..31) is the
+Each 5-year month's realized P&L after the SAME time as the paper run has run (``elapsed`` days, up to 31) is the
 yardstick for the paper run's realized P&L since its start (closed trades only, both sides; open positions are not
-counted on either side). Under ``SMALL_N`` closed trades the page marks it 표본 적음. Not a verdict (설명용, 판정 아님).
+counted on either side). The committed table has each month's P&L by the end of day 1..31; inside a day the value is
+read on the straight line between two day ends (``same_time``), so a run 0.4 days old is compared with 0.4 days of each
+5-year month, never with a whole day (a whole day would give the losing 5-year months more time to lose and flatter the
+run). Ties count half (``rank_among``: the paper run's place among the 5-year months, a tie in the middle). With no
+closed trade yet there is nothing to place: ``waiting`` (the page says so). Under ``SMALL_N`` closed trades the page
+marks it 표본 적음. Not a verdict (설명용, 판정 아님).
 """
 from __future__ import annotations
 
@@ -67,12 +72,39 @@ def combo_view(doc: Optional[dict]) -> dict:
 
 
 def rank_among(x: float, vals: list) -> dict:
-    """Where x stands among the 5-year months: rank 1 = above all; ``below`` = months under x."""
+    """Where x stands among the 5-year months: rank 1 = above all; ``below`` / ``ties`` = months under / equal to x.
+    A tie sits in the middle of its equals (rank = months above + 1 + half the ties, rounded down), so a paper run
+    level with most months (e.g. a strategy that hardly trades) is not shown near the top; ``share_below`` counts a
+    tie as half."""
     v = [float(a) for a in vals if a is not None and math.isfinite(float(a))]
     above = sum(1 for a in v if a > x)
     below = sum(1 for a in v if a < x)
-    return {"rank": above + 1, "of": len(v) + 1, "below": below, "n": len(v),
-            "share_below": round(below / len(v), 4) if v else None}
+    ties = len(v) - above - below
+    return {"rank": above + 1 + ties // 2, "of": len(v) + 1, "below": below, "ties": ties, "n": len(v),
+            "share_below": round((below + ties / 2) / len(v), 4) if v else None}
+
+
+def median(vals: list) -> Optional[float]:
+    """The middle value (the mean of the two middle values for an even count); None for no values."""
+    v = sorted(float(a) for a in vals if a is not None and math.isfinite(float(a)))
+    if not v:
+        return None
+    k = len(v) // 2
+    return v[k] if len(v) % 2 else (v[k - 1] + v[k]) / 2
+
+
+def same_time(row: list, elapsed: float) -> Optional[float]:
+    """One 5-year month's realized P&L (ratio) after ``elapsed`` days from its start: ``row`` = the month's P&L by the
+    end of day 1..31 in basis points (``elapsed_bp``); inside a day, on the straight line between the two day ends
+    (0 at the month's start); from day 31 on, the month's total."""
+    if not row:
+        return None
+    e = max(0.0, min(float(elapsed), float(len(row))))
+    d = int(math.floor(e))
+    if d >= len(row):
+        return row[-1] / 10_000.0
+    lo = 0.0 if d == 0 else float(row[d - 1])
+    return (lo + (e - d) * (float(row[d]) - lo)) / 10_000.0
 
 
 def paper_so_far(c: sqlite3.Connection, now_ms: int) -> dict:
@@ -112,8 +144,8 @@ def monthly_view(doc: Optional[dict], paper: Optional[dict], now_ms: int) -> dic
     if doc is None:
         return dict(UNAVAILABLE)
     start = (paper or {}).get("start")
-    elapsed = (now_ms - int(start)) / DAY_MS if start else None
-    day = None if elapsed is None else max(1, min(31, int(math.ceil(max(elapsed, 1e-9)))))
+    elapsed = max(0.0, (now_ms - int(start)) / DAY_MS) if start else None
+    day = None if elapsed is None else max(1, min(31, int(math.ceil(max(elapsed, 1e-9)))))   # "N일째" (a label)
     rows = []
     papers = (paper or {}).get("strategies") or {}
     for s in doc.get("strategies") or []:
@@ -124,15 +156,17 @@ def monthly_view(doc: Optional[dict], paper: Optional[dict], now_ms: int) -> dic
             row[k] = p.get(k)
         row["tfs"] = {tf: {k: v for k, v in (t or {}).items()} for tf, t in (p.get("tfs") or {}).items()}
         pp = papers.get(s)
-        if pp is not None and day is not None:
-            el = [r[day - 1] / 10_000.0 for r in (p.get("elapsed_bp") or []) if len(r) >= day]
+        if pp is not None and elapsed is not None:
+            el = [x for x in (same_time(r, elapsed) for r in (p.get("elapsed_bp") or [])) if x is not None]
             ret = pp["pnl"] / pp["initial"] if pp["initial"] else None
+            waiting = pp["trades"] == 0           # nothing closed yet: no place among the months (not "level with 0")
+            med = median(el)
             row["paper"] = {"pnl": round(pp["pnl"], 2), "ret": None if ret is None else round(ret, 6),
                             "trades": pp["trades"], "wins": pp["wins"], "accounts": pp["accounts"],
-                            "capital": pp["initial"], "small": pp["trades"] < SMALL_N,
+                            "capital": pp["initial"], "small": pp["trades"] < SMALL_N, "waiting": waiting,
                             "same_day": [round(x, 4) for x in el],
-                            "same_day_median": round(sorted(el)[len(el) // 2], 4) if el else None,
-                            "rank": rank_among(ret, el) if (ret is not None and el) else None}
+                            "same_day_median": None if med is None else round(med, 4),
+                            "rank": rank_among(ret, el) if (ret is not None and el and not waiting) else None}
         rows.append(row)
     meth = doc.get("methods") or {}
     return {"ready": True, "label": LABEL, "generated": doc.get("generated"), "months": doc.get("months") or [],
@@ -140,9 +174,10 @@ def monthly_view(doc: Optional[dict], paper: Optional[dict], now_ms: int) -> dic
             "flips": {k: v for k, v in (doc.get("flips") or {}).items() if k in ("unit_months", "tfs", "units")},
             "now": now_ms, "run_start": start, "elapsed_days": None if elapsed is None else round(elapsed, 3),
             "day": day, "small_n": SMALL_N, "over_month": bool(elapsed is not None and elapsed > 31),
+            "paper_error": (paper or {}).get("error"),
             "methods": {k: meth.get(k) for k in ("accounts", "sizing", "costs", "caveat", "period")},
-            "note": ("5년 달은 매달 1일에 계좌마다 $5,000로 새로 시작. 지금 실험은 시작한 날부터 같은 날 수(올림)만큼 지난 5년 달들의 "
-                     "닫힌 거래 손익과 비교 (열린 포지션은 양쪽 다 빼고)")}
+            "note": ("5년 달은 매달 1일에 계좌마다 $5,000로 새로 시작. 지금 실험이 시작한 뒤 흐른 시간과 같은 시간만큼 지난 5년 달들의 "
+                     "닫힌 거래 손익과 비교 (하루 안은 시간 비율로 나눔, 열린 포지션은 양쪽 다 빼고)")}
 
 
 def tf_month(doc: Optional[dict], strategy: str, tf: str) -> Optional[dict]:
@@ -179,7 +214,6 @@ def doc_cached(path: Optional[str] = None) -> Optional[dict]:
 
 
 def register(app, ctx) -> dict:
-    from fastapi import HTTPException
     data = ctx.data
     path = getattr(ctx, "combo5y_json", None) or DATA_JSON
     cache: dict = {}
@@ -218,7 +252,8 @@ def register(app, ctx) -> dict:
                 with contextlib.closing(data.conn()) as c:
                     paper = paper_so_far(c, now)
             except sqlite3.Error as exc:
-                raise HTTPException(503, f"paper3.db를 읽지 못함: {type(exc).__name__}") from None
+                # the 5-year side still answers; the page says the run could not be read (never a made-up run)
+                paper = {"start": None, "strategies": {}, "error": f"paper3.db를 읽지 못함 ({type(exc).__name__})"}
             v = json_finite(monthly_view(doc, paper, now))
             cache["monthly"] = (id(doc), time.time(), v)
         return v

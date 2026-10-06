@@ -89,8 +89,27 @@ def _paper(tmp_path, start, trades=True):
 
 # ---------------------------------------------------------------- pure views
 def test_rank_among_hand_case():
-    assert M.rank_among(0.015, [0.01, -0.02, 0.03]) == {"rank": 2, "of": 4, "below": 2, "n": 3, "share_below": 0.6667}
+    assert M.rank_among(0.015, [0.01, -0.02, 0.03]) == {"rank": 2, "of": 4, "below": 2, "ties": 0, "n": 3,
+                                                       "share_below": 0.6667}
     assert M.rank_among(0.5, [0.01])["rank"] == 1 and M.rank_among(-1, [0.01])["rank"] == 2
+
+
+def test_rank_among_puts_a_tie_in_the_middle():
+    # level with 4 of 5 months (a strategy that hardly trades): not "2nd of 6", the middle of its equals
+    r = M.rank_among(0.0, [0.0, 0.0, 0.0, 0.0, -0.1])
+    assert (r["rank"], r["below"], r["ties"], r["of"]) == (3, 1, 4, 6)
+    assert r["share_below"] == pytest.approx((1 + 4 / 2) / 5)
+
+
+def test_median_and_same_time_hand_cases():
+    assert M.median([3.0, 1.0, 2.0]) == 2.0 and M.median([4.0, 1.0, 3.0, 2.0]) == 2.5 and M.median([]) is None
+    row = [100, 300] + [300] * 29                                   # bp by the end of day 1, 2, ...
+    assert M.same_time(row, 0.0) == 0.0                             # the month's start: nothing yet
+    assert M.same_time(row, 0.4) == pytest.approx(0.004)            # 0.4 of day 1 (not the whole day 1)
+    assert M.same_time(row, 1.0) == pytest.approx(0.01)
+    assert M.same_time(row, 1.5) == pytest.approx(0.02)             # half way from day 1 (100) to day 2 (300)
+    assert M.same_time(row, 40.0) == pytest.approx(0.03)            # past the month: its total
+    assert M.same_time([], 1.0) is None
 
 
 def test_monthly_view_ranks_the_paper_run_at_the_same_day(tmp_path):
@@ -109,9 +128,10 @@ def test_monthly_view_ranks_the_paper_run_at_the_same_day(tmp_path):
     assert v["ready"] and v["day"] == 2 and v["elapsed_days"] == 1.5
     row = next(r for r in v["rows"] if r["strategy"] == "S_A")
     p = row["paper"]
-    assert p["ret"] == pytest.approx(0.015) and p["same_day"] == [0.01, -0.02, 0.03]
-    assert p["rank"] == {"rank": 2, "of": 4, "below": 2, "n": 3, "share_below": 0.6667}
-    assert p["same_day_median"] == 0.01 and p["small"] is True and p["trades"] == 2
+    # 1.5 days: each 5-year month half way between its day-1 and day-2 ends (bp 50/100, -100/-200, 100/300)
+    assert p["ret"] == pytest.approx(0.015) and p["same_day"] == [0.0075, -0.015, 0.02]
+    assert p["rank"] == {"rank": 2, "of": 4, "below": 2, "ties": 0, "n": 3, "share_below": 0.6667}
+    assert p["same_day_median"] == 0.0075 and p["small"] is True and p["trades"] == 2 and p["waiting"] is False
     assert "elapsed_bp" not in row and row["tfs"]["15m"]["median"] == -0.02
     sc = next(r for r in v["rows"] if r["strategy"] == "S_C")
     assert "paper" not in sc                                    # no account of S_C in this run
@@ -128,10 +148,36 @@ def test_monthly_view_waiting_and_without_paper(tmp_path):
     v = M.monthly_view(_doc(), paper, start + HOUR)
     p = next(r for r in v["rows"] if r["strategy"] == "S_A")["paper"]
     assert v["day"] == 1 and p["trades"] == 0 and p["ret"] == 0.0 and p["small"] is True
-    assert p["same_day"] == [0.005, -0.01, 0.01]                # day 1 of each 5-year month
+    # one hour in: 1/24 of each 5-year month's day 1 (50, -100, 100 bp), never the whole day
+    assert p["same_day"] == [round(0.005 / 24, 4), round(-0.01 / 24, 4), round(0.01 / 24, 4)]
+    assert p["waiting"] is True and p["rank"] is None            # nothing closed yet: no place among the months
     v2 = M.monthly_view(_doc(), None, start)
     assert v2["day"] is None and all("paper" not in r for r in v2["rows"])
     assert M.monthly_view(None, None, start)["unavailable"] is True
+
+
+def test_monthly_view_without_a_readable_paper_db():
+    v = M.monthly_view(_doc(), {"start": None, "strategies": {}, "error": "paper3.db를 읽지 못함 (OperationalError)"},
+                       int(time.time() * 1000))
+    assert v["ready"] and v["paper_error"] and v["day"] is None and all("paper" not in r for r in v["rows"])
+
+
+def test_monthly_route_empty_database_answers_the_5_years(tmp_path, monkeypatch):
+    """A paper3.db without tables (a fresh install): the 5-year side, no paper side, no error page."""
+    path = str(tmp_path / "combo5y.json")
+    _write(path, _doc())
+    monkeypatch.setattr(M, "DATA_JSON", path)
+    db = str(tmp_path / "empty.db")
+    import sqlite3
+    sqlite3.connect(db).close()
+    app = create_app(db, hash_password(PW), SECRET, candles=lambda s, i, n: [], inbox_db=str(tmp_path / "inbox.db"))
+    c = TestClient(app)
+    assert c.post("/api/login", json={"password": PW}).status_code == 200
+    r = c.get("/api/v4/combo5y/monthly")
+    assert r.status_code == 200
+    v = r.json()
+    assert v["ready"] and len(v["rows"]) == 3 and all("paper" not in x for x in v["rows"])
+    assert v["paper_error"] and "paper3.db" in v["paper_error"]
 
 
 def test_combo_view_is_trimmed():
@@ -178,7 +224,7 @@ def test_routes_answer_cached_and_reload_on_change(app_with):
     m = c.get("/api/v4/combo5y/monthly").json()
     assert m["ready"] and m["day"] == 2
     p = next(r for r in m["rows"] if r["strategy"] == "S_A")["paper"]
-    assert p["trades"] == 2 and p["ret"] == pytest.approx(0.015) and p["rank"]["rank"] == 2
+    assert p["trades"] == 2 and p["ret"] == pytest.approx(0.015) and p["rank"]["rank"] == 2 and not p["waiting"]
     assert c.get("/api/v4/combo5y/monthly").json() == m                       # cached
     doc = _doc(("S_A", "S_B"))
     _write(path, doc)
