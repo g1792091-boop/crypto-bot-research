@@ -19,7 +19,8 @@ Daily budget (the statistical price of every counted test, not only CPU), per KS
 'tested' events: debate <= ``lab_intake_debate_per_day`` (hard max 2), meeting <= ``dispute_tests_per_day`` (only
 while ``sides`` is on, and one counted test per strategy room per ``dispute_room_gap_days``), owner <=
 ``lab_intake_owner_per_day``. A source whose budget is 0 is off: its rows wait (and expire). With every source off
-``tick`` does nothing at all (no table is created, nothing is read).
+``tick`` runs nothing and creates no table; it only sets budgets saved by an earlier pass to 0 (the dashboard reads
+them), so turning the sources off never leaves old quotas on show.
 
 ``run_due`` NEVER proposes anything: a pass waits in the ledger like any lab pass, and rooms.newlab_tick proposes it
 after the observation period, judged again with n at that time; copies only come from a strategy room's meeting.
@@ -827,10 +828,20 @@ def reconcile(conn: sqlite3.Connection, now: Optional[int] = None) -> int:
 
 def tick(ctx: Any, debate_db: Optional[str], now: int) -> dict:
     """The agents tick's hook (after the meetings, so meetings keep priority and tests use the time left in the pass):
-    nothing at all while every source is off; else the tables, the budgets in force for the dashboard, recovery of a
-    killed run, the debate's new picks, and the runs that are due."""
+    while every source is off only the saved budgets are brought to 0 (when a pass saved some); else the tables, the
+    budgets in force for the dashboard, recovery of a killed run, the debate's new picks, and the runs that are due."""
     p = ctx.policy
     if not enabled(p):
+        # every source off: nothing runs, but budgets saved by an earlier pass are brought to the new ones (all 0), so
+        # the dashboard and the lab packet never show the old quotas as if still in force. Only a value that is
+        # already saved is touched (the cursors table is rooms_db's own): a fresh agents3.db stays untouched.
+        lim = limits(p)
+        try:
+            saved = R.get_cursor(ctx.agents_conn, LIMITS_CURSOR)
+            if saved is not None and saved != lim:
+                R.set_cursor(ctx.agents_conn, LIMITS_CURSOR, lim)
+        except sqlite3.Error:
+            pass
         return {"enabled": False}
     conn = ctx.agents_conn
     ensure(conn)
