@@ -161,7 +161,7 @@ GET routes (sample files in `api_samples/`):
 | `/api/board` | {ts, accounts[] (+ group, family, exits, name_ko), best_random, initial, extras_runtime, strategy_ko, names_ko, group_ko, family_ko, default_groups, run_shape} | many | store `board`: home, board, positions, chart, account, strategies. `strategy_ko` + `names_ko` feed every account name (fmt.stratKo) |
 | `/api/summary` | {now, start, period_days, day, next_checkpoint, observe_until, observing, restart, today, events} | summary.js, panels.js | store `summary`: chip, home, market, checkpoint |
 | `/api/status` | {now, heartbeat, run, alerts, signals_24h, limits} | 서버 상태 | store `status`: banner, server, alerts, signals (`limits` = the signal time limits) |
-| `/api/time` | {now} | charts.js | core/api.js |
+| `/api/time` | {now, ver} (ver: the page code fingerprint, dash/assets.py) | charts.js | core/api.js, core/version.js |
 | `/api/checkpoint` | {ready, …verdict} | checkpoint.js | checkpoint |
 | `/api/levwhy` | {positions: {id: {group, group_ko, score, leverage, short_ko, entry_time}}} | pos.js | positions, account |
 | `/api/account/{id}` | {account, state, trades[], equity[], equity_points, signals, extra, position_why} | 계좌 | account |
@@ -497,3 +497,17 @@ The chart deck's Premium / Discount light (터미널 chart and 차트 screen, AI
 | Addition | Screen / place | Server (read-only) |
 |---|---|---|
 | 졸업 길 | 매매법 › 졸업 길 (`#/path`, after 분석; screens/path.js + path.css): how far the project is from "a strategy that does not lose", in five stages: 아이디어 (the debate room's ideas, the meetings' hypothesis ledger, the owners' posts in 새 매매법 연구실) → 5년 시험 (the lab's trial ledger: new strategies and number tests, passed / failed and the first failed gate line, the proposal and the owners' click) → 모의 계좌 (기존 36, 딥시크 counts only, 릴스, approved extra / new-lab accounts; coin flips counted as the yardstick) → 30일 판정 (before the verdict: 판정 전, the date and the accounts that already have the checkpoint's 30 trades; after it: counts per status and the passed accounts, DeepSeek as counts only) → 실전 후보 (the eight readiness conditions of 분석 › 실전 준비도 and what each waits for; performance conditions are not counted before the verdict). On top a funnel in the AI-terminal look (real counts, 아직 없음 / 판정 전 where there is nothing, the furthest stage lit as 지금 여기); every row says where it is stuck under 기다리는 것 / 멈춘 이유 / 결과 / 지금 상태 ("거래 N건 더 필요", "관찰 기간 10/27까지 제안 없음", the first failed gate line, who decided a proposal: 두 분 / 승인관(AI) / 코드) and opens the existing detail screen; after the verdict day without a checkpoint.db record yet: "첫 판정일 지남 · 판정 기록 기다림". No money numbers on the page | `/api/v4/gradpath` (dash/more/gradpath.py; its own background runner + cached 2 min, never queued behind the analysis tab's long computations) |
+
+## fix-reliability: the page heals itself and opens fast (review 10/06 fixes; dashboard only; tests/test_dash_reliability.py)
+
+| Fix | Where | Server |
+|---|---|---|
+| Requests time out (15 s, heavy reads 30 s) instead of freezing a number forever | core/api.js `api` / `post` / `apiText` (ApiError kind timeout / network) | — |
+| Failed loads never read as 없음; error boxes try again by themselves (5/15/30/60 s) and heal | core/ui.js `errorBox`, `loadState`, `failKo`, `staleNote`, `dim`; pager / searchList shimmer until a first answer; 포지션, 순위표, 매매법, 분석, store-bound boxes on 홈 / 회의실 / 방 / 판정 / 토론 | — |
+| A silent stream after PC sleep / Wi-Fi change is replaced within 12 s; a hidden tab lets its stream go after 2 min; '대시보드 연결 다시 잡는 중' instead of blaming the bot | core/api.js watchdog, core/alerts.js `link`, core/shell.js | stream events carry `cursor` |
+| Page files kept a year under a content version; F5 / a new tab download none of them; boot modules preloaded | core/router.js, core/since.js, core/lwc.js, the kit css loaders (relative URLs) | dash/assets.py (`/static/v-<ver>/`, content ETags, '/' rewritten) |
+| '새 버전 준비됨 · 눌러서 새로고침' chip; hidden / 5-minute-idle tabs reload on the same screen | core/version.js | `/api/time` `ver` |
+| 홈 today's best / worst from the server's day sums (no 2,000-trade download a minute) | screens/home-live.js | `/api/summary` today.by_group[g] best / worst carry `n` and names; `accounts` |
+| Radar map: pending answers asked after 2.5 / 5 / 10 / 30 s, stalled after 2 min → the next bar close | screens/strategies-radar.js | — |
+| Glows blink 3 times on a real change, then stay lit (opacity / transform only): health dot, 위험 사다리, radar; 홈's open positions rebuilt only on a real change; the order book without a forced layout | base.css, positions.css, strategies-radar.css, home-live.js, positions-book.js | — |
+| https front for PC tabs (the owners' opt-in) | docs/server-setup-v4.md 8-1 | `DASH_TLS_PROXY=1` origin rule (app.py `same_origin` / `tls_proxied`) |
