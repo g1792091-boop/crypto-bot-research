@@ -221,8 +221,10 @@ def test_the_next_version_views_grade_every_candidate_and_read_only(env):
     assert cands["luck"]["newlab"]["tested"] == 2 and cands["luck"]["roomtests"]["tested"] == 3
     regime = next(s for s in cands["studies"] if s["id"] == "regime5y")
     assert regime["grade"] == "-" and "끝까지 남은 칸 0개" in regime["title"] and not regime["candidate"]
+    # a study with a gate that nothing passed is '후보 없음', never called descriptive (that is size5y's label only)
+    assert regime["grade_ko"] == "후보 없음" and "설명용" not in regime["grade_why"]
     size = next(s for s in cands["studies"] if s["id"] == "size5y")
-    assert size["grade"] == "-" and "설명용" in size["title"]
+    assert size["grade"] == "-" and "설명용" in size["title"] and size["grade_ko"] == "등급 없음"
     lab = next(r for r in cands["rows"] if r["kind"] == "dispute" and r["grade"] == "C")
     assert "None" not in lab["title"] and lab["quote"] == "추세 반대 진입이 손해"
     claims = NV.claims_view(env["agents"])
@@ -281,6 +283,15 @@ def test_the_verdict_day_follows_the_checkpoint_clock(tmp_path):
         late = GL.verdict_day(p, None, checkpoint_ts(START, 1) + 3_600_000)
         assert late["k"] == 2 and late["overdue"] is True                            # day passed, no verdict record yet
         assert "첫 판정일 지남" in GL.goal(None, p, None, checkpoint_ts(START, 1) + 3_600_000)["text_ko"]
+        # day 180 and later: the rules give no new verdict (checkpoint.NO_VERDICT_DAYS), so no D-day is invented
+        from paperbot.checkpoint import NO_VERDICT_DAYS, PERIOD_DAYS
+        last = NO_VERDICT_DAYS // PERIOD_DAYS
+        before = GL.verdict_day(p, None, checkpoint_ts(START, last) - 3_600_000)
+        assert before["k"] == last and not before["ended"]
+        after = GL.verdict_day(p, None, checkpoint_ts(START, last) + 3_600_000)
+        assert after["ended"] is True and after["ts"] is None and after["left"] is None
+        text = GL.goal(None, p, None, checkpoint_ts(START, last) + 3_600_000)["text_ko"]
+        assert "판정 기간 끝(180일" in text and "D-" not in text
     finally:
         p.close()
 
@@ -311,6 +322,8 @@ def test_the_lab_room_form_and_cards():
     assert "innerHTML" not in kit and "ui.stepStrip(" in kit
     chat = _read("screens", "rooms-chat.js")
     assert 'import {labRequestForm} from "./labreq-kit.js";' in chat and 'ctx.api("/api/lab/intake?limit=1")' in chat
+    # CONTRACT 1.7: the form is hidden unless the server says the owners' budget is on (never a dead form while off)
+    assert "labForm.hidden = !(owner && owner.enabled);" in chat
     side = _read("screens", "rooms-side.js")
     assert "ownerRequests(ctx, intake && intake.owner" in side
     assert '@import url("labreq-kit.css");' in _read("screens", "rooms.css")

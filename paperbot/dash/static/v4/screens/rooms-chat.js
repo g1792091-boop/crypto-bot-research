@@ -415,11 +415,15 @@ export function makeChat(ctx, hooks) {
     requestAnimationFrame(() => toBottom(true));
   }
   async function loadLabOwner(id) {
-    labForm.hidden = id !== LAB_ROOM;
+    labForm.hidden = true;                        // CONTRACT 1.7: a feature that is not on is hidden, not a dead form
     if (id !== LAB_ROOM) return;
     let d = null;
-    try { d = await ctx.api("/api/lab/intake?limit=1"); } catch { d = null; }   // an older server: the form says it cannot send
-    if (st.id === id && ctx.alive()) labForm.setOwner(d && d.owner);
+    try { d = await ctx.api("/api/lab/intake?limit=1"); } catch { d = null; }   // an older server: no form
+    if (st.id !== id || !ctx.alive()) return;
+    const owner = d && d.owner;
+    labForm.setOwner(owner);
+    // only while the agents' owner budget is on (the info pane's '두 분 시험 요청' says when it is off and why)
+    labForm.hidden = !(owner && owner.enabled);
   }
 
   return {el, open, fetchNew, renderHead, current: () => st.id,

@@ -92,12 +92,16 @@ def verdict_day(paper_ro: Optional[sqlite3.Connection], checkpoint_db: Optional[
             start = None
     cp = checkpoint_view(checkpoint_db) if checkpoint_db else {"ready": False}
     out: dict = {"k": None, "ts": None, "mmdd": None, "left": None, "ready": bool(cp.get("ready")), "overdue": False,
-                 "date": cp.get("date")}
+                 "date": cp.get("date"), "ended": False}
     if not start:
         return out
     k = 1
     while CK.checkpoint_ts(int(start), k) <= int(now):
         k += 1
+    if k * CK.PERIOD_DAYS > CK.NO_VERDICT_DAYS:
+        # the rules: after day NO_VERDICT_DAYS (180) the run is observation only, no new verdict (checkpoint.py)
+        out.update(ended=True, end_day=CK.NO_VERDICT_DAYS)
+        return out
     ts = CK.checkpoint_ts(int(start), k)
     out.update(k=k, ts=ts, mmdd=_mmdd(ts), left=days_left(ts, now), overdue=k > 1 and not out["ready"])
     return out
@@ -120,7 +124,9 @@ def goal(agents_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlite3.Con
               f"{_num(nl['luck'])}개)")
     else:
         p2 = "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"
-    if v["ts"] is None:
+    if v.get("ended"):
+        p3 = f"판정 기간 끝({v['end_day']}일 뒤로는 새 판정 없이 관찰만)"
+    elif v["ts"] is None:
         p3 = "판정 날짜는 봇이 첫 계좌를 만들면 정해짐"
     elif v["overdue"]:
         p3 = "첫 판정일 지남 · 판정 기록 기다림"

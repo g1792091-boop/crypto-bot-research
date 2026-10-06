@@ -163,7 +163,7 @@ export function ownerRequests(ctx, owner, o = {}) {
     owner.enabled ? h("p", {class: "muted"}, `오늘 요청 ${fmt.int(owner.requests_today || 0)}/${fmt.int(owner.requests_max || 0)}번 · 두 분 몫 5년 시험 ${fmt.int(owner.tests_today || 0)}/${fmt.int(owner.limit || 0)}개`)
       : h("p", {class: "muted"}, owner.off_ko || "시험 요청은 아직 꺼져 있습니다"),
     cards.length ? h("div", {class: "lq-list", role: "list"}, cards.slice(0, 5).map((c) => card(ctx, c, redraw, confirm)))
-      : h("p", {class: "muted"}, "아직 보낸 시험 요청이 없습니다. 대화 아래 '🧪 이 매매법 시험해줘'로 보낼 수 있습니다."),
+      : owner.enabled ? h("p", {class: "muted"}, "아직 보낸 시험 요청이 없습니다. 대화 아래 '🧪 이 매매법 시험해줘'로 보낼 수 있습니다.") : null,
     cards.length > 5 ? ui.disclosure(`나머지 ${fmt.int(cards.length - 5)}개`, h("div", {class: "lq-list", role: "list"}, cards.slice(5, 20).map((c) => card(ctx, c, redraw, confirm)))) : null,
     h("p", {class: "rk-note"}, "정확히 옮긴 요청은 코드가 하루 몫 안에서 바로 시험합니다. 근사로 옮긴 요청은 두 분이 [시험하기]를 눌러야 시험합니다. 옮길 수 없는 요청은 시험하지 않고 시험 수에도 넣지 않습니다. 통과해도 관찰 기간이 끝난 뒤 그때의 시험 수로 다시 판정해 제안하고, 두 분 확인이 필요합니다."));
 }

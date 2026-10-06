@@ -3282,7 +3282,7 @@ def lab_translate_packet(ctx: RoundContext, reqs: list[dict]) -> dict:
                 "exits_ko": LI.OWNER_EXITS_KO,
                 "note": ("요청 하나마다: 진입이 문법 그대로면 exact(코드가 바로 시험 줄에 넣음), 가장 가까운 값·필터로 바꿨으면 approx(두 분이 "
                          "대시보드에서 확인한 뒤에만 시험), 옮길 수 없으면 none(시험 안 함). 청산·크기는 옮기지 않으며 그것만으로 approx가 "
-                         "되지는 않음. 링크는 열 수 없음")}}
+                         "되지는 않음. 두 분이 양식에서 고른 시간봉·롱숏(모름 제외)과 다르게 옮기면 코드가 approx로 돌림. 링크는 열 수 없음")}}
 
 
 def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) -> list[dict]:
@@ -3305,9 +3305,10 @@ def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) ->
     for m in reqs:
         items = by_mid.get(m["id"]) or [{"engine": "none", "entry_fidelity": "none", "reason_codes": [],
                                          "idea": "", "kept": [], "lost": []}]
+        asked = LI.request_fields(m.get("text"))       # the form's 시간봉 / 롱·숏: code checks an 'exact' against them
         for i, it in enumerate(items):
             try:
-                got = LI.enqueue_owner(conn, m["id"], i, it, ctx.clock())
+                got = LI.enqueue_owner(conn, m["id"], i, it, ctx.clock(), asked=asked)
             except (sqlite3.Error, ValueError, TypeError) as exc:
                 rnd.system(f"두 분 시험 요청 #{m['id']}을 대기열에 넣지 못했습니다({type(exc).__name__}). {LI.NOT_TESTED_KO}.",
                            {"owner_request": True, "message_id": m["id"], "error": type(exc).__name__})

@@ -283,3 +283,55 @@ def test_a_free_repeat_answers_the_owners_without_a_new_test(world, noise, tmp_p
     dup = next(c for c in cards if c["status"] == "duplicate")
     assert dup["counted"] is False and dup["result_ko"].startswith("이미 시험함")
     assert any(m["text"].startswith(f"🧪 두 분 시험 요청 {dup['label_ko'][3:]} 결과") for m in lab_lines(world))
+
+
+def test_code_checks_an_exact_translation_against_the_owners_timeframe_and_side(tmp_path):
+    """The translator says 'exact' but changed the 시간봉 or 롱·숏 the owners picked on the form: code makes it approximate
+    (the owners confirm first, nothing is counted before) and writes the difference itself; '모름' checks nothing."""
+    text = LI.request_text({"entry": "볼린저 아래에서 다시 안으로", "timeframe": "1h", "side": "롱만"})
+    assert LI.request_fields(text) == {"timeframe": "1h", "side": "롱만"}
+    assert LI.request_fields(LI.request_text({"entry": "x", "timeframe": "모름"})) == {"timeframe": "모름"}
+    assert LI.request_fields("그냥 글\n시간봉: 1h") == {} and LI.request_fields(None) == {}
+    assert LI.request_fields(LI.LAB_REQUEST_MARK + "\n시간봉: 1d\n롱·숏: 아무거나") == {}
+    c = R.open_agents(str(tmp_path / "a.db"))
+    LI.ensure(c)
+    asked = LI.request_fields(text)
+    tf = LI.enqueue_owner(c, 1, 0, {"engine": "newlab", "spec": dict(NOISE, direction="long"), "entry_fidelity": "exact"},
+                          asked=asked)                                     # 4h tested, 1h asked
+    side = LI.enqueue_owner(c, 2, 0, {"engine": "newlab", "spec": dict(NOISE, timeframe="1h"), "entry_fidelity": "exact"},
+                            asked=asked)                                   # both sides tested, 롱만 asked
+    same = LI.enqueue_owner(c, 3, 0, {"engine": "newlab", "spec": dict(NOISE, timeframe="1H", direction="long"),
+                                      "entry_fidelity": "exact"}, asked=asked)
+    unknown = LI.enqueue_owner(c, 4, 0, {"engine": "newlab", "spec": NOISE, "entry_fidelity": "exact"},
+                               asked={"timeframe": "모름", "side": "모름"})
+    assert (tf["status"], side["status"], same["status"], unknown["status"]) == (
+        "needs_owner_ok", "needs_owner_ok", "queued", "queued")
+    cards = {int(x["source_ref"].split(":")[1]): x for x in LI.owner_cards(c)}
+    assert cards[1]["fidelity"] == "approx" and any("시간봉 1h" in x and "4h" in x for x in cards[1]["reasons_ko"])
+    assert any("롱만" in x and "(코드 확인)" in x for x in cards[2]["reasons_ko"])
+    assert cards[3]["reasons_ko"] == [] and cards[4]["fidelity"] == "exact"
+    # a 36 what-if test cannot pick a side: an owner's 롱만 / 숏만 is never 'exact' there
+    lt = LI._asked_mismatch("labtest", {"template": "stop_atr", "timeframe": "1h", "k": 2.5}, asked)
+    assert len(lt) == 1 and "롱·숏을 고를 수 없어" in lt[0]
+    assert LI._asked_mismatch("newlab", {"timeframe": "9h"}, asked) == []            # unreadable: canon refuses it
+    c.close()
+
+
+def test_the_meeting_passes_the_forms_choices_to_code(world, noise):
+    """End to end: an 'exact' translation that changed the owners' 시간봉 waits for their click and tests nothing."""
+    world.say(LAB, LI.request_text({"entry": "볼린저 아래에서 다시 안으로", "timeframe": "1h", "side": "둘 다"}),
+              QUIET - 10 * MIN)
+    tick(world, QueueRunner({"researcher": [translate(exact())], "team_lead": [LEAD]}), QUIET, noise)
+    card = LI.owner_cards(world.agents)[0]
+    assert card["status"] == "needs_owner_ok" and card["fidelity"] == "approx" and A.newlab_count(world.agents) == 0
+    assert any("시간봉 1h" in m["text"] and "두 분 확인 필요" in m["text"] for m in lab_lines(world))
+
+
+def test_switching_every_source_off_brings_the_saved_budgets_to_zero(world, noise):
+    """The dashboard's form reads the budgets the agents saved: turning the owners' budget (and every other source) off
+    must not leave the form looking switched on."""
+    tick(world, QueueRunner({}), QUIET, noise, owner=2)
+    assert R.get_cursor(world.agents, LI.LIMITS_CURSOR) == {"debate": 0, "meeting": 0, "owner": 2}
+    tick(world, QueueRunner({}), QUIET + 15 * MIN, noise, owner=0)
+    assert R.get_cursor(world.agents, LI.LIMITS_CURSOR) == {"debate": 0, "meeting": 0, "owner": 0}
+    assert LI.owner_block(world.agents, None, QUIET + 16 * MIN)["enabled"] is False

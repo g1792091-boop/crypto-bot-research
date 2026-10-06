@@ -88,6 +88,10 @@ def grade(g: str) -> dict:
     return {"grade": g, "grade_ko": ko, "grade_why": why}
 
 
+# a pass / fail study whose pre-registered gate nothing passed: no grade, but never called 'descriptive' (it had a gate)
+NO_SURVIVOR = {"grade": "-", "grade_ko": "후보 없음", "grade_why": "미리 정한 관문을 끝까지 넘은 칸이 없음(합격·불합격이 있는 연구)"}
+
+
 def _test_ko(spec: dict) -> str:
     from ...agents.disputes import _test_ko as dko
     try:
@@ -169,7 +173,7 @@ def study_rows(data_dir: str) -> list[dict]:
         out.append({"kind": "study", "kind_ko": "5년 연구 · 장세 스위치", "id": "regime5y", "ts": rg.get("generated_at"),
                     "title": f"맞는 장에서만 켜기: {tested:,}칸 시험 · 끝까지 남은 칸 {surv:,}개",
                     "sub": (f"보정(FDR)만 통과 {int(head.get('bh_pass') or 0):,}개 · 확인 기간 A·B 둘 다 같은 방향이어야 남음"),
-                    "candidate": surv > 0, **grade("A" if surv else "-"),
+                    "candidate": surv > 0, **(grade("A") if surv else NO_SURVIVOR),
                     "go": {"name": "analysis", "arg": "regime"}})
     else:
         out.append({"kind": "study", "kind_ko": "5년 연구 · 장세 스위치", "id": "regime5y", "title": "장세 스위치",
@@ -181,7 +185,7 @@ def study_rows(data_dir: str) -> list[dict]:
         out.append({"kind": "study", "kind_ko": "5년 연구 · 조합", "id": "combo5y", "ts": cb.get("generated_at"),
                     "title": f"매매법 신호를 합친 규칙: {int(mg['tested']):,}개 시험 · 둘 다 통과 {both:,}개",
                     "sub": f"보정(FDR)만 통과 {int(mg.get('bh_pass') or 0):,}개 · 신호를 섞은 자료보다도 좋아야 남음",
-                    "candidate": both > 0, **grade("B" if both else "-")})
+                    "candidate": both > 0, **(grade("B") if both else NO_SURVIVOR)})
     sz = _load(os.path.join(data_dir, "size5y.json"))
     pooled = ((sz or {}).get("pooled") or {}).get("all") if isinstance(sz, dict) else None
     if isinstance(pooled, dict):

@@ -319,12 +319,42 @@ def enqueue(conn: sqlite3.Connection, source: str, source_ref: str, engine: str,
     return out
 
 
+def _asked_mismatch(engine: str, spec: Any, asked: Optional[dict]) -> list[str]:
+    """Code's own check of a translation against what the owners picked on the form (``request_fields``): the 시간봉
+    and the 롱·숏 they chose (not '모름' or empty) must be the tested ones. Korean lines, one per difference ([] = none
+    or nothing to check). A spec code cannot read is left to ``canon`` (it is refused there anyway)."""
+    if not isinstance(asked, dict) or engine not in ENGINES or not isinstance(spec, dict):
+        return []
+    tf_asked, side_asked = asked.get("timeframe"), asked.get("side")
+    tf = direction = None
+    if engine == "newlab":
+        from . import newlab as NL
+        try:
+            c = NL.normalize_spec(spec)
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+            return []
+        tf, direction = c.get("timeframe"), c.get("direction")
+    else:
+        tf = str(spec.get("timeframe") or "").strip().lower() or None
+    out = []
+    if tf_asked in REQUEST_TF_GRID and tf != tf_asked:
+        out.append(f"두 분이 고른 시간봉 {tf_asked}와 옮긴 시간봉 {tf or '?'}이 다릅니다(코드 확인)")
+    want = REQUEST_SIDE_DIRECTION.get(side_asked or "")
+    if want is not None and engine == "labtest" and want != "both":
+        out.append(f"36개 고쳐 보기 시험은 롱·숏을 고를 수 없어 '{side_asked}'이 그대로가 아닙니다(코드 확인)")
+    elif want is not None and engine == "newlab" and direction != want:
+        out.append(f"두 분이 고른 롱·숏 '{side_asked}'와 옮긴 방향({_DIRECTION_KO.get(direction or '', direction or '?')})이 "
+                   "다릅니다(코드 확인)")
+    return out
+
+
 def enqueue_owner(conn: sqlite3.Connection, message_id: int, index: int, request: dict,
-                  now: Optional[int] = None) -> dict:
+                  now: Optional[int] = None, asked: Optional[dict] = None) -> dict:
     """An owner's request (#103 '이 매매법 시험해줘'), translated by the lab translator and re-normalized here:
     entry_fidelity 'exact' -> queued (runs within the owners' daily budget), 'approx' (or unknown) -> needs the owners'
     OK first ('needs_owner_ok', with what was kept and lost), 'none' -> refused (nothing counted). Reasons come from
-    the fixed OWNER_REASON_KO vocabulary only."""
+    the fixed OWNER_REASON_KO vocabulary only, plus code's own lines when the translation's 시간봉 or 롱·숏 differs
+    from what the owners picked on the form (``asked``, ``request_fields``): such an 'exact' is approximate."""
     req = request if isinstance(request, dict) else {}
     fid = req.get("entry_fidelity") if req.get("entry_fidelity") in ("exact", "approx", "none") else "approx"
     engine = req.get("engine") if req.get("engine") in ENGINES else "none"
@@ -334,8 +364,11 @@ def enqueue_owner(conn: sqlite3.Connection, message_id: int, index: int, request
         # code's rule, not the translator's: a request whose entry needed any of these changes is approximate (the
         # owners confirm it first); the exits / sizing never decide this (they are never tested, OWNER_EXITS_KO)
         fid = "approx"
+    checked = _asked_mismatch(engine, spec, asked) if fid in ("exact", "approx") else []
+    if fid == "exact" and checked:
+        fid = "approx"            # the translator said 'exact' but changed a choice the owners made on the form
     meta = {"fidelity": fid, "message_id": message_id, "index": index, "reason_codes": codes,
-            "reasons_ko": [OWNER_REASON_KO[c] for c in codes],
+            "reasons_ko": [OWNER_REASON_KO[c] for c in codes] + checked,
             "kept": [_text(x, 80) for x in (req.get("kept") or []) if isinstance(x, str)][:6],
             "lost": [_text(x, 80) for x in (req.get("lost") or []) if isinstance(x, str)][:6],
             "exits_ko": OWNER_EXITS_KO}
@@ -839,10 +872,20 @@ def reconcile(conn: sqlite3.Connection, now: Optional[int] = None) -> int:
 
 def tick(ctx: Any, debate_db: Optional[str], now: int) -> dict:
     """The agents tick's hook (after the meetings, so meetings keep priority and tests use the time left in the pass):
-    nothing at all while every source is off; else the tables, the budgets in force for the dashboard, recovery of a
-    killed run, the debate's new picks, and the runs that are due."""
+    while every source is off only the saved budgets are brought to 0 (when a pass saved some); else the tables, the
+    budgets in force for the dashboard, recovery of a killed run, the debate's new picks, and the runs that are due."""
     p = ctx.policy
     if not enabled(p):
+        # every source off: nothing runs, but budgets saved by an earlier pass are brought to the new ones (all 0), so
+        # the dashboard and the lab packet never show the old quotas as if still in force. Only a value that is
+        # already saved is touched (the cursors table is rooms_db's own): a fresh agents3.db stays untouched.
+        lim = limits(p)
+        try:
+            saved = R.get_cursor(ctx.agents_conn, LIMITS_CURSOR)
+            if saved is not None and saved != lim:
+                R.set_cursor(ctx.agents_conn, LIMITS_CURSOR, lim)
+        except sqlite3.Error:
+            pass
         return {"enabled": False}
     conn = ctx.agents_conn
     ensure(conn)
@@ -1014,6 +1057,10 @@ OWNER_PER_DAY_MAX = 3                # AGENTS_LAB_INTAKE_OWNER_PER_DAY above thi
 OWNER_REQUESTS_PER_DAY = 5           # requests a KST day the dashboard takes (each one opens an owner meeting: 2 AI calls)
 REQUEST_TFS = ("15m", "30m", "1h", "4h", "모름")
 REQUEST_SIDES = ("롱만", "숏만", "둘 다", "모름")
+# what code checks an 'exact' translation against (``_asked_mismatch``): the form's own choices, '모름' = no check
+REQUEST_TF_GRID = ("15m", "30m", "1h", "4h")
+REQUEST_SIDE_DIRECTION = {"롱만": "long", "숏만": "short", "둘 다": "both"}
+_DIRECTION_KO = {"long": "롱만", "short": "숏만", "both": "롱·숏 둘 다"}
 # (key, label in the stored text, required, most characters): all of them together stay under one owner post's
 # 1,000 characters (rooms_db.MAX_OWNER_TEXT, the packet's owner_messages cut)
 REQUEST_FIELDS = (("entry", "언제 들어가나", True, 350), ("exit", "언제 나오나", False, 200), ("timeframe", "시간봉", False, 10),
@@ -1066,6 +1113,21 @@ def request_text(fields: Any) -> str:
             raise ValueError("롱·숏은 롱만, 숏만, 둘 다 중 하나(또는 모름)입니다")
         lines.append(f"{label}: {v}")
     return "\n".join(lines)
+
+
+def request_fields(text: Any) -> dict:
+    """The form's choices back from a stored request (``request_text``'s labelled lines): {timeframe, side} when the
+    post is a request and the line holds one of the form's values; {} otherwise (a hand-typed post, an older text)."""
+    if not is_lab_request(text):
+        return {}
+    want = {"시간봉": ("timeframe", REQUEST_TFS), "롱·숏": ("side", REQUEST_SIDES)}
+    out: dict = {}
+    for line in text.split("\n")[1:]:
+        label, sep, value = line.partition(":")
+        key = want.get(label.strip()) if sep else None
+        if key and key[0] not in out and value.strip() in key[1]:
+            out[key[0]] = value.strip()
+    return out
 
 
 def requests_today(inbox_ro: Optional[sqlite3.Connection], now: int) -> int:
@@ -1235,5 +1297,6 @@ def owner_block(conn_ro: Optional[sqlite3.Connection], inbox_ro: Optional[sqlite
             "requests_max": OWNER_REQUESTS_PER_DAY, "cards": owner_cards(conn_ro, inbox_ro, limit),
             "mark": LAB_REQUEST_MARK, "link_note_ko": LINK_NOTE_KO, "exits_ko": OWNER_EXITS_KO,
             "not_tested_ko": NOT_TESTED_KO, "timeframes": list(REQUEST_TFS), "sides": list(REQUEST_SIDES),
-            "off_ko": ("시험 요청은 아직 꺼져 있습니다(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0). 켜지면 이 양식으로 보낸 "
-                       "요청을 연구원이 문법으로 옮기고, 코드가 하루 몫만큼 5년 시험을 돌립니다.")}
+            "off_ko": ("시험 요청은 아직 꺼져 있습니다(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0). 켜지면 대화 아래에 "
+                       "'🧪 이 매매법 시험해줘' 양식이 나오고, 보낸 요청을 연구원이 문법으로 옮기고 코드가 하루 몫만큼 5년 시험을 "
+                       "돌립니다.")}
