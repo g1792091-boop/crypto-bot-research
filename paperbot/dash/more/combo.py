@@ -499,7 +499,7 @@ def combination(book: Book, units: list, method: str, custom, now: int, overlap:
              "members": [[K.r(v / caps[i] - 1) for v in E[i][idx]] for i in range(len(units))],
              "flips": [K.r(v) for v in np.asarray(flips["path"])[idx]] if flips.get("path") is not None else None,
              "step_min": K.r((grid[-1] - grid[0]) / max(1, len(idx) - 1) / 60_000, 1) if len(grid) > 1 else None,
-             "points": int(len(grid))}
+             "points": int(len(grid)), "thinned": bool(len(idx) < len(grid))}
     flips.pop("path", None)
     days_run = (now - start) / DAY_MS
     early = tn["trades"] < SMALL_TRADES or days_run < SMALL_DAYS
@@ -803,7 +803,7 @@ def rules(book: Book, q: dict, now: int) -> dict:
     kind = c["kind"]
     out = {"label": LABEL, "kind": kind, "kind_ko": RULE_KO[kind], "approx_ko": APPROX_KO, "now": int(now),
            "start": book.start, "run_days": K.r((now - int(book.start or now)) / DAY_MS, 3),
-           "signals_ko": ("B 쪽은 신호 기록(signal_log: 계산된 모든 신호, 계좌가 다른 거래 중이라 못 들어간 신호도 남음)을 써서 "
+           "signals_ko": ("B 쪽은 신호 기록(계산된 신호를 모두 남긴 표: 계좌가 다른 거래 중이라 못 들어간 신호도 남음)을 써서 "
                           "B가 바빠서 놓친 진입도 같은 방향으로 셉니다."),
            "signal_rows": book.sig_rows, "small_n": RULE_SMALL, "flip_money_ko": FLIP_MONEY_KO}
     if kind in ("both", "filter"):

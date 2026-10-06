@@ -32,7 +32,7 @@ export function buildTab(env) {
   // ---------------------------------------------------------------- the pick and the address
   function fromQuery(q) {
     const keys = String(q.u || "").split(",").map((x) => x.trim()).filter(Boolean);
-    const p = String(q.p || "").split(",").map((x) => Number(x));
+    const p = q.p ? String(q.p).split(",").map((x) => (String(x).trim() === "" ? NaN : Number(x))) : [];   // no p: an equal split
     return {keys, w: okMethod(q.w), p};
   }
   function apply(q) {
@@ -225,15 +225,16 @@ export function buildTab(env) {
       d.method.in_sample_ko ? h("p", {class: "cb-small"}, ui.pill("미리 안 셈", "thin"), ` ${d.method.in_sample_ko}`) : null,
       d.small.early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` ${d.small.words}`) : null,
       box, legend,
-      h("p", {class: "an-note"}, `세로 = 시작 대비 수익률 % · ${d.basis_ko}`, cv.step_min ? ` · 그림은 ${fmt.num(cv.step_min, 0)}분 간격으로 줄여 그림, 숫자는 기록 전체로 계산` : ""),
+      h("p", {class: "an-note"}, `세로 = 시작 대비 수익률 % · ${d.basis_ko}`, cv.thinned && cv.step_min ? ` · 그림은 약 ${fmt.num(cv.step_min, 0)}분 간격으로 줄여 그림, 숫자는 기록 전체로 계산` : ""),
       flipLine, d.reel_note ? h("p", {class: "an-note"}, ui.pill("릴스", "ref"), " ", d.reel_note) : null, ui.refNote(verdictTs()));
   }
   async function draw(box, d, series) {
     const cv = d.curve || {};
     if (!(cv.t || []).length || cv.t.length < 2) { put(box, ui.notYet("곡선 기록 전")); return; }
     try {
+      // no timeScale here: chartOptions' own keeps the Korea-time tick labels (an extra timeScale would replace it: UTC)
       const C = await makeChart(box, {rightPriceScale: {borderColor: tok("--line-2"), scaleMargins: {top: 0.12, bottom: 0.1}},
-        handleScroll: {vertTouchDrag: false}, timeScale: {borderColor: tok("--line-2"), timeVisible: true, secondsVisible: false}});
+        handleScroll: {vertTouchDrag: false}});
       if (!ctx.alive() || !box.isConnected) { C.dispose(); return; }
       st.disposers.push(C.dispose);
       const T = cv.t.map((ms) => Math.floor(ms / 1000));
@@ -318,7 +319,7 @@ export function buildTab(env) {
     });
     return ui.card({plate: "구성원별", sub: "기여 = 비중만큼의 자금으로 한 손익"},
       h("div", {class: "cb-mems", role: "list"}, rows),
-      h("p", {class: "an-note"}, Math.abs(tot) > 0.005 ? "괄호 = 합친 손익 중 그 구성원의 몫 (합친 손익과 반대 방향이면 깎았거나 메운 것). " : "합친 손익이 아직 0 근처라 몫(%)은 보이지 않습니다. ",
+      h("p", {class: "an-note"}, Math.abs(tot) > 0.005 ? "괄호 = 합친 손익 중 그 구성원의 몫 (합친 손익과 반대 방향이면 깎았거나 메운 것. 100%가 넘으면 다른 구성원이 반대로 움직여 그만큼 메우거나 깎은 것). " : "합친 손익이 아직 0 근처라 몫(%)은 보이지 않습니다. ",
         "'이것 빼면' = 같은 나누는 법으로 나머지만 합친 결과. 괄호의 %p는 지금 조합과의 차이 (낙폭은 −면 더 깊어짐)."),
       ui.assume());
   }
