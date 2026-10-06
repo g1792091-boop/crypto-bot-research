@@ -100,7 +100,7 @@ export async function mount(el, ctx) {
       castBox.replaceChildren(castStrip(null));
       startLine.replaceChildren();
       chatBox.replaceChildren(h("div", {class: "db-none"}, h("b", null, "첫 토론이 끝나면 여기에 대화가 나옵니다"),
-        h("span", null, "새 청산·알림·밤 점검이 없으면 회차를 건너뛰어 비용이 들지 않습니다. 오른쪽(휴대폰은 위)의 최근 회차에서 무엇을 했는지 보입니다.")));
+        h("span", null, "새 청산·알림·밤 점검이 없으면 회차를 건너뛰어 비용이 들지 않습니다. 상태 칸(넓은 화면은 오른쪽, 좁은 화면은 맨 위 한 줄을 펼치면)의 최근 회차에서 무엇을 했는지 보입니다.")));
       st.shown = null;
       return;
     }

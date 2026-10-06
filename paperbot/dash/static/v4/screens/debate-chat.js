@@ -35,7 +35,7 @@ export function avatar(speaker, size = 34) {
 export function castStrip(round) {
   const n = {};
   for (const m of (round && round.messages) || []) n[isNote(m) ? "정리" : m.speaker] = (n[isNote(m) ? "정리" : m.speaker] || 0) + 1;
-  const said = (c) => !round ? c.job : c.id === "정리" ? (n[c.id] ? "정리함" : "정리 없음") : n[c.id] ? `${fmt.int(n[c.id])}번 말함` : "이번엔 없음";
+  const said = (c) => !round ? c.job : c.id === "정리" ? (n[c.id] ? "정리함" : "정리 없음") : n[c.id] ? `${fmt.int(n[c.id])}번 말함` : "이번엔 차례 없음";
   return h("ul", {class: "db-cast", "aria-label": "토론 참가자"}, CAST.map((c) => h("li", {class: ["db-castm", !round || n[c.id] ? "" : "quiet"],
     style: {"--h": c.hue}, title: `${c.name}: ${c.job}`}, avatar(c.id, 30), h("b", null, c.name), h("small", null, said(c)))));
 }
