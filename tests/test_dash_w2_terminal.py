@@ -1,9 +1,9 @@
 """Wave 2 터미널 (#/terminal, owners 10/05: the old v3 트레이드 tab's density in the "AI" look, PC only).
 
 - the route exists as the 거래 group's first sub tab, is a PC screen (`feature: "wide"`, off the phone menu) and is
-  the start screen wherever it exists (owners 10/06 13:27: "요약화면이 아니라 차트화면부터"; a window at least 760 px
-  wide; a phone starts on the 차트 screen; unknown screens never fall back to the terminal, so a narrow window cannot
-  loop);
+  the start screen on a PC window (owners 10/06 13:27: "요약화면이 아니라 차트화면부터"; a window at least 900 px wide,
+  where the top menu shows and the terminal fits; a phone or a tablet held upright starts on the 차트 screen; unknown
+  screens never fall back to the terminal, so a narrow window cannot loop);
 - the terminal's css and js carry no colour literals (tokens only), and its motion stops under reduced motion and on a
   hidden page;
 - the honesty captions are there: the shared money captions under fills / open P&L / closed trades, 참고 on the group
@@ -70,8 +70,8 @@ def _landing(width):
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-@pytest.mark.parametrize("width,want", [(390, "chart"), (759, "chart"), (760, "terminal"), (1024, "terminal"), (1199, "terminal"),
-                                        (1200, "terminal"), (1920, "terminal")])
+@pytest.mark.parametrize("width,want", [(390, "chart"), (759, "chart"), (760, "chart"), (899, "chart"), (900, "terminal"),
+                                        (1024, "terminal"), (1199, "terminal"), (1200, "terminal"), (1920, "terminal")])
 def test_landing_rule(width, want):
     out = _landing(width)
     assert out["empty"] == want and out["bare"] == want and out["land"] == want

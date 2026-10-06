@@ -75,6 +75,8 @@ def test_top_menu_is_the_default_and_the_rail_only_a_choice():
         assert ':root[data-nav="left"]' in line, line
     assert ".subtabs .navsw { display: inline-flex; }" in block                         # the switch from 1200 px
     assert re.search(r"^\.navsw \{ display: none; \}", css, re.M)                       # and only there
+    # a long tab row (서버 under 크게 / 아주 크게) never pushes it out of view: it sticks to the row's right edge
+    assert ".subtabs .navsw { margin-left: 6px; position: sticky; right: 0; z-index: 1; background: var(--bg); }" in css
     # nothing outside [data-nav="left"] hides the group bar or the sub tabs any more
     assert css.count(".groups { display: none !important; }") == 1 and css.count(".subtabs { display: none; }") == 1
     out = _node_dom("console.log(JSON.stringify({def: nav.DEFAULT_NAV, ids: nav.NAV_POS.map((x) => x.id), ko: nav.NAV_POS.map((x) => x.ko)}));")
@@ -144,6 +146,9 @@ def test_group_dropdowns_list_every_screen_with_icon_name_and_key():
     assert "renderGroups(p.name, badges);" in shell and 'put($("#groups")' not in shell
     css = _nocomment(_read("core/nav.css"))
     assert ".gmenu { position: absolute;" in css and '.gm-a[aria-current="page"]' in css
+    # the rows carry data-screen: screens/terminal.css' bare [data-screen="terminal"] { gap: 0 } must not reach them
+    assert '[data-screen="terminal"] { gap: 0; }' in _read("screens/terminal.css")
+    assert ".gmenu .gm-a, .rail .rail-a { gap: 10px; }" in css
     assert "@media (prefers-reduced-motion: reduce) { .gw[data-open] .gmenu { animation: none; }" in css
     base = _nocomment(_read("base.css"))
     assert '.groups .gbtn[aria-current="true"] { color: var(--accent-ink); background: var(--accent); }' in base
@@ -191,12 +196,22 @@ def test_left_rail_reads_by_itself():
 def test_start_screen_is_the_terminal_and_home_stays_reachable():
     """Owners 10/06 13:27: "대시보드 들어가면 요약화면이 나오는게 아니라 사진속 차트화면부터"."""
     routes = _read("core/routes.js")
-    assert "export const LANDING_MIN_PX = 760;" in routes and 'return wide ? "terminal" : "chart";' in routes
+    # a PC window (900 px, where the top menu shows and the terminal fits without sideways scrolling); the terminal
+    # itself exists from 760 px, so the start screen is never a switched-off one
+    assert "export const LANDING_MIN_PX = 900;" in routes and 'return wide ? "terminal" : "chart";' in routes
     assert 'export const DEFAULT = "home";' in routes                                     # unknown names: 홈, never a loop
     assert 'matchMedia("(min-width: 760px)")' in _read("core/features.js")               # the terminal's own width
+    assert "@media (min-width: 900px) { .groups { display: flex; }" in _read("base.css")   # the top menu's width
     # a PC screen opened on a phone goes to the start screen there (the 차트), named in the toast
     router = _read("core/router.js")
     assert 'const to = meta.feature === "wide" ? landing() : DEFAULT;' in router and "location.replace(href(to));" in router
+    # an address without a screen name follows the window across the start width (menu and screen never disagree)
+    assert "cur.name !== landing()" in router and "matchMedia(`(min-width: ${LANDING_MIN_PX}px)`)" in router
+    assert "|| startMoved()) go();" in router and 'mq.addEventListener("change", () => { if (startMoved()) go(); });' in router
+    # a 하이라이트 opened from the '지난번 본 뒤로' sheet (or a link) closes to the start screen, not to 홈
+    story = _read("screens/story.js")
+    assert "else ctx.go(landing());" in story and 'ctx.go("home")' not in story
+    assert 'export {href, SCREENS, GROUPS, landing} from "./routes.js";' in _read("core/pb.js")
     # the brand mark opens the start screen and says so; 홈 stays in its group, the number key 2, #/home
     html = _read("index.html")
     assert '<a class="brand" href="#/" aria-label="Paper v4 첫 화면">' in html and 'href="#/home"' not in html
@@ -208,10 +223,11 @@ def test_start_screen_is_the_terminal_and_home_stays_reachable():
     out = _node("""
     const at = (w) => { globalThis.matchMedia = (q) => ({matches: Number((q.match(/min-width: (\\d+)px/) || [0, 0])[1]) <= w}); };
     const o = {};
-    for (const w of [390, 759, 760, 1100, 1920]) { at(w); o[w] = [routes.parseHash("").name, routes.parseHash("#/").name, routes.landing()]; }
+    for (const w of [390, 759, 760, 899, 900, 1100, 1920]) { at(w); o[w] = [routes.parseHash("").name, routes.parseHash("#/").name, routes.landing()]; }
     at(1920); o.home = routes.parseHash("#/home").name; o.keys = routes.KEYS.indexOf("home") + 1;
     console.log(JSON.stringify(o));""")
-    for w, want in (("390", "chart"), ("759", "chart"), ("760", "terminal"), ("1100", "terminal"), ("1920", "terminal")):
+    for w, want in (("390", "chart"), ("759", "chart"), ("760", "chart"), ("899", "chart"), ("900", "terminal"), ("1100", "terminal"),
+                    ("1920", "terminal")):
         assert out[w] == [want, want, want], (w, out[w])
     assert out["home"] == "home" and out["keys"] == 2
 

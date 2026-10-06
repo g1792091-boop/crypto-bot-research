@@ -5,7 +5,7 @@
 // prefers-reduced-motion nothing moves by itself. The day picker lists the run's days (seen ones dim: per viewer).
 // Data: GET /api/v4/story?day= (dash/more/story.py). The stage is a dialog over the whole app (in <body>, so the
 // router's screen fade never moves it); it leaves with the screen. Closing goes back to where it was opened from.
-import {h, ui, fmt, motion} from "../core/pb.js";
+import {h, ui, fmt, motion, landing} from "../core/pb.js";
 import {PAGES, nav, markSeen, isSeen, ringSvg, dayWord, pixIcon} from "./story-kit.js";
 import {PAGE_LIST} from "./story-pages.js";
 
@@ -157,7 +157,9 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- closing
   function close() {
     if (nav.from) { nav.from = null; history.back(); }
-    else ctx.go("home");
+    // opened from elsewhere (the '지난번 본 뒤로' sheet over the start screen, a shared link): back to the start screen
+    // (the 터미널 on a PC, owners 10/06 13:27), not to 홈
+    else ctx.go(landing());
   }
 
   // ---------------------------------------------------------------- touch, mouse and keys

@@ -5,7 +5,7 @@ import {h, clear, on as domOn} from "./dom.js";
 import {api, post, bus, poll} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {SCREENS, DEFAULT, parseHash, href, landing} from "./routes.js";
+import {SCREENS, DEFAULT, LANDING_MIN_PX, parseHash, href, landing} from "./routes.js";
 import {swap, shimmer} from "./motion.js";
 import {errorBox, toast} from "./ui.js";
 import {peekGo} from "./drawer.js";
@@ -110,10 +110,18 @@ async function show(params) {
 export function startRouter() {
   const go = () => show(parseHash(location.hash));
   window.addEventListener("hashchange", go);
+  // an address without a screen name (/ or #/) shows the start screen of the window's width (routes.js landing()): when
+  // the window is resized across that width, the screen follows, so the menu never lights one screen while another is
+  // on view (and a PC 터미널 never stays on a window too narrow for it)
+  const startMoved = () => !String(location.hash).replace(/^#\/?/, "").split(/[/?]/)[0] && cur.name && cur.name !== landing();
   bus.on("features", () => {
     const p = parseHash(location.hash), meta = SCREENS[p.name];
-    if (meta && meta.feature && !features[meta.feature]) go();
+    if ((meta && meta.feature && !features[meta.feature]) || startMoved()) go();
   });
+  if (typeof matchMedia === "function") {
+    const mq = matchMedia(`(min-width: ${LANDING_MIN_PX}px)`);
+    if (mq.addEventListener) mq.addEventListener("change", () => { if (startMoved()) go(); });
+  }
   go();
 }
 export const currentScreen = () => cur.name;

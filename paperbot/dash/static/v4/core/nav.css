@@ -48,11 +48,17 @@
 .gm-a .ndot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .gm-a kbd { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .gw[data-open] .gmenu { animation: none; } .groups .gbtn .gcar { transition: none; } }
+/* the menu rows carry data-screen (the focus is kept across a redraw by it): a screen's own bare [data-screen="…"] rule
+   (screens/terminal.css `[data-screen="terminal"] { gap: 0 }`, loaded once the start screen has been shown) must not
+   squeeze the 터미널 row's icon against its name */
+.gmenu .gm-a, .rail .rail-a { gap: 10px; }
 
 /* ---------------------------------------------------------------- 메뉴 위치 (core/navpos.js) and the left rail */
-/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up) */
+/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up). At the end of the sub tabs it
+   stays in view even when the row is longer than the window (the 서버 tabs with 화면 색 and 예전 화면 under 크게 /
+   아주 크게): it sticks to the row's right edge and the rest slides under it */
 .navsw { display: none; }
-.subtabs .navsw { margin-left: 6px; }
+.subtabs .navsw { margin-left: 6px; position: sticky; right: 0; z-index: 1; background: var(--bg); }
 .rail { display: none; }
 @media (min-width: 1200px) {
   .subtabs .navsw { display: inline-flex; }

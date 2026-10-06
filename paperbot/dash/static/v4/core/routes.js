@@ -3,8 +3,9 @@
 // (core/features.js); `soft`: always a tab, greyed with a '꺼짐' pill while that feature is off (the 토론방: the owners
 // should see it exists; its screen says plainly that it has not started); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
 // `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu. The start screen
-// (owners 10/06 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 wherever it exists
-// (760 px and up), and the 차트 screen on a phone; 홈 stays one click away (#/home, the 홈 group, the number key 2).
+// (owners 10/06 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 on a PC window (900 px
+// and up, where the top menu shows and the terminal fits without sideways scrolling), and the 차트 screen on a phone
+// or a tablet held upright; 홈 stays one click away (#/home, the 홈 group, the number key 2).
 import {s} from "./dom.js";
 
 export const GROUPS = [
@@ -43,10 +44,12 @@ export const SCREENS = {
 };
 
 export const DEFAULT = "home";          // an unknown screen name falls back here (never the terminal: no loop)
-/** The start screen's width: the 터미널's own (core/features.js `wide`, a window at least 760 px wide). */
-export const LANDING_MIN_PX = 760;
-/** The screen an empty hash (and the brand mark) opens: the 터미널 where it exists, else the phone's 차트 screen.
- *  Never a switched-off screen, so the router may also send a PC-only screen opened on a phone here (no loop). */
+/** The start screen's width: a PC window, where the top menu shows (base.css .groups, 900 px) and the 터미널 fits (it
+ *  exists from 760 px, core/features.js `wide`, but scrolls sideways below about 900 px). */
+export const LANDING_MIN_PX = 900;
+/** The screen an empty hash (and the brand mark) opens: the 터미널 on a PC window, else the 차트 screen (a phone, a
+ *  tablet held upright). Never a switched-off screen (900 > 760), so the router may also send a PC-only screen opened
+ *  on a phone here (no loop). */
 export function landing() {
   const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : "chart";
