@@ -52,3 +52,31 @@ def test_close_events_share_one_mark():
     assert out["none"] == 0 and out["bad"] == 0
     src = _read("flow-kit.js")
     assert "clusterEvents(evs)" in src and "names.map((n, i) => s(\"text\"" in src
+
+
+# ---------------------------------------------------------------- 회의 '근거' in plain words
+def test_evidence_paths_read_in_korean_and_never_as_json():
+    out = _node("const E = await import('{base}/rooms-evidence.js');", """
+      const p = (x) => E.pathKo(x);
+      const g = E.evidenceGroups({evidence: ["board.today.trades", {path: "losses.tag_stats.0.losses", value: 3}, {a: {b: 1}}]}, {});
+      const gc = E.evidenceGroups({evidence: ["x"]}, {findings: [{claim: "손절 2건이 추세 반대", evidence: ["loss_cards[0].tags"]}],
+        objections: [{claim: "표본 적음", evidence: ["code_result.result.periods.2.diff"]}]});
+      console.log(JSON.stringify({a: p("loss_cards[0].tags"), b: p("losses.tag_stats.0.losses"), c: p("board.today.trades"),
+        d: p("specialist.by_strategy.15m.mean_roe"), e: p("meta.weird_new_key_xyz"), f: p("by_coin.BTCUSDT.pnl"), g: p(""),
+        flat: g, claims: gc, n: E.evidenceCount(gc), v: [E.valueKo(0.123456), E.valueKo(1234.5), E.valueKo({x: 1}), E.valueKo(["a", "b"])]}));""")
+    assert out["a"] == "손실 카드 1번 › 태그"
+    assert out["b"] == "손실 › 태그 통계 1번 › 손실"
+    assert out["c"] == "순위 자료 › 오늘 › 거래 수"
+    assert out["d"] == "전담 자료 › 봉별 › 15분봉 › 거래당 평균 ROE"
+    assert out["e"] == "기본 정보 › 세부 항목"                          # an unknown key: never the raw English
+    assert out["f"] == "코인별 › BTC › 손익" and out["g"] == "세부 항목"
+    flat = out["flat"][0]
+    assert flat["claim"] is None and [i["name"] for i in flat["items"]] == ["순위 자료 › 오늘 › 거래 수", "손실 › 태그 통계 1번 › 손실",
+                                                                         "세부 자료"]
+    assert flat["items"][1]["value"] == "3"
+    assert not any("{" in i["name"] for i in flat["items"])              # an object is never printed as JSON
+    assert [c["claim"] for c in out["claims"]] == ["손절 2건이 추세 반대", "표본 적음"] and out["n"] == 2
+    assert out["claims"][1]["items"][0]["name"] == "코드 계산 결과 › 결과 › 2기간 › 차이"     # a period id, not a list index
+    assert out["v"][0] == "0.1235" and out["v"][1] == "1,235" and out["v"][2] is None and out["v"][3] == "a, b"
+    src = _read("rooms-chat.js")
+    assert "JSON.stringify(x)" not in src and "evidenceList(evg)" in src
