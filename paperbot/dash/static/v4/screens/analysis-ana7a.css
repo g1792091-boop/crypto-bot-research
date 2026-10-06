@@ -110,3 +110,4 @@
 
 /* 매매법별: the chosen strategy's own paper entries under its 5-year ranges */
 .a7-sp { display: grid; gap: 6px; min-width: 0; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-2); }
+.a7-v .pp { justify-self: start; }
