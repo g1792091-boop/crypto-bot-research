@@ -73,7 +73,9 @@ function chip(ctx, m, o) {
   const title = `${m.room_title || m.room_id} · ${fmt.kst(m.started_ts)}${m.summary_ko ? ` · ${String(m.summary_ko).replace(/^\s*🧾\s*/u, "").split("\n")[0]}` : ""}`;
   if (o.nested) {
     const go = (e) => { e.preventDefault(); e.stopPropagation(); window.location.hash = meetingHref(ctx, m); };
-    return h("span", {class: "ml-chip", role: "link", tabindex: "0", title, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(e); }}, words);
+    // data-no-peek: the row's own link opens the account peek panel in the capture phase (core/drawer.js); this chip
+    // opens the meeting instead
+    return h("span", {class: "ml-chip", role: "link", tabindex: "0", title, dataset: {noPeek: "1"}, onclick: go, onkeydown: (e) => { if (e.key === "Enter") go(e); }}, words);
   }
   return h("a", {class: "ml-chip", href: meetingHref(ctx, m), title}, words);
 }

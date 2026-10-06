@@ -493,3 +493,16 @@ def test_inbox_unread_agents_record_never_reads_as_no_proposals(tmp_path):
     block = src[i:src.index("const w = d.waiting", i)]
     shown = block[block.index("body.replaceChildren("):]
     assert "return;" in shown and "알 수 없습니다" in shown and "없음" not in shown
+
+
+def test_home_row_meeting_chip_is_not_swallowed_by_the_peek_panel():
+    """홈 › 방금 끝난 거래: the chip sits inside the row's account link, and core/drawer.js opens the account peek panel in
+    the capture phase; the chip carries data-no-peek and the drawer leaves such a click alone (it opens the meeting)."""
+    ml = _read("meet-links.js")
+    i = ml.index("if (o.nested) {")
+    assert 'dataset: {noPeek: "1"}' in ml[i:i + 600]
+    drawer = _read("drawer.js", os.path.join(V4, "core"))
+    j = drawer.index('document.addEventListener("click", (e) => {')
+    head = drawer[j:j + 500]
+    assert 'closest("[data-no-peek]")) return;' in head
+    assert head.index("[data-no-peek]") < head.index('closest("a[href]")')
