@@ -274,9 +274,11 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
         return []
     from ...checkpoint import PERIOD_DAYS, REHEARSAL_BOTS, checkpoint_ts, day_str
     k, cp = c["k"], c["ts"]
-    lo = checkpoint_ts(c["start"], k - 1) if k > 1 else c["start"] - c["start"] % DAY_MS
+    # this season and the one before (the road still shows the last season on its own verdict day)
+    lo = checkpoint_ts(c["start"], k - 2) if k > 2 else c["start"] - c["start"] % DAY_MS
     out = []
     ran = {}
+    cp_days = {day_str(checkpoint_ts(c["start"], j)) for j in range(max(1, k - 1), k + 1)}
     for r in rehearsals or []:
         if r.get("ts"):
             ran[day_str(r["ts"])] = r
@@ -286,7 +288,7 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
         if dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc).weekday() == wd and t >= lo:
             d = day_str(t)
             r = ran.get(d)
-            if d == day_str(cp):
+            if d in cp_days:
                 ko = "판정 연습 없음 (판정 날이라 건너뜀)"
             elif r and r.get("status") == "ok":
                 ko = "판정 연습 12:30 · 정상 끝남"
@@ -304,9 +306,12 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
         if lo <= e <= cp:
             out.append({"ts": e, "kind": "dst", "ko": "미국 서머타임 끝 · 미국 시각 기준 세션 매매법 5개의 신호가 한국 시각으로 "
                                                     "1시간 늦게 남 (고장 아님)"})
-    lead = "총괄 판정 회의 (결과가 나온 뒤)"
+    last = c.get("last")
+    if last and last.get("k") == k - 1:
+        out.append({"ts": last["ts"], "kind": "verdict", "done": True,
+                    "ko": f"{last['day']}일 판정 · 결과 저장 {_hm(last['stored_ts'])} · 총괄 판정 회의는 결과가 나온 뒤"})
     out.append({"ts": cp, "kind": "verdict", "ko": f"{k * PERIOD_DAYS}일 판정 · 09:00 모든 계좌 상태 저장 · 09:35 동전 봇 비교 "
-                                                 f"계산 시작 · {lead}"})
+                                                 f"계산 시작 · 총괄 판정 회의 (결과가 나온 뒤)"})
     nxt = checkpoint_ts(c["start"], k + 1)
     out.append({"ts": nxt, "kind": "next", "ko": f"다음 판정 {_mmdd(nxt)} 09:00 · 1차 합격 계좌의 2차 확인 · 보류 계좌 다시"})
     return sorted(out, key=lambda x: x["ts"])

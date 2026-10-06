@@ -50,7 +50,7 @@ function marksOf(e, ctxd) {
 /** pixelRoad(ctx, {card}) -> element. card: wrap in its own card with a plate and the legend (판정 screen). */
 export function pixelRoad(ctx, opts = {}) {
   ensureCss();
-  const st = {cal: null, events: null, summary: null, today: null, err: null, milestones: null, next: null};
+  const st = {cal: null, events: null, summary: null, today: null, err: null, milestones: null};
   const road = h("div", {class: "proad-road", role: "list", "aria-label": "30일 길: 하루 한 칸"});
   const head = h("div", {class: "proad-head"});
   const legend = h("p", {class: "proad-legend"},
@@ -89,7 +89,10 @@ export function pixelRoad(ctx, opts = {}) {
     // 판정, review 10/06 change 13); the cells are Korea-time dates, so they carry dates, never a second day count
     const vc = vday.vclock(s0);
     const rs = s0.restart && s0.restart.ready ? s0.restart : null;          // an older server: the restart banner's D+n
-    const nxt = st.next && opts.card ? h("span", {class: "muted proad-next", title: st.next.ko}, ` · 다음 ${fmt.mmdd(st.next.ts)} 2차 확인`) : null;
+    // the checkpoint after this road's flag (on the verdict day itself the clock already names the next one)
+    const flagTs = c.verdict_ts || last.ts;
+    const after = (st.milestones || []).filter((m) => (m.kind === "verdict" || m.kind === "next") && m.ts > flagTs + 1).sort((a, b) => a.ts - b.ts)[0];
+    const nxt = after && opts.card ? h("span", {class: "muted proad-next", title: "1차 합격 계좌의 2차 확인 · 보류 계좌 다시"}, ` · 다음 판정 ${fmt.mmdd(after.ts)} (2차 확인)`) : null;
     put(head, vc ? [h("b", null, vc.passed_ko), h("span", {class: "muted"}, ` · ${vc.rest_ko}`)]
       : [h("b", null, ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤"), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`)],
     h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`, nxt));
@@ -126,10 +129,7 @@ export function pixelRoad(ctx, opts = {}) {
         ctx.api(VD_API).catch(() => null)]);
       if (!ctx.alive()) return;
       st.cal = cal; st.events = (ev && ev.events) || [];
-      if (vd && Array.isArray(vd.milestones)) {
-        st.milestones = vd.milestones;
-        st.next = vd.milestones.find((m) => m.kind === "next") || null;
-      }
+      if (vd && Array.isArray(vd.milestones)) st.milestones = vd.milestones;
       render();
     } catch (e) {
       if (!ctx.alive()) return;

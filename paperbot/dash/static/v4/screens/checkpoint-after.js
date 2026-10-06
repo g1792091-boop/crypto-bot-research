@@ -15,7 +15,6 @@ const CLS = {[PASS2]: "good", [PASS1]: "good", [FAIL]: "bad", [HOLD]: "thin", [O
 const V_KO = {met: "충족", not_yet: "아직", unknown: "모름"};
 const V_CLS = {met: "good", not_yet: "warn", unknown: "thin"};
 const GROUP_LINES = [["ds200", "딥시크"], ["reel", "5분봉 단타"], ["extra", "추가 계좌 (복제·새 매매법)"]];
-const MAP_PHONE_ROWS = 12;
 
 const count = (rows, s) => rows.filter((r) => r.status === s).length;
 const strat = (r) => String(r.account_id || "").split("@")[0];
@@ -58,9 +57,13 @@ function lines(ck, summary) {
 function resultMap(ck, board, phoneAll, ctx) {
   const {tfs, rows} = mapRows(ck, board);
   if (!rows.length) return ui.empty("이 판정에 기존 36 계좌 줄이 없습니다");
-  const head = h("div", {class: "cka-mh", "aria-hidden": "true"}, h("span", null, "매매법"), tfs.map((tf) => h("span", null, fmt.tfKo(tf))));
-  const list = h("div", {class: ["cka-map", phoneAll.on ? "all" : ""], role: "list", "aria-label": "매매법 × 봉 판정 결과"},
-    rows.map((x) => h("div", {class: "cka-mrow", role: "listitem"},
+  // three blocks side by side on a PC, each with its own column heads; a phone shows the first block until 모두 보기
+  const per = Math.max(1, Math.ceil(rows.length / 3));
+  const blocks = [];
+  for (let i = 0; i < rows.length; i += per) blocks.push(rows.slice(i, i + per));
+  const headOf = () => h("div", {class: "cka-mh", "aria-hidden": "true"}, h("span", null, "매매법"), tfs.map((tf) => h("span", null, fmt.tfKo(tf))));
+  const list = h("div", {class: ["cka-map", phoneAll.on ? "all" : ""], "aria-label": "매매법 × 봉 판정 결과"}, blocks.map((blk) => h("div", {class: "cka-blk", role: "list"}, headOf(),
+    blk.map((x) => h("div", {class: "cka-mrow", role: "listitem"},
       h("span", {class: "cka-mn", title: x.strategy}, fmt.stratKo(x.strategy)),
       tfs.map((tf) => {
         const r = x.cells[tf];
@@ -68,8 +71,8 @@ function resultMap(ck, board, phoneAll, ctx) {
         return h("a", {class: ["cka-c", CLS[r.status] || ""], href: ctx.href("account", r.account_id),
           title: `${fmt.stratKo(x.strategy)} · ${fmt.tfKo(tf)}: ${r.status}${r.reason ? ` · ${r.reason}` : ""}`,
           "aria-label": `${fmt.stratKo(x.strategy)} ${fmt.tfKo(tf)} ${r.status}`}, SHORT[r.status] || r.status);
-      }))));
-  const more = rows.length > MAP_PHONE_ROWS ? h("button", {class: "btn-line cka-more", type: "button", "aria-expanded": String(phoneAll.on),
+      }))))));
+  const more = blocks.length > 1 ? h("button", {class: "btn-line cka-more", type: "button", "aria-expanded": String(phoneAll.on),
     onclick: (e) => { phoneAll.on = !phoneAll.on; list.classList.toggle("all", phoneAll.on); e.currentTarget.setAttribute("aria-expanded", String(phoneAll.on));
       e.currentTarget.textContent = phoneAll.on ? "접기" : `${fmt.int(rows.length)}개 모두 보기`; }},
   phoneAll.on ? "접기" : `${fmt.int(rows.length)}개 모두 보기`) : null;
@@ -81,7 +84,7 @@ function resultMap(ck, board, phoneAll, ctx) {
       parts.length ? parts.map(([s, n]) => `${s} ${fmt.int(n)}`).join(" · ") : "—",
       g === "ds200" ? h("span", {class: "muted"}, " (계좌별로는 보이지 않음)") : null);
   }).filter(Boolean);
-  return h("div", {class: "stack tight"}, head, list, more,
+  return h("div", {class: "stack tight"}, list, more,
     h("p", {class: "muted home-small"}, "칸 = 그 봉 계좌의 판정 · 1차 = 1차 합격 · 2차 = 2차 통과 · 4시간봉은 관찰용이라 빠짐 · 칸을 누르면 그 계좌"),
     groups.length ? h("ul", {class: "cka-groups"}, groups) : null);
 }
