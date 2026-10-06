@@ -23,8 +23,10 @@ const ageKo = (d) => `${fmt.num(d.elapsed_days || 0, 1)}일`;
 
 /** One strip: a thin tick per 5-year month (its value after the same days, or the full month), the median, and the
  *  paper run so far as the thick accent mark. Vector strokes keep their width when the strip stretches. */
+const PAD = 2;                                                   // % of the strip kept free at each end (a mark at
+const stripX = (v, lo, hi) => PAD + (100 - 2 * PAD) * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);   // the edge stays whole
 function strip(vals, mark, lo, hi) {
-  const X = (v) => (100 * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo));
+  const X = (v) => stripX(v, lo, hi);
   const kids = [s("line", {class: "am-zero", x1: X(0).toFixed(2), x2: X(0).toFixed(2), y1: 0, y2: 24, "vector-effect": "non-scaling-stroke"})];
   for (const v of vals) if (v != null) kids.push(s("line", {class: ["am-tick", v > 0 ? "up" : v < 0 ? "down" : ""], x1: X(v).toFixed(2), x2: X(v).toFixed(2), y1: 5, y2: 19, "vector-effect": "non-scaling-stroke"}));
   const med = median(vals);
@@ -119,7 +121,7 @@ function rowOf(r, d, i) {
   const mark = p && !wait ? p.ret : null;
   const all = [...vals.filter((v) => v != null), mark].filter((v) => v != null);
   const lo = Math.min(-0.1, ...all), hi = Math.max(0.1, ...all);
-  const zx = 100 * (0 - lo) / (hi - lo);                        // where 0 sits on the strip (its label goes there)
+  const zx = stripX(0, lo, hi);                                 // where 0 sits on the strip (its label goes there)
   const words = !p ? h("span", {class: "muted"}, "지금 기록 없음")
     : wait ? h("span", {class: "muted"}, "기다리는 중")
     : [h("b", {class: ["num", fmt.tone(p.ret, fmt.pct(p.ret, 1))]}, fmt.pct(p.ret, 1)), p.rank ? h("span", {class: "am-rank"}, ` ${fmt.int(p.rank.rank)}/${fmt.int(p.rank.of)}`) : null];

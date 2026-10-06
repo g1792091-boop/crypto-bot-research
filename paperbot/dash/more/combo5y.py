@@ -154,7 +154,8 @@ def monthly_view(doc: Optional[dict], paper: Optional[dict], now_ms: int) -> dic
         for k in ("n", "best", "worst", "median", "mean", "pos_share", "p10", "p25", "p75", "p90", "trades", "win_rate",
                   "liq", "bust_months", "one"):
             row[k] = p.get(k)
-        row["tfs"] = {tf: {k: v for k, v in (t or {}).items()} for tf, t in (p.get("tfs") or {}).items()}
+        # per timeframe: the summary only (the page draws the 62 months of the 4 timeframes together, ``m`` above)
+        row["tfs"] = {tf: {k: v for k, v in (t or {}).items() if k != "m"} for tf, t in (p.get("tfs") or {}).items()}
         pp = papers.get(s)
         if pp is not None and elapsed is not None:
             el = [x for x in (same_time(r, elapsed) for r in (p.get("elapsed_bp") or [])) if x is not None]

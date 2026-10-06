@@ -132,7 +132,7 @@ def test_monthly_view_ranks_the_paper_run_at_the_same_day(tmp_path):
     assert p["ret"] == pytest.approx(0.015) and p["same_day"] == [0.0075, -0.015, 0.02]
     assert p["rank"] == {"rank": 2, "of": 4, "below": 2, "ties": 0, "n": 3, "share_below": 0.6667}
     assert p["same_day_median"] == 0.0075 and p["small"] is True and p["trades"] == 2 and p["waiting"] is False
-    assert "elapsed_bp" not in row and row["tfs"]["15m"]["median"] == -0.02
+    assert "elapsed_bp" not in row and row["tfs"]["15m"]["median"] == -0.02 and "m" not in row["tfs"]["15m"]
     sc = next(r for r in v["rows"] if r["strategy"] == "S_C")
     assert "paper" not in sc                                    # no account of S_C in this run
     assert "DeepSeek" not in json.dumps(v, ensure_ascii=False) and "F3_BOS" not in json.dumps(v)
