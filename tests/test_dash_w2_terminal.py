@@ -117,7 +117,8 @@ def test_honesty_captions_are_present():
 
 def test_reuses_existing_helpers_and_polls_no_faster_than_the_screens_it_borrows_from():
     chart, side, js = _src("terminal-chart.js"), _src("terminal-side.js"), _src("terminal.js")
-    assert "makeChart" in chart and "candleOptions" in chart and 'from "./positions-kit.js"' in chart
+    assert "makeChart" in chart and "candleOptions" in chart and 'from "./chart-lines.js"' in chart
+    assert 'from "./positions-kit.js"' in _src("chart-lines.js")              # the position lines: one helper for 차트 and 터미널
     assert 'import {bookPanel} from "./positions-book.js"' in js
     assert 'from "./flow-kit.js"' in side and 'from "./flow-cal.js"' in side and "prep(" in side
     known = {1000, 5000, 10000, 30000, 120000, 300000}               # clock, forming bar, liq, office, levels, GH / race / calendar

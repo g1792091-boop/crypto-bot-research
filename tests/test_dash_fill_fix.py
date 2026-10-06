@@ -156,7 +156,8 @@ def test_wiring_count_only_and_words():
     assert "const co = !!o.countOnly;" in kit and "co ? null : stopLine(a, pos)" in kit
     assert 'derive.countOnlyIn(a, view)' in kit
     chart = _read(SCR, "chart.js")
-    assert 'g.items.filter((x) => !countOnly(x.a, ""))' in chart and "usdKo(t.q)" in chart
+    # the position lines moved to the shared chart deck helper (chart-lines.js, used by 차트 and the terminal)
+    assert 'g.items.filter((x) => !countOnly(x.a, ""))' in _read(SCR, "chart-lines.js") and "posLines(" in chart and "usdKo(t.q)" in chart
     cp = _read(SCR, "chart-panels.js")
     assert 'countOnly(x.a, "")' in cp and "usdKo(x)" in cp
     hs = _read(SCR, "home-shared.js")
