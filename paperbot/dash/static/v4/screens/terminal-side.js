@@ -3,14 +3,14 @@
 //     the numbers roll to a real new mark). Owners 10/06 ~14:00: the strategy's full Korean name (two lines when it
 //     needs them, the timeframe chip kept); the liquidation and entry prices in each row's tooltip. DeepSeek and the
 //     coin flips are counted only (their money is on their own group screens). Paper: 주문 버튼 없음.
-// The captions are said once (owners 10/06 ~14:00): an ⓘ in each head with that panel's note, the terminal's footer.
 //   - 수익 (기존 36): the 36's realized P&L, the sum of the day's closed trades of those accounts (/api/v4/flow/calendar,
 //     g.core.pnl: the same answer as 흐름 · 수익 달력), drawn as the cumulative line from the run start with the daily
 //     bars under it; 오늘 수익 (today's realized sum and trades); the 수익 캘린더 with each day's realized P&L in its
 //     cell, green / red by sign. Read every 5 minutes like 흐름.
 // HONESTY: realized money of closed trades only (the open positions' P&L is in the table below), the 36 only, 참고 (a
 // running record, not a verdict); a day without a record is 기록 없음, never a zero; nothing is drawn before the first
-// real day.
+// real day. The captions are said once (owners 10/06 ~14:00): an ⓘ in each head with that panel's exact note, the
+// terminal's one footer line.
 import {h, s, put, ui, fmt, store, motion} from "../core/pb.js";
 import {normPos} from "./positions-kit.js";
 import {CAL_API} from "./flow-cal.js";

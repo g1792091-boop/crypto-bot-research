@@ -1,9 +1,10 @@
 // 터미널 top strip (term v2, owners 10/06: "HelloQuant 터미널처럼 한 줄로 읽히게"): the coin and its big price (a teal /
 // pink glow only when the price really moved), the 24 h change, the 24 h quote volume, funding and the time to the next
 // funding, then 급등 · 급락 · 음펀비 over EVERY Binance USD-M perpetual (/api/v4/movers: the server asks Binance twice a
-// minute at most for everybody; labelled 시장 전체 (우리 봇 아님)), the session and the KST clock. Under it one slow line
-// of the latest real AI meeting conclusions (/api/office: finished meetings' decision lines; '회의 중' only from
-// office.running). The office is read through the shared store like 홈 (every 30 s and when a room changes).
+// minute at most for everybody; a "시장" chip says 시장 전체 (우리 봇 아님) in its tooltip, owners 10/06 ~14:00), the
+// session and the KST clock. Under it one slow line of the latest real AI meeting conclusions (/api/office: finished
+// meetings' decision lines; '회의 중' only from office.running). The office is read through the shared store like 홈
+// (every 30 s and when a room changes).
 import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";

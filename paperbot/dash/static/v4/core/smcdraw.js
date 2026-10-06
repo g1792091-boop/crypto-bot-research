@@ -10,7 +10,8 @@ import {num} from "./fmt.js";
 /**
  * smcPrimitive({chart, series, get, col}) -> primitive with .request()
  *   get() -> what to draw, or null (off): the deck's view of the smcAll() result (chartfx.js smcView):
- *     {range, eq, ote, words (bool: the parts that are on), zones: [{kind: "ob" | "fvg", i, top, bot, dir}],
+ *     {range, eq, ote, words (bool: the parts that are on; tint: the words come with the faint halves, 클래식),
+ *      zones: [{kind: "ob" | "fvg", i, top, bot, dir}],
  *      liq, structure, trend, legs (the lists to draw; empty when that part is off)}
  *   col() -> the deck's resolved colours
  */

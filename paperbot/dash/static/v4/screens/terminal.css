@@ -197,9 +197,6 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-gsw.core { background: var(--series-core); } .term-gsw.ds { background: var(--series-ds); } .term-gsw.m5 { background: var(--series-m5); }
 .term-gsw.extra { background: var(--accent); }
 .term .empty { padding: 12px 4px; font-size: var(--t-2xs); color: var(--muted); text-align: center; }
-.term-blab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.term-blab b { color: var(--ink-2); font-weight: 700; }
-.term-bmin { display: none; }
 .term-bst { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--t-2xs); font-weight: 700; color: var(--muted); white-space: nowrap; }
 .term-bst i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
 .term-bst[data-s="live"] { color: var(--up); }

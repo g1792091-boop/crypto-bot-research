@@ -503,8 +503,9 @@ export function chartDeck(o) {
       const g = shownNames[i];
       if (!g) { t.el.hidden = true; return; }
       if (t.txt.textContent !== g.text) t.txt.textContent = g.text;
-      t.el.dataset.tone = g.tone;
-      t.el.title = g.items.map((x) => x.title || `${x.text} ${fmtPrice(x.price)}`).join("\n");
+      if (t.el.dataset.tone !== g.tone) t.el.dataset.tone = g.tone;
+      const tt = g.items.map((x) => x.title || `${x.text} ${fmtPrice(x.price)}`).join("\n");
+      if (t.el.title !== tt) t.el.title = tt;
       t.el.hidden = false;
       const top = Math.round(g.ly - H / 2), rel = g.y - top;          // the line's height inside the name's box
       t.el.style.transform = `translateY(${top}px)`;
@@ -798,7 +799,7 @@ export function chartDeck(o) {
   let smcBtn = null, smcB = null;
   if (groups.includes("smc")) {
     const box = h("div", {class: "cfx-menu cfx-smcmenu", role: "menu", hidden: true, "aria-label": "프리미엄 지표 고르기"}, smcList());
-    smcB = h("button", {type: "button", class: "cfx-smcbtn", "aria-haspopup": "menu", "aria-expanded": "false", "aria-pressed": String(shown("smc")), title: SMC_NOTE},
+    smcB = h("button", {type: "button", class: ["cfx-smcbtn", shown("smc") ? "on" : ""], "aria-haspopup": "menu", "aria-expanded": "false", title: SMC_NOTE},
       "프리미엄 지표 ▾");
     smcBtn = h("span", {class: "cfx-mwrap cfx-smcwrap"}, smcB, box);
     dropdown(smcB, box, smcBtn);
@@ -814,7 +815,7 @@ export function chartDeck(o) {
   function paintMenu() {
     for (const [g, b] of mItems) b.setAttribute("aria-checked", String(shown(g)));
     for (const [id, bs] of smcItems) for (const b of bs) b.setAttribute("aria-checked", String(part(id)));
-    if (smcB) smcB.setAttribute("aria-pressed", String(shown("smc")));
+    if (smcB) smcB.classList.toggle("on", shown("smc"));            // (a menu button: the "on" look is a class, not aria-pressed)
     vbtn.classList.toggle("on", shown("smc"));
     under.dataset.words = part("words") ? "1" : "";                // the AI light's Premium / Discount words: opt-in
     const nHid = [...lines.values()].filter((L) => st.hide.has(L.spec.id)).length;
