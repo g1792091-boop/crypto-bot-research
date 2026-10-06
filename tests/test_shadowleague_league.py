@@ -415,6 +415,20 @@ def test_a_series_that_fell_behind_while_the_feed_failed_reads_error_then_catche
     assert dump(st)["trades"] == full["trades"] and dump(st)["bars"] == full["bars"]
 
 
+def test_one_late_bar_is_not_an_alarm_two_are(tmp_path):
+    ex, m, st = world(tmp_path)
+    st, _ = ticks(st, ex, m, [1239])
+    ex.fail = 99
+    ex.now_ms = now_after_bar("1h", 1240)                       # bar 1240 has closed, the feed cannot give it: one bar behind
+    LG.League(st, (m,), ex.get).tick(ex.now_ms)
+    assert st.series(m.member_id, "BTC", "1h")["status"] == "recording"
+    assert st.feed("BTC", "1h")["state"] == "error"             # the feed's own state says it, the series is not yet an alarm
+    ex.now_ms = now_after_bar("1h", 1241) + FD.BACKOFF_MS       # two bars behind
+    LG.League(st, (m,), ex.get).tick(ex.now_ms)
+    s = st.series(m.member_id, "BTC", "1h")
+    assert s["status"] == "error" and "2봉 늦음" in s["note"]
+
+
 def test_a_bad_answer_rejects_the_page_and_says_so(tmp_path):
     ex, m, st = world(tmp_path)
     ex.garbage = True
