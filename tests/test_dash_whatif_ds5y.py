@@ -228,14 +228,14 @@ def test_shadow_pairs_by_hand(tmp_path):
 def test_shadow_waiting_states(tmp_path):
     db, dd = _hand_world(tmp_path, [])
     a = W.paper_all(db, None, T0 + DAY)
-    assert a["ready"] is False and "daily3.db" in a["why"]
+    assert a["ready"] is False and "밤 점검 기록이 아직 없습니다" in a["why"]
     p = W.paper_scope(a, W.scope(None, None))
     assert p["ready"] is False and "scopes" not in p
     a = W.paper_all(db, dd, T0 + DAY)                                  # a report, but no shadow rows yet
     assert a["ready"] and a["rows"] == 0
     p = W.paper_scope(a, W.scope(None, None))
     assert p["base"] == {"trades": 0, "mean_eq": None} and p["variants"] == {}
-    assert W.paper_all(str(tmp_path / "none.db"), dd, T0)["why"] == "paper3.db 없음"
+    assert "paper3.db" in W.paper_all(str(tmp_path / "none.db"), dd, T0)["why"]
 
 
 def test_synthetic_world_shadows_cover_every_variant(tmp_path):

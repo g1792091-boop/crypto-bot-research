@@ -50,9 +50,8 @@ NOTE_KO = ("5년 시험(사전 등록 PREREG_DEEPSEEK200.md)의 결과 파일을
            "숫자가 다릅니다. 거래당 손익은 레버리지 없이 진입가 대비 %, 수수료·슬리피지·펀딩을 뺀 뒤입니다")
 COIN_KO = ("동전 던지기와 견주기: 같은 청산으로 아무 때나 들어가면 비용 전 손익은 0 근처이고 비용만큼 잃습니다. 그래서 "
            "'비용 전' 칸이 0보다 위여야 동전보다 나은 진입입니다 (연구 비용: 수수료·펀딩, 슬리피지는 체결가에 이미 들어 있음)")
-ABSENT_KO = ("서버가 5년 결과를 아직 쓰지 않았습니다 (계산 중이거나 아직 시작 안 함). 다 되면 여기에 정의 44개마다: 5년 거래 수, "
-             "승률, 거래당 손익, 합계, 낙폭, 비용 전 손익(동전과 비교), 세 기간 중 플러스인 기간 수, 관문 결과가 나오고, 옆에 "
-             "지금 모의 계좌의 거래 수가 붙습니다")
+ABSENT_KO = "서버가 5년 결과를 아직 쓰지 않았습니다 (계산 중이거나 아직 시작 안 함). 다 되면 여기에 나오는 것:"
+PARTIAL_KO = "계산이 아직 끝나지 않았습니다. 아래 목록은 끝난 설정만 셉니다 (342개가 다 차면 관문 결과도 나옵니다)"
 
 
 def out_dir() -> str:
@@ -158,7 +157,7 @@ def view(folder: Optional[str] = None) -> dict:
     out = {**base, "state": "done" if done >= TOTAL else "partial", "done": done, "file_ts": int(st.st_mtime * 1000),
            "summary": summary, "defs": sorted(defs.values(), key=lambda e: order.get(e["id"], 999))}
     if done < TOTAL:
-        out["absent_ko"] = ABSENT_KO
+        out["absent_ko"] = PARTIAL_KO
     _CACHE["v"] = (stamp, out)
     return out
 

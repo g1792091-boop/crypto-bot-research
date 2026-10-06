@@ -399,7 +399,7 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
     out: dict = {"label": LABEL, "ready": False, "since": 0, "scopes": {}, "small_n": SMALL_N}
     try:
         if c is None:
-            out["why"] = "paper3.db 없음"
+            out["why"] = "봇 기록(paper3.db)을 찾지 못했습니다"
             return out
         try:
             from ...checkpoint import run_facts
@@ -407,7 +407,7 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
             accts = c.execute("SELECT account_id, strategy, timeframe, kind FROM accounts "
                               "WHERE kind IN ('strategy', 'random')").fetchall()
         except sqlite3.Error as exc:
-            out["why"] = f"paper3.db를 읽지 못함: {type(exc).__name__}"
+            out["why"] = f"봇 기록(paper3.db)을 읽지 못했습니다 ({type(exc).__name__})"
             return out
         out["since"] = start
         who = {}
@@ -418,7 +418,7 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
         out["accounts"] = {"core": sum(1 for v in who.values() if v[0] == "core"),
                            "coin": sum(1 for v in who.values() if v[0] == "coin")}
         if d is None:
-            out["why"] = "daily3.db 없음 (밤 점검이 아직 한 번도 돌지 않음)"
+            out["why"] = "밤 점검 기록이 아직 없습니다 (첫 점검은 시작 다음 날 09:20, 전날 끝난 거래로 채움)"
             return out
         out["report"] = report_info(d)
         lo, hi = _utc_day(start) if start else "0000-00-00", _utc_day(max(int(now_ms) - 1, 0))
@@ -429,7 +429,7 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
                             f"WHERE day >= ? AND day <= ? AND kind IN ({','.join('?' * len(kinds))})",
                             (lo, hi, *kinds)).fetchall()
         except sqlite3.Error as exc:
-            out["why"] = f"daily3.db 그림자 기록을 읽지 못함: {type(exc).__name__}"
+            out["why"] = f"밤 점검 그림자 기록을 읽지 못했습니다 ({type(exc).__name__})"
             return out
     finally:
         _close(c, d)

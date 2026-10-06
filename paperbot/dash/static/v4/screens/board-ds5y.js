@@ -110,7 +110,7 @@ export function ds5yCard(ctx) {
     const wait = D.state === "absent" ? "아직 시작 안 함 / 서버에서 계산 중" : "서버에서 계산 중";
     return [h("p", {class: "ds5-wait"}, ui.pill(wait, "warn")),
       progress(D.done || 0, D.total || 342, D.state === "absent" ? "결과 파일 없음" : "5년 계산 진행", D.absent_ko || ""),
-      D.state === "absent" ? h("ul", {class: "ds5-will"},
+      !(D.defs || []).length ? h("ul", {class: "ds5-will"},
         h("li", null, "정의 44개마다 5년(2020-01 ~ 2026-09, 세 기간) 거래 수 · 승률 · 거래당 손익 · 합계 · 낙폭"),
         h("li", null, "비용 전 손익: 동전 던지기(같은 청산으로 아무 때나 진입)와 견주는 기준"),
         h("li", null, "세 기간 중 플러스인 기간 수와 미리 정한 관문을 어디까지 갔는지"),
@@ -146,7 +146,7 @@ export function ds5yCard(ctx) {
         h("span", null, `승률 ${a.win == null ? "—" : fmt.pct(a.win / 100, 0, false)}`),
         h("span", null, "거래당 ", h("b", {class: ["num", fmt.tone(a.mean)]}, pc3(a.mean))),
         h("span", null, "비용 전 ", h("b", {class: ["num", fmt.tone(a.gross)]}, pc3(a.gross))),
-        h("span", null, `합계 ${pc0(a.sum)}`), h("span", null, `낙폭 ${pc0(a.mdd)}`), dots),
+        h("span", {title: "매번 같은 금액으로 레버리지 없이 거래했다면, 그 금액 대비 손익을 모두 더한 것"}, `합계(1배) ${pc0(a.sum)}`), h("span", null, `낙폭 ${pc0(a.mdd)}`), dots),
       h("div", {class: "ds5-paper"}, h("span", {class: "ds5-tag"}, "모의"),
         p.accounts ? [h("span", null, `계좌 ${fmt.int(p.accounts)}`), h("span", null, `거래 ${fmt.int(p.trades)}건`),
           h("span", null, `승률 ${p.rate == null ? "—" : fmt.pct(p.rate, 0, false)}`),
@@ -208,7 +208,7 @@ export function ds5yCard(ctx) {
           flips.accounts ? `${st.tf ? fmt.tfKo(st.tf) : "15분~4시간"} 동전 계좌 ${fmt.int(flips.accounts)}개 · 거래 ${fmt.int(flips.trades)}건 · 승률 ${flips.rate == null ? "—" : fmt.pct(flips.rate, 0, false)} · 수익률 중앙값 ${fmt.pct(flips.medRet, 2)}`
             : "동전 계좌 없음", " ", ui.smallSample(flips.trades, SMALL_PAPER)),
         h("p", {class: "note"}, D.coin_ko || ""),
-        h("p", {class: "note"}, "5년 = 세 기간 합계(1기 2021-08~2024-06 고르기, 2기 2024-07~2026-09 확인, 3기 2020-01~2021-07 최종). 거래당·비용 전·합계는 레버리지 없이 진입가 대비 %. 낙폭 = 코인별 낙폭의 중앙값 중 가장 깊은 기간. 점 = 기간마다 거래당 평균이 플러스(채움)·마이너스(빈칸)."),
+        h("p", {class: "note"}, "5년 = 세 기간 합계(1기 2021-08~2024-06 고르기, 2기 2024-07~2026-09 확인, 3기 2020-01~2021-07 최종). 거래당·비용 전은 레버리지 없이 진입가 대비 %. 합계(1배) = 매번 같은 금액으로 레버리지 없이 거래했다면 그 금액 대비 손익을 모두 더한 것. 낙폭 = 코인별 낙폭의 중앙값 중 가장 깊은 기간. 점 = 기간마다 거래당 평균이 플러스(채움)·마이너스(빈칸)."),
         ui.assume(null, "모의 칸의 수익률은 닫힌 거래 기준 (열린 포지션 손익 제외)"),
         ui.refNote(st.verdictTs, "딥시크는 계좌마다 비교하지 않고 정의·묶음 숫자만 참고로 봅니다."));
     }
