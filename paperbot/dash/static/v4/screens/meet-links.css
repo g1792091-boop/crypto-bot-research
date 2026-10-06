@@ -1,6 +1,9 @@
 /* 손실 거래 <-> 회의 (meet-links.js): the meeting chip on a losing trade and a loss meeting's '근거 거래' list. Tokens
    only (both skins); @imported by account.css, replay.css, rooms-kit.css and home-live.css. */
 .ml-slot:empty, .ml-round:empty { display: none; }
+/* a slot in a wrapping flex row (계좌 trade meta, the why card's biggest losses) never grows past its row: the chip
+   cuts with … instead of pushing the page sideways at 390 px */
+.ml-slot { display: inline-flex; min-width: 0; max-width: 100%; }
 .ml-chip { display: inline-flex; align-items: center; gap: 2px; min-height: 28px; max-width: 100%; padding: 2px 9px; border-radius: 999px;
   border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--ink); font-size: var(--t-xs); font-weight: 600;
   text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
