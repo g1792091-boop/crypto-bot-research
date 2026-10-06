@@ -11,7 +11,7 @@
 //    side on a wide screen and the 심판's idea.
 // HONESTY: counts are the server's; nothing is computed into a score here; "맞음" counts stand next to the base rate
 // (the lab rarely passes, so 반대 is right almost always by that alone); a small sample is said; text nodes only.
-import {h, ui, fmt} from "../core/pb.js";
+import {h, ui, fmt, serverNow} from "../core/pb.js";
 import {sideChip} from "./rooms-kit.js";
 import {ideaCard, stageChip, engineShort} from "./debate-idea.js";
 import {roundChat, partsOf, DEEP_PART_KO, castStrip, sidesLine} from "./debate-chat.js";
@@ -132,14 +132,18 @@ export function deepBlock() {
       h("small", null, "가장 중요한 질문 하나 · 세 번 따로 부름 (주장 → 반박 → 심판)")),
     meta, state, steps, body);
   let shown = null;
+  // today's state from the service's own marks (analysis._deep_today): a retry is promised only when the service will
+  // really try again today (fewer than its tries a day, not stopped by a cap)
   function stateLine(d) {
     const t = d.today || {}, last = t.last;
+    const again = t.retry ? `${t.retry_ts ? `${fmt.hm(t.retry_ts)}쯤` : "오늘 안에"} 한 번 더 시도합니다` : "오늘은 더 시도하지 않습니다 · 내일 다시";
     if (last && last.status === "ok") return "";
+    if (last && last.status === "skipped" && last.tag === "hour") return `시간당 안전장치로 잠시 미룸 · 비용 0 · ${again}`;
     if (last && last.status === "skipped") return `오늘은 건너뜀: ${last.why || "한도"} · 비용 0`;
-    if (last && (last.status === "error" || last.status === "aborted")) return `오늘 시도가 끝나지 못함: ${last.why || "오류"} · 오늘 안에 한 번 더 시도합니다`;
+    if (last && (last.status === "error" || last.status === "aborted")) return `오늘 시도가 끝나지 못함: ${last.why || "오류"} · ${again}`;
     if (last && last.status === "running") return "지금 깊은 토론 중 (세 번 부르는 중)";
     if (!d.on) return "깊은 토론이 꺼져 있습니다 (서버 설정 DEBATE_DEEP)";
-    if (t.due_ts && t.due_ts > Date.now()) return `오늘은 ${fmt.hm(t.due_ts)}(한국 시간)부터 · 아직 전`;
+    if (t.due_ts && t.due_ts > serverNow()) return `오늘은 ${fmt.hm(t.due_ts)}(한국 시간)부터 · 아직 전`;
     return "오늘 깊은 토론을 기다리는 중";
   }
   function render(f) {
@@ -150,6 +154,8 @@ export function deepBlock() {
     meta.replaceChildren(...[
       d.model ? h("span", {class: "db-dmodel"}, d.model) : null,
       h("span", null, `깊은 토론 몫 이번 달 ${usd4(d.month)}${d.cap != null ? ` / ${fmt.usd(d.cap)}` : ""} (월 한도 안)`),
+      // the newest finished deep debate: an earlier day's one says so (the block's title is today's)
+      r && fmt.dayKey(r.ts) !== fmt.dayKey(serverNow()) ? ui.pill(`지난 깊은 토론 · ${fmt.mmdd(r.ts)}`, "thin") : null,
       r ? h("span", null, `${fmt.kst(r.ts)} · 발언 ${fmt.int((r.messages || []).filter((m) => m.part).length)}개 · ${usd4(r.cost_usd)}`) : null].filter(Boolean));
     const sl = stateLine(d);
     state.textContent = sl;

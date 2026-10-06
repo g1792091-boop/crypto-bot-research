@@ -166,7 +166,7 @@ function bubble(m, i, round, onReply, inPart = false) {
     avatar(m.speaker),
     h("div", {class: "db-mb"},
       // the seat's tag, the code's side chip and the deep debate's part, each word once (the 심판: one gold chip)
-      h("div", {class: "db-mh"}, h("b", {class: "db-who"}, c.name), c.tag && c.tag !== m.side ? h("span", {class: "db-tag"}, c.tag) : null,
+      h("div", {class: "db-mh"}, h("b", {class: "db-who"}, c.name), c.tag && c.tag !== m.side && c.tag !== c.name ? h("span", {class: "db-tag"}, c.tag) : null,
         // the deep debate's part: once, on the column's header when the turn sits in its part's column
         m.side ? sideChip(m.side) : null, m.part && m.part !== m.side && !inPart ? h("span", {class: "db-tag db-part"}, m.part) : null,
         h("span", {class: "db-no"}, `${fmt.int(i + 1)}번째`), round && round.ts ? h("time", {title: fmt.kst(round.ts)}, fmt.hm(round.ts)) : null),

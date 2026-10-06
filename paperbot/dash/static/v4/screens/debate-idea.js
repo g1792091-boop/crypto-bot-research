@@ -83,7 +83,8 @@ export function ideaCard(idea, o = {}) {
   const lab = idea.lab || null;
   const where = lab ? [lab.trial_id ? `장부 #${fmt.int(lab.trial_id)}` : "",
     lab.test_number ? `새 매매법 시험 ${fmt.int(lab.test_number)}번째` : lab.n_trials ? `이 방 시험 ${fmt.int(lab.n_trials)}번째` : "",
-    lab.threshold != null ? `기준 p<${fmt.num(lab.threshold, 5)}` : ""].filter(Boolean).join(" · ") : "";
+    // the bar as the lab's own line writes it (two significant digits: 0.00088, 2.5e-05), never rounded to zero
+    lab.threshold_ko ? `기준 p<${lab.threshold_ko}` : ""].filter(Boolean).join(" · ") : "";
   return h("div", {class: ["db-idcard", `st-${idea.stage || "other"}`]},
     o.head === false ? null : h("div", {class: "db-idhead"},
       h("b", null, o.title || "심판이 낸 5년 시험 아이디어"), ui.pill(idea.engine_ko || engineShort(idea), "thin"), stageChip(idea),
@@ -100,7 +101,8 @@ export function ideaCard(idea, o = {}) {
       idea.con_check ? h("p", {class: "db-small"}, `반대가 떨어질 거라 짚은 칸: ${idea.con_check}${idea.con_check_ko ? ` ${idea.con_check_ko}` : ""}`) : null) : null,
     h("div", {class: "db-idcode"},
       h("span", {class: "db-k"}, "코드"),
-      h("p", {class: "db-small"}, `검사: ${idea.check_ko || "—"}`),
+      // the code check at the time the idea was stored: an idea that passed it says so (not "후보" on a tested idea)
+      h("p", {class: "db-small"}, idea.check_status === "ok" ? "검사: 통과 · 시험 후보가 됨" : `검사: ${idea.check_ko || "—"}`),
       stageNote(idea) ? h("p", {class: "db-small"}, stageNote(idea)) : null,
       lab && lab.result_ko ? h("p", {class: "db-labline"}, lab.result_ko) : null,
       lab ? checkList(lab) : null,

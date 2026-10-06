@@ -412,3 +412,106 @@ def test_wiring_and_css():
     for m in re.finditer(r"font(?:-size)?\s*:\s*([^;]+);", css):
         assert "var(--t-" in m.group(1) or "inherit" in m.group(1) or "var(--f-" in m.group(1), m.group(0)
     assert "@container db-list (min-width: 680px)" in css and ".db-deep" in css
+
+
+# ---------------------------------------------------------------- review: odd rows, today's deep state, the base rates
+def test_an_odd_idea_row_never_takes_the_page_down(tmp_path):
+    """A lab detail the view cannot read (not a list of failed checks, a list for a verdict, True for a test number,
+    text that is not JSON) shows the idea without those parts; /api/debate's chat and factory still answer."""
+    path = str(tmp_path / "debate.db")
+    _world(path, deep=False, fillers=0)
+    c = sqlite3.connect(path)
+    ids = [r[0] for r in c.execute("SELECT id FROM debate_lab_ideas WHERE lab_status IS NULL ORDER BY id")]
+    dets = ('{"failed_checks": 5}', '{"verdict": ["x"], "checks": {"a": "yes"}}', "not json",
+            '{"test_number": true, "n_trials": true, "threshold": "nan"}')
+    assert len(ids) == len(dets)
+    for iid, det in zip(ids, dets):
+        c.execute("UPDATE debate_lab_ideas SET lab_status = 'tested', lab_detail = ?, lab_test_number = NULL WHERE id = ?",
+                  (det, iid))
+    c.commit()
+    c.close()
+    out = AN.debate(path, now_ms=NOW)
+    f = out["factory"]
+    assert len(f["ideas"]) == 8 and f["why_fail"]["newlab"]["failed"]["①"] == 1         # the readable one still counts
+    odd = [x for x in f["ideas"] if x["id"] in ids]
+    assert len(odd) == 4 and all(x["lab"]["failed"] == [] and x["lab"]["test_number"] is None
+                                 and x["lab"]["n_trials"] is None and x["lab"]["threshold_ko"] == "" for x in odd)
+    assert all(x["lab"]["verdict"] is None or isinstance(x["lab"]["verdict"], str) for x in f["ideas"] if x.get("lab"))
+    assert all(r.get("idea") for r in out["chat"] if r.get("kind"))
+
+
+def _deep_state(tmp_path, name, error, mark, status="error"):
+    """Today's deep state on a world whose deep debate already ran once today, then had one more round (``status``,
+    ``error``) and the service's day mark ``mark``."""
+    from paperbot.agents import debate as D
+    from paperbot.agents import debate_factory as DF
+    path = str(tmp_path / f"deep-{name}.db")
+    _world(path, fillers=0)
+    db = D.DB(path)
+    db.conn.execute("INSERT INTO debate_rounds (ts, topic, status, model, turns, cost_usd, error, kind) VALUES "
+                    "(?, 'q', ?, 'claude-opus-5-5', 0, 0, ?, 'deep')", (NOW + 2 * M, status, error))
+    db.put(f"deep:{DF.P.kst_day(NOW)}", mark)
+    db.close()
+    return AN.debate_factory_view(path, NOW + 3 * M)["deep"]["today"]
+
+
+def test_the_deep_debate_promises_a_retry_only_when_the_service_will_try(tmp_path):
+    from paperbot.agents.debate import DEEP_ATTEMPTS, DEEP_RETRY_MS
+    once = _deep_state(tmp_path, "once", "반박: overloaded: 529", {"attempts": 1, "last": NOW + 2 * M})
+    assert once["retry"] and once["retry_ts"] == NOW + 2 * M + DEEP_RETRY_MS and once["last"]["tag"] is None
+    spent = _deep_state(tmp_path, "spent", "반박: overloaded: 529", {"attempts": DEEP_ATTEMPTS, "last": NOW + 2 * M})
+    assert not spent["retry"] and spent["retry_ts"] is None and spent["attempts_max"] == DEEP_ATTEMPTS
+    cap = _deep_state(tmp_path, "cap", "deep_cap: 깊은 토론 건너뜀(깊은 토론 이번 달 몫($10)에 닿음)",
+                      {"done": True, "skipped": "deep_cap"}, status="skipped")
+    assert not cap["retry"] and cap["last"]["tag"] == "deep_cap" and cap["last"]["why"] == "깊은 토론 이번 달 몫($10)에 닿음"
+    hour = _deep_state(tmp_path, "hour", "hour: 깊은 토론 건너뜀(시간당 안전장치(30분 뒤 다시))", {"last": NOW + 2 * M},
+                       status="skipped")
+    assert hour["retry"] and hour["last"]["tag"] == "hour" and hour["last"]["why"] == "시간당 안전장치(30분 뒤 다시)"
+    out = _node(f"""
+const F = await import('@S/debate-factory.js');
+const st = (today) => {{ const b = F.deepBlock(); b.render({{deep: {{on: true, model: 'm', cap: 10, month: 0, round: null, today}}}}); return txt(all(b.el, 'db-dstate')[0]); }};
+console.log(JSON.stringify({{once: st({json.dumps(once)}), spent: st({json.dumps(spent)}), cap: st({json.dumps(cap, ensure_ascii=False)}),
+  hour: st({json.dumps(hour, ensure_ascii=False)})}}));
+""")
+    assert out["once"].startswith("오늘 시도가 끝나지 못함: 반박: overloaded: 529 · ") and out["once"].endswith("쯤 한 번 더 시도합니다")
+    assert out["spent"] == "오늘 시도가 끝나지 못함: 반박: overloaded: 529 · 오늘은 더 시도하지 않습니다 · 내일 다시"
+    assert out["cap"] == "오늘은 건너뜀: 깊은 토론 이번 달 몫($10)에 닿음 · 비용 0"
+    assert out["hour"].startswith("시간당 안전장치로 잠시 미룸 · 비용 0 · ") and "한 번 더 시도합니다" in out["hour"]
+
+
+def test_no_base_rate_number_before_the_lab_ledger_was_read(tmp_path):
+    """An agents3.db the service could not read is stored as zero tests per engine: the record then says the usual
+    rates are not collected yet, never '평소 비율로는 0번'."""
+    from paperbot.agents import debate as D
+    path = str(tmp_path / "debate.db")
+    _world(path, deep=False, fillers=0)
+    db = D.DB(path)
+    db.put("factory:base_rates", {e: {"tests": 0, "passed": 0, "pass_rate": None, "fail_share": {}}
+                                  for e in ("newlab", "labtest")})
+    db.close()
+    r = AN.debate_factory_view(path, NOW)["record"]
+    assert r["settled"] == 3 and r["base_known"] is False
+    out = _node(f"""
+const F = await import('@S/debate-factory.js');
+const card = F.factoryCard(); card.render({json.dumps(AN.debate_factory_view(path, NOW), ensure_ascii=False)});
+console.log(JSON.stringify({{rec: all(card.el, 'db-rrow').map(txt)}}));
+""")
+    assert all(x.endswith("연구실 평소 비율 수집 전") for x in out["rec"])
+
+
+def test_the_threshold_reads_like_the_labs_own_line(view):
+    fail = next(x for x in view["factory"]["ideas"] if x["stage"] == "failed" and x["engine"] == "newlab")
+    assert fail["lab"]["threshold_ko"] == "0.00088" and "기준 p<0.00088" in fail["lab"]["result_ko"]
+    tiny = {**fail, "lab": {**fail["lab"], "threshold": 0.05 / 2001, "threshold_ko": f"{0.05 / 2001:.2g}"}}
+    out = _node(f"""
+const I = await import('@S/debate-idea.js');
+const C = await import('@S/debate-chat.js');
+const card = I.ideaCard({json.dumps(tiny, ensure_ascii=False)});
+const ok = I.ideaCard({json.dumps({**tiny, "lab": None, "check_status": "ok", "stage": "candidate"}, ensure_ascii=False)});
+const r = C.roundChat({{round_id: 1, ts: 1, topic: 't', messages: [{{speaker: '퀀트', text: 'x', side: '찬성'}}, {{speaker: '차트 분석가', text: 'y', side: '반대'}}]}});
+console.log(JSON.stringify({{where: all(card, 'db-small').map(txt).filter((x) => x.includes('기준')),
+  check: all(ok, 'db-small').map(txt).filter((x) => x.startsWith('검사')), tags: all(r, 'db-tag').map(txt)}}));
+""")
+    assert out["where"] == ["장부 #305 · 새 매매법 시험 57번째 · 기준 p<2.5e-05"]           # never rounded to 0.00002
+    assert out["check"] == ["검사: 통과 · 시험 후보가 됨"]
+    assert out["tags"] == ["차트"]                                                      # 퀀트: its name once
