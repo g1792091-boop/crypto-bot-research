@@ -232,8 +232,10 @@ def test_away_card_lists_every_section_and_counts_deepseek_only():
         "paperbot-offsite": {{ok: false, last_ms: {T0 - HOUR}}}}}}}, {{level: "warn", problems: ["신호가 늦습니다"]}}, {T0});
     const r = S.rangeAfter("away", {T0 + 10 * HOUR}, {{from: {T0 + HOUR}, to: {T0 + 9 * HOUR}}});
     const r2 = S.rangeAfter("away", {T0 + 10 * HOUR}, null);
+    const unk = S.awayParts({{...d, server: {{known: false, stops: [], stops_n: 0, restarts: [], nightly: []}}}}, {{id: "8h", words: "최근 8시간"}});
+    const lastDay = S.verdictLeft({{verdict_ts: {T0 + 5 * HOUR}, now: {T0}, days_left: 1}});
     console.log(JSON.stringify({{tiles: D.walk(p.tiles), rows: D.walk(p.rows), title: p.title, sub: p.sub, srv: D.walk(srv).text, nsrv: srv.length,
-      r, r2: r2[0]}}));
+      r, r2: r2[0], unk: D.walk(unk.rows).text, lastDay}}));
     """, dom=True)
     t = out["tiles"]["text"]
     assert "기존 36" in t and "120.50 USDT" in t and "딥시크 44" in t and "건수만" in t and "5분봉" in t and "동전 봇" in t
@@ -250,6 +252,9 @@ def test_away_card_lists_every_section_and_counts_deepseek_only():
     assert "예약 작업 실패 1개" in s and "DB 백업" in s and "바깥 백업" not in s   # failed before the window: not counted
     assert "지금 확인할 것 있음" in s and "신호가 늦습니다" in s
     assert out["r"][0] == T0 + HOUR and out["r2"] == T0 + 2 * HOUR       # no absence yet: the last 8 hours
+    # no 1-minute records: the card says it could not tell, never "no stop"
+    assert "봇 멈춤" in out["unk"] and "확인 못 함" in out["unk"] and "봇 가동 기록(1분봉)이 아직 없습니다" in out["unk"]
+    assert out["lastDay"] == "5시간"                                     # the verdict's last day counts hours
 
 
 def test_grid_cells_are_cleaned_and_only_our_groups_can_be_laid_over():

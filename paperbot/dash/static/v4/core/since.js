@@ -118,11 +118,12 @@ function row(ic, cls, title, detail, value, link, vcls) {
     h("span", {class: "since-t"}, h("b", null, title), detail ? h("span", null, detail) : null),
     value != null ? h("span", {class: ["since-v", "num", vcls]}, value) : h("span", {class: "since-go", "aria-hidden": "true"}, "›"));
 }
-/** A section of the 자는 동안 card with nothing in it: its name and 없음 (still a link to its place). */
-const noneRow = (ic, title, detail, link) => h("a", {class: "since-row none", href: link, "data-close": "1"},
+/** A section of the 자는 동안 card with nothing in it: its name and 없음 (still a link to its place); `word` says
+ *  확인 못 함 where the record to tell is missing. */
+const noneRow = (ic, title, detail, link, word = "없음") => h("a", {class: "since-row none", href: link, "data-close": "1"},
   h("span", {class: "since-ic", "aria-hidden": "true"}, ic),
   h("span", {class: "since-t"}, h("b", null, title), detail ? h("span", null, detail) : null),
-  h("span", {class: "since-v since-none"}, "없음"));
+  h("span", {class: "since-v since-none"}, word));
 
 const TRADE_KO = {best: ["▲", "up", "가장 크게 번 거래"], worst: ["▼", "down", "가장 크게 잃은 거래"]};
 /** The best ("best") or worst ("worst") closed trade of 기존 36 · 5분봉 · 추가 계좌 (the server never names another
@@ -237,8 +238,10 @@ export function awayParts(d, o = {}) {
   const G = T.groups || {};
   const tiles = GROUPS.filter(([g]) => g !== "extra" || G.extra).map((x) => tile(x, G[x[0]]));
   const M = d.meetings || {};
-  const srv = serverRows(d, o.jobs, o.health, d.after);
   const S = d.server || {};
+  // the bot's stops need its 1-minute records: without them the card says it could not tell (never "no stop")
+  const srv = [...serverRows(d, o.jobs, o.health, d.after),
+    S.known === false ? noneRow("■", "봇 멈춤", "봇 가동 기록(1분봉)이 아직 없습니다", href("server"), "확인 못 함") : null].filter(Boolean);
   const vts = d.verdict_ts;
   const leftKo = verdictLeft(d);
   const sh = (t) => h("p", {class: "since-sh"}, t);
@@ -251,7 +254,7 @@ export function awayParts(d, o = {}) {
     meetingRow(d) || noneRow("◆", "끝난 회의", M.error ? "회의 기록을 읽지 못했습니다" : "결론을 내고 끝난 회의", href("digest")),
     alertRow(d) || noneRow("!", "봇 알림", "주의 · 긴급 알림", href("alerts")),
     sh("서버"),
-    ...(srv.length ? srv : [noneRow("■", "서버 문제", S.known === false ? "봇 가동 기록이 아직 없어 멈춤은 확인하지 못했습니다" : "멈춤 · 재시작 · 실패한 작업", href("server"))]),
+    ...(srv.length ? srv : [noneRow("■", "서버 문제", "멈춤 · 재시작 · 실패한 작업", href("server"))]),
     sh("판정"),
     ...milestoneRows(d),
     vts ? row("D-", "accent", `판정까지 ${leftKo}`, `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 ${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
