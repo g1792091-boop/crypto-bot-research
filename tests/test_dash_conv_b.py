@@ -396,3 +396,12 @@ def test_a_finger_drawing_or_moving_a_drawing_does_not_scroll_the_page():
     assert ".drw-drawing, .drw-drawing * { touch-action: none; }" in _read("screens/draw-kit.css")
     dk = _read("screens/draw-kit.js")
     assert 'wrap.addEventListener("touchmove", (e) => { if (st.drag || st.draft) e.preventDefault(); }, {capture: true, passive: false});' in dk
+
+
+def test_rail_star_count_and_home_strip_size():
+    """The rail's ★ count follows a star change before its list was ever opened (the listener is module level), and the
+    홈 strip shows at most 20 chips (CONTRACT: about 20 rows at once)."""
+    pop = _read("core/favpop.js")
+    assert "\nonFavs(() => { paintBtn(); if (st.pop && !st.pop.hidden) paint(); });" in pop
+    strip = _read("screens/home-favs.js")
+    assert "const CHIPS = 20;" in strip and "kids.slice(0, CHIPS)" in strip

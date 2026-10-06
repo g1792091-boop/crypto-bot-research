@@ -18,5 +18,6 @@
 .hf-thinnote { color: var(--muted); font-size: var(--t-2xs); }
 .hf-thinnote[hidden] { display: none; }
 .hf-pos { color: var(--accent); font-size: var(--t-xs); }
+.hf-more { align-self: center; font-size: var(--t-xs); white-space: nowrap; }
 .hf-empty { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.5; white-space: normal; }
 @media (max-width: 599px) { .hf-note { display: none; } }

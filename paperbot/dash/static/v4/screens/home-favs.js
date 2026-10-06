@@ -8,6 +8,7 @@ import {h, put, fmt, fav, derive, features} from "../core/pb.js";
 
 const OWN = new Set(["strategy", "ds200", "reel"]);
 const SMALL = 20;
+const CHIPS = 20;
 
 /** The chip numbers of one starred strategy / account from the board: {name, sub, ret, trades, countOnly, missing}. */
 export function favNumbers(kind, id, board) {
@@ -78,7 +79,8 @@ export function favStrip(ctx) {
         t && t.p != null ? h("span", {class: ["num", fmt.tone(t.p, fmt.pctOf(t.p, 2, true))]}, fmt.pctOf(t.p, 2, true)) : null],
       ctx.href(features.wide ? "terminal" : "chart", sym), `${fmt.coin(sym)} ${features.wide ? "터미널" : "차트"} 열기`));
     }
-    put(row, kids);
+    // at most CHIPS chips (CONTRACT: about 20 rows at once); the PC rail's ★ list has them all
+    put(row, kids.length > CHIPS ? [...kids.slice(0, CHIPS), h("span", {class: "hf-more muted"}, `외 ${fmt.int(kids.length - CHIPS)}개 더`)] : kids);
   }
   ctx.watch("board", (b) => { if (b) { board = b; render(); } });
   ctx.watch("ticker", (t) => {

@@ -50,7 +50,6 @@ export function openFavPop(anchor) {
       if (!st.pop.hidden && !st.pop.contains(e.target) && !(e.target.closest && e.target.closest(".favrail"))) closeFavPop();
     }, true);
     bus.on("route", () => closeFavPop());
-    onFavs(() => { if (!st.pop.hidden) paint(); paintBtn(); });
   }
   st.opener = anchor || null;
   paint();
@@ -76,6 +75,9 @@ function paintBtn() {
   b.querySelector(".favrail-n").textContent = n ? String(n) : "";
   b.setAttribute("aria-label", `즐겨찾기 ${n}개 보기`);
 }
+// a star added or taken anywhere: the rail's count (and the open list) follow at once, list opened or not
+onFavs(() => { paintBtn(); if (st.pop && !st.pop.hidden) paint(); });
+
 /** The rail's ★ (core/rail.js draws it on every redraw). */
 export function favRailBtn() {
   const n = favCount();
