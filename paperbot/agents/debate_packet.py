@@ -214,6 +214,20 @@ def _recent_meetings(agents: Optional[sqlite3.Connection], k: int = 4) -> list[d
     return [{"room": r[0], "trigger": r[1], "ended_ts": r[2], "decision": str(r[3] or "")[:140]} for r in rows]
 
 
+def _latest_verdict_date(path: Optional[str]) -> Optional[str]:
+    """The newest verdict's date in checkpoint.db (checkpoint.latest_verdict's row, read through open_ro), or None."""
+    c = open_ro(path)
+    if c is None:
+        return None
+    try:
+        r = c.execute("SELECT data FROM verdicts ORDER BY date DESC LIMIT 1").fetchone()
+        return None if r is None else str(json.loads(r[0])["date"])
+    except (sqlite3.Error, TypeError, ValueError, KeyError):
+        return None
+    finally:
+        c.close()
+
+
 def _checkpoint(path: Optional[str], now_ms: int, start: Optional[int]) -> dict:
     """The 30-day verdict state: only whether a verdict exists and when the next one is (never the verdict itself:
     the debate does not conclude before day 30)."""
@@ -222,10 +236,13 @@ def _checkpoint(path: Optional[str], now_ms: int, start: Optional[int]) -> dict:
         return out
     try:
         from .. import checkpoint as CP
-        # no checkpoint.db yet (before the first verdict): the next date still comes from the run's start
-        view = CP.dashboard_view(path) if path and os.path.exists(path) else {}
-        out["verdict_exists"] = bool(view.get("ready"))
-        k, last = 1, (CP.day_ms(view["date"]) if view.get("ready") else -1)
+        # no checkpoint.db yet (before the first verdict): the next date still comes from the run's start. The newest
+        # verdict's date is read here through open_ro (its immutable fallback), not CP.dashboard_view: checkpoint.db is
+        # a WAL file written by a timer, and the frozen reader's plain mode=ro open reads nothing under the debate
+        # unit's ReadOnlyPaths (it would then report 'no verdict' after the first verdict exists)
+        vdate = _latest_verdict_date(path)
+        out["verdict_exists"] = vdate is not None
+        k, last = 1, (CP.day_ms(vdate) if vdate else -1)
         while CP.checkpoint_ts(start, k) <= last:
             k += 1
         out["next"] = f"{CP.day_str(CP.checkpoint_ts(start, k))} 09:00 KST"

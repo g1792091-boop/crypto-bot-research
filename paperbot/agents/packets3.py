@@ -73,12 +73,25 @@ _PRIOR: Optional[dict] = None
 
 
 def _ro(path: str) -> Optional[sqlite3.Connection]:
+    """A read-only connection, or None when the file is missing or cannot be read. ``mode=ro`` first; when that cannot
+    read (a WAL file with no -shm next to it, in a directory this user cannot write: the debate service under
+    ReadOnlyPaths=/var/lib/paperbot reading daily3.db between two nightly runs), ``immutable=1`` (debate_packet.open_ro's
+    fallback). Where ``mode=ro`` works (the agents, the dashboard) nothing changes."""
     if not path or not os.path.exists(path):
         return None
     # quoted: a '?' or '#' in the path must never change the open mode
-    c = sqlite3.connect(f"file:{urllib.parse.quote(os.path.abspath(path))}?mode=ro", uri=True, timeout=10)
-    c.row_factory = sqlite3.Row
-    return c
+    base = f"file:{urllib.parse.quote(os.path.abspath(path))}"
+    for flags in ("?mode=ro", "?mode=ro&immutable=1"):
+        c = None
+        try:
+            c = sqlite3.connect(base + flags, uri=True, timeout=10)
+            c.row_factory = sqlite3.Row
+            c.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
+            return c
+        except sqlite3.Error:
+            if c is not None:
+                c.close()
+    return None
 
 
 def _r(x, n=4):
