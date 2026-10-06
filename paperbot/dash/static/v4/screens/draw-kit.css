@@ -20,6 +20,8 @@
 /* the line pills step right of the open tool column */
 .drw-on .cfx-pill { left: 50px; max-width: calc(100% - 70px); }
 .drw-drawing canvas { cursor: crosshair; }
+/* while a tool is picked, a finger on the chart draws: the page does not scroll under it (phones) */
+.drw-drawing, .drw-drawing * { touch-action: none; }
 
 .drw-menu { position: absolute; z-index: 8; min-width: 210px; max-width: min(300px, calc(100% - 8px)); display: grid; gap: 2px; padding: 6px; border-radius: 10px;
   border: 1px solid var(--line-2); background: var(--surface); box-shadow: 0 14px 32px var(--card-shadow, transparent); }

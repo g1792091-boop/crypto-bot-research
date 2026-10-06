@@ -388,3 +388,11 @@ def test_chart_alert_never_promises_a_ring_while_the_sender_is_off():
     dk = _read("screens/draw-kit.js")
     assert "a.sender_alive" in dk and "features.priceSender" in dk
     assert "켜지면 그때부터 울립니다" in dk and "보내는 프로그램이 꺼져 있음" in dk
+
+
+def test_a_finger_drawing_or_moving_a_drawing_does_not_scroll_the_page():
+    """Phones: with a tool picked the chart takes the finger (touch-action none); moving a picked drawing with no tool
+    stops the page scroll in touchmove (checked in a browser: the page scrolled 127 px / 65 px under the finger before)."""
+    assert ".drw-drawing, .drw-drawing * { touch-action: none; }" in _read("screens/draw-kit.css")
+    dk = _read("screens/draw-kit.js")
+    assert 'wrap.addEventListener("touchmove", (e) => { if (st.drag || st.draft) e.preventDefault(); }, {capture: true, passive: false});' in dk

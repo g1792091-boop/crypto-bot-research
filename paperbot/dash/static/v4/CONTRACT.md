@@ -501,8 +501,13 @@ Status after the review pass (team P10 is adding these to `app.py`): **#1 arrive
 - **매매법 비교** (`#/compare`, `/api/v4/compare`): DeepSeek picks are compared by counts only (the server sends no
   money, rate, curve, coin-flip rank or 5-year return for them); coin flips are the yardstick, never a pick; extras
   (late start, another rule) get no coin-flip or 5-year side; every number says 설명용, 판정 아님 and 동전 봇 순위 is
-  참고 with `ui.refNote`.
+  참고 with `ui.refNote` (and 표본 적음 under 30 trades). 합친 곡선 최대 낙폭 is the drawdown of the line as drawn (its
+  last point, the wallets now, counts). The 5-year side is the research under its own rules (the 36: the v3 leverage
+  rule, every signal taken; a research exit that is not the live one is named): the card says so, never "the same
+  rules as now".
 - **차트 그리기** (`screens/draw-kit.js`, any chart built on `chartDeck`): `drawTools({ctx, chart, series, wrap, box, deck,
-  sym, tf, step, onAlertAdded})`; '이 가격에 알림' only through `POST /api/price-alerts` (the sender is unchanged).
+  sym, tf, step, onAlertAdded})`; '이 가격에 알림' only through `POST /api/price-alerts` (the sender is unchanged). The
+  menu and the answer read the sender's state (`features.priceSender`, then the route's own `sender_alive`): while
+  paperbot-tgtrades is off they say the alert is saved and rings once it is back, never "텔레그램으로 알립니다".
 - **TV 자동 넘김** (`core/tvmode.js`): key t, the rail's TV, the 서버 sub-tab row; `tvSection(onDone)` is the same
   controls for a settings panel. It only changes which real screen is shown (no invented activity).

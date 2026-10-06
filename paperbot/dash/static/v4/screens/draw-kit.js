@@ -311,6 +311,8 @@ export function drawTools(o) {
   const swallow = (e) => { if (block) { e.stopPropagation(); } };
   wrap.addEventListener("mousedown", swallow, true);
   wrap.addEventListener("touchstart", swallow, {capture: true, passive: true});
+  // a finger moving a picked drawing (no tool, so the chart's touch-action still lets the page scroll): keep the page still
+  wrap.addEventListener("touchmove", (e) => { if (st.drag || st.draft) e.preventDefault(); }, {capture: true, passive: false});
   wrap.addEventListener("pointerdown", (e) => {
     block = false;
     if (st.menu && !st.menu.contains(e.target)) closeMenu();
