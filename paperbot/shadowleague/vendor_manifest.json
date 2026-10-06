@@ -1,0 +1,122 @@
+{
+ "schema": 1,
+ "about": "Which code the shadow league's zone-flip detector and exit simulation were copied from, and the hashes of the originals. tests/test_shadowleague_parity.py checks every number here against the files and checks that each verbatim function has the original's exact source text.",
+ "sources": [
+  {
+   "id": "lib_zoneflip",
+   "where": "docs/zoneflip-reel/lib_zoneflip.py.txt on branch claude/keen-pasteur-wav02u; reference copy in this repository: tests/data/zoneflip_original/lib_zoneflip.py.txt",
+   "sha256": "b4a5f6d00ff1d9cb71cf8cd209eb39731603daaaa50827dcc5fdd95a424677f3",
+   "prereg_sha256": "202d638e4a3d72aacc1d8ac601f9372f0ed4fdb5a923c5e8ecabadafaa642c8a",
+   "results_sha256": "85d137f404a875b604c9173e470ada5da870798d331f4f575ed72dabdc6ebd7c",
+   "copied": {
+    "paperbot/shadowleague/zoneflip.py": {
+     "verbatim_functions": {
+      "_edge": "9f2fc9271fd77bd62a7d81fd19d507a7318a401f56edb1f9fe3a2d8aa4c5af21",
+      "profiles": "8554c71543eb852c379c3d7cc0d248b29cc7b609e56ba0d8f94d63f89adb6576",
+      "qualify": "a4d712df13089085f26148d1de328e32a247858f4550f47835611d8793c79831",
+      "zone_runs": "e570abe92edfeebc6f1b851bb8b67270107bc659d473e268622ffce4bad59ec5",
+      "count_touches": "e710133001b47d929180e8098e9214dac8516c6eaed31a24ed2038bba5a9f0cb",
+      "resolve": "74816438388356cad603893c36f3109a38eec1242b8d88dcb540f0d0136cadf7",
+      "choose": "6de23271a6265dd0b5219a94285b756fa82e11ab421f6bbce4b8c46821df1725"
+     },
+     "verbatim_constants": [
+      "VP_BARS",
+      "N_BUCKETS",
+      "PCTL",
+      "BREAK_ATR",
+      "MIN_TOUCHES",
+      "TOUCH_GAP",
+      "RETEST_BARS",
+      "STOP_BUF_ATR",
+      "MAX_STOP_ATR",
+      "MIN_RR",
+      "MAX_HOLD",
+      "ATR_LEN",
+      "VARIANTS"
+     ],
+     "changed": {
+      "setups": "one optional argument b_min (default None = the original); a break at bar b < b_min is not looked at. Nothing else differs.",
+      "signals": "signals_from_arrays: the same steps on numpy arrays instead of a DataFrame"
+     }
+    },
+    "paperbot/shadowleague/sim.py": {
+     "verbatim_functions": {
+      "exit_fixed_batch": "b95df5f4d849a613cd70eb2f7001f30a2c32262232a504724d294d4886a9d4c8"
+     },
+     "changed": {
+      "simulate": "the call R.exit_trade(...) is exit_trade(...) (the copy next to it); nothing else differs"
+     }
+    }
+   }
+  },
+  {
+   "id": "lib_reel5m",
+   "where": "research/reel5m/lib_reel5m.py (frozen)",
+   "sha256": "a824717e50b0a4f7e2890ceb1457a12ee096ebc36e8a56c56e30c7e77dfc0eda",
+   "copied": {
+    "paperbot/shadowleague/sim.py": {
+     "verbatim_functions": {
+      "exit_trade": "aed572e5874d56f3a3c2a9fdeab30499a189e401ef75c1fface6b35374df571e"
+     }
+    }
+   }
+  },
+  {
+   "id": "fg_indicators",
+   "where": "third_party/sweep/harness/vendor/fg_indicators.py (locked)",
+   "sha256": "bf43c1b805463a012c76dec0114adff027a06e23dfc7268e092c496ff35fdb8d",
+   "re_implemented": {
+    "paperbot/shadowleague/zoneflip.py": {
+     "functions": [
+      "true_range",
+      "atr14 (= rma(true_range(df), 14) = atr(df, 14))",
+      "atr_next"
+     ],
+     "how": "numpy and a loop with the arithmetic of pandas ewm(alpha=1/14, adjust=False, min_periods=14); tests compare it with fg_indicators.atr and with pandas, bit for bit"
+    }
+   }
+  },
+  {
+   "id": "sweep_lib",
+   "where": "third_party/sweep/harness/sweep_lib.py (locked)",
+   "sha256": "2b20c3c155f31bbe3b51cc3b7b96a8b8c01226d6cf573cb601077d89f98cd543",
+   "constants": {
+    "FEE_SIDE": 0.0005,
+    "SLIP_SIDE": 0.0002,
+    "FUNDING_8H": 0.0001,
+    "tf_minutes": {
+     "15m": 15,
+     "30m": 30,
+     "1h": 60,
+     "4h": 240
+    },
+    "max_hold": 48
+   },
+   "copied": {
+    "paperbot/shadowleague/sim.py": {
+     "constants": [
+      "FEE_SIDE",
+      "SLIP_SIDE",
+      "FUNDING_8H",
+      "TF_MINUTES"
+     ]
+    }
+   }
+  },
+  {
+   "id": "search_owners_book",
+   "where": "research/search/search.py (frozen): OWN_EXPO, OWN_MARGIN, OWN_LIQ and owners_book; the step-by-step version is lib_zoneflip.py owners_curve",
+   "sha256": "06920240b6f56e954e1896c16fed7c58b8fb8b3d95d73109efa0d1dcced43ce3",
+   "constants": {
+    "OWN_EXPO": 4.0,
+    "OWN_MARGIN": 0.2,
+    "OWN_LIQ": "1 / 20 - 0.005 = 0.045"
+   },
+   "copied": {
+    "paperbot/shadowleague/account.py": {
+     "rules": "sort by (entry time, coin); skip a trade whose entry is before the last taken trade's exit; liquidated when -mae >= OWN_LIQ; equity *= 1 - OWN_MARGIN if liquidated else 1 + max(OWN_EXPO * net, -OWN_MARGIN)"
+    }
+   }
+  }
+ ]
+}

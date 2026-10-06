@@ -433,6 +433,7 @@ AI의 답은 글(데이터)로만 저장됩니다. 실제로 무언가를 하는
 | `AGENTS_DISPUTE_TESTS_PER_DAY` | 다툼 5년 시험의 하루 몫(공용 시험 대기열이 지킴). 3보다 크게 할 수 없음 | 3 |
 | `AGENTS_DISPUTE_ROOM_GAP_DAYS` | 한 매매법 방에서 다툼 5년 시험 사이의 최소 일수 | 7 |
 | `AGENTS_DISPUTE_EXPERT` | `1`이면 편 가르기 회의에도 코드가 고른 전문가 차례를 둠(AI 1번 더) | 0 |
+| `AGENTS_SHADOW_LEAGUE` | `1`이면 **그림자 리그**를 켬: 5년 시험에서 실패한 아이디어(첫 멤버: 릴스 매물대)를 실제 봉에서 가상 거래로만 기록. 15분마다 최대 20초, 바이낸스 공개 시세만 읽고 `shadow_league.db`에만 씀. 모의 계좌·30일 판정·보정과 무관(참고용, 판정 아님). `docs/shadow-league.md` | 0 (끔: 파일도 만들지 않음) |
 
 값을 잘못 적으면(예: `AGENTS_OWNER_OK=maybe`) 에이전트가 시작하지 않고 `systemctl status paperbot-agents`에 이유가 나옵니다. 값은 맞지만 어떤 회의를 아예 열 수 없게 만드는 한도(예: `loss=8`이면 파산 몫을 빼고 손실 묶음 회의에 남는 호출이 없음, `total`이 사고+정기 회의 몫보다 크지 않음)는 매번 경고로 기록합니다(`journalctl -u paperbot-agents`). 정한 한도 없이 도는 일은 없습니다. 이 설정들로 관문을 느슨하게 할 수는 없습니다.
 
@@ -509,12 +510,14 @@ sudo systemctl start paperbot-dash paperbot-backup.timer paperbot-agents.timer  
 - `daily3.db`: 밤 점검만 씁니다.
 - `agents3.db`: 에이전트 틱(`python -m paperbot.agents.rooms tick`)만 씁니다. 방, 회의(rounds), 메시지, 메모, 시험 장부(trials, trial_results: 추가만 가능), 제안(proposals: 상태만 정해진 경로로 바뀜), 커서, agent_calls. 스키마: `paperbot/agents/rooms_db.py`. 낙관·비관 토론 판정 `committee_calls`는 `paperbot/agents/committee.py`가 틱마다 `CREATE TABLE IF NOT EXISTS`로 만듭니다(이미 쓰던 agents3.db도 그대로; 시험 장부 종류와 CHECK 조건은 바꾸지 않음).
 - `flow.db`·`liq.db`(파생 지표·강제청산 기록기의 것): 토론과 경제지표 복기가 읽기 전용(`mode=ro`)으로 읽습니다. 없으면 그 칸은 null(모름).
+- `shadow_league.db`: 그림자 리그(`paperbot/shadowleague/`, 스위치 `AGENTS_SHADOW_LEAGUE`, 기본 꺼짐)를 켰을 때 에이전트 틱만 씁니다. 대시보드는 `shadowleague/view.py`로 읽기 전용으로 읽습니다. 매매 계좌가 아니고 가상 거래 기록뿐입니다(`docs/shadow-league.md`).
 - `inbox.db`: 대시보드만 씁니다(owner_messages, approvals). 틱은 읽기 전용으로 읽고, 어디까지 처리했는지 agents3.db 커서(`owner:<방>`, `owner_copied:<방>`, `inbox:approvals`)에 적습니다.
 - `checkpoint.db`: 체크포인트 판정 작업만 씁니다. 틱은 30일 점검의 판정을 읽기 전용(`mode=ro`, 파일이 없으면 만들지 않음)으로 읽습니다. 실거래 조건 점검(`agents/readiness.py`)과 주간 성적표도 같은 읽기 함수(`checkpoint.dashboard_view`)로 읽습니다.
 - `research/power/out/power.json`: `python3 research/power/power.py run`(저장소 자료만, 약 13초)이 만들고 커밋합니다. 에이전트(`agents/power.py`)는 읽기만 합니다. 실거래 조건 점검·가격 충격 시험·조합 시너지는 데이터베이스에 아무것도 쓰지 않습니다(자료 루트: 30일 점검 `readiness`, 금요일 `survival.shock`·`survival.readiness`, 화요일 `combo.synergy`, 토요일 `learning.power`, 매일 `board.readiness`(팀장)·`board.shock`(리스크 책임자); `rooms.CODE_ROOTS`, `TEAM_VIEW`, `MEETING_PACKETS`).
 
 **한 번의 틱** (`deploy/paperbot-agents.service`, 15분마다 `paperbot-agents.timer`, `agents3.db.lock`으로 겹치지 않음):
 0. (코드만, 2026-10-04) 토론 판정 표 확인(`committee.ensure`), 24시간 지난 토론 판정 채점(`rooms.grade_debate`, 바이낸스 공개 5분봉), 요일별 분석·경제지표 복기를 열거나 열지 않은 이유, 새 실행의 거래가 10건 미만이라 건너뛴 14:00 순위 검토(`ranking`)와 일요일 주간 성적표(`weekly_report`)를 커서 `meetings:skipped`에(`rooms.store_skipped` → `triggers.skipped_status`/`analysis_extra`/`fresh_run_data`, `rooms.weekly_report_skip`), 하루 한 번 보안 점검을 커서 `security:check`에(`digest.store_security`). 회의 시각은 커서 `policy:hours`(`rooms.schedule_hours`: `cost_review`·`combo_review`·`coin_review`·`rr_review`·`risk_review`·`learning_review`·`analysis_weekdays`·`event_review`·`bull_bear` 포함)에 적혀 대시보드가 읽습니다.
+0b. (코드만, 스위치 `AGENTS_SHADOW_LEAGUE=1`일 때만, 회의 전) 그림자 리그 한 번(`shadowleague.hook.run`, 최대 20초, 남은 일은 데이터베이스의 커서로 다음 차례가 이어감): 바이낸스 공개 봉을 받아 `shadow_league.db`에 가상 거래를 기록합니다. 꺼져 있으면 import도 하지 않아 파일도 쿼리도 없습니다. 자세히는 `docs/shadow-league.md`.
 1. 방 42개 확인(`rooms_db.ensure_rooms`), 틱 시각을 커서 `tick:last`에 기록(로그인 확인 거절·실행 오류도 기록; 대시보드의 "에이전트 멈춤"), 쓰고 있는 한도를 커서 `policy:caps`에 저장(대시보드가 읽음), 남아 있는 'running' 회의를 'failed'로 표시(틱 잠금을 잡았으므로 죽은 실행의 회의: 실패 한 번으로 세고 한 번 더 엶)
 2. paper3.db가 바뀌었는지 확인(`triggers.reconcile_paper_cursors`, 아래), 두 분의 승인·거절 반영(`rooms.apply_approvals`). 관문 실패 제안의 승인은 `rooms_db`의 트리거가 거부하고, 승인 클릭은 그 방의 지금 시험 수로 관문을 다시 판정해(`rooms.gate_now` → `actions.current_gate`) 불통과면 코드가 거절로 닫습니다. 기다리는 제안의 지금 판정은 커서 `proposals:gate_now`에 적어 대시보드가 보여 줍니다.
 3. `triggers.find_due`: 코드만으로 열 회의를 고릅니다(AI 호출 없음). 우선순위, 방별 하루 한도, 틱당 한도를 적용합니다.
