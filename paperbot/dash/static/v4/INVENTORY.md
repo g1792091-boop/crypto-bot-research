@@ -183,6 +183,7 @@ GET routes (sample files in `api_samples/`):
 | `/api/rooms/{id}/messages?after_id&before_id&limit` | {room_id, messages[], pending_owner, has_more, max_id, room} | rooms.js | rooms, office |
 | `/api/rooms/{id}/notes` | [{id, ts, room_id, strategy, text, round_id}] | rooms.js | rooms |
 | `/api/trials`, `/api/proposals` | ledger / proposals | rooms.js | rooms |
+| `/api/disputes` | who was right: a room's disputes, its seats, the base rates (design 102 C) | — | rooms (rooms-side.js) |
 | `/api/agents/usage` | {day, calls, tokens, cap_calls, cap_tokens, classes[], week, caps_source} | rooms.js | rooms, server |
 | `/api/office` | {ready, now, day, zones, strategy_members, running[], recent[], latest_strategy, today, schedule, roles} | office.js | store `office`: office, home |
 | `/api/digest/day`, `/staff`, `/week`, `/tf` | see samples | digest.js | digest |
@@ -456,3 +457,12 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 | 다음 기간에도 통할까 | 조합 시너지, next card: the first half's best 2-5 combination (agents/synergy.search on the first half only) scored on the second half next to the median and 75th percentile of all 443,667 combinations' second-half scores; coin flips the same way (참고). Filling bar until 20 KST days | `.walk` |
 | 한 계좌로 합치면 | 조합 시너지, last card: the top 3 combinations in one account: share of position time with the same coin held long and short at once (상쇄), peak margin in use at once vs one account's start (USDT, with assume()); the 12 coin-flip accounts merged as 참고. Filling bar until the 조합 시너지 top list exists (5 trades per account) | `.one_account` |
 | 청산 이유 tab | 분석 › 청산 이유 (after 손익비·위험; screens/analysis-exits.js, groups kind): per group vs its own coin flips, the share of each exit reason that really occurs (손절, each 익절 잠금 step, 목표가, 시간 청산, 강제청산, …) as paired bars, then trades / win share / mean net ROE per reason; 역행·순행: winners' and losers' worst move against the entry as a share of the first stop distance (0-25/25-50/50-75/75-100/100%+), winners that came within 80% of their stop, losers' best move in R; one plain line under each chart. DeepSeek: counts and shares only (no ROE, no R size). Filling bar until 20 closed trades (10 winners / losers per chart) | `/api/v4/exits?group=core\|ds200\|reel` (dash/more/exits.py) |
+
+## disputes-c: 편 가르기와 누가 맞았나 (design 102 C; agents side needs the full install, AGENTS_SIDES=1; tests/test_dash_rooms.py, tests/test_digest.py)
+
+| Addition | Screen / place | Server (read-only) |
+|---|---|---|
+| 누가 맞았나 (실험 전체) | 회의 요약 › 직원 성적표, a card after the bull/bear card (screens/disputes-kit.js `whoWasRightCard`): tiles 결론 난 다툼 · 공격 쪽이 이긴 비율 · 대기 · 인정·말로만·포기; bars of the attacker's share for 5-year and forward disputes next to 동전 던지기 50% (dim); per staff 맞음 x/y · 기준 비율로만 맞혔다면 e개 · 공격할 때 a/b · 편들 때 c/d · 대기 · 인정 · 말로만 · 포기 (10 a page, 표본 적음 under 10 settled); the latest results (5 a page, the claim as a quote, code line). Empty: 아직 다툼이 없습니다 | `/api/digest/staff` (`who_was_right`, `staff[].right`) |
+| 누가 맞았나 chip | 직원 성적표 rows: `누가 맞았나 7/10` (+ 표본 적음) when the member has a dispute | `/api/digest/staff` (`staff[].right`) |
+| 편 가르기 · 누가 맞았나 | 에이전트 방 › a strategy room's info pane (rooms-side.js): 편드는 직원 / 공격하는 직원 with each seat's record (only once the agents wrote the seats: sides on), the room's disputes (5 + 더 보기: 5년 시험 대기 / 앞으로 40건 중 12건 / 결론), the base rates and the coin flip's 50% | `/api/disputes?room=` (`disputes`, `seats`, `base_rates`) |
+| 5년 시험 대기열 | 에이전트 방 › team:lab info pane: source chips (연구원 / 토론방 / 회의 / 두 분), what is tested (code text), state, today's quota, N번째 시험 · 기준 p<0.05/N; 수집 전 until the shared queue's route exists | `/api/lab/intake` (NEEDS SERVER: the shared-queue branch) |
