@@ -229,7 +229,14 @@ export function drawTools(o) {
   wrap.append(tools);
   const toggle = h("button", {type: "button", class: "drw-toggle", "aria-pressed": "false",
     title: "그리기: 가로선·추세선·네모·글 (이 기기에 코인·봉마다 저장) · 차트에서 오른쪽 클릭(휴대폰은 길게 누르기) = 이 가격에 알림",
-    onclick: () => openTools(tools.hidden)}, "그리기");
+    onclick: () => {
+      openTools(tools.hidden);
+      // the first time on this device: how the tools and the alert menu are reached (a phone has no hover title)
+      if (!tools.hidden && local.get("draw-hint", false) !== true) {
+        local.set("draw-hint", true);
+        ctx.toast("도구를 고른 뒤 차트를 누르세요 · 차트를 길게 누르면 (PC는 오른쪽 클릭) '이 가격에 알림'");
+      }
+    }}, "그리기");
   function openTools(on) {
     tools.hidden = !on;
     toggle.setAttribute("aria-pressed", String(on));
