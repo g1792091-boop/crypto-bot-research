@@ -15,6 +15,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     power   판정 감도: 진짜 실력별 30·60·90일 합격 확률 (research/power/out/power.json, 판정 화면)
     brief   오늘의 회의 결론 보고판 (홈 · 대표실 책상)
     vs5y    5년 시험 vs 지금 vs 동전 봇 (매매법 상세, 봉마다)
+    size5y  손실 크기 규칙: 같은 5년 진입·청산에 크기 규칙만 바꿔 (data/size5y.json, 분석 › 손실 크기 규칙)
     bell        결재함 종 (머리글: 두 분 승인을 기다리는 제안 수)
     uptime      가동 기록 (서버·비용: 시간마다 처리한 분, 재시작, 밤 점검)
     tradeshape  요일×시간 열지도 + 거래 결과 분포 (분석)
@@ -24,6 +25,10 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     movers  급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 전체 (터미널 윗줄, 요청 2개를 60초 캐시)
     synplus 조합 시너지 보강: 같이 망하는 날, 같이 들어간 진입, 다음 기간에도 통할까, 한 계좌로 합치면 (분석 › 조합 시너지)
     exits   청산 이유 + 역행·순행 (분석 › 청산 이유, ?group=core|ds200|reel; 딥시크는 거래 수와 비율만)
+    regime5y 장세 스위치: 5년 장세별 성적 + 장세 스위치 걸어가며 확인 (data/regime5y.json) + 모의 거래 장세별 (분석 › 장세 스위치)
+    luck    운 vs 실력: 여러 개를 한꺼번에 시험하는 곳마다 시험 수, 통과 기준, 운으로 나올 수, 실제 통과 (분석 › 운 vs 실력,
+            홈·판정의 작은 카드; background, cached)
+    gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
 """
 from __future__ import annotations
 
@@ -33,6 +38,7 @@ from types import SimpleNamespace
 MODULES = ("flow", "grid", "story", "since", "replay", "params")
 MODULES += ("jobs", "costs", "power")          # wave 2 part B
 MODULES += ("brief", "vs5y")                    # wave 2 part C
+MODULES += ("size5y",)                         # 손실 크기 규칙 (5년 JSON as committed, re-read on change)
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
@@ -41,6 +47,9 @@ MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시�
 MODULES += ("people",)                         # fill-people: 상황판 + strategy room record
 MODULES += ("movers",)                         # term-v2: 급등 · 급락 · 음펀비 (시장 전체, 60 s cache)
 MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보강 + 청산 이유 (background, cached)
+MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as committed + live trades by regime, background)
+MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
+MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
 
 
 def register_all(app, **kw) -> dict:

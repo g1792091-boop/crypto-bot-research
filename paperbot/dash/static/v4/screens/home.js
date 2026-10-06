@@ -18,6 +18,7 @@ import {costLine} from "./analysis-costs.js";
 import {meetBoard} from "./meetboard-kit.js";
 import {pixelRoad} from "./road-kit.js";
 import {marketStrip, openCard, tradesCard, meetSchedule} from "./home-live.js";
+import {luckMini} from "./luck-kit.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -109,6 +110,9 @@ export async function mount(el, ctx) {
       h("button", {class: "btn-line", type: "button", onclick: () => startTour()}, "안내 다시 보기")),
     h("p", {class: "muted home-small"}, "AI 직원은 회의와 기록만 하고 거래하지 않습니다. 모든 계좌는 모의(가상 돈)입니다."));
 
+  // ---------------------------------------------------------------- 8. 운 vs 실력 (luck-kit.js: how many would pass by luck)
+  const luckCard = luckMini(ctx, {cls: "home-o8"});
+
   // PC: the story rings beside 시장 지금; two columns (head card + 지금 열린 포지션 | 오늘 + 회의 일정 / 회의 결론); 방금 끝난
   // 거래 across the page; the LED bar, the group cards, then (상위·하위 or 1:3 | 처음이라면).
   // Phone: one column in the order of the home-o* classes (home.css).
@@ -116,7 +120,7 @@ export async function mount(el, ctx) {
     h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
       h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
     trCard, led, groupSec,
-    h("div", {class: "home-wrap"}, h("div", {class: "home-col"}, ranksCard, duel), h("div", {class: "home-col"}, howCard)));
+    h("div", {class: "home-wrap"}, h("div", {class: "home-col"}, ranksCard, duel), h("div", {class: "home-col"}, luckCard, howCard)));
 
   // ================================================================ renderers
   function renderHero() {

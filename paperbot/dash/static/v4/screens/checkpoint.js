@@ -8,6 +8,7 @@ import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {expInfo, judgedProgress, progBar, verdictDate as vDate, MIN_TRADES} from "./home-shared.js";
 import {seatsCard, powerCard, stamp, luckDots} from "./checkpoint-stage.js";
 import {pixelRoad} from "./road-kit.js";
+import {luckCheck} from "./luck-kit.js";
 
 const ST_CLS = {"2차 통과": "good", "1차 합격": "good", "불합격": "bad", "보류": "thin", "관찰용": "thin"};
 const ST_ORDER = ["2차 통과", "1차 합격", "불합격", "보류", "관찰용"];
@@ -61,6 +62,8 @@ export async function mount(el, ctx) {
   const seats = seatsCard();
   const power = powerCard(ctx);
   power.load();
+  // 운 vs 실력 (luck-kit.js): how many accounts could look like a pass by luck alone, before and after the verdict
+  const luck = luckCheck(ctx);
 
   function renderCountdown() {
     const x = expInfo(st.summary);
@@ -168,8 +171,8 @@ export async function mount(el, ctx) {
     const mode = st.ck && st.ck.ready ? "after" : "before";
     if (mode !== st.mode) {
       st.mode = mode;
-      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, seats, targetCard), h("div", {class: "stack"}, power, howCard)));
-      else put(body, h("div", {class: "stack"}, verdictCards, power, ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
+      if (mode === "before") put(body, h("div", {class: "ck-grid"}, h("div", {class: "stack"}, heroCard, seats, targetCard), h("div", {class: "stack"}, power, luck, howCard)));
+      else put(body, h("div", {class: "stack"}, verdictCards, luck, power, ui.card({plate: "판정 방법"}, ui.disclosure("일곱 단계 다시 보기", steps()))));
       motion.swap(body);
     }
     if (mode === "before") { renderCountdown(); renderTargets(); } else renderVerdict();

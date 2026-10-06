@@ -1,0 +1,53 @@
+/* luck-kit: 운 vs 실력 (분석 tab, the compact cards on 홈 and 판정). Tokens only; both skins; 390 px phones stack. */
+.lk-lede { font: 700 var(--t-md)/1.5 var(--f-body); color: var(--ink); }
+.lk-note { font-size: var(--t-xs); line-height: 1.5; }
+.lk-rule { font-size: var(--t-sm); line-height: 1.5; color: var(--ink-2); }
+.lk-list { display: grid; gap: 10px; min-width: 0; }
+
+/* one place */
+.lk-row { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.lk-row.lk-prep { background: transparent; border-style: dashed; }
+.lk-rt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.lk-title { font: 800 var(--t-md)/1.4 var(--f-body); color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.lk-go { margin-left: auto; font-size: var(--t-sm); color: var(--accent); white-space: nowrap; }
+.lk-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; max-width: 640px; }
+.lk-num { display: grid; gap: 2px; min-width: 0; }
+.lk-num .k { font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
+.lk-num b { font: 800 var(--t-lg)/1.2 var(--f-body); color: var(--ink); overflow-wrap: anywhere; }
+.lk-row .disclosure .linkish { font-size: var(--t-xs); }
+.lk-v { font: 700 var(--t-sm)/1.5 var(--f-body); color: var(--ink); padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-3); }
+.lk-v.lk-s-more { border-left: 3px solid var(--accent); }
+.lk-v.lk-s-some { border-left: 3px solid var(--warn); }
+.lk-v.lk-s-like_luck, .lk-v.lk-s-none, .lk-v.lk-s-waiting, .lk-v.lk-s-before { border-left: 3px solid var(--line-2); }
+
+/* 운으로 vs 실제: two bars on one scale */
+.lk-bars { display: grid; gap: 4px; min-width: 0; max-width: 520px; }
+.lk-bar { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: var(--t-xs); }
+.lk-bk { color: var(--muted); }
+.lk-bt { position: relative; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
+.lk-bt i { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); min-width: 2px; border-radius: 5px; }
+.lk-bt.lk-luck i { background: var(--cmp-lo); }
+.lk-bt.lk-real i { background: var(--accent); }
+.lk-bar b { font-size: var(--t-sm); color: var(--ink); }
+
+/* why it matters: 100 people as dots */
+.lk-why { gap: 10px; }
+.lk-dots { display: grid; grid-template-columns: repeat(20, 12px); gap: 4px; max-width: 100%; }
+.lk-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--line); }
+.lk-dots i.hit { background: var(--accent); border-color: var(--accent); }
+
+/* the compact cards (홈, 판정) */
+.lk-mlist { display: grid; gap: 6px; min-width: 0; }
+.lk-mrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t p" "n n"; align-items: center; gap: 2px 8px;
+  padding: 8px 10px; min-height: 32px; border-radius: var(--r-sm); background: var(--surface-2); color: inherit; text-decoration: none; }
+a.lk-mrow:hover, a.lk-mrow:focus-visible { background: var(--surface-3); }
+.lk-mt { grid-area: t; font: 700 var(--t-sm)/1.4 var(--f-body); color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.lk-mn { grid-area: n; font-size: var(--t-xs); color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+.lk-mrow .pp { grid-area: p; }
+
+@media (max-width: 560px) {
+  .lk-num b { font-size: var(--t-md); }
+  .lk-go { margin-left: 0; }
+  .lk-dots { grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; }
+  .lk-dots i { width: auto; height: auto; aspect-ratio: 1; }
+}
