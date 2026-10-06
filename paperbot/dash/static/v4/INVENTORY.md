@@ -463,6 +463,6 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 | Addition | Screen / place | Server (read-only) |
 |---|---|---|
 | 누가 맞았나 (실험 전체) | 회의 요약 › 직원 성적표, a card after the bull/bear card (screens/disputes-kit.js `whoWasRightCard`): tiles 결론 난 다툼 · 공격 쪽이 이긴 비율 · 대기 · 인정·말로만·포기; bars of the attacker's share for 5-year and forward disputes next to 동전 던지기 50% (dim); per staff 맞음 x/y · 기준 비율로만 맞혔다면 e개 · 공격할 때 a/b · 편들 때 c/d · 대기 · 인정 · 말로만 · 포기 (10 a page, 표본 적음 under 10 settled); the latest results (5 a page, the claim as a quote, code line). Empty: 아직 다툼이 없습니다 | `/api/digest/staff` (`who_was_right`, `staff[].right`) |
-| 누가 맞았나 chip | 직원 성적표 rows: `누가 맞았나 7/10` (+ 표본 적음) when the member has a dispute | `/api/digest/staff` (`staff[].right`) |
+| 누가 맞았나 chip | 직원 성적표 rows: `누가 맞았나 7/10 · 기준 6.8` (the wins the side's base rate alone gives, on the chip itself: no hover on a phone; + 표본 적음) when the member has a dispute | `/api/digest/staff` (`staff[].right`) |
 | 편 가르기 · 누가 맞았나 | 에이전트 방 › a strategy room's info pane (rooms-side.js): 편드는 직원 / 공격하는 직원 with each seat's record (only once the agents wrote the seats: sides on), the room's disputes (5 + 더 보기: 5년 시험 대기 / 앞으로 40건 중 12건 / 결론), the base rates and the coin flip's 50% | `/api/disputes?room=` (`disputes`, `seats`, `base_rates`) |
 | 5년 시험 대기열 | 에이전트 방 › team:lab info pane: source chips (연구원 / 토론방 / 회의 / 두 분), what is tested (code text), state, today's quota, N번째 시험 · 기준 p<0.05/N; 수집 전 until the shared queue's route exists | `/api/lab/intake` (NEEDS SERVER: the shared-queue branch) |

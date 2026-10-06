@@ -631,3 +631,19 @@ def test_expected_wins_use_each_forward_checks_own_base_rate(conn):
     wi, en = DS.role_record(b, "whatif"), DS.role_record(b, "entry_timing")
     assert (wi["won"], wi["expected"]) == (4, 4.0)                            # 4/4 is exactly what vs_flip gives
     assert (en["won"], en["expected"]) == (1, 1.0)
+
+
+def test_a_queued_lab_dispute_expires_with_the_queue_or_after_45_days(conn, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(DS, "_labintake", lambda: _fake_labintake(calls))
+    a = _open(conn, LABC)
+    b = _open(conn, {"kind": "lab", "test": {**LAB["test"], "timeframe": "4h", "strategy": S}})
+    assert a["intake_id"] and b["intake_id"]
+    conn.execute("INSERT INTO lab_intake_events (intake_id, ts, status) VALUES (?, ?, 'expired')", (a["intake_id"], T0 + 9))
+    conn.commit()
+    [g] = DS.grade_due(conn, None, T0 + 10)
+    assert (g["dispute_id"], g["status"], g["winner"]) == (a["id"], "expired", None)
+    assert DS.grade_due(conn, None, T0 + DS.EXPIRE_DAYS * DAY) == []          # still waiting in the queue
+    [g] = DS.grade_due(conn, None, T0 + DS.EXPIRE_DAYS * DAY + 1)
+    assert (g["dispute_id"], g["status"]) == (b["id"], "expired")
+    assert DS.board(conn)["base_rates"]["all"]["settled"] == 0                # an expiry is never a win
