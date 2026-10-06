@@ -364,12 +364,64 @@ def scoreboard(db: sqlite3.Connection) -> dict:
         b["rate"] = round(b["hit"] / b["graded"], 3) if b["graded"] else None
         b["small"] = b["graded"] < SMALL_GRADED
     counts = {s: n for s, n in db.execute("SELECT status, COUNT(*) FROM debate_hypotheses GROUP BY status")}
-    return {"speakers": out, "graded": g, "hit": h, "rate": round(h / g, 3) if g else None,
-            "small": g < SMALL_GRADED, "by_status": counts, "small_below": SMALL_GRADED,
-            "coin_flip_rate": 0.5, "p_vs_coin_flip": None if not g else round(_p_at_least(h, g), 4),
-            "expected_hits": round(expected, 2) if g else None,
-            "expected_rate": round(expected / g, 3) if g else None,
-            "easy": {"graded": easy, "hit": easy_hit, "rate_from": EASY_RATE}}
+    out_all = {"speakers": out, "graded": g, "hit": h, "rate": round(h / g, 3) if g else None,
+               "small": g < SMALL_GRADED, "by_status": counts, "small_below": SMALL_GRADED,
+               "coin_flip_rate": 0.5, "p_vs_coin_flip": None if not g else round(_p_at_least(h, g), 4),
+               "expected_hits": round(expected, 2) if g else None,
+               "expected_rate": round(expected / g, 3) if g else None,
+               "easy": {"graded": easy, "hit": easy_hit, "rate_from": EASY_RATE}}
+    # the idea factory's sides, once it has an idea (a classic debate.db, where the service only created the empty
+    # table, keeps the scoreboard it always had)
+    fac = factory_record(db)
+    if fac is not None and fac.get("ideas"):
+        out_all["factory"] = fac
+    return out_all
+
+
+FACTORY_NOTE_KO = ("한 AI가 다섯 자리를 맡아 편을 나눈 기록이라 사람 성적이 아님. 연구실 통과는 드물어서 반대 편은 평소 비율만으로도 "
+                   "거의 늘 맞음: _expected(연구실 평소 비율로 맞힐 수)보다 많아야 의미가 있음")
+
+
+def factory_record(db: sqlite3.Connection) -> Optional[dict]:
+    """The idea factory's sides (debate.db only; None before the factory's table exists): of this room's ideas the lab
+    really tested (settled_side, written by debate_factory.sync_lab), how often 찬성 (passed) and 반대 (failed) were
+    right, and how often the check 반대 named really failed, each next to what the lab's usual rates alone would give
+    (debate_state 'factory:base_rates', the agents' trial ledger as the debate service last read it). Never a person's
+    score (#88: one model plays every seat)."""
+    try:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'debate_lab_ideas'").fetchone() is None:
+            return None
+        rows = db.execute("SELECT engine, settled_side, con_check, con_check_hit FROM debate_lab_ideas "
+                          "WHERE settled_side IS NOT NULL").fetchall()
+        raw = db.execute("SELECT v FROM debate_state WHERE k = 'factory:base_rates'").fetchone()
+        tested = db.execute("SELECT COUNT(*) FROM debate_lab_ideas WHERE lab_status = 'tested'").fetchone()[0]
+        ideas = db.execute("SELECT COUNT(*) FROM debate_lab_ideas").fetchone()[0]
+    except sqlite3.Error:
+        return None
+    try:
+        base = json.loads(raw[0]) if raw else {}
+    except (TypeError, ValueError):
+        base = {}
+    base = base if isinstance(base, dict) else {}
+    pro = con = hits = graded = 0
+    exp_pro = exp_hit = 0.0
+    for engine, side, cc, hit in rows:
+        rates = base.get(engine) if isinstance(base.get(engine), dict) else {}
+        pr = rates.get("pass_rate")
+        exp_pro += float(pr) if isinstance(pr, (int, float)) else 0.0
+        pro += side == "찬성"
+        con += side == "반대"
+        if hit is not None:
+            graded += 1
+            hits += int(hit)
+            fs = (rates.get("fail_share") or {}).get(cc) if isinstance(rates.get("fail_share"), dict) else None
+            exp_hit += float(fs) if isinstance(fs, (int, float)) else 0.0
+    n = pro + con
+    return {"ideas": int(ideas), "tested": int(tested), "settled": n, "찬성_right": pro, "반대_right": con,
+            "찬성_expected": round(exp_pro, 2), "반대_expected": round(n - exp_pro, 2),
+            "con_check_graded": graded, "con_check_hits": hits, "con_check_expected": round(exp_hit, 2),
+            "con_check_rate": round(hits / graded, 3) if graded else None,
+            "base_rates_known": bool(base), "small": n < SMALL_GRADED, "note": FACTORY_NOTE_KO}
 
 
 # ---------------------------------------------------------------- Korean wording for the dashboard

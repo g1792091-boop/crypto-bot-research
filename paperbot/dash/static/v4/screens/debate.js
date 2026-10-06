@@ -13,7 +13,7 @@
 // HONESTY: every bubble is a stored turn (text nodes, no typing effect); it is ONE AI speaking every role (said under
 // the chat); nothing here changes an order, a rule or an account.
 import {h, ui, fmt, motion, store, serverNow} from "../core/pb.js";
-import {roundChat, castStrip, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";
+import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";
 import {makeSide, usd4} from "./debate-side.js";
 
 export async function mount(el, ctx) {
@@ -32,9 +32,11 @@ export async function mount(el, ctx) {
   const startLine = h("div", {class: "db-start"});
   const chatBox = h("div", {class: "db-chat"});
   const scroller = h("div", {class: "db-scroll"}, startLine, chatBox);
-  const head = h("div", {class: "db-head"},
-    h("span", {class: "db-avs", "aria-hidden": "true"}, CAST.slice(0, 5).map((c) => avatar(c.id, 22))),
-    h("div", {class: "db-ht"}, subjectK, subject), meta);
+  // the seats in the head: the shown round's cast (the idea factory's specialists or the classic five)
+  const avs = h("span", {class: "db-avs", "aria-hidden": "true"}, CAST.slice(0, 5).map((c) => avatar(c.id, 22)));
+  const head = h("div", {class: "db-head"}, avs, h("div", {class: "db-ht"}, subjectK, subject), meta);
+  const factoryMode = () => !!(st.d && st.d.factory && st.d.factory.mode === "factory");
+  const seats = (r) => avs.replaceChildren(...castList(r, factoryMode()).slice(0, 5).map((c) => avatar(c.id, 22)));
   const honest = h("p", {class: "db-honest"}, "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다. 말풍선은 저장된 글 그대로(실시간 타이핑 아님)이고, ",
     "의견이지 사실이 아닙니다. 이 방은 주문·규칙·계좌를 바꾸지 않습니다.");
   const live = h("section", {class: "db-room", "aria-label": "지금 토론"}, head, castBox, scroller, honest);
@@ -97,7 +99,8 @@ export async function mount(el, ctx) {
       subjectK.textContent = "참가자 다섯 명과 사회자";
       subject.textContent = "아직 끝난 토론이 없습니다";
       meta.textContent = "";
-      castBox.replaceChildren(castStrip(null));
+      castBox.replaceChildren(castStrip(null, {factory: factoryMode()}));
+      seats(null);
       startLine.replaceChildren();
       chatBox.replaceChildren(h("div", {class: "db-none"}, h("b", null, "첫 토론이 끝나면 여기에 대화가 나옵니다"),
         h("span", null, "새 청산·알림·밤 점검이 없으면 회차를 건너뛰어 비용이 들지 않습니다. 상태 칸(넓은 화면은 오른쪽, 좁은 화면은 맨 위 한 줄을 펼치면)의 최근 회차에서 무엇을 했는지 보입니다.")));
@@ -107,9 +110,13 @@ export async function mount(el, ctx) {
     if (st.shown === r.round_id) return;              // the same stored round: leave it as the reader left it
     const fresh = st.shown != null;
     st.shown = r.round_id;
-    subjectK.textContent = "이번 회차 주제";
+    // a factory round's topic is the question code picked; the deep debate is the day's one in three calls
+    subjectK.textContent = r.kind === "deep" ? "오늘의 깊은 토론 질문 (세 번에 나눠 부름)" : r.kind ? "이번 회차 질문" : "이번 회차 주제";
     subject.textContent = r.topic || "주제 없음";
-    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`);
+    seats(r);
+    // the deep debate runs on its own model (three calls): say which, so its bubbles are not read as the regular model's
+    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`
+      + (r.kind === "deep" && r.model ? ` · ${r.model} 3번 호출` : ""));
     castBox.replaceChildren(castStrip(r));
     startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
       h("time", null, fmt.hm(r.ts)));

@@ -460,6 +460,28 @@ def test_tick_does_nothing_while_every_source_is_off(tmp_path, noise):
         c.close()
 
 
+def test_turning_every_source_off_clears_the_saved_quotas(tmp_path, noise):
+    """The catch: with every source off the tick returned before the budgets were saved again, so the dashboard and the
+    lab packet kept showing the old quotas (e.g. '토론방 0/2') as if they were still in force."""
+    c = R.open_agents(str(tmp_path / "agents3.db"))
+    try:
+        LI.tick(make_ctx(c, noise, lab_intake_debate_per_day=2, lab_intake_owner_per_day=3), None, NOW)
+        assert LI.today(c, NOW)["sources"]["debate"]["limit"] == 2
+        R.set_cursor(c, LI.BLOCKED_CURSOR, {"ts": NOW, "why": "no_data"})          # an earlier pass found no data
+        assert LI.today(c, NOW)["blocked_ko"]
+        assert LI.tick(make_ctx(c, noise), None, NOW + MIN) == {"enabled": False}
+        assert R.get_cursor(c, LI.LIMITS_CURSOR) == {"debate": 0, "meeting": 0, "owner": 0}
+        assert LI.today(c, NOW + MIN)["blocked"] is None and LI.today(c, NOW + MIN)["blocked_ko"] == ""   # no old line
+        assert {s: v["limit"] for s, v in LI.today(c, NOW + MIN)["sources"].items()} == {"debate": 0, "meeting": 0,
+                                                                                        "owner": 0}
+        assert LI.overview(c, NOW + MIN)["today"]["owner"] == {"used": 0, "limit": 0}
+        # turned on again: the new budgets are saved as before
+        LI.tick(make_ctx(c, noise, lab_intake_owner_per_day=1), None, NOW + 2 * MIN)
+        assert R.get_cursor(c, LI.LIMITS_CURSOR) == {"debate": 0, "meeting": 0, "owner": 1}
+    finally:
+        c.close()
+
+
 def test_result_lines_are_code_text_from_the_numbers():
     d = {"engine": "newlab", "verdict": "failed", "test_number": 57, "threshold": 0.05 / 57,
          "failed_checks": ["①", "⑥"], "passed_checks": ["②", "③", "④", "⑤"],
