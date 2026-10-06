@@ -17,5 +17,7 @@ export {href, SCREENS, GROUPS} from "./routes.js";
 export {setBadge} from "./shell.js";
 export {startTour} from "./tour.js";
 export * as bars from "./bars.js";
+export {chartDeck, isAi as chartAi, GROUP_KO, AMBIENT_TIP, FLASH_TIP} from "./chartfx.js";
+export {bigEvent, liqEvent, ownEvent, FLASH_MODES} from "./flash.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
 export * as sound from "./sound.js";

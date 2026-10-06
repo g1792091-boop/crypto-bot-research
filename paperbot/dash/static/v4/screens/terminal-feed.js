@@ -236,6 +236,7 @@ export function liqFeed(ctx, st, onNew) {
       const had = last.sym === want ? last.rows.length : -1;
       last = {sym: want, rows};
       let nNew = 0;                                // rows that really arrived since the last answer
+      const fresh = [];
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
@@ -243,13 +244,14 @@ export function liqFeed(ctx, st, onNew) {
           h("span", {class: "term-ft num"}, fmt.hm(r.ts)),
           h("span", {class: ["term-tag", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱" : "숏"),
           h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num"}, "$" + usdK(r.usd)));
-        if (isNew) nNew++;
+        if (isNew) { nNew++; fresh.push(r); }
         if (isNew && live()) motion.fillIn(node, "down");
         return node;
       }) : ui.empty("최근 1시간 기록 없음"));
       ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n) => "$" + usdK(n));
       if (nNew && live()) ping(el);
-      if ((nNew || had !== rows.length) && onNew) onNew();      // 이 코인 포지션 shows them when it has no position
+      // 이 코인 포지션 shows them when it has no position; the chart flashes once for the really new ones
+      if ((nNew || had !== rows.length) && onNew) onNew(fresh);
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
     finally { busy = false; }
   }

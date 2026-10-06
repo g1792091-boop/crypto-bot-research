@@ -51,6 +51,31 @@
   --edge-glow: transparent;
   --shim-a: #17223b;
   --shim-b: #263459;
+  /* the chart deck (core/chartfx.js, core/smcdraw.js). 클래식 stays plain: no ambient / flash / glow there, so those
+     tokens are transparent in this block; the lines, volume and 프리미엄 지표 colours are used by both skins */
+  --amb-up: transparent;
+  --amb-down: transparent;
+  --amb-up-edge: transparent;
+  --amb-down-edge: transparent;
+  --amb-up-ink: var(--muted);
+  --amb-down-ink: var(--muted);
+  --flash-up: transparent;
+  --flash-down: transparent;
+  --flash-accent: transparent;
+  --depth-top: transparent;
+  --depth-bot: transparent;
+  --vol-up: rgba(52, 211, 154, .28);
+  --vol-down: rgba(244, 100, 107, .28);
+  --pill-bg: rgba(13, 21, 40, .88);
+  --smc-ob: #f39a3d;
+  --smc-fvg: #f0cf72;
+  --smc-liq: #c9d3e6;
+  --smc-bos: #7aa2ff;
+  --smc-choch: #f39a3d;
+  --smc-trend: #c9d3e6;
+  --smc-prem: #f4646b;
+  --smc-disc: #34d39a;
+  --smc-ote: #f39a3d;
   /* chrome that used to be written in base.css: the phone tab bar and the tour's dimmed page */
   --botbar: rgba(13, 21, 40, .97);
   --scrim: rgba(4, 8, 18, .72);
@@ -231,6 +256,31 @@
   --card-ring: rgba(25, 195, 177, .05);
   --card-shadow: rgba(0, 0, 0, .35);
   --head-glow: rgba(25, 195, 177, .18);
+  /* the chart deck's light (owners' reference terminal): the pane washed sky blue above the 50-bar average, red below
+     (strongest at the top edge, a faint inner edge glow); a real big trade / liquidation flashes the same hues */
+  --amb-up: rgba(56, 189, 248, .13);
+  --amb-down: rgba(244, 63, 94, .14);
+  --amb-up-edge: rgba(56, 189, 248, .20);
+  --amb-down-edge: rgba(244, 63, 94, .22);
+  --amb-up-ink: #38bdf8;
+  --amb-down-ink: #f43f5e;
+  --flash-up: rgba(56, 200, 248, .34);
+  --flash-down: rgba(244, 63, 94, .36);
+  --flash-accent: rgba(25, 195, 177, .30);
+  --depth-top: rgba(255, 255, 255, .025);
+  --depth-bot: rgba(0, 0, 0, .22);
+  --vol-up: rgba(34, 201, 164, .26);
+  --vol-down: rgba(244, 81, 122, .26);
+  --pill-bg: rgba(18, 21, 25, .86);
+  --smc-ob: #f5a524;
+  --smc-fvg: #f5d76b;
+  --smc-liq: #d6dde5;
+  --smc-bos: #6ea8ff;
+  --smc-choch: #f5a524;
+  --smc-trend: #d6dde5;
+  --smc-prem: #f4517a;
+  --smc-disc: #22c9a4;
+  --smc-ote: #f5a524;
 }
 
 /* ---------------------------------------------------------------- 글자 크기 (core/textsize.js, per device)

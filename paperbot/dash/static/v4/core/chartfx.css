@@ -1,0 +1,115 @@
+/* The chart deck (core/chartfx.js): layers under the transparent chart canvas (depth, ambient light, event flash),
+   the line pills / edge markers over the pane, our last-price tag, the '선' menu and the 프리미엄 지표 button.
+   Colours are tokens (tokens.css); the AI skin has the light, 클래식 stays plain (its light tokens are transparent and
+   the layers are not drawn). Motion: the ambient cross-fades only when its tone or strength really changed; the flash
+   is a Web Animation started by a real event (core/flash.js); the tag pulses once on a real new price. All of it is
+   off under prefers-reduced-motion (no flash; the tint stays without its cross-fade). */
+.cfx { isolation: isolate; }
+.cfx-box { z-index: 1; }
+.cfx[data-fx="ai"] { background: var(--surface); }
+.cfx[data-fx="ai"] > .cfx-box { background: transparent; }
+.cfx-under, .cfx-over { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; overflow: hidden; }
+.cfx-under { z-index: 0; }
+.cfx-over { z-index: 3; }
+.cfx-under > i { position: absolute; inset: 0; display: block; }
+.cfx[data-fx="plain"] .cfx-under { display: none; }
+
+/* a faint depth: a lighter top, a darker floor */
+.cfx-depth { background: linear-gradient(to bottom, var(--depth-top), transparent 42%, var(--depth-bot)); }
+/* the steady light: strongest at the top edge, a faint inner edge glow; the two tones cross-fade (1.2 s) */
+.cfx-amb { opacity: 0; transition: opacity 1.2s var(--ease); }
+.cfx-amb[data-tone="up"] { background: linear-gradient(to bottom, var(--amb-up), transparent 72%); box-shadow: inset 0 0 42px var(--amb-up-edge); }
+.cfx-amb[data-tone="down"] { background: linear-gradient(to bottom, var(--amb-down), transparent 72%); box-shadow: inset 0 0 42px var(--amb-down-edge); }
+.cfx-under[data-amb="up"] > .cfx-amb[data-tone="up"], .cfx-under[data-amb="down"] > .cfx-amb[data-tone="down"] { opacity: var(--ak, .8); }
+.cfx-under.still > .cfx-amb { transition: none; }
+/* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */
+.cfx-flash { opacity: 0; --fc: var(--flash-accent);
+  background: linear-gradient(to bottom, var(--fc), transparent 78%), radial-gradient(ellipse at 50% 0%, var(--fc), transparent 70%);
+  box-shadow: inset 0 0 70px var(--fc); }
+.cfx-flash[data-tone="up"] { --fc: var(--flash-up); }
+.cfx-flash[data-tone="down"] { --fc: var(--flash-down); }
+
+/* our lines' pills: compact, at the left edge inside the pane, in the line's meaning colour */
+.cfx-pills { position: absolute; inset: 0; }
+.cfx-pill { --pc: var(--muted); --pl: var(--line-2); position: absolute; left: 6px; top: 0; height: 20px; max-width: calc(100% - 24px);
+  display: inline-flex; align-items: stretch; border-radius: 4px; overflow: hidden; pointer-events: auto; white-space: nowrap;
+  background: var(--pill-bg); border: 1px solid var(--pl); color: var(--pc); font: 600 var(--t-2xs)/1 var(--f-term); }
+.cfx-pill[hidden] { display: none; }
+.cfx-pill[data-tone="up"] { --pc: var(--up); --pl: var(--up-line); }
+.cfx-pill[data-tone="down"] { --pc: var(--down); --pl: var(--down-line); }
+.cfx-pill[data-tone="accent"] { --pc: var(--accent); --pl: var(--accent-line); }
+.cfx-pill[data-tone="warn"] { --pc: var(--warn); --pl: var(--warn-line); }
+.cfx[data-fx="ai"] .cfx-pill[data-tone="up"] { box-shadow: 0 0 8px var(--up-soft); }
+.cfx[data-fx="ai"] .cfx-pill[data-tone="down"] { box-shadow: 0 0 8px var(--down-soft); }
+.cfx-pill.off { border-style: dashed; }
+.cfx-pill button { border: 0; margin: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 6px; }
+.cfx-pill button:hover, .cfx-pill button:focus-visible { background: var(--surface-3); color: var(--ink); outline: none; }
+.cfx-pt { overflow: hidden; text-overflow: ellipsis; }
+.cfx-pill .cfx-chip { border-left: 1px solid var(--line-2); color: var(--ink-2); padding: 0 5px; }
+.cfx-pill .cfx-chip[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.cfx-pill .cfx-x { border-left: 1px solid var(--line-2); color: var(--muted); padding: 0 6px; }
+.cfx-more { display: inline-flex; align-items: center; padding: 0 5px; border-left: 1px solid var(--line-2); color: var(--ink-2); }
+.cfx-more[hidden] { display: none; }
+/* a line above / below the price range: a small edge marker with its price */
+.cfx-edge { position: absolute; right: 6px; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 72%; }
+.cfx-edge.top { top: 4px; }
+.cfx-edge.bot { bottom: 4px; }
+.cfx-em { --pc: var(--muted); --pl: var(--line-2); padding: 2px 6px; border-radius: 3px; white-space: nowrap; pointer-events: auto;
+  background: var(--pill-bg); border: 1px solid var(--pl); color: var(--pc); font: 600 var(--t-2xs)/1.2 var(--f-term); }
+.cfx-em[data-tone="up"] { --pc: var(--up); --pl: var(--up-line); }
+.cfx-em[data-tone="down"] { --pc: var(--down); --pl: var(--down-line); }
+.cfx-em[data-tone="accent"] { --pc: var(--accent); --pl: var(--accent-line); }
+.cfx-em[data-tone="warn"] { --pc: var(--warn); --pl: var(--warn-line); }
+.cfx-smckey { position: absolute; left: 8px; top: 30px; padding: 2px 7px; border-radius: 3px; background: var(--pill-bg); color: var(--muted);
+  font: 500 var(--t-2xs)/1.3 var(--f-body); }
+.cfx-smckey[hidden] { display: none; }
+
+/* our last-price tag on the right axis (the 차트 screen; the terminal has its own .term-ptag with the countdown) */
+.cfx-tag { position: absolute; left: 0; top: 0; z-index: 4; height: 20px; display: grid; place-items: center; border-radius: 3px 0 0 3px;
+  pointer-events: none; background: var(--accent); }
+.cfx-tag[hidden] { display: none; }
+.cfx-tag b { font: 700 var(--t-xs)/1 var(--f-term); color: var(--accent-ink); }
+.cfx-tag[data-tone="up"] { background: var(--up); }
+.cfx-tag[data-tone="down"] { background: var(--down); }
+.cfx[data-fx="ai"] > .cfx-tag[data-tone="up"] { box-shadow: 0 0 12px var(--up-glow); }
+.cfx[data-fx="ai"] > .cfx-tag[data-tone="down"] { box-shadow: 0 0 12px var(--down-glow); }
+.cfx-tag[data-hit="up"] { animation: cfx-tag-up .7s ease-out 1; }
+.cfx-tag[data-hit="down"] { animation: cfx-tag-dn .7s ease-out 1; }
+@keyframes cfx-tag-up { from { box-shadow: 0 0 0 3px var(--up-line), 0 0 24px var(--up-glow); } to { box-shadow: 0 0 0 0 transparent, 0 0 12px var(--up-glow); } }
+@keyframes cfx-tag-dn { from { box-shadow: 0 0 0 3px var(--down-line), 0 0 24px var(--down-glow); } to { box-shadow: 0 0 0 0 transparent, 0 0 12px var(--down-glow); } }
+
+/* the header controls: '선' menu, 프리미엄 지표, the light legend chip */
+.cfx-mwrap { position: relative; display: inline-flex; }
+.cfx-mbtn, .cfx-smcbtn { height: 26px; padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2);
+  font: 600 var(--t-xs)/1 var(--f-body); cursor: pointer; white-space: nowrap; }
+.cfx-mbtn:hover, .cfx-smcbtn:hover { color: var(--ink); border-color: var(--accent-line); }
+.cfx-mbtn[aria-expanded="true"] { color: var(--ink); border-color: var(--accent-line); }
+.cfx-smcbtn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); box-shadow: 0 0 10px var(--accent-glow); }
+.cfx-mcount { color: var(--muted); font-size: var(--t-2xs); }
+.cfx-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 210px; display: grid; gap: 2px; padding: 6px; border-radius: 8px;
+  background: var(--glass); border: 1px solid var(--line-2); box-shadow: 0 10px 28px var(--card-shadow, transparent); }
+.cfx-menu[hidden] { display: none; }
+.cfx-mi { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 5px; background: none; color: var(--ink);
+  font: 500 var(--t-sm)/1.2 var(--f-body); text-align: left; cursor: pointer; white-space: nowrap; }
+.cfx-mi:hover, .cfx-mi:focus-visible { background: var(--surface-2); outline: none; }
+.cfx-mi[hidden] { display: none; }
+.cfx-ck { flex: none; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line-2); }
+.cfx-mi[aria-checked="true"] .cfx-ck { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--surface); }
+.cfx-mrow { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
+.cfx-mrow .cfx-mi { justify-content: center; font-size: var(--t-xs); }
+.cfx-mback { color: var(--accent); }
+.cfx-mnote { margin: 4px 4px 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.4; white-space: normal; max-width: 220px; }
+.cfx-fsel { height: 26px; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2);
+  font: 600 var(--t-xs)/1 var(--f-body); cursor: pointer; }
+.cfx-fsel[hidden] { display: none; }
+.cfx-light { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 13px; border: 1px solid var(--line-2);
+  color: var(--ink-2); font: 600 var(--t-2xs)/1 var(--f-body); cursor: help; white-space: nowrap; }
+.cfx-light[hidden] { display: none; }
+.cfx-light i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.cfx-light[data-tone="up"] i { background: var(--amb-up-ink); box-shadow: 0 0 8px var(--amb-up-ink); }
+.cfx-light[data-tone="down"] i { background: var(--amb-down-ink); box-shadow: 0 0 8px var(--amb-down-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cfx-amb { transition: none; }
+  .cfx-tag[data-hit] { animation: none; }
+}
