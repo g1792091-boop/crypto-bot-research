@@ -31,6 +31,7 @@ button.c5-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .c5-chart path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
 .c5-chart .c5-l-flip { stroke: var(--cmp-hi); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .c5-chart .c5-l-mem { stroke: var(--ink-2); stroke-width: 1.2; opacity: .55; }
+.c5-chart .c5-l-sep { stroke: var(--ink-2); stroke-width: 5; opacity: .35; }
 .c5-chart .c5-l-combo { stroke: var(--accent); stroke-width: 2.4; }
 .c5-chart .c5-dot { fill: var(--accent); }
 .c5-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
@@ -38,6 +39,7 @@ button.c5-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .c5-legend .sw { display: inline-block; width: 16px; height: 0; border-top: 3px solid var(--accent); }
 .c5-legend .sw.mem { border-top: 2px solid var(--ink-2); opacity: .7; }
 .c5-legend .sw.flip { border-top: 2px dashed var(--cmp-hi); }
+.c5-legend .sw.sep { border-top: 5px solid var(--ink-2); opacity: .45; }
 
 .c5-guard { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px dashed var(--line-2); }
 .c5-guard p { margin: 0; font-size: var(--t-xs); color: var(--ink-2); line-height: 1.6; }
@@ -65,7 +67,9 @@ button.c5-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .c5-hc.none { fill: var(--surface-3); }
 .c5-hc.diag { fill: var(--line-2); fill-opacity: 1; }
 .c5-hc.sel { stroke: var(--ink); stroke-width: 1.5; }
-.c5-heatnames { margin: 0; padding-left: 26px; columns: 2; column-gap: 16px; font-size: var(--t-2xs); color: var(--ink-2); line-height: 1.5; }
+.c5-heatnames { margin: 0; padding: 0; list-style-position: inside; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0 14px; font-size: var(--t-2xs); color: var(--ink-2); line-height: 1.55; }
+.c5-heatnames li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .c5-heatinfo { margin: 0; min-height: 1.5em; font-size: var(--t-sm); color: var(--ink); line-height: 1.55; overflow-wrap: anywhere; }
 .c5-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .c5-pairs { margin: 0; padding-left: 18px; font-size: var(--t-xs); color: var(--ink-2); line-height: 1.6; }
@@ -98,7 +102,7 @@ button.c5-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 
 @media (max-width: 640px) {
   .c5-heatgrid { grid-template-columns: minmax(0, 1fr); }
-  .c5-heatnames { columns: 2; padding-left: 22px; }
+  .c5-heatnames { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .c5-cols { grid-template-columns: minmax(0, 1fr); }
   .c5-srow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
 }

@@ -899,7 +899,9 @@ def search_variant(U: np.ndarray, units: list, F: np.ndarray, flips: list, mons:
     for rows in (wf, wf_flip):
         for r in rows:
             r["months_next"] = sum(1 for m in mons if m["label"].startswith(str(r["test_year"])))
-            r["mean_month_next"] = r["return_next"] / max(1, r["months_next"])
+            for a, b in (("return_next", "mean_month_next"), ("ret_median_next", "mean_month_median_next"),
+                         ("ret_p75_next", "mean_month_p75_next")):
+                r[b] = r[a] / max(1, r["months_next"])
     top = []
     for sc, combo in best:
         c = list(combo)

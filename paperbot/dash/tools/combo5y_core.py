@@ -344,18 +344,22 @@ def all_combos(n: int, kmin: int, kmax: int) -> Iterable[np.ndarray]:
 
 
 def all_scores(U: np.ndarray, cap: np.ndarray, kmin: int, kmax: int, curve_numbers: Callable,
-               max_cells: int = 6_000_000) -> np.ndarray:
+               max_cells: int = 6_000_000, with_return: bool = False):
     """agents/synergy's score (``curve_numbers``) of EVERY equal-weight combination of kmin..kmax rows, chunked so a
-    chunk holds at most ``max_cells`` numbers."""
-    out = []
+    chunk holds at most ``max_cells`` numbers; ``with_return``: also each combination's total P&L / its capital."""
+    out, ret = [], []
     D = U.shape[1]
     for combos in all_combos(len(U), kmin, kmax):
         k = combos.shape[1]
         step = max(1, max_cells // max(1, k * D))
         for a in range(0, len(combos), step):
             c = combos[a:a + step]
-            out.append(curve_numbers(U[c].sum(axis=1), cap[c].sum(axis=1))[3])
-    return np.concatenate(out) if out else np.zeros(0)
+            capc = cap[c].sum(axis=1)
+            cn = curve_numbers(U[c].sum(axis=1), capc)
+            out.append(cn[3])
+            ret.append(cn[0] / capc)
+    s = np.concatenate(out) if out else np.zeros(0)
+    return (s, np.concatenate(ret) if ret else np.zeros(0)) if with_return else s
 
 
 def walk_forward(U: np.ndarray, cap: np.ndarray, years: dict, search: Callable, curve_numbers: Callable,
@@ -373,12 +377,14 @@ def walk_forward(U: np.ndarray, cap: np.ndarray, years: dict, search: Callable, 
         sc_in, combo = best[0]
         c = list(combo)
         nxt = curve_numbers(U[c][:, a2:b2].sum(axis=0)[None, :], np.array([cap[c].sum()]))
-        allv = all_scores(U[:, a2:b2], cap, kmin, kmax, curve_numbers)
+        allv, allr = all_scores(U[:, a2:b2], cap, kmin, kmax, curve_numbers, with_return=True)
         s2 = float(nxt[3][0])
+        r2 = float(nxt[0][0] / cap[c].sum())
         rows.append({"pick_year": int(y), "test_year": int(y2), "combo": c, "score_in": float(sc_in), "score_next": s2,
-                     "return_next": float(nxt[0][0] / cap[c].sum()), "median_next": float(np.median(allv)),
+                     "return_next": r2, "median_next": float(np.median(allv)),
                      "p75_next": float(np.quantile(allv, 0.75)), "beat_share": float((allv < s2).mean()),
-                     "n_combos": int(len(allv))})
+                     "ret_median_next": float(np.median(allr)), "ret_p75_next": float(np.quantile(allr, 0.75)),
+                     "ret_beat_share": float((allr < r2).mean()), "n_combos": int(len(allv))})
     return rows
 
 

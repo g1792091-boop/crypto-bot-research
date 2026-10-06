@@ -3,16 +3,13 @@
 // the v4 rules) and where the paper run so far sits among the 5-year months cut at the same number of days (closed
 // trades on both sides). Day 0-1: the strip still shows the 5 years; the paper mark carries 표본 적음 and the waiting
 // bars say how far the run is. 설명용, 판정 아님; the 36 were chosen on these 5 years (selection bias, said up front).
+// Its look: analysis-monthly.css (@imported by analysis.css).
 import {h, s, ui, fmt, local} from "../core/pb.js";
 import {viewHead, waitCard} from "./analysis-kit.js";
 
 const SORTS = [{id: "median", label: "5년 중앙값 순"}, {id: "now", label: "지금 위치 순"}, {id: "name", label: "이름 순"}];
 const TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
 
-function ensureCss() {
-  if (document.querySelector("link[data-an-month]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/analysis-monthly.css", dataset: {anMonth: "1"}}));
-}
 
 /** One strip: a thin tick per 5-year month (its value after the same days, or the full month), the median, and the
  *  paper run so far as the thick accent mark. Vector strokes keep their width when the strip stretches. */
@@ -43,7 +40,6 @@ function bars(m) {
 }
 
 export function monthly5y(d, env) {
-  ensureCss();
   const rows = d.rows || [];
   const months = d.months || [];
   const day = d.day;

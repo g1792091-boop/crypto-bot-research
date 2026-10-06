@@ -15,7 +15,8 @@ const TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 let cache = null;                         // {at, p}: the answer only changes when the JSON is regenerated
 
 function ensureCss() {
-  if (document.querySelector("link[data-c5]")) return;
+  // #/combo5y's own css @imports it; any other screen gets it linked once here
+  if (document.querySelector('link[data-c5], link[href$="/screens/combo5y.css"]')) return;
   document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/combo-5y.css", dataset: {c5: "1"}}));
 }
 function load(ctx) {
@@ -156,45 +157,65 @@ function curveBox(d, t) {
   const band = ((d.portfolio || {}).flip_band || {})[String(t.k)] || null;
   const members = t.units.map((u) => ({u, v: ((d.portfolio || {}).unit_curves || {})[u] || []}));
   const series = [
-    ...(band ? [{values: band.p50, cls: "c5-l-flip"}] : []),
+    ...(band ? [{values: band.p50, cls: "c5-l-flip", optional: true}] : []),
     ...members.map((m) => ({values: m.v, cls: "c5-l-mem"})),
     {values: t.curve || [], cls: "c5-l-combo", dot: true},
   ];
   const last = (a) => (a && a.length ? a[a.length - 1] : null);
+  const chart = lineChart({series, band: band ? {lo: band.p10, hi: band.p90} : null,
+    xlabels: [months[0], months[Math.floor(months.length / 2)], months[months.length - 1]], label: "조합의 5년 누적 수익률"});
+  const flipOut = band && chart.dataset.omitted !== "0";
+  const ddr = t.capital ? t.dd_usd / t.capital : null;
   return h("div", {class: "c5-curve"},
     h("p", {class: "c5-ctitle"}, h("b", null, t.units.map((u) => nm(d, u)).join(" + ")), ` · 5년 누적 (자기 자금 대비, 매달 다시 채운 합계)`),
-    lineChart({series, band: band ? {lo: band.p10, hi: band.p90} : null, xlabels: [months[0], months[Math.floor(months.length / 2)], months[months.length - 1]],
-      label: "조합의 5년 누적 수익률"}),
+    chart,
     h("div", {class: "c5-legend"},
       h("span", null, h("i", {class: "sw combo"}), `조합 ${fmt.pct(last(t.curve), 0)}`),
       h("span", null, h("i", {class: "sw mem"}), `구성 매매법 ${fmt.int(members.length)}개 (각자 ${members.map((m) => fmt.pct(last(m.v), 0)).join(" · ")})`),
-      band ? h("span", null, h("i", {class: "sw flip"}), `동전 봇 ${fmt.int(t.k)}개 묶음 (가운데 ${fmt.pct(last(band.p50), 0)}, 띠 = 10~90%) · 참고`) : null),
-    h("p", {class: "an-note"}, `자금 ${dol(t.capital)} · 5년 손익 합계 ${dol(t.pnl, true)} · 가장 깊은 낙폭 ${dol(-t.dd_usd)} (자금의 ${fmt.num(t.capital ? t.dd_usd / t.capital : null, 1)}배: 매달 다시 채워 넣은 돈까지 합친 낙폭)`));
+      band ? h("span", null, flipOut ? null : h("i", {class: "sw flip"}),
+        `동전 봇 ${fmt.int(t.k)}개 묶음: 가운데 ${fmt.pct(last(band.p50), 0)} (10~90% ${fmt.pct(last(band.p10), 0)} ~ ${fmt.pct(last(band.p90), 0)})`,
+        flipOut ? " · 이 그림보다 훨씬 아래라 선은 생략" : " · 띠 = 10~90%", " · 참고") : null),
+    h("p", {class: "an-note"}, `자금 ${dol(t.capital)} · 5년 손익 합계 ${dol(t.pnl, true)} · 가장 깊은 낙폭 ${dol(-t.dd_usd)} (`,
+      ddr == null ? "—" : ddr < 1 ? `자금의 ${fmt.pct(ddr, 0, false)}` : `자금의 ${fmt.num(ddr, 1)}배`,
+      ": 매달 다시 채워 넣은 돈까지 합친 낙폭). 누적이 −100%보다 낮으면 자금을 여러 번 다시 채웠다는 뜻입니다."));
 }
 
 /** A thin-line chart at the box's real width (like ui.curves), with an optional shaded band. */
 function lineChart(o) {
   const box = h("div", {class: "c5-chart", role: "img", "aria-label": o.label || "곡선"});
-  const vals = [...o.series.flatMap((x) => x.values || []), ...(o.band ? [...o.band.lo, ...o.band.hi] : [])].filter((v) => v != null && Number.isFinite(v));
+  const fin = (a) => (a || []).filter((v) => v != null && Number.isFinite(v));
+  // the scale follows the series that are always drawn (fit: true); a band / line far outside it is left out
+  const base = o.series.filter((x) => !x.optional).flatMap((x) => fin(x.values));
+  const vals = base.length >= 2 ? base : o.series.flatMap((x) => fin(x.values));
   if (vals.length < 2) { box.append(ui.notYet("자료 없음")); return box; }
+  const span0 = Math.max(Math.max(0, ...vals) - Math.min(0, ...vals), 0.01);
+  const inRange = (a) => fin(a).every((v) => v >= Math.min(0, ...vals) - span0 && v <= Math.max(0, ...vals) + span0);
+  const band = o.band && inRange(o.band.lo) && inRange(o.band.hi) ? o.band : null;
+  const series = o.series.filter((x) => !x.optional || inRange(x.values));
+  box.dataset.omitted = String(o.series.length - series.length + (o.band && !band ? 1 : 0));
   const draw = (W) => {
-    const H = 200, x0 = 46, x1 = W - 8, y0 = 8, y1 = H - 20;
-    let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const H = 200, x0 = 52, x1 = W - 8, y0 = 8, y1 = H - 20;
+    const all = [...series.flatMap((x) => fin(x.values)), ...(band ? [...fin(band.lo), ...fin(band.hi)] : [])];
+    let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
     const pad = (hi - lo) * 0.06 || 0.01;
     lo -= pad; hi += pad;
-    const n = Math.max(...o.series.map((x) => (x.values || []).length));
+    const n = Math.max(...series.map((x) => (x.values || []).length));
     const X = (i) => x0 + (x1 - x0) * i / Math.max(1, n - 1), Y = (v) => y1 - (y1 - y0) * (v - lo) / (hi - lo);
+    const dec = hi - lo < 0.2 ? 1 : 0;
     const kids = [];
-    for (const v of [lo + pad, 0, hi - pad]) {
+    const ticks = [];
+    for (const v of [0, lo + pad, hi - pad]) {       // zero first; a tick too close to one already placed is dropped
+      if (ticks.some((t) => Math.abs(Y(t) - Y(v)) < 16)) continue;
+      ticks.push(v);
       kids.push(s("line", {class: v === 0 ? "c5-zero" : "c5-grid", x1: x0, x2: x1, y1: Y(v).toFixed(1), y2: Y(v).toFixed(1)}));
-      kids.push(s("text", {class: "c5-ax", x: x0 - 5, y: (Y(v) + 4).toFixed(1), "text-anchor": "end"}, fmt.pct(v, 0)));
+      kids.push(s("text", {class: "c5-ax", x: x0 - 5, y: (Y(v) + 4).toFixed(1), "text-anchor": "end"}, v === 0 ? "0%" : fmt.pct(v, dec)));
     }
-    if (o.band) {
-      const up = o.band.hi.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
-      const dn = o.band.lo.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).reverse();
+    if (band) {
+      const up = band.hi.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+      const dn = band.lo.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).reverse();
       kids.push(s("path", {class: "c5-band", d: "M" + up.join(" L") + " L" + dn.join(" L") + " Z"}));
     }
-    for (const sr of o.series) {
+    for (const sr of series) {
       const pts = (sr.values || []).map((v, i) => (v == null ? null : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).filter(Boolean);
       if (pts.length > 1) kids.push(s("path", {class: sr.cls, d: "M" + pts.join(" L")}));
       if (sr.dot && pts.length) {
@@ -229,11 +250,12 @@ function walkCard({d, vts, v}) {
     h("div", {class: "c5-wf-bar", title: `전체 조합 중 ${fmt.pct(r.beat_share, 0, false)}보다 높음`},
       h("i", {style: {"--w": (Math.max(0, Math.min(1, r.beat_share || 0)) * 100).toFixed(1) + "%"}}),
       h("span", {class: "c5-mk m50"}), h("span", {class: "c5-mk m75"})),
-    h("p", {class: "c5-wf-t"}, `다음 해 점수 ${fmt.num(r.score_next, 2)} · 그해 모든 조합(${fmt.int(r.n_combos)}개) 중앙값 ${fmt.num(r.median_next, 2)} · 상위 25% 선 ${fmt.num(r.p75_next, 2)} · 이긴 비율 ${fmt.pct(r.beat_share, 0, false)}`));
+    h("p", {class: "c5-wf-t"}, `점수: 고른 조합 ${fmt.num(r.score_next, 3)} · 그해 모든 조합(${fmt.int(r.n_combos)}개) 중앙값 ${fmt.num(r.median_next, 3)} · 상위 25% 선 ${fmt.num(r.p75_next, 3)} · 이긴 비율 ${fmt.pct(r.beat_share, 0, false)}`),
+    r.mean_month_median_next != null ? h("p", {class: "c5-wf-t"}, `한 달 평균: 고른 조합 ${fmt.pct(r.mean_month_next, 1)} · 모든 조합 중앙값 ${fmt.pct(r.mean_month_median_next, 1)} · 상위 25% 선 ${fmt.pct(r.mean_month_p75_next, 1)} · 이긴 비율 ${fmt.pct(r.ret_beat_share, 0, false)}`) : null);
   return ui.card({plate: "다음 해에도 통했나", sub: "한 해에 고른 1위를 다음 해에 그대로 돌렸다면"},
     h("p", {class: "c5-sum"}, `기존 36: ${fmt.int(a.n)}번 중 그해 중앙값을 넘은 해 ${fmt.int(a.med)}번, 상위 25%에 든 해 ${fmt.int(a.p75)}번`,
       fl.length ? ` · 동전 봇 36개로 같은 시험: 중앙값 넘음 ${fmt.int(b.med)}번, 상위 25% ${fmt.int(b.p75)}번` : ""),
-    h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다."),
+    h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다. 거의 모든 조합이 내리막만 탄 해에는 점수가 −1 근처에 몰리므로 한 달 평균 수익도 함께 봅니다."),
     h("div", {class: "c5-wfs", role: "list"}, wf.map((r) => row(r, false))),
     fl.length ? ui.disclosure("동전 봇 36개로 같은 시험 (참고)", h("div", {class: "c5-wfs", role: "list"}, fl.map((r) => row(r, true)))) : null,
     ui.refNote(vts));
@@ -333,7 +355,7 @@ function mergedCard({d}) {
       (r.alone || []).filter(Boolean).length ? h("span", null, "혼자일 때 ", (r.alone || []).map((a) => (a ? fmt.pct(a.mean, 2) : "—")).join(" / ")) : null,
       h("span", {class: "c5-wins"}, (r.w || []).map((w, j) => h("i", {class: ["c5-win", w[1] == null ? "" : fmt.tone(w[1])], title: `${winLabels[j]} 거래 ${fmt.int(w[0])}건`},
         `${winLabels[j]} ${w[1] == null ? "—" : fmt.pct(w[1], 2)}`))),
-      r.consistent ? ui.pill("세 구간 모두 +", "accent") : null,
+      r.consistent ? ui.pill("세 구간 모두 +", "thin") : null,
       r.null_rank_p != null ? h("span", null, r.shuffle_pass ? "섞은 비교보다 높음" : "섞은 비교와 비슷") : null))});
   pg.set((m.survivors && m.survivors.length ? m.survivors : m.top) || []);
   const sg = m.singles || {};
@@ -375,9 +397,10 @@ function sharedCard({d, v}) {
         cmpRow("가장 깊은 낙폭", dol(-a.dd_usd), dol(-b.dd_usd)),
         cmpRow("5년 손익 합계", dol(a.pnl, true), dol(b.pnl, true)),
         cmpRow("거래 수", fmt.int(a.trades), fmt.int(b.trades))),
-      lineChart({series: [{values: a.curve || [], cls: "c5-l-mem"}, {values: b.curve || [], cls: "c5-l-combo", dot: true}],
+      lineChart({series: [{values: a.curve || [], cls: "c5-l-sep"}, {values: b.curve || [], cls: "c5-l-combo", dot: true}],
         xlabels: [(d.months || [])[0], null, (d.months || [])[(d.months || []).length - 1]], label: "따로 vs 한 계좌"}),
-      h("div", {class: "c5-legend"}, h("span", null, h("i", {class: "sw mem"}), "따로"), h("span", null, h("i", {class: "sw combo"}), "한 계좌")),
+      h("div", {class: "c5-legend"}, h("span", null, h("i", {class: "sw sep"}), "따로 (굵은 회색)"), h("span", null, h("i", {class: "sw combo"}), "한 계좌"),
+        h("span", null, "5년 누적, 자금 대비")),
       h("p", {class: "an-note"}, `한 계좌에 들어온 신호 ${fmt.int(b.signals)}개 중: 같은 코인을 이미 같은 방향으로 들고 있어 건너뜀 ${fmt.int(b.same_side_skipped)}개 · `,
         h("b", null, `반대 방향 충돌 ${fmt.int(b.conflicts)}개`), ` · 크기 규칙에 막힘 ${fmt.int(b.refused)}개 · 파산한 달 ${fmt.int(b.bust_months)}개`));
   }});
@@ -392,7 +415,8 @@ function methodsCard({d}) {
   const mt = d.methods || {}, pr = d.parity || {}, v4 = pr.v4_same_windows || {};
   const bs = mt.best_share || {};
   const tm = mt.timings || {};
-  const parWords = pr.cells ? `${fmt.int(pr.same_final)}/${fmt.int(pr.cells)}칸 최종 잔고 같음 · 거래 수 같음 ${fmt.int(pr.same_trades)}/${fmt.int(pr.cells)} · 프로필 카드 ${fmt.int(pr.cards_same)}/${fmt.int(pr.cards_cells)}` : "—";
+  const parWords = pr.cells ? `${fmt.int(pr.same_final)}/${fmt.int(pr.cells)}칸 최종 잔고 같음 · 거래 수 같음 ${fmt.int(pr.same_trades)}/${fmt.int(pr.cells)} · 프로필 카드 ${fmt.int(pr.cards_same)}/${fmt.int(pr.cards_cells)}`
+    + (pr.cards_blank ? ` (${fmt.int(pr.cards_blank)}칸은 신호가 없어 카드에 숫자 없음)` : "") : "—";
   return ui.card({plate: "어떻게 계산했나", sub: "방법 · 연구 숫자와 맞춰 보기 · 주의"},
     h("div", {class: "c5-caveat"}, h("b", null, "주의 "), mt.caveat || ""),
     ui.kv([

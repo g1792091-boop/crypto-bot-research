@@ -240,6 +240,11 @@ def test_walk_forward_picks_on_year_n_only():
     want = SY.curve_numbers(U[c][:, 10:].sum(axis=0)[None, :], np.array([cap[c].sum()]))[3][0]
     assert a[0]["score_next"] == pytest.approx(want)
     assert 0.0 <= a[0]["beat_share"] <= 1.0 and a[0]["n_combos"] == sum(math.comb(6, k) for k in range(2, 6))
+    # the returns side: the pick's year N+1 return against every combination's return that year
+    assert a[0]["return_next"] == pytest.approx(U[c][:, 10:].sum() / cap[c].sum())
+    _s, rets = K.all_scores(U[:, 10:], cap, 2, 5, SY.curve_numbers, with_return=True)
+    assert a[0]["ret_median_next"] == pytest.approx(float(np.median(rets)))
+    assert a[0]["ret_beat_share"] == pytest.approx(float((rets < a[0]["return_next"]).mean()))
 
 
 # ---------------------------------------------------------------- one shared account

@@ -446,3 +446,9 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 - **숫자 키** (`core/navkeys.js`): 1 터미널 · 2 홈 · 3 포지션 · 4 매매법 · 5 순위표 · 6 회의실 · 7 차트 · 8 시장 · 9 서버 (입력 칸에서는 안 먹음).
 - **폰 옆으로 밀기**: 화면을 좌우로 밀면 같은 묶음의 다음 / 이전 화면 (차트, 옆으로 스크롤되는 표·탭, 입력 칸 위에서는 안 함). 아래 막대 + 탭으로 어느 화면이든 두 번 안에.
 - 첫 화면은 그대로: PC(1200px 이상) 터미널, 폰 홈.
+
+## 5년 조합 시험 (combo-5y; docs/combo5y.md; tests/test_combo5y_core.py, test_combo5y_engine.py, test_dash_combo5y.py)
+
+- **#/combo5y** (`screens/combo5y.js` → `screens/combo-5y.js` `render5y(ctx, el)`, look `combo-5y.css`): 매매법 › 5년 조합. 커밋된 5년 계산(`paperbot/dash/data/combo5y.json`, 오프라인 생성기 `paperbot/dash/tools/combo5y.py`)을 `GET /api/v4/combo5y`(dash/more/combo5y.py)로 읽음. 카드: 어떤 매매법으로 찾았나(36개 전부 / 거래가 있는 것만) · 점수 높은 조합(누르면 5년 월별 누적 곡선 vs 구성 매매법 vs 같은 크기 동전 봇 띠) · 다음 해에도 통했나(달력 해 walk-forward) · 5년 상관 지도(하루 손익 / 나쁜 날 / 같이 잃은 날) · 신호 합치기(시험 수, 우연 거르기 두 단계, 상위 15개와 세 구간) · 한 계좌로 합치면 · 어떻게 계산했나(연구 숫자와 맞춰 보기, 선택 편향). 조합 화면(#/combo)이 같은 `render5y`를 불러 씀.
+- **분석 › 5년 월별** (`screens/analysis-monthly.js`, `GET /api/v4/combo5y/monthly`): 기존 36 매매법마다 5년 62달의 한 달 수익률(매달 $5,000로 새로 시작) 눈금과, 지금 실험이 같은 날 수까지 자른 5년 달들 사이 어디쯤인지(닫힌 거래만, 20건 미만 표본 적음, 채워지는 중 막대). 매매법 상세의 5년 시험 vs 지금 표에 봉별 한 달 요약 한 줄(vs5y `month5y`).
+- 딥시크는 들어가지 않음 (5년 조합 시험은 기존 36과 동전 봇만). 설명용, 판정 아님.
