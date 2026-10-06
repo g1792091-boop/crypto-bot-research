@@ -1,0 +1,18 @@
+/* "판정 결과가 나왔습니다 → 보기" band (core/verdictday.js; index.html links this file): shown once per verdict on every screen,
+   above the phone's bottom bar, bottom centre on a PC. Tokens only; the slide is off under prefers-reduced-motion. */
+.vband { position: fixed; z-index: 56; left: 50%; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));
+  width: min(560px, calc(100vw - 32px)); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px;
+  align-items: center; padding: 10px 10px 10px 14px; border-radius: var(--r-md); border: 1px solid var(--accent-line);
+  background: var(--surface-2); color: var(--ink); box-shadow: 0 0 0 1px var(--accent-soft), 0 14px 36px var(--bubble-shadow);
+  font-size: var(--t-sm); line-height: 1.45; opacity: 0; transform: translate(-50%, 16px); transition: opacity .24s var(--ease), transform .24s var(--ease); }
+.vband.in { opacity: 1; transform: translate(-50%, 0); }
+.vband-ic { color: var(--accent); font-size: var(--t-sm); }
+.vband-t { min-width: 0; }
+.vband-t b { color: var(--ink); }
+.vband-t span { color: var(--ink-2); font-size: var(--t-xs); }
+.vband-go { white-space: nowrap; padding: 7px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 700;
+  text-decoration: none; font-size: var(--t-sm); min-height: 32px; display: inline-flex; align-items: center; }
+.vband-x { appearance: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent;
+  color: var(--ink-2); font-size: var(--t-sm); cursor: pointer; }
+@media (min-width: 900px) { .vband { bottom: 24px; } }
+@media (prefers-reduced-motion: reduce) { .vband { transition: none; transform: translate(-50%, 0); } }

@@ -62,7 +62,7 @@ The architect has built the shared foundation. Five builders now fill the screen
    - The screenshot check fails a screen that shows `USDT` without one.
    - **Say it once** (owners 10/06 ~14:00, "작은 글씨가 패널마다 반복된다"): a screen whose cards share the same assumptions prints them ONCE, in one slim line (`ui.assumeLine(["closed", "open"], extra)`: `ui.ASSUME_ALL_KO`, or the closed / open caption alone), and each money panel or card that stands on its own (the terminal's panels, 계좌's 잔고 and 열린 포지션, 포지션's summary) keeps an ⓘ (`ui.infoTip(text)`) whose tooltip / tap bubble carries that card's exact caption and note. Market panels (the whole Binance market, not our bots) carry a tiny "시장" chip whose tooltip says so; the screen's line says it in full. Used by 터미널 (one footer line), 계좌 (one line at the bottom) and 포지션 (one caption per tab, an ⓘ on the unrealized total). The words still come only from core/ui.js (tests/test_dash_v4.py).
 3. **No pass/fail hint before the checkpoint verdict.**
-   - Any comparison with coin flips is labelled 참고 and carries `ui.refNote(verdictTs)` ("판정은 30일째 … 지금 비교는 합격·불합격을 뜻하지 않습니다").
+   - Any comparison with coin flips is labelled 참고 and carries `ui.refNote(verdictTs)` ("판정은 30일마다 (다음 MM/DD 09:00) … 지금 비교는 합격·불합격을 뜻하지 않습니다").
    - No p-values, no ✓ / ✕, no green/red "passes" before `/api/checkpoint` says `ready: true`.
    - DeepSeek (`kind: "ds200"`) accounts show nothing per account beyond a `pill("…", "ref")` (참고). Group-level DeepSeek medians are fine, with refNote.
 4. **Escape all model text.** See section 0: h() only.
@@ -176,7 +176,8 @@ Rules:
 | `alerts` | `[{rid, ts, level, text}]` |
 | `rooms` | `{room_id: newest message id}` |
 | `heartbeat` | `[ts, {last_step}]` |
-| `stream:state` | `"open"` / `"error"` |
+| `stream:state` | `"connecting"` / `"open"` / `"error"` / `"reconnecting"` / `"paused"` (section 5c) |
+| `version` | the server's code fingerprint from `/api/time` (core/version.js) |
 | `route` | — |
 | `features` | — |
 
@@ -459,6 +460,41 @@ What the integrator changed, so later work starts from the same place:
 - **Menu (`core/strip.js`, nav-v3):** every screen of `routes.js` GROUPS (not `hidden`, `feature` while it runs) is its own text button in the strip under the top bar, in `NAV` order (거래 · 성적 · 매매법 · AI 직원 · 서버); a new screen needs only its line in SCREENS and its name in its group's `screens`. `JOINED` makes one button for several screens (도움말 = howto + faq); each of those screens puts `joinedTabs(name)` (pb.js) under its title. Sticky parts of a screen sit under `calc(var(--top-h) + var(--sub-h))`: `--sub-h` is the strip's measured height (two rows when it wraps) plus the red critical banner's while it shows (core/strip.js measures both), so a screen never adds the banner itself.
 - **h():** `on*` attributes take functions only (a string handler is dropped); `srcdoc` / `formaction` are never set.
 - **Tests** (`tests/test_dash_v4.py`): every import resolves to an export, every file is reachable (no dead copies), screens reach core through `pb.js` (pure data `names.js` excepted), screen css has no colour literals, every old `/api` route is still called, every called route exists or is a listed NEEDS SERVER probe that degrades to 수집 전, the tour's targets exist, the captions are the shared ones.
+
+## 5c. Reliability rules (review 10/06, branch fix-reliability)
+
+- **Three load states, never mixed up** (honesty rule 6 extended: a failed load never reads as '없음'):
+  - 불러오는 중: `motion.shimmer(n)`; a `ui.searchList` / `ui.pager` shimmers by itself until its first `set()`
+    (`ui.pager({empty: () => node})` lets a screen show its own waiting / failed node instead of the empty words).
+  - 못 불러옴: `ui.errorBox(err, retry, {key})`. With a retry it tries again **by itself** after 5, 15, 30, 60 s, then
+    every 60 s, says when, and takes itself away on success; `{key: "board"}` also heals on the store's next good answer
+    from any poll. A retry must reject on failure (pass `() => store.refresh(k)`, never `.catch(() => {})`); a retry
+    that reloads the page only runs from the button. Over data that is still shown: `ui.staleNote(err, okAt, retry)`
+    ('불러오지 못함 · n분 전 자료') and `ui.dim(el, true)`.
+  - 진짜 없음: the screen's own words (`ui.empty`), only from a real answer.
+  - `ui.loadState(value, err)` → `"loading" | "failed" | "stale" | "ok"`; `ui.failKo(err)` says why in plain words.
+  - `store.meta(k)` = `{v, at (last try), okAt (last good answer), err}`; `store.need(k, maxAge)` counts from `okAt`.
+- **Requests time out** (`core/api.js`): 15 s, heavy reads (`/api/analysis/`, `/api/v4/`, strategy, account, trades,
+  cards, overlap, breakdown, levels) 30 s, POST 30 s. A timeout or a lost connection is an `ApiError` with
+  `kind: "timeout" | "network"` (status 0), so the next poll asks again; a left screen's abort stays an `AbortError`.
+- **The live stream heals itself**: 12 s without an event (the server writes every 3 s) = a dead connection, made again
+  at once (also on showing the page again and on `online`); a tab hidden for 2 minutes lets it go and connects again
+  when shown. A gap under 2 minutes resumes from the server's `cursor` (no trade or alert skipped); a longer one starts
+  from now (`stream.resumed` false) and the shell reads the recent trades again for the banner. The browser's own
+  retry of a resumed address is replaced at once (it would replay everything since that old cursor). `stream.state`:
+  `connecting | open | error | reconnecting | paused | idle`; `stream.fresh()` = open with an event in the last 12 s.
+  `criticalLines({..., link})` shows '대시보드 연결 다시 잡는 중' after 5 s of trouble and blames the bot only with a
+  heartbeat a live connection brought. When the connection is open again, every polled store key whose last try failed
+  is asked again at once (core/store.js), so `{key}` boxes and stale notes clear within seconds.
+- **Versioned files** (`dash/assets.py`): the page loads from `/static/v-<content hash>/v4/...`, kept a year. Never write
+  an absolute `/static/v4/...` address in a screen: load css / files relative to the module,
+  `new URL("x.css", import.meta.url).href` (tests/test_dash_reliability.py fails otherwise). `/api/time` carries the
+  server's `ver`; `core/version.js` shows '새 버전 준비됨 · 눌러서 새로고침' and reloads a hidden or 5-minute-idle tab
+  (once per new version: a tab that comes back still behind keeps the chip and never loops). A file is kept a year
+  only while it is the very file the version was taken from (an update landing between two looks is revalidated).
+- **No endless decoration**: a glow or blink runs 2-3 times on a real change, then stays lit; animate `opacity` /
+  `transform` of a layer (a `::before` / `::after`), never `box-shadow` / `background` in a loop. A list that updates
+  every few seconds changes its numbers in place and rebuilds only when its rows or order change.
 
 ## 6. NEEDS SERVER (exact routes the UI wants; until then it degrades as described)
 

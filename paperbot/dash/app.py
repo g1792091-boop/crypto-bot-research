@@ -53,11 +53,11 @@ import urllib.request
 from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from ..config import (DS200_FAMILY, FIVE_M_MAX_DELAY_MS, REEL_NAME, REEL_TF, V3_TRADE_TFS, V4_ACCOUNTS, V4_GROUPS,
                       v4_tfs_of)
+from .assets import REVALIDATE, Assets, asset_files
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
@@ -300,9 +300,12 @@ def _ro_uri(path: str) -> str:
 
 
 class Data:
-    def __init__(self, db: str, daily_db: Optional[str] = None):
+    def __init__(self, db: str, daily_db: Optional[str] = None, checkpoint_db: Optional[str] = None):
         self.db = db
         self.daily_db = daily_db
+        # the checkpoint job's verdicts (read-only): the countdown stays on a checkpoint until its verdict is stored
+        # (dash/more/verdictday.py clock); by default checkpoint.db next to paper3.db, like create_app
+        self.checkpoint_db = checkpoint_db or os.path.join(os.path.dirname(os.path.abspath(db)), "checkpoint.db")
         # board(): the last result and the database marks it was computed from (G17: every open page's live stream
         # asked for it every 3 s, a GROUP BY over all trades plus 331 engines each time)
         self._board_hit: Optional[tuple] = None   # (marks, board, time.monotonic() of the last marks check)
@@ -628,7 +631,7 @@ class Data:
     def summary(self, now_ms: Optional[int] = None) -> dict:
         """Experiment progress (day n of 30, next checkpoint, observation period) and today's summary (KST day)."""
         from ..accounts import GROUP_OF_KIND, ORIGINAL_KINDS
-        from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+        from ..checkpoint import PERIOD_DAYS
         now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         day_ms, kst = 86_400_000, 9 * 3_600_000
         with self.conn() as c:
@@ -638,15 +641,21 @@ class Data:
             xs = self.extras_state(c)
             since = (now + kst) // day_ms * day_ms - kst                     # 00:00 KST today
             rows = [dict(x) for x in c.execute(
-                "SELECT t.account_id, a.kind, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
+                "SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
                 "ON a.account_id = t.account_id WHERE t.exit_time >= ?", (since,))]
         out: dict = {"now": now, "start": start, "period_days": PERIOD_DAYS}
+        # the verdict-day clock (dash/more/verdictday.py): a checkpoint that has passed stays the next one until the
+        # checkpoint job has stored its verdict (never '2번째 판정 · 30일 남음' on the morning of the first verdict)
+        from .more.verdictday import clock, day_state_reader, job_reader, read_ledger
+        ledger = read_ledger(self.checkpoint_db)
+        day_state = day_state_reader(self.db)
+        jobs = job_reader()       # systemd on the server, asked (cached 60 s) only on a verdict day before its result
         if start is not None:
             out["day"] = (now - (start - start % day_ms)) // day_ms + 1
-            k = 1
-            while checkpoint_ts(start, k) <= now:
-                k += 1
-            out["next_checkpoint"] = {"k": k, "ts": checkpoint_ts(start, k), "day": k * PERIOD_DAYS}
+            vc = clock(start, now, ledger, day_state, jobs)
+            out["next_checkpoint"] = {"k": vc["k"], "ts": vc["ts"], "day": vc["day"], "due": vc["due"],
+                                      "state": vc["state"], "late": vc["late"]}
+            out["verdict_clock"] = vc
             floor = (xs or {}).get("observe_until")
             obs = floor if isinstance(floor, int) and not isinstance(floor, bool) else start + 21 * day_ms
             out["observe_until"] = obs
@@ -658,17 +667,23 @@ class Data:
                 rs = run_facts(c).get("start_ts")
         except (sqlite3.Error, TypeError, ValueError):
             rs = start
-        out["restart"] = restart_banner(rs, now)
+        out["restart"] = restart_banner(rs, now, ledger, day_state, jobs)
         per: dict = {}
         group = {}
+        info: dict = {}            # account -> {strategy, timeframe, kind, n}: the page names a row without the board
         for x in rows:
             per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
             group[x["account_id"]] = GROUP_OF_KIND.get(x["kind"], "other")
+            i = info.setdefault(x["account_id"],
+                                {"strategy": x["strategy"], "timeframe": x["timeframe"], "kind": x["kind"], "n": 0})
+            i["n"] += 1
 
+        # best / worst 3 accounts by today's closed P&L (every trade since 00:00 KST, no row cap: 홈 reads these instead
+        # of downloading the day's trades), each with its trade count for the page's 표본 적음
         def ranked(gs) -> tuple[list, list]:
             rank = sorted(((a, p) for a, p in per.items() if group[a] in gs), key=lambda kv: kv[1])
-            return ([{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
-                    [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0])
+            return ([{"account_id": a, "pnl": round(p, 2), **info[a]} for a, p in rank[::-1][:3] if p > 0],
+                    [{"account_id": a, "pnl": round(p, 2), **info[a]} for a, p in rank[:3] if p < 0])
         strat = [x for x in rows if x["kind"] == "strategy"]
         # best / worst: the 36, the reel and the extras (the DeepSeek P&L only in its own group, D11; the coin flips are
         # the yardstick); by_group: each group's own numbers (the page shows the groups its switch selects)
@@ -679,7 +694,7 @@ class Data:
             gb, gw = ranked((g,))
             by_group[g] = {"trades": len(xs), "pnl": round(sum(x["pnl"] for x in xs), 2),
                            "wins": sum(x["pnl"] > 0 for x in xs), "liquidations": sum(x["exit_reason"] == "LIQ" for x in xs),
-                           "best": gb, "worst": gw}
+                           "accounts": len({x["account_id"] for x in xs}), "best": gb, "worst": gw}
         out["today"] = {"since": since, "trades": len(rows), "pnl": round(sum(x["pnl"] for x in strat), 2),
                         "wins": sum(x["pnl"] > 0 for x in strat), "strategy_trades": len(strat),
                         "liquidations": sum(x["exit_reason"] == "LIQ" for x in rows),
@@ -1209,8 +1224,11 @@ def stream_event(data: "Data", rooms: "Rooms", st: dict) -> str:
     last = st.get("last_board")
     changed = {k: v for k, v in slim.items() if last is None or last.get(k) != v}
     st["last_board"] = slim
+    # cursor: where this connection stands (trade id, alert row), so a page that reconnects after a short gap asks for
+    # exactly what it missed (core/api.js streamUrl)
     payload = {"ts": b["ts"], "changed": changed, "trades": d["trades"], "alerts": d["alerts"],
-               "heartbeat": d["heartbeat"], "room_msg": st["room_msg"], "rooms": rooms_changed}
+               "heartbeat": d["heartbeat"], "room_msg": st["room_msg"], "rooms": rooms_changed,
+               "cursor": [st["trade_id"], st["alert_row"]]}
     return f"data: {json.dumps(json_finite(payload), allow_nan=False)}\n\n"
 
 
@@ -1628,19 +1646,36 @@ def login_redirect(path: str, query: str = "") -> str:
 def same_origin(req: Request) -> bool:
     """Write endpoints: refuse a request whose Origin header is present and is not this site, scheme
     included (http://host is not https://host), and any browser request marked cross-site. The
-    dashboard is served directly (Tailscale / SSH tunnel); behind a proxy that changes the scheme
-    or the Host header every owner write would be refused (run uvicorn with --proxy-headers then)."""
+    dashboard is served directly (Tailscale / SSH tunnel). With DASH_TLS_PROXY=1 (the owners' choice of
+    ``tailscale serve --https=443`` in front, docs/server-setup-v4.md 8-1: one HTTP/2 connection instead of Chrome's 6
+    per http:// host) a request that comes from this machine itself (the local proxy, ``tls_proxied``) may carry the
+    https Origin of the proxy's name (X-Forwarded-Host) for this http server; a request from any other address is held
+    to the strict rule."""
     origin = req.headers.get("origin")
     if origin is not None:
         try:
             o = urllib.parse.urlsplit(origin)
         except ValueError:
             return False
-        if not o.netloc or o.netloc.lower() != req.headers.get("host", "").lower():
+        via = tls_proxied(req)
+        hosts = {req.headers.get("host", "").lower()}
+        if via and req.headers.get("x-forwarded-host"):
+            hosts.add(req.headers["x-forwarded-host"].strip().lower())
+        if not o.netloc or o.netloc.lower() not in hosts:
             return False
-        if (o.scheme or "").lower() != req.url.scheme.lower():
+        scheme = (o.scheme or "").lower()
+        if scheme != req.url.scheme.lower() and not (via and scheme == "https"):
             return False
     return req.headers.get("sec-fetch-site", "") != "cross-site"
+
+
+def tls_proxied(req: Request) -> bool:
+    """DASH_TLS_PROXY=1 and the request comes from this machine (127.0.0.1, ::1 or DASH_HOST, where a local
+    ``tailscale serve`` connects from): an https front for this http server, set up by the owners."""
+    if os.environ.get("DASH_TLS_PROXY", "").strip() != "1":
+        return False
+    ip = req.client.host if req.client else ""
+    return bool(ip) and ip in {"127.0.0.1", "::1", os.environ.get("DASH_HOST", "").strip()}
 
 
 def owner_names(env_text: Optional[str] = None) -> tuple[str, ...]:
@@ -2497,28 +2532,34 @@ def verdict_method() -> dict:
     return {"method_ko": CP.method_ko(None, n), "n_bots": n, "family_alpha": alpha}
 
 
-def restart_banner(start_ts: Optional[int], now_ms: int) -> dict:
+def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] = None, day_state=None,
+                   jobs=None) -> dict:
     """'새 실험 D+n / 30 · 첫 판정 MM/DD' of the run started at ``start_ts`` (checkpoint.run_facts): n = whole days
     since 00:00 UTC of the start day (the checkpoint clock: day 30 is the first verdict, checkpoint_ts), the verdict
-    date in KST (09:00). After the first verdict the next one is named instead."""
-    from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+    date in KST (09:00). The checkpoint named is the verdict-day clock's (dash/more/verdictday.py; ``ledger`` =
+    read_ledger(checkpoint.db)): a checkpoint that has passed stays named ('판정 결과 기다림') until its verdict is
+    stored; only then the next one, and ``of`` becomes its day (60, 90, ...). Without a ledger a passed checkpoint reads
+    as not known, never as the next one. ``line_ko`` / ``chip_ko``: the one sentence every screen uses (change 13)."""
+    from ..checkpoint import PERIOD_DAYS
+    from .more.verdictday import clock
     out: dict = {"rules_ko": RULES_V4_KO, "rules_label": RULES_V4_LABEL, **verdict_method(),
                  "doc": _doc_link("rules-v4", "rules-change-1"),
                  "verdict_doc": _doc_link("verdict-v4", "rules-change-1"),
                  "levrule_doc": _doc_link("levrule-eval-v4", "levrule-eval")}
     if start_ts is None:
         return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
-    day_ms = 86_400_000
-    n = max(0, (int(now_ms) - (int(start_ts) - int(start_ts) % day_ms)) // day_ms)
-    k = 1
-    while checkpoint_ts(int(start_ts), k) <= int(now_ms):
-        k += 1
-    cp = checkpoint_ts(int(start_ts), k)
-    mmdd = time.strftime("%m/%d", time.gmtime(cp / 1000 + 9 * 3600))
-    text = (f"새 실험 D+{n} / {PERIOD_DAYS} · 첫 판정 {mmdd}" if k == 1
-            else f"새 실험 D+{n} · {k}번째 판정 {mmdd}")
-    return {**out, "ready": True, "day": n, "of": PERIOD_DAYS, "checkpoint": k, "verdict_ts": cp, "verdict_mmdd": mmdd,
-            "text": text}
+    c = clock(int(start_ts), int(now_ms), ledger, day_state, jobs)
+    n, k, cp, mmdd = c["n"], c["k"], c["ts"], c["mmdd"] or "—"          # "—": past day 180, no verdict left
+    if c["state"] == "ended":
+        text = f"새 실험 D+{n} · 판정 끝"
+    elif c["due"]:
+        text = f"새 실험 D+{n} · {c['day']}일 판정 결과 기다림"
+    elif k == 1:
+        text = f"새 실험 D+{n} / {PERIOD_DAYS} · 첫 판정 {mmdd}"
+    else:
+        text = f"새 실험 D+{n} · {k}번째 판정 {mmdd}"
+    return {**out, "ready": True, "day": n, "of": c["of"], "checkpoint": k, "verdict_ts": cp, "verdict_mmdd": mmdd,
+            "text": text, "due": c["due"], "state": c["state"], "line_ko": c["line_ko"], "chip_ko": c["chip_ko"]}
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
@@ -2537,7 +2578,9 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     warm_imports()
     app = FastAPI(title="paper v4", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(GZipExceptStream, minimum_size=GZIP_MIN_BYTES)
-    data = Data(db, daily_db)
+    # the page's code files by content hash (assets.py): versioned addresses, a year in the browser, the '새 버전' chip
+    assets = app.state.assets = Assets(STATIC)
+    data = Data(db, daily_db, checkpoint_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
                   owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
     rooms.ensure_inbox()
@@ -2556,7 +2599,13 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             # back to the same page after logging in (login.html follows ?next=, same-origin paths only)
             return RedirectResponse(login_redirect(path, req.url.query))
         resp = await call_next(req)
-        resp.headers["Cache-Control"] = "no-store"
+        # the page's code files keep what the /static mount chose (assets.py: a year under /static/v-<ver>/, else
+        # revalidated with an ETag); pages and every API answer are never stored
+        if path.startswith("/static/") and not path.endswith((".html", "/")):
+            if "cache-control" not in resp.headers:
+                resp.headers["Cache-Control"] = REVALIDATE
+        else:
+            resp.headers["Cache-Control"] = "no-store"
         return resp
 
     @app.middleware("http")
@@ -2595,12 +2644,12 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/")
     def index():
-        """The paper v4 dashboard (static/v4/index.html; its files load from /static/v4/)."""
-        return FileResponse(V4_INDEX)
+        """The paper v4 dashboard (static/v4/index.html; its files load from /static/v-<ver>/v4/, assets.py)."""
+        return HTMLResponse(assets.index_html())
 
     @app.get("/v4")
     def index_v4():
-        return FileResponse(V4_INDEX)
+        return HTMLResponse(assets.index_html())
 
     @app.get("/v3")
     def index_v3():
@@ -3269,5 +3318,5 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     app.state.more = more.register_all(app, data=data, rooms=rooms, db=db, daily_db=daily_db, agents_db=agents_db,
                                        checkpoint_db=checkpoint_db, candles=candles, frames=frames)
 
-    app.mount("/static", StaticFiles(directory=STATIC), name="static")
+    app.mount("/static", asset_files(STATIC, assets), name="static")
     return app

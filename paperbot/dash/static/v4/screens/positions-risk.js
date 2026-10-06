@@ -67,7 +67,9 @@ export function riskLadder(ctx, o = {}) {
     r.row.classList.toggle("near", danger(x));
   };
   let order = "";
-  const set = (list, markOf) => {
+  /** wait: () => node, while there is no board yet (불러오는 중 / 못 불러옴; never '열린 포지션이 없습니다') */
+  const set = (list, markOf, wait) => {
+    if (wait) { order = "\0wait"; listEl.replaceChildren(wait()); more.textContent = ""; return; }
     const ranked = rankRisk(list, markOf);
     const shown = ranked.slice(0, max);
     const ids = shown.map((x) => x.a.account_id).join(",");

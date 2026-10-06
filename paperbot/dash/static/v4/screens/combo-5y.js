@@ -17,7 +17,8 @@ let cache = null;                         // {at, p}: the answer only changes wh
 function ensureCss() {
   // #/combo5y's own css @imports it; any other screen gets it linked once here
   if (document.querySelector('link[data-c5], link[href$="/screens/combo5y.css"]')) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/combo-5y.css", dataset: {c5: "1"}}));
+  // next to this file: the page's own versioned folder (/static/v-<ver>/v4/, dash/assets.py)
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("combo-5y.css", import.meta.url).href, dataset: {c5: "1"}}));
 }
 function load(ctx) {
   if (!cache || Date.now() - cache.at > FRESH_MS) {

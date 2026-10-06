@@ -120,16 +120,19 @@ export function heatCell(c, o = {}) {
   const b = grey || c.bust ? null : bin(v);
   const tf = fmt.tfKo(c.tf);
   const words = [`${o.label || nameOf(c)} · ${tf}`, `수익률 ${fmt.pct(c.ret)}`, `거래 ${fmt.int(c.n)}건`];
-  if (o.mode !== "own" && c.vs != null) words.push(`같은 봉 동전 봇 중앙값과 ${vsWords(c.vs)} (참고)`);
+  if ((o.mode !== "own" || o.vsMark) && c.vs != null) words.push(`같은 봉 동전 봇 중앙값과 ${vsWords(c.vs)} (참고)`);
   if (grey) words.push("거래가 적어 색 없음");
   else if (c.n < SMALL) words.push("표본 적음");
   if (c.open) words.push("지금 포지션 있음");
   if (c.bust) words.push("파산");
-  const el = h(o.href ? "a" : "span", {class: ["gk-cell", grey ? "grey" : "", c.bust ? "bust" : "", !grey && c.n < SMALL ? "small" : ""],
+  const el = h(o.href ? "a" : "span", {class: ["gk-cell", o.mode === "own" ? "own" : "", grey ? "grey" : "", c.bust ? "bust" : "", !grey && c.n < SMALL ? "small" : ""],
     href: o.href || null, dataset: {b: b == null ? "" : String(b)}, style: o.i != null ? {"--i": o.i} : null,
     title: words.join(" · "), "aria-label": words.join(", ")},
   h("b", {class: "num"}, c.bust ? "파산" : cellPct(c.ret)),
-  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`));
+  // vsMark (own colours): the coin-flip comparison only as a small neutral ▲ / ▼ beside the trade count (참고), never the
+  // colour (beside the count, not in the corner: a phone cell's corner sits on the return's "%")
+  h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`,
+    o.vsMark && !grey && !c.bust && c.vs != null && c.vs !== 0 ? h("i", {class: "gk-vsm", "aria-hidden": "true"}, c.vs > 0 ? "▲" : "▼") : null));
   return el;
 }
 
@@ -229,7 +232,8 @@ export function profileCard(ctx, key, o = {}) {
     if (g !== st.gen || !ctx.alive()) return;
     st.d = d;
     if (o.head) headSlot.replaceChildren(headBlock(d));
-    body.replaceChildren(...(d.group === "ds200" ? dsCounts(ctx, d) : d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)));
+    // (a null part would print as the text "null")
+    body.replaceChildren(...(d.group === "ds200" ? dsCounts(ctx, d) : d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)).filter((x) => x != null));
     if (animate) motion.swap(body);
   }
 
@@ -309,14 +313,15 @@ export function dsCounts(ctx, d) {
 function strategyBody(ctx, d) {
   const c = d.combined || {};
   const ds = d.group === "ds200";
-  const mode = ds ? "own" : "vs";
-  const tiles = h("div", {class: ["gk-tfrow", ds ? "own" : ""]}, (d.accounts || []).map((a, i) => h("div", {class: "gk-tf"},
+  // review 10/06 (as the map): the colour is each account's own return (a −58 % account is never gold); the coin-flip
+  // comparison is the small neutral ▲ / ▼ beside the trade count (참고), DeepSeek without it
+  const tiles = h("div", {class: "gk-tfrow own"}, (d.accounts || []).map((a, i) => h("div", {class: "gk-tf"},
     h("span", {class: "k"}, fmt.tfKo(a.tf)),
     heatCell({id: a.id, s: a.strategy, tf: a.tf, g: a.group, ret: a.ret, vs: a.vs, n: a.trades, bust: a.bust, open: a.open},
-      {mode, href: ctx.href("account", a.id), i}))));
+      {mode: "own", vsMark: !ds, href: ctx.href("account", a.id), i}))));
   const vsLine = ds
     ? h("p", {class: "gk-vsline"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref"), " 칸 색 = 자기 수익률")
-    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (칸 색)`);
+    : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 칸 색 = 자기 수익률 · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (거래 수 옆 ▲ / ▼)`);
   const stats = [
     // the deepest SINGLE timeframe account (the strategy page's '최대 낙폭 · 합친 곡선' is the summed curve): said so
     ui.stat("최대 낙폭 · 계좌 하나", c.mdd_max == null ? "—" : fmt.pct(-c.mdd_max, 1), "봉 계좌 중 가장 깊었던 하나 (합친 곡선 아님)"),

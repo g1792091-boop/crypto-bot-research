@@ -125,11 +125,12 @@ function cantdo(c) {
 export async function mount(el, ctx) {
   ctx.setTitle("다음 버전");
   el.append(ui.screenHead("다음 버전", "판정 뒤 무엇을 바꿀지 정할 때 보는 장부 · 보기만, 아무것도 제안하지 않음"));
-  const st = {tab: TABS.some((t) => t.id === ctx.params.arg) ? ctx.params.arg : "candidates", d: null};
+  const st = {tab: TABS.some((t) => t.id === ctx.params.arg) ? ctx.params.arg : "candidates", d: null, at: 0};
   const seg = ui.seg(TABS, st.tab, (id) => ctx.go("nextver", id === "candidates" ? null : id), {label: "다음 버전 보기", scroll: true});
   const body = h("div", {class: "nv-body"}, motion.shimmer(3));
   const foot = h("p", {class: "nv-foot muted"});
-  el.append(seg, body, foot);
+  const staleSlot = h("div", {class: "nv-stale"});
+  el.append(seg, staleSlot, body, foot);
 
   function render(animate) {
     if (!st.d) return;
@@ -142,11 +143,17 @@ export async function mount(el, ctx) {
   async function load() {
     let d;
     try { d = await ctx.api(API); } catch (e) {
-      if (ctx.alive()) put(body, ui.errorBox(e, load));
+      if (!ctx.alive()) return;
+      // fix-reliability (CONTRACT 5c): a 5-minute look that failed over a shown ledger keeps it, dimmed, under
+      // '불러오지 못함 · n분 전 자료'; before any answer, the box that tries again by itself
+      if (st.d) { put(staleSlot, ui.staleNote(e, st.at, () => load())); ui.dim(body, true); } else put(body, ui.errorBox(e, load));
       return;
     }
     if (!ctx.alive()) return;
     st.d = d;
+    st.at = Date.now();
+    put(staleSlot, null);
+    ui.dim(body, false);
     render(false);
   }
   cur = {set(tab) { st.tab = TABS.some((t) => t.id === tab) ? tab : "candidates"; seg.set(st.tab); render(true); }};

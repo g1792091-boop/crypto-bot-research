@@ -1,6 +1,8 @@
 /* 다음 버전 (#/nextver, screens/nextver.js): 후보 장부 · 주장별 성적표 · 못 하는 아이디어. Tokens only (both skins), every
    font size a --t-* token; phones first (one column, rows wrap, no sideways scroll). */
 [data-screen="nextver"] { gap: 14px; }
+[data-screen="nextver"] .nv-stale:empty { display: none; }
+[data-screen="nextver"] .nv-stale .failnote { margin: 0; }
 [data-screen="nextver"] .nv-body { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   align-items: start; min-width: 0; }
 .nv-list { display: grid; gap: 8px; min-width: 0; }

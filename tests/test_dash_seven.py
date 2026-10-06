@@ -52,7 +52,8 @@ def test_account_strip_links_and_deepseek_counts_only():
     # the money caption once for the page (owners 10/06 ~14:00): the line at the bottom, the cards keep short notes
     assert 'ui.assumeLine(["closed", "open"])' in js and "ui.assume(" not in js
     # the strip lives under the profile card and follows the board
-    assert "el.replaceChildren(...[backLink(), headSlot, same ? same.el : null," in js   # (nulls filtered: conv-a review)
+    # (add-accounts: the 원본 vs 복제 and '왜 이 수익률인가' cards sit between the profile and the strip; nulls filtered out)
+    assert "el.replaceChildren(...[backLink(), headSlot, cmp, why, same ? same.el : null," in js
     assert "if (view.same) view.same.update(b);" in js
     # the routes it links to read those params
     assert "q.tf" in _read("screens", "strategies-detail.js")

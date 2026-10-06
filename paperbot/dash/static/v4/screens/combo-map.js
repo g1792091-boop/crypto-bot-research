@@ -44,7 +44,7 @@ export function mapTab(env) {
     let d;
     try { d = await ctx.api(`/api/v4/combo/corr?${qs.toString()}`); } catch (e) {
       if (g !== st.gen || !ctx.alive()) return;
-      put(body, ui.card({plate: "전체 상관 지도"}, ui.errorBox(e, () => load())));
+      put(body, ui.card({plate: "전체 상관 지도"}, ui.errorBox(e, () => load(), {id: "combo-map"})));
       return;
     }
     if (g !== st.gen || !ctx.alive()) return;

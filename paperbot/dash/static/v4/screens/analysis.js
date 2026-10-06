@@ -76,7 +76,8 @@ const GROUP_N = {core: "기존 36", ds200: "딥시크", reel: "릴스"};
 /**
  * fill-strat: the real thresholds of the views that wait for trades, and how far the accounts are now (board
  * trades), as filling bars: 손익비·위험 (파산 확률 흉내: 계좌마다 거래 N건), 계좌 겹침 (계좌마다 거래 N건 + 같이 쌓인 기록
- * N일), 조합 시너지 (36 계좌 평균 N건). Null once every bar is full (the view then stands on its own numbers).
+ * N일), 조합 시너지 (36 계좌 평균 N건). A per-account bar fills with the share of accounts that reached the threshold.
+ * Null once every bar is full (the view then stands on its own numbers).
  * Thresholds come from the server's answer (d.drawdown.min_trades, d.rules.min_trades / min_days, d.min_trades),
  * with the server's constants as fallbacks (agents/survival.MIN_TRADES 20, overlap 20 / 7, SYNERGY_MIN_TRADES 5).
  */
@@ -86,8 +87,10 @@ export function waitBars(id, d, group, board, now = Date.now()) {
   const perAcct = (need, why) => {
     const p = tradeProgress(board, group, need);
     if (!p.total) return null;
-    return {label: `${why} · 계좌마다 거래 ${fmt.int(need)}건 필요`, share: p.share, full: p.done >= p.total,
-      words: `지금 가장 많은 계좌 ${fmt.int(p.max)}건 · ${fmt.int(need)}건 넘은 ${gk} 계좌 ${fmt.int(p.done)}/${fmt.int(p.total)}`};
+    // the bar is the share of accounts that reached the threshold (104 of 144 = 72 %), never the busiest account's
+    // way there (that read 100 % while 40 accounts still waited and nothing new opened)
+    return {label: `${why} · 계좌마다 거래 ${fmt.int(need)}건 필요`, share: p.total ? p.done / p.total : 0, full: p.done >= p.total,
+      words: `${gk} ${fmt.int(p.done)}/${fmt.int(p.total)} 계좌 채움 · 가장 많은 계좌 ${fmt.int(p.max)}건`};
   };
   let bars = [];
   if (id === "risk") {
@@ -102,7 +105,9 @@ export function waitBars(id, d, group, board, now = Date.now()) {
     if (p.total) bars = [{label: `조합 점수 · 36 계좌 평균 거래 ${fmt.int(need)}건 필요`, share: Math.min(1, p.avg / need), full: !d.waiting && p.avg >= need,
       words: `지금 계좌당 평균 ${fmt.num(p.avg, 1)}건 · 가장 많은 계좌 ${fmt.int(p.max)}건`}];
   }
-  bars = bars.filter(Boolean);
+  // a bar that is not full never reads 100 % (143 / 144 rounds to 99 %, not 100 %; the synergy bar's average can pass
+  // its mark while the server still waits): 100 % only when the view really opened
+  bars = bars.filter(Boolean).map((b) => (b.full ? b : {...b, share: Math.min(b.share, 0.99)}));
   return bars.length && bars.some((b) => !b.full) ? bars : null;
 }
 const FRESH_MS = 5 * 60 * 1000;
@@ -122,7 +127,7 @@ export async function mount(el, ctx) {
   const groupSeg = ui.seg(GROUPS.map((g) => ({id: g.id, label: g.label, title: g.title})), st.group, (id) => setGroup(id), {label: "묶음 고르기"});
   const groupRow = h("div", {class: "an-gsel"}, h("span", {class: "an-glabel"}, "묶음"), groupSeg);
   const desc = h("p", {class: "an-desc"});
-  const body = h("div", {class: "stack an-body"});
+  const body = h("div", {class: "stack an-body"}, motion.shimmer(5, true));     // 불러오는 중 (never a blank page)
   // ana7b: the what-if lab (#/whatif) is one tap away from every view
   const lab = h("a", {class: "btn-line", href: ctx.href("whatif"), title: "손절·익절·잠금·레버리지를 바꿨다면: 5년 결과와 밤 그림자"}, "만약 실험실 →");
   el.append(ui.screenHead("분석", "매매법 계좌의 거래를 여러 방향으로 나눠 봅니다 · 설명용, 판정 아님", lab), segSlot, groupRow, desc, body);

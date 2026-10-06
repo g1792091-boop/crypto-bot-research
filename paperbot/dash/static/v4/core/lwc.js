@@ -1,6 +1,7 @@
 // The candle chart library the old UI already ships (same origin: /static/vendor/lightweight-charts...js, v4 API,
 // window.LightweightCharts). Loaded once, only by the screens that draw candles. Colours come from the tokens.
-const SRC = "/static/vendor/lightweight-charts.standalone.production.js";
+// relative to this module, so it carries the page's version prefix (/static/v-<ver>/vendor/..., dash/assets.py)
+const SRC = new URL("../../vendor/lightweight-charts.standalone.production.js", import.meta.url).href;
 let loading = null;
 
 /** Promise of window.LightweightCharts (rejects when the file cannot load; show ui.errorBox then). */

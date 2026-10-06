@@ -3,7 +3,7 @@
 // liquidation distance, entry / mark / liquidation / stop, a meter from now to the stop and the liquidation, the lock
 // rule or the reel's own exits). Tabs 포지션 / 손절·잠금 주문 / 체결 기록 (closed trades with filters). A chosen coin
 // shows its head and order book. Prices: /api/ticker through the store (5 s); nothing here can place an order.
-import {h, ui, fmt, store, local, motion, serverNow} from "../core/pb.js";
+import {h, put, ui, fmt, store, stream, local, motion, serverNow} from "../core/pb.js";
 import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo, sideCounts, oneSided, SKEW_MIN, SKEW_SHARE,
   countOnly, COUNT_ONLY_KO, COUNT_ONLY_WHY} from "./positions-kit.js";
 import {coinHead, bookPanel} from "./positions-book.js";
@@ -70,7 +70,8 @@ export async function mount(el, ctx) {
   const ladder = riskLadder(ctx);
   const sideBook = h("div", {class: "stack"});
   side.append(ladder.el, sideBook);
-  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), sumCard, coinBar,
+  const staleSlot = h("div");         // '불러오지 못함 · n분 전 자료' over the last good board (ui.staleNote)
+  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), staleSlot, sumCard, coinBar,
     h("div", {class: "positions-cols"}, h("div", {class: "stack", dataset: {tour: "positions"}}, tabBar, tabBody), side));
 
   // ---------------------------------------------------------------- data helpers
@@ -98,6 +99,7 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- the coin strip (counts of open positions)
   // each coin: long ↑ / short ↓ counts and a dot when one side holds 80 % or more of at least 5 (counts only, no money)
   const renderCoins = (all) => {
+    if (!st.board) { st.countsKey = ""; coinBar.replaceChildren(); return; }     // no counts before a real answer
     const counts = {};
     const mine = all.filter((x) => !st.grp || fmt.groupOf(x.a) === st.grp);
     for (const x of mine) counts[x.pos.symbol] = (counts[x.pos.symbol] || 0) + 1;
@@ -112,7 +114,20 @@ export async function mount(el, ctx) {
   };
 
   // ---------------------------------------------------------------- summary (follows the coin and group filters)
+  // no board yet: 불러오는 중, or 못 불러옴 with its own retry (never '0개' / '없습니다' from an answer that never came)
+  const boardWait = () => {
+    const m = store.meta("board");
+    return m.err ? ui.errorBox(m.err, () => store.refresh("board"), {key: "board"}) : motion.shimmer(3);
+  };
   const renderSum = () => {
+    if (!st.board) {
+      const m = store.meta("board");
+      sumNum.update(null); sumSub.textContent = ""; lsEl.textContent = "—";
+      nOpenSub.textContent = m.err ? ui.failKo(m.err) : "불러오는 중";
+      put(line, m.err ? "포지션 자료를 저절로 다시 받는 중입니다 (아래 목록에서 바로 다시 시도할 수 있습니다)" : "불러오는 중");
+      put(bestLine);
+      return;
+    }
     const list = positions().filter(inScope);
     let tot = 0, known = 0, up = 0, dn = 0, mg = 0, best = null, worst = null, nCo = 0;
     for (const x of list) {
@@ -167,7 +182,7 @@ export async function mount(el, ctx) {
     needPx(x.pos.symbol);
     return c.el;
   };
-  const posPager = ui.pager({size: wide ? 12 : 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
+  const posPager = ui.pager({size: wide ? 12 : 8, row: (x) => cardOf(x), empty: () => (st.board ? ui.empty("조건에 맞는 열린 포지션이 없습니다") : boardWait())});
   const posNote = h("p", {class: "pos-note"});
   const notePos = () => { posNote.textContent = (wide ? "넓은 화면이라 모든 카드를 펼쳐 둡니다. " : "한 줄을 누르면 펼쳐집니다. ") + "미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다."; };
   notePos();
@@ -188,7 +203,7 @@ export async function mount(el, ctx) {
         hide ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, `발동 시 손익 ${COUNT_ONLY_KO}`) : h("span", {class: fmt.tone(pnl)}, `발동 시 ${fmt.money(pnl, true)} USDT`),
         reel ? h("span", null, `목표 리밋 ${x.pos.target ? fmt.price(x.pos.target) : "받는 중"}`) : null));
   };
-  const ordPager = ui.pager({size: 10, row: orderRow, empty: "걸려 있는 손절·잠금 주문이 없습니다"});
+  const ordPager = ui.pager({size: 10, row: orderRow, empty: () => (st.board ? ui.empty("걸려 있는 손절·잠금 주문이 없습니다") : boardWait())});
   const ordPane = h("div", {class: "stack"}, ordPager.el,
     h("p", {class: "pos-note"}, "가격 순서: 지금 가격과 가까운 주문이 위. 발동 시 손익은 나갈 때 수수료 전입니다. 모의 주문이라 거래소에는 아무것도 걸려 있지 않습니다."),
     ui.assume("open"));
@@ -244,7 +259,7 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- tabs
   const TABS = () => {
     const all = positions().filter(inScope);
-    return [{id: "pos", label: `포지션 ${fmt.int(all.length)}`}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
+    return [{id: "pos", label: st.board ? `포지션 ${fmt.int(all.length)}` : "포지션"}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
   };
   let tabSeg = null, tabLabelKey = "";
   const renderTabBar = () => {
@@ -304,7 +319,7 @@ export async function mount(el, ctx) {
     }
     renderSum();
     renderSide();
-    ladder.set(all.filter(inScope), markOf);
+    ladder.set(all.filter(inScope), markOf, st.board ? null : boardWait);
     if (st.tab === "trd" && st.trades) renderTrades(false);
   }
   const onTicker = (tk) => {
@@ -329,11 +344,17 @@ export async function mount(el, ctx) {
   renderTabBar();
   showTab(false);
   renderSide();
-  ctx.watch("board", (b) => {
-    if (!b) return;
+  ctx.watch("board", (b, k, err) => {
+    // no board yet: the lists and the summary say 불러오는 중 / 못 불러옴 (renderAll with no board)
+    if (!b) { if (!st.board) renderAll(true); return; }
     st.board = b;
     renderAll(true);
+    // a refresh that failed while the live stream is not bringing the positions either: the last data stays, dimmed
+    const old = !!err && !stream.fresh();
+    put(staleSlot, old ? ui.staleNote(err, store.meta("board").okAt, () => store.refresh("board").catch(() => {})) : null);
+    for (const x of [sumCard, coinBar, tabBody]) ui.dim(x, old);      // the summary and the coin counts are that data too
   });
+  if (!st.board) renderAll(true);
   ctx.watch("levwhy", (w) => { if (w && w.positions) { st.why = w.positions; if (st.board) renderAll(true); } });
   ctx.watch("ticker", (tk) => { if (tk) onTicker(tk); });
   ctx.every(1000, () => { if (head) head.tick(); }, {now: false});

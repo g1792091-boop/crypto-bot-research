@@ -2,8 +2,9 @@
 // HONESTY helpers live here too: assume() (the money caption), refNote() (comparison = 참고 until the verdict),
 // smallSample() (표본 적음), notYet() (수집 전). See CONTRACT.md for when each one is required.
 import {h, s, $, $$, clear, put, local} from "./dom.js";
-import {num, int, mmdd, acctParts} from "./fmt.js";
-import {countTo, swap, expand, popBubble, reduced, drawIn, fadeIn} from "./motion.js";
+import {num, int, mmdd, acctParts, ago} from "./fmt.js";
+import {store} from "./store.js";
+import {countTo, swap, expand, popBubble, reduced, drawIn, fadeIn, shimmer} from "./motion.js";
 
 // ---------------------------------------------------------------- captions (non-negotiable rules)
 export const ASSUME_KO = "모의 · 실제 시세 · 수수료·펀딩·슬리피지 포함";
@@ -78,10 +79,14 @@ export function setMethod(rs) {
 export const botsKo = () => (METHOD && METHOD.n_bots ? `같은 봉 동전 봇 ${int(METHOD.n_bots)}개` : "같은 봉 동전 봇");
 /** The verdict's method in one line: the server's method_ko, else neutral words (no typed-in count or error rate). */
 export const methodKo = () => (METHOD && METHOD.method_ko ? METHOD.method_ko : "같은 봉 동전 봇과 비교 · 묶음마다 따로 운 보정");
-/** Under any comparison with the coin flips before the checkpoint verdict. verdictTs: the first verdict (ms). */
+/** Under any comparison with the coin flips before the checkpoint verdict. verdictTs: the next verdict (ms): after
+ *  the first verdict (11/04) it is the second (12/04), so the words say '30일마다 (다음 MM/DD)', never '30일째 (12/04)'.
+ *  A verdict time already past is the verdict-day clock's 'due' checkpoint (its result is not stored yet): said so,
+ *  never '다음' for a time that has gone by. */
 export function refNote(verdictTs, extra) {
-  return h("p", {class: "refnote"}, h("b", null, "참고"), " · 판정은 30일째",
-    verdictTs ? ` (${mmdd(verdictTs)} 09:00)` : "", `에 계좌마다 ${botsKo()}와 비교해서 합니다. 지금 비교는 합격·불합격을 뜻하지 않습니다.`,
+  const when = !verdictTs ? "" : verdictTs <= Date.now() ? ` (${mmdd(verdictTs)} 09:00 판정 결과를 기다리는 중)` : ` (다음 ${mmdd(verdictTs)} 09:00)`;
+  return h("p", {class: "refnote"}, h("b", null, "참고"), " · 판정은 30일마다", when,
+    ` 계좌마다 ${botsKo()}와 비교해서 합니다. 지금 비교는 합격·불합격을 뜻하지 않습니다.`,
     extra ? ` ${extra}` : null);
 }
 /** '표본 적음' pill when n is below min. The default is the verdict's own floor for trade counts (checkpoint.MIN_TRADES
@@ -108,10 +113,107 @@ export const sideTag = (side) => h("span", {class: ["side", Number(side) > 0 ? "
 export const empty = (text) => h("p", {class: "empty"}, text);
 /** A small grey note under a card's content (how to read it, where a number comes from). */
 export const note = (...kids) => h("p", {class: "note"}, ...kids);
-export function errorBox(err, retry) {
-  const msg = err && err.status === 404 ? "이 자료가 서버에 없습니다" : "불러오지 못했습니다. 잠시 뒤 다시 시도합니다.";
-  return h("div", {class: "errbox", role: "status"}, h("span", null, msg),
+// ---------------------------------------------------------------- 불러오는 중 / 못 불러옴 / 진짜 없음 (review 10/06)
+// Every screen tells three states apart (CONTRACT §1.6: a failed load never reads as '없음'):
+//   불러오는 중  shimmer rows (motion.shimmer) while the first answer is on its way;
+//   못 불러옴    errorBox (nothing to show yet), or staleNote above the last good data, which stays on screen, dimmed;
+//   진짜 없음    the screen's own words (empty), only from a real answer.
+// loadState(v, err) names the state; for a store key: loadState(store.get(k), store.meta(k).err).
+/** "loading" | "failed" | "stale" | "ok": a value (undefined / null = none yet) and the error of the last try. */
+export function loadState(v, err) {
+  if (v === undefined || v === null) return err ? "failed" : "loading";
+  return err ? "stale" : "ok";
+}
+/** What went wrong, in the owners' words (core/api.js ApiError kinds). */
+export function failKo(err) {
+  if (err && err.status === 404) return "이 자료가 서버에 없습니다";
+  if (err && err.kind === "timeout") return "서버가 제때 답하지 않았습니다";
+  if (err && err.kind === "network") return "서버에 닿지 못했습니다 (연결 끊김)";
+  return "불러오지 못했습니다";
+}
+/** Over the last good data when a refresh failed: '불러오지 못함 · 2분 전 자료' (+ 다시 시도). Dim the data with
+ *  dim(el, true) meanwhile. okAt: when that data came (store.meta(k).okAt). */
+export function staleNote(err, okAt, retry) {
+  return h("div", {class: "failnote", role: "status"}, h("b", null, failKo(err)),
+    okAt ? h("span", {class: "muted"}, ` · ${ago(okAt)} 자료를 보여 드립니다`) : null,
     retry ? h("button", {class: "btn-line", type: "button", onclick: retry}, "다시 시도") : null);
+}
+/** Dims (or undims) data that is older than the last failed refresh. */
+export const dim = (el, on) => { if (el && el.classList) el.classList.toggle("is-stale", !!on); return el; };
+
+/** The tries of the boxes drawn into one place (or under one o.id, for a caller that draws a new place each time, like
+ *  the router's screen): a load that fails again draws a new box there, and the wait keeps growing instead of starting
+ *  over at 5 s (it starts over 3 minutes after the last try). */
+const TRIES = new WeakMap();
+const TRIES_ID = new Map();
+export const RETRY_S = [5, 15, 30, 60];
+/**
+ * A failed load. With retry (a function; a promise that rejects on failure), the box tries again BY ITSELF after 5,
+ * 15, 30 and 60 seconds, then every 60 seconds, while it is on the page (a screen left, or the box replaced by the
+ * caller's own drawing, stops it), and says when; 다시 시도 tries now. When a try succeeds and the caller has not drawn
+ * over the box, the box takes itself away. o.key: a store key whose next good answer (from any poll) also takes it
+ * away. o.auto false: only the button; o.auto true: by itself even for a retry that loads the page again (the caller
+ * makes sure it does so only once the server answers). Without retry the box promises nothing.
+ */
+export function errorBox(err, retry, o = {}) {
+  const when = h("span", {class: "errbox-when"});
+  const btn = retry ? h("button", {class: "btn-line", type: "button"}, "다시 시도") : null;
+  const box = h("div", {class: "errbox", role: "status"}, h("span", null, failKo(err)), when, btn);
+  if (!retry) return box;
+  // a retry that reloads the whole page is never run by itself (a server that is down would leave the browser's own
+  // error page, which never comes back): only the button does it
+  const auto = o.auto === true || (o.auto !== false && !(err && err.status === 404) && !/location\.reload/.test(String(retry)));
+  let timer = null, busy = false, off = null;
+  const gone = () => { clearTimeout(timer); timer = null; if (off) { off(); off = null; } };
+  const heal = () => { gone(); if (box.isConnected) box.remove(); if (o.onOk) o.onOk(); };
+  const memo = () => {
+    const p = o.id || box.parentNode, map = o.id ? TRIES_ID : TRIES;
+    if (!p) return null;
+    let m = map.get(p);
+    if (!m || Date.now() - m.at > 180000) { m = {n: 0, at: Date.now()}; map.set(p, m); }
+    return m;
+  };
+  const plan = () => {
+    clearTimeout(timer);
+    if (!auto || !box.isConnected) return;
+    const m = memo(), s = RETRY_S[Math.min(m ? m.n : 0, RETRY_S.length - 1)];
+    when.textContent = ` · ${s}초 뒤 저절로 다시 시도`;
+    timer = setTimeout(() => {
+      if (!box.isConnected) { gone(); return; }
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") { plan(); return; }
+      run();
+    }, s * 1000);
+  };
+  const run = async () => {
+    if (busy || !box.isConnected) return;
+    busy = true; clearTimeout(timer);
+    const m = memo();
+    if (m) { m.n++; m.at = Date.now(); }
+    when.textContent = " · 다시 시도하는 중…";
+    if (btn) btn.disabled = true;
+    try {
+      await retry();
+      busy = false;
+      if (box.isConnected) heal(); else gone();
+    } catch (e) {
+      busy = false;
+      if (btn) btn.disabled = false;
+      if (box.isConnected) plan(); else gone();
+    }
+  };
+  btn.addEventListener("click", run);
+  if (o.key) {
+    let armed = false;
+    off = store.watch(o.key, (v, k, e) => {
+      if (!armed) return;
+      if (!box.isConnected) { if (box.dataset.placed) gone(); return; }
+      if (v !== undefined && !e) heal();
+    });
+    armed = true;
+  }
+  // schedule once the caller has put the box on the page (the next tick); a box never placed keeps no timer
+  setTimeout(() => { if (box.isConnected) { box.dataset.placed = "1"; plan(); } else gone(); }, 0);
+  return box;
 }
 export const avatar = (label, hue, cls = "") => h("span", {class: ["rav", cls], style: {"--h": hue ?? 210}, "aria-hidden": "true"}, label);
 
@@ -265,7 +367,9 @@ export function pager(o) {
     const pages = Math.max(1, Math.ceil(st.items.length / size));
     st.page = Math.min(st.page, pages - 1);
     const s0 = st.page * size, part = st.items.slice(s0, s0 + size);
-    put(list, part.length ? part.map((it, i) => o.row(it, s0 + i)) : empty(o.empty || "맞는 항목이 없습니다"));
+    // o.empty: the words of a real empty answer, or a function returning the node to show instead (불러오는 중 /
+    // 못 불러옴 while there is no answer yet: a failed load never reads as '없음')
+    put(list, part.length ? part.map((it, i) => o.row(it, s0 + i)) : typeof o.empty === "function" ? o.empty() : empty(o.empty || "맞는 항목이 없습니다"));
     info.textContent = st.items.length ? `${num(s0 + 1, 0)}–${num(s0 + part.length, 0)} / ${num(st.items.length, 0)}` : "0 / 0";
     prev.disabled = st.page === 0; next.disabled = st.page >= pages - 1;
     bar.hidden = st.items.length <= size;
@@ -277,12 +381,14 @@ export function pager(o) {
     set(items, keepPage) { st.items = items || []; if (!keepPage) st.page = 0; render(!keepPage); }, rerender: () => render(false)};
 }
 export function searchList(o) {
-  const st = {items: o.items || [], q: ""};
+  // items undefined: no answer yet, so the list shimmers (불러오는 중) instead of saying its empty words
+  const st = {items: o.items, q: ""};
   const input = h("input", {class: "search", type: "search", placeholder: o.placeholder || "이름 찾기", "aria-label": o.placeholder || "찾기", autocomplete: "off"});
-  const pg = pager({size: o.size || 10, row: o.row, empty: o.empty});
+  const pg = pager({size: o.size || 10, row: o.row,
+    empty: () => (st.items === undefined ? shimmer(3) : typeof o.empty === "function" ? o.empty() : empty(o.empty || "맞는 항목이 없습니다"))});
   const apply = (keep) => {
-    const q = st.q.trim().toLowerCase();
-    pg.set(q ? st.items.filter((it) => o.match(it, q)) : st.items, keep);
+    const q = st.q.trim().toLowerCase(), items = st.items || [];
+    pg.set(q ? items.filter((it) => o.match(it, q)) : items, keep);
   };
   input.addEventListener("input", () => { st.q = input.value; apply(false); });
   apply(false);

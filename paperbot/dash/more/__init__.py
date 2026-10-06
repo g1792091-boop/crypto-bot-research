@@ -40,6 +40,12 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
     nextver 다음 버전: 후보 장부(증거 등급) · 주장별 성적표 · 연구실이 못 하는 아이디어 (#/nextver) + 목표 진척도 한 줄 (홈 맨 위)
+    verdictday 판정 날 시계 (판정이 저장될 때까지 그 판정을 '계산 중'으로), 판정 기계 준비 카드, 30일 길 이정표, 판정 뒤
+            실거래 체크리스트 (판정 화면; /api/summary의 next_checkpoint · restart도 같은 시계)
+    copycmp  원본 vs 복제: an approved copy next to its parent over the same period (계좌 화면, 결재함 지난 결정)
+    losslinks 손실 거래 <-> 회의: the trade ids the loss meetings stored, both ways (계좌·다시보기·회의 요약·에이전트 방)
+    approvals 결재함: the proposals that wait for the owners with their 5-year table, for / against lines and what
+            approving does; past decisions (approving itself stays POST /api/proposals/<id>/decide)
 """
 from __future__ import annotations
 
@@ -67,6 +73,8 @@ MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
 MODULES += ("nextver",)                        # round 2: 다음 버전 (#/nextver) + 목표 진척도 한 줄 (cached, read-only)
+MODULES += ("verdictday",)                     # fix-verdict: 판정 날 시계, 판정 기계, 30일 길 이정표, 판정 뒤 할 일
+MODULES += ("copycmp", "losslinks", "approvals")   # add-accounts: 원본 vs 복제, 손실 거래 <-> 회의, 결재함
 
 
 def register_all(app, **kw) -> dict:

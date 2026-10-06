@@ -77,8 +77,21 @@ export function bookPanel(ctx, sym, o = {}) {
         h("div", null, h("i", {style: {width: (share * 100).toFixed(1) + "%"}})), h("span", {class: "down num"}, `매도 ${fmt.pct(1 - share, 1, false)}`)));
     shown = true;
   };
+  // on screen = drawn (not inside a closed tab: display none), as before; the observer tells it, the layout is never
+  // asked (getClientRects every 3 s forced a fresh layout of a busy page: the terminal). The huge margin keeps a book
+  // further down the page counting as drawn, like the old check did.
+  let inView = typeof IntersectionObserver !== "function";
+  if (!inView) {
+    const io = new IntersectionObserver((es) => {
+      const was = inView;
+      inView = es.some((e) => e.isIntersecting);
+      if (inView && !was) load();
+    }, {rootMargin: "100000px"});
+    io.observe(el);
+    ctx.track(() => io.disconnect());
+  }
   const load = async () => {
-    if (busy || !cur || !el.isConnected || !el.getClientRects().length) return;      // only while on screen
+    if (busy || !cur || !el.isConnected || !inView) return;      // only while on screen
     busy = true;
     const want = cur;
     try {

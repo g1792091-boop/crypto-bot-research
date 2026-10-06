@@ -2,7 +2,8 @@
 after the 30-day verdict, what a next version (v5) could carry, plus the goal line of 홈.
 
     GET /api/v4/nextver   {candidates, claims, cantdo}   (cached ``TTL_S``; every database read-only)
-    GET /api/v4/goal      the 목표 진척도 line (agents/goalline.py, the same text the evening Telegram can carry)
+    GET /api/v4/goal      the 목표 진척도 line (agents/goalline.py, the same text the evening Telegram can carry; its
+                          verdict part in the verdict-day clock's words here, ``clock_words``: one D-day on every screen)
 
 - 다음 버전 후보 장부 (``candidates``): every result that could become a change, each with an evidence grade written by
   code (``GRADES``): the new-strategy lab's passes (A: 5-year, pre-registered gate corrected for every test, later
@@ -63,6 +64,29 @@ def _close(c) -> None:
             c.close()
         except Exception:  # noqa: BLE001
             pass
+
+
+def clock_words(g: dict, paper_ro, paper_db: Optional[str], checkpoint_db: Optional[str], jobs=None) -> dict:
+    """The goal line's verdict part in the verdict-day clock's words (dash/more/verdictday.py, fix-verdict change 13: one
+    D-day wording on every screen, the sentence of 홈's head card, 판정 and 30일 길): '판정까지 23일 (11/04 09:00)',
+    '2번째 판정까지 …', on a verdict day '30일 판정 날 · 동전 봇 비교 계산 중' until its result is stored (fix 1: never
+    '다음 판정 D-29' while that verdict is still being computed), '판정 끝 (180일)'. goalline's own words stay when the run
+    start is not known (paper3.db unreadable: '…읽지 못해 모름'; no account yet). The evening Telegram keeps goalline's
+    text (agents side)."""
+    from .story import run_start
+    from .verdictday import clock, day_state_reader, read_ledger
+    parts = list(g.get("parts") or [])
+    if paper_ro is None or (g.get("verdict") or {}).get("error") or len(parts) != 3:
+        return g
+    start = run_start(paper_ro)
+    if start is None:
+        return g
+    c = clock(start, int(g.get("now") or time.time() * 1000), read_ledger(checkpoint_db), day_state_reader(paper_db), jobs)
+    if not c.get("ready"):
+        return g
+    parts[2] = c["line_ko"] if c.get("due") else c["rest_ko"]
+    return {**g, "parts": parts, "text_ko": " · ".join(parts),
+            "verdict_clock": {k: c.get(k) for k in ("k", "day", "ts", "due", "state", "line_ko")}}
 
 
 def _load(path: str) -> Optional[dict]:
@@ -390,10 +414,12 @@ def register(app, ctx) -> dict:
 
     def goal() -> dict:
         from ...agents.goalline import goal as G
+        from .verdictday import job_reader
         a = _ro(agents_db)
         p = _ro(db)
         try:
-            return G(a, p, cp if cp and os.path.exists(cp) else None)
+            # the verdict part in the clock's words (the same day and sentence as /api/summary's verdict_clock)
+            return clock_words(G(a, p, cp if cp and os.path.exists(cp) else None), p, db, cp, job_reader())
         finally:
             _close(a)
             _close(p)

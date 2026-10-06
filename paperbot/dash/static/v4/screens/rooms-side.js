@@ -96,6 +96,8 @@ export function makeSide(ctx, hooks) {
       (g.reasons || []).length ? ui.disclosure("판정 근거", h("ul", null, g.reasons.map((x) => h("li", null, String(x))))) : null,
       run ? h("p", null, ui.pill("계좌 시작됨", "good"), ` ${run.label_ko || fmt.idName(run.account_id)}${run.extra_status && run.extra_status !== "active" ? ` · ${EXTRA_KO[run.extra_status] || run.extra_status}` : ""} · 거절로 멈출 수 없음`) : null,
       !run && ref ? h("p", null, `실행기: ${ref.text_ko || ref.code}${RE_APPROVE.includes(ref.code) ? " (아래 '다시 승인')" : ""}`) : null,
+      // the same proposal in the 결재함, with its 5-year table per period, the for / against lines and what approving does
+      p.status === "awaiting_owner" ? h("a", {class: "rm-ibx", href: ctx.href("inbox", null, {p: p.id})}, "결재함에서 근거와 함께 보기 →") : null,
       acts);
   }
   const propTitle = (p) => {
