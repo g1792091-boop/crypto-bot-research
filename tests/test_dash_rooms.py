@@ -798,3 +798,110 @@ console.log(JSON.stringify({lab: propCard(lab), run: propCard(run), stale: propC
     assert "다시 승인" in got["stale"] and "실행기: 한 번 더 승인해야 시작합니다" in got["stale"]
     assert "다시 승인" in got["lost"] and 'data-dec="approve"' in got["lost"]      # a lost click: one more click
     assert "다음 5분 봉 경계" in got["confirm"] and "거절로 멈출 수 없습니다" in got["confirm"]
+
+
+# ---------------------------------------------------------------- who was right (design 102 C, agents/disputes.py)
+def _with_disputes(env, monkeypatch, seats=True):
+    """The agents tick's writes: the seats (only with sides on), one settled 5-year dispute and one open forward one."""
+    from paperbot.agents import disputes as DS
+    monkeypatch.setattr(DS, "_labintake", lambda: None)
+    c = R.open_agents(env["agents"])
+    DS.ensure(c)
+    if seats:
+        DS.sides(c, env["now"])
+    lab = {"kind": "lab", "test": {"template": "skip_tag", "timeframe": "1h", "tag": "추세 반대 진입", "strategy": S}}
+    a = DS.open_dispute(c, room_id=ROOM, round_id=1, strategy=S, source="strategy_room", claim_ko="추세 반대 진입이 손해",
+                        side_a=DS.attacker_of(S), side_b=f"spec_{S}", settle=lab, now_ms=env["now"] - 5_000)
+    DS._update(c, a["id"], status="settled", winner="b", outcome="편드는 직원 맞음(1기간 +0.31%p, p=0.21)",
+               settled_ts=env["now"] - 1_000)
+    b = DS.open_dispute(c, room_id=ROOM, round_id=1, strategy=S, source="strategy_room", claim_ko="동전보다 낫지 않음",
+                        side_a=DS.attacker_of(S), side_b=f"spec_{S}", now_ms=env["now"] - 4_000,
+                        settle={"kind": "forward", "check": "vs_flip", "timeframe": None, "n": 40})
+    c.close()
+    return a["id"], b["id"]
+
+
+def test_disputes_endpoint_trials_sides_and_the_staff_board(env, monkeypatch):
+    c = env["client"]
+    assert c.get("/api/disputes").status_code == 401
+    _login(c)
+    assert c.get("/api/disputes").json()["disputes"] == []              # no table yet: nothing, no error
+    settled, open_ = _with_disputes(env, monkeypatch)
+    before = _digest(env["agents"])
+    d = c.get("/api/disputes", params={"strategy": S}).json()
+    assert [x["id"] for x in d["disputes"]] == [open_, settled]
+    first = d["disputes"][1]
+    assert (first["status_ko"], first["winner_ko"], first["side_a_name"], first["kind_ko"]) == (
+        "결론", "편드는 쪽 맞음", "청산 타점 분석가", "5년 시험")
+    assert first["claim_ko"] == "추세 반대 진입이 손해" and first["settle_ko"].startswith("5년 시험 · ")
+    assert d["disputes"][0]["status_ko"] == "앞으로 거래로 확인 중" and d["disputes"][0]["n"] == 40
+    assert d["seats"]["advocate"]["role"] == f"spec_{S}" and d["seats"]["attacker"]["name"] == "청산 타점 분석가"
+    assert d["base_rates"]["lab"]["advocate_share"] == 1.0 and d["coin_flip"] == 0.5
+    assert [x["id"] for x in c.get("/api/disputes", params={"status": "settled"}).json()["disputes"]] == [settled]
+    assert [x["id"] for x in c.get("/api/disputes", params={"room": ROOM, "limit": 1}).json()["disputes"]] == [open_]
+    assert c.get("/api/disputes", params={"strategy": "S1_EMA_RSI_CHOP"}).json()["disputes"] == []
+    assert c.get("/api/disputes", params={"status": "won"}).status_code == 400
+    t = c.get("/api/trials", params={"strategy": S}).json()
+    assert t["sides"]["attacker"]["role"] == "exit_timing" and len(t["disputes"]) == 2
+    staff = c.get("/api/digest/staff").json()
+    w = staff["who_was_right"]
+    assert w["tiles"]["settled"] == 1 and w["tiles"]["pending"] == 1 and w["recent"][0]["id"] == settled
+    by = {s["role"]: s for s in staff["staff"]}
+    assert by[f"spec_{S}"]["right"]["won"] == 1 and by["exit_timing"]["right"]["lost"] == 1
+    assert _digest(env["agents"]) == before                             # read-only
+
+
+def test_a_room_shows_no_sides_while_they_were_never_on(env, monkeypatch):
+    c = env["client"]
+    _login(c)
+    t = c.get("/api/trials", params={"strategy": S}).json()
+    assert t["sides"] is None and t["disputes"] == []
+    _with_disputes(env, monkeypatch, seats=False)
+    d = c.get("/api/disputes", params={"room": ROOM}).json()
+    assert d["seats"] is None and len(d["disputes"]) == 2               # disputes stay visible, the seats do not
+
+
+def _render_kit(script: str) -> dict:
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dom = "file://" + os.path.join(root, "tests", "anasyn_dom.mjs")
+    kit = "file://" + os.path.join(root, "paperbot", "dash", "static", "v4", "screens", "disputes-kit.js")
+    body = f"const D = await import('{dom}'); const K = await import('{kit}');\n" + script
+    r = subprocess.run([node, "--input-type=module", "-e", body], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_the_who_was_right_cards_render_next_to_the_base_rates():
+    got = _render_kit("""
+const w = {tiles: {settled: 3, attacker_won: 1, attacker_share: 1 / 3, pending: 2, conceded: 1, talk_only: 1, gave_up: 1},
+  base_rates: {lab: {settled: 2, attacker_won: 0, attacker_share: 0}, forward: {settled: 1, attacker_won: 1, attacker_share: 1}},
+  roles: [{role: "exit_timing", name: "청산 타점 분석가", won: 1, lost: 2, settled: 3, expected: 1.0, pending: 1, conceded: 0,
+           talk_only: 1, gave_up: 0, small: true, as_attacker: {won: 1, lost: 2}, as_advocate: {won: 0, lost: 0}}],
+  recent: [{id: 4, status: "settled", winner_ko: "편드는 쪽 맞음", strategy: "N17_KC_RSI", strategy_ko: "켈트너·RSI", ts: 1,
+            settled_ts: 2, side_a_name: "청산 타점 분석가", side_b_name: "켈트너·RSI 전담", claim_ko: "잠금이 낮음",
+            settle_ko: "5년 시험 · N17_KC_RSI 1h: 첫 익절 잠금 10% → 20%", trial_id: 41, outcome: "편드는 직원 맞음"}]};
+const room = {sides: {advocate: {name: "켈트너·RSI 전담", record_side: {won: 1, lost: 0}, record: {settled: 1}},
+                      attacker: {name: "청산 타점 분석가", record_side: {won: 0, lost: 1}, record: {settled: 1}}},
+  disputes: [{id: 2, settle_ko: "앞으로 거래 40건: 같은 기간 동전 계좌보다 나은지", progress_ko: "앞으로 40건 중 12건",
+              status: "open", status_ko: "앞으로 거래로 확인 중"}], base_rates: w.base_rates};
+const t = (n) => (n ? D.walk(n).text : null);
+console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRightCard({tiles: {}, roles: [], recent: []})),
+  chip: t(K.rightChip(w.roles[0])), nochip: t(K.rightChip({settled: 0, pending: 0})), room: t(K.roomSides(room)),
+  noroom: t(K.roomSides({sides: null, disputes: []})), wait: t(K.labIntake(null)),
+  queue: t(K.labIntake({items: [{source: "meeting", description_ko: "N17_KC_RSI 1h: 스킵", status: "tested",
+                                  status_ko: "시험함", detail: {test_number: 5}}], today: {meeting: {used: 1, limit: 3}}}))}));
+""")
+    card = got["card"]
+    assert "누가 맞았나" in card and "결론 난 다툼" in card and "공격 쪽이 이긴 비율" in card and "33%" in card
+    assert "동전 던지기 (기준)" in card and "50%" in card and "표본 적음" in card and "기준 비율로만 맞혔다면 1.0개" in card
+    assert "공격할 때 1/3" in card and "말로만 1" in card and "“잠금이 낮음”" in card and "5년 시험 #41" in card
+    assert "아직 다툼이 없습니다" in got["none"] and "동전 던지기 50%" in got["none"]
+    assert got["chip"].startswith("누가 맞았나 1/3") and got["nochip"] is None
+    assert "편드는 직원" in got["room"] and "공격하는 직원" in got["room"] and "앞으로 40건 중 12건" in got["room"]
+    assert "동전 던지기 50%" in got["room"] and got["noroom"] is None
+    assert "수집 전" in got["wait"] and "회의" in got["queue"] and "5번째 시험" in got["queue"] and "회의 1/3" in got["queue"]

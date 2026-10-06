@@ -485,3 +485,84 @@ def test_fresh_run_without_trades_skips_the_sunday_report_and_says_why(world):
     assert RM.weekly_report_skip(ctx.policy, world.paper(), SUNDAY + 7 * DAY) is None                  # next week
     assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 7 * DAY, n, min_trades=10)) is True
     assert len(n.messages) == 1 and n.messages[0][1].startswith("📊 주간 성적표")
+
+
+# ---------------------------------------------------------------- who was right (design 102 C, agents/disputes.py)
+QUIET_ = kst(2026, 10, 7, 15, 0)
+
+
+def _a_dispute_meeting(world):
+    """A strategy meeting with sides on: the attacker holds with a 5-year test, so code opens dispute #1 (queued)."""
+    from test_rooms_sides import ATT, LAB_SETTLE, attack, final
+    world.losses()
+    world.tick(QueueRunner({SPEC: [analysis(NOTE), final(NOTE)], ATT: [attack("disagree", LAB_SETTLE)]}), QUIET_,
+               policy=RM.RoomsPolicy(sides=True))
+    return ATT
+
+
+def test_the_day_digest_and_the_staff_board_show_who_was_right(world, monkeypatch):
+    from paperbot.agents import disputes as DS
+    monkeypatch.setattr(DS, "_labintake", lambda: None)
+    att = _a_dispute_meeting(world)
+    d = DG.day_digest(world.agents, R.kst_day(QUIET_))
+    [m] = [x for x in d["meetings"] if x["room_id"] == ROOM]
+    assert m["dispute"] == {"id": 1, "status": "queued", "status_ko": "5년 시험 대기", "winner": None, "winner_ko": "",
+                            "kind": "lab"}
+    assert m["challenge"] == "disagree"                         # the attack turn counts as a challenge
+    # code settles it for the advocate; two more attack turns: one talk-only, one given up
+    assert DS._update(world.agents, 1, status="settled", winner="b", outcome="편드는 직원 맞음", settled_ts=QUIET_ + HOUR)
+    R.post(world.agents, ROOM, None, "m", att, None, "challenge", "x",
+           {"turn": "attack", "answer": {"verdict": "disagree", "talk_only": True}}, ts=QUIET_ + HOUR)
+    R.post(world.agents, ROOM, None, "m", att, None, "challenge", "x",
+           {"turn": "attack", "answer": {"verdict": "agree"}}, ts=QUIET_ + HOUR)
+    b = DG.staff_board(world.agents, QUIET_ + 2 * HOUR, 7)
+    by = {s["role"]: s for s in b["staff"]}
+    ra, rs = by[att]["right"], by[SPEC]["right"]
+    assert (ra["won"], ra["lost"], ra["as_attacker"], ra["attacks"], ra["talk_only"], ra["gave_up"]) == (
+        0, 1, {"won": 0, "lost": 1}, 3, 1, 1)
+    assert (rs["won"], rs["settled"], rs["as_advocate"], rs["expected"], rs["small"]) == (1, 1, {"won": 1, "lost": 0},
+                                                                                            1.0, True)
+    w = b["who_was_right"]
+    assert w["tiles"]["settled"] == 1 and w["tiles"]["attacker_share"] == 0.0 and w["coin_flip"] == 0.5
+    assert w["base_rates"]["lab"]["advocate_share"] == 1.0 and w["small"] is True and w["min"] == 10
+    assert w["recent"][0]["line_ko"].endswith("→ 편드는 쪽 맞음") and "동전 50%" in w["note"]
+    # long after the meetings the staff rows still carry the run's disputes (who was right is the whole run)
+    late = {s["role"]: s for s in DG.staff_board(world.agents, QUIET_ + 30 * DAY, 7)["staff"]}
+    assert late[att]["right"]["lost"] == 1 and late[att]["turns"] == 0
+
+
+def test_no_dispute_means_no_board_rows_and_no_week_line(world):
+    b = DG.staff_board(world.agents, QUIET_, 7)
+    assert b["who_was_right"]["tiles"]["settled"] == 0 and b["who_was_right"]["roles"] == []
+    rep = DG.week_report(world.paper(), world.agents, SUNDAY)
+    assert rep["who_was_right"] is None and "누가 맞았나" not in DG.compose_week(rep)
+    from paperbot.agents import meetings as MT
+    assert "disputes_this_week" not in MT.learning_packet(world.agents, SUNDAY)
+
+
+def test_the_sunday_report_and_the_saturday_lessons_carry_the_weeks_disputes(world, monkeypatch):
+    from paperbot.agents import disputes as DS
+    from paperbot.agents import meetings as MT
+    monkeypatch.setattr(DS, "_labintake", lambda: None)
+    DS.ensure(world.agents)
+    lab = {"kind": "lab", "test": {"template": "skip_tag", "timeframe": "1h", "tag": "추세 반대 진입", "strategy": S}}
+    fwd = {"kind": "forward", "check": "vs_flip", "timeframe": None, "n": 20}
+    for settle, winner in ((lab, "b"), (fwd, "a")):
+        o = DS.open_dispute(world.agents, room_id=ROOM, round_id=None, strategy=S, source="strategy_room",
+                            claim_ko="추세 반대 진입이 손해", side_a="exit_timing", side_b=SPEC, settle=settle,
+                            now_ms=SUNDAY - 3 * DAY)
+        DS._update(world.agents, o["id"], status="settled", winner=winner, outcome="코드 결론", settled_ts=SUNDAY - DAY)
+    DS.open_dispute(world.agents, room_id=ROOM, round_id=None, strategy=S, source="strategy_room", claim_ko="x",
+                    side_a="exit_timing", side_b=SPEC, now_ms=SUNDAY - DAY,
+                    settle={**fwd, "check": "tag_gap", "tag": "횡보장 진입"})            # still open
+    rep = DG.week_report(world.paper(), world.agents, SUNDAY)
+    assert rep["who_was_right"] == {"week_settled": 2, "week_attacker": 1, "week_advocate": 1, "all_settled": 2,
+                                    "all_attacker": 1, "all_attacker_share": 0.5, "pending": 1, "small": True}
+    text = DG.compose_week(rep)
+    assert "누가 맞았나: 이번 주 결론 2건(공격 1·편 1) · 실험 전체 공격 쪽 1/2(50%, 동전 50%) 표본 적음 · 대기 1" in text
+    assert len(text) <= 4000
+    lp = MT.learning_packet(world.agents, SUNDAY)
+    got = lp["disputes_this_week"]["list"]
+    assert [(x["claim"], x["winner_ko"], x["side_a"]) for x in got] == [
+        ("추세 반대 진입이 손해", "편드는 쪽 맞음", "exit_timing"), ("추세 반대 진입이 손해", "공격 쪽 맞음", "exit_timing")]
+    assert "편드는 쪽이 거의 늘" in lp["disputes_this_week"]["note"]
