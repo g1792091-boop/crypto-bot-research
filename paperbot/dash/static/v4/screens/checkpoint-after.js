@@ -60,13 +60,17 @@ function lines(ck, summary) {
   const rows = (ck.rows || []).filter((r) => r.group !== "flip");
   const n1 = count(rows, PASS1), n2 = count(rows, PASS2), nh = count(rows, HOLD), nf = count(rows, FAIL);
   const nd = nextDate(summary, ck);
+  // past day 180 (checkpoint.NO_VERDICT_DAYS) there is no next verdict: no '2차 확인' date is promised
+  const last = !!(summary && summary.verdict_clock && summary.verdict_clock.state === "ended");
   return h("ul", {class: "cka-lines"},
     h("li", null, h("b", null, "거래는 아무것도 바뀌지 않습니다"),
       " · 모든 모의 계좌가 같은 규칙으로 계속 돕니다. 판정은 이름표일 뿐이고, 실거래는 두 분이 정하기 전에는 없습니다."),
-    h("li", null, n1 ? [h("b", null, `1차 합격 ${fmt.int(n1)}개는 ${nd}에 2차 확인`),
-      " · 그 30일 동안의 새 거래 30건 이상 · 그 기간 손익 플러스 · 운 시험 다시"]
-      : [h("b", null, "1차 합격 0개"), ` · ${nd}에 2차 확인할 계좌가 없습니다`]),
-    h("li", null, h("b", null, `보류 ${fmt.int(nh)}개도 ${nd}에 다시`), " · 그때 거래가 30건을 넘은 계좌는 1차 판정을 받습니다"),
+    last ? h("li", null, h("b", null, "180일 실험의 마지막 판정입니다"), " · 더 이상 판정(2차 확인 · 보류 다시)은 없습니다")
+      : h("li", null, n1 ? [h("b", null, `1차 합격 ${fmt.int(n1)}개는 ${nd}에 2차 확인`),
+        " · 그 30일 동안의 새 거래 30건 이상 · 그 기간 손익 플러스 · 운 시험 다시"]
+        : [h("b", null, "1차 합격 0개"), ` · ${nd}에 2차 확인할 계좌가 없습니다`]),
+    last ? h("li", null, h("b", null, `1차 합격 ${fmt.int(n1)}개 · 보류 ${fmt.int(nh)}개`))
+      : h("li", null, h("b", null, `보류 ${fmt.int(nh)}개도 ${nd}에 다시`), " · 그때 거래가 30건을 넘은 계좌는 1차 판정을 받습니다"),
     nf ? h("li", null, h("b", null, `불합격 ${fmt.int(nf)}개`), " · 이 판정으로 끝 (계좌는 그대로 계속 돎)") : null,
     n2 ? h("li", null, h("b", null, `2차 통과 ${fmt.int(n2)}개`), " · 실거래 조건 점검으로 (아래 표)") : null);
 }
