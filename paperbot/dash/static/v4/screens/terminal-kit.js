@@ -1,8 +1,12 @@
 // 터미널 kit: the panel frame, the ratio bar and the short ages every part of the terminal uses.
 import {h, ui, fmt, motion, serverNow} from "../core/pb.js";
 
-/** Every market-wide number on the terminal (movers, large orders, liquidations) carries this label: not our bots. */
+/** Every market-wide number on the terminal (movers, large orders, liquidations, the book) is the whole market's, not
+ *  our bots'. Owners 10/06 ~14:00 ("작은 글씨가 패널마다 반복된다"): those panels carry a tiny "시장" chip (its tooltip
+ *  has these words) and the terminal's one footer line says it in full. */
 export const MARKET_LABEL = "시장 전체 (우리 봇 아님)";
+/** The "시장" chip of a market panel: the whole market's numbers, not our bots' (the words in its tooltip). */
+export const marketChip = (title) => h("span", {class: "term-mk", title: title || `바이낸스 ${MARKET_LABEL}`, "aria-label": `바이낸스 ${MARKET_LABEL}`}, "시장");
 
 /** A short age for dense rows (term v2, the HelloQuant lists): "6s" / "4m" / "2h" / "3d" against the server clock. */
 export const age = (ms, now = serverNow()) => {
@@ -22,15 +26,17 @@ export function ages(root) {
 }
 
 /** A terminal panel: a thin-edged box with a small head (title, a sub line, optional right side) and a body.
- *  o: {sub, lead: [el] (after the title), acts: [el], cls, label, scroll (the body scrolls inside the panel)}. */
+ *  o: {sub, info (the panel's own note: an ⓘ after the title, ui.infoTip; el.tip.set(text) changes it), lead: [el]
+ *  (after the title), acts: [el], cls, label, scroll (the body scrolls inside the panel)}. */
 export function panel(title, o = {}, ...kids) {
   const sub = h("span", {class: "term-phs"}, o.sub || "");
+  const tip = o.info ? ui.infoTip(o.info, `${title} 설명`) : null;
   // the head's thin accent underline: a light runs along it once when the panel really receives data (ping below)
-  const head = h("div", {class: "term-ph"}, h("h2", null, title), ...(o.lead || []), sub, h("span", {class: "grow"}), ...(o.acts || []),
+  const head = h("div", {class: "term-ph"}, h("h2", null, title), tip, ...(o.lead || []), sub, h("span", {class: "grow"}), ...(o.acts || []),
     h("i", {class: "term-uline", "aria-hidden": "true"}));
   const body = h("div", {class: ["term-pb", o.scroll ? "scroll" : ""]}, kids);
   const el = h("section", {class: ["term-p", o.cls || ""], "aria-label": o.label || title}, head, body);
-  el.head = head; el.body = body; el.sub = sub;
+  el.head = head; el.body = body; el.sub = sub; el.tip = tip;
   return el;
 }
 

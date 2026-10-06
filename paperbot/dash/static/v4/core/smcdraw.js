@@ -1,13 +1,18 @@
-// 프리미엄 지표 drawing (core/smc.js computes, this draws): a lightweight-charts v4.2 series primitive. Zones (order
-// blocks, fair value gaps, premium / discount, OTE) are thin translucent bands under the candles that extend to the
-// right edge with a small label there; lines (BSL / SSL liquidity, BoS / CHoCH, trendlines) and the % labels of the
-// last legs are 1 px and drawn over them. Colours are tokens (read by chartfx.js colours()), text the --t-2xs size.
+// 프리미엄 지표 drawing (core/smc.js computes, core/chartfx.js picks what is on, this draws): a lightweight-charts v4.2
+// series primitive. Zones (order blocks, fair value gaps, premium / discount, OTE) are thin translucent bands under the
+// candles that extend to the right edge; lines (the equilibrium, BSL / SSL liquidity, BoS / CHoCH, trendlines) and the
+// % labels of the last legs are 1 px and drawn over them. The zones' names (OB+ / OB− / FVG) are NOT drawn here: the
+// deck places every right-edge name in one collision-free column next to the price axis (core/edgelabels.js, owners
+// 10/06 ~14:00). Colours are tokens (read by chartfx.js colours()), text the --t-2xs size.
 // Nothing here is excluded from or added to the autoscale: the candles alone set the price range.
 import {num} from "./fmt.js";
 
 /**
- * smcPrimitive({chart, series, get, col, ai}) -> primitive with .request()
- *   get() -> the smcAll() result to draw, or null (off); col() -> the deck's resolved colours; ai() -> the AI skin
+ * smcPrimitive({chart, series, get, col}) -> primitive with .request()
+ *   get() -> what to draw, or null (off): the deck's view of the smcAll() result (chartfx.js smcView):
+ *     {range, eq, ote, words (bool: the parts that are on), zones: [{kind: "ob" | "fvg", i, top, bot, dir}],
+ *      liq, structure, trend, legs (the lists to draw; empty when that part is off)}
+ *   col() -> the deck's resolved colours
  */
 export function smcPrimitive(o) {
   let api = null;
@@ -66,58 +71,52 @@ export function smcPrimitive(o) {
   function compute() {
     v.z = []; v.l = []; v.t = [];
     const d = o.get();
-    if (!api) return;
+    if (!api || !d) return;
     const col = o.col(), ts = o.chart.timeScale();
     const X = (i) => ts.logicalToCoordinate(i), Y = (p) => o.series.priceToCoordinate(p);
     let W = 0;
     try { W = ts.width(); } catch (e) { return; }
-    const R = W - 4;                                          // the right edge (labels sit just inside it)
-    // the deck's own line words (저항 / 지지 / 잠금 / 손절 …) share the right edge with the zones' words, first in line
-    for (const e of (o.extra ? o.extra() : [])) {
-      const y = Y(e.price);
-      if (y != null) v.t.push({s: e.s, x: R, y: y - 7, c: e.c, align: "right", p: 0});
-    }
-    if (!d) return;
-    const zone = (i, top, bot, c, a, label, edge) => {
+    const zone = (i, top, bot, c, a, edge) => {
       const x1 = X(i), y1 = Y(top), y2 = Y(bot);
       if (x1 == null || y1 == null || y2 == null || x1 > W) return;
       v.z.push({x1: Math.max(0, x1), x2: W, y1, y2, c, a, edge});
-      if (label) v.t.push({s: label, x: R, y: (y1 + y2) / 2, c, align: "right", p: 1});
     };
-    // dealing range: premium / discount tints, equilibrium, OTE band with its 0.62 / 0.79 labels
+    // dealing range: the equilibrium line, premium / discount tints and words (the AI skin's light already washes the
+    // halves: there only the words), the OTE band with its 0.62 / 0.79 labels
     const rg = d.range;
     if (rg) {
-      // (the AI skin's light already washes the pane red / sky blue at this split and names both halves: no second tint)
-      const words = o.zoneWords ? o.zoneWords() : true;
-      if (words) {
-        zone(rg.from, rg.hi, rg.eq, col.prem, 0.035, null);
-        zone(rg.from, rg.eq, rg.lo, col.disc, 0.035, null);
-      }
       const xf = Math.max(0, X(rg.from) ?? 0), yh = Y(rg.hi), yl = Y(rg.lo), ye = Y(rg.eq);
-      if (words && yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem, p: 6});
-      if (words && yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc, p: 6});
-      if (ye != null) { v.l.push({x1: xf, y1: ye, x2: W, y2: ye, c: col.trend, a: 0.35, dash: true}); v.t.push({s: "Equilibrium", x: xf + 6, y: ye - 8, c: col.trend, p: 6}); }
-      const [a, b] = rg.ote;
-      zone(rg.i, Math.max(a, b), Math.min(a, b), col.ote, 0.09, null, 0.4);
-      const ya = Y(a), yb = Y(b), xo = X(rg.i);
-      if (ya != null && yb != null && xo != null && xo < W) {
-        const xl = Math.max(0, xo) + 4;                           // at the zone's start: the right edge is for OB / FVG
-        v.t.push({s: "0.62", x: xl, y: ya, c: col.ote, p: 4});
-        v.t.push({s: "0.79", x: xl, y: yb, c: col.ote, p: 4});
-        v.t.push({s: "OTE", x: xl + 34, y: (ya + yb) / 2, c: col.ote, p: 4});
+      if (d.words) {
+        if (d.tint) {
+          zone(rg.from, rg.hi, rg.eq, col.prem, 0.035);
+          zone(rg.from, rg.eq, rg.lo, col.disc, 0.035);
+        }
+        if (yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem, p: 6});
+        if (yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc, p: 6});
+      }
+      if (d.eq && ye != null) v.l.push({x1: xf, y1: ye, x2: W, y2: ye, c: col.trend, a: 0.35, dash: true});      // its name: on hover
+      if (d.ote) {
+        const [a, b] = rg.ote;
+        zone(rg.i, Math.max(a, b), Math.min(a, b), col.ote, 0.09, 0.4);
+        const ya = Y(a), yb = Y(b), xo = X(rg.i);
+        if (ya != null && yb != null && xo != null && xo < W) {
+          const xl = Math.max(0, xo) + 4;                         // at the zone's start: the right edge is for the names
+          v.t.push({s: "0.62", x: xl, y: ya, c: col.ote, p: 4});
+          v.t.push({s: "0.79", x: xl, y: yb, c: col.ote, p: 4});
+          v.t.push({s: "OTE", x: xl + 34, y: (ya + yb) / 2, c: col.ote, p: 4});
+        }
       }
     }
-    for (const g of d.fvgs) zone(g.i, g.top, g.bot, col.fvg, 0.1, "FVG", 0.3);
-    for (const b of d.obs) zone(b.i, b.top, b.bot, col.ob, 0.13, b.dir > 0 ? "OB+" : "OB−", 0.5);
+    for (const z of d.zones || []) zone(z.i, z.top, z.bot, z.kind === "ob" ? col.ob : col.fvg, z.kind === "ob" ? 0.13 : 0.1, z.kind === "ob" ? 0.5 : 0.3);
     // liquidity resting above / below: a dashed line from the swing to the right edge
-    for (const q of d.liq) {
+    for (const q of d.liq || []) {
       const x = X(q.i), y = Y(q.price);
       if (x == null || y == null || x > W) continue;
       v.l.push({x1: Math.max(0, x), y1: y, x2: W, y2: y, c: col.liq, a: 0.55, dash: true});
       v.t.push({s: q.kind, x: Math.max(0, x) + 4, y: q.kind === "BSL" ? y - 8 : y + 9, c: col.liq, p: 2});
     }
     // structure breaks: the broken swing's level from the swing to the breaking bar, a small label in the middle
-    for (const s of d.structure) {
+    for (const s of d.structure || []) {
       const x1 = X(s.from), x2 = X(s.to), y = Y(s.price);
       if (x1 == null || x2 == null || y == null) continue;
       const c = s.kind === "CHoCH" ? col.choch : col.bos;
@@ -125,14 +124,14 @@ export function smcPrimitive(o) {
       v.t.push({s: s.kind, x: (x1 + x2) / 2, y: s.dir > 0 ? y - 8 : y + 9, c, align: "center", p: 3});
     }
     // trendlines through the last two major highs / lows, extended to the right edge
-    for (const t of d.trend) {
+    for (const t of d.trend || []) {
       const x1 = X(t.i1), x2 = X(t.i2), y1 = Y(t.p1), y2 = Y(t.p2);
       if ([x1, x2, y1, y2].some((q) => q == null) || x2 === x1) continue;
       const m = (y2 - y1) / (x2 - x1);
       v.l.push({x1, y1, x2: W, y2: y1 + m * (W - x1), c: col.trend, a: 0.45});
     }
     // % of the last major legs, at each leg's middle
-    for (const g of d.legs) {
+    for (const g of d.legs || []) {
       const x1 = X(g.i1), x2 = X(g.i2), y1 = Y(g.p1), y2 = Y(g.p2);
       if ([x1, x2, y1, y2].some((q) => q == null)) continue;
       v.l.push({x1, y1, x2, y2, c: col.trend, a: 0.22});
@@ -141,9 +140,9 @@ export function smcPrimitive(o) {
     }
   }
 
-  /** No two labels overlap: placed by priority (the zones' right-edge words first, then liquidity, structure, OTE,
-   *  leg %, the range words), each tried at its own height, then 14 px below / above; one that still collides is
-   *  left out (the line or zone it names is still drawn). The same word right next to itself shows once. */
+  /** No two labels overlap: placed by priority (liquidity, structure, OTE, leg %, the range words), each tried at its
+   *  own height, then 14 px below / above; one that still collides is left out (the line or zone it names is still
+   *  drawn). The same word right next to itself shows once. */
   function spread() {
     const fs = o.col().fs || 12, placed = [], keep = [];
     const box = (t, dy) => {

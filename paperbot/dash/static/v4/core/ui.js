@@ -12,6 +12,61 @@ export const ASSUME_OPEN_KO = "모의 · 실제 시세 · 마크 가격 기준 �
 export function assume(kind = "closed", extra) {
   return h("p", {class: "assume"}, kind === "open" ? ASSUME_OPEN_KO : ASSUME_KO, extra ? ` · ${extra}` : null);
 }
+// ---------------------------------------------------------------- say it once (owners 10/06 ~14:00)
+// "작은 글씨가 패널마다 반복된다": a screen whose cards all share the same assumptions prints them ONCE, in one slim
+// line (assumeLine), and each money card keeps an ⓘ (infoTip) whose tooltip carries that card's exact note.
+/** Closed and open money on one screen, in one line. */
+export const ASSUME_ALL_KO = "모의 · 실제 시세 · 닫힌 거래 손익은 수수료·펀딩·슬리피지 포함 · 열린 포지션은 마크 가격 기준 미실현(나갈 때 수수료 전) · 주문 버튼 없음";
+/** The screen's one caption line. kinds: "closed" / "open" / both (the default); extra: the screen's own last words. */
+export function assumeLine(kinds = ["closed", "open"], extra) {
+  const k = new Set(kinds);
+  const text = k.has("closed") && k.has("open") ? ASSUME_ALL_KO : k.has("open") ? ASSUME_OPEN_KO : ASSUME_KO;
+  return h("p", {class: "assume once"}, text, extra ? ` · ${extra}` : null);
+}
+let tipNow = null;
+function tipClose() {
+  if (!tipNow) return;
+  tipNow.b.setAttribute("aria-expanded", "false");
+  tipNow.pop.remove();
+  tipNow = null;
+}
+function tipWire() {
+  if (tipWire.done || typeof document === "undefined") return;
+  tipWire.done = true;
+  document.addEventListener("pointerdown", (e) => { if (tipNow && !tipNow.pop.contains(e.target) && !tipNow.b.contains(e.target)) tipClose(); }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") tipClose(); });
+  window.addEventListener("hashchange", tipClose);
+  window.addEventListener("scroll", tipClose, true);
+  window.addEventListener("resize", tipClose);
+}
+/**
+ * infoTip(text, label) -> an ⓘ button for a card / panel head: its tooltip is the card's own note (hover on a PC); a
+ * tap opens the same words in a small bubble (phones), a tap elsewhere or Escape closes it. .set(text) changes them.
+ */
+export function infoTip(text, label = "설명") {
+  const b = h("button", {type: "button", class: "itip", "aria-expanded": "false"}, "ⓘ");
+  b.set = (t) => {
+    b.title = t;
+    b.setAttribute("aria-label", `${label}: ${t}`);
+    if (tipNow && tipNow.b === b) tipNow.pop.textContent = t;
+  };
+  b.set(text);
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const same = tipNow && tipNow.b === b;
+    tipClose();
+    if (same) return;
+    tipWire();
+    const pop = h("div", {class: "itip-pop", role: "tooltip"}, b.title);
+    document.body.append(pop);
+    const r = b.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    pop.style.left = Math.round(Math.max(16, Math.min(innerWidth - 16 - pw, r.left + r.width / 2 - pw / 2))) + "px";
+    pop.style.top = Math.round(r.bottom + 6 + ph > innerHeight - 8 ? Math.max(8, r.top - 6 - ph) : r.bottom + 6) + "px";
+    b.setAttribute("aria-expanded", "true");
+    tipNow = {b, pop};
+  });
+  return b;
+}
 // ---------------------------------------------------------------- the verdict's method (server facts, never typed in)
 // /api/summary restart carries method_ko / n_bots / family_alpha (paperbot/dash/app.py verdict_method, from
 // checkpoint.N_BOTS and FAMILY_ALPHA); core/shell.js hands it here. Before it arrives the words stay neutral.

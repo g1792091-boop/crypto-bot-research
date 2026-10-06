@@ -11,6 +11,12 @@ import {panel, ratioBar} from "./terminal-kit.js";
 
 const MAX = 40;
 export const MONEY_G = new Set(["core", "m5", "extra"]);
+/** each tab's own note (the ⓘ by the tabs) */
+const TAB_NOTE = {
+  pos: `열린 포지션 · 미실현: ${ui.ASSUME_OPEN_KO} · 기존 36 · 5분봉 · 추가 계좌만 (딥시크·동전 봇은 건수만)`,
+  fills: `닫힌 거래 · 손익: ${ui.ASSUME_KO} · 딥시크·동전 봇 빼고`,
+  stops: "모의 계좌의 손절·잠금 가격 (거래소에 걸린 실제 주문 아님) · 지금 가격에서 가까운 순",
+};
 
 /** bottomTable(ctx, st, onPick) -> {el, setSym, onBoard, onTicker, onTrades} */
 export function bottomTable(ctx, st, onPick) {
@@ -28,7 +34,9 @@ export function bottomTable(ctx, st, onPick) {
   const openN = h("b", {class: "num"}, "—");
   const tbl = h("div", {class: "term-tw"});
   const foot = h("div", {class: "term-pf row"});
-  const el = panel("우리 봇", {cls: "term-table", lead: [tabs],
+  // the money caption per tab: the ⓘ by the tabs (its words follow the tab) and the terminal's one footer line (owners
+  // 10/06 ~14:00: not under the table as well)
+  const el = panel("우리 봇", {cls: "term-table", lead: [tabs], info: TAB_NOTE.pos,
     acts: [grp, ratio, h("span", {class: "term-ut n"}, "열린 ", openN), h("span", {class: "term-ut"}, "미실현 합계 ", total, " USDT")]}, tbl, foot);
   const cells = new Map();          // account id -> {pnl, roe} elements (reused so numbers roll)
 
@@ -64,7 +72,7 @@ export function bottomTable(ctx, st, onPick) {
         h("td", {class: "r num muted xs"}, x.p.entry_time ? fmt.kst(x.p.entry_time) : "—"));
     });
     const n = all.length;
-    put(foot, ui.assume("open"), h("span", {class: "muted"}, counted(), n > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(n)}개는 ` : "",
+    put(foot, h("span", {class: "muted"}, counted(), n > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(n)}개는 ` : "",
       h("a", {href: ctx.href("positions")}, "포지션 화면 →")));
     return rows.length ? table([["계좌"], ["코인"], ["방향"], ["배수", "r xn"], ["진입가", "r xe"], ["마크", "r xm"], ["미실현 (USDT)", "r"], ["ROE", "r"], ["청산가", "r"],
       ["손절·잠금", "r"], ["진입", "r xs"]], rows) : ui.empty("열린 포지션이 없습니다");
@@ -79,7 +87,7 @@ export function bottomTable(ctx, st, onPick) {
         h("td", {class: "r num"}, `${fmt.price(x.entry_price)} → ${fmt.price(x.exit_price)}`),
         h("td", {class: x.exit_reason === "LIQ" ? "down" : ""}, fmt.reasonKo(x.exit_reason)),
         h("td", {class: ["r", "num", fmt.tone(x.roe)]}, fmt.pct(x.roe, 1)), h("td", {class: ["r", "num", fmt.tone(x.pnl)]}, fmt.money(x.pnl, true))));
-    put(foot, ui.assume("closed"), h("span", {class: "muted"}, `최근 ${fmt.int(rows.length)}건 (딥시크·동전 봇 빼고) · `, h("a", {href: ctx.href("positions")}, "체결 기록 전체 →")));
+    put(foot, h("span", {class: "muted"}, `최근 ${fmt.int(rows.length)}건 (딥시크·동전 봇 빼고) · `, h("a", {href: ctx.href("positions")}, "체결 기록 전체 →")));
     return rows.length ? table([["청산"], ["계좌"], ["코인"], ["방향"], ["배수", "r"], ["진입 → 청산", "r"], ["이유"], ["ROE", "r"], ["손익 (USDT)", "r"]], rows)
       : ui.empty("체결이 아직 없습니다");
   }
@@ -96,10 +104,11 @@ export function bottomTable(ctx, st, onPick) {
         h("td", {class: ["r", "num", x.d != null && x.d < 0.005 ? "down" : ""]}, x.d == null ? "—" : fmt.pct(x.d, 2, false)),
         h("td", {class: "r num warn-t"}, fmt.price(x.p.liq)));
     });
-    put(foot, h("span", {class: "muted"}, "모의 계좌의 손절·잠금 가격 (실제 주문 아님) · 지금 가격에서 가까운 순"));
+    put(foot, h("span", {class: "muted"}, "모의 계좌의 손절·잠금 가격 (실제 주문 아님)"));
     return rows.length ? table([["계좌"], ["코인"], ["방향"], ["종류"], ["가격", "r"], ["지금", "r"], ["거리", "r"], ["청산가", "r"]], rows) : ui.empty("걸린 손절이 없습니다");
   }
   function render(user) {
+    el.tip.set(TAB_NOTE[t.tab] || TAB_NOTE.pos);
     const b = t.board;
     if (b) {
       let L = 0, S = 0, tot = 0, known = 0;

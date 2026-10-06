@@ -63,8 +63,9 @@ export function posLines(accounts, mark, o = {}) {
   }
   for (const s of keep) {
     // a merged stop answers to every id it carries: the first is the line's own, the others are aliases the chips use
+    // (count: how many stops this one line stands for, so its right-edge name reads "손절 ×2"; core/edgelabels.js)
     out.push({id: s.id, alias: s.ids.slice(1), parent: s.parent, group: "risk", price: s.price, tone: s.lock ? "up" : "down", dash: 1, alpha: 0.5,
-      axis: false, label: s.lock ? "잠금" : "손절"});
+      axis: false, label: s.lock ? "잠금" : "손절", count: s.ids.length});
   }
   return out;
 }

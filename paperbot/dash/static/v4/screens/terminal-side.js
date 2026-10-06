@@ -1,7 +1,9 @@
 // 터미널 right column (term v2, owners 10/06: HelloQuant's right column without the order form):
-//   - 이 코인 포지션: this coin's open positions of OUR named accounts (기존 36, 5분봉, 추가: live ROE at the mark price,
-//     the liquidation price; the numbers roll to a real new mark). DeepSeek and the coin flips are counted only (their
-//     money is on their own group screens). Paper: 주문 버튼 없음.
+//   - 이 코인 포지션: this coin's open positions of OUR named accounts (기존 36, 5분봉, 추가: live ROE at the mark price;
+//     the numbers roll to a real new mark). Owners 10/06 ~14:00: the strategy's full Korean name (two lines when it
+//     needs them, the timeframe chip kept); the liquidation and entry prices in each row's tooltip. DeepSeek and the
+//     coin flips are counted only (their money is on their own group screens). Paper: 주문 버튼 없음.
+// The captions are said once (owners 10/06 ~14:00): an ⓘ in each head with that panel's note, the terminal's footer.
 //   - 수익 (기존 36): the 36's realized P&L, the sum of the day's closed trades of those accounts (/api/v4/flow/calendar,
 //     g.core.pnl: the same answer as 흐름 · 수익 달력), drawn as the cumulative line from the run start with the daily
 //     bars under it; 오늘 수익 (today's realized sum and trades); the 수익 캘린더 with each day's realized P&L in its
@@ -20,8 +22,10 @@ import {MONEY_G} from "./terminal-table.js";       // the groups whose money is 
 export function coinPositions(ctx, st) {
   const list = h("div", {class: "term-cp", role: "list"});
   const other = h("p", {class: "term-cpo muted", hidden: true});
-  const el = panel("이 코인 포지션", {cls: "term-mine", scroll: true}, list, other);
-  el.append(h("div", {class: "term-pf"}, ui.assume("open")));
+  // (owners 10/06 ~14:00) the money caption is the ⓘ and the terminal's one footer line; the strategy name gets the
+  // room (two lines if needed, the timeframe chip kept): 청산가 moved into each row's tooltip
+  const el = panel("이 코인 포지션", {cls: "term-mine", scroll: true,
+    info: `우리 계좌(기존 36 · 5분봉 · 추가)의 이 코인 열린 포지션 · ROE: ${ui.ASSUME_OPEN_KO} · 청산가·진입가는 줄에 마우스를 올리면 · 딥시크·동전 봇은 건수만`}, list, other);
   let board = null;
   const rows = new Map();          // account id -> {key, node, roe}
   function render() {
@@ -39,10 +43,10 @@ export function coinPositions(ctx, st) {
       let r = rows.get(id);
       if (!r || r.key !== key) {
         const roe = h("b", {class: "num term-roe"}, "—");
-        const node = h("a", {class: "term-cr", role: "listitem", href: ctx.href("account", id), title: `${id} · 진입 ${fmt.price(x.p.entry)} · ${fmt.lev(x.p.leverage)}`},
-          ui.sideTag(x.p.side), h("span", {class: "term-fn"}, h("i", {class: ["term-gsw", fmt.groupOf(x.a)], "aria-hidden": "true"}), ui.acctLabel(x.a)),
-          h("span", {class: "muted num"}, fmt.lev(x.p.leverage)), roe,
-          h("span", {class: "term-lq num", title: "청산가"}, fmt.price(x.p.liq)));
+        const node = h("a", {class: "term-cr", role: "listitem", href: ctx.href("account", id),
+          title: `${id} · 진입 ${fmt.price(x.p.entry)} · ${fmt.lev(x.p.leverage)} · 청산가 ${fmt.price(x.p.liq)}`},
+          ui.sideTag(x.p.side), h("span", {class: "term-fn term-cfn"}, h("i", {class: ["term-gsw", fmt.groupOf(x.a)], "aria-hidden": "true"}), ui.acctLabel(x.a)),
+          h("span", {class: "muted num"}, fmt.lev(x.p.leverage)), roe);
         r = {key, node, roe};
         rows.set(id, r);
       }
@@ -52,7 +56,7 @@ export function coinPositions(ctx, st) {
     });
     if (!nodes.length) put(list, ui.empty(board ? `${fmt.coin(st.sym)}에 열린 포지션이 없습니다` : "불러오는 중"));
     else list.replaceChildren(h("div", {class: "term-cr hd", "aria-hidden": "true"}, h("span", null, "방향"), h("span", null, "계좌"), h("span", null, "배수"),
-      h("span", null, "ROE"), h("span", null, "청산가")), ...nodes);
+      h("span", null, "ROE")), ...nodes);
   }
   return {el, setSym() { rows.clear(); render(); }, onBoard(b) { board = b; render(); }, onTicker: render};
 }
@@ -79,15 +83,15 @@ export function pnlPanel(ctx) {
   const calBox = h("div", {class: "term-cal"});
   const legend = h("div", {class: "term-plg", title: "선 = 누적 실현 수익 · 막대 = 그날 실현 수익"}, h("span", null, h("i", {class: "k-line", "aria-hidden": "true"}), "누적"),
     h("span", null, h("i", {class: "k-bar", "aria-hidden": "true"}), "일별"));
-  const el = panel("수익 차트", {cls: "term-pnl", acts: [legend, ui.pill("", "ref")]},
+  // the note and the money caption: the ⓘ (the 참고 pill stays in sight) and the terminal's one footer line
+  const el = panel("수익 차트", {cls: "term-pnl", acts: [legend, ui.pill("", "ref")],
+    info: `기존 36 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고, 아래 표에 따로) · ${ui.ASSUME_KO} · 칸 = 한국 시간 하루 · 중간 기록일 뿐 판정이 아닙니다`},
     h("div", {class: "term-phero"}, meta, h("span", {class: "term-pnum"}, big, unit)),
     chartBox,
     h("div", {class: "term-today"}, h("span", {class: "term-tdt"}, "오늘 수익"), todayK, h("span", {class: "grow"}), todayV, h("span", {class: "term-punit"}, "USDT")),
     h("div", {class: "term-calh"}, h("span", {class: "term-calt"}, "수익 캘린더"), calMonth, h("span", {class: "grow"}),
       h("a", {class: "term-more", href: ctx.href("flow")}, "흐름 →")),
     calBox);
-  el.append(h("div", {class: "term-pf"}, ui.assume(),
-    ui.note("기존 36 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고, 아래 표에 따로) · 칸 = 한국 시간 하루 · 중간 기록일 뿐 판정이 아닙니다")));
 
   const daysOf = (cal) => (cal && cal.ready ? cal.days || [] : []);
   const hasDay = (d) => (d.state === "done" || d.state === "today") && d.g && d.g[K];

@@ -22,7 +22,7 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
   --ug: var(--up-glow, var(--up-line));
   --dg: var(--down-glow, var(--down-line));
   --rowh: calc(23px * var(--ts));
-  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-width: 0;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; min-width: 0;
   font-size: var(--t-xs); color: var(--ink);
 }
 .term .num { font-family: var(--f-term); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -47,6 +47,13 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term-pf.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .term-pf .assume, .term-pf .note { margin: 0; font-size: var(--t-2xs); color: var(--muted); line-height: 1.35; }
 .term-more { color: var(--accent); font-size: var(--t-2xs); text-decoration: none; white-space: nowrap; }
+/* said once (owners 10/06 ~14:00, "작은 글씨가 패널마다 반복된다"): the terminal's one slim caption line under the grid,
+   an ⓘ in each panel head (ui.infoTip, components.css) with that panel's exact note, a tiny "시장" chip on the market
+   panels (the whole market's numbers, not our bots') */
+.term-foot { margin: -4px 0 0; padding: 0 4px; border: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.35; }
+.term-mk { display: inline-flex; align-items: center; flex: none; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line-2); color: var(--ink-2);
+  font: 700 var(--t-2xs)/1.45 var(--f-body); letter-spacing: .02em; white-space: nowrap; cursor: help; }
+.term-ph .itip { margin-left: -4px; }
 .term-more:hover { text-decoration: underline; }
 .term .pp { font-size: var(--t-2xs); padding: 1px 6px; }
 
@@ -73,8 +80,8 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term-mvl { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .term-mvs { font-weight: 800; font-size: var(--t-sm); color: var(--ink); max-width: calc(110px * var(--ts)); overflow: hidden; text-overflow: ellipsis; }
 .term-mvv { font-size: var(--t-sm); font-weight: 700; }
-.term-mvcap { flex: none; display: grid; gap: 3px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.15; white-space: nowrap; padding-right: 2px; }
-.term-mvcap b { color: var(--accent-hi); font-weight: 700; }
+.term-mvcap { flex: none; display: grid; justify-items: start; gap: 3px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.15; white-space: nowrap; padding-right: 2px; }
+.term-mvwhen:empty { display: none; }
 .term-movers.none .term-mvs { color: var(--muted); font-weight: 600; }
 .term-movers.stale .term-mvl { opacity: .7; }
 .term-sess { flex: none; padding: 3px 8px; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent-hi); font-weight: 700; font-size: var(--t-2xs);
@@ -241,8 +248,17 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-dot.on { animation: term-breathe 2.4s var(--ease) infinite; }
 .term[data-still="1"] .term-dot.on { animation-play-state: paused; }
 @keyframes term-breathe { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); opacity: 1; } 50% { box-shadow: 0 0 0 7px transparent; opacity: .75; } }
-/* the chart deck's header controls (core/chartfx.css styles them): light legend, 번쩍임, 프리미엄 지표, '선' */
-.term-fx { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
+/* the chart deck's header controls (core/chartfx.css styles them): the light legend chip, '보기 ▾' (조명 · 번쩍임 ·
+   프리미엄 지표 parts in one menu) and '선 ▾' (owners 10/06 ~14:00: the head needed ~862 px and cut the last timeframe
+   button below ~1700 px). Below 1600 px the chip keeps only its dot (its words stay in its tooltip); the head wraps
+   before it would cut a timeframe button, so all seven stay visible down to a 1200 px window at any 글자 크기. */
+.term-fx { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; flex: none; }
+.term-chart .term-ph { flex-wrap: wrap; row-gap: 4px; }
+.term-chart .term-ph .term-tfs, .term-chart .term-ph .term-more { flex: none; }
+@media (max-width: 1599px) {
+  .term-fx .cfx-light { padding: 0 8px; }
+  .term-fx .cfx-light > span { display: none; }
+}
 .term-tip { position: absolute; left: 0; top: 0; z-index: 6; display: grid; gap: 3px; max-width: 220px; padding: 6px 9px; border-radius: 5px; pointer-events: none;
   background: var(--glass); border: 1px solid var(--warn); color: var(--ink); font-size: var(--t-xs); box-shadow: 0 6px 18px var(--card-shadow, transparent); }
 .term-tip b { color: var(--warn); }
@@ -297,7 +313,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
 .term-duoseg { display: inline-flex; flex: none; flex-wrap: nowrap; gap: 2px; }
 .term-duoseg button { height: 22px; padding: 0 9px; font-size: var(--t-2xs); border-radius: 5px; }
-.term-cr { display: grid; grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(36px * var(--ts)) calc(60px * var(--ts)) calc(74px * var(--ts)); gap: 4px; align-items: center;
+.term-cr { display: grid; grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(36px * var(--ts)) calc(60px * var(--ts)); gap: 4px; align-items: center;
   min-height: var(--rowh); padding: 1px 2px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
 .term-cr.hd { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; min-height: 0; padding-block: 3px; }
 .term-cr.hd > span { overflow: hidden; text-overflow: ellipsis; }
@@ -306,7 +322,17 @@ a.term-cr:hover { background: var(--surface-2); }
 .term-cr .side { padding: 0 4px; font-size: var(--t-2xs); justify-self: start; }
 .term-cr > .num { text-align: right; }
 .term-roe { padding: 0 3px; border-radius: 3px; }
-.term-cr .term-lq { color: var(--warn); font-size: var(--t-xs); }
+/* the strategy's full Korean name (owners 10/06 ~14:00: "일목···· VWMA··· 하이킨···"): up to two lines, the timeframe chip
+   kept at its start; the liquidation price lives in the row's tooltip */
+.term-cr .term-cfn { white-space: normal; align-items: flex-start; overflow: visible; }
+.term-cr .term-cfn .term-gsw { margin-top: 3px; }
+.term-cr .term-cfn .an { align-items: flex-start; overflow: visible; }
+.term-cr .term-cfn .an-tf { flex: none; }
+.term-cr .term-cfn .an-n { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; line-height: 1.3;
+  word-break: keep-all; overflow-wrap: anywhere; }
+/* a narrow head (the 포지션 · 호가 switch, the ⓘ): the count line goes (the list shows the rows themselves) */
+@media (max-width: 1599px) { .term-mine .term-phs { display: none; } }
+html[data-text="lg"] .term-mine .term-phs, html[data-text="xl"] .term-mine .term-phs { display: none; }
 .term-cpo { margin: 0; padding: 4px 4px 2px; font-size: var(--t-2xs); }
 .term-mine .term-cp .empty { padding: 8px 4px 4px; }
 .term-book .pos-book { gap: 0; }
@@ -381,7 +407,7 @@ a.term-cr:hover { background: var(--surface-2); }
 }
 @media (min-width: 1200px) and (max-width: 1599px) {
   .term-grid { grid-template-columns: 292px minmax(0, 1fr) 296px; }
-  .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)) calc(74px * var(--ts)); }
+  .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)); }
   .term-cr > :nth-child(3) { display: none; }
   .term-row { gap: 14px; }
   .term-stats, .term-movers { gap: 14px; }
@@ -413,8 +439,6 @@ a.term-cr:hover { background: var(--surface-2); }
 @media (max-height: 959px) and (min-width: 1200px) {
   .term-mid { grid-template-rows: auto minmax(0, 1fr) 208px; }
   .term-pchart { flex-basis: calc(108px * var(--ts)); min-height: calc(96px * var(--ts)); }
-  .term-pnl .term-pf .note { display: none; }
-  .term-left .term-pf .assume { display: none; }        /* the fills' money caption stays in each row's title and the footer below */
   .term-cc { min-height: calc(28px * var(--ts)); }
 }
 @media (max-height: 819px) and (min-width: 1200px) {
@@ -427,7 +451,7 @@ a.term-cr:hover { background: var(--surface-2); }
 @media (min-width: 1200px) {
   html[data-text="lg"] .term-grid { grid-template-columns: 296px minmax(0, 1fr) 312px; }
   html[data-text="xl"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 328px; }
-  html[data-text="lg"] .term-cr, html[data-text="xl"] .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)) calc(74px * var(--ts)); }
+  html[data-text="lg"] .term-cr, html[data-text="xl"] .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)); }
   html[data-text="lg"] .term-cr > :nth-child(3), html[data-text="xl"] .term-cr > :nth-child(3) { display: none; }
 }
 @media (min-width: 1440px) {
