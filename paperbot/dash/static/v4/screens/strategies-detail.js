@@ -17,6 +17,7 @@ import {exitsCard} from "./strategies-exits.js";
 import {priorPanel} from "./strategies-prior.js";
 import {stratShadows} from "./strategies-shadows.js";
 import {radarMatrix} from "./strategies-radar.js";
+import {aiOpinionCard} from "./strategies-ai.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -118,6 +119,7 @@ export function detailView(ctx, st, name) {
   const vs = vs5yCard(ctx, name, kind, {tf: v.tf, verdictTs: () => verdictTs()});
   const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, exits.el, profCard, lossCardEl);
   { const ss = stratShadows(ctx, name, kind); if (ss) right.append(ss); }     // ana8B: this strategy's shadows + 5-year cells
+  if (kind === "strategy") right.insertBefore(aiOpinionCard(ctx, name), acctCard);   // agents-ui: 이 매매법에 대한 AI 의견
   const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers
