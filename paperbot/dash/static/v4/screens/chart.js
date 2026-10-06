@@ -267,8 +267,11 @@ export async function mount(el, ctx) {
     if (sr && st.levels && st.levels.levels) {
       for (const side of ["resistance", "support"]) {
         st.levels.levels.filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 3)
-          .forEach((x, i) => add(`lv:${side}:${i}`, "sr", x.price, side === "resistance" ? "down" : "up", 2, `${side === "resistance" ? "저항" : "지지"}${narrow() ? "" : " · " + x.ko}`));
+          .forEach((x, i) => add(`lv:${side}:${i}`, "sr", x.price, side === "resistance" ? "down" : "up", 2, side === "resistance" ? "저항" : "지지"));
       }
+      const named = st.levels.levels.filter((x) => x.atr == null || Math.abs(x.atr) <= 8).slice(0, 6)
+        .map((x) => `${x.side === "resistance" ? "저항" : "지지"} ${fmt.price(x.price)}${x.ko ? " " + x.ko : ""}`);
+      if (named.length && !narrow()) note.push(named.join(" · ") + ".");
       note.push("지지·저항은 설명용입니다 (진입 연구에서 수익과 관계가 없었음).");
     } else if (sr && !LEVEL_TFS.includes(st.tf)) note.push("지지·저항은 15분·30분·1시간·4시간 봉에만 있습니다.");
     const g = st.show.gh && features.ghcoin && st.gh && st.gh.coins && st.gh.coins[st.sym];

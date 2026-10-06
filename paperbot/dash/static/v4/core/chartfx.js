@@ -36,7 +36,7 @@ const SMC_KEY = "프리미엄 지표 · 계산한 참고선 · 신호 아님";
 export const isAi = () => typeof document !== "undefined" && document.documentElement.dataset.skin !== "classic";
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 const TONES = ["up", "down", "flat", "accent", "warn"];
-const PILL_H = 20, PILL_GAP = 2, EDGE_MAX = 3, FLASH_KEY = "chart-flash";
+const PILL_H = 20, PILL_GAP = 2, EDGE_MAX = 3, TOP_GAP = 26, FLASH_KEY = "chart-flash";
 
 function colours() {
   const c = {};
@@ -225,9 +225,12 @@ export function chartDeck(o) {
         c.font = `600 ${col.fs * vr}px ${col.font}`;
         c.textAlign = "right"; c.textBaseline = "bottom";
         c.shadowColor = col.bg; c.shadowBlur = 3 * hr; c.globalAlpha = 0.9;
+        let prevS = null;
         for (const t of labels) {
+          if (t.s === prevS && t.y - prev < col.fs + 2) continue;            // the same word right above: once
           const y = Math.max(t.y, prev + col.fs + 2);
-          prev = y;
+          if (y - t.y > 2 * (col.fs + 2)) continue;                           // too far from its own line: no word
+          prev = y; prevS = t.s;
           c.fillStyle = t.c;
           c.fillText(t.s, bitmapSize.width - 58 * hr, Math.round(y * vr));
         }
@@ -341,7 +344,7 @@ export function chartDeck(o) {
     on.sort((a, b) => a.y - b.y);
     let prev = null, bottom = -Infinity;
     for (const it of on) {
-      const want = it.y - PILL_H / 2;
+      const want = Math.max(TOP_GAP, it.y - PILL_H / 2);              // under the OHLC legend line
       const top = Math.max(want, bottom + PILL_GAP);
       if (prev && top - want > PILL_H * 1.6) {             // too far from its own line: merge into the pill above
         it.L.pill.hidden = true;
