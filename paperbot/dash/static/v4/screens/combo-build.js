@@ -74,7 +74,7 @@ export function buildTab(env) {
       changed();
     }, {label: "비중 나누는 법"});
     const mw = h("p", {class: "cb-mwords"}, METHODS.find((m) => m.id === st.w).words);
-    const sum = st.w === "custom" ? st.p.reduce((a, b) => a + (Number(b) || 0), 0) : null;
+    st.sumEl = st.w === "custom" ? h("p", {class: "cb-mwords"}, sumWords()) : null;
     const acts = h("div", {class: "cb-acts"},
       h("button", {class: "btn-line", type: "button", onclick: copyLink, disabled: n < KMIN || null}, "이 조합 링크 복사"),
       n ? h("button", {class: "btn-line", type: "button", onclick: () => { st.pick = []; st.p = []; changed(); }}, "모두 빼기") : null);
@@ -82,15 +82,24 @@ export function buildTab(env) {
       chips,
       h("div", {class: "cb-mrow"}, h("span", {class: "cb-k"}, "비중"), mseg),
       mw,
-      sum != null ? h("p", {class: "cb-mwords"}, `지금 합 ${fmt.num(sum, 0)}% · 합이 100이 아니면 비율대로 맞춰 계산합니다.`) : null,
+      st.sumEl,
       finder(),
       acts));
+  }
+  function sumWords() {
+    const sum = st.p.reduce((a, b) => a + (Number(b) || 0), 0);
+    return `지금 합 ${fmt.num(sum, 0)}% · 합이 100이 아니면 비율대로 맞춰 계산합니다.`;
   }
   function chip(k, i) {
     const u = st.idx[k] || {name: k, sub: ""};
     const inp = st.w === "custom" ? h("input", {class: "cb-pct", type: "number", min: "0", max: "100", step: "5", inputmode: "numeric",
       value: String(st.p[i] ?? 0), "aria-label": `${unitName(k, st.idx)} 비중 %`,
-      oninput: (e) => { st.p[i] = Math.max(0, Number(e.target.value) || 0); clearTimeout(st.timer); st.timer = setTimeout(() => changed(true), 700); }}) : null;
+      oninput: (e) => {
+        st.p[i] = Math.max(0, Number(e.target.value) || 0);
+        if (st.sumEl) st.sumEl.textContent = sumWords();      // the picker is not redrawn while typing (keeps the focus)
+        clearTimeout(st.timer);
+        st.timer = setTimeout(() => changed(true), 700);
+      }}) : null;
     return h("div", {class: "cb-chip", role: "listitem"}, swatch(i),
       h("span", {class: "cb-cn"}, h("b", null, u.name), h("span", {class: "cb-cs"}, u.kind === "account" ? `${fmt.tfKo(u.tf)}봉 하나` : u.sub)),
       inp ? h("span", {class: "cb-pctw"}, inp, "%") : null,
