@@ -141,8 +141,8 @@ def vol_threshold(atrp: np.ndarray, bars_per_day: float, days: int = VOL_DAYS, m
     return pd.Series(np.asarray(atrp, float)).rolling(w, min_periods=mp).quantile(q).to_numpy()
 
 
-def regimes(h, lo, c, tf_min: int, vol_days: int = VOL_DAYS, vol_min_days: int = VOL_MIN_DAYS) -> dict:
-    """{code: int8 per bar, adx, slope, atrp, vol_q}. Each value at bar t uses bars 0..t only."""
+def indicators(h, lo, c) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(ADX14, EMA50 slope over 10 bars in ATR units, ATR%) per bar, each from bars 0..t only."""
     adx, atr = adx_atr(h, lo, c)
     e = ema(c, EMA_N)
     c = np.asarray(c, float)
@@ -150,14 +150,28 @@ def regimes(h, lo, c, tf_min: int, vol_days: int = VOL_DAYS, vol_min_days: int =
         slope = np.full(len(c), np.nan)
         slope[SLOPE_BARS:] = (e[SLOPE_BARS:] - e[:-SLOPE_BARS]) / atr[SLOPE_BARS:]
         atrp = atr / c
-    vq = vol_threshold(atrp, 1440.0 / tf_min, vol_days, vol_min_days)
+    return adx, slope, atrp
+
+
+def label_codes(adx, slope, atrp, vq) -> np.ndarray:
+    """The regime of each bar (급변 > 추세 > 횡보 > 보통; 모름 where any input is missing). ``vq``: the ATR% threshold
+    per bar (an array) or one number (the live view's fixed threshold)."""
+    adx, slope, atrp = (np.asarray(x, float) for x in (adx, slope, atrp))
+    vq = np.broadcast_to(np.asarray(vq, float), adx.shape)
     known = np.isfinite(adx) & np.isfinite(slope) & np.isfinite(atrp) & np.isfinite(vq)
-    code = np.full(len(c), NORMAL, np.int8)
+    code = np.full(len(adx), NORMAL, np.int8)
     code[np.nan_to_num(adx, nan=99.0) < ADX_RANGE] = RANGE
     code[(np.nan_to_num(adx) >= ADX_TREND) & (np.abs(np.nan_to_num(slope)) >= SLOPE_MIN)] = TREND
     code[np.nan_to_num(atrp) >= np.nan_to_num(vq, nan=np.inf)] = SHOCK
     code[~known] = UNKNOWN
-    return {"code": code, "adx": adx, "slope": slope, "atrp": atrp, "vol_q": vq}
+    return code
+
+
+def regimes(h, lo, c, tf_min: int, vol_days: int = VOL_DAYS, vol_min_days: int = VOL_MIN_DAYS) -> dict:
+    """{code: int8 per bar, adx, slope, atrp, vol_q}. Each value at bar t uses bars 0..t only."""
+    adx, slope, atrp = indicators(h, lo, c)
+    vq = vol_threshold(atrp, 1440.0 / tf_min, vol_days, vol_min_days)
+    return {"code": label_codes(adx, slope, atrp, vq), "adx": adx, "slope": slope, "atrp": atrp, "vol_q": vq}
 
 
 # ---------------------------------------------------------------- windows (pure)
