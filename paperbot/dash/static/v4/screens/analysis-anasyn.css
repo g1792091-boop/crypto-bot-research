@@ -1,0 +1,47 @@
+/* 분석 ana-syn: 청산 이유 (analysis-exits.js) and the 조합 시너지 added cards (analysis-synplus.js). Tokens only (both
+   skins); text sizes only as --t-* tokens (12px floor). Group bars wear the group's series colour, the coin flips
+   --series-coin; every value is text in ink tokens beside its bar. */
+.ax-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.ax-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ax-sw { display: inline-block; width: 14px; height: 8px; border-radius: 4px; background: var(--series-core); }
+.ax-sw.ds { background: var(--series-ds); } .ax-sw.m5 { background: var(--series-m5); }
+.ax-sw.flip { background: var(--series-coin); opacity: .75; }
+
+/* two thin bars per row (group above, coin flips below) on one scale, the values on the right */
+.ax-dual { display: grid; gap: 2px; min-width: 0; }
+.ax-row { display: grid; grid-template-columns: minmax(96px, 168px) minmax(0, 1fr) 64px; gap: 4px 10px; align-items: center;
+  padding: 5px 0; border-top: 1px solid var(--line); font-size: var(--t-sm); min-width: 0; }
+.ax-row:first-child { border-top: 0; }
+.ax-k { color: var(--ink); min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.ax-bars { display: grid; gap: 2px; min-width: 0; }
+.ax-b { display: block; height: 8px; width: var(--w, 0%); min-width: 2px; border-radius: 0 4px 4px 0; background: var(--series-core);
+  transition: width .6s var(--ease); }
+.ax-b.ds { background: var(--series-ds); } .ax-b.m5 { background: var(--series-m5); }
+.ax-b.flip { height: 6px; background: var(--series-coin); opacity: .75; }
+.ax-v { display: grid; justify-items: end; line-height: 1.2; }
+.ax-v b { font-size: var(--t-sm); color: var(--ink); }
+.ax-v small { font-size: var(--t-2xs); color: var(--muted); }
+@media (max-width: 520px) {
+  .ax-row { grid-template-columns: minmax(0, 1fr) 56px; }
+  .ax-k { grid-column: 1 / -1; font-size: var(--t-xs); }
+}
+@media (prefers-reduced-motion: reduce) { .ax-b { transition: none; } }
+
+/* the plain sentence under a chart */
+.ax-say { margin: 2px 0 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.6; }
+
+/* table cells with the coin flips' value under the group's */
+.ax-two { display: inline-grid; justify-items: end; line-height: 1.25; }
+.ax-two small { font-size: var(--t-2xs); }
+
+/* 역행·순행: three small charts side by side on wide screens */
+.ax-charts { display: grid; gap: 14px; min-width: 0; }
+.ax-chart { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.ax-chart.an-wait { padding: 8px 10px; border: 1px dashed var(--accent-line); border-radius: var(--r-sm); }
+@media (min-width: 1100px) { .ax-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* 조합 더 보기 */
+.ax-syn { min-width: 0; }
+.ax-k2 { display: grid; gap: 1px; min-width: 0; }
+.ax-k2 small { font-size: var(--t-2xs); line-height: 1.35; }
+.ax-combo { margin: 0; font-size: var(--t-md); line-height: 1.5; overflow-wrap: anywhere; }

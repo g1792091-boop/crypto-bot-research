@@ -6,6 +6,7 @@ import {h, put, ui, fmt, motion, makeChart, tok} from "../core/pb.js";
 import {viewHead, thin, dimSeg, acctLabel} from "./analysis-kit.js";
 import {limitEntry} from "./analysis-limit.js";
 import {driftCard} from "./analysis-drift.js";
+import {synPlus} from "./analysis-synplus.js";
 
 const GKO = {best: "좋은 자리", normal: "보통"};
 const rp = (x) => (x == null ? "—" : `${fmt.num(x * 100, 3, true)}%`);       // per unit of exposure, small numbers
@@ -186,6 +187,7 @@ export function synergy(d, env) {
     warn: [thin(d.days || 0, 14, "날 수(하루 손익)"), "수만 개 조합 중 고른 최고값이라 실제보다 좋아 보이기 쉽습니다. 계좌를 묶거나 바꾸지 않습니다: 설명용, 판정 아님."]})];
   if (d.waiting) {      // day 0: no ranked list before trades exist (it would be ties in alphabetical order)
     out.push(ui.card({plate: "점수 높은 조합"}, h("p", {class: "muted"}, d.note || `거래가 쌓이면 (계좌당 ${fmt.int(d.min_trades || 5)}건 이상) 보여 드립니다`)));
+    out.push(synPlus(env));       // ana-syn: the added cards wait on their own real thresholds (filling bars)
     return out;
   }
   const pg = ui.pager({size: 8, empty: "조합이 없습니다", row: (r) => h("div", {class: "lrow an-row", role: "listitem"},
@@ -203,6 +205,7 @@ export function synergy(d, env) {
     (d.same_bet_pairs || []).length ? h("p", {class: "an-note"}, "사실상 같은 베팅 쌍: ", d.same_bet_pairs.slice(0, 6).map((p) => (p.strategies || []).join(" · ")).join(" / ")) : null,
     (d.clusters || []).length ? ui.moreText(`하루 손익이 같이 움직이는 묶음 (상관 0.7 이상): ${d.clusters.slice(0, 5).map((g) => g.join(", ")).join(" / ")}`, 2, "an-note") : null,
     ui.refNote(env.verdictTs), ui.assume()));
+  out.push(synPlus(env));         // ana-syn: 같이 망하는 날 · 같이 들어간 진입 · 다음 기간 · 한 계좌로 (/api/v4/synplus)
   return out;
 }
 
