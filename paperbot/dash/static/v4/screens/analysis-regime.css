@@ -68,3 +68,9 @@
 .rg-wfa b { font-size: var(--t-md); }
 .rg-wfa small { font-size: var(--t-xs); overflow-wrap: anywhere; }
 @media (max-width: 560px) { .rg-wfc { grid-template-columns: minmax(0, 1fr); } }
+/* the paper trades by regime: cells wrap at " · " (never inside a number), so the coin-flip column stays on a phone */
+.rg-nw { white-space: nowrap; }
+.rg-live { min-width: 0; max-width: 100%; }
+.rg-live .tbl td { white-space: normal; }
+.rg-live .rg-two > * { text-align: right; }
+@media (max-width: 560px) { .rg-live .tbl th, .rg-live .tbl td { padding: 8px 4px; } .rg-live .tbl th { white-space: normal; } }

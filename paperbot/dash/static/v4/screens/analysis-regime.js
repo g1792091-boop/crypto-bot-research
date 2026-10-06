@@ -229,11 +229,11 @@ function liveBody(d, env) {
   const rows = (d.rows || []).filter((r) => r.key !== "unknown" || (r.group || [0])[0] || (r.coin_flips || [0])[0]);
   const unk = (d.rows || []).find((r) => r.key === "unknown");
   return [
-    ui.table([
+    h("div", {class: "rg-live"}, ui.table([
       {label: "장세", l: true, get: (r) => r.ko},
       {label: "기존 36", get: (r) => liveCell(r.group, min)},
-      {label: "동전 봇", get: (r) => liveCell(r.coin_flips, min)},
-    ], rows),
+      {label: "동전 봇 (참고)", get: (r) => liveCell(r.coin_flips, min)},
+    ], rows)),
     ui.assume("closed"),
     h("p", {class: "an-note"}, `기존 36 끝난 거래 ${fmt.int(n)}건 · 동전 봇 ${fmt.int(fn)}건. 장세는 바이낸스 공개 봉 최근 ${fmt.int(d.candles_n || 1500)}개로 같은 공식을 계산했고, 급변장 기준선은 ${d.vol_q_asof || "저장본 마지막 날"}까지 1년입니다.`,
       unk && (unk.group || [0])[0] ? ` 봉 자료 밖이라 장세를 모르는 거래 ${fmt.int(unk.group[0])}건은 '모름'에 있습니다.` : "",
@@ -241,10 +241,12 @@ function liveBody(d, env) {
     ui.refNote(env.verdictTs),
   ];
 }
+/** One live cell; the pieces only break at " · " so both columns fit a 390 px phone without a sideways scroll. */
 function liveCell(r, min) {
   if (!r || !r[0]) return h("span", {class: "muted"}, "—");
-  return h("span", {class: "rg-two"}, h("span", null, `${fmt.int(r[0])}건 · 승률 ${fmt.pct(r[1], 0, false)}`, " ", ui.smallSample(r[0], min)),
-    h("small", {class: "num"}, h("span", {class: fmt.tone(r[2])}, `평균 ${pc(r[2])}`), " · ", h("span", {class: fmt.tone(r[3])}, fmt.money(r[3], true))));
+  const nw = (t, cls) => h("span", {class: ["rg-nw", ...[].concat(cls || [])]}, t);
+  return h("span", {class: "rg-two"}, h("span", null, nw(`${fmt.int(r[0])}건`), " · ", nw(`승률 ${fmt.pct(r[1], 0, false)}`), " ", ui.smallSample(r[0], min)),
+    h("small", null, nw(`평균 ${pc(r[2])}`, ["num", fmt.tone(r[2])]), " · ", nw(fmt.money(r[3], true), ["num", fmt.tone(r[3])])));
 }
 
 // ---------------------------------------------------------------- 장세 스위치 (/api/v4/regime5y)
