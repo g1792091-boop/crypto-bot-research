@@ -21,7 +21,7 @@ function showTip(a) {
   if (!tip) { tip = h("div", {class: "rail-tip", id: "railtip", role: "tooltip", hidden: true}); document.body.append(tip); }
   const r = a.getBoundingClientRect();
   tip.replaceChildren(h("span", {class: "rail-tip-g"}, a.dataset.group), h("b", null, a.dataset.tip),
-    a.dataset.off ? h("span", {class: "pp thin"}, "꺼짐") : null, a.dataset.key ? h("kbd", null, a.dataset.key) : null);
+    ...[a.dataset.off ? h("span", {class: "pp thin"}, "꺼짐") : null, a.dataset.key ? h("kbd", null, a.dataset.key) : null].filter(Boolean));
   tip.hidden = false;
   tip.style.top = `${Math.round(r.top + r.height / 2)}px`;
   tip.style.left = `${Math.round(r.right + 10)}px`;
