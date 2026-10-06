@@ -35,9 +35,10 @@ export function holdcmp(d, env) {
   const basket = hold.basket_chg;
   const tiles = [];
   if (money) {
-    tiles.push(tile(`${W.short} (끝난 거래)`, sp(m.ret, 2), `이긴 비율 ${pc(m.wr)}`, fmt.tone(m.ret), "me"));
-    tiles.push(tile("반대로 했다면", sp((m.mirror || {}).mirror_ret, 2), `이긴 비율 ${pc((m.mirror || {}).wr)} · 대충`, fmt.tone((m.mirror || {}).mirror_ret), "mir"));
-    tiles.push(tile(`${W.flips} (참고)`, sp(f.ret, 2), `이긴 비율 ${pc(f.wr)}`, fmt.tone(f.ret), "flip"));
+    const none = (x) => (x.trades ? null : "아직 끝난 거래 없음");
+    tiles.push(tile(`${W.short} (끝난 거래)`, sp(m.ret, 2), none(m) || `이긴 비율 ${pc(m.wr)}`, fmt.tone(m.ret), "me"));
+    tiles.push(tile("반대로 했다면", sp((m.mirror || {}).mirror_ret, 2), none(m) || `이긴 비율 ${pc((m.mirror || {}).wr)} · 대충`, fmt.tone((m.mirror || {}).mirror_ret), "mir"));
+    tiles.push(tile(`${W.flips} (참고)`, sp(f.ret, 2), none(f) || `이긴 비율 ${pc(f.wr)}`, fmt.tone(f.ret), "flip"));
   } else {
     tiles.push(tile(`${W.short} 이긴 비율`, pc(m.wr), `끝난 거래 ${fmt.int(m.trades || 0)}건 · 수익률은 딥시크 화면에서`, "", "me"));
     tiles.push(tile("반대로 했다면 이긴 비율", pc((m.mirror || {}).wr), "대충 계산", "", "mir"));
@@ -58,11 +59,11 @@ export function holdcmp(d, env) {
   const hc = d.hold_curve || {}, cv = d.curve || {};
   const n = (hc.t || []).length;
   const series = [];
-  if (money && cv.group) {
+  if (money && cv.group && m.trades) {         // no closed trade yet: no line (never a flat zero)
     series.push({values: cv.group, cls: `a7-l-${SERIES[grp] || "core"}`, label: W.short});
     series.push({values: cv.mirror, cls: "a7-l-mir", label: "반대로"});
-    series.push({values: cv.flips, cls: "lc", label: W.flips});
   }
+  if (money && cv.flips && f.trades) series.push({values: cv.flips, cls: "lc", label: W.flips});
   series.push({values: hc.basket || [], cls: "a7-l-bas", label: "들고 있기"});
   const xl = n ? [fmt.mmdd(hc.t[0]), "", fmt.kst(hc.t[n - 1])] : [];
   const legend = h("div", {class: "a7-legend2"}, series.map((s) => h("span", null, h("i", {class: ["a7-sw", s.cls]}), s.label)));

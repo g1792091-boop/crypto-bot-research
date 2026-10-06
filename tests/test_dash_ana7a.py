@@ -352,6 +352,10 @@ def test_hold_and_mirror_by_hand(tmp_path):
     assert v["waiting"] and v["mine"]["mirror"]["trades"] == 2
     # anasyn_world.trade: entry = exit price, so the mirror pays the fees again and nothing else
     assert v["mine"]["mirror"]["mirror_ret"] == pytest.approx(-0.2 / 10_000)
+    reel = HC.view(db, now, "reel", None)                                       # no closed trade: no 0%, no flat line
+    assert reel["mine"]["trades"] == 0 and reel["mine"]["ret"] is None and reel["mine"]["mirror"]["mirror_ret"] is None
+    assert all(x is None for x in reel["curve"]["group"] + reel["curve"]["mirror"] + reel["curve"]["flips"])
+    assert reel["hold_curve"]["basket"][-1] is not None                         # the coins' prices are still there
     ds = HC.view(db, now, "ds200", None)
     assert ds["no_money"] and not (set(_keys(ds)) & DS_MONEY)
     assert ds["mine"]["wr"] == 1.0 and ds["hold"]["basket_chg"] == pytest.approx(v["hold"]["basket_chg"])

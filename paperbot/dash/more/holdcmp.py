@@ -110,8 +110,9 @@ def at(px: tuple, t: int) -> Optional[float]:
 
 
 def cum(trades: list, key: str, ts: list, capital: float) -> list:
-    """Cumulative sum of ``key`` over trades exited at or before each point, as a share of ``capital``."""
-    if not capital:
+    """Cumulative sum of ``key`` over trades exited at or before each point, as a share of ``capital`` (no trades, no
+    capital: no line at all, never a flat zero)."""
+    if not capital or not trades:
         return [None] * len(ts)
     ex = np.array([t["exit"] for t in trades], np.int64)
     v = np.array([t.get(key) or 0.0 for t in trades], float)
@@ -131,7 +132,7 @@ def part(trades: list, capital: float) -> dict:
     mir = [t for t in trades if t["mpnl"] is not None]
     n = len(trades)
     return {"trades": n, "wr": K.r4(sum(1 for t in trades if t["pnl"] > 0) / n, 4) if n else None,
-            "ret": K.r4(sum(t["pnl"] for t in trades) / capital, 5) if capital else None,
+            "ret": K.r4(sum(t["pnl"] for t in trades) / capital, 5) if capital and n else None,   # no trade: not 0%
             "mirror": {"trades": len(mir), "wr": K.r4(sum(1 for t in mir if t["mpnl"] > 0) / len(mir), 4) if mir else None,
                        "mirror_ret": K.r4(sum(t["mpnl"] for t in mir) / capital, 5) if capital and mir else None,
                        "liq_capped": sum(1 for t in mir if t.get("margin") is not None and t["mpnl"] <= -t["margin"] + 1e-9)}}
