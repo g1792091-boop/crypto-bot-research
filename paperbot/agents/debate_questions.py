@@ -978,8 +978,8 @@ def q_coverage(paper: sqlite3.Connection, agents: Optional[sqlite3.Connection], 
                      "coin_flip_mean_wallet": _r(sum(flips) / len(flips), 2) if flips else None}
     weak = min((tf for tf in TFS if by_tf[tf]["wallet"] is not None),
                key=lambda t: (by_tf[t]["wallet"], t), default=TFS[0])
-    cs = [c for c in _strategy_cards(paper, now_ms - 7 * DAY_MS, now_ms + 1, limit=600)
-          if c.get("strategy") == strat]
+    cs = [c for tf in TFS for c in _strategy_cards(paper, now_ms - 7 * DAY_MS, now_ms + 1, limit=300,
+                                                   account=f"{strat}@{tf}")]
     tags = _tag_rows(cs)
     bad = [r["tag"] for r in tags if (r["loss_share"] or 0) > (r["win_share"] or 0)][:2]
     days = None if not cov.get(strat) else _r(age / DAY_MS, 1)
