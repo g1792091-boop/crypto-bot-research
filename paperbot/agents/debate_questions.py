@@ -394,18 +394,17 @@ def q_event(paper: sqlite3.Connection, board: dict, now_ms: int, seen: Optional[
     flags = [k for k, _w in P.unusual(board, None, seen, start) if k == "risk"]
     if not flags:
         return None
-    aid = None
+    pc = board.get("pass_check") or {}                      # the 36's accounts (a coin flip's alert is not a question)
+    crit = []
     for a in ((board.get("today") or {}).get("alerts") or []):
         text = str(a.get("text") or "")
-        if a.get("level") == "CRITICAL" and text.startswith("[") and "@" in text[:text.find("]")]:
-            aid = text[1:text.find("]")]
-            break
+        if a.get("level") == "CRITICAL" and text.startswith("[") and "]" in text and text[1:text.find("]")] in pc:
+            crit.append(text[1:text.find("]")])
+    busts = sorted(a for a, v in pc.items() if v.get("bust"))
+    aid = next((a for a in crit + busts if a.partition("@")[2] in TFS), None)
     if aid is None:
-        busts = [a for a, v in (board.get("pass_check") or {}).items() if v.get("bust")]
-        aid = sorted(busts)[0] if busts else None
-    strat, _, tf = (aid or "").partition("@")
-    if not aid or tf not in TFS or (board.get("pass_check") or {}).get(aid) is None:
         return None
+    strat, _, tf = aid.partition("@")
     cs = _strategy_cards(paper, 0, now_ms + 1, losses_only=True, limit=5, account=aid)
     tags = [t for t in _skip_tags() if sum(t in (c.get("tags") or []) for c in cs) >= 2]
     marks = P.agenda_marks(board, start)

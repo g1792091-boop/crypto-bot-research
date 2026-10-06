@@ -567,7 +567,8 @@ def result_ko(detail: Any, status: Optional[str] = None, trial_id: Optional[int]
         where = f"이 방 시험 {d.get('n_trials', '?')}번째, 기준 p<{_thr(d.get('threshold'))}" + (f", 장부 {tid}" if tid else "")
     if verdict in ("passed",) or (verdict in R.NEWLAB_PASSED and d["engine"] == "newlab"):
         head = "통과: ①~⑥ 모두"
-        tail = " · 관찰 기간이면 기간 뒤 그때의 시험 수로 다시 판정해 제안(두 분 확인 필요)"
+        tail = (" · 관찰 기간이면 기간 뒤 그때의 시험 수로 다시 판정해 제안(두 분 확인 필요)" if d["engine"] == "newlab"
+                else " · 복제 제안은 그 매매법 방 회의에서만, 그때의 시험 수로 다시 판정(두 분 확인 필요)")
     elif verdict == "described":
         head, tail = "설명용 시험(판정 없음)", ""
     elif verdict in ("no_data", "error"):

@@ -168,6 +168,21 @@ def test_an_event_is_only_a_new_one(world):
     assert "event" not in {q.kind for q in again}                                  # seen by the last ok round
 
 
+def test_an_event_names_a_critical_alert_of_the_36_never_a_coin_flip(world):
+    from paperbot.agents import packets3
+    board = packets3.build(world["paper"], world["daily"], NOW)
+    flip = next(a for a in board["league"]["15m"]["coin_flip_wallets"])
+    board["today"]["alerts"] = [{"ts": NOW - MIN, "level": "CRITICAL", "text": f"[{flip}] LIQUIDATED BTCUSDT 30x"},
+                                {"ts": NOW - 2 * MIN, "level": "CRITICAL", "text": f"[{WORST}] LIQUIDATED BTCUSDT 30x"}]
+    paper = P.open_ro(world["paper"])
+    try:
+        q = Q.q_event(paper, board, NOW)
+    finally:
+        paper.close()
+    assert q.evidence["account"] == WORST and q.handles["strategies"] == [S]
+    assert len(q.evidence["last_losses"]) == 5 and {h["timeframe"] for h in q.handles["labtest"]} == {"1h"}
+
+
 def _q(kind, key, n=1):
     return Q.Question(kind, key, f"{kind} 질문", "주장", {}, {}, n)
 
