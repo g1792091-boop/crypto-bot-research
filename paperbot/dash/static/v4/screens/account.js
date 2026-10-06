@@ -120,7 +120,7 @@ export async function mount(el, ctx) {
     const walletCard = h("section", {class: "card account-wallet", "aria-label": "잔고"}, led,
       h("p", {class: "pos-plain"}, "청산된 거래 손익 합계 ", h("b", {class: fmt.tone(pnlSum)}, fmt.usdt(pnlSum, true)),
         d.trades && d.trades.length >= 500 ? " (최근 500건)" : "", n ? ` · 이긴 거래 ${fmt.int(wins)} / ${fmt.int(n)}` : ""),
-      stats, ui.assume());
+      stats);                                      // (the money caption: the page's one line at the bottom)
 
     // ---------------------------------------------------------------- 참고: the coin flips of the same interval
     const ref = refBox(a, board, init);
@@ -136,7 +136,7 @@ export async function mount(el, ctx) {
     const pos = normPos(stt.position);
     let posEl;
     if (pos) {
-      view.card = posCard(a, pos, {why: d.position_why, wallet: stt.wallet ?? a.wallet, data, href: ctx.href, noAccountLink: true, noName: true});
+      view.card = posCard(a, pos, {why: d.position_why, wallet: stt.wallet ?? a.wallet, data, href: ctx.href, noAccountLink: true, noName: true, caption: false});
       view.card.update(store.mark(pos.symbol));
       posEl = h("div", {class: "stack tight"}, ui.plate("열린 포지션"), view.card);
     } else posEl = ui.card({plate: "열린 포지션"}, ui.empty("지금 열린 포지션이 없습니다"));
@@ -144,7 +144,7 @@ export async function mount(el, ctx) {
     // ---------------------------------------------------------------- charts and trades
     const eqBox = h("div", {class: "account-eq"});
     const eqCard = ui.card({plate: "자본 곡선", sub: `기록 ${fmt.int(d.equity_points || 0)}점${(d.equity || []).length < (d.equity_points || 0) ? ` · 화면에는 ${fmt.int(d.equity.length)}점으로 줄임` : ""}`},
-      eqBox, ui.assume("closed", "점선은 시작 잔고"));
+      eqBox, ui.note("점선은 시작 잔고"));
     const syms = [...new Set(trades.map((t) => t.symbol).concat(pos ? [pos.symbol] : []))];
     const symSel = h("select", {class: "select", "aria-label": "코인"}, (syms.length ? syms : ["BTCUSDT"]).map((s) => h("option", {value: s}, fmt.coin(s))));
     if (pos) symSel.value = pos.symbol;
@@ -156,7 +156,7 @@ export async function mount(el, ctx) {
     pg.set(trades);
     const tradesCard = ui.card({plate: "거래 내역", sub: `${fmt.int(n)}건 · 최근 것부터`,
       acts: [h("a", {class: "btn-line", href: `/api/export/trades.csv?account=${encodeURIComponent(acc.account_id)}`, download: ""}, "엑셀(CSV)")]},
-      pg.el, ui.assume("closed", "거래마다 나갈 때 수수료·펀딩 뒤"));
+      pg.el, ui.note("손익은 거래마다 나갈 때 수수료·펀딩 뒤"));
 
     // the head: the profile card for every account on the map; the plain head + 참고 box otherwise (or when the card's
     // route answers 404)
@@ -184,10 +184,13 @@ export async function mount(el, ctx) {
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
+    // the money caption once for the page (owners 10/06 ~14:00, "작은 글씨가 반복된다"): the cards keep only their own
+    // short notes (점선 · 수익률 · 거래마다 나갈 때 비용)
     el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
-        h("div", {class: "stack"}, rules, extra, tradesCard)));
+        h("div", {class: "stack"}, rules, extra, tradesCard)),
+      ui.assumeLine(["closed", "open"]));
 
     // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
     termify(walletCard);
@@ -259,7 +262,7 @@ export async function mount(el, ctx) {
       h("div", {class: "card-h"}, ui.plate("같은 매매법"), h("span", {class: "sub"}, ds ? "봉마다 닫힌 거래 수 (딥시크는 계좌별 수익을 보지 않음)"
         : counts ? "봉마다 닫힌 거래 수 (동전 봇은 비교 기준이라 개수만)" : "봉마다 지금 수익률"),
         counts ? ui.pill("", "ref") : null),
-      box, acts, counts ? null : ui.assume("closed", "수익률 = 지금 잔고 ÷ 시작 잔고"));
+      box, acts, counts ? null : ui.note("수익률 = 지금 잔고 ÷ 시작 잔고"));
     return {el, update: (b) => { if (b && el.isConnected) paint(b); }};
   }
 

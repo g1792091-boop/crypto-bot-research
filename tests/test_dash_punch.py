@@ -186,7 +186,8 @@ FILES = ["terminal.js", "terminal-live.js", "terminal-feed.js", "terminal-top.js
 def test_feed_is_labelled_the_whole_market_and_carries_no_money_of_ours():
     live = _src("screens", "terminal-live.js")
     assert 'BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)"' in live
-    assert "sub: MARKET_LABEL" in live and 'h("b", null, BIG_LABEL)' in live         # head (term v2: 시장 전체 (우리 봇 아님)) and footer
+    # head: a "시장" chip and an ⓘ with the words (owners 10/06 ~14:00: said once, the terminal's footer line)
+    assert "lead: [marketChip(BIG_LABEL)], info: BIG_LABEL" in live and "el.tip.set(`${BIG_LABEL} · " in live
     assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in _src("screens", "terminal-kit.js")
     assert '"고래"' in live and "실시간 큰 체결" in live
     code = _code(live)

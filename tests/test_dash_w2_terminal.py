@@ -101,8 +101,10 @@ def test_no_colour_literals_and_motion_respects_reduced_motion_and_hidden_pages(
 
 def test_honesty_captions_are_present():
     feed, side, table, top = _src("terminal-feed.js"), _src("terminal-side.js"), _src("terminal-table.js"), _src("terminal-top.js")
-    assert "ui.assume()" in feed                                    # money in the fills feed
-    assert 'ui.assume("open")' in side and 'ui.assume("open")' in table and 'ui.assume("closed")' in table
+    # said once (owners 10/06 ~14:00): the terminal's one footer line; each money panel's ⓘ carries its exact caption
+    assert 'ui.assumeLine(["closed", "open"]' in _src("terminal.js")
+    assert "${ui.ASSUME_KO}" in feed                                # money in the fills feed (its ⓘ)
+    assert "${ui.ASSUME_OPEN_KO}" in side and "${ui.ASSUME_OPEN_KO}" in table and "${ui.ASSUME_KO}" in table
     assert 'ui.pill("", "ref")' in side                              # the group return is 참고 (the pill prints the word)
     assert "판정이 아닙니다" in side
     assert 'FOLD = new Set(["ds", "coin"])' in feed                 # DeepSeek / coin flips: counts only, no money per account

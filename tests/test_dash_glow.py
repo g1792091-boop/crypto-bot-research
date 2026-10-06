@@ -172,8 +172,10 @@ def test_split_light_red_above_cyan_below_follows_the_price_scale():
     assert "top: calc(var(--split, 50%) - 24px)" in cyan and "bottom: 0" in cyan and "linear-gradient(to top, var(--amb-up)" in cyan
     assert "transparent)" in red and "transparent)" in cyan                     # each half feathers out past the seam
     assert '"Premium"' in fx and '"Discount"' in fx and ".cfx-zw" in css and "right: 64px" in css
-    # with the AI light on, the indicator does not tint the halves a second time
-    assert "zoneWords: () => !st.ai" in fx and "if (words) {" in _read("core", "smcdraw.js")
+    # with the AI light on, the indicator does not tint the halves a second time; the words are opt-in (owners 10/06
+    # ~14:00, the calm default: 프리미엄 지표 ▾ › Premium·Discount 글자; tests/test_dash_declutter.py)
+    assert 'words: P.has("words") && !st.ai, tint: !st.ai' in fx and "if (d.words) {" in _read("core", "smcdraw.js")
+    assert '.cfx-under:not([data-words="1"]) > .cfx-zw { display: none; }' in css
 
 
 # ---------------------------------------------------------------- the blinking halves (core/blink.js)
@@ -607,9 +609,12 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert 'LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)"' in raw
     assert "7개 코인 중 이 코인이 가장 밝게" in raw.split("LIGHT_REAL = ")[1].split("\n")[0]
     assert "blink.src() === \"real\" ? LIGHT_REAL : blink.src() === \"deco\" ? LIGHT_DECO" in fx
-    # the screens keep the old name for the control (flashSel) and hand the deck the coin on screen
+    # the 차트 screen keeps the old name for the control (flashSel); the terminal's narrow header has the same items in
+    # one '보기 ▾' menu (owners 10/06 ~14:00: every timeframe button visible); both hand the deck the coin on screen
+    assert "deck.flashSel" in _code(_read("screens", "chart.js"))
+    assert "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);" in _code(_read("screens", "terminal-chart.js"))
     for scr in ("terminal-chart.js", "chart.js"):
-        assert "deck.flashSel" in _read("screens", scr) and "sym: () => st.sym" in _read("screens", scr), scr
+        assert "sym: () => st.sym" in _read("screens", scr), scr
     # 클래식: the light tokens are transparent
     tok = _read("tokens.css")
     classic = tok[:tok.index(":root:not([data-skin=\"classic\"])")]

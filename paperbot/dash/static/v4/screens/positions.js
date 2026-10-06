@@ -60,8 +60,8 @@ export async function mount(el, ctx) {
   const line = h("p", {class: "positions-line"});
   const bestLine = h("div", {class: "positions-bw"});
   const sumCard = h("section", {class: "card positions-sum", "aria-label": "열린 포지션 요약"},
-    h("div", {class: "stats"}, ui.stat("미실현 손익 합계 (USDT)", sumNum, sumSub), ui.stat("롱 · 숏", lsEl, nOpenSub)),
-    line, ui.disclosure("가장 많이 버는·잃는 포지션", bestLine), ui.assume("open"));
+    h("div", {class: "stats"}, ui.stat(["미실현 손익 합계 (USDT) ", ui.infoTip(ui.ASSUME_OPEN_KO, "미실현 손익")], sumNum, sumSub), ui.stat("롱 · 숏", lsEl, nOpenSub)),
+    line, ui.disclosure("가장 많이 버는·잃는 포지션", bestLine));          // (the caption: once, under the list below)
 
   const coinBar = h("div", {class: "positions-coins-bar"});
   const tabBar = h("div", {class: "positions-tabs"});
@@ -70,7 +70,7 @@ export async function mount(el, ctx) {
   const ladder = riskLadder(ctx);
   const sideBook = h("div", {class: "stack"});
   side.append(ladder.el, sideBook);
-  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션 · 주문 버튼 없음"), sumCard, coinBar,
+  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), sumCard, coinBar,
     h("div", {class: "positions-cols"}, h("div", {class: "stack", dataset: {tour: "positions"}}, tabBar, tabBody), side));
 
   // ---------------------------------------------------------------- data helpers
@@ -157,7 +157,7 @@ export async function mount(el, ctx) {
       w ? `${w.entry_time}:${w.leverage}:${w.group}` : ""].join("|");
     let c = cards.get(id);
     if (!c || c.key !== key) {
-      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: wide || st.open.has(id), href: ctx.href, caption: !wide, countOnly: co(x),
+      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: wide || st.open.has(id), href: ctx.href, caption: false, countOnly: co(x),
         onToggle: (aid, o) => { if (o) st.open.add(aid); else st.open.delete(aid); }});
       c = {key, el: elc};
       cards.set(id, c);
