@@ -97,7 +97,7 @@ function compareCard(doc, env) {
     const pp = (r) => (P[r.key] || {})[pk] || {};
     const rowsB = [
       {label: "파산한 칸 (잔고 $10 미만)", get: (r) => cell(`${fmt.int(pp(r).busts ?? 0)} / ${fmt.int(pp(r).n ?? 0)}`)},
-      {label: "$5,000보다 늘어난 칸", get: (r) => { const t = upThin(doc, key, pk, r.key); return cell(`${fmt.int(pp(r).up ?? 0)} / ${fmt.int(pp(r).n ?? 0)}${t ? ` (${fmt.int(t)}칸은 거래 20건 미만)` : ""}`); }},
+      {label: "$5,000보다 늘어난 칸 (괄호: 그중 거래 20건 미만)", get: (r) => cell(`${fmt.int(pp(r).up ?? 0)} / ${fmt.int(pp(r).n ?? 0)} (${fmt.int(upThin(doc, key, pk, r.key))})`)},
       {label: "칸마다 배수의 가운데 값", get: (r) => cell(mx(pp(r).med_mult))},
       {label: "칸마다 최대 낙폭의 가운데 값", get: (r) => cell(pc0(pp(r).med_mdd))},
     ];
