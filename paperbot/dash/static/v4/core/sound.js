@@ -1,4 +1,7 @@
-// Live sound (wave 2, owners 10/05 22:45: "v6 chiptune" approved): 8-bit square / 25 %-pulse beeps, ported unchanged
+// Live sound. Two engines, chosen per device (소리 종류, the speaker menu): v7 "영상 기계음" (the default since owners
+// 10/06 "기계소리랑 똑같이": the YouTube stream's machine sounds rebuilt by synthesis, core/sound7.js: triangle beeps
+// 띵 / 띠띠 / 띠링 / 띠리리링·띠릭 for the market trades, the stream's sparkle run and mallet phrase for our events) and
+// v6 "칩튠" (owners 10/05 22:45: "v6 chiptune" approved): 8-bit square / 25 %-pulse beeps, ported unchanged
 // from the owners' picker (scratchpad/sounds/sound_picker.html: pulse25(), CHIP, chip(), chipRun(), the six motifs
 // c_entry / c_tp / c_sl / c_meet / c_liq / c_ms and the continuous layer of single beeps with a third of them short
 // runs), through ONE shared output gain (the volume).
@@ -21,6 +24,7 @@
 import {bus} from "./api.js";
 import {store} from "./store.js";
 import {h, local} from "./dom.js";
+import {tick7, motif7, render7} from "./sound7.js";
 
 // ---------------------------------------------------------------- settings (per device)
 const KEY = "sound";
@@ -53,6 +57,20 @@ export function setCfg(patch) {
 const gainOf = () => cfg.vol / 100;      // the picker's bus exactly (owners 10/06 04:00: "not the sound I liked"; the 1.6 curve made 60 % sound like 44 %)
 /** 00:00-06:59 KST (UTC+9, no daylight saving). */
 export const nightKst = (now) => new Date(Number(now) + 9 * 3600e3).getUTCHours() < 7;
+
+// ---------------------------------------------------------------- 소리 종류 (engine, per device; v7 by default)
+export const ENGINES = {v7: "영상 기계음(새)", v6: "칩튠(이전)"};
+let engine = Object.hasOwn(ENGINES, String(local.get("snd-kind", "v7"))) ? local.get("snd-kind", "v7") : "v7";
+/** "v7" (the stream's machine sounds) or "v6" (the chiptune). */
+export const soundKind = () => engine;
+export function setKind(k) {
+  if (!Object.hasOwn(ENGINES, String(k))) return;
+  engine = k;
+  local.set("snd-kind", k);
+  bus.emit("sound:cfg", {...cfg});
+}
+/** v7 follows the stream's pace: about one sound a second at 보통 (the clips: 1.07 events / s, median gap 0.6 s). */
+export const V7_PACE = 0.7;
 
 // ---------------------------------------------------------------- the engine (picker v6, unchanged)
 let ctx = null, master = null, unlocked = false;
@@ -104,7 +122,8 @@ const up = (f, st) => f * Math.pow(2, st / 12);
 let sink = (kind, a) => {
   const c = ac();
   if (!c) return;
-  if (kind === "beep") chip(a.f, a.v, c.currentTime + 0.01, master, a.pulse ? "pulse" : "square");
+  if (a.eng === "v7") render7(c, a, master, c.currentTime + 0.01);
+  else if (kind === "beep") chip(a.f, a.v, c.currentTime + 0.01, master, a.pulse ? "pulse" : "square");
   else chipRun(a.fs, a.gaps, a.v, master);
 };
 
@@ -143,19 +162,35 @@ export function makeLayer(gapFn = () => DENSITY[cfg.density].gap) {
       nextGap = Math.max(MIN_GAP_MS, gapFn() * (0.6 + Math.random() * 0.8));   // the picker's uneven spacing
       return {item: best};
     },
+    /** take the biggest other waiting item too (v7: the stream plays trades that came together 80-160 ms apart) */
+    pull(now) {
+      let best = null;
+      for (const x of q.values()) if (now - x.at <= MAX_AGE_MS && (!best || x.size > best.size)) best = x;
+      if (best) q.delete(best.key);
+      return best;
+    },
     clear() { q.clear(); },
     get size() { return q.size; },
   };
 }
-const layer = makeLayer();
-let layerT = null;
+const layer = makeLayer(() => DENSITY[cfg.density].gap * (engine === "v7" ? V7_PACE : 1));
+let layerT = null, combo = 0;
 function pump() {
   clearTimeout(layerT); layerT = null;
   const now = Date.now();
   if (!canPlay(now)) { layer.clear(); return; }
   const r = layer.next(now);
   if (!r) return;                                               // empty: no timer left running
-  if (r.item) { const b = beepOf(r.item); sink(b.fs ? "run" : "beep", {...b, src: r.item.src, key: r.item.key}); layerT = setTimeout(pump, MIN_GAP_MS); return; }
+  if (r.item) {
+    let b = engine === "v6" ? beepOf(r.item) : beep7Of(r.item);
+    if (engine === "v7" && ++combo >= COMBO_EVERY && layer.size) {           // two real trades that came together
+      const two = layer.pull(now);
+      if (two) { b = combo7(r.item, two); combo = 0; }
+    }
+    sink(b.fs ? "run" : "beep", {...b, src: r.item.src, key: r.item.key});
+    layerT = setTimeout(pump, MIN_GAP_MS);
+    return;
+  }
   layerT = setTimeout(pump, Math.max(30, r.wait));
 }
 /** A layer item -> the notes, played the way the owners' approved "한꺼번에 듣기" plays them (picker v6, owners 10/06
@@ -176,6 +211,28 @@ export function beepOf(it, rnd) {
   const fs = [f], gaps = [];
   for (let i = 1; i < k; i++) { fs.push(up(fs[i - 1], (R() < 0.75 ? 1 : -1) * [3, 4, 5, 7][Math.min(3, Math.floor(R() * 4))])); gaps.push(0.07 + R() * 0.11); }
   return {fs: fs.map((x) => Math.min(Math.max(x, 330), 1100)), gaps, v};
+}
+
+/** v7: a layer item -> the stream's sound for it (core/sound7.js): the size picks the kind as the stream's trade size
+ *  does (relay buckets 1-2 = 띵, 3 = 띠링, 4 = 띠리리링 (buy) / 띠릭 (sell)); buy = the upper notes E5..E6, sell = the
+ *  lower B4..B3; louder for a bigger one. */
+export function beep7Of(it) {
+  const v = 0.55 + 0.35 * Math.min(1, (it.size || 1) / 3);
+  return {...tick7(it.dir > 0 ? 1 : -1, it.size || 1, v), eng: "v7"};
+}
+/** at most one sound in COMBO_EVERY is two trades together (the clips: about 1 sound in 5 is several trades at once) */
+export const COMBO_EVERY = 5;
+/** two real layer items that were waiting together -> one sound: both small and the same side = 띠띠 (the same note
+ *  twice, 85 ms apart), else the first item's sound and the second's 160 ms later (the stream's 겹침). */
+export function combo7(a, b) {
+  const pa = beep7Of(a), pb = beep7Of(b);
+  if (pa.kind === "one" && pb.kind === "one" && (a.dir > 0) === (b.dir > 0)) {
+    return {...tick7(a.dir > 0 ? 1 : -1, 1, Math.max(pa.v, pb.v), "dbl"), eng: "v7"};
+  }
+  const notes = (p) => p.fs || [p.f];
+  const voices = pa.voices.concat(pb.voices.map((x) => ({...x, at: x.at + 0.16})));
+  const fs = notes(pa).concat(notes(pb));
+  return {fs, gaps: fs.slice(1).map(() => 0), v: Math.max(pa.v, pb.v), kind: "combo", voices, eng: "v7"};
 }
 
 // ---------------------------------------------------------------- prices -> the layer
@@ -311,7 +368,11 @@ export function playMotifs(names, now = Date.now()) {
   pick.forEach((n, i) => {
     lastMotif[n] = now;
     const [fs, gaps, v] = MOTIFS[n];
-    const go = () => { if (canPlay()) sink("run", {fs, gaps, v, name: n}); };
+    const go = () => {
+      if (!canPlay()) return;
+      if (engine === "v7") sink("run", {...motif7(n, v), name: n, eng: "v7"});
+      else sink("run", {fs, gaps, v, name: n});
+    };
     if (i === 0) go(); else setTimeout(go, 450 * i);
   });
   return pick;
@@ -492,6 +553,8 @@ export function soundButton() {
   const vol = h("input", {type: "range", min: "0", max: "100", step: "5", id: "snd-vol", "aria-label": "소리 크기"});
   const dens = h("div", {class: "seg", role: "group", "aria-label": "소리 빈도"},
     Object.entries(DENSITY).map(([id, d]) => h("button", {type: "button", dataset: {d: id}, onclick: () => setCfg({density: id})}, d.ko)));
+  const kindSeg = h("div", {class: "seg", role: "group", "aria-label": "소리 종류"},
+    Object.entries(ENGINES).map(([id, ko]) => h("button", {type: "button", dataset: {k: id}, onclick: () => setKind(id)}, ko)));
   const night = h("input", {type: "checkbox", id: "snd-night"});
   const wakeBox = h("input", {type: "checkbox", id: "snd-wake", disabled: !wakeSupported()});
   const why = h("p", {class: "note snd-why"});
@@ -499,10 +562,12 @@ export function soundButton() {
     h("label", {class: "snd-row snd-main"}, onBox, h("b", null, "실시간 소리")),
     h("label", {class: "snd-row"}, h("span", {class: "k"}, "크기"), vol),
     h("div", {class: "snd-row"}, h("span", {class: "k"}, "빈도"), dens),
+    h("div", {class: "snd-row"}, h("span", {class: "k"}, "종류"), kindSeg),
     h("label", {class: "snd-row"}, night, h("span", null, "밤 00~07시(한국)엔 끄기")),
     h("label", {class: "snd-row"}, wakeBox, h("span", null, wakeSupported() ? "화면 켜두기 (휴대폰이 잠들면 소리도 멈춤)" : "화면 켜두기 · 이 기기는 지원 안 함")),
     why,
-    h("p", {class: "note"}, "바탕음 = 바이낸스에서 실제로 체결된 거래 (사는 쪽이 많으면 높은 음, 파는 쪽이 많으면 낮은 음, 크게 몰리면 더 크게). 연결이 안 되면 코인 가격이 움직일 때 한 번씩. 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."));
+    h("p", {class: "note"}, "바탕음 = 바이낸스에서 실제로 체결된 거래 (사는 쪽이 많으면 높은 음, 파는 쪽이 많으면 낮은 음, 크게 몰리면 더 크게). 연결이 안 되면 코인 가격이 움직일 때 한 번씩. 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."),
+    h("p", {class: "note"}, "소리 종류: 영상 기계음 = 그 라이브 영상의 기계 소리(띵 · 띠띠 · 띠링 · 띠리리링/띠릭, 반짝 소리, 딩딩 소리)를 그대로 다시 만든 소리. 칩튠 = 이전 소리."));
   const wrap = h("div", {class: "snd"}, btn, pop);
   const paint = () => {
     const on = cfg.on, wait = waiting(), mute = on && cfg.night && nightKst(Date.now());
@@ -511,6 +576,7 @@ export function soundButton() {
     btn.title = t; btn.setAttribute("aria-label", t + (on ? ". 누르면 설정" : ". 누르면 켜지고 설정이 열립니다"));
     onBox.checked = on; vol.value = String(cfg.vol); night.checked = cfg.night; wakeBox.checked = wake.on;
     for (const b of dens.children) b.setAttribute("aria-pressed", String(b.dataset.d === cfg.density));
+    for (const b of kindSeg.children) b.setAttribute("aria-pressed", String(b.dataset.k === engine));
     why.textContent = !on ? "꺼져 있습니다." : mute ? "지금은 밤이라 쉬는 중입니다 (07시부터 다시)." : wait ? "화면을 한 번 누르면 소리가 시작됩니다." : "켜져 있습니다. 실제로 일이 생길 때만 소리가 납니다.";
   };
   const setOpen = (open) => {
