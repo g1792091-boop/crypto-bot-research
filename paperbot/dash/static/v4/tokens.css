@@ -264,8 +264,8 @@
   --amb-down-edge: rgba(244, 63, 94, .33);
   --amb-up-ink: #38bdf8;
   --amb-down-ink: #f43f5e;
-  --flash-up: rgba(56, 200, 248, .34);
-  --flash-down: rgba(244, 63, 94, .36);
+  --flash-up: rgba(56, 200, 248, .40);
+  --flash-down: rgba(244, 63, 94, .42);
   --flash-accent: rgba(25, 195, 177, .30);
   --depth-top: rgba(255, 255, 255, .025);
   --depth-bot: rgba(0, 0, 0, .22);

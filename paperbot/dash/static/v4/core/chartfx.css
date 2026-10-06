@@ -24,8 +24,8 @@
 .cfx-under.still > .cfx-amb { transition: none; }
 /* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */
 .cfx-flash { opacity: 0; --fc: var(--flash-accent);
-  background: linear-gradient(to bottom, var(--fc), transparent 78%), radial-gradient(ellipse at 50% 0%, var(--fc), transparent 70%);
-  box-shadow: inset 0 0 70px var(--fc); }
+  background: linear-gradient(to bottom, var(--fc), transparent 92%), radial-gradient(ellipse at 50% 0%, var(--fc), transparent 75%);
+  box-shadow: inset 0 0 90px var(--fc); }
 .cfx-flash[data-tone="up"] { --fc: var(--flash-up); }
 .cfx-flash[data-tone="down"] { --fc: var(--flash-down); }
 

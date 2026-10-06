@@ -108,26 +108,44 @@ export function chartDeck(o) {
 
   // ---------------------------------------------------------------- the glow primitive (under the candles)
   const gv = {bars: [], last: null, w: 2, py: null, halos: []};
+  const smalls = new Map();                   // the reused small canvases of the candle glow, by scale
+  const small = (S, w, hh) => {
+    let cv = smalls.get(S);
+    if (!cv) { cv = document.createElement("canvas"); smalls.set(S, cv); }
+    if (cv.width !== w) cv.width = w;
+    if (cv.height !== hh) cv.height = hh;
+    return cv;
+  };
   const glowR = {
     draw() {},
     drawBackground(target) {
       if (!st.ai || !gv.bars.length) return;
       target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize}) => {
         const col = st.col;
-        const paths = {up: new Path2D(), down: new Path2D()};
-        const bw = Math.max(1, Math.round(gv.w * hr)), wl = Math.max(1, Math.floor(hr));
-        for (const b of gv.bars) {
-          const p = paths[b.up ? "up" : "down"], X = Math.round(b.x * hr);
-          p.rect(X - bw / 2, Math.round(b.t * vr), bw, Math.max(1, Math.round((b.b - b.t) * vr)));
-          p.rect(X - wl / 2, Math.round(b.hi * vr), wl, Math.max(1, Math.round((b.lo - b.hi) * vr)));
-        }
+        const bw = Math.max(1, Math.round(gv.w * hr));
         c.save();
-        for (const tone of ["up", "down"]) {
-          c.shadowColor = tone === "up" ? col.upGlow : col.downGlow;
-          c.shadowBlur = 7 * hr;
-          c.globalAlpha = 0.55;
-          c.fillStyle = col[tone];
-          c.fill(paths[tone]);
+        // the candles' glow: the bodies and wicks drawn small (1/4 and 1/8 of the size) and stretched back with
+        // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
+        c.imageSmoothingEnabled = true;
+        try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
+        for (const [S, a] of [[3, 0.55], [8, 0.75]]) {
+          const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
+          const off = small(S, ow, oh), o2 = off.getContext("2d");
+          o2.clearRect(0, 0, ow, oh);
+          const sw = Math.max(1, bw / S + 1), ww = Math.max(0.8, (2 * hr) / S);
+          for (const tone of ["up", "down"]) {
+            o2.fillStyle = col[tone];
+            o2.beginPath();
+            for (const b of gv.bars) {
+              if (b.up !== (tone === "up")) continue;
+              const X = (b.x * hr) / S;
+              o2.rect(X - sw / 2, (b.t * vr) / S, sw, Math.max(0.8, ((b.b - b.t) * vr) / S));
+              o2.rect(X - ww / 2, (b.hi * vr) / S, ww, Math.max(0.8, ((b.lo - b.hi) * vr) / S));
+            }
+            o2.fill();
+          }
+          c.globalAlpha = a;
+          c.drawImage(off, 0, 0, ow, oh, 0, 0, ow * S, oh * S);
         }
         // the forming candle: a little brighter, a faint column of light behind it
         const f = gv.last;
