@@ -241,6 +241,24 @@ def test_the_engine_takes_one_position_per_series_and_skips_busy_and_gapped_entr
     assert tr[1010]["net"] == pytest.approx(103.0 / (100.0 * (1 + SM.SLIP_SIDE)) - 1 - 2 * SM.FEE_SIDE - SM.FUNDING_8H * 3 * 60 / 480)
 
 
+def test_a_member_added_after_its_start_dates_bars_were_dropped_says_so_instead_of_starting_late(tmp_path):
+    """A second member whose start date is older than the oldest bar the league still holds (the first member's retention
+    window moved on) must not quietly begin at the oldest stored bar: that would be another record under the same start."""
+    ex, a, st = world(tmp_path)
+    st, _ = ticks(st, ex, a, [3999, 3999, 3999])                      # the first member has processed everything; old bars are pruned
+    first = st.load_bars("BTC", "1h")["t"][0]
+    assert first > T0 + 1500 * HOUR
+    late = make_member(member_id="late", start_ms=T0 + 1200 * HOUR, k=5)              # start date before the oldest stored bar
+    fresh = make_member(member_id="fresh", start_ms=int(first) + 400 * HOUR, k=5)      # start date inside the stored bars
+    ex.now_ms = now_after_bar("1h", 3999)
+    out = LG.League(st, (a, late, fresh), ex.get).tick(ex.now_ms)
+    s = st.series("late", "BTC", "1h")
+    assert s["status"] == "error" and "시작일" in s["note"] and s["last_bar_ms"] is None
+    assert not [r for r in st.conn.execute("SELECT 1 FROM signals WHERE member_id = 'late'")]
+    assert st.series("fresh", "BTC", "1h")["status"] == "recording" and st.series(a.member_id, "BTC", "1h")["status"] == "recording"
+    assert out["errors"] == []                                        # a per-series state, not a crash of the pass
+
+
 def test_irregular_ticks_of_15_minute_bars_with_5_to_10_minute_gaps_make_the_same_tables(tmp_path):
     """A pass that is a few minutes late sees the same closed bars; a pass that was missed sees two bars at once."""
     start = T0 + 1000 * 15 * MIN

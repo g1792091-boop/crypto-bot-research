@@ -239,6 +239,12 @@ class League:
                           note="시작일 전 (봉만 모으는 중)")
             return out
         last_done = prior["last_bar_ms"] if prior else None
+        if last_done is None and i_start == 0 and int(t[0]) > int(m.start_ms):
+            # a member added after the older bars were dropped: it cannot be recorded from its start date, and starting at
+            # the oldest bar left would be a different record under the same start date
+            st.put_series(m.member_id, coin, tf, "error", now_ms, warm_have=have, warm_need=need,
+                          note="시작일의 봉이 이미 지워져 시작일부터는 기록할 수 없음")
+            return out
         i0 = 0 if last_done is None else int(np.searchsorted(t, last_done, side="right"))
         if i0 < n_all:
             n = min(n_all, i0 + MAX_CHUNK_BARS)
