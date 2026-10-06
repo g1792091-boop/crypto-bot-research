@@ -1232,7 +1232,7 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
       why}``; ``why`` is the stored reason of a skipped round (without its 'unchanged: ' tag) or the stored, already
       redacted error text.
     - ``next``: the service's own schedule from debate_state, as Service.due_ms() computes it: ``{ts, kind, every_min}``,
-      ts = max(last attempt + interval, backoff end), kind 'retry' while a backoff decides it; None when unknown.
+      ts = max(last attempt + interval, backoff end), kind 'retry' while a failure is unresolved; None when unknown.
     - ``today``: the KST day's rounds ``{ok, skipped, error, cost_usd}`` (error counts error and aborted rounds).
     Nothing at all ({}) when the file or its tables cannot be read."""
     c = ro_connect(debate_db)
@@ -1282,7 +1282,8 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
 
 def _debate_next(st: dict) -> Optional[dict]:
     """When the debate service will try its next round (Service.due_ms: last attempt + interval, or the end of a
-    backoff when that is later). None without an interval or a last attempt."""
+    backoff when that is later). kind 'retry' while a failure is unresolved (the service keeps 'backoff:until' until a
+    round succeeds), else 'round'. None without an interval or a last attempt."""
     def num(k: str) -> int:
         try:
             return int(float(json.loads(st.get(k) or "0") or 0))
@@ -1297,7 +1298,7 @@ def _debate_next(st: dict) -> Optional[dict]:
     nxt = last + every * 60_000 if last and every else 0
     if not nxt and not until:
         return None
-    return {"ts": max(nxt, until), "kind": "retry" if until > nxt else "round", "every_min": every}
+    return {"ts": max(nxt, until), "kind": "retry" if until else "round", "every_min": every}
 
 
 # ---------------------------------------------------------------- routes

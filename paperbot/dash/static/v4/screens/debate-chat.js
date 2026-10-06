@@ -30,14 +30,14 @@ export function avatar(speaker, size = 34) {
   return h("span", {class: "db-av", style: {"--h": c.hue}, title: c.name, "aria-hidden": "true"}, f);
 }
 
-/** The cast strip: who sits in this room and how often each spoke in the shown round (stored turns only). */
+/** The cast strip: who sits in this room and how often each spoke in the shown round (stored turns only); before the
+ *  first finished round (round null) each one's job. */
 export function castStrip(round) {
   const n = {};
   for (const m of (round && round.messages) || []) n[isNote(m) ? "정리" : m.speaker] = (n[isNote(m) ? "정리" : m.speaker] || 0) + 1;
-  return h("ul", {class: "db-cast", "aria-label": "토론 참가자"}, CAST.map((c) => h("li", {class: ["db-castm", n[c.id] ? "" : "quiet"], style: {"--h": c.hue},
-    title: `${c.name}: ${c.job}`},
-  avatar(c.id, 30), h("b", null, c.name),
-  h("small", null, c.id === "정리" ? (n[c.id] ? "정리함" : "정리 없음") : n[c.id] ? `${fmt.int(n[c.id])}번 말함` : "이번엔 없음"))));
+  const said = (c) => !round ? c.job : c.id === "정리" ? (n[c.id] ? "정리함" : "정리 없음") : n[c.id] ? `${fmt.int(n[c.id])}번 말함` : "이번엔 없음";
+  return h("ul", {class: "db-cast", "aria-label": "토론 참가자"}, CAST.map((c) => h("li", {class: ["db-castm", !round || n[c.id] ? "" : "quiet"],
+    style: {"--h": c.hue}, title: `${c.name}: ${c.job}`}, avatar(c.id, 30), h("b", null, c.name), h("small", null, said(c)))));
 }
 
 /**

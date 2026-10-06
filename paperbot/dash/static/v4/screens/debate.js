@@ -13,7 +13,7 @@
 // HONESTY: every bubble is a stored turn (text nodes, no typing effect); it is ONE AI speaking every role (said under
 // the chat); nothing here changes an order, a rule or an account.
 import {h, ui, fmt, motion, store} from "../core/pb.js";
-import {roundChat, castStrip, avatar, noteLine, hasReplies, CAST} from "./debate-chat.js";
+import {roundChat, castStrip, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";
 import {makeSide, usd4} from "./debate-side.js";
 
 export async function mount(el, ctx) {
@@ -25,6 +25,7 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- the room (chat | status)
   const side = makeSide(ctx);
+  const subjectK = h("small", null, "이번 회차 주제");
   const subject = h("b", {class: "db-topic"});
   const meta = h("span", {class: "db-meta"});
   const castBox = h("div", {class: "db-castbox"});
@@ -33,7 +34,7 @@ export async function mount(el, ctx) {
   const scroller = h("div", {class: "db-scroll"}, startLine, chatBox);
   const head = h("div", {class: "db-head"},
     h("span", {class: "db-avs", "aria-hidden": "true"}, CAST.slice(0, 5).map((c) => avatar(c.id, 22))),
-    h("div", {class: "db-ht"}, h("small", null, "이번 회차 주제"), subject), meta);
+    h("div", {class: "db-ht"}, subjectK, subject), meta);
   const honest = h("p", {class: "db-honest"}, "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다. 말풍선은 저장된 글 그대로(실시간 타이핑 아님)이고, ",
     "의견이지 사실이 아닙니다. 이 방은 주문·규칙·계좌를 바꾸지 않습니다.");
   const live = h("section", {class: "db-room", "aria-label": "지금 토론"}, head, castBox, scroller, honest);
@@ -52,13 +53,14 @@ export async function mount(el, ctx) {
     h("div", {class: "db-panes"}, main, side.el));
 
   // ---------------------------------------------------------------- pieces
+  const turnsOf = (r) => (r.messages || []).filter((m) => !isNote(m)).length;
   function histRow(r) {
     const region = h("div", {class: "db-hbody", hidden: true});
     const note = noteLine(r);
     const btn = h("button", {class: "db-hrow", type: "button", "aria-expanded": "false"},
       h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)),
       h("span", {class: "db-hmain"}, h("b", null, r.topic || "주제 없음"), note ? h("span", {class: "db-hnote"}, note) : null),
-      h("span", {class: "db-hmeta"}, `발언 ${fmt.int((r.messages || []).filter((m) => m.speaker !== "정리" && m.stance !== "정리").length)}개 · ${usd4(r.cost_usd)}`,
+      h("span", {class: "db-hmeta"}, `발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`,
         hasReplies(r) ? null : h("small", null, "예전 형식")),
       h("i", {class: "db-hchev", "aria-hidden": "true"}, "›"));
     btn.addEventListener("click", () => {
@@ -92,6 +94,7 @@ export async function mount(el, ctx) {
 
   function renderLive(r) {
     if (!r) {
+      subjectK.textContent = "참가자 다섯 명과 사회자";
       subject.textContent = "아직 끝난 토론이 없습니다";
       meta.textContent = "";
       castBox.replaceChildren(castStrip(null));
@@ -104,9 +107,9 @@ export async function mount(el, ctx) {
     if (st.shown === r.round_id) return;              // the same stored round: leave it as the reader left it
     const fresh = st.shown != null;
     st.shown = r.round_id;
-    const turns = (r.messages || []).filter((m) => m.speaker !== "정리" && m.stance !== "정리").length;
+    subjectK.textContent = "이번 회차 주제";
     subject.textContent = r.topic || "주제 없음";
-    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turns)}개 · ${usd4(r.cost_usd)}`);
+    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`);
     castBox.replaceChildren(castStrip(r));
     startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
       h("time", null, fmt.hm(r.ts)));

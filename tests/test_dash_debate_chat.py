@@ -134,6 +134,11 @@ def test_an_older_debate_db_reads_as_plain_turns_and_a_backoff_decides_the_next_
     assert d["chat"][0]["messages"][1] == {"id": d["chat"][0]["messages"][1]["id"], "speaker": "비관론자", "stance": "비관",
                                            "text": "2번째 말", "reply_to": None, "reply_stance": None}
     assert d["next"] == {"ts": NOW + 25 * M, "kind": "retry", "every_min": 30}
+    c = sqlite3.connect(path)                     # a backoff that ends before the interval: still a retry, at the interval
+    c.execute("UPDATE debate_state SET v = ? WHERE k = 'backoff:until'", (json.dumps(NOW + 5 * M),))
+    c.commit()
+    c.close()
+    assert AN.debate_chat(path, NOW)["next"] == {"ts": NOW + 18 * M, "kind": "retry", "every_min": 30}
     assert AN.debate_chat(str(tmp_path / "none.db"), NOW) == {}
     junk = str(tmp_path / "junk.db")
     sqlite3.connect(junk).execute("CREATE TABLE debate_messages (id INTEGER)").connection.commit()
@@ -280,7 +285,7 @@ def test_wiring_honesty_and_layout():
     for gone in ('"강세"', '"약세"', "db-vs", "이번 회차에 발언 없음", "typing", "setInterval", "innerHTML"):
         assert gone not in every, gone
     # the room: chat + the status column, the older rounds folded, the honesty line under the chat
-    assert 'import {roundChat, castStrip, avatar, noteLine, hasReplies, CAST} from "./debate-chat.js";' in js["debate.js"]
+    assert 'import {roundChat, castStrip, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";' in js["debate.js"]
     assert 'import {makeSide, usd4} from "./debate-side.js";' in js["debate.js"]
     assert "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다" in js["debate.js"] and "의견이지 사실이 아닙니다" in js["debate.js"]
     assert "history.set(chat.slice(1), true)" in js["debate.js"] and 'motion.expand(region, open)' in js["debate.js"]
