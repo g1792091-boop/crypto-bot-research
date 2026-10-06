@@ -8,8 +8,12 @@ labtests only to CALL normalize_spec / spec_hash / describe_ko (pure, data-free;
 import fails an idea is stored 'unchecked' and the agents side still checks it (agents/labintake.py re-makes every spec,
 so nothing here is ever trusted there). It never imports rooms.py or the agents' runner.
 
-Sides: SIDES = 찬성 / 반대 / 심판, assigned by code per round (``sides_for``): the 심판 rotates through the five roles, the
-other four alternate 찬성 / 반대, and the start flips every five rounds, so every role plays every side. The model's own
+Seats (owners 10/06, after the design): five SPECIALISTS instead of personalities. 차트 분석가 (entries, trend, support
+and resistance, 매물대), 리스크 책임자 (stop size, leverage, losing streaks), 퀀트 (numbers, sample size, coin flips),
+시장 분석가 (funding, liquidations, volume, the macro calendar) and the 심판, a seat of its own that weighs both sides and
+writes the round's one testable idea. Sides: SIDES = 찬성 / 반대 / 심판, assigned by code per round (``sides_for``): the
+four specialists split 2-2 into 찬성 / 반대 and the split changes every round (three pairings x which pair is 찬성: all
+six in six rounds, so every specialist plays both sides equally often); the 심판 is always the 심판. The model's own
 label is never used. ``factory_order`` puts 찬성1, 반대1, 찬성2, 반대2 first, replies in between, the 심판 last.
 
 Idea checks (``check_idea``): newlab grammar or one of the 36's what-if templates; 5m, timeframe_only and names outside
@@ -40,8 +44,12 @@ from . import rooms_db as R
 DAY_MS = 86_400_000
 HOUR_MS = 3_600_000
 KST_MS = 9 * HOUR_MS
-ROLES = ("낙관론자", "비관론자", "회의론자", "리스크 책임자", "퀀트")      # debate.ROLES (a test keeps them equal)
+# the factory's seats (debate.FACTORY_ROLES; a test keeps them equal): four specialists, then the judge's own seat
+ROLES = ("차트 분석가", "리스크 책임자", "퀀트", "시장 분석가", "심판")
+JUDGE = "심판"
 SIDES = ("찬성", "반대", "심판")
+# the three ways to split four specialists 2-2 (by index into the four)
+PAIRINGS = (((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2)))
 MIN_TURNS, MAX_TURNS = 5, 9
 TFS = ("15m", "30m", "1h", "4h")
 CHECK_MARKS = ("①", "②", "③", "④", "⑤", "⑥")
@@ -59,6 +67,8 @@ CHECK_KO = {"ok": "시험 후보", "bad_spec": "문법 밖", "refused": "시험 
 QUEUE_KO = {"candidate": "후보", "queued": "오늘 시험 줄", "not_picked": "이번엔 안 뽑힘", "skipped": "시험 후보 아님"}
 # check statuses that can be picked: 'unchecked' too (the agents side checks it: labintake.canon)
 PICKABLE = ("ok", "unchecked")
+ROUND_KINDS = ("factory", "deep")
+DEEP_BONUS = 1.0                    # slot_pick: the daily deep debate's idea (Opus, three calls) scores this much more
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS debate_lab_ideas (
@@ -100,31 +110,41 @@ CREATE INDEX IF NOT EXISTS debate_lab_ideas_hash ON debate_lab_ideas (spec_hash)
 """
 
 
+# added columns (ALTER TABLE ADD COLUMN when missing; older rows keep NULL): round_kind = the kind of round that wrote
+# the idea ('factory' = a regular round, 'deep' = the daily deep debate)
+ADDED_COLUMNS = (("round_kind", "TEXT"),)
+
+
 def ensure(conn: sqlite3.Connection) -> None:
-    """debate.db's idea table (CREATE TABLE IF NOT EXISTS; the debate service is the file's only writer)."""
+    """debate.db's idea table (CREATE TABLE IF NOT EXISTS, then the added columns; the debate service is the file's only
+    writer)."""
     conn.executescript(SCHEMA)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(debate_lab_ideas)")}
+    for col, typ in ADDED_COLUMNS:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE debate_lab_ideas ADD COLUMN {col} {typ}")
     conn.commit()
 
 
 # ---------------------------------------------------------------- sides and order (code, never the model)
 def sides_for(n: int, roles: tuple = ROLES) -> dict:
-    """{role: side} for round ``n``: the 심판 is roles[n % 5]; the other four, in roles order, alternate 찬성 / 반대
-    starting with 반대 every other block of five rounds. Over 10 rounds every role plays every side."""
-    judge = roles[n % len(roles)]
-    flip = (n // len(roles)) % 2
-    out, k = {}, 0
-    for r in roles:
-        if r == judge:
-            out[r] = "심판"
-            continue
-        out[r] = "찬성" if (k + flip) % 2 == 0 else "반대"
-        k += 1
-    return out
+    """{seat: side} for round ``n``: the last seat (the 심판) judges every round; the four specialists split 2-2, by
+    pairing ``n % 3`` with the pairs swapped every three rounds, so the split changes every round and over any six
+    rounds each specialist argues 찬성 three times and 반대 three times."""
+    judge, spec = roles[-1], list(roles[:-1])
+    if len(spec) != 4:
+        raise ValueError("sides_for: four specialists and a judge")
+    a, b = PAIRINGS[n % 3]
+    pro, con = (a, b) if (n // 3) % 2 == 0 else (b, a)
+    out = {spec[i]: "찬성" for i in pro}
+    out.update({spec[i]: "반대" for i in con})
+    out[judge] = "심판"
+    return {r: out[r] for r in roles}
 
 
 def factory_order(n: int, turns: int, roles: tuple = ROLES) -> list[str]:
     """Speakers of round ``n``: 찬성1, 반대1, 찬성2, 반대2, then replies alternating 반대 / 찬성, the 심판 last. ``turns``
-    is clamped to 5-9, so every role speaks at least once (debate-chat's 'all five speak' rule)."""
+    is clamped to 5-9, so every seat speaks at least once (debate-chat's 'all five speak' rule)."""
     sides = sides_for(n, roles)
     pro = [r for r in roles if sides[r] == "찬성"]
     con = [r for r in roles if sides[r] == "반대"]
@@ -148,7 +168,8 @@ def sides_text(n: int, roles: tuple = ROLES) -> str:
     pro = ", ".join(r for r in roles if s[r] == "찬성")
     con = ", ".join(r for r in roles if s[r] == "반대")
     judge = next(r for r in roles if s[r] == "심판")
-    return f"찬성 {pro} / 반대 {con} / 심판 {judge} — 마지막 발언은 심판. {SIDE_RULE_KO}"
+    seat = "심판" if judge == "심판" else f"심판 {judge}"
+    return f"찬성 {pro} / 반대 {con} / {seat} — 마지막 발언은 심판. {SIDE_RULE_KO}"
 
 
 # ---------------------------------------------------------------- the idea check (code)
@@ -331,22 +352,23 @@ def check_idea(raw: Any, agents_ro: Optional[sqlite3.Connection], debate_conn: O
 
 
 def add_idea(conn: sqlite3.Connection, round_id: int, ts: int, question: Optional[dict], checked: dict,
-             commit: bool = True) -> int:
+             commit: bool = True, round_kind: Optional[str] = None) -> int:
     """Store one round's checked idea (debate.db). Only an 'ok' idea, or one this side could not check ('unchecked':
     the lab modules did not load; the agents side re-makes every spec and refuses what is outside the grammar), is a
-    candidate for the daily pick."""
+    candidate for the daily pick. ``round_kind``: 'factory' or 'deep' (the daily deep debate's idea)."""
     q = question or {}
     cur = conn.execute(
         "INSERT INTO debate_lab_ideas (round_id, ts, question_kind, question_key, question_ko, engine, strategy, "
         "spec_json, spec_hash, description_ko, claim_ko, pro_ko, con_ko, con_check, backs, weak_json, check_status, "
-        "check_ko, old_trial_id, queue_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "check_ko, old_trial_id, queue_status, round_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (int(round_id), int(ts), q.get("kind"), q.get("key"), _text(q.get("question_ko"), 300), checked["engine"],
          checked.get("strategy"), None if checked.get("spec") is None else json.dumps(checked["spec"], ensure_ascii=False,
                                                                                      default=str),
          checked.get("spec_hash"), checked.get("description_ko") or "", checked.get("claim_ko", ""),
          checked.get("pro_ko", ""), checked.get("con_ko", ""), checked.get("con_check"), checked.get("backs"),
          json.dumps(checked.get("weak") or [], ensure_ascii=False), checked["check_status"], checked.get("check_ko"),
-         checked.get("old_trial_id"), "candidate" if checked["check_status"] in PICKABLE else "skipped"))
+         checked.get("old_trial_id"), "candidate" if checked["check_status"] in PICKABLE else "skipped",
+         round_kind if round_kind in ROUND_KINDS else None))
     if commit:
         conn.commit()
     return int(cur.lastrowid)
@@ -415,15 +437,18 @@ def _score(row: dict, backs: int, weak: int, fams: set, combos: set) -> float:
             s += 1
         if library_overlap(sp):
             s -= 2
-    if row.get("question_kind") in ("big_losses", "worst_vs_flip"):
+    if row.get("question_kind") in ("big_losses", "worst_vs_flip", "loss_traits"):
         s += 0.5
+    if row.get("round_kind") == "deep":           # the day's most important question, argued in three separate calls
+        s += DEEP_BONUS
     return s
 
 
 def slot_pick(conn: sqlite3.Connection, agents_ro: Optional[sqlite3.Connection], now: int, per_day: int) -> dict:
     """At most one idea per slot to the lab intake queue: among the slot's candidates (check 'ok'), score = 1 + backs -
     weak + 1 (entry family never in the ledger) + 1 (filter combination never tested) - 2 (library overlap) + 0.5
-    (question big_losses / worst_vs_flip); the best with score >= 1 -> 'queued', ties to the oldest; the others
+    (question big_losses / worst_vs_flip / loss_traits) + DEEP_BONUS (the daily deep debate's idea); the best with
+    score >= 1 -> 'queued', ties to the oldest; the others
     'not_picked' with a code reason. Older candidates whose slot passed are 'not_picked' too. Idempotent (only
     'candidate' rows are looked at). Returns {slot, queued, not_picked}."""
     sl = last_slot(now, per_day)

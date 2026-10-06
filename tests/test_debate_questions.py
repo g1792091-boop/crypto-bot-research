@@ -24,6 +24,10 @@ S = "N17_KC_RSI"
 WORST = f"{S}@1h"
 BUST = "S5_DONCHIAN_MFI@4h"
 ENTRY = {"family": "ema_cross", "params": {"fast": 9, "slow": 21}}
+NEAR = {"timeframe": "4h", "entry": {"family": "macd_hist_zero"}, "filters": [{"kind": "adx", "mode": "above", "level": 25}],
+        "direction": "long"}
+LUCKY, PAIR, VP = "V39_ALL", ("OBV_B", "S3_CMO_SANDWICH"), "S4_BB_BBP"
+UP = {"regime": "trend_up"}
 
 
 def _rec(strat, tf, pnl, exit_time, side=1, context=None, symbol="BTCUSDT", margin=500.0):
@@ -55,9 +59,31 @@ def rich_world(tmp_path):
         st.trade(f"{strat}@30m", _rec(strat, "30m", -15.0 if k < 30 else 12.0, NOW - 5 * DAY + k * HOUR, side=1,
                                       context=down))
     for i, strat in enumerate(strategies[:14]):             # the US session (UTC 16-24) on 1h: 14 strategies lose
-        for k in range(6):
+        for k in range(6):                                  # (in a rising market: the regime cell, no new tag)
             entry = (NOW - 14 * HOUR) - 2 * DAY + 18 * HOUR + k * MIN + i          # UTC 18:00 two days ago
-            st.trade(f"{strat}@1h", _rec(strat, "1h", -5.0, entry + 3 * HOUR, side=1))
+            st.trade(f"{strat}@1h", _rec(strat, "1h", -5.0, entry + 3 * HOUR, side=1, context=UP))
+    # best_luck / tf_split: LUCKY wins on 4h (wallet far above its coin flips) and loses on 15m
+    for k in range(35):
+        st.trade(f"{LUCKY}@4h", _rec(LUCKY, "4h", 30.0, NOW - 3 * DAY + k * HOUR, symbol="SOLUSDT"))
+    for k in range(25):
+        st.trade(f"{LUCKY}@15m", _rec(LUCKY, "15m", -10.0, NOW - 3 * DAY + k * HOUR + 7 * MIN, symbol="SOLUSDT"))
+    # pairs: PAIR_A@1h and PAIR_B@30m lose together on ETH, 6 times in the same hour
+    for k in range(6):
+        t0 = NOW - 2 * DAY + k * 5 * HOUR
+        st.trade(f"{PAIR[0]}@1h", _rec(PAIR[0], "1h", -8.0, t0 + 3 * HOUR, symbol="ETHUSDT", context=down))
+        st.trade(f"{PAIR[1]}@30m", _rec(PAIR[1], "30m", -8.0, t0 + 3 * HOUR + 2 * MIN, symbol="ETHUSDT", context=down))
+    # 매물대: VP@15m keeps losing with a 매물대 level right ahead (stored entry marks), wins otherwise
+    for k in range(10):
+        ahead = k < 6
+        sr = {"room": 0.4 if ahead else 3.5, "room_kind": (51, 52, 53)[k % 3] if ahead else 11, "floor": 1.0,
+              "floor_kind": 12, "atr": 1.0, "close": 100.0}
+        st.trade(f"{VP}@15m", _rec(VP, "15m", -6.0 if (ahead or k == 9) else 9.0, NOW - 4 * DAY + k * HOUR,
+                                   symbol="XRPUSDT", context={"sr": sr}))
+    # a DeepSeek family that loses far more often than the coin flips (counts only)
+    ds = st.conn.execute("SELECT account_id FROM accounts WHERE kind = 'ds200' ORDER BY account_id LIMIT 1").fetchone()[0]
+    for k in range(35):
+        dstrat, _, dtf = ds.partition("@")
+        st.trade(ds, _rec(dstrat, dtf, -3.0, NOW - 3 * DAY + k * HOUR + 11 * MIN, symbol="BNBUSDT"))
     for k in range(5):                                      # 5m: the reel and a 5m coin flip lose big today
         st.trade("REEL_H1@5m", _rec("REEL_H1", "5m", -5000.0, NOW - k * MIN, context=down))
     flips = [r[0] for r in st.conn.execute("SELECT account_id FROM accounts WHERE kind = 'random' AND timeframe = '5m'")]
@@ -65,6 +91,7 @@ def rich_world(tmp_path):
         st.trade(flips[0], _rec(flips[0].split("@")[0], "5m", -4000.0, NOW - k * MIN, context=down))
     eng = json.loads(st.conn.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()[0])["engines"]
     eng[WORST]["wallet"] = 900.0
+    eng[f"{LUCKY}@4h"]["wallet"] = 9800.0
     eng[BUST] = {"wallet": 11.0, "bust": True}
     st.put_state("accounts", NOW, {"engines": eng})
     st.commit()
@@ -74,6 +101,10 @@ def rich_world(tmp_path):
     R.add_trial_with_result(c, R.LAB_ROOM, None, "newlab", NL.normalize_spec({"timeframe": "1h", "entry": ENTRY}),
                             "failed", {"ledger": {"checks": {"a": False, "b": True, "c": False, "d": True, "e": False,
                                                              "f": False}}}, ts=NOW - DAY)
+    # a near miss: failed only ⑥ (the coin flip check)
+    R.add_trial_with_result(c, R.LAB_ROOM, None, "newlab", NL.normalize_spec(NEAR), "failed",
+                            {"ledger": {"checks": {"a": True, "b": True, "c": True, "d": True, "e": True, "f": False}}},
+                            ts=NOW - DAY + MIN)
     tid = R.add_trial(c, f"strat:{S}", S, "test", LT.normalize_spec({"template": "stop_atr", "timeframe": "1h", "k": 2.5}, S),
                       ts=NOW - DAY)
     R.add_trial_result(c, tid, "failed", {"gate": {"pass": False}}, ts=NOW - DAY)
@@ -120,8 +151,85 @@ def test_every_kind_builds(cands):
     ev = k["event"][0]
     assert ev.evidence["account"] == BUST and "파산" in ev.question_ko
     retro = k["retro"][0]
-    assert retro.evidence["why_fail"]["tests"] == 1 and retro.evidence["why_fail"]["failed"]["⑥"] == 1
+    assert retro.evidence["why_fail"]["tests"] == 2 and retro.evidence["why_fail"]["failed"]["⑥"] == 2
     assert "ema_cross" not in retro.handles["newlab_entries"] and retro.handles["newlab_entries"]
+
+
+def test_the_new_kinds_cover_every_strategy_and_say_what_the_grammar_cannot(cands):
+    """Owners 10/06: ALL of today's losses' traits, best = skill or luck, timeframe split, coin / regime cells, pairs
+    losing together, 매물대 from the stored marks, DeepSeek by counts only, lab near misses, the weekly coverage."""
+    k = by_kind(cands)
+    tr = k["loss_traits"][0]
+    kinds = {r["kind"] for r in tr.evidence["traits"]}
+    assert tr.evidence["losses"] >= Q.MIN_TRAIT_LOSSES and "청산" not in kinds                  # entry-time traits only
+    assert not {r["trait"] for r in tr.evidence["traits"]} & set(Q.OUTCOME_TAGS)
+    assert all(r["gap"] >= tr.evidence["traits"][-1]["gap"] for r in tr.evidence["traits"])
+    lucky = k["best_luck"][0]
+    assert lucky.evidence["account"] == f"{LUCKY}@4h" and lucky.evidence["gap_to_coin_flips"] > 0
+    lt = lucky.evidence["luck_test"]
+    assert lt["accounts_compared"] == 144 and lt["trades"] >= 30 and lt["p_times_accounts"] >= lt["p_one_sided"]
+    assert "운" in lucky.question_ko and lucky.handles["strategies"] == [LUCKY]
+    split = k["tf_split"][0]
+    assert (split.evidence["good_tf"], split.evidence["bad_tf"]) == ("4h", "15m")
+    assert {h["timeframe"] for h in split.handles["labtest"]} == {"15m"}
+    reg = k["regime_cell"][0]
+    assert reg.evidence["cell"]["regime"] == "상승 추세" and reg.evidence["cell"]["losing"] >= 12
+    coin = k["coin_cell"][0]
+    assert "6개 코인" in coin.evidence["note"]                                    # no 'drop one coin' test exists
+    pair = k["pairs"][0]
+    assert pair.evidence["pair"] == [f"{PAIR[0]}@1h", f"{PAIR[1]}@30m"] and pair.evidence["losses_together"] == 6
+    assert {h["strategy"] for h in pair.handles["labtest"]} == set(PAIR)
+    vp = k["volume_profile"][0]
+    assert vp.evidence["account"] == f"{VP}@15m" and vp.evidence["vp_ahead"] == {"trades": 6, "losses": 6,
+                                                                                 "loss_rate": 1.0, "mean_roe": -0.012}
+    assert set(vp.evidence["losses_by_level"]) == set(Q.VP_KINDS.values()) and vp.evidence["median_distance_atr"] == 0.4
+    assert "문법" in vp.evidence["grammar_note"] and "무관" in vp.evidence["research_note"]
+    assert vp.handles["labtest"][0] == Q.skip_handle(VP, "15m", "최근 범위 끝에서 진입")
+    ds = k["ds_counts"][0]
+    from paperbot.agents import dsmoney as DM
+    text = json.dumps(ds.section(), ensure_ascii=False)
+    assert not any(f'"{m}"' in text for m in DM.MONEY_KEYS) and not DM.has_money(text)        # counts only
+    assert ds.evidence["cell"]["win_rate"] < ds.evidence["coin_flip_win_rate"] and ds.handles["strategies"] == []
+    nm = k["near_miss"][0]
+    assert [x["failed"] for x in nm.evidence["near_misses"]] == [["⑥"]] and "비슷한 실패" in nm.evidence["rule_note"]
+    cov = k["coverage"][0]
+    assert cov.evidence["strategy"] == "DOGE" and cov.evidence["days_since_debated"] is None and not cov.urgent
+
+
+def test_coverage_debates_every_strategy_within_a_week(world):
+    """The weekly rotation: the least recently debated strategy comes next; a focused question counts as its turn; a
+    strategy left for COVER_URGENT_MS jumps the rotation (never twice in a row)."""
+    from paperbot.agents import packets3
+    board = packets3.build(world["paper"], world["daily"], NOW)
+    paper, agents = P.open_ro(world["paper"]), P.open_ro(world["agents"])
+    try:
+        covered, start, seen = {}, NOW - 2 * DAY, []
+        for i in range(36):
+            q = Q.q_coverage(paper, agents, board, NOW + i * MIN, covered, start)
+            seen.append(q.evidence["strategy"])
+            covered = Q.covered_update(covered, q, NOW + i * MIN)
+        assert len(set(seen)) == 36                                        # all 36 once, none twice
+        old = dict(covered, **{"N17_KC_RSI": NOW - 6 * DAY})
+        late = Q.q_coverage(paper, agents, board, NOW + DAY, old, start)
+        assert late.evidence["strategy"] == "N17_KC_RSI" and late.urgent and late.evidence["days_since_debated"] == 7.0
+    finally:
+        paper.close()
+        agents.close()
+    # big_losses names several strategies: not a turn; worst_vs_flip names one: its turn
+    assert Q.covered_update({}, Q.Question("big_losses", "b", "", "", {}, {"strategies": ["A", "B"]}), NOW) == {}
+    assert Q.covered_update({}, Q.Question("worst_vs_flip", "w", "", "", {}, {"strategies": ["A"]}), NOW) == {"A": NOW}
+    cands = [_q("loss_tag", "l1", 30), Q.Question("coverage", "c1", "", "", {}, {}, 1, urgent=True)]
+    assert Q.pick(cands, {}, "big_losses", NOW).key == "c1"                     # overdue: before the rotation
+    assert Q.pick(cands, {}, "coverage", NOW).key == "l1"                       # never twice in a row
+    assert Q.pick(cands + [_q("event", "e1")], {}, None, NOW).key == "e1"       # an event still comes first
+
+
+def test_the_deep_debate_takes_the_most_important_question():
+    cands = [_q("coverage", "c"), _q("loss_tag", "l", 5), _q("big_losses", "b", 9), _q("retro", "r")]
+    assert Q.deep_pick(cands).key == "b"
+    assert Q.deep_pick(cands + [_q("event", "e")]).key == "e"
+    assert Q.deep_pick([_q("retro", "r")]).key == "r" and Q.deep_pick([]) is None
+    assert list(Q.DEEP_ORDER)[0] == "event" and set(Q.DEEP_ORDER) == set(Q.KINDS)
 
 
 def test_every_handle_passes_the_lab_checks_and_5m_is_never_offered(cands):

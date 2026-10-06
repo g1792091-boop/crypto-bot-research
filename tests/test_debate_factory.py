@@ -64,22 +64,32 @@ def skip(tag=LT.SKIP_TAGS[0], tf="1h", strategy=S):
 
 
 # ------------------------------------------------------------------ sides and order
-def test_sides_give_every_role_every_side_within_ten_rounds_and_the_judge_speaks_last():
-    assert DF.ROLES == D.ROLES
-    seen = {r: set() for r in DF.ROLES}
-    for n in range(10):
+def test_the_specialists_split_two_two_every_round_and_the_judge_speaks_last():
+    """Owners 10/06: five specialists (차트 분석가, 리스크 책임자, 퀀트, 시장 분석가) and a 심판 seat of its own; the four
+    split 2-2 into 찬성 / 반대, a different split every round, each plays both sides equally often."""
+    assert DF.ROLES == D.FACTORY_ROLES == ("차트 분석가", "리스크 책임자", "퀀트", "시장 분석가", "심판")
+    assert D.ROLES == ("낙관론자", "비관론자", "회의론자", "리스크 책임자", "퀀트")           # classic: unchanged
+    count = {r: {"찬성": 0, "반대": 0} for r in DF.ROLES[:4]}
+    prev = None
+    splits = set()
+    for n in range(12):
         s = DF.sides_for(n)
+        assert list(s) == list(DF.ROLES) and s["심판"] == "심판"
         assert sorted(s.values()) == ["반대", "반대", "심판", "찬성", "찬성"]
-        for r, side in s.items():
-            seen[r].add(side)
+        pro = frozenset(r for r in s if s[r] == "찬성")
+        assert pro != prev                                                             # a new split every round
+        prev = pro
+        splits.add(pro)
+        for r in DF.ROLES[:4]:
+            count[r][s[r]] += 1
         for turns in range(3, 12):
             order = DF.factory_order(n, turns)
             assert len(order) == min(max(turns, 5), 9) and set(order) == set(DF.ROLES)     # all five speak
-            assert s[order[-1]] == "심판" and order.count(order[-1]) == 1                  # the judge last, once
+            assert order[-1] == "심판" and order.count("심판") == 1                         # the judge last, once
             assert [s[r] for r in order[:4]] == ["찬성", "반대", "찬성", "반대"]
-            assert all(s[r] != "심판" for r in order[:-1])
-    assert all(v == set(DF.SIDES) for v in seen.values())
-    assert DF.sides_text(0) == ("찬성 비관론자, 리스크 책임자 / 반대 회의론자, 퀀트 / 심판 낙관론자 — 마지막 발언은 심판. "
+    assert len(splits) == 6                                                            # every 2-2 split in 6 rounds
+    assert all(v == {"찬성": 6, "반대": 6} for v in count.values())
+    assert DF.sides_text(0) == ("찬성 차트 분석가, 리스크 책임자 / 반대 퀀트, 시장 분석가 / 심판 — 마지막 발언은 심판. "
                                 + DF.SIDE_RULE_KO)
     assert "맡은 편만 변호" in DF.SIDE_RULE_KO and "①~⑥" in DF.SIDE_RULE_KO       # no side may step out of its side
 

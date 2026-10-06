@@ -54,8 +54,12 @@ DAY_MS = 86_400_000
 KST_MS = 9 * HOUR_MS
 PROMPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts3", "debate_room.md")
 DEFAULT_DIR = "/var/lib/paperbot/debate"
-ROLES = ("낙관론자", "비관론자", "회의론자", "리스크 책임자", "퀀트")
+ROLES = ("낙관론자", "비관론자", "회의론자", "리스크 책임자", "퀀트")              # classic mode (and older rows)
 STANCE = {"낙관론자": "낙관", "비관론자": "비관", "회의론자": "검증", "리스크 책임자": "리스크", "퀀트": "퀀트"}
+# factory mode (owners 10/06): five SPECIALIST seats instead of personalities, debate_factory.ROLES (a test keeps them
+# equal). 리스크 책임자 and 퀀트 keep their names; rows stored before keep the names they were stored with.
+FACTORY_ROLES = ("차트 분석가", "리스크 책임자", "퀀트", "시장 분석가", "심판")
+FACTORY_STANCE = {"차트 분석가": "차트", "리스크 책임자": "리스크", "퀀트": "퀀트", "시장 분석가": "시장", "심판": "심판"}
 NOTE_SPEAKER, NOTE_STANCE = "정리", "정리"
 # debate-chat (owners 10/06): a real back-and-forth. Every round all five roles speak once, then they answer each other;
 # from the third turn on a turn names the earlier speaker it answers (reply_to) and its stance toward it.
