@@ -55,3 +55,20 @@ html[data-tv="on"] .tvbtn { color: var(--accent); border-color: var(--accent-lin
   .tvp-box { width: 100%; max-height: 88vh; border-radius: 16px 16px 0 0; }
   .tvchip { left: 10px; right: 10px; max-width: none; }
 }
+
+/* ---------------------------------------------------------------- the PC rail's foot (core/rail.js; nav.css places it):
+   ★ 즐겨찾기 · TV / 글자 크기 / 화면 색 · v3, two small buttons to a row, so the screen icons above still fit without scrolling
+   the rail on a 1280 x 800 window (stacked one per row, ★ and TV pushed the 서버 group below the fold there) */
+@media (min-width: 1200px) {
+  .rail-foot { display: grid; grid-template-columns: repeat(2, 26px); justify-content: center; justify-items: center; align-items: center; gap: 5px 4px; }
+  .rail .favrail, .rail .tvbtn, .rail .skincyc, .rail .rail-old { width: 26px; height: 26px; }
+  .rail .favrail { font-size: var(--t-sm); }
+  .rail .skincyc i { width: 13px; height: 13px; }
+  .rail .textcyc { grid-column: 1 / -1; }
+}
+@media (min-width: 1200px) and (max-height: 880px) {
+  .rail-foot { gap: 4px; padding: 5px 0 6px; }
+  .rail .textcyc { padding: 5px 0; }
+}
+/* 1440 x 900 and shorter: thinner gaps at the group lines (the 비교 icon is one more screen in the 매매법 group) */
+@media (min-width: 1200px) and (max-height: 940px) { .rail-sep { margin: 2px 0; } }

@@ -420,3 +420,11 @@ def test_compare_deepseek_only_shows_the_count_rows():
     assert "딥시크 정의의 5년 연구 숫자는 섞인 화면에서 보이지 않습니다" in page
     assert '!x.trades ? h("span", {class: "muted"}, "거래 전 (아직 견줄 것 없음)")' in page        # no rank before a trade
     assert "autoscaleInfoProvider: minSpan" in page
+
+
+def test_rail_foot_packs_two_to_a_row():
+    """★ 즐겨찾기 and TV in the rail's foot: two small buttons to a row on a PC, so the screen icons still fit at 1280 x 800
+    (checked in a browser: stacked, the rail scrolled 86 px and hid the 서버 group's last icons)."""
+    css = _read("core/tvmode.css")
+    assert "@media (min-width: 1200px) {\n  .rail-foot { display: grid; grid-template-columns: repeat(2, 26px);" in css
+    assert ".rail .textcyc { grid-column: 1 / -1; }" in css
