@@ -20,7 +20,7 @@ let tip = null;
 function showTip(a) {
   if (!tip) { tip = h("div", {class: "rail-tip", id: "railtip", role: "tooltip", hidden: true}); document.body.append(tip); }
   const r = a.getBoundingClientRect();
-  tip.replaceChildren(h("span", {class: "rail-tip-g"}, a.dataset.group), h("b", null, a.dataset.tip),
+  tip.replaceChildren(h("span", {class: "rail-tip-g"}, a.dataset.gko), h("b", null, a.dataset.tip),
     ...[a.dataset.off ? h("span", {class: "pp thin"}, "꺼짐") : null, a.dataset.key ? h("kbd", null, a.dataset.key) : null].filter(Boolean));
   tip.hidden = false;
   tip.style.top = `${Math.round(r.top + r.height / 2)}px`;
@@ -44,13 +44,13 @@ export function renderRail(cur, badges, onRedraw) {
     const links = visibleScreens(g).map((n) => {
       const m = SCREENS[n], off = m.soft && !features[m.soft], k = keyOf(n);
       return h("a", {class: ["rail-a", off ? "off" : ""], href: href(n), "aria-current": n === cur ? "page" : null,
-        "aria-label": `${m.ko}${off ? " (아직 켜지지 않음)" : ""}${k ? ` · 단축키 ${k}` : ""}`, dataset: {screen: n, tip: m.ko, group: g.ko, key: k, off: off ? "1" : null},
+        "aria-label": `${m.ko}${off ? " (아직 켜지지 않음)" : ""}${k ? ` · 단축키 ${k}` : ""}`, dataset: {screen: n, tip: m.ko, gko: g.ko, key: k, off: off ? "1" : null},
         onmouseenter: (e) => showTip(e.currentTarget), onmouseleave: (e) => hideTip(e.currentTarget),
         onfocus: (e) => showTip(e.currentTarget), onblur: (e) => hideTip(e.currentTarget), onclick: () => hideTip()},
       screenIcon(n), badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
     });
     return [gi ? h("span", {class: "rail-sep", "aria-hidden": "true"}) : null,
-      h("div", {class: ["rail-g", g.id === curGroup ? "cur" : ""], role: "group", "aria-label": g.ko}, links)];
+      h("div", {class: ["rail-g", g.id === curGroup ? "cur" : ""], role: "group", "aria-label": g.ko, dataset: {group: g.id}}, links)];
   });
   const scroller = nav.querySelector(".rail-in");
   const keep = scroller ? scroller.scrollTop : 0;
