@@ -12,7 +12,7 @@ import time
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from combo_world import blank, build, equity, signal, trade  # noqa: E402
+from combo_world import blank, build, signal, trade  # noqa: E402
 
 from paperbot.dash.more import combo as CB  # noqa: E402
 
