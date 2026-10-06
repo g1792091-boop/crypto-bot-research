@@ -269,7 +269,7 @@ def test_ds5y_states(tmp_path):
     run.mkdir()
     (run / "run.log").write_text("15m: 2321522 trades, 88 configs so far, 94s\n30m: 1272618 trades, 176 configs so far, 142s\n")
     v = DS.view(str(run))
-    assert v["state"] == "running" and v["done"] == 176
+    assert v["state"] == "running" and v["done"] == 176 and "계산하는 중" in v["absent_ko"] and "아직 시작 안 함" not in v["absent_ko"]
     part = tmp_path / "part"
     part.mkdir()
     base = {"is_n": 100, "is_win_pct": 40, "is_mean_pct": -0.1, "cf_n": 50, "cf_mean_pct": 0.2, "pre_n": 0,

@@ -16,7 +16,7 @@ const DIMS = ["stop", "tp", "lock", "time", "lev"];
 const DIM_KO = {stop: "손절 폭", tp: "익절 방식", lock: "첫 잠금", time: "시간 청산", lev: "레버리지·비중"};
 const FIXED_TP = new Set(["tp1R", "tp1.5R", "tp2R", "tp3R"]);
 const TFS = [{id: "", label: "모든 봉"}, {id: "15m", label: "15분"}, {id: "30m", label: "30분"}, {id: "1h", label: "1시간"}, {id: "4h", label: "4시간"}];
-const LEV_ROWS = [["tiers", "지금 단계"], ["10", "10배·20%"], ["20", "20배·20%"], ["30", "30배·30%"], ["40", "40배·40%"], ["50", "50배·40%"]];
+const LEV_ROWS = [["tiers", "v3 단계"], ["10", "10배·20%"], ["20", "20배·20%"], ["30", "30배·30%"], ["40", "40배·40%"], ["50", "50배·40%"]];
 const STOP_COLS = [1.5, 2, 2.5, 3];
 const TP_STRIP = [["ladder", "사다리"], ["tp1R", "1R"], ["tp1.5R", "1.5R"], ["tp2R", "2R"], ["tp3R", "3R"], ["ladder_tp2R", "사다리+2R"]];
 const NO_FIVE_KO = {
@@ -355,9 +355,9 @@ export async function mount(el, ctx) {
     const strip = h("div", {class: "wi-map-tp"}, TP_STRIP.map(([k, ko]) => h("div", {class: "wi-map-tpc"}, h("span", {class: "wi-map-k"}, ko),
       cell(E[k], k === "ladder" ? FY.ref : `exitstyle:${k}`, {stop: 2, tp: k, lock: FIXED_TP.has(k) ? null : 0.1, time: "none", lev: "rule"}, `익절 ${ko}`))));
     return h("div", {class: "stack tight wi-map"},
-      h("p", {class: "note"}, "숫자 = 거래당 자금 대비 평균(%). 굵은 테두리 = 지금 규칙의 5년 기준, 밝은 테두리 = 고른 설정. 칸을 누르면 그 설정을 고릅니다."),
+      h("p", {class: "note"}, "숫자 = 거래당 자금 대비 평균(%). 굵은 테두리 = 지금 규칙의 5년 기준(v3 단계 · 2 ATR · 사다리), 밝은 테두리 = 고른 설정. 칸을 누르면 그 설정을 고릅니다 (v3 단계 줄은 지금 규칙으로 고름)."),
       h("div", {class: "wi-map-g"}, head, rows),
-      h("p", {class: "wi-sub"}, "익절 방식 (손절 2 ATR · 지금 단계)"), strip,
+      h("p", {class: "wi-sub"}, "익절 방식 (손절 2 ATR · v3 단계 레버리지)"), strip,
       h("p", {class: "note"}, "가장 좋아 보이는 칸을 고르는 것은 선택 편향입니다. ", vals.some((x) => x > 0)
         ? `${fmt.int(vals.length)}칸 중 ${fmt.int(vals.filter((x) => x > 0).length)}칸이 플러스입니다. 이렇게 많은 칸을 한꺼번에 보면 몇 칸은 우연으로도 플러스가 나옵니다 (거래가 적은 칸일수록 더).`
         : `${fmt.int(vals.length)}칸 모두 마이너스입니다. 플러스인 조합이 하나도 없다는 것이 이 표의 큰 그림입니다. 레버리지가 낮은 칸은 덜 잃을 뿐, 잃는 방향은 같습니다.`));
@@ -445,7 +445,7 @@ export async function mount(el, ctx) {
     const C5 = ((st.D.five_year || {}).coin) || {};
     const k = s && s.tp === "ladder" && s.time === "none" && s.lev === "rule" && sameVal(s.lock, 0.1) && (sameVal(s.stop, 1.5) || sameVal(s.stop, 2)) ? (sameVal(s.stop, 2) ? "2.0" : "1.5") : null;
     if (!C5.ready) kids.push(h("p", {class: "muted"}, C5.why || "5년 동전 봇 결과가 없습니다."));
-    else if (!k) kids.push(h("p", {class: "note"}, h("b", null, "5년 "), "동전 봇은 손절 1.5·2 ATR(지금 단계 레버리지, 사다리)로만 돌렸습니다. 이 설정의 5년 동전 봇 숫자는 없습니다."));
+    else if (!k) kids.push(h("p", {class: "note"}, h("b", null, "5년 "), "동전 봇은 손절 1.5·2 ATR(v3 단계 레버리지, 사다리)로만 돌렸습니다. 이 설정의 5년 동전 봇 숫자는 없습니다."));
     else {
       const B = (C5.by_k || {})[k] || {};
       const f = B.flips || {}, c = B.core || {};

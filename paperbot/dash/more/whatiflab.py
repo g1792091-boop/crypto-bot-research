@@ -291,7 +291,7 @@ def coin_five_year(sc: dict, path: str = COIN5Y_CSV) -> dict:
     names = {sc["strategy"]} if sc["strategy"] else set(strategies_ko())
     out: dict = {"ready": True, "by_k": {}, "source": "research/paper_rules (PREREG_RULES.md, out_binance)",
                  "note": ("같은 하우스 규칙(v3 단계 레버리지, 사다리)을 5년 신호에 계좌마다 한 번에 한 포지션으로 돌린 결과. "
-                          "평균 R = 거래당 증거금 대비 순손익. 동전 봇은 봉마다 무작위로 들어감 (봉마다 3개, 기간 2개)")}
+                          "평균 R = 거래당 증거금 대비 순손익. 동전 봇은 무작위 시점에 들어감 (봉 종류마다 3개 × 기간 2개)")}
     for k in ("1.5", "2.0"):
         part = {}
         for who, pick in (("flips", lambda r: r["strategy"].startswith("RANDOM")),

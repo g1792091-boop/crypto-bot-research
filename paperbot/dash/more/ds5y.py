@@ -53,6 +53,8 @@ COIN_KO = ("동전 던지기와 견주기: 같은 청산으로 아무 때나 들
            "근처면 동전과 비슷한 진입입니다. 이 칸은 수수료·펀딩을 빼기 전이고, 미끄러짐(양쪽 0.02%)은 체결가에 이미 들어 있습니다. "
            "계산으로 정한 기준이지 동전 봇을 5년 돌린 숫자는 아닙니다")
 ABSENT_KO = "서버가 5년 결과를 아직 쓰지 않았습니다 (계산 중이거나 아직 시작 안 함). 다 되면 여기에 나오는 것:"
+RUNNING_KO = ("서버가 5년 결과를 계산하는 중입니다 (15분·30분·1시간·4시간 중 한 봉 종류가 끝날 때마다 숫자가 오르고, 결과 파일은 342개가 다 끝난 뒤 한 번에 "
+              "씁니다). 다 되면 여기에 나오는 것:")
 PARTIAL_KO = "계산이 아직 끝나지 않았습니다. 아래 목록은 끝난 설정만 셉니다 (342개가 다 차면 관문 결과도 나옵니다)"
 
 
@@ -115,7 +117,7 @@ def view(folder: Optional[str] = None) -> dict:
     except OSError:
         k = _progress(folder)
         return {**base, "state": "running" if k is not None else "absent", "done": min(k or 0, TOTAL),
-                "absent_ko": ABSENT_KO}
+                "absent_ko": RUNNING_KO if k is not None else ABSENT_KO}
     stamp = (path, st.st_mtime_ns, st.st_size)
     hit = _CACHE.get("v")
     if hit and hit[0] == stamp:
