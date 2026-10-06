@@ -199,7 +199,6 @@ export function chartDeck(o) {
       target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize, mediaSize}) => {
         const col = st.col;
         c.save();
-        const labels = [];
         for (const L of lines.values()) {
           if (!L.vis || L.y == null || L.y < 0 || L.y > mediaSize.height) continue;
           const sp = L.spec, colr = col[sp.tone] || col.flat;
@@ -215,24 +214,6 @@ export function chartDeck(o) {
           }
           c.globalAlpha = sp.alpha ?? 0.6;
           c.beginPath(); c.moveTo(0, y); c.lineTo(bitmapSize.width, y); c.stroke();
-          if (sp.label) labels.push({s: sp.label, y: L.y - 2, c: colr});
-        }
-        // a level's / stop's word just above its line, right-aligned short of the right edge (the indicators' labels
-        // sit at the edge itself); words never overlap: sorted by height and pushed apart
-        labels.sort((a, b) => a.y - b.y);
-        let prev = -Infinity;
-        c.setLineDash([]);
-        c.font = `600 ${col.fs * vr}px ${col.font}`;
-        c.textAlign = "right"; c.textBaseline = "bottom";
-        c.shadowColor = col.bg; c.shadowBlur = 3 * hr; c.globalAlpha = 0.9;
-        let prevS = null;
-        for (const t of labels) {
-          if (t.s === prevS && t.y - prev < col.fs + 2) continue;            // the same word right above: once
-          const y = Math.max(t.y, prev + col.fs + 2);
-          if (y - t.y > 2 * (col.fs + 2)) continue;                           // too far from its own line: no word
-          prev = y; prevS = t.s;
-          c.fillStyle = t.c;
-          c.fillText(t.s, bitmapSize.width - 58 * hr, Math.round(y * vr));
         }
         c.restore();
       });
@@ -275,6 +256,7 @@ export function chartDeck(o) {
     }
     rebuildAxis();
     linePrim.updateAllViews();
+    smcP.request();
     refresh();
   }
   function hideLine(id, on = true) {
@@ -286,7 +268,7 @@ export function chartDeck(o) {
       L.vis = isVis(L.spec);
       if (L.pill) for (const ch of L.pill.querySelectorAll(".cfx-chip")) ch.setAttribute("aria-pressed", String((ch._ids || []).some((x) => !st.hide.has(x))));
     }
-    linePrim.updateAllViews(); paintMenu(); refresh();
+    linePrim.updateAllViews(); smcP.request(); paintMenu(); refresh();
   }
   function paintPill(L, old) {
     const sp = L.spec, p = sp.pill;
@@ -420,7 +402,10 @@ export function chartDeck(o) {
   }
 
   // ---------------------------------------------------------------- 프리미엄 지표
-  const smcP = smcPrimitive({chart, series, get: () => (shown("smc") ? st.smc : null), col: () => st.col, ai: () => st.ai, n: () => st.data.length});
+  // the words of our lines (저항 / 지지 / 잠금 / 손절 / 알림 …) are placed with the indicators' words at the right edge
+  const lineWords = () => [...lines.values()].filter((L) => L.vis && L.spec.label && L.y != null)
+    .map((L) => ({s: L.spec.label, price: L.spec.price, c: st.col[L.spec.tone] || st.col.flat}));
+  const smcP = smcPrimitive({chart, series, get: () => (shown("smc") ? st.smc : null), col: () => st.col, extra: lineWords});
   series.attachPrimitive(smcP);
   function computeSmc() {
     if (!shown("smc") || st.data.length < 30) { st.smc = null; smcP.request(); return; }

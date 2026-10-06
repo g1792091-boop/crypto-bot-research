@@ -312,7 +312,7 @@ def test_fonts_and_colours_are_tokens():
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", _code(src)), f
         assert not re.search(r"\brgba?\(\s*\d", src), f
     fx = _read("core", "chartfx.js")
-    assert '["fs", "--t-2xs"]' in fx and 'c.font = `600 ${col.fs * vr}px ${col.font}`' in fx
+    assert '["fs", "--t-2xs"]' in fx and "const fontOf = (col, vr, w = 600) => `${w} ${col.fs * vr}px ${col.font}`;" in _read("core", "smcdraw.js")
 
 
 def test_candles_api_carries_volume():

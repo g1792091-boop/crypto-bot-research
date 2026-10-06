@@ -18,8 +18,8 @@
 .cfx-depth { background: linear-gradient(to bottom, var(--depth-top), transparent 42%, var(--depth-bot)); }
 /* the steady light: strongest at the top edge, a faint inner edge glow; the two tones cross-fade (1.2 s) */
 .cfx-amb { opacity: 0; transition: opacity 1.2s var(--ease); }
-.cfx-amb[data-tone="up"] { background: linear-gradient(to bottom, var(--amb-up), transparent 72%); box-shadow: inset 0 0 42px var(--amb-up-edge); }
-.cfx-amb[data-tone="down"] { background: linear-gradient(to bottom, var(--amb-down), transparent 72%); box-shadow: inset 0 0 42px var(--amb-down-edge); }
+.cfx-amb[data-tone="up"] { background: linear-gradient(to bottom, var(--amb-up), transparent 80%); box-shadow: inset 0 0 42px var(--amb-up-edge); }
+.cfx-amb[data-tone="down"] { background: linear-gradient(to bottom, var(--amb-down), transparent 80%); box-shadow: inset 0 0 42px var(--amb-down-edge); }
 .cfx-under[data-amb="up"] > .cfx-amb[data-tone="up"], .cfx-under[data-amb="down"] > .cfx-amb[data-tone="down"] { opacity: var(--ak, .8); }
 .cfx-under.still > .cfx-amb { transition: none; }
 /* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */

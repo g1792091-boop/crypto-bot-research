@@ -66,17 +66,23 @@ export function smcPrimitive(o) {
   function compute() {
     v.z = []; v.l = []; v.t = [];
     const d = o.get();
-    if (!d || !api) return;
+    if (!api) return;
     const col = o.col(), ts = o.chart.timeScale();
     const X = (i) => ts.logicalToCoordinate(i), Y = (p) => o.series.priceToCoordinate(p);
     let W = 0;
     try { W = ts.width(); } catch (e) { return; }
     const R = W - 4;                                          // the right edge (labels sit just inside it)
+    // the deck's own line words (저항 / 지지 / 잠금 / 손절 …) share the right edge with the zones' words, first in line
+    for (const e of (o.extra ? o.extra() : [])) {
+      const y = Y(e.price);
+      if (y != null) v.t.push({s: e.s, x: R, y: y - 7, c: e.c, align: "right", p: 0});
+    }
+    if (!d) return;
     const zone = (i, top, bot, c, a, label, edge) => {
       const x1 = X(i), y1 = Y(top), y2 = Y(bot);
       if (x1 == null || y1 == null || y2 == null || x1 > W) return;
       v.z.push({x1: Math.max(0, x1), x2: W, y1, y2, c, a, edge});
-      if (label) v.t.push({s: label, x: R, y: (y1 + y2) / 2, c, align: "right"});
+      if (label) v.t.push({s: label, x: R, y: (y1 + y2) / 2, c, align: "right", p: 1});
     };
     // dealing range: premium / discount tints, equilibrium, OTE band with its 0.62 / 0.79 labels
     const rg = d.range;
@@ -84,17 +90,17 @@ export function smcPrimitive(o) {
       zone(rg.from, rg.hi, rg.eq, col.prem, 0.035, null);
       zone(rg.from, rg.eq, rg.lo, col.disc, 0.035, null);
       const xf = Math.max(0, X(rg.from) ?? 0), yh = Y(rg.hi), yl = Y(rg.lo), ye = Y(rg.eq);
-      if (yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem});
-      if (yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc});
-      if (ye != null) { v.l.push({x1: xf, y1: ye, x2: W, y2: ye, c: col.trend, a: 0.35, dash: true}); v.t.push({s: "Equilibrium", x: xf + 6, y: ye - 8, c: col.trend}); }
+      if (yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem, p: 6});
+      if (yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc, p: 6});
+      if (ye != null) { v.l.push({x1: xf, y1: ye, x2: W, y2: ye, c: col.trend, a: 0.35, dash: true}); v.t.push({s: "Equilibrium", x: xf + 6, y: ye - 8, c: col.trend, p: 6}); }
       const [a, b] = rg.ote;
       zone(rg.i, Math.max(a, b), Math.min(a, b), col.ote, 0.09, null, 0.4);
       const ya = Y(a), yb = Y(b), xo = X(rg.i);
       if (ya != null && yb != null && xo != null && xo < W) {
         const xl = Math.max(0, xo) + 4;                           // at the zone's start: the right edge is for OB / FVG
-        v.t.push({s: "0.62", x: xl, y: ya, c: col.ote});
-        v.t.push({s: "0.79", x: xl, y: yb, c: col.ote});
-        v.t.push({s: "OTE", x: xl + 34, y: (ya + yb) / 2, c: col.ote});
+        v.t.push({s: "0.62", x: xl, y: ya, c: col.ote, p: 4});
+        v.t.push({s: "0.79", x: xl, y: yb, c: col.ote, p: 4});
+        v.t.push({s: "OTE", x: xl + 34, y: (ya + yb) / 2, c: col.ote, p: 4});
       }
     }
     for (const g of d.fvgs) zone(g.i, g.top, g.bot, col.fvg, 0.1, "FVG", 0.3);
@@ -104,7 +110,7 @@ export function smcPrimitive(o) {
       const x = X(q.i), y = Y(q.price);
       if (x == null || y == null || x > W) continue;
       v.l.push({x1: Math.max(0, x), y1: y, x2: W, y2: y, c: col.liq, a: 0.55, dash: true});
-      v.t.push({s: q.kind, x: Math.max(0, x) + 4, y: q.kind === "BSL" ? y - 8 : y + 9, c: col.liq});
+      v.t.push({s: q.kind, x: Math.max(0, x) + 4, y: q.kind === "BSL" ? y - 8 : y + 9, c: col.liq, p: 2});
     }
     // structure breaks: the broken swing's level from the swing to the breaking bar, a small label in the middle
     for (const s of d.structure) {
@@ -112,7 +118,7 @@ export function smcPrimitive(o) {
       if (x1 == null || x2 == null || y == null) continue;
       const c = s.kind === "CHoCH" ? col.choch : col.bos;
       v.l.push({x1, y1: y, x2, y2: y, c, a: 0.75});
-      v.t.push({s: s.kind, x: (x1 + x2) / 2, y: s.dir > 0 ? y - 8 : y + 9, c, align: "center"});
+      v.t.push({s: s.kind, x: (x1 + x2) / 2, y: s.dir > 0 ? y - 8 : y + 9, c, align: "center", p: 3});
     }
     // trendlines through the last two major highs / lows, extended to the right edge
     for (const t of d.trend) {
@@ -127,20 +133,30 @@ export function smcPrimitive(o) {
       if ([x1, x2, y1, y2].some((q) => q == null)) continue;
       v.l.push({x1, y1, x2, y2, c: col.trend, a: 0.22});
       const up = g.pct >= 0;
-      v.t.push({s: `${up ? "↑" : "↓"}${num(Math.abs(g.pct * 100), 2)}%`, x: (x1 + x2) / 2 + 6, y: (y1 + y2) / 2, c: up ? col.disc : col.prem, w: 700});
+      v.t.push({s: `${up ? "↑" : "↓"}${num(Math.abs(g.pct * 100), 2)}%`, x: (x1 + x2) / 2 + 6, y: (y1 + y2) / 2, c: up ? col.disc : col.prem, w: 700, p: 5});
     }
   }
 
-  /** Right-edge labels never overlap: sorted by height, pushed apart 14 px; the same word next to itself shows once. */
+  /** No two labels overlap: placed by priority (the zones' right-edge words first, then liquidity, structure, OTE,
+   *  leg %, the range words), each tried at its own height, then 14 px below / above; one that still collides is
+   *  left out (the line or zone it names is still drawn). The same word right next to itself shows once. */
   function spread() {
-    const edge = v.t.filter((t) => t.align === "right").sort((a, b) => a.y - b.y);
-    let prev = null;
-    for (const t of edge) {
-      if (prev && t.s === prev.s && t.y - prev.y < 14) { t.skip = true; continue; }
-      if (prev && t.y < prev.y + 14) t.y = prev.y + 14;
-      prev = t;
+    const fs = o.col().fs || 12, placed = [], keep = [];
+    const box = (t, dy) => {
+      const w = t.s.length * fs * 0.62 + 4, x0 = t.align === "right" ? t.x - w : t.align === "center" ? t.x - w / 2 : t.x;
+      return {x0, x1: x0 + w, y0: t.y + dy - fs / 2 - 1, y1: t.y + dy + fs / 2 + 1};
+    };
+    const hits = (b) => placed.some((q) => b.x0 < q.x1 && q.x0 < b.x1 && b.y0 < q.y1 && q.y0 < b.y1);
+    for (const t of v.t.slice().sort((x, y) => (x.p || 9) - (y.p || 9))) {
+      if (keep.some((k) => k.s === t.s && Math.abs(k.x - t.x) < 40 && Math.abs(k.y - t.y) < 14)) continue;
+      for (const dy of [0, 14, -14]) {
+        const bx = box(t, dy);
+        if (hits(bx)) continue;
+        placed.push(bx); t.y += dy; keep.push(t);
+        break;
+      }
     }
-    v.t = v.t.filter((t) => !t.skip);
+    v.t = keep;
   }
 
   return {

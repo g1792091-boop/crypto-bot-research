@@ -258,10 +258,10 @@
   --head-glow: rgba(25, 195, 177, .18);
   /* the chart deck's light (owners' reference terminal): the pane washed sky blue above the 50-bar average, red below
      (strongest at the top edge, a faint inner edge glow); a real big trade / liquidation flashes the same hues */
-  --amb-up: rgba(56, 189, 248, .17);
-  --amb-down: rgba(244, 63, 94, .19);
-  --amb-up-edge: rgba(56, 189, 248, .24);
-  --amb-down-edge: rgba(244, 63, 94, .27);
+  --amb-up: rgba(56, 189, 248, .22);
+  --amb-down: rgba(244, 63, 94, .24);
+  --amb-up-edge: rgba(56, 189, 248, .30);
+  --amb-down-edge: rgba(244, 63, 94, .33);
   --amb-up-ink: #38bdf8;
   --amb-down-ink: #f43f5e;
   --flash-up: rgba(56, 200, 248, .34);
