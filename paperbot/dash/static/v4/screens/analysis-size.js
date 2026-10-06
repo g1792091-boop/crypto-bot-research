@@ -35,9 +35,10 @@ export function reading(doc, key = "all") {
   const out = [];
   const lv4 = (P.v4 || {}).loss_med, l1 = (P.r1 || {}).loss_med, lh = (P.half || {}).loss_med;
   out.push(`지금 v4 규칙에서는 지는 거래 한 번에 잔고의 ${pc1(lv4)}(가운데 값)를 잃었고, 가장 크게는 ${pc1((P.v4 || {}).loss_max)}를 잃었습니다. 1% 규칙에서는 ${pc1(l1)}였습니다.`);
-  const ret = r1.mult != null && v4.mult != null
-    ? (r1.mult > v4.mult ? `수익 쪽도 덜 잃었습니다 (5년 뒤 잔고가 시작의 ${mx(v4.mult)} → ${mx(r1.mult)})` : `대신 5년 뒤 잔고는 시작의 ${mx(v4.mult)} → ${mx(r1.mult)}로 더 적었습니다`)
-    : "";
+  const pair = `5년 뒤 잔고가 시작의 ${mx(v4.mult)} → ${mx(r1.mult)}`;
+  const ret = r1.mult == null || v4.mult == null ? ""
+    : r1.mult <= v4.mult ? `대신 수익은 줄었습니다 (${pair})`
+      : r1.mult > 1 ? `수익도 더 컸습니다 (${pair})` : `돈도 덜 잃었습니다 (${pair})`;
   out.push(`1% 규칙이면 ${n}칸을 모은 5년 최대 낙폭이 ${pc0(v4.mdd)}에서 ${pc0(r1.mdd)}로, 가장 나쁜 달이 ${pc1(v4.worst_month)}에서 ${pc1(r1.worst_month)}로 바뀌고, ${ret}.`);
   const b = (r) => ((P[r] || {}).full || {}).busts ?? 0, up = (r) => ((P[r] || {}).full || {}).up ?? 0;
   out.push(`5년 한 계좌가 파산한 칸: v4 ${fmt.int(b("v4"))}칸 → 1% 규칙 ${fmt.int(b("r1"))}칸 → 0.5% 규칙 ${fmt.int(b("r05"))}칸 (${fmt.int(n)}칸 중).`);
@@ -45,7 +46,7 @@ export function reading(doc, key = "all") {
     out.push(`그래도 0.5% 규칙에서도 5년 뒤 $5,000보다 늘어난 칸은 ${fmt.int(up("r05"))}칸뿐입니다 (v4 ${fmt.int(up("v4"))}칸). 거래당 평균이 마이너스면 크기를 줄여도 잃는 속도만 느려집니다.`);
   }
   if (lh != null && lv4 != null && Math.abs(lh - lv4) < 0.25 * lv4) {
-    out.push(`배수 절반은 거의 같았습니다 (손실 한 번 ${pc1(lv4)} → ${pc1(lh)}, 5년 배수 ${mx(v4.mult)} → ${mx(half.mult)}). 증거금 비율을 그대로 두면 거래소 한도와 '손절 손실 ≤ 잔고 15%' 확인 때문에 들어가는 크기가 거의 줄지 않기 때문입니다.`);
+    out.push(`배수 절반은 거의 같았습니다 (지는 거래 한 번 ${pc1(lv4)} → ${pc1(lh)}, 5년 배수 ${mx(v4.mult)} → ${mx(half.mult)}). 잔고가 $5,000 근처일 때 좋은 자리는 v4가 거래소 한도 때문에 50·40배를 못 쓰고 30배 · 증거금 30%로 들어가는데 절반 규칙은 25배 · 증거금 50%로 오히려 크게 들어가고, 손절이 먼 자리에서는 v4가 '손절 손실 ≤ 잔고 15%' 확인에 걸려 20배로 내려가는 반면 절반 규칙은 15배 · 30%로 들어가 비슷합니다. 크기가 정말 절반이 되는 건 손절이 가까운 보통 자리뿐입니다.`);
   }
   const f4 = mrow(((F.v4 || {}).full || {}).m, K), f1 = mrow(((F.r1 || {}).full || {}).m, K);
   if (f4.mult != null && f1.mult != null) {
@@ -87,7 +88,7 @@ function compareCard(doc, env) {
       {label: "지는 거래 한 번 (가운데 / 최대)", get: (r) => cell(`${pc1((P[r.key] || {}).loss_med)} / ${pc1((P[r.key] || {}).loss_max)}`)},
       {label: "30일 계좌: 파산한 창", get: (r) => cell(`${fmt.int(((P[r.key] || {}).w30 || [])[1] ?? 0)} / ${fmt.int(((P[r.key] || {}).w30 || [])[0] ?? 0)}`)},
       {label: "30일 계좌: 플러스로 끝난 비율", get: (r) => cell(pc0(((P[r.key] || {}).w30 || [])[2]))},
-      {label: "30일 계좌: 가운데 수익 / 가장 나쁜", get: (r) => { const w = (P[r.key] || {}).w30 || []; return cell(`${pc1(w[3], true)} / ${pc1(w[4], true)}`, w[3]); }},
+      {label: "30일 계좌: 가운데 수익 (칸들의 가운데) / 가장 나쁜", get: (r) => { const w = (P[r.key] || {}).w30 || []; return cell(`${pc1(w[3], true)} / ${pc1(w[4], true)}`, w[3]); }},
     ] : [];
     const rowsF = [{label: "동전 봇 같은 규칙 (참고)", get: (r) => cell(mx(fcol(r).mult), fcol(r).mult == null ? null : fcol(r).mult - 1)}];
     const all = [...rowsA, ...rowsB, ...rowsC, ...rowsF];
@@ -134,7 +135,8 @@ export function logCurves(o) {
     const m = o.months || [];
     const yrs = m.map((x, i) => [x, i]).filter(([x]) => x.endsWith("-01"));
     const step = W < 520 ? 2 : 1;
-    yrs.filter((_y, j) => j % step === 0).forEach(([x, i]) => kids.push(s("text", {class: "ax", x: X(i + 1).toFixed(1), y: H - 4, "text-anchor": "middle"}, x.slice(0, 4))));
+    // point i (i >= 1) is the end of month i - 1 of the labels after "시작", so a January label i starts at point i - 1
+    yrs.filter((_y, j) => j % step === 0).forEach(([x, i]) => kids.push(s("text", {class: "ax", x: X(i - 1).toFixed(1), y: H - 4, "text-anchor": "middle"}, x.slice(0, 4))));
     box.replaceChildren(s("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": o.label || "규칙별 잔고 곡선"}, kids));
   };
   let lastW = 0;
