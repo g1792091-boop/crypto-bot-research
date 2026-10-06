@@ -29,7 +29,9 @@ export function peekSpec(name, arg, query, fromPanel) {
   const kind = PEEKABLE[name];
   if (!kind || arg == null || arg === "") return null;
   if (kind === "trade" && !/^\d+$/.test(String(arg))) return null;
-  if (!fromPanel && curName() === name) return null;
+  // on the page a link to the screen already open keeps its meaning (an account page's other accounts, the replay
+  // picker); the strategy LIST is the exception: its rows open the panel like everywhere else
+  if (!fromPanel && curName() === name && !(name === "strategies" && !parseHash(location.hash).arg)) return null;
   const q = query && Object.keys(query).length ? "?" + new URLSearchParams(query).toString() : "";
   return {kind, id: String(arg), full: `#/${encodeURIComponent(name)}/${encodeURIComponent(arg)}${q}`, view: (st.open && st.spec && st.spec.view) || viewNow()};
 }

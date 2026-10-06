@@ -93,7 +93,7 @@ def test_links_and_ctx_go_open_the_side_panel():
     d = _read("core/drawer.js")
     assert 'document.addEventListener("click", (e) => {' in d and "}, true);" in d          # capture: before the row's own onclick
     assert "e.metaKey || e.ctrlKey || e.shiftKey || e.altKey" in d                          # a new tab stays a new tab
-    assert 'if (!fromPanel && curName() === name) return null;' in d                         # the account page's own links
+    assert 'if (!fromPanel && curName() === name && !(name === "strategies" && !parseHash(location.hash).arg)) return null;' in d
     main = _read("core/main.js")
     assert main.index("startDrawer();") < main.index("startRouter();")
 
