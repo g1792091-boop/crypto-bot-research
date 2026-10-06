@@ -873,7 +873,9 @@ def view(conn_ro: Optional[sqlite3.Connection], source: Optional[str] = None, li
 def today(conn_ro: Optional[sqlite3.Connection], now: int, lim: Optional[dict] = None) -> dict:
     """Per source: counted tests used today / the budget, rows waiting; and why the lab waits, if it does."""
     out = {"day": R.kst_day(now), "sources": {}, "blocked": None, "blocked_ko": ""}
-    if conn_ro is None:
+    if conn_ro is None:                  # no agents3.db yet: the same shape, all zero (the dashboard reads the keys)
+        out["sources"] = {s: {"source_ko": SOURCE_KO[s], "used": 0, "limit": int((lim or {}).get(s, 0) or 0),
+                              "waiting": 0} for s in SOURCES}
         return out
     try:
         if lim is None:

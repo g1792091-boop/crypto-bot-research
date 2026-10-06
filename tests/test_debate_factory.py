@@ -79,7 +79,9 @@ def test_sides_give_every_role_every_side_within_ten_rounds_and_the_judge_speaks
             assert [s[r] for r in order[:4]] == ["찬성", "반대", "찬성", "반대"]
             assert all(s[r] != "심판" for r in order[:-1])
     assert all(v == set(DF.SIDES) for v in seen.values())
-    assert DF.sides_text(0) == "찬성 비관론자, 리스크 책임자 / 반대 회의론자, 퀀트 / 심판 낙관론자 — 마지막 발언은 심판"
+    assert DF.sides_text(0) == ("찬성 비관론자, 리스크 책임자 / 반대 회의론자, 퀀트 / 심판 낙관론자 — 마지막 발언은 심판. "
+                                + DF.SIDE_RULE_KO)
+    assert "맡은 편만 변호" in DF.SIDE_RULE_KO and "①~⑥" in DF.SIDE_RULE_KO       # no side may step out of its side
 
 
 # ------------------------------------------------------------------ the idea check

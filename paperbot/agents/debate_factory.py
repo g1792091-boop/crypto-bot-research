@@ -136,13 +136,19 @@ def factory_order(n: int, turns: int, roles: tuple = ROLES) -> list[str]:
     return out + [judge]
 
 
+SIDE_RULE_KO = ("찬성·반대는 자기 생각과 달라도 맡은 편만 변호(편 바꾸기·'둘 다 일리 있음'으로 비켜 가기 금지), "
+                "반대는 떨어질 관문 칸(①~⑥) 하나를 꼭 짚음")
+
+
 def sides_text(n: int, roles: tuple = ROLES) -> str:
-    """The user text's side line (code)."""
+    """The user text's side line (code): who plays which side this round, and the rule that an assigned side is argued
+    as assigned (one model plays every role, so without it the sides drift to agreement: a straw man is the risk the
+    plan names)."""
     s = sides_for(n, roles)
     pro = ", ".join(r for r in roles if s[r] == "찬성")
     con = ", ".join(r for r in roles if s[r] == "반대")
     judge = next(r for r in roles if s[r] == "심판")
-    return f"찬성 {pro} / 반대 {con} / 심판 {judge} — 마지막 발언은 심판"
+    return f"찬성 {pro} / 반대 {con} / 심판 {judge} — 마지막 발언은 심판. {SIDE_RULE_KO}"
 
 
 # ---------------------------------------------------------------- the idea check (code)
