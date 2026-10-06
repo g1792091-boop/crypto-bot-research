@@ -482,7 +482,8 @@ What the integrator changed, so later work starts from the same place:
   retry of a resumed address is replaced at once (it would replay everything since that old cursor). `stream.state`:
   `connecting | open | error | reconnecting | paused | idle`; `stream.fresh()` = open with an event in the last 12 s.
   `criticalLines({..., link})` shows '대시보드 연결 다시 잡는 중' after 5 s of trouble and blames the bot only with a
-  heartbeat a live connection brought.
+  heartbeat a live connection brought. When the connection is open again, every polled store key whose last try failed
+  is asked again at once (core/store.js), so `{key}` boxes and stale notes clear within seconds.
 - **Versioned files** (`dash/assets.py`): the page loads from `/static/v-<content hash>/v4/...`, kept a year. Never write
   an absolute `/static/v4/...` address in a screen: load css / files relative to the module,
   `new URL("x.css", import.meta.url).href` (tests/test_dash_reliability.py fails otherwise). `/api/time` carries the

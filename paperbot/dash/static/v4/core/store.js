@@ -129,3 +129,10 @@ bus.on("rooms", () => {
   }, 800);
 });
 bus.on("alerts", () => { load("status").catch(() => {}); });
+// The page's own connection back (core/api.js stream:state "open", e.g. after a sleep or a dashboard restart): every
+// polled key whose last try failed is asked again at once, so the self-retrying boxes ({key}) and the '불러오지 못함 ·
+// n분 전 자료' notes clear within seconds of the server being back, not at the next poll (up to 10 minutes away)
+bus.on("stream:state", (s) => {
+  if (s !== "open") return;
+  for (const k of Object.keys(stops)) if (cache[k] && cache[k].err && !inflight[k]) load(k).catch(() => {});
+});

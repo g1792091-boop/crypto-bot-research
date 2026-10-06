@@ -337,6 +337,29 @@ process.exit(0);
     assert out["replay"] == {"closed4": True, "n": 5, "url5": "/api/stream?trade_id=60&alert_row=8&room_msg=9", "seen": []}
 
 
+def test_the_connection_back_asks_again_for_every_key_whose_last_try_failed():
+    out = _node("""
+let calls = [];
+globalThis.fetch = async (p) => { calls.push(p); if (globalThis.fail) throw new TypeError('down'); return {ok: true, status: 200, json: async () => ({accounts: []})}; };
+const A = await import('@C/api.js');
+const S = await import('@C/store.js');
+globalThis.fail = true;
+S.store.watch('board', () => {});
+S.store.watch('summary', () => {});
+await new Promise((r) => setTimeout(r, 50));
+const failed = [!!S.store.meta('board').err, !!S.store.meta('summary').err];
+globalThis.fail = false; calls = [];
+A.bus.emit('stream:state', 'reconnecting');
+const early = calls.length;
+A.bus.emit('stream:state', 'open');
+await new Promise((r) => setTimeout(r, 50));
+console.log(JSON.stringify({failed, early, again: calls.sort(), healed: [!!S.store.meta('board').err, !!S.store.meta('summary').err]}));
+process.exit(0);
+""", _STREAM_SETUP)
+    assert out["failed"] == [True, True] and out["early"] == 0
+    assert out["again"] == ["/api/board", "/api/summary"] and out["healed"] == [False, False]
+
+
 def test_a_dead_page_connection_gets_its_own_line_and_never_blames_the_bot():
     out = _node("""
 const {criticalLines, LINK_KO} = await import('@C/alerts.js');
