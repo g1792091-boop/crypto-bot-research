@@ -207,10 +207,27 @@ def test_corr_tail_coloss_hand_cases():
     assert np.isnan(CL[2, 2])
     assert K.worst_days(np.array([-5.0, 0.0, -1.0, 3.0, -2.0]), 0.4).tolist() == [0, 4]
     assert K.worst_days(np.array([1.0, 2.0]), 0.5).tolist() == []    # no losing day among the worst: none
+
+
+def test_tail_overlap_hand_case_and_why_not_a_correlation():
+    # 20 days; a's worst 2 (10%) are days 3 and 7, b's are days 3 and 9: one shared -> (1/2 + 1/2) / 2 = 0.5
+    a = np.zeros(20)
+    b = np.zeros(20)
+    a[[3, 7]] = [-5.0, -4.0]
+    b[[3, 9]] = [-6.0, -3.0]
+    a[[1, 2]] = -0.1                                                 # small losses: not among the worst 10%
+    T = K.tail_overlap(np.vstack([a, b, a * 3.0]), 0.10, min_days=2)
+    assert T[0, 1] == pytest.approx(0.5) and T[0, 2] == pytest.approx(1.0) and T[0, 0] == 1.0
+    assert np.isnan(K.tail_overlap(np.vstack([a, np.ones(20)]), 0.10, min_days=2)[0, 1])   # never loses: no tail
     rng = np.random.default_rng(2)
-    x = rng.normal(0, 1, 400)
-    T = K.tail_corr(np.vstack([x, x * 2.0, -x]), 0.05)
-    assert T[0, 1] == pytest.approx(1.0) and T[0, 2] == pytest.approx(-1.0)
+    x, y = rng.normal(0, 1, 4000), rng.normal(0, 1, 4000)
+    T = K.tail_overlap(np.vstack([x, y, x * 2.0]), 0.05)
+    assert 0.02 < T[0, 1] < 0.09                                     # independent: about the 5% share by chance
+    assert T[0, 2] == pytest.approx(1.0)                             # the same worst days
+    # the correlation on the union of both worst-day sets says "opposite on bad days" for two INDEPENDENT rows,
+    # which is why it is not used
+    d = np.array(sorted(set(K.worst_days(x, 0.05).tolist()) | set(K.worst_days(y, 0.05).tolist())))
+    assert np.corrcoef(x[d], y[d])[0, 1] < -0.5
 
 
 def test_all_scores_counts_every_combination():

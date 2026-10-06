@@ -308,22 +308,27 @@ def worst_days(x: np.ndarray, share: float) -> np.ndarray:
     return order[x[order] < 0]
 
 
-def tail_corr(U: np.ndarray, share: float = 0.05, min_days: int = 10) -> np.ndarray:
-    """For every pair: the correlation of the two rows on the days that were among EITHER one's worst ``share`` of
-    days (losses only). NaN with fewer than ``min_days`` such days or a row that does not move on them."""
+def tail_overlap(U: np.ndarray, share: float = 0.05, min_days: int = 10) -> np.ndarray:
+    """For every pair: do the two have their worst days TOGETHER? Of each row's worst ``share`` of days (losing days
+    only, ``worst_days``), the share that were also among the other row's worst days, averaged over the two
+    directions: (|Wa & Wb| / |Wa| + |Wa & Wb| / |Wb|) / 2. About ``share`` when the two move independently, 1 when
+    their worst days are the same days. NaN when either row has fewer than ``min_days`` such days (it hardly loses).
+
+    Not a correlation on those days on purpose: the correlation of the two rows on the union of their worst days is
+    negative by construction (on A's worst days B is ordinary and the other way round: two independent rows give about
+    -0.7), so it would say "they move apart on bad days" for every pair."""
     U = np.asarray(U, float)
     n = len(U)
     W = [set(worst_days(U[i], share).tolist()) for i in range(n)]
     out = np.full((n, n), np.nan)
     for i in range(n):
-        out[i, i] = 1.0
+        if len(W[i]) >= min_days:
+            out[i, i] = 1.0
         for j in range(i + 1, n):
-            d = np.array(sorted(W[i] | W[j]), dtype=np.int64)
-            if len(d) < min_days:
+            if len(W[i]) < min_days or len(W[j]) < min_days:
                 continue
-            a, b = U[i, d], U[j, d]
-            if a.std() > 0 and b.std() > 0:
-                out[i, j] = out[j, i] = float(np.corrcoef(a, b)[0, 1])
+            both = len(W[i] & W[j])
+            out[i, j] = out[j, i] = 0.5 * (both / len(W[i]) + both / len(W[j]))
     return out
 
 

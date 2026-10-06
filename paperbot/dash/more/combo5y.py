@@ -190,13 +190,14 @@ def tf_month(doc: Optional[dict], strategy: str, tf: str) -> Optional[dict]:
     return {k: t.get(k) for k in ("n", "best", "worst", "median", "pos_share", "bust_months")}
 
 
-_SHARED: dict = {"path": DATA_JSON, "hit": None}
+_SHARED: dict = {"hit": None}
 _SHARED_LOCK = threading.Lock()
 
 
 def doc_cached(path: Optional[str] = None) -> Optional[dict]:
-    """The JSON, read again only when its mtime changes (shared by both routes and vs5y)."""
-    path = path or _SHARED["path"]
+    """The JSON, read again only when its mtime changes (shared by both routes and vs5y; ``DATA_JSON`` is read at call
+    time, so the routes and vs5y always look at the same file)."""
+    path = path or DATA_JSON
     try:
         mt = os.path.getmtime(path)
     except OSError:

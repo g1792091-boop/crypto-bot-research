@@ -36,8 +36,9 @@ What (every choice is fixed here, before looking at any combination result):
    (RANDOM_k on the same four timeframes at the median strategy signal rate, the same rules). Walk-forward by KST
    calendar year: the best combination of year N (searched on year N only) scored on year N+1 alone, against the
    median and 75th percentile of EVERY 2-5 combination's year N+1 score. The 36 x 36 daily P&L correlation, its
-   clusters (>= 0.7, agents/meetings.corr_clusters), the correlation on either one's worst 5% days, the co-loss
-   ratio (days both lost / days either lost). The top 10 with their monthly curve, drawdown, return, winning-month
+   clusters (>= 0.7, agents/meetings.corr_clusters), the worst-day overlap (of each one's worst 5% days, the
+   share that were the other's worst days too: a tail dependence; a correlation on the union of both worst-day sets
+   would be negative by construction), the co-loss ratio (days both lost / days either lost). The top 10 with their monthly curve, drawdown, return, winning-month
    share and diversification ratio (members' own max drawdowns added up / the combination's). The search runs twice:
    over all 36 (as specified) and, added AFTER seeing the first run, over the strategies with at least
    ``MIN_UNIT_TRADES`` closed trades in the 62 monthly accounts (every strategy loses under these rules, so a strategy
@@ -695,7 +696,8 @@ def shared_job(args) -> str:
             ex_open = int(data[tf][c]["ms"][int(row["exit_j"])])
             return ex_open + K.TF_MS[tf], float(row["R"]) * float(row["margin_frac"]) * eq_share, ex_open
 
-        res = K.shared_month(cands, trade, INITIAL * accounts, accounts)
+        # bust like the separate accounts: when one account's share (equity / accounts) is under rules_bt's $10
+        res = K.shared_month(cands, trade, INITIAL * accounts, accounts, bust_below=float(RB.BUST_BELOW) * accounts)
         for bt, pnl in res["booked"]:
             K.daily_add(daily, np.array([int(K.kst_day(bt)) - d0]), np.array([pnl]))
         for k in tot:
@@ -937,7 +939,7 @@ def portfolio(work: str, names: list, flips: list) -> dict:
     v_act = search_variant(U[ix], active, F, flips, mons, d0, sl)
     log("portfolio: correlation")
     C = K.corr_matrix(U)
-    T = K.tail_corr(U, 0.05)
+    T = K.tail_overlap(U, 0.05)
     CL = K.coloss(U)
     pairs = [(float(C[i, j]), names[i], names[j]) for i in range(len(names)) for j in range(i + 1, len(names))
              if np.isfinite(C[i, j])]
@@ -1155,7 +1157,10 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
                                 "했습니다 (이 기준은 결과를 본 뒤에 정한 것)")},
         "trades": {s: trades_of[s] for s in names},
         "corr": {"r": _tri(port["corr"]), "tail": _tri(port["tail"]), "coloss": _tri(port["coloss"]),
-                 "clusters": port["clusters"], "tail_share": 0.05},
+                 "clusters": port["clusters"], "tail_share": 0.05, "tail_kind": "overlap",
+                 "tail_words": ("나쁜 날 겹침: 한쪽이 가장 나빴던 5%의 날(잃은 날만) 가운데 다른 쪽도 가장 나빴던 날의 비율, 두 방향 "
+                                "평균. 따로 움직이면 약 5%, 나쁜 날이 똑같으면 100%. (그 날들만 놓고 상관을 재면 서로 상관없는 두 "
+                                "매매법도 약 −0.7로 나와 쓰지 않음)")},
         "unit_curves": {s: [K.r4(x) for x in np.cumsum(v) / (INITIAL * len(TFS))] for s, v in port["unit_month"].items()},
         "flip_band": {k: {q: [K.r4(x) for x in v] for q, v in b.items()} for k, b in port["flip_band"].items()},
         "search": {"exhaustive": "2·3개 전부", "beam": 200, "kmin": 2, "kmax": 5,

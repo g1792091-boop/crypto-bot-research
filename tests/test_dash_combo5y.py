@@ -295,6 +295,9 @@ def test_committed_file_shape_and_honesty(committed):
     assert len(pf["corr"]["r"]) == len(pf["corr"]["tail"]) == len(pf["corr"]["coloss"]) == tri
     assert all(-1.0001 <= x <= 1.0001 for x in pf["corr"]["r"] if x is not None)
     assert all(0 <= x <= 1 for x in pf["corr"]["coloss"] if x is not None)
+    # 나쁜 날 겹침: a share (0..1), not the union-days correlation that is negative by construction
+    assert pf["corr"]["tail_kind"] == "overlap" and all(0 <= x <= 1 for x in pf["corr"]["tail"] if x is not None)
+    assert sum(x is not None for x in pf["corr"]["tail"]) > tri // 2
     assert set(pf["flip_band"]) == {"2", "3", "4", "5"}
 
 

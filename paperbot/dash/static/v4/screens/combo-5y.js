@@ -268,7 +268,7 @@ function walkCard({d, vts, v}) {
 // ---------------------------------------------------------------- correlation heatmap (36 x 36)
 const MODES = [
   {id: "r", label: "하루 손익 상관", read: "같은 날 같이 벌고 같이 잃는 정도 (−1 ~ 1). 0.7 이상이면 사실상 같은 매매법처럼 움직입니다."},
-  {id: "tail", label: "나쁜 날 상관", read: "둘 중 하나라도 가장 나빴던 5%의 날만 놓고 본 상관. 나쁜 날 같이 무너지는지 봅니다."},
+  {id: "tail", label: "나쁜 날 겹침", read: "한쪽이 가장 나빴던 5%의 날(잃은 날만) 가운데 다른 쪽도 가장 나빴던 날의 비율 (두 방향 평균). 서로 상관없이 움직이면 약 5%, 나쁜 날이 똑같으면 100%. 나쁜 날 같이 무너지는지 봅니다."},
   {id: "coloss", label: "같이 잃은 날", read: "둘 중 하나라도 잃은 날 가운데 둘 다 잃은 날의 비율 (0 ~ 100%)."},
 ];
 function triAt(n, i, j) {
@@ -286,26 +286,31 @@ function corrCard({d}) {
   const read = h("p", {class: "an-note"});
   const slot = h("div", {class: "c5-heatwrap"});
   const info = h("p", {class: "c5-heatinfo", "aria-live": "polite"}, "칸을 누르면 두 매매법과 숫자가 나옵니다.");
-  const val = (m, i, j) => (i === j ? (m === "coloss" ? null : 1) : (c[m] || [])[triAt(n, i, j)]);
+  const SHARE = {tail: true, coloss: true};                    // 0..1 modes: coloured by their order
+  const val = (m, i, j) => (i === j ? (m === "r" ? 1 : null) : (c[m] || [])[triAt(n, i, j)]);
   function cellWords(i, j) {
     const pct = (x) => (x == null ? "—" : fmt.pct(x, 0, false));
-    return `${nm(d, units[i])} × ${nm(d, units[j])}: 하루 손익 상관 ${fmt.num(val("r", i, j), 2)} · 나쁜 날 상관 ${fmt.num(val("tail", i, j), 2)} · 같이 잃은 날 ${pct(val("coloss", i, j))}`;
+    return `${nm(d, units[i])} × ${nm(d, units[j])}: 하루 손익 상관 ${fmt.num(val("r", i, j), 2)} · 나쁜 날 겹침 ${pct(val("tail", i, j))} · 같이 잃은 날 ${pct(val("coloss", i, j))}`;
   }
   function draw() {
-    // 같이 잃은 날 (0..1) sits in a narrow band for most pairs: its colour runs from the map's own lowest to highest
-    // (the 10th to the 95th percentile of the pairs above 0, so a strategy that never trades does not wash it out)
-    const cv = mode === "coloss" ? (c.coloss || []).filter((x) => x != null && x > 0).sort((x, y) => x - y) : [];
-    const q = (f) => cv[Math.min(cv.length - 1, Math.max(0, Math.round(f * (cv.length - 1))))];
-    const cmin = cv.length ? q(0.1) : 0, cmax = cv.length ? q(0.95) : 1;
+    // 나쁜 날 겹침 / 같이 잃은 날 (0..1) bunch up for most pairs: their colour follows each pair's ORDER among the pairs
+    // above 0 (the lowest the palest, the highest the strongest), so the bunch spreads out; 0 (a strategy that never
+    // trades) stays palest
+    const cv = SHARE[mode] ? (c[mode] || []).filter((x) => x != null && x > 0).sort((x, y) => x - y) : [];
+    const order = (v) => {                                     // share of the pairs at or below v (0..1)
+      let lo = 0, hi = cv.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (cv[m] <= v) lo = m + 1; else hi = m; }
+      return cv.length > 1 ? (lo - 1) / (cv.length - 1) : 0.5;
+    };
     read.textContent = (MODES.find((m) => m.id === mode) || MODES[0]).read
-      + (mode === "coloss" && cv.length ? ` 색은 ${fmt.pct(cmin, 0, false)}(연함)부터 ${fmt.pct(cmax, 0, false)}(진함)까지 (0이 아닌 쌍의 10~95%).` : "");
+      + (cv.length ? ` 색은 순서대로: 가장 낮은 쌍(${fmt.pct(cv[0], 0, false)})이 가장 연하고 가장 높은 쌍(${fmt.pct(cv[cv.length - 1], 0, false)})이 가장 진합니다. 가운데 쌍은 ${fmt.pct(cv[Math.floor(cv.length / 2)], 0, false)}.` : "");
     const cell = 12, lab = 0, W = lab + n * cell, H = n * cell;
     const kids = [];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const v = val(mode, i, j);
         const cls = v == null ? "none" : v >= 0 ? "pos" : "neg";
-        const a = v == null ? 0 : mode === "coloss" ? (cmax > cmin ? Math.max(0, Math.min(1, (v - cmin) / (cmax - cmin))) : 0.5) : Math.min(1, Math.abs(v));
+        const a = v == null ? 0 : SHARE[mode] ? (v > 0 ? Math.max(0, Math.min(1, order(v))) : 0) : Math.min(1, Math.abs(v));
         kids.push(s("rect", {class: ["c5-hc", cls, i === j ? "diag" : ""], x: lab + j * cell, y: i * cell, width: cell - 1, height: cell - 1,
           style: {"--a": a.toFixed(3)}, dataset: {i, j}}));
       }
