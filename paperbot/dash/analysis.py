@@ -30,6 +30,10 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
 - ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing);
                                     ``?group=core|ds200|reel`` (default core = the 36): entrymoment.group_dash_view
                                     (DeepSeek with no money, the reel next to its three 5m coin flips)
+- ``GET /api/analysis/vp``          매물대 (owners' request 2026-10-06): a group's trades by the kind of the price level
+                                    ahead, its ATR distance and the value-area position at entry next to the group's own
+                                    coin flips, plus the 5-year entry study A's 매물대 rows (entrymoment.vp_dash_view;
+                                    ``?group=core|ds200|reel``; n / win rate / ROE only, no money for any group)
 - ``GET /api/analysis/breakdown``   코인·시간대 per group: /api/breakdown's card (paperbot/breakdown.py) for ``?group=``
                                     (core = breakdown.report itself; ds200 / reel see ``group_breakdown``)
 - ``GET /api/analysis/synergy``     조합 시너지 (agents/synergy.py dash_view)
@@ -968,6 +972,28 @@ def entry_view(paper_db: str, daily_db: Optional[str], now_ms: int, group: str =
     return v if isinstance(v, dict) else {"unavailable": True, "note": "준비 중"}
 
 
+# ---------------------------------------------------------------- 매물대
+VP_TTL_S = 900
+
+
+def vp_view(paper_db: str, now_ms: int, group: str = "core") -> dict:
+    """매물대 for one group (entrymoment.vp_dash_view: the group against its own coin flips, the 5-year study rows)."""
+    try:
+        import importlib
+        EM = importlib.import_module("..agents.entrymoment", __package__)
+        from ..agents.roster3 import STRATEGY_KO
+    except Exception as exc:  # noqa: BLE001  (the module may still be in the making)
+        return {"unavailable": True, "note": f"준비 중 ({type(exc).__name__})"}
+    if not hasattr(EM, "vp_dash_view"):
+        return {"unavailable": True, "note": "준비 중"}
+    c = ro_connect(paper_db)
+    try:
+        v = EM.vp_dash_view(c, now_ms, group, 0, names_ko=dict(STRATEGY_KO) if group == "core" else None)
+    finally:
+        _close(c)
+    return v if isinstance(v, dict) else {"unavailable": True, "note": "준비 중"}
+
+
 # ---------------------------------------------------------------- 조합 시너지
 def synergy_view(paper_db: str, now_ms: int) -> dict:
     from ..agents import synergy as SY
@@ -1356,6 +1382,11 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
         if g == "core":        # the key /api/analysis/map peeks at stays the 36's
             return heavy.get("entry", ENTRY_TTL_S, lambda: entry_view(db, daily, _now()))
         return heavy.get(f"entry:{g}", ENTRY_TTL_S, lambda: entry_view(db, daily, _now(), g))
+
+    @app.get("/api/analysis/vp")
+    def get_vp(group: Optional[str] = None):
+        g = entry_group(group)
+        return heavy.get(f"vp:{g}", VP_TTL_S, lambda: vp_view(db, _now(), g))
 
     @app.get("/api/analysis/map")
     def get_map(group: Optional[str] = None):

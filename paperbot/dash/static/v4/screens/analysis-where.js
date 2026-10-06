@@ -102,11 +102,16 @@ export function sessions(d, env) {
 // ---------------------------------------------------------------- 진입 순간 (/api/analysis/entry)
 const DIM_KO = {strength: "진입 강도", volatility: "변동성", body: "몸통 크기(ATR 대비)", wick_against: "반대쪽 꼬리", wick_with: "같은 쪽 꼬리",
   close_loc: "종가 위치", streak: "연속 봉", pattern: "봉 모양", liq: "직전 강제청산 몰림", hold: "보유 시간", funding: "펀딩비", weekday: "요일",
-  trend_stage: "추세 초입·중간·막판", range_pos: "범위 안 위치(거래 방향 기준)", trend_align: "장세 방향"};
+  trend_stage: "추세 초입·중간·막판", range_pos: "범위 안 위치(거래 방향 기준)", trend_align: "장세 방향",
+  sr_ahead: "앞 가격대 종류", sr_room: "앞 가격대까지", va_pos: "매물대 안·밖"};
 const BK_KO = {weak: "약함", mid: "중간", strong: "강함", unknown: "모름", low: "낮음", high: "높음", with_1: "같은 방향 1개", with_2: "같은 방향 2개",
   "with_3+": "같은 방향 3개+", against_1: "반대 1개", "against_2+": "반대 2개+", doji: "도지", engulf_with: "장악형(같은 방향)",
   engulf_against: "장악형(반대)", pin_with: "망치형(같은 방향)", pin_against: "망치형(반대)", none: "없음", burst_with: "몰림(같은 방향)",
-  burst_against: "몰림(반대)", neg: "마이너스", base: "기본", "<30m": "30분 미만", "30m-2h": "30분~2시간", "2h-8h": "2~8시간", "8h+": "8시간+"};
+  burst_against: "몰림(반대)", neg: "마이너스", base: "기본", "<30m": "30분 미만", "30m-2h": "30분~2시간", "2h-8h": "2~8시간", "8h+": "8시간+",
+  // 매물대 (2026-10-06): the price level ahead (its kind, its ATR distance) and the value-area position at entry
+  "바로 앞": "바로 앞 (ATR 0.5 미만)", "가까움": "가까움 (ATR 0.5~1)", "보통": "보통 (ATR 1~2)", "멂": "멂 (ATR 2 이상)",
+  "최다 가격 근처": "최다 가격 근처 (ATR 0.25 안)", "70% 구간 안": "거래량 70% 구간 안", "상위 봉": "상위 봉 스윙", "스윙": "스윙 고저",
+  "전일·전주": "전일·전주 고저", "라운드": "라운드 넘버"};
 export function entry(d, env) {
   const cov = d.coverage || {}, mc = d.multiple_comparisons || {}, min = d.min_n || 10;
   const T = cov.trades || d.trades || 1;
@@ -139,7 +144,8 @@ export function entry(d, env) {
   }
   paint(false);
   out.push(ui.card({plate: "모습별 성적"}, seg.el, body,
-    h("p", {class: "an-note"}, `자료가 붙은 비율: 봉 모양 ${fmt.pct((cov.candle || 0) / T, 0, false)} · 변동성 ${fmt.pct((cov.volatility || 0) / T, 0, false)} · 진입 강도 ${fmt.pct((cov.strength || 0) / T, 0, false)} · 강제청산 ${fmt.pct((cov.liq || 0) / T, 0, false)}${cov.liq_note ? ` (${cov.liq_note})` : ""}${cov.trend_stage != null ? ` · 추세 단계 ${fmt.pct((cov.trend_stage || 0) / T, 0, false)}` : ""}`),
+    h("p", {class: "an-note"}, `자료가 붙은 비율: 봉 모양 ${fmt.pct((cov.candle || 0) / T, 0, false)} · 변동성 ${fmt.pct((cov.volatility || 0) / T, 0, false)} · 진입 강도 ${fmt.pct((cov.strength || 0) / T, 0, false)} · 강제청산 ${fmt.pct((cov.liq || 0) / T, 0, false)}${cov.liq_note ? ` (${cov.liq_note})` : ""}${cov.trend_stage != null ? ` · 추세 단계 ${fmt.pct((cov.trend_stage || 0) / T, 0, false)}` : ""}${cov.sr != null ? ` · 앞 가격대 ${fmt.pct((cov.sr || 0) / T, 0, false)}` : ""}${cov.va != null ? ` · 매물대 안·밖 ${fmt.pct((cov.va || 0) / T, 0, false)}` : ""}`),
+    cov.va != null ? h("p", {class: "an-note"}, "매물대 안·밖 = 신호 봉 종가가 같은 봉 200개의 매물대(거래량 70% 구간) 위·안·아래인지(가격 위치라 롱·숏 뜻이 다름). 롱·숏 나눠 보기와 5년 연구 결과는 '매물대' 보기에 있습니다.") : null,
     d.coin_flips_note ? h("p", {class: "an-note"}, d.coin_flips_note) : null));
   if ((d.notable || []).length) {
     const pg = ui.pager({size: 8, row: (x) => h("a", {class: "lrow click an-row", role: "listitem", href: env.ctx.href("strategies", x.strategy)},
