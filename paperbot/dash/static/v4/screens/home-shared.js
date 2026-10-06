@@ -343,7 +343,7 @@ export function rankList(ctx, o = {}) {
     return (a) => acc.has(a.account_id) || (strat.has(a.strategy) && a.kind !== "random");
   }
   // a star added or taken anywhere on the page: the rows (their ★ marks, and the list when the switch is on) follow
-  if (favSw) ctx.track(fav.onFavs(() => { if (st.board) apply(true); }));
+  if (favSw) ctx.track(fav.onFavs(() => { if (st.board) apply(true); if (o.onFavs) o.onFavs(); }));
   return {
     el: h("div", {class: "stack tight"}, list.el, foot), countEl, favPred, favEl: favSw,
     set(board, gs, group, keep = true) {

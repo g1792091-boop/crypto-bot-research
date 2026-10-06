@@ -324,7 +324,7 @@ export function drawTools(o) {
       if (!q) return;
       block = true; e.preventDefault();
       if (st.mode === "h") { add({id: newId(), t: "h", p: q.p}); setMode(null); return; }
-      if (st.mode === "text") { askText(x, y, q); return; }
+      if (st.mode === "text") { if (!wrap.querySelector(".drw-input")) askText(x, y, q); return; }
       if (st.draft && st.draft.wait) { st.draft.b = q; finishDraft(); return; }
       st.draft = {id: newId(), t: st.mode, a: q, b: q, sx: x, sy: y};
       startDrag("draft");
@@ -422,7 +422,18 @@ export function drawTools(o) {
     const {x, y} = local2(e);
     openMenu(x, y);
   });
-  ctx.listen(document, "pointerdown", (e) => { if (st.menu && !wrap.contains(e.target)) closeMenu(); });
+  // a line / box finished by a second click follows the pointer until then
+  wrap.addEventListener("pointermove", (e) => {
+    if (!st.draft || !st.draft.wait) return;
+    const {x, y} = local2(e), q = at(x, y);
+    if (q) { st.draft.b = q; redraw(); }
+  });
+  // a click outside this chart closes its menu and lets go of the picked drawing (Delete then never reaches it)
+  ctx.listen(document, "pointerdown", (e) => {
+    if (wrap.contains(e.target)) return;
+    if (st.menu) closeMenu();
+    if (st.sel) { st.sel = null; paintTools(); redraw(); }
+  });
   ctx.listen(document, "keydown", (e) => {
     const el = document.activeElement;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
