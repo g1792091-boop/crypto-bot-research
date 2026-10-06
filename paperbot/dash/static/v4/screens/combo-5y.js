@@ -290,17 +290,19 @@ function corrCard({d}) {
   }
   function draw() {
     // 같이 잃은 날 (0..1) sits in a narrow band for most pairs: its colour runs from the map's own lowest to highest
-    const cv = mode === "coloss" ? (c.coloss || []).filter((x) => x != null) : [];
-    const cmin = cv.length ? Math.min(...cv) : 0, cmax = cv.length ? Math.max(...cv) : 1;
+    // (the 10th to the 95th percentile of the pairs above 0, so a strategy that never trades does not wash it out)
+    const cv = mode === "coloss" ? (c.coloss || []).filter((x) => x != null && x > 0).sort((x, y) => x - y) : [];
+    const q = (f) => cv[Math.min(cv.length - 1, Math.max(0, Math.round(f * (cv.length - 1))))];
+    const cmin = cv.length ? q(0.1) : 0, cmax = cv.length ? q(0.95) : 1;
     read.textContent = (MODES.find((m) => m.id === mode) || MODES[0]).read
-      + (mode === "coloss" && cv.length ? ` 색은 이 지도 안에서 가장 낮은 ${fmt.pct(cmin, 0, false)}부터 가장 높은 ${fmt.pct(cmax, 0, false)}까지.` : "");
+      + (mode === "coloss" && cv.length ? ` 색은 ${fmt.pct(cmin, 0, false)}(연함)부터 ${fmt.pct(cmax, 0, false)}(진함)까지 (0이 아닌 쌍의 10~95%).` : "");
     const cell = 12, lab = 0, W = lab + n * cell, H = n * cell;
     const kids = [];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const v = val(mode, i, j);
         const cls = v == null ? "none" : v >= 0 ? "pos" : "neg";
-        const a = v == null ? 0 : mode === "coloss" ? (cmax > cmin ? (v - cmin) / (cmax - cmin) : 0.5) : Math.min(1, Math.abs(v));
+        const a = v == null ? 0 : mode === "coloss" ? (cmax > cmin ? Math.max(0, Math.min(1, (v - cmin) / (cmax - cmin))) : 0.5) : Math.min(1, Math.abs(v));
         kids.push(s("rect", {class: ["c5-hc", cls, i === j ? "diag" : ""], x: lab + j * cell, y: i * cell, width: cell - 1, height: cell - 1,
           style: {"--a": a.toFixed(3)}, dataset: {i, j}}));
       }

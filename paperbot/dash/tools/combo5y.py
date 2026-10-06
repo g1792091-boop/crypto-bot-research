@@ -1239,8 +1239,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m paperbot.dash.tools.combo5y", description=__doc__.split("\n")[0])
     ap.add_argument("--signals", required=True, help="the 5-year signal cache (sig_<tf>_<COIN>.npz)")
     ap.add_argument("--out", default=OUT_DEFAULT)
-    ap.add_argument("--work", default=os.environ.get("COMBO5Y_WORK") or os.path.join(os.getcwd(), ".combo5y_work"),
-                    help="checkpoint folder (a restart resumes from it)")
+    import tempfile
+    ap.add_argument("--work", default=os.environ.get("COMBO5Y_WORK") or os.path.join(tempfile.gettempdir(), "combo5y_work"),
+                    help="checkpoint folder, outside the repository (a restart resumes from it)")
     ap.add_argument("--procs", type=int, default=2)
     a = ap.parse_args(argv)
     run(a.signals, a.out, a.work, a.procs)
