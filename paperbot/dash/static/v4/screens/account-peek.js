@@ -133,7 +133,7 @@ async function accountPeek(spec, ctx, {setHead, body}) {
   const init = (board && board.initial) || 5000;
   setHead({title: nameOf(a, data), sub: [acc.account_id, `${fmt.tfKo(acc.timeframe)}봉`, fmt.familyKo(a) ? `계열 ${fmt.familyKo(a)}` : null].filter(Boolean).join(" · "),
     pills: [ui.pill(groupKo(a), g === "core" ? "accent" : ""), stt.bust || a.bust ? ui.pill("파산", "bad") : null,
-      co ? ui.pill("참고", "ref", COUNT_ONLY_WHY) : null, ui.smallSample(n)]});
+      co ? ui.pill("", "ref", COUNT_ONLY_WHY) : null, ui.smallSample(n)]});
 
   // the summary: the profile card (money accounts on the map; DeepSeek gets its counts there), else plain numbers
   let summary;
@@ -180,7 +180,7 @@ async function strategyPeek(spec, ctx, {setHead, body}) {
   const init = (board && board.initial) || 5000;
   const fam = kind === "ds200" && DS_DEFS[name] ? `${DS_DEFS[name].fam} ${FAMILY[DS_DEFS[name].fam].ko}` : null;
   setHead({title: nameKo(name, list36), sub: [name, rows.length ? `봉 ${fmt.int(rows.length)}개` : null].filter(Boolean).join(" · "),
-    pills: [ui.pill(GROUP_PLATE[group] || "매매법", group === "core" ? "accent" : ""), fam ? ui.pill(fam, "thin") : null, co ? ui.pill("참고", "ref", COUNT_ONLY_WHY) : null]});
+    pills: [ui.pill(GROUP_PLATE[group] || "매매법", group === "core" ? "accent" : ""), fam ? ui.pill(fam, "thin") : null, co ? ui.pill("", "ref", COUNT_ONLY_WHY) : null]});
 
   // the timeframe accounts: each opens its account here
   const tfRow = (a) => {
@@ -219,7 +219,7 @@ async function strategyPeek(spec, ctx, {setHead, body}) {
   if (!ctx.alive()) return;
   const byId = new Map(rows.map((a) => [a.account_id, a]));
   const all = [];
-  details.forEach((d) => { if (d) for (const t of d.trades || []) all.push(t); });
+  details.forEach((d, i) => { if (d) for (const t of d.trades || []) all.push(t.account_id ? t : {...t, account_id: rows[i].account_id}); });
   tradeSlot.replaceChildren(lastTrades(ctx, all, (t) => byId.get(t.account_id), {isCo, co}));
   const dPick = details[rows.indexOf(pick)];
   if (dPick) {
@@ -241,7 +241,7 @@ async function tradePeek(spec, ctx, {setHead, body}) {
   const reason = fmt.reasonKo(t.exit_reason) + (t.exit_reason === "LOCK" && t.lock_roe ? ` +${fmt.num(t.lock_roe * 100, 0)}%` : "");
   setHead({kind: "거래", title: `${fmt.coin(t.symbol)}USDT ${fmt.sideKo(t.side)} · ${fmt.lev(t.leverage)}`,
     sub: `${fmt.acctName(a)} · ${fmt.kst(t.exit_time)} 청산`,
-    pills: [ui.pill(reason, t.exit_reason === "LIQ" ? "bad" : ""), ui.pill(groupKo(a), fmt.groupOf(a) === "core" ? "accent" : ""), co ? ui.pill("참고", "ref", COUNT_ONLY_WHY) : null]});
+    pills: [ui.pill(reason, t.exit_reason === "LIQ" ? "bad" : ""), ui.pill(groupKo(a), fmt.groupOf(a) === "core" ? "accent" : ""), co ? ui.pill("", "ref", COUNT_ONLY_WHY) : null]});
   const hero = co
     ? ui.card({plate: "결과", sub: COUNT_ONLY_KO, cls: "pk-card"}, h("p", {class: "pos-note"}, `${reason}로 닫힘. `, COUNT_ONLY_WHY))
     : ui.card({plate: "결과", cls: "pk-card"},
