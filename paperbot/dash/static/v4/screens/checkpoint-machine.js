@@ -4,7 +4,7 @@
 // verdict job's timer (paperbot-checkpoint: on / off, the hourly :35 run, its last result) and the projected runtime of
 // the real verdict (the rehearsal's runtime x 10,000 / 2,000 bots). systemd answers only on the server: elsewhere the
 // rows say 수집 전 (never 'off').
-import {h, put, ui, fmt} from "../core/pb.js";
+import {h, put, ui, fmt, vday} from "../core/pb.js";
 
 const LEVEL = {ok: ["준비됨", "good"], warn: ["확인 필요", "warn"], bad: ["꺼짐", "bad"], unknown: ["서버에서만 확인", "thin"],
   wait: ["첫 연습 전", "thin"]};
@@ -32,7 +32,8 @@ function jobLine(m, unit) {
   if (j.state === "off") return h("b", {class: "down"}, unit === "job" ? "꺼짐 · 판정 날 결과가 나오지 않습니다" : "꺼짐");
   const parts = [h("b", {class: "up"}, unit === "job" ? "켜짐 · 매시 35분 (판정 날 09:35 시작)" : "켜짐 · 매주 수요일 12:30")];
   if (j.running) parts.push(h("span", null, " · 지금 도는 중"));
-  else if (j.last_ms) parts.push(h("span", {class: "muted"}, ` · 마지막 ${fmt.kst(j.last_ms)} ${j.ok === false ? "오류로 끝남" : j.ok ? "정상" : ""}`));
+  else if (j.last_ms) parts.push(h("span", {class: j.ok === false ? "down" : "muted"},
+    ` · 마지막 ${fmt.kst(j.last_ms)} ${j.ok === false ? (vday.RESULT_KO[j.result] || "오류로 끝남") : j.ok ? "정상" : ""}`));
   return h("span", null, parts);
 }
 
