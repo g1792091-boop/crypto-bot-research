@@ -410,3 +410,35 @@ def test_the_version_chip_is_started_once_and_reads_the_page_meta():
     ver = _read("core", "version.js")
     assert 'meta[name="pb-ver"]' in ver and "새 버전 준비됨" in ver and "눌러서 새로고침" in ver
     assert "innerHTML" not in ver and "location.reload()" in ver
+
+
+# ====================================================================== https in front (tailscale serve): owner writes
+def _req(origin, host, client, xfh=None):
+    from starlette.requests import Request
+    headers = [(b"host", host.encode()), (b"origin", origin.encode())]
+    if xfh:
+        headers.append((b"x-forwarded-host", xfh.encode()))
+    return Request({"type": "http", "method": "POST", "scheme": "http", "path": "/api/x", "query_string": b"",
+                    "headers": headers, "client": (client, 50000), "server": ("100.64.0.5", 8080)})
+
+
+def test_owner_writes_behind_tailscale_serve_only_when_the_owners_switch_it_on(monkeypatch):
+    from paperbot.dash.app import same_origin
+    ts = "paperbot.tail1234.ts.net"
+    monkeypatch.setenv("DASH_HOST", "100.64.0.5")
+    monkeypatch.delenv("DASH_TLS_PROXY", raising=False)
+    # the plain setup: http://100.64.0.5:8080 from the owner's phone
+    assert same_origin(_req("http://100.64.0.5:8080", "100.64.0.5:8080", "100.64.0.9"))
+    # https through the local proxy, not switched on: refused as before
+    assert not same_origin(_req(f"https://{ts}", ts, "100.64.0.5"))
+    monkeypatch.setenv("DASH_TLS_PROXY", "1")
+    # switched on: the local proxy (the server's own address) with the proxy's https name, Host kept or rewritten
+    assert same_origin(_req(f"https://{ts}", ts, "100.64.0.5"))
+    assert same_origin(_req(f"https://{ts}", "100.64.0.5:8080", "100.64.0.5", xfh=ts))
+    assert same_origin(_req(f"https://{ts}", ts, "127.0.0.1"))
+    assert same_origin(_req("http://100.64.0.5:8080", "100.64.0.5:8080", "100.64.0.9"))        # the old address still works
+    # anyone else on the tailnet is held to the strict rule, and a foreign origin never passes
+    assert not same_origin(_req(f"https://{ts}", ts, "100.64.0.9"))
+    assert not same_origin(_req(f"https://{ts}", "100.64.0.5:8080", "100.64.0.9", xfh=ts))
+    assert not same_origin(_req("https://evil.example", ts, "100.64.0.5", xfh="evil.example.org"))
+    assert not same_origin(_req("http://evil.example", "100.64.0.5:8080", "100.64.0.5"))

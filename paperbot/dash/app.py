@@ -1636,19 +1636,36 @@ def login_redirect(path: str, query: str = "") -> str:
 def same_origin(req: Request) -> bool:
     """Write endpoints: refuse a request whose Origin header is present and is not this site, scheme
     included (http://host is not https://host), and any browser request marked cross-site. The
-    dashboard is served directly (Tailscale / SSH tunnel); behind a proxy that changes the scheme
-    or the Host header every owner write would be refused (run uvicorn with --proxy-headers then)."""
+    dashboard is served directly (Tailscale / SSH tunnel). With DASH_TLS_PROXY=1 (the owners' choice of
+    ``tailscale serve --https=443`` in front, docs/server-setup-v4.md 8-1: one HTTP/2 connection instead of Chrome's 6
+    per http:// host) a request that comes from this machine itself (the local proxy, ``tls_proxied``) may carry the
+    https Origin of the proxy's name (X-Forwarded-Host) for this http server; a request from any other address is held
+    to the strict rule."""
     origin = req.headers.get("origin")
     if origin is not None:
         try:
             o = urllib.parse.urlsplit(origin)
         except ValueError:
             return False
-        if not o.netloc or o.netloc.lower() != req.headers.get("host", "").lower():
+        via = tls_proxied(req)
+        hosts = {req.headers.get("host", "").lower()}
+        if via and req.headers.get("x-forwarded-host"):
+            hosts.add(req.headers["x-forwarded-host"].strip().lower())
+        if not o.netloc or o.netloc.lower() not in hosts:
             return False
-        if (o.scheme or "").lower() != req.url.scheme.lower():
+        scheme = (o.scheme or "").lower()
+        if scheme != req.url.scheme.lower() and not (via and scheme == "https"):
             return False
     return req.headers.get("sec-fetch-site", "") != "cross-site"
+
+
+def tls_proxied(req: Request) -> bool:
+    """DASH_TLS_PROXY=1 and the request comes from this machine (127.0.0.1, ::1 or DASH_HOST, where a local
+    ``tailscale serve`` connects from): an https front for this http server, set up by the owners."""
+    if os.environ.get("DASH_TLS_PROXY", "").strip() != "1":
+        return False
+    ip = req.client.host if req.client else ""
+    return bool(ip) and ip in {"127.0.0.1", "::1", os.environ.get("DASH_HOST", "").strip()}
 
 
 def owner_names(env_text: Optional[str] = None) -> tuple[str, ...]:
