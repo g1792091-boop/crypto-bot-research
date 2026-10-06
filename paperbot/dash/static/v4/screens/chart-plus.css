@@ -11,6 +11,7 @@
 .cfxp-cv { display: block; }
 .term-cwrap.cfxp-has > .term-cbox { right: var(--cfxp-w, 0px); }
 .term-cwrap.cfxp-has > .term-ptag { right: var(--cfxp-w, 0px); }
+.term-cwrap.cfxp-has > .term-legend { right: calc(var(--cfxp-w, 0px) + 84px); white-space: normal; }                 /* the open / high / low / close line wraps inside the narrower box, never over the strips */
 .chart-wrap.cfxp-has > .chart-box { margin-right: var(--cfxp-w, 0px); }
 
 /* the floating tip (a bubble, a price bar, "이 가격이면") */
