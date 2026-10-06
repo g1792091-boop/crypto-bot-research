@@ -15,7 +15,6 @@ carry the agents code, so tests/league_world.py builds the file from the bot's f
 """
 import hashlib
 import json
-import math
 import os
 import random
 import re
@@ -990,3 +989,46 @@ def test_head_card_words():
     assert "그림자 리그" in t and "331개 모의 계좌 중 하나가 아니에요" in t and "11/04 판정을 받지 않아요" in t and "실제 주문이 아니에요" in t and "참고용, 판정 아님" in t
     t = _render("K.headCard({})", view("/nonexistent/x.db"))["text"]
     assert "모의 계좌들 중 하나가 아니에요" in t and "30일 판정을 받지 않아요" in t
+
+
+# ---------------------------------------------------------------- against the bot's own code (runs only where the agents code is merged)
+def test_matches_the_bots_own_database_shape_and_view(tmp_path, monkeypatch):
+    """When paperbot/shadowleague is on the branch (the merged install), a database written by the bot's own tick has exactly the
+    tables, columns and indexes of tests/league_world.py, and this module's numbers equal the bot's view.py on it."""
+    V = pytest.importorskip("paperbot.shadowleague.view")
+    LG = pytest.importorskip("paperbot.shadowleague.league")
+    TL = pytest.importorskip("test_shadowleague_league")
+    monkeypatch.setattr(LG, "WORK_S", 1e6)
+    monkeypatch.setattr(LG, "HARD_S", 1e6)
+    ex, m, st = TL.world(tmp_path, k=10, coins=("BTC", "ETH"))
+    st, _ = TL.ticks(st, ex, m, TL.ALL)
+    path, now = st.path, ex.now_ms
+    st.close()
+    real, mine = sqlite3.connect(path), sqlite3.connect(":memory:")
+    mine.executescript(W.ddl(2))
+    q = "SELECT name FROM sqlite_master WHERE type = '{}' AND name NOT LIKE 'sqlite_%'"
+    for kind in ("table", "index"):
+        assert {r[0] for r in real.execute(q.format(kind))} == {r[0] for r in mine.execute(q.format(kind))}
+    for (t,) in real.execute(q.format("table")):
+        assert [tuple(r[1:]) for r in real.execute(f"PRAGMA table_info({t})")] == [tuple(r[1:]) for r in mine.execute(f"PRAGMA table_info({t})")], t
+    real.close()
+    mid = S.build(path, None, now_ms=now)["selected"]
+    bot, out = V.member(path, mid, now), S.build(path, mid, now_ms=now)
+    d = out["member"]
+    assert out["state"] == d["state"] == "ok" and bot["state"] == "ok" and bot["card"]["trades"]["closed"] > 0
+    for k in ("status", "series", "warming", "errors", "signals", "started_at_ms", "activated_ms", "last_tick_ms"):
+        assert bot["card"][k] == d["card"][k], k
+    for k, v in bot["card"]["trades"].items():
+        assert v == d["card"]["trades"][k] or approx(v, d["card"]["trades"][k], 1e-9), k
+    bp, dp = bot["curve"]["per_trade"], d["per_trade"]
+    assert (bp["n"], bp["clones_per_trade"], bp["awaiting_clones"]) == (dp["n"], dp["clones_per_trade"], dp["awaiting_clones"]) and bp["points"]
+    for x, y in zip(bp["points"], dp["points"]):
+        assert all(approx(x[k], y[k], 1e-3) for k in x), (x, y)
+    for sc, blk in bot["curve"]["account"]["scopes"].items():
+        assert blk["asof_ms"] == d["account"]["scopes"][sc]["asof_ms"]
+        for x, y in zip(blk["points"], d["account"]["scopes"][sc]["points"]):
+            assert x["day_ms"] == y["day_ms"] and approx(x["member_equity"], y["equity"], 0.011) and (x["taken"], x["liquidated"]) == (y["taken"], y["liquidated"])
+    for x, y in zip(bot["table"], d["table"]["cells"]):
+        assert all(x[k] == y[k] for k in ("coin", "tf", "status", "signals", "taken", "open", "closed", "wins"))
+    assert [t["trade_id"] for t in bot["trades"]] == [t["trade_id"] for t in d["trades"]["rows"]]
+    assert bot["study"]["main"] == d["study"]["main"] and bot["study"]["prereg_sha256"] == d["study"]["prereg_sha256"]
