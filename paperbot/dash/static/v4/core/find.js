@@ -1,7 +1,8 @@
 // 찾기 (owners 10/06: fewer clicks): '/' (or the 찾기 button in the top bar) opens one search box that finds any screen,
 // strategy or account by its Korean name, its code, or the first consonants of the Korean name (ㅅㅇㅍ → 순위표).
 // Enter / a click opens it: a screen as usual, an account or a strategy in the side panel (core/drawer.js). ↑ ↓ move,
-// Esc closes. With an empty box it lists the number-key screens (1-9). Data: routes.js and the shared board (store);
+// Esc closes. With an empty box it lists the starred strategies / accounts / coins (★ 즐겨찾기, core/favs.js; on a phone
+// this is the rail's ★ list) and then the number-key screens (1-9). Data: routes.js and the shared board (store);
 // nothing is fetched here. An account found here opens in a mixed view, so a DeepSeek / coin-flip account is counted
 // only (CONTRACT §1).
 import {h, $} from "./dom.js";
@@ -11,6 +12,8 @@ import {store} from "./store.js";
 import {acctName, stratKo, tfKo, GROUP_KO, groupOf} from "./fmt.js";
 import {openPeek, closePeek} from "./drawer.js";
 import {ALIAS, norm, rank} from "./search.js";
+import {favs} from "./favs.js";
+import {favItem} from "./favpop.js";
 
 function screenItems() {
   const out = [];
@@ -41,7 +44,7 @@ function boardItems() {
 export function search(qRaw) {
   const q = norm(qRaw);
   const scr = screenItems();
-  if (!q) return scr.filter((x) => x.key).sort((x, y) => x.key - y.key);
+  if (!q) return [...favItems(), ...scr.filter((x) => x.key).sort((x, y) => x.key - y.key)];
   const {strats, accts} = boardItems();
   return [...rank(q, scr, 5), ...rank(q, strats, 6), ...rank(q, accts, 8)];
 }
@@ -49,7 +52,18 @@ export function search(qRaw) {
 // ---------------------------------------------------------------- the box
 const st = {open: false, items: [], at: 0, opener: null};
 let box = null, input = null, list = null;
-const KIND_KO = {screen: "화면", strategy: "매매법", account: "계좌"};
+const KIND_KO = {screen: "화면", strategy: "매매법", account: "계좌", coin: "코인"};
+/** conv-b: with an empty box the starred strategies, accounts and coins come first (at most 8; core/favs.js). */
+function favItems() {
+  const f = favs(), board = store.get("board"), out = [];
+  for (const kind of ["strategy", "account", "coin"]) {
+    for (const id of f[kind]) {
+      const it = favItem(kind, id, board);
+      out.push({kind, id, label: it.label, code: id, sub: `★ ${it.sub}`, fav: true, href: it.href});
+    }
+  }
+  return out.slice(0, 8);
+}
 
 function build() {
   if (box) return;
@@ -80,7 +94,7 @@ function move(d) {
 function paint(keepList) {
   if (!keepList) st.items = search(input.value);
   const q = norm(input.value);
-  const opts = st.items.map((x, i) => h("li", {id: `find-o${i}`, role: "option", class: ["find-o", x.kind], "aria-selected": String(i === st.at),
+  const opts = st.items.map((x, i) => h("li", {id: `find-o${i}`, role: "option", class: ["find-o", x.kind, x.fav ? "fav" : ""], "aria-selected": String(i === st.at),
     onmousedown: (e) => e.preventDefault(), onclick: () => pick(x), onmousemove: () => { if (st.at !== i) { st.at = i; paint(true); } }},
   h("span", {class: "find-k"}, x.kind === "screen" ? screenIcon(x.id) : KIND_KO[x.kind]),
   h("span", {class: "find-t"}, h("b", null, x.label), h("small", null, x.kind === "screen" ? x.sub : `${x.code} · ${x.sub}`)),
@@ -95,6 +109,7 @@ function pick(x) {
   if (!x) return;
   closeFind(true);
   if (x.kind === "screen") { closePeek(() => { location.hash = href(x.id); }); return; }
+  if (x.kind === "coin") { closePeek(() => { location.hash = x.href; }); return; }      // a starred coin: 터미널 / 차트
   const name = x.kind === "account" ? "account" : "strategies";
   openPeek({kind: x.kind, id: x.id, full: href(name, x.id), view: "all"});
 }

@@ -2,6 +2,7 @@
 //   1-9  jump to 터미널 · 홈 · 포지션 · 매매법 · 순위표 · 회의실 · 차트 · 시장 · 서버 (routes.js KEYS; the rail's tooltips
 //        show the number). Never while typing in a box, never with Ctrl / Alt / Cmd.
 //   /    opens 찾기 (core/find.js).
+//   t    TV 자동 넘김 on / off (core/tvmode.js); Esc also ends it.
 //   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the sub tabs' order).
 //        Not on a chart, a table or a row that scrolls sideways itself, a form field, or a slider.
 import {SCREENS, GROUPS, KEYS, href, parseHash} from "./routes.js";
@@ -9,6 +10,7 @@ import {features} from "./features.js";
 import {toast} from "./ui.js";
 import {openFind, findOpen} from "./find.js";
 import {closePeek, peekOpen} from "./drawer.js";
+import {toggleTv, stopTv, tvOn, tvPanelOpen} from "./tvmode.js";
 
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -73,6 +75,9 @@ export function startNavKeys() {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || typing(e.target) || findOpen()) return;
     if (document.querySelector(".tour-card")) return;               // the first-visit tour has the keyboard
     if (e.key === "/") { e.preventDefault(); openFind(); return; }
+    // t: TV 자동 넘김 on / off (e.code too: a keyboard in 한글 mode sends "ㅅ" for t); Esc ends it when nothing else is open
+    if ((e.key === "t" || e.key === "T" || e.code === "KeyT") && !e.repeat && !tvPanelOpen()) { e.preventDefault(); toggleTv(); return; }
+    if (e.key === "Escape" && tvOn() && !peekOpen() && !tvPanelOpen()) { stopTv(); return; }
     const name = keyScreen(e.key);
     if (!name || e.repeat) return;
     e.preventDefault();

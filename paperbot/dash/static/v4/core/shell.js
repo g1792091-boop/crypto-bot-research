@@ -18,6 +18,7 @@ import {textCycle, textSwitch} from "./textsize.js";
 import {remount} from "./router.js";
 import {renderRail, visibleScreens} from "./rail.js";
 import {openFind} from "./find.js";
+import {tvTab} from "./tvmode.js";
 
 const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
 
@@ -43,6 +44,7 @@ function renderNav() {
   // page) stay one tap away next to it at the end of the 서버 group's menu
   textSwitch(() => remount()),
   g.id === "server" ? skinSwitch(() => remount()) : null,
+  g.id === "server" ? tvTab() : null,                 // TV 자동 넘김 (core/tvmode.js; on a PC also the rail's TV and the key t)
   g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null);
 }
 /** 찾기 at the start of the phone's sub-tab row (the top bar has no room for it under 460 px): two taps to any

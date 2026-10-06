@@ -21,3 +21,7 @@ export {chartDeck, candleGlow, isAi as chartAi, GROUP_KO, AMBIENT_TIP, FLASH_TIP
 export {bigEvent, liqEvent, ownEvent, FLASH_MODES} from "./flash.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
 export * as sound from "./sound.js";
+// conv-b: ★ 즐겨찾기 (core/favs.js), 비교에 추가 (core/cmp.js), TV 자동 넘김 (core/tvmode.js)
+export * as fav from "./favs.js";
+export * as cmp from "./cmp.js";
+export {openTvPanel, tvOn} from "./tvmode.js";

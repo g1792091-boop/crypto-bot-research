@@ -1,0 +1,58 @@
+/* ★ 즐겨찾기 + 비교에 추가 (conv-b): the star toggle (core/favs.js), the '즐겨찾기만' list switch, the small ★ mark on
+   starred rows, the rail's ★ with its list (core/favpop.js) and the 홈 strip (screens/home-favs.js). A star is yellow
+   in both skins (--series-core: the 기존 36 yellow, never up / down). Tokens only, font sizes only var(--t-*). */
+
+/* ---------------------------------------------------------------- the star toggle */
+.favstar { appearance: none; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; min-height: 32px;
+  padding: 0 6px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer;
+  font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; transition: color var(--t-fast), border-color var(--t-fast), background-color var(--t-fast); }
+.favstar-g { font-size: var(--t-lg); line-height: 1; }
+.favstar:hover { color: var(--series-core); border-color: var(--line-2); }
+.favstar[aria-pressed="true"] { color: var(--series-core); }
+.favstar[aria-pressed="true"] .favstar-g { text-shadow: 0 0 10px var(--accent-glow); }
+.favstar.wtext { min-height: 32px; padding: 0 10px 0 8px; border-color: var(--line-2); background: var(--surface); color: var(--ink-2); }
+.favstar.wtext .favstar-g { font-size: var(--t-md); }
+.favstar.wtext[aria-pressed="true"] { color: var(--series-core); border-color: var(--series-core); }
+.favmark { flex: none; margin-right: 4px; color: var(--series-core); font-size: var(--t-xs); line-height: 1; }
+
+/* the '★ 즐겨찾기만' switch of a list */
+.favfilter { appearance: none; flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 11px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.favfilter span { color: var(--series-core); }
+.favfilter[aria-pressed="true"] { border-color: var(--series-core); background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--series-core); }
+.favfilter:hover { border-color: var(--accent-line); }
+.favnone { margin: 0; padding: 10px 2px; color: var(--muted); font-size: var(--t-sm); }
+
+/* ---------------------------------------------------------------- '＋ 비교에 추가' */
+.cmpbtn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-line); }
+
+/* ---------------------------------------------------------------- the rail's ★ and its list */
+.favrail { appearance: none; position: relative; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--series-core); font: 700 var(--t-md)/1 var(--f-body); cursor: pointer; }
+.favrail:hover { border-color: var(--series-core); }
+.favrail-n { position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--surface-3);
+  color: var(--ink); font: 700 var(--t-2xs)/16px var(--f-term); font-style: normal; text-align: center; }
+.favrail-n:empty { display: none; }
+.favpop { position: fixed; z-index: 88; width: min(340px, calc(100vw - 80px)); max-height: min(70vh, 620px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  border-radius: 12px; border: 1px solid var(--line-2); background: var(--surface); box-shadow: 0 16px 40px var(--card-shadow, transparent); overflow: hidden; }
+.favpop[hidden] { display: none; }
+.favpop-head { display: flex; align-items: center; gap: 4px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--line); font: 800 var(--t-sm)/1 var(--f-body); }
+.favpop-head b { color: var(--series-core); }
+.favpop-x { appearance: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-sm)/1 var(--f-body); }
+.favpop-body { overflow-y: auto; padding: 6px 8px; display: grid; gap: 8px; }
+.favpop-k { margin: 4px 6px 2px; color: var(--muted); font: 700 var(--t-2xs)/1.2 var(--f-body); letter-spacing: .04em; }
+.favpop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.favpop-row { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+.favpop-row:hover { background: var(--surface-2); }
+.favpop-row a { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; padding: 7px 8px; color: var(--ink); text-decoration: none; }
+.favpop-row a b { font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.favpop-row a small { color: var(--muted); font-size: var(--t-2xs); }
+.favpop-empty { margin: 0; padding: 16px 14px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.55; }
+.favpop-foot { margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--t-2xs); }
+
+/* the side panel's head (core/drawer.js): ★ 즐겨찾기 + 비교에 추가 of an account / a strategy */
+.peek-mine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.peek-mine[hidden] { display: none; }
+
+/* 찾기 with an empty box: the starred ones first */
+.find-o.fav .find-k { color: var(--series-core); }

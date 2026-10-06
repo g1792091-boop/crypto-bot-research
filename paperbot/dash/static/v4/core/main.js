@@ -12,6 +12,7 @@ import {applyText} from "./textsize.js";
 import {startDrawer} from "./drawer.js";
 import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
+import {startTvMode} from "./tvmode.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -31,6 +32,7 @@ function boot() {
   startRouter();
   startFind();             // '/' and the 찾기 button
   startNavKeys();          // 1-9, and the phone's sideways swipe between a group's screens
+  startTvMode();           // TV 자동 넘김: a device that was rotating comes back rotating (core/tvmode.js)
   startStream();
   startFeatureProbe();
   syncClock();

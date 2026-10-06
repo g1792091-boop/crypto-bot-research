@@ -7,6 +7,7 @@
 @import url("reel-duel.css");
 @import url("meetboard-kit.css");
 @import url("home-live.css");
+@import url("home-favs.css");
 
 /* ---------------------------------------------------------------- layout: one column on a phone, two on a PC */
 [data-screen="home"] .home-wrap { display: grid; gap: 16px; min-width: 0; }
