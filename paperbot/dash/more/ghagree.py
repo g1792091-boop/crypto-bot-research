@@ -10,7 +10,8 @@ A call is an ``open`` event that is not a mirror: coin, side (+1 long / -1 short
 the 5-minute bar it was made on). For an entry at E on a coin: the latest call on that coin with t < E and
 E - t <= 24 hours (a call's own life: it expires after 24 hours) -> ``same`` (its side is ours), ``opposite``, or
 ``none``. Strictly before: an entry's time is its bar's open (engine entry_time = bar.open_time), and a call made on
-the 5-minute bar that closed at that same moment is written by the recorder after it, so it was not out yet. ``open_at_entry`` counts the calls that were still running at E (not yet hit their stop / target / flip).
+the 5-minute bar that closed at that same moment is written by the recorder after it, so it was not out yet.
+``open_at_entry`` counts the calls that were still running at E (not yet hit their stop / target / flip).
 Entries before the recorder's first event are ``before`` (left out). Per bucket: trades, win share (net P&L > 0),
 mean net ROE.
 
