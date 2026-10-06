@@ -145,6 +145,7 @@ def test_page_wiring_of_the_review_fixes():
     assert "S.partial_day && wd.day === S.partial_day" in build_js and "d.method.in_sample_ko" in build_js
     assert 'st.corr == null && b === "hour"' in build_js and 'local.get("combo-corrbasis", null)' in build_js
     assert "st.hidden.clear()" in build_js and "지금보다" in build_js
+    assert 'st.fromSyn = q.from === "synergy"' in build_js and "하루 마감·닫힌 거래 기준" in build_js
     # the chart keeps chartOptions' Korea-time axis: no timeScale of its own (it would replace kstTick: UTC labels)
     i = build_js.index("await makeChart(box,")
     assert "timeScale" not in build_js[i:build_js.index("});", i)] and "cv.thinned" in build_js

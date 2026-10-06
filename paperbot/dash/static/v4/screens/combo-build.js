@@ -150,6 +150,7 @@ export function buildTab(env) {
 
   function changed(keepPicker) {
     st.hidden.clear();
+    st.fromSyn = false;                     // a changed pick is no longer the 조합 시너지 row
     save();
     if (!keepPicker) {
       const q = search ? search.input.value : "";
@@ -223,6 +224,8 @@ export function buildTab(env) {
       h("p", {class: "cb-title"}, names.map((n, i) => [i ? h("span", {class: "muted"}, " + ") : null, h("span", {class: "cb-tn"}, swatch(i), n)])),
       d.method.note ? h("p", {class: "an-warn"}, `${d.method.asked_ko}을(를) 골랐지만 ${d.method.note}`) : null,
       d.method.in_sample_ko ? h("p", {class: "cb-small"}, ui.pill("미리 안 셈", "thin"), ` ${d.method.in_sample_ko}`) : null,
+      st.fromSyn ? h("p", {class: "an-note"}, "분석 › 조합 시너지에서 연 조합입니다. 그 표는 하루 마감·닫힌 거래 기준이라, ",
+        d.basis === "mark" ? "5분 자본(열린 포지션 포함)으로 그린 여기와 수익률·최대 낙폭이 다를 수 있습니다." : "여기와 끝 시점이 달라 숫자가 조금 다를 수 있습니다.") : null,
       d.small.early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` ${d.small.words}`) : null,
       box, legend,
       h("p", {class: "an-note"}, `세로 = 시작 대비 수익률 % · ${d.basis_ko}`, cv.thinned && cv.step_min ? ` · 그림은 약 ${fmt.num(cv.step_min, 0)}분 간격으로 줄여 그림, 숫자는 기록 전체로 계산` : ""),
@@ -404,6 +407,7 @@ export function buildTab(env) {
     if (!ctx.alive()) return;
     st.idx = unitIndex(d);
     const q = env.query();
+    st.fromSyn = q.from === "synergy";      // opened from a 조합 시너지 row: its numbers are on another basis (said once)
     const last = local.get("combo-pick", null);
     if (q.u) apply(q);
     else if (last && last.u) apply(last);

@@ -374,6 +374,6 @@ def test_page_rules_honesty_and_the_optional_5_year_module():
 
 def test_synergy_rows_open_the_combination_and_the_two_drawdowns_are_named():
     rules = _read(V4, "screens", "analysis-rules.js")
-    assert 'env.ctx.href("combo", "build", {u: r.units.join(",")})' in rules
+    assert 'env.ctx.href("combo", "build", {u: r.units.join(","), from: "synergy"})' in rules
     assert "최대 낙폭 · 계좌 하나" in _read(V4, "screens", "grid-kit.js")
     assert "최대 낙폭 · 합친 곡선" in _read(V4, "screens", "strategies-detail.js")
