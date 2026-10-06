@@ -7,8 +7,8 @@
 //                         combination) and is remembered per device.
 //   전체 상관 지도 map    the 36 x 36 daily correlation, the together / opposite pairs, the 계좌 겹침 table (combo-map.js)
 //   합친 규칙 실험 rules  merged rules measured as one rule on recorded entries (combo-rules.js)
-//   5년 기준 y5          the 5-year backtest view of another builder (./combo-5y.js, render5y(ctx, el)); until that file
-//                         exists: '5년 백테스트 결과 준비 중'
+//   5년 기준 y5          the 5-year backtest view of another builder (./combo-5y.js, render5y(ctx, el); the current pick is
+//                         in ctx.params.query u / w / p, as on 내 조합 만들기); until that file exists: '5년 백테스트 결과 준비 중'
 // HONESTY: descriptive only ('설명용, 판정 아님'); DeepSeek is not in it (one line says why: its money only on its own
 // group screens); coin-flip lines are 참고 with refNote; small samples say "거래 N건 · 아직 판단하기 이릅니다".
 import {h, put, ui, motion, local} from "../core/pb.js";
@@ -67,7 +67,8 @@ export async function mount(el, ctx) {
     const t = TABS.find((x) => x.id === tab);
     desc.textContent = t.desc;
     if (query) ctx.params = {...ctx.params, arg: tab, query};
-    else env.setQuery(tab === "build" ? pickQuery() : {});
+    // the pick stays in the address on 5년 기준 too (render5y reads ctx.params.query.u / w / p: the same combination)
+    else env.setQuery(tab === "build" || tab === "y5" ? pickQuery() : {});
     put(body, motion.shimmer(4, true));
     if (tab === "y5") { await five(g); return; }
     const make = tab === "map" ? mapTab : tab === "rules" ? rulesTab : buildTab;

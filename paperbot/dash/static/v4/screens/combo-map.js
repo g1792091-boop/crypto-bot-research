@@ -145,9 +145,11 @@ export function mapTab(env) {
     const top = ov.top || [];
     const bars = [];
     if (!top.length) {
-      bars.push(progressBar(`같이 쌓인 기록 ${fmt.num(ov.min_days || 7, 0)}일`, `지금 가장 긴 계좌 ${fmt.num(ov.max_days || 0, 1)}일`, Math.min(1, (ov.max_days || 0) / (ov.min_days || 7))));
-      bars.push(progressBar(`계좌마다 거래 ${fmt.int(ov.min_trades || 20)}건 (지난 ${fmt.int(ov.window_days || 7)}일)`, `지금 가장 많은 계좌 ${fmt.int(ov.max_trades || 0)}건`,
-        Math.min(1, (ov.max_trades || 0) / (ov.min_trades || 20))));
+      // the closest PAIR (a pair needs both: the days together, and the trades of BOTH accounts; the smaller one counts)
+      const pd = ov.pair_days ?? ov.max_days ?? 0, pt = ov.pair_trades ?? 0;
+      bars.push(progressBar(`같이 쌓인 기록 ${fmt.num(ov.min_days || 7, 0)}일`, `지금 가장 오래 같이 쌓인 쌍 ${fmt.num(pd, 1)}일`, Math.min(1, pd / (ov.min_days || 7))));
+      bars.push(progressBar(`두 계좌 모두 거래 ${fmt.int(ov.min_trades || 20)}건 (지난 ${fmt.int(ov.window_days || 7)}일)`, `지금 가장 가까운 쌍 ${fmt.int(pt)}건 (둘 중 적은 쪽)`,
+        Math.min(1, pt / (ov.min_trades || 20))));
     }
     const tbl = top.length ? ui.table([
       {label: "계좌 A", l: true, get: (p) => fmt.idName(p.a)},
@@ -156,9 +158,9 @@ export function mapTab(env) {
       {label: "같은 시각 같은 베팅", get: (p) => fmt.pct(p.same_time, 0, false)},
       {label: "포지션 있을 때", get: (p) => fmt.pct(p.same_of_busy, 0, false)},
       {label: "같이 쌓인 날", get: (p) => `${fmt.num(p.common_days, 1)}일`}], top.slice(0, 20),
-    (p) => ctx.go("combo", "build", {u: `${p.a},${p.b}`})) : null;
+    (p) => (p.pickable === false ? ctx.toast("추가 계좌는 조합에 넣을 수 없습니다 (기존 36의 봉 계좌만)") : ctx.go("combo", "build", {u: `${p.a},${p.b}`}))) : null;
     return ui.card({plate: "같은 베팅 쌍", sub: `계좌 겹침 기준 · 지난 ${fmt.int(ov.window_days || 7)}일`},
-      tbl || h("div", null, h("p", {class: "muted"}, "아직 기준을 넘은 계좌 쌍이 없습니다. 기준은 계좌 겹침 화면과 같습니다:"), ...bars),
+      tbl || h("div", null, h("p", {class: "muted"}, "아직 기준을 넘은 계좌 쌍이 없습니다. 기준은 계좌 겹침 화면과 같습니다 (5분 기록이 90% 이상 있어야 함):"), ...bars),
       h("p", {class: "an-note"}, `같은 시각 같은 베팅 = 5분마다 둘이 같은 코인·같은 방향을 들고 있던 비율 (전체 시간 중). 포지션 있을 때 = 둘 중 하나라도 들고 있던 시간 중. `,
         top.length ? `기준을 넘은 쌍 ${fmt.int(ov.sufficient || 0)}/${fmt.int(ov.pairs || 0)}개 중 상관 높은 순 20개. 줄을 누르면 그 둘로 조합 만들기.` : ""));
   }

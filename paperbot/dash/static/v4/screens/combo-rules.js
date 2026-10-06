@@ -140,13 +140,15 @@ export function rulesTab(env) {
         h("span", {class: "num", role: "cell"}, h("i", null, "거래 "), `${fmt.int(r.trades)}건`, r.small && r.trades ? [" ", ui.pill("표본 적음", "thin")] : null),
         h("span", {class: "num", role: "cell"}, h("i", null, "승률 "), r.win_rate == null ? "—" : fmt.pct(r.win_rate, 0, false)),
         h("span", {class: ["num", fmt.tone(r.mean_roe, fmt.pct(r.mean_roe, 1))], role: "cell"}, h("i", null, "평균 순 ROE "), r.mean_roe == null ? "—" : fmt.pct(r.mean_roe, 1)),
-        h("span", {class: ["num", fmt.tone(r.pnl, fmt.money(r.pnl))], role: "cell"}, h("i", null, "손익 합 "), r.trades ? fmt.money(r.pnl, true) : "—"))));
+        h("span", {class: ["num", r.pnl == null ? "muted" : fmt.tone(r.pnl, fmt.money(r.pnl))], role: "cell"}, h("i", null, "손익 합 "),
+          r.trades && r.pnl != null ? fmt.money(r.pnl, true) : "—"))));
     const out = [ui.card({plate: head.label, sub: d.kind_ko && d.kind_ko !== head.label ? d.kind_ko : null},
       h("h2", {class: "an-q"}, head.q),
       h("p", {class: "an-read"}, h("b", null, "규칙 "), d.window_ko || ""),
       early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` 규칙이 남긴 거래 ${fmt.int(rule.trades || 0)}건 · 아직 판단하기 이릅니다`) : null,
       list,
-      h("p", {class: "an-note"}, "평균 순 ROE = 거래마다 증거금 대비 손익(수수료·펀딩 뺀 뒤)의 평균. 손익 합 = 그 거래들의 실제 모의 손익을 그대로 더한 것 (각자 자기 청산)."),
+      h("p", {class: "an-note"}, "평균 순 ROE = 거래마다 증거금 대비 손익(수수료·펀딩 뺀 뒤)의 평균. 손익 합 = 그 거래들의 실제 모의 손익을 그대로 더한 것 (각자 자기 청산). ",
+        d.flip_money_ko || ""),
       ui.assume(), ui.refNote(verdictTs()))];
     const notes = [h("p", null, h("b", null, "근사입니다. "), d.approx_ko || ""), h("p", null, d.signals_ko || "")];
     if (d.busy_passed != null) notes.push(h("p", null, `A가 다른 거래 중이었거나 늦어 들어가지 못한 신호 중 이 규칙을 통과한 것 ${fmt.int(d.busy_passed)}건은 청산 기록이 없어 위 숫자에 없습니다.`));

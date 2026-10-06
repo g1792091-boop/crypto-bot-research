@@ -23,7 +23,7 @@ const ratioB = (x) => h("b", {class: ["num", x == null ? "muted" : ""]}, x == nu
 export function buildTab(env) {
   const {ctx} = env;
   const st = {idx: null, d: null, pick: [], w: "eq", p: [], gen: 0, hidden: new Set(), kind: local.get("combo-kind", "strategy"),
-    corr: local.get("combo-corrbasis", "day"), timer: 0, disposers: []};
+    corr: local.get("combo-corrbasis", null), timer: 0, disposers: []};
   const pickCard = h("div");
   const result = h("div", {class: "stack cb-result"});
   const el = h("div", {class: "stack cb-build"}, pickCard, result);
@@ -149,6 +149,7 @@ export function buildTab(env) {
   }
 
   function changed(keepPicker) {
+    st.hidden.clear();
     save();
     if (!keepPicker) {
       const q = search ? search.input.value : "";
@@ -221,6 +222,7 @@ export function buildTab(env) {
     return ui.card({plate: "합친 곡선", sub: `${names.length}개 · 비중 ${d.method.used_ko}`, cls: "cb-curve"},
       h("p", {class: "cb-title"}, names.map((n, i) => [i ? h("span", {class: "muted"}, " + ") : null, h("span", {class: "cb-tn"}, swatch(i), n)])),
       d.method.note ? h("p", {class: "an-warn"}, `${d.method.asked_ko}을(를) 골랐지만 ${d.method.note}`) : null,
+      d.method.in_sample_ko ? h("p", {class: "cb-small"}, ui.pill("미리 안 셈", "thin"), ` ${d.method.in_sample_ko}`) : null,
       d.small.early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` ${d.small.words}`) : null,
       box, legend,
       h("p", {class: "an-note"}, `세로 = 시작 대비 수익률 % · ${d.basis_ko}`, cv.step_min ? ` · 그림은 ${fmt.num(cv.step_min, 0)}분 간격으로 줄여 그림, 숫자는 기록 전체로 계산` : ""),
@@ -265,10 +267,10 @@ export function buildTab(env) {
     const S = d.stats, wd = S.worst_day;
     const tiles = [
       ui.stat("수익률", pctB(S.ret, 2), `합친 자금 ${fmt.money(d.capital)} 대비`),
-      ui.stat("손익", moneyB(S.pnl), "비중 반영 · 열린 포지션 평가 포함"),
+      ui.stat("손익", moneyB(S.pnl), d.basis === "mark" ? "비중 반영 · 열린 포지션은 지금 시세로 평가" : "비중 반영 · 닫힌 거래만"),
       ui.stat("최대 낙폭", pctB(S.mdd_pct ? -S.mdd_pct : 0, 1), S.mdd_trough_ts ? `${fmt.money(-S.mdd_usd)} · 바닥 ${fmt.kst(S.mdd_trough_ts)}` : "아직 고점 아래로 내려간 적 없음"),
       ui.stat("최악의 날", wd ? moneyB(wd.pnl) : h("b", {class: "num muted"}, "—"),
-        wd ? `${wd.day.slice(5).replace("-", "/")} · ${fmt.pct(wd.ret, 1)}${wd.pnl >= 0 ? " · 잃은 날 없음 (가장 덜 번 날)" : ""}${S.partial_last ? " · 오늘은 진행 중" : ""}` : "날 기록 전"),
+        wd ? `${wd.day.slice(5).replace("-", "/")} · ${fmt.pct(wd.ret, 1)}${wd.pnl >= 0 ? " · 잃은 날 없음 (가장 덜 번 날)" : ""}${S.partial_day && wd.day === S.partial_day ? " · 오늘 (아직 진행 중)" : ""}` : "날 기록 전"),
       ui.stat("거래 수", `${fmt.int(S.trades)}건`, ui.smallSample(S.trades, d.small.need) || "구성원 닫힌 거래의 합"),
       ui.stat("승률", S.win_rate == null ? "—" : fmt.pct(S.win_rate, 0, false), S.trades ? `${fmt.int(S.wins)}승 ${fmt.int(S.trades - S.wins)}패` : "거래 없음"),
       ui.stat("평균 거래", S.avg_trade == null ? h("b", {class: "num muted"}, "—") : moneyB(S.avg_trade), "한 건 평균 손익 (비중 반영)"),
@@ -276,7 +278,7 @@ export function buildTab(env) {
     return ui.card({plate: "합친 숫자", sub: d.small.early ? d.small.words : `${d.label}`},
       h("div", {class: "stats s4"}, tiles),
       h("p", {class: "an-note"}, d.mdd_basis_ko, ". 수익률·손익은 구성원마다 비중만큼의 자금으로 같은 거래를 했다고 보고 더한 것 (리밸런싱 없음)."),
-      ui.assume());
+      ui.assume("closed", d.basis === "mark" ? "수익률·손익·낙폭은 열린 포지션을 마크 가격으로 평가 (나갈 때 수수료 전)" : null));
   }
   function dailyCard(d) {
     const S = d.stats, need = S.ratio_min_days || 5, few = (S.days || 0) < need;
@@ -312,12 +314,12 @@ export function buildTab(env) {
           h("span", null, h("i", null, "기여"), " ", moneyB(u.pnl), u.share != null ? h("small", {class: "muted"}, ` (${shareWords(u.share, tot, u.pnl)})`) : null),
           h("span", null, h("i", null, "거래"), " ", h("b", {class: "num"}, `${fmt.int(u.trades)}건`))),
         h("span", {class: ["cb-cbar", w >= 0 ? "pos" : "neg"], "aria-hidden": "true"}, h("i", {style: {"--w": `${Math.abs(w) * 50}%`}})),
-        lo.key ? h("p", {class: "cb-loo"}, h("i", null, "이것 빼면"), ` 수익률 ${fmt.pct(lo.ret, 1)} (${fmt.pct(lo.d_ret, 1)}) · 최대 낙폭 ${fmt.pct(-(lo.mdd_pct || 0), 1)} (${fmt.pct(-(lo.d_mdd || 0), 1)})`) : null);
+        lo.key ? h("p", {class: "cb-loo"}, h("i", null, "이것 빼면"), ` 수익률 ${fmt.pct(lo.ret, 1)} (지금보다 ${fmt.pct(lo.d_ret, 1)}p) · 최대 낙폭 ${fmt.pct(-(lo.mdd_pct || 0), 1)} (지금보다 ${fmt.pct(-(lo.d_mdd || 0), 1)}p)`) : null);
     });
     return ui.card({plate: "구성원별", sub: "기여 = 비중만큼의 자금으로 한 손익"},
       h("div", {class: "cb-mems", role: "list"}, rows),
       h("p", {class: "an-note"}, Math.abs(tot) > 0.005 ? "괄호 = 합친 손익 중 그 구성원의 몫 (합친 손익과 반대 방향이면 깎았거나 메운 것). " : "합친 손익이 아직 0 근처라 몫(%)은 보이지 않습니다. ",
-        "'이것 빼면' = 같은 나누는 법으로 나머지만 합친 결과와 지금과의 차이."),
+        "'이것 빼면' = 같은 나누는 법으로 나머지만 합친 결과. 괄호의 %p는 지금 조합과의 차이 (낙폭은 −면 더 깊어짐)."),
       ui.assume());
   }
 
@@ -325,14 +327,19 @@ export function buildTab(env) {
   function corrCard(d, names) {
     const c = d.corr || {};
     const body = h("div");
+    const ok = (b) => ((c[b] || {}).n || 0) >= ((c[b] || {}).min || 3);
+    // nobody chose: the daily basis once it has its days, the hourly one before (said in a line)
+    const basis = () => st.corr || (!ok("day") && ok("hour") ? "hour" : "day");
     const paint = () => {
-      const x = c[st.corr] || {}, ready = (x.n || 0) >= (x.min || 3);
-      put(body, corrGrid(x.m || [], names, {swatches: true, label: "구성원끼리 상관"}),
-        h("p", {class: "an-note"}, ready ? `${st.corr === "day" ? c.day_basis_ko : c.hour_basis_ko} · ${fmt.int(x.n)}${st.corr === "day" ? "일" : "시간"} 기록`
-          : `${st.corr === "day" ? "하루 손익 상관은 " + fmt.int(x.min) + "일" : "1시간 상관은 " + fmt.int(x.min) + "시간"} 기록부터 계산합니다 (지금 ${fmt.int(x.n || 0)}${st.corr === "day" ? "일" : "시간"}). '—' = 아직 계산 전이거나 그동안 한 번도 움직이지 않음.`),
+      const b = basis();
+      const x = c[b] || {}, ready = ok(b);
+      put(body, st.corr == null && b === "hour" ? h("p", {class: "an-warn"}, `하루 손익 상관은 기록 ${fmt.int((c.day || {}).min || 3)}일부터라, 지금은 1시간마다의 자본 변화로 보여 드립니다 (초반 참고용).`) : null,
+        corrGrid(x.m || [], names, {swatches: true, label: "구성원끼리 상관"}),
+        h("p", {class: "an-note"}, ready ? `${b === "day" ? c.day_basis_ko : c.hour_basis_ko} · ${fmt.int(x.n)}${b === "day" ? "일" : "시간"} 기록`
+          : `${b === "day" ? "하루 손익 상관은 " + fmt.int(x.min) + "일" : "1시간 상관은 " + fmt.int(x.min) + "시간"} 기록부터 계산합니다 (지금 ${fmt.int(x.n || 0)}${b === "day" ? "일" : "시간"}). '—' = 아직 계산 전이거나 그동안 한 번도 움직이지 않음.`),
         ready ? pairWords(x.m, names) : null);
     };
-    const seg = ui.seg([{id: "day", label: `하루 손익 (${fmt.int((c.day || {}).n || 0)}일)`}, {id: "hour", label: `1시간 변화 (${fmt.int((c.hour || {}).n || 0)}시간)`}], st.corr,
+    const seg = ui.seg([{id: "day", label: `하루 손익 (${fmt.int((c.day || {}).n || 0)}일)`}, {id: "hour", label: `1시간 변화 (${fmt.int((c.hour || {}).n || 0)}시간)`}], basis(),
       (id) => { st.corr = id; local.set("combo-corrbasis", id); paint(); motion.swap(body); }, {label: "상관 기준"});
     paint();
     return ui.card({plate: "구성원끼리 상관", sub: "1 = 똑같이, 0 = 따로, −1 = 반대로"}, seg, body,

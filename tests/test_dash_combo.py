@@ -271,7 +271,9 @@ def test_both_filter_vote_and_timeframe_rules_by_hand(tmp_path):
     r = rows(both)
     assert (r["rule"]["trades"], r["rule"]["pnl"], r["rule"]["win_rate"]) == (1, 100, 1.0)
     assert r["alone"]["trades"] == 3 and r["alone"]["pnl"] == 80 and r["dropped"]["trades"] == 2
-    assert r["flip_rule"]["trades"] == 1 and r["flip_rule"]["pnl"] == -20 and r["flip_all"]["trades"] == 1
+    # coin flips: 3 accounts per timeframe, so no dollar sum next to A's (win rate and mean ROE only)
+    assert r["flip_rule"]["trades"] == 1 and r["flip_rule"]["pnl"] is None and r["flip_rule"]["win_rate"] == 0.0
+    assert r["flip_all"]["trades"] == 1 and r["flip_all"]["pnl"] is None and both["flip_money_ko"]
     assert r["rule"]["mean_roe"] == pytest.approx(100 / 1500, abs=1e-4)     # pnl / margin (30% of 5,000)
     assert both["busy_passed"] == 0 and "근사" in both["approx_ko"] and both["signal_rows"] == 8          # the DeepSeek row is skipped
     filt = c.rules({"kind": "filter", "a": A, "b": "S2_ST_ROC"}, now=now)

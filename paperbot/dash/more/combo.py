@@ -81,6 +81,9 @@ REEL_NOTE = ("릴스(5분 단타)는 넣을 수 있지만 자기 청산 규칙�
 APPROX_KO = ("각 구성원의 기록된 진입과 자기 청산을 그대로 쓰고 진입만 거른 근사입니다. 걸러진 거래 대신 들어갔을 다른 진입은 "
              "청산 기록이 없어 셀 수 없습니다.")
 WEIGHT_KO = K.WEIGHT_KO
+IN_SAMPLE_KO = ("이 비중은 지금까지의 기록 전체에서 잰 변동으로 정해 처음부터 썼습니다. 처음에는 몰랐을 정보를 쓴 셈이라 곡선이 "
+                "실제보다 조금 좋아 보일 수 있습니다.")
+FLIP_MONEY_KO = ("동전 봇 줄은 계좌 수가 달라(봉마다 3개) 손익 합을 나란히 놓지 않고 승률과 평균 순 ROE로만 비교합니다.")
 # 5년 기준 tab: another builder's screen module; the page imports it only when it is there (no 404 for a missing
 # file)
 FIVE_Y_JS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "v4", "screens",
@@ -241,6 +244,35 @@ class Book:
                 if any(b[j] > b[j + 1] for j in range(len(b) - 1)):
                     order = sorted(range(len(b)), key=lambda j: b[j])
                     self.sig[key] = ([b[j] for j in order], [sd[j] for j in order])
+
+    def held(self, aids) -> list:
+        """(symbol, lo, hi): bar-close windows of the entries ``aids`` hold or wait on now (state 'accounts': the open
+        position and the pending signals). Their signals were taken, not skipped, though no closed trade row exists
+        yet. A position without its signal time covers the bar before its entry."""
+        out: list = []
+        try:
+            with self._conn() as c:
+                row = c.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
+            eng = (json.loads(row[0]) or {}).get("engines", {}) if row else {}
+        except (sqlite3.Error, TypeError, ValueError, AttributeError):
+            return out
+        for a in aids:
+            e = eng.get(a) if isinstance(eng, dict) else None
+            if not isinstance(e, dict):
+                continue
+            bar = TF_MS.get(str(a).split("@", 1)[-1], HOUR_MS)
+            p = e.get("position")
+            if isinstance(p, dict) and p.get("symbol"):
+                sig = p.get("signal") if isinstance(p.get("signal"), dict) else {}
+                ts = sig.get("ts")
+                if isinstance(ts, (int, float)) and ts > 0:
+                    out.append((p["symbol"], int(ts) + 1, int(ts) + 1))
+                elif isinstance(p.get("entry_time"), (int, float)):
+                    out.append((p["symbol"], int(p["entry_time"]) - bar, int(p["entry_time"])))
+            for q in e.get("pending") or []:
+                if isinstance(q, dict) and q.get("symbol") and isinstance(q.get("ts"), (int, float)):
+                    out.append((q["symbol"], int(q["ts"]) + 1, int(q["ts"]) + 1))
+        return out
 
     # ---------------------------------------------------------------- reading the cache
     def strategies(self) -> list:
@@ -475,7 +507,11 @@ def combination(book: Book, units: list, method: str, custom, now: int, overlap:
         "label": LABEL, "units": members, "k": len(units), "capital": K.r(cap, 2), "start": start, "now": int(now),
         "run_days": K.r(days_run, 3),
         "method": {"asked": method, "used": wt["used"], "asked_ko": WEIGHT_KO.get(method, method),
-                   "used_ko": WEIGHT_KO.get(wt["used"], wt["used"]), "note": wt["note"], "points": wt["points"]},
+                   "used_ko": WEIGHT_KO.get(wt["used"], wt["used"]), "note": wt["note"], "points": wt["points"],
+                   # inverse volatility / equal risk are measured on the whole record and applied from the start: the
+                   # curve uses what was only known later (in-sample), which the page says
+                   "in_sample": wt["used"] in ("invvol", "rp"),
+                   "in_sample_ko": (IN_SAMPLE_KO if wt["used"] in ("invvol", "rp") else None)},
         "basis": "mark" if mark else "closed",
         "basis_ko": ("5분마다 기록한 자본 (열린 포지션은 그때 시세로 평가, 수수료·펀딩 포함)" if mark
                      else "닫힌 거래 기준 잔고 (5분 자본 기록이 아직 없어 거래가 끝날 때만 움직임)"),
@@ -484,7 +520,7 @@ def combination(book: Book, units: list, method: str, custom, now: int, overlap:
         "curve": curve,
         "stats": {**{k: cn[k] for k in ("ret", "pnl", "mdd_pct", "mdd_usd", "mdd_peak_ts", "mdd_trough_ts", "recovered",
                                        "recovery_days", "under_water_share", "longest_under_water_days", "days_since_peak")},
-                  **{k: dn[k] for k in ("days", "partial_last", "worst_day", "best_day", "win_days", "win_days_n", "daily_vol",
+                  **{k: dn[k] for k in ("days", "partial_last", "partial_day", "worst_day", "best_day", "win_days", "win_days_n", "daily_vol",
                                        "sharpe_like", "sortino_like", "calmar_like", "ratio_min_days")},
                   **tn},
         "flips": flips,
@@ -570,10 +606,16 @@ def overlap_snapshot(book: Book, now: Optional[int] = None) -> dict:
                         "same_time": K.r(sim["same_time"][a, b], 3), "same_of_busy": K.r(sim["same_of_busy"][a, b], 3),
                         "common_days": K.r(sim["common_days"][a, b], 2)})
         span = [(w.last[j] - w.first[j]) * OV.STEP_MS / DAY_MS if w.first[j] >= 0 else 0.0 for j in S]
+        # how close the closest pair is to the two thresholds (both accounts' trades: the smaller one counts)
+        tr_s = np.asarray(w.trades)[S]
+        pair_trades = int(np.minimum(tr_s[iu[0]], tr_s[iu[1]]).max()) if len(iu[0]) else 0
+        cd = sim["common_days"][np.ix_(S, S)][iu]
+        pair_days = float(np.nanmax(cd)) if len(cd) and np.isfinite(cd).any() else 0.0
         snap = {"ready": True, "ids": {a: j for j, a in enumerate(w.ids)}, "sim": sim, "trades": w.trades.tolist(),
                 "first": w.first, "last": w.last, "rules": dict(OV.RULES), "top": top,
                 "pairs": int(len(ok)), "sufficient": int(ok.sum()), "max_days": K.r(max(span) if span else 0.0, 2),
-                "max_trades": int(max((w.trades[j] for j in S), default=0)), "window": {"start": int(w.start), "end": int(w.end)}}
+                "max_trades": int(max((w.trades[j] for j in S), default=0)), "pair_trades": pair_trades,
+                "pair_days": K.r(pair_days, 2), "window": {"start": int(w.start), "end": int(w.end)}}
     book.overlap = (time.monotonic(), snap)
     return snap
 
@@ -654,8 +696,10 @@ def corr_map(book: Book, level: str, tf: Optional[str], basis: str, now: int, sn
         rules = snap.get("rules") or {}
         ov.update(min_days=rules.get("min_days"), min_trades=rules.get("min_trades"), group_corr=rules.get("group_corr"))
         if snap.get("ready"):
-            ov.update(top=snap["top"], pairs=snap["pairs"], sufficient=snap["sufficient"], max_days=snap["max_days"],
-                      max_trades=snap["max_trades"])
+            pick = lambda a: (book.acc.get(a) or {}).get("kind") == "strategy"  # noqa: E731  (an extra account: no)
+            ov.update(top=[{**p, "pickable": pick(p["a"]) and pick(p["b"])} for p in snap["top"]], pairs=snap["pairs"],
+                      sufficient=snap["sufficient"], max_days=snap["max_days"], max_trades=snap["max_trades"],
+                      pair_days=snap.get("pair_days"), pair_trades=snap.get("pair_trades"))
     return {"label": LABEL, "level": level, "tf": tf, "basis": basis, "n": n, "need": need, "ready": ready,
             "basis_ko": ("하루 손익 (한국 시간 자정마다 자본의 변화" + (", 열린 포지션 포함)" if mark else ", 닫힌 거래 기준)")
                          if basis == "day" else "1시간마다 자본의 변화 (열린 포지션 포함, 초반 참고용)"),
@@ -701,16 +745,20 @@ def _parse_member(book: Book, key: str) -> Unit:
     return parse_units(book, key, kmin=1, kmax=1)[0]
 
 
-def _busy_signals(book: Book, unit: Unit, passes) -> int:
-    """Signals of ``unit`` (signal log) that never became one of its trades (the account was busy, or the signal came
-    late / without a price) and that pass the rule: entries the merged rule would have wanted, with no exit to measure."""
+def _busy_signals(book: Book, unit: Unit, passes, now: int) -> int:
+    """Signals of ``unit`` (signal log, bar closed by ``now``) that never became one of its trades (the account was
+    busy, or the signal came late / without a price) and that pass the rule: entries the merged rule would have wanted,
+    with no exit to measure. The entry it holds or waits on now is not one of them (taken, not closed yet)."""
     taken = {(x["sym"], x["bar"]) for x in book.trades(unit.aids)}
+    held = book.held(unit.aids)
     n = 0
     for (s, tf, sym), (bars, sides) in list(book.sig.items()):
         if s != unit.strategy or tf not in unit.tfs:
             continue
         for b, sd in zip(bars, sides):
-            if (sym, b) not in taken and passes(sym, sd, b, tf):
+            if b > now or (sym, b) in taken or any(hs == sym and lo <= b <= hi for hs, lo, hi in held):
+                continue
+            if passes(sym, sd, b, tf):
                 n += 1
     return n
 
@@ -757,7 +805,7 @@ def rules(book: Book, q: dict, now: int) -> dict:
            "start": book.start, "run_days": K.r((now - int(book.start or now)) / DAY_MS, 3),
            "signals_ko": ("B 쪽은 신호 기록(signal_log: 계산된 모든 신호, 계좌가 다른 거래 중이라 못 들어간 신호도 남음)을 써서 "
                           "B가 바빠서 놓친 진입도 같은 방향으로 셉니다."),
-           "signal_rows": book.sig_rows, "small_n": RULE_SMALL}
+           "signal_rows": book.sig_rows, "small_n": RULE_SMALL, "flip_money_ko": FLIP_MONEY_KO}
     if kind in ("both", "filter"):
         a, b = c["a"], c["b"]
         bar = TF_MS.get(a.tf, HOUR_MS)
@@ -772,14 +820,17 @@ def rules(book: Book, q: dict, now: int) -> dict:
             out["window_ko"] = "A가 들어갈 때 그 코인에 대한 B의 가장 최근 신호가 같은 방향일 때만 (B가 그 코인에 신호를 낸 적이 없으면 거름)"
         out.update(a=a.as_dict(), b=b.as_dict())
         _rule_rows(book, out, [a], passes, a.tfs, now)
-        out["busy_passed"] = _busy_signals(book, a, passes)
+        out["busy_passed"] = _busy_signals(book, a, passes, now)
         return out
     if kind == "vote":
         members, kk = c["members"], c["k"]
-        voters = [(m.strategy, m.tfs, max(TF_MS.get(tf, HOUR_MS) for tf in m.tfs)) for m in members]
+        # a member that is a whole strategy votes when any of its timeframes agrees, each signal alive one of its
+        # own bars (a 15m signal 15 minutes, a 4h signal 4 hours)
+        voters = [(m.strategy, [(tf, TF_MS.get(tf, HOUR_MS)) for tf in m.tfs]) for m in members]
 
         def votes(sym, side, t, skip=None):
-            return sum(1 for i, (s, tfs, bar) in enumerate(voters) if i != skip and _agrees(book, s, tfs, sym, side, t - bar, t))
+            return sum(1 for i, (s, tfb) in enumerate(voters)
+                       if i != skip and any(_agrees(book, s, [tf], sym, side, t - bar, t) for tf, bar in tfb))
         out.update(members=[m.as_dict() for m in members], k=kk,
                    window_ko=("구성원마다 자기 봉 하나 길이 동안 그 방향 신호가 살아 있다고 보고, 들어가는 순간 같은 코인·같은 방향인 "
                               f"구성원이 {kk}개 이상일 때만 (같은 코인·방향이 이미 열려 있으면 겹친 진입은 하나로 셈)"))
@@ -807,8 +858,8 @@ def rules(book: Book, q: dict, now: int) -> dict:
         out["rows"] = [_rows_stats(f"합친 규칙 ({len(members)}개 중 {kk}개 이상)", "rule", rule),
                        _rows_stats("구성원 거래 전부 (거르기 전)", "alone", every),
                        _rows_stats("걸러진 거래", "dropped", [x for x in every if x["id"] not in ids]),
-                       _rows_stats(f"동전 봇 + 같은 투표 (구성원 {max(1, kk - 1)}개 이상 같은 방향)", "flip_rule", fk),
-                       _rows_stats("동전 봇 전부", "flip_all", flips)]
+                       _rows_stats(f"동전 봇 + 같은 투표 (구성원 {max(1, kk - 1)}개 이상 같은 방향)", "flip_rule", fk, money=False),
+                       _rows_stats("동전 봇 전부", "flip_all", flips, money=False)]
         out["duplicates"] = dup
         return out
     # kind == "tf": the same strategy's higher timeframe as the filter of its lower one
@@ -834,14 +885,14 @@ def rules(book: Book, q: dict, now: int) -> dict:
             _rows_stats("걸러진 거래", "dropped", [x for x in alone if x["id"] not in ids])]
     if s != "all":
         rows.append(_rows_stats(f"동전 봇 + 같은 거르개 ({tf_ko(hi)} 신호)", "flip_rule",
-                                [x for x in flips if _latest(book, s, [hi], x["sym"], x["bar"]) == x["side"]]))
-    rows.append(_rows_stats(f"{tf_ko(lo)}봉 동전 봇 전부", "flip_all", flips))
+                                [x for x in flips if _latest(book, s, [hi], x["sym"], x["bar"]) == x["side"]], money=False))
+    rows.append(_rows_stats(f"{tf_ko(lo)}봉 동전 봇 전부", "flip_all", flips, money=False))
     out["rows"] = rows
     if s == "all":
         out["per_strategy"] = per
     else:
         a = Unit(f"{s}@{lo}", "account", s, lo, [f"{s}@{lo}"], "core", f"{names.get(s, s)} · {tf_ko(lo)}")
-        out["busy_passed"] = _busy_signals(book, a, lambda sym, side, t, _tf=None: _latest(book, s, [hi], sym, t) == side)
+        out["busy_passed"] = _busy_signals(book, a, lambda sym, side, t, _tf=None: _latest(book, s, [hi], sym, t) == side, now)
     return out
 
 
@@ -852,8 +903,9 @@ def _rule_rows(book: Book, out: dict, units: list, passes, tfs, now: int) -> Non
     flips = [x for tf in tfs for x in book.trades(book.flips(tf)) if x["exit"] <= now]
     out["rows"] = [_rows_stats("합친 규칙", "rule", kept), _rows_stats("A 혼자", "alone", every),
                    _rows_stats("걸러진 거래", "dropped", [x for x in every if x["id"] not in ids]),
-                   _rows_stats("동전 봇 + 같은 거르개", "flip_rule", [x for x in flips if passes(x["sym"], x["side"], x["bar"])]),
-                   _rows_stats("동전 봇 전부", "flip_all", flips)]
+                   _rows_stats("동전 봇 + 같은 거르개", "flip_rule", [x for x in flips if passes(x["sym"], x["side"], x["bar"])],
+                               money=False),
+                   _rows_stats("동전 봇 전부", "flip_all", flips, money=False)]
 
 
 # ---------------------------------------------------------------- the picker

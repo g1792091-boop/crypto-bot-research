@@ -134,7 +134,10 @@ def daily_numbers(daily: dict, ret_total: Optional[float], mdd_pct: Optional[flo
     pnl = np.asarray(daily.get("pnl") or [], dtype=np.float64)
     rr = np.asarray(daily.get("ret") or [], dtype=np.float64)
     n = len(pnl)
-    out = {"days": n, "partial_last": bool(daily.get("partial_last")), "worst_day": None, "best_day": None,
+    labels = daily.get("days") or []
+    out = {"days": n, "partial_last": bool(daily.get("partial_last")),
+           "partial_day": labels[-1] if daily.get("partial_last") and labels else None,   # the day still going on
+           "worst_day": None, "best_day": None,
            "win_days": None, "win_days_n": None, "daily_vol": None, "sharpe_like": None, "sortino_like": None,
            "calmar_like": calmar_like(ret_total, mdd_pct) if n >= min_days else None, "ratio_min_days": min_days}
     if not n:
