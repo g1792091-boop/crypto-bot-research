@@ -67,7 +67,14 @@ export async function mount(el, ctx) {
     await render(d, gen);
   }
 
-  const backLink = () => h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+  // the way back; on a shown account (view.nav, set by render) the same row carries ★ 즐겨찾기 and '＋ 비교에 추가' (conv-b)
+  const backLink = () => {
+    const a = h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+    const n = view.nav;
+    view.nav = null;
+    return n ? h("div", {class: "row wrap account-nav"}, a, h("span", {class: "grow"}),
+      fav.starBtn("account", n.id, {text: true, label: n.name}), cmp.cmpBtn(n.id, {label: n.name})) : a;
+  };
 
   async function render(d, gen) {
     const board = await store.need("board", 120000).catch(() => null);
@@ -184,10 +191,8 @@ export async function mount(el, ctx) {
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
-    // conv-b: ★ 즐겨찾기 and 비교에 추가 (매매법 비교, #/compare) beside the way back
-    el.replaceChildren(h("div", {class: "row wrap account-nav"}, backLink(), h("span", {class: "grow"}),
-      fav.starBtn("account", acc.account_id, {text: true, label: name}), cmp.cmpBtn(acc.account_id, {label: name})),
-    headSlot, same ? same.el : null, candleCard,
+    view.nav = {id: acc.account_id, name};          // conv-b: backLink() carries ★ 즐겨찾기 and 비교에 추가 for this account
+    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));

@@ -48,7 +48,8 @@ export function termChart(ctx, st, onTf) {
   let seenPos = null;            // this coin's open positions at the last board (a new one is a real fill: one accent flash)
   let draw = null, alerts = null;  // conv-b: the drawing tools (draw-kit.js) and the last /api/price-alerts answer
 
-  // the armed price alerts of this coin as the deck's '가격 알림 선' (the same lines as the 차트 screen's)
+  // the armed price alerts of this coin as the deck's '가격 알림 선' (the same lines as the 차트 screen's; group "al" is not
+  // in this deck's '선' menu, so they always show: a fired or deleted alert leaves with the next answer)
   function drawAlerts() {
     if (!deck) return;
     deck.setLines("al", ((alerts && alerts.alerts) || []).filter((a) => a.symbol === st.sym && a.armed).map((a) => ({
@@ -220,7 +221,7 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "al"]});
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"]});
       deck.onToggle((g) => { if (g === "ev" || g == null) drawMarks(); });
       // conv-b: 그리기 (lines, boxes, notes per coin + timeframe on this device) and the right-click '이 가격에 알림'
       // (the existing /api/price-alerts route); the armed alerts of this coin are the deck's '가격 알림 선'
