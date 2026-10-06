@@ -445,6 +445,12 @@ a.term-cr:hover { background: var(--surface-2); }
   html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: auto minmax(0, 1fr) calc(236px * var(--ts)); }
 }
 @media (min-width: 1200px) and (max-width: 1599px) {
+  /* bigger type below 1600 px: the same compact heads as a 1280 px window at 보통 */
+  html[data-text="lg"] .term-ut.n, html[data-text="xl"] .term-ut.n,
+  html[data-text="lg"] .term-left .term-rbk, html[data-text="xl"] .term-left .term-rbk,
+  html[data-text="lg"] .term-snd, html[data-text="xl"] .term-snd { display: none; }
+  html[data-text="lg"] .term-rb.wide .term-rb-t, html[data-text="xl"] .term-rb.wide .term-rb-t { flex-basis: calc(44px * var(--ts)); }
+  html[data-text="lg"] .term-sel, html[data-text="xl"] .term-sel { max-width: calc(84px * var(--ts)); }
   html[data-text="lg"] .term-t .xn, html[data-text="xl"] .term-t .xn, html[data-text="lg"] .term-t .xe, html[data-text="xl"] .term-t .xe { display: none; }
 }
 /* a tablet or a narrow PC window (760-1199 px): the chart and the table first, then the two side columns, page scroll */
