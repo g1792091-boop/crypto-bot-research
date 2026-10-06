@@ -249,19 +249,21 @@ class League:
         return out
 
     def _prune(self, coin: str, tf: str, tfm: int) -> None:
-        """Drop bars older than KEEP_BARS before the slowest member's cursor (never while a member has not started on them)."""
-        st, cursors = self.store, []
+        """Drop bars older than KEEP_BARS before the slowest member's cursor (never while a member has not started on them),
+        and never a bar a pending clone of any member still has to enter on (a long catch-up in one tick moves the cursor
+        far past the clones that enter up to 5 days before their trade)."""
+        st, cursors, needs = self.store, [], []
         for x in self.members:
             if (coin, tf) in _series(x):
                 s = st.series(x.member_id, coin, tf)
                 if s is None or s["last_bar_ms"] is None:
                     return
                 cursors.append(int(s["last_bar_ms"]))
+                need = st.oldest_pending_clone_ms(x.member_id, coin, tf)
+                if need is not None:
+                    needs.append(need)
         if cursors:
-            cut = min(cursors) - KEEP_BARS * tfm
-            need = st.oldest_pending_clone_ms(coin, tf)      # a clone that has not entered yet needs its own entry bar
-            if need is not None:                             # (a long catch-up in one tick moves the cursor far past it)
-                cut = min(cut, need)
+            cut = min([min(cursors) - KEEP_BARS * tfm] + needs)
             st.conn.execute("DELETE FROM bars WHERE coin = ? AND tf = ? AND t_ms < ?", (coin, tf, cut))
 
     def _finish_status(self, m: Member, coin: str, tf: str, cur: Optional[dict], feed: Optional[dict], sync: dict,

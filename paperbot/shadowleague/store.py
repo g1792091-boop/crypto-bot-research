@@ -524,10 +524,10 @@ class Store:
             q, a = q + " AND coin = ? AND tf = ?", a + [coin, tf]
         return [dict(r) for r in self.conn.execute(q + " ORDER BY target_ms, clone_id", a)]
 
-    def oldest_pending_clone_ms(self, coin: str, tf: str) -> Optional[int]:
-        """The earliest entry bar any member's pending clone of this coin / timeframe still needs (None = no pending clone)."""
-        r = self.conn.execute("SELECT MIN(target_ms) FROM clones WHERE coin = ? AND tf = ? AND status = 'pending'",
-                              (coin, tf)).fetchone()
+    def oldest_pending_clone_ms(self, member_id: str, coin: str, tf: str) -> Optional[int]:
+        """The earliest entry bar a pending clone of this member, coin and timeframe still needs (None = no pending clone)."""
+        r = self.conn.execute("SELECT MIN(target_ms) FROM clones WHERE member_id = ? AND status = 'pending' AND coin = ? "
+                              "AND tf = ?", (member_id, coin, tf)).fetchone()
         return None if r is None or r[0] is None else int(r[0])
 
     def pending_clone_series(self, member_id: str) -> list[tuple]:

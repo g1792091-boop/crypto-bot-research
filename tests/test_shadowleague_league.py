@@ -154,7 +154,9 @@ def test_a_pending_clone_keeps_its_entry_bar_through_the_pruning_and_a_lost_one_
     ex, m, st = world(tmp_path, k=10)
     st, _ = ticks(st, ex, m, [1239, 1539])
     n_bars = st.conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
-    assert st.oldest_pending_clone_ms("BTC", "1h") is None or isinstance(st.oldest_pending_clone_ms("BTC", "1h"), int)
+    pend = [c["target_ms"] for c in st.clones_of(m.member_id) if c["status"] == "pending"]
+    assert pend and st.oldest_pending_clone_ms(m.member_id, "BTC", "1h") == min(pend)
+    assert st.oldest_pending_clone_ms(m.member_id, "ETH", "1h") is None and st.oldest_pending_clone_ms("nobody", "BTC", "1h") is None
     # a clone far in the past of everything stored cannot be simulated: it says so and stays pending
     cl = CL.make_clones(m.member_id, {"trade_id": "x", "coin": "BTC", "tf": "1h", "side": 1, "entry_ms": T0 + 5 * HOUR,
                                       "sl_dist": 0.01, "tp_dist": 0.03}, HOUR, T0, T0, 3, 5)
