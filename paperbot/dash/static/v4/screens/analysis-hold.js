@@ -24,10 +24,10 @@ export function holdcmp(d, env) {
     meta: [d.since ? `실험 시작 ${when(d.since)}부터` : null, d.accounts != null ? `${W.who} 계좌 ${fmt.int(d.accounts)}개` : null,
       `끝난 거래 ${fmt.int(m.trades || 0)}건`].filter(Boolean).join(" · "), at: d.computed_at, stale: d.stale,
     read: money
-      ? `묶음 수익률 = 끝난 거래 손익 합 ÷ 시작 돈 합 (계좌 ${fmt.int(d.accounts || 0)}개 × ${fmt.int(d.initial || 5000)}). 들고 있기 = 실험 시작 때 코인 6개를 같은 돈으로 1배로 사서 지금까지 (수수료·펀딩 없음). 반대로 = 끝난 거래마다 같은 때 들어가고 나와서 방향만 거꾸로.`
+      ? `묶음 수익률 = 끝난 거래 손익 합 ÷ 시작 돈 합 (계좌 ${fmt.int(d.accounts || 0)}개 × ${fmt.int(d.initial || 5000)}). 들고 있기 = 실험 시작 때 코인 6개를 같은 돈으로 1배로 사서 지금까지 (수수료·펀딩 없음). 반대로 = 계좌마다 거꾸로 계좌를 하나씩 따로 굴린 것: 끝난 거래마다 같은 때 들어가고 나와서 방향만 거꾸로, 크기는 그때 거꾸로 계좌가 가진 돈에 맞춰서 (진짜 계좌와 같은 비율), 돈이 파산선 아래로 떨어지면 거기서 멈춤.`
       : "들고 있기 = 실험 시작 때 코인 6개를 같은 돈으로 1배로 사서 지금까지 (수수료·펀딩 없음). 반대로 = 끝난 거래마다 같은 때 들어가고 나와서 방향만 거꾸로 했을 때 이긴 비율.",
     warn: [!money ? noMoneyLine() : null,
-      h("p", {class: "an-warn"}, ui.pill("대충 계산", "ref"), " 반대로는 대충입니다: 반대로 들어갔다면 손절·익절 자리가 달라서 실제로는 다른 때 나갔을 겁니다. 수수료는 거꾸로 한 거래도 똑같이 내고(양쪽 다 뺌), 펀딩은 반대로 셉니다."),
+      h("p", {class: "an-warn"}, ui.pill("대충 계산", "ref"), " 반대로는 대충입니다: 반대로 들어갔다면 손절·익절 자리가 달라서 실제로는 다른 때 나갔을 겁니다. 수수료는 거꾸로 한 거래도 똑같이 내고(양쪽 다 뺌), 펀딩은 반대로 셉니다. 한 거래에서 증거금보다 더 잃지는 않게 했습니다."),
       money ? h("p", {class: "an-read"}, "계좌는 20~50배로 매매하고 들고 있기는 1배라서, 크기를 바로 견줄 수는 없습니다. 방향과 흐름을 보는 용도입니다.") : null]})];
   if (d.error) { out.push(ui.card({plate: "들고 있었다면"}, h("p", {class: "muted"}, String(d.error)))); return out; }
 
@@ -37,7 +37,9 @@ export function holdcmp(d, env) {
   if (money) {
     const none = (x) => (x.trades ? null : "아직 끝난 거래 없음");
     tiles.push(tile(`${W.short} (끝난 거래)`, sp(m.ret, 2), none(m) || `이긴 비율 ${pc(m.wr)}`, fmt.tone(m.ret), "me"));
-    tiles.push(tile("반대로 했다면", sp((m.mirror || {}).mirror_ret, 2), none(m) || `이긴 비율 ${pc((m.mirror || {}).wr)} · 대충`, fmt.tone((m.mirror || {}).mirror_ret), "mir"));
+    const mb = (m.mirror || {}).busts || 0;
+    tiles.push(tile("반대로 했다면", sp((m.mirror || {}).mirror_ret, 2),
+      none(m) || `이긴 비율 ${pc((m.mirror || {}).wr)} · 대충${mb ? ` · 파산했을 계좌 ${fmt.int(mb)}개` : ""}`, fmt.tone((m.mirror || {}).mirror_ret), "mir"));
     tiles.push(tile(`${W.flips} (참고)`, sp(f.ret, 2), none(f) || `이긴 비율 ${pc(f.wr)}`, fmt.tone(f.ret), "flip"));
   } else {
     tiles.push(tile(`${W.short} 이긴 비율`, pc(m.wr), `끝난 거래 ${fmt.int(m.trades || 0)}건 · 수익률은 딥시크 화면에서`, "", "me"));

@@ -19,7 +19,7 @@ export function ghagree(d, env) {
     meta: [d.calls != null ? `GH Coin 타점 ${fmt.int(d.calls)}개 (기록 시작 ${when(d.first_ts)})` : null,
       d.trades != null ? `${W.who} 끝난 거래 ${fmt.int(d.trades)}건 · ${W.flips} ${fmt.int(d.flip_trades || 0)}건` : null].filter(Boolean).join(" · "),
     at: d.computed_at, stale: d.stale,
-    read: `진입 전 ${fmt.int(d.lookback_h || 24)}시간 안에 GH Coin이 그 코인에 낸 마지막 타점을 봅니다 (타점은 24시간이 지나면 끝남). 같은 방향 / 반대 방향 / 타점 없음으로 나누고, ${W.flips}도 같은 기준으로 나눠 나란히 둡니다.`,
+    read: `진입 전 ${fmt.int(d.lookback_h || 24)}시간 안에 GH Coin이 그 코인에 낸 마지막 타점을 봅니다 (타점은 24시간이 지나면 끝남; 진입과 같은 시각에 난 타점은 진입 뒤에 기록되므로 뺌). 같은 방향 / 반대 방향 / 타점 없음으로 나누고, ${W.flips}도 같은 기준으로 나눠 나란히 둡니다.`,
     warn: [!money ? noMoneyLine() : null,
       h("p", {class: "an-read"}, "GH Coin은 따로 도는 타점 기록기입니다. 계좌는 GH Coin을 읽지 않고, 이 화면도 매매를 바꾸지 않습니다.")]})];
   if (d.error) { out.push(ui.card({plate: "GH Coin 방향"}, h("p", {class: "muted"}, String(d.error)))); return out; }

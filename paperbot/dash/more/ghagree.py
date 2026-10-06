@@ -7,9 +7,10 @@ same way as the baseline. Descriptive, read-only; the page shows this tab only w
 
 GH Coin calls: ``ghcoin/calls.jsonl`` next to paper3.db (ghcoin/recorder.mjs; read with paperbot/ghcoin.read_events).
 A call is an ``open`` event that is not a mirror: coin, side (+1 long / -1 short), decision time ``t`` (the close of
-the 5-minute bar it was made on). For an entry at E on a coin: the latest call on that coin with t <= E and
+the 5-minute bar it was made on). For an entry at E on a coin: the latest call on that coin with t < E and
 E - t <= 24 hours (a call's own life: it expires after 24 hours) -> ``same`` (its side is ours), ``opposite``, or
-``none``. ``open_at_entry`` counts the calls that were still running at E (not yet hit their stop / target / flip).
+``none``. Strictly before: an entry's time is its bar's open (engine entry_time = bar.open_time), and a call made on
+the 5-minute bar that closed at that same moment is written by the recorder after it, so it was not out yet. ``open_at_entry`` counts the calls that were still running at E (not yet hit their stop / target / flip).
 Entries before the recorder's first event are ``before`` (left out). Per bucket: trades, win share (net P&L > 0),
 mean net ROE.
 
@@ -61,7 +62,7 @@ def latest(gh: dict, sym: str, entry: int) -> tuple[str, bool]:
     x = gh["by_sym"].get(sym)
     if not x:
         return "none", False
-    j = bisect.bisect_right(x[0], entry) - 1
+    j = bisect.bisect_left(x[0], entry) - 1            # t < entry (a call at the entry's own bar close came after it)
     if j < 0 or entry - x[0][j] > LOOKBACK_MS:
         return "none", False
     end = x[2][j]

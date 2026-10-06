@@ -8,6 +8,10 @@ MODULES and has no ``register``).
 - ``mirror_pnl``     the same trade the other way round (same entry and exit times and prices, same size), with the
                      fees paid again and the funding the other way; a loss is capped at the margin (isolated margin:
                      the position would have been liquidated there).
+- ``mirror_book``    every account's trades mirrored as a running account of its own: each mirrored trade sized to
+                     the mirror account's money the way the real one was sized to its own (the engine sizes on
+                     equity), never more than that money lost, and no trade after the bust line (paper accounts stop
+                     there). A plain sum of same-size mirrors could lose more than an account ever had.
 - ``strip``          an answer without money (DeepSeek, owners' D10 / D11): dash/analysis.no_money plus ``NO_MONEY``.
 
 Read-only: connections come from dash/analysis.ro_connect (``mode=ro``).
@@ -50,7 +54,7 @@ def closed_trades(c: sqlite3.Connection, kinds: tuple, tfs: tuple, since_ms: int
                   until_ms: Optional[int] = None) -> list[dict]:
     """The closed trades of ``kinds`` on ``tfs`` exited in [since_ms, until_ms), oldest exit first."""
     q = ("SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.symbol, t.entry_time, t.exit_time, t.exit_reason, "
-         "t.leverage, t.pnl, t.roe, t.data FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+         "t.leverage, t.pnl, t.roe, t.equity_after, t.data FROM trades t JOIN accounts a ON a.account_id = t.account_id "
          f"WHERE a.kind IN ({','.join('?' * len(kinds))}) AND a.timeframe IN ({','.join('?' * len(tfs))}) "
          "AND t.exit_time >= ?")
     args: list = [*kinds, *tfs, int(since_ms)]
@@ -58,8 +62,8 @@ def closed_trades(c: sqlite3.Connection, kinds: tuple, tfs: tuple, since_ms: int
         q += " AND t.exit_time < ?"
         args.append(int(until_ms))
     out = []
-    for aid, kind, strat, tf, sym, entry, exit_, reason, lev, pnl, roe, data in c.execute(q + " ORDER BY t.exit_time, t.id",
-                                                                                        args):
+    for aid, kind, strat, tf, sym, entry, exit_, reason, lev, pnl, roe, eq_after, data in c.execute(
+            q + " ORDER BY t.exit_time, t.id", args):
         try:
             d = json.loads(data) or {}
         except (TypeError, ValueError):
@@ -71,7 +75,7 @@ def closed_trades(c: sqlite3.Connection, kinds: tuple, tfs: tuple, since_ms: int
         out.append({"aid": aid, "kind": kind, "strategy": strat, "tf": tf or d.get("timeframe"),
                     "symbol": str(sym or d.get("symbol")), "side": side, "entry": int(entry), "exit": int(exit_),
                     "signal_ts": int(sig) if sig is not None else int(entry) - 1, "reason": str(reason or ""),
-                    "lev": _f(lev) or _f(d.get("leverage")), "pnl": float(pnl), "roe": _f(roe),
+                    "lev": _f(lev) or _f(d.get("leverage")), "pnl": float(pnl), "roe": _f(roe), "eq_after": _f(eq_after),
                     "margin": _f(d.get("margin")), "qty": _f(d.get("qty")), "fees": _f(d.get("fees")) or 0.0,
                     "funding": _f(d.get("funding")) or 0.0, "entry_price": _f(d.get("entry_price")),
                     "exit_price": _f(d.get("exit_price")), "stop_initial": _f(d.get("stop_initial"))})
@@ -101,6 +105,36 @@ def mirror_pnl(t: dict) -> Optional[float]:
     if m is not None and gross < -m:
         return -m
     return gross - (t.get("fees") or 0.0) + (t.get("funding") or 0.0)
+
+
+def mirror_book(trades: list, initial: float, bust_below: float = 0.0) -> dict:
+    """Sets ``mpnl`` on every trade: its mirror's P&L in a mirror account that starts with ``initial`` (one per real
+    account, ``aid``). The real account's money at the entry is ``eq_after - pnl`` (one position at a time); the mirror
+    trade is ``mirror_pnl`` scaled by mirror money / real money (both size on their own equity), at most the mirror
+    money lost. After the mirror account falls under ``bust_below`` it takes no more trades (``mpnl`` None, counted in
+    ``after_bust``). Returns {"accounts": mirrored accounts, "busts": mirror accounts that went bust, "after_bust": n}."""
+    by: dict = {}
+    for t in trades:
+        by.setdefault(t["aid"], []).append(t)
+    busts = after = 0
+    for rows in by.values():
+        money, dead = float(initial), False
+        for t in sorted(rows, key=lambda r: (r["exit"], r["entry"])):
+            t["mpnl"] = None
+            if dead:
+                after += 1
+                continue
+            m = mirror_pnl(t)
+            real = (t["eq_after"] - t["pnl"]) if t.get("eq_after") is not None else None
+            if m is None or not real or real <= 0:
+                continue
+            d = max(money * m / real, -money)
+            money += d
+            t["mpnl"] = d
+            if money < bust_below or money <= 0:
+                dead = True
+                busts += 1
+    return {"accounts": len(by), "busts": busts, "after_bust": after}
 
 
 def strip(x: Any) -> Any:

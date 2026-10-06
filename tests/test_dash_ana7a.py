@@ -313,6 +313,28 @@ def test_mirror_pnl_by_hand():
     assert K.mirror_pnl({"side": 1, "qty": None, "entry_price": 1, "exit_price": 2}) is None
 
 
+def test_mirror_book_runs_one_account_per_real_account_and_stops_at_the_bust_line():
+    def t(aid, k, pnl, eq_after, exit_price, qty=1.0, margin=100.0):
+        return {"aid": aid, "entry": k, "exit": k + 1, "side": 1, "qty": qty, "entry_price": 100.0,
+                "exit_price": exit_price, "fees": 0.0, "funding": 0.0, "margin": margin, "pnl": pnl, "eq_after": eq_after}
+    # account A: +50 on 1,000 (mirror -50: 5% of its money), then the real account had 1,050 and lost 105
+    # (10%): the mirror, now holding 950, wins 10% of 950 = 95
+    a1, a2 = t("A", 0, 50.0, 1050.0, 150.0), t("A", 2, -105.0, 945.0, -5.0, qty=1.0, margin=500.0)
+    book = K.mirror_book([a2, a1], 1000.0, 10.0)                                 # (any order in: by exit time)
+    assert a1["mpnl"] == pytest.approx(-50.0) and a2["mpnl"] == pytest.approx(950 * 105 / 1050)
+    assert book == {"accounts": 1, "busts": 0, "after_bust": 0}
+    # account B: the mirror of a +1,000 trade loses its whole margin of 995 out of 1,000 -> 5 left, under the bust
+    # line of 10: it takes no more trades
+    b1, b2 = t("B", 0, 1000.0, 2000.0, 1100.0, margin=995.0), t("B", 2, -5.0, 1995.0, 95.0)
+    book = K.mirror_book([b1, b2], 1000.0, 10.0)
+    assert b1["mpnl"] == pytest.approx(-995.0) and b2["mpnl"] is None and book == {"accounts": 1, "busts": 1, "after_bust": 1}
+    # never more than the account's money: a same-size sum would have said -1,500 out of 1,000
+    c1 = t("C", 0, 1500.0, 2500.0, 1600.0, margin=2000.0)
+    K.mirror_book([c1], 1000.0, 10.0)
+    assert c1["mpnl"] == pytest.approx(-1000.0)
+    assert t("D", 0, 1.0, None, 101.0).get("mpnl") is None and K.mirror_book([t("D", 0, 1.0, None, 101.0)], 1000.0)["busts"] == 0
+
+
 def _market_db(path, sym_prices, t0, n):
     from paperbot.archive import SCHEMA
     c = sqlite3.connect(path)
@@ -401,6 +423,9 @@ def test_gh_coin_same_opposite_none_by_hand(tmp_path):
     assert v["coin_flips"]["same"]["n"] == 1 and v["with_call"] == 3
     ds = GA.view(db, T0 + 3 * DAY, "ds200")
     assert ds["no_money"] and not (set(_keys(ds)) & DS_MONEY) and ds["mine"]["opposite"] == {"n": 1, "wr": 1.0, "small": True}
+    # a call made at the entry's own bar close is written after the entry: it does not count (strictly before)
+    gh = GA.calls(str(tmp_path / "ghcoin"))
+    assert GA.latest(gh, "BTCUSDT", c1)[0] == "none" and GA.latest(gh, "BTCUSDT", c1 + 1)[0] == "long"
     shutil.rmtree(str(tmp_path / "ghcoin"))
     assert GA.view(db, T0 + 3 * DAY, "core")["ready"] is False
 

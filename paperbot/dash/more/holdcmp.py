@@ -13,9 +13,14 @@ closed trade taken the other way. Descriptive, read-only.
                       weight basket (the mean of the six). Prices: the market recorder's market.db (5-minute bars, read-
                       only); a coin it does not cover is read from ``frames`` (1-hour closed bars; then the first price
                       is the close of the hour bar that ended at or before the run start, ``price_source`` says which).
-- 반대로 했다면         a7kit.mirror_pnl: the same entry and exit times and prices and the same size, the other side; fees
-                      paid again (both directions pay them), funding the other way, a loss capped at the margin. ROUGH:
-                      the other side would have had other stops and lock steps, so it would have left at other times.
+- 반대로 했다면         a7kit.mirror_pnl: the same entry and exit times and prices, the other side; fees paid again (both
+                      directions pay them), funding the other way, a loss capped at the margin. a7kit.mirror_book runs
+                      one mirror account per real account: each mirrored trade sized on the mirror account's own money
+                      the way the real trade was sized on the real account's money (equity_after - pnl), never losing
+                      more than that money, and no trade after the bust line (``busts``, ``after_bust``). A plain sum of
+                      same-size mirrors was not used: it can lose more than an account ever had (-178% of one
+                      account's money in the 30-day fixture's reel). ROUGH: the other side would have had other stops
+                      and lock steps, so it would have left at other times.
 - curve               hourly points (at most ``MAX_POINTS``; a wider step on a long run) of the cumulative realized
                       return of the group, its mirror and its coin flips, and of the basket (``hold_curve``).
 
@@ -125,17 +130,21 @@ def cum(trades: list, key: str, ts: list, capital: float) -> list:
     return out
 
 
-def part(trades: list, capital: float) -> dict:
-    """realized return, win share, the mirror's return and win share of one set of trades."""
-    for t in trades:
-        t["mpnl"] = K.mirror_pnl(t)
-    mir = [t for t in trades if t["mpnl"] is not None]
+def part(trades: list, capital: float, initial: float, bust_below: float) -> dict:
+    """realized return, win share, the mirror's return and win share of one set of trades (a7kit.mirror_book: one
+    mirror account per real account, sized on its own money, stopped at the bust line)."""
+    book = K.mirror_book(trades, initial, bust_below)
+    mir = [t for t in trades if t.get("mpnl") is not None]
     n = len(trades)
+    capped = 0
+    for t in mir:
+        m, mg = K.mirror_pnl(t), t.get("margin")
+        capped += m is not None and mg is not None and m <= -mg + 1e-9
     return {"trades": n, "wr": K.r4(sum(1 for t in trades if t["pnl"] > 0) / n, 4) if n else None,
             "ret": K.r4(sum(t["pnl"] for t in trades) / capital, 5) if capital and n else None,   # no trade: not 0%
             "mirror": {"trades": len(mir), "wr": K.r4(sum(1 for t in mir if t["mpnl"] > 0) / len(mir), 4) if mir else None,
                        "mirror_ret": K.r4(sum(t["mpnl"] for t in mir) / capital, 5) if capital and mir else None,
-                       "liq_capped": sum(1 for t in mir if t.get("margin") is not None and t["mpnl"] <= -t["margin"] + 1e-9)}}
+                       "liq_capped": capped, "busts": book["busts"], "after_bust": book["after_bust"]}}
 
 
 def view(paper_db: str, now_ms: int, group: str = "core", frames=None) -> dict:
@@ -177,8 +186,13 @@ def view(paper_db: str, now_ms: int, group: str = "core", frames=None) -> dict:
     for p in ts:
         v = [at(px[x["symbol"]], p) for x in known]
         ok = [(a / x["p0"] - 1) for a, x in zip(v, known) if a is not None and x["p0"]]
-        basket.append(K.r4(sum(ok) / len(ok), 5) if len(ok) == len(known) and ok else (0.0 if p == ts[0] else None))
-    p_mine, p_flips = part(mine, cap), part(flips, fcap)        # (adds each trade's mirror P&L, read by cum below)
+        if not known:                       # no coin's price: no basket line at all (not one dot at 0%)
+            basket.append(None)
+        else:
+            basket.append(K.r4(sum(ok) / len(ok), 5) if len(ok) == len(known) else (0.0 if p == ts[0] else None))
+    from ...config import v4_settings
+    bust = float(v4_settings().bust_below or 0.0)
+    p_mine, p_flips = part(mine, cap, init, bust), part(flips, fcap, init, bust)   # (sets each trade's mpnl for cum)
     out.update({
         "since": start, "now": now_ms, "accounts": n_acc, "flip_accounts": n_flip, "initial": init,
         "hold": {"coins": coins, "basket_chg": K.r4(sum(x["chg"] for x in known) / len(known), 5) if known else None,
