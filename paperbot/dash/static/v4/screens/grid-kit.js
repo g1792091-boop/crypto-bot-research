@@ -316,7 +316,8 @@ function strategyBody(ctx, d) {
     ? h("p", {class: "gk-vsline"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref"), " 칸 색 = 자기 수익률")
     : h("p", {class: "gk-vsline"}, h("b", null, "참고"), ` · 봉 ${fmt.int(c.vs_n || 0)}개 중 같은 봉 동전 봇 중앙값보다 위 ${fmt.int(c.above || 0)} · 아래 ${fmt.int(c.below || 0)} (칸 색)`);
   const stats = [
-    ui.stat("최대 낙폭", c.mdd_max == null ? "—" : fmt.pct(-c.mdd_max, 1), "가장 깊은 봉 계좌"),
+    // the deepest SINGLE timeframe account (the strategy page's '최대 낙폭 · 합친 곡선' is the summed curve): said so
+    ui.stat("최대 낙폭 · 계좌 하나", c.mdd_max == null ? "—" : fmt.pct(-c.mdd_max, 1), "봉 계좌 중 가장 깊었던 하나 (합친 곡선 아님)"),
     ui.stat("승률", c.win_rate == null ? "—" : fmt.pct(c.win_rate, 0, false), c.trades ? `${fmt.int(c.wins)}승 ${fmt.int(c.trades - c.wins)}패` : "거래 없음"),
     ui.stat("거래 수", `${fmt.int(c.trades || 0)}건`, ui.smallSample(c.trades || 0, SMALL) || `봉 계좌 ${fmt.int((d.accounts || []).length)}개 합`)];
   return [
