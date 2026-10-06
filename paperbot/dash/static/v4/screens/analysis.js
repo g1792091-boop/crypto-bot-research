@@ -105,7 +105,7 @@ export async function mount(el, ctx) {
   const groupSeg = ui.seg(GROUPS.map((g) => ({id: g.id, label: g.label, title: g.title})), st.group, (id) => setGroup(id), {label: "묶음 고르기"});
   const groupRow = h("div", {class: "an-gsel"}, h("span", {class: "an-glabel"}, "묶음"), groupSeg);
   const desc = h("p", {class: "an-desc"});
-  const body = h("div", {class: "stack an-body"});
+  const body = h("div", {class: "stack an-body"}, motion.shimmer(5, true));     // 불러오는 중 (never a blank page)
   el.append(ui.screenHead("분석", "매매법 계좌의 거래를 여러 방향으로 나눠 봅니다 · 설명용, 판정 아님"), segSlot, groupRow, desc, body);
 
   function setGroup(id) {

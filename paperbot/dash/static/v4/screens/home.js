@@ -293,12 +293,12 @@ export async function mount(el, ctx) {
   const [b0, s0] = await Promise.all([ctx.store.need("board", 60000).catch((e) => e), ctx.store.need("summary", 60000).catch((e) => e)]);
   if (!ctx.alive()) return;
   if (b0 instanceof Error) {
-    el.insertBefore(ui.errorBox(b0, () => ctx.store.refresh("board").catch(() => {})), el.children[1] || null);
+    el.insertBefore(ui.errorBox(b0, () => ctx.store.refresh("board"), {key: "board"}), el.children[1] || null);   // heals itself
   }
   ctx.watch("board", onBoard);
   ctx.watch("summary", onSummary);
   ctx.watch("checkpoint", (ck) => { if (ck) { st.ck = ck; renderCheckpoint(); } });
-  if (s0 instanceof Error) put(todayBody, ui.errorBox(s0, () => ctx.store.refresh("summary").catch(() => {})));
+  if (s0 instanceof Error) put(todayBody, ui.errorBox(s0, () => ctx.store.refresh("summary"), {key: "summary"}));
 
   // the office: refreshed every 30 s (shared cache) and when a room has a new message
   const office = async (maxAge) => {

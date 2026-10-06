@@ -142,7 +142,7 @@ export async function mount(el, ctx) {
 
   ctx.watch("debate", (d, k, err) => {
     if (d) render(d);
-    else if (err && !wrap.querySelector(".db-frame, .card")) wrap.replaceChildren(ui.errorBox(err, () => store.refresh("debate").catch(() => {})));
+    else if (err && !wrap.querySelector(".db-frame, .card")) wrap.replaceChildren(ui.errorBox(err, () => store.refresh("debate"), {key: "debate"}));
   });
   await store.need("debate", 60000).catch(() => null);
 }

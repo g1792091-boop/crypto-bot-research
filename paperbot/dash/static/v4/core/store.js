@@ -19,7 +19,7 @@ const SOURCES = {
   levwhy: ["/api/levwhy", 30000],
 };
 
-const cache = {};          // key -> {v, at, err}
+const cache = {};          // key -> {v, at, okAt, err}: at = the last try, okAt = the last good answer
 const subs = {};           // key -> Set(fn)
 const stops = {};          // key -> poll stopper
 const inflight = {};
@@ -33,7 +33,7 @@ async function load(key) {
       const v = await api(src[0]);
       // the 36 names + the server labels for DeepSeek and the reel (names_ko = groups.label_ko, the Telegram names)
       if (key === "board" && v && (v.strategy_ko || v.names_ko)) setStrategyNames({...(v.strategy_ko || {}), ...(v.names_ko || {})});
-      cache[key] = {v, at: Date.now(), err: null};
+      cache[key] = {v, at: Date.now(), okAt: Date.now(), err: null};
       notify(key);
       return v;
     } catch (e) {
@@ -55,7 +55,8 @@ function notify(key) {
 export const store = {
   /** The cached value (or undefined). */
   get: (key) => cache[key] && cache[key].v,
-  /** When it was fetched (ms) and the last error. */
+  /** {v, at (the last try, ms), okAt (the last good answer, ms), err (the last try's error, null after a good one)}:
+   *  a screen tells 불러오는 중 (no v, no err) from 못 불러옴 (err) from a real empty answer (v) with it (ui.loadState). */
   meta: (key) => cache[key] || {},
   /** Fetch now (returns the value; throws on error). */
   refresh: (key) => load(key),
@@ -77,7 +78,7 @@ export const store = {
   /** Promise of a value: cached when fresh enough (maxAgeMs), else fetched. */
   async need(key, maxAgeMs = 30000) {
     const c = cache[key];
-    if (c && c.v !== undefined && Date.now() - c.at < maxAgeMs) return c.v;
+    if (c && c.v !== undefined && Date.now() - (c.okAt || 0) < maxAgeMs) return c.v;
     return load(key);
   },
   /** The current mark price of a coin (from the ticker key; null when unknown). */

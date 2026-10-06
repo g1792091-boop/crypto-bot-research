@@ -166,7 +166,7 @@ export async function mount(el, ctx) {
   ctx.track(() => clearTimeout(unreadT));
   // ---------------------------------------------------------------- data
   ctx.watch("rooms", (ov, k, err) => {
-    if (!ov) { if (err && !st.ov) listPane.append(ui.errorBox(err, () => store.refresh("rooms").catch(() => {}))); return; }
+    if (!ov) { if (err && !st.ov && !listPane.querySelector(".errbox")) listPane.append(ui.errorBox(err, () => store.refresh("rooms"), {key: "rooms"})); return; }
     st.ov = ov;
     st.seen = syncUnread(ov);
     chat.setOv(ov);

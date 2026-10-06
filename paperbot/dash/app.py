@@ -638,7 +638,7 @@ class Data:
             xs = self.extras_state(c)
             since = (now + kst) // day_ms * day_ms - kst                     # 00:00 KST today
             rows = [dict(x) for x in c.execute(
-                "SELECT t.account_id, a.kind, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
+                "SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
                 "ON a.account_id = t.account_id WHERE t.exit_time >= ?", (since,))]
         out: dict = {"now": now, "start": start, "period_days": PERIOD_DAYS}
         if start is not None:
@@ -661,14 +661,19 @@ class Data:
         out["restart"] = restart_banner(rs, now)
         per: dict = {}
         group = {}
+        info: dict = {}                      # account -> {strategy, timeframe, kind, n}: the page names a row without the board
         for x in rows:
             per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
             group[x["account_id"]] = GROUP_OF_KIND.get(x["kind"], "other")
+            i = info.setdefault(x["account_id"], {"strategy": x["strategy"], "timeframe": x["timeframe"], "kind": x["kind"], "n": 0})
+            i["n"] += 1
 
+        # best / worst 3 accounts by today's closed P&L (every trade since 00:00 KST, no row cap: 홈 reads these instead
+        # of downloading the day's trades), each with its trade count for the page's 표본 적음
         def ranked(gs) -> tuple[list, list]:
             rank = sorted(((a, p) for a, p in per.items() if group[a] in gs), key=lambda kv: kv[1])
-            return ([{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
-                    [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0])
+            return ([{"account_id": a, "pnl": round(p, 2), **info[a]} for a, p in rank[::-1][:3] if p > 0],
+                    [{"account_id": a, "pnl": round(p, 2), **info[a]} for a, p in rank[:3] if p < 0])
         strat = [x for x in rows if x["kind"] == "strategy"]
         # best / worst: the 36, the reel and the extras (the DeepSeek P&L only in its own group, D11; the coin flips are
         # the yardstick); by_group: each group's own numbers (the page shows the groups its switch selects)
@@ -679,7 +684,7 @@ class Data:
             gb, gw = ranked((g,))
             by_group[g] = {"trades": len(xs), "pnl": round(sum(x["pnl"] for x in xs), 2),
                            "wins": sum(x["pnl"] > 0 for x in xs), "liquidations": sum(x["exit_reason"] == "LIQ" for x in xs),
-                           "best": gb, "worst": gw}
+                           "accounts": len({x["account_id"] for x in xs}), "best": gb, "worst": gw}
         out["today"] = {"since": since, "trades": len(rows), "pnl": round(sum(x["pnl"] for x in strat), 2),
                         "wins": sum(x["pnl"] > 0 for x in strat), "strategy_trades": len(strat),
                         "liquidations": sum(x["exit_reason"] == "LIQ" for x in rows),
@@ -1209,8 +1214,11 @@ def stream_event(data: "Data", rooms: "Rooms", st: dict) -> str:
     last = st.get("last_board")
     changed = {k: v for k, v in slim.items() if last is None or last.get(k) != v}
     st["last_board"] = slim
+    # cursor: where this connection stands (trade id, alert row), so a page that reconnects after a short gap asks for
+    # exactly what it missed (core/api.js streamUrl)
     payload = {"ts": b["ts"], "changed": changed, "trades": d["trades"], "alerts": d["alerts"],
-               "heartbeat": d["heartbeat"], "room_msg": st["room_msg"], "rooms": rooms_changed}
+               "heartbeat": d["heartbeat"], "room_msg": st["room_msg"], "rooms": rooms_changed,
+               "cursor": [st["trade_id"], st["alert_row"]]}
     return f"data: {json.dumps(json_finite(payload), allow_nan=False)}\n\n"
 
 

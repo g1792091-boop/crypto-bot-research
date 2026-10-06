@@ -140,7 +140,7 @@ function level() {
 }
 function critical() {
   return criticalLines({health: st.health, alerts: st.alerts, trades: st.trades, hb: stream.heartbeat,
-    streamOk: stream.state === "open", now: Date.now(), kindOf});
+    streamOk: stream.fresh(), link: {state: stream.state, since: stream.since}, now: Date.now(), kindOf});
 }
 function renderHealth() {
   const lv = level();
@@ -198,7 +198,8 @@ export function startShell() {
   store.watch("board", () => {});
   bus.on("alerts", (a) => { st.alerts = [...a, ...st.alerts].slice(0, 100); renderHealth(); });
   bus.on("trades", (t) => { st.trades = [...t, ...st.trades].slice(0, 300); renderHealth(); });
-  bus.on("stream:state", (s) => { st.streamErrSince = s === "error" ? (st.streamErrSince || Date.now()) : null; renderHealth(); });
+  // the page's own connection (core/api.js): any state but open (or a hidden tab's pause) counts as down from its start
+  bus.on("stream:state", (s) => { st.streamErrSince = s === "open" || s === "paused" ? null : (st.streamErrSince || Date.now()); renderHealth(); });
   // the live dot breathes once per REAL new heartbeat (the stream repeats the last one every 3 s: same ts, no pulse)
   let hbTs = null;
   bus.on("heartbeat", (hb) => {

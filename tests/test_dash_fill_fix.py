@@ -166,7 +166,8 @@ def test_wiring_count_only_and_words():
     assert "derive.countOnlyIn(a, st.sel)" in _read(SCR, "board-motion.js")
     assert 'Array.isArray(d.signals) ? "아직 없음" : "수집 전"' in _read(SCR, "rooms-record.js")
     hl = _read(SCR, "home-live.js")
-    assert "표본 적음" in hl and "최근 2,000건만" in hl
+    # today's best / worst from the server's day sums (summary today.by_group.core: every trade, no 2,000-row cap)
+    assert "표본 적음" in hl and "bestWorstOf(" in hl and "limit=2000" not in hl
     grid = _read(SCR, "grid.css")
     assert ".gk-cell.pos.off { background: var(--surface); color: var(--muted); }" in grid
     assert ".gk-cell.y5 small, .gk-cell.pos small { font-size: var(--t-xs); }" in grid

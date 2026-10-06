@@ -98,6 +98,20 @@ function clockLine(tf, d) {
  *  (the server re-reads signal_log from its cell cache, no new fetch). Returns the time of the next load. */
 export const AFTER_CLOSE = 45000;
 export const RECHECK = 45000;
+/** While the server still computes cells (d.pending): ask again after 2.5, 5, 10, then every 30 seconds (was every
+ *  2.5 s without end: 15 requests a minute, each 0.8 s of server time); no fewer pending cells for STALL_MS = stalled:
+ *  wait for the next bar close. wait: the last plan's state ({step, n, since}) or null. -> {wait, at, stalled}. */
+export const PENDING_STEPS = [2500, 5000, 10000, 30000];
+export const STALL_MS = 120000;
+export function pendingPlan(wait, pending, now, nextClose) {
+  if (!pending) return {wait: null, at: nextClose, stalled: false};
+  const moved = !wait || pending < wait.n;
+  const w = moved ? {step: wait ? wait.step : 0, n: pending, since: now} : {...wait};
+  if (!moved && now - w.since >= STALL_MS) return {wait: null, at: nextClose, stalled: true};
+  const at = now + PENDING_STEPS[Math.min(w.step, PENDING_STEPS.length - 1)];
+  w.step++;
+  return {wait: w, at, stalled: false};
+}
 export function nextLoadAt(d, now) {
   if (d && d.next_close && d.next_close > now) {
     const waiting = d.bar_close != null && (d.rows || []).some((r) => r && r.left === 0 && !r.fired);
@@ -192,7 +206,7 @@ export function radarMatrix(ctx, name, opts = {}) {
   const foot = h("p", {class: "note rd-mx-foot"});
   const el = ui.card({plate: "코인 × 봉 조건 지도", sub: "마지막으로 닫힌 봉 · 누르면 그 차트로", cls: "strat-o3 rd-mxcard"}, body, foot,
     ui.note("칸마다 롱·숏 조건이 몇 개 켜졌는지. 밝게 빛나는 칸이 지금 가장 가까운 곳입니다. 예측이 아니라 코드의 조건 검사 결과입니다."));
-  const st = {d: null, at: 0, busy: false, cells: new Map(), selKey: ""};
+  const st = {d: null, at: 0, busy: false, cells: new Map(), selKey: "", wait: null, glow: new Set()};
 
   function paint() {
     const d = st.d;
@@ -201,6 +215,10 @@ export function radarMatrix(ctx, name, opts = {}) {
     const best = ready.length ? Math.min(...ready.map((c) => (c.left == null ? 99 : c.left))) : null;
     const at = (tf, sym) => d.cells.find((c) => c.tf === tf && c.symbol === sym);
     st.cells.clear();
+    // a closest cell glows (steady light); it blinks a few times only when it newly became one (a real change), so a
+    // repaint while cells are computed never restarts the blink and nothing pulses on its own all day
+    const was = st.glow;
+    st.glow = new Set();
     const grid = h("div", {class: "rd-mx", role: "grid", style: {"--rd-cols": String(RADAR_TFS.length)}},
       h("span", {class: "rd-mx-h"}, "코인"), RADAR_TFS.map((tf) => h("span", {class: "rd-mx-h", title: `${fmt.tfKo(tf)} 다음 마감`}, fmt.tfKo(tf),
         h("small", {class: "rd-mx-cd num", dataset: {tf}}, bars.closeIn(tf, serverNow())))),
@@ -209,7 +227,9 @@ export function radarMatrix(ctx, name, opts = {}) {
         if (!c || !c.ready) return h("span", {class: "rd-mx-cell wait", title: "아직 계산 전"}, "…");
         const s = stateOf(c);
         const glow = c.left != null && best != null && c.left === best && best <= 1;
-        const b = h("button", {type: "button", class: ["rd-mx-cell", s.key, glow ? "glow" : ""], title: `${fmt.coin(sym)} ${fmt.tfKo(tf)} · ${onOf(c)} · ${s.ko}`,
+        if (glow) st.glow.add(`${tf}|${sym}`);
+        const blink = glow && !was.has(`${tf}|${sym}`);
+        const b = h("button", {type: "button", class: ["rd-mx-cell", s.key, glow ? "glow" : "", blink ? "blink" : ""], title: `${fmt.coin(sym)} ${fmt.tfKo(tf)} · ${onOf(c)} · ${s.ko}`,
           onclick: () => { if (opts.pick) opts.pick(tf, sym); markSel(); }},
           h("span", {class: ["rd-mx-l", c.long.of && c.long.on === c.long.of ? "full" : ""]}, `롱 ${c.long.on}/${c.long.of}`),
           h("span", {class: ["rd-mx-s", c.short.of && c.short.on === c.short.of ? "full" : ""]}, `숏 ${c.short.on}/${c.short.of}`),
@@ -222,7 +242,8 @@ export function radarMatrix(ctx, name, opts = {}) {
     markSel();
     const n1 = ready.filter((c) => c.left === 1).length, n0 = ready.filter((c) => c.left === 0).length;
     foot.textContent = `${fmt.int(ready.length)}/${fmt.int(d.cells.length)}칸 계산됨`
-      + (d.pending ? ` · 나머지 ${fmt.int(d.pending)}칸 계산 중` : "")
+      + (d.pending ? (st.stalled ? ` · 나머지 ${fmt.int(d.pending)}칸 계산이 늦어지고 있습니다 · 다음 봉 마감 뒤(${fmt.hm(st.at)}) 다시 봅니다`
+        : ` · 나머지 ${fmt.int(d.pending)}칸 계산 중`) : "")
       + ` · 한 칸 남음 ${fmt.int(n1)}칸` + (n0 ? ` · 조건 모두 켜짐 ${fmt.int(n0)}칸` : "");
   }
   function markSel() {
@@ -239,10 +260,14 @@ export function radarMatrix(ctx, name, opts = {}) {
       const d = await ctx.api(`/api/v4/radar/strategy/${encodeURIComponent(name)}`);
       if (!ctx.alive()) return;
       st.d = d;
-      paint();
       const now = serverNow();
-      // cells still being computed: ask again shortly; else after the next 15-minute close (the soonest timeframe)
-      st.at = d.pending ? now + 2500 : bars.barEnd("15m", now) + AFTER_CLOSE;
+      // cells still being computed: ask again after 2.5, 5, 10, then every 30 s; no progress for 2 minutes (the server
+      // busy, Binance limiting it): say so and wait for the next 15-minute close (the soonest timeframe)
+      const p = pendingPlan(st.wait, d.pending, now, bars.barEnd("15m", now) + AFTER_CLOSE);
+      st.wait = p.wait;
+      st.at = p.at;
+      st.stalled = p.stalled;
+      paint();
     } catch (e) {
       if (e && e.name === "AbortError") return;
       if (!st.d) put(body, ui.notYet("준비 전", "레이더를 아직 읽지 못했습니다"));

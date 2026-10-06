@@ -6,17 +6,19 @@ import {states, tile, note} from "./server-kit.js";
 
 const TITLE = {ok: "모두 정상입니다", warn: "확인할 것이 있습니다", bad: "고칠 것이 있습니다", unknown: "확인하는 중입니다"};
 const ago = (s) => (s == null ? "기록 없음" : `${fmt.dur(s)} 전`);
+/** The page's own stream is being made again (core/api.js: a browser retry, the watchdog, a first connect). */
+const relinking = () => ["error", "reconnecting", "connecting"].includes(stream.state);
 
 /** Problems / warnings / level with the live stream folded in (the dot's own rule). */
 export function healthState(hl) {
   const now = serverNow();
   const problems = [...((hl && hl.problems) || [])];
   const warnings = [...((hl && hl.warnings) || [])];
-  const stale = criticalLines({health: hl, alerts: [], trades: [], hb: stream.heartbeat, streamOk: stream.state === "open", now})
+  const stale = criticalLines({health: hl, alerts: [], trades: [], hb: stream.heartbeat, streamOk: stream.fresh(), now})
     .filter((l) => l.kind === "stale");
   // the stream's fresher heartbeat says the same as the dot; health's own line wins when it already says it
   if (stale.length && !problems.some((p) => /생존|1분봉/.test(p))) problems.unshift(stale[0].text);
-  if (stream.state === "error") warnings.unshift("이 기기의 실시간 연결이 끊겨 다시 연결하는 중입니다");
+  if (relinking()) warnings.unshift("이 기기의 실시간 연결이 끊겨 다시 연결하는 중입니다");
   const level = problems.length ? "bad" : warnings.length ? "warn" : hl ? "ok" : "unknown";
   return {problems, warnings, level};
 }
@@ -64,9 +66,9 @@ export function tiles(hl, o = {}) {
       st: dataAge == null ? "none" : dataAge < 300 ? "ok" : "bad"}));
   }
   const live = stream.live();
-  out.push(tile({k: "실시간 연결 (이 기기)", v: stream.state === "open" ? (live ? "연결됨" : "연결됨 · 봇 조용") : stream.state === "error" ? "다시 연결 중" : "연결 준비",
+  out.push(tile({k: "실시간 연결 (이 기기)", v: stream.state === "open" ? (live ? "연결됨" : "연결됨 · 봇 조용") : relinking() ? "다시 연결 중" : stream.state === "paused" ? "쉬는 중 (탭 숨김)" : "연결 준비",
     s: stream.lastEventAt ? `마지막 소식 ${ago((Date.now() - stream.lastEventAt) / 1000)}` : "아직 소식 없음",
-    st: stream.state === "open" ? (live ? "ok" : "warn") : stream.state === "error" ? "warn" : "none"}));
+    st: stream.state === "open" ? (live ? "ok" : "warn") : relinking() ? "warn" : "none"}));
   if (b.ready) {
     out.push(tile({k: "신호 (24시간)", v: `${fmt.int(b.signals_24h)}개`,
       s: `늦음 ${fmt.int(b.signals_late_24h || 0)}개 · 평균 지연 ${b.avg_delay_s == null ? "—" : fmt.num(b.avg_delay_s, 1) + "초"}`,

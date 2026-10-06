@@ -13,6 +13,7 @@ import {applyNavPos} from "./navpos.js";
 import {startDrawer} from "./drawer.js";
 import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
+import {startVersion} from "./version.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -35,6 +36,7 @@ function boot() {
   startNavKeys();          // 1-9, and the phone's sideways swipe between a group's screens
   startStream();
   startFeatureProbe();
+  startVersion();          // '새 버전 준비됨 · 눌러서 새로고침' when the server has newer code (before the first clock check)
   syncClock();
   setInterval(syncClock, 600000);
   maybeStartTour();
