@@ -21,7 +21,7 @@ export async function mount(el, ctx) {
   el.append(ui.screenHead("24시간 토론방", "AI 하나가 다섯 역할로 나눠 하는 토론 · 유료 API로 따로 돌고 주문·규칙·계좌를 바꾸지 않습니다"));
   const wrap = h("div", {class: "db-body"}, motion.shimmer(5));
   el.append(wrap);
-  const st = {d: null, shown: null, poked: 0};
+  const st = {d: null, shown: null, poked: 0, hist: null};
 
   // ---------------------------------------------------------------- the room (chat | status)
   const side = makeSide(ctx);
@@ -123,7 +123,9 @@ export async function mount(el, ctx) {
     const chat = chatOf(d);
     side.render(d);
     renderLive(chat[0] || null);
-    history.set(chat.slice(1), true);
+    // the earlier debates: redrawn only when the list of rounds changed (a poll must not fold a conversation being read)
+    const hk = chat.slice(1).map((r) => r.round_id).join(",");
+    if (hk !== st.hist) { st.hist = hk; history.set(chat.slice(1), true); }
     ideas.set(d.ideas || [], true);
     caution.replaceChildren(h("b", null, "읽을 때 주의"), h("span", null, d.caution || "AI가 쓴 토론이라 사실이 아니라 의견입니다."));
     if (!frame.isConnected) wrap.replaceChildren(frame);
