@@ -1,0 +1,47 @@
+/* 순위표 › 딥시크 › 딥시크 5년 결과 (screens/board-ds5y.js, ana7b; @imported by board.css). Tokens only; font sizes are
+   --t-* tokens. Phones: the rows wrap their chips, nothing scrolls sideways (the detail table scrolls inside .tbl-wrap). */
+.ds5-card { min-width: 0; }
+.ds5-body { display: grid; gap: 12px; min-width: 0; }
+.ds5-body > p { margin: 0; }
+.ds5-intro { font-size: var(--t-sm); line-height: 1.65; color: var(--ink-2); }
+.ds5-gate { font-size: var(--t-sm); line-height: 1.65; color: var(--ink-2); }
+.ds5-gate b { color: var(--ink); }
+.ds5-wait { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ds5-will { margin: 0; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6; }
+
+/* the progress bar (N / 342) */
+.ds5-prog { display: grid; gap: 6px; }
+.ds5-prog-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: var(--t-sm); }
+.ds5-prog-top .num { color: var(--accent); font-weight: 800; }
+.ds5-prog-t { display: block; height: 12px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line); overflow: hidden; }
+.ds5-prog-t i { display: block; height: 100%; width: var(--w, 0%); min-width: 4px; border-radius: inherit; background: var(--accent-line); transition: width .6s var(--ease); }
+.ds5-prog.full .ds5-prog-t i { background: var(--accent); }
+
+/* controls */
+.ds5-ctl { display: grid; gap: 8px; min-width: 0; }
+.ds5-lab { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
+.ds5-lab > span { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.ds5-lab .select { justify-self: start; }
+.ds5-stats { min-width: 0; }
+
+/* the definitions */
+.ds5-list { min-width: 0; }
+.ds5-row { display: grid; gap: 6px; padding: 10px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.ds5-list .plist > .ds5-row:first-child { border-top: 0; }
+.ds5-name { font-size: var(--t-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.ds5-name .muted { font-size: var(--t-xs); }
+.ds5-5y, .ds5-paper { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--t-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ds5-5y b, .ds5-paper b { font-size: var(--t-sm); }
+.ds5-5y .up, .ds5-paper .up { color: var(--up); }
+.ds5-5y .down, .ds5-paper .down { color: var(--down); }
+.ds5-tag { display: inline-block; min-width: 34px; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-2); color: var(--muted);
+  font-size: var(--t-2xs); font-weight: 800; text-align: center; line-height: 1.6; }
+.ds5-paper .ds5-tag { border-style: dashed; }
+.ds5-dots { display: inline-flex; align-items: center; gap: 3px; }
+.ds5-dots i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line-2); }
+.ds5-dots i.pos { background: var(--up); border-color: var(--up-line); }
+.ds5-dots i.neg { background: transparent; border-color: var(--down-line); }
+.ds5-dots i.none { background: var(--surface-3); border-style: dashed; }
+.ds5-dots span { margin-left: 3px; }
+.ds5-row .disclosure { font-size: var(--t-xs); }
+.ds5-coin { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }

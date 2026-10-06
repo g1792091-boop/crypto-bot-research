@@ -7,6 +7,7 @@ import {h, put, ui, fmt, derive, motion, local} from "../core/pb.js";
 import {groupCards, topBottom, rankList, groupKo, savedGroup, expInfo, extraPills, paintRoe, ORDER, TF_ORDER} from "./home-shared.js";
 import {boardTable} from "./board-table.js";
 import {rowMotion} from "./board-motion.js";
+import {ds5yCard} from "./board-ds5y.js";
 
 let current = null;          // the mounted screen's group setter (update() uses it)
 const okGroup = (g) => (ORDER.includes(g) || g === "all" ? g : null);
@@ -59,7 +60,9 @@ export async function mount(el, ctx) {
     h("a", {class: "btn-line", href: href("analysis", "map")}, "코인·장세 지도"),
     h("a", {class: "btn-line", href: href("analysis", "overlap")}, "계좌 겹침"),
     h("a", {class: "btn-line", href: href("analysis", "risk")}, "손익비·위험"));
-  el.append(h("div", {class: "board-grid"}, tbCard, listCard), links, h("div", {class: "board-grid2"}, tfCard, xCard));
+  // ana7b: 딥시크 5년 결과, only while the DeepSeek group is chosen (D10 / D11: DeepSeek numbers on its own screen)
+  const ds5 = ds5yCard(ctx);
+  el.append(h("div", {class: "board-grid"}, tbCard, listCard), ds5.el, links, h("div", {class: "board-grid2"}, tfCard, xCard));
 
   // ---------------------------------------------------------------- renderers
   // the four counts keep their elements: a count that really changed counts to its new value with a soft tint
@@ -157,6 +160,7 @@ export async function mount(el, ctx) {
     const x = expInfo(st.summary);
     put(refBox, ui.refNote(x && x.verdictTs,
       st.sel === "ds" ? "딥시크 계좌는 계좌마다 비교하지 않고 묶음 숫자만 참고로 봅니다." : null));
+    ds5.update(b, gs, st.sel, x && x.verdictTs);
     if (animate) { motion.swap(tb); motion.swap(tfBody); }
   }
   function setGroup(id, user) {
