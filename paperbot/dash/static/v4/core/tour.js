@@ -23,7 +23,7 @@ export const STEPS = [
   {go: "office", sel: ['[data-tour="office"]', '[data-group="agents"]'], t: "AI 직원 · 회의실",
     p: "픽셀 회의실과 콘솔입니다. AI 직원은 회의와 기록만 하고 거래하지 않습니다. 말풍선과 콘솔 줄은 저장된 실제 발언만 나옵니다."},
   {go: "server", sel: ["#toptools .oldui, .subtabs .oldui, .rail-old", '[data-group="server"]'], t: "서버와 도움말",
-    p: "서버 묶음에 서버·비용, 알림 기록, 신호, 도움말(어떻게 돌아가나 · 자주 묻는 질문)이 있습니다. '예전 화면'은 지금까지 쓰던 대시보드이고, 그 옆에 글자 크기 · 화면 색 · 메뉴 위치가 있습니다 (폰은 버튼 줄의 맨 끝). 이 안내는 도움말 › 자주 묻는 질문에서 다시 볼 수 있습니다."},
+    p: "서버 묶음에 서버·비용, 알림 기록, 신호, 도움말(어떻게 돌아가나 · 자주 묻는 질문)이 있습니다. '예전 화면'은 지금까지 쓰던 대시보드이고, 그 옆에 글자 크기 · 화면 색이 있습니다 (PC는 위 막대에 메뉴 위치와 함께, 폰은 버튼 줄의 맨 끝). 이 안내는 도움말 › 자주 묻는 질문에서 다시 볼 수 있습니다."},
 ];
 
 function visible(el) {
@@ -38,6 +38,11 @@ function find(sels, upto = sels.length) {
   return null;
 }
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+/** A target inside a sideways-scrolling row (the phone's menu strip) is scrolled into that row's view. */
+function bring(el) {
+  const rx = el.getBoundingClientRect();
+  if (rx.left < 0 || rx.right > window.innerWidth) el.scrollIntoView({block: "nearest", inline: "center", behavior: "auto"});
+}
 const barH = () => { const b = document.getElementById("botbar"); return b && visible(b) ? b.getBoundingClientRect().height : 0; };
 const topH = () => { const t = document.querySelector(".shell-top"); return t ? t.getBoundingClientRect().height : 0; };
 
@@ -60,6 +65,11 @@ export function startTour() {
   function place() {
     const vw = window.innerWidth, vh = window.innerHeight, bottom = vh - barH() - 12;
     const cw = card.offsetWidth, ch = card.offsetHeight;
+    // the shell draws its menu and top-bar controls again on every route / badge change: a target that was swapped
+    // out is found again by the same selectors (예전 화면, a strip group); one in the phone's sideways strip is kept in
+    // that row's view (the strip centres the current screen's button after a route change)
+    if (el && !el.isConnected) el = find(STEPS[i].sel);
+    if (el && visible(el)) bring(el);
     if (!el || !el.isConnected || !visible(el)) {
       ring.hidden = true;
       card.style.left = `${Math.max(16, (vw - cw) / 2)}px`; card.style.top = `${Math.max(16, (bottom - ch) / 2)}px`;
@@ -95,10 +105,7 @@ export function startTour() {
     }
     if (my !== gen) return;
     if (el) {
-      const rx = el.getBoundingClientRect();
-      if (rx.left < 0 || rx.right > window.innerWidth) {     // inside a sideways-scrolling row (the phone's menu strip)
-        el.scrollIntoView({block: "nearest", inline: "center", behavior: "auto"});
-      }
+      bring(el);
       const r = el.getBoundingClientRect();
       const inView = r.top >= topH() && r.bottom <= window.innerHeight - barH();
       if (!inView && getComputedStyle(el).position !== "fixed" && !el.closest(".shell-top, .botbar")) {
