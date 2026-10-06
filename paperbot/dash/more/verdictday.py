@@ -298,7 +298,7 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
                 ko = f"판정 연습 12:30 (동전 봇 {REHEARSAL_BOTS:,}개, 진짜 판정 아님)"
             else:
                 ko = "판정 연습 12:30 · 기록 없음"
-            out.append({"ts": t, "kind": "rehearsal", "ko": ko, "state": (r or {}).get("status")})
+            out.append({"ts": t, "kind": "rehearsal", "ko": ko, "state": (r or {}).get("status"), "skip": d in cp_days})
         t += DAY_MS
     for y in {dt.datetime.fromtimestamp(lo / 1000, dt.timezone.utc).year,
               dt.datetime.fromtimestamp(cp / 1000, dt.timezone.utc).year}:
@@ -393,12 +393,12 @@ def machine(rh: dict, jb: dict, c: dict) -> dict:
            "job": js.get("paperbot-checkpoint"), "rehearsal_timer": js.get("paperbot-rehearsal"),
            "projected_s": proj}
     job = out["job"] or {}
-    if not out["systemd"]:
-        level = "unknown"
-    elif job.get("state") != "on":
+    if out["systemd"] and job.get("state") != "on":
         level = "bad"
     elif last_run and last_run["status"] == "failed":
-        level = "warn"
+        level = "warn"                          # the rehearsal's own file says so, systemd or not
+    elif not out["systemd"]:
+        level = "unknown"
     elif job.get("ok") is False and not (c.get("due") and job.get("running")):
         level = "warn"
     else:

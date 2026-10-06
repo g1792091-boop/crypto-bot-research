@@ -45,7 +45,7 @@ function funnel(d, ctx) {
     h("b", {class: "path-fbig num"}, w.big),
     h("span", {class: "path-fsm"}, here ? "지금 여기" : w.small));
   });
-  const day = d.dplus != null ? `D+${fmt.int(d.dplus)}` : "";
+  const day = d.passed_ko || (d.dplus != null ? `D+${fmt.int(d.dplus)}` : "");     // the clock's own words when sent
   // the next verdict: after the first one "다음 판정"; its day passed without a record yet (hourly job) -> say so (the
   // verdict-day clock keeps a passed checkpoint as the next one, due, until its verdict is stored: dash/more/verdictday.py)
   const nc = d.next_checkpoint;

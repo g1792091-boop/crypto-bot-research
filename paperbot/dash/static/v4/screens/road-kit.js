@@ -92,7 +92,7 @@ export function pixelRoad(ctx, opts = {}) {
     // the checkpoint after this road's flag (on the verdict day itself the clock already names the next one)
     const flagTs = c.verdict_ts || last.ts;
     const after = (st.milestones || []).filter((m) => (m.kind === "verdict" || m.kind === "next") && m.ts > flagTs + 1).sort((a, b) => a.ts - b.ts)[0];
-    const nxt = after && opts.card ? h("span", {class: "muted proad-next", title: "1차 합격 계좌의 2차 확인 · 보류 계좌 다시"}, ` · 다음 판정 ${fmt.mmdd(after.ts)} (2차 확인)`) : null;
+    const nxt = after && opts.card ? h("span", {class: "muted proad-next", title: "그날: 1차 판정을 받은 계좌의 2차 확인 · 보류 계좌 다시"}, ` · 다음 판정 ${fmt.mmdd(after.ts)} (2차 확인)`) : null;
     put(head, vc ? [h("b", null, vc.passed_ko), h("span", {class: "muted"}, ` · ${vc.rest_ko}`)]
       : [h("b", null, ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤"), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`)],
     h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`, nxt));

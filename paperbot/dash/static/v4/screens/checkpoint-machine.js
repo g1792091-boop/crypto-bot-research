@@ -8,8 +8,9 @@ import {h, put, ui, fmt} from "../core/pb.js";
 
 const LEVEL = {ok: ["준비됨", "good"], warn: ["확인 필요", "warn"], bad: ["꺼짐", "bad"], unknown: ["서버에서만 확인", "thin"]};
 
-function rehearsalLine(r) {
-  if (!r || r.state === "missing") return h("span", {class: "muted"}, "연습 기록이 아직 없습니다 (첫 수요일 12:30 뒤 생김)");
+function rehearsalLine(r, next) {
+  const nx = next ? ` · 다음 ${fmt.date(next.ts)} ${fmt.hm(next.ts)}` : "";
+  if (!r || r.state === "missing") return h("span", {class: "muted"}, `연습 기록이 아직 없습니다${nx}`);
   if (r.state === "error") return h("span", {class: "ck-bad"}, "연습 기록을 읽지 못했습니다 (없다는 뜻이 아님)");
   const last = r.last, run = r.last_run;
   const out = [];
@@ -17,7 +18,7 @@ function rehearsalLine(r) {
     const mins = run.runtime_s != null ? ` (${fmt.dur(run.runtime_s)})` : "";
     out.push(run.status === "ok" ? h("b", {class: "up"}, `${fmt.date(run.ts)} 정상 끝남${mins}`)
       : h("b", {class: "down"}, `${fmt.date(run.ts)} 실패${run.error_kind ? ` (${run.error_kind})` : ""}`));
-  } else out.push(h("span", {class: "muted"}, "아직 한 번도 돌지 않았습니다"));
+  } else out.push(h("span", {class: "muted"}, `아직 한 번도 돌지 않았습니다${nx}`));
   if (last && last.status === "skipped") out.push(h("span", {class: "muted"}, ` · ${fmt.mmdd(last.ts)}는 판정 날이라 건너뜀`));
   if (r.n > 1) out.push(h("span", {class: "muted"}, ` · 최근 ${fmt.int(r.n)}번 중 정상 ${fmt.int(r.ok)}번${r.failed ? ` · 실패 ${fmt.int(r.failed)}번` : ""}`));
   return h("span", null, out);
@@ -53,8 +54,10 @@ export function machineCard(ctx) {
     const m = vd.machine;
     const [lk, lc] = LEVEL[m.level] || LEVEL.unknown;
     put(pill, ui.pill(lk, lc));
+    // the next Wednesday rehearsal from the road's milestones (deploy/paperbot-rehearsal.timer; skipped on a verdict day)
+    const next = (vd.milestones || []).find((x) => x.kind === "rehearsal" && x.ts > (vd.now || 0) && !x.skip);
     put(body, ui.kv([
-      ["판정 연습 (매주 수 12:30)", rehearsalLine(m.rehearsal)],
+      ["판정 연습 (매주 수 12:30)", rehearsalLine(m.rehearsal, next)],
       ["판정 작업", jobLine(m, "job")],
       ["연습 타이머", jobLine(m, "rehearsal")],
       ["판정 계산 예상", m.projected_s ? `약 ${fmt.dur(m.projected_s)} (마지막 연습 기준, 동전 봇 ${fmt.int(m.n_bots)}개)` : h("span", {class: "muted"}, "연습 기록이 생기면 나옴")],

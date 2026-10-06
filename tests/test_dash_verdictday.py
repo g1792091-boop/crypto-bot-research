@@ -331,7 +331,10 @@ def test_the_story_and_the_race_and_the_path(tmp_path):
     v = GP.verdict_stage({"ready": False}, {}, nc, CP1 + 5 * MIN, 30)
     assert v["when_ko"] == "첫 판정일 지남 · 판정 기록 기다림" and "12/04" not in json.dumps(v, ensure_ascii=False)
     early = Data(str(empty_dir / "paper3.db")).summary(CP1 - MIN)["next_checkpoint"]
-    assert not GP.overdue(early, False) and "11/04 첫 판정" in GP.verdict_stage({"ready": False}, {}, early, CP1 - MIN, 30)["when_ko"]
+    assert not GP.overdue(early, False)
+    assert GP.verdict_stage({"ready": False}, {}, early, CP1 - MIN, 30)["when_ko"] == "11/04 첫 판정 (오늘 09:00)"
+    week = Data(str(empty_dir / "paper3.db")).summary(CP1 - 7 * DAY + H)["next_checkpoint"]
+    assert GP.verdict_stage({"ready": False}, {}, week, CP1 - 7 * DAY + H, 30)["when_ko"] == "11/04 첫 판정 (7일 남음)"
 
 
 # ---------------------------------------------------------------- the routes, the clock moved
@@ -402,6 +405,7 @@ def test_rehearsal_summaries_say_only_whether_it_ran(tmp_path):
     assert V.machine(rh, {"available": False, "reason": "systemctl 없음"}, c)["level"] == "unknown"
     failed_last = {"state": "ok", "runs": rh["runs"][::-1]}
     assert V.machine(failed_last, on, c)["level"] == "warn"
+    assert V.machine(failed_last, {"available": False, "reason": "systemctl 없음"}, c)["level"] == "warn"   # its own file says so
     assert V.rehearsals(str(tmp_path / "nope")) == {"state": "missing", "runs": []}
 
 
@@ -414,6 +418,7 @@ def test_road_milestones_of_the_first_season():
     by = {(m["kind"], ck.day_str(m["ts"])): m for m in ms}
     assert by[("rehearsal", "2026-10-07")]["ko"] == "판정 연습 12:30 · 정상 끝남"
     assert by[("rehearsal", "2026-11-04")]["ko"] == "판정 연습 없음 (판정 날이라 건너뜀)"      # deploy: skipped on a verdict day
+    assert by[("rehearsal", "2026-11-04")]["skip"] and not by[("rehearsal", "2026-10-28")]["skip"]
     assert f"{ck.REHEARSAL_BOTS:,}개" in by[("rehearsal", "2026-10-14")]["ko"]
     dst = by[("dst", "2026-11-01")]
     assert dst["ts"] == ck._nth_sunday(2026, 11, 1) * DAY + 6 * H and "1시간 늦게" in dst["ko"]
@@ -496,5 +501,9 @@ def test_page_sources_keep_one_sentence_and_the_honesty_rules():
     main = rd("core", "main.js")
     assert "startVerdictBand();" in main and 'href="/static/v4/core/verdictday.css"' in rd("index.html")
     assert "vday.vclock(s0)" in rd("screens", "road-kit.js") and "c.passed_ko" in rd("screens", "home.js")
+    sh = rd("screens", "server-health.js")
+    assert "`D-${" not in sh and "일 남음" in sh and "nx.due" in sh                # 서버 › 상태 타일: the same clock
+    story = rd("screens", "story-pages.js")
+    assert "`D-${left}`" not in story and "d.verdict_due" in story
     since = rd("core", "since.js")
     assert "결과 계산 중" in since and "m.judged" in since and "verdict_result" in since
