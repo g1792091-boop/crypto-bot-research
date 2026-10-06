@@ -25,6 +25,27 @@ VENV=/opt/paperbot/venv
 
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo"; exit 1; fi
 
+# Armed just before the services are stopped for the code swap (below) and cleared once they are started again: a
+# failure in between (an error, Ctrl+C, a dropped SSH session) puts the previous code back if the swap was cut in half
+# and starts again the units this script stopped, so a failed install never leaves the bot down.
+restart_stopped() {
+  rc=$?
+  trap '' HUP INT TERM
+  trap - EXIT
+  [ "$rc" -eq 0 ] && return 0
+  set +e
+  if [ ! -d "$APP" ] && [ -d "$APP.old" ]; then
+    mv "$APP.old" "$APP" && echo "put the previous code back in $APP"
+  fi
+  if [ -n "${RUNNING:-}" ]; then
+    if systemctl start $RUNNING; then
+      echo "install.sh stopped early (exit $rc); started again:$RUNNING. Send this screen to the developer before running it again."
+    else
+      echo "install.sh stopped early (exit $rc) and could not start again:$RUNNING -> sudo systemctl start$RUNNING"
+    fi
+  fi
+}
+
 echo "== packages"
 # A new server runs cloud-init and its first automatic updates for a few minutes: wait for them
 # instead of failing on "Could not get lock".
@@ -162,6 +183,10 @@ paperbot-dscheck.service"
   for u in $UNITS; do
     systemctl is-active --quiet "$u" 2>/dev/null && RUNNING="$RUNNING $u"
   done
+  trap restart_stopped EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   [ -n "$RUNNING" ] && systemctl stop $RUNNING
   # A pass already running (up to 100 min) loads prompts and modules as it goes: end it before the
   # swap so it never mixes two versions or finds the tree missing. It is not restarted: the next timer
@@ -278,6 +303,7 @@ if [ -n "$RUNNING" ]; then
   systemctl start $RUNNING
   echo "restarted:$RUNNING (the bot resumes from its saved state; the start is logged in the runs table)"
 fi
+trap - EXIT HUP INT TERM
 
 cat <<'NEXT'
 
