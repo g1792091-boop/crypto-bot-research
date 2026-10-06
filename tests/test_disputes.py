@@ -585,3 +585,24 @@ def test_a_finished_run_without_its_period_table_is_void_never_the_advocates(con
         tid = _lab_trial(conn, LAB["test"], "failed", periods, ts=T0 + len(periods))
         v = DS.lab_verdict(R.get_trial(conn, tid))
         assert (v["status"], v["winner"]) == ("void", None) and "무효" in v["line_ko"]
+
+
+def test_a_forward_dispute_across_a_new_run_is_void(conn, tmp_path):
+    """paper3 replaced by a new run after the dispute opened (a reset): its trades are another experiment's."""
+    old = Paper(tmp_path, name="old.db")
+    o = _fwd(conn, old.ro(), "vs_flip", n=20, tf="1h")
+    new = Paper(tmp_path, start=T0 + DAY, name="new.db")
+    new.add(f"{S}@1h", T0 + 2 * DAY, -0.01, n=20)
+    new.add("RANDOM_1@1h", T0 + 2 * DAY, 0.01, n=20)
+    [g] = DS.grade_due(conn, new.ro(), T0 + 3 * DAY)
+    assert (g["dispute_id"], g["status"], g["winner"]) == (o["id"], "void", None) and "새로 시작" in g["line_ko"]
+    rows = DS.list_rows(conn, strategy=S, paper_ro=old.ro())
+    assert rows[0]["status"] == "void"
+
+
+def test_the_shown_progress_stops_at_n(conn, tmp_path):
+    paper = Paper(tmp_path)
+    _fwd(conn, paper.ro(), "vs_flip", n=20, tf="1h")
+    paper.add(f"{S}@1h", T0 + 1000, -0.01, n=23)
+    [r] = DS.list_rows(conn, strategy=S, paper_ro=paper.ro())
+    assert r["progress"] == 20 and r["progress_ko"] == "앞으로 20건 중 20건"

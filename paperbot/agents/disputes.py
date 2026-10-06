@@ -773,6 +773,12 @@ def forward_verdict(d: dict, paper_ro: Optional[sqlite3.Connection], now_ms: int
     expired = now_ms - ts > EXPIRE_DAYS * DAY_MS
     if paper_ro is None:
         return {"status": "expired", "winner": None, "line_ko": f"{EXPIRE_DAYS}일 안에 거래를 읽지 못함"} if expired else None
+    from .triggers import run_start
+    start = run_start(paper_ro)
+    if start is not None and int(start) > ts:
+        # paper3 was replaced by a new run after the dispute opened (a reset): its trades are another experiment's
+        return {"status": "void", "winner": None,
+                "line_ko": "다툼을 연 뒤 모의 실험이 새로 시작되어(새 계좌) 가릴 수 없음(무효)"}
     try:
         rows = _trades(paper_ro, _account_ids(S, tf), ts)
     except sqlite3.Error:
@@ -1064,6 +1070,8 @@ def list_rows(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None
         spec = r.get("spec") or {}
         n = spec.get("n")
         prog = progress(r, paper_ro)
+        if prog is not None and n:
+            prog = min(prog, int(n))           # N in, graded at the next tick: never 'N건 중 N+3건'
         out.append({"id": r["id"], "ts": r["ts"], "room_id": r["room_id"], "round_id": r.get("round_id"),
                     "strategy": r["strategy"], "strategy_ko": STRATEGY_KO.get(r["strategy"], r["strategy"]),
                     "source": r["source"], "source_ko": SOURCE_KO.get(r["source"], r["source"]),
