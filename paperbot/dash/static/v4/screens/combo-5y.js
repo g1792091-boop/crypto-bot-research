@@ -7,7 +7,7 @@
 // parity with the research numbers, the selection-bias caveat). Backtest only: 설명용, 판정 아님; coin flips are 참고.
 // Every server string is text (h()); numbers only through fmt.
 import {h, s, put, ui, fmt, motion, local} from "../core/pb.js";
-import {viewHead, shareBar} from "./analysis-kit.js";
+import {viewHead} from "./analysis-kit.js";
 
 const API = "/api/v4/combo5y";
 const FRESH_MS = 30 * 60 * 1000;
@@ -386,4 +386,3 @@ function methodsCard({d}) {
     h("p", {class: "an-note"}, d.label || "설명용, 판정 아님"));
 }
 
-export {shareBar};
