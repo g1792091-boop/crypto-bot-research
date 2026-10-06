@@ -50,7 +50,6 @@ export function closeGroupMenu(focusBtn = false) {
   w.querySelector(".gmenu").hidden = true;
   if (focusBtn) w.querySelector(".gbtn").focus({preventScroll: true});
 }
-export const groupMenuOpen = () => st.open;
 
 function moveGroup(gid, dir, focusFirst) {
   const ids = GROUPS.map((g) => g.id);
