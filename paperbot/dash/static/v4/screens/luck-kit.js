@@ -123,6 +123,7 @@ function follow(ctx, paint) {
     try { d = await ctx.api(LUCK_API); } catch (e) { if (!dead && ctx.alive()) paint(null, e); return; }
     if (dead || !ctx.alive()) return;
     if (d && d.pending) { if (!last) paint(null, null); ctx.timeout(() => { if (!dead) ask(); }, RETRY_MS); return; }
+    if (!d || d.error) { if (!last) paint(null, (d && d.error) || "no answer"); return; }   // the server's own failure
     last = d;
     paint(d, null);
   };

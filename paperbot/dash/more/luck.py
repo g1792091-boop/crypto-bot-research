@@ -258,7 +258,11 @@ def checkpoint_row(paper_db: Optional[str], checkpoint_db: Optional[str]) -> dic
         luck, tail = bh_luck(fams)
         tested, passed = _int(v.get("tested")), _int(v.get("luck_passed"))
         return row("checkpoint", "now", title, where, tested=tested, rule_ko=rule, luck=luck,
-                   luck_ko=f"실력이 하나도 없어도 평균 {luck:.2f}개 (보정 없이 봤다면 {float(v.get('lucky_if_uncorrected') or 0):.1f}개)",
+                   # the 판정 screen's '보정을 안 했다면' is the families' own alphas without BH (verdict doc 6), not the
+                   # 5 % of the coin card: both are named so the two numbers never read as one
+                   luck_ko=(f"실력이 하나도 없어도 평균 {luck:.2f}개 (묶음별 기준을 보정 없이 썼다면 "
+                            f"{float(v.get('lucky_if_uncorrected') or 0):.1f}개, '동전 봇 95%보다 잘하면 합격'이었다면 "
+                            f"{(tested or 0) * ALPHA:.1f}개)"),
                    passed=passed, passed_ko=f"운 시험 통과 {passed or 0:,}개 (그중 운일 수 있는 수 많아야 "
                                             f"{float(v.get('lucky_expected') or 0):.1f}개)",
                    tail=tail(passed or 0), extra={"date": v.get("date"), "ready": True,

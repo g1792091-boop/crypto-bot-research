@@ -446,3 +446,8 @@ def test_why_card_after_the_verdict_has_its_number(tmp_path):
     assert ck["ready"] and ck["plain"] == 6.0
     t = _render("K.whyCard(d)", json.loads(json.dumps(v)))["text"]
     assert "지난 30일 판정에서 검정한 계좌는 120개" in t and "약 6.0개" in t and "약 —개" not in t
+
+
+def test_cards_say_so_when_the_server_failed():
+    src = _read("luck-kit.js")
+    assert "if (!d || d.error) { if (!last) paint(null, (d && d.error) || \"no answer\"); return; }" in src
