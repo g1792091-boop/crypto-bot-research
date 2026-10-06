@@ -284,6 +284,20 @@ def test_the_goal_line_reuses_the_luck_calc_numbers_and_counts_today(env):
     assert empty["parts"][:2] == ["오늘 5년 시험 0개(통과 0)", "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"]
 
 
+def test_the_goal_line_never_reads_a_failed_read_as_zero(env):
+    """CONTRACT 1.6: a ledger (or paper3.db) that cannot be read says so; it never becomes '0 tests', 'no test yet' or
+    'the bot has no account yet' (on 홈 and in the evening Telegram)."""
+    bad = sqlite3.connect(":memory:")            # opens, but every query fails (no such table)
+    try:
+        g = GL.goal(bad, bad, None, env["now"])
+    finally:
+        bad.close()
+    assert g["tests_today"].get("error") and g["newlab"].get("error") and g["verdict"].get("error")
+    assert g["parts"] == ["오늘 5년 시험 수는 시험 장부를 읽지 못해 모름", "동전보다 나은 새 매매법 후보 수는 시험 장부를 읽지 못해 모름",
+                          "판정 날짜는 계좌 기록을 읽지 못해 모름"]
+    assert "0개" not in g["text_ko"] and "없음" not in g["text_ko"] and "정해짐" not in g["text_ko"]
+
+
 def test_the_verdict_day_follows_the_checkpoint_clock(tmp_path):
     from test_rooms import START, World, kst
     w = World(tmp_path)
