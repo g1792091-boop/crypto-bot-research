@@ -137,6 +137,15 @@ def _state(tmp_path, which: str, monkeypatch=None):
     return paper, out
 
 
+def _runtime_ms(out) -> int:
+    """The stored verdict's own runtime (judge's timer, in its data) in ms."""
+    c = sqlite3.connect(f"file:{out}?mode=ro", uri=True)
+    try:
+        return int(json.loads(c.execute("SELECT data FROM verdicts WHERE date = ?", (DATE1,)).fetchone()[0])["runtime_s"] * 1000)
+    finally:
+        c.close()
+
+
 def _clock(paper, out, now):
     return V.clock(START, now, V.read_ledger(out), V.day_state_reader(paper))
 
@@ -229,7 +238,10 @@ def test_after_the_job_wrote_the_verdict_and_the_next_days(tmp_path):
     led = V.read_ledger(out)
     c = V.clock(START, CP1 + 2 * H + MIN, led)
     assert (c["k"], c["ts"], c["due"], c["state"], c["of"]) == (2, CP2, False, "before", 60)
-    assert c["last"] == {"k": 1, "day": 30, "date": DATE1, "ts": CP1, "stored_ts": CP1 + 2 * H}
+    # the verdict row's ts is the job run's own clock (run_due's now); it was written its runtime later (done_ts)
+    rt = _runtime_ms(out)
+    assert rt > 0 and led["done"][DATE1] == CP1 + 2 * H + rt
+    assert c["last"] == {"k": 1, "day": 30, "date": DATE1, "ts": CP1, "stored_ts": CP1 + 2 * H, "done_ts": CP1 + 2 * H + rt}
     assert c["line_ko"] == "60일 중 30일 지남 · 2번째 판정까지 30일 (12/04 09:00)"
     d1 = V.clock(START, CP1 + DAY + H, led)
     assert (d1["n"], d1["left"], d1["line_ko"]) == (31, 29, "60일 중 31일 지남 · 2번째 판정까지 29일 (12/04 09:00)")
@@ -322,7 +334,7 @@ def test_the_sleep_sheet_says_whether_the_result_is_stored(tmp_path):
         # looked at 09:10, back at 12:00: the result stored in between is named
         back = since(c, None, CP1 + 10 * MIN, CP1 + 3 * H, ledger=led)
         assert [x for x in back["milestones"] if x["kind"].startswith("verdict")] == [
-            {"kind": "verdict_result", "k": 1, "ts": CP1 + 2 * H, "cp_ts": CP1}]
+            {"kind": "verdict_result", "k": 1, "ts": CP1 + 2 * H + _runtime_ms(out), "cp_ts": CP1}]
         # checkpoint.db unreadable: the verdict day is named without a claim either way (never '계산 중' as a fact)
         bad = since(c, None, CP1 - H, CP1 + 5 * MIN, ledger={"db": "error", "verdicts": {}, "snapshots": {}, "log": {}})
         assert [x["judged"] for x in bad["milestones"] if x["kind"] == "verdict"] == [None]

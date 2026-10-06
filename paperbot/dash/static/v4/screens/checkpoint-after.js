@@ -118,8 +118,8 @@ function checklist(d, ctx) {
 function meetingLine(m, ctx) {
   const go = h("a", {class: "btn-line", href: ctx.href("rooms", "team:lead")}, "회의 보기 →");
   if (m === undefined) return h("span", {class: "muted"}, "읽는 중…");
-  if (m === null) return h("span", null, "결과가 저장되면 총괄 판정 회의가 열립니다 · 아직 시작 전");
-  if (m.error) return h("span", {class: "ck-bad"}, "회의 기록을 읽지 못했습니다 (없다는 뜻이 아님)");
+  if (m === null) return h("span", null, "아직 시작 전 · 총괄이 판정 결과를 받으면 회의를 엽니다 ", go);
+  if (m.error || m.failed) return h("span", {class: "ck-bad"}, "회의 기록을 읽지 못했습니다 (없다는 뜻이 아님) · 1분 뒤 다시 확인");
   if (m.status === "running") return h("span", null, h("b", null, "진행 중"), ` · ${fmt.hm(m.started_ts)} 시작 `, go);
   return h("span", null, h("b", null, `끝남 ${fmt.hm(m.ended_ts)}`), m.line ? ` · '${m.line}'` : "", " ", go);
 }
@@ -183,7 +183,8 @@ export function afterCard(ctx) {
     put(head, `${ck.day ?? "—"}일째 판정 · ${verdictDate(ck.date)} 09:00 (한국 시각) 결과로 정리했습니다`);
     put(linesBox, lines(ck, st.summary));
     put(mapBox, resultMap(ck, st.board, st.phoneAll, ctx));
-    put(meetBox, meetingLine(st.vd ? st.vd.meeting : undefined, ctx));
+    // /api/v4/verdictday (asked every minute by 판정): its failed load says so, never 'still reading' for ever
+    put(meetBox, meetingLine(!st.vd ? undefined : st.vd.failed ? {failed: true} : st.vd.meeting, ctx));
     if (loadedFor !== ck.date) {
       loadedFor = ck.date;
       put(ckBox, checklist(null, ctx)); put(lvBox, levruleLine(undefined, ctx));

@@ -121,11 +121,15 @@ def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: in
         # a verdict day that passed since: whether its result is stored (checkpoint.db; the job computes it from 09:35),
         # and a result stored since even when its day passed before (the 09:10 visit, back at 20:00)
         verdicts = (ledger or {}).get("verdicts") or {}
+        # when a verdict was really written: the row's ts is the job run's start (run_due's own clock), the result comes
+        # its runtime later (the 10:00 visit while it computes, back at 12:00: the result is named)
+        done = (ledger or {}).get("done") or {}
         known = (ledger or {}).get("db") in ("ok", "missing")      # missing: the job never ran, so nothing is stored
         k = 1
         while checkpoint_ts(start, k) <= now and k * PERIOD_DAYS <= NO_VERDICT_DAYS:
             cp = checkpoint_ts(start, k)
             stored = verdicts.get(day_str(cp))
+            stored = done.get(day_str(cp), stored) if stored is not None else None
             if cp > after:
                 ms.append({"kind": "verdict", "k": k, "ts": cp, "judged": (stored is not None) if known or stored else None,
                            "stored_ts": stored})

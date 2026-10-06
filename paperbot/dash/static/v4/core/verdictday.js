@@ -55,19 +55,39 @@ export function bigWords(c, now = serverNow()) {
   return {big: `${c.left}일`, unit: "남음"};
 }
 
+/** systemd's word on the verdict job since the checkpoint (/api/v4/verdictday machine.job, on the server only):
+ *  {rerun: a run after an error is computing now} or {dead: the last run ended badly, e.g. killed by the service's memory
+ *  or time limit, which leaves no line in checkpoint.db}; null when systemd does not answer or has nothing to add. */
+export const RESULT_KO = {"oom-kill": "메모리 한도로 멈춤", timeout: "시간 한도로 멈춤", signal: "강제로 멈춤", "core-dump": "비정상 종료",
+  "exit-code": "오류로 끝남", watchdog: "응답 없어 멈춤", "start-limit-hit": "재시작 한도"};
+export function jobSays(c, m) {
+  const j = m && m.systemd ? m.job : null;
+  if (!c || !c.due || !j || !j.last_ms || !c.ts || j.last_ms < c.ts) return null;
+  if (j.running) return c.state === "failed" ? {rerun: true, since: j.last_ms} : null;
+  if (j.ok === false && (c.state === "computing" || c.state === "waiting_job")) {
+    return {dead: true, since: j.last_ms, result: j.result || null, ko: RESULT_KO[j.result] || "실패로 끝남"};
+  }
+  return null;
+}
+
 /** The due checkpoint's steps, in order: [{t, label, state: "done" | "now" | "wait" | "bad", note}]. Only what the
- *  databases say happened is marked done (CONTRACT 1.1: never an invented step). */
-export function dueSteps(c, now = serverNow()) {
+ *  databases say happened is marked done (CONTRACT 1.1: never an invented step). ``js``: jobSays() (optional). */
+export function dueSteps(c, now = serverNow(), js = null) {
   if (!c || !c.due) return [];
   const saved = c.saved_ts, snap = c.snapshot_ts, failed = c.state === "failed", unknown = c.state === "unknown";
+  const waitState = c.state === "waiting_state";
   const s1 = saved ? {state: "done", note: `봇이 저장함 (${hm(saved)})`} : unknown ? {state: "wait", note: "확인하지 못함"}
-    : {state: c.state === "waiting_state" ? "now" : "wait", note: c.state === "waiting_state" ? "봇의 저장을 기다리는 중" : "기록 아직 없음"};
+    : waitState && c.late ? {state: "bad", note: "아직 저장이 없음 · 봇이 도는지 서버 화면에서 확인"}
+    : {state: waitState ? "now" : "wait", note: waitState ? "봇의 저장을 기다리는 중" : "기록 아직 없음"};
   const s2 = snap ? {state: "done", note: `저장본 잠금 (${hm(snap)})`}
     : unknown ? {state: "wait", note: "확인하지 못함"}
+    : waitState ? {state: "wait", note: `판정 작업은 돌았고 봇의 저장을 기다림 (${c.next_try_ts ? `다음 실행 ${hm(c.next_try_ts)}` : "매시 35분"})`}
     : c.late ? {state: "bad", note: "판정 작업이 아직 돌지 않았습니다"}
     : now < c.job_ts ? {state: "wait", note: `${hm(c.job_ts)}에 시작`}
     : {state: "now", note: c.next_try_ts ? `다음 실행 ${hm(c.next_try_ts)}` : "곧 시작"};
-  const s3 = failed ? {state: "bad", note: `오류${c.error_kind ? ` (${c.error_kind})` : ""} · ${c.next_try_ts ? `${hm(c.next_try_ts)}에` : "매시 35분에"} 다시 시도`}
+  const s3 = js && js.rerun ? {state: "now", note: `앞선 실행은 오류${c.error_kind ? ` (${c.error_kind})` : ""} · ${hm(js.since)}부터 다시 계산 중`}
+    : js && js.dead ? {state: "bad", note: `마지막 실행(${hm(js.since)} 시작)이 ${js.ko} · ${c.next_try_ts ? `${hm(c.next_try_ts)}에` : "매시 35분에"} 다시 시도`}
+    : failed ? {state: "bad", note: `오류${c.error_kind ? ` (${c.error_kind})` : ""} · ${c.next_try_ts ? `${hm(c.next_try_ts)}에` : "매시 35분에"} 다시 시도`}
     : snap && c.late ? {state: "bad", note: `계산 중 · ${dur((now - snap) / 1000)}째 · 너무 오래 걸림`}
     : snap ? {state: "now", note: `계산 중 · ${dur((now - snap) / 1000)}째`}
     : {state: "wait", note: "저장본이 잠긴 뒤"};
@@ -84,10 +104,11 @@ export const whenKo = (c) => (c && c.ts ? `${c.k > 1 ? `${c.k}번째 판정` : "
 
 // ---------------------------------------------------------------- the one-time band
 let band = null;          // its look: core/verdictday.css (index.html links it)
+let dismissed = null;     // the verdict date closed in this tab (the 'vband-seen' mark can be blocked: a private window)
 const onCheckpoint = () => parseHash(location.hash).name === "checkpoint";
 
 function close(date) {
-  if (date) local.set(SEEN, date);
+  if (date) { dismissed = date; local.set(SEEN, date); }
   if (!band) return;
   const el = band;
   band = null;
@@ -99,12 +120,13 @@ function show(last) {
   if (band && band.dataset.date === last.date) return;
   close(null);
   const day = last.day || 30;
+  const done = last.done_ts || last.stored_ts;      // when the verdict was really written (the row's ts is the run's start)
   const go = h("a", {class: "vband-go", href: href("checkpoint"), onclick: () => close(last.date)}, "보기 →");
   const x = h("button", {class: "vband-x", type: "button", "aria-label": "닫기", onclick: () => close(last.date)}, "✕");
   band = h("section", {class: "vband", role: "status", "aria-live": "polite", dataset: {date: last.date}},
     h("span", {class: "vband-ic", "aria-hidden": "true"}, "◆"),
     h("span", {class: "vband-t"}, h("b", null, `${day}일 판정 결과가 나왔습니다`),
-      h("span", null, ` · ${mmdd(last.ts)} 판정 · ${hm(last.stored_ts)} 저장`)),
+      h("span", null, ` · ${mmdd(last.ts)} 판정${done ? ` · ${hm(done)}쯤 결과 저장` : ""}`)),
     go, x);
   document.body.append(band);
   requestAnimationFrame(() => requestAnimationFrame(() => band && band.classList.add("in")));
@@ -114,11 +136,11 @@ function check(s) {
   const c = vclock(s);
   const last = c && c.last;
   if (!last || !last.date) return;
-  if (local.get(SEEN, null) === last.date) return;
-  if (serverNow() - (last.stored_ts || 0) > BAND_DAYS * DAY) return;
+  if (dismissed === last.date || local.get(SEEN, null) === last.date) return;
+  if (serverNow() - (last.done_ts || last.stored_ts || 0) > BAND_DAYS * DAY) return;
   const ck = store.get("checkpoint");
   if (!ck || !ck.ready || ck.date !== last.date) store.refresh("checkpoint").catch(() => {});
-  if (onCheckpoint()) { local.set(SEEN, last.date); close(null); return; }
+  if (onCheckpoint()) { dismissed = last.date; local.set(SEEN, last.date); close(null); return; }
   show(last);
 }
 

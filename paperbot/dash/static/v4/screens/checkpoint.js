@@ -89,8 +89,16 @@ export async function mount(el, ctx) {
     if (c.state === "failed") return `판정 계산이 오류로 멈췄습니다${c.error_kind ? ` (${c.error_kind})` : ""}. 매시 35분에 저절로 다시 시도합니다. 계속되면 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
     if (c.state === "unknown") return "판정 기록(checkpoint.db)을 읽지 못했습니다. 결과가 없다는 뜻이 아닙니다 · 1분 뒤 다시 확인합니다.";
     if (c.late && c.state === "computing") return `판정 작업이 저장본을 잠근 지 ${c.snapshot_ts ? fmt.dur(Math.max(0, serverNow() - c.snapshot_ts) / 1000) : "한참"} 지났는데 결과가 아직 저장되지 않았습니다. 작업이 서버의 메모리·시간 한도로 멈췄을 수 있습니다 (그러면 매시 35분에 다시 계산합니다). 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
+    if (c.late && c.state === "waiting_state") return "09:00이 지나고 1시간 40분이 넘었는데 봇이 그 시각의 상태를 아직 저장하지 않았습니다. 판정 작업은 그 저장을 기다립니다 (매시 35분에 다시 확인). 서버 화면에서 봇이 도는지 봐 주세요.";
     if (c.late) return "09:00이 지나고 1시간 40분이 넘었는데 판정 작업이 아무 기록도 남기지 않았습니다. 서버 › 예약 작업에서 '30일 판정' 타이머가 켜져 있는지 봐 주세요.";
     return "";
+  }
+  // systemd's word on the job (on the server only): a retry computing after an error, or a run that ended badly with no
+  // line in checkpoint.db (killed by its memory or time limit) - said at once instead of after 4 hours
+  function jobText(js) {
+    if (!js) return "";
+    if (js.rerun) return `앞선 계산은 오류로 멈췄고, ${fmt.hm(js.since)}부터 다시 계산하는 중입니다. 결과가 저장되면 이 화면이 바로 바뀝니다.`;
+    return `판정 작업의 마지막 실행(${fmt.hm(js.since)} 시작)이 ${js.ko}${js.result ? ` (${js.result})` : ""}. 결과는 아직 없습니다. 매시 35분에 저절로 다시 계산합니다. 계속되면 서버 › 예약 작업의 '30일 판정' 줄을 봐 주세요.`;
   }
   function renderCountdown() {
     const x = expInfo(st.summary);
@@ -110,24 +118,26 @@ export async function mount(el, ctx) {
       left.textContent = ""; dtext.textContent = `${x.of}일 중 ${x.day}일 지남`;
       return;
     }
-    const bw = vday.bigWords(c, now);
+    const js = vday.jobSays(c, st.vd && st.vd.machine);
+    const bw = js ? {big: js.dead ? "확인 필요" : "계산 중", unit: ""} : vday.bigWords(c, now);
     if (big.textContent !== bw.big && big.textContent !== "—") motion.flash(big);    // a new day, not the first paint
     big.textContent = bw.big; bigU.textContent = bw.unit;
-    const bad = c.due && !!alarmText(c);
+    const at = js ? jobText(js) : alarmText(c);
+    const bad = c.due && (js ? !!js.dead : !!at);
     heroCard.classList.toggle("ck-isdue", !!c.due); big.classList.toggle("bad", bad);
     dtext.textContent = c.passed_ko || "";
     when.textContent = vday.whenKo(c);
     const ms = vday.msLeft(c, now);
     left.textContent = c.state === "ended" ? "180일 실험이 끝나 더 이상 판정이 없습니다"
-      : c.due ? (c.state_ko || "") : `정확히 ${vday.leftWords(ms)} 남음`;
+      : js ? (js.rerun ? "오류 뒤 다시 계산 중" : `판정 작업이 ${js.ko}`) : c.due ? (c.state_ko || "") : `정확히 ${vday.leftWords(ms)} 남음`;
     const p = c.due ? 100 : Math.max(0, Math.min(100, c.n / c.of * 100));
     dprog.firstChild.style.setProperty("--p", p + "%");
     dprog.setAttribute("aria-valuemax", String(c.of)); dprog.setAttribute("aria-valuenow", String(c.due ? c.of : c.n));
-    const at = alarmText(c);
     alarm.hidden = !(c.due && at); alarm.textContent = c.due ? at : "";
+    alarm.classList.toggle("soft", !!(js && js.rerun));
     steps4.hidden = !c.due;
     if (c.due) {
-      put(steps4, vday.dueSteps(c, now).map((s) => h("li", {class: ["ck-dstep", s.state]},
+      put(steps4, vday.dueSteps(c, now, js).map((s) => h("li", {class: ["ck-dstep", s.state]},
         h("span", {class: "ck-dt", "aria-hidden": "true"}, s.t || "·"),
         h("span", null, h("b", null, s.label), h("small", null, s.note)))));
     }

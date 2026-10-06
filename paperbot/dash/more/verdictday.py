@@ -13,14 +13,16 @@ The verdict-day clock (``clock``)
         before         not reached yet (the countdown)
         waiting_job    reached; the job has not left a line for it yet (its first run is HH:35 UTC; ``late`` after
                        ``LATE_MS``: neither the 09:35 run nor its retry left anything)
-        waiting_state  the job ran but the runner had not saved its ``day:<date>`` state (job_log "판정 대기")
+        waiting_state  the job ran but the runner had not saved its ``day:<date>`` state (job_log "판정 대기"; ``late``
+                       after ``LATE_MS``: is the runner running?)
         computing      the job froze the snapshot (checkpoint.db snapshots) and is comparing with the coin flips
                        (``late`` after ``SLOW_MS`` without a stored verdict: a run killed by its limits logs nothing)
         failed         the job logged an error for that date (job_log "판정 오류"; it retries every hour at :35)
         unknown        checkpoint.db could not be read: never shown as "no verdict"
         ended          past day 180 (checkpoint.NO_VERDICT_DAYS): no more verdicts
 
-    ``last`` is the newest checkpoint whose verdict is stored. The same clock feeds /api/summary (next_checkpoint,
+    ``last`` is the newest checkpoint whose verdict is stored (``stored_ts``: the verdict row's ts, which is the job run's
+    start; ``done_ts``: when it was really written, that ts plus the verdict's own runtime). The same clock feeds /api/summary (next_checkpoint,
     verdict_clock, restart), the 자는 동안 sheet (more/since.py), the story (more/story.py), the race (more/flow.py) and
     졸업 길 (more/gradpath.py), so every place shows the same day.
 
@@ -98,8 +100,18 @@ def _log_kind(text: str) -> str:
     return "other"
 
 
+def _verdict_rows(c: sqlite3.Connection) -> list:
+    """[(date, ts, runtime_s)] of the stored verdicts. ``ts`` is the job run's own clock (run_due takes ``now`` once,
+    when the hourly run starts, and judge() stores the verdict with it), so the verdict was really written about
+    ``runtime_s`` later (judge's own timer, in the verdict's data)."""
+    try:
+        return [(d, ts, rt) for d, ts, rt in c.execute("SELECT date, ts, json_extract(data, '$.runtime_s') FROM verdicts")]
+    except sqlite3.OperationalError:          # no JSON functions in this SQLite, or a verdict whose data is not JSON
+        return [(d, ts, None) for d, ts in c.execute("SELECT date, ts FROM verdicts")]
+
+
 def _read_ledger(path: str) -> dict:
-    out: dict = {"db": "ok", "error": None, "verdicts": {}, "snapshots": {}, "log": {}}
+    out: dict = {"db": "ok", "error": None, "verdicts": {}, "done": {}, "snapshots": {}, "log": {}}
     try:
         c = sqlite3.connect(f"file:{urllib.parse.quote(os.path.abspath(path))}?mode=ro", uri=True,
                             timeout=LEDGER_TIMEOUT_S)
@@ -108,7 +120,10 @@ def _read_ledger(path: str) -> dict:
     try:
         names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if "verdicts" in names:
-            out["verdicts"] = {str(d): int(ts) for d, ts in c.execute("SELECT date, ts FROM verdicts")}
+            for d, ts, rt in _verdict_rows(c):
+                out["verdicts"][str(d)] = int(ts)
+                ok = isinstance(rt, (int, float)) and not isinstance(rt, bool) and 0 <= rt < 7 * 86_400
+                out["done"][str(d)] = int(ts) + (int(rt * 1000) if ok else 0)
         if "snapshots" in names:
             out["snapshots"] = {str(d): int(ts) for d, ts in c.execute("SELECT date, created_ts FROM snapshots")}
         if "job_log" in names:
@@ -127,12 +142,13 @@ def _read_ledger(path: str) -> dict:
 
 def read_ledger(path: Optional[str]) -> dict:
     """What checkpoint.db says about each checkpoint date: {"db": "ok" | "missing" | "error" | "unknown", "verdicts":
-    {date: stored ms}, "snapshots": {date: frozen ms}, "log": {date: [{"ts", "kind": sent | error | wait | other}]}}.
+    {date: the verdict row's ts (the job run's start)}, "done": {date: when it was really written, ts + its runtime},
+    "snapshots": {date: frozen ms}, "log": {date: [{"ts", "kind": sent | error | wait | other}]}}.
     Cached on the file's (and its WAL's) modification time and size, so a page asking every minute costs a stat."""
     if not path:
-        return {"db": "unknown", "error": None, "verdicts": {}, "snapshots": {}, "log": {}}
+        return {"db": "unknown", "error": None, "verdicts": {}, "done": {}, "snapshots": {}, "log": {}}
     if not os.path.exists(path):
-        return {"db": "missing", "error": None, "verdicts": {}, "snapshots": {}, "log": {}}
+        return {"db": "missing", "error": None, "verdicts": {}, "done": {}, "snapshots": {}, "log": {}}
     sig = _sig(path)
     with _LEDGER_LOCK:
         hit = _LEDGERS.get(path)
@@ -196,7 +212,8 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
         date = day_str(cp)
         if k * PERIOD_DAYS > NO_VERDICT_DAYS or cp > now or date not in verdicts:
             break
-        last = {"k": k, "day": k * PERIOD_DAYS, "date": date, "ts": cp, "stored_ts": int(verdicts[date])}
+        last = {"k": k, "day": k * PERIOD_DAYS, "date": date, "ts": cp, "stored_ts": int(verdicts[date]),
+                "done_ts": int((led.get("done") or {}).get(date, verdicts[date]))}
         k += 1
     out: dict = {"ready": True, "now": int(now), "start": int(start), "n": n, "k": k, "day": k * PERIOD_DAYS,
                  "of": k * PERIOD_DAYS, "ts": cp, "date": date, "mmdd": _mmdd(cp), "due": False, "state": "before",
@@ -224,6 +241,7 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
             out["late"] = now - int(snap) > SLOW_MS
         elif wait:
             out["state"] = "waiting_state"
+            out["late"] = now - cp > LATE_MS      # the runner has not saved its 09:00 state 100 minutes on: is it running?
         else:
             out["state"] = "waiting_job"
             out["late"] = now - cp > LATE_MS
@@ -256,6 +274,8 @@ def texts(c: dict) -> dict:
         sko = STATE_KO.get(st, "")
         if st == "waiting_job" and c.get("late"):
             sko = "판정 작업이 아직 돌지 않았습니다"
+        elif st == "waiting_state" and c.get("late"):
+            sko = "봇의 09:00 상태 저장이 아직 없음 · 봇이 도는지 확인"
         elif st == "computing" and c.get("late"):
             sko = f"동전 봇 비교 계산이 {SLOW_MS // HOUR_MS}시간 넘게 끝나지 않음"
         elif st == "waiting_job" and c["now"] >= (c.get("job_ts") or 0):
@@ -279,7 +299,7 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
     (09:00 snapshot · 09:35 job · the lead's meeting after the result), next (the next checkpoint: 2nd checks)."""
     if not c.get("ready") or c.get("state") == "ended" or not c.get("ts"):
         return []
-    from ...checkpoint import PERIOD_DAYS, REHEARSAL_BOTS, checkpoint_ts, day_str
+    from ...checkpoint import PERIOD_DAYS, REHEARSAL_BOTS, SESSION_RULES, checkpoint_ts, day_str
     k, cp = c["k"], c["ts"]
     # this season and the one before (the road still shows the last season on its own verdict day)
     lo = checkpoint_ts(c["start"], k - 2) if k > 2 else c["start"] - c["start"] % DAY_MS
@@ -311,12 +331,13 @@ def milestones(c: dict, rehearsals: Optional[list] = None) -> list:
               dt.datetime.fromtimestamp(cp / 1000, dt.timezone.utc).year}:
         e = _dst_end(y)
         if lo <= e <= cp:
-            out.append({"ts": e, "kind": "dst", "ko": "미국 서머타임 끝 · 미국 시각 기준 세션 매매법 5개의 신호가 한국 시각으로 "
-                                                    "1시간 늦게 남 (고장 아님)"})
+            out.append({"ts": e, "kind": "dst", "ko": f"미국 서머타임 끝 · 미국 시각으로 정한 딥시크 세션 매매법 {len(SESSION_RULES)}개의 "
+                                                    "신호가 한국 시각으로 1시간 늦게 남 (고장 아님)"})
     last = c.get("last")
     if last and last.get("k") == k - 1:
         out.append({"ts": last["ts"], "kind": "verdict", "done": True,
-                    "ko": f"{last['day']}일 판정 · 결과 저장 {_hm(last['stored_ts'])} · 총괄 판정 회의는 결과가 나온 뒤"})
+                    "ko": f"{last['day']}일 판정 · 결과 저장 {_hm(last.get('done_ts') or last['stored_ts'])}쯤 · 총괄 판정 "
+                          f"회의는 결과가 나온 뒤"})
     out.append({"ts": cp, "kind": "verdict", "ko": f"{k * PERIOD_DAYS}일 판정 · 09:00 모든 계좌 상태 저장 · 09:35 동전 봇 비교 "
                                                  f"계산 시작 · 총괄 판정 회의 (결과가 나온 뒤)"})
     nxt = checkpoint_ts(c["start"], k + 1)
@@ -504,7 +525,8 @@ def register(app, ctx) -> dict:
         meeting = None
         if c.get("last"):
             with ctx.rooms.ro(ctx.rooms.agents_db) as a:
-                meeting = lead_meeting(a, c["last"]["ts"])
+                # agents3.db missing or unreadable: said as such, never as 'no meeting yet'
+                meeting = lead_meeting(a, c["last"]["ts"]) if a is not None else {"error": "agents3.db를 읽지 못함"}
         return {"ready": bool(c.get("ready")), "now": now, "clock": c, "machine": machine(rh, jb, c),
                 "milestones": milestones(c, rh.get("runs")), "meeting": meeting,
                 "ledger": {"db": led.get("db"), "error": led.get("error")}}
