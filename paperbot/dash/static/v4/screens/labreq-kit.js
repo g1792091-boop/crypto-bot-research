@@ -101,14 +101,18 @@ function quoteList(label, xs) {
 }
 
 /** One request card. */
-function card(ctx, c, onDecided, confirm) {
+function card(ctx, c, onDecided, confirm, on) {
   const steps = ui.stepStrip(c.steps || [], {done: (c.stage || {}).done || [], now: (c.stage || {}).now, label: "요청 단계"});
   const fid = c.fidelity ? ui.pill(c.fidelity_ko || c.fidelity, FIDELITY_CLS[c.fidelity] || "thin") : null;
   const chip = ui.pill(c.status_ko || c.status, c.status === "needs_owner_ok" ? "warn" : "thin");
   let acts = null;
   if (c.status === "needs_owner_ok") {
     if (c.decision) {
-      acts = h("p", {class: "rm-done"}, "두 분 결정: ", h("b", null, c.decision.decision_ko), " · 다음 차례(15분 안)에 코드가 반영합니다");
+      acts = h("p", {class: "rm-done"}, "두 분 결정: ", h("b", null, c.decision.decision_ko),
+        on ? " · 다음 차례(15분 안)에 코드가 반영합니다" : " · 시험 요청이 켜지면 코드가 반영합니다");
+    } else if (!on) {
+      // the agents apply a click only while the owners' budget is on (the server refuses one now)
+      acts = h("p", {class: "muted"}, "시험 요청이 꺼져 있어 지금은 고를 수 없습니다(그때까지 시험하지 않음)");
     } else if (confirm.id === c.id) {
       const run = confirm.dec === "run";
       const err = h("p", {class: "rm-err", hidden: true, role: "alert"});
@@ -158,13 +162,14 @@ export function ownerRequests(ctx, owner, o = {}) {
   const confirm = o.confirm || {id: null, dec: null};
   const cards = owner.cards || [];
   const redraw = (id, d) => { if (o.onDecided) o.onDecided(id, d); };
-  const waiting = cards.filter((c) => c.status === "needs_owner_ok" && !c.decision).length;
+  // the '확인 N' call to action only while a click can be applied (the owners' budget is on)
+  const waiting = owner.enabled ? cards.filter((c) => c.status === "needs_owner_ok" && !c.decision).length : 0;
   return h("section", {class: ["rm-sec", waiting ? "hl" : ""], id: "rm-labreq"},
     h("h3", null, "두 분 시험 요청 ", waiting ? ui.pill(`확인 ${fmt.int(waiting)}`, "accent") : null),
     owner.enabled ? h("p", {class: "muted"}, `오늘 요청 ${fmt.int(owner.requests_today || 0)}/${fmt.int(owner.requests_max || 0)}번 · 두 분 몫 5년 시험 ${fmt.int(owner.tests_today || 0)}/${fmt.int(owner.limit || 0)}개`)
       : h("p", {class: "muted"}, owner.off_ko || "시험 요청은 아직 꺼져 있습니다"),
-    cards.length ? h("div", {class: "lq-list", role: "list"}, cards.slice(0, 5).map((c) => card(ctx, c, redraw, confirm)))
+    cards.length ? h("div", {class: "lq-list", role: "list"}, cards.slice(0, 5).map((c) => card(ctx, c, redraw, confirm, !!owner.enabled)))
       : owner.enabled ? h("p", {class: "muted"}, "아직 보낸 시험 요청이 없습니다. 대화 아래 '🧪 이 매매법 시험해줘'로 보낼 수 있습니다.") : null,
-    cards.length > 5 ? ui.disclosure(`나머지 ${fmt.int(cards.length - 5)}개`, h("div", {class: "lq-list", role: "list"}, cards.slice(5, 20).map((c) => card(ctx, c, redraw, confirm)))) : null,
+    cards.length > 5 ? ui.disclosure(`나머지 ${fmt.int(cards.length - 5)}개`, h("div", {class: "lq-list", role: "list"}, cards.slice(5, 20).map((c) => card(ctx, c, redraw, confirm, !!owner.enabled)))) : null,
     h("p", {class: "rk-note"}, "정확히 옮긴 요청은 코드가 하루 몫 안에서 바로 시험합니다. 근사로 옮긴 요청은 두 분이 [시험하기]를 눌러야 시험합니다. 옮길 수 없는 요청은 시험하지 않고 시험 수에도 넣지 않습니다. 통과해도 관찰 기간이 끝난 뒤 그때의 시험 수로 다시 판정해 제안하고, 두 분 확인이 필요합니다."));
 }

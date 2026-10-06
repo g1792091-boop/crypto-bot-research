@@ -2324,6 +2324,10 @@ class Rooms:
             raise HTTPException(404, "그런 시험 요청이 없습니다")
         if row["status"] != "needs_owner_ok":
             raise HTTPException(409, f"이 요청은 지금 고를 수 없는 상태입니다 ({LI.STATUS_KO.get(row['status'], row['status'])})")
+        if not self.lab_owner(now_ms)["enabled"]:
+            # the agents apply a click only while the owners' budget is on: never a promise ('15분 안') they cannot keep
+            raise HTTPException(409, "시험 요청이 지금 꺼져 있어(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0) 고를 수 없습니다. "
+                                     "켜지면 이 요청을 다시 고를 수 있습니다(그때까지 시험하지 않음)")
         with self.ro(self.inbox_db) as ib:
             prev = [d for d in LI.decisions(ib, [int(intake_id)]).get(int(intake_id), [])
                     if d["source_ref"] == row["source_ref"] and int(d["ts"]) >= int(row["ts"])]

@@ -119,6 +119,19 @@ def test_the_daily_request_cap_and_the_off_switch(env, tmp_path):
     r = c2.post(SAY, json={"lab_request": True, "fields": {"entry": "x"}})
     assert r.status_code == 409 and "꺼져" in r.json()["detail"]
     assert c2.get("/api/lab/intake").json()["owner"]["enabled"] is False
+    # a waiting request cannot be clicked while off (the agents would not apply it): refused, inbox.db untouched
+    a = R.open_agents(os.path.join(off, "agents3.db"))
+    wait = LI.enqueue_owner(a, 9, 0, {"engine": "newlab", "spec": OTHER, "entry_fidelity": "approx"}, env["now"] - 1000)
+    a.close()
+    r = c2.post(f"/api/lab/intake/{wait['id']}/decide", json={"decision": "run"})
+    assert r.status_code == 409 and "꺼져" in r.json()["detail"]
+    ib = os.path.join(off, "inbox.db")
+    if os.path.exists(ib):
+        x = sqlite3.connect(ib)
+        try:
+            assert not x.execute("SELECT 1 FROM sqlite_master WHERE name = 'lab_request_decisions'").fetchone()
+        finally:
+            x.close()
     # no agents3.db at all (before the first agents pass): off, never a server error
     none = str(tmp_path / "none")
     os.makedirs(none)
