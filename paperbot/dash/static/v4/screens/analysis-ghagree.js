@@ -40,7 +40,7 @@ export function ghagree(d, env) {
       h("p", {class: "an-note"}, `진입 때 아직 진행 중이던 GH Coin 타점 ${fmt.int(g.open_at_entry || 0)}건.`,
         g.before ? ` GH Coin 기록 시작 전 진입 ${fmt.int(g.before)}건은 뺐습니다.` : "",
         money ? " ROE = 증거금 대비 손익 (수수료·펀딩 뺀 순)." : ""),
-      ui.refNote(env.verdictTs)));
+      ui.refNote(env.verdictTs), money ? ui.assume() : null));
   }
   out.push(ui.card({plate: "GH Coin 타점 수", sub: "코인별 (기록 시작부터)"},
     h("div", {class: "a7-chips"}, Object.entries(d.per_coin || {}).map(([s, c]) => h("span", {class: "a7-chip"}, h("b", null, fmt.coin(s)), h("span", {class: "num"}, `${fmt.int(c.calls || 0)}개`)))),

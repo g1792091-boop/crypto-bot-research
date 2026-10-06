@@ -48,7 +48,7 @@
 .a7-row.coin { grid-template-columns: minmax(90px, .8fr) minmax(120px, 1.6fr) minmax(130px, 1fr); }
 .a7-v.five { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 6px; color: var(--ink-2); }
 @media (max-width: 640px) {
-  .a7-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
+  .a7-row, .a7-row.paper, .a7-row.coin { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
   .a7-row .a7-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
   .a7-row .a7-st { order: 2; }
   .a7-row .a7-bar { grid-column: 1 / -1; order: 3; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }

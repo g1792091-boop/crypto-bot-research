@@ -55,7 +55,7 @@ export function liqentry(d, env) {
   out.push(ui.card({plate: "직후 진입 vs 그 밖", sub: `${W.short} vs ${W.flips}`}, seg.el, body,
     h("p", {class: "an-note"}, money ? "ROE = 증거금 대비 손익 (수수료·펀딩 뺀 순). 이긴 = 순손익이 플러스." : "이긴 = 순손익이 플러스.",
       " 한 진입이 여러 시간 창에 같이 들어갑니다 (5분 안이면 15분·60분 안에도 셈)."),
-    ui.refNote(env.verdictTs)));
+    ui.refNote(env.verdictTs), money ? ui.assume() : null));
   out.push(coinCard(d));
   out.push(h("p", {class: "an-note an-foot"}, `강제청산 직후: ${W.who} · 실험 시작부터 끝난 거래 · ${d.label || "설명용, 판정 아님"}`));
   return out;

@@ -199,7 +199,7 @@ function paperCards(pd, d, ind, paints) {
     put(body, h("p", {class: "a7-help"}, h("b", null, IND[k].long), " · 위에서 고른 숫자"),
       h("div", {class: "a7-rows", role: "list"}, cells.map((c, j) => h("div", {class: "a7-row paper", role: "listitem"},
         h("span", {class: "a7-k"}, h("b", null, labelOf(k, j))),
-        h("span", {class: "a7-v"}, h("b", {class: ["num", fmt.tone(c.mean_r)]}, c.n ? `평균 ${rr(c.mean_r)}` : "—"),
+        h("span", {class: "a7-v"}, h("b", {class: "num"}, c.n ? `평균 ${rr(c.mean_r)}` : "—"),     // plain ink: nothing tested yet
           h("small", {class: "num"}, c.n ? `${fmt.int(c.n)}건 · 이긴 비율 ${pc(c.wr)}` : "0건"), c.small && c.n ? ui.pill("표본 적음", "thin") : null),
         h("span", {class: "a7-v five"}, h("small", null, "5년"), h("span", {class: "num"}, `평균 ${rr((five[j] || {}).r)}`))))));
     if (anim) motion.swap(body);
