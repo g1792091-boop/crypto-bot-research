@@ -50,8 +50,9 @@ MAX_HOLD = 48          # time exit after 48 bars (entry bar included), all timef
 ATR_LEN = 14
 VARIANTS = ("ZF_MAIN", "ZF_CTRL")     # MAIN: zone held >= 3 times (the shadow member); CTRL: no touch condition
 DETECTOR_ID = "zoneflip_v1"
-# bars of history the detector needs before its first signal: the profile (200) + 1 + room for the ATR to settle (the
-# study dropped the first 300 bars of every series, sweep_lib.warmup_bars)
+# bars of history the detector needs before its first signal: the profile (200) + 1 + room for the ATR to settle. The
+# study dropped the first max(300 bars, 30 days) of every series (sweep_lib.warmup_bars); the league holds 1000 bars
+# before a member's start date (feed.HISTORY_BARS), enough for the ATR (0.93 ** 1000 ~ 0), and asks for no less than 300
 MIN_BARS = 300
 LOOKBACK_BARS = VP_BARS + RETEST_BARS + 2
 
