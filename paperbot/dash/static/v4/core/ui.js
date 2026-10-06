@@ -23,10 +23,11 @@ export function setMethod(rs) {
 export const botsKo = () => (METHOD && METHOD.n_bots ? `같은 봉 동전 봇 ${int(METHOD.n_bots)}개` : "같은 봉 동전 봇");
 /** The verdict's method in one line: the server's method_ko, else neutral words (no typed-in count or error rate). */
 export const methodKo = () => (METHOD && METHOD.method_ko ? METHOD.method_ko : "같은 봉 동전 봇과 비교 · 묶음마다 따로 운 보정");
-/** Under any comparison with the coin flips before the checkpoint verdict. verdictTs: the first verdict (ms). */
+/** Under any comparison with the coin flips before the checkpoint verdict. verdictTs: the next verdict (ms): after
+ *  the first verdict (11/04) it is the second (12/04), so the words say '30일마다 (다음 MM/DD)', never '30일째 (12/04)'. */
 export function refNote(verdictTs, extra) {
-  return h("p", {class: "refnote"}, h("b", null, "참고"), " · 판정은 30일째",
-    verdictTs ? ` (${mmdd(verdictTs)} 09:00)` : "", `에 계좌마다 ${botsKo()}와 비교해서 합니다. 지금 비교는 합격·불합격을 뜻하지 않습니다.`,
+  return h("p", {class: "refnote"}, h("b", null, "참고"), " · 판정은 30일마다",
+    verdictTs ? ` (다음 ${mmdd(verdictTs)} 09:00)` : "", ` 계좌마다 ${botsKo()}와 비교해서 합니다. 지금 비교는 합격·불합격을 뜻하지 않습니다.`,
     extra ? ` ${extra}` : null);
 }
 /** '표본 적음' pill when n is below min. The default is the verdict's own floor for trade counts (checkpoint.MIN_TRADES

@@ -61,7 +61,7 @@ The architect has built the shared foundation. Five builders now fill the screen
    - The LED bar prints its own caption.
    - The screenshot check fails a screen that shows `USDT` without one.
 3. **No pass/fail hint before the checkpoint verdict.**
-   - Any comparison with coin flips is labelled 참고 and carries `ui.refNote(verdictTs)` ("판정은 30일째 … 지금 비교는 합격·불합격을 뜻하지 않습니다").
+   - Any comparison with coin flips is labelled 참고 and carries `ui.refNote(verdictTs)` ("판정은 30일마다 (다음 MM/DD 09:00) … 지금 비교는 합격·불합격을 뜻하지 않습니다").
    - No p-values, no ✓ / ✕, no green/red "passes" before `/api/checkpoint` says `ready: true`.
    - DeepSeek (`kind: "ds200"`) accounts show nothing per account beyond a `pill("…", "ref")` (참고). Group-level DeepSeek medians are fine, with refNote.
 4. **Escape all model text.** See section 0: h() only.

@@ -332,6 +332,9 @@ def test_the_story_and_the_race_and_the_path(tmp_path):
     nc = Data(str(empty_dir / "paper3.db")).summary(CP1 + 5 * MIN)["next_checkpoint"]
     assert GP.overdue(nc, False)
     v = GP.verdict_stage({"ready": False}, {}, nc, CP1 + 5 * MIN, 30)
+    assert v["when_ko"] == "11/04 첫 판정 날 · 판정 기록 기다림" and "12/04" not in json.dumps(v, ensure_ascii=False)
+    late = Data(str(empty_dir / "paper3.db")).summary(CP1 + DAY + H)["next_checkpoint"]
+    v = GP.verdict_stage({"ready": False}, {}, late, CP1 + DAY + H, 30)
     assert v["when_ko"] == "첫 판정일 지남 · 판정 기록 기다림" and "12/04" not in json.dumps(v, ensure_ascii=False)
     early = Data(str(empty_dir / "paper3.db")).summary(CP1 - MIN)["next_checkpoint"]
     assert not GP.overdue(early, False)

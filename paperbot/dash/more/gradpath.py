@@ -413,7 +413,9 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
     nts = (next_cp or {}).get("ts")
     if not cp or not cp.get("ready"):
         if overdue(next_cp, False):
-            when = "첫 판정일 지남 · 판정 기록 기다림"
+            # on the verdict day itself (KST) the day has not 'passed': it is today, the job is computing or waiting
+            same_day = bool(nts) and (now + KST_MS) // DAY_MS == (int(nts) + KST_MS) // DAY_MS
+            when = f"{_mmdd(nts)} 첫 판정 날 · 판정 기록 기다림" if same_day else "첫 판정일 지남 · 판정 기록 기다림"
         elif not nts:                                   # no account yet (paper3.db empty): no start, no date
             when = "첫 판정 날짜는 봇이 첫 계좌를 만들면 정해짐"
         else:

@@ -75,13 +75,13 @@ export function refTag(a, gs) {
   if (med == null) return null;
   const w = a.wallet == null ? (gs.initial || 5000) : a.wallet;
   const [g1, t] = w > med ? ["▲", "위"] : w < med ? ["▼", "아래"] : ["=", "같음"];
-  return h("span", {class: "vsg", title: `참고 · 같은 봉 동전 봇 중앙값보다 ${t} · 판정 아님 (판정은 30일째)`,
+  return h("span", {class: "vsg", title: `참고 · 같은 봉 동전 봇 중앙값보다 ${t} · 판정 아님 (판정은 30일마다)`,
     "aria-label": `참고: 같은 봉 동전 봇 중앙값보다 ${t}`}, "동전 ", h("b", {"aria-hidden": "true"}, g1));
 }
 /** The one 참고 caption under a list whose rows carry the ▲▼ glyph (null for the groups that have none). */
 export function vsFoot(group) {
   if (group === "ds" || group === "coin" || group === "extra") return null;
-  return h("p", {class: "assume home-vsfoot"}, h("b", null, "참고"), " · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일째",
+  return h("p", {class: "assume home-vsfoot"}, h("b", null, "참고"), " · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일마다",
     group === "all" ? " · 딥시크·동전 봇은 개수만 (순위 없이 맨 뒤)" : "");
 }
 
