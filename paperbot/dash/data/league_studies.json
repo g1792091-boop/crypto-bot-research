@@ -1,0 +1,280 @@
+{
+ "version": 1,
+ "note_ko": "그림자 리그 멤버가 다른 이름으로 5년 시험을 마친 결과입니다. 숫자는 커밋된 결과 문서(docs/zoneflip-reel/RESULTS_ZONEFLIP.md)에서 옮겼고, tests/test_dash_league.py가 그 문서와 숫자 하나하나 같은지 확인합니다. 라이브 기록과 나란히 보여 주기 위한 참고용입니다(판정 아님).",
+ "studies": {
+  "zoneflip": {
+   "title_ko": "매물대 지지→저항 전환 5년 시험",
+   "verdict": "FAIL",
+   "verdict_ko": "실패",
+   "one_line_ko": "5년 자료에서 8칸 중 통과 0칸. 4개 봉 모두, 세 기간 모두 비용 뒤 거래당 손실이었고 무작위 시점 진입보다 낫지 않았습니다.",
+   "honest_ko": "라이브는 이 5년 결과와 같은 규칙입니다. 그래서 비용을 못 넘고 손실이 나는 것이 예상입니다. 이 기록은 라이브가 5년 시험과 같은 모양인지 보고, 앞으로 다른 아이디어를 같은 방식으로 지켜볼 길을 닦기 위한 참고용입니다(판정 아님).",
+   "run_date": "2026-10-06",
+   "prereg_sha256": "202d638e4a3d72aacc1d8ac601f9372f0ed4fdb5a923c5e8ecabadafaa642c8a",
+   "results_sha256": "85d137f404a875b604c9173e470ada5da870798d331f4f575ed72dabdc6ebd7c",
+   "code_sha256": "b4a5f6d00ff1d9cb71cf8cd209eb39731603daaaa50827dcc5fdd95a424677f3",
+   "where": "docs/zoneflip-reel/RESULTS_ZONEFLIP.md (브랜치 claude/keen-pasteur-wav02u)",
+   "cells": 8,
+   "cells_passed": 0,
+   "trades_main": 3173,
+   "trades_ctrl": 6755,
+   "periods": {
+    "is": "1기 2021-08 ~ 2024-06",
+    "oos": "2기 2024-07 ~ 2026-09",
+    "pre": "3기 2020-01 ~ 2021-07"
+   },
+   "main": {
+    "15m": {
+     "is": {
+      "trades": 796,
+      "win_pct": 26.6,
+      "avg_win_pct": 1.76,
+      "avg_loss_pct": -0.78,
+      "pf": 0.82,
+      "net_pct": -0.1,
+      "gross_pct": 0.04,
+      "coins_positive": 0,
+      "coins_of": 6,
+      "flip_net_pct": -0.15,
+      "account_x": 0.01
+     },
+     "oos": {
+      "trades": 614,
+      "win_pct": 22.0,
+      "avg_win_pct": 1.6,
+      "avg_loss_pct": -0.67,
+      "pf": 0.67,
+      "net_pct": -0.17,
+      "gross_pct": -0.03,
+      "coins_positive": 1,
+      "coins_of": 6,
+      "flip_net_pct": -0.14,
+      "account_x": 0.01
+     },
+     "pre": {
+      "trades": 345,
+      "win_pct": 27.0,
+      "avg_win_pct": 2.75,
+      "avg_loss_pct": -1.06,
+      "pf": 0.96,
+      "net_pct": -0.03,
+      "gross_pct": 0.11,
+      "coins_positive": 3,
+      "coins_of": 6,
+      "flip_net_pct": -0.14,
+      "account_x": 0.07
+     }
+    },
+    "30m": {
+     "is": {
+      "trades": 389,
+      "win_pct": 24.9,
+      "avg_win_pct": 2.08,
+      "avg_loss_pct": -1.07,
+      "pf": 0.65,
+      "net_pct": -0.28,
+      "gross_pct": -0.14,
+      "coins_positive": 0,
+      "coins_of": 6,
+      "flip_net_pct": -0.15,
+      "account_x": 0.01
+     },
+     "oos": {
+      "trades": 294,
+      "win_pct": 24.5,
+      "avg_win_pct": 2.29,
+      "avg_loss_pct": -0.89,
+      "pf": 0.83,
+      "net_pct": -0.11,
+      "gross_pct": 0.03,
+      "coins_positive": 3,
+      "coins_of": 6,
+      "flip_net_pct": -0.14,
+      "account_x": 0.12
+     },
+     "pre": {
+      "trades": 201,
+      "win_pct": 24.4,
+      "avg_win_pct": 4.39,
+      "avg_loss_pct": -1.46,
+      "pf": 0.97,
+      "net_pct": -0.03,
+      "gross_pct": 0.11,
+      "coins_positive": 3,
+      "coins_of": 6,
+      "flip_net_pct": -0.16,
+      "account_x": 0.41
+     }
+    },
+    "1h": {
+     "is": {
+      "trades": 180,
+      "win_pct": 24.4,
+      "avg_win_pct": 3.64,
+      "avg_loss_pct": -1.66,
+      "pf": 0.71,
+      "net_pct": -0.36,
+      "gross_pct": -0.21,
+      "coins_positive": 2,
+      "coins_of": 6,
+      "flip_net_pct": -0.16,
+      "account_x": 0.01
+     },
+     "oos": {
+      "trades": 128,
+      "win_pct": 22.7,
+      "avg_win_pct": 3.08,
+      "avg_loss_pct": -1.34,
+      "pf": 0.67,
+      "net_pct": -0.34,
+      "gross_pct": -0.18,
+      "coins_positive": 1,
+      "coins_of": 6,
+      "flip_net_pct": -0.13,
+      "account_x": 0.16
+     },
+     "pre": {
+      "trades": 100,
+      "win_pct": 21.0,
+      "avg_win_pct": 4.78,
+      "avg_loss_pct": -1.9,
+      "pf": 0.67,
+      "net_pct": -0.5,
+      "gross_pct": -0.35,
+      "coins_positive": 2,
+      "coins_of": 6,
+      "flip_net_pct": -0.16,
+      "account_x": 0.07
+     }
+    },
+    "4h": {
+     "is": {
+      "trades": 52,
+      "win_pct": 23.1,
+      "avg_win_pct": 9.04,
+      "avg_loss_pct": -3.73,
+      "pf": 0.73,
+      "net_pct": -0.78,
+      "gross_pct": -0.57,
+      "coins_positive": 2,
+      "coins_of": 2,
+      "flip_net_pct": -0.18,
+      "account_x": 0.07
+     },
+     "oos": {
+      "trades": 48,
+      "win_pct": 22.9,
+      "avg_win_pct": 7.09,
+      "avg_loss_pct": -2.85,
+      "pf": 0.74,
+      "net_pct": -0.57,
+      "gross_pct": -0.39,
+      "coins_positive": 1,
+      "coins_of": 2,
+      "flip_net_pct": -0.12,
+      "account_x": 0.12
+     },
+     "pre": {
+      "trades": 26,
+      "win_pct": 3.8,
+      "avg_win_pct": 14.1,
+      "avg_loss_pct": -4.61,
+      "pf": 0.12,
+      "net_pct": -3.89,
+      "gross_pct": -3.69,
+      "coins_positive": 0,
+      "coins_of": 0,
+      "flip_net_pct": -0.13,
+      "account_x": 0.05
+     }
+    }
+   },
+   "distance_pct": {
+    "15m": {
+     "stop": [
+      0.5,
+      0.8
+     ],
+     "target": [
+      2.0,
+      2.5
+     ]
+    },
+    "30m": {
+     "stop": [
+      0.7,
+      1.0
+     ],
+     "target": [
+      2.3,
+      3.6
+     ]
+    },
+    "1h": {
+     "stop": [
+      1.1,
+      1.4
+     ],
+     "target": [
+      3.9,
+      4.6
+     ]
+    },
+    "4h": {
+     "stop": [
+      2.5,
+      2.7
+     ],
+     "target": [
+      9.0,
+      13.0
+     ]
+    }
+   },
+   "p12": {
+    "15m": 1.0,
+    "30m": 1.0,
+    "1h": 0.99,
+    "4h": 0.88
+   },
+   "vs_flip": {
+    "15m": {
+     "main_pct": -0.13,
+     "flip_pct": -0.14,
+     "p": 0.35
+    },
+    "30m": {
+     "main_pct": -0.21,
+     "flip_pct": -0.14,
+     "p": 0.86
+    },
+    "1h": {
+     "main_pct": -0.35,
+     "flip_pct": -0.15,
+     "p": 0.93
+    },
+    "4h": {
+     "main_pct": -0.68,
+     "flip_pct": -0.15,
+     "p": 0.83
+    }
+   },
+   "reading_ko": [
+    "승률은 약 21~27%(4시간봉 3기만 3.8%)이고, 손익비 약 3에서 본전에 필요한 승률(약 25% + 비용)을 넘지 못했습니다.",
+    "15분·30분봉은 비용 전에 거의 0이고 비용만큼 손실입니다. 1시간·4시간봉은 비용 전부터 손실입니다.",
+    "'3번 이상 막힌 구간'이라는 조건을 빼도(대조 설정) 12칸 모두 손실이었고 결과가 거의 같았습니다."
+   ],
+   "cost_note_ko": "비용 = 수수료 왕복 0.10% + 슬리피지 0.02%(시장가 체결마다) + 펀딩 0.01%/8시간. 거래당 약 0.14%(4시간봉 약 0.21%).",
+   "window_ko": "2020-01 ~ 2026-09 (세 기간)",
+   "account_ko": "두 분 방식 계좌(증거금 20% × 20배, 한 번에 1개)로 돌려도 모든 봉·모든 기간에서 줄었습니다: 기간 끝 0.007 ~ 0.41배, 최대 낙폭 84 ~ 99.6%.",
+   "account_range": {
+    "x_min": 0.007,
+    "x_max": 0.41,
+    "dd_min_pct": 84.0,
+    "dd_max_pct": 99.6
+   },
+   "ctrl_ko": "'3번 이상 막힌 구간' 조건을 빼고 돌린 대조 설정도 4개 봉 × 세 기간 12칸이 모두 손실이었습니다.",
+   "verdict_cells_ko": "8칸(봉 4개 × 본 규칙·대조) 중 통과 0칸",
+   "rules_ko": "릴스의 규칙을 숫자로 고정해 5년 자료에서 시험했습니다: 직전 200봉의 거래량이 쌓인 가격대가 3번 이상 막아 준 뒤 깨지고, 20봉 안에 되돌아와 닿았다가 다시 깬 쪽에서 마감하면 다음 봉 시가에 들어갑니다. 손절은 가격대 반대쪽 끝 + 0.25 ATR, 목표는 다음 매물대, 손익비 2 미만은 거래 안 함, 48봉이 지나면 닫습니다."
+  }
+ }
+}

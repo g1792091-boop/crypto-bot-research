@@ -40,6 +40,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
     nextver 다음 버전: 후보 장부(증거 등급) · 주장별 성적표 · 연구실이 못 하는 아이디어 (#/nextver) + 목표 진척도 한 줄 (홈 맨 위)
+    shadowleague 그림자 리그 (#/league): 5년 시험에서 실패한 아이디어를 실제 봉에서 가상 거래로만 따라간 기록 (agents3.db 옆의
+            shadow_league.db를 읽기만; 못 읽으면 '오류'와 이유, 없으면 '아직 켜지 않았어요'; 참고용, 판정 아님)
 """
 from __future__ import annotations
 
@@ -67,6 +69,7 @@ MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
 MODULES += ("nextver",)                        # round 2: 다음 버전 (#/nextver) + 목표 진척도 한 줄 (cached, read-only)
+MODULES += ("shadowleague",)                   # 그림자 리그 (#/league): shadow_league.db next to agents3.db, read-only, 5 s cache
 
 
 def register_all(app, **kw) -> dict:
