@@ -134,7 +134,8 @@ def _market_bars(market: Optional[sqlite3.Connection], sym: str, tf: str, lo: in
 def _frame_bars(frames, sym: str, tf: str, lo: int, now_ms: int) -> Optional[dict]:
     if frames is None:
         return None
-    n = int(min(MAX_FRAME_BARS, (now_ms - lo) // TF_MS[tf] + 5))
+    end = max(int(now_ms), int(time.time() * 1000))       # the fetcher answers the latest bars
+    n = int(min(MAX_FRAME_BARS, (end - lo) // TF_MS[tf] + 5))
     try:
         df = frames(sym, tf, max(n, 50))
     except Exception:  # noqa: BLE001  (no network: the trades of that coin read as no_bars)

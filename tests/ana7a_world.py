@@ -73,7 +73,7 @@ def write_liq(path: str, entries: list, lo: int, hi: int, seed: int = 9) -> int:
         q = usd / px
         rows.append((ts, ts, sym, side, "LIMIT", "IOC", q, px, px, "FILLED", q, q, ts + 200))
 
-    for sym in SYMS:
+    for sym in SYMS if hi > lo else ():                          # (a recorder that starts after 'now': no rows)
         t = lo
         while t < hi:
             t += int(rng.expovariate(1 / (4 * MIN)))

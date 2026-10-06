@@ -81,8 +81,9 @@ def prices(paper_db: str, start: int, now_ms: int, frames=None, symbols=SYMBOLS)
                 continue
             if frames is None:
                 continue
-            try:
-                df = frames(sym, "1h", int(min(1500 * 4, (now_ms - start) // HOUR + 4)))
+            try:                    # (the fetcher answers the latest bars: count them from the real clock too)
+                end = max(int(now_ms), int(time.time() * 1000))
+                df = frames(sym, "1h", int(min(1500 * 4, (end - start) // HOUR + 4)))
             except Exception:  # noqa: BLE001  (no network: that coin reads as not known)
                 df = None
             if df is None or not len(df):
