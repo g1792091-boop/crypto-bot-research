@@ -4,7 +4,8 @@
 // group's own coin flips in the same cells; the trades entered with a 매물대 right ahead, per strategy; and the 5-year entry
 // study A's 매물대 rows (research/entry_study, read only: no edge found, the server builds the plain lines from the
 // files' own counts). Counts, win rates and ROE only (no money for any group, DeepSeek included). Descriptive: many
-// cells are looked at, so one odd cell is a hypothesis, never a rule.
+// cells are looked at, so one odd cell is a hypothesis, never a rule. Every card set next to the coin flips carries
+// ui.refNote (참고 until the verdict, CONTRACT section 1.3).
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {viewHead, thin, dimSeg, groupWords, pp} from "./analysis-kit.js";
 
@@ -65,7 +66,7 @@ export function vp(d, env) {
     h("p", {class: "an-note"}, `자료가 붙은 비율: 앞 가격대 ${share(cov.sr || 0, T)} · 매물대 안·밖 ${share(cov.va || 0, T)}`,
       ` (${W.flips} ${share(cov.flip_sr || 0, F)} · ${share(cov.flip_va || 0, F)}). 매물대 안·밖은 같은 봉 200개가 빠짐없이 쌓인 뒤부터 계산합니다 (그 전과 거래량 기록이 없으면 모름).`,
       cov.bars_note ? ` ${cov.bars_note}.` : ""),
-    h("p", {class: "an-note"}, W.flipNote)));
+    h("p", {class: "an-note"}, W.flipNote), ui.refNote(env.verdictTs)));
 
   // a 매물대 right ahead: by distance, then per strategy
   const ru = d.right_under || {};
@@ -84,18 +85,21 @@ export function vp(d, env) {
   const list = pg.el;
   const a = ru.all || {}, fa = ru.coin_flips || {};
   out.push(ui.card({plate: "매물대가 거래 방향 바로 앞", sub: "롱이면 위쪽, 숏이면 아래쪽 매물대가 0.5 ATR 안"},
-    h("p", {class: "an-read"}, a.n ? [`${W.short} ${fmt.int(a.n)}건 · 승률 ${fmt.pct(a.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(a.roe)}, fmt.pct(a.roe)), " ", ui.smallSample(a.n, min)] : `${W.short} 0건`,
+    // a plain paragraph (not .an-read: its <b> is the accent label colour, which would hide the ROE's up/down tone)
+    h("p", null, a.n ? [`${W.short} ${fmt.int(a.n)}건 · 승률 ${fmt.pct(a.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(a.roe)}, fmt.pct(a.roe)), " ", ui.smallSample(a.n, min)] : `${W.short} 0건`,
       " / ", fa.n ? [`${W.flips} ${fmt.int(fa.n)}건 · 승률 ${fmt.pct(fa.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(fa.roe)}, fmt.pct(fa.roe))] : `${W.flips} 0건`),
     h("p", {class: "an-sub"}, "앞 가격대가 매물대인 거래 · 거리별"),
     sideBySide(mine.under_vp, flips.under_vp, order.sr_room || [], min, W),
     h("p", {class: "an-sub"}, `매물대 바로 앞에서 들어간 거래가 많은 순 (${fmt.int(ru.total || 0)}개 중 최대 10개)`), list,
-    h("p", {class: "an-note"}, "같은 칸의 동전 봇도 비슷하면 그 매매법 탓이 아니라 그 자리 자체의 성질일 수 있습니다. 칸이 많아 차이는 가설로만 봅니다.")));
+    h("p", {class: "an-note"}, "같은 칸의 동전 봇도 비슷하면 그 매매법 탓이 아니라 그 자리 자체의 성질일 수 있습니다. 칸이 많아 차이는 가설로만 봅니다."),
+    ui.refNote(env.verdictTs)));
 
   // va_pos is a price position: a long and a short read it differently
   out.push(ui.card({plate: "매물대 안·밖 · 롱과 숏", sub: "가격 위치라 롱·숏을 나눠 봅니다"},
     h("p", {class: "an-sub"}, "롱"), sideBySide(mine.va_long, flips.va_long, order.va_pos || [], min, W),
     h("p", {class: "an-sub"}, "숏"), sideBySide(mine.va_short, flips.va_short, order.va_pos || [], min, W),
-    h("p", {class: "an-note"}, "롱이 매물대 위에서 들어가면 매물대를 벗어나 오른 뒤의 추격, 숏이 매물대 위에서 들어가면 위로 벗어난 곳에서 되돌림을 노리는 자리입니다.")));
+    h("p", {class: "an-note"}, "롱이 매물대 위에서 들어가면 매물대를 벗어나 오른 뒤의 추격, 숏이 매물대 위에서 들어가면 위로 벗어난 곳에서 되돌림을 노리는 자리입니다."),
+    ui.refNote(env.verdictTs)));
   if (s5) out.push(s5);
   if (d.note) out.push(h("p", {class: "an-note an-foot"}, d.note));
   return out;
