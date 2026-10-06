@@ -18,8 +18,9 @@
 // changes that already arrived (at most ~2 a second) and drops what is too old to mean "now".
 // Controls (the speaker button in the header, core/shell.js): off until the first tap (browsers allow sound only
 // after a tap); ONE tap on the speaker turns it on and opens the menu (startOnTap), then remembered per device
-// (dom.js local): on / off, volume, density (잔잔 / 보통 / 활발) and the night mute 00-07 KST (off by default: the
-// owners watch at night; one tick turns it on). The page going hidden suspends the audio and drops the queue; the
+// (dom.js local): on / off, volume, density (잔잔 / 보통 / 활발) and the night mute (00-07 KST unless the 설정 panel set
+// other hours; off by default: the owners watch at night; one tick turns it on); each event's sound can be turned off
+// in the 설정 panel (core/settings.js), which also plays one sample on '들어보기'. The page going hidden suspends the audio and drops the queue; the
 // first ticker after it comes back is a new baseline (minutes of drift are not "a tick").
 import {bus} from "./api.js";
 import {store} from "./store.js";
@@ -55,8 +56,50 @@ export function setCfg(patch) {
   bus.emit("sound:cfg", {...cfg});
 }
 const gainOf = () => cfg.vol / 100;      // the picker's bus exactly (owners 10/06 04:00: "not the sound I liked"; the 1.6 curve made 60 % sound like 44 %)
-/** 00:00-06:59 KST (UTC+9, no daylight saving). */
-export const nightKst = (now) => new Date(Number(now) + 9 * 3600e3).getUTCHours() < 7;
+
+// ---------------------------------------------------------------- 설정 한 곳 (core/settings.js): night hours, per event
+// Two more per-device choices, each under its OWN key, so the four above stay exactly as they were stored:
+//   "snd-hours" {from, to}: the night mute's Korea-time hours (default 00-07, the old fixed window; from > to wraps
+//               midnight, e.g. 23 -> 7; from == to is no window at all). The mute itself is still cfg.night (on / off).
+//   "snd-ev"    {name: false}: an event sound this device turned off (c_entry 진입 · c_tp 익절 · c_sl 손절 · c_liq
+//               강제청산 · c_meet 회의 결론 · c_ms 기념일 · layer 바탕음 = the market trades and the DeepSeek / coin-flip
+//               fills). Only the ones turned off are stored; every event sounds by default.
+const HOURS_KEY = "snd-hours", EV_KEY = "snd-ev";
+export const DEFAULT_HOURS = {from: 0, to: 7};
+const hourOf = (v, d) => { const n = Number(v); return v !== null && v !== "" && Number.isInteger(n) && n >= 0 && n <= 23 ? n : d; };
+function sanitizeHours(o) {
+  const x = o && typeof o === "object" ? o : {};
+  return {from: hourOf(x.from, DEFAULT_HOURS.from), to: hourOf(x.to, DEFAULT_HOURS.to)};
+}
+export const hours = sanitizeHours(local.get(HOURS_KEY, null));
+export function setHours(patch) {
+  Object.assign(hours, sanitizeHours({...hours, ...(patch || {})}));
+  local.set(HOURS_KEY, {from: hours.from, to: hours.to});
+  bus.emit("sound:cfg", {...cfg});
+}
+const pad2 = (n) => String(n).padStart(2, "0");
+/** "00~07시": the night window in the menus' words. */
+export const hoursKo = () => `${pad2(hours.from)}~${pad2(hours.to)}시`;
+/** The event sounds the 설정 panel lists, in its order: [id, 한국어, what really makes it sound]. */
+export const EVENTS = [["c_entry", "진입", "우리 계좌(기존 36·5분봉·추가)가 새로 들어갈 때"], ["c_tp", "익절", "우리 계좌가 이익으로 닫을 때"],
+  ["c_sl", "손절", "우리 계좌가 손실로 닫을 때"], ["c_liq", "강제청산", "우리 계좌가 강제청산될 때"], ["c_meet", "회의 결론", "회의가 결론을 내고 끝날 때"],
+  ["c_ms", "기념일", "D+10 · D+20 · 판정 날 (한 번씩)"], ["layer", "바탕음", "바이낸스 실제 체결 · 딥시크·동전 봇 체결"]];
+const evOff = {};
+{ const v = local.get(EV_KEY, null); if (v && typeof v === "object") for (const [k] of EVENTS) if (v[k] === false) evOff[k] = false; }
+/** Is this event's sound on (every one is on by default)? */
+export const evOn = (name) => evOff[name] !== false;
+export function setEv(name, on) {
+  if (!EVENTS.some(([k]) => k === name)) return;
+  if (on) delete evOff[name]; else evOff[name] = false;
+  local.set(EV_KEY, {...evOff});
+  bus.emit("sound:cfg", {...cfg});
+}
+/** Inside the night window (Korea time, UTC+9, no daylight saving); by default 00:00-06:59. */
+export const nightKst = (now, from = hours.from, to = hours.to) => {
+  const hh = new Date(Number(now) + 9 * 3600e3).getUTCHours();
+  if (from === to) return false;
+  return from < to ? hh >= from && hh < to : hh >= from || hh < to;
+};
 
 // ---------------------------------------------------------------- 소리 종류 (engine, per device; v7 by default)
 export const ENGINES = {v7: "영상 기계음(새)", v6: "칩튠(이전)"};
@@ -374,7 +417,7 @@ const lastMotif = {};
  *  the same motif at most once per 1.2 s (a burst of fills is one sound, not twenty). */
 export function playMotifs(names, now = Date.now()) {
   if (!canPlay(now)) return [];
-  const pick = ORDER.filter((n) => names.includes(n) && !(now - (lastMotif[n] || -Infinity) < MOTIF_COOLDOWN_MS)).slice(0, 2);
+  const pick = ORDER.filter((n) => names.includes(n) && evOn(n) && !(now - (lastMotif[n] || -Infinity) < MOTIF_COOLDOWN_MS)).slice(0, 2);
   pick.forEach((n, i) => {
     lastMotif[n] = now;
     const [fs, gaps, v] = MOTIFS[n];
@@ -389,7 +432,7 @@ export function playMotifs(names, now = Date.now()) {
 }
 function feed(items) {
   if (!items.length) return;
-  if (!canPlay()) { layer.clear(); return; }
+  if (!canPlay() || !evOn("layer")) { layer.clear(); return; }
   for (const it of items) layer.push(it);
   if (!layerT) pump();
 }
@@ -524,6 +567,26 @@ export function startOnTap() {
   return true;
 }
 
+// ---------------------------------------------------------------- 들어보기 (the 설정 panel)
+/** One sample of an event's sound, played only because the viewer pressed '들어보기' next to it (that press is also the
+ *  browser's permission to play): the motif in the chosen kind and volume, or for 바탕음 one ordinary buy beep. It
+ *  plays even with the live sound off; no timer and no record ever calls it. False where the page has no audio. */
+export function preview(name) {
+  if (name !== "layer" && !MOTIFS[name]) return false;
+  const c = ac();
+  if (!c) return false;
+  if (name === "layer") {
+    const it = {key: "preview", dir: 1, size: 1, voice: 3, at: Date.now(), src: "preview"};
+    const b = engine === "v6" ? beepOf(it) : beep7Of(it);
+    sink(b.fs ? "run" : "beep", {...b, src: "preview", key: "preview"});
+    return true;
+  }
+  const [fs, gaps, v] = MOTIFS[name];
+  if (engine === "v7") sink("run", {...motif7(name, v), name, eng: "v7"});
+  else sink("run", {fs, gaps, v, name});
+  return true;
+}
+
 // ---------------------------------------------------------------- 화면 켜두기 (Screen Wake Lock)
 // A phone that locks its screen stops the page and its sound. With this ticked (off by default; a per-device choice
 // on this device) the page asks the browser to keep the screen on while the sound is on, and asks again when the page
@@ -566,6 +629,7 @@ export function soundButton() {
   const kindSeg = h("div", {class: "seg", role: "group", "aria-label": "소리 종류"},
     Object.entries(ENGINES).map(([id, ko]) => h("button", {type: "button", dataset: {k: id}, onclick: () => setKind(id)}, ko)));
   const night = h("input", {type: "checkbox", id: "snd-night"});
+  const nightT = h("span", null, `밤 ${hoursKo()}(한국)엔 끄기`);
   const wakeBox = h("input", {type: "checkbox", id: "snd-wake", disabled: !wakeSupported()});
   const why = h("p", {class: "note snd-why"});
   const pop = h("div", {class: "snd-pop", id: "sndpop", role: "dialog", "aria-label": "실시간 소리", hidden: true},
@@ -573,21 +637,26 @@ export function soundButton() {
     h("label", {class: "snd-row"}, h("span", {class: "k"}, "크기"), vol),
     h("div", {class: "snd-row"}, h("span", {class: "k"}, "빈도"), dens),
     h("div", {class: "snd-row"}, h("span", {class: "k"}, "종류"), kindSeg),
-    h("label", {class: "snd-row"}, night, h("span", null, "밤 00~07시(한국)엔 끄기")),
+    h("label", {class: "snd-row"}, night, nightT),
     h("label", {class: "snd-row"}, wakeBox, h("span", null, wakeSupported() ? "화면 켜두기 (휴대폰이 잠들면 소리도 멈춤)" : "화면 켜두기 · 이 기기는 지원 안 함")),
     why,
     h("p", {class: "note"}, "바탕음 = 바이낸스에서 실제로 체결된 거래 (사는 쪽이 많으면 높은 음, 파는 쪽이 많으면 낮은 음, 크게 몰리면 더 크게). 연결이 안 되면 코인 가격이 움직일 때 한 번씩. 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."),
-    h("p", {class: "note"}, "소리 종류: 영상 기계음 = 그 라이브 영상의 기계 소리(띵 · 띠띠 · 띠링 · 띠리리링/띠릭, 반짝 소리, 딩딩 소리)를 그대로 다시 만든 소리. 칩튠 = 이전 소리."));
+    h("p", {class: "note"}, "소리 종류: 영상 기계음 = 그 라이브 영상의 기계 소리(띵 · 띠띠 · 띠링 · 띠리리링/띠릭, 반짝 소리, 딩딩 소리)를 그대로 다시 만든 소리. 칩튠 = 이전 소리."),
+    // 설정 한 곳 (core/settings.js): the night hours, each event's sound on / off and 들어보기 live there
+    h("button", {type: "button", class: "btn-line snd-more", onclick: () => { setOpen(false); bus.emit("settings:open", "sound"); }},
+      "밤 시간 · 소리별 켜고 끄기 · 들어보기 →"));
   const wrap = h("div", {class: "snd"}, btn, pop);
   const paint = () => {
     const on = cfg.on, wait = waiting(), mute = on && cfg.night && nightKst(Date.now());
+    const back = `${pad2(hours.to)}시부터`;
     btn.dataset.state = !on ? "off" : wait ? "wait" : mute ? "night" : "on";
-    const t = !on ? "실시간 소리 꺼짐" : wait ? "실시간 소리 켜짐 · 화면을 한 번 누르면 들립니다" : mute ? "실시간 소리 · 밤이라 쉬는 중 (07시부터)" : "실시간 소리 켜짐";
+    const t = !on ? "실시간 소리 꺼짐" : wait ? "실시간 소리 켜짐 · 화면을 한 번 누르면 들립니다" : mute ? `실시간 소리 · 밤이라 쉬는 중 (${back})` : "실시간 소리 켜짐";
+    nightT.textContent = `밤 ${hoursKo()}(한국)엔 끄기`;
     btn.title = t; btn.setAttribute("aria-label", t + (on ? ". 누르면 설정" : ". 누르면 켜지고 설정이 열립니다"));
     onBox.checked = on; vol.value = String(cfg.vol); night.checked = cfg.night; wakeBox.checked = wake.on;
     for (const b of dens.children) b.setAttribute("aria-pressed", String(b.dataset.d === cfg.density));
     for (const b of kindSeg.children) b.setAttribute("aria-pressed", String(b.dataset.k === engine));
-    why.textContent = !on ? "꺼져 있습니다." : mute ? "지금은 밤이라 쉬는 중입니다 (07시부터 다시)." : wait ? "화면을 한 번 누르면 소리가 시작됩니다." : "켜져 있습니다. 실제로 일이 생길 때만 소리가 납니다.";
+    why.textContent = !on ? "꺼져 있습니다." : mute ? `지금은 밤이라 쉬는 중입니다 (${back} 다시).` : wait ? "화면을 한 번 누르면 소리가 시작됩니다." : "켜져 있습니다. 실제로 일이 생길 때만 소리가 납니다.";
   };
   const setOpen = (open) => {
     pop.hidden = !open; btn.setAttribute("aria-expanded", String(open));

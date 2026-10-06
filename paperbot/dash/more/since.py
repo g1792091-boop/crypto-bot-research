@@ -11,9 +11,16 @@ last 7 days (``clamped: true`` then, ``clamped_by`` "start" or "week", and the p
 - meetings: meetings that finished since (count, decisions, the two conclusions to show; see story.meetings).
 - alerts: the bot's warnings since (count per level, the latest three; the page turns them into Korean).
 - milestones: D+n changed, a verdict day passed, the observation period ended.
+- server (자는 동안, the long-absence card; conv-a): the bot's stops in the window (runs of STOP_MIN or more minutes
+  with no stepped 1m bar in paper3.db ``live_bars``, the same rule as 가동 기록 / more/uptime.py; ``known`` false while
+  live_bars has no row at all, so nothing is claimed either way), its restarts (``runs`` rows after the run start) and
+  the nightly checks written in the window (daily3.db ``reports``, uptime.nightly). The page adds the timers' failed
+  runs from /api/v4/jobs and the health problems of now.
+- days_left: whole days to the next verdict (restart_banner's verdict_ts), for the countdown line.
 
-Cost: one grouped index walk over trades_acct, two LIMIT 1 queries, the last alerts, a few agents3.db rows. Cached per
-minute bucket of (after, now).
+Cost: one grouped index walk over trades_acct, two LIMIT 1 queries, the last alerts, a few agents3.db rows, one index
+walk of live_bars' primary key over the window (7 days at most: about 70k entries). Cached per minute bucket of
+(after, now).
 """
 from __future__ import annotations
 
@@ -30,6 +37,44 @@ TTL_S = 60.0
 CACHE_MAX = 64
 ALERTS_SCAN = 500             # newest alert rows looked at (the table has no time index; rowid order is time order)
 MAIN_KINDS = ("strategy", "reel", "copy", "newlab")
+MIN_MS = 60_000
+STOPS_MAX = 20                # the newest stops listed (all of them are counted)
+
+
+def server_issues(c: sqlite3.Connection, daily_db: Optional[str], after: int, now: int, start: Optional[int]) -> dict:
+    """The bot's stops and restarts in (after, now] and the nightly checks written in it (see the module docstring)."""
+    from .uptime import LAG_MIN, STOP_MIN, nightly
+    out: dict = {"known": False, "stops": [], "stops_n": 0, "stop_min": 0, "restarts": [], "nightly": [], "stop_min_rule": STOP_MIN}
+    if start is None:
+        return out
+    try:
+        any_bar = c.execute("SELECT 1 FROM live_bars LIMIT 1").fetchone() is not None
+    except sqlite3.Error:
+        any_bar = False
+    t_end = now - now % MIN_MS - LAG_MIN * MIN_MS            # minutes up to here are expected to be stepped
+    lo = max(int(after), int(start))
+    lo = -(-lo // MIN_MS) * MIN_MS                           # the first whole minute in the window
+    if any_bar and t_end > lo:
+        out["known"] = True
+        mins = [int(r[0]) for r in c.execute("SELECT DISTINCT ts FROM live_bars WHERE ts >= ? AND ts < ? ORDER BY ts", (lo, t_end))]
+        stops, prev = [], lo - MIN_MS
+        for ts in mins + [t_end]:
+            gap = (ts - prev) // MIN_MS - 1
+            if gap >= STOP_MIN:
+                stops.append({"from": prev + MIN_MS, "to": ts, "min": int(gap), "ongoing": ts == t_end})
+            prev = ts
+        out.update(stops=stops[-STOPS_MAX:], stops_n=len(stops), stop_min=int(sum(x["min"] for x in stops)),
+                   longest=max(stops, key=lambda x: x["min"]) if stops else None)
+    elif any_bar:
+        out["known"] = True                                  # a window shorter than the lag: nothing to expect yet
+    try:
+        out["restarts"] = [int(r[0]) for r in c.execute(
+            "SELECT started_ts FROM runs WHERE started_ts > ? AND started_ts > ? AND started_ts <= ? ORDER BY started_ts",
+            (int(after), int(start), int(now)))]
+    except sqlite3.Error:
+        out["restarts"] = []
+    out["nightly"] = [x for x in nightly(daily_db, int(after) + 1) if x["ts"] <= now]
+    return out
 
 
 def clamp_after(after: int, start: Optional[int], now: int) -> tuple[int, bool]:
@@ -50,7 +95,7 @@ def _trade_row(c: sqlite3.Connection, after: int, order: str) -> Optional[dict]:
 
 
 def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: int, now: int,
-          clamped: bool = False) -> dict:
+          clamped: bool = False, daily_db: Optional[str] = None) -> dict:
     """What happened in (after, now] (see the module docstring); ``after`` already clamped (clamp_after)."""
     from ..app import restart_banner
     from ...checkpoint import checkpoint_ts
@@ -126,13 +171,17 @@ def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: in
             ms.append({"kind": "observe_end", "ts": obs})
         rs = restart_banner(start, now)
         out.update(dn=d1, of=rs.get("of"), verdict_ts=rs.get("verdict_ts"), verdict_mmdd=rs.get("verdict_mmdd"))
+        vts = rs.get("verdict_ts")
+        out["days_left"] = max(0, -(-(int(vts) - now) // DAY_MS)) if isinstance(vts, int) else None
     out["milestones"] = ms
-    out["empty"] = not (total or out["busts"]["n"] or out["meetings"]["finished"] or al or ms)
+    out["server"] = server_issues(c, daily_db, after, now, start)
+    srv = out["server"]
+    out["empty"] = not (total or out["busts"]["n"] or out["meetings"]["finished"] or al or ms or srv["stops_n"] or srv["restarts"])
     return out
 
 
 def register(app, ctx) -> dict:
-    data, rooms = ctx.data, ctx.rooms
+    data, rooms, daily_db = ctx.data, ctx.rooms, getattr(ctx, "daily_db", None)
     cache: dict = {}
     lock = threading.Lock()
 
@@ -159,7 +208,7 @@ def register(app, ctx) -> dict:
             try:
                 with contextlib.closing(data.conn()) as c:
                     with rooms.ro(rooms.agents_db) as ag:
-                        v = json_finite(since(c, ag, a, now, clamped))
+                        v = json_finite(since(c, ag, a, now, clamped, daily_db))
             except sqlite3.Error as exc:
                 raise HTTPException(503, f"paper3.db를 읽지 못함: {type(exc).__name__}") from None
             if len(cache) >= CACHE_MAX:

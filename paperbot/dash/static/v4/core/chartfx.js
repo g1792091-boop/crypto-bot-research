@@ -29,6 +29,7 @@ import {reduced, visible} from "./motion.js";
 import {flashScheduler, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
 import {smcAll, splitOf, zoneOf} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
+import {onPref} from "./prefs.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
@@ -81,7 +82,7 @@ const glowR = {
       // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
       c.imageSmoothingEnabled = true;
       try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
-      for (const [S, a] of [[3, 0.5], [8, 0.6]]) {
+      for (const [S, a] of (o.lite ? LITE_PASSES : GLOW_PASSES)) {
         const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
         const off = small(S, ow, oh), o2 = off.getContext("2d");
         o2.clearRect(0, 0, ow, oh);
@@ -162,6 +163,22 @@ return {
   },
 };}
 
+// the candle glow's soft passes [scale, alpha]: two for a big chart; ONE for a small cell of 여러 차트 (screens/charts.js,
+// `lite`), where up to nine charts redraw together
+const GLOW_PASSES = [[3, 0.5], [8, 0.6]], LITE_PASSES = [[6, 0.7]];
+
+/** The '선' menu's choices of one deck key on this device: {off: Set of groups, hide: Set of line ids}. The same rule
+ *  chartDeck starts from (nothing stored yet: on a phone the position / stop / level / 프리미엄 지표 groups start off,
+ *  unless `defaults` says otherwise). The 설정 panel (core/settings.js) reads it and writes {off, hide} back under the
+ *  same key ("cfx-" + key) through core/prefs.js, so a deck on screen follows at once. */
+export function deckState(key, groups, defaults) {
+  const saved = local.get("cfx-" + key, null) || {};
+  const defOff = groups.filter((g) => (defaults && g in defaults ? !defaults[g] : (narrow() && ["pos", "risk", "sr", "smc"].includes(g))));
+  return {off: new Set(Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
+    hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : [])};
+}
+export {FLASH_KEY};
+
 /** The candle glow alone, for a chart without the deck (매매법 / 계좌 charts): the AI skin only, null otherwise. */
 export function candleGlow(chart, series) {
   if (!isAi()) return null;
@@ -174,10 +191,11 @@ export function candleGlow(chart, series) {
 }
 
 /**
- * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag}) -> deck
+ * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag, lite}) -> deck
  *   wrap: the positioned box around the chart element `box` (the layers sit in it, the pills over the pane)
- *   key: per-device memory name ("term" | "chart"); groups: the ids the '선' menu lists (GROUP_KO)
+ *   key: per-device memory name ("term" | "chart" | "grid"); groups: the ids the '선' menu lists (GROUP_KO)
  *   tag: true draws our own last-price tag on the right axis (glows, pulses on a real new price)
+ *   lite: a small cell of 여러 차트: the same glow and flash, the glow drawn in one soft pass instead of two
  * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn, lightChip, place, ready}
  */
 export function chartDeck(o) {
@@ -234,7 +252,7 @@ export function chartDeck(o) {
 
   // ---------------------------------------------------------------- the glow (under the candles; glowPrimitive below)
   series.attachPrimitive(glowPrimitive({chart, series, data: () => st.data, marks: () => st.marks, idx: (t) => st.idx.get(t),
-    col: () => st.col, ai: () => st.ai, onUpdate: () => schedule()}));
+    col: () => st.col, ai: () => st.ai, onUpdate: () => schedule(), lite: !!o.lite}));
 
   // ---------------------------------------------------------------- lines (our positions, stops, levels, alerts)
   const lines = new Map();                    // id -> {spec, y, vis}
@@ -530,6 +548,25 @@ export function chartDeck(o) {
     if (!quiet) { revis(); for (const fn of subs) fn(g); }
   }
   function refresh() { paintMenu(); schedule(); }
+
+  // 설정 한 곳 (core/settings.js through core/prefs.js): the panel changes this device's '선' choices and '번쩍임' while
+  // the deck is on screen, under the same storage keys as the deck's own menu and select; the deck follows at once
+  const prefOffs = [
+    onPref(key, (v) => {
+      const x = v && typeof v === "object" ? v : {};
+      st.off = new Set(Array.isArray(x.off) ? x.off.filter((g) => groups.includes(g)) : []);
+      st.hide = new Set(Array.isArray(x.hide) ? x.hide.slice(-60) : []);
+      for (const g of groups) applyGroup(g, true);
+      revis();
+      for (const fn of subs) fn(null);
+    }),
+    onPref(FLASH_KEY, (v) => {
+      fmode = modeOf(v).id;
+      if ("value" in flashSel) flashSel.value = fmode;
+      if (fmode === "off") sched.cancel();
+    }),
+  ];
+  if (ctx && ctx.track) ctx.track(() => { for (const off of prefOffs) off(); });
 
   // ---------------------------------------------------------------- data in
   function index() { st.idx = new Map(st.data.map((b, i) => [b.time, i])); }

@@ -1,7 +1,7 @@
 // The PC left rail (owners 10/06: "들어가는 클릭버튼이 너무 많다"): on a window at least 1200 px wide every screen of
 // the 5 groups is ONE click away, as a slim column of pixel icons down the left edge (thin lines between the groups,
 // the label in a tooltip on hover / keyboard focus, the current screen lit with the accent, the small dot of a screen
-// with news). At its foot: 글자 크기, 화면 색 and 예전 화면 (they live at the end of the sub tabs below 1200 px, where the
+// with news). At its foot: 설정 (the gear, core/settings.js), 글자 크기, 화면 색 and 예전 화면 (they live at the end of the sub tabs below 1200 px, where the
 // rail is hidden and the group bar + sub tabs stay as they were). Drawn by core/shell.js on every route / feature /
 // badge change; base.css (.rail) places it, core/nav.css styles it.
 import {h, $} from "./dom.js";
@@ -9,6 +9,7 @@ import {GROUPS, SCREENS, KEYS, href, screenIcon} from "./routes.js";
 import {features} from "./features.js";
 import {textCycle} from "./textsize.js";
 import {skinCycle} from "./skin.js";
+import {settingsRail} from "./settings.js";
 
 const keyOf = (n) => { const i = KEYS.indexOf(n); return i < 0 ? null : String(i + 1); };
 /** The screens of a group the menu shows now (hidden ones out, PC-only / feature screens only while they run). */
@@ -55,7 +56,7 @@ export function renderRail(cur, badges, onRedraw) {
   const scroller = nav.querySelector(".rail-in");
   const keep = scroller ? scroller.scrollTop : 0;
   nav.replaceChildren(h("div", {class: "rail-in"}, groups),
-    h("div", {class: "rail-foot"}, textCycle(onRedraw), skinCycle(onRedraw),
+    h("div", {class: "rail-foot"}, settingsRail(), textCycle(onRedraw), skinCycle(onRedraw),
       h("a", {class: "rail-old", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)", "aria-label": "예전 화면 (/v3)"}, "v3")));
   if (keep) nav.querySelector(".rail-in").scrollTop = keep;
   hideTip();

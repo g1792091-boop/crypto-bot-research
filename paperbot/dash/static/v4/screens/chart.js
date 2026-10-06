@@ -10,7 +10,7 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, onPref} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
@@ -86,6 +86,15 @@ export async function mount(el, ctx) {
   });
   const toggles = h("div", {class: "seg scroll chart-toggles", role: "group", "aria-label": "차트에 표시"}, toggleBtns);
   const tgl = (k) => toggleBtns[TOGGLES.findIndex((x) => x[0] === k)];
+  // 설정 한 곳 (core/settings.js) writes the same "chart-show" choice: the toggles and the chart follow at once
+  ctx.track(onPref("chart-show", (v) => {
+    for (const [k] of TOGGLES) {
+      const want = !!(v && v[k]);
+      if (st.show[k] === want) continue;
+      st.show[k] = want; tgl(k).setAttribute("aria-pressed", String(want));
+      if (k === "mk") drawMarkers(); if (k === "gh") loadLevels(); if (k === "al") drawAlertLines();
+    }
+  }));
   const fxBar = h("div", {class: "chart-fx"});          // the deck's controls (filled once the chart exists)
   const lvNote = h("p", {class: "pos-note"});
   const tvA = h("a", {class: "btn-line", target: "_blank", rel: "noopener noreferrer"}, "트레이딩뷰에서 열기 ↗");

@@ -4,7 +4,8 @@
 // should see it exists; its screen says plainly that it has not started); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
 // `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu, and it is the
 // landing screen (an empty hash) only on a window at least 1200 px wide; phones and narrow windows land on 홈.
-import {s} from "./dom.js";
+import {s, local} from "./dom.js";
+import {START_KEY} from "./prefs.js";
 
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
@@ -42,9 +43,21 @@ export const SCREENS = {
 };
 
 export const DEFAULT = "home";          // unknown or switched-off screens fall back here (never the terminal: no loop)
-/** The screen an empty hash opens: the 터미널 on a window at least 1200 px wide, else 홈 (phones keep 홈). */
+/** 첫 화면 chosen in the 설정 panel (core/settings.js, per device; "" = automatic), when it can open here: a known,
+ *  listed screen, and a PC-only one (`feature: "wide"`) only on a window at least 760 px wide; else null. */
+export function startScreen() {
+  const v = local.get(START_KEY, "");
+  const m = typeof v === "string" && Object.hasOwn(SCREENS, v) ? SCREENS[v] : null;
+  if (!m || m.hidden || v.startsWith("_")) return null;
+  if (m.feature === "wide" && typeof matchMedia === "function" && !matchMedia("(min-width: 760px)").matches) return null;
+  return v;
+}
+/** The screen an empty hash opens: this device's 첫 화면 (startScreen) when it has one, else the 터미널 on a window at
+ *  least 1200 px wide, else 홈 (phones keep 홈). */
 export const LANDING_MIN_PX = 1200;
 export function landing() {
+  const pick = startScreen();
+  if (pick) return pick;
   const wide = typeof matchMedia === "function" && matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : DEFAULT;
 }

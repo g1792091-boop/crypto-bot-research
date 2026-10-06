@@ -2,13 +2,17 @@
 //   1-9  jump to 터미널 · 홈 · 포지션 · 매매법 · 순위표 · 회의실 · 차트 · 시장 · 서버 (routes.js KEYS; the rail's tooltips
 //        show the number). Never while typing in a box, never with Ctrl / Alt / Cmd.
 //   /    opens 찾기 (core/find.js).
+//   ,    opens 설정 (core/settings.js: every per-device choice in one panel).
 //   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the sub tabs' order).
-//        Not on a chart, a table or a row that scrolls sideways itself, a form field, or a slider.
+//        Not on a chart, a table or a row that scrolls sideways itself, a form field, or a slider; never while this
+//        device turned it off in 설정 (core/prefs.js swipeOn).
 import {SCREENS, GROUPS, KEYS, href, parseHash} from "./routes.js";
 import {features} from "./features.js";
 import {toast} from "./ui.js";
 import {openFind, findOpen} from "./find.js";
 import {closePeek, peekOpen} from "./drawer.js";
+import {openSettings, settingsOpen} from "./settings.js";
+import {swipeOn} from "./prefs.js";
 
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -49,7 +53,7 @@ function startSwipe() {
   if (!main) return;
   let s = null;
   main.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1 || peekOpen() || findOpen()) { s = null; return; }
+    if (e.touches.length !== 1 || peekOpen() || findOpen() || settingsOpen() || !swipeOn()) { s = null; return; }
     const t = e.touches[0];
     s = ownsSideways(e.target) ? null : {x: t.clientX, y: t.clientY, at: Date.now()};
   }, {passive: true});
@@ -72,7 +76,9 @@ export function startNavKeys() {
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || typing(e.target) || findOpen()) return;
     if (document.querySelector(".tour-card")) return;               // the first-visit tour has the keyboard
+    if (settingsOpen()) return;                                      // the 설정 panel has the keyboard (Esc closes it)
     if (e.key === "/") { e.preventDefault(); openFind(); return; }
+    if (e.key === ",") { e.preventDefault(); openSettings(); return; }
     const name = keyScreen(e.key);
     if (!name || e.repeat) return;
     e.preventDefault();
