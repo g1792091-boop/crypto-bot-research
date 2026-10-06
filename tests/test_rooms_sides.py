@@ -104,7 +104,7 @@ def test_hold_opens_a_lab_dispute_in_three_calls_and_hands_its_test_to_the_queue
     assert runner.roles() == [SPEC, ATT, SPEC] and out["rounds"][0]["calls"] == 3
     t1, t2, t4 = (c["packet"] for c in runner.calls)
     assert t1["sides"]["advocate"]["role"] == SPEC and t1["sides"]["attacker"]["role"] == ATT
-    assert "rules_ko" in t1["disputes"] and "attack_hint" in t2 and t4["this_round"]["attack"]["verdict"] == "disagree"
+    assert "dispute_tests" in t1["disputes"] and "attack_hint" in t2 and t4["this_round"]["attack"]["verdict"] == "disagree"
     assert runner.calls[1]["turn"] == "attack" and "공격하는 직원" in runner.calls[1]["system"]
     [d] = disputes(world)
     assert (d["status"], d["kind"], d["side_a"], d["side_b"], d["source"], d["room_id"]) == (

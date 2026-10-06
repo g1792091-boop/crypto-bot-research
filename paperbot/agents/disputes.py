@@ -320,8 +320,17 @@ def forward_info(paper_ro: Optional[sqlite3.Connection], strategy: str, timefram
 
 def forward_table(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms: int) -> dict:
     """``forward_info`` for all four timeframes together ('all') and each one: the room's packet carries it, so the
-    attacker's answer is checked against code numbers (``clean_settle(..., forward=...)``)."""
-    return {(tf or "all"): forward_info(paper_ro, strategy, tf, now_ms) for tf in (None, *TFS)}
+    attacker's answer is checked against code numbers (``clean_settle(..., forward=...)``). Compact (tokens): ok, n,
+    per_day, and a short why when a forward check is not possible."""
+    out = {}
+    for tf in (None, *TFS):
+        f = forward_info(paper_ro, strategy, tf, now_ms)
+        row = {"ok": f["ok"], "n": f["n"], "per_day": f["per_day"]}
+        if not f["ok"]:
+            row["why"] = ("paper3를 읽지 못함" if f["per_day"] is None
+                          else f"거래 드묾(하루 {f['per_day']:.2f}건): 5년 시험만")
+        out[tf or "all"] = row
+    return out
 
 
 def clean_settle(raw: Any, strategy: Optional[str], paper_ro: Optional[sqlite3.Connection] = None,
@@ -1152,8 +1161,7 @@ def dispute_tests(conn: sqlite3.Connection, strategy: str, now_ms: int, per_day:
     return {"left_today": max(0, int(per_day) - int(used)), "per_day": int(per_day),
             "room_test_ok_now": recent == 0, "gap_days": int(gap_days),
             "tests_in_room": n, "next_p_threshold": round(LAB_ALPHA / (n + 1), 6),
-            "note": (f"다툼 5년 시험은 하루 {per_day}개, 한 방에 {gap_days}일에 1개까지(남으면 대기). 이 방 장부의 시험 수가 "
-                     "늘수록 복제 관문 기준이 엄격해짐(0.05 ÷ 시험 수). 같은 시험은 다시 돌리지 않고 결과를 재사용")}
+            "note": f"하루 {per_day}개·한 방 {gap_days}일에 1개(넘치면 대기). 시험마다 이 방 관문 기준이 엄격해짐"}
 
 
 def packet(conn: sqlite3.Connection, strategy: str, paper_ro: Optional[sqlite3.Connection], now_ms: int,
@@ -1173,7 +1181,7 @@ def packet(conn: sqlite3.Connection, strategy: str, paper_ro: Optional[sqlite3.C
                   "version": sides_view(conn).get("version", 1),
                   "base_rates": {k: {x: b["base_rates"][k][x] for x in ("settled", "attacker_share")}
                                  for k in ("lab", "forward")}, "coin_flip": 0.5,
-                  "note": "편드는 직원은 이 매매법을 지키고, 공격하는 직원은 결함 하나를 찾아 가릴 시험을 정함. 점수는 코드가 채점"},
+                  "note": "점수는 코드가 채점(편의 기준 비율·동전 50%와 함께 봄)"},
         "disputes": {
             "open": [{k: r[k] for k in ("id", "claim_ko", "kind", "settle_ko", "status_ko", "progress_ko")}
                      for r in rows if r["status"] in PENDING][:5],
@@ -1181,10 +1189,4 @@ def packet(conn: sqlite3.Connection, strategy: str, paper_ro: Optional[sqlite3.C
                                 "settle_ko": r["settle_ko"], "status": r["status"]}
                                for r in rows if r["status"] in FINAL][:8],
             "dispute_tests": dispute_tests(conn, strategy, now_ms, per_day, gap_days),
-            "forward": forward_table(paper_ro, strategy, now_ms),
-            "skip_tags": _skip_tags(),
-            "rules_ko": ("5년 시험(lab): 1·2기간 모두 개선 p<0.05(2기간 바꾼 규칙 거래 100건 이상), 3기간은 지금 규칙 30건 이상이면 "
-                         "개선, stop_atr는 레버리지를 뺀 수익도 1·2기간 개선이어야 공격 쪽 승. 아니면 편드는 쪽 승. "
-                         "앞으로 확인(forward): tag_gap은 다음 N건 중 그 특징 거래 평균 ROE가 없는 거래보다 낮으면 공격 쪽 승"
-                         "(각 5건 이상), vs_flip은 다음 N건 평균 ROE가 같은 기간 동전 계좌 이하이면 공격 쪽('우위 없음') 승. "
-                         "이미 가린 주장·이미 한 시험은 점수 없음")}}
+            "forward": forward_table(paper_ro, strategy, now_ms)}}       # the claim rule itself is fixed prompt text

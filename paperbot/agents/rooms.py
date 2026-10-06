@@ -246,7 +246,7 @@ SCHEMAS.update({
 # code grades the dispute later (agents/disputes.py). None of this is in a prompt while sides are off.
 SETTLE_FMT = ('null 또는 {"kind": "lab", "test": {"template": "stop_atr | lock_start | skip_tag", "timeframe": '
               '"15m | 30m | 1h | 4h", "value": "그 시험의 값 하나 (rules.tests)"}} 또는 {"kind": "forward", "check": '
-              '"tag_gap | vs_flip", "tag": "tag_gap일 때 disputes.skip_tags 중 하나", "timeframe": "15m | 30m | 1h | 4h 또는 null"}')
+              '"tag_gap | vs_flip", "tag": "tag_gap일 때 rules.tests의 skip_tag 특징 중 하나", "timeframe": "15m | 30m | 1h | 4h 또는 null"}')
 SCHEMAS["attack"] = """{
   "headline": "한 문장 요약",
   "claim": "이 매매법(또는 전담의 제안)의 결함 한 줄",

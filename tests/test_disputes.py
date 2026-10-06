@@ -486,7 +486,7 @@ def test_the_rooms_packet_has_both_seats_the_rule_and_the_test_budget(conn, tmp_
     assert pk["disputes"]["settled_recent"][0]["status"] == "settled"
     dt = pk["disputes"]["dispute_tests"]
     assert dt["left_today"] == 3 and dt["room_test_ok_now"] is True and dt["next_p_threshold"] == 0.05
-    assert pk["disputes"]["forward"]["all"]["ok"] is False and "추세 반대 진입" in pk["disputes"]["skip_tags"]
+    assert pk["disputes"]["forward"]["all"] == {"ok": False, "n": None, "per_day": 0.0, "why": "거래 드묾(하루 0.00건): 5년 시험만"}
     assert len(json.dumps(pk, ensure_ascii=False)) < 6000
     _open(conn, LABC, now=now)
     dt = DS.dispute_tests(conn, S, now + 1000)
