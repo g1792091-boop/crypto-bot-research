@@ -6,7 +6,8 @@
 // rows say 수집 전 (never 'off').
 import {h, put, ui, fmt} from "../core/pb.js";
 
-const LEVEL = {ok: ["준비됨", "good"], warn: ["확인 필요", "warn"], bad: ["꺼짐", "bad"], unknown: ["서버에서만 확인", "thin"]};
+const LEVEL = {ok: ["준비됨", "good"], warn: ["확인 필요", "warn"], bad: ["꺼짐", "bad"], unknown: ["서버에서만 확인", "thin"],
+  wait: ["첫 연습 전", "thin"]};
 
 function rehearsalLine(r, next) {
   const nx = next ? ` · 다음 ${fmt.date(next.ts)} ${fmt.hm(next.ts)}` : "";

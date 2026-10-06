@@ -457,7 +457,9 @@ def timers(runner=None) -> dict:
 
 def machine(rh: dict, jb: dict, c: dict) -> dict:
     """'판정 기계 준비됐나': the last rehearsal (ran / failed / skipped, when, minutes), the verdict job's timer and the
-    rehearsal timer (on / off / missing, last run and result), the real verdict's projected runtime (rehearsal x 5)."""
+    rehearsal timer (on / off / missing, last run and result), the real verdict's projected runtime (rehearsal x 5).
+    level: ok / warn / bad (the verdict job's timer is not on) / unknown (no systemd here) / wait (the timers are on and
+    no rehearsal has run yet: nothing is wrong, '첫 연습 전')."""
     runs = [r for r in rh.get("runs") or [] if r.get("status") in ("ok", "failed", "skipped")]
     last = runs[-1] if runs else None
     last_run = next((r for r in reversed(runs) if r.get("status") in ("ok", "failed")), None)
@@ -472,6 +474,7 @@ def machine(rh: dict, jb: dict, c: dict) -> dict:
            "job": js.get("paperbot-checkpoint"), "rehearsal_timer": js.get("paperbot-rehearsal"),
            "projected_s": proj}
     job = out["job"] or {}
+    rt = out["rehearsal_timer"] or {}
     if out["systemd"] and job.get("state") != "on":
         level = "bad"
     elif last_run and last_run["status"] == "failed":
@@ -480,8 +483,12 @@ def machine(rh: dict, jb: dict, c: dict) -> dict:
         level = "unknown"
     elif job.get("ok") is False and not (c.get("due") and job.get("running")):
         level = "warn"
+    elif rt.get("state") != "on":
+        level = "warn"                          # no weekly rehearsal will run
+    elif last_run is None:
+        level = "wait"                          # the timers are on, the first Wednesday rehearsal has not run yet
     else:
-        level = "ok" if last_run and last_run["status"] == "ok" else "warn"
+        level = "ok"
     out["level"] = level
     return out
 

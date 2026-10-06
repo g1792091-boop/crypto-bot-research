@@ -244,3 +244,19 @@ def test_past_day_180_the_period_is_180_and_the_server_tile_says_so():
     assert restart_banner(START, ck.checkpoint_ts(START, 6) + 5 * DAY, led)["of"] == 180
     js = open(os.path.join(V4, "screens", "server-health.js"), encoding="utf-8").read()
     assert 'nx.state === "ended"' in js and '"판정 끝"' in js
+
+
+def test_the_machine_card_before_the_first_rehearsal_is_not_a_warning():
+    """10/06: the run started 10/05, the first Wednesday rehearsal is 10/07 12:30. With both timers on, nothing is
+    wrong: '첫 연습 전', never '확인 필요'."""
+    c = V.clock(START, START + DAY, {"db": "ok", "verdicts": {}, "snapshots": {}, "log": {}})
+    on = {"available": True, "jobs": {"paperbot-checkpoint": {"state": "on", "ok": True},
+                                      "paperbot-rehearsal": {"state": "on", "ok": None}}}
+    assert V.machine({"state": "missing", "runs": []}, on, c)["level"] == "wait"
+    skipped = {"state": "ok", "runs": [{"status": "skipped", "ts": CP1 + 3 * H + 30 * MIN}]}
+    assert V.machine(skipped, on, c)["level"] == "wait"
+    no_rh = {"available": True, "jobs": {"paperbot-checkpoint": {"state": "on", "ok": True},
+                                         "paperbot-rehearsal": {"state": "missing"}}}
+    assert V.machine({"state": "missing", "runs": []}, no_rh, c)["level"] == "warn"
+    js = open(os.path.join(V4, "screens", "checkpoint-machine.js"), encoding="utf-8").read()
+    assert 'wait: ["첫 연습 전", "thin"]' in js
