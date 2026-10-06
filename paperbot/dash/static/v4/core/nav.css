@@ -53,7 +53,8 @@
   :root:not([data-nav="left"]) .strip-tools { display: none; }
   :root:not([data-nav="left"]) .toptools { display: inline-flex; }
 }
-/* the top bar's settings on a PC with the menu on top: 글자 크기 (one button) · 화면 색 · 예전 화면 · 메뉴 위치 */
+/* the top bar's settings on a PC with the menu on top: 글자 크기 · 화면 색 (the full switches from 1680 px, one small
+   button each below) · 예전 화면 · 메뉴 위치 */
 .toptools { display: none; flex: none; align-items: center; gap: 6px; margin-right: 4px; }
 .toptools .textcyc, .toptools .navsw, .toptools .tt-mini { display: inline-flex; }
 .toptools .tt-mini { align-items: center; gap: 6px; }
@@ -71,7 +72,7 @@
 .jt-a[aria-current="page"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
 /* ---------------------------------------------------------------- 메뉴 위치 (core/navpos.js) and the left rail */
-/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up), at the strip's end */
+/* the switch shows only where the left rail can be chosen (a PC window, 1200 px and up): in the top bar and the rail's foot */
 .navsw { display: none; }
 .rail { display: none; }
 @media (min-width: 1200px) {

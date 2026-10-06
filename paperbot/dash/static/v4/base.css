@@ -88,7 +88,7 @@ em { font-style: normal; color: var(--accent); }
 /* 예전 화면 ↗ (the old dashboard at /v3): at the strip's end, or in the top bar on a PC (core/shell.js) */
 a.oldui { flex: none; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--line-2); color: var(--ink-2); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 a.oldui:hover { color: var(--ink); border-color: var(--accent-line); }
-/* the skin switch (core/skin.js): two small buttons at the strip's end, between 글자 크기 and 예전 화면 */
+/* the skin switch (core/skin.js): two small buttons between 글자 크기 and 예전 화면 (the strip's end, the PC top bar) */
 .skinsw { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px; border: 1px solid var(--line-2); }
 .skinsw .k { padding: 0 6px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 .skinsw button { appearance: none; height: 28px; padding: 0 9px; border-radius: 7px; border: 0; background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
