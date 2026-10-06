@@ -600,7 +600,11 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)" in fx
     assert "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)" in fx
     assert '"aria-label": "조명과 번쩍임"' in fx and 'FLASH_KEY = "chart-flash"' in fx and 'LIGHT_KEY = "chart-light"' in fx
-    assert "local.get(LIGHT_KEY, DEFAULT_LIGHT)" in fx and "local.set(LIGHT_KEY, lmode)" in fx      # per device
+    # per device: read through local, written through core/prefs.js setPref (it stores under the same key, then every listener
+    # follows: this deck's onPref(LIGHT_KEY) -> lightSync, the other decks, the 설정 panel's 차트 조명 row)
+    assert "local.get(LIGHT_KEY, DEFAULT_LIGHT)" in fx and "setPref(LIGHT_KEY, lightModeOf(id).id)" in fx
+    assert "onPref(LIGHT_KEY, (v) => {" in fx and "lmode = lightModeOf(v).id;" in fx
+    assert "setPref(FLASH_KEY, modeOf(id).id)" in fx and "onPref(FLASH_KEY, (v) => {" in fx
     assert 'role: "menuitemradio"' in fx and "(기본)" in fx
     # the decorative blink is named as such, with no number: the chip says what the light follows right now
     raw = _read("core", "chartfx.js")
@@ -612,7 +616,7 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     # the 차트 screen keeps the old name for the control (flashSel); the terminal's narrow header has the same items in
     # one '보기 ▾' menu (owners 10/06 ~14:00: every timeframe button visible); both hand the deck the coin on screen
     assert "deck.flashSel" in _code(_read("screens", "chart.js"))
-    assert "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);" in _code(_read("screens", "terminal-chart.js"))
+    assert "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in _code(_read("screens", "terminal-chart.js"))
     for scr in ("terminal-chart.js", "chart.js"):
         assert "sym: () => st.sym" in _read("screens", scr), scr
     # 클래식: the light tokens are transparent

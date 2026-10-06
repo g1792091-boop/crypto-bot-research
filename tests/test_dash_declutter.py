@@ -206,7 +206,9 @@ def test_calm_default_parts_and_opt_in_menus_remembered_per_device():
     assert 'if (P.has("near")) { for (const z of nearestZones(r.obsAll, px)) add(z, "ob"); for (const z of nearestZones(r.fvgsAll, px)) add(z, "fvg"); }' in view
     assert "const smcP = smcPrimitive({chart, series, get: smcView, col: () => st.col});" in fx
     # per device (dom.js local, try/catch inside), versioned: a device saved before the calm default starts from it once
-    assert "const save = () => local.set(key, {v: DECK_V, off: [...st.off], hide: [...st.hide].slice(-60), smc: [...st.parts]});" in fx
+    # (conv-a's prefs: the value is stored, then the other decks of this key and the 설정 panel are told; the same shape)
+    assert "const v = {v: DECK_V, off: [...st.off], hide: [...st.hide].slice(-60), smc: [...st.parts]};" in fx and "local.set(key, v);" in fx
+    assert "export const deckValue = (now) => ({v: DECK_V, off: [...now.off], hide: [...now.hide].slice(-60), smc: [...now.parts]});" in fx
     assert "const fresh = saved.v !== DECK_V;" in fx and "localStorage" not in fx
     # clear on / off items, 기본으로, 모두 끄기; the AI light's words follow the part
     assert 'role: "menuitemcheckbox", "aria-checked": String(part(x.id)), onclick: () => setPart(x.id, !part(x.id))' in fx
@@ -214,7 +216,7 @@ def test_calm_default_parts_and_opt_in_menus_remembered_per_device():
     assert 'under.dataset.words = part("words") ? "1" : "";' in fx
     # the terminal: 지지·저항 opt-in too; the light, the flash and the parts in one '보기 ▾' menu
     tc = _code(_read("screens", "terminal-chart.js"))
-    assert 'defaults: {sr: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);" in tc
+    assert 'defaults: {sr: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
     assert 'LEVEL_TFS.includes(st.tf) && deck.shown("sr")' in tc            # the key line names only what is drawn
     assert '"보기 ▾"' in fx and "viewBtn," in fx
 

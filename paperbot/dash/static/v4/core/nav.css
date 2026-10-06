@@ -112,7 +112,15 @@
 .rail .navsw { display: inline-flex; justify-self: start; margin: 0; }
 .rail .navsw .k { padding: 0 4px; }
 .rail .navsw button { padding: 0 8px; }
-.rail-tools { display: flex; align-items: center; gap: 6px; }
+/* the foot's tools: ★ 즐겨찾기 · TV · 설정 · 화면 색 · 예전 화면 as one row of five small buttons, 글자 크기 under them (the
+   merge of the rail's old foot and the gear: stacked one per row they pushed the 서버 group below the fold at 1280 x 800) */
+.rail-tools { display: grid; grid-template-columns: repeat(5, 26px); justify-content: space-between; align-items: center; gap: 5px 0; }
+.rail-tools .textcyc { grid-column: 1 / -1; }
+.rail .favrail, .rail .tvbtn, .rail .setcyc, .rail .skincyc, .rail .rail-old { width: 26px; height: 26px; padding: 0; }
+.rail .favrail { font-size: var(--t-sm); }
+.rail .setcyc svg { width: 14px; height: 14px; }
+.rail .skincyc i { width: 13px; height: 13px; }
+.rail .rail-old { border-radius: 7px; }
 .rail .textcyc { display: inline-flex; }
 .skincyc { appearance: none; display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface); }
 .skincyc i { width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(90deg, var(--accent) 50%, var(--surface-3) 50%); box-shadow: 0 0 0 1px var(--line-2); }

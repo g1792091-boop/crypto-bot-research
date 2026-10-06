@@ -8,7 +8,7 @@
 // DeepSeek only at group level); money has assume(); 표본 적음.
 // DeepSeek's first view (전체 요약, also #/strategies?g=ds&fam=all from the grid) opens with the 17-family summary
 // (strategies-dsfam.js: counts only, no money); tapping the 딥시크 group starts there, a family row opens that family.
-import {h, put, ui, fmt, motion, local, derive} from "../core/pb.js";
+import {h, put, ui, fmt, motion, local, derive, fav, cmp} from "../core/pb.js";
 import {miniSpark, profileCard, identicon} from "./grid-kit.js";
 import {DS_FAMILIES, FAMILY, DS_DEFS, DS_COMMON, EXITS, LEVERAGE, REEL} from "./strategies-defs.js";
 import {DS_RAW, REEL_RAW} from "./strategies-raw.js";
@@ -24,6 +24,7 @@ const GROUPS = [
 ];
 const STYLES = [{id: "", label: "전체"}, {id: "추세 따라가기", label: "추세"}, {id: "되돌림 노리기", label: "되돌림"}, {id: "섞임", label: "섞임"}];
 const SORTS = [["", "기본 순서"], ["pnl", "수익률 높은 순"], ["pnl-", "수익률 낮은 순"], ["trades", "거래 많은 순"]];
+const FAV_EMPTY = "맞는 매매법이 없습니다 (★ 즐겨찾기만이 켜져 있으면 별을 누른 매매법만 보입니다)";
 
 /** One line of a record: "12승 9패 · 승률 57%" + P&L, or "거래 없음". */
 function recLine(r) {
@@ -74,7 +75,8 @@ export function listView(ctx, st) {
       c = h("div", {class: "strat-preg", id: `strat-p-${s.id}`},
         pc.el, h("div", {class: "row wrap strat-pacts"},
           h("a", {class: "btn-y", href: ctx.href("strategies", s.id)}, "차트와 조건 보기"),
-          h("a", {class: "btn-line", href: ctx.href("grid", null, {g: s.group})}, "한눈 지도에서 보기")));
+          h("a", {class: "btn-line", href: ctx.href("grid", null, {g: s.group})}, "한눈 지도에서 보기"),
+          fav.starBtn("strategy", s.id, {text: true, label: s.ko}), cmp.cmpBtn(s.id, {label: s.ko})));
       pc.load();
       sp.cards.set(s.id, c);
       if (sp.cards.size > 12) { const k = sp.cards.keys().next().value; if (k !== s.id) sp.cards.delete(k); }
@@ -119,7 +121,7 @@ export function listView(ctx, st) {
     const open = sp.open === s.id;
     const rowEl = h("div", {class: "lrow click strat-row strat-prow", role: "button", tabindex: "0", "aria-expanded": String(open),
       "aria-controls": `strat-p-${s.id}`, title: `${s.ko} · 눌러서 프로필 보기`},
-    h("span", {class: "rk"}, rk), h("span", {class: "lname strat-lname"}, identicon(s.id, "sm"), h("span", {class: "strat-nm"}, s.ko)),
+    h("span", {class: "rk"}, rk), h("span", {class: "lname strat-lname"}, identicon(s.id, "sm"), fav.favMark("strategy", s.id), h("span", {class: "strat-nm"}, s.ko)),
     h("span", {class: "strat-spark"}, miniSpark(x && x.v, {label: `${s.ko} 최근 잔고 흐름`})),
     h("span", {class: ["ret num", fmt.tone(ret, shown)]}, shown),
     h("span", {class: "strat-chev", "aria-hidden": "true"}),
@@ -138,14 +140,26 @@ export function listView(ctx, st) {
     h("span", null, recLine(s.rec)), ui.smallSample(s.rec.trades), s.rec.open ? h("span", {class: "accent"}, `포지션 ${fmt.int(s.rec.open)}`) : null,
     s.rec.bust ? ui.pill(`파산 ${fmt.int(s.rec.bust)}`, "bad") : null, s.rare ? ui.pill("신호 드묾", "warn") : null]);
   const makeCore = (wide) => ui.searchList({size: wide ? 40 : 10, row, placeholder: "매매법 이름 찾기 (예: 일목, MACD)",
-    match: (s, qq) => s.ko.toLowerCase().includes(qq) || s.id.toLowerCase().includes(qq)});
+    match: (s, qq) => s.ko.toLowerCase().includes(qq) || s.id.toLowerCase().includes(qq), empty: FAV_EMPTY});
   let wide = wideNow();
   let coreList = makeCore(wide);
 
   // ---------------------------------------------------------------- DeepSeek: one family at a time
   const dsRow = (s) => stratRow(s, s.fam, [h("span", {class: "strat-rule1"}, DS_DEFS[s.id].lines[0]), h("span", null, recLine(s.rec)), ui.smallSample(s.rec.trades)]);
   const dsList = ui.searchList({size: 10, row: dsRow, placeholder: "정의 이름 찾기 (예: FVG, 피보나치)",
-    match: (s, qq) => s.ko.toLowerCase().includes(qq) || s.id.toLowerCase().includes(qq) || FAMILY[s.fam].ko.toLowerCase().includes(qq)});
+    match: (s, qq) => s.ko.toLowerCase().includes(qq) || s.id.toLowerCase().includes(qq) || FAMILY[s.fam].ko.toLowerCase().includes(qq), empty: FAV_EMPTY});
+  // ★ 즐겨찾기만 (conv-b): the 36's list and DeepSeek's 44-definition list, each remembered on this device
+  const favOnly = fav.favFilter({memo: "strat-favonly", onChange: () => fillCore(false)});
+  const dsFavOnly = fav.favFilter({memo: "strat-ds-favonly", onChange: () => dsList.set(dsRows(), false)});
+  const dsRows = () => {
+    const sel = dsFavOnly.on() ? new Set(fav.favs().strategy) : null;
+    return v.idx.filter((s) => s.group === "ds" && (!sel || sel.has(s.id)));
+  };
+  ctx.track(fav.onFavs((e) => {
+    if (e.kind !== "strategy") return;
+    if (v.g === "core") fillCore(true);
+    else if (v.g === "ds" && !v.fam) dsList.set(dsRows(), true);
+  }));
 
   // the record line of one definition card (re-filled in place when the board changes: open disclosures stay open)
   const recEls = new Map();
@@ -204,7 +218,7 @@ export function listView(ctx, st) {
     try { mq.addEventListener("change", onWide); ctx.track(() => mq.removeEventListener("change", onWide)); } catch { /* an old browser: the width at opening */ }
   }
   coreCard.querySelector(".card-h").append(coreSub);
-  const dsAllCard = ui.card({plate: "딥시크 정의 44개", sub: "계열을 고르면 규칙을 한눈에"}, dsList.el, dsNote(), ui.assume(null, "손익은 닫힌 거래 기준"));
+  const dsAllCard = ui.card({plate: "딥시크 정의 44개", sub: "계열을 고르면 규칙을 한눈에", acts: [dsFavOnly]}, dsList.el, dsNote(), ui.assume(null, "손익은 닫힌 거래 기준"));
 
   // ---------------------------------------------------------------- render
   function renderGroups() {
@@ -223,7 +237,7 @@ export function listView(ctx, st) {
       sortSel.value = v.sort;
       sortSel.addEventListener("change", () => { v.sort = sortSel.value; local.set("strat-sort", v.sort); fillCore(false); });
       put(filters, h("div", {class: "row wrap strat-filters"},
-        ui.seg(STYLES, v.style, (id) => { v.style = id; local.set("strat-style", id); fillCore(false); }, {label: "성격"}), h("span", {class: "grow"}), sortSel));
+        ui.seg(STYLES, v.style, (id) => { v.style = id; local.set("strat-style", id); fillCore(false); }, {label: "성격"}), favOnly, h("span", {class: "grow"}), sortSel));
     } else if (v.g === "ds") {
       put(filters, ui.seg([{id: "", label: "전체 요약"}, ...DS_FAMILIES.map((f) => ({id: f.id, label: `${f.id} ${f.ko}`}))], v.fam,
         (id) => { v.fam = id; local.set("strat-fam", id); famUrl(); renderBody(true); }, {label: "계열", scroll: true}));
@@ -232,7 +246,8 @@ export function listView(ctx, st) {
   }
 
   function fillCore(keep) {
-    let list = v.idx.filter((s) => s.group === "core" && (!v.style || s.style === v.style));
+    const starred = favOnly.on() ? new Set(fav.favs().strategy) : null;
+    let list = v.idx.filter((s) => s.group === "core" && (!v.style || s.style === v.style) && (!starred || starred.has(s.id)));
     if (v.sort === "pnl") list = [...list].sort((a, b) => (retOf(b) ?? -9) - (retOf(a) ?? -9));
     else if (v.sort === "pnl-") list = [...list].sort((a, b) => (retOf(a) ?? 9) - (retOf(b) ?? 9));
     else if (v.sort === "trades") list = [...list].sort((a, b) => b.rec.trades - a.rec.trades);
@@ -249,7 +264,7 @@ export function listView(ctx, st) {
       fillCore(!animate);
       kids = [(sp.radar ||= radarCard(ctx)).el, coreCard];   // 신호 레이더 (strategies-radar.js), the 36 only
     } else if (v.g === "ds" && !v.fam) {
-      dsList.set(rows, !animate);
+      dsList.set(dsRows(), !animate);
       famCard.update(st.board);
       kids = [famCard.el, dsAllCard];
     } else if (v.g === "ds") {
@@ -290,7 +305,7 @@ export function listView(ctx, st) {
     catch (e) { return; }               // the rows keep the board's own numbers (no curve) until the next try
     if (!ctx.alive()) return;
     if (v.g === "core") fillCore(true);
-    else if (v.g === "ds" && !v.fam) dsList.set(v.idx.filter((x) => x.group === "ds"), true);
+    else if (v.g === "ds" && !v.fam) dsList.set(dsRows(), true);
     for (const [id, x] of recEls) { const y = v.idx.find((z) => z.id === id); if (y) fillRec(x.el, y, x.ref); }
   }
   ctx.every(60000, loadSparks);
@@ -312,7 +327,7 @@ export function listView(ctx, st) {
     refresh() {
       v.idx = strategyIndex(st.board, st.list36);
       if (v.g === "core") fillCore(true);
-      else if (v.g === "ds" && !v.fam) { dsList.set(v.idx.filter((s) => s.group === "ds"), true); famCard.update(st.board); }
+      else if (v.g === "ds" && !v.fam) { dsList.set(dsRows(), true); famCard.update(st.board); }
       else if (v.g === "ds" && famLineEl) put(famLineEl, familyLine(familyStats(st.board).rows.find((r) => r.id === v.fam)));
       for (const [id, x] of recEls) { const s = v.idx.find((y) => y.id === id); if (s) fillRec(x.el, s, x.ref); }
       renderGroups();

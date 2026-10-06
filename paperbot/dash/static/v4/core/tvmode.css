@@ -1,0 +1,63 @@
+/* TV 자동 넘김 (conv-b, core/tvmode.js): the rail hidden while it runs, the small dim strip at the bottom right, the
+   TV panel (a sheet on a phone, a small dialog on a PC) and the TV buttons. Tokens only, font sizes only var(--t-*). */
+
+/* while it runs: no menu (the page takes the whole width): neither the left rail nor, on a PC window, the menu strip
+   (core/strip.js; the strip's row height then reads 0 into --sub-h, so the screens use the room). The top bar stays, with
+   찾기, the ★ and the gear; the strip below 1200 px stays (a phone has no other menu) */
+html[data-tv="on"] .rail { display: none !important; }
+@media (min-width: 1200px) {
+  html[data-tv="on"] body { padding-left: 0; }
+  html[data-tv="on"] .subtabs { display: none; }
+}
+
+/* ---------------------------------------------------------------- the strip */
+.tvchip { position: fixed; right: 14px; bottom: calc(var(--bot-h) + 12px); z-index: 58; display: flex; align-items: center; gap: 8px; max-width: min(92vw, 560px);
+  padding: 6px 6px 6px 10px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--glass); color: var(--ink-2);
+  font: 700 var(--t-xs)/1.2 var(--f-body); opacity: .72; transition: opacity var(--t-fast); }
+.tvchip:hover, .tvchip:focus-within, .tvchip[data-paused="1"] { opacity: 1; }
+.tvchip[hidden] { display: none; }
+@media (min-width: 900px) { .tvchip { bottom: 14px; } }
+.tvchip-tag { flex: none; padding: 3px 6px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font: 700 var(--t-2xs)/1 var(--f-pixel); letter-spacing: .06em; }
+.tvchip-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tvchip-now { color: var(--ink); }
+.tvchip-next, .tvchip-wake { color: var(--muted); }
+.tvchip[data-paused="1"] .tvchip-next { color: var(--warn); }
+.tvchip-b { appearance: none; flex: none; min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
+  font: 700 var(--t-xs)/1 var(--f-body); cursor: pointer; }
+.tvchip-b:hover { border-color: var(--accent-line); }
+
+/* ---------------------------------------------------------------- the buttons that open the panel */
+.tvbtn { appearance: none; display: grid; place-items: center; width: 34px; height: 26px; padding: 0; border-radius: 7px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink-2); font: 700 var(--t-2xs)/1 var(--f-pixel); cursor: pointer; }
+.tvbtn:hover { color: var(--accent); border-color: var(--accent-line); }
+html[data-tv="on"] .tvbtn { color: var(--accent); border-color: var(--accent-line); }
+.tvtab { appearance: none; flex: none; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px dashed var(--line-2); background: transparent; color: var(--ink-2);
+  font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+
+/* ---------------------------------------------------------------- the panel */
+.tvp { position: fixed; inset: 0; z-index: 86; display: grid; justify-items: center; align-items: start; padding: 10vh 16px 16px; background: var(--scrim); }
+.tvp[hidden] { display: none; }
+.tvp-box { width: min(560px, 100%); max-height: 84vh; overflow-y: auto; display: grid; gap: 12px; padding: 16px; border-radius: 14px; border: 1px solid var(--line-2);
+  background: var(--surface); box-shadow: 0 20px 50px var(--card-shadow, transparent); }
+.tvp-head { display: flex; align-items: center; gap: 8px; }
+.tvp-head h2 { margin: 0; font: 800 var(--t-lg)/1.2 var(--f-body); }
+.tvp-x { appearance: none; width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-sm)/1 var(--f-body); }
+.tvp-sec { display: grid; gap: 12px; }
+.tvp-lead { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.55; }
+.tvp-row { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: var(--t-sm); }
+.tvp-range { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.tvp-secs { min-width: 52px; text-align: right; color: var(--ink); font-size: var(--t-md); }
+.tvp-stops { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; }
+.tvp-stops legend { padding: 0 6px; color: var(--muted); font-size: var(--t-xs); }
+.tvp-stop { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--ink); font-size: var(--t-sm); cursor: pointer; }
+.tvp-stop input { width: 18px; height: 18px; accent-color: var(--accent); }
+.tvp-stop small { color: var(--muted); font-size: var(--t-2xs); }
+.tvp-stop.dim { opacity: .55; }
+.tvp-note { margin: 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.5; }
+.tvp-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 599px) {
+  .tvp { padding: 0; align-items: end; }
+  .tvp-box { width: 100%; max-height: 88vh; border-radius: 16px 16px 0 0; }
+  .tvchip { left: 10px; right: 10px; max-width: none; }
+}
+

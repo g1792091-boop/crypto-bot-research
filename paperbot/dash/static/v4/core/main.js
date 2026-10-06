@@ -13,6 +13,8 @@ import {applyNavPos} from "./navpos.js";
 import {startDrawer} from "./drawer.js";
 import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
+import {startSettings} from "./settings.js";
+import {startTvMode} from "./tvmode.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -33,12 +35,14 @@ function boot() {
   startRouter();
   startFind();             // '/' and the 찾기 button
   startNavKeys();          // 1-9, and the phone's sideways swipe between a group's screens
+  startTvMode();           // TV 자동 넘김: a device that was rotating comes back rotating (core/tvmode.js)
   startStream();
   startFeatureProbe();
   syncClock();
   setInterval(syncClock, 600000);
   maybeStartTour();
-  startSince();            // "지난번 본 뒤로" sheet (never on the first visit)
+  startSettings();         // 설정 한 곳: the top bar's gear, the key "," (core/navkeys.js), the speaker menu's link
+  startSince();            // "지난번 본 뒤로" sheet (never on the first visit); 3 hours away or more: the 자는 동안 card
   attachFonts();
 }
 

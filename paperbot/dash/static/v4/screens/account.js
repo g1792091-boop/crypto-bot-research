@@ -8,7 +8,7 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local, fullChart, fav, cmp} from "../core/pb.js";
 import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
@@ -67,7 +67,14 @@ export async function mount(el, ctx) {
     await render(d, gen);
   }
 
-  const backLink = () => h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+  // the way back; on a shown account (view.nav, set by render) the same row carries ★ 즐겨찾기 and '＋ 비교에 추가' (conv-b)
+  const backLink = () => {
+    const a = h("a", {class: "account-back", href: ctx.href("board")}, "← 순위표");
+    const n = view.nav;
+    view.nav = null;
+    return n ? h("div", {class: "row wrap account-nav"}, a, h("span", {class: "grow"}),
+      fav.starBtn("account", n.id, {text: true, label: n.name}), cmp.cmpBtn(n.id, {label: n.name})) : a;
+  };
 
   async function render(d, gen) {
     const board = await store.need("board", 120000).catch(() => null);
@@ -143,16 +150,21 @@ export async function mount(el, ctx) {
     } else posEl = ui.card({plate: "열린 포지션"}, ui.empty("지금 열린 포지션이 없습니다"));
 
     // ---------------------------------------------------------------- charts and trades
-    const eqBox = h("div", {class: "account-eq"});
-    const eqCard = ui.card({plate: "자본 곡선", sub: `기록 ${fmt.int(d.equity_points || 0)}점${(d.equity || []).length < (d.equity_points || 0) ? ` · 화면에는 ${fmt.int(d.equity.length)}점으로 줄임` : ""}`},
-      eqBox, ui.note("점선은 시작 잔고"));
+    const eqBox = h("div", {class: "account-eq", "data-fc-grow": ""});
+    // 차트 크게 보기 for the curve too (core/fullchart.js), once there is a curve to see (2 points or more)
+    const eqFs = (d.equity || []).length >= 2 ? fullChart({ctx, label: "자본 곡선"}) : null;
+    const eqCard = ui.card({plate: "자본 곡선", sub: `기록 ${fmt.int(d.equity_points || 0)}점${(d.equity || []).length < (d.equity_points || 0) ? ` · 화면에는 ${fmt.int(d.equity.length)}점으로 줄임` : ""}`,
+      acts: eqFs ? [eqFs] : null}, eqBox, ui.note("점선은 시작 잔고"));
+    if (eqFs) eqFs.bind(eqCard);
     const syms = [...new Set(trades.map((t) => t.symbol).concat(pos ? [pos.symbol] : []))];
     const symSel = h("select", {class: "select", "aria-label": "코인"}, (syms.length ? syms : ["BTCUSDT"]).map((s) => h("option", {value: s}, fmt.coin(s))));
     if (pos) symSel.value = pos.symbol;
     else if (trades.length) symSel.value = [...trades].sort((x, y) => (y.exit_time || 0) - (x.exit_time || 0))[0].symbol;
-    const cBox = h("div", {class: "account-candles"});
-    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉 · 첫 거래부터 지금까지`, acts: [symSel], cls: "account-cc"}, cBox,
+    const cBox = h("div", {class: "account-candles", "data-fc-grow": ""});
+    const fs = fullChart({ctx, label: "계좌 차트"});                  // 차트 크게 보기 (core/fullchart.js, key "f")
+    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉 · 첫 거래부터 지금까지`, acts: [symSel, fs], cls: "account-cc"}, cBox,
       h("p", {class: "pos-note"}, "화살표 = 진입, 동그라미 = 청산 (초록 수익, 빨강 손실). 열린 포지션이 있으면 진입·손절·청산가 선이 나옵니다."));
+    fs.bind(candleCard);
     const pg = ui.pager({size: 10, row: (t) => withReplay(tradeRow(t, a, {noName: true, why: true, prices: true, equity: true}), t), empty: "아직 거래가 없습니다"});
     pg.set(trades);
     const tradesCard = ui.card({plate: "거래 내역", sub: `${fmt.int(n)}건 · 최근 것부터`,
@@ -187,11 +199,13 @@ export async function mount(el, ctx) {
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
     // the money caption once for the page (owners 10/06 ~14:00, "작은 글씨가 반복된다"): the cards keep only their own
     // short notes (점선 · 수익률 · 거래마다 나갈 때 비용)
-    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
+    view.nav = {id: acc.account_id, name};          // conv-b: backLink() carries ★ 즐겨찾기 and 비교에 추가 for this account
+    // (the DOM's own replaceChildren writes a null as the word "null": an extra account has no same-strategy strip)
+    el.replaceChildren(...[backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)),
-      ui.assumeLine(["closed", "open"]));
+      ui.assumeLine(["closed", "open"])].filter(Boolean));
 
     // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
     termify(walletCard);
@@ -311,6 +325,8 @@ export async function mount(el, ctx) {
       s.setData(pts);
       s.createPriceLine({price: init, color: tok("--muted"), lineStyle: 2, lineWidth: 1, title: "시작"});
       c.chart.timeScale().fitContent();
+      // the curve cannot be scrolled or zoomed: at a new size (차트 크게 보기, a turned phone) it fills the width again
+      c.chart.timeScale().subscribeSizeChange(() => c.chart.timeScale().fitContent());
     } catch (e) { box.replaceChildren(ui.errorBox(e)); }
   }
 
