@@ -21,6 +21,9 @@ import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
 import {drawTools} from "./draw-kit.js";
+import {failNote, retrier} from "./terminal-state.js";      // term-plus: a failed load is told and retried, never an empty chart
+import {chartPlus} from "./chart-plus.js";
+import {vpAttach, vpPrepare} from "./chart-vp.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -43,13 +46,15 @@ export function termChart(ctx, st, onTf) {
   const tag = h("div", {class: "term-ptag", hidden: true}, h("b", {class: "num"}, "—"), h("small", {class: "num"}, "—"));
   const dot = h("i", {class: "term-dot", hidden: true, "aria-hidden": "true"});
   const tip = h("div", {class: "term-tip", hidden: true, role: "tooltip"});
-  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip);
+  const cfail = h("div", {class: "term-cfail2", hidden: true});
+  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip, cfail);
   const keyLine = h("div", {class: "term-ckey"});
+  const vpHost = h("div", {class: "vp-host"});             // 매물대's legend row (screens/chart-vp.js), filled once the chart exists
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
   // 차트 크게 보기 (core/fullchart.js): the whole panel (its interval buttons and '선' menu too) fills the window; key "f"
   const fs = fullChart({ctx, label: "터미널 차트"});
-  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, vpHost, keyLine);
   fs.bind(el);
   const moreA = el.head.querySelector(".term-more");
 
@@ -109,10 +114,17 @@ export function termChart(ctx, st, onTf) {
   async function loadCandles() {
     if (!series) return;
     const tk = ++loadTok, sym = st.sym, tf = st.tf;
-    let data = [];
+    let data = [], failed = false;
     try { data = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=500`); }
-    catch (e) { if (e && e.name === "AbortError") return; ctx.toast("가격 자료를 불러오지 못했습니다"); }
+    catch (e) { if (e && e.name === "AbortError") return; failed = true; }
     if (tk !== loadTok || !ctx.alive()) return;
+    // a failed load is not an empty market: the chart says so and asks again (5 · 15 · 30 · 60 s) until the bars arrive
+    if (!Array.isArray(data) || !data.length) { failed = true; data = []; }      // (no bars at all is not a quiet market either)
+    if (failed) {
+      put(cfail, failNote(`${fmt.coin(sym)} ${SHORT[tf]} 봉 (가격 자료)`, {retry: () => { candleRetry.stop(); loadCandles(); }}));
+      cfail.hidden = false;
+      candleRetry.fail();
+    } else { cfail.hidden = true; candleRetry.ok(); }
     const dec = priceDec(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
     deck.setData(data);
@@ -146,7 +158,7 @@ export function termChart(ctx, st, onTf) {
   async function eventsList() {
     if (events && Date.now() - events.at < 600000) return events.list;
     try { const d = await ctx.api("/api/events?days_back=60&days_ahead=1"); events = {at: Date.now(), list: d.events || []}; }
-    catch (e) { events = {at: Date.now(), list: []}; }
+    catch (e) { return events ? events.list : []; }            // (a failure is not cached as "no events": the next load asks again)
     return events.list;
   }
   async function loadTrades() {
@@ -227,6 +239,7 @@ export function termChart(ctx, st, onTf) {
     loadCandles();
   }
 
+  const candleRetry = retrier(ctx, () => loadCandles());
   const ready = (async () => {
     try {
       C = await makeChart(box, {rightPriceScale: {borderColor: tok("--line-2"), scaleMargins: {top: 0.08, bottom: 0.08}},
@@ -234,8 +247,10 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"], defaults: {sr: false},
+      vpPrepare("term", false);                           // 매물대 is opt-in here (the declutter); a device with saved choices starts with it off too
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], defaults: {sr: false, vp: false},
         sym: () => st.sym, legend});
+      vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, legend, sym: () => st.sym, tf: () => st.tf});
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
       // conv-b: 그리기 (lines, boxes, notes per coin + timeframe on this device; off until the owner presses it) and the
       // right-click '이 가격에 알림' (the existing /api/price-alerts route); the armed alerts of this coin are the deck's
@@ -244,6 +259,9 @@ export function termChart(ctx, st, onTf) {
         onAlertAdded: () => loadAlerts()});
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);
+      // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
+      try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 230}); }
+      catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);

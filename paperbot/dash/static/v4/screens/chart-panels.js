@@ -1,11 +1,10 @@
 // chart (builder B): the panels under the chart (beside it on a PC), as tabs: this coin's positions, its closed
 // trades, its signals, the order book, market liquidations (only while the liquidation recorder runs) and price
 // alerts. Each pane loads when it is first shown and follows the chart's coin.
-import {h, ui, fmt, store, local, motion, features} from "../core/pb.js";
+import {h, ui, fmt, store, local, motion, features, liqkit} from "../core/pb.js";
 import {normPos, tradeRow, nameNode, countOnly, COUNT_ONLY_KO, COUNT_ONLY_WHY} from "./positions-kit.js";
 import {bookPanel} from "./positions-book.js";
 import {alertsPane} from "./chart-alerts.js";
-import {usdKo} from "./market-live.js";
 
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음 (진입 안 함)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
 
@@ -102,7 +101,7 @@ export function sidePanels(ctx, o) {
   };
 
   // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
-  const usdK = (x) => usdKo(x);      // 만 / 억 like 시장 and the 이 코인 시장 지표 card (no 'K' / 'M' beside '만')
+  const {usdShort, liqTone, liqKo, LIQ_TIP} = liqkit;      // one colour rule + one money format for liquidations ($K / $M, core/liqkit.js)
   const makeLiq = () => {
     const box = h("div", {class: "stack tight"}, motion.shimmer(3));
     const pane = h("div", {class: "stack tight"}, box);
@@ -120,13 +119,13 @@ export function sidePanels(ctx, o) {
         box.replaceChildren(...[      // (nulls left out: replaceChildren would print them as the text "null")
           quiet != null && quiet >= 10 ? h("p", {class: "chart-warn"}, `기록기가 ${fmt.int(quiet)}분째 조용합니다. 아래는 그 전까지의 기록입니다.`) : null,
           h("p", {class: "pos-sum"}, `최근 1시간 ${fmt.coin(d.symbol)} 강제청산 (바이낸스 전체, ${fmt.int(d.n || 0)}건, 달러)`),
-          h("div", {class: "pos-bkbar"}, h("span", {class: "down num"}, `롱 ${usdK(d.long_usd || 0)}`), h("div", {class: "chart-liqbar"}, h("i", {style: {width: (share * 100).toFixed(1) + "%"}})),
-            h("span", {class: "up num"}, `숏 ${usdK(d.short_usd || 0)}`)),
+          h("div", {class: "pos-bkbar"}, h("span", {class: [liqTone("long"), "num"]}, `롱 ${usdShort(d.long_usd || 0)}`), h("div", {class: "chart-liqbar"}, h("i", {style: {width: (share * 100).toFixed(1) + "%"}})),
+            h("span", {class: [liqTone("short"), "num"]}, `숏 ${usdShort(d.short_usd || 0)}`)),
           ...(d.rows || []).slice(0, stacked("liq") ? 6 : 12).map((r) => h("div", {class: "lrow"}, h("span", {class: "rk"}, fmt.hm(r.ts)),
-            h("span", {class: ["lname", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱 청산" : "숏 청산"),
-            h("span", {class: "ret num"}, usdK(r.usd)), h("span", {class: "meta"}, `가격 ${fmt.price(r.price)}`))),
+            h("span", {class: ["lname", liqTone(r.liquidated)]}, liqKo(r.liquidated)),
+            h("span", {class: "ret num"}, usdShort(r.usd)), h("span", {class: "meta"}, `가격 ${fmt.price(r.price)}`))),
           (d.rows || []).length ? null : ui.empty("최근 1시간 기록 없음"),
-          h("p", {class: "pos-note"}, "롱 청산 = 롱 포지션이 강제로 정리됨 (가격 하락 쪽). 바이낸스가 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다.")].filter(Boolean));
+          h("p", {class: "pos-note", title: LIQ_TIP}, LIQ_TIP, " · 바이낸스가 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다.")].filter(Boolean));
       } catch (e) { if (!(e && e.name === "AbortError")) box.replaceChildren(ui.errorBox(e, pane.refresh)); }
       finally { busy = false; }
     };

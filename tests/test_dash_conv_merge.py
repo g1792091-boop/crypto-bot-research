@@ -160,8 +160,9 @@ def test_one_gear_and_one_star_per_layout_with_a_tooltip_and_the_keyboard():
 def test_conv_b_hooks_keep_the_terminal_calm():
     tc = _read("screens", "terminal-chart.js")
     # the decluttered deck call and header stay (calm 지지·저항 default, the 보기 ▾ menu); 그리기 is one more button, off
-    assert 'defaults: {sr: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
-    assert 'groups: ["pos", "risk", "sr", "smc", "ev", "vol"]' in tc and '"al"' in tc          # the owner's own alert lines: group "al" is not in the '선' menu, so they show
+    # (wave-b merge: the 매물대 group "vp" joined the list, off here like 지지·저항)
+    assert 'defaults: {sr: false, vp: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
+    assert 'groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"]' in tc and '"al"' in tc          # the owner's own alert lines: group "al" is not in the '선' menu, so they show
     dk = _read("screens", "draw-kit.js")
     assert '"aria-pressed": "false"' in dk and 'hidden: true' in dk                            # the tools start closed, the toggle off
     assert "key: \"term\"" in tc

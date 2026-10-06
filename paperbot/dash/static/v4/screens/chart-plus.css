@@ -1,0 +1,92 @@
+/* 차트 위 얹기 (chart-plus.js): the strips beside the price axis (시장 강제청산 가격대 막대, 우리 손절·청산 지도), the note
+   row under the chart, the lower panes (CVD · 미결제약정 · 펀딩 · 롱/숏). Every add-on is off until chosen in the chart's
+   '선' menu. Colours are tokens (tokens.css), font sizes the --t-* tokens (12 px at the least, scaled by 글자 크기). */
+
+/* the strips take their own column right of the price axis: the chart box is exactly that much narrower, so nothing of the
+   chart (names, labels, the price tag) is ever under them */
+.cfxp-strips { position: absolute; right: 0; top: 0; z-index: 2; display: flex; background: var(--surface); border-left: 1px solid var(--line-2); }
+.cfxp-strips[hidden], .cfxp-strip[hidden] { display: none; }
+.cfxp-strip { position: relative; flex: none; overflow: hidden; cursor: crosshair; }
+.cfxp-strip + .cfxp-strip { border-left: 1px solid var(--line); }
+.cfxp-cv { display: block; }
+.term-cwrap.cfxp-has > .term-cbox { right: var(--cfxp-w, 0px); }
+.term-cwrap.cfxp-has > .term-ptag { right: var(--cfxp-w, 0px); }
+.term-cwrap.cfxp-has > .term-legend { right: calc(var(--cfxp-w, 0px) + 84px); white-space: normal; }                 /* the open / high / low / close line wraps inside the narrower box, never over the strips */
+.chart-wrap.cfxp-has > .chart-box { margin-right: var(--cfxp-w, 0px); }
+
+/* the floating tip (a bubble, a price bar, "이 가격이면") */
+.cfxp-tip { position: absolute; left: 0; top: 0; z-index: 7; display: grid; gap: 2px; max-width: 280px; padding: 7px 10px; border-radius: 6px; pointer-events: none;
+  background: var(--glass); border: 1px solid var(--line-2); box-shadow: 0 8px 22px var(--card-shadow, transparent); color: var(--ink);
+  font-size: var(--t-xs); line-height: 1.4; white-space: normal; }
+.cfxp-tip[hidden] { display: none; }
+.cfxp-tip b.up, .cfxp-tip .up { color: var(--up); } .cfxp-tip b.down, .cfxp-tip .down { color: var(--down); }
+.cfxp-tip small, .cfxp-tip .muted { font-size: var(--t-2xs); }
+.cfxp-tip .muted { color: var(--muted); }
+
+/* under the chart: the honest note row, then the lower panes (the same right margin as the chart box) */
+.cfxp-below { display: grid; min-width: 0; margin-right: var(--cfxp-w, 0px); }
+.cfxp-below[hidden], .cfxp-notes[hidden] { display: none; }
+.cfxp-notes { display: grid; gap: 2px; padding: 4px 10px 5px; border-top: 1px solid var(--line); }
+.cfxp-n { margin: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.5; overflow-wrap: anywhere; }
+.cfxp-n b { color: var(--ink-2); font-weight: 700; }
+.cfxp-dot { display: inline-block; width: 8px; height: 8px; margin: 0 4px 0 2px; border-radius: 50%; vertical-align: -1px; }
+.cfxp-dot[data-tone="up"] { background: var(--up); } .cfxp-dot[data-tone="down"] { background: var(--down); }
+.cfxp-retry { margin-left: 4px; padding: 0 7px; height: 20px; border-radius: 4px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--accent);
+  font: 600 var(--t-2xs)/1 var(--f-body); cursor: pointer; }
+.cfxp-retry:hover { border-color: var(--accent-line); }
+.cfxp-retry[hidden] { display: none; }
+
+.cfxp-panes { display: grid; min-width: 0; }
+.cfxp-panes:empty { display: none; }
+.cfxp-pane { position: relative; height: var(--cfxp-ph, 84px); border-top: 1px solid var(--line); background: var(--surface); }
+.cfxp-pbox { position: absolute; inset: 4px 0 3px 0; }          /* a few px of air: the half-cut axis labels of two stacked panes never touch */
+.cfxp-ph { position: absolute; left: 8px; right: var(--cfxp-axw, 64px); top: 2px; z-index: 3; display: flex; align-items: baseline; gap: 8px; min-width: 0; pointer-events: none;
+  font-size: var(--t-2xs); line-height: 1.4; white-space: nowrap; }
+.cfxp-ph > * { min-width: 0; }
+.cfxp-pt { color: var(--ink); font-weight: 700; flex: none; text-shadow: 0 0 4px var(--surface); }
+.cfxp-pp { color: var(--muted); overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; text-shadow: 0 0 4px var(--surface); }
+.cfxp-pp[hidden] { display: none; }
+.cfxp-grow { flex: 1 1 auto; }
+.cfxp-pv { color: var(--ink-2); flex: none; font-weight: 600; text-shadow: 0 0 4px var(--surface); }
+.cfxp-chip { flex: none; padding: 0 6px; border-radius: 3px; border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.cfxp-chip[data-tone="bad"] { border-color: var(--down-line); background: var(--down-soft); color: var(--down); }
+.cfxp-chip[hidden] { display: none; }
+.cfxp-ph .cfxp-retry, .cfxp-ph .cfxp-x { pointer-events: auto; flex: none; }
+.cfxp-x { width: 22px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: var(--t-xs); line-height: 1; cursor: pointer; }
+.cfxp-x:hover, .cfxp-x:focus-visible { background: var(--surface-3); color: var(--ink); outline: none; }
+.cfxp-pmsg { position: absolute; left: 12px; right: 12px; top: 50%; z-index: 2; transform: translateY(-30%); text-align: center; color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.4; pointer-events: none; }
+.cfxp-pmsg[hidden] { display: none; }
+
+/* the '선' menu: the add-ons are a second column on a PC (a phone: one list that scrolls inside the menu) */
+.cfx-menu.cfxp-two { max-height: min(78vh, 640px); overflow-y: auto; }
+.cfxp-sec { display: grid; gap: 2px; align-content: start; min-width: 0; }
+@media (min-width: 700px) {
+  .cfx-menu.cfxp-two { grid-template-columns: minmax(200px, auto) minmax(250px, auto); column-gap: 12px; align-items: start; width: max-content; max-width: calc(100vw - 32px); }
+  .cfx-menu.cfxp-two > .cfxp-sec { grid-column: 2; grid-row: 1 / span 8; border-left: 1px solid var(--line); padding-left: 10px; }
+}
+.cfxp-sec .cfx-mnote { max-width: 250px; }
+
+@media (max-width: 599px) {
+  .cfxp-pane { height: var(--cfxp-ph, 84px); }
+  .cfxp-pp { display: none; }
+  /* a note shows two lines; a tap opens the whole text */
+  .cfxp-n { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+  .cfxp-n.open { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cfxp-tip { transition: none; }
+}
+
+/* the 차트 screen: the add-ons belong to 우리 차트 only (거래소 차트 is TradingView's own page) */
+.chart-card[data-view="tv"] > .cfxp-below { display: none; }
+.chart-card > .cfxp-below { margin-top: -6px; }
+
+/* the terminal's chart panel is one fixed-height box: a note is one line there (the whole text in its tooltip), and the
+   key line under the chart gives its row to the lower panes while they are on */
+.term-chart .cfxp-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-chart .cfxp-notes { padding-block: 2px 3px; gap: 0; }
+.cfxp-nokey > .term-ckey { display: none; }
+.cfx-mi[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.cfxp-roomnote { color: var(--warn); }
+.cfxp-roomnote[hidden] { display: none; }

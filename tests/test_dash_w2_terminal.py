@@ -100,7 +100,7 @@ def test_no_colour_literals_and_motion_respects_reduced_motion_and_hidden_pages(
 
 
 def test_honesty_captions_are_present():
-    feed, side, table, top = _src("terminal-feed.js"), _src("terminal-side.js"), _src("terminal-table.js"), _src("terminal-top.js")
+    feed, side, table, top = _src("terminal-feed.js"), _src("terminal-side.js") + _src("terminal-pnl.js"), _src("terminal-table.js"), _src("terminal-top.js")
     # said once (owners 10/06 ~14:00): the terminal's one footer line; each money panel's ⓘ carries its exact caption
     assert 'ui.assumeLine(["closed", "open"]' in _src("terminal.js")
     assert "${ui.ASSUME_KO}" in feed                                # money in the fills feed (its ⓘ)
@@ -110,7 +110,7 @@ def test_honesty_captions_are_present():
     assert 'FOLD = new Set(["ds", "coin"])' in feed                 # DeepSeek / coin flips: counts only, no money per account
     fold = feed[feed.index("const what = "):feed.index("function render()")]
     assert "pnl" not in fold.replace("m.one", "")
-    assert "수집 전" in side and "기록 없음" in side                  # nothing drawn before real points, no zero for a missing day
+    assert "불러오지 못함" in side and "기록 없음" in side            # nothing drawn before real points (failed is told, not drawn flat), no zero for a missing day
     assert "running" in top and "회의 중" in top                      # 회의 중 only from office.running
     for f in FILES:
         src = _src(f)
@@ -120,7 +120,7 @@ def test_honesty_captions_are_present():
 
 
 def test_reuses_existing_helpers_and_polls_no_faster_than_the_screens_it_borrows_from():
-    chart, side, js = _src("terminal-chart.js"), _src("terminal-side.js"), _src("terminal.js")
+    chart, side, js = _src("terminal-chart.js"), _src("terminal-pnl.js"), _src("terminal.js")      # term-plus: the profit card lives in terminal-pnl.js
     assert "makeChart" in chart and "candleOptions" in chart and 'from "./chart-lines.js"' in chart
     assert 'from "./positions-kit.js"' in _src("chart-lines.js")              # the position lines: one helper for 차트 and 터미널
     assert 'import {bookPanel} from "./positions-book.js"' in js

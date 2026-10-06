@@ -86,8 +86,13 @@ def test_the_goal_line_keeps_goallines_words_when_the_start_is_not_known(monkeyp
 
 def test_both_sides_registries_and_homes_order():
     from paperbot.dash import more
-    for m in ("nextver", "verdictday", "copycmp", "losslinks", "approvals"):
+    for m in ("nextver", "verdictday", "copycmp", "losslinks", "approvals", "topstats", "termpnl", "chartplus", "vplevels"):
         assert m in more.MODULES, m
+    assert len(more.MODULES) == len(set(more.MODULES))
+    pb = _read("core", "pb.js")
+    for exp in ('export * as fav from "./favs.js";', 'export * as cmp from "./cmp.js";', 'export * as vday from "./verdictday.js";',
+                'export * as liqkit from "./liqkit.js";', 'export * as fundkit from "./fundkit.js";'):
+        assert exp in pb, exp
     routes = _read("core", "routes.js")
     assert 'nextver: {ko: "다음 버전", group: "strat", title: "다음 버전 후보", hidden: true},' in routes
     assert 'inbox: {ko: "결재함", group: "agents", title: "결재함", hidden: true},' in routes
@@ -131,3 +136,13 @@ def test_every_new_install_side_module_loads_inside_the_versioned_folder(tmp_pat
     html = a.index_html()
     assert '"/static/v4/' not in html and f'<meta name="pb-ver" content="{a.ver()}">' in html
     assert html.count('rel="modulepreload"') == len(a.boot_modules()) > 10
+
+
+def test_the_terminal_band_leads_to_the_inbox_and_says_the_clocks_sentence():
+    """The terminal band (term-plus) with the 결재함 and the verdict-day clock (add-accounts / fix-verdict): the 결재 대기
+    chip is a link to #/inbox (the header bell is a link there now, not a list to press open); the D+ chip's tooltip
+    is the clock's one sentence when the server sends it (on a verdict day never '0일 남음')."""
+    band = _read("screens", "terminal-band.js")
+    assert 'const appr = mk("appr", 7, {href: ctx.href("inbox")});' in band and "bellbtn" not in band
+    assert "vday.lineKo(sm.v)" in band and "vday.vclock(sm.v)" in band
+    assert 'href: href("inbox")' in _read("core", "bell.js")

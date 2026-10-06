@@ -35,10 +35,14 @@ import {startTour} from "./tour.js";
 import {toast} from "./ui.js";
 import {leave as leaveFull} from "./fullchart.js";
 
-// the chart decks the panel lists: [deck key, 이름, its '선' groups, the screen's own first choice (null: the deck's rule)]
+// the chart decks the panel lists: [deck key, 이름, its '선' groups, the screen's own first choice (null: the deck's rule)]. The
+// groups and first choices are the screens' own (screens/terminal-chart.js, screens/chart.js): 매물대 (vp) is off on the 터미널
+// (the declutter, 지지·저항 too) and on for a PC window's 차트 screen, off on a phone; a list without "vp" here would write the
+// deck's choices back without it and switch the 매물대 on by itself
+const phone = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 export const DECKS = [
-  ["term", "터미널 차트", ["pos", "risk", "sr", "smc", "ev", "vol"], null],
-  ["chart", "차트 화면", ["pos", "risk", "sr", "smc", "ev", "vol"], null],
+  ["term", "터미널 차트", ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], () => ({sr: false, vp: false})],
+  ["chart", "차트 화면", ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], () => ({vp: !phone()})],
   [GRID_DECK.key, "여러 차트", GRID_DECK.groups, GRID_DECK.defaults],
 ];
 // the 차트 screen's own toggles (screens/chart.js TOGGLES, "chart-show"): [key, label, default]
@@ -140,8 +144,12 @@ function chartSection() {
     choice("차트 조명", LIGHT_MODES.map((m) => ({id: m.id, ko: m.ko, title: LIGHT_SUB[m.id]})), lNow, (id) => setPref(LIGHT_KEY, id)), {dim: !ai, id: "light"});
   const flashRow = row("번쩍임", ai ? "큰 체결·청산·우리 체결 때 차트가 한 번 빛남 (실제 일만)" : "AI 화면 색에서만 빛납니다 (지금은 클래식)",
     choice("번쩍임", FLASH_MODES.map((m) => ({id: m.id, ko: m.ko, title: FLASH_SUB[m.id]})), fNow, (id) => setPref(FLASH_KEY, id)), {dim: !ai, id: "flash"});
-  const decks = DECKS.map(([key, ko, groups, defaults]) => {
+  const decks = DECKS.map(([key, ko, groups, defs]) => {
+    const defaults = typeof defs === "function" ? defs() : defs;
     const now = deckState(key, groups, defaults);
+    // choices saved before the 매물대 existed: the screen switches it to its first choice once (screens/chart-vp.js vpPrepare,
+    // "vp-seen-" + key); until that screen was opened the panel shows the same
+    if (groups.includes("vp") && defaults && defaults.vp === false && !local.get("vp-seen-" + key, false)) now.off.add("vp");
     const save = () => setPref("cfx-" + key, deckValue(now));
     const chips = groups.map((g) => h("button", {type: "button", class: "set-chip", "aria-pressed": String(!now.off.has(g)),
       onclick: (e) => { const on = now.off.has(g); if (on) now.off.delete(g); else now.off.add(g); e.currentTarget.setAttribute("aria-pressed", String(on)); save(); }},

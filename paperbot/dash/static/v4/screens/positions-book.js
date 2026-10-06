@@ -1,7 +1,9 @@
 // 거래 screens (builder B): one coin's head (last price, 24h change, mark, funding and time to it, 24h high / low) and
 // its order book (/api/depth, top 20 from the server, polled every 3 s only while the book is on screen). Shared by
 // positions (a chosen coin) and chart (the 호가 tab). No Binance WebSocket: prices come through the server.
-import {h, ui, fmt, store, serverNow, motion} from "../core/pb.js";
+import {h, ui, fmt, store, serverNow, motion, fundkit} from "../core/pb.js";
+
+const {fundTone, fundWho} = fundkit;      // one funding colour rule (not a loss colour)
 
 /** "2:13:04" until a timestamp (server clock). */
 export function countdown(ts) {
@@ -38,7 +40,7 @@ export function coinHead(sym, o = {}) {
     chg.className = "num " + fmt.tone(t.p);
     motion.tickPrice(mark, t.mark, fmt.price(t.mark), sym);
     fund.textContent = fundPct(t.r);
-    fund.className = "num " + fmt.tone(-Number(t.r || 0));
+    fund.className = "num " + fundTone(t.r); fund.title = fundWho(t.r);
     hi.textContent = fmt.price(t.h); lo.textContent = fmt.price(t.l);
     T = t.T || null;
     fundLeft.textContent = T ? countdown(T) : "";
