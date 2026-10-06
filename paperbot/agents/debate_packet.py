@@ -365,17 +365,66 @@ def unusual(board: dict, levrule: Optional[dict], seen: Optional[dict] = None,
 
 
 # ---------------------------------------------------------------- the packet
+def run_start(paper_path: Optional[str]) -> Optional[int]:
+    """The run's start (checkpoint.run_facts) from paper3.db read-only, as ``build`` reads it; None when unknown."""
+    paper = open_ro(paper_path)
+    if paper is None:
+        return None
+    try:
+        from ..checkpoint import run_facts
+        return run_facts(paper).get("start_ts")
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+    finally:
+        paper.close()
+
+
+MARKET_NOTE_KO = ("시장 자료는 이것뿐: 경제지표 일정(data/macro_events.csv)과 표의 계좌(meta.accounts_in_tables)의 펀딩·수수료 합계. 강제청산·거래량·"
+                  "호가·미결제약정 자료는 이 방에 없으니 '자료에 없음'이라고 말함")
+FACTORY_KEYS = ("question", "idea_factory")      # never trimmed (each has its own budget: 900 and 600 tokens)
+
+
+def _macro_ko(e: dict) -> dict:
+    return {"name_ko": e.get("name_ko"), "ts_utc": e.get("ts_utc"),
+            **({"hours_left": e["hours_left"]} if "hours_left" in e else {})}
+
+
+def market_block(board: dict, now_ms: int) -> dict:
+    """The factory's small market block (the 시장 분석가's seat): the US macro releases of the next 48 h and the last
+    24 h (paperbot/events.py, a repository file), the run's funding and fee totals; what is NOT here is said."""
+    out: dict = {"note": MARKET_NOTE_KO}
+    try:
+        from .. import events as EV
+        out["macro_next_48h"] = [_macro_ko(e) for e in EV.upcoming(int(now_ms), days=2.0, limit=4)]
+        out["macro_last_24h"] = [_macro_ko(e.as_dict()) for e in EV.near(int(now_ms), 0, DAY_MS)][-3:]
+    except Exception:  # noqa: BLE001  (a calendar that cannot be read is said, never a crash)
+        out["macro"] = "경제지표 일정을 읽지 못함"
+    ex = board.get("execution") or {}
+    out["funding_total"], out["fees_total"] = ex.get("funding_total"), ex.get("fees_total")
+    return out
+
+
 def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Optional[str],
           checkpoint_path: Optional[str], now_ms: int, round_no: int = 0, recent_topics: tuple = (),
           last_notes: Optional[list] = None, last_turns: Optional[list] = None, scoreboard: Optional[dict] = None,
-          min_n: int = MIN_N, max_tokens: int = MAX_PACKET_TOKENS, seen: Optional[dict] = None) -> dict:
+          min_n: int = MIN_N, max_tokens: int = MAX_PACKET_TOKENS, seen: Optional[dict] = None,
+          question: Any = None, factory: Optional[dict] = None, board: Optional[dict] = None) -> dict:
     """{"packet": dict, "topic": key, "topic_ko": str, "why": str, "tokens": estimate, "marks": agenda_marks}. Raises
     FileNotFoundError when paper3.db is missing (there is nothing to debate then); every other source is optional and
-    noted when absent. ``seen``: the last ok round's ``marks`` (only a new event jumps the agenda, ``unusual``)."""
+    noted when absent. ``seen``: the last ok round's ``marks`` (only a new event jumps the agenda, ``unusual``).
+
+    The idea factory (debate.py DEBATE_MODE=factory): ``question`` (a debate_questions.Question, or its ``section()``)
+    replaces the rotating topic: the packet's ``question`` section is its evidence and handles, ``topic_ko`` its
+    question; ``factory`` (debate_factory.readback) goes in as ``idea_factory``, and a small ``market`` block is added.
+    Neither ``question`` nor ``idea_factory`` is ever trimmed (each keeps its own budget); the rest is trimmed to what
+    is left of ``max_tokens``. ``board``: packets3.build's board when the caller already built it (the question bank
+    did), else it is built here. Without ``question`` the packet is exactly the classic one."""
     if not paper_path or not os.path.exists(paper_path):
         raise FileNotFoundError("paper3.db")
     from . import packets3
-    board = packets3.build(paper_path, daily_path, now_ms, min_n=min_n)
+    if board is None:
+        board = packets3.build(paper_path, daily_path, now_ms, min_n=min_n)
+    qsec = question.section() if hasattr(question, "section") else (question if isinstance(question, dict) else None)
     paper, daily, agents = open_ro(paper_path), open_ro(daily_path), open_ro(agents_path)
     try:
         start = None
@@ -386,7 +435,7 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
             except (sqlite3.Error, TypeError, ValueError):
                 start = None
         lev = None
-        if paper is not None:
+        if paper is not None and qsec is None:                     # the question replaces the topic: no rule B table
             from . import leveval as LV
             try:
                 lev = LV.compact(LV.levrule_eval(paper, now_ms=now_ms, mix=False))
@@ -395,11 +444,14 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
         flags = unusual(board, lev, seen, start)
         topic, why = TOPICS[round_no % len(TOPICS)][0], "정해진 순서(돌아가며)"
         for key, reason in flags:
-            if list(recent_topics[:2]).count(key) < 2:             # an unusual thing jumps the queue, not forever
+            if qsec is None and list(recent_topics[:2]).count(key) < 2:   # an unusual thing jumps the queue, not forever
                 topic, why = key, "이상 징후: " + reason
                 break
         sections: dict = {}
-        if topic == "lev":
+        if qsec is not None:
+            topic, why = "question", f"코드가 고른 질문: {qsec.get('kind_ko') or qsec.get('kind')}"
+            sections["question"] = qsec
+        elif topic == "lev":
             sections["levrule"] = lev
         elif topic == "rank":
             sections["rank"] = _rank(board, min_n)
@@ -449,9 +501,13 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
             "alerts": _alerts(board),
             "nightly": _nightly(board) if topic != "nightly" else {"see": "nightly_detail"},
             "recent_agent_meetings": _recent_meetings(agents),
-            "topic": TOPIC_KO.get(topic),
+            "topic": TOPIC_KO.get(topic) if qsec is None else qsec.get("kind_ko"),
             "unusual": [{"topic": TOPIC_KO[k], "why": w} for k, w in flags],
         }
+        if qsec is not None:
+            core["market"] = market_block(board, now_ms)
+            if factory is not None:
+                core["idea_factory"] = factory
         if scoreboard is not None:
             core["hypothesis_scoreboard"] = {"graded": scoreboard.get("graded"), "hit": scoreboard.get("hit"),
                                              "small_sample": scoreboard.get("small"), "open": (
@@ -463,17 +519,22 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
         for c in (paper, daily, agents):
             if c is not None:
                 c.close()
+    # the factory's question and read-back keep their own budgets: set aside, never trimmed or cut here
+    kept = {k: pk.pop(k) for k in FACTORY_KEYS if k in pk}
+    budget = max_tokens - (estimate_tokens(compact_json(kept)) if kept else 0)
     pk = shrink(pk, 10, 200)
     # trim to the budget: drop the least needed pieces first, then cut lists harder
     for key in ("recent_agent_meetings", "alerts", "last_24h", "unusual"):
-        if estimate_tokens(compact_json(pk)) <= max_tokens:
+        if estimate_tokens(compact_json(pk)) <= budget:
             break
         pk.pop(key, None)
     for ml, ms in ((6, 140), (4, 100), (3, 80)):
-        if estimate_tokens(compact_json(pk)) <= max_tokens:
+        if estimate_tokens(compact_json(pk)) <= budget:
             break
         pk = shrink(pk, ml, ms)
-    return {"packet": pk, "topic": topic, "topic_ko": TOPIC_KO[topic], "why": why,
+    pk.update(kept)
+    topic_ko = TOPIC_KO[topic] if qsec is None else str(qsec.get("question_ko") or "")
+    return {"packet": pk, "topic": topic, "topic_ko": topic_ko, "why": why,
             "tokens": estimate_tokens(compact_json(pk)), "marks": agenda_marks(board, start)}
 
 

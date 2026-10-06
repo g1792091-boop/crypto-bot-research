@@ -170,9 +170,11 @@ def test_an_older_debate_db_only_gains_two_empty_columns(tmp_path):
     # read before the service opened it (the dashboard updated first): plain turns, no error
     s = D.summary(path, NOW)
     assert s["ready"] and s["rounds"][0]["messages"][1]["reply_to"] is None
-    db = D.DB(path)                                                     # the service opens it: two columns added
+    db = D.DB(path)                                                     # the service opens it: empty columns added
     cols = [r[1] for r in db.conn.execute("PRAGMA table_info(debate_messages)")]
-    assert cols == ["id", "ts", "round_id", "speaker", "stance", "topic", "text", "reply_to", "reply_stance"]
+    # reply_to / reply_stance (debate-chat), side / part (the idea factory's assigned side and the deep debate's part)
+    assert cols == ["id", "ts", "round_id", "speaker", "stance", "topic", "text", "reply_to", "reply_stance", "side",
+                    "part"]
     assert db.conn.execute("SELECT speaker, text, reply_to, reply_stance FROM debate_messages ORDER BY id").fetchall() == [
         ("낙관론자", "말", None, None), ("비관론자", "말", None, None)]
     db.close()
