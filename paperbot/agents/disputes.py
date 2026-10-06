@@ -209,6 +209,35 @@ def sides_view(conn: Optional[sqlite3.Connection]) -> dict:
     return {"version": 1, "since": None, "pool": list(ATTACKER_POOL), "sides": default_sides(1)}
 
 
+def seats_written(conn: Optional[sqlite3.Connection]) -> Optional[dict]:
+    """The seats cursor when the agents tick has written it (it does only with sides on), else None: the dashboard
+    shows a room's sides only then (a feature that is off is not shown)."""
+    if conn is None:
+        return None
+    try:
+        v = R.get_cursor(conn, SIDES_CURSOR)
+    except sqlite3.Error:
+        return None
+    return v if isinstance(v, dict) and isinstance(v.get("sides"), dict) else None
+
+
+def room_seats(conn: Optional[sqlite3.Connection], strategy: str) -> Optional[dict]:
+    """{advocate, attacker} of one strategy with each seat's record (dashboard), or None while sides were never on."""
+    v = seats_written(conn)
+    seat = ((v or {}).get("sides") or {}).get(strategy)
+    if not seat:
+        return None
+    b = board(conn, turns=False)
+
+    def one(role: str, side: str) -> dict:
+        r = role_record(b, role)
+        return {"role": role, "name": name(role),
+                "record": {k: r[k] for k in ("won", "lost", "settled", "pending", "conceded", "expected", "small")},
+                "record_side": r["as_advocate" if side == "advocate" else "as_attacker"]}
+    return {"version": v.get("version", 1), "since": v.get("since"), "advocate": one(seat["advocate"], "advocate"),
+            "attacker": one(seat["attacker"], "attacker"), "base_rates": b["base_rates"], "coin_flip": 0.5}
+
+
 def sides(conn: sqlite3.Connection, now_ms: int) -> dict:
     """The seats, written once to the cursor ``disputes:sides`` (the tick's writer connection)."""
     v = R.get_cursor(conn, SIDES_CURSOR)
@@ -910,7 +939,7 @@ def base_rates(rows: Iterable[dict]) -> dict:
     return out
 
 
-def board(conn: Optional[sqlite3.Connection]) -> dict:
+def board(conn: Optional[sqlite3.Connection], turns: bool = True) -> dict:
     """Per role over the whole run: won / lost (as attacker, as advocate, by kind), pending, conceded, talk-only attacks
     and attacks given up, and ``expected``: the wins the side's base rate alone would give (so 9/10 for an advocate
     of lab disputes that advocates win 92% of the time reads as the base rate, not as skill). Plus the base rates, the
@@ -940,7 +969,7 @@ def board(conn: Optional[sqlite3.Connection]) -> dict:
                 row[side]["won" if won else "lost"] += 1
                 row["by_kind"][r["kind"]]["won" if won else "lost"] += 1
                 row["expected"] += share if mine == "a" else 1.0 - share
-    for role, k in _attack_turns(conn).items():
+    for role, k in (_attack_turns(conn) if turns else {}).items():    # turns=False: the disputes table only
         row = get_(role)
         row.update(k)
     out = []
@@ -1023,6 +1052,59 @@ def who_was_right(conn: Optional[sqlite3.Connection], recent: int = 20) -> dict:
             "base_rates": rates, "roles": b["roles"], "small": b["small"], "min": SMALL, "coin_flip": 0.5,
             "recent": [r for r in list_rows(conn, limit=200) if r["status"] in FINAL][:max(0, int(recent))],
             "note": b["note"]}
+
+
+def of_rounds(conn: Optional[sqlite3.Connection], round_ids: Iterable[int]) -> dict:
+    """{round_id: {id, status, status_ko, winner, winner_ko, kind}} of the dispute each meeting opened (the digest)."""
+    ids = [int(i) for i in round_ids if i is not None]
+    out: dict = {}
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        for r in _rows(conn, f"round_id IN ({','.join('?' * len(part))})", tuple(part), 5000, "id"):
+            out.setdefault(int(r["round_id"]), {"id": r["id"], "status": r["status"],
+                                                "status_ko": STATUS_KO.get(r["status"], r["status"]),
+                                                "winner": r.get("winner"), "winner_ko": WINNER_KO.get(r.get("winner") or "", ""),
+                                                "kind": r["kind"]})
+    return out
+
+
+def settled_between(conn: Optional[sqlite3.Connection], since_ms: int, until_ms: int, limit: int = 30) -> list[dict]:
+    """Disputes that ended (settled, void, expired, conceded) in [since, until): claim, sides, winner, the code line
+    (the Saturday learning packet: do_not_retest)."""
+    out = []
+    for r in _rows(conn, "settled_ts >= ? AND settled_ts < ?", (int(since_ms), int(until_ms)), limit, "settled_ts"):
+        out.append({"id": r["id"], "strategy": r["strategy"], "claim": r["claim_ko"][:200], "kind": r["kind"],
+                    "settle_ko": settle_ko(r.get("spec"), r["strategy"]), "side_a": r["side_a"], "side_b": r["side_b"],
+                    "status": r["status"], "winner": r.get("winner"),
+                    "winner_ko": WINNER_KO.get(r.get("winner") or "", STATUS_KO.get(r["status"], "")),
+                    "outcome": (r.get("outcome") or "")[:300]})
+    return out
+
+
+def week_summary(conn: Optional[sqlite3.Connection], since_ms: int, until_ms: int) -> Optional[dict]:
+    """The Sunday report's '누가 맞았나' numbers: settled this week (attacker / advocate), the whole run's attacker share
+    next to the coin flip's 50%, pending. None when there is no dispute at all."""
+    rows = _rows(conn, limit=100_000, order="id")
+    if not rows:
+        return None
+    week = [r for r in rows if r["status"] == "settled" and since_ms <= int(r.get("settled_ts") or 0) < until_ms]
+    rates = base_rates(rows)["all"]
+    return {"week_settled": len(week), "week_attacker": sum(r.get("winner") == "a" for r in week),
+            "week_advocate": sum(r.get("winner") == "b" for r in week),
+            "all_settled": rates["settled"], "all_attacker": rates["attacker_won"],
+            "all_attacker_share": rates["attacker_share"], "pending": sum(r["status"] in PENDING for r in rows),
+            "small": rates["settled"] < SMALL}
+
+
+def week_line(w: Optional[dict]) -> str:
+    """'누가 맞았나: 이번 주 결론 3건(공격 1·편 2) · 실험 전체 공격 쪽 12/40(30%, 동전 50%) · 대기 4' (code text)."""
+    if not w:
+        return ""
+    share = w.get("all_attacker_share")
+    total = (f"실험 전체 공격 쪽 {w['all_attacker']}/{w['all_settled']}"
+             + (f"({share * 100:.0f}%, 동전 50%)" if share is not None else "") + (" 표본 적음" if w.get("small") else ""))
+    return (f"누가 맞았나: 이번 주 결론 {w['week_settled']}건(공격 {w['week_attacker']}·편 {w['week_advocate']}) · "
+            f"{total} · 대기 {w['pending']}")
 
 
 def role_record(b: dict, role: str) -> dict:

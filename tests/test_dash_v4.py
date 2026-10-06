@@ -348,7 +348,10 @@ SERVER_NOT_USED = {
     "/api/login": "the login page (/login) posts it, not the dashboard",
 }
 # Paths the new UI probes before the server has them (it shows '수집 전' on a 404): CONTRACT.md NEEDS SERVER.
-NEEDS_SERVER: dict = {}       # /api/v4/server (#4) and /api/v4/curves (#2) are on the server now
+NEEDS_SERVER: dict = {       # /api/v4/server (#4) and /api/v4/curves (#2) are on the server now
+    # the lab room's shared test queue (design 102, step 2 on the shared-queue branch): take it off once that is merged
+    "/api/lab/intake": "rooms-side.js: the lab room's 5년 시험 대기열 (disputes-kit.js labIntake)",
+}
 
 
 def test_every_old_ui_route_is_still_used_or_listed_as_not_needed():
