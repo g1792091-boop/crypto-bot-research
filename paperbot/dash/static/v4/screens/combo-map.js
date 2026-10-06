@@ -131,6 +131,8 @@ export function mapTab(env) {
   function pairsCard(d, units) {
     const wait = d.ready ? null : "기록이 쌓이면 보여 드립니다 (지금은 비교할 날이 모자랍니다).";
     return ui.card({plate: "같이 · 반대로 움직인 쌍", sub: "누르면 그 둘로 조합 만들기"},
+      d.ready && d.early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"),
+        ` 기록 ${fmt.num(d.run_days, 1)}일째 · 아직 판단하기 이릅니다. 거래 몇 건이 같은 시간에 겹친 것만으로도 큰 숫자가 나옵니다 (${fmt.int(d.early_days)}일 전에는 참고만).`) : null,
       h("div", {class: "cb-two"},
         h("div", null, h("p", {class: "cb-k"}, "가장 같이 움직인 쌍"), pairList(d.top || [], units, wait || "상관을 잴 수 있는 쌍이 없습니다.")),
         h("div", null, h("p", {class: "cb-k"}, "가장 반대로 움직인 쌍 (헤지)"), pairList(d.hedge || [], units, wait || "반대로 움직인 쌍이 없습니다 (모두 0 이상)."))),

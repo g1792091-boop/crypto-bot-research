@@ -141,7 +141,7 @@ export function rulesTab(env) {
         h("span", {class: "num", role: "cell"}, h("i", null, "승률 "), r.win_rate == null ? "—" : fmt.pct(r.win_rate, 0, false)),
         h("span", {class: ["num", fmt.tone(r.mean_roe, fmt.pct(r.mean_roe, 1))], role: "cell"}, h("i", null, "평균 순 ROE "), r.mean_roe == null ? "—" : fmt.pct(r.mean_roe, 1)),
         h("span", {class: ["num", fmt.tone(r.pnl, fmt.money(r.pnl))], role: "cell"}, h("i", null, "손익 합 "), r.trades ? fmt.money(r.pnl, true) : "—"))));
-    const out = [ui.card({plate: head.label, sub: d.kind_ko || ""},
+    const out = [ui.card({plate: head.label, sub: d.kind_ko && d.kind_ko !== head.label ? d.kind_ko : null},
       h("h2", {class: "an-q"}, head.q),
       h("p", {class: "an-read"}, h("b", null, "규칙 "), d.window_ko || ""),
       early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` 규칙이 남긴 거래 ${fmt.int(rule.trades || 0)}건 · 아직 판단하기 이릅니다`) : null,
@@ -165,7 +165,7 @@ export function rulesTab(env) {
       h("span", {class: "meta"}, h("span", null, `합의 승률 ${p.rule.win_rate == null ? "—" : fmt.pct(p.rule.win_rate, 0, false)}`),
         h("span", null, `혼자 승률 ${p.alone.win_rate == null ? "—" : fmt.pct(p.alone.win_rate, 0, false)}`),
         h("span", {class: fmt.tone(p.rule.mean_roe, fmt.pct(p.rule.mean_roe, 1))}, `합의 평균 ROE ${p.rule.mean_roe == null ? "—" : fmt.pct(p.rule.mean_roe, 1)}`),
-        p.rule.small ? ui.pill("표본 적음", "thin") : null))});
+        !p.alone.trades ? h("span", null, "거래 없음") : p.rule.small ? ui.pill("표본 적음", "thin") : null))});
     pg.set(d.per_strategy);
     return ui.card({plate: "매매법마다", sub: `${fmt.tfKo(d.lo)} 거래 중 ${fmt.tfKo(d.hi)}와 같은 방향이던 것 / 전부 · 이름 순 (순위 아님)`}, pg.el);
   }

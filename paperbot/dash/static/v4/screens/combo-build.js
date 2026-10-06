@@ -208,7 +208,7 @@ export function buildTab(env) {
       d.small.early ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` ${d.small.words}`) : null,
       box, legend,
       h("p", {class: "an-note"}, `세로 = 시작 대비 수익률 % · ${d.basis_ko}`, cv.step_min ? ` · 그림은 ${fmt.num(cv.step_min, 0)}분 간격으로 줄여 그림, 숫자는 기록 전체로 계산` : ""),
-      flipLine, ui.refNote(verdictTs()));
+      flipLine, d.reel_note ? h("p", {class: "an-note"}, ui.pill("릴스", "ref"), " ", d.reel_note) : null, ui.refNote(verdictTs()));
   }
   async function draw(box, d, series) {
     const cv = d.curve || {};
@@ -251,7 +251,8 @@ export function buildTab(env) {
       ui.stat("수익률", pctB(S.ret, 2), `합친 자금 ${fmt.money(d.capital)} 대비`),
       ui.stat("손익", moneyB(S.pnl), "비중 반영 · 열린 포지션 평가 포함"),
       ui.stat("최대 낙폭", pctB(S.mdd_pct ? -S.mdd_pct : 0, 1), S.mdd_trough_ts ? `${fmt.money(-S.mdd_usd)} · 바닥 ${fmt.kst(S.mdd_trough_ts)}` : "아직 고점 아래로 내려간 적 없음"),
-      ui.stat("최악의 날", wd ? moneyB(wd.pnl) : h("b", {class: "num muted"}, "—"), wd ? `${wd.day.slice(5).replace("-", "/")} · ${fmt.pct(wd.ret, 1)}${S.partial_last ? " · 오늘은 진행 중" : ""}` : "날 기록 전"),
+      ui.stat("최악의 날", wd ? moneyB(wd.pnl) : h("b", {class: "num muted"}, "—"),
+        wd ? `${wd.day.slice(5).replace("-", "/")} · ${fmt.pct(wd.ret, 1)}${wd.pnl >= 0 ? " · 잃은 날 없음 (가장 덜 번 날)" : ""}${S.partial_last ? " · 오늘은 진행 중" : ""}` : "날 기록 전"),
       ui.stat("거래 수", `${fmt.int(S.trades)}건`, ui.smallSample(S.trades, d.small.need) || "구성원 닫힌 거래의 합"),
       ui.stat("승률", S.win_rate == null ? "—" : fmt.pct(S.win_rate, 0, false), S.trades ? `${fmt.int(S.wins)}승 ${fmt.int(S.trades - S.wins)}패` : "거래 없음"),
       ui.stat("평균 거래", S.avg_trade == null ? h("b", {class: "num muted"}, "—") : moneyB(S.avg_trade), "한 건 평균 손익 (비중 반영)"),

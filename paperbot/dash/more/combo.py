@@ -662,6 +662,7 @@ def corr_map(book: Book, level: str, tf: Optional[str], basis: str, now: int, sn
             "units": [{"key": k, "name_ko": (names.get(k.split("@")[0], k.split("@")[0]) + (f" · {tf_ko(tf)}" if tf else "")),
                        "trades": trades[k]} for k in keys],
             "m": m, "top": top, "hedge": hedge, "overlap": ov, "start": start, "now": int(now),
+            "early": (now - start) / DAY_MS < SMALL_DAYS, "early_days": SMALL_DAYS,
             "run_days": K.r((now - start) / DAY_MS, 3), "ds_note": DS_NOTE}
 
 
