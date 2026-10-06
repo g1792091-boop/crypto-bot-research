@@ -166,7 +166,7 @@ function walkCard(wf, env) {
 }
 
 // ---------------------------------------------------------------- 한 계좌로 합치면
-function oneRow(c, i, init) {
+function oneRow(c, i) {
   return h("div", {class: "lrow an-row", role: "listitem"},
     h("span", {class: "rk"}, String(i + 1)), h("span", {class: "lname an-wrap"}, (c.names || []).join(" + ")),
     h("span", {class: "ret num", title: "포지션이 있던 시간 중 서로 상쇄된 시간 비율"}, `상쇄 ${pc(c.cancel_share)}`),
@@ -181,7 +181,7 @@ function oneCard(oa, env) {
   const top = (oa.combos || [])[0];
   return ui.card({plate: "한 계좌로 합치면", sub: `점수 높은 조합 ${fmt.int((oa.combos || []).length)}개`},
     h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "조합의 계좌들을 거래소 계좌 하나에서 돌렸다면: 같은 코인을 한쪽은 롱, 한쪽은 숏으로 들고 있던 시간은 서로 지워져 수수료·펀딩만 나갑니다(상쇄). 최대 동시 증거금 = 같은 순간 열려 있던 포지션의 증거금 합의 최고값."),
-    h("div", {class: "plist", role: "list"}, (oa.combos || []).map((c, i) => oneRow(c, i, oa.initial))),
+    h("div", {class: "plist", role: "list"}, (oa.combos || []).map((c, i) => oneRow(c, i))),
     top ? h("p", {class: "ax-say"}, `1위 조합은 포지션이 있던 시간의 ${pc(top.cancel_share)} 동안 같은 코인을 양쪽으로 들고 있었고, 한때 한 계좌 시작 자금(${fmt.money(oa.initial)} USDT)의 ${fmt.num(top.peak_x_one, 1)}배를 증거금으로 썼어요.`) : null,
     f ? h("p", {class: "an-note"}, `동전 봇 계좌 ${fmt.int(f.accounts)}개를 한 계좌로 (참고): 상쇄 ${pc(f.cancel_share)} · 최대 동시 증거금 한 계좌 시작 자금의 ${fmt.num(f.peak_x_one, 1)}배.`) : null,
     h("p", {class: "an-note"}, "같은 매매법의 다른 봉 계좌끼리도 셉니다 (한 계좌에서는 모두 서로 지워지므로). 끝난 거래와 지금 열린 포지션 기준."),
