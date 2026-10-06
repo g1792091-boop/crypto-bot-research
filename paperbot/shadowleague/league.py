@@ -78,6 +78,11 @@ class AccountSpec:
     leverage: int = 20
     liq_adverse: float = AC.OWN_LIQ
 
+    @property
+    def exposure(self) -> float:
+        """Position size as a multiple of the equity: 20 % margin x 20x = 4x (a member with other numbers gets its own)."""
+        return self.margin_frac * self.leverage
+
 
 @dataclass(frozen=True)
 class Member:
@@ -398,7 +403,7 @@ class League:
         acct_rows: list[tuple] = []
         with st.tx():
             for scope, tr in sets:
-                res = AC.run_account(tr, a.start_equity, AC.OWN_EXPO, a.margin_frac, a.liq_adverse)
+                res = AC.run_account(tr, a.start_equity, a.exposure, a.margin_frac, a.liq_adverse)
                 asof = AC.frontier_ms(series, None if scope == "all" else scope)
                 st.replace_account_daily(m.member_id, scope, AC.daily_equity(tr, res, m.start_ms, asof, a.start_equity)
                                          if asof else [])

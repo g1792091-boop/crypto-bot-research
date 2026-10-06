@@ -681,6 +681,13 @@ def test_an_adverse_move_of_exactly_the_liquidation_level_liquidates_and_a_hair_
     assert not off["liquidated"] and off["ret"] == pytest.approx(4 * 0.01)
 
 
+def test_the_account_exposure_follows_the_members_own_margin_and_leverage():
+    a = LG.AccountSpec()
+    assert a.exposure == AC.OWN_EXPO == 4.0 and a.margin_frac == AC.OWN_MARGIN and a.leverage == 20
+    assert LG.AccountSpec(margin_frac=0.1, leverage=10).exposure == 1.0
+    assert "exposure" not in LG.Member.spec(make_member())["account"]          # a property, not part of the stored definition
+
+
 def test_an_open_taken_trade_blocks_every_later_one_and_is_not_marked_to_market():
     tr = [_t("a", "BTC", 10, 20, 0.02), {"trade_id": "o", "coin": "BTC", "tf": "1h", "entry_ms": 30, "exit_ms": None,
                                          "net": None, "mae": None}, _t("z", "ETH", 99, 120, 0.5)]

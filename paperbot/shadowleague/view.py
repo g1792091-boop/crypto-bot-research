@@ -267,7 +267,7 @@ def curves(trades: list[dict], clones: list[dict], series: list[dict], start_ms:
                     + [int(x["entry_ms"]) for t in tr for x in by_trade.get(t["trade_id"], [])
                        if x["status"] != "closed" and x["entry_ms"] is not None])
         real = [t for t in tr if int(t["entry_ms"]) < tstar]
-        res = AC.run_account(real, acct.start_equity, AC.OWN_EXPO, acct.margin_frac, acct.liq_adverse)
+        res = AC.run_account(real, acct.start_equity, acct.exposure, acct.margin_frac, acct.liq_adverse)
         mem = AC.daily_equity(real, res, start_ms, tstar, acct.start_equity)
         worlds = []
         for k in range(kmax):
@@ -280,7 +280,7 @@ def curves(trades: list[dict], clones: list[dict], series: list[dict], start_ms:
                 if x["status"] == "closed" and x["entry_ms"] is not None and int(x["entry_ms"]) < tstar:
                     wt.append({"trade_id": x["clone_id"], "coin": x["coin"], "tf": x["tf"], "entry_ms": x["entry_ms"],
                                "exit_ms": x["exit_ms"], "net": x["net"], "mae": x["mae"]})
-            r = AC.run_account(wt, acct.start_equity, AC.OWN_EXPO, acct.margin_frac, acct.liq_adverse)
+            r = AC.run_account(wt, acct.start_equity, acct.exposure, acct.margin_frac, acct.liq_adverse)
             worlds.append(AC.daily_equity(wt, r, start_ms, tstar, acct.start_equity))
         points = []
         for i, row in enumerate(mem):
