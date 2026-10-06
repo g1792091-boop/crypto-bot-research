@@ -67,6 +67,7 @@ function recordBox(f) {
 /** 왜 떨어졌나: per engine, how often each check failed among this room's tested ideas, next to the lab's share. */
 function whyBox(f) {
   const w = f.why_fail || {};
+  const small = (f.record && f.record.small_below) || 10;
   const engines = ["newlab", "labtest"].filter((e) => w[e] && (w[e].tests || w[e].lab_tests));
   if (!engines.length) return h("div", {class: "db-fwhy"}, h("h4", null, "왜 떨어졌나"),
     h("p", {class: "db-small"}, "아직 5년 시험 결과가 없습니다"));
@@ -74,7 +75,9 @@ function whyBox(f) {
     engines.map((e) => {
       const x = w[e], names = x.names_ko || {}, ls = x.lab_share || {};
       return h("div", {class: "db-wset"},
-        h("p", {class: "db-wk"}, `${ENGINE_KO[e]} · 토론방 ${fmt.int(x.tests || 0)}개 · 연구실 ${x.lab_tests ? fmt.int(x.lab_tests) + "개" : "수집 전"}`),
+        // a few tested ideas make long bars out of one or two tests: said next to the count (the server's sample floor)
+        h("p", {class: "db-wk"}, `${ENGINE_KO[e]} · 토론방 ${fmt.int(x.tests || 0)}개`
+          + (x.tests && x.tests < small ? " (표본 적음 · 참고만)" : "") + ` · 연구실 ${x.lab_tests ? fmt.int(x.lab_tests) + "개" : "수집 전"}`),
         h("ul", {class: "db-wlist"}, MARKS.map((m) => {
           const k = (x.failed || {})[m] || 0, t = x.tests || 0;
           return h("li", null, h("b", null, m), h("span", {class: "db-wn", title: names[m] || ""}, names[m] || ""),

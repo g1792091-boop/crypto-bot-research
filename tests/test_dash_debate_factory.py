@@ -369,7 +369,7 @@ console.log(JSON.stringify({{
     assert out["small"] and "결론 난 시험 3개" in out["small"][0] and "동전 던지기 50%" in out["small"][0]
     assert any("새 매매법 1/412 통과(0.2%)" in x and "36개 고쳐 보기 3/96 통과(3.1%)" in x for x in out["recLine"])
     assert any(x.startswith("반대가 짚은 칸 적중 2/3") for x in out["recLine"])
-    assert out["why"] == [6, 6] and out["wk"][0] == "새 매매법 5년 시험 · 토론방 2개 · 연구실 412개"
+    assert out["why"] == [6, 6] and out["wk"][0] == "새 매매법 5년 시험 · 토론방 2개 (표본 적음 · 참고만) · 연구실 412개"
     assert "사람 성적이 아닙니다" in out["caution"] and out["hidden"] == [False, True]
     assert out["deep"] == [False, True, False] and out["done"] == ["1 주장", "2 반박", "3 심판"] and out["cols"] == 3
     assert out["meta"].startswith("claude-opus-5-5깊은 토론 몫 이번 달 $0.6612 / $10.00 (월 한도 안)")
