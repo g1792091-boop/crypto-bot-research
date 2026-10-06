@@ -237,7 +237,7 @@ export function tvSection(onDone) {
   return h("section", {class: "tvp-sec", "aria-label": "TV 자동 넘김"},
     h("p", {class: "tvp-lead"}, "고른 화면을 차례로 보여 줍니다. 화면을 만지거나 키를 누르면 멈추고, 60초 동안 가만두면 다시 넘깁니다. 넘기는 동안 왼쪽 메뉴는 숨깁니다."),
     h("div", {class: "tvp-row"}, h("span", null, "한 화면에"), slider, val),
-    h("fieldset", {class: "tvp-stops"}, h("legend", null, "보여 줄 화면 (위에서부터 차례로)"), items),
+    h("fieldset", {class: "tvp-stops"}, h("legend", null, "보여 줄 화면 (이 순서대로 넘어감)"), items),
     h("p", {class: "tvp-note"}, "화면 꺼짐 막기: 브라우저가 허락하면 넘기는 동안 화면을 켜 둡니다. 이 기기에만 기억합니다."),
     h("div", {class: "tvp-acts"}, go, end));
 }
