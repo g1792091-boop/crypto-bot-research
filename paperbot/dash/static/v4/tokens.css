@@ -260,13 +260,14 @@
   --head-glow: rgba(25, 195, 177, .18);
   /* the chart deck's light (owners' reference terminal): the Premium half of the pane (above the dealing range's middle) red,
      the Discount half sky blue (strongest at the outer edges, -seam: the faint end at the split); a real big trade /
-     liquidation flashes the whole pane in the same hues */
-  --amb-up: rgba(56, 189, 248, .22);
-  --amb-down: rgba(244, 63, 94, .24);
-  --amb-up-edge: rgba(56, 189, 248, .30);
-  --amb-down-edge: rgba(244, 63, 94, .33);
-  --amb-up-seam: rgba(56, 189, 248, .05);
-  --amb-down-seam: rgba(244, 63, 94, .05);
+     liquidation flashes the whole pane in the same hues. The halves blink (core/blink.js): these are a strong blink's
+     peak (layer opacity 1); '계속 켜짐' shows them at 0.56, the old steady strength (.22 / .24) */
+  --amb-up: rgba(56, 189, 248, .40);
+  --amb-down: rgba(244, 63, 94, .43);
+  --amb-up-edge: rgba(56, 189, 248, .54);
+  --amb-down-edge: rgba(244, 63, 94, .59);
+  --amb-up-seam: rgba(56, 189, 248, .09);
+  --amb-down-seam: rgba(244, 63, 94, .09);
   --amb-up-ink: #38bdf8;
   --amb-down-ink: #f43f5e;
   --flash-up: rgba(56, 200, 248, .40);

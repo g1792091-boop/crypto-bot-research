@@ -6,8 +6,9 @@
 //   - 실시간 큰 체결: real large market orders of the whole Binance market (NOT our bots), newest on top, with the
 //     5-minute taker buy / sell notional of those orders and a 고래 badge from 4 times the coin's threshold.
 // HONESTY: no message, no motion (no timer animates anything); the feed is labelled as the whole market's trades, not
-// ours; nothing under prefers-reduced-motion; the stream is closed while the page is hidden and when the screen is left.
-import {h, put, ui, fmt, motion} from "../core/pb.js";
+// ours; nothing under prefers-reduced-motion; the page's one relay connection (core/ticks.js) is closed while the page is
+// hidden, and this screen's listener leaves when the screen is left.
+import {h, put, ui, fmt, motion, listenTicks, ticksState} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
 
 export const BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)";
@@ -38,50 +39,23 @@ export function hit(el, tone) {
 }
 
 /**
- * tickStream(ctx) -> {on(fn), start(), state()}: the relay's server-sent events while the terminal is mounted and the
- * page is visible (closed when hidden, opened again when shown, closed when the screen is left). fn(msg) gets every
- * message {state, ev, big?}; a dropped connection is told as {state: "down", ev: []}. A refused stream (401 / 404 /
- * 5xx) is asked again after 30 s, then a growing wait up to 5 minutes (as the sound layer does).
+ * tickStream(ctx) -> {on(fn), start(), state()}: the relay's server-sent events while the screen is mounted and the
+ * page is visible, through the page's ONE relay connection (core/ticks.js, shared with the sound and the chart light:
+ * closed while the page is hidden, opened again when shown; this screen's listener leaves when the screen is left).
+ * fn(msg) gets every message {state, ev, big?, first}; a dropped connection is told as {state: "down", ev: []}; a
+ * refused one is asked again after 30 s, then a growing wait up to 5 minutes.
  */
 export function tickStream(ctx) {
   const subs = [];
-  const st = {es: null, state: "off", retryT: null, retryMs: 30000, first: true};
+  let off = null;
   const tell = (m) => { for (const fn of subs) { try { fn(m); } catch (e) { /* one part failing never stops the others */ } } };
   function open() {
-    const ES = globalThis.EventSource;
-    if (st.es || st.retryT || document.hidden || !ctx.alive() || typeof ES !== "function") return;
-    let es;
-    try { es = new ES("/api/v4/ticks"); } catch (e) { st.state = "down"; return; }
-    st.es = es; st.state = "connecting"; st.first = true;
-    es.onmessage = (ev) => {
-      if (st.es !== es) return;
-      let d;
-      try { d = JSON.parse(ev.data); } catch (e) { return; }
-      if (!d || typeof d !== "object") return;
-      st.retryMs = 30000;
-      st.state = typeof d.state === "string" ? d.state : "down";
-      d.first = st.first; st.first = false;
-      tell(d);
-    };
-    es.onerror = () => {
-      if (st.es !== es) return;
-      st.state = "down"; st.first = true;
-      tell({state: "down", ev: []});
-      if (es.readyState === 2) {                    // refused for good: again later (readyState 0: the browser retries)
-        st.es = null;
-        st.retryT = setTimeout(() => { st.retryT = null; open(); }, st.retryMs);
-        st.retryMs = Math.min(300000, st.retryMs * 2);
-      }
-    };
+    if (off || !ctx.alive()) return;
+    off = listenTicks(tell);
   }
-  function close() {
-    clearTimeout(st.retryT); st.retryT = null;
-    if (st.es) { try { st.es.close(); } catch (e) { /* closed */ } st.es = null; }
-    st.state = "off";
-  }
-  ctx.listen(document, "visibilitychange", () => { if (document.hidden) close(); else open(); });
+  function close() { if (off) { const f = off; off = null; f(); } }
   ctx.track(close);
-  return {on(fn) { subs.push(fn); }, start: open, state: () => st.state};
+  return {on(fn) { subs.push(fn); }, start: open, state: () => (off ? ticksState() : "off")};
 }
 
 /** bigFeed(ctx) -> {el, onMsg(msg), rows(sym)}: 실시간 큰 체결 (the whole market's large orders, not ours). */
