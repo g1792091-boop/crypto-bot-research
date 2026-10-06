@@ -171,8 +171,9 @@ export function mapTab(env) {
     update(q) {
       st.level = q.level === "account" ? "account" : "strategy";
       if (TFS.includes(q.tf)) st.tf = q.tf;
-      st.basis = q.basis === "hour" ? "hour" : "day";
-      st.chosen = true;
+      // a link without ?basis= keeps the early fallback (hourly while daily has too few days) unless one was chosen
+      st.chosen = q.basis === "hour" || local.get("combo-mapbasis", null) != null;
+      st.basis = q.basis === "hour" ? "hour" : local.get("combo-mapbasis", "day");
       st.auto = false;
       load();
     },

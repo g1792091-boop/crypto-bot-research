@@ -128,6 +128,7 @@ def test_the_day_going_on_is_named_and_in_sample_weights_say_so(tmp_path):
     s = d["stats"]
     assert s["partial_last"] is True and s["partial_day"] == CB.K.kst_day(info["now"])
     assert d["method"]["in_sample"] is False and d["method"]["in_sample_ko"] is None
+    assert d["curve"]["thinned"] is (d["curve"]["points"] > CB.CURVE_POINTS)
     iv = c.combo("S1_EMA_RSI_CHOP,S2_ST_ROC@1h", "invvol", None, now=info["now"])
     assert iv["method"]["used"] == "invvol" and iv["method"]["in_sample"] is True and "처음부터" in iv["method"]["in_sample_ko"]
     rp = c.combo("S1_EMA_RSI_CHOP,S2_ST_ROC@1h,S3_CMO_SANDWICH", "rp", None, now=info["now"])
@@ -144,6 +145,9 @@ def test_page_wiring_of_the_review_fixes():
     assert "S.partial_day && wd.day === S.partial_day" in build_js and "d.method.in_sample_ko" in build_js
     assert 'st.corr == null && b === "hour"' in build_js and 'local.get("combo-corrbasis", null)' in build_js
     assert "st.hidden.clear()" in build_js and "지금보다" in build_js
+    # the chart keeps chartOptions' Korea-time axis: no timeScale of its own (it would replace kstTick: UTC labels)
+    i = build_js.index("await makeChart(box,")
+    assert "timeScale" not in build_js[i:build_js.index("});", i)] and "cv.thinned" in build_js
     main = _read(V4, "screens", "combo.js")
     assert 'tab === "build" || tab === "y5" ? pickQuery() : {}' in main
     mp = _read(V4, "screens", "combo-map.js")
