@@ -8,6 +8,13 @@
 //              washed red (strongest at the top edge), the Discount part below sky blue (strongest at the bottom edge),
 //              a soft seam between, faint 'Premium' / 'Discount' words at the right. The split follows the price scale
 //              (pan / zoom) and moves when the dealing range really changes (a new closed bar).
+//              The two halves BLINK (owners 10/06 13:27 "깜박깜박하는 느낌", core/blink.js): each lights up and goes
+//              dark on its own — a real taker SELL burst of the server's relay (/api/v4/ticks, the page's one
+//              connection in core/ticks.js, opened for the light even with the sound off) lights the red top, a BUY
+//              burst the sky-blue bottom, a bigger one brighter and longer; with no relay event for 2 s a soft
+//              decorative blink (no label, no number; the chip's tooltip says it is decoration). '조명: 깜박 (기본) /
+//              계속 켜짐 / 끄기' per device in the light menu next to '번쩍임'; reduced motion: slow calm fades; a hidden
+//              page: dark, no timer. Two absolutely positioned layers with CSS opacity transitions (no canvas work).
 //   flash      AI skin only: a real market event of this coin (a big taker trade from the server relay, a market
 //              liquidation, our own bot's fill) washes the pane once (core/flash.js scheduler: 0.2 s in, a 0.6 s hold
 //              or 1.5 s for a 고래 / a large liquidation, 0.4 s out; '번쩍임 자주 / 보통 / 끄기' per device). Reduced
@@ -20,26 +27,36 @@
 //              Remembered per device (dom.js local, try/catch inside).
 //   smc        프리미엄 지표: core/smc.js on the closed candles shown, drawn by core/smcdraw.js (an indicator, labelled).
 //   volume     translucent up / down volume bars along the bottom (an overlay price scale of their own).
-// HONESTY: every motion answers a real change (a new price, a real event); nothing animates on a timer. Colours are
-// tokens (tokens.css), font sizes the --t-* tokens.
+// HONESTY: every motion answers a real change (a new price, a real event); the one exception is the light's soft
+// decorative blink while no real trade arrives (core/blink.js), which carries no label or number and is named
+// decoration in the chip's tooltip. Colours are tokens (tokens.css), font sizes the --t-* tokens.
 import {h, local} from "./dom.js";
 import {tok} from "./lwc.js";
 import {price as fmtPrice} from "./fmt.js";
 import {reduced, visible} from "./motion.js";
 import {flashScheduler, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
+import {blinker, relayBlink, LIGHT_MODES, DEFAULT_LIGHT, lightModeOf} from "./blink.js";
+import {listenTicks} from "./ticks.js";
 import {smcAll, splitOf, zoneOf} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
+export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게 · 7개 코인 중 이 코인이 가장 밝게)";
+export const LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)";
+export const LIGHT_NOTE = "깜박: 바이낸스 실제 체결을 따라 파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색이 잠깐 켜집니다 "
+  + "(클수록 밝고 길게 · 7개 코인 중 지금 코인이 가장 밝게). 따라갈 체결이 2초 넘게 없으면 은은한 장식 깜박 (시장 자료 아님). 이 기기에만 기억합니다.";
+const LIGHT_SHORT = {blink: "깜박", steady: "켜짐", off: "끔"};
+const LIGHT_SUB = {blink: "실제 체결 따라", steady: "예전처럼"};
+const FLASH_SUB = {often: "큰 체결마다", normal: "고래·큰 청산·우리 체결만"};
 export const SMC_NOTE = "프리미엄 지표: 화면의 캔들로 계산한 참고선 (스윙·구조·OB·FVG·OTE) · 매매 신호 아님";
 const SMC_KEY = "프리미엄 지표 · 계산한 참고선 · 신호 아님";
 /** The AI skin (the default) has the light; 클래식 stays plain. */
 export const isAi = () => typeof document !== "undefined" && document.documentElement.dataset.skin !== "classic";
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 const TONES = ["up", "down", "flat", "accent", "warn"];
-const PILL_H = 20, PILL_GAP = 2, EDGE_MAX = 3, TOP_GAP = 26, FLASH_KEY = "chart-flash";
+const PILL_H = 20, PILL_GAP = 2, EDGE_MAX = 3, TOP_GAP = 26, FLASH_KEY = "chart-flash", LIGHT_KEY = "chart-light";
 
 function colours() {
   const c = {};
@@ -174,11 +191,13 @@ export function candleGlow(chart, series) {
 }
 
 /**
- * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag}) -> deck
+ * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag, sym}) -> deck
  *   wrap: the positioned box around the chart element `box` (the layers sit in it, the pills over the pane)
  *   key: per-device memory name ("term" | "chart"); groups: the ids the '선' menu lists (GROUP_KO)
  *   tag: true draws our own last-price tag on the right axis (glows, pulses on a real new price)
- * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn, lightChip, place, ready}
+ *   sym: () -> the coin on screen (its relay events light the halves at full strength; others dimmer)
+ * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn, lightChip,
+ *        lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), place, ready}
  */
 export function chartDeck(o) {
   const {chart, series, wrap, box, ctx} = o;
@@ -189,7 +208,7 @@ export function chartDeck(o) {
   const st = {
     off: new Set(Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
     hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : []),
-    data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
+    data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, split: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
   };
   const subs = [];
   const save = () => local.set(key, {off: [...st.off], hide: [...st.hide].slice(-60)});
@@ -407,8 +426,9 @@ export function chartDeck(o) {
     list.length > EDGE_MAX ? h("span", {class: "cfx-em num", dataset: {tone: "flat"}}, `+${list.length - EDGE_MAX}`) : null].filter(Boolean));
   }
 
-  // ---------------------------------------------------------------- ambient + flash
+  // ---------------------------------------------------------------- ambient (blinking halves) + flash
   let fmode = modeOf(local.get(FLASH_KEY, DEFAULT_FLASH)).id;
+  let lmode = lightModeOf(local.get(LIGHT_KEY, DEFAULT_LIGHT)).id;
   const sched = flashScheduler({
     reduced, visible, mode: () => fmode,
     play(ev, T) {
@@ -422,15 +442,88 @@ export function chartDeck(o) {
       } catch (e) { /* an old browser: no flash */ }
     },
   });
-  if (ctx && ctx.track) ctx.track(() => { sched.cancel(); if (flashEl._a) flashEl._a.cancel(); });
-  // '번쩍임: 자주 / 보통 / 끄기' (per device; 끄기 keeps the steady tint). Reduced motion: no flash whatever is chosen.
-  const flashSel = h("select", {class: "cfx-fsel", "aria-label": "번쩍임", title: FLASH_TIP + "\n번쩍임: 자주 = 큰 체결마다 · 보통 = 고래·큰 청산·우리 체결만 · 끄기",
-    onchange: () => { fmode = modeOf(flashSel.value).id; local.set(FLASH_KEY, fmode); if (fmode === "off") sched.cancel(); }},
-  FLASH_MODES.map((m) => h("option", {value: m.id}, `번쩍임 ${m.ko}`)));
-  flashSel.value = fmode;
-  flashSel.hidden = !st.ai;
-  const lightChip = h("span", {class: "cfx-light", hidden: !st.ai, tabindex: "0", title: AMBIENT_TIP + "\n" + FLASH_TIP, "aria-label": AMBIENT_TIP + ". " + FLASH_TIP},
-    h("i", {"aria-hidden": "true"}), h("span", null, "빛"));
+  // the blinking halves (core/blink.js): tone "down" (red) is the Premium top, tone "up" (sky blue) the Discount bottom;
+  // each blink is one CSS opacity transition on its layer (chartfx.css .cfx-amb), nothing is redrawn
+  const halfEl = {top: ambDn, bottom: ambUp};
+  // a deck built after its screen was left (the chart loads asynchronously) must not start anything: ctx.track would
+  // never run its cleanup, so a relay listener or a blink timer would outlive the screen
+  const gone = () => !!(ctx && typeof ctx.alive === "function" && !ctx.alive());
+  const blink = blinker({
+    reduced, visible, mode: () => (st.ai && !gone() ? lmode : "off"),
+    apply(half, k, ms, kind) {
+      const el = halfEl[half];
+      // "important": under prefers-reduced-motion components.css stops every transition (!important), which would
+      // turn the calm slow fade (blink.js CALM) into an abrupt on / off; this one opacity fade is the calm version
+      el.style.setProperty("transition", ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none", "important");
+      el.style.opacity = String(Math.round(k * 1000) / 1000);
+    },
+    onSrc: () => paintChip(),
+  });
+  // the real market trades for the light: the page's ONE relay connection (core/ticks.js; shared with the sound and the
+  // terminal's lists), listened to only while the light blinks in the AI skin, left when the screen is left
+  let relayOff = null;
+  function relaySync() {
+    const want = st.ai && lmode === "blink" && !gone();
+    if (want && !relayOff) {
+      relayOff = listenTicks((m) => {
+        if (!m || m.state !== "live" || !Array.isArray(m.ev)) return;
+        const sym = typeof o.sym === "function" ? o.sym() : null;
+        for (const ev of m.ev) blink.real(relayBlink(ev, sym));
+      });
+    } else if (!want && relayOff) { const off = relayOff; relayOff = null; off(); }
+  }
+  if (ctx && ctx.listen) ctx.listen(document, "visibilitychange", () => blink.sync());      // hidden: dark, no timer
+  if (ctx && ctx.track) ctx.track(() => { sched.cancel(); if (flashEl._a) flashEl._a.cancel(); blink.stop(); if (relayOff) { relayOff(); relayOff = null; } });
+
+  // '조명 · 번쩍임' menu (per device): 조명 깜박 (기본) / 계속 켜짐 / 끄기 and 번쩍임 자주 / 보통 / 끄기. Reduced motion:
+  // calm slow fades, no flash whatever is chosen.
+  const radio = (label, sub, fn) => h("button", {type: "button", class: "cfx-mi", role: "menuitemradio", "aria-checked": "false", onclick: fn},
+    h("i", {class: "cfx-ck cfx-rd", "aria-hidden": "true"}), h("span", null, label), sub ? h("small", {class: "cfx-msub"}, sub) : null);
+  const lItems = new Map(LIGHT_MODES.map((m) => [m.id, radio(m.id === DEFAULT_LIGHT ? `${m.ko} (기본)` : m.ko, LIGHT_SUB[m.id], () => setLight(m.id))]));
+  const fItems = new Map(FLASH_MODES.map((m) => [m.id, radio(m.ko, FLASH_SUB[m.id], () => setFlash(m.id))]));
+  const lNote = h("p", {class: "cfx-mnote"});
+  const lmenu = h("div", {class: "cfx-menu cfx-lmenu", role: "menu", hidden: true, "aria-label": "조명과 번쩍임"},
+    h("p", {class: "cfx-mhd"}, "조명 (위 빨강 · 아래 하늘색)"),
+    h("div", {class: "cfx-mgrp", role: "group", "aria-label": "조명"}, [...lItems.values()]),
+    h("p", {class: "cfx-mhd"}, "번쩍임 (큰 체결 · 청산 · 우리 체결)"),
+    h("div", {class: "cfx-mgrp", role: "group", "aria-label": "번쩍임"}, [...fItems.values()]),
+    lNote);
+  const lNow = h("b", {class: "cfx-lnow"}), fNow = h("b", {class: "cfx-lnow"});
+  const lbtn = h("button", {type: "button", class: "cfx-mbtn cfx-lbtn", "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": "조명과 번쩍임",
+    onclick: (e) => { e.stopPropagation(); openLight(lmenu.hidden); }},
+  "조명 ", lNow, h("span", {class: "cfx-lf"}, " · 번쩍임 ", fNow), " ▾");
+  const flashSel = h("span", {class: "cfx-mwrap cfx-lwrap", hidden: !st.ai}, lbtn, lmenu);
+  function openLight(on) {
+    lmenu.hidden = !on;
+    lbtn.setAttribute("aria-expanded", String(on));
+    if (on) { paintLight(); const f = lmenu.querySelector('[aria-checked="true"]') || lmenu.querySelector("button"); if (f) f.focus(); }
+  }
+  if (ctx && ctx.listen) {
+    ctx.listen(document, "pointerdown", (e) => { if (!lmenu.hidden && !flashSel.contains(e.target)) openLight(false); });
+    ctx.listen(document, "keydown", (e) => { if (e.key === "Escape" && !lmenu.hidden) { openLight(false); lbtn.focus(); } });
+  }
+  function setLight(id) { lmode = lightModeOf(id).id; local.set(LIGHT_KEY, lmode); lightSync(); }
+  function setFlash(id) { fmode = modeOf(id).id; local.set(FLASH_KEY, fmode); if (fmode === "off") sched.cancel(); paintLight(); }
+  function paintLight() {
+    for (const [id, b] of lItems) b.setAttribute("aria-checked", String(id === lmode));
+    for (const [id, b] of fItems) b.setAttribute("aria-checked", String(id === fmode));
+    lNow.textContent = LIGHT_SHORT[lmode]; fNow.textContent = modeOf(fmode).ko;
+    lbtn.title = `조명: ${lightModeOf(lmode).ko} · 번쩍임: ${modeOf(fmode).ko} (누르면 바꾸기 · 이 기기에만 기억)`;
+    lNote.textContent = LIGHT_NOTE + (reduced() ? " 움직임 줄이기 설정이라 천천히 바뀝니다." : "");
+    paintChip();
+  }
+  /** the mode on the layers (CSS: the words go with the light when it is off), the halves, the relay listener */
+  function lightSync() { under.dataset.light = st.ai ? lmode : "off"; blink.sync(); relaySync(); paintLight(); }
+  const lightChip = h("span", {class: "cfx-light", hidden: !st.ai, tabindex: "0"}, h("i", {"aria-hidden": "true"}), h("span", null, "빛"));
+  /** The chip's tooltip: what the halves mean, where they split, what the light follows right now, the flashes. */
+  function paintChip() {
+    const sp = st.split;
+    const now = lmode === "blink" ? (blink.src() === "real" ? LIGHT_REAL : blink.src() === "deco" ? LIGHT_DECO : "조명 깜박: 체결 소식을 기다리는 중")
+      : lmode === "steady" ? "조명: 계속 켜짐" : "조명: 꺼짐";
+    const parts = [AMBIENT_TIP, sp ? `나누는 선: ${sp.src === "range" ? "지금 범위의 중간값" : "화면 고가·저가의 중간"} ${fmtPrice(sp.eq)}` : null, now, FLASH_TIP].filter(Boolean);
+    lightChip.title = parts.join("\n");
+    lightChip.setAttribute("aria-label", parts.join(". "));
+  }
   wPrem.title = AMBIENT_TIP;
   /** The Premium / Discount split at the price scale's current position (called with every redraw: pan, zoom, data). */
   function placeSplit() {
@@ -447,11 +540,11 @@ export function chartDeck(o) {
     wPrem.hidden = Y < 22; wDisc.hidden = pane.h - Y < 22;
     // the chip says which side the price is on now (and the split's source in its tooltip)
     const z = zoneOf(st.data[st.data.length - 1].close, sp.eq);
-    if (z !== st.zone || sp.src !== st.zoneSrc) {
-      st.zone = z; st.zoneSrc = sp.src;
+    if (z !== st.zone || sp.src !== st.zoneSrc || !st.split || sp.eq !== st.split.eq) {
+      st.zone = z; st.zoneSrc = sp.src; st.split = sp;
       lightChip.dataset.tone = z === "premium" ? "down" : "up";
       lightChip.lastChild.textContent = z === "premium" ? "Premium 구간" : "Discount 구간";
-      lightChip.title = `${AMBIENT_TIP}\n나누는 선: ${sp.src === "range" ? "지금 범위의 중간값" : "화면 고가·저가의 중간"} ${fmtPrice(sp.eq)}\n${FLASH_TIP}`;
+      paintChip();
     }
   }
 
@@ -579,6 +672,7 @@ export function chartDeck(o) {
   chart.timeScale().subscribeVisibleLogicalRangeChange(() => schedule());
   if (ctx && ctx.track) ctx.track(() => { if (st.raf) cancelAnimationFrame(st.raf); });
   paintMenu();
+  lightSync();
 
   /** Show the most recent ``n`` bars with room on the right for the line labels (like the reference terminal). */
   function showRecent(n = 220, right = 24) {
@@ -592,6 +686,6 @@ export function chartDeck(o) {
     /** A real event of the coin on screen: {tone: "up" | "down" | "accent", k: 0..1, why} (AI skin only). */
     flash(ev) { if (st.ai) sched.push(ev); },
     onToggle(fn) { subs.push(fn); },
-    menuBtn: menuWrap, smcBtn, lightChip, flashSel,
+    menuBtn: menuWrap, smcBtn, lightChip, lightMenu: flashSel, flashSel,
   };
 }

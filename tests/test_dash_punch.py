@@ -209,9 +209,13 @@ def test_every_light_answers_a_real_message_and_respects_reduced_motion_and_hidd
     # no timer animates anything: no setInterval in the new code, ctx.every only the known cadences
     for f in ("terminal-live.js", "terminal-kit.js"):
         assert "setInterval" not in _src("screens", f) and "ctx.every(" not in _src("screens", f), f
-    # the stream: opened only while visible, closed when hidden and when the screen is left
-    assert "document.hidden" in live and 'ctx.listen(document, "visibilitychange"' in live and "ctx.track(close)" in live
-    assert 'new ES("/api/v4/ticks")' in live
+    # the stream: the page's ONE relay connection (core/ticks.js, shared with the sound and the chart light): open only
+    # while a part listens and the page is visible, closed when hidden; this screen's listener leaves with the screen
+    hub = _src("core", "ticks.js")
+    assert "if (hub.es || hub.retryT || !hub.subs.size || hidden()) return;" in hub
+    assert 'document.addEventListener("visibilitychange", () => { if (hidden()) close(); else open(); });' in hub
+    assert "if (!hub.subs.size) close();" in hub and "new ES(TICKS_URL)" in hub and 'TICKS_URL = "/api/v4/ticks"' in hub
+    assert "off = listenTicks(tell);" in live and "ctx.track(close)" in live and "new ES(" not in live
     # the lights are driven from the relay's own messages
     assert "ticks.on((m) =>" in js and "watch.onTick(ev)" in js and "top.onTick(ev)" in js and "chart.onTick(ev)" in js
     assert "top.onRelay(m)" in js and "big.onMsg(m)" in js

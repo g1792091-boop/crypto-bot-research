@@ -25,6 +25,7 @@ import {bus} from "./api.js";
 import {store} from "./store.js";
 import {h, local} from "./dom.js";
 import {tick7, motif7, render7} from "./sound7.js";
+import {listenTicks} from "./ticks.js";
 
 // ---------------------------------------------------------------- settings (per device)
 const KEY = "sound";
@@ -278,15 +279,16 @@ export function priceMoves(tk, now = Date.now(), state = px) {
 // ---------------------------------------------------------------- market trades -> the layer (server relay)
 // /api/v4/ticks (dash/more/ticks.py): ONE Binance aggTrade socket on the server shared by every page, at most ~2 events
 // a second, each {s, side, b, usd, n, p, t}: the coin whose traded notional ran furthest above its usual in that half
-// second, its side (more taker buys or sells) and size bucket b 1-4. Opened only while the sound is on, unlocked, the
-// page visible and not in the night mute (the server closes its socket a minute after the last page left). While it is live the layer
+// second, its side (more taker buys or sells) and size bucket b 1-4. Listened to only while the sound is on, unlocked,
+// the page visible and not in the night mute, through the page's ONE relay connection (core/ticks.js, shared with the
+// terminal and the chart light; the server closes its socket a minute after the last page left). While it is live the layer
 // follows these trades (the same queue, spacing and density as before); when it is not (state "connecting" / "down",
 // a refused or dropped answer, nothing heard for 15 s) the /api/ticker price changes above feed the layer again.
 export const TICK_SYMS = ["BCHUSDT", "BTCUSDT", "DOGEUSDT", "ETHUSDT", "LTCUSDT", "SOLUSDT", "XRPUSDT"];  // sorted: each coin keeps priceMoves' voice
 /** size bucket -> layer size (beepOf): 1-2 one beep (2 louder), 3 a two-note run, 4 a three-note run, the loudest. */
 export const BUCKET_SIZE = {1: 1, 2: 1.3, 3: 1.6, 4: 3};
 export const TICK_FRESH_MS = 15000;
-export const ticks = {es: null, state: "off", at: 0, retryMs: 30000, retryT: null};
+export const ticks = {off: null, state: "off", at: 0};     // off: this layer's listener on the page's relay connection
 /** Are real market trades feeding the layer right now (else the ticker price changes do)? */
 export const tradesLive = (now = Date.now()) => ticks.state === "live" && now - ticks.at < TICK_FRESH_MS;
 /** Relay events -> layer items (buy: dir 1 = the upper notes, sell: dir -1 = the lower). Unknown coins / sides: none. */
@@ -313,37 +315,19 @@ export function onTicks(msg, now = Date.now()) {
   return items;
 }
 function ticksOpen() {
-  const ES = globalThis.EventSource;
-  if (ticks.es || ticks.retryT || !cfg.on || !unlocked || hidden() || (cfg.night && nightKst(Date.now())) || typeof ES !== "function") return;
-  let es;
-  try { es = new ES("/api/v4/ticks"); } catch (e) { ticks.state = "down"; return; }
-  ticks.es = es; ticks.state = "connecting";
-  es.onmessage = (ev) => {
-    let d;
-    try { d = JSON.parse(ev.data); } catch (e) { return; }
-    if (ticks.es !== es) return;
-    ticks.retryMs = 30000;
-    onTicks(d);
-  };
-  es.onerror = () => {
-    if (ticks.es !== es) return;
-    ticks.state = "down";                         // the ticker layer takes over until the relay says "live" again
-    if (es.readyState === 2) {                     // refused for good (401, 404, 5xx): again later, with a growing wait
-      ticks.es = null;
-      ticks.retryT = setTimeout(() => { ticks.retryT = null; ticksOpen(); }, ticks.retryMs);
-      ticks.retryMs = Math.min(300000, ticks.retryMs * 2);
-    }                                              // (readyState 0: the browser reconnects by itself)
-  };
+  if (ticks.off || !cfg.on || !unlocked || hidden() || (cfg.night && nightKst(Date.now()))) return;
+  ticks.state = "connecting";                     // the ticker layer plays until the relay says "live"
+  // a dropped or refused answer arrives as {state: "down"} (the ticker layer takes over); core/ticks.js asks again
+  ticks.off = listenTicks((d) => onTicks(d));
 }
 function ticksClose() {
-  clearTimeout(ticks.retryT); ticks.retryT = null;
-  if (ticks.es) { try { ticks.es.close(); } catch (e) { /* already closed */ } ticks.es = null; }
+  if (ticks.off) { const off = ticks.off; ticks.off = null; off(); }
   ticks.state = "off";
 }
 /** The night mute (00-07 KST, when ticked) closes the stream too: nothing is heard, so the server's socket may close.
  *  Checked with every ticker poll (5 s) and every setting change, so it opens again by itself at 07:00. */
 function ticksSync(now = Date.now()) {
-  if (cfg.night && nightKst(now)) { if (ticks.es || ticks.retryT) ticksClose(); }
+  if (cfg.night && nightKst(now)) { if (ticks.off) ticksClose(); }
   else ticksOpen();
 }
 
@@ -630,5 +614,5 @@ export const _test = {
   setKinds(obj) { kinds = {b: kinds.b, m: new Map(Object.entries(obj))}; },
   unlock(v = true) { unlocked = v; },
   layer, px, posSeen, roomSeen, lastMotif, ticks, ticksOpen, ticksClose, ticksSync,
-  reset() { ticksClose(); ticks.retryMs = 30000; tradeSeen.clear(); layer.clear(); px.base = null; px.ema = {}; posSeen.clear(); roomSeen.clear(); for (const k of Object.keys(lastMotif)) delete lastMotif[k]; clearTimeout(layerT); layerT = null; },
+  reset() { ticksClose(); tradeSeen.clear(); layer.clear(); px.base = null; px.ema = {}; posSeen.clear(); roomSeen.clear(); for (const k of Object.keys(lastMotif)) delete lastMotif[k]; clearTimeout(layerT); layerT = null; },
 };

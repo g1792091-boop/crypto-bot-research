@@ -10,8 +10,9 @@
 - the route sits behind the login, streams state + events, is never gzipped, keeps connect-src 'self', and the app's
   shutdown stops the relay;
 - sound.js: buy -> the upper notes, sell -> the lower, a bigger bucket is louder, the same layer (throttle / density);
-  the ticker's price changes are heard only while the relay is not live; the EventSource opens only while the sound
-  is on, unlocked and the page visible, and a refused one falls back and retries later.
+  the ticker's price changes are heard only while the relay is not live; the sound listens on the page's one relay
+  connection (core/ticks.js, shared with the terminal and the chart light) only while it is on, unlocked and the page
+  visible, and a refused connection falls back and retries later.
 """
 import json
 import os
@@ -328,6 +329,7 @@ def _node(body: str) -> dict:
         pytest.skip("needs node")
     core = "file://" + os.path.join(V4, "core")
     script = (f"const sound = await import('{core}/sound.js');\n"
+              f"const T = await import('{core}/ticks.js');      // the page's one relay connection (shared)\n"
               "const log = [];\n"
               "sound._test.setSink((kind, a) => log.push({kind, f: a.f || null, fs: a.fs || null, v: a.v, src: a.src || null, key: a.key || null}));\n"
               "sound.cfg.on = true; sound.cfg.night = false; sound._test.unlock(true);\n"
@@ -364,7 +366,13 @@ def test_trades_drive_the_same_layer_buy_high_sell_low_bigger_louder():
 def test_ticker_is_the_fallback_and_the_layer_rules_are_unchanged():
     src = open(os.path.join(V4, "core", "sound.js"), encoding="utf-8").read()
     assert 'store.watch("ticker", (tk) => { ticksSync(); if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); })' in src
-    assert 'new ES("/api/v4/ticks")' in src and "wss://" not in src and "binance.com" not in src   # only our server
+    # the layer listens on the page's ONE relay connection (core/ticks.js, shared with the terminal and the chart light)
+    assert 'import {listenTicks} from "./ticks.js";' in src and "ticks.off = listenTicks((d) => onTicks(d));" in src
+    assert "EventSource" not in src and "new ES(" not in src
+    hub = open(os.path.join(V4, "core", "ticks.js"), encoding="utf-8").read()
+    assert 'TICKS_URL = "/api/v4/ticks"' in hub and "new ES(TICKS_URL)" in hub
+    for s in (src, hub):
+        assert "wss://" not in s and "binance.com" not in s                                   # only our server
     assert "export const MIN_GAP_MS = 500;" in src and 'normal: {ko: "보통", gap: 1333},' in src     # ~0.75 / s
     assert src.count("setInterval(") == 1
 
@@ -384,10 +392,10 @@ def test_event_source_opens_only_when_on_unlocked_visible_and_retries_when_refus
     out.st0 = sound._test.ticks.state;
     made[0].onmessage({data: JSON.stringify({state: "live", ev: []})}); out.st1 = sound._test.ticks.state;
     made[0].readyState = 2; made[0].onerror(); out.st2 = sound._test.ticks.state;
-    out.retry = !!sound._test.ticks.retryT && sound._test.ticks.es === null && sound._test.ticks.retryMs === 60000;
+    out.retry = !!T.hub.retryT && T.hub.es === null && T.hub.retryMs === 60000;   // the page's connection asks again later
     sound._test.ticksOpen(); out.waits = made.length;                  // the retry timer, not at once
-    sound._test.ticksClose(); out.closed = {st: sound._test.ticks.state, t: sound._test.ticks.retryT};
-    sound._test.ticksOpen(); made[1].onerror(); out.dropped = {st: sound._test.ticks.state, es: sound._test.ticks.es === made[1]};
+    sound._test.ticksClose(); out.closed = {st: sound._test.ticks.state, t: T.hub.retryT};
+    sound._test.ticksOpen(); made[1].onerror(); out.dropped = {st: sound._test.ticks.state, es: T.hub.es === made[1]};
     sound._test.reset(); out.reset = {closed: made[1].closed, st: sound._test.ticks.state};
     """)
     assert out["locked"] == 0 and out["off"] == 0 and out["hidden"] == 0      # no tap / off / hidden: no stream

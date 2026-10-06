@@ -97,6 +97,7 @@ The architect has built the shared foundation. Five builders now fill the screen
   - members walk to the table only when a real meeting starts (`motion.walkTo`)
   - smooth expand / collapse (`motion.expand`, `ui.disclosure`)
   - shimmer skeletons while loading (`motion.shimmer`)
+  - the chart deck's Premium / Discount halves blink (`core/blink.js`, owners 10/06 "깜박깜박"): real relay trades light them; with nothing to follow for 2 s a soft decorative blink (no label, no number, the chip's tooltip says "장식 … 시장 자료 아님") is the one ambient exception. Under reduced motion only a slow calm fade; a hidden page: dark, no timer
 - Calm, not cluttered (the owners' complaint about today's UI):
   - one main idea per card
   - at most two levels of nesting

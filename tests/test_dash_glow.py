@@ -4,8 +4,14 @@
 - glow / ambient / flash are the AI skin's only (클래식 stays plain), motion follows real events only, never a timer;
 - the flash scheduler (core/flash.js): rate limit per '번쩍임' mode, the biggest waiting event wins, stale events drop,
   reduced motion and 끄기 play nothing, 고래 / large liquidations hold longer (node);
-- the steady light (owners 10/06: the reference splits the pane): red Premium above the current dealing range's
+- the light (owners 10/06: the reference splits the pane): red Premium above the current dealing range's
   equilibrium, sky-blue Discount below (fallback: the middle of the visible high / low), following the price scale;
+- the light BLINKS (owners 10/06 13:27 "나타났다가 안나타났다가 ... 깜박깜박", core/blink.js, node): a real relay event
+  lights one half (sell -> the red top, buy -> the cyan bottom, a bigger bucket brighter and longer), the halves are
+  independent and go dark between blinks, a soft decorative blink only after 2 s without an event, '조명 깜박 / 계속
+  켜짐 / 끄기' per device, calm slow fades under reduced motion, nothing while the page is hidden;
+- the page's ONE relay connection (core/ticks.js, node): every listener (sound, terminal, chart light) shares it, it
+  closes while the page is hidden and when the last listener leaves, a late listener gets the kept large orders;
 - 프리미엄 지표 (core/smc.js) on synthetic candles: swings, BoS / CHoCH, order blocks, FVGs, BSL / SSL, the dealing
   range with OTE 0.62 / 0.79, trendlines, leg % (node);
 - our position lines (screens/chart-lines.js): 1 px pills like '숏 30배 · 3개 · −2.5% · 잠금 · 손절', DeepSeek /
@@ -40,7 +46,8 @@ def _node(body: str):
     if node is None:
         pytest.skip("needs node")
     core = "file://" + os.path.join(V4, "core")
-    script = (f"const F = await import('{core}/flash.js'); const S = await import('{core}/smc.js');\n" + body)
+    script = (f"const F = await import('{core}/flash.js'); const S = await import('{core}/smc.js');\n"
+              f"const BL = await import('{core}/blink.js'); const TK = await import('{core}/ticks.js');\n" + body)
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout.strip().splitlines()[-1])
@@ -169,6 +176,277 @@ def test_split_light_red_above_cyan_below_follows_the_price_scale():
     assert "zoneWords: () => !st.ai" in fx and "if (words) {" in _read("core", "smcdraw.js")
 
 
+# ---------------------------------------------------------------- the blinking halves (core/blink.js)
+BLINK = """
+const mk = (o = {}) => {
+  const st = {t: 0, timers: [], log: [], src: [], vis: true, mode: o.mode || "blink", reduced: !!o.reduced};
+  let seed = o.seed || 7;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  const b = BL.blinker({now: () => st.t, rand, reduced: () => st.reduced, visible: () => st.vis, mode: () => st.mode,
+    setTimer: (fn, ms) => { const x = {fn, at: st.t + ms}; st.timers.push(x); return x; },
+    clearTimer: (x) => { st.timers = st.timers.filter((y) => y !== x); },
+    apply: (half, k, ms, kind) => st.log.push({t: st.t, half, k: Math.round(k * 1000) / 1000, ms, kind}),
+    onSrc: (s) => st.src.push([st.t, s])});
+  const run = (until) => {
+    for (;;) {
+      st.timers.sort((a, z) => a.at - z.at);
+      const x = st.timers[0];
+      if (!x || x.at > until) break;
+      st.timers.shift(); st.t = Math.max(st.t, x.at); x.fn();
+    }
+    st.t = until;
+  };
+  return {b, st, run};
+};
+// the blinks of one half from the log: [{on: t of the rise, k, off: t the fade started, dark: t it was dark}]
+const blinks = (log, half) => {
+  const out = []; let cur = null;
+  for (const e of log.filter((x) => x.half === half)) {
+    if (e.k > 0 && e.kind === "in") { if (!cur) { cur = {on: e.t, k: e.k}; out.push(cur); } else cur.k = Math.max(cur.k, e.k); }
+    else if (e.k === 0 && cur) { cur.off = e.t; cur.dark = e.t + e.ms; cur = null; }
+  }
+  return out;
+};
+"""
+
+
+def test_light_modes_steady_off_and_blink():
+    out = _node(BLINK + """
+      const SM = mk({mode: "steady"}); const s1 = SM.b.sync();
+      const O = mk({mode: "off"}); const o1 = O.b.sync();
+      const K = mk(); const k1 = K.b.sync();
+      const before = K.st.log.filter((e) => e.k > 0).length, timers = K.st.timers.length;
+      K.st.mode = "steady"; const k2 = K.b.sync();
+      console.log(JSON.stringify({s1, steady: SM.st.log, sT: SM.st.timers.length, o1, off: O.st.log, oT: O.st.timers.length,
+        k1, before, timers, k2, after: K.st.log.slice(-2), kT: K.st.timers.length,
+        modes: BL.LIGHT_MODES.map((m) => [m.id, m.ko]), def: BL.DEFAULT_LIGHT, bad: BL.lightModeOf("x").id, steadyK: BL.STEADY_K}));""")
+    assert out["modes"] == [["blink", "깜박"], ["steady", "계속 켜짐"], ["off", "끄기"]] and out["def"] == "blink" and out["bad"] == "blink"
+    # 계속 켜짐: both halves at the old steady strength, no timer at all
+    assert out["s1"] == "steady" and out["sT"] == 0 and {(e["half"], e["k"]) for e in out["steady"]} == {("top", 0.56), ("bottom", 0.56)}
+    # 끄기: both dark, no timer
+    assert out["o1"] == "off" and out["oT"] == 0 and all(e["k"] == 0 for e in out["off"])
+    # 깜박: starts dark (nothing lights at once), one timer per half
+    assert out["k1"] == "blink" and out["before"] == 0 and out["timers"] == 2
+    # a switch to 계속 켜짐 stops the timers and shows both halves steady
+    assert out["k2"] == "steady" and out["kT"] == 0 and all(e["k"] == 0.56 for e in out["after"])
+
+
+def test_relay_event_maps_sell_to_the_red_top_buy_to_the_cyan_bottom_bigger_is_brighter_and_longer():
+    out = _node(BLINK + """
+      const R = (side, b, s = "BTCUSDT") => BL.relayBlink({s, side, b}, "BTCUSDT");
+      const map = {sell: R("sell", 2), buy: R("buy", 2), mine: [1, 2, 3, 4].map((b) => R("buy", b)), other: [1, 2, 3, 4].map((b) => R("sell", b, "ETHUSDT")),
+        bad: [R("up", 2), BL.relayBlink(null), R("buy", undefined), R("buy", 9)], nosym: BL.relayBlink({s: "ETHUSDT", side: "buy", b: 1}, null)};
+      // the halves are independent: a sell lights only the top, a buy only the bottom
+      const A = mk(); A.b.sync();
+      A.st.t = 100; const r1 = A.b.real(R("sell", 4));
+      A.st.t = 300; const r2 = A.b.real(R("buy", 1));
+      A.run(4000);
+      console.log(JSON.stringify({map, r1, r2, top: blinks(A.st.log, "top"), bot: blinks(A.st.log, "bottom"), log: A.st.log.filter((e) => e.k > 0)}));""")
+    m = out["map"]
+    assert m["sell"]["half"] == "top" and m["buy"]["half"] == "bottom"
+    ks, holds = [x["k"] for x in m["mine"]], [x["hold"] for x in m["mine"]]
+    assert ks == sorted(ks) and holds == sorted(holds) and len(set(ks)) == 4          # bigger bucket: brighter, longer
+    assert m["mine"][3]["k"] == 1 and m["mine"][3]["hold"] == 1200                      # b 4: the strongest flash
+    assert m["other"][0] is None                                                         # another coin's smallest: skipped
+    assert all(o["k"] < x["k"] and o["hold"] < x["hold"] for o, x in zip(m["other"][1:], m["mine"][1:]))
+    assert m["bad"][0] is None and m["bad"][1] is None and m["bad"][2]["b"] == 1 and m["bad"][3]["b"] == 4
+    assert m["nosym"]["k"] == 0.55                                                       # no coin given: full strength
+    assert out["r1"] is True and out["r2"] is True
+    top, bot = out["top"], out["bot"]
+    # b 4 sell: the top rises in 0.2 s at full strength, holds 1.2 s, fades in 0.4 s; the bottom blinks on its own
+    assert top[0] == {"on": 100, "k": 1, "off": 100 + 200 + 1200, "dark": 100 + 200 + 1200 + 400}
+    assert bot[0]["on"] == 300 and bot[0]["k"] == 0.55 and bot[0]["off"] == 300 + 200 + 400
+    first = [e for e in out["log"] if e["t"] == 100][0]
+    assert first == {"t": 100, "half": "top", "k": 1, "ms": 200, "kind": "in"}
+
+
+def test_a_lit_half_goes_dark_before_the_next_real_blink_and_a_stronger_event_only_brightens_it():
+    out = _node(BLINK + """
+      const A = mk(); A.b.sync();
+      const R = (b) => BL.relayBlink({s: "BTCUSDT", side: "sell", b}, "BTCUSDT");
+      A.st.t = 0; A.b.real(R(1));                  // lights the top (0.55)
+      A.st.t = 150; const up = A.b.real(R(3));     // stronger while lit: brighter at once, same end
+      A.st.t = 300; const wait = A.b.real(R(2));   // weaker while lit: waits for the dark gap
+      const pending = A.b.half("top").wait && A.b.half("top").wait.k;
+      A.run(6000);
+      // a sell every 100 ms for 10 s: the top still goes dark between blinks
+      const C = mk(); C.b.sync();
+      for (let t = 0; t < 10000; t += 100) { C.run(t); C.b.real(R(2)); }
+      C.run(13000);
+      // an event that waits longer than 1.5 s is dropped (not "now" any more)
+      const D = mk(); D.b.sync();
+      D.st.t = 0; D.b.real(R(4)); D.st.t = 50; D.b.real(R(1));       // waits behind a 1.8 s blink + the gap
+      D.run(8000);
+      console.log(JSON.stringify({up, wait, pending, A: blinks(A.st.log, "top"), raise: A.st.log.filter((e) => e.ms === 120),
+        C: blinks(C.st.log, "top"), D: blinks(D.st.log, "top"), dark: [...BL.FAST.dark]}));""")
+    assert out["up"] is True and out["wait"] is False and out["pending"] == 0.7
+    assert out["raise"] == [{"t": 150, "half": "top", "k": 0.85, "ms": 120, "kind": "in"}]
+    a = out["A"]
+    assert a[0]["on"] == 0 and a[0]["off"] == 200 + 400                                 # the raise keeps the end
+    assert a[1]["on"] >= a[0]["dark"] + out["dark"][0]                                    # then the waiting one, after the gap
+    c = out["C"]
+    assert len(c) >= 4
+    for x, y in zip(c, c[1:]):
+        assert y["on"] - x["dark"] >= out["dark"][0]                                      # dark between every two blinks
+        assert x["off"] - x["on"] <= 200 + 1200                                           # never on for long
+    assert len([x for x in out["D"] if x["k"] > 0.5]) == 1                                # the stale one never played
+    assert all(x["k"] <= 0.45 for x in out["D"][1:])                                      # (later: the soft fallback)
+
+
+def test_fallback_blinks_softly_and_irregularly_only_after_two_quiet_seconds():
+    out = _node(BLINK + """
+      const A = mk({seed: 11}); A.b.sync();
+      A.run(30000);
+      const B2 = mk({seed: 5}); B2.b.sync();
+      // real events every 400 ms for 8 s (alternating sides): no decorative blink in between
+      for (let t = 0; t < 8000; t += 400) { B2.run(t); B2.b.real(BL.relayBlink({s: "BTCUSDT", side: t % 800 ? "buy" : "sell", b: 2}, "BTCUSDT")); }
+      B2.run(20000);
+      console.log(JSON.stringify({top: blinks(A.st.log, "top"), bot: blinks(A.st.log, "bottom"), src: A.st.src,
+        rtop: blinks(B2.st.log, "top"), rbot: blinks(B2.st.log, "bottom"), rsrc: B2.st.src, deco: BL.FAST.deco}));""")
+    top, bot, deco = out["top"], out["bot"], out["deco"]
+    assert len(top) >= 5 and len(bot) >= 5                                               # it never just sits there
+    assert min(top[0]["on"], bot[0]["on"]) >= 2000                                        # not before 2 quiet seconds
+    for x in top + bot:
+        assert deco["k"][0] <= x["k"] <= deco["k"][1]                                     # soft (real ones go to 1)
+        assert x["off"] - x["on"] <= 200 + deco["hold"][1] and "dark" in x               # and it always goes dark again
+    ons = sorted([x["on"] for x in top] + [x["on"] for x in bot])
+    gaps = {round(b - a) for a, b in zip(ons, ons[1:])}
+    assert len(gaps) > 5                                                                   # irregular moments
+    assert {x["on"] for x in top} != {x["on"] for x in bot}                               # the halves are independent
+    assert out["src"][0][1] == "deco"
+    # with real events coming, every blink is a real one (k 0.7 = b 2); the decorative ones start 2 s after the last
+    real_end = 7600
+    for x in out["rtop"] + out["rbot"]:
+        assert x["k"] == 0.7 or x["on"] >= real_end + 2000, x
+    assert any(x["on"] >= real_end + 2000 for x in out["rtop"] + out["rbot"])             # ... and come back after
+    assert out["rsrc"][0][1] == "real" and out["rsrc"][-1][1] == "deco"
+
+
+def test_hidden_page_pauses_every_timer_and_resumes_when_shown():
+    out = _node(BLINK + """
+      const A = mk(); A.b.sync();
+      A.st.t = 10; A.b.real(BL.relayBlink({s: "BTCUSDT", side: "sell", b: 4}, "BTCUSDT"));
+      A.st.t = 50; A.st.vis = false; const s1 = A.b.sync();
+      const timers = A.st.timers.length, last = A.st.log.slice(-2);
+      const n = A.st.log.length;
+      A.st.t = 100; const r = A.b.real(BL.relayBlink({s: "BTCUSDT", side: "buy", b: 4}, "BTCUSDT"));
+      A.run(20000);
+      const quiet = A.st.log.length - n, timers2 = A.st.timers.length;
+      A.st.vis = true; const s2 = A.b.sync();
+      const timers3 = A.st.timers.length;
+      A.run(30000);
+      const back = blinks(A.st.log.slice(n), "top").concat(blinks(A.st.log.slice(n), "bottom")).map((x) => x.on).sort((a, b) => a - b);
+      console.log(JSON.stringify({s1, timers, last, r, quiet, timers2, s2, timers3, back}));""")
+    assert out["s1"] == "paused" and out["timers"] == 0                                   # hidden: no timer left
+    assert all(e["k"] == 0 and e["ms"] == 0 for e in out["last"])                        # both halves dark at once
+    assert out["r"] is False and out["quiet"] == 0 and out["timers2"] == 0               # nothing plays or waits
+    assert out["s2"] == "blink" and out["timers3"] == 2
+    assert out["back"] and out["back"][0] >= 20000 + 2000                                 # shown again: dark, then blinks
+
+
+def test_reduced_motion_is_a_calm_slow_fade():
+    out = _node(BLINK + """
+      const A = mk({reduced: true}); A.b.sync();
+      const R = (b) => BL.relayBlink({s: "BTCUSDT", side: "sell", b}, "BTCUSDT");
+      A.st.t = 0; A.b.real(R(4));
+      A.st.t = 300; const up = A.b.real(R(4));
+      for (let t = 400; t < 20000; t += 300) { A.run(t); A.b.real(R(4)); }
+      A.run(26000);
+      const Q = mk({reduced: true, seed: 3}); Q.b.sync(); Q.run(40000);
+      console.log(JSON.stringify({up, top: blinks(A.st.log, "top"), ins: A.st.log.filter((e) => e.k > 0).map((e) => e.ms),
+        outs: A.st.log.filter((e) => e.k === 0 && e.ms).map((e) => e.ms), deco: blinks(Q.st.log, "top").concat(blinks(Q.st.log, "bottom")),
+        calm: BL.CALM}));""")
+    calm, top = out["calm"], out["top"]
+    assert out["up"] is False                                                             # no quick brighten
+    assert set(out["ins"]) == {calm["inMs"]} and calm["inMs"] >= 1000                   # slow rise
+    assert set(out["outs"]) <= {calm["outMs"], 300} and calm["outMs"] >= 1500            # slow fade
+    assert all(x["k"] <= calm["kMax"] for x in top)
+    for x, y in zip(top, top[1:]):
+        assert y["on"] - x["dark"] >= calm["dark"][0] >= 2500                             # seconds of dark between
+    assert len(top) <= 6                                                                   # ~20 s of a flood: a few fades
+    for x in out["deco"]:
+        assert x["k"] <= calm["deco"]["k"][1]
+
+
+def test_the_page_has_one_relay_connection_closed_while_hidden_and_after_the_last_listener():
+    out = _node("""
+      const made = [];
+      globalThis.EventSource = class { constructor(u) { this.url = u; this.readyState = 0; this.closed = false; made.push(this); }
+        close() { this.closed = true; this.readyState = 2; } };
+      let visH = null;
+      globalThis.document = {hidden: false, addEventListener(ev, fn) { if (ev === "visibilitychange") visH = fn; }};
+      const out = {}, a = [], b = [], c = [];
+      const offA = TK.listenTicks((m) => a.push(m)), offB = TK.listenTicks((m) => b.push(m));
+      out.one = made.length; out.url = made[0].url;
+      const big1 = {rows: [{t: 1, s: "BTCUSDT", side: "buy", usd: 2e5, p: 1}], buy: 2e5, sell: 0, min: {BTCUSDT: 150000}, whale_x: 4};
+      made[0].onmessage({data: JSON.stringify({state: "live", ev: [], big: big1})});
+      made[0].onmessage({data: JSON.stringify({state: "live", ev: [{s: "ETHUSDT", side: "sell", b: 3}],
+        big: {rows: [{t: 2, s: "ETHUSDT", side: "sell", usd: 9e4, p: 2}], buy: 2e5, sell: 9e4}})});
+      out.firsts = a.map((m) => m.first); out.b = b.length;
+      const offC = TK.listenTicks((m) => c.push(m));                 // a late listener: a catch-up, no new connection
+      await new Promise((r) => setTimeout(r, 0));
+      out.c = c; out.stillOne = made.length;
+      document.hidden = true; visH();
+      out.hidden = {closed: made[0].closed, st: TK.ticksState(), n: made.length};
+      document.hidden = false; visH();
+      out.shown = made.length;
+      offA(); offB(); out.twoOff = made[1].closed;
+      offC(); out.allOff = made[1].closed; out.st = TK.ticksState();
+      const offD = TK.listenTicks(() => {});
+      made[2].readyState = 2; made[2].onerror();
+      out.retry = {es: TK.hub.es === null, t: !!TK.hub.retryT, ms: TK.hub.retryMs};
+      offD(); out.cleared = TK.hub.retryT; out.total = made.length;
+      console.log(JSON.stringify(out));""")
+    assert out["one"] == 1 and out["url"] == "/api/v4/ticks"                             # two listeners, one connection
+    assert out["firsts"] == [True, False] and out["b"] == 2
+    c = out["c"]
+    assert out["stillOne"] == 1 and len(c) == 1 and c[0]["first"] is True and c[0]["ev"] == []
+    assert [r["t"] for r in c[0]["big"]["rows"]] == [2, 1] and c[0]["big"]["min"] == {"BTCUSDT": 150000} and c[0]["big"]["sell"] == 90000
+    assert out["hidden"] == {"closed": True, "st": "off", "n": 1}                         # hidden: closed
+    assert out["shown"] == 2                                                              # shown: one new connection
+    assert out["twoOff"] is False and out["allOff"] is True and out["st"] == "off"       # the last listener closes it
+    assert out["retry"] == {"es": True, "t": True, "ms": 60000}                           # refused: asked again later
+    assert out["cleared"] is None and out["total"] == 3
+
+
+def test_every_relay_listener_uses_the_one_connection_and_the_light_listens_only_while_it_blinks():
+    fx = _code(_read("core", "chartfx.js"))
+    relay = fx[fx.index("function relaySync()"):fx.index("const radio = (label")]
+    assert 'if (!m || m.state !== "live" || !Array.isArray(m.ev)) return;' in relay      # only a live relay's events
+    assert "for (const ev of m.ev) blink.real(relayBlink(ev, sym));" in relay
+    assert "relayOff = listenTicks(" in relay and "off();" in relay
+    assert 'ctx.listen(document, "visibilitychange", () => blink.sync());' in fx          # hidden: the halves pause
+    assert "blink.stop(); if (relayOff) { relayOff(); relayOff = null; }" in fx          # the screen left: all stops
+    assert "function lightSync() { under.dataset.light = st.ai ? lmode : \"off\"; blink.sync(); relaySync(); paintLight(); }" in fx
+    # one EventSource for the relay on the whole page: only core/ticks.js opens it (core/api.js has the board stream)
+    v4 = os.path.join(V4)
+    for d, _, files in os.walk(v4):
+        for f in files:
+            if not f.endswith(".js"):
+                continue
+            src = _code(open(os.path.join(d, f), encoding="utf-8").read())
+            rel = os.path.relpath(os.path.join(d, f), v4)
+            if "/api/v4/ticks" in src:
+                assert rel == os.path.join("core", "ticks.js"), rel
+            if "EventSource" in src:
+                assert rel in (os.path.join("core", "ticks.js"), os.path.join("core", "api.js")), rel
+    assert "listenTicks" in _read("core", "sound.js") and "listenTicks" in _read("screens", "terminal-live.js")
+
+
+def test_light_button_stays_short_where_its_full_label_would_push_the_terminal_header_past_its_edge():
+    # measured in a browser (1920 px window): the terminal's chart header fits '조명 깜박 · 번쩍임 자주 ▾' from 1700 px at
+    # 글자 크기 보통 and from 1840 px at 크게; at 아주 크게 it never fits (it cut off 일 / 차트 화면 at 1920 px, which the old
+    # 번쩍임 select did not), so there the button keeps the short '조명 깜박 ▾' (the flash setting stays in the menu)
+    fx = _code(_read("core", "chartfx.js"))
+    assert 'h("span", {class: "cfx-lf"}, " · 번쩍임 ", fNow)' in fx
+    css = _read("core", "chartfx.css")
+    assert "@media (max-width: 1699px) { .cfx-lbtn .cfx-lf { display: none; } }" in css
+    assert '@media (max-width: 1839px) { html[data-text="lg"] .cfx-lbtn .cfx-lf { display: none; } }' in css
+    assert 'html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }' in css
+    # phones: the menu is a sheet above the bottom tab bar (its own token, not a copied number)
+    assert "bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));" in css
+
+
 # ---------------------------------------------------------------- 프리미엄 지표 (SMC) on synthetic candles
 SYN = """
 // a downtrend (lower highs 95, 91), a rally that breaks the last lower high (CHoCH up), a higher high (BoS up) with an
@@ -289,22 +567,49 @@ def test_deck_lines_are_thin_out_of_the_autoscale_and_click_to_hide_is_remembere
         assert 'groups: ["pos", "risk", "sr", "smc", "ev", "vol"]' in _read("screens", scr), scr
 
 
-def test_light_is_the_ai_skins_only_and_never_animates_on_a_timer():
+def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     fx = _code(_read("core", "chartfx.js"))
     assert 'document.documentElement.dataset.skin !== "classic"' in fx
     assert "if (!o.ai() || !gv.bars.length) return;" in fx                   # candle glow
     assert 'if (!st.ai || !st.data.length) { under.dataset.split = ""; return; }' in fx    # the split light
     assert "flash(ev) { if (st.ai) sched.push(ev); }" in fx                  # event flash
-    assert "setInterval" not in fx
+    assert 'mode: () => (st.ai && !gone() ? lmode : "off")' in fx            # 클래식: the halves never blink
+    assert "const want = st.ai && lmode === \"blink\" && !gone();" in fx     # ... and no relay listener for them
+    # a deck built after its screen was left starts nothing (ctx.track would never clean it up)
+    assert 'const gone = () => !!(ctx && typeof ctx.alive === "function" && !ctx.alive());' in fx
+    assert "setInterval" not in fx and "setInterval" not in _code(_read("core", "blink.js"))
+    assert "requestAnimationFrame" not in _code(_read("core", "blink.js"))
+    # each blink is one CSS opacity transition on its own layer, set by the blinker's apply (no canvas work per blink)
+    # (inline !important: the reduced-motion rule in components.css would turn the calm fade into an abrupt on / off)
+    assert 'el.style.setProperty("transition", ms > 0 ? `opacity ${Math.round(ms)}ms ${kind === "in" ? "ease-out" : "ease-in"}` : "none", "important");' in fx
+    assert "*, *::before, *::after { animation: none !important; transition: none !important;" in _read("components.css")
+    assert "el.style.opacity = String(Math.round(k * 1000) / 1000);" in fx
+    assert "const halfEl = {top: ambDn, bottom: ambUp};" in fx               # tone down = red = Premium top
     css = _read("core", "chartfx.css")
+    css_code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     assert '.cfx[data-fx="plain"] .cfx-under { display: none; }' in css
-    assert "infinite" not in css and "transition" not in css.split(".cfx-flash {")[0]
+    assert "infinite" not in css and "transition" not in css_code and "@keyframes cfx-amb" not in css   # inline only
+    assert ".cfx-under > .cfx-amb { opacity: 0; will-change: opacity; }" in css
+    assert '.cfx-under:not([data-split="1"]) > .cfx-amb { visibility: hidden; }' in css
+    assert '.cfx-under[data-light="off"] > .cfx-zw' in css                  # 끄기: the words go with the light
     rm = css[css.index("@media (prefers-reduced-motion: reduce)"):]
     assert ".cfx-tag[data-hit] { animation: none; }" in rm
-    # the legend in the chart header (the light chip's tooltip) and the '번쩍임' setting
+    # the legend in the chart header (the light chip's tooltip) and the '조명 · 번쩍임' menu
     assert "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)" in fx
     assert "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)" in fx
-    assert '"aria-label": "번쩍임"' in fx and 'FLASH_KEY = "chart-flash"' in fx
+    assert '"aria-label": "조명과 번쩍임"' in fx and 'FLASH_KEY = "chart-flash"' in fx and 'LIGHT_KEY = "chart-light"' in fx
+    assert "local.get(LIGHT_KEY, DEFAULT_LIGHT)" in fx and "local.set(LIGHT_KEY, lmode)" in fx      # per device
+    assert 'role: "menuitemradio"' in fx and "(기본)" in fx
+    # the decorative blink is named as such, with no number: the chip says what the light follows right now
+    raw = _read("core", "chartfx.js")
+    # (the relay may be live while nothing it sends is followed: another coin's smallest are skipped, so the words say
+    # "nothing to follow", not "no trades")
+    assert 'LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)"' in raw
+    assert "7개 코인 중 이 코인이 가장 밝게" in raw.split("LIGHT_REAL = ")[1].split("\n")[0]
+    assert "blink.src() === \"real\" ? LIGHT_REAL : blink.src() === \"deco\" ? LIGHT_DECO" in fx
+    # the screens keep the old name for the control (flashSel) and hand the deck the coin on screen
+    for scr in ("terminal-chart.js", "chart.js"):
+        assert "deck.flashSel" in _read("screens", scr) and "sym: () => st.sym" in _read("screens", scr), scr
     # 클래식: the light tokens are transparent
     tok = _read("tokens.css")
     classic = tok[:tok.index(":root:not([data-skin=\"classic\"])")]

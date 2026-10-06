@@ -1,9 +1,10 @@
 /* The chart deck (core/chartfx.js): layers under the transparent chart canvas (depth, ambient light, event flash),
    the line pills / edge markers over the pane, our last-price tag, the '선' menu and the 프리미엄 지표 button.
    Colours are tokens (tokens.css); the AI skin has the light, 클래식 stays plain (its light tokens are transparent and
-   the layers are not drawn). Motion: the steady Premium / Discount light has none (its split simply follows the price
-   scale); the flash is a Web Animation started by a real event (core/flash.js); the tag pulses once on a real new
-   price. Under prefers-reduced-motion: no flash, no pulse (the steady light stays). */
+   the layers are not drawn). Motion: the Premium / Discount halves blink (core/blink.js sets each layer's opacity and
+   its transition inline: ~0.2 s in, a hold, ~0.4 s out; the split itself simply follows the price scale); the flash
+   is a Web Animation started by a real event (core/flash.js); the tag pulses once on a real new price. Under
+   prefers-reduced-motion: no flash, no pulse, and the halves only fade slowly (blink.js CALM). */
 .cfx { isolation: isolate; }
 .cfx-box { z-index: 1; }
 .cfx[data-fx="ai"] { background: var(--surface); }
@@ -16,11 +17,13 @@
 
 /* a faint depth: a lighter top, a darker floor */
 .cfx-depth { background: linear-gradient(to bottom, var(--depth-top), transparent 42%, var(--depth-bot)); }
-/* the steady light, split at the dealing range's equilibrium (--split, px from the pane top; chartfx.js placeSplit):
+/* the light, split at the dealing range's equilibrium (--split, px from the pane top; chartfx.js placeSplit):
    Premium above washed red (strongest at the top edge), Discount below sky blue (strongest at the bottom edge); each
-   half runs 24 px past the split while fading out, so the seam is feathered, never a hard line */
-.cfx-under > .cfx-amb { opacity: 0; }
-.cfx-under[data-split="1"] > .cfx-amb { opacity: 1; }
+   half runs 24 px past the split while fading out, so the seam is feathered, never a hard line. The tokens are a
+   strong blink's peak: each half's opacity (0 dark, 1 the strongest, 0.56 '계속 켜짐') and its transition are set inline
+   by core/blink.js through chartfx.js, one compositor-only opacity change per blink */
+.cfx-under > .cfx-amb { opacity: 0; will-change: opacity; }
+.cfx-under:not([data-split="1"]) > .cfx-amb { visibility: hidden; }
 .cfx-under > .cfx-amb[data-tone="down"] { top: 0; bottom: auto; height: calc(var(--split, 50%) + 24px);
   background: linear-gradient(to bottom, var(--amb-down), var(--amb-down-seam) calc(100% - 24px), transparent);
   box-shadow: inset 0 30px 30px -26px var(--amb-down-edge); }
@@ -28,7 +31,7 @@
   background: linear-gradient(to top, var(--amb-up), var(--amb-up-seam) calc(100% - 24px), transparent);
   box-shadow: inset 0 -30px 30px -26px var(--amb-up-edge); }
 .cfx-zw { position: absolute; right: 64px; opacity: .6; font: 600 var(--t-2xs)/1 var(--f-term); letter-spacing: .02em; }
-.cfx-zw[hidden], .cfx-under:not([data-split="1"]) > .cfx-zw { display: none; }
+.cfx-zw[hidden], .cfx-under:not([data-split="1"]) > .cfx-zw, .cfx-under[data-light="off"] > .cfx-zw { display: none; }
 .cfx-zw[data-tone="down"] { top: calc(var(--split, 50%) - 18px); color: var(--amb-down-ink); }
 .cfx-zw[data-tone="up"] { top: calc(var(--split, 50%) + 6px); color: var(--amb-up-ink); }
 /* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */
@@ -108,9 +111,29 @@
 .cfx-mrow .cfx-mi { justify-content: center; font-size: var(--t-xs); }
 .cfx-mback { color: var(--accent); }
 .cfx-mnote { margin: 4px 4px 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.4; white-space: normal; max-width: 220px; }
-.cfx-fsel { height: 26px; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2);
-  font: 600 var(--t-xs)/1 var(--f-body); cursor: pointer; }
-.cfx-fsel[hidden] { display: none; }
+/* the '조명 · 번쩍임' menu (the light: 깜박 / 계속 켜짐 / 끄기; the flash: 자주 / 보통 / 끄기) */
+.cfx-mwrap[hidden] { display: none; }
+.cfx-lbtn .cfx-lnow { color: var(--ink); font-weight: 700; }
+.cfx-lmenu { min-width: 250px; }
+.cfx-mhd { margin: 6px 8px 2px; color: var(--muted); font: 600 var(--t-2xs)/1.35 var(--f-body); white-space: normal; }
+.cfx-mhd:first-child { margin-top: 2px; }
+.cfx-mgrp { display: grid; gap: 2px; }
+.cfx-ck.cfx-rd { border-radius: 50%; }
+.cfx-msub { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: var(--t-2xs); }
+.cfx-lmenu .cfx-mnote { max-width: 250px; }
+/* narrower windows: the button says only the light ('조명 깜박 ▾', narrower than the old 번쩍임 select); the flash
+   setting stays in the menu and the button's tooltip. The full label fits the terminal's chart header from 1700 px at
+   글자 크기 보통, from 1840 px at 크게 and never at 아주 크게 (the header would pass its edge, cutting off 일 / 차트 화면) */
+@media (max-width: 1699px) { .cfx-lbtn .cfx-lf { display: none; } }
+@media (max-width: 1839px) { html[data-text="lg"] .cfx-lbtn .cfx-lf { display: none; } }
+html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }
+/* phones: the button sits mid-row, so a menu hanging from it could pass the screen's left edge; it opens as a sheet
+   inside the 16 px gutters, above the bottom tab bar */
+@media (max-width: 599px) {
+  .cfx-lmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px)); min-width: 0;
+    max-height: 64vh; overflow-y: auto; }
+  .cfx-lmenu .cfx-mnote { max-width: none; }
+}
 .cfx-light { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 13px; border: 1px solid var(--line-2);
   color: var(--ink-2); font: 600 var(--t-2xs)/1 var(--f-body); cursor: help; white-space: nowrap; }
 .cfx-light[hidden] { display: none; }
