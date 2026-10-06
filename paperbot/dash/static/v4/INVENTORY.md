@@ -446,3 +446,18 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 - **숫자 키** (`core/navkeys.js`): 1 터미널 · 2 홈 · 3 포지션 · 4 매매법 · 5 순위표 · 6 회의실 · 7 차트 · 8 시장 · 9 서버 (입력 칸에서는 안 먹음).
 - **폰 옆으로 밀기**: 화면을 좌우로 밀면 같은 묶음의 다음 / 이전 화면 (차트, 옆으로 스크롤되는 표·탭, 입력 칸 위에서는 안 함). 아래 막대 + 탭으로 어느 화면이든 두 번 안에.
 - 첫 화면은 그대로: PC(1200px 이상) 터미널, 폰 홈.
+
+## 조합 성과 (combo-paper; owners: "매매법끼리 합쳤을 때 성과가 어떻게 되나"; tests/test_dash_combo.py)
+
+A new screen `combo` (매매법 묶음, next to 분석; rail icon, 찾기 "조합"). Paper v4 records only, read-only
+(`paperbot/dash/more/combo.py` + `combo_calc.py`); 설명용, 판정 아님. DeepSeek is not in it (one line says why: its money
+only on its own group screens, D10 / D11); the reel can be added with its note (own exits on 5m, 5m coin flips).
+
+| Part | What it shows | Server |
+|---|---|---|
+| 내 조합 만들기 `#/combo/build?u=A,B@1h&w=eq\|custom\|invvol\|rp&p=50,50` | searchable picker of 2-8 units (a strategy = its 4 timeframe accounts summed, or one strategy@timeframe account), weights 똑같이 / 직접 % / 변동 적은 쪽에 더 / 위험 똑같이; the pick in the address and remembered per device; **합친 곡선** (lightweight-charts: combined thick, members thin, the same number of same-timeframe coin flips combined as the grey baseline 참고, legend items hide / show a line); **합친 숫자** (수익률, 손익, 최대 낙폭 on the one stated basis, 최악의 날, 거래 수, 승률, 평균 거래, 이익 합 ÷ 손실 합); **하루 기준 · 회복** (평균 이익 ÷ 평균 손실, 이긴 날, 하루 변동, 샤프·소르티노 비슷한 값 = DAILY not annualised, 칼마 비슷한 값, 고점 아래 시간, 회복; the ratios from 5 days); **구성원별** (weight, own return, contribution $ and share, '이것 빼면' leave-one-out); **구성원끼리 상관** (daily P&L with the number of days; 1시간 as the early basis); **같은 베팅** (overlap.py's same-coin-side shares, 7-day window, its thresholds); **분산 효과** (members' own max drawdown $ / the combined one); early days: the filling bars and "거래 N건 · 아직 판단하기 이릅니다" | `/api/v4/combo/units`, `/api/v4/combo` (background + cache, `pending` while computing) |
+| 전체 상관 지도 `#/combo/map?level=&tf=&basis=` | 36 x 36 daily-P&L correlation (strategy level, or one timeframe's 36 accounts), tap a cell → the pair and "이 둘로 조합 만들기"; the most together / most opposite (hedging) pairs; the 계좌 겹침 pairs.top table (1시간 상관, 같은 시각 같은 베팅, 포지션 있을 때, 같이 쌓인 날) with its thresholds as filling bars until a pair passes | `/api/v4/combo/corr` |
+| 합친 규칙 실험 `#/combo/rules?kind=both\|filter\|vote\|tf&..` | a merged rule measured as ONE rule on recorded entries: A와 B가 같이 신호 줄 때만, A에 B를 거르개로, N개 중 K개 이상 같은 방향, 같은 매매법 봉 합의 (e.g. 1시간 + 4시간); rows 합친 규칙 / A 혼자 / 걸러진 거래 / 동전 봇 + 같은 거르개 / 동전 봇 전부 with trades, 승률, 평균 순 ROE, 손익 합 (own exits); says it is an approximation (own exits kept, entries only filtered), B's side reads the signal log (signals skipped while busy count), A's skipped signals that pass are counted, not measured | `/api/v4/combo/rules` |
+| 5년 기준 `#/combo/y5` | another builder's `screens/combo-5y.js` (`render5y(ctx, el)`), imported on demand; '5년 백테스트 결과 준비 중' until it exists | — |
+| 조합 시너지 rows (분석) | each top row opens `#/combo/build?u=<its strategies>` | `/api/analysis/synergy` (unchanged) |
+| 최대 낙폭 labels | 매매법 프로필 카드: '최대 낙폭 · 계좌 하나' (the deepest single timeframe account); 매매법 상세: '최대 낙폭 · 합친 곡선' (the summed curve). Numbers unchanged | unchanged |

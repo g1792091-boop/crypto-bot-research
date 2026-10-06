@@ -116,6 +116,9 @@ def test_inventory_maps_every_old_view_and_every_new_screen():
 
 
 # ---------------------------------------------------------------- the module graph: files, names, no dead copies
+# Modules another builder writes, imported on demand (import("...") inside try / catch: the page says '준비 중' while
+# the file is missing; tests/test_dash_combo.py checks the wrapping). Once the file exists it is checked like any other.
+OPTIONAL_MODULES = {"screens/combo-5y.js": "조합 성과 › 5년 기준 (combo-5y builder); combo.js shows '5년 백테스트 결과 준비 중'"}
 _IMP = re.compile(r'(?:^|[\n;])\s*(import|export)\s*(\{[^}]*\}|\*\s*as\s+\w+|\*|\w+(?:\s*,\s*\{[^}]*\})?)\s*from\s*"([^"]+)"', re.S)
 _DYN = re.compile(r'\bimport\(\s*"([^"]+)"\s*\)')
 _SIDE = re.compile(r'(?:^|\n)\s*import\s+"([^"]+)"')
@@ -226,7 +229,8 @@ def test_every_referenced_file_and_imported_name_exists():
                     if imported not in have:
                         bad.append(f"{os.path.relpath(p, V4)}: {imported} is not exported by {ref}")
         for ref in _DYN.findall(src) + _SIDE.findall(src):
-            if not os.path.exists(_resolve(p, ref)):
+            target = _resolve(p, ref)
+            if not os.path.exists(target) and os.path.relpath(target, V4).replace(os.sep, "/") not in OPTIONAL_MODULES:
                 bad.append(f"{p}: {ref} (missing file)")
         for ref in re.findall(r'"(/static/[^"$`]+\.(?:js|css|svg|png|json))"', src):   # literal asset paths
             if not os.path.exists(_resolve(p, ref)):
