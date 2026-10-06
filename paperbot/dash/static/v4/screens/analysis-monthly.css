@@ -10,7 +10,8 @@
 .am-strip .am-tick.down { stroke: var(--down); opacity: .55; }
 .am-strip .am-med { stroke: var(--ink); stroke-width: 3; opacity: .6; }
 .am-strip .am-now { stroke: var(--accent); stroke-width: 4; }
-.am-scale { display: flex; justify-content: space-between; font-size: var(--t-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.am-scale { position: relative; display: flex; justify-content: space-between; font-size: var(--t-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.am-scale .am-z { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); }
 .am-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); margin: 4px 0; }
 .am-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .am-legend .sw { display: inline-block; width: 4px; height: 14px; border-radius: 1px; background: var(--ink-2); opacity: .6; }

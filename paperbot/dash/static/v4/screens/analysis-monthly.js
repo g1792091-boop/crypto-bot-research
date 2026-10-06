@@ -52,7 +52,7 @@ export function monthly5y(d, env) {
     at: d.generated ? Date.parse(d.generated) : null,
     read: "줄 하나 = 매매법 하나 (봉 4개 계좌 합, $20,000). 가는 눈금 하나 = 5년 중 한 달" + (day ? `을 지금과 같은 ${fmt.int(day)}일째까지 자른 결과` : "의 결과") + ", 회색 굵은 눈금 = 그 가운데(중앙값), 청록 굵은 눈금 = 지금 실험이 시작한 뒤 지금까지 (닫힌 거래만). 순위 = 그 달들 사이에서 몇 번째.",
     warn: [meth.caveat || "이 36개는 바로 이 5년 자료를 보고 고른 매매법이라 5년 숫자는 실제보다 좋게 나오기 쉽습니다.",
-      day && day < 30 ? `지금 실험은 ${fmt.int(day)}일째입니다. 한 달 전체와 비교하지 않고, 5년 달들도 ${fmt.int(day)}일째까지만 잘라서 비교합니다. 며칠 사이의 순위는 거의 우연입니다.` : null,
+      day && day < 30 ? `지금 실험은 ${fmt.int(day)}일째입니다. 한 달 전체와 비교하지 않고, 5년 달들도 ${fmt.int(day)}일째까지만 잘라서 비교합니다.${day < 7 ? " 며칠 사이의 순위는 거의 우연입니다." : ""}` : null,
       d.over_month ? `지금 실험이 한 달(31일)을 넘었습니다. 5년 쪽은 한 달짜리라 기간이 다릅니다: 순위는 참고로만 보세요.` : null]})];
   // waiting: how far the month and the trades are (real numbers only)
   if (hasPaper) {
@@ -106,6 +106,7 @@ function rowOf(r, d, i) {
   const mark = p ? p.ret : null;
   const all = [...vals.filter((v) => v != null), mark].filter((v) => v != null);
   const lo = Math.min(-0.1, ...all), hi = Math.max(0.1, ...all);
+  const zx = 100 * (0 - lo) / (hi - lo);                        // where 0 sits on the strip (its label goes there)
   const words = !p ? h("span", {class: "muted"}, "지금 기록 없음")
     : [h("b", {class: ["num", fmt.tone(p.ret)]}, fmt.pct(p.ret, 1)), p.rank ? h("span", {class: "am-rank"}, ` ${fmt.int(p.rank.rank)}/${fmt.int(p.rank.of)}`) : null];
   const tfs = Object.entries(r.tfs || {});
@@ -128,7 +129,9 @@ function rowOf(r, d, i) {
     h("span", {class: "lname an-wrap"}, r.name),
     h("span", {class: "ret"}, words),
     h("div", {class: "am-stripbox"}, strip(vals, mark, lo, hi),
-      h("div", {class: "am-scale"}, h("span", null, fmt.pct(lo, 0)), h("span", null, "0"), h("span", null, fmt.pct(hi, 0)))),
+      h("div", {class: "am-scale"}, h("span", null, fmt.pct(lo, 0)),
+        zx > 10 && zx < 90 ? h("span", {class: "am-z", style: {"--x": zx.toFixed(1) + "%"}}, "0") : null,
+        h("span", null, fmt.pct(hi, 0)))),
     h("span", {class: "meta"},
       p && p.small ? ui.pill("표본 적음", "thin", `지금 닫힌 거래 ${p.trades}건`) : null,
       r.trades === 0 ? ui.pill("5년 동안 거래 없음", "thin") : r.trades != null && r.trades < 62 ? ui.pill(`5년 거래 ${fmt.int(r.trades)}건뿐`, "thin") : null,

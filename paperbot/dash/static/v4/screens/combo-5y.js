@@ -240,6 +240,7 @@ function lineChart(o) {
 function walkCard({d, vts, v}) {
   const p = (d.portfolio || {})[v] || {};
   const wf = p.walk_forward || [], fl = p.walk_forward_flips || [];
+  const nUnits = (p.units || []).length || 36;
   if (!wf.length) return null;
   const count = (rows) => ({med: rows.filter((r) => r.score_next > r.median_next).length, p75: rows.filter((r) => r.score_next > r.p75_next).length, n: rows.length});
   const a = count(wf), b = count(fl);
@@ -253,11 +254,11 @@ function walkCard({d, vts, v}) {
     h("p", {class: "c5-wf-t"}, `점수: 고른 조합 ${fmt.num(r.score_next, 3)} · 그해 모든 조합(${fmt.int(r.n_combos)}개) 중앙값 ${fmt.num(r.median_next, 3)} · 상위 25% 선 ${fmt.num(r.p75_next, 3)} · 이긴 비율 ${fmt.pct(r.beat_share, 0, false)}`),
     r.mean_month_median_next != null ? h("p", {class: "c5-wf-t"}, `한 달 평균: 고른 조합 ${fmt.pct(r.mean_month_next, 1)} · 모든 조합 중앙값 ${fmt.pct(r.mean_month_median_next, 1)} · 상위 25% 선 ${fmt.pct(r.mean_month_p75_next, 1)} · 이긴 비율 ${fmt.pct(r.ret_beat_share, 0, false)}`) : null);
   return ui.card({plate: "다음 해에도 통했나", sub: "한 해에 고른 1위를 다음 해에 그대로 돌렸다면"},
-    h("p", {class: "c5-sum"}, `기존 36: ${fmt.int(a.n)}번 중 그해 중앙값을 넘은 해 ${fmt.int(a.med)}번, 상위 25%에 든 해 ${fmt.int(a.p75)}번`,
-      fl.length ? ` · 동전 봇 36개로 같은 시험: 중앙값 넘음 ${fmt.int(b.med)}번, 상위 25% ${fmt.int(b.p75)}번` : ""),
+    h("p", {class: "c5-sum"}, `매매법 ${fmt.int(nUnits)}개: ${fmt.int(a.n)}번 중 그해 중앙값을 넘은 해 ${fmt.int(a.med)}번, 상위 25%에 든 해 ${fmt.int(a.p75)}번`,
+      fl.length ? ` · 동전 봇 ${fmt.int(nUnits)}개로 같은 시험: 중앙값 넘음 ${fmt.int(b.med)}번, 상위 25% ${fmt.int(b.p75)}번` : ""),
     h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다. 거의 모든 조합이 내리막만 탄 해에는 점수가 −1 근처에 몰리므로 한 달 평균 수익도 함께 봅니다."),
     h("div", {class: "c5-wfs", role: "list"}, wf.map((r) => row(r, false))),
-    fl.length ? ui.disclosure("동전 봇 36개로 같은 시험 (참고)", h("div", {class: "c5-wfs", role: "list"}, fl.map((r) => row(r, true)))) : null,
+    fl.length ? ui.disclosure(`동전 봇 ${fmt.int(nUnits)}개로 같은 시험 (참고)`, h("div", {class: "c5-wfs", role: "list"}, fl.map((r) => row(r, true)))) : null,
     ui.refNote(vts));
 }
 
@@ -288,14 +289,18 @@ function corrCard({d}) {
     return `${nm(d, units[i])} × ${nm(d, units[j])}: 하루 손익 상관 ${fmt.num(val("r", i, j), 2)} · 나쁜 날 상관 ${fmt.num(val("tail", i, j), 2)} · 같이 잃은 날 ${pct(val("coloss", i, j))}`;
   }
   function draw() {
-    read.textContent = (MODES.find((m) => m.id === mode) || MODES[0]).read;
+    // 같이 잃은 날 (0..1) sits in a narrow band for most pairs: its colour runs from the map's own lowest to highest
+    const cv = mode === "coloss" ? (c.coloss || []).filter((x) => x != null) : [];
+    const cmin = cv.length ? Math.min(...cv) : 0, cmax = cv.length ? Math.max(...cv) : 1;
+    read.textContent = (MODES.find((m) => m.id === mode) || MODES[0]).read
+      + (mode === "coloss" && cv.length ? ` 색은 이 지도 안에서 가장 낮은 ${fmt.pct(cmin, 0, false)}부터 가장 높은 ${fmt.pct(cmax, 0, false)}까지.` : "");
     const cell = 12, lab = 0, W = lab + n * cell, H = n * cell;
     const kids = [];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const v = val(mode, i, j);
         const cls = v == null ? "none" : v >= 0 ? "pos" : "neg";
-        const a = v == null ? 0 : Math.min(1, Math.abs(v));
+        const a = v == null ? 0 : mode === "coloss" ? (cmax > cmin ? (v - cmin) / (cmax - cmin) : 0.5) : Math.min(1, Math.abs(v));
         kids.push(s("rect", {class: ["c5-hc", cls, i === j ? "diag" : ""], x: lab + j * cell, y: i * cell, width: cell - 1, height: cell - 1,
           style: {"--a": a.toFixed(3)}, dataset: {i, j}}));
       }
@@ -327,7 +332,7 @@ function corrCard({d}) {
       h("div", null, h("p", {class: "c5-sub"}, "가장 따로 움직인 쌍"), h("ul", {class: "c5-pairs"}, pl(pairs.slice(-5).reverse())))),
     h("p", {class: "an-note"}, cl.length ? `상관 0.7 이상으로 묶이는 무리 ${fmt.int(cl.length)}개: ` + cl.slice(0, 4).map((g) => g.map((u) => nm(d, u)).join(" · ")).join(" / ")
       : "상관 0.7 이상으로 묶이는 무리는 없습니다."),
-    h("p", {class: "an-note"}, "색이 진할수록 숫자가 큽니다 (청록 = +, 회색 = −). 오른쪽(휴대폰은 아래) 번호 목록이 칸의 줄 순서입니다."));
+    h("p", {class: "an-note"}, "색이 진할수록 숫자가 큽니다 (강조색 = +, 회색빛 = −, 대각선 = 자기 자신). 오른쪽(휴대폰은 아래) 번호 목록이 칸의 줄·칸 순서입니다."));
 }
 
 // ---------------------------------------------------------------- merged signal rules
