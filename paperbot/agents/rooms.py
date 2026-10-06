@@ -5373,7 +5373,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             ctx.cache["tick_t0"] = t0                  # _Round.ask: no call that could outlive the pass
             newlab_tick(ctx)                           # code only: the lab's waiting passes, its stop notice
             if policy.shadow_league:
-                # code only, before the meetings (a pass whose Claude login fails still records bars): one shadow league
+                # code only, before the meetings (a pass whose AI login check fails still records bars): one shadow league
                 # tick, at most 20 seconds, the rest waits for the next pass. Nothing is imported while the switch is off.
                 try:
                     from ..shadowleague import hook as SLH
