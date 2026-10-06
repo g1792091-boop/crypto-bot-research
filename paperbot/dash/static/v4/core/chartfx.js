@@ -445,8 +445,11 @@ export function chartDeck(o) {
   // the blinking halves (core/blink.js): tone "down" (red) is the Premium top, tone "up" (sky blue) the Discount bottom;
   // each blink is one CSS opacity transition on its layer (chartfx.css .cfx-amb), nothing is redrawn
   const halfEl = {top: ambDn, bottom: ambUp};
+  // a deck built after its screen was left (the chart loads asynchronously) must not start anything: ctx.track would
+  // never run its cleanup, so a relay listener or a blink timer would outlive the screen
+  const gone = () => !!(ctx && typeof ctx.alive === "function" && !ctx.alive());
   const blink = blinker({
-    reduced, visible, mode: () => (st.ai ? lmode : "off"),
+    reduced, visible, mode: () => (st.ai && !gone() ? lmode : "off"),
     apply(half, k, ms, kind) {
       const el = halfEl[half];
       // "important": under prefers-reduced-motion components.css stops every transition (!important), which would
@@ -460,7 +463,7 @@ export function chartDeck(o) {
   // terminal's lists), listened to only while the light blinks in the AI skin, left when the screen is left
   let relayOff = null;
   function relaySync() {
-    const want = st.ai && lmode === "blink";
+    const want = st.ai && lmode === "blink" && !gone();
     if (want && !relayOff) {
       relayOff = listenTicks((m) => {
         if (!m || m.state !== "live" || !Array.isArray(m.ev)) return;

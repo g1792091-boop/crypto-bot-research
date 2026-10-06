@@ -559,8 +559,10 @@ def test_light_is_the_ai_skins_only_and_its_motion_is_the_blinkers():
     assert "if (!o.ai() || !gv.bars.length) return;" in fx                   # candle glow
     assert 'if (!st.ai || !st.data.length) { under.dataset.split = ""; return; }' in fx    # the split light
     assert "flash(ev) { if (st.ai) sched.push(ev); }" in fx                  # event flash
-    assert 'mode: () => (st.ai ? lmode : "off")' in fx                       # 클래식: the halves never blink
-    assert "const want = st.ai && lmode === \"blink\";" in fx                # ... and no relay listener for them
+    assert 'mode: () => (st.ai && !gone() ? lmode : "off")' in fx            # 클래식: the halves never blink
+    assert "const want = st.ai && lmode === \"blink\" && !gone();" in fx     # ... and no relay listener for them
+    # a deck built after its screen was left starts nothing (ctx.track would never clean it up)
+    assert 'const gone = () => !!(ctx && typeof ctx.alive === "function" && !ctx.alive());' in fx
     assert "setInterval" not in fx and "setInterval" not in _code(_read("core", "blink.js"))
     assert "requestAnimationFrame" not in _code(_read("core", "blink.js"))
     # each blink is one CSS opacity transition on its own layer, set by the blinker's apply (no canvas work per blink)
