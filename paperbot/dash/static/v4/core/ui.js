@@ -82,9 +82,11 @@ export function staleNote(err, okAt, retry) {
 /** Dims (or undims) data that is older than the last failed refresh. */
 export const dim = (el, on) => { if (el && el.classList) el.classList.toggle("is-stale", !!on); return el; };
 
-/** The tries of the boxes drawn into one place: a load that fails again draws a new box there, and the wait keeps
- *  growing instead of starting over at 5 s (it starts over 3 minutes after the last try). */
+/** The tries of the boxes drawn into one place (or under one o.id, for a caller that draws a new place each time, like
+ *  the router's screen): a load that fails again draws a new box there, and the wait keeps growing instead of starting
+ *  over at 5 s (it starts over 3 minutes after the last try). */
 const TRIES = new WeakMap();
+const TRIES_ID = new Map();
 export const RETRY_S = [5, 15, 30, 60];
 /**
  * A failed load. With retry (a function; a promise that rejects on failure), the box tries again BY ITSELF after 5,
@@ -104,7 +106,13 @@ export function errorBox(err, retry, o = {}) {
   let timer = null, busy = false, off = null;
   const gone = () => { clearTimeout(timer); timer = null; if (off) { off(); off = null; } };
   const heal = () => { gone(); if (box.isConnected) box.remove(); if (o.onOk) o.onOk(); };
-  const memo = () => { const p = box.parentNode; if (!p) return null; let m = TRIES.get(p); if (!m || Date.now() - m.at > 180000) { m = {n: 0, at: Date.now()}; TRIES.set(p, m); } return m; };
+  const memo = () => {
+    const p = o.id || box.parentNode, map = o.id ? TRIES_ID : TRIES;
+    if (!p) return null;
+    let m = map.get(p);
+    if (!m || Date.now() - m.at > 180000) { m = {n: 0, at: Date.now()}; map.set(p, m); }
+    return m;
+  };
   const plan = () => {
     clearTimeout(timer);
     if (!auto || !box.isConnected) return;

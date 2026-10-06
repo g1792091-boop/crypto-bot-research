@@ -104,7 +104,9 @@ async function show(params) {
     if (token !== cur.token) return;
     console.error(e);
     clear(el);
-    el.append(errorBox(e, () => show(params)));
+    // tries again by itself (a screen file missing for a moment: an update restarting the dashboard); one memo per
+    // screen, since every try draws a new screen element
+    el.append(errorBox(e, () => show(params), {id: "screen:" + name}));
   }
 }
 

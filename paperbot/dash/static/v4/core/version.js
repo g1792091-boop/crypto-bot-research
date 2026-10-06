@@ -42,11 +42,17 @@ function show(ver) {
   if (!timer) timer = setInterval(check, 30000);
   check();
 }
+function hide() {
+  newVer = null;
+  if (chip) { chip.remove(); chip = null; }
+  if (timer) { clearInterval(timer); timer = null; }
+}
 
 export function startVersion() {
   const mine = pageVer();
   if (!mine) return;
-  bus.on("version", (v) => { if (v && v !== mine) show(v); });
+  // (the server back on this page's own code, e.g. an update rolled back before the reload: nothing new to offer)
+  bus.on("version", (v) => { if (!v) return; if (v !== mine) show(v); else hide(); });
   for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(ev, () => { lastInput = Date.now(); }, {passive: true, capture: true});
   // back after a while away: ask at once (the 10-minute clock check may be far off)
   let hiddenAt = null;
