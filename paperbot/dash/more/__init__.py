@@ -39,6 +39,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     whatiflab  만약 실험실 (#/whatif): 시험한 설정만 고르는 손절·익절·잠금·시간·레버리지, 5년 결과 + 밤 그림자 (기존 36만)
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
+    nextver 다음 버전: 후보 장부(증거 등급) · 주장별 성적표 · 연구실이 못 하는 아이디어 (#/nextver) + 목표 진척도 한 줄 (홈 맨 위)
 """
 from __future__ import annotations
 
@@ -65,6 +66,7 @@ MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 
 MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수치 · 강제청산 직후 · 들고 있었다면 · GH Coin 방향
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
+MODULES += ("nextver",)                        # round 2: 다음 버전 (#/nextver) + 목표 진척도 한 줄 (cached, read-only)
 
 
 def register_all(app, **kw) -> dict:

@@ -1,10 +1,12 @@
 // 회의 요약 · 직원 성적표 (builder D): per staff member over 1 / 7 / 30 days (turns, meetings, 동의·반대·보완, objections
 // received, questions, facts vs hypotheses, unreadable answers, proposals, verdicts) and graded predictions over the
 // whole run (small samples say so), the latest graded predictions, and the 12:00 bull/bear calls against their base
-// rates (a coin flip 50 %, "always up" on the same days) as the server computes them. GET /api/digest/staff?days=N.
+// rates (a coin flip 50 %, "always up" on the same days) as the server computes them, and 누가 맞았나 (disputes graded
+// by code, next to each side's base rate and the coin flip's 50 %; disputes-kit.js). GET /api/digest/staff?days=N.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {avatarFor, ACTION_KO, VERDICT_KO} from "./rooms-kit.js";
 import {staffBoard} from "./digest-board.js";
+import {whoWasRightCard, rightChip} from "./disputes-kit.js";
 
 const TEAM_KO = {market: "시장분석", plan: "매매 계획", risk: "리스크", ops: "운영·검증", dev: "개발", lead: "총괄", review: "손익 복기",
   evolve: "자기진화", compare: "비교분석", timing: "타점분석", safety: "안전·실거래", specialist: "매매법 전담"};
@@ -30,6 +32,7 @@ export function makeStaff(ctx) {
   const seg = ui.seg([{id: "1", label: "하루"}, {id: "7", label: "7일"}, {id: "30", label: "30일"}], "7", (v) => { st.days = +v; load(); }, {label: "기간"});
   const tiles = h("div", {class: "stats s4"});
   const debateBox = h("div");
+  const rightBox = h("div");             // 누가 맞았나 (design 102 C): the whole run's disputes, next to the base rates
   const list = ui.pager({size: 10, empty: "아직 발언이 없습니다", row: (s) => staffRow(s)});
   const grades = ui.pager({size: 5, empty: "아직 채점된 예측이 없습니다. 예측은 정해 둔 거래 수 (30~300건)가 쌓여야 채점됩니다.", row: (g) => gradeRow(g)});
   const note = h("p", {class: "rk-note"});
@@ -53,6 +56,7 @@ export function makeStaff(ctx) {
         h("span", null, `사실·가설 ${fmt.int(s.facts)}·${fmt.int(s.hypotheses_said)}`),
         s.unreadable ? ui.pill(`못 읽은 답 ${fmt.int(s.unreadable)}`, "warn") : null,
         p.graded ? h("span", null, `예측 ${fmt.int(p.correct)}/${fmt.int(p.graded)} 맞음`, " ", ui.smallSample(p.graded, 20)) : null,
+        rightChip(s.right),
         p.waiting ? h("span", null, `채점 대기 ${fmt.int(p.waiting)}`) : null,
         props || verd ? h("span", null, [props, verd].filter(Boolean).join(" · ")) : null,
         s.last_ts ? h("span", null, `마지막 ${fmt.kst(s.last_ts)}`) : null));
@@ -97,7 +101,8 @@ export function makeStaff(ctx) {
       ui.stat(`말한 직원 (${st.days === 1 ? "하루" : `${st.days}일`})`, fmt.int(staff.filter((s) => s.turns).length), `발언 ${fmt.int(staff.reduce((a, s) => a + s.turns, 0))}번`),
       ui.stat("못 읽은 답", fmt.int(staff.reduce((a, s) => a + (s.unreadable || 0), 0)), "형식이 틀려 코드가 버린 답"));
     debateBox.replaceChildren(...[debateCard(d.debate)].filter(Boolean));
-    list.set(staff.filter((s) => s.turns || (s.predictions || {}).graded), true);
+    rightBox.replaceChildren(...[whoWasRightCard(d.who_was_right)].filter(Boolean));
+    list.set(staff.filter((s) => s.turns || (s.predictions || {}).graded || (s.right && (s.right.settled || s.right.pending))), true);
     grades.set(d.recent_grades || [], true);
     note.textContent = d.note || "";
     if (!tiles.isConnected) put(body, tiles, staffBoard(ctx),
@@ -105,7 +110,7 @@ export function makeStaff(ctx) {
         h("p", {class: "dg-rkey"}, h("span", null, "색 막대 = 이 직원이 남의 말에 한 반응"),
           h("span", null, h("i", {class: "agree"}), "동의"), h("span", null, h("i", {class: "disagree"}), "반대"), h("span", null, h("i", {class: "add"}), "보완")),
         list.el),
-      debateBox,
+      debateBox, rightBox,
       ui.card({plate: "최근 채점된 예측", sub: "가설을 쓴 뒤 들어간 거래로 코드가 판정"}, grades.el), note);
   }
   return {el, show: () => (st.d ? null : load()), refresh: load};

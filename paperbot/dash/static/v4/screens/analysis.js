@@ -5,6 +5,8 @@
 //   청산 이유 exits (/api/v4/exits?group=, analysis-exits.js; 조합 시너지 adds analysis-synplus.js's cards)
 //   장세 스위치 regime (/api/v4/regime5y + /live, analysis-regime.js; the 36 only, 5-year study + paper trades by regime)
 //   코인·장세 지도 map · 코인·시간대 /api/breakdown · 진입 순간 entry · 상황 태그 /api/cards/stats   (analysis-where.js)
+//   매물대 vp (/api/analysis/vp?group=, analysis-vp.js: the price level ahead and the 매물대 at entry vs the coin flips,
+//   with the 5-year entry study A's 매물대 rows)
 //   좋은 자리 vs 보통 levrule · 그림자 비교 shadows · 계좌 겹침 /api/overlap · 조합 시너지 synergy (analysis-rules.js)
 //   운 vs 실력 luck (/api/v4/luck, luck-kit.js: every place that tests many things, luck alone vs really passed)
 //   손실 크기 규칙 size (/api/v4/size5y + /cell, analysis-size.js; the 36 only, the same 5-year trades under other sizes)
@@ -28,6 +30,7 @@ import * as SZ from "./analysis-size.js";
 import * as C from "./analysis-costs.js";
 import * as E from "./analysis-exits.js";
 import * as RG from "./analysis-regime.js";
+import * as VP from "./analysis-vp.js";
 import * as L from "./luck-kit.js";
 import * as M from "./analysis-monthly.js";
 import {indranges} from "./analysis-indr.js";
@@ -45,6 +48,7 @@ const VIEWS = [
   {id: "indranges", label: "좋은 수치 찾기", path: "/api/v4/indranges", render: indranges, groups: "core", desc: "들어갈 때 RSI·변동성·추세 세기 같은 숫자가 어느 구간이면 결과가 좋았나 (5년 과거 시험 + 지금 실험)"},
   {id: "liqentry", label: "강제청산 직후", path: "/api/v4/liqentry", render: liqentry, groups: "groups", feature: "liq", desc: "큰 강제청산이 터지고 5·15·60분 안에 같은 코인에 들어간 거래"},
   {id: "hold", label: "들고 있었다면", path: "/api/v4/holdcmp", render: holdcmp, groups: "groups", desc: "매매 없이 코인을 그냥 들고 있었다면, 거래를 거꾸로 했다면 (대충 계산)"},
+  {id: "vp", label: "매물대", path: "/api/analysis/vp", render: VP.vp, groups: "groups", desc: "거래 방향 앞 가격대(매물대·스윙·전일·라운드)와 매물대 안·밖 진입별 성적, 동전 봇과 나란히 · 5년 연구 결과"},
   {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, groups: "any", desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
   {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, groups: "core", desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
   {id: "size", label: "손실 크기 규칙", path: "/api/v4/size5y", render: SZ.size, groups: "core", fixed: true, desc: "같은 5년 거래에 크기만 바꾸면: 손절 한 번 = 잔고 0.5·1·2%, 배수 절반, 지금 v4"},

@@ -112,7 +112,9 @@ export async function mount(el, ctx) {
   const top = h("div", {class: "path-top"});
   const body = h("div", {class: "path-grid"});
   const foot = h("p", {class: "path-foot"});
-  el.append(top, body, foot);
+  // round 2: what a next version could carry, with evidence grades (screens/nextver.js, its own read-only route)
+  const next = h("a", {class: "btn-line path-next", href: ctx.href("nextver")}, "다음 버전 후보 장부 · 주장별 성적표 · 못 하는 아이디어 →");
+  el.append(top, body, next, foot);
   put(top, motion.shimmer(3, true));
   let first = true;
 

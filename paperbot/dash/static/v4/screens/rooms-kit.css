@@ -39,3 +39,9 @@
 /* wave 2 ⑦: a strategy room's avatar is its strategy's pixel character (rooms-kit.js roomAvatar) */
 .rav.rav-fig { overflow: hidden; border-radius: 8px; }
 .rav.rav-fig .sfig { width: 100%; height: 100%; border-radius: 0; }
+/* assigned sides (rooms-kit.js sideChip): 찬성 / 편드는 직원 green, 반대 / 공격하는 직원 red, 심판 gold, the same in the debate
+   chat and the rooms. Tokens only, both skins. */
+.rk-side { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--line-2); font: 700 var(--t-xs)/1.6 var(--f-body); white-space: nowrap; }
+.rk-side.pro { color: var(--up); border-color: var(--up-line); background: var(--up-soft); }
+.rk-side.con { color: var(--down); border-color: var(--down-line); background: var(--down-soft); }
+.rk-side.judge { color: var(--amber-ink); border-color: var(--amber-line); background: var(--amber-soft); }

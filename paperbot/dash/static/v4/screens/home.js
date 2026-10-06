@@ -20,6 +20,7 @@ import {pixelRoad} from "./road-kit.js";
 import {marketStrip, openCard, tradesCard, meetSchedule} from "./home-live.js";
 import {luckMini} from "./luck-kit.js";
 import {favStrip} from "./home-favs.js";
+import {goalLine} from "./goal-kit.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -120,7 +121,9 @@ export async function mount(el, ctx) {
   // ★ 즐겨찾기 (conv-b, home-favs.js): the starred strategies / accounts / coins, right under the head
   const favs = favStrip(ctx);
   favs.classList.add("home-o0");
-  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), favs, h("div", {class: "home-band"}, ring, market),
+  // round 2 (owners 10/06): 목표 진척도 한 줄 (goal-kit.js), one slim line on top that the remodel can place elsewhere
+  const goal = goalLine(ctx, {cls: "home-goal"});
+  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), goal, favs, h("div", {class: "home-band"}, ring, market),
     h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
       h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
     trCard, led, groupSec,

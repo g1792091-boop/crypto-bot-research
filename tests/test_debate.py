@@ -107,12 +107,15 @@ def test_a_round_writes_messages_round_hypotheses_and_ideas(tmp_path, world):
     url, headers, body, timeout = svc.fake.calls[0]
     assert url == "https://api.anthropic.com/v1/messages" and headers["anthropic-version"] == "2023-06-01"
     assert headers["x-api-key"] == KEY and KEY not in json.dumps(body)
-    assert body["model"] == D.DEFAULT_MODEL and body["max_tokens"] == 900 and timeout == 45.0
+    # debate-chat: 7 turns by default, the answer's ceiling follows them (default_max_tokens: 1,150 without thinking)
+    assert body["model"] == D.DEFAULT_MODEL and body["max_tokens"] == 1150 == D.Config().max_tokens and timeout == 45.0
     sysb = body["system"][0]
     assert sysb["cache_control"] == {"type": "ephemeral", "ttl": "1h"}      # 20-minute rounds: the 1-hour cache
     assert "30일 체크포인트" in sysb["text"] and "가설 메뉴" in sysb["text"] and "D+10" not in sysb["text"]
     user = body["messages"][0]["content"]
-    assert "D+10" in user and "낙관론자, 비관론자, 회의론자, 리스크 책임자" in user and "회차 0번" in user
+    assert "D+10" in user and "회차 0번" in user
+    assert "발언 7번): 1. 낙관론자, 2. 비관론자, 3. 회의론자, 4. 리스크 책임자, 5. 퀀트, 6. 낙관론자, 7. 비관론자" in user
+    assert "3번째 발언부터는 이미 말한 사람 한 명을 reply_to에" in user
 
 
 def test_roles_rotate_and_topics_do_not_repeat(tmp_path, world):
@@ -170,9 +173,9 @@ def test_parse_answer_checks_shape_and_keeps_what_was_paid_for():
         with pytest.raises(D.ApiError) as e:
             D.parse_answer(bad, order)
         assert e.value.kind == "output"
-    long = D.parse_answer(json.dumps({"turns": [{"speaker": "퀀트", "text": "가" * 5000}] * 6, "note": "나" * 5000,
+    long = D.parse_answer(json.dumps({"turns": [{"speaker": "퀀트", "text": "가" * 5000}] * 12, "note": "나" * 5000,
                                       "ideas": [{"text": "다" * 5000, "tag": "t" * 99}] * 5}), order)
-    assert len(long["turns"]) == 5 and len(long["turns"][0]["text"]) == D.MAX_TURN_CHARS
+    assert len(long["turns"]) == D.TURNS_MAX == 9 and len(long["turns"][0]["text"]) == D.MAX_TURN_CHARS
     assert len(long["note"]) == D.MAX_NOTE_CHARS and len(long["ideas"]) == 2 and len(long["ideas"][0]["tag"]) == 40
 
 
@@ -215,7 +218,7 @@ def test_cost_comes_from_the_usage_fields_with_overridable_prices():
     env = D.config_from_env({"ANTHROPIC_API_KEY": KEY, "DEBATE_PRICE_IN": "3", "DEBATE_PRICE_OUT": "15"})
     assert env.prices() == (3.0, 15.0) and env.every_min == 20 and env.monthly_cap == 40.0 and env.model == D.DEFAULT_MODEL
     for bad in ({"DEBATE_EVERY_MIN": "0"}, {"DEBATE_EVERY_MIN": "x"}, {"DEBATE_MONTHLY_USD_CAP": "-1"},
-                {"DEBATE_TURNS": "9"}, {"DEBATE_THINKING": "yes"}):
+                {"DEBATE_TURNS": "10"}, {"DEBATE_TURNS": "2"}, {"DEBATE_THINKING": "yes"}):
         with pytest.raises(ValueError):
             D.config_from_env(bad)
 
@@ -607,7 +610,9 @@ def test_sonnet_55_effort_low_is_sent_and_its_thinking_is_in_the_cost_and_the_ca
                              "DEBATE_DIR": str(tmp_path / "d")})
     assert (cfg.model, cfg.every_min, cfg.monthly_cap, cfg.effort, cfg.thinking) == ("claude-sonnet-5-5", 30, 30.0,
                                                                                       "low", "")
-    assert cfg.max_tokens == D.THINKING_MAX_TOKENS == 1500 and cfg.prices() == (2.0, 10.0) and cfg.cache_ttl() == "1h"
+    # the ceiling holds thinking + 7 turns (debate-chat): 1,150 for the answer + 600 for the thinking
+    assert cfg.max_tokens == D.default_max_tokens(cfg.model, "", 7) == 1750 and cfg.prices() == (2.0, 10.0)
+    assert cfg.cache_ttl() == "1h" and cfg.turns == 7
     usage = {"input_tokens": 1500, "output_tokens": 1100, "cache_read_input_tokens": 1700,
              "cache_creation_input_tokens": 0}
     svc = make(tmp_path, world, thinking_body(answer(4), usage), model=cfg.model, every_min=30, monthly_cap=30.0,
@@ -615,7 +620,7 @@ def test_sonnet_55_effort_low_is_sent_and_its_thinking_is_in_the_cost_and_the_ca
     assert svc.tick(force=True) == "round"
     _, _, body, _ = svc.fake.calls[0]
     assert body["output_config"] == {"effort": "low"} and "thinking" not in body
-    assert body["model"] == "claude-sonnet-5-5" and body["max_tokens"] == 1500
+    assert body["model"] == "claude-sonnet-5-5" and body["max_tokens"] == 1750
     assert body["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert "temperature" not in body and body["messages"][-1]["role"] == "user"           # no sampling, no prefill
     assert "meta.accounts_in_tables" in body["system"][0]["text"] and "groups_compare" in body["system"][0]["text"]
@@ -625,9 +630,9 @@ def test_sonnet_55_effort_low_is_sent_and_its_thinking_is_in_the_cost_and_the_ca
     assert svc.db.spent(NOW)["month"] == pytest.approx(want)
     assert svc.db.get("last_usage")["thinking_blocks"] == 1 and "생각 블록 1개" in svc.logs[-1]
     assert [m[0] for m in rows(svc, "SELECT speaker FROM debate_messages")][:2] == ["낙관론자", "비관론자"]
-    assert svc.worst_case_usd(3300) == pytest.approx((3300 * 2.0 * 2.0 + 1500 * 10.0) / 1e6)   # max_tokens bounds it
+    assert svc.worst_case_usd(3300) == pytest.approx((3300 * 2.0 * 2.0 + 1750 * 10.0) / 1e6)   # max_tokens bounds it
     run = svc.db.get("run")
-    assert run["effort"] == "low" and run["thinking"] == "adaptive(기본)" and run["max_tokens"] == 1500
+    assert run["effort"] == "low" and run["thinking"] == "adaptive(기본)" and run["max_tokens"] == 1750
     s = D.summary(svc.cfg.debate_db, NOW)
     out = []
     D.print_status(s, out.append)
@@ -645,10 +650,10 @@ def test_settings_a_model_would_refuse_stop_the_service_at_start():
     assert "받지 않습니다" in err(DEBATE_MODEL="claude-haiku-4-5-20251001")                    # effort on Haiku
     assert D.main(["status"], environ={**SONNET_ENV, "DEBATE_THINKING": "disabled"}) == 2
     off = D.config_from_env({**SONNET_ENV, "DEBATE_THINKING": "between_tools"})
-    assert off.max_tokens == 900 and D.request_body(off, "s", "u")["thinking"] == {"type": "between_tools"}
+    assert off.max_tokens == 1150 and D.request_body(off, "s", "u")["thinking"] == {"type": "between_tools"}
     assert D.config_from_env({**SONNET_ENV, "DEBATE_MAX_TOKENS": "1200"}).max_tokens == 1200      # the env wins
     haiku = D.config_from_env({"DEBATE_MODEL": "claude-haiku-4-5-20251001"})
-    assert haiku.max_tokens == 900 and "output_config" not in D.request_body(haiku, "s", "u")
+    assert haiku.max_tokens == 1150 and "output_config" not in D.request_body(haiku, "s", "u")
     assert not D.model_thinks("claude-haiku-4-5-20251001") and D.model_thinks("claude-sonnet-5-5")
     assert not D.model_thinks("claude-sonnet-5-5", "between_tools") and D.model_thinks("claude-opus-5-5")
 
@@ -728,7 +733,7 @@ def test_the_debate_room_runs_on_the_v4_shape(tmp_path, monkeypatch):
     env = {k: v for k, v in SONNET_ENV.items() if k != "ANTHROPIC_API_KEY"}
     assert D.main(["once", "--dry-run"], environ={**env, **cfg_env}, out=out.append) == 0
     text = "\n".join(out)
-    assert "설정 모델 claude-sonnet-5-5" in text and "(월 한도 $30)" in text and "상한 1,500" in text
+    assert "설정 모델 claude-sonnet-5-5" in text and "(월 한도 $30)" in text and "상한 1,750; 발언 7개" in text
     assert "생각(thinking)" in text and "effort low" in text and "캐시가 잡히면" in text
     assert not os.path.exists(str(tmp_path / "d" / "debate.db"))
 

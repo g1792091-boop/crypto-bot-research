@@ -1,10 +1,13 @@
 // 에이전트 방 · the info pane (builder D): proposals waiting for the owners (approve / reject with a note, a confirm
 // step and the server's own Korean answer), when the room meets, members and duties, past proposals, notes, the
-// hypothesis ledger and today's AI use (gauges against the caps). Old rooms.js renderRoomSide, item by item.
+// hypothesis ledger and today's AI use (gauges against the caps). Old rooms.js renderRoomSide, item by item. Design
+// 102 C: a strategy room's sides and disputes, the lab room's shared test queue (disputes-kit.js).
 // The approve / reject click goes to POST /api/proposals/<id>/decide; the server re-checks everything and refuses with
 // a Korean message that is shown as is.
 import {h, ui, fmt, motion} from "../core/pb.js";
 import {specKo, avatarFor, agentsState, keptHoursKo, scheduleOf} from "./rooms-kit.js";
+import {roomSides, labIntake} from "./disputes-kit.js";
+import {ownerRequests} from "./labreq-kit.js";
 
 const PSTATUS_KO = {awaiting_owner: "두 분 확인 대기", approved: "승인됨", rejected: "거절됨", blocked_gate: "코드 관문에서 막힘", blocked_cap: "복제 한도로 막힘"};
 const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안", newlab: "새 매매법 시험"};
@@ -21,7 +24,7 @@ function decisionWhen(st) {
 }
 
 export function makeSide(ctx, hooks) {
-  const st = {id: null, room: null, side: null, confirm: null, req: 0, usage: null};
+  const st = {id: null, room: null, side: null, confirm: null, req: 0, usage: null, labConfirm: {id: null, dec: null}};
   const back = h("button", {class: "btn-line rm-back", type: "button", onclick: () => hooks.pane("chat")}, "← 대화");
   const titleEl = h("b", {class: "rm-stitle"}, "방 정보");
   const body = h("div", {class: "rm-sbody"}, ui.empty("방을 고르면 정보가 나옵니다"));
@@ -141,7 +144,7 @@ export function makeSide(ctx, hooks) {
     const r = hooks.cur(), info = st.room;
     titleEl.textContent = `${(r || info || {}).title || st.id} 정보`;
     if (!st.side) { body.replaceChildren(motion.shimmer(3)); return; }
-    const {notes = [], trials = null, props = []} = st.side;
+    const {notes = [], trials = null, props = [], intake = null, disputes = null} = st.side;
     const kids = [];
     const waiting = props.filter((p) => p.status === "awaiting_owner");
     const past = props.filter((p) => p.status !== "awaiting_owner").slice(0, 5);
@@ -183,6 +186,12 @@ export function makeSide(ctx, hooks) {
         h("p", {class: "rk-note"}, lab ? `새 매매법 시험은 모든 방을 합쳐 셉니다. 시험이 늘수록 통과 기준이 엄격해지고 (p < 0.05 ÷ 시험 번호), ${fmt.int(NEWLAB_MAX_TESTS)}번째 뒤에는 어떤 시험도 통과할 수 없어 멈춥니다. 관찰 기간에는 제안하지 않습니다.`
           : "시험을 많이 할수록 통과 기준이 엄격해집니다 (우연 방지).")));
     }
+    // design 102 C: a strategy room's sides and disputes; the lab room's shared test queue
+    if (disputes) kids.push(roomSides({sides: disputes.seats, disputes: disputes.disputes, base_rates: disputes.base_rates}));
+    if (st.id === LAB_ROOM) kids.push(labIntake(intake));
+    // #103: the owners' own test requests, their translation and the 시험하기 / 그만두기 click (labreq-kit.js)
+    if (st.id === LAB_ROOM) kids.push(ownerRequests(ctx, intake && intake.owner, {confirm: st.labConfirm,
+      onDecided: (id, d) => { if (d) load(); else render(); }}));
     kids.push(usageBlock(st.usage));
     body.replaceChildren(...kids.filter(Boolean));
   }
@@ -193,12 +202,18 @@ export function makeSide(ctx, hooks) {
     const req = ++st.req;
     const strat = id.startsWith("strat:") ? id.slice(6) : "";
     const tq = id === LAB_ROOM ? `limit=30&room_id=${encodeURIComponent(id)}` : `limit=6${strat ? "&strategy=" + encodeURIComponent(strat) : ""}`;
-    const [notes, trials, props] = await Promise.all([
+    // the lab room's shared test queue (/api/lab/intake, agents/labintake.py): an older server without the route (a
+    // 404) or a failed read shows 수집 전 (disputes-kit.js labIntake)
+    const intakeOf = async () => { try { return await ctx.api("/api/lab/intake"); } catch (e) { return null; } };
+    const [notes, trials, props, more] = await Promise.all([
       ctx.api(`/api/rooms/${encodeURIComponent(id)}/notes?limit=20`).catch(() => []),
       ctx.api(`/api/trials?${tq}`).catch(() => null),
-      ctx.api(`/api/proposals?room_id=${encodeURIComponent(id)}&limit=20`).catch(() => [])]);
+      ctx.api(`/api/proposals?room_id=${encodeURIComponent(id)}&limit=20`).catch(() => []),
+      id === LAB_ROOM ? intakeOf()
+        : strat ? ctx.api(`/api/disputes?room=${encodeURIComponent(id)}&limit=20`).catch(() => null) : null]);
     if (req !== st.req || id !== st.id || !ctx.alive()) return;
-    st.side = {notes: notes || [], trials, props: props || []};
+    st.side = {notes: notes || [], trials, props: props || [], intake: id === LAB_ROOM ? more : null,
+      disputes: strat ? more : null};
     render();
   }
 

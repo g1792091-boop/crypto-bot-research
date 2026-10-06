@@ -320,7 +320,7 @@ Old features are mapped row by row in `INVENTORY.md`. Every row assigned to you 
 **analysis (분석)**
 
 - Sub tabs via `ui.seg(..., {scroll: true})`:
-  - 손익비·위험, 실전 준비도, 충격 테스트, 코인·장세 지도, 진입 순간, 조합 시너지, 좋은 자리 vs 보통, 그림자 비교 (curves + account picker)
+  - 손익비·위험, 실전 준비도, 충격 테스트, 코인·장세 지도, 진입 순간, 매물대 (`/api/analysis/vp`, groups), 조합 시너지, 좋은 자리 vs 보통, 그림자 비교 (curves + account picker)
   - 코인·시간대 (`/api/breakdown`), 계좌 겹침 (`/api/overlap`), GH Coin (feature), 45개 질문 (feature)
 - `{pending: true}` answers: shimmer, then retry after 3 s.
 - Every table keeps its "how to read" line and its small-sample marks.

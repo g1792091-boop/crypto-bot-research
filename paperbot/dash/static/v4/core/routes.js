@@ -41,6 +41,7 @@ export const SCREENS = {
   combo: {ko: "조합 성과", group: "strat", title: "조합 성과"},
   combo5y: {ko: "5년 조합", group: "strat", title: "5년 조합 시험"},
   whatif: {ko: "만약 실험실", group: "strat", title: "만약 실험실"},
+  nextver: {ko: "다음 버전", group: "strat", title: "다음 버전 후보", hidden: true},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},

@@ -30,6 +30,10 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
 - ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing);
                                     ``?group=core|ds200|reel`` (default core = the 36): entrymoment.group_dash_view
                                     (DeepSeek with no money, the reel next to its three 5m coin flips)
+- ``GET /api/analysis/vp``          매물대 (owners' request 2026-10-06): a group's trades by the kind of the price level
+                                    ahead, its ATR distance and the value-area position at entry next to the group's own
+                                    coin flips, plus the 5-year entry study A's 매물대 rows (entrymoment.vp_dash_view;
+                                    ``?group=core|ds200|reel``; n / win rate / ROE only, no money for any group)
 - ``GET /api/analysis/breakdown``   코인·시간대 per group: /api/breakdown's card (paperbot/breakdown.py) for ``?group=``
                                     (core = breakdown.report itself; ds200 / reel see ``group_breakdown``)
 - ``GET /api/analysis/synergy``     조합 시너지 (agents/synergy.py dash_view)
@@ -968,6 +972,28 @@ def entry_view(paper_db: str, daily_db: Optional[str], now_ms: int, group: str =
     return v if isinstance(v, dict) else {"unavailable": True, "note": "준비 중"}
 
 
+# ---------------------------------------------------------------- 매물대
+VP_TTL_S = 900
+
+
+def vp_view(paper_db: str, now_ms: int, group: str = "core") -> dict:
+    """매물대 for one group (entrymoment.vp_dash_view: the group against its own coin flips, the 5-year study rows)."""
+    try:
+        import importlib
+        EM = importlib.import_module("..agents.entrymoment", __package__)
+        from ..agents.roster3 import STRATEGY_KO
+    except Exception as exc:  # noqa: BLE001  (the module may still be in the making)
+        return {"unavailable": True, "note": f"준비 중 ({type(exc).__name__})"}
+    if not hasattr(EM, "vp_dash_view"):
+        return {"unavailable": True, "note": "준비 중"}
+    c = ro_connect(paper_db)
+    try:
+        v = EM.vp_dash_view(c, now_ms, group, 0, names_ko=dict(STRATEGY_KO) if group == "core" else None)
+    finally:
+        _close(c)
+    return v if isinstance(v, dict) else {"unavailable": True, "note": "준비 중"}
+
+
 # ---------------------------------------------------------------- 조합 시너지
 def synergy_view(paper_db: str, now_ms: int) -> dict:
     from ..agents import synergy as SY
@@ -1217,6 +1243,8 @@ def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS, now_ms: Optional[
 
 
 DEBATE_REPLY_STANCES = ("동의", "반대", "보완", "질문")
+DEBATE_SIDES = ("찬성", "반대", "심판")            # debate_factory.SIDES: assigned by code
+DEBATE_PARTS = ("주장", "반박", "심판")            # debate.DEEP_PARTS: the daily deep debate's three calls
 
 
 def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT_ROUNDS,
@@ -1229,8 +1257,11 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
       has those columns and only with a known value; an older round has None (shown as plain bubbles). ``cut``: the
       answer was cut at max_tokens (the complete turns were kept).
     - ``timeline``: the newest rounds of every kind, newest first, ``{round_id, ts, status, cost_usd, turns, topic,
-      why}``; ``why`` is the stored reason of a skipped round (without its 'unchanged: ' tag) or the stored, already
-      redacted error text.
+      why}``; ``why`` is the stored reason of a skipped round (without the service's tag: 'unchanged: ', the factory's
+      'no_question: ', the deep debate's 'deep_cap: ' ...) or the stored, already redacted error text.
+    - the idea factory (DEBATE_MODE=factory): a message's ``side`` (찬성 / 반대 / 심판, assigned by code) and, in the
+      daily deep debate, its ``part`` (주장 / 반박 / 심판), only when stored; a factory or deep round's ``kind`` and
+      ``question`` {kind, ko}. A classic round or an older debate.db has none of these keys.
     - ``next``: the service's own schedule from debate_state, as Service.due_ms() computes it: ``{ts, kind, every_min}``,
       ts = max(last attempt + interval, backoff end), kind 'retry' while a failure is unresolved; None when unknown.
     - ``today``: the KST day's rounds ``{ok, skipped, error, cost_usd}`` (error counts error and aborted rounds).
@@ -1240,26 +1271,39 @@ def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT
         return {}
     try:
         cols = {r[1] for r in c.execute("PRAGMA table_info(debate_messages)")}
-        extra = ", ".join(x if x in cols else f"NULL AS {x}" for x in ("reply_to", "reply_stance"))
+        extra = ", ".join(x if x in cols else f"NULL AS {x}" for x in ("reply_to", "reply_stance", "side", "part"))
+        # the idea factory (debate.py DEBATE_MODE=factory): a round's kind and question; added columns, absent before
+        rcols = {r[1] for r in c.execute("PRAGMA table_info(debate_rounds)")}
+        rextra = ", ".join(x if x in rcols else f"NULL AS {x}" for x in ("kind", "question_kind", "question_ko"))
         chat = []
-        for r in c.execute("SELECT round_id, ts, topic, cost_usd, turns, model, error FROM debate_rounds "
+        for r in c.execute(f"SELECT round_id, ts, topic, cost_usd, turns, model, error, {rextra} FROM debate_rounds "
                            "WHERE status = 'ok' ORDER BY round_id DESC LIMIT ?", (max(1, min(int(rounds), 30)),)).fetchall():
             msgs = []
             for m in c.execute(f"SELECT id, speaker, stance, text, {extra} FROM debate_messages WHERE round_id = ? "
                                "ORDER BY id", (r["round_id"],)):
                 rs = str(m["reply_stance"] or "")
-                msgs.append({"id": int(m["id"]), "speaker": str(m["speaker"] or "")[:40], "stance": str(m["stance"] or "")[:20],
-                             "text": str(m["text"] or "")[:1000], "reply_to": str(m["reply_to"])[:40] if m["reply_to"] else None,
-                             "reply_stance": rs if rs in DEBATE_REPLY_STANCES else None})
+                one = {"id": int(m["id"]), "speaker": str(m["speaker"] or "")[:40], "stance": str(m["stance"] or "")[:20],
+                       "text": str(m["text"] or "")[:1000], "reply_to": str(m["reply_to"])[:40] if m["reply_to"] else None,
+                       "reply_stance": rs if rs in DEBATE_REPLY_STANCES else None}
+                # the code's side (찬성 / 반대 / 심판) and the deep debate's part: only when stored, only known words
+                if m["side"] in DEBATE_SIDES:
+                    one["side"] = m["side"]
+                if m["part"] in DEBATE_PARTS:
+                    one["part"] = m["part"]
+                msgs.append(one)
             if msgs:
-                chat.append({"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "topic": str(r["topic"] or "")[:120],
-                             "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
-                             "model": str(r["model"] or "")[:60], "cut": "max_tokens" in str(r["error"] or ""),
-                             "messages": msgs})
+                row = {"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "topic": str(r["topic"] or "")[:120],
+                       "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
+                       "model": str(r["model"] or "")[:60], "cut": "max_tokens" in str(r["error"] or ""),
+                       "messages": msgs}
+                if r["kind"] in ("factory", "deep"):
+                    row["kind"] = r["kind"]
+                    row["question"] = {"kind": str(r["question_kind"] or "")[:40], "ko": str(r["question_ko"] or "")[:300]}
+                chat.append(row)
         tl = []
         for r in c.execute("SELECT round_id, ts, status, cost_usd, turns, topic, error FROM debate_rounds "
                            "ORDER BY round_id DESC LIMIT ?", (max(1, min(int(timeline), 50)),)):
-            why = re.sub(r"^unchanged:\s*", "", str(r["error"] or ""))[:160]
+            why = re.sub(r"^(unchanged|no_question|deep_cap|cap|day|hour):\s*", "", str(r["error"] or ""))[:160]
             tl.append({"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "status": str(r["status"] or "")[:20],
                        "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
                        "topic": str(r["topic"] or "")[:120], "why": why})
@@ -1356,6 +1400,11 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
         if g == "core":        # the key /api/analysis/map peeks at stays the 36's
             return heavy.get("entry", ENTRY_TTL_S, lambda: entry_view(db, daily, _now()))
         return heavy.get(f"entry:{g}", ENTRY_TTL_S, lambda: entry_view(db, daily, _now(), g))
+
+    @app.get("/api/analysis/vp")
+    def get_vp(group: Optional[str] = None):
+        g = entry_group(group)
+        return heavy.get(f"vp:{g}", VP_TTL_S, lambda: vp_view(db, _now(), g))
 
     @app.get("/api/analysis/map")
     def get_map(group: Optional[str] = None):

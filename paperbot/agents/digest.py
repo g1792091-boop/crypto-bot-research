@@ -294,6 +294,8 @@ def day_digest(agents_ro: Optional[sqlite3.Connection], day: str) -> dict:
     except sqlite3.Error as exc:
         out["error"] = f"agents3.db를 읽지 못함: {type(exc).__name__}"
         return out
+    from . import disputes as DS
+    dmap = DS.of_rounds(agents_ro, ids)        # the dispute a meeting opened (sides on; none before the table exists)
     for r in rounds:
         ms = msgs.get(r["round_id"], [])
         speakers, replies, asks, lead, disagreement, results, verdict = [], [], [], [], "", [], None
@@ -328,7 +330,8 @@ def day_digest(agents_ro: Optional[sqlite3.Connection], day: str) -> dict:
             "calls": int(r["calls"] or 0), "tokens": int(r["tokens"] or 0),
             "summary_ko": str(dec.get("summary_ko") or "")[:1500], "action": final.get("action") or dec.get("action"),
             "challenge": verdict or dec.get("challenge"), "speakers": speakers, "replies": replies, "asks": asks,
-            "lead": lead, "open_disagreement": disagreement, "results": results[:5]})
+            "lead": lead, "open_disagreement": disagreement, "results": results[:5],
+            "dispute": dmap.get(r["round_id"])})
         k = out["by_trigger"].setdefault(r["trigger"], {"trigger_ko": TRIGGER_KO.get(r["trigger"], r["trigger"]),
                                                        "meetings": 0})
         k["meetings"] += 1
@@ -414,11 +417,21 @@ def staff_board(agents_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
     from .committee import track_record
     out["debate"] = track_record(agents_ro, recent=5)      # the market team's daily debate (the lead's calls)
     graded = {r["role"]: r for r in card.get("roles") or []}
-    for role in set(by) | {r for r in graded if r}:
+    # who was right (design #102 C, agents/disputes.py): the whole run's disputes per staff member, next to the side's
+    # base rate and the coin flip's 50% (a 5-year dispute is nearly always the advocate's)
+    from . import disputes as DS
+    wwr = DS.who_was_right(agents_ro)
+    right = {r["role"]: r for r in wwr.get("roles") or []}
+    out["who_was_right"] = wwr
+    for role in set(by) | {r for r in graded if r} | set(right):
         k = get(role)
         g = graded.get(role) or {}
         k["predictions"] = {f: g.get(f, 0) for f in ("graded", "correct", "waiting", "expired", "not_gradable")}
         k["predictions"]["hit_rate"] = g.get("hit_rate")
+        d = right.get(role)
+        k["right"] = None if d is None else {f: d[f] for f in ("won", "lost", "settled", "hit_rate", "as_attacker",
+                                                               "as_advocate", "pending", "conceded", "talk_only",
+                                                               "gave_up", "attacks", "expected", "small")}
     staff = []
     for k in by.values():
         k["meetings"] = len(k["meetings"])
@@ -657,6 +670,8 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
     if agents_ro is not None:
         from .committee import week_summary
         out["debate"] = week_summary(agents_ro, w0, now)
+        from . import disputes as DS
+        out["who_was_right"] = DS.week_summary(agents_ro, w0, now)     # None until the first dispute (design #102 C)
         try:
             sec = R.get_cursor(agents_ro, SECURITY_CURSOR)
         except sqlite3.Error:
@@ -845,6 +860,9 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
     if db and (db.get("all") or {}).get("graded"):
         w, a = db.get("week") or {}, db["all"]
         L.append(f"낙관·비관 토론: 이번 주 {w.get('correct', 0)}/{w.get('graded', 0)}, 누적 {a['correct']}/{a['graded']}")
+    if rep.get("who_was_right"):
+        from .disputes import week_line
+        L.append(week_line(rep["who_was_right"]))
     L.append(security_line(rep.get("security"), short=True))
     L += ["", "※ 7일 성적은 운이 큼. 판정은 30일 체크포인트"]
     while L and not L[-1]:

@@ -509,7 +509,12 @@ def learning_packet(agents_conn: Optional[sqlite3.Connection], now_ms: int, days
     except ImportError:  # pragma: no cover
         LIBRARY_PRIOR_KO = ""
     card = scorecard(agents_conn)
-    return {"window": {"from": since, "to": now_ms, "days": days},
+    # the week's ended disputes (design #102 C, agents/disputes.py): claim, sides, who was right (code line), so the
+    # Saturday lessons' do_not_retest can name a settled claim; omitted while there is none (sides off)
+    from . import disputes as DS
+    settled = DS.settled_between(agents_conn, since, now_ms)
+    extra = {"disputes_this_week": {"list": settled, "note": DS.BASE_NOTE_KO}} if settled else {}
+    return {**extra, "window": {"from": since, "to": now_ms, "days": days},
             "graded_this_week": {"by_role": by_role, "list": graded[-30:]},
             "waiting_predictions": {"count": len(waiting), "latest": wait_rows},
             "tests_this_week": {"five_year": [t for t in tests if t["kind"] == "test"],

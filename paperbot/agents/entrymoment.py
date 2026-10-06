@@ -50,7 +50,23 @@ Dimensions (``DIMS``), each with an ``unknown`` bucket when its data is missing:
   ``range_pos``    range_pct (1 - range_pct for a short): ``아래쪽`` < 0.33, ``가운데``, ``위쪽`` >= 0.67.
   ``trend_align``  regime and htf_regime against the side: ``반대`` when either trends the other way, else ``같은 방향``
                    when either trends this way, else ``횡보·불분명``; ``unknown`` when neither was recorded.
-- ``hold``        holding time: ``<30m``, ``30m-2h``, ``2h-8h``, ``8h+``.
+- 매물대 and the price levels ahead (owners' request 2026-10-06), read from what the trade already carries or from the
+  bars up to the signal bar only:
+  ``sr_ahead``  the kind of the nearest price level in the trade's direction (the S/R marks recorded with the signal,
+                ``context.sr.room_kind``: entry_marks / research/entry_study/sr.py, read only): ``매물대`` (51-53: the
+                200-bar volume profile's POC, VAH, VAL), ``스윙`` (11, 12), ``전일·전주`` (21-32), ``라운드`` (40), ``상위 봉``
+                (61, 62: higher-timeframe swings); ``unknown`` = no marks recorded (or recorded with an error).
+  ``sr_room``   its distance in ATR14 (``context.sr.room``, capped at 10 by sr.py): ``바로 앞`` < 0.5, ``가까움`` < 1,
+                ``보통`` < 2, ``멂`` 2+.
+  ``va_pos``    where the signal bar's close sits against the volume profile of the ``VP_BARS`` (200) complete bars of
+                the trade's timeframe ending at the signal bar (built from the 1m ``live_bars`` with their volume; the
+                same rules as sr.py's L5: 50 equal price bins over the bars' range, each bar's volume in the bin of its
+                typical price, POC = the fullest bin's centre, value area grown from the POC to 70% of the volume, VAH /
+                VAL its outer edges): ``최다 가격 근처`` within ``POC_NEAR_ATR`` (0.25) ATR14 of the POC, else ``매물대 위``
+                above the VAH, ``매물대 아래`` below the VAL, ``70% 구간 안`` between them. A price position, not a side:
+                the same bucket means different things for a long and a short (``vp_dash_view`` splits it by side).
+                ``unknown`` = fewer than 200 consecutive complete bars, no volume, or no ATR14.
+- ``hold``      holding time: ``<30m``, ``30m-2h``, ``2h-8h``, ``8h+``.
 - ``funding``     funding rate at the entry: the last settlement at most 9 hours before (market.db ``funding``), else
                   an estimate from the latest completed 5-minute premium index (flow.db ``premium5m``, at most 15
                   minutes old): premium + clamp(0.01% - premium, -0.05%, +0.05%) (Binance's formula with the current
@@ -64,7 +80,9 @@ the nightly check's hypothetical outcome (daily3.db ``shadows`` kind ``skipped``
 account, net ROE). REJECTED signals have no hypothetical outcome recorded: counts only.
 
 ``packet`` (Wednesday coin and regime meeting, ``coins.entry_moment``) stays under ``MAX_BYTES`` compact JSON;
-``strategy_brief`` (a strategy specialist's packet) under ``BRIEF_MAX_BYTES``; ``dash_view`` for the dashboard.
+``strategy_brief`` (a strategy specialist's packet) under ``BRIEF_MAX_BYTES``; ``dash_view`` for the dashboard;
+``vp_dash_view`` the dashboard's 매물대 view (a group's three 매물대 dimensions next to its coin flips, and the 5-year
+entry study A's 매물대 rows, ``vp_study_5y``: research/entry_study/out_binance, read only).
 """
 
 from __future__ import annotations
@@ -113,6 +131,13 @@ STAGE_EDGES = (0.0, 1.0, 2.0)   # side-relative EMA20 distance in ATR14 (ema20_d
 RANGE_EDGES = (0.33, 0.67)      # side-relative place in the regime window's range (range_pct; 1 - range_pct for a
                                 # short): <0.33 아래쪽, <0.67 가운데, else 위쪽 (위쪽 = far along in the trade's way)
 TREND_OF_SIDE = {1: "trend_up", -1: "trend_down"}   # context.regime labels; box / chop / unknown = no trend
+# 매물대 (owners' request 2026-10-06). Edges fixed before any live result was looked at:
+SR_GROUP_OF_KIND = {51: "매물대", 52: "매물대", 53: "매물대", 11: "스윙", 12: "스윙", 21: "전일·전주", 22: "전일·전주",
+                    31: "전일·전주", 32: "전일·전주", 40: "라운드", 61: "상위 봉", 62: "상위 봉"}   # sr.py KIND codes
+ROOM_EDGES = (0.5, 1.0, 2.0)    # ATR14 to the nearest level ahead: <0.5 바로 앞 (the study's 4-1 '0.5 ATR 안'), <1, <2
+VP_BARS, VP_BINS, VP_SHARE = 200, 50, 0.70   # = research/entry_study/sr.py VP_BARS / VP_BINS / VP_SHARE (a test)
+POC_NEAR_ATR = 0.25             # the signal bar's close within this many ATR14 of the POC: 최다 가격 근처
+VP_DIMS = ("sr_ahead", "sr_room", "va_pos")
 
 BUCKETS = {
     "strength": ("weak", "mid", "strong", "unknown"),
@@ -120,6 +145,9 @@ BUCKETS = {
     "trend_stage": ("역방향", "초입", "중간", "막판", "unknown"),
     "range_pos": ("아래쪽", "가운데", "위쪽", "unknown"),
     "trend_align": ("같은 방향", "반대", "횡보·불분명", "unknown"),
+    "sr_ahead": ("매물대", "스윙", "전일·전주", "라운드", "상위 봉", "unknown"),
+    "sr_room": ("바로 앞", "가까움", "보통", "멂", "unknown"),
+    "va_pos": ("매물대 위", "70% 구간 안", "매물대 아래", "최다 가격 근처", "unknown"),
     "body": ("<0.3", "0.3-1", "1+", "unknown"),
     "wick_against": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
     "wick_with": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
@@ -133,15 +161,19 @@ BUCKETS = {
 }
 DIMS = tuple(BUCKETS)
 # the order dimensions leave a brief that is too big (the least specific first)
+# (the 매물대 three, 2026-10-06: after the candle shape and the liquidation bursts, before the trend-stage three; the
+# kind of the level ahead leaves before its distance, the distance before the value-area position)
 BRIEF_DROP = ("weekday", "wick_with", "streak", "hold", "funding", "body", "wick_against", "close_loc", "pattern",
-              "liq", "range_pos", "trend_align", "volatility", "trend_stage")
+              "liq", "sr_ahead", "sr_room", "va_pos", "range_pos", "trend_align", "volatility", "trend_stage")
 STAGE_DIMS = ("trend_stage", "range_pos", "trend_align")
 
 HOW_TO_READ = ("진입 순간의 모습별 끝난 거래 성적(코드 계산). 칸: n 거래 수, wr 승률, roe 평균 ROE(0.01=1%), eq 자금 대비 평균 "
                "손익. small = 거래 적어 우연일 수 있음. 정의는 회의 안내(진입 순간 칸)에 있음. with/against = 거래 방향과 같은/"
                "반대 쪽. trend_stage 추세 단계(EMA20에서 거래 방향으로 ATR 몇 배: 0 미만 역방향, 0~1 초입, 1~2 중간, 2 이상 "
                "막판), range_pos 최근 범위 안 위치(거래 방향 기준 0.33 미만 아래쪽, 0.67 이상 위쪽), trend_align 이 봉·상위 "
-               "봉 장세가 거래와 같은 방향/반대(하나라도 반대면 반대)/횡보·불분명. unknown = 그 자료가 없음")
+               "봉 장세가 거래와 같은 방향/반대(하나라도 반대면 반대)/횡보·불분명. sr_ahead 거래 방향 앞 첫 가격대 종류, "
+               "sr_room 거기까지 ATR, va_pos 종가가 200봉 매물대(거래량 70%) 위·안·아래·최다 가격 근처(롱·숏 뜻 다름). "
+               "unknown = 자료 없음")
 EQ_READ = "eq 자금 대비 평균 손익. "            # HOW_TO_READ's line on the eq column (left out where there is no money)
 NOTE = ("설명용 집계일 뿐 규칙이 아님. 칸을 아주 많이 보므로(multiple_comparisons) 20칸 중 1칸쯤은 우연만으로 달라 보임: "
         "칸 차이는 가설로만, 나중 거래로 확인할 예측을 붙여 남김")
@@ -180,24 +212,28 @@ def compact_bytes(obj) -> int:
 
 
 # ---------------------------------------------------------------- bars (live_bars -> timeframe bars)
-def load_live_bars(paper_ro: sqlite3.Connection, symbols, lo: int, hi: int) -> dict:
-    """{symbol: (t, o, h, l, c) numpy arrays} of paper3.db ``live_bars`` in [lo, hi), oldest first."""
+def load_live_bars(paper_ro: sqlite3.Connection, symbols, lo: int, hi: int, volume: bool = False) -> dict:
+    """{symbol: (t, o, h, l, c) numpy arrays} of paper3.db ``live_bars`` in [lo, hi), oldest first; with ``volume``
+    a sixth array, the 1m volume (NaN where none was stored)."""
     out: dict = {}
+    cols = "ts, open, high, low, close" + (", volume" if volume else "")
     for sym in sorted(set(symbols)):
         try:
-            rows = paper_ro.execute("SELECT ts, open, high, low, close FROM live_bars WHERE symbol = ? AND ts >= ? "
+            rows = paper_ro.execute(f"SELECT {cols} FROM live_bars WHERE symbol = ? AND ts >= ? "
                                     "AND ts < ? ORDER BY ts", (sym, int(lo), int(hi))).fetchall()
         except sqlite3.Error:
             return {}
         if rows:
             a = np.array(rows, dtype=float)
-            out[sym] = (a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4])
+            out[sym] = (a[:, 0].astype(np.int64), *(a[:, k] for k in range(1, a.shape[1])))
     return out
 
 
-def resample(t: np.ndarray, o, h, l, c, tf_ms: int) -> dict:
+def resample(t: np.ndarray, o, h, l, c, tf_ms: int, v=None, with_atr: bool = True) -> dict:
     """Complete timeframe bars from 1m bars (every minute present), with Wilder ATR14 and ATR14 / close.
-    Keys: key (bar open // tf_ms), o, h, l, c, atr, share (NaN until 14 true ranges)."""
+    Keys: key (bar open // tf_ms), o, h, l, c, atr, share (NaN until 14 true ranges); with the 1m volume ``v`` also
+    ``v`` (the bar's summed volume, a missing 1m volume counted as 0). ``with_atr`` False: atr and share all NaN
+    (the value area needs no ATR: its bars are read for their range and volume only)."""
     if len(t) == 0:
         return {"key": np.array([], np.int64)}
     g = t // tf_ms
@@ -208,12 +244,13 @@ def resample(t: np.ndarray, o, h, l, c, tf_ms: int) -> dict:
     bh = np.maximum.reduceat(h, start)
     bl = np.minimum.reduceat(l, start)
     bc = c[ends]
+    bv = None if v is None else np.add.reduceat(np.nan_to_num(np.asarray(v, float), nan=0.0), start)[full]
     keys, bo, bh, bl, bc = keys[full], bo[full], bh[full], bl[full], bc[full]
     n = len(keys)
     atr = np.full(n, np.nan)
     trs: list = []
     a = None
-    for i in range(n):
+    for i in range(n if with_atr else 0):
         tr = bh[i] - bl[i]
         if i and keys[i - 1] == keys[i] - 1:
             tr = max(tr, abs(bh[i] - bc[i - 1]), abs(bl[i] - bc[i - 1]))
@@ -227,7 +264,10 @@ def resample(t: np.ndarray, o, h, l, c, tf_ms: int) -> dict:
             atr[i] = a
     with np.errstate(divide="ignore", invalid="ignore"):
         share = np.where(bc > 0, atr / bc, np.nan)
-    return {"key": keys, "o": bo, "h": bh, "l": bl, "c": bc, "atr": atr, "share": share}
+    out = {"key": keys, "o": bo, "h": bh, "l": bl, "c": bc, "atr": atr, "share": share}
+    if bv is not None:
+        out["v"] = bv
+    return out
 
 
 def _colour(o: float, c: float, h: float, l: float) -> int:
@@ -481,6 +521,97 @@ def stage_buckets(d: dict, side: int) -> dict:
             "trend_align": trend_align_bucket(ctx, side)}
 
 
+# ---------------------------------------------------------------- 매물대: the price level ahead, the value area
+def _sr_of(ctx: dict) -> dict:
+    """The signal side's S/R marks recorded with the signal ({} when none or recorded with an error)."""
+    sr = (ctx or {}).get("sr")
+    return sr if isinstance(sr, dict) and "error" not in sr else {}
+
+
+def sr_ahead_bucket(ctx: dict) -> str:
+    """The kind group of the nearest price level in the trade's direction (``SR_GROUP_OF_KIND``) or 'unknown'."""
+    k = _num(_sr_of(ctx).get("room_kind"))
+    if k is None or k != int(k):
+        return "unknown"
+    return SR_GROUP_OF_KIND.get(int(k), "unknown")
+
+
+def sr_room_bucket(ctx: dict) -> str:
+    """바로 앞 / 가까움 / 보통 / 멂 of the ATR14 distance to that level (``ROOM_EDGES``) or 'unknown'."""
+    x = _num(_sr_of(ctx).get("room"))
+    if x is None or x < 0:
+        return "unknown"
+    return _cut(round(x, 12), ROOM_EDGES, BUCKETS["sr_room"])
+
+
+def value_area(h, l, c, v, bins: int = VP_BINS, share: float = VP_SHARE) -> Optional[tuple]:
+    """(POC, VAH, VAL) of the bars given (research/entry_study/sr.py L5 for one window, the same rules): ``bins``
+    equal price bins over [min low, max high]; each bar's volume goes to the bin of its typical price (h + l + c) / 3;
+    POC = the centre of the fullest bin (ties: the lowest); the value area starts at the POC bin and adds the
+    adjacent bin with more volume (a tie: the upper one; an exhausted side is skipped) until it holds ``share`` of the
+    volume; VAH / VAL = its outer edges. None when the range is zero or there is no volume (NaN volume = 0)."""
+    h, l, c = (np.asarray(x, float) for x in (h, l, c))
+    v = np.nan_to_num(np.asarray(v, float), nan=0.0)
+    if not len(h):
+        return None
+    lo, hi = float(np.min(l)), float(np.max(h))
+    width = (hi - lo) / bins
+    if not (math.isfinite(width) and width > 0):
+        return None
+    b = np.floor(((h + l + c) / 3.0 - lo) / width)
+    b = np.clip(np.nan_to_num(b, nan=0.0), 0, bins - 1).astype(np.int64)
+    hist = np.bincount(b, weights=v, minlength=bins)
+    total = float(hist.sum())
+    if not total > 0:
+        return None
+    poc = int(np.argmax(hist))
+    lo_b = hi_b = poc
+    acc = float(hist[poc])
+    target = share * total * (1.0 - 1e-12)
+    while acc < target:
+        up = float(hist[hi_b + 1]) if hi_b < bins - 1 else -1.0
+        dn = float(hist[lo_b - 1]) if lo_b > 0 else -1.0
+        if up >= dn and hi_b < bins - 1:
+            hi_b += 1
+            acc += up
+        elif lo_b > 0:
+            lo_b -= 1
+            acc += dn
+        else:
+            break
+    return lo + (poc + 0.5) * width, lo + (hi_b + 1) * width, lo + lo_b * width
+
+
+def va_pos_bucket(close: float, atr: float, va: Optional[tuple]) -> str:
+    """최다 가격 근처 (|close - POC| <= POC_NEAR_ATR x ATR14), else 매물대 위 (close > VAH) / 매물대 아래 (close < VAL) /
+    70% 구간 안; 'unknown' without a value area or an ATR14."""
+    if va is None or not (math.isfinite(atr) and atr > 0 and math.isfinite(close)):
+        return "unknown"
+    poc, vah, val = va
+    if abs(close - poc) <= POC_NEAR_ATR * atr + 1e-12:
+        return "최다 가격 근처"
+    if close > vah:
+        return "매물대 위"
+    if close < val:
+        return "매물대 아래"
+    return "70% 구간 안"
+
+
+def va_at(b: dict, i: int) -> Optional[tuple]:
+    """The value area of the ``VP_BARS`` timeframe bars of ``b`` (``resample`` with volume) ending at and including the
+    signal bar ``i``: only bars up to the signal bar, and only when all of them are complete and consecutive."""
+    if "v" not in b or i < VP_BARS - 1 or int(b["key"][i]) - int(b["key"][i - VP_BARS + 1]) != VP_BARS - 1:
+        return None
+    s = slice(i - VP_BARS + 1, i + 1)
+    return value_area(b["h"][s], b["l"][s], b["c"][s], b["v"][s])
+
+
+def sr_buckets(d: dict) -> dict:
+    """sr_ahead and sr_room of a trade (its recorded marks); va_pos needs the bars (``features``)."""
+    ctx = _ctx_of(d)
+    return {"sr_ahead": sr_ahead_bucket(ctx), "sr_room": sr_room_bucket(ctx)}
+
+
 # ---------------------------------------------------------------- per-trade features
 def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strategy: Optional[str] = None,
              liq_path: Optional[str] = None, flow_path: Optional[str] = None,
@@ -494,16 +625,23 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
     raw = [x for x in _closed(paper_ro, since_ms, now_ms, kinds=tuple(kinds), tfs=timeframes)
            if strategy is None or x[2] == strategy]
     rows: list = []
-    cov = {"trades": len(raw), "candle": 0, "volatility": 0, "strength": 0, "liq": 0, "trend_stage": 0,
-           "funding_source": {"settled": 0, "premium_est": 0, "none": 0}}
+    cov = {"trades": len(raw), "candle": 0, "volatility": 0, "strength": 0, "liq": 0, "trend_stage": 0, "sr": 0,
+           "va": 0, "funding_source": {"settled": 0, "premium_est": 0, "none": 0}}
     if not raw:
         return {"window": {"from": since_ms, "to": now_ms}, "rows": rows, "coverage": cov}
     syms = {str(d.get("symbol")) for *_x, d in raw}
     first = min(int(_f(d.get("signal_ts"), _f(d.get("entry_time")))) for *_x, d in raw)
     last = max(int(_f(d.get("entry_time"))) for *_x, d in raw)
     lo, hi = first - VOL_LOOKBACK_MS - 4 * HOUR_MS * (ATR_N + 2), last + MIN
-    bars = load_live_bars(paper_ro, syms, lo, hi)
+    # the value area wants VP_BARS bars of the longest timeframe before the first signal; the other dimensions keep
+    # reading the bars from ``lo`` exactly as before (Wilder's ATR depends on where its history starts)
+    tf_max = max((TF_MS.get(tf or d.get("timeframe")) or 0) for _a, _k, _s, tf, d in raw)
+    lo_vp = min(lo, first - (VP_BARS + 1) * tf_max)
+    # a paper3.db whose live_bars cannot give the volume still gives the other dimensions (va_pos is then 'unknown')
+    bars = load_live_bars(paper_ro, syms, lo_vp, hi, volume=True) or load_live_bars(paper_ro, syms, lo_vp, hi)
     tfb: dict = {}
+    vpb: dict = {}
+    vas: dict = {}
     liq = load_liq(liq_path, syms, first - VOL_LOOKBACK_MS, hi)
     fund = load_funding(market_path, flow_path, syms, first - DAY_MS, hi)
     for _aid, kind, strat, tf, d in raw:
@@ -517,7 +655,11 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
         tf_ms = TF_MS.get(tf)
         if tf_ms and sym in bars:
             if (sym, tf) not in tfb:
-                tfb[(sym, tf)] = resample(*bars[sym], tf_ms)
+                t1, o1, h1, l1, c1, *vol = bars[sym]
+                v1 = vol[0] if vol else None
+                j = int(np.searchsorted(t1, lo))
+                tfb[(sym, tf)] = resample(t1[j:], o1[j:], h1[j:], l1[j:], c1[j:], tf_ms)
+                vpb[(sym, tf)] = resample(t1, o1, h1, l1, c1, tf_ms, v=v1, with_atr=False)
             bb = tfb[(sym, tf)]
             close_ms = int(_f(d.get("signal_ts"), entry - 1)) + 1
             key = close_ms // tf_ms - 1
@@ -527,6 +669,13 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
                 cov["candle"] += 1
                 b["volatility"] = volatility(bb, i, close_ms, tf_ms)
                 cov["volatility"] += b["volatility"] != "unknown"
+                # the value area of the 200 bars ending at the signal bar (nothing after it), once per bar
+                if (sym, tf, key) not in vas:
+                    vb = vpb[(sym, tf)]
+                    iv = int(np.searchsorted(vb["key"], key))
+                    vas[(sym, tf, key)] = va_at(vb, iv) if iv < len(vb["key"]) and vb["key"][iv] == key else None
+                b["va_pos"] = va_pos_bucket(float(bb["c"][i]), float(bb["atr"][i]), vas[(sym, tf, key)])
+                cov["va"] += b["va_pos"] != "unknown"
         b["strength"] = strength_bucket(d, strat, tf)
         cov["strength"] += b["strength"] != "unknown"
         b["liq"] = liq_bucket(liq, sym, entry, side)
@@ -538,6 +687,8 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
         b["weekday"] = weekday_bucket(entry)
         b.update(stage_buckets(d, side))
         cov["trend_stage"] += b["trend_stage"] != "unknown"
+        b.update(sr_buckets(d))
+        cov["sr"] += b["sr_ahead"] != "unknown"
         rows.append({"kind": kind, "strategy": strat, "timeframe": tf, "symbol": sym, "side": side, "pnl": pnl,
                      "roe": _f(d.get("roe")), "eq": pnl / before if before > 0 else None, "b": b})
     if liq is None:
@@ -931,4 +1082,253 @@ def group_brief(rows: list, families: Optional[dict] = None, flip_rows: Optional
         left.append("families.stage")
     if left:
         out["left_out"] = left
+    return out
+
+
+
+# ---------------------------------------------------------------- 매물대 (dashboard 분석 › 매물대, owners' request 2026-10-06)
+# A group's three 매물대 dimensions next to ITS coin flips (the 36 and DeepSeek: the 15m-4h flips; the reel: its three
+# 5m flips), n / win rate / ROE only (no money for any group here), and the 5-year entry study A's 매물대 rows read from
+# the committed result files (read only). Descriptive: nothing here is a rule or a verdict.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+STUDY_OUT = os.path.join(ROOT, "research", "entry_study", "out_binance")
+STUDY_DESC = os.path.join(STUDY_OUT, "sr_descriptive.json")
+STUDY_CAND = os.path.join(STUDY_OUT, "sr_candidates.json")
+# the pre-registered run itself (PREREG_ENTRY.md fixes its data; RESULTS_ENTRY_A.md reports it): out_binance is the
+# Binance futures re-run of the same code ("NOT the pre-registered result", its own sr_candidates.json says)
+STUDY_OFFICIAL_CAND = os.path.join(ROOT, "research", "entry_study", "out", "sr_candidates.json")
+STUDY_DOC = "research/entry_study/RESULTS_ENTRY_A.md"
+STUDY_RECHECK_DOC = "research/binance_data/RESULTS_BINANCE.md"
+VP_FAMILY = 5                                     # sr.py FAMILY_NAME[5] = volume_profile (room_type)
+STUDY_PERIODS = (("1", "① 2021-08 ~ 2024-06"), ("2", "② 2024-07 ~ 2026-09"), ("3", "③ 2020-01 ~ 2021-07"))
+VP_LIST_MAX = 10
+VP_READ = ("앞 가격대 = 거래 방향으로 가장 가까운 가격대(신호 때 기록한 지지·저항 표시): 매물대(최근 200봉에서 거래가 가장 "
+           "많았던 가격과 거래량 70% 구간의 위·아래 끝), 스윙 고저, 전일·전주 고저, 라운드 넘버, 상위 봉 스윙. 앞 가격대까지 = "
+           "그 가격대까지 거리를 ATR(최근 14봉 평균 움직임)로 잰 것. 매물대 안·밖 = 신호 봉 종가가 같은 봉 200개의 매물대 "
+           "위·안·아래(최다 가격에서 0.25 ATR 안이면 최다 가격 근처): 가격 위치라 롱과 숏에서 뜻이 달라 롱·숏을 나눠서도 "
+           "봅니다. 칸: 거래 수, 승률, 평균 ROE. 동전 봇 = 같은 칸의 무작위 진입(비교 기준)")
+_STUDY_CACHE: dict = {}
+
+
+def _load_study(path: str):
+    """A committed study file (JSON), cached per modification time; OSError / ValueError when missing or broken."""
+    mt = os.path.getmtime(path)
+    hit = _STUDY_CACHE.get(path)
+    if hit and hit[0] == mt:
+        return hit[1]
+    with open(path, encoding="utf-8") as fh:
+        obj = json.load(fh)
+    _STUDY_CACHE[path] = (mt, obj)
+    return obj
+
+
+def _vp_row(x: Optional[dict]) -> Optional[dict]:
+    """The 매물대 line (room_type 5) of one pooled block of sr_descriptive.json against that block's whole mean."""
+    x = x if isinstance(x, dict) else {}
+    vp = next((r for r in x.get("room_type") or [] if isinstance(r, dict) and r.get("value") == VP_FAMILY), None)
+    allm, n_all = _num(x.get("mean_roe")), _num(x.get("n_trades"))
+    if vp is None or allm is None or n_all is None or _num(vp.get("mean_roe")) is None:
+        return None
+    return {"n": int(_f(vp.get("n"))), "share": round(_f(vp.get("share")), 4), "roe": round(_f(vp.get("mean_roe")), 4),
+            "se": round(_f(vp.get("se_roe")), 4), "all_n": int(n_all), "all_roe": round(allm, 4),
+            "diff": round(_f(vp.get("mean_roe")) - allm, 4)}
+
+
+def _pct_ko(x: float) -> str:
+    """-0.0514 -> '−5.1%' (the dashboard's minus sign)."""
+    return f"{x * 100:.1f}%".replace("-", "−")
+
+
+def _same_sign(periods: list, key: str) -> bool:
+    ds = [p[key]["diff"] for p in periods if p.get(key)]
+    return len(ds) == len(STUDY_PERIODS) and (all(d > 0 for d in ds) or all(d < 0 for d in ds))
+
+
+def _cand_summary(path: str) -> Optional[dict]:
+    """The counts of one sr_candidates.json (None when missing or broken): tests, candidates, how many were
+    market-wide (the random entries showed the same effect), P2 candidates, and the range of the kept side's mean ROE
+    over the three periods (P1 keeps group 0 = no level ahead before the first lock; P2 group 1 = a level behind
+    before the stop)."""
+    try:
+        cand = _load_study(path)
+        cs = [c for c in cand.get("candidates") or [] if isinstance(c, dict)]
+        kept = [_f(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) for c in cs for p, _l in STUDY_PERIODS
+                if _num(c.get(f"mean{int(c.get('test') == 'P2')}_p{p}")) is not None]
+        return {"tests": int(_f(cand.get("trials"))), "candidates": len(cs),
+                "market_wide": sum(1 for c in cs if c.get("random_same_effect_p1")),
+                "p2_candidates": sum(1 for c in cs if c.get("test") == "P2"),
+                "kept_side_roe_min": round(min(kept), 4) if kept else None,
+                "kept_side_roe_max": round(max(kept), 4) if kept else None}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def _no_edge(c: Optional[dict]) -> bool:
+    """Every candidate market-wide and every kept side still a loss (or no candidate at all)."""
+    return bool(c) and c["market_wide"] == c["candidates"] and (
+        not c["candidates"] or (c["kept_side_roe_max"] is not None and c["kept_side_roe_max"] < 0))
+
+
+def vp_study_5y(tfs: tuple = ("15m", "30m", "1h", "4h"), desc_path: str = STUDY_DESC,
+                cand_path: str = STUDY_CAND, official_path: str = STUDY_OFFICIAL_CAND) -> dict:
+    """The 5-year entry study A on the 매물대 (research/entry_study, Binance futures re-run in out_binance; read only).
+    Per timeframe and period: the share of the trades whose nearest level ahead was a 매물대 level (POC / VAH / VAL),
+    their mean net ROE against all the timeframe's trades', for the 36 pooled ('strategies') and the random entries
+    ('random'). ``same_sign_3`` = that difference had the same sign in all three periods. ``candidates`` = the
+    re-run's candidates of the pre-registered tests (any level, not only 매물대) and how many showed the same effect on
+    random entries; ``official`` = the same counts of the pre-registered run itself (research/entry_study/out, the
+    numbers RESULTS_ENTRY_A.md reports); ``same_conclusion`` = in both every candidate was market-wide and its kept
+    side still lost. The plain lines are built from these counts; the descriptive rows were never tested (PREREG
+    section 2)."""
+    try:
+        desc = _load_study(desc_path)
+    except (OSError, ValueError):
+        return {"available": False, "note": "5년 진입 연구 결과 파일이 없음 (research/entry_study/out_binance)"}
+    rows = []
+    for tf in tfs:
+        per = (desc.get("by_tf_period") or {}).get(tf) if isinstance(desc, dict) else None
+        if not isinstance(per, dict):
+            continue
+        periods = []
+        for p, label in STUDY_PERIODS:
+            e = per.get(p) or {}
+            periods.append({"period": int(p), "label": label, "strategies": _vp_row(e.get("strategies_pooled")),
+                            "random": _vp_row(e.get("random_null"))})
+        rows.append({"tf": tf, "periods": periods, "same_sign_3": _same_sign(periods, "strategies"),
+                     "random_same_sign_3": _same_sign(periods, "random")})
+    out = {"available": bool(rows), "tfs": [r["tf"] for r in rows], "rows": rows,
+           "source": {"numbers": "research/entry_study/out_binance/sr_descriptive.json", "doc": STUDY_DOC,
+                      "recheck_doc": STUDY_RECHECK_DOC}}
+    if not rows:
+        out["note"] = "이 봉의 5년 연구 줄이 없음"
+        return out
+    k = sum(r["same_sign_3"] for r in rows)
+    kr = sum(r["random_same_sign_3"] for r in rows)
+    out["same_sign_3"], out["random_same_sign_3"] = k, kr
+    out["headline_ko"] = (f"매물대가 앞에 있던 거래의 평균 ROE가 그 봉 전체 평균보다 세 기간 모두 같은 쪽(모두 덜 나쁨 또는 "
+                          f"모두 더 나쁨)이었던 봉: 매매법 {k}/{len(rows)}, 무작위 진입 {kr}/{len(rows)}")
+    out["candidates"] = _cand_summary(cand_path)
+    out["official"] = _cand_summary(official_path)
+    c, o = out["candidates"], out["official"]
+    # the numbers in the rows below are the re-run's; the pre-registered run's own counts are named next to them, so
+    # the line never contradicts RESULTS_ENTRY_A.md (290 tests, 2 candidates there)
+    out["same_conclusion"] = _no_edge(c) and _no_edge(o)
+    if c and c["candidates"]:
+        all_mw = c["market_wide"] == c["candidates"]
+        loss = c["kept_side_roe_max"] is not None and c["kept_side_roe_max"] < 0
+        pre = (f"사전 등록한 원래 결과(검정 {o['tests']}개)에서는 세 기간을 통과한 후보 {o['candidates']}개 중 "
+               f"{o['market_wide']}개가 무작위 진입에서도 같은 효과였습니다. " if o else "")
+        out["verdict_ko"] = (
+            ("5년 진입 연구 A에서 매물대를 포함한 지지·저항으로 매매법 고유의 효과는 찾지 못했습니다. "
+             if _no_edge(c) and (o is None or _no_edge(o)) else
+             "5년 진입 연구 A의 지지·저항(매물대 포함) 후보입니다. 후보는 규칙이 아니라 나중 거래로 확인할 가설입니다. ")
+            + pre
+            + f"바이낸스 선물 자료로 다시 돌린 결과(검정 {c['tests']}개, 아래 표의 숫자)에서는 후보 {c['candidates']}개 중 "
+              f"{c['market_wide']}개가 무작위 진입에서도 같은 효과{'(모두 시장 전체의 성질)' if all_mw else ''}였"
+            + (f"고, 걸러서 남긴 쪽 거래도 세 기간 평균 ROE {_pct_ko(c['kept_side_roe_min'])} ~ "
+               f"{_pct_ko(c['kept_side_roe_max'])}로 손실입니다" if loss else "습니다")
+            + f". 손절 뒤 지지선(P2) 후보는 {c['p2_candidates']}개"
+            + (f"(원래 결과 {o['p2_candidates']}개)" if o else "")
+            + ". 아래 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다.")
+    elif c:
+        out["verdict_ko"] = (f"5년 진입 연구 A를 바이낸스 선물 자료로 다시 돌린 결과(검정 {c['tests']}개, 아래 표의 숫자)에서 세 "
+                             "기간을 통과한 후보는 0개입니다"
+                             + (f"(사전 등록한 원래 결과: 검정 {o['tests']}개, 후보 {o['candidates']}개)" if o else "")
+                             + ". 아래 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다.")
+    else:
+        out["verdict_ko"] = ("5년 진입 연구 A의 매물대 줄은 설명용 표로, 검정·판정에 쓰지 않았습니다(후보 파일을 읽지 못함: "
+                             f"{STUDY_DOC} 참고).")
+    return out
+
+
+def _vp_tables(rows: list, min_n: int) -> dict:
+    """The three 매물대 dimensions of ``rows`` (n, wr, roe), the distance split of the trades with a 매물대 ahead, and
+    va_pos split by side (a price position means different things for a long and a short)."""
+    under = [r for r in rows if r["b"].get("sr_ahead") == "매물대"]
+    return {"buckets": table(rows, min_n, VP_DIMS, eq=False),
+            "under_vp": table(under, min_n, ("sr_room",), eq=False)["sr_room"],
+            "va_long": table([r for r in rows if r["side"] > 0], min_n, ("va_pos",), eq=False)["va_pos"],
+            "va_short": table([r for r in rows if r["side"] < 0], min_n, ("va_pos",), eq=False)["va_pos"]}
+
+
+def _right_under(rows: list) -> list:
+    """The trades entered with a 매물대 level right ahead (sr_ahead 매물대, sr_room 바로 앞: under 0.5 ATR)."""
+    return [r for r in rows if r["b"].get("sr_ahead") == "매물대" and r["b"].get("sr_room") == "바로 앞"]
+
+
+def vp_from(rows: list, flip_rows: list, group: str = "core", min_n: int = SMALL_N,
+            names_ko: Optional[dict] = None) -> dict:
+    """The 매물대 view of a group's ``features`` rows next to its coin flips' rows (no money: n, wr, roe)."""
+    g = group if group in GROUPS else "core"
+    out: dict = {"group": g, "group_label": GROUP_LABEL_KO[g], "min_n": min_n, "dims": list(VP_DIMS),
+                 "bucket_order": {d: list(BUCKETS[d]) for d in VP_DIMS}, "trades": len(rows),
+                 "flip_trades": len(flip_rows),
+                 "coverage": {"sr": sum(1 for r in rows if r["b"].get("sr_ahead") != "unknown"),
+                              "va": sum(1 for r in rows if r["b"].get("va_pos") != "unknown"),
+                              "flip_sr": sum(1 for r in flip_rows if r["b"].get("sr_ahead") != "unknown"),
+                              "flip_va": sum(1 for r in flip_rows if r["b"].get("va_pos") != "unknown")}}
+    if g == "ds200":
+        out["no_money"] = True
+    if not rows and not flip_rows:
+        out["note"] = "아직 끝난 거래가 없음"
+        return out
+    out["all"] = _bare(cell(rows, min_n)) if rows else {"n": 0}
+    out["flip_all"] = _bare(cell(flip_rows, min_n)) if flip_rows else {"n": 0}
+    mine = _vp_tables(rows, min_n)
+    out["mine"], out["coin_flips"] = mine, _vp_tables(flip_rows, min_n)
+    # per strategy: its trades entered with a 매물대 right ahead (under 0.5 ATR) against its own average
+    per: dict = {}
+    for r in rows:
+        per.setdefault(r["strategy"], []).append(r)
+    lst = []
+    for s, rs in per.items():
+        hit = _right_under(rs)
+        if hit:
+            lst.append({"strategy": s, **({"name_ko": names_ko[s]} if names_ko and s in names_ko else {}),
+                        **_bare(cell(hit, min_n)), "share": round(len(hit) / len(rs), 3), "strategy_n": len(rs),
+                        "strategy_roe": round(sum(r["roe"] for r in rs) / len(rs), 4)})
+    lst.sort(key=lambda x: (-x["n"], x["roe"], x["strategy"]))
+    mine_ru, flip_ru = _right_under(rows), _right_under(flip_rows)
+    out["right_under"] = {"rows": lst[:VP_LIST_MAX], "total": len(lst),
+                          "all": _bare(cell(mine_ru, min_n)) if mine_ru else {"n": 0},
+                          "coin_flips": _bare(cell(flip_ru, min_n)) if flip_ru else {"n": 0}}
+    ex = big = 0
+    for tab in (mine["buckets"], {"u": mine["under_vp"], "l": mine["va_long"], "s": mine["va_short"]}):
+        e, b = _examined(tab)
+        ex, big = ex + e, big + b
+    out["multiple_comparisons"] = _multiple(ex, big)
+    out["how_to_read"] = VP_READ
+    out["note"] = NOTE
+    return out
+
+
+def vp_dash_view(paper_ro: Optional[sqlite3.Connection], now_ms: int, group: str = "core", since_ms: int = 0,
+                 names_ko: Optional[dict] = None, desc_path: str = STUDY_DESC, cand_path: str = STUDY_CAND) -> dict:
+    """The dashboard's 매물대 view of one v4 group (``GROUPS``): ``vp_from`` on the group's and its coin flips'
+    ``features`` (the 36 and DeepSeek: the 15m-4h flips; the reel: its three 5m flips), plus ``study_5y`` (the 5-year
+    entry study A's 매물대 rows of the group's timeframes)."""
+    from .digest import TFS
+    g = group if group in GROUPS else "core"
+    kinds, tfs = group_scope(g)
+    study = vp_study_5y(tuple(tfs or TFS), desc_path, cand_path)
+    if paper_ro is None:
+        return {"error": "paper3.db 없음", "group": g, "study_5y": study}
+    if g != "core" and names_ko is None:
+        try:
+            from ..groups import label_ko
+            names_ko = {s: label_ko(s) or s for (s,) in paper_ro.execute(
+                f"SELECT DISTINCT strategy FROM accounts WHERE kind IN ({','.join('?' * len(kinds))})", kinds)}
+        except (ImportError, sqlite3.Error):
+            names_ko = None
+    try:
+        feat = features(paper_ro, now_ms, since_ms, kinds=kinds, timeframes=tfs)
+        ff = features(paper_ro, now_ms, since_ms, kinds=("random",), timeframes=tfs)
+    except sqlite3.Error as exc:
+        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "group": g, "study_5y": study}
+    out = vp_from(feat["rows"], ff["rows"], g, names_ko=names_ko)
+    out["generated_ms"] = now_ms
+    out["window"] = feat["window"]
+    if feat["coverage"].get("bars_note"):
+        out["coverage"]["bars_note"] = feat["coverage"]["bars_note"]
+    out["study_5y"] = study
     return out
