@@ -588,11 +588,20 @@ def assemble(cells: list, head: dict, share: dict, live_q: dict, rates: dict, se
         c["test"] = _round_test(c["test"])
     withrule = [c for c in cells if c.get("switch")]
     base_lose_ab = sum(1 for c in cells if all((c["total"][pk][2] or 0) <= 0 for pk in ("a", "b")))
+    usd_up = lambda row: row is not None and (row[3] or 0) > 0  # noqa: E731  (the dollar P&L of the 30-day accounts)
+    tested = [c for c in cells if c["test"].get("status") == "tested"]
     head = {**head, "with_rule": len(withrule), "stops_losing": sum(1 for c in withrule if c["stops_losing"]),
             "flip_stops_losing": sum(1 for c in withrule if c["flip_stops_losing"]),
             "survivors_stop_losing": sum(1 for c in withrule if c["stops_losing"] and c["test"]["survivor"]),
             "base_losing_both": base_lose_ab,
-            "base_positive_both": sum(1 for c in cells if all((c["total"][pk][2] or 0) > 0 for pk in ("a", "b")))}
+            "base_positive_both": sum(1 for c in cells if all((c["total"][pk][2] or 0) > 0 for pk in ("a", "b"))),
+            # the same counts in dollars (descriptive; the pre-registered "손실이 멈췄나" is the per-trade mean above):
+            # a mean net ROE above 0 can still lose dollars when the bigger trades lose
+            "stops_losing_usd": sum(1 for c in withrule if all(usd_up(c["switch"][pk]["switch"]) for pk in ("a", "b"))),
+            "flip_stops_losing_usd": sum(1 for c in withrule
+                                         if all(usd_up(c["switch"][pk]["flip_switch"]) for pk in ("a", "b"))),
+            "base_positive_both_usd": sum(1 for c in cells if all(usd_up(c["total"][pk]) for pk in ("a", "b"))),
+            "p05": sum(1 for c in tested if (c["test"].get("p") if c["test"].get("p") is not None else 1.0) < 0.05)}
     return {
         "version": VERSION, "label": "설명용, 판정 아님", "prereg": "docs/regime5y.md",
         "generated_at": int(time.time() * 1000), "secs": round(secs, 1), "config": config_key(),

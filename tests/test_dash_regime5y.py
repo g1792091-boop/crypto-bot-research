@@ -61,6 +61,25 @@ def test_file_shape_and_counts(doc):
             assert n >= G.MIN_PICK and m >= c["pick_mean"] - 1e-4          # both rounded to 4 places in the file
 
 
+def test_head_counts_match_the_cells_in_trades_and_in_dollars(doc):
+    """The headline counts come from the cells: the per-trade mean ones (pre-registered) and the dollar ones next to
+    them (a mean net ROE above 0 can still lose dollars, e.g. N15_KC_AO 30m in B)."""
+    cells, hd = doc["cells"], doc["head"]
+    sw = [c for c in cells if c.get("switch")]
+    up_r = lambda row: (row[2] or 0) > 0          # noqa: E731
+    up_usd = lambda row: (row[3] or 0) > 0        # noqa: E731
+    assert hd["base_positive_both"] == sum(1 for c in cells if all(up_r(c["total"][k]) for k in "ab"))
+    assert hd["base_positive_both_usd"] == sum(1 for c in cells if all(up_usd(c["total"][k]) for k in "ab"))
+    assert hd["stops_losing"] == sum(1 for c in sw if all(up_r(c["switch"][k]["switch"]) for k in "ab"))
+    assert hd["stops_losing_usd"] == sum(1 for c in sw if all(up_usd(c["switch"][k]["switch"]) for k in "ab"))
+    assert hd["flip_stops_losing_usd"] == sum(1 for c in sw if all(up_usd(c["switch"][k]["flip_switch"]) for k in "ab"))
+    assert hd["p05"] == sum(1 for c in cells if c["test"]["status"] == "tested" and c["test"]["p"] < 0.05)
+    js = _read("analysis-regime.js")
+    for k in ("base_positive_both_usd", "stops_losing_usd", "flip_stops_losing_usd", "hd.p05"):
+        assert k in js
+    assert "144칸을 같이" not in js                 # BH runs over the tested cells, named from the file
+
+
 def test_file_has_no_nan_and_q_values_are_bh(doc):
     s = json.dumps(doc)
     assert "NaN" not in s and "Infinity" not in s

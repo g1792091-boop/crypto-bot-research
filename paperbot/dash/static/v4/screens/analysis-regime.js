@@ -37,7 +37,7 @@ const WORD_TITLE = {
   survivor: "동전 봇보다 장세 차이가 뚜렷했고, 여러 번 시험한 것을 보정한 뒤에도 남았고, 확인 A와 B 각각에서도 같은 쪽이었습니다",
   nodiff: "확인 기간에 장세 차이가 동전 봇보다 뚜렷하다고 볼 수 없었습니다",
   small: "확인 기간에 고른 장세 안팎 거래가 각각 20건이 안 됐습니다",
-  norule: "고르는 기간에 30건 넘는 장세 중 평균보다 나은 장세가 없었거나, 네 장세가 다 골라졌습니다 (그러면 스위치가 아님)",
+  norule: "고르는 기간에 거래가 30건 이상인 장세 중 평균보다 나은 장세가 없었거나, 네 장세가 다 골라졌습니다 (그러면 스위치가 아님)",
   notrade: "5년 동안 이 봉에서 거래가 없었습니다",
 };
 
@@ -49,7 +49,7 @@ export function headline(head, med) {
   const spread = vals.length ? Math.max(...vals) - Math.min(...vals) : null;
   const lines = [];
   if (!hd.survivors && !hd.stops_losing) {
-    lines.push("5년 자료에서는 '맞지 않는 장에서 돌아서 잃는다'는 설명이 맞지 않았습니다.");
+    lines.push("5년 자료에서는 '맞지 않는 장에서 돌아서 잃는다'는 설명이 뒷받침되지 않았습니다. 맞는 장에서만 켜는 스위치로도 손실이 멈추지 않았습니다.");
   } else if (hd.survivors) {
     lines.push(`${fmt.int(hd.survivors)}칸에서 장세 차이가 동전 봇보다 뚜렷하게 남았습니다. 그래도 설명용이고, 잠긴 규칙은 그대로입니다.`);
   } else {
@@ -98,7 +98,7 @@ function detail(c, doc) {
       h("p", {class: "rg-say"}, "고른 장세 안 − 밖, 거래당 평균 차이: ",
         ["a", "b"].map((k, i) => [i ? " · " : "", `${pr(k).ko.split(" ")[1]} 매매법 ${pp((per[k] || {}).s)}, 동전 봇 ${pp((per[k] || {}).f)}`])),
       h("p", {class: ["rg-verdict", t.survivor ? "on" : ""]}, t.survivor
-        ? "남음: 동전 봇보다 뚜렷했고, 144칸을 같이 시험한 것을 보정한 뒤에도 남았고, 두 기간 각각에서 같은 쪽이었습니다."
+        ? `남음: 동전 봇보다 뚜렷했고, ${fmt.int((doc.head || {}).tested || 0)}칸을 같이 시험한 것을 보정한 뒤에도 남았고, 두 기간 각각에서 같은 쪽이었습니다.`
         : t.status === "tested" ? "차이 없음: 이 정도 차이는 동전 봇에도 생기거나, 여러 번 시험하면 우연으로도 나오는 크기입니다."
           : WORD_TITLE[cellWord(c)]),
       ui.assume("closed", ASSUME_5Y));
@@ -120,7 +120,7 @@ function cellRow(c, open, toggle, doc) {
     ui.acctLabel({kind: "strategy", strategy: c.s, timeframe: c.tf}),
     h("span", {class: "rg-mid"}, rChips(c.rule)),
     h("span", {class: "rg-end"}, ui.pill(word, cls, WORD_TITLE[w]),
-      h("small", {class: ["num", fmt.tone(tot[2])]}, tot[0] ? `5년 평균 ${pc(tot[2])}` : "")));
+      h("small", {class: ["num", fmt.tone(tot[2])]}, tot[0] ? `5년 평균 ${pc(tot[2])} · ${fmt.int(tot[0])}건` : "")));
   return h("div", {class: "rg-item", role: "listitem"}, btn, open ? detail(c, doc) : null);
 }
 
@@ -146,6 +146,11 @@ function listCard(doc) {
     pg.el);
 }
 
+/** " · 달러 손익(30일 계좌 합)으로는 n칸": a per-trade mean above 0 can still lose dollars when the bigger trades lose. */
+function usdNote(n) {
+  return n == null ? "" : ` · 달러 손익(30일 계좌들의 합)으로 둘 다 플러스는 ${fmt.int(n)}칸`;
+}
+
 function headCard(doc) {
   const hd = doc.head || {}, med = regimeMedians(doc.cells);
   const lines = headline(hd, med);
@@ -153,14 +158,15 @@ function headCard(doc) {
     lines.map((l, i) => h(i ? "p" : "h2", {class: i ? "rg-say" : "rg-big"}, l)),
     h("div", {class: "rg-stats"},
       ui.stat("남은 칸", `${fmt.int(hd.survivors || 0)} / ${fmt.int(hd.tested || 0)}`, "동전 봇보다 뚜렷 · 보정 후 · 두 기간 모두"),
-      ui.stat("스위치 켜고 손실 멈춤", `${fmt.int(hd.stops_losing || 0)} / ${fmt.int(hd.with_rule || 0)}`, "확인 A·B 둘 다 거래당 평균 플러스"),
-      ui.stat("동전 봇 + 같은 스위치", `${fmt.int(hd.flip_stops_losing || 0)} / ${fmt.int(hd.with_rule || 0)}`, "참고: 아무 데나 들어가도 같은 스위치로"),
-      ui.stat("스위치 없이도 플러스", `${fmt.int(hd.base_positive_both || 0)} / ${fmt.int(hd.cells || 0)}`, "확인 A·B 둘 다")),
+      ui.stat("스위치 켜고 손실 멈춤", `${fmt.int(hd.stops_losing || 0)} / ${fmt.int(hd.with_rule || 0)}`, `확인 A·B 둘 다 거래당 평균 플러스${usdNote(hd.stops_losing_usd)}`),
+      ui.stat("동전 봇 + 같은 스위치", `${fmt.int(hd.flip_stops_losing || 0)} / ${fmt.int(hd.with_rule || 0)}`, `참고: 아무 데나 들어가도 같은 스위치로${usdNote(hd.flip_stops_losing_usd)}`),
+      ui.stat("스위치 없이도 플러스", `${fmt.int(hd.base_positive_both || 0)} / ${fmt.int(hd.cells || 0)}`, `확인 A·B 둘 다 거래당 평균 플러스${usdNote(hd.base_positive_both_usd)}`)),
+    hd.p05 != null ? h("p", {class: "an-note"}, `시험한 ${fmt.int(hd.tested || 0)}칸 중 한쪽 p < 0.05는 ${fmt.int(hd.p05)}칸입니다. 아무 차이가 없어도 우연만으로 약 ${fmt.num((hd.tested || 0) * 0.05, 1)}칸은 나오는 수라서, 여러 번 시험한 것을 보정(BH)하면 ${fmt.int(hd.bh_pass || 0)}칸이 남습니다.`) : null,
     h("h3", {class: "an-sub"}, "장세별 거래당 평균 순 ROE (칸들의 가운데 값)"),
     h("div", {class: "rg-meds"}, RK.map((k) => h("span", {class: ["rg-med", k]}, h("b", null, RKO[k]),
       h("span", {class: ["num", fmt.tone(med[k] && med[k].med)]}, med[k] ? pc(med[k].med) : "—"),
       h("small", {class: "muted"}, med[k] ? `${fmt.int(med[k].n)}칸` : "")))),
-    h("p", {class: "an-note"}, "ROE = 증거금 대비 손익 (수수료·펀딩·슬리피지 뺀 순). 가운데 값 = 그 장세에서 30건 넘게 거래한 칸들의 평균을 줄 세운 가운데."));
+    h("p", {class: "an-note"}, "ROE = 증거금 대비 손익 (수수료·펀딩·슬리피지 뺀 순). 가운데 값 = 그 장세에서 30건 이상 거래한 칸들의 평균을 줄 세운 가운데."));
 }
 
 function defsCard(doc) {
