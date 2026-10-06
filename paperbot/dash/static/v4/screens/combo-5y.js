@@ -162,6 +162,8 @@ function curveBox(d, t) {
     {values: t.curve || [], cls: "c5-l-combo", dot: true},
   ];
   const last = (a) => (a && a.length ? a[a.length - 1] : null);
+  // a small total keeps one decimal (−0.4%, never a rounded "0%" for a loss)
+  const pc = (x) => (x == null ? "—" : fmt.pct(x, Math.abs(x) < 0.1 ? 1 : 0));
   const chart = lineChart({series, band: band ? {lo: band.p10, hi: band.p90} : null,
     xlabels: [months[0], months[Math.floor(months.length / 2)], months[months.length - 1]], label: "조합의 5년 누적 수익률"});
   const flipOut = band && chart.dataset.omitted !== "0";
@@ -170,8 +172,8 @@ function curveBox(d, t) {
     h("p", {class: "c5-ctitle"}, h("b", null, t.units.map((u) => nm(d, u)).join(" + ")), ` · 5년 누적 (자기 자금 대비, 매달 다시 채운 합계)`),
     chart,
     h("div", {class: "c5-legend"},
-      h("span", null, h("i", {class: "sw combo"}), `조합 ${fmt.pct(last(t.curve), 0)}`),
-      h("span", null, h("i", {class: "sw mem"}), `구성 매매법 ${fmt.int(members.length)}개 (각자 ${members.map((m) => fmt.pct(last(m.v), 0)).join(" · ")})`),
+      h("span", null, h("i", {class: "sw combo"}), `조합 ${pc(last(t.curve))}`),
+      h("span", null, h("i", {class: "sw mem"}), `구성 매매법 ${fmt.int(members.length)}개 (각자 ${members.map((m) => pc(last(m.v))).join(" · ")})`),
       band ? h("span", null, flipOut ? null : h("i", {class: "sw flip"}),
         `동전 봇 ${fmt.int(t.k)}개 묶음: 가운데 ${fmt.pct(last(band.p50), 0)} (10~90% ${fmt.pct(last(band.p10), 0)} ~ ${fmt.pct(last(band.p90), 0)})`,
         flipOut ? " · 이 그림보다 훨씬 아래라 선은 생략" : " · 띠 = 10~90%", " · 참고") : null),
