@@ -1,6 +1,6 @@
 // Live sound engine v7 "영상 기계음" (owners 10/06: "기계소리랑 똑같이"): the machine sounds of the YouTube live stream the
 // owners pointed at, rebuilt by synthesis only (no recording is shipped or embedded). Measured from the owners' screen
-// recordings (scratchpad/sound7/analysis.md: 97 s of clean stream audio, music / speech / phone UI left out). Found:
+// recordings (scratchpad/sound7/census.json + compare7.json: 97 s of clean stream audio, music / speech / phone UI left out). Found:
 //   A  the trade notes (almost all of the stream, ~1.07 sounds a second): a plain TRIANGLE wave (partials 1, 3, 5, 7 at
 //      -19, -28, -34 dB, no even ones), ~9 ms rise, then a two-part fall (64 % with a 43 ms time constant, 36 % with
 //      240 ms: -11 dB at 100 ms, -20 dB at ~300 ms). Buys are the E-major notes E5 659.26 / G#5 830.61 / B5 987.77 / E6
@@ -28,7 +28,7 @@ export const ATK7 = 0.009;
 export const STEP7 = 0.08;               // two / four note runs: 80 ms apart
 export const DBL7 = 0.085;               // 띠띠: the same note twice, 85 ms apart (the stream's queued trades)
 export const UNIT7 = 0.26;               // a sell beep's peak per unit of loudness v; every level below is x this
-/** The stream's kinds (census of 97 s of clean stream audio, analysis.md): [notes, levels x UNIT7, start s, shapes].
+/** The stream's kinds (census of 97 s of clean stream audio, census.json): [notes, levels x UNIT7, start s, shapes].
  *  one = 띵 (62 % of the events), dbl = 띠띠, pair = 띠링, run = 띠리리링 (buy) / 띠릭 (sell) for the biggest trades;
  *  a run's last note sounds twice, the second louder, as in the stream. Sells are +3.5 dB over buys, runs ~+10 dB. */
 export const KINDS7 = {
