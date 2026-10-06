@@ -913,6 +913,8 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
   off: t(K.labIntake({cards: [], today: {day: "2026-10-07", sources: {debate: {used: 0, limit: 0, waiting: 0},
                                          meeting: {used: 0, limit: 0, waiting: 0}, owner: {used: 0, limit: 0, waiting: 0}},
                                          blocked: null, blocked_ko: ""}})),
+  unread: t(K.labIntake({cards: [], today: {day: "2026-10-07", error: "OperationalError", sources: {debate: {used: 0, limit: 0,
+                                            waiting: 0}}, blocked: null, blocked_ko: ""}})),
   seat: D.walk(K.roomSides(room)).classes}));
 """)
     card = got["card"]
@@ -932,5 +934,7 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
     assert "복제 관문 불통과" in real and "대기열이 기다리는 중" in real
     # every source's quota 0 (the server's default): the queue says it is off, not '오늘 몫 0/0'
     assert "시험 대기열 꺼짐" in got["off"] and "오늘 몫" not in got["off"]
+    # budgets that could not be read (today.error): 읽지 못함, never '꺼짐' or '대기 중인 시험이 없습니다'
+    assert "읽지 못함" in got["unread"] and "꺼짐" not in got["unread"] and "대기 중인 시험이 없습니다" not in got["unread"]
     # the seats wear rooms-kit's sideChip (one side chip for the rooms and the debate), not a pill of their own
     assert {"rk-side pro", "rk-side con"} <= set(got["seat"])

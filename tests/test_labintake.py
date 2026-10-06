@@ -495,3 +495,19 @@ def test_result_lines_are_code_text_from_the_numbers():
                                              "(이 방 시험 5번째, 기준 p<0.01, 장부 #41)")
     assert LI.result_ko({"why": "no_data"}, "not_counted").startswith("시험 수에 안 넣음")
     assert LI.result_ko({}, "declined").startswith("두 분이 그만")
+
+
+def test_an_unreadable_ledger_is_never_shown_as_the_queue_switched_off():
+    """CONTRACT 1.6: agents3.db that opens but cannot be read (every query fails) gives budgets marked unknown
+    (``today.error``) and an owner block whose words say the read failed; never '꺼짐 (설정이 0)' made of a failed read."""
+    bad = sqlite3.connect(":memory:")
+    try:
+        t = LI.today(bad, NOW)
+        o = LI.owner_block(bad, None, NOW)
+    finally:
+        bad.close()
+    assert t.get("error") and all(v["limit"] == 0 for v in t["sources"].values())
+    assert o.get("error") and o["enabled"] is False and "읽지 못했습니다" in o["off_ko"]
+    assert "AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0" not in o["off_ko"]
+    # a database that is simply missing (no agents yet) keeps the plain 'off' words
+    assert "error" not in LI.today(None, NOW) and "꺼져 있습니다" in LI.owner_block(None, None, NOW)["off_ko"]
