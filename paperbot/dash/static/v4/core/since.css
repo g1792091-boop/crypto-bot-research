@@ -63,3 +63,17 @@
   .since.bsheet::before { display: none; }
   .since-h { padding-top: 16px; }
 }
+
+/* 자는 동안 (conv-a): the same sheet as the full card. Every section is a row and an empty one says 없음 in grey; the
+   range buttons sit under the title; a taller, wider card on a PC. */
+.since-segrow { padding: 0 var(--gutter) 10px; }
+.since-seg button { height: 32px; }
+.since-row.none .since-t b { color: var(--ink-2); font-weight: 700; }
+.since-row.none .since-ic { opacity: .7; }
+.since-none { color: var(--muted); font-weight: 700; font-size: var(--t-xs); }
+.since-sh { display: flex; align-items: center; gap: 7px; margin: 8px 8px 2px; color: var(--ink-2); font: 700 var(--t-2xs)/1.2 var(--f-body); letter-spacing: .04em; }
+.since-sh::before { content: ""; width: 3px; height: 10px; border-radius: 2px; background: var(--accent); }
+.since-sh:first-child { margin-top: 0; }
+@media (min-width: 760px) {
+  .since.away { width: 480px; top: 76px; max-height: none; }
+}

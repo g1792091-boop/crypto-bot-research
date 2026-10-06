@@ -5,14 +5,16 @@
 // 터미널 is a PC screen: its `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the
 // phone's menu. A screen added to a group's `screens` list shows in the menu by itself (core/strip.js: one text button
 // per screen, owners 10/06 ~14:00; NAV below sets the groups' order and captions). The start screen (owners 10/06
-// 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 on a PC window (900 px and up, where the
-// terminal fits without sideways scrolling), and the 차트 screen on a phone or a tablet held upright; 홈 (요약) stays one
-// click away (#/home, its button, the number key 5).
-import {s} from "./dom.js";
+// 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens this device's 첫 화면 (the 설정 panel,
+// core/settings.js) when it has one, else the 터미널 on a PC window (900 px and up, where the terminal fits without
+// sideways scrolling), else the 차트 screen (a phone or a tablet held upright); 홈 (요약) stays one click away (#/home,
+// its button, its number key (6 since 여러 차트)).
+import {s, local} from "./dom.js";
+import {START_KEY} from "./prefs.js";
 
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
-  {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
+  {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "charts", "market"]},
   {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "path", "combo", "combo5y", "whatif"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
@@ -28,6 +30,7 @@ export const SCREENS = {
   terminal: {ko: "터미널", group: "trade", title: "터미널", feature: "wide"},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
+  charts: {ko: "여러 차트", group: "trade", title: "여러 차트"},
   market: {ko: "시장", group: "trade", title: "시장"},
   strategies: {ko: "매매법", group: "strat", title: "매매법"},
   grid: {ko: "한눈 지도", group: "strat", title: "한눈 지도"},
@@ -50,15 +53,29 @@ export const SCREENS = {
 };
 
 export const DEFAULT = "home";          // an unknown screen name falls back here (never the terminal: no loop)
+/** 첫 화면 chosen in the 설정 panel (core/settings.js, per device; "" = automatic), when it can open here: a known,
+ *  listed screen, and a PC-only one (`feature: "wide"`) only on a window at least 760 px wide; else null. */
+export function startScreen() {
+  const v = local.get(START_KEY, "");
+  const m = typeof v === "string" && Object.hasOwn(SCREENS, v) ? SCREENS[v] : null;
+  if (!m || m.hidden || v.startsWith("_")) return null;
+  if (m.feature === "wide" && typeof matchMedia === "function" && !matchMedia("(min-width: 760px)").matches) return null;
+  return v;
+}
 /** The start screen's width: a PC window, where the 터미널 fits (it exists from 760 px, core/features.js `wide`, but
  *  scrolls sideways below about 900 px) and the phone's bottom bar is gone (base.css .botbar, 900 px). */
 export const LANDING_MIN_PX = 900;
-/** The screen an empty hash (and the brand mark) opens: the 터미널 on a PC window, else the 차트 screen (a phone, a
- *  tablet held upright). Never a switched-off screen (900 > 760), so the router may also send a PC-only screen opened
- *  on a phone here (no loop). */
-export function landing() {
+/** The main rule: the 터미널 on a PC window, else the 차트 screen (a phone, a tablet held upright). Never a
+ *  switched-off screen (900 > 760), so the router may also send a PC-only screen opened on a phone here (no loop).
+ *  The 설정 panel's automatic 첫 화면 shows this same screen (core/settings.js autoStart). */
+export function mainLanding() {
   const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : "chart";
+}
+/** The screen an empty hash (and the brand mark) opens: this device's 첫 화면 (startScreen) when it has one, else
+ *  the main rule (mainLanding). */
+export function landing() {
+  return startScreen() || mainLanding();
 }
 
 /** "#/rooms/strat:S5?x=1" -> {name, arg, query}. */
@@ -103,6 +120,8 @@ const SICON = {
   positions: () => [R(6, 2, 4, 1), R(5, 3, 1, 2), R(10, 3, 1, 2), R(1, 5, 14, 1), R(1, 5, 1, 9), R(14, 5, 1, 9), R(1, 13, 14, 1),
     R(1, 8, 14, 1), R(7, 7, 2, 3)],
   chart: ICON.trade,
+  // 여러 차트: four small chart panes, a candle in each
+  charts: () => [[1, 1], [9, 1], [1, 9], [9, 9]].flatMap(([x, y]) => [R(x, y, 6, 1), R(x, y + 5, 6, 1), R(x, y, 1, 6), R(x + 5, y, 1, 6), R(x + 2, y + 2, 2, 2)]),
   market: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6), R(2, 11, 1, 2),
     R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(1, 7, 14, 1), R(7, 1, 2, 14)],
   strategies: ICON.strat,

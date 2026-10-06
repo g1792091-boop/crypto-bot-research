@@ -8,7 +8,7 @@
 // Motion: on a trade's own page the player is started by the viewer only; the landing (#/replay, fill-strat) plays the
 // most recently closed trade (the 36 or the 5분봉 group) once on its own, above the list (a replay of a real stored trade,
 // labelled 다시보기; not with reduced motion). It pauses when the page is hidden or left; no other animation runs.
-import {h, ui, fmt, motion, local, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
+import {h, ui, fmt, motion, local, makeChart, candleOptions, tok, priceDec, fullChart} from "../core/pb.js";
 import {exitKo, entryWho, stopPath, eventLines, caption, startBar, notes, summary} from "./replay-story.js";
 import {tradeRow} from "./positions-kit.js";
 
@@ -132,7 +132,7 @@ export async function mount(el, ctx) {
     const capStep = h("span", {class: "rp-cap-step"});
     const capText = h("p", {class: "rp-cap-text", "aria-live": "polite"});
     const cap = h("div", {class: "rp-cap"}, h("div", {class: "rp-cap-top"}, h("span", {class: "rp-cap-plate"}, "◆ 지금 이 순간"), capStep), capText);
-    const box = h("div", {class: "rp-chart", role: "img", "aria-label": `${fmt.coin(t.symbol)} ${fmt.tfKo(d.tf)}봉 차트, 이 거래의 진입과 청산`});
+    const box = h("div", {class: "rp-chart", role: "img", "aria-label": `${fmt.coin(t.symbol)} ${fmt.tfKo(d.tf)}봉 차트, 이 거래의 진입과 청산`, "data-fc-grow": ""});
     const legend = h("div", {class: "rp-legend"}, legendItems(d).map(([cls, txt]) => h("span", null, h("i", {class: cls, "aria-hidden": "true"}), txt)));
 
     // ---- controls
@@ -156,8 +156,11 @@ export async function mount(el, ctx) {
 
     const warn = [];
     if (d.fit === false) warn.push(h("p", {class: "rp-warn", role: "note"}, "이 봉 자료는 거래 가격과 맞지 않습니다 (진입·청산 가격이 그 봉 밖). 이야기의 숫자는 거래 기록만 믿으세요."));
-    const chartCard = ui.card({plate: `${fmt.coin(t.symbol)} · ${fmt.tfKo(d.tf)}봉`, sub: entryWho(d), cls: "rp-chartcard"},
+    // 차트 크게 보기 (core/fullchart.js, key "f"): the card fills the window with its caption and play buttons
+    const fs = n ? fullChart({ctx, label: "다시보기 차트"}) : null;
+    const chartCard = ui.card({plate: `${fmt.coin(t.symbol)} · ${fmt.tfKo(d.tf)}봉`, sub: entryWho(d), cls: "rp-chartcard", acts: fs ? [fs] : null},
       ...warn, n ? box : emptyBars(d), cap, n ? ctl : null, n ? legend : null);
+    if (fs) fs.bind(chartCard);
     const storyCard = ui.card({plate: "이 거래의 순간들", sub: "누르면 그 봉으로", cls: "rp-storycard"}, evs.length ? story : ui.empty("표시할 순간이 없습니다 (봉 자료 없음)"),
       h("p", {class: "refnote"}, h("b", null, "참고"), " · 거래 한 건의 이야기입니다. 한 건으로 매매법이 좋다·나쁘다를 말할 수 없습니다 (판정은 30일째, 동전 봇과 비교)."));
     const links = h("div", {class: "row wrap rp-links"},

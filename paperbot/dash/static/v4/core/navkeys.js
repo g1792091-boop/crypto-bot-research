@@ -3,13 +3,20 @@
 //        (routes.js KEYS, from the strip's order; each button's tooltip and the left rail show the number). Never while
 //        typing in a box, never with Ctrl / Alt / Cmd.
 //   /    opens 찾기 (core/find.js).
+//   ,    opens 설정 (core/settings.js: every per-device choice in one panel).
+//   f    the chart under the mouse (else the biggest one on screen) fills the window; f / Esc puts it back
+//        (core/fullchart.js).
 //   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the strip's order).
-//        Not on a chart, a table or a row that scrolls sideways itself (the strip too), a form field, or a slider.
+//        Not on a chart, a table or a row that scrolls sideways itself (the strip too), a form field, or a slider; never
+//        while this device turned it off in 설정 (core/prefs.js swipeOn).
 import {SCREENS, GROUPS, KEYS, href, parseHash} from "./routes.js";
 import {features} from "./features.js";
 import {toast} from "./ui.js";
 import {openFind, findOpen} from "./find.js";
 import {closePeek, peekOpen} from "./drawer.js";
+import {openSettings, settingsOpen} from "./settings.js";
+import {swipeOn} from "./prefs.js";
+import {toggleFull} from "./fullchart.js";
 
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -50,7 +57,7 @@ function startSwipe() {
   if (!main) return;
   let s = null;
   main.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1 || peekOpen() || findOpen()) { s = null; return; }
+    if (e.touches.length !== 1 || peekOpen() || findOpen() || settingsOpen() || !swipeOn()) { s = null; return; }
     const t = e.touches[0];
     s = ownsSideways(e.target) ? null : {x: t.clientX, y: t.clientY, at: Date.now()};
   }, {passive: true});
@@ -73,7 +80,11 @@ export function startNavKeys() {
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || typing(e.target) || findOpen()) return;
     if (document.querySelector(".tour-card")) return;               // the first-visit tour has the keyboard
+    if (settingsOpen()) return;                                      // the 설정 panel has the keyboard (Esc closes it)
     if (e.key === "/") { e.preventDefault(); openFind(); return; }
+    // "," and "f" by the key's place too (e.code): a keyboard in 한글 mode sends "ㄹ" for f
+    if (e.key === "," || e.code === "Comma") { e.preventDefault(); openSettings(); return; }
+    if ((e.key === "f" || e.key === "F" || e.code === "KeyF") && !e.shiftKey && !e.repeat) { if (toggleFull()) e.preventDefault(); return; }
     const name = keyScreen(e.key);
     if (!name || e.repeat) return;
     e.preventDefault();

@@ -21,6 +21,7 @@ import {renderRail, visibleScreens} from "./rail.js";
 import {renderStrip} from "./strip.js";
 import {navPosSwitch} from "./navpos.js";
 import {openFind} from "./find.js";
+import {settingsTab, gearButton} from "./settings.js";
 
 const badges = {};       // screen -> true (a small dot after its button, e.g. new room messages)
 
@@ -48,17 +49,18 @@ function renderNav() {
   put($("#botbar"), GROUPS.map((g) => link(g)));
   // the menu strip: every screen its own text button (core/strip.js). At its start on a phone: 찾기 (it stays at the
   // row's left edge) and 글자 크기 (one button); at its end below 1200 px: 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js), 화면 색 (AI / 클래식,
-  // core/skin.js) and the old dashboard (served at /v3; '/' is this page)
+  // core/skin.js), the old dashboard (served at /v3; '/' is this page) and the gear that opens 설정 (core/settings.js)
   renderStrip(p.name, badges, {
     lead: [findTab(), textCycle(() => remount())],
-    tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink()],
+    tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink(), settingsTab()],
   });
   // a PC window with the menu on top (1200 px and up): the same settings sit in the top bar, so the strip keeps its
   // row for the screens (one row at 1920 px), with 메뉴 위치 위 / 왼쪽 (core/navpos.js): the full switches from 1680 px,
-  // one small button each below that (core/nav.css .toptools); the left layout has them at the rail's foot
+  // one small button each below that (core/nav.css .toptools), and the gear that opens 설정 last; the left layout has
+  // them at the rail's foot (the gear there too). One gear is shown per layout (core/nav.css, core/settings.css)
   const tt = $("#toptools");
   if (tt) put(tt, h("span", {class: "tt-full"}, textSwitch(() => remount()), skinSwitch(() => remount())),
-    h("span", {class: "tt-mini"}, textCycle(() => remount()), skinCycle(() => remount())), oldLink(), navPosSwitch());
+    h("span", {class: "tt-mini"}, textCycle(() => remount()), skinCycle(() => remount())), oldLink(), navPosSwitch(), gearButton());
 }
 const oldLink = () => h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗"));
 /** 찾기 at the start of the phone's menu strip (the top bar has no room for it under 460 px): two taps to any

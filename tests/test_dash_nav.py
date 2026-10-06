@@ -135,18 +135,20 @@ def test_settings_sit_in_the_top_bar_on_a_pc_and_at_the_strips_end_below():
     strip = shell[shell.index("renderStrip(p.name, badges, {"):shell.index('const tt = $("#toptools");')]
     # below 1200 px: 글자 크기, 화면 색, 예전 화면 at the strip's end; 찾기 + the one-button 글자 크기 at its start
     assert "lead: [findTab(), textCycle(() => remount())]," in strip
-    assert "tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink()]," in strip
+    # (and the gear that opens 설정, core/settings.js: ONE per layout, here for the strip below 1200 px)
+    assert "tools: [textSwitch(() => remount()), skinSwitch(() => remount()), oldLink(), settingsTab()]," in strip
     # a PC: the full switches from 1680 px, one small button each below, 예전 화면 and 메뉴 위치 (the settings panel's hook)
     top = shell[shell.index('const tt = $("#toptools");'):]
     top = top[:top.index("\n}\n")]
     assert 'h("span", {class: "tt-full"}, textSwitch(() => remount()), skinSwitch(() => remount()))' in top
     assert 'h("span", {class: "tt-mini"}, textCycle(() => remount()), skinCycle(() => remount()))' in top
-    assert "oldLink(), navPosSwitch());" in top
+    assert "oldLink(), navPosSwitch(), gearButton());" in top                           # the top bar's gear is the last one
     assert 'const oldLink = () => h("a", {class: "oldui", href: "/v3"' in shell
     css = _nocomment(_read("core/nav.css"))
     assert "@media (min-width: 1680px) { .toptools .tt-full { display: inline-flex; } .toptools .tt-mini { display: none; } }" in css
     rail = _read("core/rail.js")
     assert 'h("div", {class: "rail-foot"}, navPosSwitch(),' in rail                     # and the rail's foot
+    assert 'h("div", {class: "rail-tools"}, settingsRail(), textCycle(onRedraw)' in rail  # with the gear in its tools
     navpos = shell[shell.index('bus.on("navpos", (id) => {'):]
     assert navpos.index("renderNav(); remount();") < navpos.index("});")                 # any caller: menu + screen redrawn
     assert '.navsw button[data-nav="${id}"]' in navpos                                   # the keyboard focus follows the switch
@@ -238,12 +240,13 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
     o.extra = routes.navGroups({wide: true}).map((g) => g.ko);
     console.log(JSON.stringify(o));""")
     assert out["groups"] == [["trade", "거래"], ["home", "성적"], ["strat", "매매법"], ["agents", "AI 직원"], ["server", "서버"]]
-    assert out["pc"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
+    assert out["pc"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
                          "path", "combo", "combo5y", "whatif", "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
     assert out["phone"] == [x for x in out["pc"] if x != "terminal"]                     # the PC 터미널 is off a phone's menu; 토론방 stays
     assert out["help"] == {"id": "help", "ko": "도움말", "to": "howto", "screens": ["howto", "faq"]}
-    assert out["keys"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies"]
-    assert out["keyOf"] == ["1", "5", "9", None, "7", None]
+    # 여러 차트 (conv-a) sits next to 차트: it takes key 4, so 요약 is key 6 now and 매매법 has no number key
+    assert out["keys"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint"]
+    assert out["keyOf"] == ["1", "6", None, None, "8", None]
     assert out["label"] == ["성적", "AI 직원", "거래"]
     assert out["added"] == ["매매법", "한눈 지도", "분석", "졸업 길", "조합 성과", "5년 조합", "만약 실험실", "새 화면"]   # a new screen gets its button by itself
     assert out["extra"] == ["거래", "성적", "매매법", "AI 직원", "서버", "실험실"]
@@ -251,8 +254,8 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
     const g = (id) => routes.GROUPS.find((x) => x.id === id);
     console.log(JSON.stringify({tradePc: routes.menuScreens(g("trade"), {wide: true}), tradePhone: routes.menuScreens(g("trade"), {wide: false}),
       tradeAll: routes.menuScreens(g("trade"), true), home: routes.menuScreens(g("home"), {}), agents: routes.menuScreens(g("agents"), {debate: false})}));""")
-    assert out["tradePc"] == out["tradeAll"] == ["terminal", "positions", "chart", "market"]
-    assert out["tradePhone"] == ["positions", "chart", "market"]
+    assert out["tradePc"] == out["tradeAll"] == ["terminal", "positions", "chart", "charts", "market"]
+    assert out["tradePhone"] == ["positions", "chart", "charts", "market"]
     assert out["home"] == ["home", "board", "flow", "checkpoint"]                        # hidden screens (계좌, 하이라이트) out
     assert out["agents"] == ["office", "rooms", "digest", "debate"]                      # 토론방 stays (greyed 꺼짐)
 
@@ -335,7 +338,7 @@ def test_start_screen_is_the_terminal_and_home_stays_reachable():
     story = _read("screens/story.js")
     assert "else ctx.go(landing());" in story and 'ctx.go("home")' not in story
     assert 'export {href, SCREENS, GROUPS, landing} from "./routes.js";' in _read("core/pb.js")
-    # the brand mark opens the start screen and says so; 홈 (요약) stays a button, the number key 5, #/home
+    # the brand mark opens the start screen and says so; 홈 (요약) stays a button, a number key (6 since 여러 차트), #/home
     html = _read("index.html")
     assert '<a class="brand" href="#/" aria-label="Paper v4 첫 화면">' in html and 'href="#/home"' not in html
     shell = _read("core/shell.js")
@@ -352,7 +355,7 @@ def test_start_screen_is_the_terminal_and_home_stays_reachable():
     for w, want in (("390", "chart"), ("759", "chart"), ("760", "chart"), ("899", "chart"), ("900", "terminal"), ("1100", "terminal"),
                     ("1920", "terminal")):
         assert out[w] == [want, want, want], (w, out[w])
-    assert out["home"] == "home" and out["keys"] == 5
+    assert out["home"] == "home" and out["keys"] == 6
 
 
 def test_tour_starts_with_the_strip():
@@ -434,7 +437,7 @@ def test_side_panel_counts_deepseek_and_coin_flips_only_outside_their_group():
 def test_number_keys_and_slash():
     """1-9 = the strip's first nine buttons (owners 10/06 ~14:00), shown in each button's tooltip."""
     out = _node("console.log(JSON.stringify(routes.KEYS));")
-    assert out == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies"]
+    assert out == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint"]
     assert "export const KEYS = navGroups(true).flatMap((g) => g.items.map((it) => it.to)).slice(0, 9);" in _read("core/routes.js")
     k = _read("core/navkeys.js")
     assert "e.ctrlKey || e.metaKey || e.altKey || e.isComposing || typing(e.target) || findOpen()" in k

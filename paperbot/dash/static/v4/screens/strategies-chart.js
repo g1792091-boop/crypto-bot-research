@@ -55,10 +55,11 @@ export function liveBar(last, px, nowS, stepS) {
  * The forming bar and its price line follow the shared ticker (store "ticker", 5 s) between the loads.
  */
 export function stratChart(ctx) {
-  const box = h("div", {class: "strat-chartbox", role: "img", "aria-label": "매매법 차트"});
+  const box = h("div", {class: "strat-chartbox", role: "img", "aria-label": "매매법 차트", "data-fc-grow": ""});
   const legend = h("p", {class: "strat-legend"});
   const note = h("p", {class: "strat-chartnote muted", hidden: true});
-  const el = h("div", {class: "stack tight"}, box, legend, note);
+  // data-fc-*: in 차트 크게 보기 (core/fullchart.js) this stack is a column and the chart box takes the height
+  const el = h("div", {class: "stack tight", "data-fc-grow": "", "data-fc-col": ""}, box, legend, note);
   let C = null, series = null, extra = [], lines = [], failed = false, dead = false;
   let drawing = Promise.resolve();
   const live = {o: null, bar: null, fired: false};

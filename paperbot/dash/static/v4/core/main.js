@@ -13,6 +13,7 @@ import {applyNavPos} from "./navpos.js";
 import {startDrawer} from "./drawer.js";
 import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
+import {startSettings} from "./settings.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -38,7 +39,8 @@ function boot() {
   syncClock();
   setInterval(syncClock, 600000);
   maybeStartTour();
-  startSince();            // "지난번 본 뒤로" sheet (never on the first visit)
+  startSettings();         // 설정 한 곳: the top bar's gear, the key "," (core/navkeys.js), the speaker menu's link
+  startSince();            // "지난번 본 뒤로" sheet (never on the first visit); 3 hours away or more: the 자는 동안 card
   attachFonts();
 }
 

@@ -1,0 +1,43 @@
+/* 차트 크게 보기 (core/fullchart.js): the '크게' button in a chart's header and the frame that fills the window (a fixed
+   layer over the page, plus the browser's real full screen where allowed). Inside the frame, data-fc-grow takes the
+   height and data-fc-col makes a container on the way a column. Tokens only, font sizes var(--t-*). */
+.fc-btn { appearance: none; flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border-radius: 7px;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font: 700 var(--t-2xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.fc-btn:hover { color: var(--ink); border-color: var(--accent-line); }
+.fc-btn svg { color: var(--accent); flex: none; }
+.fc-btn[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.fc-btn[aria-pressed="true"] svg { color: var(--accent-ink); }
+
+html.fc-lock { overflow: hidden; }
+.fc-frame.fc-on { position: fixed !important; inset: 0 !important; z-index: 80; width: auto !important; height: auto !important; max-width: none !important;
+  max-height: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; gap: 8px; overflow: hidden;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important; border-radius: 0 !important; background: var(--bg) !important; }
+.fc-frame.fc-on:fullscreen { background: var(--bg); }
+.fc-frame.fc-on::backdrop { background: var(--bg); }
+.fc-on > * { flex: none; }
+.fc-on [data-fc-grow] { flex: 1 1 auto !important; min-height: 0 !important; height: auto !important; max-height: none !important; }
+.fc-on > [data-fc-grow] { flex: 1 1 auto !important; }
+.fc-on [data-fc-col] { display: flex !important; flex-direction: column !important; }
+.fc-on [data-fc-box] { height: 100% !important; min-height: 0 !important; max-height: none !important; }
+/* the terminal's chart panel is already a column: its body takes the room */
+.fc-on.term-chart > .term-pb { flex: 1 1 auto !important; min-height: 0; }
+.fc-x { position: absolute; top: 8px; right: 10px; z-index: 6; appearance: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); font: 700 var(--t-sm)/1 var(--f-body); }
+.fc-x:hover { border-color: var(--accent-line); }
+.fc-hint { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; margin: 0; color: var(--muted); font-size: var(--t-2xs); }
+.fc-rot { display: none; color: var(--ink-2); }
+/* a phone held upright: the hint to turn it sideways (nothing is forced); the header keeps clear of the ✕ */
+@media (orientation: portrait) and (max-width: 759px) { .fc-rot { display: inline; } .fc-esc { display: none; } }
+.fc-on > :first-child { padding-right: 52px !important; }       /* the frame's head keeps clear of the ✕ */
+/* a phone: the 차트 screen's account picker, toggles and level note step aside for the chart (the caption stays) */
+@media (max-width: 759px), (max-height: 560px) { .fc-on.chart-card > :is(.chart-ctrl, .chart-toggles, .pos-note) { display: none !important; } }
+/* a phone turned sideways (a short window): tighter edges, no hint line, the chart keeps at least a usable height */
+@media (max-height: 560px) {
+  .fc-frame.fc-on { gap: 4px; padding: 6px 10px !important; }
+  .fc-on .fc-hint { display: none; }
+  .fc-on [data-fc-grow], .fc-on.term-chart > .term-pb { min-height: 170px !important; }
+  .fc-x { top: 4px; right: 6px; width: 32px; height: 32px; }
+}
+/* a phone: a 32 px square (the touch-target floor), the word goes */
+@media (max-width: 759px) { .fc-btn { height: 32px; } }
+@media (max-width: 599px) { .fc-btn .fc-bt { display: none; } .fc-btn { width: 32px; padding: 0; justify-content: center; } }

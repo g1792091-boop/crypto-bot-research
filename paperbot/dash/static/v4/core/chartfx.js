@@ -51,6 +51,7 @@ import {listenTicks} from "./ticks.js";
 import {smcAll, splitOf, zoneOf, nearestZones} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
 import {edgeLayout} from "./edgelabels.js";
+import {onPref, tellPref, setPref} from "./prefs.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
@@ -126,7 +127,7 @@ const glowR = {
       // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
       c.imageSmoothingEnabled = true;
       try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
-      for (const [S, a] of [[3, 0.5], [8, 0.6]]) {
+      for (const [S, a] of (o.lite ? LITE_PASSES : GLOW_PASSES)) {
         const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
         const off = small(S, ow, oh), o2 = off.getContext("2d");
         o2.clearRect(0, 0, ow, oh);
@@ -207,6 +208,30 @@ return {
   },
 };}
 
+// the candle glow's soft passes [scale, alpha]: two for a big chart; ONE for a small cell of 여러 차트 (screens/charts.js,
+// `lite`), where up to nine charts redraw together
+const GLOW_PASSES = [[3, 0.5], [8, 0.6]], LITE_PASSES = [[6, 0.7]];
+
+/** The '선' menu's choices of one deck key on this device: {off: Set of groups, hide: Set of line ids, parts: Set of
+ *  프리미엄 지표 parts}. The same rule chartDeck starts from (nothing stored yet, or stored before the calm default
+ *  (DECK_V): the calm default, on a phone the position / stop / level / 프리미엄 지표 groups off, unless `defaults` says
+ *  otherwise). The 설정 panel (core/settings.js) reads it and writes {v, off, hide, smc} back (deckValue) under the same
+ *  key ("cfx-" + key) through core/prefs.js, so a deck on screen follows at once. */
+export function deckState(key, groups, defaults) {
+  const raw = local.get("cfx-" + key, null);
+  const saved = raw && typeof raw === "object" ? raw : {};
+  const fresh = saved.v !== DECK_V;
+  const defOff = groups.filter((g) => (defaults && g in defaults ? !defaults[g] : (narrow() && ["pos", "risk", "sr", "smc"].includes(g))));
+  const partIds = SMC_PARTS.map((x) => x.id);
+  return {off: new Set(!fresh && Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
+    hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : []),
+    parts: new Set(!fresh && Array.isArray(saved.smc) ? saved.smc.filter((x) => partIds.includes(x)) : SMC_DEF)};
+}
+/** What a deck stores under "cfx-" + key (the shape chartDeck's save writes): deckState's sets as arrays, the version. */
+export const deckValue = (now) => ({v: DECK_V, off: [...now.off], hide: [...now.hide].slice(-60), smc: [...now.parts]});
+export {FLASH_KEY};
+export {LIGHT_KEY};
+
 /** The candle glow alone, for a chart without the deck (매매법 / 계좌 charts): the AI skin only, null otherwise. */
 export function candleGlow(chart, series) {
   if (!isAi()) return null;
@@ -219,16 +244,20 @@ export function candleGlow(chart, series) {
 }
 
 /**
- * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag, sym}) -> deck
+ * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag, sym, lite}) -> deck
  *   wrap: the positioned box around the chart element `box` (the layers sit in it, the pills over the pane)
- *   key: per-device memory name ("term" | "chart"); groups: the ids the '선' menu lists (GROUP_KO)
+ *   key: per-device memory name ("term" | "chart" | "grid"); groups: the ids the '선' menu lists (GROUP_KO)
  *   defaults: {group: on?} the "기본" state of those groups (else all on; on a phone pos / risk / sr / smc off)
  *   tag: true draws our own last-price tag on the right axis (glows, pulses on a real new price)
  *   sym: () -> the coin on screen (its relay events light the halves at full strength; others dimmer)
  *   legend: the screen's OHLC legend element over the chart (the right-edge names start under it when it reaches them)
+ *   lite: a small cell of 여러 차트: the same glow and flash, the glow drawn in one soft pass instead of two
  * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn ('프리미엄 지표 ▾'),
  *        lightChip, lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), viewBtn (one
  *        '보기 ▾' menu with the light, the flash and the 프리미엄 지표 parts, for a narrow header), place, ready}
+ *        The 설정 panel (core/settings.js) changes the '선' choices, 번쩍임 and 조명 of a deck on screen through
+ *        core/prefs.js under the deck's own storage keys; the deck's menus follow at once, and the deck's own menus tell
+ *        the panel (and the other decks of this key) the same way.
  */
 export function chartDeck(o) {
   const {chart, series, wrap, box, ctx} = o;
@@ -248,7 +277,16 @@ export function chartDeck(o) {
     data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, split: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
   };
   const subs = [];
-  const save = () => local.set(key, {v: DECK_V, off: [...st.off], hide: [...st.hide].slice(-60), smc: [...st.parts]});
+  // the same storage key as before; core/prefs.js then tells the other decks of this key on the screen (the 여러 차트
+  // cells share "grid"), so they follow at once and a later save of theirs cannot drop a line hidden here; this deck
+  // skips its own echo (`saving`)
+  let saving = false;
+  const save = () => {
+    const v = {v: DECK_V, off: [...st.off], hide: [...st.hide].slice(-60), smc: [...st.parts]};
+    local.set(key, v);
+    saving = true;
+    try { tellPref(key, v); } finally { saving = false; }
+  };
   const shown = (g) => !st.off.has(g);
   /** a 프리미엄 지표 part is drawn: the indicator on and that part chosen */
   const part = (id) => shown("smc") && st.parts.has(id);
@@ -299,7 +337,7 @@ export function chartDeck(o) {
 
   // ---------------------------------------------------------------- the glow (under the candles; glowPrimitive below)
   series.attachPrimitive(glowPrimitive({chart, series, data: () => st.data, marks: () => st.marks, idx: (t) => st.idx.get(t),
-    col: () => st.col, ai: () => st.ai, onUpdate: () => schedule()}));
+    col: () => st.col, ai: () => st.ai, onUpdate: () => schedule(), lite: !!o.lite}));
 
   // ---------------------------------------------------------------- lines (our positions, stops, levels, alerts)
   const lines = new Map();                    // id -> {spec, y, vis}
@@ -704,8 +742,10 @@ export function chartDeck(o) {
     ctx.listen(document, "pointerdown", (e) => { if (!lmenu.hidden && !flashSel.contains(e.target)) openLight(false); });
     ctx.listen(document, "keydown", (e) => { if (e.key === "Escape" && !lmenu.hidden) { openLight(false); lbtn.focus(); } });
   }
-  function setLight(id) { lmode = lightModeOf(id).id; local.set(LIGHT_KEY, lmode); lightSync(); }
-  function setFlash(id) { fmode = modeOf(id).id; local.set(FLASH_KEY, fmode); if (fmode === "off") sched.cancel(); paintLight(); }
+  // the menu's choice goes through core/prefs.js (it stores under the same key, then every listener of it follows: this
+  // deck's onPref handlers below, the other decks on screen, the 설정 panel's rows)
+  function setLight(id) { setPref(LIGHT_KEY, lightModeOf(id).id); }
+  function setFlash(id) { setPref(FLASH_KEY, modeOf(id).id); }
   function paintLight() {
     for (const [id, bs] of lItems) for (const b of bs) b.setAttribute("aria-checked", String(id === lmode));
     for (const [id, bs] of fItems) for (const b of bs) b.setAttribute("aria-checked", String(id === fmode));
@@ -917,6 +957,39 @@ export function chartDeck(o) {
     if (!quiet) { revis(); for (const fn of subs) fn(g); }
   }
   function refresh() { paintMenu(); schedule(); }
+
+  // 설정 한 곳 (core/settings.js through core/prefs.js): the panel changes this device's '선' choices and '번쩍임' while
+  // the deck is on screen, under the same storage keys as the deck's own menu and select; the deck follows at once
+  const prefOffs = [
+    onPref(key, (v) => {
+      if (saving) return;
+      const x = v && typeof v === "object" ? v : {};
+      const was = st.off;
+      st.off = new Set(Array.isArray(x.off) ? x.off.filter((g) => groups.includes(g)) : []);
+      st.hide = new Set(Array.isArray(x.hide) ? x.hide.slice(-60) : []);
+      // the 프리미엄 지표 parts travel with it (a value without them keeps this deck's)
+      const wasParts = st.parts;
+      if (Array.isArray(x.smc)) st.parts = new Set(x.smc.filter((id) => partIds.includes(id)));
+      const partsMoved = [...st.parts].some((id) => !wasParts.has(id)) || [...wasParts].some((id) => !st.parts.has(id));
+      // only the groups that changed are drawn again (a line hidden in another 여러 차트 cell: no 프리미엄 지표 recount)
+      const moved = groups.filter((g) => was.has(g) !== st.off.has(g) || (g === "smc" && partsMoved));
+      for (const g of moved) applyGroup(g, true);
+      revis();
+      if (moved.length) for (const fn of subs) fn(null);
+    }),
+    // 번쩍임 and 조명 changed in the 설정 panel (or in another deck's menu): this deck's menu words, the flash scheduler,
+    // the blinking halves and the relay listener follow (flashSel is the span of the light menu, not a select)
+    onPref(FLASH_KEY, (v) => {
+      fmode = modeOf(v).id;
+      if (fmode === "off") sched.cancel();
+      paintLight();
+    }),
+    onPref(LIGHT_KEY, (v) => {
+      lmode = lightModeOf(v).id;
+      lightSync();
+    }),
+  ];
+  if (ctx && ctx.track) ctx.track(() => { for (const off of prefOffs) off(); });
 
   // ---------------------------------------------------------------- data in
   function index() { st.idx = new Map(st.data.map((b, i) => [b.time, i])); }
