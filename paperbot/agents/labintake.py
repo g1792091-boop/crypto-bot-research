@@ -715,7 +715,8 @@ def run_due(ctx: Any, now: int, max_per_pass: int = 2) -> dict:
     for r in rows:
         exp = EXPIRE_MS.get(r["source"])
         if exp is not None and now - _origin_ts(r) > exp:
-            event(conn, r["id"], "expired", now, detail={"why": f"{exp // HOUR_MS}시간 안에 시험하지 못함"})
+            span = f"{exp // HOUR_MS}시간" if exp < 4 * DAY_MS else f"{exp // DAY_MS}일"
+            event(conn, r["id"], "expired", now, detail={"why": f"{span} 안에 시험하지 못함(시험 수에 안 넣음)"})
             out["expired"].append(r["id"])
         else:
             live.append(r)
