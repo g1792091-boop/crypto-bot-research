@@ -557,9 +557,13 @@ def test_the_sunday_report_and_the_saturday_lessons_carry_the_weeks_disputes(wor
                     settle={**fwd, "check": "tag_gap", "tag": "횡보장 진입"})            # still open
     rep = DG.week_report(world.paper(), world.agents, SUNDAY)
     assert rep["who_was_right"] == {"week_settled": 2, "week_attacker": 1, "week_advocate": 1, "all_settled": 2,
-                                    "all_attacker": 1, "all_attacker_share": 0.5, "pending": 1, "small": True}
+                                    "all_attacker": 1, "all_attacker_share": 0.5, "pending": 1, "small": True,
+                                    "by_kind": {"lab": {"settled": 1, "attacker_won": 0, "attacker_share": 0.0},
+                                                "forward": {"settled": 1, "attacker_won": 1, "attacker_share": 1.0}}}
     text = DG.compose_week(rep)
-    assert "누가 맞았나: 이번 주 결론 2건(공격 1·편 1) · 실험 전체 공격 쪽 1/2(50%, 동전 50%) 표본 적음 · 대기 1" in text
+    # the 5-year and the forward shares apart (different base rates); the coin flip's 50% only next to the forward one
+    assert ("누가 맞았나: 이번 주 결론 2건(공격 1·편 1) · 실험 전체 공격 쪽 5년 시험 0/1(0%) · 앞으로 N건 1/1(100%, 동전 50%) "
+            "표본 적음 · 대기 1") in text
     assert len(text) <= 4000
     lp = MT.learning_packet(world.agents, SUNDAY)
     got = lp["disputes_this_week"]["list"]

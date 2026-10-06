@@ -17,12 +17,15 @@ export function sideTag(side) {
   return side === "attacker" ? ui.pill("공격하는 직원", "bad") : ui.pill("편드는 직원", "good");
 }
 
-/** '누가 맞았나 7/10' on a staff row (the whole run), or null when the member has no dispute yet. */
+/** '누가 맞았나 7/10 · 기준 6.8' on a staff row (the whole run), or null when the member has no dispute yet. The
+ *  base-rate count is on the chip itself, not only in its tooltip (a phone has no hover): an advocate's 9/10 in 5-year
+ *  disputes is mostly the base rate. */
 export function rightChip(r) {
   if (!r || !(r.settled || r.pending)) return null;
   const tip = `결론 난 다툼 ${r.settled}개 중 ${r.won}개 맞음 · 그 편의 기준 비율로만 맞혔다면 ${fmt.num(r.expected || 0, 1)}개 · 대기 ${r.pending}개`;
-  return h("span", {class: "dg-wrchip"}, ui.pill(r.settled ? `누가 맞았나 ${fmt.int(r.won)}/${fmt.int(r.settled)}` : `다툼 대기 ${fmt.int(r.pending)}`, "thin", tip),
-    r.settled ? ui.smallSample(r.settled, SMALL) : null);
+  const label = r.settled ? `누가 맞았나 ${fmt.int(r.won)}/${fmt.int(r.settled)} · 기준 ${fmt.num(r.expected || 0, 1)}`
+    : `다툼 대기 ${fmt.int(r.pending)}`;
+  return h("span", {class: "dg-wrchip"}, ui.pill(label, "thin", tip), r.settled ? ui.smallSample(r.settled, SMALL) : null);
 }
 
 function bar(label, v, cls) {

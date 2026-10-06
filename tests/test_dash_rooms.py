@@ -901,7 +901,7 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
     assert "동전 던지기 (기준)" in card and "50%" in card and "표본 적음" in card and "기준 비율로만 맞혔다면 1.0개" in card
     assert "공격할 때 1/3" in card and "말로만 1" in card and "“잠금이 낮음”" in card and "5년 시험 #41" in card
     assert "아직 다툼이 없습니다" in got["none"] and "동전 던지기 50%" in got["none"]
-    assert got["chip"].startswith("누가 맞았나 1/3") and got["nochip"] is None
+    assert got["chip"].startswith("누가 맞았나 1/3 · 기준 1.0") and got["nochip"] is None   # the base rate on the chip itself
     assert "편드는 직원" in got["room"] and "공격하는 직원" in got["room"] and "앞으로 40건 중 12건" in got["room"]
     assert "동전 던지기 50%" in got["room"] and got["noroom"] is None
     assert "수집 전" in got["wait"] and "회의" in got["queue"] and "5번째 시험" in got["queue"] and "회의 1/3" in got["queue"]

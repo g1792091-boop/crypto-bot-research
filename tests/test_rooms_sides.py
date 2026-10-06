@@ -281,3 +281,31 @@ def test_the_attack_answer_is_checked_by_code():
     ok, _ = RM.check_attack({**attack("maybe", LAB_SETTLE)}, given)       # an unreadable verdict opens nothing
     assert ok["verdict_coerced"] is True and ok["settle"] is None and "talk_only" not in ok
     assert json.dumps(ok, ensure_ascii=False)
+
+
+# ------------------------------------------------------------------ review fixes (disputes-c adversarial review)
+def test_an_open_disputes_claim_is_the_attackers_words_never_a_code_fact():
+    given = {"room": {"room_id": ROOM, "strategy": S}, "turn": "specialist", "role": SPEC, "this_round": {},
+             "disputes": {"open": [{"id": 1, "claim_ko": "이 매매법은 동전보다 못함", "kind": "forward", "settle_ko": "앞으로 거래 20건"}],
+                          "settled_recent": [{"id": 2, "line": "편드는 직원 맞음(코드 결론)"}]},
+             "sides": {"advocate": {"record": {"won": 1}}}}
+    probs: list = []
+    got = RM._findings([{"claim": "동전보다 못함", "kind": "fact", "evidence": [p]} for p in
+                        ("disputes.open.0.claim_ko", "disputes.open.0", "disputes.open", "disputes")], given, "findings",
+                       probs)
+    assert [f["kind"] for f in got] == ["hypothesis"] * 4 and len(probs) == 4
+    ok = RM._findings([{"claim": "코드 결론", "kind": "fact", "evidence": [p]} for p in
+                       ("disputes.settled_recent.0.line", "disputes.open.0.settle_ko", "sides.advocate.record")],
+                      given, "findings", [])
+    assert [f["kind"] for f in ok] == ["fact"] * 3
+
+
+def test_the_owners_named_devils_advocate_answers_in_a_room_it_does_not_attack(world):
+    assert ATT != "devils_advocate"
+    world.say(ROOM, "@반론 검토관 이 방 손실은 어떻게 봐?", QUIET - MIN)
+    runner = QueueRunner({SPEC: [analysis(NOTE), final(NOTE)], ATT: [attack("agree")],
+                          "devils_advocate": [challenge("disagree")]})
+    out = world.tick(runner, QUIET, policy=sides())
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [(ROOM, "owner")]
+    assert runner.roles() == [SPEC, ATT, "devils_advocate", SPEC]          # no early stop: the owners asked it
+    assert runner.calls[2]["turn"] == "challenge" and out["rounds"][0]["calls"] == 4

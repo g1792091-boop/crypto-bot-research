@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import sys
 from typing import Any, Iterable, Optional
 
 from ..config import V3_TRADE_TFS
@@ -494,13 +495,19 @@ def _update(conn: sqlite3.Connection, dispute_id: int, **cols: Any) -> bool:
 
 def hand_over(conn: sqlite3.Connection, now_ms: int) -> int:
     """Lab disputes still 'queued' without an intake row go to the shared queue now that it exists (idempotent: the
-    queue keys on source_ref). Returns how many were handed over."""
+    queue keys on source_ref). A conceded lab dispute whose test could not be queued when it was written (no queue
+    yet) is handed over too, within ``HANDOVER_DAYS``: its row is final, so only the queue gets the test (found by
+    its source_ref). Returns how many were handed over."""
     if not _table_ok(conn) or _labintake() is None:
         return 0
     n = 0
     for d in _rows(conn, "status = 'queued' AND kind = 'lab' AND intake_id IS NULL", (), 50, "id"):
         iid, _why = _enqueue(conn, d, now_ms)
         if iid is not None and _update(conn, d["id"], intake_id=iid):
+            n += 1
+    for d in _rows(conn, "status = 'conceded' AND kind = 'lab' AND intake_id IS NULL AND ts >= ?",
+                   (int(now_ms) - HANDOVER_DAYS * DAY_MS,), 50, "id"):
+        if _intake_id(conn, d["id"]) is None and _enqueue(conn, d, now_ms)[0] is not None:
             n += 1
     return n
 
@@ -717,8 +724,11 @@ def _lab_trial(conn: sqlite3.Connection, d: dict) -> tuple[Optional[dict], Optio
             return t, ev
     test = (d.get("spec") or {}).get("test") or {}
     t = R.find_trial(conn, d["strategy"], test, kind="test")
-    if t is not None and int(t.get("ts") or 0) >= int(d["ts"]) and \
-            ((t.get("result") or {}).get("status") in ("passed", "failed", "no_data", "error")):
+    res = (t or {}).get("result") or {}
+    # a result written after the dispute opened: a new trial, or an older number that could not run before (no data /
+    # error keeps its number, request_test runs it again under it)
+    if t is not None and res.get("status") in ("passed", "failed", "no_data", "error") and \
+            int(res.get("ts") or 0) >= int(d["ts"]):
         return t, ev
     return None, ev
 
@@ -864,6 +874,11 @@ def grade_due(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], 
     done: list[dict] = []
     for d in _rows(conn, "status IN ('queued', 'open')", (), 500, "id"):
         try:
+            if (d.get("data") or {}).get("conceded"):
+                # a conceded dispute is written 'queued' only for the moment its test is handed to the queue; a pass
+                # that stopped in between leaves it so: it is final and never scored
+                _update(conn, d["id"], status="conceded", settled_ts=int(d["ts"]))
+                continue
             if d["kind"] == "lab":
                 t, ev = _lab_trial(conn, d)
                 if t is not None:
@@ -888,6 +903,15 @@ def grade_due(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], 
                 got = _close(conn, d, v, now_ms) if v is not None else None
         except sqlite3.IntegrityError:
             continue          # a row a concurrent writer finished: nothing to do
+        except (sqlite3.OperationalError, TypeError, ValueError, KeyError, AttributeError, IndexError) as exc:
+            # one odd row (a trade's data code cannot read, a locked read) never stops the others' grading; it is
+            # tried again next tick and expires on time like any other
+            print(f"warning: dispute #{d.get('id')} not graded: {type(exc).__name__}: {exc}", file=sys.stderr)
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass
+            continue
         if got:
             done.append(got)
     return done
@@ -1099,21 +1123,38 @@ def week_summary(conn: Optional[sqlite3.Connection], since_ms: int, until_ms: in
     if not rows:
         return None
     week = [r for r in rows if r["status"] == "settled" and since_ms <= int(r.get("settled_ts") or 0) < until_ms]
-    rates = base_rates(rows)["all"]
+    br = base_rates(rows)
+    rates = br["all"]
     return {"week_settled": len(week), "week_attacker": sum(r.get("winner") == "a" for r in week),
             "week_advocate": sum(r.get("winner") == "b" for r in week),
             "all_settled": rates["settled"], "all_attacker": rates["attacker_won"],
             "all_attacker_share": rates["attacker_share"], "pending": sum(r["status"] in PENDING for r in rows),
-            "small": rates["settled"] < SMALL}
+            "small": rates["settled"] < SMALL,
+            # by kind: a 5-year dispute's base rate is far from the coin flip, so the two are never pooled in the line
+            "by_kind": {k: {x: br[k][x] for x in ("settled", "attacker_won", "attacker_share")} for k in KINDS}}
 
 
 def week_line(w: Optional[dict]) -> str:
-    """'누가 맞았나: 이번 주 결론 3건(공격 1·편 2) · 실험 전체 공격 쪽 12/40(30%, 동전 50%) · 대기 4' (code text)."""
+    """'누가 맞았나: 이번 주 결론 3건(공격 1·편 2) · 실험 전체 공격 쪽 5년 시험 0/30(0%) · 앞으로 N건 6/10(60%, 동전 50%)
+    · 대기 4' (code text). The 5-year and the forward shares are given apart: only the forward one is read against the
+    coin flip's 50% (a 5-year dispute is nearly always the advocate's)."""
     if not w:
         return ""
-    share = w.get("all_attacker_share")
-    total = (f"실험 전체 공격 쪽 {w['all_attacker']}/{w['all_settled']}"
-             + (f"({share * 100:.0f}%, 동전 50%)" if share is not None else "") + (" 표본 적음" if w.get("small") else ""))
+    by = w.get("by_kind") or {}
+    parts = []
+    for k, label in (("lab", "5년 시험"), ("forward", "앞으로 N건")):
+        r = by.get(k) or {}
+        if not r.get("settled"):
+            continue
+        share = r.get("attacker_share")
+        pct = f"{share * 100:.0f}%" if share is not None else ""
+        pct += ", 동전 50%" if k == "forward" else ""
+        parts.append(f"{label} {r['attacker_won']}/{r['settled']}" + (f"({pct})" if pct else ""))
+    if parts:
+        total = "실험 전체 공격 쪽 " + " · ".join(parts)
+    else:
+        total = f"실험 전체 공격 쪽 {w.get('all_attacker', 0)}/{w.get('all_settled', 0)}"
+    total += " 표본 적음" if w.get("small") else ""
     return (f"누가 맞았나: 이번 주 결론 {w['week_settled']}건(공격 {w['week_attacker']}·편 {w['week_advocate']}) · "
             f"{total} · 대기 {w['pending']}")
 
@@ -1133,8 +1174,10 @@ def _intake_tests_today(conn: sqlite3.Connection, now_ms: int, room: Optional[st
     None when the queue's tables are not there."""
     if not (_table_ok(conn, "lab_intake") and _table_ok(conn, "lab_intake_events")):
         return None
+    # what the queue counts against a source's day (labintake._COUNTED_SQL): a finished test, or a run that got a
+    # ledger number but no result (no data / error: it is in the room's n all the same)
     sql = ("SELECT COUNT(*) FROM lab_intake_events e JOIN lab_intake i ON i.id = e.intake_id WHERE i.source = 'meeting' "
-           "AND e.status = 'tested' AND e.ts >= ?")
+           "AND (e.status = 'tested' OR (e.status IN ('not_counted', 'error') AND e.trial_id IS NOT NULL)) AND e.ts >= ?")
     args: list = [R.kst_day_start_ms(now_ms) if since_ms is None else int(since_ms)]
     if room:
         sql += " AND i.room_id = ?"

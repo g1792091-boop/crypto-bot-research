@@ -1437,6 +1437,13 @@ def _model_written(path: str, given: Optional[dict]) -> bool:
         except (KeyError, IndexError, TypeError, ValueError):
             return True
         return not isinstance(row, dict) or row.get("kind") != "test"
+    # sides on (design #102 C): an open dispute's claim_ko is the attacker's own words, quoted in the packet; a path
+    # that contains it ('disputes', 'disputes.open', 'disputes.open.<i>', '...claim_ko') is not code's number
+    if parts[0] == "disputes":
+        if len(parts) == 1:
+            dz = (given or {}).get("disputes")
+            return not isinstance(dz, dict) or bool(dz.get("open"))
+        return parts[1] == "open" and (len(parts) <= 3 or parts[3] == "claim_ko")
     return False
 
 
@@ -2669,6 +2676,9 @@ def _strategy_round_sides(rnd: _Round) -> tuple[str, dict]:
     if named:
         base["owner_mentions"] = [{"role": r, "name": role_ko(r)} for r in named]
     named_expert = next((r for r in named if r in STRATEGY_EXPERTS and r != attacker), None)
+    # the owners @named the devil's advocate in a room it does not attack: it answers in the one extra turn (a named
+    # expert goes first), as it would in today's meeting
+    named_da = "devils_advocate" in named and attacker != "devils_advocate" and named_expert is None
     t1 = rnd.ask(spec_role, "specialist", base)
     if t1 is None:
         raise RoundFailed("전담 에이전트의 첫 분석을 받지 못했습니다")
@@ -2682,7 +2692,8 @@ def _strategy_round_sides(rnd: _Round) -> tuple[str, dict]:
     coerced = bool(t2 and t2.get("verdict_coerced"))
     first = t1["proposal"]
     expert, t3, t4 = None, None, None
-    early = verdict == "agree" and first.get("action") in ("note", "no_action") and named_expert is None
+    early = (verdict == "agree" and first.get("action") in ("note", "no_action") and named_expert is None
+             and not named_da)
     if early:
         expert, t3 = ("tf_compare", tf_cmp) if tf_cmp else (None, None)
         final = first
@@ -2690,11 +2701,13 @@ def _strategy_round_sides(rnd: _Round) -> tuple[str, dict]:
         why = ""
         if named_expert:
             expert, why = named_expert, "두 분이 지목함"
-        elif ctx.policy.dispute_expert:
+        elif ctx.policy.dispute_expert and not named_da:
             expert, why = pick_expert(base, rnd.due)
             if expert == attacker:
                 expert = None                             # the attacker already spoke with that lens
-        if rnd.due.trigger == "tf_split" and not named_expert:
+        if named_da:
+            rnd.ask("devils_advocate", "challenge", base)       # its answer is in the room and in this_round
+        elif rnd.due.trigger == "tf_split" and not named_expert:
             expert, t3 = ("tf_compare" if tf_cmp else None), tf_cmp
         elif expert:
             t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why})

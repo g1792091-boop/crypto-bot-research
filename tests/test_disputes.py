@@ -491,3 +491,90 @@ def test_the_rooms_packet_has_both_seats_the_rule_and_the_test_budget(conn, tmp_
     _open(conn, LABC, now=now)
     dt = DS.dispute_tests(conn, S, now + 1000)
     assert dt["left_today"] == 2 and dt["room_test_ok_now"] is False
+
+
+# ------------------------------------------------------------------ review fixes (disputes-c adversarial review)
+def test_a_conceded_test_reaches_the_queue_once_it_is_installed(conn, monkeypatch):
+    """No queue when the advocate conceded: the row is final at once, and a later tick still hands its test over
+    (the design: a conceded lab settle is still run as the room's own test, never scored)."""
+    c = _open(conn, {"kind": "lab", "test": {**LAB["test"], "timeframe": "4h", "strategy": S}}, conceded=True)
+    assert c["status"] == "conceded" and c["intake_id"] is None
+    calls: list = []
+    monkeypatch.setattr(DS, "_labintake", lambda: _fake_labintake(calls))
+    DS.grade_due(conn, None, T0 + DAY)
+    assert [x["source_ref"] for x in calls] == [f"dispute:{c['id']}"] and calls[0]["meta"]["conceded"] is True
+    DS.grade_due(conn, None, T0 + 2 * DAY)
+    assert len(calls) == 1                                                     # once
+    row = DS.get(conn, c["id"])
+    assert row["status"] == "conceded" and row["winner"] is None              # still final and unscored
+    # too old to hand over: left alone
+    monkeypatch.setattr(DS, "_labintake", lambda: None)
+    late = _open(conn, {"kind": "lab", "test": {**LAB["test"], "timeframe": "15m", "strategy": S}}, conceded=True)
+    monkeypatch.setattr(DS, "_labintake", lambda: _fake_labintake(calls))
+    DS.grade_due(conn, None, T0 + (DS.HANDOVER_DAYS + 1) * DAY)
+    assert f"dispute:{late['id']}" not in [x["source_ref"] for x in calls]
+
+
+def test_a_conceded_row_left_queued_by_a_stopped_pass_is_never_scored(conn):
+    o = _open(conn, LABC)
+    # what a pass that stopped between writing a conceded dispute and finishing it leaves behind
+    conn.execute("UPDATE disputes SET data = ? WHERE id = ?", (json.dumps({"conceded": True}), o["id"]))
+    conn.commit()
+    _lab_trial(conn, LAB["test"], "failed", {"1": _period(0.004, 0.01), "2": _period(0.003, 0.02)}, ts=T0 + 5)
+    assert DS.grade_due(conn, None, T0 + 10) == []
+    row = DS.get(conn, o["id"])
+    assert row["status"] == "conceded" and row["winner"] is None and DS.board(conn)["base_rates"]["all"]["settled"] == 0
+
+
+def test_an_older_ledger_number_run_again_after_the_dispute_settles_it(conn):
+    """A test that had no data before the dispute keeps its ledger number; run again after the dispute opened (the
+    meeting's own request_test), its new result settles the dispute without the queue."""
+    tid = _lab_trial(conn, LAB["test"], "no_data", {}, ts=T0 - DAY)
+    o = _open(conn, LABC)
+    assert o["status"] == "queued"                                             # no_data is not a final test
+    assert DS.grade_due(conn, None, T0 + 1) == []                              # its only result is older
+    R.add_trial_result(conn, tid, "failed", {"result": {"ok": True, "template": "skip_tag", "periods": {
+        "1": _period(-0.001, 0.8), "2": _period(-0.001, 0.8)}}, "gate": {"pass": False}, "n_trials": 2}, ts=T0 + 50)
+    [g] = DS.grade_due(conn, None, T0 + 60)
+    assert (g["dispute_id"], g["status"], g["winner"], g["trial_id"]) == (o["id"], "settled", "b", tid)
+
+
+def test_one_unreadable_row_does_not_stop_the_others(conn, tmp_path, monkeypatch):
+    paper = Paper(tmp_path)
+    bad = _fwd(conn, paper.ro(), "tag_gap", n=20, tf="1h")
+    good = _fwd(conn, paper.ro(), "vs_flip", n=20, tf="4h")
+    paper.add(f"{S}@1h", T0 + 1000, -0.01, n=20)
+    paper.add(f"{S}@4h", T0 + 1000, -0.01, n=20)
+    paper.add("RANDOM_1@4h", T0 + 1000, 0.01, n=20)
+    real = DS._tagged
+
+    def broken(rows, tag, rt):
+        raise AttributeError("a trade's data code cannot read")
+    monkeypatch.setattr(DS, "_tagged", broken)
+    got = DS.grade_due(conn, paper.ro(), T0 + DAY)
+    assert [g["dispute_id"] for g in got] == [good["id"]]
+    assert DS.get(conn, bad["id"])["status"] == "open"                          # tried again next tick
+    monkeypatch.setattr(DS, "_tagged", real)
+    assert [g["dispute_id"] for g in DS.grade_due(conn, paper.ro(), T0 + DAY + 1)] == [bad["id"]]
+
+
+def test_the_packets_test_budget_counts_what_the_queue_counts(conn, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(DS, "_labintake", lambda: _fake_labintake(calls))
+    o = _open(conn, LABC)
+    # a run that got a ledger number but no data: in the room's n, so it costs the day's budget (labintake)
+    conn.execute("INSERT INTO lab_intake_events (intake_id, ts, status, trial_id) VALUES (?, ?, 'not_counted', 9)",
+                 (o["intake_id"], T0 + 10))
+    conn.commit()
+    t = DS.dispute_tests(conn, S, T0 + 20)
+    assert t["left_today"] == 2 and t["room_test_ok_now"] is False
+
+
+def test_the_sunday_line_never_pools_5_year_and_forward_shares(conn):
+    for k, (settle, winner) in enumerate(((LABC, "b"), ({"kind": "forward", "check": "vs_flip", "timeframe": None,
+                                                          "n": 20}, "a"))):
+        o = _open(conn, settle, now=T0 + k)
+        DS._update(conn, o["id"], status="settled", winner=winner, outcome="x", settled_ts=T0 + DAY)
+    line = DS.week_line(DS.week_summary(conn, T0, T0 + 2 * DAY))
+    assert "5년 시험 0/1(0%)" in line and "앞으로 N건 1/1(100%, 동전 50%)" in line
+    assert "실험 전체 공격 쪽 1/2" not in line                                 # never one pooled share
