@@ -29,6 +29,10 @@ DEFAULT_DAYS = 5
 DAY_MS = 86_400_000
 
 
+class EntryBarGone(Exception):
+    """The clone's entry bar is older than the oldest bar the league still holds: it must not be simulated on another bar."""
+
+
 def window_bars(tf_ms: int, days: int = DEFAULT_DAYS) -> int:
     return (days * DAY_MS) // tf_ms
 
@@ -68,6 +72,8 @@ def resolve_clone(clone: dict, bars: dict, cost, now_ms: int) -> dict | None:
     The update has status 'closed' once the stop, the target or the 48th bar is in the bars, else 'pending' with the entry
     filled in (so the league knows a position would be open)."""
     t, o, h, l, c = bars["t"], bars["o"], bars["h"], bars["l"], bars["c"]
+    if len(t) and int(clone["target_ms"]) < int(t[0]):
+        raise EntryBarGone(clone["clone_id"])       # pruned: league._prune keeps the bars a pending clone needs
     e = int(np.searchsorted(t, int(clone["target_ms"]), side="left"))
     if e >= len(t):
         return None

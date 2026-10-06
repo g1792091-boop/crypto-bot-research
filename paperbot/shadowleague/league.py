@@ -191,7 +191,7 @@ class League:
                 out[k] += got.get(k, 0)
         for m in live:
             try:
-                out["clones"] += self._resolve_clones(m, now_ms)
+                out["clones"] += self._resolve_clones(m, now_ms, out["errors"])
                 self.update_accounts(m)
             except Exception as exc:  # noqa: BLE001
                 out["errors"].append(f"{m.member_id}/clones+account: {type(exc).__name__}: {str(exc)[:160]}")
@@ -258,8 +258,11 @@ class League:
                     return
                 cursors.append(int(s["last_bar_ms"]))
         if cursors:
-            st.conn.execute("DELETE FROM bars WHERE coin = ? AND tf = ? AND t_ms < ?",
-                            (coin, tf, min(cursors) - KEEP_BARS * tfm))
+            cut = min(cursors) - KEEP_BARS * tfm
+            need = st.oldest_pending_clone_ms(coin, tf)      # a clone that has not entered yet needs its own entry bar
+            if need is not None:                             # (a long catch-up in one tick moves the cursor far past it)
+                cut = min(cut, need)
+            st.conn.execute("DELETE FROM bars WHERE coin = ? AND tf = ? AND t_ms < ?", (coin, tf, cut))
 
     def _finish_status(self, m: Member, coin: str, tf: str, cur: Optional[dict], feed: Optional[dict], sync: dict,
                        now_ms: int, tfm: int) -> None:
@@ -358,20 +361,29 @@ class League:
         self.store.close_trade(trade_id, {**tr, "exit_ms": int(t[tr["exit_idx"]])}, now_ms)
 
     # ------------------------------------------------------------------------------------------------ clones, accounts
-    def _resolve_clones(self, m: Member, now_ms: int) -> int:
+    def _resolve_clones(self, m: Member, now_ms: int, problems: Optional[list] = None) -> int:
+        """Simulate every pending clone whose entry bar and holding bars have closed. A clone whose entry bar is no longer
+        stored is left pending and reported in ``problems`` (it is never simulated on another bar)."""
         st, n = self.store, 0
         for coin, tf in st.pending_clone_series(m.member_id):
             bars = st.load_bars(coin, tf)
             if not len(bars["t"]):
                 continue
             cost = m.trade.cost(tf)
+            lost = 0
             with st.tx():
                 for cl in st.pending_clones(m.member_id, coin, tf):
-                    row = CL.resolve_clone(cl, bars, cost, now_ms)
+                    try:
+                        row = CL.resolve_clone(cl, bars, cost, now_ms)
+                    except CL.EntryBarGone:
+                        lost += 1
+                        continue
                     if row is None:
                         continue
                     st.update_clone(cl["clone_id"], row)
                     n += row["status"] == "closed"
+            if lost and problems is not None:
+                problems.append(f"{m.member_id}/{coin}/{tf}: {lost} clones wait for an entry bar that is no longer stored")
         return n
 
     def update_accounts(self, m: Member) -> None:

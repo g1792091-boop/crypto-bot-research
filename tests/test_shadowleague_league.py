@@ -135,6 +135,38 @@ def test_one_bar_ticks_a_restart_every_few_ticks_a_gap_and_one_late_tick_make_th
             assert got[t] == base[t], f"{name}: table {t} differs"
 
 
+def test_a_late_catch_up_of_thousands_of_bars_gives_every_clone_the_entry_bar_it_drew(tmp_path):
+    """One late pass moves the cursor far past the early trades; the bars older than the retention window are then pruned.
+    The clones of those trades (entering up to 5 days BEFORE the trade) must still be simulated on the bars they chose,
+    never on the oldest bar that happens to be left: the tables equal those of a run that ticked all along."""
+    a_tbl, a_st = _scenario(tmp_path, "inc.db", list(range(1099, 3999, 25)) + [3999], k=20)
+    b_tbl, b_st = _scenario(tmp_path, "late.db", [3999, 3999, 3999], k=20)
+    assert a_tbl["clones"] and a_tbl["trades"]
+    for st in (a_st, b_st):
+        bad = st.conn.execute("SELECT COUNT(*) FROM clones WHERE entry_ms IS NOT NULL AND entry_ms != target_ms").fetchone()[0]
+        assert bad == 0, "a clone was simulated on a bar other than the one it drew"
+    for t in ("members", "feeds", "series_state", "signals", "trades", "clones", "account_daily"):
+        assert b_tbl[t] == a_tbl[t], t
+    assert b_st.get_meta("last_tick")["errors"] == []
+
+
+def test_a_pending_clone_keeps_its_entry_bar_through_the_pruning_and_a_lost_one_is_reported_not_guessed(tmp_path):
+    ex, m, st = world(tmp_path, k=10)
+    st, _ = ticks(st, ex, m, [1239, 1539])
+    n_bars = st.conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
+    assert st.oldest_pending_clone_ms("BTC", "1h") is None or isinstance(st.oldest_pending_clone_ms("BTC", "1h"), int)
+    # a clone far in the past of everything stored cannot be simulated: it says so and stays pending
+    cl = CL.make_clones(m.member_id, {"trade_id": "x", "coin": "BTC", "tf": "1h", "side": 1, "entry_ms": T0 + 5 * HOUR,
+                                      "sl_dist": 0.01, "tp_dist": 0.03}, HOUR, T0, T0, 3, 5)
+    st.conn.execute("DELETE FROM bars WHERE t_ms < ?", (T0 + 400 * HOUR,))
+    st.add_clones(cl)
+    problems: list = []
+    LG.League(st, (m,), ex.get)._resolve_clones(m, ex.now_ms, problems)
+    assert problems and "no longer stored" in problems[0]
+    assert {r["status"] for r in st.conn.execute("SELECT status FROM clones WHERE trade_id = 'x'")} == {"pending"}
+    assert n_bars > 0
+
+
 def test_irregular_ticks_of_15_minute_bars_with_5_to_10_minute_gaps_make_the_same_tables(tmp_path):
     """A pass that is a few minutes late sees the same closed bars; a pass that was missed sees two bars at once."""
     start = T0 + 1000 * 15 * MIN
