@@ -50,7 +50,7 @@ def test_account_strip_links_and_deepseek_counts_only():
     assert 'const val = counts ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);' in strip
     assert 'counts ? ui.pill("", "ref") : null' in strip and 'counts ? null : ui.assume("closed"' in strip
     # the strip lives under the profile card and follows the board
-    assert "el.replaceChildren(backLink(), headSlot, same ? same.el : null," in js
+    assert "el.replaceChildren(...[backLink(), headSlot, same ? same.el : null," in js   # (nulls filtered: conv-a review)
     assert "if (view.same) view.same.update(b);" in js
     # the routes it links to read those params
     assert "q.tf" in _read("screens", "strategies-detail.js")
