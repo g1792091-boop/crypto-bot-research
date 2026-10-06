@@ -183,3 +183,22 @@ export function smcAll(bars, o = {}) {
     legs: last(legs(zz), lim.legs),
   };
 }
+
+// ---------------------------------------------------------------- the chart's Premium / Discount light (chartfx.js)
+/**
+ * splitOf(range, visibleBars) -> {eq, hi, lo, src: "range" | "mid"} or null: where the AI skin splits the pane into
+ * Premium (above, red) and Discount (below, sky blue): the equilibrium of the current dealing range (dealingRange), or
+ * when there is none the middle of the visible high / low.
+ */
+export function splitOf(range, bars) {
+  if (range && Number.isFinite(range.eq) && range.hi > range.lo) return {eq: range.eq, hi: range.hi, lo: range.lo, src: "range"};
+  let hi = -Infinity, lo = Infinity;
+  for (const b of bars || []) {
+    if (!b) continue;
+    if (Number.isFinite(b.high) && b.high > hi) hi = b.high;
+    if (Number.isFinite(b.low) && b.low < lo) lo = b.low;
+  }
+  return hi > lo ? {eq: (hi + lo) / 2, hi, lo, src: "mid"} : null;
+}
+/** "premium" at or above the split, "discount" below. */
+export const zoneOf = (price, eq) => (Number(price) >= eq ? "premium" : "discount");

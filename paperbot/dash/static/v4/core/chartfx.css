@@ -1,9 +1,9 @@
 /* The chart deck (core/chartfx.js): layers under the transparent chart canvas (depth, ambient light, event flash),
    the line pills / edge markers over the pane, our last-price tag, the '선' menu and the 프리미엄 지표 button.
    Colours are tokens (tokens.css); the AI skin has the light, 클래식 stays plain (its light tokens are transparent and
-   the layers are not drawn). Motion: the ambient cross-fades only when its tone or strength really changed; the flash
-   is a Web Animation started by a real event (core/flash.js); the tag pulses once on a real new price. All of it is
-   off under prefers-reduced-motion (no flash; the tint stays without its cross-fade). */
+   the layers are not drawn). Motion: the steady Premium / Discount light has none (its split simply follows the price
+   scale); the flash is a Web Animation started by a real event (core/flash.js); the tag pulses once on a real new
+   price. Under prefers-reduced-motion: no flash, no pulse (the steady light stays). */
 .cfx { isolation: isolate; }
 .cfx-box { z-index: 1; }
 .cfx[data-fx="ai"] { background: var(--surface); }
@@ -16,12 +16,21 @@
 
 /* a faint depth: a lighter top, a darker floor */
 .cfx-depth { background: linear-gradient(to bottom, var(--depth-top), transparent 42%, var(--depth-bot)); }
-/* the steady light: strongest at the top edge, a faint inner edge glow; the two tones cross-fade (1.2 s) */
-.cfx-amb { opacity: 0; transition: opacity 1.2s var(--ease); }
-.cfx-amb[data-tone="up"] { background: linear-gradient(to bottom, var(--amb-up), transparent 80%); box-shadow: inset 0 0 42px var(--amb-up-edge); }
-.cfx-amb[data-tone="down"] { background: linear-gradient(to bottom, var(--amb-down), transparent 80%); box-shadow: inset 0 0 42px var(--amb-down-edge); }
-.cfx-under[data-amb="up"] > .cfx-amb[data-tone="up"], .cfx-under[data-amb="down"] > .cfx-amb[data-tone="down"] { opacity: var(--ak, .8); }
-.cfx-under.still > .cfx-amb { transition: none; }
+/* the steady light, split at the dealing range's equilibrium (--split, px from the pane top; chartfx.js placeSplit):
+   Premium above washed red (strongest at the top edge), Discount below sky blue (strongest at the bottom edge); each
+   half runs 24 px past the split while fading out, so the seam is feathered, never a hard line */
+.cfx-under > .cfx-amb { opacity: 0; }
+.cfx-under[data-split="1"] > .cfx-amb { opacity: 1; }
+.cfx-under > .cfx-amb[data-tone="down"] { top: 0; bottom: auto; height: calc(var(--split, 50%) + 24px);
+  background: linear-gradient(to bottom, var(--amb-down), var(--amb-down-seam) calc(100% - 24px), transparent);
+  box-shadow: inset 0 30px 30px -26px var(--amb-down-edge); }
+.cfx-under > .cfx-amb[data-tone="up"] { top: calc(var(--split, 50%) - 24px); bottom: 0;
+  background: linear-gradient(to top, var(--amb-up), var(--amb-up-seam) calc(100% - 24px), transparent);
+  box-shadow: inset 0 -30px 30px -26px var(--amb-up-edge); }
+.cfx-zw { position: absolute; right: 64px; opacity: .6; font: 600 var(--t-2xs)/1 var(--f-term); letter-spacing: .02em; }
+.cfx-zw[hidden], .cfx-under:not([data-split="1"]) > .cfx-zw { display: none; }
+.cfx-zw[data-tone="down"] { top: calc(var(--split, 50%) - 18px); color: var(--amb-down-ink); }
+.cfx-zw[data-tone="up"] { top: calc(var(--split, 50%) + 6px); color: var(--amb-up-ink); }
 /* the event flash: a whole-pane wash; its opacity is the Web Animation's (none under reduced motion) */
 .cfx-flash { opacity: 0; --fc: var(--flash-accent);
   background: linear-gradient(to bottom, var(--fc), transparent 92%), radial-gradient(ellipse at 50% 0%, var(--fc), transparent 75%);
@@ -110,6 +119,5 @@
 .cfx-light[data-tone="down"] i { background: var(--amb-down-ink); box-shadow: 0 0 8px var(--amb-down-ink); }
 
 @media (prefers-reduced-motion: reduce) {
-  .cfx-amb { transition: none; }
   .cfx-tag[data-hit] { animation: none; }
 }

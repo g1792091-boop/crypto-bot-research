@@ -3,8 +3,11 @@
 //   glow       AI skin only: candles and wicks get a soft neon glow in their up / down colours, the forming candle a
 //              little brighter, the last price a glowing line, our entry / exit marks a halo; a faint depth gradient.
 //              Drawn under the candles (primitive zOrder "bottom"), so the candles and every text stay crisp.
-//   ambient    AI skin only: the pane is washed sky blue while the last close is above the EMA(50) of the bars shown,
-//              red below (core/flash.js ambient: it flips only on a real cross), ~1.2 s CSS cross-fade on a change.
+//   ambient    AI skin only, like the reference terminal: the pane is split at the equilibrium of the current dealing
+//              range (core/smc.js splitOf; fallback the middle of the visible high / low): the Premium part above is
+//              washed red (strongest at the top edge), the Discount part below sky blue (strongest at the bottom edge),
+//              a soft seam between, faint 'Premium' / 'Discount' words at the right. The split follows the price scale
+//              (pan / zoom) and moves when the dealing range really changes (a new closed bar).
 //   flash      AI skin only: a real market event of this coin (a big taker trade from the server relay, a market
 //              liquidation, our own bot's fill) washes the pane once (core/flash.js scheduler: 0.2 s in, a 0.6 s hold
 //              or 1.5 s for a 고래 / a large liquidation, 0.4 s out; '번쩍임 자주 / 보통 / 끄기' per device). Reduced
@@ -23,12 +26,12 @@ import {h, local} from "./dom.js";
 import {tok} from "./lwc.js";
 import {price as fmtPrice} from "./fmt.js";
 import {reduced, visible} from "./motion.js";
-import {flashScheduler, ambient, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
-import {smcAll} from "./smc.js";
+import {flashScheduler, ENVELOPE, FLASH_MODES, DEFAULT_FLASH, modeOf} from "./flash.js";
+import {smcAll, splitOf, zoneOf} from "./smc.js";
 import {smcPrimitive} from "./smcdraw.js";
 
 export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
-export const AMBIENT_TIP = "빨간 빛 = 가격이 50봉 평균 아래 / 하늘색 = 위";
+export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
 export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
 export const SMC_NOTE = "프리미엄 지표: 화면의 캔들로 계산한 참고선 (스윙·구조·OB·FVG·OTE) · 매매 신호 아님";
 const SMC_KEY = "프리미엄 지표 · 계산한 참고선 · 신호 아님";
@@ -186,7 +189,7 @@ export function chartDeck(o) {
   const st = {
     off: new Set(Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
     hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : []),
-    data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, amb: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
+    data: [], col: colours(), ai: isAi(), smc: null, smcAt: null, range: null, zone: null, lastPx: null, raf: 0, marks: [], idx: new Map(),
   };
   const subs = [];
   const save = () => local.set(key, {off: [...st.off], hide: [...st.hide].slice(-60)});
@@ -199,7 +202,9 @@ export function chartDeck(o) {
   const ambUp = h("i", {class: "cfx-amb", dataset: {tone: "up"}, "aria-hidden": "true"});
   const ambDn = h("i", {class: "cfx-amb", dataset: {tone: "down"}, "aria-hidden": "true"});
   const flashEl = h("i", {class: "cfx-flash", "aria-hidden": "true"});
-  const under = h("div", {class: "cfx-under", "aria-hidden": "true"}, depth, ambUp, ambDn, flashEl);
+  const wPrem = h("span", {class: "cfx-zw", dataset: {tone: "down"}}, "Premium");
+  const wDisc = h("span", {class: "cfx-zw", dataset: {tone: "up"}}, "Discount");
+  const under = h("div", {class: "cfx-under", "aria-hidden": "true"}, depth, ambDn, ambUp, wPrem, wDisc, flashEl);
   const pills = h("div", {class: "cfx-pills"});
   const edgeTop = h("div", {class: "cfx-edge top"}), edgeBot = h("div", {class: "cfx-edge bot"});
   const smcKey = h("div", {class: "cfx-smckey", hidden: true, title: SMC_NOTE}, SMC_KEY);
@@ -343,6 +348,7 @@ export function chartDeck(o) {
       el.style.left = pane.x + "px"; el.style.top = pane.y + "px"; el.style.width = pane.w + "px"; el.style.height = pane.h + "px";
     }
     layoutPills();
+    placeSplit();
     if (tagEl) {
       const d = st.data[st.data.length - 1], y = d ? series.priceToCoordinate(d.close) : null;
       if (y == null || y < 0 || y > pane.h) tagEl.hidden = true;
@@ -425,33 +431,46 @@ export function chartDeck(o) {
   flashSel.hidden = !st.ai;
   const lightChip = h("span", {class: "cfx-light", hidden: !st.ai, tabindex: "0", title: AMBIENT_TIP + "\n" + FLASH_TIP, "aria-label": AMBIENT_TIP + ". " + FLASH_TIP},
     h("i", {"aria-hidden": "true"}), h("span", null, "빛"));
-  function paintAmbient(fresh) {
-    if (!st.ai) { under.dataset.amb = ""; return; }
-    const closed = st.data;                               // the forming bar counts: the light follows the price now
-    const a = ambient(closed, fresh ? null : st.amb && st.amb.tone);
-    if (!a) { under.dataset.amb = ""; return; }
-    const changed = !st.amb || st.amb.tone !== a.tone || Math.abs(st.amb.k - a.k) >= 0.05;
-    if (!changed && !fresh) return;
-    if (fresh) under.classList.add("still");
-    under.dataset.amb = a.tone;
-    under.style.setProperty("--ak", String(a.k));
-    lightChip.dataset.tone = a.tone;
-    lightChip.lastChild.textContent = a.tone === "up" ? "평균 위" : "평균 아래";
-    st.amb = a;
-    if (fresh) requestAnimationFrame(() => requestAnimationFrame(() => under.classList.remove("still")));
+  wPrem.title = AMBIENT_TIP;
+  /** The Premium / Discount split at the price scale's current position (called with every redraw: pan, zoom, data). */
+  function placeSplit() {
+    if (!st.ai || !st.data.length) { under.dataset.split = ""; return; }
+    let vis = st.data;
+    const r = chart.timeScale().getVisibleLogicalRange();
+    if (r) vis = st.data.slice(Math.max(0, Math.floor(r.from)), Math.max(0, Math.ceil(r.to) + 1));
+    const sp = splitOf(st.range, vis);
+    const y = sp ? series.priceToCoordinate(sp.eq) : null;
+    if (y == null) { under.dataset.split = ""; return; }
+    const Y = Math.round(Math.max(0, Math.min(pane.h, y)));
+    under.dataset.split = "1";
+    under.style.setProperty("--split", Y + "px");
+    wPrem.hidden = Y < 22; wDisc.hidden = pane.h - Y < 22;
+    // the chip says which side the price is on now (and the split's source in its tooltip)
+    const z = zoneOf(st.data[st.data.length - 1].close, sp.eq);
+    if (z !== st.zone || sp.src !== st.zoneSrc) {
+      st.zone = z; st.zoneSrc = sp.src;
+      lightChip.dataset.tone = z === "premium" ? "down" : "up";
+      lightChip.lastChild.textContent = z === "premium" ? "Premium 구간" : "Discount 구간";
+      lightChip.title = `${AMBIENT_TIP}\n나누는 선: ${sp.src === "range" ? "지금 범위의 중간값" : "화면 고가·저가의 중간"} ${fmtPrice(sp.eq)}\n${FLASH_TIP}`;
+    }
   }
 
   // ---------------------------------------------------------------- 프리미엄 지표
   // the words of our lines (저항 / 지지 / 잠금 / 손절 / 알림 …) are placed with the indicators' words at the right edge
   const lineWords = () => [...lines.values()].filter((L) => L.vis && L.spec.label && L.y != null)
     .map((L) => ({s: L.spec.label, price: L.spec.price, c: st.col[L.spec.tone] || st.col.flat}));
-  const smcP = smcPrimitive({chart, series, get: () => (shown("smc") ? st.smc : null), col: () => st.col, extra: lineWords});
+  const smcP = smcPrimitive({chart, series, get: () => (shown("smc") ? st.smc : null), col: () => st.col, extra: lineWords,
+    zoneWords: () => !st.ai});                             // the AI skin's split already says Premium / Discount
   series.attachPrimitive(smcP);
   function computeSmc() {
-    if (!shown("smc") || st.data.length < 30) { st.smc = null; smcP.request(); return; }
-    st.smc = smcAll(st.data.slice(0, -1));                // closed candles only: a forming bar can still change
+    // closed candles only (a forming bar can still change); the AI skin's split uses the dealing range even with the
+    // indicator itself turned off
+    const need = shown("smc") || st.ai;
+    const r = need && st.data.length >= 31 ? smcAll(st.data.slice(0, -1)) : null;
+    st.range = r && r.range;
+    st.smc = shown("smc") ? r : null;
     st.smcAt = st.data.length ? st.data[st.data.length - 1].time : null;
-    smcP.request();
+    smcP.request(); schedule();
   }
 
   // ---------------------------------------------------------------- the '선' menu + the 프리미엄 지표 button
@@ -520,7 +539,8 @@ export function chartDeck(o) {
     index();
     series.setData(st.data);
     st.lastPx = null;
-    paintVol(); computeSmc(); paintAmbient(true); if (tagEl) paintTag(false); schedule();
+    st.zone = null;
+    paintVol(); computeSmc(); if (tagEl) paintTag(false); schedule();
   }
   /** A newer or the forming bar. real: the price came from a real new trade / poll (the tag pulses once if it moved). */
   function update(c, real = true) {
@@ -531,7 +551,6 @@ export function chartDeck(o) {
     if (isNew) { st.data.push(c); st.idx.set(c.time, st.data.length - 1); } else st.data[n - 1] = {...last, ...c};
     if (vol && shown("vol") && c.volume != null) { try { vol.update(volRow(c)); } catch (e) { /* older */ } }
     if (isNew) computeSmc();
-    paintAmbient(false);
     if (tagEl) paintTag(real);
     schedule();
     return true;

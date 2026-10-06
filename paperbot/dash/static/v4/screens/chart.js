@@ -5,7 +5,7 @@
 // runs), US macro release marks, armed price alerts. Prices come from the server: /api/ticker (store, 5 s) and
 // /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links; the opt-in second
 // tab 거래소 차트 shows TradingView's own page in a sandboxed cross-origin iframe (chart-tv.js), built only while open.
-// The chart deck (core/chartfx.js, the same as the terminal's): the AI skin's glow, 50-bar-average light and event
+// The chart deck (core/chartfx.js, the same as the terminal's): the AI skin's glow, Premium / Discount light and event
 // flashes (a real big trade from the server relay, a market liquidation, our own fill of this coin), 1 px lines with a
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
