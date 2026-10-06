@@ -56,3 +56,15 @@
   .rg-def { grid-template-columns: 64px minmax(0, 1fr); }
   .rg-def small { grid-column: 2; }
 }
+.rg-two.l { justify-items: start; }
+.rg-two.l .rg-in { font-size: var(--t-2xs); }
+.rg-wf { display: grid; gap: 8px; }
+.rg-wfp { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }
+.rg-wfk { font-size: var(--t-sm); color: var(--ink); }
+.rg-wfc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rg-wfa { display: grid; gap: 2px; align-content: start; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); min-width: 0; }
+.rg-wfa.hi { border-color: var(--accent-line); }
+.rg-wfl { color: var(--muted); font-size: var(--t-xs); }
+.rg-wfa b { font-size: var(--t-md); }
+.rg-wfa small { font-size: var(--t-xs); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .rg-wfc { grid-template-columns: minmax(0, 1fr); } }

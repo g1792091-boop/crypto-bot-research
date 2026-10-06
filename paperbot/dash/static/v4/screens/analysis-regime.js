@@ -12,12 +12,7 @@ const RK = ["trend", "range", "shock", "normal"];
 const RKO = {trend: "추세장", range: "횡보장", shock: "급변장", normal: "보통", unknown: "모름"};
 const pc = (x, d = 1) => (x == null ? "—" : fmt.pct(x, d));
 const pp = (x) => (x == null ? "—" : `${fmt.num(x * 100, 1, true)}%p`);
-const ASSUME_5Y = "5년 과거 시험 · 30일마다 새 $5,000 계좌들의 합";
-
-function ensureCss() {
-  if (document.querySelector("link[data-an-regime]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/analysis-regime.css", dataset: {anRegime: "1"}}));
-}
+const ASSUME_5Y = "5년 과거 시험 · 평균 = 거래당 순 ROE · 손익(USDT) = 30일마다 새 $5,000 계좌들의 합";
 
 /** The median over cells of each regime's 5-year mean net ROE (cells with at least ``min`` trades in that regime). */
 export function regimeMedians(cells, min = 30) {
@@ -78,11 +73,10 @@ function detail(c, doc) {
   const keys = [...RK, ...(all.unknown ? ["unknown"] : [])].filter((k) => all[k]);
   const rows = keys.map((k) => ({k, r: all[k]}));
   const tbl = rows.length ? ui.table([
-    {label: "장세", l: true, get: (x) => h("span", null, RKO[x.k], rule.includes(x.k) ? h("b", {class: "rg-in"}, " 스위치 켬") : null)},
-    {label: "거래", get: (x) => `${fmt.int(x.r[0])}건`},
-    {label: "승률", get: (x) => fmt.pct(x.r[1], 0, false)},
-    {label: "평균 순 ROE", get: (x) => h("span", {class: fmt.tone(x.r[2])}, pc(x.r[2]))},
-    {label: "손익 (USDT)", get: (x) => h("span", {class: ["num", fmt.tone(x.r[3])]}, fmt.money(x.r[3], true))},
+    {label: "장세", l: true, get: (x) => h("span", {class: "rg-two l"}, RKO[x.k], rule.includes(x.k) ? h("b", {class: "rg-in"}, "스위치 켬") : null)},
+    {label: "거래", get: (x) => h("span", {class: "rg-two"}, `${fmt.int(x.r[0])}건`, h("small", {class: "num muted"}, `승률 ${fmt.pct(x.r[1], 0, false)}`))},
+    {label: "평균 · 손익", get: (x) => h("span", {class: "rg-two"}, h("span", {class: fmt.tone(x.r[2])}, pc(x.r[2])),
+      h("small", {class: ["num", fmt.tone(x.r[3])]}, fmt.money(x.r[3], true)))},
   ], rows) : h("p", {class: "muted"}, "5년 동안 거래가 없었습니다.");
   const pick = ((c.regimes || {}).pick) || {};
   const pickLine = rule.length
@@ -95,12 +89,12 @@ function detail(c, doc) {
     const t = c.test || {}, per = t.per || {};
     const pr = (k) => (doc.periods || []).find((p) => p.key === k) || {ko: k};
     kids.push(h("h3", {class: "an-sub"}, "손대지 않은 두 기간에서 확인"),
-      ui.table([
-        {label: "기간", l: true, get: (k) => pr(k).ko},
-        {label: "그대로", get: (k) => two(sw[k].base)},
-        {label: "스위치 켬", get: (k) => two(sw[k].switch, true)},
-        {label: "동전 봇 + 같은 스위치", get: (k) => two(sw[k].flip_switch, false, true)},
-      ], ["a", "b"]),
+      h("div", {class: "rg-wf", role: "list"}, ["a", "b"].map((k) => h("div", {class: "rg-wfp", role: "listitem"},
+        h("b", {class: "rg-wfk"}, pr(k).ko),
+        h("div", {class: "rg-wfc"},
+          wfCell("그대로", sw[k].base),
+          wfCell("스위치 켬", sw[k].switch, true),
+          wfCell("동전 봇 + 같은 스위치 (참고)", sw[k].flip_switch, false, "씨앗 3개 평균"))))),
       h("p", {class: "rg-say"}, "고른 장세 안 − 밖, 거래당 평균 차이: ",
         ["a", "b"].map((k, i) => [i ? " · " : "", `${pr(k).ko.split(" ")[1]} 매매법 ${pp((per[k] || {}).s)}, 동전 봇 ${pp((per[k] || {}).f)}`])),
       h("p", {class: ["rg-verdict", t.survivor ? "on" : ""]}, t.survivor
@@ -111,11 +105,12 @@ function detail(c, doc) {
   }
   return h("div", {class: "rg-detail"}, kids);
 }
-/** "평균 −3.1% · −12,345.67" (and the trade count when asked). */
-function two(r, withN, flips) {
-  if (!r || !r[0]) return h("span", {class: "muted"}, "거래 없음");
-  return h("span", {class: "rg-two"}, h("span", {class: fmt.tone(r[2])}, `평균 ${pc(r[2])}`),
-    h("small", {class: "num muted"}, [withN || flips ? `${fmt.int(r[0])}건${flips ? "(씨앗 평균)" : ""} · ` : "", fmt.money(r[3], true)]));
+/** One account of the walk-forward check: "평균 −3.1%" with "1,234건 · −12,345.67" under it. */
+function wfCell(label, r, hi, note) {
+  const body = !r || !r[0] ? h("span", {class: "muted"}, "거래 없음")
+    : [h("b", {class: ["num", fmt.tone(r[2])]}, `평균 ${pc(r[2])}`),
+      h("small", {class: "num muted"}, `${fmt.int(r[0])}건${note ? ` (${note})` : ""} · `, h("span", {class: fmt.tone(r[3])}, `${fmt.money(r[3], true)} USDT`))];
+  return h("div", {class: ["rg-wfa", hi ? "hi" : ""]}, h("span", {class: "rg-wfl"}, label), body);
 }
 
 function cellRow(c, open, toggle, doc) {
@@ -248,7 +243,6 @@ function liveCell(r, min) {
 
 // ---------------------------------------------------------------- 장세 스위치 (/api/v4/regime5y)
 export function regime(d, env) {
-  ensureCss();
   const hd = d.head || {};
   const per = (d.periods || []).map((p) => p.ko).join(" · ");
   const out = [viewHead({plate: "장세 스위치", q: "잃는 게 '맞지 않는 장'에서 돌아서일까?",

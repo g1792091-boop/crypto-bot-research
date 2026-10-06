@@ -1,5 +1,6 @@
 @import url("analysis-shape.css");
 @import url("analysis-anasyn.css");
+@import url("analysis-regime.css");
 /* analysis: 분석 (builder C). One card style for every view: the head card (plate, the question, what it stands on, how
    to read it, warnings), then content cards. Screen-only rules; tokens and components come from the shared css. */
 [data-screen="analysis"] .an-tabs { position: sticky; top: calc(var(--top-h) + var(--sub-h)); z-index: 5; margin: 0 calc(var(--gutter) * -1);
