@@ -35,6 +35,11 @@
 .chart-legend { position: absolute; left: 8px; top: 6px; right: 70px; z-index: 2; pointer-events: none; font-size: var(--t-xs); color: var(--ink-2);
   white-space: normal; text-shadow: 0 0 4px var(--surface); }
 .chart-legend b { color: var(--ink); }
+/* the chart deck (core/chartfx.css): its controls row, the box above the light layers, the wrap carries the radius */
+.chart-fx { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.chart-card[data-view="tv"] > .chart-fx { display: none; }
+.chart-box.cfx-box { position: relative; }
+.chart-wrap.cfx { border-radius: var(--r-md); overflow: hidden; }
 .chart-fail { display: grid; place-items: center; height: 100%; padding: 16px; }
 .chart-ctrl { display: flex; gap: 8px; min-width: 0; }
 .chart-acct { flex: 1 1 auto; min-width: 0; height: 38px; }

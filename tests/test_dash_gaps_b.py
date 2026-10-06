@@ -127,34 +127,26 @@ def test_family_summary_is_on_the_deepseek_list_and_linked_from_the_grid():
 
 # ---------------------------------------------------------------------------------------------- (2) line glow
 def test_terminal_line_glow_follows_real_lines_only():
+    """Superseded by the chart deck (owners 10/06: "선이 너무 크고 투박하다"): our entry / stop lines are 1 px lines
+    drawn by core/chartfx.js (a faint glow in the AI skin only), one per real position; tests/test_dash_glow.py
+    covers the deck. Here: the terminal hands the deck only real positions and drops them on a coin switch."""
     js = _read("screens", "terminal-chart.js")
     code = _code(js)
-    # one glow per real price line: created in the same loop as the line, dropped with it, cleared on a coin switch
-    assert 'const glows = h("div", {class: "term-glows", "aria-hidden": "true"});' in code
-    assert "rm(l); lines.pos.delete(k); dropGlow(k);" in code
-    assert "[...lines.glow.keys()].forEach(dropGlow); glowSeen = false;" in code
-    loop = code[code.index("for (const [k, w] of want) {"):code.index("function drawLevels()")]
-    assert "lines.glow.set(k, g)" in loop and "g.el.dataset.tone = w.tone;" in loop
-    # placed at the line's own price, hidden off the price range; moved by place() (scroll, zoom, resize, tick)
-    pg = code[code.index("function placeGlows()"):code.index("function place()")]
-    assert "series.priceToCoordinate(g.price)" in pg and "g.el.hidden = true" in pg
-    # drawPos (board / ticker) can run before the chart's first layout: the scale width read must not throw out
-    assert 'try { sw = C.chart.priceScale("right").width(); } catch (e) { return; }' in pg
-    assert "placeGlows();" in code[code.index("function place()"):code.index("function paintTag(")]
-    # motion only for a line that is new after the first paint, through the reduced-motion-aware helper
-    assert "const real = glowSeen;" in code and "if (real && !g.el.hidden) motion.drawIn(g.band, 500);" in code
-    assert "setInterval" not in code and "requestAnimationFrame(placeGlows" not in code
+    assert 'deck.setLines("pos", posLines(accts, store.mark(st.sym), {stops: 6}));' in code
+    assert 'deck.setLines("pos", []); deck.setLines("sr", []);' in code          # a coin switch clears the lines
+    assert "term-glows" not in code and "placeGlows" not in code                   # the old DOM bands are gone
+    fx = _code(_read("core", "chartfx.js"))
+    assert "if (st.ai && sp.glow !== false)" in fx                                 # the glow is the AI skin's only
+    assert "setInterval" not in code and "setInterval" not in fx
 
 
 def test_terminal_glow_css_uses_tokens_and_no_loop():
-    css = _read("screens", "terminal.css")
-    part = css[css.index("/* gap batch B: a soft glow"):css.index(".term-tip {")]
-    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d|\b(black|white)\b", part)
-    assert "@keyframes" not in part and "animation" not in part and "infinite" not in part
-    assert "var(--ug)" in part and "var(--dg)" in part and "var(--accent-glow)" in part
-    assert "pointer-events: none" in part
+    css = _read("core", "chartfx.css")
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d|\b(black|white)\b(?!-)", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
+    assert "infinite" not in css                                                   # no loop: one-shots only
+    assert "pointer-events: none" in css
     tok = _read("tokens.css")
-    for k in ("--up-glow", "--down-glow", "--accent-glow"):
+    for k in ("--up-glow", "--down-glow", "--accent-glow", "--amb-up", "--amb-down", "--flash-up", "--flash-down"):
         assert tok.count(k + ":") == 2, k                                    # both skins (AI default + 클래식)
 
 

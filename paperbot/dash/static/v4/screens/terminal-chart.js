@@ -1,28 +1,29 @@
 // 터미널 centre: the candle chart with the same engine and helpers as 차트 (core/lwc makeChart / candleOptions / tok /
 // priceDec, positions-kit normPos): /api/candles (500 bars, then the forming bar every 5 s like 차트), our open positions
-// on this coin as entry lines (기존 36 · 5분봉 · 추가 계좌; stops when few enough to read), our recent closed trades as
+// on this coin as entry lines (기존 36 · 5분봉 · 추가 계좌) with their nearest stops / locks, our recent closed trades as
 // entry / exit marks, support / resistance (/api/levels, the four house timeframes), US macro releases as marks with a
 // tooltip, and the price tag on the right axis: the last price, dashed across the chart, with the bar-close countdown
 // under it; it glows teal / pink when the server's price really moved. A small dot breathes on the last candle while the
 // stream is live (never while the page is hidden or under reduced motion).
-// Our entry and stop lines carry a soft glow (gap batch B): lightweight-charts price lines cannot glow, so a thin band
-// per line sits in an overlay over the chart at the line's price (series.priceToCoordinate, moved with the price tag
-// in place()), in the line's own meaning colour (--up-glow / --down-glow, --accent-glow before a mark price). It is
-// static; a glow that newly appears (a real new position or stop) draws itself in once (motion.drawIn: skipped under
-// reduced motion and on a hidden page). No position on this coin: no line, no glow.
-import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
-import {normPos} from "./positions-kit.js";
+// The chart deck (core/chartfx.js, owners 10/06 "간지나게 · 선은 얇게 · 누르면 숨기게"): in the AI skin the candles
+// glow, the pane carries the 50-bar-average light and flashes once on a real big trade / liquidation / our fill of
+// this coin; our lines are 1 px with a compact pill at the left (click to hide), never in the autoscale, an edge
+// marker when off the price range; the '선' menu, 프리미엄 지표 (core/smc.js) and the volume bars along the bottom.
+import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec, chartDeck,
+  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
 import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
+import {posLines} from "./chart-lines.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
 const LEVEL_TFS = ["15m", "30m", "1h", "4h"];
 const MAIN = new Set(["core", "m5", "extra"]);
 const TF_S = Object.fromEntries(Object.entries(bars.TF_MS).map(([k, v]) => [k, v / 1000]));
-const RELAY_FRESH_MS = 6000;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
+const RELAY_FRESH_MS = 6000;
+const narrowBox = () => typeof matchMedia === "function" && matchMedia("(max-width: 1279px)").matches;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
 
-/** termChart(ctx, st, onTf) -> {el, ready, setSym, onTicker, onBoard, onTrades, tick} */
+/** termChart(ctx, st, onTf) -> {el, ready, setSym, onTicker, onBoard, onTrades, onTick, flash, tick} */
 export function termChart(ctx, st, onTf) {
   const tfBtns = new Map();
   const tfBar = h("div", {class: "term-tfs", role: "tablist", "aria-label": "봉"}, TFS.map((tf) => {
@@ -35,18 +36,15 @@ export function termChart(ctx, st, onTf) {
   const tag = h("div", {class: "term-ptag", hidden: true}, h("b", {class: "num"}, "—"), h("small", {class: "num"}, "—"));
   const dot = h("i", {class: "term-dot", hidden: true, "aria-hidden": "true"});
   const tip = h("div", {class: "term-tip", hidden: true, role: "tooltip"});
-  const glows = h("div", {class: "term-glows", "aria-hidden": "true"});
-  const wrap = h("div", {class: "term-cwrap"}, box, glows, legend, dot, tag, tip);
+  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip);
   const keyLine = h("div", {class: "term-ckey"});
+  const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
-  const el = panel("차트", {cls: "term-chart", acts: [tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
   const moreA = el.head.querySelector(".term-more");
 
-  let C = null, series = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;
-  let glowSeen = false;          // the first lines drawn for a coin are the baseline: their glows appear without motion
-  const lines = {pos: new Map(), lv: [], glow: new Map()};
-  const rm = (l) => { try { series.removePriceLine(l); } catch (e) { /* gone */ } };
-  const dropGlow = (k) => { const g = lines.glow.get(k); if (g) { g.el.remove(); lines.glow.delete(k); } };
+  let C = null, series = null, deck = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;
+  let seenPos = null;            // this coin's open positions at the last board (a new one is a real fill: one accent flash)
 
   function paintLegend(d) {
     if (!d) { legend.textContent = ""; return; }
@@ -55,29 +53,14 @@ export function termChart(ctx, st, onTf) {
       h("span", {class: fmt.tone(ch)}, fmt.pct(ch, 2)));
   }
 
-  // ---------------------------------------------------------------- overlays: the price tag + countdown, the dot, line glows
-  /** Each entry / stop glow sits on its line's price; a line scrolled out of the price range hides its glow. */
-  function placeGlows() {
-    if (!lines.glow.size) return;
-    let sw;
-    try { sw = C.chart.priceScale("right").width(); } catch (e) { return; }       // the chart is mid-layout: next place()
-    const W = Math.max(0, box.clientWidth - sw), H = box.clientHeight - 26;
-    for (const g of lines.glow.values()) {
-      const y = series.priceToCoordinate(g.price);
-      if (y == null || y < 0 || y > H) { g.el.hidden = true; continue; }
-      g.el.hidden = false;
-      g.el.style.width = W + "px";
-      g.el.style.transform = `translateY(${Math.round(y)}px)`;
-    }
-  }
+  // ---------------------------------------------------------------- overlays: the price tag + countdown, the dot
   function place() {
-    glows.hidden = !series || !last;
     if (!series || !last) { tag.hidden = true; dot.hidden = true; return; }
-    placeGlows();
     const y = series.priceToCoordinate(last.close);
     const x = C.chart.timeScale().timeToCoordinate(last.time);
-    const sw = C.chart.priceScale("right").width();
-    const H = box.clientHeight - 26;
+    let sw, th;
+    try { sw = C.chart.priceScale("right").width(); th = C.chart.timeScale().height(); } catch (e) { return; }   // mid-layout
+    const H = box.clientHeight - th;
     if (y == null || y < 0 || y > H) { tag.hidden = true; } else {
       tag.hidden = false;
       tag.style.transform = `translateY(${Math.round(y - 11)}px)`;
@@ -108,13 +91,12 @@ export function termChart(ctx, st, onTf) {
     if (tk !== loadTok || !ctx.alive()) return;
     const dec = priceDec(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
-    series.setData(data);
+    deck.setData(data);
     t0 = data.length ? data[0].time : 0;
     last = data[data.length - 1] || null;
     lastPx = null;
     paintLegend(last); paintTag(false);
-    C.chart.timeScale().fitContent();
-    C.chart.timeScale().scrollToPosition(6, false);
+    deck.showRecent(narrowBox() ? 120 : 220, narrowBox() ? 12 : 26);
     drawPos(); loadTrades(); loadLevels(); drawMarks();
     requestAnimationFrame(place);
   }
@@ -129,7 +111,7 @@ export function termChart(ctx, st, onTf) {
         if (c.time < last.time) continue;
         // the relay's trade price of this bar is newer than the server's 4 s candle cache: keep it, take the wider range
         if (c.time === last.time && Date.now() - relayAt < RELAY_FRESH_MS) c = {...c, close: last.close, high: Math.max(c.high, last.high), low: Math.min(c.low, last.low)};
-        try { series.update(c); last = c; } catch (e) { /* older bar */ }
+        if (deck.update(c)) last = c;
       }
       paintLegend(last); paintTag(true); place();
       if (last.close !== before) ping(el);
@@ -162,14 +144,14 @@ export function termChart(ctx, st, onTf) {
     const sym = st.sym, tf = st.tf, step = TF_S[tf] || 900;
     const marks = [];
     evBars = new Map();
-    if (step < 86400) {
+    if (step < 86400 && deck.shown("ev")) {
       const now = serverNow() / 1000;
       for (const e of await eventsList()) {
         const s = Math.floor(e.ts_ms / 1000);
         if (s < t0 || s > now) continue;
         const bt = s - (s % step);
         evBars.set(bt, [...(evBars.get(bt) || []), e]);
-        marks.push({time: bt, position: "aboveBar", color: tok("--warn"), shape: "square", text: e.kind});
+        marks.push({time: bt, position: "aboveBar", color: tok("--warn"), shape: "square", text: e.kind, glow: false});
       }
     }
     const mine = trades.filter((t) => t.symbol === sym && MAIN.has(groupOfT(t)) && t.entry_time / 1000 >= t0).slice(0, 12);
@@ -180,64 +162,29 @@ export function termChart(ctx, st, onTf) {
     }
     if (sym !== st.sym || tf !== st.tf) return;
     marks.sort((a, b) => a.time - b.time);
-    series.setMarkers(marks);
+    deck.setMarkers(marks);
     put(keyLine, h("span", null, h("i", {class: "k-ar"}), "우리 진입"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
-      h("span", null, h("i", {class: "k-ev"}), "경제지표 (올리면 이름)"), h("span", null, h("i", {class: "k-ln"}), "진입선·손절선 (기존 36·5분봉·추가)"),
+      h("span", null, h("i", {class: "k-ev"}), "경제지표 (올리면 이름)"), h("span", null, h("i", {class: "k-ln"}), "진입선·손절선 (기존 36·5분봉·추가) · 이름표를 누르면 숨김"),
       LEVEL_TFS.includes(st.tf) ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null);
   }
   function drawPos() {
-    if (!series) return;
-    const list = board ? board.accounts.filter((a) => a.position && a.position.symbol === st.sym && MAIN.has(fmt.groupOf(a)))
-      .map((a) => ({a, p: normPos(a.position)})).sort((x, y) => x.p.entry - y.p.entry) : [];
-    const groups = [];
-    for (const x of list) {
-      const g = groups[groups.length - 1];
-      if (g && Math.abs(x.p.entry - g.price) / g.price < 0.0005) g.items.push(x); else groups.push({price: x.p.entry, items: [x]});
-    }
-    const m = store.mark(st.sym), want = new Map();
-    for (const g of groups) {
-      const pnl = m ? g.items.reduce((s, x) => s + x.p.side * x.p.qty * (m - x.p.entry), 0) : null;
-      const mg = g.items.reduce((s, x) => s + (x.p.margin || 0), 0);
-      const L = g.items.filter((x) => x.p.side > 0).length, S = g.items.length - L;
-      const title = g.items.length === 1 ? `${fmt.sideKo(g.items[0].p.side)} ${fmt.lev(g.items[0].p.leverage)}${pnl != null ? " " + fmt.pct(pnl / mg, 1) : ""}`
-        : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${pnl != null && mg ? " " + fmt.pct(pnl / mg, 1) : ""}`;
-      const tone = pnl == null ? "flat" : pnl >= 0 ? "up" : "down";
-      want.set("e" + g.items.map((x) => x.a.account_id).join(",") + "@" + g.price, {price: g.price, color: tone === "flat" ? tok("--muted") : tok(tone === "up" ? "--up" : "--down"), title, w: 2, style: 0, tone});
-    }
-    if (list.length <= 4) {
-      for (const x of list) if (x.p.stop) {
-        const lock = x.p.lock_roe != null && !fmt.ownExits(x.a);
-        want.set("s" + x.a.account_id + "@" + x.p.stop, {price: x.p.stop, color: lock ? tok("--up") : tok("--down"), w: 1, style: 2,
-          title: lock ? `잠금 +${fmt.num(x.p.lock_roe * 100, 0)}%` : "손절", tone: lock ? "up" : "down"});
-      }
-    }
-    for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); dropGlow(k); }
-    for (const [k, w] of want) {
-      const o = {price: w.price, color: w.color, lineWidth: w.w, lineStyle: w.style, axisLabelVisible: true, title: w.title};
-      if (lines.pos.has(k)) lines.pos.get(k).applyOptions(o); else lines.pos.set(k, series.createPriceLine(o));
-      let g = lines.glow.get(k);
-      if (!g) {
-        const band = h("i");
-        g = {price: w.price, el: h("span", {class: "term-glow", hidden: true, dataset: {k: k[0] === "e" ? "entry" : "stop"}}, band), band, fresh: true};
-        lines.glow.set(k, g);
-        glows.append(g.el);
-      }
-      g.el.dataset.tone = w.tone;
-    }
-    if (series && last) placeGlows();
-    const real = glowSeen;
-    if (board) glowSeen = true;
-    for (const g of lines.glow.values()) if (g.fresh) { g.fresh = false; if (real && !g.el.hidden) motion.drawIn(g.band, 500); }
+    if (!deck) return;
+    const accts = board ? board.accounts.filter((a) => a.position && a.position.symbol === st.sym && MAIN.has(fmt.groupOf(a))) : [];
+    deck.setLines("pos", posLines(accts, store.mark(st.sym), {stops: 6}));
+    // a position of this coin that is new since the last board: our bot really filled an entry (one accent flash)
+    const now = new Set(accts.map((a) => a.account_id + "@" + (a.position.entry_time || a.position.entry_price || a.position.entry)));
+    if (seenPos && [...now].some((k) => !seenPos.has(k))) deck.flash(ownEvent());
+    if (board) seenPos = now;
   }
   function drawLevels() {
-    if (!series) return;
-    lines.lv.forEach(rm); lines.lv = [];
-    if (!levels || !levels.levels) return;
+    if (!deck) return;
+    const out = [];
     for (const side of ["resistance", "support"]) {
-      levels.levels.filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 2).forEach((x) => lines.lv.push(series.createPriceLine({
-        price: x.price, color: side === "resistance" ? tok("--down-line") : tok("--up-line"), lineWidth: 1, lineStyle: 1, axisLabelVisible: false,
-        title: side === "resistance" ? "저항" : "지지"})));
+      ((levels && levels.levels) || []).filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 2).forEach((x, i) => out.push({
+        id: `lv:${side}:${i}`, group: "sr", price: x.price, tone: side === "resistance" ? "down" : "up", dash: 2, alpha: 0.45, axis: false, glow: false,
+        label: side === "resistance" ? "저항" : "지지"}));
     }
+    deck.setLines("sr", out);
   }
 
   // ---------------------------------------------------------------- changes
@@ -252,10 +199,13 @@ export function termChart(ctx, st, onTf) {
   const ready = (async () => {
     try {
       C = await makeChart(box, {rightPriceScale: {borderColor: tok("--line-2"), scaleMargins: {top: 0.08, bottom: 0.08}},
-        timeScale: {rightOffset: 6}, grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}}});
+        timeScale: {rightOffset: 26}, grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}}});
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"]});
+      deck.onToggle((g) => { if (g === "ev" || g == null) drawMarks(); });
+      put(fxSlot, deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);
@@ -278,10 +228,14 @@ export function termChart(ctx, st, onTf) {
   ctx.every(120000, loadLevels, {now: false});
   return {
     el, ready,
-    setSym() { relayAt = 0; lines.pos.forEach(rm); lines.pos.clear(); [...lines.glow.keys()].forEach(dropGlow); glowSeen = false; trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
+    setSym() { relayAt = 0; seenPos = null; if (deck) { deck.setLines("pos", []); deck.setLines("sr", []); } trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
     onTicker() { drawPos(); },
     onBoard(b) { board = b; drawPos(); },
-    onTrades(rows) { if ((rows || []).some((t) => t.symbol === st.sym)) loadTrades(); },
+    onTrades(rows) {
+      if (!(rows || []).some((t) => t.symbol === st.sym)) return;
+      loadTrades();
+      if (deck && (rows || []).some((t) => t.symbol === st.sym && MAIN.has(groupOfT(t)))) deck.flash(ownEvent());   // our real exit fill
+    },
     /** A real relay event of the selected coin {s, side, p, t}: the forming candle takes that trade's price (only a
      *  trade inside the bar on screen; the next bar comes with the 5 s poll) and the price tag lights once. */
     onTick(ev) {
@@ -289,12 +243,15 @@ export function termChart(ctx, st, onTf) {
       if (ev.s !== st.sym || !series || !last || !Number.isFinite(p) || p <= 0 || !span) return;
       if (!(t >= last.time && t < last.time + span)) return;
       const prev = last.close, c = {...last, close: p, high: Math.max(last.high, p), low: Math.min(last.low, p)};
-      try { series.update(c); } catch (e) { return; }
+      if (!deck.update(c)) return;
       last = c; relayAt = Date.now();
       paintLegend(last); paintTag(false); place();
       hit(tag, p > prev ? "up" : p < prev ? "down" : ev.side === "buy" ? "up" : "down");
       ping(el);
     },
+    /** A real market event of the selected coin: a new big taker trade (relay row) or a new market liquidation. */
+    onBig(r) { if (deck && r && r.s === st.sym) deck.flash(bigEvent(r)); },
+    onLiq(r) { if (deck && r) deck.flash(liqEvent(r)); },
     tick() {
       if (!last) return;
       tag.lastChild.textContent = bars.closeIn(st.tf, serverNow());

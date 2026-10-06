@@ -39,7 +39,7 @@ export async function mount(el, ctx) {
   const top = topBar(ctx, st);
   const watch = watchList(ctx, st, pick);
   const fills = fillsFeed(ctx);
-  const liq = liqFeed(ctx, st);
+  const liq = liqFeed(ctx, st, (fresh) => { for (const r of fresh || []) chart.onLiq(r); });   // new liquidations flash the chart
   const big = bigFeed(ctx);
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("term-tf", tf); });
   const mine = coinPositions(ctx, st);
@@ -85,6 +85,8 @@ export async function mount(el, ctx) {
       if (ev.s === st.sym) { top.onTick(ev); chart.onTick(ev); }
     }
     big.onMsg(m);
+    // a new big taker trade of this coin flashes the chart once (the first message's rows are the past: no flash)
+    if (!m.first && m.big && Array.isArray(m.big.rows)) for (const r of m.big.rows) if (r && r.s === st.sym) chart.onBig(r);
   });
   ticks.start();
   // the bottom table lights its head when real closed trades arrived (its 체결 tab changed)

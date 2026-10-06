@@ -240,6 +240,7 @@ export function liqFeed(ctx, st, onNew) {
       const had = last.sym === want ? last.rows.length : -1;
       last = {sym: want, rows};
       let nNew = 0;                                // rows that really arrived since the last answer
+      const arrived = [];                          // ... and the rows themselves (the chart flashes once for them)
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
@@ -249,12 +250,14 @@ export function liqFeed(ctx, st, onNew) {
         h("span", {class: ["term-lb", lg ? "up" : "down"]}, lg ? "LONG" : "SHORT"),
         h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, "$" + usdK(r.usd)), ageCell(r.ts));
         if (isNew) nNew++;
+        if (isNew) arrived.push(r);
         if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
         return node;
       }) : ui.empty("최근 1시간 기록 없음"));
       ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
       if (nNew && live()) ping(el);
-      if ((nNew || had !== rows.length) && onNew) onNew();
+      // the chart flashes once for the really new ones
+      if ((nNew || had !== rows.length) && onNew) onNew(arrived);
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
     finally { busy = false; }
   }
