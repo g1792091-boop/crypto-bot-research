@@ -102,7 +102,10 @@ export function fileNotes(d) {
         h("li", null, e.ko, h("small", {class: "muted"}, ` (${e.raw})`))))));
     }
   } else if (d.state === "ok") {
-    kids.push(h("p", {class: "lg-sub"}, "아직 실행 기록이 없어요(켠 뒤 첫 15분 차례가 오기 전)."));
+    // 'no run recorded' and 'the record could not be read' are different things (a failed read is never 'none')
+    if (d.last_tick_state === "unreadable") kids.push(h("p", {class: "lg-warn"}, ui.pill("읽지 못함", "warn"), " 마지막 실행 기록의 글이 깨져 있어서 읽지 못했어요. 실행이 없었다는 뜻이 아니에요."));
+    else if (d.last_tick_state === "missing_table") kids.push(h("p", {class: "lg-warn"}, ui.pill("표 없음", "warn"), " 기록 파일에 마지막 실행을 적는 표가 없어서 언제 실행했는지 알 수 없어요."));
+    else kids.push(h("p", {class: "lg-sub"}, "아직 실행 기록이 없어요(켠 뒤 첫 15분 차례가 오기 전)."));
   }
   return kids.length ? h("div", {class: "lg-notes"}, kids) : null;
 }

@@ -260,6 +260,25 @@ def test_permission_lock_and_surprises_are_errors(db, monkeypatch):
     assert out["state"] == "error" and "ZeroDivisionError" in out["reason"]
 
 
+def test_a_folder_that_cannot_be_entered_is_an_error_not_not_started(db, monkeypatch):
+    """os.path.exists says False for a folder the dashboard may not enter: that is a failed read, never 'the switch was never on'."""
+    real = os.stat
+
+    def stat(path, *a, **k):
+        if str(path) == db:
+            raise PermissionError(13, "Permission denied", db)
+        return real(path, *a, **k)
+    monkeypatch.setattr(os, "stat", stat)
+    out = view(db)
+    assert out["state"] == "error" and "PermissionError" in out["reason"] and "권한" in out["reason_ko"] and "member" not in out
+    monkeypatch.undo()
+    assert view(str(os.path.join(os.path.dirname(db), "nothing", "x.db")))["state"] == "not_started"          # really not there: not started
+    d = os.path.join(os.path.dirname(db), "is_a_folder")
+    os.mkdir(d)
+    out = view(d)
+    assert out["state"] == "error" and "is not a file" in out["reason"]
+
+
 def test_one_members_failure_is_its_own_error_and_the_list_stays(db, monkeypatch):
     def boom(*a, **k):
         raise KeyError("trade_id")
@@ -333,9 +352,43 @@ def test_missing_version_row_and_bad_json_are_noted_not_fatal(tmp_path):
     c.close()
     out = view(p)
     assert out["state"] == "ok" and out["schema_version"] is None and "버전이 적혀 있지 않아요" in out["notes_ko"][0]
-    assert out["last_tick"] is None and out["member"]["spec_ok"] is False
+    assert out["last_tick"] is None and out["last_tick_state"] == "unreadable" and out["member"]["spec_ok"] is False
     assert len(out["member"]["table"]["cells"]) == 24                                  # coins and timeframes from the series, not the spec
     assert out["member"]["account_spec"]["start_equity"] == 5000.0
+
+
+def test_the_last_run_that_cannot_be_read_is_not_no_run(tmp_path):
+    p = str(tmp_path / "a.db")
+    W.build(p)
+    assert view(p)["last_tick_state"] == "ok" and view(p)["last_tick"]["bars_added"] == 8
+    c = sqlite3.connect(p)
+    c.execute("UPDATE league_meta SET v = '[1, 2]' WHERE k = 'last_tick'")                 # JSON, but not a record
+    c.commit()
+    c.close()
+    out = view(p)
+    assert out["last_tick"] is None and out["last_tick_state"] == "unreadable"
+    c = sqlite3.connect(p)
+    c.execute("UPDATE league_meta SET v = '{broken' WHERE k = 'last_tick'")
+    c.commit()
+    c.close()
+    assert view(p)["last_tick_state"] == "unreadable"
+    t = _render("K.fileNotes(d)", view(p))["text"]
+    assert "읽지 못함" in t and "실행이 없었다는 뜻이 아니에요" in t and "아직 실행 기록이 없어요" not in t
+    c = sqlite3.connect(p)
+    c.execute("DELETE FROM league_meta WHERE k = 'last_tick'")
+    c.commit()
+    c.close()
+    out = view(p)
+    assert out["last_tick"] is None and out["last_tick_state"] == "none"
+    assert "아직 실행 기록이 없어요" in _render("K.fileNotes(d)", out)["text"]
+    c = sqlite3.connect(p)
+    c.execute("DROP TABLE league_meta")
+    c.commit()
+    c.close()
+    out = view(p)
+    assert out["state"] == "ok" and out["last_tick_state"] == "missing_table" and "league_meta" in out["tables_missing"]
+    t = _render("K.fileNotes(d)", out)["text"]
+    assert "표 없음" in t and "league_meta" in t and "아직 실행 기록이 없어요" not in t
 
 
 def test_members_list_unknown_member_and_requested_missing(tmp_path):
@@ -453,7 +506,32 @@ def test_account_by_hand(db):
     s15 = a["scopes"]["15m"]["last"]
     assert s15["equity"] == 4000.0 and s15["x"] == 0.8 and s15["ret_pct"] == -20.0 and s15["liquidated"] == 1 and s15["max_dd_pct"] == 20.0
     for tf in ("30m", "1h", "4h"):                                       # no closed trade there: no points, no last, not a flat 5,000 line
-        assert a["scopes"][tf] == {"points": [], "asof_ms": None, "start_equity": 5000.0, "last": None, "label_ko": "참고용, 판정 아님"}
+        assert a["scopes"][tf] == {"points": [], "asof_ms": None, "start_equity": 5000.0, "last": None, "no_closed": False, "label_ko": "참고용, 판정 아님"}
+
+
+def test_an_account_scope_with_no_closed_trade_is_no_record_not_a_flat_balance(db):
+    """The bot writes day rows at the start balance for a scope whose trades are all still open (or that has none): equity = start
+    by construction. That must read as 'no closed trade yet', never as a +0.00 % account that never fell."""
+    c = sqlite3.connect(db)
+    for day in range(3):
+        c.execute("INSERT INTO account_daily (member_id, scope, day_ms, equity, ret_pct, taken, liquidated, asof_ms) VALUES (?,?,?,?,?,?,?,?)",
+                  ("zoneflip", "4h", W.START + day * W.DAY, 5000.0, 0.0, 0, 0, W.START + (day + 1) * W.DAY))
+    c.commit()
+    c.close()
+    a = view(db)["member"]["account"]
+    sc = a["scopes"]["4h"]
+    assert sc == {"points": [], "asof_ms": W.START + 3 * W.DAY, "start_equity": 5000.0, "last": None, "no_closed": True, "label_ko": "참고용, 판정 아님"}
+    assert a["scopes"]["all"]["no_closed"] is False and a["scopes"]["all"]["last"]["taken"] == 5            # the others are untouched
+    # all of them flat: the card shows no balance, no return and no drawdown for any scope
+    c = sqlite3.connect(db)
+    c.execute("UPDATE account_daily SET equity = 5000.0, ret_pct = 0.0, taken = 0, liquidated = 0")
+    c.commit()
+    c.close()
+    d = view(db)
+    assert all(v["no_closed"] and v["last"] is None for k, v in d["member"]["account"]["scopes"].items() if v["asof_ms"] is not None)
+    t = _render("A.accountCard(ctx, m)", d)["text"]
+    assert "아직 끝난 거래가 없어요" in t and "결과가 아니라 시작값" in t and "기록 전" in t
+    assert "+0.00%" not in t and "1.000배" not in t and "3.2%" not in t and "5,000.00 USDT 시작" not in t
 
 
 def test_table_totals_by_hand(db):

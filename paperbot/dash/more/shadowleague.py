@@ -21,6 +21,7 @@ import math
 import os
 import re
 import sqlite3
+import stat
 import threading
 import time
 import urllib.parse
@@ -51,7 +52,7 @@ SIGNAL_KO = {"candidate": "후보", "pending_entry": "다음 봉 시가 진입 �
              "skip_entry": "시가가 이미 손절·목표 밖이라 건너뜀", "skip_no_target": "목표 구간 없음",
              "skip_stop_far": "손절이 3 ATR보다 멂", "skip_rr": "손익비 2 미만", "not_chosen": "같은 봉의 다른 신호가 우선"}
 # tables the page needs; a missing one switches only its own block off (the file is an older or a newer shape)
-NEEDED = ("members", "series_state", "signals", "trades", "clones", "account_daily")
+NEEDED = ("members", "series_state", "signals", "trades", "clones", "account_daily", "league_meta")
 
 # The members this page knows by name: explicit and short (a new idea is one more entry here and its study in the JSON).
 KNOWN_MEMBERS = {
@@ -71,7 +72,7 @@ SWITCH = {
 }
 OFF_KO = {
     "never": "아직 켜지 않았어요: 기록을 한 번도 시작하지 않았습니다.",
-    "stale": "꺼져 있는 것 같아요: 마지막 기록이 오래됐습니다(3시간 넘게 새 기록이 없음).",
+    "stale": "꺼져 있는 것 같아요: 마지막 기록이 오래됐습니다(3시간 넘게 새 기록이 없음). 스위치가 꺼졌거나 에이전트가 멈췄을 수 있어요.",
 }
 
 _lock = threading.Lock()
@@ -173,9 +174,11 @@ def stale_wal(path: str) -> bool:
 def open_ro(path: str) -> sqlite3.Connection:
     """A read-only connection (autocommit, so the caller opens one BEGIN for a consistent read). FileNotFoundError when the
     file is not there, sqlite3.Error / OSError when it cannot be read."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(path)
-    if not os.path.isfile(path):
+    try:
+        mode = os.stat(path).st_mode
+    except FileNotFoundError:
+        raise                                # nothing there: the switch was never on (os.path.exists would also say this for a folder we may not enter)
+    if not stat.S_ISREG(mode):
         raise OSError(f"{path} is not a file")
     if stale_wal(path):
         raise sqlite3.DatabaseError("restored database with an old -wal next to it")
@@ -272,6 +275,21 @@ def _account_spec(spec: dict) -> dict:
 
 def _known(member_id: str) -> dict:
     return KNOWN_MEMBERS.get(member_id) or {}
+
+
+def _last_tick(meta: dict, has_table: bool) -> tuple:
+    """(the last run's facts | None, why none): 'ok', 'none' (the key is not there: no run yet), 'unreadable' (it is there but is not
+    a readable record) or 'missing_table'. A record that cannot be read is never the same as 'no run yet'."""
+    if not has_table:
+        return None, "missing_table"
+    raw = meta.get("last_tick")
+    if raw is None or raw == "":
+        return None, "none"
+    try:
+        tick = json.loads(raw)
+    except (TypeError, ValueError):
+        return None, "unreadable"
+    return (tick, "ok") if isinstance(tick, dict) else (None, "unreadable")
 
 
 def _tick_errors(tick: Optional[dict]) -> list:
@@ -385,16 +403,21 @@ def account_view(rows: list, acct: dict) -> dict:
         by.setdefault(r["scope"], []).append(r)
     scopes = {}
     for sc in SCOPES:
-        rs = sorted(by.get(sc, []), key=lambda r: int(r["day_ms"]))
+        rs = sorted((r for r in by.get(sc, []) if _f(r["equity"], None) is not None), key=lambda r: int(r["day_ms"]))
         pts = [{"day_ms": int(r["day_ms"]), "equity": _f(r["equity"], 2), "ret_pct": _f(r["ret_pct"], 4),
                 "taken": _i(r["taken"]), "liquidated": _i(r["liquidated"])} for r in rs]
-        eq = [float(r["equity"]) for r in rs if _f(r["equity"], None) is not None]
-        if not rs or not eq:
-            scopes[sc] = {"points": [], "asof_ms": None, "start_equity": start, "last": None, "label_ko": LABEL}
+        eq = [float(r["equity"]) for r in rs]                    # one equity per point, so a trough index is a point index
+        if not rs:
+            scopes[sc] = {"points": [], "asof_ms": None, "start_equity": start, "last": None, "no_closed": False, "label_ko": LABEL}
+            continue
+        last = pts[-1]
+        if last["taken"] == 0:
+            # No trade of this scope has closed yet: the bot writes flat day rows at the start balance (equity = start by
+            # construction, not by a result). That is 'no record yet', never a +0.00 % account with a 0 % fall.
+            scopes[sc] = {"points": [], "asof_ms": _i(rs[-1]["asof_ms"]), "start_equity": start, "last": None, "no_closed": True, "label_ko": LABEL}
             continue
         dd = max_drawdown(eq, start)
-        last = pts[-1]
-        scopes[sc] = {"points": pts, "asof_ms": _i(rs[-1]["asof_ms"]), "start_equity": start, "label_ko": LABEL,
+        scopes[sc] = {"points": pts, "asof_ms": _i(rs[-1]["asof_ms"]), "start_equity": start, "no_closed": False, "label_ko": LABEL,
                       "last": {"equity": last["equity"], "x": round(eq[-1] / start, 4), "ret_pct": last["ret_pct"],
                                "taken": last["taken"], "liquidated": last["liquidated"], "max_dd_pct": dd["max_dd_pct"],
                                "trough_day_ms": pts[dd["trough_index"]]["day_ms"] if dd["trough_index"] is not None else None}}
@@ -567,11 +590,7 @@ def build(path: Optional[str], member_id: Optional[str] = None, now_ms: Optional
         if not rows:
             return {**base, "state": "not_started", "reason": "no_member", "reason_ko": "기록 파일은 있지만 멤버가 아직 한 명도 없어요."}
         meta = {r["k"]: r["v"] for r in conn.execute("SELECT k, v FROM league_meta")} if "league_meta" in tables else {}
-        tick = None
-        try:
-            tick = json.loads(meta["last_tick"]) if meta.get("last_tick") else None
-        except (TypeError, ValueError):
-            tick = None
+        tick, tick_state = _last_tick(meta, "league_meta" in tables)
         sv = _i(meta.get("schema_version"))
         picked = next((r for r in rows if r["member_id"] == member_id), None) if member_id else None
         chosen = picked or rows[0]
@@ -598,7 +617,8 @@ def build(path: Optional[str], member_id: Optional[str] = None, now_ms: Optional
         if sv is None:
             notes.append("기록 파일에 모양 버전이 적혀 있지 않아요.")
         return {**base, "state": "ok", "as_of_ms": now, "schema_version": sv, "notes_ko": notes, "tables_missing": [t for t in NEEDED if t not in tables],
-                "last_tick": ({**tick, "errors_ko": _tick_errors(tick)} if isinstance(tick, dict) else None), "members": cards,
+                "last_tick": ({**tick, "errors_ko": _tick_errors(tick)} if tick is not None else None), "last_tick_state": tick_state,
+                "members": cards,
                 "selected": chosen["member_id"], "requested_missing": bool(member_id and not picked), "member": detail}
     except Exception as exc:  # noqa: BLE001  (anything unexpected is an error with its reason, never an empty success)
         return {**base, **_err(path, exc)}

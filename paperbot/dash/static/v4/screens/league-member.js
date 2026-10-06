@@ -17,11 +17,13 @@ function statusBanner(c, d) {
   }
   if (c.status === "waiting") {
     return h("div", {class: "lg-banner", role: "status"}, h("p", {class: "lg-bt"}, ui.pill("시작 전", "thin"),
-      ` 시작일(${fmt.date(c.started_at_ms)}) 전이라 아직 기록할 봉이 없어요.`, c.starts_in_days > 0 ? ` ${fmt.num(c.starts_in_days, 1)}일 뒤에 시작해요.` : ""));
+      c.starts_in_days > 0 ? ` 시작일(${fmt.date(c.started_at_ms)}) 전이라 아직 기록할 봉이 없어요. ${fmt.num(c.starts_in_days, 1)}일 뒤에 시작해요.`
+        : ` 시작일(${fmt.date(c.started_at_ms)})은 지났고, 첫 봉이 닫히기를 기다리는 중이에요.`));
   }
   if (c.status === "warming") {
+    const need = (c.warming.find((x) => x.need != null) || {}).need;
     return h("div", {class: "lg-banner", role: "status"}, h("p", {class: "lg-bt"}, ui.pill("워밍업 중", "accent"),
-      " 신호를 내려면 봉이 300개 필요해서 아직 모으는 중이에요. 다 모이면 기록을 시작해요."));
+      ` 신호를 내려면 봉이 ${need ? `${fmt.int(need)}개` : "충분히"} 쌓여 있어야 해서 아직 모으는 중이에요. 다 모이면 기록을 시작해요.`));
   }
   if (c.status === "error") {
     return h("div", {class: "lg-banner bad", role: "alert"}, h("p", {class: "lg-bt"}, ui.pill("오류", "bad"),

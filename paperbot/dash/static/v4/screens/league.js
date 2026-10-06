@@ -30,7 +30,12 @@ const signature = (d) => JSON.stringify(d, (k, v) => (k === "now_ms" || k === "a
 export async function mount(el, ctx) {
   ctx.setTitle("그림자 리그");
   el.append(ui.screenHead("그림자 리그", "5년 시험에서 떨어진 아이디어를 실제 봉에서 가상 거래로만 지켜봐요 · 참고용, 판정 아님"));
-  const st = {member: ctx.params.arg || null, d: null, sig: null, board: null, verdictTs: null, headSig: null};
+  const st = {member: ctx.params.arg || null, d: null, sig: null, board: null, verdictTs: null, headSig: null, gen: 0};
+  // Every draw gets its own small ctx: the charts of the previous draw are disposed when the page is drawn again (a refresh with
+  // new numbers every 15 minutes), and a chart that finishes loading after a newer draw started is thrown away instead of kept.
+  let chartOffs = [];
+  const disposeCharts = () => { for (const off of chartOffs.splice(0)) { try { off(); } catch (e) { /* chart gone */ } } };
+  ctx.track(disposeCharts);
   const headSlot = h("div", {class: "lg-slot"});
   const staleSlot = h("div", {class: "lg-slot"});
   const body = h("div", {class: "lg-body"}, motion.shimmer(3));
@@ -57,6 +62,9 @@ export async function mount(el, ctx) {
   }
 
   function render(d) {
+    disposeCharts();
+    const gen = ++st.gen;
+    const rctx = {alive: () => ctx.alive() && gen === st.gen, track: (off) => { chartOffs.push(off); return off; }};
     const parts = [];
     if (d.state === "not_started") {
       parts.push(notStartedCard(d), studyCard(d, studyOf(d, null)));
@@ -68,7 +76,7 @@ export async function mount(el, ctx) {
       if (m.state !== "ok") {
         parts.push(errorCard({reason: m.reason, reason_ko: m.reason_ko || "이 멤버의 기록을 읽지 못했어요", path: d.path}, load), studyCard(d, studyOf(d, null)));
       } else {
-        parts.push(memberCard(d, m), curveCard(ctx, m, d), accountCard(ctx, m), h("div", {class: "lg-col"}, tableCard(m), signalsBlock(m)), tradesCard(m), studyCard(d, m));
+        parts.push(memberCard(d, m), curveCard(rctx, m, d), accountCard(rctx, m), h("div", {class: "lg-col"}, tableCard(m), signalsBlock(m)), tradesCard(m), studyCard(d, m));
       }
     }
     const kids = parts.filter(Boolean);

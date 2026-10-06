@@ -29,12 +29,14 @@ export function accountCard(ctx, m) {
     const L = sc.last;
     const label = (SCOPES.find((s) => s.id === pick) || SCOPES[0]).label;
     put(stats,
-      ui.stat("지금 잔고", L ? fmt.usdt(L.equity) : ui.notYet("기록 전"), L ? `시작 ${fmt.usdt(start)}` : "닫힌 거래가 없어요"),
+      ui.stat("지금 잔고", L ? fmt.usdt(L.equity) : ui.notYet("기록 전"), L ? `시작 ${fmt.usdt(start)}` : "끝난 거래가 없어요"),
       ui.stat("수익률", L ? pctB(L.ret_pct, 2) : "—", L ? `${fmt.num(L.x, 3)}배` : null),
       ui.stat("최대 낙폭", L ? fmt.pctOf(L.max_dd_pct, 1) : "—", "고점에서 가장 많이 내려간 폭 · 하루 끝 잔고 기준"),
-      ui.stat("받아들인 거래", L ? fmt.int(L.taken) : "—", "열린 거래가 있으면 다음 거래는 못 받아요"),
+      ui.stat("계좌가 따라간 거래", L ? fmt.int(L.taken) : "—", "끝난 것만 셈 · 한 번에 1개라서 들고 있는 동안의 신호는 건너뛰어요"),
       ui.stat("강제 청산", L ? fmt.int(L.liquidated) : "—", `걸리면 증거금 ${fmt.pct(a.margin_frac, 0, false)}를 잃어요`));
-    put(when, L ? `${label} · 기준 시각 ${fmt.kst(sc.asof_ms)} · 하루 끝 잔고 ${fmt.int(sc.points.length)}개` : `${label}: 아직 끝난 거래가 없어서 잔고를 그리지 않았어요. 시작 잔고 그대로라는 뜻이 아니라 기록이 아직 없다는 뜻이에요.`);
+    put(when, L ? `${label} · 기준 시각 ${fmt.kst(sc.asof_ms)} · 하루 끝 잔고 ${fmt.int(sc.points.length)}개 (하루 = 한국 시각 오전 9시부터 다음 날 오전 9시까지)`
+      : sc.no_closed ? `${label}: 이 봉에서는 아직 끝난 거래가 없어요(기준 시각 ${fmt.kst(sc.asof_ms)}). 잔고는 끝난 거래만 반영해서, 시작 잔고 ${fmt.usdt(start)}에서 움직이지 않았어요. 결과가 아니라 시작값이라서 숫자로 보여 주지 않아요.`
+        : `${label}: 아직 기록이 없어서 잔고를 그리지 않았어요. 시작 잔고 그대로라는 뜻이 아니라 기록이 아직 없다는 뜻이에요.`);
     const drawn = !!L && sc.points.length >= 2;
     chartBox.hidden = !drawn;
     put(empty, L && !drawn ? "하루 끝 잔고가 2개 이상 쌓이면 선이 그려져요." : null);
@@ -63,7 +65,7 @@ export function accountCard(ctx, m) {
     h("p", {class: "lg-sub"}, rules),
     study && study.account_ko ? h("p", {class: "lg-vs"}, h("b", null, "5년 시험의 같은 계좌 "), study.account_ko) : null,
     ui.assume("closed", "가상 계좌: 끝난 거래만 반영, 열린 포지션은 평가하지 않음"),
-    ui.note("이 계좌는 진짜 계좌도 331개 모의 계좌 중 하나도 아니에요. 같은 신호로 그렇게 들어갔다면 잔고가 어땠을지 계산한 숫자이고, 순위·판정에 들어가지 않아요. 동전 던지기 계좌와의 비교선은 따로 그리지 않았어요(위의 누적 곡선이 그 비교예요)."));
+    ui.note("이 계좌는 진짜 계좌도, 모의 계좌 중 하나도 아니에요. 같은 신호로 그렇게 들어갔다면 잔고가 어땠을지 계산한 숫자이고, 순위·판정에 들어가지 않아요. 동전 던지기 계좌와의 비교선은 따로 그리지 않았어요(위의 누적 곡선이 그 비교예요)."));
   paint();                                  // the numbers do not wait for the chart
   card.draw = () => { const sc = a.scopes[pick]; return sc && sc.points.length >= 2 ? draw() : null; };
   return card;
