@@ -274,7 +274,9 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
             out["late"] = now - int(snap) > SLOW_MS
         elif wait:
             out["state"] = "waiting_state"
-            out["late"] = now - cp > LATE_MS      # the runner has not saved its 09:00 state 100 minutes on: is it running?
+            # the runner has not saved its 09:00 state 100 minutes on: is it running? (only when paper3.db was asked: a
+            # state saved after the job's last look is picked up by its next :35 run)
+            out["late"] = day_state is not None and saved is None and now - cp > LATE_MS
         else:
             out["state"] = "waiting_job"
             out["late"] = now - cp > LATE_MS
@@ -322,6 +324,8 @@ def texts(c: dict) -> dict:
             sko = "판정 작업이 아직 돌지 않았습니다"
         elif st == "waiting_state" and c.get("late"):
             sko = "봇의 09:00 상태 저장이 아직 없음 · 봇이 도는지 확인"
+        elif st == "waiting_state" and c.get("saved_ts"):
+            sko = "봇이 09:00 상태를 저장함 · 매시 35분 실행 때 계산 시작"
         elif st == "computing" and c.get("late"):
             sko = f"동전 봇 비교 계산이 {SLOW_MS // HOUR_MS}시간 넘게 끝나지 않음"
         elif st == "waiting_job" and c["now"] >= (c.get("job_ts") or 0):

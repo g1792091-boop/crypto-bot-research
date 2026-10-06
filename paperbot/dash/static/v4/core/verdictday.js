@@ -86,6 +86,7 @@ export function dueSteps(c, now = serverNow(), js = null) {
     : {state: waitState ? "now" : "wait", note: waitState ? "봇의 저장을 기다리는 중" : "기록 아직 없음"};
   const s2 = snap ? {state: "done", note: `저장본 잠금 (${hm(snap)})`}
     : unknown ? {state: "wait", note: "확인하지 못함"}
+    : waitState && saved ? {state: "wait", note: `봇의 저장을 확인하면 잠금 (${c.next_try_ts ? `다음 실행 ${hm(c.next_try_ts)}` : "매시 35분"})`}
     : waitState ? {state: "wait", note: `판정 작업은 돌았고 봇의 저장을 기다림 (${c.next_try_ts ? `다음 실행 ${hm(c.next_try_ts)}` : "매시 35분"})`}
     : c.late ? {state: "bad", note: "판정 작업이 아직 돌지 않았습니다"}
     : now < c.job_ts ? {state: "wait", note: `${hm(c.job_ts)}에 시작`}

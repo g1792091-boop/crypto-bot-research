@@ -190,3 +190,22 @@ def test_a_retry_after_a_logged_error_is_computing_again(tmp_path, monkeypatch):
     dead = V.clock(START, CP1 + 2 * H, led, V.day_state_reader(paper), lambda: _jobs(last_ms=CP1 + 95 * MIN, ok=False,
                                                                                       running=False, result="exit-code"))
     assert dead["state"] == "failed" and "job" not in dead and dead["chip_ko"]["opt"] == " · 확인 필요"
+
+
+def test_a_runner_state_saved_after_the_jobs_look_is_not_a_missing_state(tmp_path):
+    """The 09:35 run logged '판정 대기' (no day state yet); the runner saved it at 10:38, after the 10:35 run had looked:
+    until the 11:35 run freezes it, the page says it is saved and waits for the next run (no red line)."""
+    paper, out = _state(tmp_path, "wait")
+    c = sqlite3.connect(paper)
+    c.execute("INSERT OR REPLACE INTO state VALUES (?,?,?)", ("day:" + DATE1, CP1, json.dumps({"engines": {}})))
+    c.commit()
+    c.close()
+    k = _clock(paper, out, CP1 + 101 * MIN)
+    assert (k["state"], k["late"], k["saved_ts"]) == ("waiting_state", False, CP1)
+    assert k["line_ko"] == "30일 판정 날 · 봇이 09:00 상태를 저장함 · 매시 35분 실행 때 계산 시작"
+    assert k["chip_ko"]["opt"] == " · 결과 계산 중"
+    r = _node("core/verdictday.js", f"const c = {json.dumps(k)};\n"
+              "const s = m.dueSteps(c, c.now); console.log(JSON.stringify({st: s.map((x) => x.state), notes: s.map((x) => x.note)}));")
+    assert r["st"] == ["done", "wait", "wait", "wait"] and r["notes"][1] == "봇의 저장을 확인하면 잠금 (다음 실행 11:35)"
+    # a caller that did not ask paper3.db (the sheet, the story, the race) never claims the state is missing
+    assert not V.clock(START, CP1 + 101 * MIN, V.read_ledger(out))["late"]
