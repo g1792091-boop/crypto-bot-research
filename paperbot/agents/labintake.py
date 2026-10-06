@@ -1,5 +1,6 @@
-"""The shared lab intake queue: ideas from the 24-hour debate room, from meeting disputes and (later) from the owners
-wait here until code runs them as real, counted 5-year tests. No AI calls here.
+"""The shared lab intake queue: ideas from the 24-hour debate room, from meeting disputes and from the owners' own test
+requests ('🧪 이 매매법 시험해줘', the lab room's form; see the owners' section at the end) wait here until code runs them
+as real, counted 5-year tests. No AI calls here.
 
 Only code decides what gets tested and when. Every test goes through ``actions.newlab_test`` (a new strategy in
 newlab's grammar, counted in the lab's n, docs/newlab-prereg.md section 5) or ``actions.request_test`` (one of the
@@ -84,6 +85,9 @@ OWNER_REASON_KO = {
     "discretionary": "사람·AI의 판단으로 들어가는 규칙은 코드로 시험할 수 없습니다",
 }
 OWNER_EXITS_KO = "영상의 청산 규칙은 시험되지 않습니다(항상 2 ATR 손절·계단식 익절·20~50배)"
+# the reasons that change the ENTRY that is tested (an 'exact' translation that names one is approximate)
+ENTRY_REASON_CODES = ("param_off_grid", "state_entry", "two_triggers_and", "pattern", "data_missing", "universe",
+                      "filter_on_36_other", "discretionary")
 NOT_TESTED_KO = "시험하지 않았고 시험 수에도 넣지 않았습니다"
 OWNER_DECISIONS = ("run", "decline")
 
@@ -316,19 +320,56 @@ def enqueue(conn: sqlite3.Connection, source: str, source_ref: str, engine: str,
     return out
 
 
+def _asked_mismatch(engine: str, spec: Any, asked: Optional[dict]) -> list[str]:
+    """Code's own check of a translation against what the owners picked on the form (``request_fields``): the 시간봉
+    and the 롱·숏 they chose (not '모름' or empty) must be the tested ones. Korean lines, one per difference ([] = none
+    or nothing to check). A spec code cannot read is left to ``canon`` (it is refused there anyway)."""
+    if not isinstance(asked, dict) or engine not in ENGINES or not isinstance(spec, dict):
+        return []
+    tf_asked, side_asked = asked.get("timeframe"), asked.get("side")
+    tf = direction = None
+    if engine == "newlab":
+        from . import newlab as NL
+        try:
+            c = NL.normalize_spec(spec)
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+            return []
+        tf, direction = c.get("timeframe"), c.get("direction")
+    else:
+        tf = str(spec.get("timeframe") or "").strip().lower() or None
+    out = []
+    if tf_asked in REQUEST_TF_GRID and tf != tf_asked:
+        out.append(f"두 분이 고른 시간봉 {tf_asked}와 옮긴 시간봉 {tf or '?'}이 다릅니다(코드 확인)")
+    want = REQUEST_SIDE_DIRECTION.get(side_asked or "")
+    if want is not None and engine == "labtest" and want != "both":
+        out.append(f"36개 고쳐 보기 시험은 롱·숏을 고를 수 없어 '{side_asked}'이 그대로가 아닙니다(코드 확인)")
+    elif want is not None and engine == "newlab" and direction != want:
+        out.append(f"두 분이 고른 롱·숏 '{side_asked}'와 옮긴 방향({_DIRECTION_KO.get(direction or '', direction or '?')})이 "
+                   "다릅니다(코드 확인)")
+    return out
+
+
 def enqueue_owner(conn: sqlite3.Connection, message_id: int, index: int, request: dict,
-                  now: Optional[int] = None) -> dict:
+                  now: Optional[int] = None, asked: Optional[dict] = None) -> dict:
     """An owner's request (#103 '이 매매법 시험해줘'), translated by the lab translator and re-normalized here:
     entry_fidelity 'exact' -> queued (runs within the owners' daily budget), 'approx' (or unknown) -> needs the owners'
     OK first ('needs_owner_ok', with what was kept and lost), 'none' -> refused (nothing counted). Reasons come from
-    the fixed OWNER_REASON_KO vocabulary only."""
+    the fixed OWNER_REASON_KO vocabulary only, plus code's own lines when the translation's 시간봉 or 롱·숏 differs
+    from what the owners picked on the form (``asked``, ``request_fields``): such an 'exact' is approximate."""
     req = request if isinstance(request, dict) else {}
     fid = req.get("entry_fidelity") if req.get("entry_fidelity") in ("exact", "approx", "none") else "approx"
     engine = req.get("engine") if req.get("engine") in ENGINES else "none"
     spec = req.get("test") if engine == "labtest" else req.get("spec")
     codes = [c for c in (req.get("reason_codes") or []) if isinstance(c, str) and c in OWNER_REASON_KO][:6]
+    if fid == "exact" and any(c in ENTRY_REASON_CODES for c in codes):
+        # code's rule, not the translator's: a request whose entry needed any of these changes is approximate (the
+        # owners confirm it first); the exits / sizing never decide this (they are never tested, OWNER_EXITS_KO)
+        fid = "approx"
+    checked = _asked_mismatch(engine, spec, asked) if fid in ("exact", "approx") else []
+    if fid == "exact" and checked:
+        fid = "approx"            # the translator said 'exact' but changed a choice the owners made on the form
     meta = {"fidelity": fid, "message_id": message_id, "index": index, "reason_codes": codes,
-            "reasons_ko": [OWNER_REASON_KO[c] for c in codes],
+            "reasons_ko": [OWNER_REASON_KO[c] for c in codes] + checked,
             "kept": [_text(x, 80) for x in (req.get("kept") or []) if isinstance(x, str)][:6],
             "lost": [_text(x, 80) for x in (req.get("lost") or []) if isinstance(x, str)][:6],
             "exits_ko": OWNER_EXITS_KO}
@@ -746,6 +787,8 @@ def run_due(ctx: Any, now: int, max_per_pass: int = 2) -> dict:
             st, tid, detail = free
             event(conn, r["id"], st, ts_now(), trial_id=tid, detail=detail)
             out["free"].append(r["id"])
+            if r["source"] == "owner":
+                _owner_result(ctx, r, st, tid, detail, ts_now())
             continue
         reuse = _reusable(conn, r)
         if not reuse:
@@ -785,6 +828,8 @@ def run_due(ctx: Any, now: int, max_per_pass: int = 2) -> dict:
                 if old is not None and int(old.get("ts") or 0) >= t:
                     tid, detail["numbered"] = int(old["id"]), True
         event(conn, r["id"], st, ts_now(), trial_id=tid, detail=detail)
+        if r["source"] == "owner":
+            _owner_result(ctx, r, st, tid, detail, ts_now())
         (out["free"] if st == "reused" else out["ran"]).append(r["id"])
         if st != "reused":
             runs += 1
@@ -852,6 +897,8 @@ def tick(ctx: Any, debate_db: Optional[str], now: int) -> dict:
     if R.get_cursor(conn, LIMITS_CURSOR) != lim:
         R.set_cursor(conn, LIMITS_CURSOR, lim)
     out: dict = {"enabled": True, "reconciled": reconcile(conn, now)}
+    # the owners' clicks on approximate requests (inbox.db, read-only), before the runs so a 'run' can test this pass
+    out["decided"] = apply_owner_decisions(conn, getattr(ctx, "inbox_ro", None), now)
     out["pulled"] = pull_debate(ctx, debate_db, now) if lim["debate"] else 0
     out.update(run_due(ctx, now))
     return out
@@ -999,3 +1046,261 @@ def overview(conn_ro: Optional[sqlite3.Connection], now: int) -> dict:
             "recent": recent,
             "note": "토론방·회의·두 분의 아이디어 대기열(코드가 하루 몫만큼 시험, 모두 같은 장부·같은 시험 수). 대기 중인 매매법은 "
                     "다시 제안하지 말 것"}
+
+
+# ---------------------------------------------------------------- the owners' requests (#103 '🧪 이 매매법 시험해줘')
+# The lab room's form on the dashboard posts through the owners' usual POST /api/rooms/team:lab/say (inbox.db
+# owner_messages, no schema change): the first line is always LAB_REQUEST_MARK and the guided fields follow as labelled
+# lines (``request_text``). The lab owner meeting's translator (rooms.py, turn 'lab_translate', only while
+# ``lab_intake_owner_per_day`` is above 0) puts each request into the grammar; code re-makes it here (``enqueue_owner``)
+# and says plainly what was kept and lost. An approximate one waits for the owners' click: the dashboard appends it to
+# inbox.db's lab_request_decisions (DECISIONS_SQL, created by dash/app.py, never by rooms_db) and the tick applies it
+# read-only (``apply_owner_decisions``). The result comes back as a code line in the lab room and one silent Telegram.
+LAB_REQUEST_MARK = "🧪 시험 요청"
+OWNER_PER_DAY_MAX = 3                # AGENTS_LAB_INTAKE_OWNER_PER_DAY above this is refused (rooms.policy_from_env)
+OWNER_REQUESTS_PER_DAY = 5           # requests a KST day the dashboard takes (each one opens an owner meeting: 2 AI calls)
+REQUEST_TFS = ("15m", "30m", "1h", "4h", "모름")
+REQUEST_SIDES = ("롱만", "숏만", "둘 다", "모름")
+# what code checks an 'exact' translation against (``_asked_mismatch``): the form's own choices, '모름' = no check
+REQUEST_TF_GRID = ("15m", "30m", "1h", "4h")
+REQUEST_SIDE_DIRECTION = {"롱만": "long", "숏만": "short", "둘 다": "both"}
+_DIRECTION_KO = {"long": "롱만", "short": "숏만", "both": "롱·숏 둘 다"}
+# (key, label in the stored text, required, most characters): all of them together stay under one owner post's
+# 1,000 characters (rooms_db.MAX_OWNER_TEXT, the packet's owner_messages cut)
+REQUEST_FIELDS = (("entry", "언제 들어가나", True, 350), ("exit", "언제 나오나", False, 200), ("timeframe", "시간봉", False, 10),
+                  ("coins", "코인", False, 60), ("side", "롱·숏", False, 10),
+                  ("link", "참고 링크(에이전트는 열 수 없음)", False, 150), ("note", "더 적을 것", False, 120))
+LINK_NOTE_KO = "링크는 열 수 없어요(에이전트는 인터넷 없음), 규칙을 글로 적어 주세요"
+FIDELITY_KO = {"exact": "정확히 옮김", "approx": "근사로 옮김", "none": "옮길 수 없음"}
+DECISION_KO = {"run": "시험하기", "decline": "그만두기"}
+OWNER_STEPS = (("received", "접수"), ("translated", "옮김"), ("confirmed", "확인"), ("tested", "시험"), ("result", "결과"))
+DECISIONS_SQL = f"""
+CREATE TABLE IF NOT EXISTS lab_request_decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    intake_id INTEGER NOT NULL,
+    source_ref TEXT NOT NULL,
+    decision TEXT NOT NULL CHECK (decision IN {_in(OWNER_DECISIONS)}),
+    author TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS lab_request_decisions_intake ON lab_request_decisions (intake_id, id);
+{_append_only("lab_request_decisions")}
+"""
+
+
+def is_lab_request(text: Any) -> bool:
+    """Does an owner post start with the fixed first line of the dashboard's test-request form?"""
+    if not isinstance(text, str):
+        return False
+    first = text.lstrip("﻿").strip().split("\n", 1)[0]
+    return first.strip() == LAB_REQUEST_MARK
+
+
+def request_text(fields: Any) -> str:
+    """The stored text of a request from the form's fields (code-made, one labelled line per field, the mark first).
+    ValueError with a Korean message when the entry is missing or a field is too long or not one of its choices."""
+    if not isinstance(fields, dict):
+        raise ValueError("시험 요청 내용이 없습니다")
+    lines = [LAB_REQUEST_MARK]
+    for key, label, need, most in REQUEST_FIELDS:
+        raw = fields.get(key)
+        v = " ".join(raw.split()) if isinstance(raw, str) else ""
+        if not v:
+            if need:
+                raise ValueError(f"'{label}'을(를) 적어 주세요")
+            continue
+        if len(v) > most:
+            raise ValueError(f"'{label.split('(')[0]}'은(는) {most}자까지 적을 수 있습니다")
+        if key == "timeframe" and v not in REQUEST_TFS:
+            raise ValueError("시간봉은 15m, 30m, 1h, 4h 중 하나(또는 모름)입니다")
+        if key == "side" and v not in REQUEST_SIDES:
+            raise ValueError("롱·숏은 롱만, 숏만, 둘 다 중 하나(또는 모름)입니다")
+        lines.append(f"{label}: {v}")
+    return "\n".join(lines)
+
+
+def request_fields(text: Any) -> dict:
+    """The form's choices back from a stored request (``request_text``'s labelled lines): {timeframe, side} when the
+    post is a request and the line holds one of the form's values; {} otherwise (a hand-typed post, an older text)."""
+    if not is_lab_request(text):
+        return {}
+    want = {"시간봉": ("timeframe", REQUEST_TFS), "롱·숏": ("side", REQUEST_SIDES)}
+    out: dict = {}
+    for line in text.split("\n")[1:]:
+        label, sep, value = line.partition(":")
+        key = want.get(label.strip()) if sep else None
+        if key and key[0] not in out and value.strip() in key[1]:
+            out[key[0]] = value.strip()
+    return out
+
+
+def requests_today(inbox_ro: Optional[sqlite3.Connection], now: int) -> int:
+    """The owners' test requests posted in the lab room in the KST day of ``now`` (the dashboard's daily cap)."""
+    if inbox_ro is None:
+        return 0
+    day0 = R.kst_day_start_ms(now)
+    try:
+        rows = inbox_ro.execute("SELECT text FROM owner_messages WHERE room_id = ? AND ts >= ? AND ts < ?",
+                                (R.LAB_ROOM, day0, day0 + DAY_MS)).fetchall()
+    except sqlite3.Error:
+        return 0
+    return sum(1 for (t,) in rows if is_lab_request(t))
+
+
+def owner_label(r: dict) -> str:
+    """'#41-1' for the source_ref 'owner:41:0' (the owners' post and which of its requests)."""
+    parts = str(r.get("source_ref") or "").split(":")
+    if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+        return f"#{parts[1]}-{int(parts[2]) + 1}"
+    return _ref_label(r)
+
+
+# ---- the owners' clicks (inbox.db, written by the dashboard; read here read-only)
+def ensure_decisions(conn: sqlite3.Connection) -> None:
+    """Create inbox.db's lab_request_decisions (the dashboard's writer connection only)."""
+    conn.executescript(DECISIONS_SQL)
+    conn.commit()
+
+
+def decisions(inbox_ro: Optional[sqlite3.Connection], intake_ids: Optional[list] = None) -> dict:
+    """{intake id: [{id, ts, intake_id, source_ref, decision, author}, oldest first]} from inbox.db; {} without the file
+    or the table."""
+    if inbox_ro is None:
+        return {}
+    want = None if intake_ids is None else {int(i) for i in intake_ids}
+    if want is not None and not want:
+        return {}
+    try:
+        rows = inbox_ro.execute("SELECT id, ts, intake_id, source_ref, decision, author FROM lab_request_decisions "
+                                "ORDER BY id").fetchall()
+    except sqlite3.Error:
+        return {}
+    out: dict = {}
+    for r in rows:
+        d = dict(zip(("id", "ts", "intake_id", "source_ref", "decision", "author"), tuple(r)))
+        if d["decision"] not in OWNER_DECISIONS or (want is not None and int(d["intake_id"]) not in want):
+            continue
+        out.setdefault(int(d["intake_id"]), []).append(d)
+    return out
+
+
+def add_decision(conn: sqlite3.Connection, intake_id: int, source_ref: str, decision: str, author: str = "",
+                 now: Optional[int] = None) -> int:
+    """The dashboard's writer: one owner click (append-only). The tick applies it with ``decide`` only while the row
+    still waits for the owners and its source_ref matches (a replaced agents3.db never takes another row's click)."""
+    if decision not in OWNER_DECISIONS:
+        raise ValueError(f"decision must be run or decline, not {decision!r}")
+    ensure_decisions(conn)
+    cur = conn.execute("INSERT INTO lab_request_decisions (ts, intake_id, source_ref, decision, author) VALUES (?,?,?,?,?)",
+                       (int(time.time() * 1000) if now is None else int(now), int(intake_id),
+                        R.clean_text(str(source_ref))[:200], decision, _text(author, 40)))
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def apply_owner_decisions(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now: int) -> list[dict]:
+    """The owners' clicks on rows that wait for them: the first click on a row whose source_ref matches and that came
+    after the row was made -> 'queued' (시험하기) or 'declined' (그만두기, nothing counted), with one code line in the lab
+    room. No cursor: only rows still waiting are looked at, so a click is applied once. Returns what was applied."""
+    waiting = [r for r in rows_with_status(conn, ("needs_owner_ok",)) if r["source"] == "owner"]
+    got = decisions(inbox_ro, [r["id"] for r in waiting]) if waiting else {}
+    out = []
+    for r in waiting:
+        for d in got.get(r["id"], []):
+            if d["source_ref"] != r["source_ref"] or int(d["ts"]) < int(r["ts"]):
+                continue                       # another agents3.db's row, or a click older than this row
+            if decide(conn, r["id"], d["decision"], now, d.get("author") or ""):
+                who = f"두 분({_text(d.get('author'), 40)})" if d.get("author") else "두 분"
+                text = (f"🧪 두 분 시험 요청 {owner_label(r)}: {who}이 '{DECISION_KO[d['decision']]}'를 고르셨습니다 — "
+                        + ("대기열에 넣었습니다. 오늘 두 분 몫 안에서 코드가 5년 시험을 돌립니다(시험 수에 들어감)."
+                           if d["decision"] == "run" else NOT_TESTED_KO + "."))
+                R.post(conn, R.LAB_ROOM, None, "lab_intake", "code", None, "system", text,
+                       {"lab_intake": r["id"], "owner_request": True, "source_ref": r["source_ref"],
+                        "decision": d["decision"], "decision_id": d["id"]}, ts=now)
+                out.append({"intake_id": r["id"], "decision": d["decision"]})
+            break
+    return out
+
+
+def _owner_result(ctx: Any, r: dict, st: str, tid: Optional[int], detail: Any, ts: int) -> None:
+    """An owner request's result in the lab room (code text) and one silent Telegram (INFO)."""
+    line = result_ko(detail, st, tid)
+    text = f"🧪 두 분 시험 요청 {owner_label(r)} 결과: {r['description_ko']}\n{line}\n{OWNER_EXITS_KO}"
+    R.post(ctx.agents_conn, R.LAB_ROOM, None, "lab_intake", "code", None, "code_result", text,
+           {"lab_intake": r["id"], "owner_request": True, "source_ref": r["source_ref"], "status": st,
+            "trial_id": tid}, ts=ts)
+    try:
+        from ..notify import INFO
+        ctx.notifier.send(INFO, f"🧪 시험 요청 결과 (요청 {owner_label(r)})\n{r['description_ko']}\n{line}\n"
+                                "→ 대시보드 '에이전트 방'의 새 매매법 연구실")
+    except Exception:  # noqa: BLE001  (a notice only: the result is in the room and on the card)
+        pass
+
+
+def owner_stage(c: dict) -> dict:
+    """Where an owner request is on 접수 → 옮김 → 확인 → 시험 → 결과: {done: [the steps that really happened], now}."""
+    st = c.get("status")
+    done = ["received", "translated"]
+    if st in ("bad_spec", "refused"):
+        return {"done": done, "now": None}
+    if st == "needs_owner_ok":
+        return {"done": done, "now": "confirmed"}
+    if st == "declined":
+        return {"done": done, "now": None}
+    done.append("confirmed")                    # exact (no click needed) or the owners' 'run'
+    if st in ("queued", "running"):
+        return {"done": done, "now": "tested"}
+    if st == "expired":
+        return {"done": done, "now": None}
+    return {"done": done + ["tested", "result"], "now": None}
+
+
+def owner_cards(conn_ro: Optional[sqlite3.Connection], inbox_ro: Optional[sqlite3.Connection] = None,
+                limit: int = 20) -> list[dict]:
+    """The owners' requests as cards (newest first): the queue card plus how it was translated (정확 / 근사 / 불가), what
+    was kept and lost (the translator's words, a quote), the code's reasons, a click not applied yet, the steps that
+    really happened and the code's result line."""
+    rows = view(conn_ro, "owner", limit)
+    pend = decisions(inbox_ro, [c["id"] for c in rows if c["status"] == "needs_owner_ok"])
+    for c in rows:
+        m = c.get("meta") or {}
+        fid = m.get("fidelity") if m.get("fidelity") in FIDELITY_KO else None
+        clicks = [d for d in pend.get(c["id"], []) if d["source_ref"] == c["source_ref"] and int(d["ts"]) >= int(c["ts"])]
+        c.update(label_ko=f"요청 {owner_label(c)}", fidelity=fid, fidelity_ko=FIDELITY_KO.get(fid or "", ""),
+                 kept=[str(x) for x in m.get("kept") or []][:6], lost=[str(x) for x in m.get("lost") or []][:6],
+                 reasons_ko=[str(x) for x in m.get("reasons_ko") or []][:6], exits_ko=OWNER_EXITS_KO,
+                 decision=({"decision": clicks[0]["decision"], "decision_ko": DECISION_KO[clicks[0]["decision"]],
+                            "ts": clicks[0]["ts"]} if clicks and c["status"] == "needs_owner_ok" else None),
+                 stage=owner_stage(c), steps=[{"id": k, "label": v} for k, v in OWNER_STEPS],
+                 counted=c["status"] == "tested" or (c["status"] in ("not_counted", "error")
+                                                     and c.get("trial_id") is not None))
+    return rows
+
+
+def owner_block(conn_ro: Optional[sqlite3.Connection], inbox_ro: Optional[sqlite3.Connection], now: int,
+                limit: int = 20) -> dict:
+    """The dashboard's '두 분 시험 요청' block: on / off (the owners' daily budget the agents last saved), today's requests
+    and tests against their caps, the cards, and the fixed words the form shows."""
+    lim = 0
+    try:
+        saved = R.get_cursor(conn_ro, LIMITS_CURSOR) if conn_ro is not None else None
+    except sqlite3.Error:
+        saved = None
+    if isinstance(saved, dict):
+        try:
+            lim = max(0, int(saved.get("owner") or 0))
+        except (TypeError, ValueError):
+            lim = 0
+    used = 0
+    if exists(conn_ro):
+        try:
+            used = used_today(conn_ro, "owner", now)
+        except sqlite3.Error:
+            used = 0
+    return {"enabled": lim > 0, "limit": lim, "tests_today": used, "requests_today": requests_today(inbox_ro, now),
+            "requests_max": OWNER_REQUESTS_PER_DAY, "cards": owner_cards(conn_ro, inbox_ro, limit),
+            "mark": LAB_REQUEST_MARK, "link_note_ko": LINK_NOTE_KO, "exits_ko": OWNER_EXITS_KO,
+            "not_tested_ko": NOT_TESTED_KO, "timeframes": list(REQUEST_TFS), "sides": list(REQUEST_SIDES),
+            "off_ko": ("시험 요청은 아직 꺼져 있습니다(서버 설정 AGENTS_LAB_INTAKE_OWNER_PER_DAY가 0). 켜지면 대화 아래에 "
+                       "'🧪 이 매매법 시험해줘' 양식이 나오고, 보낸 요청을 연구원이 문법으로 옮기고 코드가 하루 몫만큼 5년 시험을 "
+                       "돌립니다.")}

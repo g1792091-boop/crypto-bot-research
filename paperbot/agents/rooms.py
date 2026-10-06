@@ -241,6 +241,20 @@ SCHEMAS.update({
   "next_time": ["다음 회의에서 피할 것 또는 해 볼 방향 (없으면 빈 목록)"],
   "reply_to_owner": ""
 }""",
+    # the owners' '🧪 이 매매법 시험해줘' (#103): the researcher puts each request into the grammar; code re-makes it,
+    # queues it (labintake.enqueue_owner) and says honestly what was kept and lost
+    "lab_translate": """{
+  "headline": "한 문장 요약",
+  "requests": [{"message_id": 12, "engine": "newlab | labtest | none",
+                "spec": {"timeframe": "1h", "entry": {"family": "rsi_cross", "params": {"length": 14, "level": 30}},
+                         "filters": [], "direction": "long"},
+                "test": null, "strategy": null,
+                "entry_fidelity": "exact | approx | none",
+                "kept": ["그대로 옮긴 것 한 줄씩"], "lost": ["못 옮기거나 가장 가까운 값으로 바꾼 것 한 줄씩"],
+                "reason_codes": ["lab_translate.reason_codes의 코드만"],
+                "idea": "두 분 요청을 한 줄로"}],
+  "reply_to_owner": "두 분께 한두 문장: 무엇을 어떻게 옮겼는지(시험 결과는 코드가 따로 알림)"
+}""",
 })
 # Strategy rooms with sides (design #102 C, policy ``sides`` / AGENTS_SIDES=1; docs/agent-rooms.md '편 가르기와 누가
 # 맞았나'): the attacker's turn names one flaw and, when it disagrees, the test that settles it (disputes.clean_settle);
@@ -295,12 +309,12 @@ TURN_FILE = {"specialist": "rooms_specialist.md", "revision": "rooms_revision.md
              "challenge": "rooms_devils_advocate.md", "validator": "rooms_validator.md",
              "approver": "rooms_approver.md", "team": "rooms_team.md", "lead": "rooms_team_lead.md",
              "lab_inventor": "rooms_lab_inventor.md", "lab_skeptic": "rooms_lab_skeptic.md",
-             "lab_lead": "rooms_lab_lead.md"}
+             "lab_lead": "rooms_lab_lead.md", "lab_translate": "rooms_lab_translate.md"}
 EXPERT_FILE = {"entry_timing": "rooms_entry_timing.md", "exit_timing": "rooms_exit_timing.md",
                "whatif": "rooms_whatif.md", "tf_compare": "rooms_tf_compare.md"}
 TURN_KIND = {"specialist": "analysis", "revision": "revision", "challenge": "challenge", "expert": "expert",
              "validator": "verdict", "approver": "verdict", "team": "analysis", "lead": "summary",
-             "lab_inventor": "analysis", "lab_skeptic": "challenge", "lab_lead": "summary"}
+             "lab_inventor": "analysis", "lab_skeptic": "challenge", "lab_lead": "summary", "lab_translate": "analysis"}
 # sides on (design #102 C): the attacker's turn is a challenge for the digest and the dashboard (its verdicts count);
 # the advocate's extra text and the lead's dispute text are added only with sides on (``system_prompt``)
 TURN_FILE["attack"] = "rooms_attacker.md"
@@ -310,12 +324,18 @@ LEAD_DISPUTE_FILE = "rooms_lead_dispute.md"
 
 # ---------------------------------------------------------------- the new-strategy lab (team:lab)
 LAB_ROOM = R.LAB_ROOM
-LAB_TURNS = ("lab_inventor", "lab_skeptic", "lab_lead")
+LAB_TURNS = ("lab_inventor", "lab_skeptic", "lab_lead", "lab_translate")
 LAB_MODEL = "sonnet"                 # every lab turn (the owners' choice; the roster's researcher is opus elsewhere)
 # the role's duty line in a lab turn's system prompt (the dashboard shows the roster/room duty)
 LAB_DUTY = {"lab_inventor": "새 매매법 연구실의 발명가: 정해진 문법으로 새 매매법을 회의마다 3개까지 제안(시험·판정은 코드)",
             "lab_skeptic": "새 매매법 연구실의 반론 검토관: 이미 떨어진 것과 거의 같은 후보, 데이터를 뒤져 고른 후보를 빼기(넣을 수는 없음)",
-            "lab_lead": "새 매매법 연구실의 팀장: 이번 회의의 코드 시험 결과를 짧게 요약"}
+            "lab_lead": "새 매매법 연구실의 팀장: 이번 회의의 코드 시험 결과를 짧게 요약",
+            "lab_translate": "새 매매법 연구실의 번역가: 두 분의 '이 매매법 시험해줘' 요청을 문법으로 옮기고, 무엇이 그대로이고 "
+                             "무엇이 빠졌는지 정직하게 적기(시험할지·판정은 코드)"}
+# the owners' requests (#103): a post whose first line is labintake.LAB_REQUEST_MARK, in the lab room, while the owners'
+# daily test budget (``lab_intake_owner_per_day``) is above 0: the researcher's turn is 'lab_translate'
+LAB_TRANSLATE_PER_MESSAGE = 2        # requests one owner post may become (each its own queue row 'owner:<id>:<i>')
+LAB_TRANSLATE_SPEC_CHARS = 2_000
 LAB_MAX_SPECS = 3
 # what the same 5-year data already said (research/library/RESULTS_LIBRARY*.md, research/search, docs/newlab-prereg.md)
 LIBRARY_PRIOR_KO = (
@@ -461,6 +481,10 @@ class RoomsPolicy:
     dispute_tests_per_day: int = 3
     dispute_room_gap_days: int = 7
     dispute_expert: bool = False
+    # round 2 (owners 10/06, docs/agent-rooms.md '목표 진척도 한 줄'): one code line in the 22:00 evening Telegram (tests
+    # today and passed, new-strategy passes against what luck alone gives, D-day to the verdict). Off here and on the
+    # server unless AGENTS_GOAL_LINE=1, so the evening message is unchanged.
+    goal_line: bool = False
 
     @property
     def max_rounds_per_tick(self) -> int:
@@ -1114,9 +1138,11 @@ ENV_INTS = {
     "AGENTS_DISPUTE_TESTS_PER_DAY": ("dispute_tests_per_day", 0),
     "AGENTS_DISPUTE_ROOM_GAP_DAYS": ("dispute_room_gap_days", 0),
     "AGENTS_DISPUTE_EXPERT": ("dispute_expert", 0),
+    # round 2 (owners 10/06): 1 = one code line '목표 진척도' in the 22:00 evening Telegram (agents/goalline.py)
+    "AGENTS_GOAL_LINE": ("goal_line", 0),
 }
 # the 0/1 switches among ENV_INTS (stored as booleans)
-ENV_SWITCHES = ("AGENTS_SIDES", "AGENTS_DISPUTE_EXPERT")
+ENV_SWITCHES = ("AGENTS_SIDES", "AGENTS_DISPUTE_EXPERT", "AGENTS_GOAL_LINE")
 DISPUTE_TESTS_MAX = 3            # AGENTS_DISPUTE_TESTS_PER_DAY above this is refused (each test tightens the room's bar)
 # settings given in minutes that the policy keeps in milliseconds
 ENV_MINUTES = ("AGENTS_LOSS_MIN_GAP_MIN",)
@@ -1176,6 +1202,10 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     if p.lab_intake_debate_per_day > 2:
         raise ValueError(f"AGENTS_LAB_INTAKE_DEBATE_PER_DAY={p.lab_intake_debate_per_day}: 토론방 5년 시험은 하루 2개까지 "
                          "(every counted test makes the lab's bar stricter for everyone; use 0, 1 or 2)")
+    if p.lab_intake_owner_per_day > LI.OWNER_PER_DAY_MAX:
+        raise ValueError(f"AGENTS_LAB_INTAKE_OWNER_PER_DAY={p.lab_intake_owner_per_day}: 두 분 시험 요청은 하루 "
+                         f"{LI.OWNER_PER_DAY_MAX}개까지 (each counted test makes the bar stricter; use 0 to "
+                         f"{LI.OWNER_PER_DAY_MAX})")
     p.debate_db = (env.get("AGENTS_DEBATE_DB") or "").strip()
     if p.copy_cap_per_strategy > 1 or p.copy_cap_total > 10:
         raise ValueError(f"AGENTS_COPY_CAP_PER_STRATEGY={p.copy_cap_per_strategy}, AGENTS_COPY_CAP_TOTAL="
@@ -1770,11 +1800,75 @@ def check_lab_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             "reply_to_owner": _line(out.get("reply_to_owner"), 800)}, []
 
 
+def _json_obj(v: Any) -> Optional[dict]:
+    """A small JSON object as plain data (a copy that survived a dumps / loads round trip), else None."""
+    if not isinstance(v, dict):
+        return None
+    try:
+        text = json.dumps(v, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError, RecursionError):
+        return None
+    return json.loads(text) if len(text) <= LAB_TRANSLATE_SPEC_CHARS else None
+
+
+def check_lab_translate(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
+    """Shape only (#103): each request names an owner post of this meeting (``lab_requests``), at most
+    LAB_TRANSLATE_PER_MESSAGE per post; engine / entry_fidelity / reason_codes from their fixed lists (anything else is
+    'none' / 'approx' / dropped). Whether a spec is in the grammar, and what is queued, code decides afterwards
+    (labintake.enqueue_owner re-makes it)."""
+    if not isinstance(out, dict) or not isinstance(out.get("requests", []), list):
+        return None, ["답이 JSON 객체가 아니거나 requests가 목록이 아님"]
+    asked = [r.get("id") for r in given.get("lab_requests") or [] if isinstance(r, dict)]
+    problems: list[str] = []
+    per: dict = {}
+    items = []
+    for k, it in enumerate(out.get("requests") or []):
+        if not isinstance(it, dict):
+            problems.append(f"requests.{k}: 객체가 아님")
+            continue
+        mid = it.get("message_id")
+        if isinstance(mid, bool) or not isinstance(mid, int) or mid not in asked:
+            problems.append(f"requests.{k}: 이번 회의의 시험 요청 번호가 아님 ({str(mid)[:12]!r})")
+            continue
+        if per.get(mid, 0) >= LAB_TRANSLATE_PER_MESSAGE:
+            problems.append(f"요청 #{mid}: 글 하나는 {LAB_TRANSLATE_PER_MESSAGE}개까지만 옮김(나머지는 뺌)")
+            continue
+        engine = it.get("engine") if it.get("engine") in ("newlab", "labtest", "none") else None
+        if engine is None:
+            problems.append(f"requests.{k}: engine이 newlab, labtest, none 중 하나가 아님 -> none")
+            engine = "none"
+        fid = it.get("entry_fidelity")
+        if fid not in ("exact", "approx", "none"):
+            problems.append(f"requests.{k}: entry_fidelity를 읽을 수 없어 approx(두 분 확인)로 봄")
+            fid = "approx"
+        codes = []
+        for c in it.get("reason_codes") or [] if isinstance(it.get("reason_codes"), list) else []:
+            if isinstance(c, str) and c in LI.OWNER_REASON_KO and c not in codes:
+                codes.append(c)
+            else:
+                problems.append(f"requests.{k}: 정해진 이유 코드가 아님 ({str(c)[:20]!r}) -> 뺌")
+        spec = _json_obj(it.get("spec")) if engine == "newlab" else None
+        test = _json_obj(it.get("test")) if engine == "labtest" else None
+        strategy = it.get("strategy") if isinstance(it.get("strategy"), str) and 0 < len(it["strategy"]) <= 64 else None
+        if (engine == "newlab" and spec is None) or (engine == "labtest" and test is None):
+            problems.append(f"requests.{k}: {engine} 시험의 JSON이 없거나 너무 김 -> 옮길 수 없음")
+            engine = "none"
+        if engine == "none":
+            fid = "none"
+        items.append({"message_id": mid, "engine": engine, "spec": spec, "test": test, "strategy": strategy,
+                      "entry_fidelity": fid, "kept": _strs(it.get("kept"), 6, 80), "lost": _strs(it.get("lost"), 6, 80),
+                      "reason_codes": codes[:6], "idea": _line(it.get("idea"), 200)})
+        per[mid] = per.get(mid, 0) + 1
+    return {"headline": _line(out.get("headline"), 300), "requests": items,
+            "reply_to_owner": _line(out.get("reply_to_owner"), 800)}, problems
+
+
 CHECKS = {"specialist": check_analysis, "revision": check_analysis, "challenge": check_challenge,
           "expert": check_expert, "validator": check_validator, "approver": check_approver, "team": check_team,
           "lead": check_lead, "lab_inventor": check_lab_inventor, "lab_skeptic": check_lab_skeptic,
           "lab_lead": check_lab_lead}
 CHECKS["attack"] = check_attack                 # sides on (design #102 C)
+CHECKS["lab_translate"] = check_lab_translate   # the owners' test requests (#103)
 
 
 # ---------------------------------------------------------------- rendering (code-written text)
@@ -1828,6 +1922,22 @@ def render(turn: str, out: dict) -> str:
         L += [f"{i + 1}. {x}" for i, x in enumerate(out["summary"])]
         if out.get("next_time"):
             L.append("다음 회의에서: " + " / ".join(out["next_time"]))
+    elif turn == "lab_translate":
+        # the translator's words; what code queued (and whether it is tested at all) is the code's own line after this
+        if out.get("headline"):
+            L.append(out["headline"])
+        for it in out.get("requests") or []:
+            L.append(f"요청 #{it['message_id']}: {LI.FIDELITY_KO.get(it['entry_fidelity'], '')}"
+                     + (f" — {it['idea']}" if it.get("idea") else ""))
+            if it.get("kept"):
+                L.append("  그대로: " + " / ".join(it["kept"]))
+            if it.get("lost"):
+                L.append("  빠짐·바뀜: " + " / ".join(it["lost"]))
+            body = it.get("spec") if it["engine"] == "newlab" else it.get("test") if it["engine"] == "labtest" else None
+            if body is not None:
+                L.append("  문법: " + _one(json.dumps(body, ensure_ascii=False)))
+        if not out.get("requests"):
+            L.append("옮긴 요청: 없음")
     if turn in LAB_TURNS:
         if out.get("reply_to_owner"):
             L.append(f"💬 두 분께: {out['reply_to_owner']}")
@@ -3031,7 +3141,9 @@ BULL_BEAR_BLIND_NOTE = ("공정한 토론을 위해 낙관론자·비관론자�
                         "글(room_messages)을 보여 주지 않음. 리스크 책임자와 팀장은 봄")
 
 
-def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
+def team_plan(due: TR.Due, mentioned: tuple = (), lab_request: bool = False) -> list[tuple[str, str]]:
+    """The turns of a team meeting. ``lab_request``: an owner meeting in the lab room answers the owners' test requests
+    (#103, '🧪 시험 요청' posts while the owners' test budget is on): the researcher translates, then the lead."""
     room, trig = due.room_id, due.trigger
     lead = ("team_lead", "lead")
     if trig == "research":
@@ -3085,6 +3197,10 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     if trig == "checkpoint":
         return [("league_referee", "team"), ("rule_keeper", "team"), lead]
     if trig == "owner":
+        if lab_request and room == LAB_ROOM:
+            # the same two calls as any owner post here: the translator's turn replaces the researcher's answer, code
+            # queues each request (labintake.enqueue_owner) before the lead sums up
+            return [("researcher", "lab_translate"), lead]
         # a staff member the owners named (@) answers first, even when the room's posts usually go to others
         first = [r for r in mentioned if r != "team_lead"]
         return ([(r, "team") for r in first] + [(r, "team") for r in OWNER_RESPONDERS.get(room, ()) if r not in first]
@@ -3144,6 +3260,110 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     return pk
 
 
+# ---------------------------------------------------------------- the owners' test requests (#103, team:lab)
+def owner_lab_requests(rnd: "_Round") -> list[dict]:
+    """The new owner posts of this lab owner meeting that are test requests (first line labintake.LAB_REQUEST_MARK)."""
+    if rnd.room != LAB_ROOM or rnd.due.trigger != "owner":
+        return []
+    return [{"id": m["id"], "ts": m["ts"], "author": m.get("author") or "", "text": m["text"]}
+            for m in rnd.base.get("owner_messages") or [] if m.get("new") and LI.is_lab_request(m.get("text"))]
+
+
+def lab_translate_packet(ctx: RoundContext, reqs: list[dict]) -> dict:
+    """What the translator sees besides the lab's own packet (``lab``: the grammar, the gate, every test so far): the
+    requests (owner text = data), the 36's what-if templates, the fixed reason codes and the rules code applies."""
+    from ..config import V3_TRADE_TFS
+    names = [s for s in A.lab_strategies()]
+    return {"lab_requests": reqs,
+            "lab_translate": {
+                "reason_codes": dict(LI.OWNER_REASON_KO),
+                "labtest": {"strategies": {s: STRATEGY_KO.get(s, s) for s in names}, "rules": A.test_rules()},
+                "timeframes": list(V3_TRADE_TFS), "max_per_message": LAB_TRANSLATE_PER_MESSAGE,
+                "exits_ko": LI.OWNER_EXITS_KO,
+                "note": ("요청 하나마다: 진입이 문법 그대로면 exact(코드가 바로 시험 줄에 넣음), 가장 가까운 값·필터로 바꿨으면 approx(두 분이 "
+                         "대시보드에서 확인한 뒤에만 시험), 옮길 수 없으면 none(시험 안 함). 청산·크기는 옮기지 않으며 그것만으로 approx가 "
+                         "되지는 않음. 두 분이 양식에서 고른 시간봉·롱숏(모름 제외)과 다르게 옮기면 코드가 approx로 돌림. 링크는 열 수 없음")}}
+
+
+def _owner_repeat(conn: sqlite3.Connection, row: dict) -> bool:
+    """Is this queued request a test the ledger already has (a newlab spec already tested, or a labtest with an
+    identical final trial)? labintake.run_due answers it for free; the room line must not say it will be counted."""
+    try:
+        return LI._free_answer(conn, row) is not None or LI._reusable(conn, row)
+    except (sqlite3.Error, ValueError, TypeError, KeyError):
+        return False
+
+
+def queue_owner_requests(rnd: "_Round", t1: Optional[dict], reqs: list[dict]) -> list[dict]:
+    """Code after the translator: every request is re-made and queued by labintake.enqueue_owner (exact -> queued within
+    the owners' daily budget, approx -> waits for the owners' click, none / outside the grammar -> refused, nothing
+    counted), and the room gets one code line per request. A post the translator left out is recorded as 'cannot be
+    translated'. With no answer at all nothing is recorded and the owners are asked to post it again."""
+    ctx, conn = rnd.ctx, rnd.ctx.agents_conn
+    if t1 is None:
+        rnd.system("번역가의 답을 받지 못해 이번 시험 요청은 옮기지 못했습니다. "
+                   f"{LI.NOT_TESTED_KO}. 같은 요청을 다시 올려 주세요.",
+                   {"owner_request": True, "message_ids": [m["id"] for m in reqs], "translated": False})
+        return []
+    LI.ensure(conn)
+    by_mid: dict = {}
+    for it in t1.get("requests") or []:
+        by_mid.setdefault(it["message_id"], []).append(it)
+    lim = LI.limits(ctx.policy)["owner"]
+    out = []
+    for m in reqs:
+        items = by_mid.get(m["id"]) or [{"engine": "none", "entry_fidelity": "none", "reason_codes": [],
+                                         "idea": "", "kept": [], "lost": []}]
+        asked = LI.request_fields(m.get("text"))       # the form's 시간봉 / 롱·숏: code checks an 'exact' against them
+        for i, it in enumerate(items):
+            try:
+                got = LI.enqueue_owner(conn, m["id"], i, it, ctx.clock(), asked=asked)
+            except (sqlite3.Error, ValueError, TypeError) as exc:
+                rnd.system(f"두 분 시험 요청 #{m['id']}을 대기열에 넣지 못했습니다({type(exc).__name__}). {LI.NOT_TESTED_KO}.",
+                           {"owner_request": True, "message_id": m["id"], "error": type(exc).__name__})
+                continue
+            row = LI.latest(conn, got["id"]) or {}
+            meta = row.get("meta") or {}
+            fid, st = meta.get("fidelity"), row.get("status")
+            if not got.get("created"):
+                # a retried meeting: the row (and its code line) is the first translation's, never a second one
+                out.append({"intake_id": got["id"], "message_id": m["id"], "index": i, "status": st,
+                            "status_ko": LI.STATUS_KO.get(st or "", st), "fidelity": fid,
+                            "description_ko": row.get("description_ko", ""), "again": True})
+                continue
+            label = LI.owner_label(row)
+            head = f"🧪 두 분 시험 요청 {label}: {row.get('description_ko', '')}"
+            said = []
+            if meta.get("kept"):
+                said.append("그대로: " + " / ".join(meta["kept"]))
+            if meta.get("lost"):
+                said.append("빠짐·바뀜: " + " / ".join(meta["lost"]))
+            said_ko = f"\n번역가 설명 — {' · '.join(said)}" if said else ""
+            reasons = " · ".join(meta.get("reasons_ko") or [])
+            if st == "queued" and _owner_repeat(conn, row):
+                # the same test is already in the ledger: answered from it for free (labintake.run_due), never 'counted'
+                body = (f"옮김: {LI.FIDELITY_KO['exact']}(진입 규칙 그대로) → 같은 시험이 장부에 이미 있어 다시 돌리지 않고 그때 결과를 "
+                        "알려 드립니다(시험 수에 넣지 않음, 오늘 몫도 쓰지 않음).")
+            elif st == "queued":
+                used = LI.used_today(conn, "owner", ctx.clock())
+                body = (f"옮김: {LI.FIDELITY_KO['exact']}(진입 규칙 그대로) → 오늘 두 분 몫({used}/{lim}) 안에서 코드가 5년 시험을 "
+                        "돌립니다(시험 수에 들어감). 몫이 찼으면 다음 날로 넘어갑니다.")
+            elif st == "needs_owner_ok":
+                body = (f"옮김: {LI.FIDELITY_KO['approx']}" + (f"({reasons})" if reasons else "")
+                        + " → 두 분 확인 필요: 대시보드 '에이전트 방'의 새 매매법 연구실 › 방 정보에서 [시험하기] 또는 [그만두기]. "
+                        f"확인 전에는 시험하지 않습니다(시험 수에도 넣지 않음).")
+            else:
+                why = str((row.get("detail") or {}).get("why") or reasons or "문법으로 옮길 수 없는 요청입니다")
+                body = f"{LI.STATUS_KO.get(st, st)}: {why}" + ("" if LI.NOT_TESTED_KO in why else f" ({LI.NOT_TESTED_KO})")
+            rnd.post("code", "code_result", f"{head}\n{body}{said_ko}\n{LI.OWNER_EXITS_KO}",
+                     {"lab_intake": got["id"], "owner_request": True, "source_ref": row.get("source_ref"),
+                      "status": st, "fidelity": fid, "created": got.get("created")})
+            out.append({"intake_id": got["id"], "message_id": m["id"], "index": i, "status": st,
+                        "status_ko": LI.STATUS_KO.get(st or "", st), "fidelity": fid,
+                        "description_ko": row.get("description_ko", "")})
+    return out
+
+
 def _team_round(rnd: _Round) -> tuple[str, dict]:
     ctx, room = rnd.ctx, rnd.room
     board = _board(ctx)
@@ -3176,10 +3396,24 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     mentioned = owner_mentions(rnd, members)
     if mentioned:
         rnd.base["owner_mentions"] = [{"role": r, "name": role_ko(r)} for r in mentioned]
+    reqs = owner_lab_requests(rnd)                # the owners' '🧪 시험 요청' posts of this meeting (#103)
+    lab_req = bool(reqs) and LI.limits(ctx.policy)["owner"] > 0
+    if reqs and not lab_req:
+        rnd.system("두 분의 '🧪 시험 요청'은 지금 서버 설정에서 꺼져 있어(AGENTS_LAB_INTAKE_OWNER_PER_DAY=0) 문법으로 옮기거나 "
+                   f"시험하지 않고 보통 글처럼 답합니다({LI.NOT_TESTED_KO}).",
+                   {"owner_request": True, "off": True, "message_ids": [m["id"] for m in reqs]})
     answered = 0
     lead = None
-    for role, turn in team_plan(rnd.due, tuple(mentioned)):
-        out = rnd.ask(role, turn, _team_packet(rnd, role, board))
+    lab_results: Optional[list] = None
+    for role, turn in team_plan(rnd.due, tuple(mentioned), lab_request=lab_req):
+        pk = _team_packet(rnd, role, board)
+        if turn == "lab_translate":
+            pk.update(lab_translate_packet(ctx, reqs))
+        elif turn == "lead" and lab_results is not None:
+            pk["lab_request_results"] = lab_results    # what code queued: the lead's lines never guess it
+        out = rnd.ask(role, turn, pk)
+        if turn == "lab_translate":
+            lab_results = queue_owner_requests(rnd, out, reqs)
         if out is not None:
             answered += 1
             if turn == "lead":
@@ -3187,6 +3421,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if answered == 0:
         raise RoundFailed("회의에서 아무도 답하지 못했습니다")
     extra: dict = {}
+    if lab_results is not None:
+        extra["lab_requests"] = lab_results
     if room in GROUP_ROLE_OF_ROOM and (gnotes := _group_notes(rnd)):
         extra["room_notes"] = gnotes
     if lead and lead.get("flag_owners"):
@@ -3288,6 +3524,11 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
         L.append(f"- 방 메모 {len(extra['room_notes'])}건 (다음 회의 패킷의 notes)")
     if (extra.get("dispute") or {}).get("ok"):
         L.append(f"- {extra['dispute']['text_ko']}")
+    if extra.get("lab_requests"):
+        reqs = extra["lab_requests"]
+        q = sum(1 for r in reqs if r["status"] == "queued")
+        ok = sum(1 for r in reqs if r["status"] == "needs_owner_ok")
+        L.append(f"- 두 분 시험 요청 {len(reqs)}건: 시험 줄 {q} · 두 분 확인 필요 {ok} · 시험 안 함 {len(reqs) - q - ok}")
     if isinstance(extra.get("call"), dict):
         L.append(f"- {extra['call'].get('text_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
@@ -4127,6 +4368,12 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
     if late:
         calls += R.usage_today(ctx.agents_conn, day0)["calls"]
     L.append(f"{since}" + (f"회의 {len(rounds)}번 · " if rounds else "") + f"AI 호출 {calls}회")
+    if getattr(ctx.policy, "goal_line", False):
+        # round 2 (AGENTS_GOAL_LINE=1): the 목표 진척도 line, code text (agents/goalline.py; nothing when unreadable)
+        from .goalline import telegram_line
+        goal = telegram_line(ctx.agents_conn, ctx.paper_ro, ctx.checkpoint_db, ctx.now_ms)
+        if goal:
+            L.append(goal)
     waiting = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
     if waiting:
         L.append(f"확인 기다리는 제안 {waiting}건")
@@ -5530,6 +5777,12 @@ class DryRunRunner:
                                                 "idea": "(dry-run) 예시", "why_new": "(dry-run)"}]}
         elif turn == "lab_skeptic":
             ans = {"headline": head, "reviews": []}
+        elif turn == "lab_translate":                  # the owners' test requests (#103): each one 'approx' (waits)
+            ans = {"headline": head, "requests": [
+                {"message_id": r.get("id"), "engine": "newlab", "entry_fidelity": "approx",
+                 "spec": {"timeframe": "4h", "entry": {"family": "keltner_break"}, "filters": [], "direction": "long"},
+                 "kept": ["(dry-run)"], "lost": ["(dry-run)"], "reason_codes": ["param_off_grid"], "idea": head}
+                for r in packet.get("lab_requests") or [] if isinstance(r, dict)], "reply_to_owner": head}
         else:
             ans = {"headline": head, "findings": [], "data_gaps": []}
         text = json.dumps(ans, ensure_ascii=False)

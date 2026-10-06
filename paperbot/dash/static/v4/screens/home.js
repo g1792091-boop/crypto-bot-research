@@ -19,6 +19,7 @@ import {meetBoard} from "./meetboard-kit.js";
 import {pixelRoad} from "./road-kit.js";
 import {marketStrip, openCard, tradesCard, meetSchedule} from "./home-live.js";
 import {luckMini} from "./luck-kit.js";
+import {goalLine} from "./goal-kit.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -116,7 +117,9 @@ export async function mount(el, ctx) {
   // PC: the story rings beside 시장 지금; two columns (head card + 지금 열린 포지션 | 오늘 + 회의 일정 / 회의 결론); 방금 끝난
   // 거래 across the page; the LED bar, the group cards, then (상위·하위 or 1:3 | 처음이라면).
   // Phone: one column in the order of the home-o* classes (home.css).
-  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), h("div", {class: "home-band"}, ring, market),
+  // round 2 (owners 10/06): 목표 진척도 한 줄 (goal-kit.js), one slim line on top that the remodel can place elsewhere
+  const goal = goalLine(ctx, {cls: "home-goal"});
+  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), goal, h("div", {class: "home-band"}, ring, market),
     h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
       h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
     trCard, led, groupSec,

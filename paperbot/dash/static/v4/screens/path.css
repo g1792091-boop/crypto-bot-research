@@ -59,6 +59,7 @@ a.path-part:hover { border-color: var(--accent-line); }
 .path-none { margin: 0; padding: 12px; border: 1px dashed var(--line-2); border-radius: var(--r-sm); color: var(--muted); font-size: var(--t-sm); text-align: center; }
 .path-note { margin: 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.5; }
 .path-foot { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+.path-next { justify-self: start; min-height: 32px; display: inline-flex; align-items: center; text-align: left; white-space: normal; }
 
 /* ---------------------------------------------------------------- phones: the funnel stands up */
 @media (max-width: 720px) {

@@ -29,6 +29,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     luck    운 vs 실력: 여러 개를 한꺼번에 시험하는 곳마다 시험 수, 통과 기준, 운으로 나올 수, 실제 통과 (분석 › 운 vs 실력,
             홈·판정의 작은 카드; background, cached)
     gradpath 졸업 길: 아이디어 → 5년 시험 → 모의 계좌 → 30일 판정 → 실전 후보 (매매법 › 졸업 길, background, cached)
+    nextver 다음 버전: 후보 장부(증거 등급) · 주장별 성적표 · 연구실이 못 하는 아이디어 (#/nextver) + 목표 진척도 한 줄 (홈 맨 위)
 """
 from __future__ import annotations
 
@@ -50,6 +51,7 @@ MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보�
 MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as committed + live trades by regime, background)
 MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
 MODULES += ("gradpath",)                       # grad-path: 졸업 길 (#/path; background, cached)
+MODULES += ("nextver",)                        # round 2: 다음 버전 (#/nextver) + 목표 진척도 한 줄 (cached, read-only)
 
 
 def register_all(app, **kw) -> dict:
