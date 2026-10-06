@@ -9,6 +9,7 @@ import {maybeStartTour} from "./tour.js";
 import {startSince} from "./since.js";
 import {applySkin} from "./skin.js";
 import {applyText} from "./textsize.js";
+import {applyNavPos} from "./navpos.js";
 import {startDrawer} from "./drawer.js";
 import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
@@ -26,6 +27,7 @@ function attachFonts() {
 function boot() {
   applySkin();            // the viewer's skin (tokens.css: "ai" by default, "classic" by choice) before anything draws
   applyText();            // the viewer's 글자 크기 (tokens.css: "md" by default, "lg" / "xl" by choice), same moment
+  applyNavPos();          // the viewer's 메뉴 위치 (core/navpos.js: the top bar by default, the left rail by choice)
   startShell();
   startDrawer();           // account / strategy / trade links open in the side panel (before the router: its links)
   startRouter();

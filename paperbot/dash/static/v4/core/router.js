@@ -5,7 +5,7 @@ import {h, clear, on as domOn} from "./dom.js";
 import {api, post, bus, poll} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {SCREENS, DEFAULT, parseHash, href} from "./routes.js";
+import {SCREENS, DEFAULT, LANDING_MIN_PX, parseHash, href, landing} from "./routes.js";
 import {swap, shimmer} from "./motion.js";
 import {errorBox, toast} from "./ui.js";
 import {peekGo} from "./drawer.js";
@@ -61,8 +61,11 @@ async function show(params) {
   let meta = SCREENS[name];
   if (!meta) { name = DEFAULT; meta = SCREENS[name]; params = {...params, name, arg: null}; }
   if (meta.feature && (features.probed || meta.feature === "wide") && !features[meta.feature]) {
-    toast(meta.feature === "wide" ? `${meta.ko}: PC 화면 (창이 좁아 홈으로 갑니다)` : `${meta.ko}: 아직 켜지지 않은 기능입니다`);
-    location.replace(href(DEFAULT));
+    // a PC screen on a narrow window goes to the start screen there (the 차트 screen: landing() never answers a
+    // switched-off screen, so this cannot loop); any other switched-off screen to 홈
+    const to = meta.feature === "wide" ? landing() : DEFAULT;
+    toast(meta.feature === "wide" ? `${meta.ko}: PC 화면 (창이 좁아 ${SCREENS[to].ko} 화면으로 갑니다)` : `${meta.ko}: 아직 켜지지 않은 기능입니다`);
+    location.replace(href(to));
     return;
   }
   // same screen, new argument: let the screen update in place when it can
@@ -107,10 +110,18 @@ async function show(params) {
 export function startRouter() {
   const go = () => show(parseHash(location.hash));
   window.addEventListener("hashchange", go);
+  // an address without a screen name (/ or #/) shows the start screen of the window's width (routes.js landing()): when
+  // the window is resized across that width, the screen follows, so the menu never lights one screen while another is
+  // on view (and a PC 터미널 never stays on a window too narrow for it)
+  const startMoved = () => !String(location.hash).replace(/^#\/?/, "").split(/[/?]/)[0] && cur.name && cur.name !== landing();
   bus.on("features", () => {
     const p = parseHash(location.hash), meta = SCREENS[p.name];
-    if (meta && meta.feature && !features[meta.feature]) go();
+    if ((meta && meta.feature && !features[meta.feature]) || startMoved()) go();
   });
+  if (typeof matchMedia === "function") {
+    const mq = matchMedia(`(min-width: ${LANDING_MIN_PX}px)`);
+    if (mq.addEventListener) mq.addEventListener("change", () => { if (startMoved()) go(); });
+  }
   go();
 }
 export const currentScreen = () => cur.name;

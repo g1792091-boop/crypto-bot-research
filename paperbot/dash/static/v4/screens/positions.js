@@ -132,15 +132,16 @@ export async function mount(el, ctx) {
     lsEl.textContent = `${fmt.int(longs)} · ${fmt.int(list.length - longs)}`;
     const scope = [st.sym ? fmt.coin(st.sym) : "", st.grp ? fmt.GROUP_KO[st.grp] : ""].filter(Boolean).join(" · ");
     nOpenSub.textContent = `열린 ${fmt.int(list.length)}개${scope ? " · " + scope : ""}`;
-    line.replaceChildren("수익 중 ", h("b", {class: "up"}, fmt.int(up)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(dn)),
+    // (replaceChildren writes a null as the word "null": the optional parts are filtered out first)
+    line.replaceChildren(...["수익 중 ", h("b", {class: "up"}, fmt.int(up)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(dn)),
       " · 묶인 증거금 ", h("b", {class: "num"}, fmt.usdt(mg)),
-      nCo ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, ` · 딥시크·동전 봇 ${fmt.int(nCo)}개 (${COUNT_ONLY_KO}, 합계에서 뺌)`) : null);
+      nCo ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, ` · 딥시크·동전 봇 ${fmt.int(nCo)}개 (${COUNT_ONLY_KO}, 합계에서 뺌)`) : null].filter(Boolean));
     const bw = (lab, b) => b ? h("a", {class: "positions-bwl", href: ctx.href("account", b.x.a.account_id)}, h("span", {class: "muted"}, lab),
       h("b", {class: "positions-bwn"}, nameNode(b.x.a)), h("span", {class: "muted"}, fmt.coin(b.x.pos.symbol)), h("b", {class: ["num", fmt.tone(b.u)]}, fmt.money(b.u, true))) : null;
     const byG = {};
     for (const x of list) { const g = groupKo(x.a); byG[g] = (byG[g] || 0) + 1; }
-    bestLine.replaceChildren(bw("가장 많이 버는 중", best && best.u > 0 ? best : null), bw("가장 많이 잃는 중", worst && worst.u < 0 ? worst : null),
-      list.length ? h("p", {class: "positions-groups muted"}, "묶음별 ", Object.entries(byG).map(([g, n]) => `${g} ${fmt.int(n)}`).join(" · ")) : null);
+    bestLine.replaceChildren(...[bw("가장 많이 버는 중", best && best.u > 0 ? best : null), bw("가장 많이 잃는 중", worst && worst.u < 0 ? worst : null),
+      list.length ? h("p", {class: "positions-groups muted"}, "묶음별 ", Object.entries(byG).map(([g, n]) => `${g} ${fmt.int(n)}`).join(" · ")) : null].filter(Boolean));
   };
 
   // ---------------------------------------------------------------- tab: 포지션 (cards, paged)

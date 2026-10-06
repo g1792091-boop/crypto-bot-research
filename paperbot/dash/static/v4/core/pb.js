@@ -13,7 +13,7 @@ export {alertKo, criticalLines, tradeAlert} from "./alerts.js";
 export {store} from "./store.js";
 export {features} from "./features.js";
 export {bus, api, apiText, post, serverNow, ApiError, stream} from "./api.js";
-export {href, SCREENS, GROUPS} from "./routes.js";
+export {href, SCREENS, GROUPS, landing} from "./routes.js";
 export {setBadge} from "./shell.js";
 export {startTour} from "./tour.js";
 export * as bars from "./bars.js";
