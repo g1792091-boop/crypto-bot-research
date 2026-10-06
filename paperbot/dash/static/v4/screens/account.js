@@ -312,6 +312,8 @@ export async function mount(el, ctx) {
       s.setData(pts);
       s.createPriceLine({price: init, color: tok("--muted"), lineStyle: 2, lineWidth: 1, title: "시작"});
       c.chart.timeScale().fitContent();
+      // the curve cannot be scrolled or zoomed: at a new size (차트 크게 보기, a turned phone) it fills the width again
+      c.chart.timeScale().subscribeSizeChange(() => c.chart.timeScale().fitContent());
     } catch (e) { box.replaceChildren(ui.errorBox(e)); }
   }
 

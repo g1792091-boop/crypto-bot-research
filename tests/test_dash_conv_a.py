@@ -333,6 +333,8 @@ def test_every_chart_has_the_fullscreen_button_and_charts_screen_uses_one_relay(
                       ("screens/replay.js", "fs.bind(chartCard)")):
         src = _read(*rel.split("/"))
         assert "fullChart(" in src and mark in src, rel
+    # the 자본 곡선 cannot be scrolled or zoomed: at a new size it fills the width again
+    assert "subscribeSizeChange(() => c.chart.timeScale().fitContent())" in _read("screens", "account.js")
     fc = _read("core", "fullchart.js")
     assert 'e.key !== "Escape"' in fc and '"fullscreenchange"' in fc and '"hashchange"' in fc and "requestFullscreen" in fc
     assert "가로로 돌리면" in fc and "setTimeout" not in fc and "setInterval" not in fc     # nothing on a timer
