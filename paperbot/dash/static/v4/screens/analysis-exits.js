@@ -1,9 +1,12 @@
 // 분석 › 청산 이유 (ana-syn): GET /api/v4/exits?group= (dash/more/exits.py). Per group (기존 36 / 딥시크 / 5분봉, the
 // analysis.js 묶음 switch) against its own coin flips:
 //   어떻게 끝났나   each exit reason that really occurs (손절, each profit-lock step, 목표가, 시간 청산, 강제청산, ...): share of
-//                  trades as bars (group vs coin flips), then trades, win share and mean net ROE per reason
-//   역행·순행       winners and losers: how far price went against the entry before the exit, as a share of the first stop
-//                  distance; losers: the best move they had seen, in R (R = the first stop distance)
+//                  trades as bars (group vs coin flips), then trades, the median holding time in the trade's own bars and
+//                  mean net ROE per reason (win share only beside a reason that can end either way: a stop is always a
+//                  loss and a lock step always a win, so a 0 % / 100 % column would say nothing)
+//   역행·순행       winners: how far price went against the entry before the exit, as a share of the first stop distance;
+//                  losers: how many of their own bars they lasted (they end at the stop, so how far they went against the
+//                  entry is always ~100 %), and the best move they had seen, in R (R = the first stop distance)
 // One plain line under each chart says what it shows (no advice, no verdict). A part with too few trades is a filling
 // bar with its real threshold. HONESTY: DeepSeek (d.no_money) shows counts and shares only (no ROE, no R size); coin flips
 // are 참고 with refNote.
@@ -11,6 +14,10 @@ import {h, ui, fmt} from "../core/pb.js";
 import {viewHead, groupWords, waitCard, progressBar} from "./analysis-kit.js";
 
 const pc = (x, d = 0) => (x == null ? "—" : fmt.pct(x, d, false));
+/** a holding time in the trade's own bars ("2봉 안" under 2, one decimal under 10) */
+const bars = (x) => (x == null ? "—" : x < 1 ? "1봉 안" : `${fmt.num(x, x < 10 ? 1 : 0)}봉`);
+/** a reason that can end either way (not a stop, not a lock step): its win share is worth showing */
+const mixed = (r) => [r.group, r.coin_flips].some((x) => x && x.win_rate != null && x.win_rate > 0 && x.win_rate < 1);
 /** A share for a bar's label: one decimal under 10% (0 stays "0%"). */
 const pv = (x) => (x == null ? "—" : fmt.pct(x, x > 0 && x < 0.1 ? 1 : 0, false));
 const SERIES = {core: "core", ds200: "ds", reel: "m5"};
@@ -67,9 +74,10 @@ export function exits(d, env) {
     ? `끝난 거래 ${fmt.int(n)}건 중 손절 ${pc(sl && sl.group.share)}, 목표가 익절 ${pc(tp && tp.group.share)}였어요.`
     : `끝난 거래 ${fmt.int(n)}건 중 손절이 ${pc(sl && sl.group.share)}, 익절 잠금이 모두 ${pc(lockShare)}였어요.`;
   const cols = [
-    {label: "청산 이유", l: true, get: (r) => r.ko, cls: () => "ax-wrap"},
+    {label: "청산 이유", l: true, cls: () => "ax-wrap", get: (r) => mixed(r)
+      ? sub(r.ko, `이긴 비율 ${pc((r.group || {}).win_rate)} · 동전 ${pc((r.coin_flips || {}).win_rate)}`) : r.ko},
     {label: "거래", get: (r) => sub(`${fmt.int((r.group || {}).trades || 0)}건`, `동전 ${fmt.int((r.coin_flips || {}).trades || 0)}`)},
-    {label: "이긴 비율", get: (r) => sub(pc((r.group || {}).win_rate), `동전 ${pc((r.coin_flips || {}).win_rate)}`)},
+    {label: "보통 걸린 시간", get: (r) => sub(bars((r.group || {}).median_hold_bars), `동전 ${bars((r.coin_flips || {}).median_hold_bars)}`)},
     money ? {label: "평균 ROE", get: (r) => sub(h("span", {class: fmt.tone((r.group || {}).mean_roe)}, fmt.pct((r.group || {}).mean_roe, 1)), `동전 ${fmt.pct((r.coin_flips || {}).mean_roe, 1)}`)} : null,
   ].filter(Boolean);
   out.push(ui.card({plate: "어떻게 끝났나", sub: `${W.short} vs ${W.flips}`},
@@ -78,7 +86,8 @@ export function exits(d, env) {
     h("p", {class: "ax-say"}, say, ` (${W.flips}: 손절 ${pc(((rs.find((r) => r.key === "SL") || {}).coin_flips || {}).share)})`),
     h("h3", {class: "an-sub"}, "이유별 성적"),
     h("div", {class: "ax-tbl"}, ui.table(cols, rs)),
-    h("p", {class: "an-note"}, money ? "ROE = 증거금 대비 손익 (수수료·펀딩 뺀 순). 아래 작은 숫자 = 동전 봇." : "아래 작은 숫자 = 동전 봇.",
+    h("p", {class: "an-note"}, "보통 걸린 시간 = 들어가서 끝날 때까지 걸린 봉 수의 가운데 값 (그 계좌의 봉: 15분봉 계좌면 1봉 = 15분). ",
+      money ? "ROE = 증거금 대비 손익 (수수료·펀딩 뺀 순). 아래 작은 숫자 = 동전 봇." : "아래 작은 숫자 = 동전 봇.",
       d.busts || d.flip_busts ? ` 이 청산 뒤 계좌가 파산선 아래로 내려간 거래 ${fmt.int(d.busts || 0)}건 (${W.flips} ${fmt.int(d.flip_busts || 0)}건).` : ""),
     ui.refNote(env.verdictTs)));
   out.push(excursionCard(d, grp, W, money, env));
@@ -104,13 +113,13 @@ function excursionCard(d, grp, W, money, env) {
   const lessW = (gw.n || 0) < min ? {who: "이긴 거래", need: min} : null;
   const lessL = (gl.n || 0) < min ? {who: "진 거래", need: min} : null;
   return ui.card({plate: "역행·순행", sub: "끝나기 전에 얼마나 밀렸고, 얼마나 갔었나"},
-    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "역행 = 들어간 뒤 반대쪽으로 가장 멀리 간 거리를 처음 손절까지 거리로 나눈 비율 (100%면 처음 손절선까지 감). 순행 R = 가장 유리하게 간 거리 ÷ 처음 손절까지 거리 (1R = 손절 거리만큼 이익 쪽으로)."),
+    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "역행 = 들어간 뒤 반대쪽으로 가장 멀리 간 거리를 처음 손절까지 거리로 나눈 비율 (100%면 처음 손절선까지 감). 진 거래는 손절선에서 끝나므로 얼마나 밀렸는지 대신 손절까지 몇 봉 걸렸는지 봅니다. 순행 R = 가장 유리하게 간 거리 ÷ 처음 손절까지 거리 (1R = 손절 거리만큼 이익 쪽으로)."),
     legend(grp, W, (gw.n || 0) + (gl.n || 0), (fw.n || 0) + (fl.n || 0)),
     h("div", {class: "ax-charts"},
       chart("이긴 거래: 손절선 쪽으로 밀린 정도", gw, fw, "mae", grp, W,
         `이긴 거래 ${fmt.int(gw.n || 0)}건 중 ${pc(gw.near_stop)}는 손절선 ${fmt.int(near * 100)}% 가까이 갔다 왔어요. (${W.flips} ${pc(fw.near_stop)})`, lessW),
-      chart("진 거래: 손절선 쪽으로 밀린 정도", gl, fl, "mae", grp, W,
-        `진 거래 ${fmt.int(gl.n || 0)}건 중 ${pc(gl.deep)}는 처음 손절 거리의 75% 넘게 밀린 뒤 끝났어요. (${W.flips} ${pc(fl.deep)})`, lessL),
+      chart("진 거래: 손절까지 걸린 시간 (봉)", gl, fl, "hold", grp, W,
+        `진 거래 ${fmt.int(gl.hold_n || 0)}건 중 ${pc(gl.quick)}는 들어가고 2봉 안에 끝났어요. 가운데 값 ${bars(gl.median_hold_bars)}. (${W.flips} ${pc(fl.quick)}, ${bars(fl.median_hold_bars)})`, lessL),
       chart("진 거래: 끝나기 전 가장 유리했던 곳 (R)", gl, fl, "mfe", grp, W,
         `진 거래 중 ${pc(gl.one_r)}는 한때 1R(손절 거리만큼) 넘게 이기고 있었어요.` + (money && gl.median_mfe_r != null ? ` 가운데 값은 ${fmt.num(gl.median_mfe_r, 2)}R.` : "") + ` (${W.flips} ${pc(fl.one_r)})`, lessL)),
     g.no_stop ? h("p", {class: "an-note"}, `처음 손절 기록이 없는 거래 ${fmt.int(g.no_stop)}건은 뺐습니다.`) : null,

@@ -301,7 +301,11 @@ def test_exit_reasons_by_hand(tmp_path, monkeypatch):
     assert R["LOCK1"]["group"]["trades"] == 2 and R["LOCK1"]["group"]["share"] == pytest.approx(2 / 7, abs=1e-4)
     assert R["LOCK1"]["ko"] == "익절 잠금 1단계 (+10%)" and R["LOCK5+"]["group"]["trades"] == 1
     assert R["SL"]["group"]["win_rate"] == 0 and R["SL"]["group"]["mean_roe"] == pytest.approx((-0.04 - 0.02) / 2)
-    assert R["SL"]["coin_flips"] == {"trades": 1, "share": 1.0, "win_rate": 0.0, "mean_roe": pytest.approx(-0.01)}
+    assert R["SL"]["coin_flips"] == {"trades": 1, "share": 1.0, "win_rate": 0.0, "median_hold_bars": 4.0,
+                                     "mean_roe": pytest.approx(-0.01)}
+    # holding time in the trade's own bars: SL 2 h on 1h (2) and 1 h on 15m (4) -> 3; LOCK5+ 1 h on 1h -> 1
+    assert R["SL"]["group"]["median_hold_bars"] == 3.0 and R["LOCK5+"]["group"]["median_hold_bars"] == 1.0
+    assert R["LOCK1"]["group"]["median_hold_bars"] == 4.0 and R["LIQ"]["group"]["median_hold_bars"] == 4.0
     assert R["LOCK2"]["coin_flips"] == {"trades": 0} and v["busts"] == 1 and v["flip_busts"] == 0
     ex = v["excursion"]["group"]
     assert ex["no_stop"] == 1                                    # a stop at the entry price: no distance, left out
@@ -312,6 +316,9 @@ def test_exit_reasons_by_hand(tmp_path, monkeypatch):
     assert lo["n"] == 3 and [b["n"] for b in lo["mae"]] == [0, 0, 0, 0, 3] and lo["deep"] == 1.0
     assert [b["n"] for b in lo["mfe"]] == [1, 1, 0, 1]                              # 0.0 (LIQ) / 0.3 / 1.2 R
     assert lo["one_r"] == pytest.approx(1 / 3, abs=1e-4) and lo["median_mfe_r"] == pytest.approx(0.3)
+    # losers lasted 2 / 4 / 4 bars: all in 2-5, none gone within 2 bars, median 4
+    assert lo["hold_n"] == 3 and [b["n"] for b in lo["hold"]] == [0, 3, 0, 0, 0]
+    assert lo["median_hold_bars"] == 4.0 and lo["quick"] == 0.0
     assert sum(b["share"] for b in w["mae"]) == pytest.approx(1.0, abs=1e-3)
     json.dumps(v, allow_nan=False)
 
@@ -327,7 +334,8 @@ def test_deepseek_exits_carry_counts_and_shares_only(tmp_path, monkeypatch, worl
         assert not bad, bad
         assert "mean_roe" not in json.dumps(out) and "median_mfe_r" not in json.dumps(out)
     R = {r["key"]: r for r in v["reasons"]}
-    assert R["SL"]["group"] == {"trades": 2, "share": pytest.approx(2 / 3, abs=1e-4), "win_rate": 0.0}
+    assert R["SL"]["group"] == {"trades": 2, "share": pytest.approx(2 / 3, abs=1e-4), "win_rate": 0.0,
+                                "median_hold_bars": 2.0}                 # 30 min on 15m: a count, not money
     assert v["excursion"]["group"]["losers"]["one_r"] == 0.0           # shares stay: 0.6R < 1R
     core = world["exits"]["core"]
     assert not core.get("no_money") and any("mean_roe" in r["group"] for r in core["reasons"])
@@ -415,10 +423,14 @@ def test_exits_page_words(world):
     assert "어떻게 끝났나" in t and "역행·순행" in t and "평균 ROE" in t and "익절 잠금 1단계 (+10%)" in t
     assert "손절선 80% 가까이 갔다 왔어요" in t and "1R(손절 거리만큼) 넘게 이기고 있었어요" in t and "참고" in t
     assert "설명용, 판정 아님" in t and "채워지는 중" not in t
+    # holding time replaces the 0 % / 100 % win column and the always-100 % losers chart
+    assert "보통 걸린 시간" in t and "손절까지 걸린 시간 (봉)" in t and "2봉 안에 끝났어요" in t
+    assert t.count("손절선 쪽으로 밀린 정도") == 1 and "이긴 비율" not in t
     assert any("ax-b core" in c for c in core["classes"]) and any("ax-b flip" in c for c in core["classes"])
     ds = _render("exits", world["exits"]["ds200"], "ds200")["text"]
     assert "돈 숫자 없음" in ds and "평균 ROE" not in ds and "가운데 값은" not in ds and "USDT" not in ds
     assert not re.search(r"ROE [−+]?\d", ds)
+    assert "보통 걸린 시간" in ds and "손절까지 걸린 시간 (봉)" in ds          # bars are a count: fine for DeepSeek
     wait = _render("exits", {"group": "core", "trades": 3, "flip_trades": 2, "min_trades": 20, "waiting": True})["text"]
     assert "채워지는 중" in wait and "끝난 거래 20건 필요" in wait and "이유별 성적" not in wait
     reel = _render("exits", world["exits"]["reel"], "reel")["text"]

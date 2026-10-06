@@ -9,8 +9,10 @@ against the core coin flips, the reel on 5m against the three 5m coin flips), cl
 - ``reasons``  one row per exit reason that really occurs (trades.exit_reason): 손절 (SL), each step of the profit lock
                (LOCK, by the trade's ``lock_roe``: +10%, +15%, ... ; from step ``LOCK_ROWS`` on one row), 목표가 (TP), 시간
                청산 (TIME), 강제청산 (LIQ), and the rare ones (HALT, END, EOD, MANUAL; an unknown code is shown as it is):
-               trades, share of the group's trades, win share (P&L > 0), mean net ROE (on margin, after costs). The
-               same row for the coin flips. ``busts``: trades after which the account fell under the bust line
+               trades, share of the group's trades, win share (P&L > 0; 0 or 1 by construction for a stop or a lock
+               step, so the page shows it only where a reason can end either way), the median holding time in the
+               trade's own bars (``median_hold_bars``), mean net ROE (on margin, after costs). The same row for the
+               coin flips. ``busts``: trades after which the account fell under the bust line
                (equity_after < Settings.bust_below).
 - ``excursion`` 역행·순행 from the stored ``mae_price`` / ``mfe_price`` and ``stop_initial`` (agents/riskreward.norm_trade):
                for winners and for losers separately, the worst move against the entry as a share of the initial stop
@@ -40,6 +42,9 @@ NEAR_STOP = 0.8
 MAE_EDGES = ((0.0, 0.25, "0~25%"), (0.25, 0.5, "25~50%"), (0.5, 0.75, "50~75%"), (0.75, 1.0, "75~100%"),
              (1.0, None, "100% 이상"))
 MFE_EDGES = ((0.0, 0.25, "0~0.25R"), (0.25, 0.5, "0.25~0.5R"), (0.5, 1.0, "0.5~1R"), (1.0, None, "1R 이상"))
+HOLD_EDGES = ((0.0, 2.0, "2봉 안"), (2.0, 5.0, "2~5봉"), (5.0, 10.0, "5~10봉"), (10.0, 20.0, "10~20봉"), (20.0, None, "20봉 이상"))
+QUICK_BARS = 2.0
+TF_MS = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
 REASON_KO = {"SL": "손절", "TP": "목표가 익절", "TIME": "시간 청산", "LIQ": "강제청산", "HALT": "계좌 멈춤 정리",
              "END": "실험 끝 정리", "EOD": "자료 끝 정리", "MANUAL": "수동 청산"}
 REEL_KO = {"TP": "목표가 익절 (볼린저 윗밴드)", "TIME": "시간 청산 (96봉)"}
@@ -91,11 +96,11 @@ def read(c: sqlite3.Connection, kinds: tuple, tfs: tuple, since_ms: int, round_t
     """The closed trades of ``kinds`` on ``tfs`` (exit at or after ``since_ms``): win, roe, reason, lock_roe, the
     excursions (agents/riskreward.norm_trade's mae_stop; the best move in R from mfe_price), equity after."""
     from ...agents.riskreward import norm_trade
-    q = ("SELECT t.exit_reason, t.pnl, t.roe, t.equity_after, t.data FROM trades t JOIN accounts a "
+    q = ("SELECT t.exit_reason, t.pnl, t.roe, t.equity_after, t.data, a.timeframe, t.exit_time FROM trades t JOIN accounts a "
          f"ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * len(kinds))}) "
          f"AND a.timeframe IN ({','.join('?' * len(tfs))}) AND t.exit_time >= ? ORDER BY t.exit_time, t.id")
     out = []
-    for reason, pnl, roe, eqa, data in c.execute(q, (*kinds, *tfs, int(since_ms))):
+    for reason, pnl, roe, eqa, data, tf, exit_t in c.execute(q, (*kinds, *tfs, int(since_ms))):
         try:
             d = json.loads(data) or {}
         except (TypeError, ValueError):
@@ -111,14 +116,30 @@ def read(c: sqlite3.Connection, kinds: tuple, tfs: tuple, since_ms: int, round_t
                 mfe_r = max(0.0, side * (best - entry) / abs(entry - stop0))
         except (KeyError, TypeError, ValueError):
             mfe_r = None
-        out.append({"reason": str(reason or d.get("exit_reason") or "?"), "lock_roe": d.get("lock_roe"),
+        hold = None
+        try:
+            bar = TF_MS.get(str(tf or d.get("timeframe") or ""))
+            t0, t1 = int(d["entry_time"]), int(exit_t if exit_t is not None else d["exit_time"])
+            if bar and t1 >= t0:
+                hold = (t1 - t0) / bar
+        except (KeyError, TypeError, ValueError):
+            hold = None
+        out.append({"reason": str(reason or d.get("exit_reason") or "?"), "lock_roe": d.get("lock_roe"), "hold_bars": hold,
                     "win": float(pnl) > 0, "roe": None if roe is None else float(roe),
                     "eq_after": None if eqa is None else float(eqa), "mae_stop": nt.get("mae_stop"), "mfe_r": mfe_r})
     return out
 
 
+def _median(vals: list) -> Optional[float]:
+    v = sorted(vals)
+    m = len(v)
+    if not m:
+        return None
+    return v[m // 2] if m % 2 else (v[m // 2 - 1] + v[m // 2]) / 2
+
+
 def reason_rows(trades: list, first: float, step: float) -> dict:
-    """{key: {"trades", "share", "win_rate", "mean_roe"}} per exit reason (LOCK split by step)."""
+    """{key: {"trades", "share", "win_rate", "median_hold_bars", "mean_roe"}} per exit reason (LOCK split by step)."""
     n = len(trades)
     per: dict = {}
     for t in trades:
@@ -129,6 +150,7 @@ def reason_rows(trades: list, first: float, step: float) -> dict:
         roe = [x["roe"] for x in xs if x["roe"] is not None]
         out[k] = {"trades": len(xs), "share": _r(len(xs) / n, 4) if n else None,
                   "win_rate": _r(sum(1 for x in xs if x["win"]) / len(xs), 4),
+                  "median_hold_bars": _r(_median([x["hold_bars"] for x in xs if x.get("hold_bars") is not None]), 2),
                   "mean_roe": _r(sum(roe) / len(roe), 4) if roe else None}
     return out
 
@@ -148,6 +170,8 @@ def excursion(trades: list) -> dict:
     los = [t for t in trades if not t["win"] and t["mae_stop"] is not None]
     lmae = [t["mae_stop"] for t in los]
     lmfe = sorted(t["mfe_r"] for t in los if t["mfe_r"] is not None)
+    lhold = [t["hold_bars"] for t in trades if not t["win"] and t.get("hold_bars") is not None]
+    quick = sum(1 for v in lhold if v < QUICK_BARS - 1e-12)
     near = sum(1 for v in win if v >= NEAR_STOP - 1e-12)
     deep = sum(1 for v in lmae if v >= 0.75 - 1e-12)
     one_r = sum(1 for v in lmfe if v >= 1.0 - 1e-12)
@@ -160,7 +184,8 @@ def excursion(trades: list) -> dict:
             "losers": {"n": len(lmae), "mae": buckets(lmae, MAE_EDGES), "deep": _r(deep / len(lmae), 4) if lmae else None,
                        "mfe_n": len(lmfe), "mfe": buckets(lmfe, MFE_EDGES),
                        "one_r": _r(one_r / len(lmfe), 4) if lmfe else None, "median_mfe_r": _r(med, 3),
-                       "small": len(lmae) < MIN_SIDE},
+                       "hold_n": len(lhold), "hold": buckets(lhold, HOLD_EDGES), "median_hold_bars": _r(_median(lhold), 2),
+                       "quick": _r(quick / len(lhold), 4) if lhold else None, "small": len(lmae) < MIN_SIDE},
             "no_stop": sum(1 for t in trades if t["mae_stop"] is None)}
 
 
