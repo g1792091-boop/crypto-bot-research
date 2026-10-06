@@ -272,6 +272,19 @@ def test_both_screens_load_the_style_and_it_uses_only_tokens():
     assert all(float(m) >= 12 for m in re.findall(r"font[^;{]*?(\d+(?:\.\d+)?)px", code))
 
 
+def test_the_names_observer_never_repaints_the_chart_on_every_mutation():
+    # review finding: the deck lays its right-edge names out after every chart repaint (touching .cfx-lead's hidden each time);
+    # a MutationObserver that redrew the chart on each of those mutations made the two repaint each other for ever (35 frames
+    # a second, the main thread busy with nobody looking). The observer now waits, measures, and redraws only if the room grew.
+    src = _code(_read("screens", "chart-vp.js"))
+    m = re.search(r"new MutationObserver\(\(\) => \{(.*?)\n    \}\);", src, re.S)
+    assert m, "the names observer"
+    body = m.group(1)
+    assert "setTimeout(" in body and "if (st.res !== before) redraw();" in body
+    assert body.count("redraw()") == 1                                          # the one guarded redraw, nothing unconditional
+    assert "namesNeed(" in body
+
+
 def test_the_legend_states_the_approximation_and_the_page_never_builds_html_from_data():
     calc = _read("screens", "chart-vp-calc.js")
     assert "봉 자료로 나눈 근사치: 실제 체결 가격별 물량과 다를 수 있음" in calc

@@ -54,7 +54,13 @@ export function volText(x) {
  */
 export function vpAttach(o) {
   try { return attach(o); } catch (e) {                         // a bug here must never take the chart down with it
-    if (o.host) put(o.host, h("div", {class: "vp-key"}, h("span", {class: "vp-meta bad", "data-note": "1"}, "매물대를 그리지 못했습니다")));
+    if (!o.host) return null;
+    // said only while the group is on (a chart with the 매물대 off shows nothing new), and again when it is switched on
+    const row = h("div", {class: "vp-key"}, h("span", {class: "vp-meta bad", "data-note": "1"}, "매물대를 그리지 못했습니다"));
+    const sync = () => { let on = true; try { on = !o.deck || o.deck.shown("vp"); } catch (e2) { on = true; } row.hidden = !on; o.host.hidden = !on; };
+    put(o.host, row);
+    try { o.deck.onToggle((g) => { if (g === "vp" || g == null) sync(); }); } catch (e3) { /* no deck: stays said */ }
+    sync();
     return null;
   }
 }
@@ -198,18 +204,17 @@ function attach(o) {
   // ---------------------------------------------------------------- geometry (media pixels) for the renderers
   /** The names column at the pane's right edge (core/chartfx.js): room for "손절 ×2"-sized tags at least, wider when a
    *  longer one is shown (measured when a name changes and every 4 s; it only grows until the coin or interval changes). */
+  const nameBase = (W) => Math.min(Math.round(st.col.fs * 5.4 + 14), Math.round(W * 0.24));
+  function namesNeed(W) {
+    let r = nameBase(W);
+    for (const el of wrap.querySelectorAll(".cfx-name:not([hidden])")) r = Math.max(r, el.offsetWidth + 12);
+    // another overlay that lives at the price axis can ask for more room: --cfx-axis-pad (px) on the chart's wrap
+    return Math.max(r, (parseFloat(getComputedStyle(wrap).getPropertyValue("--cfx-axis-pad")) || 0) + 8);
+  }
   function reserve(W) {
-    const base = Math.min(Math.round(st.col.fs * 5.4 + 14), Math.round(W * 0.24));
     const now = Date.now();
-    if (st.resDirty || now - st.resAt > 4000) {
-      st.resDirty = false; st.resAt = now;
-      let r = base;
-      for (const el of wrap.querySelectorAll(".cfx-name:not([hidden])")) r = Math.max(r, el.offsetWidth + 12);
-      // another overlay that lives at the price axis can ask for more room: --cfx-axis-pad (px) on the chart's wrap
-      r = Math.max(r, (parseFloat(getComputedStyle(wrap).getPropertyValue("--cfx-axis-pad")) || 0) + 8);
-      st.res = Math.max(st.res, r);
-    }
-    return Math.min(Math.max(st.res, base), Math.round(W * 0.4));
+    if (st.resDirty || now - st.resAt > 4000) { st.resDirty = false; st.resAt = now; st.res = Math.max(st.res, namesNeed(W)); }
+    return Math.min(Math.max(st.res, nameBase(W)), Math.round(W * 0.4));
   }
   function place(W, H) {
     g = null;
@@ -383,12 +388,25 @@ function attach(o) {
     redraw();
   }
   deck.onToggle((grp) => { if (grp === "vp" || grp == null) sync(); });
-  // the names column changed (a longer name, a name gone): measure again at the next draw
+  // the names column changed (a longer name appeared): measure again soon and draw again ONLY when the room really grew.
+  // (The deck lays its names out after every chart repaint and touches this very column each time: redrawing on every
+  // mutation would make the two repaint each other for ever, 35 frames a second with nobody looking.)
   const namesEl = wrap.querySelector(".cfx-names");
   if (namesEl && typeof MutationObserver === "function") {
-    const mo = new MutationObserver(() => { st.resDirty = true; if (on()) redraw(); });
+    let moT = 0;
+    const mo = new MutationObserver(() => {
+      if (moT || !on()) return;
+      moT = setTimeout(() => {
+        moT = 0;
+        if (!on()) return;
+        const before = st.res;
+        st.res = Math.max(st.res, namesNeed(st.paneW || wrap.clientWidth || 0));
+        st.resAt = Date.now(); st.resDirty = false;
+        if (st.res !== before) redraw();
+      }, 200);
+    });
     mo.observe(namesEl, {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden"]});
-    ctx.track(() => mo.disconnect());
+    ctx.track(() => { mo.disconnect(); if (moT) clearTimeout(moT); });
   }
   ctx.every(60000, () => { if (on() && st.range !== "view" && !st.rbusy) { st.rkey = ""; redraw(); } }, {now: false});     // 오늘 / 7일: fresh once a minute
   ctx.every(120000, () => { if (on() && st.bot) { st.bkey = ""; redraw(); } }, {now: false});                          // the bot's lines: every two minutes
