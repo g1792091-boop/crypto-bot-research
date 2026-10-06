@@ -183,6 +183,39 @@ def test_an_event_names_a_critical_alert_of_the_36_never_a_coin_flip(world):
     assert len(q.evidence["last_losses"]) == 5 and {h["timeframe"] for h in q.handles["labtest"]} == {"1h"}
 
 
+def test_an_event_names_the_new_alert_never_an_old_one(world):
+    """With the last ok round's marks, only what is NEW is the event: the newer CRITICAL alert, not an older one of
+    today that was already asked about; when the only new thing is not one of the 36's (a coin flip's alert, no new
+    bust), there is no event question at all (never an old event in its place)."""
+    from paperbot.agents import packets3
+    board = packets3.build(world["paper"], world["daily"], NOW)
+    flip = next(a for a in board["league"]["15m"]["coin_flip_wallets"])
+    old = {"ts": NOW - HOUR, "level": "CRITICAL", "text": f"[{WORST}] LIQUIDATED BTCUSDT 30x"}
+    board["today"]["alerts"] = [old]
+    seen = P.agenda_marks(board, None)                          # the last ok round saw the old alert and the busts
+    new = {"ts": NOW - MIN, "level": "CRITICAL", "text": "[V45_AMB@30m] LIQUIDATED ETHUSDT 30x"}
+    board["today"]["alerts"] = [old, new]
+    paper = P.open_ro(world["paper"])
+    try:
+        q = Q.q_event(paper, board, NOW, seen)
+        assert q.evidence["account"] == "V45_AMB@30m"
+        board["today"]["alerts"] = [old, {**new, "text": f"[{flip}] LIQUIDATED ETHUSDT 30x"}]
+        assert Q.q_event(paper, board, NOW, seen) is None
+    finally:
+        paper.close()
+
+
+def test_an_event_after_an_event_and_a_forced_round_after_a_retro():
+    cands = [_q("loss_tag", "l1", 30), _q("retro", "r1"), _q("event", "e2")]
+    # a second NEW event right after an event round is still asked (its marks are gone by the round after)
+    assert Q.pick(cands, {}, "event", NOW).key == "e2"
+    # a forced round right after a retro round is not a skip: it asks the retro question again (once more today)
+    assert Q.pick([_q("retro", "r1")], {}, "retro", NOW, force=True).key == "r1"
+    assert Q.pick([_q("retro", "r1")], {}, "retro", NOW) is None                   # unforced: a free skip
+    full = {"r1": {"day": P.kst_day(NOW), "n": Q.MAX_ASKS_A_DAY}}
+    assert Q.pick([_q("retro", "r1")], full, "retro", NOW, force=True) is None      # the 3-a-day limit still holds
+
+
 def _q(kind, key, n=1):
     return Q.Question(kind, key, f"{kind} 질문", "주장", {}, {}, n)
 

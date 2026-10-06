@@ -386,17 +386,23 @@ def rows_with_status(conn: sqlite3.Connection, statuses: tuple) -> list[dict]:
     return _rows(conn, f"e.status IN ({','.join('?' * len(statuses))})", tuple(statuses), " ORDER BY i.id")
 
 
+# What uses up a source's budget: a 'tested' event, and a labtest that did not finish but left a numbered trial in
+# its room's ledger (request_test keeps the number of a run that errored: it is in that room's n, the Bonferroni
+# divisor, so it costs the same as a finished test)
+_COUNTED_SQL = "(e.status = 'tested' OR (e.status IN ('not_counted', 'error') AND e.trial_id IS NOT NULL))"
+
+
 def used_today(conn: sqlite3.Connection, source: str, now: int) -> int:
-    """Counted tests ('tested' events) of this source in the KST day of ``now``."""
+    """Tests of this source that cost the budget (``_COUNTED_SQL``) in the KST day of ``now``."""
     r = conn.execute("SELECT COUNT(*) FROM lab_intake_events e JOIN lab_intake i ON i.id = e.intake_id "
-                     "WHERE e.status = 'tested' AND i.source = ? AND e.ts >= ? AND e.ts < ?",
+                     f"WHERE {_COUNTED_SQL} AND i.source = ? AND e.ts >= ? AND e.ts < ?",
                      (source, R.kst_day_start_ms(now), R.kst_day_start_ms(now) + DAY_MS)).fetchone()
     return int(r[0] or 0)
 
 
 def _room_tested_since(conn: sqlite3.Connection, source: str, room_id: str, since: int) -> bool:
     r = conn.execute("SELECT 1 FROM lab_intake_events e JOIN lab_intake i ON i.id = e.intake_id WHERE "
-                     "e.status = 'tested' AND i.source = ? AND i.room_id = ? AND e.ts >= ? LIMIT 1",
+                     f"{_COUNTED_SQL} AND i.source = ? AND i.room_id = ? AND e.ts >= ? LIMIT 1",
                      (source, room_id, since)).fetchone()
     return r is not None
 
@@ -531,6 +537,11 @@ def result_ko(detail: Any, status: Optional[str] = None, trial_id: Optional[int]
         return f"{STATUS_KO[status]}: {str(d.get('why') or '')[:200]}".rstrip(": ")
     if status in ("not_counted", "error"):
         why = d.get("why") or d.get("error") or ""
+        if trial_id or d.get("numbered"):
+            # request_test keeps the number of a run that did not finish: it is in that room's test count
+            tid = f" #{trial_id}" if trial_id else ""
+            return (f"{STATUS_KO[status]}: 시험을 끝내지 못했지만 장부{tid}에 번호가 남아 그 방의 시험 수에 들어감(오늘 몫도 씀)"
+                    + (f" ({str(why)[:120]})" if why else ""))
         return f"{STATUS_KO[status]}: 시험 수에 넣지 않음" + (f" ({str(why)[:120]})" if why else "")
     if status == "expired":
         return "기한 지남: 시험하지 않았고 시험 수에도 넣지 않았습니다"
@@ -677,9 +688,12 @@ def _run(ctx: Any, r: dict, now_ms: int) -> tuple[str, Optional[int], dict]:
                                                              res.get("n_trials"), reused=True)
     if st in ("passed", "failed", "described"):
         return "tested", res.get("trial_id"), labtest_detail(st, res.get("gate"), res.get("result"), res.get("n_trials"))
+    # a run that did not finish keeps its ledger number (request_test): it is in the room's n, so it is marked and
+    # costs the source's budget like a finished test (_COUNTED_SQL)
+    numbered = {"numbered": True} if res.get("trial_id") is not None else {}
     if st == "no_data":
-        return "not_counted", res.get("trial_id"), {"why": "no_data", "error": res.get("text")}
-    return "error", res.get("trial_id"), {"error": res.get("text") or st}
+        return "not_counted", res.get("trial_id"), {"why": "no_data", "error": res.get("text"), **numbered}
+    return "error", res.get("trial_id"), {"error": res.get("text") or st, **numbered}
 
 
 def _announce(ctx: Any, r: dict, now_ms: int, used: Optional[int], lim: Optional[int], reuse: bool = False) -> None:
@@ -734,12 +748,15 @@ def run_due(ctx: Any, now: int, max_per_pass: int = 2) -> dict:
             continue
         reuse = _reusable(conn, r)
         if not reuse:
-            used = used_today(conn, r["source"], now)
+            # the budget's day is the day the test would start (the clock, not the pass's start): a test that ran
+            # past midnight is in the new day's budget, so the next row of this pass is judged by that day
+            t_day = max(int(now), ts_now())
+            used = used_today(conn, r["source"], t_day)
             if used >= lim[r["source"]]:
                 continue
             if (r["source"] == "meeting" and r["room_id"].startswith("strat:")
                     and _room_tested_since(conn, "meeting", r["room_id"],
-                                           now - max(0, int(getattr(p, "dispute_room_gap_days", 0) or 0)) * DAY_MS)):
+                                           t_day - max(0, int(getattr(p, "dispute_room_gap_days", 0) or 0)) * DAY_MS)):
                 continue
             why = _blocked(ctx, r["engine"])
             if why:
@@ -761,6 +778,11 @@ def run_due(ctx: Any, now: int, max_per_pass: int = 2) -> dict:
             st, tid, detail = _run(ctx, r, ts_now())
         except Exception as exc:  # noqa: BLE001  (recorded; the tick goes on)
             st, tid, detail = "error", None, {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+            if r["engine"] == "labtest":
+                # request_test numbers a trial before it runs: one made by this run is in the room's n
+                old = R.find_trial(conn, r["strategy"], r["spec"], kind="test")
+                if old is not None and int(old.get("ts") or 0) >= t:
+                    tid, detail["numbered"] = int(old["id"]), True
         event(conn, r["id"], st, ts_now(), trial_id=tid, detail=detail)
         (out["free"] if st == "reused" else out["ran"]).append(r["id"])
         if st != "reused":
@@ -909,6 +931,41 @@ def why_fail(conn_ro: Optional[sqlite3.Connection]) -> dict:
         out["text_ko"] = (f"새 매매법 시험 {n:,}개 중 떨어진 칸: "
                           + ", ".join(f"{m} {NEWLAB_CHECK_KO[m]} 미달 {c / n:.0%}" for m, c in ranked)) if ranked \
             else f"새 매매법 시험 {n:,}개: 떨어진 칸 없음"
+    return out
+
+
+def base_rates(conn_ro: Optional[sqlite3.Connection]) -> dict:
+    """The lab's base rates, per engine ('newlab' trials, 'labtest' = the 36's 'test' trials), from each test's own
+    result (the first one that carries gate checks): {engine: {tests, passed, pass_rate, fail_share {①..⑥}}}. A side
+    that is 'right' only as often as these rates is right by the base rate, not by skill (debate_factory.readback
+    shows its record next to them). Code numbers; empty rates when nothing is readable."""
+    out = {e: {"tests": 0, "passed": 0, "pass_rate": None, "fail_share": {}} for e in ENGINES}
+    if conn_ro is None:
+        return out
+    for eng, kind in (("newlab", "newlab"), ("labtest", "test")):
+        try:
+            rows = conn_ro.execute(
+                "SELECT r.trial_id, r.status, COALESCE(json_extract(r.result, '$.ledger.checks'), "
+                "json_extract(r.result, '$.gate.checks')) FROM trial_results r JOIN trials t ON t.id = r.trial_id "
+                "WHERE t.kind = ? ORDER BY r.id", (kind,)).fetchall()
+        except sqlite3.Error:
+            continue
+        first: dict = {}
+        for tid, st, raw in rows:
+            checks = _loads(raw)
+            if tid not in first and isinstance(checks, dict) and checks:
+                first[tid] = (st, checks)
+        n = len(first)
+        if not n:
+            continue
+        failed = {m: 0 for m in CHECK_MARKS.values()}
+        passed = 0
+        for st, checks in first.values():
+            passed += int(st == "passed" or (kind == "newlab" and st in R.NEWLAB_PASSED))
+            for k, m in CHECK_MARKS.items():
+                failed[m] += int(checks.get(k) is False)
+        out[eng] = {"tests": n, "passed": passed, "pass_rate": round(passed / n, 4),
+                    "fail_share": {m: round(c / n, 3) for m, c in failed.items()}}
     return out
 
 

@@ -57,6 +57,8 @@ CHECK_KO = {"ok": "시험 후보", "bad_spec": "문법 밖", "refused": "시험 
             "missing": "아이디어 없음(답이 잘림)", "duplicate": "이미 시험함", "repeat": "같은 아이디어가 이미 후보(그 아이디어를 밈)",
             "near_duplicate": "비슷한 실패 시험 있음", "unchecked": "검사 못 함(연구실 쪽에서 다시 검사)"}
 QUEUE_KO = {"candidate": "후보", "queued": "오늘 시험 줄", "not_picked": "이번엔 안 뽑힘", "skipped": "시험 후보 아님"}
+# check statuses that can be picked: 'unchecked' too (the agents side checks it: labintake.canon)
+PICKABLE = ("ok", "unchecked")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS debate_lab_ideas (
@@ -146,6 +148,15 @@ def sides_text(n: int, roles: tuple = ROLES) -> str:
 # ---------------------------------------------------------------- the idea check (code)
 def _text(v: Any, n: int = MAX_TEXT) -> str:
     return R.clean_text(" ".join(v.split()))[:n] if isinstance(v, str) else ""
+
+
+def _sql_in(values: tuple) -> str:
+    return "(" + ",".join(f"'{v}'" for v in values) + ")"
+
+
+def _row_id(v: Any) -> Optional[int]:
+    """A positive integer that can be a debate_lab_ideas id (SQLite INTEGER), else None."""
+    return v if isinstance(v, int) and not isinstance(v, bool) and 0 < v < 2 ** 62 else None
 
 
 def _lab_names() -> tuple:
@@ -252,9 +263,12 @@ def check_idea(raw: Any, agents_ro: Optional[sqlite3.Connection], debate_conn: O
         return out
     cc = raw.get("con_check")
     cc = CHECK_ALIASES.get(str(cc).strip().lower(), cc) if isinstance(cc, (str, int)) and not isinstance(cc, bool) else cc
-    weak = [{"id": int(w["id"]), "why": _text(w.get("why"), 120)} for w in (raw.get("weak") or [])[:2]
-            if isinstance(w, dict) and isinstance(w.get("id"), int) and not isinstance(w.get("id"), bool)]
-    backs = raw.get("backs") if isinstance(raw.get("backs"), int) and not isinstance(raw.get("backs"), bool) else None
+    # model words are data: a 'weak' that is not a list, or an id that is not a plausible row id, is dropped (never
+    # a crash of the round, never an integer SQLite cannot store)
+    weak_raw = raw.get("weak") if isinstance(raw.get("weak"), list) else []
+    weak = [{"id": int(w["id"]), "why": _text(w.get("why"), 120)} for w in weak_raw[:2]
+            if isinstance(w, dict) and _row_id(w.get("id")) is not None]
+    backs = _row_id(raw.get("backs"))
     out.update(claim_ko=_text(raw.get("claim")), pro_ko=_text(raw.get("pro")), con_ko=_text(raw.get("con")),
                con_check=cc if cc in CHECK_MARKS else None, backs=backs, weak=weak)
     engine = raw.get("engine")
@@ -268,8 +282,12 @@ def check_idea(raw: Any, agents_ro: Optional[sqlite3.Connection], debate_conn: O
     try:
         got = _canon(engine, raw)
     except ImportError:                       # the lab modules cannot load here: the agents side checks it
-        out.update(check_status="unchecked", check_ko=CHECK_KO["unchecked"],
-                   spec=raw.get("spec") if engine == "newlab" else raw.get("test"))
+        spec = raw.get("spec") if engine == "newlab" else raw.get("test")
+        s = None
+        if engine == "labtest" and isinstance(spec, dict):
+            s = spec.get("strategy") if isinstance(spec.get("strategy"), str) else raw.get("strategy")
+        out.update(check_status="unchecked", check_ko=CHECK_KO["unchecked"], spec=spec,
+                   strategy=s if isinstance(s, str) and 0 < len(s) <= 64 else None)
         return out
     if isinstance(got[0], str):
         out.update(check_status=got[0], check_ko=got[1],
@@ -308,7 +326,9 @@ def check_idea(raw: Any, agents_ro: Optional[sqlite3.Connection], debate_conn: O
 
 def add_idea(conn: sqlite3.Connection, round_id: int, ts: int, question: Optional[dict], checked: dict,
              commit: bool = True) -> int:
-    """Store one round's checked idea (debate.db). Only an 'ok' idea is a candidate for the daily pick."""
+    """Store one round's checked idea (debate.db). Only an 'ok' idea, or one this side could not check ('unchecked':
+    the lab modules did not load; the agents side re-makes every spec and refuses what is outside the grammar), is a
+    candidate for the daily pick."""
     q = question or {}
     cur = conn.execute(
         "INSERT INTO debate_lab_ideas (round_id, ts, question_kind, question_key, question_ko, engine, strategy, "
@@ -320,7 +340,7 @@ def add_idea(conn: sqlite3.Connection, round_id: int, ts: int, question: Optiona
          checked.get("spec_hash"), checked.get("description_ko") or "", checked.get("claim_ko", ""),
          checked.get("pro_ko", ""), checked.get("con_ko", ""), checked.get("con_check"), checked.get("backs"),
          json.dumps(checked.get("weak") or [], ensure_ascii=False), checked["check_status"], checked.get("check_ko"),
-         checked.get("old_trial_id"), "candidate" if checked["check_status"] == "ok" else "skipped"))
+         checked.get("old_trial_id"), "candidate" if checked["check_status"] in PICKABLE else "skipped"))
     if commit:
         conn.commit()
     return int(cur.lastrowid)
@@ -407,10 +427,29 @@ def slot_pick(conn: sqlite3.Connection, agents_ro: Optional[sqlite3.Connection],
     key, start, close = sl
     cols = [c[1] for c in conn.execute("PRAGMA table_info(debate_lab_ideas)")]
     rows = [dict(zip(cols, r)) for r in conn.execute(
-        "SELECT * FROM debate_lab_ideas WHERE queue_status = 'candidate' AND check_status = 'ok' AND ts < ? ORDER BY id",
-        (close,)).fetchall()]
+        f"SELECT * FROM debate_lab_ideas WHERE queue_status = 'candidate' AND check_status IN {_sql_in(PICKABLE)} "
+        "AND ts < ? ORDER BY id", (close,)).fetchall()]
     stale = [r for r in rows if r["ts"] < start]
     rows = [r for r in rows if r["ts"] >= start]
+    # one pick per slot, ever: an idea stored after the slot was picked (a round that began before the close and
+    # ended after it) is not a second pick of the same slot
+    taken = conn.execute("SELECT id FROM debate_lab_ideas WHERE queue_status = 'queued' AND slot = ? ORDER BY id LIMIT 1",
+                         (key,)).fetchone()
+    if taken is not None:
+        try:
+            for r in rows:
+                conn.execute("UPDATE debate_lab_ideas SET queue_status = 'not_picked', slot = ?, queue_ko = ? WHERE id = ?",
+                             (key, f"하루 {per_day}개 한도: 이번엔 #{int(taken[0])}", r["id"]))
+                out["not_picked"].append(r["id"])
+            for r in stale:
+                conn.execute("UPDATE debate_lab_ideas SET queue_status = 'not_picked', queue_ko = ? WHERE id = ?",
+                             ("뽑는 시각을 지나 이번엔 시험하지 않음", r["id"]))
+                out["not_picked"].append(r["id"])
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        return out
     fams, combos = set(), set()
     for r in _index(agents_ro):
         sp = r.get("spec") if isinstance(r.get("spec"), dict) else {}
@@ -502,7 +541,8 @@ def sync_lab(conn: sqlite3.Connection, agents_ro: Optional[sqlite3.Connection], 
 
 
 def _lab_numbers(agents_ro: Optional[sqlite3.Connection]) -> dict:
-    n = len(_ledger_newlab(agents_ro))
+    # every counted 'newlab' trial (actions.newlab_count: rows, not distinct specs)
+    n = R.trial_count(agents_ro, kinds=("newlab",)) if agents_ro is not None else 0
     try:
         from . import newlab as NL
         mp = NL.max_passable_n()
@@ -536,18 +576,30 @@ def readback(conn: sqlite3.Connection, agents_ro: Optional[sqlite3.Connection], 
                        "coinflip_diff": (d.get("p1") or {}).get("coinflip_diff"),
                        "test_no": d.get("test_number"), "line": c["result_ko"][:140]})
     rec = {"tested": 0, "passed": 0, "찬성_right": 0, "반대_right": 0, "con_check_hits": 0, "con_check_graded": 0}
+    # the base rates: lab passes are near 0, so 반대 is 'right' almost always by the base rate alone; each side's
+    # count is shown next to what the lab's usual rates would give (the pass rate; the named check's usual fail share)
+    base = LI.base_rates(agents_ro)
+    exp_pro = exp_hit = 0.0
     for iid, c in cards.items():
         if c["status"] != "tested":
             continue
         rec["tested"] += 1
         row = conn.execute("SELECT con_check FROM debate_lab_ideas WHERE id = ?", (iid,)).fetchone()
         side, hit = settle(c, row[0] if row else None)
+        rates = base.get(c.get("engine")) or {}
         rec["passed"] += int(side == "찬성")
         if side:
             rec[f"{side}_right"] += 1
+            exp_pro += float(rates.get("pass_rate") or 0.0)
         if hit is not None:
             rec["con_check_graded"] += 1
             rec["con_check_hits"] += hit
+            exp_hit += float((rates.get("fail_share") or {}).get(row[0]) or 0.0)
+    graded = rec["찬성_right"] + rec["반대_right"]
+    rec["찬성_expected"] = round(exp_pro, 2)                  # what the lab's pass rate alone gives 찬성
+    rec["반대_expected"] = round(graded - exp_pro, 2)         # ... and 반대
+    rec["con_check_expected"] = round(exp_hit, 2)            # hits the named checks' usual fail shares give
+    rec["base_note"] = "_expected = 연구실 평소 비율(통과율, 그 칸의 평소 탈락률)만으로 맞힐 수. 그보다 많아야 실력"
     wf = LI.why_fail(agents_ro)
     out = {"goal": GOAL_KO,
            "today": {"queued": f"{queued_today}/{per_day}", "candidates": len(open_rows)},

@@ -394,20 +394,32 @@ def q_event(paper: sqlite3.Connection, board: dict, now_ms: int, seen: Optional[
     flags = [k for k, _w in P.unusual(board, None, seen, start) if k == "risk"]
     if not flags:
         return None
+    if not isinstance(seen, dict) or seen.get("start") != start:
+        seen = None                                         # as P.unusual: another run's marks count as none
+    marks = P.agenda_marks(board, start)
     pc = board.get("pass_check") or {}                      # the 36's accounts (a coin flip's alert is not a question)
+    # the NEW thing, never an old one: a CRITICAL alert of the 36 newer than the last ok round's mark (newest first),
+    # then (when the bust count grew) the busted account of the 36 with the latest losing trade
     crit = []
     for a in ((board.get("today") or {}).get("alerts") or []):
         text = str(a.get("text") or "")
         if a.get("level") == "CRITICAL" and text.startswith("[") and "]" in text and text[1:text.find("]")] in pc:
-            crit.append(text[1:text.find("]")])
-    busts = sorted(a for a, v in pc.items() if v.get("bust"))
+            if seen is None or int(a.get("ts") or 0) > int(seen.get("crit_ts") or 0):
+                crit.append((int(a.get("ts") or 0), text[1:text.find("]")]))
+    crit = [aid for _ts, aid in sorted(crit, key=lambda x: -x[0])]
+    busts: list = []
+    if seen is None or marks["busts"] > int(seen.get("busts") or 0):
+        last = {}
+        for a in (a for a, v in pc.items() if v.get("bust")):
+            r = paper.execute("SELECT MAX(exit_time) FROM trades WHERE account_id = ? AND pnl < 0", (a,)).fetchone()
+            last[a] = int((r[0] if r else 0) or 0)
+        busts = sorted(last, key=lambda a: (-last[a], a))
     aid = next((a for a in crit + busts if a.partition("@")[2] in TFS), None)
     if aid is None:
-        return None
+        return None                                         # the new thing was not one of the 36's (a coin flip)
     strat, _, tf = aid.partition("@")
     cs = _strategy_cards(paper, 0, now_ms + 1, losses_only=True, limit=5, account=aid)
     tags = [t for t in _skip_tags() if sum(t in (c.get("tags") or []) for c in cs) >= 2]
-    marks = P.agenda_marks(board, start)
     q = Question("event", f"event:{aid}:{marks.get('busts')}:{marks.get('crit_ts')}",
                  f"{strat} {tf}의 파산·긴급 청산을 막을 수 있었던 조건은?",
                  f"{strat} {tf}의 마지막 손실들에는 규칙 하나로 막을 수 있었던 공통점이 있다",
@@ -508,13 +520,20 @@ def pick(cands: list[Question], asked: Optional[dict], last_kind: Optional[str],
     """One question: an event first; then the next kind in rotation after ``last_kind`` that has a fresh candidate
     (never the same kind twice in a row), the strongest evidence within it; retro only when nothing else is fresh or
     ``force`` (the 6-hour forced round). None: nothing fresh (a free 'no_question' skip)."""
-    fresh = [q for q in cands if eligible(q, asked, now_ms) and q.kind != last_kind]
-    ev = [q for q in fresh if q.kind == "event"]
+    ok = [q for q in cands if eligible(q, asked, now_ms)]
+    # an event jumps the queue even right after another event: each is a NEW bust or alert (its key carries the
+    # marks, and the next round's marks no longer count it), so a second one would otherwise never be asked
+    ev = [q for q in ok if q.kind == "event"]
     if ev:
         return max(ev, key=lambda q: (q.n_evidence, q.key))
+    fresh = [q for q in ok if q.kind != last_kind]
     retro = [q for q in fresh if q.kind == "retro"]
-    if force and retro:
-        return retro[0]
+    if force:
+        # the forced round (hours without news) asks the retro question, even right after a retro: a forced round
+        # is never a skip
+        retro = retro or [q for q in ok if q.kind == "retro"]
+        if retro:
+            return retro[0]
     order = [k for k in KINDS if k not in ("event", "retro")]
     if last_kind in order:
         i = order.index(last_kind)

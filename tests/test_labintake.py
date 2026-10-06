@@ -268,6 +268,62 @@ def test_the_debate_budget_of_one_a_day_holds_across_kst_midnight(conn, stub, no
     assert LI.limits(RM.RoomsPolicy(lab_intake_debate_per_day=5))["debate"] == 2
 
 
+def test_a_test_that_runs_past_midnight_counts_in_the_new_day_and_the_pass_stops(conn, stub, noise):
+    """The budget's day is the day a test starts by the clock: a pass that began at 23:59 and whose first test ended
+    after midnight must not start a second test 'for yesterday' (both would land in the new day: 2 of 1)."""
+    ids = [debate(conn, i, "labtest", skip(TAGS[i]), S)["id"] for i in range(3)]
+    late = kst(2026, 10, 8, 23, 59)
+    clock = {"t": late}
+    ctx = make_ctx(conn, noise, now=late, lab_intake_debate_per_day=1)
+    ctx.clock_ms = lambda: clock["t"]
+    run = stub.run_test
+
+    def slow(*a, **k):
+        clock["t"] += 2 * MIN                          # this 5-year test ends at 00:01
+        return run(*a, **k)
+    stub.run_test = slow
+    out = LI.run_due(ctx, late)
+    assert out["ran"] == [ids[0]] and len(stub.runs) == 1
+    tomorrow = kst(2026, 10, 9, 9, 0)
+    assert LI.used_today(conn, "debate", tomorrow) == 1                   # it counts in the day it ended
+    assert LI.run_due(make_ctx(conn, noise, now=tomorrow, lab_intake_debate_per_day=1), tomorrow)["ran"] == []
+    assert R.trial_count(conn, room_id=ROOM) == 1
+
+
+def test_a_labtest_that_errors_keeps_its_number_and_costs_the_budget(conn, stub, noise):
+    """request_test numbers a trial before it runs and keeps the number when the run fails: that trial is in the
+    room's n (the Bonferroni divisor), so it costs the daily budget, and the line never says it was not counted."""
+    ids = [debate(conn, i, "labtest", skip(TAGS[i]), S)["id"] for i in range(3)]
+
+    def boom(*a, **k):
+        raise RuntimeError("bad cache")
+    stub.run_test = boom
+    out = LI.run_due(make_ctx(conn, noise, lab_intake_debate_per_day=1), NOW)
+    assert out["ran"] == [ids[0]] and R.trial_count(conn, room_id=ROOM) == 1       # one number, not one per row
+    row = status(conn, ids[0])
+    assert row["status"] == "error" and row["trial_id"] is not None and row["detail"]["numbered"] is True
+    line = LI.result_ko(row["detail"], row["status"], row["trial_id"])
+    assert f"장부 #{row['trial_id']}에 번호가 남아" in line and "시험 수에 넣지 않음" not in line
+    assert LI.used_today(conn, "debate", NOW) == 1 and status(conn, ids[1])["status"] == "queued"
+    # a meeting dispute's error also holds its room for the gap
+    m = LI.enqueue(conn, "meeting", "dispute:1", "labtest", skip(TAGS[3]), S, "", {}, NOW - HOUR)
+    m2 = LI.enqueue(conn, "meeting", "dispute:2", "labtest", skip(TAGS[4]), S, "", {}, NOW - HOUR)
+    out = LI.run_due(make_ctx(conn, noise, sides=True), NOW)
+    assert out["ran"] == [m["id"]] and status(conn, m2["id"])["status"] == "queued"
+    # an exception that escapes after the trial was numbered is still marked (the number is in the room's n)
+    def numbered_then_raise(env, a):
+        R.add_trial(env.conn, env.room_id, env.strategy, "test", {**a["test"], "strategy": env.strategy},
+                    ts=env.now_ms)
+        raise sqlite3.OperationalError("disk I/O error")
+    import unittest.mock as um
+    with um.patch.object(A, "request_test", numbered_then_raise):
+        out = LI.run_due(make_ctx(conn, noise, now=NOW + DAY, lab_intake_debate_per_day=1), NOW + DAY)
+    got = status(conn, out["ran"][0])
+    assert got["status"] == "error" and got["trial_id"] is not None and got["detail"]["numbered"] is True
+    # an error before any number (no trial row): nothing in the room's n, the line says so
+    assert LI.result_ko({"error": "x"}, "error").startswith("오류: 시험 수에 넣지 않음")
+
+
 def test_lab_blocked_and_the_wall_time_keep_rows_queued(conn, stub, noise, monkeypatch):
     n = debate(conn, 1, "newlab", NOISE)
     t = debate(conn, 2, "labtest", skip(), S)

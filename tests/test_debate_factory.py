@@ -148,6 +148,51 @@ def test_unimportable_lab_modules_leave_the_idea_unchecked(dconn, monkeypatch):
     assert got["check_status"] == "unchecked" and got["spec"] == NOISE
 
 
+def test_an_unchecked_idea_is_still_a_candidate_for_the_agents_side_to_check(dconn, agents, monkeypatch):
+    """The design: if the lab modules cannot load on the debate side, the idea is stored 'unchecked' and the agents
+    side still checks it (labintake re-makes every spec). It must reach the daily pick, not be skipped for good."""
+    a, _ = agents
+
+    def broken(engine, raw):
+        raise ImportError("no numpy here")
+    monkeypatch.setattr(DF, "_canon", broken)
+    n = DF.check_idea(idea(spec=SPECS[0]), a, dconn, kst_at(0, 20))
+    t = DF.check_idea(idea("labtest", test={k: v for k, v in skip().items() if k != "strategy"}, strategy=S), a, dconn,
+                      kst_at(0, 20))
+    monkeypatch.undo()
+    assert n["check_status"] == t["check_status"] == "unchecked" and t["strategy"] == S
+    nid = DF.add_idea(dconn, 1, kst_at(0, 20), None, n)
+    tid = DF.add_idea(dconn, 2, kst_at(0, 20, 5), None, t)
+    assert _q(dconn, nid)[0] == _q(dconn, tid)[0] == "candidate"
+    assert DF.slot_pick(dconn, a, kst_at(0, 21, 5), 1)["queued"] in (nid, tid)
+
+
+def test_malformed_backs_and_weak_from_the_model_never_break_the_round(dconn, agents):
+    a, _ = agents
+    for weak in (5, 1.5, True, "약함", {"id": 1}, [{"id": 2 ** 70}], [{"id": "3"}], [{"id": -4}], None):
+        for backs in (2 ** 70, -1, 0, True, "7", 1.5, [1], None):
+            got = DF.check_idea(idea(spec=SPECS[0], backs=backs, weak=weak), a, dconn, kst_at(0, 20))
+            assert got["weak"] == [] and got["backs"] is None, (weak, backs)
+            DF.add_idea(dconn, 1, kst_at(0, 20), None, got, commit=False)        # storable (no overflow)
+            dconn.rollback()
+    ok = DF.check_idea(idea(spec=SPECS[0], backs=7, weak=[{"id": 9, "why": "표본"}]), a, dconn, kst_at(0, 20))
+    assert ok["backs"] == 7 and ok["weak"] == [{"id": 9, "why": "표본"}]
+
+
+def test_a_slot_is_picked_once_even_when_an_idea_arrives_after_the_pick(dconn, agents):
+    a, _ = agents
+    x = _add(dconn, a, SPECS[0], kst_at(0, 20))
+    assert DF.slot_pick(dconn, a, kst_at(0, 21, 5), 1)["queued"] == x
+    # a round that began at 20:55 stores its idea (with its round time) after the 21:05 pick
+    late = _add(dconn, a, SPECS[1], kst_at(0, 20, 55), kind="big_losses")
+    got = DF.slot_pick(dconn, a, kst_at(0, 21, 20), 1)
+    assert got["queued"] is None and got["not_picked"] == [late] and f"이번엔 #{x}" in _q(dconn, late)[3]
+    assert dconn.execute("SELECT COUNT(*) FROM debate_lab_ideas WHERE queue_status = 'queued'").fetchone()[0] == 1
+    # the next slot picks as usual
+    y = _add(dconn, a, SPECS[2], kst_at(1, 10))
+    assert DF.slot_pick(dconn, a, kst_at(1, 21, 1), 1)["queued"] == y
+
+
 def test_the_similar_copy_scores_like_rooms():
     specs = [NEAR_FAILED, {**NEAR_FAILED, "direction": "short"}, {**NEAR_FAILED, "timeframe": "4h"},
              {"timeframe": "1h", "entry": {"family": "ema_cross", "params": {"fast": 20, "slow": 50}}, "direction": "both"},
@@ -263,11 +308,40 @@ def test_round_trip_pick_intake_run_sync_and_readback(dconn, agents, tmp_path, m
     assert row[3] == "반대" and row[4] == 0                       # the stub fails only ④, not ⑥ (the check 반대 named)
     rb = DF.readback(dconn, ro, kst_at(0, 21, 40), 1)
     assert rb["goal"] == DF.GOAL_KO and rb["today"] == {"queued": "1/1", "candidates": 0}
-    assert rb["record"] == {"tested": 1, "passed": 0, "찬성_right": 0, "반대_right": 1, "con_check_hits": 0,
-                            "con_check_graded": 1}
+    rec = dict(rb["record"])
+    assert rec.pop("base_note").startswith("_expected")
+    # next to each side's count, what the lab's own rates give (the stub never passes and fails only ④, not ⑥)
+    assert rec == {"tested": 1, "passed": 0, "찬성_right": 0, "반대_right": 1, "con_check_hits": 0,
+                   "con_check_graded": 1, "찬성_expected": 0.0, "반대_expected": 1.0, "con_check_expected": 0.0}
     assert rb["recent_results"][0]["verdict"] == "failed" and rb["lab"]["tests_so_far"] == 0
     assert P.estimate_tokens(P.compact_json(rb)) <= 700
     ro.close()
+
+
+def test_readback_shows_each_side_next_to_the_lab_base_rates(dconn, agents):
+    """Lab passes are near 0, so 반대 is 'right' almost always by the base rate alone: the record shows what the lab's
+    own rates give each side (the pass rate; the usual fail share of the check 반대 named) next to the counts."""
+    a, _ = agents
+    full = dict.fromkeys("abcdef", True)
+    for spec, st, ch in ((SPECS[0], "passed", full), (SPECS[1], "failed", {**full, "f": False}),
+                         (SPECS[2], "failed", {**full, "a": False, "f": False}), (SPECS[3], "failed", {**full, "a": False})):
+        R.add_trial_with_result(a, R.LAB_ROOM, None, "newlab", NL.normalize_spec(spec), st, {"ledger": {"checks": ch}},
+                                ts=D0 - DAY)
+    base = LI.base_rates(a)
+    assert base["newlab"]["tests"] == 4 and base["newlab"]["pass_rate"] == 0.25
+    assert base["newlab"]["fail_share"]["①"] == base["newlab"]["fail_share"]["⑥"] == 0.5
+    assert base["labtest"]["tests"] == 0 and LI.base_rates(None)["newlab"]["pass_rate"] is None
+    LI.ensure(a)
+    for k, (spec, cc) in enumerate(((SPECS[4], "⑥"), (SPECS[5], "①"))):
+        iid = DF.add_idea(dconn, k, kst_at(0, 10 + k), None,
+                          DF.check_idea(idea(spec=spec, con_check=cc), a, dconn, kst_at(0, 10 + k)))
+        got = LI.enqueue(a, "debate", f"debate:{iid}", "newlab", spec, None, "", {}, kst_at(0, 22))
+        LI.event(a, got["id"], "tested", kst_at(0, 22, 10 + k), trial_id=None,
+                 detail={"engine": "newlab", "verdict": "failed", "failed_checks": ["⑥"]})
+    rec = DF.readback(dconn, a, kst_at(0, 23), 1)["record"]
+    assert (rec["tested"], rec["반대_right"], rec["찬성_right"]) == (2, 2, 0)
+    assert rec["찬성_expected"] == 0.5 and rec["반대_expected"] == 1.5           # 2 tests x the 25 % pass rate
+    assert (rec["con_check_hits"], rec["con_check_graded"], rec["con_check_expected"]) == (1, 2, 1.0)
 
 
 def test_settle_and_the_result_line():
