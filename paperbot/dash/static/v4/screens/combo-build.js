@@ -16,6 +16,8 @@ const METHODS = [
 ];
 const okMethod = (w) => (METHODS.some((m) => m.id === w) ? w : "eq");
 const daysKo = (d) => (d == null ? "—" : d < 1 ? fmt.dur(d * 86400) : `${fmt.num(d, 1)}일`);
+/** n whole percents that add up to 100 (the first ones get the remainder): 3 -> [34, 33, 33]. */
+const equalSplit = (n) => Array.from({length: n}, (_x, i) => Math.floor(100 / n) + (i < 100 % n ? 1 : 0));
 const ratioB = (x) => h("b", {class: ["num", x == null ? "muted" : ""]}, x == null ? "—" : fmt.num(x, 2));
 
 export function buildTab(env) {
@@ -43,7 +45,8 @@ export function buildTab(env) {
     if (dropped.length) ctx.toast(`목록에 없는 구성원을 뺐습니다: ${dropped.join(", ")}`);
     st.pick = ok;
     st.w = w;
-    st.p = ok.map((_k, i) => (Number.isFinite(p[i]) && p[i] >= 0 ? p[i] : Math.round(100 / Math.max(1, ok.length))));
+    const even = equalSplit(ok.length);
+    st.p = ok.map((_k, i) => (Number.isFinite(p[i]) && p[i] >= 0 ? p[i] : even[i]));
   }
   function clash(key, list) {
     const u = st.idx[key];
@@ -65,7 +68,11 @@ export function buildTab(env) {
     const n = st.pick.length;
     const chips = h("div", {class: "cb-chips", role: "list", "aria-label": "고른 구성원"},
       n ? st.pick.map((k, i) => chip(k, i)) : h("p", {class: "muted"}, "아직 고른 것이 없습니다. 아래에서 찾아 넣어 주세요."));
-    const mseg = ui.seg(METHODS.map((m) => ({id: m.id, label: m.label})), st.w, (id) => { st.w = id; changed(); }, {label: "비중 나누는 법"});
+    const mseg = ui.seg(METHODS.map((m) => ({id: m.id, label: m.label})), st.w, (id) => {
+      if (id === "custom" && st.w !== "custom") st.p = equalSplit(st.pick.length);   // 직접 % starts from an equal split
+      st.w = id;
+      changed();
+    }, {label: "비중 나누는 법"});
     const mw = h("p", {class: "cb-mwords"}, METHODS.find((m) => m.id === st.w).words);
     const sum = st.w === "custom" ? st.p.reduce((a, b) => a + (Number(b) || 0), 0) : null;
     const acts = h("div", {class: "cb-acts"},

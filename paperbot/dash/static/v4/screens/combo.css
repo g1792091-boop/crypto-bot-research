@@ -72,7 +72,7 @@
 .cb-loo { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
 
 /* the small correlation table (k x k) */
-.cb-cgrid { display: grid; grid-template-columns: 30px repeat(var(--k), minmax(40px, 1fr)); gap: 3px; max-width: 640px; }
+.cb-cgrid { display: grid; grid-template-columns: 30px repeat(var(--k), minmax(40px, 1fr)); gap: 3px; max-width: 640px; margin-bottom: 10px; }
 .cb-ch { display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-term); min-height: 24px; }
 .cb-ch .cb-sw { margin-right: 2px; width: 10px; height: 10px; }
 .cb-cc { display: flex; align-items: center; justify-content: center; min-height: 36px; border-radius: 6px; font: 700 var(--t-xs)/1 var(--f-term);
