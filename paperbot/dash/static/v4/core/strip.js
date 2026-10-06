@@ -11,7 +11,8 @@
 //   below 1200 px        the same buttons as one row that scrolls sideways (swipe; a mouse wheel scrolls it too), the
 //                        current one brought into view; on a phone 찾기 stays at its left edge; the phone's bottom bar
 //                        stays as it was (core/shell.js)
-// The row's real height goes to --sub-h on <html>, so the screens' sticky parts sit under it however many rows it has.
+// The row's real height (plus the red critical banner's while it shows) goes to --sub-h on <html>, so the screens'
+// sticky parts sit under it however many rows it has.
 // Drawn into #subtabs by core/shell.js on every route / feature / badge change (the focus and the scroll survive).
 // Look: core/nav.css (.strip, .sb). The left rail (core/rail.js) lists the same buttons when chosen (메뉴 위치 왼쪽).
 import {h, $} from "./dom.js";
@@ -43,11 +44,14 @@ function button(it, cur, badges) {
   news ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
 }
 
-/** After a draw or a resize: the row's height to --sub-h, and the group lines at a row's start hidden. */
+/** After a draw or a resize: the row's height to --sub-h, and the group lines at a row's start hidden. The red
+ *  critical banner (#crit, in the same sticky header above the top bar) counts too while it shows: without it the
+ *  screens' sticky parts slid under the banner and the 터미널 ran past the window's bottom by the banner's height. */
 function measure() {
   const nav = bar();
   if (!nav) return;
-  const px = nav.offsetHeight;
+  const crit = $("#crit");
+  const px = nav.offsetHeight + (crit ? crit.offsetHeight : 0);
   const root = document.documentElement;
   if (root.style.getPropertyValue("--sub-h") !== `${px}px`) root.style.setProperty("--sub-h", `${px}px`);
   let top = null;
@@ -103,7 +107,11 @@ export function renderStrip(cur, badges, {lead = [], tools = []} = {}) {
   const keepX = nav.scrollLeft;
   nav.replaceChildren(...lead, ...groups, h("span", {class: "strip-tools"}, tools));
   nav.scrollLeft = keepX;                                          // a badge or a feature redraw keeps the row where it was
-  if (st.ro) { st.ro.disconnect(); st.ro.observe(nav); for (const g of groups) st.ro.observe(g); }
+  if (st.ro) {
+    st.ro.disconnect(); st.ro.observe(nav); for (const g of groups) st.ro.observe(g);
+    const crit = $("#crit");
+    if (crit) st.ro.observe(crit);                                 // the banner showing, wrapping or going away
+  }
   measure();
   if (moved) center(nav, !first);
   if (focusId) { const b = nav.querySelector(`.sb[data-sb="${focusId}"]`); if (b) b.focus({preventScroll: true}); }

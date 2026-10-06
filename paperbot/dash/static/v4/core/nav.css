@@ -46,9 +46,10 @@
 /* the phone's 찾기 (first in the row) stays at the row's left edge while the buttons slide under it */
 .strip .findsub { position: sticky; left: 0; z-index: 2; box-shadow: calc(var(--gutter) * -1) 0 0 6px var(--bg), 12px 0 10px -2px var(--bg); }
 /* a PC window (1200 px and up), menu on top: the header spans the window and the buttons wrap instead of scrolling
-   (one row at 1920 px at every 글자 크기; a tidy second row on a narrower window; a group never splits) */
+   (one row at 1920 px at every 글자 크기; a tidy second row on a narrower window; a group never splits), with the
+   same 12 px edge as the 터미널's (screens/terminal.css), so the buttons never shift when it is opened or left */
 @media (min-width: 1200px) {
-  :root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; }
+  :root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; padding-inline: 12px; }
   :root:not([data-nav="left"]) .subtabs { flex-wrap: wrap; overflow: visible; padding-block: 3px; row-gap: 2px; }
   :root:not([data-nav="left"]) .strip-tools { display: none; }
   :root:not([data-nav="left"]) .toptools { display: inline-flex; }

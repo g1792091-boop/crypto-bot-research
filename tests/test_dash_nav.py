@@ -93,7 +93,7 @@ def test_strip_is_the_default_and_the_rail_only_a_choice():
     assert ".groups" not in _nocomment(_read("base.css"))
     # a PC window with the strip: the header spans the window and the buttons wrap (never a sideways scroll there)
     pc = _media(css, "@media (min-width: 1200px) {\n  :root:not([data-nav=\"left\"])")
-    assert ':root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; }' in pc
+    assert ':root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none;' in pc
     assert ':root:not([data-nav="left"]) .subtabs { flex-wrap: wrap; overflow: visible;' in pc
     # the settings move to the top bar there; below 1200 px they stay at the strip's end
     assert ':root:not([data-nav="left"]) .strip-tools { display: none; }' in pc and ':root:not([data-nav="left"]) .toptools { display: inline-flex; }' in pc
@@ -196,6 +196,29 @@ def test_strip_height_is_measured_into_sub_h():
     assert "min-height: 44px;" in sub and "var(--sub-h)" not in sub                      # it never reads what it writes
     # the screens keep reading --sub-h for their sticky tops and heights
     assert "var(--sub-h)" in _read("screens/terminal.css") and "var(--sub-h)" in _read("screens/chart.css")
+    # the red critical banner sits in the same sticky header: its height counts while it shows (review: the analysis
+    # tabs slid under it and the 터미널 ran past the window's bottom by its height), and a change of it re-measures
+    assert 'const px = nav.offsetHeight + (crit ? crit.offsetHeight : 0);' in t
+    assert "if (crit) st.ro.observe(crit);" in t
+    html = _read("index.html")
+    shell_top = html[html.index('<div class="shell-top">'):html.index('<nav class="rail"')]
+    assert 'id="crit"' in shell_top and 'id="subtabs"' in shell_top
+
+
+def test_strip_keeps_still_and_the_top_bar_fits():
+    """Review fixes: the buttons do not shift when the 터미널 is opened or left; the top bar's small 글자 크기 button
+    reads centred; the D+n chip keeps its 관찰 date at 1200-1439 px with 아주 크게."""
+    css = _nocomment(_read("core/nav.css"))
+    pc = _media(css, "@media (min-width: 1200px) {\n  :root:not([data-nav=\"left\"])")
+    assert ':root:not([data-nav="left"]) .top, :root:not([data-nav="left"]) .subtabs { max-width: none; padding-inline: 12px; }' in pc
+    term = _read("screens/terminal.css")
+    assert 'body:has(.scr[data-screen="terminal"]) .subtabs { max-width: none; padding-inline: 12px; }' in term   # the same edge
+    base = _nocomment(_read("base.css"))
+    cyc = next(x for x in base.splitlines() if x.startswith(".textcyc {"))
+    assert "align-items: center;" in cyc and "baseline" not in cyc
+    assert ('@media (min-width: 1200px) and (max-width: 1439px) { :root[data-text="xl"]:not([data-nav="left"]) .brand-t { display: none; } }'
+            in base)
+    assert 'class="bic"' in _read("index.html")                                          # the brand's mark itself always stays
 
 
 def test_menu_order_captions_keys_and_new_screens_in_node():

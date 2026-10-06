@@ -44,6 +44,9 @@ em { font-style: normal; color: var(--accent); }
 .brand b { color: var(--accent); font-weight: 700; }
 .brand-t { display: none; }
 @media (min-width: 420px) { .brand-t { display: inline; } }
+/* a 1200-1439 px window with the menu on top and 아주 크게: the top bar's settings leave the D+n chip too little room
+   (its "관찰 ~날짜" was cut), so the brand keeps only its mark there */
+@media (min-width: 1200px) and (max-width: 1439px) { :root[data-text="xl"]:not([data-nav="left"]) .brand-t { display: none; } }
 
 /* the one-line D+n chip and its rules panel */
 .dchip { appearance: none; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--ink); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -95,8 +98,10 @@ a.oldui:hover { color: var(--ink); border-color: var(--accent-line); }
 .skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 /* 글자 크기 (core/textsize.js): the same small control, first at the strip's end; 화면 색 follows right after it */
 .textsw + .skinsw { margin-left: 6px; }
-/* 글자 크기 on a phone: one cycling button first in the strip (the full control is at the far end of that row) */
-.textcyc { display: none; flex: none; align-items: baseline; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+/* 글자 크기 on a phone: one cycling button first in the strip (the full control is at the far end of that row); also the
+   PC top bar's small one below 1680 px. Its two words sit in the middle of the button (baseline alignment put them
+   at its top edge) */
+.textcyc { display: none; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
   background: var(--surface); color: var(--ink); font: 800 var(--t-sm)/1 var(--f-body); cursor: pointer; }
 .textcyc small { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); }
 @media (max-width: 759px) { .textcyc { display: inline-flex; } .subtabs .textsw { display: none; } }
