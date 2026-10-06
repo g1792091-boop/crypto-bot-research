@@ -211,7 +211,8 @@ def test_rings_count_korea_days_so_today_and_yesterday_differ():
     assert 'h("small", null, "일째")' in kit and 'h("small", null, "D+")' not in kit
     assert 'h("small", null, "일째")' in _read("screens", "story.js")
     assert "`${fmt.int(d.i + 1)}일째`" in _read("screens", "flow-cal.js")     # 흐름: the same 1-based Korea-day count
-    assert "D+는 매일 한국 09:00에 +1" in _read("screens", "home.js")
+    # the home card's day count ('30일 중 N일 지남', the verdict-day clock's words) moves at 09:00 KST and says so
+    assert "지난 날은 매일 한국 09:00에 +1" in _read("screens", "home.js")
 
 
 # ---------------------------------------------------------------------------------------------- 5. 상황 태그

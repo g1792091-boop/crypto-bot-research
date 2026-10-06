@@ -287,13 +287,12 @@ class Flow:
         self.cache[key] = (time.monotonic(), v)
         return v
 
-    @staticmethod
-    def _next_verdict(start: int, now: int) -> tuple[int, int]:
-        from ...checkpoint import checkpoint_ts
-        k = 1
-        while checkpoint_ts(start, k) <= now:
-            k += 1
-        return k, checkpoint_ts(start, k)
+    def _next_verdict(self, start: int, now: int) -> tuple[int, int]:
+        """The verdict-day clock's checkpoint (dash/more/verdictday.py): a passed checkpoint stays the race's finish
+        until its verdict is stored in checkpoint.db (never the next one on the morning of the verdict)."""
+        from .verdictday import clock, read_ledger
+        c = clock(start, now, read_ledger(getattr(self.data, "checkpoint_db", None)))
+        return c["k"], c["ts"]
 
     def race(self, step: str = "auto") -> dict:
         try:

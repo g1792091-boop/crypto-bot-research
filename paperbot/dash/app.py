@@ -299,9 +299,12 @@ def _ro_uri(path: str) -> str:
 
 
 class Data:
-    def __init__(self, db: str, daily_db: Optional[str] = None):
+    def __init__(self, db: str, daily_db: Optional[str] = None, checkpoint_db: Optional[str] = None):
         self.db = db
         self.daily_db = daily_db
+        # the checkpoint job's verdicts (read-only): the countdown stays on a checkpoint until its verdict is stored
+        # (dash/more/verdictday.py clock); by default checkpoint.db next to paper3.db, like create_app
+        self.checkpoint_db = checkpoint_db or os.path.join(os.path.dirname(os.path.abspath(db)), "checkpoint.db")
         # board(): the last result and the database marks it was computed from (G17: every open page's live stream
         # asked for it every 3 s, a GROUP BY over all trades plus 331 engines each time)
         self._board_hit: Optional[tuple] = None   # (marks, board, time.monotonic() of the last marks check)
@@ -627,7 +630,7 @@ class Data:
     def summary(self, now_ms: Optional[int] = None) -> dict:
         """Experiment progress (day n of 30, next checkpoint, observation period) and today's summary (KST day)."""
         from ..accounts import GROUP_OF_KIND, ORIGINAL_KINDS
-        from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+        from ..checkpoint import PERIOD_DAYS
         now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         day_ms, kst = 86_400_000, 9 * 3_600_000
         with self.conn() as c:
@@ -640,12 +643,18 @@ class Data:
                 "SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
                 "ON a.account_id = t.account_id WHERE t.exit_time >= ?", (since,))]
         out: dict = {"now": now, "start": start, "period_days": PERIOD_DAYS}
+        # the verdict-day clock (dash/more/verdictday.py): a checkpoint that has passed stays the next one until the
+        # checkpoint job has stored its verdict (never '2번째 판정 · 30일 남음' on the morning of the first verdict)
+        from .more.verdictday import clock, day_state_reader, job_reader, read_ledger
+        ledger = read_ledger(self.checkpoint_db)
+        day_state = day_state_reader(self.db)
+        jobs = job_reader()       # systemd on the server, asked (cached 60 s) only on a verdict day before its result
         if start is not None:
             out["day"] = (now - (start - start % day_ms)) // day_ms + 1
-            k = 1
-            while checkpoint_ts(start, k) <= now:
-                k += 1
-            out["next_checkpoint"] = {"k": k, "ts": checkpoint_ts(start, k), "day": k * PERIOD_DAYS}
+            vc = clock(start, now, ledger, day_state, jobs)
+            out["next_checkpoint"] = {"k": vc["k"], "ts": vc["ts"], "day": vc["day"], "due": vc["due"],
+                                      "state": vc["state"], "late": vc["late"]}
+            out["verdict_clock"] = vc
             floor = (xs or {}).get("observe_until")
             obs = floor if isinstance(floor, int) and not isinstance(floor, bool) else start + 21 * day_ms
             out["observe_until"] = obs
@@ -657,7 +666,7 @@ class Data:
                 rs = run_facts(c).get("start_ts")
         except (sqlite3.Error, TypeError, ValueError):
             rs = start
-        out["restart"] = restart_banner(rs, now)
+        out["restart"] = restart_banner(rs, now, ledger, day_state, jobs)
         per: dict = {}
         group = {}
         info: dict = {}            # account -> {strategy, timeframe, kind, n}: the page names a row without the board
@@ -2449,28 +2458,34 @@ def verdict_method() -> dict:
     return {"method_ko": CP.method_ko(None, n), "n_bots": n, "family_alpha": alpha}
 
 
-def restart_banner(start_ts: Optional[int], now_ms: int) -> dict:
+def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] = None, day_state=None,
+                   jobs=None) -> dict:
     """'새 실험 D+n / 30 · 첫 판정 MM/DD' of the run started at ``start_ts`` (checkpoint.run_facts): n = whole days
     since 00:00 UTC of the start day (the checkpoint clock: day 30 is the first verdict, checkpoint_ts), the verdict
-    date in KST (09:00). After the first verdict the next one is named instead."""
-    from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+    date in KST (09:00). The checkpoint named is the verdict-day clock's (dash/more/verdictday.py; ``ledger`` =
+    read_ledger(checkpoint.db)): a checkpoint that has passed stays named ('판정 결과 기다림') until its verdict is
+    stored; only then the next one, and ``of`` becomes its day (60, 90, ...). Without a ledger a passed checkpoint reads
+    as not known, never as the next one. ``line_ko`` / ``chip_ko``: the one sentence every screen uses (change 13)."""
+    from ..checkpoint import PERIOD_DAYS
+    from .more.verdictday import clock
     out: dict = {"rules_ko": RULES_V4_KO, "rules_label": RULES_V4_LABEL, **verdict_method(),
                  "doc": _doc_link("rules-v4", "rules-change-1"),
                  "verdict_doc": _doc_link("verdict-v4", "rules-change-1"),
                  "levrule_doc": _doc_link("levrule-eval-v4", "levrule-eval")}
     if start_ts is None:
         return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
-    day_ms = 86_400_000
-    n = max(0, (int(now_ms) - (int(start_ts) - int(start_ts) % day_ms)) // day_ms)
-    k = 1
-    while checkpoint_ts(int(start_ts), k) <= int(now_ms):
-        k += 1
-    cp = checkpoint_ts(int(start_ts), k)
-    mmdd = time.strftime("%m/%d", time.gmtime(cp / 1000 + 9 * 3600))
-    text = (f"새 실험 D+{n} / {PERIOD_DAYS} · 첫 판정 {mmdd}" if k == 1
-            else f"새 실험 D+{n} · {k}번째 판정 {mmdd}")
-    return {**out, "ready": True, "day": n, "of": PERIOD_DAYS, "checkpoint": k, "verdict_ts": cp, "verdict_mmdd": mmdd,
-            "text": text}
+    c = clock(int(start_ts), int(now_ms), ledger, day_state, jobs)
+    n, k, cp, mmdd = c["n"], c["k"], c["ts"], c["mmdd"] or "—"          # "—": past day 180, no verdict left
+    if c["state"] == "ended":
+        text = f"새 실험 D+{n} · 판정 끝"
+    elif c["due"]:
+        text = f"새 실험 D+{n} · {c['day']}일 판정 결과 기다림"
+    elif k == 1:
+        text = f"새 실험 D+{n} / {PERIOD_DAYS} · 첫 판정 {mmdd}"
+    else:
+        text = f"새 실험 D+{n} · {k}번째 판정 {mmdd}"
+    return {**out, "ready": True, "day": n, "of": c["of"], "checkpoint": k, "verdict_ts": cp, "verdict_mmdd": mmdd,
+            "text": text, "due": c["due"], "state": c["state"], "line_ko": c["line_ko"], "chip_ko": c["chip_ko"]}
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
@@ -2491,7 +2506,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     app.add_middleware(GZipExceptStream, minimum_size=GZIP_MIN_BYTES)
     # the page's code files by content hash (assets.py): versioned addresses, a year in the browser, the '새 버전' chip
     assets = app.state.assets = Assets(STATIC)
-    data = Data(db, daily_db)
+    data = Data(db, daily_db, checkpoint_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
                   owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
     rooms.ensure_inbox()

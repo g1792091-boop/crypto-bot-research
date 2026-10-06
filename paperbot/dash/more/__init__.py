@@ -39,6 +39,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     whatiflab  만약 실험실 (#/whatif): 시험한 설정만 고르는 손절·익절·잠금·시간·레버리지, 5년 결과 + 밤 그림자 (기존 36만)
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
+    verdictday 판정 날 시계 (판정이 저장될 때까지 그 판정을 '계산 중'으로), 판정 기계 준비 카드, 30일 길 이정표, 판정 뒤
+            실거래 체크리스트 (판정 화면; /api/summary의 next_checkpoint · restart도 같은 시계)
 """
 from __future__ import annotations
 
@@ -65,6 +67,7 @@ MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 
 MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수치 · 강제청산 직후 · 들고 있었다면 · GH Coin 방향
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
+MODULES += ("verdictday",)                     # fix-verdict: 판정 날 시계, 판정 기계, 30일 길 이정표, 판정 뒤 할 일
 
 
 def register_all(app, **kw) -> dict:

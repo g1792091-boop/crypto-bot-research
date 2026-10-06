@@ -155,11 +155,17 @@ function alertRow(d) {
   const split = [lv.CRITICAL ? `긴급 ${int(lv.CRITICAL)}` : null, lv.WARN ? `주의 ${int(lv.WARN)}` : null].filter(Boolean).join(" · ");
   return row("!", "warn", `봇 알림 ${int(A.n)}${A.capped ? "+" : ""}개${split ? " · " + split : ""}`, l ? alertKo(l.text) : null, null, href("alerts"));
 }
+// the day count and the verdict in the verdict-day clock's words (dash/more/verdictday.py, review 10/06 fix 1 and
+// change 13): a verdict day that passed says whether its result is stored yet, never "결과를 봅니다" before it is
 function milestoneRows(d) {
   const out = [];
   for (const m of d.milestones || []) {
-    if (m.kind === "day") out.push(row("D+", "accent", `실험 D+${m.from} → D+${m.to}`, d.verdict_ts ? `첫 판정 ${kst(d.verdict_ts)}` : null, null, href("checkpoint")));
-    else if (m.kind === "verdict") out.push(row("◆", "accent", `${int(m.k * (d.of || 30))}일째 판정 날이 지났습니다`, "판정 화면에서 결과를 봅니다", null, href("checkpoint")));
+    if (m.kind === "day") out.push(row("D+", "accent", `실험 ${int(m.from)}일 → ${int(m.to)}일 지남`, d.line_ko || (d.verdict_ts ? `판정 ${kst(d.verdict_ts)}` : null), null, href("checkpoint")));
+    else if (m.kind === "verdict") out.push(m.judged
+      ? row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, "판정 화면에서 봅니다 (그래서 이제 뭐가 바뀌나까지)", null, href("checkpoint"))
+      : m.judged == null ? row("◆", "warn", `${int(m.k * 30)}일 판정 날 · 결과 기록을 읽지 못함`, "없다는 뜻이 아닙니다 · 판정 화면에서 확인", null, href("checkpoint"))
+      : row("◆", "accent", `${int(m.k * 30)}일 판정 날 · 결과 계산 중`, "계산은 09:35부터 · 결과가 저장되면 판정 화면에 바로 나옵니다 (지금 상황도 판정 화면에)", null, href("checkpoint")));
+    else if (m.kind === "verdict_result") out.push(row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, `${kst(m.ts)} 저장 · 판정 화면에서 봅니다`, null, href("checkpoint")));
     else if (m.kind === "observe_end") out.push(row("◆", "accent", "관찰 기간이 끝났습니다", "이제 에이전트가 새 계좌를 제안할 수 있습니다 (두 분 승인 후 시작)", null, href("rooms")));
   }
   return out;
@@ -249,7 +255,10 @@ export function awayParts(d, o = {}) {
     S.known === false ? noneRow("■", "봇 멈춤", "봇 가동 기록(1분봉)이 아직 없습니다", href("server"), "확인 못 함") : null,
     jobsKnown ? null : noneRow("!", "예약 작업", "이 서버의 예약 작업 기록을 읽지 못했습니다", href("server"), "확인 못 함")].filter(Boolean);
   const vts = d.verdict_ts;
-  const leftKo = verdictLeft(d);
+  // a verdict day that passed stays the one named until its result is stored (the verdict-day clock, fix-verdict fix 1):
+  // "판정 결과 기다림", never "판정까지 0초"
+  const due = !!d.verdict_due;
+  const leftKo = due ? null : verdictLeft(d);
   const sh = (t) => h("p", {class: "since-sh"}, t);
   const rows = [
     sh("거래 · 파산"),
@@ -264,9 +273,13 @@ export function awayParts(d, o = {}) {
     ...(srv.length ? srv : [noneRow("■", "서버 문제", "멈춤 · 재시작 · 실패한 작업", href("server"))]),
     sh("판정"),
     ...milestoneRows(d),
-    // after the first verdict the server names the next one (restart_banner): "D+35 · 다음 판정 12/04", not "D+35 / 30"
-    vts ? row("D-", "accent", `판정까지 ${leftKo}`, (Number(d.dn) > Number(d.of || 30) ? `D+${int(d.dn)} · 다음 판정 ` : `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 `)
-      + `${mmdd(vts)} 09:00 (한국)`, null, href("checkpoint"))
+    // the countdown under the server's one sentence (line_ko: "30일 중 N일 지남 · 판정까지 M일 (11/04 09:00)", the same
+    // words as 판정 · 홈 · 30일 길, fix-verdict change 13); an older answer without it: after the first verdict the server
+    // names the next one (restart_banner): "D+35 · 다음 판정 12/04", not "D+35 / 30"
+    vts ? row(due ? "◆" : "D-", "accent", due ? `${int((d.verdict_k || 1) * 30)}일 판정 · 결과 기다림` : `판정까지 ${leftKo}`,
+      d.line_ko || ((Number(d.dn) > Number(d.of || 30) ? `D+${int(d.dn)} · 다음 판정 ` : `D+${int(d.dn ?? 0)} / ${int(d.of || 30)} · 판정 `)
+        + `${mmdd(vts)} 09:00 (한국)`), null, href("checkpoint"))
+      : d.line_ko && d.start != null ? row("◆", "accent", "판정", d.line_ko, null, href("checkpoint"))      // past day 180: 판정 끝
       : noneRow("D-", "판정까지", "봇이 아직 첫 계좌를 만들지 않았습니다", href("checkpoint")),
   ];
   const span = dur((d.now - d.after) / 1000);
@@ -275,7 +288,7 @@ export function awayParts(d, o = {}) {
     RANGES.filter((r) => r.id !== "away" || o.away).map((r) => h("button", {type: "button", "aria-pressed": String(r.id === o.id),
       title: r.id === "away" && o.away ? `${kst(o.away.from)} ~ ${kst(o.away.to)} 자리 비움` : null,
       onclick: () => { if (r.id !== o.id) openAway(r.id, {keep: true}); }}, r.ko)));
-  return {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts ? ` · 판정까지 ${leftKo}` : "",
+  return {cls: "away", plate: "자는 동안", title, sub: [`${span} 동안 · 닫힌 거래 ${int(T.total)}건`, vts ? (due ? " · 판정 결과 기다림" : ` · 판정까지 ${leftKo}`) : "",
     d.clamped_by === "week" ? " · 그보다 전 일은 알림 기록에" : ""], seg, tiles, rows};
 }
 

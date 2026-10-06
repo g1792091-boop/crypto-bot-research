@@ -10,13 +10,17 @@ last 7 days (``clamped: true`` then, ``clamped_by`` "start" or "week", and the p
 - busts: accounts that went bust since (named for core / reel / extra, counted for DeepSeek and the coin flips).
 - meetings: meetings that finished since (count, decisions, the two conclusions to show; see story.meetings).
 - alerts: the bot's warnings since (count per level, the latest three; the page turns them into Korean).
-- milestones: D+n changed, a verdict day passed, the observation period ended.
+- milestones: D+n changed, a verdict day passed (``judged``: its result is stored in checkpoint.db yet, verdictday.py;
+  None when checkpoint.db could not be read),
+  a verdict result stored since (its day passed before), the observation period ended. ``line_ko``: the countdown's
+  one sentence (verdictday.texts), the same as every other screen.
 - server (자는 동안, the long-absence card; conv-a): the bot's stops in the window (runs of STOP_MIN or more minutes
   with no stepped 1m bar in paper3.db ``live_bars``, the same rule as 가동 기록 / more/uptime.py; ``known`` false while
   live_bars has no row at all, so nothing is claimed either way), its restarts (``runs`` rows after the run start) and
   the nightly checks written in the window (daily3.db ``reports``, uptime.nightly). The page adds the timers' failed
   runs from /api/v4/jobs and the health problems of now.
-- days_left: whole days to the next verdict (restart_banner's verdict_ts), for the countdown line.
+- days_left: whole days to the verdict the countdown names (restart_banner's verdict_ts, the verdict-day clock's: 0
+  while a verdict day that passed waits for its stored result, ``verdict_due``), for the countdown line.
 
 Cost: one grouped index walk over trades_acct, two LIMIT 1 queries, the last alerts, a few agents3.db rows, one index
 walk of live_bars' primary key over the window (7 days at most: about 70k entries). Cached per minute bucket of
@@ -31,6 +35,7 @@ import time
 from typing import Optional
 
 from .story import DAY_MS, MAIN_GROUPS, _loads, accounts, busts, day_n, meetings, run_start
+from .verdictday import read_ledger
 
 WEEK_MS = 7 * DAY_MS
 TTL_S = 60.0
@@ -95,10 +100,12 @@ def _trade_row(c: sqlite3.Connection, after: int, order: str) -> Optional[dict]:
 
 
 def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: int, now: int,
-          clamped: bool = False, daily_db: Optional[str] = None) -> dict:
-    """What happened in (after, now] (see the module docstring); ``after`` already clamped (clamp_after)."""
+          clamped: bool = False, daily_db: Optional[str] = None, ledger: Optional[dict] = None) -> dict:
+    """What happened in (after, now] (see the module docstring); ``after`` already clamped (clamp_after). ``daily_db``:
+    daily3.db (the nightly checks of the server section). ``ledger``: verdictday.read_ledger(checkpoint.db): a verdict
+    day that passed says whether its result is stored yet."""
     from ..app import restart_banner
-    from ...checkpoint import checkpoint_ts
+    from ...checkpoint import NO_VERDICT_DAYS, PERIOD_DAYS, checkpoint_ts, day_str
     start = run_start(c)
     out: dict = {"after": after, "now": now, "clamped": clamped, "start": start,
                  "clamped_by": None if not clamped else "start" if start is not None and after <= start else "week"}
@@ -158,10 +165,23 @@ def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: in
         d0, d1 = day_n(start, after), day_n(start, now)
         if d1 > d0:
             ms.append({"kind": "day", "from": d0, "to": d1})
+        # a verdict day that passed since: whether its result is stored (checkpoint.db; the job computes it from 09:35),
+        # and a result stored since even when its day passed before (the 09:10 visit, back at 20:00)
+        verdicts = (ledger or {}).get("verdicts") or {}
+        # when a verdict was really written: the row's ts is the job run's start (run_due's own clock), the result comes
+        # its runtime later (the 10:00 visit while it computes, back at 12:00: the result is named)
+        done = (ledger or {}).get("done") or {}
+        known = (ledger or {}).get("db") in ("ok", "missing")      # missing: the job never ran, so nothing is stored
         k = 1
-        while checkpoint_ts(start, k) <= now:
-            if checkpoint_ts(start, k) > after:
-                ms.append({"kind": "verdict", "k": k, "ts": checkpoint_ts(start, k)})
+        while checkpoint_ts(start, k) <= now and k * PERIOD_DAYS <= NO_VERDICT_DAYS:
+            cp = checkpoint_ts(start, k)
+            stored = verdicts.get(day_str(cp))
+            stored = done.get(day_str(cp), stored) if stored is not None else None
+            if cp > after:
+                ms.append({"kind": "verdict", "k": k, "ts": cp, "judged": (stored is not None) if known or stored else None,
+                           "stored_ts": stored})
+            elif stored is not None and stored > after:
+                ms.append({"kind": "verdict_result", "k": k, "ts": stored, "cp_ts": cp})
             k += 1
         r = c.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
         xs = _loads(r[0]) if r else None
@@ -169,8 +189,9 @@ def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: in
         obs = obs if isinstance(obs, int) and not isinstance(obs, bool) else start + 21 * DAY_MS
         if after < obs <= now:
             ms.append({"kind": "observe_end", "ts": obs})
-        rs = restart_banner(start, now)
-        out.update(dn=d1, of=rs.get("of"), verdict_ts=rs.get("verdict_ts"), verdict_mmdd=rs.get("verdict_mmdd"))
+        rs = restart_banner(start, now, ledger)
+        out.update(dn=d1, of=rs.get("of"), verdict_ts=rs.get("verdict_ts"), verdict_mmdd=rs.get("verdict_mmdd"),
+                   verdict_k=rs.get("checkpoint"), verdict_due=rs.get("due"), line_ko=rs.get("line_ko"))
         vts = rs.get("verdict_ts")
         out["days_left"] = max(0, -(-(int(vts) - now) // DAY_MS)) if isinstance(vts, int) else None
     out["milestones"] = ms
@@ -208,7 +229,8 @@ def register(app, ctx) -> dict:
             try:
                 with contextlib.closing(data.conn()) as c:
                     with rooms.ro(rooms.agents_db) as ag:
-                        v = json_finite(since(c, ag, a, now, clamped, daily_db))
+                        v = json_finite(since(c, ag, a, now, clamped, daily_db,
+                                              read_ledger(getattr(ctx, "checkpoint_db", None))))
             except sqlite3.Error as exc:
                 raise HTTPException(503, f"paper3.db를 읽지 못함: {type(exc).__name__}") from None
             if len(cache) >= CACHE_MAX:

@@ -275,6 +275,39 @@ def test_away_card_lists_every_section_and_counts_deepseek_only():
     assert "D+35 · 다음 판정" in out["after30"] and "/ 30" not in out["after30"]
 
 
+def test_away_card_says_the_verdict_in_the_clock_words_and_waits_on_the_verdict_day():
+    """wave-a merge: the 자는 동안 card's 판정 section in the verdict-day clock's words (more/verdictday.py line_ko,
+    fix-verdict change 13), and a verdict day that passed is named until its result is stored (fix 1): 결과 기다림,
+    never '판정까지 0초' and never the next verdict; the milestone of that day says 계산 중 / 결과가 나왔습니다."""
+    base = {"after": T0, "now": T0 + 7 * HOUR, "clamped": False, "start": T0,
+            "trades": {"total": 0, "liquidations": 0, "groups": {}}, "best": None, "worst": None,
+            "busts": {"n": 0, "by_group": {}, "named": []}, "meetings": {"finished": 0, "decided": 0, "lines": []},
+            "alerts": {"n": 0, "by_level": {}, "latest": []}, "milestones": [],
+            "server": {"known": True, "stops": [], "stops_n": 0, "stop_min": 0, "restarts": [], "nightly": []},
+            "dn": 1, "of": 30, "verdict_ts": T0 + 29 * DAY, "days_left": 29, "verdict_k": 1, "verdict_due": False,
+            "line_ko": "30일 중 1일 지남 · 판정까지 29일 (11/04 09:00)", "empty": False}
+    due = {**base, "now": T0 + 29 * DAY + 2 * HOUR, "dn": 30, "verdict_due": True, "days_left": 0,
+           "line_ko": "30일 판정 날 · 동전 봇 비교 계산 중",
+           "milestones": [{"kind": "day", "from": 29, "to": 30},
+                          {"kind": "verdict", "k": 1, "ts": T0 + 29 * DAY, "judged": False, "stored_ts": None}]}
+    done = {**due, "milestones": [{"kind": "verdict", "k": 1, "ts": T0 + 29 * DAY, "judged": True, "stored_ts": T0 + 29 * DAY + HOUR}]}
+    out = _node(f"""
+    globalThis.location = {{hash: ""}}; globalThis.addEventListener = () => {{}};
+    const D = await import('file://{os.path.join(ROOT, "tests", "anasyn_dom.mjs")}');
+    const S = await import(CORE + '/since.js');
+    const J = {{available: true, jobs: {{}}}};
+    const one = (d) => {{ const p = S.awayParts(d, {{id: "8h", words: "최근 8시간", jobs: J}}); return {{rows: D.walk(p.rows).text, sub: p.sub.join("")}}; }};
+    console.log(JSON.stringify({{base: one({json.dumps(base)}), due: one({json.dumps(due)}), done: one({json.dumps(done)})}}));
+    """, dom=True)
+    b, d, k = out["base"], out["due"], out["done"]
+    assert "판정까지 29일" in b["rows"] and "30일 중 1일 지남 · 판정까지 29일 (11/04 09:00)" in b["rows"] and "판정까지 29일" in b["sub"]
+    assert "D+1 / 30" not in b["rows"]                                    # one wording: the clock's sentence
+    assert "30일 판정 · 결과 기다림" in d["rows"] and "동전 봇 비교 계산 중" in d["rows"] and "판정 결과 기다림" in d["sub"]
+    assert "판정까지 0" not in d["rows"] + d["sub"] and "2번째" not in d["rows"]
+    assert "실험 29일 → 30일 지남" in d["rows"] and "30일 판정 날 · 결과 계산 중" in d["rows"]
+    assert "30일 판정 결과가 나왔습니다" in k["rows"] and "결과 계산 중" not in k["rows"]
+
+
 def test_grid_cells_are_cleaned_and_only_our_groups_can_be_laid_over():
     out = _node("""
     const C = await import(SCR + '/charts.js');

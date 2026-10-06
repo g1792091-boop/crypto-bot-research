@@ -1,0 +1,301 @@
+"""Review of fix-verdict (판정 날 시계, 판정 뒤 할 일, 판정 기계): the cases the first build missed.
+
+- checkpoint.db's verdict row carries the job RUN's clock (run_due takes ``now`` once when the hourly run starts and
+  judge() stores the verdict with it), so a verdict computed from 09:35 for two hours says 09:35. The dashboard reads
+  when it was really written (ts + the verdict's own runtime_s): the band's '결과 저장' time, the road's mark and the
+  자는 동안 sheet (looked at 10:00 while it computed, back at 12:00: the result must be named).
+- the runner's 09:00 state still missing 100 minutes on is a 'look' state, like the job leaving no trace.
+- systemd's word on the job (on the server): a run killed by its limits leaves no line in checkpoint.db; a retry after
+  an error is computing now.
+- the lead's meeting when agents3.db cannot be read is said as such, never '아직 시작 전'.
+"""
+import json
+import os
+import sqlite3
+import time
+
+import pytest
+
+from paperbot import checkpoint as ck
+from paperbot.dash.more import verdictday as V
+from test_dash_verdictday import CP1, DATE1, DAY, H, MIN, START, V4, _client, _clock, _node, _paper, _state
+
+
+def _ledger_with(tmp_path, ts: int, runtime_s) -> str:
+    """checkpoint.db made by the checkpoint module itself (open_out: its schema and triggers) holding one verdict row
+    the way judge() writes it: (date, ts = the run's now, sha, data with runtime_s)."""
+    out = str(tmp_path / "checkpoint.db")
+    o = ck.open_out(out)
+    data = {"date": DATE1, "cp_ts": CP1, "day": 30, "accounts": {}, "text": "x"}
+    if runtime_s is not None:
+        data["runtime_s"] = runtime_s
+    with o:
+        o.execute("INSERT INTO verdicts VALUES (?,?,?,?)", (DATE1, ts, "0" * 64, ck.canonical(data)))
+    o.close()
+    return out
+
+
+def test_the_store_time_is_the_run_start_plus_its_runtime(tmp_path):
+    out = _ledger_with(tmp_path, CP1 + 35 * MIN, 7000.0)          # the 09:35 run, 1 h 56 min of coin flips
+    led = V.read_ledger(out)
+    assert led["verdicts"][DATE1] == CP1 + 35 * MIN and led["done"][DATE1] == CP1 + 35 * MIN + 7_000_000
+    c = V.clock(START, CP1 + 3 * H, led)
+    assert c["last"]["stored_ts"] == CP1 + 35 * MIN and c["last"]["done_ts"] == CP1 + 35 * MIN + 7_000_000
+    ms = V.milestones(c)
+    done = [m for m in ms if m["kind"] == "verdict" and m.get("done")][0]
+    assert "결과 저장 11:31쯤" in done["ko"] and "09:35" not in done["ko"]
+
+
+def test_a_verdict_without_runtime_reads_its_row_ts(tmp_path):
+    out = _ledger_with(tmp_path, CP1 + 2 * H, None)
+    led = V.read_ledger(out)
+    assert led["done"][DATE1] == CP1 + 2 * H
+    assert V.clock(START, CP1 + 3 * H, led)["last"]["done_ts"] == CP1 + 2 * H
+
+
+def test_the_sleep_sheet_names_a_result_written_after_a_visit_during_the_computation(tmp_path):
+    """Looked at 10:00 (computing since 09:35), back at 12:00: the result written at 11:31 is named, although the row
+    says 09:35 (before the 10:00 visit)."""
+    from paperbot.dash.more.since import since
+    paper = _paper(tmp_path)
+    out = _ledger_with(tmp_path, CP1 + 35 * MIN, 7000.0)
+    c = sqlite3.connect(f"file:{paper}?mode=ro", uri=True)
+    try:
+        back = since(c, None, CP1 + H, CP1 + 3 * H, ledger=V.read_ledger(out))
+    finally:
+        c.close()
+    assert [x for x in back["milestones"] if x["kind"].startswith("verdict")] == [
+        {"kind": "verdict_result", "k": 1, "ts": CP1 + 35 * MIN + 7_000_000, "cp_ts": CP1}]
+
+
+def test_the_runner_state_missing_100_minutes_on_asks_for_a_look(tmp_path):
+    paper, out = _state(tmp_path, "wait")
+    assert not _clock(paper, out, CP1 + 99 * MIN)["late"]
+    c = _clock(paper, out, CP1 + 101 * MIN)
+    assert (c["state"], c["late"], c["due"], c["k"]) == ("waiting_state", True, True, 1)
+    assert c["line_ko"] == "30일 판정 날 · 봇의 09:00 상태 저장이 아직 없음 · 봇이 도는지 확인"
+    assert c["chip_ko"]["opt"] == " · 확인 필요" and "12/04" not in json.dumps(c, ensure_ascii=False)
+    r = _node("core/verdictday.js", f"const c = {json.dumps(c)};\n"
+              "const s = m.dueSteps(c, c.now); console.log(JSON.stringify({st: s.map((x) => x.state), notes: s.map((x) => x.note), "
+              "big: m.bigWords(c, c.now)}));")
+    assert r["st"] == ["bad", "wait", "wait", "wait"] and r["big"]["big"] == "확인 필요"
+    assert "판정 작업이 아직 돌지 않았습니다" not in json.dumps(r, ensure_ascii=False)     # the job did run (it logged the wait)
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert 'c.late && c.state === "waiting_state"' in js
+
+
+def test_systemd_says_a_killed_run_or_a_retry(tmp_path):
+    paper, out = _state(tmp_path, "snap")
+    snap = _clock(paper, out, CP1 + 2 * H)
+    failed = {**snap, "state": "failed", "error_kind": "ConnectionError"}
+    waiting = {**_clock(paper, out, CP1 + 2 * H), "state": "waiting_job", "snapshot_ts": None}
+    job = lambda **k: {"systemd": True, "job": {"state": "on", "last_ms": CP1 + 95 * MIN, **k}}     # noqa: E731
+    cases = {
+        "killed": [snap, job(ok=False, running=False, result="oom-kill")],
+        "killed_before": [waiting, job(ok=False, running=False, result="timeout")],
+        "retry": [failed, job(ok=False, running=True, result="exit-code")],
+        "running": [snap, job(ok=True, running=True, result="success")],
+        "old_run": [snap, {"systemd": True, "job": {"state": "on", "last_ms": CP1 - 25 * MIN, "ok": False, "running": False}}],
+        "off_server": [snap, {"systemd": False, "job": None}],
+        "failed_logged": [failed, job(ok=False, running=False, result="exit-code")],
+    }
+    r = _node("core/verdictday.js", f"const C = {json.dumps(cases)}; const r = {{}};\n"
+              "for (const [k, [c, mm]] of Object.entries(C)) { const js = m.jobSays(c, mm); "
+              "r[k] = {js, steps: m.dueSteps(c, c.now, js).map((s) => s.state), note: (m.dueSteps(c, c.now, js)[2] || {}).note}; }\n"
+              "console.log(JSON.stringify(r));")
+    assert r["killed"]["js"]["dead"] and r["killed"]["js"]["ko"] == "메모리 한도로 멈춤" and r["killed"]["steps"][2] == "bad"
+    assert "10:35 시작" in r["killed"]["note"] and "메모리 한도로 멈춤" in r["killed"]["note"]
+    assert r["killed_before"]["js"]["dead"] and r["killed_before"]["js"]["ko"] == "시간 한도로 멈춤"
+    assert r["retry"]["js"] == {"rerun": True, "since": CP1 + 95 * MIN} and r["retry"]["steps"][2] == "now"
+    assert "다시 계산 중" in r["retry"]["note"] and "ConnectionError" in r["retry"]["note"]
+    for k in ("running", "old_run", "off_server", "failed_logged"):      # nothing to add: the ledger's own words stay
+        assert r[k]["js"] is None, k
+    assert r["failed_logged"]["steps"][2] == "bad" and "ConnectionError" in r["failed_logged"]["note"]
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert "vday.jobSays(c, st.vd && st.vd.machine)" in js and "vday.dueSteps(c, now, js)" in js
+
+
+def test_the_meeting_when_agents_db_cannot_be_read(tmp_path, monkeypatch):
+    paper, out = _state(tmp_path, "verdict")
+    c = _client(paper, out, monkeypatch, CP1 + 3 * H)
+    agents = os.path.join(os.path.dirname(paper), "agents3.db")
+    assert not os.path.exists(agents)                              # the test world has no agents3.db
+    v = c.get("/api/v4/verdictday").json()
+    assert v["clock"]["last"]["date"] == DATE1 and v["meeting"] == {"error": "agents3.db를 읽지 못함"}
+    after = open(os.path.join(V4, "screens", "checkpoint-after.js"), encoding="utf-8").read()
+    assert "st.vd.failed ? {failed: true}" in after and "m.error || m.failed" in after
+
+
+def test_words_the_review_changed():
+    ui = open(os.path.join(V4, "core", "ui.js"), encoding="utf-8").read()
+    assert "판정 결과를 기다리는 중" in ui and "verdictTs <= Date.now()" in ui      # never '다음 11/04' at 10:00 on 11/04
+    band = open(os.path.join(V4, "core", "verdictday.js"), encoding="utf-8").read()
+    assert "last.done_ts || last.stored_ts" in band and "dismissed === last.date" in band
+    c = V.clock(START, START + 3 * DAY, {"db": "ok", "verdicts": {}, "snapshots": {}, "log": {}})
+    dst = [m for m in V.milestones(c) if m["kind"] == "dst"][0]
+    assert f"딥시크 세션 매매법 {len(ck.SESSION_RULES)}개" in dst["ko"]
+    assert all(s.startswith("F15_") for s in ck.SESSION_RULES)      # DeepSeek's F15 session definitions only
+
+
+@pytest.mark.parametrize("which", ["empty", "snap"])
+def test_the_summary_carries_done_ts_only_after_a_verdict(tmp_path, which):
+    from paperbot.dash.app import Data
+    paper, out = _state(tmp_path, which)
+    s = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)
+    assert s["verdict_clock"]["last"] is None and s["next_checkpoint"]["due"]
+
+
+def _jobs(**job):
+    return {"ready": True, "available": True, "jobs": {"paperbot-checkpoint": {"state": "on", **job}}}
+
+
+def test_the_server_clock_takes_systemds_word_everywhere(tmp_path, monkeypatch):
+    """A run killed by its limits (no line in checkpoint.db): every screen's clock says 확인 필요 at once (the top chip's
+    data, the home card's words, the server tile's late), not '계산 중' for 4 hours; a retry after a logged error says
+    it is computing again."""
+    from paperbot.dash.app import Data
+    paper, out = _state(tmp_path, "snap")
+    killed = _jobs(last_ms=CP1 + 95 * MIN, ok=False, running=False, result="oom-kill")
+    monkeypatch.setattr(V, "timers", lambda runner=None: killed)
+    s = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)
+    vc = s["verdict_clock"]
+    assert (vc["state"], vc["late"], vc["job"]["dead"], vc["job"]["result"]) == ("computing", True, True, "oom-kill")
+    assert vc["line_ko"] == "30일 판정 날 · 판정 작업이 메모리 한도로 멈춤 · 매시 35분에 다시 시도"
+    assert s["next_checkpoint"]["late"] and s["restart"]["chip_ko"]["opt"] == " · 확인 필요"
+    # the same run still going, a run that ended well, or one from before the checkpoint: the ledger's own words
+    for jb in (_jobs(last_ms=CP1 + 95 * MIN, ok=None, running=True), _jobs(last_ms=CP1 + 95 * MIN, ok=True, running=False),
+               _jobs(last_ms=CP1 - 25 * MIN, ok=False, running=False, result="exit-code"),
+               {"ready": True, "available": False, "reason": "systemctl 없음", "jobs": {}}):
+        monkeypatch.setattr(V, "timers", lambda runner=None, jb=jb: jb)
+        c = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)["verdict_clock"]
+        assert (c["state"], c["late"], "job" in c) == ("computing", False, False), jb
+        assert c["line_ko"] == "30일 판정 날 · 동전 봇 비교 계산 중"
+    # a systemctl that raises never takes the summary down
+    def boom(runner=None):
+        raise OSError("no systemd")
+    monkeypatch.setattr(V, "timers", boom)
+    assert Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)["verdict_clock"]["state"] == "computing"
+
+
+def test_a_retry_after_a_logged_error_is_computing_again(tmp_path, monkeypatch):
+    paper, out = _state(tmp_path, "error", monkeypatch)
+    led = V.read_ledger(out)
+    retry = _jobs(last_ms=CP1 + 95 * MIN, ok=False, running=True, result="exit-code")
+    c = V.clock(START, CP1 + 2 * H, led, V.day_state_reader(paper), lambda: retry)
+    assert (c["state"], c["job"], c["late"]) == ("failed", {"rerun": True, "dead": False, "since": CP1 + 95 * MIN}, False)
+    assert c["line_ko"] == "30일 판정 날 · 앞선 계산은 오류 · 지금 다시 계산 중" and c["chip_ko"]["opt"] == " · 결과 계산 중"
+    r = _node("core/verdictday.js", f"const c = {json.dumps(c)};\n"
+              "console.log(JSON.stringify({big: m.bigWords(c, c.now), js: m.jobSays(c, null), st: m.dueSteps(c, c.now, m.jobSays(c, null)).map((s) => s.state)}));")
+    assert r["big"]["big"] == "계산 중" and r["js"] == {"rerun": True, "since": CP1 + 95 * MIN} and r["st"][2] == "now"
+    # the logged error with no run going: still the red state
+    dead = V.clock(START, CP1 + 2 * H, led, V.day_state_reader(paper), lambda: _jobs(last_ms=CP1 + 95 * MIN, ok=False,
+                                                                                      running=False, result="exit-code"))
+    assert dead["state"] == "failed" and "job" not in dead and dead["chip_ko"]["opt"] == " · 확인 필요"
+
+
+def test_a_runner_state_saved_after_the_jobs_look_is_not_a_missing_state(tmp_path):
+    """The 09:35 run logged '판정 대기' (no day state yet); the runner saved it at 10:38, after the 10:35 run had looked:
+    until the 11:35 run freezes it, the page says it is saved and waits for the next run (no red line)."""
+    paper, out = _state(tmp_path, "wait")
+    c = sqlite3.connect(paper)
+    c.execute("INSERT OR REPLACE INTO state VALUES (?,?,?)", ("day:" + DATE1, CP1, json.dumps({"engines": {}})))
+    c.commit()
+    c.close()
+    k = _clock(paper, out, CP1 + 101 * MIN)
+    assert (k["state"], k["late"], k["saved_ts"]) == ("waiting_state", False, CP1)
+    assert k["line_ko"] == "30일 판정 날 · 봇이 09:00 상태를 저장함 · 매시 35분 실행 때 계산 시작"
+    assert k["chip_ko"]["opt"] == " · 결과 계산 중"
+    r = _node("core/verdictday.js", f"const c = {json.dumps(k)};\n"
+              "const s = m.dueSteps(c, c.now); console.log(JSON.stringify({st: s.map((x) => x.state), notes: s.map((x) => x.note)}));")
+    assert r["st"] == ["done", "wait", "wait", "wait"] and r["notes"][1] == "봇의 저장을 확인하면 잠금 (다음 실행 11:35)"
+    # a caller that did not ask paper3.db (the sheet, the story, the race) never claims the state is missing
+    assert not V.clock(START, CP1 + 101 * MIN, V.read_ledger(out))["late"]
+
+
+def test_deepseek_rows_on_the_verdict_page_carry_no_money(tmp_path):
+    """Owners' D10 / D11: DeepSeek money only on its own group screen. The 판정 page's account rows show a DeepSeek
+    account's status, trades, p and q, never its 평가금 or the dollar amounts in the stored reason."""
+    reasons = ["거래 46건, 평가금 $60,000, p 0.0007, q 0.012",
+               "1차: 평가금 $4,900 ≤ 시작 $5,000, 우연 기준 미통과 (p 0.1000, 보정 q 0.900)",
+               "2차: 2차 기간 거래 12건 < 30건, 2차 기간 손익 $-1,234",
+               "2차 통과: 실거래 검토 대상 (거래 40건, 손익 $2,345, q 0.010)",
+               "2026-11-04 판정 유지: 거래 46건, 평가금 $60,000, p 0.0007, q 0.012", "1차: 파산"]
+    r = _node("screens/checkpoint-after.js", f"const R = {json.dumps(reasons, ensure_ascii=False)};\n"
+              "console.log(JSON.stringify({out: R.map(m.moneyFree), ds: [m.isDs({group: 'ds200'}), m.isDs({family: 'ds200', group: 'extra'}), m.isDs({group: 'core'})]}));")
+    assert r["out"] == ["거래 46건, p 0.0007, q 0.012", "1차: 평가금이 시작 잔고 이하, 우연 기준 미통과 (p 0.1000, 보정 q 0.900)",
+                        "2차: 2차 기간 거래 12건 < 30건, 2차 기간 손익 플러스 아님", "2차 통과: 실거래 검토 대상 (거래 40건, q 0.010)",
+                        "2026-11-04 판정 유지: 거래 46건, p 0.0007, q 0.012", "1차: 파산"]
+    assert r["ds"] == [True, True, False]
+    # every reason the real verdict stored for a DeepSeek row comes out without a dollar sign
+    paper, out = _state(tmp_path, "verdict")
+    ds = [x["reason"] for x in ck.dashboard_view(out)["rows"] if x["group"] == "ds200" and x.get("reason")]
+    assert ds and any("$" in x for x in ds)
+    clean = _node("screens/checkpoint-after.js", f"const R = {json.dumps(ds, ensure_ascii=False)};\nconsole.log(JSON.stringify(R.map(m.moneyFree)));")
+    assert not any("$" in x for x in clean)
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert "r.equity != null && !ds" in js and "ds ? moneyFree(r.reason)" in js
+
+
+def test_past_day_180_the_period_is_180_and_the_server_tile_says_so():
+    led = {"db": "ok", "verdicts": {ck.day_str(ck.checkpoint_ts(START, k)): ck.checkpoint_ts(START, k) + H for k in range(1, 7)},
+           "snapshots": {}, "log": {}}
+    c = V.clock(START, ck.checkpoint_ts(START, 6) + 5 * DAY, led)
+    assert (c["state"], c["of"], c["day"], c["ts"]) == ("ended", 180, 180, None)        # never 'D+185/210'
+    from paperbot.dash.app import restart_banner
+    assert restart_banner(START, ck.checkpoint_ts(START, 6) + 5 * DAY, led)["of"] == 180
+    js = open(os.path.join(V4, "screens", "server-health.js"), encoding="utf-8").read()
+    assert 'nx.state === "ended"' in js and '"판정 끝"' in js
+
+
+def test_the_machine_card_before_the_first_rehearsal_is_not_a_warning():
+    """10/06: the run started 10/05, the first Wednesday rehearsal is 10/07 12:30. With both timers on, nothing is
+    wrong: '첫 연습 전', never '확인 필요'."""
+    c = V.clock(START, START + DAY, {"db": "ok", "verdicts": {}, "snapshots": {}, "log": {}})
+    on = {"available": True, "jobs": {"paperbot-checkpoint": {"state": "on", "ok": True},
+                                      "paperbot-rehearsal": {"state": "on", "ok": None}}}
+    assert V.machine({"state": "missing", "runs": []}, on, c)["level"] == "wait"
+    skipped = {"state": "ok", "runs": [{"status": "skipped", "ts": CP1 + 3 * H + 30 * MIN}]}
+    assert V.machine(skipped, on, c)["level"] == "wait"
+    no_rh = {"available": True, "jobs": {"paperbot-checkpoint": {"state": "on", "ok": True},
+                                         "paperbot-rehearsal": {"state": "missing"}}}
+    assert V.machine({"state": "missing", "runs": []}, no_rh, c)["level"] == "warn"
+    js = open(os.path.join(V4, "screens", "checkpoint-machine.js"), encoding="utf-8").read()
+    assert 'wait: ["첫 연습 전", "thin"]' in js
+
+
+def test_the_verdict_page_asks_the_summary_at_0900_itself():
+    """The summary is polled every minute; at 09:00 the page asks it right then (a timer within the last hour, and the
+    minute tick when it finds the time passed), never '정확히 0초 남음' for up to a minute."""
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert "ms <= 3600000 && st.timed !== c.ts" in js and "ctx.timeout(() => { renderCountdown(); ctx.store.refresh(\"summary\")" in js
+    assert '"판정 시각입니다 · 확인 중"' in js and "st.kicked !== c.ts" in js
+
+
+def test_job_word_through_the_real_systemctl_parser(tmp_path, monkeypatch):
+    """The same answer the server gets: `systemctl show` text parsed by more/jobs.py (LastTriggerUSec, Result
+    oom-kill), through verdictday.timers' own runner, into the clock."""
+    import shutil
+    import subprocess
+    from paperbot.dash.more import jobs as J
+    if shutil.which("systemctl") is None:
+        pytest.skip("more/jobs.show needs a systemctl binary to name")
+    utc = lambda ms: time.strftime("%a %Y-%m-%d %H:%M:%S UTC", time.gmtime(ms / 1000))     # noqa: E731
+    blocks = {"paperbot-checkpoint.timer": {"LoadState": "loaded", "UnitFileState": "enabled", "ActiveState": "active",
+                                            "LastTriggerUSec": utc(CP1 + 95 * MIN)},
+              "paperbot-checkpoint.service": {"LoadState": "loaded", "ActiveState": "failed", "SubState": "failed",
+                                              "Result": "oom-kill", "ExecMainExitTimestamp": utc(CP1 + 150 * MIN)},
+              "paperbot-rehearsal.timer": {"LoadState": "loaded", "UnitFileState": "enabled", "ActiveState": "active"}}
+
+    def run(cmd, **kw):
+        units = [a for a in cmd if a.startswith("paperbot-")]
+        text = "\n\n".join("\n".join([f"Id={u}"] + [f"{k}={v}" for k, v in blocks.get(u, {}).items()]) for u in units)
+        return subprocess.CompletedProcess(cmd, 0, stdout=text + "\n", stderr="")
+    monkeypatch.setattr(V, "_JOBS", {})
+    jb = V.timers(run)
+    assert jb["available"] and jb["jobs"]["paperbot-checkpoint"]["result"] == "oom-kill"
+    paper, out = _state(tmp_path, "snap")
+    c = V.clock(START, CP1 + 3 * H, V.read_ledger(out), V.day_state_reader(paper), lambda: jb)
+    assert c["job"]["dead"] and c["job"]["since"] == CP1 + 95 * MIN and c["late"]
+    assert c["line_ko"] == "30일 판정 날 · 판정 작업이 메모리 한도로 멈춤 · 매시 35분에 다시 시도"
+    assert J.job_state(blocks["paperbot-checkpoint.timer"], blocks["paperbot-checkpoint.service"])["ok"] is False
+    monkeypatch.setattr(V, "_JOBS", {})

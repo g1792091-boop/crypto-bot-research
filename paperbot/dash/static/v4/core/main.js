@@ -7,6 +7,7 @@ import {startShell} from "./shell.js";
 import {startRouter} from "./router.js";
 import {maybeStartTour} from "./tour.js";
 import {startSince} from "./since.js";
+import {startVerdictBand} from "./verdictday.js";
 import {applySkin} from "./skin.js";
 import {applyText} from "./textsize.js";
 import {applyNavPos} from "./navpos.js";
@@ -45,6 +46,7 @@ function boot() {
   maybeStartTour();
   startSettings();         // 설정 한 곳: the top bar's gear, the key "," (core/navkeys.js), the speaker menu's link
   startSince();            // "지난번 본 뒤로" sheet (never on the first visit); 3 hours away or more: the 자는 동안 card
+  startVerdictBand();      // "판정 결과가 나왔습니다 → 보기" once per verdict on every screen (core/verdictday.js)
   attachFonts();
 }
 
