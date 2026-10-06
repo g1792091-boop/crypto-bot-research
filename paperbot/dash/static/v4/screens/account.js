@@ -8,7 +8,7 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec, local} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local} from "../core/pb.js";
 import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
@@ -326,6 +326,7 @@ export async function mount(el, ctx) {
       cChart = c;
       view.disposers.push(() => { if (cChart === c) { c.dispose(); cChart = null; } });
       const s = c.chart.addCandlestickSeries(candleOptions());
+      candleGlow(c.chart, s);                              // the AI skin's soft neon glow (core/chartfx.js), nothing in 클래식
       const dec = decOf(data.length ? data[data.length - 1].close : 1);
       s.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
       s.setData(data);

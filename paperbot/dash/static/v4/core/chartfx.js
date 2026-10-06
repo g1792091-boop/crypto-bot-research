@@ -50,6 +50,127 @@ function colours() {
 }
 
 /**
+ * glowPrimitive({chart, series, data, marks, idx, col, ai, onUpdate}) -> a series primitive (zOrder "bottom"): the
+ * candles' neon glow in their up / down colours, the forming candle brighter with a faint column of light, a glowing
+ * hairline at the last price, a halo on our entry / exit marks. Draws nothing unless ai() (the AI skin).
+ *   data() -> the bars on the series (logical index = array index); marks() / idx(time) -> the series markers
+ */
+export function glowPrimitive(o) {
+  const {chart, series} = o;
+const gv = {bars: [], last: null, w: 2, py: null, halos: []};
+const smalls = new Map();                   // the reused small canvases of the candle glow, by scale
+const small = (S, w, hh) => {
+  let cv = smalls.get(S);
+  if (!cv) { cv = document.createElement("canvas"); smalls.set(S, cv); }
+  if (cv.width !== w) cv.width = w;
+  if (cv.height !== hh) cv.height = hh;
+  return cv;
+};
+const glowR = {
+  draw() {},
+  drawBackground(target) {
+    if (!o.ai() || !gv.bars.length) return;
+    target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize}) => {
+      const col = o.col();
+      const bw = Math.max(1, Math.round(gv.w * hr));
+      c.save();
+      // the candles' glow: the bodies and wicks drawn small (1/4 and 1/8 of the size) and stretched back with
+      // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
+      c.imageSmoothingEnabled = true;
+      try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
+      for (const [S, a] of [[3, 0.55], [8, 0.75]]) {
+        const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
+        const off = small(S, ow, oh), o2 = off.getContext("2d");
+        o2.clearRect(0, 0, ow, oh);
+        const sw = Math.max(1, bw / S + 1), ww = Math.max(0.8, (2 * hr) / S);
+        for (const tone of ["up", "down"]) {
+          o2.fillStyle = col[tone];
+          o2.beginPath();
+          for (const b of gv.bars) {
+            if (b.up !== (tone === "up")) continue;
+            const X = (b.x * hr) / S;
+            o2.rect(X - sw / 2, (b.t * vr) / S, sw, Math.max(0.8, ((b.b - b.t) * vr) / S));
+            o2.rect(X - ww / 2, (b.hi * vr) / S, ww, Math.max(0.8, ((b.lo - b.hi) * vr) / S));
+          }
+          o2.fill();
+        }
+        c.globalAlpha = a;
+        c.drawImage(off, 0, 0, ow, oh, 0, 0, ow * S, oh * S);
+      }
+      // the forming candle: a little brighter, a faint column of light behind it
+      const f = gv.last;
+      if (f) {
+        const X = Math.round(f.x * hr), cw = Math.max(6 * hr, bw * 4);
+        const g = c.createLinearGradient(0, 0, 0, bitmapSize.height);
+        g.addColorStop(0, "transparent"); g.addColorStop(0.5, f.up ? col.upGlow : col.downGlow); g.addColorStop(1, "transparent");
+        c.shadowBlur = 0; c.globalAlpha = 0.07; c.fillStyle = g;
+        c.fillRect(X - cw / 2, 0, cw, bitmapSize.height);
+        c.shadowColor = f.up ? col.upGlow : col.downGlow; c.shadowBlur = 14 * hr; c.globalAlpha = 0.9; c.fillStyle = col[f.up ? "up" : "down"];
+        c.fillRect(X - bw / 2, Math.round(f.t * vr), bw, Math.max(1, Math.round((f.b - f.t) * vr)));
+      }
+      // the last price: a glowing hairline under the series' own dashed price line
+      if (gv.py != null && f) {
+        c.shadowColor = f.up ? col.upGlow : col.downGlow; c.shadowBlur = 6 * hr; c.globalAlpha = 0.45; c.fillStyle = col[f.up ? "up" : "down"];
+        c.fillRect(0, Math.round(gv.py * vr) - Math.floor(vr / 2), bitmapSize.width, Math.max(1, Math.round(vr)));
+      }
+      // our entry / exit marks: a soft halo where the series draws them
+      for (const m of gv.halos) {
+        c.shadowColor = m.color; c.shadowBlur = 12 * hr; c.globalAlpha = 0.5; c.fillStyle = m.color;
+        c.beginPath(); c.arc(m.x * hr, m.y * vr, 3.5 * hr, 0, Math.PI * 2); c.fill();
+      }
+      c.restore();
+    });
+  },
+};
+return {
+  paneViews: () => [{zOrder: () => "bottom", renderer: () => glowR}],
+  updateAllViews() {
+    gv.bars = []; gv.last = null; gv.py = null; gv.halos = [];
+    if (o.onUpdate) o.onUpdate();
+    const data = o.data();
+    if (!o.ai() || !data.length) return;
+    const ts = chart.timeScale(), r = ts.getVisibleLogicalRange();
+    if (!r) return;
+    const sp = ts.options().barSpacing || 6;
+    gv.w = Math.max(1, sp * 0.72);
+    const n = data.length, a = Math.max(0, Math.floor(r.from)), z = Math.min(n - 1, Math.ceil(r.to));
+    const Y = (p) => series.priceToCoordinate(p);
+    for (let i = a; i <= z; i++) {
+      const d = data[i], x = ts.logicalToCoordinate(i);
+      const yo = Y(d.open), yc = Y(d.close), yh = Y(d.high), yl = Y(d.low);
+      if (x == null || yo == null || yc == null || yh == null || yl == null) continue;
+      const b = {x, t: Math.min(yo, yc), b: Math.max(yo, yc), hi: yh, lo: yl, up: d.close >= d.open};
+      gv.bars.push(b);
+      if (i === n - 1) gv.last = b;
+    }
+    const ld = data[n - 1];
+    gv.py = ld ? Y(ld.close) : null;
+    const size = Math.min(Math.max(sp, 12), 30), seen = new Set();
+    for (const m of o.marks ? o.marks() : []) {
+      const i = o.idx(m.time);
+      if (i == null || i < a || i > z || m.position === "inBar") continue;
+      const k = i + m.position;
+      if (seen.has(k)) continue;                           // the first mark of a bar side (stacked ones sit further out)
+      seen.add(k);
+      const d = data[i], x = ts.logicalToCoordinate(i);
+      const y = m.position === "aboveBar" ? Y(d.high) - size / 2 - 3 : Y(d.low) + size / 2 + 3;
+      if (x != null && y != null && m.glow !== false) gv.halos.push({x, y, color: m.color});
+    }
+  },
+};}
+
+/** The candle glow alone, for a chart without the deck (매매법 / 계좌 charts): the AI skin only, null otherwise. */
+export function candleGlow(chart, series) {
+  if (!isAi()) return null;
+  const col = colours();
+  let data = [];
+  const p = glowPrimitive({chart, series, data: () => data, col: () => col, ai: () => true,
+    onUpdate: () => { try { data = series.data(); } catch (e) { data = []; } }});
+  series.attachPrimitive(p);
+  return p;
+}
+
+/**
  * chartDeck({chart, series, wrap, box, ctx, key, groups, defaults, tag}) -> deck
  *   wrap: the positioned box around the chart element `box` (the layers sit in it, the pills over the pane)
  *   key: per-device memory name ("term" | "chart"); groups: the ids the '선' menu lists (GROUP_KO)
@@ -61,7 +182,7 @@ export function chartDeck(o) {
   const key = "cfx-" + (o.key || "chart");
   const groups = o.groups || ["pos", "risk", "sr", "smc", "ev", "vol"];
   const saved = local.get(key, null) || {};
-  const defOff = groups.filter((g) => (o.defaults && g in o.defaults ? !o.defaults[g] : (narrow() && ["pos", "sr", "smc"].includes(g))));
+  const defOff = groups.filter((g) => (o.defaults && g in o.defaults ? !o.defaults[g] : (narrow() && ["pos", "risk", "sr", "smc"].includes(g))));
   const st = {
     off: new Set(Array.isArray(saved.off) ? saved.off.filter((g) => groups.includes(g)) : defOff),
     hide: new Set(Array.isArray(saved.hide) ? saved.hide.slice(-60) : []),
@@ -106,108 +227,9 @@ export function chartDeck(o) {
     if (on) vol.setData(st.data.filter((b) => b.volume != null).map(volRow)); else vol.setData([]);
   }
 
-  // ---------------------------------------------------------------- the glow primitive (under the candles)
-  const gv = {bars: [], last: null, w: 2, py: null, halos: []};
-  const smalls = new Map();                   // the reused small canvases of the candle glow, by scale
-  const small = (S, w, hh) => {
-    let cv = smalls.get(S);
-    if (!cv) { cv = document.createElement("canvas"); smalls.set(S, cv); }
-    if (cv.width !== w) cv.width = w;
-    if (cv.height !== hh) cv.height = hh;
-    return cv;
-  };
-  const glowR = {
-    draw() {},
-    drawBackground(target) {
-      if (!st.ai || !gv.bars.length) return;
-      target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize}) => {
-        const col = st.col;
-        const bw = Math.max(1, Math.round(gv.w * hr));
-        c.save();
-        // the candles' glow: the bodies and wicks drawn small (1/4 and 1/8 of the size) and stretched back with
-        // smoothing, a soft light in their own colours for the cost of two image copies (no per-frame blur filter)
-        c.imageSmoothingEnabled = true;
-        try { c.imageSmoothingQuality = "high"; } catch (e) { /* older browsers: default smoothing */ }
-        for (const [S, a] of [[3, 0.55], [8, 0.75]]) {
-          const ow = Math.max(1, Math.ceil(bitmapSize.width / S)), oh = Math.max(1, Math.ceil(bitmapSize.height / S));
-          const off = small(S, ow, oh), o2 = off.getContext("2d");
-          o2.clearRect(0, 0, ow, oh);
-          const sw = Math.max(1, bw / S + 1), ww = Math.max(0.8, (2 * hr) / S);
-          for (const tone of ["up", "down"]) {
-            o2.fillStyle = col[tone];
-            o2.beginPath();
-            for (const b of gv.bars) {
-              if (b.up !== (tone === "up")) continue;
-              const X = (b.x * hr) / S;
-              o2.rect(X - sw / 2, (b.t * vr) / S, sw, Math.max(0.8, ((b.b - b.t) * vr) / S));
-              o2.rect(X - ww / 2, (b.hi * vr) / S, ww, Math.max(0.8, ((b.lo - b.hi) * vr) / S));
-            }
-            o2.fill();
-          }
-          c.globalAlpha = a;
-          c.drawImage(off, 0, 0, ow, oh, 0, 0, ow * S, oh * S);
-        }
-        // the forming candle: a little brighter, a faint column of light behind it
-        const f = gv.last;
-        if (f) {
-          const X = Math.round(f.x * hr), cw = Math.max(6 * hr, bw * 4);
-          const g = c.createLinearGradient(0, 0, 0, bitmapSize.height);
-          g.addColorStop(0, "transparent"); g.addColorStop(0.5, f.up ? col.upGlow : col.downGlow); g.addColorStop(1, "transparent");
-          c.shadowBlur = 0; c.globalAlpha = 0.07; c.fillStyle = g;
-          c.fillRect(X - cw / 2, 0, cw, bitmapSize.height);
-          c.shadowColor = f.up ? col.upGlow : col.downGlow; c.shadowBlur = 14 * hr; c.globalAlpha = 0.9; c.fillStyle = col[f.up ? "up" : "down"];
-          c.fillRect(X - bw / 2, Math.round(f.t * vr), bw, Math.max(1, Math.round((f.b - f.t) * vr)));
-        }
-        // the last price: a glowing hairline under the series' own dashed price line
-        if (gv.py != null && f) {
-          c.shadowColor = f.up ? col.upGlow : col.downGlow; c.shadowBlur = 6 * hr; c.globalAlpha = 0.45; c.fillStyle = col[f.up ? "up" : "down"];
-          c.fillRect(0, Math.round(gv.py * vr) - Math.floor(vr / 2), bitmapSize.width, Math.max(1, Math.round(vr)));
-        }
-        // our entry / exit marks: a soft halo where the series draws them
-        for (const m of gv.halos) {
-          c.shadowColor = m.color; c.shadowBlur = 12 * hr; c.globalAlpha = 0.5; c.fillStyle = m.color;
-          c.beginPath(); c.arc(m.x * hr, m.y * vr, 3.5 * hr, 0, Math.PI * 2); c.fill();
-        }
-        c.restore();
-      });
-    },
-  };
-  const glowPrim = {
-    paneViews: () => [{zOrder: () => "bottom", renderer: () => glowR}],
-    updateAllViews() {
-      gv.bars = []; gv.last = null; gv.py = null; gv.halos = [];
-      schedule();
-      if (!st.ai || !st.data.length) return;
-      const ts = chart.timeScale(), r = ts.getVisibleLogicalRange();
-      if (!r) return;
-      const sp = ts.options().barSpacing || 6;
-      gv.w = Math.max(1, sp * 0.72);
-      const n = st.data.length, a = Math.max(0, Math.floor(r.from)), z = Math.min(n - 1, Math.ceil(r.to));
-      const Y = (p) => series.priceToCoordinate(p);
-      for (let i = a; i <= z; i++) {
-        const d = st.data[i], x = ts.logicalToCoordinate(i);
-        const yo = Y(d.open), yc = Y(d.close), yh = Y(d.high), yl = Y(d.low);
-        if (x == null || yo == null || yc == null || yh == null || yl == null) continue;
-        const b = {x, t: Math.min(yo, yc), b: Math.max(yo, yc), hi: yh, lo: yl, up: d.close >= d.open};
-        gv.bars.push(b);
-        if (i === n - 1) gv.last = b;
-      }
-      const ld = st.data[n - 1];
-      gv.py = ld ? Y(ld.close) : null;
-      const size = Math.min(Math.max(sp, 12), 30), seen = new Set();
-      for (const m of st.marks) {
-        const i = st.idx.get(m.time);
-        if (i == null || i < a || i > z || m.position === "inBar") continue;
-        const k = i + m.position;
-        if (seen.has(k)) continue;                           // the first mark of a bar side (stacked ones sit further out)
-        seen.add(k);
-        const d = st.data[i], x = ts.logicalToCoordinate(i);
-        const y = m.position === "aboveBar" ? Y(d.high) - size / 2 - 3 : Y(d.low) + size / 2 + 3;
-        if (x != null && y != null && m.glow !== false) gv.halos.push({x, y, color: m.color});
-      }
-    },
-  };
-  series.attachPrimitive(glowPrim);
+  // ---------------------------------------------------------------- the glow (under the candles; glowPrimitive below)
+  series.attachPrimitive(glowPrimitive({chart, series, data: () => st.data, marks: () => st.marks, idx: (t) => st.idx.get(t),
+    col: () => st.col, ai: () => st.ai, onUpdate: () => schedule()}));
 
   // ---------------------------------------------------------------- lines (our positions, stops, levels, alerts)
   const lines = new Map();                    // id -> {spec, y, vis}

@@ -2,7 +2,7 @@
 // Candles from /api/candles; the indicator lines and lower panes exactly as the strategy's locked code uses them, from
 // /api/strategy/<name> (the old strat.js view). A strategy without a chart view (DeepSeek and the reel today: 404 / 400)
 // still shows its candles and its account's entries and exits, and says the lines are '준비 전'. Colours: tokens only.
-import {h, put, ui, fmt, motion, makeChart, candleOptions, tok} from "../core/pb.js";
+import {h, put, ui, fmt, motion, makeChart, candleOptions, candleGlow, tok} from "../core/pb.js";
 
 const PALETTE = ["--term-cyan", "--accent", "--ink-2", "--warn", "--amber-ink"];
 const TF_S = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400};
@@ -93,6 +93,7 @@ export function stratChart(ctx) {
       }
       if (dead) { C.dispose(); C = null; return false; }
       series = C.chart.addCandlestickSeries(candleOptions());
+      candleGlow(C.chart, series);                         // the AI skin's soft neon glow (core/chartfx.js), nothing in 클래식
       return true;
     })();
     return making.then((ok) => ok && !!C && !failed);

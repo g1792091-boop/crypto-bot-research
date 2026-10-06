@@ -275,7 +275,7 @@ def test_deck_lines_are_thin_out_of_the_autoscale_and_click_to_hide_is_remembere
 def test_light_is_the_ai_skins_only_and_never_animates_on_a_timer():
     fx = _code(_read("core", "chartfx.js"))
     assert 'document.documentElement.dataset.skin !== "classic"' in fx
-    assert "if (!st.ai || !gv.bars.length) return;" in fx                    # candle glow
+    assert "if (!o.ai() || !gv.bars.length) return;" in fx                   # candle glow
     assert "if (!st.ai) { under.dataset.amb" in fx                           # ambient
     assert "flash(ev) { if (st.ai) sched.push(ev); }" in fx                  # event flash
     assert "setInterval" not in fx
