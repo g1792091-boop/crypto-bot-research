@@ -8,7 +8,7 @@
 // HONESTY: no message, no motion (no timer animates anything); the feed is labelled as the whole market's trades, not
 // ours; nothing under prefers-reduced-motion; the stream is closed while the page is hidden and when the screen is left.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
-import {panel, ratioBar, ping} from "./terminal-kit.js";
+import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
 
 export const BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)";
 export const BIG_SHOW = 20;                         // rows on screen (the relay keeps 40)
@@ -93,7 +93,7 @@ export function bigFeed(ctx) {
   const ratioK = h("span", {class: "term-rbk"}, "최근 5분");
   const minNote = h("span", {class: "term-bmin"});
   const label = h("p", {class: "note term-blab"}, h("b", null, BIG_LABEL), " ", minNote);
-  const el = panel("실시간 큰 체결", {cls: "term-bigp", sub: BIG_LABEL, scroll: true, acts: [stateEl]}, list);
+  const el = panel("실시간 큰 체결", {cls: "term-bigp", sub: MARKET_LABEL, scroll: true, acts: [stateEl]}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio), label));
   put(list, ui.empty("시장 체결을 기다리는 중"));
 
@@ -105,16 +105,17 @@ export function bigFeed(ctx) {
     label.title = BIG_LABEL + " " + minNote.textContent;      // (a short footer hides the thresholds: the tooltip keeps them)
   }
   paintMin();
+  // one dense line per order (term v2): ▲ / ▼ coin · price · 고래 · $ · age, the row tinted by its side
   function rowOf(r) {
     const tone = r.side === "buy" ? "up" : "down";
     return h("div", {class: ["term-fr", "big", r.side, r.w ? "whale" : ""], role: "listitem",
-      title: `${fmt.coin(r.s)} ${SIDE_KO[r.side]} ${usdK(r.usd)} · 기준의 ${fmt.num(r.x, 1)}배 · 체결 ${fmt.int(r.n)}건 묶음`},
-    h("span", {class: "term-ft num"}, hms(r.t)),
-    h("b", {class: "term-bc"}, fmt.coin(r.s)),
-    h("span", {class: ["term-tag", tone]}, SIDE_KO[r.side]),
-    h("span", {class: "num term-lp"}, fmt.price(r.p)),
-    h("b", {class: ["num", "term-bu", tone]}, usdK(r.usd)),
-    r.w ? h("span", {class: "term-whale"}, "고래") : h("span", {class: "term-bx num muted"}, `×${fmt.num(r.x, 1)}`));
+      title: `${fmt.coin(r.s)} ${SIDE_KO[r.side]} ${usdK(r.usd)} · ${hms(r.t)} · 기준의 ${fmt.num(r.x, 1)}배 · 체결 ${fmt.int(r.n)}건 묶음 (${BIG_LABEL})`},
+    h("b", {class: ["term-bc", tone]}, h("i", {class: "term-bar", "aria-hidden": "true"}, r.side === "buy" ? "▲" : "▼"), fmt.coin(r.s),
+      h("span", {class: "term-sr"}, ` ${SIDE_KO[r.side]}`)),
+    h("span", {class: ["num", "term-lp", tone]}, fmt.price(r.p)),
+    r.w ? h("span", {class: "term-whale"}, "고래") : h("span", {class: "term-wsp", "aria-hidden": "true"}),
+    h("b", {class: ["num", "term-bu"]}, usdK(r.usd)),
+    ageCell(r.t));
   }
   function render(fresh) {
     const show = st.rows.slice(0, BIG_SHOW);
@@ -161,7 +162,7 @@ export function bigFeed(ctx) {
         const span = Number(b.span) || 0;
         if (m.state === "live" && span > 0) {
           ratioK.textContent = span >= 290 ? "최근 5분" : `최근 ${fmt.int(Math.max(1, Math.round(span / 60)))}분`;
-          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n) => usdK(n));
+          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
         }
         if (fresh.size || m.first || was !== m.state) { render(fresh); if (fresh.size) ping(el); }   // (a new state: the empty line says it)
       } else if (was !== m.state) render(new Set());

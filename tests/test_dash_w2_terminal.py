@@ -119,8 +119,9 @@ def test_reuses_existing_helpers_and_polls_no_faster_than_the_screens_it_borrows
     chart, side, js = _src("terminal-chart.js"), _src("terminal-side.js"), _src("terminal.js")
     assert "makeChart" in chart and "candleOptions" in chart and 'from "./positions-kit.js"' in chart
     assert 'import {bookPanel} from "./positions-book.js"' in js
-    assert 'from "./flow-kit.js"' in side and 'from "./flow-cal.js"' in side and "prep(" in side
-    known = {1000, 5000, 10000, 30000, 120000, 300000}               # clock, forming bar, liq, office, levels, GH / race / calendar
+    assert 'from "./flow-cal.js"' in side and "CAL_API" in side        # term v2: the 수익 card reads the calendar answer
+    # clock, forming bar, liq, office, movers (term v2: the server caches 60 s), levels, GH / calendar
+    known = {1000, 5000, 10000, 30000, 60000, 120000, 300000}
     for f in FILES:
         for ms in re.findall(r"ctx\.every\((\d+)", _src(f)):
             assert int(ms) in known, (f, ms)

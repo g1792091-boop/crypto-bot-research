@@ -1,41 +1,46 @@
-// 터미널 left column: the watchlist (7 coins, live price and 24 h change, GH Coin's call while that recorder runs), OUR
-// bots' fills as they happen, and the market liquidations of the chosen coin while the liquidation recorder runs.
-// Fills: closed trades from /api/trades (then the stream's `trades` events) and entries from the board's positions
-// (a position with a new entry time in a real board update is a new entry). 기존 36, the 5분봉 reel and the extra accounts
-// are named one by one; DeepSeek and the coin flips are folded into count rows per minute (no per-account money for
-// them here). A row that really arrived while the page is open slides in from the top with one brief glow.
-import {h, put, ui, fmt, store, motion, bars, features} from "../core/pb.js";
-import {panel, ratioBar, ping} from "./terminal-kit.js";
+// 터미널 coin strip and two of the left column's lists (term v2, owners 10/06: "HelloQuant처럼 촘촘하고 읽기 쉽게").
+//   - the coin strip over the chart: the 7 coins, live price and 24 h change (GH Coin's call while that recorder runs);
+//     a tap picks the coin for the whole terminal;
+//   - 시장 강제청산: the chosen coin's forced liquidations across Binance (/api/liq every 10 s, while the recorder runs:
+//     features.liq), dense single-line rows LONG / SHORT · price · $ · age, the 1-hour long / short $ bar beneath;
+//     the whole market's, labelled 시장 전체 (우리 봇 아님);
+//   - 우리 봇 체결: OUR bots' fills as they happen. Closed trades from /api/trades (then the stream's `trades` events) and
+//     entries from the board's positions (a position with a new entry time in a real board update is a new entry).
+//     기존 36, the 5분봉 reel and the extra accounts are named one by one; DeepSeek and the coin flips are folded into
+//     count rows per minute (no money of theirs here). The recent entries' long / short bar beneath.
+// A row that really arrived while the page is open slides in from the top with one brief glow; ages ('6s', '4m') are
+// repainted by the terminal's 1 s clock tick (text only).
+import {h, put, ui, fmt, motion, bars, features} from "../core/pb.js";
+import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
 const GH_TONE = {long: "up", longWait: "up", short: "down", shortWait: "down"};
 const FOLD = new Set(["ds", "coin"]);             // groups shown as count rows
 const GSHORT = {core: "기존 36", ds: "딥시크", m5: "5분봉", coin: "동전 봇", extra: "추가"};
-const MAX_ROWS = 28;
-const FEW_ROWS = 6;                                // fewer rows: the fills panel shrinks and 실시간 큰 체결 takes the room
+const REASON_SHORT = {SL: "손절", LOCK: "잠금", LIQ: "청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료", TIME: "시간", BAND: "익절"};
+const MAX_ROWS = 24;
 const live = () => motion.visible() && !motion.reduced();
 export const TICK_FRESH_MS = 6000;                 // a coin whose relay price is this fresh keeps it (the ticker is older)
 const ROW_GAP_MS = 500;                            // a watchlist row lights at most twice a second
 
-// ---------------------------------------------------------------- watchlist
-/** watchList(ctx, st, onPick) -> {el, setSym, onTicker, onFeatures} */
+// ---------------------------------------------------------------- coin strip (the watchlist)
+/** watchList(ctx, st, onPick) -> {el, setSym, onTicker, onFeatures, onTick} */
 export function watchList(ctx, st, onPick) {
   const rows = new Map();
-  const ghHead = h("span", {class: "term-wgh", hidden: !features.ghcoin}, "GH 판단");
-  const list = h("div", {class: "term-wl", role: "listbox", "aria-label": "코인 고르기"}, bars.SYMS.map((s) => {
+  const list = h("div", {class: "term-wl", role: "listbox", "aria-label": "코인 고르기 (서버 경유 5초 · 실시간 체결이 오면 바로)"}, bars.SYMS.map((s) => {
     const px = h("span", {class: "num term-wpx"}, "—"), chg = h("span", {class: "num term-wch"}, ""), gh = h("span", {class: "term-wgh", hidden: !features.ghcoin});
-    const b = h("button", {type: "button", class: "term-wr", role: "option", "aria-selected": String(s === st.sym), onclick: () => onPick(s)},
-      h("b", null, fmt.coin(s), s === "XRPUSDT" ? h("small", null, "기록") : null), px, chg, gh);
+    const b = h("button", {type: "button", class: "term-wr", role: "option", "aria-selected": String(s === st.sym), onclick: () => onPick(s),
+      title: s === "XRPUSDT" ? "XRP: 기록만 (매매하지 않는 코인)" : `${fmt.coin(s)} 보기`},
+    h("b", null, fmt.coin(s)), px, chg, gh);
     rows.set(s, {b, px, chg, gh, last: null, at: 0, lit: 0});
     return b;
   }));
-  const head = h("div", {class: "term-wr hd", "aria-hidden": "true"}, h("span", null, "코인"), h("span", null, "가격"), h("span", null, "24시간"), ghHead);
-  const el = panel("관심 종목", {cls: "term-watch", sub: "서버 경유 5초"}, head, list);
+  const el = h("nav", {class: "term-coins", "aria-label": "관심 종목"}, list);
+  el.head = null;
   let gh = null;
   async function loadGh() {
     const on = features.ghcoin;
-    ghHead.hidden = !on;
     for (const r of rows.values()) r.gh.hidden = !on;
     el.classList.toggle("gh", on);
     if (!on) return;
@@ -45,7 +50,7 @@ export function watchList(ctx, st, onPick) {
       const c = gh && gh.coins && gh.coins[s];
       r.gh.textContent = c ? GH_KO[c.state] || c.state || "—" : "—";
       r.gh.className = "term-wgh " + (c ? GH_TONE[c.state] || "muted" : "muted");
-      r.gh.title = c && c.why ? c.why : "";
+      r.gh.title = c && c.why ? `GH 판단: ${c.why}` : "GH 판단";
     }
   }
   ctx.every(300000, loadGh, {now: true});
@@ -74,7 +79,6 @@ export function watchList(ctx, st, onPick) {
       r.lit = now;
       const tone = motion.tickPrice(r.px, p, fmt.price(p), ev.s) || (ev.side === "buy" ? "up" : "down");
       hit(r.b, tone);
-      ping(el);
     },
   };
 }
@@ -85,7 +89,7 @@ const groupOfTrade = (t, a) => (a ? fmt.groupOf(a) : fmt.SERVER_GROUP[t.group] |
 /** fillsFeed(ctx) -> {el, ready, onBoard(b), onTrades(rows)} */
 export function fillsFeed(ctx) {
   const st = {ev: [], seen: new Set(), board: null, byId: new Map(), nodes: new Map(), seeded: false};
-  const list = h("div", {class: "term-feed", role: "list", "aria-live": "off"});
+  const list = h("div", {class: "term-feed term-fl", role: "list", "aria-live": "off"});
   const ratio = ratioBar([{key: "L", label: "롱", tone: "up"}, {key: "S", label: "숏", tone: "down"}], {label: "최근 진입 롱·숏"});
   const ratioK = h("span", {class: "term-rbk"}, "최근 진입");
   const el = panel("우리 봇 체결", {cls: "term-fills", sub: "딥시크·동전 봇은 건수만", scroll: true}, list);
@@ -129,25 +133,25 @@ export function fillsFeed(ctx) {
   }
   const sigOf = (m) => (m.one ? m.id : `${m.id}:${m.n}:${m.win}:${m.liq}`);
   const tagOf = (e) => (e.kind === "entry" ? h("span", {class: "term-tag in"}, "진입")
-    : h("span", {class: ["term-tag", e.reason === "LIQ" ? "liq" : e.pnl > 0 ? "up" : "down"]}, fmt.reasonKo(e.reason)));
+    : h("span", {class: ["term-tag", e.reason === "LIQ" ? "liq" : e.pnl > 0 ? "up" : "down"], title: fmt.reasonKo(e.reason)}, REASON_SHORT[e.reason] || fmt.reasonKo(e.reason)));
   function rowOf(m) {
     if (m.one) {
       const e = m.one, a = st.byId.get(e.id);
-      const right = e.kind === "exit" ? h("b", {class: ["num", fmt.tone(e.pnl)]}, fmt.money(e.pnl, true)) : h("span", {class: "num muted"}, fmt.price(e.price));
-      return h("a", {class: ["term-fr", e.g], role: "listitem", href: ctx.href("account", e.id), title: e.id},
-        h("span", {class: "term-ft num"}, fmt.hm(e.t)), tagOf(e),
+      const right = e.kind === "exit" ? h("b", {class: ["num", "term-fv", fmt.tone(e.pnl)]}, fmt.money(e.pnl, true)) : h("span", {class: "num term-fv muted"}, fmt.price(e.price));
+      const what = `${fmt.coin(e.sym)} ${fmt.sideKo(e.side)} ${fmt.lev(e.lev)}${e.kind === "exit" && e.roe != null ? ` · ROE ${fmt.pct(e.roe, 0)}` : ""}`;
+      return h("a", {class: ["term-fr", "fl", e.g], role: "listitem", href: ctx.href("account", e.id), title: `${e.id} · ${what} · ${fmt.kst(e.t)}`},
+        ageCell(e.t), tagOf(e),
         h("span", {class: "term-fn"}, h("i", {class: ["term-gsw", e.g], "aria-hidden": "true"}), a ? ui.acctLabel(a) : fmt.idName(e.id)),
-        h("span", {class: "term-fm"}, h("span", null, fmt.coin(e.sym)), h("span", {class: e.side > 0 ? "up" : "down"}, fmt.sideKo(e.side)),
-          h("span", {class: "muted"}, fmt.lev(e.lev)), e.kind === "exit" && e.roe != null ? h("span", {class: fmt.tone(e.roe)}, fmt.pct(e.roe, 0)) : null),
+        h("span", {class: "term-fc"}, fmt.coin(e.sym), " ", h("span", {class: e.side > 0 ? "up" : "down"}, fmt.sideKo(e.side))),
         right);
     }
-    const what = `${fmt.int(m.n)}건`;
     const detail = m.kind === "entry" ? `롱 ${fmt.int(m.L)} · 숏 ${fmt.int(m.S)}` : `이김 ${fmt.int(m.win)}${m.liq ? ` · 강제청산 ${fmt.int(m.liq)}` : ""}`;
-    return h("div", {class: ["term-fr", "fold", m.g], role: "listitem"},
-      h("span", {class: "term-ft num"}, fmt.hm(m.t)), h("span", {class: ["term-tag", m.kind === "entry" ? "in" : "n"]}, m.kind === "entry" ? "진입" : "청산"),
+    const what = `${fmt.int(m.n)}건`;
+    return h("div", {class: ["term-fr", "fl", "fold", m.g], role: "listitem", title: `${GSHORT[m.g]} ${what} · ${detail} · ${[...m.syms].join("·")} (건수만)`},
+      ageCell(m.t), h("span", {class: ["term-tag", m.kind === "entry" ? "in" : "n"]}, m.kind === "entry" ? "진입" : "청산"),
       h("span", {class: "term-fn"}, h("i", {class: ["term-gsw", m.g], "aria-hidden": "true"}), h("span", null, `${GSHORT[m.g]} · ${what}`)),
-      h("span", {class: "term-fm"}, h("span", {class: "muted"}, [...m.syms].slice(0, 3).join("·")), h("span", null, detail)),
-      m.g === "ds" ? ui.pill("", "ref") : h("span", {class: "muted term-fbase"}, "기준"));
+      h("span", {class: "term-fc muted"}, [...m.syms].slice(0, 2).join("·")),
+      m.g === "ds" ? ui.pill("", "ref") : h("span", {class: "muted term-fv term-fbase"}, "기준"));
   }
   function render() {
     const ms = models();
@@ -168,10 +172,8 @@ export function fillsFeed(ctx) {
     for (const e of st.ev) e.live = false;
     if (!nodes.length) put(list, ui.empty("아직 체결이 없습니다"));
     else list.replaceChildren(...nodes);
-    // few rows (day 0): the panel takes only what it needs and 실시간 큰 체결 below gets the room (terminal.css)
-    el.classList.toggle("few", ms.length < FEW_ROWS);
     if (ms.some((m) => m.live) && live()) ping(el);
-    // long / short share of the last 100 entries (every group: the market side our bots took)
+    // long / short share of the last 100 entries (every group: the market side our bots took; counts, not money)
     let L = 0, S = 0, n = 0;
     for (const e of st.ev) { if (e.kind !== "entry") continue; if (e.side > 0) L++; else S++; if (++n >= 100) break; }
     ratioK.textContent = `최근 진입 ${fmt.int(n)}건`;
@@ -216,9 +218,11 @@ const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.nu
 /** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq of the chosen coin every 10 s (as 차트's tab) while the recorder runs. */
 export function liqFeed(ctx, st, onNew) {
   const list = h("div", {class: "term-feed term-liq", role: "list"});
-  const ratio = ratioBar([{key: "long", label: "롱 청산", tone: "down"}, {key: "short", label: "숏 청산", tone: "up"}], {label: "최근 1시간 강제청산 롱·숏"});
+  const ratio = ratioBar([{key: "long", label: "롱", tone: "up"}, {key: "short", label: "숏", tone: "down"}], {label: "최근 1시간 강제청산된 롱·숏 금액"});
+  const ratioK = h("span", {class: "term-rbk"}, "1시간");
   const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true}, list);
-  el.append(h("div", {class: "term-pf"}, ratio, ui.note("바이낸스 전체 · 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다")));
+  el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio),
+    h("p", {class: "note term-blab", title: "바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다"}, h("b", null, `바이낸스 ${MARKET_LABEL}`), " · 코인마다 1초에 1건만 기록")));
   const seen = new Set();
   let sym = null, busy = false, last = {sym: null, rows: []};
   async function load() {
@@ -230,26 +234,27 @@ export function liqFeed(ctx, st, onNew) {
       const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(want)}&minutes=60`);
       if (want !== st.sym || !ctx.alive()) return;
       if (fresh) { seen.clear(); sym = want; }
-      el.sub.textContent = `${fmt.coin(want)} · 최근 1시간 ${fmt.int(d.n || 0)}건`;
+      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건 · 시장 전체`;
       if (!d.recorder) { put(list, ui.empty("강제청산 기록기 자료가 없습니다")); ratio.set({}); return; }
-      const rows = (d.rows || []).slice(0, 14);
+      const rows = (d.rows || []).slice(0, 20);
       const had = last.sym === want ? last.rows.length : -1;
       last = {sym: want, rows};
       let nNew = 0;                                // rows that really arrived since the last answer
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
-        const node = h("div", {class: ["term-fr", "liq", r.liquidated === "long" ? "lg" : "sh"], role: "listitem"},
-          h("span", {class: "term-ft num"}, fmt.hm(r.ts)),
-          h("span", {class: ["term-tag", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱" : "숏"),
-          h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num"}, "$" + usdK(r.usd)));
+        const lg = r.liquidated === "long";
+        const node = h("div", {class: ["term-fr", "liq", lg ? "lg" : "sh", r.usd >= 100000 ? "bigl" : ""], role: "listitem",
+          title: `${fmt.coin(want)} ${lg ? "롱" : "숏"} 포지션 강제청산 · ${fmt.price(r.price)} · $${usdK(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
+        h("span", {class: ["term-lb", lg ? "up" : "down"]}, lg ? "LONG" : "SHORT"),
+        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, "$" + usdK(r.usd)), ageCell(r.ts));
         if (isNew) nNew++;
-        if (isNew && live()) motion.fillIn(node, "down");
+        if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
         return node;
       }) : ui.empty("최근 1시간 기록 없음"));
-      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n) => "$" + usdK(n));
+      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
       if (nNew && live()) ping(el);
-      if ((nNew || had !== rows.length) && onNew) onNew();      // 이 코인 포지션 shows them when it has no position
+      if ((nNew || had !== rows.length) && onNew) onNew();
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
     finally { busy = false; }
   }

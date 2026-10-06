@@ -422,3 +422,19 @@ Dashboard only (one read-only route). Tests: tests/test_dash_fill_strat.py.
 | 전체 순위 개수만 (fill-fix) | 순위표·홈 '전체' (카드·표): 딥시크·동전 봇은 순위 없이 맨 뒤 (딥시크, 동전 봇 순, 이름순), 잔고·수익률·낙폭·반짝임·순위 화살표·작은 선 없음 | `/api/board` (derive `mixedOrder`) |
 | 위험 사다리 깜빡임 (fill-fix) | 청산가 또는 손해 보는 손절선 0.5% 안일 때만 깜빡임; 수익 쪽 잠금선은 초록 '잠금까지', 깜빡이지 않음 | `/api/board`, `/api/ticker` |
 | 작은 말 바로잡기 (fill-fix) | 홈 잘한·못한 계좌 줄마다 '표본 적음' + 2,000건에서 잘리면 '최근 2,000건만'; 방 코드 기록 신호 0건 = '아직 없음' (못 읽음만 '수집 전'); 강제청산 시각 어제면 '어제 06:52'; 차트 거래대금·강제청산 만/억; 한눈 지도 5년 시험·지금 포지션 칸 글씨 12px; 매매법 목록 PC 2열·이름 한 줄; 빈 방 일정 문장 한 번만; people.py 읽기 오류 = error 필드 | — |
+
+## 터미널 v2 (term-v2: the HelloQuant reference, "읽기 편하게")
+
+Owners 10/06: they like the HelloQuant terminal and find ours hard to read. The side, top and bottom areas were reworked
+toward that clarity; the chart itself (terminal-chart.js) is unchanged, it only got more room. Dashboard plus one
+read-only route. Supersedes the 터미널 rows above where they differ (the watchlist column, the 큰 체결 · 청산 switch,
+이 코인 포지션's market rows, the group median card). Tests: tests/test_dash_term_v2.py.
+
+| Part | What it shows | Server |
+|---|---|---|
+| Top strip | one line: coin, big price, 24 h %, 24 h 거래대금 (high / low / mark in its title), 펀딩 + countdown, then **시장 전체 (우리 봇 아님)** · 급등 · 급락 · 음펀비 (top 24 h gainer, top loser, most negative funding over every Binance USD-M perpetual; the top 3 of each in the title; "수집 전" before the first answer, the time of the last good answer when Binance failed), the session and the KST clock; the AI 회의 결론 line under it (hidden under 820 px tall). The label comes first so a narrow window cuts the last mover, never the label | `/api/v4/movers` (dash/more/movers.py: ONE all-symbol `/fapi/v1/ticker/24hr` (weight 40) + ONE `/fapi/v1/premiumIndex` (weight 10) per 60 s for every viewer, via app `_get_json`; perpetuals only, frozen / dust symbols left out; stale on failure); the page asks once a minute |
+| Coin strip | the 7 coins over the chart (price, 24 h %, GH 판단 while `features.ghcoin`); a tap picks the coin; a real relay tick lights that coin | `/api/ticker`, `/api/v4/ticks` (unchanged) |
+| Left column | three stacked dense lists, no switch, each with its ratio bar beneath, flex-shared on short windows: **실시간 큰 체결** (▲/▼ coin · price · 고래 · $ · age; rows tinted by side, whales filled and badged; 매수 / 매도 % and $ of the last 5 minutes; "바이낸스 시장 전체 체결 (우리 봇 아님)"), **시장 강제청산** (LONG / SHORT · price · $ · age for the chosen coin, ≥ $100k highlighted; 롱 / 숏 % and $ of the last hour; "바이낸스 시장 전체 (우리 봇 아님)"; hidden unless `features.liq`), **우리 봇 체결** (age · 진입 / 손절 / 잠금 / 청산 · account · coin side · P&L or price; DeepSeek / coin flips as count rows; recent entries 롱 / 숏 %). Ages ('6s', '4m', '2h') repaint on the 1 s clock tick (text only) | `/api/v4/ticks`, `/api/liq` (10 s), `/api/trades` + stream (unchanged) |
+| Right column | **이 코인 포지션** (ours: 기존 36 · 5분봉 · 추가; ROE, 청산가; DeepSeek / coin flips counted only; "주문 버튼 없음" caption; 호가 behind its switch), **수익 차트** (기존 36 realized P&L: cumulative line from the run start + daily bars; 참고), **오늘 수익** (today's realized sum, trades, wins), **수익 캘린더** (each KST day's realized P&L of the 36 in its cell, green / red by sign, 기록 없음 days blank) | `/api/v4/flow/calendar` (`g.core.pnl / trades / wins`, 5 min) |
+| Positions table | one head line: 포지션 n / 체결 / 손절 주문, **ALL** (= 기존 36 · 5분봉 · 추가) or one group, 롱 / 숏 share bar with %, 열린 n, 미실현 합계; dense aligned rows; foot: the open-P&L caption, "딥시크 n · 동전 봇 n개 열림 (건수만)" | `/api/board`, `/api/trades` (unchanged) |
+| Not shown | whale on-chain transfers (HelloQuant's "Whale Transfer") need a paid on-chain source: not faked, not shown | — |

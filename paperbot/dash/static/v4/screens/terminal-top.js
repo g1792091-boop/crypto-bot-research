@@ -1,23 +1,27 @@
-// 터미널 top bar: the coin and its price (a teal / pink glow only when the server's price really moved), the 24 h
-// numbers, mark, funding and the time to the next funding, the trading session, the KST clock, and one slow line of
-// the latest real AI meeting conclusions (/api/office: finished meetings' decision lines; '회의 중' only from
+// 터미널 top strip (term v2, owners 10/06: "HelloQuant 터미널처럼 한 줄로 읽히게"): the coin and its big price (a teal /
+// pink glow only when the price really moved), the 24 h change, the 24 h quote volume, funding and the time to the next
+// funding, then 급등 · 급락 · 음펀비 over EVERY Binance USD-M perpetual (/api/v4/movers: the server asks Binance twice a
+// minute at most for everybody; labelled 시장 전체 (우리 봇 아님)), the session and the KST clock. Under it one slow line
+// of the latest real AI meeting conclusions (/api/office: finished meetings' decision lines; '회의 중' only from
 // office.running). The office is read through the shared store like 홈 (every 30 s and when a room changes).
 import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
+import {MARKET_LABEL} from "./terminal-kit.js";
 
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
 const two = (x) => String(x).padStart(2, "0");
 const clockKst = (ms) => { const d = new Date(ms + 9 * 3.6e6); return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`; };
 const clean = (t) => String(t || "").replace(/^\s*🧾\s*/u, "").trim();
+const pct2 = (v) => fmt.pctOf(v, 2, true);
 
-/** topBar(ctx, st) -> {el, setSym, onTicker(map), tick()} */
+/** topBar(ctx, st) -> {el, setSym, onTicker(map), onRelay, onTick, tick()} */
 export function topBar(ctx, st) {
   const symEl = h("b", {class: "term-sym"}), perp = h("span", {class: "term-perp"}, "무기한 · 모의");
   const px = h("b", {class: "term-px num"}, "—"), chg = h("span", {class: "term-chg num"}, "");
-  const stat = (k) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: "term-st"}, h("span", null, k), v)}; };
-  const hi = stat("24시간 고가"), lo = stat("24시간 저가"), vol = stat("24시간 거래대금"), mark = stat("마크 가격"), fund = stat("펀딩비 / 다음까지");
+  const stat = (k, cls) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: ["term-st", cls || ""]}, h("span", null, k), v)}; };
+  const vol = stat("24시간 거래대금"), fund = stat("펀딩 / 다음까지", "fund");
   const sess = h("span", {class: "term-sess"}), clock = h("b", {class: "term-clock num"}, "—");
   // the live dot: lit while the market-trade relay is really connected, one pulse per real relay message
   const liveDot = h("i", {class: "term-live", "aria-hidden": "true"});
@@ -34,6 +38,18 @@ export function topBar(ctx, st) {
   };
   paintSnd();
   ctx.on("sound:cfg", paintSnd);
+
+  // 급등 · 급락 · 음펀비 (the whole market): one item each, the top 3 in the title
+  const mover = (k, tone) => {
+    const s = h("b", {class: "term-mvs"}, "—"), v = h("span", {class: ["term-mvv", "num", tone]}, "");
+    return {s, v, el: h("div", {class: "term-mv"}, h("span", {class: "term-mvk"}, k), h("span", {class: "term-mvl"}, s, v))};
+  };
+  const mUp = mover("급등", "up"), mDn = mover("급락", "down"), mNeg = mover("음펀비", "down");
+  const mWhen = h("span", null, "(우리 봇 아님)");
+  const mCap = h("span", {class: "term-mvcap", title: `바이낸스 USD-M 무기한 전체에서 1분마다 (${MARKET_LABEL})`}, h("b", null, "시장 전체"), mWhen);
+  const movers = h("div", {class: "term-movers", role: "group", "aria-label": `급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 ${MARKET_LABEL}`},
+    mCap, mUp.el, mDn.el, mNeg.el);
+
   // the meetings line: a label, a running count (real), the conclusions (duplicated once for a seamless loop; the copy is
   // hidden from screen readers)
   const meetN = h("span", {class: "term-mrun", hidden: true});
@@ -44,7 +60,9 @@ export function topBar(ctx, st) {
     h("div", {class: "term-row"},
       h("div", {class: "term-id"}, symEl, perp),
       h("div", {class: "term-pxbox"}, px, chg),
-      h("div", {class: "term-stats"}, hi.el, lo.el, vol.el, mark.el, fund.el),
+      h("div", {class: "term-stats"}, vol.el, fund.el),
+      h("i", {class: "term-vsep", "aria-hidden": "true"}),
+      movers,
       h("span", {class: "grow"}), sndHint, sess, clockBox),
     line);
 
@@ -58,12 +76,34 @@ export function topBar(ctx, st) {
     px.classList.toggle("up", Number(t.p) > 0); px.classList.toggle("down", Number(t.p) < 0);
     chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
     chg.className = "term-chg num " + fmt.tone(t.p);
-    hi.v.textContent = fmt.price(t.h); lo.v.textContent = fmt.price(t.l);
     vol.v.textContent = t.q != null ? fmt.compact(t.q) : "—";
-    mark.v.textContent = fmt.price(t.mark);
+    vol.el.title = `24시간 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
     fundT = t.T || null;
-    put(fund.v, h("span", {class: fmt.tone(-Number(t.r || 0))}, fundPct(t.r)), " ", h("span", {class: "muted"}, fundT ? countdown(fundT) : ""));
+    put(fund.v, h("span", {class: fmt.tone(-Number(t.r || 0))}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
   }
+
+  // ---- movers: /api/v4/movers every minute (the server's own 60 s cache: one Binance fetch a minute for everybody)
+  function paintMovers(d) {
+    const ok = d && d.ready;
+    movers.classList.toggle("none", !ok);
+    movers.classList.toggle("stale", !!(ok && d.stale));
+    const one = (m, row, val, list, what) => {
+      m.s.textContent = row ? fmt.coin(row.s) : ok ? "없음" : "수집 전";
+      m.v.textContent = row ? val(row) : "";
+      m.el.title = ok && list && list.length
+        ? `${what} (${MARKET_LABEL}, 바이낸스 USD-M 무기한 ${fmt.int(d.n)}개 중)\n${list.map((r, i) => `${i + 1}. ${fmt.coin(r.s)} ${val(r)}`).join("\n")}`
+        : `${what}: 아직 받은 값이 없습니다`;
+    };
+    one(mUp, ok && d.up[0], (r) => pct2(r.pct), ok && d.up, "24시간 가장 많이 오른 코인");
+    one(mDn, ok && d.down[0], (r) => pct2(r.pct), ok && d.down, "24시간 가장 많이 내린 코인");
+    one(mNeg, ok && d.neg[0], (r) => fmt.num(r.rate * 100, 4, true) + "%", ok && d.neg, "펀딩비가 가장 낮은 코인 (숏이 롱에게 냄)");
+    mWhen.textContent = ok && d.stale ? `(우리 봇 아님) · ${fmt.hm(d.ts)} 값` : "(우리 봇 아님)";
+  }
+  paintMovers(null);
+  const loadMovers = async () => {
+    try { const d = await ctx.api("/api/v4/movers"); if (ctx.alive()) paintMovers(d); } catch (e) { /* the last answer stays */ }
+  };
+  ctx.every(60000, loadMovers, {now: true});
 
   function meetings(o) {
     if (!o || o.ready === false) { put(track, h("span", {class: "term-mi muted"}, "회의 기록이 아직 없습니다")); return; }
@@ -116,6 +156,7 @@ export function topBar(ctx, st) {
       const ss = bars.session(now);
       sess.textContent = `${ss.weekend ? "주말 · " : ""}${ss.ko}`;
       sess.title = `미국 증시 ${bars.usMarket(now).text}`;
+      clockBox.title = `한국 시각 (서버 시계 기준) · ${sess.textContent}`;
       if (fundT) { const c = fund.v.lastChild; if (c) c.textContent = countdown(fundT); }
     },
   };
