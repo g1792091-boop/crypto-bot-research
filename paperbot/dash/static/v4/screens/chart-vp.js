@@ -75,12 +75,12 @@ function attach(o) {
   const rangeSeg = ui.seg(RANGES.map((r) => ({id: r.id, label: r.ko, title: r.id === "view" ? "지금 차트에 보이는 봉" : r.id === "today" ? "한국 시각 0시부터 지금까지 (5분 봉으로 계산)" : "지난 7일 (15분 봉으로 계산)"})),
     st.range, (id) => setRange(id), {label: "매물대 계산 구간"});
   rangeSeg.classList.add("vp-seg");
-  const botBtn = h("button", {type: "button", class: "vp-chip", "aria-pressed": String(st.bot), onclick: () => { st.bot = !st.bot; savePref(); paintKey(); if (st.bot) loadBot(); redraw(); }}, "봇 기준선");
+  const botBtn = h("button", {type: "button", class: "vp-chip", "aria-pressed": String(st.bot), onclick: () => { st.bot = !st.bot; savePref(); paintKey(); if (st.bot) loadBot(); redraw(); }}, "봇 기록선");
   const meta = h("span", {class: "vp-meta num", role: "status"});
   const retry = h("button", {type: "button", class: "vp-retry", hidden: true, onclick: () => { st.rkey = ""; st.bkey = ""; st.rerr = null; st.berr = null; paintKey(); redraw(); }}, "다시 시도");
   const info = ui.infoTip(`${APPROX}. 가격 칸 하나하나의 매수 = 시장가로 산 물량(테이커 매수), 매도 = 전체 − 매수. `
     + "POC = 가장 많이 거래된 가격, 70% 구간 = POC에서 위·아래로 한 칸씩(물량이 더 많은 쪽부터) 넓혀 전체의 70%를 채운 구간 (위 끝 VAH, 아래 끝 VAL). "
-    + "봇 기준선 = 봇이 진입 판단에 쓰는 매물대 (바로 직전 닫힌 200봉을 50칸으로 나눈 값, 칸마다 봉의 종가 부근 가격에 몰아 계산): 이 화면의 매물대와 계산법이 달라 조금 다를 수 있습니다. 참고용이며 매매 신호가 아닙니다.", "매물대 설명");
+    + "봇 기록선 = 봇이 신호를 기록할 때 함께 남겨 두는 매물대 (바로 직전 닫힌 200봉을 50칸으로 나눈 값, 칸마다 봉의 종가 부근 가격에 몰아 계산): 이 화면의 매물대와 계산법이 달라 조금 다를 수 있습니다. 설명용 기록이며 매매에는 쓰지 않습니다 (진입 연구에서 수익과 관계가 없었음).", "매물대 설명");
   const keyEl = h("div", {class: "vp-key", hidden: true, role: "group", "aria-label": "매물대 범례"},
     h("b", {class: "vp-ttl", title: APPROX}, "매물대"), rangeSeg,
     h("span", {class: "vp-sw buy", title: "매수 물량: 시장가로 산 쪽 (테이커 매수)"}, "매수"),
@@ -99,8 +99,8 @@ function attach(o) {
     const t = o.tf();
     const botOk = LEVEL_TFS.includes(t);
     botBtn.disabled = !botOk;
-    botBtn.title = botOk ? "봇이 쓰는 매물대 세 줄 (매물 최다 가격 · 위 끝 · 아래 끝) 보이기·숨기기. 이 화면의 매물대와 비교해 보세요."
-      : "봇은 15분 · 30분 · 1시간 · 4시간 봉에서만 매물대를 씁니다";
+    botBtn.title = botOk ? "봇이 신호마다 기록해 두는 매물대 세 줄 (매물 최다 가격 · 위 끝 · 아래 끝) 보이기·숨기기. 이 화면의 매물대와 비교해 보세요. 설명용이며 매매에는 쓰지 않습니다."
+      : "봇은 15분 · 30분 · 1시간 · 4시간 봉에서만 매물대를 기록합니다";
     const p = st.prof, stats = [], notes = [];
     keyEl.dataset.split = p && p.ok && !p.split ? "0" : "1";
     const have = st.range === "view" || (st.rb && st.rb.mode === st.range && st.rb.sym === o.sym());      // the asked range's bars are here
@@ -112,9 +112,9 @@ function attach(o) {
     } else if (p && p.why === "novol") notes.push("이 봉들에는 거래량 자료가 없습니다");
     else if (p && p.why === "flat") notes.push("가격 변화가 없어 칸을 나눌 수 없습니다");
     else if (!p) notes.push("계산 중…");
-    if (st.bot && botOk && st.berr) notes.push("봇 기준선을 불러오지 못했습니다");
-    else if (st.bot && botOk && st.botLv && st.botLv.why) notes.push("봇 기준선: 봉이 모자라 계산하지 못했습니다");
-    else if (st.bot && botOk && st.botLv && st.botLv.stale) notes.push("봇 기준선은 조금 전 자료입니다 (새로 받지 못함)");
+    if (st.bot && botOk && st.berr) notes.push("봇 기록선을 불러오지 못했습니다");
+    else if (st.bot && botOk && st.botLv && st.botLv.why) notes.push("봇 기록선: 봉이 모자라 계산하지 못했습니다");
+    else if (st.bot && botOk && st.botLv && st.botLv.stale) notes.push("봇 기록선은 조금 전 자료입니다 (새로 받지 못함)");
     const txt = [...stats, ...notes].join(" · ");
     if (txt !== st.metaTxt) { st.metaTxt = txt; put(meta, txt); meta.dataset.note = notes.length ? "1" : ""; }     // (a pan recomputes often: touch the DOM only for news)
     const bad = !!(st.rerr || (st.bot && botOk && st.berr));

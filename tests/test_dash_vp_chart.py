@@ -282,7 +282,7 @@ def test_the_legend_states_the_approximation_and_the_page_never_builds_html_from
     # the colours are named on the chart itself (the row under it may be below the fold): 매물대 ■ 매수 ■ 매도, or the total only
     assert '{t: "매수", sw: "up"}, {t: "매도", sw: "down"}' in vp and '{t: "거래량 합계", sw: "flat"}' in vp
     # a failed load is said, never an empty profile: the range read, the bot's lines and the candles without a split
-    assert "자료를 불러오지 못했습니다" in vp and "봇 기준선을 불러오지 못했습니다" in vp and "매수·매도 구분이 없습니다" in vp
+    assert "자료를 불러오지 못했습니다" in vp and "봇 기록선을 불러오지 못했습니다" in vp and "매수·매도 구분이 없습니다" in vp
 
 
 # ---------------------------------------------------------------- 5. the bot's own 매물대 (read-only)
@@ -369,6 +369,28 @@ def test_a_failed_refetch_returns_the_last_good_answer_marked_stale(monkeypatch)
     assert again["stale"] is True and again["levels"] == first["levels"]
     with pytest.raises(Exception):
         bp.get("ETHUSDT", "15m")                                   # never fetched: a 503, not an invented answer
+
+
+def test_a_slow_binance_is_asked_once_not_once_per_poll(monkeypatch):
+    import threading
+    from paperbot.dash.more import vplevels as V
+    df = _df()
+    release, calls = threading.Event(), []
+
+    def frames(s, tf, n):
+        calls.append((s, tf, n))
+        release.wait(10)
+        return df.tail(n).reset_index(drop=True)
+
+    monkeypatch.setattr(V, "TIMEOUT_S", 0.05)
+    bp = V.BotProfile(frames, ("15m",))
+    for _ in range(4):                                             # four polls while the one fetch is still running
+        with pytest.raises(Exception):
+            bp.get("BTCUSDT", "15m")                               # each answers 503 at once (never an empty "no levels")
+    assert len(calls) == 1
+    release.set()                                                  # Binance answers: the next poll has its levels
+    monkeypatch.setattr(V, "TIMEOUT_S", 5.0)
+    assert bp.get("BTCUSDT", "15m")["ready"] is True
 
 
 def test_the_route_is_listed_and_the_page_asks_for_it():

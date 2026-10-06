@@ -66,6 +66,7 @@ class BotProfile:
         self.frames, self.tfs, self.clock = frames, tuple(tfs), clock
         self.lock = threading.Lock()
         self.good: dict = {}                    # (symbol, tf) -> (checked at, answer)
+        self.inflight: dict = {}                # (symbol, tf) -> the fetch still running (a slow Binance is asked once, not once per poll)
 
     def get(self, symbol: str, tf: str) -> dict:
         if tf not in self.tfs:
@@ -75,8 +76,12 @@ class BotProfile:
             hit = self.good.get(key)
         if hit and self.clock() - hit[0] < 30:                  # the bar rarely changes inside 30 s: no fetch at all
             return hit[1]
+        with self.lock:
+            fut = self.inflight.get(key)
+            if fut is None or fut.done():
+                fut = self.inflight[key] = _POOL.submit(self.frames, symbol, tf, FETCH_BARS)
         try:
-            df = _POOL.submit(self.frames, symbol, tf, FETCH_BARS).result(timeout=TIMEOUT_S)
+            df = fut.result(timeout=TIMEOUT_S)
             out = {**levels_of(df, tf), "symbol": symbol}
         except Exception:  # noqa: BLE001  (Binance slow (TimeoutError) / down / bad bars: the last good answer, else 503)
             if hit and hit[1].get("ready"):
