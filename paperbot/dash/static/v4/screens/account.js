@@ -189,10 +189,11 @@ export async function mount(el, ctx) {
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
-    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
+    // (the DOM's own replaceChildren writes a null as the word "null": an extra account has no same-strategy strip)
+    el.replaceChildren(...[backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
-        h("div", {class: "stack"}, rules, extra, tradesCard)));
+        h("div", {class: "stack"}, rules, extra, tradesCard))].filter(Boolean));
 
     // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
     termify(walletCard);
