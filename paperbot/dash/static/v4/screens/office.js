@@ -7,6 +7,7 @@ import {h, put, ui, fmt, store, features, consolePanel} from "../core/pb.js";
 import {makeFloor} from "./office-floor.js";
 import {makeFeed} from "./office-feed.js";
 import {makeWall, countdown} from "./office-wall.js";
+import {makeSched} from "./office-sched.js";
 import {STEPS, statusPill, stripLead, agentsState, agentsBanner, syncUnread, roomIdKo, triggerKo} from "./rooms-kit.js";
 
 const NOTE = "말풍선은 회의 기록에 저장된 실제 마지막 발언(첫 문장)입니다. 직원의 AI 차례가 끝나 기록될 때마다 바뀌며 실시간 타이핑이 아닙니다. " +
@@ -33,7 +34,8 @@ export async function mount(el, ctx) {
   let con = makeConsole();
   const main = h("div", {class: "of-main"}, floor.el, con);
   floor.el.dataset.tour = "office";                     // the first-visit tour points here (core/tour.js)
-  const office = h("div", {class: "of-office"}, top, banner, main);
+  const sched = makeSched(ctx);                          // agents-ui: today's fixed meetings while none runs
+  const office = h("div", {class: "of-office"}, top, sched.el, banner, main);
   const doneBody = h("div", {class: "of-done"}, ui.empty("불러오는 중"));
   const doneCard = ui.card({plate: "오늘 끝난 회의", sub: "단계는 실제로 말한 차례만 켜집니다",
     acts: [h("a", {class: "btn-line", href: ctx.href("digest", "day")}, "회의 요약")]}, doneBody);
@@ -124,7 +126,7 @@ export async function mount(el, ctx) {
   ctx.watch("office", (o, k, err) => {
     if (!o) { if (err && !st.o) floor.el.replaceChildren(ui.errorBox(err, () => store.refresh("office").catch(() => {}))); return; }
     st.o = o;
-    renderTop(); renderFloor(); wall.update(o); paintCd();
+    renderTop(); renderFloor(); wall.update(o); sched.update(o); paintCd();
     const key = (o.recent || []).map((r) => r.round_id).join(",");
     if (key !== st.doneKey) { const firstLoad = !st.doneKey && st.done === null; st.doneKey = key; if (!firstLoad) loadDone(); }
   });
