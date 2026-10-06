@@ -6,8 +6,8 @@
 // "매매법 매매법"); a screen added to routes.js shows here by itself. The current screen is bold with an accent
 // underline; a screen with news has a dot after its name ("에이전트 방 ●", the shell's badges); a feature that is off
 // is grey with 꺼짐. Each button's tooltip names its number key (1-9 = the first nine buttons, core/navkeys.js).
-//   PC (1200 px and up)  the buttons wrap: one row on a 1920 window at 보통, a tidy second row on a narrower window or
-//                        with 크게 / 아주 크게 (a group never splits; the line before a group that starts a row goes)
+//   PC (1200 px and up)  the buttons wrap: one row on a 1920 window (at every 글자 크기), a tidy second row on a
+//                        narrower one (a group never splits; the line before a group that starts a row goes)
 //   below 1200 px        the same buttons as one row that scrolls sideways (swipe; a mouse wheel scrolls it too), the
 //                        current one brought into view; on a phone 찾기 stays at its left edge; the phone's bottom bar
 //                        stays as it was (core/shell.js)
