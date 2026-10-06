@@ -47,7 +47,7 @@ export function leftWords(ms) {
 export function bigWords(c, now = serverNow()) {
   if (!c) return {big: "—", unit: ""};
   if (c.state === "ended") return {big: "끝", unit: "180일"};
-  if (c.due) return {big: c.state === "failed" || c.state === "unknown" || c.late ? "확인 필요" : "계산 중", unit: ""};
+  if (c.due) return {big: (c.state === "failed" && !(c.job && c.job.rerun)) || c.state === "unknown" || c.late ? "확인 필요" : "계산 중", unit: ""};
   if (c.ts - now <= DAY) {
     const same = Math.floor((now + 9 * 3600000) / DAY) === Math.floor((c.ts + 9 * 3600000) / DAY);
     return {big: same ? "오늘" : "내일", unit: "09:00"};
@@ -55,12 +55,17 @@ export function bigWords(c, now = serverNow()) {
   return {big: `${c.left}일`, unit: "남음"};
 }
 
-/** systemd's word on the verdict job since the checkpoint (/api/v4/verdictday machine.job, on the server only):
- *  {rerun: a run after an error is computing now} or {dead: the last run ended badly, e.g. killed by the service's memory
- *  or time limit, which leaves no line in checkpoint.db}; null when systemd does not answer or has nothing to add. */
+/** systemd's word on the verdict job since the checkpoint (on the server only): {rerun: a run after an error is
+ *  computing now} or {dead: the last run ended badly, e.g. killed by the service's memory or time limit, which leaves no
+ *  line in checkpoint.db}; null when systemd does not answer or has nothing to add. The server's clock carries it (c.job,
+ *  dash/more/verdictday.py job_word); else /api/v4/verdictday machine.job (m) is read the same way. */
 export const RESULT_KO = {"oom-kill": "메모리 한도로 멈춤", timeout: "시간 한도로 멈춤", signal: "강제로 멈춤", "core-dump": "비정상 종료",
   "exit-code": "오류로 끝남", watchdog: "응답 없어 멈춤", "start-limit-hit": "재시작 한도"};
 export function jobSays(c, m) {
+  if (c && c.due && c.job && (c.job.rerun || c.job.dead)) {
+    return c.job.rerun ? {rerun: true, since: c.job.since}
+      : {dead: true, since: c.job.since, result: c.job.result || null, ko: c.job.ko || RESULT_KO[c.job.result] || "실패로 끝남"};
+  }
   const j = m && m.systemd ? m.job : null;
   if (!c || !c.due || !j || !j.last_ms || !c.ts || j.last_ms < c.ts) return null;
   if (j.running) return c.state === "failed" ? {rerun: true, since: j.last_ms} : null;

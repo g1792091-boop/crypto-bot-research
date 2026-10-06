@@ -645,12 +645,13 @@ class Data:
         out: dict = {"now": now, "start": start, "period_days": PERIOD_DAYS}
         # the verdict-day clock (dash/more/verdictday.py): a checkpoint that has passed stays the next one until the
         # checkpoint job has stored its verdict (never '2번째 판정 · 30일 남음' on the morning of the first verdict)
-        from .more.verdictday import clock, day_state_reader, read_ledger
+        from .more.verdictday import clock, day_state_reader, job_reader, read_ledger
         ledger = read_ledger(self.checkpoint_db)
         day_state = day_state_reader(self.db)
+        jobs = job_reader()       # systemd on the server, asked (cached 60 s) only on a verdict day before its result
         if start is not None:
             out["day"] = (now - (start - start % day_ms)) // day_ms + 1
-            vc = clock(start, now, ledger, day_state)
+            vc = clock(start, now, ledger, day_state, jobs)
             out["next_checkpoint"] = {"k": vc["k"], "ts": vc["ts"], "day": vc["day"], "due": vc["due"],
                                       "state": vc["state"], "late": vc["late"]}
             out["verdict_clock"] = vc
@@ -665,7 +666,7 @@ class Data:
                 rs = run_facts(c).get("start_ts")
         except (sqlite3.Error, TypeError, ValueError):
             rs = start
-        out["restart"] = restart_banner(rs, now, ledger, day_state)
+        out["restart"] = restart_banner(rs, now, ledger, day_state, jobs)
         per: dict = {}
         group = {}
         for x in rows:
@@ -2431,7 +2432,8 @@ def verdict_method() -> dict:
     return {"method_ko": CP.method_ko(None, n), "n_bots": n, "family_alpha": alpha}
 
 
-def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] = None, day_state=None) -> dict:
+def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] = None, day_state=None,
+                   jobs=None) -> dict:
     """'새 실험 D+n / 30 · 첫 판정 MM/DD' of the run started at ``start_ts`` (checkpoint.run_facts): n = whole days
     since 00:00 UTC of the start day (the checkpoint clock: day 30 is the first verdict, checkpoint_ts), the verdict
     date in KST (09:00). The checkpoint named is the verdict-day clock's (dash/more/verdictday.py; ``ledger`` =
@@ -2446,7 +2448,7 @@ def restart_banner(start_ts: Optional[int], now_ms: int, ledger: Optional[dict] 
                  "levrule_doc": _doc_link("levrule-eval-v4", "levrule-eval")}
     if start_ts is None:
         return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
-    c = clock(int(start_ts), int(now_ms), ledger, day_state)
+    c = clock(int(start_ts), int(now_ms), ledger, day_state, jobs)
     n, k, cp, mmdd = c["n"], c["k"], c["ts"], c["mmdd"] or "—"          # "—": past day 180, no verdict left
     if c["state"] == "ended":
         text = f"새 실험 D+{n} · 판정 끝"

@@ -68,6 +68,8 @@ REHEARSAL_UTC = (2, 3, 30)          # deploy/paperbot-rehearsal.timer: Wednesday
 CHECK_IDS = ("trades200", "regimes2", "neighbour_tf", "cost_ratio", "testnet")
 CHECK_KO = {"trades200": "거래 200건", "regimes2": "국면 2개에서 플러스", "neighbour_tf": "옆 봉도 같은 방향",
             "cost_ratio": "실제 비용 ≤ 가정의 1.5배", "testnet": "테스트넷 연습"}
+RESULT_KO = {"oom-kill": "메모리 한도로 멈춤", "timeout": "시간 한도로 멈춤", "signal": "강제로 멈춤", "core-dump": "비정상 종료",
+             "exit-code": "오류로 끝남", "watchdog": "응답 없어 멈춤", "start-limit-hit": "재시작 한도"}   # systemd's Result
 STATE_KO = {"waiting_job": "09:35에 계산 시작", "waiting_state": "봇의 09:00 상태 저장을 기다리는 중",
             "computing": "동전 봇 비교 계산 중", "failed": "계산 중 오류 · 매시 35분에 다시 시도",
             "unknown": "판정 기록을 읽지 못함"}
@@ -196,10 +198,41 @@ def day_n(start: int, now: int) -> int:
     return max(0, (int(now) - (int(start) - int(start) % DAY_MS)) // DAY_MS)
 
 
+def job_word(jb: Optional[dict], cp: int) -> Optional[dict]:
+    """systemd's word on the verdict job (more/jobs.py answer, on the server only) since the checkpoint ``cp``: a run
+    computing now ({"running": True}) or the last run ended badly ({"running": False, "result"}: killed by the
+    service's MemoryMax / TimeoutStartSec it leaves no line in checkpoint.db). None when systemd does not answer, no run
+    started since ``cp`` or the last one ended well."""
+    if not (jb or {}).get("available"):
+        return None
+    j = ((jb or {}).get("jobs") or {}).get("paperbot-checkpoint") or {}
+    last = j.get("last_ms")
+    if not isinstance(last, int) or last < cp:
+        return None
+    if j.get("running"):
+        return {"running": True, "since": last}
+    if j.get("ok") is False:
+        return {"running": False, "since": last, "result": j.get("result")}
+    return None
+
+
+def job_reader(runner=None) -> Callable[[], dict]:
+    """() -> timers(): asked only when a due checkpoint needs it (never raises: systemd is a bonus, not a source)."""
+    def read() -> dict:
+        try:
+            return timers(runner)
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": type(exc).__name__, "jobs": {}}
+    return read
+
+
 def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
-          day_state: Optional[Callable[[str], Optional[int]]] = None) -> dict:
+          day_state: Optional[Callable[[str], Optional[int]]] = None,
+          jobs: Optional[Callable[[], dict]] = None) -> dict:
     """The checkpoint the countdown points at, and where it is (see the module docstring). ``ledger``: read_ledger();
-    None = not known (a due checkpoint then reads 'unknown', never 'no verdict' and never the next one)."""
+    None = not known (a due checkpoint then reads 'unknown', never 'no verdict' and never the next one). ``jobs``:
+    job_reader() (on the server, systemd's word): a due checkpoint whose last run ended badly with no line in
+    checkpoint.db is ``late`` at once (``job.dead``), a retry after a logged error says it is computing (``job.rerun``)."""
     from ...checkpoint import NO_VERDICT_DAYS, PERIOD_DAYS, checkpoint_ts, day_str
     if start is None:
         return {"ready": False}
@@ -247,6 +280,14 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
             out["late"] = now - cp > LATE_MS
         nxt = now - now % HOUR_MS + JOB_MINUTE * MIN_MS
         out["next_try_ts"] = nxt if nxt > now else nxt + HOUR_MS
+        if jobs is not None and out["state"] in ("computing", "waiting_job", "failed"):
+            w = job_word(jobs(), cp)
+            if w and w["running"] and out["state"] == "failed":
+                out["job"] = {"rerun": True, "dead": False, "since": w["since"]}
+            elif w and not w["running"] and out["state"] != "failed":
+                out["job"] = {"rerun": False, "dead": True, "since": w["since"], "result": w.get("result"),
+                              "ko": RESULT_KO.get(w.get("result") or "", "실패로 끝남")}
+                out["late"] = True
     out.update(texts(out))
     return out
 
@@ -272,7 +313,12 @@ def texts(c: dict) -> dict:
     else:
         st = c["state"]
         sko = STATE_KO.get(st, "")
-        if st == "waiting_job" and c.get("late"):
+        job = c.get("job") or {}
+        if job.get("dead"):
+            sko = f"판정 작업이 {job.get('ko') or '실패로 끝남'} · 매시 35분에 다시 시도"
+        elif job.get("rerun"):
+            sko = "앞선 계산은 오류 · 지금 다시 계산 중"
+        elif st == "waiting_job" and c.get("late"):
             sko = "판정 작업이 아직 돌지 않았습니다"
         elif st == "waiting_state" and c.get("late"):
             sko = "봇의 09:00 상태 저장이 아직 없음 · 봇이 도는지 확인"
@@ -281,8 +327,8 @@ def texts(c: dict) -> dict:
         elif st == "waiting_job" and c["now"] >= (c.get("job_ts") or 0):
             sko = "곧 계산 시작 (매시 35분)"
         passed, rest = f"{c['day']}일 판정 날", sko
-        chip = {"main": "판정 날", "opt": " · 결과 계산 중" if st in ("waiting_job", "waiting_state", "computing")
-                and not c.get("late") else " · 확인 필요"}
+        chip = {"main": "판정 날", "opt": " · 결과 계산 중" if (st in ("waiting_job", "waiting_state", "computing")
+                and not c.get("late")) or job.get("rerun") else " · 확인 필요"}
     return {"line_ko": f"{passed} · {rest}", "passed_ko": passed, "rest_ko": rest, "state_ko": sko, "chip_ko": chip}
 
 
@@ -516,12 +562,9 @@ def register(app, ctx) -> dict:
         except sqlite3.Error as exc:
             return {"ready": False, "error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
         led = read_ledger(ctx.checkpoint_db)
-        c = clock(start, now, led, day_state_reader(ctx.db))
+        jb = job_reader(getattr(ctx, "jobs_runner", None))()          # systemd never takes the card down
+        c = clock(start, now, led, day_state_reader(ctx.db), lambda: jb)
         rh = rehearsals(rdir)
-        try:
-            jb = timers(getattr(ctx, "jobs_runner", None))
-        except Exception as exc:  # noqa: BLE001  (systemd never takes the card down)
-            jb = {"available": False, "reason": type(exc).__name__, "jobs": {}}
         meeting = None
         if c.get("last"):
             with ctx.rooms.ro(ctx.rooms.agents_db) as a:

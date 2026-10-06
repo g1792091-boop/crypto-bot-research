@@ -142,3 +142,51 @@ def test_the_summary_carries_done_ts_only_after_a_verdict(tmp_path, which):
     paper, out = _state(tmp_path, which)
     s = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)
     assert s["verdict_clock"]["last"] is None and s["next_checkpoint"]["due"]
+
+
+def _jobs(**job):
+    return {"ready": True, "available": True, "jobs": {"paperbot-checkpoint": {"state": "on", **job}}}
+
+
+def test_the_server_clock_takes_systemds_word_everywhere(tmp_path, monkeypatch):
+    """A run killed by its limits (no line in checkpoint.db): every screen's clock says 확인 필요 at once (the top chip's
+    data, the home card's words, the server tile's late), not '계산 중' for 4 hours; a retry after a logged error says
+    it is computing again."""
+    from paperbot.dash.app import Data
+    paper, out = _state(tmp_path, "snap")
+    killed = _jobs(last_ms=CP1 + 95 * MIN, ok=False, running=False, result="oom-kill")
+    monkeypatch.setattr(V, "timers", lambda runner=None: killed)
+    s = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)
+    vc = s["verdict_clock"]
+    assert (vc["state"], vc["late"], vc["job"]["dead"], vc["job"]["result"]) == ("computing", True, True, "oom-kill")
+    assert vc["line_ko"] == "30일 판정 날 · 판정 작업이 메모리 한도로 멈춤 · 매시 35분에 다시 시도"
+    assert s["next_checkpoint"]["late"] and s["restart"]["chip_ko"]["opt"] == " · 확인 필요"
+    # the same run still going, a run that ended well, or one from before the checkpoint: the ledger's own words
+    for jb in (_jobs(last_ms=CP1 + 95 * MIN, ok=None, running=True), _jobs(last_ms=CP1 + 95 * MIN, ok=True, running=False),
+               _jobs(last_ms=CP1 - 25 * MIN, ok=False, running=False, result="exit-code"),
+               {"ready": True, "available": False, "reason": "systemctl 없음", "jobs": {}}):
+        monkeypatch.setattr(V, "timers", lambda runner=None, jb=jb: jb)
+        c = Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)["verdict_clock"]
+        assert (c["state"], c["late"], "job" in c) == ("computing", False, False), jb
+        assert c["line_ko"] == "30일 판정 날 · 동전 봇 비교 계산 중"
+    # a systemctl that raises never takes the summary down
+    def boom(runner=None):
+        raise OSError("no systemd")
+    monkeypatch.setattr(V, "timers", boom)
+    assert Data(paper, checkpoint_db=out).summary(CP1 + 2 * H)["verdict_clock"]["state"] == "computing"
+
+
+def test_a_retry_after_a_logged_error_is_computing_again(tmp_path, monkeypatch):
+    paper, out = _state(tmp_path, "error", monkeypatch)
+    led = V.read_ledger(out)
+    retry = _jobs(last_ms=CP1 + 95 * MIN, ok=False, running=True, result="exit-code")
+    c = V.clock(START, CP1 + 2 * H, led, V.day_state_reader(paper), lambda: retry)
+    assert (c["state"], c["job"], c["late"]) == ("failed", {"rerun": True, "dead": False, "since": CP1 + 95 * MIN}, False)
+    assert c["line_ko"] == "30일 판정 날 · 앞선 계산은 오류 · 지금 다시 계산 중" and c["chip_ko"]["opt"] == " · 결과 계산 중"
+    r = _node("core/verdictday.js", f"const c = {json.dumps(c)};\n"
+              "console.log(JSON.stringify({big: m.bigWords(c, c.now), js: m.jobSays(c, null), st: m.dueSteps(c, c.now, m.jobSays(c, null)).map((s) => s.state)}));")
+    assert r["big"]["big"] == "계산 중" and r["js"] == {"rerun": True, "since": CP1 + 95 * MIN} and r["st"][2] == "now"
+    # the logged error with no run going: still the red state
+    dead = V.clock(START, CP1 + 2 * H, led, V.day_state_reader(paper), lambda: _jobs(last_ms=CP1 + 95 * MIN, ok=False,
+                                                                                      running=False, result="exit-code"))
+    assert dead["state"] == "failed" and "job" not in dead and dead["chip_ko"]["opt"] == " · 확인 필요"
