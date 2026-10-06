@@ -20,8 +20,11 @@ export function lossCells(s) {
   return {neg, all};
 }
 
-function liveCell(r, need) {
-  if (!r) return ui.notYet("표 없음");
+/** why: why there is no live row: "none" = nothing was ever recorded, "error" = the file could not be read, else a table is missing. */
+function liveCell(r, need, why) {
+  if (!r) {
+    return why === "none" ? h("span", {class: "muted"}, "아직 기록이 없어요") : why === "error" ? ui.notYet("읽지 못함", "기록 파일을 읽지 못했어요") : ui.notYet("표 없음");
+  }
   const l = r.live;
   if (!l.trades) return h("span", {class: "muted"}, "아직 닫힌 거래가 없어요");
   return h("span", {class: "lg-cellcol"}, h("span", null, pctB(l.net_pct, 2), " ", h("small", {class: "muted"}, "거래당")),
@@ -37,18 +40,18 @@ function flipCell(f) {
   return h("span", {class: "lg-cellcol"}, h("span", null, "이 규칙 ", pctB(f.main_pct, 2)), h("small", {class: "muted"}, `동전 던지기 ${fmt.pctOf(f.flip_pct, 2, true)}`));
 }
 
-function sideBySide(s, rows, need) {
+function sideBySide(s, rows, need, why) {
   const byTf = Object.fromEntries((rows || []).map((r) => [r.tf, r]));
   const dist = (tf) => { const d = (s.distance_pct || {})[tf]; return d ? `손절 ${fmt.num(d.stop[0], 1)}~${fmt.num(d.stop[1], 1)}% · 목표 ${fmt.num(d.target[0], 1)}~${fmt.num(d.target[1], 1)}%` : ""; };
   const wide = h("div", {class: "tbl-wrap lg-wide"}, h("table", {class: "tbl lg-cmp"},
     h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "봉"), h("th", {class: "live", scope: "col"}, "지금 (라이브)"),
       PER.map(([k, ko]) => h("th", {scope: "col", title: (s.periods || {})[k]}, `5년 시험 ${ko}`)), h("th", {scope: "col"}, "동전 던지기와 (5년 1·2기)"))),
     h("tbody", null, TFS.map((tf) => h("tr", null, h("th", {class: "l", scope: "row"}, h("b", null, tfk(tf)), h("small", {class: "muted"}, dist(tf))),
-      h("td", {class: "live"}, liveCell(byTf[tf], need)),
+      h("td", {class: "live"}, liveCell(byTf[tf], need, why)),
       PER.map(([k]) => h("td", null, perCell(((s.main || {})[tf] || {})[k]))), h("td", null, flipCell((s.vs_flip || {})[tf])))))));
   const stack = h("div", {class: "lg-stack"}, TFS.map((tf) => h("section", {class: "lg-sblock", "aria-label": tfk(tf)},
     h("h3", null, tfk(tf), h("small", {class: "muted"}, ` ${dist(tf)}`)),
-    h("dl", null, h("dt", null, "지금 (라이브)"), h("dd", null, liveCell(byTf[tf], need)),
+    h("dl", null, h("dt", null, "지금 (라이브)"), h("dd", null, liveCell(byTf[tf], need, why)),
       PER.map(([k, ko]) => [h("dt", null, `5년 시험 ${ko}`), h("dd", null, perCell(((s.main || {})[tf] || {})[k]))]),
       h("dt", null, "동전 던지기와"), h("dd", null, flipCell((s.vs_flip || {})[tf]))))));
   return [wide, stack];
@@ -109,7 +112,7 @@ export function studyCard(d, m) {
     ui.stat("본 규칙 거래 수", `${fmt.int(s.trades_main)}건`, `대조 설정 ${fmt.int(s.trades_ctrl)}건은 따로 셈`)),
   h("p", {class: "lg-sub"}, s.honest_ko),
   h("h3", {class: "lg-h3"}, "5년 시험과 지금, 봉마다 나란히"),
-  ...sideBySide(s, rows, need),
+  ...sideBySide(s, rows, need, d.state === "error" || (d.member && d.member.state === "error") ? "error" : !m.comparison ? "none" : "table"),
   ui.note("지금 기록은 거래가 적어서 숫자 차이를 해석하지 않는 게 맞아요. 5년 시험은 비용 뒤 거래당 평균(1배)이고, 라이브도 같은 비용을 뺀 1배 기준이에요."),
   ui.disclosure("5년 시험 숫자 전부 (봉 × 기간)", allNumbers(s)),
   ui.disclosure("규칙 · 읽는 법 · 동전 던지기와 비교", readingBlock(s)),

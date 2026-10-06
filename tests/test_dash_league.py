@@ -884,6 +884,7 @@ def test_off_card_says_how_it_is_turned_on(tmp_path):
     study = _render("Y.studyCard(d, {study: d.studies.zoneflip, comparison: null})", d)["text"]
     assert "5년 시험은 이랬어요" in study and "0 / 8" in study and "8칸 중 통과 0칸" in study
     assert "실패" in study and "202d638e" in study and "지금 (라이브)" in study
+    assert "아직 기록이 없어요" in study and "표 없음" not in study and "읽지 못함" not in study           # nothing recorded: said so
 
 
 def test_error_card_shows_the_reason_and_no_zero(tmp_path):
@@ -894,6 +895,8 @@ def test_error_card_shows_the_reason_and_no_zero(tmp_path):
     t = _render("K.errorCard(d, () => {})", d)["text"]
     assert "기록 파일을 읽지 못했어요" in t and "망가졌" in t and "DatabaseError" in t and "다시 읽기" in t and "'거래 0건'처럼 보이지 않으려고" in t
     assert not re.search(r"\d+건", t.replace("'거래 0건'처럼", "")) and "기록 중" not in t
+    study = _render("Y.studyCard(d, {study: d.studies.zoneflip, comparison: null})", d)["text"]
+    assert "읽지 못함" in study and "아직 기록이 없어요" not in study                               # an unreadable record is not 'no record'
 
 
 def test_member_card_words(db):
