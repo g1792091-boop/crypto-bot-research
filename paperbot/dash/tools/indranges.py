@@ -361,7 +361,9 @@ def build(signals: str, funding_dir: Optional[str], work: Optional[str] = None) 
     try:
         with open(os.path.join(signals, "labdata_manifest.json")) as fh:
             m = json.load(fh)
-        manifest = {"all_identical": m.get("all_identical"), "checked_utc": m.get("checked_utc")}
+        main = [f for k, f in (m.get("files") or {}).items() if k.startswith("main/")]   # (pre-2021 is not used here)
+        manifest = {"main_identical": bool(main) and all(f.get("status") == "identical" for f in main),
+                    "main_files": len(main), "checked_utc": m.get("checked_utc")}
     except (OSError, ValueError):
         pass
     try:

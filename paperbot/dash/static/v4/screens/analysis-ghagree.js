@@ -43,7 +43,7 @@ export function ghagree(d, env) {
       ui.refNote(env.verdictTs)));
   }
   out.push(ui.card({plate: "GH Coin 타점 수", sub: "코인별 (기록 시작부터)"},
-    h("div", {class: "a7-chips"}, Object.entries(d.per_coin || {}).map(([s, c]) => h("span", {class: "a7-chip"}, h("b", null, fmt.coin(s)), ` ${fmt.int(c.calls || 0)}개`))),
+    h("div", {class: "a7-chips"}, Object.entries(d.per_coin || {}).map(([s, c]) => h("span", {class: "a7-chip"}, h("b", null, fmt.coin(s)), h("span", {class: "num"}, `${fmt.int(c.calls || 0)}개`)))),
     h("p", {class: "an-note"}, "GH Coin 자체 성적(타점마다 R, 동전과 비교)은 ", h("a", {href: env.ctx.href("analysis", "ghcoin")}, "분석 › GH Coin"), "에 있습니다.")));
   out.push(h("p", {class: "an-note an-foot"}, `GH Coin 방향: ${W.who} · 실험 시작부터 끝난 거래 · ${d.label || "설명용, 판정 아님"}`));
   return out;

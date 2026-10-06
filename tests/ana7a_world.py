@@ -137,8 +137,8 @@ def write_ghcoin(folder: str, lo: int, hi: int, seed: int = 13) -> int:
 
 
 def build_all(folder: str, days: int = 30, seed: int = 11, start: int | None = None, liq_from_h: float = 6.0,
-              gh_from_h: float = -48.0, market_days: int = 45, now: int | None = None) -> dict:
-    """paper3.db (anasyn_world.build) + liq.db + ghcoin/ + market.db in ``folder``."""
+              gh_from_h: float = -48.0, market_days: int = 45, now: int | None = None, hours: int = 20) -> dict:
+    """paper3.db (anasyn_world.build, ``hours`` into its last day) + liq.db + ghcoin/ + market.db in ``folder``."""
     os.makedirs(folder, exist_ok=True)
     db = os.path.join(folder, "paper3.db")
     for name in ("paper3.db", "liq.db", "market.db"):
@@ -146,7 +146,7 @@ def build_all(folder: str, days: int = 30, seed: int = 11, start: int | None = N
             p = os.path.join(folder, name + ext)
             if os.path.exists(p):
                 os.remove(p)
-    info = build(db, days=days, seed=seed, start=start)
+    info = build(db, days=days, seed=seed, start=start, hours_into_last=hours)
     s0, now = info["start"], info["now"] if now is None else now
     c = sqlite3.connect(db)
     entries = [(int(e), str(sym)) for e, sym in c.execute("SELECT entry_time, symbol FROM trades")]

@@ -117,8 +117,10 @@ export function indranges(d, env) {
   const names = Object.keys(d.strategies || {});
   const pick = h("select", {class: "select a7-pick", "aria-label": "매매법 고르기"},
     names.map((s) => h("option", {value: s}, `${fmt.stratKo(s)} · 표시 ${fmt.int((d.strategies[s] || {}).passed || 0)}칸`)));
+  // first visit: the strategy with the most marked cells (a thinly traded one would open on empty ranges)
+  const most = names.reduce((a, s) => (((d.strategies[s] || {}).passed || 0) > ((d.strategies[a] || {}).passed || 0) ? s : a), names[0]);
   const saved = local.get("an-indr-s", null);
-  if (saved && names.includes(saved)) pick.value = saved;
+  pick.value = saved && names.includes(saved) ? saved : most;
   const cache = {};
   const indName = h("b", {class: "a7-ind-name"});
   const showStrat = (anim) => {
@@ -150,7 +152,7 @@ export function indranges(d, env) {
 
   // ---- 표시된 칸 모두
   const all = d.marked || [];
-  const pg = ui.pager({size: 10, row: (c) => markedRow(c, d), empty: "표시된 칸이 없습니다."});
+  const pg = ui.pager({size: 10, row: (c, i) => markedRow(c, d, i), empty: "표시된 칸이 없습니다."});
   const filt = dimSeg("indr-mk", [{id: "all", label: `전체 ${fmt.int(all.length)}`}, {id: "up", label: `더 좋음 ${fmt.int(all.filter((c) => c.ok === 1).length)}`},
     {id: "down", label: `더 나쁨 ${fmt.int(all.filter((c) => c.ok === -1).length)}`}], "all", () => setMarked(), false);
   const setMarked = () => { const f = filt.get(); pg.set(all.filter((c) => f === "all" || (f === "up" ? c.ok === 1 : c.ok === -1))); };
@@ -170,11 +172,12 @@ export function indranges(d, env) {
   return out;
 }
 
-function markedRow(c, d) {
+function markedRow(c, d, i) {
   const k = c.k, who = c.s ? fmt.stratKo(c.s) : "기존 36 전체";
-  const w = (c.w || []).map((x, i) => `${["21~22", "23~24", "25~26"][i]} ${x && x[1] != null ? rr(x[1]) : "—"}`).join(" · ");
+  const w = (c.w || []).map((x, j) => `${["21~22", "23~24", "25~26"][j]} ${x && x[1] != null ? rr(x[1]) : "—"}`).join(" · ");
   const rt = rangeText(k, c.j, ((d.edges || {})[k] || {})[EX_TF]);
   return h("div", {class: "lrow an-row a7-mrow", role: "listitem"},
+    h("span", {class: "rk"}, String(i + 1)),
     h("span", {class: "lname an-wrap"}, h("b", null, who), ` · ${IND[k].ko} ${labelOf(k, c.j)}`, rt ? h("small", {class: "num muted"}, ` (${fmt.tfKo(EX_TF)}봉 ${rt})`) : null),
     h("span", {class: ["ret", "num", fmt.tone(c.d)]}, rr(c.d)),
     h("span", {class: "meta"},
@@ -221,5 +224,5 @@ function methods(d) {
       li(`여러 번 본 것 감안: 검사한 ${fmt.int(r.tests)}칸 모두를 한꺼번에 (Benjamini-Hochberg ${fmt.pct(r.fdr, 0, false)}). 그러고도 세 기간(2021.8~2022, 2023~2024, 2025~2026.9) 모두에서 같은 방향이고 각 기간 양쪽 ${fmt.int(r.min_window)}건 이상인 칸만 표시.`),
       li(h("b", null, "첫 실행 뒤에 더한 규칙: "), `거래가 189만 건이나 되어 0.02R 같은 아주 작은 차이도 검사를 넘었습니다. 그래서 표시는 차이가 ${fmt.num(r.min_effect_r, 2)}R(손절 거리의 5%) 이상인 칸만 합니다. 검사는 넘었지만 차이가 작은 ${fmt.int(r.tiny)}칸은 차이 없음으로 둡니다.`),
       li(`결과: 표시 ${fmt.int(r.passed)}칸 (더 좋음 ${fmt.int(r.better)} · 더 나쁨 ${fmt.int(r.worse)}). 이 방식은 표시된 칸의 약 5%가 우연일 수 있다고 보는 방식입니다.`),
-      li(`자료: 연구실 5년 신호 저장본${src.all_identical === true ? " (연구 자료와 같은지 확인됨)" : ""} · 만든 때 ${d.built_utc || "—"} UTC${d.code_commit ? ` · 코드 ${d.code_commit}` : ""}.`)));
+      li(`자료: 연구실 5년 신호 저장본${src.main_identical === true ? ` (파일 ${fmt.int(src.main_files)}개 모두 연구 자료와 같음을 확인)` : ""}, 펀딩비 기록${src.funding ? "" : " 없음"} · 만든 때 ${d.built_utc || "—"} UTC${d.code_commit ? ` · 코드 ${d.code_commit}` : ""}.`)));
 }

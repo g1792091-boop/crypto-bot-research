@@ -4,8 +4,8 @@
    for a real gain / loss; everything else stays in ink tokens. */
 
 /* one cell as words */
-.a7-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 0; min-width: 0; }
-.a7-dot { color: var(--muted); }
+.a7-cell { display: inline; line-height: 1.7; min-width: 0; }
+.a7-dot { color: var(--muted); white-space: pre; }
 
 /* label → our group / coin flips (stacked on phones, three columns on wide screens) */
 .a7-cmp { display: grid; min-width: 0; }
@@ -46,16 +46,17 @@
 .a7-plain { color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
 .a7-row.paper { grid-template-columns: minmax(118px, 1fr) minmax(0, 1.4fr) minmax(90px, auto); }
 .a7-row.coin { grid-template-columns: minmax(90px, .8fr) minmax(120px, 1.6fr) minmax(130px, 1fr); }
-.a7-v.five { justify-items: end; color: var(--ink-2); }
+.a7-v.five { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 6px; color: var(--ink-2); }
 @media (max-width: 640px) {
-  .a7-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
-  .a7-row .a7-bar { grid-column: 1 / -1; order: 3; }
-  .a7-row .a7-v { order: 4; }
+  .a7-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
+  .a7-row .a7-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
   .a7-row .a7-st { order: 2; }
-  .a7-row.paper { grid-template-columns: minmax(0, 1fr) auto; }
-  .a7-row.paper .a7-v:not(.five) { grid-column: 1 / -1; order: 3; }
-  .a7-row.coin { grid-template-columns: minmax(0, 1fr) auto; }
-  .a7-row.coin .a7-v { order: 2; justify-items: end; }
+  .a7-row .a7-bar { grid-column: 1 / -1; order: 3; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+  .a7-row .a7-v { grid-column: 1 / -1; order: 4; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .a7-row.paper .a7-v.five { grid-column: auto; order: 2; }
+  .a7-row.paper .a7-v:not(.five) { order: 3; }
+  .a7-row.coin .a7-v { grid-column: auto; order: 2; display: grid; justify-items: end; }
+  .a7-row.coin .a7-bar { order: 3; }
 }
 
 .a7-help { margin: 0 0 6px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
@@ -102,7 +103,7 @@
 
 /* GH Coin calls per coin */
 .a7-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.a7-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px;
+.a7-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px;
   font-size: var(--t-xs); color: var(--ink-2); }
 .a7-chip b { color: var(--ink); }
 .a7-coin .meta { line-height: 1.6; }
