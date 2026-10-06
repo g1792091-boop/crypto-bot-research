@@ -167,6 +167,71 @@ def test_a_pending_clone_keeps_its_entry_bar_through_the_pruning_and_a_lost_one_
     assert n_bars > 0
 
 
+class ScriptedDetector:
+    """A detector that reports given long signals (bar number -> stop, target) on flat bars whose volume is the bar number
+    plus one: pins the ENGINE's rules (one position per coin and timeframe, entry at the next open, skips) without any
+    price pattern to depend on."""
+    id = "scripted_v1"
+    min_bars = 300
+
+    def __init__(self, plan):
+        self.plan = dict(plan)
+
+    def params(self):
+        return {"plan": {str(k): list(v) for k, v in sorted(self.plan.items())}}
+
+    def detect(self, o, h, l, c, v, atr, first_r):
+        out = []
+        number = {int(x) - 1: i for i, x in enumerate(v)}          # the volume of bar k is k + 1: its number survives pruning
+        for k, (stop, target) in sorted(self.plan.items()):
+            r = number.get(k)
+            if r is not None and first_r <= r < len(c):
+                out.append({"r": r, "b": r - 2, "side": 1, "ref": float(c[r]), "stop": stop, "target": target, "rr": 3.0,
+                            "touches": 3, "atr": 1.0, "skip": "", "chosen": True,
+                            "extra": {"zone_lo": 98.0, "zone_hi": 99.0, "tz_lo": 103.0, "tz_hi": 104.0}})
+        return out
+
+
+def _flat_world(tmp_path, name):
+    n = 1400
+    a = {"o": np.full(n, 100.0), "h": np.full(n, 100.1), "l": np.full(n, 99.9), "c": np.full(n, 100.0),
+         "v": np.arange(1.0, n + 1)}
+    a["h"][1013] = 103.5                       # target 103 of the first trade
+    a["l"][1030] = 98.5                        # stop 99 of the second trade
+    a["o"][1032], a["l"][1032] = 98.0, 97.9    # this bar opens below the stop of the signal before it
+    a["h"][1040] = 101.5                       # target 101 of the fourth trade
+    ex = FakeExchange(coins=("BTC",), tfs=("1h",), arrays={("BTC", "1h"): a})
+    plan = {1010: (99.0, 103.0), 1013: (99.0, 103.0), 1014: (99.0, 104.0), 1016: (99.0, 104.0), 1030: (99.0, 104.0),
+            1031: (99.0, 104.0), 1033: (99.0, 101.0), 1389: (99.0, 104.0),
+            1050: (100.0 * (1.0 + SM.SLIP_SIDE), 104.0),        # the stop is exactly where the entry fills: no room, no trade
+            1052: (99.0, 100.0 * (1.0 + SM.SLIP_SIDE))}         # the target is exactly where the entry fills
+    m = LG.Member(member_id="scripted", name_ko="시험", detector=ScriptedDetector(plan), start_ms=START, tfs=("1h",),
+                  coins=("BTC",), clones_k=5)
+    return ex, m, open_store(tmp_path, name)
+
+
+EXPECTED_STATUS = {1010: "taken", 1013: "busy", 1014: "taken", 1016: "busy", 1030: "busy", 1031: "skip_entry",
+                   1033: "taken", 1050: "skip_entry", 1052: "skip_entry", 1389: "taken"}
+
+
+@pytest.mark.parametrize("idxs", [list(range(1005, 1400)), [1399], [1100, 1250, 1389, 1399], [1389, 1390, 1399]])
+def test_the_engine_takes_one_position_per_series_and_skips_busy_and_gapped_entries(tmp_path, idxs):
+    """A signal on the exit bar of the open trade, or while it is open, is skipped (the study's rule: bars <= the previous
+    exit bar); the next bar after the exit may trade; an open already beyond the stop is skipped and leaves the series
+    flat; a signal on the newest bar waits for its entry bar. The same whatever the tick pattern."""
+    ex, m, st = _flat_world(tmp_path, "scripted.db")
+    st, out = ticks(st, ex, m, idxs)
+    sig = {(s["bar_ms"] - T0) // HOUR: s["status"] for s in (dict(r) for r in st.conn.execute("SELECT * FROM signals"))}
+    assert sig == EXPECTED_STATUS, sig
+    tr = {(t["signal_ms"] - T0) // HOUR: t for t in st.trades(m.member_id)}
+    assert sorted(tr) == [1010, 1014, 1033, 1389]
+    assert (tr[1010]["reason"], (tr[1010]["exit_ms"] - T0) // HOUR, tr[1010]["hold"]) == ("TP", 1013, 3)
+    assert (tr[1014]["reason"], (tr[1014]["exit_ms"] - T0) // HOUR, tr[1014]["entry_px"]) == ("SL", 1030, 100.0 * (1 + SM.SLIP_SIDE))
+    assert (tr[1033]["reason"], (tr[1033]["exit_ms"] - T0) // HOUR) == ("TP", 1040)
+    assert tr[1389]["status"] == "open" and tr[1389]["entry_ms"] == T0 + 1390 * HOUR     # entered at the next bar's open
+    assert tr[1010]["net"] == pytest.approx(103.0 / (100.0 * (1 + SM.SLIP_SIDE)) - 1 - 2 * SM.FEE_SIDE - SM.FUNDING_8H * 3 * 60 / 480)
+
+
 def test_irregular_ticks_of_15_minute_bars_with_5_to_10_minute_gaps_make_the_same_tables(tmp_path):
     """A pass that is a few minutes late sees the same closed bars; a pass that was missed sees two bars at once."""
     start = T0 + 1000 * 15 * MIN
