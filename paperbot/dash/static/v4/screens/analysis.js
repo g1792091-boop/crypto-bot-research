@@ -23,7 +23,7 @@ import * as E from "./analysis-exits.js";
 
 const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
-  {id: "exits", label: "청산 이유", path: "/api/v4/exits", render: E.exits, groups: "groups", desc: "손절·익절 잠금 단계·강제청산별 성적, 끝나기 전에 얼마나 밀렸나"},
+  {id: "exits", label: "청산 이유", path: "/api/v4/exits", render: E.exits, groups: "groups", desc: "청산 이유(손절·익절 잠금 단계·시간 청산·강제청산)별 성적, 끝나기 전에 얼마나 밀렸나"},
   {id: "map", label: "코인·장세 지도", path: "/api/analysis/map", render: W.map, groups: "groups", desc: "코인·장세·시간대·방향·봉별로 어디서 벌고 잃었나"},
   {id: "sessions", label: "코인·시간대", path: "/api/breakdown", render: W.sessions, groups: "groups", gpath: "/api/analysis/breakdown", desc: "코인별, 평일·주말 × 시간대, 펀딩·미국장 개장·지표 발표 시간"},
   {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "groups", desc: "들어가는 봉의 모습별 성적"},

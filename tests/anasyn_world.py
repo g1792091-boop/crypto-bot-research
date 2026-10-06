@@ -136,6 +136,8 @@ def build(path: str, days: int = 30, seed: int = 11, start: int | None = None, h
         while t < now - bar and not busted:
             gap = rng.expovariate(PER_DAY[tf] / DAY)
             t = (int(t + gap) // bar) * bar
+            if t < start:                                        # a start off the bar grid: the first bar after it
+                t += bar
             if t >= now - bar:
                 break
             d = (t - start) // DAY
@@ -144,7 +146,7 @@ def build(path: str, days: int = 30, seed: int = 11, start: int | None = None, h
             sym, side = rng.choice(SYMS), rng.choice((1, -1))
             if kind == "strategy" and rng.random() < 0.45:     # a cluster entry: same coin, side, about the same bar
                 et, sym, side = rng.choice(events[(cluster[s], d)])
-                t = max(t, (et // bar) * bar)
+                t = max(t, (et // bar) * bar, start)
             if not house:
                 side = 1                                         # the reel and its flips: long only
             hold = rng.randint(*HOLD_BARS[tf]) * bar
