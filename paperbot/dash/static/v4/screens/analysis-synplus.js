@@ -97,14 +97,14 @@ function colossCard(co, env) {
       ui.stat("받쳐 준 날 (중앙값)", pc(m.cover), "하나가 잃을 때 다른 하나는 범"),
       f ? ui.stat("동전 봇끼리 (참고)", pc(f.median && f.median.co_loss), `같이 잃은 날 · 나쁜 날 겹침 ${pc(f.median && f.median.bad)}`) : null),
     seg.el, body,
-    h("p", {class: "an-note"}, `잃은 날이 둘 합쳐 ${fmt.int(co.min_pair_days)}일 이상인 쌍만 봅니다.`,
+    h("p", {class: "an-note"}, `둘 중 하나라도 잃은 날이 ${fmt.int(co.min_pair_days)}일 이상인 쌍만 봅니다.`,
       f ? ` 동전 봇은 계좌 ${fmt.int(f.units)}개(봉 하나씩)끼리 ${fmt.int(f.pairs)}쌍: 매매법은 봉 계좌 4개를 합친 것이라 조건이 같지 않은 참고 기준입니다.` : ""),
     ui.refNote(env.verdictTs));
 }
 
 // ---------------------------------------------------------------- 같이 들어간 진입
-const AG_ROWS = [["alone", "혼자", "같이 들어간 다른 매매법 없음"], ["two", "2개 같이", "다른 매매법 1개"], ["three_plus", "3개 이상", "다른 매매법 2개 이상"],
-  ["opposite", "반대 방향 있음", "들어갈 때 같은 코인 반대 방향 포지션이 열려 있었음"], ["no_opposite", "반대 방향 없음", "들어갈 때 반대 방향 포지션 없음"]];
+const AG_ROWS = [["alone", "혼자", "같이 들어간 다른 매매법 없음"], ["two", "2개 같이", "다른 매매법 1개"], ["three_plus", "3개 이상", "다른 매매법 2개 이상"]];
+const OPP_ROWS = [["opposite", "반대 방향 있음", "같은 코인 반대 방향 포지션이 열려 있었음"], ["no_opposite", "반대 방향 없음", "반대 방향 포지션 없음"]];
 const TF_ROWS = [["tf_none", "다른 봉 없음", "같은 매매법의 다른 봉 계좌가 같은 쪽에 없었음"], ["tf_one", "다른 봉 1개", "같은 매매법 다른 봉 1개가 이미 같은 쪽"],
   ["tf_two_plus", "다른 봉 2개 이상", "같은 매매법 다른 봉 2개 이상이 이미 같은 쪽"]];
 function agCell(c, share, small) {
@@ -129,13 +129,17 @@ function agList(rows, B, small) {
 function agreeCard(ag, env) {
   const B = ag.buckets || {}, small = ag.small_n || 20, all = ag.all || {};
   const s = (k) => (B[k] || {}).strategies || {};
-  const alone = s("alone"), three = s("three_plus");
+  const alone = s("alone"), three = s("three_plus"), opp = B.opposite || {}, tfAny = (B.tf_one || {}).share || 0;
   return ui.card({plate: "같이 들어간 진입", sub: `기존 36 끝난 거래 ${fmt.int(ag.trades)}건 · 동전 봇 ${fmt.int(ag.flip_trades)}건`},
-    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "거래마다 들어간 순간 앞뒤로 그 거래의 봉 하나 길이 안에 같은 코인·같은 방향으로 들어간 다른 매매법(이름 기준, 봉 무관)을 셉니다. 위 세 줄과 아래 두 줄은 따로 나눈 것이라 각각 합이 100%입니다. ROE = 증거금 대비, 자금 대비 = 거래 전 잔고 대비 (수수료·펀딩 뺀 순)."),
+    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "거래마다 들어간 순간 앞뒤로 그 거래의 봉 하나 길이 안에 같은 코인·같은 방향으로 들어간 다른 매매법(이름 기준, 봉 무관)을 셉니다. 세 묶음은 따로 나눈 것이라 묶음마다 합이 100%입니다. ROE = 증거금 대비, 자금 대비 = 거래 전 잔고 대비 (수수료·펀딩 뺀 순)."),
     agList(AG_ROWS, B, small),
     alone.trades && three.trades ? h("p", {class: "ax-say"}, `혼자 들어간 거래의 이긴 비율은 ${pc(alone.win_rate)}, 3개 이상 같이 들어간 거래는 ${pc(three.win_rate)}였어요. (전체 ${pc((all.strategies || {}).win_rate)})`) : null,
+    h("h3", {class: "an-sub"}, "들어갈 때 같은 코인에 반대 방향 포지션이 있었나 (기존 36 어느 계좌든)"),
+    agList(OPP_ROWS, B, small),
+    opp.share != null ? h("p", {class: "ax-say"}, `기존 36 거래의 ${pc(opp.share)}는 들어갈 때 다른 계좌가 같은 코인을 반대 방향으로 들고 있었어요. (동전 봇 ${pc(opp.flip_share)})`) : null,
     h("h3", {class: "an-sub"}, "봉 합의: 같은 매매법의 다른 봉 계좌가 이미 같은 쪽에 있었나"),
     agList(TF_ROWS, B, small),
+    h("p", {class: "ax-say"}, `기존 36 거래의 ${pc(tfAny + ((B.tf_two_plus || {}).share || 0))}는 같은 매매법의 다른 봉 계좌가 이미 같은 코인·같은 방향에 들어가 있었어요.`),
     h("p", {class: "an-note"}, "동전 봇 칸 = 동전 봇이 들어간 순간 같은 코인·방향으로 들어간 기존 36 매매법 수로 나눔 (0개 = 혼자, 1개 = 2개 같이, 2개 이상 = 3개 이상). 봉 합의의 동전 봇은 같은 번호 동전 봇의 다른 봉 계좌. 지금 열린 포지션도 '들어감'으로 셉니다",
       ag.open_now ? ` (${fmt.int(ag.open_now)}개).` : "."),
     ui.refNote(env.verdictTs), ui.assume());
@@ -150,13 +154,13 @@ function walkCard(wf, env) {
     h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "앞 절반의 하루 손익만 보고 점수(총손익 ÷ 최대 낙폭)가 가장 높은 조합(매매법 2~5개)을 고른 뒤, 고를 때 보지 않은 뒤 절반에서 다시 점수를 매깁니다. 뒤 절반에서 모든 조합의 중앙값·상위 25% 선과 나란히 봅니다."),
     s ? [h("p", {class: "ax-combo"}, h("b", null, (s.names || []).join(" + ")), h("span", {class: "muted"}, ` · 앞 절반 점수 ${sc(s.first_score)}`)),
       h("div", {class: "stats s4"},
-        ui.stat("이 조합의 뒤 절반 점수", h("b", {class: "num"}, sc(s.second_score)), "고를 때 보지 않은 기간"),
+        ui.stat("고른 조합 · 뒤 절반", h("b", {class: "num"}, sc(s.second_score)), "고를 때 보지 않은 기간"),
         ui.stat("모든 조합 중앙값", sc(s.second_median), `뒤 절반 · 조합 ${fmt.int(s.combos)}개`),
-        ui.stat("모든 조합 상위 25% 선", sc(s.second_p75), "뒤 절반"),
+        ui.stat("상위 25% 선", sc(s.second_p75), "뒤 절반 · 모든 조합"),
         ui.stat("이 조합보다 낮은 조합", pc(s.beat_share), "뒤 절반 점수 기준")),
       say ? h("p", {class: "ax-say"}, say) : null] : h("p", {class: "muted"}, "조합할 매매법이 2개 미만입니다."),
     f ? h("p", {class: "an-note"}, `동전 봇 계좌 ${fmt.int(f.units_n)}개로 같은 방법 (참고): 앞 절반 최고 조합의 뒤 절반 점수 ${sc(f.second_score)} · 모든 조합 중앙값 ${sc(f.second_median)} · 상위 25% 선 ${sc(f.second_p75)} (조합 ${fmt.int(f.combos)}개).`) : null,
-    h("p", {class: "an-note"}, "기간이 짧으면 앞뒤 모두 우연이 큽니다. 한 번 나눈 결과라 '다음에도 그렇다'는 뜻이 아닙니다."),
+    h("p", {class: "an-note"}, "점수 = 총손익 ÷ 최대 낙폭. 낙폭이 자금의 0.5%보다 작으면 0.5%로 셈니다 (거의 내려가지 않은 기간은 점수가 크게 나옴). 기간이 짧으면 앞뒤 모두 우연이 큽니다. 한 번 나눈 결과라 '다음에도 그렇다'는 뜻이 아닙니다."),
     ui.refNote(env.verdictTs));
 }
 

@@ -11,6 +11,8 @@ import {h, ui, fmt} from "../core/pb.js";
 import {viewHead, groupWords, waitCard, progressBar} from "./analysis-kit.js";
 
 const pc = (x, d = 0) => (x == null ? "—" : fmt.pct(x, d, false));
+/** A share for a bar's label: one decimal under 10% (0 stays "0%"). */
+const pv = (x) => (x == null ? "—" : fmt.pct(x, x > 0 && x < 0.1 ? 1 : 0, false));
 const SERIES = {core: "core", ds200: "ds", reel: "m5"};
 
 /** A legend: the group's colour and the coin flips' colour, with their trade counts. */
@@ -20,18 +22,20 @@ function legend(grp, W, n, fn) {
     h("span", null, h("i", {class: "ax-sw flip"}), `${W.flips} (${fmt.int(fn)}건, 참고)`));
 }
 
-/** Rows of two thin bars (group, coin flips) on one 0..max scale, the values on the right. rows: [{label, a, b, an, bn}] */
-function dualBars(rows, grp, W, aria) {
+/** Rows of two thin bars (group, coin flips) on one 0..max scale, the values on the right. rows: [{label, a, b, an, bn}];
+ *  short: bucket labels that stay beside the bars on a phone too. */
+function dualBars(rows, grp, W, aria, short = false) {
   const top = Math.max(0.0001, ...rows.map((r) => Math.max(r.a || 0, r.b || 0)));
   const w = (x) => `${((x || 0) / top * 100).toFixed(1)}%`;
-  return h("div", {class: "ax-dual", role: "list", "aria-label": aria},
+  return h("div", {class: ["ax-dual", short ? "short" : ""], role: "list", "aria-label": aria},
     rows.map((r) => {
       const say = `${r.label}: ${W.short} ${pc(r.a, 1)}${r.an != null ? ` (${fmt.int(r.an)}건)` : ""} · ${W.flips} ${pc(r.b, 1)}${r.bn != null ? ` (${fmt.int(r.bn)}건)` : ""}`;
       return h("div", {class: "ax-row", role: "listitem", title: say, "aria-label": say},
         h("span", {class: "ax-k"}, r.label),
-        h("span", {class: "ax-bars", "aria-hidden": "true"},
-          h("i", {class: ["ax-b", SERIES[grp] || "core"], style: {"--w": w(r.a)}}), h("i", {class: "ax-b flip", style: {"--w": w(r.b)}})),
-        h("span", {class: "ax-v"}, h("b", {class: "num"}, pc(r.a, r.a != null && r.a < 0.1 ? 1 : 0)), h("small", {class: "num"}, pc(r.b, r.b != null && r.b < 0.1 ? 1 : 0))));
+        h("span", {class: "ax-bars", "aria-hidden": "true"},          // a zero share draws no bar (not a stub)
+          h("i", {class: ["ax-b", SERIES[grp] || "core", r.a ? "" : "z"], style: {"--w": w(r.a)}}),
+          h("i", {class: ["ax-b", "flip", r.b ? "" : "z"], style: {"--w": w(r.b)}})),
+        h("span", {class: "ax-v"}, h("b", {class: "num"}, pv(r.a)), h("small", {class: "num"}, pv(r.b))));
     }));
 }
 
@@ -63,7 +67,7 @@ export function exits(d, env) {
     ? `끝난 거래 ${fmt.int(n)}건 중 손절 ${pc(sl && sl.group.share)}, 목표가 익절 ${pc(tp && tp.group.share)}였어요.`
     : `끝난 거래 ${fmt.int(n)}건 중 손절이 ${pc(sl && sl.group.share)}, 익절 잠금이 모두 ${pc(lockShare)}였어요.`;
   const cols = [
-    {label: "청산 이유", l: true, get: (r) => r.ko},
+    {label: "청산 이유", l: true, get: (r) => r.ko, cls: () => "ax-wrap"},
     {label: "거래", get: (r) => sub(`${fmt.int((r.group || {}).trades || 0)}건`, `동전 ${fmt.int((r.coin_flips || {}).trades || 0)}`)},
     {label: "이긴 비율", get: (r) => sub(pc((r.group || {}).win_rate), `동전 ${pc((r.coin_flips || {}).win_rate)}`)},
     money ? {label: "평균 ROE", get: (r) => sub(h("span", {class: fmt.tone((r.group || {}).mean_roe)}, fmt.pct((r.group || {}).mean_roe, 1)), `동전 ${fmt.pct((r.coin_flips || {}).mean_roe, 1)}`)} : null,
@@ -73,7 +77,7 @@ export function exits(d, env) {
     dualBars(rows, grp, W, "청산 이유별 비율"),
     h("p", {class: "ax-say"}, say, ` (${W.flips}: 손절 ${pc(((rs.find((r) => r.key === "SL") || {}).coin_flips || {}).share)})`),
     h("h3", {class: "an-sub"}, "이유별 성적"),
-    ui.table(cols, rs),
+    h("div", {class: "ax-tbl"}, ui.table(cols, rs)),
     h("p", {class: "an-note"}, money ? "ROE = 증거금 대비 손익 (수수료·펀딩 뺀 순). 아래 작은 숫자 = 동전 봇." : "아래 작은 숫자 = 동전 봇.",
       d.busts || d.flip_busts ? ` 이 청산 뒤 계좌가 파산선 아래로 내려간 거래 ${fmt.int(d.busts || 0)}건 (${W.flips} ${fmt.int(d.flip_busts || 0)}건).` : ""),
     ui.refNote(env.verdictTs)));
@@ -91,7 +95,7 @@ function chart(title, part, fpart, key, grp, W, line, wait) {
   }
   const fb = (fp[key] || []);
   const rows = (p[key] || []).map((b, i) => ({label: b.label, a: b.share, b: (fb[i] || {}).share, an: b.n, bn: (fb[i] || {}).n}));
-  return h("div", {class: "ax-chart"}, h("h3", {class: "an-sub"}, title), dualBars(rows, grp, W, title), h("p", {class: "ax-say"}, line));
+  return h("div", {class: "ax-chart"}, h("h3", {class: "an-sub"}, title), dualBars(rows, grp, W, title, true), h("p", {class: "ax-say"}, line));
 }
 function excursionCard(d, grp, W, money, env) {
   const ex = d.excursion || {}, g = ex.group || {}, f = ex.coin_flips || {};

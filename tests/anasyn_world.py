@@ -101,6 +101,7 @@ def build(path: str, days: int = 30, seed: int = 11, start: int | None = None, h
     st = Store3(path)
     core = list(STRATEGY_KO)
     cluster = {s: i % 6 for i, s in enumerate(core)}
+    skill = {s: rng.gauss(0, 1) for s in core}                  # some strategies better than others
     accounts = []                                                # (aid, strategy, tf, kind, house)
     for tf in CORE_TFS:
         accounts += [(f"{s}@{tf}", s, tf, "strategy", True) for s in core]
@@ -151,13 +152,13 @@ def build(path: str, days: int = 30, seed: int = 11, start: int | None = None, h
             if exit_t >= now:
                 break
             if kind == "strategy":
-                p = 0.47 + 0.22 * math.tanh(mood[d][cluster[s]] + 0.6 * market[d])
+                p = 0.6 + 0.07 * skill[s] + 0.2 * math.tanh(mood[d][cluster[s]] + 0.6 * market[d])
             elif kind == "ds200":
-                p = 0.45 + 0.15 * math.tanh(market[d])
+                p = 0.58 + 0.15 * math.tanh(market[d])
             elif kind == "reel":
                 p = 0.5 + 0.1 * math.tanh(market[d])
             else:
-                p = 0.42 + 0.1 * math.tanh(0.5 * market[d] * side)
+                p = 0.55 + 0.1 * math.tanh(0.5 * market[d] * side)
             lev = rng.choice((20, 30, 30, 40, 50)) if house else 20
             reason, lock, roe, mae, mfe = _outcome(rng, p, lev, house)
             rec, wallet = record(s, tf, sym, side, t, exit_t, reason, lev, wallet, lock_roe=lock, roe=roe,

@@ -18,12 +18,15 @@
   transition: width .6s var(--ease); }
 .ax-b.ds { background: var(--series-ds); } .ax-b.m5 { background: var(--series-m5); }
 .ax-b.flip { height: 6px; background: var(--series-coin); opacity: .75; }
+.ax-b.z { visibility: hidden; }
 .ax-v { display: grid; justify-items: end; line-height: 1.2; }
 .ax-v b { font-size: var(--t-sm); color: var(--ink); }
 .ax-v small { font-size: var(--t-2xs); color: var(--muted); }
 @media (max-width: 520px) {
   .ax-row { grid-template-columns: minmax(0, 1fr) 56px; }
   .ax-k { grid-column: 1 / -1; font-size: var(--t-xs); }
+  .ax-dual.short .ax-row { grid-template-columns: 76px minmax(0, 1fr) 52px; }
+  .ax-dual.short .ax-k { grid-column: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .ax-b { transition: none; } }
 
@@ -33,6 +36,11 @@
 /* table cells with the coin flips' value under the group's */
 .ax-two { display: inline-grid; justify-items: end; line-height: 1.25; }
 .ax-two small { font-size: var(--t-2xs); }
+.tbl td.ax-wrap { white-space: normal; min-width: 7.5em; line-height: 1.35; }
+@media (max-width: 520px) {        /* four columns fit a phone without the table's own sideways scroll */
+  .ax-tbl .tbl th, .ax-tbl .tbl td { padding: 7px 4px; }
+  .ax-tbl .tbl td.ax-wrap { min-width: 5.5em; }
+}
 
 /* 역행·순행: three small charts side by side on wide screens */
 .ax-charts { display: grid; gap: 14px; min-width: 0; }

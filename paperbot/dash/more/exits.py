@@ -72,7 +72,7 @@ def reason_label(key: str, first: float, step: float, reel: bool) -> str:
             return "익절 잠금 (단계 기록 없음)"
         k = int(key[4:].rstrip("+"))
         roe = round((first + step * (k - 1)) * 100)
-        return f"익절 잠금 {k}단계 (+{roe}%)" + (" 이상" if key.endswith("+") else "")
+        return f"익절 잠금 {k}단계 이상 (+{roe}%~)" if key.endswith("+") else f"익절 잠금 {k}단계 (+{roe}%)"
     if reel and key in REEL_KO:
         return REEL_KO[key]
     return REASON_KO.get(key, f"기타 ({key})")
