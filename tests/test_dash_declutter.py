@@ -114,7 +114,9 @@ def test_the_deck_places_every_right_edge_name_in_one_column():
     # smcdraw no longer writes names at the right edge (zones or our lines): the deck does, through edgelabels.js
     assert 'align: "right"' not in draw and "o.extra" not in draw
     assert 'import {edgeLayout} from "./edgelabels.js";' in fx and "export const NAMES_MAX = 6;" in fx
-    assert "edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo, hi: pane.h - 2})" in fx
+    assert "edgeLayout(items, {price: last ? last.close : null, max: fitN, H: H + 1, lo, hi: top})" in fx
+    assert "const fitN = Math.max(0, Math.min(NAMES_MAX, Math.floor((top - lo) / (H + 1))));" in fx   # never squeezed
+    assert "let lo = 2, hi = pane.h - 2;" in fx and "let lay = run(hi);" in fx
     assert "layoutNames();" in fx[fx.index("function place()"):fx.index("function layoutPills()")]
     # the hidden ones: on hover / tap of the line (and the equilibrium / liquidity lines), and a "+N" chip with a list
     assert "chart.subscribeCrosshairMove((p) => showHover(" in fx and "chart.subscribeClick((p) => showHover(" in fx
@@ -141,7 +143,11 @@ def test_names_keep_clear_of_the_left_pills_and_name_only_drawn_zones():
     assert 'over.classList.toggle("nmore", !!n);' in fx
     assert ".cfx-over.nmore .cfx-smckey { max-width: calc(100% - 44px - 7.5em); }" in _read("core", "chartfx.css")
     # the OHLC legend (top left): when it runs into the names' column, the names start under it (it kept "−0.16%" hidden)
-    assert "lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);" in lay and "max: NAMES_MAX, H: H + 1, lo, hi:" in lay
+    assert "lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);" in lay and "max: fitN, H: H + 1, lo, hi:" in lay
+    # our ▲ / ▼ markers and the "+N" chip hold the right corners: the names keep clear of them
+    assert "if (edgeTop.childElementCount) lo = Math.max(lo, 4 + edgeTop.offsetHeight + 2);" in lay
+    assert "if (edgeBot.childElementCount) hi = Math.min(hi, pane.h - 4 - Math.max(rowH, edgeBotRow.offsetHeight) - 2);" in lay
+    assert "if (lay.shown.some((g) => g.ly + H / 2 > hi2)) lay = run(hi2);" in lay
     assert "sym: () => st.sym, legend});" in _read("screens", "terminal-chart.js")
     assert "sym: () => st.sym, legend});" in _read("screens", "chart.js")
 

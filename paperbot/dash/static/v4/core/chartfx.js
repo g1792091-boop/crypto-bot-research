@@ -506,21 +506,36 @@ export function chartDeck(o) {
     const items = nameItems().filter((x) => x.y != null && x.y >= 0 && x.y <= pane.h);
     const last = st.data[st.data.length - 1], H = nameH();
     // the screen's OHLC legend line (o.legend, top left): when it reaches the names' column, the names start under it
-    let lo = 2;
+    let lo = 2, hi = pane.h - 2;
     const lg = o.legend;
     if (lg && lg.textContent && lg.offsetLeft + lg.offsetWidth - pane.x > pane.w - 180) lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);
-    const lay = edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo, hi: pane.h - 2});
+    // our ▲ / ▼ markers (lines off the price range, layoutPills) hold the top / bottom right corners; the "+N" chip shares
+    // the bottom one: the names keep clear of them
+    const rowH = H + 6;
+    if (edgeTop.childElementCount) lo = Math.max(lo, 4 + edgeTop.offsetHeight + 2);
+    if (edgeBot.childElementCount) hi = Math.min(hi, pane.h - 4 - Math.max(rowH, edgeBotRow.offsetHeight) - 2);
     // a narrow pane (the left menu with bigger type): a name that would sit on one of our left pills goes to the "+N"
     // list and the hover tag instead, so a name and a pill never cover each other
     const pb = [];
     for (const L of lines.values()) if (L.pill && !L.pill.hidden && L._top != null) pb.push({t: L._top, b: L._top + PILL_H, r: 6 + L.pill.offsetWidth});
-    if (pb.length) {
-      const keep = [];
-      for (const g of lay.shown) {
-        const top = g.ly - H / 2, bot = top + H, left = pane.w - 4 - nameW(g.text);
-        if (pb.some((q) => q.t < bot + 2 && top - 2 < q.b && left - 6 < q.r)) lay.hidden.push(g); else keep.push(g);
+    const run = (top) => {
+      // a short pane shows only as many names as fit one under another (dodge would squeeze them onto each other)
+      const fitN = Math.max(0, Math.min(NAMES_MAX, Math.floor((top - lo) / (H + 1))));
+      const lay = edgeLayout(items, {price: last ? last.close : null, max: fitN, H: H + 1, lo, hi: top});
+      if (pb.length) {
+        const keep = [];
+        for (const g of lay.shown) {
+          const y0 = g.ly - H / 2, y1 = y0 + H, left = pane.w - 4 - nameW(g.text);
+          if (pb.some((q) => q.t < y1 + 2 && y0 - 2 < q.b && left - 6 < q.r)) lay.hidden.push(g); else keep.push(g);
+        }
+        lay.shown = keep;
       }
-      lay.shown = keep;
+      return lay;
+    };
+    let lay = run(hi);
+    if (lay.hidden.length && !edgeBot.childElementCount) {            // the "+N" chip will show: keep its corner free
+      const hi2 = pane.h - 4 - rowH - 2;
+      if (lay.shown.some((g) => g.ly + H / 2 > hi2)) lay = run(hi2);
     }
     shownNames = lay.shown; hiddenNames = lay.hidden;
     while (pool.length < shownNames.length) {
