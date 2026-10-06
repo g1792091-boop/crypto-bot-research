@@ -118,6 +118,12 @@ def test_topstats_parsers_say_only_what_binance_said():
             TS.parse_ls(bad)
 
 
+def test_topstats_coins_are_the_dashboards_traded_coins():
+    from paperbot.dash.app import TICKER_SYMBOLS
+    from paperbot.dash.more import topstats as TS
+    assert tuple(TS.SYMBOLS) == tuple(TICKER_SYMBOLS)                       # one list of coins, not two that can drift
+
+
 def test_topstats_caches_per_coin_never_zero_and_keeps_the_last_good_one_marked_old():
     from paperbot.dash.more import topstats as TS
     clock = {"t": 1_000.0}
@@ -283,6 +289,7 @@ def test_band_numbers_in_node():
         noHealth: st({health: null, healthFailed: true, hbAgeS: 12, critical: []}), loading: st({health: null, healthFailed: false, hbAgeS: 12, critical: []}),
         noHb: st({health: {level: "ok"}, hbAgeS: null, critical: []}), staleHb: st({health: {level: "ok"}, hbAgeS: 300, critical: []}),
         warn: st({health: {level: "warn", warnings: ["w1"]}, hbAgeS: 3, critical: []}),
+        blind: st({health: {level: "ok"}, hbAgeS: 3, critical: [], failedKeys: ["순위 자료", "요약 자료"]}), seeing: st({health: {level: "ok"}, hbAgeS: 3, critical: [], failedKeys: []}),
         bad: st({health: {level: "bad", problems: ["p1"]}, hbAgeS: 3, critical: []}),
         crit: st({health: {level: "ok"}, hbAgeS: 3, critical: [{kind: "stale", text: "봇 생존 신호가 3분째 없습니다"}]}), min: B.MIN_TRADES}));""", [BAND])
     assert out["day"] == {"day": 9, "of": 30, "verdictTs": 1000 + 5 * 86400000, "left": 5} and out["dayOld"]["day"] == 9 and out["dayOld"]["of"] == 30
@@ -297,6 +304,8 @@ def test_band_numbers_in_node():
         assert out[k]["text"] != "이상 없음" and out[k]["level"] in ("unknown", "bad"), k
     assert out["noHealth"]["text"] == "상태 확인 못 함" and out["loading"]["text"] == "확인 중"
     assert out["warn"]["level"] == "warn" and out["bad"]["level"] == "bad" and out["bad"]["detail"] == "p1"
+    assert out["blind"]["level"] == "warn" and out["blind"]["text"] == "일부 자료를 못 받음" and "순위 자료 · 요약 자료" in out["blind"]["detail"]
+    assert out["seeing"]["text"] == "이상 없음"                                    # a page that failed to read its own data never says 이상 없음
     assert out["crit"]["level"] == "bad" and "3분째" in out["crit"]["detail"]
     ck = open(os.path.join(ROOT, "paperbot", "checkpoint.py"), encoding="utf-8").read()
     assert f"MIN_TRADES = {out['min']}" in ck                                    # the verdict's own floor, tied

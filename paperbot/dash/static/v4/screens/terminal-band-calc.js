@@ -68,11 +68,13 @@ export function todayTrades(summary) {
 
 /**
  * The status chip. in: {health (the /api/analysis/health card or null), healthFailed, hbAgeS (seconds since the bot's last
- * heartbeat from the live stream or the health card, or null), critical: [{kind, text}] (core/alerts.js criticalLines)}.
+ * heartbeat from the live stream or the health card, or null), critical: [{kind, text}] (core/alerts.js criticalLines),
+ * failedKeys: names of the page's own data that could not be read right now (["순위 자료", ...])}.
  * -> {level: "ok" | "warn" | "bad" | "unknown", text, detail}. "ok" ONLY when the health card was read, says ok, no
- * critical line stands and the heartbeat is known and fresh: anything less never says 이상 없음.
+ * critical line stands, the heartbeat is known and fresh and nothing the page shows failed to load: anything less never
+ * says 이상 없음.
  */
-export function statusOf({health, healthFailed, hbAgeS, critical}) {
+export function statusOf({health, healthFailed, hbAgeS, critical, failedKeys}) {
   const lines = Array.isArray(critical) ? critical : [];
   if (lines.length) return {level: "bad", text: "문제 있음", detail: lines[0].text};
   if (!health) return {level: "unknown", text: healthFailed ? "상태 확인 못 함" : "확인 중", detail: healthFailed ? "불러오지 못함" : "불러오는 중"};
@@ -81,5 +83,7 @@ export function statusOf({health, healthFailed, hbAgeS, critical}) {
   if (health.level === "warn") return {level: "warn", text: "확인할 것 있음", detail: first};
   if (hbAgeS == null) return {level: "unknown", text: "봇 신호 확인 중", detail: "봇 생존 신호를 아직 받지 못했습니다"};
   if (hbAgeS > 120) return {level: "bad", text: "문제 있음", detail: "봇 생존 신호가 오래 없습니다"};
+  const miss = Array.isArray(failedKeys) ? failedKeys : [];
+  if (miss.length) return {level: "warn", text: "일부 자료를 못 받음", detail: `${miss.join(" · ")} 불러오지 못함 (봇 상태 카드는 정상)`};
   return {level: "ok", text: "이상 없음", detail: null};
 }

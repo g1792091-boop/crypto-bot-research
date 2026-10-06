@@ -36,9 +36,8 @@ export function bandLine(ctx) {
     h("span", {class: "term-bl"}, "실험 상황"), status, day, med, above, today, judged, appr);
 
   let bell = {n: null, failed: false, loaded: false};
-  const sep = (t) => h("span", {class: "term-bsep", "aria-hidden": "true"}, t);
   const state = (key) => { const m = store.meta(key); return {v: store.get(key), failed: !!(m && m.err)}; };
-  const dash = (why) => h("span", {class: "num"}, "—");
+  const dash = () => h("span", {class: "num"}, "—");
 
   function paintStatus() {
     const hs = state("health"), st = state("status");
@@ -47,7 +46,9 @@ export function bandLine(ctx) {
     if (hbAge == null && hs.v && hs.v.bot && hs.v.bot.ready && hs.v.bot.heartbeat_age_s != null) hbAge = Number(hs.v.bot.heartbeat_age_s);
     const crit = criticalLines({health: hs.v || null, alerts: (st.v && st.v.alerts) || [], trades: [], hb, streamOk: stream.state === "open",
       now: Date.now(), kindOf: () => null});
-    const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit});
+    // what the page itself could not read (순위 · 요약 · 알림 자료) is told too: the bot being fine is not "이상 없음" on a page that is blind
+    const failedKeys = [["board", "순위 자료"], ["summary", "요약 자료"], ["status", "알림 자료"]].filter(([k]) => state(k).failed).map(([, ko]) => ko);
+    const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit, failedKeys});
     status.className = `term-bc2 c-status ${s.level}`;
     put(status, h("i", {class: "term-bdot", "aria-hidden": "true"}), h("b", null, s.text),
       hbAge != null ? h("span", {class: "muted num"}, ` · 봇 신호 ${fmt.dur(hbAge)} 전`) : null);
