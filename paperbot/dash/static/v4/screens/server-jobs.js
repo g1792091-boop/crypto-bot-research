@@ -29,6 +29,7 @@ function lastOf(job, hl, sys) {
 function sideMark(job, fail, sys, now) {
   if (sys && sys.state === "off") return ui.pill("꺼짐", "warn", "타이머가 꺼져 있어 이 작업이 돌지 않습니다 (systemd)");
   if (sys && sys.state === "missing") return ui.pill("설치 안 됨", "thin", "서버에 이 타이머가 없습니다 (systemd)");
+  if (fail && fail.recovered_ts) return ui.pill("다시 돌려서 성공", "good", `실패 경고 ${String(fail.day).slice(5).replace("-", "/")} 뒤에 다시 돌아 성공했습니다 (systemd)`);
   if (fail) return ui.pill(`실패 경고 ${String(fail.day).slice(5).replace("-", "/")}`, now - fail.ts < 864e5 ? "bad" : "thin",
     "systemd가 이 작업의 실패를 알린 날 (그날 첫 번만)");
   if (sys && sys.ok === false) return ui.pill("지난번 실패", "bad", `마지막 실행 결과: ${sys.result}`);

@@ -282,8 +282,29 @@ def failalert_records(path: str = FAILALERT_DIR) -> list[dict]:
     return out
 
 
+def mark_recovered(fa: list, runner=None) -> list:
+    """``fa`` (failalert_records) with ``recovered_ts`` on each failure whose service has since finished successfully
+    (one ``systemctl show`` for the failed units: Result=success and ExecMainExitTimestamp after the warning). When
+    systemctl cannot answer (a test machine, a container) the records stay as they are."""
+    if not fa:
+        return fa
+    from .more import jobs as J
+    units = [f["unit"] if f["unit"].endswith(".service") else f["unit"] + ".service" for f in fa]
+    try:
+        got = J.show(units, "Id,Result,ExecMainExitTimestamp", runner)
+    except J.Unavailable:
+        return fa
+    out = []
+    for f, u in zip(fa, units):
+        sv = got.get(u) or {}
+        done = J.parse_ts(sv.get("ExecMainExitTimestamp"))
+        ok = sv.get("Result") == "success" and done is not None and done > int(f["ts"])
+        out.append({**f, "recovered_ts": done} if ok else f)
+    return out
+
+
 def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], liq_db: Optional[str],
-           now_ms: Optional[int] = None, failalert_dir: str = FAILALERT_DIR) -> dict:
+           now_ms: Optional[int] = None, failalert_dir: str = FAILALERT_DIR, jobs_runner=None) -> dict:
     """① One card: is everything alive and agreeing? Every part on its own (one missing part never hides the rest).
     ``problems`` / ``warnings``: plain Korean lines; ``level``: ok / warn / bad."""
     now = _now() if now_ms is None else int(now_ms)
@@ -409,11 +430,13 @@ def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], l
     out["checkpoint"] = {"ready": bool(cv.get("ready")), "date": cv.get("date"), "day": cv.get("day"),
                          "counts": cv.get("counts"), "next": summ.get("next_checkpoint"),
                          "run_day": summ.get("day"), "last_job": _checkpoint_job(checkpoint_db)}
-    # scheduled jobs that failed (failalert.py's own records, when this server keeps them)
-    fa = failalert_records(failalert_dir)
+    # scheduled jobs that failed (failalert.py's own records, when this server keeps them); a failure that the same job
+    # has since run past successfully (systemd's last result, e.g. the owners re-ran it by hand) is shown as fixed, not
+    # as a warning
+    fa = mark_recovered(failalert_records(failalert_dir), runner=jobs_runner)
     out["job_failures"] = fa
     for f in fa:
-        if now - f["ts"] < DAY_MS:
+        if now - f["ts"] < DAY_MS and not f.get("recovered_ts"):
             warnings.append(f"예약 작업 실패 경고: {f['job_ko']} ({f['day']})")
     out["problems"], out["warnings"] = problems[:20], warnings[:20]
     out["level"] = "bad" if problems else "warn" if warnings else "ok"
@@ -536,7 +559,7 @@ def alert_history(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[
         with rooms.ro(rooms.agents_db) as a:
             out["agents_tick"] = rooms._cursor_obj(a, rooms.R.TICK_CURSOR)
             out["agents_ai"] = rooms._ai_failing(a)
-    out["job_failures"] = failalert_records(failalert_dir)
+    out["job_failures"] = mark_recovered(failalert_records(failalert_dir))
     try:
         pa = rooms.price_alerts()
         out["price_alerts_fired"] = [{"id": a.get("id"), "symbol": a.get("symbol"), "direction": a.get("direction"),

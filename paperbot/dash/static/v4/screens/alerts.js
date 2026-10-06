@@ -109,7 +109,8 @@ export async function mount(el, ctx) {
   const tickEl = h("div", {class: "stack tight"});
   const failPg = ui.pager({size: 10, empty: "기록 없음 (이 서버에 실패 경고 기록이 없거나 읽을 수 없음)", row: (f) => h("div", {class: "server-row", role: "listitem"},
     h("div", {class: "body"}, h("b", null, f.job_ko || f.unit)), h("div", {class: "side-r"}, ui.pill(md(f.day), "warn")),
-    h("div", {class: "meta"}, h("span", null, `알린 시각 ${dayTime(f.ts)}`), h("span", {class: "mono"}, String(f.unit || ""))))});
+    h("div", {class: "meta"}, h("span", null, `알린 시각 ${dayTime(f.ts)}`),
+      f.recovered_ts ? h("span", {class: "up"}, `다시 돌려서 성공 ${dayTime(f.recovered_ts)}`) : null, h("span", {class: "mono"}, String(f.unit || ""))))});
   const cpPg = ui.pager({size: 10, empty: "아직 기록 없음 (판정 날에만 남깁니다)", row: (j) => h("div", {class: "server-row", role: "listitem"},
     h("div", {class: "body"}, ui.moreText(String(j.text || ""), 2)), h("div", {class: "side-r"}, h("span", {class: "t"}, dayTime(j.ts))))});
   panels.jobs.append(ui.card({plate: "에이전트 마지막 점검"}, tickEl),

@@ -112,8 +112,10 @@ export function tiles(hl, o = {}) {
       st: lq.age_s == null ? "none" : lq.age_s < 3600 ? "ok" : "warn"}));
   }
   if (hl) {
-    const jf = (hl.job_failures || []).filter((f) => now - f.ts < 864e5);
-    out.push(tile({k: "예약 작업", v: jf.length ? `실패 경고 ${fmt.int(jf.length)}` : "실패 경고 없음", s: jf.length ? jf.map((f) => f.job_ko).join(", ") : "지난 24시간",
+    const recent = (hl.job_failures || []).filter((f) => now - f.ts < 864e5);
+    const jf = recent.filter((f) => !f.recovered_ts), fixed = recent.filter((f) => f.recovered_ts);   // re-run and succeeded
+    out.push(tile({k: "예약 작업", v: jf.length ? `실패 경고 ${fmt.int(jf.length)}` : "실패 경고 없음",
+      s: jf.length ? jf.map((f) => f.job_ko).join(", ") : fixed.length ? `${fixed.map((f) => f.job_ko).join(", ")}: 다시 돌려서 성공` : "지난 24시간",
       st: jf.length ? "warn" : "ok"}));
   }
   return out;
