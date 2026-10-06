@@ -84,7 +84,8 @@ export function pnlPanel(ctx) {
       s("circle", {class: ["end", up ? "up" : "dn"], cx: X(end[0]).toFixed(1), cy: Y(end[1]).toFixed(1), r: 2.6}),
       s("text", {class: "ax", x: W - 42, y: Y(sr.hi) + 9}, short(sr.hi)),
       short(sr.lo) !== short(sr.hi) ? s("text", {class: "ax", x: W - 42, y: Y(sr.lo)}, short(sr.lo)) : null,
-      sr.hi > 0 && sr.lo < 0 ? s("text", {class: "ax", x: W - 42, y: Y(0) + 4}, "0") : null,
+      // the "0" label only where it does not sit on top of the high or low label (a line that ends close to zero)
+      sr.hi > 0 && sr.lo < 0 && Math.abs(Y(0) + 4 - (Y(sr.hi) + 9)) >= 12 && Math.abs(Y(0) + 4 - Y(sr.lo)) >= 12 ? s("text", {class: "ax", x: W - 42, y: Y(0) + 4}, "0") : null,
     ].filter(Boolean);
     // the bars: each bucket's realized P&L, centred on its time span; a hover rect over each carries the numbers
     const mx = Math.max(1, ...sr.bars.map((x) => Math.abs(x.pnl)));
