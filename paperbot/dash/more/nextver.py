@@ -317,6 +317,7 @@ def cantdo_view(agents_db: Optional[str], debate_db: Optional[str], limit: int =
     a = _ro(agents_db)
     try:
         cards = LI.view(a, None, 200) if a is not None else []
+        started = LI.exists(a)           # the queue's tables: made only once a source (owners, debate, disputes) is on
     finally:
         _close(a)
     for c in cards:
@@ -342,6 +343,8 @@ def cantdo_view(agents_db: Optional[str], debate_db: Optional[str], limit: int =
             try:
                 rows = d.execute("SELECT id, ts, question_ko, claim_ko, check_status, check_ko FROM debate_lab_ideas "
                                  "WHERE check_status IN ('cannot_express', 'bad_spec') ORDER BY id DESC LIMIT 200").fetchall()
+                # the idea factory has collected an idea (a classic debate.db holds only the empty table)
+                started = started or d.execute("SELECT 1 FROM debate_lab_ideas LIMIT 1").fetchone() is not None
             except Exception:  # noqa: BLE001  (no idea table yet: nothing from the debate)
                 rows = []
             for rid, ts, q, claim, st, ko in rows:
@@ -353,7 +356,9 @@ def cantdo_view(agents_db: Optional[str], debate_db: Optional[str], limit: int =
         _close(d)
     items.sort(key=lambda x: -(x.get("ts") or 0))
     tally = sorted(codes.values(), key=lambda r: -(r["none"] + r["approx"]))
-    return {"items": items[:limit], "total": len(items), "by_reason": tally, "debate": deb,
+    # started False: no source that collects such ideas has ever run (all off: the defaults); the screen says so instead
+    # of '0개' that reads like a finished count
+    return {"items": items[:limit], "total": len(items), "by_reason": tally, "debate": deb, "started": bool(started),
             "owner": sum(1 for x in items if x["source"] == "owner"), "note_ko": CANTDO_NOTE_KO}
 
 

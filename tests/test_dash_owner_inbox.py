@@ -249,11 +249,30 @@ def test_the_next_version_views_grade_every_candidate_and_read_only(env):
     cant = NV.cantdo_view(env["agents"], deb)
     srcs = sorted(x["source"] for x in cant["items"])
     assert srcs == ["debate", "owner"] and cant["debate"] == 1 and cant["owner"] == 1
+    assert cant["started"] is True                          # the queue ran (its tables) and the factory collected
     owner = next(x for x in cant["items"] if x["source"] == "owner")
     assert owner["reasons_ko"] == [LI.OWNER_REASON_KO["pattern"]] and owner["quote"] == "머리어깨 숏"
     tally = {r["code"]: (r["none"], r["approx"]) for r in cant["by_reason"]}
     assert tally == {"pattern": (1, 0), "param_off_grid": (0, 1)}
     assert _digest(env["agents"]) == before and _digest(deb) == dbefore
+
+
+def test_the_cantdo_tab_says_not_started_while_no_source_ever_ran(tmp_path):
+    """Every source off (the defaults): no queue tables, a classic debate.db with only the empty idea table. The
+    answer carries started False (the screen says 모으기 전), never a bare 0개 that reads like a finished count."""
+    agents = str(tmp_path / "agents3.db")
+    c = R.open_agents(agents)
+    R.ensure_rooms(c, ts=1)
+    c.close()
+    deb = tmp_path / "debate.db"
+    d = sqlite3.connect(str(deb))
+    DF.ensure(d)
+    d.close()
+    cant = NV.cantdo_view(agents, str(deb))
+    assert cant["started"] is False and cant["total"] == 0
+    assert NV.cantdo_view(None, None)["started"] is False
+    nv = _read("screens", "nextver.js")
+    assert "c.started === false" in nv and "아직 모으기 전입니다" in nv
 
 
 def test_the_routes_answer_behind_the_login(env):

@@ -102,6 +102,13 @@ function cantRow(it) {
 }
 
 function cantdo(c) {
+  // started false (the server's flag): no source that collects these ideas has run yet (owners' requests, the debate's
+  // idea factory, the queue: all off); never a '0개' that reads like a finished count
+  if (c.started === false && !(c.items || []).length) {
+    return [ui.card({plate: "연구실이 못 하는 아이디어", sub: "모으기 전"},
+      h("p", {class: "muted"}, "아직 모으기 전입니다: 두 분 시험 요청과 토론방 아이디어 공장(서버 설정)이 켜지면, 문법으로 옮기지 못한 아이디어가 여기에 모입니다."),
+      h("p", {class: "rk-note"}, c.note_ko || ""))];
+  }
   const pg = ui.pager({size: 10, row: cantRow, empty: "아직 문법으로 옮기지 못한 아이디어가 없습니다"});
   pg.set(c.items || []);
   const tally = c.by_reason || [];
