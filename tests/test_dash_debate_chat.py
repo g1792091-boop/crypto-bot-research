@@ -300,7 +300,7 @@ console.log(JSON.stringify({
 """)
     assert out["who"] == ["차트 분석가", "퀀트", "리스크 책임자", "시장 분석가", "심판"]
     assert out["sides"][0] == [["rk-side pro", "찬성"]] and out["sides"][1] == [["rk-side con", "반대"]]
-    assert out["sides"][4] == [["rk-side judge", "심판"]] and out["part"] == ["주장"]
+    assert out["sides"][4] == [["rk-side judge", "심판"]] and out["part"] == []           # the part: on its column only
     # each seat with the side the code gave it in this round (the chip after the count)
     assert out["strip"][:5] == ["차트 분석가1번 말함찬성", "리스크 책임자1번 말함찬성", "퀀트1번 말함반대", "시장 분석가1번 말함반대",
                                 "심판1번 말함심판"]

@@ -36,7 +36,7 @@ export function stageNote(idea) {
     return (obs ? `관찰 기간(${fmt.mmdd(obs - 1)}까지)이라 지금은 제안하지 않습니다. 기간 뒤 그때의 시험 수로 다시 판정해 ` : "제안은 그때의 시험 수로 다시 판정해 ")
       + "두 분께 올립니다 (두 분 확인 필요)";
   }
-  if (st === "failed") return idea.lab && idea.lab.failed && idea.lab.failed.length ? `떨어진 칸 ${idea.lab.failed.join("")}` : "관문 미달";
+  if (st === "failed") return idea.lab && idea.lab.result_ko ? "" : "관문 미달";   // the lab's own line names the checks
   if (st === "not_picked") return idea.queue_ko || "그날 몫에 들지 못해 시험하지 않았습니다 (시험 수에 넣지 않음)";
   if (st === "duplicate" || st === "near_duplicate" || st === "repeat") return idea.check_ko || "";
   if (["bad_spec", "cannot_express", "refused", "missing"].includes(st)) return `${idea.check_ko || ""} · 시험하지 않았고 시험 수에도 넣지 않았습니다`;

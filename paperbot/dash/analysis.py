@@ -1404,12 +1404,12 @@ def _f(x: Any) -> Optional[float]:
 
 def _pct_ko(x: Any) -> str:
     v = _f(x)
-    return "" if v is None else f"{v * 100:+.2f}%"
+    return "" if v is None else f"{v * 100:+.2f}%".replace("-", "−")         # the dashboard's minus sign (fmt.js)
 
 
 def _pp_ko(x: Any) -> str:
     v = _f(x)
-    return "" if v is None else f"{v * 100:+.2f}%p"
+    return "" if v is None else f"{v * 100:+.2f}%p".replace("-", "−")
 
 
 def _p_ko(x: Any) -> str:

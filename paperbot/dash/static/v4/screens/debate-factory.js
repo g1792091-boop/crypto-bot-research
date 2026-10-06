@@ -18,16 +18,17 @@ import {roundChat, partsOf, DEEP_PART_KO, castStrip, sidesLine} from "./debate-c
 
 const MARKS = ["①", "②", "③", "④", "⑤", "⑥"];
 const ENGINE_KO = {newlab: "새 매매법 5년 시험", labtest: "36개 고쳐 보기 5년 시험"};
-const n2 = (x) => x == null || !Number.isFinite(Number(x)) ? "—" : fmt.num(x, Number(x) % 1 ? 1 : 0);
+const n2 = (x) => x == null || !Number.isFinite(Number(x)) ? "—" : fmt.num(x, Number(x) % 1 ? 2 : 0);
 const usd4 = (x) => x == null || !Number.isFinite(Number(x)) ? "—" : `$${fmt.num(x, 4)}`;
-const share = (x) => x == null || !Number.isFinite(Number(x)) ? "—" : fmt.pct(x, 0, false);
+const share = (x) => x == null || !Number.isFinite(Number(x)) ? "—" : fmt.pct(x, Number(x) > 0 && Number(x) < 0.1 ? 1 : 0, false);
 
 /** One list row: when · engine · what it tests (code) · stage; tap: the whole card. */
 function ideaRow(it) {
   const region = h("div", {class: "db-fbody", hidden: true});
   const btn = h("button", {class: "db-frow", type: "button", "aria-expanded": "false"},
     h("time", {title: fmt.kst(it.ts)}, fmt.dayKey(it.ts) === fmt.dayKey(Date.now()) ? fmt.hm(it.ts) : fmt.mmdd(it.ts)),
-    h("span", {class: "db-fmain"}, h("b", null, it.description_ko || it.check_ko || "시험으로 옮기지 못함"),
+    // what the lab runs (code); an idea the code could not turn into a test: the 심판's own words, marked as quoted
+    h("span", {class: "db-fmain"}, h("b", null, it.description_ko || (it.claim_ko ? `“${it.claim_ko}”` : it.check_ko) || "시험으로 옮기지 못함"),
       h("small", null, [engineShort(it), it.question_kind_ko, it.round_kind === "deep" ? "깊은 토론" : ""].filter(Boolean).join(" · "))),
     stageChip(it), h("i", {class: "db-hchev", "aria-hidden": "true"}, "›"));
   btn.addEventListener("click", () => {
@@ -53,8 +54,7 @@ function recordBox(f) {
       h("div", {class: "db-tile"}, h("span", null, "5년 시험함"), h("b", {class: "num"}, fmt.int(r.tested || 0))),
       h("div", {class: "db-tile"}, h("span", null, "통과"), h("b", {class: "num"}, fmt.int(r.passed || 0))),
       h("div", {class: "db-tile"}, h("span", null, "아이디어 전체"), h("b", {class: "num"}, fmt.int(r.ideas || 0)))),
-    h("p", {class: "db-small"}, `토론방 아이디어 5년 시험 ${fmt.int(r.tested || 0)}개 · 통과 ${fmt.int(r.passed || 0)}개`
-      + (labLine ? ` · 연구실 전체 ${labLine}` : " · 연구실 전체 통과율 수집 전")),
+    h("p", {class: "db-small"}, labLine ? `연구실 전체 통과율 (기준이 되는 평소 비율): ${labLine}` : "연구실 전체 통과율: 수집 전"),
     r.settled ? [row("찬성", r.pro_right, r.pro_expected, "통과에 건 편"), row("반대", r.con_right, r.con_expected, "불통과에 건 편")]
       : h("p", {class: "db-small"}, "아직 결론 난 5년 시험이 없습니다 (시험이 끝나면 코드가 편을 채점합니다)"),
     r.con_check_graded ? h("p", {class: "db-small"}, `반대가 짚은 칸 적중 ${fmt.int(r.con_check_hits)}/${fmt.int(r.con_check_graded)}`

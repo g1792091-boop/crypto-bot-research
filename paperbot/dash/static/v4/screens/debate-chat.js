@@ -138,7 +138,7 @@ export function roundChat(round, o = {}) {
     // the bubble a turn answers: the latest earlier turn of that speaker
     let target = null;
     if (m.reply_to) for (let j = i - 1; j >= 0; j--) if (turns[j].speaker === m.reply_to) { target = j; break; }
-    const n = bubble(m, i, round, target == null ? null : () => jump(nodes[target]));
+    const n = bubble(m, i, round, target == null ? null : () => jump(nodes[target]), !!col);
     nodes.push(n);
     (col || list).append(n);
   });
@@ -157,7 +157,7 @@ export function roundChat(round, o = {}) {
   return list;
 }
 
-function bubble(m, i, round, onReply) {
+function bubble(m, i, round, onReply, inPart = false) {
   const c = castOf(m.speaker);
   const sc = STANCE_CLS[m.reply_stance];
   const re = m.reply_to ? h(onReply ? "button" : "span", {class: "db-re", type: onReply ? "button" : null, onclick: onReply || null,
@@ -167,7 +167,8 @@ function bubble(m, i, round, onReply) {
     h("div", {class: "db-mb"},
       // the seat's tag, the code's side chip and the deep debate's part, each word once (the 심판: one gold chip)
       h("div", {class: "db-mh"}, h("b", {class: "db-who"}, c.name), c.tag && c.tag !== m.side ? h("span", {class: "db-tag"}, c.tag) : null,
-        m.side ? sideChip(m.side) : null, m.part && m.part !== m.side ? h("span", {class: "db-tag db-part"}, m.part) : null,
+        // the deep debate's part: once, on the column's header when the turn sits in its part's column
+        m.side ? sideChip(m.side) : null, m.part && m.part !== m.side && !inPart ? h("span", {class: "db-tag db-part"}, m.part) : null,
         h("span", {class: "db-no"}, `${fmt.int(i + 1)}번째`), round && round.ts ? h("time", {title: fmt.kst(round.ts)}, fmt.hm(round.ts)) : null),
       h("div", {class: "db-bub"},
         re || sc ? h("div", {class: "db-reline"}, re, sc ? h("span", {class: ["db-st", sc]}, m.reply_stance) : null) : null,

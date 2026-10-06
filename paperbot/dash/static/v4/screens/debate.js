@@ -145,7 +145,10 @@ export async function mount(el, ctx) {
     // a factory round: the seats with the side the code gave each this round, and the sides in one line
     const sl = r.kind ? sidesLine(r) : null;
     castBox.replaceChildren(...[castStrip(r), sl].filter(Boolean));
-    startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
+    // the start line repeats the head's subject: a factory round's head already shows the question (and the sides line
+    // follows the seats), so only a classic round keeps it
+    if (r.kind) startLine.replaceChildren();
+    else startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
       h("time", null, fmt.hm(r.ts)));
     chatBox.replaceChildren(roundChat(r, {question: false}));
     if (fresh) motion.slideIn(chatBox);             // a new stored round arrived since the last paint

@@ -199,9 +199,14 @@
 [data-screen="debate"] .db-qk { color: var(--accent); font: 800 var(--t-xs)/1.4 var(--f-body); }
 [data-screen="debate"] .db-qh small { color: var(--muted); font-size: var(--t-2xs); }
 [data-screen="debate"] .db-qt { margin: 0; color: var(--ink); font: 700 var(--t-sm)/1.55 var(--f-body); overflow-wrap: anywhere; }
-/* the deep debate's parts: one column per call, side by side on a wide screen */
+/* the deep debate's parts: one column per call; where the conversation is wide enough, 1 주장 (찬성) and 2 반박 (반대)
+   face each other and 3 심판 spans both under them */
+[data-screen="debate"] .db-list { container: db-list / inline-size; }
 [data-screen="debate"] .db-parts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
-@media (min-width: 1400px) { [data-screen="debate"] .db-parts { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; } }
+@container db-list (min-width: 680px) {
+  [data-screen="debate"] .db-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  [data-screen="debate"] .db-partcol:nth-child(n + 3) { grid-column: 1 / -1; }
+}
 [data-screen="debate"] .db-partcol { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); }
 [data-screen="debate"] .db-partdiv { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--line-2);
   color: var(--ink-2); font: 400 var(--t-xs)/1.45 var(--f-body); }
