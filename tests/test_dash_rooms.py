@@ -894,7 +894,14 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
   chip: t(K.rightChip(w.roles[0])), nochip: t(K.rightChip({settled: 0, pending: 0})), room: t(K.roomSides(room)),
   noroom: t(K.roomSides({sides: null, disputes: []})), wait: t(K.labIntake(null)),
   queue: t(K.labIntake({items: [{source: "meeting", description_ko: "N17_KC_RSI 1h: 스킵", status: "tested",
-                                  status_ko: "시험함", detail: {test_number: 5}}], today: {meeting: {used: 1, limit: 3}}}))}));
+                                  status_ko: "시험함", detail: {test_number: 5}}], today: {meeting: {used: 1, limit: 3}}})),
+  real: t(K.labIntake({cards: [{source: "meeting", source_ko: "회의", description_ko: "N17_KC_RSI 1h: 스킵", status: "tested",
+                                status_ko: "시험함", detail: {engine: "labtest", n_trials: 4, threshold: 0.0125},
+                                result_ko: "복제 관문 불통과"}],
+                       today: {day: "2026-10-07", sources: {debate: {source_ko: "토론방", used: 0, limit: 1, waiting: 0},
+                                                            meeting: {source_ko: "회의", used: 1, limit: 3, waiting: 2},
+                                                            owner: {source_ko: "두 분", used: 0, limit: 0, waiting: 0}},
+                               blocked: null, blocked_ko: "이 서버에 5년 시험 자료(캐시)가 없어 대기열이 기다리는 중"}}))}));
 """)
     card = got["card"]
     assert "누가 맞았나" in card and "결론 난 다툼" in card and "공격 쪽이 이긴 비율" in card and "33%" in card
@@ -905,3 +912,8 @@ console.log(JSON.stringify({card: t(K.whoWasRightCard(w)), none: t(K.whoWasRight
     assert "편드는 직원" in got["room"] and "공격하는 직원" in got["room"] and "앞으로 40건 중 12건" in got["room"]
     assert "동전 던지기 50%" in got["room"] and got["noroom"] is None
     assert "수집 전" in got["wait"] and "회의" in got["queue"] and "5번째 시험" in got["queue"] and "회의 1/3" in got["queue"]
+    # the server's real shape (agents/labintake.py view / today): the quota per source under today.sources, the bar
+    # code computed (detail.threshold), the code's result line and why the queue waits
+    real = got["real"]
+    assert "오늘 몫: 토론방 0/1 · 회의 1/3 · 두 분 0/0" in real and "4번째 시험 · 기준 p<0.0125" in real
+    assert "복제 관문 불통과" in real and "대기열이 기다리는 중" in real

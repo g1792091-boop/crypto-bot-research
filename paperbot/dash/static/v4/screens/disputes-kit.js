@@ -123,20 +123,28 @@ export function roomSides(d) {
 export function labIntake(d) {
   if (!d || d.error) return h("section", {class: "rm-sec"}, h("h3", null, "5년 시험 대기열"),
     h("p", null, ui.notYet("수집 전", "시험 대기열이 아직 이 서버에 없습니다")));
-  const items = d.items || d.view || d.cards || [];
+  // the server's shape (agents/labintake.py view / today): {cards: [...], today: {sources: {debate|meeting|owner: {used,
+  // limit, waiting}}, blocked_ko}}; older probe shapes are still read
+  const items = d.cards || d.items || d.view || [];
   const today = d.today && typeof d.today === "object" ? d.today : null;
-  const quota = today ? Object.entries(today.by_source || today).filter(([, v]) => v && typeof v === "object" && v.limit != null)
-    .map(([k, v]) => `${SOURCE_KO[k] || k} ${fmt.int(v.used || 0)}/${fmt.int(v.limit)}`) : [];
+  const quota = today ? Object.entries(today.sources || today.by_source || today)
+    .filter(([, v]) => v && typeof v === "object" && v.limit != null)
+    .map(([k, v]) => `${SOURCE_KO[k] || v.source_ko || k} ${fmt.int(v.used || 0)}/${fmt.int(v.limit)}`) : [];
   const row = (it) => {
-    const det = it.detail || it.result || {};
-    const n = det.test_number ?? it.test_number;
+    const det = it.detail || {};
+    // the n-th test of its ledger and the bar code computed for it (a newlab test: its number in the lab; a 36 test:
+    // the room's test count); never a bar worked out here
+    const n = det.test_number ?? det.n_trials ?? it.test_number;
+    const thr = typeof det.threshold === "number" ? det.threshold : null;
     return h("div", {class: "rm-trow"},
-      h("span", null, ui.pill(SOURCE_KO[it.source] || it.source || "—", "thin"), " ", it.description_ko || ""),
+      h("span", null, ui.pill(SOURCE_KO[it.source] || it.source_ko || it.source || "—", "thin"), " ", it.description_ko || "",
+        it.result_ko ? h("small", {class: "muted"}, ` · ${it.result_ko}`) : null),
       h("span", {class: "row wrap"}, ui.pill(it.status_ko || it.status || "—", it.status === "tested" ? "accent" : "thin"),
-        n != null ? h("small", {class: "muted"}, `${fmt.int(n)}번째 시험 · 기준 p<0.05/${fmt.int(n)}`) : null));
+        n != null ? h("small", {class: "muted"}, `${fmt.int(n)}번째 시험` + (thr != null ? ` · 기준 p<${fmt.num(thr, 4)}` : "")) : null));
   };
   return h("section", {class: "rm-sec"}, h("h3", null, "5년 시험 대기열"),
     quota.length ? h("p", {class: "muted"}, `오늘 몫: ${quota.join(" · ")}`) : null,
+    today && today.blocked_ko ? h("p", {class: "muted"}, today.blocked_ko) : null,
     items.length ? items.slice(0, 5).map(row) : h("p", {class: "muted"}, "대기 중인 시험이 없습니다"),
     items.length > 5 ? ui.disclosure(`나머지 ${fmt.int(items.length - 5)}개`, items.slice(5, 20).map(row)) : null,
     h("p", {class: "rk-note"}, "연구원·토론방·회의 다툼·두 분이 낸 시험이 한 줄로 섭니다. 무엇을 시험할지는 코드가 정하고, 시험마다 그 장부의 시험 수에 들어가 통과 기준이 엄격해집니다."));
