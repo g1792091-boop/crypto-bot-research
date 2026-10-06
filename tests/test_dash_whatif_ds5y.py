@@ -236,6 +236,8 @@ def test_shadow_waiting_states(tmp_path):
     p = W.paper_scope(a, W.scope(None, None))
     assert p["base"] == {"trades": 0, "mean_eq": None} and p["variants"] == {}
     assert "paper3.db" in W.paper_all(str(tmp_path / "none.db"), dd, T0)["why"]
+    # the background cache keeps a not-ready answer 60 s only (an 'error'), a ready one for the report's 3 hours
+    assert W.paper_job(db, None, T0 + DAY)["error"] and "error" not in W.paper_job(db, dd, T0 + DAY)
 
 
 def test_synthetic_world_shadows_cover_every_variant(tmp_path):

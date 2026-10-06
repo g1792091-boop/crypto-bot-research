@@ -490,6 +490,16 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
     return out
 
 
+def paper_job(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
+    """``paper_all`` for the background cache: a not-ready answer (no daily3.db yet, an unreadable file) carries
+    ``error`` so ``Heavy`` keeps it 60 s only (dash/analysis.ERROR_TTL_S) instead of the report's 3 hours: the first
+    nightly report shows up on the page within a minute."""
+    out = paper_all(paper_db, daily_db, now_ms)
+    if not out.get("ready"):
+        out["error"] = out.get("why") or "그림자 기록 없음"
+    return out
+
+
 def paper_scope(allp: dict, sc: dict) -> dict:
     """The scope's part of ``paper_all`` (+ the coin flips of the scope's timeframe(s))."""
     if not allp.get("ready"):
@@ -526,7 +536,7 @@ def register(app, ctx) -> dict:
         sc = scope(strategy, tf)
         rk = report_key(ctx.daily_db)
         got = heavy.get(f"whatif-paper:{rk}", TTL_S,
-                        lambda: paper_all(ctx.db, ctx.daily_db, int(time.time() * 1000)), wait_s=WAIT_S)
+                        lambda: paper_job(ctx.db, ctx.daily_db, int(time.time() * 1000)), wait_s=WAIT_S)
         if got.get("pending"):
             return got
         return paper_scope(got, sc)
