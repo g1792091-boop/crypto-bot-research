@@ -99,19 +99,22 @@ export async function mount(el, ctx) {
     paintResults(!first);
     loadPaper();
   }
-  async function loadPaper() {
+  async function loadPaper(quiet) {
     const g = ++st.pgen;
-    st.P = null;
-    paintPaper();
+    if (!quiet) { st.P = null; paintPaper(); }     // the 10-minute refresh keeps the shown numbers until new ones come
     let P;
     try { P = await ctx.api(`/api/v4/whatif/paper${qs()}`); } catch (e) {
-      if (!ctx.alive() || g !== st.pgen) return;
+      if (!ctx.alive() || g !== st.pgen || (quiet && st.P && st.P.ready)) return;      // a failed refresh keeps the last numbers
       st.P = {ready: false, why: "그림자 기록을 불러오지 못했습니다", err: true};
       paintPaper(); paintCoin();
       return;
     }
     if (!ctx.alive() || g !== st.pgen) return;
-    if (P && P.pending) { st.P = {pending: true}; paintPaper(); ctx.timeout(() => { if (g === st.pgen) loadPaper(); }, 3000); return; }
+    if (P && P.pending) {
+      if (!quiet || !st.P || !st.P.ready) { st.P = {pending: true}; paintPaper(); }
+      ctx.timeout(() => { if (g === st.pgen) loadPaper(quiet); }, 3000);
+      return;
+    }
     st.P = P;
     paintPaper(); paintCoin();
   }
@@ -441,7 +444,7 @@ export async function mount(el, ctx) {
   }).catch(() => {});
   await load();
   // a new nightly report changes the shadows: ask again every 10 minutes (the server caches per report)
-  ctx.every(600000, () => loadPaper(), {now: false});
+  ctx.every(600000, () => loadPaper(true), {now: false});
 }
 
 export function update(params) { if (current) current(params); }
