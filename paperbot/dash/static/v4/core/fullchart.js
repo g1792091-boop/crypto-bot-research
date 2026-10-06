@@ -54,7 +54,8 @@ function enter(it) {
   it.hint = h("p", {class: "fc-hint", role: "note"}, h("span", {class: "fc-rot"}, "↻ 휴대폰을 가로로 돌리면 더 넓게 보입니다"),
     h("span", {class: "fc-esc"}, "Esc · f 또는 ✕ 로 닫기"));
   f.append(it.x, it.hint);
-  document.addEventListener("keydown", onKey);
+  // capture: before a chart deck's own Esc closes its open '선' menu (then this Esc only closes the menu)
+  document.addEventListener("keydown", onKey, true);
   document.addEventListener("fullscreenchange", onFs);
   window.addEventListener("hashchange", onRoute);
   // the browser's real full screen on top (not on an iPhone, where only video may; the CSS layer is enough there)
@@ -68,7 +69,7 @@ export function leave() {
   const it = cur;
   if (!it) return false;
   cur = null;
-  document.removeEventListener("keydown", onKey);
+  document.removeEventListener("keydown", onKey, true);
   document.removeEventListener("fullscreenchange", onFs);
   window.removeEventListener("hashchange", onRoute);
   if (it.frame) it.frame.classList.remove("fc-on");

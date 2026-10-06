@@ -100,7 +100,7 @@ export async function mount(el, ctx) {
     const head = h("div", {class: "cg-h"}, symSel, tfSel, ovSel, h("span", {class: "grow"}), h("span", {class: "cg-pxw"}, px, chg), fs);
     const root = h("section", {class: "cg-cell", "aria-label": `칸 ${i + 1}`, dataset: {i: String(i)}}, head, wrap, note);
     fs.bind(root);
-    const cell = {i, root, C: null, series: null, deck: null, last: null, loadTok: 0, relayAt: 0, dead: false, seenPos: null,
+    const cell = {i, root, C: null, series: null, deck: null, last: null, loadTok: 0, relayAt: 0, dead: false, seenPos: null, dataKey: "",
       get sym() { return cfg.cells[i].sym; }, get tf() { return cfg.cells[i].tf; }, get acct() { return cfg.cells[i].acct; }};
 
     function paintLegend(d) {
@@ -161,14 +161,16 @@ export async function mount(el, ctx) {
       const dec = priceDec(data.length ? data[data.length - 1].close : store.mark(sym));
       cell.series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
       cell.deck.setData(data);
+      cell.dataKey = `${sym}|${tf}`;                   // the bars on screen (a poll or a trade of another pair waits for them)
       cell.last = data[data.length - 1] || null;
       cell.relayAt = 0;
       paintLegend(cell.last);
       cell.deck.showRecent(cfg.layout === "3x3" ? 70 : 110, 8);
       drawLines();
     }
+    const fresh = () => cell.dataKey === `${cell.sym}|${cell.tf}`;
     function onCandles(rows) {                         // the poll's forming bar (and a new bar when one began)
-      if (!cell.series || !cell.last) return;
+      if (!cell.series || !cell.last || !fresh()) return;
       for (let x of rows || []) {
         if (x.time < cell.last.time) continue;
         if (x.time === cell.last.time && Date.now() - cell.relayAt < RELAY_FRESH_MS) {
@@ -180,7 +182,7 @@ export async function mount(el, ctx) {
     }
     function onTick(ev) {                              // a real relay trade of this coin inside the bar on screen
       const p = Number(ev.p), t = Number(ev.t), span = bars.TF_MS[cell.tf];
-      if (!cell.series || !cell.last || !Number.isFinite(p) || p <= 0 || !span) return;
+      if (!cell.series || !cell.last || !fresh() || !Number.isFinite(p) || p <= 0 || !span) return;
       const t0 = cell.last.time * 1000;
       if (!(t >= t0 && t < t0 + span)) return;
       const x = {...cell.last, close: p, high: Math.max(cell.last.high, p), low: Math.min(cell.last.low, p)};
