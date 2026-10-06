@@ -668,6 +668,10 @@ def lab_verdict(trial: Optional[dict]) -> dict:
         why = {"no_data": "시험 자료가 없어", "error": "시험 오류로", "described": "설명용 시험이라"}.get(st, "시험 결과가 없어")
         return {"status": "void", "winner": None, "line_ko": f"{why} 가릴 수 없음(무효)", "numbers": {}}
     P = result.get("periods") if isinstance(result.get("periods"), dict) else {}
+    if not (isinstance(P.get("1"), dict) and isinstance(P.get("2"), dict)):
+        # a finished run without its period table cannot answer the claim: void, never a default win for the advocate
+        return {"status": "void", "winner": None, "line_ko": "시험 결과에 1·2기간 숫자가 없어 가릴 수 없음(무효)",
+                "numbers": {}}
     p1, p2, p3 = (P.get(k) if isinstance(P.get(k), dict) else {} for k in ("1", "2", "3"))
 
     def num(row: dict, *keys: str) -> Optional[float]:

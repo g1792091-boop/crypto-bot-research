@@ -1488,8 +1488,12 @@ def check_analysis(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
              "proposal": _proposal(out, "proposal", given),
              "changes": _line(out.get("changes"), 500),
              "reply_to_owner": _line(out.get("reply_to_owner"), 800)}
-    if given.get("turn") == "revision" and isinstance(given.get("sides"), dict):
-        clean["concede"] = out.get("concede") is True          # sides on: the advocate gives in only with a real true
+    att = (given.get("this_round") or {}).get("attack") if isinstance(given.get("this_round"), dict) else None
+    if given.get("turn") == "revision" and isinstance(given.get("sides"), dict) and isinstance(att, dict) \
+            and isinstance(att.get("settle"), dict):
+        # sides on and an attack with a test to settle it: the advocate gives in only with a real true (no such attack
+        # -- given up, talk only, unreadable -- leaves nothing to concede or hold, and the room is not told 'held')
+        clean["concede"] = out.get("concede") is True
     return clean, problems
 
 

@@ -309,3 +309,16 @@ def test_the_owners_named_devils_advocate_answers_in_a_room_it_does_not_attack(w
     assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [(ROOM, "owner")]
     assert runner.roles() == [SPEC, ATT, "devils_advocate", SPEC]          # no early stop: the owners asked it
     assert runner.calls[2]["turn"] == "challenge" and out["rounds"][0]["calls"] == 4
+
+
+def test_without_an_attack_to_settle_the_final_answer_neither_concedes_nor_holds(world):
+    """The attacker gave up but the meeting went on (T1 was a hypothesis): the advocate's final answer has nothing to
+    concede or hold, so the room is not told '버팀 (코드가 시험으로 가림)' and no dispute opens."""
+    world.losses()
+    hyp = {"action": "hypothesis", "text": "추세 반대 진입 손실이 많음", "how_to_confirm": "다음 20건"}
+    runner = QueueRunner({SPEC: [analysis(hyp), final(NOTE, concede=True)], ATT: [attack("agree")]})
+    world.tick(runner, QUIET, policy=sides())
+    assert runner.roles() == [SPEC, ATT, SPEC] and disputes(world) == []
+    rev = next(m for m in world.messages() if m["kind"] == "revision")
+    assert "공격에 대해" not in rev["text"] and "concede" not in rev["data"]["answer"]
+    assert world.rounds()[-1]["decision"]["dispute"]["status"] == "gave_up"

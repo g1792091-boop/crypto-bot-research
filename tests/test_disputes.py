@@ -578,3 +578,10 @@ def test_the_sunday_line_never_pools_5_year_and_forward_shares(conn):
     line = DS.week_line(DS.week_summary(conn, T0, T0 + 2 * DAY))
     assert "5년 시험 0/1(0%)" in line and "앞으로 N건 1/1(100%, 동전 50%)" in line
     assert "실험 전체 공격 쪽 1/2" not in line                                 # never one pooled share
+
+
+def test_a_finished_run_without_its_period_table_is_void_never_the_advocates(conn):
+    for periods in ({}, {"1": _period(0.004, 0.01)}, {"2": _period(0.004, 0.01)}):
+        tid = _lab_trial(conn, LAB["test"], "failed", periods, ts=T0 + len(periods))
+        v = DS.lab_verdict(R.get_trial(conn, tid))
+        assert (v["status"], v["winner"]) == ("void", None) and "무효" in v["line_ko"]
