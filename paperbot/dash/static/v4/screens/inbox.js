@@ -54,7 +54,11 @@ export async function mount(el, ctx) {
     const pl = periodLine(d.period, d.now);
     top.replaceChildren(h("p", {class: ["ibx-period", pl.key || ""]}, pl.text));
     const kids = [];
-    if (!d.ready) kids.push(ui.card({plate: "결재함"}, h("p", {class: "muted"}, "에이전트 기록(agents3.db)을 아직 읽지 못했습니다. 잠시 뒤 다시 봅니다.")));
+    if (!d.ready) {
+      // the agents' record could not be read: no "기다리는 제안 없음" / "아직 결정된 제안이 없습니다" (that would be a guess)
+      body.replaceChildren(ui.card({plate: "결재함"}, h("p", {class: "muted"}, "에이전트 기록(agents3.db)을 아직 읽지 못했습니다. 기다리는 제안이 있는지 지금은 알 수 없습니다. 잠시 뒤 다시 봅니다.")));
+      return;
+    }
     const w = d.waiting || [];
     kids.push(h("div", {class: "row wrap ibx-count"}, ui.plate(w.length ? `두 분 결정을 기다리는 제안 ${fmt.int(w.length)}건` : "기다리는 제안 없음"),
       w.length ? null : h("span", {class: "muted"}, d.period && d.period.observing ? "관찰 기간이라 아직 제안이 오지 않습니다." : "에이전트가 새 계좌를 제안하면 여기에 카드가 생기고 위쪽 종에 숫자가 뜹니다.")));

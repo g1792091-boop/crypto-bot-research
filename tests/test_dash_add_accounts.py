@@ -479,3 +479,17 @@ def test_grid_mark_beside_the_count_and_reel_flip_words():
     assert re.search(r'`\$\{fmt\.int\(c\.n\)\}건`,\s*\n\s*o\.vsMark && !grey', kit)       # the mark inside the count line
     why = _read("account-why.js")
     assert "롱만 무작위로 들어간 계좌" in why and "롱만 무작위로 들어가도" in why
+
+
+def test_inbox_unread_agents_record_never_reads_as_no_proposals(tmp_path):
+    """agents3.db missing: the 결재함 answers ready false and the page says it cannot know (no '기다리는 제안 없음')."""
+    from paperbot.dash.app import Rooms
+    from paperbot.dash.more import approvals as AP
+    db = _paper(str(tmp_path / "paper3.db"))
+    v = AP.view(Rooms(str(tmp_path / "missing-agents3.db"), str(tmp_path / "inbox.db"), paper_db=db), db, now_ms=T0)
+    assert v["ready"] is False and v["waiting"] == [] and v["past"] == []
+    src = _read("inbox.js")
+    i = src.index("if (!d.ready) {")
+    block = src[i:src.index("const w = d.waiting", i)]
+    shown = block[block.index("body.replaceChildren("):]
+    assert "return;" in shown and "알 수 없습니다" in shown and "없음" not in shown
