@@ -43,7 +43,7 @@ function steps() {
 
 export async function mount(el, ctx) {
   ctx.setTitle("30일 판정");
-  const st = {summary: null, board: null, ck: null, mode: null, filter: "judged", vd: null, asked: null};
+  const st = {summary: null, board: null, ck: null, mode: null, filter: "judged", vd: null, asked: null, timed: null, kicked: null};
   const head = ui.screenHead("30일 판정", "계좌마다 동전 봇과 비교해 합격·불합격을 정하는 날");
   const body = h("div", {class: "ck-body"});
   el.append(head, pixelRoad(ctx, {card: true}), body);         // the 30-day road (road-kit.js, wave 3)
@@ -128,8 +128,17 @@ export async function mount(el, ctx) {
     dtext.textContent = c.passed_ko || "";
     when.textContent = vday.whenKo(c);
     const ms = vday.msLeft(c, now);
+    // 09:00 itself: the summary is asked right then (a timer set within the last hour, and once more when the minute
+    // tick finds the time passed), so the page turns to the verdict morning at once, not up to a minute later
+    const reached = !c.due && c.ts && ms === 0;
+    if (!c.due && c.ts && ms > 0 && ms <= 3600000 && st.timed !== c.ts) {
+      st.timed = c.ts;
+      ctx.timeout(() => { renderCountdown(); ctx.store.refresh("summary").catch(() => {}); }, ms + 3000);
+    }
+    if (reached && st.kicked !== c.ts) { st.kicked = c.ts; ctx.store.refresh("summary").catch(() => {}); }
     left.textContent = c.state === "ended" ? "180일 실험이 끝나 더 이상 판정이 없습니다"
-      : js ? (js.rerun ? "오류 뒤 다시 계산 중" : `판정 작업이 ${js.ko}`) : c.due ? (c.state_ko || "") : `정확히 ${vday.leftWords(ms)} 남음`;
+      : js ? (js.rerun ? "오류 뒤 다시 계산 중" : `판정 작업이 ${js.ko}`) : c.due ? (c.state_ko || "")
+      : reached ? "판정 시각입니다 · 확인 중" : `정확히 ${vday.leftWords(ms)} 남음`;
     const p = c.due ? 100 : Math.max(0, Math.min(100, c.n / c.of * 100));
     dprog.firstChild.style.setProperty("--p", p + "%");
     dprog.setAttribute("aria-valuemax", String(c.of)); dprog.setAttribute("aria-valuenow", String(c.due ? c.of : c.n));

@@ -260,3 +260,11 @@ def test_the_machine_card_before_the_first_rehearsal_is_not_a_warning():
     assert V.machine({"state": "missing", "runs": []}, no_rh, c)["level"] == "warn"
     js = open(os.path.join(V4, "screens", "checkpoint-machine.js"), encoding="utf-8").read()
     assert 'wait: ["첫 연습 전", "thin"]' in js
+
+
+def test_the_verdict_page_asks_the_summary_at_0900_itself():
+    """The summary is polled every minute; at 09:00 the page asks it right then (a timer within the last hour, and the
+    minute tick when it finds the time passed), never '정확히 0초 남음' for up to a minute."""
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert "ms <= 3600000 && st.timed !== c.ts" in js and "ctx.timeout(() => { renderCountdown(); ctx.store.refresh(\"summary\")" in js
+    assert '"판정 시각입니다 · 확인 중"' in js and "st.kicked !== c.ts" in js
