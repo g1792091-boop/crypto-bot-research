@@ -465,6 +465,12 @@ html[data-text="lg"] .term-mine .term-phs, html[data-text="xl"] .term-mine .term
 @media (min-width: 1200px) and (min-height: 640px) {
   html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: auto minmax(0, 1fr) calc(236px * var(--ts)); }
 }
+/* a short window with bigger type (and a chart head that wrapped to keep every timeframe button, term-declutter):
+   the table keeps the short-window height and the chart's key line goes, so the chart keeps its room */
+@media (min-width: 1200px) and (max-height: 819px) {
+  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: auto minmax(0, 1fr) 204px; }
+  html[data-text="lg"] .term-ckey, html[data-text="xl"] .term-ckey { display: none; }
+}
 @media (min-width: 1200px) and (max-width: 1599px) {
   /* bigger type below 1600 px: the same compact heads as a 1280 px window at 보통 */
   html[data-text="lg"] .term-ut.n, html[data-text="xl"] .term-ut.n,
