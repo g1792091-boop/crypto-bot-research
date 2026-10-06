@@ -346,11 +346,11 @@ SERVER_NOT_USED = {
     "/api/agents/feed": "no room_id / round_id / speaker name yet: the console is built from /api/office + room "
                         "messages (CONTRACT.md NEEDS SERVER #3)",
     "/api/login": "the login page (/login) posts it, not the dashboard",
-    "/api/lab/intake": "the lab intake queue (agents/labintake.py) is off until its settings are on; its cards come with "
-                       "the debate factory card and the lab room's queue panel (ideafactory steps 6 and 9)",
 }
 # Paths the new UI probes before the server has them (it shows '수집 전' on a 404): CONTRACT.md NEEDS SERVER.
-NEEDS_SERVER: dict = {}       # /api/v4/server (#4) and /api/v4/curves (#2) are on the server now
+# (/api/v4/server #4 and /api/v4/curves #2 are on the server now; so is /api/lab/intake, read by rooms-side.js through
+# disputes-kit.js labIntake since the shared queue and the disputes boards were merged)
+NEEDS_SERVER: dict = {}
 
 
 def test_every_old_ui_route_is_still_used_or_listed_as_not_needed():

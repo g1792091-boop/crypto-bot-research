@@ -1912,7 +1912,23 @@ class Rooms:
             if cands:      # written together (same time); several when a capped proposal was made again
                 p = min(cands, key=lambda p: (abs(int(p.get("ts") or 0) - int(t.get("ts") or 0)), int(p["id"])))
                 t["proposal_id"], t["proposal_status"] = int(p["id"]), p.get("effective_status") or p.get("status")
+        # the room's sides and disputes (design #102 C, agents/disputes.py): seats only once the agents wrote them
+        # (sides on), disputes whenever there are some
+        d = self.disputes(strategy, room_id, None, 10)
+        out["sides"] = d["seats"]
+        out["disputes"] = d["disputes"]
         return out
+
+    def disputes(self, strategy: Optional[str], room_id: Optional[str], status: Optional[str], limit: int = 50) -> dict:
+        """Disputes for a room / strategy (newest first, code text plus the model's claim as a quote), the seats of the
+        strategy when sides are on, and the base rates every score is read against (agents3.db and paper3.db read-only)."""
+        from ..agents import disputes as DS
+        strat = strategy or (self.R.room_strategy(room_id) if room_id else None)
+        with self.ro(self.agents_db) as a, self.ro(self.paper_db) as p:
+            rows = DS.list_rows(a, strategy=strategy, room=room_id, status=status, limit=limit, paper_ro=p)
+            seats = DS.room_seats(a, strat) if strat else None
+            rates = DS.board(a, turns=False)["base_rates"]
+        return {"disputes": rows, "seats": seats, "base_rates": rates, "coin_flip": 0.5, "note": DS.BASE_NOTE_KO}
 
     def author(self, body: dict) -> str:
         """The signer of an owner write: one of the configured owner names, else nobody in particular."""
@@ -2824,6 +2840,15 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/trials")
     def get_trials(strategy: Optional[str] = None, room_id: Optional[str] = None, limit: int = 50):
         return rooms.trials(strategy or None, room_id or None, limit)
+
+    @app.get("/api/disputes")
+    def get_disputes(strategy: Optional[str] = None, room: Optional[str] = None, status: Optional[str] = None,
+                     limit: int = 50):
+        """Who was right (design #102 C): disputes newest first, read-only (agents/disputes.py list_rows)."""
+        from ..agents import disputes as DS
+        if status and status not in DS.STATUSES:
+            raise HTTPException(400, "unknown status")
+        return rooms.disputes(strategy or None, room or None, status or None, min(max(int(limit), 1), 500))
 
     @app.get("/api/proposals")
     def get_proposals(status: Optional[str] = None, strategy: Optional[str] = None, room_id: Optional[str] = None,

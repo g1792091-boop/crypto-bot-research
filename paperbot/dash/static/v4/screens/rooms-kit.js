@@ -280,14 +280,19 @@ export function markSeen(roomId, lastId) {
 /**
  * Sides are assigned by code, never chosen by the model: the 24-hour debate says 찬성 / 반대 / 심판, a strategy room
  * says 편드는 직원 / 공격하는 직원 ({room: true}). The same colours everywhere (green, red, gold), so a side reads the same
- * in the debate chat and in the rooms. Accepts "pro" | "con" | "judge" or the Korean word; anything else: null.
+ * in the debate chat and in the rooms (the one side chip: disputes-kit.js's room seats use it too). Accepts "pro" |
+ * "con" | "judge", the disputes' "advocate" | "attacker" (room words unless {room: false}) or the Korean word;
+ * anything else: null.
  */
 export const SIDE_KO = {pro: ["찬성", "편드는 직원"], con: ["반대", "공격하는 직원"], judge: ["심판", "심판"]};
-const SIDE_KEY = {"찬성": "pro", "반대": "con", "심판": "judge", "편드는 직원": "pro", "공격하는 직원": "con"};
+const SIDE_KEY = {"찬성": "pro", "반대": "con", "심판": "judge", "편드는 직원": "pro", "공격하는 직원": "con",
+  advocate: "pro", attacker: "con"};
+const ROOM_SIDE = new Set(["편드는 직원", "공격하는 직원", "advocate", "attacker"]);
 export function sideChip(side, o = {}) {
   const k = SIDE_KO[side] ? side : SIDE_KEY[side];
   if (!k) return null;
-  return h("span", {class: ["rk-side", k], title: "코드가 정한 편 (자기 생각과 달라도 맡은 편을 변호)"}, SIDE_KO[k][o.room ? 1 : 0]);
+  const room = o.room ?? ROOM_SIDE.has(side);
+  return h("span", {class: ["rk-side", k], title: "코드가 정한 편 (자기 생각과 달라도 맡은 편을 변호)"}, SIDE_KO[k][room ? 1 : 0]);
 }
 /** The lab intake queue (/api/lab/intake, agents/labintake.py): a row's status and its source, as the server names them.
  * Never a pass/fail colour: the result is the code's own line (result_ko). */

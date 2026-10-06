@@ -152,3 +152,11 @@
   [data-screen="digest"] .db2-rate { grid-column: 4; grid-row: 1; }
   [data-screen="digest"] .db2-hyp { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 누가 맞았나 (design 102 C, disputes-kit.js): the staff board's card (both skins: tokens only) and the chip on a staff
+   row; a long claim or code line wraps inside the row on a phone */
+[data-screen="digest"] .dg-wr .dg-wrh { margin: 6px 0 0; font-size: var(--t-sm); color: var(--ink-2); }
+[data-screen="digest"] .dg-wr .meta span { min-width: 0; overflow-wrap: anywhere; }
+[data-screen="digest"] .dg-wr .dg-wrres { grid-template-columns: auto minmax(0, 1fr) auto; }
+[data-screen="digest"] .dg-wr .dg-wrres .ret { font-size: var(--t-xs); }
+[data-screen="digest"] .dg-wrchip { display: inline-flex; align-items: center; gap: 4px; }
