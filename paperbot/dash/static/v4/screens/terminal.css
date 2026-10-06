@@ -1,3 +1,4 @@
+@import url("chart-vp.css");
 /* 터미널 (#/terminal): the PC one-screen view. term v2 (owners 10/06, the HelloQuant reference: "읽기 편하게"): one
    calm top line, dense single-line lists with a ratio bar under each, the chart given the room, a plain right column.
    Charcoal panels with a thin teal edge light (brighter on hover / focus), monospace digits, teal / pink only for up /

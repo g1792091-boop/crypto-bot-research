@@ -38,6 +38,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     (a7kit: the four views' shared helpers, not a route module)
     whatiflab  만약 실험실 (#/whatif): 시험한 설정만 고르는 손절·익절·잠금·시간·레버리지, 5년 결과 + 밤 그림자 (기존 36만)
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
+    vplevels   봇 매물대: 봇이 쓰는 매물 최다 가격 · 매물대 위/아래 끝 (차트·터미널의 매물대 겹침선과 비교, 읽기만)
 """
 from __future__ import annotations
 
@@ -63,6 +64,7 @@ MODULES += ("combo",)                          # combo-paper: 조합 성과 (합
 MODULES += ("combo5y",)                        # combo-5y: 5년 조합 시험 + 5년 월별 (committed JSON)
 MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수치 · 강제청산 직후 · 들고 있었다면 · GH Coin 방향
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
+MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물대 (POC / VAH / VAL, kinds 51-53) for the chart overlay
 
 
 def register_all(app, **kw) -> dict:

@@ -20,6 +20,7 @@ import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, cand
 import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
+import {vpAttach, vpPrepare} from "./chart-vp.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -44,9 +45,10 @@ export function termChart(ctx, st, onTf) {
   const tip = h("div", {class: "term-tip", hidden: true, role: "tooltip"});
   const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip);
   const keyLine = h("div", {class: "term-ckey"});
+  const vpHost = h("div", {class: "vp-host"});             // 매물대's legend row (screens/chart-vp.js), filled once the chart exists
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
-  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, vpHost, keyLine);
   const moreA = el.head.querySelector(".term-more");
 
   let C = null, series = null, deck = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;
@@ -212,8 +214,10 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"], defaults: {sr: false},
+      vpPrepare("term", false);                           // 매물대 is opt-in here (the declutter); a device with saved choices starts with it off too
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], defaults: {sr: false, vp: false},
         sym: () => st.sym, legend});
+      vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, sym: () => st.sym, tf: () => st.tf});
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);

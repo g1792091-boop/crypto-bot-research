@@ -18,6 +18,7 @@ import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
+import {vpAttach, vpPrepare} from "./chart-vp.js";
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
   "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};
@@ -73,6 +74,7 @@ export async function mount(el, ctx) {
   const legend = h("div", {class: "chart-legend num"});
   const box = h("div", {class: "chart-box"});
   const wrap = h("div", {class: "chart-wrap"}, box, legend);
+  const vpHost = h("div", {class: "vp-host"});             // 매물대's legend row (screens/chart-vp.js), filled once the chart exists
   const acctSel = h("select", {class: "select chart-acct", "aria-label": "진입·청산을 볼 계좌"});
   acctSel.addEventListener("change", () => { st.acct = acctSel.value; st.acctData = null; reflectUrl(); drawAccount(); });
   const toggleBtns = TOGGLES.map(([k, label]) => {
@@ -106,7 +108,7 @@ export async function mount(el, ctx) {
   const viewSeg = ui.seg([{id: "bot", label: "우리 차트"}, {id: "tv", label: "거래소 차트", title: "트레이딩뷰 화면 (바깥 사이트)"}], "bot",
     (v) => setView(v), {label: "차트 종류"});
   viewSeg.classList.add("chart-views");
-  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, fxBar, wrap, tv.el,
+  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, fxBar, wrap, vpHost, tv.el,
     h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
     ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
   const flowCard = coinFlowCard(ctx, st.sym);           // 이 코인 시장 지표 (flow.db + liq.db, /api/v4/flowlive)
@@ -120,8 +122,10 @@ export async function mount(el, ctx) {
     C = await makeChart(box, {timeScale: {rightOffset: 26}});
     ctx.track(C.dispose);
     series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineStyle: 2, priceLineWidth: 1});
-    deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol"],
-      defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null, sym: () => st.sym, legend});
+    vpPrepare("chart", !narrow());                      // 매물대 starts on for a PC window (not a phone); a device with saved choices too
+    deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"],
+      defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false, vp: false} : {vp: true}, sym: () => st.sym, legend});
+    vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "chart", host: vpHost, sym: () => st.sym, tf: () => st.tf});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
