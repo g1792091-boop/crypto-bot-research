@@ -125,8 +125,9 @@ function card(ctx, c, onDecided, confirm) {
         }
       });
       acts = h("div", {class: "rm-confirm"},
-        h("p", null, run ? "근사로 옮긴 그대로 5년 시험을 할까요? 시험하면 새 매매법 시험 수에 들어가 모든 시험의 통과 기준이 조금 엄격해집니다."
-          : "이 요청을 그만둘까요? 시험하지 않고 시험 수에도 넣지 않습니다."),
+        h("p", null, !run ? "이 요청을 그만둘까요? 시험하지 않고 시험 수에도 넣지 않습니다."
+          : c.engine === "labtest" ? "근사로 옮긴 그대로 5년 시험을 할까요? 시험하면 그 매매법 방의 시험 수에 들어가 그 방의 통과 기준이 조금 엄격해집니다."
+            : "근사로 옮긴 그대로 5년 시험을 할까요? 시험하면 새 매매법 시험 수에 들어가 모든 시험의 통과 기준이 조금 엄격해집니다."),
         h("div", {class: "row wrap"}, go, h("button", {class: "btn-line", type: "button", onclick: () => { confirm.id = null; onDecided(null); }}, "취소")), err);
     } else {
       const ask = (dec) => { confirm.id = c.id; confirm.dec = dec; onDecided(null); };
