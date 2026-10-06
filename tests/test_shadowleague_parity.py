@@ -239,27 +239,31 @@ def test_exit_fixed_batch_equals_exit_trade_bit_for_bit():
 PRE = os.path.join(ROOT, "data", "pre2021")
 
 
-def _real(path: str, n: int) -> dict:
+def _real(path: str, n: int, skip: int = 0) -> dict:
     df = pd.read_csv(path)
     df["ts"] = pd.to_datetime(df["ts"], utc=True)
-    df = df.sort_values("ts").drop_duplicates("ts").reset_index(drop=True).iloc[:n]
+    df = df.sort_values("ts").drop_duplicates("ts").reset_index(drop=True).iloc[skip:skip + n]
     return {"o": df["open"].to_numpy(float), "h": df["high"].to_numpy(float), "l": df["low"].to_numpy(float),
             "c": df["close"].to_numpy(float), "v": df["volume"].to_numpy(float)}
 
 
 REAL = [(os.path.join(PRE, "btcusd-1h.csv.gz"), "1h", 6000), (os.path.join(PRE, "ethusd-15m.csv.gz"), "15m", 5000),
-        (os.path.join(PRE, "solusd-4h.csv.gz"), "4h", 3000)]
+        (os.path.join(PRE, "solusd-4h.csv.gz"), "4h", 3000),
+        # other coins and later stretches than the three above (a reviewer's addition)
+        (os.path.join(PRE, "dogeusd-1h.csv.gz"), "1h", 6000, 3000), (os.path.join(PRE, "ltcusd-15m.csv.gz"), "15m", 5000, 20000),
+        (os.path.join(PRE, "bchusd-4h.csv.gz"), "4h", 3000, 0)]
 _bd = os.environ.get("BINANCE_DIR")
 if _bd:
     REAL.append((os.path.join(_bd, "bars", "btcusd-1h.csv.gz"), "1h", 4000))
 
 
 @needs_original
-@pytest.mark.parametrize("path,tf,n", REAL, ids=[os.path.basename(p[0]) for p in REAL])
-def test_the_vendored_detector_equals_the_original_on_real_bars(path, tf, n):
+@pytest.mark.parametrize("path,tf,n,skip", [(p + (0,) if len(p) == 3 else p) for p in REAL],
+                         ids=[os.path.basename(p[0]) + (f"+{p[3]}" if len(p) > 3 and p[3] else "") for p in REAL])
+def test_the_vendored_detector_equals_the_original_on_real_bars(path, tf, n, skip):
     if not os.path.exists(path):
         pytest.skip(f"{path} is not on this machine")
-    a = _real(path, n) if "pre2021" in path else None
+    a = _real(path, n, skip) if "pre2021" in path else None
     if a is None:                                                  # the study's own loader for the 2021-2026 bar files
         L = SO.load_original().env()["L"]
         df = L.read_ohlcv(path).iloc[:n]
