@@ -11,7 +11,7 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
 function ensureCss() {
   if (document.querySelector("link[data-up-kit]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/server-uptime.css", dataset: {upKit: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("server-uptime.css", import.meta.url).href, dataset: {upKit: "1"}}));
 }
 
 const dayLabel = (ts) => { const k = new Date(ts + 9 * 3600000); return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${WD[k.getUTCDay()]}`; };

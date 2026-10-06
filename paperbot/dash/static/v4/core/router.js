@@ -16,7 +16,8 @@ export function loadCss(name) {
   cssLoaded.add(name);
   return new Promise((ok) => {
     const l = document.createElement("link");
-    l.rel = "stylesheet"; l.href = `/static/v4/screens/${name}.css`;
+    // relative to this module: the page's own versioned folder (/static/v-<ver>/v4/, dash/assets.py), kept for a year
+    l.rel = "stylesheet"; l.href = new URL(`../screens/${name}.css`, import.meta.url).href;
     l.onload = () => ok(); l.onerror = () => ok();         // a screen without its own css still works
     document.head.appendChild(l);
   });

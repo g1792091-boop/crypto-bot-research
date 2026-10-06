@@ -17,7 +17,7 @@ const HONEST = "레이더는 매매법 코드가 방금 닫힌 봉에서 자기 
 /** Load this piece's stylesheet once (the router loads only the screen's own CSS). */
 export function radarCss() {
   if (typeof document === "undefined" || document.querySelector("link[data-radar-css]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/strategies-radar.css", dataset: {radarCss: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("strategies-radar.css", import.meta.url).href, dataset: {radarCss: "1"}}));
 }
 
 // ---------------------------------------------------------------- pure logic (tests/test_dash_fill_radar.py runs these in node)

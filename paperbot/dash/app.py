@@ -53,8 +53,9 @@ import urllib.request
 from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+
+from .assets import REVALIDATE, Assets, asset_files
 
 from ..config import (DS200_FAMILY, FIVE_M_MAX_DELAY_MS, REEL_NAME, REEL_TF, V3_TRADE_TFS, V4_ACCOUNTS, V4_GROUPS,
                       v4_tfs_of)
@@ -2463,6 +2464,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     warm_imports()
     app = FastAPI(title="paper v4", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(GZipExceptStream, minimum_size=GZIP_MIN_BYTES)
+    # the page's code files by content hash (assets.py): versioned addresses, a year in the browser, the '새 버전' chip
+    assets = app.state.assets = Assets(STATIC)
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
                   owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
@@ -2482,7 +2485,13 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             # back to the same page after logging in (login.html follows ?next=, same-origin paths only)
             return RedirectResponse(login_redirect(path, req.url.query))
         resp = await call_next(req)
-        resp.headers["Cache-Control"] = "no-store"
+        # the page's code files keep what the /static mount chose (assets.py: a year under /static/v-<ver>/, else
+        # revalidated with an ETag); pages and every API answer are never stored
+        if path.startswith("/static/") and not path.endswith((".html", "/")):
+            if "cache-control" not in resp.headers:
+                resp.headers["Cache-Control"] = REVALIDATE
+        else:
+            resp.headers["Cache-Control"] = "no-store"
         return resp
 
     @app.middleware("http")
@@ -2521,12 +2530,12 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/")
     def index():
-        """The paper v4 dashboard (static/v4/index.html; its files load from /static/v4/)."""
-        return FileResponse(V4_INDEX)
+        """The paper v4 dashboard (static/v4/index.html; its files load from /static/v-<ver>/v4/, assets.py)."""
+        return HTMLResponse(assets.index_html())
 
     @app.get("/v4")
     def index_v4():
-        return FileResponse(V4_INDEX)
+        return HTMLResponse(assets.index_html())
 
     @app.get("/v3")
     def index_v3():
@@ -3146,5 +3155,5 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     app.state.more = more.register_all(app, data=data, rooms=rooms, db=db, daily_db=daily_db, agents_db=agents_db,
                                        checkpoint_db=checkpoint_db, candles=candles, frames=frames)
 
-    app.mount("/static", StaticFiles(directory=STATIC), name="static")
+    app.mount("/static", asset_files(STATIC, assets), name="static")
     return app

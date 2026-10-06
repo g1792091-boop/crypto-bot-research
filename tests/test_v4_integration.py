@@ -252,7 +252,11 @@ def test_get_root_with_a_session_serves_the_v4_shell(tmp_path):
     assert c.post("/api/login", json={"password": "pw-integration"}).status_code == 200
     r = c.get("/")
     v4 = (PKG / "dash" / "static" / "v4" / "index.html").read_text(encoding="utf-8")
-    assert r.status_code == 200 and r.text == v4 and "<title>Paper v4</title>" in r.text
+    # the file itself, its own addresses under the content version (dash/assets.py: /static/v-<ver>/v4/..., the version
+    # meta and the boot modulepreloads added)
+    ver = re.search(r'<meta name="pb-ver" content="([0-9a-f]{10})">', r.text).group(1)
+    plain = re.sub(r'<meta name="pb-ver" content="[0-9a-f]+">\n|<link rel="modulepreload" href="[^"]+">\n', "", r.text)
+    assert r.status_code == 200 and plain == v4.replace('"/static/v4/', f'"/static/v-{ver}/v4/') and "<title>Paper v4</title>" in r.text
     old = c.get("/v3")
     assert old.status_code == 200 and old.text != v4
 
