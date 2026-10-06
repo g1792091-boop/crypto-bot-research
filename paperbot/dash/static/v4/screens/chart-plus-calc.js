@@ -57,10 +57,11 @@ export function priceRows(cells, tick, a, z, yOf, rowPx, height) {
  * liquidation price on that path is reached, the nearer one to the mark first (that one closes it, the other never
  * happens). A stopped position books side * qty * (stop - entry), a liquidated one loses its whole margin, the others
  * are valued at P. Marks only, before the exit fee and slippage: arithmetic on the open positions, not a forecast.
- * -> {n, stops, locks, liqs, open, countOnly (positions that are counted without money), pnl (money ones), nMoney}
+ * -> {n, stops, locks, liqs, open, both (positions whose stop AND liquidation price both lie on the path: only the nearer
+ *    one counts), countOnly (positions that are counted without money), pnl (money ones), nMoney}
  */
 export function whatIf(items, mark, P) {
-  const out = {n: 0, stops: 0, locks: 0, liqs: 0, open: 0, countOnly: 0, pnl: 0, nMoney: 0};
+  const out = {n: 0, stops: 0, locks: 0, liqs: 0, open: 0, both: 0, countOnly: 0, pnl: 0, nMoney: 0};
   if (!(mark > 0) || !(P > 0)) return out;
   const lo = Math.min(mark, P), hi = Math.max(mark, P);
   const on = (x) => x != null && Number.isFinite(x) && x >= lo && x <= hi && x !== mark;
@@ -71,7 +72,7 @@ export function whatIf(items, mark, P) {
     const adverse = (x) => x != null && (it.side > 0 ? x < mark : x > mark);
     const sHit = adverse(it.stop) && on(it.stop), lHit = adverse(it.liq) && on(it.liq);
     let kind = "open", at = P;
-    if (sHit && lHit) kind = Math.abs(it.stop - mark) <= Math.abs(it.liq - mark) ? "stop" : "liq";
+    if (sHit && lHit) { kind = Math.abs(it.stop - mark) <= Math.abs(it.liq - mark) ? "stop" : "liq"; out.both++; }
     else if (sHit) kind = "stop";
     else if (lHit) kind = "liq";
     if (kind === "stop") { out.stops++; if (it.lock) out.locks++; at = it.stop; }
@@ -133,6 +134,18 @@ export function cvd(candles, a = 0, z = Infinity) {
 }
 
 // ---------------------------------------------------------------- Binance series on the candles' own times
+/** Where candle ``i`` ends (ms): the next candle's open (a month is not 30 days, a missing bar widens its neighbour), the forming one: one step. */
+const endOf = (times, i, step) => (i + 1 < times.length ? times[i + 1] : times[i] + step) * 1000;
+
+/** The bar numbers (relative to the first bar of the liquidation cut: ``t0`` and ``step`` seconds) of the candles a..z on screen. The cut
+ *  is by time, so a candle Binance left out (a quiet minute, maintenance) never shifts the bars. -> [first bar, last bar] */
+export function barWindow(candles, a, z, t0, step) {
+  const n = Array.isArray(candles) ? candles.length : 0;
+  if (!n || !(step > 0)) return [0, -1];
+  const i = Math.max(0, Math.min(n - 1, a)), k = Math.max(i, Math.min(n - 1, z));
+  return [Math.round((candles[i].time - t0) / step), Math.round((candles[k].time - t0) / step)];
+}
+
 /**
  * Put a step series on the candles: ``points`` [[ts ms, value, ...]] oldest first; ``times`` the candles' open times (s);
  * ``step`` the candle width (s); ``periodS`` the series' own period (s). A candle takes the LAST point inside it; a candle
@@ -144,7 +157,7 @@ export function alignSeries(points, times, step, periodS) {
   const pts = Array.isArray(points) ? points : [];
   let j = 0, prev = null;
   for (let i = 0; i < times.length; i++) {
-    const t0 = times[i] * 1000, t1 = t0 + step * 1000;
+    const t0 = times[i] * 1000, t1 = endOf(times, i, step);
     let inside = null;
     while (j < pts.length && pts[j][0] < t1) {
       if (pts[j][0] >= t0) inside = pts[j];
@@ -163,7 +176,7 @@ export function alignFunding(points, times, step) {
   const pts = Array.isArray(points) ? points : [];
   let j = 0;
   for (let i = 0; i < times.length; i++) {
-    const t0 = times[i] * 1000, t1 = t0 + step * 1000;
+    const t0 = times[i] * 1000, t1 = endOf(times, i, step);
     while (j < pts.length && pts[j][0] < t0) j++;
     let k = j, sum = 0, n = 0;
     while (k < pts.length && pts[k][0] < t1) { sum += pts[k][1]; n++; k++; }

@@ -82,7 +82,8 @@ def _ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
     if not path or not os.path.exists(path):
         return None
     try:
-        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+        from ..app import _ro_uri               # the dashboard's own read-only URI: the path is quoted ('?', '#', '%' in it are safe)
+        c = sqlite3.connect(_ro_uri(path), uri=True, timeout=5)
         c.execute("PRAGMA query_only = 1")
         return c
     except sqlite3.Error:

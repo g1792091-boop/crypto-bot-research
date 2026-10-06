@@ -22,6 +22,7 @@ export const WORDS = {
   stops: "우리 모의 계좌의 열린 포지션 손절·청산가 (이 코인)",
   stopsMath: "마크 가격 기준 산수 · 나갈 때 수수료·미끄러짐 전 · 예측이 아님",
   countOnly: (n) => `딥시크·동전 봇 ${n}개는 개수만`,
+  both: (n) => `손절가·청산가를 둘 다 지나는 ${n}개는 먼저 닿는 쪽 하나로만 셉니다 (보통 손절이 먼저)`,
 };
 
 /** The per-device choice of one chart ("term" | "chart"): {liq, stops, panes: [at most 2 of cvd / oi / fund / ls]}. */

@@ -13,11 +13,11 @@
 // the candles. The 차트 screen's chart box has its own height, the panes simply add under it.
 // Hooks into the screens: ONE call each after the deck exists (terminal-chart.js, chart.js); the deck's onData / menuEl /
 // onToggle(…, how) (core/chartfx.js) are the only other touch points.
-import {h, fmt, tok} from "../core/pb.js";
+import {h, fmt, tok, features, bus} from "../core/pb.js";
 import {liqMap} from "./chart-liqmap.js";
 import {stopMap} from "./chart-stopmap.js";
 import {lowerPanes, PANES} from "./chart-lower.js";
-import {LIQ_TONE} from "./chart-plus-calc.js";
+import {LIQ_TONE, minLiqUsd} from "./chart-plus-calc.js";
 import {WORDS, readState, saveState, PANE_IDS} from "./chart-plus-kit.js";
 
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
@@ -75,7 +75,7 @@ export function chartPlus(o) {
     if (v.kind === "nofile") return say("liq", k, "기록기 자료가 없습니다 (서버에서 강제청산 기록기가 켜지면 보입니다)");
     const d = v.data || {}, since = d.since_ts ? `${fmt.kst(d.since_ts)}부터 ` : "";
     if (v.kind === "empty") return say("liq", k, `이 구간에 기록된 청산이 없습니다 (${since}기록기가 들은 것 기준 · 바이낸스 시장 전체, 우리 봇 아님)`);
-    const parts = [`${WORDS.liq} · ${since}기록기가 들은 것만 · 코인마다 1초에 1건만 알려 줘서 실제보다 적음 · `, dot("long"), "롱 ", dot("short"), "숏 청산, 원 크기 = 금액"];
+    const parts = [`${WORDS.liq} · ${since}기록기가 들은 것만 · 코인마다 1초에 1건만 알려 줘서 실제보다 적음 · `, dot("long"), "롱 ", dot("short"), `숏 청산, 원 크기 = 금액 (BTC ${fmt.int(minLiqUsd("BTCUSDT") / 10000)}만 · 그 외 ${fmt.int(minLiqUsd("ETHUSDT") / 10000)}만 USDT부터 원으로, 작은 건 가격 막대에만)`];
     if (d.stale) parts.push(" · 기록기가 2시간 넘게 새 자료를 못 받음: 그 뒤는 모름");
     if ((d.gaps || []).length) parts.push(` · 빗금 = 기록이 끊겼던 때 (${fmt.int(d.gaps.length)}번)`);
     if (v.refreshFailed) parts.push(" · 새로 못 불러옴: 마지막 값");
@@ -115,10 +115,13 @@ export function chartPlus(o) {
     p.title = rows.map((r) => r.title).join("\n");
     return p;
   }
+  let notesSig = "";
   function paintNotes() {
     let rows = [liqNote(), stopNote(), paneNote()].filter(Boolean);
     if (rows.length > 1 && tight()) rows = [merged(rows)];
-    notes.replaceChildren(...rows);
+    // rebuilt only when the words changed (the panes report every second: a hovered note's tooltip must not blink away)
+    const sig = rows.map((r) => `${r.dataset.k}|${r.classList.contains("open")}|${r.title}`).join("\n");
+    if (sig !== notesSig) { notesSig = sig; notes.replaceChildren(...rows); }
     notes.hidden = !rows.length;
     below.hidden = !rows.length && !shown.length;
     scheduleLayout();
@@ -229,6 +232,7 @@ export function chartPlus(o) {
   function menuPaint() {
     items.get("liq").setAttribute("aria-checked", String(st.liq));
     items.get("stops").setAttribute("aria-checked", String(st.stops));
+    items.get("liq").hidden = features.probed && !features.liq && !st.liq;          // no liq.db on this server: the choice is not offered (CONTRACT 1.7)
     const noRoom = !!o.minMain && !st.panes.length && !fitsOne();
     for (const id of PANE_IDS) {
       const b = items.get("p:" + id);
@@ -237,6 +241,7 @@ export function chartPlus(o) {
     }
     roomNote.hidden = !(noRoom || (!!o.minMain && st.panes.length > shown.length));       // saved panes that do not fit here are explained in the menu too
   }
+  ctx.track(bus.on("features", () => menuPaint()));
   if (deck.menuEl) {
     deck.menuEl.classList.add("cfxp-two");
     deck.menuEl.append(sec);

@@ -128,6 +128,36 @@ def test_liq_bars_never_turn_a_missing_or_broken_file_into_no_liquidations(tmp_p
     assert b["ready"] is False and b.get("failed") is True and ("읽지 못" in b["why"] or "열지 못" in b["why"])
 
 
+def test_liq_bars_value_a_forced_order_like_the_market_screens_do(tmp_path):
+    """USDT = the average FILL price x the FILLED quantity (a partly filled order is not its order size x its limit price),
+    the same sum /api/liq and the terminal's list use."""
+    path = str(tmp_path / "liq.db")
+    q = sqlite3.connect(path)
+    q.executescript(liqstream.SCHEMA)
+    ts = _bar_ms(0, 3000)
+    q.execute("INSERT INTO liq VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (ts, ts, "BTCUSDT", "SELL", "LIMIT", "IOC", 10.0, 105.0, 100.0, "FILLED", 2.0, 4.0, ts))
+    q.execute("INSERT INTO liq VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (ts + 1, ts + 1, "BTCUSDT", "BUY", "LIMIT", "IOC", 3.0, 50.0, 0.0, "NEW", 0.0, 0.0, ts))
+    q.commit()
+    q.close()
+    r = CP.liq_bars(path, "BTCUSDT", T0, STEP, NOW)
+    by = {b["side"]: b for b in r["bars"]}
+    assert by["long"]["usd"] == 400.0 and by["long"]["px"] == 100.0                  # 4 filled x 100 average (not 10 x 105)
+    assert by["short"]["usd"] == 150.0 and by["short"]["px"] == 50.0                 # nothing filled / no average: order size x price
+    # ... and the market screens' own totals agree
+    market = APP.Data.liquidations(object.__new__(APP.Data), path, "BTCUSDT", 100_000_000, now_ms=NOW)
+    assert market["long_usd"] == 400.0 and market["short_usd"] == 150.0
+
+
+def test_liq_db_in_a_folder_with_odd_characters_is_still_read(tmp_path):
+    """The path goes through the dashboard's own quoted read-only URI: a '?', '#' or '%' in a folder name never changes the file opened."""
+    odd = tmp_path / "data#1?x%20y"
+    odd.mkdir()
+    path = str(odd / "liq.db")
+    _liq(path, [("BTCUSDT", _bar_ms(1), "SELL", 100.0, 1.0)], conn=[(_bar_ms(0), "connected")])
+    r = CP.liq_bars(path, "BTCUSDT", T0, STEP, NOW)
+    assert r["ready"] is True and r["n"] == 1 and r["since_ts"] == _bar_ms(0)
+
+
 # ---------------------------------------------------------------- Binance series, fetched by the server
 KL = [{"symbol": "BTCUSDT", "sumOpenInterest": "1.5", "sumOpenInterestValue": "93000.5", "timestamp": 1_000},
       {"symbol": "BTCUSDT", "sumOpenInterest": "x", "sumOpenInterestValue": "nan", "timestamp": 2_000},      # not a number: left out
@@ -381,6 +411,29 @@ def test_series_are_put_on_the_candles_times_without_inventing_values():
     assert o["day"][0]["n"] == 3 and o["day"][0]["v"] == pytest.approx(0.0006)
 
 
+def test_what_if_says_how_many_accounts_pass_both_their_stop_and_liquidation():
+    o = _node("""const A = {side: 1, entry: 100, qty: 1, margin: 10, stop: 98, liq: 91, money: true};
+    console.log(JSON.stringify({deep: C.whatIf([A, A, {...A, stop: 50}], 100, 80), shallow: C.whatIf([A], 100, 95), up: C.whatIf([A], 100, 120)}));""")
+    assert o["deep"]["both"] == 2 and o["deep"]["stops"] == 2 and o["deep"]["liqs"] == 1       # stop 50 is beyond the liquidation 91: the liquidation is nearer
+    assert o["shallow"]["both"] == 0 and o["up"]["both"] == 0
+    assert "WORDS.both(r.both)" in _code(_src("screens", "chart-stopmap.js")) and "먼저 닿는 쪽 하나로만" in _src("screens", "chart-plus-kit.js")
+
+
+def test_a_candle_ends_where_the_next_one_opens_and_a_missing_candle_does_not_shift_the_bars():
+    o = _node("""const D = 86400, M = 2592000;
+    // 1-month candles: January (31 days), February (28): a point on Feb 1 + 2 h belongs to February, not to January's "30 days"
+    const times = [0, 31 * D, 59 * D];
+    const pts = [[(30 * D + 100) * 1000, 1], [(31 * D + 7200) * 1000, 2]];
+    const a = C.alignSeries(pts, times, M, D);
+    const f = C.alignFunding([[(30 * D + 100) * 1000, 0.0001], [(31 * D + 7200) * 1000, 0.0002]], times, M);
+    // candles of 15 minutes with one missing (index 2 is absent): the bars of the liquidation cut are by time
+    const cs = [{time: 0}, {time: 900}, {time: 2700}, {time: 3600}];
+    console.log(JSON.stringify({a: a.map((x) => x && x.v), f: f.map((x) => x && x.v), w: C.barWindow(cs, 2, 3, 0, 900), all: C.barWindow(cs, 0, 99, 0, 900),
+      none: C.barWindow([], 0, 5, 0, 900), off: C.barWindow(cs, 1, 3, 900, 900)}));""")
+    assert o["a"] == [1, 2, None] and o["f"] == [0.0001, 0.0002, None]          # (March: the last point is 28 days old, nothing is carried that far)
+    assert o["w"] == [3, 4] and o["all"] == [0, 4] and o["none"] == [0, -1] and o["off"] == [0, 3]
+
+
 # ---------------------------------------------------------------- the page
 def test_everything_is_off_until_chosen_and_remembered_per_device():
     kit = _code(_src("screens", "chart-plus-kit.js"))
@@ -448,3 +501,19 @@ def test_the_terminal_chart_keeps_its_candles_readable():
     assert ".cfxp-nokey > .term-ckey { display: none; }" in css and ".term-chart .cfxp-n { white-space: nowrap;" in css
     term = _src("screens", "terminal.css")
     assert ".term-chart .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; padding: 0; }" in term
+
+
+def test_review_fixes_of_the_page():
+    plus = _code(_src("screens", "chart-plus.js"))
+    low = _code(_src("screens", "chart-lower.js"))
+    liq = _code(_src("screens", "chart-liqmap.js"))
+    # the market liquidation choice is offered only while the recorder runs (CONTRACT 1.7), a saved "on" stays visible to be turned off
+    assert 'items.get("liq").hidden = features.probed && !features.liq && !st.liq;' in plus and 'bus.on("features"' in plus
+    # the notes are rebuilt only when their words change (the panes report every second)
+    assert "if (sig !== notesSig)" in plus
+    # the legend says which bubbles exist at all (a small order has a price bar, no circle)
+    assert "작은 건 가격 막대에만" in plus and "minLiqUsd(" in plus
+    # a failed refresh with an old answer on screen says so; the colours are read once per draw, not per bar
+    assert "if (d.stale || p.err) chip = " in low and "palette().up" not in low
+    # the price bars are cut by the candles' times, not their count
+    assert "barWindow(d, a, z, data.t0, data.step_s)" in liq

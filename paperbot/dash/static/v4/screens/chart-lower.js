@@ -137,11 +137,11 @@ export function lowerPanes(o) {
     p.vals = new Map();
     p.last = null;
     if (p.id === "cvd") {
-      const {a, z} = visRange(), r = cvd(cs, a, z);
+      const {a, z} = visRange(), r = cvd(cs, a, z), pc = palette();
       if (cs.length && r.missing === cs.length) { can = false; why = "봉 자료에 매수 체결량이 없어 계산하지 못했습니다"; chip = "계산 못 함"; }
       else {
         line = cs.map((c, i) => (r.cum[i] == null ? {time: c.time} : {time: c.time, value: r.cum[i]}));
-        hist = cs.map((c, i) => (r.delta[i] == null ? {time: c.time} : {time: c.time, value: r.delta[i], color: r.delta[i] >= 0 ? palette().up : palette().down}));
+        hist = cs.map((c, i) => (r.delta[i] == null ? {time: c.time} : {time: c.time, value: r.delta[i], color: r.delta[i] >= 0 ? pc.up : pc.down}));
         cs.forEach((c, i) => { if (r.cum[i] != null) p.vals.set(c.time, {v: r.cum[i], d: r.delta[i]}); });
         if (r.missingVisible) chip = "일부 봉은 비워 둠";
       }
@@ -160,8 +160,9 @@ export function lowerPanes(o) {
         line = cs.map((c, i) => (al[i] ? {time: c.time, value: al[i].v} : {time: c.time}));
         al.forEach((x, i) => { if (x) p.vals.set(cs[i].time, {v: x.v, x: x.x, ts: x.ts, carried: x.carried}); });
       }
-      if (d.stale) { chip = "마지막 값 (새로 못 받음)"; why = d.why_ko || ""; }
+      if (d.stale || p.err) chip = "마지막 값 (새로 못 받음)";                // the server's old answer, or this page's own failed refresh: never shown as fresh
       else if (cs.length && cs[0].time * 1000 < d.oldest - d.period_s * 1000 && p.id !== "fund") chip = "앞쪽은 바이낸스 자료 없음 (최근 30일)";
+      else if (cs.length && cs[0].time * 1000 < d.oldest - 8 * 3600000 && p.id === "fund") chip = "앞쪽 정산은 받아 오지 않음 (최근 1000번)";
     }
     // never a flat line over a failure: the series are emptied
     const S = p.S;
@@ -251,7 +252,7 @@ export function lowerPanes(o) {
     const out = [];
     for (const id of want) {
       const p = panes.get(id);
-      if (p) out.push({id, can: p.can !== false, stale: !!(p.data && p.data.stale), failed: !!(p.err && !p.data), why: p.ui && p.ui.msg ? p.ui.msg.textContent : ""});
+      if (p) out.push({id, can: p.can !== false, stale: !!(p.data && (p.data.stale || p.err)), failed: !!(p.err && !p.data), why: p.ui && p.ui.msg ? p.ui.msg.textContent : ""});
     }
     return out;
   }

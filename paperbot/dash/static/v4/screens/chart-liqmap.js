@@ -10,7 +10,7 @@
 //            second limit (said in the note); a failed load is its own note, never "no liquidations".
 // Data: /api/v4/chartplus/liq (dash/more/chartplus.py, 20 s cache), asked every 20 s while this is on and the page is visible.
 import {h, fmt} from "../core/pb.js";
-import {LIQ_TONE, TF_S, minLiqUsd, liqRadius, bubbles, priceRows} from "./chart-plus-calc.js";
+import {LIQ_TONE, TF_S, minLiqUsd, liqRadius, bubbles, priceRows, barWindow} from "./chart-plus-calc.js";
 import {koUsdt, WORDS, tipBox, palette} from "./chart-plus-kit.js";
 
 const ROW_PX = 3;
@@ -168,7 +168,8 @@ export function liqMap(o) {
     const d = deck.data(), r = chart.timeScale().getVisibleLogicalRange();
     if (data && data.ready && data.tick && r && d.length && data.t0 === d[0].time) {
       const a = Math.max(0, Math.ceil(r.from)), z = Math.min(d.length - 1, Math.floor(r.to));
-      rows = priceRows(data.cells, data.tick, a, z, (price) => series.priceToCoordinate(price), ROW_PX, H);
+      const [ba, bz] = barWindow(d, a, z, data.t0, data.step_s);                 // the cut's bar numbers of the candles on screen (by time)
+      rows = priceRows(data.cells, data.tick, ba, bz, (price) => series.priceToCoordinate(price), ROW_PX, H);
       const room = W - 8;
       for (const row of rows.rows) {
         const lw = (row.long / rows.max) * room, sw = (row.short / rows.max) * room;

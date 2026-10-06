@@ -100,6 +100,7 @@ export function stopMap(o) {
     if (r.nMoney) lines.push(h("span", {class: ["num", fmt.tone(r.pnl)]}, `예상 손익 ${fmt.usdt(r.pnl, true)}`));
     else lines.push(h("span", {class: "muted"}, "예상 손익: 금액을 보이는 계좌가 없습니다"));
     if (r.countOnly) lines.push(h("small", {class: "muted"}, WORDS.countOnly(r.countOnly)));
+    if (r.both) lines.push(h("small", {class: "muted"}, WORDS.both(r.both)));
     lines.push(h("small", {class: "muted"}, `이 코인 열린 포지션 ${fmt.int(r.n)}개 · ${WORDS.stopsMath}`));
     tip.show(lines, x, y, strip.parentElement.offsetLeft);
   }
