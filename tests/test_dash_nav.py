@@ -241,14 +241,14 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
     console.log(JSON.stringify(o));""")
     assert out["groups"] == [["trade", "거래"], ["home", "성적"], ["strat", "매매법"], ["agents", "AI 직원"], ["server", "서버"]]
     assert out["pc"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
-                         "compare", "path", "combo", "combo5y", "whatif", "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
+                         "compare", "path", "combo", "combo5y", "whatif", "league", "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
     assert out["phone"] == [x for x in out["pc"] if x != "terminal"]                     # the PC 터미널 is off a phone's menu; 토론방 stays
     assert out["help"] == {"id": "help", "ko": "도움말", "to": "howto", "screens": ["howto", "faq"]}
     # 여러 차트 (conv-a) sits next to 차트: it takes key 4, so 요약 is key 6 now and 매매법 has no number key
     assert out["keys"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint"]
     assert out["keyOf"] == ["1", "6", None, None, "8", None]
     assert out["label"] == ["성적", "AI 직원", "거래"]
-    assert out["added"] == ["매매법", "한눈 지도", "분석", "비교", "졸업 길", "조합 성과", "5년 조합", "만약 실험실", "새 화면"]   # a new screen gets its button by itself
+    assert out["added"] == ["매매법", "한눈 지도", "분석", "비교", "졸업 길", "조합 성과", "5년 조합", "만약 실험실", "그림자 리그", "새 화면"]   # a new screen gets its button by itself
     assert out["extra"] == ["거래", "성적", "매매법", "AI 직원", "서버", "실험실"]
     out = _node("""
     const g = (id) => routes.GROUPS.find((x) => x.id === id);

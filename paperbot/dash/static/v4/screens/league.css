@@ -1,0 +1,121 @@
+/* 그림자 리그 (#/league, screens/league*.js). The waiting bar (.an-prog) comes from analysis.css. Tokens only (both skins), every
+   font size a --t-* token; phones first: one column, the coin x timeframe table fits 358 px without sideways scrolling (its totals
+   column folds into the coin's name), the 5-year comparison becomes one block per timeframe, wide tables scroll inside .tbl-wrap. */
+@import url("analysis.css");
+
+[data-screen="league"] { gap: 14px; }
+.lg-slot:empty { display: none; }
+.lg-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.lg-body { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); align-items: start; min-width: 0; }
+.lg-body > .seg, .lg-body > .lg-notes, .lg-body > .lg-member, .lg-body > .lg-study, .lg-body > .lg-off, .lg-body > .lg-err,
+.lg-body > .errbox, .lg-body > .skel { grid-column: 1 / -1; }
+
+/* words */
+.lg-sub { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.lg-bt { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.lg-bad { color: var(--down); }
+.lg-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
+  border: 1px dashed var(--warn-line); background: var(--warn-soft); color: var(--ink); font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.lg-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; min-width: 0; }
+.lg-list li { overflow-wrap: anywhere; }
+.lg-pills .linkish { font-size: var(--t-sm); }
+.lg-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.lg-empty { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 14px 4px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.lg-notes { display: grid; gap: 6px; min-width: 0; }
+.lg-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-screen="league"] code, .lg-hash { font: 600 var(--t-xs)/1.5 var(--f-term); padding: 1px 6px; border-radius: 5px; background: var(--surface-3); color: var(--ink); overflow-wrap: anywhere; word-break: break-all; }
+.lg-hash { display: inline-block; max-width: 100%; }
+
+/* the head card */
+.lg-head { gap: 12px; }
+.lg-lead { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.75; }
+.lg-two { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); min-width: 0; }
+.lg-box { padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; }
+.lg-box h3 { margin: 0 0 6px; font: 800 var(--t-sm)/1.4 var(--f-body); color: var(--ink); }
+.lg-box ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.lg-box li { overflow-wrap: anywhere; }
+.lg-not { border: 1px dashed var(--warn-line); }
+
+/* states: off, halted, error, the switch's how-to */
+.lg-banner { display: grid; gap: 6px; padding: 12px; border-radius: var(--r-md); border: 1px dashed var(--line-2); background: var(--surface-2); min-width: 0; }
+.lg-banner.halt { border-color: var(--warn-line); background: var(--warn-soft); }
+.lg-banner.bad { border-color: var(--down-line); background: var(--down-soft); }
+.lg-switch { display: grid; gap: 8px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface); min-width: 0; }
+.lg-switch h3 { margin: 0; font: 800 var(--t-sm)/1.4 var(--f-body); }
+.lg-switch .kv { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.lg-switch .kv dd { overflow-wrap: anywhere; }
+.lg-raw { display: grid; gap: 6px; min-width: 0; }
+.lg-raw p { margin: 0; overflow-wrap: anywhere; }
+.lg-off, .lg-err { gap: 10px; }
+.lg-err { border-color: var(--down-line); }
+
+/* the member card */
+.lg-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.lg-stats .stat b { font-size: var(--t-md); overflow-wrap: anywhere; }
+.lg-member .an-prog { border-top: 0; padding: 4px 0 0; }
+
+/* the charts */
+.lg-chart { position: relative; height: 320px; min-width: 0; border-radius: var(--r-sm); overflow: hidden; }
+.lg-chart.short { height: 240px; }
+@media (max-width: 599px) { .lg-chart { height: 240px; } .lg-chart.short { height: 200px; } }
+.lg-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: var(--t-xs); }
+.lg-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lg-sw { display: inline-block; flex: none; width: 22px; height: 0; border-top: 3px solid var(--cmp-hi); }
+.lg-sw.flip { border-top: 3px dashed var(--cmp-lo); }
+.lg-sw.band { height: 10px; border: 0; border-radius: 2px; background: var(--cmp-lo); opacity: .3; }
+.lg-read { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.7; }
+.lg-read .num { color: var(--ink); }
+.lg-vs { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); border: 1px dashed var(--line-2); color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
+.lg-vs b { color: var(--ink); }
+
+/* coin x timeframe */
+.lg-mx { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--t-xs); }
+.lg-mx th, .lg-mx td { padding: 7px 3px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: top; min-width: 0; overflow-wrap: anywhere; }
+.lg-mx thead th { color: var(--muted); font-weight: 700; }
+.lg-mx th.l { text-align: left; width: 4.6em; padding-left: 2px; }
+.lg-mx .lg-coin b { display: block; font-size: var(--t-sm); color: var(--ink); }
+.lg-rowtot { display: none; color: var(--muted); font-size: var(--t-2xs); }
+.lg-c > * { display: block; }
+.lg-c .lg-n { font-weight: 700; color: var(--ink); }
+.lg-c .lg-n em { font-style: normal; font-weight: 600; color: var(--accent); }
+.lg-st { font-weight: 700; color: var(--muted); }
+.lg-st.error { color: var(--down); }
+.lg-st.warming { color: var(--accent); }
+.lg-mx .tot, .lg-mx .ft { background: var(--surface-2); }
+.lg-mx tfoot th, .lg-mx tfoot td { border-top: 2px solid var(--line-2); border-bottom: 0; }
+@media (max-width: 599px) {
+  .lg-mx th.tot, .lg-mx td.tot { display: none; }
+  .lg-rowtot { display: block; }
+  .lg-mx th.l { width: 4.2em; }
+  .lg-mx .lg-coin b { font-size: var(--t-xs); }
+}
+
+/* trades and signals */
+.lg-list-wrap { display: grid; min-width: 0; }
+.lg-trade { display: grid; gap: 4px; padding: 10px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.lg-t1 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.lg-tn { font-size: var(--t-sm); color: var(--ink); }
+.lg-tnet { margin-left: auto; font-size: var(--t-sm); white-space: nowrap; }
+.lg-t2 { margin: 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+
+/* 5년 시험은 이랬어요 */
+.lg-verdict { margin: 0; color: var(--ink-2); font-size: var(--t-md); line-height: 1.65; overflow-wrap: anywhere; }
+.lg-verdict b { color: var(--ink); }
+.lg-h3 { margin: 4px 0 0; font: 800 var(--t-sm)/1.4 var(--f-body); color: var(--ink); }
+.lg-cmp { min-width: 720px; }
+.lg-cmp th, .lg-cmp td { white-space: normal; text-align: left; vertical-align: top; }
+.lg-cmp th small { display: block; font-weight: 500; font-size: var(--t-2xs); }
+.lg-cmp .live { background: var(--surface-2); }
+.lg-cellcol { display: inline-grid; gap: 2px; justify-items: start; font-size: var(--t-xs); }
+.lg-cellcol small { font-size: var(--t-2xs); }
+.lg-stack { display: none; }
+@media (max-width: 759px) { .lg-wide { display: none; } .lg-stack { display: grid; gap: 10px; } }
+.lg-sblock { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.lg-sblock h3 { margin: 0; font: 800 var(--t-sm)/1.4 var(--f-body); }
+.lg-sblock dl { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 6px 10px; font-size: var(--t-xs); }
+.lg-sblock dt { color: var(--ink-2); }
+.lg-sblock dd { margin: 0; display: flex; justify-content: flex-end; text-align: right; }
+.lg-sblock dd .lg-cellcol { justify-items: end; }
+.lg-read-box { display: grid; gap: 8px; min-width: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
+.lg-read-box p { margin: 0; }
+.lg-read-box .tbl-wrap { max-width: 100%; }

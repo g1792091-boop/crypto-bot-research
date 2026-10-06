@@ -51,6 +51,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     chartplus  차트 위 얹기: 시장 강제청산 거품·가격대 막대 (liq.db, 봉 단위로 합침, 20초) + 아래 칸의 미결제약정·롱/숏·펀딩
                (바이낸스 공개 주소를 서버가 받아 캐시, 짧은 제한 시간, 실패는 못 불러옴으로 따로)
     vplevels   봇 매물대: 봇이 쓰는 매물 최다 가격 · 매물대 위/아래 끝 (차트·터미널의 매물대 겹침선과 비교, 읽기만)
+    shadowleague 그림자 리그 (#/league): 5년 시험에서 실패한 아이디어를 실제 봉에서 가상 거래로만 따라간 기록 (agents3.db 옆의
+            shadow_league.db를 읽기만; 못 읽으면 '오류'와 이유, 없으면 '아직 켜지 않았어요'; 참고용, 판정 아님)
 """
 from __future__ import annotations
 
@@ -83,6 +85,7 @@ MODULES += ("verdictday",)                     # fix-verdict: 판정 날 시계,
 MODULES += ("copycmp", "losslinks", "approvals")   # add-accounts: 원본 vs 복제, 손실 거래 <-> 회의, 결재함
 MODULES += ("chartplus",)                      # chart-plus: 차트 위 시장 청산 거품·가격대 막대 + 아래 칸의 시장 자료 (liq.db, Binance by the server)
 MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물대 (POC / VAH / VAL, kinds 51-53) for the chart overlay
+MODULES += ("shadowleague",)                   # 그림자 리그 (#/league): shadow_league.db next to agents3.db, read-only, 5 s cache
 
 
 def register_all(app, **kw) -> dict:
