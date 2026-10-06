@@ -68,14 +68,15 @@ export function render(d, env) {
 }
 
 // ---------------------------------------------------------------- 같이 망하는 날
-function pairRow(r, i, main, co) {
+function pairRow(r, i, main) {
   const [a, b] = r.names || r.units || ["", ""];
   return h("div", {class: "lrow an-row", role: "listitem"},
     h("span", {class: "rk"}, String(i + 1)), h("span", {class: "lname an-wrap"}, `${a} + ${b}`),
     h("span", {class: "ret num"}, main === "cover" ? pc(r.cover) : pc(r.co_loss)),
     h("span", {class: "meta"},
       h("span", null, `둘 중 하나라도 잃은 ${fmt.int(r.either_days)}일 중 둘 다 잃음 ${fmt.int(r.both_days)}일 · 하나가 잃을 때 다른 하나는 범 ${fmt.int(r.cover_days)}일`),
-      h("span", null, `${a}의 나쁜 날 ${fmt.int(co.worst_days)}일 중 ${b}도 잃음 ${pc(r.bad_ab)} · 반대로 ${pc(r.bad_ba)}`)));
+      // the worst days that were losses (a unit with fewer losing days has fewer): each side's own count
+      h("span", null, `${a}의 나쁜 날 ${fmt.int(r.bad_a_days)}일 중 ${b}도 잃음 ${pc(r.bad_ab)} · ${b}의 나쁜 날 ${fmt.int(r.bad_b_days)}일 중 ${a}도 잃음 ${pc(r.bad_ba)}`)));
 }
 function colossCard(co, env) {
   const m = co.median || {}, f = co.coin_flips;
@@ -85,12 +86,12 @@ function colossCard(co, env) {
     const main = seg.get(), rows = main === "cover" ? co.cover_best || [] : co.together || [];
     put(body, h("p", {class: "an-note"}, main === "cover" ? "오른쪽 = 둘 중 하나가 잃은 날 가운데 다른 하나는 번 날의 비율 (높은 순)"
       : "오른쪽 = 둘 중 하나라도 잃은 날 가운데 둘 다 잃은 날의 비율 (높은 순)"),
-    rows.length ? h("div", {class: "plist", role: "list"}, rows.map((r, i) => pairRow(r, i, main, co))) : ui.empty("비교할 쌍이 아직 없습니다."));
+    rows.length ? h("div", {class: "plist", role: "list"}, rows.map((r, i) => pairRow(r, i, main))) : ui.empty("비교할 쌍이 아직 없습니다."));
     if (anim) motion.swap(body);
   }
   paint(false);
   return ui.card({plate: "같이 망하는 날", sub: `기존 36 매매법 쌍 · 하루 손익 ${fmt.int(co.days)}일`},
-    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), `매매법마다 하루(한국 시간) 손익을 봅니다. '같이 잃은 날' = 둘 중 하나라도 잃은 날 가운데 둘 다 잃은 날. '나쁜 날 겹침' = 한 매매법이 가장 많이 잃은 날(전체의 ${fmt.int((co.worst_share || 0.2) * 100)}%, ${fmt.int(co.worst_days)}일)에 다른 매매법도 잃은 비율.`),
+    h("p", {class: "an-read"}, h("b", null, "읽는 법 "), `매매법마다 하루(한국 시간) 손익을 봅니다. '같이 잃은 날' = 둘 중 하나라도 잃은 날 가운데 둘 다 잃은 날. '나쁜 날 겹침' = 한 매매법이 가장 많이 잃은 날(전체 날의 ${fmt.int((co.worst_share || 0.2) * 100)}%인 ${fmt.int(co.worst_days)}일 가운데 실제로 잃은 날)에 다른 매매법도 잃은 비율.`),
     h("div", {class: "stats s4"},
       ui.stat("같이 잃은 날 (중앙값)", pc(m.co_loss), `매매법 쌍 ${fmt.int(co.pairs)}개`),
       ui.stat("나쁜 날 겹침 (중앙값)", pc(m.bad), "가장 나쁜 날에 상대도 잃음"),
@@ -140,7 +141,7 @@ function agreeCard(ag, env) {
     h("h3", {class: "an-sub"}, "봉 합의: 같은 매매법의 다른 봉 계좌가 이미 같은 쪽에 있었나"),
     agList(TF_ROWS, B, small),
     h("p", {class: "ax-say"}, `기존 36 거래의 ${pc(tfAny + ((B.tf_two_plus || {}).share || 0))}는 같은 매매법의 다른 봉 계좌가 이미 같은 코인·같은 방향에 들어가 있었어요.`),
-    h("p", {class: "an-note"}, "동전 봇 칸 = 동전 봇이 들어간 순간 같은 코인·방향으로 들어간 기존 36 매매법 수로 나눔 (0개 = 혼자, 1개 = 2개 같이, 2개 이상 = 3개 이상). 봉 합의의 동전 봇은 같은 번호 동전 봇의 다른 봉 계좌. 지금 열린 포지션도 '들어감'으로 셉니다",
+    h("p", {class: "an-note"}, "동전 봇 칸 = 동전 봇이 들어간 순간 같은 코인·방향으로 들어간 기존 36 매매법 수로 나눔 (0개 = 혼자, 1개 = 2개 같이, 2개 이상 = 3개 이상), 반대 방향도 기존 36 포지션 기준. 봉 합의의 동전 봇은 같은 번호 동전 봇의 다른 봉 계좌. 지금 열린 포지션도 '들어감'으로 셉니다",
       ag.open_now ? ` (${fmt.int(ag.open_now)}개).` : "."),
     ui.refNote(env.verdictTs), ui.assume());
 }

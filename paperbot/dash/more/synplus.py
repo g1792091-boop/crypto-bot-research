@@ -8,7 +8,8 @@ baseline line. Read-only on paper3.db; nothing trades, nothing is written, nothi
               the 조합 시너지 view). For every pair of strategies over the days either one lost (P&L < 0):
               ``co_loss`` = days both lost / days either lost; ``cover`` = days one lost while the other made money
               (P&L > 0) / days either lost; ``bad_ab`` = on a's worst days (the ceil(WORST_SHARE x days) lowest days
-              of a that were losses) the share on which b lost too, and ``bad_ba`` the other way. Listed: the pairs
+              of a that were losses; ``bad_a_days`` of them) the share on which b lost too, and ``bad_ba`` the other
+              way (out of ``bad_b_days``). Listed: the pairs
               that fall together most (co_loss) and the ones that cover each other best (cover), among pairs with at
               least ``MIN_PAIR_DAYS`` losing days between them; the medians over those pairs; the same medians for the
               coin-flip accounts (one account each: not the same conditions). Needs ``MIN_DAYS_COLOSS`` KST days.
@@ -121,7 +122,7 @@ def pair_rows(units: list, M: np.ndarray, min_days: int = MIN_PAIR_DAYS) -> tupl
         bad = [x for x in (ab, ba) if x is not None]
         out.append({"a": units[i], "b": units[j], "either_days": e, "both_days": int(t["both"][i, j]),
                     "cover_days": int(t["cover"][i, j]), "co_loss": int(t["both"][i, j]) / e,
-                    "cover": int(t["cover"][i, j]) / e, "bad_ab": ab, "bad_ba": ba,
+                    "cover": int(t["cover"][i, j]) / e, "bad_ab": ab, "bad_ba": ba, "bad_a_days": bi, "bad_b_days": bj,
                     "bad": sum(bad) / len(bad) if bad else None})
     return out, t["worst_days"]
 
@@ -130,7 +131,7 @@ def _pair_out(r: dict, names: dict) -> dict:
     return {"units": [r["a"], r["b"]], "names": [names.get(r["a"], r["a"]), names.get(r["b"], r["b"])],
             "either_days": r["either_days"], "both_days": r["both_days"], "cover_days": r["cover_days"],
             "co_loss": _r(r["co_loss"], 3), "cover": _r(r["cover"], 3), "bad_ab": _r(r["bad_ab"], 3),
-            "bad_ba": _r(r["bad_ba"], 3)}
+            "bad_ba": _r(r["bad_ba"], 3), "bad_a_days": r["bad_a_days"], "bad_b_days": r["bad_b_days"]}
 
 
 def _medians(rows: list) -> dict:

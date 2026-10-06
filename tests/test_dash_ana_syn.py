@@ -76,6 +76,7 @@ def test_pair_counts_by_hand():
     assert ab["bad_ab"] == 0.0 and ab["bad_ba"] == 0.0           # 0's worst (day 1): 1 won; 1's worst (day 2): 0 won
     ac = r[("a", "c")]
     assert ac["co_loss"] == 0.0 and ac["cover"] == 1.0 and ac["bad_ab"] == 0.0 and ac["bad_ba"] is None
+    assert (ab["bad_a_days"], ab["bad_b_days"], ac["bad_b_days"]) == (1, 1, 0)       # each side's own denominator
     assert ("b", "c") in r and len(SP.pair_rows(["a", "b", "c"], M)[0]) == 0    # 5 losing days needed by default
 
 
