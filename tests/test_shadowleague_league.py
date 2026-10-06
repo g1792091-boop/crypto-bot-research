@@ -500,6 +500,21 @@ def test_clones_are_the_same_whenever_they_are_made(tmp_path):
     assert CL.window_bars(HOUR) == 120 and CL.window_bars(15 * MIN) == 480 and CL.window_bars(4 * HOUR) == 30
 
 
+def test_the_clone_draw_depends_on_the_trade_id_alone_not_on_the_clock_or_global_random_state(monkeypatch):
+    """The same id gives the same draw on any machine at any time (golden values pin the algorithm: a silent change would
+    make new clones differ from the ones already in the database)."""
+    import time
+    import numpy as np
+    tid = "zoneflip|BTC|1h|100|1|90|1.5"
+    assert CL.seed_parts(tid) == [20261006, 4021001553, 2154804604]
+    assert CL.draw_offsets(tid, 120, 8, -1000) == [96, -79, -110, -18, 33, -28, -119, 107]
+    assert CL.draw_offsets("t", 480, 5, -7) == [125, 447, 41, 225, 61]
+    monkeypatch.setattr(time, "time", lambda: 4_000_000_000.0)
+    monkeypatch.setattr(time, "monotonic", lambda: 12345.0)
+    np.random.seed(99)
+    assert CL.draw_offsets(tid, 120, 8, -1000) == [96, -79, -110, -18, 33, -28, -119, 107]
+
+
 def test_every_trade_has_k_clones_with_its_own_distances_and_the_study_s_exit(tmp_path):
     ex, m, st = world(tmp_path, k=50)
     st, _ = ticks(st, ex, m, ALL)
