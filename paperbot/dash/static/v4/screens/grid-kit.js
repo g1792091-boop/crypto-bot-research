@@ -312,7 +312,7 @@ function strategyBody(ctx, d) {
   const c = d.combined || {};
   const ds = d.group === "ds200";
   // review 10/06 (as the map): the colour is each account's own return (a −58 % account is never gold); the coin-flip
-  // comparison is the small neutral ▲ / ▼ in the corner (참고), DeepSeek without it
+  // comparison is the small neutral ▲ / ▼ beside the trade count (참고), DeepSeek without it
   const tiles = h("div", {class: "gk-tfrow own"}, (d.accounts || []).map((a, i) => h("div", {class: "gk-tf"},
     h("span", {class: "k"}, fmt.tfKo(a.tf)),
     heatCell({id: a.id, s: a.strategy, tf: a.tf, g: a.group, ret: a.ret, vs: a.vs, n: a.trades, bust: a.bust, open: a.open},
