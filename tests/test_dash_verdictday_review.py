@@ -12,6 +12,7 @@
 import json
 import os
 import sqlite3
+import time
 
 import pytest
 
@@ -268,3 +269,33 @@ def test_the_verdict_page_asks_the_summary_at_0900_itself():
     js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
     assert "ms <= 3600000 && st.timed !== c.ts" in js and "ctx.timeout(() => { renderCountdown(); ctx.store.refresh(\"summary\")" in js
     assert '"판정 시각입니다 · 확인 중"' in js and "st.kicked !== c.ts" in js
+
+
+def test_job_word_through_the_real_systemctl_parser(tmp_path, monkeypatch):
+    """The same answer the server gets: `systemctl show` text parsed by more/jobs.py (LastTriggerUSec, Result
+    oom-kill), through verdictday.timers' own runner, into the clock."""
+    import shutil
+    import subprocess
+    from paperbot.dash.more import jobs as J
+    if shutil.which("systemctl") is None:
+        pytest.skip("more/jobs.show needs a systemctl binary to name")
+    utc = lambda ms: time.strftime("%a %Y-%m-%d %H:%M:%S UTC", time.gmtime(ms / 1000))     # noqa: E731
+    blocks = {"paperbot-checkpoint.timer": {"LoadState": "loaded", "UnitFileState": "enabled", "ActiveState": "active",
+                                            "LastTriggerUSec": utc(CP1 + 95 * MIN)},
+              "paperbot-checkpoint.service": {"LoadState": "loaded", "ActiveState": "failed", "SubState": "failed",
+                                              "Result": "oom-kill", "ExecMainExitTimestamp": utc(CP1 + 150 * MIN)},
+              "paperbot-rehearsal.timer": {"LoadState": "loaded", "UnitFileState": "enabled", "ActiveState": "active"}}
+
+    def run(cmd, **kw):
+        units = [a for a in cmd if a.startswith("paperbot-")]
+        text = "\n\n".join("\n".join([f"Id={u}"] + [f"{k}={v}" for k, v in blocks.get(u, {}).items()]) for u in units)
+        return subprocess.CompletedProcess(cmd, 0, stdout=text + "\n", stderr="")
+    monkeypatch.setattr(V, "_JOBS", {})
+    jb = V.timers(run)
+    assert jb["available"] and jb["jobs"]["paperbot-checkpoint"]["result"] == "oom-kill"
+    paper, out = _state(tmp_path, "snap")
+    c = V.clock(START, CP1 + 3 * H, V.read_ledger(out), V.day_state_reader(paper), lambda: jb)
+    assert c["job"]["dead"] and c["job"]["since"] == CP1 + 95 * MIN and c["late"]
+    assert c["line_ko"] == "30일 판정 날 · 판정 작업이 메모리 한도로 멈춤 · 매시 35분에 다시 시도"
+    assert J.job_state(blocks["paperbot-checkpoint.timer"], blocks["paperbot-checkpoint.service"])["ok"] is False
+    monkeypatch.setattr(V, "_JOBS", {})
