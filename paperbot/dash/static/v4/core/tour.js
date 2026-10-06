@@ -1,6 +1,7 @@
-// First-visit guided tour: 7 short steps that walk through the real screens (홈 → 거래 → 에이전트 → 서버), skippable,
+// First-visit guided tour: 7 short steps (the menu strip, then the real screens 요약 → 포지션 → 회의실 → 서버), skippable,
 // remembered in localStorage (local.* has the try/catch: a private window simply sees it again). FAQ and 홈 have a
-// button that starts it again. Each step names the screen it shows (`go`) and its targets in priority order: the
+// button that starts it again. Each step names the screen it shows (`go`) and its targets in priority order (one entry
+// may list several selectors: the first of them shown on this layout, the strip or the left rail, wins): the
 // screen's own data-tour element first, then a shell element that always exists, so a step never waits forever on a
 // screen that has nothing to show yet (no open position, no meeting). At the end (or 건너뛰기) the page goes back to
 // where the tour started. Only real elements are pointed at; nothing is drawn or made up for the tour.
@@ -9,20 +10,20 @@ import {href, parseHash, landing} from "./routes.js";
 import {reduced} from "./motion.js";
 
 export const STEPS = [
+  {go: "home", sel: ["#subtabs, #rail"], t: "화면 버튼",
+    p: "모든 화면이 이 줄에 글자 버튼으로 하나씩 있습니다. 누르면 바로 그 화면입니다. 지금 보는 화면은 굵은 글씨에 밑줄, 새 소식이 있는 화면은 이름 옆에 점(●)이 붙습니다. 키보드 숫자 1-9는 앞의 아홉 버튼, '/'는 찾기입니다. 폰에서는 이 줄을 옆으로 밀어서 봅니다."},
   {go: "home", sel: ["#dchip"], t: "실험 며칠째인가요",
     p: "D+며칠/30과 판정 날짜가 한 줄에 있습니다 (PC는 관찰 기간까지). 누르면 관찰 기간과 규칙이 펼쳐집니다."},
   {go: "home", sel: ["#hdot"], t: "건강 점 하나",
     p: "초록은 정상, 주황은 확인할 것, 빨강은 무언가 멈춘 것입니다. 누르면 서버 화면으로 갑니다. 파산·강제청산 몰림·시세 끊김은 맨 위 빨간 띠로도 나옵니다."},
-  {go: "home", sel: ['[data-tour="headline"]', '[data-group="home"]'], t: "홈 · 첫 카드",
-    p: "매매법 계좌들의 중앙값과 동전 봇 중앙값을 나란히 봅니다. 30일째 판정 전까지 이 비교는 '참고'이고, 합격·불합격이 아닙니다."},
-  {go: "home", sel: ['[data-tour="groups"]', '[data-group="home"]'], t: "묶음 카드",
-    p: "기존 36 · 딥시크 44 · 5분봉 · 동전 봇. 누르면 아래 상위·하위 5개와 전체 목록이 그 묶음으로 바뀝니다. 돈 숫자 밑 작은 글씨는 '모의 · 실제 시세 · 수수료 포함'이라는 뜻입니다."},
+  {go: "home", sel: ['[data-tour="headline"]', '[data-group="home"]'], t: "성적 · 요약",
+    p: "매매법 계좌들의 중앙값과 동전 봇 중앙값을 나란히 봅니다. 30일째 판정 전까지 이 비교는 '참고'이고, 합격·불합격이 아닙니다. 아래 묶음 카드(기존 36 · 딥시크 44 · 5분봉 · 동전 봇)를 누르면 목록이 그 묶음으로 바뀝니다. 돈 숫자 밑 작은 글씨는 '모의 · 실제 시세 · 수수료 포함'이라는 뜻입니다."},
   {go: "positions", sel: ['.pos-card.open .pos-why', '[data-tour="positions"]', '[data-group="trade"]'], t: "거래 · 포지션",
     p: "지금 열린 모의 포지션입니다. '왜 ○○배' 줄에 자리 등급, 증거금, 진입 때 청산까지 거리가 있습니다. 주문 버튼은 없습니다."},
-  {go: "office", sel: ['[data-tour="office"]', '[data-group="agents"]'], t: "에이전트 · 회의실",
+  {go: "office", sel: ['[data-tour="office"]', '[data-group="agents"]'], t: "AI 직원 · 회의실",
     p: "픽셀 회의실과 콘솔입니다. AI 직원은 회의와 기록만 하고 거래하지 않습니다. 말풍선과 콘솔 줄은 저장된 실제 발언만 나옵니다."},
-  {go: "server", sel: ['.subtabs .oldui', '[data-group="server"]'], t: "서버와 도움말",
-    p: "서버 상태와 비용, '어떻게 돌아가나', 자주 묻는 질문이 이 묶음에 있습니다. 맨 끝 '예전 화면'은 지금까지 쓰던 대시보드입니다. 이 안내는 자주 묻는 질문에서 다시 볼 수 있습니다."},
+  {go: "server", sel: ["#toptools .oldui, .subtabs .oldui, .rail-old", '[data-group="server"]'], t: "서버와 도움말",
+    p: "서버 묶음에 서버·비용, 알림 기록, 신호, 도움말(어떻게 돌아가나 · 자주 묻는 질문)이 있습니다. '예전 화면'은 지금까지 쓰던 대시보드이고, 그 옆에 글자 크기 · 화면 색이 있습니다 (PC는 위 막대에 메뉴 위치와 함께, 폰은 버튼 줄의 맨 끝). 이 안내는 도움말 › 자주 묻는 질문에서 다시 볼 수 있습니다."},
 ];
 
 function visible(el) {
@@ -37,6 +38,11 @@ function find(sels, upto = sels.length) {
   return null;
 }
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+/** A target inside a sideways-scrolling row (the phone's menu strip) is scrolled into that row's view. */
+function bring(el) {
+  const rx = el.getBoundingClientRect();
+  if (rx.left < 0 || rx.right > window.innerWidth) el.scrollIntoView({block: "nearest", inline: "center", behavior: "auto"});
+}
 const barH = () => { const b = document.getElementById("botbar"); return b && visible(b) ? b.getBoundingClientRect().height : 0; };
 const topH = () => { const t = document.querySelector(".shell-top"); return t ? t.getBoundingClientRect().height : 0; };
 
@@ -59,6 +65,11 @@ export function startTour() {
   function place() {
     const vw = window.innerWidth, vh = window.innerHeight, bottom = vh - barH() - 12;
     const cw = card.offsetWidth, ch = card.offsetHeight;
+    // the shell draws its menu and top-bar controls again on every route / badge change: a target that was swapped
+    // out is found again by the same selectors (예전 화면, a strip group); one in the phone's sideways strip is kept in
+    // that row's view (the strip centres the current screen's button after a route change)
+    if (el && !el.isConnected) el = find(STEPS[i].sel);
+    if (el && visible(el)) bring(el);
     if (!el || !el.isConnected || !visible(el)) {
       ring.hidden = true;
       card.style.left = `${Math.max(16, (vw - cw) / 2)}px`; card.style.top = `${Math.max(16, (bottom - ch) / 2)}px`;
@@ -94,10 +105,7 @@ export function startTour() {
     }
     if (my !== gen) return;
     if (el) {
-      const rx = el.getBoundingClientRect();
-      if (rx.left < 0 || rx.right > window.innerWidth) {     // inside a sideways-scrolling row (the phone's sub tabs)
-        el.scrollIntoView({block: "nearest", inline: "center", behavior: "auto"});
-      }
+      bring(el);
       const r = el.getBoundingClientRect();
       const inView = r.top >= topH() && r.bottom <= window.innerHeight - barH();
       if (!inView && getComputedStyle(el).position !== "fixed" && !el.closest(".shell-top, .botbar")) {

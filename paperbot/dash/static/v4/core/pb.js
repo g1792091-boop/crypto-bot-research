@@ -15,6 +15,7 @@ export {features} from "./features.js";
 export {bus, api, apiText, post, serverNow, ApiError, stream} from "./api.js";
 export {href, SCREENS, GROUPS, landing} from "./routes.js";
 export {setBadge} from "./shell.js";
+export {joinedTabs} from "./strip.js";
 export {startTour} from "./tour.js";
 export * as bars from "./bars.js";
 export {chartDeck, candleGlow, isAi as chartAi, GROUP_KO, AMBIENT_TIP, FLASH_TIP} from "./chartfx.js";

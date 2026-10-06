@@ -1,11 +1,13 @@
-// The navigation: 5 groups (홈 · 거래 · 매매법 · 에이전트 · 서버), each with its screens (sub tabs). A screen is
-// screens/<name>.js + screens/<name>.css (CONTRACT.md). `feature`: shown only while that feature really runs
-// (core/features.js); `soft`: always a tab, greyed with a '꺼짐' pill while that feature is off (the 토론방: the owners
-// should see it exists; its screen says plainly that it has not started); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
-// `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu. The start screen
-// (owners 10/06 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 on a PC window (900 px
-// and up, where the top menu shows and the terminal fits without sideways scrolling), and the 차트 screen on a phone
-// or a tablet held upright; 홈 stays one click away (#/home, the 홈 group, the number key 2).
+// The screens and their 5 groups (거래 · 성적 · 매매법 · AI 직원 · 서버). A screen is screens/<name>.js +
+// screens/<name>.css (CONTRACT.md). `feature`: shown only while that feature really runs (core/features.js); `soft`:
+// always a button, greyed with a '꺼짐' pill while that feature is off (the 토론방: the owners should see it exists; its
+// screen says plainly that it has not started); `hidden`: not in the menu (reached by links, e.g. one account). The
+// 터미널 is a PC screen: its `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the
+// phone's menu. A screen added to a group's `screens` list shows in the menu by itself (core/strip.js: one text button
+// per screen, owners 10/06 ~14:00; NAV below sets the groups' order and captions). The start screen (owners 10/06
+// 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 on a PC window (900 px and up, where the
+// terminal fits without sideways scrolling), and the 차트 screen on a phone or a tablet held upright; 홈 (요약) stays one
+// click away (#/home, its button, the number key 5).
 import {s} from "./dom.js";
 
 export const GROUPS = [
@@ -48,8 +50,8 @@ export const SCREENS = {
 };
 
 export const DEFAULT = "home";          // an unknown screen name falls back here (never the terminal: no loop)
-/** The start screen's width: a PC window, where the top menu shows (base.css .groups, 900 px) and the 터미널 fits (it
- *  exists from 760 px, core/features.js `wide`, but scrolls sideways below about 900 px). */
+/** The start screen's width: a PC window, where the 터미널 fits (it exists from 760 px, core/features.js `wide`, but
+ *  scrolls sideways below about 900 px) and the phone's bottom bar is gone (base.css .botbar, 900 px). */
 export const LANDING_MIN_PX = 900;
 /** The screen an empty hash (and the brand mark) opens: the 터미널 on a PC window, else the 차트 screen (a phone, a
  *  tablet held upright). Never a switched-off screen (900 > 760), so the router may also send a PC-only screen opened
@@ -90,7 +92,7 @@ const ICON = {
 export const icon = (group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
 
-// one 16 x 16 pixel icon per screen: the top bar's group menus (core/topnav.js), the left rail (core/rail.js), 찾기
+// one 16 x 16 pixel icon per screen: the left rail (core/rail.js) and 찾기 (the menu strip itself is text only)
 const SICON = {
   home: ICON.home,
   board: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(7, 1, 2, 2)],
@@ -126,14 +128,53 @@ const SICON = {
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
 
-/** The number keys 1-9 (core/navkeys.js): the screens opened most, in this order (owners 10/06). */
-export const KEYS = ["terminal", "home", "positions", "strategies", "board", "office", "chart", "market", "server"];
+/** The screens of a group the menu lists now (feats = core/features.js; true = every feature on): hidden ones out, a
+ *  `feature` screen only while it runs (the PC 터미널 only on a wide window); a `soft` one stays (greyed with 꺼짐). */
+export function menuScreens(g, feats) {
+  return g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden
+    && (!SCREENS[n].feature || feats === true || !!(feats && feats[SCREENS[n].feature])));
+}
+
+/** The menu (core/strip.js; owners 10/06 ~14:00 with a photo of the v3 tab bar: "클릭해서 바로 들어갈수있는 버튼들을
+ *  많이 만들어줬으면", "왼쪽에 그림으로 되어있는데 너무 헷갈려"): every screen its own text button, the groups in this order,
+ *  each with its caption. A group of GROUPS missing here comes last under its own name. The phone's bottom bar keeps
+ *  GROUPS' order and names (홈 · 거래 · 매매법 · 에이전트 · 서버). */
+export const NAV = [
+  {group: "trade", ko: "거래"},
+  {group: "home", ko: "성적"},
+  {group: "strat", ko: "매매법"},
+  {group: "agents", ko: "AI 직원"},
+  {group: "server", ko: "서버"},
+];
+/** One button for several screens of one group: it opens the first and is lit on each; every one of them shows a
+ *  small switch to the others at its top (core/strip.js joinedTabs), so each stays one click away. */
+export const JOINED = [{id: "help", ko: "도움말", screens: ["howto", "faq"]}];
+/** A group's caption in the menu ("성적" for 홈's screens). */
+export const navLabel = (gid) => (NAV.find((x) => x.group === gid) || GROUPS.find((x) => x.id === gid) || {ko: ""}).ko;
+
+/**
+ * navGroups(feats) -> the menu's buttons now: [{group, ko, items: [{id, ko, to, screens}]}] in NAV order. `to` is the
+ * screen a button opens, `screens` the ones it is lit on (one, or a JOINED set). feats as in menuScreens.
+ */
+export function navGroups(feats) {
+  const order = [...NAV.filter((x) => GROUPS.some((g) => g.id === x.group)),
+    ...GROUPS.filter((g) => !NAV.some((x) => x.group === g.id)).map((g) => ({group: g.id, ko: g.ko}))];
+  return order.map((x) => {
+    const shown = menuScreens(GROUPS.find((g) => g.id === x.group), feats);
+    const items = [];
+    for (const n of shown) {
+      const j = JOINED.find((y) => y.screens.includes(n));
+      const set = j ? j.screens.filter((m) => shown.includes(m)) : [n];
+      if (set.length < 2) items.push({id: n, ko: SCREENS[n].ko, to: n, screens: [n]});
+      else if (!items.some((it) => it.id === j.id)) items.push({id: j.id, ko: j.ko, to: set[0], screens: set});
+    }
+    return items.length ? {group: x.group, ko: x.ko, items} : null;
+  }).filter(Boolean);
+}
+
+/** The number keys 1-9 (core/navkeys.js): the menu's first nine buttons, in its order (owners 10/06 ~14:00). */
+export const KEYS = navGroups(true).flatMap((g) => g.items.map((it) => it.to)).slice(0, 9);
 /** A screen's number key ("1" ... "9"), null when it has none. */
 export const keyOf = (name) => { const i = KEYS.indexOf(name); return i < 0 ? null : String(i + 1); };
-/** The screens of a group its menu lists now (feats = core/features.js): hidden ones out, a `feature` screen only while
- *  it runs (the PC 터미널 only on a wide window); a `soft` one stays (greyed with 꺼짐). */
-export function menuScreens(g, feats) {
-  return g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden && (!SCREENS[n].feature || !!(feats && feats[SCREENS[n].feature])));
-}
 /** Links that open in the side panel instead of leaving the page (core/drawer.js): route name -> panel kind. */
 export const PEEKABLE = {account: "account", strategies: "strategy", replay: "trade"};

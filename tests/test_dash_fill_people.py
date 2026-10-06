@@ -220,7 +220,8 @@ def test_wiring():
     assert "recordBox(ctx" in _read("screens", "rooms-chat.js") and "latestEventKo(" in _read("screens", "rooms.js")
     r = _read("core", "routes.js")
     assert 'debate: {ko: "토론방", group: "agents", title: "24시간 토론방", soft: "debate"}' in r
-    assert "SCREENS[n].soft && !features[SCREENS[n].soft]" in _read("core", "shell.js")
+    # the 토론방 button stays in the menu strip, greyed with 꺼짐 while the room is off (nav-v3: core/strip.js)
+    assert "SCREENS[n].soft && !features[SCREENS[n].soft]" in _read("core", "strip.js")
     assert "아직 시작 전 · 켜면 하루 종일 토론" in _read("screens", "debate.js")
     inv = _read("INVENTORY.md")
     assert "fill-people" in inv

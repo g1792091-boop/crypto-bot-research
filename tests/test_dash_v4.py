@@ -85,8 +85,9 @@ def test_every_routed_screen_has_its_module_and_css_with_mount_and_unmount():
     routes = _routes()
     assert {"home", "board", "checkpoint", "account", "positions", "chart", "market", "strategies", "analysis", "office",
             "rooms", "digest", "debate", "server", "alerts", "signals", "howto", "faq"} <= set(routes)
-    groups = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"', _read(os.path.join(V4, "core", "routes.js")))
-    assert [g[1] for g in groups] == ["홈", "거래", "매매법", "에이전트", "서버"]
+    src = _read(os.path.join(V4, "core", "routes.js"))
+    groups = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"', src[src.index("export const GROUPS = ["):src.index("export const SCREENS")])
+    assert [g[1] for g in groups] == ["홈", "거래", "매매법", "에이전트", "서버"]     # the phone's bottom bar (the strip: NAV)
     for name in routes:
         js = os.path.join(V4, "screens", name + ".js")
         assert os.path.exists(js), name

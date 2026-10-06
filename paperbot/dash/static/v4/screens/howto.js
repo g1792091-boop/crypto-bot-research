@@ -1,7 +1,7 @@
 // #/howto — 어떻게 돌아가나 (builder E, mockup screen 04). Six step tabs 01 신호 → 06 판정, each two or three sentences
 // and a console-style 예시 box; #/howto/<1-6> opens a step (update() swaps it in place). Below: who trades (the four
 // groups, counted from the board), what the AI staff do (counted from /api/agents/roster) and that everything is 모의.
-import {h, ui, fmt, derive, motion, local, put} from "../core/pb.js";
+import {h, ui, fmt, derive, motion, local, put, joinedTabs} from "../core/pb.js";
 import {limitsOf} from "./server-kit.js";
 import {STEPS} from "./howto-steps.js";
 
@@ -54,7 +54,7 @@ export async function mount(el, ctx) {
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) show(cur + (dx < 0 ? 1 : -1), true);
   }, {passive: true});
 
-  el.append(ui.screenHead("어떻게 돌아가나", "한 거래가 신호에서 판정까지 지나가는 여섯 단계"),
+  el.append(ui.screenHead("어떻게 돌아가나", "한 거래가 신호에서 판정까지 지나가는 여섯 단계"), joinedTabs("howto"),
     ui.card({cls: "howto-hero", hero: true, label: "작동 방식"}, h("p", {class: "howto-kicker"}, "작동 방식"),
       h("h2", {class: "howto-title"}, "신호에서 ", h("em", null, "판정"), "까지"), strip, panel,
       h("div", {class: "row howto-nav"}, prev, h("span", {class: "grow"}), next),

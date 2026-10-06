@@ -2,7 +2,7 @@
 // '표본 적음' and '수집 전' mean; the 'what costs money' table (free / Max subscription / paid API / server rental) with
 // today's real usage; the rule documents (read as plain text, never parsed as HTML); 안내 다시 보기; 로그아웃.
 // Old homes: the summary strip's 원문 link, the 로그아웃 button (INVENTORY.md 1, 13).
-import {h, ui, motion, features, apiText, startTour, local, put} from "../core/pb.js";
+import {h, ui, motion, features, apiText, startTour, local, put, joinedTabs} from "../core/pb.js";
 import {note} from "./server-kit.js";
 import {FAQ, costRows} from "./faq-items.js";
 import {termsCard} from "./faq-terms.js";
@@ -12,7 +12,7 @@ const DOCS = [["doc", "실험 규칙 원문"], ["verdict_doc", "판정 방법 �
 export async function mount(el, ctx) {
   ctx.setTitle("자주 묻는 질문");
   const f = {verdict: null, usage: null, debate: null, debateOn: !!features.debate};
-  el.append(ui.screenHead("자주 묻는 질문", "짧게 묻고 짧게 답합니다"));
+  el.append(ui.screenHead("자주 묻는 질문", "짧게 묻고 짧게 답합니다"), joinedTabs("faq"));
   // 용어 사전 first: #/faq?q=<term> (the "?" chips on the account screen) opens that term and brings it into view
   const terms = termsCard((ctx.params.query || {}).q);
   el.append(terms);
@@ -87,7 +87,7 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- tour + logout
   const tourCard = ui.card({plate: "안내와 로그아웃"},
-    h("p", {class: "ink2"}, "처음 들어왔을 때 나온 7단계 안내를 다시 볼 수 있습니다. 메뉴의 다섯 묶음을 하나씩 짚어 줍니다."),
+    h("p", {class: "ink2"}, "처음 들어왔을 때 나온 7단계 안내를 다시 볼 수 있습니다. 화면 버튼 줄부터 요약 · 포지션 · 회의실 · 서버까지 하나씩 짚어 줍니다."),
     h("div", {class: "row wrap"},
       h("button", {class: "btn-y", type: "button", onclick: () => { window.scrollTo(0, 0); startTour(); }}, "안내 다시 보기"),
       h("button", {class: "btn-line", type: "button", onclick: logout}, "로그아웃")),

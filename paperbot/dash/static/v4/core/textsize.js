@@ -44,8 +44,8 @@ export function textSwitch(onChange) {
 }
 
 /**
- * textCycle(onChange) -> the phone version: one small "가" button at the start of the sub-tab row (the three-button
- * control sits at the end of that row, which scrolls sideways on a phone). Each tap goes 보통 → 크게 → 아주 크게 → 보통.
+ * textCycle(onChange) -> the small version: one "가" button (the phone's menu strip, the PC top bar below 1680 px, the
+ * left rail's foot; the three-button control sits at the end of the phone's strip, which scrolls sideways). Each tap goes 보통 → 크게 → 아주 크게 → 보통.
  */
 export function textCycle(onChange) {
   const at = () => document.documentElement.dataset.text || currentText();

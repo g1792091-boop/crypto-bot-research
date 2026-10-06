@@ -1,12 +1,12 @@
 // 메뉴 위치 (owners 10/06 13:27: "클릭하는 버튼들이 다 왼쪽으로 바꼈네?? ... 불편해졌는데"): on a PC window (1200 px and
-// up) the menu is the top bar again by default (the 5 groups, each with a dropdown of all its screens, and the sub
-// tabs; core/topnav.js), and the left rail (core/rail.js: icon + Korean name, group headings) is a choice:
+// up) the menu is on top by default (10/06 ~14:00: every screen its own text button in one strip, like v3;
+// core/strip.js), and the left rail (core/rail.js: the same buttons with icon + Korean name, group headings) is a choice:
 //   "top"   위 (the default)
 //   "left"  왼쪽
 // The choice is a per-device convenience (local storage through dom.js `local`, wrapped in try/catch): a private
 // window or blocked storage simply gets 위. Applied at boot (core/main.js) on <html data-nav> before the shell draws;
 // core/nav.css shows the rail only under [data-nav="left"] at 1200 px and up (below that the menu is the same in both).
-// Switched from the small "메뉴 위치 위 | 왼쪽" control at the end of the sub tabs and in the rail's foot (core/shell.js,
+// Switched from the small "메뉴 위치 위 | 왼쪽" control in the top bar and in the rail's foot (core/shell.js,
 // core/rail.js). Other code (the settings panel) calls setNavPos("top" | "left"): it stores, applies and emits the bus
 // event "navpos", on which the shell redraws the menu and the screen (core/shell.js).
 import {h, local} from "./dom.js";
@@ -50,7 +50,7 @@ export function setNavPos(id) {
 export function navPosSwitch() {
   const cur = navPosNow();
   const btns = NAV_POS.map((x) => h("button", {type: "button", "aria-pressed": String(x.id === cur), dataset: {nav: x.id},
-    title: x.id === "top" ? "메뉴를 위 막대에 (묶음을 누르면 그 묶음의 모든 화면)" : "메뉴를 왼쪽 줄에 (모든 화면 이름이 늘 보임)",
+    title: x.id === "top" ? "메뉴를 위에 (모든 화면이 글자 버튼 한 줄)" : "메뉴를 왼쪽 줄에 (그림 + 이름, 세로로)",
     onclick: () => {
       if (navPosNow() === x.id) return;
       for (const b of btns) b.setAttribute("aria-pressed", String(b.dataset.nav === x.id));
