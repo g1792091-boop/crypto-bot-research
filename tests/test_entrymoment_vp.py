@@ -239,6 +239,13 @@ def test_a_missing_minute_inside_the_window_is_unknown_never_a_guess(vpw):
     assert {r["b"]["sr_ahead"] for r in rows} == {"매물대", "라운드", "unknown"}     # the recorded marks still read
 
 
+def test_bars_without_a_readable_volume_still_give_the_other_dimensions(vpw, monkeypatch):
+    real = EM.load_live_bars
+    monkeypatch.setattr(EM, "load_live_bars", lambda *a, volume=False, **k: {} if volume else real(*a, **k))
+    rows = EM.features(vpw.paper(), T0 + DAY)["rows"]
+    assert {r["b"]["va_pos"] for r in rows} == {"unknown"} and all(r["b"]["body"] != "unknown" for r in rows)
+
+
 def test_no_volume_recorded_is_unknown(tmp_path):
     w = World(tmp_path)
     _fill(w, T0 - 260 * M15, T0 + 10 * M15, vol=None)

@@ -636,7 +636,9 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
     # the value area wants VP_BARS bars of the longest timeframe before the first signal; the other dimensions keep
     # reading the bars from ``lo`` exactly as before (Wilder's ATR depends on where its history starts)
     tf_max = max((TF_MS.get(tf or d.get("timeframe")) or 0) for _a, _k, _s, tf, d in raw)
-    bars = load_live_bars(paper_ro, syms, min(lo, first - (VP_BARS + 1) * tf_max), hi, volume=True)
+    lo_vp = min(lo, first - (VP_BARS + 1) * tf_max)
+    # a paper3.db whose live_bars cannot give the volume still gives the other dimensions (va_pos is then 'unknown')
+    bars = load_live_bars(paper_ro, syms, lo_vp, hi, volume=True) or load_live_bars(paper_ro, syms, lo_vp, hi)
     tfb: dict = {}
     vpb: dict = {}
     vas: dict = {}
@@ -653,7 +655,8 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
         tf_ms = TF_MS.get(tf)
         if tf_ms and sym in bars:
             if (sym, tf) not in tfb:
-                t1, o1, h1, l1, c1, v1 = bars[sym]
+                t1, o1, h1, l1, c1, *vol = bars[sym]
+                v1 = vol[0] if vol else None
                 j = int(np.searchsorted(t1, lo))
                 tfb[(sym, tf)] = resample(t1[j:], o1[j:], h1[j:], l1[j:], c1[j:], tf_ms)
                 vpb[(sym, tf)] = resample(t1, o1, h1, l1, c1, tf_ms, v=v1, with_atr=False)

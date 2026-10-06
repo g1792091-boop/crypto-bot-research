@@ -28,10 +28,11 @@ function sideBySide(t, f, order, min, W) {
     {label: `${W.flips} 거래`, get: (b) => c(f[b], (x) => fmt.int(x.n))},
     {label: "승률", get: (b) => c(f[b], (x) => fmt.pct(x.wr, 0, false))},
     {label: "평균 ROE", get: (b) => c(f[b], (x) => h("span", {class: fmt.tone(x.roe)}, fmt.pct(x.roe)))},
-    {label: "", get: (b) => (t[b] ? ui.smallSample(t[b].n, min) : null)},
+    {label: "", get: (b) => (t[b] && t[b].n < min ? ui.smallSample(t[b].n, min) : "")},
   ], keys);
 }
 
+const STUDY_SMALL = 200;        // the study's own '*' line (RESULTS_ENTRY_A.md section 4: under 200 trades)
 const share = (n, of) => (of ? fmt.pct(n / of, 0, false) : "—");
 
 export function vp(d, env) {
@@ -70,14 +71,15 @@ export function vp(d, env) {
   const ru = d.right_under || {};
   const rows = ru.rows || [];
   // the 36 open their strategy page; DeepSeek definitions and the reel are named only (no per-definition page link here)
+  const unit = grp === "ds200" ? "정의" : "매매법";
   const pg = ui.pager({size: 10, empty: "아직 매물대 바로 앞에서 들어간 거래가 없습니다.",
     row: (x) => h(grp === "core" ? "a" : "div",
       {class: ["lrow an-row", grp === "core" ? "click" : ""], role: "listitem", href: grp === "core" ? env.ctx.href("strategies", x.strategy) : null},
       h("span", {class: "rk"}, String(x.strategy).split("_")[0]), h("span", {class: "lname"}, x.name_ko || x.strategy),
       h("span", {class: ["ret num", fmt.tone(x.roe)]}, fmt.pct(x.roe)),
       h("span", {class: "meta"}, h("span", null, `${fmt.int(x.n)}건 · 승률 ${fmt.pct(x.wr, 0, false)}`),
-        h("span", null, `이 매매법 거래의 ${fmt.pct(x.share, 0, false)}`),
-        h("span", null, `매매법 평균 ${fmt.pct(x.strategy_roe)} (${fmt.int(x.strategy_n)}건)`), ui.smallSample(x.n, min)))});
+        h("span", null, `이 ${unit} 거래의 ${fmt.pct(x.share, 0, false)}`),
+        h("span", null, `${unit} 평균 ${fmt.pct(x.strategy_roe)} (${fmt.int(x.strategy_n)}건)`), ui.smallSample(x.n, min)))});
   pg.set(rows);
   const list = pg.el;
   const a = ru.all || {}, fa = ru.coin_flips || {};
@@ -118,9 +120,10 @@ function study(s, grp) {
       {label: "매물대가 앞인 비중", get: (x) => st(x, (v) => fmt.pct(v.share, 0, false))},
       {label: "그 거래 평균 ROE", get: (x) => st(x, (v) => h("span", {class: fmt.tone(v.roe)}, fmt.pct(v.roe)))},
       {label: "봉 전체 평균 ROE", get: (x) => st(x, (v) => h("span", {class: fmt.tone(v.all_roe)}, fmt.pct(v.all_roe)))},
-      {label: "차이", get: (x) => st(x, (v) => h("span", {class: fmt.tone(v.diff)}, pp(v.diff * 100, 2)))},
+      {label: "차이", get: (x) => st(x, (v) => [h("span", {class: fmt.tone(v.diff)}, pp(v.diff * 100, 2)), " ", ui.smallSample(v.n, STUDY_SMALL)])},
       {label: "무작위 진입 차이", get: (x) => rn(x, (v) => h("span", {class: fmt.tone(v.diff)}, pp(v.diff * 100, 2)))},
     ], rows),
     h("p", {class: "an-note"}, `매매법 = 기존 36개 매매법의 5년 신호 합산(코인·매매법 합침), 무작위 진입 = 같은 봉·코인에서 무작위로 들어간 거래.${grp === "ds200" ? " 딥시크 정의는 이 연구에 없어 기존 36의 숫자를 참고로만 둡니다." : ""}${grp === "reel" ? " 5분봉 줄은 기존 36의 과거 5분봉 신호이며 릴스 자체는 이 연구에 없습니다." : ""}`),
-    h("p", {class: "an-note"}, `숫자: ${src.numbers || "research/entry_study/out_binance"} (바이낸스 선물 자료로 다시 돌린 것). 사전 등록 결과와 판정: ${src.doc || "research/entry_study/RESULTS_ENTRY_A.md"} (원래 자료, 결론 같음: ${src.recheck_doc || "research/binance_data/RESULTS_BINANCE.md"} 3장).`));
+    h("p", {class: "an-note"}, `${fmt.int(STUDY_SMALL)}건 미만 칸은 표본 적음(연구 문서의 * 표시와 같은 선). 숫자는 5년 연구를 바이낸스 선물 자료로 다시 돌린 결과이고, 사전 등록한 원래 자료의 결과도 결론이 같습니다.`),
+    h("p", {class: "an-note an-wrap", title: [src.numbers, src.recheck_doc].filter(Boolean).join(" · ")}, `문서: ${src.doc || "research/entry_study/RESULTS_ENTRY_A.md"}`));
 }
