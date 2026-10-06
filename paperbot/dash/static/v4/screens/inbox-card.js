@@ -117,7 +117,7 @@ export function proposalCard(c, o) {
       });
       return h("div", {class: "ibx-confirm"},
         h("p", null, ap ? (c.runtime_ready
-          ? "정말 승인할까요? 승인하면 코드가 다시 확인한 뒤 다음 봉 경계에 새 모의 계좌가 시작됩니다 (원본 계좌와 같은 시작 자금). 시작된 계좌는 거절로 멈출 수 없습니다."
+          ? `정말 승인할까요? 승인하면 코드가 다시 확인한 뒤 다음 봉 경계에 새 모의 계좌가 시작됩니다 (${c.kind === "newlab" ? "다른 계좌들과" : "원본 계좌와"} 같은 시작 자금). 시작된 계좌는 거절로 멈출 수 없습니다.`
           : "정말 승인할까요? 계좌는 아직 만들어지지 않습니다 (실행기의 추가 계좌 기능이 켜지기 전). 기능이 켜진 뒤 한 번 더 승인을 눌러야 시작합니다.")
           : "정말 거절할까요? 거절한 제안은 다시 승인할 수 없습니다."),
         h("div", {class: "row wrap"}, go, h("button", {class: "btn-line", type: "button", onclick: () => { st.confirm = null; paint(); }}, "취소")));

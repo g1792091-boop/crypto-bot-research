@@ -55,9 +55,9 @@ def _int(v) -> Optional[int]:
         return None
 
 
-def load_rounds(agents_ro: Optional[sqlite3.Connection]) -> dict:
+def load_rounds(agents_ro: Optional[sqlite3.Connection]) -> Optional[dict]:
     """{round_id: {room_id, trigger, started_ts, status, summary_ko, trade_ids, lo, hi}} of the loss meetings that
-    stored trade ids."""
+    stored trade ids; None when agents3.db could not be read (the caller keeps what it had and asks again)."""
     if agents_ro is None:
         return {}
     out: dict = {}
@@ -65,7 +65,7 @@ def load_rounds(agents_ro: Optional[sqlite3.Connection]) -> dict:
         rows = agents_ro.execute("SELECT round_id, room_id, trigger, trigger_data, started_ts, status, decision FROM rounds "
                                  f"WHERE trigger IN ({','.join('?' * len(LOSS_TRIGGERS))})", LOSS_TRIGGERS).fetchall()
     except sqlite3.Error:
-        return {}
+        return None
     for r in rows:
         try:
             td = json.loads(r["trigger_data"] or "{}") or {}
@@ -174,7 +174,8 @@ def register(app, ctx) -> dict:
                 finally:
                     if a is not None:
                         a.close()
-                st.update(at=time.time(), rounds=rounds, idx=index(rounds))
+                if rounds is not None:          # a read error keeps the last index (never an empty one for a minute)
+                    st.update(at=time.time(), rounds=rounds, idx=index(rounds))
             return st["rounds"], st["idx"]
 
     @app.get("/api/v4/losslinks")

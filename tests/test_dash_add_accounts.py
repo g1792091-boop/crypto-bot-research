@@ -138,14 +138,14 @@ H = 3_600_000
 T0 = 1_790_000_000_000          # the copy's start
 
 
-def _trade(st, aid, entry, exit_t, pnl, roe, reason="SL", fees=2.0, funding=0.5, sym="BTCUSDT"):
+def _trade(st, aid, entry, exit_t, pnl, roe, reason="SL", fees=2.0, funding=0.5, sym="BTCUSDT", after=0.0):
     from paperbot.models import TradeRecord
     strat, tf = aid.split("~")[0].split("@")
     st.trade(aid, TradeRecord(strategy_id=strat, symbol=sym, timeframe=tf, side=1, signal_ts=entry - 1, entry_time=entry,
                               entry_price=100.0, exit_time=exit_t, exit_price=99.0, exit_reason=reason, qty=1.0, leverage=30,
                               tier="normal", margin=100.0, stop_price=99.0, tp_price=float("nan"), liq_price=97.0, fees=fees,
                               funding=funding, pnl=pnl, roe=roe, price_move=-0.01, mae_price=99.0, mfe_price=100.0,
-                              equity_after=0.0, score=0.0, context={}))
+                              equity_after=after, score=0.0, context={}))
 
 
 def _paper(path):
@@ -157,19 +157,18 @@ def _paper(path):
     st.add_account("D@15m", "D", "15m", "ds200", T0 - 100 * H, "v4", None, {"group": "x"})
     for k in (1, 2, 3):
         st.add_account(f"RANDOM_{k}@15m", f"RANDOM_{k}", "15m", "random", T0 - 100 * H, "v4")
+    # equity rows are marked to market (an open position's unrealised P&L in them): never the comparison's base
     st.equity("S@15m", T0 - 100 * H, 5000.0, 0.0)
-    st.equity("S@15m", T0 - H, 2000.0, 0.0)          # the parent's balance when the copy starts
-    st.equity("S@15m", T0 + 5 * H, 2200.0, 0.0)
-    st.equity("S@15m~c1", T0, 5000.0, 0.0)
-    st.equity("S@15m~c1", T0 + 5 * H, 4500.0, 0.0)
+    st.equity("S@15m", T0 - H, 2600.0, 0.0)
+    st.equity("S@15m~c1", T0 + 5 * H, 4100.0, 0.0)
     for k, (a, b) in enumerate(((4000.0, 4400.0), (5000.0, 4500.0), (3000.0, 3300.0)), 1):
-        st.equity(f"RANDOM_{k}@15m", T0 - 2 * H, a, 0.0)
-        st.equity(f"RANDOM_{k}@15m", T0 + 5 * H, b, 0.0)
-    _trade(st, "S@15m", T0 - 3 * H, T0 - 2 * H, -300.0, -0.3)                       # before the copy: left out
-    _trade(st, "S@15m", T0 + H, T0 + 2 * H, 150.0, 0.15, "LOCK", fees=4.0, funding=1.0)
-    _trade(st, "S@15m", T0 + 3 * H, T0 + 4 * H, 50.0, 0.05, "LOCK", fees=6.0, funding=1.0)
-    _trade(st, "S@15m~c1", T0 + H, T0 + 2 * H, -400.0, -0.08, "SL", fees=10.0, funding=2.0)
-    _trade(st, "S@15m~c1", T0 + 3 * H, T0 + 4 * H, -100.0, -0.02, "LIQ", fees=10.0, funding=3.0)
+        _trade(st, f"RANDOM_{k}@15m", T0 - 5 * H, T0 - 2 * H, a - 5000.0, -0.1, after=a)  # balance at the copy's start
+    _trade(st, "S@15m", T0 - 3 * H, T0 - 2 * H, -3000.0, -0.3, after=2000.0)            # ended before the copy: out
+    # open when the copy started, ended after it: in the period's return, so in its trade rows too
+    _trade(st, "S@15m", T0 - H // 2, T0 + H // 2, 50.0, 0.05, "LOCK", fees=6.0, funding=1.0, after=2050.0)
+    _trade(st, "S@15m", T0 + H, T0 + 2 * H, 150.0, 0.15, "LOCK", fees=4.0, funding=1.0, after=2200.0)
+    _trade(st, "S@15m~c1", T0 + H, T0 + 2 * H, -400.0, -0.08, "SL", fees=10.0, funding=2.0, after=4600.0)
+    _trade(st, "S@15m~c1", T0 + 3 * H, T0 + 4 * H, -100.0, -0.02, "LIQ", fees=10.0, funding=3.0, after=4500.0)
     _trade(st, "D@15m", T0 + H, T0 + 2 * H, -10.0, -0.1)
     st.put_state("accounts", T0 + 5 * H, {"engines": {"S@15m": {"wallet": 2200.0}, "S@15m~c1": {"wallet": 4500.0},
                                                       "RANDOM_1@15m": {"wallet": 4400.0}, "RANDOM_2@15m": {"wallet": 4500.0},
@@ -187,8 +186,9 @@ def test_copy_vs_parent_over_the_same_period(tmp_path):
     d = CC.compare(db, "S@15m~c1", now_ms=T0 + 6 * H)
     assert d["parent_id"] == "S@15m" and d["rule_ko"] == "손절 2.5 ATR" and d["since"] == T0 and not d["count_only"]
     p, c = d["parent"], d["copy"]
-    assert p["trades"] == 2 and p["wins"] == 2                       # the trade it entered before the copy existed: out
-    assert abs(p["ret"] - (2200 / 2000 - 1)) < 1e-9                  # from ITS balance at the copy's start, not 5,000
+    assert p["trades"] == 2 and p["wins"] == 2                       # the trades that ended in the period
+    assert abs(p["ret"] - (2200 / 2000 - 1)) < 1e-9                  # from ITS closed balance at the copy's start
+    assert p["start_balance"] == 2000 and c["start_balance"] == 5000   # not 5,000; not the marked-to-market 2,600
     assert abs(c["ret"] - (4500 / 5000 - 1)) < 1e-9 and c["liquidations"] == 1
     assert abs(p["fees_share"] - 10 / 2000) < 1e-9 and abs(c["fees_share"] - 20 / 5000) < 1e-9
     assert abs(p["mean_roe"] - 0.1) < 1e-9 and c["small"] is True
@@ -197,6 +197,7 @@ def test_copy_vs_parent_over_the_same_period(tmp_path):
     cur = d["curve"]
     assert cur["copy"][0] == 0 and cur["parent"][0] == 0             # both lines start at 0 % on the copy's first day
     assert abs(cur["parent"][-1] - 0.1) < 1e-9 and abs(cur["copy"][-1] + 0.1) < 1e-9
+    assert abs(cur["parent"][1] - 0.025) < 1e-9 and abs(cur["copy"][2] + 0.08) < 1e-9   # T0 + 1h: 2,050; T0 + 2h: 4,600
     with pytest.raises(HTTPException) as e:
         CC.compare(db, "S@15m", now_ms=T0 + 6 * H)                      # not a copy
     assert e.value.status_code == 404
@@ -211,7 +212,7 @@ def test_copy_card_rows_and_wiring():
     ks = [r["k"] for r in out["rows"]]
     assert ks[0] == "기간 수익률" and "거래당 ROE (평균)" in ks and "수수료 (시작 잔고 대비)" in ks
     assert out["rows"][0]["parent"] == "+10.0%" and out["rows"][0]["copy"] == "−10.0%"
-    assert out["ds"] == ["거래 (이 기간에 들어간 것)", "이긴 비율", "강제청산"]       # a DeepSeek copy: counts only
+    assert out["ds"] == ["거래 (이 기간에 끝난 것)", "이긴 비율", "강제청산"]       # a DeepSeek copy: counts only
     src = _read("account-copy.js")
     assert "/api/v4/copycmp/" in src and "ui.errorBox(e, load)" in src and "ui.smallSample(" in src
     assert 'a.kind === "copy" ? copyCard(ctx, acc.account_id)' in _read("account.js")
@@ -276,6 +277,10 @@ def test_loss_meetings_link_their_trades_both_ways(tmp_path):
     assert dst["count_only"] is True and "pnl" not in dst and "roe" not in dst          # DeepSeek: counted only
     assert rr[str(new_id)]["trades"][0]["pnl"] == -400.0
     p.close()
+    # agents3.db that cannot be read is not "no meetings": None, and the route keeps its last index
+    broken = sqlite3.connect(":memory:")
+    assert LL.load_rounds(broken) is None and LL.load_rounds(None) == {}
+    broken.close()
     assert LL._ids("3,a,3,-1,4", 10) == [3, 4]
 
 

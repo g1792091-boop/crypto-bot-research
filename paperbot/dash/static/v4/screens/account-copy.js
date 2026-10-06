@@ -1,7 +1,7 @@
 // 계좌 · 원본 vs 복제 (review addition 10): an approved copy account next to its parent over the SAME period, from the
 // copy's start (GET /api/v4/copycmp/<id>, dash/more/copycmp.py). The board compares each account from its own start,
-// so "바꾼 게 더 나았나?" could not be read anywhere; here both lines start at 0 % on the copy's first day, the trades
-// each one entered since then sit side by side, and the one changed rule is named. The same-timeframe coin flips over
+// so "바꾼 게 더 나았나?" could not be read anywhere; here both lines start at 0 % on the copy's first day (closed-trade
+// balance, as the board), the trades each one closed since then sit side by side, and the one changed rule is named. The same-timeframe coin flips over
 // the same period are a 참고 line. HONESTY: below 30 trades the card says 표본 적음; nothing here is a verdict; a failed
 // load is an error box with a retry (never "없음"); a copy of a DeepSeek account (none today) would get counts only.
 import {h, ui, fmt, motion} from "../core/pb.js";
@@ -12,7 +12,7 @@ const pp = (x) => (x == null ? "—" : `${fmt.num(x * 100, 1, true)}%p`);
  *  "won": the numbers side by side, the money ones in the up / down colours only. */
 export function copyRows(d) {
   const p = (d && d.parent) || {}, c = (d && d.copy) || {};
-  const trades = {k: "거래 (이 기간에 들어간 것)", parent: fmt.int(p.trades || 0) + "건", copy: fmt.int(c.trades || 0) + "건"};
+  const trades = {k: "거래 (이 기간에 끝난 것)", parent: fmt.int(p.trades || 0) + "건", copy: fmt.int(c.trades || 0) + "건"};
   const win = {k: "이긴 비율", parent: p.win_rate == null ? "—" : fmt.pct(p.win_rate, 0, false), copy: c.win_rate == null ? "—" : fmt.pct(c.win_rate, 0, false)};
   const liq = {k: "강제청산", parent: fmt.int(p.liquidations || 0) + "건", copy: fmt.int(c.liquidations || 0) + "건"};
   if (!d || d.count_only) return [trades, win, liq];
@@ -71,7 +71,7 @@ export function copyCard(ctx, id, onData) {
       out.push(h("p", {class: "acc-line"}, ui.pill("", "ref"), ` 같은 기간 ${d.timeframe === "5m" ? "5분봉" : `${tf}봉`} 동전 봇 ${fmt.int(d.flips.n)}개 중앙값 `,
         h("b", {class: ["num", fmt.tone(d.flips.median_ret)]}, fmt.pct(d.flips.median_ret, 1)), " · 판정 아님"));
     }
-    out.push(h("p", {class: "note"}, "원본은 복제가 시작한 뒤 들어간 거래만 셉니다. 바꾼 규칙이 나았는지는 거래가 쌓인 뒤에 봅니다 (지금 차이는 판정이 아님)."),
+    out.push(h("p", {class: "note"}, "둘 다 복제가 시작한 뒤 끝난 거래만 셉니다 (원본이 그때 열어 둔 거래 하나는 들어갈 수 있음). 바꾼 규칙이 나았는지는 거래가 쌓인 뒤에 봅니다 (지금 차이는 판정이 아님)."),
       d.count_only ? h("p", {class: "note"}, ui.pill("딥시크는 개수만", "ref"), " 돈 숫자는 딥시크 묶음 화면에서 봅니다.")
         : ui.assume("closed", "기간 수익률 = 복제 시작 때 잔고 대비 지금 잔고"));
     return out;
