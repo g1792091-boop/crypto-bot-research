@@ -10,7 +10,9 @@ results for the 36 (descriptive; nothing here changes a locked rule).
                                              since the run start), bucketed with the 5-year edges of the trade's
                                              timeframe: per number and range trades, win share, mean net ROE, mean net R
                                              (R = |entry - first stop|). ``waiting`` below ``MIN_PAPER`` trades (a
-                                             filling bar on the page). Background + cached (dash/analysis.Heavy).
+                                             filling bar on the page). ``by_strategy``: each strategy's count, and
+                                             its own ranges from ``MIN_PAPER_STRATEGY`` trades on (매매법별 card).
+                                             Background + cached (dash/analysis.Heavy).
 
 Paper candles: the market recorder's market.db (5-minute bars next to paper3.db, read-only) grouped into the trade's
 timeframe (a bin counts only when every 5-minute bar is there); a coin and timeframe it does not cover are asked from
@@ -36,6 +38,7 @@ TTL_S = 900
 WAIT_S = 3.0
 MIN_PAPER = 100                # closed trades of the 36 with their numbers known before the paper table is shown
 MIN_BUCKET = 20                # a paper range under this many trades carries small: true
+MIN_PAPER_STRATEGY = 30        # one strategy's paper entries with their numbers before its own ranges are sent
 FIVE_MIN = 300_000
 TF_MS = {"15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
 MAX_FRAME_BARS = 6000
@@ -168,6 +171,22 @@ def numbers_at(rows: list, bars: dict, tf: str, five: dict) -> list:
     return out
 
 
+def paper_cells(known: list) -> dict:
+    """{indicator: [cell per range]} of (trade, buckets, net R) triples: trades, win share, mean net ROE, mean net R."""
+    cells: dict = {}
+    for k in IC.INDICATORS:
+        nb = IC.N_Q if k in IC.QUINT else len(IC.FIXED[k])
+        row = []
+        for j in range(nb):
+            sel = [(r, rn) for r, b, rn in known if b.get(k) == j]
+            c0 = K.cell([r for r, _ in sel], MIN_BUCKET)
+            rr = [rn for _, rn in sel if rn is not None]
+            c0["mean_r"] = K.r4(sum(rr) / len(rr), 4) if rr else None
+            row.append(c0)
+        cells[k] = row
+    return cells
+
+
 def paper_view(paper_db: str, now_ms: int, frames=None, five_path: str = DATA_JSON) -> dict:
     from ...agents import entrymoment as EM
     from ..analysis import CORE_FLIP_TFS, _close, ro_connect
@@ -239,19 +258,14 @@ def paper_view(paper_db: str, now_ms: int, frames=None, five_path: str = DATA_JS
             r_net = r["roe"] / lev / (abs(ep - st) / ep)
         known.append((r, b, r_net))
     cov["with_numbers"] = len(known)
-    cells: dict = {}
-    for k in IC.INDICATORS:
-        nb = IC.N_Q if k in IC.QUINT else len(IC.FIXED[k])
-        row = []
-        for j in range(nb):
-            sel = [(r, rn) for r, b, rn in known if b.get(k) == j]
-            c0 = K.cell([r for r, _ in sel], MIN_BUCKET)
-            rr = [rn for _, rn in sel if rn is not None]
-            c0["mean_r"] = K.r4(sum(rr) / len(rr), 4) if rr else None
-            row.append(c0)
-        cells[k] = row
-    out.update({"since": start, "coverage": cov, "cells": cells,
-                "all": {**K.cell([r for r, _b, _rn in known], MIN_BUCKET)}})
+    by_s: dict = {}
+    for item in known:
+        by_s.setdefault(item[0]["strategy"], []).append(item)
+    out.update({"since": start, "coverage": cov, "cells": paper_cells(known),
+                "all": {**K.cell([r for r, _b, _rn in known], MIN_BUCKET)}, "min_strategy": MIN_PAPER_STRATEGY,
+                # each of the 36 on its own (매매법별): its count, and its ranges once it has MIN_PAPER_STRATEGY
+                "by_strategy": {s: {"n": len(v), **({"cells": paper_cells(v)} if len(v) >= MIN_PAPER_STRATEGY else {})}
+                                for s, v in sorted(by_s.items())}})
     if cov["with_numbers"] < MIN_PAPER:
         out["waiting"] = True
     return out

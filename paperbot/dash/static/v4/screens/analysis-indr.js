@@ -5,7 +5,9 @@
 //                          sessions), each with the mean result in R, the difference against the other entries as a bar
 //                          from the middle, and 더 좋음 / 더 나쁨 ONLY for cells that pass every check; the rest read
 //                          차이 없음 in plain ink
-//   매매법별 (5년)          the same for one strategy (a select of the 36, with each one's number of marked cells)
+//   매매법별 (5년)          the same for one strategy (a select of the 36, with each one's number of marked cells);
+//                          under it that strategy's own paper entries in the same ranges once it has enough (a
+//                          filling bar before; /api/v4/indranges/paper by_strategy)
 //   표시된 칸 모두          every marked cell, strongest first, 10 a page, 전체 / 더 좋음 / 더 나쁨
 //   지금 실험               the paper run's entries in the same ranges (the 5-year edges of each trade's timeframe) next
 //                          to the 5-year numbers; a filling bar until enough trades
@@ -51,8 +53,9 @@ function rangeText(k, j, edges) {
 
 /** The status words of one cell: 더 좋음 / 더 나쁨 only for marked cells; else 차이 없음 (or 표본 적음). */
 function status(c, rules) {
-  if (c.ok === 1) return ui.pill("더 좋음", "good", "여러 번 본 것을 감안한 검사와 세 기간 모두 같은 방향, 차이 0.05R 이상");
-  if (c.ok === -1) return ui.pill("더 나쁨", "bad", "여러 번 본 것을 감안한 검사와 세 기간 모두 같은 방향, 차이 0.05R 이상");
+  const why = `여러 번 본 것을 감안한 검사와 세 기간 모두 같은 방향, 차이 ${fmt.num(rules.min_effect_r ?? 0.05, 2)}R 이상`;
+  if (c.ok === 1) return ui.pill("더 좋음", "good", why);
+  if (c.ok === -1) return ui.pill("더 나쁨", "bad", why);
   if (c.p == null) return h("span", {class: "a7-plain"}, `표본 적음 (${fmt.int(rules.min_cell || 30)}건 미만)`);
   return h("span", {class: "a7-plain"}, "차이 없음");
 }
@@ -72,7 +75,7 @@ function rangeRows(k, cells, edges, rules, five) {
           h("small", {class: "num"}, `${cnt(c.n)}건 · 이긴 비율 ${pc(c.wr)}`)),
         h("span", {class: "a7-st"}, status(c, rules)));
     }),
-    five ? h("p", {class: "a7-legend"}, "가운데 선 = 같은 매매법의 나머지 진입과 같음. 오른쪽 = 그보다 좋음, 왼쪽 = 나쁨 (R 단위).") : null);
+    five ? h("p", {class: "a7-legend"}, "가운데 선 = 36개 전체의 나머지 진입 평균과 같음. 오른쪽 = 그보다 좋음, 왼쪽 = 나쁨 (R 단위).") : null);
 }
 
 /** The edges of one number on every timeframe (구간 경계 table). */
@@ -97,6 +100,7 @@ export function indranges(d, env) {
   const ind = dimSeg("indr", ORDER.map((k) => ({id: k, label: IND[k].ko, title: IND[k].long})), "rsi", () => paintAll(true), true);
   const pooledBody = h("div"), stratBody = h("div"), edgeBody = h("div");
   const paints = [];
+  const st = {paper: null};                 // /api/v4/indranges/paper once it answered (매매법별 reads by_strategy)
   const paintAll = (anim) => { for (const f of paints) f(anim); };
 
   // ---- 기존 36 합쳐서 (5년)
@@ -129,7 +133,8 @@ export function indranges(d, env) {
     if (!got) { put(stratBody, motion.shimmer(3, true)); return; }
     if (got.error) { put(stratBody, h("p", {class: "muted"}, got.error)); return; }
     put(stratBody, h("p", {class: "a7-help"}, `${fmt.stratKo(s)} · 5년 진입 ${fmt.int(got.n)}건 · 평균 ${rr(got.r)} · 이긴 비율 ${pc(got.wr)} · 표시된 칸 ${fmt.int(got.passed || 0)}개`),
-      rangeRows(k, (got.cells || {})[k] || [], (d.edges || {})[k], rules, false));
+      rangeRows(k, (got.cells || {})[k] || [], (d.edges || {})[k], rules, false),
+      stratPaper(st.paper, s, k, got));
     if (anim) motion.swap(stratBody);
   };
   const loadStrat = () => {
@@ -162,7 +167,7 @@ export function indranges(d, env) {
     h("p", {class: "an-note"}, "세 기간 = 2021.8~2022 · 2023~2024 · 2025~2026.9 (그 칸이 나머지보다 얼마나 나았나). 칸 경계는 봉 길이마다 다릅니다 (위 '구간 경계 보기').")));
 
   // ---- 지금 실험 (paper)
-  out.push(fetchInto(env, "/api/v4/indranges/paper", "지금 실험", (pd) => paperCards(pd, d, ind, paints)));
+  out.push(fetchInto(env, "/api/v4/indranges/paper", "지금 실험", (pd) => { st.paper = pd; showStrat(false); return paperCards(pd, d, ind, paints); }));
 
   // ---- 어떻게 계산했나
   out.push(ui.card({plate: "어떻게 계산했나"}, ui.disclosure("검사 방법과 숫자 보기", methods(d))));
@@ -196,12 +201,7 @@ function paperCards(pd, d, ind, paints) {
   const body = h("div");
   const paint = (anim) => {
     const k = ind.get(), cells = (pd.cells || {})[k] || [], five = (((d.pooled || {}).cells || {})[k]) || [];
-    put(body, h("p", {class: "a7-help"}, h("b", null, IND[k].long), " · 위에서 고른 숫자"),
-      h("div", {class: "a7-rows", role: "list"}, cells.map((c, j) => h("div", {class: "a7-row paper", role: "listitem"},
-        h("span", {class: "a7-k"}, h("b", null, labelOf(k, j))),
-        h("span", {class: "a7-v"}, h("b", {class: "num"}, c.n ? `평균 ${rr(c.mean_r)}` : "—"),     // plain ink: nothing tested yet
-          h("small", {class: "num"}, c.n ? `${fmt.int(c.n)}건 · 이긴 비율 ${pc(c.wr)}` : "0건"), c.small && c.n ? ui.pill("표본 적음", "thin") : null),
-        h("span", {class: "a7-v five"}, h("small", null, "5년"), h("span", {class: "num"}, `평균 ${rr((five[j] || {}).r)}`))))));
+    put(body, h("p", {class: "a7-help"}, h("b", null, IND[k].long), " · 위에서 고른 숫자"), paperRows(k, cells, five));
     if (anim) motion.swap(body);
   };
   paints.push(paint);
@@ -212,6 +212,28 @@ function paperCards(pd, d, ind, paints) {
       cov.no_bars ? ` 진입 봉 시세를 찾지 못한 거래 ${fmt.int(cov.no_bars)}건은 뺐습니다.` : ""))];
 }
 
+/** Paper ranges of one number next to the 5-year mean of the same range (plain ink: nothing tested yet). */
+function paperRows(k, cells, five) {
+  return h("div", {class: "a7-rows", role: "list"}, cells.map((c, j) => h("div", {class: "a7-row paper", role: "listitem"},
+    h("span", {class: "a7-k"}, h("b", null, labelOf(k, j))),
+    h("span", {class: "a7-v"}, h("b", {class: "num"}, c.n ? `평균 ${rr(c.mean_r)}` : "—"),
+      h("small", {class: "num"}, c.n ? `${fmt.int(c.n)}건 · 이긴 비율 ${pc(c.wr)}` : "0건"), c.small && c.n ? ui.pill("표본 적음", "thin") : null),
+    h("span", {class: "a7-v five"}, h("small", null, "5년"), h("span", {class: "num"}, `평균 ${rr((five[j] || {}).r)}`)))));
+}
+
+/** 매매법별: the chosen strategy's own paper entries in the same ranges, or how far it is from enough. */
+function stratPaper(pd, s, k, got) {
+  if (!pd || pd.error || pd.pending || !pd.by_strategy) return null;
+  const need = pd.min_strategy || 30, x = pd.by_strategy[s] || {n: 0};
+  if (!x.cells) {
+    return h("div", {class: "a7-sp"}, progressBar(`이 매매법 지금 실험 · 끝난 거래 ${fmt.int(need)}건부터 칸별로 나옴`,
+      `지금 ${fmt.int(x.n || 0)}건 (진입 때 숫자를 잰 거래) · 그때까지는 위 5년 숫자만 봅니다`, Math.min(1, (x.n || 0) / need)));
+  }
+  return h("div", {class: "a7-sp"}, h("p", {class: "a7-help"}, h("b", null, "지금 실험"), ` · 이 매매법의 끝난 거래 ${fmt.int(x.n)}건 · 오른쪽은 같은 칸의 5년 평균`),
+    paperRows(k, x.cells[k] || [], (got.cells || {})[k] || []),
+    h("p", {class: "a7-legend"}, "아직 검사는 하지 않습니다 (설명용). 20건 미만 칸은 표본 적음."));
+}
+
 function methods(d) {
   const r = d.rules || {}, src = d.source || {};
   const li = (...t) => h("li", null, ...t);
@@ -220,9 +242,9 @@ function methods(d) {
       li(`거래: 기존 36개 매매법이 15분·30분·1시간·4시간봉, 코인 6개에서 낸 모든 신호를 한 번씩 거래 (실험과 같은 청산: 다음 봉 시가 진입, 2 ATR 손절, 계단 잠금, 수수료·펀딩·강제청산 포함). 계좌·동시 포지션 제한 없음. 모두 ${fmt.int(d.trades)}건.`),
       li("숫자: 신호 봉이 닫힐 때의 값 (그 봉과 앞 봉들만 씀). RSI와 EMA200 거리는 진입 방향 기준 (숏은 뒤집음)."),
       li("칸: 봉 길이마다 36개 모두의 5년 진입을 다섯으로 똑같이 나눈 경계 (펀딩비 세 칸, 시간대 네 칸)."),
-      li(`비교: 한 칸의 평균 R과 같은 매매법의 나머지 진입 평균 R의 차이. 양쪽 다 ${fmt.int(r.min_cell)}건 이상일 때만 검사 (같은 주의 진입은 같이 움직이므로 주 단위로 묶어 계산).`),
+      li(`비교: 한 칸의 평균 R과 같은 매매법의 나머지 진입 평균 R의 차이 (36개 합친 칸은 36개 전체의 나머지 진입). 양쪽 다 ${fmt.int(r.min_cell)}건 이상일 때만 검사 (같은 주의 진입은 같이 움직이므로 주 단위로 묶어 계산).`),
       li(`여러 번 본 것 감안: 검사한 ${fmt.int(r.tests)}칸 모두를 한꺼번에 (Benjamini-Hochberg ${fmt.pct(r.fdr, 0, false)}). 그러고도 세 기간(2021.8~2022, 2023~2024, 2025~2026.9) 모두에서 같은 방향이고 각 기간 양쪽 ${fmt.int(r.min_window)}건 이상인 칸만 표시.`),
-      li(h("b", null, "첫 실행 뒤에 더한 규칙: "), `거래가 189만 건이나 되어 0.02R 같은 아주 작은 차이도 검사를 넘었습니다. 그래서 표시는 차이가 ${fmt.num(r.min_effect_r, 2)}R(손절 거리의 5%) 이상인 칸만 합니다. 검사는 넘었지만 차이가 작은 ${fmt.int(r.tiny)}칸은 차이 없음으로 둡니다.`),
+      li(h("b", null, "첫 실행 뒤에 더한 규칙: "), `거래가 ${cnt(d.trades)}건이나 되어 0.02R 같은 아주 작은 차이도 검사를 넘었습니다. 그래서 표시는 차이가 ${fmt.num(r.min_effect_r, 2)}R(손절 거리의 ${fmt.pct(r.min_effect_r, 0, false)}) 이상인 칸만 합니다. 검사는 넘었지만 차이가 작은 ${fmt.int(r.tiny)}칸은 차이 없음으로 둡니다.`),
       li(`결과: 표시 ${fmt.int(r.passed)}칸 (더 좋음 ${fmt.int(r.better)} · 더 나쁨 ${fmt.int(r.worse)}). 이 방식은 표시된 칸의 약 5%가 우연일 수 있다고 보는 방식입니다.`),
       li(`자료: 연구실 5년 신호 저장본${src.main_identical === true ? ` (파일 ${fmt.int(src.main_files)}개 모두 연구 자료와 같음을 확인)` : ""}, 펀딩비 기록${src.funding ? "" : " 없음"} · 만든 때 ${d.built_utc || "—"} UTC${d.code_commit ? ` · 코드 ${d.code_commit}` : ""}.`)));
 }

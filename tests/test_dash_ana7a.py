@@ -222,6 +222,12 @@ def test_paper_part_fills_from_market_db_and_waits_on_day_0(world, tmp_path):
     assert sum(c["n"] for c in p["cells"]["rsi"]) == p["coverage"]["with_numbers"]
     assert sum(c["n"] for c in p["cells"]["session"]) == p["coverage"]["with_numbers"]
     assert all(set(c) >= {"n"} for row in p["cells"].values() for c in row)
+    # each of the 36 on its own: counts add up; ranges only from MIN_PAPER_STRATEGY trades on
+    bs = p["by_strategy"]
+    assert sum(x["n"] for x in bs.values()) == p["coverage"]["with_numbers"] and p["min_strategy"] == IR.MIN_PAPER_STRATEGY
+    assert all(("cells" in x) == (x["n"] >= IR.MIN_PAPER_STRATEGY) for x in bs.values())
+    full = [x for x in bs.values() if "cells" in x]
+    assert full and all(sum(c["n"] for c in x["cells"]["rsi"]) == x["n"] for x in full)
     small = build_all(str(tmp_path / "d0"), days=1, hours=5)
     q = IR.paper_view(small["db"], small["now"], fake_frames())
     assert q["waiting"] and q["coverage"]["with_numbers"] < IR.MIN_PAPER
@@ -521,7 +527,8 @@ def _render(module: str, fn: str, data: dict, group: str = "core", extra: dict |
               f"const nodes = M.{fn}(d, env);\n"
               "await new Promise((r) => setTimeout(r, 30));\n"
               "console.log(JSON.stringify(D.walk(nodes)));")
-    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    # (the script goes in on stdin: a long answer as a -e argument passes the OS argument limit)
+    r = subprocess.run([node, "--input-type=module"], input=script, capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout.strip().splitlines()[-1])
 
@@ -536,6 +543,17 @@ def test_indranges_page_words(world):
               "기존 36 합쳐서", "매매법별", "표시된 칸 모두", "지금 실험", "어떻게 계산했나", "차이 없음", "더 좋음", "첫 실행 뒤에 더한 규칙"):
         assert w in t, w
     assert "채워지는 중" not in t and "5년" in t
+    # 매매법별: the chosen strategy's own paper entries (ranges once it has enough, else its filling bar)
+    x = world["paper"]["by_strategy"].get(strat["name"], {"n": 0})
+    if "cells" in x:
+        assert f"이 매매법의 끝난 거래 {x['n']:,}건" in t
+    else:
+        assert "이 매매법 지금 실험" in t
+    thin = {**world["paper"], "by_strategy": {strat["name"]: {"n": 3}}}
+    t2 = _render("analysis-indr.js", "indranges", five, extra={"/api/v4/indranges/strategy": strat,
+                                                                "/api/v4/indranges/paper": thin})["text"]
+    assert "이 매매법 지금 실험 · 끝난 거래 30건부터 칸별로 나옴" in t2 and "지금 3건" in t2
+    assert "36개 전체의 나머지 진입" in t and "189.0만건" in t
     wait = _render("analysis-indr.js", "indranges", five, extra={"/api/v4/indranges/strategy": strat,
                                                                   "/api/v4/indranges/paper": {"waiting": True, "min_trades": 100,
                                                                                               "coverage": {"with_numbers": 7, "trades": 9}}})

@@ -19,7 +19,7 @@ export function liqentry(d, env) {
     meta: [`기록 시작: ${when(d.first_ts)}`, d.rows != null ? `강제청산 기록 ${fmt.int(d.rows)}줄` : null,
       d.trades != null ? `${W.who} 끝난 거래 ${fmt.int(d.trades)}건 · ${W.flips} ${fmt.int(d.flip_trades || 0)}건` : null].filter(Boolean).join(" · "),
     at: d.computed_at, stale: d.stale,
-    read: `한 코인에서 1분 동안 강제청산이 크게 몰린 때(그 코인 기록의 상위 ${fmt.int((1 - (d.burst_pct || 0.95)) * 100)}%)를 '큰 강제청산'으로 봅니다. 그 뒤 5·15·60분 안에 같은 코인에 들어간 진입을 청산당한 쪽과 같은 방향 / 반대 방향으로 나눠, 그 밖의 진입과 ${W.flips}과 나란히 봅니다.`,
+    read: `한 코인에서 1분 동안 강제청산이 크게 몰린 때(그 코인의 지금까지 기록 전체에서 상위 ${fmt.int((1 - (d.burst_pct || 0.95)) * 100)}%, 기록이 쌓이면 기준도 바뀜)를 '큰 강제청산'으로 봅니다. 그 뒤 5·15·60분 안에 같은 코인에 들어간 진입을 청산당한 쪽과 같은 방향 / 반대 방향으로 나눠, 그 밖의 진입과 ${W.flips}과 나란히 봅니다.`,
     warn: [!money ? noMoneyLine() : null,
       d.ready === false ? null : h("p", {class: "an-read"}, ui.pill("기록 시작", "accent"), ` 강제청산 기록기는 ${when(d.first_ts)}부터 기록했습니다 (그 전에는 바이낸스 주소 문제로 조용했음). 기록 전 진입은 뺍니다.`),
       d.stale ? h("p", {class: "an-warn"}, `마지막 기록이 ${when(d.last_ts)}입니다. 기록기가 멈췄을 수 있어요 (0건은 '없음'이 아니라 '모름').`) : null]})];
@@ -32,7 +32,7 @@ export function liqentry(d, env) {
   const need = d.min_covered || 20;
   if (d.waiting) {
     out.push(waitCard("강제청산 직후", [{label: `기록 시작 뒤 ${W.short} 진입 ${fmt.int(need)}건 필요`, share: Math.min(1, (d.covered || 0) / need),
-      words: `지금 ${fmt.int(d.covered || 0)}건 (기록 시작 전 진입 ${fmt.int(Math.max(0, (d.trades || 0) - (d.covered || 0)))}건은 뺌)`}], null));
+      words: `지금 ${fmt.int(d.covered || 0)}건 (기록 전이거나 그 코인 기록이 아직 적어 뺀 진입 ${fmt.int(Math.max(0, (d.trades || 0) - (d.covered || 0)))}건)`}], null));
     out.push(coinCard(d));
     out.push(h("p", {class: "an-note an-foot"}, `강제청산 직후: ${W.who} · ${d.label || "설명용, 판정 아님"}`));
     return out;

@@ -8,8 +8,11 @@ next to every other entry and next to the group's coin flips split the same way.
 Liquidations: liq.db next to paper3.db (paperbot/liqstream.py, the public ``!forceOrder@arr`` stream; Binance sends at
 most one order per coin per second, so bursts are undercounted). A burst is agents/entrymoment's definition (the same
 as 진입 순간's 강제청산 dimension): a coin's 1-minute liquidated notional (filled qty x average price) at or above the
-95th percentile of that coin's non-zero minutes on record, with at least 30 such minutes before anything is called a
-burst. Its side is the larger of the two in that minute: SELL forced orders close longs, BUY orders close shorts.
+95th percentile of that coin's non-zero minutes on record, and a coin needs at least 30 such minutes on record before
+anything is called a burst. "On record" is the whole record so far (as in 진입 순간), so the size that counts as large
+for an early entry also uses minutes recorded after it: a scale for "large", never the entry's own result; it moves as
+the record grows, and the page says so. Its side is the larger of the two in that minute: SELL forced orders close
+longs, BUY orders close shorts.
 
 Per window W: an entry is ``after`` a burst when a burst minute ended at or before the entry and began at most W
 minutes before it; with several bursts, their sides are summed (a tie: the latest one's side). ``same`` / ``opposite``
