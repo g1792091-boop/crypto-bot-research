@@ -1,0 +1,54 @@
+/* agents-ui: the pieces the agent screens share (screens/agents-ui.js): pixel avatars in the role's colour, message
+   type badges, the strategy / account mini cards, the staff leaderboard row, the debate meter. @imported by
+   rooms-kit.css (office / rooms / digest / debate) and strategies.css (the 'AI 의견' card). Tokens only: a role's colour
+   is hsl(var(--h) …) over the avatar tokens, the same formula as .rav. */
+
+/* ---------------------------------------------------------------- pixel avatars */
+.ag-av { position: relative; flex: none; display: grid; place-items: end center; width: 36px; height: 36px; border-radius: 50%; overflow: hidden;
+  background: hsl(var(--h, 210) var(--av-s) var(--av-bg-l)); border: 2px solid hsl(var(--h, 210) var(--av-s) var(--av-ring-l));
+  box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--h, 210) var(--av-s) var(--av-ring-l)) 14%, transparent); }
+.ag-av .fig { margin-bottom: -7px; }
+.ag-av.owner { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ag-av.code { place-items: center; border-radius: 9px; background: var(--surface-2); border-color: var(--line-2); box-shadow: none; }
+.ag-av.code b { color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-pixel); }
+.ag-av.sm { width: 22px; height: 22px; border-radius: 6px; border-width: 1px; }
+.rm-avs .ag-av { width: 28px; height: 28px; margin-left: -8px; border-width: 2px; box-shadow: 0 0 0 2px var(--surface); }
+.rm-avs .ag-av .fig { margin-bottom: -6px; }
+
+/* ---------------------------------------------------------------- type badges */
+.ag-types { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ag-t { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 0; border-radius: 5px; border: 1px solid var(--line-2);
+  color: var(--ink-2); font: 700 var(--t-2xs)/1.6 var(--f-body); letter-spacing: .02em; white-space: nowrap; }
+.ag-t::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
+.ag-t.t-conclusion { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.ag-t.t-proposal { color: var(--term-cyan); border-color: color-mix(in srgb, var(--term-cyan) 45%, transparent); background: color-mix(in srgb, var(--term-cyan) 10%, transparent); }
+.ag-t.t-hypothesis { color: var(--amber-ink); border-color: var(--amber-line); background: var(--amber-soft); }
+.ag-t.t-question { --h: 268; color: hsl(var(--h) var(--av-s) var(--av-ink-l)); border-color: hsl(var(--h) var(--av-s) var(--av-line-l)); background: hsl(var(--h) var(--av-s) var(--av-bg-l)); }
+.ag-t.t-data { color: var(--ink-2); border-color: var(--line-2); background: var(--surface-2); }
+
+/* ---------------------------------------------------------------- strategy / account mini cards */
+.ag-minis { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.ag-mini { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; max-width: 100%; min-height: 40px; padding: 5px 10px 5px 6px;
+  border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); text-decoration: none; font: 400 var(--t-xs)/1.35 var(--f-body);
+  transition: border-color var(--t-fast), transform var(--t-fast); }
+.ag-mini:hover, .ag-mini:focus-visible { border-color: var(--accent-line); transform: translateY(-1px); }
+.ag-mini-fig { width: 28px; height: 28px; border-radius: 7px; overflow: hidden; display: grid; place-items: center; }
+.ag-mini-fig .sfig { width: 100%; height: 100%; }
+.ag-mini-b { display: grid; gap: 1px; min-width: 0; }
+.ag-mini-b b { font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-mini-s { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-mini-s .up { color: var(--up); } .ag-mini-s .down { color: var(--down); }
+.ag-mini-pos { color: var(--ink-2); }
+.ag-mini-go { font-style: normal; color: var(--accent); font-weight: 700; }
+@media (max-width: 559px) { .ag-mini { flex: 1 1 100%; } }
+
+/* ---------------------------------------------------------------- the 'AI 의견' card (strategy detail) */
+.ag-op { display: grid; gap: 10px; min-width: 0; }
+.ag-op-pin { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--accent-line); background: var(--accent-soft); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.ag-op-pin small { color: var(--muted); font-size: var(--t-xs); }
+.ag-op-list { display: grid; gap: 8px; }
+.ag-op-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; }
+.ag-op-row .ag-op-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-xs); color: var(--muted); }
+.ag-op-row .ag-op-h b { color: hsl(var(--h, 210) var(--av-s) var(--av-ink-l)); font-size: var(--t-sm); }
+.ag-op-row .ag-op-t { margin: 2px 0 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.ag-op-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: var(--t-xs); }

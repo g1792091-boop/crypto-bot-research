@@ -16,7 +16,7 @@ export async function mount(el, ctx) {
   ctx.setTitle("에이전트 방");
   const mq = matchMedia(NARROW);
   const narrow = () => mq.matches;
-  const st = {ov: null, id: null, pane: "list", filter: local.get("rooms-filter", "all"), q: "", seen: {}, roles: {}, room: null};
+  const st = {ov: null, id: null, pane: "list", filter: local.get("rooms-filter", "all"), q: "", seen: {}, roles: {}, room: null, unread: {}};
 
   el.append(ui.screenHead("에이전트 방", "직원들의 회의 대화 · 두 분이 끼어들 수도 있습니다 (선택)"));
   // ---------------------------------------------------------------- frame + panes
@@ -28,7 +28,7 @@ export async function mount(el, ctx) {
     pane: (p, toProps) => setPane(p, toProps),
     narrow, ov: () => st.ov, cur: () => (st.ov && st.ov.rooms || []).find((r) => r.room_id === st.id),
     roles: () => st.roles,
-    seen: (id, top) => { if (narrow() && st.pane !== "chat") return; st.seen = markSeen(id, top); syncUnread(st.ov); renderList(); },
+    seen: (id, top) => { if (narrow() && st.pane !== "chat") return; st.seen = markSeen(id, top); delete st.unread[id]; syncUnread(st.ov); renderList(); },
     sideChanged: () => side.load(), refreshOv: () => store.refresh("rooms").catch(() => {}),
   };
   const chat = makeChat(ctx, {...hooks, roomInfo: (r) => { st.room = r; side.setRoom(r); }});
@@ -69,7 +69,15 @@ export async function mount(el, ctx) {
       h("span", {class: "rm-r2"}, h("span", {class: "rm-lt"}, lastLine(r)),
         r.running ? h("span", {class: "live-pill rm-livepill"}, "회의 중") : null,
         r.open_proposals ? ui.pill(`승인 대기 ${fmt.int(r.open_proposals)}`, "accent") : null,
-        unread ? h("i", {class: "rm-udot", title: "새 대화", "aria-label": "새 대화"}) : null)));
+        unread ? unreadBadge(r) : null)));
+  }
+  /** The unread count of a room (agents-ui): messages after the last one this viewer saw, from /api/agents/feed;
+   *  "12+" when the feed page ended before this room's seen message; a plain dot until the count arrives. */
+  function unreadBadge(r) {
+    const u = st.unread[r.room_id];
+    if (!u || !u.n) return h("i", {class: "rm-udot", title: "새 대화", "aria-label": "새 대화"});
+    const t = u.n > 99 ? "99+" : `${fmt.int(u.n)}${u.plus ? "+" : ""}`;
+    return h("b", {class: "rm-ucount num", title: `새 글 ${t}개`, "aria-label": `새 글 ${t}개`}, t);
   }
   function renderList(resetPage) {
     const ov = st.ov;
@@ -133,6 +141,29 @@ export async function mount(el, ctx) {
   ctx.track(() => { if (cur === route) cur = null; });
   ctx.listen(mq, "change", () => { if (!narrow() && !st.id) route({arg: null, query: {}}); });
 
+  // unread counts per room (only rooms with something new; one bounded read of the newest messages)
+  const FEED_MAX = 400;
+  let unreadT = null, unreadBusy = false;
+  async function loadUnread() {
+    const rooms = (st.ov && st.ov.rooms) || [];
+    const behind = rooms.filter((r) => (r.last_id || 0) > (st.seen[r.room_id] || 0) && r.room_id !== st.id);
+    if (!behind.length) { if (Object.keys(st.unread).length) { st.unread = {}; renderList(); } return; }
+    if (unreadBusy) return;
+    unreadBusy = true;
+    try {
+      const from = Math.min(...behind.map((r) => st.seen[r.room_id] || 0));
+      const rows = await ctx.api(`/api/agents/feed?after_id=${from}&limit=${FEED_MAX}`);
+      if (!ctx.alive() || !Array.isArray(rows)) return;
+      const n = {};
+      for (const x of rows) if (x.room_id && x.kind !== "system" && x.id > (st.seen[x.room_id] || 0)) n[x.room_id] = (n[x.room_id] || 0) + 1;
+      const oldest = rows.length ? Math.min(...rows.map((x) => x.id)) : 0;
+      const cut = rows.length >= FEED_MAX;
+      st.unread = Object.fromEntries(behind.map((r) => [r.room_id, {n: n[r.room_id] || 0, plus: cut && (st.seen[r.room_id] || 0) < oldest}]));
+      renderList();
+    } catch { /* the dot stays */ } finally { unreadBusy = false; }
+  }
+  const unreadSoon = () => { clearTimeout(unreadT); unreadT = setTimeout(() => ctx.alive() && loadUnread(), 800); };
+  ctx.track(() => clearTimeout(unreadT));
   // ---------------------------------------------------------------- data
   ctx.watch("rooms", (ov, k, err) => {
     if (!ov) { if (err && !st.ov) listPane.append(ui.errorBox(err, () => store.refresh("rooms").catch(() => {}))); return; }
@@ -141,8 +172,12 @@ export async function mount(el, ctx) {
     chat.setOv(ov);
     renderState(); renderList();
     side.render();
+    unreadSoon();
   });
   ctx.watch("usage", (u) => { if (u) side.setUsage(u); });
+  // agents-ui: the strategy / account cards in messages read the board; the running meeting's progress reads the office
+  ctx.watch("board", (b) => { if (b) chat.boardChanged(); });
+  ctx.watch("office", (o) => { if (o) chat.officeChanged(); });
   const loadEvents = () => ctx.api("/api/v4/people/strats").then((d) => { if (ctx.alive() && d && d.strats) { st.events = d.strats; renderList(); } }).catch(() => {});
   ctx.every(60000, loadEvents);
   ctx.on("rooms", (map) => {

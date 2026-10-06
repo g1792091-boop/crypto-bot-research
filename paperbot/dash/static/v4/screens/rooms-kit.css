@@ -1,3 +1,4 @@
+@import url("agents-ui.css");
 /* Builder D's shared agent pieces (screens/rooms-kit.js): rule cards with folded raw JSON, code-result cards, stance
    pills, meeting result pills, the agents banner. Loaded once by office / rooms / digest / debate. Tokens only. */
 .rk-body { display: grid; gap: 8px; min-width: 0; }

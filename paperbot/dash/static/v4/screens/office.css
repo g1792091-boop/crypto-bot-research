@@ -158,3 +158,67 @@
 [data-screen="office"] .ow-s { color: var(--led-dim); font-size: var(--t-xs); overflow-wrap: anywhere; }
 [data-screen="office"] .ow-foot { margin: 0; align-self: flex-start; padding: 3px 8px; border-radius: 3px; background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.45 var(--f-term); }
 @media (max-width: 420px) { [data-screen="office"] .ow-g { grid-template-columns: 56px 50px 1fr; } [data-screen="office"] .ow-g > :last-child { grid-column: 2 / -1; } }
+
+/* ---------------------------------------------------------------- agents-ui: a live meeting's progress and people */
+[data-screen="office"] .of-room.live { box-shadow: 0 0 0 2px var(--accent-glow), 0 0 28px 2px var(--accent-glow); }
+[data-screen="office"] .of-room.live .of-table { box-shadow: 0 4px 0 var(--table-edge), 0 0 18px 4px var(--accent-glow); }
+[data-screen="office"] .of-say-old { opacity: .72; }
+[data-screen="office"] .of-say-now { box-shadow: 0 0 0 2px var(--accent-line), 0 6px 18px var(--bubble-shadow); }
+[data-screen="office"] .of-prog { position: relative; z-index: 1; display: grid; gap: 5px; padding: 6px 9px; border-radius: 3px; background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.4 var(--f-term); }
+[data-screen="office"] .of-prog-t { font-weight: 700; color: var(--accent); }
+[data-screen="office"] .of-prog-t small { color: var(--plate-ink); font-weight: 400; font-size: var(--t-xs); }
+[data-screen="office"] .of-pbar { display: flex; gap: 3px; }
+[data-screen="office"] .of-pbar i { flex: 1 1 0; height: 6px; border-radius: 1px; background: var(--wall-dark); }
+[data-screen="office"] .of-pbar i.on { background: var(--accent); }
+[data-screen="office"] .of-pbar i.nx { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); }
+[data-screen="office"] .of-chips { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+[data-screen="office"] .of-st { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 2px 8px 2px 6px; border-radius: 3px; border: 2px solid var(--plate-line);
+  background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.2 var(--f-term); }
+[data-screen="office"] .of-st i { width: 8px; height: 8px; border-radius: 1px; background: hsl(var(--h, 210) var(--av-s) var(--av-ring-l)); }
+[data-screen="office"] .of-st b { color: var(--ink); font-weight: 700; }
+[data-screen="office"] .of-st small { font-size: var(--t-xs); color: var(--muted); }
+[data-screen="office"] .of-st.talk { border-color: var(--accent); }
+[data-screen="office"] .of-st.talk small { color: var(--accent); font-weight: 700; }
+[data-screen="office"] .of-st.next { border-style: dashed; border-color: var(--accent-line); }
+[data-screen="office"] .of-st.next small { color: var(--ink-2); font-weight: 700; }
+[data-screen="office"] .of-st.done small { color: var(--ink-2); }
+[data-screen="office"] .of-st.wait { opacity: .75; }
+
+/* ---------------------------------------------------------------- agents-ui: today's fixed meetings (office-sched.js) */
+[data-screen="office"] .osc { display: grid; gap: 10px; padding: 12px 14px 10px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); min-width: 0; }
+[data-screen="office"] .osc[hidden] { display: none; }
+[data-screen="office"] .osc-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+[data-screen="office"] .osc-now { color: var(--muted); font-size: var(--t-sm); }
+[data-screen="office"] .osc-next { font-size: var(--t-sm); }
+[data-screen="office"] .osc-cd { color: var(--accent); font: 700 var(--t-lg)/1 var(--f-term); letter-spacing: .03em; }
+[data-screen="office"] .osc-cdw { color: var(--ink-2); font-size: var(--t-sm); }
+[data-screen="office"] .osc-track { position: relative; height: 54px; margin: 2px 14px 0; }
+[data-screen="office"] .osc-line { position: absolute; left: 0; right: 0; top: 20px; height: 4px; border-radius: 4px; background: var(--surface-3); }
+[data-screen="office"] .osc-hr { position: absolute; top: 34px; transform: translateX(-50%); color: var(--muted); font: 400 var(--t-2xs)/1 var(--f-term); }
+[data-screen="office"] .osc-mark { position: absolute; top: 0; transform: translateX(-50%); display: grid; justify-items: center; gap: 3px; }
+[data-screen="office"] .osc-mark b { order: -1; padding: 0 5px; border-radius: 4px; color: var(--ink-2); font: 700 var(--t-2xs)/1.4 var(--f-term); }
+[data-screen="office"] .osc-mark i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); background: var(--surface); }
+[data-screen="office"] .osc-mark.done i { background: var(--up); border-color: var(--up); }
+[data-screen="office"] .osc-mark.past i { border-style: dashed; }
+[data-screen="office"] .osc-mark.next i { border-color: var(--ink-2); }
+[data-screen="office"] .osc-mark.is-next i { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+[data-screen="office"] .osc-mark.is-next b { background: var(--accent); color: var(--accent-ink); }
+[data-screen="office"] .osc-nowmark { position: absolute; top: 12px; width: 2px; height: 20px; margin-left: -1px; background: var(--ink); border-radius: 2px; }
+[data-screen="office"] .osc-nowmark span { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--ink); color: var(--bg);
+  font: 700 var(--t-2xs)/1.4 var(--f-body); white-space: nowrap; }
+[data-screen="office"] .osc-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+[data-screen="office"] .osc-li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+[data-screen="office"] .osc-li > b { color: var(--ink); font: 700 var(--t-sm)/1 var(--f-term); }
+[data-screen="office"] .osc-li.done { opacity: .78; }
+[data-screen="office"] .osc-li.past { opacity: .6; }
+[data-screen="office"] .osc-li.is-next { border-color: var(--accent-line); background: var(--accent-soft); }
+[data-screen="office"] .osc-lb { display: grid; min-width: 0; }
+[data-screen="office"] .osc-ln { font-size: var(--t-sm); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-screen="office"] .osc-ln small { color: var(--muted); font-weight: 400; font-size: var(--t-xs); }
+[data-screen="office"] .osc-lw { color: var(--muted); font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-screen="office"] .osc-st { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); font: 700 var(--t-2xs)/1.6 var(--f-body); white-space: nowrap; }
+[data-screen="office"] .osc-st.done { color: var(--up); border-color: var(--up-line); }
+[data-screen="office"] .osc-li.is-next .osc-st { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+[data-screen="office"] .osc-foot { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+/* a phone: hours sit close on the track, so only the next one keeps its label (the list below names them all) */
+@media (max-width: 759px) { [data-screen="office"] .osc-mark:not(.is-next) b { visibility: hidden; } [data-screen="office"] .osc-track { margin-inline: 8px; } }

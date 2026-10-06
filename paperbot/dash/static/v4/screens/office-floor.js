@@ -84,8 +84,10 @@ export function makeFloor(ctx) {
       const key = `${m.round_id}|${x.role}|${x.ts}`;
       const fresh = !first && !st.shown.has(key);
       st.shown.add(key);
+      // agents-ui: the newest stored line is the speaker's (bright); the one before it stays, dimmed
+      const latest = i === lines.length - 1;
       out.push(ui.bubble({who: `${roleName(roles, x.role)} · ${KIND_KO[x.kind] || "발언"}`, time: fmt.hm(x.ts), text: x.line,
-        tail: i === lines.length - 1 && lines.length > 1 ? "tr" : "tl", fresh, cls: "of-say"}));
+        tail: latest && lines.length > 1 ? "tr" : "tl", fresh, cls: ["of-say", latest ? "of-say-now" : "of-say-old"].join(" ")}));
     });
     if (!out.length && m.code && m.code.line) {
       const key = `${m.round_id}|code|${m.code.ts}`;
@@ -167,10 +169,29 @@ export function makeFloor(ctx) {
       const half = Math.ceil(ppl.length / 2);
       kids.push(h("div", {class: "of-tz"}, h("div", {class: "of-side l"}, ppl.slice(0, half)), h("i", {class: "of-table", "aria-hidden": "true"}),
         h("div", {class: "of-side r"}, ppl.slice(half))));
-      if (m.next_role) kids.push(h("p", {class: "of-next"}, `다음 차례 · ${roleName(roles, m.next_role)}`));
+      // agents-ui: how far the meeting is (stored turns against the people its order names) and each one's state
+      kids.push(progress(m, roles), statusChips(m, roles));         // "다음 차례" only when the order names the next one
     }
     return h("section", {class: ["of-room", "tint", md.live ? "live" : "", small ? "quiet" : "", z.kind === "spec" ? "spec" : ""], "aria-label": z.title,
       dataset: {zone: z.key}, style: {"--h": zoneHue(z)}}, h("i", {class: "of-lamp", "aria-hidden": "true", title: md.live ? "회의 중: 불 켜짐" : null}), kids);
+  }
+  /** "발언 3번째 · 순서에 오른 4명 중 2명 말함" and one segment per person (lit once that person's line is stored). */
+  function progress(m, roles) {
+    const ppl = m.participants || [];
+    const spoke = new Set(Object.keys(m.lines || {}));
+    const turns = (m.turns || []).length;
+    return h("div", {class: "of-prog", title: "회의 순서에 이름이 오른 직원 (앞사람의 답에 따라 늘거나 줄 수 있음)"},
+      h("span", {class: "of-prog-t"}, turns ? `발언 ${fmt.int(turns)}번째` : "첫 발언 전",
+        h("small", null, ` · 순서에 오른 ${fmt.int(ppl.length)}명 중 ${fmt.int(ppl.filter((r) => spoke.has(r)).length)}명 말함`)),
+      h("span", {class: "of-pbar", "aria-hidden": "true"}, ppl.map((r) => h("i", {class: [spoke.has(r) ? "on" : "", m.next_role === r ? "nx" : ""]}))));
+  }
+  /** Each participant's state, from the stored turns only: 방금 발언 / 다음 차례 (the order names them) / 발언함 / 대기. */
+  function statusChips(m, roles) {
+    return h("div", {class: "of-chips", role: "list", "aria-label": "참석자 상태"}, (m.participants || []).map((r) => {
+      const [ko, cls] = m.last_role === r ? ["방금 발언", "talk"] : m.next_role === r ? ["다음 차례", "next"] : (m.lines || {})[r] ? ["발언함", "done"] : ["대기", "wait"];
+      return h("span", {class: ["of-st", cls], role: "listitem", style: {"--h": hueFor(roles, r)}, title: `${roleName(roles, r)} · ${ko}`},
+        h("i", {"aria-hidden": "true"}), h("b", null, shortName(roles, r)), h("small", null, ko));
+    }));
   }
   /** The team colour of a room's floor: its team (TEAM_HUE), a group specialist room, the strategy rooms. */
   function zoneHue(z) {
