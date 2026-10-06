@@ -546,9 +546,10 @@ def open_dispute(conn: sqlite3.Connection, *, room_id: str, round_id: Optional[i
         data["conceded"] = True
     cur = conn.execute(
         "INSERT INTO disputes (ts, room_id, round_id, strategy, source, claim_ko, side_a, side_b, kind, spec, spec_hash, "
-        "status, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "status, data, settled_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (int(now_ms), room_id, round_id, strategy, source, claim, side_a, side_b, kind, R._dumps(spec), shash,
-         "queued" if (conceded and kind == "lab") else status, R._dumps(data)))
+         "queued" if (conceded and kind == "lab") else status, R._dumps(data),
+         int(now_ms) if status in ("conceded", "duplicate") else None))     # final at once: it ended now
     conn.commit()
     did = int(cur.lastrowid)
     d = get(conn, did) or {}
@@ -1072,7 +1073,8 @@ def settled_between(conn: Optional[sqlite3.Connection], since_ms: int, until_ms:
     """Disputes that ended (settled, void, expired, conceded) in [since, until): claim, sides, winner, the code line
     (the Saturday learning packet: do_not_retest)."""
     out = []
-    for r in _rows(conn, "settled_ts >= ? AND settled_ts < ?", (int(since_ms), int(until_ms)), limit, "settled_ts"):
+    for r in _rows(conn, "settled_ts >= ? AND settled_ts < ? AND status != 'duplicate'", (int(since_ms), int(until_ms)),
+                   limit, "settled_ts"):
         out.append({"id": r["id"], "strategy": r["strategy"], "claim": r["claim_ko"][:200], "kind": r["kind"],
                     "settle_ko": settle_ko(r.get("spec"), r["strategy"]), "side_a": r["side_a"], "side_b": r["side_b"],
                     "status": r["status"], "winner": r.get("winner"),
