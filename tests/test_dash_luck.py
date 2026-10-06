@@ -424,3 +424,21 @@ def test_links_only_to_screens_this_build_has():
     src = _read("luck-kit.js")
     assert "SCREENS[w.screen]" in src and 'r.verdict === "preparing" && r.part === "past"' in src
     assert "5년 연구란" in src
+
+
+def test_why_card_after_the_verdict_has_its_number(tmp_path):
+    """After the verdict the coin card still names the count and the uncorrected number (never '약 —개')."""
+    from paperbot import checkpoint as CK
+    out = str(tmp_path / "checkpoint.db")
+    CK.open_out(out).close()
+    c = sqlite3.connect(out)
+    c.execute("INSERT INTO verdicts (date, ts, snapshot_sha256, data) VALUES (?,?,?,?)",
+              ("2026-11-04", 1, "x", json.dumps({"tested": 120, "luck_passed": 1, "lucky_expected": 0.07,
+                                                 "lucky_if_uncorrected": 8.4, "alpha": 0.1})))
+    c.commit()
+    c.close()
+    v = L.luck_view(None, checkpoint_db=out, data_dir=str(tmp_path))
+    ck = v["rows"][0]
+    assert ck["ready"] and ck["plain"] == 6.0
+    t = _render("K.whyCard(d)", json.loads(json.dumps(v)))["text"]
+    assert "지난 30일 판정에서 검정한 계좌는 120개" in t and "약 6.0개" in t and "약 —개" not in t

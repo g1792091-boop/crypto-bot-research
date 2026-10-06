@@ -87,7 +87,9 @@ export function whyCard(d) {
     dots,
     h("p", {class: "muted lk-note"}, `점 하나 = 한 사람. 색칠한 점 = 앞면이 ${fmt.int(ex.hit)}번 이상 나온 사람 (그 확률 ${fmt.pct(ex.share, 1, false)}). 이 사람들이 동전 던지기를 잘하는 걸까요? 아닙니다. 다시 던지면 대부분 평범해집니다.`),
     h("p", null, "매매법도 같습니다. 여러 개를 한꺼번에 시험하면 아무 실력이 없어도 몇 개는 좋아 보입니다. ",
-      ck.tested ? `지금 30일 판정에 들어갈 계좌는 ${fmt.int(ck.tested)}개라, '동전 봇 95%보다 잘하면 합격'으로만 보면 실력이 없어도 약 ${num(ck.plain, 1)}개가 합격처럼 보입니다. ` : "",
+      ck.tested && ck.plain != null ? (ck.ready
+        ? `지난 30일 판정에서 검정한 계좌는 ${fmt.int(ck.tested)}개라, '동전 봇 95%보다 잘하면 합격'으로만 봤다면 실력이 없어도 약 ${num(ck.plain, 1)}개가 합격처럼 보였을 것입니다. `
+        : `지금 30일 판정에 들어갈 계좌는 ${fmt.int(ck.tested)}개라, '동전 봇 95%보다 잘하면 합격'으로만 보면 실력이 없어도 약 ${num(ck.plain, 1)}개가 합격처럼 보입니다. `) : "",
       "그래서 이 프로젝트는 시험할 때마다 기준을 엄격하게 보정하고, 아래처럼 '통과한 수'를 '운으로 나올 수'와 나란히 봅니다."),
     h("p", {class: "lk-rule"}, h("b", null, "읽는 법 "), "통과한 수가 운으로 나올 수와 비슷하면 아직 진짜를 찾았다고 할 수 없습니다. 운으로 나올 수보다 확실히 많을 때만 '진짜가 섞여 있을 수 있다'고 봅니다. 그래도 어느 것이 진짜인지는 새 자료로 다시 확인해야 합니다."));
 }
@@ -184,7 +186,7 @@ export function luckCheck(ctx, o = {}) {
         h("p", {class: "muted lk-note"}, r.note || ""));
       return;
     }
-    put(body, h("div", {class: "lk-list", role: "list"}, luckRow(r, ctx)));
+    put(body, h("div", {class: "lk-list", role: "list"}, luckRow(r, null)));     // already on 판정: no link to itself
   });
   return el;
 }
