@@ -131,6 +131,7 @@ from typing import Any, Callable, Iterator, Optional
 from ..notify import INFO, WARN, ConsoleNotifier, Notifier, NullNotifier, TelegramNotifier
 from . import actions as A
 from . import extra_accounts as X
+from . import labintake as LI
 from . import rooms_db as R
 from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
@@ -417,6 +418,19 @@ class RoomsPolicy:
     weekly_report_hour_kst: int = -1
     weekly_report_weekday: int = 6
     weekly_report_window_ms: int = 6 * 3_600_000
+    # the shared lab intake queue (agents/labintake.py, code only): counted 5-year tests a KST day from the 24-hour
+    # debate room's picked idea (hard max 2) and from the owners' requests; 0 = that source is off. Every source off
+    # (the default) = the queue does nothing at all. ``debate_db``: debate.db, read-only (main: --debate-db)
+    lab_intake_debate_per_day: int = 0
+    lab_intake_owner_per_day: int = 0
+    debate_db: str = ""
+    # assigned sides in the strategy rooms (advocate vs attacker) and their disputes' tests (owner item C; off here):
+    # at most ``dispute_tests_per_day`` counted dispute tests a KST day, one per strategy room per
+    # ``dispute_room_gap_days``; ``dispute_expert`` keeps the code-picked expert turn in a full sides meeting
+    sides: bool = False
+    dispute_tests_per_day: int = 3
+    dispute_room_gap_days: int = 7
+    dispute_expert: bool = False
 
     @property
     def max_rounds_per_tick(self) -> int:
@@ -1060,7 +1074,17 @@ ENV_INTS = {
     "AGENTS_ANALYSIS_MIN_TRADES": ("triggers.analysis_min_trades", 1),
     # ... and meet once more in a KST week (on another day) with this many times that minimum of new trades
     "AGENTS_ANALYSIS_EXTRA_FACTOR": ("triggers.analysis_extra_factor", 1),
+    # the shared lab intake queue (agents/labintake.py): counted 5-year tests a KST day per source (0 = off)
+    "AGENTS_LAB_INTAKE_DEBATE_PER_DAY": ("lab_intake_debate_per_day", 0),
+    "AGENTS_LAB_INTAKE_OWNER_PER_DAY": ("lab_intake_owner_per_day", 0),
+    # assigned sides in the strategy rooms and their disputes' tests (0/1 switches: AGENTS_SIDES, AGENTS_DISPUTE_EXPERT)
+    "AGENTS_DISPUTE_TESTS_PER_DAY": ("dispute_tests_per_day", 0),
+    "AGENTS_DISPUTE_ROOM_GAP_DAYS": ("dispute_room_gap_days", 0),
+    "AGENTS_SIDES": ("sides", 0),
+    "AGENTS_DISPUTE_EXPERT": ("dispute_expert", 0),
 }
+# the 0/1 switches among ENV_INTS (stored as booleans)
+ENV_SWITCHES = ("AGENTS_SIDES", "AGENTS_DISPUTE_EXPERT")
 # settings given in minutes that the policy keeps in milliseconds
 ENV_MINUTES = ("AGENTS_LOSS_MIN_GAP_MIN",)
 
@@ -1109,8 +1133,17 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
             continue
         if not raw.isdigit() or int(raw) < lo:
             raise ValueError(f"{name}={raw!r}: use a whole number >= {lo}")
+        if name in ENV_SWITCHES:
+            if int(raw) > 1:
+                raise ValueError(f"{name}={raw!r}: use 1 (on) or 0 (off)")
+            setattr(p, attr, int(raw) == 1)
+            continue
         obj, _, leaf = attr.rpartition(".")
         setattr(getattr(p, obj) if obj else p, leaf, int(raw) * (60_000 if name in ENV_MINUTES else 1))
+    if p.lab_intake_debate_per_day > 2:
+        raise ValueError(f"AGENTS_LAB_INTAKE_DEBATE_PER_DAY={p.lab_intake_debate_per_day}: 토론방 5년 시험은 하루 2개까지 "
+                         "(every counted test makes the lab's bar stricter for everyone; use 0, 1 or 2)")
+    p.debate_db = (env.get("AGENTS_DEBATE_DB") or "").strip()
     if p.copy_cap_per_strategy > 1 or p.copy_cap_total > 10:
         raise ValueError(f"AGENTS_COPY_CAP_PER_STRATEGY={p.copy_cap_per_strategy}, AGENTS_COPY_CAP_TOTAL="
                          f"{p.copy_cap_total}: at most 1 copy per strategy and 10 in all (rule Q7; the live runner "
@@ -3944,7 +3977,7 @@ def lab_overview(ctx: RoundContext) -> dict:
     doc = packets3.research_doc() or {}
     obs = observing(ctx)
     fams = list(getattr(NL, "FAMILIES", {}) or {}) if NL is not None else []
-    return {
+    out = {
         "tests_so_far": n, "passes_so_far": len(passed), "next_test_number": n + 1,
         "next_p_threshold": _r(0.05 / (n + 1), 8), "max_passable_n": mp, "can_still_pass": n <= mp,
         "tests_left_that_can_pass": max(0, mp + 1 - n), "max_specs_per_meeting": min(LAB_MAX_SPECS, p.lab_max_tests),
@@ -3965,6 +3998,11 @@ def lab_overview(ctx: RoundContext) -> dict:
                          "note": "관찰 기간: 시험은 하고 장부에 남기지만, 통과해도 새 계좌 제안은 하지 않음(기간이 끝나면 코드가 제안)"}
                         if obs else None),
     }
+    if LI.enabled(p):
+        # the shared intake queue (debate ideas, meeting disputes, the owners' requests): what waits, today's budget,
+        # the latest results, so the inventor does not propose a queued spec again (only while the queue is on)
+        out["intake"] = LI.overview(conn, ctx.now_ms)
+    return out
 
 
 def lab_accounts_packet(ctx: RoundContext, new_since: Optional[int] = None) -> list[dict]:
@@ -4978,13 +5016,15 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
          now_ms: Optional[int] = None, clock_ms: Optional[Callable[[], int]] = None,
          cards_path: Optional[str] = None, preflight: Optional[Callable[[], tuple]] = None,
          market_fetch: Optional[Callable[[int], dict]] = None,
-         price_get: Optional[Callable[[str], Any]] = None) -> dict:
+         price_get: Optional[Callable[[str], Any]] = None, debate_db: Optional[str] = None) -> dict:
     """One pass of the agents process (the only writer of agents3.db). Meetings run one at a time;
     after each one ``find_due`` is asked again (code only), so a new incident goes first. A meeting
     starts only when its AI budget can carry it (``ClassBudget.headroom``, pacing included); what
     cannot start now is simply found again on a later tick. ``preflight`` (the real runner's login
     check) runs once, before the first meeting. ``price_get``: a JSON GET of Binance public market data (no key) for
-    the daily debate and the event review; None = prices unknown (no reference price, nothing graded)."""
+    the daily debate and the event review; None = prices unknown (no reference price, nothing graded). ``debate_db``:
+    the 24-hour debate room's debate.db (read-only, default ``policy.debate_db``) for the lab intake queue, which runs
+    after the meetings and does nothing while its settings are off (agents/labintake.py)."""
     policy = policy or RoomsPolicy()
     if any(R.same_file(other, agents_db) for other in (paper_db, daily_db, inbox_db)):
         # the tick creates its tables in agents3.db: never in another process's database
@@ -5121,6 +5161,12 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             store_deferred(conn, now, deferrals)
             if any(r.get("stopped") == "usage_limit" for r in results):
                 lower_usage_scale(conn, now)
+            try:
+                # code only, after the meetings (they keep priority; the tests use the time left in the pass): the
+                # shared lab intake queue's counted 5-year tests within their daily budgets; nothing while it is off
+                LI.tick(ctx, debate_db if debate_db is not None else policy.debate_db, now)
+            except Exception as exc:  # noqa: BLE001  (the queue waits for the next pass: the tick goes on)
+                print(f"warning: lab intake failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             try:
                 check_runner_down(ctx)
             except sqlite3.Error as exc:  # an alert only: the tick goes on
@@ -5289,6 +5335,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     t.add_argument("--agents-db", required=True)
     t.add_argument("--inbox-db", required=True)
     t.add_argument("--lab-dir", help="5-year signal caches (default: env LAB_DATA_DIR)")
+    t.add_argument("--debate-db", default=None,
+                   help="the 24-hour debate room's debate.db, read-only, for the lab intake queue (default: env "
+                        "AGENTS_DEBATE_DB, else debate/debate.db next to --agents-db)")
     t.add_argument("--dry-run", action="store_true",
                    help="scripted answers, no Claude call; works on a temporary copy of agents3.db")
     t.add_argument("--no-send", action="store_true", help="print Telegram messages instead of sending")
@@ -5314,6 +5363,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if any(R.same_file(args.agents_db, other) for other in (args.paper_db, args.daily_db, args.inbox_db)):
         ap.error("--agents-db must be its own file (not the paper, daily or inbox database)")
     lab = _load_lab(args.lab_dir)
+    # the debate's database (the dashboard's rule: debate/debate.db next to the bot's databases); read-only
+    debate_db = (args.debate_db or policy.debate_db
+                 or os.path.join(os.path.dirname(os.path.abspath(args.agents_db)), "debate", "debate.db"))
     agents_db = args.agents_db
     tmp = None
     preflight: Optional[Callable[[], tuple]] = None
@@ -5345,7 +5397,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             out = tick(args.paper_db, args.daily_db, agents_db, args.inbox_db, runner, lab=lab, notifier=notifier,
                        policy=policy, preflight=preflight, market_fetch=lambda now: fetch_market_moves(now),
-                       price_get=CM_HTTP_GET)
+                       price_get=CM_HTTP_GET, debate_db=debate_db)
         except Exception as exc:
             if not args.dry_run:
                 _mark_crash(agents_db, exc)

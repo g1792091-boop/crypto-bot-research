@@ -183,6 +183,7 @@ GET routes (sample files in `api_samples/`):
 | `/api/rooms/{id}/messages?after_id&before_id&limit` | {room_id, messages[], pending_owner, has_more, max_id, room} | rooms.js | rooms, office |
 | `/api/rooms/{id}/notes` | [{id, ts, room_id, strategy, text, round_id}] | rooms.js | rooms |
 | `/api/trials`, `/api/proposals` | ledger / proposals | rooms.js | rooms |
+| `/api/lab/intake?source=debate\|meeting\|owner&limit` | {cards[{id, source, source_ko, source_ref, room_id, engine, engine_ko, strategy, description_ko (code), idea_ko (quote), meta, status, status_ko, trial_id, detail, result_ko (code)}], today{day, sources{debate\|meeting\|owner: {used, limit, waiting}}, blocked, blocked_ko}, why_fail{tests, failed{①..⑥}, share, text_ko}, status_ko, source_ko, engine_ko}: the shared lab intake queue (agents/labintake.py; 60 s cache; nothing until its settings are on). Pieces: rooms-kit.js `sideChip`, `intakeChip`, `intakeSource` | (screens come with the debate factory / disputes boards) | rooms, debate |
 | `/api/agents/usage` | {day, calls, tokens, cap_calls, cap_tokens, classes[], week, caps_source} | rooms.js | rooms, server |
 | `/api/office` | {ready, now, day, zones, strategy_members, running[], recent[], latest_strategy, today, schedule, roles} | office.js | store `office`: office, home |
 | `/api/digest/day`, `/staff`, `/week`, `/tf` | see samples | digest.js | digest |
