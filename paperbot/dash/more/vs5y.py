@@ -162,6 +162,16 @@ def compare(c: sqlite3.Connection, strategy: str, now: int) -> Optional[dict]:
         row5 = y5.get(tf)
         out_tfs.append({"tf": tf, "account_id": aid, "y5": row5, "now": nw, "flips": fl,
                         "words": words(row5, nw, unit or "roe")})
+    if kind == "strategy":
+        # combo-5y: this timeframe's 5-year months (each a fresh $5,000 account, the committed combo5y.json); an extra
+        # line only: a missing or unreadable file leaves the comparison as it was
+        try:
+            from . import combo5y as C5
+            doc = C5.doc_cached()
+            for r in out_tfs:
+                r["month5y"] = C5.tf_month(doc, strategy, r["tf"])
+        except Exception:  # noqa: BLE001
+            pass
     return {"strategy": strategy, "kind": kind, "unit": unit, "y5_meta": meta, "tfs": out_tfs, "now": now,
             "min_n": MIN_N, "counts_only": kind == "ds200"}
 

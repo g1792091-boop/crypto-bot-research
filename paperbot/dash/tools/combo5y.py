@@ -38,7 +38,10 @@ What (every choice is fixed here, before looking at any combination result):
    median and 75th percentile of EVERY 2-5 combination's year N+1 score. The 36 x 36 daily P&L correlation, its
    clusters (>= 0.7, agents/meetings.corr_clusters), the correlation on either one's worst 5% days, the co-loss
    ratio (days both lost / days either lost). The top 10 with their monthly curve, drawdown, return, winning-month
-   share and diversification ratio (members' own max drawdowns added up / the combination's).
+   share and diversification ratio (members' own max drawdowns added up / the combination's). The search runs twice:
+   over all 36 (as specified) and, added AFTER seeing the first run, over the strategies with at least
+   ``MIN_UNIT_TRADES`` closed trades in the 62 monthly accounts (every strategy loses under these rules, so a strategy
+   that hardly trades wins the score by doing nothing; the JSON and the page say so).
 3. MERGED SIGNAL RULES (c). On the cached signal arrays, no look-ahead (a signal on bar t is known at its close, the
    entry is bar t + 1): AND (A and B, same coin and side, within k bars: k = 0, 1, 3), FILTER (A only when B's latest
    signal within N bars, B's own bar t included, is on the same side: N = 4, 16), VOTE (at least K of the 36 on the
@@ -50,7 +53,7 @@ What (every choice is fixed here, before looking at any combination result):
    mean > 0 with week-clustered errors; Benjamini-Hochberg at 5% over EVERY trial; survivors must also beat a
    shuffle null (the partner's signals circularly shifted in time, ``NULL_RUNS`` runs, rank p <= 0.05); the top 15
    by t with their means in 2021-22 / 2023-24 / 2025-26.
-4. ONE SHARED ACCOUNT (d). The top 5 portfolios as one account fed by all members' signals on all four timeframes:
+4. ONE SHARED ACCOUNT (d). The top 5 portfolios (of each search) as one account fed by all members' signals on all four timeframes:
    capital = the separate accounts' total, one position per coin (a signal on a coin already held is skipped: same
    side, or an opposite-signal conflict, counted), each position sized like one paper account (equity / number of
    member accounts), monthly like (1); against the separate accounts.
@@ -103,6 +106,7 @@ MTF_PAIRS = (("15m", "30m"), ("15m", "1h"), ("15m", "4h"), ("30m", "1h"), ("30m"
 MTF_AGE = {"state": None, "recent": 2}
 WIN3 = (("2021-22", "2021-08", "2023-01"), ("2023-24", "2023-01", "2025-01"), ("2025-26", "2025-01", "2026-10"))
 TOP_PORT, TOP_SHARED, TOP_MERGED = 10, 5, 15
+MIN_UNIT_TRADES = 62                              # the 'active' search: at least one closed trade a month on average
 SEED = 20261006
 ELAPSED_DAYS = 31
 MAX_PROCS = 2
@@ -643,7 +647,7 @@ _ZERO: dict = {}
 def shared_job(args) -> str:
     """The shared account of one portfolio (its members' signals on every timeframe), month by month."""
     rank, members, sig_dir, work = args
-    path = os.path.join(work, "shared", f"{rank}.json")
+    path = os.path.join(work, "shared", f"{rank}_{hashlib.sha1('|'.join(members).encode()).hexdigest()[:8]}.json")
     if os.path.exists(path):
         return path
     RB, L = _rb(), _lib()
@@ -731,6 +735,22 @@ def _pool_map(fn, jobs: list, procs: int, what: str) -> list:
                 out.append(x)
                 if j % 20 == 0 or j == len(jobs):
                     log(f"{what} {j}/{len(jobs)} ({time.time() - t0:.0f}s)")
+    return out
+
+
+def stage_timings(work: str, now: dict) -> dict:
+    """Seconds per stage of the run that really computed it: a resumed stage (its checkpoints already there) takes
+    ~0 s now, so the first computing run's time is kept (work/timings.json) and reported."""
+    path = os.path.join(work, "timings.json")
+    try:
+        with open(path) as fh:
+            old = json.load(fh)
+    except (OSError, ValueError):
+        old = {}
+    out = {k: max(float(now.get(k) or 0.0), float(old.get(k) or 0.0)) for k in set(now) | set(old) if k != "total_s"}
+    out["total_s"] = round(sum(v for k, v in out.items() if k != "total_s"), 1)
+    with open(path, "w") as fh:
+        json.dump(out, fh)
     return out
 
 
@@ -826,14 +846,15 @@ def run(sig_dir: str, out: str, work: str, procs: int = 2) -> dict:
     timings["portfolio_s"] = round(time.time() - t, 1)
 
     t = time.time()
-    shared_paths = _pool_map(shared_job, [(i, c["units"], sig_dir, work)
-                                          for i, c in enumerate(port["top"][:TOP_SHARED])], procs, "shared")
-    shared = []
-    for p in shared_paths:
+    sjobs = [(f"{v}_{i}", c["units"], sig_dir, work) for v in ("all", "active")
+             for i, c in enumerate(port[v]["top"][:TOP_SHARED])]
+    shared: dict = {"all": [], "active": []}
+    for (tag, *_r), p in zip(sjobs, _pool_map(shared_job, sjobs, procs, "shared")):
         with open(p) as fh:
-            shared.append(json.load(fh))
+            shared[tag.split("_")[0]].append(json.load(fh))
     timings["shared_s"] = round(time.time() - t, 1)
     timings["total_s"] = round(time.time() - t_start, 1)
+    timings = stage_timings(work, timings)
 
     doc = assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, singles, single_pass, port, shared,
                    timings, sig_dir)
@@ -850,30 +871,68 @@ def unit_daily(work: str, unit: str, key: str = "daily") -> np.ndarray:
     return np.sum([load_acct(work, tf, unit)[key] for tf in TFS], axis=0)
 
 
-def portfolio(work: str, names: list, flips: list) -> dict:
+def unit_trades(work: str, unit: str) -> int:
+    return int(sum(load_acct(work, tf, unit)["m_trades"].sum() for tf in TFS))
+
+
+def search_variant(U: np.ndarray, units: list, F: np.ndarray, flips: list, mons: list, d0: int, sl: list) -> dict:
+    """agents/synergy's search, its two guards and the calendar-year walk-forward on the units ``units`` (rows of U);
+    the coin-flip groups use as many coin-flip units as there are units, so both searches have the same size."""
     from paperbot.agents import synergy as SY
+    n = len(units)
+    cap = np.full(n, INITIAL * len(TFS))
+    best = SY.search(U, cap, keep=TOP_PORT)
+    real = best[0][0]
+    log(f"portfolio[{n}]: day shuffles")
+    null = SY.shuffled_bests(U, cap, runs=SHUFFLES, seed=SEED)
+    log(f"portfolio[{n}]: coin-flip groups")
+    flip_best = []
+    for g in range(FLIP_GROUPS):
+        a = g * UNITS_PER_GROUP
+        fb = SY.search(F[a:a + n], cap, keep=1)
+        flip_best.append({"group": g + 1, "score": fb[0][0], "units": [flips[a + i] for i in fb[0][1]]})
+    log(f"portfolio[{n}]: walk-forward")
+    years = K.year_slices(mons, d0)
+    srch = (lambda UU, cc: SY.search(UU, cc, keep=1))
+    wf = K.walk_forward(U, cap, years, srch, SY.curve_numbers)
+    wf_flip = K.walk_forward(F[:n], cap, years, srch, SY.curve_numbers)
+    for rows in (wf, wf_flip):
+        for r in rows:
+            r["months_next"] = sum(1 for m in mons if m["label"].startswith(str(r["test_year"])))
+            r["mean_month_next"] = r["return_next"] / max(1, r["months_next"])
+    top = []
+    for sc, combo in best:
+        c = list(combo)
+        row = U[c].sum(axis=0)
+        capc = float(cap[c].sum())
+        tot, ddu, ddp, _ = SY.curve_numbers(row[None, :], np.array([capc]))
+        mm = K.month_sums(row, sl)
+        top.append({"units": [units[i] for i in c], "k": len(c), "score": float(sc), "pnl": float(tot[0]),
+                    "capital": capc, "mean_month": float(mm.mean() / capc), "dd_usd": float(ddu[0]),
+                    "dd_peak": float(ddp[0]), "win_months": float((mm > 0).mean()),
+                    "div": SY.diversification(U, cap, combo), "month_pnl": mm.tolist()})
+    return {"units": units, "top": top, "real": real, "null": null.tolist(), "flip_best": flip_best, "wf": wf,
+            "wf_flip": wf_flip}
+
+
+def portfolio(work: str, names: list, flips: list) -> dict:
+    """Both searches: ``all`` (the 36, as specified: agents/synergy's search over every strategy) and ``active`` (only
+    the strategies with at least MIN_UNIT_TRADES closed trades in the 62 monthly accounts: a strategy that never
+    trades never loses, so with every strategy losing it wins the score by doing nothing), plus the correlation map
+    and the coin-flip band (shared by both)."""
     from paperbot.agents.meetings import corr_clusters
     mons = month_list()
     d0 = int(K.kst_day(mons[0]["start"]))
     sl = K.month_day_slices(mons, d0)
     U = np.vstack([unit_daily(work, s) for s in names])
-    cap = np.full(len(names), INITIAL * len(TFS))
     F = np.vstack([unit_daily(work, f) for f in flips])
-    log("portfolio: search")
-    best = SY.search(U, cap, keep=TOP_PORT)
-    real = best[0][0]
-    log("portfolio: day shuffles")
-    null = SY.shuffled_bests(U, cap, runs=SHUFFLES, seed=SEED)
-    log("portfolio: coin-flip groups")
-    flip_best = []
-    for g in range(FLIP_GROUPS):
-        fb = SY.search(F[g * UNITS_PER_GROUP:(g + 1) * UNITS_PER_GROUP], cap, keep=1)
-        flip_best.append({"group": g + 1, "score": fb[0][0], "units": [flips[g * UNITS_PER_GROUP + i] for i in fb[0][1]]})
-    log("portfolio: walk-forward")
-    years = K.year_slices(mons, d0)
-    srch = (lambda UU, cc: SY.search(UU, cc, keep=1))
-    wf = K.walk_forward(U, cap, years, srch, SY.curve_numbers)
-    wf_flip = K.walk_forward(F[:UNITS_PER_GROUP], cap, years, srch, SY.curve_numbers)
+    trades = {s: unit_trades(work, s) for s in names}
+    active = [s for s in names if trades[s] >= MIN_UNIT_TRADES]
+    log("portfolio: search (all 36)")
+    v_all = search_variant(U, names, F, flips, mons, d0, sl)
+    log(f"portfolio: search (active {len(active)})")
+    ix = [names.index(s) for s in active]
+    v_act = search_variant(U[ix], active, F, flips, mons, d0, sl)
     log("portfolio: correlation")
     C = K.corr_matrix(U)
     T = K.tail_corr(U, 0.05)
@@ -881,30 +940,17 @@ def portfolio(work: str, names: list, flips: list) -> dict:
     pairs = [(float(C[i, j]), names[i], names[j]) for i in range(len(names)) for j in range(i + 1, len(names))
              if np.isfinite(C[i, j])]
     clusters = corr_clusters(names, pairs, 0.7)
-    msum = (lambda row: K.month_sums(row, sl))
-    unit_month = {s: msum(U[i]) for i, s in enumerate(names)}
-    top = []
-    for sc, combo in best:
-        c = list(combo)
-        row = U[c].sum(axis=0)
-        capc = float(cap[c].sum())
-        tot, ddu, ddp, _ = SY.curve_numbers(row[None, :], np.array([capc]))
-        mm = msum(row)
-        top.append({"units": [names[i] for i in c], "k": len(c), "score": float(sc), "pnl": float(tot[0]),
-                    "capital": capc, "mean_month": float(mm.mean() / capc), "dd_usd": float(ddu[0]),
-                    "dd_peak": float(ddp[0]), "win_months": float((mm > 0).mean()),
-                    "div": SY.diversification(U, cap, combo), "month_pnl": mm.tolist()})
+    unit_month = {s: K.month_sums(U[i], sl) for i, s in enumerate(names)}
     # coin-flip band per combination size: random size-k groups of coin-flip units (every flip group pooled)
     rng = np.random.default_rng(SEED)
-    FM = np.vstack([msum(F[i]) for i in range(len(F))])
+    FM = np.vstack([K.month_sums(F[i], sl) for i in range(len(F))])
     band = {}
     for k in range(2, 6):
         picks = np.array([rng.choice(len(F), size=k, replace=False) for _ in range(2000)])
         cum = np.cumsum(FM[picks].sum(axis=1), axis=1) / (k * INITIAL * len(TFS))
         band[str(k)] = {q: np.quantile(cum, p, axis=0).tolist() for q, p in (("p10", 0.1), ("p50", 0.5), ("p90", 0.9))}
-    return {"top": top, "real": real, "null": null.tolist(), "flip_best": flip_best, "wf": wf, "wf_flip": wf_flip,
-            "corr": C, "tail": T, "coloss": CL, "clusters": clusters, "unit_month": unit_month, "flip_band": band,
-            "flip_month": FM}
+    return {"all": v_all, "active": v_act, "trades": trades, "corr": C, "tail": T, "coloss": CL, "clusters": clusters,
+            "unit_month": unit_month, "flip_band": band, "flip_month": FM}
 
 
 # ---------------------------------------------------------------- the JSON
@@ -976,7 +1022,8 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
     acc = acc[(acc["k"] == K_STOP) & acc["tf"].isin(TFS)]
     with open(CARDS_JSON) as fh:
         cards = {c["strategy"]: {r["tf"]: r for r in c["rows"]} for c in json.load(fh)["cards"]}
-    n = same_final = same_trades = card_same = 0
+    n = same_final = same_trades = card_same = card_cells = 0
+    card_blank = []
     worst = 0.0
     v4_vs = []
     for _i, r in acc.iterrows():
@@ -991,14 +1038,20 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
         if not str(r["strategy"]).startswith("RANDOM_"):
             cr = cards.get(r["strategy"], {}).get(r["tf"], {})
             cv = cr.get("account_is" if wi == 0 else "account_cf")
-            card_same += int(cv is not None and abs(cv - fin) <= 1e-6 * max(1.0, abs(cv)))
+            if cv is None:                     # a card row without account numbers (a strategy that never signals)
+                card_blank.append(f"{r['strategy']}@{r['tf']} {r['window']}")
+            else:
+                card_cells += 1
+                card_same += int(abs(cv - fin) <= 1e-6 * max(1.0, abs(cv)))
             v4f = a["par"][1, wi][0]
             v4_vs.append((r["final"] / 1000.0, v4f / INITIAL, bool(r["bust"]), v4f < 10.0))
     v4a = np.array([x[:2] for x in v4_vs])
     parity = {
         "cells": n, "same_final": same_final, "same_trades": same_trades, "max_abs_diff": K.r4(worst, 9),
-        "cards_cells": len(v4_vs), "cards_same": card_same,
-        "agree": bool(n and same_final == n and same_trades == n and card_same == len(v4_vs)),
+        "cards_cells": card_cells, "cards_same": card_same, "cards_blank": len(card_blank),
+        "cards_blank_why": (f"{', '.join(sorted({x.split('@')[0] for x in card_blank}))}: 5년 동안 신호가 없어 카드에 계좌 숫자가 없음 "
+                            "(이 생성기도 그 칸은 거래 0건, 잔고 그대로)") if card_blank else None,
+        "agree": bool(n and same_final == n and same_trades == n and card_same == card_cells),
         "what": ("research/paper_rules/out_binance/accounts.csv (k 2 ATR, windows is / cf, 15m-4h, the 36 and RANDOM_1-3) "
                  "와 strategy_profiles/out_binance/cards.json account_is / account_cf 를 이 생성기의 rules_bt.simulate 호출로 "
                  "같은 캐시에서 다시 계산해 칸마다 비교"),
@@ -1065,24 +1118,40 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
                    "mtf": [list(x) for x in MTF_PAIRS], "mtf_age": {k: v for k, v in MTF_AGE.items()}},
         "windows": [w[0] for w in WIN3],
     }
-    # portfolios
-    real = port["real"]
-    null = np.asarray(port["null"])
+    # portfolios: the specified search over all 36 and the same search over the strategies that trade
+    trades_of = port["trades"]
+
+    def fl(x):
+        return {k: (K.r4(v) if isinstance(v, float) else v) for k, v in x.items()}
+
+    def variant(v: dict) -> dict:
+        real = v["real"]
+        null = np.asarray(v["null"])
+        return {
+            "units": v["units"],
+            "top": [{**fl({k: x for k, x in t.items() if k != "month_pnl"}),
+                     "pnl": K.r4(t["pnl"], 0), "capital": t["capital"], "dd_usd": K.r4(t["dd_usd"], 0),
+                     "div": K.r4(t["div"], 3), "trades": int(sum(trades_of[u] for u in t["units"])),
+                     "curve": [K.r4(x) for x in np.cumsum(t["month_pnl"]) / t["capital"]]} for t in v["top"]],
+            "shuffled_days": {"runs": int(len(null)), "real_best": K.r4(real, 3),
+                              "null_median": K.r4(float(np.median(null)), 3),
+                              "null_p90": K.r4(float(np.quantile(null, 0.9)), 3), "rank_p": K.r4(K.rank_p(real, null), 3)},
+            "coin_flips": {"groups": [{"group": g["group"], "score": K.r4(g["score"], 3)} for g in v["flip_best"]],
+                           "beat_real": int(sum(1 for g in v["flip_best"] if g["score"] >= real)),
+                           "units_per_group": len(v["units"])},
+            "walk_forward": [{**fl({k: x for k, x in w.items() if k != "combo"}),
+                              "units": [v["units"][i] for i in w["combo"]]} for w in v["wf"]],
+            "walk_forward_flips": [fl({k: x for k, x in w.items() if k != "combo"}) for w in v["wf_flip"]],
+        }
+    quiet = sorted((s for s in names if trades_of[s] < MIN_UNIT_TRADES), key=lambda s: trades_of[s])
     portfolio_out = {
         "unit": "매매법 1개 = 15분·30분·1시간·4시간 계좌 4개의 합 ($20,000)",
-        "top": [{**{k: (K.r4(v) if isinstance(v, float) else v) for k, v in t.items() if k != "month_pnl"},
-                 "pnl": K.r4(t["pnl"], 0), "capital": t["capital"], "dd_usd": K.r4(t["dd_usd"], 0),
-                 "div": K.r4(t["div"], 3), "curve": [K.r4(x) for x in np.cumsum(t["month_pnl"]) / t["capital"]]}
-                for t in port["top"]],
-        "shuffled_days": {"runs": int(len(null)), "real_best": K.r4(real, 3), "null_median": K.r4(float(np.median(null)), 3),
-                          "null_p90": K.r4(float(np.quantile(null, 0.9)), 3), "rank_p": K.r4(K.rank_p(real, null), 3)},
-        "coin_flips": {"groups": [{"group": g["group"], "score": K.r4(g["score"], 3)} for g in port["flip_best"]],
-                       "beat_real": int(sum(1 for g in port["flip_best"] if g["score"] >= real)),
-                       "units_per_group": UNITS_PER_GROUP},
-        "walk_forward": [{**{k: (K.r4(v) if isinstance(v, float) else v) for k, v in w.items() if k != "combo"},
-                          "units": [names[i] for i in w["combo"]]} for w in port["wf"]],
-        "walk_forward_flips": [{k: (K.r4(v) if isinstance(v, float) else v) for k, v in w.items() if k != "combo"}
-                               for w in port["wf_flip"]],
+        "all": variant(port["all"]), "active": variant(port["active"]),
+        "active_rule": {"min_trades": MIN_UNIT_TRADES, "left_out": [{"strategy": s, "trades": trades_of[s]} for s in quiet],
+                        "why": ("36개 모두 이 규칙에서 5년 동안 돈을 잃어서, 거의 거래하지 않는 매매법이 '잃지 않아서' 1위가 됩니다. "
+                                f"그래서 5년 동안 거래가 {MIN_UNIT_TRADES}건(평균 한 달 1건) 이상인 매매법만으로 같은 탐색을 한 번 더 "
+                                "했습니다 (이 기준은 결과를 본 뒤에 정한 것)")},
+        "trades": {s: trades_of[s] for s in names},
         "corr": {"r": _tri(port["corr"]), "tail": _tri(port["tail"]), "coloss": _tri(port["coloss"]),
                  "clusters": port["clusters"], "tail_share": 0.05},
         "unit_curves": {s: [K.r4(x) for x in np.cumsum(v) / (INITIAL * len(TFS))] for s, v in port["unit_month"].items()},
@@ -1090,26 +1159,29 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
         "search": {"exhaustive": "2·3개 전부", "beam": 200, "kmin": 2, "kmax": 5,
                    "score": "총손익 ÷ 최대 낙폭($), 낙폭 바닥 = 자본의 0.5% (agents/synergy.py)"},
     }
-    # shared accounts
-    shared_out = []
-    for sh in shared:
-        mem = sh["members"]
-        sep_daily = np.sum([unit_daily(work, u) for u in mem], axis=0)
-        sd = np.asarray(sh["daily"])
-        capc = sh["capital"]
-        sm, pm = K.month_sums(sep_daily, sl), np.asarray(sh["month_pnl"])
 
-        def side_numbers(daily, mm, trades):
-            dd_u, dd_p = K.curve_mdd(daily, capc)
-            return {"pnl": K.r4(float(daily.sum()), 0), "mean_month": K.r4(float(mm.mean() / capc)),
-                    "win_months": K.r4(float((mm > 0).mean())), "dd_usd": K.r4(dd_u, 0), "dd_peak": K.r4(dd_p),
-                    "trades": int(trades), "curve": [K.r4(x) for x in np.cumsum(mm) / capc]}
-        sep_trades = sum(int(load_acct(work, tf, u)["m_trades"].sum()) for tf in TFS for u in mem)
-        shared_out.append({"units": mem, "capital": capc, "accounts": sh["accounts"],
-                           "separate": side_numbers(sep_daily, sm, sep_trades),
-                           "shared": {**side_numbers(sd, pm, sh["entries"]), "signals": sh["signals"],
-                                      "same_side_skipped": sh["same"], "conflicts": sh["conflict"],
-                                      "refused": sh["refused"], "bust_months": sh["bust_months"]}})
+    def shared_rows(items: list) -> list:
+        out = []
+        for sh in items:
+            mem = sh["members"]
+            sep_daily = np.sum([unit_daily(work, u) for u in mem], axis=0)
+            sd = np.asarray(sh["daily"])
+            capc = sh["capital"]
+            sm, pm = K.month_sums(sep_daily, sl), np.asarray(sh["month_pnl"])
+
+            def side_numbers(daily, mm, trades):
+                dd_u, dd_p = K.curve_mdd(daily, capc)
+                return {"pnl": K.r4(float(daily.sum()), 0), "mean_month": K.r4(float(mm.mean() / capc)),
+                        "win_months": K.r4(float((mm > 0).mean())), "dd_usd": K.r4(dd_u, 0), "dd_peak": K.r4(dd_p),
+                        "trades": int(trades), "curve": [K.r4(x) for x in np.cumsum(mm) / capc]}
+            sep_trades = sum(int(load_acct(work, tf, u)["m_trades"].sum()) for tf in TFS for u in mem)
+            out.append({"units": mem, "capital": capc, "accounts": sh["accounts"],
+                        "separate": side_numbers(sep_daily, sm, sep_trades),
+                        "shared": {**side_numbers(sd, pm, sh["entries"]), "signals": sh["signals"],
+                                   "same_side_skipped": sh["same"], "conflicts": sh["conflict"],
+                                   "refused": sh["refused"], "bust_months": sh["bust_months"]}})
+        return out
+    shared_out = {"all": shared_rows(shared["all"]), "active": shared_rows(shared["active"])}
     import subprocess
     try:
         head = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
@@ -1140,7 +1212,9 @@ def assemble(work, names, flips, rates, ref_rates, cfg, rows, passed, nulls, sin
                           "신호마다 거래 한 건(계좌·포지션 제한 없음), 결과 = 거래 한 건이 계좌에 남긴 손익 %"),
         "trials": {"merged": len(keys), "merged_tested": len(tested), "portfolio_shuffles": SHUFFLES,
                    "coin_flip_groups": FLIP_GROUPS, "coin_flip_units": len(flips),
-                   "portfolio_combos_searched": "2·3개 조합 전부(630 + 7,140) + 4·5개는 상위 200개에서 하나씩 늘려 봄"},
+                   "portfolio_combos_searched": "2·3개 조합 전부(630 + 7,140) + 4·5개는 상위 200개에서 하나씩 늘려 봄",
+                   "portfolio_searches": (f"두 번: 36개 전부(명세 그대로), 5년 거래 {MIN_UNIT_TRADES}건 이상인 "
+                                          f"{len(port['active']['units'])}개만 (결과를 본 뒤 더한 것)")},
         "caveat": ("이 36개는 바로 이 5년 자료를 보고 고른 매매법입니다. 그래서 여기 숫자는 실제보다 좋게 나오기 쉽습니다 (선택 편향). "
                    "설명용이며 판정이 아니고, 미리 등록한 연구도 아닙니다. 지난 5년이 앞으로를 약속하지 않습니다."),
         "data": {"signals": "Binance USD-M 선물 5년 캐시 (paperbot/agents/labdata.py로 만들고 연구 캐시와 대조)",

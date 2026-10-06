@@ -49,9 +49,9 @@ def _doc(strategies=("S_A", "S_B", "S_C")):
             "per": per, "flips": {"units": 4, "unit_months": {"n": 12, "median": -0.1, "pos_share": 0.2},
                                   "tfs": {"15m": {"n": 3}}, "median_month": [-0.1, -0.1, -0.1]},
             "parity": {"cells": 2, "same_final": 2, "same_trades": 2, "agree": True},
-            "portfolio": {"top": [{"units": ["S_A", "S_B"], "k": 2, "score": 1.0, "curve": [0.0, 0.01, 0.02]}]},
+            "portfolio": {"all": {"top": [{"units": ["S_A", "S_B"], "k": 2, "score": 1.0, "curve": [0.0, 0.01, 0.02]}]}},
             "merged": {"trials": 10, "tested": 5, "bh_pass": 0, "both_pass": 0, "top": []},
-            "shared": [], "methods": {"caveat": "선택 편향", "accounts": "매달", "sizing": "v4", "costs": {}, "period": {}}}
+            "shared": {"all": [], "active": []}, "methods": {"caveat": "선택 편향", "accounts": "매달", "sizing": "v4", "costs": {}, "period": {}}}
 
 
 def _write(path, doc):
@@ -137,7 +137,7 @@ def test_monthly_view_waiting_and_without_paper(tmp_path):
 def test_combo_view_is_trimmed():
     v = M.combo_view(_doc())
     assert set(v["per"]["S_A"]) <= {"n", "best", "worst", "median", "mean", "pos_share", "trades", "win_rate", "one"}
-    assert "tfs" not in v["flips"] and v["portfolio"]["top"][0]["units"] == ["S_A", "S_B"]
+    assert "tfs" not in v["flips"] and v["portfolio"]["all"]["top"][0]["units"] == ["S_A", "S_B"]
     assert M.combo_view(None)["unavailable"] is True
     assert M.load("/nonexistent/x.json") is None
 
@@ -217,22 +217,39 @@ def test_committed_file_shape_and_honesty(committed):
     # parity with the research's own per-strategy accounts
     pr = d["parity"]
     assert pr["agree"] is True and pr["cells"] == pr["same_final"] == pr["same_trades"] and pr["cells"] >= 288
+    assert pr["cards_same"] == pr["cards_cells"] and pr["cards_cells"] + pr["cards_blank"] == 288
     # merged-rule counts are consistent and every trial is counted
     m = d["merged"]
     assert m["both_pass"] <= m["bh_pass"] <= m["tested"] <= m["trials"]
     assert sum(f["trials"] for f in m["families"].values()) == m["trials"]
     assert len(m["top"]) <= 15 and all(len(r["w"]) == 3 for r in m["top"])
-    # portfolios: top 10 with monthly curves, walk-forward, correlation triangles
+    # portfolios (both searches): top 10 with monthly curves, the guards, walk-forward; one correlation map
     pf = d["portfolio"]
-    assert 1 <= len(pf["top"]) <= 10 and all(len(t["curve"]) == n and 2 <= t["k"] <= 5 for t in pf["top"])
+    rule = pf["active_rule"]
+    assert set(pf["all"]["units"]) == set(d["strategies"])
+    assert set(pf["active"]["units"]) == {s for s in d["strategies"] if pf["trades"][s] >= rule["min_trades"]}
+    assert [x["strategy"] for x in rule["left_out"]] == sorted(set(d["strategies"]) - set(pf["active"]["units"]),
+                                                               key=lambda s: pf["trades"][s])
+    for v in ("all", "active"):
+        V = pf[v]
+        assert 1 <= len(V["top"]) <= 10 and all(len(t["curve"]) == n and 2 <= t["k"] <= 5 for t in V["top"])
+        assert all(set(t["units"]) <= set(V["units"]) for t in V["top"])
+        assert [t["score"] for t in V["top"]] == sorted((t["score"] for t in V["top"]), reverse=True)
+        assert V["shuffled_days"]["runs"] == 100 and len(V["coin_flips"]["groups"]) == 4
+        assert V["coin_flips"]["units_per_group"] == len(V["units"])
+        assert [w["test_year"] - w["pick_year"] for w in V["walk_forward"]] == [1] * len(V["walk_forward"])
+        assert all(set(w["units"]) <= set(V["units"]) and 0 <= w["beat_share"] <= 1 for w in V["walk_forward"])
+        assert len(d["shared"][v]) == min(5, len(V["top"]))
+        for sh, t in zip(d["shared"][v], V["top"]):
+            assert sh["units"] == t["units"] and sh["capital"] == t["capital"]
+            assert sh["shared"]["conflicts"] >= 0 and len(sh["shared"]["curve"]) == n == len(sh["separate"]["curve"])
+            assert sh["shared"]["signals"] == (sh["shared"]["trades"] + sh["shared"]["same_side_skipped"]
+                                               + sh["shared"]["conflicts"] + sh["shared"]["refused"])
     tri = 36 * 35 // 2
     assert len(pf["corr"]["r"]) == len(pf["corr"]["tail"]) == len(pf["corr"]["coloss"]) == tri
     assert all(-1.0001 <= x <= 1.0001 for x in pf["corr"]["r"] if x is not None)
-    assert [w["test_year"] - w["pick_year"] for w in pf["walk_forward"]] == [1] * len(pf["walk_forward"])
+    assert all(0 <= x <= 1 for x in pf["corr"]["coloss"] if x is not None)
     assert set(pf["flip_band"]) == {"2", "3", "4", "5"}
-    assert len(d["shared"]) == min(5, len(pf["top"]))
-    for sh in d["shared"]:
-        assert sh["shared"]["conflicts"] >= 0 and len(sh["shared"]["curve"]) == n == len(sh["separate"]["curve"])
 
 
 def test_committed_file_has_no_deepseek(committed):

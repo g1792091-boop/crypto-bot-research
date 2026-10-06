@@ -85,7 +85,7 @@ export function monthly5y(d, env) {
   // the list
   let sortBy = local.get("an-m5-sort", "median");
   if (!SORTS.some((x) => x.id === sortBy)) sortBy = "median";
-  const pg = ui.pager({size: 8, empty: "매매법이 없습니다", row: (r) => rowOf(r, d)});
+  const pg = ui.pager({size: 8, empty: "매매법이 없습니다", row: (r, i) => rowOf(r, d, i)});
   const order = () => {
     const a = [...rows];
     if (sortBy === "name") a.sort((x, y) => String(x.name).localeCompare(String(y.name), "ko"));
@@ -103,7 +103,7 @@ export function monthly5y(d, env) {
   return out;
 }
 
-function rowOf(r, d) {
+function rowOf(r, d, i) {
   const p = r.paper;
   const vals = p && p.same_day && p.same_day.length ? p.same_day : (r.m || []);
   const mark = p ? p.ret : null;
@@ -127,12 +127,14 @@ function rowOf(r, d) {
     ], tfs),
     h("p", {class: "an-note"}, `5년 한 계좌 = 같은 계좌를 끊지 않고 5년 굴렸다면 처음 $5,000의 몇 배 (파산하면 거기서 멈춤). 거래 ${fmt.int(r.trades)}건 · 이긴 거래 ${fmt.pct(r.win_rate, 0, false)} · 강제청산 ${fmt.int(r.liq)}건 (62달 합계).`));
   return h("div", {class: "lrow an-row am-row", role: "listitem"},
-    h("span", {class: "rk"}, p && p.small ? ui.pill("표본 적음", "thin", `닫힌 거래 ${p.trades}건`) : ""),
+    h("span", {class: "rk"}, `${fmt.int(i + 1)}`),
     h("span", {class: "lname an-wrap"}, r.name),
     h("span", {class: "ret"}, words),
     h("div", {class: "am-stripbox"}, strip(vals, mark, lo, hi),
       h("div", {class: "am-scale"}, h("span", null, fmt.pct(lo, 0)), h("span", null, "0"), h("span", null, fmt.pct(hi, 0)))),
     h("span", {class: "meta"},
+      p && p.small ? ui.pill("표본 적음", "thin", `지금 닫힌 거래 ${p.trades}건`) : null,
+      r.trades === 0 ? ui.pill("5년 동안 거래 없음", "thin") : r.trades != null && r.trades < 62 ? ui.pill(`5년 거래 ${fmt.int(r.trades)}건뿐`, "thin") : null,
       h("span", null, `5년 한 달 중앙값 ${fmt.pct(r.median, 1)}`), h("span", null, `이긴 달 ${fmt.pct(r.pos_share, 0, false)}`),
       h("span", null, `좋은 달 ${fmt.pct(r.best, 0)} · 나쁜 달 ${fmt.pct(r.worst, 0)}`),
       p ? h("span", null, `지금 닫힌 거래 ${fmt.int(p.trades)}건${p.rank ? ` · 같은 날 5년 달 중 ${fmt.int(p.rank.below)}개보다 위` : ""}`) : null),

@@ -53,10 +53,30 @@ export async function render5y(ctx, el) {
     put(root, ui.card({plate: "5년 조합 시험"}, h("p", null, "준비 중입니다. "), h("p", {class: "muted"}, (d && d.note) || "결과 파일이 아직 없습니다.")));
     return;
   }
-  const env = {ctx, d, vts: verdictTs(ctx)};
-  const parts = [head(env), topCard(env), walkCard(env), corrCard(env), mergedCard(env), sharedCard(env), methodsCard(env)];
+  const p = d.portfolio || {};
+  const env = {ctx, d, vts: verdictTs(ctx), v: local.get("c5-var", "all")};
+  if (!p[env.v]) env.v = "all";
+  // the cards that follow the chosen search (36개 전부 / 거래가 있는 매매법만) are drawn again on a switch
+  const varSlot = h("div", {class: "stack c5-varslot"});
+  const drawVar = () => put(varSlot, ...[topCard(env), walkCard(env), sharedCard(env)].filter(Boolean));
+  drawVar();
+  const pick = variantCard(env, (id) => { env.v = id; local.set("c5-var", id); drawVar(); motion.swap(varSlot); });
+  const parts = [head(env), pick, varSlot, corrCard(env), mergedCard(env), methodsCard(env)];
   put(root, ...parts.filter(Boolean));
   motion.swap(root);
+}
+
+// ---------------------------------------------------------------- which strategies the search used
+function variantCard({d, v}, onPick) {
+  const p = d.portfolio || {};
+  const rule = p.active_rule || {};
+  if (!p.active) return null;
+  const left = (rule.left_out || []).map((x) => `${nm(d, x.strategy)} ${fmt.int(x.trades)}건`).join(" · ");
+  return ui.card({plate: "어떤 매매법으로 찾았나", sub: "아래 조합 · 다음 해 · 한 계좌 카드가 따라 바뀝니다"},
+    ui.seg([{id: "all", label: `36개 전부 (${fmt.int((p.all.units || []).length)}개)`},
+      {id: "active", label: `거래가 있는 것만 (${fmt.int((p.active.units || []).length)}개)`}], v, onPick, {label: "탐색에 넣은 매매법"}),
+    h("p", {class: "c5-sum"}, rule.why || ""),
+    left ? h("p", {class: "an-note"}, `빠진 매매법 (5년 거래 ${fmt.int(rule.min_trades || 62)}건 미만): ${left}`) : null);
 }
 
 // ---------------------------------------------------------------- head
@@ -76,12 +96,13 @@ function head({d}) {
 }
 
 // ---------------------------------------------------------------- top portfolios + the curve of the chosen one
-function topCard({ctx, d, vts}) {
+function topCard({d, vts, v}) {
   const p = d.portfolio || {};
-  const top = p.top || [];
+  const V = p[v] || {};
+  const top = V.top || [];
   if (!top.length) return ui.card({plate: "점수 높은 조합"}, ui.empty("조합 결과가 없습니다"));
   const detail = h("div", {class: "c5-detail"});
-  let sel = Math.min(Number(local.get("c5-top", 0)) || 0, top.length - 1);
+  let sel = Math.min(Number(local.get(`c5-top-${v}`, 0)) || 0, top.length - 1);
   const list = h("div", {class: "c5-list", role: "list"});
   const rows = top.map((t, i) => {
     const r = h("button", {class: ["lrow click c5-row", i === sel ? "on" : ""], type: "button", role: "listitem", "aria-pressed": String(i === sel),
@@ -91,6 +112,8 @@ function topCard({ctx, d, vts}) {
     h("span", {class: ["ret num", fmt.tone(t.mean_month)]}, `월 ${fmt.pct(t.mean_month, 1)}`),
     h("span", {class: "meta"},
       h("span", null, `${fmt.int(t.k)}개 · 점수 ${fmt.num(t.score, 2)}`),
+      h("span", null, `5년 거래 ${fmt.int(t.trades)}건`),
+      t.trades != null && t.trades < 62 ? ui.pill("거의 거래 안 함", "warn") : null,
       h("span", null, `최대 낙폭 ${dol(-t.dd_usd)}`),
       h("span", null, `이긴 달 ${fmt.pct(t.win_months, 0, false)}`),
       h("span", null, `분산 효과 ${t.div == null ? "—" : fmt.num(t.div, 2)}`)));
@@ -99,17 +122,20 @@ function topCard({ctx, d, vts}) {
   });
   function pick(i) {
     sel = i;
-    local.set("c5-top", i);
+    local.set(`c5-top-${v}`, i);
     rows.forEach((r, j) => { r.classList.toggle("on", j === i); r.setAttribute("aria-pressed", String(j === i)); });
     put(detail, curveBox(d, top[i]));
     motion.swap(detail);
   }
   put(detail, curveBox(d, top[sel]));
-  const sh = p.shuffled_days || {}, cf = p.coin_flips || {};
+  const sh = V.shuffled_days || {}, cf = V.coin_flips || {};
+  const allLose = top.every((t) => (t.pnl || 0) <= 0);
   const shWords = sh.rank_p == null ? null : sh.rank_p > 0.1
     ? "날짜를 섞은 자료에서도 이만한 점수가 자주 나옵니다: 이 조합이 특별하다고 보기 어렵습니다."
     : "날짜를 섞은 자료에서는 이만한 점수가 드뭅니다. 다만 36개 자체를 이 5년으로 골랐다는 점은 그대로입니다.";
   return ui.card({plate: "점수 높은 조합", sub: "오른쪽 = 한 달 평균 수익률 (합친 자금 대비)"},
+    allLose ? h("p", {class: "c5-sum"}, h("b", null, "10개 모두 5년 동안 돈을 잃었습니다. "),
+      "점수는 '덜 잃은 정도'입니다. 묶어서 돈을 번 조합은 이 규칙에서는 찾지 못했습니다.") : null,
     h("p", {class: "an-note"}, "한 줄을 누르면 그 조합의 5년 흐름을 아래에 그립니다."),
     list, detail,
     h("div", {class: "c5-guard"},
@@ -117,7 +143,7 @@ function topCard({ctx, d, vts}) {
         `각 매매법의 날짜를 섞어 같은 탐색을 ${fmt.int(sh.runs || 0)}번: 섞은 자료의 최고 점수 중앙값 ${fmt.num(sh.null_median, 2)}, 위 10% ${fmt.num(sh.null_p90, 2)} · 진짜 최고 ${fmt.num(sh.real_best, 2)}. `,
         shWords),
       h("p", null, h("b", null, "우연 거르기 2 · 동전 봇 "),
-        `동전 봇 ${fmt.int(cf.units_per_group || 36)}개 묶음 ${fmt.int((cf.groups || []).length)}개로 같은 탐색: 최고 점수 `,
+        `동전 봇 ${fmt.int(cf.units_per_group || 36)}개짜리 묶음 ${fmt.int((cf.groups || []).length)}개로 같은 탐색: 최고 점수 `,
         (cf.groups || []).map((g) => fmt.num(g.score, 2)).join(" · "),
         ` · 진짜 최고 이상인 묶음 ${fmt.int(cf.beat_real || 0)}/${fmt.int((cf.groups || []).length)}`, " ", ui.pill("동전 봇", "ref"))),
     ui.refNote(vts, "5년 과거 시험의 비교도 같습니다."), capCaption());
@@ -190,15 +216,15 @@ function lineChart(o) {
 }
 
 // ---------------------------------------------------------------- walk-forward by calendar year
-function walkCard({d, vts}) {
-  const p = d.portfolio || {};
+function walkCard({d, vts, v}) {
+  const p = (d.portfolio || {})[v] || {};
   const wf = p.walk_forward || [], fl = p.walk_forward_flips || [];
   if (!wf.length) return null;
   const count = (rows) => ({med: rows.filter((r) => r.score_next > r.median_next).length, p75: rows.filter((r) => r.score_next > r.p75_next).length, n: rows.length});
   const a = count(wf), b = count(fl);
   const row = (r, flip) => h("div", {class: "c5-wf", role: "listitem"},
     h("div", {class: "c5-wf-h"}, h("b", null, `${r.pick_year}년에 고른 1위 → ${r.test_year}년`),
-      h("span", {class: ["num", fmt.tone(r.return_next)]}, ` 그해 수익 ${fmt.pct(r.return_next, 1)}`)),
+      h("span", {class: ["num", fmt.tone(r.mean_month_next)]}, ` 그해 한 달 평균 ${fmt.pct(r.mean_month_next, 1)}`)),
     flip ? null : h("p", {class: "c5-wf-n"}, (r.units || []).map((u) => nm(d, u)).join(" + ")),
     h("div", {class: "c5-wf-bar", title: `전체 조합 중 ${fmt.pct(r.beat_share, 0, false)}보다 높음`},
       h("i", {style: {"--w": (Math.max(0, Math.min(1, r.beat_share || 0)) * 100).toFixed(1) + "%"}}),
@@ -334,8 +360,8 @@ function mergedCard({d}) {
 }
 
 // ---------------------------------------------------------------- one shared account
-function sharedCard({d}) {
-  const sh = d.shared || [];
+function sharedCard({d, v}) {
+  const sh = (d.shared || {})[v] || [];
   if (!sh.length) return null;
   const pg = ui.pager({size: 1, row: (x) => {
     const a = x.separate || {}, b = x.shared || {};
