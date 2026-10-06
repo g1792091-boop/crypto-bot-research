@@ -323,8 +323,15 @@ def test_the_sleep_sheet_says_whether_the_result_is_stored(tmp_path):
         back = since(c, None, CP1 + 10 * MIN, CP1 + 3 * H, ledger=led)
         assert [x for x in back["milestones"] if x["kind"].startswith("verdict")] == [
             {"kind": "verdict_result", "k": 1, "ts": CP1 + 2 * H, "cp_ts": CP1}]
+        # checkpoint.db unreadable: the verdict day is named without a claim either way (never '계산 중' as a fact)
+        bad = since(c, None, CP1 - H, CP1 + 5 * MIN, ledger={"db": "error", "verdicts": {}, "snapshots": {}, "log": {}})
+        assert [x["judged"] for x in bad["milestones"] if x["kind"] == "verdict"] == [None]
+        none = since(c, None, CP1 - H, CP1 + 5 * MIN, ledger={"db": "missing", "verdicts": {}, "snapshots": {}, "log": {}})
+        assert [x["judged"] for x in none["milestones"] if x["kind"] == "verdict"] == [False]
     finally:
         c.close()
+    js = open(os.path.join(V4, "core", "since.js"), encoding="utf-8").read()
+    assert "m.judged == null" in js and "결과 기록을 읽지 못함" in js
 
 
 def test_the_story_and_the_race_and_the_path(tmp_path):

@@ -10,7 +10,8 @@ last 7 days (``clamped: true`` then, ``clamped_by`` "start" or "week", and the p
 - busts: accounts that went bust since (named for core / reel / extra, counted for DeepSeek and the coin flips).
 - meetings: meetings that finished since (count, decisions, the two conclusions to show; see story.meetings).
 - alerts: the bot's warnings since (count per level, the latest three; the page turns them into Korean).
-- milestones: D+n changed, a verdict day passed (``judged``: its result is stored in checkpoint.db yet, verdictday.py),
+- milestones: D+n changed, a verdict day passed (``judged``: its result is stored in checkpoint.db yet, verdictday.py;
+  None when checkpoint.db could not be read),
   a verdict result stored since (its day passed before), the observation period ended. ``line_ko``: the countdown's
   one sentence (verdictday.texts), the same as every other screen.
 
@@ -120,12 +121,14 @@ def since(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], after: in
         # a verdict day that passed since: whether its result is stored (checkpoint.db; the job computes it from 09:35),
         # and a result stored since even when its day passed before (the 09:10 visit, back at 20:00)
         verdicts = (ledger or {}).get("verdicts") or {}
+        known = (ledger or {}).get("db") in ("ok", "missing")      # missing: the job never ran, so nothing is stored
         k = 1
         while checkpoint_ts(start, k) <= now and k * PERIOD_DAYS <= NO_VERDICT_DAYS:
             cp = checkpoint_ts(start, k)
             stored = verdicts.get(day_str(cp))
             if cp > after:
-                ms.append({"kind": "verdict", "k": k, "ts": cp, "judged": stored is not None, "stored_ts": stored})
+                ms.append({"kind": "verdict", "k": k, "ts": cp, "judged": (stored is not None) if known or stored else None,
+                           "stored_ts": stored})
             elif stored is not None and stored > after:
                 ms.append({"kind": "verdict_result", "k": k, "ts": stored, "cp_ts": cp})
             k += 1

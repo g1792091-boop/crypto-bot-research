@@ -94,6 +94,10 @@ export async function mount(el, ctx) {
   }
   function renderCountdown() {
     const x = expInfo(st.summary);
+    if (!st.summary) {            // not received yet (or its load failed): never '시작 전'
+      big.textContent = "—"; bigU.textContent = ""; put(when, "요약을 받는 중 · 1분마다 다시 확인"); put(left); dtext.textContent = "";
+      return;
+    }
     if (!x) {
       big.textContent = "시작 전"; bigU.textContent = ""; put(when, "봇이 아직 첫 계좌를 만들지 않았습니다"); put(left); dtext.textContent = "";
       return;

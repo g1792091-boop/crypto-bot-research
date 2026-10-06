@@ -117,6 +117,7 @@ function render(d, after) {
     if (m.kind === "day") rows.push(row("D+", "accent", `실험 ${int(m.from)}일 → ${int(m.to)}일 지남`, d.line_ko || (d.verdict_ts ? `판정 ${kst(d.verdict_ts)}` : null), null, href("checkpoint")));
     else if (m.kind === "verdict") rows.push(m.judged
       ? row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, "판정 화면에서 봅니다 (그래서 이제 뭐가 바뀌나까지)", null, href("checkpoint"))
+      : m.judged == null ? row("◆", "warn", `${int(m.k * 30)}일 판정 날 · 결과 기록을 읽지 못함`, "없다는 뜻이 아닙니다 · 판정 화면에서 확인", null, href("checkpoint"))
       : row("◆", "accent", `${int(m.k * 30)}일 판정 날 · 결과 계산 중`, "계산은 09:35부터 · 결과가 저장되면 판정 화면에 바로 나옵니다 (지금 상황도 판정 화면에)", null, href("checkpoint")));
     else if (m.kind === "verdict_result") rows.push(row("◆", "accent", `${int(m.k * 30)}일 판정 결과가 나왔습니다`, `${kst(m.ts)} 저장 · 판정 화면에서 봅니다`, null, href("checkpoint")));
     else if (m.kind === "observe_end") rows.push(row("◆", "accent", "관찰 기간이 끝났습니다", "이제 에이전트가 새 계좌를 제안할 수 있습니다 (두 분 승인 후 시작)", null, href("rooms")));

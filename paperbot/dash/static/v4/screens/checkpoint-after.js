@@ -34,15 +34,17 @@ export function mapRows(ck, board) {
   return {tfs, rows: out};
 }
 
-function nextDate(summary) {
+// the next checkpoint's date from the clock, only once the clock has seen this verdict (between two summary polls it
+// still names the verdict's own day)
+function nextDate(summary, ck) {
   const c = summary && summary.verdict_clock;
-  return c && c.ts ? fmt.mmdd(c.ts) : "다음 판정";
+  return c && c.ts && c.last && c.last.date === ck.date ? fmt.mmdd(c.ts) : "다음 판정 날";
 }
 
 function lines(ck, summary) {
   const rows = (ck.rows || []).filter((r) => r.group !== "flip");
   const n1 = count(rows, PASS1), n2 = count(rows, PASS2), nh = count(rows, HOLD), nf = count(rows, FAIL);
-  const nd = nextDate(summary);
+  const nd = nextDate(summary, ck);
   return h("ul", {class: "cka-lines"},
     h("li", null, h("b", null, "거래는 아무것도 바뀌지 않습니다"),
       " · 모든 모의 계좌가 같은 규칙으로 계속 돕니다. 판정은 이름표일 뿐이고, 실거래는 두 분이 정하기 전에는 없습니다."),
@@ -133,7 +135,8 @@ function levruleLine(lv, ctx) {
 
 /** afterCard(ctx) -> card with .update({ck, board, summary, vd}); it asks its own two routes (checklist, rule B). */
 export function afterCard(ctx) {
-  const st = {ck: null, board: null, summary: null, vd: null, list: null, lv: undefined, phoneAll: {on: false}, busy: false};
+  const st = {ck: null, board: null, summary: null, vd: null, list: null, lv: undefined, phoneAll: {on: false}, busy: false,
+    failedAt: 0};
   const head = h("p", {class: "cka-head"});
   const linesBox = h("div");
   const mapBox = h("div");
@@ -156,6 +159,7 @@ export function afterCard(ctx) {
     try { st.list = await ctx.api("/api/v4/verdictday/after"); } catch (e) {
       if (e && e.name === "AbortError") { st.busy = false; return; }
       st.list = {failed: true};
+      st.failedAt = Date.now();
     }
     st.busy = false;
     if (!ctx.alive()) return;
@@ -184,7 +188,7 @@ export function afterCard(ctx) {
       loadedFor = ck.date;
       put(ckBox, checklist(null, ctx)); put(lvBox, levruleLine(undefined, ctx));
       loadList(); loadLev();
-    } else if (st.list && st.list.failed) loadList();
+    } else if (st.list && st.list.failed && Date.now() - st.failedAt >= 60000) loadList();     // once a minute, not per render
   };
   return card;
 }

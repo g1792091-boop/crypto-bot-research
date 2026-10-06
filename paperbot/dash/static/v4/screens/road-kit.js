@@ -61,7 +61,8 @@ export function pixelRoad(ctx, opts = {}) {
     h("span", null, h("i", {class: "proad-mk dst"}), " 미국 서머타임 끝"),
     h("span", null, h("i", {class: "proad-mk bust"}), " 파산"),
     h("span", null, h("i", {class: "proad-sw none"}), " 기록 없음"));
-  const mini = h("p", {class: "proad-legend proad-mini"}, "한 칸 = 하루 · 색 = 그날 기존 36 중앙값이 오른·내린 정도 (참고) · 아래 점 = 일정 (지표 · 판정 연습 · 서머타임 끝) · 누르면 그날 하이라이트");
+  const miniBad = h("span");
+  const mini = h("p", {class: "proad-legend proad-mini"}, "한 칸 = 하루 · 색 = 그날 기존 36 중앙값이 오른·내린 정도 (참고) · 아래 점 = 일정 (지표 · 판정 연습 · 서머타임 끝) · 누르면 그날 하이라이트", miniBad);
   const box = h("div", {class: "proad" + (opts.card ? " proad-in-card" : " proad-compact")}, opts.card ? head : null, road, opts.card ? legend : mini);
   const root = opts.card ? ui.card({plate: "30일 길", cls: "proad-card", acts: [h("a", {class: "btn-line", href: ctx.href("flow")}, "날짜별 →")]}, box, ui.note("지난 칸을 누르면 그날의 하이라이트가 열립니다."))
     : box;
@@ -93,8 +94,10 @@ export function pixelRoad(ctx, opts = {}) {
     const flagTs = c.verdict_ts || last.ts;
     const after = (st.milestones || []).filter((m) => (m.kind === "verdict" || m.kind === "next") && m.ts > flagTs + 1).sort((a, b) => a.ts - b.ts)[0];
     const nxt = after && opts.card ? h("span", {class: "muted proad-next", title: "그날: 1차 판정을 받은 계좌의 2차 확인 · 보류 계좌 다시"}, ` · 다음 판정 ${fmt.mmdd(after.ts)} (2차 확인)`) : null;
+    miniBad.textContent = st.vdFailed ? " · 판정 연습·서머타임 점을 불러오지 못함 (없다는 뜻 아님)" : "";
     put(head, vc ? [h("b", null, vc.passed_ko), h("span", {class: "muted"}, ` · ${vc.rest_ko}`)]
       : [h("b", null, ti >= 0 ? (rs ? `D+${rs.day}` : "오늘") : "판정 뒤"), h("span", {class: "muted"}, ` · ${days.length}칸 중 지난 ${Math.max(0, ti)}칸`)],
+    st.vdFailed ? h("span", {class: "muted"}, " · 판정 연습·서머타임 점을 불러오지 못함 (없다는 뜻 아님)") : null,
     h("span", {class: "grow"}), h("span", {class: "proad-target"}, flag(), ` 판정 ${fmt.date(c.verdict_ts || last.ts)}`, nxt));
     road.style.setProperty("--n", String(days.length));
     put(road, days.map((e, i) => {
@@ -130,6 +133,7 @@ export function pixelRoad(ctx, opts = {}) {
       if (!ctx.alive()) return;
       st.cal = cal; st.events = (ev && ev.events) || [];
       if (vd && Array.isArray(vd.milestones)) st.milestones = vd.milestones;
+      st.vdFailed = !vd && !st.milestones;           // said on the head: never read as 'no rehearsal'
       render();
     } catch (e) {
       if (!ctx.alive()) return;
