@@ -226,3 +226,31 @@ def test_grade_open_writes_only_the_debate_db_and_the_scoreboard_is_a_small_samp
     assert sb["small"] is True and sb["graded"] >= 4 and sb["by_status"]["void"] == 1
     assert G.claim_ko("busts_by_day", json.dumps({"params": {"day": 20, "max_busts": 2}})) == "D+20에 파산한 전략 계좌가 2개 이하다"
     assert G.status_ko("graded", "hit {...}") == "맞음" and G.status_ko("dropped", "x") == "메뉴에 맞지 않아 버림"
+
+
+def test_the_factory_scoreboard_puts_each_side_next_to_the_lab_base_rates(tmp_path):
+    """The idea factory's sides (debate.db only): settled ideas by side, the check 반대 named, and what the lab's usual
+    rates alone would give (debate_state 'factory:base_rates'); absent before the factory's table exists."""
+    path = str(tmp_path / "debate.db")
+    c = sqlite3.connect(path)
+    c.executescript(D.SCHEMA)
+    assert G.factory_record(c) is None and "factory" not in G.scoreboard(c)
+    c.close()
+    db = D.DB(path)
+    base = {"newlab": {"tests": 100, "passed": 1, "pass_rate": 0.01, "fail_share": {"⑥": 0.6, "①": 0.9}},
+            "labtest": {"tests": 10, "passed": 0, "pass_rate": 0.0, "fail_share": {"①": 0.5}}}
+    db.put("factory:base_rates", base)
+    for i, (engine, side, cc, hit) in enumerate([("newlab", "반대", "⑥", 1), ("newlab", "반대", "①", 0),
+                                                  ("labtest", "반대", "①", 1), ("newlab", "찬성", "⑥", 0)]):
+        db.conn.execute("INSERT INTO debate_lab_ideas (round_id, ts, engine, check_status, queue_status, lab_status, "
+                        "settled_side, con_check, con_check_hit) VALUES (?, ?, ?, 'ok', 'queued', 'tested', ?, ?, ?)",
+                        (i, NOW, engine, side, cc, hit))
+    db.conn.execute("INSERT INTO debate_lab_ideas (round_id, ts, engine, check_status, queue_status) "
+                    "VALUES (9, ?, 'newlab', 'ok', 'candidate')", (NOW,))
+    db.conn.commit()
+    rec = G.scoreboard(db.conn)["factory"]
+    assert (rec["tested"], rec["settled"], rec["찬성_right"], rec["반대_right"]) == (4, 4, 1, 3)
+    assert rec["찬성_expected"] == 0.03 and rec["반대_expected"] == 3.97          # 0.01 x 3 newlab + 0 x 1 labtest
+    assert (rec["con_check_hits"], rec["con_check_graded"], rec["con_check_expected"]) == (2, 4, 2.6)
+    assert rec["small"] and rec["base_rates_known"] and "사람 성적이 아님" in rec["note"]
+    db.close()
