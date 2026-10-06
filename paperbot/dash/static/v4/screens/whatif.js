@@ -293,7 +293,7 @@ export async function mount(el, ctx) {
           ["평균이 플러스인 칸", share(R.cells_pos, R.cells_traded), share(V.cells_pos, V.cells_traded), ""],
           ["두 기간 다 플러스인 칸", share(R.cells_both, R.cells_traded), share(V.cells_both, V.cells_traded), ""],
         ];
-        if (R.mean_eq_p1 != null || V.mean_eq_p1 != null) M.push(["1기 거래당", pc(R.mean_eq_p1), pc(V.mean_eq_p1), ""], ["2기 거래당", pc(R.mean_eq_p2), pc(V.mean_eq_p2), ""]);
+        if (R.mean_eq_p1 != null || V.mean_eq_p1 != null) M.push([`1기 거래당${perKo("1")}`, pc(R.mean_eq_p1), pc(V.mean_eq_p1), ""], [`2기 거래당${perKo("2")}`, pc(R.mean_eq_p2), pc(V.mean_eq_p2), ""]);
         if ((V.liq_share || 0) > 0 || (R.liq_share || 0) > 0) M.push(["강제청산 비율", fmt.pct(R.liq_share, 1, false), fmt.pct(V.liq_share, 1, false), ""]);
         if (A.src === "exitstyle" && !same) {
           M.push(["같은 신호에서 지금보다", "", pctp(V.diff), ["", ""]], ["익절로 끝난 비율", fmt.pct(R.tp_share ?? 0, 0, false), fmt.pct(V.tp_share, 0, false), ""]);
@@ -313,6 +313,15 @@ export async function mount(el, ctx) {
     kids.push(ui.disclosure("5년 24가지 + 익절 6가지 한눈에", mapFive(s)));
     kids.push(h("p", {class: "note"}, `${FY.ref_ko || ""}. 칸 = 매매법 × 봉, 거래당 자금 대비 = ROE × 증거금 비율의 평균, 파산 = 칸·기간마다 $5,000 계좌 하나. ${FY.cells_ko || ""} · ${FY.label || "설명용, 판정 아님"}`));
     put(fiveBody, ...kids);
+  }
+  // " (2021.08~2024.06)": a research period from the file (its end date is exclusive, so the month before it)
+  function perKo(k) {
+    const FY = st.D.five_year || {};
+    const p = ((FY.exitstyle || {}).periods || (FY.levstop || {}).periods || {})[k];
+    const m = (d, back) => { const t = new Date(`${d}T00:00:00Z`); if (Number.isNaN(t.getTime())) return null; if (back) t.setUTCDate(t.getUTCDate() - 1);
+      return `${t.getUTCFullYear()}.${String(t.getUTCMonth() + 1).padStart(2, "0")}`; };
+    const a = p && m(p[0], false), b = p && m(p[1], true);
+    return a && b ? ` (${a}~${b})` : "";
   }
   // two thin bars on one zero line: 지금 vs 이 설정 (the per-trade mean on equity)
   function bars5(R, V, same, alt = "이 설정") {
