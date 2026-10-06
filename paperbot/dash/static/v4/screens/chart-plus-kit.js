@@ -15,6 +15,11 @@ export function koUsd(x) {
 /** "420만 USDT" */
 export const koUsdt = (x) => (x == null || !Number.isFinite(Number(x)) ? "—" : `${koUsd(x)} USDT`);
 
+/** A callback that can never throw into its caller (the chart library, the deck's data feed): a fault in an add-on is logged, the chart goes on. */
+export const safe = (fn) => (...a) => {
+  try { return fn(...a); } catch (e) { try { console.error("chart-plus", e); } catch (x) { /* nothing left to do */ } }
+};
+
 /** The words that stay on screen whenever the overlay is on (the owners' honesty rule: say what it is and what it is not). */
 export const WORDS = {
   liq: "바이낸스 시장 전체 (우리 봇 아님)",

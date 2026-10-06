@@ -38,7 +38,7 @@
 .cfxp-panes { display: grid; min-width: 0; }
 .cfxp-panes:empty { display: none; }
 .cfxp-pane { position: relative; height: var(--cfxp-ph, 84px); border-top: 1px solid var(--line); background: var(--surface); }
-.cfxp-pbox { position: absolute; inset: 0; }
+.cfxp-pbox { position: absolute; inset: 4px 0 3px 0; }          /* a few px of air: the half-cut axis labels of two stacked panes never touch */
 .cfxp-ph { position: absolute; left: 8px; right: var(--cfxp-axw, 64px); top: 2px; z-index: 3; display: flex; align-items: baseline; gap: 8px; min-width: 0; pointer-events: none;
   font-size: var(--t-2xs); line-height: 1.4; white-space: nowrap; }
 .cfxp-ph > * { min-width: 0; }

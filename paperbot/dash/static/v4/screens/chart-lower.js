@@ -12,7 +12,7 @@
 // a bar without a value is a gap; a stale answer says so; Binance's 30-day limit says so.
 import {h, fmt, makeChart, tok} from "../core/pb.js";
 import {TF_S, cvd, alignSeries, alignFunding} from "./chart-plus-calc.js";
-import {koUsd, koUsdt, palette} from "./chart-plus-kit.js";
+import {koUsd, koUsdt, palette, safe} from "./chart-plus-kit.js";
 
 export const PANES = {
   cvd: {ko: "CVD · 사고파는 힘", plain: "오르면 시장가로 사는 쪽이 더 많음", note: "봉 자료로 계산한 근사치"},
@@ -93,7 +93,7 @@ export function lowerPanes(o) {
     }
     p.built = true;
     host.style.setProperty("--cfxp-axw", (mainW() + 4) + "px");
-    c.subscribeCrosshairMove((q) => paneMove(p, q));
+    c.subscribeCrosshairMove(safe((q) => paneMove(p, q)));
     apply(p);
     load(p, false);
   }
@@ -204,7 +204,7 @@ export function lowerPanes(o) {
     if (r) { try { p.C.chart.timeScale().setVisibleLogicalRange(r); } catch (e) { /* mid-layout */ } }
   }
   let lastW = -1;
-  ts().subscribeVisibleLogicalRangeChange((r) => {
+  ts().subscribeVisibleLogicalRangeChange(safe((r) => {
     if (!panes.size) return;
     const w = mainW();
     host.style.setProperty("--cfxp-axw", (w + 4) + "px");
@@ -216,10 +216,10 @@ export function lowerPanes(o) {
     lastW = w;
     const cp = panes.get("cvd");                  // the sum starts at the left edge of the bars on screen: again when that moves
     if (cp && cp.built && !cvdTimer) cvdTimer = setTimeout(() => { cvdTimer = 0; const q = panes.get("cvd"); if (q) apply(q); }, 140);
-  });
+  }));
   ctx.track(() => { if (cvdTimer) clearTimeout(cvdTimer); if (barTimer) clearTimeout(barTimer); });
   // the crosshair of the main chart shows in every pane, and the pane's header value follows it
-  chart.subscribeCrosshairMove((q) => {
+  chart.subscribeCrosshairMove(safe((q) => {
     if (relaying || !panes.size) return;
     relaying++;
     try {
@@ -232,7 +232,7 @@ export function lowerPanes(o) {
         try { if (x && s && p.can) p.C.chart.setCrosshairPosition(x.v, t, s); else p.C.chart.clearCrosshairPosition(); } catch (e) { /* older build */ }
       }
     } finally { relaying--; }
-  });
+  }));
   function paneMove(p, q) {
     if (relaying) return;
     relaying++;

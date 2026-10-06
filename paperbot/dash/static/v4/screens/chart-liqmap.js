@@ -11,7 +11,7 @@
 // Data: /api/v4/chartplus/liq (dash/more/chartplus.py, 20 s cache), asked every 20 s while this is on and the page is visible.
 import {h, fmt} from "../core/pb.js";
 import {LIQ_TONE, TF_S, minLiqUsd, liqRadius, bubbles, priceRows, barWindow} from "./chart-plus-calc.js";
-import {koUsdt, WORDS, tipBox, palette} from "./chart-plus-kit.js";
+import {koUsdt, WORDS, tipBox, palette, safe} from "./chart-plus-kit.js";
 
 const ROW_PX = 3;
 const isAi = () => document.documentElement.dataset.skin !== "classic";
@@ -91,7 +91,7 @@ export function liqMap(o) {
   }
   const under = {
     draw() {},
-    drawBackground(target) {
+    drawBackground: safe((target) => {
       if (!lay.veil && !lay.gaps.length) return;
       target.useMediaCoordinateSpace(({context: c, mediaSize}) => {
         const p = col();
@@ -119,10 +119,10 @@ export function liqMap(o) {
         }
         c.restore();
       });
-    },
+    }),
   };
   const top = {
-    draw(target) {
+    draw: safe((target) => {
       if (!lay.items.length) return;
       target.useMediaCoordinateSpace(({context: c, mediaSize}) => {
         const p = col(), ai = isAi();
@@ -138,7 +138,7 @@ export function liqMap(o) {
         }
         c.restore();
       });
-    },
+    }),
   };
   let raf = 0;
   const paintSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
@@ -147,7 +147,7 @@ export function liqMap(o) {
     attached(p) { api = p; },
     detached() { api = null; },
     paneViews: () => [{zOrder: () => "bottom", renderer: () => under}, {zOrder: () => "top", renderer: () => top}],
-    updateAllViews() { layout(); paintSoon(); },
+    updateAllViews: safe(() => { layout(); paintSoon(); }),
   });
 
   // ---------------------------------------------------------------- the strip: price buckets over the bars on screen
@@ -188,8 +188,8 @@ export function liqMap(o) {
 
   // ---------------------------------------------------------------- hover / tap
   const side = (s) => (s === "long" ? "롱" : "숏");
-  chart.subscribeCrosshairMove((p) => bubbleTip(p && p.point ? p.point : null));
-  chart.subscribeClick((p) => bubbleTip(p && p.point ? p.point : null));
+  chart.subscribeCrosshairMove(safe((p) => bubbleTip(p && p.point ? p.point : null)));
+  chart.subscribeClick(safe((p) => bubbleTip(p && p.point ? p.point : null)));
   function bubbleTip(pt) {
     const was = hover;
     hover = null;

@@ -7,7 +7,7 @@
 import {h, fmt, store} from "../core/pb.js";
 import {normPos, countOnly} from "./positions-kit.js";
 import {whatIf, stopLevels} from "./chart-plus-calc.js";
-import {koUsdt, WORDS, tipBox, palette} from "./chart-plus-kit.js";
+import {koUsdt, WORDS, tipBox, palette, safe} from "./chart-plus-kit.js";
 
 /** stopMap({ctx, chart, series, wrap, deck, strip, sym, report}) -> {setOn(on), onData(), paint(), view()}
  *  report(view): {kind: "off" | "waiting" | "none" | "ready", n, stops, liqs, countOnly}  for the note under the chart */
@@ -45,7 +45,7 @@ export function stopMap(o) {
   let raf = 0;
   const paintSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
   ctx.track(() => { if (raf) cancelAnimationFrame(raf); });
-  series.attachPrimitive({paneViews: () => [], updateAllViews() { if (on) paintSoon(); }});
+  series.attachPrimitive({paneViews: () => [], updateAllViews: safe(() => { if (on) paintSoon(); })});
   function paint() {
     const W = strip.clientWidth, H = strip.clientHeight;
     if (!W || !H) return;

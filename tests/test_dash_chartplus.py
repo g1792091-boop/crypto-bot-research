@@ -567,3 +567,17 @@ def test_review_fixes_of_the_page():
     assert "if (d.stale || p.err) chip = " in low and "palette().up" not in low
     # the price bars are cut by the candles' times, not their count
     assert "barWindow(d, a, z, data.t0, data.step_s)" in liq
+
+
+def test_a_fault_in_an_add_on_never_reaches_the_chart_or_the_candle_feed():
+    """The deck calls the add-ons from inside setData / update, the chart library from inside its draw and crosshair loop: every
+    one of those callbacks is wrapped (chart-plus-kit.js safe), so a fault is logged and the candles go on."""
+    kit = _code(_src("screens", "chart-plus-kit.js"))
+    assert "export const safe = (fn) => (...a) => {" in kit and "console.error(" in kit
+    plus, liq = _code(_src("screens", "chart-plus.js")), _code(_src("screens", "chart-liqmap.js"))
+    low, stop = _code(_src("screens", "chart-lower.js")), _code(_src("screens", "chart-stopmap.js"))
+    assert "deck.onData(safe(" in plus and "deck.onToggle(safe(" in plus and "subscribeVisibleLogicalRangeChange(safe(" in plus
+    assert "drawBackground: safe(" in liq and "draw: safe(" in liq and "updateAllViews: safe(" in liq
+    assert "subscribeCrosshairMove(safe(" in liq and "subscribeClick(safe(" in liq
+    assert low.count("subscribeCrosshairMove(safe(") == 2 and "subscribeVisibleLogicalRangeChange(safe(" in low
+    assert "updateAllViews: safe(" in stop

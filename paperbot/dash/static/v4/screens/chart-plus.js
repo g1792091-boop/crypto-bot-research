@@ -18,7 +18,7 @@ import {liqMap} from "./chart-liqmap.js";
 import {stopMap} from "./chart-stopmap.js";
 import {lowerPanes, PANES} from "./chart-lower.js";
 import {LIQ_TONE, minLiqUsd} from "./chart-plus-calc.js";
-import {WORDS, readState, saveState, PANE_IDS} from "./chart-plus-kit.js";
+import {WORDS, readState, saveState, PANE_IDS, safe} from "./chart-plus-kit.js";
 
 const narrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
 const STRIP_W = {liq: 56, stops: 60};
@@ -183,7 +183,7 @@ export function chartPlus(o) {
     if (below.parentElement && o.minMain) ro.observe(below.parentElement);
     ctx.track(() => ro.disconnect());
   }
-  chart.timeScale().subscribeVisibleLogicalRangeChange(() => { if (st.liq || st.stops) scheduleLayout(); });
+  chart.timeScale().subscribeVisibleLogicalRangeChange(safe(() => { if (st.liq || st.stops) scheduleLayout(); }));
 
   // ---------------------------------------------------------------- choices
   const save = () => saveState(o.key, st);
@@ -249,19 +249,19 @@ export function chartPlus(o) {
     deck.menuEl.append(sec);
   }
   // '기본으로' puts the calm chart back (all of this off); '모두 숨기기' too; '모두 보기' leaves the add-ons as they are
-  deck.onToggle((g, how) => {
+  deck.onToggle(safe((g, how) => {
     if (g == null && (how === "default" || how === "none")) {
       if (st.liq) { st.liq = false; L.setOn(false); }
       if (st.stops) { st.stops = false; S.setOn(false); }
       st.panes = []; save();
       layoutNow();
     }
-  });
-  deck.onData((how) => {
+  }));
+  deck.onData(safe((how) => {                       // (safe: this runs inside the deck's setData / update; a fault here never stops the candles)
     if (how === "set") cur = {sym: o.sym(), tf: o.tf()};
-    L.onData(how); S.onData(how); P.onData(how);
+    for (const part of [L, S, P]) safe(() => part.onData(how))();
     if (how === "set") scheduleLayout();
-  });
+  }));
 
   // ---------------------------------------------------------------- start from what this device chose
   if (st.liq) L.setOn(true);
