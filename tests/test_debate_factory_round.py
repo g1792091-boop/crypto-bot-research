@@ -270,6 +270,7 @@ def test_the_deep_debate_is_three_calls_reading_each_other_once_a_day(world, tmp
     assert svc.deep_due(AT_2005) and svc.tick() == "deep"
     calls = [c[2] for c in svc.fake.calls]
     assert len(calls) == 3 and {c["model"] for c in calls} == {"claude-opus-5-5"}
+    assert {c[3] for c in svc.fake.calls} == {D.DEEP_TIMEOUT_S} and D.DEEP_TIMEOUT_S < 90       # under TimeoutStopSec
     assert all(c["max_tokens"] == 4000 and c["output_config"] == {"effort": "low"} and "thinking" not in c
                for c in calls)
     assert len({c["system"][0]["text"] for c in calls}) == 1 and "## 깊은 토론" in calls[0]["system"][0]["text"]

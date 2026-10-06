@@ -123,6 +123,9 @@ DEEP_MAX_TOKENS = 4000                      # per call, thinking included (Opus 
 DEEP_ATTEMPTS = 2                           # attempts a day (a failed one is tried once more, DEEP_RETRY_MS later)
 DEEP_RETRY_MS = 30 * 60_000
 DEEP_EST_OUT = (900, 900, 1100)             # the dry run's output estimate per part (answer + effort-low thinking)
+# one deep call may write up to 4,000 tokens: longer than the regular 45 s, but under the unit's TimeoutStopSec=90 so a
+# stop request still lets the call in progress finish and its money be counted
+DEEP_TIMEOUT_S = 80.0
 
 
 def est_out_default(turns: int, factory: bool = False) -> int:
@@ -298,7 +301,8 @@ class Config:
         (Opus 5.5 cannot turn it off), the five-minute cache, its own prices."""
         import dataclasses
         return dataclasses.replace(self, model=self.deep_model, max_tokens=self.deep_max_tokens, effort=self.deep_effort,
-                                   thinking="", cache="5m", price_in=self.deep_price_in, price_out=self.deep_price_out)
+                                   thinking="", cache="5m", price_in=self.deep_price_in, price_out=self.deep_price_out,
+                                   timeout_s=max(self.timeout_s, DEEP_TIMEOUT_S))
 
     def deep_minutes(self) -> int:
         hh, mm = self.deep_at.split(":")
