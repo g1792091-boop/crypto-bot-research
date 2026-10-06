@@ -17,6 +17,21 @@ const V_CLS = {met: "good", not_yet: "warn", unknown: "thin"};
 const GROUP_LINES = [["ds200", "딥시크"], ["reel", "5분봉 단타"], ["extra", "추가 계좌 (복제·새 매매법)"]];
 
 const count = (rows, s) => rows.filter((r) => r.status === s).length;
+
+/** A verdict row of a DeepSeek account (owners' D10 / D11: DeepSeek money only on its own group screen). */
+export const isDs = (r) => !!r && (r.group === "ds200" || r.family === "ds200");
+/** The stored verdict's reason without its dollar amounts (checkpoint.decide words: '평가금 $X ≤ 시작 $Y', ', 평가금 $X',
+ *  '손익 $X'), for a DeepSeek row on 판정: the rule in words, the money only on the DeepSeek screen. */
+const USD = "\\$-?\\d+(?:,\\d{3})*(?:\\.\\d+)?";        // "$60,000", "$-1,234" (never the comma after it)
+const RX = (src) => new RegExp(src.replace(/USD/g, () => USD), "g");
+export function moneyFree(text) {
+  return String(text || "")
+    .replace(RX("평가금 USD ≤ 시작 USD"), "평가금이 시작 잔고 이하")
+    .replace(RX(", 평가금 USD"), "")
+    .replace(RX("2차 기간 손익 USD"), "2차 기간 손익 플러스 아님")
+    .replace(RX(", 손익 USD"), "")
+    .replace(RX("USD"), "(금액은 딥시크 화면에서)");
+}
 const strat = (r) => String(r.account_id || "").split("@")[0];
 
 /** The 36 by strategy x judged timeframe: [{strategy, best, cells: {tf: row}}], the passes first. */

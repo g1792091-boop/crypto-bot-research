@@ -17,7 +17,7 @@ import {expInfo, judgedProgress, progBar, verdictDate as vDate, MIN_TRADES} from
 import {seatsCard, powerCard, stamp, luckDots} from "./checkpoint-stage.js";
 import {pixelRoad} from "./road-kit.js";
 import {luckCheck} from "./luck-kit.js";
-import {afterCard} from "./checkpoint-after.js";
+import {afterCard, isDs, moneyFree} from "./checkpoint-after.js";
 import {machineCard} from "./checkpoint-machine.js";
 
 const ST_CLS = {"2차 통과": "good", "1차 합격": "good", "불합격": "bad", "보류": "thin", "관찰용": "thin"};
@@ -194,15 +194,18 @@ export async function mount(el, ctx) {
     return a ? fmt.acctName(a) : fmt.idName(id);
   }
   function verdictRow(r) {
+    // a DeepSeek row: no money on 판정 (owners' D10 / D11: DeepSeek money only on its own group screen)
+    const ds = isDs(r);
+    const reason = r.reason ? (ds ? moneyFree(r.reason) : String(r.reason)) : "";
     const meta = [h("span", null, fmt.tfKo(r.timeframe)), r.stage ? h("span", null, String(r.stage)) : null,
-      h("span", null, `거래 ${fmt.int(r.trades)}`), r.equity != null ? h("span", null, `평가금 ${fmt.money(r.equity)}`) : null,
+      h("span", null, `거래 ${fmt.int(r.trades)}`), r.equity != null && !ds ? h("span", null, `평가금 ${fmt.money(r.equity)}`) : null,
       r.p != null ? h("span", {class: "mono"}, `p ${fmt.num(r.p, 4)}`) : null, r.q != null ? h("span", {class: "mono"}, `q ${fmt.num(r.q, 3)}`) : null];
     return h("div", {class: "lrow ck-row", role: "listitem"},
       h("span", {class: "rk"}, ui.pill(r.status, ST_CLS[r.status] || "", ST_MEAN[r.status])),
       h("a", {class: "lname", href: ctx.href("account", r.account_id), title: r.account_id}, r._name),
       h("span", {class: "ret"}),
       h("span", {class: "meta"}, meta),
-      r.reason ? h("div", {class: "ck-reason"}, ui.moreText(String(r.reason), 2)) : null);
+      reason ? h("div", {class: "ck-reason"}, ui.moreText(reason, 2)) : null);
   }
   function applyRows(keep) {
     const v = st.ck;

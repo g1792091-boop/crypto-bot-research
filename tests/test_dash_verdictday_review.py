@@ -209,3 +209,27 @@ def test_a_runner_state_saved_after_the_jobs_look_is_not_a_missing_state(tmp_pat
     assert r["st"] == ["done", "wait", "wait", "wait"] and r["notes"][1] == "봇의 저장을 확인하면 잠금 (다음 실행 11:35)"
     # a caller that did not ask paper3.db (the sheet, the story, the race) never claims the state is missing
     assert not V.clock(START, CP1 + 101 * MIN, V.read_ledger(out))["late"]
+
+
+def test_deepseek_rows_on_the_verdict_page_carry_no_money(tmp_path):
+    """Owners' D10 / D11: DeepSeek money only on its own group screen. The 판정 page's account rows show a DeepSeek
+    account's status, trades, p and q, never its 평가금 or the dollar amounts in the stored reason."""
+    reasons = ["거래 46건, 평가금 $60,000, p 0.0007, q 0.012",
+               "1차: 평가금 $4,900 ≤ 시작 $5,000, 우연 기준 미통과 (p 0.1000, 보정 q 0.900)",
+               "2차: 2차 기간 거래 12건 < 30건, 2차 기간 손익 $-1,234",
+               "2차 통과: 실거래 검토 대상 (거래 40건, 손익 $2,345, q 0.010)",
+               "2026-11-04 판정 유지: 거래 46건, 평가금 $60,000, p 0.0007, q 0.012", "1차: 파산"]
+    r = _node("screens/checkpoint-after.js", f"const R = {json.dumps(reasons, ensure_ascii=False)};\n"
+              "console.log(JSON.stringify({out: R.map(m.moneyFree), ds: [m.isDs({group: 'ds200'}), m.isDs({family: 'ds200', group: 'extra'}), m.isDs({group: 'core'})]}));")
+    assert r["out"] == ["거래 46건, p 0.0007, q 0.012", "1차: 평가금이 시작 잔고 이하, 우연 기준 미통과 (p 0.1000, 보정 q 0.900)",
+                        "2차: 2차 기간 거래 12건 < 30건, 2차 기간 손익 플러스 아님", "2차 통과: 실거래 검토 대상 (거래 40건, q 0.010)",
+                        "2026-11-04 판정 유지: 거래 46건, p 0.0007, q 0.012", "1차: 파산"]
+    assert r["ds"] == [True, True, False]
+    # every reason the real verdict stored for a DeepSeek row comes out without a dollar sign
+    paper, out = _state(tmp_path, "verdict")
+    ds = [x["reason"] for x in ck.dashboard_view(out)["rows"] if x["group"] == "ds200" and x.get("reason")]
+    assert ds and any("$" in x for x in ds)
+    clean = _node("screens/checkpoint-after.js", f"const R = {json.dumps(ds, ensure_ascii=False)};\nconsole.log(JSON.stringify(R.map(m.moneyFree)));")
+    assert not any("$" in x for x in clean)
+    js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
+    assert "r.equity != null && !ds" in js and "ds ? moneyFree(r.reason)" in js
