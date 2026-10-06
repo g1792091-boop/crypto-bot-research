@@ -438,6 +438,13 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 | Right column | **이 코인 포지션** (ours: 기존 36 · 5분봉 · 추가; ROE, 청산가; DeepSeek / coin flips counted only; "주문 버튼 없음" caption; 호가 behind its switch), **수익 차트** (기존 36 realized P&L: cumulative line from the run start + daily bars; 참고), **오늘 수익** (today's realized sum, trades, wins), **수익 캘린더** (each KST day's realized P&L of the 36 in its cell, green / red by sign, 기록 없음 days blank) | `/api/v4/flow/calendar` (`g.core.pnl / trades / wins`, 5 min) |
 | Positions table | one head line: 포지션 n / 체결 / 손절 주문, **ALL** (= 기존 36 · 5분봉 · 추가) or one group, 롱 / 숏 share bar with %, 열린 n, 미실현 합계; dense aligned rows; foot: the open-P&L caption, "딥시크 n · 동전 봇 n개 열림 (건수만)" | `/api/board`, `/api/trades` (unchanged) |
 | Not shown | whale on-chain transfers (HelloQuant's "Whale Transfer") need a paid on-chain source: not faked, not shown | — |
+## size5y: 손실 크기 규칙 (owners' idea 6; dashboard only, read-only, pre-registered in docs/size5y.md; tests/test_dash_size5y.py, tests/test_size5y.py)
+
+| What | Where it shows | Server |
+|---|---|---|
+| 손실 크기 규칙 tab | 분석 › 손실 크기 규칙 (after 좋은 자리 vs 보통; screens/analysis-size.js + .css, core only): the same 5-year entries and exits of the 36 (v4 path, 30-day $5,000 accounts) with only the position size changed: 지금 v4 / 손절 한 번 = 잔고 0.5 · 1 · 2% / 배수 절반. Head, caveat card (설명용, 판정 아님; the live rule does not change before the verdict; the 36 were chosen on this data; exits fixed), 쉬운 말로 (sentences built only from the file's pooled numbers, timeframe switch), 규칙 비교 (rules as columns: 5년 뒤 잔고, 1년 평균, 최대 낙폭, 가장 나쁜 달, 플러스인 달, Calmar-like, 파산한 칸, 늘어난 칸, 지는 거래 한 번, 30일 계좌; timeframe and 5년 / 2021-22 / 2023-24 / 2025-26 switches; coin flips with the same rule as 참고 + refNote; assume()), 모은 36 · 달별 잔고 (log-scale monthly curves, one line per rule), 매매법마다 (144 rows, 10 per page; tap: the cell's rule table and curves) | `/api/v4/size5y` (dash/more/size5y.py: paperbot/dash/data/size5y.json as committed, written offline by paperbot/dash/tools/size5y.py; per-cell curves left out) |
+| 매매법마다 drill-down | the same tab: one strategy x timeframe's rules side by side (5년, the three periods, bust month, loss per losing trade, 30-day share positive) and its monthly curves; 표본 적음 under 20 path trades | `/api/v4/size5y/cell?s=&tf=` |
+
 ## 클릭 줄이기 (nav-rail; owners 10/06 "들어가는 클릭버튼이 너무 많아서 들어가서 보는게 귀찮다"; tests/test_dash_nav.py)
 
 - **왼쪽 아이콘 줄** (`core/rail.js`, `core/nav.css`): 창이 1200px 이상이면 다섯 묶음의 모든 화면이 왼쪽 세로 줄에 아이콘으로 바로 나옵니다 (묶음 사이 얇은 선, 마우스·키보드 초점에 이름과 단축키, 지금 화면은 강조색, 새 소식 점 그대로). 한 번 누르면 어느 화면이든 갑니다. 그 폭에서는 묶음 막대와 아래 탭 줄이 숨고 (`--sub-h: 0`), 위 막대에 "묶음 › 화면"이 나옵니다. 글자 크기 · 화면 색 · 예전 화면(v3)은 줄의 맨 아래. 1200px 아래는 예전 그대로 (묶음 막대 + 탭, 폰은 아래 막대).

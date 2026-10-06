@@ -38,7 +38,10 @@
 .sz-mid { min-width: 0; overflow-wrap: anywhere; }
 .sz-end { text-align: right; font-size: var(--t-xs); }
 .sz-detail { display: grid; gap: 10px; padding: 6px 4px 14px; min-width: 0; }
+.sz-swipe { display: none; }
 @media (max-width: 640px) {
+  .sz-swipe { display: block; margin: 0; }
+  .sz-rl { min-width: 7em; }
   .sz-row { grid-template-columns: minmax(0, 1fr) auto; }
   .sz-mid { grid-column: 1 / -1; grid-row: 2; }
   .sz-end { grid-row: 1; grid-column: 2; }

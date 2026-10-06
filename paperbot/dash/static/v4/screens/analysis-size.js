@@ -93,7 +93,7 @@ function compareCard(doc, env) {
     const all = [...rowsA, ...rowsB, ...rowsC, ...rowsF];
     const cols = [{label: "", l: true, get: (x) => h("span", {class: "sz-rl"}, x.label)},
       ...rules.map((r) => ({label: h("span", {class: ["sz-key", RULE_CLS[r.key]]}, r.short), get: (x) => x.get(r)}))];
-    put(box, ui.table(cols, all),
+    put(box, h("p", {class: "an-note sz-swipe"}, "표를 옆으로 밀면 다른 규칙이 보입니다."), ui.table(cols, all),
       h("p", {class: "an-note"}, key === "all" ? "모은 것 = 144칸(기존 36 × 네 봉)의 5년 계좌(각 $5,000)를 그냥 더한 잔고, 달마다 찍은 점으로 낙폭을 잽니다." : `모은 것 = 이 봉의 36칸 5년 계좌를 그냥 더한 잔고 (달 단위 낙폭).`,
         pk !== "full" ? " 구간마다 $5,000에서 새로 시작한 계좌입니다." : " 30일 계좌 = 지금 모의 계좌처럼 30일마다 새 $5,000."),
       ui.assume("closed", ASSUME_5Y), ui.refNote(env.verdictTs, "동전 봇 줄은 같은 크기 규칙을 무작위 진입에 단 것입니다."));
@@ -193,7 +193,7 @@ function cellDetail(c, doc, env, cache) {
       {label: "30일 계좌 플러스 비율", get: (r) => num(pc0((((d.r || {})[r.key] || {}).w30 || [])[2]))},
     ];
     const series = rules.map((r) => ({key: r.key, values: [1, ...((((d.r || {})[r.key]) || {}).curve || [])]}));
-    put(body, ui.table(cols, lines), logCurves({series, months: ["시작", ...(d.months || doc.months || [])], height: 180,
+    put(body, h("p", {class: "an-note sz-swipe"}, "표를 옆으로 밀면 다른 규칙이 보입니다."), ui.table(cols, lines), logCurves({series, months: ["시작", ...(d.months || doc.months || [])], height: 180,
       label: `${c.s} ${fmt.tfKo(c.tf)} 규칙별 잔고`}), legend(rules),
     h("p", {class: "an-note"}, `5년 경로 거래 ${fmt.int(d.trades || 0)}건 (30일 계좌로 돈 v4 경로).`, " ", ui.smallSample(d.trades || 0, 20)),
     ui.assume("closed", ASSUME_5Y));
