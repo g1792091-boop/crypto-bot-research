@@ -134,7 +134,7 @@ export function entry(d, env) {
       {label: "승률", get: (b) => fmt.pct(t[b].wr, 0, false)},
       {label: "평균 ROE", get: (b) => h("span", {class: fmt.tone(t[b].roe)}, fmt.pct(t[b].roe))},
       ...(f ? [
-        {label: "동전 거래", get: (b) => (f[b] ? fmt.int(f[b].n) : "—")},
+        {label: "동전 거래", get: (b) => (f[b] ? (f[b].n < min ? [fmt.int(f[b].n), " ", ui.smallSample(f[b].n, min)] : fmt.int(f[b].n)) : "—")},
         {label: "동전 승률", get: (b) => (f[b] ? fmt.pct(f[b].wr, 0, false) : "—")},
         {label: "동전 ROE", get: (b) => (f[b] ? h("span", {class: fmt.tone(f[b].roe)}, fmt.pct(f[b].roe)) : "—")},
       ] : []),

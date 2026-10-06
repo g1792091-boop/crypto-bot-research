@@ -15,7 +15,8 @@ const BK_KO = {"바로 앞": "바로 앞 (ATR 0.5 미만)", "가까움": "가까
   "전일·전주": "전일·전주 고저", "라운드": "라운드 넘버", unknown: "모름 (기록 없음)"};
 const bk = (b) => BK_KO[b] || b;
 
-/** One table: the group's cell and the coin flips' cell for each bucket (n, win rate, ROE; never money). */
+/** One table: the group's cell and the coin flips' cell for each bucket (n, win rate, ROE; never money). A cell under
+ *  ``min`` trades is marked on either side: the group's in the last column, the flips' next to their count. */
 function sideBySide(t, f, order, min, W) {
   t = t || {}; f = f || {};
   const keys = [...order.filter((b) => t[b] || f[b]), ...Object.keys(t).filter((b) => !order.includes(b))];
@@ -26,7 +27,8 @@ function sideBySide(t, f, order, min, W) {
     {label: `${W.short} 거래`, get: (b) => c(t[b], (x) => fmt.int(x.n))},
     {label: "승률", get: (b) => c(t[b], (x) => fmt.pct(x.wr, 0, false))},
     {label: "평균 ROE", get: (b) => c(t[b], (x) => h("span", {class: fmt.tone(x.roe)}, fmt.pct(x.roe)))},
-    {label: `${W.flips} 거래`, get: (b) => c(f[b], (x) => fmt.int(x.n))},
+    // the coin flips' cell carries its own small-sample mark (a 2-trade flip cell is no yardstick)
+    {label: `${W.flips} 거래`, get: (b) => c(f[b], (x) => (x.n < min ? [fmt.int(x.n), " ", ui.smallSample(x.n, min)] : fmt.int(x.n)))},
     {label: "승률", get: (b) => c(f[b], (x) => fmt.pct(x.wr, 0, false))},
     {label: "평균 ROE", get: (b) => c(f[b], (x) => h("span", {class: fmt.tone(x.roe)}, fmt.pct(x.roe)))},
     {label: "", get: (b) => (t[b] && t[b].n < min ? ui.smallSample(t[b].n, min) : "")},
@@ -87,7 +89,7 @@ export function vp(d, env) {
   out.push(ui.card({plate: "매물대가 거래 방향 바로 앞", sub: "롱이면 위쪽, 숏이면 아래쪽 매물대가 0.5 ATR 안"},
     // a plain paragraph (not .an-read: its <b> is the accent label colour, which would hide the ROE's up/down tone)
     h("p", null, a.n ? [`${W.short} ${fmt.int(a.n)}건 · 승률 ${fmt.pct(a.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(a.roe)}, fmt.pct(a.roe)), " ", ui.smallSample(a.n, min)] : `${W.short} 0건`,
-      " / ", fa.n ? [`${W.flips} ${fmt.int(fa.n)}건 · 승률 ${fmt.pct(fa.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(fa.roe)}, fmt.pct(fa.roe))] : `${W.flips} 0건`),
+      " / ", fa.n ? [`${W.flips} ${fmt.int(fa.n)}건 · 승률 ${fmt.pct(fa.wr, 0, false)} · 평균 ROE `, h("b", {class: fmt.tone(fa.roe)}, fmt.pct(fa.roe)), " ", ui.smallSample(fa.n, min)] : `${W.flips} 0건`),
     h("p", {class: "an-sub"}, "앞 가격대가 매물대인 거래 · 거리별"),
     sideBySide(mine.under_vp, flips.under_vp, order.sr_room || [], min, W),
     h("p", {class: "an-sub"}, `매물대 바로 앞에서 들어간 거래가 많은 순 (${fmt.int(ru.total || 0)}개 중 최대 10개)`), list,
