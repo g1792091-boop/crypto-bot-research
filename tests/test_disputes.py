@@ -606,3 +606,28 @@ def test_the_shown_progress_stops_at_n(conn, tmp_path):
     paper.add(f"{S}@1h", T0 + 1000, -0.01, n=23)
     [r] = DS.list_rows(conn, strategy=S, paper_ro=paper.ro())
     assert r["progress"] == 20 and r["progress_ko"] == "앞으로 20건 중 20건"
+
+
+def test_expected_wins_use_each_forward_checks_own_base_rate(conn):
+    """vs_flip and tag_gap can have different base rates: an attacker who always picks the check that attackers
+    usually win must read as that base rate, not as skill."""
+    def put(check, winner, a):
+        spec = {"kind": "forward", "check": check, "timeframe": "1h", "n": 20}
+        if check == "tag_gap":
+            spec["tag"] = "횡보장 진입"
+        conn.execute("INSERT INTO disputes (ts, room_id, strategy, source, claim_ko, side_a, side_b, kind, spec, spec_hash, "
+                     "status, winner, outcome, settled_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     (T0, ROOM, S, "strategy_room", "c", a, f"spec_{S}", "forward", json.dumps(spec),
+                      f"{check}{a}{winner}{conn.execute('SELECT COUNT(*) FROM disputes').fetchone()[0]}", "settled",
+                      winner, "o", T0))
+        conn.commit()
+    for _ in range(4):
+        put("vs_flip", "a", "whatif")                                         # vs_flip: attackers won 4/4
+    for w in ("a", "b", "b", "b"):
+        put("tag_gap", w, "entry_timing")                                     # tag_gap: 1/4
+    b = DS.board(conn)
+    assert b["base_rates"]["vs_flip"]["attacker_share"] == 1.0 and b["base_rates"]["tag_gap"]["attacker_share"] == 0.25
+    assert b["base_rates"]["forward"]["attacker_share"] == 0.625
+    wi, en = DS.role_record(b, "whatif"), DS.role_record(b, "entry_timing")
+    assert (wi["won"], wi["expected"]) == (4, 4.0)                            # 4/4 is exactly what vs_flip gives
+    assert (en["won"], en["expected"]) == (1, 1.0)

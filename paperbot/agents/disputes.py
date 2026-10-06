@@ -970,11 +970,23 @@ def _empty_role(role: str) -> dict:
             "gave_up": 0, "expected": 0.0, "small": True}
 
 
+def _check_of(r: dict) -> str:
+    """The finest kind a base rate is kept for: 'lab', or the forward check ('tag_gap' / 'vs_flip')."""
+    if r.get("kind") == "lab":
+        return "lab"
+    c = (r.get("spec") or {}).get("check") if isinstance(r.get("spec"), dict) else None
+    return c if c in FORWARD_CHECKS else "forward"
+
+
 def base_rates(rows: Iterable[dict]) -> dict:
-    """The attacker's share of settled disputes by kind (the advocate's is 1 minus it), next to the coin flip's 50%."""
+    """The attacker's share of settled disputes by kind (the advocate's is 1 minus it), next to the coin flip's 50%;
+    also per forward check ('tag_gap', 'vs_flip'): their base rates can differ (a strategy that trails the coin flips
+    hands the attacker most vs_flip checks), and ``board``'s expected wins use the finest one."""
+    rows = list(rows)
     out: dict = {}
-    for k in ("lab", "forward", "all"):
-        rs = [r for r in rows if r["status"] == "settled" and (k == "all" or r["kind"] == k)]
+    for k in ("lab", "forward", "all") + FORWARD_CHECKS:
+        rs = [r for r in rows if r["status"] == "settled"
+              and (k == "all" or r["kind"] == k or (k in FORWARD_CHECKS and _check_of(r) == k))]
         a = sum(r.get("winner") == "a" for r in rs)
         out[k] = {"settled": len(rs), "attacker_won": a, "advocate_won": len(rs) - a,
                   "attacker_share": a / len(rs) if rs else None, "advocate_share": (len(rs) - a) / len(rs) if rs else None,
@@ -1006,7 +1018,7 @@ def board(conn: Optional[sqlite3.Connection], turns: bool = True) -> dict:
             a[st] += 1
             b[st] += 1
         elif st == "settled" and r.get("winner") in ("a", "b"):
-            share = rates[r["kind"]]["attacker_share"] or 0.0
+            share = (rates.get(_check_of(r)) or rates[r["kind"]])["attacker_share"] or 0.0
             for row, side, mine in ((a, "as_attacker", "a"), (b, "as_advocate", "b")):
                 won = r["winner"] == mine
                 row["won" if won else "lost"] += 1
