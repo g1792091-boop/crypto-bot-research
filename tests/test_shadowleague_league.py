@@ -201,7 +201,8 @@ def _flat_world(tmp_path, name):
     a["o"][1032], a["l"][1032] = 98.0, 97.9    # this bar opens below the stop of the signal before it
     a["h"][1040] = 101.5                       # target 101 of the fourth trade
     ex = FakeExchange(coins=("BTC",), tfs=("1h",), arrays={("BTC", "1h"): a})
-    plan = {1010: (99.0, 103.0), 1013: (99.0, 103.0), 1014: (99.0, 104.0), 1016: (99.0, 104.0), 1030: (99.0, 104.0),
+    plan = {900: (99.0, 103.0),                            # before the member's start date (bar 1000): never recorded
+            1010: (99.0, 103.0), 1013: (99.0, 103.0), 1014: (99.0, 104.0), 1016: (99.0, 104.0), 1030: (99.0, 104.0),
             1031: (99.0, 104.0), 1033: (99.0, 101.0), 1389: (99.0, 104.0),
             1050: (100.0 * (1.0 + SM.SLIP_SIDE), 104.0),        # the stop is exactly where the entry fills: no room, no trade
             1052: (99.0, 100.0 * (1.0 + SM.SLIP_SIDE))}         # the target is exactly where the entry fills
