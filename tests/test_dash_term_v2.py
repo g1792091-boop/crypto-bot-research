@@ -164,8 +164,12 @@ def test_left_column_stacks_three_lists_with_ratio_bars_and_no_switch():
     assert "duoSwitch(left" not in js
     assert "ratioBar(" in feed and "ratioBar(" in live
     assert '"LONG"' in feed and '"SHORT"' in feed and "/api/liq" in feed
-    assert "시장 전체 (우리 봇 아님)" in live and "시장 전체 (우리 봇 아님)" in feed
-    assert "export const age" in _src("screens", "terminal-kit.js")         # ages '6s' / '4m'
+    kit = _src("screens", "terminal-kit.js")
+    assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in kit
+    assert "sub: MARKET_LABEL" in live and 'h("b", null, BIG_LABEL)' in live                 # 실시간 큰 체결: head + footer
+    assert "바이낸스 ${MARKET_LABEL}" in feed                                                  # 시장 강제청산: footer
+    assert "export const age" in kit and "ageCell(r.t)" in live and "ageCell(r.ts)" in feed   # ages '6s' / '4m'
+    assert "ages(left)" in js and "ctx.every(1000" in js
     css = _src("screens", "terminal.css")
     assert ".term-fr.big.whale" in css and ".term-fr.big.buy" in css and ".term-fr.big.sell" in css
 
@@ -206,7 +210,7 @@ def test_tokens_only():
         v = m.group(1)
         if "var(--f-" in v and "var(--t-" not in v and "px" not in v:
             continue                                                          # a family only (font: inherit etc.)
-        assert "var(--t-" in v or "inherit" in v, v
+        assert "var(--t-" in v or "inherit" in v or re.fullmatch(r"calc\(\d+px \* var\(--ts\)\)", v.strip()), v
     for f in JS + ["terminal.css"]:
         src = _code(_src("screens", f))
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", src), f

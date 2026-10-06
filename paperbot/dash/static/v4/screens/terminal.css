@@ -73,7 +73,7 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term-mvl { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .term-mvs { font-weight: 800; font-size: var(--t-sm); color: var(--ink); max-width: calc(110px * var(--ts)); overflow: hidden; text-overflow: ellipsis; }
 .term-mvv { font-size: var(--t-sm); font-weight: 700; }
-.term-mvcap { flex: none; max-width: calc(76px * var(--ts)); color: var(--muted); font-size: var(--t-2xs); line-height: 1.25; white-space: normal; }
+.term-mvcap { flex: none; max-width: calc(92px * var(--ts)); color: var(--muted); font-size: var(--t-2xs); line-height: 1.25; white-space: normal; }
 .term-movers.none .term-mvs { color: var(--muted); font-weight: 600; }
 .term-movers.stale .term-mvl { opacity: .7; }
 .term-sess { flex: none; padding: 3px 8px; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent-hi); font-weight: 700; font-size: var(--t-2xs);
@@ -100,7 +100,7 @@ a.term-mi:hover span:last-child { color: var(--ink); text-decoration: underline;
 @keyframes term-marq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* ---------------------------------------------------------------- grid: side columns sized so the chart gets the room */
-.term-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 8px; min-height: 0; min-width: 0; }
+.term-grid { display: grid; grid-template-columns: 324px minmax(0, 1fr) 344px; gap: 8px; min-height: 0; min-width: 0; }
 .term-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
 .term-mid { display: grid; grid-template-rows: auto minmax(0, 1fr) 236px; gap: 8px; min-height: 0; min-width: 0; }
 
@@ -132,7 +132,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-fr > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .term-age { justify-self: end; color: var(--muted); font-size: var(--t-2xs); }
 /* 실시간 큰 체결: ▲ coin · price · 고래 · $ · age, tinted by side */
-.term-fr.big { grid-template-columns: calc(64px * var(--ts)) minmax(0, 1fr) auto calc(58px * var(--ts)) calc(26px * var(--ts)); }
+.term-fr.big { grid-template-columns: calc(54px * var(--ts)) minmax(0, 1fr) auto calc(54px * var(--ts)) calc(22px * var(--ts)); column-gap: 4px; }
 .term-fr.big::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55; }
 .term-fr.big.buy::before { background: linear-gradient(90deg, var(--up-soft), transparent 75%); }
 .term-fr.big.sell::before { background: linear-gradient(90deg, var(--down-soft), transparent 75%); }
@@ -152,7 +152,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-whale { justify-self: end; padding: 0 4px; border-radius: 3px; font-size: var(--t-2xs); font-weight: 800; line-height: 1.35; color: var(--accent-ink);
   background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 /* 시장 강제청산: LONG / SHORT · price · $ · age */
-.term-fr.liq { grid-template-columns: calc(48px * var(--ts)) minmax(0, 1fr) calc(64px * var(--ts)) calc(26px * var(--ts)); }
+.term-fr.liq { grid-template-columns: calc(48px * var(--ts)) minmax(0, 1fr) calc(62px * var(--ts)) calc(24px * var(--ts)); column-gap: 5px; }
 .term-fr.liq.lg { border-left-color: var(--up-line); } .term-fr.liq.sh { border-left-color: var(--down-line); }
 .term-fr.liq.bigl { background: var(--amber-soft, var(--surface-2)); }
 .term-lb { justify-self: start; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; font: 800 var(--t-2xs)/1.35 var(--f-term); letter-spacing: .02em; }
@@ -161,7 +161,8 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-lu { text-align: right; font-weight: 800; }
 .term-fr.liq.bigl .term-lu { color: var(--warn); }
 /* 우리 봇 체결: age · tag · account · coin side · result */
-.term-fr.fl { grid-template-columns: calc(26px * var(--ts)) calc(34px * var(--ts)) minmax(0, 1fr) auto calc(70px * var(--ts)); }
+.term-fr.fl { grid-template-columns: calc(24px * var(--ts)) calc(32px * var(--ts)) minmax(0, 1fr) auto calc(60px * var(--ts)); column-gap: 5px; }
+.term-fr.fl .term-gsw, .term-fr.fl .an-tf { display: none; }      /* the timeframe and group are in the row's title */
 .term-fr.fl .term-age { justify-self: start; }
 .term-fn { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; font-weight: 600; }
 .term-fn .an { display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; }
@@ -190,6 +191,8 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-bst[data-s="live"] { color: var(--up); }
 .term-bst[data-s="live"] i { background: var(--up); box-shadow: 0 0 7px var(--live-glow, var(--up-line)); }
 .term-bst[data-s="down"] { color: var(--down); }
+/* the head keeps the state dot alone (its words stay for screen readers and in its title) */
+.term-bst > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ratio bars: under every list (a thin bar, the two shares under it) and inline in the table head */
 .term-rbrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
@@ -289,7 +292,7 @@ a.term-fr:hover { background: var(--surface-2); }
 
 /* ---------------------------------------------------------------- the right column */
 .term-right { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.term-mine, .term-book { flex: 0 1 34%; min-height: 150px; }
+.term-mine, .term-book { flex: 0 1 auto; max-height: 36%; min-height: 128px; }
 .term-mine .term-pb { padding: 2px 6px; }
 .term-right[data-duo="pos"] .term-book, .term-right[data-duo="book"] .term-mine { display: none; }
 .term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
@@ -314,7 +317,9 @@ a.term-cr:hover { background: var(--surface-2); }
 /* 수익 (기존 36): chart card, 오늘 수익, 수익 캘린더 */
 .term-pnl { flex: 1 1 auto; min-height: 0; }
 .term-pnl > .term-pb { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
-.term-phero { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.term-phero { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
+.term-phero .term-pmeta { flex: 1 1 auto; }
+.term-pnum { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; white-space: nowrap; }
 .term-plg { display: flex; gap: 10px; color: var(--ink-2); font-size: var(--t-2xs); white-space: nowrap; }
 .term-plg span { display: inline-flex; align-items: center; gap: 4px; }
 .term-plg .k-line { width: 12px; height: 2px; background: var(--accent); }
@@ -370,12 +375,12 @@ a.term-cr:hover { background: var(--surface-2); }
 @media (min-width: 1600px) {
   .term-t .xs, .term-t .xm { display: table-cell; }
   .term-t .nm { max-width: calc(240px * var(--ts)); }
-  .term-grid { grid-template-columns: 312px minmax(0, 1fr) 356px; }
+  .term-grid { grid-template-columns: 324px minmax(0, 1fr) 344px; }
   .term-mid { grid-template-rows: auto minmax(0, 1fr) 262px; }
   .term-px { font-size: calc(30px * var(--ts)); }
 }
 @media (min-width: 1200px) and (max-width: 1599px) {
-  .term-grid { grid-template-columns: 276px minmax(0, 1fr) 300px; }
+  .term-grid { grid-template-columns: 292px minmax(0, 1fr) 296px; }
   .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)) calc(74px * var(--ts)); }
   .term-cr > :nth-child(3) { display: none; }
   .term-row { gap: 14px; }
@@ -386,7 +391,7 @@ a.term-cr:hover { background: var(--surface-2); }
 /* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
    page still show them); the top line drops the meetings label's room to the movers */
 @media (min-width: 1200px) and (max-width: 1439px) {
-  .term-grid { grid-template-columns: 262px minmax(0, 1fr) 284px; }
+  .term-grid { grid-template-columns: 272px minmax(0, 1fr) 276px; }
   .term-t .xn, .term-t .xe { display: none; }
   .term-t .nm { max-width: calc(164px * var(--ts)); }
   .term-perp { display: none; }

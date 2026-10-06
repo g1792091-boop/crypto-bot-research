@@ -79,9 +79,9 @@ export function pnlPanel(ctx) {
   const calBox = h("div", {class: "term-cal"});
   const legend = h("div", {class: "term-plg"}, h("span", null, h("i", {class: "k-line", "aria-hidden": "true"}), "누적 수익"),
     h("span", null, h("i", {class: "k-bar", "aria-hidden": "true"}), "일별 수익"));
-  const el = panel("수익 차트", {cls: "term-pnl", sub: "기존 36 · 실현 손익", acts: [ui.pill("", "ref")]},
-    h("div", {class: "term-phero"}, legend, h("span", {class: "grow"}), big, unit),
-    meta, chartBox,
+  const el = panel("수익 차트", {cls: "term-pnl", sub: "기존 36 · 실현", acts: [legend, ui.pill("", "ref")]},
+    h("div", {class: "term-phero"}, meta, h("span", {class: "term-pnum"}, big, unit)),
+    chartBox,
     h("div", {class: "term-today"}, h("span", {class: "term-tdt"}, "오늘 수익"), todayK, h("span", {class: "grow"}), todayV, h("span", {class: "term-punit"}, "USDT")),
     h("div", {class: "term-calh"}, h("span", {class: "term-calt"}, "수익 캘린더"), calMonth, h("span", {class: "grow"}),
       h("a", {class: "term-more", href: ctx.href("flow")}, "흐름 →")),

@@ -218,11 +218,11 @@ const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.nu
 /** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq of the chosen coin every 10 s (as 차트's tab) while the recorder runs. */
 export function liqFeed(ctx, st, onNew) {
   const list = h("div", {class: "term-feed term-liq", role: "list"});
-  const ratio = ratioBar([{key: "long", label: "롱 청산", tone: "up"}, {key: "short", label: "숏 청산", tone: "down"}], {label: "최근 1시간 강제청산 롱·숏 금액"});
-  const ratioK = h("span", {class: "term-rbk"}, "최근 1시간");
-  const el = panel("시장 강제청산", {cls: "term-liqp", sub: MARKET_LABEL, scroll: true}, list);
+  const ratio = ratioBar([{key: "long", label: "롱", tone: "up"}, {key: "short", label: "숏", tone: "down"}], {label: "최근 1시간 강제청산된 롱·숏 금액"});
+  const ratioK = h("span", {class: "term-rbk"}, "1시간");
+  const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio),
-    h("p", {class: "note term-blab", title: "바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다"}, h("b", null, `바이낸스 ${MARKET_LABEL}`), " · 1초에 1건만 기록 (실제보다 적음)")));
+    h("p", {class: "note term-blab", title: "바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다"}, h("b", null, `바이낸스 ${MARKET_LABEL}`), " · 코인마다 1초에 1건만 기록")));
   const seen = new Set();
   let sym = null, busy = false, last = {sym: null, rows: []};
   async function load() {
@@ -234,7 +234,7 @@ export function liqFeed(ctx, st, onNew) {
       const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(want)}&minutes=60`);
       if (want !== st.sym || !ctx.alive()) return;
       if (fresh) { seen.clear(); sym = want; }
-      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건 · ${MARKET_LABEL}`;
+      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건`;
       if (!d.recorder) { put(list, ui.empty("강제청산 기록기 자료가 없습니다")); ratio.set({}); return; }
       const rows = (d.rows || []).slice(0, 20);
       const had = last.sym === want ? last.rows.length : -1;

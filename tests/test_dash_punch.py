@@ -186,13 +186,14 @@ FILES = ["terminal.js", "terminal-live.js", "terminal-feed.js", "terminal-top.js
 def test_feed_is_labelled_the_whole_market_and_carries_no_money_of_ours():
     live = _src("screens", "terminal-live.js")
     assert 'BIG_LABEL = "바이낸스 시장 전체 체결 (우리 봇 아님)"' in live
-    assert "sub: BIG_LABEL" in live and 'h("b", null, BIG_LABEL)' in live            # head and footer
+    assert "sub: MARKET_LABEL" in live and 'h("b", null, BIG_LABEL)' in live         # head (term v2: 시장 전체 (우리 봇 아님)) and footer
+    assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in _src("screens", "terminal-kit.js")
     assert '"고래"' in live and "실시간 큰 체결" in live
     code = _code(live)
     for word in ("pnl", "roe", "account", "equity", "acctLabel", "ui.assume"):
         assert word not in code, word                                            # market orders only, never our money
-    side = _src("screens", "terminal-side.js")
-    assert "바이낸스 시장 전체 · 우리 봇 아님" in side                              # 이 코인 포지션's market rows say so too
+    side = _code(_src("screens", "terminal-side.js"))
+    assert "market.big" not in side and "rowOf(" not in side                     # term v2: 이 코인 포지션 shows ours only
     # DeepSeek / coin flips stay counts only in our fills feed (unchanged rule)
     feed = _src("screens", "terminal-feed.js")
     assert 'FOLD = new Set(["ds", "coin"])' in feed
@@ -258,12 +259,13 @@ def test_liq_feed_declares_fresh_once():
     assert "isNew = !fresh && !seen.has(k)" in body and "if (isNew) nNew++;" in body
 
 
-def test_big_and_liq_share_one_place_on_every_pc_window_while_the_recorder_runs():
-    """Review 10/06: with the recorder on, four stacked panels left our fills ~1.5 rows and the big-order feed 1-2 rows
-    at 1920x1080; the 큰 체결 · 청산 switch now applies to every PC height (not only windows under 940 px)."""
-    css = _src("screens", "terminal.css")
-    i = css.index("@media (min-width: 1200px) {\n  .term-left.has-liq .term-duoseg { display: inline-flex; }")
-    block = css[i:css.index("\n}\n", i)]
-    assert '.term-left.has-liq[data-duo="big"] .term-liqp, .term-left.has-liq[data-duo="liq"] .term-bigp { display: none; }' in block
-    assert "flex-basis: 26%" not in css
+def test_big_liq_and_fills_stack_without_a_switch():
+    """term v2 (owners 10/06, the HelloQuant reference): the watchlist moved to a coin strip over the chart, so the left
+    column holds exactly three dense lists stacked with a flex share each (실시간 큰 체결, 시장 강제청산, 우리 봇 체결),
+    all visible at once; the old 큰 체결 · 청산 switch is gone. Without the recorder the liquidation panel is hidden."""
+    css, js = _src("screens", "terminal.css"), _src("screens", "terminal.js")
+    assert "duoSwitch(left" not in js and "term-left.has-liq[data-duo" not in css
+    for sel in (".term-bigp { flex: 1.3 1 0;", ".term-liqp { flex: 1 1 0;", ".term-fills { flex: 1 1 0;"):
+        assert sel in css, sel
+    assert ".term-left:not(.has-liq) .term-liqp { display: none; }" in css
 
