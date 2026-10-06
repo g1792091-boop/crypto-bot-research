@@ -48,10 +48,22 @@ export function chartOptions(el) {
 export const candleOptions = () => ({upColor: tok("--up"), downColor: tok("--down"), borderVisible: false,
   wickUpColor: tok("--up"), wickDownColor: tok("--down")});
 
+/** base options with ``extra`` laid over them one level deep: a screen that sets {timeScale: {rightOffset: 26}} keeps
+ *  the Korea-time axis (timeVisible, tickMarkFormatter) instead of replacing the whole timeScale block (the terminal's
+ *  15분 chart showed "4일 4일 4일 5일 ..." with no times, owners' screenshot 10/06 13:23). */
+export function mergeOptions(base, extra = {}) {
+  const out = {...base};
+  for (const [k, v] of Object.entries(extra || {})) {
+    const b = base[k];
+    out[k] = v && typeof v === "object" && !Array.isArray(v) && b && typeof b === "object" && !Array.isArray(b) ? {...b, ...v} : v;
+  }
+  return out;
+}
+
 /** Create a chart that follows its box's size; returns {chart, dispose}. Pass dispose to ctx.track(). */
 export async function makeChart(el, extra = {}) {
   const L = await loadLwc();
-  const chart = L.createChart(el, {...chartOptions(el), ...extra});
+  const chart = L.createChart(el, mergeOptions(chartOptions(el), extra));
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => chart.resize(el.clientWidth, el.clientHeight)) : null;
   if (ro) ro.observe(el);
   return {chart, L, dispose: () => { if (ro) ro.disconnect(); try { chart.remove(); } catch (e) { /* gone */ } }};
