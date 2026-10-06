@@ -164,7 +164,7 @@ def test_split_light_red_above_cyan_below_follows_the_price_scale():
     assert "top: 0" in red and "height: calc(var(--split, 50%) + 24px)" in red and "linear-gradient(to bottom, var(--amb-down)" in red
     assert "top: calc(var(--split, 50%) - 24px)" in cyan and "bottom: 0" in cyan and "linear-gradient(to top, var(--amb-up)" in cyan
     assert "transparent)" in red and "transparent)" in cyan                     # each half feathers out past the seam
-    assert '"Premium"' in fx and '"Discount"' in fx and ".cfx-zw" in css and "right: 10px" in css
+    assert '"Premium"' in fx and '"Discount"' in fx and ".cfx-zw" in css and "right: 64px" in css
     # with the AI light on, the indicator does not tint the halves a second time
     assert "zoneWords: () => !st.ai" in fx and "if (words) {" in _read("core", "smcdraw.js")
 

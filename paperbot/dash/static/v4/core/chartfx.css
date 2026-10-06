@@ -27,7 +27,7 @@
 .cfx-under > .cfx-amb[data-tone="up"] { top: calc(var(--split, 50%) - 24px); bottom: 0;
   background: linear-gradient(to top, var(--amb-up), var(--amb-up-seam) calc(100% - 24px), transparent);
   box-shadow: inset 0 -30px 30px -26px var(--amb-up-edge); }
-.cfx-zw { position: absolute; right: 10px; opacity: .6; font: 600 var(--t-2xs)/1 var(--f-term); letter-spacing: .02em; }
+.cfx-zw { position: absolute; right: 64px; opacity: .6; font: 600 var(--t-2xs)/1 var(--f-term); letter-spacing: .02em; }
 .cfx-zw[hidden], .cfx-under:not([data-split="1"]) > .cfx-zw { display: none; }
 .cfx-zw[data-tone="down"] { top: calc(var(--split, 50%) - 18px); color: var(--amb-down-ink); }
 .cfx-zw[data-tone="up"] { top: calc(var(--split, 50%) + 6px); color: var(--amb-up-ink); }
