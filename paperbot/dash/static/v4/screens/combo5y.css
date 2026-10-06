@@ -1,0 +1,3 @@
+/* #/combo5y (screens/combo5y.js): the page frame only; the cards' look is combo-5y.css (loaded by combo-5y.js). */
+[data-screen="combo5y"] .c5-links { margin: 0 0 10px; }
+[data-screen="combo5y"] .c5-page { min-width: 0; }

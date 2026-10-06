@@ -9,7 +9,7 @@ import {s} from "./dom.js";
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
-  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis"]},
+  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "combo5y"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
 ];
@@ -29,6 +29,7 @@ export const SCREENS = {
   grid: {ko: "한눈 지도", group: "strat", title: "한눈 지도"},
   replay: {ko: "다시보기", group: "strat", title: "거래 다시보기", hidden: true},
   analysis: {ko: "분석", group: "strat", title: "분석"},
+  combo5y: {ko: "5년 조합", group: "strat", title: "5년 조합 시험"},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},
@@ -96,6 +97,8 @@ const SICON = {
   strategies: ICON.strat,
   grid: () => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => R(1 + 5 * i, 1 + 5 * j, 4, 4))),
   analysis: () => [R(3, 1, 6, 2), R(1, 3, 2, 6), R(9, 3, 2, 6), R(3, 9, 6, 2), R(10, 10, 2, 2), R(12, 12, 3, 3)],
+  // 5년 조합: two linked blocks (a combination) over a row of bars
+  combo5y: () => [R(1, 2, 6, 6), R(9, 2, 6, 6), R(7, 4, 2, 2), R(3, 4, 2, 2), R(11, 4, 2, 2), R(1, 11, 14, 1), R(1, 13, 3, 2), R(6, 12, 3, 3), R(11, 13, 4, 2)],
   office: () => [R(3, 2, 3, 3), R(10, 2, 3, 3), R(1, 6, 14, 3), R(3, 9, 1, 5), R(12, 9, 1, 5)],
   rooms: () => [R(4, 1, 8, 1), R(4, 1, 1, 13), R(11, 1, 1, 13), R(2, 14, 12, 1), R(9, 7, 1, 2)],
   digest: () => [R(1, 2, 14, 1), R(1, 2, 1, 9), R(14, 2, 1, 9), R(1, 10, 14, 1), R(3, 11, 2, 3), R(4, 5, 8, 1), R(4, 7, 5, 1)],
