@@ -2,7 +2,7 @@
 // saturation / lightness tokens, so both skins hold), the correlation colour (the neutral 참고 pair --cmp-hi / --cmp-lo:
 // a correlation is neither good nor bad), the picker list (/api/v4/combo/units, kept a minute per page), names, the
 // verdict time for refNote, and the sample-size words. Every server string goes in as text (h()).
-import {h, s, ui, fmt, store, tok} from "../core/pb.js";
+import {h, ui, fmt, store, tok} from "../core/pb.js";
 import {progressBar} from "./analysis-kit.js";
 
 /** One hue per member, far apart around the wheel (order = the order the members were picked). */
@@ -103,14 +103,11 @@ export function earlyCard(sm, title) {
 export const pctB = (x, dec = 1) => h("b", {class: ["num", fmt.tone(x, fmt.pct(x, dec))]}, fmt.pct(x, dec));
 /** Money with its sign and tone. */
 export const moneyB = (x) => h("b", {class: ["num", fmt.tone(x, fmt.money(x))]}, fmt.money(x, true));
-/** A ratio number (Sharpe-like etc.) or the reason it is not shown yet. */
-export const ratioOr = (x, why) => (x == null ? h("b", {class: "num muted"}, "—") : h("b", {class: "num"}, fmt.num(x, 2)));
 
-/** A tiny inline sparkline of a member's return path (the picker chips): drawn only from real numbers. */
-export function chipSpark(values, i) {
-  const vs = (values || []).filter((v) => v != null && Number.isFinite(v));
-  if (vs.length < 2) return null;
-  const w = 44, hh = 14, lo = Math.min(...vs, 0), hi = Math.max(...vs, 0), span = hi - lo || 1;
-  const d = "M" + vs.map((v, k) => `${(1 + (w - 2) * k / (vs.length - 1)).toFixed(1)},${(hh - 1 - (hh - 2) * (v - lo) / span).toFixed(1)}`).join(" L");
-  return s("svg", {class: "cb-cspark", viewBox: `0 0 ${w} ${hh}`, style: {"--h": hueOf(i)}, "aria-hidden": "true"}, s("path", {d}));
+/** A member's part of the combined P&L in words: of the money made / lost, or how much it took away / made up. */
+export function shareWords(share, total, pnl) {
+  if (share == null || !total) return null;
+  const x = fmt.pct(Math.abs(share), 0, false);
+  if (total > 0) return pnl >= 0 ? `번 돈의 ${x}` : `${x}만큼 깎음`;
+  return pnl <= 0 ? `잃은 돈의 ${x}` : `${x}만큼 메움`;
 }

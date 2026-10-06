@@ -42,6 +42,7 @@ import contextlib
 import itertools
 import json
 import math
+import os
 import sqlite3
 import threading
 import time
@@ -80,6 +81,10 @@ REEL_NOTE = ("릴스(5분 단타)는 넣을 수 있지만 자기 청산 규칙�
 APPROX_KO = ("각 구성원의 기록된 진입과 자기 청산을 그대로 쓰고 진입만 거른 근사입니다. 걸러진 거래 대신 들어갔을 다른 진입은 "
              "청산 기록이 없어 셀 수 없습니다.")
 WEIGHT_KO = K.WEIGHT_KO
+# 5년 기준 tab: another builder's screen module; the page imports it only when it is there (no 404 for a missing
+# file)
+FIVE_Y_JS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "v4", "screens",
+                         "combo-5y.js")
 
 
 def _f(x, d: float = 0.0) -> float:
@@ -881,6 +886,7 @@ def units_view(book: Book, board: dict, now: int) -> dict:
             "flips": flips, "tfs": list(CORE_TFS), "initial": init, "start": start, "now": int(now),
             "run_days": K.r((now - start) / DAY_MS, 3), "kmin": KMIN, "kmax": KMAX, "ds_note": DS_NOTE,
             "methods": [{"id": k, "ko": v} for k, v in WEIGHT_KO.items()],
+            "five_year_view": os.path.exists(FIVE_Y_JS),
             "basis_ko": "수익률 = 닫힌 거래 기준 잔고 (매매법 = 봉 계좌 4개를 더한 잔고)"}
 
 

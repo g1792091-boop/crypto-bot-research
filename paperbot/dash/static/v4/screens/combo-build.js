@@ -5,7 +5,7 @@
 // numbers (one stated basis); 하루 기준·회복; each member's part and the combination without it; the correlation inside;
 // 'same bet' pairs; the diversification ratio. Early days: the filling bars and "거래 N건 · 아직 판단하기 이릅니다".
 import {h, put, ui, fmt, motion, local, makeChart, tok} from "../core/pb.js";
-import {swatch, lineColor, loadUnits, unitIndex, unitName, corrGrid, corrWords, earlyCard, pctB, moneyB, verdictTs} from "./combo-kit.js";
+import {swatch, lineColor, loadUnits, unitIndex, unitName, corrGrid, corrWords, earlyCard, pctB, moneyB, verdictTs, shareWords} from "./combo-kit.js";
 
 const KMIN = 2, KMAX = 8;
 const METHODS = [
@@ -292,14 +292,14 @@ export function buildTab(env) {
           h("span", {class: "cb-mem-w num"}, `비중 ${fmt.pct(u.weight, 0, false)}`)),
         h("div", {class: "cb-mem-g"},
           h("span", null, h("i", null, "혼자 수익률"), " ", pctB(u.ret, 1)),
-          h("span", null, h("i", null, "기여"), " ", moneyB(u.pnl), u.share != null ? h("small", {class: "muted"}, ` (${fmt.pct(u.share, 0)})`) : null),
+          h("span", null, h("i", null, "기여"), " ", moneyB(u.pnl), u.share != null ? h("small", {class: "muted"}, ` (${shareWords(u.share, tot, u.pnl)})`) : null),
           h("span", null, h("i", null, "거래"), " ", h("b", {class: "num"}, `${fmt.int(u.trades)}건`))),
         h("span", {class: ["cb-cbar", w >= 0 ? "pos" : "neg"], "aria-hidden": "true"}, h("i", {style: {"--w": `${Math.abs(w) * 50}%`}})),
         lo.key ? h("p", {class: "cb-loo"}, h("i", null, "이것 빼면"), ` 수익률 ${fmt.pct(lo.ret, 1)} (${fmt.pct(lo.d_ret, 1)}) · 최대 낙폭 ${fmt.pct(-(lo.mdd_pct || 0), 1)} (${fmt.pct(-(lo.d_mdd || 0), 1)})`) : null);
     });
     return ui.card({plate: "구성원별", sub: "기여 = 비중만큼의 자금으로 한 손익"},
       h("div", {class: "cb-mems", role: "list"}, rows),
-      h("p", {class: "an-note"}, Math.abs(tot) > 0.005 ? "괄호 안 % = 합친 손익 중 그 구성원의 몫 (마이너스면 깎아 먹은 것). " : "합친 손익이 아직 0 근처라 몫(%)은 보이지 않습니다. ",
+      h("p", {class: "an-note"}, Math.abs(tot) > 0.005 ? "괄호 = 합친 손익 중 그 구성원의 몫 (합친 손익과 반대 방향이면 깎았거나 메운 것). " : "합친 손익이 아직 0 근처라 몫(%)은 보이지 않습니다. ",
         "'이것 빼면' = 같은 나누는 법으로 나머지만 합친 결과와 지금과의 차이."),
       ui.assume());
   }
@@ -337,7 +337,7 @@ export function buildTab(env) {
     const keyIdx = Object.fromEntries(d.units.map((u, i) => [u.key, i]));
     const rows = (sb.pairs || []).map((p) => {
       const i = keyIdx[p.a], j = keyIdx[p.b];
-      const head = h("span", {class: "cb-pair"}, swatch(i), names[i], h("span", {class: "muted"}, " · "), swatch(j), names[j]);
+      const head = h("span", {class: "cb-pair"}, h("span", null, swatch(i), names[i]), h("span", {class: "muted"}, "·"), h("span", null, swatch(j), names[j]));
       if (p.missing) return h("div", {class: "cb-sb", role: "listitem"}, head, h("p", {class: "muted"}, "릴스는 계좌 겹침 계산에 없습니다."));
       const why = (p.why || []).map((w) => (w === "days" ? `같이 쌓인 기록 ${fmt.num(r.min_days, 0)}일 전` : `계좌마다 거래 ${fmt.int(r.min_trades)}건 전`));
       return h("div", {class: "cb-sb", role: "listitem"}, head,
@@ -359,6 +359,7 @@ export function buildTab(env) {
     const x = d.div_ratio;
     const words = x == null ? d.div_note || "아직 계산할 낙폭이 없습니다" : x < 1.15 ? "위험이 거의 안 나뉨" : x < 1.6 ? "위험이 조금 나뉨" : x < 2.5 ? "위험이 꽤 나뉨" : "위험이 많이 나뉨";
     return ui.card({plate: "분산 효과", sub: "설명용, 판정 아님"},
+      d.small.early && x != null ? h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"), ` ${d.small.words} · 낙폭이 몇 번 없어 이 배수는 쉽게 바뀝니다`) : null,
       h("div", {class: "cb-div"}, h("b", {class: "num cb-divn"}, x == null ? "—" : `${fmt.num(x, 2)}배`), h("span", {class: "cb-divw"}, words)),
       h("p", {class: "an-note"}, `${d.div_basis_ko}. 1이면 합쳐도 낙폭이 그대로, 2면 따로 겪을 낙폭의 절반만 겪은 것.`),
       h("div", {class: "cb-divl"}, d.units.map((u, i) => h("span", null, swatch(i), `${names[i]} ${fmt.money(-(u.mdd_usd_scaled || 0))}`)),

@@ -87,7 +87,8 @@
 .cb-sbs { display: grid; }
 .cb-sb { display: grid; gap: 4px; padding: 10px 2px; border-top: 1px solid var(--line); min-width: 0; }
 .cb-sb:first-child { border-top: 0; }
-.cb-pair { display: flex; flex-wrap: wrap; align-items: center; font-weight: 700; font-size: var(--t-sm); }
+.cb-pair { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-weight: 700; font-size: var(--t-sm); }
+.cb-pair > span { display: inline-flex; align-items: center; }
 .cb-sbn { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; font-size: var(--t-sm); }
 .cb-sb .an-note { margin: 0; }
 
@@ -102,7 +103,7 @@
 /* the 36 x 36 map */
 .cb-ctl { display: grid; gap: 8px; }
 .cb-heatw { overflow-x: auto; max-width: 100%; padding-bottom: 4px; }
-.cb-heat { display: block; }
+.cb-heat { display: block; max-width: none; }   /* real pixel size: 12px axis numbers; the box scrolls */
 .cb-hc { cursor: pointer; stroke: none; }
 .cb-hc.diag { cursor: default; }
 .cb-hc:hover, .cb-hc:focus-visible, .cb-hc.sel { stroke: var(--ink); stroke-width: 1.5px; outline: none; }

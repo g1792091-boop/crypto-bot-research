@@ -14,7 +14,10 @@ export function mapTab(env) {
   const q0 = env.query();
   const st = {level: q0.level === "account" ? "account" : local.get("combo-maplevel", "strategy"),
     tf: TFS.includes(q0.tf) ? q0.tf : local.get("combo-maptf", "1h"), basis: q0.basis === "hour" ? "hour" : local.get("combo-mapbasis", "day"),
-    gen: 0, sel: null};
+    gen: 0, sel: null, auto: false};
+  // nobody chose a basis (no ?basis=, nothing remembered): while the daily one has too few days, show the hourly one and
+  // say so (the first days would otherwise be an empty grey map)
+  st.chosen = q0.basis === "hour" || local.get("combo-mapbasis", null) != null;
   if (st.level !== "account" && st.level !== "strategy") st.level = "strategy";
   const ctl = h("div", {class: "cb-ctl"});
   const body = h("div", {class: "stack"});
@@ -27,14 +30,14 @@ export function mapTab(env) {
       st.level === "account" ? h("div", {class: "cb-mrow"}, h("span", {class: "cb-k"}, "봉"), ui.seg(TFS.map((t) => ({id: t, label: fmt.tfKo(t)})), st.tf,
         (id) => { st.tf = id; local.set("combo-maptf", id); load(); }, {label: "봉 고르기"})) : null,
       h("div", {class: "cb-mrow"}, h("span", {class: "cb-k"}, "기준"), ui.seg([{id: "day", label: "하루 손익"}, {id: "hour", label: "1시간 변화 (초반 참고)"}], st.basis,
-        (id) => { st.basis = id; local.set("combo-mapbasis", id); load(); }, {label: "상관 기준"})));
+        (id) => { st.basis = id; st.chosen = true; st.auto = false; local.set("combo-mapbasis", id); load(); }, {label: "상관 기준"})));
   }
 
   async function load() {
     const g = ++st.gen;
     st.sel = null;
     controls();
-    env.setQuery({level: st.level === "account" ? "account" : null, tf: st.level === "account" ? st.tf : null, basis: st.basis === "hour" ? "hour" : null});
+    env.setQuery({level: st.level === "account" ? "account" : null, tf: st.level === "account" ? st.tf : null, basis: st.basis === "hour" && !st.auto ? "hour" : null});
     put(body, ui.card({plate: "전체 상관 지도", sub: "계산 중"}, motion.shimmer(5)));
     const qs = new URLSearchParams({level: st.level, basis: st.basis});
     if (st.level === "account") qs.set("tf", st.tf);
@@ -51,6 +54,7 @@ export function mapTab(env) {
       return;
     }
     if (d && d.error) { put(body, ui.card({plate: "전체 상관 지도"}, h("p", {class: "muted"}, String(d.error)))); return; }
+    if (!st.chosen && !st.auto && d.basis === "day" && !d.ready) { st.auto = true; st.basis = "hour"; load(); return; }
     paint(d);
   }
 
@@ -58,6 +62,7 @@ export function mapTab(env) {
     const units = d.units || [];
     const detail = h("div", {class: "cb-hsel", "aria-live": "polite"}, h("p", {class: "muted"}, "칸을 누르면 두 매매법과 상관이 여기 나옵니다."));
     const head = ui.card({plate: "전체 상관 지도", sub: `${d.level === "account" ? fmt.tfKo(d.tf) + "봉 계좌 36개" : "매매법 36개 (봉 4개 합)"} · ${d.basis === "day" ? "하루 손익" : "1시간 변화"}`},
+      st.auto && d.basis === "hour" ? h("p", {class: "an-warn"}, "하루 손익 상관은 기록 3일부터라, 지금은 1시간마다의 자본 변화로 보여 드립니다 (초반 참고용 · 위 '기준'에서 바꿀 수 있음).") : null,
       d.ready ? null : h("p", {class: "cb-small"}, ui.pill("표본 적음", "thin"),
         ` ${d.basis === "day" ? `하루 손익 상관은 ${fmt.int(d.need)}일 기록부터 계산합니다 (지금 ${fmt.int(d.n)}일). 그 전에는 칸이 비어 있습니다.`
           : `1시간 상관은 ${fmt.int(d.need)}시간 기록부터 (지금 ${fmt.int(d.n)}시간).`}`),
@@ -163,6 +168,8 @@ export function mapTab(env) {
       st.level = q.level === "account" ? "account" : "strategy";
       if (TFS.includes(q.tf)) st.tf = q.tf;
       st.basis = q.basis === "hour" ? "hour" : "day";
+      st.chosen = true;
+      st.auto = false;
       load();
     },
     dispose() { st.gen++; },

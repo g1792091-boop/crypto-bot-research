@@ -15,6 +15,7 @@ import {h, put, ui, motion, local} from "../core/pb.js";
 import {buildTab} from "./combo-build.js";
 import {mapTab} from "./combo-map.js";
 import {rulesTab} from "./combo-rules.js";
+import {loadUnits} from "./combo-kit.js";
 
 const TABS = [
   {id: "build", label: "내 조합 만들기", desc: "매매법이나 봉 계좌를 2~8개 골라 같이 돌렸다면의 곡선과 숫자"},
@@ -28,7 +29,10 @@ let current = null;
 
 export async function mount(el, ctx) {
   ctx.setTitle("조합 성과");
-  const st = {tab: okTab(ctx.params.arg || local.get("combo-tab", "build")), view: null, gen: 0};
+  const q0 = (ctx.params && ctx.params.query) || {};
+  const hasQ = Object.keys(q0).length > 0;
+  // #/combo?u=.. (a link without the tab) opens 내 조합 만들기 with that pick
+  const st = {tab: okTab(ctx.params.arg || (q0.u ? "build" : local.get("combo-tab", "build"))), view: null, gen: 0};
   const segSlot = h("div", {class: "cb-tabs"});
   const desc = h("p", {class: "cb-desc"});
   const body = h("div", {class: "stack cb-body"});
@@ -85,11 +89,15 @@ export async function mount(el, ctx) {
     return last && last.u ? {u: last.u, w: last.w, p: last.p} : {};
   }
 
-  // 5년 기준: another builder's module (./combo-5y.js exports render5y(ctx, el)); missing until that build lands
+  // 5년 기준: another builder's module (./combo-5y.js exports render5y(ctx, el)); missing until that build lands. The
+  // server says whether the file is there (units.five_year_view), so a missing one is never requested (no 404)
   async function five(g) {
     const slot = h("div", {class: "stack cb-5y"});
     let mod = null;
-    try { mod = await import("./combo-5y.js"); } catch { mod = null; }
+    const u = await loadUnits(ctx).catch(() => null);
+    if (!u || u.five_year_view !== false) {
+      try { mod = await import("./combo-5y.js"); } catch { mod = null; }
+    }
     if (g !== st.gen || !ctx.alive()) return;
     put(body, slot);
     if (mod && typeof mod.render5y === "function") {
@@ -104,14 +112,14 @@ export async function mount(el, ctx) {
 
   current = {
     update(params) {
-      const tab = okTab(params.arg || st.tab);
+      const tab = okTab(params.arg || ((params.query || {}).u ? "build" : st.tab));
       if (tab !== st.tab || !st.view || !st.view.update) { show(tab, params.query || {}); return; }
       ctx.params = {...ctx.params, ...params};
       st.view.update(params.query || {});
     },
     dispose() { if (st.view && st.view.dispose) st.view.dispose(); },
   };
-  await show(st.tab, ctx.params.arg ? ctx.params.query || {} : null);
+  await show(st.tab, ctx.params.arg || hasQ ? q0 : null);
 }
 
 export function update(params) { if (current) current.update(params); }

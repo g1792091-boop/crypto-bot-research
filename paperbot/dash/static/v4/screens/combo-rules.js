@@ -130,9 +130,8 @@ export function rulesTab(env) {
   const ROW_HELP = {rule: "규칙이 남긴 거래", alone: "거르기 전 전부", dropped: "규칙이 뺀 거래", flip_rule: "동전 봇 진입에 같은 거르개 (참고)", flip_all: "같은 봉 동전 봇 전부 (참고)"};
   function paint(d) {
     const rows = d.rows || [];
-    const rule = rows.find((r) => r.id === "rule") || {}, alone = rows.find((r) => r.id === "alone") || {};
+    const rule = rows.find((r) => r.id === "rule") || {};
     const head = KINDS.find((k) => k.id === d.kind) || KINDS[0];
-    const totalN = alone.trades || 0;
     const early = (rule.trades || 0) < (d.small_n || 20);
     const list = h("div", {class: "cb-rrows", role: "table", "aria-label": "규칙 결과"},
       h("div", {class: "cb-rr cb-rrh", role: "row"}, ["", "거래", "승률", "평균 순 ROE", "손익 합"].map((x) => h("span", {role: "columnheader"}, x))),
@@ -157,7 +156,6 @@ export function rulesTab(env) {
     if (d.per_strategy) out.push(perCard(d));
     put(body, ...out);
     motion.swap(body);
-    void totalN;
   }
 
   function perCard(d) {
