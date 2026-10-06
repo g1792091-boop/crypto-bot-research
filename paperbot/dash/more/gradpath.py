@@ -15,7 +15,8 @@ read from the databases the dashboard already reads (all read-only; nothing is w
                accounts that meet all eight conditions, and what each condition waits for (before the verdict the
                performance conditions are not counted here: no pass / fail hint before the verdict, CONTRACT.md 1.3)
 
-    GET /api/v4/gradpath     background + cached ``TTL_S`` (one computation at a time: dash/analysis.Heavy)
+    GET /api/v4/gradpath     background + cached ``TTL_S`` (its own dash/analysis.Heavy: never queued behind the
+                             analysis tab's long computations; 실전 준비도's fresh answer is reused from the shared one)
 
 A stage with no data says so (``state: "none"``, "아직 없음"); a source that is not there (no agents3.db, the debate room
 never started) says that (``state: "off"``) instead of a zero. Every item carries where it is stuck (``wait``) in plain
@@ -43,8 +44,12 @@ STAGE_KO = (("ideas", "아이디어"), ("tests", "5년 시험"), ("paper", "모�
 GROUP_KO = {"core": "기존 36", "ds200": "딥시크", "reel": "릴스 5분", "extra": "추가 계좌", "flip": "동전 봇"}
 TEST_DONE = ("passed", "failed", "described", "proposed", "lapsed")       # a test that ran and counted
 TEST_ADVANCED = {"proposed": 0, "passed": 1, "lapsed": 2, "described": 3, "failed": 4, "no_data": 5, "error": 6}
-PROPOSAL_KO = {"awaiting_owner": "두 분 승인 기다림", "approved": "두 분 승인 · 모의 계좌로", "rejected": "두 분이 거절",
-               "blocked_gate": "코드 관문에서 막힘", "blocked_cap": "계좌 자리가 차서 대기"}
+PROPOSAL_KO = {"awaiting_owner": "두 분 승인 기다림", "blocked_gate": "코드 관문에서 막힘", "blocked_cap": "계좌 자리가 차서 대기"}
+# who decided an approved / rejected proposal (proposals.decided_by: "owner:<name>" the owners' click applied by the tick,
+# "approver" the approver model, "code" the tick / runner closing it, e.g. the gate judged again with more tests)
+DECIDER_KO = {"owner": "두 분", "approver": "승인관(AI)", "code": "코드"}
+# the words before an item's ``wait``: what it waits for, why it stopped, or its finished result
+LAB_WAIT, LAB_STOP, LAB_DONE, LAB_NOW = "기다리는 것", "멈춘 이유", "결과", "지금 상태"
 STATUS_KO = {"passed": "통과", "failed": "탈락", "described": "설명용 시험", "proposed": "제안됨", "lapsed": "다시 판정에서 탈락",
              "no_data": "자료 없어 못 돌림", "error": "오류로 못 돌림", None: "결과 기다림"}
 # the readiness conditions that judge performance: not counted here before the first verdict (CONTRACT.md 1.3)
@@ -59,8 +64,13 @@ def _now() -> int:
 def _mmdd(ms: Optional[int]) -> str:
     if not ms:
         return "—"
-    t = time.gmtime((int(ms) + KST_MS) / 1000)
-    return f"{t.tm_mon}/{t.tm_mday}"
+    return time.strftime("%m/%d", time.gmtime((int(ms) + KST_MS) / 1000))     # MM/DD like fmt.mmdd and the top bar
+
+
+def _mmdd_iso(day: Any) -> str:
+    """'2026-11-04' (checkpoint.db's verdict date) -> '11/04', the way the rest of the page writes a day."""
+    t = str(day or "")
+    return f"{t[5:7]}/{t[8:10]}" if len(t) >= 10 and t[4] == "-" else (t or "—")
 
 
 def _days_left(ts: Optional[int], now: int) -> Optional[int]:
@@ -103,11 +113,12 @@ def _stage(sid: str, **kw) -> dict:
 
 
 def item(title: str, wait: str, *, sub: str = "", ts: Optional[int] = None, tone: str = "", go: Optional[dict] = None,
-         tag: str = "", acct: Optional[str] = None) -> dict:
-    """One row of a stage: what it is, where it is stuck (``wait``), when, and where a tap goes. ``acct``: the account
-    id when the row is one account (the page names it the dashboard's way)."""
+         tag: str = "", acct: Optional[str] = None, lab: str = LAB_WAIT) -> dict:
+    """One row of a stage: what it is, where it is stuck (``wait``, after the words ``lab``: 기다리는 것 / 멈춘 이유 /
+    결과 / 지금 상태), when, and where a tap goes. ``acct``: the account id when the row is one account (the page
+    names it the dashboard's way)."""
     return {"title": _cut(title, 120), "sub": _cut(sub, TEXT_MAX), "wait": _cut(wait, 120), "ts": ts, "tone": tone,
-            "go": go, "tag": tag, "acct": acct}
+            "go": go, "tag": tag, "acct": acct, "lab": lab}
 
 
 def go(name: str, arg: Optional[str] = None, **query) -> dict:
@@ -143,14 +154,17 @@ def ideas_stage(debate_ro: Optional[sqlite3.Connection], agents_ro: Optional[sql
             res = t.get("result") or {}
             body = res.get("result") if isinstance(res.get("result"), dict) else {}
             if res.get("status") == "graded":
-                wait = "채점됨: " + ("예측이 맞음" if body.get("correct") else "예측이 틀림")
+                wait, lab = "채점됨: " + ("예측이 맞음" if body.get("correct") else "예측이 틀림"), LAB_DONE
             elif res.get("status") == "expired":
-                wait = "채점 기한이 지남"
+                wait, lab = "채점 기한이 지나 채점하지 않음", LAB_DONE
+            elif spec.get("prediction") and t.get("strategy"):
+                wait, lab = "예측 채점 (거래가 쌓이면 코드가 채점)", LAB_WAIT
             elif spec.get("prediction"):
-                wait = "예측 채점 기다림 (거래가 쌓이면 코드가 채점)"
+                # agents/scorecard.grade_due grades only a hypothesis that names its strategy
+                wait, lab = "매매법이 정해지지 않은 가설이라 코드가 채점하지 않음", LAB_NOW
             else:
-                wait = "시험 전 · 채점할 예측 없음"
-            rows.append(item(spec.get("text") or f"가설 #{t['id']}", wait,
+                wait, lab = "채점할 예측이 없는 가설 (기록만)", LAB_NOW
+            rows.append(item(spec.get("text") or f"가설 #{t['id']}", wait, lab=lab,
                              sub=f"회의 가설 #{t['id']}" + (f" · {_name(t.get('strategy'))}" if t.get("strategy") else ""),
                              ts=int(t.get("ts") or 0), go=go("rooms", t.get("room_id")), tag="회의"))
     if inbox_ro is not None:
@@ -194,15 +208,54 @@ def first_failed(gate: Any) -> str:
     return rs[0] if rs else ""
 
 
+def _click_pending(prop: dict, st: Optional[str]) -> bool:
+    """The owners' click is not applied yet: the effective status differs from the stored one (dash.app.Rooms._effective)."""
+    return prop.get("status") is not None and st != prop.get("status")
+
+
+def _decider(prop: dict, st: Optional[str]) -> str:
+    """Who approved / rejected a proposal: the owners (their click, applied or not yet), else proposals.decided_by."""
+    if _click_pending(prop, st):
+        return "owner"
+    by = str(prop.get("decided_by") or "")
+    return "owner" if by.startswith("owner") else by if by in DECIDER_KO else ""
+
+
+def proposal_wait(prop: dict) -> tuple[str, str, str]:
+    """(wait words, tone, label) of a test that has a proposal."""
+    st = prop.get("effective_status") or prop.get("status")
+    run = prop.get("account_running")
+    if st == "approved" and isinstance(run, dict):
+        return "모의 계좌에서 도는 중", "good", LAB_NOW
+    who = _decider(prop, st)
+    pending = _click_pending(prop, st)                   # the owners' click, applied at the agents' next tick
+    if st == "approved":
+        w = f"{DECIDER_KO.get(who, '')} 승인".strip() if who else "승인됨"
+        return w + (" · 반영 기다림" if pending else " · 모의 계좌 시작 기다림"), "accent", LAB_WAIT
+    if st == "rejected":
+        if who == "code":
+            return "코드가 닫음 (다시 판정하니 관문 미달 등, 방 기록에 이유)", "", LAB_STOP
+        return (f"{DECIDER_KO[who]}이 거절" if who else "거절됨") + (
+            " · 반영 기다림" if pending else ""), "", LAB_STOP
+    if st in ("blocked_gate", "blocked_cap"):
+        return PROPOSAL_KO[st], "", LAB_STOP
+    return PROPOSAL_KO.get(st, f"제안 상태: {_cut(st, 20)}"), "accent" if st == "awaiting_owner" else "", LAB_WAIT
+
+
+def trial_lab(status: Optional[str], prop: Optional[dict]) -> str:
+    """The words before a test's ``wait``: 멈춘 이유 for a test that stopped, 결과 for a descriptive one."""
+    if prop is not None:
+        return proposal_wait(prop)[2]
+    if status in ("failed", "lapsed", "no_data", "error"):
+        return LAB_STOP
+    return LAB_DONE if status == "described" else LAB_WAIT
+
+
 def trial_wait(kind: str, status: Optional[str], body: dict, prop: Optional[dict], observe: dict) -> tuple[str, str]:
     """(wait words, tone) of one five-year test from its latest result and its proposal."""
     gate = body.get("gate") if isinstance(body.get("gate"), dict) else {}
     if prop is not None:
-        st = prop.get("effective_status") or prop.get("status")
-        run = prop.get("account_running")
-        if st == "approved" and isinstance(run, dict):
-            return "모의 계좌에서 도는 중", "good"
-        return PROPOSAL_KO.get(st, f"제안 상태: {_cut(st, 20)}"), "accent" if st in ("awaiting_owner", "approved") else ""
+        return proposal_wait(prop)[:2]
     if status == "passed":
         if observe.get("observing"):
             return f"관찰 기간 {observe.get('until_ko')}까지 제안 없음", "accent"
@@ -265,7 +318,7 @@ def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observ
             sub = f"기존 매매법 숫자 시험 #{t['id']}"
             where = go("rooms", t.get("room_id"))
         rows.append(dict(item(str(title), wait, sub=sub, ts=int(t.get("ts") or 0), tone=tone, go=where,
-                              tag=STATUS_KO.get(st, _cut(st, 20))),
+                              tag=STATUS_KO.get(st, _cut(st, 20)), lab=trial_lab(st, prop)),
                          rank=_prop_rank(prop) if prop is not None else TEST_ADVANCED.get(st, 7)))
     rows.sort(key=lambda x: (x["rank"], -(x["ts"] or 0)))
     for r in rows:
@@ -275,7 +328,8 @@ def tests_stage(agents_ro: Optional[sqlite3.Connection], proposals: list, observ
              {"k": "test", "ko": "기존 매매법 숫자", "n": done.get("test", 0), "good": good.get("test", 0),
               "bad": bad.get("test", 0), "go": go("rooms")}]
     passed = sum(good.values())
-    head = f"시험 {total:,}번 · 통과 {passed:,} · 탈락 {sum(bad.values()):,}"
+    described = sum(c.get("described", 0) for c in counts.values())
+    head = f"시험 {total:,}번 · 통과 {passed:,} · 탈락 {sum(bad.values()):,}" + (f" · 설명용 {described:,}" if described else "")
     return _stage("tests", count=total, state="has" if total else "none", parts=parts, items=rows[:ITEMS], head=head,
                   passed=passed, go=go("rooms", LAB_ROOM),
                   none_ko=("아직 없음: 연구실이 아직 5년 시험을 돌리지 않았습니다"
@@ -327,18 +381,32 @@ def paper_stage(board: dict, min_trades: int, verdict_ko: str) -> dict:
                          acct=None if a.get("label_ko") else a.get("account_id")))
     flips = groups.get("flip", {}).get("n", 0)
     count = sum(p["n"] for p in parts)
-    head = " · ".join(f"{p['ko']} {p['n']:,}" for p in parts)
+    head = " · ".join(f"{p['ko']} {p['n']:,}개" for p in parts)
     return _stage("paper", count=count, state="has" if count else "none", parts=parts, items=rows[:ITEMS + 2], head=head,
                   flips=flips, go=go("board"))
 
 
 # ---------------------------------------------------------------- 4. the 30-day verdict
+def overdue(next_cp: Optional[dict], cp_ready: bool) -> bool:
+    """The first verdict day has passed (dash.app summary already names the next one) but checkpoint.db has no verdict
+    yet (the hourly checkpoint job has not written it, or it failed)."""
+    return not cp_ready and int((next_cp or {}).get("k") or 1) > 1
+
+
+def _is_ds(r: dict) -> bool:
+    """A DeepSeek row of the verdict: its display group, or its verdict family (a copy of a DeepSeek account)."""
+    return r.get("group") == "ds200" or r.get("family") == "ds200"
+
+
 def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_trades: int) -> dict:
     from ...checkpoint import FAIL, HOLD, OBSERVE, OBSERVE_TFS, PASS1, PASS2
     nts = (next_cp or {}).get("ts")
     if not cp or not cp.get("ready"):
         left = _days_left(nts, now)
-        when = f"{_mmdd(nts)} 첫 판정" + (f" (D-{left})" if left is not None and left > 0 else " (오늘)" if left == 0 else "")
+        if overdue(next_cp, False):
+            when = "첫 판정일 지남 · 판정 기록 기다림"
+        else:
+            when = f"{_mmdd(nts)} 첫 판정" + (f" (D-{left})" if left is not None and left > 0 else " (오늘)" if left == 0 else "")
         rows = []
         accts = [a for a in (board or {}).get("accounts") or [] if isinstance(a, dict) and a.get("group") in ("core", "ds200", "reel", "extra")]
         for g in ("core", "ds200", "reel", "extra"):
@@ -355,35 +423,34 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
     # the coin flips are the yardstick, never a candidate: left out of the counts and the list
     rows_cp = [r for r in cp.get("rows") or [] if isinstance(r, dict) and r.get("group") != "flip"]
     passed = [r for r in rows_cp if r.get("status") in (PASS1, PASS2)]
-    by_group: dict = {}
-    for r in rows_cp:
-        by_group.setdefault(r.get("group") or "other", {}).setdefault(r.get("status"), 0)
-        by_group[r.get("group") or "other"][r.get("status")] += 1
     parts = [{"k": s, "ko": s, "n": sum(1 for r in rows_cp if r.get("status") == s)}
              for s in (PASS2, PASS1, FAIL, HOLD, OBSERVE)]
     items = []
     for r in passed:
-        if r.get("group") == "ds200":
+        if _is_ds(r):
             continue                                    # DeepSeek: counts only (below), never one account
         st = r.get("status")
         wait = "2차 통과 · 실전 조건 확인으로" if st == PASS2 else "1차 합격 · 다음 30일(2차) 기다림"
         items.append(item(r.get("account_id") or "", wait, sub=f"거래 {int(r.get('trades') or 0):,}건", tone="good",
                           go=go("account", r.get("account_id")), tag=st, acct=r.get("account_id")))
-    ds = by_group.get("ds200") or {}
+    ds: dict = {}
+    for r in rows_cp:
+        if _is_ds(r):
+            ds[r.get("status")] = ds.get(r.get("status"), 0) + 1
     if ds:
         items.append(item("딥시크 (묶음 숫자만)", "묶음 숫자: " + " · ".join(f"{k} {v:,}" for k, v in ds.items() if k), sub="계좌별로는 보이지 않음 (참고)",
                           go=go("checkpoint"), tag="딥시크"))
-    held = [r for r in rows_cp if r.get("status") == HOLD and r.get("group") != "ds200"]
+    held = [r for r in rows_cp if r.get("status") == HOLD and not _is_ds(r)]
     for r in held[:2]:
         n = int(r.get("trades") or 0)
         items.append(item(r.get("account_id") or "", f"보류: 거래 {max(0, min_trades - n):,}건 더 필요" if n < min_trades
                           else "보류: 이유는 판정 화면에", sub=f"거래 {n:,}건", go=go("account", r.get("account_id")),
                           tag=HOLD, acct=r.get("account_id")))
     n_pass = len(passed)
-    head = f"{cp.get('date') or ''} 판정 · " + " · ".join(f"{p['ko']} {p['n']:,}" for p in parts if p["n"])
+    head = " · ".join([f"{_mmdd_iso(cp.get('date'))} 판정"] + [f"{p['ko']} {p['n']:,}" for p in parts if p["n"]])
     return _stage("verdict", count=n_pass, state="has" if n_pass else "none", parts=parts, items=items[:ITEMS + 2],
                   head=head, date=cp.get("date"), next_ts=nts, go=go("checkpoint"),
-                  none_ko=f"{cp.get('date') or ''} 판정에서 합격한 계좌 없음")
+                  none_ko=f"{_mmdd_iso(cp.get('date'))} 판정에서 합격한 계좌 없음")
 
 
 # ---------------------------------------------------------------- 5. ready for live
@@ -409,7 +476,8 @@ def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], bes
         elif cid == "trades200":
             wait = (f"거래 200건 넘은 계좌 {ok:,}개" if ok else f"가장 많은 계좌도 거래 {max(0, 200 - best_trades):,}건 더 필요")
         elif cid in PERF_CONDS and not cp_ready:
-            wait = f"{_mmdd(nts)} 판정 뒤에 셈" if cid != "second_check" else "1차 판정 다음 30일 뒤"
+            wait = ("1차 판정 다음 30일 뒤" if cid == "second_check" else "판정 기록이 생기면 셈" if overdue(next_cp, False)
+                    else f"{_mmdd(nts)} 판정 뒤에 셈")
         elif cid in ("cost_ratio", "testnet"):
             wait = "실거래 쪽 기록이라 두 분이 확인"
         else:
@@ -489,14 +557,18 @@ def fresh_cached(heavy, key: str) -> Optional[dict]:
 
 def register(app, ctx) -> dict:
     from ..analysis import Heavy
-    heavy = getattr(app.state, "analysis", None)
-    if not isinstance(heavy, Heavy):
-        heavy = Heavy()
+    shared = getattr(app.state, "analysis", None)        # the analysis tab's cache: 실전 준비도's answer is read from it
+    if not isinstance(shared, Heavy):
+        shared = Heavy()
+    # its own background runner (still one computation at a time, cached, a pending answer while it computes): this
+    # view is a few cheap reads, so it never waits behind the analysis tab's long computations on the shared gate
+    # (조합 시너지, 청산 이유 ... run one at a time and can hold it for minutes)
+    heavy = Heavy()
     # the debate room's file: the dashboard's own default (create_app: debate/debate.db next to paper3.db)
     debate_db = getattr(ctx, "debate_db", None) or os.path.join(os.path.dirname(os.path.abspath(ctx.db)), "debate", "debate.db")
 
     def make() -> dict:
-        return path_view(ctx.data, ctx.rooms, ctx.db, debate_db, ctx.checkpoint_db, _now(), fresh_cached(heavy, "readiness"))
+        return path_view(ctx.data, ctx.rooms, ctx.db, debate_db, ctx.checkpoint_db, _now(), fresh_cached(shared, "readiness"))
 
     @app.get("/api/v4/gradpath")
     def get_gradpath():

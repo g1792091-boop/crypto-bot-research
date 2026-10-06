@@ -46,7 +46,10 @@ function funnel(d, ctx) {
     h("span", {class: "path-fsm"}, here ? "지금 여기" : w.small));
   });
   const day = d.dplus != null ? `D+${fmt.int(d.dplus)}` : "";
-  const nxt = d.next_checkpoint && d.next_checkpoint.ts ? `첫 판정 ${fmt.mmdd(d.next_checkpoint.ts)}` : "";
+  // the next verdict: after the first one "다음 판정"; its day passed without a record yet (hourly job) -> say so
+  const nc = d.next_checkpoint;
+  const nxt = !nc || !nc.ts ? "" : d.verdict_ready ? `다음 판정 ${fmt.mmdd(nc.ts)}`
+    : (nc.k || 1) > 1 ? "첫 판정 기록 기다림" : `첫 판정 ${fmt.mmdd(nc.ts)}`;
   const obs = d.observe && d.observe.observing ? `관찰 기간 ${d.observe.until_ko}까지 (제안 없음)` : "";
   return h("section", {class: "path-term", "aria-label": "졸업 길 깔때기"},
     h("div", {class: "path-tline"}, h("span", {class: "path-prompt"}, "›"), h("span", {class: "path-tcmd"}, "졸업 길"),
@@ -65,7 +68,8 @@ function row(it, ctx) {
     h("span", {class: "lname path-title"}, title),
     it.ts ? h("span", {class: "ret path-when"}, fmt.mmdd(it.ts)) : h("span"),
     h("span", {class: "meta"}, it.sub ? h("span", null, it.sub) : null),
-    h("span", {class: ["path-wait", it.tone || ""]}, h("b", null, "기다리는 것 "), it.wait || "—"),
+    // 기다리는 것 / 멈춘 이유 / 결과 / 지금 상태 (the server says which: a failed test waits for nothing)
+    h("span", {class: ["path-wait", it.tone || ""]}, h("b", null, `${it.lab || "기다리는 것"} `), it.wait || "—"),
   ];
   return href ? h("a", {class: "lrow click path-row", role: "listitem", href}, kids) : h("div", {class: "lrow path-row", role: "listitem"}, kids);
 }

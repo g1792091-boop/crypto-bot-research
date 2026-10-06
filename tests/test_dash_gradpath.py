@@ -120,6 +120,7 @@ def test_where_each_test_is_stuck(answer):
     assert obs["observing"] and passed_new["wait"] == f"관찰 기간 {obs['until_ko']}까지 제안 없음"
     failed = by["새 매매법 시험 #4"]
     assert failed["tag"] == "탈락" and failed["wait"].startswith("② 1기간 거래 120건") and "미달" in failed["wait"]
+    assert failed["lab"] == "멈춘 이유" and passed_new["lab"] == "기다리는 것"     # a failed test waits for nothing
     assert all(i["go"]["name"] == "rooms" for i in tests["items"])
     # the number test is named the lab's way, with the strategy's Korean name (not its code)
     num = by["기존 매매법 숫자 시험 #3"]
@@ -253,7 +254,7 @@ def test_trial_wait_words():
     assert GP.trial_wait("newlab", "passed", {}, None, {"observing": False})[0] == "새 매매법 제안 차례 기다림"
     run = {"effective_status": "approved", "account_running": {"account_id": "X"}}
     assert GP.trial_wait("test", "passed", {}, run, obs) == ("모의 계좌에서 도는 중", "good")
-    assert GP.trial_wait("test", "passed", {}, {"effective_status": "rejected"}, obs)[0] == "두 분이 거절"
+    assert GP.trial_wait("test", "passed", {}, {"effective_status": "rejected"}, obs)[0] == "거절됨"
     assert GP.trial_wait("test", "failed", {"gate": {"reasons": ["① a: 통과", "② b: 미달"]}}, None, obs)[0] == "② b: 미달"
     assert GP.trial_wait("test", "described", {}, None, obs)[0] == "설명용 시험이라 합격·불합격 없음"
     assert GP.trial_wait("newlab", "lapsed", {}, None, obs)[0].startswith("시험 수가 늘어")
@@ -289,3 +290,91 @@ def test_route_menu_icon_and_files():
     assert not re.search(r"font(-size)?:[^;}]*\dpx", css)                          # sizes only as --t-* tokens
     from paperbot.dash import more
     assert "gradpath" in more.MODULES
+
+
+# ---------------------------------------------------------------- review fixes
+def test_who_decided_a_proposal_is_named_right():
+    """'rejected' is also written by the approver model and by code (the gate judged again with more tests,
+    dash/agents rooms.py); only the owners' own click is '두 분'."""
+    w = lambda p: GP.proposal_wait(p)[:2] + (GP.proposal_wait(p)[2],)
+    assert w({"status": "rejected", "decided_by": "owner:A"})[0] == "두 분이 거절"
+    assert w({"status": "rejected", "decided_by": "approver"})[0] == "승인관(AI)이 거절"
+    assert w({"status": "rejected", "decided_by": "code"})[0].startswith("코드가 닫음")
+    assert w({"status": "rejected", "decided_by": "code"})[2] == "멈춘 이유"
+    assert w({"status": "approved", "decided_by": "approver"})[0] == "승인관(AI) 승인 · 모의 계좌 시작 기다림"
+    assert w({"status": "approved", "decided_by": "owner:B"})[0] == "두 분 승인 · 모의 계좌 시작 기다림"
+    # the owners clicked, the agents' tick has not applied it yet (dash.app.Rooms._effective)
+    assert w({"status": "awaiting_owner", "effective_status": "rejected"})[0] == "두 분이 거절 · 반영 기다림"
+    assert w({"status": "awaiting_owner", "effective_status": "approved"})[0] == "두 분 승인 · 반영 기다림"
+    assert w({"status": "awaiting_owner"}) == ("두 분 승인 기다림", "accent", "기다리는 것")
+    for p in ({"status": "rejected", "decided_by": "approver"}, {"status": "rejected", "decided_by": "code"},
+              {"status": "approved", "decided_by": "approver"}):
+        assert "두 분" not in GP.proposal_wait(p)[0], p
+
+
+def test_a_hypothesis_without_a_strategy_is_not_said_to_wait_for_grading(tmp_path):
+    """agents/scorecard.grade_due grades only a hypothesis that names its strategy: no '채점 기다림' for the others."""
+    from paperbot.agents import rooms_db as R
+    p = str(tmp_path / "agents3.db")
+    c = R.open_agents(p)
+    R.ensure_rooms(c, ts=NOW)
+    R.add_trial(c, "team:review", None, "hypothesis", {"text": "가설 A", "prediction": {"kind": "x"}}, ts=NOW)
+    R.add_trial(c, "strat:S5_DONCHIAN_MFI", "S5_DONCHIAN_MFI", "hypothesis", {"text": "가설 B", "prediction": {"kind": "x"}},
+                ts=NOW + 1)
+    c.close()
+    a = R.open_ro(p)
+    try:
+        st = GP.ideas_stage(None, a, None)
+    finally:
+        a.close()
+    by = {i["title"]: i for i in st["items"]}
+    assert "채점" in by["가설 B"]["wait"] and by["가설 B"]["lab"] == "기다리는 것"
+    assert "채점하지 않음" in by["가설 A"]["wait"] and by["가설 A"]["lab"] == "지금 상태"
+
+
+def test_verdict_day_passed_without_a_record_never_names_the_next_date_as_the_first():
+    """After 00:00 UTC of day 30 the summary names checkpoint k=2; the hourly checkpoint job may not have written
+    checkpoint.db yet: the page says the record is awaited, never '12/04 첫 판정'."""
+    nxt = {"k": 2, "ts": NOW + 29 * 86_400_000, "day": 60}
+    v = GP.verdict_stage({"ready": False}, {}, nxt, NOW, 30)
+    assert v["state"] == "wait" and v["when_ko"] == "첫 판정일 지남 · 판정 기록 기다림"
+    assert GP._mmdd(nxt["ts"]) not in json.dumps(v, ensure_ascii=False)
+    rd = {"summary": {"met_all": 0, "accounts": 144, "days_running": 30.2, "by_condition": {}},
+          "conditions": [{"id": "regimes2", "label": "국면 2개 이상 플러스"}]}
+    r = GP.ready_stage(rd, False, nxt, 50)
+    assert r["items"][0]["wait"] == "판정 기록이 생기면 셈"
+    js = _read("screens", "path.js")
+    assert "첫 판정 기록 기다림" in js and "다음 판정 ${fmt.mmdd(nc.ts)}" in js
+
+
+def test_after_the_verdict_head_and_deepseek_copies():
+    rows = [{"account_id": "COPY_9", "status": PASS1, "group": "extra", "family": "ds200", "trades": 40},
+            {"account_id": "S1@1h", "status": FAIL, "group": "core", "family": "core", "trades": 40}]
+    v = GP.verdict_stage({"ready": True, "date": "2026-11-04", "rows": rows}, {}, None, NOW, 30)
+    assert "COPY_9" not in json.dumps(v)                                 # a DeepSeek copy: counts only
+    assert next(i for i in v["items"] if i["tag"] == "딥시크")["wait"] == f"묶음 숫자: {PASS1} 1"
+    assert v["head"] == f"11/04 판정 · {PASS1} 1 · {FAIL} 1"
+    none = GP.verdict_stage({"ready": True, "date": "2026-11-04", "rows": []}, {}, None, NOW, 30)
+    assert none["head"] == "11/04 판정" and none["state"] == "none"     # no dangling ' · '
+
+
+def test_dates_are_written_like_the_rest_of_the_page():
+    ts = 1793664000000                                                   # 2026-11-03 09:00 KST
+    assert GP._mmdd(ts) == "11/03" and GP._mmdd(None) == "—"
+    assert GP._mmdd_iso("2026-11-04") == "11/04"
+
+
+def test_not_queued_behind_the_analysis_tabs_long_computations(world):
+    """dash/analysis.Heavy runs one computation at a time; 졸업 길 is a few cheap reads and answers while a long
+    analysis (조합 시너지 ...) holds the shared gate."""
+    c = _client(world)
+    shared = c.app.state.analysis
+    with shared.gate:                                                    # a long analysis is computing
+        t0 = time.time()
+        d = None
+        while time.time() - t0 < 8:
+            d = c.get("/api/v4/gradpath").json()
+            if not d.get("pending"):
+                break
+            time.sleep(0.2)
+    assert d and not d.get("pending") and [s["id"] for s in d["stages"]][0] == "ideas"
