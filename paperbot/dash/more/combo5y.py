@@ -139,7 +139,7 @@ def monthly_view(doc: Optional[dict], paper: Optional[dict], now_ms: int) -> dic
             "tfs": doc.get("tfs") or list(CORE_TFS), "initial": doc.get("initial"), "rows": rows,
             "flips": {k: v for k, v in (doc.get("flips") or {}).items() if k in ("unit_months", "tfs", "units")},
             "now": now_ms, "run_start": start, "elapsed_days": None if elapsed is None else round(elapsed, 3),
-            "day": day, "small_n": SMALL_N,
+            "day": day, "small_n": SMALL_N, "over_month": bool(elapsed is not None and elapsed > 31),
             "methods": {k: meth.get(k) for k in ("accounts", "sizing", "costs", "caveat", "period")},
             "note": ("5년 달은 매달 1일에 계좌마다 $5,000로 새로 시작. 지금 실험은 시작한 날부터 같은 날 수(올림)만큼 지난 5년 달들의 "
                      "닫힌 거래 손익과 비교 (열린 포지션은 양쪽 다 빼고)")}

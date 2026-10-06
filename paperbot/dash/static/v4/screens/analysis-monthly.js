@@ -52,7 +52,8 @@ export function monthly5y(d, env) {
     at: d.generated ? Date.parse(d.generated) : null,
     read: "줄 하나 = 매매법 하나 (봉 4개 계좌 합, $20,000). 가는 눈금 하나 = 5년 중 한 달" + (day ? `을 지금과 같은 ${fmt.int(day)}일째까지 자른 결과` : "의 결과") + ", 회색 굵은 눈금 = 그 가운데(중앙값), 청록 굵은 눈금 = 지금 실험이 시작한 뒤 지금까지 (닫힌 거래만). 순위 = 그 달들 사이에서 몇 번째.",
     warn: [meth.caveat || "이 36개는 바로 이 5년 자료를 보고 고른 매매법이라 5년 숫자는 실제보다 좋게 나오기 쉽습니다.",
-      day && day < 30 ? `지금 실험은 ${fmt.int(day)}일째입니다. 한 달 전체와 비교하지 않고, 5년 달들도 ${fmt.int(day)}일째까지만 잘라서 비교합니다. 며칠 사이의 순위는 거의 우연입니다.` : null]})];
+      day && day < 30 ? `지금 실험은 ${fmt.int(day)}일째입니다. 한 달 전체와 비교하지 않고, 5년 달들도 ${fmt.int(day)}일째까지만 잘라서 비교합니다. 며칠 사이의 순위는 거의 우연입니다.` : null,
+      d.over_month ? `지금 실험이 한 달(31일)을 넘었습니다. 5년 쪽은 한 달짜리라 기간이 다릅니다: 순위는 참고로만 보세요.` : null]})];
   // waiting: how far the month and the trades are (real numbers only)
   if (hasPaper) {
     const withN = rows.filter((r) => r.paper && r.paper.trades >= smallN).length;
