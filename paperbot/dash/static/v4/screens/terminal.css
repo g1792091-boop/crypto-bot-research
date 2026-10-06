@@ -196,7 +196,8 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-bst > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ratio bars: under every list (a thin bar, the two shares under it) and inline in the table head */
-.term-rbrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.term-rbrow { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.term-rbrow > .term-rb { flex: 1 1 auto; }
 .term-rbk { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; }
 .term-rb { display: grid; gap: 2px; min-width: 0; }
 .term-rb-t { display: flex; height: 4px; border-radius: 3px; overflow: hidden; background: var(--line); gap: 1px; }
@@ -391,7 +392,9 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-row { gap: 14px; }
   .term-stats, .term-movers { gap: 14px; }
   .term-sess { display: none; }                           /* the session is in the clock's title */
-  .term-rb.wide .term-rb-t { flex-basis: calc(90px * var(--ts)); }
+  .term-rb.wide .term-rb-t { flex-basis: calc(70px * var(--ts)); }
+  .term-ut.n, .term-left .term-rbk { display: none; }      /* the open count is in the 포지션 tab; the bars keep their shares */
+  .term-sel { max-width: calc(84px * var(--ts)); }
 }
 /* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
    page still show them); the top line drops the meetings label's room to the movers */
