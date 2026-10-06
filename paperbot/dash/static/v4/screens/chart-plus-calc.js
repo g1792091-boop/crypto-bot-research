@@ -56,12 +56,14 @@ export function priceRows(cells, tick, a, z, yOf, rowPx, height) {
  * only, CONTRACT D10 / D11). ``mark``: the price now. The price path runs from the mark to ``P``; a position's stop or
  * liquidation price on that path is reached, the nearer one to the mark first (that one closes it, the other never
  * happens). A stopped position books side * qty * (stop - entry), a liquidated one loses its whole margin, the others
- * are valued at P. Marks only, before the exit fee and slippage: arithmetic on the open positions, not a forecast.
- * -> {n, stops, locks, liqs, open, both (positions whose stop AND liquidation price both lie on the path: only the nearer
+ * are valued at P. A position with a take-profit price ``tp`` (the 5-minute reel) that the path passes is closed there: it books
+ * side * qty * (tp - entry), so a price beyond its target never counts more than the target. Marks only, before the exit fee
+ * and slippage: arithmetic on the open positions, not a forecast.
+ * -> {n, stops, locks, liqs, tps, open, both (positions whose stop AND liquidation price both lie on the path: only the nearer
  *    one counts), countOnly (positions that are counted without money), pnl (money ones), nMoney}
  */
 export function whatIf(items, mark, P) {
-  const out = {n: 0, stops: 0, locks: 0, liqs: 0, open: 0, both: 0, countOnly: 0, pnl: 0, nMoney: 0};
+  const out = {n: 0, stops: 0, locks: 0, liqs: 0, tps: 0, open: 0, both: 0, countOnly: 0, pnl: 0, nMoney: 0};
   if (!(mark > 0) || !(P > 0)) return out;
   const lo = Math.min(mark, P), hi = Math.max(mark, P);
   const on = (x) => x != null && Number.isFinite(x) && x >= lo && x <= hi && x !== mark;
@@ -71,12 +73,14 @@ export function whatIf(items, mark, P) {
     // only the adverse side of the mark can be a stop / liquidation: a long's lie below the price, a short's above
     const adverse = (x) => x != null && (it.side > 0 ? x < mark : x > mark);
     const sHit = adverse(it.stop) && on(it.stop), lHit = adverse(it.liq) && on(it.liq);
-    let kind = "open", at = P;
+    const tHit = it.tp != null && (it.side > 0 ? it.tp > mark : it.tp < mark) && on(it.tp);      // a target lies on the favourable side
+    let kind = tHit ? "tp" : "open", at = P;
     if (sHit && lHit) { kind = Math.abs(it.stop - mark) <= Math.abs(it.liq - mark) ? "stop" : "liq"; out.both++; }
     else if (sHit) kind = "stop";
     else if (lHit) kind = "liq";
     if (kind === "stop") { out.stops++; if (it.lock) out.locks++; at = it.stop; }
     else if (kind === "liq") out.liqs++;
+    else if (kind === "tp") { out.tps++; at = it.tp; }
     else out.open++;
     if (!it.money) { out.countOnly++; continue; }
     out.nMoney++;

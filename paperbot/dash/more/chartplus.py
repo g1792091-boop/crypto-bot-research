@@ -10,7 +10,8 @@
         ``since_ts`` (when the recorder started: nothing before it was heard, which is NOT "no liquidations"),
         ``gaps`` (the recorder's own disconnected spans, from conn_log), ``stale`` (no row for 2 hours), and
         ``note_ko``: Binance sends at most one liquidation per coin per second, so bursts are undercounted.
-        No file: {"ready": false}. Cached 20 s.
+        One pass over the coin's rows; the strip's price step grows (``coarse``) instead of dropping bars when a busy window would
+        make more than ``CELLS_MAX`` buckets. No file: {"ready": false}. Cached 20 s (4-hour charts 60 s, daily and up 120 s).
 
     GET /api/v4/chartplus/series?symbol=BTCUSDT&kind=oi|ls|funding&tf=15m
         The lower panes' market series, fetched by the SERVER from Binance's public futures endpoints (never from the

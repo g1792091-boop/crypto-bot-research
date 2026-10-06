@@ -26,7 +26,7 @@ export function stopMap(o) {
       if (!a || !a.position || a.position.symbol !== sym) continue;
       const p = normPos(a.position);
       if (!p || !(p.entry > 0)) continue;
-      items.push({id: a.account_id, side: p.side, entry: p.entry, qty: p.qty || 0, margin: p.margin || 0, stop: p.stop, liq: p.liq,
+      items.push({id: a.account_id, side: p.side, entry: p.entry, qty: p.qty || 0, margin: p.margin || 0, stop: p.stop, liq: p.liq, tp: p.target,
         lock: p.lock_roe != null && !fmt.ownExits(a), money: !countOnly(a, "")});
     }
     levels = stopLevels(items);
@@ -96,7 +96,7 @@ export function stopMap(o) {
     if (!m) { tip.show([h("b", null, "지금 가격을 못 불러와 계산하지 못했습니다")], x, y, strip.parentElement.offsetLeft); return; }
     const r = whatIf(items, m, P);
     const head = h("b", null, `이 가격이면 · ${fmt.price(P)} (지금보다 ${fmt.pct(P / m - 1, 2)})`);
-    const hit = [`손절 ${fmt.int(r.stops)}개`, `청산 ${fmt.int(r.liqs)}개`].join(" · ") + (r.locks ? ` (손절 중 잠금선 ${fmt.int(r.locks)}개)` : "");
+    const hit = [`손절 ${fmt.int(r.stops)}개`, `청산 ${fmt.int(r.liqs)}개`, r.tps ? `익절 ${fmt.int(r.tps)}개` : ""].filter(Boolean).join(" · ") + (r.locks ? ` (손절 중 잠금선 ${fmt.int(r.locks)}개)` : "");
     const lines = [head, h("span", null, hit)];
     if (r.nMoney) lines.push(h("span", {class: ["num", fmt.tone(r.pnl)]}, `예상 손익 ${fmt.usdt(r.pnl, true)}`));
     else lines.push(h("span", {class: "muted"}, "예상 손익: 금액을 보이는 계좌가 없습니다"));

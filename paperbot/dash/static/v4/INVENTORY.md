@@ -563,3 +563,12 @@ Files: `screens/chart-plus.js` (the owner: DOM, menu, note rows, layout), `chart
 `chart-plus-calc.js` (pure arithmetic, run in node by the tests), `chart-plus-kit.js`, `chart-plus.css`. Hooks: one `chartPlus(...)`
 call in `terminal-chart.js` and `chart.js`; `core/chartfx.js` gained `deck.onData(fn)`, `deck.menuEl` and the `how` argument of
 `onToggle(null, "default" | "all" | "none")`; `/api/candles` gained `taker_buy`; `more/__init__.py` lists `chartplus`.
+
+Review (adversarial pass after the build): `liq_bars` reads the coin's rows ONCE (a daily chart on 180k rows took 4.7 s, now 1.1 s) and the
+strip's price step grows instead of the old 20,000-cell cap silently dropping the NEWEST bars; one lock per cut (a slow daily cut no
+longer holds up the 15-minute one) and longer reuse on 4-hour / daily charts; the liq.db path goes through the dashboard's quoted
+read-only URI; "이 가격이면" says how many accounts pass both their stop and their liquidation (only the nearer one counts); the stop map
+says 못 불러옴 when the board never loaded and 마지막 값 when the board or the price could not be refreshed; a pane whose refresh failed
+with an old answer on screen says 마지막 값 (새로 못 받음); a series ends a candle where the next one opens (1-month candles); the
+market-liquidation choice is hidden while `features.liq` is false (CONTRACT 1.7) unless already on; every add-on callback the deck or
+the chart library calls is wrapped (`chart-plus-kit.js` `safe`); the terminal's OHLC line wraps inside the box the strips leave.

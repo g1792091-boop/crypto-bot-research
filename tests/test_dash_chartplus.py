@@ -469,6 +469,18 @@ def test_what_if_says_how_many_accounts_pass_both_their_stop_and_liquidation():
     assert "WORDS.both(r.both)" in _code(_src("screens", "chart-stopmap.js")) and "먼저 닿는 쪽 하나로만" in _src("screens", "chart-plus-kit.js")
 
 
+def test_what_if_stops_a_reel_position_at_its_take_profit():
+    o = _node("""const R = {side: 1, entry: 100, qty: 2, margin: 20, stop: 95, liq: 80, tp: 110, money: true};      // the 5-minute reel has a target
+    const S = {side: -1, entry: 100, qty: 1, margin: 10, stop: 105, liq: 120, tp: 90, money: true};
+    const N = {side: 1, entry: 100, qty: 5, margin: 50, stop: 95, liq: 80, tp: null, money: true};               // the ladder houses: no target
+    console.log(JSON.stringify({above: C.whatIf([R, N], 100, 130), below: C.whatIf([S], 100, 80), under: C.whatIf([R], 100, 105), down: C.whatIf([R], 100, 90)}));""")
+    assert (o["above"]["tps"], o["above"]["open"]) == (1, 1) and o["above"]["pnl"] == 2 * 10 + 5 * 30      # the reel books its target (+10), the ladder one runs on to 130
+    assert (o["below"]["tps"], o["below"]["pnl"]) == (1, 10)                                          # a short's target lies below the price
+    assert o["under"]["tps"] == 0 and o["under"]["pnl"] == 10                                         # not yet at the target: valued at the price
+    assert (o["down"]["stops"], o["down"]["tps"]) == (1, 0) and o["down"]["pnl"] == -10               # a target above never closes a fall
+    assert "r.tps" in _code(_src("screens", "chart-stopmap.js")) and "tp: p.target" in _code(_src("screens", "chart-stopmap.js"))
+
+
 def test_a_candle_ends_where_the_next_one_opens_and_a_missing_candle_does_not_shift_the_bars():
     o = _node("""const D = 86400, M = 2592000;
     // 1-month candles: January (31 days), February (28): a point on Feb 1 + 2 h belongs to February, not to January's "30 days"
