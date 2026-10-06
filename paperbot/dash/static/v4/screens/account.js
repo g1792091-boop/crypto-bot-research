@@ -169,7 +169,7 @@ export async function mount(el, ctx) {
     else {
       if (!view.prof || view.prof.id !== acc.account_id) {
         const prof = {id: acc.account_id, missing: false};
-        prof.card = profileCard(ctx, acc.account_id, {head: true, cls: "account-prof",
+        prof.card = profileCard(ctx, acc.account_id, {head: true, cls: "account-prof", once: true,
           sub: [acc.account_id, acc.created_ts ? `시작 ${fmt.kst(acc.created_ts)}` : null].filter(Boolean).join(" · "),
           onMissing: () => { prof.missing = true; if (view.prof === prof && view.plain) view.plain(); }});
         if (view.prof && view.prof.mo) view.prof.mo.disconnect();

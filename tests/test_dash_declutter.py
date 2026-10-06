@@ -176,7 +176,7 @@ def test_terminal_chart_header_wraps_instead_of_cutting_a_timeframe_button():
     assert re.search(r"@media \(max-width: 1599px\) \{\s*\.term-fx \.cfx-light \{ padding: 0 8px; \}\s*\.term-fx \.cfx-light > span \{ display: none; \}", css)
     fxcss = _read("core", "chartfx.css")
     assert ".cfx-vmenu { left: 0; right: auto;" in fxcss                  # opens to the right of its button
-    assert ".cfx-smcmenu, .cfx-vmenu { position: fixed; left: 16px; right: 16px;" in fxcss   # a phone: a sheet
+    assert ".cfx-smcmenu, .cfx-vmenu { position: fixed; left: 16px; right: 16px; width: auto;" in fxcss   # a phone: a sheet
 
 
 # ---------------------------------------------------------------- 2. the small print, said once

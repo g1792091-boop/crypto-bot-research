@@ -143,8 +143,8 @@
 .cfx-mnote { margin: 4px 4px 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.4; white-space: normal; max-width: 220px; }
 /* '프리미엄 지표 ▾' (the parts on / off) and '보기 ▾' (light · flash · parts in one menu for a narrow header: it opens
    to the right of its button, two columns on a PC) */
-.cfx-smcmenu { min-width: 270px; }
-.cfx-vmenu { left: 0; right: auto; max-height: min(78vh, 600px); overflow-y: auto; }
+.cfx-smcmenu { min-width: 270px; width: max-content; max-width: calc(100vw - 32px); }
+.cfx-vmenu { left: 0; right: auto; width: max-content; max-width: calc(100vw - 32px); max-height: min(78vh, 600px); overflow-y: auto; }
 .cfx-vmenu.two { grid-template-columns: minmax(240px, auto) minmax(250px, auto); column-gap: 14px; align-items: start; }
 .cfx-vcol { display: grid; gap: 2px; align-content: start; min-width: 0; }
 .cfx-vbtn.on { color: var(--accent); border-color: var(--accent-line); }
@@ -170,7 +170,7 @@ html[data-text="xl"] .cfx-lbtn .cfx-lf { display: none; }
   .cfx-lmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px)); min-width: 0;
     max-height: 64vh; overflow-y: auto; }
   .cfx-lmenu .cfx-mnote { max-width: none; }
-  .cfx-smcmenu, .cfx-vmenu { position: fixed; left: 16px; right: 16px; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));
+  .cfx-smcmenu, .cfx-vmenu { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(var(--bot-h) + 14px + env(safe-area-inset-bottom, 0px));
     min-width: 0; max-height: 64vh; overflow-y: auto; }
   .cfx-vmenu.two { grid-template-columns: minmax(0, 1fr); }
   .cfx-smcmenu .cfx-mi, .cfx-vmenu .cfx-mi { white-space: normal; }
