@@ -192,6 +192,16 @@ def test_checkpoint_after_the_verdict_reads_its_own_numbers(tmp_path):
     r = L.checkpoint_row(None, out)
     assert r["ready"] is True and r["tested"] == 120 and r["passed"] == 6 and r["verdict"] == "more"
     assert "많아야 0.4개" in r["passed_ko"] and r["uncorrected"] == 8.4
+    # an older verdict without per-family rows still reads as a verdict (never '판정 전' once one exists)
+    old = str(tmp_path / "old.db")
+    CK.open_out(old).close()
+    c = sqlite3.connect(old)
+    c.execute("INSERT INTO verdicts (date, ts, snapshot_sha256, data) VALUES (?,?,?,?)",
+              ("2026-11-04", 1, "x", json.dumps({"tested": 40, "luck_passed": 0, "alpha": 0.1})))
+    c.commit()
+    c.close()
+    o = L.checkpoint_row(None, old)
+    assert o["ready"] is True and o["verdict"] == "none" and o["tested"] == 40 and 0.05 < o["luck"] < 0.2
 
 
 def test_agents_ledgers(world):

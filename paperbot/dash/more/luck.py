@@ -136,12 +136,14 @@ def binom_tail(n: int, k: int, p: float) -> float:
 @lru_cache(maxsize=64)
 def bh_null(m: int, alpha: float, sims: int = SIMS, seed: int = SEED) -> tuple:
     """How many of ``m`` tests Benjamini-Hochberg at ``alpha`` passes when nothing is real (independent uniform
-    p-values), simulated ``sims`` times with a fixed seed: (mean, the passes per run as a tuple of counts)."""
+    p-values), simulated ``sims`` times with a fixed seed: (mean, the passes per run as a read-only int array)."""
     m = int(m)
     if m <= 0 or alpha <= 0:
-        return 0.0, (0,) * sims
+        z = np.zeros(sims, dtype=np.int32)
+        z.flags.writeable = False
+        return 0.0, z
     rng = np.random.default_rng(seed + m)
-    out = np.zeros(sims, dtype=np.int64)
+    out = np.zeros(sims, dtype=np.int32)
     thr = np.arange(1, m + 1) * (alpha / m)
     step = max(1, min(sims, 4_000_000 // m))
     for a in range(0, sims, step):
@@ -150,7 +152,8 @@ def bh_null(m: int, alpha: float, sims: int = SIMS, seed: int = SEED) -> tuple:
         anyok = ok.any(axis=1)
         last = m - np.argmax(ok[:, ::-1], axis=1)
         out[a:a + len(u)] = np.where(anyok, last, 0)
-    return float(out.mean()), tuple(int(x) for x in out)
+    out.flags.writeable = False                    # cached: shared by every caller
+    return float(out.mean()), out
 
 
 def bh_luck(families: list) -> tuple[float, Callable[[int], float]]:
@@ -160,8 +163,7 @@ def bh_luck(families: list) -> tuple[float, Callable[[int], float]]:
         if not m:
             continue
         _mean, counts = bh_null(int(m), float(a))
-        arr = np.asarray(counts)
-        runs = arr if runs is None else runs + arr
+        runs = counts.astype(np.int64) if runs is None else runs + counts
     if runs is None:
         return 0.0, lambda k: 1.0 if k <= 0 else 0.0
     mean = float(runs.mean())
@@ -226,8 +228,10 @@ def checkpoint_row(paper_db: Optional[str], checkpoint_db: Optional[str]) -> dic
     rule = (f"같은 봉 동전 봇 {CK.N_BOTS:,}개보다 잘했는지 본 뒤 묶음마다 보정(FDR " +
             " · ".join(f"{CK.FAMILY_KO[g]} {a * 100:g}%" for g, a in al.items()) + ")")
     v = CK.latest_verdict(checkpoint_db) if checkpoint_db else None
-    if isinstance(v, dict) and v.get("families"):
-        fams = [(f.get("tested") or 0, f.get("alpha") or al.get(f.get("group"), 0)) for f in v["families"]]
+    if isinstance(v, dict) and v.get("tested") is not None:
+        # a verdict exists: its own numbers (an older verdict without per-family rows is one family at its alpha)
+        fams = ([(f.get("tested") or 0, f.get("alpha") or al.get(f.get("group"), 0)) for f in v["families"]]
+                if v.get("families") else [(v.get("tested") or 0, v.get("alpha") or CK.ALPHA)])
         luck, tail = bh_luck(fams)
         tested, passed = _int(v.get("tested")), _int(v.get("luck_passed"))
         return row("checkpoint", "now", title, where, tested=tested, rule_ko=rule, luck=luck,
