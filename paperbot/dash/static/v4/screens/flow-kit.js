@@ -180,12 +180,14 @@ export function raceChart(o = {}) {
         if (g.road) {
           const evs = (st.events || []).map((ev) => ({ev, t: Number(ev.ts_ms)})).filter((e) => e.t > m.now && e.t <= m.verdict)
             .map((e) => ({...e, x: X(e.t)}));
-          for (const c of clusterEvents(evs)) {
+          // the gap and the line step grow with the 글자 크기 setting (a 15 px "FOMC" is wider than 40 px)
+          const ts = textScale(), step = Math.round(13 * ts);
+          for (const c of clusterEvents(evs, EV_GAP * ts)) {
             const x = c.x, anchor = x > xv - 22 ? "end" : x < sx + 16 ? "start" : "middle";
             const names = [...new Set(c.items.map((e) => String(e.ev.kind || "").slice(0, 5)))];
             kids.push(s("g", {class: ["fk-ev", names.length > 1 ? "multi" : ""], transform: `translate(${x.toFixed(1)},${(y1 - 6).toFixed(1)})`},
               s("rect", {x: -3, y: -3, width: 6, height: 6, transform: "rotate(45)"}),
-              names.map((n, i) => s("text", {x: 0, y: -8 - (names.length - 1 - i) * 13, "text-anchor": anchor}, n)),
+              names.map((n, i) => s("text", {x: 0, y: -8 - (names.length - 1 - i) * step, "text-anchor": anchor}, n)),
               s("title", null, c.items.map((e) => `${e.ev.name_ko || e.ev.kind} · ${tlabel(e.t)}`).join("\n"))));
           }
         }

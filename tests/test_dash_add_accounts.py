@@ -51,7 +51,7 @@ def test_close_events_share_one_mark():
     assert out["xs"] == [100, 290, 515]                                    # the mark sits between them
     assert out["none"] == 0 and out["bad"] == 0
     src = _read("flow-kit.js")
-    assert "clusterEvents(evs)" in src and "names.map((n, i) => s(\"text\"" in src
+    assert "clusterEvents(evs, EV_GAP * ts)" in src and "names.map((n, i) => s(\"text\"" in src and "Math.round(13 * ts)" in src
 
 
 # ---------------------------------------------------------------- 회의 '근거' in plain words
