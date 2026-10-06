@@ -349,6 +349,26 @@ def test_a_bar_that_closed_a_moment_ago_waits_for_the_settle_time(tmp_path):
     assert st.feed("BTC", "1h")["last_bar_ms"] == T0 + 1099 * HOUR
 
 
+def test_a_bar_that_is_still_forming_is_never_stored_even_if_the_exchange_sends_it(tmp_path):
+    """The request ends at the newest settled bar, but an answer that carries the forming bar anyway (or a bar that closed
+    a moment ago) must not be kept: a stored bar is final."""
+    ex, m, st = world(tmp_path)
+    ex.now_ms = now_after_bar("1h", 1099)
+
+    def greedy(url):
+        rows = ex.get(url)
+        t = T0 + 1100 * HOUR                                       # the bar that opened a few minutes ago and is half done
+        rows.append([t, "1.0", "9.0", "0.5", "7.0", "3", t + HOUR - 1, "0", 0, "0", "0", "0"])
+        t2 = T0 + 1099 * HOUR + 1                                  # an hour-grid violation as well
+        rows.append([t2, "1.0", "2.0", "0.5", "1.5", "3", t2 + HOUR - 1, "0", 0, "0", "0", "0"])
+        return rows
+    LG.League(st, (m,), greedy).tick(ex.now_ms)
+    bars = st.load_bars("BTC", "1h")
+    assert int(bars["t"][-1]) == T0 + 1099 * HOUR and 9.0 not in bars["h"]
+    f = st.feed("BTC", "1h")
+    assert f["last_bar_ms"] == T0 + 1099 * HOUR
+
+
 def test_the_first_tick_fetches_the_history_before_the_start_date(tmp_path):
     ex, m, st = world(tmp_path)
     ex.now_ms = now_after_bar("1h", 1099)
