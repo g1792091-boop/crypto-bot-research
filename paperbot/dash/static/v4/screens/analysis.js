@@ -6,6 +6,7 @@
 //   장세 스위치 regime (/api/v4/regime5y + /live, analysis-regime.js; the 36 only, 5-year study + paper trades by regime)
 //   코인·장세 지도 map · 코인·시간대 /api/breakdown · 진입 순간 entry · 상황 태그 /api/cards/stats   (analysis-where.js)
 //   좋은 자리 vs 보통 levrule · 그림자 비교 shadows · 계좌 겹침 /api/overlap · 조합 시너지 synergy (analysis-rules.js)
+//   운 vs 실력 luck (/api/v4/luck, luck-kit.js: every place that tests many things, luck alone vs really passed)
 //   GH Coin /api/ghcoin (only while its recorder runs) · 45개 질문 questions (only when filled)
 // 건강 점검 moved to 서버·비용 and 알림 기록 to 알림 기록 (builder E). A {pending: true} answer shows the shimmer and asks
 // again after 3 s (the server computes heavy views in the background). The last view is remembered (local).
@@ -22,6 +23,7 @@ import * as X from "./analysis-rules.js";
 import * as C from "./analysis-costs.js";
 import * as E from "./analysis-exits.js";
 import * as RG from "./analysis-regime.js";
+import * as L from "./luck-kit.js";
 
 const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
@@ -37,6 +39,7 @@ const VIEWS = [
   {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, groups: "core", desc: "매매법 여러 개를 같이 돌렸다면"},
   {id: "shock", label: "충격 테스트", path: "/api/analysis/shock", render: R.shock, groups: "core", desc: "가격이 한 번에 크게 움직이면 지금 포지션은"},
   {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, groups: "core", desc: "실거래 전에 정한 조건 8개를 계좌마다"},
+  {id: "luck", label: "운 vs 실력", path: "/api/v4/luck", render: L.luckView, groups: "any", desc: "여러 개를 한꺼번에 시험하는 곳마다: 운으로 통과할 수와 실제로 통과한 수"},
   {id: "costs", label: "비용", path: "/api/v4/costs", render: C.costs, groups: "any", desc: "수수료·펀딩이 깎아 먹는 몫과 실제 호가였다면 (추정)"},
   {id: "ghcoin", label: "GH Coin", path: "/api/ghcoin", render: X.ghcoin, feature: "ghcoin", groups: "any", desc: "GH Coin 타점 기록 (따로 도는 기록기)"},
   {id: "questions", label: "45개 질문", path: "/api/analysis/questions", render: X.questions, feature: "questions", groups: "any", desc: "질문마다 답이 있는지"},
