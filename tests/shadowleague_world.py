@@ -43,8 +43,9 @@ class FakeExchange:
     T0; a bar exists once it has opened (the forming bar is returned, like the real endpoint does, if the request allows).
     ``requests`` records every call; ``fail`` makes the next calls raise; ``garbage`` returns rubbish rows."""
 
-    def __init__(self, coins=("BTC", "ETH"), tfs=("1h",), now_ms: int = T0, arrays=None):
+    def __init__(self, coins=("BTC", "ETH"), tfs=("1h",), now_ms: int = T0, arrays=None, t0: int = T0):
         self.now_ms = int(now_ms)
+        self.t0 = int(t0)
         self.data = {(c, tf): (arrays or {}).get((c, tf)) or series_arrays(c, tf) for c in coins for tf in tfs}
         self.requests: list[dict] = []
         self.fail = 0
@@ -62,13 +63,13 @@ class FakeExchange:
         arr = self.data[(coin, tf)]
         tfm = TF_MS[tf]
         n = len(arr["o"])
-        start = int(q.get("startTime", [T0])[0])
+        start = int(q.get("startTime", [self.t0])[0])
         end = int(q["endTime"][0]) if "endTime" in q else self.now_ms
-        first = max(0, -(-(start - T0) // tfm))
-        last = min(n - 1, (min(end, self.now_ms) - T0) // tfm)        # opened bars only
+        first = max(0, -(-(start - self.t0) // tfm))
+        last = min(n - 1, (min(end, self.now_ms) - self.t0) // tfm)        # opened bars only
         rows = []
         for i in range(first, last + 1):
-            t = T0 + i * tfm
+            t = self.t0 + i * tfm
             rows.append([t] + [repr(float(arr[k][i])) for k in ("o", "h", "l", "c", "v")]
                         + [t + tfm - 1, "0", 0, "0", "0", "0"])
             if len(rows) >= int(q["limit"][0]):

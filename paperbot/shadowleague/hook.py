@@ -28,14 +28,14 @@ def enabled(policy: Any) -> bool:
     return bool(getattr(policy, "shadow_league", False))
 
 
-def run(agents_db: str, now_ms: int, get: Optional[Callable[[str], Any]], members: tuple = MEMBERS,
+def run(agents_db: str, now_ms: int, get: Optional[Callable[[str], Any]], members: Optional[tuple] = None,
         path: Optional[str] = None, clock: Callable[[], float] = time.monotonic) -> dict:
     """One league tick. Never raises (a problem is returned and printed; the agents pass goes on)."""
     out: dict = {"enabled": True}
     store = None
     try:
         store = Store(path or default_path(agents_db))
-        out.update(League(store, members, get, clock).tick(now_ms, work_s=WORK_S, hard_s=WALL_S))
+        out.update(League(store, MEMBERS if members is None else members, get, clock).tick(now_ms, work_s=WORK_S, hard_s=WALL_S))
     except Exception as exc:  # noqa: BLE001  (the shadow league never stops the agents' meetings)
         out["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
         print(f"warning: shadow league ({ENV_SWITCH}) failed: {out['error']}", file=sys.stderr)

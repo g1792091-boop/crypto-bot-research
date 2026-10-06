@@ -13,6 +13,7 @@ The shapes are listed in docs/shadow-league.md ('대시보드용 읽기 도우�
 
 from __future__ import annotations
 
+import json
 import math
 import sqlite3
 from typing import Any, Optional
@@ -21,7 +22,7 @@ import numpy as np
 
 from . import LABEL_KO
 from . import account as AC
-from .league import MEMBERS, STALE_MS
+from .league import MEMBERS, STALE_MS, AccountSpec
 from .store import open_ro, schema_version
 from .study import STUDIES
 
@@ -60,6 +61,14 @@ def _f(x: Any, nd: int = 4) -> Optional[float]:
 
 def _pct(x: Any, nd: int = 4) -> Optional[float]:
     return None if x is None else _f(100.0 * float(x), nd)
+
+
+def _spec(row: dict) -> dict:
+    """The member's definition as it was stored (its 5-year study key, coins, timeframes, account)."""
+    try:
+        return json.loads(row["spec_json"])
+    except (ValueError, TypeError):
+        return {}
 
 
 def _known(m_id: str):
@@ -109,7 +118,7 @@ def _card(c: sqlite3.Connection, row: dict, now_ms: int) -> dict:
     skipped = sum(v for k, v in sig.items() if k.startswith("skip_") or k in ("busy", "not_chosen"))
     start = int(row["start_ms"])
     m = _known(mid)
-    study = STUDIES.get(m.study) if m else None
+    study = STUDIES.get(_spec(row).get("study", ""))
     warm = [{"coin": s["coin"], "tf": s["tf"], "have": s["warm_have"], "need": s["warm_need"], "note": s["note"]}
             for s in series if s["status"] == "warming"]
     errs = [{"coin": s["coin"], "tf": s["tf"], "note": s["note"]} for s in series if s["status"] == "error"]
@@ -139,7 +148,6 @@ def overview(path: str, now_ms: Optional[int] = None) -> dict:
         if not rows:
             return {"state": "not_started", "label_ko": LABEL_KO}
         meta = c.execute("SELECT v FROM league_meta WHERE k = 'last_tick'").fetchone()
-        import json
         return {"state": "ok", "label_ko": LABEL_KO, "as_of_ms": now, "schema_version": schema_version(c),
                 "last_tick": json.loads(meta[0]) if meta else None, "members": [_card(c, r, now) for r in rows]}
     except (sqlite3.Error, ValueError, KeyError, TypeError) as exc:
@@ -309,13 +317,11 @@ def member(path: str, member_id: str, now_ms: Optional[int] = None) -> dict:
         if row is None:
             return {"state": "not_started", "label_ko": LABEL_KO}
         row = dict(row)
-        m = _known(member_id)
-        study = STUDIES.get(m.study) if m else None
+        spec = _spec(row)
+        study = STUDIES.get(spec.get("study", ""))
         trades = [dict(r) for r in c.execute("SELECT * FROM trades WHERE member_id = ? ORDER BY entry_ms, coin, tf", (member_id,))]
         clones = [dict(r) for r in c.execute("SELECT * FROM clones WHERE member_id = ? ORDER BY trade_id, k", (member_id,))]
         series = [dict(r) for r in c.execute("SELECT * FROM series_state WHERE member_id = ?", (member_id,))]
-        spec = __import__("json").loads(row["spec_json"])
-        from .league import AccountSpec
         acct = AccountSpec(**spec["account"])
         last = sorted(trades, key=lambda t: (int(t["entry_ms"]), t["trade_id"]), reverse=True)[:LAST_TRADES]
         act = row.get("activated_ms")
