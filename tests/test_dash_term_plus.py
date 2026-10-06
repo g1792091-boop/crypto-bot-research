@@ -489,3 +489,18 @@ def test_pnl_axis_ticks_never_touch_the_left_label_the_right_label_or_each_other
     assert max(out["counts"]) >= 2                                                      # (not satisfied by drawing nothing at all)
     src = _read("screens", "terminal-pnl.js")
     assert "axisTicks(" in src and "--t-2xs" in src                                    # the label widths follow the 글자 크기 token
+
+
+def test_band_blames_the_bot_only_for_what_the_bot_did_not_do():
+    out = _node("""
+      const st = (o) => B.statusOf(o);
+      console.log(JSON.stringify({
+        down: st({health: {level: "ok"}, hbAgeS: null, critical: [], linkDown: true}),
+        loading: st({health: {level: "ok"}, hbAgeS: null, critical: [], linkDown: false}),
+        cardAge: st({health: {level: "ok"}, hbAgeS: 52, critical: [], linkDown: true}),
+        cardOld: st({health: {level: "ok"}, hbAgeS: 400, critical: [], linkDown: true})}));""", [BAND])
+    assert out["down"]["text"] == "실시간 연결 확인 중" and "봇이 멈췄다는 뜻이 아닙니다" in out["down"]["detail"] and out["down"]["level"] == "unknown"
+    assert out["loading"]["text"] == "봇 생존 신호 확인 중"
+    assert out["cardAge"]["text"] == "이상 없음" and out["cardOld"]["level"] == "bad"      # the server's own heartbeat age still counts when the stream is gone
+    band = _code(_read("screens", "terminal-band.js"))
+    assert "stream.lastEventAt" in band and "streamOk: live" in band and "linkDown: !live" in band       # a stream that died with the PC's sleep gives no heartbeat

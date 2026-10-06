@@ -41,10 +41,15 @@ export function bandLine(ctx) {
 
   function paintStatus() {
     const hs = state("health"), st = state("status");
-    const hb = stream.heartbeat;
+    // the stream's heartbeat only counts while the stream really delivers (it sends every 3 s): a connection that died with the PC's sleep
+    // keeps its last heartbeat for ever, and "봇 생존 신호 5분 전" would then blame the bot for a dead browser connection
+    const live = stream.state === "open" && Date.now() - (stream.lastEventAt || 0) < 30000;
+    const hb = live ? stream.heartbeat : null;
     let hbAge = hb ? Math.max(0, (serverNow() - Number(hb[0])) / 1000) : null;
-    if (hbAge == null && hs.v && hs.v.bot && hs.v.bot.ready && hs.v.bot.heartbeat_age_s != null) hbAge = Number(hs.v.bot.heartbeat_age_s);
-    let crit = criticalLines({health: hs.v || null, alerts: (st.v && st.v.alerts) || [], trades: [], hb, streamOk: stream.state === "open",
+    if (hbAge == null && !hs.failed && hs.v && hs.v.bot && hs.v.bot.ready && hs.v.bot.heartbeat_age_s != null) {
+      hbAge = Number(hs.v.bot.heartbeat_age_s) + Math.max(0, (Date.now() - (store.meta("health").at || Date.now())) / 1000);      // the card's own, as old as the card
+    }
+    let crit = criticalLines({health: hs.v || null, alerts: (st.v && st.v.alerts) || [], trades: [], hb, streamOk: live,
       now: Date.now(), kindOf: () => null});
     // the red banner under the menu (core/shell.js) also lists what this page cannot compute itself (a burst of our own forced exits, from
     // the shell's own trade list): whatever it says right now, this line never says 이상 없음 beside it
@@ -54,7 +59,7 @@ export function bandLine(ctx) {
     }
     // what the page itself could not read (순위 · 요약 · 알림 자료) is told too: the bot being fine is not "이상 없음" on a page that is blind
     const failedKeys = [["board", "순위 자료"], ["summary", "요약 자료"], ["status", "알림 자료"]].filter(([k]) => state(k).failed).map(([, ko]) => ko);
-    const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit, failedKeys});
+    const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit, failedKeys, linkDown: !live});
     status.className = `term-bc2 c-status ${s.level}`;
     put(status, h("i", {class: "term-bdot", "aria-hidden": "true"}), h("b", null, s.text),
       hbAge != null ? h("span", {class: "muted num"}, ` · 봇 생존 신호 ${fmt.dur(hbAge)} 전`) : null);
