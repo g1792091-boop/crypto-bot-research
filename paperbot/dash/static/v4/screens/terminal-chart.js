@@ -14,6 +14,7 @@ import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, cand
 import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
+import {drawTools} from "./draw-kit.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
@@ -45,6 +46,19 @@ export function termChart(ctx, st, onTf) {
 
   let C = null, series = null, deck = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;
   let seenPos = null;            // this coin's open positions at the last board (a new one is a real fill: one accent flash)
+  let draw = null, alerts = null;  // conv-b: the drawing tools (draw-kit.js) and the last /api/price-alerts answer
+
+  // the armed price alerts of this coin as the deck's '가격 알림 선' (the same lines as the 차트 screen's)
+  function drawAlerts() {
+    if (!deck) return;
+    deck.setLines("al", ((alerts && alerts.alerts) || []).filter((a) => a.symbol === st.sym && a.armed).map((a) => ({
+      id: `al:${a.id ?? a.price}`, group: "al", price: a.price, tone: "accent", dash: 2, alpha: 0.6, axis: true, glow: false,
+      label: `알림 ${a.direction === "above" ? "↑" : "↓"}`})));
+  }
+  async function loadAlerts() {
+    try { alerts = await ctx.api("/api/price-alerts"); } catch (e) { return; }
+    if (ctx.alive()) drawAlerts();
+  }
 
   function paintLegend(d) {
     if (!d) { legend.textContent = ""; return; }
@@ -92,6 +106,8 @@ export function termChart(ctx, st, onTf) {
     const dec = priceDec(data.length ? data[data.length - 1].close : store.mark(sym));
     series.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
     deck.setData(data);
+    if (draw) draw.setKey();                 // this coin + timeframe's own drawings
+    drawAlerts();
     t0 = data.length ? data[0].time : 0;
     last = data[data.length - 1] || null;
     lastPx = null;
@@ -165,7 +181,8 @@ export function termChart(ctx, st, onTf) {
     deck.setMarkers(marks);
     put(keyLine, h("span", null, h("i", {class: "k-ar"}), "우리 진입"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
       h("span", null, h("i", {class: "k-ev"}), "경제지표 (올리면 이름)"), h("span", null, h("i", {class: "k-ln"}), "진입선·손절선 (기존 36·5분봉·추가) · 이름표를 누르면 숨김"),
-      LEVEL_TFS.includes(st.tf) ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null);
+      LEVEL_TFS.includes(st.tf) ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null,
+      h("span", {title: "차트에서 오른쪽 클릭: 이 가격에 텔레그램 알림 걸기 · 가로선 긋기 (그리기 버튼: 선·네모·글)"}, "오른쪽 클릭 = 이 가격에 알림"));
   }
   function drawPos() {
     if (!deck) return;
@@ -203,9 +220,13 @@ export function termChart(ctx, st, onTf) {
       ctx.track(C.dispose);
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
-      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol"]});
+      deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "al"]});
       deck.onToggle((g) => { if (g === "ev" || g == null) drawMarks(); });
-      put(fxSlot, deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
+      // conv-b: 그리기 (lines, boxes, notes per coin + timeframe on this device) and the right-click '이 가격에 알림'
+      // (the existing /api/price-alerts route); the armed alerts of this coin are the deck's '가격 알림 선'
+      draw = drawTools({ctx, chart: C.chart, series, wrap, box, deck, sym: () => st.sym, tf: () => st.tf, step: () => TF_S[st.tf] || 900,
+        onAlertAdded: () => loadAlerts()});
+      put(fxSlot, deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn, draw.toggle);
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);
@@ -226,6 +247,7 @@ export function termChart(ctx, st, onTf) {
 
   ctx.every(5000, liveBar, {now: false});
   ctx.every(120000, loadLevels, {now: false});
+  ctx.every(30000, loadAlerts, {now: true});           // conv-b: the armed alerts (a fired one leaves the chart)
   return {
     el, ready,
     setSym() { relayAt = 0; seenPos = null; if (deck) { deck.setLines("pos", []); deck.setLines("sr", []); } trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },

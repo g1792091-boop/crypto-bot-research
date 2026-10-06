@@ -1,0 +1,34 @@
+/* 차트 그리기 + 이 가격에 알림 (conv-b, screens/draw-kit.js): the '그리기' head toggle, the tool column at the pane's left
+   edge (the deck's line pills step aside while it is open), the right-click / long-press menu and the note box.
+   @imported by terminal.css and chart.css. Tokens only, font sizes only var(--t-*). */
+.drw-toggle { appearance: none; flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 7px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font: 700 var(--t-2xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.drw-toggle:hover { color: var(--ink); border-color: var(--accent-line); }
+.drw-toggle[aria-pressed="true"] { color: var(--draw); border-color: var(--draw); background: var(--surface-2); }
+
+.drw-tools { position: absolute; left: 6px; top: 30px; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px;
+  border-radius: 10px; border: 1px solid var(--line-2); background: var(--pill-bg); box-shadow: 0 6px 18px var(--card-shadow, transparent); }
+.drw-tools[hidden] { display: none; }
+.drw-b { appearance: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; color: var(--ink-2); cursor: pointer; }
+.drw-b:hover { color: var(--ink); background: var(--surface-2); }
+.drw-b[aria-pressed="true"] { color: var(--draw); border-color: var(--draw); background: var(--surface-2); }
+.drw-b:disabled { opacity: .35; cursor: default; }
+.drw-b.arm { color: var(--down); border-color: var(--down-line); }
+.drw-sep { display: block; width: 20px; height: 1px; margin: 2px 0; background: var(--line-2); }
+.drw-n { min-height: 14px; color: var(--muted); font-size: var(--t-2xs); }
+/* the line pills step right of the open tool column */
+.drw-on .cfx-pill { left: 50px; max-width: calc(100% - 70px); }
+.drw-drawing canvas { cursor: crosshair; }
+
+.drw-menu { position: absolute; z-index: 8; min-width: 210px; max-width: min(300px, calc(100% - 8px)); display: grid; gap: 2px; padding: 6px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--surface); box-shadow: 0 14px 32px var(--card-shadow, transparent); }
+.drw-mh { margin: 2px 6px 4px; color: var(--muted); font-size: var(--t-xs); }
+.drw-mi { appearance: none; display: grid; gap: 2px; min-height: 34px; padding: 7px 10px; border-radius: 7px; border: 0; background: transparent; color: var(--ink);
+  font: 700 var(--t-sm)/1.3 var(--f-body); text-align: left; cursor: pointer; }
+.drw-mi small { color: var(--muted); font-size: var(--t-2xs); font-weight: 500; }
+.drw-mi:hover, .drw-mi:focus-visible { background: var(--surface-2); outline: none; }
+.drw-mi.alert { color: var(--accent); }
+.drw-mi.bad { color: var(--down); }
+.drw-input { position: absolute; z-index: 8; width: 190px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--draw); background: var(--surface);
+  color: var(--ink); font: 500 var(--t-sm)/1 var(--f-body); }

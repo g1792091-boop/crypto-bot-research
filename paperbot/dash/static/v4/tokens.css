@@ -162,6 +162,9 @@
   --pick-2: var(--series-ds);
   --pick-3: var(--series-m5);
   --pick-4: var(--smc-bos);
+  /* 차트 그리기 (conv-b, screens/draw-kit.js): the viewer's own lines / boxes / notes, in a hue nothing else on a
+     chart uses (not up / down, not the accent, not the 프리미엄 지표 blues and greys) */
+  --draw: var(--series-m5);
   /* type: one scale */
   --f-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif;
   --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
