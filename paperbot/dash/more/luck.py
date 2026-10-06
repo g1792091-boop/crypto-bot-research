@@ -195,16 +195,18 @@ def verdict(tested: Optional[int], passed: Optional[int], tail: Optional[float],
 
 
 def row(rid: str, part: str, title: str, where: dict, *, tested=None, rule_ko="", luck=None, luck_ko="",
-        passed=None, passed_ko="", tail=None, small=False, before=False, note="", caveat="", extra=None) -> dict:
+        passed=None, passed_ko="", tail=None, small=False, before=False, note="", caveat="", caveat_short="",
+        extra=None) -> dict:
     """One place. ``caveat``: what a 'more' / 'some' verdict does NOT mean there (e.g. a real difference that still
-    loses money); it is added to the verdict line and kept as ``caveat_ko`` for the short cards."""
+    loses money); it is added to the verdict line, and ``caveat_short`` (or the caveat) is kept as ``caveat_ko`` for the
+    short cards (홈's footer)."""
     v = verdict(tested, passed, tail, small=small, before=before)
     vk = VERDICT_KO[v] + (f" · 단, {caveat}" if caveat and v in ("more", "some") else "")
     out = {"id": rid, "part": part, "title": title, "short": SHORT.get(rid, title), "where": where, "tested": tested, "rule_ko": rule_ko,
            "luck": _r(luck, 4), "luck_ko": luck_ko, "passed": passed, "passed_ko": passed_ko, "tail": _r(tail, 4),
            "small": bool(small), "verdict": v, "verdict_ko": vk, "note": note}
     if caveat and v in ("more", "some"):
-        out["caveat_ko"] = caveat
+        out["caveat_ko"] = caveat_short or caveat
     if extra:
         out.update(extra)
     return out
@@ -387,6 +389,7 @@ def ledger_rows(agents_db: Optional[str]) -> list[dict]:
                            small=g < SMALL_GRADED,
                            note=(f"채점 {SMALL_GRADED}개가 되기 전에는 결론을 내지 않습니다. " if g < SMALL_GRADED else "") + easy,
                            caveat="50%는 가정이라 쉬운 예측이 섞이면 이 줄은 실제보다 좋게 보일 수 있음",
+                           caveat_short="50%는 가정",
                            extra={"need": SMALL_GRADED, "waiting_n": int(tot.get("waiting") or 0)}))
     finally:
         _close(c)
@@ -515,13 +518,17 @@ def indranges_row(path: str) -> dict:
     marked, plus = _marked_cells(d)
     money = (f"통과한 칸 {k:,}개 중 거래당 평균이 플러스인 칸은 {plus:,}개뿐"
              if marked == k and k else "그 구간의 거래당 손익은 따로 봐야 함")
+    # a rule added after the first run is said (the file records it); it only removes passes, so the luck stays
+    late = (". '최소 크기' 조건은 첫 결과를 본 뒤에 더한 것입니다 (통과를 줄이는 쪽이라 운으로 나올 수는 그대로)"
+            if rules.get("min_effect_added_after_first_run") is True else "")
     return row("indranges", "past", title, where, tested=m,
                rule_ko=f"칸마다 차이 시험 + 보정(FDR {fdr * 100:g}%) + 세 구간 같은 방향 + 최소 크기", luck=luck,
                luck_ko=f"실제 차이가 없다면 평균 {luck:.2f}개 (보정 없이 5%였다면 약 {m * ALPHA:.0f}개)",
                passed=k, passed_ko=f"차이가 확인된 칸 {k:,}개{side} · 그중 운일 수 있는 수 많아야 {fdr * k:.0f}개",
-               tail=tail(k), note=f"차이가 진짜라는 뜻이지, 그 구간에서 돈을 번다는 뜻은 아닙니다 ({money})",
+               tail=tail(k), note=f"차이가 진짜라는 뜻이지, 그 구간에서 돈을 번다는 뜻은 아닙니다 ({money}){late}",
                caveat="'구간마다 결과가 다르다'는 뜻일 뿐 돈 버는 구간을 찾았다는 뜻은 아님"
                       + (f" (통과 칸 중 거래당 플러스 {plus:,}개)" if marked == k and k else ""),
+               caveat_short="차이일 뿐, 돈 버는 구간은 아님",
                extra={"plus_cells": plus if marked == k else None})
 
 

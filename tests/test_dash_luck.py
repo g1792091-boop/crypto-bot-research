@@ -381,7 +381,11 @@ def test_indranges_more_carries_the_money_caveat(tmp_path):
     r = L.indranges_row(str(p))
     assert r["verdict"] == "more" and r["plus_cells"] == 1
     assert "돈 버는 구간을 찾았다는 뜻은 아님" in r["verdict_ko"] and "거래당 플러스 1개" in r["verdict_ko"]
-    assert r["caveat_ko"] and "플러스인 칸은 1개뿐" in r["note"]
+    assert r["caveat_ko"] == "차이일 뿐, 돈 버는 구간은 아님" and "플러스인 칸은 1개뿐" in r["note"]
+    assert "첫 결과를 본 뒤" not in r["note"]
+    d["rules"]["min_effect_added_after_first_run"] = True        # a rule added after looking is said
+    p.write_text(json.dumps(d))
+    assert "첫 결과를 본 뒤에 더한 것" in L.indranges_row(str(p))["note"]
     d["strategies"]["S1"]["cells"]["rsi"] = [{"r": 0.1}]          # cells not marked: no count, still the caveat
     p.write_text(json.dumps(d))
     r2 = L.indranges_row(str(p))
