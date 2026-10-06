@@ -265,7 +265,11 @@ def checkpoint_row(paper_db: Optional[str], checkpoint_db: Optional[str]) -> dic
                             f"{(tested or 0) * ALPHA:.1f}개)"),
                    passed=passed, passed_ko=f"운 시험 통과 {passed or 0:,}개 (그중 운일 수 있는 수 많아야 "
                                             f"{float(v.get('lucky_expected') or 0):.1f}개)",
-                   tail=tail(passed or 0), extra={"date": v.get("date"), "ready": True,
+                   tail=tail(passed or 0),
+                   # 'more than luck' over the whole group is not 'this account is real': a pass is checked again
+                   caveat="운 시험을 통과한 계좌 가운데 어느 것이 진짜인지는 다음 30일(2차)에 다시 확인합니다",
+                   caveat_short="다음 30일(2차)에 다시 확인",
+                   extra={"date": v.get("date"), "ready": True,
                                                    "uncorrected": _r(v.get("lucky_if_uncorrected"), 2),
                                                    "plain": _r((tested or 0) * ALPHA, 2)})
     # before the verdict: the accounts it can judge (judged timeframes per family), the rule's luck numbers

@@ -194,6 +194,7 @@ def test_checkpoint_after_the_verdict_reads_its_own_numbers(tmp_path):
     r = L.checkpoint_row(None, out)
     assert r["ready"] is True and r["tested"] == 120 and r["passed"] == 6 and r["verdict"] == "more"
     assert "많아야 0.4개" in r["passed_ko"] and r["uncorrected"] == 8.4
+    assert "다음 30일(2차)에 다시 확인" in r["verdict_ko"] and r["caveat_ko"]           # a group result, not one account
     # an older verdict without per-family rows still reads as a verdict (never '판정 전' once one exists)
     old = str(tmp_path / "old.db")
     CK.open_out(old).close()
