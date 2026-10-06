@@ -61,8 +61,9 @@ function wire(nav) {
   // a mouse wheel over the sideways row scrolls it (a window narrower than 1200 px with a mouse)
   nav.addEventListener("wheel", (e) => {
     if (e.ctrlKey || nav.scrollWidth <= nav.clientWidth + 1 || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
-    nav.scrollLeft += e.deltaY;
-    e.preventDefault();
+    const before = nav.scrollLeft;
+    nav.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * nav.clientWidth : e.deltaY;
+    if (nav.scrollLeft !== before) e.preventDefault();            // at either end the page scrolls as usual
   }, {passive: false});
   if (typeof ResizeObserver === "function") st.ro = new ResizeObserver(() => measure());
   else window.addEventListener("resize", measure);
@@ -96,7 +97,9 @@ export function renderStrip(cur, badges, {lead = [], tools = []} = {}) {
   st.cur = cur;
   const groups = navGroups(features).map((g) => h("div", {class: "sg", role: "group", "aria-label": g.ko, title: g.ko, dataset: {group: g.group}},
     g.items.map((it) => button(it, cur, badges))));
+  const keepX = nav.scrollLeft;
   nav.replaceChildren(...lead, ...groups, h("span", {class: "strip-tools"}, tools));
+  nav.scrollLeft = keepX;                                          // a badge or a feature redraw keeps the row where it was
   if (st.ro) { st.ro.disconnect(); st.ro.observe(nav); for (const g of groups) st.ro.observe(g); }
   measure();
   if (moved) center(nav, !first);

@@ -169,7 +169,8 @@ def test_strip_is_one_text_button_per_screen_like_v3():
     assert "nav.replaceChildren(...lead, ...groups, h(\"span\", {class: \"strip-tools\"}, tools));" in t
     assert 'b.focus({preventScroll: true})' in t and "nav.scrollTo({left:" in t and "scrollIntoView" not in t
     # the wheel scrolls the sideways row (a mouse below 1200 px), never the page there
-    assert 'nav.addEventListener("wheel"' in t and "{passive: false}" in t and "nav.scrollLeft += e.deltaY;" in t
+    assert 'nav.addEventListener("wheel"' in t and "{passive: false}" in t and "if (nav.scrollLeft !== before) e.preventDefault();" in t
+    assert "nav.scrollLeft = keepX;" in t                                                # a redraw keeps the row where it was
     css = _nocomment(_read("core/nav.css"))
     # v3: plain text, the current one bold with an accent underline; a lit button is as wide as an unlit one
     assert '.sb[aria-current="page"] { color: var(--ink); font-weight: 700; }' in css
