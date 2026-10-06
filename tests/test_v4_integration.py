@@ -100,6 +100,11 @@ ALLOW = (
     ("docs/paper-v4-verdict.md", "봇 2,000개로", "REHEARSAL_BOTS (the weekly rehearsal), not the verdict's N_BOTS"),
     ("docs/agent-rooms.md", "판정 계좌 108개 = 36 × 15분·30분·1시간", "the core group's judged count (36 x 3)"),
     ("paperbot/obsidian_vault/", "--pb-overlay-rgb: 156, 160, 176", "a colour value"),
+    # luck-calc / regime5y / size5y (owners' branch 855ecb8): study numbers, not the v3 bot or account counts
+    ("paperbot/dash/more/luck.py", "라이브러리 2,000개", "luck-calc's row: the research library's 2,000 combinations"),
+    ("paperbot/dash/static/v4/INVENTORY.md", "라이브러리 2,000개, 딥시크 342개", "luck-calc's row names (the library)"),
+    ("docs/regime5y.md", "5년 156건", "one regime cell's 5-year trade count"),
+    ("docs/size5y.md", "144개를 다 더한 것", "the 5-year studies' 144 cells (36 strategies x 4 timeframes)"),
 )
 
 
