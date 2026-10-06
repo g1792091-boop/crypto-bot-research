@@ -17,7 +17,7 @@ const STEP = ["①", "②", "③", "④", "⑤"];
 /** The words a stage block shows for its count: a number, 판정 전, or 아직 없음 (never a made-up zero). */
 export function countWords(st) {
   if (!st) return {big: "—", small: "아직 없음"};
-  if (st.state === "wait") return {big: "판정 전", small: st.none_ko || ""};
+  if (st.state === "wait") return {big: "판정 전", small: st.when_ko || st.none_ko || ""};
   if (st.state === "pending") return {big: "…", small: "계산 중"};
   if (st.state === "off") return {big: "—", small: "아직 없음"};
   if (!st.count) return {big: "0", small: "아직 없음"};
@@ -44,7 +44,7 @@ function funnel(d, ctx) {
     h("b", {class: "path-fbig num"}, w.big),
     h("span", {class: "path-fsm"}, here ? "지금 여기" : w.small));
   });
-  const day = d.day ? `D+${fmt.int(d.day)}` : "";
+  const day = d.dplus != null ? `D+${fmt.int(d.dplus)}` : "";
   const nxt = d.next_checkpoint && d.next_checkpoint.ts ? `첫 판정 ${fmt.mmdd(d.next_checkpoint.ts)}` : "";
   const obs = d.observe && d.observe.observing ? `관찰 기간 ${d.observe.until_ko}까지 (제안 없음)` : "";
   return h("section", {class: "path-term", "aria-label": "졸업 길 깔때기"},

@@ -16,7 +16,7 @@
 .path-funnel { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; align-items: center; min-width: 0; }
 .path-fcell { display: flex; min-width: 0; }
 .path-fseg { --cut: 9px; flex: 1 1 auto; display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0;
-  min-height: calc((132px - var(--i, 0) * 16px) * var(--ts, 1)); padding: 8px 10px; text-decoration: none; color: var(--ink-2);
+  min-height: calc((150px - var(--i, 0) * 14px) * var(--ts, 1)); padding: 8px 10px; text-decoration: none; color: var(--ink-2);
   background: var(--surface-3); clip-path: polygon(0 0, 100% var(--cut), 100% calc(100% - var(--cut)), 0 100%);
   transition: background-color .25s var(--ease), color .25s var(--ease); }
 .path-fseg:hover, .path-fseg:focus-visible { background: var(--surface-2); color: var(--ink); }
@@ -64,11 +64,12 @@ a.path-part:hover { border-color: var(--accent-line); }
   .path-term { padding: 10px; }
   .path-funnel { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .path-fcell { justify-content: center; }
-  .path-fseg { --cut: 7px; flex: 0 1 auto; width: calc(100% - var(--i, 0) * 7%); min-height: 46px; grid-template-columns: auto auto minmax(0, 1fr) auto;
-    justify-items: start; align-items: center; gap: 0 8px; padding: 6px 14px;
+  .path-fseg { --cut: 7px; flex: 0 1 auto; width: calc(100% - var(--i, 0) * 7%); min-height: 50px; grid-template-columns: auto minmax(0, 1fr) auto;
+    justify-items: start; align-items: center; gap: 0 8px; padding: 6px 16px;
     clip-path: polygon(0 0, 100% 0, calc(100% - var(--cut)) 100%, var(--cut) 100%); }
-  .path-fbig { font-size: var(--t-lg); grid-column: 4; justify-self: end; }
+  .path-fno { grid-column: 1; grid-row: 1; }
+  .path-fko { grid-column: 2; grid-row: 1; text-align: left; }
+  .path-fbig { grid-column: 3; grid-row: 1 / span 2; justify-self: end; font-size: var(--t-lg); }
   .path-fseg.wait .path-fbig { font-size: var(--t-sm); }
-  .path-fsm { grid-column: 3; text-align: left; -webkit-line-clamp: 1; }
-  .path-fko { text-align: left; }
+  .path-fsm { grid-column: 2; grid-row: 2; text-align: left; -webkit-line-clamp: 1; }
 }

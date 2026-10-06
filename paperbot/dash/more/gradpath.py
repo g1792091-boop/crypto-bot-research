@@ -23,7 +23,7 @@ Korean ("거래 12건 더 필요", "관찰 기간 10/27까지 제안 없음") an
 """
 from __future__ import annotations
 
-import json
+import math
 import os
 import sqlite3
 import time
@@ -75,13 +75,10 @@ def _cut(s: Any, n: int = TEXT_MAX) -> str:
     return t if len(t) <= n else t[: n - 1] + "…"
 
 
-def _loads(v: Any) -> Any:
-    if isinstance(v, (dict, list)) or v is None:
-        return v
-    try:
-        return json.loads(v)
-    except (TypeError, ValueError):
-        return None
+def _name(code: Any) -> str:
+    """A strategy's Korean name (agents/roster3.STRATEGY_KO, the names every screen uses), else the code."""
+    from ...agents.roster3 import STRATEGY_KO
+    return _cut(STRATEGY_KO.get(str(code or ""), code), 40)
 
 
 def _ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
@@ -134,7 +131,7 @@ def ideas_stage(debate_ro: Optional[sqlite3.Connection], agents_ro: Optional[sql
             for r in got:
                 st = str(r[4] or "new")
                 rows.append(item(r[2], "다음 단계: 회의에서 5년 시험 요청" if st == "new" else f"상태: {_cut(st, 30)}",
-                                 sub="24시간 토론방" + (f" · {_cut(r[3], 30)}" if r[3] else ""), ts=int(r[1] or 0),
+                                 sub="24시간 토론방", ts=int(r[1] or 0),
                                  go=go("debate"), tag="토론방"))
     if agents_ro is not None:
         from ...agents import rooms_db as R
@@ -154,7 +151,7 @@ def ideas_stage(debate_ro: Optional[sqlite3.Connection], agents_ro: Optional[sql
             else:
                 wait = "시험 전 · 채점할 예측 없음"
             rows.append(item(spec.get("text") or f"가설 #{t['id']}", wait,
-                             sub=f"회의 가설 #{t['id']}" + (f" · {_cut(t.get('strategy'), 40)}" if t.get("strategy") else ""),
+                             sub=f"회의 가설 #{t['id']}" + (f" · {_name(t.get('strategy'))}" if t.get("strategy") else ""),
                              ts=int(t.get("ts") or 0), go=go("rooms", t.get("room_id")), tag="회의"))
     if inbox_ro is not None:
         try:
@@ -181,7 +178,7 @@ def _test_title(spec: dict) -> str:
     """The lab's own Korean words for a number test (agents/labtests.describe_ko), else the template name."""
     try:
         from ...agents.labtests import describe_ko
-        return describe_ko(spec)
+        return describe_ko({**spec, "strategy": _name(spec.get("strategy"))})
     except Exception:  # noqa: BLE001  (an older spec without a field: its template name)
         bits = [str(spec.get(k)) for k in ("strategy", "timeframe", "template") if spec.get(k)]
         return " · ".join(bits)
@@ -348,7 +345,7 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
             rows.append(item(f"{GROUP_KO[g]}", wait, sub="4시간봉은 관찰용이라 판정하지 않음" if g in ("core", "ds200") else "",
                              go=go("checkpoint"), tag="판정 전"))
         return _stage("verdict", count=None, state="wait", head=f"판정 전 · {when}", items=rows,
-                      none_ko=f"판정 전: {when}", next_ts=nts, go=go("checkpoint"))
+                      none_ko=f"판정 전: {when}", when_ko=when, next_ts=nts, go=go("checkpoint"))
     counts = cp.get("counts") or {}
     rows_cp = [r for r in cp.get("rows") or [] if isinstance(r, dict)]
     passed = [r for r in rows_cp if r.get("status") in (PASS1, PASS2)]
@@ -402,7 +399,7 @@ def ready_stage(rd: Optional[dict], cp_ready: bool, next_cp: Optional[dict], bes
         ok = int(v.get("✅") or 0)
         if cid == "day30":
             days = float(s.get("days_running") or 0)
-            wait = "시작 후 30일 지남" if days >= 30 else f"{max(0, 30 - int(days)):,}일 더 (지금 {int(days) + 1}일째)"
+            wait = "시작 후 30일 지남" if days >= 30 else f"30일까지 {max(1, math.ceil(30 - days)):,}일 더"
         elif cid == "trades200":
             wait = (f"거래 200건 넘은 계좌 {ok:,}개" if ok else f"가장 많은 계좌도 거래 {max(0, 200 - best_trades):,}건 더 필요")
         elif cid in PERF_CONDS and not cp_ready:
@@ -462,7 +459,10 @@ def path_view(data, rooms, paper_db: str, debate_db: Optional[str], checkpoint_d
     for st in stages:
         if st.get("count"):
             frontier = st["id"]
-    return {"label": LABEL, "now": now, "start": summ.get("start"), "day": summ.get("day"), "observe": observe,
+    # D+ the way the top bar counts it (core/shell.js: the restart banner's day, else summary day - 1)
+    rs = summ.get("restart") if isinstance(summ.get("restart"), dict) else {}
+    dplus = rs.get("day") if rs.get("ready") else (int(summ["day"]) - 1 if summ.get("day") else None)
+    return {"label": LABEL, "now": now, "start": summ.get("start"), "dplus": dplus, "observe": observe,
             "next_checkpoint": next_cp, "verdict_ready": bool(cp.get("ready")), "min_trades": MIN_TRADES,
             "stages": stages, "frontier": frontier}
 
