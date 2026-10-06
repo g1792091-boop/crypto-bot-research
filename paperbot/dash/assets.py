@@ -107,7 +107,8 @@ class Assets:
         want = self._stats.get(rel)
         ok = want == (st.st_size, st.st_mtime_ns)
         if not ok and (want is not None or rel.startswith(tuple(d + "/" for d in self.dirs))):
-            self._checked = 0.0                 # (an asset changed or added; the old /v3 page's files never force a look)
+            self._checked = float("-inf")       # (an asset changed or added; the old /v3 page's files never force a look;
+                                                # -inf, not 0: monotonic time starts near 0 at boot)
         return ok
 
     def etag(self, rel: str) -> Optional[str]:
