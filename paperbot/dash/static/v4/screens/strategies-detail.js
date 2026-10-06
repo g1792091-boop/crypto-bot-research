@@ -82,9 +82,9 @@ export function detailView(ctx, st, name) {
   const chart = stratChart(ctx);
   sc.track(chart.dispose);
   const liveEl = h("div", {class: "row wrap strat-live", "aria-live": "polite"});
-  const fs = fullChart({ctx: sc, label: "매매법 차트"});               // 차트 크게 보기 (core/fullchart.js, key "f")
-  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn, fs]}, liveEl, tfSeg, chart.el);
-  fs.bind(chartCard);
+  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn]}, liveEl, tfSeg, chart.el);
+  // 차트 크게 보기 (core/fullchart.js, key "f"): the card fills the window, the chart takes the height
+  chartCard.querySelector(".acts").append(fullChart({ctx: sc, label: "매매법 차트"}).bind(chartCard));
 
   const condEl = h("div", {class: "stack tight"}, motion.shimmer(3));
   const condCard = ui.card({plate: "지금 조건", sub: "마지막으로 닫힌 봉", cls: "strat-o3"}, condEl);

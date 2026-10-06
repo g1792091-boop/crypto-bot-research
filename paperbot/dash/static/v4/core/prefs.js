@@ -10,6 +10,9 @@ import {local} from "./dom.js";
 export const START_KEY = "start";          // a screen name, "" = automatic (routes.js landing)
 export const SWIPE_KEY = "swipe";          // false = the phone's sideways swipe between screens is off (default on)
 export const GRID_KEY = "charts-grid";     // 여러 차트 (screens/charts.js): {layout: "2x2" | "3x3", cells: [{sym, tf, acct}]}
+/** 여러 차트's cells share one '선' choice (deck key "grid"): these groups, and these on before the viewer chose (the
+ *  프리미엄 지표 drawings stay off in a small cell). The 설정 panel lists the same. */
+export const GRID_DECK = {key: "grid", groups: ["pos", "risk", "smc", "vol"], defaults: {pos: true, risk: true, smc: false, vol: true}};
 
 const subs = new Map();                    // key -> Set(fn)
 

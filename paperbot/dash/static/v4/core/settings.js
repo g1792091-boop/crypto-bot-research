@@ -19,18 +19,18 @@ import {FLASH_MODES, modeOf} from "./flash.js";
 import {GROUP_KO, deckState, FLASH_KEY} from "./chartfx.js";
 import * as sound from "./sound.js";
 import {GROUPS, SCREENS, LANDING_MIN_PX} from "./routes.js";
-import {START_KEY, SWIPE_KEY, GRID_KEY, setPref, swipeOn} from "./prefs.js";
+import {START_KEY, SWIPE_KEY, GRID_KEY, GRID_DECK, setPref, swipeOn} from "./prefs.js";
 import {remount} from "./router.js";
 import {reduced} from "./motion.js";
 import {openAway} from "./since.js";
 import {startTour} from "./tour.js";
 import {toast} from "./ui.js";
 
-// the chart decks the panel lists: [deck key, 이름, its '선' groups, extra toggles of that screen]
+// the chart decks the panel lists: [deck key, 이름, its '선' groups, the screen's own first choice (null: the deck's rule)]
 export const DECKS = [
-  ["term", "터미널 차트", ["pos", "risk", "sr", "smc", "ev", "vol"]],
-  ["chart", "차트 화면", ["pos", "risk", "sr", "smc", "ev", "vol"]],
-  ["grid", "여러 차트", ["pos", "risk", "smc", "vol"]],
+  ["term", "터미널 차트", ["pos", "risk", "sr", "smc", "ev", "vol"], null],
+  ["chart", "차트 화면", ["pos", "risk", "sr", "smc", "ev", "vol"], null],
+  [GRID_DECK.key, "여러 차트", GRID_DECK.groups, GRID_DECK.defaults],
 ];
 // the 차트 screen's own toggles (screens/chart.js TOGGLES, "chart-show"): [key, label, default]
 export const CHART_SHOW = [["mk", "진입·청산", true], ["al", "가격 알림 선", true], ["gh", "GH Coin 타점", false]];
@@ -115,8 +115,8 @@ function chartSection() {
   const fNow = modeOf(local.get(FLASH_KEY, null)).id;
   const flashRow = row("번쩍임", ai ? "큰 체결·청산·우리 체결 때 차트가 한 번 빛남 (실제 일만)" : "AI 화면 색에서만 빛납니다 (지금은 클래식)",
     choice("번쩍임", FLASH_MODES.map((m) => ({id: m.id, ko: m.ko, title: FLASH_SUB[m.id]})), fNow, (id) => setPref(FLASH_KEY, id)), {dim: !ai});
-  const decks = DECKS.map(([key, ko, groups]) => {
-    const now = deckState(key, groups);
+  const decks = DECKS.map(([key, ko, groups, defaults]) => {
+    const now = deckState(key, groups, defaults);
     const save = () => setPref("cfx-" + key, {off: [...now.off], hide: [...now.hide].slice(-60)});
     const chips = groups.map((g) => h("button", {type: "button", class: "set-chip", "aria-pressed": String(!now.off.has(g)),
       onclick: (e) => { const on = now.off.has(g); if (on) now.off.delete(g); else now.off.add(g); e.currentTarget.setAttribute("aria-pressed", String(on)); save(); }},

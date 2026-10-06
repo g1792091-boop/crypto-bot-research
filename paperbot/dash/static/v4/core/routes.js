@@ -9,7 +9,7 @@ import {START_KEY} from "./prefs.js";
 
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
-  {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
+  {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "charts", "market"]},
   {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
@@ -25,6 +25,7 @@ export const SCREENS = {
   terminal: {ko: "터미널", group: "trade", title: "터미널", feature: "wide"},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
+  charts: {ko: "여러 차트", group: "trade", title: "여러 차트"},
   market: {ko: "시장", group: "trade", title: "시장"},
   strategies: {ko: "매매법", group: "strat", title: "매매법"},
   grid: {ko: "한눈 지도", group: "strat", title: "한눈 지도"},
@@ -104,6 +105,8 @@ const SICON = {
   positions: () => [R(6, 2, 4, 1), R(5, 3, 1, 2), R(10, 3, 1, 2), R(1, 5, 14, 1), R(1, 5, 1, 9), R(14, 5, 1, 9), R(1, 13, 14, 1),
     R(1, 8, 14, 1), R(7, 7, 2, 3)],
   chart: ICON.trade,
+  // 여러 차트: four small chart panes, a candle in each
+  charts: () => [[1, 1], [9, 1], [1, 9], [9, 9]].flatMap(([x, y]) => [R(x, y, 6, 1), R(x, y + 5, 6, 1), R(x, y, 1, 6), R(x + 5, y, 1, 6), R(x + 2, y + 2, 2, 2)]),
   market: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6), R(2, 11, 1, 2),
     R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(1, 7, 14, 1), R(7, 1, 2, 14)],
   strategies: ICON.strat,
