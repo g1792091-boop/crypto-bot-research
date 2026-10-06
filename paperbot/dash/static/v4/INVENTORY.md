@@ -125,7 +125,7 @@ Sample answers of every GET route were recorded on the synthetic fixture world, 
 | Old | New home |
 |---|---|
 | Office floor: one zone per team room + a shared strategy-room zone, staff at desks, meeting participants at the table, real last lines as bubbles, 💭 next turn only when the meeting's order says so, walking when the place changes, today's counts, fixed meeting hours, running meetings with turns, today's finished meetings, the honesty note | office (D): warm wooden pixel office (team rooms, 전문가실 with a +N chip, 대표실 with real KST / UTC / NYC clocks), the agent console, and step strips that light only real steps |
-| 24시간 토론방 card (state, spend vs cap, rounds, hypotheses, scoreboard, ideas) | debate (D), shown only once the debate room has run (`features.debate`). Its spend also goes on server (E) |
+| 24시간 토론방 card (state, spend vs cap, rounds, hypotheses, scoreboard, ideas) | debate (D), shown only once the debate room has run (`features.debate`). Its spend also goes on server (E). debate-chat (owners 10/06): a chat room like the agents' rooms (screens/debate-chat.js: a pixel character per role, bubbles in speaking order, "↳ …에게" + 동의 / 반대 / 보완 / 질문 only when stored, the 사회자's 정리 pinned; earlier debates folded) and a status column (screens/debate-side.js: 토론 중 / 쉬는 중, next round from the server's schedule, month vs cap + today, last 12 rounds, 가설 장부; one folded line on a phone); the 강세 / 약세 boxes are gone. Tests: tests/test_dash_debate_chat.py |
 
 ## 11. 회의 요약 (digest.js)
 
@@ -198,7 +198,7 @@ GET routes (sample files in `api_samples/`):
 | `/api/analysis/alerts` | {sources, not_stored, bot, mismatches, nightly, checkpoint_jobs, agents_tick, agents_ai, job_failures, price_alerts_fired} | analysis.js | alerts |
 | `/api/analysis/` risk, readiness, shock, map, entry, synergy, levrule, shadows | see samples (heavy ones may answer {pending: true} first) | analysis.js | analysis |
 | `/api/analysis/questions` | {ready, questions[], counts, total, note} | analysis.js | analysis (feature `questions`) |
-| `/api/debate` | {ready, state, state_ko, reason, spend, rounds, hypotheses, scoreboard, ideas, caution, …} | analysis.js | debate (feature), server |
+| `/api/debate` | {ready, state, state_ko, reason, spend, rounds, hypotheses, scoreboard, ideas, caution, chat (finished rounds with reply_to / reply_stance), timeline, next {ts, kind}, today, …} | analysis.js | debate (feature), server |
 | `/api/doc/rules-change-1`, `/api/doc/levrule-eval` | plain text | summary.js link | chip rules, faq |
 | `/api/export/board.csv`, `/api/export/trades.csv?account` | CSV | 순위표, 계좌 | board, account |
 | `/api/stream` (SSE) | every 3 s {ts, changed{id: [wallet, trades, bust, position]}, trades[], alerts[], heartbeat, room_msg, rooms{}} | app.js | core/api.js `startStream` (one connection; bus events) |
