@@ -23,7 +23,7 @@ import sys
 import time
 from typing import Callable, Optional
 
-STREAM = "wss://fstream.binance.com/ws/!forceOrder@arr"
+STREAM = "wss://fstream.binance.com/market/ws/!forceOrder@arr"  # 2026-10: Binance serves market streams under /market (the old /ws path connects but stays silent)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS liq (

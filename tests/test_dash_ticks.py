@@ -75,7 +75,7 @@ def _until(cond, s=3.0):
 # ---------------------------------------------------------------- parse
 def test_parse_side_from_the_m_flag_and_skips_junk():
     assert T.symbols() == A.TICKER_SYMBOLS == SYMS                      # the dashboard's 7 coins, /api/ticker's list
-    assert T.stream_url(("BTCUSDT", "XRPUSDT")) == "wss://fstream.binance.com/stream?streams=btcusdt@aggTrade/xrpusdt@aggTrade"
+    assert T.stream_url(("BTCUSDT", "XRPUSDT")) == "wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/xrpusdt@aggTrade"
     buy = T.parse(msg(m=False, p=200, q=0.5, t=7), SYMS)
     sell = T.parse(msg(m=True, wrap=False), SYMS)
     assert buy == ("BTCUSDT", True, 100.0, 200.0, 7) and sell[1] is False   # m = buyer is maker = a taker sell
@@ -317,7 +317,7 @@ def test_module_is_registered_and_never_calls_rest():
     with open(T.__file__, encoding="utf-8") as fh:
         src = fh.read()
     assert "urllib" not in src and "requests" not in src and "fapi/v1" not in src and "http://" not in src
-    assert "https://" not in src and re.findall(r'"wss://[^"]*"', src) == ['"wss://fstream.binance.com/stream?streams="']
+    assert "https://" not in src and re.findall(r'"wss://[^"]*"', src) == ['"wss://fstream.binance.com/market/stream?streams="']
     assert "daemon=True" in src and "on_shutdown.append(relay.stop)" in src
 
 

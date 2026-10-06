@@ -85,7 +85,7 @@ function bookUse(sym) {
     try { const d = await api(`/api/depth?symbol=${sym}`); if (sym === book.sym && !book.ok) book.data = d; } catch (e) { /* none */ }
   };
   try {
-    book.ws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@depth20@500ms`);
+    book.ws = new WebSocket(`wss://fstream.binance.com/public/ws/${sym.toLowerCase()}@depth20@500ms`);
     book.ws.onopen = () => { book.ok = true; };
     book.ws.onmessage = (ev) => {
       const d = JSON.parse(ev.data); if (sym !== book.sym) return;

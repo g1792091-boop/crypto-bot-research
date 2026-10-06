@@ -3,7 +3,7 @@
     GET /api/v4/ticks      server-sent events, behind the login like every /api route
 
 The v6 chiptune's continuous layer (static/v4/core/sound.js) follows real market trades through this relay. ONE shared
-WebSocket to Binance's public aggTrade streams of the 7 coins (wss://fstream.binance.com/stream?streams=btcusdt@aggTrade
+WebSocket to Binance's public aggTrade streams of the 7 coins (wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade
 /...; no API key, never a REST call: the bot owns this IP's REST weight) is aggregated into at most two events a second
 for every page together. Every half second the coin whose traded notional in that half second ran furthest above its own
 usual busy half second (an average over its recent half seconds that had trades) becomes one event:
@@ -53,7 +53,7 @@ from typing import Callable, Optional
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 
-WS_BASE = "wss://fstream.binance.com/stream?streams="
+WS_BASE = "wss://fstream.binance.com/market/stream?streams="  # 2026-10: market streams moved under /market (the old path connects but stays silent)
 WINDOW_S = 0.5            # one event per half second at most: ~2 a second for every page together
 STALE_S = 3.0             # a window that stayed open this long (the socket went quiet) is not "now": dropped
 LINGER_S = 60.0           # the socket stays this long after the last page left

@@ -954,7 +954,7 @@ setInterval(pollTicker, 5000);
 setInterval(pollKline, 5000);
 function marketStream() {
   const streams = SYMS.flatMap((s) => [s.toLowerCase() + "@markPrice@1s", s.toLowerCase() + "@ticker"]).join("/");
-  try { mws = new WebSocket("wss://fstream.binance.com/stream?streams=" + streams); } catch (e) { chip("chip-feed", false, "시세 끊김"); return; }
+  try { mws = new WebSocket("wss://fstream.binance.com/market/stream?streams=" + streams); } catch (e) { chip("chip-feed", false, "시세 끊김"); return; }
   mws.onopen = () => { mwsOk = true; chip("chip-feed", true, "바이낸스 시세"); };
   mws.onmessage = (ev) => {
     const m = JSON.parse(ev.data).data; if (!m) return;
@@ -967,7 +967,7 @@ function klineStream() {
   if (kws) { kws.onclose = null; kws.close(); }
   kwsOk = false;
   const tf = state.tf, sym = state.sym;
-  try { kws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@kline_${tf}`); } catch (e) { return; }
+  try { kws = new WebSocket(`wss://fstream.binance.com/market/ws/${sym.toLowerCase()}@kline_${tf}`); } catch (e) { return; }
   kws.onmessage = (ev) => {
     const k = JSON.parse(ev.data).k; if (!k || !tseries || sym !== state.sym || tf !== state.tf) return;
     const c = {time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c};

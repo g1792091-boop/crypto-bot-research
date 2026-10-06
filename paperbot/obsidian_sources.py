@@ -184,21 +184,26 @@ def load_paper(conn: Optional[sqlite3.Connection], d: Data) -> None:
 
 
 # ------------------------------------------------------------------ daily3
+def _dict(x) -> dict:
+    """A report part as a dict: the start day's report holds plain notes (e.g. parity: '시작한 날: 재계산 없음')."""
+    return x if isinstance(x, dict) else {}
+
+
 def _day_summary(day: str, ts: int, rep: dict, mism: int) -> dict:
-    par = rep.get("parity") or {}
-    sh = rep.get("shadows") or {}
-    tv = sh.get("trade_variants") or {}
-    dq = rep.get("data_quality") or {}
+    par = _dict(rep.get("parity"))
+    sh = _dict(rep.get("shadows"))
+    tv = _dict(sh.get("trade_variants"))
+    dq = _dict(rep.get("data_quality"))
     miss = zero = ext = 0
     for sym, v in dq.items():
         if isinstance(v, dict):
             miss += int(v.get("missing") or 0)
             zero += int(v.get("zero_volume") or 0)
             ext += int(v.get("extreme_ranges") or 0)
-    fc = rep.get("fill_costs") or {}
-    ss = rep.get("stop_slippage") or {}
-    ov = ss.get("overall") or {}
-    cur = (tv.get("curves") or {})
+    fc = _dict(rep.get("fill_costs"))
+    ss = _dict(rep.get("stop_slippage"))
+    ov = _dict(ss.get("overall"))
+    cur = _dict(tv.get("curves"))
     variants = {}
     for k, v in tv.items():
         if isinstance(v, dict) and "mean_roe" in v and "trades" in v:
@@ -209,10 +214,10 @@ def _day_summary(day: str, ts: int, rep: dict, mism: int) -> dict:
     return {
         "day": day, "ts": ts, "data_day": rep.get("day"), "steps": rep.get("steps"),
         "parity_accounts": par.get("accounts"), "parity_mismatched": par.get("mismatched_accounts"),
-        "bars": (par.get("live_bars") or {}).get("bars"), "bars_mismatched": (par.get("live_bars") or {}).get("mismatched"),
+        "bars": _dict(par.get("live_bars")).get("bars"), "bars_mismatched": _dict(par.get("live_bars")).get("mismatched"),
         "mismatch_rows": mism,
-        "strength_checked": (rep.get("strength") or {}).get("checked"),
-        "strength_failed": (rep.get("strength") or {}).get("failed"),
+        "strength_checked": _dict(rep.get("strength")).get("checked"),
+        "strength_failed": _dict(rep.get("strength")).get("failed"),
         "limit_signals": sh.get("limit_signals"), "limit_filled": sh.get("limit_filled"),
         "limit_mean_roe": num(sh.get("limit_mean_roe")), "skipped": sh.get("skipped"),
         "stop_variants": sh.get("stop_variants") or {}, "variants": variants,
