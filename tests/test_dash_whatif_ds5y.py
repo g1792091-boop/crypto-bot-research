@@ -450,6 +450,7 @@ def test_whatif_screen_renders_the_reference_and_a_changed_setting(tmp_path):
     paper = W.paper_scope(W.paper_all(db, dd, T0 + 3 * DAY), W.scope(None, None))
     lev = next(s["id"] for s in view["settings"] if s["stop"] == 1.5 and s["lev"] == "30")
     lock = next(s["id"] for s in view["settings"] if s["paper"] == "lock15")
+    m50 = next(s["id"] for s in view["settings"] if s["lev"] == "50m50")
     out = _node(_prelude() + f"const M = await import('file://{SCREENS}/whatif.js');\n"
                 f"const V = {json.dumps(view)}; const P = {json.dumps(paper)};\n"
                 "const el = document.createElement('div');\n"
@@ -459,14 +460,19 @@ def test_whatif_screen_renders_the_reference_and_a_changed_setting(tmp_path):
                 "const t0 = D.walk(el).text;\n"
                 f"M.update({{query: {{set: '{lev}'}}}}); const t1 = D.walk(el).text;\n"
                 f"M.update({{query: {{set: '{lock}'}}}}); const t2 = D.walk(el).text;\n"
+                f"M.update({{query: {{set: '{m50}'}}}}); const t3 = D.walk(el).text;\n"
                 "M.unmount();\n"
-                "console.log(JSON.stringify({t0, t1, t2}));")
-    t0, t1, t2 = out["t0"], out["t1"], out["t2"]
+                "console.log(JSON.stringify({t0, t1, t2, t3}));")
+    t0, t1, t2, t3 = out["t0"], out["t1"], out["t2"], out["t3"]
     assert "먼저 읽어 주세요" in t0 and "30일 규칙은 바뀌지 않습니다" in t0 and "과최적화" in t0
     assert "지금 규칙(30일 동안 고정)" in t0 and "−1.41%" in t0 and "170/276" in t0 and "참고" in t0
-    assert "지금 규칙(base 그림자)" in t0 and "매매법 (지금 규칙)" in t0 and "동전 봇 (지금 규칙)" in t0   # coin flips next to it
+    assert "지금 규칙 그대로 다시 돌린 거래" in t0 and "매매법 (지금 규칙)" in t0 and "동전 봇 (지금 규칙)" in t0   # coin flips next to it
     assert "손절 폭 1.5 ATR" in t1 and "레버리지·비중 30배·30%" in t1 and "밤 그림자 없음" in t1 and "이 설정" in t1
-    assert "첫 잠금 +15%" in t2 and "5년에 시험한 적 없음" in t2 and "lock_start" in t2
+    assert "첫 잠금 +15%" in t2 and "5년에 시험한 적 없음" in t2 and "5년 실험실 관문" in t2 and "lock_start" not in t2
     assert "표본 적음" in t2 and "같은 거래 10건 필요" in t2                           # 3 paired trades: a filling bar
+    # 50배·50% was never run for five years: the nearest tested arm (50배·40%, same stop) is shown and named as such
+    assert "5년에 시험한 적 없음" in t3 and "가장 가까운 5년 시험: 50배·40%" in t3
+    v50 = view["five_year"]["levstop"]["arms"]["50|2.0"]["mean_eq"]
+    assert f"{abs(v50) * 100:.2f}%" in t3
     for t in (t0, t1, t2):
         assert "USDT" not in t and "딥시크" in t0

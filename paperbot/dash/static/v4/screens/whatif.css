@@ -36,7 +36,9 @@
   border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font: 600 var(--t-2xs)/1.25 var(--f-body);
   text-align: center; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
 .wi-tick.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
-.wi-tick.now span { text-decoration: underline; text-decoration-color: var(--accent-line); text-underline-offset: 3px; }
+.wi-tick-l { display: grid; justify-items: center; gap: 0; }
+.wi-tick-l > span { display: block; word-break: keep-all; }
+.wi-tick.now .wi-tick-l { text-decoration: underline; text-decoration-color: var(--accent-line); text-underline-offset: 3px; }
 .wi-tick i { font-style: normal; color: var(--accent); font-size: var(--t-2xs); }
 .wi-tick:disabled { cursor: not-allowed; }
 .wi-tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -69,7 +71,7 @@
 
 /* 지금 vs 이 설정: two bars from one zero line */
 .wi-bars { display: grid; gap: 6px; padding: 4px 0; }
-.wi-bar { display: grid; grid-template-columns: 52px minmax(0, 1fr) 76px; gap: 8px; align-items: center; font-size: var(--t-xs); }
+.wi-bar { display: grid; grid-template-columns: 70px minmax(0, 1fr) 76px; gap: 8px; align-items: center; font-size: var(--t-xs); }
 .wi-bar-k { color: var(--muted); font-weight: 700; }
 .wi-bar > b { text-align: right; }
 .wi-bar-t { position: relative; height: 12px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }

@@ -392,7 +392,9 @@ def report_info(daily_ro: Optional[sqlite3.Connection]) -> Optional[dict]:
 def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
     """Every scope at once: {"ready", "since", "days", "report", "scopes": {key: {"base": {...}, "variants": {...}}}}.
     Keys: "core", "core|<tf>", "core|<strategy>", "core|<strategy>|<tf>", "coin", "coin|<tf>" (coin = the 15m-4h coin
-    flips). DeepSeek, the reel, its 5m flips, copies and new-strategy accounts are not read."""
+    flips). DeepSeek, the reel, its 5m flips, copies and new-strategy accounts are not read: the queries name the
+    scope's own account ids, so their rows never leave the database file, and the rows are streamed (two passes: the
+    base shadows, then the variants), never all held at once."""
     from ..analysis import _close, ro_connect
     c = ro_connect(paper_db)
     d = ro_connect(daily_db)
@@ -423,70 +425,74 @@ def paper_all(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
         out["report"] = report_info(d)
         lo, hi = _utc_day(start) if start else "0000-00-00", _utc_day(max(int(now_ms) - 1, 0))
         out["days"] = [lo, hi]
-        kinds = ("base",) + VARIANTS
+
+        def keys_of(aid: str) -> list:
+            g, s, tf = who[aid]
+            return [g, f"{g}|{tf}"] + ([f"{g}|{s}", f"{g}|{s}|{tf}"] if s else [])
+
+        ids = sorted(who)
+        ids_sql = ",".join("?" * len(ids))
+        base: dict = {}                        # trade tail -> (pnl on equity, reason)
+        scopes: dict = {}
+        bases: dict = {}
+        n_rows = 0
         try:
-            got = d.execute(f"SELECT key, kind, account_id, roe, exit_reason, resolved, data FROM shadows "
-                            f"WHERE day >= ? AND day <= ? AND kind IN ({','.join('?' * len(kinds))})",
-                            (lo, hi, *kinds)).fetchall()
+            if ids:
+                for key, aid, reason, data in d.execute(
+                        f"SELECT key, account_id, exit_reason, data FROM shadows WHERE day >= ? AND day <= ? "
+                        f"AND kind = 'base' AND resolved != 0 AND roe IS NOT NULL AND account_id IN ({ids_sql})",
+                        (lo, hi, *ids)):
+                    n_rows += 1
+                    pe = _pe(data)
+                    if pe is None or aid not in who:
+                        continue
+                    base[str(key).split("|", 1)[-1]] = (pe, reason)
+                    for k in keys_of(aid):
+                        b = bases.setdefault(k, [0, 0.0])
+                        b[0] += 1
+                        b[1] += pe
+                for key, kind, aid, roe, reason, resolved, data in d.execute(
+                        f"SELECT key, kind, account_id, roe, exit_reason, resolved, data FROM shadows "
+                        f"WHERE day >= ? AND day <= ? AND kind IN ({','.join('?' * len(VARIANTS))}) "
+                        f"AND account_id IN ({ids_sql})", (lo, hi, *VARIANTS, *ids)):
+                    n_rows += 1
+                    if aid not in who:
+                        continue
+                    accs = [scopes.setdefault(k, {}).setdefault(kind, _acc()) for k in keys_of(aid)]
+                    if not resolved:
+                        for a in accs:
+                            a[8] += 1
+                        continue
+                    if roe is None:
+                        for a in accs:
+                            a[7] += 1
+                        continue
+                    b = base.get(str(key).split("|", 1)[-1])
+                    pe = _pe(data) if b is not None else None
+                    if b is None or pe is None:
+                        continue
+                    better, worse = pe > b[0] + 1e-12, pe < b[0] - 1e-12
+                    for a in accs:
+                        a[0] += 1
+                        a[1] += pe
+                        a[2] += b[0]
+                        a[3] += better
+                        a[4] += worse
+                        a[5] += reason == "LIQ"
+                        a[6] += b[1] == "LIQ"
+                        a[9] += reason == "TP"
         except sqlite3.Error as exc:
             out["why"] = f"밤 점검 그림자 기록을 읽지 못했습니다 ({type(exc).__name__})"
             return out
     finally:
         _close(c, d)
 
-    def keys_of(aid: str) -> list:
-        g, s, tf = who[aid]
-        return [g, f"{g}|{tf}"] + ([f"{g}|{s}", f"{g}|{s}|{tf}"] if s else [])
-
-    base: dict = {}                            # trade tail -> (pnl on equity, reason)
-    for key, kind, aid, roe, reason, resolved, data in got:
-        if kind != "base" or aid not in who or not resolved or roe is None:
-            continue
-        pe = _pe(data)
-        if pe is not None:
-            base[str(key).split("|", 1)[-1]] = (pe, reason)
-    scopes: dict = {}
-    bases: dict = {}
-    for tail, (pe, _reason) in base.items():
-        aid = tail.split("|", 1)[0]
-        for k in keys_of(aid):
-            b = bases.setdefault(k, [0, 0.0])
-            b[0] += 1
-            b[1] += pe
-    for key, kind, aid, roe, reason, resolved, data in got:
-        if kind == "base" or aid not in who:
-            continue
-        tail = str(key).split("|", 1)[-1]
-        ks = keys_of(aid)
-        accs = [scopes.setdefault(k, {}).setdefault(kind, _acc()) for k in ks]
-        if not resolved:
-            for a in accs:
-                a[8] += 1
-            continue
-        if roe is None:
-            for a in accs:
-                a[7] += 1
-            continue
-        b = base.get(tail)
-        pe = _pe(data) if b is not None else None
-        if b is None or pe is None:
-            continue
-        better, worse = pe > b[0] + 1e-12, pe < b[0] - 1e-12
-        for a in accs:
-            a[0] += 1
-            a[1] += pe
-            a[2] += b[0]
-            a[3] += better
-            a[4] += worse
-            a[5] += reason == "LIQ"
-            a[6] += b[1] == "LIQ"
-            a[9] += reason == "TP"
     out["scopes"] = {k: {"base": {"trades": bases.get(k, [0, 0.0])[0],
                                   "mean_eq": (round(bases[k][1] / bases[k][0], 6) if bases.get(k, [0])[0] else None)},
                          "variants": {v: _cell(a) for v, a in scopes.get(k, {}).items()}}
                      for k in set(scopes) | set(bases)}
     out["ready"] = True
-    out["rows"] = len(got)
+    out["rows"] = n_rows
     return out
 
 
@@ -514,9 +520,9 @@ def paper_scope(allp: dict, sc: dict) -> dict:
             "report": allp.get("report"), "small_n": SMALL_N, "accounts": allp.get("accounts"),
             "scope": sc, "base": sp["base"], "variants": sp["variants"], "coin": cp,
             "computed_at": allp.get("computed_at"), "stale": allp.get("stale"),
-            "note": ("밤 점검(매일 09:20)이 그날 끝난 실제 거래를 규칙 하나만 바꿔 혼자 다시 돌린 기록. 차이 = 그림자 평균 − 같은 "
-                     "거래 base(지금 규칙) 평균, 거래당 자금 대비. 10건 미만은 표본 적음. 동전 봇 = 15분~4시간 동전 계좌의 같은 "
-                     "그림자. " + LABEL)}
+            "note": ("밤 점검(매일 09:20)이 전날 끝난 실제 거래를 규칙 하나만 바꿔 혼자 다시 돌린 기록. 차이 = 그 그림자 평균 − 같은 "
+                     "거래를 지금 규칙 그대로 다시 돌린 평균, 거래당 자금 대비. 10건 미만은 표본 적음. 동전 봇 = 15분~4시간 동전 "
+                     "계좌의 같은 그림자. " + LABEL)}
 
 
 def register(app, ctx) -> dict:

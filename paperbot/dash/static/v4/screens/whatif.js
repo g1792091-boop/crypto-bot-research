@@ -20,7 +20,7 @@ const LEV_ROWS = [["tiers", "지금 단계"], ["10", "10배·20%"], ["20", "20�
 const STOP_COLS = [1.5, 2, 2.5, 3];
 const TP_STRIP = [["ladder", "사다리"], ["tp1R", "1R"], ["tp1.5R", "1.5R"], ["tp2R", "2R"], ["tp3R", "3R"], ["ladder_tp2R", "사다리+2R"]];
 const NO_FIVE_KO = {
-  lock: "첫 잠금 15·20·30%는 5년 결과 파일이 없습니다 (5년 실험실 관문의 lock_start 시험으로만 확인하는 항목).",
+  lock: "첫 잠금 15·20·30%는 5년 결과 파일이 없습니다 (규칙을 바꾸자는 제안이 나오면 5년 실험실 관문이 따로 시험하는 항목).",
   time: "시간 청산은 5년에 비교한 적이 없습니다 (매일 밤 그림자로만 봄).",
   lev: "증거금 = 배수만큼(50배·50%)은 5년에 없습니다. 가장 가까운 시험: 50배·40%.",
 };
@@ -117,6 +117,8 @@ export async function mount(el, ctx) {
     }
     st.P = P;
     paintPaper(); paintCoin();
+    // a failed computation (no waiting reason) is kept by the server for 60 s only: ask again after that, not in 10 minutes
+    if (P && !P.ready && P.error && !P.why) ctx.timeout(() => { if (g === st.pgen) loadPaper(true); }, 65000);
   }
 
   // ---------------------------------------------------------------- 대상
@@ -150,9 +152,12 @@ export async function mount(el, ctx) {
       paintResults(true);
     });
     const ticks = h("div", {class: "wi-ticks", style: {"--n": String(opts.length)}});
+    // "10배·20%" reads as two short lines ("10배" over "20%"), so seven leverage stops fit a phone; a label that already
+    // says 지금 (지금 규칙) gets no second 지금 mark
     const paintTicks = () => put(ticks, opts.map((o, i) => h("button", {type: "button", class: ["wi-tick", o.v === st.sel[dim] && !disabled ? "on" : "", o.now ? "now" : ""],
-      disabled: disabled || null, title: o.d || o.ko, onclick: () => { inp.value = String(i); inp.dispatchEvent(new Event("input")); }},
-      h("span", null, o.ko), o.now ? h("i", null, "지금") : null)));
+      disabled: disabled || null, title: o.d || o.ko, "aria-label": o.ko, onclick: () => { inp.value = String(i); inp.dispatchEvent(new Event("input")); }},
+      h("span", {class: "wi-tick-l"}, String(o.ko).split("·").map((w) => h("span", null, w))),
+      o.now && !String(o.ko).includes("지금") ? h("i", null, "지금") : null)));
     paintTicks();
     return h("div", {class: ["wi-ctl", disabled ? "off" : ""]},
       h("div", {class: "wi-ctl-h"}, h("span", {class: "wi-k"}, DIM_KO[dim]), val),
@@ -252,18 +257,28 @@ export async function mount(el, ctx) {
     // today's rule over five years: levstop tiers|2.0, which is exitstyle's ladder number for number (its prereg checks
     // it); the exitstyle copy also carries the pooled period means, so it is used whenever it is there
     const ladder = armOf("exitstyle:ladder");
-    const src = s && s.five ? s.five.split(":")[0] : null;
-    const R = (src !== "levstop" || !s || s.five === FY.ref) && ladder && ladder.v ? ladder.v : ref.v;
+    // the 5-year arm shown next to today's rule: the setting's own, or for 50배·50% (never run for five years) the
+    // nearest tested one, 50배·40% at the same stop, named as such
+    const cur = st.D.current;
+    const near50 = !!s && !s.five && s.lev === "50m50" && s.tp === "ladder" && s.time === "none" && sameVal(s.lock, cur.lock)
+      && !!STOP_KEY[s.stop];
+    const key = s && s.five ? s.five : near50 ? `levstop:50|${STOP_KEY[s.stop]}` : null;
+    const src = key ? key.split(":")[0] : null;
+    const R = (src !== "levstop" || key === FY.ref) && ladder && ladder.v ? ladder.v : ref.v;
     const kids = [];
     if (!s || !s.five) {
-      const why = !s ? "이 조합은 5년에도, 밤 그림자에도 없습니다." : [!sameVal(st.sel.lock, st.D.current.lock) ? NO_FIVE_KO.lock : null,
+      const why = !s ? "이 조합은 5년에도, 밤 그림자에도 없습니다." : [!sameVal(st.sel.lock, cur.lock) ? NO_FIVE_KO.lock : null,
         st.sel.time !== "none" ? NO_FIVE_KO.time : null, st.sel.lev === "50m50" ? NO_FIVE_KO.lev : null].filter(Boolean).join(" ");
       kids.push(h("p", {class: "wi-none"}, ui.pill("5년에 시험한 적 없음", "thin"), " ", why || "이 설정은 5년 결과가 없습니다."));
-      kids.push(h("p", {class: "note"}, `지금 규칙의 5년 기준: 거래당 자금 대비 ${pc(R.mean_eq)} · 승률 ${fmt.pct(R.win_rate, 0, false)} · 파산 ${share(R.busts, R.accounts)}`));
-    } else {
-      const A = armOf(s.five);
+      if (!near50) {
+        kids.push(h("p", {class: "note"}, s ? "가장 가까운 5년 시험은 지금 규칙 그 자체입니다 (바꾼 것만 5년에 없음). " : "",
+          `지금 규칙의 5년 기준: 거래당 자금 대비 ${pc(R.mean_eq)} · 승률 ${fmt.pct(R.win_rate, 0, false)} · 파산 ${share(R.busts, R.accounts)}`));
+      }
+    }
+    if (key) {
+      const A = armOf(key);
       const V = A && A.v;
-      const same = s.five === FY.ref;
+      const same = key === FY.ref;
       if (!V) {
         kids.push(h("p", {class: "muted"}, "이 설정의 5년 칸을 찾지 못했습니다."));
       } else {
@@ -283,9 +298,10 @@ export async function mount(el, ctx) {
         if (A.src === "exitstyle" && !same) {
           M.push(["같은 신호에서 지금보다", "", pctp(V.diff), ["", ""]], ["익절로 끝난 비율", fmt.pct(R.tp_share ?? 0, 0, false), fmt.pct(V.tp_share, 0, false), ""]);
         }
+        if (near50) kids.push(h("p", {class: "wi-sub"}, `가장 가까운 5년 시험: 50배·40% · 손절 ${s.stop} ATR (증거금만 다름, 50%는 5년에 없음)`));
         kids.push(same ? cmpTable(["지금 규칙"], M.map((r) => cmpRow(r[0], r[1])))
-          : cmpTable(["지금 규칙", "이 설정", "차이"], M.map((r) => cmpRow(r[0], r[1], r[2], r[3]))));
-        kids.push(bars5(R, V, same));
+          : cmpTable(["지금 규칙", near50 ? "50배·40%" : "이 설정", "차이"], M.map((r) => cmpRow(r[0], r[1], r[2], r[3]))));
+        kids.push(bars5(R, V, same, near50 ? "50배·40%" : "이 설정"));
         if (A.src === "exitstyle" && !same) {
           kids.push(h("p", {class: "note"}, `같은 신호 비교: 1기 ${pctp(V.diff_p1)}, 2기 ${pctp(V.diff_p2)}. 미리 정한 판정(5년, 사전 등록): `,
             ((FY.exitstyle || {}).recommend === "ladder" ? "어느 고정 익절도 세 조건을 다 넘지 못해 사다리 유지." : "결과 파일의 권고를 보세요.")));
@@ -297,7 +313,7 @@ export async function mount(el, ctx) {
     put(fiveBody, ...kids);
   }
   // two thin bars on one zero line: 지금 vs 이 설정 (the per-trade mean on equity)
-  function bars5(R, V, same) {
+  function bars5(R, V, same, alt = "이 설정") {
     const xs = [R.mean_eq, same ? null : V.mean_eq].filter((x) => x != null);
     if (!xs.length) return null;
     const m = Math.max(...xs.map(Math.abs), 1e-9);
@@ -305,7 +321,7 @@ export async function mount(el, ctx) {
       h("span", {class: "wi-bar-t"}, h("i", {class: [x < 0 ? "neg" : "pos", cls], style: {"--w": `${(Math.abs(x) / m * 50).toFixed(1)}%`}})),
       h("b", {class: ["num", fmt.tone(x)]}, pc(x)));
     return h("div", {class: "wi-bars", role: "img", "aria-label": "거래당 자금 대비 평균 비교"},
-      bar("지금", R.mean_eq, "now"), same ? null : bar("이 설정", V.mean_eq, "alt"));
+      bar("지금", R.mean_eq, "now"), same ? null : bar(alt, V.mean_eq, "alt"));
   }
   // the whole 5-year table at once (lev x stop with the ladder, and the take-profit strip): tap a cell to pick it
   function mapFive(s) {
@@ -340,7 +356,9 @@ export async function mount(el, ctx) {
     const P = st.P;
     if (!P || P.pending) { put(paperBody, h("p", {class: "muted"}, P && P.pending ? "서버가 그림자 기록을 모으는 중입니다. 곧 다시 불러옵니다." : "불러오는 중"), motion.shimmer(3)); return; }
     if (!P.ready) {
-      put(paperBody, h("p", null, ui.pill("아직 없음", "thin"), " ", P.why || "밤 점검 기록이 없습니다."),
+      // P.why: the server's waiting reason (no nightly report yet); P.error alone: the computation failed (retried in a minute)
+      put(paperBody, h("p", null, ui.pill(P.err || (P.error && !P.why) ? "불러오지 못함" : "아직 없음", "thin"), " ",
+        P.why || (P.error ? `그림자 기록을 계산하지 못했습니다 (${P.error}). 1분쯤 뒤 다시 계산합니다.` : "밤 점검 기록이 없습니다.")),
         progressBar("그림자 비교 · 같은 거래 10건부터 볼 만함", "밤 점검(매일 09:20)이 전날 끝난 거래를 규칙 하나만 바꿔 다시 돌린 뒤 채워집니다.", 0));
       return;
     }
@@ -351,7 +369,7 @@ export async function mount(el, ctx) {
         s ? "밤 그림자는 한 번에 규칙 하나만 바꿉니다. 이 설정은 둘 이상을 바꿔서 5년 표에만 있습니다." : "이 조합은 시험한 적이 없습니다."));
     } else if (s.paper === "base") {
       kids.push(base.trades
-        ? h("p", null, `지금 규칙(base 그림자): ${fmt.int(base.trades)}건 · 거래당 자금 대비 `, h("b", {class: ["num", fmt.tone(base.mean_eq)]}, pc(base.mean_eq)), " ", ui.smallSample(base.trades, P.small_n || 10))
+        ? h("p", null, `지금 규칙 그대로 다시 돌린 거래 ${fmt.int(base.trades)}건 · 거래당 자금 대비 `, h("b", {class: ["num", fmt.tone(base.mean_eq)]}, pc(base.mean_eq)), " ", ui.smallSample(base.trades, P.small_n || 10))
         : h("p", null, ui.pill("아직 0건", "thin"), " 지금 규칙의 그림자 거래가 아직 없습니다."));
       kids.push(progressFor(base.trades, P.small_n || 10, "지금 규칙"));
     } else {
