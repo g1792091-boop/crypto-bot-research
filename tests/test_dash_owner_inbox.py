@@ -280,8 +280,20 @@ def test_the_goal_line_reuses_the_luck_calc_numbers_and_counts_today(env):
     assert g["tests_today"] == {"tests": 5, "passed": 2, "newlab": 2, "room": 3}
     assert g["parts"][2] == "판정 날짜는 봇이 첫 계좌를 만들면 정해짐"                    # no paper3.db
     assert "0.07개" in g["parts"][1] and "후보 1개" in g["parts"][1]
+    # a candidate carries the chance luck alone gives that many (1 - 0.95 x 0.975 = 7.4%): '1 > 0.07' is not 'real'
+    assert "운만으로 1개 이상 나올 확률 7%" in g["parts"][1]
     empty = GL.goal(None, None, None, env["now"])
     assert empty["parts"][:2] == ["오늘 5년 시험 0개(통과 0)", "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"]
+
+
+def test_the_goal_line_odds_only_with_a_candidate(monkeypatch):
+    """No candidate: no odds (nothing to explain); a candidate unlikely by luck says '1% 미만', never 0%."""
+    for nl, want in (({"tested": 57, "passed": 0, "luck": 0.2356, "tail": 1.0}, None),
+                     ({"tested": 57, "passed": 1, "luck": 0.2356, "tail": 0.2131}, "운만으로 1개 이상 나올 확률 21%"),
+                     ({"tested": 57, "passed": 3, "luck": 0.2356, "tail": 0.0013}, "운만으로 3개 이상 나올 확률 1% 미만")):
+        monkeypatch.setattr(GL, "newlab_luck", lambda _a, nl=nl: dict(nl))
+        p2 = GL.goal(None, None, None, 1_790_000_000_000)["parts"][1]
+        assert ("확률" in p2) is (want is not None) and (want is None or want in p2), p2
 
 
 def test_the_goal_line_never_reads_a_failed_read_as_zero(env):

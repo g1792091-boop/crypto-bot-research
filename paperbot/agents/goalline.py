@@ -1,7 +1,7 @@
 """목표 진척도 한 줄 (owners' round 2, 10/06): how far the project is from its goal, in one line of code text that the
 dashboard's 홈 shows on top and the 22:00 evening Telegram can carry (rooms.compose_evening, AGENTS_GOAL_LINE=1):
 
-    오늘 5년 시험 3개(통과 0) · 동전보다 나은 새 매매법 후보 0개(시험 57개라 운만으로도 많아야 0.24개) · 첫 판정 D-23(11/04)
+    오늘 5년 시험 3개(통과 0) · 동전보다 나은 새 매매법 후보 0개(시험 57개라 운만으로도 많아야 0.23개) · 첫 판정 D-23(11/04)
 
 - tests today: the counted 5-year tests whose first result was written in today's KST day (the lab's 'newlab' trials and
   the strategy rooms' 'test' trials that ran: passed / failed / described; one that could not run is not a test), and
@@ -130,8 +130,13 @@ def goal(agents_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlite3.Con
     if nl.get("error"):
         p2 = "동전보다 나은 새 매매법 후보 수는 시험 장부를 읽지 못해 모름"
     elif nl["tested"]:
+        # with a candidate, the chance that luck alone gives that many (the luck-calc's tail): '1개 vs 많아야 0.23개'
+        # alone reads as 'real', while luck gives 1 or more about one time in five
+        tail = nl.get("tail")
+        odds = (f" · 운만으로 {nl['passed']:,}개 이상 나올 확률 " + ("1% 미만" if tail < 0.01 else f"{tail * 100:.0f}%")
+                if nl["passed"] and tail is not None else "")
         p2 = (f"동전보다 나은 새 매매법 후보 {nl['passed']:,}개(시험 {nl['tested']:,}개라 운만으로도 많아야 "
-              f"{_num(nl['luck'])}개)")
+              f"{_num(nl['luck'])}개{odds})")
     else:
         p2 = "동전보다 나은 새 매매법 후보 0개(아직 새 매매법 시험 없음)"
     if v.get("ended"):
