@@ -9,8 +9,8 @@ What it is: every DEBATE_EVERY_MIN minutes (default 20) ONE call to the Anthropi
 ``urllib``) returns a short Korean debate plus a note, 0-2 gradable hypotheses and 0-2 ideas for the new-strategy lab.
 The debate is a conversation (debate-chat, owners 10/06): DEBATE_TURNS turns (default 7, 5-9) of 2-3 sentences, every
 one of the five rotating roles speaks once and then they answer each other; from the third turn on a turn names the
-earlier speaker it answers (``reply_to``) and its stance (동의 / 반대 / 보완 / 질문), stored with the turn. The input is a compact packet code builds from the bot's databases, READ-ONLY
-(debate_packet.py). What it is not: it never places an order, never edits a rule, an account or code, and writes
+earlier speaker it answers (``reply_to``) and its stance (동의 / 반대 / 보완 / 질문), stored with the turn. The input
+is a compact packet code builds from the bot's databases, READ-ONLY (debate_packet.py). What it is not: it never places an order, never edits a rule, an account or code, and writes
 nothing to any bot database; its only writable file is its own debate.db (this process is its only writer; the
 dashboard reads it read-only). It runs on the owners' own paid API key, which only this service's env file
 (/etc/paperbot/debate.env, readable by user paperbot-debate only) holds. The agent rooms run on the Claude Max
@@ -573,25 +573,19 @@ _OBJ_START = re.compile(r'\{\s*"')
 
 
 def _salvage(s: str) -> tuple:
-    """What an answer that is not one clean JSON object still holds: (the whole answer when a complete one starts at its
-    first brace and only text follows it, else None; the complete turn objects of an answer cut off at max_tokens:
-    what was paid for is kept). A turn is any complete object with a "speaker" and a "text" string, in any key order
-    (the back-and-forth adds "reply_to" and "stance")."""
+    """What an answer that is not one clean JSON object still holds: (the whole answer when a complete object with a
+    "turns" list sits somewhere in the text, with words before or after it, else None; the complete turn objects of an
+    answer cut off at max_tokens: what was paid for is kept). A turn is any complete object with a "speaker" and a
+    "text" string, in any key order (the back-and-forth adds "reply_to" and "stance")."""
     dec = json.JSONDecoder()
-    first = s.find("{")
-    if first >= 0:
-        try:
-            whole, _ = dec.raw_decode(s, first)
-            if isinstance(whole, dict) and isinstance(whole.get("turns"), list):
-                return whole, []
-        except ValueError:
-            pass
     out = []
     for m in _OBJ_START.finditer(s):
         try:
             o, _ = dec.raw_decode(s, m.start())
         except ValueError:
             continue
+        if isinstance(o, dict) and isinstance(o.get("turns"), list):
+            return o, []
         if isinstance(o, dict) and isinstance(o.get("speaker"), str) and isinstance(o.get("text"), str):
             out.append(o)
     return None, out
@@ -903,8 +897,9 @@ class Service:
         self.db.conn.commit()
         self.grade(t)
         replies = sum(1 for x in ans["turns"] if x.get("reply_to"))
-        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개(누구에게 답했는지 적힌 것 {replies}개), 출력 "
-                 f"{res['usage'].get('output_tokens')} 토큰(생각 블록 {res.get('thinking_blocks', 0)}개 포함), ${cost:.4f}")
+        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개(누구에게 답했는지 적힌 것 "
+                 f"{replies}개), 출력 {res['usage'].get('output_tokens')} 토큰(생각 블록 {res.get('thinking_blocks', 0)}개 "
+                 f"포함), ${cost:.4f}")
         return "round"
 
     def finish_round(self, rid: int, status: str, error: Optional[str] = None, usage: Optional[dict] = None,

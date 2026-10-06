@@ -107,6 +107,8 @@ def test_a_cut_answer_keeps_its_complete_turns_in_any_key_order():
     # a complete answer followed by text that holds a brace: the whole answer is used (note kept, not "cut")
     whole = D.parse_answer(text + " 끝} 이상", order)
     assert not whole["truncated"] and len(whole["turns"]) == 7 and whole["note"]
+    prefixed = D.parse_answer("설명 {예시} " + text + " 끝} 이상", order)                    # braces before it too
+    assert not prefixed["truncated"] and len(prefixed["turns"]) == 7 and prefixed["note"]
 
 
 # ---------------------------------------------------------------- storage, summary, dashboard
