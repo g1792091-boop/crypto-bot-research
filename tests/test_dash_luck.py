@@ -106,11 +106,13 @@ def test_day_zero_without_any_database(tmp_path):
     v = L.luck_view(None, data_dir=str(tmp_path))
     rows = {r["id"]: r for r in v["rows"]}
     assert list(rows) == ["checkpoint", "newlab", "roomtests", "synergy", "staff", "debate", "library", "ds5y",
-                          "reel5m", "entry", "indranges", "combo5y"]
-    for rid in ("checkpoint", "newlab", "roomtests", "synergy", "staff", "debate", "indranges", "combo5y"):
+                          "reel5m", "entry", "indranges", "combo5y", "regime5y"]
+    for rid in ("checkpoint", "newlab", "roomtests", "synergy", "staff", "debate", "indranges", "combo5y", "regime5y"):
         assert rows[rid]["verdict"] == "preparing" and rows[rid]["tested"] is None and rows[rid]["passed"] is None, rid
         assert rows[rid]["note"], rid
-    assert v["label"] == "설명용, 판정 아님" and v["summary"]["places"] == 12
+    assert v["label"] == "설명용, 판정 아님" and v["summary"]["places"] == 13
+    # no sum of passes across places (a debate hit and a BH pass are not the same thing)
+    assert "passed" not in v["summary"] and "tested" not in v["summary"]
 
 
 def test_the_research_summaries_are_read_as_they_are():
@@ -333,3 +335,92 @@ def test_wiring_tokens_and_text_safety():
         assert "var(--t-" in val, m.group(0)
         assert not re.search(r"\b\d+(\.\d+)?(px|rem|em)\b(?!\s*\))", val.split("var(--t-")[0]), m.group(0)
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
+
+
+# ---------------------------------------------------------------- review fixes (luck-calc review)
+def test_room_tests_count_only_tests_that_ran(tmp_path):
+    """A room test that could not run (no_data / error) has no p: it stays in the room's divisor (rooms_db.trial_count)
+    but is neither 'tested' nor a luck chance; a described one is tested but can never pass."""
+    ag = LW.make_agents(str(tmp_path / "a.db"), tests=[("strat:A", "no_data"), ("strat:A", "failed"),
+                                                      ("strat:A", "described"), ("strat:A", "passed")])
+    rt = {r["id"]: r for r in L.ledger_rows(ag)}["roomtests"]
+    assert rt["tested"] == 3 and rt["passed"] == 1
+    assert rt["luck"] == pytest.approx(0.05 / 2 + 0.05 / 4, abs=1e-3)        # tests 2 and 4 of the room
+    assert "돌리지 못한 1개" in rt["passed_ko"] and "설명용 시험 1개" in rt["passed_ko"]
+
+
+def test_synergy_rule_says_what_rank_p_needs():
+    """rank_p = (shuffled bests >= real + 1) / (runs + 1) <= 0.05: with 20 shuffles the real best must beat all 20."""
+    r20 = L.synergy_row({"units": 36, "days": 30, "shuffled_days": {"runs": 20, "rank_p": 0.095, "real_beats_share": 0.95}})
+    assert "20번 해서 나온 1등 점수들보다 모두 높으면" in r20["rule_ko"] and r20["passed"] == 0     # 19 of 20 is not enough
+    assert "20개 중 19개보다 높음" in r20["passed_ko"]
+    r50 = L.synergy_row({"units": 36, "days": 30, "shuffled_days": {"runs": 50, "rank_p": 0.039, "real_beats_share": 0.98}})
+    assert "49번 이상 높으면" in r50["rule_ko"] and r50["passed"] == 1
+    for runs in (20, 50, 100):                       # the wording matches the rule rank_p <= 0.05
+        lose = max(0, int(np.floor(0.05 * (runs + 1) - 1 + 1e-9)))
+        assert (lose + 1) / (runs + 1) <= 0.05 < (lose + 2) / (runs + 1)
+
+
+def test_checkpoint_note_names_the_judged_bars_and_the_extras(tmp_path):
+    from anasyn_world import build
+    db = str(tmp_path / "paper3.db")
+    build(db, days=3)
+    r = L.checkpoint_row(db, str(tmp_path / "none.db"))
+    assert "5분 단타 5분" in r["note"] and "4시간봉은 관찰용" in r["note"]
+    assert "따로 셉니다" not in r["note"] and "30일이 지나야 같은 묶음에 더해지므로" in r["note"]
+
+
+def test_indranges_more_carries_the_money_caveat(tmp_path):
+    """좋은 수치 찾기: a difference that is real is not a range that earns. The verdict line says so, with the count of
+    passing cells whose mean net R per trade is above 0 (when the file marks its cells)."""
+    cells = [{"ok": 1, "r": -0.1}, {"ok": -1, "r": -0.2}, {"ok": 1, "r": 0.03}, {"r": 0.5}]
+    d = {"rules": {"tests": 60, "passed": 3, "better": 2, "worse": 1, "fdr": 0.05},
+         "strategies": {"S1": {"cells": {"rsi": cells}}}, "pooled": {"cells": {"rsi": [{"r": -0.1}]}}}
+    p = tmp_path / "indranges.json"
+    p.write_text(json.dumps(d))
+    r = L.indranges_row(str(p))
+    assert r["verdict"] == "more" and r["plus_cells"] == 1
+    assert "돈 버는 구간을 찾았다는 뜻은 아님" in r["verdict_ko"] and "거래당 플러스 1개" in r["verdict_ko"]
+    assert r["caveat_ko"] and "플러스인 칸은 1개뿐" in r["note"]
+    d["strategies"]["S1"]["cells"]["rsi"] = [{"r": 0.1}]          # cells not marked: no count, still the caveat
+    p.write_text(json.dumps(d))
+    r2 = L.indranges_row(str(p))
+    assert r2["plus_cells"] is None and "돈 버는 구간" in r2["verdict_ko"] and "플러스 " not in r2["verdict_ko"]
+
+
+def test_regime5y_row(tmp_path):
+    p = tmp_path / "regime5y.json"
+    assert L.regime5y_row(str(p))["verdict"] == "preparing"
+    p.write_text(json.dumps({"account": {"fdr_q": 0.05},
+                             "head": {"cells": 144, "tested": 92, "bh_pass": 0, "survivors": 0, "norule": 52, "small": 0}}))
+    r = L.regime5y_row(str(p))
+    assert r["tested"] == 92 and r["passed"] == 0 and r["verdict"] == "none" and 0.03 < r["luck"] < 0.1
+    assert "144칸 중 92칸" in r["note"] and "52칸" in r["note"] and r["where"] == {"screen": "analysis", "arg": "regime"}
+    p.write_text("{broken")
+    assert L.regime5y_row(str(p))["verdict"] == "preparing"
+
+
+def test_one_broken_place_does_not_take_the_page_down(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise KeyError("x")
+    monkeypatch.setattr(L, "entry_row", boom)
+    monkeypatch.setattr(L, "ledger_rows", boom)
+    monkeypatch.setattr(L, "checkpoint_row", boom)
+    v = L.luck_view(None, data_dir=str(tmp_path))
+    rows = {r["id"]: r for r in v["rows"]}
+    assert len(rows) == 13
+    for rid in ("entry", "newlab", "roomtests", "staff", "checkpoint"):
+        assert rows[rid]["verdict"] == "preparing" and "읽지 못함" in rows[rid]["note"], rid
+    assert rows["library"]["tested"] == 2000                               # the others are still there
+
+
+def test_staff_row_says_50_percent_is_an_assumption(tmp_path):
+    ag = LW.make_agents(str(tmp_path / "a.db"), hyps=[True] * 12)
+    st = {r["id"]: r for r in L.ledger_rows(ag)}["staff"]
+    assert st["verdict"] == "more" and "가정" in st["verdict_ko"] and "기준값을 직접 정하므로" in st["note"]
+
+
+def test_links_only_to_screens_this_build_has():
+    src = _read("luck-kit.js")
+    assert "SCREENS[w.screen]" in src and 'r.verdict === "preparing" && r.part === "past"' in src
+    assert "5년 연구란" in src

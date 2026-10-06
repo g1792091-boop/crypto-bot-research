@@ -31,7 +31,14 @@ past (5-year studies, files)
 - ``entry``       paperbot/agents/research_prior.json (four pre-registered entry studies)
 - ``indranges``   paperbot/dash/data/indranges.json (좋은 수치 찾기: BH over the cells) — '준비 중' until it exists
 - ``combo5y``     paperbot/dash/data/combo5y.json (조합 5년, merged-signal rules: BH + shuffle null) — '준비 중' until then
-                  (``PAPERBOT_LUCK_DATA`` names another folder for these two, e.g. a preview)
+- ``regime5y``    paperbot/dash/data/regime5y.json (장세 스위치: BH over the tested cells at account.fdr_q + both
+                  confirmation periods; head.tested / bh_pass / survivors) — '준비 중' until then
+                  (``PAPERBOT_LUCK_DATA`` names another folder for these three, e.g. a preview)
+
+Every place is read on its own (``safe_row``): one broken file or database says '읽지 못함' on its row only. A 'more'
+verdict can carry a ``caveat`` (좋은 수치 찾기: a real difference between ranges, not a range that earns; 직원 예측: the
+50 % base is an assumption). ``summary`` never adds up tested / passed across places (a pass means a different thing
+in each).
 
 ``verdict``: preparing (no file / no database yet), waiting (nothing tested yet or a small sample), before (the 30-day
 verdict has not happened), none (0 passed), like_luck / some / more from ``tail`` = the chance that luck alone gives at
@@ -62,7 +69,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 DATA = os.path.join(ROOT, "paperbot", "dash", "data")
 SHORT = {"checkpoint": "30일 판정", "newlab": "새 매매법 시험실", "roomtests": "방별 규칙 시험", "synergy": "조합 시너지",
          "staff": "직원 예측", "debate": "토론방 가설", "library": "라이브러리 2,000개", "ds5y": "딥시크 342개",
-         "reel5m": "5분 단타 40개", "entry": "진입 연구 4개", "indranges": "좋은 수치 찾기", "combo5y": "조합 5년"}
+         "reel5m": "5분 단타 40개", "entry": "진입 연구 4개", "indranges": "좋은 수치 찾기", "combo5y": "조합 5년",
+         "regime5y": "장세 스위치 5년"}
 VERDICT_KO = {
     "preparing": "준비 중",
     "waiting": "아직 숫자가 적어 말할 수 없음",
@@ -187,14 +195,27 @@ def verdict(tested: Optional[int], passed: Optional[int], tail: Optional[float],
 
 
 def row(rid: str, part: str, title: str, where: dict, *, tested=None, rule_ko="", luck=None, luck_ko="",
-        passed=None, passed_ko="", tail=None, small=False, before=False, note="", extra=None) -> dict:
+        passed=None, passed_ko="", tail=None, small=False, before=False, note="", caveat="", extra=None) -> dict:
+    """One place. ``caveat``: what a 'more' / 'some' verdict does NOT mean there (e.g. a real difference that still
+    loses money); it is added to the verdict line and kept as ``caveat_ko`` for the short cards."""
     v = verdict(tested, passed, tail, small=small, before=before)
+    vk = VERDICT_KO[v] + (f" · 단, {caveat}" if caveat and v in ("more", "some") else "")
     out = {"id": rid, "part": part, "title": title, "short": SHORT.get(rid, title), "where": where, "tested": tested, "rule_ko": rule_ko,
            "luck": _r(luck, 3), "luck_ko": luck_ko, "passed": passed, "passed_ko": passed_ko, "tail": _r(tail, 4),
-           "small": bool(small), "verdict": v, "verdict_ko": VERDICT_KO[v], "note": note}
+           "small": bool(small), "verdict": v, "verdict_ko": vk, "note": note}
+    if caveat and v in ("more", "some"):
+        out["caveat_ko"] = caveat
     if extra:
         out.update(extra)
     return out
+
+
+def safe_row(fn: Callable[[], Any], rid: str, part: str, title: str, where: dict) -> Any:
+    """One place that cannot be read (a broken file or database row) says so; it never takes the whole page down."""
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001  (a page of many places: one broken place is one '준비 중' row)
+        return row(rid, part, title, where, note=f"읽지 못함 ({type(exc).__name__})")
 
 
 def _load(path: str) -> Optional[dict]:
@@ -264,12 +285,15 @@ def checkpoint_row(paper_db: Optional[str], checkpoint_db: Optional[str]) -> dic
     unc = sum(counts[g] * al[g] for g in al)
     plain = m * ALPHA
     first = CK.checkpoint_ts(int(start), 1) if start else None
+    tfs = " · ".join(f"{CK.FAMILY_KO[g]} " + "·".join(CK.TF_KO.get(t, t) for t in CK.JUDGED_BY_FAMILY.get(g, ()))
+                     for g in al)
     return row("checkpoint", "now", title, where, tested=m, rule_ko=rule, luck=luck,
                luck_ko=(f"실력이 하나도 없어도 평균 {luck:.2f}개 (1개라도 나올 확률 {tail(1) * 100:.0f}%). "
                         f"보정 없이 '동전 봇 95%보다 잘하면 합격'이었다면 약 {plain:.1f}개"),
                passed=None, passed_ko="판정 전", before=True,
-               note=("판정 대상 계좌 수(15분·30분·1시간, 5분봉 매매법은 5분). 거래 30건이 안 된 계좌는 그날 보류라 실제 검정 수는 "
-                     "더 적을 수 있습니다. 추가 계좌는 따로 셉니다"),
+               note=(f"판정에 들어갈 계좌 수 (판정 봉: {tfs}; 4시간봉은 관찰용). 그날까지 거래가 {CK.MIN_TRADES}건이 안 된 계좌는 "
+                     "보류라 실제로 검정하는 수는 이보다 적을 수 있습니다. 복사 계좌와 새 매매법 계좌는 만든 날부터 "
+                     f"{CK.PERIOD_DAYS}일이 지나야 같은 묶음에 더해지므로 이 수에는 아직 없습니다"),
                extra={"ready": False, "families": [{"family": g, "name": CK.FAMILY_KO[g], "accounts": counts[g],
                                                      "alpha": al[g]} for g in al],
                       "uncorrected": _r(unc, 2), "plain": _r(plain, 2), "any_luck": _r(tail(1), 4),
@@ -322,20 +346,29 @@ def ledger_rows(agents_db: Optional[str]) -> list[dict]:
         if tests is None:
             out.append(row("roomtests", "now", room_t, room_w, rule_ko=room_rule, note="시험 장부를 읽지 못함"))
         else:
+            # the room's divisor counts every 'test' trial of the room (rooms_db.trial_count, as actions.request_test);
+            # only a test that really ran and was judged (passed / failed) can pass: a 'described' one never does, and
+            # one that could not run (no_data / error, no result yet) has no p at all
             seen: dict = {}
-            ps, passed, gradable = [], 0, 0
+            ps, passed, described, not_run = [], 0, 0, 0
             for _tid, room, status in tests:
                 seen[room] = seen.get(room, 0) + 1
                 if status == "described":
+                    described += 1
                     continue
-                gradable += 1
+                if status not in ("passed", "failed"):
+                    not_run += 1
+                    continue
                 ps.append(ALPHA / seen[room])
                 passed += status == "passed"
+            ran = len(ps) + described
             luck = sum(ps)
-            out.append(row("roomtests", "now", room_t, room_w, tested=len(tests), rule_ko=room_rule, luck=luck,
-                           luck_ko=f"많아야 {luck:.2f}개 (방마다 5%, 2.5%, … 를 더한 값)" if tests else "시험이 생기면 계산",
-                           passed=passed, passed_ko=f"통과 {passed:,}개 (설명용 시험 {len(tests) - gradable:,}개는 통과가 없음)",
-                           tail=pb_tail(ps, passed), note="" if tests else "아직 방에서 시험한 것이 없습니다"))
+            extra_ko = ", ".join(x for x in (f"설명용 시험 {described:,}개는 통과가 없음" if described else "",
+                                              f"돌리지 못한 {not_run:,}개는 빼고 셈" if not_run else "") if x)
+            out.append(row("roomtests", "now", room_t, room_w, tested=ran, rule_ko=room_rule, luck=luck,
+                           luck_ko=f"많아야 {luck:.2f}개 (방마다 5%, 2.5%, … 를 더한 값)" if ps else "시험이 생기면 계산",
+                           passed=passed, passed_ko=f"통과 {passed:,}개" + (f" ({extra_ko})" if extra_ko else ""),
+                           tail=pb_tail(ps, passed), note="" if ran else "아직 방에서 끝난 시험이 없습니다"))
         try:
             from ...agents.scorecard import scorecard
             tot = (scorecard(c) or {}).get("total") or {}
@@ -345,14 +378,29 @@ def ledger_rows(agents_db: Optional[str]) -> list[dict]:
             out.append(row("staff", "now", staff_t, staff_w, rule_ko=staff_rule, note="성적표를 읽지 못함"))
         else:
             g, k = int(tot.get("graded") or 0), int(tot.get("correct") or 0)
+            easy = ("직원이 기준값을 직접 정하므로, 원래 잘 일어나는 쪽을 고르면 50%보다 쉽게 맞힐 수 있습니다 "
+                    "(그 확률은 기록에 없음)")
             out.append(row("staff", "now", staff_t, staff_w, tested=g, rule_ko=staff_rule, luck=g * 0.5,
                            luck_ko=f"반반으로 찍어도 약 {g * 0.5:.1f}개 (위·아래 맞히기라 50%로 가정)" if g else "채점이 생기면 계산",
                            passed=k, passed_ko=f"맞힘 {k:,}개 / 채점 {g:,}개", tail=binom_tail(g, k, 0.5),
-                           small=g < SMALL_GRADED, note=f"채점 {SMALL_GRADED}개가 되기 전에는 결론을 내지 않습니다" if g < SMALL_GRADED else "",
+                           small=g < SMALL_GRADED,
+                           note=(f"채점 {SMALL_GRADED}개가 되기 전에는 결론을 내지 않습니다. " if g < SMALL_GRADED else "") + easy,
+                           caveat="50%는 가정이라 쉬운 예측이 섞이면 이 줄은 실제보다 좋게 보일 수 있음",
                            extra={"need": SMALL_GRADED, "waiting_n": int(tot.get("waiting") or 0)}))
     finally:
         _close(c)
     return out
+
+
+def ledger_rows_safe(agents_db: Optional[str]) -> list[dict]:
+    """ledger_rows, or three rows that say the ledger could not be read (never the whole page down)."""
+    try:
+        return ledger_rows(agents_db)
+    except Exception as exc:  # noqa: BLE001
+        why = f"에이전트 기록을 읽지 못함 ({type(exc).__name__})"
+        return [row("newlab", "now", "새 매매법 시험실", {"screen": "rooms", "arg": "team:lab"}, note=why),
+                row("roomtests", "now", "방마다 규칙 바꾸기 시험", {"screen": "rooms"}, note=why),
+                row("staff", "now", "직원 예측 성적표", {"screen": "digest", "arg": "staff"}, note=why)]
 
 
 def debate_row(debate_db: Optional[str]) -> dict:
@@ -382,7 +430,14 @@ def synergy_row(syn: Optional[dict]) -> dict:
     """조합 시너지 from the analysis view's answer (agents/synergy.py dash_view + its day-0 waiting)."""
     from ...agents import synergy as SY
     title, where = "조합 시너지 (매매법 2~5개 묶음 고르기)", {"screen": "analysis", "arg": "synergy"}
-    rule = "가장 좋은 묶음이 날짜를 섞은 자료로 같은 탐색을 한 최고 점수 20번 중 19번보다 높으면"
+    sd = syn.get("shuffled_days") if isinstance(syn, dict) else None
+    sd = sd if isinstance(sd, dict) else {}
+    runs = _int(sd.get("runs")) or 20                 # the dashboard view's shuffles (synergy.dash_view)
+    # rank_p = (shuffled bests >= real + 1) / (runs + 1) <= 0.05: how many shuffled bests may still beat the real one
+    may_lose = max(0, math.floor(ALPHA * (runs + 1) - 1 + 1e-9))
+    need = "모두" if may_lose == 0 else f"{runs - may_lose:,}번 이상"
+    rule = (f"가장 좋은 묶음의 점수가, 날짜를 섞은 자료로 같은 고르기를 {runs:,}번 해서 나온 1등 점수들보다 {need} 높으면 "
+            "(p ≤ 0.05)")
     if not isinstance(syn, dict) or syn.get("error"):
         return row("synergy", "now", title, where, rule_ko=rule,
                    note=str((syn or {}).get("error") or "아직 계산 전") if isinstance(syn, dict) else "아직 계산 전")
@@ -391,16 +446,17 @@ def synergy_row(syn: Optional[dict]) -> dict:
     for k in range(SY.KMIN, min(SY.KMAX, n) + 1):
         full = math.comb(n, k)
         searched += full if (full <= SY.EXHAUSTIVE or k == SY.KMIN) else min(full, SY.BEAM * (n - k + 1))
-    sd = syn.get("shuffled_days") or {}
     waiting = bool(syn.get("waiting") or syn.get("small")) or not sd
     rank_p = _r(sd.get("rank_p"), 4)
     passed = None if waiting or rank_p is None else int(rank_p <= ALPHA)
     beats = _r(sd.get("real_beats_share"), 3)
+    won = None if beats is None else int(round(beats * runs))
     return row("synergy", "now", title, where, tested=searched if n else 0, rule_ko=rule, luck=ALPHA,
-               luck_ko="20번에 1번 (5%): 묶음이 아무 의미 없어도 이만큼은 1등이 섞은 자료보다 높게 나옴",
+               luck_ko=("후보가 많아도 섞은 자료로 똑같이 고르므로, 묶음이 아무 의미 없어도 통과할 확률은 약 5% "
+                        "(20번에 1번)"),
                passed=passed, passed_ko=("기다리는 중" if passed is None else
-                                         f"섞은 자료 최고 점수 {int(sd.get('runs') or 0)}번 중 {beats * 100:.0f}%보다 높음"
-                                         if beats is not None else "—"),
+                                         f"실제 1등 점수가 섞은 자료 1등 점수 {runs:,}개 중 {won:,}개보다 높음"
+                                         if won is not None else "—"),
                tail=rank_p, small=waiting,
                note=f"묶음 후보 약 {searched:,}개 중 가장 좋은 것을 고르므로, 섞은 자료로 같은 고르기를 해서 견줍니다"
                if n else "", extra={"days": syn.get("days"), "min_trades": syn.get("min_trades")})
@@ -444,7 +500,7 @@ def entry_row(path: Optional[str] = None) -> dict:
 
 
 def indranges_row(path: str) -> dict:
-    title, where = "좋은 수치 찾기 (지표 구간마다 5년 성적)", {"screen": "analysis"}
+    title, where = "좋은 수치 찾기 (지표 구간마다 5년 성적)", {"screen": "analysis", "arg": "indranges"}
     d = _load(path)
     rules = (d or {}).get("rules") if isinstance(d, dict) else None
     if not isinstance(rules, dict) or _int(rules.get("tests")) is None:
@@ -455,15 +511,69 @@ def indranges_row(path: str) -> dict:
     luck, tail = bh_luck([(m, fdr)])
     better, worse = _int(rules.get("better")), _int(rules.get("worse"))
     side = f" (더 좋음 {better:,} · 더 나쁨 {worse:,})" if better is not None and worse is not None else ""
+    marked, plus = _marked_cells(d)
+    money = (f"통과한 칸 {k:,}개 중 거래당 평균이 플러스인 칸은 {plus:,}개뿐"
+             if marked == k and k else "그 구간의 거래당 손익은 따로 봐야 함")
     return row("indranges", "past", title, where, tested=m,
                rule_ko=f"칸마다 차이 시험 + 보정(FDR {fdr * 100:g}%) + 세 구간 같은 방향 + 최소 크기", luck=luck,
                luck_ko=f"실제 차이가 없다면 평균 {luck:.2f}개 (보정 없이 5%였다면 약 {m * ALPHA:.0f}개)",
                passed=k, passed_ko=f"차이가 확인된 칸 {k:,}개{side} · 그중 운일 수 있는 수 많아야 {fdr * k:.0f}개",
-               tail=tail(k), note="차이가 진짜라는 뜻이지, 그 구간에서 돈을 번다는 뜻은 아닙니다 (거래당 손익은 따로 봐야 함)")
+               tail=tail(k), note=f"차이가 진짜라는 뜻이지, 그 구간에서 돈을 번다는 뜻은 아닙니다 ({money})",
+               caveat="'구간마다 결과가 다르다'는 뜻일 뿐 돈 버는 구간을 찾았다는 뜻은 아님"
+                      + (f" (통과 칸 중 거래당 플러스 {plus:,}개)" if marked == k and k else ""),
+               extra={"plus_cells": plus if marked == k else None})
+
+
+def _marked_cells(d: dict) -> tuple[int, int]:
+    """(marked cells, marked cells whose mean net R per trade is above 0) of indranges.json: every cell list under
+    strategies.*.cells and pooled.cells with ``ok`` = 1 / -1 (the generator's mark for a cell that passed)."""
+    lists = []
+    for s in (d.get("strategies") or {}).values() if isinstance(d.get("strategies"), dict) else ():
+        if isinstance(s, dict) and isinstance(s.get("cells"), dict):
+            lists += list(s["cells"].values())
+    pooled = d.get("pooled")
+    if isinstance(pooled, dict) and isinstance(pooled.get("cells"), dict):
+        lists += list(pooled["cells"].values())
+    marked = plus = 0
+    for cells in lists:
+        for c in cells if isinstance(cells, list) else ():
+            if isinstance(c, dict) and c.get("ok") in (1, -1):
+                marked += 1
+                r = _r(c.get("r"), 6)
+                plus += r is not None and r > 0
+    return marked, plus
+
+
+def regime5y_row(path: str) -> dict:
+    """장세 스위치 (paperbot/dash/data/regime5y.json, docs/regime5y.md): one pre-registered rule per strategy x timeframe,
+    tested on the confirmation years against the coin flips; BH over every tested cell at ``account.fdr_q``; 'survivors'
+    also hold in both confirmation periods."""
+    title, where = "장세 스위치 (맞는 장에서만 켜기, 5년)", {"screen": "analysis", "arg": "regime"}
+    base_rule = "고르는 기간(2021~2022)에 칸마다 규칙을 정하고, 확인 기간(2023~2026)에 동전 봇보다 나은지 시험"
+    d = _load(path)
+    head = (d or {}).get("head") if isinstance(d, dict) else None
+    if not isinstance(head, dict) or _int(head.get("tested")) is None:
+        return row("regime5y", "past", title, where, rule_ko=base_rule + " + 보정(FDR) + 확인 기간 둘 다",
+                   note="결과 파일이 아직 없습니다")
+    m = int(head["tested"])
+    acc = d.get("account") if isinstance(d.get("account"), dict) else {}
+    q = float(acc.get("fdr_q") or ALPHA)
+    bh_pass, surv = int(head.get("bh_pass") or 0), int(head.get("survivors") or 0)
+    luck, tail = bh_luck([(m, q)])
+    cells, norule, small = _int(head.get("cells")), _int(head.get("norule")), _int(head.get("small"))
+    skipped = ", ".join(x for x in (f"규칙이 생기지 않은 {norule:,}칸" if norule else "",
+                                     f"거래가 적은 {small:,}칸" if small else "") if x)
+    note = (f"매매법 × 봉 {cells:,}칸 중 {m:,}칸을 시험" if cells else f"{m:,}칸을 시험") + \
+        (f" ({skipped}은 시험하지 않음)" if skipped else "")
+    return row("regime5y", "past", title, where, tested=m,
+               rule_ko=f"{base_rule} + 보정(FDR {q * 100:g}%) + 확인 기간 A·B 둘 다 같은 방향", luck=luck,
+               luck_ko=f"스위치가 아무 효과 없다면 평균 {luck:.2f}개 (보정 없이 5%였다면 약 {m * ALPHA:.1f}개)",
+               passed=surv, passed_ko=f"끝까지 남은 칸 {surv:,}개 (보정만 통과 {bh_pass:,}개)", tail=tail(surv),
+               note=note)
 
 
 def combo5y_row(path: str) -> dict:
-    title, where = "조합 5년 (매매법 신호를 합친 규칙)", {"screen": "analysis"}
+    title, where = "조합 5년 (매매법 신호를 합친 규칙)", {"screen": "combo5y"}
     d = _load(path)
     mg = (d or {}).get("merged") if isinstance(d, dict) else None
     if not isinstance(mg, dict) or _int(mg.get("tested")) is None:
@@ -493,28 +603,36 @@ def luck_view(paper_db: Optional[str], *, agents_db: Optional[str] = None, check
               debate_db: Optional[str] = None, syn: Optional[dict] = None, data_dir: str = DATA,
               research: str = os.path.join(ROOT, "research"), now_ms: Optional[int] = None) -> dict:
     t0 = time.perf_counter()
-    rows = [checkpoint_row(paper_db, checkpoint_db)]
-    rows += ledger_rows(agents_db)
-    rows.insert(3, synergy_row(syn))
-    rows.append(debate_row(debate_db))
+    S = safe_row
+    rows = [S(lambda: checkpoint_row(paper_db, checkpoint_db), "checkpoint", "now", "30일 판정", {"screen": "checkpoint"})]
+    led = ledger_rows_safe(agents_db)
+    rows += led[:2] + [S(lambda: synergy_row(syn), "synergy", "now", "조합 시너지", {"screen": "analysis", "arg": "synergy"})]
+    rows += led[2:] + [S(lambda: debate_row(debate_db), "debate", "now", "토론방 가설", {"screen": "debate"})]
+    lib = [os.path.join(research, "library", "out", "summary.json"), os.path.join(research, "library", "out_b", "summary.json")]
     rows += [
-        _gauntlet("library", "매매법 라이브러리 2,000개 (5년)", [os.path.join(research, "library", "out", "summary.json"),
-                                                         os.path.join(research, "library", "out_b", "summary.json")],
-                  {"screen": "strategies"}, "RSI·MACD·이평·돈치안·볼린저·캔들 등 이미 알려진 규칙을 모아 시험"),
-        _gauntlet("ds5y", "딥시크 정의 342개 (5년)", [os.path.join(research, "deepseek200", "out", "summary.json")],
-                  {"screen": "board", "query": {"g": "ds200"}}, "딥시크가 낸 정의 171개 × 청산 2가지 (거래 수·통과 수만)",
-                  counts_only=True),
-        _gauntlet("reel5m", "5분 단타 변형 40개 (5년)", [os.path.join(research, "reel5m", "out", "summary.json")],
-                  {"screen": "strategies", "arg": "REEL_H1"}, "릴스 5분 단타와 그 변형"),
-        entry_row(),
-        indranges_row(os.path.join(data_dir, "indranges.json")),
-        combo5y_row(os.path.join(data_dir, "combo5y.json")),
+        S(lambda: _gauntlet("library", "매매법 라이브러리 2,000개 (5년)", lib, {"screen": "strategies"},
+                            "RSI·MACD·이평·돈치안·볼린저·캔들 등 이미 알려진 규칙을 모아 시험"),
+          "library", "past", "매매법 라이브러리 2,000개 (5년)", {"screen": "strategies"}),
+        S(lambda: _gauntlet("ds5y", "딥시크 정의 342개 (5년)", [os.path.join(research, "deepseek200", "out", "summary.json")],
+                            {"screen": "board", "query": {"g": "ds200"}},
+                            "딥시크가 낸 정의 171개 × 청산 2가지 (거래 수·통과 수만)", counts_only=True),
+          "ds5y", "past", "딥시크 정의 342개 (5년)", {"screen": "board", "query": {"g": "ds200"}}),
+        S(lambda: _gauntlet("reel5m", "5분 단타 변형 40개 (5년)", [os.path.join(research, "reel5m", "out", "summary.json")],
+                            {"screen": "strategies", "arg": "REEL_H1"}, "릴스 5분 단타와 그 변형"),
+          "reel5m", "past", "5분 단타 변형 40개 (5년)", {"screen": "strategies", "arg": "REEL_H1"}),
+        S(entry_row, "entry", "past", "지난 진입 연구 4개", {"screen": "strategies"}),
+        S(lambda: indranges_row(os.path.join(data_dir, "indranges.json")), "indranges", "past", "좋은 수치 찾기",
+          {"screen": "analysis", "arg": "indranges"}),
+        S(lambda: combo5y_row(os.path.join(data_dir, "combo5y.json")), "combo5y", "past", "조합 5년",
+          {"screen": "combo5y"}),
+        S(lambda: regime5y_row(os.path.join(data_dir, "regime5y.json")), "regime5y", "past", "장세 스위치 5년",
+          {"screen": "analysis", "arg": "regime"}),
     ]
     have = [r for r in rows if r["tested"] is not None]
+    # no sum of 'tested' or 'passed' across places: a pass means something different in each place (a BH pass, a hit
+    # of a prediction, a 3-stage gauntlet), so the page compares each place only with its own luck number
     return {"label": LABEL, "rows": rows, "example": example(), "verdict_ko": VERDICT_KO,
             "summary": {"places": len(rows), "with_data": len(have),
-                        "tested": sum(int(r["tested"] or 0) for r in have),
-                        "passed": sum(int(r["passed"] or 0) for r in have if r["passed"] is not None),
                         "more": [r["id"] for r in rows if r["verdict"] == "more"],
                         "some": [r["id"] for r in rows if r["verdict"] == "some"]},
             "now": now_ms if now_ms is not None else int(time.time() * 1000),

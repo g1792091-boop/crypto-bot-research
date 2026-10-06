@@ -8,7 +8,7 @@
 // its real threshold (analysis-kit.js progressBar); before the 30-day verdict nothing hints at a pass (판정 전); the
 // pills are neutral (no green / red); DeepSeek rows carry counts only (the server sends no money). 설명용, 판정 아님.
 // Its look: luck-kit.css, @imported by analysis.css, home.css and checkpoint.css.
-import {h, ui, fmt, put, motion} from "../core/pb.js";
+import {h, ui, fmt, put, motion, SCREENS} from "../core/pb.js";
 import {viewHead, progressBar} from "./analysis-kit.js";
 
 export const LUCK_API = "/api/v4/luck";
@@ -19,7 +19,10 @@ const PILL_KO = {more: "운보다 확실히 많음", some: "운보다 조금 많
   before: "판정 전", preparing: "준비 중"};
 
 const num = (x, dec = 2) => (x == null ? "—" : fmt.num(x, Number(x) >= 10 ? 0 : dec));
-const linkOf = (ctx, w) => (w && w.screen && ctx && ctx.href ? ctx.href(w.screen, w.arg || null, w.query || undefined) : null);
+// a link only to a screen this build has (조합 5년's own screen arrives with its branch), never from a past study that is
+// still 준비 중 (its tab may not exist yet)
+const linkOf = (ctx, w, r) => (w && w.screen && SCREENS[w.screen] && ctx && ctx.href
+  && !(r && r.verdict === "preparing" && r.part === "past") ? ctx.href(w.screen, w.arg || null, w.query || undefined) : null);
 export const verdictPill = (r) => ui.pill(PILL_KO[r.verdict] || "—", PILL[r.verdict] || "thin", r.verdict_ko || "");
 
 /** Two small bars on one scale: 운으로 (luck) and 실제 (passed); null when either side is missing. */
@@ -38,7 +41,7 @@ function bar(k, v, cls, top, label) {
 
 /** One place: title, verdict pill, the four numbers, the rule, the verdict line, the note, a link to where it lives. */
 export function luckRow(r, ctx) {
-  const href = linkOf(ctx, r.where);
+  const href = linkOf(ctx, r.where, r);
   const head = h("div", {class: "lk-rt"}, h("b", {class: "lk-title"}, r.title), verdictPill(r),
     href ? h("a", {class: "lk-go", href}, "보러 가기 →") : null);
   if (r.verdict === "preparing") {
@@ -103,7 +106,9 @@ export function luckView(d, env) {
       read: "곳마다 시험한 수, 통과 기준, 실력이 하나도 없어도 운으로 통과할 수, 실제로 통과한 수를 나란히 둡니다. 판정이 아니라 '얼마나 조심해서 봐야 하나'를 보여 줍니다."}),
     whyCard(d),
     ui.card({plate: "지금 실험", sub: "이번 모의 실험의 기록"}, list(now)),
-    ui.card({plate: "지난 5년 연구", sub: "이미 끝난 시험의 결과 파일"}, list(past),
+    ui.card({plate: "지난 5년 연구", sub: "이미 끝난 시험의 결과 파일"},
+      h("p", {class: "lk-rule"}, h("b", null, "5년 연구란 "), "지금의 30일 모의 실험을 기다리지 않고, 바이낸스의 실제 지난 시세 약 5년치(연구에 따라 2020~2021년부터 2026년 9월까지)로 매매법을 미리 돌려 본 과거 시험입니다. 묻는 것은 하나: '과거에도 운으로는 설명되지 않을 만큼 좋았나?' 이 화면은 그 결과 파일을 읽기만 하고 다시 계산하지 않습니다."),
+      list(past),
       h("p", {class: "muted lk-note"}, "5년 연구 파일이 아직 없는 곳은 '준비 중'입니다. 파일이 생기면 여기에 바로 나옵니다.")),
   ];
 }
@@ -140,7 +145,11 @@ export function luckMini(ctx, o = {}) {
       .sort((a, b) => (a.part === "now" ? 0 : 1) - (b.part === "now" ? 0 : 1)).slice(0, 3);
     put(body, h("div", {class: "lk-mlist", role: "list"}, [ck, ...rest].filter(Boolean).map((r) => miniRow(r, ctx))));
     const sm = d.summary || {};
-    const named = (ids) => (ids || []).map((id) => { const r = rows.find((x) => x.id === id); return r ? r.short || r.title : id; });
+    // a place that is 'more than luck' with a caveat says it right there (e.g. 좋은 수치 찾기: a difference, not money)
+    const named = (ids) => (ids || []).map((id) => {
+      const r = rows.find((x) => x.id === id);
+      return r ? (r.short || r.title) + (r.caveat_ko ? `: ${r.caveat_ko}` : "") : id;
+    });
     const moreIds = named(sm.more);
     put(foot, `시험하는 곳 ${fmt.int(sm.places || rows.length)}곳 · 숫자가 있는 곳 ${fmt.int(sm.with_data || 0)}곳 · 운보다 확실히 많은 곳 ${fmt.int(moreIds.length)}곳`,
       moreIds.length ? ` (${moreIds.join(", ")})` : "");
@@ -149,7 +158,7 @@ export function luckMini(ctx, o = {}) {
 }
 
 function miniRow(r, ctx) {
-  const href = linkOf(ctx, r.where);
+  const href = linkOf(ctx, r.where, r);
   const nums = r.verdict === "preparing" ? "준비 중"
     : r.verdict === "before" ? `대상 ${fmt.int(r.tested)}개 · 운만으로 평균 ${num(r.luck)}개 · 판정 전`
     : `시험 ${fmt.int(r.tested)} · 통과 ${r.passed == null ? "—" : fmt.int(r.passed)} · 운으로 ${num(r.luck)}`;
