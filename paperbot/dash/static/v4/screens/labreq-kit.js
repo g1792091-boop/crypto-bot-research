@@ -18,6 +18,8 @@ import {h, ui, fmt} from "../core/pb.js";
 const LAB = "team:lab";
 const FIDELITY_CLS = {exact: "good", approx: "warn", none: "thin"};
 const MAX = {entry: 350, exit: 200, coins: 60, link: 150, note: 120};
+// the statuses whose code line says something (a result, or why nothing ran); a waiting row's line is only its status
+const RESULT = new Set(["tested", "reused", "duplicate", "not_counted", "error", "expired", "declined", "refused", "bad_spec"]);
 
 function field(label, input, hint) {
   return h("label", {class: "lq-f"}, h("span", {class: "lq-l"}, label), input, hint ? h("small", {class: "lq-h"}, hint) : null);
@@ -132,14 +134,19 @@ function card(ctx, c, onDecided, confirm) {
         h("button", {class: "btn-line bad", type: "button", onclick: () => ask("decline")}, "그만두기"));
     }
   }
+  // not tested at all (outside the grammar, refused): the code's reason once, never the same words three times
+  const untested = ["refused", "bad_spec"].includes(c.status);
+  const reasons = c.reasons_ko || [];
+  const result = RESULT.has(c.status) && !(untested && reasons.length) ? c.result_ko : "";
   return h("div", {class: "lq-card", role: "listitem"},
     h("div", {class: "lq-ch"}, h("b", null, c.label_ko || `#${c.id}`), fid, chip, h("time", {class: "muted"}, fmt.kst(c.ts))),
     steps,
-    c.description_ko ? h("p", {class: "lq-desc"}, c.description_ko) : null,
+    c.description_ko && !untested ? h("p", {class: "lq-desc"}, c.description_ko) : null,
     c.idea_ko ? h("p", {class: "lq-q"}, h("span", {class: "muted"}, "요청 한 줄 "), `“${c.idea_ko}”`) : null,
     quoteList("번역가: 그대로", c.kept), quoteList("번역가: 빠짐·바뀜", c.lost),
-    (c.reasons_ko || []).length ? h("ul", {class: "lq-why"}, c.reasons_ko.map((x) => h("li", null, x))) : null,
-    c.result_ko ? h("p", {class: "lq-res"}, h("span", {class: "muted"}, "코드 결과 "), c.result_ko) : null,
+    reasons.length ? h("ul", {class: "lq-why"}, reasons.map((x) => h("li", null, x))) : null,
+    result ? h("p", {class: "lq-res"}, h("span", {class: "muted"}, "코드 결과 "), result) : null,
+    untested ? h("p", {class: "lq-res"}, "시험하지 않았고 시험 수에도 넣지 않았습니다") : null,
     h("p", {class: "rk-note"}, c.exits_ko || ""),
     acts);
 }

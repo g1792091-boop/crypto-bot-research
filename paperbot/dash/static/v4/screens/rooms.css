@@ -122,6 +122,8 @@
 [data-screen="rooms"] .rm-mem small { color: var(--muted); font-size: var(--t-xs); line-height: 1.45; }
 [data-screen="rooms"] .rm-trow { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: var(--t-xs); color: var(--ink-2); }
 [data-screen="rooms"] .rm-trow span:first-child { min-width: 0; overflow-wrap: anywhere; }
+/* the queue row's chips (labIntake: '두 분 확인 필요' + the test number) keep their width: a nowrap pill never pokes out */
+[data-screen="rooms"] .rm-trow > .row { flex: 0 1 auto; min-width: min-content; max-width: 55%; justify-content: flex-end; }
 [data-screen="rooms"] .rm-past { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 [data-screen="rooms"] .rm-nrow { display: grid; gap: 2px; padding-top: 6px; border-top: 1px solid var(--line); font-size: var(--t-xs); }
 [data-screen="rooms"] .rm-nrow time { color: var(--muted); }

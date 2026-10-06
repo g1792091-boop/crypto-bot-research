@@ -230,7 +230,7 @@ def claim_key(spec: dict) -> Optional[tuple]:
 def claim_ko(key: tuple) -> str:
     t, v = key
     if t == "skip_tag":
-        return f"'{v}' 진입은 건너뛰는 게 낫다"
+        return f"'{v}' 붙은 진입은 건너뛰는 게 낫다"
     if t == "stop_atr":
         return f"손절을 {float(v):g} ATR로 바꾸면 낫다"
     if t == "lock_start":

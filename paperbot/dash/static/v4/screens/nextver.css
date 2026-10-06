@@ -10,7 +10,7 @@ a.nv-row:hover, a.nv-row:focus-visible { background: var(--surface-3, var(--surf
 .nv-rh { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .nv-rh time { margin-left: auto; }
 .nv-title { color: var(--ink); font: 700 var(--t-sm)/1.45 var(--f-body); overflow-wrap: anywhere; }
-.nv-sub, .nv-quote, .nv-luck { margin: 0; overflow-wrap: anywhere; }
+.nv-sub, .nv-quote, .nv-luck { margin: 0; overflow-wrap: anywhere; font-size: var(--t-xs); line-height: 1.55; color: var(--ink-2); }
 .nv-quote { color: var(--ink-2); font-style: italic; }
 .nv-luckbox { display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line-2); font-size: var(--t-xs); }
 .nv-luckbox:empty { display: none; }
