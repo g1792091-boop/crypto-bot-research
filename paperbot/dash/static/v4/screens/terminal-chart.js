@@ -217,7 +217,7 @@ export function termChart(ctx, st, onTf) {
       vpPrepare("term", false);                           // 매물대 is opt-in here (the declutter); a device with saved choices starts with it off too
       deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], defaults: {sr: false, vp: false},
         sym: () => st.sym, legend});
-      vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, sym: () => st.sym, tf: () => st.tf});
+      vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, legend, sym: () => st.sym, tf: () => st.tf});
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);

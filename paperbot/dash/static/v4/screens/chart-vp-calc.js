@@ -35,6 +35,13 @@ export function rowCount(paneH) {
 /** Whether the 매물대 starts on: the 차트 screen on a PC window, never on a phone and never on the 터미널 (the declutter). */
 export function defaultOn(key, narrow) { return key === "chart" && !narrow; }
 
+/** The chart deck's saved choices ({v, off, hide, smc}, core/chartfx.js) on a device that saved them before the "vp" group
+ *  existed: the deck takes a group it never saw as on, so when the chart's default is off the saved list gets "vp" once. */
+export function withVpDefault(raw, defaultOn) {
+  if (defaultOn || !raw || typeof raw !== "object" || !Array.isArray(raw.off) || raw.off.includes("vp")) return raw;
+  return {...raw, off: [...raw.off, "vp"]};
+}
+
 /** Korea time midnight (00:00 KST) of the day that contains ``nowSec`` (seconds). */
 export function kstDayStart(nowSec) { return Math.floor((nowSec + 32400) / 86400) * 86400 - 32400; }
 

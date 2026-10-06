@@ -125,7 +125,7 @@ export async function mount(el, ctx) {
     vpPrepare("chart", !narrow());                      // 매물대 starts on for a PC window (not a phone); a device with saved choices too
     deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"],
       defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false, vp: false} : {vp: true}, sym: () => st.sym, legend});
-    vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "chart", host: vpHost, sym: () => st.sym, tf: () => st.tf});
+    vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "chart", host: vpHost, legend, sym: () => st.sym, tf: () => st.tf});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });

@@ -15,7 +15,7 @@
 //     zoom, resize, range or coin change (it is a few thousand additions). 오늘 / 최근 7일 read /api/candles (5m / 15m
 //     bars) once a minute while on; the bot's levels once every two minutes.
 import {h, put, ui, fmt, local, tok, serverNow, GROUP_KO} from "../core/pb.js";
-import {RANGES, RANGE_KO, APPROX, LEVEL_TFS, MIN_GAP_MS, rowCount, rangeSpec, visibleIdx, buildProfile, rowText, rowInfo, throttle, placeLabels} from "./chart-vp-calc.js";
+import {RANGES, RANGE_KO, APPROX, LEVEL_TFS, MIN_GAP_MS, rowCount, rangeSpec, visibleIdx, buildProfile, rowText, throttle, placeLabels, withVpDefault} from "./chart-vp-calc.js";
 
 GROUP_KO.vp = "매물대";                 // the deck's '선' menu lists a group by this name
 const PREF = "vp-";                     // per device: {range, bot} (on / off itself is the deck's)
@@ -29,7 +29,8 @@ export function vpPrepare(key, defaultOn) {
   if (local.get(PREF + "seen-" + key, false)) return;
   local.set(PREF + "seen-" + key, true);
   const raw = local.get("cfx-" + key, null);               // core/chartfx.js: "cfx-" + o.key
-  if (!defaultOn && raw && typeof raw === "object" && Array.isArray(raw.off) && !raw.off.includes("vp")) local.set("cfx-" + key, {...raw, off: [...raw.off, "vp"]});
+  const next = withVpDefault(raw, defaultOn);
+  if (next !== raw) local.set("cfx-" + key, next);
 }
 
 function colours() {
@@ -39,17 +40,18 @@ function colours() {
   c.fs = parseFloat(c.fs) || 12;
   return c;
 }
-/** A volume (the coin's own units) with the digits it needs: 12.35 · 128 · 4.2k · 1.3M. */
+/** A volume (the coin's own units) with the digits it needs: 12.35 · 128 · 4,215 · 1.3M. */
 export function volText(x) {
   const a = Math.abs(Number(x));
   if (!Number.isFinite(a)) return "—";
-  return a >= 1000 ? fmt.compact(x) : a >= 100 ? fmt.num(x, 0) : a >= 10 ? fmt.num(x, 1) : a >= 1 ? fmt.num(x, 2) : fmt.num(x, 3);
+  return a >= 1e6 ? fmt.compact(x) : a >= 100 ? fmt.int(x) : a >= 10 ? fmt.num(x, 1) : a >= 1 ? fmt.num(x, 2) : fmt.num(x, 3);
 }
 
 /**
- * vpAttach({chart, series, deck, wrap, box, ctx, key, host, sym, tf, narrow}) -> {key (the legend row, also appended to
+ * vpAttach({chart, series, deck, wrap, box, ctx, key, host, legend, sym, tf}) -> {key (the legend row, also appended to
  * ``host``), refresh()}
- *   deck: the screen's chartDeck (groups include "vp"); sym() / tf(): the coin and interval on screen; key: "term" | "chart".
+ *   deck: the screen's chartDeck (groups include "vp"); sym() / tf(): the coin and interval on screen; key: "term" | "chart";
+ *   legend: the screen's OHLC legend element over the chart (the labels keep under it when it reaches their column).
  */
 export function vpAttach(o) {
   const {chart, series, deck, wrap, box, ctx} = o;
@@ -78,6 +80,7 @@ export function vpAttach(o) {
     h("b", {class: "vp-ttl", title: APPROX}, "매물대"), rangeSeg,
     h("span", {class: "vp-sw buy", title: "매수 물량: 시장가로 산 쪽 (테이커 매수)"}, "매수"),
     h("span", {class: "vp-sw sell", title: "매도 물량: 시장가로 판 쪽 (전체 − 매수)"}, "매도"),
+    h("span", {class: "vp-sw tot", title: "이 자료에는 매수·매도 구분이 없어 거래량 합계만 그립니다"}, "거래량 합계"),
     h("span", {class: "vp-sw poc", title: "POC: 이 구간에서 가장 많이 거래된 가격"}, "POC 가장 많이 거래된 가격"),
     h("span", {class: "vp-sw va", title: "거래량의 70%가 모인 구간: 위 끝 VAH, 아래 끝 VAL"}, "70% 구간"),
     botBtn, meta, retry, info);
@@ -93,19 +96,20 @@ export function vpAttach(o) {
     botBtn.disabled = !botOk;
     botBtn.title = botOk ? "봇이 쓰는 매물대 세 줄 (매물 최다 가격 · 위 끝 · 아래 끝) 보이기·숨기기. 이 화면의 매물대와 비교해 보세요."
       : "봇은 15분 · 30분 · 1시간 · 4시간 봉에서만 매물대를 씁니다";
-    const p = st.prof, parts = [];
-    if (st.range !== "view" && st.rbusy && !st.rb) parts.push(`${RANGE_KO[st.range]} 불러오는 중…`);
-    else if (st.rerr) parts.push(`${RANGE_KO[st.range]} 자료를 불러오지 못했습니다`);
+    const p = st.prof, stats = [], notes = [];
+    keyEl.dataset.split = p && p.ok && !p.split ? "0" : "1";
+    if (st.range !== "view" && st.rbusy && !st.rb) notes.push(`${RANGE_KO[st.range]} 불러오는 중…`);
+    else if (st.rerr) notes.push(`${RANGE_KO[st.range]} 자료를 불러오지 못했습니다`);
     else if (p && p.ok) {
-      parts.push(`봉 ${fmt.int(p.bars)}개`);
-      parts.push(p.split ? `매수 비율 ${fmt.num(p.buyRatio * 100, 0)}%` : "합계만 (이 자료에는 매수·매도 구분이 없습니다)");
-    } else if (p && p.why === "novol") parts.push("이 봉들에는 거래량 자료가 없습니다");
-    else if (p && p.why === "flat") parts.push("가격 변화가 없어 칸을 나눌 수 없습니다");
-    else if (!p) parts.push("계산 중…");
-    if (st.bot && botOk && st.berr) parts.push("봇 기준선을 불러오지 못했습니다");
-    else if (st.bot && botOk && st.botLv && st.botLv.why) parts.push("봇 기준선: 봉이 모자라 계산하지 못했습니다");
-    const txt = parts.join(" · ");
-    if (txt !== st.metaTxt) { st.metaTxt = txt; put(meta, txt); }                // (a pan recomputes often: touch the DOM only for news)
+      stats.push(`봉 ${fmt.int(p.bars)}개`);
+      if (p.split) stats.push(`매수 비율 ${fmt.num(p.buyRatio * 100, 0)}%`); else notes.push("합계만 (이 자료에는 매수·매도 구분이 없습니다)");
+    } else if (p && p.why === "novol") notes.push("이 봉들에는 거래량 자료가 없습니다");
+    else if (p && p.why === "flat") notes.push("가격 변화가 없어 칸을 나눌 수 없습니다");
+    else if (!p) notes.push("계산 중…");
+    if (st.bot && botOk && st.berr) notes.push("봇 기준선을 불러오지 못했습니다");
+    else if (st.bot && botOk && st.botLv && st.botLv.why) notes.push("봇 기준선: 봉이 모자라 계산하지 못했습니다");
+    const txt = [...stats, ...notes].join(" · ");
+    if (txt !== st.metaTxt) { st.metaTxt = txt; put(meta, txt); meta.dataset.note = notes.length ? "1" : ""; }     // (a pan recomputes often: touch the DOM only for news)
     const bad = !!(st.rerr || (st.bot && botOk && st.berr));
     meta.classList.toggle("bad", bad);
     retry.hidden = !bad;
@@ -168,6 +172,7 @@ export function vpAttach(o) {
   }
   function recompute(sel) {
     st.computes++;
+    keyEl.dataset.computes = String(st.computes);                                // (what the browser checks read: how often the profile was rebuilt)
     st.prof = sel.list && sel.i1 >= sel.i0 ? buildProfile(sel.list.slice(sel.i0, sel.i1 + 1), {n: sel.rows}) : {ok: false, why: "nobars"};
     paintKey();
   }
@@ -185,7 +190,7 @@ export function vpAttach(o) {
   /** The names column at the pane's right edge (core/chartfx.js): room for "손절 ×2"-sized tags at least, wider when a
    *  longer one is shown (measured at most twice a second; it only grows until the coin or interval changes). */
   function reserve(W) {
-    const base = Math.round(st.col.fs * 5.4 + 14);
+    const base = Math.min(Math.round(st.col.fs * 5.4 + 14), Math.round(W * 0.24));
     const now = Date.now();
     if (st.resDirty || now - st.resAt > 4000) {
       st.resDirty = false; st.resAt = now;
@@ -200,7 +205,7 @@ export function vpAttach(o) {
     const p = st.prof;
     if (!p || !p.ok) return;
     const Y = (v) => series.priceToCoordinate(v);
-    const x1 = W - reserve(W), maxW = Math.max(56, Math.min(240, W * 0.16));
+    const x1 = W - reserve(W), maxW = Math.max(56, Math.min(240, W * (W < 420 ? 0.22 : 0.16)));
     if (x1 < 120) return;
     const rows = [];
     for (let i = 0; i < p.n; i++) {
@@ -223,7 +228,12 @@ export function vpAttach(o) {
     lab(`VAH ${fmt.price(vah.price)}`, vah.y, -LH * 0.6, "warn");
     lab(`VAL ${fmt.price(val.price)}`, val.y, LH * 0.6, "warn");
     for (const b of bot) lab(`봇 ${b.kind === 51 ? "최다가" : b.kind === 52 ? "위 끝" : "아래 끝"} ${fmt.price(b.price)}`, b.y, b.kind === 53 ? LH * 0.6 : -LH * 0.6, "ink");
-    placeLabels(labs, LH, 2, H - 2);
+    labs.splice(Math.max(2, Math.floor(H / (LH * 2.4))));           // a short pane keeps only the first few (POC, VAH, VAL, then the bot's): the labels never fill it
+    // the screen's OHLC legend (top left) runs over the labels' column on a narrow pane: the labels start under it
+    let top = 2;
+    const lg = o.legend;
+    if (lg && lg.textContent && lg.offsetLeft + lg.offsetWidth - box.offsetLeft > x1 - 150) top = Math.max(top, lg.offsetTop + lg.offsetHeight - box.offsetTop + 2);
+    placeLabels(labs, LH, top, H - 2);
     g = {x1, x0: x1 - maxW, maxW, W, H, rows, poc, vah, val, bot, labs};
     st.paneW = W;
   }
@@ -277,6 +287,7 @@ export function vpAttach(o) {
           const a = (isPoc ? 0.8 : inVa ? 0.52 : 0.27) + (hov ? 0.22 : 0);
           const top = Math.round(r.y0 * vr), hgt = Math.max(1, Math.round(r.y1 * vr) - top - 1);
           const lt = Math.max(1, Math.round(r.len * hr)), lb = Math.round(r.buyLen * hr);
+          if (hov) { c.globalAlpha = 0.14; c.fillStyle = col.ink; c.fillRect(Math.round(gg.x0 * hr), top, xr - Math.round(gg.x0 * hr), hgt); }      // the row under the pointer
           c.globalAlpha = Math.min(1, a);
           if (p.split) {
             c.fillStyle = col.up; c.fillRect(xr - lb, top, lb, hgt);
