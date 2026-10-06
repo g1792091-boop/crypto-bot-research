@@ -224,7 +224,11 @@ export function tradesCard(ctx) {
   // today's best / worst: from the summary the shell already polls every minute (no request of its own), instead of
   // downloading the day's 2,000 newest trades every minute (815 KB; wrong on a day with more than 2,000)
   put(bw, motion.shimmer(2));
-  ctx.watch("summary", (s) => { if (s) renderBW(s); });
+  // (no summary at all yet and its load failed: 못 불러옴 with its own retry, not a shimmer that never ends)
+  ctx.watch("summary", (s, k, err) => {
+    if (s) renderBW(s);
+    else if (err) put(bw, ui.errorBox(err, () => ctx.store.refresh("summary"), {key: "summary"}));
+  });
   let t = null;
   ctx.on("trades", () => { clearTimeout(t); t = setTimeout(() => ctx.alive() && load(), 1500); });
   ctx.track(() => clearTimeout(t));
