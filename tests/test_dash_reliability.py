@@ -149,6 +149,33 @@ def test_the_version_follows_the_files_edit_copy_and_rollback(tmp_path):
     assert a.ver() not in (v1, v2)
 
 
+def test_an_update_landing_between_two_looks_is_never_kept_a_year_under_the_old_address(tmp_path):
+    """update-dash.sh swaps the folder while the old server still runs (and a file can change between two looks of a
+    running one): the new bytes must not be stored for a year under the old version's address, where a --rollback to
+    that version would find them, nor be matched by the old file's content ETag."""
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+    from starlette.testclient import TestClient as Plain
+    root = _tree(tmp_path)
+    a = AS.Assets(str(root), check_s=3600)              # this server's next look is far off
+    v1 = a.ver()
+    c = Plain(Starlette(routes=[Mount("/static", app=AS.asset_files(str(root), a))]))
+    first = c.get(f"/static/v-{v1}/v4/core/x.js")
+    assert first.headers["cache-control"] == AS.IMMUTABLE and first.headers["etag"] == a.etag("v4/core/x.js")
+    p = root / "v4" / "core" / "x.js"
+    p.write_text("export const x = 99;\n")
+    os.utime(p, ns=(p.stat().st_atime_ns, p.stat().st_mtime_ns + 5_000_000_000))
+    for hdrs in ({}, {"if-none-match": first.headers["etag"]}):
+        r = c.get(f"/static/v-{v1}/v4/core/x.js", headers=hdrs)
+        assert r.status_code == 200 and b"99" in r.content
+        assert r.headers["cache-control"] == "no-cache" and r.headers.get("etag") != first.headers["etag"]
+    # the changed file made the server look again at once: the new version, a year again for every file under it
+    v2 = a.ver()
+    assert v2 != v1
+    assert c.get(f"/static/v-{v2}/v4/core/x.js").headers["cache-control"] == AS.IMMUTABLE
+    assert c.get(f"/static/v-{v2}/v4/core/y.js").headers["cache-control"] == AS.IMMUTABLE
+
+
 def test_index_html_and_boot_modules(tmp_path):
     root = _tree(tmp_path)
     a = AS.Assets(str(root), check_s=0)

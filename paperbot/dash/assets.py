@@ -12,6 +12,10 @@ downloaded the 60-66 screen files again, 1.4-2.6 s of empty screen).
   time ('no-cache'), and the page's '새 버전' chip (core/version.js, /api/time ``ver``) offers the reload.
 - Unversioned /static files (the old /v3 page, a direct /static/v4/... link) are revalidated on every use with an ETag
   (``etag``: the content hash for v4 / vendor files, not Starlette's mtime-and-size one).
+- A file is promised for a year (and given its content ETag) only while it is the very file the fingerprint was taken
+  from (``current``: same size and mtime). Between an update landing on disk and the next look (up to ``CHECK_S``) the
+  new bytes are served revalidated, never stored for a year under the old version's address (a later ``--rollback``
+  to that version would otherwise find the newer file in the browser's cache).
 - ``index_html`` also lists the boot modules (the static imports reachable from core/main.js) as
   ``<link rel="modulepreload">``, so the first open after an update asks for them in one round instead of a chain
   nine imports deep.
@@ -47,6 +51,7 @@ class Assets:
         self._sig: Optional[tuple] = None
         self._ver = ""
         self._etags: dict = {}
+        self._stats: dict = {}          # rel -> (size, mtime_ns) the fingerprint was taken from
         self._index: Optional[str] = None
 
     # ------------------------------------------------------------------ fingerprints
@@ -77,6 +82,7 @@ class Assets:
             if sig == self._sig:
                 return
             etags, whole = {}, hashlib.sha256()
+            stats = {rel: (size, mt) for rel, size, mt in sig}
             for rel, _, _ in sig:
                 h = hashlib.sha256()
                 try:
@@ -88,11 +94,20 @@ class Assets:
                 etags[rel] = h.hexdigest()[:24]
                 whole.update(f"{rel}\0{etags[rel]}\n".encode())
             self._etags, self._ver, self._sig, self._index = etags, whole.hexdigest()[:10], sig, None
+            self._stats = stats
 
     def ver(self) -> str:
         """The current fingerprint of the page's code (10 hex digits)."""
         self.refresh()
         return self._ver
+
+    def current(self, rel: str, st) -> bool:
+        """The file on disk (``st``: its os.stat) is the one the fingerprint was taken from. False for a file changed
+        since the last look (an update landing between two looks): the next request looks again at once."""
+        ok = self._stats.get(rel) == (st.st_size, st.st_mtime_ns)
+        if not ok:
+            self._checked = 0.0
+        return ok
 
     def etag(self, rel: str) -> Optional[str]:
         """'"<content hash>"' of a file under static/ (relative path, '/' separators), None when it is not an asset."""
@@ -169,16 +184,19 @@ def asset_files(static_dir: str, assets: Assets):
                 cc = IMMUTABLE if ver == assets._ver else REVALIDATE
             resp = await super().get_response(path, scope)
             if cc and resp.status_code in (200, 304):
-                resp.headers["Cache-Control"] = cc
+                # a year only for the very file the version was taken from (an update landing just now: revalidated)
+                resp.headers["Cache-Control"] = cc if cc != IMMUTABLE or getattr(resp, "pb_current", False) else REVALIDATE
             return resp
 
         def file_response(self, full_path, stat_result, scope, status_code: int = 200):
             rel = os.path.relpath(os.path.abspath(full_path), assets.root).replace(os.sep, "/")
-            e = assets._etags.get(rel)
+            ok = assets.current(rel, stat_result)
+            e = assets._etags.get(rel) if ok else None          # (a changed file: Starlette's own mtime-and-size ETag)
             resp = FileResponse(full_path, status_code=status_code, stat_result=stat_result,
                                 headers={"etag": f'"{e}"'} if e else None)
             if self.is_not_modified(resp.headers, Headers(scope=scope)):
-                return NotModifiedResponse(resp.headers)
+                resp = NotModifiedResponse(resp.headers)
+            resp.pb_current = ok
             return resp
 
     return AssetFiles(directory=static_dir)
