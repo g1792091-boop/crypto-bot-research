@@ -246,8 +246,8 @@ export async function mount(el, ctx) {
       money.length ? ui.refNote(verdictTs(), "동전 봇 순위는 같은 봉 동전 봇 묶음(RANDOM_1~3)을 같은 봉끼리 더해 견준 참고 숫자입니다.")
         : ui.note("딥시크끼리는 거래 수와 지금 포지션만 나란히 봅니다."),
       money.length ? ui.assume(null, "수익률·낙폭·손익비는 닫힌 거래 기준") : null));
-    kids.push(ui.card({plate: "봉별로 나눠 보기", sub: "참고"}, tfTable(items),
-      ui.note("동전 대비 = 같은 봉 동전 봇 수익률 중앙값과의 차이 (참고, 판정 아님). 늦게 시작한 추가 계좌는 견주지 않습니다.")));
+    kids.push(ui.card({plate: "봉별로 나눠 보기", sub: money.length ? "참고" : "거래 수"}, tfTable(items),
+      money.length ? ui.note("동전 대비 = 같은 봉 동전 봇 수익률 중앙값과의 차이 (참고, 판정 아님). 늦게 시작한 추가 계좌는 견주지 않습니다.") : null));
     // the research is NOT the live rules (vs5y-kit says the same on the strategy page): the 36's 5-year cards used the v3
     // leverage rule, every signal was taken (a live account holds one position at a time), and some research exits differ
     const exitDiff = items.filter((x) => x.y5 && x.y5.exit && x.y5.same_exits_as_live === false)
