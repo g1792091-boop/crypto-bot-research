@@ -89,6 +89,16 @@ def test_reply_fields_are_checked_and_old_answers_read_as_plain_turns():
                                                   {"speaker": "낙관론자", "text": "b", "reply_to": "퀀트", "reply_stance": "보완"}]},
                                       ensure_ascii=False), order)
     assert alias["turns"][1]["reply_stance"] == "보완"
+    # review: the role's spelling without (or with an extra) space and a stance word with more after it still count;
+    # the stored names are the code's own (ROLES), so the dashboard can find the bubble a turn answers
+    spell = D.parse_answer(json.dumps({"turns": [
+        {"speaker": "리스크책임자", "text": "a"},
+        {"speaker": "퀀트", "reply_to": "리스크책임자", "stance": "반대합니다", "text": "b"},
+        {"speaker": "낙 관론자", "reply_to": "퀀트", "stance": "보완(조건 하나)", "text": "c"},
+        {"speaker": "비관론자", "reply_to": "낙관론자", "stance": "동 의", "text": "d"}]}, ensure_ascii=False), order)
+    assert [(t["speaker"], t["reply_to"], t["reply_stance"]) for t in spell["turns"]] == [
+        ("리스크 책임자", None, None), ("퀀트", "리스크 책임자", "반대"), ("낙관론자", "퀀트", "보완"),
+        ("비관론자", "낙관론자", None)]
     old = D.parse_answer(json.dumps({"turns": [{"speaker": r, "text": "말"} for r in ROLES[:4]], "note": "n"},
                                     ensure_ascii=False), order)
     assert [(t["reply_to"], t["reply_stance"]) for t in old["turns"]] == [(None, None)] * 4 and old["note"] == "n"

@@ -570,6 +570,7 @@ def user_text(packet: dict, topic_ko: str, why: str, round_no: int, order: list[
 
 
 _OBJ_START = re.compile(r'\{\s*"')
+_ROLE_BY_KEY = {"".join(r.split()): r for r in ROLES}
 
 
 def _salvage(s: str) -> tuple:
@@ -596,12 +597,14 @@ def _reply(t: dict, speaker: str, spoken: list) -> tuple:
     the speaker), the stance only with such a target and only 동의 / 반대 / 보완 / 질문. Anything else: (None, None),
     and the turn is kept as a plain turn."""
     rt = t.get("reply_to")
-    rt = rt.strip() if isinstance(rt, str) else None
+    # the role's own spelling even when the model drops or adds a space ("리스크책임자" -> "리스크 책임자")
+    rt = _ROLE_BY_KEY.get("".join(rt.split()), rt.strip()) if isinstance(rt, str) else None
     if not rt or rt == speaker or rt not in spoken:
         return None, None
     st = t.get("stance", t.get("reply_stance"))
-    st = st.strip() if isinstance(st, str) else None
-    return rt, (st if st in REPLY_STANCES else None)
+    st = st.strip() if isinstance(st, str) else ""
+    # one of the four words, also when the model adds to it ("반대합니다", "보완(조건)"); anything else: no chip
+    return rt, next((x for x in REPLY_STANCES if st.startswith(x)), None)
 
 
 def parse_answer(text: str, order: list[str]) -> dict:
@@ -636,7 +639,10 @@ def parse_answer(text: str, order: list[str]) -> dict:
     for t in obj["turns"][:TURNS_MAX]:
         if not isinstance(t, dict) or not isinstance(t.get("text"), str) or not t["text"].strip():
             continue
-        sp = t.get("speaker") if t.get("speaker") in ROLES else (order[len(turns)] if len(turns) < len(order) else None)
+        sp = t.get("speaker")
+        sp = _ROLE_BY_KEY.get("".join(sp.split())) if isinstance(sp, str) else None
+        if sp is None:
+            sp = order[len(turns)] if len(turns) < len(order) else None
         if sp is None:
             continue
         rt, st = _reply(t, sp, spoken)
