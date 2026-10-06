@@ -1461,6 +1461,17 @@ def _check_num_ko(engine: str, mark: str, det: dict) -> str:
     return ""
 
 
+# the ledger's status words inside the code check's text ('이미 시험함: 장부 #57 (failed)', debate_factory.check_idea):
+# the screen says them in Korean (the owners read Korean; the stored text is unchanged)
+TRIAL_STATUS_KO = {"passed": "통과", "failed": "불통과", "described": "설명용 시험", "no_data": "자료 없음", "error": "오류",
+                   "proposed": "통과·두 분께 제안함", "lapsed": "통과했다가 기준 미달", "running": "시험 중"}
+
+
+def _check_text_ko(text: Any) -> str:
+    return re.sub(r"\((passed|failed|described|no_data|error|proposed|lapsed|running)\)",
+                  lambda m: f"({TRIAL_STATUS_KO[m.group(1)]})", str(text or ""))
+
+
 def _failed_marks(det: dict) -> list:
     """The checks ①-⑥ a stored 5-year result failed (labintake's detail ``failed_checks``), known marks only; [] when
     the detail has no such list."""
@@ -1554,7 +1565,7 @@ def debate_idea(row: dict) -> dict:
            "pro_ko": str(row.get("pro_ko") or "")[:200], "con_ko": str(row.get("con_ko") or "")[:200],
            "con_check": cc, "con_check_ko": names.get(cc, "") if cc else "",
            "check_status": str(row.get("check_status") or ""),
-           "check_ko": str(row.get("check_ko") or DF.CHECK_KO.get(row.get("check_status"), "") or "")[:200],
+           "check_ko": _check_text_ko(row.get("check_ko") or DF.CHECK_KO.get(row.get("check_status"), "") or "")[:200],
            "old_trial_id": _pos_int(old),
            "queue_status": str(row.get("queue_status") or ""),
            "queue_ko": str(row.get("queue_ko") or DF.QUEUE_KO.get(row.get("queue_status"), "") or "")[:160],

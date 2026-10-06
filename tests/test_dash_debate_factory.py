@@ -457,9 +457,9 @@ def _deep_state(tmp_path, name, error, mark, status="error"):
 
 def test_the_deep_debate_promises_a_retry_only_when_the_service_will_try(tmp_path):
     from paperbot.agents.debate import DEEP_ATTEMPTS, DEEP_RETRY_MS
-    once = _deep_state(tmp_path, "once", "반박: overloaded: 529", {"attempts": 1, "last": NOW + 2 * M})
+    once = _deep_state(tmp_path, "once", "반박: server: HTTP 529", {"attempts": 1, "last": NOW + 2 * M})
     assert once["retry"] and once["retry_ts"] == NOW + 2 * M + DEEP_RETRY_MS and once["last"]["tag"] is None
-    spent = _deep_state(tmp_path, "spent", "반박: overloaded: 529", {"attempts": DEEP_ATTEMPTS, "last": NOW + 2 * M})
+    spent = _deep_state(tmp_path, "spent", "반박: server: HTTP 529", {"attempts": DEEP_ATTEMPTS, "last": NOW + 2 * M})
     assert not spent["retry"] and spent["retry_ts"] is None and spent["attempts_max"] == DEEP_ATTEMPTS
     cap = _deep_state(tmp_path, "cap", "deep_cap: 깊은 토론 건너뜀(깊은 토론 이번 달 몫($10)에 닿음)",
                       {"done": True, "skipped": "deep_cap"}, status="skipped")
@@ -473,8 +473,10 @@ const st = (today) => {{ const b = F.deepBlock(); b.render({{deep: {{on: true, m
 console.log(JSON.stringify({{once: st({json.dumps(once)}), spent: st({json.dumps(spent)}), cap: st({json.dumps(cap, ensure_ascii=False)}),
   hour: st({json.dumps(hour, ensure_ascii=False)})}}));
 """)
-    assert out["once"].startswith("오늘 시도가 끝나지 못함: 반박: overloaded: 529 · ") and out["once"].endswith("쯤 한 번 더 시도합니다")
-    assert out["spent"] == "오늘 시도가 끝나지 못함: 반박: overloaded: 529 · 오늘은 더 시도하지 않습니다 · 내일 다시"
+    # the call that failed and why, in Korean (the stored error is the API's own text)
+    assert out["once"].startswith("오늘 시도가 끝나지 못함: 2번째 부르기(반박): Anthropic 서버 오류 · ")
+    assert out["once"].endswith("쯤 한 번 더 시도합니다")
+    assert out["spent"] == "오늘 시도가 끝나지 못함: 2번째 부르기(반박): Anthropic 서버 오류 · 오늘은 더 시도하지 않습니다 · 내일 다시"
     assert out["cap"] == "오늘은 건너뜀: 깊은 토론 이번 달 몫($10)에 닿음 · 비용 0"
     assert out["hour"].startswith("시간당 안전장치로 잠시 미룸 · 비용 0 · ") and "한 번 더 시도합니다" in out["hour"]
 
@@ -513,5 +515,18 @@ console.log(JSON.stringify({{where: all(card, 'db-small').map(txt).filter((x) =>
   check: all(ok, 'db-small').map(txt).filter((x) => x.startsWith('검사')), tags: all(r, 'db-tag').map(txt)}}));
 """)
     assert out["where"] == ["장부 #305 · 새 매매법 시험 57번째 · 기준 p<2.5e-05"]           # never rounded to 0.00002
+    # the ledger's status word inside the code check is said in Korean
+    dup = next(x for x in view["factory"]["ideas"] if x["stage"] == "duplicate")
+    assert dup["check_ko"] == "이미 시험함: 장부 #57 (불통과)"
     assert out["check"] == ["검사: 통과 · 시험 후보가 됨"]
     assert out["tags"] == ["차트"]                                                      # 퀀트: its name once
+
+
+def test_a_deep_debate_error_names_its_call_in_the_timeline():
+    out = _node("""
+const S = await import('@S/debate-side.js');
+console.log(JSON.stringify({deep: S.roundKo({status: 'error', kind: 'deep', why: '심판: output: 답이 약속한 JSON 모양이 아님', cost_usd: 0.08}),
+  classic: S.roundKo({status: 'error', why: 'credit: 잔액 부족'}), odd: S.roundKo({status: 'error', why: '중단 요청(서비스 멈춤)'})}));
+""")
+    assert out["deep"][2] == "3번째 부르기(심판): AI 답을 읽지 못함 · $0.0800"
+    assert out["classic"][2] == "API 잔액 부족" and out["odd"][2] == "실패"                      # unchanged

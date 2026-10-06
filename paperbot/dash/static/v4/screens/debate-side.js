@@ -21,6 +21,14 @@ const STATE = {running: ["토론 중", "live"], paused: ["쉬는 중", "warn"], 
 const CAUSE = {auth: "API 키가 거부됨", credit: "API 잔액 부족", rate: "요청이 너무 잦다는 답(429)", server: "Anthropic 서버 오류",
   network: "인터넷 연결 오류", bad_request: "요청이 거절됨(설정 확인)", output: "AI 답을 읽지 못함", packet: "봇 자료를 읽지 못함"};
 const OPEN_KEY = "debate-side-open";
+/** A stored error in plain Korean: 'server: …' → 'Anthropic 서버 오류'; the deep debate's '반박: server: …' →
+ *  '2번째 부르기(반박): Anthropic 서버 오류'; '' when the text has no known cause tag. */
+export function causeKo(why) {
+  const m = String(why || "").match(/^(?:(주장|반박|심판):\s*)?([a-z_]+):/);
+  if (!m || !CAUSE[m[2]]) return "";
+  const n = {"주장": 1, "반박": 2, "심판": 3}[m[1]];
+  return m[1] ? `${n}번째 부르기(${m[1]}): ${CAUSE[m[2]]}` : CAUSE[m[2]];
+}
 
 /** One timeline row's [label, tone, detail, small line] from a stored round. */
 export function roundKo(r, newest, running) {
@@ -34,7 +42,8 @@ export function roundKo(r, newest, running) {
   if (r.status === "running") return newest && running ? ["토론 중", "is-live", "AI 답을 기다리는 중", ""] : ["기록 중", "is-skip", "끝난 기록이 아직 없음", ""];
   if (r.status === "aborted") return ["중단", "is-bad", why || "서비스가 도중에 멈춤", ""];
   const tag = (why.match(/^([a-z_]+):/) || [])[1];
-  return ["오류", "is-bad", `${CAUSE[tag] || "실패"}${r.cost_usd ? ` · ${usd4(r.cost_usd)}` : ""}`, ""];
+  // the deep debate's error names its call ('반박: server: …'): the cause in Korean either way
+  return ["오류", "is-bad", `${causeKo(why) || CAUSE[tag] || "실패"}${r.cost_usd ? ` · ${usd4(r.cost_usd)}` : ""}`, ""];
 }
 
 /** The idea factory's line in the state block: "아이디어 공장 · 오늘 5년 시험 줄 0/2 · 후보 4 · 다음 고르기 21:00". */

@@ -15,6 +15,7 @@ import {h, ui, fmt, serverNow} from "../core/pb.js";
 import {sideChip} from "./rooms-kit.js";
 import {ideaCard, stageChip, engineShort} from "./debate-idea.js";
 import {roundChat, partsOf, DEEP_PART_KO, castStrip, sidesLine} from "./debate-chat.js";
+import {causeKo} from "./debate-side.js";
 
 const MARKS = ["①", "②", "③", "④", "⑤", "⑥"];
 const ENGINE_KO = {newlab: "새 매매법 5년 시험", labtest: "36개 고쳐 보기 5년 시험"};
@@ -76,7 +77,7 @@ function whyBox(f) {
         h("p", {class: "db-wk"}, `${ENGINE_KO[e]} · 토론방 ${fmt.int(x.tests || 0)}개 · 연구실 ${x.lab_tests ? fmt.int(x.lab_tests) + "개" : "수집 전"}`),
         h("ul", {class: "db-wlist"}, MARKS.map((m) => {
           const k = (x.failed || {})[m] || 0, t = x.tests || 0;
-          return h("li", null, h("b", null, m), h("span", {class: "db-wn"}, names[m] || ""),
+          return h("li", null, h("b", null, m), h("span", {class: "db-wn", title: names[m] || ""}, names[m] || ""),
             h("span", {class: "db-wbar", role: "img", "aria-label": t ? `토론방 ${k}/${t}` : "토론방 시험 없음"},
               h("i", {style: {"--w": `${t ? Math.round(100 * k / t) : 0}%`}})),
             h("span", {class: "num"}, t ? `${fmt.int(k)}/${fmt.int(t)}` : "—"),
@@ -140,7 +141,7 @@ export function deepBlock() {
     if (last && last.status === "ok") return "";
     if (last && last.status === "skipped" && last.tag === "hour") return `시간당 안전장치로 잠시 미룸 · 비용 0 · ${again}`;
     if (last && last.status === "skipped") return `오늘은 건너뜀: ${last.why || "한도"} · 비용 0`;
-    if (last && (last.status === "error" || last.status === "aborted")) return `오늘 시도가 끝나지 못함: ${last.why || "오류"} · ${again}`;
+    if (last && (last.status === "error" || last.status === "aborted")) return `오늘 시도가 끝나지 못함: ${causeKo(last.why) || last.why || "오류"} · ${again}`;
     if (last && last.status === "running") return "지금 깊은 토론 중 (세 번 부르는 중)";
     if (!d.on) return "깊은 토론이 꺼져 있습니다 (서버 설정 DEBATE_DEEP)";
     if (t.due_ts && t.due_ts > serverNow()) return `오늘은 ${fmt.hm(t.due_ts)}(한국 시간)부터 · 아직 전`;
