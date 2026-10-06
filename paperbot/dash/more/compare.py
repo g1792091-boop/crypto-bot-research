@@ -9,7 +9,8 @@ Coin flips (kind random) are the yardstick, never a pick: they are dropped and n
 - ``ret``      the summed realized wallet against the summed starting wallet (closed trades; the board's own wallet)
 - ``curve``    the summed realized balance after every closed trade since the accounts started, as a return from the
                start (at most ``CURVE_MAX`` points, the last one = the board's wallets now); ``t`` in ms
-- ``mdd``      the deepest fall of that summed realized curve from its running peak (closed trades only); ``mdd_worst``
+- ``mdd``      the deepest fall of that summed curve from its running peak (every closed trade, and the last point: the
+               wallets now, which already paid an open position's entry fee and funding); ``mdd_worst``
                the deepest engine drawdown of one of its accounts (mark price, open positions included)
 - ``trades`` / ``wins`` / ``losses`` / ``win_rate``; ``payoff`` = average win / |average loss| (both needed);
                ``pf`` = gross win / |gross loss| (None without a loss); ``open`` positions now, ``bust`` accounts
@@ -19,8 +20,9 @@ Coin flips (kind random) are the yardstick, never a pick: they are dropped and n
 - ``by_tf``    per timeframe account: trades, return, win rate, engine drawdown, open, and (core / reel) the median
                return of that timeframe's coin flips and the difference (참고)
 - ``y5``       the 5-year research rows of the strategy for the item's timeframes (more/vs5y.five_year: unit "roe" =
-               mean ROE per trade on margin for the 36, "1x" = net price % per trade for the reel); None for extras
-               (another rule) and DeepSeek
+               mean ROE per trade on margin for the 36 under the v3 leverage rule, "1x" = net price % per trade for the
+               reel; ``exit`` / ``same_exits_as_live`` when the research's exits are not the live ones); None for
+               extras (another rule) and DeepSeek. NOT the live rules: the page says so (v3 배수, every signal taken)
 
 HONESTY (CONTRACT section 1, D10/D11): a DeepSeek definition or account is compared by COUNTS ONLY on this mixed
 screen: ``counts_only`` true and only trades, open positions and the timeframes are sent (no wallet, return, curve,
@@ -111,6 +113,17 @@ def realized_curve(events: list, start: dict, t0: int) -> tuple[list, list, floa
     return ts, vs, mdd
 
 
+def max_drawdown(vs: list) -> float:
+    """The deepest fall of a balance series from its running peak (0 for a series that never falls)."""
+    peak, mdd = None, 0.0
+    for v in vs:
+        if peak is None or v > peak:
+            peak = v
+        elif peak > 0:
+            mdd = max(mdd, 1 - v / peak)
+    return mdd
+
+
 def thin(ts: list, vs: list, n: int = CURVE_MAX) -> tuple[list, list]:
     """At most n points, evenly picked, the first and the last always kept."""
     if len(ts) <= n:
@@ -146,7 +159,10 @@ def _y5(strategy: str, tfs: list) -> Optional[dict]:
     if not unit:
         return None
     out = [{"tf": tf, **{k: _r(v) for k, v in (rows.get(tf) or {}).items()}} for tf in tfs if rows.get(tf)]
-    return {"unit": unit, "rows": out, "source": (meta or {}).get("source")} if out else None
+    m = meta or {}
+    # the research's own exit when it is not the live accounts' (the page says so, like the strategy page's vs5y card)
+    return {"unit": unit, "rows": out, "source": m.get("source"), "exit": m.get("exit"),
+            "same_exits_as_live": m.get("same_exits_as_live")} if out else None
 
 
 def item(c: sqlite3.Connection, key: str, board: dict, names: dict, now: int) -> dict:
@@ -188,11 +204,14 @@ def item(c: sqlite3.Connection, key: str, board: dict, names: dict, now: int) ->
     q = (f"SELECT exit_time, account_id, equity_after FROM trades WHERE account_id IN ({','.join('?' * len(ids))}) "
          "ORDER BY exit_time, id")
     events = [(r[0], r[1], r[2]) for r in c.execute(q, ids)]
-    ts, vs, mdd = realized_curve(events, starts, t0)
+    ts, vs, _ = realized_curve(events, starts, t0)
     w0 = init * len(mine)
     w_now = sum(_wallet(a, init) for a in mine)
     ts.append(int(now))
     vs.append(w_now)
+    # the drawdown of the line as drawn: its last point (the wallets now) counts too, so an entry fee or funding paid on
+    # a position still open (already out of the wallet) is never a fall the chart shows and the number leaves out
+    mdd = max_drawdown(vs)
     ts, vs = thin(ts, vs)
     wins = sum(int(a.get("wins") or 0) for a in mine)
     losses = sum(int(a.get("losses") or 0) for a in mine)

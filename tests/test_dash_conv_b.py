@@ -281,7 +281,8 @@ def test_alerts_go_through_the_existing_route_only():
     dk = _read("screens/draw-kit.js")
     assert 'ctx.post("/api/price-alerts", {symbol: sym, price})' in dk
     code = re.sub(r"(?m)^\s*//.*$", "", dk)
-    assert len(re.findall(r"/api/", code)) == 1                                           # no other route
+    assert set(re.findall(r"/api/[a-z0-9/_-]*", code)) == {"/api/price-alerts"}            # no other route
+    assert len(re.findall(r"ctx\.post\(", code)) == 1                                       # one write: the alert
     assert '"contextmenu"' in dk and "LONG_MS = 550" in dk and 'e.pointerType === "touch"' in dk
     assert "(e && e.detail) ||" in dk                                                      # the server's own Korean words
     term, chart = _read("screens/terminal-chart.js"), _read("screens/chart.js")
@@ -339,3 +340,50 @@ def test_compare_route_and_honesty_words():
     assert "--pick-1" in _read("tokens.css") and "--draw:" in _read("tokens.css")
     inv = _read("INVENTORY.md")
     assert "## conv-b:" in inv and "#/compare" in inv and "TV 자동 넘김" in inv
+
+
+# ---------------------------------------------------------------- review fixes (conv-b review)
+def _mini_trades(rows):
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY, account_id TEXT, exit_time INTEGER, equity_after REAL)")
+    c.executemany("INSERT INTO trades (account_id, exit_time, equity_after) VALUES (?,?,?)", rows)
+    return c
+
+
+def test_compare_drawdown_counts_the_last_point_of_the_line():
+    """An open position's entry fee and funding are already out of the wallet: the line's last point (the wallets now)
+    falls below the last closed trade, and the 합친 곡선 최대 낙폭 must count that fall (the chart shows it)."""
+    from paperbot.dash.more import compare as C
+    c = _mini_trades([("A@15m", START + H, 5200.0)])                  # 5000 -> 5200 (the peak)
+    board = {"initial": INIT, "accounts": [{"account_id": "A@15m", "strategy": "A", "timeframe": "15m", "kind": "strategy",
+                                            "group": "core", "created_ts": START, "wallet": 5148.0, "trades": 1, "wins": 1,
+                                            "losses": 0, "gross_win": 200.0, "gross_loss": 0.0, "max_drawdown": 0.02,
+                                            "position": {"symbol": "BTCUSDT"}}]}
+    x = C.item(c, "A", board, {}, START + 2 * H)
+    assert x["curve"] == [0.0, 0.04, 0.0296] and x["open"] == 1
+    assert math.isclose(x["mdd"], 1 - 5148 / 5200, abs_tol=1e-6)        # was 0: the last point was left out
+    assert C.max_drawdown([100.0, 120.0, 90.0, 130.0, 117.0]) == 0.25 and C.max_drawdown([]) == 0.0
+
+
+def test_compare_five_year_side_says_when_the_research_exit_differs(monkeypatch):
+    from paperbot.dash.more import compare as C
+    from paperbot.dash.more import vs5y
+    monkeypatch.setattr(vs5y, "five_year", lambda s: ("1x", {"5m": {"per_day": 3.0, "roe": 0.001, "win": 0.5, "hold_h": 0.5, "lock": None}},
+                                                       {"source": "binance_futures", "exit": "bb_mid", "same_exits_as_live": False}))
+    y = C._y5("REEL_H1", ["5m"])
+    assert y["unit"] == "1x" and y["exit"] == "bb_mid" and y["same_exits_as_live"] is False and y["rows"][0]["tf"] == "5m"
+    assert C._y5("REEL_H1", ["15m"]) is None                            # no row for the item's timeframes: no side
+
+
+def test_compare_page_never_says_the_research_used_todays_rules():
+    page = _read("screens/compare.js")
+    assert "지금과 같은 규칙" not in page                                     # the 36's cards used the v3 leverage rule
+    assert "v3 배수" in page and "same_exits_as_live === false" in page and "신호를 모두 따로 잡아서" in page
+    assert "x.trades < SMALL ? h(\"small\", {class: \"muted\"}, \" · 표본 적음\")" in page   # a coin-flip rank on a few trades
+
+
+def test_chart_alert_never_promises_a_ring_while_the_sender_is_off():
+    dk = _read("screens/draw-kit.js")
+    assert "a.sender_alive" in dk and "features.priceSender" in dk
+    assert "켜지면 그때부터 울립니다" in dk and "보내는 프로그램이 꺼져 있음" in dk

@@ -12,7 +12,7 @@
 //             drawing. The armed alerts of the coin are the deck's '가격 알림 선' lines (the caller loads them).
 // HONESTY: drawings are the viewer's own marks (never a signal, never sent anywhere); an alert is made only by an
 // explicit menu choice, and the server's own Korean answer is shown (success or error). Paper only: no orders.
-import {h, s, fmt, tok, priceDec, local} from "../core/pb.js";
+import {h, s, fmt, tok, priceDec, local, features} from "../core/pb.js";
 
 export const MAX_SHAPES = 40;
 export const KINDS = ["h", "line", "rect", "text"];
@@ -265,11 +265,13 @@ export function drawTools(o) {
     const price = roundPrice(p0), sym = o.sym();
     const last = bars().length ? bars()[bars().length - 1].close : null;
     const dir = last == null ? "" : price > last ? " · 지금보다 위 (오르면 울림)" : " · 지금보다 아래 (내리면 울림)";
+    // the Telegram sender's last known state (features probe): never promise a ring while it is off
+    const off = features.probed && !features.priceSender;
     const hit = topHit(x, y);
     const item = (text, fn, cls) => h("button", {type: "button", role: "menuitem", class: ["drw-mi", cls || ""], onclick: (e) => { e.stopPropagation(); closeMenu(); fn(); }}, text);
     st.menu = h("div", {class: "drw-menu", role: "menu", "aria-label": "차트 메뉴"},
       h("p", {class: "drw-mh num"}, `${fmt.coin(sym)} ${fmt.price(price)}`),
-      item(["이 가격에 알림", h("small", null, `텔레그램 소리 알림${dir}`)], () => makeAlert(sym, price), "alert"),
+      item(["이 가격에 알림", h("small", null, off ? `보내는 프로그램이 꺼져 있음 (켜지면 울림)${dir}` : `텔레그램 소리 알림${dir}`)], () => makeAlert(sym, price), "alert"),
       item("여기에 가로선 긋기", () => add({id: newId(), t: "h", p: price})),
       hit ? item("이 그림 지우기", () => remove(hit.id), "bad") : null,
       item("닫기", () => {}));
@@ -284,7 +286,12 @@ export function drawTools(o) {
   async function makeAlert(sym, price) {
     try {
       const r = await ctx.post("/api/price-alerts", {symbol: sym, price});
-      ctx.toast(`${fmt.coin(sym)} ${fmt.price(price)} ${r && r.direction === "above" ? "위로 오르면" : "아래로 내리면"} 텔레그램으로 알립니다 (한 번 울리면 꺼짐)`);
+      // the sender's state now (the same answer the 가격 알림 pane reads): a saved alert does not ring while it is off
+      let alive = features.priceSender;
+      try { const a = await ctx.api("/api/price-alerts"); if (a && typeof a.sender_alive === "boolean") alive = a.sender_alive; } catch (e) { /* keep the probe's */ }
+      const when = `${fmt.coin(sym)} ${fmt.price(price)} ${r && r.direction === "above" ? "위로 오르면" : "아래로 내리면"}`;
+      ctx.toast(alive ? `${when} 텔레그램으로 알립니다 (한 번 울리면 꺼짐)`
+        : `${when} 알림을 걸었습니다. 다만 텔레그램 보내는 프로그램이 지금 꺼져 있어, 켜지면 그때부터 울립니다`);
       if (o.onAlertAdded) o.onAlertAdded();
     } catch (e) {
       if (!(e && e.name === "AbortError")) ctx.toast((e && e.detail) || "알림을 저장하지 못했습니다. 잠시 뒤 다시 해 주세요.");

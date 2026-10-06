@@ -9,6 +9,8 @@
   border: 1px solid var(--c, var(--line-2)); background: var(--surface-2); font-size: var(--t-sm); min-width: 0; }
 .cmp-pick b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-pick small { font-size: var(--t-2xs); white-space: nowrap; }
+/* a phone: the name wins the room (the code is in the search results and the 표 heads already) */
+@media (max-width: 599px) { .cmp-pick small { display: none; } .cmp-pick { flex: 1 1 100%; } .cmp-pick b { flex: 1 1 auto; } }
 .cmp-x { appearance: none; flex: none; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2);
   font: 700 var(--t-sm)/1 var(--f-body); cursor: pointer; }
 .cmp-x:hover { color: var(--down); border-color: var(--down-line); }

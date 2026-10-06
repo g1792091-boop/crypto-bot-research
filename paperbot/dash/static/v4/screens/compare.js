@@ -94,7 +94,7 @@ export async function mount(el, ctx) {
       h("button", {type: "button", class: "cmp-x", "aria-label": `${pickName(id, board())} 빼기`, onclick: () => setIds(st.ids.filter((x) => x !== id))}, "✕")))
       : h("p", {class: "muted cmp-none"}, "아직 고른 것이 없습니다. 아래에서 찾거나 즐겨찾기에서 눌러 넣으세요."));
     input.disabled = full;
-    input.placeholder = full ? `${cmp.CMP_MAX}개가 다 찼습니다 · 하나를 빼면 더 넣을 수 있습니다` : "매매법·계좌 찾기 (예: 돈치안, S5, F9, 1시간)";
+    input.placeholder = full ? `${cmp.CMP_MAX}개가 다 찼습니다 · 하나 빼고 넣기` : "매매법·계좌 찾기 (예: 돈치안, S5, F9)";
     clearBtn.hidden = !st.ids.length;
     paintResults();
     const f = fav.favs();
@@ -165,13 +165,14 @@ export async function mount(el, ctx) {
   const MAIN = [
     {k: "수익률", s: "시작 잔고 합 대비 · 닫힌 거래", get: (x) => pctCell(x.ret)},
     {k: "합친 곡선 최대 낙폭", s: "고점에서 가장 많이 내려간 폭", get: (x) => (x.mdd == null ? "—" : fmt.pct(x.mdd, 1, false))},
-    {k: "계좌 하나의 가장 깊은 낙폭", s: "열린 포지션 포함 (엔진 기록)", get: (x) => (x.mdd_worst == null ? "—" : fmt.pct(x.mdd_worst, 1, false))},
+    {k: "계좌 하나의 가장 깊은 낙폭", s: "열린 포지션 손익까지 · 봇이 기록한 값", get: (x) => (x.mdd_worst == null ? "—" : fmt.pct(x.mdd_worst, 1, false))},
     {k: "거래 수", s: "닫힌 거래", money: false, get: (x) => h("span", null, `${fmt.int(x.trades)}건`, " ", ui.smallSample(x.trades, SMALL))},
     {k: "승률", s: "이긴 거래 ÷ 전체", get: (x) => (x.win_rate == null ? "—" : h("span", null, fmt.pct(x.win_rate, 0, false), h("small", {class: "muted"}, ` ${fmt.int(x.wins)}승 ${fmt.int(x.losses)}패`)))},
     {k: "손익비", s: "평균 이익 ÷ 평균 손실", get: (x) => (x.payoff != null ? fmt.num(x.payoff, 2) : x.no_loss ? "손실 없음" : "—")},
     {k: "수익 팩터", s: "총이익 ÷ 총손실", get: (x) => (x.pf != null ? fmt.num(x.pf, 2) : x.no_loss ? "손실 없음" : "—")},
-    {k: "동전 봇 순위 (참고)", s: "같은 봉 동전 봇 묶음 중 몇 개보다 위", get: (x) => (x.extra ? h("span", {class: "muted"}, "비교 안 함 (늦게 시작)")
-      : x.flip ? `${fmt.int(x.flip.n)}개 중 ${fmt.int(x.flip.above)}개보다 위` : "—")},
+    // a rank on a handful of trades is luck more than skill: it says 표본 적음 next to it (like the 순위표's 동전 ▲▼)
+    {k: "동전 봇 순위 (참고)", s: "같은 봉 동전 봇 몇 개보다 수익률이 높은지", get: (x) => (x.extra ? h("span", {class: "muted"}, "비교 안 함 (늦게 시작)")
+      : x.flip ? h("span", null, `동전 봇 ${fmt.int(x.flip.n)}개 중 ${fmt.int(x.flip.above)}개보다 높음`, x.trades < SMALL ? h("small", {class: "muted"}, " · 표본 적음") : null) : "—")},
     {k: "지금 포지션", s: "열린 것", money: false, get: (x) => `${fmt.int(x.open)}개`},
     {k: "파산 계좌", s: "잔고 10 USDT 미만", get: (x) => fmt.int(x.bust)},
   ];
@@ -227,8 +228,14 @@ export async function mount(el, ctx) {
       ui.assume(null, "수익률·낙폭·손익비는 닫힌 거래 기준")));
     kids.push(ui.card({plate: "봉별로 나눠 보기", sub: "참고"}, tfTable(items),
       ui.note("동전 대비 = 같은 봉 동전 봇 수익률 중앙값과의 차이 (참고, 판정 아님). 늦게 시작한 추가 계좌는 견주지 않습니다.")));
-    kids.push(ui.card({plate: "5년 시험", sub: "연구 결과 · 지금과 같은 규칙으로 지난 5년"}, y5Table(items),
-      ui.note("기존 36의 '건당'은 증거금 대비 거래 한 번의 평균 ROE, 5분봉은 레버리지 없는 가격 % (1배)입니다. 5년 숫자는 성격을 보는 참고이지 실력의 증거가 아닙니다.")));
+    // the research is NOT the live rules (vs5y-kit says the same on the strategy page): the 36's 5-year cards used the v3
+    // leverage rule, every signal was taken (a live account holds one position at a time), and some research exits differ
+    const exitDiff = items.filter((x) => x.y5 && x.y5.exit && x.y5.same_exits_as_live === false)
+      .map((x) => `${x.name}: 5년 연구 청산(${x.y5.exit})은 지금 계좌 청산과 다름`);
+    kids.push(ui.card({plate: "5년 시험", sub: "연구 결과 · 지난 5년 · 지금 규칙과 일부 다름"}, y5Table(items),
+      ui.note(["기존 36의 '건당'은 증거금 대비 거래 한 번의 평균 ROE (5년 시험은 예전 v3 배수 규칙), 5분봉은 배수 없이 가격 % (1배)입니다. ",
+        "5년 시험은 신호를 모두 따로 잡아서 지금 계좌(한 번에 한 포지션)보다 거래가 많은 게 보통입니다. ",
+        ...exitDiff.map((t) => `${t}. `), "5년 숫자는 성격을 보는 참고이지 실력의 증거가 아닙니다."].join(""))));
     kids.push(h("p", {class: "cmp-foot"}, `${d.label || "설명용, 판정 아님"}${d.computed_at ? ` · ${fmt.kst(d.computed_at)} 계산${d.stale ? " (예전 값, 다시 계산 중)" : ""}` : ""} · 같이 돌렸다면 어땠을지는 `,
       h("a", {href: ctx.href("analysis", "synergy")}, "분석 › 조합 시너지"), "에서 봅니다."));
     put(body, kids);
