@@ -51,7 +51,7 @@ export async function mount(el, ctx) {
       h("span", {class: "meta"}, x.horizon ? h("span", null, `기한 ${x.horizon}`) : null, h("span", null, fmt.kst(x.ts)),
         x.status === "dropped" && x.outcome ? h("span", null, String(x.outcome)) : null));
   }
-  const say = (m, side) => h("div", {class: ["db-say", side]}, h("span", {class: "db-say-who"}, m.speaker), ui.moreText(String(m.text || ""), 5));
+  const say = (m, side) => h("div", {class: ["db-say", side]}, side === "mid" ? h("span", {class: "db-say-who"}, m.speaker) : null, ui.moreText(String(m.text || ""), 5));
   /** The newest round with turns: 강세 vs 약세 side by side, the other voices under them, the 정리 line on top. */
   function liveRound(r) {
     const ms = (r && r.messages) || [];
@@ -135,7 +135,7 @@ export async function mount(el, ctx) {
       d.caution ? h("p", {class: "rk-banner"}, h("b", null, "읽을 때 주의"), h("span", null, d.caution)) : null));
     tick();
     const all = d.rounds || [];
-    const withTurns = all.filter((r) => (r.messages || []).length);
+    const withTurns = all.filter((r) => (r.messages || []).length).sort((a, b) => (b.ts || 0) - (a.ts || 0));
     live.replaceChildren(...(withTurns.length ? [liveRound(withTurns[0])] : []));
     rounds.set(withTurns.slice(1), true);
     const skipped = all.filter((r) => r.status === "skipped").length;

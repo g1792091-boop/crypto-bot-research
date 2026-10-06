@@ -197,6 +197,8 @@ def test_chat_filters_search_pin_and_honest_scroll():
         assert bad not in src, bad
     rooms = _code(_read("screens", "rooms.js"))
     assert "/api/agents/feed?after_id=" in rooms and "rm-ucount" in rooms and '"99+"' in rooms
+    # a cached store value runs the watch callback at once: the unread helpers must exist before it is registered
+    assert rooms.index("const unreadSoon = ") < rooms.index('ctx.watch("rooms"')
     # the progress line is read from /api/office running only
     assert 'store.get("office")' in src and "next_role" in src
 

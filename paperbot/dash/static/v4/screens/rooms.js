@@ -141,20 +141,6 @@ export async function mount(el, ctx) {
   ctx.track(() => { if (cur === route) cur = null; });
   ctx.listen(mq, "change", () => { if (!narrow() && !st.id) route({arg: null, query: {}}); });
 
-  // ---------------------------------------------------------------- data
-  ctx.watch("rooms", (ov, k, err) => {
-    if (!ov) { if (err && !st.ov) listPane.append(ui.errorBox(err, () => store.refresh("rooms").catch(() => {}))); return; }
-    st.ov = ov;
-    st.seen = syncUnread(ov);
-    chat.setOv(ov);
-    renderState(); renderList();
-    side.render();
-    unreadSoon();
-  });
-  ctx.watch("usage", (u) => { if (u) side.setUsage(u); });
-  // agents-ui: the strategy / account cards in messages read the board; the running meeting's progress reads the office
-  ctx.watch("board", (b) => { if (b) chat.boardChanged(); });
-  ctx.watch("office", (o) => { if (o) chat.officeChanged(); });
   // unread counts per room (only rooms with something new; one bounded read of the newest messages)
   const FEED_MAX = 400;
   let unreadT = null, unreadBusy = false;
@@ -178,6 +164,20 @@ export async function mount(el, ctx) {
   }
   const unreadSoon = () => { clearTimeout(unreadT); unreadT = setTimeout(() => ctx.alive() && loadUnread(), 800); };
   ctx.track(() => clearTimeout(unreadT));
+  // ---------------------------------------------------------------- data
+  ctx.watch("rooms", (ov, k, err) => {
+    if (!ov) { if (err && !st.ov) listPane.append(ui.errorBox(err, () => store.refresh("rooms").catch(() => {}))); return; }
+    st.ov = ov;
+    st.seen = syncUnread(ov);
+    chat.setOv(ov);
+    renderState(); renderList();
+    side.render();
+    unreadSoon();
+  });
+  ctx.watch("usage", (u) => { if (u) side.setUsage(u); });
+  // agents-ui: the strategy / account cards in messages read the board; the running meeting's progress reads the office
+  ctx.watch("board", (b) => { if (b) chat.boardChanged(); });
+  ctx.watch("office", (o) => { if (o) chat.officeChanged(); });
   const loadEvents = () => ctx.api("/api/v4/people/strats").then((d) => { if (ctx.alive() && d && d.strats) { st.events = d.strats; renderList(); } }).catch(() => {});
   ctx.every(60000, loadEvents);
   ctx.on("rooms", (map) => {
