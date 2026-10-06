@@ -55,10 +55,9 @@ from typing import Any, Iterator, Optional
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
-from .assets import REVALIDATE, Assets, asset_files
-
 from ..config import (DS200_FAMILY, FIVE_M_MAX_DELAY_MS, REEL_NAME, REEL_TF, V3_TRADE_TFS, V4_ACCOUNTS, V4_GROUPS,
                       v4_tfs_of)
+from .assets import REVALIDATE, Assets, asset_files
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
@@ -661,11 +660,12 @@ class Data:
         out["restart"] = restart_banner(rs, now)
         per: dict = {}
         group = {}
-        info: dict = {}                      # account -> {strategy, timeframe, kind, n}: the page names a row without the board
+        info: dict = {}            # account -> {strategy, timeframe, kind, n}: the page names a row without the board
         for x in rows:
             per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
             group[x["account_id"]] = GROUP_OF_KIND.get(x["kind"], "other")
-            i = info.setdefault(x["account_id"], {"strategy": x["strategy"], "timeframe": x["timeframe"], "kind": x["kind"], "n": 0})
+            i = info.setdefault(x["account_id"],
+                                {"strategy": x["strategy"], "timeframe": x["timeframe"], "kind": x["kind"], "n": 0})
             i["n"] += 1
 
         # best / worst 3 accounts by today's closed P&L (every trade since 00:00 KST, no row cap: 홈 reads these instead

@@ -1,7 +1,8 @@
 // 홈 · 요약의 살아 있는 칸 (fill-home): 시장 지금 (7 coins from the store ticker), 지금 열린 포지션 (/api/board positions at
 // the ticker's mark price), 방금 끝난 거래 (/api/trades?group=main, new rows on the stream's trade event) with today's best /
-// worst 기존 36 accounts (the server's day sums in /api/summary today.by_group.core), and 오늘 회의 일정 (/api/office schedule: a countdown to the next fixed meeting and today's
-// timeline). Also used by 회의 요약 › 회의 결론 (digest-day.js) for the countdown before the first meeting.
+// worst 기존 36 accounts (the server's day sums in /api/summary today.by_group.core), and 오늘 회의 일정 (/api/office
+// schedule: a countdown to the next fixed meeting and today's timeline). Also used by 회의 요약 › 회의 결론
+// (digest-day.js) for the countdown before the first meeting.
 // HONESTY (CONTRACT.md §1): every number comes from the server; a countdown only counts down to a time the server sent
 // (funding time, meeting hour); flashes only when a value really changed; DeepSeek and coin flips are counts only here
 // (owners' D10 / D11: no money, no ROE for them outside the DeepSeek screen).
