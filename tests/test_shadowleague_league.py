@@ -205,14 +205,15 @@ def _flat_world(tmp_path, name):
             1010: (99.0, 103.0), 1013: (99.0, 103.0), 1014: (99.0, 104.0), 1016: (99.0, 104.0), 1030: (99.0, 104.0),
             1031: (99.0, 104.0), 1033: (99.0, 101.0), 1389: (99.0, 104.0),
             1050: (100.0 * (1.0 + SM.SLIP_SIDE), 104.0),        # the stop is exactly where the entry fills: no room, no trade
-            1052: (99.0, 100.0 * (1.0 + SM.SLIP_SIDE))}         # the target is exactly where the entry fills
+            1052: (99.0, 100.0 * (1.0 + SM.SLIP_SIDE)),         # the target is exactly where the entry fills
+            1100: (90.0, 110.0)}                                # neither is ever touched: the 48th bar closes it
     m = LG.Member(member_id="scripted", name_ko="시험", detector=ScriptedDetector(plan), start_ms=START, tfs=("1h",),
                   coins=("BTC",), clones_k=5)
     return ex, m, open_store(tmp_path, name)
 
 
 EXPECTED_STATUS = {1010: "taken", 1013: "busy", 1014: "taken", 1016: "busy", 1030: "busy", 1031: "skip_entry",
-                   1033: "taken", 1050: "skip_entry", 1052: "skip_entry", 1389: "taken"}
+                   1033: "taken", 1050: "skip_entry", 1052: "skip_entry", 1100: "taken", 1389: "taken"}
 
 
 @pytest.mark.parametrize("idxs", [list(range(1005, 1400)), [1399], [1100, 1250, 1389, 1399], [1389, 1390, 1399]])
@@ -225,10 +226,15 @@ def test_the_engine_takes_one_position_per_series_and_skips_busy_and_gapped_entr
     sig = {(s["bar_ms"] - T0) // HOUR: s["status"] for s in (dict(r) for r in st.conn.execute("SELECT * FROM signals"))}
     assert sig == EXPECTED_STATUS, sig
     tr = {(t["signal_ms"] - T0) // HOUR: t for t in st.trades(m.member_id)}
-    assert sorted(tr) == [1010, 1014, 1033, 1389]
+    assert sorted(tr) == [1010, 1014, 1033, 1100, 1389]
     assert (tr[1010]["reason"], (tr[1010]["exit_ms"] - T0) // HOUR, tr[1010]["hold"]) == ("TP", 1013, 3)
     assert (tr[1014]["reason"], (tr[1014]["exit_ms"] - T0) // HOUR, tr[1014]["entry_px"]) == ("SL", 1030, 100.0 * (1 + SM.SLIP_SIDE))
     assert (tr[1033]["reason"], (tr[1033]["exit_ms"] - T0) // HOUR) == ("TP", 1040)
+    # the time exit: the close of the 48th bar (entry bar included), with slippage, never one bar early whatever the tick pattern
+    t = tr[1100]
+    assert (t["reason"], t["hold"], t["entry_ms"], (t["exit_ms"] - T0) // HOUR) == ("TIME", 48, T0 + 1101 * HOUR, 1148)
+    assert t["exit_px"] == 100.0 * (1.0 - SM.SLIP_SIDE)
+    assert t["net"] == pytest.approx(t["exit_px"] / t["entry_px"] - 1 - 2 * SM.FEE_SIDE - SM.FUNDING_8H * 48 * 60 / 480)
     assert tr[1389]["status"] == "open" and tr[1389]["entry_ms"] == T0 + 1390 * HOUR     # entered at the next bar's open
     assert tr[1010]["net"] == pytest.approx(103.0 / (100.0 * (1 + SM.SLIP_SIDE)) - 1 - 2 * SM.FEE_SIDE - SM.FUNDING_8H * 3 * 60 / 480)
 
@@ -313,6 +319,7 @@ def test_a_new_request_is_made_only_when_a_new_bar_has_closed(tmp_path):
 
 
 def test_a_bar_that_closed_a_moment_ago_waits_for_the_settle_time(tmp_path):
+    assert FD.SETTLE_MS == 20_000                                # the live feed's rule (and the docs): 20 seconds
     ex, m, st = world(tmp_path)
     ex.now_ms = T0 + 1100 * HOUR + FD.SETTLE_MS - 1_000          # bar 1099 closed 19 s ago
     LG.League(st, (m,), ex.get).tick(ex.now_ms)
