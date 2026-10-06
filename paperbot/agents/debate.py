@@ -6,8 +6,10 @@
     python -m paperbot.agents.debate status [--json]     # what the service did, spend against the cap, hit rates
 
 What it is: every DEBATE_EVERY_MIN minutes (default 20) ONE call to the Anthropic Messages API (standard library only,
-``urllib``) returns a short Korean debate (3-5 turns by rotating roles) plus a note, 0-2 gradable hypotheses and 0-2
-ideas for the new-strategy lab. The input is a compact packet code builds from the bot's databases, READ-ONLY
+``urllib``) returns a short Korean debate plus a note, 0-2 gradable hypotheses and 0-2 ideas for the new-strategy lab.
+The debate is a conversation (debate-chat, owners 10/06): DEBATE_TURNS turns (default 7, 5-9) of 2-3 sentences, every
+one of the five rotating roles speaks once and then they answer each other; from the third turn on a turn names the
+earlier speaker it answers (``reply_to``) and its stance (동의 / 반대 / 보완 / 질문), stored with the turn. The input is a compact packet code builds from the bot's databases, READ-ONLY
 (debate_packet.py). What it is not: it never places an order, never edits a rule, an account or code, and writes
 nothing to any bot database; its only writable file is its own debate.db (this process is its only writer; the
 dashboard reads it read-only). It runs on the owners' own paid API key, which only this service's env file
@@ -55,6 +57,13 @@ DEFAULT_DIR = "/var/lib/paperbot/debate"
 ROLES = ("낙관론자", "비관론자", "회의론자", "리스크 책임자", "퀀트")
 STANCE = {"낙관론자": "낙관", "비관론자": "비관", "회의론자": "검증", "리스크 책임자": "리스크", "퀀트": "퀀트"}
 NOTE_SPEAKER, NOTE_STANCE = "정리", "정리"
+# debate-chat (owners 10/06): a real back-and-forth. Every round all five roles speak once, then they answer each other;
+# from the third turn on a turn names the earlier speaker it answers (reply_to) and its stance toward it.
+TURNS_DEFAULT, TURNS_MIN, TURNS_MAX = 7, 5, 9
+REPLY_STANCES = ("동의", "반대", "보완", "질문")
+# the answer's size by the service's own estimator (debate_packet.estimate_tokens) on a sample answer: one turn of 2-3
+# sentences with its reply fields about 100 tokens, the note, two hypotheses, two ideas and the JSON about 300
+EST_OUT_BASE, EST_OUT_PER_TURN, ANSWER_HEADROOM = 300, 100, 150
 MAX_TURN_CHARS, MAX_NOTE_CHARS, MAX_IDEA_CHARS = 700, 500, 300
 KEEP_MESSAGES_DAYS, KEEP_ROUNDS_DAYS, KEEP_HYP_DAYS, KEEP_IDEA_DAYS = 60, 120, 120, 180
 WARN_EVERY_MS = HOUR_MS                    # one Telegram warning per cause per hour
@@ -75,8 +84,24 @@ CACHE_MIN_TOKENS = {"haiku": 4096}         # shorter prefixes are silently not c
 CACHE_MIN_TOKENS_5 = 512                   # Claude 5.x models (Sonnet 5.5 among them): 512-token minimum
 # Claude 5.x models think by default when ``thinking`` is not sent (adaptive). Thinking tokens are billed as OUTPUT
 # tokens (``usage.output_tokens`` includes them, whatever ``display`` is) and count against ``max_tokens`` (thinking +
-# answer), so a thinking model gets a larger default ceiling: 900 would cut the JSON answer short.
+# answer), so a thinking model gets a larger default ceiling: the answer's alone would cut the JSON answer short.
+# (Four turns: 900 for the answer, 1,500 with thinking; the ceiling now follows the number of turns, see
+# default_max_tokens: seven turns 1,150 / 1,750.)
 THINKING_MAX_TOKENS = 1500
+THINKING_ROOM = THINKING_MAX_TOKENS - 900  # what a thinking model gets on top of the answer's own ceiling
+
+
+def est_out_default(turns: int) -> int:
+    """The dry run's output estimate for a round of ``turns`` turns (7: 1,000 tokens; the old 4 turns of up to four
+    sentences measured about 800)."""
+    return EST_OUT_BASE + EST_OUT_PER_TURN * int(turns)
+
+
+def default_max_tokens(model: str, thinking: str, turns: int) -> int:
+    """The answer's ceiling unless DEBATE_MAX_TOKENS says otherwise: the estimate plus some room (7 turns: 1,150), and
+    a thinking model's thinking on top (7 turns: 1,750). Only the ceiling: the bill is the real output."""
+    base = est_out_default(turns) + ANSWER_HEADROOM
+    return base + THINKING_ROOM if model_thinks(model, thinking) else base
 
 
 def model_thinks(model: str, thinking: str = "") -> bool:
@@ -175,12 +200,12 @@ class Config:
     monthly_cap: float = 40.0
     hourly_cap: float = 0.0            # 0 = cap / 24
     daily_cap: float = 0.0             # 0 = off
-    turns: int = 4
-    max_tokens: int = 900
+    turns: int = TURNS_DEFAULT         # 5 roles once each, then replies (TURNS_MIN..TURNS_MAX)
+    max_tokens: int = EST_OUT_BASE + EST_OUT_PER_TURN * TURNS_DEFAULT + ANSWER_HEADROOM    # default_max_tokens: 1,150
     price_in: float = 0.0              # 0 = by model family
     price_out: float = 0.0
     min_new_trades: int = 10
-    est_out_tokens: int = 800
+    est_out_tokens: int = EST_OUT_BASE + EST_OUT_PER_TURN * TURNS_DEFAULT                  # est_out_default: 1,000
     thinking: str = ""                 # "" = not sent; e.g. between_tools for Sonnet 5.5 (see docs)
     effort: str = ""                   # "" = not sent; low | medium | high
     timeout_s: float = 45.0
@@ -234,16 +259,17 @@ def config_from_env(environ: Optional[dict] = None) -> Config:
     c.monthly_cap = _num(env, "DEBATE_MONTHLY_USD_CAP", c.monthly_cap, 0.5, 100000)
     c.hourly_cap = _num(env, "DEBATE_HOURLY_USD_CAP", 0.0, 0.0, 10000)
     c.daily_cap = _num(env, "DEBATE_DAILY_USD_CAP", 0.0, 0.0, 10000)
-    c.turns = _num(env, "DEBATE_TURNS", c.turns, 3, 5, int)
+    # 5-9 turns (every role once, then replies). An older debate.env's 3 or 4 (the old range was 3-5) is read as 5
+    # instead of stopping the service: every role still speaks once.
+    c.turns = max(TURNS_MIN, _num(env, "DEBATE_TURNS", c.turns, 3, TURNS_MAX, int))
     c.thinking = str(env.get("DEBATE_THINKING") or "").strip()
     c.effort = str(env.get("DEBATE_EFFORT") or "").strip()
-    # a thinking model's ceiling holds its thinking too (THINKING_MAX_TOKENS); DEBATE_MAX_TOKENS still wins
-    c.max_tokens = _num(env, "DEBATE_MAX_TOKENS", THINKING_MAX_TOKENS if model_thinks(c.model, c.thinking)
-                        else c.max_tokens, 300, 2000, int)
+    # the ceiling follows the turns; a thinking model's holds its thinking too (THINKING_ROOM); DEBATE_MAX_TOKENS wins
+    c.max_tokens = _num(env, "DEBATE_MAX_TOKENS", default_max_tokens(c.model, c.thinking, c.turns), 300, 2000, int)
     c.price_in = _num(env, "DEBATE_PRICE_IN", 0.0, 0.0, 1000)
     c.price_out = _num(env, "DEBATE_PRICE_OUT", 0.0, 0.0, 1000)
     c.min_new_trades = _num(env, "DEBATE_MIN_NEW_TRADES", c.min_new_trades, 0, 100000, int)
-    c.est_out_tokens = _num(env, "DEBATE_EST_OUT_TOKENS", c.est_out_tokens, 100, 4000, int)
+    c.est_out_tokens = _num(env, "DEBATE_EST_OUT_TOKENS", est_out_default(c.turns), 100, 4000, int)
     if c.thinking not in ("", "disabled", "adaptive", "between_tools"):
         raise ValueError(f"DEBATE_THINKING={c.thinking!r}: 비우거나 disabled / adaptive / between_tools")
     if c.effort not in ("", "low", "medium", "high"):
@@ -329,6 +355,11 @@ class DB:
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(debate_rounds)")}
         if "prompt_version" not in cols:
             self.conn.execute("ALTER TABLE debate_rounds ADD COLUMN prompt_version TEXT")
+        # debate-chat: whom a turn answers and how (동의 / 반대 / 보완 / 질문); added columns only, older rows keep NULL
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(debate_messages)")}
+        for col in ("reply_to", "reply_stance"):
+            if col not in cols:
+                self.conn.execute(f"ALTER TABLE debate_messages ADD COLUMN {col} TEXT")
         self.conn.commit()
 
     def close(self) -> None:
@@ -526,32 +557,64 @@ def prompt_version() -> str:
 
 
 def roles_for(round_no: int, n: int) -> list[str]:
-    """The speaking order of this round: the roles rotate, starting one place further each round."""
+    """The speaking order of this round: the roles rotate, starting one place further each round. With n >= 5 (the
+    service's TURNS_MIN) every role speaks once and the rotation goes on for the replies (7: the first two again)."""
     return [ROLES[(round_no + i) % len(ROLES)] for i in range(n)]
 
 
 def user_text(packet: dict, topic_ko: str, why: str, round_no: int, order: list[str]) -> str:
-    return (f"회차 {round_no}번. 주제: {topic_ko} ({why})\n발언 순서(이 순서 그대로, {len(order)}명): {', '.join(order)}\n"
+    seq = ", ".join(f"{i}. {r}" for i, r in enumerate(order, 1))
+    return (f"회차 {round_no}번. 주제: {topic_ko} ({why})\n발언 순서(이 순서 그대로, 발언 {len(order)}번): {seq}\n"
+            "서로 대화합니다: 3번째 발언부터는 이미 말한 사람 한 명을 reply_to에, 동의·반대·보완·질문 중 하나를 stance에 씁니다.\n"
             f"아래는 이번 회차 자료(JSON)입니다.\n{P.compact_json(packet)}")
 
 
-TURN_RE = re.compile(r'\{\s*"speaker"\s*:\s*"([^"\\]*)"\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}')
+_OBJ_START = re.compile(r'\{\s*"')
 
 
-def _salvage_turns(s: str) -> list:
-    """The complete {"speaker", "text"} objects of an answer that was cut off (max_tokens): what was paid for is kept."""
-    out = []
-    for sp, tx in TURN_RE.findall(s):
+def _salvage(s: str) -> tuple:
+    """What an answer that is not one clean JSON object still holds: (the whole answer when a complete one starts at its
+    first brace and only text follows it, else None; the complete turn objects of an answer cut off at max_tokens:
+    what was paid for is kept). A turn is any complete object with a "speaker" and a "text" string, in any key order
+    (the back-and-forth adds "reply_to" and "stance")."""
+    dec = json.JSONDecoder()
+    first = s.find("{")
+    if first >= 0:
         try:
-            out.append({"speaker": sp, "text": json.loads('"' + tx + '"')})
+            whole, _ = dec.raw_decode(s, first)
+            if isinstance(whole, dict) and isinstance(whole.get("turns"), list):
+                return whole, []
+        except ValueError:
+            pass
+    out = []
+    for m in _OBJ_START.finditer(s):
+        try:
+            o, _ = dec.raw_decode(s, m.start())
         except ValueError:
             continue
-    return out
+        if isinstance(o, dict) and isinstance(o.get("speaker"), str) and isinstance(o.get("text"), str):
+            out.append(o)
+    return None, out
+
+
+def _reply(t: dict, speaker: str, spoken: list) -> tuple:
+    """(reply_to, reply_stance) of one turn: reply_to only when it names someone who already spoke in this answer (not
+    the speaker), the stance only with such a target and only 동의 / 반대 / 보완 / 질문. Anything else: (None, None),
+    and the turn is kept as a plain turn."""
+    rt = t.get("reply_to")
+    rt = rt.strip() if isinstance(rt, str) else None
+    if not rt or rt == speaker or rt not in spoken:
+        return None, None
+    st = t.get("stance", t.get("reply_stance"))
+    st = st.strip() if isinstance(st, str) else None
+    return rt, (st if st in REPLY_STANCES else None)
 
 
 def parse_answer(text: str, order: list[str]) -> dict:
-    """The model's JSON answer, checked: {"turns": [{"speaker", "text"}], "note", "hypotheses": [...], "ideas": [...],
-    "truncated": bool}. A cut-off answer keeps its complete turns (no note, hypotheses or ideas). Raises
+    """The model's JSON answer, checked: {"turns": [{"speaker", "text", "reply_to", "reply_stance"}], "note",
+    "hypotheses": [...], "ideas": [...], "truncated": bool}. Up to TURNS_MAX turns; an unknown speaker takes its slot's
+    role from ``order``; reply_to / reply_stance as _reply() allows (None when missing: an answer in the older format
+    reads as plain turns). A cut-off answer keeps its complete turns (no note, hypotheses or ideas). Raises
     ApiError('output') when nothing usable is left."""
     s = text.strip()
     if s.startswith("```"):
@@ -567,18 +630,25 @@ def parse_answer(text: str, order: list[str]) -> dict:
             obj = None
     truncated = False
     if not isinstance(obj, dict) or not isinstance(obj.get("turns"), list):
-        got = _salvage_turns(s)
-        if not got:
+        whole, got = _salvage(s)
+        if whole is not None:
+            obj = whole
+        elif got:
+            obj, truncated = {"turns": got}, True
+        else:
             raise ApiError("output", "답이 약속한 JSON 모양이 아님(잘렸거나 설명이 섞임)")
-        obj, truncated = {"turns": got}, True
-    turns = []
-    for t in obj["turns"][:5]:
+    turns: list = []
+    spoken: list = []
+    for t in obj["turns"][:TURNS_MAX]:
         if not isinstance(t, dict) or not isinstance(t.get("text"), str) or not t["text"].strip():
             continue
         sp = t.get("speaker") if t.get("speaker") in ROLES else (order[len(turns)] if len(turns) < len(order) else None)
         if sp is None:
             continue
-        turns.append({"speaker": sp, "text": " ".join(t["text"].split())[:MAX_TURN_CHARS]})
+        rt, st = _reply(t, sp, spoken)
+        turns.append({"speaker": sp, "text": " ".join(t["text"].split())[:MAX_TURN_CHARS], "reply_to": rt,
+                      "reply_stance": st})
+        spoken.append(sp)
     if len(turns) < 2:
         raise ApiError("output", "토론 발언이 2개 미만")
     note = " ".join(str(obj.get("note") or "").split())[:MAX_NOTE_CHARS]
@@ -832,7 +902,8 @@ class Service:
             self.db.prune(t)
         self.db.conn.commit()
         self.grade(t)
-        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개, 출력 "
+        replies = sum(1 for x in ans["turns"] if x.get("reply_to"))
+        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개(누구에게 답했는지 적힌 것 {replies}개), 출력 "
                  f"{res['usage'].get('output_tokens')} 토큰(생각 블록 {res.get('thinking_blocks', 0)}개 포함), ${cost:.4f}")
         return "round"
 
@@ -850,8 +921,9 @@ class Service:
     def store_answer(self, rid: int, ts: int, topic: str, ans: dict) -> None:
         c = self.db.conn
         for t in ans["turns"]:
-            c.execute("INSERT INTO debate_messages (ts, round_id, speaker, stance, topic, text) VALUES (?,?,?,?,?,?)",
-                      (ts, rid, t["speaker"], STANCE.get(t["speaker"], ""), topic, t["text"]))
+            c.execute("INSERT INTO debate_messages (ts, round_id, speaker, stance, topic, text, reply_to, reply_stance) "
+                      "VALUES (?,?,?,?,?,?,?,?)", (ts, rid, t["speaker"], STANCE.get(t["speaker"], ""), topic, t["text"],
+                                                   t.get("reply_to"), t.get("reply_stance")))
         if ans["note"]:
             c.execute("INSERT INTO debate_messages (ts, round_id, speaker, stance, topic, text) VALUES (?,?,?,?,?,?)",
                       (ts, rid, NOTE_SPEAKER, NOTE_STANCE, topic, ans["note"]))
@@ -964,11 +1036,16 @@ def summary(debate_db: Optional[str], now_ms: Optional[int] = None, rounds: int 
         rows = c.execute("SELECT round_id, ts, topic, in_tokens, out_tokens, cache_read, cache_write, cost_usd, status, "
                          "error, model, turns FROM debate_rounds ORDER BY round_id DESC LIMIT ?", (rounds,)).fetchall()
         shown = []
+        # reply_to / reply_stance (debate-chat): a debate.db the service has not opened since the update lacks them
+        mcols = {x[1] for x in c.execute("PRAGMA table_info(debate_messages)")}
+        extra = ", ".join(x if x in mcols else f"NULL AS {x}" for x in ("reply_to", "reply_stance"))
         for r in rows:
             d = {k: r[k] for k in r.keys()}
             d["cost_usd"] = round(float(d["cost_usd"] or 0), 5)
-            d["messages"] = [{"speaker": m["speaker"], "stance": m["stance"], "text": m["text"]} for m in c.execute(
-                "SELECT speaker, stance, text FROM debate_messages WHERE round_id = ? ORDER BY id", (r["round_id"],))]
+            d["messages"] = [{"speaker": m["speaker"], "stance": m["stance"], "text": m["text"], "reply_to": m["reply_to"],
+                              "reply_stance": m["reply_stance"]} for m in c.execute(
+                f"SELECT speaker, stance, text, {extra} FROM debate_messages WHERE round_id = ? ORDER BY id",
+                (r["round_id"],))]
             shown.append(d)
         hy = [{k: r[k] for k in r.keys()} for r in c.execute(
             "SELECT id, round_id, ts, speaker, kind, horizon, status, outcome, graded_ts, params_json FROM "
