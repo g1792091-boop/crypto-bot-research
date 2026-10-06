@@ -425,8 +425,9 @@ def test_funding_is_one_rule_on_every_screen_not_a_loss_colour():
         src = _code(_read("screens", f))
         assert not re.search(r"fmt\.tone\(-Number\([a-z]+\.r\b", src), f
     for f in ("market-live.js", "market.js", "chart.js", "positions-book.js"):
-        assert "fundTone(" in _code(_read("screens", f)) and "../core/fundkit.js" in _read("screens", f), f
-    assert "FUND_HOT" in _code(_read("screens", "terminal-top.js")) and "../core/fundkit.js" in _read("screens", "terminal-top.js")
+        assert "fundTone(" in _code(_read("screens", f)) and "= fundkit;" in _read("screens", f) and "../core/fundkit.js" not in _read("screens", f), f     # through pb.js
+    assert "FUND_HOT" in _code(_read("screens", "terminal-top.js")) and "= fundkit;" in _read("screens", "terminal-top.js")
+    assert 'export * as fundkit from "./fundkit.js";' in _read("core", "pb.js")
 
 
 def test_topstats_a_hung_binance_request_does_not_hold_the_request_thread():

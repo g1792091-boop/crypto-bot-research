@@ -6,11 +6,11 @@
 //   강제청산 /api/v4/flowlive/liq (liq.db, the public forced-order stream): long vs short liquidated USDT over 1 h and
 //            24 h, the biggest single one, the latest 5 sliding in when they are new.
 // Missing files say 수집 전 / 기록기 멈춤, never a zero. Nothing here touches a paper account.
-import {h, ui, fmt, store, motion, bars, serverNow, liqkit} from "../core/pb.js";
-
-const {usdShort, liqTone, liqKo, LIQ_TIP} = liqkit;       // one colour rule (롱 청산 = up, 숏 청산 = down: the terminal's) and one money format ($K/M)
+import {h, ui, fmt, store, motion, bars, serverNow, liqkit, fundkit} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
-import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
+
+const {fundTone, fundWho} = fundkit;       // one funding colour rule (not a loss colour)
+const {usdShort, liqTone, liqKo, LIQ_TIP} = liqkit;       // one colour rule (롱 청산 = up, 숏 청산 = down: the terminal's) and one money format ($K/M)
 
 /** Where the price sits in the 24 h range: 0 = at the low, 1 = at the high (null without a range). */
 export function rangePos(c, lo, hi) {

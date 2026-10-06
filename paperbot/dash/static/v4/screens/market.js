@@ -2,12 +2,13 @@
 // fear & greed, dominance and total market cap, the US indexes with 5-day lines, the US macro calendar with D-days,
 // today and the schedule (funding, US market, next verdict, observation end), and GH Coin's current calls while its
 // recorder runs. Nothing here feeds the paper accounts; the screen says so.
-import {h, ui, fmt, store, motion, bars, serverNow, features} from "../core/pb.js";
+import {h, ui, fmt, store, motion, bars, serverNow, features, fundkit} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
-import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
 import {sideCounts} from "./positions-kit.js";
 import {termChip} from "./faq-terms.js";
 import {tempBoard, flowBoard, liqBoard} from "./market-live.js";
+
+const {fundTone, fundWho} = fundkit;      // one funding colour rule (not a loss colour)
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
 const GH_TONE = {long: "up", longWait: "up", short: "down", shortWait: "down"};

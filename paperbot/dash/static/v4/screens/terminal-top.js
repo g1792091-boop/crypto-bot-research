@@ -5,13 +5,14 @@
 // session and the KST clock. Under it one slow line of the latest real AI meeting conclusions (/api/office: finished
 // meetings' decision lines; '회의 중' only from office.running). The office is read through the shared store like 홈
 // (every 30 s and when a room changes).
-import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
+import {h, put, fmt, store, motion, bars, serverNow, sound, fundkit} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
 import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
 import {topStats} from "./terminal-stats.js";      // term-plus: 미결제약정 · 롱/숏 · 24시간 범위 (terminal-stats.js)
 import {usdKo} from "./market-live.js";
-import {FUND_HOT} from "../core/fundkit.js";      // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
+
+const {FUND_HOT} = fundkit;      // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
 
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 

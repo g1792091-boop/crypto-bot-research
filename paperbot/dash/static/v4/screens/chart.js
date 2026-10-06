@@ -10,16 +10,17 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, fundkit} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
 import {countdown, fundPct} from "./positions-book.js";
-import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
 import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
 import {coinPosCell, coinMarks} from "./terminal-coinpos.js";      // term-plus: 코인마다 우리 포지션 몇 개 (the terminal's strip has it too)
+
+const {fundTone, fundWho} = fundkit;      // one funding colour rule (not a loss colour)
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
   "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};

@@ -24,3 +24,4 @@ export * as liqkit from "./liqkit.js";
 export {listenTicks, ticksState} from "./ticks.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
 export * as sound from "./sound.js";
+export * as fundkit from "./fundkit.js";
