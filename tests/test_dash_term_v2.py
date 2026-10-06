@@ -169,7 +169,8 @@ def test_left_column_stacks_three_lists_with_ratio_bars_and_no_switch():
     assert left.index("big.el") < left.index("liq.el") < left.index("fills.el")
     assert "duoSwitch(left" not in js
     assert "ratioBar(" in feed and "ratioBar(" in live
-    assert '"LONG"' in feed and '"SHORT"' in feed and "/api/liq" in feed
+    assert "liqTag(r.liquidated)" in feed and "/api/liq" in feed                             # term-plus: LONG / SHORT come from core/liqkit.js
+    assert '"LONG"' in _src("core", "liqkit.js") and '"SHORT"' in _src("core", "liqkit.js")
     kit = _src("screens", "terminal-kit.js")
     assert 'MARKET_LABEL = "시장 전체 (우리 봇 아님)"' in kit
     assert "lead: [marketChip(BIG_LABEL)], info: BIG_LABEL" in live                          # 실시간 큰 체결: chip + ⓘ
@@ -182,8 +183,8 @@ def test_left_column_stacks_three_lists_with_ratio_bars_and_no_switch():
 
 
 def test_right_column_profit_card_calendar_and_no_order_buttons():
-    side = _src("screens", "terminal-side.js")
-    for w in ("이 코인 포지션", "수익 차트", "오늘 수익", "수익 캘린더", "기존 36", "판정이 아닙니다", "수집 전", "기록 없음"):
+    side = _src("screens", "terminal-side.js") + _src("screens", "terminal-pnl.js")         # term-plus: the profit card moved to terminal-pnl.js
+    for w in ("이 코인 포지션", "수익 차트", "오늘 수익", "수익 캘린더", "기존 36", "판정이 아닙니다", "불러오지 못함", "기록 없음"):
         assert w in side, w
     # the money captions: each panel's ⓘ carries its exact one, the terminal's footer line says both once
     assert "ROE: ${ui.ASSUME_OPEN_KO}" in side and "${ui.ASSUME_KO}" in side and 'ui.pill("", "ref")' in side

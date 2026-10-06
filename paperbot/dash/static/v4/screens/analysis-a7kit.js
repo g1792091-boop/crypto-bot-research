@@ -62,9 +62,9 @@ export function fetchInto(env, path, plate, render) {
       }
       put(box, ...nodes);
       motion.swap(box);
-    }).catch(() => {
+    }).catch((e) => {
       if (dead || !env.ctx.alive()) return;
-      put(box, ui.card({plate}, ui.errorBox(null, () => { put(box, motion.shimmer(3, true)); ask(); })));
+      put(box, ui.card({plate}, ui.errorBox(e, () => { put(box, motion.shimmer(3, true)); ask(); }, {id: "a7:" + path})));
     });
   };
   ask();

@@ -5,6 +5,7 @@
 .gl-k { color: var(--ink); font-weight: 800; white-space: nowrap; }
 .gl-parts { display: flex; flex-wrap: wrap; gap: 2px 10px; min-width: 0; flex: 1 1 auto; }
 .gl-p { overflow-wrap: anywhere; }
+.gl .errbox { padding: 2px 8px; gap: 6px; }          /* a failed read: the one-line box that tries again by itself */
 .gl-p + .gl-p::before { content: "·"; margin-right: 10px; color: var(--muted); }
 .gl-go { margin-left: auto; color: var(--accent); font-weight: 700; white-space: nowrap; text-decoration: none; min-height: 32px;
   display: inline-flex; align-items: center; }

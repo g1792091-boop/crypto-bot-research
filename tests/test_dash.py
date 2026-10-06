@@ -286,7 +286,10 @@ def test_summary_and_csv_exports(client):
     s = client.get("/api/summary").json()
     assert s["period_days"] == 30 and "today" in s and set(s["today"]) >= {"trades", "pnl", "wins", "liquidations"}
     if s["start"] is not None:
-        assert s["day"] >= 1 and s["next_checkpoint"]["ts"] > s["now"] and "observe_until" in s
+        # the verdict-day clock (dash/more/verdictday.py): the next checkpoint is ahead, or one that has passed and
+        # still has no verdict in checkpoint.db ('due'; this world's run started decades ago and was never judged)
+        nc = s["next_checkpoint"]
+        assert s["day"] >= 1 and (nc["ts"] > s["now"] or (nc["due"] and nc["ts"] <= s["now"])) and "observe_until" in s
     b = client.get("/api/export/board.csv")
     assert b.status_code == 200 and b.headers["content-type"].startswith("text/csv")
     assert b.text.startswith("﻿계좌,종류,매매법") and "attachment" in b.headers["content-disposition"]

@@ -17,7 +17,7 @@
 // record next to the lab's base rates, 왜 떨어졌나). Classic rounds (the five personalities) render as before.
 // HONESTY: every bubble is a stored turn (text nodes, no typing effect); it is ONE AI speaking every role (said under
 // the chat); nothing here changes an order, a rule or an account.
-import {h, ui, fmt, motion, store, serverNow} from "../core/pb.js";
+import {h, put, ui, fmt, motion, store, serverNow} from "../core/pb.js";
 import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST, sidesLine} from "./debate-chat.js";
 import {makeSide, usd4} from "./debate-side.js";
 import {factoryCard, deepBlock} from "./debate-factory.js";
@@ -64,11 +64,14 @@ export async function mount(el, ctx) {
   deep.el.hidden = true;
   factory.el.hidden = true;
   const caution = h("p", {class: "rk-banner db-caution"});
+  // fix-reliability (CONTRACT 5c): a 5-minute look that failed over a shown room keeps it, dimmed, under one line
+  // '불러오지 못함 · n분 전 자료' (ui.staleNote); the idea factory's cards and the status column are that same answer
+  const staleSlot = h("div", {class: "db-stale"});
   const main = h("div", {class: "db-main"}, live, deep.el, factory.el, histCard, ideaCard, caution);
   const frame = h("section", {class: "console db-frame", "aria-label": "24시간 토론방"},
     h("div", {class: "con-head"}, h("span", {class: "con-title"}, "24시간 토론방"), h("span", {class: "grow"}),
       h("span", {class: "db-conhint"}, "유료 API · 의견일 뿐")),
-    h("div", {class: "db-panes"}, main, side.el));
+    staleSlot, h("div", {class: "db-panes"}, main, side.el));
 
   // ---------------------------------------------------------------- pieces
   const turnsOf = (r) => (r.messages || []).filter((m) => !isNote(m)).length;
@@ -187,9 +190,15 @@ export async function mount(el, ctx) {
     }
   });
 
+  function stale(err) {
+    const old = !!err && frame.isConnected;
+    put(staleSlot, old ? ui.staleNote(err, store.meta("debate").okAt, () => store.refresh("debate").catch(() => {})) : null);
+    for (const x of [live, deep.el, factory.el, histCard, ideaCard, side.el]) ui.dim(x, old);
+  }
+
   ctx.watch("debate", (d, k, err) => {
-    if (d) render(d);
-    else if (err && !wrap.querySelector(".db-frame, .card")) wrap.replaceChildren(ui.errorBox(err, () => store.refresh("debate").catch(() => {})));
+    if (d) { render(d); stale(err); }
+    else if (err && !wrap.querySelector(".db-frame, .card")) wrap.replaceChildren(ui.errorBox(err, () => store.refresh("debate"), {key: "debate"}));
   });
   await store.need("debate", 60000).catch(() => null);
 }

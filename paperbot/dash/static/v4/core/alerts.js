@@ -95,21 +95,30 @@ function alertWorthy(t, kindOf) {
 const bustAcct = (a) => { const m = String(a.text || "").match(/^\[([^\]]+)\]/); return m ? m[1] : String(a.text || ""); };
 const HB_STALE_S = 120;
 const DATA_STALE_S = 300;            // health.py: 1m data older than 5 minutes is not fresh
+const LINK_GRACE_MS = 5000;          // core/api.js LINK_GRACE_MS: a blip shorter than this stays quiet
+const LINK_TROUBLE = new Set(["connecting", "error", "reconnecting"]);
+export const LINK_KO = "대시보드 연결 다시 잡는 중 · 이 화면과 서버 사이의 연결입니다 (봇과는 별개)";
 
 /**
  * Critical banner lines, from real records only:
  *   health: /api/analysis/health (polled each minute); alerts: recent alert rows [{ts, level, text}]; trades: recent
  *   closed trades; hb: the live stream's last heartbeat [ts, {last_step}] or null (newer than the health card, so it
- *   wins while the stream is open); streamOk: the stream is connected; now: ms; kindOf(account_id): its kind (the
- *   live stream's trades carry none).
- * -> [{id, kind: "stale"|"bust"|"liq", text, href, dismissable}]
+ *   wins while the stream is open); streamOk: the stream is connected AND has sent something in the last 12 s
+ *   (core/api.js: a silent connection is dropped and made again, so an old heartbeat on it never blames the bot);
+ *   link: {state, since} of the page's own stream (core/api.js stream), for the '대시보드 연결 다시 잡는 중' line;
+ *   now: ms; kindOf(account_id): its kind (the live stream's trades carry none).
+ * -> [{id, kind: "link"|"stale"|"bust"|"liq", text, href, dismissable}]
  */
-export function criticalLines({health, alerts, trades, hb, streamOk, now, kindOf}) {
+export function criticalLines({health, alerts, trades, hb, streamOk, link, now, kindOf}) {
   const out = [];
   const stale = [];
   const b = health && health.bot;
   const hbTs = hb && Number(hb[0]);
   const last = hb && hb[1] && Number(hb[1].last_step);
+  // the page's own connection is being made again: say so on its own line (the bot may be fine); the bot is judged by
+  // the health card meanwhile, never by the heartbeat the dead connection last brought
+  if (link && LINK_TROUBLE.has(link.state) && now - Number(link.since || now) >= LINK_GRACE_MS)
+    out.push({id: "link", kind: "link", text: LINK_KO, href: "#/server", dismissable: false});
   if (streamOk && hbTs) {
     const age = (now - hbTs) / 1000;
     if (age > HB_STALE_S) stale.push(`봇 생존 신호가 ${dur(age)}째 없습니다`);

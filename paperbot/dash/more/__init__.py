@@ -23,6 +23,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     people  오늘 코드 기록: 묶음별 오늘 거래·손실 카드 수, 매매법 방의 최근 거래·신호 (회의실 상황판, 에이전트 방)
     ticks   실시간 체결 바탕음: 바이낸스 aggTrade 소켓 하나를 모든 화면이 나눠 씀 (/api/v4/ticks, 소리를 켠 화면만)
     movers  급등 · 급락 · 음펀비: 바이낸스 USD-M 무기한 전체 (터미널 윗줄, 요청 2개를 60초 캐시)
+    topstats 터미널 윗줄: 고른 코인의 미결제약정 + 롱/숏 계좌 비율 (바이낸스 공개 선물 자료, 코인마다 60초 캐시, 짧은 제한 시간)
+    termpnl  터미널 수익 차트: 기존 36의 닫힌 거래를 시간 단위로 (승·패·최대 낙폭용, paper3.db만 읽음)
     synplus 조합 시너지 보강: 같이 망하는 날, 같이 들어간 진입, 다음 기간에도 통할까, 한 계좌로 합치면 (분석 › 조합 시너지)
     exits   청산 이유 + 역행·순행 (분석 › 청산 이유, ?group=core|ds200|reel; 딥시크는 거래 수와 비율만)
     regime5y 장세 스위치: 5년 장세별 성적 + 장세 스위치 걸어가며 확인 (data/regime5y.json) + 모의 거래 장세별 (분석 › 장세 스위치)
@@ -40,6 +42,15 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     ds5y       딥시크 5년 결과 (순위표 › 딥시크에서만): 5년 시험 결과 파일, 진행 N/342
     compare 매매법 비교 (매매법 › 비교, #/compare: 2-4개 나란히, 합친 곡선·숫자·봉별·동전 봇 순위·5년 시험; 딥시크는 거래 수만)
     nextver 다음 버전: 후보 장부(증거 등급) · 주장별 성적표 · 연구실이 못 하는 아이디어 (#/nextver) + 목표 진척도 한 줄 (홈 맨 위)
+    verdictday 판정 날 시계 (판정이 저장될 때까지 그 판정을 '계산 중'으로), 판정 기계 준비 카드, 30일 길 이정표, 판정 뒤
+            실거래 체크리스트 (판정 화면; /api/summary의 next_checkpoint · restart도 같은 시계)
+    copycmp  원본 vs 복제: an approved copy next to its parent over the same period (계좌 화면, 결재함 지난 결정)
+    losslinks 손실 거래 <-> 회의: the trade ids the loss meetings stored, both ways (계좌·다시보기·회의 요약·에이전트 방)
+    approvals 결재함: the proposals that wait for the owners with their 5-year table, for / against lines and what
+            approving does; past decisions (approving itself stays POST /api/proposals/<id>/decide)
+    chartplus  차트 위 얹기: 시장 강제청산 거품·가격대 막대 (liq.db, 봉 단위로 합침, 20초) + 아래 칸의 미결제약정·롱/숏·펀딩
+               (바이낸스 공개 주소를 서버가 받아 캐시, 짧은 제한 시간, 실패는 못 불러옴으로 따로)
+    vplevels   봇 매물대: 봇이 쓰는 매물 최다 가격 · 매물대 위/아래 끝 (차트·터미널의 매물대 겹침선과 비교, 읽기만)
 """
 from __future__ import annotations
 
@@ -57,6 +68,7 @@ MODULES += ("radar",)                          # 신호 레이더 (36개 조건 
 MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시장 강제청산 보드 (flow.db, liq.db)
 MODULES += ("people",)                         # fill-people: 상황판 + strategy room record
 MODULES += ("movers",)                         # term-v2: 급등 · 급락 · 음펀비 (시장 전체, 60 s cache)
+MODULES += ("topstats", "termpnl")              # term-plus: 터미널 윗줄 미결제약정·롱숏 (바이낸스 공개, 60 s cache) + 수익 차트 시간별 점 (paper3.db)
 MODULES += ("synplus", "exits")                # ana-syn: 조합 시너지 보강 + 청산 이유 (background, cached)
 MODULES += ("regime5y",)                       # 장세 스위치 (5년 JSON as committed + live trades by regime, background)
 MODULES += ("luck",)                           # luck-calc: 운 vs 실력 (background, cached)
@@ -67,6 +79,10 @@ MODULES += ("indranges", "liqentry", "holdcmp", "ghagree")   # ana7a: 좋은 수
 MODULES += ("whatiflab", "ds5y")               # ana7b: 만약 실험실 + 딥시크 5년 결과 (files; shadows in the background)
 MODULES += ("compare",)                        # conv-b: 매매법 비교 (2-4 side by side; background, cached)
 MODULES += ("nextver",)                        # round 2: 다음 버전 (#/nextver) + 목표 진척도 한 줄 (cached, read-only)
+MODULES += ("verdictday",)                     # fix-verdict: 판정 날 시계, 판정 기계, 30일 길 이정표, 판정 뒤 할 일
+MODULES += ("copycmp", "losslinks", "approvals")   # add-accounts: 원본 vs 복제, 손실 거래 <-> 회의, 결재함
+MODULES += ("chartplus",)                      # chart-plus: 차트 위 시장 청산 거품·가격대 막대 + 아래 칸의 시장 자료 (liq.db, Binance by the server)
+MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물대 (POC / VAH / VAL, kinds 51-53) for the chart overlay
 
 
 def register_all(app, **kw) -> dict:

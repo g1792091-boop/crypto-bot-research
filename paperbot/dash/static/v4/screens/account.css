@@ -1,6 +1,7 @@
 @import url("positions-kit.css");
 @import url("grid-kit.css");
 @import url("faq-terms.css");
+@import url("meet-links.css");
 /* account: 계좌 (builder B). */
 .account-back { justify-self: start; display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
 .account-back:hover { color: var(--accent); }
@@ -52,3 +53,54 @@ a.account-same-t:hover { border-color: var(--accent-line); }
 .acp-g { color: var(--muted); white-space: nowrap; }
 .acp-pos { color: var(--accent); }
 @media (max-width: 420px) { .account-same-row { gap: 6px; } .account-same-t { padding: 7px 6px; } .account-same-t b { font-size: var(--t-sm); letter-spacing: -.02em; } }
+/* add-accounts: '왜 이 수익률인가' (account-why.js) */
+.acw { gap: 12px; }
+.acw-head { display: grid; gap: 4px; }
+.acw-big { margin: 0; font-size: var(--t-lg); font-weight: 700; color: var(--ink); }
+.acw-big .num { font-variant-numeric: tabular-nums; }
+.acw-big .up, .acw-line b.up, .acw-fv.up, .acw-chip b.up { color: var(--up); }
+.acw-big .down, .acw-line b.down, .acw-fv.down, .acw-chip b.down { color: var(--down); }
+.acw-line { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.acw-line b { color: var(--ink); }
+.acw-body { display: grid; gap: 14px 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .acw-body { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.acw-sec { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+.acw-k { margin: 0; color: var(--ink); font-size: var(--t-sm); font-weight: 700; }
+.acw-k b { color: var(--down); }
+.acw-fall { display: grid; gap: 6px; }
+.acw-frow { display: grid; grid-template-columns: minmax(84px, 112px) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--ink-2); }
+.acw-ftrack { position: relative; height: 14px; border-radius: 4px; background: var(--surface-3); }
+.acw-fbar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; background: var(--muted); }
+.acw-fbar.up, .acw-fbar.gain { background: var(--up); }
+.acw-fbar.down { background: var(--down); }
+.acw-fbar.cost { background: var(--warn); }
+.acw-fzero { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink-2); }
+.acw-fv { min-width: 84px; text-align: right; color: var(--ink); font-size: var(--t-xs); }
+.acw-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.acw-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
+.acw-chip.bad { border-color: var(--down-line); }
+.acw-wr { position: relative; height: 12px; border-radius: 4px; background: var(--surface-3); }
+.acw-wrbar { position: absolute; left: 0; top: 2px; bottom: 2px; border-radius: 3px; background: var(--muted); }
+.acw-wrbar.up { background: var(--up); }
+.acw-wrbar.down { background: var(--down); }
+.acw-wrmark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); }
+.acw-big3 { display: grid; gap: 4px; }
+.acw-brow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 32px; font-size: var(--t-xs); color: var(--ink-2); }
+.acw-brow .acw-bt { font-family: var(--f-term); color: var(--muted); }
+.acw-brow b { color: var(--down); }
+.acw-replay { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 700; text-decoration: none; }
+.acw-replay:hover { text-decoration: underline; }
+/* add-accounts: 원본 vs 복제 (account-copy.js) */
+.acc { gap: 10px; }
+.acc-body { display: grid; gap: 10px; min-width: 0; }
+.acc-rule { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.acc-rule b { color: var(--accent); font-size: var(--t-md); }
+.acc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.acc-k.cp { color: var(--accent); font-weight: 700; }
+.acc-k.pa { color: var(--ink-2); font-weight: 700; }
+.acc-tbl td.up { color: var(--up); }
+.acc-tbl td.down { color: var(--down); }
+.acc-line { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.acc-line b.up { color: var(--up); }
+.acc-line b.down { color: var(--down); }

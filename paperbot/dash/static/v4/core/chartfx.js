@@ -53,9 +53,10 @@ import {smcPrimitive} from "./smcdraw.js";
 import {edgeLayout} from "./edgelabels.js";
 import {onPref, tellPref, setPref} from "./prefs.js";
 
-export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선"};
+export const GROUP_KO = {pos: "포지션 선", risk: "손절·잠금", sr: "지지·저항", smc: "프리미엄 지표", ev: "경제지표", vol: "거래량", al: "가격 알림 선",
+  vp: "매물대"};                   // vp: screens/chart-vp.js (the 설정 panel names it too, before any chart was opened)
 export const AMBIENT_TIP = "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)";
-export const FLASH_TIP = "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)";
+export const FLASH_TIP = "하늘색 번쩍 = 큰 매수 · 롱 청산, 빨간 번쩍 = 큰 매도 · 숏 청산 (강제청산은 정리된 쪽의 색: 롱 = 하늘색, 숏 = 빨강) · 바이낸스 실제 체결";
 export const LIGHT_REAL = "조명 깜박: 지금 바이낸스 실제 체결을 따라 깜박 (파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색, 클수록 밝고 길게 · 7개 코인 중 이 코인이 가장 밝게)";
 export const LIGHT_DECO = "조명 깜박: 지금은 따라갈 체결이 2초 넘게 없어 은은한 장식 깜박 (시장 자료 아님)";
 export const LIGHT_NOTE = "깜박: 바이낸스 실제 체결을 따라 파는 쪽이 많으면 위 빨강, 사는 쪽이 많으면 아래 하늘색이 잠깐 켜집니다 "
@@ -252,12 +253,15 @@ export function candleGlow(chart, series) {
  *   sym: () -> the coin on screen (its relay events light the halves at full strength; others dimmer)
  *   legend: the screen's OHLC legend element over the chart (the right-edge names start under it when it reaches them)
  *   lite: a small cell of 여러 차트: the same glow and flash, the glow drawn in one soft pass instead of two
- * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn ('프리미엄 지표 ▾'),
+ * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), onData(fn), menuEl, menuBtn, smcBtn ('프리미엄 지표 ▾'),
  *        lightChip, lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), viewBtn (one
  *        '보기 ▾' menu with the light, the flash and the 프리미엄 지표 parts, for a narrow header), place, ready}
  *        The 설정 panel (core/settings.js) changes the '선' choices, 번쩍임 and 조명 of a deck on screen through
  *        core/prefs.js under the deck's own storage keys; the deck's menus follow at once, and the deck's own menus tell
  *        the panel (and the other decks of this key) the same way.
+ *        onToggle(fn): fn(group) after one group changed; fn(null, how) after several at once, how = "all" | "none" (모두 보기 /
+ *        모두 숨기기), "default" (기본으로) or "pref" (the 설정 panel or another deck of this key): a subscriber that only
+ *        redraws ignores how; screens/chart-plus.js turns its add-ons off on "default" / "none".
  */
 export function chartDeck(o) {
   const {chart, series, wrap, box, ctx} = o;
@@ -848,7 +852,14 @@ export function chartDeck(o) {
   function openMenu(on) {
     menu.hidden = !on;
     menuBtn.setAttribute("aria-expanded", String(on));
-    if (on) { paintMenu(); const f = menu.querySelector("button"); if (f) f.focus(); }
+    if (on) { paintMenu(); keepInView(); const f = menu.querySelector("button"); if (f) f.focus(); }
+  }
+  /** the menu hangs from the button's right edge; with chart-plus's second column it is ~520 px wide, and on a 1280 px
+   *  terminal the button sits too far left for that: the menu is moved right until it is inside the window (8 px air) */
+  function keepInView() {
+    menu.style.removeProperty("right");
+    const r = menu.getBoundingClientRect();
+    if (r.left < 8) menu.style.right = `${Math.round(r.left - 8)}px`;
   }
   if (ctx && ctx.listen) {
     ctx.listen(document, "pointerdown", (e) => { if (!menu.hidden && !menuWrap.contains(e.target)) openMenu(false); });
@@ -932,7 +943,7 @@ export function chartDeck(o) {
     save();
     for (const g of groups) applyGroup(g, true);
     revis();
-    for (const fn of subs) fn(null);
+    for (const fn of subs) fn(null, on ? "all" : "none");
   }
   /** 기본으로: the calm default of every group and part, the hidden lines back */
   function setDefault() {
@@ -940,7 +951,7 @@ export function chartDeck(o) {
     save();
     for (const g of groups) applyGroup(g, true);
     revis();
-    for (const fn of subs) fn(null);
+    for (const fn of subs) fn(null, "default");
   }
   /** one 프리미엄 지표 part on / off: with the indicator off, choosing a part turns it on with that part alone */
   function setPart(id, on) {
@@ -975,7 +986,7 @@ export function chartDeck(o) {
       const moved = groups.filter((g) => was.has(g) !== st.off.has(g) || (g === "smc" && partsMoved));
       for (const g of moved) applyGroup(g, true);
       revis();
-      if (moved.length) for (const fn of subs) fn(null);
+      if (moved.length) for (const fn of subs) fn(null, "pref");
     }),
     // 번쩍임 and 조명 changed in the 설정 panel (or in another deck's menu): this deck's menu words, the flash scheduler,
     // the blinking halves and the relay listener follow (flashSel is the span of the light menu, not a select)
@@ -993,6 +1004,7 @@ export function chartDeck(o) {
 
   // ---------------------------------------------------------------- data in
   function index() { st.idx = new Map(st.data.map((b, i) => [b.time, i])); }
+  const dataSubs = [];
   function setData(data) {
     st.col = colours();
     st.data = (data || []).slice();
@@ -1001,6 +1013,7 @@ export function chartDeck(o) {
     st.lastPx = null;
     st.zone = null;
     paintVol(); computeSmc(); if (tagEl) paintTag(false); schedule();
+    for (const fn of dataSubs) fn("set");
   }
   /** A newer or the forming bar. real: the price came from a real new trade / poll (the tag pulses once if it moved). */
   function update(c, real = true) {
@@ -1013,6 +1026,7 @@ export function chartDeck(o) {
     if (isNew) computeSmc();
     if (tagEl) paintTag(real);
     schedule();
+    for (const fn of dataSubs) fn(isNew ? "new" : "bar");
     return true;
   }
   function paintTag(real) {
@@ -1053,6 +1067,11 @@ export function chartDeck(o) {
     /** A real event of the coin on screen: {tone: "up" | "down" | "accent", k: 0..1, why} (AI skin only). */
     flash(ev) { if (st.ai) sched.push(ev); },
     onToggle(fn) { subs.push(fn); },
+    /** fn(how) after the candles were replaced ("set") or a bar changed / arrived ("bar" / "new"): the add-ons of
+     *  screens/chart-plus.js (liquidation bubbles, our stop map, the lower panes) follow the candles through it. */
+    onData(fn) { dataSubs.push(fn); },
+    /** the '선' menu's box: chart-plus.js adds its own section (겹쳐 보기 · 아래 칸) to it */
+    menuEl: menu,
     menuBtn: menuWrap, smcBtn, lightChip, lightMenu: flashSel, flashSel, viewBtn,
   };
 }

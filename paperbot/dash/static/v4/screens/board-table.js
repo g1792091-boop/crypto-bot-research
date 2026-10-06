@@ -42,7 +42,8 @@ export function boardTable(ctx, o = {}) {
   const st = {rows: [], group: "core", gs: null, col: "rk", dir: 1, page: 0, q: ""};
   const search = h("input", {class: "search", type: "search", placeholder: "이름·코드 찾기", "aria-label": "표에서 계좌 찾기", autocomplete: "off"});
   const thead = h("thead");
-  const tbody = h("tbody");
+  // until the first board: 불러오는 중 (the empty words below come only from a real answer)
+  const tbody = h("tbody", null, h("tr", null, h("td", {colspan: String(COLS.length), class: "l muted", "aria-busy": "true"}, "불러오는 중")));
   const info = h("span", {class: "pinfo"});
   const prev = h("button", {class: "btn-line", type: "button"}, "이전");
   const next = h("button", {class: "btn-line", type: "button"}, "다음");
@@ -94,7 +95,7 @@ export function boardTable(ctx, o = {}) {
     info.textContent = rows.length ? `${fmt.int(s0 + 1)}–${fmt.int(s0 + part.length)} / ${fmt.int(rows.length)}` : "0 / 0";
     prev.disabled = st.page === 0; next.disabled = st.page >= pages - 1;
     bar.hidden = rows.length <= PAGE;
-    put(note, h("b", null, "참고"), " · 상태의 % = 열린 포지션의 지금 ROE (마크 가격, 수수료 전) · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일째",
+    put(note, h("b", null, "참고"), " · 상태의 % = 열린 포지션의 지금 ROE (마크 가격, 수수료 전) · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일마다",
       st.group === "all" ? " · 섞인 목록에서 딥시크·동전 봇은 개수만 (순위 없이 맨 뒤)" : "");
     if (o.onRender) o.onRender();
   }

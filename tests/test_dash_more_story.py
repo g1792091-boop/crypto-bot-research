@@ -307,7 +307,7 @@ def test_since_sheet_is_wired_once_never_on_the_first_visit_and_keeps_storage_wr
     assert 'import {startSince} from "./since.js";' in main and main.count("startSince()") == 1
     assert "localStorage" not in since and "local.get(KEY" in since and "local.set(KEY" in since
     assert "prev != null && serverNow() - prev >= GAP_MS" in since          # the first visit only records the time
-    assert '"/static/v4/core/since.css"' in since and os.path.exists(os.path.join(V4, "core", "since.css"))
+    assert 'new URL("since.css", import.meta.url)' in since and os.path.exists(os.path.join(V4, "core", "since.css"))
     assert "/api/v4/since?after=" in since and "ASSUME_KO" in since
     assert "innerHTML" not in since
 

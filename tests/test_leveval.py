@@ -436,8 +436,13 @@ def test_restart_banner_math():
     assert b["text"] == "새 실험 D+0 / 30 · 첫 판정 11/04" and b["rules_ko"] == RULES_V4_KO
     assert restart_banner(start, START + DAY + HOUR)["text"] == "새 실험 D+1 / 30 · 첫 판정 11/04"
     assert restart_banner(start, cp1 - 1)["day"] == 29
+    # review 10/06 fix 1: at 09:00 on the verdict day the checkpoint stays named until its verdict is stored
+    # (dash/more/verdictday.py); without checkpoint.db's word it is 'not known', never the next one
     late = restart_banner(start, cp1)
-    assert late["day"] == 30 and late["checkpoint"] == 2 and late["text"] == "새 실험 D+30 · 2번째 판정 12/04"
+    assert late["day"] == 30 and late["checkpoint"] == 1 and late["due"] and late["state"] == "unknown"
+    assert late["text"] == "새 실험 D+30 · 30일 판정 결과 기다림" and late["verdict_mmdd"] == "11/04"
+    judged = restart_banner(start, cp1, {"db": "ok", "verdicts": {"2026-11-04": cp1 + 7_200_000}, "snapshots": {}, "log": {}})
+    assert judged["checkpoint"] == 2 and judged["of"] == 60 and judged["text"] == "새 실험 D+30 · 2번째 판정 12/04"
     assert restart_banner(None, cp1)["ready"] is False
     assert "5분봉 제외" not in RULES_V4_KO and "딥시크" in RULES_V4_KO            # the v4 run trades 5m (the reel)
 

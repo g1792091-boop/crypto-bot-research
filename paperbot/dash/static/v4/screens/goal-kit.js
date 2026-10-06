@@ -14,18 +14,30 @@ export function goalLine(ctx, o = {}) {
   const go = h("a", {class: "gl-go", href: ctx.href("nextver")}, "다음 버전 후보 →");
   const el = h("div", {class: ["gl", o.cls], role: "status", "aria-label": "목표 진척도"},
     h("span", {class: "gl-k"}, "🎯 목표 진척도"), parts, go);
+  let shown = false;
+  // fix-reliability (CONTRACT 5c): a failed read never reads as 수집 전. Over a line already shown it stays, dimmed, with
+  // why in its tooltip (the next 5-minute look tries again); before any answer, the one-line box that tries again by
+  // itself (load rejects on failure, so the box stays until a try succeeds)
   async function load() {
     let d = null;
-    try { d = await ctx.api(GOAL_API); } catch { d = null; }
+    try { d = await ctx.api(GOAL_API); } catch (e) {
+      if (!ctx.alive()) return;
+      if (shown) { ui.dim(parts, true); el.title = `${ui.failKo(e)} · 앞서 받은 줄을 보여 드립니다`; }
+      else if (!parts.querySelector(".errbox")) parts.replaceChildren(ui.errorBox(e, load));
+      throw e;
+    }
     if (!ctx.alive()) return;
     if (!d || !Array.isArray(d.parts)) {
       parts.replaceChildren(ui.notYet("수집 전", "서버가 아직 이 값을 보내지 않습니다"));
       return;
     }
     parts.replaceChildren(...d.parts.map((t, i) => h("span", {class: "gl-p", dataset: {i: String(i)}}, t)));
+    ui.dim(parts, false);
+    shown = true;
     el.title = d.caveat_ko || "";
   }
-  load();
+  // ctx.every runs it at once, then every 5 minutes (one first request, not two)
   if (ctx.every) ctx.every(REFRESH_MS, load);
+  else load().catch(() => { /* the line itself says it failed */ });
   return el;
 }

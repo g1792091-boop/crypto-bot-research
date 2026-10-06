@@ -231,4 +231,4 @@ def test_page_files_keep_the_honesty_rules():
     assert "visibilitychange" in js["flow.js"] and "chart.pause()" in js["flow.js"]   # paused when hidden
     assert '"/api/v4/flow/calendar"' in js["flow-cal.js"] and "기록 없음" in js["flow-cal.js"]
     assert _src("flow.css").startswith('@import url("flow-kit.css");')
-    assert '"/static/v4/screens/flow-kit.css"' in kit                      # home loads the kit css itself
+    assert 'new URL("flow-kit.css", import.meta.url)' in kit              # home loads the kit css itself

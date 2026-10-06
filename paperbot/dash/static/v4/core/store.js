@@ -19,7 +19,7 @@ const SOURCES = {
   levwhy: ["/api/levwhy", 30000],
 };
 
-const cache = {};          // key -> {v, at, err}
+const cache = {};          // key -> {v, at, okAt, err}: at = the last try, okAt = the last good answer
 const subs = {};           // key -> Set(fn)
 const stops = {};          // key -> poll stopper
 const inflight = {};
@@ -33,7 +33,7 @@ async function load(key) {
       const v = await api(src[0]);
       // the 36 names + the server labels for DeepSeek and the reel (names_ko = groups.label_ko, the Telegram names)
       if (key === "board" && v && (v.strategy_ko || v.names_ko)) setStrategyNames({...(v.strategy_ko || {}), ...(v.names_ko || {})});
-      cache[key] = {v, at: Date.now(), err: null};
+      cache[key] = {v, at: Date.now(), okAt: Date.now(), err: null};
       notify(key);
       return v;
     } catch (e) {
@@ -55,7 +55,8 @@ function notify(key) {
 export const store = {
   /** The cached value (or undefined). */
   get: (key) => cache[key] && cache[key].v,
-  /** When it was fetched (ms) and the last error. */
+  /** {v, at (the last try, ms), okAt (the last good answer, ms), err (the last try's error, null after a good one)}:
+   *  a screen tells 불러오는 중 (no v, no err) from 못 불러옴 (err) from a real empty answer (v) with it (ui.loadState). */
   meta: (key) => cache[key] || {},
   /** Fetch now (returns the value; throws on error). */
   refresh: (key) => load(key),
@@ -77,7 +78,7 @@ export const store = {
   /** Promise of a value: cached when fresh enough (maxAgeMs), else fetched. */
   async need(key, maxAgeMs = 30000) {
     const c = cache[key];
-    if (c && c.v !== undefined && Date.now() - c.at < maxAgeMs) return c.v;
+    if (c && c.v !== undefined && Date.now() - (c.okAt || 0) < maxAgeMs) return c.v;
     return load(key);
   },
   /** The current mark price of a coin (from the ticker key; null when unknown). */
@@ -128,3 +129,10 @@ bus.on("rooms", () => {
   }, 800);
 });
 bus.on("alerts", () => { load("status").catch(() => {}); });
+// The page's own connection back (core/api.js stream:state "open", e.g. after a sleep or a dashboard restart): every
+// polled key whose last try failed is asked again at once, so the self-retrying boxes ({key}) and the '불러오지 못함 ·
+// n분 전 자료' notes clear within seconds of the server being back, not at the next poll (up to 10 minutes away)
+bus.on("stream:state", (s) => {
+  if (s !== "open") return;
+  for (const k of Object.keys(stops)) if (cache[k] && cache[k].err && !inflight[k]) load(k).catch(() => {});
+});

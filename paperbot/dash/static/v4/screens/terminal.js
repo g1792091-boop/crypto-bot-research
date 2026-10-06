@@ -23,6 +23,8 @@ import {bottomTable} from "./terminal-table.js";
 import {bookPanel} from "./positions-book.js";
 import {panel, duoSwitch, ping, ages, marketChip, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
+import {bandLine} from "./terminal-band.js";
+import {paneResize} from "./terminal-resize.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("터미널");
@@ -60,8 +62,13 @@ export async function mount(el, ctx) {
   // terminal; every panel keeps an ⓘ with its own exact note, the market panels a "시장" chip
   const foot = ui.assumeLine(["closed", "open"], `'시장' 표시 = 바이낸스 ${MARKET_LABEL} · 딥시크·동전 봇은 건수만`);
   foot.classList.add("term-foot");
+  // term-plus: the '실험 잘 되고 있나' band sits inside the top block, between the price row and the meetings line
+  const band = bandLine(ctx);
+  top.el.insertBefore(band.el, top.el.querySelector(".term-mline"));
   const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right), foot);
   el.append(h("h1", {class: "term-sr"}, "터미널"), root);
+  // term-plus: drag handles between the columns and between the chart and the table (sizes remembered per device, T = 차트 ↔ 표)
+  paneResize(ctx, {root, grid: root.querySelector(".term-grid"), left, right, mid, strip: watch.el, table: table.el});
 
   // page hidden: the slow lines and breathing marks stop (CSS reads data-still); reduced motion is handled in CSS
   const still = () => { root.dataset.still = document.hidden ? "1" : ""; };
@@ -70,7 +77,12 @@ export async function mount(el, ctx) {
 
   // shared data: one watcher per key, handed to the parts
   ctx.watch("ticker", (tk) => { if (!tk) return; top.onTicker(tk); watch.onTicker(tk); mine.onTicker(); table.onTicker(); chart.onTicker(tk); });
-  ctx.watch("board", (b) => { if (!b) return; fills.onBoard(b); mine.onBoard(b); table.onBoard(b); chart.onBoard(b); pnl.onBoard(b); });
+  // a board that could not be read is told (the table and the coin strip say 불러오지 못함, never "열린 포지션이 없습니다")
+  ctx.watch("board", (b, k, err) => {
+    if (!b) { watch.onBoard(null, !!err); table.onBoardFailed(!!err); mine.onBoardFailed(!!err); return; }
+    watch.onBoard(b); fills.onBoard(b); mine.onBoard(b); table.onBoard(b, !err); chart.onBoard(b); pnl.onBoard(b);
+    if (err) table.onBoardFailed(true);                    // the old board stays on screen, marked 새로 받지 못함
+  });
   ctx.on("trades", (rows) => { fills.onTrades(rows); table.onTrades(rows); chart.onTrades(rows); });
   const syncLiq = () => left.classList.toggle("has-liq", !!features.liq);
   syncLiq();

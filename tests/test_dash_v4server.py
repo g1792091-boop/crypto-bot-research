@@ -8,6 +8,7 @@ import gzip
 import json
 import math
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -58,7 +59,8 @@ def test_root_is_the_v4_dashboard_and_the_old_one_moves_to_v3(tmp_path):
     assert anon.get("/api/board").status_code == 401                       # the API still answers 401, no redirect
     c = _client(db)
     root = c.get("/").text
-    assert 'src="/static/v4/core/main.js"' in root and "<title>Paper v4</title>" in root
+    # the page's files under its content version (dash/assets.py): /static/v-<ver>/v4/...
+    assert re.search(r'src="/static/v-[0-9a-f]{10}/v4/core/main\.js"', root) and "<title>Paper v4</title>" in root
     assert c.get("/v4").text == root
     old = c.get("/v3").text
     assert 'src="/static/app.js"' in old and "Paper v4" in old and "Paper v3" not in old

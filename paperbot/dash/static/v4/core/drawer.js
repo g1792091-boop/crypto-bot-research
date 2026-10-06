@@ -155,6 +155,8 @@ export function peekGo(name, arg, query) {
 export function startDrawer() {
   document.addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // a control inside a row link that opens something else (meet-links.js: the loss meeting of a 홈 trade row) keeps its click
+    if (e.target && e.target.closest && e.target.closest("[data-no-peek]")) return;
     const a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
     if (!a || (a.target && a.target !== "_self")) return;
     const raw = a.getAttribute("href") || "";

@@ -15,7 +15,7 @@ let cache = null;               // {at, p}: one request serves both cards (and a
 
 function ensureCss() {
   if (document.querySelector("link[data-an-shape]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/analysis-shape.css", dataset: {anShape: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("analysis-shape.css", import.meta.url).href, dataset: {anShape: "1"}}));
 }
 function load(env) {
   if (!cache || Date.now() - cache.at > FRESH_MS) {

@@ -75,7 +75,7 @@ export async function mount(el, ctx) {
     let view;
     try { view = make(env); } catch (e) {
       console.error(e);
-      put(body, ui.card({plate: t.label}, ui.errorBox(e, () => show(tab, null))));
+      put(body, ui.card({plate: t.label}, ui.errorBox(e, () => show(tab, null), {id: "combo:" + tab})));
       return;
     }
     if (g !== st.gen) { if (view.dispose) view.dispose(); return; }

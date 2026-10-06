@@ -174,7 +174,7 @@ export function buildTab(env) {
     let d;
     try { d = await ctx.api(`/api/v4/combo?${q.toString()}`); } catch (e) {
       if (g !== st.gen || !ctx.alive()) return;
-      put(result, ui.card({plate: "합친 곡선"}, e && e.detail ? h("p", {class: "an-warn"}, String(e.detail)) : ui.errorBox(e, () => compute())));
+      put(result, ui.card({plate: "합친 곡선"}, e && e.detail && e.kind === "http" ? h("p", {class: "an-warn"}, String(e.detail)) : ui.errorBox(e, () => compute(), {id: "combo-build"})));
       return;
     }
     if (g !== st.gen || !ctx.alive()) return;

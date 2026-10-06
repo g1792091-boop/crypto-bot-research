@@ -2,7 +2,7 @@
 // inside the console frame. Staff messages: the office's pixel person in the role's colour, the name in that colour,
 // type badges (결론 / 제안 / 가설 / 질문 / 데이터, agents-ui.js msgTypes: only what the stored message holds), the
 // text with 더 보기, rule JSON as readable lines with the raw text folded, 동의 / 반대 / 보완 pills from the answer's
-// responds_to, evidence folded, and small link cards for the strategies / accounts the message names. A speaker's
+// responds_to, evidence folded (packet paths named in Korean per claim, rooms-evidence.js), and small link cards for the strategies / accounts the message names. A speaker's
 // next message within a few minutes of the same meeting is grouped under the first (no repeated avatar). Code results
 // and decisions as cards; owner posts on the right (전달 대기 until the staff read them).
 // Top of the room: the latest conclusion pinned (tap: jump to it). Filters 전체 / 결론만 / 두 분 메모 and a search box
@@ -17,6 +17,8 @@ import {KIND_KO, SPEAKING, VERDICT_KO, stanceOf, answerOf, dataOf, bodyLines, me
 import {recordBox, stratOf} from "./rooms-record.js";
 import {typeBadges, msgTypes, forOwners, pixAvatar, refsOf, miniCards, dayLabel} from "./agents-ui.js";
 import {labRequestForm} from "./labreq-kit.js";
+import {evidenceGroups, evidenceList, evidenceCount} from "./rooms-evidence.js";
+import {roundTradesSlot, LOSS_TRIGGERS} from "./meet-links.js";
 
 const PAGE = 60;
 const LAB_ROOM = "team:lab";
@@ -93,7 +95,7 @@ export function makeChat(ctx, hooks) {
     const who = m.speaker_name || roleName(roles(), m.role);
     const a = answerOf(m);
     const verdict = m.kind === "challenge" && a.verdict ? (a.verdict_coerced ? "unreadable" : a.verdict) : null;
-    const ev = Array.isArray(m.evidence) ? m.evidence : m.evidence ? [m.evidence] : [];
+    const evg = evidenceGroups(m, a), evn = evidenceCount(evg);
     const hue = hueFor(roles(), m.role);
     const kindKo = KIND_KO[m.kind] || m.kind;
     return h("div", {class: ["rm-msg", cont ? "cont" : ""], style: {"--h": hue}},
@@ -106,7 +108,7 @@ export function makeChat(ctx, hooks) {
           messageBody(bodyLines(m), {lines: 3}),
           verdict ? h("div", {class: "rk-stance"}, ui.pill(`판정: ${VERDICT_KO[verdict] || verdict}`, verdict === "agree" ? "good" : verdict === "disagree" ? "bad" : "warn")) : null,
           minis(m),
-          ev.length ? ui.disclosure(`근거 ${fmt.int(ev.length)}곳`, h("ul", {class: "rm-ev"}, ev.map((x) => h("li", null, typeof x === "string" ? x : JSON.stringify(x))))) : null)));
+          evn ? ui.disclosure(`근거 ${fmt.int(evn)}곳`, evidenceList(evg)) : null)));
   }
   function codeNode(m) {
     const d = dataOf(m), g = d.gate && typeof d.gate === "object" ? d.gate : null;
@@ -143,7 +145,8 @@ export function makeChat(ctx, hooks) {
       n = h("div", {class: "cl ev rm-act"}, h("span", {class: "bl"}, "▪ "), `> [실행] ${stripLead(m.text)} `, h("time", null, `(${fmt.hm(m.ts)})`));
     } else if (m.kind === "decision") {
       n = h("div", {class: "rm-dec"}, h("div", {class: "rk-code-h"}, h("b", null, "회의 결론"), typeBadges(m), h("span", {class: "muted"}, "숫자는 코드가 정리"), timeEl(m.ts)),
-        messageBody(stripLead(m.text).split("\n"), {lines: 3}), minis(m));
+        messageBody(stripLead(m.text).split("\n"), {lines: 3}), minis(m),
+        LOSS_TRIGGERS.includes(m.meeting) ? roundTradesSlot(ctx, m.round_id) : null);     // the losses it was about
     } else if (m.kind === "code_result") {
       n = codeNode(m);
     } else if (m.kind === "owner") {

@@ -6,17 +6,19 @@ import {states, tile, note} from "./server-kit.js";
 
 const TITLE = {ok: "모두 정상입니다", warn: "확인할 것이 있습니다", bad: "고칠 것이 있습니다", unknown: "확인하는 중입니다"};
 const ago = (s) => (s == null ? "기록 없음" : `${fmt.dur(s)} 전`);
+/** The page's own stream is being made again (core/api.js: a browser retry, the watchdog, a first connect). */
+const relinking = () => ["error", "reconnecting", "connecting"].includes(stream.state);
 
 /** Problems / warnings / level with the live stream folded in (the dot's own rule). */
 export function healthState(hl) {
   const now = serverNow();
   const problems = [...((hl && hl.problems) || [])];
   const warnings = [...((hl && hl.warnings) || [])];
-  const stale = criticalLines({health: hl, alerts: [], trades: [], hb: stream.heartbeat, streamOk: stream.state === "open", now})
+  const stale = criticalLines({health: hl, alerts: [], trades: [], hb: stream.heartbeat, streamOk: stream.fresh(), now})
     .filter((l) => l.kind === "stale");
   // the stream's fresher heartbeat says the same as the dot; health's own line wins when it already says it
   if (stale.length && !problems.some((p) => /생존|1분봉/.test(p))) problems.unshift(stale[0].text);
-  if (stream.state === "error") warnings.unshift("이 기기의 실시간 연결이 끊겨 다시 연결하는 중입니다");
+  if (relinking()) warnings.unshift("이 기기의 실시간 연결이 끊겨 다시 연결하는 중입니다");
   const level = problems.length ? "bad" : warnings.length ? "warn" : hl ? "ok" : "unknown";
   return {problems, warnings, level};
 }
@@ -64,9 +66,9 @@ export function tiles(hl, o = {}) {
       st: dataAge == null ? "none" : dataAge < 300 ? "ok" : "bad"}));
   }
   const live = stream.live();
-  out.push(tile({k: "실시간 연결 (이 기기)", v: stream.state === "open" ? (live ? "연결됨" : "연결됨 · 봇 조용") : stream.state === "error" ? "다시 연결 중" : "연결 준비",
+  out.push(tile({k: "실시간 연결 (이 기기)", v: stream.state === "open" ? (live ? "연결됨" : "연결됨 · 봇 조용") : relinking() ? "다시 연결 중" : stream.state === "paused" ? "쉬는 중 (탭 숨김)" : "연결 준비",
     s: stream.lastEventAt ? `마지막 소식 ${ago((Date.now() - stream.lastEventAt) / 1000)}` : "아직 소식 없음",
-    st: stream.state === "open" ? (live ? "ok" : "warn") : stream.state === "error" ? "warn" : "none"}));
+    st: stream.state === "open" ? (live ? "ok" : "warn") : relinking() ? "warn" : "none"}));
   if (b.ready) {
     out.push(tile({k: "신호 (24시간)", v: `${fmt.int(b.signals_24h)}개`,
       s: `늦음 ${fmt.int(b.signals_late_24h || 0)}개 · 평균 지연 ${b.avg_delay_s == null ? "—" : fmt.num(b.avg_delay_s, 1) + "초"}`,
@@ -102,9 +104,17 @@ export function tiles(hl, o = {}) {
   } else if (hl) out.push(tile({k: "밤 점검", v: "기록 없음", s: n.why || "아직 밤 점검 전", st: "none"}));
   const cp = (hl && hl.checkpoint) || {};
   if (hl) {
+    // the verdict-day clock (summary next_checkpoint, dash/more/verdictday.py): a passed checkpoint stays 'due' until
+    // its verdict is stored; days left in words, never 'D-' (review 10/06 fix 1, change 13)
     const nx = cp.next;
-    out.push(tile({k: "30일 판정", v: cp.ready ? `${cp.date} 판정 끝` : nx ? `D-${fmt.int(Math.max(0, Math.ceil((nx.ts - now) / 864e5)))}` : "시작 전",
-      s: cp.ready ? "결과는 판정 화면" : nx ? `첫 판정 ${fmt.kst(nx.ts)} (${fmt.int(nx.day)}일째)` : "봇이 아직 첫 계좌를 만들지 않음", st: "none"}));
+    const due = !!(nx && nx.due), bad = due && (nx.state === "failed" || nx.state === "unknown" || !!nx.late);
+    const ended = !!(nx && nx.state === "ended");          // past day 180: no verdict left (never '시작 전')
+    out.push(tile({k: "30일 판정", v: ended ? "판정 끝" : due ? (bad ? "확인 필요" : "계산 중") : cp.ready && !nx ? `${cp.date} 판정 끝`
+      : nx && nx.ts ? `${fmt.int(Math.max(0, Math.ceil((nx.ts - now) / 864e5)))}일 남음` : "시작 전",
+      s: ended ? `180일 실험이 끝나 더 이상 판정이 없습니다${cp.ready ? ` · 마지막 ${cp.date}` : ""}`
+        : due ? `${fmt.int(nx.day)}일 판정 날 · 결과 저장 전 (판정 화면에서 진행 확인)`
+        : nx && nx.ts ? `${(nx.k || 1) > 1 ? `${fmt.int(nx.k)}번째` : "첫"} 판정 ${fmt.kst(nx.ts)} (${fmt.int(nx.day)}일째)${cp.ready ? ` · ${cp.date} 판정 끝` : ""}`
+        : "봇이 아직 첫 계좌를 만들지 않음", st: bad ? "bad" : due ? "warn" : "none"}));
   }
   if (hl && hl.liq_recorder) {
     const lq = hl.liq_recorder;

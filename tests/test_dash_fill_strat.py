@@ -157,9 +157,10 @@ def test_analysis_waiting_views_show_real_thresholds():
         syn: A.waitBars("synergy", {waiting: true, min_trades: 5}, "core", board), none: A.waitBars("map", {}, "core", board),
         done: A.waitBars("risk", {}, "core", {accounts: [acc("S", 30, "1h")]})}));""")
     r = out["risk"][0]
-    assert "계좌마다 거래 20건 필요" in r["label"] and r["words"] == "지금 가장 많은 계좌 25건 · 20건 넘은 기존 36 계좌 1/3"
-    assert r["share"] == 1 and r["full"] is False
-    assert out["riskDs"][0]["words"] == "지금 가장 많은 계좌 2건 · 20건 넘은 딥시크 계좌 0/1"
+    assert "계좌마다 거래 20건 필요" in r["label"] and r["words"] == "기존 36 1/3 계좌 채움 · 가장 많은 계좌 25건"
+    # the bar is the share of accounts that reached 20 (1 of 3), never 100 % because one account did
+    assert abs(r["share"] - 1 / 3) < 1e-9 and r["full"] is False
+    assert out["riskDs"][0]["words"] == "딥시크 0/1 계좌 채움 · 가장 많은 계좌 2건" and out["riskDs"][0]["share"] == 0
     assert [b["label"] for b in out["over"]][1] == "같이 쌓인 기록 7일 필요" and out["over"][1]["words"] == "지금 2.5일째"
     assert out["syn"][0]["words"].startswith("지금 계좌당 평균 12.0건")
     assert out["none"] is None and out["done"] is None              # every bar full: the view stands on its own

@@ -200,7 +200,9 @@ def test_no_outside_script_anywhere_in_v4_and_the_iframe_only_in_chart_tv():
             if re.search(r"""createElement\(\s*["'`]script""", code):
                 # the only script element made in code is the vendored chart library, same origin
                 assert rel == os.path.join("core", "lwc.js"), rel
-                assert 'const SRC = "/static/vendor/lightweight-charts.standalone.production.js";' in src
+                # (relative to the module itself: same origin, under the page's versioned folder, dash/assets.py)
+                assert ('const SRC = new URL("../../vendor/lightweight-charts.standalone.production.js", '
+                        'import.meta.url).href;') in src
             if rel != os.path.join("screens", "chart-tv.js"):
                 assert not re.search(r"""(h|createElement)\(\s*["'`]iframe""", code), rel
                 assert "s.tradingview.com" not in src, rel

@@ -394,9 +394,13 @@ def paper_stage(board: dict, min_trades: int, verdict_ko: str) -> dict:
 
 # ---------------------------------------------------------------- 4. the 30-day verdict
 def overdue(next_cp: Optional[dict], cp_ready: bool) -> bool:
-    """The first verdict day has passed (dash.app summary already names the next one) but checkpoint.db has no verdict
-    yet (the hourly checkpoint job has not written it, or it failed)."""
-    return not cp_ready and int((next_cp or {}).get("k") or 1) > 1
+    """The first verdict day has passed but checkpoint.db has no verdict yet (the hourly checkpoint job has not written
+    it, or it failed). The summary's verdict-day clock (dash/more/verdictday.py) keeps that checkpoint as the next one
+    and says ``due``; a summary without the clock named the next one instead (k > 1)."""
+    nc = next_cp or {}
+    if "due" in nc:
+        return not cp_ready and bool(nc.get("due"))
+    return not cp_ready and int(nc.get("k") or 1) > 1
 
 
 def _is_ds(r: dict) -> bool:
@@ -408,13 +412,18 @@ def verdict_stage(cp: dict, board: dict, next_cp: Optional[dict], now: int, min_
     from ...checkpoint import FAIL, HOLD, OBSERVE, OBSERVE_TFS, PASS1, PASS2
     nts = (next_cp or {}).get("ts")
     if not cp or not cp.get("ready"):
-        left = _days_left(nts, now)
         if overdue(next_cp, False):
-            when = "첫 판정일 지남 · 판정 기록 기다림"
+            # on the verdict day itself (KST) the day has not 'passed': it is today, the job is computing or waiting
+            same_day = bool(nts) and (now + KST_MS) // DAY_MS == (int(nts) + KST_MS) // DAY_MS
+            when = f"{_mmdd(nts)} 첫 판정 날 · 판정 기록 기다림" if same_day else "첫 판정일 지남 · 판정 기록 기다림"
         elif not nts:                                   # no account yet (paper3.db empty): no start, no date
             when = "첫 판정 날짜는 봇이 첫 계좌를 만들면 정해짐"
         else:
-            when = f"{_mmdd(nts)} 첫 판정" + (f" (D-{left})" if left is not None and left > 0 else " (오늘)" if left == 0 else "")
+            # days left the way every screen counts them (dash/more/verdictday.py: the checkpoint's day minus D+n, i.e.
+            # whole 24-hour steps to 09:00 rounded up; review 10/06 change 13: never 'D-' next to 'D+')
+            left = max(0, -(-(int(nts) - now) // DAY_MS))
+            word = "오늘" if (now + KST_MS) // DAY_MS == (int(nts) + KST_MS) // DAY_MS else "내일"
+            when = f"{_mmdd(nts)} 첫 판정" + (f" ({left}일 남음)" if left > 1 else f" ({word} 09:00)")
         rows = []
         accts = [a for a in (board or {}).get("accounts") or [] if isinstance(a, dict) and a.get("group") in ("core", "ds200", "reel", "extra")]
         for g in ("core", "ds200", "reel", "extra"):
@@ -555,7 +564,10 @@ def path_view(data, rooms, paper_db: str, debate_db: Optional[str], checkpoint_d
     # D+ the way the top bar counts it (core/shell.js: the restart banner's day, else summary day - 1)
     rs = summ.get("restart") if isinstance(summ.get("restart"), dict) else {}
     dplus = rs.get("day") if rs.get("ready") else (int(summ["day"]) - 1 if summ.get("day") else None)
-    return {"label": LABEL, "now": now, "start": summ.get("start"), "dplus": dplus, "observe": observe,
+    # the verdict-day clock's words for the day ('30일 중 N일 지남', review 10/06 change 13; dash/more/verdictday.py)
+    vc = summ.get("verdict_clock") if isinstance(summ.get("verdict_clock"), dict) else {}
+    return {"label": LABEL, "now": now, "start": summ.get("start"), "dplus": dplus, "passed_ko": vc.get("passed_ko"),
+            "observe": observe,
             "next_checkpoint": next_cp, "verdict_ready": bool(cp.get("ready")), "min_trades": MIN_TRADES,
             "stages": stages, "frontier": frontier}
 

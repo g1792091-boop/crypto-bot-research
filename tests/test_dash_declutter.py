@@ -216,7 +216,7 @@ def test_calm_default_parts_and_opt_in_menus_remembered_per_device():
     assert 'under.dataset.words = part("words") ? "1" : "";' in fx
     # the terminal: 지지·저항 opt-in too; the light, the flash and the parts in one '보기 ▾' menu
     tc = _code(_read("screens", "terminal-chart.js"))
-    assert 'defaults: {sr: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
+    assert 'defaults: {sr: false, vp: false},' in tc and "put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);" in tc
     assert 'LEVEL_TFS.includes(st.tf) && deck.shown("sr")' in tc            # the key line names only what is drawn
     assert '"보기 ▾"' in fx and "viewBtn," in fx
 
@@ -250,6 +250,7 @@ def test_terminal_says_the_captions_once():
     kit = _read("screens", "terminal-kit.js")
     assert 'const tip = o.info ? ui.infoTip(o.info, `${title} 설명`) : null;' in kit and "export const marketChip" in kit
     side, feed, live, table = (_read("screens", f) for f in ("terminal-side.js", "terminal-feed.js", "terminal-live.js", "terminal-table.js"))
+    side += _read("screens", "terminal-pnl.js")                      # term-plus: the 수익 차트 card (and its ⓘ) moved there
     assert side.count("info: `") == 2 and "중간 기록일 뿐 판정이 아닙니다" in side
     assert feed.count("info: `") == 2 and "marketChip(" in feed and "info: BIG_LABEL" in live and "marketChip(BIG_LABEL)" in live
     assert "info: TAB_NOTE.pos" in table and "el.tip.set(TAB_NOTE[t.tab] || TAB_NOTE.pos);" in table

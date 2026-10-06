@@ -8,6 +8,8 @@
 [data-screen="debate"] .db-panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; font-family: var(--f-body); }
 [data-screen="debate"] .db-panes > * { min-width: 0; }
 [data-screen="debate"] .db-main { display: grid; gap: 12px; align-content: start; min-width: 0; }
+[data-screen="debate"] .db-stale:empty { display: none; }     /* the stale line only when a look failed over shown data */
+[data-screen="debate"] .db-stale .failnote { margin: 0; }
 @media (max-width: 1099px) {
   [data-screen="debate"] .db-side { order: -1; }
   [data-screen="debate"] .db-side:not(.open) .db-sbody { display: none; }

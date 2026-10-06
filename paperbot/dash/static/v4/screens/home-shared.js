@@ -5,7 +5,7 @@
 // HONESTY (CONTRACT.md section 1): comparisons with the coin flips are '참고' pills in neutral colours (never a pass or
 // fail before /api/checkpoint says ready); a DeepSeek account gets nothing per account beyond the bare '참고' pill;
 // late-started extras are never compared; small samples say 표본 적음.
-import {h, put, ui, fmt, derive, local, stratFigure, fav} from "../core/pb.js";
+import {h, put, ui, fmt, derive, local, stratFigure, fav, vday} from "../core/pb.js";
 
 // wave 2 ⑦: the strategy's own pixel character in front of its name (no idle motion in lists)
 const fig = (a, size) => stratFigure({strategy: a.strategy, kind: a.kind, size, cls: "row-fig"});
@@ -39,16 +39,21 @@ export const savedGroup = (key, d = "core") => {
 };
 
 // ---------------------------------------------------------------- the D+n numbers (same rules as the top chip)
+// The checkpoint is the server's verdict-day clock (summary.verdict_clock, dash/more/verdictday.py): a checkpoint that
+// has passed stays the one named (due) until its verdict is stored, so the verdict morning never jumps to the next one.
+// line: the one sentence of every screen ("30일 중 N일 지남 · 판정까지 M일 (11/04 09:00)").
 const DAY = 86400000;
 export function expInfo(s, now = Date.now()) {
   if (!s || s.start == null) return null;
   const rs = s.restart || {};
   const cp = s.next_checkpoint || {};
+  const c = vday.vclock(s);
   const day = rs.ready ? rs.day : (s.day || 1) - 1;
   const of = rs.ready ? rs.of : s.period_days || 30;
   const verdictTs = rs.ready ? rs.verdict_ts : cp.ts;
-  const left = verdictTs ? Math.max(0, Math.ceil((verdictTs - now) / DAY)) : null;
-  return {day, of, verdictTs, left, observing: !!s.observing, observeUntil: s.observe_until, k: cp.k || 1};
+  const left = c && c.left != null ? c.left : verdictTs ? Math.max(0, Math.ceil((verdictTs - now) / DAY)) : null;
+  return {day, of, verdictTs, left, observing: !!s.observing, observeUntil: s.observe_until, k: (c && c.k) || cp.k || 1,
+    clock: c, due: !!(c ? c.due : cp.due), state: c ? c.state : cp.state || null, last: c ? c.last : null, line: vday.lineKo(s)};
 }
 
 /** A verdict's UTC date "2026-10-28" (00:00 UTC = 09:00 KST that day) -> "10월 28일 (수)". */
@@ -70,13 +75,13 @@ export function refTag(a, gs) {
   if (med == null) return null;
   const w = a.wallet == null ? (gs.initial || 5000) : a.wallet;
   const [g1, t] = w > med ? ["▲", "위"] : w < med ? ["▼", "아래"] : ["=", "같음"];
-  return h("span", {class: "vsg", title: `참고 · 같은 봉 동전 봇 중앙값보다 ${t} · 판정 아님 (판정은 30일째)`,
+  return h("span", {class: "vsg", title: `참고 · 같은 봉 동전 봇 중앙값보다 ${t} · 판정 아님 (판정은 30일마다)`,
     "aria-label": `참고: 같은 봉 동전 봇 중앙값보다 ${t}`}, "동전 ", h("b", {"aria-hidden": "true"}, g1));
 }
 /** The one 참고 caption under a list whose rows carry the ▲▼ glyph (null for the groups that have none). */
 export function vsFoot(group) {
   if (group === "ds" || group === "coin" || group === "extra") return null;
-  return h("p", {class: "assume home-vsfoot"}, h("b", null, "참고"), " · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일째",
+  return h("p", {class: "assume home-vsfoot"}, h("b", null, "참고"), " · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일마다",
     group === "all" ? " · 딥시크·동전 봇은 개수만 (순위 없이 맨 뒤)" : "");
 }
 

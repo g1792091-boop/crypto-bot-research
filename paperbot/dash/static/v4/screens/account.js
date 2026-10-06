@@ -13,6 +13,9 @@ import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
 import {termChip, termify} from "./faq-terms.js";
+import {whyCard} from "./account-why.js";
+import {copyCard} from "./account-copy.js";
+import {tradeMeetSlot} from "./meet-links.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -176,9 +179,9 @@ export async function mount(el, ctx) {
     const plainHead = () => [h("div", {class: "scr-head account-head"}, h("h1", null, name), h("span", {class: "sub"}, sub)),
       h("div", {class: "row wrap account-pills"}, pills)];
     const headSlot = h("div", {class: "stack account-top"});
-    view.plain = () => { headSlot.replaceChildren(...plainHead()); if (ref) headSlot.append(ref); };
+    view.plain = () => { headSlot.replaceChildren(...plainHead().filter(Boolean)); if (ref) headSlot.append(ref); };
     let refSlot = null;
-    if (isExtra || (view.prof && view.prof.id === acc.account_id && view.prof.missing)) { headSlot.append(...plainHead()); refSlot = ref; }
+    if (isExtra || (view.prof && view.prof.id === acc.account_id && view.prof.missing)) { headSlot.append(...plainHead().filter(Boolean)); refSlot = ref; }
     else {
       if (!view.prof || view.prof.id !== acc.account_id) {
         const prof = {id: acc.account_id, missing: false};
@@ -194,14 +197,21 @@ export async function mount(el, ctx) {
     }
     const same = sameStrip(a, board, init);
     view.same = same;
+    // 왜 이 수익률인가 (account-why.js): fees, funding, exit reasons, win rate vs break-even, the biggest losses
+    const flipMed = board ? derive.groupStats(board).flipMedByTf[a.timeframe] : null;
+    const why = whyCard(a, d, {initial: init, wallet: row && row.wallet != null ? row.wallet : stt.wallet ?? null, flipMed,
+      total: row && row.trades != null ? row.trades : null, href: ctx.href, countOnly: a.kind === "ds200",
+      chip: (t) => tradeMeetSlot(ctx, t)});
     // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
     // where no profile card draws the curve already (an extra account, or a card the server does not have)
     const profDraws = !isExtra && !(view.prof && view.prof.missing);
     // the money caption once for the page (owners 10/06 ~14:00, "작은 글씨가 반복된다"): the cards keep only their own
     // short notes (점선 · 수익률 · 거래마다 나갈 때 비용)
     view.nav = {id: acc.account_id, name};          // conv-b: backLink() carries ★ 즐겨찾기 and 비교에 추가 for this account
-    // (the DOM's own replaceChildren writes a null as the word "null": an extra account has no same-strategy strip)
-    el.replaceChildren(...[backLink(), headSlot, same ? same.el : null, candleCard,
+    // 원본 vs 복제 over the same period (an approved copy only; account-copy.js loads its own answer)
+    const cmp = a.kind === "copy" ? copyCard(ctx, acc.account_id) : null;
+    // (the DOM's own replaceChildren writes a null as the word "null": the optional parts are filtered out first)
+    el.replaceChildren(...[backLink(), headSlot, cmp, why, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)),
@@ -225,7 +235,9 @@ export async function mount(el, ctx) {
     const link = h("a", {class: "account-replay", href: ctx.href("replay", String(t.id)), title: "이 거래를 봉 차트에서 다시 보기",
       "aria-label": `${fmt.coin(t.symbol)} 거래 다시보기`}, h("span", {class: "pl", "aria-hidden": "true"}, "▶"), "다시보기");
     const meta = row.querySelector(".meta");
-    if (meta) meta.append(link); else row.append(link);
+    // a losing trade: the loss meeting that looked at it (meet-links.js; nothing until a meeting stored its id)
+    const meet = tradeMeetSlot(ctx, t);
+    if (meta) meta.append(link, meet); else row.append(link, meet);
     return row;
   }
 
@@ -285,7 +297,9 @@ export async function mount(el, ctx) {
   function refBox(a, board, init) {
     const g = fmt.groupOf(a);
     if (a.kind === "random") return h("p", {class: "refnote"}, h("b", null, "비교 기준"), " · 이 계좌가 동전 봇입니다. 다른 계좌를 이 계좌들과 견줍니다.");
-    if (g === "extra") return h("p", {class: "refnote"}, h("b", null, "따로 셈"), " · 나중에 시작한 추가 계좌라 동전 봇과 견주지 않습니다.");
+    if (g === "extra") return h("p", {class: "refnote"}, h("b", null, "따로 셈"), a.kind === "copy"
+      ? " · 나중에 시작한 복제 계좌라 순위표에서는 동전 봇과 견주지 않습니다 (위 '원본 vs 복제' 카드만 같은 기간으로 잰 참고 줄을 둡니다)."
+      : " · 나중에 시작한 추가 계좌라 동전 봇과 견주지 않습니다.");
     const s = store.get("summary");
     const vts = s && s.next_checkpoint && s.next_checkpoint.ts;
     if (a.kind === "ds200") return h("div", {class: "stack tight"}, h("div", {class: "row wrap"}, ui.pill("딥시크는 묶음 중앙값으로만 봅니다", "ref")), ui.refNote(vts));

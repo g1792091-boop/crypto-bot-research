@@ -1,7 +1,7 @@
-/* 결재함 종 (core/bell.js): the header bell, its count badge and its short list. Tokens only (both skins). */
+/* 결재함 종 (core/bell.js): the header bell (a link to the 결재함, #/inbox) and its count badge. Tokens only (both skins). */
 .bell { position: relative; flex: none; }
 .bell[hidden] { display: none; }
-.bell-btn { appearance: none; position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+.bell-btn { appearance: none; position: relative; display: grid; text-decoration: none; place-items: center; width: 34px; height: 34px; border-radius: 50%;
   border: 1px solid var(--line-2); background: var(--surface); color: var(--muted); }
 .bell-btn:hover { border-color: var(--accent-line); color: var(--ink); }
 .bell-btn[data-state="wait"] { color: var(--accent); border-color: var(--accent-line); box-shadow: 0 0 10px var(--edge-glow); }
@@ -14,18 +14,5 @@
 @keyframes bell-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(14deg); } 30% { transform: rotate(-12deg); }
   45% { transform: rotate(9deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(3deg); } }
 @media (prefers-reduced-motion: reduce) { .bell-btn.ringing svg { animation: none; } }
-.bell-pop { position: fixed; left: 16px; top: 64px; z-index: 60; width: min(320px, calc(100vw - 32px)); display: grid; gap: 8px;
-  padding: 14px; border-radius: var(--r-md); border: 1px solid var(--edge-hi, var(--line-2)); background: var(--surface);
-  box-shadow: 0 0 18px var(--edge-glow), 0 12px 30px var(--card-shadow, var(--scrim)); }
-.bell-pop[hidden] { display: none; }
-.bell-h { color: var(--ink); font-size: var(--t-sm); }
-.bell-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.bell-list a { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
-  min-height: 40px; padding: 8px 10px; border-radius: var(--r-sm, 8px); border: 1px solid var(--line-2); background: var(--surface-2);
-  color: var(--ink); text-decoration: none; }
-.bell-list a:hover, .bell-list a:focus-visible { border-color: var(--accent-line); }
-.bell-t { font-size: var(--t-sm); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bell-s { grid-row: 2; font-size: var(--t-xs); color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bell-go { grid-row: 1 / span 2; grid-column: 2; color: var(--accent); }
 /* a phone's header is tight: the bell shows there only while something waits for the owners */
 @media (max-width: 459px) { .bell:has(.bell-btn[data-state="zero"]), .bell:has(.bell-btn[data-state="none"]) { display: none; } }

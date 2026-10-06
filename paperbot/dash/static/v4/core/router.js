@@ -16,8 +16,11 @@ export function loadCss(name) {
   cssLoaded.add(name);
   return new Promise((ok) => {
     const l = document.createElement("link");
-    l.rel = "stylesheet"; l.href = `/static/v4/screens/${name}.css`;
-    l.onload = () => ok(); l.onerror = () => ok();         // a screen without its own css still works
+    // relative to this module: the page's own versioned folder (/static/v-<ver>/v4/, dash/assets.py), kept for a year
+    l.rel = "stylesheet"; l.href = new URL(`../screens/${name}.css`, import.meta.url).href;
+    // a stylesheet that did not arrive (the dashboard restarting for an update) is asked again on the next visit to
+    // the screen instead of being remembered as loaded; the screen itself still opens
+    l.onload = () => ok(); l.onerror = () => { cssLoaded.delete(name); l.remove(); ok(); };
     document.head.appendChild(l);
   });
 }
@@ -91,8 +94,9 @@ async function show(params) {
   document.title = `${meta.title || meta.ko} · Paper v4`;
   bus.emit("route", {name, params});
   window.scrollTo(0, 0);
+  let imported = false;
   try {
-    const [mod] = await Promise.all([import(`../screens/${name}.js`), loadCss(name)]);
+    const [mod] = await Promise.all([import(`../screens/${name}.js`).then((m) => { imported = true; return m; }), loadCss(name)]);
     if (token !== cur.token) return;
     const ctx = makeCtx(name, params);
     cur.mod = mod; cur.ctx = ctx;
@@ -103,8 +107,24 @@ async function show(params) {
     if (token !== cur.token) return;
     console.error(e);
     clear(el);
-    el.append(errorBox(e, () => show(params)));
+    // tries again by itself; one memo per screen, since every try draws a new screen element. A screen FILE that did
+    // not arrive (the dashboard restarting for an update, the connection down) is remembered as failed by the browser
+    // until the page loads again, so asking again would fail forever: that box loads the page again (the same
+    // #/screen) once the server answers, never into a server that is down, and at most once per screen in 2 minutes
+    el.append(fileFailed(e, imported) ? reloadBox(e, name) : errorBox(e, () => show(params), {id: "screen:" + name}));
   }
+}
+const RELOAD_KEY = "pb4-screen-reload:";
+/** A dynamic import that failed to fetch (not a mistake in the screen's code, which a reload would not mend). */
+const fileFailed = (e, imported) => !imported && e instanceof TypeError && /module|import/i.test(String(e.message));
+function reloadBox(e, name) {
+  let last = 0;
+  try { last = Number(sessionStorage.getItem(RELOAD_KEY + name)) || 0; } catch (x) { /* no storage */ }
+  if (Date.now() - last < 120000) return errorBox(e, () => location.reload());       // just tried: the button only
+  return errorBox(e, () => api("/api/time").then(() => {
+    try { sessionStorage.setItem(RELOAD_KEY + name, String(Date.now())); } catch (x) { /* no storage */ }
+    location.reload();
+  }), {id: "screen:" + name, auto: true});
 }
 
 export function startRouter() {

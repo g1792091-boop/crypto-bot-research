@@ -159,14 +159,15 @@ def test_wiring_count_only_and_words():
     # the position lines moved to the shared chart deck helper (chart-lines.js, used by 차트 and the terminal)
     assert 'g.items.filter((x) => !countOnly(x.a, ""))' in _read(SCR, "chart-lines.js") and "posLines(" in chart and "usdKo(t.q)" in chart
     cp = _read(SCR, "chart-panels.js")
-    assert 'countOnly(x.a, "")' in cp and "usdKo(x)" in cp
+    assert 'countOnly(x.a, "")' in cp and "usdShort(" in cp          # liquidation sizes: one money format ($K / $M, core/liqkit.js), term-plus
     hs = _read(SCR, "home-shared.js")
     assert 'derive.countOnlyIn(a, "all")' in hs and "derive.mixedOrder(" in hs
     assert "derive.mixedOrder(" in _read(SCR, "board-table.js")
     assert "derive.countOnlyIn(a, st.sel)" in _read(SCR, "board-motion.js")
     assert 'Array.isArray(d.signals) ? "아직 없음" : "수집 전"' in _read(SCR, "rooms-record.js")
     hl = _read(SCR, "home-live.js")
-    assert "표본 적음" in hl and "최근 2,000건만" in hl
+    # today's best / worst from the server's day sums (summary today.by_group.core: every trade, no 2,000-row cap)
+    assert "표본 적음" in hl and "bestWorstOf(" in hl and "limit=2000" not in hl
     grid = _read(SCR, "grid.css")
     assert ".gk-cell.pos.off { background: var(--surface); color: var(--muted); }" in grid
     assert ".gk-cell.y5 small, .gk-cell.pos small { font-size: var(--t-xs); }" in grid

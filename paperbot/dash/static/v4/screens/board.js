@@ -179,7 +179,7 @@ export async function mount(el, ctx) {
 
   const [b0] = await Promise.all([ctx.store.need("board", 60000).catch((e) => e), ctx.store.need("summary", 60000).catch(() => null)]);
   if (!ctx.alive()) return;
-  if (b0 instanceof Error) el.insertBefore(ui.errorBox(b0, () => ctx.store.refresh("board").catch(() => {})), el.children[1] || null);
+  if (b0 instanceof Error) el.insertBefore(ui.errorBox(b0, () => ctx.store.refresh("board"), {key: "board"}), el.children[1] || null);
   ctx.watch("summary", (s) => { if (s) { st.summary = s; render(false); } });
   // the open-position chips' live ROE (기존 36 / 5분봉 / 추가 only): the ticker's mark price, every 5 s
   ctx.watch("ticker", () => paintRoe(el, st.board, (s) => ctx.store.mark(s)));

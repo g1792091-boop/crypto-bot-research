@@ -1,7 +1,9 @@
 // 거래 screens (builder B): one coin's head (last price, 24h change, mark, funding and time to it, 24h high / low) and
 // its order book (/api/depth, top 20 from the server, polled every 3 s only while the book is on screen). Shared by
 // positions (a chosen coin) and chart (the 호가 tab). No Binance WebSocket: prices come through the server.
-import {h, ui, fmt, store, serverNow, motion} from "../core/pb.js";
+import {h, ui, fmt, store, serverNow, motion, fundkit} from "../core/pb.js";
+
+const {fundTone, fundWho} = fundkit;      // one funding colour rule (not a loss colour)
 
 /** "2:13:04" until a timestamp (server clock). */
 export function countdown(ts) {
@@ -38,7 +40,7 @@ export function coinHead(sym, o = {}) {
     chg.className = "num " + fmt.tone(t.p);
     motion.tickPrice(mark, t.mark, fmt.price(t.mark), sym);
     fund.textContent = fundPct(t.r);
-    fund.className = "num " + fmt.tone(-Number(t.r || 0));
+    fund.className = "num " + fundTone(t.r); fund.title = fundWho(t.r);
     hi.textContent = fmt.price(t.h); lo.textContent = fmt.price(t.l);
     T = t.T || null;
     fundLeft.textContent = T ? countdown(T) : "";
@@ -77,8 +79,21 @@ export function bookPanel(ctx, sym, o = {}) {
         h("div", null, h("i", {style: {width: (share * 100).toFixed(1) + "%"}})), h("span", {class: "down num"}, `매도 ${fmt.pct(1 - share, 1, false)}`)));
     shown = true;
   };
+  // on screen = drawn (not inside a closed tab: display none), as before; the observer tells it, the layout is never
+  // asked (getClientRects every 3 s forced a fresh layout of a busy page: the terminal). The huge margin keeps a book
+  // further down the page counting as drawn, like the old check did.
+  let inView = typeof IntersectionObserver !== "function";
+  if (!inView) {
+    const io = new IntersectionObserver((es) => {
+      const was = inView;
+      inView = es.some((e) => e.isIntersecting);
+      if (inView && !was) load();
+    }, {rootMargin: "100000px"});
+    io.observe(el);
+    ctx.track(() => io.disconnect());
+  }
   const load = async () => {
-    if (busy || !cur || !el.isConnected || !el.getClientRects().length) return;      // only while on screen
+    if (busy || !cur || !el.isConnected || !inView) return;      // only while on screen
     busy = true;
     const want = cur;
     try {

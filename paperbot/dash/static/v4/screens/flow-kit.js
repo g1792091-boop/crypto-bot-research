@@ -23,7 +23,7 @@ export const dayN = (t, start) => Math.max(0, Math.floor((t - (start - (start % 
 /** The kit's css for screens that are not 흐름 (home): flow.css @imports the same file. */
 export function ensureKitCss() {
   if (typeof document === "undefined" || document.querySelector("link[data-flow-kit]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/flow-kit.css", dataset: {flowKit: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("flow-kit.css", import.meta.url).href, dataset: {flowKit: "1"}}));
 }
 
 /** /api/v4/flow/race -> the chart's model (returns as ratios to the starting balance), or null before 2 real points. */
@@ -69,6 +69,19 @@ const pts = (xs, X, Y, T) => {
   return d;
 };
 const tlabel = (t) => `${fmt.mmdd(t)} ${fmt.hm(t)}`;
+/** Outside events nearer than this (px) on the road share one mark (their labels stacked). */
+export const EV_GAP = 40;
+/** [{x, ...}] sorted or not -> [{x, items}] where each group's events lie within `gap` px of the group's first one;
+ *  the mark sits at the group's middle. */
+export function clusterEvents(evs, gap = EV_GAP) {
+  const out = [];
+  for (const e of [...(evs || [])].filter((v) => Number.isFinite(v.x)).sort((a, b) => a.x - b.x)) {
+    const last = out[out.length - 1];
+    if (last && e.x - last.x0 < gap) { last.items.push(e); last.x = (last.x0 + e.x) / 2; }
+    else out.push({x: e.x, x0: e.x, items: [e]});
+  }
+  return out;
+}
 
 /**
  * raceChart({mini, height, onTime(t, order), onState("idle"|"playing"|"paused")}) -> div with
@@ -162,14 +175,21 @@ export function raceChart(o = {}) {
         if (xv - sx > 64) kids.push(s("text", {class: "fk-left big", x: cx, y: (y0 + 16).toFixed(1), "text-anchor": "middle"}, `남은 ${fmt.int(left)}일`));
         else if (xv - sx > 26) kids.push(s("text", {class: "fk-left", x: cx, y: (y0 + 30).toFixed(1), "text-anchor": "middle"}, "남은"),
           s("text", {class: "fk-left big", x: cx, y: (y0 + 46).toFixed(1), "text-anchor": "middle"}, `${fmt.int(left)}일`));
-        if (g.road) for (const ev of st.events || []) {
-          const t = Number(ev.ts_ms);
-          if (!(t > m.now && t <= m.verdict)) continue;
-          const x = X(t);
-          kids.push(s("g", {class: "fk-ev", transform: `translate(${x.toFixed(1)},${(y1 - 6).toFixed(1)})`},
-            s("rect", {x: -3, y: -3, width: 6, height: 6, transform: "rotate(45)"}),
-            s("text", {x: 0, y: -8, "text-anchor": x > xv - 22 ? "end" : x < sx + 16 ? "start" : "middle"}, String(ev.kind || "").slice(0, 5)),
-            s("title", null, `${ev.name_ko || ev.kind} · ${tlabel(t)}`)));
+        // events closer than EV_GAP px share one mark: their names stacked (FOMC over PCE, never "FOMCE"), every
+        // event's own time in the mark's tooltip
+        if (g.road) {
+          const evs = (st.events || []).map((ev) => ({ev, t: Number(ev.ts_ms)})).filter((e) => e.t > m.now && e.t <= m.verdict)
+            .map((e) => ({...e, x: X(e.t)}));
+          // the gap and the line step grow with the 글자 크기 setting (a 15 px "FOMC" is wider than 40 px)
+          const ts = textScale(), step = Math.round(13 * ts);
+          for (const c of clusterEvents(evs, EV_GAP * ts)) {
+            const x = c.x, anchor = x > xv - 22 ? "end" : x < sx + 16 ? "start" : "middle";
+            const names = [...new Set(c.items.map((e) => String(e.ev.kind || "").slice(0, 5)))];
+            kids.push(s("g", {class: ["fk-ev", names.length > 1 ? "multi" : ""], transform: `translate(${x.toFixed(1)},${(y1 - 6).toFixed(1)})`},
+              s("rect", {x: -3, y: -3, width: 6, height: 6, transform: "rotate(45)"}),
+              names.map((n, i) => s("text", {x: 0, y: -8 - (names.length - 1 - i) * step, "text-anchor": anchor}, n)),
+              s("title", null, c.items.map((e) => `${e.ev.name_ko || e.ev.kind} · ${tlabel(e.t)}`).join("\n"))));
+          }
         }
         kids.push(s("line", {class: "fk-vline", x1: xv, x2: xv, y1: y0, y2: y1}),
           s("g", {class: "fk-flag", transform: `translate(${(xv).toFixed(1)},${y0 - 2})`, "shape-rendering": "crispEdges"},
