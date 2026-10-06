@@ -241,11 +241,15 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-ptag.up { background: var(--up); box-shadow: 0 0 12px var(--ug); } .term-ptag.down { background: var(--down); box-shadow: 0 0 12px var(--dg); }
 .term-ptag b { font: 700 var(--t-xs)/1.15 var(--f-term); color: var(--accent-ink); }
 .term-ptag small { font: 600 var(--t-2xs)/1.1 var(--f-term); color: var(--accent-ink); opacity: .82; }
-.term-dot { position: absolute; left: -4px; top: -4px; z-index: 3; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); pointer-events: none;
-  box-shadow: 0 0 0 0 var(--accent-glow); }
-.term-dot.on { animation: term-breathe 2.4s var(--ease) infinite; }
-.term[data-still="1"] .term-dot.on { animation-play-state: paused; }
-@keyframes term-breathe { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); opacity: 1; } 50% { box-shadow: 0 0 0 7px transparent; opacity: .75; } }
+.term-dot { position: absolute; left: -4px; top: -4px; z-index: 3; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); pointer-events: none; }
+/* the breathing ring is a second layer that only changes size and opacity (the compositor does it; the old box-shadow animation repainted the
+   chart's area every frame all day: review 10/06 fix 13, ~17 % of a core at rest, measured 5.2 s -> 2.2 s of work per 20 s here) */
+.term-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent-glow); opacity: 0; transform: scale(1); }
+.term-dot.on { animation: term-breathe-dot 2.4s var(--ease) infinite; }
+.term-dot.on::after { animation: term-breathe 2.4s var(--ease) infinite; }
+.term[data-still="1"] .term-dot.on, .term[data-still="1"] .term-dot.on::after { animation-play-state: paused; }
+@keyframes term-breathe-dot { 0%, 100% { opacity: 1; } 50% { opacity: .75; } }
+@keyframes term-breathe { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(2.75); opacity: 0; } }
 /* the chart deck's header controls (core/chartfx.css styles them): the light legend chip, '보기 ▾' (조명 · 번쩍임 ·
    프리미엄 지표 parts in one menu) and '선 ▾' (owners 10/06 ~14:00: the head needed ~862 px and cut the last timeframe
    button below ~1700 px). Below 1600 px the chip keeps only its dot (its words stay in its tooltip); the head wraps
@@ -540,7 +544,7 @@ html[data-text="lg"] .term-mine .term-phs, html[data-text="xl"] .term-mine .term
 
 @media (prefers-reduced-motion: reduce) {
   .term-marq-in.run { animation: none; }
-  .term-dot.on { animation: none; }
+  .term-dot.on, .term-dot.on::after { animation: none; }
   .term-rb-s, .term-p { transition: none; }
   .term-uline.run::after, .term-px[data-hit], .term-wr[data-hit], .term-ptag[data-hit] { animation: none; }
 }

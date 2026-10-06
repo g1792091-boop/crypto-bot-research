@@ -4,6 +4,7 @@
 // recorder runs. Nothing here feeds the paper accounts; the screen says so.
 import {h, ui, fmt, store, motion, bars, serverNow, features} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
+import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
 import {sideCounts} from "./positions-kit.js";
 import {termChip} from "./faq-terms.js";
 import {tempBoard, flowBoard, liqBoard} from "./market-live.js";
@@ -129,7 +130,7 @@ export async function mount(el, ctx) {
     const now = serverNow();
     const tk = store.get("ticker"), b = tk && tk.BTCUSDT;
     fundT = b && b.T;
-    fundEl.replaceChildren(fundT ? `${countdown(fundT)} 뒤 · ` : "—", b ? h("span", {class: fmt.tone(-Number(b.r || 0))}, fundPct(b.r)) : "");
+    fundEl.replaceChildren(fundT ? `${countdown(fundT)} 뒤 · ` : "—", b ? h("span", {class: fundTone(b.r), title: fundWho(b.r)}, fundPct(b.r)) : "");
     const us = bars.usMarket(now), ss = bars.session(now);
     usEl.textContent = us.text; usEl.className = us.open ? "up" : "";
     sessEl.textContent = `${ss.weekend ? "주말 · " : ""}${ss.ko}`;
@@ -153,7 +154,7 @@ export async function mount(el, ctx) {
     fundBox.replaceChildren(...rows.map((x) => h("a", {class: "market-fr", role: "listitem", href: ctx.href("positions", null, {coin: x.sym}),
       "aria-label": `${fmt.coin(x.sym)} 포지션 보기`},
       h("div", {class: "market-fr-h"}, h("b", null, fmt.coin(x.sym)),
-        h("span", {class: ["num", fmt.tone(-Number(x.r || 0))]}, fundPct(x.r)),
+        h("span", {class: ["num", fundTone(x.r)], title: fundWho(x.r)}, fundPct(x.r)),
         h("span", {class: "muted"}, x.T ? `다음 펀딩(${minsLeft(x.T, now)} 뒤)` : "다음 펀딩 시각 받는 중"),
         h("span", {class: "go", "aria-hidden": "true"}, "→")),
       h("p", null, x.c ? fundLine(x.r, x.c) : "우리 모의 계좌 불러오는 중"))));

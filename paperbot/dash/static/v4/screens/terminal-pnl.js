@@ -130,7 +130,7 @@ export function pnlPanel(ctx) {
     motion.countTo(big, sr.empty ? 0 : sr.total, {dec: 2, sign: true, tone: true, glow: true});
     const stale = st.curveState === "failed";
     meta.replaceChildren(...[
-      h("span", null, `기존 36 · ${w.ms ? `최근 ${w.ko} · ` : ""}`),
+      h("span", null, `기존 36 · ${w.ms ? `최근 ${w.ko} · ` : Number(st.curve.seasons) > 1 ? "이번 판정 구간 · " : ""}`),      // (after the first verdict the whole line is only the current season)
       sr.empty ? h("span", null, "아직 닫힌 거래 없음") : h("span", null, `거래 ${fmt.int(sr.trades)} · `, h("b", {class: "up"}, `${fmt.int(sr.wins)}승`), " ", h("b", {class: "down"}, `${fmt.int(sr.losses)}패`)),
       sr.empty ? null : h("span", {title: "실현 손익 선이 그 전 최고점(시작점 0 포함)에서 가장 깊게 내려간 만큼 · 닫힌 거래 기준이고 열린 포지션의 평가손익은 빠짐 · 참고"},
         ` · 최대 낙폭 ${sr.mdd > 0 ? "−" : ""}${fmt.money(sr.mdd)} USDT (참고)`),
@@ -141,6 +141,7 @@ export function pnlPanel(ctx) {
     for (const r of st.curve.hours || []) if (Number(r[0]) > t0) { pnl += Number(r[1]) || 0; n += Number(r[2]) || 0; wn += Number(r[3]) || 0; ls += Number(r[4]) || 0; }
     motion.countTo(todayV, pnl, {dec: 2, sign: true, tone: true});
     todayK.textContent = n ? `거래 ${fmt.int(n)} · ${fmt.int(wn)}승 ${fmt.int(ls)}패` : "오늘 닫힌 거래 없음";
+    todayK.title = todayK.textContent;                          // (a narrow column cuts it with …: the tooltip has all of it)
     put(chartBox, chart(sr, st.curve));
   }
 

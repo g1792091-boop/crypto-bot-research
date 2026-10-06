@@ -15,6 +15,7 @@ import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
 import {countdown, fundPct} from "./positions-book.js";
+import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
 import {sidePanels} from "./chart-panels.js";
 import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
@@ -327,7 +328,7 @@ export async function mount(el, ctx) {
     pxChg.className = "num " + (t ? fmt.tone(t.p) : "");
     motion.tickPrice(tk.mark, t ? t.mark : null, t ? fmt.price(t.mark) : "—", st.sym);
     tk.fund.textContent = t ? fundPct(t.r) : "—";
-    tk.fund.className = "num " + (t ? fmt.tone(-Number(t.r || 0)) : "");
+    tk.fund.className = "num " + (t ? fundTone(t.r) : ""); tk.fund.title = t ? fundWho(t.r) : "";
     tk.hi.textContent = t ? fmt.price(t.h) : "—";
     tk.lo.textContent = t ? fmt.price(t.l) : "—";
     tk.vol.textContent = t && t.q != null ? `${usdKo(t.q)} USDT` : "—";      // 만 / 억 like 시장 (fix: no 'B' / 'K' on one screen)

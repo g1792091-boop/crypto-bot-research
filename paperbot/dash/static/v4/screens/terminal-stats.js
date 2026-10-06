@@ -46,7 +46,7 @@ export function topStats(ctx, st) {
       oi.el.title = loadedFor === sym && failedAt ? `미결제약정: ${FAIL_WORDS}` : `미결제약정: ${LOAD_WORDS}`;
       return;
     }
-    oi.v.textContent = usdKo(part.usd);
+    oi.v.textContent = usdKo(part.usd);                           // (the unit, USDT, is in its label tooltip: the row has no room for it)
     oi.sub.textContent = part.chg_1h == null ? "" : fmt.pct(part.chg_1h, 1);
     oi.sub.className = "num term-ss " + fmt.tone(part.chg_1h, oi.sub.textContent);
     oi.el.title = `${fmt.coin(sym)} 미결제약정 ${usdKo(part.usd)} USDT (아직 닫지 않은 계약의 총 금액)` + (part.chg_1h == null ? "" : ` · 1시간 전보다 ${fmt.pct(part.chg_1h, 2)}`)
@@ -124,7 +124,10 @@ export function topStats(ctx, st) {
     fit(row, movers) {
       const order = [rng.el, oi.el, ls.el];
       for (const c of order) c.hidden = false;
+      row.classList.remove("term-tight");
       const tight = () => row.scrollWidth > row.clientWidth + 1 || (movers && movers.scrollWidth > movers.clientWidth + 1);
+      // first the short words give way ("(롱이 냄)", "USDT": their tooltips keep them), only then the cells themselves
+      if (tight()) row.classList.add("term-tight");
       for (const c of order) { if (!tight()) break; c.hidden = true; }
     },
   };

@@ -133,17 +133,24 @@ class TopStats:
 
     def _fetch_all(self, sym: str, now: float) -> dict:
         out: dict = {"symbol": sym, "ts": int(now * 1000), "errors": {}}
-        with ThreadPoolExecutor(max_workers=len(self.parts)) as ex:
+        # NOT ``with ThreadPoolExecutor``: its exit waits for every worker, so one Binance request that hangs (a socket timeout is per read,
+        # a slow drip never trips it) would hold this request thread for as long as it hangs. One shared deadline for both parts instead;
+        # a worker still running after it is left to finish alone (it only fills nothing: its answer is dropped).
+        ex = ThreadPoolExecutor(max_workers=len(self.parts))
+        deadline = time.monotonic() + TIMEOUT_S + 2.0
+        try:
             futs = {k: ex.submit(fn, sym) for k, fn in self.parts.items()}
             for k, fut in futs.items():
                 try:
-                    v = fut.result(timeout=TIMEOUT_S + 2.0)
+                    v = fut.result(timeout=max(0.0, deadline - time.monotonic()))
                     self.good[(sym, k)] = (now, v)
                     out[k] = {**v, "stale": False}
                 except Exception as exc:  # noqa: BLE001  (Binance down / blocked / slow / bad answer: the last good one, marked old)
                     g = self.good.get((sym, k))
-                    out["errors"][k] = type(exc).__name__
+                    out["errors"][k] = type(exc).__name__ or "Error"
                     out[k] = {**g[1], "stale": True} if g and now - g[0] <= KEEP_S else None
+        finally:
+            ex.shutdown(wait=False)
         out["ready"] = any(out.get(k) for k in self.parts)
         return out
 

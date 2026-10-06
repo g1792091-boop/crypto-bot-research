@@ -10,6 +10,7 @@ import {h, ui, fmt, store, motion, bars, serverNow, liqkit} from "../core/pb.js"
 
 const {usdShort, liqTone, liqKo, LIQ_TIP} = liqkit;       // one colour rule (롱 청산 = up, 숏 청산 = down: the terminal's) and one money format ($K/M)
 import {countdown, fundPct} from "./positions-book.js";
+import {fundTone, fundWho} from "../core/fundkit.js";      // one funding colour rule (not a loss colour)
 
 /** Where the price sits in the 24 h range: 0 = at the low, 1 = at the high (null without a range). */
 export function rangePos(c, lo, hi) {
@@ -74,7 +75,7 @@ export function tempBoard(ctx) {
       t.hi.textContent = x.h == null ? "—" : fmt.price(Number(x.h));
       t.vol.textContent = x.q == null ? "—" : `${usdKo(x.q)} USDT`;
       t.fund.textContent = fundPct(x.r);
-      t.fund.className = "num " + fmt.tone(-Number(x.r || 0));
+      t.fund.className = "num " + fundTone(x.r); t.fund.title = fundWho(x.r);
       t.T = x.T || null;
     }
     tick();

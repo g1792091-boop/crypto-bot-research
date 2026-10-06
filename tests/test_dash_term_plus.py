@@ -408,3 +408,60 @@ def test_every_ctx_every_of_the_new_files_uses_a_known_cadence():
     for f in NEW_JS:
         for ms in re.findall(r"ctx\.every\((\d+)", _read("screens", f)):
             assert int(ms) in known, (f, ms)
+
+
+# ---------------------------------------------------------------- adversarial review fixes (reviewer 10/06)
+FUND = ("F", ("core", "fundkit.js"))
+
+
+def test_funding_is_one_rule_on_every_screen_not_a_loss_colour():
+    out = _node("""console.log(JSON.stringify({tone: [0.0001, -0.0001, 0, 0.0005, -0.0005, 0.0012, null, undefined, "", "x", NaN].map(F.fundTone),
+      who: [F.fundWho(0.0001), F.fundWho(-0.0002), F.fundWho(0), F.fundWho(null)], hot: F.FUND_HOT}));""", [FUND])
+    assert out["tone"] == ["", "", "", "warn-t", "warn-t", "warn-t", "", "", "", "", ""]       # only 5 times the usual rate is a caution colour
+    assert "롱이 숏에게" in out["who"][0] and "숏이 롱에게" in out["who"][1] and "주고받는 돈이 없" in out["who"][2] and "불러오지 못함" in out["who"][3]
+    assert out["hot"] == 0.0005
+    # no screen colours a funding rate by its sign any more (a plus rate is not pink): terminal top row, 시장 (tiles, schedule, per coin), 차트, 포지션
+    for f in ("terminal-top.js", "market-live.js", "market.js", "chart.js", "positions-book.js"):
+        src = _code(_read("screens", f))
+        assert not re.search(r"fmt\.tone\(-Number\([a-z]+\.r\b", src), f
+    for f in ("market-live.js", "market.js", "chart.js", "positions-book.js"):
+        assert "fundTone(" in _code(_read("screens", f)) and "../core/fundkit.js" in _read("screens", f), f
+    assert "FUND_HOT" in _code(_read("screens", "terminal-top.js")) and "../core/fundkit.js" in _read("screens", "terminal-top.js")
+
+
+def test_topstats_a_hung_binance_request_does_not_hold_the_request_thread():
+    from paperbot.dash.more import topstats as TS
+    old = TS.TIMEOUT_S
+    TS.TIMEOUT_S = 0.2
+    TS.FETCH = lambda url: time.sleep(4) or []                       # a request that hangs (a slow drip never trips the socket timeout)
+    try:
+        t0 = time.time()
+        ans = TS.TopStats().get("BTCUSDT")
+        assert time.time() - t0 < 3.5, "the request waited for the hung Binance call"            # the shared deadline is TIMEOUT_S + 2 s
+        assert ans["ready"] is False and ans["oi"] is None and ans["ls"] is None and set(ans["errors"]) == {"oi", "ls"}
+    finally:
+        TS.FETCH, TS.TIMEOUT_S = None, old
+
+
+def test_profit_head_lines_keep_their_height_and_the_breathing_dot_is_compositor_only():
+    plus = _read("screens", "terminal-plus.css")
+    # in a short column (1280 x 800) the head lines used to shrink to one line and their wrapped text ran into the chart's axis labels
+    assert re.search(r"\.term \.term-pnl \.term-phero, \.term \.term-pnl \.term-pmeta, \.term \.term-pnl \.term-today, \.term \.term-pnl \.term-calh \{ flex: none; \}", plus)
+    css = _read("screens", "terminal.css")
+    kf = css[css.index("@keyframes term-breathe {"):].split("\n")[0]
+    assert "box-shadow" not in kf and "transform" in kf and "opacity" in kf               # fix 13: no paint-heavy shadow animation all day
+    assert "box-shadow" not in css[css.index("@keyframes term-breathe-dot"):].split("\n")[0]
+    assert ".term-dot.on, .term-dot.on::after { animation: none; }" in css                 # still stops under reduced motion
+    assert '.term[data-still="1"] .term-dot.on, .term[data-still="1"] .term-dot.on::after { animation-play-state: paused; }' in css
+
+
+def test_band_never_says_ok_beside_the_red_banner_and_the_top_row_gives_way_in_order():
+    band = _code(_read("screens", "terminal-band.js"))
+    assert 'document.getElementById("crit")' in band and ".crit-row > .grow" in band           # the shell's banner is read, whatever it lists
+    stats = _code(_read("screens", "terminal-stats.js"))
+    assert 'row.classList.add("term-tight")' in stats and stats.index('classList.add("term-tight")') < stats.index("c.hidden = true")   # short words first, cells after
+    top = _code(_read("screens", "terminal-top.js"))
+    assert "term-fwho" in top and "term-vun" in top
+    assert ".term-tight .term-vun, .term-tight .term-fwho { display: none; }" in _read("screens", "terminal-plus.css")
+    pnl = _read("screens", "terminal-pnl.js")
+    assert "이번 판정 구간" in pnl and "todayK.title" in pnl

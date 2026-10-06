@@ -44,8 +44,14 @@ export function bandLine(ctx) {
     const hb = stream.heartbeat;
     let hbAge = hb ? Math.max(0, (serverNow() - Number(hb[0])) / 1000) : null;
     if (hbAge == null && hs.v && hs.v.bot && hs.v.bot.ready && hs.v.bot.heartbeat_age_s != null) hbAge = Number(hs.v.bot.heartbeat_age_s);
-    const crit = criticalLines({health: hs.v || null, alerts: (st.v && st.v.alerts) || [], trades: [], hb, streamOk: stream.state === "open",
+    let crit = criticalLines({health: hs.v || null, alerts: (st.v && st.v.alerts) || [], trades: [], hb, streamOk: stream.state === "open",
       now: Date.now(), kindOf: () => null});
+    // the red banner under the menu (core/shell.js) also lists what this page cannot compute itself (a burst of our own forced exits, from
+    // the shell's own trade list): whatever it says right now, this line never says 이상 없음 beside it
+    if (!crit.length) {
+      const box = document.getElementById("crit");
+      if (box && !box.hidden) crit = [...box.querySelectorAll(".crit-row > .grow")].map((e) => ({kind: "banner", text: e.textContent.replace(/\s+/g, " ").trim()})).filter((l) => l.text);
+    }
     // what the page itself could not read (순위 · 요약 · 알림 자료) is told too: the bot being fine is not "이상 없음" on a page that is blind
     const failedKeys = [["board", "순위 자료"], ["summary", "요약 자료"], ["status", "알림 자료"]].filter(([k]) => state(k).failed).map(([, ko]) => ko);
     const s = statusOf({health: hs.v || null, healthFailed: hs.failed, hbAgeS: hbAge, critical: crit, failedKeys});

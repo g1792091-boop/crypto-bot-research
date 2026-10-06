@@ -48,6 +48,9 @@ a.term-bc2:hover > span:first-child, a.term-bc2:hover b { text-decoration: under
 .term-rd[hidden] { display: none; }
 .term-rl { font-size: var(--t-2xs); color: var(--ink-2); font-weight: 600; }
 .term-sx.rng .term-sl { gap: 6px; }
+/* the unit and the who-pays words of the number cells: the first to give way when the row is tight (terminal-stats.js fit()) */
+.term-vun { color: var(--ink-2); font-weight: 600; }
+.term-tight .term-vun, .term-tight .term-fwho { display: none; }
 /* a little tighter than before so the three new cells fit a 1920 window next to the sound hint */
 .term .term-row, .term .term-stats { gap: 16px; }
 
@@ -76,6 +79,9 @@ a.term-bc2:hover > span:first-child, a.term-bc2:hover b { text-decoration: under
 .term-pseg .seg { display: inline-flex; flex-wrap: nowrap; gap: 2px; }
 .term-pseg .seg button { height: 22px; padding: 0 8px; font-size: var(--t-2xs); border-radius: 5px; }
 .term .term-pnl .term-pmeta { display: block; min-height: 1em; margin-top: -4px; line-height: 1.45; }
+/* the head lines keep their own height: in a short column (1280 x 800) they shrank to one line and the wrapped second line ran into the
+   chart's axis labels (reviewer 10/06); the column scrolls instead, the chart keeps its own minimum */
+.term .term-pnl .term-phero, .term .term-pnl .term-pmeta, .term .term-pnl .term-today, .term .term-pnl .term-calh { flex: none; }
 .term-pmeta .up { color: var(--up); } .term-pmeta .down { color: var(--down); } .term-pmeta b { font-weight: 700; }
 .term-psvg .tk { stroke: var(--line-2); stroke-width: 1; }
 .term-psvg .ax.mid { text-anchor: middle; }

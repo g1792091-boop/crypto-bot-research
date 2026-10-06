@@ -11,8 +11,8 @@ import {hit} from "./terminal-live.js";
 import {MARKET_LABEL, marketChip} from "./terminal-kit.js";
 import {topStats} from "./terminal-stats.js";      // term-plus: 미결제약정 · 롱/숏 · 24시간 범위 (terminal-stats.js)
 import {usdKo} from "./market-live.js";
+import {FUND_HOT} from "../core/fundkit.js";      // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
 
-const FUND_HOT = 0.0005;          // funding of 0.05 % or more (5 times the usual 0.01 %) gets the caution colour, nothing below it
 const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
 const two = (x) => String(x).padStart(2, "0");
@@ -90,13 +90,14 @@ export function topBar(ctx, st) {
     chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
     chg.className = "term-chg num " + fmt.tone(t.p);
     // the same amount reads the same on every screen (차트 · 시장 print it with usdKo too): 12.0억 USDT, not 1.2B
-    vol.v.textContent = t.q != null ? `${usdKo(t.q)} USDT` : "—";
+    put(vol.v, t.q != null ? [usdKo(t.q), h("span", {class: "term-vun"}, " USDT")] : "—");
     vol.el.title = `24시간 거래대금 ${t.q != null ? `${usdKo(t.q)} USDT` : "— (불러오지 못함)"} · 고가 ${fmt.price(t.h)} · 저가 ${fmt.price(t.l)} · 마크 ${fmt.price(t.mark)}`;
     fundT = t.T || null;
     // funding is not a gain or a loss: a plus rate is not pink (review 10/06). Neutral ink with WHO pays in words; the
     // caution colour only when it is 5 times the usual 0.01 % or more
     const r = Number(t.r), hot = Number.isFinite(r) && Math.abs(r) >= FUND_HOT;
-    fundK.textContent = !Number.isFinite(r) || r === 0 ? "펀딩 / 다음까지" : r > 0 ? "펀딩 (롱이 냄) / 다음까지" : "펀딩 (숏이 냄) / 다음까지";
+    // (the words in the parentheses give way first when the row is tight: terminal-stats.js fit() sets .term-tight; the tooltip keeps them)
+    put(fundK, "펀딩", !Number.isFinite(r) || r === 0 ? null : h("span", {class: "term-fwho"}, r > 0 ? " (롱이 냄)" : " (숏이 냄)"), " / 다음까지");
     fund.el.title = Number.isFinite(r) ? `펀딩 ${fundPct(r)}: ${r > 0 ? "롱이 숏에게" : r < 0 ? "숏이 롱에게" : "아무도 안"} 냅니다 (8시간마다) · 보통은 +0.0100% · ${fmt.num(FUND_HOT * 100, 2)}% 이상 쏠리면 주의 색`
       : "펀딩: 이 코인의 펀딩을 받지 못했습니다 (불러오지 못함)";
     put(fund.v, h("span", {class: hot ? "warn-t" : ""}, fundPct(t.r)), " ", h("span", {class: "term-fcd"}, fundT ? countdown(fundT) : ""));
