@@ -54,10 +54,12 @@ SuccessExitStatus=SIGTERM
 # (file:...?mode=ro, query_only) in any case. Restore a database only with this timer AND
 # paperbot-agents.service stopped (stopping the timer does not end a pass in progress), after deleting
 # the restored file's -wal/-shm: SQLite would replay an old -wal onto the restored copy (docs/agent-rooms.md).
+# The 24-hour debate room's folder (debate.db, the lab intake queue reads its picked ideas) is read-only too: a
+# directory, so its rollback journal is never pinned (its mode 2750 already keeps this user from writing there).
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
-ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/lab
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/lab -/var/lib/paperbot/debate
 # The order executor's keys and its databases (directory: a stable inode) are never visible here.
 InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/agents.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/backups/paperbot
