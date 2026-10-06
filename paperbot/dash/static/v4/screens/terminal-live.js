@@ -162,7 +162,7 @@ export function bigFeed(ctx) {
         const span = Number(b.span) || 0;
         if (m.state === "live" && span > 0) {
           ratioK.textContent = span >= 290 ? "최근 5분" : `최근 ${fmt.int(Math.max(1, Math.round(span / 60)))}분`;
-          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · ${usdK(n)}`);
+          ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
         }
         if (fresh.size || m.first || was !== m.state) { render(fresh); if (fresh.size) ping(el); }   // (a new state: the empty line says it)
       } else if (was !== m.state) render(new Set());

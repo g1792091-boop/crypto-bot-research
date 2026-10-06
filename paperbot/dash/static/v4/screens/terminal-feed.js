@@ -234,7 +234,7 @@ export function liqFeed(ctx, st, onNew) {
       const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(want)}&minutes=60`);
       if (want !== st.sym || !ctx.alive()) return;
       if (fresh) { seen.clear(); sym = want; }
-      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건`;
+      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건 · 시장 전체`;
       if (!d.recorder) { put(list, ui.empty("강제청산 기록기 자료가 없습니다")); ratio.set({}); return; }
       const rows = (d.rows || []).slice(0, 20);
       const had = last.sym === want ? last.rows.length : -1;
@@ -252,7 +252,7 @@ export function liqFeed(ctx, st, onNew) {
         if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
         return node;
       }) : ui.empty("최근 1시간 기록 없음"));
-      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${usdK(n)}`);
+      ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
       if (nNew && live()) ping(el);
       if ((nNew || had !== rows.length) && onNew) onNew();
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
