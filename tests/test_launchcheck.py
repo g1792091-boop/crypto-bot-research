@@ -1025,7 +1025,14 @@ def test_db_option_checks_only_that_database(tmp_path):
     assert L.main(["--db", str(stage / "paper4.db")], ctx=srv.ctx(), out=out.append) == 0
     assert not [x for x in out if "restart paperbot-live3" in x]
     text = "\n".join(out)
-    assert "원래 계좌 331개" in text and "held = 0" in text and "== 결론" in text and "paper v4 started: 331" in text
+    assert "원래 계좌 331개" in text and "held = 0" in text and "== 결론" in text
+    # the verdict names the start messages as Telegram shows them: first start, and resumed after an install
+    from paperbot.notify import ko
+    first = ko("paper v4 started: 331 accounts, brackets: x, taker fee 0.05%").split("\n")
+    again = ko("paper v4 resumed: 331 accounts, brackets: x, taker fee 0.05%").split("\n")
+    verdict = out[-1]
+    assert first[0].removeprefix("▶️ ") in verdict and again[0].removeprefix("▶️ ") in verdict
+    assert again[2] == "이어서 돌림" and "이어서 돌림" in verdict and "started" not in verdict
     assert not srv.calls and not srv.http                    # no systemctl, no network
     out.clear()
     assert L.main(["--db", str(tmp_path / "none.db")], ctx=srv.ctx(), out=out.append) == 1
