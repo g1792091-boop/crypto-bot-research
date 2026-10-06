@@ -2,8 +2,9 @@
 // screens/<name>.js + screens/<name>.css (CONTRACT.md). `feature`: shown only while that feature really runs
 // (core/features.js); `soft`: always a tab, greyed with a '꺼짐' pill while that feature is off (the 토론방: the owners
 // should see it exists; its screen says plainly that it has not started); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
-// `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu, and it is the
-// landing screen (an empty hash) only on a window at least 1200 px wide; phones and narrow windows land on 홈.
+// `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu. The start screen
+// (owners 10/06 13:27: "들어가면 요약화면이 아니라 차트화면부터"): an empty hash opens the 터미널 wherever it exists
+// (760 px and up), and the 차트 screen on a phone; 홈 stays one click away (#/home, the 홈 group, the number key 2).
 import {s} from "./dom.js";
 
 export const GROUPS = [
@@ -41,12 +42,14 @@ export const SCREENS = {
   _kit: {ko: "부품", group: "server", title: "부품 견본", hidden: true},
 };
 
-export const DEFAULT = "home";          // unknown or switched-off screens fall back here (never the terminal: no loop)
-/** The screen an empty hash opens: the 터미널 on a window at least 1200 px wide, else 홈 (phones keep 홈). */
-export const LANDING_MIN_PX = 1200;
+export const DEFAULT = "home";          // an unknown screen name falls back here (never the terminal: no loop)
+/** The start screen's width: the 터미널's own (core/features.js `wide`, a window at least 760 px wide). */
+export const LANDING_MIN_PX = 760;
+/** The screen an empty hash (and the brand mark) opens: the 터미널 where it exists, else the phone's 차트 screen.
+ *  Never a switched-off screen, so the router may also send a PC-only screen opened on a phone here (no loop). */
 export function landing() {
-  const wide = typeof matchMedia === "function" && matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
-  return wide ? "terminal" : DEFAULT;
+  const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
+  return wide ? "terminal" : "chart";
 }
 
 /** "#/rooms/strat:S5?x=1" -> {name, arg, query}. */
@@ -80,7 +83,7 @@ const ICON = {
 export const icon = (group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
 
-// one 16 x 16 pixel icon per screen for the PC left rail (core/rail.js)
+// one 16 x 16 pixel icon per screen: the top bar's group menus (core/topnav.js), the left rail (core/rail.js), 찾기
 const SICON = {
   home: ICON.home,
   board: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(7, 1, 2, 2)],
@@ -112,5 +115,12 @@ export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "curre
 
 /** The number keys 1-9 (core/navkeys.js): the screens opened most, in this order (owners 10/06). */
 export const KEYS = ["terminal", "home", "positions", "strategies", "board", "office", "chart", "market", "server"];
+/** A screen's number key ("1" ... "9"), null when it has none. */
+export const keyOf = (name) => { const i = KEYS.indexOf(name); return i < 0 ? null : String(i + 1); };
+/** The screens of a group its menu lists now (feats = core/features.js): hidden ones out, a `feature` screen only while
+ *  it runs (the PC 터미널 only on a wide window); a `soft` one stays (greyed with 꺼짐). */
+export function menuScreens(g, feats) {
+  return g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden && (!SCREENS[n].feature || !!(feats && feats[SCREENS[n].feature])));
+}
 /** Links that open in the side panel instead of leaving the page (core/drawer.js): route name -> panel kind. */
 export const PEEKABLE = {account: "account", strategies: "strategy", replay: "trade"};

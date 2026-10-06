@@ -1,12 +1,13 @@
-// The shell around every screen: the 5-group nav (top on a PC, bottom tab bar on a phone), the current group's sub
-// tabs, the one-line "D+n/30 · 판정 날짜 · 관찰 ~날짜" chip that expands to the rules, the ONE health dot (red when
+// The shell around every screen: the 5-group nav (top on a PC, each group with a dropdown of all its screens,
+// core/topnav.js; or the left rail by choice, core/rail.js + core/navpos.js; bottom tab bar on a phone), the current
+// group's sub tabs, the one-line "D+n/30 · 판정 날짜 · 관찰 ~날짜" chip that expands to the rules, the ONE health dot (red when
 // something is down; it pulses once per real new heartbeat), the speaker button of the live sound (core/sound.js) and
 // the sticky red banner for critical alerts (bust, liquidation burst, feed stale).
 import {h, put, clear, $, local} from "./dom.js";
 import {api, bus, stream} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {GROUPS, SCREENS, href, icon, parseHash, screenIcon} from "./routes.js";
+import {GROUPS, SCREENS, href, icon, parseHash, screenIcon, landing} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
 import {expand, pulseLive} from "./motion.js";
 import {soundButton, startSound} from "./sound.js";
@@ -17,6 +18,8 @@ import {skinSwitch} from "./skin.js";
 import {textCycle, textSwitch} from "./textsize.js";
 import {remount} from "./router.js";
 import {renderRail, visibleScreens} from "./rail.js";
+import {renderGroups} from "./topnav.js";
+import {navPosSwitch} from "./navpos.js";
 import {openFind} from "./find.js";
 
 const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
@@ -28,9 +31,18 @@ function renderNav() {
   const link = (g, cls) => h("a", {href: href(visibleScreens(g)[0] || g.screens[0]), class: cls, "aria-current": g.id === gid ? "page" : null,
     dataset: {group: g.id}}, icon(g.id), h("span", null, g.ko),
     g.screens.some((n) => badges[n]) ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
-  put($("#groups"), GROUPS.map((g) => link(g)));
-  // the PC rail (every screen one click away, >= 1200 px) and the "묶음 › 화면" line that stands in for the group bar there
+  // the top bar's groups, each opening a list of all its screens (one click to any screen; core/topnav.js)
+  renderGroups(p.name, badges);
+  // the left rail (a choice, "메뉴 위치", >= 1200 px) and the "묶음 › 화면" line that stands in for the group bar there
   renderRail(p.name, badges, () => remount());
+  // the brand mark opens the start screen (the 터미널; the phone's 차트), named as such: 홈 is one click away in its group
+  const brand = $(".brand");
+  if (brand) {
+    const to = landing();
+    brand.setAttribute("href", href(to));
+    brand.setAttribute("aria-label", `Paper v4 첫 화면 (${SCREENS[to].ko})`);
+    brand.title = `첫 화면: ${SCREENS[to].ko}`;
+  }
   const crumb = $("#crumb");
   if (crumb) put(crumb, h("span", {class: "crumb-g"}, (GROUPS.find((x) => x.id === gid) || GROUPS[0]).ko), h("span", {class: "crumb-s", "aria-hidden": "true"}, "›"),
     h("b", null, meta.ko));
@@ -43,7 +55,9 @@ function renderNav() {
   // page) stay one tap away next to it at the end of the 서버 group's menu
   textSwitch(() => remount()),
   g.id === "server" ? skinSwitch(() => remount()) : null,
-  g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null);
+  g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null,
+  // 메뉴 위치 위 / 왼쪽 (core/navpos.js) at the very end: shown from 1200 px, where the left rail can be chosen
+  navPosSwitch());
 }
 /** 찾기 at the start of the phone's sub-tab row (the top bar has no room for it under 460 px): two taps to any
  *  account or strategy. Shown below 760 px only (core/nav.css). */
@@ -164,6 +178,9 @@ export function startShell() {
   renderNav();
   bus.on("route", renderNav);
   bus.on("features", renderNav);
+  // 메뉴 위치 changed (the control here, in the rail, or the settings panel through setNavPos): the menu and the screen
+  // are drawn again (the screen's width changes by the rail's)
+  bus.on("navpos", () => { renderNav(); remount(); });
   const chip = $("#dchip");
   chip.addEventListener("click", () => setRules(chip.getAttribute("aria-expanded") !== "true"));
   bus.on("route", () => setRules(false));

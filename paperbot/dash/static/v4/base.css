@@ -43,10 +43,11 @@ em { font-style: normal; color: var(--accent); }
 .brand .bic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); }
 .brand b { color: var(--accent); font-weight: 700; }
 .groups { display: none; gap: 2px; margin-left: 12px; }
-.groups a { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border-radius: 10px; color: var(--ink-2); text-decoration: none; font: 700 var(--t-sm)/1 var(--f-body); white-space: nowrap; transition: background-color var(--t-fast), color var(--t-fast); }
-.groups a:hover { color: var(--ink); background: var(--surface); }
-.groups a[aria-current="page"] { color: var(--accent-ink); background: var(--accent); }
-.groups a svg, .botbar a svg { width: 16px; height: 16px; flex: none; }
+/* a group is a button that opens the list of all its screens (core/topnav.js; the list's look: core/nav.css .gmenu) */
+.groups .gbtn { appearance: none; border: 0; background: transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px 0 12px; border-radius: 10px; color: var(--ink-2); font: 700 var(--t-sm)/1 var(--f-body); white-space: nowrap; transition: background-color var(--t-fast), color var(--t-fast); }
+.groups .gbtn:hover, .groups .gw[data-open] .gbtn { color: var(--ink); background: var(--surface); }
+.groups .gbtn[aria-current="true"] { color: var(--accent-ink); background: var(--accent); }
+.groups .gbtn svg, .botbar a svg { width: 16px; height: 16px; flex: none; }
 @media (min-width: 900px) { .groups { display: flex; } .brand-t { display: inline; } }
 .brand-t { display: none; }
 @media (min-width: 420px) { .brand-t { display: inline; } }

@@ -570,7 +570,8 @@ def test_hash_routes_round_trip():
     const c = routes.parseHash("");
     console.log(JSON.stringify({a, b, c}));""")
     assert out["a"] == {"name": "rooms", "arg": "strat:S5_DONCHIAN_MFI", "query": {"from": "office"}}
-    assert out["b"]["arg"] == "N05_PSAR_POC@15m" and out["c"]["name"] == "home"
+    # an empty hash is the start screen: the 터미널 (node has no matchMedia: a wide window, as core/features.js assumes)
+    assert out["b"]["arg"] == "N05_PSAR_POC@15m" and out["c"]["name"] == "terminal"
 
 # ---------------------------------------------------------------- review pass: rule numbers, names, banner, fonts
 def test_rule_numbers_match_the_checkpoint_and_the_server_run_shape_is_read():

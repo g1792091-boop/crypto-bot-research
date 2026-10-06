@@ -5,7 +5,7 @@
 // screen that has nothing to show yet (no open position, no meeting). At the end (or 건너뛰기) the page goes back to
 // where the tour started. Only real elements are pointed at; nothing is drawn or made up for the tour.
 import {h, local} from "./dom.js";
-import {href, parseHash} from "./routes.js";
+import {href, parseHash, landing} from "./routes.js";
 import {reduced} from "./motion.js";
 
 export const STEPS = [
@@ -43,7 +43,9 @@ const topH = () => { const t = document.querySelector(".shell-top"); return t ? 
 let active = null;
 export function startTour() {
   if (active) return;
-  const startHash = location.hash || href("home");
+  // where the tour goes back to: the screen it started on (an empty hash = the start screen, the 터미널; never 홈 by
+  // default, or a first visit would leave the owners on 홈 after the tour)
+  const startHash = location.hash && location.hash !== "#" && location.hash !== "#/" ? location.hash : href(landing());
   let i = 0, gen = 0, el = null;
   const ring = h("div", {class: "tour-ring", "aria-hidden": "true", hidden: true});
   const tn = h("span", {class: "tn"}), tt = h("h3", {id: "tour-t"}), tp = h("p");
@@ -131,8 +133,8 @@ export function startTour() {
   requestAnimationFrame(() => show(0));
 }
 
-/** First visit: starts only when the page opened on 홈 or on the landing screen (an empty hash: the 터미널 on a wide
- *  PC; the tour's first step walks to 홈). A shared deep link such as #/board is shown as it is. */
+/** First visit: starts only when the page opened on 홈 or on the start screen (an empty hash: the 터미널, the phone's
+ *  차트; the tour's first step walks to 홈 and the last one comes back). A shared deep link such as #/board is shown as it is. */
 const landed = () => !location.hash || location.hash === "#" || location.hash === "#/";
 export function maybeStartTour() {
   if (local.get("tour-done", 0)) return;
