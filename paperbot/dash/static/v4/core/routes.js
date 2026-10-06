@@ -79,3 +79,38 @@ const ICON = {
 };
 export const icon = (group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
+
+// one 16 x 16 pixel icon per screen for the PC left rail (core/rail.js)
+const SICON = {
+  home: ICON.home,
+  board: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(7, 1, 2, 2)],
+  flow: () => [R(1, 14, 14, 1), R(1, 11, 2, 2), R(3, 9, 2, 2), R(5, 10, 2, 2), R(7, 7, 2, 2), R(9, 8, 2, 2), R(11, 5, 2, 2), R(13, 2, 2, 2)],
+  checkpoint: () => [R(3, 1, 2, 14), R(5, 2, 9, 1), R(5, 3, 7, 3), R(5, 6, 9, 1), R(1, 14, 6, 1)],
+  terminal: () => [R(1, 2, 14, 1), R(1, 2, 1, 10), R(14, 2, 1, 10), R(1, 11, 14, 1), R(3, 5, 1, 1), R(4, 6, 1, 1), R(3, 7, 1, 1),
+    R(6, 8, 4, 1), R(7, 12, 2, 2), R(4, 14, 8, 1)],
+  positions: () => [R(6, 2, 4, 1), R(5, 3, 1, 2), R(10, 3, 1, 2), R(1, 5, 14, 1), R(1, 5, 1, 9), R(14, 5, 1, 9), R(1, 13, 14, 1),
+    R(1, 8, 14, 1), R(7, 7, 2, 3)],
+  chart: ICON.trade,
+  market: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6), R(2, 11, 1, 2),
+    R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(1, 7, 14, 1), R(7, 1, 2, 14)],
+  strategies: ICON.strat,
+  grid: () => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => R(1 + 5 * i, 1 + 5 * j, 4, 4))),
+  analysis: () => [R(3, 1, 6, 2), R(1, 3, 2, 6), R(9, 3, 2, 6), R(3, 9, 6, 2), R(10, 10, 2, 2), R(12, 12, 3, 3)],
+  office: () => [R(3, 2, 3, 3), R(10, 2, 3, 3), R(1, 6, 14, 3), R(3, 9, 1, 5), R(12, 9, 1, 5)],
+  rooms: () => [R(4, 1, 8, 1), R(4, 1, 1, 13), R(11, 1, 1, 13), R(2, 14, 12, 1), R(9, 7, 1, 2)],
+  digest: () => [R(1, 2, 14, 1), R(1, 2, 1, 9), R(14, 2, 1, 9), R(1, 10, 14, 1), R(3, 11, 2, 3), R(4, 5, 8, 1), R(4, 7, 5, 1)],
+  debate: () => [R(1, 1, 9, 5), R(2, 6, 2, 2), R(6, 8, 9, 5), R(12, 13, 2, 2)],
+  server: ICON.server,
+  alerts: () => [R(7, 1, 2, 1), R(5, 2, 6, 1), R(4, 3, 8, 6), R(3, 9, 10, 2), R(2, 11, 12, 1), R(7, 13, 2, 2)],
+  signals: () => [R(1, 8, 4, 1), R(5, 6, 1, 2), R(6, 2, 1, 4), R(7, 6, 1, 6), R(8, 12, 1, 2), R(9, 7, 1, 5), R(10, 8, 5, 1)],
+  howto: () => [R(7, 1, 2, 2), R(7, 13, 2, 2), R(1, 7, 2, 2), R(13, 7, 2, 2), R(5, 3, 6, 2), R(5, 11, 6, 2), R(3, 5, 2, 6), R(11, 5, 2, 6),
+    R(3, 3, 2, 2), R(11, 3, 2, 2), R(3, 11, 2, 2), R(11, 11, 2, 2)],
+  faq: () => [R(5, 1, 6, 2), R(3, 3, 3, 3), R(10, 3, 3, 4), R(8, 7, 3, 2), R(7, 9, 2, 2), R(7, 12, 2, 2)],
+};
+export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
+  (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
+
+/** The number keys 1-9 (core/navkeys.js): the screens opened most, in this order (owners 10/06). */
+export const KEYS = ["terminal", "home", "positions", "strategies", "board", "office", "chart", "market", "server"];
+/** Links that open in the side panel instead of leaving the page (core/drawer.js): route name -> panel kind. */
+export const PEEKABLE = {account: "account", strategies: "strategy", replay: "trade"};

@@ -8,9 +8,10 @@ import {features} from "./features.js";
 import {SCREENS, DEFAULT, parseHash, href} from "./routes.js";
 import {swap, shimmer} from "./motion.js";
 import {errorBox, toast} from "./ui.js";
+import {peekGo} from "./drawer.js";
 
 const cssLoaded = new Set();
-function loadCss(name) {
+export function loadCss(name) {
   if (cssLoaded.has(name)) return Promise.resolve();
   cssLoaded.add(name);
   return new Promise((ok) => {
@@ -23,7 +24,7 @@ function loadCss(name) {
 
 const cur = {name: null, arg: null, mod: null, ctx: null, el: null, token: 0};
 
-function makeCtx(name, params) {
+export function makeCtx(name, params) {
   const ac = new AbortController();
   const disposers = [];
   let alive = true;
@@ -32,7 +33,7 @@ function makeCtx(name, params) {
     name, params,
     signal: ac.signal,
     alive: () => alive,
-    go: (n, a, q) => { location.hash = href(n, a, q); },
+    go: (n, a, q) => { if (!peekGo(n, a, q)) location.hash = href(n, a, q); },
     href,
     api: (path) => api(path, {signal: ac.signal}),
     post: (path, body) => post(path, body, {signal: ac.signal}),

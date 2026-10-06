@@ -438,3 +438,11 @@ read-only route. Supersedes the 터미널 rows above where they differ (the watc
 | Right column | **이 코인 포지션** (ours: 기존 36 · 5분봉 · 추가; ROE, 청산가; DeepSeek / coin flips counted only; "주문 버튼 없음" caption; 호가 behind its switch), **수익 차트** (기존 36 realized P&L: cumulative line from the run start + daily bars; 참고), **오늘 수익** (today's realized sum, trades, wins), **수익 캘린더** (each KST day's realized P&L of the 36 in its cell, green / red by sign, 기록 없음 days blank) | `/api/v4/flow/calendar` (`g.core.pnl / trades / wins`, 5 min) |
 | Positions table | one head line: 포지션 n / 체결 / 손절 주문, **ALL** (= 기존 36 · 5분봉 · 추가) or one group, 롱 / 숏 share bar with %, 열린 n, 미실현 합계; dense aligned rows; foot: the open-P&L caption, "딥시크 n · 동전 봇 n개 열림 (건수만)" | `/api/board`, `/api/trades` (unchanged) |
 | Not shown | whale on-chain transfers (HelloQuant's "Whale Transfer") need a paid on-chain source: not faked, not shown | — |
+## 클릭 줄이기 (nav-rail; owners 10/06 "들어가는 클릭버튼이 너무 많아서 들어가서 보는게 귀찮다"; tests/test_dash_nav.py)
+
+- **왼쪽 아이콘 줄** (`core/rail.js`, `core/nav.css`): 창이 1200px 이상이면 다섯 묶음의 모든 화면이 왼쪽 세로 줄에 아이콘으로 바로 나옵니다 (묶음 사이 얇은 선, 마우스·키보드 초점에 이름과 단축키, 지금 화면은 강조색, 새 소식 점 그대로). 한 번 누르면 어느 화면이든 갑니다. 그 폭에서는 묶음 막대와 아래 탭 줄이 숨고 (`--sub-h: 0`), 위 막대에 "묶음 › 화면"이 나옵니다. 글자 크기 · 화면 색 · 예전 화면(v3)은 줄의 맨 아래. 1200px 아래는 예전 그대로 (묶음 막대 + 탭, 폰은 아래 막대).
+- **옆 창** (`core/drawer.js`, `screens/account-peek.js`): 어디서든 계좌 · 매매법 · 닫힌 거래(다시보기) 링크나 줄을 누르면 페이지를 떠나지 않고 오른쪽 옆 창(PC 약 540px, 폰은 화면 전체)에 요약, 진입·청산이 찍힌 작은 봉 차트, 열린 포지션, 최근 거래가 나옵니다. '전체 화면으로'는 원래 페이지. Esc · 바깥 누르기 · ✕ · 뒤로 가기(폰 포함)로 닫힙니다 (옆 창은 기록 한 칸: 뒤로 가기는 창만 닫음). 이미 그 화면에 있으면 (계좌 화면의 다른 계좌 링크 등) 링크는 원래대로. 각 페이지의 조각을 그대로 씁니다 (positions-kit, account-pick, grid-kit 프로필 카드, strategies-calc/panels). **정직**: 섞인 목록에서 연 딥시크·동전 봇 계좌는 개수만 (잔고·수익률·손익·ROE 없음, 청산 점은 회색, 참고 표시); 그 묶음만 고른 화면(`?g=ds` / `?g=coin`)에서 열면 그 묶음 규칙대로.
+- **찾기** (`core/find.js`, `core/search.js`): `/` 또는 위 막대의 찾기(폰은 탭 줄 맨 앞). 화면 · 매매법 · 계좌를 한글 이름, 코드, 초성(ㅅㅇㅍ → 순위표)으로 찾고, 계좌·매매법은 옆 창으로 엽니다.
+- **숫자 키** (`core/navkeys.js`): 1 터미널 · 2 홈 · 3 포지션 · 4 매매법 · 5 순위표 · 6 회의실 · 7 차트 · 8 시장 · 9 서버 (입력 칸에서는 안 먹음).
+- **폰 옆으로 밀기**: 화면을 좌우로 밀면 같은 묶음의 다음 / 이전 화면 (차트, 옆으로 스크롤되는 표·탭, 입력 칸 위에서는 안 함). 아래 막대 + 탭으로 어느 화면이든 두 번 안에.
+- 첫 화면은 그대로: PC(1200px 이상) 터미널, 폰 홈.

@@ -44,3 +44,22 @@ export function skinSwitch(onChange) {
   return h("span", {class: "skinsw", role: "group", "aria-label": "화면 색 고르기", title: "화면 색: 이 기기에만 기억합니다"},
     h("span", {class: "k"}, "화면 색"), btns);
 }
+
+/** skinCycle(onChange) -> one small round button for the PC rail's foot (core/rail.js): each click switches to the
+ *  other skin, remembers it on this device and calls onChange(id). */
+export function skinCycle(onChange) {
+  const at = () => document.documentElement.dataset.skin || currentSkin();
+  const ko = (id) => (SKINS.find((x) => x.id === id) || SKINS[0]).ko;
+  const label = (id) => `화면 색: ${ko(id)} (누르면 바뀝니다)`;
+  const btn = h("button", {type: "button", class: "skincyc", dataset: {skin: at()}, "aria-label": label(at()), title: label(at()),
+    onclick: () => {
+      const i = SKINS.findIndex((x) => x.id === at());
+      const next = SKINS[(i + 1) % SKINS.length].id;
+      local.set(KEY, next);
+      applySkin(next);
+      btn.dataset.skin = next;
+      btn.setAttribute("aria-label", label(next)); btn.title = label(next);
+      if (onChange) onChange(next);
+    }}, h("i", {"aria-hidden": "true"}));
+  return btn;
+}

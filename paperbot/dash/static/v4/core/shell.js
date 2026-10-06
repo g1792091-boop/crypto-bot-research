@@ -6,7 +6,7 @@ import {h, put, clear, $, local} from "./dom.js";
 import {api, bus, stream} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {GROUPS, SCREENS, href, icon, parseHash} from "./routes.js";
+import {GROUPS, SCREENS, href, icon, parseHash, screenIcon} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
 import {expand, pulseLive} from "./motion.js";
 import {soundButton, startSound} from "./sound.js";
@@ -16,12 +16,10 @@ import {criticalLines} from "./alerts.js";
 import {skinSwitch} from "./skin.js";
 import {textCycle, textSwitch} from "./textsize.js";
 import {remount} from "./router.js";
+import {renderRail, visibleScreens} from "./rail.js";
+import {openFind} from "./find.js";
 
 const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
-
-function visibleScreens(g) {
-  return g.screens.filter((n) => SCREENS[n] && !SCREENS[n].hidden && (!SCREENS[n].feature || features[SCREENS[n].feature]));
-}
 
 function renderNav() {
   const p = parseHash(location.hash);
@@ -31,9 +29,14 @@ function renderNav() {
     dataset: {group: g.id}}, icon(g.id), h("span", null, g.ko),
     g.screens.some((n) => badges[n]) ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null);
   put($("#groups"), GROUPS.map((g) => link(g)));
+  // the PC rail (every screen one click away, >= 1200 px) and the "묶음 › 화면" line that stands in for the group bar there
+  renderRail(p.name, badges, () => remount());
+  const crumb = $("#crumb");
+  if (crumb) put(crumb, h("span", {class: "crumb-g"}, (GROUPS.find((x) => x.id === gid) || GROUPS[0]).ko), h("span", {class: "crumb-s", "aria-hidden": "true"}, "›"),
+    h("b", null, meta.ko));
   put($("#botbar"), GROUPS.map((g) => link(g)));
   const g = GROUPS.find((x) => x.id === gid) || GROUPS[0];
-  put($("#subtabs"), textCycle(() => remount()), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
+  put($("#subtabs"), textCycle(() => remount()), findTab(), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
     SCREENS[n].ko, SCREENS[n].soft && !features[SCREENS[n].soft] ? h("span", {class: "pp thin", style: {marginLeft: "6px", opacity: ".75"}, title: "아직 켜지지 않음"}, "꺼짐") : null, badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null)),
   // 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js) at the end of every group's tabs, so it is one tap away on the
   // screen being read (on a phone the one-button textCycle at the start of the row stands in for it); the screen colours (AI / 클래식, core/skin.js) and the old dashboard (served at /v3; '/' is this
@@ -42,6 +45,10 @@ function renderNav() {
   g.id === "server" ? skinSwitch(() => remount()) : null,
   g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null);
 }
+/** 찾기 at the start of the phone's sub-tab row (the top bar has no room for it under 460 px): two taps to any
+ *  account or strategy. Shown below 760 px only (core/nav.css). */
+const findTab = () => h("button", {type: "button", class: "findsub", "aria-label": "찾기: 화면, 매매법, 계좌", onclick: () => openFind()},
+  screenIcon("analysis"), "찾기");
 export function setBadge(screen, on) {
   if (!!badges[screen] === !!on) return;
   badges[screen] = !!on;

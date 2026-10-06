@@ -9,6 +9,9 @@ import {maybeStartTour} from "./tour.js";
 import {startSince} from "./since.js";
 import {applySkin} from "./skin.js";
 import {applyText} from "./textsize.js";
+import {startDrawer} from "./drawer.js";
+import {startFind} from "./find.js";
+import {startNavKeys} from "./navkeys.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -24,7 +27,10 @@ function boot() {
   applySkin();            // the viewer's skin (tokens.css: "ai" by default, "classic" by choice) before anything draws
   applyText();            // the viewer's 글자 크기 (tokens.css: "md" by default, "lg" / "xl" by choice), same moment
   startShell();
+  startDrawer();           // account / strategy / trade links open in the side panel (before the router: its links)
   startRouter();
+  startFind();             // '/' and the 찾기 button
+  startNavKeys();          // 1-9, and the phone's sideways swipe between a group's screens
   startStream();
   startFeatureProbe();
   syncClock();
