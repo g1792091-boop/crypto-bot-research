@@ -22,7 +22,7 @@ const TP_STRIP = [["ladder", "사다리"], ["tp1R", "1R"], ["tp1.5R", "1.5R"], [
 const NO_FIVE_KO = {
   lock: "첫 잠금 15·20·30%는 5년 결과 파일이 없습니다 (규칙을 바꾸자는 제안이 나오면 5년 실험실 관문이 따로 시험하는 항목).",
   time: "시간 청산은 5년에 비교한 적이 없습니다 (매일 밤 그림자로만 봄).",
-  lev: "증거금 = 배수만큼(50배·50%)은 5년에 없습니다. 가장 가까운 시험: 50배·40%.",
+  lev: "증거금 = 배수만큼(50배·50%)은 5년에 돌린 적이 없습니다.",
 };
 const STOP_KEY = {1.5: "1.5", 2: "2.0", 2.5: "2.5", 3: "3.0"};     // levstop's arm spelling ("<lev>|2.0")
 const FIVE_MIN = 100;          // fewer 5-year trades in the scope: '표본 적음' (one strategy on 4h has a few dozen)
@@ -299,6 +299,8 @@ export async function mount(el, ctx) {
           M.push(["같은 신호에서 지금보다", "", pctp(V.diff), ["", ""]], ["익절로 끝난 비율", fmt.pct(R.tp_share ?? 0, 0, false), fmt.pct(V.tp_share, 0, false), ""]);
         }
         if (near50) kids.push(h("p", {class: "wi-sub"}, `가장 가까운 5년 시험: 50배·40% · 손절 ${s.stop} ATR (증거금만 다름, 50%는 5년에 없음)`));
+        // the reference column is not rule B itself (never run for five years): say so where the numbers are
+        kids.push(h("p", {class: "note"}, "'지금 규칙' 칸 = 5년에 시험한 것 중 지금과 가장 가까운 설정 (손절 2 ATR · 사다리, 레버리지만 v3 단계: 50배·40% → 20배·20%)."));
         kids.push(same ? cmpTable(["지금 규칙"], M.map((r) => cmpRow(r[0], r[1])))
           : cmpTable(["지금 규칙", near50 ? "50배·40%" : "이 설정", "차이"], M.map((r) => cmpRow(r[0], r[1], r[2], r[3]))));
         kids.push(bars5(R, V, same, near50 ? "50배·40%" : "이 설정"));
@@ -347,7 +349,9 @@ export async function mount(el, ctx) {
       h("p", {class: "note"}, "숫자 = 거래당 자금 대비 평균(%). 굵은 테두리 = 지금 규칙의 5년 기준, 밝은 테두리 = 고른 설정. 칸을 누르면 그 설정을 고릅니다."),
       h("div", {class: "wi-map-g"}, head, rows),
       h("p", {class: "wi-sub"}, "익절 방식 (손절 2 ATR · 지금 단계)"), strip,
-      h("p", {class: "note"}, "가장 좋아 보이는 칸을 고르는 것은 선택 편향입니다. 플러스인 조합이 하나도 없다는 것이 이 표의 큰 그림입니다."));
+      h("p", {class: "note"}, "가장 좋아 보이는 칸을 고르는 것은 선택 편향입니다. ", vals.some((x) => x > 0)
+        ? `${fmt.int(vals.length)}칸 중 ${fmt.int(vals.filter((x) => x > 0).length)}칸이 플러스입니다. 이렇게 많은 칸을 한꺼번에 보면 몇 칸은 우연으로도 플러스가 나옵니다 (거래가 적은 칸일수록 더).`
+        : `${fmt.int(vals.length)}칸 모두 마이너스입니다. 플러스인 조합이 하나도 없다는 것이 이 표의 큰 그림입니다. 레버리지가 낮은 칸은 덜 잃을 뿐, 잃는 방향은 같습니다.`));
   }
 
   function paintPaper() {

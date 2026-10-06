@@ -442,6 +442,27 @@ def test_ds5y_card_shows_only_on_the_deepseek_group_and_says_absent(tmp_path):
         assert "USDT" not in t
 
 
+def test_whatif_map_sentence_follows_the_data(tmp_path):
+    """One strategy on one timeframe can have plus cells: the 5-year map never says 'no plus cell' then."""
+    if not os.path.exists(W.LEVSTOP_JSON):
+        pytest.skip("research outputs not in this checkout")
+    view = W.view("N03_ADX_GC", "4h")
+    arms = list(view["five_year"]["levstop"]["arms"].values()) + list(view["five_year"]["exitstyle"]["arms"].values())
+    vals = [a["mean_eq"] for a in arms if a["mean_eq"] is not None]
+    pos = sum(1 for x in vals if x > 0)
+    assert pos > 0
+    f = tmp_path / "v.json"
+    f.write_text(json.dumps(view), encoding="utf-8")
+    out = _node(_prelude() + f"const M = await import('file://{SCREENS}/whatif.js');\n"
+                f"const fs = await import('fs'); const V = JSON.parse(fs.readFileSync('{f}', 'utf8'));\n"
+                "const el = document.createElement('div');\n"
+                "const ctx = {params: {query: {strategy: 'N03_ADX_GC', tf: '4h'}}, setTitle() {}, api: async (p) => (p.startsWith('/api/v4/whatif/paper') ? {ready: false, why: 'x'} : V),\n"
+                "  store: {need: async () => null}, every() {}, timeout() {}, track() {}, alive: () => true, href: () => '#'};\n"
+                "await M.mount(el, ctx); await new Promise((r) => setTimeout(r, 30));\n"
+                "const t = D.walk(el).text; M.unmount(); console.log(JSON.stringify({t}));")
+    assert f"{len(vals)}칸 중 {pos}칸이 플러스입니다" in out["t"] and "하나도 없다" not in out["t"]
+
+
 def test_ds5y_card_follows_a_running_job(tmp_path):
     """While the server job runs, the shown card asks again (every 2 minutes) and N / 342 moves on; once done it stops."""
     run = tmp_path / "run"
@@ -495,6 +516,7 @@ def test_whatif_screen_renders_the_reference_and_a_changed_setting(tmp_path):
     assert "손절 폭 1.5 ATR" in t1 and "레버리지·비중 30배·30%" in t1 and "밤 그림자 없음" in t1 and "이 설정" in t1
     assert "첫 잠금 +15%" in t2 and "5년에 시험한 적 없음" in t2 and "5년 실험실 관문" in t2 and "lock_start" not in t2
     assert "표본 적음" in t2 and "같은 거래 10건 필요" in t2                           # 3 paired trades: a filling bar
+    assert "30칸 모두 마이너스" in t0 and "하나도 없다" in t0                         # the whole 36: every 5-year cell loses
     # 50배·50% was never run for five years: the nearest tested arm (50배·40%, same stop) is shown and named as such
     assert "5년에 시험한 적 없음" in t3 and "가장 가까운 5년 시험: 50배·40%" in t3
     v50 = view["five_year"]["levstop"]["arms"]["50|2.0"]["mean_eq"]
