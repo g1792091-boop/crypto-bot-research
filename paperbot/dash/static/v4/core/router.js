@@ -18,7 +18,9 @@ export function loadCss(name) {
     const l = document.createElement("link");
     // relative to this module: the page's own versioned folder (/static/v-<ver>/v4/, dash/assets.py), kept for a year
     l.rel = "stylesheet"; l.href = new URL(`../screens/${name}.css`, import.meta.url).href;
-    l.onload = () => ok(); l.onerror = () => ok();         // a screen without its own css still works
+    // a stylesheet that did not arrive (the dashboard restarting for an update) is asked again on the next visit to
+    // the screen instead of being remembered as loaded; the screen itself still opens
+    l.onload = () => ok(); l.onerror = () => { cssLoaded.delete(name); l.remove(); ok(); };
     document.head.appendChild(l);
   });
 }
