@@ -190,3 +190,47 @@ def test_speaker_menu_has_the_engine_choice():
     assert 'local.get("snd-kind", "v7")' in src                                # per device, v7 by default
     assert "if (a.eng === \"v7\") render7(c, a, master, c.currentTime + 0.01);" in src   # the one master bus
     assert src.count("ctx.destination") == 1
+
+
+def test_relay_rank_picks_the_kind_and_the_mix_matches_the_stream():
+    """ticks.py sends each event's rank q (0-1); v7 hears q >= 0.92 as a run, >= 0.85 as 띠링, else 띵. Fed with a
+    relay-like stream (one event per half second, 7 coins, ranks uniform), the real layer + combo rule give the
+    stream's mix (census of the clips: 띵 62 %, 띠링 9 %, runs 11 %, 띠띠 4 %, 겹침 15 %, 1.07 sounds / s)."""
+    from paperbot.dash.more import ticks as T
+    g = T.Agg(("BTCUSDT", "ETHUSDT"), 0.5)
+    t, evs = 0.0, []
+    for i in range(80):
+        g.add(("BTCUSDT", i % 2 == 0, 1000.0 * (1 + (i * 7) % 13), 1.0, 1), t + 0.01)
+        t += 0.5
+        e = g.tick(t)
+        if e:
+            evs.append(e)
+    assert all("q" in e and 0 <= e["q"] <= 1 for e in evs)
+    ranked = [e for e in evs[25:]]
+    assert any(e["q"] > 0 for e in ranked)
+    for e in ranked:                                                           # b is the same rank, bucketed
+        assert e["b"] == 1 + sum(e["q"] >= x for x in T.BUCKET_AT)
+    out = _node(f"""const s = await import('{CORE}/sound.js');
+    const items = s.tickItems([{{s: "BTCUSDT", side: "buy", b: 3, q: 0.9}}, {{s: "ETHUSDT", side: "sell", b: 4, q: 0.99}}, {{s: "SOLUSDT", side: "buy", b: 2, q: "x"}}], 1);
+    const out = {{q: items.map((x) => x.q ?? null), kinds: items.map((x) => s.kind7Of(x) ?? null), beeps: items.map((x) => s.beep7Of(x).kind)}};
+    let seed = 12345; const R = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const coins = [["BTCUSDT", 40], ["ETHUSDT", 25], ["SOLUSDT", 12], ["XRPUSDT", 8], ["DOGEUSDT", 8], ["BCHUSDT", 4], ["LTCUSDT", 3]];
+    const coin = () => {{ let r = R() * 100; for (const [c, w] of coins) if ((r -= w) <= 0) return c; return "BTCUSDT"; }};
+    const L = s.makeLayer(() => 1333 * s.V7_PACE); Math.random = R;
+    const kinds = {{}}; let n = 0, combo = 0, next = 0; const TT = 600000;
+    for (let now = 0; now < TT; now += 10) {{
+      if (now % 500 === 0) {{ const q = R(), b = 1 + [0.5, 0.85, 0.97].filter((x) => q >= x).length;
+        L.push({{key: "tk:" + coin(), dir: R() < 0.5 ? 1 : -1, size: {{1: 1, 2: 1.3, 3: 1.6, 4: 3}}[b], q, at: now}}); }}
+      if (now < next) continue;
+      const r = L.next(now);
+      if (!r || !r.item) {{ if (r && r.wait) next = now + r.wait; continue; }}
+      let b = s.beep7Of(r.item);
+      if (++combo >= s.COMBO_EVERY && L.size) {{ const two = L.pull(now); if (two) {{ b = s.combo7(r.item, two); combo = 0; }} }}
+      kinds[b.kind] = (kinds[b.kind] || 0) + 1; n++; next = now + 500;
+    }}
+    out.rate = n / (TT / 1000); out.share = Object.fromEntries(Object.entries(kinds).map(([k, v]) => [k, v / n]));""")
+    assert out["q"] == [0.9, 0.99, None] and out["kinds"] == ["pair", "run", None] and out["beeps"] == ["pair", "run", "one"]
+    sh = out["share"]
+    assert 0.9 < out["rate"] < 1.2                                             # ~1 sound a second, like the stream
+    assert 0.52 < sh["one"] < 0.68 and 0.06 < sh["pair"] < 0.14 and 0.07 < sh["run"] < 0.15
+    assert 0.12 < sh["dbl"] + sh["combo"] < 0.26

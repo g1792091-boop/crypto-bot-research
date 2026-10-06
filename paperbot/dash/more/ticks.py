@@ -8,12 +8,13 @@ WebSocket to Binance's public aggTrade streams of the 7 coins (wss://fstream.bin
 for every page together. Every half second the coin whose traded notional in that half second ran furthest above its own
 usual busy half second (an average over its recent half seconds that had trades) becomes one event:
 
-    {"s": "BTCUSDT", "side": "buy" | "sell", "b": 1-4, "usd": 81234, "n": 17, "p": 64123.5, "t": <last trade ms>}
+    {"s": "BTCUSDT", "side": "buy" | "sell", "b": 1-4, "q": 0.91, "usd": 81234, "n": 17, "p": 64123.5, "t": <last trade ms>}
 
 side: more taker-buy or more taker-sell notional (aggTrade ``m`` = the buyer was the maker = a taker SELL). b, the size
 bucket: that half second's score (its notional over the coin's usual one) ranked among the scores of the last
 ``RANK_KEEP`` events: 1 below the median, 2 from the median, 3 from the 85th percentile, 4 from the 97th (the first
-``RANK_MIN`` events are all 1: no history yet, no loud guess). A half second without a single trade sends nothing.
+``RANK_MIN`` events are all 1: no history yet, no loud guess); q = that rank itself (0-1, 0 without history; the v7
+sound picks its kind from it). A half second without a single trade sends nothing.
 
 - The socket opens with the first listening page and closes a minute after the last one left (a reload keeps it);
   it reconnects with a growing wait (1 s up to 60 s; back to 1 s only after a connection that stayed up ``HEALTHY_S``,
@@ -178,12 +179,12 @@ class Agg:
         a = acc[best]
         hist = sorted(self.scores)
         self.scores.append(best_score)
-        b = 1
+        b, pct = 1, 0.0
         if len(hist) >= RANK_MIN:
             pct = bisect.bisect_right(hist, best_score) / len(hist)
             b = 1 + sum(pct >= x for x in BUCKET_AT)
         side = "buy" if a[0] > a[1] else "sell" if a[1] > a[0] else ("buy" if a[5] else "sell")
-        return {"s": best, "side": side, "b": b, "usd": round(a[0] + a[1]), "n": a[2], "p": a[3], "t": a[4]}
+        return {"s": best, "side": side, "b": b, "q": round(pct, 3), "usd": round(a[0] + a[1]), "n": a[2], "p": a[3], "t": a[4]}
 
 
 class Big:

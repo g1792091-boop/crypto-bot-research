@@ -218,7 +218,15 @@ export function beepOf(it, rnd) {
  *  lower B4..B3; louder for a bigger one. */
 export function beep7Of(it) {
   const v = 0.55 + 0.35 * Math.min(1, (it.size || 1) / 3);
-  return {...tick7(it.dir > 0 ? 1 : -1, it.size || 1, v), eng: "v7"};
+  return {...tick7(it.dir > 0 ? 1 : -1, it.size || 1, v, kind7Of(it)), eng: "v7"};
+}
+/** A market trade's rank q (relay, 0-1) picks the kind so the listener hears the stream's mix (census: 띵 62 %,
+ *  띠링 9 %, 띠리리링·띠릭 11 %, 띠띠 4 %, 겹침 15 %): q >= 0.92 a run, >= 0.85 a 띠링, else 띵. Without q (the
+ *  ticker fallback, the fills) the size decides (core/sound7.js kindOf7). */
+export const RUN_Q = 0.92, PAIR_Q = 0.85;
+export function kind7Of(it) {
+  if (typeof it.q !== "number") return undefined;
+  return it.q >= RUN_Q ? "run" : it.q >= PAIR_Q ? "pair" : "one";
 }
 /** at most one sound in COMBO_EVERY is two trades together (the clips: about 1 sound in 5 is several trades at once) */
 export const COMBO_EVERY = 5;
@@ -288,7 +296,9 @@ export function tickItems(evs, now = Date.now()) {
     if (!e || typeof e !== "object") continue;
     const voice = TICK_SYMS.indexOf(e.s);
     if (voice < 0 || (e.side !== "buy" && e.side !== "sell")) continue;
-    out.push({key: "tk:" + e.s, dir: e.side === "buy" ? 1 : -1, size: BUCKET_SIZE[e.b] || 1, voice, at: now, src: "trade"});
+    const q = Number(e.q);                                     // the event's rank among recent ones (0-1, v7 uses it)
+    out.push({key: "tk:" + e.s, dir: e.side === "buy" ? 1 : -1, size: BUCKET_SIZE[e.b] || 1, voice, at: now, src: "trade",
+      ...(e.q != null && Number.isFinite(q) ? {q} : {})});
   }
   return out;
 }
