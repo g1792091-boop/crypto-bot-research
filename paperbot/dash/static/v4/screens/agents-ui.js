@@ -38,7 +38,7 @@ export function msgTypes(m) {
       const t = ln.trim();
       if (/^-\s*\[사실\]/.test(t)) out.add("data");
       else if (/^-\s*\[가설\]/.test(t)) out.add("hypothesis");
-      else if (/^(참고\s*)?제안:\s*(?!없음|행동 없음|메모)/.test(t)) out.add(/^(참고\s*)?제안:\s*가설/.test(t) ? "hypothesis" : "proposal");
+      else if (/^(참고\s*)?제안:\s*(?!\s|없음|행동 없음)/.test(t)) out.add(/^(참고\s*)?제안:\s*가설/.test(t) ? "hypothesis" : "proposal");
       else if (/^❓/.test(t)) out.add("question");
     }
   }
@@ -79,7 +79,7 @@ export function refsOf(text, board) {
   if (!accts.size || !t) return [];
   const out = [], seen = new Set();
   const add = (type, id) => { const k = `${type}:${id}`; if (!seen.has(k) && out.length < 3) { seen.add(k); out.push({type, id}); } };
-  const ra = new RegExp(`([A-Z][A-Z0-9_.]{1,40}@${TF_RE}(?:~c\\d+)?)`, "g");
+  const ra = new RegExp(`([A-Z][A-Z0-9_.]{1,40}@${TF_RE}(?:~c\\d+)?)(?![A-Za-z0-9_])`, "g");
   let m;
   while ((m = ra.exec(t))) if (accts.has(m[1])) add("account", m[1]);
   const strats = new Set([...accts.values()].map((a) => a.strategy));
