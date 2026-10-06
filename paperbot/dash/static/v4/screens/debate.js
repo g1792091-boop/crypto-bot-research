@@ -114,7 +114,9 @@ export async function mount(el, ctx) {
     subjectK.textContent = r.kind === "deep" ? "오늘의 깊은 토론 질문 (세 번에 나눠 부름)" : r.kind ? "이번 회차 질문" : "이번 회차 주제";
     subject.textContent = r.topic || "주제 없음";
     seats(r);
-    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`);
+    // the deep debate runs on its own model (three calls): say which, so its bubbles are not read as the regular model's
+    meta.replaceChildren(h("time", {title: fmt.kst(r.ts)}, fmt.kst(r.ts)), ` · 발언 ${fmt.int(turnsOf(r))}개 · ${usd4(r.cost_usd)}`
+      + (r.kind === "deep" && r.model ? ` · ${r.model} 3번 호출` : ""));
     castBox.replaceChildren(castStrip(r));
     startLine.replaceChildren(h("span", {class: "db-start-k"}, "토론 시작"), h("span", {class: "db-start-t"}, r.topic || "주제 없음"),
       h("time", null, fmt.hm(r.ts)));

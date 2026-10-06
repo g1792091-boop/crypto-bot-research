@@ -142,6 +142,7 @@ DEBATE_EFFORT=low
 - 대시보드에는 회차 하나로 나오고(종류 '깊은 토론'), 말풍선마다 주장·반박·심판 표시가 붙습니다. 그 아이디어는 21:00 몫에서 1점 더 받습니다.
 - 돈: 부름마다 사용량을 바로 세고, 이번 달 전체와 **깊은 토론 자기 몫**(`DEBATE_DEEP_MONTHLY_USD_CAP`, 기본 $10) 둘 다에 넣습니다. 자기 몫이나 월 한도·하루 한도·시간당 안전장치를 최악의 경우로 넘을 것 같으면 그날은 건너뛰고(이유를 기록), 보통 회차는 계속 돕니다. 한 번의 부름이 실패하면 그때까지 쓴 것만 남기고, 30분 뒤 한 번 더 해 봅니다(하루 두 번까지).
 - 부름마다 출력은 4,000토큰까지(생각 포함; Opus 5.5는 생각을 끌 수 없고 effort가 양을 정함, 기본 low).
+- 1부에는 찬성 두 명만, 2부에는 반대 두 명만, 3부에는 심판만 말합니다: 모델이 다른 자리 이름을 써도 코드가 그 부분의 자리로 고쳐 저장합니다.
 
 ### 비용 (키·API 없이 `once --dry-run`으로 잼, v4 모양 합성 자료 331계좌·6일·거래 4,410건, 2026-10-06)
 설정: Sonnet 5.5, effort low, 20분, 아이디어 공장, 깊은 토론 켬. 고정 앞부분은 연구실 문법·관문 설명이 들어가 약 6,368토큰(예전 3,715)이고 캐시됩니다. 회차 자료+요청은 평균 2,557토큰(질문 종류가 다 나오는 자료에서는 2,675), 출력 추정 1,250토큰(발언 7개 + 아이디어 하나 + 정리), 출력 상한 2,000.
@@ -171,7 +172,7 @@ DEBATE_DEEP=1
 ```
 `DEBATE_MAX_TOKENS`는 비워 둡니다(아이디어 공장은 저절로 2,000). 콘솔의 지출 한도도 $70 이상으로 올리세요. 에이전트 쪽 `/etc/paperbot/agents.env`에는 `AGENTS_LAB_INTAKE_DEBATE_PER_DAY=2`(이 줄이 없으면 고른 아이디어를 에이전트 쪽이 가져가지 않아 시험되지 않고, 3일이 지나면 다시 보지 않음).
 
-순서: ① 비용 재 보기 `sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EFFORT=low DEBATE_EVERY_MIN=20 DEBATE_MONTHLY_USD_CAP=70 DEBATE_DAILY_USD_CAP=3 DEBATE_MODE=factory DEBATE_LAB_PER_DAY=2 DEBATE_DEEP=1 /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (고정 앞부분 약 6,300토큰, 질문 종류별 크기, 깊은 토론 줄, 합계가 나오면 됨) → ② 위 줄을 `sudoedit`로 넣기 → ③ `sudo systemctl restart paperbot-debate` → ④ 깊은 토론을 바로 한 번 보고 싶으면 `... debate once --deep`(한도는 그대로 지킴, 그날 몫으로 세어 그날 20:00에는 다시 하지 않음). `once`(보통 회차)는 돌아가는 순서의 다음 질문을 묻고, 새 질문이 없을 때만 '지난 아이디어 돌아보기'를 묻습니다.
+순서: ① 비용 재 보기 `sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EFFORT=low DEBATE_EVERY_MIN=20 DEBATE_MONTHLY_USD_CAP=70 DEBATE_DAILY_USD_CAP=3 DEBATE_MODE=factory DEBATE_LAB_PER_DAY=2 DEBATE_DEEP=1 /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (고정 앞부분 약 6,300토큰, 질문 종류별 크기, 깊은 토론 줄, 합계가 나오면 됨) → ② 위 줄을 `sudoedit`로 넣기 → ③ `sudo systemctl restart paperbot-debate` → ④ 깊은 토론을 바로 한 번 보고 싶으면 `... debate once --deep`(한도는 그대로 지킴, 그날 몫으로 세어 그날 20:00에는 다시 하지 않고, 같은 날 `once --deep`을 또 해도 부르지 않음: 하루 한 번). `once`(보통 회차)는 돌아가는 순서의 다음 질문을 묻고, 새 질문이 없을 때만 '지난 아이디어 돌아보기'를 묻습니다.
 
 ### 되돌리기 (코드 바꿀 필요 없음)
 `DEBATE_MODE=classic`(또는 줄을 지움) 후 `sudo systemctl restart paperbot-debate`. 예전 방식이 그대로 돌고(같은 프롬프트·같은 요청), 깊은 토론도 멈춥니다. 이미 시험 줄에 간 아이디어의 결과는 계속 받아 둡니다. 시험만 멈추려면 에이전트 쪽 `AGENTS_LAB_INTAKE_DEBATE_PER_DAY=0`. 표와 기록은 남습니다.

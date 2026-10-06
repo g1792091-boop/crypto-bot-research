@@ -370,8 +370,10 @@ def scoreboard(db: sqlite3.Connection) -> dict:
                "expected_hits": round(expected, 2) if g else None,
                "expected_rate": round(expected / g, 3) if g else None,
                "easy": {"graded": easy, "hit": easy_hit, "rate_from": EASY_RATE}}
+    # the idea factory's sides, once it has an idea (a classic debate.db, where the service only created the empty
+    # table, keeps the scoreboard it always had)
     fac = factory_record(db)
-    if fac is not None:
+    if fac is not None and fac.get("ideas"):
         out_all["factory"] = fac
     return out_all
 
@@ -393,6 +395,7 @@ def factory_record(db: sqlite3.Connection) -> Optional[dict]:
                           "WHERE settled_side IS NOT NULL").fetchall()
         raw = db.execute("SELECT v FROM debate_state WHERE k = 'factory:base_rates'").fetchone()
         tested = db.execute("SELECT COUNT(*) FROM debate_lab_ideas WHERE lab_status = 'tested'").fetchone()[0]
+        ideas = db.execute("SELECT COUNT(*) FROM debate_lab_ideas").fetchone()[0]
     except sqlite3.Error:
         return None
     try:
@@ -414,7 +417,7 @@ def factory_record(db: sqlite3.Connection) -> Optional[dict]:
             fs = (rates.get("fail_share") or {}).get(cc) if isinstance(rates.get("fail_share"), dict) else None
             exp_hit += float(fs) if isinstance(fs, (int, float)) else 0.0
     n = pro + con
-    return {"tested": int(tested), "settled": n, "찬성_right": pro, "반대_right": con,
+    return {"ideas": int(ideas), "tested": int(tested), "settled": n, "찬성_right": pro, "반대_right": con,
             "찬성_expected": round(exp_pro, 2), "반대_expected": round(n - exp_pro, 2),
             "con_check_graded": graded, "con_check_hits": hits, "con_check_expected": round(exp_hit, 2),
             "con_check_rate": round(hits / graded, 3) if graded else None,

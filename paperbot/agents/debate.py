@@ -940,7 +940,15 @@ def parse_deep_part(text: str, part: int, sides: dict) -> dict:
     order = (pro, con, ["심판"])[part]
     obj, truncated, cut_idea = _answer_obj(text)
     turns = _turns(obj["turns"], order, _FACTORY_ROLE_BY_KEY, min_turns=1, limit=len(order))
+    # only this part's seats speak in it (주장: the two 찬성 seats, 반박: the two 반대 seats, 심판: the judge): a turn the
+    # model gave another seat (a 반대 seat in 주장, the judge early) takes the part's next free seat, so no stored turn
+    # argues in a part its side does not own
+    free = [r for r in order if r not in {t["speaker"] for t in turns}]
+    used: set = set()
     for t in turns:
+        if t["speaker"] not in order or t["speaker"] in used:
+            t["speaker"] = free.pop(0) if free else order[-1]
+        used.add(t["speaker"])
         t["side"], t["part"] = sides.get(t["speaker"]), DEEP_PARTS[part]
         t["reply_to"] = t["reply_stance"] = None
     out = {"turns": turns, "truncated": truncated}
@@ -1057,9 +1065,13 @@ class Service:
                 self.notify("WARN", f"⚠ 24시간 토론방 멈춤: 이번 달 한도에 닿았습니다 (${sp['month']:.2f} / ${cap:g}). "
                                     "다음 달에 저절로 이어집니다. 지금 이어가려면 한도를 올리고 서비스를 다시 시작하세요")
             return "cap"
-        if self.cfg.daily_cap and sp["day"] >= self.cfg.daily_cap:
+        # the day and hour guards count this round's worst case too (as the month does), so neither is passed by the
+        # round that would cross it (the deep debate's own guards do the same, deep_cap)
+        worst = self.worst_case_usd(in_tokens)
+        if self.cfg.daily_cap and (sp["day"] >= self.cfg.daily_cap or sp["day"] + worst > self.cfg.daily_cap):
             return "day"
-        if self.db.hour_spend(now) >= self.cfg.hourly():
+        hour = self.db.hour_spend(now)
+        if hour >= self.cfg.hourly() or hour + worst > self.cfg.hourly():
             return "hour"
         return None
 
@@ -1482,13 +1494,16 @@ class Service:
         round, then THREE separate calls to the deep model: 1 주장 (the two 찬성 seats), 2 반박 (the two 반대 seats,
         reading part 1), 3 심판 (reading both: the one lab idea and a note). Stored as one round of kind 'deep' whose
         messages carry their part; every call's money is counted on the month and on the deep line before its answer
-        is used; a failed call ends the round with what it has (tried once more later today)."""
+        is used; a failed call ends the round with what it has (tried once more later today). Once a KST day, also by
+        hand (`once --deep`): a day whose deep debate is done (or skipped by a cap) answers 'deep_done', no call."""
         from . import debate_factory as DF
         from . import debate_questions as DQ
         import hashlib
         c, d = self.cfg, self.cfg.deep_config()
         key = self._deep_key(now)
         st = dict(self.db.get(key) or {})
+        if st.get("done"):
+            return "deep_done"
         k = int(self.db.get("deep_seq", 0))
         sides = DF.sides_for(k)
         sys_text = deep_system_text()
@@ -2080,6 +2095,9 @@ def main(argv: Optional[list] = None, environ: Optional[dict] = None, transport:
                     print("debate: --deep 은 DEBATE_MODE=factory 와 DEBATE_DEEP=1 일 때만 됩니다", file=sys.stderr)
                     return 2
                 res = svc.deep_round(svc.clock())
+                if res == "deep_done":
+                    print("debate: 오늘(한국 시간) 깊은 토론은 이미 했거나 한도 때문에 건너뛰었습니다: 하루 한 번만 합니다",
+                          file=sys.stderr)
             else:
                 res = svc.tick(force=True)
             out(f"결과: {res}")

@@ -526,12 +526,18 @@ def q_regime_cell(paper: sqlite3.Connection, now_ms: int, cs: Optional[list] = N
 # ---------------------------------------------------------------- owners 10/06: every strategy, more kinds
 # tags that describe how the trade ended, not the entry: never a 'trait' to avoid (losers carry them by definition)
 OUTCOME_TAGS = ("강제청산", "수익 났다가 손절", "진입 직후 바로 손절")
+MACRO_ENTRY_KO = "진입이 발표 30분 전~2시간 뒤"     # the entry half of cards.MACRO_TAG (its window)
 
 
 def _trait_values(c: dict) -> list[tuple]:
     """(kind, value) traits of one card known AT ENTRY: its entry tags, side, coin, timeframe, UTC session, trend state
-    and leverage (never the exit or an outcome tag: losers carry those by definition)."""
-    out = [("태그", t) for t in c.get("tags") or [] if t not in OUTCOME_TAGS]
+    and leverage (never the exit or an outcome tag: losers carry those by definition). The card's macro tag
+    (cards.MACRO_TAG) also looks at the EXIT time, so it is replaced by its entry half: an entry inside a release's
+    window (the calendar is known in advance)."""
+    from ..cards import MACRO_TAG
+    out = [("태그", t) for t in c.get("tags") or [] if t not in OUTCOME_TAGS and t != MACRO_TAG]
+    if any(isinstance(m, dict) and m.get("entry") for m in c.get("macro") or []):
+        out.append(("경제지표", MACRO_ENTRY_KO))
     out += [("방향", c.get("side_ko")), ("코인", _coin(c)), ("봉", c.get("timeframe")),
             ("시간대", SESSION_KO[_session_utc(c["entry_time"])]), ("레버리지", f"{c.get('leverage')}배")]
     reg = (c.get("ctx") or {}).get("regime")
@@ -1095,7 +1101,7 @@ def candidates(paper_path: Optional[str], daily_path: Optional[str], agents_path
             week: list = []
             try:
                 week = _week(paper, now_ms)
-            except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001  (the kinds that share it then find nothing)
                 _note(f"week cards failed: {type(exc).__name__}: {exc}")
             for fn in (lambda: q_event(paper, board, now_ms, seen, start), lambda: q_big_losses(paper, now_ms),
                        lambda: q_loss_traits(paper, now_ms), lambda: q_best_luck(paper, agents, board, now_ms),
@@ -1107,16 +1113,19 @@ def candidates(paper_path: Optional[str], daily_path: Optional[str], agents_path
                        lambda: q_coverage(paper, agents, board, now_ms, covered, covered_since)):
                 try:
                     q = fn()
-                except (sqlite3.Error, KeyError, TypeError, ValueError, ZeroDivisionError) as exc:  # one kind never
-                    q = None                                                                       # stops the others
+                except Exception as exc:  # noqa: BLE001  (one kind never stops the others, nor backs the service off)
+                    q = None
                     _note(f"question kind failed: {type(exc).__name__}: {exc}")
                 if q is not None:
                     out.append(q)
             try:
                 out += q_worst_vs_flip(paper, agents, board, now_ms)
-            except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001  (as above)
                 _note(f"worst_vs_flip failed: {type(exc).__name__}: {exc}")
-        out.append(q_retro(agents, now_ms, readback))
+        try:
+            out.append(q_retro(agents, now_ms, readback))
+        except Exception as exc:  # noqa: BLE001  (no retro question: the round is a free 'no_question' skip)
+            _note(f"retro failed: {type(exc).__name__}: {exc}")
     finally:
         for c in (paper, agents):
             if c is not None:
