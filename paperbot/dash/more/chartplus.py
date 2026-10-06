@@ -128,8 +128,18 @@ def _gaps(c: sqlite3.Connection, lo: int, now: int) -> tuple:
     return start, out[-GAPS_MAX:]
 
 
+def liq_ttl(step_s: int) -> float:
+    """How long one cut is reused: a 1-minute / 15-minute chart follows the market (20 s), a 4-hour or daily one moves by the hour (it
+    is also the slow one: it reads the most rows)."""
+    return LIQ_TTL_S if step_s < 3600 else 60.0 if step_s < 86400 else 120.0
+
+
 def liq_bars(liq_path: Optional[str], symbol: str, t0_s: int, step_s: int, now_ms: int) -> dict:
-    """The answer of /api/v4/chartplus/liq (pure given the file: tested without the server)."""
+    """The answer of /api/v4/chartplus/liq (pure given the file: tested without the server).
+
+    ONE pass over the coin's rows in the window (the (symbol, trade_ts) index), aggregated in Python: the bubbles' bars, and the price
+    buckets of the strip. The strip never drops bars to stay small: when the buckets would be more than ``CELLS_MAX`` the price step is
+    made coarser (``coarse``) and every bar is still counted."""
     note = NOTE_LIQ_KO
     if not liq_path or not os.path.exists(liq_path):
         return {"ready": False, "recorder": False, "why": "liq.db 없음 (강제청산 기록기가 아직 돌지 않음)", "note_ko": note}
@@ -145,40 +155,54 @@ def liq_bars(liq_path: Optional[str], symbol: str, t0_s: int, step_s: int, now_m
         first = int(first[0]) if first and first[0] is not None else None
         since = start if start is not None else first
         recent = [r[0] for r in c.execute(f"SELECT {_PX} FROM liq WHERE symbol = ? ORDER BY trade_ts DESC LIMIT 201", (symbol,)) if r[0]]
-        tick = nice_tick(sorted(recent)[len(recent) // 2] * 0.0002) if recent else None
-        inner = (f"SELECT (trade_ts - {lo}) / {step_ms} AS b, side, {_PX} AS px, {_USD} AS usd, trade_ts AS ts FROM liq "
-                 f"WHERE symbol = ? AND trade_ts >= ? AND trade_ts <= ?")
-        bars = []
-        # per bar and side (the "bare" px / ts columns of MAX(usd) are the biggest order's: SQLite's documented rule)
-        for b, side, n, usd, upx, big, bpx, bts in c.execute(
-                f"SELECT b, side, COUNT(*), SUM(usd), SUM(usd * px), MAX(usd), px, ts FROM ({inner}) GROUP BY b, side ORDER BY b",
-                (symbol, lo, now_ms)):
-            if usd is None or not usd > 0:
+        tick0 = nice_tick(sorted(recent)[len(recent) // 2] * 0.0002) if recent else None
+        bars: dict = {}                              # (bar, side) -> [n, USDT, USDT x price, biggest USDT, its price, its time]
+        cells: dict = {}                             # (bar, price bucket, side) -> USDT
+        mult = 1
+        for ts, side, px, usd in c.execute(f"SELECT trade_ts, side, {_PX}, {_USD} FROM liq WHERE symbol = ? AND trade_ts >= ? AND trade_ts <= ?",
+                                           (symbol, lo, now_ms)):
+            if usd is None or px is None or not (usd > 0 and px > 0):
                 continue
-            bars.append({"t": int(t0_s) + int(b) * int(step_s), "side": "long" if side == "SELL" else "short", "usd": round(float(usd), 2),
-                         "n": int(n), "px": round(float(upx) / float(usd), 8),
-                         "big": {"usd": round(float(big), 2), "px": float(bpx), "ts": int(bts)}})
-        cells, capped = [], False
-        if tick:
-            for b, pb, side, usd in c.execute(
-                    f"SELECT b, CAST(px / ? AS INTEGER), side, SUM(usd) FROM ({inner}) GROUP BY 1, 2, side ORDER BY 1, 2",
-                    (float(tick), symbol, lo, now_ms)):
-                if len(cells) >= CELLS_MAX:
-                    capped = True
-                    break
-                if cells and cells[-1][0] == int(b) and cells[-1][1] == int(pb):
-                    cell = cells[-1]
-                else:
-                    cell = [int(b), int(pb), 0.0, 0.0]
-                    cells.append(cell)
-                cell[2 if side == "SELL" else 3] += round(float(usd or 0), 2)
+            k = "long" if side == "SELL" else "short"
+            b = (int(ts) - lo) // step_ms
+            r = bars.get((b, k))
+            if r is None:
+                bars[(b, k)] = [1, usd, usd * px, usd, px, int(ts)]
+            else:
+                r[0] += 1; r[1] += usd; r[2] += usd * px
+                if usd > r[3]:
+                    r[3], r[4], r[5] = usd, px, int(ts)
+            if tick0:
+                ck = (b, int(px / tick0) // mult, k)
+                cells[ck] = cells.get(ck, 0.0) + usd
+                if len(cells) > 8 * CELLS_MAX:       # a very busy window: coarser right away (the memory stays small)
+                    cells, mult = _coarser(cells, 2), mult * 2
+        while len(cells) > CELLS_MAX and mult < (1 << 30):        # (BARS_MAX x 2 sides is far below CELLS_MAX: this always ends)
+            cells, mult = _coarser(cells, 2), mult * 2
     except sqlite3.Error as exc:
         return {"ready": False, "failed": True, "recorder": True, "why": f"liq.db를 읽지 못함 ({type(exc).__name__})", "note_ko": note}
     finally:
         c.close()
+    out_bars = [{"t": int(t0_s) + int(b) * int(step_s), "side": k, "usd": round(float(r[1]), 2), "n": int(r[0]), "px": round(float(r[2]) / float(r[1]), 8),
+                 "big": {"usd": round(float(r[3]), 2), "px": float(r[4]), "ts": int(r[5])}} for (b, k), r in sorted(bars.items())]
+    merged: dict = {}
+    for (b, pb, k), usd in cells.items():
+        row = merged.setdefault((b, pb), [int(b), int(pb), 0.0, 0.0])
+        row[2 if k == "long" else 3] += usd
+    out_cells = [[r[0], r[1], round(r[2], 2), round(r[3], 2)] for _, r in sorted(merged.items())]
     return {"ready": True, "recorder": True, "symbol": symbol, "step_s": int(step_s), "t0": int(t0_s), "since_ts": since,
-            "last_record_ts": newest, "stale": newest is None or now_ms - newest > LIQ_STALE_MS, "gaps": gaps, "tick": tick,
-            "bars": bars, "cells": cells, "capped": capped, "n": sum(b["n"] for b in bars), "at": now_ms, "note_ko": note}
+            "last_record_ts": newest, "stale": newest is None or now_ms - newest > LIQ_STALE_MS, "gaps": gaps,
+            "tick": (tick0 * mult) if tick0 else None, "coarse": mult > 1, "bars": out_bars, "cells": out_cells, "capped": False,
+            "n": sum(b["n"] for b in out_bars), "at": now_ms, "note_ko": note}
+
+
+def _coarser(cells: dict, m: int) -> dict:
+    """The same price buckets ``m`` times as wide (bucket // m: every bar and side stays counted)."""
+    out: dict = {}
+    for (b, pb, k), usd in cells.items():
+        key = (b, pb // m, k)
+        out[key] = out.get(key, 0.0) + usd
+    return out
 
 
 # ---------------------------------------------------------------- the lower panes' market series (Binance, by the server)
@@ -291,18 +315,26 @@ def register(app, ctx) -> dict:
     series = Series()
     from fastapi import HTTPException
 
+    klocks: dict = {}
+
     def cached(key, ttl: float, fn):
+        """One answer per key for ``ttl`` s; one computation at a time PER KEY (a slow daily-chart cut never holds up a 15-minute one)."""
         hit = cache.get(key)
         if hit and time.time() - hit[0] < ttl:
             return hit[1]
         with lock:
+            if len(klocks) > 256:
+                klocks.clear()
+            kl = klocks.setdefault(key, threading.Lock())
+        with kl:
             hit = cache.get(key)
             if hit and time.time() - hit[0] < ttl:
                 return hit[1]
-            if len(cache) > 64:
-                cache.clear()
             v = fn()
-            cache[key] = (time.time(), v)
+            with lock:
+                if len(cache) > 64:
+                    cache.clear()
+                cache[key] = (time.time(), v)
             return v
 
     @app.get("/api/v4/chartplus/liq")
@@ -320,7 +352,7 @@ def register(app, ctx) -> dict:
         floor_t = now // 1000 - BARS_MAX * step                # at most BARS_MAX bars back (kept on the client's bar grid)
         if t0 < floor_t:
             t0 += -(-(floor_t - t0) // step) * step
-        return cached(("liq", symbol, tf, t0), LIQ_TTL_S, lambda: liq_bars(os.path.join(here, "liq.db"), symbol, t0, step, now))
+        return cached(("liq", symbol, tf, t0), liq_ttl(step), lambda: liq_bars(os.path.join(here, "liq.db"), symbol, t0, step, now))
 
     @app.get("/api/v4/chartplus/series")
     def get_chartplus_series(symbol: str = "BTCUSDT", kind: str = "oi", tf: str = "15m"):

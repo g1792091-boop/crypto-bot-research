@@ -17,7 +17,7 @@ export function stopMap(o) {
   strip.append(cv);
   strip.title = "우리 모의 계좌의 이 코인 열린 포지션: 손절가(노랑)와 청산가(분홍). 가격 막대에 마우스를 올리면 '이 가격이면'.";
   const tip = tipBox(wrap);
-  let on = false, board = null, items = [], levels = [], aim = null;
+  let on = false, board = null, boardErr = null, items = [], levels = [], aim = null;
 
   function collect() {
     const sym = o.sym();
@@ -34,9 +34,9 @@ export function stopMap(o) {
   const mark = () => store.mark(o.sym());
   function view() {
     if (!on) return {kind: "off"};
-    if (!board) return {kind: "waiting"};
-    if (!items.length) return {kind: "none"};
-    return {kind: "ready", n: items.length, stops: levels.filter((l) => l.kind === "stop").reduce((s, l) => s + l.n, 0),
+    if (!board) return {kind: boardErr ? "failed" : "waiting"};              // a board that never loaded is a failure, not "no positions"
+    if (!items.length) return {kind: "none", stale: !!boardErr};
+    return {kind: "ready", stale: !!boardErr, n: items.length, stops: levels.filter((l) => l.kind === "stop").reduce((s, l) => s + l.n, 0),
       liqs: levels.filter((l) => l.kind === "liq").reduce((s, l) => s + l.n, 0), countOnly: items.filter((x) => !x.money).length};
   }
   const report = () => { if (o.report) o.report(view()); };
@@ -64,7 +64,7 @@ export function stopMap(o) {
     if (my != null && my >= 0 && my <= H) { c.globalAlpha = 0.5; c.fillStyle = p.ink2; c.fillRect(0, Math.round(my), W, 1); c.globalAlpha = 1; }
     if (!items.length) {
       c.fillStyle = p.muted; c.textAlign = "center"; c.textBaseline = "middle";
-      const msg = board ? ["열린", "포지션", "없음"] : ["불러오는", "중"];
+      const msg = board ? ["열린", "포지션", "없음"] : boardErr ? ["못", "불러옴"] : ["불러오는", "중"];
       msg.forEach((t, i) => c.fillText(t, W / 2, H / 2 + (i - (msg.length - 1) / 2) * (p.fs + 3)));
     } else {
       c.textAlign = "left"; c.textBaseline = "middle";
@@ -91,7 +91,8 @@ export function stopMap(o) {
   function say(P, clientX, clientY) {
     const m = mark();
     const wr = wrap.getBoundingClientRect(), x = clientX - wr.left, y = clientY - wr.top;
-    if (!items.length) { tip.show([h("b", null, "이 코인의 열린 포지션이 없습니다"), h("small", {class: "muted"}, "우리 모의 계좌 기준")], x, y, strip.parentElement.offsetLeft); return; }
+    if (!board) { tip.show([h("b", null, boardErr ? "우리 포지션을 못 불러와 계산하지 못했습니다" : "불러오는 중…")], x, y, strip.parentElement.offsetLeft); return; }
+    if (!items.length) { tip.show([h("b", null, "이 코인의 열린 포지션이 없습니다"), h("small", {class: "muted"}, boardErr ? "우리 모의 계좌 기준 · 새로 못 불러옴: 마지막으로 받은 값" : "우리 모의 계좌 기준")], x, y, strip.parentElement.offsetLeft); return; }
     if (!m) { tip.show([h("b", null, "지금 가격을 못 불러와 계산하지 못했습니다")], x, y, strip.parentElement.offsetLeft); return; }
     const r = whatIf(items, m, P);
     const head = h("b", null, `이 가격이면 · ${fmt.price(P)} (지금보다 ${fmt.pct(P / m - 1, 2)})`);
@@ -101,6 +102,8 @@ export function stopMap(o) {
     else lines.push(h("span", {class: "muted"}, "예상 손익: 금액을 보이는 계좌가 없습니다"));
     if (r.countOnly) lines.push(h("small", {class: "muted"}, WORDS.countOnly(r.countOnly)));
     if (r.both) lines.push(h("small", {class: "muted"}, WORDS.both(r.both)));
+    const tkErr = store.meta("ticker").err;
+    if (boardErr || tkErr) lines.push(h("small", {class: "warn-t"}, `새로 못 불러옴 (${[boardErr ? "우리 포지션" : "", tkErr ? "현재가" : ""].filter(Boolean).join("·")}): 마지막으로 받은 값으로 계산했습니다`));
     lines.push(h("small", {class: "muted"}, `이 코인 열린 포지션 ${fmt.int(r.n)}개 · ${WORDS.stopsMath}`));
     tip.show(lines, x, y, strip.parentElement.offsetLeft);
   }
@@ -124,7 +127,7 @@ export function stopMap(o) {
   strip.style.touchAction = "none";
   if (ctx.listen) ctx.listen(document, "pointerdown", (e) => { if (aim != null && !strip.contains(e.target)) clearAim(); });          // a tap elsewhere puts the tip away
 
-  ctx.watch("board", (b) => { if (b) { board = b; collect(); paintSoon(); report(); } });
+  ctx.watch("board", (b, k, err) => { boardErr = err || null; if (b) { board = b; collect(); paintSoon(); } report(); });
   ctx.watch("ticker", () => { if (on) paintSoon(); });
   return {
     tip,

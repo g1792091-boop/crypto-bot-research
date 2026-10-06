@@ -86,10 +86,12 @@ export function chartPlus(o) {
     if (v.kind === "off") return null;
     const k = "우리 손절·청산 지도";
     if (v.kind === "waiting") return say("stops", k, "불러오는 중…");
-    if (v.kind === "none") return say("stops", k, "이 코인에 열린 포지션이 없습니다 (우리 모의 계좌 기준)");
+    if (v.kind === "failed") return say("stops", k, "못 불러옴: 우리 포지션을 받지 못해 그리지 않았습니다 (연결이 돌아오면 다시 그립니다)");
+    if (v.kind === "none") return say("stops", k, `이 코인에 열린 포지션이 없습니다 (우리 모의 계좌 기준${v.stale ? " · 새로 못 불러옴: 마지막으로 받은 값" : ""})`);
     const bits = [`이 코인 열린 포지션 ${fmt.int(v.n)}개 · 손절선 ${fmt.int(v.stops)}개 · 청산가 ${fmt.int(v.liqs)}개 · 가격 막대에 마우스를 올리면 '이 가격이면'`];
     if (v.countOnly) bits.push(WORDS.countOnly(v.countOnly));
     bits.push(WORDS.stopsMath);
+    if (v.stale) bits.push("새로 못 불러옴: 마지막으로 받은 포지션 기준");
     return say("stops", k, bits.join(" · "));
   }
   function paneNote() {

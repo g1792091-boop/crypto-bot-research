@@ -158,6 +158,24 @@ def test_liq_db_in_a_folder_with_odd_characters_is_still_read(tmp_path):
     assert r["ready"] is True and r["n"] == 1 and r["since_ts"] == _bar_ms(0)
 
 
+def test_a_busy_window_gets_a_coarser_price_step_and_never_loses_its_newest_bars(tmp_path, monkeypatch):
+    """The price-bar strip used to stop at 20,000 cells and silently drop the NEWEST bars; now the price step grows instead."""
+    path = str(tmp_path / "liq.db")
+    rows = [("BTCUSDT", _bar_ms(k, 100 + i), "SELL" if i % 2 else "BUY", 100.0 + 0.2 * (k * 7 + i), 1.0) for k in range(12) for i in range(30)]
+    _liq(path, rows, conn=[(_bar_ms(0), "connected")])
+    full = CP.liq_bars(path, "BTCUSDT", T0, STEP, NOW)
+    assert full["coarse"] is False and len(full["cells"]) > 40
+    monkeypatch.setattr(CP, "CELLS_MAX", 40)
+    r = CP.liq_bars(path, "BTCUSDT", T0, STEP, NOW)
+    assert r["coarse"] is True and len(r["cells"]) <= 40 and r["tick"] > full["tick"] and r["tick"] % full["tick"] == 0
+    assert {c[0] for c in r["cells"]} == {c[0] for c in full["cells"]} == set(range(12))             # every bar, the newest too
+    assert sum(c[2] + c[3] for c in r["cells"]) == pytest.approx(sum(c[2] + c[3] for c in full["cells"]))
+    assert sum(b["usd"] for b in r["bars"]) == pytest.approx(sum(b["usd"] for b in full["bars"])) and r["capped"] is False
+    # never an endless loop, even when the bars alone are more than the cap
+    monkeypatch.setattr(CP, "CELLS_MAX", 3)
+    assert CP.liq_bars(path, "BTCUSDT", T0, STEP, NOW)["ready"] is True
+
+
 # ---------------------------------------------------------------- Binance series, fetched by the server
 KL = [{"symbol": "BTCUSDT", "sumOpenInterest": "1.5", "sumOpenInterestValue": "93000.5", "timestamp": 1_000},
       {"symbol": "BTCUSDT", "sumOpenInterest": "x", "sumOpenInterestValue": "nan", "timestamp": 2_000},      # not a number: left out
@@ -290,6 +308,38 @@ def test_the_liq_route_reads_the_recorders_file_and_a_failed_series_is_a_normal_
     monkeypatch.setattr(CP, "FETCH", lambda url: (_ for _ in ()).throw(OSError("x")))
     f = c.get("/api/v4/chartplus/series", params={"symbol": "BTCUSDT", "kind": "funding", "tf": "1h"})
     assert f.status_code == 200 and f.json()["ready"] is False and "못 불러옴" in f.json()["why_ko"]
+
+
+def test_the_liq_route_keeps_one_answer_per_cut_and_a_slow_cut_does_not_hold_up_the_others(tmp_path, monkeypatch):
+    import threading
+    rows = [("BTCUSDT", _bar_ms(1), "SELL", 100.0, 1.0), ("ETHUSDT", _bar_ms(1), "SELL", 10.0, 1.0)]
+    c = _client(tmp_path, rows, [(_bar_ms(0), "connected")])
+    assert c.post("/api/login", json={"password": PW}).status_code == 200
+    now = int(time.time())
+    t0 = now // STEP * STEP - 20 * STEP
+    gate, entered, calls = threading.Event(), threading.Event(), []
+    real = CP.liq_bars
+
+    def slow(path, symbol, t0_, step, now_ms):
+        calls.append(symbol)
+        if symbol == "ETHUSDT":
+            entered.set()
+            assert gate.wait(15)
+        return real(path, symbol, t0_, step, now_ms)
+    monkeypatch.setattr(CP, "liq_bars", slow)
+    slow_one = {}
+    th = threading.Thread(target=lambda: slow_one.update(c.get("/api/v4/chartplus/liq", params={"symbol": "ETHUSDT", "tf": "15m", "t0": t0}).json()))
+    th.start()
+    assert entered.wait(10)
+    t = time.time()
+    btc = c.get("/api/v4/chartplus/liq", params={"symbol": "BTCUSDT", "tf": "15m", "t0": t0}).json()        # answers while ETH's cut is still running
+    assert btc["ready"] is True and time.time() - t < 5 and calls == ["ETHUSDT", "BTCUSDT"]
+    c.get("/api/v4/chartplus/liq", params={"symbol": "BTCUSDT", "tf": "15m", "t0": t0})
+    assert calls == ["ETHUSDT", "BTCUSDT"]                                                                   # the second ask is the cached answer
+    gate.set()
+    th.join(10)
+    assert slow_one.get("ready") is True
+    assert CP.liq_ttl(900) == CP.LIQ_TTL_S < CP.liq_ttl(14400) < CP.liq_ttl(86400)                             # a daily cut (the slow one) is reused longer
 
 
 def test_the_server_never_blocks_on_binance_for_long():

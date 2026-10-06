@@ -19,7 +19,8 @@
   font-size: var(--t-xs); line-height: 1.4; white-space: normal; }
 .cfxp-tip[hidden] { display: none; }
 .cfxp-tip b.up, .cfxp-tip .up { color: var(--up); } .cfxp-tip b.down, .cfxp-tip .down { color: var(--down); }
-.cfxp-tip .muted { color: var(--muted); font-size: var(--t-2xs); }
+.cfxp-tip small, .cfxp-tip .muted { font-size: var(--t-2xs); }
+.cfxp-tip .muted { color: var(--muted); }
 
 /* under the chart: the honest note row, then the lower panes (the same right margin as the chart box) */
 .cfxp-below { display: grid; min-width: 0; margin-right: var(--cfxp-w, 0px); }
