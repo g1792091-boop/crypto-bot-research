@@ -335,7 +335,8 @@ def test_compare_route_and_honesty_words():
     routes = _read("core/routes.js")
     assert '"strategies", "grid", "analysis", "compare"' in routes and 'compare: {ko: "비교", group: "strat", title: "매매법 비교"}' in routes
     page = _read("screens/compare.js")
-    assert "/api/v4/compare?ids=" in page and "waitCard(" in page and "ui.refNote(" in page and "ui.assume(" in page
+    assert "/api/v4/compare?ids=" in page and "progressBar(" in page and '"채워지는 중"' in page and "ui.refNote(" in page and "ui.assume(" in page
+    assert "if (!items.length) {" in page and "kids.push(emptyCard());" in page         # all unknown / flips: no empty tables
     assert "거래 수만" in page and "설명용, 판정 아님" in page and 'ctx.href("analysis", "synergy")' in page
     assert "--pick-1" in _read("tokens.css") and "--draw:" in _read("tokens.css")
     inv = _read("INVENTORY.md")

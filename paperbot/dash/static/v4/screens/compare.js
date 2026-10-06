@@ -15,7 +15,7 @@
 // never a pick (their place is the 동전 봇 순위 row, 참고 with refNote); late-started extras get no coin-flip or
 // 5-year side; every number is labelled 설명용, 판정 아님; small samples say 표본 적음.
 import {h, put, ui, fmt, fav, cmp, makeChart, tok, motion} from "../core/pb.js";
-import {waitCard} from "./analysis-kit.js";
+import {progressBar} from "./analysis-kit.js";
 
 const SMALL = 30;
 const DASH = [0, 2, 3, 1];          // lightweight-charts line styles: solid, dashed, large dashed, dotted (never colour alone)
@@ -217,10 +217,19 @@ export async function mount(el, ctx) {
     }
     if (items.length === 1) notes.push(h("p", {class: "cmp-hint"}, "하나 더 고르면 나란히 봅니다."));
     if (notes.length) kids.push(h("div", {class: "stack tight"}, notes));
+    if (!items.length) {           // every pick unknown or a coin flip: no empty tables, the how-to card instead
+      kids.push(emptyCard());
+      put(body, kids);
+      return;
+    }
+    // the analysis kit's filling bars (one per pick under 30 closed trades); the numbers below stay on screen, so the
+    // note says what they are worth now (analysis-kit waitCard's own note promises a view that fills in later)
     const thin = items.filter((x) => x.trades < SMALL);
     if (thin.length) {
-      kids.push(waitCard("비교할 만큼 거래가 쌓이는 중", thin.map((x) => ({label: x.name, share: x.trades / SMALL,
-        words: `닫힌 거래 ${fmt.int(x.trades)} / ${SMALL}건 · ${SMALL}건이 안 되면 숫자가 우연일 수 있어 결론을 내리지 않습니다${x.counts_only ? " (딥시크는 거래 수만)" : ""}`}))));
+      kids.push(ui.card({plate: "채워지는 중", sub: "비교할 만큼 거래가 쌓이는 중", cls: "an-wait"},
+        thin.map((x) => progressBar(x.name, `닫힌 거래 ${fmt.int(x.trades)} / ${SMALL}건 · ${SMALL}건이 안 되면 숫자가 우연일 수 있어 결론을 내리지 않습니다${x.counts_only ? " (딥시크는 거래 수만)" : ""}`,
+          x.trades / SMALL)),
+        h("p", {class: "an-note"}, `막대는 고른 것마다 실제 닫힌 거래 수입니다. ${SMALL}건이 될 때까지 아래 숫자는 지금까지의 기록일 뿐, 어느 쪽이 낫다는 뜻이 아닙니다.`)));
     }
     if (money.length) kids.push(chartCard);
     kids.push(ui.card({plate: "주요 숫자", sub: d.label || "설명용, 판정 아님"}, table(items, MAIN),
@@ -246,13 +255,12 @@ export async function mount(el, ctx) {
     }), items.filter((x) => x.counts_only).map((x) => h("span", {class: "cmp-lg muted"}, `${x.name}: 거래 수만 (곡선 없음)`)));
     if (money.length) drawChart(money);
   }
-  function renderEmpty() {
-    put(body, ui.card({plate: "나란히 보기", cls: "cmp-empty"},
+  const emptyCard = () => ui.card({plate: "나란히 보기", cls: "cmp-empty"},
       h("p", {class: "ink2"}, "매매법이나 계좌를 2개 이상 고르면 여기에 합친 곡선, 주요 숫자, 봉별 숫자, 5년 시험 숫자가 나란히 나옵니다."),
       h("ol", {class: "cmp-steps"}, h("li", null, "위 찾기 칸에 이름이나 코드를 적어 고르거나"),
         h("li", null, "매매법 화면·계좌 화면의 '＋ 비교에 추가'를 누르거나"), h("li", null, "★ 즐겨찾기한 것을 한 번에 넣습니다.")),
-      h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: ctx.href("strategies")}, "매매법 목록"), h("a", {class: "btn-line", href: ctx.href("board")}, "순위표"))));
-  }
+      h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: ctx.href("strategies")}, "매매법 목록"), h("a", {class: "btn-line", href: ctx.href("board")}, "순위표")));
+  const renderEmpty = () => put(body, emptyCard());
   /** quiet: a periodic refresh keeps the shown answer until the new one is there (a shimmer only on a new pick list). */
   async function load(quiet) {
     const gen = ++st.gen;
