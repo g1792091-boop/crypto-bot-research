@@ -137,7 +137,7 @@ function topCard({d, vts, v}) {
   return ui.card({plate: "점수 높은 조합", sub: "오른쪽 = 한 달 평균 수익률 (합친 자금 대비)"},
     allLose ? h("p", {class: "c5-sum"}, h("b", null, "10개 모두 5년 동안 돈을 잃었습니다. "),
       "점수는 '덜 잃은 정도'입니다. 묶어서 돈을 번 조합은 이 규칙에서는 찾지 못했습니다.") : null,
-    h("p", {class: "an-note"}, "한 줄을 누르면 그 조합의 5년 흐름을 아래에 그립니다."),
+    h("p", {class: "an-note"}, "한 줄을 누르면 그 조합의 5년 흐름을 아래에 그립니다. 점수 = 5년 손익 합계 ÷ 가장 깊은 낙폭 (−1 근처 = 거의 내리막만). 분산 효과 = 각자 가장 깊은 낙폭을 더한 것 ÷ 묶은 곡선의 가장 깊은 낙폭 (1이면 위험이 나뉘지 않음, 2면 절반으로 줄어듦)."),
     list, detail,
     h("div", {class: "c5-guard"},
       h("p", null, h("b", null, "우연 거르기 1 · 날짜 섞기 "),
@@ -259,7 +259,8 @@ function walkCard({d, vts, v}) {
     h("p", {class: "c5-sum"}, `매매법 ${fmt.int(nUnits)}개: ${fmt.int(a.n)}번 중 고른 조합이 다음 해 모든 조합의 가운데를 넘은 해는 점수로 ${fmt.int(a.med)}번(상위 25% ${fmt.int(a.p75)}번), 한 달 평균 수익으로 ${fmt.int(a.rmed)}번(상위 25% ${fmt.int(a.rp75)}번).`,
       fl.length ? ` 동전 봇 ${fmt.int(nUnits)}개로 같은 시험(참고): 점수로 ${fmt.int(b.med)}번, 수익으로 ${fmt.int(b.rmed)}번.` : "",
       (p.top || []).some((t) => t.trades != null && t.trades < 62) ? " 고른 조합에 거의 거래하지 않는 매매법이 들어 있으면 '덜 잃어서' 위에 섭니다." : ""),
-    h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다. 거의 모든 조합이 내리막만 탄 해에는 점수가 −1 근처에 몰리므로 한 달 평균 수익도 함께 봅니다."),
+    h("p", {class: "an-note"}, "막대 = 그해 2~5개 모든 조합 중 몇 %보다 점수가 높았나 · 가는 선 = 가운데(50%)와 상위 25%(75%) 자리. 고를 때는 그해 자료만 씁니다. 거의 모든 조합이 내리막만 탄 해에는 점수가 −1 근처에 몰리므로 한 달 평균 수익도 함께 봅니다."
+      + (v === "active" ? " 단, '거래가 있는 것만' 목록 자체는 5년 전체의 거래 수를 보고 정했으므로 이 시험에는 미래 정보가 조금 섞여 있습니다." : "")),
     h("div", {class: "c5-wfs", role: "list"}, wf.map((r) => row(r, false))),
     fl.length ? ui.disclosure(`동전 봇 ${fmt.int(nUnits)}개로 같은 시험 (참고)`, h("div", {class: "c5-wfs", role: "list"}, fl.map((r) => row(r, true)))) : null,
     ui.refNote(vts));
