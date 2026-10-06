@@ -6,7 +6,7 @@
 // under it; it glows teal / pink when the server's price really moved. A small dot breathes on the last candle while the
 // stream is live (never while the page is hidden or under reduced motion).
 // The chart deck (core/chartfx.js, owners 10/06 "간지나게 · 선은 얇게 · 누르면 숨기게"): in the AI skin the candles
-// glow, the pane carries the 50-bar-average light and flashes once on a real big trade / liquidation / our fill of
+// glow, the pane carries the Premium (red, above) / Discount (sky blue, below) light and flashes once on a real big trade / liquidation / our fill of
 // this coin; our lines are 1 px with a compact pill at the left (click to hide), never in the autoscale, an edge
 // marker when off the price range; the '선' menu, 프리미엄 지표 (core/smc.js) and the volume bars along the bottom.
 import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec, chartDeck,

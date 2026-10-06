@@ -87,11 +87,15 @@ export function smcPrimitive(o) {
     // dealing range: premium / discount tints, equilibrium, OTE band with its 0.62 / 0.79 labels
     const rg = d.range;
     if (rg) {
-      zone(rg.from, rg.hi, rg.eq, col.prem, 0.035, null);
-      zone(rg.from, rg.eq, rg.lo, col.disc, 0.035, null);
+      // (the AI skin's light already washes the pane red / sky blue at this split and names both halves: no second tint)
+      const words = o.zoneWords ? o.zoneWords() : true;
+      if (words) {
+        zone(rg.from, rg.hi, rg.eq, col.prem, 0.035, null);
+        zone(rg.from, rg.eq, rg.lo, col.disc, 0.035, null);
+      }
       const xf = Math.max(0, X(rg.from) ?? 0), yh = Y(rg.hi), yl = Y(rg.lo), ye = Y(rg.eq);
-      if (yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem, p: 6});
-      if (yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc, p: 6});
+      if (words && yh != null) v.t.push({s: "Premium", x: xf + 6, y: yh + 9, c: col.prem, p: 6});
+      if (words && yl != null) v.t.push({s: "Discount", x: xf + 6, y: yl - 9, c: col.disc, p: 6});
       if (ye != null) { v.l.push({x1: xf, y1: ye, x2: W, y2: ye, c: col.trend, a: 0.35, dash: true}); v.t.push({s: "Equilibrium", x: xf + 6, y: ye - 8, c: col.trend, p: 6}); }
       const [a, b] = rg.ote;
       zone(rg.i, Math.max(a, b), Math.min(a, b), col.ote, 0.09, null, 0.4);

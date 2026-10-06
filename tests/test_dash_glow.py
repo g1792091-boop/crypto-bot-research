@@ -4,7 +4,8 @@
 - glow / ambient / flash are the AI skin's only (클래식 stays plain), motion follows real events only, never a timer;
 - the flash scheduler (core/flash.js): rate limit per '번쩍임' mode, the biggest waiting event wins, stale events drop,
   reduced motion and 끄기 play nothing, 고래 / large liquidations hold longer (node);
-- the ambient light (EMA 50): tone by the last close, a flip only on a real cross, strength modestly by distance (node);
+- the steady light (owners 10/06: the reference splits the pane): red Premium above the current dealing range's
+  equilibrium, sky-blue Discount below (fallback: the middle of the visible high / low), following the price scale;
 - 프리미엄 지표 (core/smc.js) on synthetic candles: swings, BoS / CHoCH, order blocks, FVGs, BSL / SSL, the dealing
   range with OTE 0.62 / 0.79, trendlines, leg % (node);
 - our position lines (screens/chart-lines.js): 1 px pills like '숏 30배 · 3개 · −2.5% · 잠금 · 손절', DeepSeek /
@@ -133,23 +134,39 @@ def test_flash_scheduler_never_runs_on_its_own():
     assert src.count("setTimer(due") == 2
 
 
-# ---------------------------------------------------------------- the ambient light
-def test_ambient_tone_follows_the_50_bar_average_and_flips_only_on_a_real_cross():
+# ---------------------------------------------------------------- the steady Premium / Discount light
+def test_split_is_the_dealing_range_equilibrium_else_the_visible_middle():
     out = _node("""
-      const bars = (cl) => cl.map((c, i) => ({time: i, open: c, high: c, low: c, close: c}));
-      const up = Array.from({length: 80}, (_, i) => 100 + i * 0.1);
-      const down = Array.from({length: 80}, (_, i) => 100 - i * 0.1);
-      const a = F.ambient(bars(up)), b = F.ambient(bars(down));
-      // a forming close hovering just under the average: an up tone stays (inside the 0.05 % band)
-      const flat = Array.from({length: 80}, () => 100);
-      const near = F.ambient(bars([...flat, 99.97]), "up"), cross = F.ambient(bars([...flat, 99.5]), "up");
-      const far = F.ambient(bars([...up.slice(0, 79), 120]));
-      console.log(JSON.stringify({a, b, near: near.tone, cross: cross.tone, fresh: F.ambient(bars([...flat, 99.97])).tone,
-        short: F.ambient(bars([1, 2, 3])), kNear: a.k, kFar: far.k}));""")
-    assert out["a"]["tone"] == "up" and out["b"]["tone"] == "down"
-    assert out["near"] == "up" and out["cross"] == "down" and out["fresh"] == "down"
-    assert out["short"] is None
-    assert 0.55 <= out["kNear"] <= out["kFar"] <= 1
+      const B = (h, l) => ({open: (h + l) / 2, close: (h + l) / 2, high: h, low: l});
+      const vis = [B(110, 100), B(130, 104), B(108, 90)];
+      console.log(JSON.stringify({rng: S.splitOf({hi: 120, lo: 80, eq: 100}, vis), mid: S.splitOf(null, vis),
+        flat: S.splitOf({hi: 5, lo: 5, eq: 5}, vis), none: S.splitOf(null, []),
+        z: [S.zoneOf(101, 100), S.zoneOf(100, 100), S.zoneOf(99.9, 100)]}));""")
+    assert out["rng"] == {"eq": 100, "hi": 120, "lo": 80, "src": "range"}
+    assert out["mid"] == {"eq": 110, "hi": 130, "lo": 90, "src": "mid"}                # no range: the visible middle
+    assert out["flat"]["src"] == "mid" and out["none"] is None
+    assert out["z"] == ["premium", "premium", "discount"]
+
+
+def test_split_light_red_above_cyan_below_follows_the_price_scale():
+    fx = _code(_read("core", "chartfx.js"))
+    place = fx[fx.index("function placeSplit()"):fx.index("const lineWords")]
+    # the split price is the current dealing range's equilibrium (core/smc.js), placed with the series' own scale on
+    # every redraw (pan / zoom / data); the range is recomputed only on a new closed bar
+    assert "splitOf(st.range, vis)" in place and "series.priceToCoordinate(sp.eq)" in place
+    assert 'under.style.setProperty("--split", Y + "px")' in place
+    assert "placeSplit();" in fx[fx.index("function place()"):fx.index("function layoutPills()")]
+    assert "if (isNew) computeSmc();" in fx and "st.range = r && r.range;" in fx
+    assert "const need = shown(\"smc\") || st.ai;" in fx                      # the light works with the indicator off
+    css = _read("core", "chartfx.css")
+    red = re.search(r'\.cfx-amb\[data-tone="down"\] \{([^}]*)\}', css).group(1)
+    cyan = re.search(r'\.cfx-amb\[data-tone="up"\] \{([^}]*)\}', css).group(1)
+    assert "top: 0" in red and "height: calc(var(--split, 50%) + 24px)" in red and "linear-gradient(to bottom, var(--amb-down)" in red
+    assert "top: calc(var(--split, 50%) - 24px)" in cyan and "bottom: 0" in cyan and "linear-gradient(to top, var(--amb-up)" in cyan
+    assert "transparent)" in red and "transparent)" in cyan                     # each half feathers out past the seam
+    assert '"Premium"' in fx and '"Discount"' in fx and ".cfx-zw" in css and "right: 10px" in css
+    # with the AI light on, the indicator does not tint the halves a second time
+    assert "zoneWords: () => !st.ai" in fx and "if (words) {" in _read("core", "smcdraw.js")
 
 
 # ---------------------------------------------------------------- 프리미엄 지표 (SMC) on synthetic candles
@@ -276,22 +293,22 @@ def test_light_is_the_ai_skins_only_and_never_animates_on_a_timer():
     fx = _code(_read("core", "chartfx.js"))
     assert 'document.documentElement.dataset.skin !== "classic"' in fx
     assert "if (!o.ai() || !gv.bars.length) return;" in fx                   # candle glow
-    assert "if (!st.ai) { under.dataset.amb" in fx                           # ambient
+    assert 'if (!st.ai || !st.data.length) { under.dataset.split = ""; return; }' in fx    # the split light
     assert "flash(ev) { if (st.ai) sched.push(ev); }" in fx                  # event flash
     assert "setInterval" not in fx
     css = _read("core", "chartfx.css")
     assert '.cfx[data-fx="plain"] .cfx-under { display: none; }' in css
-    assert "transition: opacity 1.2s" in css and "infinite" not in css
+    assert "infinite" not in css and "transition" not in css.split(".cfx-flash {")[0]
     rm = css[css.index("@media (prefers-reduced-motion: reduce)"):]
-    assert ".cfx-amb { transition: none; }" in rm and ".cfx-tag[data-hit] { animation: none; }" in rm
+    assert ".cfx-tag[data-hit] { animation: none; }" in rm
     # the legend in the chart header (the light chip's tooltip) and the '번쩍임' setting
-    assert "빨간 빛 = 가격이 50봉 평균 아래 / 하늘색 = 위" in fx
+    assert "위쪽 빨간 빛 = Premium (지금 범위의 중간값 위) / 아래쪽 하늘색 = Discount (중간값 아래)" in fx
     assert "하늘색 번쩍 = 큰 매수·숏 청산, 빨간 번쩍 = 큰 매도·롱 청산 (바이낸스 실제 체결)" in fx
     assert '"aria-label": "번쩍임"' in fx and 'FLASH_KEY = "chart-flash"' in fx
     # 클래식: the light tokens are transparent
     tok = _read("tokens.css")
     classic = tok[:tok.index(":root:not([data-skin=\"classic\"])")]
-    for k in ("--amb-up", "--amb-down", "--flash-up", "--flash-down", "--depth-top"):
+    for k in ("--amb-up", "--amb-down", "--amb-up-seam", "--amb-down-seam", "--flash-up", "--flash-down", "--depth-top"):
         assert re.search(re.escape(k) + r":\s*transparent;", classic), k
 
 

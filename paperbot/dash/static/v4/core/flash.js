@@ -6,7 +6,7 @@
 // (node-tested, tests/test_dash_glow.py); the layer is core/chartfx.js, and so is the per-device setting '번쩍임'.
 // HONESTY: only push() starts a flash and only a real event calls push(): no timer ever invents one. The single
 // setTimeout below only plays an event that really arrived while the previous flash was still on screen.
-// prefers-reduced-motion: no flash at all (the steady ambient tint stays, without its cross-fade).
+// prefers-reduced-motion: no flash at all (the steady Premium / Discount light stays; it never moves by itself).
 
 export const ENVELOPE = {inMs: 200, holdMs: 1500, holdSmallMs: 600, outMs: 400};
 /** '번쩍임' per device: 자주 (default) every real big trade, at most one start per 0.9 s; 보통 only the big ones (고래, a
@@ -88,29 +88,4 @@ export function flashScheduler(o = {}) {
     pending: () => wait,
     cancel() { if (timer) clearTimer(timer); timer = null; wait = null; },
   };
-}
-
-// ---------------------------------------------------------------- the steady ambient light (EMA 50 of the bars shown)
-/**
- * ambient(bars, prev, {n, band}) -> {tone: "up" | "down", k: 0.55..1, ema, d} or null (fewer than 10 bars).
- * tone "up" (sky blue) while the last close is above the EMA(n) of the bars shown, "down" (red) below. It flips only on
- * a real cross: with a previous tone the close must cross the EMA by more than ``band`` (0.05 %, so a forming candle
- * wobbling on the line does not flicker). k grows modestly with the distance measured in the bars' own typical move.
- */
-export function ambient(bars, prev = null, o = {}) {
-  const cl = (bars || []).map((b) => Number(b && b.close)).filter((x) => Number.isFinite(x) && x > 0);
-  if (cl.length < 10) return null;
-  const n = Math.min(o.n || 50, cl.length), band = o.band ?? 0.0005, a = 2 / (n + 1);
-  let ema = cl[0];
-  for (let i = 1; i < cl.length; i++) ema += a * (cl[i] - ema);
-  const last = cl[cl.length - 1], d = (last - ema) / ema;
-  let tone = d >= 0 ? "up" : "down";
-  if (prev === "up" && d >= -band) tone = "up";
-  else if (prev === "down" && d <= band) tone = "down";
-  const m = cl.slice(-n);
-  let mv = 0;
-  for (let i = 1; i < m.length; i++) mv += Math.abs(m[i] - m[i - 1]) / m[i - 1];
-  mv = mv / Math.max(1, m.length - 1) || 0.001;
-  const k = 0.55 + 0.45 * Math.min(1, Math.abs(d) / (mv * 6));
-  return {tone, k: Math.round(k * 100) / 100, ema, d};
 }

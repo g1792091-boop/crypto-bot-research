@@ -57,6 +57,8 @@
   --amb-down: transparent;
   --amb-up-edge: transparent;
   --amb-down-edge: transparent;
+  --amb-up-seam: transparent;
+  --amb-down-seam: transparent;
   --amb-up-ink: var(--muted);
   --amb-down-ink: var(--muted);
   --flash-up: transparent;
@@ -256,12 +258,15 @@
   --card-ring: rgba(25, 195, 177, .05);
   --card-shadow: rgba(0, 0, 0, .35);
   --head-glow: rgba(25, 195, 177, .18);
-  /* the chart deck's light (owners' reference terminal): the pane washed sky blue above the 50-bar average, red below
-     (strongest at the top edge, a faint inner edge glow); a real big trade / liquidation flashes the same hues */
+  /* the chart deck's light (owners' reference terminal): the Premium half of the pane (above the dealing range's middle) red,
+     the Discount half sky blue (strongest at the outer edges, -seam: the faint end at the split); a real big trade /
+     liquidation flashes the whole pane in the same hues */
   --amb-up: rgba(56, 189, 248, .22);
   --amb-down: rgba(244, 63, 94, .24);
   --amb-up-edge: rgba(56, 189, 248, .30);
   --amb-down-edge: rgba(244, 63, 94, .33);
+  --amb-up-seam: rgba(56, 189, 248, .05);
+  --amb-down-seam: rgba(244, 63, 94, .05);
   --amb-up-ink: #38bdf8;
   --amb-down-ink: #f43f5e;
   --flash-up: rgba(56, 200, 248, .40);
