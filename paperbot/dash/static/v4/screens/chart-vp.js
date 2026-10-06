@@ -244,8 +244,11 @@ function attach(o) {
     let top = 2;
     const lg = o.legend;
     if (lg && lg.textContent && lg.offsetLeft + lg.offsetWidth - box.offsetLeft > x1 - 150) top = Math.max(top, lg.offsetTop + lg.offsetHeight - box.offsetTop + 2);
-    placeLabels(labs, LH, top, H - 2);
-    g = {x1, x0: x1 - maxW, maxW, W, H, rows, poc, vah, val, bot, labs};
+    // the legend on the chart itself (the row under the chart may be below the fold): 매물대 (the range) ■ 매수 ■ 매도
+    const head = {y: top + LH / 2, items: [{t: st.range === "view" ? "매물대" : `매물대 · ${RANGE_KO[st.range]}`},
+      ...(p.split ? [{t: "매수", sw: "up"}, {t: "매도", sw: "down"}] : [{t: "거래량 합계", sw: "flat"}])]};
+    placeLabels(labs, LH, top + LH + 1, H - 2);
+    g = {x1, x0: x1 - maxW, maxW, W, H, rows, poc, vah, val, bot, labs, head};
     st.paneW = W;
   }
 
@@ -319,12 +322,23 @@ function attach(o) {
   const textR = {
     draw(target) {
       const gg = g;
-      if (!gg || !gg.labs.length) return;
+      if (!gg) return;
       target.useBitmapCoordinateSpace(({context: c, horizontalPixelRatio: hr, verticalPixelRatio: vr}) => {
         const col = st.col;
         c.save();
         c.textAlign = "right"; c.textBaseline = "middle";
         c.shadowColor = col.bg; c.shadowBlur = 3 * hr;
+        // the legend, right to left from the histogram's edge: the colour squares are the rows' own colours
+        c.font = fontOf(col, vr, 700);
+        let x = (gg.x1 - 4) * hr;
+        const hy = Math.round(gg.head.y * vr), sq = Math.round(8 * hr);
+        for (let i = gg.head.items.length - 1; i >= 0; i--) {
+          const it = gg.head.items[i];
+          c.fillStyle = col.ink; c.fillText(it.t, Math.round(x), hy);
+          x -= c.measureText(it.t).width;
+          if (it.sw) { x -= 4 * hr; c.fillStyle = col[it.sw]; c.globalAlpha = 0.85; c.fillRect(Math.round(x - sq), Math.round(hy - sq / 2), sq, sq); c.globalAlpha = 1; x -= sq; }
+          x -= 10 * hr;
+        }
         for (const L of gg.labs) {
           c.font = fontOf(col, vr, L.bold ? 700 : 600);
           c.fillStyle = col[L.color] || col.ink;

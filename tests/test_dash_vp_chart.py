@@ -279,6 +279,8 @@ def test_the_legend_states_the_approximation_and_the_page_never_builds_html_from
     assert "APPROX" in _code(vp) and "title: APPROX" in vp
     for bad in ("innerHTML", "insertAdjacentHTML", "outerHTML", "DOMParser", "eval(", "toLocaleString", "Intl.NumberFormat"):
         assert bad not in _code(vp) and bad not in _code(calc), bad
+    # the colours are named on the chart itself (the row under it may be below the fold): 매물대 ■ 매수 ■ 매도, or the total only
+    assert '{t: "매수", sw: "up"}, {t: "매도", sw: "down"}' in vp and '{t: "거래량 합계", sw: "flat"}' in vp
     # a failed load is said, never an empty profile: the range read, the bot's lines and the candles without a split
     assert "자료를 불러오지 못했습니다" in vp and "봇 기준선을 불러오지 못했습니다" in vp and "매수·매도 구분이 없습니다" in vp
 
