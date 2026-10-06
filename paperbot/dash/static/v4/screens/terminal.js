@@ -1,15 +1,19 @@
-// #/terminal — 터미널 (wave 2, the PC one-screen view; owners 10/05: the old v3 트레이드 tab's density with the
-// reference's "AI" look). One screen, no page scroll on a PC: a top bar (coin, price, 24 h numbers, funding and the
-// time to it, session, KST clock, a slow line of the latest real AI meeting conclusions), left (watchlist with
-// GH Coin calls while that recorder runs, OUR bots' fills as they happen, market liquidations while that recorder
-// runs), centre (the chart: lightweight-charts through core/lwc like 차트, our entries / exits / stops, support /
-// resistance, macro releases with a tooltip, the price tag with the bar-close countdown) over the positions table
-// (포지션 / 체결 / 손절 주문, long / short / flat bar), right (this coin's positions with live ROE and liquidation price,
-// the order book, the chosen group's median return line with daily bars and the profit calendar).
+// #/terminal — 터미널 (wave 2, the PC one-screen view; term v2 10/06: the owners' HelloQuant reference, "읽기 편하게").
+// One screen, no page scroll on a PC:
+//   top     the coin, its big price, 24 h change and quote volume, funding and the time to it, 급등 · 급락 · 음펀비 of
+//           the whole Binance USD-M market (labelled 시장 전체), the KST clock; a slow line of the latest real AI
+//           meeting conclusions under it;
+//   left    three stacked dense lists, each with its ratio bar beneath (no switch): 실시간 큰 체결 (the whole market's
+//           large orders, the server's relay), 시장 강제청산 (the chosen coin, while the recorder runs), 우리 봇 체결;
+//   centre  the coin strip (7 coins, live), the chart (terminal-chart.js, unchanged), the positions table (ALL filter,
+//           long / short share, open count, unrealized total);
+//   right   이 코인 포지션 (with the order book behind a 호가 switch; no order buttons), 수익 차트 of 기존 36 (realized,
+//           참고) with 오늘 수익 and the 수익 캘린더.
 // Data: the same routes and the same cadence as 차트 / 포지션 / 시장 / 흐름 (store ticker 5 s, forming bar 5 s, book
-// 3 s, liquidations 10 s, levels 2 min, GH Coin / race / calendar 5 min); nothing new is polled. HONESTY: every glow or
-// slide follows a real change (a new price, a new fill, a new liquidation, a P&L that moved), none under
-// prefers-reduced-motion or while the page is hidden; paper only, no order buttons.
+// 3 s, liquidations 10 s, levels 2 min, GH Coin / calendar 5 min) plus /api/v4/movers once a minute (the server's own
+// 60 s cache). HONESTY: every glow or slide follows a real change (a new price, a new fill, a new liquidation, a P&L
+// that moved), none under prefers-reduced-motion or while the page is hidden; paper only, no order buttons; DeepSeek
+// and coin-flip money is never shown here (counts only).
 import {h, store, local, motion, bars, features} from "../core/pb.js";
 import {topBar} from "./terminal-top.js";
 import {watchList, fillsFeed, liqFeed} from "./terminal-feed.js";
@@ -17,7 +21,7 @@ import {termChart} from "./terminal-chart.js";
 import {coinPositions, pnlPanel} from "./terminal-side.js";
 import {bottomTable} from "./terminal-table.js";
 import {bookPanel} from "./positions-book.js";
-import {panel, duoSwitch, ping} from "./terminal-kit.js";
+import {panel, duoSwitch, ping, ages} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 
 export async function mount(el, ctx) {
@@ -35,10 +39,10 @@ export async function mount(el, ctx) {
   const top = topBar(ctx, st);
   const watch = watchList(ctx, st, pick);
   const fills = fillsFeed(ctx);
-  const liq = liqFeed(ctx, st, () => mine.onMarket());
+  const liq = liqFeed(ctx, st);
   const big = bigFeed(ctx);
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("term-tf", tf); });
-  const mine = coinPositions(ctx, st, {big: big.rows, liq: liq.recent, rowOf: big.rowOf});
+  const mine = coinPositions(ctx, st);
   const book = bookPanel(ctx, st.sym, {rows: 5});
   // the book loads only while it is on screen; its first shimmer would stay up while the 호가 switch is off (a shimmer
   // means a request in flight), so it starts empty and fills on its first answer
@@ -47,13 +51,11 @@ export async function mount(el, ctx) {
   const table = bottomTable(ctx, st, pick);
 
   const bookP = panel("호가", {sub: "위 20개 기준", cls: "term-book"}, book);
-  const left = h("aside", {class: "term-col term-left", "aria-label": "관심 종목과 실시간 체결"}, watch.el, fills.el, big.el, liq.el);
-  const mid = h("div", {class: "term-mid"}, chart.el, table.el);
-  const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인과 손익"}, mine.el, bookP, pnl.el);
-  // a window under 940 px tall: this coin's positions and the book share a place, and so do our fills and the
-  // market liquidations (a small switch in both heads; terminal.css)
+  const left = h("aside", {class: "term-col term-left", "aria-label": "실시간 큰 체결, 시장 강제청산, 우리 봇 체결"}, big.el, liq.el, fills.el);
+  const mid = h("div", {class: "term-mid"}, watch.el, chart.el, table.el);
+  const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인과 수익"}, mine.el, bookP, pnl.el);
+  // this coin's positions and the order book share one place (a small switch in both heads; terminal.css)
   duoSwitch(right, "duo", [{id: "pos", label: "포지션", panel: mine.el}, {id: "book", label: "호가", panel: bookP}], (id) => { if (id === "book") book.load(); });
-  duoSwitch(left, "duo", [{id: "big", label: "큰 체결", panel: big.el}, {id: "liq", label: "청산", panel: liq.el}], (id) => { if (id === "liq") liq.load(); });
   const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right));
   el.append(h("h1", {class: "term-sr"}, "터미널"), root);
 
@@ -69,10 +71,11 @@ export async function mount(el, ctx) {
   const syncLiq = () => left.classList.toggle("has-liq", !!features.liq);
   syncLiq();
   ctx.on("features", () => { syncLiq(); watch.onFeatures(); liq.onFeatures(); });
-  ctx.every(1000, () => { top.tick(); chart.tick(); }, {now: true});
+  // the clock, the funding countdown, the chart's bar countdown and the lists' ages ('6s', '4m'): text only, no request
+  ctx.every(1000, () => { top.tick(); chart.tick(); ages(left); }, {now: true});
 
   // 터미널 살아 있게: the server's real market-trade relay while this screen is on screen and the page visible (each
-  // message lights only what it carries: the live dot, that coin's watchlist row, the selected coin's price and tag)
+  // message lights only what it carries: the live dot, that coin's strip button, the selected coin's price and tag)
   const ticks = tickStream(ctx);
   ticks.on((m) => {
     top.onRelay(m);
@@ -82,7 +85,6 @@ export async function mount(el, ctx) {
       if (ev.s === st.sym) { top.onTick(ev); chart.onTick(ev); }
     }
     big.onMsg(m);
-    if (m.big && Array.isArray(m.big.rows) && m.big.rows.some((r) => r && r.s === st.sym)) mine.onMarket();
   });
   ticks.start();
   // the bottom table lights its head when real closed trades arrived (its 체결 tab changed)

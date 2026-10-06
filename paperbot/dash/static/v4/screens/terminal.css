@@ -1,9 +1,10 @@
-/* 터미널 (#/terminal): the PC one-screen view. Charcoal panels with a thin teal edge light (brighter on hover / focus),
-   monospace digits, teal / pink only for up / down. Every colour is a token (tokens.css); the glow tokens of wave 2
-   (--up-glow, --down-glow, --edge, --edge-hi, --edge-glow) are used with fallbacks so the screen holds without them.
-   Motion: only one-shots on real updates (price glow, a new fill sliding in, a ratio bar's width) and two quiet loops
-   that show live state (the meetings line, the last candle's dot); all of it stops under prefers-reduced-motion and
-   while the page is hidden ([data-still]). */
+/* 터미널 (#/terminal): the PC one-screen view. term v2 (owners 10/06, the HelloQuant reference: "읽기 편하게"): one
+   calm top line, dense single-line lists with a ratio bar under each, the chart given the room, a plain right column.
+   Charcoal panels with a thin teal edge light (brighter on hover / focus), monospace digits, teal / pink only for up /
+   down. Every colour is a token (tokens.css); every font size a --t-* token (tests/test_dash_read.py). Motion: only
+   one-shots on real updates (price glow, a new row sliding in, a ratio bar's width) and two quiet loops that show live
+   state (the meetings line, the last candle's dot); all of it stops under prefers-reduced-motion and while the page is
+   hidden ([data-still]). */
 @import url("positions-kit.css");
 @import url("flow-kit.css");
 
@@ -20,6 +21,7 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
   --tglow: var(--edge-glow, transparent);
   --ug: var(--up-glow, var(--up-line));
   --dg: var(--down-glow, var(--down-line));
+  --rowh: calc(23px * var(--ts));
   display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-width: 0;
   font-size: var(--t-xs); color: var(--ink);
 }
@@ -27,42 +29,54 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term .grow { flex: 1 1 auto; }
 .term .muted { color: var(--muted); }
 .term .up { color: var(--up); } .term .down, .term .down-t { color: var(--down); }
+.term .warn-t { color: var(--warn); }
 
 /* ---------------------------------------------------------------- panels */
 .term-p { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--tp);
   border: 1px solid var(--tedge); border-radius: 6px; box-shadow: 0 0 0 0 var(--tglow), inset 0 1px 0 var(--card-ring, transparent);
   transition: border-color .25s var(--ease), box-shadow .25s var(--ease); }
 .term-p:hover, .term-p:focus-within { border-color: var(--tedge-hi); box-shadow: 0 0 14px -2px var(--tglow), inset 0 1px 0 var(--card-ring, transparent); }
-.term-ph { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 10px; border-bottom: 1px solid var(--line); flex: none; min-width: 0; }
+.term-ph { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 10px; border-bottom: 1px solid var(--line); flex: none; min-width: 0; }
 .term-ph h2 { font: 700 var(--t-xs)/1 var(--f-body); color: var(--ink); letter-spacing: .02em; white-space: nowrap; }
 .term-ph h2::before { content: ""; display: inline-block; width: 3px; height: 10px; margin-right: 7px; border-radius: 2px; background: var(--accent);
   box-shadow: 0 0 6px var(--accent-glow); vertical-align: -1px; }
-.term-phs { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.term-phs { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .term-pb { padding: 6px 10px; min-height: 0; min-width: 0; }
 .term-pb.scroll { flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.term-pf { flex: none; padding: 6px 10px 7px; border-top: 1px solid var(--line); display: grid; gap: 5px; }
+.term-pf { flex: none; padding: 5px 10px 6px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
 .term-pf.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.term-pf .assume, .term-pf .note { margin: 0; font-size: var(--t-xs); }
-.term-more { color: var(--accent); font-size: var(--t-xs); text-decoration: none; white-space: nowrap; }
+.term-pf .assume, .term-pf .note { margin: 0; font-size: var(--t-2xs); color: var(--muted); line-height: 1.35; }
+.term-more { color: var(--accent); font-size: var(--t-2xs); text-decoration: none; white-space: nowrap; }
 .term-more:hover { text-decoration: underline; }
-.term .pp { font-size: var(--t-xs); padding: 1px 6px; }
+.term .pp { font-size: var(--t-2xs); padding: 1px 6px; }
 
-/* ---------------------------------------------------------------- top bar */
+/* ---------------------------------------------------------------- top strip: one calm line (HelloQuant) */
 .term-top { background: var(--tp); border: 1px solid var(--tedge); border-radius: 6px; padding: 6px 12px 0; min-width: 0; overflow: hidden;
-  background-image: linear-gradient(90deg, var(--accent-soft), transparent 40%); }
-.term-row { display: flex; align-items: center; gap: 18px; min-width: 0; padding-bottom: 6px; }
+  background-image: linear-gradient(90deg, var(--accent-soft), transparent 34%); }
+.term-row { display: flex; align-items: center; gap: 20px; min-width: 0; padding-bottom: 6px; }
 .term-id { display: grid; gap: 1px; flex: none; }
 .term-sym { font: 800 var(--t-md)/1.1 var(--f-body); letter-spacing: .01em; }
-.term-perp { color: var(--muted); font-size: var(--t-xs); }
+.term-perp { color: var(--muted); font-size: var(--t-2xs); }
 .term-pxbox { display: flex; align-items: baseline; gap: 8px; flex: none; }
-.term-px { font: 700 var(--t-xl)/1 var(--f-term); padding: 2px 6px; margin-left: -6px; border-radius: 5px; text-shadow: 0 0 14px var(--accent-glow); }
-.term-px.up { color: var(--up); text-shadow: 0 0 14px var(--up-soft); } .term-px.down { color: var(--down); text-shadow: 0 0 14px var(--down-soft); }
+.term-px { font: 700 var(--t-xl)/1 var(--f-term); padding: 2px 6px; margin-left: -6px; border-radius: 5px; }
 .term-chg { font-size: var(--t-sm); font-weight: 700; }
-.term-stats { display: flex; gap: 16px; min-width: 0; overflow: hidden; }
-.term-st { display: grid; gap: 2px; flex: none; }
-.term-st > span { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
-.term-st > b { font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
-.term-sess { flex: none; padding: 3px 8px; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent-hi); font-weight: 700; font-size: var(--t-xs);
+.term-stats { display: flex; gap: 20px; min-width: 0; flex: none; }
+.term-st { display: grid; gap: 3px; flex: none; }
+.term-st > span { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; }
+.term-st > b { font-size: var(--t-sm); font-weight: 700; white-space: nowrap; }
+.term-st .term-fcd { color: var(--ink-2); font-weight: 600; }
+.term-vsep { flex: none; width: 1px; align-self: stretch; margin-block: 2px; background: var(--line-2); }
+/* 급등 · 급락 · 음펀비 (the whole market: the caption says so) */
+.term-movers { display: flex; align-items: center; gap: 20px; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.term-mv { display: grid; gap: 3px; flex: none; min-width: 0; cursor: default; }
+.term-mvk { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; }
+.term-mvl { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.term-mvs { font-weight: 800; font-size: var(--t-sm); color: var(--ink); max-width: calc(110px * var(--ts)); overflow: hidden; text-overflow: ellipsis; }
+.term-mvv { font-size: var(--t-sm); font-weight: 700; }
+.term-mvcap { flex: none; max-width: calc(76px * var(--ts)); color: var(--muted); font-size: var(--t-2xs); line-height: 1.25; white-space: normal; }
+.term-movers.none .term-mvs { color: var(--muted); font-weight: 600; }
+.term-movers.stale .term-mvl { opacity: .7; }
+.term-sess { flex: none; padding: 3px 8px; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent-hi); font-weight: 700; font-size: var(--t-2xs);
   background: var(--accent-soft); white-space: nowrap; }
 .term-clockbox { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); }
 .term-clock { font: 700 var(--t-md)/1 var(--f-term); letter-spacing: .02em; }
@@ -70,68 +84,96 @@ body:has(.scr[data-screen="terminal"]) .top, body:has(.scr[data-screen="terminal
 .term-live { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
 /* the meetings line */
 .term-mline { display: flex; align-items: center; gap: 10px; height: 26px; margin: 0 -12px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--bg); min-width: 0; }
-.term-mlab { flex: none; color: var(--accent); font-weight: 800; font-size: var(--t-xs); letter-spacing: .03em; text-decoration: none; }
+.term-mlab { flex: none; color: var(--accent); font-weight: 800; font-size: var(--t-2xs); letter-spacing: .03em; text-decoration: none; }
 .term-mlab::before { content: "◆ "; }
-.term-mrun { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-hi); font-size: var(--t-xs); font-weight: 700; }
+.term-mrun { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-hi); font-size: var(--t-2xs); font-weight: 700; }
 .term-marq { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 100%;
   -webkit-mask-image: linear-gradient(90deg, transparent, var(--ink) 3%, var(--ink) 95%, transparent); mask-image: linear-gradient(90deg, transparent, var(--ink) 3%, var(--ink) 95%, transparent); }
 .term-marq-in { position: absolute; left: 0; top: 0; height: 100%; display: flex; align-items: center; white-space: nowrap; }
 .term-marq-in.run { animation: term-marq var(--dur, 60s) linear infinite; }
 .term-marq:hover .term-marq-in, .term[data-still="1"] .term-marq-in { animation-play-state: paused; }
 .term-mset { display: inline-flex; align-items: center; }
-.term-mi { display: inline-flex; gap: 6px; align-items: baseline; padding-right: 36px; color: var(--ink-2); text-decoration: none; font-size: var(--t-xs); }
+.term-mi { display: inline-flex; gap: 6px; align-items: baseline; padding-right: 36px; color: var(--ink-2); text-decoration: none; font-size: var(--t-2xs); }
 .term-mi b { color: var(--ink); font-weight: 700; }
 .term-mi .num { color: var(--muted); }
 a.term-mi:hover span:last-child { color: var(--ink); text-decoration: underline; }
 @keyframes term-marq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
-/* ---------------------------------------------------------------- grid */
-.term-grid { display: grid; grid-template-columns: 288px minmax(0, 1fr) 328px; gap: 8px; min-height: 0; min-width: 0; }
+/* ---------------------------------------------------------------- grid: side columns sized so the chart gets the room */
+.term-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 8px; min-height: 0; min-width: 0; }
 .term-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
-.term-mid { display: grid; grid-template-rows: minmax(0, 1fr) 238px; gap: 8px; min-height: 0; min-width: 0; }
+.term-mid { display: grid; grid-template-rows: auto minmax(0, 1fr) 236px; gap: 8px; min-height: 0; min-width: 0; }
 
-/* watchlist */
-.term-watch { flex: none; }
-.term-watch .term-pb { padding: 2px 4px 4px; }
-.term-wr { display: grid; grid-template-columns: calc(62px * var(--ts)) minmax(0, 1fr) calc(64px * var(--ts)); gap: 6px; align-items: center; width: 100%; padding: 4px 6px; border: 0; border-radius: 4px;
-  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-left: 2px solid transparent; }
-.term-watch.gh .term-wr { grid-template-columns: calc(40px * var(--ts)) minmax(0, 1fr) calc(52px * var(--ts)) calc(50px * var(--ts)); }
-.term-watch.gh .term-wr b small { display: none; }
-.term-wr.hd { cursor: default; color: var(--muted); font-size: var(--t-xs); padding-block: 3px 2px; }
-.term-wr:not(.hd):hover { background: var(--surface-2); }
-.term-wr[aria-selected="true"] { background: var(--accent-soft); border-left-color: var(--accent); }
-.term-wr b { font-weight: 800; font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.term-wr b small { margin-left: 3px; color: var(--muted); font-weight: 500; font-size: var(--t-2xs); }
-.term-wpx { text-align: right; padding: 0 3px; border-radius: 3px; }
-.term-wch { text-align: right; font-weight: 700; }
-.term-wgh { font-size: var(--t-xs); text-align: right; white-space: nowrap; }
-.term-wr.hd > span:nth-child(2), .term-wr.hd > span:nth-child(3) { text-align: right; }
+/* the coin strip over the chart (the watchlist: tap a coin) */
+.term-coins { min-width: 0; overflow-x: auto; scrollbar-width: none; background: var(--tp); border: 1px solid var(--tedge); border-radius: 6px; }
+.term-coins::-webkit-scrollbar { display: none; }
+.term-wl { display: flex; min-width: max-content; }
+.term-wr { display: inline-flex; align-items: baseline; gap: 7px; padding: 6px 12px; border: 0; border-right: 1px solid var(--line); background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; }
+.term-wr:hover { background: var(--surface-2); }
+.term-wr[aria-selected="true"] { background: var(--accent-soft); border-bottom-color: var(--accent); }
+.term-wr b { font-weight: 800; font-size: var(--t-xs); }
+.term-wpx { font-size: var(--t-xs); color: var(--ink); padding: 0 2px; border-radius: 3px; }
+.term-wch { font-size: var(--t-2xs); font-weight: 700; }
+.term-wgh { font-size: var(--t-2xs); }
 
-/* feeds */
-.term-fills { flex: 1 1 0; min-height: 140px; }
-.term-liqp { flex: 0 1 34%; min-height: 120px; }
+/* ---------------------------------------------------------------- the left column: three stacked dense lists */
+.term-bigp { flex: 1.3 1 0; min-height: 132px; }
+.term-liqp { flex: 1 1 0; min-height: 120px; }
+.term-fills { flex: 1 1 0; min-height: 120px; }
+.term-left:not(.has-liq) .term-liqp { display: none; }
+.term-left .term-pb { padding: 2px 4px; }
 .term-feed { display: grid; }
-.term-fills .term-pb, .term-liqp .term-pb { padding: 2px 6px; }
-.term-fr { display: grid; grid-template-columns: calc(70px * var(--ts)) minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 7px; row-gap: 2px; align-items: center;
-  padding: 5px 4px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; border-left: 2px solid transparent; }
+/* one line per row: monospace numbers right-aligned in fixed columns, the age last ('6s', '4m') */
+.term-fr { position: relative; display: grid; align-items: center; column-gap: 6px; min-height: var(--rowh); padding: 1px 6px; color: inherit; text-decoration: none;
+  border-left: 2px solid transparent; border-bottom: 1px solid var(--line); font-size: var(--t-xs); white-space: nowrap; }
+.term-fr:last-child { border-bottom: 0; }
 a.term-fr:hover { background: var(--surface-2); }
-.term-fr .term-ft { grid-column: 1; grid-row: 1; color: var(--muted); font-size: var(--t-xs); }
-.term-fr .term-tag { grid-column: 1; grid-row: 2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.term-fr .term-fn { grid-column: 2; grid-row: 1; }
+.term-fr > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.term-age { justify-self: end; color: var(--muted); font-size: var(--t-2xs); }
+/* 실시간 큰 체결: ▲ coin · price · 고래 · $ · age, tinted by side */
+.term-fr.big { grid-template-columns: calc(64px * var(--ts)) minmax(0, 1fr) auto calc(58px * var(--ts)) calc(26px * var(--ts)); }
+.term-fr.big::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55; }
+.term-fr.big.buy::before { background: linear-gradient(90deg, var(--up-soft), transparent 75%); }
+.term-fr.big.sell::before { background: linear-gradient(90deg, var(--down-soft), transparent 75%); }
+.term-fr.big.buy { border-left-color: var(--up-line); } .term-fr.big.sell { border-left-color: var(--down-line); }
+.term-bc { font-weight: 800; font-size: var(--t-xs); }
+.term-bar { font-style: normal; font-size: var(--t-2xs); margin-right: 4px; }
+.term-fr.big .term-bc:not(.up):not(.down) { color: var(--ink); }
+.term-fr.big .term-bc { color: var(--ink); } .term-fr.big .term-bc .term-bar { color: inherit; }
+.term-fr.big.buy .term-bar { color: var(--up); } .term-fr.big.sell .term-bar { color: var(--down); }
+.term-fr.big .term-lp { text-align: right; }
+.term-bu { text-align: right; font-weight: 800; color: var(--ink); }
+.term-wsp { width: 0; }
+.term-fr.big.whale::before { opacity: 1; }
+.term-fr.big.whale.buy { border-left-color: var(--up); background: var(--up-soft); }
+.term-fr.big.whale.sell { border-left-color: var(--down); background: var(--down-soft); }
+.term-fr.big.whale.buy .term-bu { color: var(--up); } .term-fr.big.whale.sell .term-bu { color: var(--down); }
+.term-whale { justify-self: end; padding: 0 4px; border-radius: 3px; font-size: var(--t-2xs); font-weight: 800; line-height: 1.35; color: var(--accent-ink);
+  background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+/* 시장 강제청산: LONG / SHORT · price · $ · age */
+.term-fr.liq { grid-template-columns: calc(48px * var(--ts)) minmax(0, 1fr) calc(64px * var(--ts)) calc(26px * var(--ts)); }
+.term-fr.liq.lg { border-left-color: var(--up-line); } .term-fr.liq.sh { border-left-color: var(--down-line); }
+.term-fr.liq.bigl { background: var(--amber-soft, var(--surface-2)); }
+.term-lb { justify-self: start; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; font: 800 var(--t-2xs)/1.35 var(--f-term); letter-spacing: .02em; }
+.term-lb.up { color: var(--up); background: var(--up-soft); } .term-lb.down { color: var(--down); background: var(--down-soft); }
+.term-lp { color: var(--ink-2); text-align: right; }
+.term-lu { text-align: right; font-weight: 800; }
+.term-fr.liq.bigl .term-lu { color: var(--warn); }
+/* 우리 봇 체결: age · tag · account · coin side · result */
+.term-fr.fl { grid-template-columns: calc(26px * var(--ts)) calc(34px * var(--ts)) minmax(0, 1fr) auto calc(70px * var(--ts)); }
+.term-fr.fl .term-age { justify-self: start; }
 .term-fn { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; font-weight: 600; }
-.term-fn .an { min-width: 0; overflow: hidden; }
+.term-fn .an { display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; }
 .term-fn .an-n { overflow: hidden; text-overflow: ellipsis; }
 .term-fn .an-tf { padding: 0 3px; font-size: var(--t-2xs); line-height: 1.4; }
-.term-fm { grid-column: 2 / span 2; grid-row: 2; display: flex; gap: 5px; font-size: var(--t-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; }
-/* when the result line is still too long, the muted parts (leverage, coin list) give way first; the side and the
-   result % keep their full width */
-.term-fm > span { flex: none; }
-.term-fm > .muted { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.term-fr > b, .term-fr > .num:last-child, .term-fr > .pp, .term-fbase { grid-column: 3; grid-row: 1; text-align: right; font-size: var(--t-xs); }
-.term-fr.fold { opacity: .86; }
-.term-fr.fold .term-fn span { overflow: hidden; text-overflow: ellipsis; }
-.term-fbase { font-size: var(--t-xs); }
-.term-tag { justify-self: start; padding: 2px 5px; border-radius: 3px; font-size: var(--t-xs); font-weight: 800; line-height: 1.2; white-space: nowrap; border: 1px solid var(--line-2); color: var(--ink-2); }
+.term-fc { font-size: var(--t-2xs); color: var(--ink-2); }
+.term-fv { text-align: right; font-size: var(--t-xs); font-weight: 700; }
+.term-fr.fold { color: var(--ink-2); }
+.term-fr.fold .term-fn span { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.term-fr.fold > .pp { justify-self: end; }
+.term-fbase { font-weight: 500; font-size: var(--t-2xs); }
+.term-tag { justify-self: start; padding: 0 4px; border-radius: 3px; font-size: var(--t-2xs); font-weight: 800; line-height: 1.35; white-space: nowrap; border: 1px solid var(--line-2); color: var(--ink-2); }
 .term-tag.in { color: var(--accent-hi); border-color: var(--accent-line); background: var(--accent-soft); }
 .term-tag.up { color: var(--up); border-color: var(--up-line); background: var(--up-soft); }
 .term-tag.down { color: var(--down); border-color: var(--down-line); background: var(--down-soft); }
@@ -139,23 +181,33 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-gsw { flex: none; width: 3px; height: 12px; border-radius: 2px; background: var(--series-coin); }
 .term-gsw.core { background: var(--series-core); } .term-gsw.ds { background: var(--series-ds); } .term-gsw.m5 { background: var(--series-m5); }
 .term-gsw.extra { background: var(--accent); }
-.term-fr.liq { grid-template-columns: 38px 30px minmax(0, 1fr) auto; grid-template-rows: auto; }
-.term-fr.liq > * { grid-row: auto; grid-column: auto; }
-.term-lp { color: var(--ink-2); }
-.term .empty { padding: 14px 4px; font-size: var(--t-xs); color: var(--muted); text-align: center; }
+.term .empty { padding: 12px 4px; font-size: var(--t-2xs); color: var(--muted); text-align: center; }
+.term-blab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-blab b { color: var(--ink-2); font-weight: 700; }
+.term-bmin { display: none; }
+.term-bst { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--t-2xs); font-weight: 700; color: var(--muted); white-space: nowrap; }
+.term-bst i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.term-bst[data-s="live"] { color: var(--up); }
+.term-bst[data-s="live"] i { background: var(--up); box-shadow: 0 0 7px var(--live-glow, var(--up-line)); }
+.term-bst[data-s="down"] { color: var(--down); }
 
-/* ratio bars */
+/* ratio bars: under every list (a thin bar, the two shares under it) and inline in the table head */
 .term-rbrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
-.term-rbk { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
-.term-rb { display: grid; gap: 3px; min-width: 0; }
-.term-rb-t { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--line); gap: 1px; }
+.term-rbk { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; }
+.term-rb { display: grid; gap: 2px; min-width: 0; }
+.term-rb-t { display: flex; height: 4px; border-radius: 3px; overflow: hidden; background: var(--line); gap: 1px; }
 .term-rb-s { display: block; height: 100%; transition: width .7s var(--ease); }
-.term-rb-s.up { background: var(--up); box-shadow: 0 0 8px var(--ug); } .term-rb-s.down { background: var(--down); box-shadow: 0 0 8px var(--dg); }
+.term-rb-s.up { background: var(--up); box-shadow: 0 0 6px var(--ug); } .term-rb-s.down { background: var(--down); box-shadow: 0 0 6px var(--dg); }
 .term-rb-s.flat { background: var(--line-2); }
 .term-rb.none .term-rb-s { background: var(--line-2); box-shadow: none; }
-.term-rb-k { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-xs); }
+.term-rb-k { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-2xs); }
 .term-rb-l { white-space: nowrap; } .term-rb-l.flat { color: var(--muted); }
-.term-rb.wide { width: 220px; }
+.term-rb-l b { font-weight: 700; }
+.term-rb.inline { display: flex; align-items: center; gap: 7px; }
+.term-rb.inline .term-rb-k { display: contents; }
+.term-rb.inline .term-rb-t { order: 2; flex: 1 1 auto; min-width: 60px; }
+.term-rb.inline .term-rb-l:first-child { order: 1; } .term-rb.inline .term-rb-l:last-child { order: 3; }
+.term-rb.wide { width: calc(230px * var(--ts)); flex: none; }
 
 /* ---------------------------------------------------------------- chart */
 .term-chart .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; padding: 0; }
@@ -204,194 +256,206 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-ckey .k-sr { width: 14px; height: 0; border-radius: 0; border-top: 1px dotted var(--ink-2); }
 .term-cfail { padding: 20px; }
 
-/* ---------------------------------------------------------------- bottom table */
-.term-table .term-ph { flex-wrap: nowrap; }
-.term-table .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; padding: 4px 8px 0; }
-.term-table .seg { justify-self: start; }
-.term-table .seg button { height: 24px; padding: 0 12px; font-size: var(--t-xs); border-radius: 5px; }
-.term-ut { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
-.term-utot { font-size: var(--t-sm); padding: 0 3px; border-radius: 3px; }
-.term-sel { height: 26px; min-height: 0; padding: 0 24px 0 8px; font-size: var(--t-xs); }
+/* ---------------------------------------------------------------- bottom table: one head line (tabs · ALL · share · count · total) */
+.term-table .term-ph { flex-wrap: nowrap; gap: 12px; min-height: 36px; }
+.term-table .term-ph h2 { display: none; }
+.term-table .term-ph .seg { flex: none; }
+.term-table .term-pb { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr); padding: 0 6px; }
+.term-table .seg button { height: 26px; padding: 0 12px; font-size: var(--t-xs); border-radius: 5px; }
+.term-ut { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; flex: none; }
+.term-ut b { color: var(--ink); font-size: var(--t-xs); }
+.term-utot { font-size: var(--t-sm); padding: 0 3px; border-radius: 3px; font-weight: 800; }
+.term-ut .term-utot.up { color: var(--up); } .term-ut .term-utot.down { color: var(--down); }
+.term-sel { height: 26px; min-height: 0; padding: 0 24px 0 8px; font-size: var(--t-xs); font-weight: 700; flex: none; }
 .term-tw { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.term-t { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
-.term-t th { position: sticky; top: 0; z-index: 1; background: var(--tp); color: var(--muted); font-weight: 600; font-size: var(--t-xs); text-align: left; padding: 4px 6px;
+.term-t { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
+.term-t th { position: sticky; top: 0; z-index: 1; background: var(--tp); color: var(--muted); font-weight: 600; font-size: var(--t-2xs); text-align: left; padding: 5px 8px;
   border-bottom: 1px solid var(--line-2); white-space: nowrap; }
-.term-t td { padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.term-t td { height: var(--rowh); padding: 1px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .term-t .r { text-align: right; }
 .term-t tr:hover td { background: var(--surface-2); }
 .term-t tr.on td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
-.term-t .nm { min-width: 130px; max-width: calc(184px * var(--ts)); overflow: hidden; }
-.term-t .nm a { display: flex; align-items: center; gap: 5px; color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; overflow: hidden; }
+.term-t .nm { min-width: 130px; max-width: calc(200px * var(--ts)); overflow: hidden; }
+.term-t .nm a { display: flex; align-items: center; gap: 5px; color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; overflow: hidden; font-weight: 600; }
 .term-t .nm a .an { overflow: hidden; }
 .term-t .nm a:hover .an-n { text-decoration: underline; }
 .term-t .nm a .an-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.term-t .side { padding: 1px 6px; font-size: var(--t-xs); }
+.term-t .side { padding: 0 6px; font-size: var(--t-2xs); }
 .term-t .an-tf { font-size: var(--t-2xs); padding: 0 3px; line-height: 1.4; }
+.term-t td > b.num { font-weight: 700; }
 .term-coin { border: 0; background: none; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); padding: 2px 4px; border-radius: 3px; cursor: pointer; }
 .term-coin:hover, .term-coin.on { color: var(--accent-hi); background: var(--accent-soft); }
+.term-table .term-pf { padding: 4px 10px 5px; }
 
-/* ---------------------------------------------------------------- right column */
-.term-mine { flex: 1 1 0; min-height: 96px; }
+/* ---------------------------------------------------------------- the right column */
+.term-right { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.term-mine, .term-book { flex: 0 1 34%; min-height: 150px; }
 .term-mine .term-pb { padding: 2px 6px; }
-.term-cr { display: grid; grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(36px * var(--ts)) calc(62px * var(--ts)) calc(76px * var(--ts)); gap: 4px; align-items: center; padding: 4px 2px; border-bottom: 1px solid var(--line);
-  color: inherit; text-decoration: none; }
-.term-cr.hd { color: var(--muted); font-size: var(--t-xs); padding-block: 2px; white-space: nowrap; }
+.term-right[data-duo="pos"] .term-book, .term-right[data-duo="book"] .term-mine { display: none; }
+.term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
+.term-duoseg { display: inline-flex; flex: none; flex-wrap: nowrap; gap: 2px; }
+.term-duoseg button { height: 22px; padding: 0 9px; font-size: var(--t-2xs); border-radius: 5px; }
+.term-cr { display: grid; grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(36px * var(--ts)) calc(60px * var(--ts)) calc(74px * var(--ts)); gap: 4px; align-items: center;
+  min-height: var(--rowh); padding: 1px 2px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
+.term-cr.hd { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; min-height: 0; padding-block: 3px; }
 .term-cr.hd > span { overflow: hidden; text-overflow: ellipsis; }
 .term-cr.hd > span:nth-child(n+3) { text-align: right; }
 a.term-cr:hover { background: var(--surface-2); }
-.term-cr .side { padding: 1px 4px; font-size: var(--t-xs); justify-self: start; }
-.term-cr .term-fn .an-tf { font-size: var(--t-2xs); padding: 0 3px; line-height: 1.4; }
-.term-cr .term-fn .an { display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; }
-.term-cr .term-fn .an-n { overflow: hidden; text-overflow: ellipsis; }
+.term-cr .side { padding: 0 4px; font-size: var(--t-2xs); justify-self: start; }
 .term-cr > .num { text-align: right; }
 .term-roe { padding: 0 3px; border-radius: 3px; }
 .term-cr .term-lq { color: var(--warn); font-size: var(--t-xs); }
-.term-book { flex: none; }
+.term-cpo { margin: 0; padding: 6px 4px 4px; font-size: var(--t-2xs); }
 .term-book .pos-book { gap: 0; }
 .term-book .pos-bk { padding: 1px 6px; font-size: var(--t-xs); }
 .term-book .pos-bk.mid { padding: 4px 6px; margin: 2px 0; font-size: var(--t-md); text-shadow: 0 0 10px var(--accent-glow); }
 .term-book .pos-note { display: none; }
-.term-book .pos-bkbar { margin-top: 4px; font-size: var(--t-xs); }
-.term-pnl { flex: none; }
-.term-pnl .term-pb { display: grid; gap: 5px; padding: 6px 10px 8px; }
-.term-pnl .seg button { height: 24px; padding: 0 9px; font-size: var(--t-xs); border-radius: 5px; }
-.term-phero { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
-.term-pk { color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
-.term-pbig { font-size: var(--t-lg); padding: 0 3px; border-radius: 3px; }
-.term-pbig.up { text-shadow: 0 0 12px var(--ug); } .term-pbig.down { text-shadow: 0 0 12px var(--dg); }
-.term-ptoday { margin-left: auto; font-size: var(--t-xs); white-space: nowrap; }
-.term-pchart { height: 104px; min-width: 0; }
+.term-book .pos-bkbar { margin-top: 4px; font-size: var(--t-2xs); }
+/* 수익 (기존 36): chart card, 오늘 수익, 수익 캘린더 */
+.term-pnl { flex: 1 1 auto; min-height: 0; }
+.term-pnl > .term-pb { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.term-phero { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.term-plg { display: flex; gap: 10px; color: var(--ink-2); font-size: var(--t-2xs); white-space: nowrap; }
+.term-plg span { display: inline-flex; align-items: center; gap: 4px; }
+.term-plg .k-line { width: 12px; height: 2px; background: var(--accent); }
+.term-plg .k-bar { width: 6px; height: 9px; background: var(--ink-2); border-radius: 1px; }
+.term-pbig { font-size: var(--t-lg); font-weight: 800; padding: 0 3px; border-radius: 3px; }
+.term-punit { color: var(--muted); font-size: var(--t-2xs); font-weight: 700; }
+.term-pmeta { color: var(--muted); font-size: var(--t-2xs); min-height: 1em; }
+.term-pchart { height: calc(132px * var(--ts)); flex: none; min-width: 0; }
 .term-psvg { display: block; width: 100%; height: 100%; overflow: visible; }
 .term-psvg .zero { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 3; }
-.term-psvg .ln { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.term-psvg .ln { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
 .term-psvg .ln.up { stroke: var(--up); filter: drop-shadow(0 0 3px var(--ug)); } .term-psvg .ln.dn { stroke: var(--down); filter: drop-shadow(0 0 3px var(--dg)); }
-.term-psvg .g-up { stop-color: var(--up); stop-opacity: .28; } .term-psvg .g-dn { stop-color: var(--down); stop-opacity: .26; }
+.term-psvg .g-up { stop-color: var(--up); stop-opacity: .26; } .term-psvg .g-dn { stop-color: var(--down); stop-opacity: .24; }
 .term-psvg .g-0 { stop-color: var(--up); stop-opacity: 0; }
 .term-psvg .end.up { fill: var(--up); } .term-psvg .end.dn { fill: var(--down); }
 .term-psvg .glow.up { fill: var(--up-soft); stroke: var(--ug); stroke-width: 1; } .term-psvg .glow.dn { fill: var(--down-soft); stroke: var(--dg); stroke-width: 1; }
-.term-psvg .bar { fill: var(--line-2); } .term-psvg .bar.up { fill: var(--up); opacity: .8; } .term-psvg .bar.dn { fill: var(--down); opacity: .8; }
+.term-psvg .bar { fill: var(--line-2); } .term-psvg .bar.up { fill: var(--up); opacity: .75; } .term-psvg .bar.dn { fill: var(--down); opacity: .75; }
 .term-psvg .ax { fill: var(--muted); font: var(--t-2xs) var(--f-term); }
-.term-pnone { display: grid; place-content: center; gap: 2px; height: 100%; text-align: center; color: var(--muted); font-size: var(--t-xs); border: 1px dashed var(--line-2); border-radius: 5px; }
+.term-psvg .ax.end { text-anchor: end; }
+.term-pnone { display: grid; place-content: center; gap: 2px; height: 100%; text-align: center; color: var(--muted); font-size: var(--t-2xs); border: 1px dashed var(--line-2); border-radius: 5px; }
 .term-pnone b { color: var(--ink-2); }
 .term-pnone.sm { height: 48px; }
-.term-calh { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-.term-calt { font-weight: 700; font-size: var(--t-xs); color: var(--ink-2); }
-.term-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.term-today { display: flex; align-items: baseline; gap: 8px; padding: 7px 0 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.term-tdt { font-weight: 700; font-size: var(--t-xs); color: var(--ink); white-space: nowrap; }
+.term-tdk { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-tdv { font-size: var(--t-sm); font-weight: 800; }
+.term-calh { display: flex; align-items: baseline; gap: 8px; }
+.term-calt { font-weight: 700; font-size: var(--t-xs); color: var(--ink); }
+.term-calm { color: var(--muted); font-size: var(--t-2xs); }
+.term-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .term-cw { text-align: center; color: var(--muted); font-size: var(--t-2xs); } .term-cw.we { color: var(--ink-2); }
-.term-cc { position: relative; display: grid; align-content: center; justify-items: center; min-height: calc(24px * var(--ts)); padding-block: 2px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.term-cc.pad { background: none; }
-.term-cc.s-future { background: none; border: 1px dashed var(--line); }
+.term-cc { position: relative; display: grid; align-content: center; justify-items: center; gap: 1px; min-height: calc(32px * var(--ts)); padding-block: 2px;
+  border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.term-cc.pad { background: none; border-color: transparent; }
+.term-cc.s-future { background: none; border-style: dashed; }
 .term-cc.s-empty { background: var(--bg); }
 .term-cc::before { content: ""; position: absolute; inset: 0; opacity: var(--a, 0); }
+.term-cc.up { border-color: var(--up-line); } .term-cc.down { border-color: var(--down-line); }
 .term-cc.up::before { background: var(--up); } .term-cc.down::before { background: var(--down); }
-.term-cc.s-today { box-shadow: inset 0 0 0 1px var(--accent); }
+.term-cc.s-today { box-shadow: inset 0 0 0 1px var(--accent), 0 0 8px -2px var(--accent-glow); }
 .term-cc .dn, .term-cc .dv { position: relative; line-height: 1.05; }
 .term-cc .dn { font-size: var(--t-2xs); color: var(--ink-2); }
-.term-cc .dv { font-size: var(--t-2xs); font-weight: 700; color: var(--ink); }
-.term-pnl .note { margin: 0; font-size: var(--t-xs); }
-@media (max-height: 1099px) { .term-pnl .note { display: none; } }
+.term-cc .dv { font-size: var(--t-2xs); font-weight: 800; color: var(--ink); }
+.term-cc.flat .dv { color: var(--muted); font-weight: 600; }
 
 /* ---------------------------------------------------------------- sizes */
 @media (min-width: 1200px) and (min-height: 640px) {
   .term { height: calc(100dvh - var(--top-h) - var(--sub-h) - 20px); min-height: 600px; }
 }
-/* bigger type (10/06): below 1600 px the table drops its two low-value columns (mark price, entry time); the account
-   name keeps its full id in the link's title */
+/* below 1600 px the table drops its two low-value columns (mark price, entry time); the account name keeps its id in
+   the link's title */
 .term-t .xs, .term-t .xm { display: none; }
 @media (min-width: 1600px) {
   .term-t .xs, .term-t .xm { display: table-cell; }
-  .term-t .nm { max-width: calc(230px * var(--ts)); }
-  .term-grid { grid-template-columns: 320px minmax(0, 1fr) 380px; }
-  .term-mid { grid-template-rows: minmax(0, 1fr) 290px; }
+  .term-t .nm { max-width: calc(240px * var(--ts)); }
+  .term-grid { grid-template-columns: 312px minmax(0, 1fr) 356px; }
+  .term-mid { grid-template-rows: auto minmax(0, 1fr) 262px; }
   .term-px { font-size: calc(30px * var(--ts)); }
-  .term-pchart { height: 104px; }
-  .term-mine { min-height: 140px; }
-  .term-cc .dn, .term-cc .dv { font-size: var(--t-xs); }
-}
-.term-duoseg { display: none; flex: none; flex-wrap: nowrap; gap: 2px; }
-.term-duoseg button { height: 22px; padding: 0 9px; font-size: var(--t-xs); border-radius: 5px; }
-.term-left:not(.has-liq) .term-duoseg { display: none !important; }
-.term-right { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-@media (max-height: 939px) and (min-width: 1200px) {
-  .term-duoseg { display: inline-flex; }
-  .term-right[data-duo="pos"] .term-book, .term-right[data-duo="book"] .term-mine { display: none; }
-  .term-left.has-liq[data-duo="big"] .term-liqp, .term-left.has-liq[data-duo="liq"] .term-bigp { display: none; }
-  .term-left.has-liq .term-liqp { flex: 1 1 0; }
-  .term-book { flex: 1 1 0; min-height: 150px; }
-  .term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
-  .term-mine { min-height: 150px; }
-  .term-pnl .note { display: none; }
-}
-/* 940-1199 px tall (a 1080p monitor's browser window): at the bigger type 호가 and 누적 손익 left 이 코인 포지션 half a row
-   (owners 10/06), so the right column's 포지션 / 호가 share one place here too (the left column keeps both feeds) */
-@media (min-height: 940px) and (max-height: 1199px) and (min-width: 1200px) {
-  .term-right .term-duoseg { display: inline-flex; }
-  .term-right[data-duo="pos"] .term-book, .term-right[data-duo="book"] .term-mine { display: none; }
-  .term-book { flex: 1 1 0; min-height: 150px; }
-  .term-book .term-pb { overflow-y: auto; flex: 1 1 auto; }
-  .term-mine { min-height: 150px; }
-}
-/* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
-   page still show them), so P&L, ROE, the liquidation price and 손절·잠금 stay in view at the bigger type; the left
-   column keeps room for the fills feed's names and result %. Below 1600 px 이 코인 포지션 drops its leverage column
-   too (block below), so the account name has room */
-@media (min-width: 1200px) and (max-width: 1439px) {
-  .term-grid { grid-template-columns: 288px minmax(0, 1fr) 296px; }
-  .term-t .xn, .term-t .xe { display: none; }
-  .term-t .nm { max-width: calc(164px * var(--ts)); }
-}
-/* 크게 / 아주 크게: wider side columns so the lists keep their names and numbers; 이 코인 포지션 drops its leverage
-   column, and below 1600 px the table drops 배수 and 진입가 (the fills feed and the positions screen still show them) */
-@media (min-width: 1200px) {
-  html[data-text="lg"] .term-grid { grid-template-columns: 300px minmax(0, 1fr) 312px; }
-  html[data-text="xl"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 328px; }
-  html[data-text="lg"] .term-cr, html[data-text="xl"] .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(62px * var(--ts)) calc(76px * var(--ts)); }
-  html[data-text="lg"] .term-cr > :nth-child(3), html[data-text="xl"] .term-cr > :nth-child(3) { display: none; }
 }
 @media (min-width: 1200px) and (max-width: 1599px) {
-  .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(62px * var(--ts)) calc(76px * var(--ts)); }
+  .term-grid { grid-template-columns: 276px minmax(0, 1fr) 300px; }
+  .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)) calc(74px * var(--ts)); }
   .term-cr > :nth-child(3) { display: none; }
-  html[data-text="lg"] .term-t .xn, html[data-text="xl"] .term-t .xn, html[data-text="lg"] .term-t .xe, html[data-text="xl"] .term-t .xe { display: none; }
+  .term-row { gap: 14px; }
+  .term-stats, .term-movers { gap: 14px; }
+  .term-sess { display: none; }                           /* the session is in the clock's title */
+  .term-rb.wide { width: calc(170px * var(--ts)); }
 }
-/* the table's rows grow with the type: give it the same number of rows by taking the height from the chart */
-@media (min-width: 1200px) and (min-height: 640px) {
-  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: minmax(0, 1fr) calc(238px * var(--ts)); }
+/* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
+   page still show them); the top line drops the meetings label's room to the movers */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .term-grid { grid-template-columns: 262px minmax(0, 1fr) 284px; }
+  .term-t .xn, .term-t .xe { display: none; }
+  .term-t .nm { max-width: calc(164px * var(--ts)); }
+  .term-perp { display: none; }
+  .term-mvs { max-width: calc(76px * var(--ts)); }
+  .term-px { font-size: var(--t-lg); }
+  .term-rb.wide { width: calc(130px * var(--ts)); }
+  .term-table .term-ph { gap: 8px; }
 }
-@media (min-width: 1600px) and (min-height: 640px) {
-  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: minmax(0, 1fr) calc(290px * var(--ts)); }
+/* a short PC window (1440x900 and below): the lists keep their rows, the chart its height */
+@media (max-height: 959px) and (min-width: 1200px) {
+  .term-mid { grid-template-rows: auto minmax(0, 1fr) 208px; }
+  .term-pchart { height: calc(108px * var(--ts)); }
+  .term-pnl .term-pf .note { display: none; }
+  .term-left .term-pf .assume { display: none; }        /* the fills' money caption stays in each row's title and the footer below */
+  .term-cc { min-height: calc(28px * var(--ts)); }
+}
+@media (max-height: 819px) and (min-width: 1200px) {
+  .term-mline { display: none; }
+  .term-blab { display: none; }
+  .term-cc { min-height: calc(24px * var(--ts)); }
+  .term-cc .dv { display: none; }
+  .term-mid { grid-template-rows: auto minmax(0, 1fr) 190px; }
+}
+/* 크게 / 아주 크게: wider side columns so the lists keep their names and numbers */
+@media (min-width: 1200px) {
+  html[data-text="lg"] .term-grid { grid-template-columns: 296px minmax(0, 1fr) 312px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 328px; }
+  html[data-text="lg"] .term-cr, html[data-text="xl"] .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(60px * var(--ts)) calc(74px * var(--ts)); }
+  html[data-text="lg"] .term-cr > :nth-child(3), html[data-text="xl"] .term-cr > :nth-child(3) { display: none; }
 }
 @media (min-width: 1440px) {
-  html[data-text="lg"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 344px; }
-  html[data-text="xl"] .term-grid { grid-template-columns: 344px minmax(0, 1fr) 372px; }
+  html[data-text="lg"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 340px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 344px minmax(0, 1fr) 368px; }
 }
 @media (min-width: 1600px) {
-  html[data-text="lg"] .term-grid { grid-template-columns: 348px minmax(0, 1fr) 404px; }
-  html[data-text="xl"] .term-grid { grid-template-columns: 372px minmax(0, 1fr) 432px; }
+  html[data-text="lg"] .term-grid { grid-template-columns: 344px minmax(0, 1fr) 392px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 372px minmax(0, 1fr) 420px; }
+}
+@media (min-width: 1200px) and (min-height: 640px) {
+  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: auto minmax(0, 1fr) calc(236px * var(--ts)); }
+}
+@media (min-width: 1200px) and (max-width: 1599px) {
+  html[data-text="lg"] .term-t .xn, html[data-text="xl"] .term-t .xn, html[data-text="lg"] .term-t .xe, html[data-text="xl"] .term-t .xe { display: none; }
 }
 /* a tablet or a narrow PC window (760-1199 px): the chart and the table first, then the two side columns, page scroll */
 @media (max-width: 1199px) {
   .term-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .term-mid { grid-column: 1 / -1; grid-row: 1; grid-template-rows: 460px 300px; }
+  .term-mid { grid-column: 1 / -1; grid-row: 1; grid-template-rows: auto 460px 300px; }
   .term-left, .term-right { min-height: 0; }
-  .term-fills { flex: none; height: 380px; }
-  .term-mine { flex: none; height: 240px; }
-  .term-liqp { flex: none; height: 260px; }
+  .term-bigp, .term-liqp, .term-fills { flex: none; height: 300px; }
+  .term-mine, .term-book { flex: none; height: 240px; }
   .term-row { flex-wrap: wrap; row-gap: 6px; }
-  .term-stats { flex-wrap: wrap; }
+  .term-stats, .term-movers { flex-wrap: wrap; }
+  .term-vsep { display: none; }
 }
 
 /* ---------------------------------------------------------------- 터미널 살아 있게 (owners 10/06: "빛나고 움직이게")
    Neon at rest: a soft teal edge light on every panel (the AI skin's --edge-glow; the classic skin keeps it off), a
    faint accent wash on the panel heads, glowing key numbers. Motion: ONLY one-shots on a real message (terminal-live.js
-   hit() sets data-hit, terminal-kit.js ping() sets .run): a watchlist row / the big price / the price tag light once per
-   real relay tick, a head's underline light runs once when that panel really got data. No loop, nothing under reduced
-   motion (block below), nothing while the page is hidden (the helpers skip it; the stream is closed then). */
+   hit() sets data-hit, terminal-kit.js ping() sets .run): a coin-strip button / the big price / the price tag light once
+   per real relay tick, a head's underline light runs once when that panel really got data. No loop, nothing under
+   reduced motion (block below), nothing while the page is hidden (the helpers skip it; the stream is closed then). */
 .term-p { box-shadow: 0 0 16px -6px var(--tglow), 0 0 0 1px var(--tglow) inset, inset 0 1px 0 var(--card-ring, transparent); }
 .term-p:hover, .term-p:focus-within { box-shadow: 0 0 20px -4px var(--tglow), 0 0 0 1px var(--tglow) inset, inset 0 1px 0 var(--card-ring, transparent); }
 :root:not([data-skin="classic"]) .term-ph { background: linear-gradient(180deg, var(--accent-soft), transparent); }
-:root:not([data-skin="classic"]) .term-p { box-shadow: 0 0 0 1px var(--tglow), 0 0 20px -6px var(--accent-glow), inset 0 1px 0 var(--accent-soft); }
+:root:not([data-skin="classic"]) .term-p { box-shadow: 0 0 0 1px var(--tglow), 0 0 18px -8px var(--accent-glow), inset 0 1px 0 var(--accent-soft); }
 :root:not([data-skin="classic"]) .term-p:hover, :root:not([data-skin="classic"]) .term-p:focus-within { box-shadow: 0 0 0 1px var(--tedge-hi), 0 0 24px -4px var(--accent-glow), inset 0 1px 0 var(--accent-soft); }
 :root:not([data-skin="classic"]) .term-ph h2 { text-shadow: 0 0 8px var(--accent-glow); }
+:root:not([data-skin="classic"]) .term-coins { box-shadow: 0 0 0 1px var(--tglow), 0 0 18px -8px var(--accent-glow); }
 .term-ph { position: relative; }
 .term-uline { position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; overflow: hidden; pointer-events: none;
   background: linear-gradient(90deg, var(--accent-line), transparent 72%); }
@@ -400,15 +464,15 @@ a.term-cr:hover { background: var(--surface-2); }
 .term-uline.run::after { animation: term-sweep .9s var(--ease) 1; }
 @keyframes term-sweep { 0% { opacity: 1; transform: translateX(-100%); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateX(340%); } }
 
-/* the big price, the watchlist rows and the chart's price tag: one light per real tick */
+/* the big price, the coin strip and the chart's price tag: one light per real tick */
 .term-px[data-hit="up"] { animation: term-px-up .7s ease-out 1; }
 .term-px[data-hit="down"] { animation: term-px-dn .7s ease-out 1; }
 @keyframes term-px-up { 0% { transform: scale(1.045); text-shadow: 0 0 6px var(--ug), 0 0 22px var(--ug); background-color: var(--up-soft); } 100% { transform: none; } }
 @keyframes term-px-dn { 0% { transform: scale(1.045); text-shadow: 0 0 6px var(--dg), 0 0 22px var(--dg); background-color: var(--down-soft); } 100% { transform: none; } }
 .term-wr[data-hit="up"] { animation: term-row-up .8s ease-out 1; }
 .term-wr[data-hit="down"] { animation: term-row-dn .8s ease-out 1; }
-@keyframes term-row-up { 0% { background-color: var(--up-soft); box-shadow: inset 2px 0 0 var(--up), inset 0 0 14px -6px var(--ug); } 100% { background-color: transparent; box-shadow: inset 2px 0 0 transparent; } }
-@keyframes term-row-dn { 0% { background-color: var(--down-soft); box-shadow: inset 2px 0 0 var(--down), inset 0 0 14px -6px var(--dg); } 100% { background-color: transparent; box-shadow: inset 2px 0 0 transparent; } }
+@keyframes term-row-up { 0% { background-color: var(--up-soft); box-shadow: inset 0 -2px 0 var(--up), inset 0 0 14px -6px var(--ug); } 100% { background-color: transparent; box-shadow: inset 0 -2px 0 transparent; } }
+@keyframes term-row-dn { 0% { background-color: var(--down-soft); box-shadow: inset 0 -2px 0 var(--down), inset 0 0 14px -6px var(--dg); } 100% { background-color: transparent; box-shadow: inset 0 -2px 0 transparent; } }
 .term-ptag[data-hit="up"] { animation: term-tag-up .7s ease-out 1; }
 .term-ptag[data-hit="down"] { animation: term-tag-dn .7s ease-out 1; }
 @keyframes term-tag-up { 0% { box-shadow: 0 0 4px var(--ug), 0 0 26px 3px var(--ug); filter: brightness(1.25); } 100% { box-shadow: 0 0 12px var(--ug); filter: none; } }
@@ -416,76 +480,12 @@ a.term-cr:hover { background: var(--surface-2); }
 /* the live dot: the relay's real state; motion.pulseLive rings it once per message that carried trades */
 .term-live[data-s="live"] { background: var(--up); box-shadow: 0 0 8px var(--live-glow, var(--up-line)); }
 .term-live[data-s="down"], .term-live[data-s="off"] { background: var(--muted); box-shadow: none; }
-/* glowing key numbers (미실현 합계, 누적 손익): readable digits with a soft light in their meaning colour */
-.term-utot.up, .term-pbig.up { text-shadow: 0 0 4px var(--ug), 0 0 16px var(--up-soft); }
-.term-utot.down, .term-pbig.down { text-shadow: 0 0 4px var(--dg), 0 0 16px var(--down-soft); }
-.term-utot { font-weight: 800; }
-.term-px { text-shadow: 0 0 10px var(--accent-glow), 0 0 26px var(--accent-soft); }
-.term-px.up { text-shadow: 0 0 8px var(--ug), 0 0 24px var(--up-soft); } .term-px.down { text-shadow: 0 0 8px var(--dg), 0 0 24px var(--down-soft); }
-
-/* 실시간 큰 체결: the whole market's large orders (NOT our bots) */
-.term-fills.few { flex: 0 0 auto; min-height: 0; }
-.term-bigp { flex: 1 1 0; min-height: 150px; }
-/* the liquidation recorder runs: 실시간 큰 체결 and 시장 강제청산 share ONE place under our fills on every PC window (the
-   큰 체결 · 청산 switch in their heads). Four panels stacked left our own fills ~1.5 rows and the big-order feed 1-2 rows
-   at 1920x1080 (review 10/06, recorder on); this keeps our fills' room as before the feed came */
-@media (min-width: 1200px) {
-  .term-left.has-liq .term-duoseg { display: inline-flex; }
-  .term-left.has-liq[data-duo="big"] .term-liqp, .term-left.has-liq[data-duo="liq"] .term-bigp { display: none; }
-  .term-left.has-liq .term-liqp { flex: 1 1 0; }
-  /* the head then holds the switch: its sub line (cut to one letter) goes, the footer keeps the full label */
-  .term-left.has-liq .term-bigp .term-phs { display: none; }
-}
-@media (min-width: 1200px) and (max-width: 1599px) {
-  .term-left.has-liq .term-bst > span { display: none; }      /* the state dot alone (its title says the state) */
-}
-.term-bigp .term-pb { padding: 2px 6px; }
-.term-bigp .term-pf .note { color: var(--muted); }
-.term-bst { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: var(--t-2xs); font-weight: 700; color: var(--muted); white-space: nowrap; }
-.term-bst i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
-.term-bst[data-s="live"] { color: var(--up); }
-.term-bst[data-s="live"] i { background: var(--up); box-shadow: 0 0 7px var(--live-glow, var(--up-line)); }
-.term-bst[data-s="down"] { color: var(--down); }
-.term-fr.big { grid-template-columns: calc(60px * var(--ts)) calc(40px * var(--ts)) calc(44px * var(--ts)) minmax(0, 1fr) auto calc(36px * var(--ts)); grid-template-rows: auto; column-gap: 5px; padding: 4px 4px; font-size: var(--t-2xs); }
-.term .term-fr.big > * { grid-row: auto; grid-column: auto; text-align: left; min-width: 0; }
-.term-fr.big .term-tag { justify-self: start; overflow: visible; }
-.term-fr.big .term-lp { visibility: hidden; }
-.term-fr.big .term-bc { font-weight: 800; font-size: var(--t-2xs); }
-.term-fr.big .term-bu { text-align: right; font-weight: 800; }
-.term-fr.big .term-bx { text-align: right; font-size: var(--t-2xs); }
-.term-fr.big.buy { border-left-color: var(--up-line); } .term-fr.big.sell { border-left-color: var(--down-line); }
-.term-fr.big.whale.buy { background: var(--up-soft); border-left-color: var(--up); }
-.term-fr.big.whale.sell { background: var(--down-soft); border-left-color: var(--down); }
+/* glowing key numbers (미실현 합계, 누적 수익, the big price): readable digits with a soft light in their meaning colour */
+.term-utot.up, .term-pbig.up { text-shadow: 0 0 10px var(--up-soft); }
+.term-utot.down, .term-pbig.down { text-shadow: 0 0 10px var(--down-soft); }
+.term-px { text-shadow: 0 0 10px var(--accent-glow); }
+.term-px.up { text-shadow: 0 0 14px var(--up-soft); } .term-px.down { text-shadow: 0 0 14px var(--down-soft); }
 .term-fr.big.whale .term-bu { text-shadow: 0 0 10px currentColor; }
-.term-whale { justify-self: end; padding: 1px 4px; border-radius: 3px; font-size: var(--t-2xs); font-weight: 800; line-height: 1.3; color: var(--accent-ink);
-  background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); white-space: nowrap; }
-@media (min-width: 1600px) {
-  .term-fr.big { grid-template-columns: calc(62px * var(--ts)) calc(44px * var(--ts)) calc(44px * var(--ts)) minmax(0, 1fr) auto calc(36px * var(--ts)); }
-  .term-fr.big .term-lp { visibility: visible; text-align: right; }
-}
-/* 이 코인 포지션 with no position: the coin's latest real market orders / liquidations (labelled: not ours) */
-.term-cp .empty { padding: 8px 4px 6px; }
-.term-cpm { display: flex; align-items: baseline; gap: 6px; padding: 6px 2px 3px; border-top: 1px solid var(--line); font-size: var(--t-2xs); white-space: nowrap; overflow: hidden; }
-.term-cpm b { color: var(--ink); }
-.term-cpm .muted { font-size: var(--t-2xs); overflow: hidden; text-overflow: ellipsis; }
-.term-cpn { margin: 0; padding: 4px 2px 8px; font-size: var(--t-2xs); }
-.term-blab { line-height: 1.4; }
-.term-blab b { color: var(--ink-2); font-weight: 700; }
-@media (max-width: 1199px) {
-  .term-fills.few { height: auto; }
-  .term-bigp { flex: none; height: 340px; }
-}
-/* a short PC window: the left column's chrome shrinks so both feeds keep rows (the thresholds stay in the row titles
-   and on a tall window; the label "바이낸스 시장 전체 체결 (우리 봇 아님)" always shows) */
-@media (max-height: 939px) and (min-width: 1200px) {
-  .term-wr { padding-block: 2px; }
-  .term-watch .term-wr.hd { padding-block: 1px; }
-  .term-fills .term-rbrow { display: none; }
-  .term-blab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .term-bmin { display: none; }
-  .term-bigp { flex: 1.25 1 0; min-height: 120px; }
-  .term-fills { min-height: 110px; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .term-marq-in.run { animation: none; }

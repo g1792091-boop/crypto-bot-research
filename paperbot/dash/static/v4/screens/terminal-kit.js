@@ -1,12 +1,32 @@
-// 터미널 kit: the panel frame and the ratio bar every part of the terminal uses.
-import {h, ui, fmt, motion} from "../core/pb.js";
+// 터미널 kit: the panel frame, the ratio bar and the short ages every part of the terminal uses.
+import {h, ui, fmt, motion, serverNow} from "../core/pb.js";
+
+/** Every market-wide number on the terminal (movers, large orders, liquidations) carries this label: not our bots. */
+export const MARKET_LABEL = "시장 전체 (우리 봇 아님)";
+
+/** A short age for dense rows (term v2, the HelloQuant lists): "6s" / "4m" / "2h" / "3d" against the server clock. */
+export const age = (ms, now = serverNow()) => {
+  const s = Math.max(0, Math.floor((now - Number(ms)) / 1000));
+  if (!Number.isFinite(s)) return "—";
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+};
+/** An age cell that the 1 s clock tick repaints (ages() below): text only, never motion. */
+export const ageCell = (ms) => h("span", {class: "term-age num", "data-t": String(ms), title: fmt.kst(ms)}, age(ms));
+/** Repaint every age cell under ``root`` (the terminal's 1 s tick: a text change, no request). */
+export function ages(root) {
+  const now = serverNow();
+  for (const el of root.querySelectorAll(".term-age[data-t]")) {
+    const t = age(Number(el.dataset.t), now);
+    if (el.textContent !== t) el.textContent = t;
+  }
+}
 
 /** A terminal panel: a thin-edged box with a small head (title, a sub line, optional right side) and a body.
- *  o: {sub, acts: [el], cls, label, scroll (the body scrolls inside the panel)}. */
+ *  o: {sub, lead: [el] (after the title), acts: [el], cls, label, scroll (the body scrolls inside the panel)}. */
 export function panel(title, o = {}, ...kids) {
   const sub = h("span", {class: "term-phs"}, o.sub || "");
   // the head's thin accent underline: a light runs along it once when the panel really receives data (ping below)
-  const head = h("div", {class: "term-ph"}, h("h2", null, title), sub, h("span", {class: "grow"}), ...(o.acts || []),
+  const head = h("div", {class: "term-ph"}, h("h2", null, title), ...(o.lead || []), sub, h("span", {class: "grow"}), ...(o.acts || []),
     h("i", {class: "term-uline", "aria-hidden": "true"}));
   const body = h("div", {class: ["term-pb", o.scroll ? "scroll" : ""]}, kids);
   const el = h("section", {class: ["term-p", o.cls || ""], "aria-label": o.label || title}, head, body);
