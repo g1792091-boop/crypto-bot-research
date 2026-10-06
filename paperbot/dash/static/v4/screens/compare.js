@@ -116,6 +116,13 @@ export async function mount(el, ctx) {
   const legend = h("div", {class: "cmp-legend"});
   const chartCard = ui.card({plate: "합친 곡선", sub: "닫힌 거래마다 · 시작 잔고 합 대비 수익률"}, chartBox, legend,
     ui.note("선 끝 = 지금 잔고 (닫힌 거래 기준, 열린 포지션 손익 제외). 매매법은 봉 계좌를 더한 값, 계좌는 그 계좌 하나입니다."));
+  // a flat start (no closed trade yet) keeps at least 2%p of height, so the axis reads −1.0% … +1.0%, never 0.0% six times
+  const minSpan = (orig) => {
+    const r = orig();
+    if (!r || !r.priceRange) return r;
+    const {minValue: lo, maxValue: hi} = r.priceRange, pad = Math.max(0, 0.02 - (hi - lo)) / 2;
+    return pad ? {...r, priceRange: {minValue: lo - pad, maxValue: hi + pad}} : r;
+  };
   async function drawChart(items) {
     if (!C) {
       try {
@@ -129,7 +136,7 @@ export async function mount(el, ctx) {
     items.forEach((x) => {
       const i = st.ids.indexOf(x.id);
       const s = C.chart.addLineSeries({color: tok(`--pick-${i + 1}`), lineWidth: 2, lineStyle: DASH[i] || 0, lastValueVisible: false, priceLineVisible: false,
-        priceFormat: {type: "custom", minMove: 0.0001, formatter: (v) => fmt.pct(v, 1)}});
+        priceFormat: {type: "custom", minMove: 0.0001, formatter: (v) => fmt.pct(v, 1)}, autoscaleInfoProvider: minSpan});
       s.setData(lineData(x.t, x.curve));
       if (!lines.length) s.createPriceLine({price: 0, color: tok("--line-2"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: ""});
       lines.push(s);
@@ -172,6 +179,7 @@ export async function mount(el, ctx) {
     {k: "수익 팩터", s: "총이익 ÷ 총손실", get: (x) => (x.pf != null ? fmt.num(x.pf, 2) : x.no_loss ? "손실 없음" : "—")},
     // a rank on a handful of trades is luck more than skill: it says 표본 적음 next to it (like the 순위표's 동전 ▲▼)
     {k: "동전 봇 순위 (참고)", s: "같은 봉 동전 봇 몇 개보다 수익률이 높은지", get: (x) => (x.extra ? h("span", {class: "muted"}, "비교 안 함 (늦게 시작)")
+      : !x.trades ? h("span", {class: "muted"}, "거래 전 (아직 견줄 것 없음)")
       : x.flip ? h("span", null, `동전 봇 ${fmt.int(x.flip.n)}개 중 ${fmt.int(x.flip.above)}개보다 높음`, x.trades < SMALL ? h("small", {class: "muted"}, " · 표본 적음") : null) : "—")},
     {k: "지금 포지션", s: "열린 것", money: false, get: (x) => `${fmt.int(x.open)}개`},
     {k: "파산 계좌", s: "잔고 10 USDT 미만", get: (x) => fmt.int(x.bust)},
