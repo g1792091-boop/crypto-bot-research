@@ -1,0 +1,990 @@
+"""Reel "parkdando_" volume-zone flip (support -> resistance retest) test. PREREG: PREREG_ZONEFLIP.md (this folder).
+
+    PYTHONDONTWRITEBYTECODE=1 nice -n 15 python3 lib_zoneflip.py selftest
+    PYTHONDONTWRITEBYTECODE=1 nice -n 15 python3 lib_zoneflip.py estimate
+    PYTHONDONTWRITEBYTECODE=1 nice -n 15 python3 lib_zoneflip.py run --bars <BINANCE_DIR>/bars [--pre <repo>/data/pre2021]
+                                                                    [--out out] [--procs 2] [--n-flip 2000] [--n-boot 2000]
+    PYTHONDONTWRITEBYTECODE=1 nice -n 15 python3 lib_zoneflip.py charts --bars ... --pre ... --out out
+
+Rule (PREREG section 4). For every bar b: volume-by-price of bars b-200 .. b-1 (50 equal buckets over their
+[min low, max high]; each bar's volume spread evenly over its own low-high range). High-volume zone = a maximal run
+of adjacent buckets whose volume is strictly above the 80th percentile of the 50 bucket volumes; the POC bucket
+always qualifies. A zone is BROKEN DOWN at b when close[b-1] >= zone.lo and close[b] < zone.lo - 0.25 ATR14[b]
+(mirror: broken UP when close[b-1] <= zone.hi and close[b] > zone.hi + 0.25 ATR14[b]). HELD = touches in bars
+b-200 .. b-1 where the bar came from the holding side, entered the zone and closed back out on that side
+(down-break: close[j-1] > hi, low[j] <= hi, close[j] > hi), counted greedily at least 3 bars apart. MAIN needs
+>= 3 touches; CTRL needs none. RETEST: the first bar r in b+1 .. b+20 that trades back into the zone (high >= lo
+for a down-break); signal iff it closes back on the broken side (close[r] < lo) -> SHORT. Stop = zone.hi + 0.25
+ATR14[r]; target = upper edge of the nearest other high-volume zone (same profile) whose upper edge is below
+close[r]; signal kept only if a target exists, risk = stop - close[r] <= 3 ATR14[r] and reward >= 2 x risk.
+Entry next bar open (market, slippage); exits: fixed stop / fixed target / 48 bars, engine conventions.
+
+Everything at bar t uses bars <= t only (profile and touches use bars < b; tests replace / shuffle every later bar).
+The exit simulator is research/reel5m/lib_reel5m.py ``exit_trade`` (imported, engine-parity tested there);
+data loading, costs, warm-up: research/reel5m (= research/deepseek200) and the locked engine; gauntlet:
+research/library/lib.py ``config_rows`` / ``select``; statistics: research/search/search.py; bootstrap:
+paperbot/agents/newlab.py ``boot_mean_p``. All imported read-only, nothing in the repo is written.
+"""
+
+from __future__ import annotations
+
+import sys
+
+sys.dont_write_bytecode = True       # never write __pycache__ into the frozen repo folders we import from
+
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import time  # noqa: E402
+import warnings  # noqa: E402
+from multiprocessing import Pool  # noqa: E402
+
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+from numpy.lib.stride_tricks import sliding_window_view as _SW  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = "/home/user/crypto-bot-research"
+sys.path.insert(0, os.path.join(REPO, "research", "reel5m"))
+warnings.filterwarnings("ignore")
+
+import lib_reel5m as R  # noqa: E402  (exit_trade, load_series, env, check_prereg, synth)
+
+# ------------------------------------------------------------------ fixed parameters (PREREG section 4)
+TFS = ("15m", "30m", "1h", "4h")
+COINS = ("BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD")
+VARIANTS = ("ZF_MAIN", "ZF_CTRL")     # MAIN: zone held >= 3 times; CTRL: same rules without the touch count
+EXIT_NAME = "ZONE_TP"
+VP_BARS = 200          # profile window: the 200 bars before the bar
+N_BUCKETS = 50         # equal price buckets over the window's [min low, max high]
+PCTL = 80.0            # bucket qualifies if volume > 80th percentile of the 50 bucket volumes (POC always)
+BREAK_ATR = 0.25       # break = close beyond the far edge by at least 0.25 ATR14
+MIN_TOUCHES = 3        # MAIN: at least 3 prior touches ...
+TOUCH_GAP = 3          # ... at least 3 bars apart
+RETEST_BARS = 20       # retest within 20 bars after the break bar
+STOP_BUF_ATR = 0.25    # stop = far edge +/- 0.25 ATR14 of the signal bar
+MAX_STOP_ATR = 3.0     # skip if stop distance > 3 ATR14
+MIN_RR = 2.0           # skip if reward : risk < 2
+MAX_HOLD = 48          # time exit after 48 bars (entry bar included), all timeframes
+ATR_LEN = 14
+SEED = 20261006
+N_FLIP = 2000
+BH_Q = 0.10
+PERIODS = {  # split label -> (start, end) UTC of the signal bar; 'pre' lives in the data/pre2021 series
+    "is": ("2021-08-01", "2024-07-01"),
+    "oos": ("2024-07-01", "2026-09-30"),
+    "pre": ("2020-01-01", "2021-08-01"),
+}
+SPLITS = ("is", "oos", "pre")
+PREREG = os.path.join(HERE, "PREREG_ZONEFLIP.md")
+PREREG_SHA = os.path.join(HERE, "PREREG_ZONEFLIP.sha256")
+
+
+def config_list() -> list[tuple[str, str, str]]:
+    """The N = 8 cells: 4 timeframes x {MAIN, CTRL}."""
+    return [(tf, v, EXIT_NAME) for tf in TFS for v in VARIANTS]
+
+
+def env() -> dict:
+    return R.env()
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ------------------------------------------------------------------ volume profile and zones
+def _edge(lo_w, w, k):
+    """Price of bucket boundary k (k = 0 .. N_BUCKETS). One expression everywhere so edges compare exactly."""
+    return lo_w + k * w
+
+
+def profiles(h, l, v, at, bars: int = VP_BARS, nb: int = N_BUCKETS, chunk: int = 512):
+    """Volume by price for the window [t-bars, t-1] of each t in ``at`` (t >= bars).
+    Returns vol (m, nb), lo_w (m,), w (m,), ok (m,). Each bar's volume is spread evenly over [low, high]
+    (a bar with high == low puts all of it in the bucket containing that price; the top price goes to the top
+    bucket). Uses bars strictly before t."""
+    h, l = np.asarray(h, float), np.asarray(l, float)
+    v = np.nan_to_num(np.asarray(v, float), nan=0.0)
+    at = np.asarray(at, np.int64)
+    m = len(at)
+    vol = np.zeros((m, nb))
+    lo_w, w = np.full(m, np.nan), np.full(m, np.nan)
+    ok = np.zeros(m, bool)
+    if m == 0:
+        return vol, lo_w, w, ok
+    assert at.min() >= bars, "profile needs `bars` earlier bars"
+    Hw, Lw, Vw = _SW(h, bars), _SW(l, bars), _SW(v, bars)
+    x = np.arange(nb + 1, dtype=float)
+    for s0 in range(0, m, chunk):
+        r = at[s0:s0 + chunk] - bars               # window start: bars r .. r+bars-1 = t-bars .. t-1
+        Hr, Lr, Vr = Hw[r], Lw[r], Vw[r]
+        lo, hi = Lr.min(axis=1), Hr.max(axis=1)
+        ww = (hi - lo) / nb
+        good = np.isfinite(ww) & (ww > 0)
+        ws = np.where(good, ww, 1.0)
+        a = (Lr - lo[:, None]) / ws[:, None]       # bar low / high in bucket units
+        b = (Hr - lo[:, None]) / ws[:, None]
+        span = b - a
+        pos = span > 0
+        sps = np.where(pos, span, 1.0)
+        F = np.clip((x[None, None, :] - a[:, :, None]) / sps[:, :, None], 0.0, 1.0)
+        pt = (x[None, None, :] > a[:, :, None]).astype(float)
+        F = np.where(pos[:, :, None], F, pt)
+        F[:, :, 0] = 0.0                           # everything lies inside [lo, hi]
+        F[:, :, nb] = 1.0
+        cum = np.einsum("tj,tjk->tk", Vr, F)
+        vb = np.diff(cum, axis=1)
+        tot = vb.sum(axis=1)
+        good &= np.isfinite(tot) & (tot > 0)
+        sl = slice(s0, s0 + len(r))
+        vol[sl], lo_w[sl], w[sl], ok[sl] = vb, lo, ww, good
+    return vol, lo_w, w, ok
+
+
+def qualify(vol: np.ndarray) -> np.ndarray:
+    """(m, nb) bool: bucket volume strictly above the 80th percentile of its row (numpy linear), POC always."""
+    thr = np.percentile(vol, PCTL, axis=1)
+    q = vol > thr[:, None]
+    q[np.arange(len(vol)), vol.argmax(axis=1)] = True      # POC: lowest bucket on ties
+    return q
+
+
+def zone_runs(qrow: np.ndarray) -> list[tuple[int, int]]:
+    """Maximal runs of qualifying buckets: [(first bucket, last bucket), ...] bottom to top."""
+    out, k, nb = [], 0, len(qrow)
+    while k < nb:
+        if qrow[k]:
+            j = k
+            while j + 1 < nb and qrow[j + 1]:
+                j += 1
+            out.append((k, j))
+            k = j + 1
+        else:
+            k += 1
+    return out
+
+
+def count_touches(o_side: int, zlo: float, zhi: float, h, l, c, b: int, bars: int = VP_BARS) -> list[int]:
+    """Touches in bars b-bars .. b-1, greedy, at least TOUCH_GAP bars apart.
+    o_side = -1 (zone broken DOWN, it was support): close[j-1] > zhi, low[j] <= zhi, close[j] > zhi.
+    o_side = +1 (zone broken UP, it was resistance): close[j-1] < zlo, high[j] >= zlo, close[j] < zlo."""
+    j0 = max(b - bars, 1)
+    if j0 >= b:
+        return []
+    cp, cj = c[j0 - 1:b - 1], c[j0:b]
+    if o_side < 0:
+        hit = (cp > zhi) & (l[j0:b] <= zhi) & (cj > zhi)
+    else:
+        hit = (cp < zlo) & (h[j0:b] >= zlo) & (cj < zlo)
+    out, last = [], -10**9
+    for j in (np.flatnonzero(hit) + j0).tolist():
+        if j - last >= TOUCH_GAP:
+            out.append(j)
+            last = j
+    return out
+
+
+def setups(o, h, l, c, v, atr) -> list[dict]:
+    """Every zone break (both directions). Bar b needs b >= VP_BARS + 1 and a finite ATR14[b] > 0. Only bars whose
+    close moved more than BREAK_ATR x ATR14 from the previous close can break a zone (necessary condition), so the
+    profile is computed only there. Each record: b, side (trade side: -1 short after a down-break, +1 long after an
+    up-break), zone edges, all zones of that profile, touch bars."""
+    n = len(c)
+    out: list[dict] = []
+    if n <= VP_BARS + 1:
+        return out
+    with np.errstate(invalid="ignore"):
+        dc = np.abs(c[1:] - c[:-1])
+        cand = np.flatnonzero((dc > BREAK_ATR * atr[1:]) & np.isfinite(atr[1:]) & (atr[1:] > 0)) + 1
+    cand = cand[cand >= VP_BARS + 1]
+    if not len(cand):
+        return out
+    step = 4096
+    karr = np.arange(N_BUCKETS)
+    for s0 in range(0, len(cand), step):
+        at = cand[s0:s0 + step]
+        vol, lo_w, w, ok = profiles(h, l, v, at)
+        q = qualify(vol)
+        starts = q & ~np.c_[np.zeros((len(q), 1), bool), q[:, :-1]]
+        ends = q & ~np.c_[q[:, 1:], np.zeros((len(q), 1), bool)]
+        P_lo = _edge(lo_w[:, None], w[:, None], karr[None, :])
+        P_hi = _edge(lo_w[:, None], w[:, None], karr[None, :] + 1)
+        cb, cp, ab = c[at][:, None], c[at - 1][:, None], atr[at][:, None]
+        with np.errstate(invalid="ignore"):
+            dn = starts & (P_lo > cb + BREAK_ATR * ab) & (P_lo <= cp)
+            up = ends & (P_hi < cb - BREAK_ATR * ab) & (P_hi >= cp)
+        rows = np.flatnonzero(ok & (dn.any(axis=1) | up.any(axis=1)))
+        for i in rows.tolist():
+            b = int(at[i])
+            runs = zone_runs(q[i])
+            zl = np.array([_edge(lo_w[i], w[i], k0) for k0, _k1 in runs])
+            zh = np.array([_edge(lo_w[i], w[i], k1 + 1) for _k0, k1 in runs])
+            for zi, (k0, k1) in enumerate(runs):
+                for side, hit in ((-1, dn[i, k0]), (1, up[i, k1])):
+                    if not hit:
+                        continue
+                    t = count_touches(side, zl[zi], zh[zi], h, l, c, b)
+                    out.append(dict(b=b, side=side, zi=zi, zlo=float(zl[zi]), zhi=float(zh[zi]), zones_lo=zl,
+                                    zones_hi=zh, touches=t, n_touch=len(t)))
+    return out
+
+
+def resolve(setups_: list[dict], h, l, c, atr) -> list[dict]:
+    """Retest -> signal records (before the MAIN / CTRL split and the same-bar rules). A signal has r (signal bar),
+    side, stop, target and the reference risk / reward at close[r]. Records failing a filter are kept with ``skip``
+    set (no_target / stop_far / rr) for the counts; a setup without a qualifying retest gives no record."""
+    n = len(c)
+    out = []
+    for s in setups_:
+        b, side, zlo, zhi = s["b"], s["side"], s["zlo"], s["zhi"]
+        r1 = min(n - 1, b + RETEST_BARS)
+        if r1 <= b:
+            continue
+        if side < 0:
+            touch = h[b + 1:r1 + 1] >= zlo
+        else:
+            touch = l[b + 1:r1 + 1] <= zhi
+        if not touch.any():
+            continue
+        r = b + 1 + int(touch.argmax())
+        if not ((c[r] < zlo) if side < 0 else (c[r] > zhi)):
+            continue                                # closed back in / through the zone: the break failed
+        a = float(atr[r])
+        if not (np.isfinite(a) and a > 0):
+            continue
+        ref = float(c[r])
+        zl, zh = s["zones_lo"], s["zones_hi"]
+        others = np.arange(len(zl)) != s["zi"]
+        if side < 0:
+            stop = zhi + STOP_BUF_ATR * a
+            cand = zh[others & (zh < ref)]
+            tgt = float(cand.max()) if len(cand) else np.nan
+            ti = int(np.flatnonzero(others & (zh == tgt))[0]) if len(cand) else -1
+        else:
+            stop = zlo - STOP_BUF_ATR * a
+            cand = zl[others & (zl > ref)]
+            tgt = float(cand.min()) if len(cand) else np.nan
+            ti = int(np.flatnonzero(others & (zl == tgt))[0]) if len(cand) else -1
+        risk = side * (ref - stop)
+        reward = side * (tgt - ref) if np.isfinite(tgt) else np.nan
+        if not np.isfinite(tgt):
+            skip = "no_target"
+        elif risk > MAX_STOP_ATR * a:
+            skip = "stop_far"
+        elif not reward >= MIN_RR * risk:
+            skip = "rr"
+        else:
+            skip = ""
+        out.append(dict(r=r, b=b, side=side, zlo=zlo, zhi=zhi, n_touch=s["n_touch"], touches=s["touches"],
+                        stop=float(stop), target=tgt, tz_lo=float(zl[ti]) if ti >= 0 else np.nan,
+                        tz_hi=float(zh[ti]) if ti >= 0 else np.nan, atr=a, ref=ref, risk=float(risk),
+                        reward=float(reward) if np.isfinite(reward) else np.nan, skip=skip))
+    return out
+
+
+def choose(sigs: list[dict], variant: str) -> dict[int, dict]:
+    """Per signal bar: the variant's valid signals; long and short on the same bar -> none; several on one side ->
+    the most recent break, then the smallest risk, then the lowest zone."""
+    by: dict[int, list] = {}
+    for s in sigs:
+        if s["skip"] or (variant == "ZF_MAIN" and s["n_touch"] < MIN_TOUCHES):
+            continue
+        by.setdefault(s["r"], []).append(s)
+    out = {}
+    for r, ss in by.items():
+        if len({s["side"] for s in ss}) > 1:
+            continue
+        out[r] = sorted(ss, key=lambda s: (-s["b"], s["risk"], s["zlo"]))[0]
+    return out
+
+
+def signals(df: pd.DataFrame) -> dict:
+    """All signal information of one series: {'atr', 'setups', 'sigs', 'chosen': {variant: {r: sig}}}."""
+    E = env()
+    fg = E["fg"]
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    v = df["volume"].to_numpy(float)
+    atr = fg.atr(df, ATR_LEN).to_numpy(float)
+    st = setups(o, h, l, c, v, atr)
+    sg = resolve(st, h, l, c, atr)
+    return {"atr": atr, "setups": st, "sigs": sg, "chosen": {var: choose(sg, var) for var in VARIANTS}}
+
+
+# ------------------------------------------------------------------ trades
+def window_idx(L, df: pd.DataFrame, tf: str, start: str, end: str) -> tuple[int, int]:
+    """Signal-bar positions [lo, hi): bar time >= start, past the warm-up, the 48-bar hold ends before `end`
+    (research/deepseek200/lib_c.window_idx)."""
+    ts = L._utc_ns(df["ts"])
+    lo = max(int(np.searchsorted(ts, np.datetime64(pd.Timestamp(start).tz_localize(None), "ns"))), L.warmup_bars(tf))
+    hi = int(np.searchsorted(ts, np.datetime64(pd.Timestamp(end).tz_localize(None), "ns"))) - (MAX_HOLD + 1)
+    return lo, max(lo, hi)
+
+
+def simulate(chosen: dict[int, dict], o, h, l, c, cost, lo: int, hi: int):
+    """One position at a time (engine convention: signals on bars <= the previous exit bar are skipped). Entry at
+    the next bar's open with slippage; skipped (flat again) if the open is already at / beyond the stop or the
+    target. Returns (trades, counts)."""
+    n = len(c)
+    hi = min(hi, n - 1)
+    trades, cnt = [], {"signals": 0, "taken": 0, "skip_entry": 0, "busy": 0}
+    next_free = -1
+    for r in sorted(k for k in chosen if lo <= k < hi):
+        cnt["signals"] += 1
+        if r <= next_free:
+            cnt["busy"] += 1
+            continue
+        s = chosen[r]
+        side, e = s["side"], r + 1
+        entry = o[e] * (1.0 + side * cost.slip_side)
+        if side * (entry - s["stop"]) <= 0 or side * (s["target"] - entry) <= 0:
+            cnt["skip_entry"] += 1
+            continue
+        t = R.exit_trade(side, e, entry, s["stop"], s["target"], o, h, l, c, cost)
+        t.update(signal_idx=r, break_idx=s["b"], n_touch=s["n_touch"], zone_lo=s["zlo"], zone_hi=s["zhi"],
+                 tz_lo=s["tz_lo"], tz_hi=s["tz_hi"], target_px=s["target"], atr_sig=s["atr"],
+                 tp_dist=side * (s["target"] - entry) / entry, risk_ref=s["risk"], reward_ref=s["reward"])
+        trades.append(t)
+        cnt["taken"] += 1
+        next_free = t["exit_idx"]
+    return trades, cnt
+
+
+def exit_fixed_batch(side, e, entry, stop, tgt, o, h, l, c, cost, chunk: int = 20000) -> np.ndarray:
+    """Vectorised ``R.exit_trade`` for fixed stop / target (coin flips): returns net per trade. Same order of
+    float operations as exit_trade (tests check bit equality)."""
+    side, e = np.asarray(side, np.int64), np.asarray(e, np.int64)
+    entry, stop, tgt = (np.asarray(x, float) for x in (entry, stop, tgt))
+    n, MH = len(o), cost.max_hold
+    out = np.empty(len(e))
+    ar = np.arange(MH)
+    for s0 in range(0, len(e), chunk):
+        sl = slice(s0, s0 + chunk)
+        sd, ee, en, sp, tg = side[sl], e[sl], entry[sl], stop[sl], tgt[sl]
+        last = np.minimum(n - 1, ee + MH - 1)
+        idx = ee[:, None] + ar[None, :]
+        valid = idx <= last[:, None]
+        idx = np.minimum(idx, n - 1)
+        lg = (sd > 0)[:, None]
+        adverse = np.where(lg, l[idx], h[idx])
+        favour = np.where(lg, h[idx], l[idx])
+        hit_sl = np.where(lg, adverse <= sp[:, None], adverse >= sp[:, None]) & valid
+        hit_tp = np.where(lg, favour >= tg[:, None], favour <= tg[:, None]) & valid
+        anyh = hit_sl | hit_tp
+        has = anyh.any(axis=1)
+        j = np.where(has, anyh.argmax(axis=1), last - ee)
+        rows = np.arange(len(ee))
+        oj = o[idx[rows, j]]
+        is_sl = has & hit_sl[rows, j]
+        is_tp = has & ~is_sl
+        sdf = sd.astype(float)
+        fill_sl = np.where(sd > 0, np.minimum(oj, sp), np.maximum(oj, sp))
+        px_sl = fill_sl * (1.0 - sdf * cost.slip_side)
+        px_tp = np.where(sd > 0, np.maximum(oj, tg), np.minimum(oj, tg))
+        px_t = c[idx[rows, j]] * (1.0 - sdf * cost.slip_side)
+        exit_px = np.where(is_sl, px_sl, np.where(is_tp, px_tp, px_t))
+        hold = j + 1
+        gross = sdf * (exit_px / en - 1.0)
+        fee = 2.0 * cost.fee_side
+        funding = cost.funding_8h * (hold * cost.bar_minutes / 480.0)
+        out[sl] = gross - fee - funding
+    return out
+
+
+def flip_sums(tr: pd.DataFrame, o, h, l, c, cost, lo: int, hi: int, n_flip: int, seed) -> tuple[np.ndarray, int]:
+    """Coin flips for one (cell, coin, period): for each real trade, ``n_flip`` random signal bars in [lo, hi) of
+    the same coin and period, same side, same stop and target distances (fractions of the entry), entry next open.
+    Returns (sum of net per bot, number of trades)."""
+    m = len(tr)
+    if m == 0 or hi <= lo:
+        return np.zeros(n_flip), 0
+    rng = np.random.default_rng(seed)
+    sides = tr["side"].to_numpy(np.int64)
+    sld = tr["sl_dist"].to_numpy(float)
+    tpd = tr["tp_dist"].to_numpy(float)
+    sums = np.zeros(n_flip)
+    per = max(1, 200000 // m)                       # bots per batch
+    for k0 in range(0, n_flip, per):
+        k1 = min(n_flip, k0 + per)
+        s = rng.integers(lo, min(hi, len(c) - 1), size=(k1 - k0, m))
+        sd = np.broadcast_to(sides, s.shape).ravel()
+        e = s.ravel() + 1
+        entry = o[e] * (1.0 + sd * cost.slip_side)
+        stop = entry * (1.0 - sd * np.broadcast_to(sld, s.shape).ravel())
+        tgt = entry * (1.0 + sd * np.broadcast_to(tpd, s.shape).ravel())
+        net = exit_fixed_batch(sd, e, entry, stop, tgt, o, h, l, c, cost)
+        sums[k0:k1] = net.reshape(k1 - k0, m).sum(axis=1)
+    return sums, m
+
+
+def _frame(trades: list, ts: np.ndarray, coin: str, variant: str, split: str, tf: str) -> pd.DataFrame:
+    t = pd.DataFrame(trades)
+    return pd.DataFrame({
+        "net": t["net"].to_numpy(np.float64), "gross": t["gross"].to_numpy(np.float64),
+        "gross_raw": t["gross_raw"].to_numpy(np.float64), "mae": t["mae"].to_numpy(np.float64),
+        "mae_held": t["mae_held"].to_numpy(np.float64), "mfe": t["mfe"].to_numpy(np.float64),
+        "sl_dist": t["sl_dist"].to_numpy(np.float64), "tp_dist": t["tp_dist"].to_numpy(np.float64),
+        "hold": t["hold"].to_numpy(np.int16), "side": t["side"].to_numpy(np.int8), "reason": t["reason"].to_numpy(),
+        "entry_px": t["entry_px"].to_numpy(np.float64), "exit_px": t["exit_px"].to_numpy(np.float64),
+        "stop_px": t["stop_px"].to_numpy(np.float64), "target_px": t["target_px"].to_numpy(np.float64),
+        "zone_lo": t["zone_lo"].to_numpy(np.float64), "zone_hi": t["zone_hi"].to_numpy(np.float64),
+        "tz_lo": t["tz_lo"].to_numpy(np.float64), "tz_hi": t["tz_hi"].to_numpy(np.float64),
+        "n_touch": t["n_touch"].to_numpy(np.int16), "atr_sig": t["atr_sig"].to_numpy(np.float64),
+        "risk_ref": t["risk_ref"].to_numpy(np.float64), "reward_ref": t["reward_ref"].to_numpy(np.float64),
+        "break_ts": ts[t["break_idx"].to_numpy(int)], "signal_ts": ts[t["signal_idx"].to_numpy(int)],
+        "entry_ts": ts[t["entry_idx"].to_numpy(int)], "exit_ts": ts[t["exit_idx"].to_numpy(int)],
+        "symbol": coin, "entry": variant, "exit": EXIT_NAME, "split": split, "tf": tf})
+
+
+def _seed(*parts) -> list[int]:
+    return [SEED] + [int(hashlib.sha256(str(p).encode()).hexdigest()[:8], 16) for p in parts]
+
+
+def run_series(df: pd.DataFrame, tf: str, coin: str, splits: list[str], n_flip: int):
+    """Trades of both variants on one series over the listed splits + coin-flip sums + signal counts."""
+    E = env()
+    L = E["L"]
+    df = df.reset_index(drop=True)
+    df.attrs["tf"] = tf
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    ts = pd.to_datetime(df["ts"], utc=True).dt.tz_localize(None).to_numpy()
+    cost = L._cost(tf, MAX_HOLD)
+    S = signals(df)
+    parts, flips, counts = [], [], []
+    for s in splits:
+        lo, hi = window_idx(L, df, tf, *PERIODS[s])
+        inwin = [x for x in S["sigs"] if lo <= x["r"] < hi]
+        brk = [x for x in S["setups"] if lo <= x["b"] < hi]
+        for var in VARIANTS:
+            tr, cnt = simulate(S["chosen"][var], o, h, l, c, cost, lo, hi) if hi > lo else ([], {})
+            need = MIN_TOUCHES if var == "ZF_MAIN" else 0
+            row = {"tf": tf, "entry": var, "split": s, "symbol": coin, "bars": max(0, hi - lo),
+                   "breaks": sum(1 for x in brk if x["n_touch"] >= need),
+                   "retests": sum(1 for x in inwin if x["n_touch"] >= need)}
+            for why in ("no_target", "stop_far", "rr"):
+                row[f"skip_{why}"] = sum(1 for x in inwin if x["n_touch"] >= need and x["skip"] == why)
+            row.update({k: cnt.get(k, 0) for k in ("signals", "taken", "skip_entry", "busy")})
+            counts.append(row)
+            fr = _frame(tr, ts, coin, var, s, tf) if tr else pd.DataFrame()
+            if len(fr):
+                parts.append(fr)
+            sums, m = flip_sums(fr, o, h, l, c, cost, lo, hi, n_flip, _seed(tf, var, coin, s)) if len(fr) else (np.zeros(n_flip), 0)
+            flips.append({"tf": tf, "entry": var, "split": s, "symbol": coin, "n": m, "sums": sums})
+    return (pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()), flips, counts
+
+
+def _task(args):
+    bars_dir, pre_dir, tf, coin, n_flip = args
+    man: dict = {}
+    t0 = time.time()
+    main, pre = R.load_series(bars_dir, pre_dir, tf, coin, man)
+    a = run_series(main, tf, coin, ["is", "oos"], n_flip)
+    b = run_series(pre, tf, coin, ["pre"], n_flip)
+    tr = pd.concat([x for x in (a[0], b[0]) if len(x)], ignore_index=True) if (len(a[0]) or len(b[0])) else pd.DataFrame()
+    return tr, a[1] + b[1], a[2] + b[2], man, (tf, coin, len(main), len(pre), round(time.time() - t0, 1))
+
+
+# ------------------------------------------------------------------ statistics, gauntlet, verdict
+def week_index(entry_ts) -> np.ndarray:
+    days = np.asarray(entry_ts, "datetime64[ns]").astype("datetime64[D]").astype(np.int64)
+    return (days + 3) // 7
+
+
+def _p12(SR, g: pd.DataFrame) -> float:
+    if len(g) < 20:
+        return 1.0
+    day = pd.to_datetime(g["entry_ts"]).dt.floor("D").to_numpy()
+    return SR.mean_test(g["net"].to_numpy(), day)[1]
+
+
+def flip_stats(flips: list[dict], tf: str, var: str, real: dict) -> dict:
+    """Pool the coin-flip bot sums over coins: bot mean per split and for periods 1+2 pooled.
+    p = (1 + bots with mean >= the real mean) / (n_flip + 1)."""
+    d = {}
+    fs = [f for f in flips if f["tf"] == tf and f["entry"] == var]
+    groups = {"is": ("is",), "oos": ("oos",), "pre": ("pre",), "12": ("is", "oos")}
+    for name, sp in groups.items():
+        sel = [f for f in fs if f["split"] in sp]
+        n = sum(f["n"] for f in sel)
+        if n == 0 or real.get(name) is None:
+            d[f"flip_{name}_mean_pct"], d[f"flip_{name}_p"] = np.nan, 1.0
+            continue
+        mean = sum(f["sums"] for f in sel) / n
+        d[f"flip_{name}_mean_pct"] = 100 * float(np.mean(mean))
+        d[f"flip_{name}_p"] = float((1 + int((mean >= real[name]).sum())) / (len(mean) + 1))
+    return d
+
+
+def owners_curve(t: pd.DataFrame) -> pd.DataFrame:
+    """research/search/search.py owners_book, step by step (one position at a time across coins, 20% margin x 20x,
+    liquidated at a 4.5% adverse move). Returns the equity after each taken trade."""
+    from search import OWN_EXPO, OWN_LIQ, OWN_MARGIN
+    t = t.sort_values(["entry_ts", "symbol"])
+    eq, last_exit, rows = 1.0, None, []
+    for et, xt, net, mae in zip(t["entry_ts"].to_numpy(), t["exit_ts"].to_numpy(), t["net"].to_numpy(), t["mae"].to_numpy()):
+        if last_exit is not None and et < last_exit:
+            continue
+        liquidated = -mae >= OWN_LIQ
+        eq *= 1 - OWN_MARGIN if liquidated else 1 + max(OWN_EXPO * net, -OWN_MARGIN)
+        rows.append((xt, eq))
+        last_exit = xt
+    return pd.DataFrame(rows, columns=["ts", "equity"])
+
+
+def cell_rows(tt: pd.DataFrame, flips: list[dict], counts: list[dict], n_boot: int) -> list[dict]:
+    E = env()
+    lib, SR = E["lib"], E["SR"]
+    from paperbot.agents.newlab import boot_mean_p
+    tt = tt.copy()
+    tt["symbol"] = tt["symbol"].astype(str)
+    rows = lib.config_rows(tt)
+    key = {(r["tf"], r["entry"], r["exit"]): r for r in rows}
+    cnt = pd.DataFrame(counts)
+    for (tf, e, x), g in tt.groupby(["tf", "entry", "exit"], observed=True):
+        r = key[(tf, e, x)]
+        g12 = g[g["split"].isin(["is", "oos"])]
+        r["p12"], r["n12"] = _p12(SR, g12), len(g12)
+        r["mean12_pct"] = 100 * g12["net"].mean() if len(g12) else np.nan
+        hseed = int(hashlib.sha256(f"{SEED}|{tf}|{e}".encode()).hexdigest()[:8], 16)
+        r["boot_p12"] = boot_mean_p(week_index(g12["entry_ts"].to_numpy()), g12["net"].to_numpy(), n_boot, hseed) if len(g12) else 1.0
+        gp = g[g["split"] == "pre"]
+        r["boot_p3"] = boot_mean_p(week_index(gp["entry_ts"].to_numpy()), gp["net"].to_numpy(), n_boot, hseed + 1) if len(gp) else 1.0
+        real = {"is": g.loc[g["split"] == "is", "net"].mean() if (g["split"] == "is").any() else None,
+                "oos": g.loc[g["split"] == "oos", "net"].mean() if (g["split"] == "oos").any() else None,
+                "pre": gp["net"].mean() if len(gp) else None,
+                "12": g12["net"].mean() if len(g12) else None}
+        r.update(flip_stats(flips, tf, e, real))
+        for pre, s in (("is_", "is"), ("cf_", "oos"), ("pre_", "pre")):
+            gg = g[g["split"] == s]
+            r[f"{pre}long_n"] = int((gg["side"] > 0).sum())
+            r[f"{pre}short_n"] = int((gg["side"] < 0).sum())
+            r[f"{pre}long_mean_pct"] = 100 * gg.loc[gg["side"] > 0, "net"].mean()
+            r[f"{pre}short_mean_pct"] = 100 * gg.loc[gg["side"] < 0, "net"].mean()
+            r[f"{pre}gross_mean_pct"] = 100 * gg["gross_raw"].mean()
+            r[f"{pre}cost_mean_pct"] = 100 * (gg["gross_raw"] - gg["net"]).mean()
+            r[f"{pre}hold_mean"] = gg["hold"].astype(float).mean()
+            r[f"{pre}sl_med_pct"] = 100 * gg["sl_dist"].median()
+            r[f"{pre}tp_med_pct"] = 100 * gg["tp_dist"].median()
+            r[f"{pre}rr_med"] = float((gg["tp_dist"] / gg["sl_dist"]).median()) if len(gg) else np.nan
+            for why in ("TP", "SL", "TIME"):
+                r[f"{pre}{why.lower()}_pct"] = 100 * float((gg["reason"] == why).mean()) if len(gg) else np.nan
+            c = cnt[(cnt["tf"] == tf) & (cnt["entry"] == e) & (cnt["split"] == s)]
+            for k in ("breaks", "retests", "skip_no_target", "skip_stop_far", "skip_rr", "signals", "taken",
+                      "skip_entry", "busy"):
+                r[f"{pre}{k}"] = int(c[k].sum()) if len(c) else 0
+    return rows
+
+
+def finish(rows: list[dict]) -> pd.DataFrame:
+    """Join to the N = 8 cells, library stages, BH over all 8 (day-clustered p12 and coin-flip p), the verdict."""
+    E = env()
+    lib, SR = E["lib"], E["SR"]
+    t = pd.DataFrame(rows)
+    full = pd.DataFrame(config_list(), columns=["tf", "entry", "exit"])
+    t = full.merge(t, on=["tf", "entry", "exit"], how="left") if len(t) else full
+    for col in ("is_n", "cf_n", "pre_n", "n12"):
+        t[col] = t[col].fillna(0) if col in t else 0
+    for col in ("is_p", "cf_p", "pre_p", "p12", "boot_p12", "boot_p3", "flip_12_p", "flip_is_p", "flip_oos_p", "flip_pre_p"):
+        t[col] = t[col].fillna(1.0) if col in t else 1.0
+    for col in ("is_mean_pct", "cf_mean_pct", "pre_mean_pct", "is_pf", "cf_pf", "pre_pf", "is_coins_pos", "cf_coins_pos",
+                "pre_coins_pos", "is_coins_n", "pre_coins_n", "is_half1_mean_pct", "is_half2_mean_pct", "max_lev",
+                "is_own_final_x", "cf_own_final_x", "pre_own_final_x"):
+        if col not in t:
+            t[col] = np.nan
+    t = lib.select(t)
+    t["bh12"] = SR.bh(t["p12"].to_numpy(float), BH_Q)
+    t["flip_bh12"] = SR.bh(t["flip_12_p"].to_numpy(float), BH_Q)
+    t["candidate"] = t["stage3"] & t["bh12"] & t["flip_bh12"]
+    t["weak_candidate"] = t["stage3"] & ~t["candidate"]
+    t["candidate_20x"] = t["candidate"] & t["x20_ok"]
+    t["all3_positive"] = (t["is_mean_pct"] > 0) & (t["cf_mean_pct"] > 0) & (t["pre_mean_pct"] > 0)
+    return t
+
+
+def verdict(t: pd.DataFrame) -> str:
+    """PREREG section 7: PASS if a MAIN cell is a candidate; WEAK if no MAIN candidate but a MAIN cell is a weak
+    candidate or positive after costs in all three periods; FAIL otherwise."""
+    m = t[t["entry"] == "ZF_MAIN"]
+    if m["candidate"].any():
+        return "PASS"
+    if m["weak_candidate"].any() or m["all3_positive"].any():
+        return "WEAK"
+    return "FAIL"
+
+
+def _clean(o):
+    return R._clean(o)
+
+
+def report(t: pd.DataFrame, tt: pd.DataFrame, counts: list[dict], out: str) -> dict:
+    os.makedirs(out, exist_ok=True)
+    t.to_csv(os.path.join(out, "results.csv"), index=False)
+    tt.to_csv(os.path.join(out, "trades.csv.gz"), index=False)
+    pd.DataFrame(counts).to_csv(os.path.join(out, "counts.csv"), index=False)
+    bc = tt.groupby(["tf", "entry", "split", "symbol"], observed=True).agg(
+        n=("net", "size"), mean_net_pct=("net", lambda x: 100 * x.mean()), win_pct=("net", lambda x: 100 * (x > 0).mean()))
+    bc.to_csv(os.path.join(out, "by_coin.csv"))
+    yr = tt.assign(year=pd.to_datetime(tt["entry_ts"]).dt.year).groupby(["tf", "entry", "year"], observed=True).agg(
+        n=("net", "size"), mean_net_pct=("net", lambda x: 100 * x.mean()), win_pct=("net", lambda x: 100 * (x > 0).mean()))
+    yr.to_csv(os.path.join(out, "by_year.csv"))
+    sd = tt.groupby(["tf", "entry", "split", "side"], observed=True).agg(
+        n=("net", "size"), mean_net_pct=("net", lambda x: 100 * x.mean()))
+    sd.to_csv(os.path.join(out, "by_side.csv"))
+    summary = {"configs": len(t), "verdict": verdict(t), "trades_total": int(len(tt)),
+               "trades_by_variant": {k: int(v) for k, v in tt.groupby("entry", observed=True).size().items()},
+               "stage1": int(t["stage1"].sum()), "stage1_top": int(t["stage1_top"].sum()), "stage2": int(t["stage2"].sum()),
+               "stage3": int(t["stage3"].sum()), "bh12": int(t["bh12"].sum()), "flip_bh12": int(t["flip_bh12"].sum()),
+               "candidate": int(t["candidate"].sum()), "weak_candidate": int(t["weak_candidate"].sum()),
+               "candidate_20x": int(t["candidate_20x"].sum()), "all_three_periods_positive": int(t["all3_positive"].sum()),
+               "main_candidates": t.loc[(t["entry"] == "ZF_MAIN") & t["candidate"], "tf"].tolist(),
+               "ctrl_candidates": t.loc[(t["entry"] == "ZF_CTRL") & t["candidate"], "tf"].tolist()}
+    with open(os.path.join(out, "summary.json"), "w") as fh:
+        json.dump(_clean(summary), fh, indent=1)
+    return summary
+
+
+def run(bars: str, pre: str, out: str, procs: int, tfs: tuple, n_flip: int, n_boot: int) -> dict:
+    prereg_sha = R.check_prereg(PREREG, PREREG_SHA)
+    t0 = time.time()
+    tasks = [(bars, pre, tf, coin, n_flip) for tf in tfs for coin in COINS]
+    trades, flips, counts, manifest, sizes = [], [], [], {}, []
+    with Pool(procs) as pool:
+        for tr, fl, cn, man, size in pool.imap_unordered(_task, tasks):
+            trades.append(tr)
+            flips.extend(fl)
+            counts.extend(cn)
+            manifest.update(man)
+            sizes.append(size)
+            print(f"{size[0]} {size[1]}: {len(tr)} trades, task {size[4]}s, total {time.time() - t0:.0f}s", flush=True)
+    order = ["tf", "entry", "split", "symbol", "entry_ts"]
+    tt = pd.concat([x for x in trades if len(x)], ignore_index=True).sort_values(order, kind="mergesort").reset_index(drop=True)
+    flips = sorted(flips, key=lambda f: (f["tf"], f["entry"], f["split"], f["symbol"]))
+    counts = sorted(counts, key=lambda r: (r["tf"], r["entry"], r["split"], r["symbol"]))
+    rows = cell_rows(tt, flips, counts, n_boot)
+    t = finish(rows)
+    summary = report(t, tt, counts, out)
+    np.savez_compressed(os.path.join(out, "flips.npz"), **{f"{f['tf']}|{f['entry']}|{f['split']}|{f['symbol']}|n{f['n']}": f["sums"] for f in flips})
+    summary["seconds"] = round(time.time() - t0)
+    summary.update(bars_dir=bars, pre_dir=pre, n_flip=n_flip, n_boot=n_boot, tfs=list(tfs), procs=procs)
+    summary["code_sha256"] = {os.path.basename(__file__): _sha256(__file__), "lib_reel5m.py": _sha256(R.__file__)}
+    summary["prereg_sha256"] = prereg_sha
+    summary["series_bars"] = {f"{tf}_{coin}": [nm, npre, sec] for tf, coin, nm, npre, sec in sorted(sizes)}
+    with open(os.path.join(out, "summary.json"), "w") as fh:
+        json.dump(_clean(summary), fh, indent=1)
+    with open(os.path.join(out, "data_manifest.json"), "w") as fh:
+        json.dump(manifest, fh, indent=1, sort_keys=True)
+    print(json.dumps({k: v for k, v in summary.items() if k != "series_bars"}, default=str))
+    return summary
+
+
+# ------------------------------------------------------------------ hand-made bars and self-tests
+def handmade(touch_bars=(150, 152, 200, 240), break_close: float = 99.0, retest_close: float = 99.5,
+             target_zone=(92.5, 94.5), mirror: bool = False) -> pd.DataFrame:
+    """300 bars, 1h. Window of the break bar 270 = bars 70..269: min low 90, max high 115 -> 50 buckets of 0.5.
+    Heavy volume builds exactly 10 buckets: zone A [100, 101] (the support), the target zone (default [92.5, 94.5])
+    and zone C [108, 110]. Price then sits at 102.5-103.5 above A, touches A at ``touch_bars`` (low 100.5, close
+    102), breaks below at bar 270 (close ``break_close``), retests at bar 273 (high 100.5, close ``retest_close``)
+    and falls to 94 by bar 276. ``mirror``: every price p -> 205 - p (same bucket grid, resistance broken up)."""
+    n = 300
+    o = np.full(n, 103.0)
+    c = np.full(n, 103.0)
+    hh = np.full(n, 103.5)
+    ll = np.full(n, 102.5)
+    v = np.ones(n)
+
+    def bar(i, oo, hi, lo, cc, vol=1.0):
+        o[i], hh[i], ll[i], c[i], v[i] = oo, hi, lo, cc, vol
+
+    bar(70, 90.5, 91.0, 90.0, 90.5)
+    bar(71, 114.5, 115.0, 114.0, 114.5)
+    t0, t1 = target_zone
+    nbk = int(round((t1 - t0) / 0.5))
+    for i in range(72, 82):
+        bar(i, t0 + 0.5, t1, t0, t1 - 0.5, 100.0 * nbk)
+    for i in range(82, 92):
+        bar(i, 108.5, 110.0, 108.0, 109.5, 400.0)
+    for i in range(92, 102):
+        bar(i, 100.5, 101.0, 100.0, 100.5, 200.0)
+    for j in touch_bars:
+        bar(j, 103.0, 103.5, 100.5, 102.0)
+    bar(270, 103.0, 103.0, 98.5, break_close)
+    bar(271, break_close, max(99.5, break_close), 98.5, 99.0)
+    bar(272, 99.0, 99.5, 98.5, 99.0)
+    bar(273, 99.0, 100.5, 98.75, retest_close)
+    bar(274, retest_close, 99.75, 98.0, 98.25)
+    bar(275, 98.25, 98.5, 96.5, 96.75)
+    bar(276, 96.75, 97.0, 94.0, 94.25)
+    for i in range(277, n):
+        bar(i, 94.25, 94.5, 94.0, 94.25)
+    if mirror:
+        o, c, hh, ll = 205.0 - o, 205.0 - c, 205.0 - ll, 205.0 - hh
+    ts = pd.date_range("2022-01-01", periods=n, freq="60min", tz="UTC")
+    df = pd.DataFrame({"ts": ts, "open": o, "high": hh, "low": ll, "close": c, "volume": v})
+    df.attrs["tf"] = "1h"
+    return df
+
+
+def _hand_trades(df: pd.DataFrame, variant: str):
+    L = env()["L"]
+    S = signals(df)
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    tr, cnt = simulate(S["chosen"][variant], o, h, l, c, L._cost("1h", MAX_HOLD), VP_BARS + 1, len(df) - 1)
+    return S, tr, cnt
+
+
+def handmade_tests() -> None:
+    L = env()["L"]
+    cost = L._cost("1h", MAX_HOLD)
+    # 0. the profile of the break bar: exactly the three designed zones
+    df = handmade()
+    h, l, v = (df[k].to_numpy(float) for k in ("high", "low", "volume"))
+    vol, lo_w, w, ok = profiles(h, l, v, np.array([270]))
+    assert ok[0] and lo_w[0] == 90.0 and w[0] == 0.5, (lo_w, w)
+    runs = zone_runs(qualify(vol)[0])
+    zones = [(_edge(90.0, 0.5, a), _edge(90.0, 0.5, b + 1)) for a, b in runs]
+    assert zones == [(92.5, 94.5), (100.0, 101.0), (108.0, 110.0)], zones
+    # 1. support held 3 times (touch at 152 is 2 bars after 150: not counted), broken, retested -> one short
+    for var in VARIANTS:
+        S, tr, _ = _hand_trades(df, var)
+        assert len(tr) == 1, (var, len(tr), [(s["b"], s["side"], s["zlo"]) for s in S["setups"]])
+        t = tr[0]
+        atr = S["atr"]
+        assert t["side"] == -1 and t["signal_idx"] == 273 and t["break_idx"] == 270 and t["entry_idx"] == 274
+        assert t["n_touch"] == 3 and (t["zone_lo"], t["zone_hi"]) == (100.0, 101.0)
+        assert t["stop_px"] == 101.0 + STOP_BUF_ATR * atr[273], (t["stop_px"], atr[273])
+        assert t["target_px"] == 94.5 and t["reason"] == "TP" and t["exit_idx"] == 276 and t["exit_px"] == 94.5
+        assert t["entry_px"] == 99.5 * (1 - cost.slip_side)
+        su = [s for s in S["setups"] if s["b"] == 270]
+        assert len(su) == 1 and su[0]["touches"] == [150, 200, 240], su
+    # 2. mirror: resistance held 3 times, broken up, retested from above -> one long
+    dm = handmade(mirror=True)
+    for var in VARIANTS:
+        S, tr, _ = _hand_trades(dm, var)
+        assert len(tr) == 1, (var, len(tr))
+        t = tr[0]
+        atr = S["atr"]
+        assert t["side"] == 1 and t["signal_idx"] == 273 and t["entry_idx"] == 274
+        assert (t["zone_lo"], t["zone_hi"]) == (104.0, 105.0) and t["n_touch"] == 3
+        assert t["stop_px"] == 104.0 - STOP_BUF_ATR * atr[273]
+        assert t["target_px"] == 110.5 and t["reason"] == "TP" and t["exit_px"] == 110.5
+        assert t["entry_px"] == 105.5 * (1 + cost.slip_side)
+        assert np.allclose(atr, _hand_trades(df, var)[0]["atr"], equal_nan=True)
+    # 3. reward : risk < 2 (target zone [96, 98] -> reward 1.5, risk ~1.8): no trade in either variant
+    dr = handmade(target_zone=(96.0, 98.0))
+    for var in VARIANTS:
+        S, tr, _ = _hand_trades(dr, var)
+        assert not tr, (var, tr)
+        assert any(s["r"] == 273 and s["skip"] == "rr" for s in S["sigs"]), S["sigs"]
+    # 4. only two counted touches (150, 152 too close, 200): MAIN no trade, CTRL the same short
+    d2 = handmade(touch_bars=(150, 152, 200))
+    assert not _hand_trades(d2, "ZF_MAIN")[1]
+    tr = _hand_trades(d2, "ZF_CTRL")[1]
+    assert len(tr) == 1 and tr[0]["n_touch"] == 2 and tr[0]["side"] == -1
+    # 5. break smaller than 0.25 ATR (close 99.9): no setup, no trade
+    d5 = handmade(break_close=99.9)
+    S, tr, _ = _hand_trades(d5, "ZF_CTRL")
+    assert not tr and not [s for s in S["setups"] if s["b"] == 270]
+    # 6. retest closes back inside the zone (100.25): the break failed, no trade
+    d6 = handmade(retest_close=100.25)
+    for var in VARIANTS:
+        assert not _hand_trades(d6, var)[1]
+    print("hand-made bar tests ok")
+
+
+def synth(n: int, tf: str, seed: int) -> pd.DataFrame:
+    return R.synth(n, tf, seed)
+
+
+def _sig_key(S: dict, cut: int) -> list:
+    out = [(s["r"], s["b"], s["side"], s["zlo"], s["zhi"], s["n_touch"], tuple(s["touches"]), s["stop"],
+            s["target"] if np.isfinite(s["target"]) else None, s["skip"]) for s in S["sigs"] if s["r"] < cut]
+    for var in VARIANTS:                                   # the chosen signal per bar (same-bar rules) too
+        out += [(var, r, x["b"], x["side"], x["stop"], x["target"]) for r, x in sorted(S["chosen"][var].items()) if r < cut]
+    return out
+
+
+def lookahead_check(tf: str = "1h", n: int = 3000, cuts=(0.45, 0.7, 0.93), seed: int = 5) -> int:
+    """Signals (and their stop / target / zone) on bars < cut must not change when the bars from ``cut`` on are
+    removed, replaced by junk, or shuffled. Returns the number of signals compared."""
+    df = synth(n, tf, seed)
+    full = signals(df)
+    rng = np.random.default_rng(1)
+    compared = 0
+    for cut in [int(n * f) for f in cuts]:
+        ref = _sig_key(full, cut)
+        compared += len(ref)
+        d2 = df.iloc[:cut].copy()
+        d3 = df.copy()
+        for k in ("open", "high", "low", "close"):
+            d3.loc[d3.index[cut:], k] = d3[k].to_numpy()[cut:] * rng.uniform(0.5, 1.5, n - cut)
+        d3["high"] = d3[["open", "high", "low", "close"]].max(axis=1)
+        d3["low"] = d3[["open", "high", "low", "close"]].min(axis=1)
+        d3.loc[d3.index[cut:], "volume"] = rng.lognormal(0, 2, n - cut) * 100
+        d4 = df.copy()
+        perm = rng.permutation(np.arange(cut, n))
+        for k in ("open", "high", "low", "close", "volume"):
+            d4.loc[d4.index[cut:], k] = df[k].to_numpy()[perm]
+        for name, dd in (("removed", d2), ("junk", d3), ("shuffled", d4)):
+            got = _sig_key(signals(dd), cut)
+            assert got == ref, f"look-ahead ({name}) {tf} cut={cut}: {len(got)} vs {len(ref)}"
+    return compared
+
+
+def _setup_key(S: dict, cut: int) -> list:
+    return [(s["b"], s["side"], s["zlo"], s["zhi"], tuple(s["touches"]), tuple(s["zones_lo"]), tuple(s["zones_hi"]))
+            for s in S["setups"] if s["b"] < cut]
+
+
+def decision_lookahead_check(tf: str = "1h", n: int = 2500, per: int = 12, seed: int = 8) -> int:
+    """For single decisions: cut right after a retest-signal bar r (cut = r + 1), right after a break bar b, and at
+    random bars; replace / shuffle every bar from the cut on. Every break and signal on bars < cut (the decision
+    bar included) must be unchanged. Returns the number of cuts checked."""
+    df = synth(n, tf, seed)
+    full = signals(df)
+    rng = np.random.default_rng(seed)
+    rs = sorted({s["r"] for s in full["sigs"]})
+    bs = sorted({s["b"] for s in full["setups"]})
+    cuts = set()
+    for arr in (rs, bs):
+        if arr:
+            cuts.update(int(x) + 1 for x in rng.choice(arr, min(per, len(arr)), replace=False))
+    cuts.update(int(x) for x in rng.integers(VP_BARS + 2, n - 1, per))
+    for cut in sorted(cuts):
+        ref_s, ref_b = _sig_key(full, cut), _setup_key(full, cut)
+        d3 = df.copy()
+        perm = rng.permutation(np.arange(cut, n))
+        for k in ("open", "high", "low", "close", "volume"):
+            d3.loc[d3.index[cut:], k] = df[k].to_numpy()[perm]
+        d4 = df.copy()
+        for k in ("open", "high", "low", "close"):
+            d4.loc[d4.index[cut:], k] = df[k].to_numpy()[cut:] * rng.uniform(0.7, 1.3, n - cut)
+        d4["high"] = d4[["open", "high", "low", "close"]].max(axis=1)
+        d4["low"] = d4[["open", "high", "low", "close"]].min(axis=1)
+        for name, dd in (("shuffled", d3), ("junk", d4)):
+            S2 = signals(dd)
+            assert _sig_key(S2, cut) == ref_s, f"decision look-ahead (signals, {name}) {tf} cut={cut}"
+            assert _setup_key(S2, cut) == ref_b, f"decision look-ahead (breaks, {name}) {tf} cut={cut}"
+    return len(cuts)
+
+
+def parity_check(seed: int = 3) -> int:
+    """exit_fixed_batch (coin flips) == R.exit_trade for random fixed stops / targets, bit for bit."""
+    L = env()["L"]
+    df = synth(4000, "1h", seed)
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    rng = np.random.default_rng(seed)
+    m = 3000
+    e = rng.integers(400, len(c) - 1, m)          # some trades run into the end of the series (EOD)
+    side = rng.choice([-1, 1], m)
+    entry = o[e] * (1 + side * 0.0002)
+    sld, tpd = rng.uniform(0.002, 0.05, m), rng.uniform(0.004, 0.12, m)
+    stop, tgt = entry * (1 - side * sld), entry * (1 + side * tpd)
+    for tf in ("15m", "4h"):
+        cost = L._cost(tf, MAX_HOLD)
+        vec = exit_fixed_batch(side, e, entry, stop, tgt, o, h, l, c, cost, chunk=700)
+        ref = np.array([R.exit_trade(int(side[i]), int(e[i]), entry[i], stop[i], tgt[i], o, h, l, c, cost)["net"] for i in range(m)])
+        assert np.array_equal(vec, ref), np.abs(vec - ref).max()
+    return m
+
+
+def selftest() -> None:
+    t0 = time.time()
+    assert len(config_list()) == 8
+    handmade_tests()
+    n = parity_check()
+    print(f"coin-flip exit parity ok ({n} trades x 2 timeframes)")
+    for tf in TFS:
+        k = lookahead_check(tf)
+        print(f"look-ahead ok {tf}: {k} signals compared (removed / junk / shuffled future)")
+        assert k > 0, "look-ahead test compared nothing"
+        k = decision_lookahead_check(tf, seed=8 + TFS.index(tf))
+        print(f"decision look-ahead ok {tf}: {k} cuts right after signal / break / random bars")
+    # determinism and both directions present on synthetic data
+    df = synth(6000, "1h", 11)
+    a, b = signals(df), signals(df)
+    assert _sig_key(a, 10**9) == _sig_key(b, 10**9)
+    sides = {s["side"] for s in a["sigs"]}
+    assert sides == {-1, 1}, sides
+    # coin flips reproducible and independent of process order (seeded per cell / coin / period)
+    L = env()["L"]
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    cost = L._cost("1h", MAX_HOLD)
+    tr, _ = simulate(a["chosen"]["ZF_CTRL"], o, h, l, c, cost, 800, 5900)
+    fr = _frame(tr, df["ts"].to_numpy(), "X", "ZF_CTRL", "is", "1h")
+    s1, _ = flip_sums(fr, o, h, l, c, cost, 800, 5900, 50, _seed("1h", "ZF_CTRL", "X", "is"))
+    s2, _ = flip_sums(fr, o, h, l, c, cost, 800, 5900, 50, _seed("1h", "ZF_CTRL", "X", "is"))
+    assert np.array_equal(s1, s2)
+    print(f"synthetic 1h 6000 bars: {len(a['setups'])} breaks, {len(a['sigs'])} retests, "
+          f"MAIN {len(a['chosen']['ZF_MAIN'])} / CTRL {len(a['chosen']['ZF_CTRL'])} signals, CTRL trades {len(tr)}")
+    print(f"selftest ok ({time.time() - t0:.0f}s)")
+
+
+def estimate() -> None:
+    """Time signals + trades + coin flips on synthetic bars and extrapolate (6 coins, real bar counts)."""
+    L = env()["L"]
+    real = {"15m": 201_000 + 56_500, "30m": 100_500 + 28_300, "1h": 50_300 + 14_100, "4h": 12_600 + 3_500}
+    tot = 0.0
+    for tf, nreal in real.items():
+        n = 20000 if tf != "4h" else 8000
+        df = synth(n, tf, 3)
+        t0 = time.time()
+        S = signals(df)
+        t_sig = time.time() - t0
+        o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+        cost = L._cost(tf, MAX_HOLD)
+        lo, hi = L.warmup_bars(tf) if L.warmup_bars(tf) < n // 2 else 400, n - 50
+        t0 = time.time()
+        ntr = 0
+        fl_t = 0.0
+        for var in VARIANTS:
+            tr, _ = simulate(S["chosen"][var], o, h, l, c, cost, lo, hi)
+            ntr += len(tr)
+            if tr:
+                fr = _frame(tr, df["ts"].to_numpy(), "X", var, "is", tf)
+                t1 = time.time()
+                flip_sums(fr, o, h, l, c, cost, lo, hi, 200, [1, 2])
+                fl_t += (time.time() - t1) * N_FLIP / 200
+        t_tr = time.time() - t0
+        per_coin = (t_sig + t_tr - fl_t * 200 / N_FLIP + fl_t) * nreal / n
+        tot += 6 * per_coin
+        print(f"{tf}: {n} bars signals {t_sig:.1f}s, {ntr} trades, flips(2000) {fl_t:.1f}s; per coin ~{per_coin:.0f}s "
+              f"({len(S['setups'])} breaks, {len(S['sigs'])} retests)")
+    print(f"total CPU ~{tot / 60:.1f} min; with 2 processes ~{tot / 120:.1f} min")
+
+
+def charts(bars: str, pre: str, out: str) -> None:
+    import zf_charts
+    zf_charts.make_all(bars, pre, out)
+
+
+def main(argv: list[str]) -> None:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cmd", choices=["selftest", "estimate", "run", "charts", "count"])
+    ap.add_argument("--bars", default="/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/bars")
+    ap.add_argument("--pre", default=os.path.join(REPO, "data", "pre2021"))
+    ap.add_argument("--out", default=os.path.join(HERE, "out"))
+    ap.add_argument("--procs", type=int, default=2)
+    ap.add_argument("--tfs", default=",".join(TFS))
+    ap.add_argument("--n-flip", type=int, default=N_FLIP)
+    ap.add_argument("--n-boot", type=int, default=2000)
+    a = ap.parse_args(argv)
+    if a.cmd == "selftest":
+        selftest()
+    elif a.cmd == "estimate":
+        estimate()
+    elif a.cmd == "count":
+        print(len(config_list()), config_list())
+    elif a.cmd == "run":
+        assert a.procs <= 2, "at most 2 worker processes (shared machine)"
+        run(a.bars, a.pre, a.out, a.procs, tuple(a.tfs.split(",")), a.n_flip, a.n_boot)
+    elif a.cmd == "charts":
+        charts(a.bars, a.pre, a.out)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
