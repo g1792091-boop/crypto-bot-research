@@ -197,6 +197,27 @@ def test_a_series_that_never_loaded_is_not_ready_and_says_why(monkeypatch):
     assert e["ready"] is False and "비어" in e["why_ko"]                                         # an empty answer is not "0"
 
 
+def test_a_binance_slow_down_stops_every_request_for_a_while(monkeypatch):
+    class Slow(Exception):
+        code = 429
+
+    clock, calls = Clock(), []
+
+    def fetch(url):
+        calls.append(url)
+        raise Slow("too many requests")
+
+    monkeypatch.setattr(CP, "FETCH", fetch)
+    s = CP.Series(clock=clock)
+    a = s.get("BTCUSDT", "oi", "15m")
+    assert a["ready"] is False and "막음" in a["why_ko"] and len(calls) == 1
+    clock.t += CP.FAIL_RETRY_S + 1                       # another coin and kind too: no request reaches Binance while it is cooling
+    assert s.get("ETHUSDT", "ls", "1h")["ready"] is False and s.get("BTCUSDT", "oi", "15m")["ready"] is False and len(calls) == 1
+    clock.t += CP.COOL_S
+    s.get("BTCUSDT", "oi", "15m")
+    assert len(calls) == 2                                # asked again after the cool-down
+
+
 # ---------------------------------------------------------------- the routes
 def _client(tmp_path, rows=(), conn=()):
     db = str(tmp_path / "p.db")

@@ -121,6 +121,7 @@ export function stopMap(o) {
   strip.addEventListener("pointerdown", aimAt);
   strip.addEventListener("pointerleave", clearAim);
   strip.style.touchAction = "none";
+  if (ctx.listen) ctx.listen(document, "pointerdown", (e) => { if (aim != null && !strip.contains(e.target)) clearAim(); });          // a tap elsewhere puts the tip away
 
   ctx.watch("board", (b) => { if (b) { board = b; collect(); paintSoon(); report(); } });
   ctx.watch("ticker", () => { if (on) paintSoon(); });

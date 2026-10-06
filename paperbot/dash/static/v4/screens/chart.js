@@ -126,7 +126,8 @@ export async function mount(el, ctx) {
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
     // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
-    chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "chart", sym: () => st.sym, tf: () => st.tf});
+    try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "chart", sym: () => st.sym, tf: () => st.tf}); }
+    catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));

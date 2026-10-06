@@ -30,7 +30,7 @@ const FUND_WARN = 0.0005;             // a bar's summed funding beyond +-0.05 % 
 export function lowerPanes(o) {
   const {ctx, chart, deck, host} = o;
   const panes = new Map();                // id -> pane
-  let want = [], relaying = 0, cvdTimer = 0;
+  let want = [], relaying = 0, cvdTimer = 0, barTimer = 0;
 
   const ts = () => chart.timeScale();
   const mainW = () => { try { return chart.priceScale("right").width(); } catch (e) { return 0; } };
@@ -216,7 +216,7 @@ export function lowerPanes(o) {
     const cp = panes.get("cvd");                  // the sum starts at the left edge of the bars on screen: again when that moves
     if (cp && cp.built && !cvdTimer) cvdTimer = setTimeout(() => { cvdTimer = 0; const q = panes.get("cvd"); if (q) apply(q); }, 140);
   });
-  ctx.track(() => { if (cvdTimer) clearTimeout(cvdTimer); });
+  ctx.track(() => { if (cvdTimer) clearTimeout(cvdTimer); if (barTimer) clearTimeout(barTimer); });
   // the crosshair of the main chart shows in every pane, and the pane's header value follows it
   chart.subscribeCrosshairMove((q) => {
     if (relaying || !panes.size) return;
@@ -270,6 +270,10 @@ export function lowerPanes(o) {
       sortHost();
     },
     onData(how) {
+      if (how === "bar") {                       // the forming bar changes with every relay trade: the panes follow once a second
+        if (!barTimer) barTimer = setTimeout(() => { barTimer = 0; for (const p of panes.values()) if (p.built) apply(p); }, 1000);
+        return;
+      }
       for (const p of panes.values()) {
         if (!p.built) continue;
         if (how === "set") {

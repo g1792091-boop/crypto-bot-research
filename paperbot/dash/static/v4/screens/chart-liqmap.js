@@ -35,6 +35,7 @@ export function liqMap(o) {
   // ---------------------------------------------------------------- data
   function view() {
     if (!on) return {kind: "off"};
+    if (o.tf() === "1M") return {kind: "unsupported"};          // calendar months are not a fixed number of seconds: no cut of liq.db fits
     if (!data && err) return {kind: "failed", err};
     if (!data) return {kind: "loading"};
     if (!data.ready) return data.failed ? {kind: "failed", err: {message: data.why}} : {kind: "nofile", why: data.why};
@@ -139,6 +140,9 @@ export function liqMap(o) {
       });
     },
   };
+  let raf = 0;
+  const paintSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
+  ctx.track(() => { if (raf) cancelAnimationFrame(raf); });
   series.attachPrimitive({
     attached(p) { api = p; },
     detached() { api = null; },
@@ -147,9 +151,6 @@ export function liqMap(o) {
   });
 
   // ---------------------------------------------------------------- the strip: price buckets over the bars on screen
-  let raf = 0;
-  const paintSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
-  ctx.track(() => { if (raf) cancelAnimationFrame(raf); });
   function paint() {
     const W = strip.clientWidth, H = strip.clientHeight;
     if (!W || !H) return;
@@ -205,7 +206,7 @@ export function liqMap(o) {
       h("small", {class: "muted"}, `${fmt.kst(b.t * 1000)} 봉 · 바이낸스 전체 (우리 봇 아님)`)], hover.x, hover.y, strip.parentElement.offsetLeft);
     if (hover !== was && api) api.requestUpdate();
   }
-  strip.addEventListener("pointermove", (e) => {
+  const onStrip = (e) => {
     const r = strip.getBoundingClientRect(), y = e.clientY - r.top;
     const row = rows.rows.reduce((best, x) => (Math.abs(x.y - y) <= 6 && (!best || Math.abs(x.y - y) < Math.abs(best.y - y)) ? x : best), null);
     if (!row) { tip.hide(); return; }
@@ -214,7 +215,9 @@ export function liqMap(o) {
       h("span", {class: toneOf("long")}, row.long > 0 ? `롱 청산 ${koUsdt(row.long)}` : "롱 청산 기록 없음"),
       h("span", {class: toneOf("short")}, row.short > 0 ? `숏 청산 ${koUsdt(row.short)}` : "숏 청산 기록 없음"),
       h("small", {class: "muted"}, "보이는 봉 동안의 합계 · 바이낸스 전체 (우리 봇 아님)")], e.clientX - wr.left, e.clientY - wr.top, strip.parentElement.offsetLeft);
-  });
+  };
+  strip.addEventListener("pointermove", onStrip);
+  strip.addEventListener("pointerdown", onStrip);
   strip.addEventListener("pointerleave", () => tip.hide());
 
   return {

@@ -69,10 +69,10 @@ export function chartPlus(o) {
     const v = views.liq;
     if (v.kind === "off") return null;
     const k = "시장 청산";
+    if (v.kind === "unsupported") return say("liq", k, "월봉에서는 쓰지 않습니다");
     if (v.kind === "loading") return say("liq", k, "불러오는 중…");
     if (v.kind === "failed") return say("liq", k, "못 불러옴: 거품과 막대를 그리지 않았습니다 ", h("button", {type: "button", class: "cfxp-retry", onclick: () => L.reload()}, "다시 시도"));
     if (v.kind === "nofile") return say("liq", k, "기록기 자료가 없습니다 (서버에서 강제청산 기록기가 켜지면 보입니다)");
-    if (tfNow() === "1M") return say("liq", k, "월봉에서는 쓰지 않습니다");
     const d = v.data || {}, since = d.since_ts ? `${fmt.kst(d.since_ts)}부터 ` : "";
     if (v.kind === "empty") return say("liq", k, `이 구간에 기록된 청산이 없습니다 (${since}기록기가 들은 것 기준 · 바이낸스 시장 전체, 우리 봇 아님)`);
     const parts = [`${WORDS.liq} · ${since}기록기가 들은 것만 · 코인마다 1초에 1건만 알려 줘서 실제보다 적음 · `, dot("long"), "롱 ", dot("short"), "숏 청산, 원 크기 = 금액"];

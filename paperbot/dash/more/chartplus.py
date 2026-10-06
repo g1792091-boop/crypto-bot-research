@@ -47,6 +47,7 @@ BASE_URL = "https://fapi.binance.com"
 FETCH_TIMEOUT_S = 4.0
 LIQ_TTL_S = 20.0
 FAIL_RETRY_S = 20.0               # after a failed fetch the next try waits this long (the answer says so)
+COOL_S = 120.0                    # Binance said "too many requests" (HTTP 429 / 418): nobody asks it again for this long
 LIQ_STALE_MS = 2 * 3_600_000
 BARS_MAX = 1500
 CELLS_MAX = 20_000
@@ -226,6 +227,7 @@ class Series:
         self.lock = threading.Lock()
         self.cells: dict = {}
         self.fetches = 0
+        self.cool_until = 0.0              # set when Binance asks us to slow down: a banned IP is not asked again and again
 
     def _cell(self, key) -> dict:
         with self.lock:
@@ -248,6 +250,9 @@ class Series:
                 return self._answer(cell, symbol, kind, period, stale=False)
             if cell["failed_at"] is not None and now - cell["failed_at"] < FAIL_RETRY_S:
                 return self._answer(cell, symbol, kind, period, stale=True)
+            if now < self.cool_until:                                  # Binance told us to slow down: no request at all
+                cell["why"] = "바이낸스가 요청이 많다며 잠시 막음"
+                return self._answer(cell, symbol, kind, period, stale=True)
             self.fetches += 1
             try:
                 pts = parse_series(kind, _fetch(series_url(symbol, kind, period)))
@@ -256,8 +261,13 @@ class Series:
                 cell["good"], cell["at"], cell["failed_at"], cell["why"] = pts, now, None, None
             except Exception as exc:  # noqa: BLE001  (Binance down / blocked / slow / odd answer: the last good one, marked old)
                 cell["failed_at"] = now
-                cell["why"] = "시간 초과" if "timed out" in str(exc).lower() or type(exc).__name__ in ("TimeoutError", "timeout") else \
-                    "받은 자료가 비어 있음" if isinstance(exc, ValueError) else "연결 실패"
+                code = getattr(exc, "code", None)
+                if code in (418, 429):
+                    self.cool_until = now + COOL_S
+                    cell["why"] = "바이낸스가 요청이 많다며 잠시 막음"
+                else:
+                    cell["why"] = "시간 초과" if "timed out" in str(exc).lower() or type(exc).__name__ in ("TimeoutError", "timeout") else \
+                        "받은 자료가 비어 있음" if isinstance(exc, ValueError) else "연결 실패"
             return self._answer(cell, symbol, kind, period, stale=cell["failed_at"] is not None)
 
     def _answer(self, cell: dict, symbol: str, kind: str, period: str, stale: bool) -> dict:

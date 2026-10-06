@@ -219,7 +219,8 @@ export function termChart(ctx, st, onTf) {
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn);
       // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
-      chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 210});
+      try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 210}); }
+      catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);
