@@ -722,6 +722,45 @@ class Data:
         out["long_usd"], out["short_usd"] = round(out["long_usd"], 2), round(out["short_usd"], 2)
         return out
 
+    MARKET_SCAN = 60_000          # 전체 시장: the newest rows looked at (rowid order = arrival order; no trade_ts index)
+
+    def liquidations_market(self, liq_db: str, minutes: int, now_ms: Optional[int] = None, limit: int = 30) -> dict:
+        """Every coin's forced orders from liq.db (the recorder keeps the whole market): totals of the last ``minutes``
+        and the latest rows with their coin. Bounded: only the newest ``MARKET_SCAN`` rows by rowid are read (the
+        table has no trade_ts index); ``capped`` says the window may hold more than that."""
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        since = now - minutes * 60_000
+        out = {"symbol": "ALL", "minutes": minutes, "long_usd": 0.0, "short_usd": 0.0, "n": 0, "rows": [],
+               "recorder": False, "capped": False}
+        if not os.path.exists(liq_db):
+            return out
+        c = sqlite3.connect(_ro_uri(liq_db), uri=True, timeout=5)
+        try:
+            top = (c.execute("SELECT MAX(rowid) FROM liq").fetchone() or [None])[0]
+            if top is not None:
+                lo = int(top) - self.MARKET_SCAN
+                usd = "COALESCE(NULLIF(avg_price, 0), price) * COALESCE(NULLIF(filled_qty, 0), qty)"
+                for side, n, v in c.execute(f"SELECT side, COUNT(*), SUM({usd}) FROM liq WHERE rowid > ? AND trade_ts >= ? "
+                                            "GROUP BY side", (lo, since)):
+                    out["n"] += n
+                    out["long_usd" if side == "SELL" else "short_usd"] += float(v or 0)
+                first = c.execute("SELECT trade_ts FROM liq WHERE rowid = (SELECT MIN(rowid) FROM liq WHERE rowid > ?)",
+                                  (lo,)).fetchone()
+                out["capped"] = bool(lo > 0 and first and first[0] is not None and int(first[0]) > since)
+                out["rows"] = [{"symbol": sym, "ts": ts, "liquidated": "long" if side == "SELL" else "short", "price": px_,
+                                "usd": round(float(v or 0), 2)} for sym, ts, side, px_, v in c.execute(
+                    f"SELECT symbol, trade_ts, side, COALESCE(NULLIF(avg_price, 0), price), {usd} FROM liq "
+                    "WHERE rowid > ? ORDER BY trade_ts DESC LIMIT ?", (max(lo, int(top) - 5_000), limit))]
+            r = c.execute("SELECT MAX(received_ts) FROM liq").fetchone()
+            out["last_any"] = r[0] if r else None
+            out["recorder"] = True
+        except sqlite3.Error:
+            pass
+        finally:
+            c.close()
+        out["long_usd"], out["short_usd"] = round(out["long_usd"], 2), round(out["short_usd"], 2)
+        return out
+
     def trades_csv(self, account: Optional[str] = None) -> str:
         """Every closed trade (or one account's) as CSV, KST times, for Excel (UTF-8 with BOM)."""
         import csv
@@ -3025,11 +3064,14 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/liq")
     def get_liq(symbol: str = "BTCUSDT", minutes: int = 60):
-        """Forced liquidations of one coin across Binance (the liquidation recorder's liq.db), read-only."""
+        """Forced liquidations of one coin (or symbol=ALL: the whole market, every coin the recorder keeps) across
+        Binance (the liquidation recorder's liq.db), read-only."""
+        liq_db = os.path.join(os.path.dirname(os.path.abspath(db)), "liq.db")
+        if symbol == "ALL":
+            return data.liquidations_market(liq_db, min(max(minutes, 5), 1440))
         if symbol not in TICKER_SYMBOLS:
             raise HTTPException(400, "unknown symbol")
-        return data.liquidations(os.path.join(os.path.dirname(os.path.abspath(db)), "liq.db"), symbol,
-                                 min(max(minutes, 5), 1440))
+        return data.liquidations(liq_db, symbol, min(max(minutes, 5), 1440))
 
     levels_cache: dict = {}
 

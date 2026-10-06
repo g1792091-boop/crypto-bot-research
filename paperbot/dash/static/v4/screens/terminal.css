@@ -161,6 +161,12 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-lp { color: var(--ink-2); text-align: right; }
 .term-lu { text-align: right; font-weight: 800; }
 .term-fr.liq.bigl .term-lu { color: var(--warn); }
+/* 전체 시장 (every coin): the coin's name after LONG/SHORT; the chosen coin's rows lit */
+.term-fr.liq.anyc { grid-template-columns: calc(48px * var(--ts)) calc(56px * var(--ts)) minmax(0, 1fr) calc(56px * var(--ts)) calc(24px * var(--ts)); }
+.term-lc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 800 var(--t-2xs)/1.3 var(--f-term); }
+.term-fr.liq.mine { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.term-fr.liq.mine .term-lc { color: var(--accent); }
+.term-liqmode button { font-size: var(--t-2xs); white-space: nowrap; }
 /* 우리 봇 체결: age · tag · account · coin side · result */
 .term-fr.fl { grid-template-columns: calc(24px * var(--ts)) calc(32px * var(--ts)) minmax(0, 1fr) auto calc(60px * var(--ts)); column-gap: 5px; }
 .term-fr.fl .term-gsw, .term-fr.fl .an-tf { display: none; }      /* the timeframe and group are in the row's title */

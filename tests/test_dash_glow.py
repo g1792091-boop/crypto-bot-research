@@ -318,7 +318,7 @@ def test_flash_sources_are_real_events_only():
     assert "if (!m.first && m.big && Array.isArray(m.big.rows)) for (const r of m.big.rows) if (r && r.s === st.sym) chart.onBig(r);" in term
     assert "if (!m.first && m.big && Array.isArray(m.big.rows))" in chart and "deck.flash(bigEvent(r))" in chart
     # new market liquidations only (seen keys), our own fills
-    assert "if (isNew) arrived.push(r);" in feed and "onNew(arrived)" in feed
+    assert "if (isNew && mine) arrived.push(r);" in feed and "onNew(arrived)" in feed   # new rows of the chosen coin only
     assert "if (st.liqSeen)" in chart and "deck.flash(liqEvent(r))" in chart
     assert "deck.flash(ownEvent())" in chart and "deck.flash(ownEvent())" in _read("screens", "terminal-chart.js")
 

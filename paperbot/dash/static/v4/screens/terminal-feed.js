@@ -10,7 +10,7 @@
 //     count rows per minute (no money of theirs here). The recent entries' long / short bar beneath.
 // A row that really arrived while the page is open slides in from the top with one brief glow; ages ('6s', '4m') are
 // repainted by the terminal's 1 s clock tick (text only).
-import {h, put, ui, fmt, motion, bars, features} from "../core/pb.js";
+import {h, put, ui, fmt, motion, bars, features, local} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell, MARKET_LABEL} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 
@@ -215,54 +215,77 @@ export function fillsFeed(ctx) {
 // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
 const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
 
-/** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq of the chosen coin every 10 s (as 차트's tab) while the recorder runs. */
+/** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq every 10 s while the recorder runs. Two views (owners 10/06
+ *  13:23: the box stood almost empty with only the chosen coin): 전체 시장 (default; every coin Binance liquidates, the
+ *  recorder keeps them all; the chosen coin's rows lit) and 이 코인 (the chosen coin only, as before). The chart flashes
+ *  only for the chosen coin's new rows. The choice is kept per device. */
 export function liqFeed(ctx, st, onNew) {
   const list = h("div", {class: "term-feed term-liq", role: "list"});
   const ratio = ratioBar([{key: "long", label: "롱", tone: "up"}, {key: "short", label: "숏", tone: "down"}], {label: "최근 1시간 강제청산된 롱·숏 금액"});
   const ratioK = h("span", {class: "term-rbk"}, "1시간");
-  const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true}, list);
+  let mode = local.get("term-liq-mode", "all") === "coin" ? "coin" : "all";
+  const modeBtns = new Map();
+  const modeBar = h("div", {class: "term-tfs term-liqmode", role: "tablist", "aria-label": "강제청산 보기"},
+    [["all", "전체", "전체 시장 (모든 코인)"], ["coin", fmt.coin(st.sym), "이 코인만"]].map(([id, label, title]) => {
+      const b = h("button", {type: "button", role: "tab", title, "aria-selected": String(id === mode), onclick: () => setMode(id)}, label);
+      modeBtns.set(id, b);
+      return b;
+    }));
+  const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true, acts: [modeBar]}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio),
     h("p", {class: "note term-blab", title: "바이낸스는 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다"}, h("b", null, `바이낸스 ${MARKET_LABEL}`), " · 코인마다 1초에 1건만 기록")));
   const seen = new Set();
-  let sym = null, busy = false, last = {sym: null, rows: []};
+  let key = null, busy = false, last = {key: null, rows: []};
+  function setMode(id) {
+    if (id === mode) return;
+    mode = id;
+    local.set("term-liq-mode", id);
+    for (const [k, b] of modeBtns) b.setAttribute("aria-selected", String(k === id));
+    put(list, motion.shimmer(3));
+    load();
+  }
   async function load() {
     el.hidden = !features.liq;
-    if (!features.liq || busy || (sym === st.sym && !el.getClientRects().length)) return;      // on screen only (the first answer always)
+    const want = st.sym, wantKey = mode === "all" ? "ALL" : want;
+    if (!features.liq || busy || (key === wantKey && last.sym === want && !el.getClientRects().length)) return;      // on screen only (the first answer always)
     busy = true;
-    const want = st.sym, fresh = sym !== want;
+    const fresh = key !== wantKey;
     try {
-      const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(want)}&minutes=60`);
-      if (want !== st.sym || !ctx.alive()) return;
-      if (fresh) { seen.clear(); sym = want; }
-      el.sub.textContent = `${fmt.coin(want)} · 1시간 ${fmt.int(d.n || 0)}건 · 시장 전체`;
+      const d = await ctx.api(`/api/liq?symbol=${encodeURIComponent(wantKey)}&minutes=60`);
+      if (want !== st.sym || wantKey !== (mode === "all" ? "ALL" : st.sym) || !ctx.alive()) return;
+      if (fresh) { seen.clear(); key = wantKey; }
+      const all = wantKey === "ALL";
+      modeBtns.get("coin").textContent = fmt.coin(want);            // the coin button follows the chosen coin
+      el.sub.textContent = `1시간 ${fmt.int(d.n || 0)}건${all && d.capped ? "+" : ""}`;
       if (!d.recorder) { put(list, ui.empty("강제청산 기록기 자료가 없습니다")); ratio.set({}); return; }
-      const rows = (d.rows || []).slice(0, 20);
-      const had = last.sym === want ? last.rows.length : -1;
-      last = {sym: want, rows};
+      const rows = (d.rows || []).slice(0, all ? 30 : 20).map((r) => ({...r, symbol: r.symbol || want}));
+      const had = last.key === wantKey && last.sym === want ? last.rows.length : -1;
+      last = {key: wantKey, sym: want, rows};
       let nNew = 0;                                // rows that really arrived since the last answer
-      const arrived = [];                          // ... and the rows themselves (the chart flashes once for them)
+      const arrived = [];                          // ... and the chosen coin's ones (the chart flashes once for them)
       put(list, rows.length ? rows.map((r) => {
-        const k = `${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
+        const k = `${r.symbol}:${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
-        const lg = r.liquidated === "long";
-        const node = h("div", {class: ["term-fr", "liq", lg ? "lg" : "sh", r.usd >= 100000 ? "bigl" : ""], role: "listitem",
-          title: `${fmt.coin(want)} ${lg ? "롱" : "숏"} 포지션 강제청산 · ${fmt.price(r.price)} · $${usdK(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
+        const lg = r.liquidated === "long", mine = r.symbol === want;
+        const node = h("div", {class: ["term-fr", "liq", all ? "anyc" : "", lg ? "lg" : "sh", r.usd >= 100000 ? "bigl" : "", all && mine ? "mine" : ""], role: "listitem",
+          title: `${fmt.coin(r.symbol)} ${lg ? "롱" : "숏"} 포지션 강제청산 · ${fmt.price(r.price)} · $${usdK(r.usd)} · ${fmt.kst(r.ts)} (${MARKET_LABEL})`},
         h("span", {class: ["term-lb", lg ? "up" : "down"]}, lg ? "LONG" : "SHORT"),
+        all ? h("b", {class: "term-lc"}, fmt.coin(r.symbol)) : null,
         h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num term-lu"}, "$" + usdK(r.usd)), ageCell(r.ts));
         if (isNew) nNew++;
-        if (isNew) arrived.push(r);
+        if (isNew && mine) arrived.push(r);
         if (isNew && live()) motion.fillIn(node, lg ? "up" : "down");
         return node;
-      }) : ui.empty("최근 1시간 기록 없음"));
+      }) : ui.empty(all ? "최근 기록 없음" : "최근 1시간 기록 없음"));
       ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n, sh) => `${fmt.pct(sh, 0, false)} · $${fmt.compact(n)}`);
       if (nNew && live()) ping(el);
-      // the chart flashes once for the really new ones
-      if ((nNew || had !== rows.length) && onNew) onNew(arrived);
+      // the chart flashes once for the chosen coin's really new ones
+      if ((arrived.length || (!all && had !== rows.length)) && onNew) onNew(arrived);
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
     finally { busy = false; }
   }
   ctx.every(10000, load, {now: true});
   return {el, load, setSym() { put(list, motion.shimmer(3)); load(); }, onFeatures: load,
     /** The last loaded liquidations of ``s`` (none for another coin, or before the first answer). */
-    recent: (s) => (features.liq && last.sym === s ? last.rows : [])};
+    recent: (s) => (features.liq && last.sym === s ? last.rows.filter((r) => r.symbol === s) : [])};
 }
