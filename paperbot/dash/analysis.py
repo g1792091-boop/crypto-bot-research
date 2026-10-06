@@ -86,6 +86,8 @@ HEAVY_KEEP = 256                # cached results kept (expired ones are dropped 
 MAP_CARDS = 2000             # cards.cards_from_db's own cap: the latest this many closed trades per kind
 READINESS_ROWS = 40
 DEBATE_ROWS = 50
+DEBATE_CHAT_ROUNDS = 10      # /api/debate `chat`: the newest finished debates with their turns (screens/debate.js)
+DEBATE_TIMELINE = 12         # /api/debate `timeline`: the newest rounds of every kind (debated / skipped / failed)
 QUESTIONS_MAX = 200
 DAY_MS = 86_400_000
 NO_DATA = "아직 자료가 없습니다"
@@ -1182,11 +1184,12 @@ def questions(path: str = QUESTIONS_FILE) -> dict:
 
 
 # ---------------------------------------------------------------- 24-hour debate room (read-only)
-def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS) -> dict:
+def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS, now_ms: Optional[int] = None) -> dict:
     """The 24-hour debate room (paperbot/agents/debate.py, a separate paid-API service; docs/debate-room.md): its latest
     rounds (newest first, each with its turns), spend against the monthly cap, status (돌고 있음 / 멈춤 + reason /
     키 없음 / 꺼짐), hypotheses with their grading, ideas and per-speaker hit rates, all from debate.db opened read-only.
-    ``messages`` (oldest first) keeps the old shape. No file or no table: ``ready: false``, ``state: "off"``."""
+    ``messages`` (oldest first) keeps the old shape. No file or no table: ``ready: false``, ``state: "off"``. The v4
+    chat screen's ``chat`` / ``timeline`` / ``next`` / ``today``: see ``debate_chat``."""
     from ..agents import debate as DB
     out = {"ready": False, "messages": [], "title": "24시간 토론방", "note": "24시간 토론방 — 꺼짐: 아직 시작한 적이 없습니다",
            "source": os.path.basename(debate_db) if debate_db else None, "state": "off", "state_ko": DB.STATE_KO["off"],
@@ -1209,7 +1212,92 @@ def debate(debate_db: Optional[str], limit: int = DEBATE_ROWS) -> dict:
     s = DB.summary(debate_db, rounds=15)
     if s.get("ready"):
         out.update({k: v for k, v in s.items() if k not in ("ready", "caution")})
+    out.update(debate_chat(debate_db, int(time.time() * 1000) if now_ms is None else now_ms))
     return out
+
+
+DEBATE_REPLY_STANCES = ("동의", "반대", "보완", "질문")
+
+
+def debate_chat(debate_db: Optional[str], now_ms: int, rounds: int = DEBATE_CHAT_ROUNDS,
+                timeline: int = DEBATE_TIMELINE) -> dict:
+    """The v4 chat screen's fields (screens/debate.js), read-only from the same debate.db:
+
+    - ``chat``: the newest finished debates (status 'ok') newest first, each ``{round_id, ts, topic, cost_usd, turns,
+      model, cut, messages: [{id, speaker, stance, text, reply_to, reply_stance}]}`` in speaking order. ``reply_to``
+      (the earlier speaker a turn answers) and ``reply_stance`` (동의 / 반대 / 보완 / 질문) come only from a debate.db that
+      has those columns and only with a known value; an older round has None (shown as plain bubbles). ``cut``: the
+      answer was cut at max_tokens (the complete turns were kept).
+    - ``timeline``: the newest rounds of every kind, newest first, ``{round_id, ts, status, cost_usd, turns, topic,
+      why}``; ``why`` is the stored reason of a skipped round (without its 'unchanged: ' tag) or the stored, already
+      redacted error text.
+    - ``next``: the service's own schedule from debate_state, as Service.due_ms() computes it: ``{ts, kind, every_min}``,
+      ts = max(last attempt + interval, backoff end), kind 'retry' while a backoff decides it; None when unknown.
+    - ``today``: the KST day's rounds ``{ok, skipped, error, cost_usd}`` (error counts error and aborted rounds).
+    Nothing at all ({}) when the file or its tables cannot be read."""
+    c = ro_connect(debate_db)
+    if c is None:
+        return {}
+    try:
+        cols = {r[1] for r in c.execute("PRAGMA table_info(debate_messages)")}
+        extra = ", ".join(x if x in cols else f"NULL AS {x}" for x in ("reply_to", "reply_stance"))
+        chat = []
+        for r in c.execute("SELECT round_id, ts, topic, cost_usd, turns, model, error FROM debate_rounds "
+                           "WHERE status = 'ok' ORDER BY round_id DESC LIMIT ?", (max(1, min(int(rounds), 30)),)).fetchall():
+            msgs = []
+            for m in c.execute(f"SELECT id, speaker, stance, text, {extra} FROM debate_messages WHERE round_id = ? "
+                               "ORDER BY id", (r["round_id"],)):
+                rs = str(m["reply_stance"] or "")
+                msgs.append({"id": int(m["id"]), "speaker": str(m["speaker"] or "")[:40], "stance": str(m["stance"] or "")[:20],
+                             "text": str(m["text"] or "")[:1000], "reply_to": str(m["reply_to"])[:40] if m["reply_to"] else None,
+                             "reply_stance": rs if rs in DEBATE_REPLY_STANCES else None})
+            if msgs:
+                chat.append({"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "topic": str(r["topic"] or "")[:120],
+                             "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
+                             "model": str(r["model"] or "")[:60], "cut": "max_tokens" in str(r["error"] or ""),
+                             "messages": msgs})
+        tl = []
+        for r in c.execute("SELECT round_id, ts, status, cost_usd, turns, topic, error FROM debate_rounds "
+                           "ORDER BY round_id DESC LIMIT ?", (max(1, min(int(timeline), 50)),)):
+            why = re.sub(r"^unchanged:\s*", "", str(r["error"] or ""))[:160]
+            tl.append({"round_id": int(r["round_id"]), "ts": int(r["ts"] or 0), "status": str(r["status"] or "")[:20],
+                       "cost_usd": round(float(r["cost_usd"] or 0), 5), "turns": int(r["turns"] or 0),
+                       "topic": str(r["topic"] or "")[:120], "why": why})
+        st = {k: v for k, v in c.execute("SELECT k, v FROM debate_state WHERE k IN ('last_attempt', 'backoff:until', 'run')")}
+        day0 = (now_ms + 9 * 3_600_000) // DAY_MS * DAY_MS - 9 * 3_600_000
+        today = {"ok": 0, "skipped": 0, "error": 0, "cost_usd": 0.0}
+        for status, n, usd in c.execute("SELECT status, COUNT(*), COALESCE(SUM(cost_usd), 0) FROM debate_rounds "
+                                        "WHERE ts >= ? AND ts < ? GROUP BY status", (day0, day0 + DAY_MS)):
+            key = {"ok": "ok", "skipped": "skipped", "error": "error", "aborted": "error"}.get(status)
+            if key:
+                today[key] += int(n)
+            today["cost_usd"] += float(usd or 0)
+        today["cost_usd"] = round(today["cost_usd"], 5)
+    except sqlite3.Error:
+        return {}
+    finally:
+        _close(c)
+    return {"chat": chat, "timeline": tl, "today": today, "next": _debate_next(st)}
+
+
+def _debate_next(st: dict) -> Optional[dict]:
+    """When the debate service will try its next round (Service.due_ms: last attempt + interval, or the end of a
+    backoff when that is later). None without an interval or a last attempt."""
+    def num(k: str) -> int:
+        try:
+            return int(float(json.loads(st.get(k) or "0") or 0))
+        except (TypeError, ValueError):
+            return 0
+    try:
+        run = json.loads(st.get("run") or "{}")
+    except (TypeError, ValueError):
+        run = {}
+    every = int((run or {}).get("every_min") or 0) if isinstance(run, dict) else 0
+    last, until = num("last_attempt"), num("backoff:until")
+    nxt = last + every * 60_000 if last and every else 0
+    if not nxt and not until:
+        return None
+    return {"ts": max(nxt, until), "kind": "retry" if until > nxt else "round", "every_min": every}
 
 
 # ---------------------------------------------------------------- routes

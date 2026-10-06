@@ -9,7 +9,7 @@
   per-role scorecard, /api/office a running meeting's turns / participants / next_role (progress line, status chips);
 - wiring greps: the chat's filters / search / pinned conclusion / smooth scroll only for really new rows, no typing,
   DeepSeek / coin-flip mini cards without numbers, the office progress and schedule line, the digest's 결정 보드 tab,
-  the debate's two columns / meters / countdown / off steps, the strategy detail mount (one import + one line),
+  the debate's chat room / status column / countdown / off steps, the strategy detail mount (one import + one line),
   tokens only in the new css (font sizes var(--t-*), no colour literals).
 """
 import json
@@ -233,10 +233,14 @@ def test_digest_board_tab_and_leaderboard():
 
 
 def test_debate_live_view_meters_and_off_steps():
-    d = _code(_read("screens", "debate.js"))
-    for s in ('"강세"', '"약세"', '"판정 미터"', '"이번 달 사용"', "한도 ", "countdown(", "every_min * 60000", '"이번 회차 정리"',
+    # debate-chat (owners 10/06): the 강세 / 약세 two-box view is gone (an empty box read as broken); the chat room
+    # (debate-chat.js), the status column (debate-side.js) and the off steps; tests/test_dash_debate_chat.py has more
+    d = "\n".join(_code(_read("screens", f)) for f in ("debate.js", "debate-chat.js", "debate-side.js"))
+    for s in ('"이번 달 비용"', "한도 ", "countdown(", "every_min * 60000", '"이번 회차 정리"', '"사회자"',
               "sudo systemctl enable --now paperbot-debate", "아직 시작 전 · 켜면 하루 종일 토론", "실제 비용 (유료 API)"):
         assert s in d, s
+    for gone in ('"강세"', '"약세"', "db-vs", "이번 회차에 발언 없음"):
+        assert gone not in d, gone
     assert "typing" not in d and "setInterval" not in d
 
 
