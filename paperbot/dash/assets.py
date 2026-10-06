@@ -104,9 +104,10 @@ class Assets:
     def current(self, rel: str, st) -> bool:
         """The file on disk (``st``: its os.stat) is the one the fingerprint was taken from. False for a file changed
         since the last look (an update landing between two looks): the next request looks again at once."""
-        ok = self._stats.get(rel) == (st.st_size, st.st_mtime_ns)
-        if not ok:
-            self._checked = 0.0
+        want = self._stats.get(rel)
+        ok = want == (st.st_size, st.st_mtime_ns)
+        if not ok and (want is not None or rel.startswith(tuple(d + "/" for d in self.dirs))):
+            self._checked = 0.0                 # (an asset changed or added; the old /v3 page's files never force a look)
         return ok
 
     def etag(self, rel: str) -> Optional[str]:

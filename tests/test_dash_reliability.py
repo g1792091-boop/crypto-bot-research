@@ -174,6 +174,10 @@ def test_an_update_landing_between_two_looks_is_never_kept_a_year_under_the_old_
     assert v2 != v1
     assert c.get(f"/static/v-{v2}/v4/core/x.js").headers["cache-control"] == AS.IMMUTABLE
     assert c.get(f"/static/v-{v2}/v4/core/y.js").headers["cache-control"] == AS.IMMUTABLE
+    # a file outside the page's folders (the old /v3 page, the icons) never makes the server look again
+    (root / "app.js").write_text("v3\n")
+    checked = a._checked
+    assert c.get("/static/app.js").status_code == 200 and a._checked == checked
 
 
 def test_index_html_and_boot_modules(tmp_path):
