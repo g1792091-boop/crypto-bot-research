@@ -13,7 +13,7 @@ Kinds (``KINDS``; owners 10/06: the bank covers ALL 36 strategies, not only the 
                  tags, side, coin, timeframe, session, trend state, leverage) sit on losers more often than on winners
   worst_vs_flip  the strategy x timeframe account (30+ trades) furthest below its timeframe's coin-flip wallets
   best_luck      the account furthest ABOVE its coin flips: skill or luck? (its own t-test, and the same p times the
-                 number of accounts compared: the best of 144 looks good by luck alone)
+                 number of accounts compared: the best of many looks good by luck alone)
   tf_split       the strategy whose timeframes differ most (one makes money, another loses; 20+ trades each)
   loss_tag       the skip tag with the largest (loss share - win share) over the last 7 days (30+ tagged trades) and the
                  3 strategies where the gap is largest

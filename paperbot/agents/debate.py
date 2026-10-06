@@ -16,6 +16,19 @@ dashboard reads it read-only). It runs on the owners' own paid API key, which on
 (/etc/paperbot/debate.env, readable by user paperbot-debate only) holds. The agent rooms run on the Claude Max
 subscription and never see that key (runner.ENV_ALLOW has no ANTHROPIC_API_KEY; a test keeps it so).
 
+The idea factory (DEBATE_MODE=factory; classic stays the default and the rollback, docs/debate-room.md '아이디어 공장'):
+code picks ONE question per round about the 36 (debate_questions: today's losses, the worst and the best account, the
+timeframe split, coin / session / trend cells, pairs losing together, the 매물대, DeepSeek by counts, lab near misses, the
+weekly coverage of every strategy), five SPECIALIST seats argue sides code assigns (debate_factory.sides_for: 차트 분석가,
+리스크 책임자, 퀀트, 시장 분석가 split 찬성 / 반대 2-2, a new split every round; the 심판 last), and the 심판 writes ONE lab
+idea. Code checks it (grammar, the 36, 5m, the ledger, repeats, near-copies of failed tests), picks at most
+DEBATE_LAB_PER_DAY a day for the agents' lab intake queue (debate_lab_ideas, read by labintake.pull_debate), and reads
+the lab's results back into the next packets (sync_lab, readback; who was right next to the lab's base rates). The daily
+deep debate (DEBATE_DEEP=1): once a KST day, claude-opus-5-5 in THREE separate calls (주장 -> 반박 -> 심판, each reading
+the ones before) on the day's most important question, stored as one round of kind 'deep', with its own month line
+inside the monthly cap. Still: no orders, no rule / account / code change, no writes outside debate.db; agents3.db is
+read read-only; no new-account proposal comes from here (a lab pass waits for the observation period and the owners).
+
 Money: cost comes from the API's own usage fields (prices below, overridable by env), counted per call in debate_state
 by KST day and month. A warning at 80% of DEBATE_MONTHLY_USD_CAP, no more calls from 95% (resumes next month, or after
 the cap is raised and the service restarted), and a round is never started when its worst case would pass the cap. An
