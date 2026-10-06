@@ -247,6 +247,65 @@ console.log(JSON.stringify({
     assert out["line"] == "결론 없음" and out["replies"] == [True, False] and out["unknown"] == "누구"
 
 
+def test_the_factory_rounds_carry_side_part_and_question_only_where_stored(tmp_path):
+    """The idea factory (debate.py DEBATE_MODE=factory): the service's new columns (side / part on messages, kind and
+    the question on rounds) reach /api/debate's chat only where stored; classic rounds and older files are unchanged."""
+    path = str(tmp_path / "debate.db")
+    _world(path, replies=True)
+    c = sqlite3.connect(path)
+    for col in ("side", "part"):
+        c.execute(f"ALTER TABLE debate_messages ADD COLUMN {col} TEXT")
+    for col in ("kind", "question_kind", "question_ko"):
+        c.execute(f"ALTER TABLE debate_rounds ADD COLUMN {col} TEXT")
+    t = NOW - 5 * M
+    rid = _round(c, t, "ok", "오늘 큰 손실 질문", cost=0.02, turns=3)
+    c.execute("UPDATE debate_rounds SET kind = 'deep', question_kind = 'big_losses', question_ko = '오늘 가장 크게 잃은 거래' "
+              "WHERE round_id = ?", (rid,))
+    for sp, side, part in (("차트 분석가", "찬성", "주장"), ("퀀트", "반대", "반박"), ("심판", "심판", "심판"),
+                           ("시장 분석가", "중립", "기타")):
+        c.execute("INSERT INTO debate_messages (ts, round_id, speaker, stance, topic, text, side, part) "
+                  "VALUES (?,?,?,?,?,?,?,?)", (t, rid, sp, "", "q", f"{sp}의 말", side, part))
+    c.commit()
+    c.close()
+    d = AN.debate_chat(path, NOW)
+    deep = d["chat"][0]
+    assert deep["kind"] == "deep" and deep["question"] == {"kind": "big_losses", "ko": "오늘 가장 크게 잃은 거래"}
+    assert [(m.get("side"), m.get("part")) for m in deep["messages"]] == [
+        ("찬성", "주장"), ("반대", "반박"), ("심판", "심판"), (None, None)]                 # unknown words: dropped
+    old = d["chat"][1]
+    assert "kind" not in old and "question" not in old and all("side" not in m for m in old["messages"])
+
+
+def test_the_chat_shows_the_specialists_with_their_code_side():
+    out = _node("""
+const C = await import('@S/debate-chat.js');
+const m = (speaker, text, side = null, part = null) => ({speaker, stance: '', text, reply_to: null, reply_stance: null, side, part});
+const round = {round_id: 5, ts: 1791158400000, topic: '질문', kind: 'factory', messages: [
+  m('차트 분석가', '하나', '찬성'), m('퀀트', '둘', '반대'), m('리스크 책임자', '셋', '찬성'), m('시장 분석가', '넷', '반대'),
+  m('심판', '다섯', '심판'), m('정리', '정리: 메모')]};
+const deep = {round_id: 6, ts: 1, topic: 'q', kind: 'deep', messages: [m('차트 분석가', 'a', '찬성', '주장')]};
+const list = C.roundChat(round);
+const msgs = all(list, 'db-msg');
+const strip = C.castStrip(round);
+console.log(JSON.stringify({
+  who: msgs.map((x) => all(x, 'db-who')[0].textContent),
+  sides: msgs.map((x) => all(x, 'rk-side').map((s) => [s.className, s.textContent])),
+  part: all(C.roundChat(deep), 'db-part').map((x) => x.textContent),
+  strip: all(strip, 'db-castm').map((x) => x.textContent),
+  classic: all(C.castStrip(null), 'db-castm').map((x) => all(x, 'db-castm')[0].childNodes[1].textContent),
+  before: all(C.castStrip(null, {factory: true}), 'db-castm').map((x) => x.childNodes[1].textContent),
+  is: [C.isFactoryRound(round), C.isFactoryRound({messages: [m('낙관론자', 'x')]}), C.isFactoryRound(deep)],
+  names: C.FACTORY_CAST.map((c) => c.name), shared: C.castOf('퀀트').hue === C.CAST.find((c) => c.id === '퀀트').hue}));
+""")
+    assert out["who"] == ["차트 분석가", "퀀트", "리스크 책임자", "시장 분석가", "심판"]
+    assert out["sides"][0] == [["rk-side pro", "찬성"]] and out["sides"][1] == [["rk-side con", "반대"]]
+    assert out["sides"][4] == [["rk-side judge", "심판"]] and out["part"] == ["주장"]
+    assert out["strip"][:5] == ["차트 분석가1번 말함", "리스크 책임자1번 말함", "퀀트1번 말함", "시장 분석가1번 말함", "심판1번 말함"]
+    assert out["classic"][:3] == ["낙관론자", "비관론자", "회의론자"]            # before any round, classic mode
+    assert out["before"][:5] == ["차트 분석가", "리스크 책임자", "퀀트", "시장 분석가", "심판"]
+    assert out["is"] == [True, False, True] and out["names"][-1] == "사회자" and out["shared"]
+
+
 def test_the_timeline_words_come_from_the_stored_round():
     out = _node("""
 const S = await import('@S/debate-side.js');
@@ -285,7 +344,7 @@ def test_wiring_honesty_and_layout():
     for gone in ('"강세"', '"약세"', "db-vs", "이번 회차에 발언 없음", "typing", "setInterval", "innerHTML"):
         assert gone not in every, gone
     # the room: chat + the status column, the older rounds folded, the honesty line under the chat
-    assert 'import {roundChat, castStrip, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";' in js["debate.js"]
+    assert 'import {roundChat, castStrip, castList, avatar, noteLine, hasReplies, isNote, CAST} from "./debate-chat.js";' in js["debate.js"]
     assert 'import {makeSide, usd4} from "./debate-side.js";' in js["debate.js"]
     assert "AI 하나가 다섯 역할과 사회자를 모두 맡아 말하는 방입니다" in js["debate.js"] and "의견이지 사실이 아닙니다" in js["debate.js"]
     assert "history.set(chat.slice(1), true)" in js["debate.js"] and 'motion.expand(region, open)' in js["debate.js"]
