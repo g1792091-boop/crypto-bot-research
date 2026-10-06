@@ -68,7 +68,7 @@ function rangeRows(k, cells, edges, rules, five) {
       const tone = c.ok === 1 ? "up" : c.ok === -1 ? "down" : "flat";
       const rt = rangeText(k, j, (edges || {})[EX_TF]);
       return h("div", {class: ["a7-row", c.ok ? "marked" : ""], role: "listitem"},
-        h("span", {class: "a7-k"}, h("b", null, labelOf(k, j)), rt ? h("small", {class: "num"}, `${fmt.tfKo(EX_TF)}봉 ${rt}`) : null),
+        h("span", {class: "a7-k"}, h("b", null, labelOf(k, j)), rt ? h("small", {class: "num"}, `${fmt.tfKo(EX_TF)}봉이면 ${rt}`) : null),
         h("span", {class: "a7-bar"}, divBar(c.d, top, tone, `나머지보다 ${rr(c.d)}`),
           h("small", {class: ["num", c.ok ? fmt.tone(c.d) : "muted"]}, c.d == null ? "—" : `나머지보다 ${rr(c.d)}`)),
         h("span", {class: "a7-v"}, h("b", {class: "num"}, `평균 ${rr(c.r)}`),
@@ -183,7 +183,7 @@ function markedRow(c, d, i) {
   const rt = rangeText(k, c.j, ((d.edges || {})[k] || {})[EX_TF]);
   return h("div", {class: "lrow an-row a7-mrow", role: "listitem"},
     h("span", {class: "rk"}, String(i + 1)),
-    h("span", {class: "lname an-wrap"}, h("b", null, who), ` · ${IND[k].ko} ${labelOf(k, c.j)}`, rt ? h("small", {class: "num muted"}, ` (${fmt.tfKo(EX_TF)}봉 ${rt})`) : null),
+    h("span", {class: "lname an-wrap"}, h("b", null, who), ` · ${IND[k].ko} ${labelOf(k, c.j)}`, rt ? h("small", {class: "num muted"}, ` (${fmt.tfKo(EX_TF)}봉이면 ${rt})`) : null),
     h("span", {class: ["ret", "num", fmt.tone(c.d)]}, rr(c.d)),
     h("span", {class: "meta"},
       h("span", null, `평균 ${rr(c.r)} · ${cnt(c.n)}건 · 이긴 비율 ${pc(c.wr)}`),
