@@ -2285,6 +2285,59 @@ class Rooms:
         return {"ok": True, "id": mid, "ts": now_ms, "room_id": room_id, "author": author, "text": text,
                 "pending": True}
 
+    # -- the owners' test requests (#103 '🧪 이 매매법 시험해줘', paperbot/agents/labintake.py): the form posts as an owner
+    # message whose first line is the request mark; an approximate translation waits for the owners' click, written to
+    # inbox.db's lab_request_decisions (created here, never by rooms_db); the agents tick applies it read-only
+    def lab_owner(self, now_ms: Optional[int] = None) -> dict:
+        """On / off (the owners' daily test budget the agents last saved), today's requests and tests, the cards."""
+        from ..agents import labintake as LI
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        with self.ro(self.agents_db) as a, self.ro(self.inbox_db) as ib:
+            return LI.owner_block(a, ib, now_ms)
+
+    def lab_request(self, fields: Any, author: str, now_ms: Optional[int] = None) -> dict:
+        from ..agents import labintake as LI
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        block = self.lab_owner(now_ms)
+        if not block["enabled"]:
+            raise HTTPException(409, block["off_ko"])
+        if block["requests_today"] >= LI.OWNER_REQUESTS_PER_DAY:
+            raise HTTPException(429, f"시험 요청은 하루 {LI.OWNER_REQUESTS_PER_DAY}번까지 보낼 수 있습니다(요청마다 AI 회의가 "
+                                     "한 번 열립니다). 내일 다시 보내 주세요")
+        try:
+            text = LI.request_text(fields)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        if not _storable(text):
+            raise HTTPException(400, "보낼 수 없는 글자가 들어 있습니다")
+        return {**self.say(self.R.LAB_ROOM, text, author, now_ms), "lab_request": True}
+
+    def lab_decide(self, intake_id: int, decision: str, author: str, now_ms: Optional[int] = None) -> dict:
+        """The owners' click on an approximate request: refused unless the row is the owners' and still waits for them
+        and no click of theirs waits to be applied."""
+        from ..agents import labintake as LI
+        if not 0 < int(intake_id) < 2 ** 63:
+            raise HTTPException(404, "그런 시험 요청이 없습니다")
+        with self.ro(self.agents_db) as a:
+            row = LI.latest(a, int(intake_id)) if LI.exists(a) else None
+        if row is None or row["source"] != "owner":
+            raise HTTPException(404, "그런 시험 요청이 없습니다")
+        if row["status"] != "needs_owner_ok":
+            raise HTTPException(409, f"이 요청은 지금 고를 수 없는 상태입니다 ({LI.STATUS_KO.get(row['status'], row['status'])})")
+        with self.ro(self.inbox_db) as ib:
+            prev = [d for d in LI.decisions(ib, [int(intake_id)]).get(int(intake_id), [])
+                    if d["source_ref"] == row["source_ref"] and int(d["ts"]) >= int(row["ts"])]
+        if prev:
+            raise HTTPException(409, f"이미 '{LI.DECISION_KO[prev[0]['decision']]}'를 고르셨습니다. 다음 차례(15분 안)에 "
+                                     "코드가 반영합니다")
+        c = self._inbox()
+        try:
+            did = LI.add_decision(c, int(intake_id), row["source_ref"], decision, author, now_ms)
+        finally:
+            c.close()
+        return {"ok": True, "decision_id": did, "intake_id": int(intake_id), "decision": decision,
+                "decision_ko": LI.DECISION_KO[decision], "message": "전달했습니다. 다음 차례(15분 안)에 코드가 반영합니다"}
+
     # -- price alerts (inbox.db; the Telegram sender paperbot/tradealerts.py fires them)
     def price_alerts(self, now_ms: Optional[int] = None) -> dict:
         """Alerts not deleted, with their state from the sender's price_alerts.json (next to inbox.db): armed /
@@ -2939,7 +2992,25 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             with rooms.ro(rooms.agents_db) as a:
                 return {"cards": LI.view(a, source or None, n), "today": LI.today(a, now), "why_fail": LI.why_fail(a),
                         "status_ko": LI.STATUS_KO, "source_ko": LI.SOURCE_KO, "engine_ko": LI.ENGINE_KO}
-        return _digest_cached(f"lab_intake:{source or ''}:{n}", make, LAB_INTAKE_TTL_S)
+        out = _digest_cached(f"lab_intake:{source or ''}:{n}", make, LAB_INTAKE_TTL_S)
+        # the owners' requests (#103) fresh on every read (cheap): a click shows as waiting at once, never 60 s late
+        try:
+            owner = rooms.lab_owner()
+        except sqlite3.Error:
+            owner = None
+        return {**out, "owner": owner}
+
+    @app.post("/api/lab/intake/{intake_id}/decide")
+    async def lab_intake_decide(intake_id: int, req: Request):
+        """The owners' 시험하기 / 그만두기 on a request translated only approximately (#103): one row in inbox.db's
+        lab_request_decisions; the agents tick applies it on its next pass (agents/labintake.apply_owner_decisions)."""
+        if not same_origin(req):
+            raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
+        body = await _json_object(req)
+        decision = body.get("decision")
+        if decision not in ("run", "decline"):
+            raise HTTPException(400, "decision은 run 또는 decline")
+        return rooms.lab_decide(intake_id, decision, rooms.author(body))
 
     @app.get("/api/digest/week")
     def get_digest_week():
@@ -3045,6 +3116,11 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
         _room(room_id)
         body = await _json_object(req)
+        if body.get("lab_request") is True:
+            # the lab room's '🧪 이 매매법 시험해줘' form (#103): code writes the text (fixed first line + the fields)
+            if room_id != rooms.R.LAB_ROOM:
+                raise HTTPException(400, "시험 요청은 새 매매법 연구실에서만 보낼 수 있습니다")
+            return rooms.lab_request(body.get("fields"), rooms.author(body))
         text = body.get("text")
         if not isinstance(text, str) or not text.strip():
             raise HTTPException(400, "보낼 내용이 없습니다")
