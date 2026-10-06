@@ -336,7 +336,7 @@ def detect_new(o, h, l, c, v, atr, first_r: int, variant: str = "ZF_MAIN") -> tu
 
 
 class ZoneFlipDetector:
-    """The shadow league's view of this detector (see league.Detector)."""
+    """The shadow league's view of this detector (see league.Detector): the MAIN rule (zone held at least 3 times)."""
     id = DETECTOR_ID
     min_bars = MIN_BARS
     lookback = LOOKBACK_BARS
@@ -348,5 +348,22 @@ class ZoneFlipDetector:
                 "stop_buf_atr": STOP_BUF_ATR, "max_stop_atr": MAX_STOP_ATR, "min_rr": MIN_RR, "atr_len": ATR_LEN,
                 "min_bars": MIN_BARS, "variant": self.variant}
 
-    def detect(self, o, h, l, c, v, atr, first_r: int):
-        return detect_new(o, h, l, c, v, atr, first_r, self.variant)
+    def detect(self, o, h, l, c, v, atr, first_r: int) -> list[dict]:
+        """Every retest signal of the MAIN rule with signal bar r >= first_r, in (r, break bar, zone) order:
+        {r, b, side, ref, stop, target, rr, touches, atr, skip, chosen, extra}. ``skip`` is '' or why the rules do not
+        trade it (no_target / stop_far / rr); ``chosen`` False with no skip = lost the same-bar rule (long and short on
+        one bar cancel each other; of several on one side the most recent break wins)."""
+        sg, chosen = detect_new(o, h, l, c, v, atr, first_r, self.variant)
+        out = []
+        for s in sg:
+            if s["n_touch"] < MIN_TOUCHES:
+                continue
+            risk, reward = s["risk"], s["reward"]
+            rr = reward / risk if (risk > 0 and np.isfinite(reward)) else float("nan")
+            out.append({"r": int(s["r"]), "b": int(s["b"]), "side": int(s["side"]), "ref": float(s["ref"]),
+                        "stop": float(s["stop"]), "target": float(s["target"]), "rr": float(rr),
+                        "touches": int(s["n_touch"]), "atr": float(s["atr"]), "skip": s["skip"],
+                        "chosen": chosen.get(s["r"]) is s,
+                        "extra": {"zone_lo": float(s["zlo"]), "zone_hi": float(s["zhi"]),
+                                  "tz_lo": float(s["tz_lo"]), "tz_hi": float(s["tz_hi"])}})
+        return sorted(out, key=lambda x: (x["r"], x["b"], x["extra"]["zone_lo"]))

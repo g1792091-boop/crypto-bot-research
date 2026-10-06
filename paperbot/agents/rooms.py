@@ -461,6 +461,10 @@ class RoomsPolicy:
     dispute_tests_per_day: int = 3
     dispute_room_gap_days: int = 7
     dispute_expert: bool = False
+    # the shadow league (paperbot/shadowleague, docs/shadow-league.md): pre-registered ideas that failed their test, followed
+    # on live bars as virtual trades in shadow_league.db. OFF here and on the server unless AGENTS_SHADOW_LEAGUE=1: with it
+    # off nothing is imported, opened or created. Never a paper account, never judged by the checkpoint.
+    shadow_league: bool = False
 
     @property
     def max_rounds_per_tick(self) -> int:
@@ -1114,9 +1118,11 @@ ENV_INTS = {
     "AGENTS_DISPUTE_TESTS_PER_DAY": ("dispute_tests_per_day", 0),
     "AGENTS_DISPUTE_ROOM_GAP_DAYS": ("dispute_room_gap_days", 0),
     "AGENTS_DISPUTE_EXPERT": ("dispute_expert", 0),
+    # the shadow league (0 / unset = off): the same rules as the failed 5-year test, followed on live bars, virtual only
+    "AGENTS_SHADOW_LEAGUE": ("shadow_league", 0),
 }
 # the 0/1 switches among ENV_INTS (stored as booleans)
-ENV_SWITCHES = ("AGENTS_SIDES", "AGENTS_DISPUTE_EXPERT")
+ENV_SWITCHES = ("AGENTS_SIDES", "AGENTS_DISPUTE_EXPERT", "AGENTS_SHADOW_LEAGUE")
 DISPUTE_TESTS_MAX = 3            # AGENTS_DISPUTE_TESTS_PER_DAY above this is refused (each test tightens the room's bar)
 # settings given in minutes that the policy keeps in milliseconds
 ENV_MINUTES = ("AGENTS_LOSS_MIN_GAP_MIN",)
@@ -5366,6 +5372,14 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 print(f"warning: monthly re-check summary failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             ctx.cache["tick_t0"] = t0                  # _Round.ask: no call that could outlive the pass
             newlab_tick(ctx)                           # code only: the lab's waiting passes, its stop notice
+            if policy.shadow_league:
+                # code only, before the meetings (a pass whose Claude login fails still records bars): one shadow league
+                # tick, at most 20 seconds, the rest waits for the next pass. Nothing is imported while the switch is off.
+                try:
+                    from ..shadowleague import hook as SLH
+                    SLH.run(agents_db, now, price_get)
+                except Exception as exc:  # noqa: BLE001  (a shadow record only: the meetings go on)
+                    print(f"warning: shadow league failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             results: list[dict] = []
             first: Optional[list] = None
             met: list[str] = []
