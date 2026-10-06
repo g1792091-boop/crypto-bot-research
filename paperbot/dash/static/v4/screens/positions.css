@@ -45,12 +45,16 @@
 .risk-bar i { display: block; height: 100%; width: 0; border-radius: 6px; transition: width .8s var(--ease); }
 .risk-t { font-size: var(--t-xs); color: var(--muted); }
 .risk-t b { color: var(--ink); }
-.risk-row.near { animation: risk-pulse 1.6s ease-in-out infinite; }
+/* in danger: a soft red wash that blinks three times when the row turns near (a real change), then stays (opacity of a
+   layer only; the old background loop repainted the row every frame for as long as it stayed near) */
+.risk-row { position: relative; }
+.risk-row.near { background: var(--down-soft); }
+.risk-row.near::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--down-soft); opacity: 0; pointer-events: none; animation: risk-pulse 1.6s ease-in-out 3; }
 .risk-row.near .risk-t b { color: var(--down); }
 .risk-key i.lock, .risk-bar i.lock { background: var(--up); }
 /* fix (D10/D11): a count-only card's price lines are neutral (their green / red would say profit or loss) */
 .pos-card.count-only .mspark path { stroke: var(--ink-2); filter: none; }
 .pos-card.count-only .mspark circle { fill: var(--ink-2) !important; filter: none; }
 .risk-row.near .risk-b.lock .risk-t b, .risk-b.lock .risk-t b { color: var(--up); }
-@keyframes risk-pulse { 0%, 100% { background: transparent; } 50% { background: var(--down-soft); } }
-@media (prefers-reduced-motion: reduce) { .risk-row.near { animation: none; background: var(--down-soft); } }
+@keyframes risk-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .risk-row.near::before { animation: none; } }

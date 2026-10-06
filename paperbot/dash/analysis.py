@@ -1313,7 +1313,10 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
 
     @app.get("/api/time")
     def get_time():
-        return {"now": _now()}
+        # ver: the fingerprint of the page's code files now on disk (dash/assets.py); an open page whose own differs
+        # offers '새 버전 · 눌러서 새로고침' (core/version.js)
+        assets = getattr(app.state, "assets", None)
+        return {"now": _now(), **({"ver": assets.ver()} if assets is not None else {})}
 
     @app.get("/api/analysis/health")
     def get_health():

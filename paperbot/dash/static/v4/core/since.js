@@ -45,7 +45,7 @@ function loadCss() {
   if (document.querySelector("link[data-since]")) return;
   const l = document.createElement("link");
   l.rel = "stylesheet";
-  l.href = "/static/v4/core/since.css";
+  l.href = new URL("since.css", import.meta.url).href;     // next to this file (the page's own versioned folder)
   l.dataset.since = "1";
   document.head.append(l);
 }

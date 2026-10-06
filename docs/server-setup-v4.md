@@ -546,13 +546,42 @@ sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate 
 cd /root/crypto-bot-research && git pull && sudo bash deploy/update-dash.sh
 ```
 
-- 마지막 줄이 `대시보드 업데이트 완료: <커밋> (봇·알림·에이전트는 멈추지 않았습니다)`면 끝입니다. 휴대폰에서 대시보드를 새로고침하세요.
+- 마지막 줄이 `대시보드 업데이트 완료: <커밋> (봇·알림·에이전트는 멈추지 않았습니다)`면 끝입니다. 열어 둔 화면 오른쪽 아래에
+  **`새 버전 준비됨 · 눌러서 새로고침`**이 뜹니다(10분 안, 화면을 다시 켜면 바로). 누르면 보던 화면 그대로 새로 불러옵니다.
+  숨겨 둔 탭이나 5분 넘게 손대지 않은 화면(터미널·TV)은 저절로 새로 불러옵니다. 글을 쓰던 중이면 기다립니다.
+- 화면 파일은 내용이 바뀔 때만 새로 받습니다(주소에 버전이 붙어 1년 동안 브라우저에 저장). 그래서 다시 열 때 빠르고, 업데이트 뒤에도
+  옛 화면이 섞여 보이지 않습니다. `--rollback`으로 되돌려도 마찬가지입니다.
 - `대시보드 밖의 파일이 설치본과 다릅니다`가 나오면 아무것도 바뀌지 않은 것입니다. 봇 파일이 바뀐 버전이라 이 방법으로는 못 올립니다. 그대로 두고 알려 주세요.
 - 새 대시보드가 응답하지 않으면 스스로 이전 대시보드로 되돌립니다(`되돌림`). 그래도 직접 되돌리려면:
 
 ```bash
 cd /root/crypto-bot-research && sudo bash deploy/update-dash.sh --rollback
 ```
+
+### 8-1. PC에서 대시보드 탭을 여러 개 열 때: https 주소 (선택)
+
+`http://100.x.y.z:8080` 주소에서는 크롬이 서버 하나에 연결을 6개까지만 씁니다. 대시보드 탭마다 실시간 연결을 하나씩 쥐고 있어서,
+PC에서 탭을 4개째 열면 화면이 비어 있거나 페이지가 안 열릴 수 있습니다. (2분 넘게 뒤에 숨겨 둔 탭은 이제 연결을 스스로 내려놓고,
+다시 보면 이어받습니다. 그래도 탭 여러 개를 함께 띄워 두면 모자랍니다.) https 주소를 쓰면 연결 하나에 요청을 여러 개 실어서
+이 한도가 없어집니다. 비용 없음, 봇·거래와 무관, 언제든 되돌릴 수 있습니다.
+
+1. https://login.tailscale.com/admin/dns 에서 **MagicDNS**와 **HTTPS Certificates**를 켭니다(이미 켜져 있으면 그대로).
+2. 서버에서 붙여 넣습니다(대시보드는 그대로 두고, Tailscale이 앞에서 https로 받아 넘겨 줍니다):
+
+```bash
+sudo tailscale serve --bg --https=443 http://$(tailscale ip -4):8080
+sudo grep -q '^DASH_TLS_PROXY=' /etc/paperbot/dash.env || echo 'DASH_TLS_PROXY=1' | sudo tee -a /etc/paperbot/dash.env
+sudo systemctl restart paperbot-dash
+tailscale serve status
+```
+
+- 마지막 줄에 `https://paperbot.<이름>.ts.net` 같은 주소가 보이면 됩니다. 이것이 새 대시보드 주소입니다(PC·폰 모두).
+- `DASH_TLS_PROXY=1`은 서버 자신을 거쳐 들어온 https 요청에서만 두 분의 승인·거절·글쓰기를 받아 주라는 표시입니다. 다른 기기에서
+  바로 들어온 요청은 지금처럼 엄격하게 봅니다.
+3. 새 주소로 들어가 로그인한 뒤 확인: 화면이 열리고, **에이전트 방에 글 하나**가 올라가면 끝입니다(승인·거절도 같은 길).
+4. 옛 주소 `http://100.x.y.z:8080`도 계속 됩니다. 탭을 여러 개 쓸 PC에서만 새 주소를 쓰셔도 됩니다.
+
+되돌리기: `sudo tailscale serve reset` (그 뒤로는 옛 주소만 씁니다. `DASH_TLS_PROXY` 줄은 그대로 둬도 해가 없습니다.)
 
 ## 9. 텔레그램 소리
 

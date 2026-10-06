@@ -13,7 +13,7 @@ export async function mount(el, ctx) {
   ctx.setTitle("매매법");
   const st = {board: null, gs: null, list36: [], summary: null};
   const head = ui.screenHead("매매법", "어떤 규칙으로 사고파는지, 지금 어떻게 되고 있는지");
-  const slot = h("div", {class: "strat-slot"});
+  const slot = h("div", {class: "strat-slot"}, motion.shimmer(5, true));       // 불러오는 중 (never a blank page)
   el.append(head, slot);
   let view = null, list = null, shownArg;
 
@@ -43,12 +43,16 @@ export async function mount(el, ctx) {
   current = (params) => show(params, true);
   ctx.track(() => { if (view && view !== list) view.dispose(); current = null; });
 
-  const [b0, l0, s0] = await Promise.all([ctx.store.need("board", 60000).catch((e) => e),
-    ctx.api("/api/strategies").catch(() => []), ctx.store.need("summary", 60000).catch(() => null)]);
-  if (!ctx.alive()) return;
-  if (b0 instanceof Error) { el.append(ui.errorBox(b0, () => ctx.store.refresh("board").catch(() => {}))); return; }
-  st.board = b0; st.gs = derive.groupStats(b0); st.list36 = Array.isArray(l0) ? l0 : []; st.summary = s0;
-  show(ctx.params, false);
+  // the first answer; a failed one says so in the slot and tries again by itself (ui.errorBox), then the screen draws
+  const start = async () => {
+    const [b0, l0, s0] = await Promise.all([ctx.store.need("board", 60000).catch((e) => e),
+      ctx.api("/api/strategies").catch(() => []), ctx.store.need("summary", 60000).catch(() => null)]);
+    if (!ctx.alive()) return;
+    if (b0 instanceof Error) { put(slot, ui.errorBox(b0, start)); return; }
+    st.board = b0; st.gs = derive.groupStats(b0); st.list36 = Array.isArray(l0) ? l0 : []; st.summary = s0;
+    show(ctx.params, false);
+  };
+  await start();
   ctx.watch("board", (b) => {
     if (!b || b === st.board) return;
     st.board = b; st.gs = derive.groupStats(b);

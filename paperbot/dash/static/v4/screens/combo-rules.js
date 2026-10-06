@@ -114,7 +114,7 @@ export function rulesTab(env) {
     let d;
     try { d = await ctx.api(`/api/v4/combo/rules?${new URLSearchParams(query()).toString()}`); } catch (e) {
       if (g !== st.gen || !ctx.alive()) return;
-      put(body, ui.card({plate: "결과"}, e && e.detail ? h("p", {class: "an-warn"}, String(e.detail)) : ui.errorBox(e, () => load())));
+      put(body, ui.card({plate: "결과"}, e && e.detail && e.kind === "http" ? h("p", {class: "an-warn"}, String(e.detail)) : ui.errorBox(e, () => load(), {id: "combo-rules"})));
       return;
     }
     if (g !== st.gen || !ctx.alive()) return;

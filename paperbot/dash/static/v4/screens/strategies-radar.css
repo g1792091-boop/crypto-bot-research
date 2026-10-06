@@ -12,7 +12,9 @@
   font-size: var(--t-xs); font-weight: 700; color: var(--muted); white-space: nowrap; background: var(--surface-2); }
 .rd-badge.one { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 .rd-badge.all { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); }
-.rd-badge.fired { color: var(--accent-ink); border-color: var(--accent-hi); background: var(--accent-hi); box-shadow: 0 0 10px var(--accent-glow); animation: rd-beat 1.6s ease-in-out infinite; }
+.rd-badge.fired { position: relative; color: var(--accent-ink); border-color: var(--accent-hi); background: var(--accent-hi); box-shadow: 0 0 10px var(--accent-glow); }
+/* a real signal: the glow beats three times (opacity of a layer only: no repaint per frame), then stays lit */
+.rd-badge.fired::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; box-shadow: 0 0 14px var(--accent-glow); opacity: 0; pointer-events: none; animation: rd-beat 1.6s ease-in-out 3; }
 
 /* the list: 2-3 columns on a wide screen */
 .rd-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr)); gap: 4px 12px; }
@@ -39,7 +41,7 @@
 .rd-lamps.big .rd-lamp { width: 12px; height: 12px; }
 .rd-side.long .rd-lamp.on { background: var(--up); border-color: var(--up); box-shadow: 0 0 6px var(--up-glow), 0 0 2px var(--up); }
 .rd-side.short .rd-lamp.on { background: var(--down); border-color: var(--down); box-shadow: 0 0 6px var(--down-glow), 0 0 2px var(--down); }
-.rd-row.one .rd-side.near .rd-lamp.on, .rd-wrow.one .rd-side.near .rd-lamp.on { animation: rd-glow 2.4s ease-in-out infinite; }
+.rd-row.one .rd-side.near .rd-lamp.on, .rd-wrow.one .rd-side.near .rd-lamp.on { animation: rd-glow 2.4s ease-in-out 3; }   /* a few blinks on a new paint, then steady */
 
 .rd-more { display: block; margin-top: 8px; width: 100%; }
 .rd-card:not(.all) .rd-extra2 { display: none; }
@@ -66,7 +68,8 @@
 .rd-mx-cell:hover { border-color: var(--accent-line); }
 .rd-mx-cell.one { color: var(--ink-2); border-color: var(--accent-line); }
 .rd-mx-cell.all, .rd-mx-cell.fired { color: var(--ink); background: var(--accent-soft); border-color: var(--accent); }
-.rd-mx-cell.glow { box-shadow: 0 0 12px var(--accent-glow); animation: rd-glow 2.4s ease-in-out infinite; }
+.rd-mx-cell.glow { box-shadow: 0 0 12px var(--accent-glow); }
+.rd-mx-cell.glow.blink { animation: rd-glow 2.4s ease-in-out 3; }   /* newly the closest cell: three blinks, then steady */
 .rd-mx-cell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rd-mx-l.full { color: var(--up); font-weight: 700; }
 .rd-mx-s.full { color: var(--down); font-weight: 700; }
@@ -74,8 +77,8 @@
 .rd-mx-foot { margin-top: 8px; }
 
 @keyframes rd-glow { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-@keyframes rd-beat { 0%, 100% { box-shadow: 0 0 6px var(--accent-glow); } 50% { box-shadow: 0 0 16px var(--accent-glow); } }
-@media (prefers-reduced-motion: reduce) { .rd-lamp, .rd-mx-cell, .rd-badge { animation: none !important; } }
+@keyframes rd-beat { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rd-lamp, .rd-mx-cell, .rd-badge, .rd-badge::after { animation: none !important; } }
 
 /* phone: a compact list, the top 12 and 모두 보기 */
 @media (max-width: 640px) {

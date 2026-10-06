@@ -183,7 +183,7 @@ export async function mount(el, ctx) {
     ctx.store.need("board", 60000).catch(() => null)]);
   if (!ctx.alive()) return;
   if (ck instanceof Error) {
-    put(body, ui.errorBox(ck, () => ctx.store.refresh("checkpoint").catch(() => {})));
+    put(body, ui.errorBox(ck, () => ctx.store.refresh("checkpoint"), {key: "checkpoint"}));
   } else st.ck = ck;
   ctx.watch("summary", (s) => { if (s) { st.summary = s; if (st.ck) render(); } });
   ctx.watch("board", (b) => { if (b) { st.board = b; if (st.ck) render(); } });

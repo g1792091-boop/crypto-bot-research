@@ -118,7 +118,7 @@ export async function mount(el, ctx) {
   const groupSeg = ui.seg(GROUPS.map((g) => ({id: g.id, label: g.label, title: g.title})), st.group, (id) => setGroup(id), {label: "묶음 고르기"});
   const groupRow = h("div", {class: "an-gsel"}, h("span", {class: "an-glabel"}, "묶음"), groupSeg);
   const desc = h("p", {class: "an-desc"});
-  const body = h("div", {class: "stack an-body"});
+  const body = h("div", {class: "stack an-body"}, motion.shimmer(5, true));     // 불러오는 중 (never a blank page)
   // ana7b: the what-if lab (#/whatif) is one tap away from every view
   const lab = h("a", {class: "btn-line", href: ctx.href("whatif"), title: "손절·익절·잠금·레버리지를 바꿨다면: 5년 결과와 밤 그림자"}, "만약 실험실 →");
   el.append(ui.screenHead("분석", "매매법 계좌의 거래를 여러 방향으로 나눠 봅니다 · 설명용, 판정 아님", lab), segSlot, groupRow, desc, body);

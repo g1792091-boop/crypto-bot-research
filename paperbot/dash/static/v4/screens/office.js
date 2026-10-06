@@ -124,7 +124,7 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- data
   ctx.watch("office", (o, k, err) => {
-    if (!o) { if (err && !st.o) floor.el.replaceChildren(ui.errorBox(err, () => store.refresh("office").catch(() => {}))); return; }
+    if (!o) { if (err && !st.o) floor.el.replaceChildren(ui.errorBox(err, () => store.refresh("office"), {key: "office"})); return; }
     st.o = o;
     renderTop(); renderFloor(); wall.update(o); sched.update(o); paintCd();
     const key = (o.recent || []).map((r) => r.round_id).join(",");

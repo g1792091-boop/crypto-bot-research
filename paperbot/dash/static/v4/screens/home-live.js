@@ -1,7 +1,8 @@
 // 홈 · 요약의 살아 있는 칸 (fill-home): 시장 지금 (7 coins from the store ticker), 지금 열린 포지션 (/api/board positions at
 // the ticker's mark price), 방금 끝난 거래 (/api/trades?group=main, new rows on the stream's trade event) with today's best /
-// worst 기존 36 accounts, and 오늘 회의 일정 (/api/office schedule: a countdown to the next fixed meeting and today's
-// timeline). Also used by 회의 요약 › 회의 결론 (digest-day.js) for the countdown before the first meeting.
+// worst 기존 36 accounts (the server's day sums in /api/summary today.by_group.core), and 오늘 회의 일정 (/api/office
+// schedule: a countdown to the next fixed meeting and today's timeline). Also used by 회의 요약 › 회의 결론
+// (digest-day.js) for the countdown before the first meeting.
 // HONESTY (CONTRACT.md §1): every number comes from the server; a countdown only counts down to a time the server sent
 // (funding time, meeting hour); flashes only when a value really changed; DeepSeek and coin flips are counts only here
 // (owners' D10 / D11: no money, no ROE for them outside the DeepSeek screen).
@@ -58,6 +59,13 @@ export function bestWorst(trades, since) {
   return {best: xs.filter((x) => x.pnl > 0).slice(0, 3), worst: xs.filter((x) => x.pnl < 0).slice(-3).reverse(), accounts: xs.length,
     trades: xs.reduce((s, x) => s + x.n, 0)};
 }
+/** The same from the server's own day sums (/api/summary today.by_group.core: every 기존 36 trade since 00:00 KST, no
+ *  row cap, a few hundred bytes in the summary the page polls anyway), or null when the server does not send them. */
+export function bestWorstOf(core) {
+  if (!core || !Array.isArray(core.best) || !Array.isArray(core.worst) || core.accounts == null) return null;
+  const row = (x) => ({id: x.account_id, strategy: x.strategy, timeframe: x.timeframe, kind: x.kind || "strategy", pnl: Number(x.pnl) || 0, n: Number(x.n) || 0});
+  return {best: core.best.map(row), worst: core.worst.map(row), accounts: Number(core.accounts) || 0, trades: Number(core.trades) || 0};
+}
 
 // ---------------------------------------------------------------------------------------------------- 시장 지금
 export function marketStrip(ctx) {
@@ -110,7 +118,7 @@ export function openCard(ctx) {
   const sub = h("span", {class: "sub"});
   const otherLine = h("p", {class: "muted hl-small"});
   const card = ui.card({plate: "지금 열린 포지션", cls: "hl-poscard", acts: [sub]}, list, otherLine, ui.assume("open"));
-  const st = {b: null, t: null, seen: new Map()};
+  const st = {b: null, t: null, seen: new Map(), order: null};
   const rowEls = new Map();
   function row(x) {
     const id = x.a.account_id;
@@ -139,11 +147,19 @@ export function openCard(ctx) {
     const {rows, other} = openRows(st.b, st.t);
     const live = new Set(rows.map((x) => x.a.account_id));
     for (const k of [...rowEls.keys()]) if (!live.has(k)) rowEls.delete(k);
-    sub.textContent = rows.length ? `${fmt.int(rows.length)}개 · ROE 높은 순` : "";
-    if (!rows.length) put(list, ui.empty("기존 36 · 5분봉 · 추가 계좌에 지금 열린 포지션이 없습니다"));
-    else put(list, rows.map(row));
-    otherLine.textContent = `그 밖에 딥시크 ${fmt.int(other.ds)} · 동전 봇 ${fmt.int(other.coin)} 포지션 (개수만)`
-      + " · ROE = 마크 가격 기준, 증거금 대비";
+    const subT = rows.length ? `${fmt.int(rows.length)}개 · ROE 높은 순` : "";
+    if (sub.textContent !== subT) sub.textContent = subT;
+    // the rows are kept and only their numbers change on a 5-second price; the list is rebuilt only when its rows or
+    // their order changed (a phone re-laid the whole card out every 5 s: 60-230 ms scroll stutter)
+    const order = rows.map((x) => `${x.a.account_id}|${x.p.symbol}|${x.p.entry_time}`).join(",");
+    const els = rows.map(row);
+    if (order !== st.order || !list.firstChild) {
+      st.order = order;
+      if (!rows.length) put(list, ui.empty("기존 36 · 5분봉 · 추가 계좌에 지금 열린 포지션이 없습니다"));
+      else put(list, els);
+    }
+    const otherT = `그 밖에 딥시크 ${fmt.int(other.ds)} · 동전 봇 ${fmt.int(other.coin)} 포지션 (개수만)` + " · ROE = 마크 가격 기준, 증거금 대비";
+    if (otherLine.textContent !== otherT) otherLine.textContent = otherT;
   }
   card.setBoard = (b) => { st.b = b; render(); };
   ctx.watch("ticker", (t) => { if (t && typeof t === "object") { st.t = t; render(); } });
@@ -158,7 +174,7 @@ export function tradesCard(ctx) {
     acts: [h("a", {class: "btn-line", href: ctx.href("positions")}, "거래 전체 →")]}, h("div", {class: "hl-trgrid"}, bw, list),
   ui.note("기존 36 · 5분봉 · 추가 계좌만 · 딥시크와 동전 봇은 빠짐 · 누르면 그 계좌"), ui.assume());
   const seen = new Set();
-  let first = true, busy = false, coreAt = 0;     // the day list (up to 2,000 rows) at most once a minute
+  let first = true, busy = false;
   const tRow = (t) => {
     const ret = h("span", {class: ["num", "hl-tret", fmt.tone(t.roe)]}, t.roe != null ? fmt.pct(t.roe, 1) : "—");
     const usd = h("b", {class: ["num", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true));
@@ -170,9 +186,10 @@ export function tradesCard(ctx) {
       h("span", {class: ["hl-why", t.exit_reason === "SL" || t.exit_reason === "LIQ" ? "down" : t.exit_reason === "LOCK" || t.exit_reason === "TP" ? "up" : "muted"]}, fmt.reasonKo(t.exit_reason)),
       ret, usd);
   };
-  function renderBW(rows) {
-    const since = fmt.kstMidnight();
-    const r = bestWorst(rows, since);
+  function renderBW(sum) {
+    // the server's own sums of today's 기존 36 trades (summary today.by_group.core, every trade since 00:00 KST)
+    const r = bestWorstOf(sum && sum.today && sum.today.by_group && sum.today.by_group.core);
+    if (!r) { put(bw, sum ? ui.notYet("오늘 계좌별 합계 수집 전") : motion.shimmer(2)); return; }
     if (!r.accounts) { put(bw, h("p", {class: "muted hl-small"}, "오늘 닫힌 기존 36 거래가 아직 없습니다 · 가장 잘한·못한 계좌는 첫 거래 뒤")); return; }
     // 표본 적음 is per account: a row ranked on fewer than 30 closed trades says so (every row on day 0-1)
     const thin = (x) => x.n < 30;
@@ -180,20 +197,16 @@ export function tradesCard(ctx) {
       h("span", {class: "hl-nm"}, fmt.acctName(x)),
       h("b", {class: ["num", fmt.tone(x.pnl)]}, fmt.money(x.pnl, true)), h("span", {class: "muted num"}, `${fmt.int(x.n)}건${thin(x) ? " · 표본 적음" : ""}`));
     const shown = r.best.concat(r.worst);
-    // the day list is the newest 2,000 core trades: when that cuts off part of today, the note says so
-    const cut = rows.length >= 2000 && rows.reduce((m, t) => Math.min(m, Number(t.exit_time) || Infinity), Infinity) > since;
     put(bw, h("div", {class: "hl-bwc"}, h("div", {class: "hl-bwk up"}, "오늘 가장 잘한 계좌"), r.best.length ? r.best.map(one) : h("span", {class: "muted"}, "아직 없음")),
       h("div", {class: "hl-bwc"}, h("div", {class: "hl-bwk down"}, "오늘 가장 못한 계좌"), r.worst.length ? r.worst.map(one) : h("span", {class: "muted"}, "아직 없음")),
       h("p", {class: "muted hl-small hl-bwn"}, ui.pill("참고", "thin"), ` 기존 36만 · 오늘 0시부터 닫힌 거래 손익 (USDT) · 계좌 ${fmt.int(r.accounts)}개 · 거래 ${fmt.int(r.trades)}건`,
-        cut ? " · 최근 2,000건만 (오늘 일부)" : "",
         shown.some(thin) ? " · 계좌마다 거래가 30건 미만이라 표본 적음 (운일 수 있음)" : ""));
   }
   async function load() {
     if (busy) return;
     busy = true;
     try {
-      const wantCore = Date.now() - coreAt > 55000;
-      const [main, core] = await Promise.all([ctx.api("/api/trades?group=main&limit=12"), wantCore ? ctx.api("/api/trades?group=core&limit=2000") : null]);
+      const main = await ctx.api("/api/trades?group=main&limit=12");
       if (!ctx.alive()) return;
       const rows = (Array.isArray(main) ? main : []).slice().sort((a, b) => (Number(b.exit_time) || 0) - (Number(a.exit_time) || 0));  // newest close first
       if (!rows.length) put(list, ui.empty("아직 끝난 거래가 없습니다"));
@@ -202,13 +215,20 @@ export function tradesCard(ctx) {
         put(list, els);
       }
       first = false;
-      if (wantCore) { coreAt = Date.now(); renderBW(Array.isArray(core) ? core : []); }
     } catch (e) {
       if (first && ctx.alive()) put(list, ui.errorBox(e, () => load()));
     } finally { busy = false; }
   }
   load();
   ctx.every(60000, load, {now: false});
+  // today's best / worst: from the summary the shell already polls every minute (no request of its own), instead of
+  // downloading the day's 2,000 newest trades every minute (815 KB; wrong on a day with more than 2,000)
+  put(bw, motion.shimmer(2));
+  // (no summary at all yet and its load failed: 못 불러옴 with its own retry, not a shimmer that never ends)
+  ctx.watch("summary", (s, k, err) => {
+    if (s) renderBW(s);
+    else if (err) put(bw, ui.errorBox(err, () => ctx.store.refresh("summary"), {key: "summary"}));
+  });
   let t = null;
   ctx.on("trades", () => { clearTimeout(t); t = setTimeout(() => ctx.alive() && load(), 1500); });
   ctx.track(() => clearTimeout(t));

@@ -172,6 +172,6 @@ export function staffBoard(ctx) {
         h("span", {class: "db2-spark"}, ui.sparkline(k.series, {w: 110, h: 30, base: 0.5, label: `${nm(k.role)} 누적 맞음 비율`})),
         h("b", {class: "db2-rate num"}, fmt.pct(rate, 0, false)));
     }), ...(rest.length ? [h("p", {class: "db2-rest"}, "아직 채점 전 · ", rest.map((k) => `${nm(k.role)} ${k.waiting ? `대기 ${fmt.int(k.waiting)}` : k.notGradable ? "예측 없음" : ""}`).join(" · "))] : []));
-  }).catch((e) => { if (ctx.alive() && !(e && e.name === "AbortError")) put(body, ui.errorBox(e, () => {})); });
+  }).catch((e) => { if (ctx.alive() && !(e && e.name === "AbortError")) put(body, ui.errorBox(e)); });   // (no retry wired here: no button that does nothing)
   return card;
 }

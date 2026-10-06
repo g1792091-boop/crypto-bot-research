@@ -23,7 +23,7 @@ export const dayN = (t, start) => Math.max(0, Math.floor((t - (start - (start % 
 /** The kit's css for screens that are not 흐름 (home): flow.css @imports the same file. */
 export function ensureKitCss() {
   if (typeof document === "undefined" || document.querySelector("link[data-flow-kit]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/flow-kit.css", dataset: {flowKit: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("flow-kit.css", import.meta.url).href, dataset: {flowKit: "1"}}));
 }
 
 /** /api/v4/flow/race -> the chart's model (returns as ratios to the starting balance), or null before 2 real points. */

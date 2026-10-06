@@ -15,7 +15,7 @@ const FULL_CHG = 0.03;             // a day's median move of 3 % or more gets th
 
 function ensureCss() {
   if (document.querySelector("link[data-road-kit]")) return;
-  document.head.append(h("link", {rel: "stylesheet", href: "/static/v4/screens/road-kit.css", dataset: {roadKit: "1"}}));
+  document.head.append(h("link", {rel: "stylesheet", href: new URL("road-kit.css", import.meta.url).href, dataset: {roadKit: "1"}}));
 }
 
 // a 7 x 9 pixel flag (fill = currentColor)

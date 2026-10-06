@@ -317,6 +317,8 @@ sudo grep '^DASH_HOST=' /etc/paperbot/dash.env
 - 첫 줄의 `100.x.y.z`가 대시보드 주소입니다. 마지막 줄에 같은 주소가 보이면 됩니다.
 - 첫 줄이 `no current Tailscale IPs; state: NeedsLogin`이면 로그인이 끝나지 않은 것입니다(승인을 기다리는 `tailscale up`을 Ctrl+C로 끊으면 이렇게 됩니다). `sudo tailscale up`을 다시 실행해 `Success.`가 나올 때까지 기다린 뒤 이 상자를 다시 붙여 넣습니다. 그 전에는 `DASH_HOST`를 바꾸지 않습니다.
 - 대시보드 주소(12번부터): 폰의 Tailscale 앱을 켠 상태로 브라우저에서 `http://100.x.y.z:8080`. `https`가 아니라 `http`입니다.
+  PC에서 대시보드 탭을 여러 개 띄우려면 https 주소(`https://paperbot.<이름>.ts.net`)를 따로 켤 수 있습니다:
+  `docs/server-setup-v4.md` 8-1.
 
 **꼭 할 것: 서버의 키 만료 끄기.** Tailscale은 기본으로 180일마다 서버 연결을 끊습니다.
 1. https://login.tailscale.com/admin → **Machines**.
@@ -518,7 +520,7 @@ systemctl status paperbot-offsite --no-pager
 - 처음 한 번은 되살리기 연습(`docs/offsite-backup.md` 9번 "연습")도 합니다. 백업은 되살려 봐야 믿을 수 있습니다.
 
 ### 대시보드
-1. 폰에서 Tailscale 앱을 켜고 `http://100.x.y.z:8080`을 열어 6번의 비밀번호로 들어갑니다. **PC에서 보려면** PC에도 Tailscale을 설치하고(tailscale.com/download, 같은 계정으로 로그인) PC 브라우저에서 같은 주소를 엽니다.
+1. 폰에서 Tailscale 앱을 켜고 `http://100.x.y.z:8080`을 열어 6번의 비밀번호로 들어갑니다. **PC에서 보려면** PC에도 Tailscale을 설치하고(tailscale.com/download, 같은 계정으로 로그인) PC 브라우저에서 같은 주소를 엽니다. PC에서 탭을 4개 넘게 띄우면 `http` 주소는 연결이 모자랍니다: https 주소를 켜는 법은 `docs/server-setup-v4.md` 8-1.
 2. **서버 상태** 탭:
    - 봇 생존 신호: **정상**
    - 계좌: **331**(v4), "새로 시작"

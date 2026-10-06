@@ -15,6 +15,7 @@ import {startFind} from "./find.js";
 import {startNavKeys} from "./navkeys.js";
 import {startSettings} from "./settings.js";
 import {startTvMode} from "./tvmode.js";
+import {startVersion} from "./version.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -38,6 +39,7 @@ function boot() {
   startTvMode();           // TV 자동 넘김: a device that was rotating comes back rotating (core/tvmode.js)
   startStream();
   startFeatureProbe();
+  startVersion();          // '새 버전 준비됨 · 눌러서 새로고침' when the server has newer code (before the first clock check)
   syncClock();
   setInterval(syncClock, 600000);
   maybeStartTour();
