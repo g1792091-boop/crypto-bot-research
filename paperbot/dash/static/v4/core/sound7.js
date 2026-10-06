@@ -84,7 +84,7 @@ const RISE = [[PITCH.F4, -7.8, -19, -22], [PITCH.G4, -17, -23, -26], [PITCH.C5, 
 
 // ---------------------------------------------------------------- C: the mallet phrase
 export const MALLET = {h4: 4.393, h10: 10.01, thump: 230, atk: 0.004, parts: [[0.55, 0.06], [0.45, 0.3]],
-  p4: -5, tau4: 0.025, glide4: 0.025, p10: -26, tau10: 0.05, pth: -20, tauth: 0.017, click: -10, clickTau: 0.003, clickHz: 5000};
+  p4: -5, tau4: 0.025, glide4: 0, p10: -26, tau10: 0.05, pth: -20, tauth: 0.017, click: -10, clickTau: 0.003, clickHz: 5000};
 const M = {D6: 1176.7, C6: 1047.5, B5: 989.1, G5: 783.99, E5: 659.26, A5: 880.0};
 /** strikes [[at s, f, level dB]] -> voices */
 function mallet(strikes, peak, seed = 7) {
@@ -92,7 +92,7 @@ function mallet(strikes, peak, seed = 7) {
   strikes.forEach(([at, f, lv], i) => {
     const p = peak * Math.pow(10, lv / 20), dB = (x) => p * Math.pow(10, x / 20);
     out.push({w: "sine", f, at, peak: p, atk: MALLET.atk, parts: MALLET.parts});
-    out.push({w: "sine", f: f * MALLET.h4, at, peak: dB(MALLET.p4), atk: 0.002, parts: [[1, MALLET.tau4]], glide: [MALLET.glide4, 0.012]});
+    out.push({w: "sine", f: f * MALLET.h4, at, peak: dB(MALLET.p4), atk: 0.002, parts: [[1, MALLET.tau4]], glide: MALLET.glide4 ? [MALLET.glide4, 0.012] : null});
     if (f * MALLET.h10 < 18000) out.push({w: "sine", f: f * MALLET.h10, at, peak: dB(MALLET.p10), atk: 0.002, parts: [[1, MALLET.tau10]]});
     out.push({w: "sine", f: MALLET.thump, at, peak: dB(MALLET.pth), atk: 0.002, parts: [[1, MALLET.tauth]]});
     out.push({w: "noise", at, peak: dB(MALLET.click), dur: 0.02, tau: MALLET.clickTau, bp: MALLET.clickHz, q: 0.7, seed: seed + i});
