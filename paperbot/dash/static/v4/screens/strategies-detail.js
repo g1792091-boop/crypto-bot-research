@@ -4,7 +4,7 @@
 // signal log → the 5-year card → loss cards / loss patterns. Old strat.js, everything kept (INVENTORY section 5).
 // HONESTY: money has assume(); the coin-flip comparison is the 참고 pill + refNote (36 only, never ✓/✕); DeepSeek accounts
 // get no per-account comparison; small samples say 표본 적음; what the server lacks says 준비 전 / 수집 전.
-import {h, put, ui, fmt, motion, local, bars} from "../core/pb.js";
+import {h, put, ui, fmt, motion, local, bars, fullChart} from "../core/pb.js";
 import {DS_DEFS, FAMILY, REEL, STATUS_KO} from "./strategies-defs.js";
 import {paramsCard} from "./strategies-params.js";
 import {accountsOf, record, splitTrades, nameKo, groupOfStrategy, strategyIndex, TF_ORDER} from "./strategies-calc.js";
@@ -82,7 +82,9 @@ export function detailView(ctx, st, name) {
   const chart = stratChart(ctx);
   sc.track(chart.dispose);
   const liveEl = h("div", {class: "row wrap strat-live", "aria-live": "polite"});
-  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn]}, liveEl, tfSeg, chart.el);
+  const fs = fullChart({ctx: sc, label: "매매법 차트"});               // 차트 크게 보기 (core/fullchart.js, key "f")
+  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn, fs]}, liveEl, tfSeg, chart.el);
+  fs.bind(chartCard);
 
   const condEl = h("div", {class: "stack tight"}, motion.shimmer(3));
   const condCard = ui.card({plate: "지금 조건", sub: "마지막으로 닫힌 봉", cls: "strat-o3"}, condEl);

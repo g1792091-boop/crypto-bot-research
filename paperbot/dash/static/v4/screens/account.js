@@ -8,7 +8,7 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, candleGlow, tok, priceDec, local, fullChart} from "../core/pb.js";
 import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
@@ -149,9 +149,11 @@ export async function mount(el, ctx) {
     const symSel = h("select", {class: "select", "aria-label": "코인"}, (syms.length ? syms : ["BTCUSDT"]).map((s) => h("option", {value: s}, fmt.coin(s))));
     if (pos) symSel.value = pos.symbol;
     else if (trades.length) symSel.value = [...trades].sort((x, y) => (y.exit_time || 0) - (x.exit_time || 0))[0].symbol;
-    const cBox = h("div", {class: "account-candles"});
-    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉 · 첫 거래부터 지금까지`, acts: [symSel], cls: "account-cc"}, cBox,
+    const cBox = h("div", {class: "account-candles", "data-fc-grow": ""});
+    const fs = fullChart({ctx, label: "계좌 차트"});                  // 차트 크게 보기 (core/fullchart.js, key "f")
+    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉 · 첫 거래부터 지금까지`, acts: [symSel, fs], cls: "account-cc"}, cBox,
       h("p", {class: "pos-note"}, "화살표 = 진입, 동그라미 = 청산 (초록 수익, 빨강 손실). 열린 포지션이 있으면 진입·손절·청산가 선이 나옵니다."));
+    fs.bind(candleCard);
     const pg = ui.pager({size: 10, row: (t) => withReplay(tradeRow(t, a, {noName: true, why: true, prices: true, equity: true}), t), empty: "아직 거래가 없습니다"});
     pg.set(trades);
     const tradesCard = ui.card({plate: "거래 내역", sub: `${fmt.int(n)}건 · 최근 것부터`,

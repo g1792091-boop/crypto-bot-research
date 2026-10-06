@@ -10,7 +10,7 @@
 // compact pill at the left (click to hide; never in the autoscale; an edge marker when off the price range), the '선'
 // menu (포지션 선 · 손절·잠금 · 지지·저항 · 프리미엄 지표 · 경제지표 · 거래량), 프리미엄 지표 and the volume bars.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features, chartDeck, chartAi,
-  bigEvent, liqEvent, ownEvent, onPref} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, onPref, fullChart} from "../core/pb.js";
 import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {posLines} from "./chart-lines.js";
 import {tickStream} from "./terminal-live.js";
@@ -71,8 +71,8 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- chart box + controls
   const legend = h("div", {class: "chart-legend num"});
-  const box = h("div", {class: "chart-box"});
-  const wrap = h("div", {class: "chart-wrap"}, box, legend);
+  const box = h("div", {class: "chart-box", "data-fc-box": ""});
+  const wrap = h("div", {class: "chart-wrap", "data-fc-grow": ""}, box, legend);
   const acctSel = h("select", {class: "select chart-acct", "aria-label": "진입·청산을 볼 계좌"});
   acctSel.addEventListener("change", () => { st.acct = acctSel.value; st.acctData = null; reflectUrl(); drawAccount(); });
   const toggleBtns = TOGGLES.map(([k, label]) => {
@@ -118,6 +118,9 @@ export async function mount(el, ctx) {
   const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, fxBar, wrap, tv.el,
     h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
     ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
+  // 차트 크게 보기 (core/fullchart.js): the chart card fills the window (key "f"); the chart takes the height
+  const fs = fullChart({ctx, label: "차트"});
+  fs.bind(chartCard);
   const flowCard = coinFlowCard(ctx, st.sym);           // 이 코인 시장 지표 (flow.db + liq.db, /api/v4/flowlive)
   ctx.every(30000, () => flowCard.load(), {now: true});
   el.append(ui.screenHead("차트", "봇이 보는 시세와 모의 계좌의 진입·청산"), coinBar, priceLine,
@@ -132,7 +135,7 @@ export async function mount(el, ctx) {
     deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol"],
       defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
-    fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
+    fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn, fs);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });
   } catch (e) {
     box.replaceChildren(h("div", {class: "chart-fail"}, ui.errorBox(e, () => location.reload())));

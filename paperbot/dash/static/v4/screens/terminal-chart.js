@@ -10,7 +10,7 @@
 // this coin; our lines are 1 px with a compact pill at the left (click to hide), never in the autoscale, an edge
 // marker when off the price range; the '선' menu, 프리미엄 지표 (core/smc.js) and the volume bars along the bottom.
 import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec, chartDeck,
-  bigEvent, liqEvent, ownEvent} from "../core/pb.js";
+  bigEvent, liqEvent, ownEvent, fullChart} from "../core/pb.js";
 import {panel, ping} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {posLines} from "./chart-lines.js";
@@ -40,7 +40,10 @@ export function termChart(ctx, st, onTf) {
   const keyLine = h("div", {class: "term-ckey"});
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
-  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  // 차트 크게 보기 (core/fullchart.js): the whole panel (its interval buttons and '선' menu too) fills the window; key "f"
+  const fs = fullChart({ctx, label: "터미널 차트"});
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
+  fs.bind(el);
   const moreA = el.head.querySelector(".term-more");
 
   let C = null, series = null, deck = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;

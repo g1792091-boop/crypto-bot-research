@@ -3,6 +3,8 @@
 //        show the number). Never while typing in a box, never with Ctrl / Alt / Cmd.
 //   /    opens 찾기 (core/find.js).
 //   ,    opens 설정 (core/settings.js: every per-device choice in one panel).
+//   f    the chart under the mouse (else the biggest one on screen) fills the window; f / Esc puts it back
+//        (core/fullchart.js).
 //   phone: a sideways swipe on the screen moves to the next / previous screen of the same group (the sub tabs' order).
 //        Not on a chart, a table or a row that scrolls sideways itself, a form field, or a slider; never while this
 //        device turned it off in 설정 (core/prefs.js swipeOn).
@@ -13,6 +15,7 @@ import {openFind, findOpen} from "./find.js";
 import {closePeek, peekOpen} from "./drawer.js";
 import {openSettings, settingsOpen} from "./settings.js";
 import {swipeOn} from "./prefs.js";
+import {toggleFull} from "./fullchart.js";
 
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -78,7 +81,9 @@ export function startNavKeys() {
     if (document.querySelector(".tour-card")) return;               // the first-visit tour has the keyboard
     if (settingsOpen()) return;                                      // the 설정 panel has the keyboard (Esc closes it)
     if (e.key === "/") { e.preventDefault(); openFind(); return; }
-    if (e.key === ",") { e.preventDefault(); openSettings(); return; }
+    // "," and "f" by the key's place too (e.code): a keyboard in 한글 mode sends "ㄹ" for f
+    if (e.key === "," || e.code === "Comma") { e.preventDefault(); openSettings(); return; }
+    if ((e.key === "f" || e.key === "F" || e.code === "KeyF") && !e.shiftKey && !e.repeat) { if (toggleFull()) e.preventDefault(); return; }
     const name = keyScreen(e.key);
     if (!name || e.repeat) return;
     e.preventDefault();
