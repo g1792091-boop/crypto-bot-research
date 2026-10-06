@@ -603,8 +603,21 @@ def _reply(t: dict, speaker: str, spoken: list) -> tuple:
         return None, None
     st = t.get("stance", t.get("reply_stance"))
     st = st.strip() if isinstance(st, str) else ""
-    # one of the four words, also when the model adds to it ("반대합니다", "보완(조건)"); anything else: no chip
-    return rt, next((x for x in REPLY_STANCES if st.startswith(x)), None)
+    return rt, _stance_word(st)
+
+
+_STANCE_ENDINGS = ("", "합니다", "함", "해요", "입니다")
+
+
+def _stance_word(st: str) -> Optional[str]:
+    """동의 / 반대 / 보완 / 질문 from the model's stance: the word alone, with a plain ending ("반대합니다") or followed by
+    punctuation ("보완(조건)", "질문: …"). Anything else ("동의하지 않음", "동의 안 함") is not read as the word: no chip."""
+    for x in REPLY_STANCES:
+        if st.startswith(x):
+            rest = st[len(x):]
+            if rest in _STANCE_ENDINGS or rest[:1] in tuple("(:-,./"):
+                return x
+    return None
 
 
 def parse_answer(text: str, order: list[str]) -> dict:

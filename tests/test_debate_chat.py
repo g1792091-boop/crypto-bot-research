@@ -99,6 +99,10 @@ def test_reply_fields_are_checked_and_old_answers_read_as_plain_turns():
     assert [(t["speaker"], t["reply_to"], t["reply_stance"]) for t in spell["turns"]] == [
         ("리스크 책임자", None, None), ("퀀트", "리스크 책임자", "반대"), ("낙관론자", "퀀트", "보완"),
         ("비관론자", "낙관론자", None)]
+    # a stance that only starts with the word is not that word ("동의하지 않음" is not 동의): no chip rather than a wrong one
+    for said, want in (("동의하지 않음", None), ("동의 안 함", None), ("반대 의견", None), ("보완하자면", None),
+                       ("반대함", "반대"), ("질문: 기준이 뭔가요", "질문"), ("동의", "동의")):
+        assert D._stance_word(said) == want, said
     old = D.parse_answer(json.dumps({"turns": [{"speaker": r, "text": "말"} for r in ROLES[:4]], "note": "n"},
                                     ensure_ascii=False), order)
     assert [(t["reply_to"], t["reply_stance"]) for t in old["turns"]] == [(None, None)] * 4 and old["note"] == "n"
