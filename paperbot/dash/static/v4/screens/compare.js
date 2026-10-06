@@ -51,10 +51,12 @@ export function pickName(id, board) {
   }
   return fmt.stratKo(id);
 }
-/** [{time (s), value}] strictly increasing (the same second keeps its last value) from ms times and returns. */
+/** [{time (s), value}] strictly increasing from ms times and returns (the server sends them in time order; a point in
+ *  the same second as the one before, or out of order, replaces that one's value); a missing time or value is skipped. */
 export function lineData(t, v) {
   const out = [];
   for (let i = 0; i < (t || []).length; i++) {
+    if (t[i] == null) continue;
     const s = Math.floor(Number(t[i]) / 1000), y = v[i];
     if (!Number.isFinite(s) || y == null || !Number.isFinite(y)) continue;
     if (out.length && s <= out[out.length - 1].time) { out[out.length - 1].value = y; continue; }
