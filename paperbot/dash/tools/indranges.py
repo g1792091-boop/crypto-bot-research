@@ -31,6 +31,9 @@ What (every choice below was fixed before any result was looked at):
    ranges, and the pooled ones), then a 3-window check: 2021-08..2022, 2023-24, 2025-26 must each have
    >= ``MIN_WINDOW`` trades on both sides and a difference of the same sign. Only cells that pass both are marked
    (``ok``: +1 better, -1 worse); every other cell is shown plainly as no difference (차이 없음).
+   ADDED AFTER THE FIRST RUN (stated in the JSON and on the page): with about 1.9 million trades a difference of
+   0.02 R passed both checks, so a marked cell must also differ by at least ``MIN_EFFECT`` R (5% of a stop distance);
+   a cell that passes the tests with a smaller difference carries ``tiny: 1`` and is shown as 차이 없음 too.
 6. CAVEAT (written into the JSON and the page): descriptive only. Looking for good ranges after the fact overfits
    even with these guards, the 36 were themselves chosen on 5-year data, and nothing here changes a locked rule.
 """
@@ -62,6 +65,7 @@ WIN3 = (("2021-22", "2021-08-01", "2023-01-01"), ("2023-24", "2023-01-01", "2025
         ("2025-26", "2025-01-01", "2026-10-01"))
 MIN_CELL = 30                                    # trades on each side of a tested cell
 MIN_WINDOW = 10                                  # trades on each side in every window of a passing cell
+MIN_EFFECT = 0.05                                # |difference in mean net R| of a marked cell (added after run 1)
 FDR = 0.05
 DAY_MS = 86_400_000
 WEEK_MS = 7 * DAY_MS
@@ -289,7 +293,7 @@ def judge(scopes: dict) -> dict:
     """Adds q and ok to every tested cell of every scope (in place); returns the counts."""
     tested = [c for cells in scopes.values() for row in cells.values() for c in row if c.get("p") is not None]
     qs = bh([c["p"] for c in tested])
-    passed = better = 0
+    passed = better = tiny = 0
     for c, q in zip(tested, qs):
         c["q"] = IC.r4(q, 5)
         c["p"] = IC.r4(c["p"], 6)
@@ -298,10 +302,14 @@ def judge(scopes: dict) -> dict:
             na >= MIN_WINDOW and dw is not None and (dw > 0) == (d > 0) and dw != 0 and
             _rest_n(c, i) >= MIN_WINDOW for i, (na, dw) in enumerate(c["w"]))
         if q <= FDR and same:
+            if abs(d) < MIN_EFFECT:
+                c["tiny"] = 1
+                tiny += 1
+                continue
             c["ok"] = 1 if d > 0 else -1
             passed += 1
             better += d > 0
-    return {"tests": len(tested), "passed": passed, "better": better, "worse": passed - better}
+    return {"tests": len(tested), "passed": passed, "better": better, "worse": passed - better, "tiny": tiny}
 
 
 def _rest_n(c: dict, i: int) -> int:
@@ -372,8 +380,8 @@ def build(signals: str, funding_dir: Optional[str], work: Optional[str] = None) 
         "windows": [list(w) for w in WIN3], "tfs": list(TFS), "k_stop": K_STOP,
         "indicators": list(IC.INDICATORS), "quint": list(IC.QUINT), "fixed": {k: list(v) for k, v in IC.FIXED.items()},
         "edges": edges,
-        "rules": {"min_cell": MIN_CELL, "min_window": MIN_WINDOW, "fdr": FDR, "test": "week-clustered, two-sided, net R",
-                  **counts},
+        "rules": {"min_cell": MIN_CELL, "min_window": MIN_WINDOW, "fdr": FDR, "min_effect_r": MIN_EFFECT,
+                  "min_effect_added_after_first_run": True, "test": "week-clustered, two-sided, net R", **counts},
         "trades": int(len(tr["s"])), "per_tf": per_tf,
         "pooled": {**summary(tr, every), "cells": scopes["__all__"]},
         "strategies": out_strats,
