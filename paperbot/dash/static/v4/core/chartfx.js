@@ -225,6 +225,7 @@ export function candleGlow(chart, series) {
  *   defaults: {group: on?} the "기본" state of those groups (else all on; on a phone pos / risk / sr / smc off)
  *   tag: true draws our own last-price tag on the right axis (glows, pulses on a real new price)
  *   sym: () -> the coin on screen (its relay events light the halves at full strength; others dimmer)
+ *   legend: the screen's OHLC legend element over the chart (the right-edge names start under it when it reaches them)
  * deck: {setData, update, setMarkers, setLines, flash, shown(g), onToggle(fn), menuBtn, smcBtn ('프리미엄 지표 ▾'),
  *        lightChip, lightMenu (the '조명 · 번쩍임' menu; flashSel is the same element, its old name), viewBtn (one
  *        '보기 ▾' menu with the light, the flash and the 프리미엄 지표 parts, for a narrow header), place, ready}
@@ -504,7 +505,11 @@ export function chartDeck(o) {
   function layoutNames() {
     const items = nameItems().filter((x) => x.y != null && x.y >= 0 && x.y <= pane.h);
     const last = st.data[st.data.length - 1], H = nameH();
-    const lay = edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo: 2, hi: pane.h - 2});
+    // the screen's OHLC legend line (o.legend, top left): when it reaches the names' column, the names start under it
+    let lo = 2;
+    const lg = o.legend;
+    if (lg && lg.textContent && lg.offsetLeft + lg.offsetWidth - pane.x > pane.w - 180) lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);
+    const lay = edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo, hi: pane.h - 2});
     // a narrow pane (the left menu with bigger type): a name that would sit on one of our left pills goes to the "+N"
     // list and the hover tag instead, so a name and a pill never cover each other
     const pb = [];

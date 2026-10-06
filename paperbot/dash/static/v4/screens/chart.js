@@ -121,7 +121,7 @@ export async function mount(el, ctx) {
     ctx.track(C.dispose);
     series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineStyle: 2, priceLineWidth: 1});
     deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "chart", tag: true, groups: ["pos", "risk", "sr", "smc", "ev", "vol"],
-      defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null, sym: () => st.sym});
+      defaults: narrow() ? {pos: false, risk: false, sr: false, smc: false} : null, sym: () => st.sym, legend});
     deck.onToggle((g) => { if (g === "ev" || g == null) drawMarkers(); if (g === "sr" || g == null) loadLevels(); });
     fxBar.append(deck.lightChip, deck.flashSel, deck.smcBtn, deck.menuBtn);
     C.chart.subscribeCrosshairMove((p) => { const d = p && p.seriesData && p.seriesData.get(series); paintLegend(d || st.last); });

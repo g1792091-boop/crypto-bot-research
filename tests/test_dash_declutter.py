@@ -114,7 +114,7 @@ def test_the_deck_places_every_right_edge_name_in_one_column():
     # smcdraw no longer writes names at the right edge (zones or our lines): the deck does, through edgelabels.js
     assert 'align: "right"' not in draw and "o.extra" not in draw
     assert 'import {edgeLayout} from "./edgelabels.js";' in fx and "export const NAMES_MAX = 6;" in fx
-    assert "edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo: 2, hi: pane.h - 2})" in fx
+    assert "edgeLayout(items, {price: last ? last.close : null, max: NAMES_MAX, H: H + 1, lo, hi: pane.h - 2})" in fx
     assert "layoutNames();" in fx[fx.index("function place()"):fx.index("function layoutPills()")]
     # the hidden ones: on hover / tap of the line (and the equilibrium / liquidity lines), and a "+N" chip with a list
     assert "chart.subscribeCrosshairMove((p) => showHover(" in fx and "chart.subscribeClick((p) => showHover(" in fx
@@ -140,6 +140,10 @@ def test_names_keep_clear_of_the_left_pills_and_name_only_drawn_zones():
     # the indicator key wraps before it runs under the "+N" chip
     assert 'over.classList.toggle("nmore", !!n);' in fx
     assert ".cfx-over.nmore .cfx-smckey { max-width: calc(100% - 44px - 7.5em); }" in _read("core", "chartfx.css")
+    # the OHLC legend (top left): when it runs into the names' column, the names start under it (it kept "−0.16%" hidden)
+    assert "lo = Math.max(lo, lg.offsetTop + lg.offsetHeight - pane.y + 2);" in lay and "max: NAMES_MAX, H: H + 1, lo, hi:" in lay
+    assert "sym: () => st.sym, legend});" in _read("screens", "terminal-chart.js")
+    assert "sym: () => st.sym, legend});" in _read("screens", "chart.js")
 
 
 def test_bottom_table_head_wraps_instead_of_cutting_its_totals():
