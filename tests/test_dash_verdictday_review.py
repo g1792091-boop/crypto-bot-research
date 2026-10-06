@@ -233,3 +233,14 @@ def test_deepseek_rows_on_the_verdict_page_carry_no_money(tmp_path):
     assert not any("$" in x for x in clean)
     js = open(os.path.join(V4, "screens", "checkpoint.js"), encoding="utf-8").read()
     assert "r.equity != null && !ds" in js and "ds ? moneyFree(r.reason)" in js
+
+
+def test_past_day_180_the_period_is_180_and_the_server_tile_says_so():
+    led = {"db": "ok", "verdicts": {ck.day_str(ck.checkpoint_ts(START, k)): ck.checkpoint_ts(START, k) + H for k in range(1, 7)},
+           "snapshots": {}, "log": {}}
+    c = V.clock(START, ck.checkpoint_ts(START, 6) + 5 * DAY, led)
+    assert (c["state"], c["of"], c["day"], c["ts"]) == ("ended", 180, 180, None)        # never 'D+185/210'
+    from paperbot.dash.app import restart_banner
+    assert restart_banner(START, ck.checkpoint_ts(START, 6) + 5 * DAY, led)["of"] == 180
+    js = open(os.path.join(V4, "screens", "server-health.js"), encoding="utf-8").read()
+    assert 'nx.state === "ended"' in js and '"판정 끝"' in js

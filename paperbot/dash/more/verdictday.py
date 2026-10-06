@@ -252,7 +252,8 @@ def clock(start: Optional[int], now: int, ledger: Optional[dict] = None,
                  "of": k * PERIOD_DAYS, "ts": cp, "date": date, "mmdd": _mmdd(cp), "due": False, "state": "before",
                  "late": False, "db": led.get("db"), "last": last, "job_ts": cp + JOB_MINUTE * MIN_MS}
     if k * PERIOD_DAYS > NO_VERDICT_DAYS:
-        out.update(state="ended", ts=None, date=None, mmdd=None, job_ts=None, left=None)
+        out.update(state="ended", ts=None, date=None, mmdd=None, job_ts=None, left=None, of=NO_VERDICT_DAYS,
+                   day=NO_VERDICT_DAYS)
     elif cp > now:
         out["left"] = k * PERIOD_DAYS - n
     else:

@@ -106,9 +106,11 @@ export function tiles(hl, o = {}) {
     // its verdict is stored; days left in words, never 'D-' (review 10/06 fix 1, change 13)
     const nx = cp.next;
     const due = !!(nx && nx.due), bad = due && (nx.state === "failed" || nx.state === "unknown" || !!nx.late);
-    out.push(tile({k: "30일 판정", v: due ? (bad ? "확인 필요" : "계산 중") : cp.ready && !nx ? `${cp.date} 판정 끝`
+    const ended = !!(nx && nx.state === "ended");          // past day 180: no verdict left (never '시작 전')
+    out.push(tile({k: "30일 판정", v: ended ? "판정 끝" : due ? (bad ? "확인 필요" : "계산 중") : cp.ready && !nx ? `${cp.date} 판정 끝`
       : nx && nx.ts ? `${fmt.int(Math.max(0, Math.ceil((nx.ts - now) / 864e5)))}일 남음` : "시작 전",
-      s: due ? `${fmt.int(nx.day)}일 판정 날 · 결과 저장 전 (판정 화면에서 진행 확인)`
+      s: ended ? `180일 실험이 끝나 더 이상 판정이 없습니다${cp.ready ? ` · 마지막 ${cp.date}` : ""}`
+        : due ? `${fmt.int(nx.day)}일 판정 날 · 결과 저장 전 (판정 화면에서 진행 확인)`
         : nx && nx.ts ? `${(nx.k || 1) > 1 ? `${fmt.int(nx.k)}번째` : "첫"} 판정 ${fmt.kst(nx.ts)} (${fmt.int(nx.day)}일째)${cp.ready ? ` · ${cp.date} 판정 끝` : ""}`
         : "봇이 아직 첫 계좌를 만들지 않음", st: bad ? "bad" : due ? "warn" : "none"}));
   }
