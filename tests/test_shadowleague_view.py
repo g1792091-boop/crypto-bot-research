@@ -64,12 +64,29 @@ def test_an_unreadable_database_is_an_error_with_a_reason_never_empty(tmp_path):
         assert set(out) == {"state", "reason"} and out["state"] == "error" and out["reason"]
     (tmp_path / "dir.db").mkdir()
     assert V.overview(str(tmp_path / "dir.db"))["state"] == "error"
+    if os.geteuid() != 0:                                          # a file this user may not read is an error too
+        locked = tmp_path / "locked.db"
+        locked.write_bytes(b"x")
+        locked.chmod(0)
+        assert V.overview(str(locked))["state"] == "error"
+        locked.chmod(0o600)
     st = open_store(tmp_path, "cut.db")
     st.conn.execute("DROP TABLE trades")                           # a half-migrated or damaged file
     st.add_member("zoneflip", "x", "d", {}, "h", 0, 0)
     st.close()
     out = V.overview(str(tmp_path / "cut.db"))
     assert out["state"] == "error" and "trades" in out["reason"]
+
+
+def test_an_unexpected_failure_while_reading_is_an_error_with_its_reason_not_a_crash_or_an_empty_view(db, monkeypatch):
+    def broken(*a, **k):
+        raise IndexError("list index out of range")
+    monkeypatch.setattr(V, "curves", broken)
+    out = V.member(db["path"], db["member"].member_id, db["now"])
+    assert out == {"state": "error", "reason": "IndexError: list index out of range"}
+    monkeypatch.setattr(V, "_card", broken)
+    out = V.overview(db["path"], db["now"])
+    assert out == {"state": "error", "reason": "IndexError: list index out of range"}
 
 
 def test_reading_is_read_only(db):

@@ -51,7 +51,7 @@ def _open(path: str):
         return open_ro(path), None
     except FileNotFoundError:
         return None, dict(NOT_STARTED)
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:             # damaged, not a database, or not allowed to read it
         return None, _err(f"{type(exc).__name__}: {exc}")
 
 
@@ -153,7 +153,7 @@ def overview(path: str, now_ms: Optional[int] = None) -> dict:
         meta = c.execute("SELECT v FROM league_meta WHERE k = 'last_tick'").fetchone()
         return {"state": "ok", "label_ko": LABEL_KO, "as_of_ms": now, "schema_version": schema_version(c),
                 "last_tick": json.loads(meta[0]) if meta else None, "members": [_card(c, r, now) for r in rows]}
-    except (sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+    except Exception as exc:  # noqa: BLE001  (whatever goes wrong while reading is an error with its reason, never an empty view)
         return _err(f"{type(exc).__name__}: {exc}")
     finally:
         c.close()
@@ -347,7 +347,7 @@ def member(path: str, member_id: str, now_ms: Optional[int] = None) -> dict:
             "comparison": _comparison(trades, study),
             "study": study,
         }
-    except (sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+    except Exception as exc:  # noqa: BLE001  (whatever goes wrong while reading is an error with its reason, never an empty view)
         return _err(f"{type(exc).__name__}: {exc}")
     finally:
         c.close()
