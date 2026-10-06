@@ -35,6 +35,7 @@ export const SCREENS = {
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},
+  inbox: {ko: "결재함", group: "agents", title: "결재함", hidden: true},
   debate: {ko: "토론방", group: "agents", title: "24시간 토론방", soft: "debate"},
   server: {ko: "서버·비용", group: "server", title: "서버·비용"},
   alerts: {ko: "알림 기록", group: "server", title: "알림 기록"},

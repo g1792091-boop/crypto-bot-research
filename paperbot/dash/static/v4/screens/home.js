@@ -11,6 +11,7 @@ import {h, put, ui, fmt, derive, motion, stream, startTour, local} from "../core
 import {groupCards, topBottom, groupKo, savedGroup, expInfo, judgedProgress, ORDER, MIN_TRADES} from "./home-shared.js";
 import {todayStats, TODAY_KO, TODAY_ORDER} from "./home-today.js";
 import {storyRing} from "./story-kit.js";
+import {inboxGuide} from "./inbox-guide.js";
 import {raceParts} from "./flow-kit.js";
 import {rowMotion} from "./board-motion.js";
 import {reelDuel} from "./reel-duel.js";
@@ -116,7 +117,8 @@ export async function mount(el, ctx) {
   // PC: the story rings beside 시장 지금; two columns (head card + 지금 열린 포지션 | 오늘 + 회의 일정 / 회의 결론); 방금 끝난
   // 거래 across the page; the LED bar, the group cards, then (상위·하위 or 1:3 | 처음이라면).
   // Phone: one column in the order of the home-o* classes (home.css).
-  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), h("div", {class: "home-band"}, ring, market),
+  // add-accounts: the 결재함 guide (inbox-guide.js), only from the day before copy proposals can come until the first decision
+  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), inboxGuide(ctx), h("div", {class: "home-band"}, ring, market),
     h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
       h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
     trCard, led, groupSec,

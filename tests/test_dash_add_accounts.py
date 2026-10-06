@@ -302,3 +302,104 @@ def test_loss_links_route_and_page_wiring(tmp_path):
     out = _node("const M = await import('{base}/meet-links.js');",
                 "console.log(JSON.stringify([M.nameOf('S5_DONCHIAN_MFI@15m~c1'), M.nameOf('S5_DONCHIAN_MFI@15m')]));")
     assert out[0].endswith("복제 c1") and "~" not in out[0] and "15분" in out[1]
+
+
+# ---------------------------------------------------------------- 결재함
+def _period(start, end, nb, mb, eb, nv, mv, ev):
+    arm = lambda n, m, e: {"trades": n, "mean_roe": m, "mean_pnl_equity": e}       # noqa: E731
+    return {"start": start, "end": end, "available": True, "baseline": arm(nb, mb, eb), "variant": arm(nv, mv, ev), "diff": mv - mb, "p": 0.001}
+
+
+def _approvals_world(tmp_path):
+    from paperbot.agents import extra_accounts as X
+    from paperbot.agents import rooms_db as R
+    db = _paper(str(tmp_path / "paper3.db"))
+    ag, ib = str(tmp_path / "agents3.db"), str(tmp_path / "inbox.db")
+    c = R.open_agents(ag)
+    R.ensure_rooms(c, ts=T0 - 100 * H)
+    room = "strat:S5_DONCHIAN_MFI"
+    rid = c.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, status) VALUES (?,?,?,?,?)",
+                    (room, "weekly", "{}", T0, "done")).lastrowid
+    R.post(c, room, rid, "weekly", "spec_S5_DONCHIAN_MFI", None, "analysis", "손절을 넓히면 흔들림에 덜 나갑니다.\n둘째 줄",
+           {"turn": "specialist", "answer": {"headline": "손절 2.5 ATR가 낫다"}}, ts=T0 + 1)
+    R.post(c, room, rid, "weekly", "devils_advocate", None, "challenge", "2기간 차이가 작습니다.",
+           {"turn": "challenge", "answer": {"verdict": "needs_test"}}, ts=T0 + 2)
+    spec = {"template": "stop_atr", "k": 2.5, "strategy": "S5_DONCHIAN_MFI", "timeframe": "15m"}
+    res = {"ok": True, "periods": {"1": _period("2021-08-01", "2024-07-01", 800, -0.03, -0.009, 790, 0.004, 0.0012),
+                                   "2": _period("2024-07-01", "2026-09-30", 450, -0.02, -0.006, 440, 0.011, 0.0033),
+                                   "3": {"start": "2020-01-01", "end": "2021-08-01", "available": False, "why": "2021년 이전 자료가 없습니다"}}}
+    gate = {"pass": True, "n_trials": 3, "reasons": ["① 통과"]}
+    tid = R.add_trial(c, room, "S5_DONCHIAN_MFI", "test", spec, rid, ts=T0 + 3)
+    R.add_trial_result(c, tid, "passed", {"result": res, "gate": gate, "n_trials": 3}, ts=T0 + 4)
+    acc = X.copy_account(R.get_trial(c, tid))
+    pid = R.add_proposal(c, room, "S5_DONCHIAN_MFI", tid, {"kind": "copy", "account": acc, "test": spec, "why": "흔들림 손절이 많음",
+                                                         "approver": {"approve": True, "reason": "두 기간 같은 방향"}},
+                         gate, "awaiting_owner", ts=T0 + 5)
+    R.post(c, room, rid, "weekly", "code", None, "action", f"제안 #{pid}", {"action": "propose_copy", "proposal_id": pid}, ts=T0 + 6)
+    old = R.add_proposal(c, room, "S5_DONCHIAN_MFI", tid, {"kind": "copy", "account": acc, "test": spec}, gate, "awaiting_owner",
+                         ts=T0 - 50 * H)
+    R.set_proposal_status(c, old, "rejected", "owner:두 분", ts=T0 - 49 * H)
+    c.close()
+    R.open_inbox_rw(ib).close()
+    return db, ag, ib, pid, old
+
+
+def test_approvals_view_shows_the_evidence_and_never_writes(tmp_path):
+    from paperbot.dash.app import Rooms
+    from paperbot.dash.more import approvals as AP
+    db, ag, ib, pid, old = _approvals_world(tmp_path)
+    before = [open(p, "rb").read() for p in (db, ag)]
+    rooms = Rooms(ag, ib, paper_db=db)
+    v = AP.view(rooms, db, now_ms=T0 + 10 * H)
+    assert v["ready"] is True and [c["id"] for c in v["waiting"]] == [pid] and not v["decided"]
+    w = v["waiting"][0]
+    assert w["rule_ko"] == "손절 2.5 ATR" and w["parent"] == "S5_DONCHIAN_MFI@15m" and w["why"] == "흔들림 손절이 많음"
+    per = w["periods"]
+    assert [p["label"] for p in per] == ["1기간 (2021-08~2024-06)", "2기간 (2024-07~2026-09)", "3기간 (2020-01~2021-07)"]
+    assert per[0]["arms"][0] == {"label": "원본", "trades": 800, "mean_roe": -0.03, "pnl_equity": -0.009}
+    assert per[0]["arms"][1]["label"] == "바꾼 것" and per[2]["available"] is False
+    vs = w["voices"]
+    assert [x["stance"] for x in vs] == ["제안", "시험 더 필요", "승인관 찬성"]          # the proposer, the challenge, the approver
+    assert vs[0]["text"] == "손절 2.5 ATR가 낫다" and vs[1]["tone"] == "against"
+    assert [c["id"] for c in v["past"]] == [old] and v["past"][0]["decider_ko"] == "두 분"
+    per = v["period"]
+    assert per["owner_ok_days"] == 60 and per["observe_until"] == per["start"] + 21 * 86_400_000
+    assert per["first_owner_decision_ts"] is None
+    assert [open(p, "rb").read() for p in (db, ag)] == before                       # read-only
+    assert AP._month_before("2024-07-01") == "2024-06" and AP._month_before("2021-01-01") == "2020-12"
+
+
+def test_approvals_route_follows_an_owner_click_through_the_existing_decide(tmp_path):
+    from fastapi.testclient import TestClient
+    from paperbot.dash.app import create_app
+    db, ag, ib, pid, _old = _approvals_world(tmp_path)
+    c = TestClient(create_app(db, None, b"s" * 32, agents_db=ag, inbox_db=ib))
+    assert [x["id"] for x in c.get("/api/v4/approvals").json()["waiting"]] == [pid]
+    r = c.post(f"/api/proposals/{pid}/decide", json={"decision": "approve"}, headers={"origin": "http://testserver"})
+    assert r.status_code == 200, r.text
+    d = c.get("/api/v4/approvals").json()                          # not the cached answer: the click moved it at once
+    assert d["waiting"] == [] and [x["id"] for x in d["decided"]] == [pid]
+    assert d["decided"][0]["owner_decision"]["decision"] == "approve" and d["period"]["first_owner_decision_ts"]
+
+
+def test_inbox_page_words_and_one_way_to_approve():
+    out = _node("const I = await import('{base}/inbox.js'); const C = await import('{base}/inbox-card.js'); const G = await import('{base}/inbox-guide.js');", """
+      const D = 86400000, p = {start: 0, observe_until: 21 * D, owner_ok_until: 60 * D, first_owner_decision_ts: null};
+      console.log(JSON.stringify({keys: [I.periodLine(p, 5 * D).key, I.periodLine(p, 30 * D).key, I.periodLine(p, 70 * D).key, I.periodLine(null).key],
+        guide: [G.guideShows(p, 19.5 * D, 0), G.guideShows(p, 20.5 * D, 0), G.guideShows(p, 30 * D, 0), G.guideShows({...p, first_owner_decision_ts: 1}, 30 * D, 0),
+                G.guideShows(p, 30 * D, 1), G.guideShows(p, 61 * D, 0)],
+        title: [C.titleOf({kind: "copy", rule_ko: "손절 2.5 ATR"}), C.titleOf({kind: "newlab", title_ko: "RSI 되돌림"})],
+        bar: C.bar({kind: "copy", gate: {n_trials: 4}}), fx: C.effects({kind: "copy", parent: "S@15m", rule_ko: "손절 2.5 ATR", gate: {n_trials: 4}, runtime_ready: false}, p)}));""")
+    assert out["keys"] == ["observe", "owner", "after", None]
+    assert out["guide"] == [False, True, True, False, False, False]      # from the day before, until the first click / 닫기
+    assert out["title"] == ["손절 2.5 ATR", "RSI 되돌림"] and out["bar"]["n"] == 4 and abs(out["bar"]["alpha"] - 0.0125) < 1e-12
+    assert any("한 번 더 승인" in x for x in out["fx"]["yes"]) and out["fx"]["no"][0].startswith("대기로 남고")
+    card = _read("inbox-card.js")
+    assert card.count("ctx.post(") == 1 and "`/api/proposals/${encodeURIComponent(c.id)}/decide`" in card   # the existing route only
+    for name in ("inbox.js", "inbox-guide.js", "account-why.js", "account-copy.js", "meet-links.js", "rooms-evidence.js"):
+        assert "ctx.post(" not in _read(name), name
+    routes = _read("routes.js", os.path.join(V4, "core"))
+    assert 'inbox: {ko: "결재함", group: "agents", title: "결재함", hidden: true}' in routes
+    bell = _read("bell.js", os.path.join(V4, "core"))
+    assert 'href: href("inbox")' in bell and "bell-pop" not in bell
+    assert 'href: ctx.href("inbox", null, {p: p.id})' in _read("rooms-side.js") and "inboxGuide(ctx)" in _read("home.js")

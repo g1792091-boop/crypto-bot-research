@@ -1,0 +1,48 @@
+/* 결재함 (#/inbox, inbox.js + inbox-card.js). Tokens only (both skins), font sizes from the --t-* scale. */
+@import url("rooms-kit.css");
+[data-screen="inbox"] .ibx-period { margin: 0; padding: 10px 14px; border-radius: var(--r-md); border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+[data-screen="inbox"] .ibx-period.observe { border-color: var(--amber-line); }
+[data-screen="inbox"] .ibx-period.owner { border-color: var(--accent-line); }
+[data-screen="inbox"] .ibx-count { align-items: center; gap: 10px; }
+.ibx-card { gap: 12px; }
+.ibx-card.done { border-color: var(--accent-line); }
+.ibx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: var(--t-sm); }
+.ibx-no { font-weight: 700; color: var(--accent); }
+.ibx-kind { color: var(--ink-2); }
+.ibx-room { color: var(--ink); text-decoration: none; font-weight: 600; }
+.ibx-room:hover { color: var(--accent); }
+.ibx-title { margin: 0; font-size: var(--t-md); color: var(--ink-2); line-height: 1.5; }
+.ibx-rule { color: var(--accent); font-size: var(--t-lg); }
+.ibx-why { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.6; }
+.ibx-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .ibx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ibx-sec { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface-2); }
+.ibx-sec h3 { margin: 0; font-size: var(--t-sm); color: var(--ink); }
+.ibx-sec ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.5; }
+.ibx-yes { border-color: var(--accent-line); }
+.ibx-tw { margin: 0; }
+.ibx-tbl td, .ibx-tbl th { font-size: var(--t-xs); white-space: nowrap; }
+.ibx-tbl td.up { color: var(--up); }
+.ibx-tbl td.down { color: var(--down); }
+.ibx-tbl .ibx-new { color: var(--accent); font-weight: 700; }
+.ibx-tbl tr.ibx-prow td { padding-top: 10px; color: var(--ink); background: var(--surface); }
+.ibx-voices { list-style: none; padding-left: 0 !important; }
+.ibx-voices li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.ibx-voices li b { color: var(--ink); font-size: var(--t-sm); }
+.ibx-voices li span:last-child { flex: 1 1 220px; min-width: 0; color: var(--ink-2); }
+.ibx-gate { align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); }
+.ibx-reasons { font-size: var(--t-xs) !important; }
+.ibx-none { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+.ibx-act { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ibx-decide { display: grid; gap: 8px; max-width: 560px; }
+.ibx-decide .btn-y, .ibx-decide .btn-line, .ibx-confirm .btn-line { min-height: 40px; min-width: 96px; }
+.ibx-confirm { display: grid; gap: 8px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--amber-line); background: var(--amber-soft); }
+.ibx-confirm p { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.6; }
+.ibx-done { margin: 0; color: var(--ink); font-size: var(--t-sm); }
+.ibx-warn { margin: 0; color: var(--down); font-size: var(--t-sm); }
+.ibx-err { margin: 0; color: var(--down); font-size: var(--t-sm); }
+.ibx-err[hidden] { display: none; }
+.ibx-past .meta b.up { color: var(--up); }
+.ibx-past .meta b.down { color: var(--down); }

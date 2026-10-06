@@ -114,6 +114,7 @@
 [data-screen="rooms"] .rm-prop { display: grid; gap: 6px; padding: 10px; border-radius: 8px; background: var(--surface-2); font-size: var(--t-xs); line-height: 1.55; }
 [data-screen="rooms"] .rm-ptitle { color: var(--accent); font-weight: 700; }
 [data-screen="rooms"] .rm-prop ul { margin: 0; padding-left: 18px; }
+[data-screen="rooms"] .rm-prop .rm-ibx { justify-self: start; display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 700; text-decoration: none; }
 [data-screen="rooms"] .rm-decide { display: grid; gap: 6px; }
 [data-screen="rooms"] .rm-note { height: 36px; }
 [data-screen="rooms"] .rm-confirm { display: grid; gap: 8px; padding: 10px; border-radius: 8px; border: 1px solid var(--warn-line); background: var(--warn-soft); }
