@@ -89,6 +89,20 @@ export function ds5yCard(ctx) {
     st.loading = false;
     if (ctx.alive()) { lastSig = sigOf(st.board); render(false); }
   }
+  // while the server job has not finished (absent / running / partial), look again every 2 minutes so N / 342 moves on
+  // its own; a failed look keeps the last answer. A finished file is never asked for again on this visit.
+  async function refresh() {
+    if (el.hidden || st.loading || !st.D || st.D.state === "done") return;
+    st.loading = true;
+    let D = null;
+    try { D = await ctx.api("/api/v4/ds5y"); } catch { D = null; }
+    st.loading = false;
+    if (!D || !ctx.alive()) return;
+    const moved = D.state !== st.D.state || D.done !== st.D.done || D.file_ts !== st.D.file_ts;
+    st.D = D;
+    if (moved && !el.hidden) render(true);
+  }
+  if (ctx.every) ctx.every(120000, refresh, {now: false});
 
   function progress(done, total, label, words) {
     const w = total ? Math.max(0, Math.min(1, done / total)) : 0;
@@ -102,9 +116,9 @@ export function ds5yCard(ctx) {
   function head(D) {
     const s = D.summary || {};
     if (D.state === "done") {
-      return [progress(D.done, D.total, "5년 계산 끝", `결과 파일 ${D.source || ""}${D.file_ts ? ` · ${fmt.kst(D.file_ts)} 기록` : ""}`),
+      return [progress(D.done, D.total, "5년 계산 끝", `결과 파일 ${D.source || ""}${D.file_ts ? ` · 파일 시각 ${fmt.kst(D.file_ts)}` : ""}`),
         h("p", {class: "ds5-gate"}, h("b", null, "미리 정한 관문: "),
-          `설정 ${fmt.int(s.configs ?? D.done)}개 → 1단계 ${fmt.int(s.stage1 ?? 0)} → 2단계 ${fmt.int(s.stage2 ?? 0)} → 3단계 ${fmt.int(s.stage3 ?? 0)} · 전체 보정(BH) ${fmt.int(s.bh12_all ?? 0)} → 후보 ${fmt.int(s.candidate ?? 0)}개`,
+          `설정 ${fmt.int(s.configs ?? D.done)}개 → 1단계 ${fmt.int(s.stage1 ?? 0)} → 2단계 ${fmt.int(s.stage2 ?? 0)} → 3단계 ${fmt.int(s.stage3 ?? 0)} · 여러 번 시험한 운 보정(BH) 통과 ${fmt.int(s.bh12_all ?? 0)} → 후보 ${fmt.int(s.candidate ?? 0)}개`,
           ". 세 기간 모두 플러스였던 설정 ", `${fmt.int(s.all_three_periods_positive ?? 0)}개 (342개면 우연으로도 몇 개는 나옴).`)];
     }
     const wait = D.state === "absent" ? "아직 시작 안 함 / 서버에서 계산 중" : "서버에서 계산 중";
@@ -199,7 +213,7 @@ export function ds5yCard(ctx) {
       pg.set(rows);
       kids.push(controls(),
         h("div", {class: "stats s4 ds5-stats"},
-          ui.stat("정의", fmt.int(rows.length), `설정 ${fmt.int(rows.reduce((s, r) => s + r.a.cfgs, 0))}개`),
+          ui.stat("정의", fmt.int(rows.length), `이 청산·봉의 설정 ${fmt.int(rows.reduce((s, r) => s + r.a.cfgs, 0))}개`),
           ui.stat("5년 거래", fmt.int(N), "세 기간 합계"),
           ui.stat("거래당 손익", h("b", {class: ["num", fmt.tone(wm("mean"))]}, pc3(wm("mean"))), `비용 전 ${pc3(wm("gross"))}`),
           ui.stat("세 기간 모두 플러스", `${fmt.int(all3)} / ${fmt.int(rows.length)}`, "정의 수")),
@@ -208,7 +222,7 @@ export function ds5yCard(ctx) {
           flips.accounts ? `${st.tf ? fmt.tfKo(st.tf) : "15분~4시간"} 동전 계좌 ${fmt.int(flips.accounts)}개 · 거래 ${fmt.int(flips.trades)}건 · 승률 ${flips.rate == null ? "—" : fmt.pct(flips.rate, 0, false)} · 수익률 중앙값 ${fmt.pct(flips.medRet, 2)}`
             : "동전 계좌 없음", " ", ui.smallSample(flips.trades, SMALL_PAPER)),
         h("p", {class: "note"}, D.coin_ko || ""),
-        h("p", {class: "note"}, "5년 = 세 기간 합계(1기 2021-08~2024-06 고르기, 2기 2024-07~2026-09 확인, 3기 2020-01~2021-07 최종). 거래당·비용 전은 레버리지 없이 진입가 대비 %. 합계(1배) = 매번 같은 금액으로 레버리지 없이 거래했다면 그 금액 대비 손익을 모두 더한 것. 낙폭 = 코인별 낙폭의 중앙값 중 가장 깊은 기간. 점 = 기간마다 거래당 평균이 플러스(채움)·마이너스(빈칸)."),
+        h("p", {class: "note"}, "5년 = 세 기간 합계(1기 2021-08~2024-06 고르기, 2기 2024-07~2026-09 확인, 3기 2020-01~2021-07 최종). 거래당·비용 전은 레버리지 없이 진입가 대비 %. 합계(1배) = 매번 같은 금액으로 레버리지 없이 거래했다면 그 금액 대비 손익을 모두 더한 것. 낙폭 = 레버리지 없이 거래를 이어 붙였을 때 코인별 가장 깊은 낙폭의 중앙값, 기간·봉 중 가장 깊은 것. 점 = 기간마다 거래당 평균이 플러스(채움)·마이너스(빈칸)."),
         ui.assume(null, "모의 칸의 수익률은 닫힌 거래 기준 (열린 포지션 손익 제외)"),
         ui.refNote(st.verdictTs, "딥시크는 계좌마다 비교하지 않고 정의·묶음 숫자만 참고로 봅니다."));
     }

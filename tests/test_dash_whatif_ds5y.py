@@ -442,6 +442,31 @@ def test_ds5y_card_shows_only_on_the_deepseek_group_and_says_absent(tmp_path):
         assert "USDT" not in t
 
 
+def test_ds5y_card_follows_a_running_job(tmp_path):
+    """While the server job runs, the shown card asks again (every 2 minutes) and N / 342 moves on; once done it stops."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "run.log").write_text("15m: 2321522 trades, 88 configs so far, 94s\n")
+    v1 = DS.view(str(run))
+    (run / "run.log").write_text("15m: 2321522 trades, 88 configs so far, 94s\n30m: 1272618 trades, 176 configs so far, 142s\n")
+    v2 = DS.view(str(run))
+    assert (v1["state"], v1["done"], v2["done"]) == ("running", 88, 176)
+    f = tmp_path / "views.json"
+    f.write_text(json.dumps([v1, v2]), encoding="utf-8")
+    out = _node(_prelude() + f"const M = await import('file://{SCREENS}/board-ds5y.js');\n"
+                f"const fs = await import('fs'); const V = JSON.parse(fs.readFileSync('{f}', 'utf8'));\n"
+                "let k = 0, tick = null, every = 0;\n"
+                "const ctx = {api: async () => V[Math.min(k++, 1)], alive: () => true, href: () => '#',\n"
+                "  every: (ms, fn) => { every = ms; tick = fn; }};\n"
+                "const c = M.ds5yCard(ctx); c.update({accounts: []}, {initial: 5000}, 'ds', null);\n"
+                "await new Promise((r) => setTimeout(r, 30)); const t1 = D.walk(c.el).text;\n"
+                "await tick(); await new Promise((r) => setTimeout(r, 30)); const t2 = D.walk(c.el).text;\n"
+                "console.log(JSON.stringify({t1, t2, every, calls: k}));")
+    assert out["every"] == 120000 and out["calls"] == 2
+    assert "서버에서 계산 중" in out["t1"] and "88 / 342" in out["t1"]
+    assert "176 / 342" in out["t2"] and "88 / 342" not in out["t2"]
+
+
 def test_whatif_screen_renders_the_reference_and_a_changed_setting(tmp_path):
     if not os.path.exists(W.LEVSTOP_JSON):
         pytest.skip("research outputs not in this checkout")

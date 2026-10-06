@@ -370,6 +370,10 @@ export async function mount(el, ctx) {
         st.tab === "ds" ? h("a", {class: "lrow click", href: ctx.href("strategies", null, {g: "ds", fam: "all"})}, h("span", {class: "rk"}, "매매법"),
           h("span", {class: "lname"}, "딥시크 17계열 요약"), h("span", {class: "ret"}, "→"),
           h("span", {class: "meta"}, "계열마다 정의·계좌·거래·승률·파산 (셈만, 돈 숫자 없음)")) : null,
+        // ana7b: the per-definition 5-year table lives on 순위표 › 딥시크 (the DeepSeek group screen)
+        st.tab === "ds" ? h("a", {class: "lrow click", href: ctx.href("board", null, {g: "ds"})}, h("span", {class: "rk"}, "순위표"),
+          h("span", {class: "lname"}, "딥시크 5년 결과"), h("span", {class: "ret"}, "→"),
+          h("span", {class: "meta"}, "정의 44개의 5년 시험: 거래 수·승률·거래당 손익·세 기간 일치, 옆에 지금 모의 계좌")) : null,
         h("a", {class: "lrow click", href: ctx.href("analysis", "map")}, h("span", {class: "rk"}, "분석"), h("span", {class: "lname"}, "코인·장세 지도"), h("span", {class: "ret"}, "→"),
           h("span", {class: "meta"}, "모든 거래를 코인·장세·시간대로 나눠 어디서 벌고 잃었나")),
         h("a", {class: "lrow click", href: ctx.href("digest", "tf")}, h("span", {class: "rk"}, "회의"), h("span", {class: "lname"}, "봉 비교"), h("span", {class: "ret"}, "→"),
