@@ -6,7 +6,7 @@
 //      100 ms, -20 dB at ~320 ms). Buys are the E-major notes E5 659.26 / G#5 830.61 / B5 987.77 / E6 1318.51, sells
 //      B4 493.88 / G4 392 / F#4 369.99 / D4 293.66 / B3 246.94, sells 1.5 x (+3.5 dB) louder. One note for an ordinary
 //      trade, two (E5 G#5 | B4 G4, 80 ms apart) for a bigger one, four (E5 G#5 B5 E6 | B4 F#4 D4 B3) for the biggest.
-//   B  a bright rising "띠리리링" (twice in two minutes): sine notes F4 G4 C5 E5 69.6 ms apart, each ~85 ms long, with a
+//   B  a bright rising "띠리리링" (twice in two minutes): sine notes F4 G4 C5 E5 73.5 ms apart, each ~85 ms long, with a
 //      glassy sparkle at 19 x and 21 x the note that sounds again ~100 ms later; E5 rings on.
 //   C  a mallet "띵 딩 딩 딩 딩" (twice in two minutes): D6 D6 C6 D6 B5 (1176.7 / 1047.5 / 989.1 Hz) 100-170 ms apart, each
 //      a struck tone (fundamental rings ~0.5 s, an inharmonic 4.39 x partial gone in ~35 ms, a 10 x partial, a 230 Hz
@@ -60,10 +60,10 @@ export function tick7(dir, size, v, kind) {
 }
 
 // ---------------------------------------------------------------- B: the sparkle run
-export const SPARK = {step: 0.0696, atk: 0.018, hold: 0.085, rel: 0.01, echo: 0.1, sAtk: 0.015, sTau: 0.03};
+export const SPARK = {step: 0.0735, atk: 0.018, hold: 0.085, rel: 0.01, echo: 0.1, sAtk: 0.015, sTau: 0.03, click: -24, clickHz: 800, clickQ: 0.4};
 const PITCH = {F4: 349.23, G4: 392.0, C5: 523.25, E5: 659.26, E6: 1318.51, G5: 783.99, A4: 440.0};
 /** notes [[f, level re the loudest, sparkle 19x level, 21x level]] -> voices; the last note rings on (tail). */
-function sparkRun(notes, peak, step = SPARK.step, tail = 0.15) {
+function sparkRun(notes, peak, step = SPARK.step, tail = 0.15, seed = 11) {
   const out = [];
   notes.forEach(([f, lv, s19, s21], i) => {
     const at = i * step, last = i === notes.length - 1;
@@ -76,6 +76,7 @@ function sparkRun(notes, peak, step = SPARK.step, tail = 0.15) {
         out.push({w: "sine", f: f * m, at: at + 0.002 + dt, peak: peak * Math.pow(10, (l + el) / 20), atk: SPARK.sAtk, parts: [[1, SPARK.sTau]]});
       }
     }
+    out.push({w: "noise", at, peak: peak * Math.pow(10, SPARK.click / 20), dur: 0.02, tau: 0.003, bp: SPARK.clickHz, q: SPARK.clickQ, seed: seed + i});
   });
   return out;
 }
@@ -83,7 +84,7 @@ const RISE = [[PITCH.F4, -7.8, -19, -22], [PITCH.G4, -17, -23, -26], [PITCH.C5, 
 
 // ---------------------------------------------------------------- C: the mallet phrase
 export const MALLET = {h4: 4.393, h10: 10.01, thump: 230, atk: 0.004, parts: [[0.55, 0.06], [0.45, 0.3]],
-  p4: -5, tau4: 0.015, glide4: 0.025, p10: -26, tau10: 0.05, pth: -20, tauth: 0.017, click: -18, clickTau: 0.003, clickHz: 5000};
+  p4: -5, tau4: 0.025, glide4: 0.025, p10: -26, tau10: 0.05, pth: -20, tauth: 0.017, click: -10, clickTau: 0.003, clickHz: 5000};
 const M = {D6: 1176.7, C6: 1047.5, B5: 989.1, G5: 783.99, E5: 659.26, A5: 880.0};
 /** strikes [[at s, f, level dB]] -> voices */
 function mallet(strikes, peak, seed = 7) {
