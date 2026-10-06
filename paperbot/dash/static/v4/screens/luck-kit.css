@@ -6,7 +6,7 @@
 
 /* one place */
 .lk-row { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
-.lk-row.prep { background: transparent; border-style: dashed; }
+.lk-row.lk-prep { background: transparent; border-style: dashed; }
 .lk-rt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
 .lk-title { font: 800 var(--t-md)/1.4 var(--f-body); color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
 .lk-go { margin-left: auto; font-size: var(--t-sm); color: var(--accent); white-space: nowrap; }
@@ -16,9 +16,9 @@
 .lk-num b { font: 800 var(--t-lg)/1.2 var(--f-body); color: var(--ink); overflow-wrap: anywhere; }
 .lk-row .disclosure .linkish { font-size: var(--t-xs); }
 .lk-v { font: 700 var(--t-sm)/1.5 var(--f-body); color: var(--ink); padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-3); }
-.lk-v.more { border-left: 3px solid var(--accent); }
-.lk-v.some { border-left: 3px solid var(--warn); }
-.lk-v.like_luck, .lk-v.none, .lk-v.waiting, .lk-v.before { border-left: 3px solid var(--line-2); }
+.lk-v.lk-s-more { border-left: 3px solid var(--accent); }
+.lk-v.lk-s-some { border-left: 3px solid var(--warn); }
+.lk-v.lk-s-like_luck, .lk-v.lk-s-none, .lk-v.lk-s-waiting, .lk-v.lk-s-before { border-left: 3px solid var(--line-2); }
 
 /* 운으로 vs 실제: two bars on one scale */
 .lk-bars { display: grid; gap: 4px; min-width: 0; max-width: 520px; }
@@ -26,8 +26,8 @@
 .lk-bk { color: var(--muted); }
 .lk-bt { position: relative; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
 .lk-bt i { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); min-width: 2px; border-radius: 5px; }
-.lk-bt.luck i { background: var(--cmp-lo); }
-.lk-bt.real i { background: var(--accent); }
+.lk-bt.lk-luck i { background: var(--cmp-lo); }
+.lk-bt.lk-real i { background: var(--accent); }
 .lk-bar b { font-size: var(--t-sm); color: var(--ink); }
 
 /* why it matters: 100 people as dots */

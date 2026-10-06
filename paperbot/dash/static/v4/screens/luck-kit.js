@@ -27,7 +27,7 @@ export function luckBars(luck, passed) {
   if (luck == null || passed == null) return null;
   const top = Math.max(1, Number(luck) || 0, Number(passed) || 0);
   return h("div", {class: "lk-bars", role: "img", "aria-label": `운으로 나올 수 ${num(luck)}개, 실제 통과 ${fmt.int(passed)}개`},
-    bar("운으로", luck, "luck", top, num(luck)), bar("실제", passed, "real", top, fmt.int(passed)));
+    bar("운으로", luck, "lk-luck", top, num(luck)), bar("실제", passed, "lk-real", top, fmt.int(passed)));
 }
 
 function bar(k, v, cls, top, label) {
@@ -42,7 +42,7 @@ export function luckRow(r, ctx) {
   const head = h("div", {class: "lk-rt"}, h("b", {class: "lk-title"}, r.title), verdictPill(r),
     href ? h("a", {class: "lk-go", href}, "보러 가기 →") : null);
   if (r.verdict === "preparing") {
-    return h("div", {class: "lk-row prep", role: "listitem"}, head,
+    return h("div", {class: "lk-row lk-prep", role: "listitem"}, head,
       h("p", {class: "muted lk-note"}, "준비 중", r.note ? ` · ${r.note}` : ""),
       h("p", {class: "lk-rule"}, h("span", {class: "muted"}, "통과 기준 "), r.rule_ko || "—"));
   }
@@ -59,13 +59,13 @@ export function luckRow(r, ctx) {
     r.counts_only ? h("p", {class: "muted lk-note"}, "딥시크는 시험 수와 통과 수만 (돈 숫자 없음)") : null,
     r.note ? h("p", {class: "muted lk-note"}, r.note) : null,
   ].filter(Boolean);
-  return h("div", {class: ["lk-row", r.verdict], role: "listitem"}, head,
+  return h("div", {class: ["lk-row", `lk-s-${r.verdict}`], role: "listitem"}, head,
     h("div", {class: "lk-nums"},
       numCell("시험한 수", r.tested == null ? "—" : fmt.int(r.tested)),
       numCell("운으로 나올 수", r.luck == null ? "—" : num(r.luck)),
       numCell("실제 통과", before ? "판정 전" : r.passed == null ? "—" : fmt.int(r.passed))),
     bars,
-    h("p", {class: ["lk-v", r.verdict]}, r.verdict_ko || ""),
+    h("p", {class: ["lk-v", `lk-s-${r.verdict}`]}, r.verdict_ko || ""),
     wait,
     ui.disclosure("기준과 숫자 자세히", h("div", {class: "stack tight"}, more)));
 }
@@ -185,5 +185,5 @@ function luckPair(plain, rule) {
   if (plain == null || rule == null) return null;
   const top = Math.max(1, Number(plain) || 0, Number(rule) || 0);
   return h("div", {class: "lk-bars", role: "img", "aria-label": `보정 없이 ${num(plain, 1)}개, 이 규칙으로 ${num(rule)}개`},
-    bar("보정 없이", plain, "luck", top, num(plain, 1)), bar("이 규칙", rule, "real", top, num(rule)));
+    bar("보정 없이", plain, "lk-luck", top, num(plain, 1)), bar("이 규칙", rule, "lk-real", top, num(rule)));
 }
