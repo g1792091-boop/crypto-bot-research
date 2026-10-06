@@ -229,8 +229,8 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
       keys: routes.KEYS, keyOf: ["terminal", "home", "strategies", "server", "flow", "debate"].map(routes.keyOf),
       label: ["home", "agents", "trade"].map(routes.navLabel)};
     // a screen added to a group in routes.js shows in the menu by itself (조합 성과 / 졸업 길 are coming)
-    routes.SCREENS.combo = {ko: "조합 성과", group: "strat", title: "조합 성과"};
-    routes.GROUPS.find((g) => g.id === "strat").screens.push("combo");
+    routes.SCREENS.fresh = {ko: "새 화면", group: "strat", title: "새 화면"};
+    routes.GROUPS.find((g) => g.id === "strat").screens.push("fresh");
     o.added = routes.navGroups({wide: true})[2].items.map((it) => it.ko);
     // a group added to GROUPS but not to NAV comes last under its own name
     routes.SCREENS.lab = {ko: "실험실", group: "lab", title: "실험실"};
@@ -239,13 +239,13 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
     console.log(JSON.stringify(o));""")
     assert out["groups"] == [["trade", "거래"], ["home", "성적"], ["strat", "매매법"], ["agents", "AI 직원"], ["server", "서버"]]
     assert out["pc"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
-                         "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
+                         "path", "combo", "combo5y", "whatif", "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
     assert out["phone"] == [x for x in out["pc"] if x != "terminal"]                     # the PC 터미널 is off a phone's menu; 토론방 stays
     assert out["help"] == {"id": "help", "ko": "도움말", "to": "howto", "screens": ["howto", "faq"]}
     assert out["keys"] == ["terminal", "positions", "chart", "market", "home", "board", "flow", "checkpoint", "strategies"]
     assert out["keyOf"] == ["1", "5", "9", None, "7", None]
     assert out["label"] == ["성적", "AI 직원", "거래"]
-    assert out["added"] == ["매매법", "한눈 지도", "분석", "조합 성과"]
+    assert out["added"] == ["매매법", "한눈 지도", "분석", "졸업 길", "조합 성과", "5년 조합", "만약 실험실", "새 화면"]   # a new screen gets its button by itself
     assert out["extra"] == ["거래", "성적", "매매법", "AI 직원", "서버", "실험실"]
     out = _node("""
     const g = (id) => routes.GROUPS.find((x) => x.id === id);
