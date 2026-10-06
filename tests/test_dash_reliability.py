@@ -442,6 +442,20 @@ def test_error_boxes_heal_and_promise_only_what_they_do():
         assert not re.search(r"errorBox\([^;]*refresh\([^)]*\)\.catch\(\(\) => \{\}\)", src), rel
 
 
+def test_a_screen_file_that_did_not_arrive_reloads_the_page_once_the_server_answers():
+    """The browser remembers a failed dynamic import until the page loads again (Chromium: the router's re-import
+    never asks the server again), so the router's box for a screen FILE that did not arrive (an update restarting the
+    dashboard) loads the page again on the same #/screen, only after /api/time answers and at most once per screen in
+    2 minutes; a mistake in a screen's code (not a fetch failure) keeps the plain retry, never a reload loop."""
+    r = _read("core", "router.js")
+    assert "fileFailed(e, imported) ? reloadBox(e, name)" in r
+    assert "!imported && e instanceof TypeError" in r
+    assert 'api("/api/time").then(() => {' in r and "location.reload();" in r and "auto: true" in r
+    assert "sessionStorage.setItem(RELOAD_KEY + name" in r and "Date.now() - last < 120000" in r
+    ui = _read("core", "ui.js")
+    assert 'o.auto === true || (o.auto !== false' in ui
+
+
 def test_the_branch_files_run_no_endless_animation_and_use_type_tokens():
     for rel in ("base.css", os.path.join("screens", "positions.css"), os.path.join("screens", "strategies-radar.css")):
         assert not re.search(r"animation:[^;}]*infinite", _read(rel)), rel

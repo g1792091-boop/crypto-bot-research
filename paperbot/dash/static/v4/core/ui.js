@@ -93,7 +93,8 @@ export const RETRY_S = [5, 15, 30, 60];
  * 15, 30 and 60 seconds, then every 60 seconds, while it is on the page (a screen left, or the box replaced by the
  * caller's own drawing, stops it), and says when; 다시 시도 tries now. When a try succeeds and the caller has not drawn
  * over the box, the box takes itself away. o.key: a store key whose next good answer (from any poll) also takes it
- * away. o.auto false: only the button. Without retry the box promises nothing.
+ * away. o.auto false: only the button; o.auto true: by itself even for a retry that loads the page again (the caller
+ * makes sure it does so only once the server answers). Without retry the box promises nothing.
  */
 export function errorBox(err, retry, o = {}) {
   const when = h("span", {class: "errbox-when"});
@@ -102,7 +103,7 @@ export function errorBox(err, retry, o = {}) {
   if (!retry) return box;
   // a retry that reloads the whole page is never run by itself (a server that is down would leave the browser's own
   // error page, which never comes back): only the button does it
-  const auto = o.auto !== false && !(err && err.status === 404) && !/location\.reload/.test(String(retry));
+  const auto = o.auto === true || (o.auto !== false && !(err && err.status === 404) && !/location\.reload/.test(String(retry)));
   let timer = null, busy = false, off = null;
   const gone = () => { clearTimeout(timer); timer = null; if (off) { off(); off = null; } };
   const heal = () => { gone(); if (box.isConnected) box.remove(); if (o.onOk) o.onOk(); };
