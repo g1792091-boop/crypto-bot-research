@@ -89,6 +89,18 @@ def test_an_unexpected_failure_while_reading_is_an_error_with_its_reason_not_a_c
     assert out == {"state": "error", "reason": "IndexError: list index out of range"}
 
 
+def test_what_was_computed_before_the_switch_was_turned_on_is_marked_late_and_nothing_else(tmp_path):
+    ex, m, st = world(tmp_path, k=4)
+    st, _ = ticks(st, ex, m, [1539])                               # the first pass ever, long after the start date
+    late = V.member(st.path, m.member_id, ex.now_ms)
+    assert late["trades"] and all(t["late"] for t in late["trades"])
+    assert late["card"]["signals"]["late"] == late["card"]["signals"]["total"] > 0
+    ex2, m2, st2 = world(tmp_path, name="ontime.db", k=4)
+    st2, _ = ticks(st2, ex2, m2, [999, 1539])                      # switched on a day before the start date
+    ok = V.member(st2.path, m2.member_id, ex2.now_ms)
+    assert ok["trades"] and not any(t["late"] for t in ok["trades"]) and ok["card"]["signals"]["late"] == 0
+
+
 def test_reading_is_read_only(db):
     V.overview(db["path"], db["now"])
     V.member(db["path"], db["member"].member_id, db["now"])

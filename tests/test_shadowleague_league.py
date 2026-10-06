@@ -661,6 +661,57 @@ def test_no_request_starts_when_it_could_end_after_the_hard_cap(tmp_path):
     assert r["state"] == "budget" and ex.requests == []         # 19 s + 6.5 s > 20 s: not started
 
 
+def test_a_series_cursor_only_moves_forward(tmp_path):
+    st = open_store(tmp_path)
+    st.put_series("m", "BTC", "1h", "recording", 1, last_bar_ms=100)
+    st.put_series("m", "BTC", "1h", "recording", 2, last_bar_ms=50)
+    assert st.series("m", "BTC", "1h")["last_bar_ms"] == 100
+    st.put_series("m", "BTC", "1h", "error", 3, note="x")                  # no cursor given: kept
+    assert st.series("m", "BTC", "1h")["last_bar_ms"] == 100 and st.series("m", "BTC", "1h")["status"] == "error"
+    st.put_series("m", "BTC", "1h", "recording", 4, last_bar_ms=150)
+    assert st.series("m", "BTC", "1h")["last_bar_ms"] == 150
+
+
+def test_the_numbers_the_docs_and_the_owners_were_told(monkeypatch):
+    monkeypatch.undo()                                                     # the module's fixture lifts the time limits
+    assert CL.DEFAULT_K == 50 and CL.DEFAULT_DAYS == 5 and LG.ZONEFLIP.clones_k == 50 and LG.ZONEFLIP.clone_days == 5
+    assert LG.STALE_MS == 3 * 3_600_000 and LG.WORK_S == 14.0 and LG.HARD_S == 20.0 and FD.MAX_PAGES == 2 and FD.PAGE == 1500
+    assert FD.HISTORY_BARS == 1000 and ST.KEEP_BARS == 1000 and LG.MAX_CHUNK_BARS == 2000
+    assert LG.ZONEFLIP.start_ms == LG.utc_ms(2026, 10, 7) and LG.ZONEFLIP.coins == ("BTC", "ETH", "SOL", "DOGE", "LTC", "BCH")
+    assert LG.ZONEFLIP.tfs == ("15m", "30m", "1h", "4h") and [m.member_id for m in LG.MEMBERS] == ["zoneflip"]
+
+
+def test_at_most_two_pages_of_bars_are_fetched_per_series_and_tick(tmp_path, monkeypatch):
+    monkeypatch.setattr(LG, "WORK_S", 1e6)
+    ex, m, st = world(tmp_path)
+    ex.now_ms = now_after_bar("1h", 3999)                                  # 4000 bars to take from the anchor
+    LG.League(st, (m,), ex.get).tick(ex.now_ms)
+    assert len(ex.requests) == 2 and st.feed("BTC", "1h")["n_ingested"] == 3000
+    LG.League(st, (m,), ex.get).tick(ex.now_ms)                            # the rest follows on the next pass
+    assert len(ex.requests) == 3 and st.feed("BTC", "1h")["n_ingested"] == 4000
+
+
+def test_the_series_furthest_behind_goes_first_when_time_runs_short(tmp_path):
+    coins = ("BTC", "ETH")
+    ex = FakeExchange(coins=coins, tfs=("1h",))
+    m = make_member(coins=coins, start_ms=START, k=4)
+    st = open_store(tmp_path, "order.db")
+
+    def no_eth(url):
+        if "ETHUSDT" in url:
+            raise TimeoutError("no answer")
+        return ex.get(url)
+    ex.now_ms = now_after_bar("1h", 1239)
+    LG.League(st, (m,), no_eth).tick(ex.now_ms)                            # BTC is recorded up to 1239, ETH has nothing at all
+    assert st.series(m.member_id, "BTC", "1h")["last_bar_ms"] == T0 + 1239 * HOUR
+    assert st.series(m.member_id, "ETH", "1h")["last_bar_ms"] is None
+    ex.now_ms = now_after_bar("1h", 1539) + FD.BACKOFF_MS
+    out = LG.League(st, (m,), ex.get, clock=StepClock(6.0)).tick(ex.now_ms, work_s=14.0, hard_s=20.0)    # time for one series only
+    assert out["timed_out"]
+    assert st.series(m.member_id, "ETH", "1h")["last_bar_ms"] is not None              # the one with nothing yet went first
+    assert st.series(m.member_id, "BTC", "1h")["last_bar_ms"] == T0 + 1239 * HOUR      # and the one a little behind waits
+
+
 # ------------------------------------------------------------------------------------------------ migrations
 OLD_SCHEMA_V1 = ST.V1
 
@@ -738,6 +789,22 @@ def test_the_account_exposure_follows_the_members_own_margin_and_leverage():
     assert a.exposure == AC.OWN_EXPO == 4.0 and a.margin_frac == AC.OWN_MARGIN and a.leverage == 20
     assert LG.AccountSpec(margin_frac=0.1, leverage=10).exposure == 1.0
     assert "exposure" not in LG.Member.spec(make_member())["account"]          # a property, not part of the stored definition
+
+
+def test_a_trade_counts_in_the_daily_equity_from_the_end_of_its_exit_bar():
+    d0 = 20_000 * AC.DAY_MS
+    tr = [{"trade_id": "a", "coin": "BTC", "tf": "1h", "entry_ms": d0 + 22 * HOUR, "exit_ms": d0 + AC.DAY_MS, "net": 0.02, "mae": -0.001}]
+    rows = AC.daily_equity(tr, AC.run_account(tr), d0, d0 + AC.DAY_MS + 5 * HOUR)       # the exit bar opens at midnight
+    assert [r["day_ms"] for r in rows] == [d0, d0 + AC.DAY_MS]
+    assert rows[0]["equity"] == 5000.0 and rows[0]["taken"] == 0                         # that bar had not closed on day one
+    assert rows[1]["equity"] == pytest.approx(5400.0) and rows[1]["taken"] == 1 and rows[1]["asof_ms"] == d0 + AC.DAY_MS + 5 * HOUR
+
+
+def test_the_frontier_is_the_close_of_the_last_processed_bar_of_the_slowest_series():
+    series = [{"tf": "1h", "last_bar_ms": 10 * HOUR, "status": "recording"}, {"tf": "4h", "last_bar_ms": 8 * HOUR, "status": "error"},
+              {"tf": "15m", "last_bar_ms": 1 * HOUR, "status": "warming"}, {"tf": "30m", "last_bar_ms": None, "status": "recording"}]
+    assert AC.frontier_ms(series) == 11 * HOUR and AC.frontier_ms(series, "4h") == 12 * HOUR
+    assert AC.frontier_ms(series, "15m") is None and AC.frontier_ms([]) is None
 
 
 def test_an_open_taken_trade_blocks_every_later_one_and_is_not_marked_to_market():
