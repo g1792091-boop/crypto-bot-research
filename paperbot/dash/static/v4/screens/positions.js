@@ -99,6 +99,7 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- the coin strip (counts of open positions)
   // each coin: long ↑ / short ↓ counts and a dot when one side holds 80 % or more of at least 5 (counts only, no money)
   const renderCoins = (all) => {
+    if (!st.board) { st.countsKey = ""; coinBar.replaceChildren(); return; }     // no counts before a real answer
     const counts = {};
     const mine = all.filter((x) => !st.grp || fmt.groupOf(x.a) === st.grp);
     for (const x of mine) counts[x.pos.symbol] = (counts[x.pos.symbol] || 0) + 1;
@@ -123,7 +124,7 @@ export async function mount(el, ctx) {
       const m = store.meta("board");
       sumNum.update(null); sumSub.textContent = ""; lsEl.textContent = "—";
       nOpenSub.textContent = m.err ? ui.failKo(m.err) : "불러오는 중";
-      put(line, m.err ? ui.failKo(m.err) : "불러오는 중");
+      put(line, m.err ? "포지션 자료를 저절로 다시 받는 중입니다 (아래 목록에서 바로 다시 시도할 수 있습니다)" : "불러오는 중");
       put(bestLine);
       return;
     }
@@ -258,7 +259,7 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- tabs
   const TABS = () => {
     const all = positions().filter(inScope);
-    return [{id: "pos", label: `포지션 ${fmt.int(all.length)}`}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
+    return [{id: "pos", label: st.board ? `포지션 ${fmt.int(all.length)}` : "포지션"}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
   };
   let tabSeg = null, tabLabelKey = "";
   const renderTabBar = () => {
