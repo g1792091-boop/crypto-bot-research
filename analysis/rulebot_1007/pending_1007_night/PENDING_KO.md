@@ -20,3 +20,6 @@
 
 ## 업데이트 (10/8 새벽)
 새 분석 4개 모두 끝남: custom_values, multi_tf, sizing, cost_model (결과 json과 `lens2_*_done/` 폴더). 모두 반박 검증 전.
+
+## 업데이트 (10/8 새벽, 2)
+Opus 반박 검증 3개 끝남: costs (12 확인/2 수정), context_filters (7/6/1 틀림), ai_upside (6/8 수정). 남은 검증: luck_flow, fiveyear, 그리고 새 분석 4개(custom_values, multi_tf, sizing, cost_model). 보조 분석 2개(portfolio, data_inventory)는 마지막.

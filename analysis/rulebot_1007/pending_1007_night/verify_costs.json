@@ -1,0 +1,107 @@
+{
+ "verdicts": [
+  {
+   "id": "C1",
+   "status": "confirmed",
+   "recomputed": "Raw trades.csv, own decomposition (v1_live.py; pnl identity err 1e-10, n=2,881): core36 15m n=630 net -0.190R = gross +0.072R [2h-cluster CI -0.039,+0.194] - cost 0.262 (fees 0.187, slip 0.037+0.037, funding 0.000); 30m n=378 -0.152 = +0.024 - 0.176; 1h n=212 -0.073 = +0.042 - 0.115; ds200 15m n=259 -0.288 = -0.042 - 0.245; ds200 30m n=181 -0.126 = +0.045 - 0.171. Exits: LOCK 1,402 / SL 1,249, LIQ 0. Replay (v2_replay.py, pipeline replay_signals TRADED only): core+ds200 15m n=2,255 gross +0.142 [-0.029,+0.340] (26 2h clusters), cost 0.240; after removing identical signals (same run/coin/side/bar across definitions) n=1,152 gross +0.089 [-0.028,+0.238]; 30m n=1,146 gross +0.024 [-0.082,+0.139], cost 0.167.",
+   "note": "Live decomposition reproduces exactly. Their replay CI lower bound +0.001 does not reproduce (mine includes 0), and their n=2,424 adds ~410 unresolved positions marked to market at export end (c02 'marked'). Both changes strengthen 'gross about zero'. Half the 15m every-signal sample is the same trade counted in several definitions."
+  },
+  {
+   "id": "C2",
+   "status": "confirmed",
+   "recomputed": "Own 5-year simulator (simcore.py from paperbot/ladder.py rules, not the repo engine; v3_5y.py + agg5y.py, fixed 30x, 2 ATR, 2021-08..2026-09, week-block bootstrap, 271 weeks): 15m n=1,140,789 net -13.8 bp/notional (excl. funding), gross +0.23 bp [-0.30,+0.72], gross R +0.0016 [-0.0054,+0.0083], side excess vs opposite side +0.0061R [-0.0052,+0.0163]; 30m n=573,137 gross -0.29 bp, gross R -0.0001 [-0.0067,+0.0062]; 1h n=287,975 gross -1.25 bp, R -0.0015 [-0.0080,+0.0053]; 4h n=70,103 gross -1.99 bp, R -0.0012 [-0.0082,+0.0067]. 15m net by year 2021-2026: -13.2,-13.6,-14.6,-13.2,-14.3,-13.2; by coin -13.0 (DOGE) to -14.4 (BTC/ETH); vol quintiles -13.4 to -14.4. levstop.json: 10x/20x/30x per notional -14.37/-14.39/-14.47 bp.",
+   "note": "Reproduces with an independent simulator (differences <=1.5 bp, mostly funding, which I left out). Gross is zero at 1h and 4h too."
+  },
+  {
+   "id": "C3",
+   "status": "confirmed",
+   "recomputed": "Real round trip per coin (v5_exec.py) / live median stop per coin (replay core36, v2_replay_coin.csv). 15m taker: DOGE 0.159, SOL 0.163, BTC 0.206, LTC 0.206, ETH 0.207, BCH 0.296; maker entry (2 bp) + taker stop: 0.11-0.18. 30m taker: DOGE 0.112, SOL 0.117, ETH 0.146, BTC 0.148, LTC 0.149, BCH 0.210; maker 0.08-0.13. Added 1h taker: DOGE 0.081, SOL 0.093, LTC 0.103, ETH 0.110, BTC 0.113, BCH 0.156 (maker 0.06-0.10); 4h (stop ~1.8-2.7%, n tiny): taker ~0.04-0.06R, paper 0.069R. 5-year best credible core cell gross ~+0.02R.",
+   "note": "Ranges reproduce within about 0.01R. The maker figures assume no adverse selection, but C8 shows that adverse selection exists, so they are optimistic. The 1h/4h break-even is about half and about a quarter of the 15m level, but the 5-year gross is still about 0 there (C2)."
+  },
+  {
+   "id": "C4",
+   "status": "corrected",
+   "recomputed": "v4_vol.py (all 5y bars since 2021-08, 6 coins, native tf ATR from the cache). Live median stop (replay) 15m 0.631% vs 5y median 0.975% = 20.7th pct; 30m 0.890% vs 1.413% = 18.1st; 1h 1.227% vs 2.058% = 14.4th; 4h 2.017% vs 4.353% = 4.3rd. Paper cost R live vs 5y: 15m 0.222/0.144 (x1.54), 30m 0.157/0.099 (x1.59), 1h 0.114/0.068 (x1.68), 4h 0.069/0.032 (x2.2). 15m median stop by year: 2021 1.31, 2022 1.15, 2023 0.79, 2024 1.00, 2025 0.99, 2026 0.76. Share of 15m bars with stop >=1.4%: 24%.",
+   "note": "Direction holds. The size is a little smaller than claimed: the 15m/30m percentiles are 18-21 (not 16-18), and the cost inflation is about 1.5-1.6x at 15m/30m (1.7x only at 1h). The 2021 median depends on the start date: 1.31% from 2021-08, versus their 1.60%."
+  },
+  {
+   "id": "C5",
+   "status": "confirmed",
+   "recomputed": "v1_live.py SL exits core36+ds200: 15m n=417 R -1.235 (fee 0.194, exit slip 0.039, gap 0.0002); 30m n=220 -1.157 (fee 0.130, slip 0.026); 1h n=101 -1.108; 4h n=14 -1.058; 5m n=497 -1.573. Filled exactly at stop-2bp: 99.8% / 99.5% / 100% / 100%.",
+   "note": "Exact reproduction. The overshoot equals the round-trip cost divided by the stop width."
+  },
+  {
+   "id": "C6",
+   "status": "confirmed",
+   "recomputed": "v5_exec.py: entry book walk beyond best (fill_costs ok entries, 3 runs): BTC 0.01 bp (n=666), ETH 0.03 (541), SOL 0.07 (527), DOGE 0.66 (366), LTC 2.69 (514, 71% >2bp), BCH 4.40 (456, 97% >2bp). Real SL stop slip (d3_stop_slips v4 ok): BTC 0.09 (57), ETH 0.17 (28), SOL 0.93 (44), DOGE 1.74 (17), LTC 3.34 (26), BCH 4.91 (42). Round trip 10.1/10.2/11.0/12.4/16.0/19.3 bp. Total paper-real diff over ok rows -$621.",
+   "note": "The numbers reproduce. Caveats: (a) 310 of 761 v4 stop-exit estimates (41%) have status 'cap' and were never measured; (b) slip_best is measured from the best level a few seconds after the minute, while paper's reference is the 1m open trade price, so the half-spread is missing and real cost on LTC/BCH/DOGE is understated; (c) per-coin stop n is 17-57 over 1.5 days. The c04 per-coin-cost replay (+0.000R) was not recomputed."
+  },
+  {
+   "id": "C7",
+   "status": "confirmed",
+   "recomputed": "Replay core36 median stop / real taker cost R at 15m: SOL 0.67%/0.163, DOGE 0.78%/0.159, LTC 0.78%/0.206, BTC 0.49%/0.206, ETH 0.49%/0.207, BCH 0.65%/0.296; 30m: DOGE 1.11%/0.112, SOL 0.94%/0.117, ETH 0.70%/0.146, BTC 0.68%/0.148, LTC 1.08%/0.149, BCH 0.92%/0.210. 5y gross R by coin 15m: BTC -0.0075 ... BCH +0.0086.",
+   "note": "Ranking reproduces. At 30m LTC is about as cheap as BTC/ETH in cost per R."
+  },
+  {
+   "id": "C8",
+   "status": "confirmed",
+   "recomputed": "v6_limit.py: d3 limit shadow (v4) joined to the market replay on account/symbol/bar_close (3,118/3,277 matched; 417 unresolved excluded). Core36 15m n=559: fill 63%, missed signals' market R +0.08 (63% winners), filled improvement +0.20R, net vs market +0.097 [2h-cluster +0.019,+0.162], limit net/signal -0.138. Core36 30m n=285: fill 58%, missed +0.07 (74% winners), net +0.097 [-0.008,+0.202], net/signal -0.082. ds200 15m/30m net +0.015/+0.007. 1h: core +0.053 [-0.104,+0.206], ds200 +0.079.",
+   "note": "Point estimates reproduce. The CIs rest on 15 2h clusters from 1.5 days, and the 13% unresolved rows are dropped, so the CIs are fragile. The c04 replay limit scenarios were not recomputed. The conclusion (at most about +0.1R, still negative per signal) holds."
+  },
+  {
+   "id": "C9",
+   "status": "confirmed",
+   "recomputed": "d3 stopw variants vs base (v7_var.py, resolved pairs, base-R per notional): core 15m stopw2.5 -0.054 (n=123), stopw3 -0.037; core 30m +0.014/-0.050; ds200 30m +0.063/+0.099. levstop.json: 10x 2->3 ATR -14.37 -> -14.77 bp/notional; 30x equity per trade -1.302% -> -1.357%. Own 5y sim at 3 ATR, 30x with liquidation: 15m -13.99 vs -13.78 bp (2 ATR), 30m -14.82 vs -14.29.",
+   "note": "Reproduces. Wider stops make the per-notional result slightly worse."
+  },
+  {
+   "id": "C10",
+   "status": "confirmed",
+   "recomputed": "Arithmetic: 14 bp x lev x margin share: 20x/20% 0.56%, 50x/50% 3.50% of equity (ratio 6.25). levstop.json per notional at 2 ATR: 10x -14.37, 20x -14.39, 30x -14.47, 40x -14.89, 50x -15.67 bp; liquidated share 0.013%, 0.21%, 0.79%, 2.05%, 4.14%. Own 5y 15m sim with liquidation: 10x/20x/30x/50x liq 0%/0.08%/0.48%/4.75%, gross R +0.0087/+0.0024/+0.0016/+0.0007.",
+   "note": "Reproduces. levstop's own arms use margin 40% at 40-50x, not 50%."
+  },
+  {
+   "id": "C11",
+   "status": "confirmed",
+   "recomputed": "v1_live.py LOCK exits core36+ds200 (gap = exit before slip vs lock price): 15m n=472, 36.9% gapped >0.1bp, mean 6.55 bp, 0.115R per lock exit; 30m n=339, 36.9%, 7.97 bp, 0.090R; 1h n=214, 36.4%, 8.92 bp, 0.076R; 4h n=37, 27%, 15.5 bp, 0.078R. Real LOCK stop minus paper (d3 ok rows): 15m -0.27, 30m -0.33, 1h -0.14 bp. 2% ROE at 30x = 6.7 bp.",
+   "note": "Reproduces. The recovery figure is an upper bound (the real ROE-vs-mark path inside the minute is unknown), and the real-stop comparison excludes the 41% 'cap' rows."
+  },
+  {
+   "id": "C12",
+   "status": "corrected",
+   "recomputed": "Own 5y sim per strategy x tf (week-block CI; their B rule = CI lo>0 and both periods >0): 15m B N02_ST_KST +0.0187 [+0.0040, ...], P1 +0.015 / P2 +0.024 (confirmed); 30m N07_ICHI_CMO +0.0238 [+0.0021] (confirmed); N12_ICHI_AO 30m +0.0207 [-0.0023, +0.043] (NOT B in independent sim); N10_HA_PSAR 30m +0.0135 [+0.0012], P1 +0.017 / P2 +0.010 (B in mine, C in theirs, their lo -0.0011); N07_ICHI_CMO 15m +0.0183 [-0.0014], both periods >0 (borderline); 1h: no B. D cells reproduce: N17_KC_RSI 15m -0.0182 [-0.029,-0.007]; N20_EMA9_CHOP 30m -0.0099 (P1/P2 <0); OBV_S 30m -0.0096 (P1/P2 <0). DeepSeek fiveyear_ref X5_TRAIL2: 15m 40/44 negative gross in IS and CF, 0 positive in both (median -5.4/-4.6 bp vs cost 10.4); 30m 37/44 both negative, 0 both positive (median -6.5/-5.6).",
+   "note": "The B set depends on the simulator: 2 of their 3 B cells are robust, 1 is replaced by another boundary cell. That is the expected chance rate (about 3 of 105 cells), so treat B as 'not ruled out', not as an edge. Even the best B (+0.024R, about 3 bp) covers less than 20% of cost. The DeepSeek 5y verdict uses DeepSeek's own exits (X5_TRAIL2), while all 171 live ds200 accounts use house exits, so it is not the exit rule that was traded live."
+  },
+  {
+   "id": "C13",
+   "status": "confirmed",
+   "recomputed": "Replay random (coin-flip) 15m n=46 gross +0.329R [+0.044,+0.577]; live random 15m trades n=50 gross +0.404 [+0.118,+0.677]. Side-flip core36 15m: chosen net -0.152 vs flipped -0.165 (n=1,087). 5y both-sides gross R 15m -0.0014 [-0.0048,+0.0018], quietest quintile -0.0028; 2026 is the best 15m year (+0.010 both sides), still about 0. Bar-resolution check (v8_res.py): on live-period signals, a tf-bar ladder (as in the 5y tests) gives core36 15m gross +0.141 vs +0.072 on 1m bars (my sim; parity with the engine corr 0.90), so the 5y zero is not an artifact of coarse bars.",
+   "note": "Reproduces. A caveat not in the claim: ds200 15m live chosen -0.070 vs flipped -0.216 (n=1,107). This is in-sample over 1.5 days, with duplicates, and does not hold at 30m (-0.138 vs -0.083)."
+  },
+  {
+   "id": "C14",
+   "status": "confirmed",
+   "recomputed": "Replay paper cost per round trip core+ds200: 15m 0.240, 30m 0.167, 1h 0.120, 4h 0.066R. Live LOCK winners: 15m gross 0.923 / cost 0.243 (26%); 30m 0.683 / 0.169 (25%). Funding 0.000-0.001R. Real taker per coin 15m 0.16-0.30R.",
+   "note": "Reproduces."
+  }
+ ],
+ "strategy_note_problems": [
+  "N12_ICHI_AO 30m graded B: not reproduced by an independent simulator (5y gross R +0.0207, week-block CI [-0.0023, +0.043]). Their own CI lower bound is +0.000. Downgrade to C/borderline.",
+  "N10_HA_PSAR 30m graded C, but it meets their B rule in my simulator (+0.0135R [+0.0012], P1 +0.017 / P2 +0.010; their lo -0.0011). B/C is set by the simulator at the CI boundary, so B grades are noise-level and should not drive selection.",
+  "Live 'every-signal' n in the notes include unresolved positions marked to market at export end (c02 'marked'), e.g. N17_KC_RSI 15m n=153 = 109 resolved + 44 marked (resolved-only gross +0.31R); N02_ST_KST 15m n=31 vs 28 resolved. Label these or use resolved-only.",
+  "The DeepSeek group grade D is based on 5y gross under DeepSeek's own X5_TRAIL2 exits, but all 171 live ds200 accounts use house exits. The 30m count is 37/44 (not 35/41) negative in both periods. The 'loses before costs' wording should name the exit rule.",
+  "The notes cover only 15m/30m. No 1h/4h grades exist, although the owners now plan 1h entries (and 4h at 20x). 1h: no core cell passes B in my 5y sim. DeepSeek fiveyear_ref has 5/44 (1h) and 4/39 (4h) definitions with positive gross in both IS and CF (F4_PULL_RSI, F5_BOX, F5_BOX_RSI, F10_M2022, F13_FVG_PD @1h; F1_PVT_DIV, F10_M2022, F11_PO3, F12_MSS_DISP @4h), near the chance rate.",
+  "'AI must add X R/trade' uses today's quiet stop. At the 5y median volatility the requirement is about 35-40% lower (C4), which the notes do not say.",
+  "Sample-checked numbers that DO reproduce: N02_ST_KST 15m 5y n 28,285, +1.9 bp, +0.019R, P1/P2 +0.015/+0.024; N17_KC_RSI 15m 5y -0.018R; N20_EMA9_CHOP 30m live n=42, gross +0.43; OBV_S 30m live n=8, +0.74; N07_ICHI_CMO 30m live n=9, +0.23; N12_ICHI_AO 30m live -0.18; DOGE 15m live -0.21."
+ ],
+ "missed": [
+  "Duplicate trades. In the every-signal replay, core36+ds200 15m has 2,255 signal-accounts but only 1,152 distinct (run, coin, side, bar) entries (1h: 685 -> 323; 4h: 79 -> 32). Identical entries with the same 2 ATR stop and house exits are the same trade, so pooled CIs are too narrow. AI traders on overlapping strategies would hold the same position (no diversification, stacked risk).",
+  "4h at 20x and liquidation. In my 5y sim with isolated-margin liquidation (mm 0.5%), 8.1% of 4h signals at 20x and 17.8% at 30x are liquidated before the 2 ATR stop; at 1h, 0.9% (20x) and 4.7% (30x). The 5y median 4h stop (4.35%) is near the 20x liquidation distance (~4.5%). Today's 2.0% 4h stop hides this. 'Only where 20x is executable' must be a per-signal check that stop distance plus buffer is below the liquidation distance, or leverage must be capped near 1/(stop%+buffer).",
+  "1h/4h break-even (owners' new plan). 5y gross R: 1h -0.0015 [-0.008,+0.005], 4h -0.0012 [-0.008,+0.007]; net -15.2 and -16.0 bp/notional before funding (multi-day 4h holds add funding). Needed AI edge at today's stops: 1h taker 0.08-0.16R (maker 0.06-0.10), 4h about 0.05-0.10R (10-19 bp / 2.0%). The bp hurdle (10-19 bp) is the same at every tf. Live: core36 1h n=212 net -0.073R (gross +0.042 [-0.081,+0.182]); 4h n=31 net +0.144 (gross CI -0.24..+0.61). That is too few trades to judge 4h. 1h/4h are cheaper per R, not more profitable before costs.",
+  "Half-spread and timing of real costs: slip_best excludes the half-spread and is read seconds after the minute, and 41% of v4 stop-slip rows are 'cap' (unmeasured). Real LTC/BCH/DOGE costs are probably higher than C6 states.",
+  "Unresolved rows: about 410 every-signal positions open at export end are marked to market in the lens replay, and 13% of limit-shadow rows are unresolved and dropped. Pooled effects are small, but per-strategy live notes and the limit CIs depend on them.",
+  "Time clustering: every live and limit uncertainty rests on 15-26 2h clusters over about 2.2 days (v3b+v4). None of the live gross estimates is out-of-sample, and the 5y data is the only usable evidence on gross edge.",
+  "In my sim the ladder is leverage-dependent but gross stays near zero at every leverage (15m 10x +0.0087R, 20x +0.0024, 30x +0.0016, 50x +0.0007). Leverage choice by 'AI confidence' cannot create gross edge.",
+  "The 2026 quiet regime is the best 15m year in 5y (gross R +0.016, both-sides +0.010). The quiet-market exit tailwind exists but is an order of magnitude smaller than the 0.16-0.30R cost at today's stops."
+ ]
+}
