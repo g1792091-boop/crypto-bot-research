@@ -102,9 +102,23 @@ def load_param_def(name: str):
     return mod
 
 
+def variant_value(spec: dict, m: float):
+    """PREREG_ENTRY section 4 rule (as param_defs/S4_BB_BBP.variant_value): length -> round half up, min 2;
+    mult / threshold_abs -> m x default; threshold_neutral -> neutral + m x (default - neutral)."""
+    import math
+    d, kind = spec["default"], spec["kind"]
+    if kind == "length":
+        return max(2, int(math.floor(d * m + 0.5)))
+    if kind in ("mult", "threshold_abs"):
+        return round(float(d) * m, 12)
+    if kind == "threshold_neutral":
+        return round(float(spec["neutral"]) + m * (float(d) - float(spec["neutral"])), 12)
+    raise ValueError(kind)
+
+
 def pd_overrides(mod, mults: dict) -> dict:
     spec = {p["name"]: p for p in mod.PARAMS}
-    return {k: mod.variant_value(spec[k], m) for k, m in mults.items()}
+    return {k: variant_value(spec[k], m) for k, m in mults.items()}
 
 
 # ------------------------------------------------------------------ bars
