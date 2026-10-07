@@ -1,0 +1,386 @@
+{
+ "as_of": "2026-10-07",
+ "repo_commit": "3494fd8",
+ "note": "Server liq.db/flow.db/market.db were never exported; their state is inferred from code, docs and commits. The Saturday export (rb_export_market.py) is authoritative.",
+ "server_live": [
+  {
+   "data": "1m bars + mark price",
+   "db": "paper3.db",
+   "table": "live_bars",
+   "columns": [
+    "ts",
+    "symbol",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "mark_open",
+    "mark_high",
+    "mark_low",
+    "mark_close",
+    "close_time",
+    "processed_at"
+   ],
+   "since": "2026-10-05T01:45Z (v3b); v3a none",
+   "frequency": "1m",
+   "coins": 6,
+   "xrp": false,
+   "retention": "never pruned; archived to archive/run-*/ on reset; daily backup 14d",
+   "status": "confirmed",
+   "evidence": "export_1007 live_bars 6042 (v3b) + 12996 (v4) rows, mark present in all"
+  },
+  {
+   "data": "order-book cost at paper entry/exit",
+   "db": "paper3.db",
+   "table": "fill_costs",
+   "columns": [
+    "ts",
+    "account_id",
+    "symbol",
+    "event",
+    "status",
+    "notional",
+    "slip_best",
+    "data{slip_mid,spread,best,levels,enough,book_ts,book(levels to 10x notional, since 2026-10-04)}"
+   ],
+   "since": "v3 start 2026-10-02",
+   "frequency": "per paper entry/exit only",
+   "coins": 6,
+   "retention": "as paper3",
+   "status": "confirmed",
+   "evidence": "export_1007 fill_costs 3220/551/2175 rows; data JSON not exported yet"
+  },
+  {
+   "data": "S/R and volume-profile marks per signal",
+   "db": "paper3.db",
+   "table": "signal_log data.ctx.sr",
+   "since": "2026-10-02",
+   "frequency": "per submitted signal",
+   "coins": 6,
+   "status": "confirmed",
+   "evidence": "nearest level is volume profile (kinds 51-53): v3a 741/7697, v3b 117/735, v4 383/4083"
+  },
+  {
+   "data": "liquidations",
+   "db": "liq.db",
+   "table": "liq + conn_log",
+   "columns": [
+    "event_ts",
+    "trade_ts",
+    "symbol",
+    "side",
+    "order_type",
+    "tif",
+    "qty",
+    "price",
+    "avg_price",
+    "status",
+    "last_qty",
+    "filled_qty",
+    "received_ts"
+   ],
+   "since": "code 2026-09-30; enabled at v3 start; stored nothing while Binance /ws path was silent; fix commit ab1c387 2026-10-06T01:51Z, deploy time unknown",
+   "frequency": "real time, max 1 event/s/symbol (undercounts bursts)",
+   "coins": "all symbols",
+   "retention": "never pruned; daily backup 14d",
+   "status": "unknown_until_export"
+  },
+  {
+   "data": "open interest, long/short (global, top account, top position), taker, premium",
+   "db": "flow.db",
+   "tables": [
+    "oi5m",
+    "ls_global5m",
+    "ls_top_account5m",
+    "ls_top_position5m",
+    "taker5m",
+    "premium5m",
+    "revisions",
+    "gaps",
+    "sync_log"
+   ],
+   "since": "only if owners hand-installed paperbot-flow.timer (docs/orderflow-collection.md); first run backfills 29 days, premium 3 years",
+   "frequency": "5m values fetched hourly at :07 (lag up to ~65 min)",
+   "coins": 7,
+   "retention": "never pruned; NOT backed up",
+   "status": "unknown_until_export",
+   "evidence": "not in install.sh units, not in launchcheck, not in backup list"
+  },
+  {
+   "data": "funding settlements, 5m bars, 5m mark",
+   "db": "market.db",
+   "tables": [
+    "funding",
+    "kline5m",
+    "mark5m"
+   ],
+   "since": "2026-09-30 (v2 signal recorder)",
+   "frequency": "twice a day",
+   "coins": 7,
+   "retention": "never pruned; not backed up",
+   "status": "inferred_stopped",
+   "evidence": "launchcheck LEGACY tells owners to disable paperbot-record (commit 9db2833, 2026-10-01)"
+  },
+  {
+   "data": "funding applied to paper trades",
+   "db": "paper3.db",
+   "table": "trades data.funding ($ per trade)",
+   "status": "confirmed",
+   "note": "rates not stored; trades with funding != 0: 431/1579 (v3a), 51/255 (v3b), 419/1047 (v4)"
+  },
+  {
+   "data": "best bid/ask 1m (v2)",
+   "db": "paper.db",
+   "table": "book",
+   "status": "inferred_stopped (legacy paperbot-live)"
+  }
+ ],
+ "repo_history_only": [
+  {
+   "data": "funding",
+   "file": "data/orderflow/{coin}_funding.csv.gz",
+   "range": "2020-01..2026-08-31",
+   "freq": "8h (last 90 settlements all 8h)",
+   "coins": 7,
+   "recoverable_publicly": true
+  },
+  {
+   "data": "OI, long/short x3, taker",
+   "file": "data/orderflow/{coin}_metrics_5m.csv.gz",
+   "range": "BTC 2020-09, others 2021-12 .. 2026-09-28",
+   "freq": "5m",
+   "coins": 7,
+   "recoverable_publicly": true
+  },
+  {
+   "data": "premium index",
+   "file": "data/orderflow/{coin}_premium_1h.csv.gz",
+   "range": "2020-01..2026-08",
+   "freq": "1h",
+   "coins": 7,
+   "recoverable_publicly": true
+  },
+  {
+   "data": "book depth +-1..5% cumulative notional",
+   "file": "data/bookdepth/{coin}_depth_5m.csv.gz",
+   "range": "2023-01-01..2026-09-28",
+   "freq": "5m",
+   "coins": 7,
+   "recoverable_publicly": true,
+   "live_counterpart": "none"
+  }
+ ],
+ "missing": [
+  {
+   "data": "liquidation history before the recorder actually stored rows",
+   "recoverable": false,
+   "why": "no public archive (liquidationSnapshot 404 for every month 2020-01..2026-09)"
+  },
+  {
+   "data": "live long/short feed for H3A",
+   "recoverable": "history yes (REST 30d + public daily metrics); live only if flow timer runs; H3A rule code not in paperbot"
+  },
+  {
+   "data": "live open-interest feed",
+   "recoverable": "history yes (public daily metrics)"
+  },
+  {
+   "data": "continuous live order book (depth20)",
+   "recoverable": false,
+   "note": "fill_costs has event snapshots only"
+  },
+  {
+   "data": "predicted funding / nextFundingTime log",
+   "recoverable": false,
+   "note": "approximable from premium5m if flow.db exists"
+  },
+  {
+   "data": "past macro release dates 2025-01..2026-09",
+   "recoverable": true,
+   "note": "official archive pages"
+  }
+ ],
+ "research_evidence": [
+  {
+   "study": "research/orderflow (prereg, 70 combos)",
+   "result": "0 pass, min p 0.33; per-strategy mean -0.06..-0.20%/trade",
+   "level": "strong (no edge beyond 0.14% cost)",
+   "screen_use": "descriptive only"
+  },
+  {
+   "study": "research/maker A (160 combos)",
+   "result": "0 pass; maker entry saves 0.03-0.08 pp/trade; H3A 1h maker 0.25ATR SL1.5/TP3 IS n1563 +0.228% p0.0099, CF n1450 +0.183%, coins 4/7, 5/7",
+   "level": "cost saving medium; H3A weak (post-hoc best of 160, BH needs p<=0.0006, 1-position +0.07%, 20x bankrupt both periods)",
+   "screen_use": "H3A only as record-only account 8; not a confidence input"
+  },
+  {
+   "study": "research/verify V3",
+   "result": "26/30 indicators significant IS, 30/30 same sign CF; size ~1/10 of cost at 1-4h; passing needs ~65% 4h direction",
+   "level": "strong",
+   "screen_use": "none at 20-50x"
+  },
+  {
+   "study": "research/round3",
+   "result": "book imbalance, funding timing, BTC lead: all lose at 1x (-0.10..-0.19%)",
+   "level": "strong"
+  },
+  {
+   "study": "research/entry_study A + trendline",
+   "result": "S/R and volume-profile filters: market-wide property (same in random entries), filtered side still -4.4..-5.5%/trade",
+   "level": "strong (no effect)"
+  }
+ ],
+ "export": {
+  "script": "scratchpad/mkt/rb_export_market.py",
+  "sha256_16": "f6bc6eaf965de70f",
+  "run_doc": "scratchpad/mkt/RUN_ON_SERVER_KO.md",
+  "when": "Sat 2026-10-10 ~14:15 KST (avoid 08:30-09:40 KST and minutes :05-:12)",
+  "defaults": {
+   "since": "2026-10-01T15:00Z",
+   "flow_since": "2026-09-28T00:00Z",
+   "bars_since": "2026-10-07T06:00Z"
+  },
+  "size_estimate_mb": [
+   1,
+   12
+  ],
+  "size_typical_mb": [
+   3,
+   8
+  ],
+  "tested_on_fake": {
+   "builder": "scratchpad/mkt/test_build_fake.py (LiqStore, FlowArchive, MarketArchive, Store3)",
+   "immutable_path": "23 files, 1.86 MB, no new files",
+   "ro_path_with_open_writer": "sees committed WAL rows, no new files",
+   "refusals": "out under data dir, existing file",
+   "missing_dbs": "reported, continues"
+  }
+ },
+ "validation": {
+  "now": [
+   "5y market-condition map (36 strategies x funding/OI/LS/taker/premium buckets) from local 5y signal caches + data/orderflow (not done)",
+   "S/R / POC effect (done: entry_study A, trendline)",
+   "funding and book cost share of R (trades.funding, fill_costs.slip_best)",
+   "shock-flag k (needs public 1m 5y download)",
+   "macro_events.csv format via paperbot.events check"
+  ],
+  "after_export": [
+   "recorders actually running (liq daily rows, conn uptime, flow 288/day, market.db last ts, unit states, /market fix deployed)",
+   "flow.db vs public metrics on 2026-09-28 overlap",
+   "H3A signal reconstruction 9/28..now (counts only)",
+   "book cost by coin: spread, slip_mid, enough vs 0.02% assumption",
+   "liquidation burst before v3/v4 entries (descriptive, small n)",
+   "flow received lag (hourly) -> not a live screen feed"
+  ],
+  "not_before_launch": [
+   "predictive value of liquidation features (no history)",
+   "whether AI use of market data improves R (3 - 2)",
+   "H3A live result (~50 trades/month)",
+   "AI collector input quality (collector not built)",
+   "macro before/after effect (no past dates; 10 live events)",
+   "behaviour in other regimes (only a quiet falling market seen)"
+  ]
+ },
+ "macro": {
+  "file": "data/macro_events.csv",
+  "rows": 11,
+  "in_window_2026_10_10_to_12_31": [
+   "CPI 10/14",
+   "FOMC 10/28",
+   "PCE 10/29",
+   "NFP 11/06",
+   "CPI 11/10",
+   "PCE 11/25",
+   "NFP 12/04",
+   "FOMC 12/09",
+   "CPI 12/10",
+   "PCE 12/23"
+  ],
+  "status": "entered via domain-restricted web search; owners must open the 4 official pages and confirm",
+  "code_limit": "paperbot/events.py KINDS = CPI, FOMC, NFP, PCE only; other kinds are skipped as malformed",
+  "missing_kinds_no_dates": [
+   {
+    "kind": "FOMC minutes",
+    "source": "federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "weight": "medium"
+   },
+   {
+    "kind": "PPI",
+    "source": "bls.gov/schedule/news_release/ppi.htm",
+    "weight": "medium"
+   },
+   {
+    "kind": "Retail sales",
+    "source": "census.gov/retail/release_schedule.html",
+    "weight": "medium"
+   },
+   {
+    "kind": "GDP advance Q3",
+    "source": "bea.gov/news/schedule",
+    "weight": "medium"
+   },
+   {
+    "kind": "JOLTS",
+    "source": "bls.gov/schedule/news_release/jolts.htm",
+    "weight": "low-medium"
+   },
+   {
+    "kind": "ECI",
+    "source": "bls.gov/schedule/news_release/eci.htm",
+    "weight": "low"
+   },
+   {
+    "kind": "Initial jobless claims (weekly)",
+    "source": "dol.gov",
+    "weight": "low"
+   },
+   {
+    "kind": "ISM PMI",
+    "source": "ismworld.org",
+    "weight": "low-medium"
+   },
+   {
+    "kind": "UMich sentiment",
+    "source": "sca.isr.umich.edu",
+    "weight": "low"
+   },
+   {
+    "kind": "US midterm election",
+    "source": "statutory (Tuesday after first Monday in November); confirm usa.gov/fec.gov",
+    "weight": "high"
+   },
+   {
+    "kind": "BoJ policy meeting",
+    "source": "boj.or.jp",
+    "weight": "medium"
+   },
+   {
+    "kind": "ECB policy meeting",
+    "source": "ecb.europa.eu",
+    "weight": "low"
+   },
+   {
+    "kind": "US funding deadline / shutdown",
+    "source": "congress.gov",
+    "weight": "medium (delays BLS releases)"
+   },
+   {
+    "kind": "Deribit/CME expiries",
+    "source": "deribit.com, cmegroup.com",
+    "weight": "low-medium"
+   },
+   {
+    "kind": "US DST end (UTC shift)",
+    "source": "statutory (first Sunday of November)",
+    "weight": "operational; already handled in file"
+   },
+   {
+    "kind": "US market holidays",
+    "source": "nyse.com",
+    "weight": "low"
+   }
+  ],
+  "rule": "dates must come from official calendars and be verified by the owners; none were invented here"
+ }
+}
