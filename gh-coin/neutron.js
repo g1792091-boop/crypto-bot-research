@@ -36,7 +36,7 @@ export async function snapshot() {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
       positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp ?? null, running: !!p.run, strategy: p.name, riskPct: p.riskPct })),
-      openAll: s.openAll || [], score: s.score || null, aiAuto: s.aiAuto || null,
+      openAll: s.openAll || [], score: s.score || null, aiAuto: s.aiAuto || null, phil: s.phil || null, forecasts: (N.forecastRows?.(600) || []),
       mood: s.mood || null, fng: s.fng || null, hold: s.hold ? { ver: s.hold.book?.ver, rules: s.hold.rules, eval: s.hold.eval, log: s.hold.log, prop: s.hold.prop } : null, adj: s.adj ? { stat: s.adj.stat, kind: s.adj.kind, log: s.adj.log, off: s.adj.off, schema: s.adj.schema } : null,
       regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, calls: s.calls || null, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 80), feed: (s.feed || []).slice(0, 20) },
     brain, verdicts, demo: book,
@@ -292,6 +292,7 @@ export async function pollInbox() {
     const by = String(it.by || "Claude").slice(0, 30);
     if (it.type === "note" && it.text) { BR.learn({ type: ["교훈", "패턴", "지식", "관찰", "전략"].includes(it.kind) ? it.kind : "지식", coin: String(it.coin || "").toUpperCase().slice(0, 6), text: String(it.text).slice(0, 140), model: "MCP:" + by, w: 1.2 }); done.push("메모"); }
     else if (it.type === "experiment" && it.gene?.base) { if (N.proposeEvo({ base: it.gene.base, ...(it.gene.with ? { with: it.gene.with, win: 3 } : {}), ...(Array.isArray(it.gene.filters) ? { filters: it.gene.filters.slice(0, 3) } : {}), ...(Number.isFinite(+it.gene.rr) ? { rr: Math.max(1.3, Math.min(3, +it.gene.rr)) } : {}), src: "MCP 제안" })) done.push("실험"); }
+    else if (it.type === "policy" && it.policy && typeof it.policy === "object") { const r = N.applyPolicy?.(it.policy, { rev: it.rev, by, why: it.why }); if (r) done.push(`정책(${r.done.length}개 변경${r.dropped.length ? `, 거부 ${r.dropped.length}` : ""})`); }
     else if (it.type === "task" && it.title) { O.addTask({ team: String(it.team || "dev").slice(0, 10), title: String(it.title).slice(0, 80), why: String(it.why || "").slice(0, 160), owner: "" }); done.push("과제"); }
   } catch (e) {}   // 그 외 종류(주문 등)는 무시
   if (done.length) { stats.inbox += done.length; try { O.addNote("hq", `🧠 뉴트론 받은 편지함: ${done.join(", ")} 반영 (Claude Code·Claudian 제안)`, "뉴트론"); } catch (e) {} }

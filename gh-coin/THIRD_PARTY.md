@@ -182,3 +182,11 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | (옵시디언 ↔ 앱) | `ingestMyTrades()` — `매매일지/내 거래/` 의 손매매 노트(코인·방향·결과R) → 자체 뇌 교훈/패턴 · 승인 자료에 '사용자 메모(옵시디언)' · 옵시디언 볼트 등록 · 뉴럴 데스크 📓 옵시디언 바로 열기 |
 | (사용자 지적: 뉴럴 데스크 AI 가 진입 안 함) | `aiAutoEntry()` — AI 모델 자기 판단 진입(확신 70%↑ · 4H 역행 금지 · 안전장치 · 0.25% · 모델당 하루 3번 · 손해면 그 모델 24시간 쉼). 실측 6번 읽기 중 4번 확신 미달 · 2번 4H 역행 |
 | 표본외 검증(규칙 진화가 켠 RSI 중립 관망) | 거래 −37%·합계 53→27R → 되돌림 + 관문에 '합계 R 15% 넘게 줄면 탈락' |
+
+### 2026-10-07 (2) — bennyjo/phil (Apache-2.0) 개념 적용
+| 원본 | GH Coin 적용 (코드 복사 없음) |
+|---|---|
+| core/score.py — brier_delta(에이전트 확률 vs 시장 가격) · luck z · 보정표 · 판(rev)별 성적 | `neural.js` 예측 장부(AI 읽기 vs 0.5 · 추천·데모 vs 무작위 걸음 1/(1+손익비)) · `phil-loop/core/score.mjs`(첫 줄 settled=… · 둘째 줄 brier:…) |
+| CYCLE.md · loop.sh — 정산→채점→회고→자기 전략 수정→커밋, 보호 엔진(core/·config/) 되돌림 | `phil-loop/` (CYCLE.md · loop.ps1/sh · 보호 core/) → `문서/GHNano 사무실/ghcoin-phil` 로컬 git |
+| strategy/ (에이전트 소유) · journal/proposals.md (운영자 요청) | `strategy/policy.json`(허용 손잡이만) · `playbook.md` · 앱 `applyPolicy`(범위 재검사) |
+| 실거래 쌍둥이(Pearl Connect · --real) | 적용하지 않음 — GH Coin 안전 규칙(AI 는 주문 안 함) |

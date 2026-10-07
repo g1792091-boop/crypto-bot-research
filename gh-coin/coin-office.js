@@ -1889,7 +1889,7 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
       book: r.book ? {imb1: r.book.imb1, spreadBps: r.book.spreadBps, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3), snapshots: r.book.snapshots} : null,
       levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.06).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: r.best}));
     // 🧠 '유력·보통' 추천은 뉴럴 데스크가 실제 봉으로 채점(익절1 먼저 / 손절 먼저) → 뇌가 교훈·패턴·함정으로 학습
-    for (const r of ok){ const b = r.best; if (b && (b.grade === "유력" || b.grade === "보통")) try { N?.trackCall?.({sym: r.sym, ko: r.ko, side: b.side, entry: b.entry, sl: b.sl, tp1: b.tp1, grade: b.grade, src: "실시간 진입"}); } catch(e){} }
+    for (const r of ok){ const b = r.best; if (b && (b.grade === "유력" || b.grade === "보통")) try { N?.trackCall?.({sym: r.sym, ko: r.ko, side: b.side, entry: b.entry, sl: b.sl, tp1: b.tp1, grade: b.grade, src: "실시간 진입", p: b.wr, rr: b.rr1}); } catch(e){} }
     const prev = readJ("coinLiveEntry", null), out = {t: Date.now(), by, list: slim};
     writeJ("coinLiveEntry", out);
     // 표 + 차트 선 + 새 '유력' 알림
@@ -2022,7 +2022,7 @@ ${X?.fng || ""}${X?.mood ? " · " + X.mood : ""}
   const res = {t: Date.now(), by, sym, ko: c.ko, price: r.price, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, myInd: r.myInd, book: r.book ? {imb1: r.book.imb1, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3)} : null,
     levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, extra: X, best: pick, other: B, decision, swing: sw, daily: dset ? {atrPct: dset.atrPct, rsi2: dset.rsi2, sma50: dset.sma50, inTrend: dset.inTrend, watch: dset.watch, chased: (dset.setups || []).filter(x => x.chased).map(x => x.name)} : null, checklist: chk};
   writeJ("coinMarketEntry", res);
-  try { N?.trackCall?.({sym, ko: c.ko, side: pick.side, entry: pick.entry, sl: pick.sl, tp1: pick.tp1, grade, src: "시장가", judges}); } catch(e){}
+  try { N?.trackCall?.({sym, ko: c.ko, side: pick.side, entry: pick.entry, sl: pick.sl, tp1: pick.tp1, grade, src: "시장가", judges, p: pick.wr, rr: pick.rr1}); } catch(e){}
   if (sw) try { N?.trackCall?.({sym, ko: c.ko, side: sw.side, entry: sw.entry, sl: sw.sl, tp1: sw.target && (sw.target - sw.entry) * sw.side > 0 ? sw.target : sw.entry + sw.side * Math.abs(sw.entry - sw.sl), grade: "일봉셋업", src: "시장가·스윙"}); } catch(e){}   // 내가 누른 시장가 추천도 채점 → 뇌 학습
   // 실시간 진입 목록에도 이 코인을 갱신 → 뉴럴 데스크 카드·MCP 에 바로 보임
   try { const cur = readJ("coinLiveEntry", null) || {t: Date.now(), list: []}; const i = cur.list.findIndex(x => x.sym === sym), row = {sym, ko: c.ko, t: res.t, price: r.price, trend: r.trend, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, book: res.book, levels: res.levels, sides: r.sides, best: {...pick, grade}, market: decision};

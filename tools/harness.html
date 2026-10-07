@@ -66,6 +66,15 @@ try {
     const sym = Object.keys(S.regime).find(k => S.regime[k].htf) || "BTCUSDT", rg = S.regime[sym], ko = sym.replace("USDT", ""), model = "qwen2.5:3b";
     out.try = { sym, htf: rg.htf, ok: N.aiAutoTry({ name: model, ko, sym, bias: rg.htf || 1, conf: 80, note: "시험 읽기", price: S.dec[sym].price, rg }) };
     out.last = N.state().aiAuto.last; out.open = Object.values(S.pos).map(p => `${p.ko} ${p.side > 0 ? "롱" : "숏"} ${p.lev}x 진입자=${p.trader} ${p.name} 리스크 ${p.riskPct}% sl ${p.sl} tp ${p.tp}`); out.feed = S.feed.slice(0, 4).map(f => f.text.slice(0, 200)); }
+  if (q === "phil") {   // 🦫 예측 채점·정책: AI 자율 진입(예측 기록) → 손절로 청산(채점) · 정책 적용(범위 안/밖)
+    const N = await import("../gh-coin/neural.js"), S = N.load(); for (const k of Object.keys(S.pos)) delete S.pos[k]; S.queue = []; S.halt = 0; S.trades = S.trades.filter(t => t.R >= 0); await N.step();
+    const sym = Object.keys(S.regime).find(k => S.regime[k].htf) || "BTCUSDT", rg = S.regime[sym], px = S.dec[sym].price;
+    out.entered = N.aiAutoTry({ name: "qwen2.5:3b", ko: sym.replace("USDT", ""), sym, bias: rg.htf || 1, conf: 80, note: "시험", price: px, rg });
+    const P = S.pos[sym]; if (P) { P.sl = P.side > 0 ? px * 1.01 : px * 0.99; P.chk = 0; } await N.step();
+    out.fcOpen = N.state().phil.open; out.phil = N.state().phil.bySrc;
+    out.policyOk = N.applyPolicy({ aiConf: 75, aiPerDay: 2, riskScale: 0.8, exclude: ["DOGE"] }, { rev: "test123", why: "시험" });
+    out.policyBad = N.applyPolicy({ aiConf: 30, riskScale: 2, exclude: ["PEPE"] }, { rev: "test124", why: "범위 밖 시험" });
+    out.policyNow = N.state().phil.policy; N.applyPolicy({ aiConf: 70, aiPerDay: 3, riskScale: 1, exclude: [] }, { rev: "reset", why: "시험 끝 — 기본값으로" }); }
   if (q === "ui") {   // 뉴럴 데스크 화면을 띄우고 &find=글자 가 있는 줄로 스크롤 → 스크린샷용
     const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 9000));
     const f = new URLSearchParams(location.search).get("find"); if (f) { const el = [...document.querySelectorAll(".nsub")].find(e => e.textContent.includes(f)); el?.scrollIntoView({ block: "start" }); out.found = !!el; }
