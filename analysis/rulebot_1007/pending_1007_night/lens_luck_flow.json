@@ -1,0 +1,708 @@
+{
+ "findings": [
+  {
+   "id": "LF1",
+   "claim": "The timeframe gradient of results (15m worst, 4h best) is a cost gradient that a coin flip shows equally; the strategies add nothing on top of it at any timeframe.",
+   "evidence": "Exhaustive coin flip (both sides at every bar close of every coin, repo engine on live_bars, v3b+v4, 9,128 replays, leverage-mixed, 4h-block cluster CI): 15m -0.188R [-0.273,-0.092] n4516, 30m -0.133 [-0.173,-0.082] n2219, 1h -0.081 [-0.137,-0.021] n1100, 4h +0.098 [-0.021,+0.224] n110. Mean cost_R 0.167/0.116/0.085/0.048, gross R -0.021/-0.017/+0.004/+0.146 (cf_exhaustive_summary.csv, coinflip.py). Strategy live trades all runs: -0.19 (630) / -0.15 (378) / -0.07 (212) / +0.14 (31) (summary.md). Timing-matched side flip v3b+v4: chosen -0.111/-0.156/-0.139/-0.006 vs coin flip at the same moments -0.151/-0.131/-0.137/+0.017 (cf_side_by_run.csv). Validation: exhaustive rows vs pipeline replay at the same moments corr 0.877, same exit 98%, mean -0.023R (check_exh.py).",
+   "confidence": "high",
+   "implication": "Choose timeframes for cost, not for 'what worked'. A 15m/30m AI trader starts ~0.13-0.19R per trade behind; the AI must create that much edge before breaking even. Nothing in the live data says any strategy's signal beats the coin flip at its timeframe."
+  },
+  {
+   "id": "LF2",
+   "claim": "The 15m coin flips' +0.10R (n 50) is luck (sample noise plus short trades in a falling v4), not exit mechanics; the 30m/1h/4h coin-flip accounts are equally noisy in the other direction.",
+   "evidence": "Coin-flip accounts 15m: +0.099R, 25 4h-clusters, CI [-0.213,+0.382]; per run v3a -0.160 (n23), v3b +0.230 (n10), v4 +0.372 (n17; v4 shorts +0.592 n10 vs longs +0.058 n7, market -2.6%); top-2 trades = 80% of the summed R (coinflip_accounts.csv). Expected 15m coin flip -0.188 (exhaustive); a block bootstrap of 50 trades from the exhaustive 15m distribution: mean -0.16, 95% band [-0.45,+0.17], P(>= +0.099) = 0.059 (cf_luck_band_15m.csv). Leverage group does not explain it: exhaustive 15m best(40-50x) vs normal(30x) v4 -0.217 vs -0.180, v3b -0.165 vs -0.193. Other flips: 30m -0.300 [-0.504,-0.086] n24 vs expected -0.133; 1h -0.170 n12; 4h -0.521 n5. The random accounts even 'passed' the side-flip direction-skill test at 15m (excess +0.273, cluster p 0.0145, n46; summary.md) though their side is random by construction.",
+   "confidence": "high",
+   "implication": "Never use the 3 live coin-flip accounts per tf as the AI verdict baseline: their ordering (15m best, 4h worst) is the reverse of the cost-driven truth. Per-account p<0.05 against a coin flip happens to coins themselves."
+  },
+  {
+   "id": "LF3",
+   "claim": "Market direction is by far the largest force in this data: both later runs fell, and a random-time short beat a random-time long by 0.3-1.1R at every timeframe, 4-6x the round-trip cost.",
+   "evidence": "Equal-weight 6-coin return: v3a -0.12% (APPROX, 2.6 d), v3b -0.91% (0.7 d), v4 -2.59% (1.5 d; all six coins down, DOGE -4.07, LTC -3.63, ETH -3.21) (market_backdrop.csv). Exhaustive coin flip by side (plain mean): v4 short/long 15m +0.199/-0.593, 30m +0.223/-0.475, 1h +0.305/-0.443, 4h +0.619/-0.469; v3b 15m -0.033/-0.328, 30m +0.035/-0.351, 1h +0.089/-0.315; per coin v4 15m long-minus-short -0.30 (SOL) to -1.25 (ETH) (backdrop_R.csv, luck.py).",
+   "confidence": "high",
+   "implication": "A 30-day AI verdict will be dominated by whether the trader leaned with that month's trend. Long/short balance must be reported next to every result, and the verdict baseline must hold the trader's own side mix fixed."
+  },
+  {
+   "id": "LF4",
+   "claim": "The best side-flip ('direction skill') results all come from one-sided strategies that were short in a falling market; against random-time entries on the same side they show zero timing edge.",
+   "evidence": "N20_EMA9_CHOP is short-only by construction (5y long share 0.00): 15m+30m side-flip excess +0.310 (n111, p 0.015) but vs same-side random-time coin flip -0.002 [-0.293,+0.365]; 1h excess +0.444 (p 0.005, lowest of all 1h/4h cells) vs timing -0.013; live R in flat v3a -0.78 (n17). N24_DMI (5y long share 0.15-0.21, live 0.09): excess +0.217 (p 0.048), timing -0.124. F14_SMT@1h (long 0.05): excess +0.364 (p 0.036), timing -0.136. Strategy v4 15m excess +0.089 splits into tilt +0.172 and drift-neutral -0.084 (long share 0.34) (grades_15m30m.csv, grades_1h4h.csv, excess_split_kind_run_tf.csv).",
+   "confidence": "high",
+   "implication": "Do not staff N20, N24 or F14_SMT because of their side-flip rank: they are bets on a falling market. A short-only trader will look skilled in a down month and fail in an up month."
+  },
+  {
+   "id": "LF5",
+   "claim": "Which coin-flip baseline the AI verdict should use: the paired side flip on the trader's own entries plus a same-side random-time coin flip, both enumerated in full on the same days with the same exits, leverage and costs. The unconditional coin flip is only the cost floor; the live coin-flip accounts should not be used.",
+   "evidence": "Side flip removes market path, timing, coin and cost (paired, sd of the half-difference 1.14R at 15m vs 1.36R for raw R; mde.py). The same-side random-time baseline removes direction exposure (LF4). An exhaustive enumeration of every bar x coin x side x leverage group took 8 s on 4 processes for 9,128 replays (cf_replay.py), so sampling 10,000 flips is unnecessary. The exhaustive flip uses the 1m open as reference price: about 0.02R more pessimistic than live fills (check_exh.py).",
+   "confidence": "high",
+   "implication": "Write both baselines into the verdict code before 10/17: report the excess over each, a day-block sign-flip p, and the long share. Count a trader only if it beats BOTH. The owners' MY_REVIEW item 3 (same-direction, random-time coin) is supported by the data."
+  },
+  {
+   "id": "LF6",
+   "claim": "No strategy x 15m+30m unit beats the coin flip after multiple-testing correction. By this lens 8 units are 'watch' (B), and only one of them, N13_3OUTSIDE, held up in two runs.",
+   "evidence": "80 AI units (36 core + 44 DeepSeek): min side-flip p 0.005 (F16_FIB500, BH q 0.32); 1h/4h cells min p 0.005 (N20@1h, q 0.20). Grades: B 8 = N13_3OUTSIDE + F12_MSS, F12_MSS_DISP, F16_FIB500, F1_MOM_DIV, F1_RSI_DIV, F7_RF_TRIPLE, F9_IFVG (all DeepSeek = v4 only, 1.5 days); C 40; D 4 = N12_ICHI_AO, N18_VWMA_MACD, OBV_S, F4_PULL; ? 21; X 7. N13: excess +0.334 (n15 pairs, 14 1h-clusters), v3b +0.42 / v4 +0.21, timing vs same-side +0.381 [-0.035,+0.800], live v3a +0.22 (n14) (grades_15m30m.csv, grade.py). N17_KC_RSI: side-flip excess +0.02, but vs random-time longs +0.386 [0.048,0.852], v3b +0.69 / v4 +0.33, 30m -0.17. This is the only unit whose timing CI excludes 0, unadjusted for 80 tests.",
+   "confidence": "medium",
+   "implication": "Any pick of AI strategies from this data is an in-sample pick. Treat the B list as 'watch' candidates. Fill the remaining seats with strategies that have frequency and five-year evidence. Do not take seats from rule accounts on the strength of these 4.8 days."
+  },
+  {
+   "id": "LF7",
+   "claim": "Accounts enter in clusters: thousands of signals equal only about 100 independent observations per timeframe, because the whole replay covers 15 four-hour blocks.",
+   "evidence": "v4: 85% of DeepSeek trades and 78% of strategy trades share the coin and minute with another account; 36% / 30% share it with >= 5 others; largest cluster 17 accounts on BTC in one minute (cluster_entries.csv). Design effect of pooled trade R: strategy 15m n630 deff 1.25 (coin-minute) / 1.84 (minute) / 2.61 (4h block); DeepSeek 15m 1.61/1.86/2.66 (neff_kind_tf.csv). Every-signal replay: strategy 15m 1,087 signals -> n_eff 94 (15 blocks); DeepSeek 15m 1,107 -> 128; strategy 30m 536 -> 148 (neff_replay_kind_tf.csv). A naive iid one-sided 5% test has a false-pass rate of 12% at deff 2.0, 16% at 2.7 and 30% at 10 (mde.py).",
+   "confidence": "high",
+   "implication": "All per-trade t-values in the variant and leaderboard tables overstate the evidence by about 1.3-3x in variance. Cross-trader tests in November will pass together in a trending month (correlated luck). Use day-block resampling and count independent days, not trades."
+  },
+  {
+   "id": "LF8",
+   "claim": "A one-month verdict on one AI trader can only detect very large edges (about 0.3R per trade or more), while plausible edges are 0.1R or less.",
+   "evidence": "Per-trade sd: 15m 1.36R, 30m 0.95R; paired side-flip sd 1.14 / 0.87; within-account day clustering rho 0.142 (deff 1.57 at 5 trades/day). MDE (80% power, one-sided 5%): 15m n150 -> 0.35R vs zero, 0.29R vs side flip; n30 -> 0.78R / 0.65R; 30m n150 -> 0.24R / 0.22R; n300 -> 0.17R / 0.16R (mde_verdict.csv).",
+   "confidence": "high",
+   "implication": "Most traders that pass the 30-day verdict will have passed by luck unless their edge is huge. Plan for accumulating evidence past 11/16 (rule accounts at cost 0) and for small real money, sized to that uncertainty."
+  },
+  {
+   "id": "LF9",
+   "claim": "Profit in profitable accounts is as concentrated as in profitable coin-flip accounts: the account leaderboard carries no skill information.",
+   "evidence": "90 of 167 profitable non-random account-runs (54%) turn negative without their best trade. Accounts with 5-9 trades: core 34% (29 accounts, median best-trade share 0.87, best-day share 1.12); DeepSeek 50% (14, 1.01, 1.61). Profitable coin-flip account-runs: 10 of 15 (67%) gone without the best trade, median best-trade share 1.0 (luck_conc_summary.csv, luck.py). Eight accounts carry the pipeline's direction-luck flag (direction_luck.csv), e.g. N22_VORTEX_PSAR@15m v3b (6 of 6 trades short), N24_DMI@15m and @30m v3b, N20_EMA9_CHOP@15m v3b.",
+   "confidence": "high",
+   "implication": "Rank AI candidates on every-signal replay R and the two coin-flip excesses, never on account P&L or 'best account' lists."
+  },
+  {
+   "id": "LF10",
+   "claim": "Signal flow: about 16 SUBMITTED signals per account-day at 15m and 8 at 30m. Most go unused because the account is already in a position. Sizing rejections occur only at 4h.",
+   "evidence": "SUBMITTED per account-day (v3a / v3b / v4): strategy 15m 16.7/15.5/15.9, 30m 7.8/8.0/8.1, 1h 3.4/4.7/5.3, 4h 1.06/0.68/1.18; DeepSeek v4 17.7 / 9.4 / 5.6 / 2.1. Shares at 15m: entered 22% / 33% / 22% (DeepSeek 24%); skipped in position 71% / 55% / 70% (65%); lower score 7-12%. Rejected for sizing (stop too close to liquidation) at 4h: 35% v3a (old 50x tier walk), 47% v3b, 19% v4 core, 17.5% DeepSeek; 2.5% at 1h in v3a; zero at 15m/30m (flow_kind_tf.csv). Live rates match the five-year rates: 124 cells, median live/5y 1.10 (IQR 0.90-1.35), log-rate correlation 0.89; core medians 0.94/0.95/0.99 at 15m/30m/1h, 0.71 at 4h. DeepSeek 1.4-2.8x because its five-year counts are trades at one position per coin (PREREG_DEEPSEEK200.md line 29), not raw signals (rate_vs_5y.csv).",
+   "confidence": "high",
+   "implication": "Entry frequency is not a constraint at 15m/30m for most strategies. Use the five-year rates for staffing: the live rates confirm they hold."
+  },
+  {
+   "id": "LF11",
+   "claim": "Persistent no-trade strategies are near-silent by design (five-year rates), not live bugs. Seven units cannot support an AI trader and five more cannot reach 30 trades a month.",
+   "evidence": "N21_ST_RSI_ADX: 0 signals in 5 years at any tf. N14_ICHI_RSI: 2-4 signals in 5 years per tf. N15_KC_AO 0.049/day at 15m. S1_EMA_RSI_CHOP 0.095/day at 15m. N11_BREAKAWAY 0.35/day at 15m. Poisson P(0 live signals given the 5y rate) 0.56-0.99 (flow.csv). Zero-trade accounts: v3a 48 (35 no signal, 8 all rejected by sizing, all at 4h; 5 open at end), v3b 64 (55/4/4 + 1 record-only), v4 core 43 (35/3/4/1), v4 DeepSeek 30 (20/3/7); 4h accounts are 25/48, 35/64, 23/43 and 22/30 of them (zero_trade_accounts.csv). X (< 1 AI trade/day both live and at the five-year rate): N11, N14, N15, N21, S1, F15_OPEN0930, F5_BOX_RSI. Below 1/day live: N08_ICHI_WR 0.9, S5_DONCHIAN_MFI 0.45, F4_PULL_RSI 0.67 (ai_trader_15m30m.csv).",
+   "confidence": "high",
+   "implication": "Give no AI seat to the X list. Keep them, if at all, as cost-free rule accounts. The 4h zero-trade problem is mostly sizing and leverage, not signals."
+  },
+  {
+   "id": "LF12",
+   "claim": "An AI trader that owns one strategy at 15m+30m with one position at a time would take about 4-5 trades a day and be in a position about half the time. The event-driven wake design costs about $200-450 a month for 30 traders; a check at every 15m close while holding would cost $1,000-1,900.",
+   "evidence": "Rule-following simulation on the replay (every signal's own exit, v3b+v4): median 5.0 trades/day for the 32 active core strategies (10-90%: 1.9-8.6), 4.7 for DeepSeek (1.3-6.7). The five-year-rate analytic agrees (e.g. N04 9.5 vs 9.7). 29/36 core and 41/44 DeepSeek reach >= 1/day. Busy share median about 0.5; >= 0.78 for N23, S2, OBV_B, N25, N04, N22, N10 and F16_FIB618. Calls per trader per month (median core / DeepSeek): event-driven 443 / 399, plus 4h scans 534 / 471, plus 15m holding checks 2,024 / 2,233. At Sonnet 5.5 $2/$10 per MTok (10k in + 1k out = $0.030, or $0.016 with 8k cached), 30 traders cost about $202-378, $240-450 and $1,008-1,890 a month for the three designs (ai_trader_15m30m.csv, ai_trader.py; prices from the claude-api skill table dated 2026-09-25).",
+   "confidence": "medium",
+   "implication": "Only the event-driven design fits $500, and only if output plus thinking stays near 1k tokens; Opus seats cost 2x. High-frequency strategies keep the trader almost always in a position, so the AI's choice reduces to taking whichever signal comes first. Prefer mid-frequency strategies (3-6 trades/day) for AI seats."
+  },
+  {
+   "id": "LF13",
+   "claim": "The positive 4h numbers come from trades still open at the end of the run and from a short tilt in a falling market.",
+   "evidence": "Strategy 4h replay: +0.206R on 28 traded signals, +0.068 when the 14 unresolved are included at mark; 39 of 81 4h signals rejected by sizing. Exhaustive coin flip 4h: +0.098 traded vs +0.034 with marks; 30 of 140 unresolved. v4 strategy 4h signals 30% long (tilt +0.218, drift-neutral -0.086). DeepSeek 4h: replay -0.122, 59 of 126 rejected (grade.py stdout, cf_exhaustive_summary.csv, excess_split_kind_run_tf.csv).",
+   "confidence": "medium",
+   "implication": "Do not promote 4h on the live +0.14R. 4h is the cheapest timeframe by cost (0.05R), but these runs are too short and too one-directional to show anything about it."
+  },
+  {
+   "id": "LF14",
+   "claim": "Live signal-to-signal correlation means DeepSeek duplicates and near-duplicates inflate the apparent number of independent candidates.",
+   "evidence": "F11_RAID = F11_TSOUP = F13_RAID_PD at 15m; F17_Z / F17_Z_HL share >= 90% of signals; F5_BOX = F5_BOX_HTF at 15m/30m; F15_OPEN0000 is one stream across tfs (dup_groups.csv). Their grades move together: F11_RAID / F11_TSOUP / F13_RAID_PD are all C with side-flip excess -0.07 / -0.28 / -0.01; F17_Z / F17_Z_HL are both C with timing +0.18 / +0.23 (grades_15m30m.csv).",
+   "confidence": "high",
+   "implication": "Count each duplicate group as one candidate for seats and for BH families; never staff two members of the same group."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "DOGE (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 10.0 (5y 14.4); AI trades/day 4.1; replay pairs n=11 (9 1h-clusters), long 0.36; R chosen -0.62 vs side-flip CF -0.27 -> excess -0.36 (p 0.86); timing vs same-side random -0.59; live n=25 R -0.57",
+   "note": "Fewer than 15 replayed signals or fewer than 10 independent 1h moments in v3b+v4: no coin-flip verdict possible."
+  },
+  {
+   "strategy": "N01_ST_EMA (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 22.5 (5y 25.5); AI trades/day 5.4; pairs n=51 (24 cl), long 0.65; chosen -0.06 vs CF -0.10 -> excess +0.04 (p 0.44); timing +0.13; excess v3b/v4 -0.53/+0.48; live n=28 R -0.40",
+   "note": "Indistinguishable from a coin flip; runs disagree in sign."
+  },
+  {
+   "strategy": "N02_ST_KST (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 20.0 (5y 22.4); AI trades/day 4.5; pairs n=44 (23 cl), long 0.52; chosen -0.13 vs CF -0.20 -> excess +0.07 (p 0.36); timing 0.00; v3b/v4 -0.32/+0.19; live n=38 R -0.29",
+   "note": "Coin-flip-like; its 1 profitable account-run is gone without the best trade."
+  },
+  {
+   "strategy": "N03_ADX_GC (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 1.7 (5y 0.9); AI trades/day 1.8 (5y-rate est 0.8); pairs n=4; live n=7 R -0.26",
+   "note": "Too few signals for a verdict; at the 5-year rate it cannot reach 30 trades a month."
+  },
+  {
+   "strategy": "N04_ST_KLINGER (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 74.4 (5y 76.6); AI trades/day 9.5; busy 0.80; pairs n=144 (43 cl), long 0.54; chosen -0.21 vs CF -0.23 -> excess +0.02 (p 0.42); timing -0.07; v3b/v4 -0.33/+0.24; live n=56 R -0.07",
+   "note": "Coin-flip-like. Direction-luck flag on v4@30m. The trader would be in a position 80% of the time."
+  },
+  {
+   "strategy": "N05_PSAR_POC (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 6.2 (5y 6.4); AI trades/day 2.3; pairs n=13 (12 cl), long 0.69; excess -0.01; timing +0.30; live n=13 R +0.44 (v3a n=7 +0.42); 3 of 6 profitable account-runs gone w/o best trade",
+   "note": "Too few replayed signals. Positive live R comes from 13 trades, half of the profit from single trades."
+  },
+  {
+   "strategy": "N06_MACD_ORB (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 3.7 (5y 6.4); AI trades/day 3.2; pairs n=12 (7 cl), long 0.33; excess +0.17 (p 0.32); timing +0.13; live n=13 R +0.22",
+   "note": "Too few independent moments for a verdict."
+  },
+  {
+   "strategy": "N07_ICHI_CMO (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 9.4 (5y 10.6); AI trades/day 3.6; pairs n=17 (14 cl), long 0.59; chosen -0.34 vs CF -0.06 -> excess -0.28 (p 0.87); timing -0.16; v3b/v4 -0.32/-0.25; live n=24 R -0.04",
+   "note": "Below the coin flip in both runs (not D only because 30m timing was positive). The pipeline's best 30m bootstrap cell (n 8) is not supported by the replay."
+  },
+  {
+   "strategy": "N08_ICHI_WR (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 1.7 (5y 1.6); AI trades/day 0.9 (5y-rate est 1.4); pairs n=2; live n=6 R +0.25",
+   "note": "Too rare: about 1 trade a day at best."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 12.3 (5y 12.3); AI trades/day 5.4; pairs n=22 (15 cl), long 0.32; chosen -0.37 vs CF -0.30 -> excess -0.07 (p 0.61); timing -0.28; live n=32 R -0.17",
+   "note": "Coin-flip-like or worse."
+  },
+  {
+   "strategy": "N10_HA_PSAR (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 37.2 (5y 35.8); AI trades/day 8.6; busy 0.78; pairs n=64 (34 cl), long 0.48; chosen +0.01 vs CF -0.04 -> excess +0.05 (p 0.37); timing +0.18; v3b/v4 +0.15/-0.02; live n=49 R +0.04 (v3a +0.29)",
+   "note": "Coin-flip-like. Direction-luck flag on v3b@15m. Often in a position."
+  },
+  {
+   "strategy": "N11_BREAKAWAY (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "sig/day 0.6 (5y 0.5); AI trades/day 0.5; live n=3",
+   "note": "Too few signals for an AI trader."
+  },
+  {
+   "strategy": "N12_ICHI_AO (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "D",
+   "numbers": "sig/day 13.7 (5y 11.9); AI trades/day 5.9; pairs n=31 (24 cl), long 0.52; chosen -0.49 vs CF -0.14 -> excess -0.35 (p 0.98); timing -0.33 [-0.57,-0.05]; v3b/v4 -0.55/-0.28; live n=33 R -0.22",
+   "note": "Loses to both coin flips everywhere it traded."
+  },
+  {
+   "strategy": "N13_3OUTSIDE (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 9.8 (5y 9.0); AI trades/day 3.6 (5y-rate est 4.8); pairs n=15 (14 cl), long 0.40; chosen +0.27 vs CF -0.06 -> excess +0.33 (p 0.13, BH q 0.86); timing +0.38 [-0.04,+0.80]; v3b/v4 +0.42/+0.21; live n=24 R +0.26 (v3a n=14 +0.22); 2 of 4 profitable runs gone w/o best trade",
+   "note": "The only core unit positive in both runs and both coin-flip tests, but n is small and not significant. Direction-luck flag on v3a@15m. Watch candidate."
+  },
+  {
+   "strategy": "N14_ICHI_RSI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "0 live signals; 5y 2 signals per tf in 5 years",
+   "note": "Never fires by design."
+  },
+  {
+   "strategy": "N15_KC_AO (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "0 live signals; 5y 0.05/day (15m)",
+   "note": "Near-silent by design."
+  },
+  {
+   "strategy": "N16_BBRSI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 8.9 (5y 10.0); AI trades/day 3.6; pairs n=12; excess -0.34; timing -0.50; live n=22 R -0.27",
+   "note": "Too few replayed signals; what exists is below the coin flip."
+  },
+  {
+   "strategy": "N17_KC_RSI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 105.8 (5y 109.6); AI trades/day 7.7; pairs n=103 (25 cl), long 0.80; chosen -0.05 vs CF -0.07 -> excess +0.02 (p 0.46); timing vs random-time longs +0.39 [0.05,0.85]; v3b/v4 timing +0.69/+0.33; 30m -0.17; live n=49 R -0.26",
+   "note": "Its timing within its side looked good, but it was long in a falling market, so its side choice lost to the drift. This is the only unit whose timing CI excludes 0, unadjusted for 80 tests. A possible AI angle: the same signals with a trend or side filter."
+  },
+  {
+   "strategy": "N18_VWMA_MACD (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "D",
+   "numbers": "sig/day 70.5 (5y 80.6); AI trades/day 5.9; pairs n=126 (31 cl), long 0.37; chosen -0.44 vs CF -0.20 -> excess -0.24 (p 0.92); timing -0.34 [-0.65,-0.01]; v3b/v4 -0.06/-0.32; live n=48 R -0.28",
+   "note": "Loses to both coin flips everywhere."
+  },
+  {
+   "strategy": "N19_FIB_CHOP (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 7.1 (5y 7.5); AI trades/day 3.2; pairs n=12; excess -0.10; timing -0.57; live n=18 R -0.68",
+   "note": "Too few replayed signals; live trades are poor."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 41.6 (5y 36.4); AI trades/day 6.4; pairs n=111 (32 cl), long 0.00; chosen +0.15 vs CF -0.16 -> excess +0.31 (p 0.015, BH q 0.49); same-side random-time CF +0.15 -> timing -0.00; live n=40 R -0.29 (flat v3a -0.78)",
+   "note": "Short-only by construction. Its side-flip edge is the falling market; it has no timing edge over random shorts. Do not staff it on this evidence."
+  },
+  {
+   "strategy": "N21_ST_RSI_ADX (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "0 live signals; 0 signals in 5 years at any tf",
+   "note": "The definition never fires; check it or drop it."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 60.3 (5y 62.6); AI trades/day 8.2; busy 0.79; pairs n=122 (39 cl), long 0.50; chosen -0.20 vs CF -0.11 -> excess -0.10 (p 0.78); timing -0.03; live n=54 R -0.16",
+   "note": "Slightly below the coin flip. Direction-luck flag on v3b@15m (all 6 trades short)."
+  },
+  {
+   "strategy": "N23_HA_ST (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 90.7 (5y 97.1); AI trades/day 9.1; busy 0.91; pairs n=168 (43 cl), long 0.52; chosen -0.13 vs CF -0.17 -> excess +0.04 (p 0.37); timing +0.02; live n=60 R -0.19",
+   "note": "Coin-flip-like. The trader would be in a position 91% of the time."
+  },
+  {
+   "strategy": "N24_DMI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 33.5 (5y 34.9); AI trades/day 7.3; pairs n=90 (37 cl), long 0.09; chosen -0.04 vs CF -0.26 -> excess +0.22 (p 0.048); same-side random-time timing -0.12; live n=50 R -0.16 (v3a -0.51)",
+   "note": "Short-biased by construction (5y long 0.15-0.21). Its side-flip edge is market direction. Direction-luck flags on v3b@15m and @30m."
+  },
+  {
+   "strategy": "N25_DST_CCI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 39.9 (5y 37.6); AI trades/day 8.2; busy 0.80; pairs n=84 (35 cl), long 0.52; chosen -0.31 vs CF -0.22 -> excess -0.09 (p 0.71); timing -0.17; live n=47 R -0.39",
+   "note": "At or below the coin flip; often in a position."
+  },
+  {
+   "strategy": "OBV_B (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 29.9 (5y 30.8); AI trades/day 8.2; busy 0.85; pairs n=68 (35 cl), long 0.51; chosen -0.28 vs CF -0.18 -> excess -0.10 (p 0.79); timing -0.12; live n=48 R -0.27",
+   "note": "Slightly below the coin flip."
+  },
+  {
+   "strategy": "OBV_S (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "D",
+   "numbers": "sig/day 10.8 (5y 10.1); AI trades/day 6.4; pairs n=15 (15 cl), long 0.47; chosen -0.25 vs CF -0.08 -> excess -0.17 (p 0.72); timing -0.12; v3b/v4 -0.35/-0.13; live n=33 R -0.18",
+   "note": "Loses to both coin flips. Its live 30m account (+0.04R, n15) is not supported by the replay."
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "0 live signals; 5y 0.095/day (15m), 0.057 (30m)",
+   "note": "Near-silent by design."
+  },
+  {
+   "strategy": "S2_ST_ROC (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 75.3 (5y 75.4); AI trades/day 8.6; busy 0.86; pairs n=151 (42 cl), long 0.54; chosen -0.17 vs CF -0.10 -> excess -0.07 (p 0.69); timing -0.02; v3b/v4 -0.50/+0.09; live n=57 R +0.09 (v3a +0.10)",
+   "note": "Its positive live 15m account (v3a, +0.17R) is not reproduced by the every-signal replay. Coin-flip-like."
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 7.1 (5y 6.4); AI trades/day 3.2; pairs n=14 (11 cl), long 0.21; excess +0.36 (p 0.14); timing +0.23; live n=21 R -0.40",
+   "note": "Too few replayed signals; the replay and live trades disagree."
+  },
+  {
+   "strategy": "S4_BB_BBP (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 30.4 (5y 27.3); AI trades/day 4.1; pairs n=51 (23 cl), long 0.27; chosen +0.31 vs CF 0.00 -> excess +0.30 (p 0.17); timing +0.33 [-0.27,+0.97]; v3b/v4 -0.10/+0.36; live n=36 R +0.11 (v3a +0.21)",
+   "note": "Positive in v4 and v3a but negative in v3b. Not significant. Side mix swings between runs (v3a 70% long, v4 26%)."
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 1.7 (5y 1.4); AI trades/day 0.45 (5y-rate est 1.2); live n=5",
+   "note": "Too rare for an AI trader."
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 5.0 (5y 7.5); AI trades/day 2.3; pairs n=7; excess -0.47; live n=17 R -0.15",
+   "note": "Too few replayed signals."
+  },
+  {
+   "strategy": "V39_ALL (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 22.7 (5y 28.9); AI trades/day 5.4; pairs n=37 (25 cl), long 0.32; chosen -0.28 vs CF -0.24 -> excess -0.04 (p 0.58); timing -0.27; live n=35 R -0.31",
+   "note": "Coin-flip-like or worse."
+  },
+  {
+   "strategy": "V45_AMB (strategy)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 7.7 (5y 10.3); AI trades/day 4.1; pairs n=20 (15 cl), long 0.70; chosen -0.37 vs CF -0.09 -> excess -0.28 (p 0.80); timing -0.10; live n=17 R -0.26",
+   "note": "Below the coin flip."
+  },
+  {
+   "strategy": "F10_M2022 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 2.0 (5y 2.0); AI trades/day 2.0; pairs n=3; live n=3 R +0.73",
+   "note": "Three trades; no verdict."
+  },
+  {
+   "strategy": "F10_OTE (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 25.9 (5y 22.4); AI trades/day 5.3; pairs n=38 (20 cl); chosen -0.25 vs CF -0.14 -> excess -0.11 (p 0.69); timing -0.10; live n=12 R -0.16",
+   "note": "v4 only (1.5 days). Slightly below the coin flip."
+  },
+  {
+   "strategy": "F11_PO3 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 8.0 (5y 10.0); AI trades/day 1.3; pairs n=12 (5 cl)",
+   "note": "Too few independent moments."
+  },
+  {
+   "strategy": "F11_RAID (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 37.2 (5y 25.8); AI trades/day 5.3; pairs n=53 (26 cl), long 0.58; excess -0.07 (p 0.65); timing +0.03; live n=16 R -0.73",
+   "note": "v4 only. Duplicate of F11_TSOUP / F13_RAID_PD at 15m."
+  },
+  {
+   "strategy": "F11_TSOUP (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 27.3; AI trades/day 6.0; pairs n=41 (24 cl), long 0.68; excess -0.28 (p 0.91); timing -0.07; live n=13 R -0.66",
+   "note": "v4 only. Duplicate group F11_RAID / F13_RAID_PD."
+  },
+  {
+   "strategy": "F12_MSS (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 27.3 (5y 24.9); AI trades/day 4.0; pairs n=39 (22 cl), long 0.49; chosen +0.07 vs CF -0.12 -> excess +0.19 (p 0.18, BH q 0.86); timing +0.23; 15m/30m excess +0.10/+0.32; live n=8 R +0.71",
+   "note": "v4 only (1.5 days, in-sample). Beats both coin flips at 15m and 30m but not significantly. Watch candidate."
+  },
+  {
+   "strategy": "F12_MSS_DISP (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 11.3; AI trades/day 4.7; pairs n=17 (10 cl), long 0.35; chosen +0.18 vs CF -0.26 -> excess +0.44 (p 0.09); timing +0.24; live n=11 R -0.17",
+   "note": "v4 only, small n. Its live account is negative and the profitable run is gone without its best trade. A weak watch candidate."
+  },
+  {
+   "strategy": "F13_FVG_PD (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "sig/day 8.0; AI trades/day 4.0; pairs n=10; excess -0.34; live n=10 R -0.38",
+   "note": "Too few replayed signals."
+  },
+  {
+   "strategy": "F13_RAID_PD (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 35.3; AI trades/day 5.3; pairs n=50 (26 cl); excess -0.01 (p 0.54); timing +0.09; live n=15 R -0.70",
+   "note": "v4 only. Duplicate of F11_RAID / F11_TSOUP."
+  },
+  {
+   "strategy": "F14_SMT (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 100.4 (5y 27.2); AI trades/day 6.7; pairs n=151 (21 cl), long 0.38; chosen -0.18 vs CF -0.20 -> excess +0.02 (p 0.44); timing -0.09; live n=17 R -0.18",
+   "note": "v4 only. Coin-flip-like. Its 1h cell's low p is a short tilt (see the 1h note)."
+  },
+  {
+   "strategy": "F15_ASIA_BRK (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 1.3; pairs n=11 (4 cl); excess -1.08; live n=4 R -1.20",
+   "note": "Session strategy with a single daily moment; too few independent moments."
+  },
+  {
+   "strategy": "F15_ASIA_SWEEP (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 1.3; pairs n=12 (3 cl); excess +0.70; live n=4",
+   "note": "Three independent moments; no verdict."
+  },
+  {
+   "strategy": "F15_LON_BRK (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 2.0; pairs n=12 (3 cl); excess -0.44; live n=5 R -0.46",
+   "note": "Too few independent moments."
+  },
+  {
+   "strategy": "F15_OPEN0000 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 1.3 (5y-rate est 0.9); pairs n=14 (2 cl), long 0.86",
+   "note": "One signal stream copied to 15m/30m/1h. Two independent moments."
+  },
+  {
+   "strategy": "F15_OPEN0930 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "AI trades/day 0.67 (5y-rate est 0.9); pairs n=12 (1 cl)",
+   "note": "Less than one trade a day; 15m = 30m signals."
+  },
+  {
+   "strategy": "F15_ORB (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 1.3 (5y-rate est 3.3); pairs n=24 (5 1h-clusters), long 0.17; excess +0.76; timing +0.77; live n=4 R +2.07",
+   "note": "Big numbers from 5 independent moments in one run; no verdict."
+  },
+  {
+   "strategy": "F16_FIB382 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 20.0; AI trades/day 6.7; busy 0.81; pairs n=26 (17 cl); excess -0.14 (p 0.76); timing -0.23; live n=9 R -1.04",
+   "note": "v4 only. Below the coin flip."
+  },
+  {
+   "strategy": "F16_FIB500 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 15.3 (5y 15.6); AI trades/day 4.7; pairs n=22 (18 cl), long 0.32; chosen +0.22 vs CF -0.24 -> excess +0.46 (p 0.006, BH q 0.32); timing +0.25 [-0.08,+0.56]; 15m/30m +0.57/+0.30; live n=10 R +0.17",
+   "note": "Lowest p of all 80 units but v4-only, short-leaning and not BH-significant. Watch candidate."
+  },
+  {
+   "strategy": "F16_FIB618 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 16.0; AI trades/day 6.7; busy 0.97; pairs n=23 (12 cl); excess -0.09; timing -0.11; live n=12 R -0.28",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F16_FIB764 (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 12.6; AI trades/day 4.7; pairs n=19 (12 cl); excess -0.02; timing -0.09; live n=11 R -0.24",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F17_Z (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 50.5 (5y 32.8); AI trades/day 6.7; pairs n=76 (24 cl), long 0.72; chosen -0.16 vs CF +0.02 -> excess -0.18; vs random-time longs +0.18; live n=16 R -0.06",
+   "note": "Long-leaning in a falling market: it loses on side, possibly gains on timing. Duplicate of F17_Z_HL."
+  },
+  {
+   "strategy": "F17_Z_HL (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 47.2; AI trades/day 6.7; pairs n=71 (24 cl), long 0.70; excess -0.11; timing +0.23; live n=15 R +0.01",
+   "note": "Same as F17_Z (>= 90% shared signals)."
+  },
+  {
+   "strategy": "F1_MOM_DIV (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 23.3 (5y 18.0); AI trades/day 5.3; pairs n=35 (20 cl), long 0.63; chosen +0.12 vs CF -0.15 -> excess +0.27 (p 0.14); timing +0.39 [-0.07,+0.87]; live n=13 R +0.13",
+   "note": "v4 only. Long-leaning yet beat the coin flip in a falling market. Not significant; its profitable run is gone without its best trade. Watch candidate."
+  },
+  {
+   "strategy": "F1_PVT_DIV (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 14.0; AI trades/day 2.7; pairs n=21 (15 cl); excess +0.01; timing +0.22; live n=8 R -0.31",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F1_RSI_DIV (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 15.3 (5y 14.8); AI trades/day 4.0; pairs n=23 (18 cl), long 0.48; chosen +0.43 vs CF +0.10 -> excess +0.32 (p 0.19); timing +0.59 [-0.09,+1.51]; live n=10 R +0.34",
+   "note": "v4 only, balanced sides, so not a direction artifact. Not significant. Watch candidate."
+  },
+  {
+   "strategy": "F2_DEMARK (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 45.9 (5y 17.0); AI trades/day 3.3; pairs n=54 (13 cl); excess +0.09; timing +0.02; live n=10 R +0.02",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F3_BOS (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 28.6; AI trades/day 5.3; pairs n=43 (16 cl), long 0.28; excess +0.12; timing +0.04; live n=12 R -0.20",
+   "note": "Beats the side flip only through its short tilt in a falling market."
+  },
+  {
+   "strategy": "F3_BOS_ZONE (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 12.6; AI trades/day 3.3; pairs n=19 (12 cl); excess -0.27; timing -0.14; live n=7 R -0.40",
+   "note": "v4 only; below the coin flip."
+  },
+  {
+   "strategy": "F3_HHHL (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 45.2; AI trades/day 4.7; pairs n=59 (27 cl), long 0.31; excess +0.19 (p 0.26); timing +0.05; live n=12 R -0.91",
+   "note": "Its side-flip edge is a short tilt; no timing edge."
+  },
+  {
+   "strategy": "F4_FAN (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 34.6; AI trades/day 5.3; pairs n=52 (25 cl), long 0.37; excess +0.07; timing +0.06; live n=13 R +0.57",
+   "note": "Live P&L is better than the replay; direction-luck flag on v4@30m."
+  },
+  {
+   "strategy": "F4_PULL (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "D",
+   "numbers": "sig/day 47.9 (5y 20.0); AI trades/day 3.3; pairs n=72 (25 cl), long 0.67; chosen -0.70 vs CF -0.24 -> excess -0.46 (p 1.00); timing -0.41 [-0.66,-0.16]; live n=13 R -0.95",
+   "note": "Clearly worse than both coin flips."
+  },
+  {
+   "strategy": "F4_PULL_RSI (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 0.67 (5y-rate est 1.5); pairs n=1",
+   "note": "Too rare."
+  },
+  {
+   "strategy": "F5_BOX (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "AI trades/day 4.0; pairs n=14 (8 cl); excess +0.25; live n=9 R -0.13",
+   "note": "Too few independent moments. Identical to F5_BOX_HTF."
+  },
+  {
+   "strategy": "F5_BOX_HTF (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "?",
+   "numbers": "same signals as F5_BOX at 15m/30m",
+   "note": "Duplicate of F5_BOX."
+  },
+  {
+   "strategy": "F5_BOX_RSI (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "X",
+   "numbers": "AI trades/day 0.67 (5y-rate est 0.6)",
+   "note": "Too rare."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 111.1 (5y 34.1); AI trades/day 7.3; pairs n=145 (26 cl), long 0.48; excess +0.08 (p 0.24); timing +0.11; live n=17 R +0.12",
+   "note": "v4 only. Mildly above the coin flip, far from significant. Its best 15m account (+0.49R, n10) has a 2-trade-heavy profit."
+  },
+  {
+   "strategy": "F6_VWAP_FAIL (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 37.9; AI trades/day 6.7; pairs n=51 (23 cl); excess +0.18 (p 0.21); timing +0.20; 15m/30m excess +0.24/-0.04; live n=16 R -0.01",
+   "note": "v4 only. Positive at 15m only."
+  },
+  {
+   "strategy": "F7_RF_ONLY (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 29.3; AI trades/day 4.7; pairs n=42 (17 cl); excess +0.08; timing +0.08; live n=10 R -0.48",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F7_RF_TRIPLE (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 88.5 (5y 50.9); AI trades/day 5.3; pairs n=122 (32 cl), long 0.39; chosen +0.06 vs CF -0.16 -> excess +0.23 (p 0.10); timing +0.16 [-0.19,+0.52]; 15m/30m +0.27/+0.14; live n=14 R -0.27",
+   "note": "v4 only. Largest-n B unit, but its live account lost. Not significant. Watch candidate."
+  },
+  {
+   "strategy": "F8_VWICK (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 13.3; AI trades/day 3.3; pairs n=20 (10 cl); excess -0.07; timing -0.02; live n=8 R -0.53",
+   "note": "v4 only; coin-flip-like."
+  },
+  {
+   "strategy": "F9_BREAKER (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 25.3; AI trades/day 5.3; busy 0.84; pairs n=37 (19 cl), long 0.24; excess +0.19 (p 0.16); timing +0.07; live n=13 R -0.21",
+   "note": "Its side-flip edge is mostly a short tilt."
+  },
+  {
+   "strategy": "F9_FVG (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 35.9; AI trades/day 5.3; pairs n=42 (19 cl), long 0.33; excess +0.08; timing +0.07; live n=12 R +0.19",
+   "note": "v4 only. The pipeline's best 30m bootstrap cell (n 5) is one trade-heavy."
+  },
+  {
+   "strategy": "F9_IFVG (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "B",
+   "numbers": "sig/day 21.9 (5y 14.9); AI trades/day 6.7; pairs n=33 (19 cl), long 0.70; chosen -0.05 vs CF -0.30 -> excess +0.25 (p 0.06); timing +0.27 [-0.05,+0.61]; 15m/30m +0.36/-0.17 (30m n small); live n=15 R -0.37",
+   "note": "v4 only. Long-leaning but beat both coin flips at 15m; its live account lost. Weak watch candidate."
+  },
+  {
+   "strategy": "F9_OB (ds200)",
+   "timeframe": "15m+30m (AI unit)",
+   "grade": "C",
+   "numbers": "sig/day 33.9; AI trades/day 4.0; pairs n=49 (23 cl), long 0.65; excess -0.06; timing +0.07; live n=13 R -0.53",
+   "note": "v4 only; coin-flip-like."
+  }
+ ],
+ "files": [
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/flow.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/flow_runs.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/flow_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/zero_trade_accounts.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/rate_vs_5y.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/ai_trader_15m30m.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/ai_trader_sim_runs.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_exhaustive_rows.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_exhaustive_summary.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_exhaustive_by_levgroup.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/coinflip_accounts.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_side_by_run.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_luck_band_15m.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/strategy_trades_by_side.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/backdrop_R.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/tilt_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/excess_split_kind_run_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/excess_split_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/luck_conc_summary.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cluster_entries.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/neff_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/neff_replay_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cells_all.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/grades_15m30m.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/grades_1h4h.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/mde_verdict.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/strategy_notes.json",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/_common.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/flow.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/ai_trader.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/cf_replay.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/coinflip.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/luck.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/grade.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/mde.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/rate_check.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/check_exh.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/notes.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/coinflip_stdout.txt",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/luck_stdout.txt",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/grade_stdout.txt",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/luck_flow/ai_trader_stdout.txt"
+ ]
+}

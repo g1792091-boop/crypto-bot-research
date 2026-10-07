@@ -1,0 +1,711 @@
+{
+ "findings": [
+  {
+   "id": "AIH-1",
+   "claim": "None of the 9 pre-declared discretionary-proxy exit rules helps out of sample. Zero rule x group cells pass the pre-registered test (positive in both v3b and v4, and BH q < 0.05). The best results are small: on core 30m, CUT05 (hard stop at -0.5R) +0.043R, NP4 (exit if no +0.3R within 4 bars) +0.032R and NP8 +0.021R. All three are positive in both runs but not significant, against a base of -0.146R.",
+   "evidence": "lens/ai_upside/out/rules_stats.csv. Built by rules_replay.py and rules_stats.py: every SUBMITTED signal run alone through the repo's PaperEngine on 1m live_bars. The base reproduces replay_signals.csv R exactly (max diff 0.0 on 4,236 traded and 410 open signals). Core 30m CUT05: n=639 (v3b 201 / v4 438), 53 hour-clusters, diff +0.043 (v3b +0.082, v4 +0.025), cluster-bootstrap CI -0.019..+0.101, two-sided sign-flip p 0.165, BH q 0.79. NP4: +0.032 (+0.053 / +0.022), p 0.22. 1h CUT05: +0.034, mixed by run (+0.163 / -0.018). Results are the same with open-at-end trades excluded (30m CUT05 +0.054). Lowest BH q anywhere is 0.029, and it is a HURT cell: DeepSeek 15m OPPH -0.061R.",
+   "confidence": "high",
+   "implication": "Exit discretion cannot lift any timeframe's base (-0.08 to -0.15R per signal) to break-even. Do not choose AI traders, or AI timeframes, because of exit headroom. At most, put a 30m/1h loss-cut into code as a shadow rule. That is free and needs no Sonnet calls."
+  },
+  {
+   "id": "AIH-2",
+   "claim": "Human-style early profit-taking and breakeven moves cost R at 15m. They save the trades that would have hit SL, but they kill more trades that would later have won.",
+   "evidence": "rules_stats.csv, pooled v3b+v4. Core 15m (n=1,252): BE05 -0.058, TP1 (+1R take-profit, ladder kept) -0.063, PART1 (half off at +1R) -0.031. DeepSeek 15m (n=1,172, v4 only): BE05 -0.082, TP1 -0.095, PART1 -0.048. By run these are mixed: core BE05 is +0.076 in v3b and -0.120 in v4. rule_tradeoff.csv for BE05 on core 15m: it helped 138 trades by +1.24R each and hurt 245 trades by -0.99R each. Break-even needs 44.6% of the changed trades to be helped; the actual share was 36.0%. For TP1 the break-even share is 74.2%; actual 58.3%. disposition.csv: a trade still open 2 bars in at >= +0.3R did better held than exited, by +0.19R (n=334, CI -0.07..+0.40; v3b +0.18, v4 +0.19).",
+   "confidence": "medium",
+   "implication": "The AI prompt and code should not let a 15m trader take profit or move to breakeven below the ladder's first rung (about +0.86R at 30x). Allow it only after the AI's calls show more than 45% precision against twin code accounts. 'Trade like a human' (take quick profits, hold losers) is the wrong way round here."
+  },
+  {
+   "id": "AIH-3",
+   "claim": "One state-based exit was consistent across runs and kinds: at 30m and 1h, a trade still open after 4 bars at <= -0.5R did worse if held than if closed then, by about 0.2-0.3R. This was found after the fact. At 15m the same state gives the opposite sign.",
+   "evidence": "disposition.csv (exit-now cost included; cluster bootstrap by run x hour). 30m: n=74, hold minus exit -0.220R, CI -0.320..-0.081, p 0.010 (v3b -0.242 n12, v4 -0.216 n62; core -0.231, DeepSeek -0.209). 1h: n=58, -0.287R, CI -0.376..-0.188, p < 0.001 (v3b -0.351, v4 -0.272). 15m: n=202, +0.122, mixed (v3b -0.154, v4 +0.166). The 30m cell surfaced in a scan of about 100 state cells (exit_now_by_state.csv, BH q 0.32), so it counts as a discovery, not a confirmation.",
+   "confidence": "low",
+   "implication": "Shadow-test 'close at market if <= -0.5R after 4 bars' at 30m/1h as a code rule; about 11-12% of trades open at bar 4 hit this state. If it holds up, roughly +0.03R per signal sits in code at zero AI cost. It is not a reason to pay for an AI."
+  },
+  {
+   "id": "AIH-4",
+   "claim": "Giveback exists but is mostly a 15m effect, and it happens before the ROE ladder arms. 11-15% of 15m signals reach +0.5R and still stop out at about -1.2R. At 30m+ the ladder catches almost every +1R trade.",
+   "evidence": "giveback_kind_tf.csv, every-signal replay v3b+v4, share reaching +0.5R then SL: core 15m 10.6%, 30m 4.7%, 1h 1.5%; DeepSeek 15m 14.8%, 30m 5.5%, 1h 1.6%. Reached +1R then SL: 0-1.7%. Real trades, all 3 runs: core 15m 8.3% (n=630), DeepSeek 15m 17.4% (n=259). giveback_first_rung.csv: share that reached +1R but closed on the first 10% ROE lock: v3a core 15m 9.5% (50x tier walk), v3b 6.8%, v4 8.6%, v4 DeepSeek 15m 15.1%; those trades kept +0.60..+0.80R of an MFE of 1.12..1.68R. Hindsight upper bounds per trade (perfect breakeven on losers that saw +0.5R, plus cutting dead losers at -0.5R): core 15m 0.24R, 30m 0.15, 1h 0.12; DeepSeek 15m 0.31, 30m 0.19, 1h 0.14. Exiting exactly at MFE: 0.56-0.90R.",
+   "confidence": "high",
+   "implication": "The theoretical room for AI exits is largest at 15m (about 0.24-0.31R per trade at most). AIH-1 and AIH-2 show that simple capture of it fails there, so any 15m exit edge would have to come from information beyond the price path. At 30m+ the code ladder already does most of what a human trailing stop would do."
+  },
+  {
+   "id": "AIH-5",
+   "claim": "Most losers are dead from the start, and most stop-outs peak in the first 2 bars. Even so, cutting at -0.5R only breaks even at 15m, because it also kills trades that recover.",
+   "evidence": "time_to_mfe_stop.csv, every-signal base. Losers whose MFE never passed +0.2R: core 45% (15m), 45% (30m), 51% (1h); DeepSeek 48%, 55%, 63%. SL trades whose best price came within 2 bars: 62% / 63% / 77% (core). Median bars to SL: 5.9 (15m), 5.9 (30m), 5.0 (1h); dead SL trades 3.7 / 4.1 / 3.7 bars. Median bars to +0.3R about 1.3-1.5; to +0.5R about 2.6-3.3; reach +1R: 23% (core 15m), 8% (core 30m). Median MAE before +0.5R: -0.26R. rule_tradeoff.csv CUT05 on core 15m: helped 550 trades (+0.49R each), hurt 197 (-1.43R each); break-even precision 74.6%, actual 73.6%. On 30m: 69.1% needed, 74.6% actual.",
+   "confidence": "high",
+   "implication": "A 15m AI sees only 3-4 bar closes before a dead trade stops out, and price state alone does not separate dead trades from recovering ones there. At 30m the cut works slightly, because hurt trades lose less (-1.08R vs -1.43R at 15m)."
+  },
+  {
+   "id": "AIH-6",
+   "claim": "AI exit headroom is a property of the timeframe and of how bad the entries were in that run. It is not a stable property of a strategy. A per-strategy headroom ranking does not replicate.",
+   "evidence": "headroom_stability.csv, core cells with >= 10 signals in both runs. Spearman of hindsight headroom, v3b vs v4: 15m -0.07 (13 cells), 30m +0.24 (9). v3a trades vs v4 signals: -0.31 (17), -0.52 (9). Per-cell base mean R, v3b vs v4: -0.10 (15m), +0.07 (30m). CUT05 cell gains, v3b vs v4: -0.39 / -0.28. Across cells (headroom_rank.csv), the rule gain is strongly negatively correlated with the cell's base R: CUT05 -0.82 (15m), -0.73 (30m), -0.52 (1h); BE05 -0.87 (15m). Headroom vs base R: -0.60 / -0.42 / -0.86. The core cells with base >= 0 in both runs (N10_HA_PSAR@15m, N17_KC_RSI@15m, N20_EMA9_CHOP@30m, N24_DMI@30m) have headroom 0.08-0.27 and no rule gain in both runs.",
+   "confidence": "high",
+   "implication": "Rank AI potential by timeframe, not by strategy. Cells graded H1 ('headroom, rule-consistent') are mostly bad entries being trimmed. Choose AI strategies on entry evidence (5-year results, the side-flip test; other lenses), and treat 'more room for AI exits' as a symptom of bad entries."
+  },
+  {
+   "id": "AIH-7",
+   "claim": "Switching to a new signal while in position lost money under every pre-declared policy, in both runs. The loss per switch is about the cost of the extra round trip (about $63 at 30x with margin = 30% of equity), so the replacement signal was no better than the remainder of the held trade.",
+   "evidence": "switch_sim.py, account-level re-simulation of each account's own signal stream. The base reproduces all 366 accounts' trade counts and closed pnl (max diff $1.2e-10). switch_summary.csv, switch-on-every-new-signal policy: core -$54/switch at 15m (590 switches), -$73 at 30m (257), -$102 at 1h (140); v3b -$50, v4 -$71; 49% of accounts worse vs 16% better. DeepSeek -$28 / -$48 / -$67. Switch only when under water: core -$77/switch (674). Reversal on own opposite signal: core -$210 (26), DeepSeek -$98 (58). Switch only stale trades: core -$72 (114; v3b +$69 on 17 switches), DeepSeek +$3 (122). Signal level (skipped_vs_held.csv): switching to the skipped signal changed equity by -2.07% per instance (core n=1,296, CI -2.69..-1.45; v3b -1.31%, v4 -2.31%), -2.68% when the held trade was under water (n=691), DeepSeek -0.67% (n=1,219). v3a nightly skipped shadows: in-position skips averaged ROE -0.079 vs entered trades -0.037 (15m).",
+   "confidence": "high",
+   "implication": "Make 'hold' the default and gate any switch in code. A switch must clear an expected gain greater than one round trip, about 0.22R at 15m and 1.26% of equity at 30x. Do not count switching as an AI upside."
+  },
+  {
+   "id": "AIH-8",
+   "claim": "Entering a missed signal 1-4 bars late performs about like entering on time, slightly worse at 15m/30m. Recycling missed signals adds trades at the same (negative) base value, each paying full costs.",
+   "evidence": "late_lev_summary.csv, same signal re-entered k bars of its timeframe later with a fresh 2 ATR stop (paired). Core 15m: 1 bar late -0.026R (v3b +0.047, v4 -0.059; CI -0.106..+0.058), 4 bars -0.115. Core 30m: -0.045 / -0.086 / -0.065. Core 1h: +0.043 / +0.063 / +0.066 (CIs include 0). DeepSeek 15m: 1 bar late -0.082 (CI -0.159..-0.008), 4 bars -0.151.",
+   "confidence": "medium",
+   "implication": "Design D12's near-signal and missed-signal entries are unlikely to add edge. If allowed, cap them and score them separately, as the design already plans. They should not be counted as AI headroom."
+  },
+  {
+   "id": "AIH-9",
+   "claim": "Leverage changes the exits, because the ladder locks a fixed ROE. On the same signals, higher leverage gave lower R. Above 30x most 15m/30m signals cannot be sized at all under the 2 ATR stop and the 15% max-loss cap.",
+   "evidence": "lev_pairs.csv, paired fixed leverage with margin = leverage%. 30x vs 20x: -0.026R (core 15m, n=1,252), -0.045 (30m), -0.046 (1h). 40x vs 30x: -0.104 (core 15m, n=976), -0.109 (DeepSeek 15m, CI -0.229..-0.005), -0.135 (DeepSeek 30m, CI -0.282..-0.024). 40x rejected 276 of 1,252 core 15m signals that 30x took; 50x was possible for only 179; at 30m/1h, 40x+ is almost never possible. ladder_geometry.csv: the first lock arms at 1.18 / 0.86 / 0.70 / 0.61R at 20 / 30 / 40 / 50x on 15m (median stop 0.63%), and at 0.84 / 0.61 / 0.50 / 0.43R on 30m. Loss at the stop with margin = lev%: 15m 6.9% of equity at 30x, 19.1% at 50x.",
+   "confidence": "medium",
+   "implication": "'20-50x by AI confidence' is mostly infeasible above 30x on 15m/30m, and where feasible it quietly tightens the exits. Define the code exits in R (price), not ROE, so a leverage choice does not change the exit. Check whether confidence predicts outcomes (twin accounts) before letting it scale exposure, which grows about 6x from 20x to 50x at margin = lev%."
+  },
+  {
+   "id": "AIH-10",
+   "claim": "At 15m, the open trade's P&L state carries no stable exit signal. Whether exiting early would have helped is set by the run's market regime, not by a repeatable state rule.",
+   "evidence": "exit_now_by_state.csv, hold value minus exit-now value at 1, 2 and 4 bars by unrealized-R bin, with cluster bootstrap: no state cell is BH-significant (min q 0.32). Core 15m, all open trades at 2 bars: v3b -0.17R, v4 +0.22R (opposite signs). Per-cell CIs typically span +-0.3R.",
+   "confidence": "medium",
+   "implication": "An AI watching only the 15m price path is unlikely to beat code exits. Any 15m exit edge must come from other information (news, order flow, higher-tf context), and must be shown with paired twin accounts, not assumed."
+  },
+  {
+   "id": "AIH-11",
+   "claim": "Events and big moves: the window held only one scheduled macro event (NFP 10/02 21:30 KST, v3a), and it did no harm. Entries in or just after the biggest-move hours did better, not worse. Holding against a big move looked costly, but the cluster counts are tiny.",
+   "evidence": "events_macro.csv: data/macro_events.csv has only NFP 2026-10-02 12:30Z inside the runs. v3a trades entered within 2h: -0.091R (n=163, incl. 5m); trades held through the release +0.48R (n=37); other v3a trades -0.45R. events_bighours.csv, top-decile hours of the 6-coin 1h return (v4: 10/07 00:00, 10:00, 11:00 down, 14:00 up). v4 core signals entered in a big-move hour +0.31R (n=253), the hour after +0.19 (n=241), others -0.14 (n=1,226). v3b: -0.23 / -0.41 / -0.33. events_bighour_hold_vs_exit.csv, positions open at a big hour's end: against the move, hold minus exit -0.13 to -0.36R (core 30m/1h, DeepSeek); with the move +0.15 to +0.78R. Only 3-5 hour-clusters.",
+   "confidence": "low",
+   "implication": "Do not build 'avoid volatile hours' logic. A 'cut positions against a big move, keep those with it' reaction is plausible; log it as a code shadow and judge it after many more events (CPI 10/14, FOMC 10/28, PCE 10/29)."
+  },
+  {
+   "id": "AIH-12",
+   "claim": "Skipping signals because other strategies disagree shows no reliable effect once look-ahead is removed. The naive version, which counts signals up to 15 min after entry, exaggerates the effect.",
+   "evidence": "agreement.csv, AI-visible window (signals in the 15 min before entry). Conflict minus agree: core 15m -0.019R (CI -0.31..+0.24), 30m -0.152 (CI -0.38..+0.07), 1h +0.049; DeepSeek 15m -0.161 (CI -0.52..+0.17). In v3b, conflict was not worse (15m -0.33 vs -0.41 for agree). agreement_leaky.csv (+-15 min window): core 15m conflict -0.217 vs agree -0.090.",
+   "confidence": "medium",
+   "implication": "No demonstrated skip rule from cross-strategy agreement. Any replay or evaluation of AI decisions must make sure the AI never sees bars after its decision; the leaky version shows how easily a fake skip edge appears."
+  },
+  {
+   "id": "AIH-13",
+   "claim": "Exiting on the strategy's own opposite signal, at the same or a higher timeframe, lowered R at 15m in pooled data (driven by v4). Using reversals as exit or switch triggers is not supported.",
+   "evidence": "rules_stats.csv, all non-coin-flip kinds, 15m, n=2,424: exit on same-tf opposite signal -0.025R (CI -0.045..-0.009, p 0.004); same-or-higher tf -0.041R (CI -0.074..-0.013, p 0.004). v3b about 0 (-0.001 / +0.014), v4 -0.030 / -0.051. DeepSeek 15m same-or-higher tf -0.061R, BH q 0.029 (the only BH-significant cell in the family). The reversal switch policy lost $98-210 per switch (AIH-7).",
+   "confidence": "medium",
+   "implication": "Tell the AI not to treat the strategy's own opposite signal as a reason to exit or reverse at 15m/30m."
+  },
+  {
+   "id": "AIH-14",
+   "claim": "Ranking by AI headroom: 30m is the only timeframe with a consistent, small exit improvement (about +0.03-0.05R per signal). 1h is similar but is planned as a rule account. 15m has the most theoretical room but nothing that captures it, and the worst costs (about 0.22R round trip). 4h has too few signals.",
+   "evidence": "Per signal: core 30m CUT05 +0.043, NP4 +0.032, deep-loser cut about +0.22R on about 12% of trades. Core 15m: no rule positive in both runs except NP4 (about 0.000). Trades per account-day (trades_per_account_day.csv): about 4-6 at 15m, 2.3-3.8 at 30m, 1.3-2.9 at 1h. So at 30m the plausible exit gain is about +0.1-0.16R per account-day against a base of about -0.37 to -0.55R per day. Grade counts (headroom_rank.csv), with N meaning too few signals: core 15m H1 3 / H2 12 / L 6 / N 11; core 30m H1 1 / H2 1 / L 12 / N 18; DeepSeek 15m H1 10 (v4 only) / H2 15 / L 1 / N 18; DeepSeek 30m H1 2 / H2 7 / L 9 / N 23.",
+   "confidence": "medium",
+   "implication": "For the AI budget: if AI traders run at 15m/30m, their value must come from entries and skips (not shown here; see other lenses). Exits should stay code (ladder plus possibly a 30m/1h loss-cut). Prefer 30m over 15m for AI traders. Measure the AI's realized contribution against paired twin code accounts, because the headroom figures are hindsight upper bounds, not expected values."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "DOGE (strategy)",
+   "timeframe": "15m",
+   "grade": "H2 / hopeless base",
+   "numbers": "sig n9 (v3b 3/v4 6) R -0.46 (v3b -1.16, v4 -0.11); trades n16 R -0.34; UB +0.37; +0.5R->SL 11%; dead 83%; CUT05 +0.10 NP4 -0.02 BE05 +0.05 TP1 -0.03; flip -0.21",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N01_ST_EMA (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n31 (v3b 15/v4 16) R +0.13 (v3b -0.80, v4 +1.01); trades n18 R -0.32; UB +0.24; +0.5R->SL 10%; dead 47%; CUT05 -0.24 NP4 -0.27 BE05 -0.56 TP1 -0.45; flip +0.18",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "N02_ST_KST (strategy)",
+   "timeframe": "15m",
+   "grade": "H1",
+   "numbers": "sig n31 (v3b 10/v4 21) R -0.24 (v3b -0.67, v4 -0.03); trades n25 R -0.31; UB +0.29; +0.5R->SL 13%; dead 41%; CUT05 +0.01 NP4 +0.15 BE05 +0.04 TP1 -0.06; flip +0.06",
+   "note": "Exit rules gained in every run it has (NP4(+0.15)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI."
+  },
+  {
+   "strategy": "N04_ST_KLINGER (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n117 (v3b 43/v4 74) R -0.23 (v3b -0.64, v4 +0.01); trades n33 R -0.03; UB +0.24; +0.5R->SL 10%; dead 49%; CUT05 +0.05 NP4 +0.01 BE05 -0.03 TP1 +0.01; flip +0.04",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "N05_PSAR_POC (strategy)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n9 (v3b 1/v4 8) R -0.00 (v3b +0.34, v4 -0.05); trades n9 R +0.50; UB +0.27; +0.5R->SL 22%; dead 0%; CUT05 -0.44 NP4 -0.01 BE05 +0.01 TP1 +0.04; flip -0.09",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N06_MACD_ORB (strategy)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n9 (v3b 4/v4 5) R -0.10 (v3b +0.13, v4 -0.28); trades n8 R +0.05; UB +0.25; +0.5R->SL 0%; dead 100%; CUT05 +0.22 NP4 +0.00 BE05 -0.05 TP1 -0.09; flip +0.06",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N07_ICHI_CMO (strategy)",
+   "timeframe": "15m",
+   "grade": "L / hopeless base",
+   "numbers": "sig n8 (v3b 3/v4 5) R -0.83 (v3b -0.66, v4 -0.93); trades n16 R -0.39; UB +0.18; +0.5R->SL 0%; dead 33%; CUT05 +0.26 NP4 +0.28 BE05 +0.00 TP1 +0.08; flip -0.81",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON (strategy)",
+   "timeframe": "15m",
+   "grade": "H1",
+   "numbers": "sig n21 (v3b 8/v4 13) R -0.29 (v3b -0.29, v4 -0.30); trades n22 R -0.07; UB +0.29; +0.5R->SL 14%; dead 30%; CUT05 +0.10 NP4 +0.03 BE05 +0.07 TP1 +0.27; flip +0.02",
+   "note": "Exit rules gained in every run it has (CUT05(+0.10)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI."
+  },
+  {
+   "strategy": "N10_HA_PSAR (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n46 (v3b 16/v4 30) R +0.06 (v3b +0.05, v4 +0.07); trades n33 R -0.01; UB +0.27; +0.5R->SL 15%; dead 35%; CUT05 +0.01 NP4 +0.02 BE05 -0.16 TP1 -0.23; flip +0.07",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. Base R >= 0 in both v3b and v4 (rare; small n)."
+  },
+  {
+   "strategy": "N12_ICHI_AO (strategy)",
+   "timeframe": "15m",
+   "grade": "H1 / hopeless base",
+   "numbers": "sig n21 (v3b 8/v4 13) R -0.58 (v3b -0.64, v4 -0.54); trades n22 R -0.15; UB +0.37; +0.5R->SL 14%; dead 53%; CUT05 +0.25 NP4 +0.16 BE05 +0.18 TP1 +0.06; flip -0.36",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N13_3OUTSIDE (strategy)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n13 (v3b 9/v4 4) R +0.26 (v3b +0.24, v4 +0.32); trades n14 R +0.47; UB +0.04; +0.5R->SL 0%; dead 33%; CUT05 -0.31 NP4 -0.01 BE05 -0.08 TP1 -0.04; flip +0.47",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N16_BBRSI (strategy)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n7 (v3b 2/v4 5) R -0.66 (v3b -1.18, v4 -0.46); trades n13 R -0.45; UB +0.58; +0.5R->SL 29%; dead 60%; CUT05 +0.36 NP4 +0.08 BE05 +0.17 TP1 -0.09; flip -0.65",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N17_KC_RSI (strategy)",
+   "timeframe": "15m",
+   "grade": "L",
+   "numbers": "sig n153 (v3b 15/v4 138) R +0.16 (v3b +0.59, v4 +0.11); trades n34 R -0.24; UB +0.08; +0.5R->SL 4%; dead 35%; CUT05 -0.08 NP4 -0.05 BE05 -0.05 TP1 -0.03; flip +0.10",
+   "note": "Little exit room; any AI value would have to come from entries/skips. Base R >= 0 in both v3b and v4 (rare; small n)."
+  },
+  {
+   "strategy": "N18_VWMA_MACD (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n98 (v3b 38/v4 60) R -0.25 (v3b -0.12, v4 -0.33); trades n26 R -0.30; UB +0.27; +0.5R->SL 8%; dead 53%; CUT05 +0.11 NP4 +0.02 BE05 +0.04 TP1 -0.04; flip -0.11",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "N19_FIB_CHOP (strategy)",
+   "timeframe": "15m",
+   "grade": "H2 / hopeless base",
+   "numbers": "sig n15 (v3b 2/v4 13) R -0.31 (v3b -1.16, v4 -0.18); trades n13 R -0.74; UB +0.34; +0.5R->SL 20%; dead 43%; CUT05 +0.07 NP4 +0.10 BE05 +0.26 TP1 +0.42; flip -0.03",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP (strategy)",
+   "timeframe": "15m",
+   "grade": "L",
+   "numbers": "sig n70 (v3b 25/v4 45) R +0.07 (v3b -0.20, v4 +0.23); trades n27 R -0.43; UB +0.19; +0.5R->SL 10%; dead 36%; CUT05 -0.22 NP4 -0.00 BE05 -0.12 TP1 -0.06; flip +0.28",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n85 (v3b 31/v4 54) R -0.22 (v3b -0.22, v4 -0.22); trades n33 R -0.10; UB +0.25; +0.5R->SL 11%; dead 49%; CUT05 +0.00 NP4 +0.01 BE05 -0.04 TP1 -0.03; flip -0.16",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "N23_HA_ST (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n119 (v3b 30/v4 89) R -0.12 (v3b -0.53, v4 +0.02); trades n36 R -0.26; UB +0.30; +0.5R->SL 11%; dead 53%; CUT05 -0.02 NP4 -0.09 BE05 -0.10 TP1 -0.06; flip +0.08",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "N24_DMI (strategy)",
+   "timeframe": "15m",
+   "grade": "L",
+   "numbers": "sig n58 (v3b 24/v4 34) R -0.10 (v3b -0.18, v4 -0.04); trades n31 R -0.32; UB +0.18; +0.5R->SL 9%; dead 36%; CUT05 -0.05 NP4 +0.01 BE05 -0.08 TP1 +0.09; flip +0.18",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N25_DST_CCI (strategy)",
+   "timeframe": "15m",
+   "grade": "H2 / hopeless base",
+   "numbers": "sig n55 (v3b 23/v4 32) R -0.37 (v3b -0.51, v4 -0.27); trades n28 R -0.36; UB +0.30; +0.5R->SL 13%; dead 50%; CUT05 +0.08 NP4 +0.04 BE05 -0.01 TP1 -0.01; flip -0.14",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "OBV_B (strategy)",
+   "timeframe": "15m",
+   "grade": "L / hopeless base",
+   "numbers": "sig n57 (v3b 20/v4 37) R -0.29 (v3b -0.28, v4 -0.30); trades n30 R -0.32; UB +0.20; +0.5R->SL 11%; dead 31%; CUT05 +0.15 NP4 +0.06 BE05 +0.03 TP1 -0.02; flip -0.19",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "OBV_S (strategy)",
+   "timeframe": "15m",
+   "grade": "L / hopeless base",
+   "numbers": "sig n10 (v3b 4/v4 6) R -0.80 (v3b -0.59, v4 -0.93); trades n18 R -0.36; UB +0.16; +0.5R->SL 0%; dead 38%; CUT05 +0.33 NP4 +0.13 BE05 +0.00 TP1 +0.02; flip -0.87",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "S2_ST_ROC (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n113 (v3b 35/v4 78) R -0.19 (v3b -0.65, v4 +0.01); trades n39 R +0.17; UB +0.35; +0.5R->SL 17%; dead 43%; CUT05 -0.01 NP4 +0.01 BE05 -0.10 TP1 -0.19; flip -0.05",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH (strategy)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n10 (v3b 4/v4 6) R +0.40 (v3b -0.16, v4 +0.77); trades n14 R -0.47; UB +0.26; +0.5R->SL 20%; dead 25%; CUT05 -0.21 NP4 +0.01 BE05 -0.05 TP1 -0.42; flip +0.55",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "S4_BB_BBP (strategy)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n39 (v3b 5/v4 34) R +0.42 (v3b -0.14, v4 +0.51); trades n22 R +0.23; UB +0.20; +0.5R->SL 8%; dead 43%; CUT05 -0.29 NP4 +0.06 BE05 -0.36 TP1 -0.44; flip +0.39",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs."
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX (strategy)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n5 (v3b 4/v4 1) R -0.52 (v3b -0.75, v4 +0.40); trades n9 R -0.07; UB +0.48; +0.5R->SL 40%; dead 0%; CUT05 +0.30 NP4 +0.00 BE05 +0.38 TP1 +0.04; flip -0.32",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "V39_ALL (strategy)",
+   "timeframe": "15m",
+   "grade": "H2 / hopeless base",
+   "numbers": "sig n29 (v3b 7/v4 22) R -0.29 (v3b -0.94, v4 -0.09); trades n24 R -0.32; UB +0.37; +0.5R->SL 21%; dead 50%; CUT05 -0.09 NP4 -0.06 BE05 +0.12 TP1 -0.09; flip -0.01",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "V45_AMB (strategy)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n12 (v3b 2/v4 10) R -0.30 (v3b -0.60, v4 -0.24); trades n7 R -0.46; UB +0.13; +0.5R->SL 0%; dead 43%; CUT05 -0.05 NP4 -0.13 BE05 -0.21 TP1 -0.01; flip -0.28",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "F10_OTE (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n24 (v3b 0/v4 24) R -0.21 (v3b na, v4 -0.21); trades n7 R +0.10; UB +0.24; +0.5R->SL 8%; dead 58%; CUT05 -0.05 NP4 -0.10 BE05 -0.03 TP1 +0.07; flip -0.02",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F11_RAID (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n38 (v3b 0/v4 38) R -0.12 (v3b na, v4 -0.12); trades n8 R -0.97; UB +0.32; +0.5R->SL 18%; dead 43%; CUT05 +0.07 NP4 -0.14 BE05 -0.08 TP1 -0.17; flip +0.05",
+   "note": "Exit rules gained in every run it has (CUT05(+0.07)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F11_TSOUP (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only) / hopeless base",
+   "numbers": "sig n25 (v3b 0/v4 25) R -0.47 (v3b na, v4 -0.47); trades n8 R -0.97; UB +0.37; +0.5R->SL 20%; dead 38%; CUT05 +0.09 NP4 +0.08 BE05 +0.14 TP1 -0.03; flip -0.29",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F12_MSS (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n26 (v3b 0/v4 26) R -0.10 (v3b na, v4 -0.10); trades n4 R +0.82; UB +0.24; +0.5R->SL 8%; dead 42%; CUT05 +0.02 NP4 +0.08 BE05 -0.08 TP1 +0.00; flip +0.10",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F12_MSS_DISP (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n12 (v3b 0/v4 12) R +0.36 (v3b na, v4 +0.36); trades n7 R -0.01; UB +0.32; +0.5R->SL 8%; dead 67%; CUT05 -0.04 NP4 +0.00 BE05 -0.23 TP1 -0.02; flip +0.64",
+   "note": "Too few signals to grade. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F13_FVG_PD (ds200)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n9 (v3b 0/v4 9) R -0.25 (v3b na, v4 -0.25); trades n7 R -0.47; UB +0.38; +0.5R->SL 22%; dead 50%; CUT05 -0.04 NP4 -0.07 BE05 +0.21 TP1 +0.08; flip -0.32",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F13_RAID_PD (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n36 (v3b 0/v4 36) R -0.05 (v3b na, v4 -0.05); trades n8 R -0.97; UB +0.34; +0.5R->SL 19%; dead 47%; CUT05 +0.04 NP4 -0.19 BE05 -0.08 TP1 -0.18; flip +0.13",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F14_SMT (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n112 (v3b 0/v4 112) R -0.14 (v3b na, v4 -0.14); trades n12 R -0.28; UB +0.22; +0.5R->SL 7%; dead 60%; CUT05 -0.12 NP4 -0.04 BE05 -0.12 TP1 +0.01; flip +0.06",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F15_OPEN0000 (ds200)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n12 (v3b 0/v4 12) R -0.77 (v3b na, v4 -0.77); trades n1 R -1.34; UB +0.27; +0.5R->SL 8%; dead 60%; CUT05 +0.19 NP4 +0.10 BE05 +0.10 TP1 -0.01; flip -0.33",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F15_ORB (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n12 (v3b 0/v4 12) R +1.09 (v3b na, v4 +1.09); trades n2 R +4.12; UB +0.15; +0.5R->SL 0%; dead 67%; CUT05 +0.02 NP4 +0.00 BE05 -0.78 TP1 -0.85; flip +0.90",
+   "note": "Too few signals to grade. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F16_FIB382 (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only) / hopeless base",
+   "numbers": "sig n20 (v3b 0/v4 20) R -0.42 (v3b na, v4 -0.42); trades n6 R -1.22; UB +0.40; +0.5R->SL 20%; dead 42%; CUT05 +0.06 NP4 +0.01 BE05 +0.24 TP1 +0.17; flip -0.17",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F16_FIB500 (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n13 (v3b 0/v4 13) R +0.29 (v3b na, v4 +0.29); trades n6 R +0.20; UB +0.20; +0.5R->SL 8%; dead 67%; CUT05 -0.38 NP4 -0.26 BE05 -0.20 TP1 -0.03; flip +0.57",
+   "note": "Too few signals to grade. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F16_FIB618 (ds200)",
+   "timeframe": "15m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n14 (v3b 0/v4 14) R -0.30 (v3b na, v4 -0.30); trades n7 R -0.32; UB +0.15; +0.5R->SL 0%; dead 62%; CUT05 -0.04 NP4 -0.04 BE05 -0.15 TP1 -0.02; flip -0.16",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F16_FIB764 (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n11 (v3b 0/v4 11) R -0.19 (v3b na, v4 -0.19); trades n6 R -0.26; UB +0.31; +0.5R->SL 9%; dead 80%; CUT05 +0.23 NP4 -0.10 BE05 -0.02 TP1 -0.04; flip -0.01",
+   "note": "Too few signals to grade. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F17_Z (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n50 (v3b 0/v4 50) R -0.21 (v3b na, v4 -0.21); trades n8 R -0.11; UB +0.25; +0.5R->SL 12%; dead 36%; CUT05 -0.03 NP4 +0.06 BE05 -0.07 TP1 -0.07; flip -0.26",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F17_Z_HL (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n47 (v3b 0/v4 47) R -0.15 (v3b na, v4 -0.15); trades n7 R +0.03; UB +0.25; +0.5R->SL 13%; dead 36%; CUT05 -0.06 NP4 +0.06 BE05 -0.07 TP1 -0.07; flip -0.20",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F1_MOM_DIV (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n25 (v3b 0/v4 25) R +0.19 (v3b na, v4 +0.19); trades n10 R -0.08; UB +0.21; +0.5R->SL 12%; dead 43%; CUT05 -0.17 NP4 -0.10 BE05 -0.06 TP1 -0.04; flip +0.37",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F1_PVT_DIV (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n15 (v3b 0/v4 15) R +0.17 (v3b na, v4 +0.17); trades n5 R -0.82; UB +0.47; +0.5R->SL 27%; dead 44%; CUT05 +0.21 NP4 +0.07 BE05 -0.46 TP1 -0.60; flip -0.03",
+   "note": "Exit rules gained in every run it has (CUT05(+0.21) NP4(+0.07)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F1_RSI_DIV (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n18 (v3b 0/v4 18) R +0.45 (v3b na, v4 +0.45); trades n6 R +0.36; UB +0.30; +0.5R->SL 17%; dead 50%; CUT05 -0.15 NP4 -0.08 BE05 -0.46 TP1 -0.40; flip +0.35",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F2_DEMARK (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n39 (v3b 0/v4 39) R -0.03 (v3b na, v4 -0.03); trades n5 R -0.20; UB +0.25; +0.5R->SL 18%; dead 14%; CUT05 +0.01 NP4 +0.03 BE05 +0.08 TP1 +0.20; flip +0.19",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F3_BOS (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n29 (v3b 0/v4 29) R +0.02 (v3b na, v4 +0.02); trades n6 R -0.41; UB +0.37; +0.5R->SL 17%; dead 53%; CUT05 -0.03 NP4 +0.12 BE05 -0.17 TP1 -0.25; flip +0.07",
+   "note": "Exit rules gained in every run it has (NP4(+0.12)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F3_BOS_ZONE (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n12 (v3b 0/v4 12) R -0.13 (v3b na, v4 -0.13); trades n4 R -0.69; UB +0.57; +0.5R->SL 25%; dead 67%; CUT05 -0.46 NP4 +0.21 BE05 -0.45 TP1 -0.59; flip -0.17",
+   "note": "Too few signals to grade. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F3_HHHL (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n46 (v3b 0/v4 46) R +0.11 (v3b na, v4 +0.11); trades n6 R -1.20; UB +0.37; +0.5R->SL 22%; dead 40%; CUT05 +0.11 NP4 -0.02 BE05 -0.19 TP1 -0.30; flip +0.31",
+   "note": "Exit rules gained in every run it has (CUT05(+0.11)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F4_FAN (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n32 (v3b 0/v4 32) R -0.00 (v3b na, v4 -0.00); trades n8 R +0.82; UB +0.36; +0.5R->SL 19%; dead 35%; CUT05 +0.13 NP4 +0.02 BE05 -0.25 TP1 -0.31; flip +0.08",
+   "note": "Exit rules gained in every run it has (CUT05(+0.13) NP8(+0.07)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F4_PULL (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only) / hopeless base",
+   "numbers": "sig n52 (v3b 0/v4 52) R -0.59 (v3b na, v4 -0.59); trades n9 R -1.21; UB +0.54; +0.5R->SL 31%; dead 41%; CUT05 +0.26 NP4 +0.11 BE05 +0.20 TP1 +0.05; flip -0.36",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F5_BOX (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n10 (v3b 0/v4 10) R +0.08 (v3b na, v4 +0.08); trades n6 R -0.18; UB +0.16; +0.5R->SL 0%; dead 75%; CUT05 +0.20 NP4 -0.09 BE05 -0.26 TP1 -0.12; flip +0.26",
+   "note": "Too few signals to grade. v4 only (no OOS run). Identical to F5_BOX_HTF@15m."
+  },
+  {
+   "strategy": "F5_BOX_HTF (ds200)",
+   "timeframe": "15m",
+   "grade": "N",
+   "numbers": "sig n10 (v3b 0/v4 10) R +0.08 (v3b na, v4 +0.08); trades n6 R -0.18; UB +0.16; +0.5R->SL 0%; dead 75%; CUT05 +0.20 NP4 -0.09 BE05 -0.26 TP1 -0.12; flip +0.26",
+   "note": "Too few signals to grade. v4 only (no OOS run). Identical to F5_BOX@15m."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n95 (v3b 0/v4 95) R +0.03 (v3b na, v4 +0.03); trades n10 R +0.49; UB +0.26; +0.5R->SL 12%; dead 51%; CUT05 -0.18 NP4 -0.06 BE05 -0.14 TP1 -0.16; flip +0.13",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F6_VWAP_FAIL (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n32 (v3b 0/v4 32) R +0.18 (v3b na, v4 +0.18); trades n10 R -0.03; UB +0.34; +0.5R->SL 16%; dead 50%; CUT05 +0.01 NP4 -0.02 BE05 -0.18 TP1 -0.29; flip +0.24",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F7_RF_ONLY (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only)",
+   "numbers": "sig n28 (v3b 0/v4 28) R -0.06 (v3b na, v4 -0.06); trades n5 R -0.55; UB +0.34; +0.5R->SL 21%; dead 33%; CUT05 -0.03 NP4 +0.09 BE05 +0.10 TP1 +0.13; flip +0.21",
+   "note": "Exit rules gained in every run it has (NP4(+0.09) BE05(+0.10)); per-cell gains do not replicate in general and track bad entries: shadow-test as code, not a reason for an AI. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F7_RF_TRIPLE (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n91 (v3b 0/v4 91) R +0.00 (v3b na, v4 +0.00); trades n7 R -0.50; UB +0.40; +0.5R->SL 25%; dead 33%; CUT05 -0.01 NP4 +0.01 BE05 +0.04 TP1 -0.06; flip +0.27",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F8_VWICK (ds200)",
+   "timeframe": "15m",
+   "grade": "H1 (v4 only) / hopeless base",
+   "numbers": "sig n15 (v3b 0/v4 15) R -0.32 (v3b na, v4 -0.32); trades n5 R -0.83; UB +0.39; +0.5R->SL 20%; dead 50%; CUT05 +0.18 NP4 +0.07 BE05 +0.25 TP1 +0.02; flip -0.11",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F9_BREAKER (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n28 (v3b 0/v4 28) R +0.06 (v3b na, v4 +0.06); trades n8 R -0.60; UB +0.32; +0.5R->SL 11%; dead 77%; CUT05 -0.36 NP4 -0.38 BE05 -0.30 TP1 -0.23; flip +0.19",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F9_FVG (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n39 (v3b 0/v4 39) R -0.12 (v3b na, v4 -0.12); trades n7 R -0.19; UB +0.27; +0.5R->SL 8%; dead 65%; CUT05 -0.06 NP4 -0.04 BE05 -0.03 TP1 -0.11; flip +0.01",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F9_IFVG (ds200)",
+   "timeframe": "15m",
+   "grade": "L",
+   "numbers": "sig n26 (v3b 0/v4 26) R +0.06 (v3b na, v4 +0.06); trades n10 R -0.31; UB +0.18; +0.5R->SL 8%; dead 50%; CUT05 -0.22 NP4 -0.08 BE05 -0.05 TP1 +0.01; flip +0.36",
+   "note": "Little exit room; any AI value would have to come from entries/skips. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "F9_OB (ds200)",
+   "timeframe": "15m",
+   "grade": "H2",
+   "numbers": "sig n34 (v3b 0/v4 34) R -0.15 (v3b na, v4 -0.15); trades n6 R -0.58; UB +0.33; +0.5R->SL 15%; dead 47%; CUT05 +0.03 NP4 -0.23 BE05 -0.12 TP1 -0.06; flip +0.08",
+   "note": "Exit room on paper only; no pre-declared rule captured it in both runs. v4 only (no OOS run)."
+  },
+  {
+   "strategy": "DOGE (strategy)",
+   "timeframe": "30m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n4 (v3b 2/v4 2) R -0.89 (v3b -0.65, v4 -1.13); trades n9 R -0.98; UB +0.39; +0.5R->SL 0%; dead 100%; CUT05 +0.38 NP4 +0.11 BE05 +0.00 TP1 +0.00; flip -0.74",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N01_ST_EMA (strategy)",
+   "timeframe": "30m",
+   "grade": "L / hopeless base",
+   "numbers": "sig n23 (v3b 10/v4 13) R -0.34 (v3b -0.61, v4 -0.13); trades n10 R -0.55; UB +0.20; +0.5R->SL 13%; dead 23%; CUT05 +0.16 NP4 +0.06 BE05 +0.14 TP1 -0.03; flip -0.14",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N02_ST_KST (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n16 (v3b 2/v4 14) R +0.01 (v3b -0.32, v4 +0.06); trades n13 R -0.24; UB +0.13; +0.5R->SL 6%; dead 20%; CUT05 +0.01 NP4 +0.02 BE05 +0.05 TP1 -0.02; flip +0.09",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N04_ST_KLINGER (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n51 (v3b 21/v4 30) R -0.23 (v3b -0.30, v4 -0.17); trades n23 R -0.13; UB +0.09; +0.5R->SL 0%; dead 52%; CUT05 +0.09 NP4 +0.07 BE05 -0.05 TP1 +0.01; flip -0.02",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N07_ICHI_CMO (strategy)",
+   "timeframe": "30m",
+   "grade": "N",
+   "numbers": "sig n9 (v3b 4/v4 5) R +0.09 (v3b -0.35, v4 +0.45); trades n8 R +0.67; UB +0.21; +0.5R->SL 11%; dead 33%; CUT05 +0.01 NP4 +0.06 BE05 +0.08 TP1 -0.12; flip +0.19",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON (strategy)",
+   "timeframe": "30m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n3 (v3b 2/v4 1) R -0.67 (v3b -0.39, v4 -1.22); trades n10 R -0.40; UB +0.18; +0.5R->SL 0%; dead 50%; CUT05 +0.33 NP4 -0.22 BE05 +0.00 TP1 +0.00; flip -0.94",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N10_HA_PSAR (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n26 (v3b 15/v4 11) R -0.07 (v3b -0.02, v4 -0.13); trades n16 R +0.15; UB +0.10; +0.5R->SL 4%; dead 20%; CUT05 -0.08 NP4 +0.02 BE05 +0.01 TP1 -0.03; flip -0.00",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N12_ICHI_AO (strategy)",
+   "timeframe": "30m",
+   "grade": "N / hopeless base",
+   "numbers": "sig n12 (v3b 2/v4 10) R -0.36 (v3b -0.24, v4 -0.38); trades n11 R -0.35; UB +0.40; +0.5R->SL 17%; dead 67%; CUT05 -0.05 NP4 +0.02 BE05 +0.20 TP1 +0.01; flip -0.34",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N13_3OUTSIDE (strategy)",
+   "timeframe": "30m",
+   "grade": "N",
+   "numbers": "sig n9 (v3b 3/v4 6) R +0.06 (v3b -0.17, v4 +0.17); trades n10 R -0.03; UB +0.06; +0.5R->SL 0%; dead 50%; CUT05 +0.11 NP4 +0.16 BE05 +0.00 TP1 -0.12; flip +0.13",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N16_BBRSI (strategy)",
+   "timeframe": "30m",
+   "grade": "N",
+   "numbers": "sig n12 (v3b 6/v4 6) R -0.23 (v3b -0.18, v4 -0.28); trades n9 R -0.01; UB +0.14; +0.5R->SL 8%; dead 33%; CUT05 +0.13 NP4 +0.00 BE05 +0.10 TP1 +0.00; flip -0.02",
+   "note": "Too few signals to grade."
+  },
+  {
+   "strategy": "N17_KC_RSI (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n62 (v3b 5/v4 57) R +0.03 (v3b +0.44, v4 -0.01); trades n15 R -0.33; UB +0.02; +0.5R->SL 0%; dead 33%; CUT05 +0.03 NP4 -0.08 BE05 -0.00 TP1 +0.00; flip -0.35",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N18_VWMA_MACD (strategy)",
+   "timeframe": "30m",
+   "grade": "H1 / hopeless base",
+   "numbers": "sig n43 (v3b 13/v4 30) R -0.75 (v3b -0.60, v4 -0.82); trades n22 R -0.25; UB +0.34; +0.5R->SL 19%; dead 31%; CUT05 +0.27 NP4 +0.28 BE05 +0.22 TP1 -0.01; flip -0.53",
+   "note": "Losing entries, no side-flip edge: exits could only trim losses; not an AI candidate on this evidence."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n43 (v3b 7/v4 36) R +0.25 (v3b +0.10, v4 +0.28); trades n13 R -0.01; UB +0.14; +0.5R->SL 5%; dead 67%; CUT05 -0.08 NP4 -0.09 BE05 -0.13 TP1 -0.12; flip +0.36",
+   "note": "Little exit room; any AI value would have to come from entries/skips. Base R >= 0 in both v3b and v4 (rare; small n)."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n47 (v3b 19/v4 28) R -0.12 (v3b -0.30, v4 +0.00); trades n21 R -0.25; UB +0.12; +0.5R->SL 6%; dead 29%; CUT05 +0.01 NP4 +0.10 BE05 +0.01 TP1 +0.01; flip +0.02",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N23_HA_ST (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n67 (v3b 15/v4 52) R -0.21 (v3b -0.02, v4 -0.27); trades n24 R -0.09; UB +0.17; +0.5R->SL 4%; dead 45%; CUT05 +0.08 NP4 +0.01 BE05 +0.02 TP1 -0.02; flip -0.03",
+   "note": "Little exit room; any AI value would have to come from entries/skips."
+  },
+  {
+   "strategy": "N24_DMI (strategy)",
+   "timeframe": "30m",
+   "grade": "L",
+   "numbers": "sig n34 (v3b 13/v4 21) R +0.05 (v3b +0.08, v4 +0.04); trades n19 R +0.10; UB +0.10; +0.5R->SL 3%; dead 44%; CUT05 -0.05 NP4 -0.03 BE05 -0.04 TP1 +0.02; flip +0.29",
+   "note": "Little exit room; any AI value would have to come from entries/skips. Base R >= 0 in both v3b and v4 (rare; small n)."
+  }
+ ],
+ "files": [
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/PREREG.md",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/rules_replay.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/rules_stats.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/headroom.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/state_exit.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/disposition.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/switch_sim.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/switch_stats.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/skipped_vs_held.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/events.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/late_lev.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/lev_pairs.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/ladder_geometry.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/agreement.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/first_rung.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/rank_cells.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/gen_notes.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/rules_signals.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/rules_stats.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/rules_cells.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/rule_tradeoff.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/giveback_kind_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/giveback_cells.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/giveback_first_rung.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/time_to_mfe_stop.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/exit_now_by_state.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/disposition.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/switch_accounts.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/switch_summary.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/skipped_vs_held.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/skipped_vs_held_detail.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/events_macro.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/events_bighours.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/events_bighours_list.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/events_bighour_hold_vs_exit.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/late_lev_signals.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/late_lev_summary.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/lev_pairs.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/ladder_geometry.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/trades_per_account_day.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/agreement.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/agreement_leaky.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/headroom_rank.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/headroom_stability.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/ai_upside/out/strategy_notes.json"
+ ]
+}

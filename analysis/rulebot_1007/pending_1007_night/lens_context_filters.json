@@ -1,0 +1,425 @@
+{
+ "findings": [
+  {
+   "id": "CF1",
+   "claim": "No chart context replicates across runs: when contexts are found in one run and tested in another, the result is no better than chance. In the live data the strategies' chart context carries no structure stable enough for an AI filter to learn.",
+   "evidence": "Omnibus check, same 63 pre-registered bucket contrasts estimated in v3a and in v4 (core 36). Correlation of the effects across contrasts: 15m +0.092 over 58 contrasts (circular-shift null p 0.514, null 5-95% -0.356..0.462); 30m -0.091 over 49 (p 0.683). Sign agreement 0.586 and 0.592, against null means 0.531 and 0.503 (p 0.32, 0.19). Source: out/omnibus_corr.csv (scan.py). Discovery to test, primary 15m+30m, 2h time blocks, t with df = sum(G-1). Direction A (v3a to v3b+v4): 115 testable, 28 raw p<0.05 (about 6 expected by chance), 15 with BH q<0.10. Out of sample: 3 one-sided p<0.05, 0 with BH q<0.05, 0 replicated, same sign 18/28. Direction B (v4 to v3a+v3b): 108 testable, 7 p<0.05 (about 5 expected), 0 with q<0.10, 1 replicated. Source: out/scan_directional.csv. Winsorized R, win rate and gross R give the same picture: correlation of all effects across runs -0.12..+0.14 (out/robust_directional.csv).",
+   "confidence": "high",
+   "implication": "The live paper data gives no basis for an AI 'chart judgement' layer to add the edge the strategies lack. AI traders should not be chosen or justified on the premise that context-aware entries rescue a strategy."
+  },
+  {
+   "id": "CF2",
+   "claim": "Power is the binding constraint. A single pre-registered bucket contrast can only detect about 0.25-0.6 R, while the real context effects (5-year) are 0.01-0.06 R. A shift of +/-0.4 R is invisible in this sample.",
+   "evidence": "Median MDE80 (two-sided 5%, 2h-block SE). Core 36, all runs pooled (4.57 days): 15m 0.280 R, 30m 0.240 R. v4 alone: 0.627 R and 0.471 R. ds200 v4: 0.483 R and 0.417 R. After correcting for about 60 contrasts: 0.41 R and 0.35 R. Days of all-strategy signals needed for one pre-specified 0.10 R test: about 36 (15m) and 26 (30m). For the 5-year effect size of about 0.04 R: about 224 and 165 days. Source: out/power_by_scope.csv (analysis2.py). Time clustering is severe: v4 15m design effect 7.4 at 1h blocks, 12.6 at 2h, 19.4 at 4h; v3a 15m 3.7 / 5.7 / 9.1 (out/design_effect_by_block.csv). The known-real cost-channel effect (wide minus tight stop, about +0.15 R) came out at only p 0.10 (15m) and 0.068 (30m) live (out/hypotheses.csv H7).",
+   "confidence": "high",
+   "implication": "Paper results before 12/31 cannot validate any context filter, AI-learned or rule-based. Filters have to be designed and validated on the 5-year data. Live paper or shadow can only catch gross breakage. Weekly custom-value tuning of entry filters on a week of shadow data will fit noise."
+  },
+  {
+   "id": "CF3",
+   "claim": "On 5 years of every-signal data (1.65M signals) the live candidate contexts are real but tiny: a few hundredths of R. The exception is the cost channel (stop width).",
+   "evidence": "fiveyear_tests2.py, strata strategy x year x side, KST-day clusters. Values are 15m / 30m in R. Europe session -0.039 / -0.021 (z -11.0 / -5.2). ADX>=30 +0.028 / +0.021. Middle of the HTF box -0.030 / -0.013. EMA 'with' +0.024 / +0.008. DI with +0.048 / +0.051. Box far edge +0.057 / +0.044. Range far edge +0.041 / +0.035. Consensus>=4 +0.006 / +0.014. Wide stop +0.163 / +0.102 (z 35 / 18). Signs hold in 4-6 of 6 years (out5y/fiveyear_contrasts.csv). Family hypotheses: trend family in high vs low ER +0.044 / +0.024. Trend family DI with +0.055 / +0.056 (6/6 years). Revert family in low ER -0.005 / -0.003, so no effect. Revert at the 'cheap edge' comes out -0.244 at 15m, the opposite of the prediction (out5y/fiveyear_hypotheses.csv). Live point estimates of the same contrasts were roughly 10x larger: europe 15m -0.415, ADX 15m +0.234 (out/scan_full.csv scope all).",
+   "confidence": "high",
+   "implication": "An AI that perfectly learned these contexts would gain about 0.03-0.06 R per kept trade, well below the 0.16-0.22 R median round trip at 15m/30m. Context is a tie-breaker at best, never an edge source."
+  },
+  {
+   "id": "CF4",
+   "claim": "A learned context filter does not make any strategy break even. Trained on 5-year 2021-08..2024-06 and tested on 2024-07..2026-09, the top third by predicted R improves by only +0.05 R (15m) and +0.03 R (30m) and stays clearly negative. Every one of the 64 core strategy x tf cells keeps a negative filtered mean.",
+   "evidence": "Ridge on 11 bar-computable context features (out5y/fiveyear_filters.csv, fiveyear_tests.py C11). CF uplift 15m +0.051 R (day-cluster CI 0.039..0.064): kept mean -0.122 vs all -0.173. 30m +0.032 (0.019..0.046): kept -0.087 vs -0.119. The live-trained filter applied to 5 years gives +0.029..+0.059 R per year at 15m (2022-2026) and +0.014..+0.043 at 30m, with kept means -0.08..-0.17 (C10). Per strategy (out5y/fiveyear_filter_by_strategy.csv): best filtered cells are 30m N07_ICHI_CMO -0.032 +/- 0.027, 30m S5_DONCHIAN_MFI -0.041 +/- 0.051, 15m N19_FIB_CHOP -0.083 +/- 0.026. All 64 are below 0. The 15m IS model is dominated by stop width (coefficients: tight -0.17, wide +0.14) (out5y/fiveyear_IS_coefs_15m.csv).",
+   "confidence": "high",
+   "implication": "Choose AI-trader strategies on their own direction or exit edge, not on filterability. With these features no 15m/30m core strategy becomes a 'not losing' candidate through context selection."
+  },
+  {
+   "id": "CF5",
+   "claim": "The largest live 'context' effect is market direction, and it flips between runs. A filter that learns it (with side, coin or session as inputs) loses money out of sample.",
+   "evidence": "Long minus short at 15m (out/scan_full.csv): v3a +0.694 R (p<0.001); v3b -0.587; v4 core -0.902; v4 ds200 -0.984. At 30m: +0.661, -0.666, -0.599, -0.693. Ridge on all features trained on v3a: in-sample top-third uplift +0.42 R. Out of sample on v3b+v4 core -0.371 R (CI -0.611..-0.144), on v4 ds200 -0.480 (CI -0.749..-0.199) (out/learned_filter.csv). At 15m the 'momentum alignment' contexts are mostly direction in disguise. After stratifying by side: DI-with falls from +0.273 to +0.032, box far edge from +0.325 to +0.028, range far edge from +0.244 to +0.026, EMA-with from +0.305 to +0.166 (out/side_stratified.csv).",
+   "confidence": "high",
+   "implication": "A human-like AI that adapts to the last days' winners (longs good, shorts good) will chase the direction of the week. The prompt and memory design should stop the AI from carrying recent-direction lessons into entry filtering and leverage."
+  },
+  {
+   "id": "CF6",
+   "claim": "A chart-only learned filter (no side, coin or session) transferred weakly across runs: about +0.11..+0.18 R. The bootstrap CIs include 0, and the transfer comes entirely from momentum-alignment features worth only about +0.04 R over 5 years.",
+   "evidence": "out/learned_filter.csv and out/learned_filter_variants.csv (learned_filter.py, learned_filter2.py). Top third, v3a to v3b+v4: +0.166 R (CI -0.142..0.476; circular-shift null p 0.005; kept mean +0.028 vs -0.138). v3a to v4 ds200: +0.179 (CI -0.254..0.612; p 0.015; kept +0.091 vs -0.088). v4 to v3a+v3b: +0.113 (CI -0.017..0.234; p 0.045; kept -0.194 vs -0.307). Without the 6 momentum features: +0.061, +0.086, +0.002 (null p 0.27, 0.15, 0.37). Stop width alone: +0.009, -0.062, -0.060.",
+   "confidence": "medium",
+   "implication": "Some transferable structure exists (trade with the short-term move, avoid chasing extended moves), but its true size is about 0.04 R. A 'go with the move' bias is a reasonable soft preference for an AI. It cannot carry a strategy."
+  },
+  {
+   "id": "CF7",
+   "claim": "Only one contrast passed the strict live out-of-sample test: Europe-session signals (16-21 KST) at 15m. It rests on 5 evenings, and over 5 years it is real but about 10x smaller (-0.04 R).",
+   "evidence": "Direction B: v4 -0.621 R (n 121), then v3a+v3b -0.322 (n 466), one-sided p 0.002, 4h-block p 0.006, BH q 0.011 (out/scan_directional.csv). The pooled per-run 15m values -0.298 / -0.417 / -0.621 / ds200 -0.405 are all negative. 30m: -0.243 / -0.116 / -0.181 / -0.183 (out/scan_full.csv). Per-evening core 15m differences: 10-02 +0.355 (n 40), 10-03 -0.403, 10-04 -0.229, 10-05 -0.371, 10-06 -0.355 (out/session_episodes.csv). Over 5 years: -0.039 R at 15m and -0.021 at 30m, 6/6 and 5/6 years negative. In ROE only -0.003 (out5y/fiveyear_within_strategy.csv).",
+   "confidence": "medium",
+   "implication": "Use it at most as a mild tie-breaker (deprioritize 15m entries 16-21 KST), never as a hard rule or a reason to pick strategies. It also shows that live effect sizes are inflated about 10x even when the sign is right."
+  },
+  {
+   "id": "CF8",
+   "claim": "The owners' entry-quality tier, which already drives 50x 'best' leverage, shows no outcome difference live, in line with the 5-year Study B (0 of 410).",
+   "evidence": "Quality 'best' minus rest, core 36 all runs: 15m +0.008 R (n 532, p 0.92), 30m +0.070 (n 221, p 0.33). Per run at 15m: -0.018, -0.015, +0.064. 'base' minus rest: 15m -0.069 (p 0.48), 30m -0.112 (p 0.15) (out/scan_full.csv). Within side, 15m best -0.017 (out/side_stratified.csv). Prior: research/entry_study/RESULTS_ENTRY.md, B: 0 of 410 strength tests passed.",
+   "confidence": "high",
+   "implication": "Leverage scaled by 'confidence' or quality (20-50x) has no evidential basis from entry features. Leverage tiers should not follow AI or quality confidence, because higher leverage on non-better signals only adds variance and liquidation risk."
+  },
+  {
+   "id": "CF9",
+   "claim": "Regime-conditional rules ('trend strategies in trend regimes, mean reversion in boxes') cannot even be tested live: trend regimes were nearly absent. Where testable, live and 5-year results do not support them beyond about 0.04 R.",
+   "evidence": "Regime counts (peek_dist.py): v4 HTF regime at 15m: chop 1,324, box 609, unknown 117, trend 0. Own-tf 15m: trend_down 151, trend_up 0. v3a 15m: 49 trend signals. Live hypotheses H1-H6 (out/hypotheses.csv): smallest BH q 0.29. H6 (revert better in box than chop) went the wrong way: -0.454 R at 15m core (n_box 48). ER contrasts are null live: 15m high +0.012 (p 0.90), low -0.015. DiD 'trend family more ER-sensitive than revert': 15m -0.25 (SE 0.24), 30m +0.31 (SE 0.24) (out/did_er_family.csv). 5-year: H1 +0.044 / +0.024 R, H2 about 0 (out5y/fiveyear_hypotheses.csv). Repo prior docs/regime5y.md: regime switch 0 of 92 cells BH; mean ROE by regime -3.4% to -3.9%.",
+   "confidence": "high",
+   "implication": "Do not give AI traders a 'regime gate' as their edge. The current quiet chop market would leave trend strategies idle and not profitable."
+  },
+  {
+   "id": "CF10",
+   "claim": "The robust 'context' is mechanical cost: signals whose 2 ATR stop is wide relative to the round trip do better in R. In money (ROE) the gain is small.",
+   "evidence": "5-year within strategy, wide minus rest: 15m +0.163 R (z 35), 30m +0.102 R (6/6 years). In ROE only +0.003 / +0.006 (out5y/fiveyear_within_strategy.csv). 5-year H7, wide minus tight: +0.264 / +0.144 R (out5y/fiveyear_hypotheses.csv). Live: 15m +0.180 (p1s 0.10), 30m +0.138 (p1s 0.068), v4 15m alone -0.237 (out/hypotheses.csv). Live 15m median 2 ATR stop is 0.59% of price (peek_dist.py). The established median round trip is 0.22 R at 15m vs 0.16 R at 30m.",
+   "confidence": "high",
+   "implication": "The defensible custom value is cost-aware: prefer 30m (and 1h) over 15m, and skip or downsize entries whose stop is under about 0.5% of price. Because ROE gains are tiny at fixed margin and leverage, this reduces drag rather than creating profit."
+  },
+  {
+   "id": "CF11",
+   "claim": "Per-strategy context tests: 25 were testable, 1 survived BH (N18_VWMA_MACD 15m, low-ER signals much worse, consistent across 3 runs). Over 5 years the same contrast is +0.03 R, about 35x smaller.",
+   "evidence": "out/per_strategy_live.csv (per_strategy.py): 25 testable (at least 10 per side), 2 raw p<0.05, 1 with BH q<0.05. N18 15m high minus low ER: +1.068 R (q 0.00005). Low-ER mean R per run: -1.29 (n 7), -0.39 (14), -0.82 (21); high-ER: -0.28 (88), +0.47 (6), +0.50 (16). Low-ER losers come in bursts (6 BTC/ETH longs within one hour on 10-06). Over 5 years N18 15m: +0.029 R (z 2.0), 30m -0.010 (out5y/fiveyear_hypotheses.csv). The 5-year trend family as a whole: +0.044 R at 15m.",
+   "confidence": "medium",
+   "implication": "Strategy-specific 'custom' context rules found on days of live data are almost always noise or hugely inflated. A rule like 'skip low-ER signals' for trend strategies has to be sized from 5-year data (about 0.03-0.05 R), not from live data."
+  },
+  {
+   "id": "CF12",
+   "claim": "No context changes the strategies' direction skill. The side-flip decomposition finds nothing after BH; where a context matters, it matters for both directions (timing or volatility).",
+   "evidence": "out/sideflip_by_context.csv (analysis2.py, v3b+v4 replay, 216 testable bucket contrasts): R, any-direction mean (R+flip)/2 and direction skill (R-flip)/2 each have 0 with BH q<0.10. Raw p<0.05 counts are 16, 19 and 21 against about 11 expected. Example, middle of the HTF box at 15m core: d_R -0.230, any-direction -0.242 (p 0.002), direction skill +0.012 (p 0.96).",
+   "confidence": "medium",
+   "implication": "An AI cannot plausibly know in which contexts the strategy's direction call is right. Any contextual benefit is about when to trade at all, which is mostly the cost and volatility channel."
+  },
+  {
+   "id": "CF13",
+   "claim": "The support/resistance context is nearly constant, so it cannot filter. Consensus or conflict among strategies is noise.",
+   "evidence": "Share with level_before_lock=1: 85-97%. Share with support_before_stop=1: 96-100%. Median room to the next level 0.22-0.39 ATR (out/signals_bucketed.csv, per run and tf). Repo prior: research/entry_study/RESULTS_ENTRY.md, A: 2 of 290 S/R candidates, both market-wide. Consensus >=4 at 30m: live +0.438 R within side (z 2.4, out/side_stratified.csv) vs 5-year +0.014 (out5y/fiveyear_within_strategy.csv). At 15m: +0.173 live vs +0.006 over 5 years.",
+   "confidence": "high",
+   "implication": "Give the AI no weight for 'resistance just ahead' or 'several strategies agree'. Neither is evidence for an entry, and these are exactly the stories a human-like LLM finds persuasive."
+  },
+  {
+   "id": "CF14",
+   "claim": "Discovery-then-test is not much helped by switching the strategy set either. Contexts found on core 36 (v3a) replicated on DeepSeek (v4) for 1 of 26 contrasts, and that one fails on core 36 in v3b+v4.",
+   "evidence": "out/scan_directional.csv, direction T: 115 discovery tests, 28 carried, 26 testable, 2 one-sided p<0.05, 1 replicated: 15m middle of the HTF box, v3a -0.335 then ds200 v4 -0.575 (q 0.016, 4h p 0.005). The same contrast on core 36 in v3b+v4: -0.252 (p1s 0.144), and in v3b alone +0.516 (out/scan_full.csv). Over 5 years: -0.030 R (15m) and -0.013 (30m) within strategy.",
+   "confidence": "medium",
+   "implication": "DeepSeek accounts cannot be graded on context either: 1.5 days, no cross-run replication, no 5-year context data. Treat them as untested."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "15m",
+   "grade": "C+ (5y filtered <0)",
+   "numbers": "live n 95 (v3a 56 / v3b 5 / v4 34); mean R -0.251 / -0.142 / +0.505; pooled +0.025 (SE 0.238); side-flip +0.390. 5y CF n 14,720: mean -0.195, filtered top third -0.142 +/- 0.016, uplift +0.053",
+   "note": "The best live 15m core cell, but the positive pool is driven by v4 (34 signals, about 1.5 days) and the CI is about +/-0.47 R. No context rescues it over 5 years. Not an AI candidate on context grounds."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 109; R -0.109 / +0.073 / +0.063; pooled -0.038 (SE 0.113); side-flip +0.073. 5y CF filtered -0.136 +/- 0.012 (uplift +0.041)",
+   "note": "Near zero live, consistent with cost-sized losses. No context effect testable at strategy level."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 40; R +0.150 / -0.269 / -0.299; pooled -0.069 (SE 0.181). 5y filtered -0.092 +/- 0.020 (uplift +0.071)",
+   "note": "Too few live signals; among the less bad cells after 5-year filtering, still negative."
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 265; R -0.247 / -0.518 / +0.046; pooled -0.177 (SE 0.096); side-flip +0.079. 5y filtered -0.119 +/- 0.009; 5y ER high-low +0.064 (z 5.6)",
+   "note": "Trend strategy with a small 5-year ER effect (+0.06 R). The filter does not reach break-even."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 171; R -0.154 / -0.214 / -0.259; pooled -0.194 (SE 0.094); side-flip -0.163. 5y filtered -0.127 +/- 0.011",
+   "note": "Negative in all three runs and its direction is worse than a coin flip at the same moments."
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 236; R -0.226 / -0.703 / +0.041; pooled -0.198 (SE 0.120); side-flip -0.052. 5y filtered -0.123 +/- 0.010; 5y ER high-low +0.054",
+   "note": "The live account profits are not supported at the every-signal level. Context lifts it only about 0.06 R."
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 41; R +0.122 / -0.718 / -0.496; pooled -0.202 (SE 0.141); side-flip -0.364. 5y filtered -0.115 +/- 0.017",
+   "note": "Small sample, negative."
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "15m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 71; R -0.489 / -0.818 / +1.012 (n 16); pooled -0.215 (SE 0.195). 5y filtered -0.119 +/- 0.014",
+   "note": "The v4 +1.0 R comes from 16 signals in one episode, a direction-luck pattern."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 225; R -0.256 / -0.090 / -0.324; pooled -0.248 (SE 0.124). The only per-strategy BH survivor: high minus low ER +1.068 R live (low-ER n 42) vs +0.029 R over 5 years. 5y filtered -0.123 +/- 0.011",
+   "note": "A live 'skip in chop' rule looks huge but is about 0.03 R over 5 years. A textbook inflated custom value."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 96; R -0.513 / -0.180 / -0.039; pooled -0.262 (SE 0.118); side-flip +0.178. 5y filtered -0.127 +/- 0.015",
+   "note": "Negative; no context lift beyond about 0.06 R."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 210; R -0.356 / -0.688 / +0.057; pooled -0.277 (SE 0.081). 5y filtered -0.116 +/- 0.009; 5y ER high-low +0.065",
+   "note": "The live account profit in v4 is not representative of its every-signal outcome."
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 270; R -0.552 / +0.626 (n 14) / +0.037; pooled -0.283 (SE 0.122). 5y filtered -0.100 +/- 0.027 (only 3% of its signals kept)",
+   "note": "A mean-reversion strategy with very frequent signals. The filter rejects almost all of them. Negative."
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 61; pooled -0.323 (SE 0.136). 5y filtered -0.115 +/- 0.014",
+   "note": "Negative."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 127; R -0.845 / -0.198 / +0.226; pooled -0.344 (SE 0.143); side-flip +0.280. 5y filtered -0.134 +/- 0.020",
+   "note": "Positive side-flip at 15m/30m/1h live (noted in the pipeline), but every-signal R is negative. Context does not change that."
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 68; pooled -0.344 (SE 0.159). 5y filtered -0.129 +/- 0.014",
+   "note": "Negative."
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 73; R -0.426 / -0.347 / -0.424; pooled -0.410 (SE 0.132); side-flip -0.187. 5y filtered -0.110 +/- 0.016",
+   "note": "Consistently negative in every run."
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "15m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 116; R -0.670 / -0.508 / -0.274; pooled -0.529 (SE 0.109). 5y filtered -0.129 +/- 0.016",
+   "note": "The worst core 15m cell; negative in all runs."
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "30m",
+   "grade": "C+ (5y filtered <0)",
+   "numbers": "live n 42 (29 / 2 / 11); R +0.178 / -0.364 / +0.019; pooled +0.110 (SE 0.158). 5y CF mean -0.122, filtered -0.099 +/- 0.016",
+   "note": "A positive point estimate on 42 signals. The 5-year every-signal result stays negative after the best context filter."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "30m",
+   "grade": "C+ (5y filtered <0)",
+   "numbers": "live n 49; R +0.211 / +0.039 / -0.132; pooled +0.088 (SE 0.092); side-flip -0.002. 5y filtered -0.079 +/- 0.014",
+   "note": "One of the less bad 30m cells; there is no evidence of direction skill (side-flip about 0)."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "30m",
+   "grade": "C+ (5y filtered <0)",
+   "numbers": "live n 56; R -0.421 / +0.108 / +0.280; pooled +0.086 (SE 0.185); side-flip +0.359. 5y filtered -0.089 +/- 0.027",
+   "note": "Live side-flip is positive (not BH-significant in the pipeline). Context adds about 0.05 R over 5 years."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "30m",
+   "grade": "C+ (5y filtered <0)",
+   "numbers": "live n 44; pooled +0.007 (SE 0.142); side-flip +0.287. 5y filtered -0.094 +/- 0.017",
+   "note": "Break-even live on a small n; negative over 5 years."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "30m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 86; pooled -0.163 (SE 0.102). 5y filtered -0.074 +/- 0.012",
+   "note": "Negative."
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "30m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 41; pooled -0.191 (SE 0.145). 5y filtered -0.100 +/- 0.021",
+   "note": "Negative."
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "30m",
+   "grade": "C (5y filtered <0)",
+   "numbers": "live n 112; pooled -0.206 (SE 0.109). 5y filtered -0.090 +/- 0.011",
+   "note": "Negative."
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "30m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 91; R -0.318 / -0.691 / +0.021; pooled -0.244 (SE 0.099). 5y filtered -0.103 +/- 0.012",
+   "note": "Negative."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "30m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 88; pooled -0.292 (SE 0.102). 5y filtered -0.088 +/- 0.012",
+   "note": "Negative."
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "30m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 55; pooled -0.337 (SE 0.142). 5y filtered -0.144 +/- 0.024 (uplift -0.005)",
+   "note": "The filter does not help at all."
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "30m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 108; pooled -0.383 (SE 0.133); side-flip -0.350. 5y filtered -0.122 +/- 0.030",
+   "note": "Negative, and its direction is worse than a coin flip live."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "30m",
+   "grade": "D (5y filtered <0)",
+   "numbers": "live n 82; R -0.026 / -0.679 / -0.831; pooled -0.390 (SE 0.111); side-flip -0.526. 5y filtered -0.063 +/- 0.012",
+   "note": "Live is clearly negative. Over 5 years it is one of the less bad 30m cells after filtering, still below 0."
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "30m",
+   "grade": "C (live n<30; 5y filtered <0)",
+   "numbers": "5y CF n 2,537: mean -0.100, filtered -0.032 +/- 0.027 (the best of all 64 core cells), uplift +0.068",
+   "note": "Too few live signals to grade. On 5 years it is the cell closest to break-even after context filtering, so it is the only core cell where a context-filtered AI is not clearly negative. It still needs a pre-registered 5-year test before any use."
+  },
+  {
+   "strategy": "F3_HHHL (ds200)",
+   "timeframe": "15m",
+   "grade": "C+ (no 5y context data)",
+   "numbers": "v4 only, n 41; mean R +0.196 (SE 0.470); side-flip +0.315",
+   "note": "Wide uncertainty; 1.5 days; no context test possible."
+  },
+  {
+   "strategy": "F7_RF_TRIPLE (ds200)",
+   "timeframe": "15m",
+   "grade": "C+ (no 5y context data)",
+   "numbers": "v4 n 84; +0.065 (SE 0.276); side-flip +0.270",
+   "note": "Untested beyond 1.5 days."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS (ds200)",
+   "timeframe": "15m",
+   "grade": "C+ (no 5y context data)",
+   "numbers": "v4 n 85; +0.040 (SE 0.316); side-flip +0.132",
+   "note": "Untested beyond 1.5 days."
+  },
+  {
+   "strategy": "F14_SMT (ds200)",
+   "timeframe": "15m",
+   "grade": "C (no 5y context data)",
+   "numbers": "v4 n 112; -0.137 (SE 0.169)",
+   "note": "Negative point estimate."
+  },
+  {
+   "strategy": "F17_Z / F17_Z_HL (ds200)",
+   "timeframe": "15m",
+   "grade": "C (no 5y context data)",
+   "numbers": "v4 n 50 / 47; -0.207 / -0.147; side-flip -0.261 / -0.198",
+   "note": "Mean-reversion family. The revert-in-low-ER hypothesis is null over 5 years for core strategies."
+  },
+  {
+   "strategy": "F4_PULL (ds200)",
+   "timeframe": "15m",
+   "grade": "D (no 5y context data)",
+   "numbers": "v4 n 52; -0.590 (SE 0.219); side-flip -0.360",
+   "note": "Clearly negative."
+  },
+  {
+   "strategy": "F7_RF_TRIPLE (ds200)",
+   "timeframe": "30m",
+   "grade": "C+ (no 5y context data)",
+   "numbers": "v4 n 40; +0.075 (SE 0.362)",
+   "note": "Untested."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS (ds200)",
+   "timeframe": "30m",
+   "grade": "C (no 5y context data)",
+   "numbers": "v4 n 62; -0.145 (SE 0.120)",
+   "note": "Negative point estimate."
+  },
+  {
+   "strategy": "F14_SMT (ds200)",
+   "timeframe": "30m",
+   "grade": "C (no 5y context data)",
+   "numbers": "v4 n 39; -0.291 (SE 0.265)",
+   "note": "Negative point estimate."
+  }
+ ],
+ "files": [
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/build_signals.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/features.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/stats_util.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/write_prereg.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/design_icc.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/scan.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/analysis2.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/learned_filter.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/learned_filter2.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/per_strategy.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/robust_dir.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/strategy_table.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/fiveyear_ctx.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/fiveyear_tests.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/fiveyear_tests2.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/fiveyear_tests3.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/prereg.json",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/build_checks.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/signals_master.csv.gz",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/signals_bucketed.csv.gz",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/design_effect_by_block.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/scan_sample_sizes.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/scan_full.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/scan_directional.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/omnibus_corr.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/hypotheses.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/did_er_family.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/side_stratified.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/sideflip_by_context.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/power_by_scope.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/session_episodes.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/learned_filter.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/learned_filter_variants.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/learned_filter_coefs_chart.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/robust_directional.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/per_strategy_live.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out/strategy_context_grades.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_signals.csv.gz",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_contrasts.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_within_strategy.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_filters.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_filter_by_strategy.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_hypotheses.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_IS_coefs_15m.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/fiveyear_IS_coefs_30m.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/context_filters/out5y/live_filter_coefs_reduced.csv"
+ ]
+}

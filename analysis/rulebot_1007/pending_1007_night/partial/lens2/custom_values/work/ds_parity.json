@@ -1,0 +1,235 @@
+{
+ "F6_VWAP_CROSS|15m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 20801
+ },
+ "F9_FVG|15m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 6406
+ },
+ "F5_BOX|15m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 1367
+ },
+ "F6_VWAP_CROSS|15m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 20283
+ },
+ "F9_FVG|15m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 6613
+ },
+ "F5_BOX|15m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 1747
+ },
+ "F6_VWAP_CROSS|15m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 21518
+ },
+ "F9_FVG|15m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 6407
+ },
+ "F5_BOX|15m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 1645
+ },
+ "F6_VWAP_CROSS|15m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 21500
+ },
+ "F9_FVG|15m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 6206
+ },
+ "F5_BOX|15m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 1765
+ },
+ "F6_VWAP_CROSS|30m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 14333
+ },
+ "F9_FVG|30m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 3194
+ },
+ "F5_BOX|30m|BTCUSD": {
+  "mismatch": 0,
+  "signals": 684
+ },
+ "F6_VWAP_CROSS|30m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 13790
+ },
+ "F9_FVG|30m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 3281
+ },
+ "F5_BOX|30m|ETHUSD": {
+  "mismatch": 0,
+  "signals": 556
+ },
+ "F6_VWAP_CROSS|15m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 20943
+ },
+ "F9_FVG|15m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 6541
+ },
+ "F5_BOX|15m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 2430
+ },
+ "F6_VWAP_CROSS|15m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 20196
+ },
+ "F9_FVG|15m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 6908
+ },
+ "F5_BOX|15m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 2139
+ },
+ "F6_VWAP_CROSS|30m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 13618
+ },
+ "F9_FVG|30m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 3343
+ },
+ "F5_BOX|30m|SOLUSD": {
+  "mismatch": 0,
+  "signals": 730
+ },
+ "F6_VWAP_CROSS|30m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 14181
+ },
+ "F9_FVG|30m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 3005
+ },
+ "F5_BOX|30m|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 805
+ },
+ "F6_VWAP_CROSS|1h|BTCUSD": {
+  "mismatch": 0,
+  "signals": 9386
+ },
+ "F9_FVG|1h|BTCUSD": {
+  "mismatch": 0,
+  "signals": 1585
+ },
+ "F5_BOX|1h|BTCUSD": {
+  "mismatch": 0,
+  "signals": 350
+ },
+ "F6_VWAP_CROSS|1h|ETHUSD": {
+  "mismatch": 0,
+  "signals": 8928
+ },
+ "F9_FVG|1h|ETHUSD": {
+  "mismatch": 0,
+  "signals": 1752
+ },
+ "F5_BOX|1h|ETHUSD": {
+  "mismatch": 0,
+  "signals": 334
+ },
+ "F6_VWAP_CROSS|30m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 13776
+ },
+ "F9_FVG|30m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 3288
+ },
+ "F5_BOX|30m|LTCUSD": {
+  "mismatch": 0,
+  "signals": 1108
+ },
+ "F6_VWAP_CROSS|30m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 13386
+ },
+ "F9_FVG|30m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 3389
+ },
+ "F5_BOX|30m|BCHUSD": {
+  "mismatch": 0,
+  "signals": 948
+ },
+ "F6_VWAP_CROSS|1h|SOLUSD": {
+  "mismatch": 0,
+  "signals": 8804
+ },
+ "F9_FVG|1h|SOLUSD": {
+  "mismatch": 0,
+  "signals": 1664
+ },
+ "F5_BOX|1h|SOLUSD": {
+  "mismatch": 0,
+  "signals": 368
+ },
+ "F6_VWAP_CROSS|1h|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 9144
+ },
+ "F9_FVG|1h|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 1580
+ },
+ "F5_BOX|1h|DOGEUSD": {
+  "mismatch": 0,
+  "signals": 343
+ },
+ "F6_VWAP_CROSS|1h|LTCUSD": {
+  "mismatch": 0,
+  "signals": 8975
+ },
+ "F9_FVG|1h|LTCUSD": {
+  "mismatch": 0,
+  "signals": 1693
+ },
+ "F5_BOX|1h|LTCUSD": {
+  "mismatch": 0,
+  "signals": 602
+ },
+ "F6_VWAP_CROSS|1h|BCHUSD": {
+  "mismatch": 0,
+  "signals": 8763
+ },
+ "F9_FVG|1h|BCHUSD": {
+  "mismatch": 0,
+  "signals": 1772
+ },
+ "F5_BOX|1h|BCHUSD": {
+  "mismatch": 0,
+  "signals": 454
+ },
+ "_exit_check": {
+  "15m": {
+   "n": 3000,
+   "max_abs_roe_diff": 0.2556248980675686,
+   "held_equal": true
+  },
+  "30m": {
+   "n": 3000,
+   "max_abs_roe_diff": 0.22522668931836742,
+   "held_equal": true
+  },
+  "1h": {
+   "n": 3000,
+   "max_abs_roe_diff": 0.38800422428404624,
+   "held_equal": true
+  }
+ }
+}

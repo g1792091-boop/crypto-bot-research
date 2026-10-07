@@ -1,0 +1,702 @@
+{
+ "findings": [
+  {
+   "id": "F1",
+   "claim": "Over 5 years, the 36 core strategies and the 44 DeepSeek definitions have about zero gross edge on every timeframe when run through the live house exit at paper-v4 leverage. The net result is simply minus the trading cost, which is what a coin flip at the same moments would earn.",
+   "evidence": "8.1M 5-year signals (2021-08-01..2026-09-30, 6 coins), next-bar entry, 2 ATR stop, v3 ladder, 30x/20x 'normal' sizing. Core net R per trade (week-clustered t): 5m -0.307 (-40), 15m -0.172 (-32), 30m -0.125 (-27), 1h -0.094 (-19), 4h -0.051 (-3.9). Core gross R: +0.005, +0.001, -0.001, 0.000, +0.022. DS net R: 15m -0.177, 30m -0.128, 1h -0.099, 4h -0.066; DS gross -0.004/-0.004/-0.006/+0.006. Both 5-year halves (IS 2021-24, CF 2024-26) agree to within 0.01R. Parity: the tier-walk mode reproduces profiles.json mean ROE in all 175 cells (max diff 1e-8). Files: lens/fiveyear/out/fy_tf_summary.csv and fy36_parity.csv; scripts fy36_rerun.py, fyds_rerun.py, fy_compare.py.",
+   "confidence": "high",
+   "implication": "The rule signal tells the AI when to look at the chart, not which way to trade. An AI trader has to supply the whole edge itself. Choosing 'the best strategy' only chooses which timing an edge-free signal uses. Any AI trader must be judged against its own strategy's every-signal result at the same moments, not against zero."
+  },
+  {
+   "id": "F2",
+   "claim": "Cost in R depends on the stop size (timeframe x current volatility), and the market right now is unusually quiet. At today's stop sizes the 5-year expectation is worse than the 5-year average, so the break-even edge an AI must add is about +0.22R per trade at 15m, +0.16R at 30m, +0.11R at 1h and +0.04R at 4h.",
+   "evidence": "Live stop sizes (v3b+v4 replay) sit at the 2nd-4th percentile of 5-year windows for 15m/30m/1h (core 0.037/0.035/0.027; DS 0.019/0.019/0.023). The 5-year net R for signals within the live stop-size range (p10..p90): core 15m -0.223, 30m -0.160, 1h -0.109, 4h -0.040; DS -0.236/-0.169/-0.120/-0.078. Core 15m by stop-size quintile: cost R 0.335 / 0.194 / 0.147 / 0.113 / 0.077, gross R +0.004/+0.008/-0.004/+0.001/-0.002, net -0.331 at stops of 0.63% or less. Live 15m median stop is 0.63%. Files: fy_volbucket.csv, fy_tf_windows.csv, fy_tf_summary.csv (fy_nowvol_*).",
+   "confidence": "high",
+   "implication": "15m/30m-only AI entries face the largest cost hurdle, and the hurdle grows in quiet markets. Limit (maker) entries, fewer trades, or trading only when stops are wide attack the real problem. Indicator-style 'custom values' do not. Report every AI result next to the cost R of its own trades."
+  },
+  {
+   "id": "F3",
+   "claim": "The live results sit inside the 5-year distribution of windows the same length as the live runs. Live shows neither a hidden edge nor broken execution. The only exceptions have explanations: 5m in v3a was worse (explained by the quiet regime), and DeepSeek 15m in v4 was better than the quiet-regime expectation (not significant after correction).",
+   "evidence": "4,000 random contiguous 5-year windows of 0.70 d + 1.50 d (v3b+v4) or 2.61 d (v3a). Pooled per timeframe, the live replay mean R falls at these percentiles: core 15m 0.64, 30m 0.38, 1h 0.32, 4h 0.81; DS 15m 0.945, 30m 0.46, 1h 0.43, 4h 0.38. v3a: 15m 0.08, 30m 0.07, 1h 0.77, 4h 0.74, 5m 0.024 (p 0.049; 0.11 in stop-size-matched windows). In regime-matched windows, DS 15m live -0.065 against a matched median of -0.308 is at percentile 0.995 (p 0.009); BH over the 13 timeframe-level tests gives q of about 0.12. Per cell: 0 BH-significant outliers among 244 replay-tested and 164 v3a-tested cells; raw p<0.05 in 20/244 and 15/164. Files: fy_tf_windows.csv, fiveyear_vs_live.csv (win_* columns), fy_freq_tf.csv.",
+   "confidence": "high",
+   "implication": "The 5-year results are a valid prior for the live accounts, and the paper bot behaves as the backtest predicts. There is no reason to think the live market is a special regime in which these rule signals work."
+  },
+  {
+   "id": "F4",
+   "claim": "No strategy x timeframe cell has a dependable positive net 5-year result. Only 7 non-thin cells have mean R > 0 (all at 4h or very rare), and none has t > 1. The two cells with a significant positive gross edge are DS F16_FIB382@15m (6x smaller than its cost) and N23_HA_ST@4h.",
+   "evidence": "Net mean R > 0 with at least 30 sized signals: N23_HA_ST@4h +0.027 (t 0.98; IS +0.011, CF +0.042; 1,416 signals, 0.75 enterable/day); N02_ST_KST@4h +0.010; N09_ALLIG_AROON@4h +0.009; N15_KC_AO@30m +0.025 (n 59); S1_EMA_RSI_CHOP@1h +0.053 (n 43); DS F10_M2022@4h +0.085 (n 39); DS F13_FVG_PD@4h +0.013 (n 68, IS +0.20 / CF -0.13). DS: 0 of 44 cells positive at 15m, 30m and 1h. Gross edge, BH over 307 cells with n>=200: F16_FIB382@15m gross +0.026R (t 4.0, q 0.009, IS +0.018 / CF +0.037) but net -0.142R; N23_HA_ST@4h gross +0.099R (t 3.7, q 0.017). Files: fy_gross_top.csv, fy_cells_is_cf.csv, fiveyear_vs_live.csv.",
+   "confidence": "high",
+   "implication": "No candidate meets 'verified not to lose' on the 5-year evidence. The only cell that is non-negative in both halves with a significant gross edge is N23_HA_ST@4h, and it is a slow 4h cell (under 1 enterable signal/day; live v3b/v4 sizing rejected all 3 of its DOGE signals). It fits a cost-free rule account, not a 15m/30m AI trader."
+  },
+  {
+   "id": "F5",
+   "claim": "The best live cells are bad over 5 years, and they flip sign between live runs. Choosing AI strategies from live P&L would select noise.",
+   "evidence": "Live v3b+v4 every-signal R against v3a every-signal R and the 5-year result: S4_BB_BBP@15m +0.42 (n 39) vs v3a -0.25 (n 56), 5y -0.20 (gross -0.013). N17_KC_RSI@15m +0.11 (n 109) vs v3a -0.55 (n 161), 5y -0.16 with negative gross (t -3.4). N20_EMA9_CHOP@30m +0.26 (42) vs v3a -0.42 (14), 5y -0.15. N20_EMA9_CHOP@1h +0.29 +/-0.10 (17) vs v3a -0.82 (5), 5y -0.097. N01_ST_EMA@15m +0.16 (30) vs v3a -0.47 (42). DS F1_RSI_DIV@15m +0.45 (18) vs 5y -0.18. Rank agreement for cells with live n>=10: Spearman 5y vs live, core -0.10 (49 cells, permutation p 0.52), DS -0.11 (68, p 0.38); live v3a vs v3b+v4, -0.11 (41, p 0.48). Files: fy_top_lists.csv, fy_rank_agreement.csv, live_cells.csv.",
+   "confidence": "high",
+   "implication": "Do not use live leaderboards (or the November 'promotion' if it is based on P&L) to choose AI traders or their custom values. Each live run disagrees with the next one."
+  },
+  {
+   "id": "F6",
+   "claim": "The number of live positive cells is about what noise around the 5-year expectation predicts, so the positive live cells are not evidence of skill.",
+   "evidence": "Cells with live n>=10 and a cluster SE. Core: 11 observed live-positive vs 10.4 expected if the true mean were the 5-year mean at today's stop size (12.5 if it were the 5-year average). DS: 26 observed vs 16.2 expected, an excess concentrated at 15m in a good 1.5-day stretch. z = (live - 5y)/live SE has sd 1.23 (core) and 1.29 (DS); |z|>2 in 3/49 and 4/68. Script: fy_compare.py and the check run inline on fiveyear_vs_live.csv.",
+   "confidence": "medium",
+   "implication": "With per-cell live n of 10-110 and an R sd of about 0.8-1.3, a cell needs about 100-280 independent signals before it can separate +0.2R from the 5-year expectation. Four days of paper trading cannot rank strategies."
+  },
+  {
+   "id": "F7",
+   "claim": "Live signal frequency matches the 5-year definitions on every timeframe, so the live signal service reproduces the backtested strategies, including the DeepSeek port.",
+   "evidence": "Live/5y signals per day, summed per timeframe: core 5m 1.04, 15m 0.97, 30m 0.94, 1h 0.99, 4h 1.01; DS 15m 1.08, 30m 1.03, 1h 1.05, 4h 1.29. Across 274 cells with >=1 5-year signal/day, the correlation of log frequency is 0.91 and 92% of cells are within 0.5-2x. No count mismatch survives BH (raw p<0.05 in 7 of 311 window-count tests). The largest gaps are small-count noise, e.g. N17_KC_RSI@4h with 4 live signals vs 5.75/day over 5y, inside the 5-year 2.2-day count range 0-39. Files: fy_freq_tf.csv, fiveyear_vs_live.csv (win_rp_cnt_*).",
+   "confidence": "high",
+   "implication": "An AI trader per strategy gets the 5-year rate of chances. 15m/30m strategies give 5-60 signals/day over the 6 coins, so the AI's selectivity, not signal supply, sets how many trades it takes. 4h gives only about 0.2-1.3 enterable signals/day per strategy under v4 sizing."
+  },
+  {
+   "id": "F8",
+   "claim": "Leverage does not change the per-notional result but multiplies the loss to equity. 40-50x with 2 ATR stops adds liquidations, badly so at 1h/4h. With no proven edge, '20-50x by AI confidence' speeds up ruin.",
+   "evidence": "research/levstop (fixed leverage, 2 ATR, every 5-year signal) in out/fy_levstop_arms.csv. 15m return per notional at 10/20/30/40/50x: -0.141/-0.142/-0.142/-0.147/-0.159%; equity per trade -0.28/-0.57/-1.28/-2.36/-3.18%; liquidated share 0.004/0.08/0.48/1.8/4.8%; busted accounts 47/58/61/64/64 of 70. Liquidated share at 50x: 30m 11%, 1h 19%, 4h 34%. My rerun: tier walk (mostly 50x) R -0.1723 vs v4 normal 30x R -0.1717 at 15m. Zero-edge drain (fy_equity_drain.csv): at 15m, 30x/30% loses 1.28%/trade (equity halves in about 54 trades), 50x/50% loses 3.56%/trade (about 19 trades).",
+   "confidence": "high",
+   "implication": "Cap AI traders at 20-30x and keep the existing sizing checks (15% loss cap, liquidation buffer) until an AI shows a positive paired edge. Allow 40-50x only after its confidence score is shown to be calibrated over at least 100 resolved shadow trades. Never use 50x with 2 ATR stops on 1h/4h."
+  },
+  {
+   "id": "F9",
+   "claim": "Exit tuning does not rescue these signals. The 5-year studies show exit styles reshape results by at most about 0.06% of equity per trade, and the live 'lev10 +0.26R / lock30 +0.14R' what-ifs are not supported by 5-year per-notional results at 15m.",
+   "evidence": "research/exitstyle (5 years, 1.89M trades): ladder -1.415% equity/trade; fixed TP 1R/1.5R/2R/3R -1.422/-1.418/-1.389/-1.378%; ladder+2R cap -1.403%. No pre-registered rule passes. 10x vs 30x at 15m: -0.141% vs -0.142% per notional (levstop). Exit choice also leaves gross R unchanged by construction: the gross R of about 0 comes from the entries.",
+   "confidence": "medium",
+   "implication": "Weekly shadow tuning of custom values will mostly fit noise. Expect gains of 0.0-0.05R, against the 0.16-0.22R needed at 15m/30m. Spend AI effort on entry selection and skipping, measured against same-moment rule outcomes, not on exit parameters."
+  },
+  {
+   "id": "F10",
+   "claim": "On 15m/30m vs 1h/4h, the 5-year ranking (4h least bad, then 1h, 30m, 15m) comes entirely from cost. 4h is the only timeframe with several near-zero cells, but it is rare under v4 sizing and has almost no live data.",
+   "evidence": "Core cost R 0.173 (15m), 0.124 (30m), 0.094 (1h), 0.072 (4h), with gross about 0 at all four. Cells with net mean > 0: core 4h 3 of 26 non-thin vs 0-1 at 15m-1h; 4h is mostly class Z+ (18 core, 18 DS) because n is small, not because of an edge. Only 19.7% of 4h 5-year signals pass v4 sizing; core 4h has 7.3 enterable signals/day across all 35 strategies. Live 4h replay: core +0.206R (n 28), which drops to +0.068 when the 14 still-open signals are counted at mark; DS -0.122 (n 51).",
+   "confidence": "high",
+   "implication": "The owners' plan (AI enters on 15m/30m; 1h/4h stay cost-free rule accounts) puts the AI where the 5-year hurdle is highest. If budget allows, give at least one AI trader 1h entries for comparison. Keep 4h as rule accounts and judge them only on 5-year-sized samples, never on a few live trades."
+  },
+  {
+   "id": "F11",
+   "claim": "DeepSeek: the house exits and the pre-registered exits (PREREG) lose about the same over 5 years. No DeepSeek definition is positive in both 5-year halves at 15m/30m/1h, and the two PREREG stage-1 passes (both 4h) failed stage 2.",
+   "evidence": "Mean net % per trade, house / X5_TRAIL2 / X2_SL15_TP3: 15m -0.149/-0.151/-0.142, 30m -0.152/-0.167/-0.147, 1h -0.160/-0.175/-0.159, 4h -0.189/-0.211/-0.172. Cross-cell rank agreement with the house exits at 15m: 0.47 (p 0.0008, X5) and 0.70 (p<0.001, X2). Stage-1 passes: F5_BOX@4h X2 and F13_FVG_PD@4h X5; both have negative CF. The PREREG gross per trade is negative on every timeframe (per_tf.csv). Files: fy_ds_prereg_vs_house.csv, research/deepseek200/out/results.csv.",
+   "confidence": "high",
+   "implication": "The DeepSeek family is no better a source for AI traders than the core 36. Its live 15m outperformance over 1.5 days is a lucky stretch (F3/F6), not evidence of an edge. Duplicates (F11_RAID = F11_TSOUP = F13_RAID_PD @15m, etc.) should count as one strategy."
+  },
+  {
+   "id": "F12",
+   "claim": "Reel 5m behaves exactly as its 5-year study predicts, and the prediction is a steady loss.",
+   "evidence": "5 years: 35,858 trades (19.0/day), net -0.125%/trade, gross before costs +0.011% (IS) / +0.007% (CF), r_net -0.55 per trade, 33% wins. Live: 18.0 signals/day; 13 trades R -0.458 (46% wins), mean -0.019%/trade; all 27 signals including 14 skipped shadows (ROE/30) average -0.156%/trade, at percentile 0.44 of 5-year 1.5-day windows (band p5..p95 -0.417%..+0.137%). Files: fy_reel.csv, research/reel5m/out/h1_trades.csv.gz.",
+   "confidence": "high",
+   "implication": "Do not give the reel an AI trader. Keep it, if at all, as the documented 5m control."
+  },
+  {
+   "id": "F13",
+   "claim": "Combined grades (5-year class x live class): no A; 3 B (all rare 1h/4h cells); 54 C, mostly low-power 4h cells plus 8 cost-killed 15m/30m/1h cells with live >= 0; 117 D; 158 F; 19 thin. The best 15m/30m combinations still lose 0.11-0.17R per trade over 5 years.",
+   "evidence": "fiveyear_vs_live.csv (351 rows). B: N23_HA_ST@4h, S1_EMA_RSI_CHOP@1h (0.02 enterable/day), DS F10_M2022@4h (0.02/day). Best at 15m/30m (all class N+ with live L+): core N01_ST_EMA@15m (5y -0.173, gross +0.011 in both halves, live +0.16+/-0.47 n30), N10_HA_PSAR@15m (-0.174, live +0.07+/-0.22 n44), N24_DMI@30m (-0.125, live +0.07+/-0.16 n33); DS F7_RF_TRIPLE@30m (-0.108, gross +0.012 in both halves, t 2.0, live +0.08+/-0.32 n40), F7_RF_TRIPLE@15m, F9_IFVG@15m (gross t 2.55), F6_VWAP_CROSS@15m, F12_MSS@30m. Highest 5-year gross: F16_FIB382@15m and F16_FIB500@15m (grade D; live -0.40 n18 and +0.29 n13). 1h/4h: N23_HA_ST@4h, N22_VORTEX_PSAR@4h (gross t 2.4), N02_ST_KST@4h, S2_ST_ROC@4h, N24_DMI@1h, N20_EMA9_CHOP@1h; DS F2_DEMARK@4h, F6_VWAP_CROSS@1h, F15_ORB@4h. Files: fy_candidates.csv, fy_grade.py.",
+   "confidence": "medium",
+   "implication": "If AI traders must be assigned, prefer the C-grade cells whose 5-year gross is >= 0 in both halves and that give >= 10 signals/day. Their direction content is at least not negative and they give the AI many chances to skip. Treat every assignment as an experiment whose null is the strategy's own every-signal R, which the 5-year data puts at -0.15 to -0.23R."
+  },
+  {
+   "id": "F14",
+   "claim": "Detecting a real AI edge before 12/31 is possible only with enough independent trades and a paired comparison.",
+   "evidence": "R sd per trade, live replay: 15m 1.34, 30m 0.94, 1h 0.77; 5-year 15m 0.90, 30m 0.80. Trades needed to detect +0.2R at 80% power (one-sided 5%): 15m 140-280, 30m about 110-140, 1h about 90, before clustering. Live signals arrive in clusters; the cluster SEs here imply effective n well below raw n.",
+   "confidence": "medium",
+   "implication": "Per AI trader, log every rule signal it saw with the AI's decision (take/skip/near-entry) and the same-moment rule replay. Judge it on the paired difference with cluster-robust SE, pre-register the decision rule, and do not promote any trader before about 150 resolved, de-clustered decisions."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "F9_IFVG",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.16 t-20 IS-0.16 CF-0.15 g+0.016 now-0.22 11.9/d | live rp26 +0.06±0.20",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.16 t-26 IS-0.16 CF-0.16 g+0.006 now-0.22 63.2/d | live rp84 +0.07±0.21",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F6_VWAP_CROSS",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.17 t-34 IS-0.17 CF-0.18 g+0.005 now-0.23 59.2/d | live rp85 +0.04±0.24",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "5y -0.11 t-16 IS-0.10 CF-0.11 g+0.012 now-0.14 30.4/d | live rp40 +0.08±0.32",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F12_MSS",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "5y -0.12 t-16 IS-0.12 CF-0.12 g+0.003 now-0.15 9.3/d | live rp15 +0.35±0.33",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F4_PULL_RSI",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.07 t-2 IS-0.12 CF-0.01 g+0.025 now-0.18 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F6_VWAP_CROSS",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.09 t-18 IS-0.09 CF-0.09 g+0.004 now-0.11 20.7/d | live rp34 +0.15±0.13",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "F10_M2022",
+   "timeframe": "4h",
+   "grade": "B",
+   "numbers": "5y +0.08 t1 IS+0.08 CF+0.09 g+0.160 now+0.11 0.0/d | live rp0 na",
+   "note": "P/L_thin; rare"
+  },
+  {
+   "strategy": "F13_FVG_PD",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y +0.01 t0 IS+0.20 CF-0.13 g+0.083 now-0.06 0.0/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F9_IFVG",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.00 t-0 IS+0.03 CF-0.02 g+0.069 now+0.01 0.1/d | live rp1 +0.28",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F3_BOS",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS+0.06 CF-0.07 g+0.060 now-0.04 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F1_PVT_DIV",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS-0.01 CF-0.02 g+0.062 now-0.05 0.1/d | live rp1 -1.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F9_BREAKER",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS-0.03 CF+0.00 g+0.058 now+0.03 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F1_MOM_DIV",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS-0.01 CF-0.01 g+0.059 now-0.03 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F7_RF_ONLY",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-0 IS+0.05 CF-0.09 g+0.046 now-0.05 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F4_FAN",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-1 IS-0.01 CF-0.04 g+0.049 now-0.07 0.3/d | live rp1 -1.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-0 IS-0.00 CF-0.05 g+0.047 now+0.05 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F6_VWAP_FAIL",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.01 CF-0.04 g+0.046 now-0.04 0.7/d | live rp4 +0.36±0.79",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F9_FVG",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.01 CF-0.04 g+0.043 now-0.05 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F15_ORB",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.03 CF-0.03 g+0.041 now-0.03 0.9/d | live rp1 -1.07",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F12_MSS",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.00 CF-0.06 g+0.039 now-0.00 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F3_HHHL",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.05 CF-0.02 g+0.038 now-0.09 0.4/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F2_DEMARK",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.04 t-2 IS-0.06 CF-0.01 g+0.035 now-0.05 1.3/d | live rp9 +0.25±0.35",
+   "note": "Z+/L_thin"
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.04 t-2 IS-0.00 CF-0.08 g+0.031 now-0.06 0.8/d | live rp4 -0.73±0.34",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F16_FIB618",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.05 t-1 IS-0.06 CF-0.04 g+0.021 now-0.06 0.1/d | live rp3 -0.20",
+   "note": "Z+/L_thin; rare; dup=F10_OTE@4h"
+  },
+  {
+   "strategy": "F1_RSI_DIV",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.05 t-1 IS-0.03 CF-0.07 g+0.023 now-0.04 0.1/d | live rp1 -1.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.12 t-2 IS-0.12 CF-0.12 g+0.009 now-0.18 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.17 t-18 IS-0.17 CF-0.17 g+0.011 now-0.23 17.1/d | live rp30 +0.16±0.47",
+   "note": "N+/L+; v3a -0.47 opp. sign"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "5y -0.17 t-27 IS-0.17 CF-0.18 g+0.002 now-0.21 24.0/d | live rp44 +0.07±0.22",
+   "note": "N+/L+; v3a -0.13 opp. sign"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "5y +0.03 t0 IS-0.09 CF+0.21 g+0.138 now+0.12 0.0/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "5y -0.05 t-1 IS-0.03 CF-0.07 g+0.062 now-0.00 0.3/d | live rp2 +0.56±0.23",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "5y -0.12 t-13 IS-0.13 CF-0.12 g+0.005 now-0.15 10.7/d | live rp33 +0.07±0.16",
+   "note": "N+/L+; v3a -0.19 opp. sign"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "1h",
+   "grade": "B",
+   "numbers": "5y +0.05 t1 IS+0.02 CF+0.10 g+0.138 now+0.04 0.0/d | live rp0 na",
+   "note": "P/L_thin; rare"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS+0.03 CF-0.05 g+0.084 now-0.16 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.04 t-1 IS-0.03 CF-0.05 g+0.043 now+0.07 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.08 t-7 IS-0.09 CF-0.06 g+0.018 now-0.10 4.6/d | live rp19 +0.06±0.18",
+   "note": "N+/L+"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.08 t-2 IS-0.08 CF-0.07 g+0.023 now-0.09 0.2/d | live rp1 -1.07",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "1h",
+   "grade": "C",
+   "numbers": "5y -0.10 t-6 IS-0.10 CF-0.09 g+0.007 now-0.10 4.7/d | live rp17 +0.29±0.10",
+   "note": "N+/L++; v3a n5 -0.82"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "4h",
+   "grade": "B",
+   "numbers": "5y +0.03 t1 IS+0.01 CF+0.04 g+0.099 (t3.7, BH q0.017) now+0.02 0.8/d | live rp0 (3 DOGE signals rejected by sizing); v3a n4 +0.29",
+   "note": "P/L_thin; rare"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y +0.01 t0 IS-0.01 CF+0.03 g+0.081 now-0.01 0.2/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y +0.01 t0 IS+0.02 CF-0.01 g+0.080 now+0.01 0.1/d | live rp1 +0.20",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.00 t-0 IS-0.01 CF+0.00 g+0.066 now+0.00 0.0/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS-0.00 CF-0.02 g+0.064 now+0.03 0.5/d | live rp4 +0.50±0.16",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.01 t-0 IS-0.03 CF+0.01 g+0.060 now-0.05 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-1 IS+0.02 CF-0.05 g+0.052 now-0.02 0.3/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-1 IS-0.06 CF+0.01 g+0.049 now-0.05 0.3/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.02 t-1 IS-0.02 CF-0.03 g+0.047 now-0.04 0.2/d | live rp2 -1.07",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.01 CF-0.04 g+0.048 now-0.01 0.7/d | live rp1 -1.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS+0.00 CF-0.07 g+0.039 now+0.02 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.03 t-1 IS-0.04 CF-0.03 g+0.040 now-0.04 0.2/d | live rp1 -1.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.04 t-1 IS-0.04 CF-0.05 g+0.033 now-0.03 0.2/d | live rp3 +0.57±0.34",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.05 t-1 IS-0.01 CF-0.10 g+0.021 now-0.08 0.1/d | live rp2 -1.05±0.00",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.06 t-1 IS-0.05 CF-0.06 g+0.017 now-0.17 0.0/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.06 t-2 IS-0.04 CF-0.08 g+0.014 now-0.04 0.7/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.06 t-2 IS+0.03 CF-0.13 g+0.011 now+0.00 0.3/d | live rp4 +0.76±0.40",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.07 t-2 IS-0.01 CF-0.13 g+0.003 now-0.09 0.3/d | live rp2 +1.41±0.05",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "4h",
+   "grade": "C",
+   "numbers": "5y -0.07 t-1 IS-0.10 CF-0.03 g+0.001 now-0.03 0.1/d | live rp0 na",
+   "note": "Z+/L_thin; rare"
+  },
+  {
+   "strategy": "F10_M2022",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/D/F",
+   "numbers": "15m: 5y -0.14 t-7 g+0.019 | live rp3 +0.73±0.08 ; 30m: 5y -0.10 t-5 g+0.013 | live rp0 na ; 1h: 5y -0.10 t-3 g-0.007 | live rp0 na",
+   "note": "15m:N+/L_thin 30m:N+/L_thin 1h:NN/L_thin"
+  },
+  {
+   "strategy": "F10_OTE",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "D/F/D/F",
+   "numbers": "15m: 5y -0.17 t-27 g+0.002 | live rp23 -0.21±0.21 ; 30m: 5y -0.14 t-18 g-0.015 | live rp15 -0.30±0.24 ; 1h: 5y -0.09 t-8 g+0.001 | live rp11 +0.02±0.26 ; 4h: 5y -0.11 t-3 g-0.038 | live rp3 -0.20",
+   "note": "15m:N+/L- 30m:NN/L- 1h:N+/L_thin 4h:NN/L_thin (4h dup of F16_FIB618)"
+  },
+  {
+   "strategy": "F11_PO3",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.21 t-18 g-0.025 | live rp6 -0.25±0.29 ; 30m: 5y -0.17 t-16 g-0.037 | live rp6 -0.31±0.33 ; 1h: 5y -0.13 t-12 g-0.036 | live rp6 +0.34±0.01 ; 4h: 5y -0.10 t-5 g-0.024 | live rp5 +0.31±0.51",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F11_RAID",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.20 t-30 g-0.019 | live rp36 -0.10±0.23 ; 30m: 5y -0.14 t-20 g-0.011 | live rp17 -0.43±0.24 ; 1h: 5y -0.12 t-13 g-0.020 | live rp8 -0.41±0.28 ; 4h: 5y -0.10 t-4 g-0.030 | live rp1 +0.20",
+   "note": "15m:NN/L- 30m:NN/L- 1h:NN/L_thin 4h:NN/L_thin (15m dup F11_TSOUP/F13_RAID_PD; 1h dup F13_RAID_PD)"
+  },
+  {
+   "strategy": "F11_TSOUP",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.19 t-28 g-0.017 | live rp25 -0.47±0.18 ; 30m: 5y -0.14 t-18 g-0.014 | live rp16 -0.22±0.28 ; 1h: 5y -0.11 t-10 g-0.015 | live rp5 -0.27±0.45 ; 4h: 5y -0.11 t-3 g-0.037 | live rp0 na",
+   "note": "15m:NN/L-- 30m:NN/L- 1h:NN/L_thin 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F12_MSS",
+   "timeframe": "15m/1h",
+   "grade": "F/D",
+   "numbers": "15m: 5y -0.18 t-25 g-0.001 | live rp24 -0.10±0.25 ; 1h: 5y -0.09 t-7 g+0.008 | live rp9 +0.31±0.21",
+   "note": "15m:NN/L- 1h:N+/L_thin"
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/D/D",
+   "numbers": "15m: 5y -0.17 t-14 g+0.001 | live rp12 +0.36±0.35 ; 30m: 5y -0.10 t-7 g+0.014 | live rp5 -0.25±0.52 ; 1h: 5y -0.08 t-4 g+0.014 | live rp3 +0.65",
+   "note": "15m:N+/L_thin 30m:N+/L_thin 1h:N+/L_thin"
+  },
+  {
+   "strategy": "F13_FVG_PD",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/F/D",
+   "numbers": "15m: 5y -0.15 t-12 g+0.017 | live rp9 -0.25±0.28 ; 30m: 5y -0.13 t-9 g-0.015 | live rp3 -0.17±0.49 ; 1h: 5y -0.08 t-4 g+0.006 | live rp0 na",
+   "note": "15m:N+/L_thin 30m:NN/L_thin 1h:N+/L_thin"
+  },
+  {
+   "strategy": "F13_RAID_PD",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.19 t-30 g-0.016 | live rp34 -0.03±0.23 ; 30m: 5y -0.14 t-20 g-0.009 | live rp16 -0.39±0.25 ; 1h: 5y -0.11 t-12 g-0.016 | live rp8 -0.41±0.28 ; 4h: 5y -0.11 t-4 g-0.042 | live rp1 +0.20",
+   "note": "15m:NN/L- 30m:NN/L- 1h:NN/L_thin 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F14_SMT",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/D/F",
+   "numbers": "15m: 5y -0.16 t-23 g-0.004 | live rp112 -0.14±0.15 ; 30m: 5y -0.12 t-14 g-0.012 | live rp39 -0.29±0.19 ; 1h: 5y -0.10 t-8 g-0.014 | live rp19 +0.13±0.11 ; 4h: 5y -0.17 t-4 g-0.105 | live rp0 na",
+   "note": "15m:NN/L- 30m:NN/L- 1h:NN/L+ 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F15_ASIA_BRK",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/D/D",
+   "numbers": "15m: 5y -0.17 t-13 g+0.015 | live rp6 -1.24±0.03 ; 30m: 5y -0.11 t-9 g+0.023 | live rp5 -1.15±0.02 ; 1h: 5y -0.08 t-7 g+0.010 | live rp5 -0.53±0.34",
+   "note": "15m:N+/L_thin 30m:N+/L_thin 1h:N+/L_thin"
+  },
+  {
+   "strategy": "F15_ASIA_SWEEP",
+   "timeframe": "15m/30m/1h",
+   "grade": "F/F/F",
+   "numbers": "15m: 5y -0.22 t-17 g-0.037 | live rp6 +0.61±0.60 ; 30m: 5y -0.16 t-14 g-0.033 | live rp6 +0.37±0.37 ; 1h: 5y -0.14 t-11 g-0.042 | live rp5 +0.44",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin"
+  },
+  {
+   "strategy": "F15_LON_BRK",
+   "timeframe": "15m/30m/1h",
+   "grade": "F/F/F",
+   "numbers": "15m: 5y -0.21 t-17 g-0.019 | live rp6 -0.88±0.32 ; 30m: 5y -0.14 t-13 g-0.010 | live rp6 -0.59±0.27 ; 1h: 5y -0.10 t-8 g-0.001 | live rp6 -0.39±0.28",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin"
+  },
+  {
+   "strategy": "F15_OPEN0000",
+   "timeframe": "15m/30m/1h",
+   "grade": "F/F/F",
+   "numbers": "15m: 5y -0.19 t-16 g-0.011 | live rp8 -0.70±0.22 ; 30m: 5y -0.14 t-12 g-0.010 | live rp6 +0.21 ; 1h: 5y -0.10 t-9 g-0.003 | live rp6 +0.30",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin (one signal stream across tfs live)"
+  },
+  {
+   "strategy": "F15_OPEN0930",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/D/D",
+   "numbers": "15m: 5y -0.15 t-11 g+0.008 | live rp6 -0.37 ; 30m: 5y -0.11 t-8 g+0.010 | live rp6 -0.12 ; 1h: 5y -0.09 t-7 g+0.003 | live rp6 -1.11",
+   "note": "15m:N+/L_thin 30m:N+/L_thin 1h:N+/L_thin"
+  },
+  {
+   "strategy": "F15_ORB",
+   "timeframe": "15m/30m/1h",
+   "grade": "F/F/F",
+   "numbers": "15m: 5y -0.22 t-16 g-0.052 | live rp12 +1.09±1.09 ; 30m: 5y -0.14 t-13 g-0.022 | live rp12 +0.62±0.30 ; 1h: 5y -0.10 t-10 g-0.005 | live rp6 -0.59±0.25",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin"
+  },
+  {
+   "strategy": "F16_FIB382",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "D/F/D/F",
+   "numbers": "15m: 5y -0.14 t-20 g+0.026 (t4.0, BH q0.009, IS+0.018 CF+0.037) | live rp18 -0.40±0.26 ; 30m: 5y -0.13 t-14 g-0.006 | live rp9 -0.06±0.35 ; 1h: 5y -0.08 t-6 g+0.015 | live rp3 +0.38±0.11 ; 4h: 5y -0.11 t-3 g-0.037 | live rp0 na",
+   "note": "15m:N+/L- 30m:NN/L_thin 1h:N+/L_thin 4h:NN/L_thin; best 5y gross edge of all 15m cells but cost 6x larger"
+  },
+  {
+   "strategy": "F16_FIB500",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "D/D/D/F",
+   "numbers": "15m: 5y -0.15 t-20 g+0.022 (t3.2) | live rp13 +0.29±0.25 ; 30m: 5y -0.12 t-13 g+0.004 | live rp9 +0.14±0.26 ; 1h: 5y -0.09 t-7 g+0.000 | live rp3 -0.15±0.47 ; 4h: 5y -0.09 t-2 g-0.019 | live rp1 -1.07",
+   "note": "15m:N+/L_thin 30m:N+/L_thin 1h:N+/L_thin 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F16_FIB618",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/F/F",
+   "numbers": "15m: 5y -0.17 t-24 g+0.002 | live rp13 -0.30±0.25 ; 30m: 5y -0.15 t-16 g-0.022 | live rp10 -0.06±0.24 ; 1h: 5y -0.10 t-8 g-0.008 | live rp3 +0.36±0.07",
+   "note": "15m:N+/L_thin 30m:NN/L_thin 1h:NN/L_thin"
+  },
+  {
+   "strategy": "F16_FIB764",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.19 t-25 g-0.015 | live rp11 -0.19±0.33 ; 30m: 5y -0.14 t-14 g-0.017 | live rp8 -0.13±0.26 ; 1h: 5y -0.10 t-8 g-0.008 | live rp7 +0.20±0.25 ; 4h: 5y -0.12 t-3 g-0.045 | live rp1 +0.28",
+   "note": "15m:NN/L_thin 30m:NN/L_thin 1h:NN/L_thin 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F17_Z",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/F/F/F",
+   "numbers": "15m: 5y -0.18 t-32 g-0.008 | live rp50 -0.21±0.24 ; 30m: 5y -0.13 t-20 g-0.006 | live rp26 -0.07±0.25 ; 1h: 5y -0.12 t-14 g-0.027 | live rp15 -0.38±0.38 ; 4h: 5y -0.17 t-6 g-0.097 | live rp0 na",
+   "note": "15m:NN/L- 30m:NN/L- 1h:NN/L- 4h:NN/L_thin (1h dup F17_Z_HL)"
+  },
+  {
+   "strategy": "F17_Z_HL",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "F/D/F/F",
+   "numbers": "15m: 5y -0.20 t-31 g-0.019 | live rp47 -0.15±0.24 ; 30m: 5y -0.14 t-18 g-0.010 | live rp24 +0.02±0.24 ; 1h: 5y -0.13 t-13 g-0.032 | live rp15 -0.38±0.38 ; 4h: 5y -0.16 t-5 g-0.085 | live rp0 na",
+   "note": "15m:NN/L- 30m:NN/L+ 1h:NN/L- 4h:NN/L_thin"
+  },
+  {
+   "strategy": "F1_MOM_DIV",
+   "timeframe": "15m/30m/1h",
+   "grade": "D/F/D",
+   "numbers": "15m: 5y -0.18 t-24 g-0.012 | live rp25 +0.19±0.28 ; 30m: 5y -0.13 t-15 g-0.008 | live rp10 -0.07±0.53 ; 1h: 5y -0.09 t-7 g+0.002 | live rp2 +0.31±0.04",
+   "note": "15m:NN/L+ 30m:NN/L_thin 1h:N+/L_thin"
+  }
+ ],
+ "files": [
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fiveyear_vs_live.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fiveyear_vs_live.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_tf_summary.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_tf_windows.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_volbucket.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_rank_agreement.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_is_cf_persistence.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_cells_is_cf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_gross_top.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_top_lists.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_candidates.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_freq_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_window_outliers.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_levstop_arms.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_levstop_check.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_equity_drain.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_ds_prereg_vs_house.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy_reel.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy36_parity.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/live_cells.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/live_signals.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/live_signal_counts.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/live_v3a_shadow_info.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/strategy_notes.json",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/strategy_notes_grouped.json",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fy36_5m.pkl.gz (and fy36_15m/30m/1h/4h.pkl.gz: 5-year per-signal outcomes, core 36)",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/out/fyds_15m.pkl.gz (and fyds_30m/1h/4h.pkl.gz: 5-year per-signal outcomes, DeepSeek 44, house exits)",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy36_rerun.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy36_parity.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fyds_rerun.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/live_cells.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy_compare.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy_extra.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy_grade.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy_notes.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/fiveyear/fy_notes_grouped.py"
+ ]
+}

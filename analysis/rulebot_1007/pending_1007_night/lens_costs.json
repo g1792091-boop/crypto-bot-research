@@ -1,0 +1,666 @@
+{
+ "findings": [
+  {
+   "id": "C1",
+   "claim": "At 15m and 30m the paper losses are the round-trip cost and nothing else: before fees and slippage the signals earn about zero. Fees, the 2 bp paper slippage per side and funding take 0.18 to 0.26 R per trade. No live trade was liquidated.",
+   "evidence": "Live trades, all runs (c01_decompose.py -> out/c01_decomp_by_tf.csv), core36 15m n=630: net -0.190R = gross +0.072R - cost 0.262R (fees 0.187, entry slip 0.0375, exit slip 0.0375, funding 0.0000). 30m n=378: -0.152 = +0.024 - 0.176. 1h n=212: -0.073 = +0.042 - 0.115. ds200 15m n=259: -0.288 = -0.043 - 0.245; ds200 30m n=181: -0.126 = +0.045 - 0.171. The R identity is checked per trade (max error 1e-12). 0 LIQ exits in 2,651 strategy-kind trades. Every SUBMITTED signal replayed alone (v3b+v4, c02_replay.py, parity 4,236/4,236 to 1e-9 vs replay_signals.csv; c05_breakeven.py -> c05_breakeven_by_tf.csv), core36+ds200 15m n=2,424 in 54 clusters: net -0.103R, gross +0.132R [cluster CI +0.001, +0.286], paper cost 0.236R. 30m n=1,259: net -0.144, gross +0.020 [-0.072, +0.113], cost 0.163.",
+   "confidence": "high",
+   "implication": "An AI trader that takes these signals gets no pre-cost edge to build on. Every R of profit has to come from the AI's own entry, direction, skip and exit decisions, and those decisions must first pay about 0.16 to 0.24 R per round trip."
+  },
+  {
+   "id": "C2",
+   "claim": "Over five years each of the 36 strategies' signals lost almost exactly one paper round trip (about -14 bp of notional) at every timeframe, in every year, on every coin, in both periods and in every volatility quintile. The gross edge is zero, and the side choice adds nothing over a coin flip.",
+   "evidence": "c07_5y_regime.py (repo's research/levstop.outcomes -> strategy_profiles._scan, fixed 30x, 2 ATR stop, paper ladder; signal cache verified identical to paperbot/agents/labdata_reference.json, 18/18 files; out/c07_5y_regime.csv). 15m n=1,140,655 signals, 271 weeks: net -14.24 bp/notional [week-block CI -14.75, -13.71], gross +0.04 bp, gross R +0.0013 [-0.0052, +0.0082], side-choice excess vs opposite side +0.0031R [-0.0020, +0.0084]. 30m n=573,097: net -15.33 bp, gross -0.91 bp, gross R -0.0017 [-0.0079, +0.0050]. 1h n=287,925: net -17.45 bp, gross -2.8 bp. Net per year at 15m from 2021 to 2026: -13.7, -14.1, -15.1, -13.8, -14.8, -13.5 bp. Per coin: -13.6 (DOGE) to -14.9 (BTC). Volatility quintiles Q1 to Q5: -14.0, -13.7, -14.6, -14.1, -14.7 bp. levstop.json shows the same at fixed 10x, 20x and 30x: -14.4, -14.4 and -14.5 bp/notional.",
+   "confidence": "high",
+   "implication": "No coin, year or volatility filter turns these signals into a pre-cost edge. The AI's added value must be measured in gross bp per round trip against a timing-matched coin flip, and it has to beat about 10 to 19 bp before anything is earned."
+  },
+  {
+   "id": "C3",
+   "claim": "To break even, the AI must add this much gross edge per trade at today's volatility: 15m 0.16 to 0.29 R with real taker execution (0.10 to 0.17 R with maker entries, if fills were not adversely selected); 30m 0.11 to 0.22 R (0.07 to 0.13 R with maker entries). In price terms that is 10 to 19 bp per round trip as a taker and about 7 to 12 bp with a maker entry.",
+   "evidence": "c10_needed_edge.py -> out/c10_needed_edge.csv (needed R = measured round-trip bps / live median stop bps - max(5y gross R, 0)). 15m real taker: SOL 0.155, DOGE 0.160, LTC 0.212, BTC 0.215, ETH 0.218, BCH 0.292; maker entry + taker stop: DOGE 0.096, SOL 0.098, LTC 0.118, BTC 0.151, ETH 0.152, BCH 0.172. 30m real taker: DOGE 0.114, SOL 0.116, LTC 0.149, ETH 0.150, BTC 0.151, BCH 0.216; maker: DOGE 0.070, SOL 0.074, LTC 0.083, ETH 0.105, BTC 0.106, BCH 0.130. At the 5-year median volatility: 15m real taker 0.075 to 0.172; 30m 0.055 to 0.124. The paper-cost grid is in c05_breakeven_grid.csv (for example 14 bp: 0.233R at a 0.6% stop, 0.175R at 0.8%, 0.140R at 1.0%).",
+   "confidence": "high",
+   "implication": "The best five-year pre-cost edge of any core strategy is about +0.02R, and the live side choice adds -0.005R. The AI would have to be about ten times better than anything measured so far. That is a strong prior against profitable 15m AI traders before 12/31. 30m is the more feasible of the two."
+  },
+  {
+   "id": "C4",
+   "claim": "Today's market is unusually quiet: the live 2 ATR stop sits at the 16th to 18th percentile of five years. That makes costs in R about 1.7 times their five-year typical size.",
+   "evidence": "c06_vol_regime.py -> out/c06_live_vs_5y_stop.csv (verified 5-year cache). Live median stop: 15m 0.620% (5y median 1.035%, 17.8th percentile), 30m 0.886% (1.496%, 16.1st), 1h 1.244% (2.174%, 13.5th), 4h 2.016% (4.593%, 3.8th). Paper cost R, live vs 5y median: 15m 0.226 vs 0.135, 30m 0.158 vs 0.094, 1h 0.113 vs 0.064. Median 15m stop by year: 2021 1.60%, 2022 1.15%, 2023 0.79%, 2024 1.00%, 2025 0.99%, 2026 0.76%. Share of 5y 15m bars where the paper cost is at most 0.10R (stop at least 1.4%): 29% (c06_share_cheap_regime.csv).",
+   "confidence": "high",
+   "implication": "Live paper results from October understate what a 15m/30m strategy could do in normal volatility by roughly 0.08 to 0.09R per trade, but only on the cost side; the five-year gross is still zero. Under risk-based sizing, skipping the quietest regime cuts losses per R. It does not create profit."
+  },
+  {
+   "id": "C5",
+   "claim": "An average stop-loss costs -1.23R at 15m instead of -1R. The overshoot is almost entirely fees plus the paper's 2 bp exit slippage; real gaps through the initial stop are negligible.",
+   "evidence": "c01_decompose.py -> out/c01_sl_decomposition_by_tf.csv (core36+ds200 SL exits). 15m n=417: R -1.235 = -1 - fees 0.194 - exit slip 0.039 - gap 0.0002 - funding 0.0013. The 2 bp entry slip (0.039R) is inside the 1R unit because R is measured from the fill. 30m n=220: -1.157 (fees 0.130, slip 0.026). 1h n=101: -1.108. 4h n=14: -1.058. 5m n=497: -1.573. Exactly at stop - 2 bp: 99.5% (15m), 99.6% (30m), 100% (1h).",
+   "confidence": "high",
+   "implication": "The overshoot is 12 to 14 bp divided by the stop %, so it is a stop-width problem, not an execution bug. At 20-50x the extra -0.2R per loss is real money. The AI's exit code should budget each stop at -(1 + cost/stop) R."
+  },
+  {
+   "id": "C6",
+   "claim": "Real execution at the paper size (about $45k notional) costs 10.1 to 10.2 bp per round trip on BTC/ETH, 11.0 on SOL, 12.4 on DOGE, 16.0 on LTC and 19.3 on BCH, against 14 bp in paper. Paper is right on average, but it flatters LTC and BCH because their books are thin.",
+   "evidence": "c03_exec_real.py -> out/c03_exec_coin.csv, c03_fill_costs_by_coin.csv, c03_stop_slips_by_coin.csv. Entry book walk beyond the best level (fill_costs ok rows, 3 runs; the paper reference already is the ask or bid): BTC 0.011 bp (n=666), ETH 0.030 (541), SOL 0.066 (527), DOGE 0.660 (366), LTC 2.689 (514), BCH 4.402 (456; above 2 bp in 97% of entries). Real stop-market slip on SL exits (d3_stop_slips, v4, status ok): BTC 0.09 bp (n=57), ETH 0.17 (28), SOL 0.93 (44), DOGE 1.74 (17), LTC 3.34 (26), BCH 4.91 (42). Paper vs real on v4 stop exits: -$621 total (paper more expensive), but BCH +$1,016 and LTC +$444 (paper too cheap). Every-signal replay with per-coin real costs on the same price path changes the core36 result by +0.000R at 15m [-0.044, +0.045] and +0.020R at 30m (c04_scenarios.csv).",
+   "confidence": "medium",
+   "implication": "Do not trade BCH or LTC at $20-125k notional (20-50x on $5k with margin = leverage %), or cut the order size. At the small real-money size, the book walk mostly disappears and real taker cost falls to about 10-12 bp on every coin."
+  },
+  {
+   "id": "C7",
+   "claim": "Per unit of risk, SOL and DOGE are the cheapest coins to trade at 15m/30m. BTC and ETH have the lowest costs in bp but the tightest stops, so their cost per R is high. BCH is the worst coin at the current order size.",
+   "evidence": "c05_breakeven.py -> out/c05_breakeven_by_coin_tf.csv (every-signal replay accounting). 15m median stop and real cost R: SOL 0.68%/0.170, DOGE 0.74%/0.172, LTC 0.76%/0.208, BTC 0.47%/0.222, ETH 0.47%/0.225, BCH 0.64%/0.291. 30m: SOL 0.93%/0.119, DOGE 1.06%/0.117, LTC 1.08%/0.144, ETH 0.68%/0.151, BTC 0.67%/0.152, BCH 0.89%/0.206. The 5-year gross R per coin is about 0 everywhere (c07_5y_regime.csv split=coin: 15m -0.0075 BTC to +0.0083 BCH).",
+   "confidence": "medium",
+   "implication": "An AI trader restricted to SOL, DOGE and ETH/BTC (at a small notional) needs about 0.04 to 0.12 R less edge per trade than one that also trades BCH. Coin choice is the cheapest cost lever available."
+  },
+  {
+   "id": "C8",
+   "claim": "Maker (limit) entries recover little because the fills are adversely selected: the limit order tends to fill on losing trades and miss winning ones. On fixed exits, the fee and slippage saving would be worth about +0.06R per trade, but after missed winners the net gain is about 0 to +0.1R.",
+   "evidence": "c04_scenarios.csv (my replay, v3b+v4, order rests from the first full minute, filled only on a trade-through, stop kept at the original price). Core36 15m: mk_fee_only +0.065R; at-the-touch limit fills 87.5%, the missed signals' market R was +0.283, net +0.017 [-0.044, +0.066]; 0.25 ATR limit fills 62.9%, net +0.006 [-0.114, +0.114]. Core36 30m: touch +0.021; 0.25 ATR +0.089 [+0.006, +0.173] (fill 59.6%). ds200 15m/30m 0.25 ATR: +0.014/+0.011. Nightly d3 limit shadow joined to the market replay (c08_limit_d3.py -> c08_limit_d3.csv, v4): fill 62-74%; the missed signals were 63-80% winners at market (+0.07 to +0.30R); fills improved by +0.16 to +0.23R; net per signal vs market: core 15m +0.097 [-0.009, +0.198], core 30m +0.097 [+0.010, +0.199], ds200 +0.015/+0.007, pooled +0.045 [-0.037, +0.125]; net per signal still -0.08 to -0.14R. 5-year maker study (research/maker/RESULTS_ROUND2.md): +3 to +8 bp per trade, still negative, fill 76-77% at 0.25 ATR.",
+   "confidence": "medium",
+   "implication": "The 'near-signal entry' idea (enter a bit better than the signal) is worth at most about +0.1R at 30m and about 0 at 15m. It cannot close a 0.16-0.24R gap. If maker entries are used, measure the missed-signal R and not only the filled-trade R."
+  },
+  {
+   "id": "C9",
+   "claim": "Wider stops (2.5 or 3 ATR) do not reduce the cost that matters. With leverage-based sizing, the notional and therefore the dollar cost stay the same, and the bigger losses make the dollar result worse. With risk-based sizing, the result per R is unchanged.",
+   "evidence": "c04_scenarios.csv (same leverage, every signal). Core36 15m in base-R units: w25 -0.029 [-0.063, +0.012], w30 -0.058 [-0.114, +0.006]; in own-R units -0.126/-0.125 vs base -0.128. 30m: -0.020/-0.044 (own R -0.134/-0.127 vs -0.146). ds200 15m w30 -0.062 [-0.118, -0.003]. The nightly d3 stopw variants are mixed (pipeline summary: core 15m stopw2.5 -0.054, stopw3 -0.038; ds200 30m +0.063/+0.099). 5-year levstop: at 30x, going from 2 to 3 ATR moves the pooled P&L per trade from -1.30% to -1.36% of equity; at 10x the per-notional result goes from -14.4 to -14.8 bp.",
+   "confidence": "medium",
+   "implication": "Custom-value tuning of the stop width is not a cost fix. Cost per R falls only if the notional falls with it (risk-based sizing), and then the gross R falls by the same amount."
+  },
+  {
+   "id": "C10",
+   "claim": "Leverage turns the fixed 14 bp into an equity drag that grows with leverage times margin share. At 50x with margin = 50%, every round trip costs 3.5% of the account, so three trades a day cost 10.5% of equity per day before any edge.",
+   "evidence": "c05_breakeven.py -> out/c05_ai_leverage_cost.csv. Paper cost per trade as % of equity with margin = leverage %: 10x 0.14, 20x 0.56, 30x 1.26, 40x 2.24, 50x 3.50 (real BTC: 0.40/0.91/1.62/2.53 at 20/30/40/50x). With a fixed 20% margin, 50x costs 1.40%. 5-year levstop (fixed leverage, 2 ATR): per-notional -14.4 (10x), -14.4 (20x), -14.5 (30x), -14.9 (40x), -15.7 bp (50x); liquidated share 0.01%, 0.21%, 0.79%, 2.05%, 4.14%.",
+   "confidence": "high",
+   "implication": "'Leverage 20-50x by AI confidence' only pays if the AI's confidence predicts at least 14 bp of gross edge. Otherwise moving from 20x/20% to 50x/50% multiplies the cost drag by 6.25. Size leverage on a measured gross edge and keep the 50x tier off until that is shown."
+  },
+  {
+   "id": "C11",
+   "claim": "The code-computed lock ladder leaks about 0.09 to 0.11R on every lock exit. In 37% of lock exits the next 1m bar opens beyond the new lock level, because at 30x the ladder's 2% ROE trigger gap is only about 6.7 bp of price, about one minute of noise.",
+   "evidence": "c01_decompose.py -> out/c01_lock_gap_by_tf.csv (core36+ds200 LOCK exits, live trades). 15m n=472: 37.5% gapped, mean 6.5 bp (p90 12.8), 0.115R per lock exit. 30m n=339: 37.2%, 8.0 bp (p90 19.1), 0.090R. 1h n=214: 36.5%, 8.9 bp, 0.076R. Median 1m bar range 3.3-7.1 bp (c00_ticks.csv). Real stop data on LOCK exits matches paper on average (d3 LOCK real minus paper -0.3 bp at 15m/30m, pipeline stop_slips_summary.csv), so the leak is real, not a paper artifact.",
+   "confidence": "medium",
+   "implication": "For AI exits computed by code, place the exchange-side stop the moment a lock arms (tick or mark stream) instead of at the next 1m bar, or make the lock steps price-based and wider than one minute of noise. That could recover up to about 0.05R per trade (an upper bound; the counterfactual path cannot be replayed on 1m bars)."
+  },
+  {
+   "id": "C12",
+   "claim": "In the cost lens no strategy x timeframe at 15m or 30m earns an A. Only N02_ST_KST 15m, N07_ICHI_CMO 30m and N12_ICHI_AO 30m show a small five-year pre-cost edge (+1.8 to +2.9 bp, 13-21% of one round trip), and about 3 such cells are expected by chance. Several live 'winners' lose before costs over five years. DeepSeek loses before costs at 15m and 30m.",
+   "evidence": "c09_strategy_notes.py -> out/c09_strategy_cost_grades.csv. Core36 15m: 1 B, 23 C, 5 D; 30m: 2 B, 24 C, 6 D (108 core cells x 3 tfs; one-sided 2.5% chance gives about 2.7 false positives). B cells, 5y gross R [week-block CI]: N02_ST_KST 15m +0.019 [+0.003, +0.035]; N07_ICHI_CMO 30m +0.022 [+0.001, +0.045]; N12_ICHI_AO 30m +0.022 [+0.000, +0.045]. Contradicted live winners: N17_KC_RSI 15m live gross +0.35R [+0.06, +0.62] (n=153) vs 5y -0.020R [-0.031, -0.008]; N20_EMA9_CHOP 30m +0.42 [+0.03, +0.85] (n=43) vs 5y -0.011 (both periods < 0); OBV_S 30m +0.74 (n=8) vs 5y -0.012. DeepSeek (fiveyear_ref, own exits X5_TRAIL2): 40/44 definitions at 15m and 35/41 at 30m have negative gross in both IS and CF (median -5.5/-4.6 bp and -6.5/-6.3 bp vs a 10.4-10.7 bp cost); none is positive in both periods.",
+   "confidence": "medium",
+   "implication": "For AI-trader selection, prefer the B cells at 30m as starting points, and drop the D cells and the DeepSeek definitions as bases. Do not promote any strategy because of live October gross alone."
+  },
+  {
+   "id": "C13",
+   "claim": "The positive live gross at 15m (+0.13R) does not come from strategy skill. Coin flips earned it too: the tight-lock, wide-stop exits gain in a quiet, ranging market. Five years show no such gain, even in the quietest quintile.",
+   "evidence": "c05_breakeven_by_tf.csv: coin flips 15m gross +0.257R [+0.031, +0.479] (n=53) vs core36+ds200 +0.132 [+0.001, +0.286]. The pipeline's side-flip shows both sides at the same moments net about -0.15R at 15m (strategy chosen -0.152 vs other side -0.165). 5-year average of both sides ('coinflip_gross_R', c07_5y_regime.csv): 15m -0.0018R overall, Q1 quietest -0.0022.",
+   "confidence": "medium",
+   "implication": "Do not read October's 15m paper gross as an edge an AI can keep. When volatility returns, the same exit structure is expected to give that gross back."
+  },
+  {
+   "id": "C14",
+   "claim": "'Trading like a human' makes cost worse. Every extra round trip (a switch, a re-entry, a split entry) costs another 0.16 to 0.30R at 15m. On lock winners, costs already eat about a quarter of the gross, so taking profit earlier raises that share.",
+   "evidence": "Paper cost per round trip in R (c05_breakeven_by_tf.csv): 15m 0.236, 30m 0.163, 1h 0.116, 4h 0.064. Lock-exit winners (c01_lock_gap_by_tf.csv): 15m gross 0.92R, cost 0.24R (26%); 30m gross 0.68R, cost 0.17R (25%). Funding is negligible at 15m/30m (0.000-0.001R per trade, c01).",
+   "confidence": "high",
+   "implication": "Make 'skip' the AI's default action and add trade-count limits per trader. Score switching and early exits against the extra cost they cause, and count every AI action that adds a round trip at about 0.2R at 15m."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "15m",
+   "grade": "B",
+   "numbers": "live every-signal n=31: net -0.24R, gross +0.00R [-0.47, +0.52], real cost 0.22R (stop 0.60%); 5y n=28283: net -12.4 bp, gross +1.8 bp = +0.019R [+0.003, +0.035], P1 +0.015 / P2 +0.024; AI must add 0.20R/trade",
+   "note": "A small, real pre-cost edge over five years (both periods > 0), but it covers only 13% of a 14 bp round trip, and about 3 such cells out of 108 are expected by chance. Usable as an AI base only if the AI adds about 0.20R/trade."
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=9: net -0.46R, gross -0.23R [-0.76, +0.50], real cost 0.21R (stop 0.60%); 5y n=16575: net -14.1 bp, gross +0.2 bp = +0.007R [-0.014, +0.028], P1 +0.006 / P2 +0.008; AI must add 0.20R/trade",
+   "note": "A coin flip before costs over five years; the AI would have to supply the whole cost (about 0.20R/trade at live volatility, real taker)."
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=31: net +0.13R, gross +0.36R [-0.35, +1.42], real cost 0.21R (stop 0.64%); 5y n=32665: net -13.5 bp, gross +0.8 bp = +0.009R [-0.007, +0.026], P1 +0.004 / P2 +0.017; AI must add 0.20R/trade",
+   "note": "A coin flip before costs over five years; the AI would have to supply the whole cost (about 0.20R/trade)."
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=2: net -1.15R, gross -0.97R [n<5], real cost 0.20R (stop 0.80%); 5y n=1147: net -11.3 bp, gross +3.0 bp = +0.044R [-0.008, +0.098], P1 +0.054 / P2 +0.032; AI must add 0.15R/trade",
+   "note": "Point estimate positive but too few signals (about 0.6/day) for the CI to exclude 0; a coin flip before costs. Too rare to feed an AI trader."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=117: net -0.23R, gross -0.01R [-0.21, +0.20], real cost 0.21R (stop 0.66%); 5y n=96125: net -13.7 bp, gross +0.6 bp = +0.006R [-0.005, +0.018], P1 +0.000 / P2 +0.015; AI must add 0.20R/trade",
+   "note": "A coin flip before costs; high signal count, so it would pay the cost often. The AI would have to supply about 0.20R/trade."
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=9: net -0.00R, gross +0.21R [-0.37, +0.73], real cost 0.26R (stop 0.65%); 5y n=8065: net -13.5 bp, gross +0.8 bp = -0.004R [-0.023, +0.015], P1 +0.001 / P2 -0.010; AI must add 0.26R/trade",
+   "note": "A coin flip before costs over five years; the AI would have to supply the whole cost (about 0.26R/trade)."
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=9: net -0.10R, gross +0.16R [-0.73, +1.01], real cost 0.21R (stop 0.62%); 5y n=7131: net -12.6 bp, gross +1.6 bp = +0.009R [-0.020, +0.039], P1 +0.015 / P2 +0.001; AI must add 0.20R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.20R/trade."
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=8: net -0.83R, gross -0.59R [-0.97, -0.10], real cost 0.23R (stop 0.67%); 5y n=13307: net -12.5 bp, gross +1.8 bp = +0.017R [-0.003, +0.037], P1 +0.016 / P2 +0.019; AI must add 0.21R/trade",
+   "note": "Borderline small pre-cost edge over five years (CI touches 0); a coin flip in practice. The 30m version is graded B."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=21: net -0.29R, gross -0.07R [-0.55, +0.37], real cost 0.20R (stop 0.67%); 5y n=15392: net -13.3 bp, gross +0.9 bp = +0.011R [-0.006, +0.028], P1 +0.002 / P2 +0.022; AI must add 0.19R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.19R/trade."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=46: net +0.06R, gross +0.29R [-0.10, +0.73], real cost 0.20R (stop 0.66%); 5y n=46224: net -14.0 bp, gross +0.3 bp = +0.004R [-0.006, +0.014], P1 +0.001 / P2 +0.007; AI must add 0.20R/trade",
+   "note": "A coin flip before costs over five years; the live positive gross is October's ranging regime. The AI would have to supply about 0.20R/trade."
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=21: net -0.58R, gross -0.36R [-0.70, +0.08], real cost 0.19R (stop 0.62%); 5y n=15009: net -12.7 bp, gross +1.6 bp = +0.015R [-0.003, +0.033], P1 +0.009 / P2 +0.024; AI must add 0.18R/trade",
+   "note": "Borderline small pre-cost edge (CI touches 0); a coin flip in practice. The 30m version is graded B."
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=13: net +0.26R, gross +0.46R [+0.01, +0.88], real cost 0.18R (stop 0.75%); 5y n=11522: net -14.8 bp, gross -0.5 bp = +0.003R [-0.015, +0.022], P1 +0.007 / P2 -0.001; AI must add 0.17R/trade",
+   "note": "A coin flip before costs over five years. The live gross CI above 0 (n=13) is contradicted by five years: treat it as regime luck."
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=7: net -0.66R, gross -0.40R [-0.96, +0.35], real cost 0.23R (stop 0.57%); 5y n=12337: net -15.2 bp, gross -0.9 bp = -0.010R [-0.028, +0.007], P1 -0.022 / P2 +0.006; AI must add 0.23R/trade",
+   "note": "A coin flip before costs, leaning negative; the AI would have to supply about 0.23R/trade."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=98: net -0.25R, gross -0.03R [-0.40, +0.35], real cost 0.20R (stop 0.70%); 5y n=102371: net -13.6 bp, gross +0.7 bp = +0.012R [-0.001, +0.026], P1 +0.008 / P2 +0.018; AI must add 0.19R/trade",
+   "note": "A coin flip before costs, with a very high signal rate; the AI would have to supply about 0.19R/trade."
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=15: net -0.31R, gross -0.11R [-0.57, +0.37], real cost 0.20R (stop 0.78%); 5y n=9610: net -15.1 bp, gross -0.8 bp = +0.009R [-0.018, +0.035], P1 -0.013 / P2 +0.045; AI must add 0.19R/trade",
+   "note": "A coin flip before costs; the two periods disagree. The AI would have to supply about 0.19R/trade."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=70: net +0.07R, gross +0.31R [-0.03, +0.73], real cost 0.22R (stop 0.60%); 5y n=46749: net -14.2 bp, gross +0.1 bp = -0.005R [-0.027, +0.018], P1 -0.012 / P2 +0.005; AI must add 0.22R/trade",
+   "note": "A coin flip before costs over five years; the live strength is October-specific. The AI would have to supply about 0.22R/trade."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=85: net -0.22R, gross +0.02R [-0.25, +0.30], real cost 0.21R (stop 0.63%); 5y n=78930: net -14.3 bp, gross -0.0 bp = +0.002R [-0.006, +0.011], P1 +0.002 / P2 +0.002; AI must add 0.21R/trade",
+   "note": "An almost perfect coin flip before costs; the AI would have to supply about 0.21R/trade."
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=119: net -0.12R, gross +0.11R [-0.23, +0.46], real cost 0.21R (stop 0.65%); 5y n=123323: net -14.0 bp, gross +0.3 bp = +0.005R [-0.006, +0.016], P1 -0.001 / P2 +0.013; AI must add 0.20R/trade",
+   "note": "A coin flip before costs, with a very high signal rate; the AI would have to supply about 0.20R/trade."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=58: net -0.10R, gross +0.13R [-0.19, +0.44], real cost 0.20R (stop 0.62%); 5y n=44439: net -14.5 bp, gross -0.2 bp = -0.003R [-0.019, +0.013], P1 -0.007 / P2 +0.002; AI must add 0.20R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.20R/trade."
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=55: net -0.37R, gross -0.13R [-0.41, +0.18], real cost 0.22R (stop 0.58%); 5y n=47271: net -14.2 bp, gross +0.1 bp = +0.002R [-0.012, +0.015], P1 +0.002 / P2 +0.001; AI must add 0.22R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.22R/trade."
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=10: net -0.80R, gross -0.56R [-0.96, -0.12], real cost 0.24R (stop 0.62%); 5y n=12634: net -14.0 bp, gross +0.3 bp = +0.004R [-0.017, +0.024], P1 -0.007 / P2 +0.018; AI must add 0.24R/trade",
+   "note": "A coin flip before costs over five years; the live loss is small-n noise. The AI would have to supply about 0.24R/trade."
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=113: net -0.19R, gross +0.04R [-0.30, +0.44], real cost 0.22R (stop 0.63%); 5y n=94447: net -13.3 bp, gross +1.0 bp = +0.009R [-0.002, +0.021], P1 +0.015 / P2 +0.002; AI must add 0.21R/trade",
+   "note": "A coin flip before costs. The v3a account profit was luck in the cost sense. The AI would have to supply about 0.21R/trade."
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=39: net +0.42R, gross +0.67R [-0.02, +1.52], real cost 0.22R (stop 0.63%); 5y n=34362: net -15.7 bp, gross -1.5 bp = -0.013R [-0.028, +0.002], P1 -0.025 / P2 +0.002; AI must add 0.22R/trade",
+   "note": "The live top performer, but its five-year gross leans negative (P1 clearly < 0). Treat the live result as regime luck; the AI would have to supply about 0.22R/trade or more."
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live every-signal n=29: net -0.29R, gross -0.04R [-0.53, +0.46], real cost 0.23R (stop 0.60%); 5y n=36378: net -13.4 bp, gross +0.9 bp = +0.011R [-0.005, +0.028], P1 +0.011 / P2 +0.012; AI must add 0.22R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.22R/trade."
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "live every-signal n=153: net +0.16R, gross +0.35R [+0.06, +0.62], real cost 0.17R (stop 0.79%); 5y n=133485: net -16.1 bp, gross -1.9 bp = -0.020R [-0.031, -0.008], P1 -0.023 / P2 -0.015; AI must add 0.17R/trade",
+   "note": "Loses before costs over five years (CI below 0, both periods). The live gross CI above 0 is contradicted: regime luck. Not a cost-viable AI base, even though it is the most active strategy."
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "live every-signal n=57: net -0.29R, gross -0.07R [-0.35, +0.22], real cost 0.20R (stop 0.63%); 5y n=38207: net -15.3 bp, gross -1.0 bp = -0.009R [-0.021, +0.002], P1 -0.015 / P2 -0.003; AI must add 0.20R/trade",
+   "note": "Negative before costs in both five-year periods. Not a cost-viable base."
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "live every-signal n=10: net +0.40R, gross +0.68R [-0.30, +1.71], real cost 0.25R (stop 0.56%); 5y n=8152: net -15.8 bp, gross -1.5 bp = -0.018R [-0.039, +0.003], P1 -0.016 / P2 -0.021; AI must add 0.25R/trade",
+   "note": "Negative before costs in both five-year periods; the live gain is n=10 noise. Not a cost-viable base."
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "live every-signal n=5: net -0.52R, gross -0.29R [-0.97, +0.72], real cost 0.17R (stop 0.59%); 5y n=9053: net -15.5 bp, gross -1.3 bp = -0.017R [-0.035, +0.001], P1 -0.029 / P2 -0.003; AI must add 0.17R/trade",
+   "note": "Negative before costs in both five-year periods. Not a cost-viable base."
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "live every-signal n=12: net -0.30R, gross -0.07R [-0.76, +0.50], real cost 0.19R (stop 0.60%); 5y n=12733: net -16.0 bp, gross -1.7 bp = -0.019R [-0.043, +0.006], P1 -0.017 / P2 -0.020; AI must add 0.19R/trade",
+   "note": "Negative before costs in both five-year periods. Not a cost-viable base."
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "30m",
+   "grade": "B",
+   "numbers": "live every-signal n=9: net +0.09R, gross +0.23R [-0.26, +1.18], real cost 0.14R (stop 1.00%); 5y n=6639: net -11.5 bp, gross +2.9 bp = +0.022R [+0.001, +0.045], P1 +0.018 / P2 +0.028; AI must add 0.11R/trade",
+   "note": "The best cost-lens cell: a small pre-cost edge in both five-year periods covering about 21% of the cost. It still needs about 0.11R/trade from the AI. Could be chance (about 3 of 108 cells expected), and the signal rate is low (about 3.5/day on 6 coins)."
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "30m",
+   "grade": "B",
+   "numbers": "live every-signal n=12: net -0.36R, gross -0.18R [-0.62, +0.26], real cost 0.16R (stop 0.93%); 5y n=7372: net -12.0 bp, gross +2.4 bp = +0.022R [+0.000, +0.045], P1 +0.015 / P2 +0.030; AI must add 0.14R/trade",
+   "note": "A small pre-cost edge in both five-year periods (about 17% of the cost). It still needs about 0.14R/trade from the AI. Could be chance."
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=4: net -0.89R, gross -0.76R [n<5], real cost 0.14R (stop 1.10%); 5y n=10530: net -14.6 bp, gross -0.2 bp = +0.005R [-0.015, +0.024], P1 +0.006 / P2 +0.003; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=23: net -0.34R, gross -0.18R [-0.56, +0.31], real cost 0.14R (stop 0.85%); 5y n=15446: net -14.3 bp, gross +0.1 bp = +0.004R [-0.015, +0.025], P1 -0.015 / P2 +0.030; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the two periods disagree. The AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=16: net +0.01R, gross +0.19R [-0.33, +0.63], real cost 0.15R (stop 0.84%); 5y n=13961: net -16.2 bp, gross -1.7 bp = -0.002R [-0.020, +0.016], P1 -0.018 / P2 +0.018; AI must add 0.15R/trade",
+   "note": "A coin flip before costs (the 15m version is graded B); the AI would have to supply about 0.15R/trade."
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=3: net +0.13R, gross +0.26R [n<5], real cost 0.15R (stop 1.07%); 5y n=528: net -9.9 bp, gross +4.6 bp = +0.056R [-0.013, +0.129], P1 +0.066 / P2 +0.043; AI must add 0.09R/trade",
+   "note": "The highest point estimate of the core 30m cells, but only 528 signals in five years (about 0.3/day), so the CI includes 0. Too rare to carry an AI trader."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=51: net -0.23R, gross -0.08R [-0.29, +0.14], real cost 0.14R (stop 0.97%); 5y n=48373: net -15.4 bp, gross -1.0 bp = +0.000R [-0.011, +0.011], P1 -0.006 / P2 +0.009; AI must add 0.14R/trade",
+   "note": "An exact coin flip before costs; the AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=4: net -0.04R, gross +0.14R [n<5], real cost 0.14R (stop 0.79%); 5y n=3916: net -14.3 bp, gross +0.2 bp = -0.002R [-0.026, +0.025], P1 -0.006 / P2 +0.004; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=3: net +0.36R, gross +0.54R [n<5], real cost 0.14R (stop 0.98%); 5y n=5011: net -13.9 bp, gross +0.5 bp = +0.005R [-0.021, +0.035], P1 +0.008 / P2 +0.001; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=2: net -0.28R, gross -0.08R [n<5], real cost 0.15R (stop 0.70%); 5y n=947: net -12.1 bp, gross +2.3 bp = +0.013R [-0.043, +0.066], P1 +0.023 / P2 -0.000; AI must add 0.13R/trade",
+   "note": "Rare and uncertain; a coin flip before costs."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=3: net -0.67R, gross -0.49R [n<5], real cost 0.15R (stop 0.77%); 5y n=7841: net -14.6 bp, gross -0.2 bp = +0.006R [-0.015, +0.026], P1 +0.002 / P2 +0.010; AI must add 0.15R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.15R/trade."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=26: net -0.07R, gross +0.09R [-0.22, +0.37], real cost 0.13R (stop 0.90%); 5y n=21265: net -14.1 bp, gross +0.3 bp = +0.012R [-0.001, +0.024], P1 +0.013 / P2 +0.010; AI must add 0.12R/trade",
+   "note": "Nearly a B (both periods +0.01R, CI just touching 0) but still under 3 bp of a 14 bp cost. The AI would have to supply about 0.12R/trade."
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=1: net +0.34R, gross +0.48R [n<5], real cost 0.11R (stop 1.03%); 5y n=307: net -14.0 bp, gross +0.4 bp = -0.002R [-0.090, +0.081], P1 +0.050 / P2 -0.058; AI must add 0.11R/trade",
+   "note": "Too rare to judge (about 0.2 signals/day); a coin flip."
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=9: net +0.06R, gross +0.21R [-0.38, +0.84], real cost 0.12R (stop 0.98%); 5y n=5357: net -16.1 bp, gross -1.6 bp = -0.011R [-0.035, +0.014], P1 -0.021 / P2 +0.001; AI must add 0.12R/trade",
+   "note": "A coin flip before costs, leaning negative; the AI would have to supply about 0.12R/trade."
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=12: net -0.23R, gross -0.08R [-0.42, +0.24], real cost 0.13R (stop 0.99%); 5y n=6499: net -14.4 bp, gross +0.1 bp = +0.005R [-0.017, +0.028], P1 +0.003 / P2 +0.008; AI must add 0.13R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.13R/trade."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=43: net -0.75R, gross -0.59R [-0.82, -0.30], real cost 0.15R (stop 0.93%); 5y n=49693: net -14.0 bp, gross +0.5 bp = +0.011R [-0.003, +0.025], P1 -0.004 / P2 +0.031; AI must add 0.13R/trade",
+   "note": "The live gross is clearly negative in October (CI below 0), but over five years it is a coin flip. The AI would have to supply about 0.13R/trade."
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=2: net -0.37R, gross -0.19R [n<5], real cost 0.17R (stop 0.86%); 5y n=4520: net -14.2 bp, gross +0.2 bp = +0.017R [-0.016, +0.050], P1 -0.005 / P2 +0.052; AI must add 0.15R/trade",
+   "note": "A coin flip before costs; the two periods disagree."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=47: net -0.12R, gross +0.04R [-0.21, +0.30], real cost 0.15R (stop 0.89%); 5y n=39188: net -15.0 bp, gross -0.6 bp = +0.003R [-0.007, +0.012], P1 -0.003 / P2 +0.011; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=67: net -0.21R, gross -0.05R [-0.33, +0.20], real cost 0.15R (stop 0.92%); 5y n=59738: net -15.3 bp, gross -0.8 bp = +0.001R [-0.011, +0.014], P1 -0.005 / P2 +0.009; AI must add 0.15R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.15R/trade."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=34: net +0.05R, gross +0.21R [-0.09, +0.48], real cost 0.14R (stop 0.88%); 5y n=21429: net -15.1 bp, gross -0.7 bp = +0.001R [-0.016, +0.018], P1 -0.005 / P2 +0.008; AI must add 0.14R/trade",
+   "note": "A live top-10 cell, but a coin flip before costs over five years. The AI would have to supply about 0.14R/trade."
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=49: net -0.19R, gross -0.03R [-0.33, +0.27], real cost 0.15R (stop 0.88%); 5y n=47665: net -15.6 bp, gross -1.1 bp = -0.002R [-0.015, +0.011], P1 -0.011 / P2 +0.009; AI must add 0.15R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.15R/trade."
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=13: net -0.04R, gross +0.12R [-0.69, +0.87], real cost 0.17R (stop 0.93%); 5y n=17204: net -15.2 bp, gross -0.8 bp = +0.003R [-0.013, +0.021], P1 -0.005 / P2 +0.014; AI must add 0.17R/trade",
+   "note": "A coin flip before costs; the AI would have to supply about 0.17R/trade."
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=1: net -1.15R, gross -0.98R [n<5], real cost 0.14R (stop 0.81%); 5y n=941: net -16.2 bp, gross -1.8 bp = -0.010R [-0.071, +0.051], P1 -0.034 / P2 +0.019; AI must add 0.14R/trade",
+   "note": "Too rare to judge; a coin flip at best."
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=3: net -0.66R, gross -0.51R [n<5], real cost 0.11R (stop 0.83%); 5y n=5142: net -16.8 bp, gross -2.4 bp = -0.003R [-0.024, +0.018], P1 -0.014 / P2 +0.011; AI must add 0.11R/trade",
+   "note": "A coin flip before costs, leaning negative."
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=11: net -0.37R, gross -0.21R [-0.81, +0.40], real cost 0.15R (stop 0.86%); 5y n=18122: net -12.8 bp, gross +1.7 bp = +0.009R [-0.009, +0.028], P1 -0.005 / P2 +0.029; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; the two periods disagree."
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live every-signal n=9: net -0.43R, gross -0.25R [-0.79, +0.28], real cost 0.14R (stop 0.84%); 5y n=6638: net -15.6 bp, gross -1.2 bp = -0.007R [-0.034, +0.021], P1 +0.021 / P2 -0.042; AI must add 0.14R/trade",
+   "note": "A coin flip before costs; P2 is clearly negative."
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=62: net +0.03R, gross +0.16R [-0.09, +0.36], real cost 0.12R (stop 1.16%); 5y n=73144: net -17.4 bp, gross -3.0 bp = -0.021R [-0.034, -0.008], P1 -0.026 / P2 -0.014; AI must add 0.12R/trade",
+   "note": "Loses before costs over five years (CI below 0, both periods; the same at 15m and 1h). Avoid as an AI base."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=43: net +0.25R, gross +0.42R [+0.03, +0.85], real cost 0.16R (stop 0.84%); 5y n=21796: net -15.3 bp, gross -0.9 bp = -0.011R [-0.034, +0.012], P1 -0.017 / P2 -0.003; AI must add 0.16R/trade",
+   "note": "A live replay top performer (and the best raw side-flip p), but negative before costs in both five-year periods. Treat the live gross CI above 0 as regime luck. Not a cost-viable base."
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=35: net -0.16R, gross +0.01R [-0.30, +0.27], real cost 0.15R (stop 0.86%); 5y n=23599: net -16.0 bp, gross -1.6 bp = -0.013R [-0.027, +0.003], P1 -0.016 / P2 -0.008; AI must add 0.15R/trade",
+   "note": "Negative before costs in both five-year periods."
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=29: net -0.02R, gross +0.14R [-0.15, +0.38], real cost 0.14R (stop 0.92%); 5y n=19849: net -17.5 bp, gross -3.1 bp = -0.017R [-0.031, -0.002], P1 -0.017 / P2 -0.017; AI must add 0.14R/trade",
+   "note": "Loses before costs over five years (CI below 0). Avoid."
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=8: net +0.57R, gross +0.74R [+0.53, +1.10], real cost 0.14R (stop 0.92%); 5y n=6370: net -17.1 bp, gross -2.6 bp = -0.012R [-0.034, +0.013], P1 -0.007 / P2 -0.018; AI must add 0.14R/trade",
+   "note": "The strong live result rests on n=8 and is contradicted by five years (negative in both periods): regime luck. Not a cost-viable base."
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "live every-signal n=5: net -0.23R, gross -0.07R [-0.98, +0.54], real cost 0.14R (stop 0.85%); 5y n=3889: net -15.5 bp, gross -1.1 bp = -0.015R [-0.044, +0.014], P1 -0.010 / P2 -0.023; AI must add 0.14R/trade",
+   "note": "Negative before costs in both five-year periods."
+  },
+  {
+   "strategy": "F10_M2022 (DeepSeek)",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live n=3: net +0.73R, gross +1.02R [n<5], real cost 0.21R; 5y (own PREREG exits, unlevered) gross IS +0.2 bp / CF -9.6 bp vs cost 10.4 bp",
+   "note": "Gross positive in only one of the two five-year periods: no stable pre-cost edge. The AI would have to supply about 0.21R/trade."
+  },
+  {
+   "strategy": "F15_OPEN0930 (DeepSeek)",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live n=6: net -0.37R, gross -0.15R, real cost 0.20R; 5y (own PREREG exits, unlevered) gross IS -3.1 bp / CF +1.4 bp vs cost 10.3 bp",
+   "note": "No stable pre-cost edge (the two periods disagree). It shares its signal stream with its 30m copy."
+  },
+  {
+   "strategy": "F5_BOX (DeepSeek)",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live n=10: net +0.08R, gross +0.32R [-0.61, +1.09], real cost 0.22R; 5y (own PREREG exits, unlevered) gross IS +0.8 bp / CF -5.9 bp vs cost 10.4 bp",
+   "note": "No stable pre-cost edge. It duplicates F5_BOX_HTF at 15m. The AI would have to supply about 0.22R/trade."
+  },
+  {
+   "strategy": "F5_BOX_RSI (DeepSeek)",
+   "timeframe": "15m",
+   "grade": "C",
+   "numbers": "live n=1: net +0.46R, gross +0.64R [n<5], real cost 0.14R; 5y (own PREREG exits, unlevered) gross IS -7.5 bp / CF +2.3 bp vs cost 10.3 bp",
+   "note": "Too rare; no stable pre-cost edge."
+  },
+  {
+   "strategy": "F15_ASIA_SWEEP (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=6: net +0.37R, gross +0.57R [-0.98, +0.93], real cost 0.17R; 5y (own PREREG exits, unlevered) gross IS +0.2 bp / CF -9.1 bp vs cost 10.7 bp",
+   "note": "No stable pre-cost edge; CF is clearly negative."
+  },
+  {
+   "strategy": "F15_OPEN0930 (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=6: net -0.12R, gross +0.05R, real cost 0.15R; 5y (own PREREG exits, unlevered) gross IS -3.3 bp / CF +0.0 bp vs cost 10.6 bp",
+   "note": "No pre-cost edge; same signals as 15m."
+  },
+  {
+   "strategy": "F5_BOX (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=4: net +0.04R, gross +0.17R [n<5], real cost 0.15R; 5y (own PREREG exits, unlevered) gross IS -4.1 bp / CF +1.9 bp vs cost 10.7 bp",
+   "note": "No stable pre-cost edge; duplicates F5_BOX_HTF at 30m."
+  },
+  {
+   "strategy": "F5_BOX_HTF (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=4: net +0.04R, gross +0.17R [n<5], real cost 0.15R; 5y (own PREREG exits, unlevered) gross IS -8.9 bp / CF +3.7 bp vs cost 10.7 bp",
+   "note": "No stable pre-cost edge; identical live trades to F5_BOX."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=72: net -0.14R, gross +0.03R [-0.17, +0.23], real cost 0.15R; 5y (own PREREG exits, unlevered) gross IS -6.4 bp / CF +1.5 bp vs cost 10.7 bp",
+   "note": "No stable pre-cost edge. The AI would have to supply about 0.15R/trade."
+  },
+  {
+   "strategy": "F9_BREAKER (DeepSeek)",
+   "timeframe": "30m",
+   "grade": "C",
+   "numbers": "live n=10: net +0.19R, gross +0.37R [+0.02, +0.75], real cost 0.15R; 5y (own PREREG exits, unlevered) gross IS -7.2 bp / CF +0.4 bp vs cost 10.7 bp",
+   "note": "The live gross CI above 0 (n=10) is not supported by five years (IS clearly negative). No stable pre-cost edge."
+  },
+  {
+   "strategy": "DeepSeek ds200: the other 40 definitions (F10_OTE, F11_PO3, F11_RAID, F11_TSOUP, F12_MSS, F12_MSS_DISP, F13_FVG_PD, F13_RAID_PD, F14_SMT, F15_ASIA_BRK, F15_ASIA_SWEEP, F15_LON_BRK, F15_OPEN0000, F15_ORB, F16_FIB382/500/618/764, F17_Z, F17_Z_HL, F1_MOM_DIV, F1_PVT_DIV, F1_RSI_DIV, F2_DEMARK, F3_BOS, F3_BOS_ZONE, F3_HHHL, F4_FAN, F4_PULL, F4_PULL_RSI, F5_BOX_HTF, F6_VWAP_CROSS, F6_VWAP_FAIL, F7_RF_ONLY, F7_RF_TRIPLE, F8_VWICK, F9_BREAKER, F9_FVG, F9_IFVG, F9_OB)",
+   "timeframe": "15m",
+   "grade": "D",
+   "numbers": "40 definitions; live n=1152, pooled live gross +0.17R; 5y gross median IS -5.5 bp / CF -4.6 bp vs cost 10.4 bp",
+   "note": "Negative before costs in both five-year periods under their own exits: they lose before costs. Live winners here (F15_ORB, F1_RSI_DIV, F12_MSS_DISP) are contradicted by five years; the pooled live gross matches the coin flips' October gross."
+  },
+  {
+   "strategy": "DeepSeek ds200: the other 35 definitions (F10_OTE, F11_PO3, F11_RAID, F11_TSOUP, F12_MSS, F12_MSS_DISP, F13_FVG_PD, F13_RAID_PD, F14_SMT, F15_ASIA_BRK, F15_LON_BRK, F15_OPEN0000, F15_ORB, F16_FIB382/500/618/764, F17_Z, F17_Z_HL, F1_MOM_DIV, F1_PVT_DIV, F1_RSI_DIV, F2_DEMARK, F3_BOS, F3_BOS_ZONE, F3_HHHL, F4_FAN, F4_PULL, F6_VWAP_FAIL, F7_RF_ONLY, F7_RF_TRIPLE, F8_VWICK, F9_FVG, F9_IFVG, F9_OB)",
+   "timeframe": "30m",
+   "grade": "D",
+   "numbers": "35 definitions; live n=518, pooled live gross +0.01R; 5y gross median IS -6.5 bp / CF -6.3 bp vs cost 10.7 bp",
+   "note": "Negative before costs in both five-year periods. F15_ORB 30m (live gross +0.80 [+0.14, +1.24], n=12) and F12_MSS 30m (+0.52) are contradicted by five years (-11.1/-10.3 bp and -11.7/-5.0 bp)."
+  }
+ ],
+ "files": [
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/_boot.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c00_ticks.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c01_decompose.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c02_replay.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c03_exec_real.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c04_scenarios.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c05_breakeven.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c06_vol_regime.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c07_5y_regime.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c08_limit_d3.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c09_strategy_notes.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c10_needed_edge.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/c11_notes_json.py",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c00_ticks.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_trades_decomposed.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_decomp_by_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_decomp_by_coin_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_decomp_by_stopbin.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_sl_decomposition_by_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c01_lock_gap_by_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c02_replay_rows.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c03_exec_coin.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c03_fill_costs_by_coin.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c03_stop_slips_by_coin.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_parity.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_scenarios.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_scenarios_resolved_only.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_by_coin_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_by_strategy_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_wide.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c04_replay_rows_rb.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_base_accounting.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_breakeven_by_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_breakeven_by_coin_tf.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_breakeven_by_stopbin.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_breakeven_grid.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_menus.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c05_ai_leverage_cost.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c06_live_vs_5y_stop.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c06_5y_stop_quantiles.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c06_5y_stop_median_by_year.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c06_share_cheap_regime.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c07_5y_regime.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c07_5y_by_strategy.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c07_data_check.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c08_limit_d3.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c09_strategy_cost_grades.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c10_needed_edge.csv",
+  "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens/costs/out/c11_strategy_notes.json"
+ ]
+}
