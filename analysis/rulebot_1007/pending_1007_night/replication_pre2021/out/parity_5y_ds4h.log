@@ -1,0 +1,6 @@
+{'coin': 'BTCUSD', 'mine': 19926, 'theirs': 19926, 'both': 19926, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'ETHUSD', 'mine': 20545, 'theirs': 20545, 'both': 20545, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'SOLUSD', 'mine': 20284, 'theirs': 20284, 'both': 20284, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'DOGEUSD', 'mine': 20833, 'theirs': 20833, 'both': 20833, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'LTCUSD', 'mine': 20538, 'theirs': 20538, 'both': 20538, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'BCHUSD', 'mine': 20667, 'theirs': 20667, 'both': 20667, 'lev_agree': 1.0, 'maxdR': 0.0, 'maxdG': 0.0}

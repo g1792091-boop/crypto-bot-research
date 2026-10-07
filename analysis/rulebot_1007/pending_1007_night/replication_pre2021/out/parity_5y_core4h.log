@@ -1,0 +1,6 @@
+{'coin': 'BTCUSD', 'mine': 11852, 'theirs': 11852, 'both': 11852, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'ETHUSD', 'mine': 11902, 'theirs': 11902, 'both': 11902, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'SOLUSD', 'mine': 11553, 'theirs': 11553, 'both': 11553, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'DOGEUSD', 'mine': 11598, 'theirs': 11598, 'both': 11598, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'LTCUSD', 'mine': 11607, 'theirs': 11607, 'both': 11607, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}
+{'coin': 'BCHUSD', 'mine': 11591, 'theirs': 11591, 'both': 11591, 'lev_agree': np.float64(1.0), 'maxdR': 0.0, 'maxdG': 0.0}

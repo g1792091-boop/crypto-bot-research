@@ -1,0 +1,8 @@
+y5 ds 15m BCHUSD 7204 sf_chk max 5.9244593009211144e-08 open_chk max 0.0
+y5 ds 15m BTCUSD 7484 sf_chk max 5.849627648935041e-08 open_chk max 0.0
+y5 ds 15m DOGEUSD 7067 sf_chk max 5.929060775677897e-08 open_chk max 0.0
+y5 ds 15m ETHUSD 7647 sf_chk max 5.9058752110985324e-08 open_chk max 0.0
+y5 ds 15m LTCUSD 6956 sf_chk max 5.8555536863735824e-08 open_chk max 0.0
+y5 ds 15m SOLUSD 7001 sf_chk max 5.91003959105052e-08 open_chk max 0.0
+SUMMARY y5 F16_FIB382@15m n 21075 | gross tf-bars +0.0262 t 3.89 -> 5m +0.0293 t 4.49 (diff +0.0030 t 1.66) | net tf-bars -0.1417 t -19.16 -> 5m -0.1384 t -19.19 (diff +0.0033 t 1.81) | lock share tf 0.624 5m 0.624 | win tf 0.583 5m 0.613
+SUMMARY y5 F16_FIB500@15m n 22284 | gross tf-bars +0.0221 t 3.32 -> 5m +0.0266 t 4.06 (diff +0.0045 t 2.61) | net tf-bars -0.1499 t -20.51 -> 5m -0.1451 t -20.14 (diff +0.0048 t 2.77) | lock share tf 0.620 5m 0.621 | win tf 0.584 5m 0.610

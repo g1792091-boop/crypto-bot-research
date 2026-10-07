@@ -1,0 +1,79 @@
+core 5m done
+core 15m done
+core 30m done
+core 1h done
+core 4h done
+ds 15m done
+ds 30m done
+ds 1h done
+ds 4h done
+{
+ "all": {
+  "cells": 247,
+  "spearman_t": 0.29609762468265927,
+  "perm_p_two": 0.0,
+  "pearson_gross": 0.29650696160885104,
+  "sign_agree_all": 0.5870445344129555,
+  "strong5y_cells": 48,
+  "strong5y_sign_agree": 0.75,
+  "pre_pos_t2": 32,
+  "pre_neg_t2": 16
+ },
+ "core": {
+  "cells": 119,
+  "spearman_t": 0.20813274462327305,
+  "perm_p_two": 0.022,
+  "pearson_gross": 0.2215369365542617,
+  "sign_agree_all": 0.5714285714285714,
+  "strong5y_cells": 17,
+  "strong5y_sign_agree": 0.8235294117647058,
+  "pre_pos_t2": 18,
+  "pre_neg_t2": 6
+ },
+ "ds": {
+  "cells": 128,
+  "spearman_t": 0.3282251419154001,
+  "perm_p_two": 0.0,
+  "pearson_gross": 0.32903572688317717,
+  "sign_agree_all": 0.6015625,
+  "strong5y_cells": 31,
+  "strong5y_sign_agree": 0.7096774193548387,
+  "pre_pos_t2": 14,
+  "pre_neg_t2": 10
+ },
+ "ai_tfs_15m_30m_1h": {
+  "cells": 213,
+  "spearman_t": 0.24759152694335645,
+  "perm_p_two": 0.0004,
+  "pearson_gross": 0.2894157360648393,
+  "sign_agree_all": 0.5539906103286385,
+  "strong5y_cells": 37,
+  "strong5y_sign_agree": 0.7027027027027027,
+  "pre_pos_t2": 23,
+  "pre_neg_t2": 14
+ }
+}
+         strategy   tf        n  per_day_sized  grossR  gross_t    netR    net_t  y5_grossR  y5_gross_t   exp_t  sign_agree   q_one                      verdict
+0      F16_FIB382  15m   4658.0         8.5002  0.0101   0.6920 -0.1165  -7.3738     0.0262      3.8860  1.8037        True  0.4016     inconclusive (same sign)
+1      F16_FIB500  15m   5080.0         9.2702  0.0148   1.2089 -0.1134  -8.6497     0.0221      3.3133  1.8083        True  0.3259     inconclusive (same sign)
+2       N23_HA_ST   4h    133.0         0.2520 -0.1132  -1.5972 -0.1846  -2.6375     0.0992      3.9491  1.4003       False  0.9878                 contradicted
+3   N20_EMA9_CHOP   5m  36868.0        67.2778  0.0189   1.2534 -0.2244 -12.5649     0.0287      3.2436  1.9037        True  0.3259     inconclusive (same sign)
+4          F9_FVG  15m   7932.0        14.4747  0.0095   0.8529 -0.1120  -9.8452     0.0167      2.5624  1.5040        True  0.4016     inconclusive (same sign)
+5         F9_IFVG  15m   5193.0         9.4765  0.0233   1.8949 -0.1007  -7.7856     0.0158      2.6132  1.2840        True  0.1336    replicates (nominal only)
+6     N10_HA_PSAR  30m   3841.0         7.0094  0.0094   0.6179 -0.0896  -5.8927     0.0124      1.7865  0.8129        True  0.4114     inconclusive (same sign)
+7   N18_VWMA_MACD  15m  22783.0        41.5756  0.0050   0.4797 -0.1256  -9.7758     0.0121      1.7931  1.1575        True  0.4498     inconclusive (same sign)
+8       S4_BB_BBP   1h   1287.0         2.3487  0.0121   0.4332 -0.0699  -2.4225     0.0193      1.5548  0.6922        True  0.4498     inconclusive (same sign)
+9     N25_DST_CCI  15m  11261.0        20.5497 -0.0106  -0.7204 -0.1465  -8.0072     0.0023      0.3383  0.1579       False  0.8371  inconclusive (sign flipped)
+10    N25_DST_CCI   1h   1500.0         2.7374  0.0170   0.7165 -0.0656  -2.7652     0.0076      0.6355  0.3224        True  0.4016     inconclusive (same sign)
+11  F6_VWAP_CROSS  15m  24183.0        44.1304  0.0178   2.7166 -0.1178 -11.9867     0.0054      1.8243  0.8282        True  0.0190              replicates (BH)
+12         F4_FAN  15m   9264.0        16.9054  0.0083   0.7230 -0.1268  -8.6405     0.0146      2.1130  1.2686        True  0.4016     inconclusive (same sign)
+13        V39_ALL  15m   8015.0        14.6262 -0.0033  -0.2009 -0.1345  -7.1403     0.0106      1.2020  0.6430       False  0.7016  inconclusive (sign flipped)
+14     N02_ST_KST  15m   6459.0        11.7867  0.0008   0.0700 -0.1305  -9.6628     0.0190      2.3617  1.6629        True  0.6032     inconclusive (same sign)
+15     F16_FIB382   1h    765.0         1.3961  0.0284   0.7092 -0.0548  -1.3171     0.0146      1.2000  0.3654        True  0.4016     inconclusive (same sign)
+16     N17_KC_RSI  15m  28167.0        51.4006 -0.0386  -3.5782 -0.1469 -12.4343    -0.0214     -3.3523 -1.9821        True  0.0040              replicates (BH)
+17     N17_KC_RSI  30m  12428.0        22.6797 -0.0411  -2.7452 -0.1287  -8.4308    -0.0254     -2.9692 -1.6976        True  0.0190              replicates (BH)
+18     N17_KC_RSI   1h   4617.0         8.4258 -0.0399  -1.5598 -0.1146  -4.4642    -0.0436     -3.8991 -1.7044        True  0.2277    replicates (nominal only)
+19        F15_ORB  15m   2474.0         4.5147  0.0548   2.4313 -0.0732  -3.3163    -0.0518     -4.1098 -2.3011       False  0.9925                 contradicted
+20       F11_RAID  15m  10245.0        18.6956  0.0036   0.3609 -0.1274 -11.6797    -0.0190     -4.0074 -1.9020       False  0.7370  inconclusive (sign flipped)
+21          F17_Z   1h   2179.0         3.9766 -0.0188  -0.8639 -0.0990  -4.5902    -0.0274     -3.2676 -1.2607        True  0.4016     inconclusive (same sign)
+22          F17_Z   4h     83.0         0.1572 -0.2119  -2.9396 -0.2797  -3.8693    -0.0972     -3.4875 -1.3486        True  0.0189              replicates (BH)

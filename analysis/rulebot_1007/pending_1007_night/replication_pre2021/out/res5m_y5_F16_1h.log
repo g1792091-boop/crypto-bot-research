@@ -1,0 +1,7 @@
+y5 ds 1h BCHUSD 738 sf_chk max 5.8204728037303255e-08 open_chk max 0.0
+y5 ds 1h BTCUSD 895 sf_chk max 5.831658300703424e-08 open_chk max 0.0
+y5 ds 1h DOGEUSD 695 sf_chk max 5.452380902326581e-08 open_chk max 0.0
+y5 ds 1h ETHUSD 890 sf_chk max 5.876720077235831e-08 open_chk max 0.0
+y5 ds 1h LTCUSD 739 sf_chk max 5.6403085313405654e-08 open_chk max 0.0
+y5 ds 1h SOLUSD 585 sf_chk max 5.67177980137501e-08 open_chk max 0.0
+SUMMARY y5 F16_FIB382@1h n 4542 | gross tf-bars +0.0146 t 1.20 -> 5m +0.0164 t 1.46 (diff +0.0018 t 0.37) | net tf-bars -0.0766 t -6.26 -> 5m -0.0739 t -6.58 (diff +0.0026 t 0.54) | lock share tf 0.716 5m 0.719 | win tf 0.634 5m 0.712

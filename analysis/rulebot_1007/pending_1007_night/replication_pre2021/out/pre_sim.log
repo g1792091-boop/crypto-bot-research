@@ -1,0 +1,13 @@
+ds 15m 338231 9s
+ds 30m 187978 14s
+ds 1h 108004 17s
+ds 4h 28713 19s
+core 5m 843563 21s
+core 15m 286437 28s
+core 30m 143961 32s
+core 1h 72893 35s
+core 4h 16784 36s
+
+real	0m55.640s
+user	1m23.748s
+sys	0m12.649s

@@ -1,0 +1,8 @@
+FIX20 pre N23_HA_ST@4h all signals n 1809 gross +0.0237 t 1.32 | net +0.0153 t 0.85 | stop med 0.0614
+FIX20 y5 N23_HA_ST@4h all signals n 7163 gross +0.0187 t 1.96 | net -0.0115 t -1.25 | stop med 0.0440
+FIX20 pre F17_Z@4h all signals n 1031 gross -0.0448 t -2.02 | net -0.0428 t -1.93 | stop med 0.0609
+FIX20 y5 F17_Z@4h all signals n 4143 gross -0.0316 t -2.54 | net -0.0619 t -5.07 | stop med 0.0437
+FIX20 pre F16_FIB382@15m all signals n 5343 gross +0.0141 t 0.96 | net -0.1000 t -6.34 | stop med 0.0145
+FIX20 pre F16_FIB500@15m all signals n 5799 gross +0.0198 t 1.50 | net -0.0966 t -6.69 | stop med 0.0144
+FIX20 y5 F16_FIB382@15m all signals n 21595 gross +0.0306 t 3.72 | net -0.1352 t -15.16 | stop med 0.0101
+FIX20 y5 F16_FIB500@15m all signals n 22791 gross +0.0250 t 3.34 | net -0.1450 t -17.57 | stop med 0.0100

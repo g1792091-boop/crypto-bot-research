@@ -1,0 +1,7 @@
+y5 core 4h BCHUSD 143 sf_chk max 4.860522972993664e-08 open_chk max 0.0
+y5 core 4h BTCUSD 634 sf_chk max 5.468217234572137e-08 open_chk max 0.0
+y5 core 4h DOGEUSD 87 sf_chk max 4.7111684109424345e-08 open_chk max 0.0
+y5 core 4h ETHUSD 298 sf_chk max 5.5460758430214696e-08 open_chk max 0.0
+y5 core 4h LTCUSD 198 sf_chk max 5.025595872787392e-08 open_chk max 0.0
+y5 core 4h SOLUSD 56 sf_chk max 3.611820553750533e-08 open_chk max 0.0
+SUMMARY y5 N23_HA_ST@4h n 1416 | gross tf-bars +0.0992 t 3.95 -> 5m +0.0770 t 3.84 (diff -0.0222 t -1.75) | net tf-bars +0.0265 t 1.06 -> 5m +0.0072 t 0.36 (diff -0.0193 t -1.53) | lock share tf 0.799 5m 0.802 | win tf 0.660 5m 0.797
