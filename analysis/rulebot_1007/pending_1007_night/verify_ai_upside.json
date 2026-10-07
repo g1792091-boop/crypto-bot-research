@@ -1,0 +1,118 @@
+{
+ "verdicts": [
+  {
+   "id": "AIH-1",
+   "status": "confirmed",
+   "recomputed": "Own replay v3rep.py (every SUBMITTED house signal of v3b+v4 run alone through the repo PaperEngine; base parity with replay_signals.csv R: 4,646 signals, max diff 0.0); stats v3st.py -> v3rules.csv. Core 30m CUT05 +0.045 (v3b +0.077, v4 +0.030; cluster CI -0.012..+0.099; p 0.127; q 0.77; 53 clusters); NP4 +0.032 (+0.053/+0.022); NP8 +0.021. No rule x group cell passes (positive in both runs and q<0.05). Lowest q 0.036 = DeepSeek 15m OPPH, a hurt cell (-0.061).",
+   "note": "Numbers reproduce. Caveats: (1) PREREG.md mtime 08:56:38 is later than rules_replay.py (08:44:50) and rules_signals.csv (08:45:16) because the addenda were appended to the same file, so 'written before running' cannot be verified from the file. The run matches the text except CUT05, which used the entry price where PREREG says the reference price; this does not matter (the PREREG version gives +0.045). (2) CUT05 is a resting 1m hard stop at -0.5R, which is a tighter code stop, not discretion. The AI-visible version (close at the signal-tf bar close when <= -0.5R, CUT05C) gives core 30m +0.012, DeepSeek 30m +0.001, core 15m -0.041."
+  },
+  {
+   "id": "AIH-2",
+   "status": "corrected",
+   "recomputed": "v3rules.csv: core 15m BE05 -0.058 (p 0.28), TP1 -0.063 (p 0.27), PART1 -0.031 (p 0.26); DeepSeek 15m -0.082/-0.095/-0.048 (p 0.17-0.19, v4 only). Core 15m by run: BE05 v3b +0.076 / v4 -0.119; TP1 +0.027 / -0.103; PART1 +0.013 / -0.052. Disposition (v3more.py, open at 2 bars with >= +0.3R, hold minus exit): +0.186 (n 334, CI -0.079..+0.406, p 0.18).",
+   "note": "The point estimates reproduce exactly, but none is significant and in v3b all three core rules HELPED. 'Early profit-taking/breakeven costs R at 15m' is not established. The supported statement is 'not shown to help; the pooled estimate is negative, driven by v4'. At 30m/1h BE05 is about 0 to slightly positive (+0.011/+0.005). Keeping a default of no profit-taking below the first rung is reasonable, but as an unproven default, not a measured cost."
+  },
+  {
+   "id": "AIH-3",
+   "status": "corrected",
+   "recomputed": "v3more.py (engine exit at the 4th tf bar close vs hold): 30m <= -0.5R n 74, -0.219 (CI -0.316..-0.069, p 0.010; v3b -0.242, v4 -0.215); 1h n 58, -0.286 (p<0.001, 14 clusters); 15m +0.122 (mixed). Threshold check: 30m <= -0.3R +0.006 (v4 +0.064, opposite sign); <= -0.7R -0.152. 1h <= -0.3/-0.5/-0.7: -0.247/-0.286/-0.201. Per-signal value of the rule (DEEP4): core 30m +0.014, core 1h +0.021, DeepSeek 30m +0.012, DeepSeek 1h +0.022, core 15m -0.013, DeepSeek 15m -0.007. Share in the state among trades open at bar 4: 30m 11.4%, 1h 19.1%.",
+   "note": "The state cell reproduces, but the analysis was not pre-registered (post hoc, as the analyst says). At 30m it depends on the -0.5R cutoff: at -0.3R it vanishes. It is robust at 1h, but with only 14 hour-clusters. The stated '+0.03R per signal' is about double the recomputed +0.012..+0.022, and '11-12% of trades' holds for 30m but is 19% at 1h. Worth a code shadow, mainly at 1h."
+  },
+  {
+   "id": "AIH-4",
+   "status": "confirmed",
+   "recomputed": "v3more.py: share of signals reaching +0.5R and then SL: core 15m 10.6%, 30m 4.7%, 1h 1.5%; DeepSeek 14.8% / 5.5% / 1.6%; reached +1R then SL 0-1.7%. Hindsight upper bound (breakeven on losers that saw +0.5R, plus dead losers cut at -0.5R) by my definition: core 0.27 / 0.16 / 0.12; DeepSeek 0.34 / 0.21 / 0.14 (lens: 0.24/0.15/0.12 and 0.31/0.19/0.14).",
+   "note": "The giveback shares reproduce exactly. The headroom bounds have the same order, with a slightly different definition of a dead loser, and they are clearly labelled as hindsight upper bounds. The real-trade and first-rung (v3a) figures were not recomputed."
+  },
+  {
+   "id": "AIH-5",
+   "status": "confirmed",
+   "recomputed": "v3more.py: share of losers whose MFE never reached +0.2R: core 45/45/51%, DeepSeek 48/55/63% (15m/30m/1h), as claimed. CUT05 at 15m: core -0.006, DeepSeek -0.021 (break-even or worse), at 30m +0.045.",
+   "note": "Bar-timing medians (bars to SL, bars to +0.3R) and the rule_tradeoff precision figures were not recomputed. The shares that were checked match."
+  },
+  {
+   "id": "AIH-6",
+   "status": "confirmed",
+   "recomputed": "v3more.py, core cells with >= 10 signals in both runs: Spearman headroom v3b vs v4 15m -0.03 (13 cells), 30m +0.26 (9); base R -0.10 / +0.07; CUT05 gain -0.37 / -0.52. Across cells, CUT05 gain vs base R: -0.85 (15m, 22 cells), -0.56 (30m, 17).",
+   "note": "Same conclusion. With 9-13 cells these correlations carry about +-0.6 uncertainty, so 'does not replicate' should read 'no evidence that it replicates'. The negative gain-vs-base link is partly mechanical: low-base cells have the deep stop-outs that a cut trims."
+  },
+  {
+   "id": "AIH-7",
+   "status": "corrected",
+   "recomputed": "Own account-level re-simulation v3acct.py (each account's own signal stream through one engine; parity 366/366 accounts on trade count, closed pnl max diff $1.2e-10). Switch on every new signal: core -$54 / -$73 / -$102 per switch at 15m/30m/1h (590/257/140 switches); v3b -$50, v4 -$71; DeepSeek -$28 / -$49 / -$66. Switch only under water: core -$78 per switch over 550 switches (lens: -$77 over 674). Selection check (v3ev.py, v3x.py): signals SKIPPED 'in position' vs signals ENTERED, each run alone: core 15m -0.066 vs -0.218 (diff +0.151, cluster CI +0.001..+0.296; v3b skipped -0.44, v4 +0.07); DeepSeek 15m 0.000 vs -0.293 (+0.293, CI +0.087..+0.484, v4 only); 30m/1h about equal or worse.",
+   "note": "The dollar results reproduce. But (1) only switching to another signal of the same strategy and timeframe was tested. The planned trader spans timeframes, and lens2_multi_tf (MT6, 5 years) finds switching only to a HIGHER timeframe the best rule (+0.015R vs first-come, 29/35 strategies). 'Do not count switching as an AI upside' overreaches; the supported statement is 'same-tf switch-on-any-signal loses about one round trip'. (2) 'The replacement signal was no better' does not hold at 15m: the in-position skipped signals were BETTER than the signals the accounts entered. The switching loss comes from cutting held trades whose remainders were good, plus the extra round trip, not from bad new signals. (3) The signal-level -2.07% per instance counts several skipped instances per held trade (not independent); not recomputed."
+  },
+  {
+   "id": "AIH-8",
+   "status": "confirmed",
+   "recomputed": "v3rep.py late entry (k bars later, fresh 2 ATR stop from that 1m open), v3more.py: core 15m 1 bar -0.026 (CI -0.110..+0.058; v3b +0.047, v4 -0.059), 4 bars -0.115; core 30m -0.045 / -0.065; core 1h +0.043 / +0.066 (CIs span 0); DeepSeek 15m -0.082 (CI -0.158..-0.013) / -0.151.",
+   "note": "Exact match. At 1h, late entries are not worse (point estimates positive, not significant)."
+  },
+  {
+   "id": "AIH-9",
+   "status": "corrected",
+   "recomputed": "v3rep.py fixed leverage (tiers set to L with margin L%), v3more.py: 30x-20x core -0.026 / -0.045 / -0.046 (15m/30m/1h, p 0.76/0.38/0.29; core 15m v3b +0.013); 40x-30x core 15m -0.104 (p 0.12), DeepSeek 15m -0.109 (p 0.078), DeepSeek 30m -0.135 (p 0.036). Sizable at 20/30/40x: core 15m 1252/1252/976; core 30m 639/630/212; core 1h 406/320/9; DeepSeek 30m 620/618/250.",
+   "note": "The paired values reproduce, but the core differences are not significant. '40x+ almost never possible at 30m' is wrong: 40x sizes 33% of core and 40% of DeepSeek 30m signals. At 1h, 40x is about 2% (9/406) and even 30x only 79%. So the 1h AI cannot scale leverage by confidence beyond 20-30x. 50x was not rechecked."
+  },
+  {
+   "id": "AIH-10",
+   "status": "confirmed",
+   "recomputed": "v3more.py: core 15m, all trades open at 2 bars, hold minus exit-now: v3b -0.174, v4 +0.223, pooled +0.105 (CI -0.045..+0.276, 53 clusters).",
+   "note": "Opposite signs by run, as claimed. The full state-cell scan with BH was not redone."
+  },
+  {
+   "id": "AIH-11",
+   "status": "corrected",
+   "recomputed": "data/macro_events.csv has 4 rows only (NFP 10/02, CPI 10/14, FOMC 10/28, PCE 10/29): one inside the runs. v3x.py, v3a trades around NFP 12:30Z (entries in [12:30, 14:30)Z): n 119, R -0.252 (lens n 163, -0.091); held through: n 39, +0.385 (lens 37, +0.48); others -0.448. Big hours (v3ev.py, top decile of 6-coin mean |1h return|): v4 4 hours, v3b 2. v4 core entries in a big hour +0.314 (n 253), hour after +0.114 (n 146; lens +0.19, n 241), others -0.140; v3b -0.229 / -0.406 / -0.334.",
+   "note": "'Only one scheduled macro event' is true only of the repo list, which covers just NFP/CPI/FOMC/PCE. Second-tier US releases (e.g. ISM Services PMI, normally Mon 10/05 14:00Z inside v3b; JOLTS) and crypto-specific news were not checked (not verifiable here). NFP is one event, one cluster, in v3a, which has no live_bars for a replay. The big hours are picked after the fact (look-ahead), with 2-4 clusters. These data cannot say anything about event reactions either way; the implication (log it as a shadow and judge later) is right."
+  },
+  {
+   "id": "AIH-12",
+   "status": "confirmed",
+   "recomputed": "v3ev.py, AI-visible window [bar close - 15 min, bar close], other accounts' SUBMITTED signals on the same coin; conflict minus agree: core 15m +0.034 (CI -0.19..+0.26; v3b +0.078, v4 -0.021), 30m -0.094 (CI -0.32..+0.12), 1h +0.049 (v3b +0.34, v4 -0.08), DeepSeek 15m -0.188 (CI -0.51..+0.12).",
+   "note": "Values differ a little from the lens (core 15m -0.019, 30m -0.152; probably different counting), but every CI spans 0 and signs change by run, so the conclusion of no reliable skip rule stands. The leaky window was not recomputed."
+  },
+  {
+   "id": "AIH-13",
+   "status": "corrected",
+   "recomputed": "v3ev.py pooled non-random 15m (n 2,424): OPP -0.025 (CI -0.046..-0.008, p 0.003; v3b -0.001, v4 -0.030), OPPH -0.041 (p 0.003; v3b +0.014, v4 -0.051), as claimed. By kind (v3rules.csv): DeepSeek 15m OPP -0.045 (p 0.008), OPPH -0.061 (q 0.036); core 15m OPP -0.006 (p 0.31), OPPH -0.022 (p 0.25; v3b +0.014); core 30m OPP +0.008 (v3b +0.012, v4 +0.007, p 0.033, q 0.77).",
+   "note": "The pooled result comes from DeepSeek 15m in v4 (single run). For the core 36 it is not significant and has mixed sign by run at 15m. At 30m it is slightly POSITIVE in both runs. 'Do not use the opposite signal at 15m/30m' is supported only for DeepSeek 15m. For core it is simply unproven either way."
+  },
+  {
+   "id": "AIH-14",
+   "status": "corrected",
+   "recomputed": "From v3rules.csv and v3more.py: the 30m 'consistent improvement' is CUT05 (a resting 1m hard stop, p 0.13, q 0.77) and core NP4 (+0.032). DeepSeek 30m NP4 is -0.004 (v4 only). The AI-visible bar-close cut gives +0.012 (core 30m) and +0.001 (DeepSeek 30m). The state cut is +0.014/signal at 30m and +0.021 at 1h (robust to the threshold only at 1h).",
+   "note": "The '+0.1-0.16R per account-day' multiplies non-significant point estimates by trades per day. It is an optimistic ceiling, not an expected gain. The only cut that held up beyond its cutoff is at 1h, which the 10/7 update now puts in scope for AI entries. 'Prefer 30m over 15m' is still supported, on cost (0.16R vs 0.22R) and on the negative 15m results, but not by a demonstrated 30m exit gain."
+  }
+ ],
+ "strategy_note_problems": [
+  "Coverage: 64 notes for 15m and 16 for 30m, none for 1h/4h, although the 10/7 update puts 1h AI entries in scope. Only 16 of the possible 30m cells have notes.",
+  "Grade 'H1 (v4 only)' (10 DeepSeek cells) reads 'exit rules gained in every run it has' from ONE run: no replication. It should not share the H1 label with cells that are consistent across runs.",
+  "DeepSeek duplicates are graded as independent cells with no duplicate flag: F5_BOX@15m and F5_BOX_HTF@15m have identical numbers (n 10, R +0.08). F11_RAID / F11_TSOUP / F13_RAID_PD@15m, listed as duplicates in CONTEXT, get three different grades (H1 v4-only, H1/hopeless, H2) with n 38/25/36, so the duplicate mapping or the notes need a check.",
+  "Per-cell rule gains (n 9-46 signals, 8-30 hour-clusters) are shown without CI or BH, e.g. 'CUT05 +0.10', and the note text reads them as gains. At this n they are noise-level.",
+  "The notes do not say that CUT05 is a resting 1m hard stop (a tighter code stop), not something an AI can do at bar closes. The bar-close version is about 0.",
+  "Spot check of 7 cells against my own replay: all reproduce to rounding (DOGE@15m n 9, R -0.46, v3b -1.16 / v4 -0.11; N09_ALLIG_AROON@15m n 21, -0.29, CUT05 +0.09 vs +0.10; F3_HHHL@15m n 46, +0.11; N24_DMI@30m n 34, +0.05 (+0.08/+0.04); N01_ST_EMA@30m n 23, -0.34, CUT05 +0.15 vs +0.16; N10_HA_PSAR@15m +0.06 (+0.05/+0.07); N20_EMA9_CHOP@30m +0.25 (+0.10/+0.28))."
+ ],
+ "missed": [
+  "1h AI entries (now in scope): the only state exit robust to its threshold is at 1h (exit at 4 bars when <= -0.5R: -0.29R hold-minus-exit, +0.021R per signal, 14 clusters). Late or near-signal entries at 1h are not worse (+0.04/+0.07R, CIs span 0). At 1h, 30x sizes only 79% of core signals and 40x about 2%, so '20-50x by confidence' is not available at 1h. Cost is about 0.11R per trade.",
+  "Skip/selection at 15m: signals that arrived while an account was in position were better run alone than the signals the accounts actually entered (core +0.15R, CI +0.00..+0.30; DeepSeek +0.29R, CI +0.09..+0.48; v4-driven, core v3b opposite). The one-position, first-come rule seems to take the worse 15m signals in v4. That bears on AI skip and priority logic and on the 'switching = bad replacement' story.",
+  "Cross-timeframe switching (the planned trader's real choice) was not tested. lens2_multi_tf found switch-only-to-higher-tf the best rule over 5 years. The AIH-7 ban on switching should be limited to same-tf switching.",
+  "AI-visible vs intrabar exits: every exit 'headroom' rule that helps (CUT05) is a resting 1m stop. The bar-close versions an AI could act on are about 0. The lens never separates 'code stop change' from 'AI discretion'.",
+  "PREREG.md was rewritten (addenda) after the main rules ran, so there is no tamper-evident record (hash or timestamp) of the original rule list. A future PREREG should be a separate, never-edited file.",
+  "Exit rules were tested only at each run's own leverage. Because the ladder locks a fixed ROE, rule effects at 20x vs 30-50x could differ. That interaction, relevant to 'leverage by AI confidence', was not checked.",
+  "All DeepSeek findings are single-run (v4): no out-of-sample check exists for any DeepSeek cell or rule.",
+  "Events: second-tier macro releases and crypto-specific events inside v3b/v4 were not listed or checked. The event file only covers NFP/CPI/FOMC/PCE."
+ ],
+ "files": [
+  "lens/ai_upside/verify3/v3rep.py",
+  "lens/ai_upside/verify3/v3sig.csv",
+  "lens/ai_upside/verify3/v3st.py",
+  "lens/ai_upside/verify3/v3st_lib.py",
+  "lens/ai_upside/verify3/v3rules.csv",
+  "lens/ai_upside/verify3/v3more.py",
+  "lens/ai_upside/verify3/v3acct.py",
+  "lens/ai_upside/verify3/v3acct.csv",
+  "lens/ai_upside/verify3/v3ev.py",
+  "lens/ai_upside/verify3/v3x.py"
+ ]
+}
