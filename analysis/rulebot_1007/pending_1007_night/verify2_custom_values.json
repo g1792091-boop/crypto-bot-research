@@ -1,0 +1,103 @@
+{
+ "verdicts": [
+  {
+   "id": "PREREG_hash_and_amendment",
+   "status": "corrected",
+   "recomputed": "sha256(PREREG.md) = 22d1f24b39164bb9e61ff220775abf759c20f54b73bfb6fc06e816a19c281c5f = PREREG.sha256 (match). mtimes: PREREG 13:54, stage1.py 13:56, cells 14:10, AMENDMENTS 14:16.",
+   "note": "Hash intact and the amendment is disclosed, dated and reported next to the original R results. Two limits. (a) The hash is stored next to the file, so it shows the file has not changed since hashing, not when it was written; only file mtimes support 'before outcomes'. (b) The amendment was avoidable and is not the best fix. PREREG section 5 already named a stop-independent money metric as secondary: net return per notional (%). Instead of promoting it, A1 adds a new post-hoc unit (R2) that is more favourable to filters and to the 1.5 ATR stop (see R2_unit). The decision should rest on the pre-registered secondary metric, or on both metrics."
+  },
+  {
+   "id": "R2_unit",
+   "status": "corrected",
+   "recomputed": "Static levels, 36 cells, half A/B (verify/vpow.py, vlevels_cells.csv). R2 = R*k/2: stop1.5 +0.0049/+0.0030, stop2.5 -0.0050/-0.0039. Exact R2x = net% / default-2ATR stop% (stop distance incl. slippage): stop1.5 +0.0038/+0.0019, stop2.5 -0.0043/-0.0032. Net % per notional (pp): stop1.5 +0.0046/+0.0033; F_adx -0.0065/+0.0009 (R2 +0.0050/+0.0032); F_box -0.0039/+0.0034 (R2 +0.0024/+0.0075); F_htf +0.0134/+0.0084.",
+   "note": "R2 is stop-independent only approximately. R's denominator is |fill - stop|, which includes the 0.02% entry slippage, so the k/2 rescale overstates the 1.5 ATR stop by about 0.001 R2 (25-35% of its effect) and penalises 2.5 ATR. R2 is not the bot's money either. paperbot sizes by margin_frac x leverage (config.py tiers, risk.check_entry), which is fixed notional, so money per trade is net % per notional. R2 instead weights trades as if sized by volatility (1/ATR%). In net %, the ADX and box filter gains disappear in half A (10 and 19 of 36 cells positive). Only the HTF filter and the 1.5 ATR stop keep their sign in both units."
+  },
+  {
+   "id": "reimplementation_parity",
+   "status": "confirmed",
+   "recomputed": "verify/vsim.py: own loop exit engine, own filters (own Wilder ADX, own HTF EMA50 resample, box, session) on 500 random signals x 9 stop/exit combos in each of S2_ST_ROC, N17_KC_RSI, OBV_B, F5_BOX @15m: 18,000 outcomes, max |dR| 2.3e-7, 0 done/undone mismatches; filter flags 100% agree; default signals equal the locked cache s__ columns exactly (292,377 signals in 3 cells). verify/vwf.py: own walk-forward (monthly re-tune, windows 13 and 26 wk, naive / F-only / S-only / P-only, selection on R and R2) reproduces the analyst's per-cell OOS deltas within 5e-5 (32 rows per metric).",
+   "note": "4-cell pooled (own day-cluster bootstrap): naive R2-selected, 26 wk: -0.0057 R2 [-0.0240, +0.0119], -0.0058 pp net%. Selecting directly on net % does not help either: +0.0006 pp [-0.023, +0.025]. R-selected stop-only: +0.029 R but -0.0049 R2 [-0.0079, -0.0020] (CV2 mechanism reproduced)."
+  },
+  {
+   "id": "lookahead_survivorship_costs",
+   "status": "confirmed",
+   "recomputed": "Code read plus parity above. Filters use only data up to the signal-bar close: HTF bins are used only once their end <= the bar close; box = rolling(48).shift(1); session uses the bar open hour. Training uses signals in [T-W, T) with exit-bar close < T (strict), applied to signals in [T, T+step). The ladder lock takes effect from the next bar. Costs: taker 0.05% plus slippage 0.02% per side, funding 0.01%/8h on every bar.",
+   "note": "No look-ahead found. Minor biases: funding is charged on every bar whatever the side (not signed), and take-profit exits pay the taker fee. Both slightly penalise long-hold exits and the TP exit. Survivorship: the 6 coins are all still-listed majors (no delisted coins), and the strategies were fixed in the PREREG (5 required by the owners, the rest by family). Both mostly affect absolute levels, not deltas versus default. Trades never closed: 0.01-0.02%."
+  },
+  {
+   "id": "CV1",
+   "status": "confirmed",
+   "recomputed": "R2 naive, 8 schemes: -0.0040..+0.0037, all CIs include 0 (wf_methods). Own net % per notional bootstrap, 36 cells (verify/vnp.py): s4_w26 -0.0164 pp [-0.0405, +0.0056] against a default of -0.150 %/trade; s4_w13 -0.0160 [-0.0384, +0.0067]; s1_w1 -0.0249 [-0.0447, -0.0048]; the 8 schemes range -0.011 to -0.025 pp.",
+   "note": "The no-gain verdict holds and is stronger in money per notional: the search is worse in all 8 schemes (7-17% larger loss per trade), and significantly worse with the 1-week window. Small fixes: BH hits are 2 in s1_w4 and 1 in s4_w1 (0 in 6 of 8 schemes, not 7 of 8); there are 269 OOS weeks, not 268."
+  },
+  {
+   "id": "CV2",
+   "status": "corrected",
+   "recomputed": "out/wf_methods naive (R): +0.0073 (s1_w1), +0.0123 (s4_w1), +0.0195 (s4_w4), +0.0232..+0.0254 (others). CI above 0 in 7 of 8 schemes, cells positive 18-32, PREREG rule passes 6 of 8. Net% -0.008..-0.019 pp. 2.5 ATR stop share 0.78 (26 wk).",
+   "note": "The mechanism (R rewards wide stops) is confirmed by my own walk-forward. The stated evidence range (+0.0236..+0.0254, CI>0 in 6 of 8, 24-32 cells) is wrong; the correct figures are in recomputed."
+  },
+  {
+   "id": "CV3",
+   "status": "confirmed",
+   "recomputed": "Mean training improvement of the pick 0.137 (26 wk) to 0.491 (1 wk). Top-10 half A +0.042 -> half B +0.0057, positive in B in 22 of 36 cells, mean Spearman +0.238. Noise rate 0.505-0.524 (R2 naive), 0.428-0.511 (R naive).",
+   "note": "Reproduced from the tables. My 4-cell walk-forward gives the same OOS collapse."
+  },
+  {
+   "id": "CV4",
+   "status": "corrected",
+   "recomputed": "R2 naive: s1_w1 -0.0040, s1_w4 +0.0037, s4_w1 +0.0028, s4_w13 -0.0024, s4_w26 -0.0009 (all CIs include 0). Per tf, equal-weight, s4_w26: 15m +0.0021, 30m +0.0005, 1h -0.0094 (matches). Net %: s1_w1 -0.0249 pp (CI excludes 0), s4_w1 -0.0147, s4_w26 -0.0164.",
+   "note": "'Short windows are worse' holds only for the weekly re-tune with a 1-week window, and only clearly in net %. In R2, the monthly re-tune with a 1-week window (s4_w1) has one of the highest deltas of the 8 schemes. No window difference is established. Advising against the 1-week window plus weekly re-tune is fine; 'monthly, 26 weeks' is not shown to be better than the other windows."
+  },
+  {
+   "id": "CV5",
+   "status": "corrected",
+   "recomputed": "R2 (matches): filter-only s4_w26 +0.0061 [+0.0011, +0.0111], stop-only +0.0026 [+0.0013, +0.0039], P-only +0.0031 [+0.0009, +0.0054]. Net % per notional (own bootstrap): filter-only s4_w26 +0.0047 pp [-0.0020, +0.0113], half B +0.0004; s4_w13 +0.0051 [-0.0012, +0.0107]. Stop-only +0.0019 [+0.0004, +0.0035], half B -0.0003. P-only -0.0016 [-0.0047, +0.0011]. Static ADX/box filters negative in net % in half A.",
+   "note": "In the pre-registered money metric (net % per notional) the filter-only search is not significant and fades in half B. The indicator-only search is negative, not 'weak positive'. The stop-only gain is partly the k/2 rescale (about 0.001) and is gone in half B. Only the HTF agreement filter is positive in both units and both halves. All effects are at most 0.01 R, against a cost of 0.08-0.17 R."
+  },
+  {
+   "id": "CV6",
+   "status": "confirmed",
+   "recomputed": "Trade-weighted default: 15m -0.1696 R (cost 0.1679, gross -0.0018), 30m -0.1201 (0.1164, -0.0037), 1h -0.0837 (0.0809, -0.0028). n 691,714 / 368,276 / 198,515. Net % per notional -0.145 / -0.156 / -0.160 %/trade. 34 of 36 cells have 0 of 225 combinations with mean > 0.",
+   "note": "Reproduced. In % per notional the loss is almost the same at every timeframe; it is smaller in R at 1h only because the stop is wider in price."
+  },
+  {
+   "id": "CV7",
+   "status": "corrected",
+   "recomputed": "Gate figures match (100/0.05/2: R2 +0.0007 [-0.0044, +0.0059], switch share 0.45; 100/0.15/2: -0.0028 [-0.0047, -0.0010]). Planted capture matches (0.20: 0.86 / 0.76 / 0.01; 0.10: 0.42 / 0.02 / 0.00; naive 0.89 / 0.58, wrong combination 0.16 / 0.48). Net %: 100/0.05/2 -0.0055 pp [-0.0147, +0.0033], half A -0.0108; 100/0.15/2 -0.0003 pp (null, so 'harmful' holds only in R2). No gate passes the PREREG rule in R2 (0 of 144).",
+   "note": "The recommendation contradicts the PREREG decision rule. The rule says: if no gate passes, keep defaults live and use the strictest gate as the proposal filter. The analyst instead recommends a permissive gate chosen after the fact from the planted test. On the real data that gate switches in 45% of cell-weeks with a 51% noise rate and loses 0.0055 pp per trade in net %. The gate's z test is not adjusted for picking the best of 225 candidates. The planted gains (0.10-0.30 R) are 15-60 times larger than any real effect seen (at most 0.008), so the test says nothing about catching realistic gains."
+  },
+  {
+   "id": "CV8",
+   "status": "corrected",
+   "recomputed": "Own code (verify/vpow.py): one-sample formula reproduces the analyst within 1%. +0.10 median 13.9 weeks (2.8-87.4), +0.20 3.5, +0.05 55.7. Day design effect 1.36-12.1. A two-sample (candidate vs concurrently estimated default, unpaired) test needs x2: +0.10 median 27.9 weeks (3 of 36 cells within 12 weeks), +0.20 median 7.0 (27 of 36). One-position stream: design effect 0.95-1.11, so its weeks / all-signal weeks = 0.73-6.3 (median 1.4), not 2-11; one-position +0.10 median 19.7 weeks (12.4-86.3).",
+   "note": "The formula is a one-sample test against a known value, not the 'unpaired comparison' the limits describe. An unpaired candidate needs twice as long. A filter judged as a subset of the same trades is close to one-sample; a stop or exit change judged on the same trades (paired) needs fewer weeks. '2 to 11 times longer' is just the trades-per-week ratio. It ignores that the one-position stream is barely clustered, so the true factor is 0.7-6.3, and for F5_BOX the one-position trader needs fewer weeks. '+0.20 R only in high-frequency cells by 12/31' is wrong: 33 of 36 cells one-sample, 27 of 36 two-sample. No allowance is made for the 225-way search."
+  },
+  {
+   "id": "CV9",
+   "status": "corrected",
+   "recomputed": "R2 PREREG verdicts: naive 0 of 8, gates 0 of 144 (correct), but restricted searches pass 14 times: filter-only 7 of 8 schemes, stop-only 4, P-only 3. R: naive 6 of 8; gates pass 76 rows.",
+   "note": "The CV9 numbers are right but leave out that the per-dimension searches pass the PREREG rule in R2. That 'positive' verdict depends on the post-hoc unit: in the pre-registered secondary money metric (net %), filter-only s4_w26 and s4_w13 do not have CI > 0, and P-only is negative."
+  }
+ ],
+ "strategy_note_problems": [
+  "Numbers: all 36 notes match the tables (14 fields each, within 1%): cell_desc, wf_cells, persistence, one_position.",
+  "Template text '(mostly wide-stop artefact)' is applied where it is wrong: where the R delta is negative (N24_DMI_1h -0.0425, OBV_B_1h, N17_KC_RSI_15m, N16_BBRSI_1h) or smaller than the R2 delta (N17_KC_RSI_1h +0.012 vs +0.032, F5_BOX_30m +0.012 vs +0.064).",
+  "N24_DMI_1h: the search significantly HURTS (-0.0826 R2/trade, p_le0 = 1.00, 26 wk; also significant at 13 wk and 1 wk), but the note only says 'BH10 fail'. Same for N17_KC_RSI_15m and N16_BBRSI_30m at 13 wk (-0.060, p 0.99 / 0.98) and N16_BBRSI_15m at 1 wk (-0.060, p 0.998). The notes never flag significant harm.",
+  "F5_BOX 'D (watch)': based on in-sample counts (40 of 225 combinations positive at 1h with n = 2,199 and a best-of-225 pick; 2 of 225 at 30m), non-significant walk-forward p values 0.20-0.39, and negative top-10 rank persistence at 15m (Spearman -0.29) and 1h (-0.17). 'Positive in all three timeframes' is 3 non-significant draws. It does not justify a watch status beyond any other D.",
+  "Notes report only R and R2. None gives net % per notional, the money unit for the bot's fixed-notional sizing, and none says whether the effects survive in it."
+ ],
+ "missed": [
+  "PREREG already had a stop-independent money metric (net % per notional, secondary). In it the naive search loses 0.011-0.025 pp per trade in all 8 schemes (significant for s1_w1), filter-only is not significant, and P-only is negative (verify/vnp.json).",
+  "paperbot sizing is margin_frac x leverage (fixed notional), so money = net %, not R2. R2 corresponds to volatility-scaled sizing. The two units disagree on the ADX and box filters.",
+  "The k/2 rescale ignores slippage in the stop distance and biases toward the 1.5 ATR stop by about 0.001 R2 (exact unit: net% / default stop%).",
+  "No two-sided harm check: several cells are significantly hurt by the search (N24_DMI_1h -0.08 R2). A live search would cause real damage in some strategies, not just noise.",
+  "The adoption gate's z threshold is not adjusted for picking the best of 225 candidates (about z 3.5 would be needed). The planted test only uses effects of 0.10-0.30, far above any real effect (at most 0.008), so gate behaviour for realistic gains is untested.",
+  "Only the 20x ladder geometry was tested. The owners plan 20-50x, and the ROE ladder locks at smaller price moves at higher leverage (CONTEXT: lock/lev variants), so custom exits interact with leverage. 4h is not tested.",
+  "The 5-year sd and cost differ from the current quiet market (15m cost about 0.22R live vs 0.168R), so the weeks-to-confirm figures will not carry over unchanged to the shadow account.",
+  "Week-cluster bootstrap (own) gives CIs close to the day-cluster ones (e.g. filter-only R2 [+0.0016, +0.0108] vs [+0.0011, +0.0111]), so the clustering choice is not a problem. Cross-strategy overlap is handled only by resampling days jointly."
+ ],
+ "files": {
+  "code": "lens2/custom_values/verify/vsim.py, vwf.py, vpow.py, vnp.py, write_verdict.py",
+  "outputs": "lens2/custom_values/verify/vsim.json, vwf_cells.csv, vwf_pooled.csv, vpow_cells.csv, vpow_summary.json, vlevels_cells.csv, vnp.json"
+ }
+}
