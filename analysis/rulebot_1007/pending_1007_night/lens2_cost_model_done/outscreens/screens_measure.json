@@ -1,0 +1,374 @@
+{
+ "screens": {
+  "S1_entry_S2_ST_ROC_15m|ko": {
+   "instructions": {
+    "chars": 2266,
+    "ascii": 1169,
+    "non_ascii": 1097,
+    "tok_low": 1092,
+    "tok_mid": 1407,
+    "tok_high": 1514
+   },
+   "market": {
+    "chars": 8819,
+    "ascii": 7414,
+    "non_ascii": 1405,
+    "tok_low": 3042,
+    "tok_mid": 3651,
+    "tok_high": 4052
+   },
+   "card": {
+    "chars": 1623,
+    "ascii": 1167,
+    "non_ascii": 456,
+    "tok_low": 643,
+    "tok_mid": 797,
+    "tok_high": 872
+   },
+   "journal": {
+    "chars": 528,
+    "ascii": 409,
+    "non_ascii": 119,
+    "tok_low": 196,
+    "tok_mid": 240,
+    "tok_high": 265
+   },
+   "wake": {
+    "chars": 526,
+    "ascii": 377,
+    "non_ascii": 149,
+    "tok_low": 209,
+    "tok_mid": 259,
+    "tok_high": 283
+   },
+   "total": {
+    "chars": 13770,
+    "ascii": 10544,
+    "non_ascii": 3226,
+    "tok_low": 5187,
+    "tok_mid": 6359,
+    "tok_high": 6991
+   }
+  },
+  "S1_entry_S2_ST_ROC_15m|en": {
+   "instructions": {
+    "chars": 3940,
+    "ascii": 3940,
+    "non_ascii": 0,
+    "tok_low": 1094,
+    "tok_mid": 1231,
+    "tok_high": 1407
+   },
+   "market": {
+    "chars": 9516,
+    "ascii": 9260,
+    "non_ascii": 256,
+    "tok_low": 2751,
+    "tok_mid": 3136,
+    "tok_high": 3563
+   },
+   "card": {
+    "chars": 1301,
+    "ascii": 1276,
+    "non_ascii": 25,
+    "tok_low": 371,
+    "tok_mid": 422,
+    "tok_high": 480
+   },
+   "journal": {
+    "chars": 713,
+    "ascii": 711,
+    "non_ascii": 2,
+    "tok_low": 198,
+    "tok_mid": 224,
+    "tok_high": 255
+   },
+   "wake": {
+    "chars": 627,
+    "ascii": 606,
+    "non_ascii": 21,
+    "tok_low": 183,
+    "tok_mid": 209,
+    "tok_high": 237
+   },
+   "market_json": {
+    "chars": 11061,
+    "ascii": 11061,
+    "non_ascii": 0,
+    "tok_low": 3072,
+    "tok_mid": 3456,
+    "tok_high": 3950
+   },
+   "total": {
+    "chars": 16105,
+    "ascii": 15801,
+    "non_ascii": 304,
+    "tok_low": 4601,
+    "tok_mid": 5226,
+    "tok_high": 5947
+   }
+  },
+  "S2_entry_bundle_F6_VWAP_CROSS|ko": {
+   "instructions": {
+    "chars": 2266,
+    "ascii": 1169,
+    "non_ascii": 1097,
+    "tok_low": 1092,
+    "tok_mid": 1407,
+    "tok_high": 1514
+   },
+   "market": {
+    "chars": 8828,
+    "ascii": 7423,
+    "non_ascii": 1405,
+    "tok_low": 3045,
+    "tok_mid": 3654,
+    "tok_high": 4056
+   },
+   "card": {
+    "chars": 1567,
+    "ascii": 1179,
+    "non_ascii": 388,
+    "tok_low": 599,
+    "tok_mid": 737,
+    "tok_high": 809
+   },
+   "journal": {
+    "chars": 527,
+    "ascii": 408,
+    "non_ascii": 119,
+    "tok_low": 196,
+    "tok_mid": 240,
+    "tok_high": 264
+   },
+   "wake": {
+    "chars": 1241,
+    "ascii": 911,
+    "non_ascii": 330,
+    "tok_low": 484,
+    "tok_mid": 598,
+    "tok_high": 655
+   },
+   "total": {
+    "chars": 14437,
+    "ascii": 11098,
+    "non_ascii": 3339,
+    "tok_low": 5420,
+    "tok_mid": 6640,
+    "tok_high": 7302
+   }
+  },
+  "S2_entry_bundle_F6_VWAP_CROSS|en": {
+   "instructions": {
+    "chars": 3940,
+    "ascii": 3940,
+    "non_ascii": 0,
+    "tok_low": 1094,
+    "tok_mid": 1231,
+    "tok_high": 1407
+   },
+   "market": {
+    "chars": 9527,
+    "ascii": 9271,
+    "non_ascii": 256,
+    "tok_low": 2754,
+    "tok_mid": 3140,
+    "tok_high": 3567
+   },
+   "card": {
+    "chars": 1123,
+    "ascii": 1098,
+    "non_ascii": 25,
+    "tok_low": 322,
+    "tok_mid": 366,
+    "tok_high": 417
+   },
+   "journal": {
+    "chars": 712,
+    "ascii": 710,
+    "non_ascii": 2,
+    "tok_low": 198,
+    "tok_mid": 223,
+    "tok_high": 255
+   },
+   "wake": {
+    "chars": 1440,
+    "ascii": 1392,
+    "non_ascii": 48,
+    "tok_low": 420,
+    "tok_mid": 480,
+    "tok_high": 545
+   },
+   "market_json": {
+    "chars": 11046,
+    "ascii": 11046,
+    "non_ascii": 0,
+    "tok_low": 3068,
+    "tok_mid": 3451,
+    "tok_high": 3945
+   },
+   "total": {
+    "chars": 16750,
+    "ascii": 16419,
+    "non_ascii": 331,
+    "tok_low": 4792,
+    "tok_mid": 5445,
+    "tok_high": 6194
+   }
+  },
+  "S3_hold_N24_DMI|ko": {
+   "instructions": {
+    "chars": 2266,
+    "ascii": 1169,
+    "non_ascii": 1097,
+    "tok_low": 1092,
+    "tok_mid": 1407,
+    "tok_high": 1514
+   },
+   "market": {
+    "chars": 8824,
+    "ascii": 7419,
+    "non_ascii": 1405,
+    "tok_low": 3044,
+    "tok_mid": 3653,
+    "tok_high": 4054
+   },
+   "card": {
+    "chars": 1629,
+    "ascii": 1225,
+    "non_ascii": 404,
+    "tok_low": 623,
+    "tok_mid": 766,
+    "tok_high": 841
+   },
+   "journal": {
+    "chars": 529,
+    "ascii": 410,
+    "non_ascii": 119,
+    "tok_low": 197,
+    "tok_mid": 241,
+    "tok_high": 265
+   },
+   "wake": {
+    "chars": 215,
+    "ascii": 116,
+    "non_ascii": 99,
+    "tok_low": 101,
+    "tok_mid": 130,
+    "tok_high": 140
+   },
+   "total": {
+    "chars": 13471,
+    "ascii": 10347,
+    "non_ascii": 3124,
+    "tok_low": 5060,
+    "tok_mid": 6201,
+    "tok_high": 6819
+   }
+  },
+  "S3_hold_N24_DMI|en": {
+   "instructions": {
+    "chars": 3940,
+    "ascii": 3940,
+    "non_ascii": 0,
+    "tok_low": 1094,
+    "tok_mid": 1231,
+    "tok_high": 1407
+   },
+   "market": {
+    "chars": 9519,
+    "ascii": 9263,
+    "non_ascii": 256,
+    "tok_low": 2752,
+    "tok_mid": 3137,
+    "tok_high": 3564
+   },
+   "card": {
+    "chars": 1266,
+    "ascii": 1240,
+    "non_ascii": 26,
+    "tok_low": 362,
+    "tok_mid": 412,
+    "tok_high": 468
+   },
+   "journal": {
+    "chars": 718,
+    "ascii": 716,
+    "non_ascii": 2,
+    "tok_low": 200,
+    "tok_mid": 225,
+    "tok_high": 257
+   },
+   "wake": {
+    "chars": 312,
+    "ascii": 303,
+    "non_ascii": 9,
+    "tok_low": 90,
+    "tok_mid": 103,
+    "tok_high": 117
+   },
+   "market_json": {
+    "chars": 11067,
+    "ascii": 11067,
+    "non_ascii": 0,
+    "tok_low": 3074,
+    "tok_mid": 3458,
+    "tok_high": 3952
+   },
+   "total": {
+    "chars": 15763,
+    "ascii": 15470,
+    "non_ascii": 293,
+    "tok_low": 4502,
+    "tok_mid": 5112,
+    "tok_high": 5818
+   }
+  }
+ },
+ "notes": {
+  "S1_entry_S2_ST_ROC_15m": {
+   "strategy": "S2_ST_ROC",
+   "time_utc": "2026-10-07 05:00:00",
+   "signals_in_wake": 2
+  },
+  "S2_entry_bundle_F6_VWAP_CROSS": {
+   "strategy": "F6_VWAP_CROSS",
+   "time_utc": "2026-10-07 06:30:00",
+   "signals_in_wake": 5
+  },
+  "S3_hold_N24_DMI": {
+   "strategy": "N24_DMI",
+   "time_utc": "2026-10-07 02:01:00",
+   "signals_in_wake": 0
+  }
+ },
+ "answers": {
+  "entry_ko": {
+   "chars": 218,
+   "ascii": 177,
+   "non_ascii": 41,
+   "tok_low": 77,
+   "tok_mid": 94,
+   "tok_high": 104,
+   "text": "{\"action\": \"진입\", \"coin\": \"BTC\", \"side\": \"long\", \"confidence\": 3, \"p_1r_first\": 46, \"basis\": \"추세\", \"invalidation\": \"15분 종가가 슈퍼트렌드 아래로 마감\", \"exp_hold_bars\": 6, \"reason\": \"4시간 박스 중간, 매물대 위 끝까지 1.2R 여유. 비용 22%라 확신은 3에 둠.\"}"
+  },
+  "skip_ko": {
+   "chars": 202,
+   "ascii": 177,
+   "non_ascii": 25,
+   "tok_low": 66,
+   "tok_mid": 79,
+   "tok_high": 88,
+   "text": "{\"action\": \"거르기\", \"coin\": \"SOL\", \"side\": \"short\", \"confidence\": 1, \"p_1r_first\": 35, \"basis\": \"매물대\", \"invalidation\": \"-\", \"exp_hold_bars\": 0, \"reason\": \"손절 쪽 0.27R에 스윙 저점, 목표 쪽 0.16R에 상위 봉 고점. 비용 25%.\"}"
+  },
+  "hold_ko": {
+   "chars": 81,
+   "ascii": 62,
+   "non_ascii": 19,
+   "tok_low": 30,
+   "tok_mid": 37,
+   "tok_high": 41,
+   "text": "{\"action\": \"유지\", \"basis\": \"기타\", \"reason\": \"무효 조건 아직 아님. 0.5R 움직임은 15분 ATR 1개 안.\"}"
+  }
+ }
+}

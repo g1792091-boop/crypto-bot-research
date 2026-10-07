@@ -1,0 +1,15 @@
+lever,mean_month,saving,note
+"reference: 30 Sonnet + 5 Opus, setup B, P4 (30m + events), switch calls",573.5,0.0,
+signals while holding ignored (no switch calls),465.1,108.4,
+holding checks only every 30 min (P2),450.6,122.9,
+holding checks only on events (P3),446.0,127.5,
+P4 with move trigger 1.0R instead of 0.5R (approx.),482.6,90.9,event part scaled by the live 1R/0.5R event ratio (15m)
+drop the 5 Opus twins,453.0,120.5,
+Haiku first for holding checks (20% escalated),476.7,96.8,
+English keys instead of Korean labels,508.3,65.2,
+"thinking low (entry ~300, hold ~100 tokens)",390.1,183.4,
+"thinking high (entry ~2000, hold ~800 tokens) [cost increase]",1021.2,-447.7,
+screen 1.5x larger instructions/card/journal [cost increase],640.8,-67.3,
+setup A (15m/30m entries only),542.3,31.2,
+20 traders instead of 30,447.1,126.4,
+AI skips half the signals (pe 0.5),510.4,63.1,

@@ -1,0 +1,4956 @@
+{
+ "findings": [
+  {
+   "id": "C1",
+   "claim": "Signal rates are high and stable: the 36 strategies on the 6 tradable coins submit about 570 (15m), 290 (30m), 190 (1h) and 40 (4h) signals a day live, the same as the 5-year rebuild; DeepSeek 44 adds about 780 / 410 / 245 / 84.",
+   "evidence": "rates_strategy_tf.csv: ours live v3b {'15m': 560.0, '1h': 167.0, '30m': 288.0, '4h': 24.0}, v4 {'15m': 573.0, '1h': 192.0, '30m': 291.0, '4h': 43.0}, 5y {'15m': 605.0, '1h': 153.0, '30m': 304.0, '4h': 37.0}; bundled per bar-close moment v4 {'15m': 398.0, '1h': 126.0, '30m': 197.0, '4h': 28.0} vs 5y {'15m': 401.0, '1h': 100.0, '30m': 200.0, '4h': 24.0}; DeepSeek v4 {'15m': 780.0, '1h': 245.0, '30m': 412.0, '4h': 84.0}",
+   "confidence": "high",
+   "implication": "Raw signal counts are not the cost driver once a trader holds one position at a time; per-trader call counts are."
+  },
+  {
+   "id": "C2",
+   "claim": "One position at a time caps entry calls at about 4-5 per trader-day (5y median), but a trader is in a position 43-54% of the time (5y) or 53-73% (live, quiet market), so most calls are holding checks and switch decisions.",
+   "evidence": "live_vs_5y.csv: 5y median entry calls A 4.6, trades 4.6, occupancy A 0.43 / B 0.54; live v4 ours occupancy A 0.6 / B 0.72, ds200 A 0.64",
+   "confidence": "high",
+   "implication": "Budget by holding-check policy first, not by signal counts."
+  },
+  {
+   "id": "C3",
+   "claim": "Per-trader calls/day (median strategy, setup A, AI enters every signal): switch mode 24-39 (5y) / 28-60 (live, ours and DeepSeek) depending on the holding policy; ignore mode 20-38 (5y) / 19-58 (live). P4 (30-minute checks + events, the PLAN_ATTACH draft) is the most expensive: about 39 (5y) and 49-60 (live) calls per trader-day.",
+   "evidence": "live_vs_5y.csv 5y A switch P1/P2/P3/P4 35.7/24.5/23.9/38.9, ignore 35.0/23.6/19.8/38.3; live v4 ours switch 47.2/37.9/28.1/48.7, ds200 switch P4 60.4",
+   "confidence": "medium",
+   "implication": "Live (quiet market) runs ~15-50% above the 5-year emulation because positions last longer when ATR is small (the ROE ladder needs a larger move in ATR terms). Plan with the live numbers as the upper case."
+  },
+  {
+   "id": "C4",
+   "claim": "A '>= 0.5R move' trigger is not rare: on 15m positions it fires about 1.8 times per hour held (1m bars), almost as often as a 15m bar-close check; 1.0R fires 0.46 per hour (-74%).",
+   "evidence": "move_threshold.csv (live replay, 2255 15m trades): per hour 0.5R 1.78, 0.75R 0.81, 1.0R 0.46; 30m 0.5R 0.88, 1h 0.43, 4h 0.13",
+   "confidence": "high",
+   "implication": "Use 1.0R (or 1 ATR of the held tf with a 15-minute cooldown) for event wakes, or route move wakes to Haiku."
+  },
+  {
+   "id": "C5",
+   "claim": "A realistic screen is about 13.5-14.5k characters: about 6.2-6.6k tokens with Korean labels (range 5.1-7.3k) and 5.1-5.4k with English keys (4.5-6.2k). The cacheable prefix (instructions + market bundle) is about 5.0k of 6.3k Korean tokens (~80%); the variable part (card + journal + wake) is about 1.1-1.4k.",
+   "evidence": "outscreens/screens_measure.json: S1 KO total mid 6359 (low 5187, high 6991; instr 1407, market 3651, card 797, journal 240, wake 259); S1 EN 5226; S2 (5-signal bundle) KO 6640; S3 hold KO 6201, EN 5112; market bundle EN JSON 3456 vs EN rows 3136",
+   "confidence": "medium",
+   "implication": "Token counts are estimates (ASCII/3.2 + Hangul x0.95; no tokenizer offline). Measure with usage fields in the pilot. English keys save ~15% input but input is only ~30% of the bill."
+  },
+  {
+   "id": "C6",
+   "claim": "Output (thinking + answer) dominates the per-call price: a Sonnet entry decision costs about $0.0129 at ~900 output tokens (low $0.0079, high $0.0249); a holding check $0.0067 (low $0.0047, high $0.0117); Opus about 1.9x; Haiku hold $0.0019.",
+   "evidence": "per_call_costs.json; cached input 5,058 tokens at $0.20/M, uncached ~1.1-1.4k at $2/M, output at $10/M (Sonnet).",
+   "confidence": "medium",
+   "implication": "Thinking length is the largest unknown (3x range in the total). Fix effort per call type and cap max_tokens; measure output_tokens in the pilot before locking the budget."
+  },
+  {
+   "id": "C7",
+   "claim": "Reference plan (30 Sonnet traders, setup B, P4 holding checks, switch calls, + 5 Opus twins, Korean, mid thinking) costs about $574/month on 5-year rates and $607/month on live (quiet-market) rates; busy days (p90) about +15%.",
+   "evidence": "scenarios.csv / scenarios_live_basis.csv: 5y mean 574, p90-day x30 661, p90 30-day window 622, max 30-day window 661; live mean 607, live p90-day x30 699",
+   "confidence": "medium",
+   "implication": "The draft plan does not fit $500 reliably; it needs one or two cuts."
+  },
+  {
+   "id": "C8",
+   "claim": "Market activity moves the bill only a little: with one position per trader, calls are bounded by clock time, so the 90th-percentile day is about 1.15x the mean day and the worst 30-day window in five years about 1.14x the mean month (30 traders).",
+   "evidence": "scenarios.csv: p90_day_x30 / mean_month 1.08-1.21 (median 1.16); max_30d_window / mean_month 1.06-1.21",
+   "confidence": "high",
+   "implication": "Set the daily cap at ~1.25x the planned mean; budget risk is in thinking tokens and policy choice, not in volatile markets. A shock day can still exceed the cap for a few hours."
+  },
+  {
+   "id": "C9",
+   "claim": "Combinations that fit $500 including 5 Opus twins under both 5-year and live rates at the p90 day (Korean screen, mid thinking): 10 traders: every setup x policy x mode; 20 traders: every combination in ignore mode, and in switch mode P2 or P3 (P1 only for B/C; P4 fits only on an average month); 30 traders: only ignore mode with P2 (30-minute checks) or P3 (event checks), any setup (P1-ignore and P2/P3-switch fit only on an average month; P4 never).",
+   "evidence": "fit_500.csv (KO screen, mid thinking, Sonnet holding checks; values = mean / p90-day x30)",
+   "confidence": "medium",
+   "implication": "With 30 traders, 'ignore new signals while holding' plus either 30-minute checks or event-only checks is the main way to stay under $500; with switch calls, only 10-20 traders fit. If the analyst, coach and re-asks (~$55/month) come out of the same $500, plan the traders at <= ~$445."
+  },
+  {
+   "id": "C10",
+   "claim": "What to cut first, by saving per dollar of lost information: (1) the 0.5R move trigger -> 1.0R or Haiku; (2) switch calls while holding (ignore new signals except opposite signals on the held coin); (3) the 30-minute schedule when events are on; (4) Opus twins to 3 or to entry calls only; then thinking caps, then trader count.",
+   "evidence": "levers.csv: reference: 30 Sonnet + 5 Opus, setup B, P4 (30m + events), switch calls: 574 (saves 0); signals while holding ignored (no switch calls): 465 (saves 108); holding checks only every 30 min (P2): 451 (saves 123); holding checks only on events (P3): 446 (saves 128); P4 with move trigger 1.0R instead of 0.5R (approx.): 483 (saves 91); drop the 5 Opus twins: 453 (saves 120); Haiku first for holding checks (20% escalated): 477 (saves 97); English keys instead of Korean labels: 508 (saves 65); thinking low (entry ~300, hold ~100 tokens): 390 (saves 183); thinking high (entry ~2000, hold ~800 tokens) [cost increase]: 1021 (saves -448); screen 1.5x larger instructions/card/journal [cost increase]: 641 (saves -67); setup A (15m/30m entries only): 542 (saves 31); 20 traders instead of 30: 447 (saves 126); AI skips half the signals (pe 0.5): 510 (saves 63)",
+   "confidence": "medium",
+   "implication": "Keep 30 traders and the 15m/30m(+1h) entries; cut the holding-check frequency, which the owners' own data says is noise (most move wakes are ordinary 1-ATR wiggles)."
+  },
+  {
+   "id": "C11",
+   "claim": "Letting the AI skip half the signals (pe 0.5) lowers the bill a little (fewer positions to check) rather than raising it.",
+   "evidence": "scenarios.csv (30 traders, Opus 5): pe 0.5 vs 1.0 mean month e.g. B/P4/switch 510 vs 574",
+   "confidence": "medium",
+   "implication": "Skip rates within the pilot band (15-85%) do not threaten the budget."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "DOGE",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 8.79,
+    "y5_bundles_per_day": 6.79
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 5.58,
+    "y5_bundles_per_day": 4.06
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 3.0,
+    "y5_bundles_per_day": 2.17
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 34.3,
+    "y5_switch_P1_p90": 53.0,
+    "y5_switch_P2_mean": 24.1,
+    "y5_switch_P2_p90": 36.6,
+    "y5_switch_P3_mean": 23.9,
+    "y5_switch_P3_p90": 37.9,
+    "y5_switch_P4_mean": 37.9,
+    "y5_switch_P4_p90": 55.7,
+    "y5_ignore_P1_mean": 33.8,
+    "y5_ignore_P1_p90": 52.0,
+    "y5_ignore_P2_mean": 22.3,
+    "y5_ignore_P2_p90": 33.0,
+    "y5_ignore_P3_mean": 19.6,
+    "y5_ignore_P3_p90": 31.9,
+    "y5_ignore_P4_mean": 37.4,
+    "y5_ignore_P4_p90": 55.1,
+    "y5_entry_calls": 4.51,
+    "y5_trades_per_day": 4.51,
+    "y5_occupancy": 0.4,
+    "live_v3b_switch_P4": 20.1,
+    "live_v3b_ignore_P2": 12.9,
+    "live_v4_switch_P4": 26.0,
+    "live_v4_ignore_P2": 12.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 37.9/day"
+  },
+  {
+   "strategy": "DOGE",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 34.3,
+    "y5_switch_P1_p90": 51.0,
+    "y5_switch_P2_mean": 27.0,
+    "y5_switch_P2_p90": 39.0,
+    "y5_switch_P3_mean": 24.5,
+    "y5_switch_P3_p90": 38.7,
+    "y5_switch_P4_mean": 39.9,
+    "y5_switch_P4_p90": 57.1,
+    "y5_ignore_P1_mean": 33.1,
+    "y5_ignore_P1_p90": 50.0,
+    "y5_ignore_P2_mean": 25.0,
+    "y5_ignore_P2_p90": 36.0,
+    "y5_ignore_P3_mean": 19.4,
+    "y5_ignore_P3_p90": 31.5,
+    "y5_ignore_P4_mean": 39.8,
+    "y5_ignore_P4_p90": 56.8,
+    "y5_entry_calls": 4.59,
+    "y5_trades_per_day": 4.59,
+    "y5_occupancy": 0.46,
+    "live_v3b_switch_P4": 27.3,
+    "live_v3b_ignore_P2": 17.2,
+    "live_v4_switch_P4": 32.7,
+    "live_v4_ignore_P2": 17.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 39.9/day"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 21.47,
+    "live_v4_signals_per_day": 10.64,
+    "live_v4_bundles_per_day": 9.98,
+    "y5_signals_per_day": 17.32,
+    "y5_bundles_per_day": 13.79
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 14.31,
+    "live_v4_signals_per_day": 8.65,
+    "live_v4_bundles_per_day": 6.65,
+    "y5_signals_per_day": 8.19,
+    "y5_bundles_per_day": 6.56
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 7.98,
+    "live_v4_bundles_per_day": 5.99,
+    "y5_signals_per_day": 4.1,
+    "y5_bundles_per_day": 3.24
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 0.98,
+    "y5_bundles_per_day": 0.77
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 47.5,
+    "y5_switch_P1_p90": 68.0,
+    "y5_switch_P2_mean": 34.6,
+    "y5_switch_P2_p90": 49.0,
+    "y5_switch_P3_mean": 39.7,
+    "y5_switch_P3_p90": 55.3,
+    "y5_switch_P4_mean": 55.8,
+    "y5_switch_P4_p90": 76.0,
+    "y5_ignore_P1_mean": 46.1,
+    "y5_ignore_P1_p90": 66.6,
+    "y5_ignore_P2_mean": 29.9,
+    "y5_ignore_P2_p90": 42.0,
+    "y5_ignore_P3_mean": 29.1,
+    "y5_ignore_P3_p90": 43.3,
+    "y5_ignore_P4_mean": 52.9,
+    "y5_ignore_P4_p90": 72.1,
+    "y5_entry_calls": 6.0,
+    "y5_trades_per_day": 6.0,
+    "y5_occupancy": 0.54,
+    "live_v3b_switch_P4": 45.9,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 46.0,
+    "live_v4_ignore_P2": 29.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 55.8/day"
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 44.1,
+    "y5_switch_P1_p90": 64.0,
+    "y5_switch_P2_mean": 40.0,
+    "y5_switch_P2_p90": 53.0,
+    "y5_switch_P3_mean": 38.7,
+    "y5_switch_P3_p90": 54.4,
+    "y5_switch_P4_mean": 57.7,
+    "y5_switch_P4_p90": 75.7,
+    "y5_ignore_P1_mean": 39.4,
+    "y5_ignore_P1_p90": 61.0,
+    "y5_ignore_P2_mean": 34.7,
+    "y5_ignore_P2_p90": 45.0,
+    "y5_ignore_P3_mean": 26.3,
+    "y5_ignore_P3_p90": 40.6,
+    "y5_ignore_P4_mean": 55.5,
+    "y5_ignore_P4_p90": 72.6,
+    "y5_entry_calls": 5.59,
+    "y5_trades_per_day": 5.59,
+    "y5_occupancy": 0.66,
+    "live_v3b_switch_P4": 45.9,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 54.1,
+    "live_v4_ignore_P2": 38.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 57.7/day"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 14.31,
+    "live_v4_signals_per_day": 13.97,
+    "live_v4_bundles_per_day": 11.97,
+    "y5_signals_per_day": 15.0,
+    "y5_bundles_per_day": 12.28
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 9.31,
+    "live_v4_bundles_per_day": 7.32,
+    "y5_signals_per_day": 7.4,
+    "y5_bundles_per_day": 6.03
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 4.66,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 3.7,
+    "y5_bundles_per_day": 3.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.89,
+    "y5_bundles_per_day": 0.72
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 48.5,
+    "y5_switch_P1_p90": 67.0,
+    "y5_switch_P2_mean": 35.8,
+    "y5_switch_P2_p90": 48.0,
+    "y5_switch_P3_mean": 40.2,
+    "y5_switch_P3_p90": 55.0,
+    "y5_switch_P4_mean": 58.4,
+    "y5_switch_P4_p90": 77.0,
+    "y5_ignore_P1_mean": 47.3,
+    "y5_ignore_P1_p90": 66.0,
+    "y5_ignore_P2_mean": 31.9,
+    "y5_ignore_P2_p90": 42.0,
+    "y5_ignore_P3_mean": 30.2,
+    "y5_ignore_P3_p90": 43.6,
+    "y5_ignore_P4_mean": 55.4,
+    "y5_ignore_P4_p90": 73.2,
+    "y5_entry_calls": 6.62,
+    "y5_trades_per_day": 6.62,
+    "y5_occupancy": 0.57,
+    "live_v3b_switch_P4": 57.4,
+    "live_v3b_ignore_P2": 31.5,
+    "live_v4_switch_P4": 52.7,
+    "live_v4_ignore_P2": 36.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 58.4/day"
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 45.5,
+    "y5_switch_P1_p90": 64.0,
+    "y5_switch_P2_mean": 40.9,
+    "y5_switch_P2_p90": 51.0,
+    "y5_switch_P3_mean": 39.9,
+    "y5_switch_P3_p90": 54.2,
+    "y5_switch_P4_mean": 60.4,
+    "y5_switch_P4_p90": 76.7,
+    "y5_ignore_P1_mean": 41.4,
+    "y5_ignore_P1_p90": 63.0,
+    "y5_ignore_P2_mean": 36.4,
+    "y5_ignore_P2_p90": 46.0,
+    "y5_ignore_P3_mean": 27.7,
+    "y5_ignore_P3_p90": 41.6,
+    "y5_ignore_P4_mean": 57.9,
+    "y5_ignore_P4_p90": 74.0,
+    "y5_entry_calls": 6.28,
+    "y5_trades_per_day": 6.28,
+    "y5_occupancy": 0.69,
+    "live_v3b_switch_P4": 57.4,
+    "live_v3b_ignore_P2": 31.5,
+    "live_v4_switch_P4": 60.7,
+    "live_v4_ignore_P2": 41.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 60.4/day"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 0.61,
+    "y5_bundles_per_day": 0.59
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 0.28,
+    "y5_bundles_per_day": 0.27
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 0.15,
+    "y5_bundles_per_day": 0.14
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.03,
+    "y5_bundles_per_day": 0.03
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 5.7,
+    "y5_switch_P1_p90": 17.0,
+    "y5_switch_P2_mean": 3.8,
+    "y5_switch_P2_p90": 11.0,
+    "y5_switch_P3_mean": 3.5,
+    "y5_switch_P3_p90": 9.9,
+    "y5_switch_P4_mean": 6.4,
+    "y5_switch_P4_p90": 19.2,
+    "y5_ignore_P1_mean": 5.7,
+    "y5_ignore_P1_p90": 17.0,
+    "y5_ignore_P2_mean": 3.8,
+    "y5_ignore_P2_p90": 11.0,
+    "y5_ignore_P3_mean": 3.4,
+    "y5_ignore_P3_p90": 9.6,
+    "y5_ignore_P4_mean": 6.4,
+    "y5_ignore_P4_p90": 19.2,
+    "y5_entry_calls": 0.75,
+    "y5_trades_per_day": 0.75,
+    "y5_occupancy": 0.07,
+    "live_v4_switch_P4": 17.3,
+    "live_v4_ignore_P2": 11.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 6.4/day"
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 6.2,
+    "y5_switch_P1_p90": 18.0,
+    "y5_switch_P2_mean": 5.5,
+    "y5_switch_P2_p90": 16.0,
+    "y5_switch_P3_mean": 3.9,
+    "y5_switch_P3_p90": 10.8,
+    "y5_switch_P4_mean": 8.4,
+    "y5_switch_P4_p90": 23.7,
+    "y5_ignore_P1_mean": 6.2,
+    "y5_ignore_P1_p90": 18.0,
+    "y5_ignore_P2_mean": 5.5,
+    "y5_ignore_P2_p90": 16.0,
+    "y5_ignore_P3_mean": 3.8,
+    "y5_ignore_P3_p90": 10.6,
+    "y5_ignore_P4_mean": 8.4,
+    "y5_ignore_P4_p90": 23.7,
+    "y5_entry_calls": 0.87,
+    "y5_trades_per_day": 0.87,
+    "y5_occupancy": 0.1,
+    "live_v4_switch_P4": 17.3,
+    "live_v4_ignore_P2": 11.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 8.4/day"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 61.55,
+    "live_v4_signals_per_day": 49.22,
+    "live_v4_bundles_per_day": 37.25,
+    "y5_signals_per_day": 50.97,
+    "y5_bundles_per_day": 35.95
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 30.06,
+    "live_v4_signals_per_day": 19.95,
+    "live_v4_bundles_per_day": 16.63,
+    "y5_signals_per_day": 25.65,
+    "y5_bundles_per_day": 17.92
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 17.18,
+    "live_v4_signals_per_day": 12.64,
+    "live_v4_bundles_per_day": 8.65,
+    "y5_signals_per_day": 13.09,
+    "y5_bundles_per_day": 9.14
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 3.47,
+    "y5_bundles_per_day": 2.36
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 78.2,
+    "y5_switch_P1_p90": 89.0,
+    "y5_switch_P2_mean": 62.0,
+    "y5_switch_P2_p90": 69.0,
+    "y5_switch_P3_mean": 80.3,
+    "y5_switch_P3_p90": 98.3,
+    "y5_switch_P4_mean": 95.8,
+    "y5_switch_P4_p90": 112.8,
+    "y5_ignore_P1_mean": 74.2,
+    "y5_ignore_P1_p90": 88.0,
+    "y5_ignore_P2_mean": 47.6,
+    "y5_ignore_P2_p90": 51.0,
+    "y5_ignore_P3_mean": 48.4,
+    "y5_ignore_P3_p90": 64.4,
+    "y5_ignore_P4_mean": 85.8,
+    "y5_ignore_P4_p90": 101.5,
+    "y5_entry_calls": 10.28,
+    "y5_trades_per_day": 10.28,
+    "y5_occupancy": 0.84,
+    "live_v3b_switch_P4": 96.1,
+    "live_v3b_ignore_P2": 48.7,
+    "live_v4_switch_P4": 92.7,
+    "live_v4_ignore_P2": 49.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 95.8/day"
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 74.9,
+    "y5_switch_P1_p90": 88.0,
+    "y5_switch_P2_mean": 63.5,
+    "y5_switch_P2_p90": 70.0,
+    "y5_switch_P3_mean": 78.9,
+    "y5_switch_P3_p90": 97.3,
+    "y5_switch_P4_mean": 91.6,
+    "y5_switch_P4_p90": 108.4,
+    "y5_ignore_P1_mean": 65.4,
+    "y5_ignore_P1_p90": 86.0,
+    "y5_ignore_P2_mean": 48.3,
+    "y5_ignore_P2_p90": 51.0,
+    "y5_ignore_P3_mean": 45.2,
+    "y5_ignore_P3_p90": 63.0,
+    "y5_ignore_P4_mean": 84.1,
+    "y5_ignore_P4_p90": 100.2,
+    "y5_entry_calls": 9.44,
+    "y5_trades_per_day": 9.44,
+    "y5_occupancy": 0.88,
+    "live_v3b_switch_P4": 91.8,
+    "live_v3b_ignore_P2": 48.7,
+    "live_v4_switch_P4": 90.0,
+    "live_v4_ignore_P2": 49.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 91.6/day"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 5.32,
+    "live_v4_bundles_per_day": 5.32,
+    "y5_signals_per_day": 4.28,
+    "y5_bundles_per_day": 3.92
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 2.08,
+    "y5_bundles_per_day": 1.92
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 1.04,
+    "y5_bundles_per_day": 0.97
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.24,
+    "y5_bundles_per_day": 0.23
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 27.1,
+    "y5_switch_P1_p90": 46.0,
+    "y5_switch_P2_mean": 18.8,
+    "y5_switch_P2_p90": 33.0,
+    "y5_switch_P3_mean": 16.8,
+    "y5_switch_P3_p90": 27.2,
+    "y5_switch_P4_mean": 29.9,
+    "y5_switch_P4_p90": 49.4,
+    "y5_ignore_P1_mean": 26.8,
+    "y5_ignore_P1_p90": 46.0,
+    "y5_ignore_P2_mean": 18.0,
+    "y5_ignore_P2_p90": 31.0,
+    "y5_ignore_P3_mean": 14.6,
+    "y5_ignore_P3_p90": 24.0,
+    "y5_ignore_P4_mean": 29.3,
+    "y5_ignore_P4_p90": 48.3,
+    "y5_entry_calls": 3.29,
+    "y5_trades_per_day": 3.29,
+    "y5_occupancy": 0.33,
+    "live_v3b_switch_P4": 7.2,
+    "live_v3b_ignore_P2": 4.3,
+    "live_v4_switch_P4": 54.7,
+    "live_v4_ignore_P2": 35.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 29.9/day"
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 25.9,
+    "y5_switch_P1_p90": 44.6,
+    "y5_switch_P2_mean": 23.4,
+    "y5_switch_P2_p90": 41.0,
+    "y5_switch_P3_mean": 16.7,
+    "y5_switch_P3_p90": 27.5,
+    "y5_switch_P4_mean": 33.3,
+    "y5_switch_P4_p90": 51.5,
+    "y5_ignore_P1_mean": 24.7,
+    "y5_ignore_P1_p90": 44.0,
+    "y5_ignore_P2_mean": 22.4,
+    "y5_ignore_P2_p90": 39.0,
+    "y5_ignore_P3_mean": 13.8,
+    "y5_ignore_P3_p90": 23.2,
+    "y5_ignore_P4_mean": 32.9,
+    "y5_ignore_P4_p90": 50.4,
+    "y5_entry_calls": 3.25,
+    "y5_trades_per_day": 3.25,
+    "y5_occupancy": 0.43,
+    "live_v3b_switch_P4": 7.2,
+    "live_v3b_ignore_P2": 4.3,
+    "live_v4_switch_P4": 55.4,
+    "live_v4_ignore_P2": 35.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 33.3/day"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 3.78,
+    "y5_bundles_per_day": 3.28
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 2.66,
+    "y5_bundles_per_day": 2.25
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 1.89,
+    "y5_bundles_per_day": 1.55
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.54,
+    "y5_bundles_per_day": 0.43
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 20.7,
+    "y5_switch_P1_p90": 41.0,
+    "y5_switch_P2_mean": 14.8,
+    "y5_switch_P2_p90": 29.0,
+    "y5_switch_P3_mean": 15.8,
+    "y5_switch_P3_p90": 28.6,
+    "y5_switch_P4_mean": 25.4,
+    "y5_switch_P4_p90": 47.2,
+    "y5_ignore_P1_mean": 20.5,
+    "y5_ignore_P1_p90": 40.0,
+    "y5_ignore_P2_mean": 14.2,
+    "y5_ignore_P2_p90": 27.0,
+    "y5_ignore_P3_mean": 13.9,
+    "y5_ignore_P3_p90": 25.9,
+    "y5_ignore_P4_mean": 25.1,
+    "y5_ignore_P4_p90": 46.4,
+    "y5_entry_calls": 2.88,
+    "y5_trades_per_day": 2.88,
+    "y5_occupancy": 0.26,
+    "live_v3b_switch_P4": 33.0,
+    "live_v3b_ignore_P2": 24.3,
+    "live_v4_switch_P4": 11.3,
+    "live_v4_ignore_P2": 6.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 25.4/day"
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 20.9,
+    "y5_switch_P1_p90": 39.0,
+    "y5_switch_P2_mean": 22.8,
+    "y5_switch_P2_p90": 41.0,
+    "y5_switch_P3_mean": 16.8,
+    "y5_switch_P3_p90": 29.7,
+    "y5_switch_P4_mean": 32.8,
+    "y5_switch_P4_p90": 52.4,
+    "y5_ignore_P1_mean": 19.8,
+    "y5_ignore_P1_p90": 38.0,
+    "y5_ignore_P2_mean": 21.9,
+    "y5_ignore_P2_p90": 39.0,
+    "y5_ignore_P3_mean": 13.9,
+    "y5_ignore_P3_p90": 25.6,
+    "y5_ignore_P4_mean": 32.7,
+    "y5_ignore_P4_p90": 52.2,
+    "y5_entry_calls": 3.11,
+    "y5_trades_per_day": 3.11,
+    "y5_occupancy": 0.43,
+    "live_v3b_switch_P4": 51.7,
+    "live_v3b_ignore_P2": 38.6,
+    "live_v4_switch_P4": 32.7,
+    "live_v4_ignore_P2": 25.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 32.8/day"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 7.06,
+    "y5_bundles_per_day": 5.97
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 3.52,
+    "y5_bundles_per_day": 2.97
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 1.69,
+    "y5_bundles_per_day": 1.41
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.43,
+    "y5_bundles_per_day": 0.36
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 33.4,
+    "y5_switch_P1_p90": 54.0,
+    "y5_switch_P2_mean": 23.8,
+    "y5_switch_P2_p90": 38.0,
+    "y5_switch_P3_mean": 23.8,
+    "y5_switch_P3_p90": 36.5,
+    "y5_switch_P4_mean": 38.9,
+    "y5_switch_P4_p90": 58.9,
+    "y5_ignore_P1_mean": 32.9,
+    "y5_ignore_P1_p90": 53.6,
+    "y5_ignore_P2_mean": 22.3,
+    "y5_ignore_P2_p90": 35.0,
+    "y5_ignore_P3_mean": 19.8,
+    "y5_ignore_P3_p90": 31.1,
+    "y5_ignore_P4_mean": 37.8,
+    "y5_ignore_P4_p90": 57.5,
+    "y5_entry_calls": 4.29,
+    "y5_trades_per_day": 4.29,
+    "y5_occupancy": 0.4,
+    "live_v3b_switch_P4": 44.5,
+    "live_v3b_ignore_P2": 27.2,
+    "live_v4_switch_P4": 38.7,
+    "live_v4_ignore_P2": 26.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 38.9/day"
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 31.9,
+    "y5_switch_P1_p90": 50.0,
+    "y5_switch_P2_mean": 28.9,
+    "y5_switch_P2_p90": 44.0,
+    "y5_switch_P3_mean": 24.0,
+    "y5_switch_P3_p90": 36.6,
+    "y5_switch_P4_mean": 42.6,
+    "y5_switch_P4_p90": 60.2,
+    "y5_ignore_P1_mean": 30.2,
+    "y5_ignore_P1_p90": 49.0,
+    "y5_ignore_P2_mean": 27.1,
+    "y5_ignore_P2_p90": 41.0,
+    "y5_ignore_P3_mean": 18.9,
+    "y5_ignore_P3_p90": 30.2,
+    "y5_ignore_P4_mean": 41.7,
+    "y5_ignore_P4_p90": 58.5,
+    "y5_entry_calls": 4.3,
+    "y5_trades_per_day": 4.3,
+    "y5_occupancy": 0.51,
+    "live_v3b_switch_P4": 54.6,
+    "live_v3b_ignore_P2": 38.6,
+    "live_v4_switch_P4": 43.4,
+    "live_v4_ignore_P2": 31.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 42.6/day"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 1.08,
+    "y5_bundles_per_day": 1.01
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.5,
+    "y5_bundles_per_day": 0.48
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.25,
+    "y5_bundles_per_day": 0.23
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.05,
+    "y5_bundles_per_day": 0.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 9.5,
+    "y5_switch_P1_p90": 24.0,
+    "y5_switch_P2_mean": 6.5,
+    "y5_switch_P2_p90": 16.0,
+    "y5_switch_P3_mean": 5.7,
+    "y5_switch_P3_p90": 13.4,
+    "y5_switch_P4_mean": 10.7,
+    "y5_switch_P4_p90": 26.5,
+    "y5_ignore_P1_mean": 9.5,
+    "y5_ignore_P1_p90": 24.0,
+    "y5_ignore_P2_mean": 6.4,
+    "y5_ignore_P2_p90": 16.0,
+    "y5_ignore_P3_mean": 5.4,
+    "y5_ignore_P3_p90": 12.7,
+    "y5_ignore_P4_mean": 10.6,
+    "y5_ignore_P4_p90": 26.2,
+    "y5_entry_calls": 1.19,
+    "y5_trades_per_day": 1.19,
+    "y5_occupancy": 0.12,
+    "live_v3b_switch_P4": 4.3,
+    "live_v3b_ignore_P2": 1.4,
+    "live_v4_switch_P4": 8.7,
+    "live_v4_ignore_P2": 6.7
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 10.7/day"
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 10.0,
+    "y5_switch_P1_p90": 24.0,
+    "y5_switch_P2_mean": 8.6,
+    "y5_switch_P2_p90": 20.0,
+    "y5_switch_P3_mean": 6.2,
+    "y5_switch_P3_p90": 13.8,
+    "y5_switch_P4_mean": 13.0,
+    "y5_switch_P4_p90": 31.0,
+    "y5_ignore_P1_mean": 10.0,
+    "y5_ignore_P1_p90": 23.0,
+    "y5_ignore_P2_mean": 8.5,
+    "y5_ignore_P2_p90": 20.0,
+    "y5_ignore_P3_mean": 5.8,
+    "y5_ignore_P3_p90": 13.2,
+    "y5_ignore_P4_mean": 13.0,
+    "y5_ignore_P4_p90": 30.9,
+    "y5_entry_calls": 1.35,
+    "y5_trades_per_day": 1.35,
+    "y5_occupancy": 0.16,
+    "live_v3b_switch_P4": 4.3,
+    "live_v3b_ignore_P2": 1.4,
+    "live_v4_switch_P4": 38.8,
+    "live_v4_ignore_P2": 35.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 13.0/day"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 11.45,
+    "live_v4_signals_per_day": 8.65,
+    "live_v4_bundles_per_day": 5.99,
+    "y5_signals_per_day": 8.16,
+    "y5_bundles_per_day": 6.52
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 4.16,
+    "y5_bundles_per_day": 3.27
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 2.02,
+    "y5_bundles_per_day": 1.58
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 0.48,
+    "y5_bundles_per_day": 0.39
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 36.4,
+    "y5_switch_P1_p90": 57.0,
+    "y5_switch_P2_mean": 25.5,
+    "y5_switch_P2_p90": 39.0,
+    "y5_switch_P3_mean": 26.6,
+    "y5_switch_P3_p90": 40.6,
+    "y5_switch_P4_mean": 42.7,
+    "y5_switch_P4_p90": 63.5,
+    "y5_ignore_P1_mean": 35.9,
+    "y5_ignore_P1_p90": 57.0,
+    "y5_ignore_P2_mean": 24.0,
+    "y5_ignore_P2_p90": 37.0,
+    "y5_ignore_P3_mean": 22.7,
+    "y5_ignore_P3_p90": 35.6,
+    "y5_ignore_P4_mean": 41.7,
+    "y5_ignore_P4_p90": 62.1,
+    "y5_entry_calls": 4.92,
+    "y5_trades_per_day": 4.92,
+    "y5_occupancy": 0.43,
+    "live_v3b_switch_P4": 63.2,
+    "live_v3b_ignore_P2": 42.9,
+    "live_v4_switch_P4": 42.0,
+    "live_v4_ignore_P2": 25.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 42.7/day"
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 34.7,
+    "y5_switch_P1_p90": 55.0,
+    "y5_switch_P2_mean": 31.2,
+    "y5_switch_P2_p90": 46.0,
+    "y5_switch_P3_mean": 26.7,
+    "y5_switch_P3_p90": 41.0,
+    "y5_switch_P4_mean": 46.9,
+    "y5_switch_P4_p90": 65.3,
+    "y5_ignore_P1_mean": 33.0,
+    "y5_ignore_P1_p90": 54.0,
+    "y5_ignore_P2_mean": 29.4,
+    "y5_ignore_P2_p90": 43.0,
+    "y5_ignore_P3_mean": 21.5,
+    "y5_ignore_P3_p90": 34.8,
+    "y5_ignore_P4_mean": 46.0,
+    "y5_ignore_P4_p90": 64.4,
+    "y5_entry_calls": 4.91,
+    "y5_trades_per_day": 4.91,
+    "y5_occupancy": 0.55,
+    "live_v3b_switch_P4": 61.8,
+    "live_v3b_ignore_P2": 42.9,
+    "live_v4_switch_P4": 59.4,
+    "live_v4_ignore_P2": 42.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 46.9/day"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 22.9,
+    "live_v4_signals_per_day": 19.95,
+    "live_v4_bundles_per_day": 17.96,
+    "y5_signals_per_day": 24.52,
+    "y5_bundles_per_day": 17.29
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 21.47,
+    "live_v4_signals_per_day": 7.32,
+    "live_v4_bundles_per_day": 6.65,
+    "y5_signals_per_day": 11.28,
+    "y5_bundles_per_day": 8.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 5.32,
+    "live_v4_bundles_per_day": 4.66,
+    "y5_signals_per_day": 5.5,
+    "y5_bundles_per_day": 3.89
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 1.24,
+    "y5_bundles_per_day": 0.9
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 61.5,
+    "y5_switch_P1_p90": 77.0,
+    "y5_switch_P2_mean": 44.4,
+    "y5_switch_P2_p90": 54.0,
+    "y5_switch_P3_mean": 49.9,
+    "y5_switch_P3_p90": 64.8,
+    "y5_switch_P4_mean": 70.1,
+    "y5_switch_P4_p90": 86.8,
+    "y5_ignore_P1_mean": 59.9,
+    "y5_ignore_P1_p90": 77.0,
+    "y5_ignore_P2_mean": 38.9,
+    "y5_ignore_P2_p90": 46.0,
+    "y5_ignore_P3_mean": 35.7,
+    "y5_ignore_P3_p90": 49.6,
+    "y5_ignore_P4_mean": 66.6,
+    "y5_ignore_P4_p90": 83.0,
+    "y5_entry_calls": 7.92,
+    "y5_trades_per_day": 7.92,
+    "y5_occupancy": 0.7,
+    "live_v3b_switch_P4": 74.6,
+    "live_v3b_ignore_P2": 47.2,
+    "live_v4_switch_P4": 80.0,
+    "live_v4_ignore_P2": 39.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 70.1/day"
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 56.2,
+    "y5_switch_P1_p90": 74.0,
+    "y5_switch_P2_mean": 48.3,
+    "y5_switch_P2_p90": 56.0,
+    "y5_switch_P3_mean": 48.7,
+    "y5_switch_P3_p90": 64.8,
+    "y5_switch_P4_mean": 69.3,
+    "y5_switch_P4_p90": 84.7,
+    "y5_ignore_P1_mean": 50.3,
+    "y5_ignore_P1_p90": 71.6,
+    "y5_ignore_P2_mean": 42.0,
+    "y5_ignore_P2_p90": 47.0,
+    "y5_ignore_P3_mean": 31.8,
+    "y5_ignore_P3_p90": 47.2,
+    "y5_ignore_P4_mean": 66.5,
+    "y5_ignore_P4_p90": 81.8,
+    "y5_entry_calls": 7.25,
+    "y5_trades_per_day": 7.25,
+    "y5_occupancy": 0.79,
+    "live_v3b_switch_P4": 79.0,
+    "live_v3b_ignore_P2": 50.1,
+    "live_v4_switch_P4": 76.7,
+    "live_v4_ignore_P2": 43.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 69.3/day"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.35,
+    "y5_bundles_per_day": 0.3
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.16,
+    "y5_bundles_per_day": 0.14
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.09,
+    "y5_bundles_per_day": 0.07
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.02,
+    "y5_bundles_per_day": 0.02
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 3.1,
+    "y5_switch_P1_p90": 10.6,
+    "y5_switch_P2_mean": 2.2,
+    "y5_switch_P2_p90": 7.0,
+    "y5_switch_P3_mean": 1.7,
+    "y5_switch_P3_p90": 5.5,
+    "y5_switch_P4_mean": 3.5,
+    "y5_switch_P4_p90": 11.8,
+    "y5_ignore_P1_mean": 3.1,
+    "y5_ignore_P1_p90": 10.6,
+    "y5_ignore_P2_mean": 2.2,
+    "y5_ignore_P2_p90": 7.0,
+    "y5_ignore_P3_mean": 1.7,
+    "y5_ignore_P3_p90": 5.5,
+    "y5_ignore_P4_mean": 3.4,
+    "y5_ignore_P4_p90": 11.8,
+    "y5_entry_calls": 0.42,
+    "y5_trades_per_day": 0.42,
+    "y5_occupancy": 0.04,
+    "live_v3b_switch_P4": 12.9,
+    "live_v3b_ignore_P2": 11.5
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 3.5/day"
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 3.4,
+    "y5_switch_P1_p90": 11.0,
+    "y5_switch_P2_mean": 3.0,
+    "y5_switch_P2_p90": 9.0,
+    "y5_switch_P3_mean": 2.0,
+    "y5_switch_P3_p90": 6.2,
+    "y5_switch_P4_mean": 4.4,
+    "y5_switch_P4_p90": 14.1,
+    "y5_ignore_P1_mean": 3.4,
+    "y5_ignore_P1_p90": 11.0,
+    "y5_ignore_P2_mean": 2.9,
+    "y5_ignore_P2_p90": 9.0,
+    "y5_ignore_P3_mean": 1.9,
+    "y5_ignore_P3_p90": 6.2,
+    "y5_ignore_P4_mean": 4.4,
+    "y5_ignore_P4_p90": 14.1,
+    "y5_entry_calls": 0.49,
+    "y5_trades_per_day": 0.49,
+    "y5_occupancy": 0.06,
+    "live_v3b_switch_P4": 12.9,
+    "live_v3b_ignore_P2": 11.5,
+    "live_v4_switch_P4": 1.3,
+    "live_v4_ignore_P2": 1.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 4.4/day"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 11.45,
+    "live_v4_signals_per_day": 8.65,
+    "live_v4_bundles_per_day": 8.65,
+    "y5_signals_per_day": 7.96,
+    "y5_bundles_per_day": 6.73
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 6.65,
+    "live_v4_bundles_per_day": 6.65,
+    "y5_signals_per_day": 3.91,
+    "y5_bundles_per_day": 3.3
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 1.97,
+    "y5_bundles_per_day": 1.65
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 0.46,
+    "y5_bundles_per_day": 0.39
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 35.7,
+    "y5_switch_P1_p90": 56.0,
+    "y5_switch_P2_mean": 25.6,
+    "y5_switch_P2_p90": 40.0,
+    "y5_switch_P3_mean": 26.4,
+    "y5_switch_P3_p90": 40.0,
+    "y5_switch_P4_mean": 42.3,
+    "y5_switch_P4_p90": 62.3,
+    "y5_ignore_P1_mean": 35.0,
+    "y5_ignore_P1_p90": 55.0,
+    "y5_ignore_P2_mean": 23.9,
+    "y5_ignore_P2_p90": 37.0,
+    "y5_ignore_P3_mean": 22.0,
+    "y5_ignore_P3_p90": 34.5,
+    "y5_ignore_P4_mean": 41.1,
+    "y5_ignore_P4_p90": 60.5,
+    "y5_entry_calls": 4.8,
+    "y5_trades_per_day": 4.8,
+    "y5_occupancy": 0.43,
+    "live_v3b_switch_P4": 56.0,
+    "live_v3b_ignore_P2": 37.2,
+    "live_v4_switch_P4": 61.4,
+    "live_v4_ignore_P2": 35.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 42.3/day"
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 33.9,
+    "y5_switch_P1_p90": 53.0,
+    "y5_switch_P2_mean": 30.9,
+    "y5_switch_P2_p90": 45.0,
+    "y5_switch_P3_mean": 26.7,
+    "y5_switch_P3_p90": 40.5,
+    "y5_switch_P4_mean": 46.1,
+    "y5_switch_P4_p90": 63.8,
+    "y5_ignore_P1_mean": 31.9,
+    "y5_ignore_P1_p90": 52.0,
+    "y5_ignore_P2_mean": 28.9,
+    "y5_ignore_P2_p90": 42.0,
+    "y5_ignore_P3_mean": 20.8,
+    "y5_ignore_P3_p90": 33.6,
+    "y5_ignore_P4_mean": 44.9,
+    "y5_ignore_P4_p90": 62.3,
+    "y5_entry_calls": 4.78,
+    "y5_trades_per_day": 4.78,
+    "y5_occupancy": 0.55,
+    "live_v3b_switch_P4": 56.0,
+    "live_v3b_ignore_P2": 37.2,
+    "live_v4_switch_P4": 63.4,
+    "live_v4_ignore_P2": 37.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 46.1/day"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 12.88,
+    "live_v4_signals_per_day": 2.66,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 6.11,
+    "y5_bundles_per_day": 4.93
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 2.84,
+    "y5_bundles_per_day": 2.26
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 1.23,
+    "y5_bundles_per_day": 0.98
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.28,
+    "y5_bundles_per_day": 0.23
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 34.8,
+    "y5_switch_P1_p90": 55.0,
+    "y5_switch_P2_mean": 23.8,
+    "y5_switch_P2_p90": 37.0,
+    "y5_switch_P3_mean": 21.7,
+    "y5_switch_P3_p90": 34.6,
+    "y5_switch_P4_mean": 38.5,
+    "y5_switch_P4_p90": 58.3,
+    "y5_ignore_P1_mean": 34.4,
+    "y5_ignore_P1_p90": 54.0,
+    "y5_ignore_P2_mean": 22.9,
+    "y5_ignore_P2_p90": 35.0,
+    "y5_ignore_P3_mean": 19.3,
+    "y5_ignore_P3_p90": 31.7,
+    "y5_ignore_P4_mean": 37.8,
+    "y5_ignore_P4_p90": 57.4,
+    "y5_entry_calls": 4.35,
+    "y5_trades_per_day": 4.35,
+    "y5_occupancy": 0.41,
+    "live_v3b_switch_P4": 57.4,
+    "live_v3b_ignore_P2": 40.1,
+    "live_v4_switch_P4": 26.7,
+    "live_v4_ignore_P2": 18.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 38.5/day"
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 33.3,
+    "y5_switch_P1_p90": 53.0,
+    "y5_switch_P2_mean": 28.0,
+    "y5_switch_P2_p90": 42.0,
+    "y5_switch_P3_mean": 21.9,
+    "y5_switch_P3_p90": 34.7,
+    "y5_switch_P4_mean": 41.7,
+    "y5_switch_P4_p90": 59.0,
+    "y5_ignore_P1_mean": 32.2,
+    "y5_ignore_P1_p90": 52.0,
+    "y5_ignore_P2_mean": 26.8,
+    "y5_ignore_P2_p90": 40.0,
+    "y5_ignore_P3_mean": 18.7,
+    "y5_ignore_P3_p90": 30.9,
+    "y5_ignore_P4_mean": 41.1,
+    "y5_ignore_P4_p90": 58.4,
+    "y5_entry_calls": 4.39,
+    "y5_trades_per_day": 4.39,
+    "y5_occupancy": 0.5,
+    "live_v3b_switch_P4": 57.4,
+    "live_v3b_ignore_P2": 40.1,
+    "live_v4_switch_P4": 40.1,
+    "live_v4_ignore_P2": 32.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 41.7/day"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.0,
+    "y5_switch_P1_p90": 0.0,
+    "y5_switch_P2_mean": 0.0,
+    "y5_switch_P2_p90": 0.0,
+    "y5_switch_P3_mean": 0.0,
+    "y5_switch_P3_p90": 0.0,
+    "y5_switch_P4_mean": 0.0,
+    "y5_switch_P4_p90": 0.0,
+    "y5_ignore_P1_mean": 0.0,
+    "y5_ignore_P1_p90": 0.0,
+    "y5_ignore_P2_mean": 0.0,
+    "y5_ignore_P2_p90": 0.0,
+    "y5_ignore_P3_mean": 0.0,
+    "y5_ignore_P3_p90": 0.0,
+    "y5_ignore_P4_mean": 0.0,
+    "y5_ignore_P4_p90": 0.0,
+    "y5_entry_calls": 0.0,
+    "y5_trades_per_day": 0.0,
+    "y5_occupancy": 0.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 0.0/day"
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.0,
+    "y5_switch_P1_p90": 0.0,
+    "y5_switch_P2_mean": 0.0,
+    "y5_switch_P2_p90": 0.0,
+    "y5_switch_P3_mean": 0.0,
+    "y5_switch_P3_p90": 0.0,
+    "y5_switch_P4_mean": 0.0,
+    "y5_switch_P4_p90": 0.0,
+    "y5_ignore_P1_mean": 0.0,
+    "y5_ignore_P1_p90": 0.0,
+    "y5_ignore_P2_mean": 0.0,
+    "y5_ignore_P2_p90": 0.0,
+    "y5_ignore_P3_mean": 0.0,
+    "y5_ignore_P3_p90": 0.0,
+    "y5_ignore_P4_mean": 0.0,
+    "y5_ignore_P4_p90": 0.0,
+    "y5_entry_calls": 0.0,
+    "y5_trades_per_day": 0.0,
+    "y5_occupancy": 0.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 0.0/day"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.05,
+    "y5_bundles_per_day": 0.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.04,
+    "y5_bundles_per_day": 0.03
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.02,
+    "y5_bundles_per_day": 0.02
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.0,
+    "y5_bundles_per_day": 0.0
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.4,
+    "y5_switch_P1_p90": 0.0,
+    "y5_switch_P2_mean": 0.3,
+    "y5_switch_P2_p90": 0.0,
+    "y5_switch_P3_mean": 0.3,
+    "y5_switch_P3_p90": 0.0,
+    "y5_switch_P4_mean": 0.5,
+    "y5_switch_P4_p90": 0.0,
+    "y5_ignore_P1_mean": 0.4,
+    "y5_ignore_P1_p90": 0.0,
+    "y5_ignore_P2_mean": 0.3,
+    "y5_ignore_P2_p90": 0.0,
+    "y5_ignore_P3_mean": 0.3,
+    "y5_ignore_P3_p90": 0.0,
+    "y5_ignore_P4_mean": 0.5,
+    "y5_ignore_P4_p90": 0.0,
+    "y5_entry_calls": 0.06,
+    "y5_trades_per_day": 0.06,
+    "y5_occupancy": 0.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 0.5/day"
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.5,
+    "y5_switch_P1_p90": 0.0,
+    "y5_switch_P2_mean": 0.4,
+    "y5_switch_P2_p90": 0.0,
+    "y5_switch_P3_mean": 0.3,
+    "y5_switch_P3_p90": 0.0,
+    "y5_switch_P4_mean": 0.7,
+    "y5_switch_P4_p90": 0.0,
+    "y5_ignore_P1_mean": 0.5,
+    "y5_ignore_P1_p90": 0.0,
+    "y5_ignore_P2_mean": 0.4,
+    "y5_ignore_P2_p90": 0.0,
+    "y5_ignore_P3_mean": 0.3,
+    "y5_ignore_P3_p90": 0.0,
+    "y5_ignore_P4_mean": 0.7,
+    "y5_ignore_P4_p90": 0.0,
+    "y5_entry_calls": 0.08,
+    "y5_trades_per_day": 0.08,
+    "y5_occupancy": 0.01
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 0.7/day"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 6.54,
+    "y5_bundles_per_day": 5.2
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 8.59,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 3.45,
+    "y5_bundles_per_day": 2.71
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 1.8,
+    "y5_bundles_per_day": 1.39
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.46,
+    "y5_bundles_per_day": 0.37
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 35.9,
+    "y5_switch_P1_p90": 57.0,
+    "y5_switch_P2_mean": 24.5,
+    "y5_switch_P2_p90": 37.0,
+    "y5_switch_P3_mean": 22.0,
+    "y5_switch_P3_p90": 33.6,
+    "y5_switch_P4_mean": 38.8,
+    "y5_switch_P4_p90": 57.8,
+    "y5_ignore_P1_mean": 35.6,
+    "y5_ignore_P1_p90": 57.0,
+    "y5_ignore_P2_mean": 23.6,
+    "y5_ignore_P2_p90": 36.0,
+    "y5_ignore_P3_mean": 19.3,
+    "y5_ignore_P3_p90": 30.1,
+    "y5_ignore_P4_mean": 38.3,
+    "y5_ignore_P4_p90": 57.0,
+    "y5_entry_calls": 4.64,
+    "y5_trades_per_day": 4.64,
+    "y5_occupancy": 0.43,
+    "live_v3b_switch_P4": 33.1,
+    "live_v3b_ignore_P2": 28.6,
+    "live_v4_switch_P4": 32.0,
+    "live_v4_ignore_P2": 23.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 38.8/day"
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 33.9,
+    "y5_switch_P1_p90": 53.0,
+    "y5_switch_P2_mean": 29.8,
+    "y5_switch_P2_p90": 42.6,
+    "y5_switch_P3_mean": 22.2,
+    "y5_switch_P3_p90": 34.3,
+    "y5_switch_P4_mean": 42.7,
+    "y5_switch_P4_p90": 58.8,
+    "y5_ignore_P1_mean": 32.5,
+    "y5_ignore_P1_p90": 53.0,
+    "y5_ignore_P2_mean": 28.5,
+    "y5_ignore_P2_p90": 41.0,
+    "y5_ignore_P3_mean": 18.4,
+    "y5_ignore_P3_p90": 30.0,
+    "y5_ignore_P4_mean": 42.3,
+    "y5_ignore_P4_p90": 58.2,
+    "y5_entry_calls": 4.62,
+    "y5_trades_per_day": 4.62,
+    "y5_occupancy": 0.54,
+    "live_v3b_switch_P4": 35.9,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 42.1,
+    "live_v4_ignore_P2": 37.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 42.7/day"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 21.47,
+    "live_v4_signals_per_day": 91.79,
+    "live_v4_bundles_per_day": 39.91,
+    "y5_signals_per_day": 70.78,
+    "y5_bundles_per_day": 31.3
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 37.91,
+    "live_v4_bundles_per_day": 9.31,
+    "y5_signals_per_day": 38.78,
+    "y5_bundles_per_day": 16.96
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 17.18,
+    "live_v4_signals_per_day": 17.96,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 21.09,
+    "y5_bundles_per_day": 9.06
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 5.76,
+    "y5_bundles_per_day": 2.44
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 52.4,
+    "y5_switch_P1_p90": 79.0,
+    "y5_switch_P2_mean": 44.7,
+    "y5_switch_P2_p90": 66.0,
+    "y5_switch_P3_mean": 67.9,
+    "y5_switch_P3_p90": 107.7,
+    "y5_switch_P4_mean": 76.0,
+    "y5_switch_P4_p90": 115.4,
+    "y5_ignore_P1_mean": 51.5,
+    "y5_ignore_P1_p90": 78.0,
+    "y5_ignore_P2_mean": 33.1,
+    "y5_ignore_P2_p90": 49.0,
+    "y5_ignore_P3_mean": 49.1,
+    "y5_ignore_P3_p90": 81.5,
+    "y5_ignore_P4_mean": 73.0,
+    "y5_ignore_P4_p90": 113.5,
+    "y5_entry_calls": 9.2,
+    "y5_trades_per_day": 9.2,
+    "y5_occupancy": 0.55,
+    "live_v3b_switch_P4": 51.6,
+    "live_v3b_ignore_P2": 25.8,
+    "live_v4_switch_P4": 78.0,
+    "live_v4_ignore_P2": 35.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 76.0/day"
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 53.6,
+    "y5_switch_P1_p90": 80.0,
+    "y5_switch_P2_mean": 51.7,
+    "y5_switch_P2_p90": 69.0,
+    "y5_switch_P3_mean": 63.2,
+    "y5_switch_P3_p90": 99.1,
+    "y5_switch_P4_mean": 75.0,
+    "y5_switch_P4_p90": 106.4,
+    "y5_ignore_P1_mean": 48.0,
+    "y5_ignore_P1_p90": 77.0,
+    "y5_ignore_P2_mean": 39.3,
+    "y5_ignore_P2_p90": 51.0,
+    "y5_ignore_P3_mean": 46.3,
+    "y5_ignore_P3_p90": 78.7,
+    "y5_ignore_P4_mean": 77.0,
+    "y5_ignore_P4_p90": 114.8,
+    "y5_entry_calls": 8.61,
+    "y5_trades_per_day": 8.61,
+    "y5_occupancy": 0.7,
+    "live_v3b_switch_P4": 51.6,
+    "live_v3b_ignore_P2": 27.2,
+    "live_v4_switch_P4": 75.3,
+    "live_v4_ignore_P2": 35.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 75.0/day"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 54.39,
+    "live_v4_signals_per_day": 39.91,
+    "live_v4_bundles_per_day": 23.28,
+    "y5_signals_per_day": 54.28,
+    "y5_bundles_per_day": 32.68
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 18.61,
+    "live_v4_signals_per_day": 19.95,
+    "live_v4_bundles_per_day": 15.96,
+    "y5_signals_per_day": 26.35,
+    "y5_bundles_per_day": 15.62
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 15.75,
+    "live_v4_signals_per_day": 19.29,
+    "live_v4_bundles_per_day": 12.64,
+    "y5_signals_per_day": 12.8,
+    "y5_bundles_per_day": 7.53
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 3.21,
+    "y5_bundles_per_day": 1.92
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 62.4,
+    "y5_switch_P1_p90": 82.0,
+    "y5_switch_P2_mean": 51.9,
+    "y5_switch_P2_p90": 66.0,
+    "y5_switch_P3_mean": 71.1,
+    "y5_switch_P3_p90": 94.5,
+    "y5_switch_P4_mean": 82.1,
+    "y5_switch_P4_p90": 105.4,
+    "y5_ignore_P1_mean": 59.3,
+    "y5_ignore_P1_p90": 79.0,
+    "y5_ignore_P2_mean": 39.0,
+    "y5_ignore_P2_p90": 49.0,
+    "y5_ignore_P3_mean": 43.4,
+    "y5_ignore_P3_p90": 62.2,
+    "y5_ignore_P4_mean": 73.9,
+    "y5_ignore_P4_p90": 96.6,
+    "y5_entry_calls": 8.55,
+    "y5_trades_per_day": 8.55,
+    "y5_occupancy": 0.69,
+    "live_v3b_switch_P4": 71.7,
+    "live_v3b_ignore_P2": 35.8,
+    "live_v4_switch_P4": 77.3,
+    "live_v4_ignore_P2": 37.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 82.1/day"
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 60.6,
+    "y5_switch_P1_p90": 80.0,
+    "y5_switch_P2_mean": 57.5,
+    "y5_switch_P2_p90": 69.0,
+    "y5_switch_P3_mean": 67.9,
+    "y5_switch_P3_p90": 91.1,
+    "y5_switch_P4_mean": 80.7,
+    "y5_switch_P4_p90": 101.9,
+    "y5_ignore_P1_mean": 49.0,
+    "y5_ignore_P1_p90": 76.0,
+    "y5_ignore_P2_mean": 43.5,
+    "y5_ignore_P2_p90": 50.0,
+    "y5_ignore_P3_mean": 39.3,
+    "y5_ignore_P3_p90": 59.1,
+    "y5_ignore_P4_mean": 75.3,
+    "y5_ignore_P4_p90": 95.6,
+    "y5_entry_calls": 7.51,
+    "y5_trades_per_day": 7.51,
+    "y5_occupancy": 0.81,
+    "live_v3b_switch_P4": 68.9,
+    "live_v3b_ignore_P2": 35.8,
+    "live_v4_switch_P4": 72.7,
+    "live_v4_ignore_P2": 45.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 80.7/day"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 8.65,
+    "live_v4_bundles_per_day": 7.98,
+    "y5_signals_per_day": 5.1,
+    "y5_bundles_per_day": 4.23
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 2.4,
+    "y5_bundles_per_day": 1.97
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 1.17,
+    "y5_bundles_per_day": 0.96
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.27,
+    "y5_bundles_per_day": 0.23
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 22.6,
+    "y5_switch_P1_p90": 44.0,
+    "y5_switch_P2_mean": 15.8,
+    "y5_switch_P2_p90": 30.0,
+    "y5_switch_P3_mean": 17.1,
+    "y5_switch_P3_p90": 32.0,
+    "y5_switch_P4_mean": 27.0,
+    "y5_switch_P4_p90": 49.5,
+    "y5_ignore_P1_mean": 22.5,
+    "y5_ignore_P1_p90": 43.0,
+    "y5_ignore_P2_mean": 14.8,
+    "y5_ignore_P2_p90": 28.0,
+    "y5_ignore_P3_mean": 14.7,
+    "y5_ignore_P3_p90": 26.9,
+    "y5_ignore_P4_mean": 26.3,
+    "y5_ignore_P4_p90": 47.9,
+    "y5_entry_calls": 3.14,
+    "y5_trades_per_day": 3.14,
+    "y5_occupancy": 0.26,
+    "live_v3b_switch_P4": 17.2,
+    "live_v3b_ignore_P2": 11.5,
+    "live_v4_switch_P4": 38.0,
+    "live_v4_ignore_P2": 23.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 27.0/day"
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 22.7,
+    "y5_switch_P1_p90": 43.0,
+    "y5_switch_P2_mean": 20.7,
+    "y5_switch_P2_p90": 39.0,
+    "y5_switch_P3_mean": 17.7,
+    "y5_switch_P3_p90": 32.0,
+    "y5_switch_P4_mean": 31.6,
+    "y5_switch_P4_p90": 52.9,
+    "y5_ignore_P1_mean": 21.9,
+    "y5_ignore_P1_p90": 42.0,
+    "y5_ignore_P2_mean": 19.6,
+    "y5_ignore_P2_p90": 37.0,
+    "y5_ignore_P3_mean": 14.7,
+    "y5_ignore_P3_p90": 26.2,
+    "y5_ignore_P4_mean": 31.0,
+    "y5_ignore_P4_p90": 52.1,
+    "y5_entry_calls": 3.29,
+    "y5_trades_per_day": 3.29,
+    "y5_occupancy": 0.37,
+    "live_v3b_switch_P4": 17.2,
+    "live_v3b_ignore_P2": 11.5,
+    "live_v4_switch_P4": 44.7,
+    "live_v4_ignore_P2": 27.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 31.6/day"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 35.79,
+    "live_v4_signals_per_day": 29.93,
+    "live_v4_bundles_per_day": 22.61,
+    "y5_signals_per_day": 24.79,
+    "y5_bundles_per_day": 16.22
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 10.02,
+    "live_v4_signals_per_day": 23.94,
+    "live_v4_bundles_per_day": 12.64,
+    "y5_signals_per_day": 11.56,
+    "y5_bundles_per_day": 7.68
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 11.31,
+    "live_v4_bundles_per_day": 6.65,
+    "y5_signals_per_day": 5.51,
+    "y5_bundles_per_day": 3.69
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 4.66,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 1.29,
+    "y5_bundles_per_day": 0.84
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 46.7,
+    "y5_switch_P1_p90": 70.0,
+    "y5_switch_P2_mean": 34.0,
+    "y5_switch_P2_p90": 51.0,
+    "y5_switch_P3_mean": 40.1,
+    "y5_switch_P3_p90": 58.6,
+    "y5_switch_P4_mean": 53.5,
+    "y5_switch_P4_p90": 76.7,
+    "y5_ignore_P1_mean": 45.7,
+    "y5_ignore_P1_p90": 69.0,
+    "y5_ignore_P2_mean": 28.2,
+    "y5_ignore_P2_p90": 41.0,
+    "y5_ignore_P3_mean": 28.2,
+    "y5_ignore_P3_p90": 42.2,
+    "y5_ignore_P4_mean": 50.6,
+    "y5_ignore_P4_p90": 72.7,
+    "y5_entry_calls": 5.74,
+    "y5_trades_per_day": 5.74,
+    "y5_occupancy": 0.5,
+    "live_v3b_switch_P4": 51.6,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 68.0,
+    "live_v4_ignore_P2": 35.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 53.5/day"
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 44.0,
+    "y5_switch_P1_p90": 67.0,
+    "y5_switch_P2_mean": 38.9,
+    "y5_switch_P2_p90": 55.0,
+    "y5_switch_P3_mean": 38.5,
+    "y5_switch_P3_p90": 56.4,
+    "y5_switch_P4_mean": 54.5,
+    "y5_switch_P4_p90": 74.4,
+    "y5_ignore_P1_mean": 39.3,
+    "y5_ignore_P1_p90": 64.0,
+    "y5_ignore_P2_mean": 32.5,
+    "y5_ignore_P2_p90": 45.0,
+    "y5_ignore_P3_mean": 26.1,
+    "y5_ignore_P3_p90": 39.7,
+    "y5_ignore_P4_mean": 53.3,
+    "y5_ignore_P4_p90": 72.8,
+    "y5_entry_calls": 5.29,
+    "y5_trades_per_day": 5.29,
+    "y5_occupancy": 0.61,
+    "live_v3b_switch_P4": 48.8,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 70.7,
+    "live_v4_ignore_P2": 43.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 54.5/day"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 44.37,
+    "live_v4_signals_per_day": 35.92,
+    "live_v4_bundles_per_day": 27.27,
+    "y5_signals_per_day": 41.86,
+    "y5_bundles_per_day": 28.38
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 27.2,
+    "live_v4_signals_per_day": 18.62,
+    "live_v4_bundles_per_day": 11.31,
+    "y5_signals_per_day": 20.78,
+    "y5_bundles_per_day": 13.97
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 11.45,
+    "live_v4_signals_per_day": 16.63,
+    "live_v4_bundles_per_day": 8.65,
+    "y5_signals_per_day": 10.22,
+    "y5_bundles_per_day": 6.88
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 2.52,
+    "y5_bundles_per_day": 1.73
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 67.3,
+    "y5_switch_P1_p90": 82.0,
+    "y5_switch_P2_mean": 52.9,
+    "y5_switch_P2_p90": 62.0,
+    "y5_switch_P3_mean": 66.4,
+    "y5_switch_P3_p90": 83.9,
+    "y5_switch_P4_mean": 81.7,
+    "y5_switch_P4_p90": 99.3,
+    "y5_ignore_P1_mean": 64.0,
+    "y5_ignore_P1_p90": 80.0,
+    "y5_ignore_P2_mean": 41.9,
+    "y5_ignore_P2_p90": 48.0,
+    "y5_ignore_P3_mean": 41.5,
+    "y5_ignore_P3_p90": 57.2,
+    "y5_ignore_P4_mean": 74.7,
+    "y5_ignore_P4_p90": 91.6,
+    "y5_entry_calls": 8.68,
+    "y5_trades_per_day": 8.68,
+    "y5_occupancy": 0.75,
+    "live_v3b_switch_P4": 86.1,
+    "live_v3b_ignore_P2": 51.5,
+    "live_v4_switch_P4": 78.7,
+    "live_v4_ignore_P2": 39.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 81.7/day"
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 62.8,
+    "y5_switch_P1_p90": 79.0,
+    "y5_switch_P2_mean": 56.8,
+    "y5_switch_P2_p90": 64.0,
+    "y5_switch_P3_mean": 64.3,
+    "y5_switch_P3_p90": 82.1,
+    "y5_switch_P4_mean": 79.3,
+    "y5_switch_P4_p90": 96.3,
+    "y5_ignore_P1_mean": 52.1,
+    "y5_ignore_P1_p90": 76.0,
+    "y5_ignore_P2_mean": 44.7,
+    "y5_ignore_P2_p90": 49.0,
+    "y5_ignore_P3_mean": 37.3,
+    "y5_ignore_P3_p90": 54.5,
+    "y5_ignore_P4_mean": 74.4,
+    "y5_ignore_P4_p90": 90.8,
+    "y5_entry_calls": 7.63,
+    "y5_trades_per_day": 7.63,
+    "y5_occupancy": 0.84,
+    "live_v3b_switch_P4": 84.7,
+    "live_v3b_ignore_P2": 51.5,
+    "live_v4_switch_P4": 82.0,
+    "live_v4_ignore_P2": 46.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 79.3/day"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 42.94,
+    "live_v4_signals_per_day": 59.2,
+    "live_v4_bundles_per_day": 37.25,
+    "y5_signals_per_day": 65.4,
+    "y5_bundles_per_day": 36.01
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 21.47,
+    "live_v4_signals_per_day": 34.59,
+    "live_v4_bundles_per_day": 19.95,
+    "y5_signals_per_day": 31.68,
+    "y5_bundles_per_day": 17.62
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 12.88,
+    "live_v4_signals_per_day": 15.96,
+    "live_v4_bundles_per_day": 9.98,
+    "y5_signals_per_day": 15.48,
+    "y5_bundles_per_day": 8.72
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 3.8,
+    "y5_bundles_per_day": 2.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 76.9,
+    "y5_switch_P1_p90": 88.0,
+    "y5_switch_P2_mean": 60.2,
+    "y5_switch_P2_p90": 68.0,
+    "y5_switch_P3_mean": 80.8,
+    "y5_switch_P3_p90": 100.2,
+    "y5_switch_P4_mean": 94.3,
+    "y5_switch_P4_p90": 112.1,
+    "y5_ignore_P1_mean": 73.1,
+    "y5_ignore_P1_p90": 87.0,
+    "y5_ignore_P2_mean": 46.7,
+    "y5_ignore_P2_p90": 50.0,
+    "y5_ignore_P3_mean": 50.2,
+    "y5_ignore_P3_p90": 67.9,
+    "y5_ignore_P4_mean": 87.0,
+    "y5_ignore_P4_p90": 103.9,
+    "y5_entry_calls": 9.91,
+    "y5_trades_per_day": 9.91,
+    "y5_occupancy": 0.83,
+    "live_v3b_switch_P4": 81.8,
+    "live_v3b_ignore_P2": 44.4,
+    "live_v4_switch_P4": 104.0,
+    "live_v4_ignore_P2": 50.5
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 94.3/day"
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 73.7,
+    "y5_switch_P1_p90": 87.0,
+    "y5_switch_P2_mean": 61.7,
+    "y5_switch_P2_p90": 68.0,
+    "y5_switch_P3_mean": 78.9,
+    "y5_switch_P3_p90": 97.6,
+    "y5_switch_P4_mean": 90.3,
+    "y5_switch_P4_p90": 107.6,
+    "y5_ignore_P1_mean": 64.7,
+    "y5_ignore_P1_p90": 84.0,
+    "y5_ignore_P2_mean": 47.5,
+    "y5_ignore_P2_p90": 50.0,
+    "y5_ignore_P3_mean": 47.9,
+    "y5_ignore_P3_p90": 66.6,
+    "y5_ignore_P4_mean": 86.3,
+    "y5_ignore_P4_p90": 102.7,
+    "y5_entry_calls": 9.19,
+    "y5_trades_per_day": 9.19,
+    "y5_occupancy": 0.87,
+    "live_v3b_switch_P4": 84.7,
+    "live_v3b_ignore_P2": 48.7,
+    "live_v4_switch_P4": 100.7,
+    "live_v4_ignore_P2": 51.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 90.3/day"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 34.35,
+    "live_v4_signals_per_day": 22.61,
+    "live_v4_bundles_per_day": 15.3,
+    "y5_signals_per_day": 23.57,
+    "y5_bundles_per_day": 17.03
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 18.61,
+    "live_v4_signals_per_day": 13.97,
+    "live_v4_bundles_per_day": 11.31,
+    "y5_signals_per_day": 11.36,
+    "y5_bundles_per_day": 8.21
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 8.59,
+    "live_v4_signals_per_day": 9.98,
+    "live_v4_bundles_per_day": 7.98,
+    "y5_signals_per_day": 5.7,
+    "y5_bundles_per_day": 4.06
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 5.99,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 1.39,
+    "y5_bundles_per_day": 0.98
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 53.3,
+    "y5_switch_P1_p90": 72.0,
+    "y5_switch_P2_mean": 39.6,
+    "y5_switch_P2_p90": 52.0,
+    "y5_switch_P3_mean": 44.6,
+    "y5_switch_P3_p90": 60.8,
+    "y5_switch_P4_mean": 61.6,
+    "y5_switch_P4_p90": 80.9,
+    "y5_ignore_P1_mean": 51.6,
+    "y5_ignore_P1_p90": 71.0,
+    "y5_ignore_P2_mean": 33.4,
+    "y5_ignore_P2_p90": 43.0,
+    "y5_ignore_P3_mean": 31.1,
+    "y5_ignore_P3_p90": 45.0,
+    "y5_ignore_P4_mean": 57.8,
+    "y5_ignore_P4_p90": 76.1,
+    "y5_entry_calls": 6.71,
+    "y5_trades_per_day": 6.71,
+    "y5_occupancy": 0.6,
+    "live_v3b_switch_P4": 84.6,
+    "live_v3b_ignore_P2": 41.5,
+    "live_v4_switch_P4": 67.4,
+    "live_v4_ignore_P2": 41.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 61.6/day"
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 48.9,
+    "y5_switch_P1_p90": 68.0,
+    "y5_switch_P2_mean": 45.1,
+    "y5_switch_P2_p90": 56.0,
+    "y5_switch_P3_mean": 43.5,
+    "y5_switch_P3_p90": 59.1,
+    "y5_switch_P4_mean": 63.0,
+    "y5_switch_P4_p90": 78.3,
+    "y5_ignore_P1_mean": 42.7,
+    "y5_ignore_P1_p90": 65.0,
+    "y5_ignore_P2_mean": 38.1,
+    "y5_ignore_P2_p90": 46.0,
+    "y5_ignore_P3_mean": 28.2,
+    "y5_ignore_P3_p90": 41.4,
+    "y5_ignore_P4_mean": 60.1,
+    "y5_ignore_P4_p90": 75.2,
+    "y5_entry_calls": 6.16,
+    "y5_trades_per_day": 6.16,
+    "y5_occupancy": 0.72,
+    "live_v3b_switch_P4": 89.0,
+    "live_v3b_ignore_P2": 47.2,
+    "live_v4_switch_P4": 69.4,
+    "live_v4_ignore_P2": 45.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 63.0/day"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 32.92,
+    "live_v4_signals_per_day": 21.28,
+    "live_v4_bundles_per_day": 14.63,
+    "y5_signals_per_day": 25.07,
+    "y5_bundles_per_day": 17.55
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 18.61,
+    "live_v4_signals_per_day": 14.63,
+    "live_v4_bundles_per_day": 11.31,
+    "y5_signals_per_day": 12.51,
+    "y5_bundles_per_day": 8.76
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 10.64,
+    "live_v4_bundles_per_day": 5.99,
+    "y5_signals_per_day": 6.18,
+    "y5_bundles_per_day": 4.33
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 1.39,
+    "y5_bundles_per_day": 0.96
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 56.7,
+    "y5_switch_P1_p90": 77.0,
+    "y5_switch_P2_mean": 41.2,
+    "y5_switch_P2_p90": 54.0,
+    "y5_switch_P3_mean": 46.5,
+    "y5_switch_P3_p90": 63.4,
+    "y5_switch_P4_mean": 63.6,
+    "y5_switch_P4_p90": 84.0,
+    "y5_ignore_P1_mean": 55.4,
+    "y5_ignore_P1_p90": 77.0,
+    "y5_ignore_P2_mean": 35.1,
+    "y5_ignore_P2_p90": 45.0,
+    "y5_ignore_P3_mean": 31.7,
+    "y5_ignore_P3_p90": 45.5,
+    "y5_ignore_P4_mean": 59.9,
+    "y5_ignore_P4_p90": 79.0,
+    "y5_entry_calls": 6.94,
+    "y5_trades_per_day": 6.94,
+    "y5_occupancy": 0.63,
+    "live_v3b_switch_P4": 66.0,
+    "live_v3b_ignore_P2": 44.4,
+    "live_v4_switch_P4": 48.7,
+    "live_v4_ignore_P2": 33.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 63.6/day"
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 53.1,
+    "y5_switch_P1_p90": 74.0,
+    "y5_switch_P2_mean": 44.8,
+    "y5_switch_P2_p90": 56.0,
+    "y5_switch_P3_mean": 45.9,
+    "y5_switch_P3_p90": 62.3,
+    "y5_switch_P4_mean": 63.4,
+    "y5_switch_P4_p90": 81.1,
+    "y5_ignore_P1_mean": 48.0,
+    "y5_ignore_P1_p90": 72.0,
+    "y5_ignore_P2_mean": 38.0,
+    "y5_ignore_P2_p90": 47.0,
+    "y5_ignore_P3_mean": 29.3,
+    "y5_ignore_P3_p90": 43.0,
+    "y5_ignore_P4_mean": 60.8,
+    "y5_ignore_P4_p90": 77.7,
+    "y5_entry_calls": 6.45,
+    "y5_trades_per_day": 6.45,
+    "y5_occupancy": 0.71,
+    "live_v3b_switch_P4": 71.8,
+    "live_v3b_ignore_P2": 44.4,
+    "live_v4_switch_P4": 48.7,
+    "live_v4_ignore_P2": 34.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 63.4/day"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 28.63,
+    "live_v4_signals_per_day": 24.61,
+    "live_v4_bundles_per_day": 19.29,
+    "y5_signals_per_day": 20.26,
+    "y5_bundles_per_day": 15.32
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 11.45,
+    "live_v4_signals_per_day": 13.97,
+    "live_v4_bundles_per_day": 9.98,
+    "y5_signals_per_day": 10.53,
+    "y5_bundles_per_day": 7.87
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 6.65,
+    "live_v4_bundles_per_day": 4.66,
+    "y5_signals_per_day": 5.28,
+    "y5_bundles_per_day": 3.88
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 1.23,
+    "y5_bundles_per_day": 0.92
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 57.1,
+    "y5_switch_P1_p90": 74.0,
+    "y5_switch_P2_mean": 41.7,
+    "y5_switch_P2_p90": 51.0,
+    "y5_switch_P3_mean": 44.3,
+    "y5_switch_P3_p90": 57.8,
+    "y5_switch_P4_mean": 64.0,
+    "y5_switch_P4_p90": 79.8,
+    "y5_ignore_P1_mean": 55.5,
+    "y5_ignore_P1_p90": 73.0,
+    "y5_ignore_P2_mean": 36.5,
+    "y5_ignore_P2_p90": 44.0,
+    "y5_ignore_P3_mean": 31.1,
+    "y5_ignore_P3_p90": 42.9,
+    "y5_ignore_P4_mean": 60.4,
+    "y5_ignore_P4_p90": 75.2,
+    "y5_entry_calls": 7.23,
+    "y5_trades_per_day": 7.23,
+    "y5_occupancy": 0.66,
+    "live_v3b_switch_P4": 68.9,
+    "live_v3b_ignore_P2": 40.1,
+    "live_v4_switch_P4": 71.4,
+    "live_v4_ignore_P2": 42.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 64.0/day"
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 52.1,
+    "y5_switch_P1_p90": 70.0,
+    "y5_switch_P2_mean": 46.2,
+    "y5_switch_P2_p90": 54.0,
+    "y5_switch_P3_mean": 43.9,
+    "y5_switch_P3_p90": 57.7,
+    "y5_switch_P4_mean": 64.6,
+    "y5_switch_P4_p90": 78.3,
+    "y5_ignore_P1_mean": 46.3,
+    "y5_ignore_P1_p90": 67.0,
+    "y5_ignore_P2_mean": 40.3,
+    "y5_ignore_P2_p90": 46.0,
+    "y5_ignore_P3_mean": 28.0,
+    "y5_ignore_P3_p90": 41.3,
+    "y5_ignore_P4_mean": 61.7,
+    "y5_ignore_P4_p90": 74.9,
+    "y5_entry_calls": 6.59,
+    "y5_trades_per_day": 6.59,
+    "y5_occupancy": 0.76,
+    "live_v3b_switch_P4": 63.2,
+    "live_v3b_ignore_P2": 44.4,
+    "live_v4_switch_P4": 62.7,
+    "live_v4_ignore_P2": 46.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 64.6/day"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 6.7,
+    "y5_bundles_per_day": 5.74
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 3.38,
+    "y5_bundles_per_day": 2.9
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 1.78,
+    "y5_bundles_per_day": 1.5
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.39,
+    "y5_bundles_per_day": 0.33
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 30.7,
+    "y5_switch_P1_p90": 50.0,
+    "y5_switch_P2_mean": 21.7,
+    "y5_switch_P2_p90": 35.0,
+    "y5_switch_P3_mean": 22.4,
+    "y5_switch_P3_p90": 35.0,
+    "y5_switch_P4_mean": 35.7,
+    "y5_switch_P4_p90": 55.5,
+    "y5_ignore_P1_mean": 30.3,
+    "y5_ignore_P1_p90": 49.6,
+    "y5_ignore_P2_mean": 20.2,
+    "y5_ignore_P2_p90": 32.6,
+    "y5_ignore_P3_mean": 18.5,
+    "y5_ignore_P3_p90": 29.9,
+    "y5_ignore_P4_mean": 34.7,
+    "y5_ignore_P4_p90": 54.0,
+    "y5_entry_calls": 4.0,
+    "y5_trades_per_day": 4.0,
+    "y5_occupancy": 0.36,
+    "live_v3b_switch_P4": 34.4,
+    "live_v3b_ignore_P2": 20.0,
+    "live_v4_switch_P4": 34.0,
+    "live_v4_ignore_P2": 19.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 35.7/day"
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 29.5,
+    "y5_switch_P1_p90": 49.0,
+    "y5_switch_P2_mean": 26.9,
+    "y5_switch_P2_p90": 42.0,
+    "y5_switch_P3_mean": 22.8,
+    "y5_switch_P3_p90": 35.5,
+    "y5_switch_P4_mean": 39.7,
+    "y5_switch_P4_p90": 57.6,
+    "y5_ignore_P1_mean": 28.0,
+    "y5_ignore_P1_p90": 48.0,
+    "y5_ignore_P2_mean": 25.1,
+    "y5_ignore_P2_p90": 39.0,
+    "y5_ignore_P3_mean": 17.8,
+    "y5_ignore_P3_p90": 28.9,
+    "y5_ignore_P4_mean": 38.9,
+    "y5_ignore_P4_p90": 56.7,
+    "y5_entry_calls": 4.03,
+    "y5_trades_per_day": 4.03,
+    "y5_occupancy": 0.48,
+    "live_v3b_switch_P4": 34.4,
+    "live_v3b_ignore_P2": 20.0,
+    "live_v4_switch_P4": 35.4,
+    "live_v4_ignore_P2": 25.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 39.7/day"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.1,
+    "y5_bundles_per_day": 0.07
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.06,
+    "y5_bundles_per_day": 0.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.03,
+    "y5_bundles_per_day": 0.03
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.01,
+    "y5_bundles_per_day": 0.01
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.6,
+    "y5_switch_P1_p90": 0.0,
+    "y5_switch_P2_mean": 0.5,
+    "y5_switch_P2_p90": 0.0,
+    "y5_switch_P3_mean": 0.4,
+    "y5_switch_P3_p90": 0.0,
+    "y5_switch_P4_mean": 0.8,
+    "y5_switch_P4_p90": 0.0,
+    "y5_ignore_P1_mean": 0.6,
+    "y5_ignore_P1_p90": 0.0,
+    "y5_ignore_P2_mean": 0.5,
+    "y5_ignore_P2_p90": 0.0,
+    "y5_ignore_P3_mean": 0.4,
+    "y5_ignore_P3_p90": 0.0,
+    "y5_ignore_P4_mean": 0.8,
+    "y5_ignore_P4_p90": 0.0,
+    "y5_entry_calls": 0.1,
+    "y5_trades_per_day": 0.1,
+    "y5_occupancy": 0.01
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 0.8/day"
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "rare",
+   "numbers": {
+    "y5_switch_P1_mean": 0.8,
+    "y5_switch_P1_p90": 2.0,
+    "y5_switch_P2_mean": 0.7,
+    "y5_switch_P2_p90": 2.0,
+    "y5_switch_P3_mean": 0.5,
+    "y5_switch_P3_p90": 1.8,
+    "y5_switch_P4_mean": 1.1,
+    "y5_switch_P4_p90": 2.9,
+    "y5_ignore_P1_mean": 0.8,
+    "y5_ignore_P1_p90": 2.0,
+    "y5_ignore_P2_mean": 0.7,
+    "y5_ignore_P2_p90": 2.0,
+    "y5_ignore_P3_mean": 0.5,
+    "y5_ignore_P3_p90": 1.7,
+    "y5_ignore_P4_mean": 1.1,
+    "y5_ignore_P4_p90": 2.9,
+    "y5_entry_calls": 0.13,
+    "y5_trades_per_day": 0.13,
+    "y5_occupancy": 0.01
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). rare: switch+P4 mean 1.1/day"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 50.1,
+    "live_v4_signals_per_day": 51.88,
+    "live_v4_bundles_per_day": 37.25,
+    "y5_signals_per_day": 50.08,
+    "y5_bundles_per_day": 31.6
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 21.47,
+    "live_v4_signals_per_day": 22.61,
+    "live_v4_bundles_per_day": 15.3,
+    "y5_signals_per_day": 25.28,
+    "y5_bundles_per_day": 15.74
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 15.75,
+    "live_v4_signals_per_day": 15.3,
+    "live_v4_bundles_per_day": 8.65,
+    "y5_signals_per_day": 12.33,
+    "y5_bundles_per_day": 7.75
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 3.04,
+    "y5_bundles_per_day": 1.86
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 70.9,
+    "y5_switch_P1_p90": 84.0,
+    "y5_switch_P2_mean": 56.2,
+    "y5_switch_P2_p90": 65.0,
+    "y5_switch_P3_mean": 72.6,
+    "y5_switch_P3_p90": 90.7,
+    "y5_switch_P4_mean": 87.5,
+    "y5_switch_P4_p90": 105.4,
+    "y5_ignore_P1_mean": 67.0,
+    "y5_ignore_P1_p90": 82.0,
+    "y5_ignore_P2_mean": 43.8,
+    "y5_ignore_P2_p90": 49.0,
+    "y5_ignore_P3_mean": 45.5,
+    "y5_ignore_P3_p90": 60.5,
+    "y5_ignore_P4_mean": 80.2,
+    "y5_ignore_P4_p90": 96.4,
+    "y5_entry_calls": 9.1,
+    "y5_trades_per_day": 9.1,
+    "y5_occupancy": 0.78,
+    "live_v3b_switch_P4": 77.5,
+    "live_v3b_ignore_P2": 42.9,
+    "live_v4_switch_P4": 87.3,
+    "live_v4_ignore_P2": 45.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 87.5/day"
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 67.4,
+    "y5_switch_P1_p90": 82.0,
+    "y5_switch_P2_mean": 58.6,
+    "y5_switch_P2_p90": 66.0,
+    "y5_switch_P3_mean": 70.3,
+    "y5_switch_P3_p90": 88.3,
+    "y5_switch_P4_mean": 83.7,
+    "y5_switch_P4_p90": 100.9,
+    "y5_ignore_P1_mean": 57.7,
+    "y5_ignore_P1_p90": 78.0,
+    "y5_ignore_P2_mean": 45.4,
+    "y5_ignore_P2_p90": 49.0,
+    "y5_ignore_P3_mean": 42.0,
+    "y5_ignore_P3_p90": 57.9,
+    "y5_ignore_P4_mean": 79.2,
+    "y5_ignore_P4_p90": 94.9,
+    "y5_entry_calls": 8.32,
+    "y5_trades_per_day": 8.32,
+    "y5_occupancy": 0.84,
+    "live_v3b_switch_P4": 73.2,
+    "live_v3b_ignore_P2": 47.2,
+    "live_v4_switch_P4": 88.7,
+    "live_v4_ignore_P2": 48.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 83.7/day"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.33,
+    "y5_signals_per_day": 4.32,
+    "y5_bundles_per_day": 3.86
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 2.06,
+    "y5_bundles_per_day": 1.83
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 2.66,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 1.01,
+    "y5_bundles_per_day": 0.9
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.23,
+    "y5_bundles_per_day": 0.2
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 26.2,
+    "y5_switch_P1_p90": 45.0,
+    "y5_switch_P2_mean": 18.0,
+    "y5_switch_P2_p90": 31.0,
+    "y5_switch_P3_mean": 15.8,
+    "y5_switch_P3_p90": 26.1,
+    "y5_switch_P4_mean": 28.2,
+    "y5_switch_P4_p90": 45.3,
+    "y5_ignore_P1_mean": 25.9,
+    "y5_ignore_P1_p90": 45.0,
+    "y5_ignore_P2_mean": 17.2,
+    "y5_ignore_P2_p90": 29.0,
+    "y5_ignore_P3_mean": 13.6,
+    "y5_ignore_P3_p90": 23.0,
+    "y5_ignore_P4_mean": 27.6,
+    "y5_ignore_P4_p90": 44.0,
+    "y5_entry_calls": 3.17,
+    "y5_trades_per_day": 3.17,
+    "y5_occupancy": 0.31,
+    "live_v3b_switch_P4": 34.5,
+    "live_v3b_ignore_P2": 25.8,
+    "live_v4_switch_P4": 28.0,
+    "live_v4_ignore_P2": 20.0
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 28.2/day"
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 25.9,
+    "y5_switch_P1_p90": 44.0,
+    "y5_switch_P2_mean": 22.4,
+    "y5_switch_P2_p90": 38.0,
+    "y5_switch_P3_mean": 16.4,
+    "y5_switch_P3_p90": 26.3,
+    "y5_switch_P4_mean": 32.2,
+    "y5_switch_P4_p90": 50.6,
+    "y5_ignore_P1_mean": 25.0,
+    "y5_ignore_P1_p90": 44.0,
+    "y5_ignore_P2_mean": 21.4,
+    "y5_ignore_P2_p90": 36.0,
+    "y5_ignore_P3_mean": 13.5,
+    "y5_ignore_P3_p90": 22.5,
+    "y5_ignore_P4_mean": 31.6,
+    "y5_ignore_P4_p90": 49.4,
+    "y5_entry_calls": 3.28,
+    "y5_trades_per_day": 3.28,
+    "y5_occupancy": 0.41,
+    "live_v3b_switch_P4": 43.1,
+    "live_v3b_ignore_P2": 31.5,
+    "live_v4_switch_P4": 33.4,
+    "live_v4_ignore_P2": 28.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 32.2/day"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 22.61,
+    "live_v4_bundles_per_day": 13.3,
+    "y5_signals_per_day": 18.22,
+    "y5_bundles_per_day": 12.32
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 7.32,
+    "live_v4_bundles_per_day": 5.99,
+    "y5_signals_per_day": 9.12,
+    "y5_bundles_per_day": 6.1
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 2.66,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 4.48,
+    "y5_bundles_per_day": 2.96
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 1.17,
+    "y5_bundles_per_day": 0.76
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 44.9,
+    "y5_switch_P1_p90": 66.0,
+    "y5_switch_P2_mean": 32.4,
+    "y5_switch_P2_p90": 47.0,
+    "y5_switch_P3_mean": 40.8,
+    "y5_switch_P3_p90": 57.6,
+    "y5_switch_P4_mean": 56.9,
+    "y5_switch_P4_p90": 78.9,
+    "y5_ignore_P1_mean": 44.1,
+    "y5_ignore_P1_p90": 65.0,
+    "y5_ignore_P2_mean": 28.5,
+    "y5_ignore_P2_p90": 41.0,
+    "y5_ignore_P3_mean": 32.3,
+    "y5_ignore_P3_p90": 47.3,
+    "y5_ignore_P4_mean": 54.5,
+    "y5_ignore_P4_p90": 75.6,
+    "y5_entry_calls": 6.33,
+    "y5_trades_per_day": 6.33,
+    "y5_occupancy": 0.5,
+    "live_v3b_switch_P4": 38.8,
+    "live_v3b_ignore_P2": 25.8,
+    "live_v4_switch_P4": 64.7,
+    "live_v4_ignore_P2": 36.6
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 56.9/day"
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 41.8,
+    "y5_switch_P1_p90": 63.0,
+    "y5_switch_P2_mean": 38.7,
+    "y5_switch_P2_p90": 52.0,
+    "y5_switch_P3_mean": 39.3,
+    "y5_switch_P3_p90": 56.1,
+    "y5_switch_P4_mean": 59.5,
+    "y5_switch_P4_p90": 78.2,
+    "y5_ignore_P1_mean": 38.2,
+    "y5_ignore_P1_p90": 61.0,
+    "y5_ignore_P2_mean": 34.3,
+    "y5_ignore_P2_p90": 45.0,
+    "y5_ignore_P3_mean": 29.4,
+    "y5_ignore_P3_p90": 44.8,
+    "y5_ignore_P4_mean": 57.6,
+    "y5_ignore_P4_p90": 75.5,
+    "y5_entry_calls": 6.03,
+    "y5_trades_per_day": 6.03,
+    "y5_occupancy": 0.64,
+    "live_v3b_switch_P4": 38.8,
+    "live_v3b_ignore_P2": 25.8,
+    "live_v4_switch_P4": 64.0,
+    "live_v4_ignore_P2": 37.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 59.5/day"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.94,
+    "y5_bundles_per_day": 0.8
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 0.5,
+    "y5_bundles_per_day": 0.41
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.24,
+    "y5_bundles_per_day": 0.21
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.05,
+    "y5_bundles_per_day": 0.04
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 6.5,
+    "y5_switch_P1_p90": 18.0,
+    "y5_switch_P2_mean": 4.4,
+    "y5_switch_P2_p90": 12.0,
+    "y5_switch_P3_mean": 5.0,
+    "y5_switch_P3_p90": 11.8,
+    "y5_switch_P4_mean": 8.2,
+    "y5_switch_P4_p90": 21.4,
+    "y5_ignore_P1_mean": 6.5,
+    "y5_ignore_P1_p90": 18.0,
+    "y5_ignore_P2_mean": 4.4,
+    "y5_ignore_P2_p90": 12.0,
+    "y5_ignore_P3_mean": 4.9,
+    "y5_ignore_P3_p90": 11.5,
+    "y5_ignore_P4_mean": 8.2,
+    "y5_ignore_P4_p90": 21.4,
+    "y5_entry_calls": 0.99,
+    "y5_trades_per_day": 0.99,
+    "y5_occupancy": 0.08,
+    "live_v4_switch_P4": 6.7,
+    "live_v4_ignore_P2": 5.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 8.2/day"
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 7.3,
+    "y5_switch_P1_p90": 19.0,
+    "y5_switch_P2_mean": 6.5,
+    "y5_switch_P2_p90": 17.0,
+    "y5_switch_P3_mean": 5.5,
+    "y5_switch_P3_p90": 12.5,
+    "y5_switch_P4_mean": 10.6,
+    "y5_switch_P4_p90": 27.1,
+    "y5_ignore_P1_mean": 7.2,
+    "y5_ignore_P1_p90": 19.0,
+    "y5_ignore_P2_mean": 6.4,
+    "y5_ignore_P2_p90": 17.0,
+    "y5_ignore_P3_mean": 5.3,
+    "y5_ignore_P3_p90": 12.3,
+    "y5_ignore_P4_mean": 10.6,
+    "y5_ignore_P4_p90": 27.1,
+    "y5_entry_calls": 1.14,
+    "y5_trades_per_day": 1.14,
+    "y5_occupancy": 0.12,
+    "live_v4_switch_P4": 6.7,
+    "live_v4_ignore_P2": 5.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 10.6/day"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 5.73,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 4.8,
+    "y5_bundles_per_day": 3.81
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 2.73,
+    "y5_bundles_per_day": 2.12
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 7.16,
+    "live_v4_signals_per_day": 0.67,
+    "live_v4_bundles_per_day": 0.67,
+    "y5_signals_per_day": 1.41,
+    "y5_bundles_per_day": 1.08
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.37,
+    "y5_bundles_per_day": 0.29
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "light",
+   "numbers": {
+    "y5_switch_P1_mean": 24.5,
+    "y5_switch_P1_p90": 45.0,
+    "y5_switch_P2_mean": 16.9,
+    "y5_switch_P2_p90": 30.0,
+    "y5_switch_P3_mean": 16.2,
+    "y5_switch_P3_p90": 29.1,
+    "y5_switch_P4_mean": 27.5,
+    "y5_switch_P4_p90": 47.6,
+    "y5_ignore_P1_mean": 24.4,
+    "y5_ignore_P1_p90": 44.6,
+    "y5_ignore_P2_mean": 16.1,
+    "y5_ignore_P2_p90": 29.0,
+    "y5_ignore_P3_mean": 14.2,
+    "y5_ignore_P3_p90": 25.8,
+    "y5_ignore_P4_mean": 27.0,
+    "y5_ignore_P4_p90": 46.5,
+    "y5_entry_calls": 3.3,
+    "y5_trades_per_day": 3.3,
+    "y5_occupancy": 0.29,
+    "live_v3b_switch_P4": 40.2,
+    "live_v3b_ignore_P2": 21.5,
+    "live_v4_switch_P4": 2.0,
+    "live_v4_ignore_P2": 1.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). light: switch+P4 mean 27.5/day"
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 24.5,
+    "y5_switch_P1_p90": 43.0,
+    "y5_switch_P2_mean": 22.5,
+    "y5_switch_P2_p90": 39.0,
+    "y5_switch_P3_mean": 16.8,
+    "y5_switch_P3_p90": 29.5,
+    "y5_switch_P4_mean": 32.5,
+    "y5_switch_P4_p90": 52.6,
+    "y5_ignore_P1_mean": 23.6,
+    "y5_ignore_P1_p90": 43.0,
+    "y5_ignore_P2_mean": 21.5,
+    "y5_ignore_P2_p90": 37.0,
+    "y5_ignore_P3_mean": 14.1,
+    "y5_ignore_P3_p90": 25.5,
+    "y5_ignore_P4_mean": 32.1,
+    "y5_ignore_P4_p90": 52.2,
+    "y5_entry_calls": 3.47,
+    "y5_trades_per_day": 3.47,
+    "y5_occupancy": 0.41,
+    "live_v3b_switch_P4": 54.6,
+    "live_v3b_ignore_P2": 35.8,
+    "live_v4_switch_P4": 28.1,
+    "live_v4_ignore_P2": 25.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 32.5/day"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 10.02,
+    "live_v4_signals_per_day": 14.63,
+    "live_v4_bundles_per_day": 11.97,
+    "y5_signals_per_day": 19.29,
+    "y5_bundles_per_day": 14.14
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 11.45,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 2.0,
+    "y5_signals_per_day": 9.61,
+    "y5_bundles_per_day": 7.05
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.33,
+    "live_v4_bundles_per_day": 2.66,
+    "y5_signals_per_day": 4.64,
+    "y5_bundles_per_day": 3.44
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 1.43,
+    "live_v4_signals_per_day": 2.0,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 1.2,
+    "y5_bundles_per_day": 0.87
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 51.7,
+    "y5_switch_P1_p90": 68.0,
+    "y5_switch_P2_mean": 37.8,
+    "y5_switch_P2_p90": 48.0,
+    "y5_switch_P3_mean": 39.7,
+    "y5_switch_P3_p90": 53.0,
+    "y5_switch_P4_mean": 57.6,
+    "y5_switch_P4_p90": 73.4,
+    "y5_ignore_P1_mean": 50.5,
+    "y5_ignore_P1_p90": 67.6,
+    "y5_ignore_P2_mean": 33.0,
+    "y5_ignore_P2_p90": 42.0,
+    "y5_ignore_P3_mean": 27.6,
+    "y5_ignore_P3_p90": 39.7,
+    "y5_ignore_P4_mean": 54.3,
+    "y5_ignore_P4_p90": 69.8,
+    "y5_entry_calls": 6.33,
+    "y5_trades_per_day": 6.33,
+    "y5_occupancy": 0.6,
+    "live_v3b_switch_P4": 48.8,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 56.7,
+    "live_v4_ignore_P2": 35.3
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 57.6/day"
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "heavy",
+   "numbers": {
+    "y5_switch_P1_mean": 47.8,
+    "y5_switch_P1_p90": 65.0,
+    "y5_switch_P2_mean": 42.3,
+    "y5_switch_P2_p90": 52.0,
+    "y5_switch_P3_mean": 39.6,
+    "y5_switch_P3_p90": 52.4,
+    "y5_switch_P4_mean": 59.0,
+    "y5_switch_P4_p90": 72.6,
+    "y5_ignore_P1_mean": 43.4,
+    "y5_ignore_P1_p90": 63.0,
+    "y5_ignore_P2_mean": 36.9,
+    "y5_ignore_P2_p90": 45.0,
+    "y5_ignore_P3_mean": 25.2,
+    "y5_ignore_P3_p90": 37.6,
+    "y5_ignore_P4_mean": 56.1,
+    "y5_ignore_P4_p90": 69.6,
+    "y5_entry_calls": 5.92,
+    "y5_trades_per_day": 5.92,
+    "y5_occupancy": 0.7,
+    "live_v3b_switch_P4": 47.4,
+    "live_v3b_ignore_P2": 30.1,
+    "live_v4_switch_P4": 68.0,
+    "live_v4_ignore_P2": 39.2
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). heavy: switch+P4 mean 59.0/day"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "15m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 2.86,
+    "live_v4_signals_per_day": 6.65,
+    "live_v4_bundles_per_day": 6.65,
+    "y5_signals_per_day": 6.75,
+    "y5_bundles_per_day": 5.6
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "30m",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": 4.29,
+    "live_v4_signals_per_day": 3.99,
+    "live_v4_bundles_per_day": 3.99,
+    "y5_signals_per_day": 3.52,
+    "y5_bundles_per_day": 2.86
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "1h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": 1.33,
+    "live_v4_bundles_per_day": 1.33,
+    "y5_signals_per_day": 1.79,
+    "y5_bundles_per_day": 1.45
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "4h",
+   "grade": "rate",
+   "numbers": {
+    "live_v3b_signals_per_day": null,
+    "live_v4_signals_per_day": null,
+    "live_v4_bundles_per_day": null,
+    "y5_signals_per_day": 0.27,
+    "y5_bundles_per_day": 0.24
+   },
+   "note": "signals = SUBMITTED on 6 tradable coins; bundle = one call per bar-close moment (coins bundled); 5y = Binance rebuild 2021-08..2026-09"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "setup A (15m+30m)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 27.6,
+    "y5_switch_P1_p90": 50.0,
+    "y5_switch_P2_mean": 19.8,
+    "y5_switch_P2_p90": 36.0,
+    "y5_switch_P3_mean": 18.3,
+    "y5_switch_P3_p90": 32.3,
+    "y5_switch_P4_mean": 30.0,
+    "y5_switch_P4_p90": 51.7,
+    "y5_ignore_P1_mean": 27.3,
+    "y5_ignore_P1_p90": 49.0,
+    "y5_ignore_P2_mean": 18.2,
+    "y5_ignore_P2_p90": 33.0,
+    "y5_ignore_P3_mean": 13.9,
+    "y5_ignore_P3_p90": 24.5,
+    "y5_ignore_P4_mean": 28.7,
+    "y5_ignore_P4_p90": 49.8,
+    "y5_entry_calls": 3.32,
+    "y5_trades_per_day": 3.32,
+    "y5_occupancy": 0.33,
+    "live_v3b_switch_P4": 43.1,
+    "live_v3b_ignore_P2": 31.5,
+    "live_v4_switch_P4": 34.0,
+    "live_v4_ignore_P2": 23.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 30.0/day"
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "setup B (15m/30m/1h/4h)",
+   "grade": "typical",
+   "numbers": {
+    "y5_switch_P1_mean": 27.4,
+    "y5_switch_P1_p90": 48.6,
+    "y5_switch_P2_mean": 24.0,
+    "y5_switch_P2_p90": 41.0,
+    "y5_switch_P3_mean": 19.2,
+    "y5_switch_P3_p90": 32.2,
+    "y5_switch_P4_mean": 33.7,
+    "y5_switch_P4_p90": 53.8,
+    "y5_ignore_P1_mean": 26.2,
+    "y5_ignore_P1_p90": 47.6,
+    "y5_ignore_P2_mean": 22.2,
+    "y5_ignore_P2_p90": 37.6,
+    "y5_ignore_P3_mean": 13.8,
+    "y5_ignore_P3_p90": 24.0,
+    "y5_ignore_P4_mean": 32.5,
+    "y5_ignore_P4_p90": 52.2,
+    "y5_entry_calls": 3.49,
+    "y5_trades_per_day": 3.49,
+    "y5_occupancy": 0.42,
+    "live_v3b_switch_P4": 43.1,
+    "live_v3b_ignore_P2": 31.5,
+    "live_v4_switch_P4": 34.0,
+    "live_v4_ignore_P2": 23.9
+   },
+   "note": "AI calls per trader-day, one position at a time, AI enters every signal (pe 1). typical: switch+P4 mean 33.7/day"
+  },
+  {
+   "strategy": "F10_M2022",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 21.3,
+    "live_v4_ignore_P2": 12.0,
+    "live_v4_entry_calls": 2.0,
+    "live_v4_switch_calls": 0.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 2.0,
+    "y5_trades_per_day_15m": 1.26
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F10_OTE",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 60.0,
+    "live_v4_ignore_P2": 35.9,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 12.64,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 15.96,
+    "y5_trades_per_day_15m": 14.95,
+    "live_v4_signals_per_day_30m": 9.98,
+    "y5_trades_per_day_30m": 7.42,
+    "live_v4_signals_per_day_1h": 7.32,
+    "y5_trades_per_day_1h": 3.65,
+    "live_v4_signals_per_day_4h": 3.33,
+    "y5_trades_per_day_4h": 0.92
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F11_PO3",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 18.7,
+    "live_v4_ignore_P2": 7.3,
+    "live_v4_entry_calls": 2.0,
+    "live_v4_switch_calls": 2.66,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 3.99,
+    "y5_trades_per_day_15m": 5.1,
+    "live_v4_signals_per_day_30m": 3.99,
+    "y5_trades_per_day_30m": 4.88,
+    "live_v4_signals_per_day_1h": 3.99,
+    "y5_trades_per_day_1h": 4.29,
+    "live_v4_signals_per_day_4h": 5.32,
+    "y5_trades_per_day_4h": 1.9
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F11_RAID",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 72.7,
+    "live_v4_ignore_P2": 37.9,
+    "live_v4_entry_calls": 6.65,
+    "live_v4_switch_calls": 21.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 25.27,
+    "y5_trades_per_day_15m": 17.04,
+    "live_v4_signals_per_day_30m": 11.97,
+    "y5_trades_per_day_30m": 8.79,
+    "live_v4_signals_per_day_1h": 5.32,
+    "y5_trades_per_day_1h": 4.52,
+    "live_v4_signals_per_day_4h": 2.0,
+    "y5_trades_per_day_4h": 1.11
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F11_TSOUP",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 68.0,
+    "live_v4_ignore_P2": 36.6,
+    "live_v4_entry_calls": 5.99,
+    "live_v4_switch_calls": 14.63,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 16.63,
+    "y5_trades_per_day_15m": 14.26,
+    "live_v4_signals_per_day_30m": 10.64,
+    "y5_trades_per_day_30m": 7.33,
+    "live_v4_signals_per_day_1h": 3.33,
+    "y5_trades_per_day_1h": 3.75,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.91
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F12_MSS",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 65.4,
+    "live_v4_ignore_P2": 39.2,
+    "live_v4_entry_calls": 3.33,
+    "live_v4_switch_calls": 17.29,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 17.29,
+    "y5_trades_per_day_15m": 16.68,
+    "live_v4_signals_per_day_30m": 9.98,
+    "y5_trades_per_day_30m": 8.21,
+    "live_v4_signals_per_day_1h": 5.99,
+    "y5_trades_per_day_1h": 4.1,
+    "live_v4_signals_per_day_4h": 2.66,
+    "y5_trades_per_day_4h": 1.03
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 42.0,
+    "live_v4_ignore_P2": 25.9,
+    "live_v4_entry_calls": 4.66,
+    "live_v4_switch_calls": 3.33,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 7.98,
+    "y5_trades_per_day_15m": 5.45,
+    "live_v4_signals_per_day_30m": 3.33,
+    "y5_trades_per_day_30m": 2.94,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 1.53,
+    "live_v4_signals_per_day_4h": 1.33,
+    "y5_trades_per_day_4h": 0.39
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F13_FVG_PD",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 47.4,
+    "live_v4_ignore_P2": 31.9,
+    "live_v4_entry_calls": 4.66,
+    "live_v4_switch_calls": 2.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 5.99,
+    "y5_trades_per_day_15m": 4.1,
+    "live_v4_signals_per_day_30m": 2.0,
+    "y5_trades_per_day_30m": 2.06
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F13_RAID_PD",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 72.0,
+    "live_v4_ignore_P2": 37.9,
+    "live_v4_entry_calls": 6.65,
+    "live_v4_switch_calls": 20.62,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 23.94,
+    "y5_trades_per_day_15m": 16.5,
+    "live_v4_signals_per_day_30m": 11.31,
+    "y5_trades_per_day_30m": 8.53,
+    "live_v4_signals_per_day_1h": 5.32,
+    "y5_trades_per_day_1h": 4.38,
+    "live_v4_signals_per_day_4h": 2.0,
+    "y5_trades_per_day_4h": 1.07
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F14_SMT",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 70.7,
+    "live_v4_ignore_P2": 36.6,
+    "live_v4_entry_calls": 7.32,
+    "live_v4_switch_calls": 19.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 74.49,
+    "y5_trades_per_day_15m": 18.24,
+    "live_v4_signals_per_day_30m": 25.94,
+    "y5_trades_per_day_30m": 8.97,
+    "live_v4_signals_per_day_1h": 12.64,
+    "y5_trades_per_day_1h": 4.58
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_ASIA_BRK",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 11.3,
+    "live_v4_ignore_P2": 8.0,
+    "live_v4_entry_calls": 1.33,
+    "live_v4_switch_calls": 2.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 3.99,
+    "y5_trades_per_day_15m": 4.85,
+    "live_v4_signals_per_day_30m": 3.33,
+    "y5_trades_per_day_30m": 4.62,
+    "live_v4_signals_per_day_1h": 3.33,
+    "y5_trades_per_day_1h": 4.08
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_ASIA_SWEEP",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 8.7,
+    "live_v4_ignore_P2": 3.3,
+    "live_v4_entry_calls": 1.33,
+    "live_v4_switch_calls": 1.33,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 3.99,
+    "y5_trades_per_day_15m": 4.74,
+    "live_v4_signals_per_day_30m": 3.99,
+    "y5_trades_per_day_30m": 4.52,
+    "live_v4_signals_per_day_1h": 3.33,
+    "y5_trades_per_day_1h": 3.95
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_LON_BRK",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 12.0,
+    "live_v4_ignore_P2": 6.0,
+    "live_v4_entry_calls": 2.0,
+    "live_v4_switch_calls": 2.66,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 3.99,
+    "y5_trades_per_day_15m": 5.51,
+    "live_v4_signals_per_day_30m": 3.99,
+    "y5_trades_per_day_30m": 5.35,
+    "live_v4_signals_per_day_1h": 3.99,
+    "y5_trades_per_day_1h": 4.78
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_OPEN0000",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 7.3,
+    "live_v4_ignore_P2": 4.7,
+    "live_v4_entry_calls": 1.33,
+    "live_v4_switch_calls": 0.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 7.98,
+    "y5_trades_per_day_15m": 5.97,
+    "live_v4_signals_per_day_30m": 7.98,
+    "y5_trades_per_day_30m": 5.88,
+    "live_v4_signals_per_day_1h": 7.98,
+    "y5_trades_per_day_1h": 5.33
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_OPEN0930",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 2.0,
+    "live_v4_ignore_P2": 0.7,
+    "live_v4_entry_calls": 0.67,
+    "live_v4_switch_calls": 0.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 3.99,
+    "y5_trades_per_day_15m": 5.98,
+    "live_v4_signals_per_day_30m": 3.99,
+    "y5_trades_per_day_30m": 5.89,
+    "live_v4_signals_per_day_1h": 3.99,
+    "y5_trades_per_day_1h": 5.32
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F15_ORB",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 24.6,
+    "live_v4_ignore_P2": 5.3,
+    "live_v4_entry_calls": 1.33,
+    "live_v4_switch_calls": 3.99,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 7.98,
+    "y5_trades_per_day_15m": 5.99,
+    "live_v4_signals_per_day_30m": 7.98,
+    "y5_trades_per_day_30m": 5.91,
+    "live_v4_signals_per_day_1h": 7.32,
+    "y5_trades_per_day_1h": 5.19,
+    "live_v4_signals_per_day_4h": 2.66,
+    "y5_trades_per_day_4h": 2.1
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F16_FIB382",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 71.4,
+    "live_v4_ignore_P2": 41.9,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 11.31,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 13.3,
+    "y5_trades_per_day_15m": 10.07,
+    "live_v4_signals_per_day_30m": 6.65,
+    "y5_trades_per_day_30m": 5.05,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 2.67
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F16_FIB500",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 60.7,
+    "live_v4_ignore_P2": 36.6,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 9.31,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 8.65,
+    "y5_trades_per_day_15m": 10.34,
+    "live_v4_signals_per_day_30m": 6.65,
+    "y5_trades_per_day_30m": 5.22,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 2.58,
+    "live_v4_signals_per_day_4h": 1.33,
+    "y5_trades_per_day_4h": 0.64
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F16_FIB618",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 53.4,
+    "live_v4_ignore_P2": 32.6,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 5.32,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 9.31,
+    "y5_trades_per_day_15m": 9.63,
+    "live_v4_signals_per_day_30m": 6.65,
+    "y5_trades_per_day_30m": 4.87,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 2.4,
+    "live_v4_signals_per_day_4h": 3.33,
+    "y5_trades_per_day_4h": 0.6
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F16_FIB764",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 41.4,
+    "live_v4_ignore_P2": 27.3,
+    "live_v4_entry_calls": 4.66,
+    "live_v4_switch_calls": 4.66,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 7.32,
+    "y5_trades_per_day_15m": 8.64,
+    "live_v4_signals_per_day_30m": 5.32,
+    "y5_trades_per_day_30m": 4.4,
+    "live_v4_signals_per_day_1h": 4.66,
+    "y5_trades_per_day_1h": 2.17,
+    "live_v4_signals_per_day_4h": 1.33,
+    "y5_trades_per_day_4h": 0.55
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F17_Z",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 66.7,
+    "live_v4_ignore_P2": 39.2,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 19.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 33.26,
+    "y5_trades_per_day_15m": 21.84,
+    "live_v4_signals_per_day_30m": 17.29,
+    "y5_trades_per_day_30m": 10.92,
+    "live_v4_signals_per_day_1h": 10.64,
+    "y5_trades_per_day_1h": 5.41,
+    "live_v4_signals_per_day_4h": 3.99,
+    "y5_trades_per_day_4h": 1.33
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F17_Z_HL",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 64.7,
+    "live_v4_ignore_P2": 39.2,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 19.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 31.26,
+    "y5_trades_per_day_15m": 15.48,
+    "live_v4_signals_per_day_30m": 15.96,
+    "y5_trades_per_day_30m": 7.53,
+    "live_v4_signals_per_day_1h": 10.64,
+    "y5_trades_per_day_1h": 3.71,
+    "live_v4_signals_per_day_4h": 3.99,
+    "y5_trades_per_day_4h": 0.88
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F1_MOM_DIV",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 64.7,
+    "live_v4_ignore_P2": 38.6,
+    "live_v4_entry_calls": 5.99,
+    "live_v4_switch_calls": 9.98,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 16.63,
+    "y5_trades_per_day_15m": 11.9,
+    "live_v4_signals_per_day_30m": 6.65,
+    "y5_trades_per_day_30m": 6.13,
+    "live_v4_signals_per_day_1h": 1.33,
+    "y5_trades_per_day_1h": 3.22
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F1_PVT_DIV",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 35.4,
+    "live_v4_ignore_P2": 23.3,
+    "live_v4_entry_calls": 2.66,
+    "live_v4_switch_calls": 9.31,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 9.98,
+    "y5_trades_per_day_15m": 8.0,
+    "live_v4_signals_per_day_30m": 3.99,
+    "y5_trades_per_day_30m": 3.95,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 2.0,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.49
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F1_RSI_DIV",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 58.0,
+    "live_v4_ignore_P2": 34.6,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 9.98,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 11.97,
+    "y5_trades_per_day_15m": 9.78,
+    "live_v4_signals_per_day_30m": 3.33,
+    "y5_trades_per_day_30m": 5.01,
+    "live_v4_signals_per_day_1h": 2.66,
+    "y5_trades_per_day_1h": 2.65,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.66
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F2_DEMARK",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 77.4,
+    "live_v4_ignore_P2": 41.2,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 21.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 25.94,
+    "y5_trades_per_day_15m": 10.02,
+    "live_v4_signals_per_day_30m": 19.95,
+    "y5_trades_per_day_30m": 6.97,
+    "live_v4_signals_per_day_1h": 15.96,
+    "y5_trades_per_day_1h": 4.72,
+    "live_v4_signals_per_day_4h": 9.98,
+    "y5_trades_per_day_4h": 1.88
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F3_BOS",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 55.3,
+    "live_v4_ignore_P2": 29.9,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 9.98,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 19.29,
+    "y5_trades_per_day_15m": 15.07,
+    "live_v4_signals_per_day_30m": 9.31,
+    "y5_trades_per_day_30m": 7.65,
+    "live_v4_signals_per_day_1h": 3.33,
+    "y5_trades_per_day_1h": 3.89,
+    "live_v4_signals_per_day_4h": 2.0,
+    "y5_trades_per_day_4h": 0.95
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F3_BOS_ZONE",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 45.4,
+    "live_v4_ignore_P2": 29.9,
+    "live_v4_entry_calls": 3.33,
+    "live_v4_switch_calls": 5.32,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 7.98,
+    "y5_trades_per_day_15m": 6.27,
+    "live_v4_signals_per_day_30m": 4.66,
+    "y5_trades_per_day_30m": 3.17,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 1.57,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.4
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F3_HHHL",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 72.1,
+    "live_v4_ignore_P2": 44.6,
+    "live_v4_entry_calls": 4.66,
+    "live_v4_switch_calls": 27.27,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 30.6,
+    "y5_trades_per_day_15m": 22.96,
+    "live_v4_signals_per_day_30m": 14.63,
+    "y5_trades_per_day_30m": 11.59,
+    "live_v4_signals_per_day_1h": 6.65,
+    "y5_trades_per_day_1h": 5.89,
+    "live_v4_signals_per_day_4h": 2.0,
+    "y5_trades_per_day_4h": 1.49
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F4_FAN",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 79.3,
+    "live_v4_ignore_P2": 35.3,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 19.95,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 21.28,
+    "y5_trades_per_day_15m": 19.02,
+    "live_v4_signals_per_day_30m": 13.3,
+    "y5_trades_per_day_30m": 9.25,
+    "live_v4_signals_per_day_1h": 8.65,
+    "y5_trades_per_day_1h": 4.56,
+    "live_v4_signals_per_day_4h": 1.33,
+    "y5_trades_per_day_4h": 1.11
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F4_PULL",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 72.7,
+    "live_v4_ignore_P2": 34.6,
+    "live_v4_entry_calls": 5.32,
+    "live_v4_switch_calls": 26.61,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 34.59,
+    "y5_trades_per_day_15m": 13.39,
+    "live_v4_signals_per_day_30m": 13.3,
+    "y5_trades_per_day_30m": 6.57,
+    "live_v4_signals_per_day_1h": 11.31,
+    "y5_trades_per_day_1h": 3.3,
+    "live_v4_signals_per_day_4h": 10.64,
+    "y5_trades_per_day_4h": 0.79
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F4_PULL_RSI",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 2.0,
+    "live_v4_ignore_P2": 0.7,
+    "live_v4_entry_calls": 0.67,
+    "live_v4_switch_calls": 0.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 0.67,
+    "y5_trades_per_day_15m": 0.98
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F5_BOX",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 24.7,
+    "live_v4_ignore_P2": 16.6,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 3.33,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 6.65,
+    "y5_trades_per_day_15m": 3.22,
+    "live_v4_signals_per_day_30m": 2.66,
+    "y5_trades_per_day_30m": 1.4,
+    "live_v4_signals_per_day_1h": 2.0,
+    "y5_trades_per_day_1h": 0.7
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F5_BOX_HTF",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 24.0,
+    "live_v4_ignore_P2": 16.6,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 3.33,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 6.65,
+    "y5_trades_per_day_15m": 1.37,
+    "live_v4_signals_per_day_30m": 2.66,
+    "y5_trades_per_day_30m": 0.62,
+    "live_v4_signals_per_day_1h": 1.33,
+    "y5_trades_per_day_1h": 0.29
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F5_BOX_RSI",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 2.0,
+    "live_v4_ignore_P2": 1.3,
+    "live_v4_entry_calls": 0.67,
+    "live_v4_switch_calls": 0.0,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 0.67,
+    "y5_trades_per_day_15m": 0.37
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F6_VWAP_CROSS",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 94.6,
+    "live_v4_ignore_P2": 43.9,
+    "live_v4_entry_calls": 7.32,
+    "live_v4_switch_calls": 41.9,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 63.19,
+    "y5_trades_per_day_15m": 21.29,
+    "live_v4_signals_per_day_30m": 47.89,
+    "y5_trades_per_day_30m": 12.79,
+    "live_v4_signals_per_day_1h": 28.6,
+    "y5_trades_per_day_1h": 7.4,
+    "live_v4_signals_per_day_4h": 7.98,
+    "y5_trades_per_day_4h": 2.3
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F6_VWAP_FAIL",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 70.0,
+    "live_v4_ignore_P2": 39.9,
+    "live_v4_entry_calls": 5.99,
+    "live_v4_switch_calls": 21.28,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 21.28,
+    "y5_trades_per_day_15m": 14.36,
+    "live_v4_signals_per_day_30m": 16.63,
+    "y5_trades_per_day_30m": 9.4,
+    "live_v4_signals_per_day_1h": 14.63,
+    "y5_trades_per_day_1h": 5.93,
+    "live_v4_signals_per_day_4h": 4.66,
+    "y5_trades_per_day_4h": 1.76
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F7_RF_ONLY",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 80.7,
+    "live_v4_ignore_P2": 45.9,
+    "live_v4_entry_calls": 6.65,
+    "live_v4_switch_calls": 11.97,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 18.62,
+    "y5_trades_per_day_15m": 14.76,
+    "live_v4_signals_per_day_30m": 10.64,
+    "y5_trades_per_day_30m": 7.3,
+    "live_v4_signals_per_day_1h": 3.99,
+    "y5_trades_per_day_1h": 3.71,
+    "live_v4_signals_per_day_4h": 2.0,
+    "y5_trades_per_day_4h": 0.93
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 93.3,
+    "live_v4_ignore_P2": 48.6,
+    "live_v4_entry_calls": 8.65,
+    "live_v4_switch_calls": 39.24,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 60.53,
+    "y5_trades_per_day_15m": 34.03,
+    "live_v4_signals_per_day_30m": 27.94,
+    "y5_trades_per_day_30m": 16.84,
+    "live_v4_signals_per_day_1h": 15.3,
+    "y5_trades_per_day_1h": 8.41,
+    "live_v4_signals_per_day_4h": 5.99,
+    "y5_trades_per_day_4h": 2.08
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F8_VWICK",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 36.7,
+    "live_v4_ignore_P2": 20.6,
+    "live_v4_entry_calls": 3.33,
+    "live_v4_switch_calls": 8.65,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 9.98,
+    "y5_trades_per_day_15m": 5.88,
+    "live_v4_signals_per_day_30m": 3.33,
+    "y5_trades_per_day_30m": 2.91
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F9_BREAKER",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 69.4,
+    "live_v4_ignore_P2": 43.2,
+    "live_v4_entry_calls": 5.99,
+    "live_v4_switch_calls": 13.3,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 18.62,
+    "y5_trades_per_day_15m": 11.42,
+    "live_v4_signals_per_day_30m": 6.65,
+    "y5_trades_per_day_30m": 5.48,
+    "live_v4_signals_per_day_1h": 1.33,
+    "y5_trades_per_day_1h": 2.55
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F9_FVG",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 68.7,
+    "live_v4_ignore_P2": 41.2,
+    "live_v4_entry_calls": 6.65,
+    "live_v4_switch_calls": 15.3,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 25.94,
+    "y5_trades_per_day_15m": 14.78,
+    "live_v4_signals_per_day_30m": 9.98,
+    "y5_trades_per_day_30m": 7.39,
+    "live_v4_signals_per_day_1h": 3.99,
+    "y5_trades_per_day_1h": 3.77
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F9_IFVG",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 66.0,
+    "live_v4_ignore_P2": 33.9,
+    "live_v4_entry_calls": 6.65,
+    "live_v4_switch_calls": 12.64,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 17.29,
+    "y5_trades_per_day_15m": 10.02,
+    "live_v4_signals_per_day_30m": 4.66,
+    "y5_trades_per_day_30m": 4.88,
+    "live_v4_signals_per_day_1h": 4.66,
+    "y5_trades_per_day_1h": 2.47,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.69
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  },
+  {
+   "strategy": "F9_OB",
+   "timeframe": "setup A (15m+30m), DeepSeek",
+   "grade": "live-only",
+   "numbers": {
+    "live_v4_switch_P4": 66.7,
+    "live_v4_ignore_P2": 39.9,
+    "live_v4_entry_calls": 3.99,
+    "live_v4_switch_calls": 22.61,
+    "live_days": 1.5,
+    "live_v4_signals_per_day_15m": 22.61,
+    "y5_trades_per_day_15m": 15.21,
+    "live_v4_signals_per_day_30m": 11.31,
+    "y5_trades_per_day_30m": 7.6,
+    "live_v4_signals_per_day_1h": 7.32,
+    "y5_trades_per_day_1h": 3.6,
+    "live_v4_signals_per_day_4h": 0.67,
+    "y5_trades_per_day_4h": 0.92
+   },
+   "note": "1.5 live days only; 5y = DeepSeek trades/day with its own exits (not a call rate)"
+  }
+ ],
+ "files": {
+  "sim5y_script": "./sim5y.py",
+  "live_sim_script": "./live_sim.py",
+  "screens_script": "./screens.py",
+  "cost_model_script": "./cost_model.py",
+  "rates_script": "./rates_table.py",
+  "assemble_script": "./assemble.py",
+  "move_threshold_script": "./move_threshold.py",
+  "summarize5y_script": "./summarize5y.py",
+  "sim5y_outputs": "./out5y",
+  "per_strategy_5y": "./calls_5y_per_strategy.csv",
+  "daily_5y": "./calls_5y_daily.npz",
+  "live_calls": "./outlive/live_calls.csv",
+  "live_rates": "./outlive/live_rates.csv",
+  "live_move_calib": "./outlive/live_move_calib.csv",
+  "trader_calls_live": "./trader_calls_live.csv",
+  "live_vs_5y": "./live_vs_5y.csv",
+  "rates_strategy_tf": "./rates_strategy_tf.csv",
+  "trader_calls_per_strategy": "./trader_calls_per_strategy.csv",
+  "move_threshold": "./move_threshold.csv",
+  "screens_dir": "./outscreens",
+  "screens_measure": "./outscreens/screens_measure.json",
+  "instructions_ko": "./screen_parts/instr_ko.txt",
+  "instructions_en": "./screen_parts/instr_en.txt",
+  "per_call_costs": "./per_call_costs.json",
+  "scenarios_5y": "./scenarios.csv",
+  "scenarios_live": "./scenarios_live_basis.csv",
+  "fit_500": "./fit_500.csv",
+  "levers": "./levers.csv"
+ },
+ "limits": [
+  "No tokenizer was available offline and no API was called: token counts are character-based estimates (low/mid/high) using the repo's own conservative rule as the high end. Korean text in particular may tokenize differently on Sonnet 5.5; measure usage.input_tokens / cache_read_input_tokens / output_tokens in the pilot.",
+  "Thinking tokens are assumed (entry 300/800/2000, holding 100/300/800 for low/mid/high). They are the largest driver of the bill and are unknown until measured.",
+  "Holding times use rule exits (5-year: a house-exit emulation on the trade's own bars at 30x / 20x; live: the validated replay). AI early exits would shorten holds (fewer checks) but add entries; not modelled.",
+  "The 5-year emulation gives shorter holds than live (5y median 52-82 min vs live 15m median 92 min) because the ROE ladder triggers sooner when ATR is large; live (quiet market, 2.2 days, holds truncated at run end) is the upper case. Truth for the coming month is likely between.",
+  "Live rates rest on 0.7 (v3b) and 1.5 (v4) days; per-strategy live numbers are noisy. DeepSeek traders have live rates only (no 5-year call simulation); they were treated as drawn from the same per-trader distribution (their live per-trader calls are similar to ours).",
+  "Scenario trader sets are random draws of 10/20/30 from the 32 non-rare core strategies; the final AI-trader list is not chosen yet. A list of busy strategies (S2_ST_ROC, N04, N23, N22, N18, N17) costs up to ~2.4x the median trader.",
+  "Market-bundle caching assumes one shared 15-minute version written about twice per window; the card sits after the market bundle (design 6-4 order), so it is never cached. A per-trader second breakpoint or a different order could change input cost by a few percent only.",
+  "Prices are from the owners' design doc (AIBOT_DESIGN_KO_v2 14-3) and the claude-api reference cached 2026-09-25: Sonnet 5.5 $2/$10, cache read $0.20; Opus 5.5 $4/$20, cache read $0.20; Haiku 4.5 $1/$5, cache read assumed $0.10, minimum cacheable prefix 4,096 tokens on Haiku. Re-check before launch.",
+  "Not included: market analyst (design ~$20/month), coach/night journal (~$15), re-asks and format failures (~$20), the separate server (~$40), pre-launch tests. Macro releases add only ~0.25 calls per trader-day (4 releases / 30 days).",
+  "Funding-settlement wakes (design v2: 10 minutes before each 8h settlement while holding) are not in P1-P4; they would add about 3 x occupancy calls per trader-day (~1.5-2)."
+ ],
+ "report_section_md": "## AI cost model for AI traders attached to the rule bot (no API calls)\n\n**Bottom line.** The draft plan (30 Sonnet traders, 15m/30m/1h/4h entries, checks every 30 minutes plus event wakes, new signals while holding asked as switch decisions, plus 5 Opus twins) costs about **$574/month** on 5-year call rates and **$607/month** on live (current quiet-market) rates, with Korean screens and mid thinking. A busy day (p90) runs about 15% higher. It does not reliably fit $500. Two cuts bring it under: ignore new signals while holding (except an opposite signal on the held coin), and raise the move trigger from 0.5R to 1.0R or send move wakes to Haiku. A safe 30-trader plan is setup C, new signals ignored while holding, and **either** 30-minute checks **or** event checks: about $270-360/month on average and $320-410 on a busy day, Opus twins included. That leaves room for the analyst, coach and re-asks (about $55, which the design budgets separately). Thinking length is the biggest unknown. If entry decisions think about 2,000 tokens instead of 800, even this plan goes over $500, so lock effort and max_tokens per call type and measure them in the pilot. **All prices must be re-checked in the Anthropic console before launch.**\n\n### 1. How many decisions\n- Signals (SUBMITTED, 6 tradable coins, per day). Our 36, live v4: {'15m': 573.0, '1h': 192.0, '30m': 291.0, '4h': 43.0}. Five-year rebuild: {'15m': 605.0, '1h': 153.0, '30m': 304.0, '4h': 37.0}. DeepSeek 44, live v4: {'15m': 780.0, '1h': 245.0, '30m': 412.0, '4h': 84.0}. Bundling the coins that close at the same moment into one call cuts these by about 30% (v4 ours {'15m': 398.0, '1h': 126.0, '30m': 197.0, '4h': 28.0}).\n- With **one position at a time**, a trader makes only about 4-5 entry calls a day (5y median), but it holds a position 43-54% of the day in the 5-year emulation and 53-73% live. While it holds, new signals are either **switch decisions** (still calls: about +5/day in the 5-year emulation, +9-13 live) or **ignored** (no call).\n- Per-trader calls/day, median strategy, setup A (5y / live v4 ours):\n  - switch mode: P1 bar close 35.7 / 47.2; P2 every 30m 24.5 / 37.9; P3 events 23.9 / 28.1; P4 30m + events 38.9 / 48.7\n  - ignore mode: 35.0 / 45.9, 23.6 / 33.9, 19.8 / 18.8, 38.3 / 44.7\n- The spread across strategies is wide: from about 6 (N03_ADX_GC) to 96 (N04_ST_KLINGER) calls per trader-day (5y, A, switch, P4). See strategy_notes.\n- A move of 0.5R is an ordinary wiggle. On 15m positions it fires 1.78 times per hour held; 1.0R fires 0.46 times per hour.\n\n### 2. Screen size (real export data; tokens are estimates)\n| part | Korean labels (tokens, mid) | English keys (tokens, mid) | cached? |\n|---|---|---|---|\n| common instructions (6-3) | 1407 | 1231 | yes, shared by all traders |\n| market bundle: 6 coins x 15m/30m/1h/4h + daily + market data + analyst + releases | 3651 | 3136 (JSON 3456) | yes, one 15-minute version shared |\n| strategy card | 797 | 422 | no (sits after the market bundle) |\n| last 10 journal lines | 240 | 224 | no |\n| wake: 2-signal entry / 5-signal bundle / holding | 259 / 598 / 130 | 209 / - / 103 | no |\n| **total** | **6359** (range 5187-6991) | **5226** (4601-5947) | ~80% cacheable |\n\nThe answer is about 80-100 tokens (entry) or 40 tokens (holding), plus thinking. Thinking is the unknown: we assumed 800 tokens for an entry decision and 300 for a holding check (mid).\n\n### 3. Prices (re-check before launch)\nSonnet 5.5: $2 input / $10 output, cache read $0.20. Opus 5.5: $4 / $20, cache read $0.20. Haiku 4.5: $1 / $5 (cache read assumed $0.10; minimum cacheable prefix 4,096 tokens). Cache write costs 1.25x input (5-minute TTL). Per call (Korean, mid): Sonnet entry $0.0129, holding $0.0067; Opus entry $0.0248, holding $0.0125. About 70% of an entry call's price is output.\n\n### 4. Monthly cost (with 5 Opus twins; Korean screen; mid thinking; Sonnet holding checks; AI enters every signal)\nSetups: A = 15m/30m entries. B = 15m/30m/1h/4h entries. C = 15m/30m/1h, plus 4h only when the 2 ATR stop is within 3.2% (20x). Holding checks: P1 = every bar close of the held timeframe. P2 = every 30 minutes. P3 = events (0.5R move, other-timeframe same-coin signal, macro release). P4 = P2 + P3. \"While holding\": switch = new signals are asked as switch decisions; ignore = no call.\n\n| traders | setup | hold | while holding | calls/day (5y) | 5y mean $ | 5y p90-day $ | live mean $ | live p90-day $ |\n|---|---|---|---|---|---|---|---|---|\n| 10 | C | P2 | ignore | 287.0 | 185.6 | 208.7 | 202.6 | 227.9 |\n| 10 | C | P2 | switch | 335.0 | 250.5 | 292.9 | 255.7 | 299.0 |\n| 10 | C | P3 | ignore | 244.0 | 164.9 | 197.2 | 155.5 | 185.9 |\n| 10 | C | P3 | switch | 349.0 | 254.1 | 295.2 | 241.0 | 280.0 |\n| 10 | C | P4 | ignore | 480.0 | 262.0 | 301.9 | 280.9 | 323.7 |\n| 10 | C | P4 | switch | 496.0 | 315.0 | 368.1 | 323.6 | 378.2 |\n| 20 | C | P2 | ignore | 572.0 | 249.9 | 282.1 | 282.5 | 318.8 |\n| 20 | C | P2 | switch | 665.0 | 344.0 | 403.5 | 362.2 | 424.8 |\n| 20 | C | P3 | ignore | 482.0 | 220.8 | 263.7 | 210.8 | 251.7 |\n| 20 | C | P3 | switch | 696.0 | 349.7 | 406.9 | 339.9 | 395.4 |\n| 20 | C | P4 | ignore | 946.0 | 361.9 | 415.9 | 401.4 | 461.3 |\n| 20 | C | P4 | switch | 984.0 | 442.5 | 513.3 | 465.4 | 539.8 |\n| 30 | A | P1 | ignore | 1175.0 | 398.0 | 472.8 | 488.9 | 580.7 |\n| 30 | A | P1 | switch | 1208.0 | 483.6 | 584.3 | 541.0 | 653.6 |\n| 30 | A | P2 | ignore | 769.0 | 290.6 | 333.5 | 351.7 | 403.6 |\n| 30 | A | P2 | switch | 899.0 | 399.1 | 473.7 | 424.9 | 504.4 |\n| 30 | A | P3 | ignore | 746.0 | 282.9 | 340.1 | 278.0 | 334.2 |\n| 30 | A | P3 | switch | 1040.0 | 434.4 | 508.5 | 426.1 | 498.8 |\n| 30 | A | P4 | ignore | 1355.0 | 445.0 | 523.8 | 516.7 | 608.2 |\n| 30 | A | P4 | switch | 1433.0 | 542.3 | 647.5 | 600.1 | 716.5 |\n| 30 | B | P1 | ignore | 1043.0 | 362.0 | 422.8 | 444.0 | 518.6 |\n| 30 | B | P1 | switch | 1154.0 | 484.1 | 570.2 | 521.4 | 614.2 |\n| 30 | B | P2 | ignore | 883.0 | 321.6 | 358.9 | 362.3 | 404.3 |\n| 30 | B | P2 | switch | 1028.0 | 450.6 | 522.5 | 468.7 | 543.5 |\n| 30 | B | P3 | ignore | 699.0 | 269.1 | 323.4 | 266.1 | 319.8 |\n| 30 | B | P3 | switch | 1025.0 | 446.0 | 517.2 | 438.7 | 508.7 |\n| 30 | B | P4 | ignore | 1431.0 | 465.1 | 532.1 | 521.9 | 597.1 |\n| 30 | B | P4 | switch | 1484.0 | 573.5 | 660.7 | 607.1 | 699.4 |\n| 30 | C | P1 | ignore | 1096.0 | 376.8 | 434.6 | 444.0 | 512.1 |\n| 30 | C | P1 | switch | 1180.0 | 488.7 | 577.7 | 521.4 | 616.4 |\n| 30 | C | P2 | ignore | 852.0 | 313.8 | 355.2 | 362.3 | 410.1 |\n| 30 | C | P2 | switch | 992.0 | 438.4 | 515.1 | 468.7 | 550.7 |\n| 30 | C | P3 | ignore | 722.0 | 276.3 | 329.9 | 266.1 | 317.7 |\n| 30 | C | P3 | switch | 1039.0 | 448.1 | 520.5 | 438.7 | 509.6 |\n| 30 | C | P4 | ignore | 1416.0 | 461.8 | 533.2 | 521.9 | 602.6 |\n| 30 | C | P4 | switch | 1469.0 | 566.9 | 660.8 | 607.1 | 707.7 |\n\np90-day = the 90th-percentile day x 30 (busy-market stress). Over five years, the worst 30-day window was at most 1.21x the mean month.\n\n### 5. What fits $500 (5 Opus twins included; Korean screen; mid thinking)\nEach cell lists the setups whose p90 day x30 is at most $500 on both the 5-year and the live basis. \"mean only\" = fits on an average month, not on busy days.\n\n| traders | while holding | P1 | P2 | P3 | P4 |\n|---|---|---|---|---|---|\n| 10 | ignore | A B C | A B C | A B C | A B C |\n| 10 | switch | A B C | A B C | A B C | A B C |\n| 20 | ignore | A B C | A B C | A B C | A B C |\n| 20 | switch | B C (mean only: A) | A B C | A B C | - (mean only: A B C) |\n| 30 | ignore | - (mean only: A B C) | A B C | A B C | - |\n| 30 | switch | - | - (mean only: A B C) | - (mean only: A B C) | - |\n\n\n### 6. What to cut first (reference: 30 traders, setup B, P4, switch, 5 Opus; $574/month on 5-year rates)\n| lever | mean_month | saving |\n|---|---|---|\n| reference: 30 Sonnet + 5 Opus, setup B, P4 (30m + events), switch calls | 573.5 | 0.0 |\n| signals while holding ignored (no switch calls) | 465.1 | 108.4 |\n| holding checks only every 30 min (P2) | 450.6 | 122.9 |\n| holding checks only on events (P3) | 446.0 | 127.5 |\n| P4 with move trigger 1.0R instead of 0.5R (approx.) | 482.6 | 90.9 |\n| drop the 5 Opus twins | 453.0 | 120.5 |\n| Haiku first for holding checks (20% escalated) | 476.7 | 96.8 |\n| English keys instead of Korean labels | 508.3 | 65.2 |\n| thinking low (entry ~300, hold ~100 tokens) | 390.1 | 183.4 |\n| thinking high (entry ~2000, hold ~800 tokens) [cost increase] | 1021.2 | -447.7 |\n| screen 1.5x larger instructions/card/journal [cost increase] | 640.8 | -67.3 |\n| setup A (15m/30m entries only) | 542.3 | 31.2 |\n| 20 traders instead of 30 | 447.1 | 126.4 |\n| AI skips half the signals (pe 0.5) | 510.4 | 63.1 |\n\nOrder of cuts:\n1. Move wakes: raise the trigger to 1.0R, or send them to Haiku first.\n2. Switch calls: wake a holding trader only for an opposite signal on the held coin (design v2 rule), not for every new signal.\n3. Drop the fixed 30-minute check when event wakes are on, or keep the 30-minute check and drop the move trigger.\n4. Opus twins: use 3 instead of 5, or ask Opus only on entry calls.\n5. Cap thinking with effort settings (entry medium, holding low) and max_tokens.\n\nTrader count and 15m/30m entries are the last things to cut. Thinking length can swing the total from about 0.7x to 1.8x of the mid case, so the pilot must measure output_tokens per call type before the budget is locked.\n\n### 7. Calls per trader-day by strategy (setup A, AI enters every signal; 5-year mean and live v4)\n| strategy | 5y switch P4 | 5y switch P2 | 5y ignore P2 | 5y ignore P3 | live v4 switch P4 | live v4 ignore P2 |\n|---|---|---|---|---|---|---|\n| N04_ST_KLINGER | 95.8 | 62.0 | 47.6 | 48.4 | 92.7 | 49.2 |\n| N23_HA_ST | 94.3 | 60.2 | 46.7 | 50.2 | 104.0 | 50.5 |\n| S2_ST_ROC | 87.5 | 56.2 | 43.8 | 45.5 | 87.3 | 45.9 |\n| N18_VWMA_MACD | 82.1 | 51.9 | 39.0 | 43.4 | 77.3 | 37.9 |\n| N22_VORTEX_PSAR | 81.7 | 52.9 | 41.9 | 41.5 | 78.7 | 39.9 |\n| N17_KC_RSI | 76.0 | 44.7 | 33.1 | 49.1 | 78.0 | 35.3 |\n| N10_HA_PSAR | 70.1 | 44.4 | 38.9 | 35.7 | 80.0 | 39.9 |\n| OBV_B | 64.0 | 41.7 | 36.5 | 31.1 | 71.4 | 42.6 |\n| N25_DST_CCI | 63.6 | 41.2 | 35.1 | 31.7 | 48.7 | 33.9 |\n| N24_DMI | 61.6 | 39.6 | 33.4 | 31.1 | 67.4 | 41.2 |\n| N02_ST_KST | 58.4 | 35.8 | 31.9 | 30.2 | 52.7 | 36.6 |\n| V39_ALL | 57.6 | 37.8 | 33.0 | 27.6 | 56.7 | 35.3 |\n| S4_BB_BBP | 56.9 | 32.4 | 28.5 | 32.3 | 64.7 | 36.6 |\n| N01_ST_EMA | 55.8 | 34.6 | 29.9 | 29.1 | 46.0 | 29.9 |\n| N20_EMA9_CHOP | 53.5 | 34.0 | 28.2 | 28.2 | 68.0 | 35.9 |\n| N09_ALLIG_AROON | 42.7 | 25.5 | 24.0 | 22.7 | 42.0 | 25.9 |\n| N12_ICHI_AO | 42.3 | 25.6 | 23.9 | 22.0 | 61.4 | 35.9 |\n| N07_ICHI_CMO | 38.9 | 23.8 | 22.3 | 19.8 | 38.7 | 26.6 |\n| N16_BBRSI | 38.8 | 24.5 | 23.6 | 19.3 | 32.0 | 23.9 |\n| N13_3OUTSIDE | 38.5 | 23.8 | 22.9 | 19.3 | 26.7 | 18.6 |\n| DOGE | 37.9 | 24.1 | 22.3 | 19.6 | 26.0 | 12.0 |\n| OBV_S | 35.7 | 21.7 | 20.2 | 18.5 | 34.0 | 19.3 |\n| V45_AMB | 30.0 | 19.8 | 18.2 | 13.9 | 34.0 | 23.9 |\n| N05_PSAR_POC | 29.9 | 18.8 | 18.0 | 14.6 | 54.7 | 35.3 |\n| S3_CMO_SANDWICH | 28.2 | 18.0 | 17.2 | 13.6 | 28.0 | 20.0 |\n| S6_EMA_DMI_ADX | 27.5 | 16.9 | 16.1 | 14.2 | 2.0 | 1.3 |\n| N19_FIB_CHOP | 27.0 | 15.8 | 14.8 | 14.7 | 38.0 | 23.3 |\n| N06_MACD_ORB | 25.4 | 14.8 | 14.2 | 13.9 | 11.3 | 6.0 |\n| N08_ICHI_WR | 10.7 | 6.5 | 6.4 | 5.4 | 8.7 | 6.7 |\n| S5_DONCHIAN_MFI | 8.2 | 4.4 | 4.4 | 4.9 | 6.7 | 5.3 |\n| N03_ADX_GC | 6.4 | 3.8 | 3.8 | 3.4 | 17.3 | 11.3 |\n| N11_BREAKAWAY | 3.5 | 2.2 | 2.2 | 1.7 | nan | nan |\n| S1_EMA_RSI_CHOP | 0.8 | 0.5 | 0.5 | 0.4 | nan | nan |\n| N15_KC_AO | 0.5 | 0.3 | 0.3 | 0.3 | nan | nan |\n| N14_ICHI_RSI | 0.0 | 0.0 | 0.0 | 0.0 | nan | nan |\n\n\n### 8. Example configurations (5-year basis, 5 Opus twins included; mean / p90-day x30 / worst 30 days, $; not all fit)\n| n | setup | policy | mode | hold_model | thinking | mean | p90day_x30 | max30d | fits_500_p90 |\n|---|---|---|---|---|---|---|---|---|---|\n| 30 | C | P4 | ignore | haiku | mid | 328.9 | 375.0 | 364.1 | yes |\n| 30 | C | P2 | ignore | sonnet | mid | 313.8 | 355.2 | 350.5 | yes |\n| 30 | C | P3 | ignore | sonnet | mid | 276.3 | 329.9 | 308.9 | yes |\n| 30 | A | P2 | ignore | sonnet | mid | 290.6 | 333.5 | 326.2 | yes |\n| 20 | C | P4 | switch | sonnet | mid | 442.5 | 513.3 | 511.6 | no |\n| 10 | C | P4 | switch | sonnet | mid | 315.0 | 368.1 | 362.9 | yes |\n| 30 | C | P4 | ignore | sonnet | high | 789.4 | 914.9 | 905.6 | no |\n| 30 | C | P2 | ignore | sonnet | high | 529.5 | 600.5 | 590.2 | no |\n| 30 | C | P4 | switch | sonnet | low | 385.9 | 447.8 | 449.2 | yes |\n\nNot included in these totals: market analyst (~$20/month), coach and night journal (~$15), re-asks (~$20), the server (~$40, outside the AI budget).\n"
+}

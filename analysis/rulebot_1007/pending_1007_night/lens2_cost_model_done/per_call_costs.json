@@ -1,0 +1,434 @@
+{
+ "ko|heavy1.0|sonnet|low|entry": {
+  "usd": 0.007881933333333332,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 400
+ },
+ "ko|heavy1.0|sonnet|low|hold": {
+  "usd": 0.0047349333333333325,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 145
+ },
+ "ko|heavy1.0|sonnet|mid|entry": {
+  "usd": 0.012881933333333333,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 900
+ },
+ "ko|heavy1.0|sonnet|mid|hold": {
+  "usd": 0.0067349333333333325,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 345
+ },
+ "ko|heavy1.0|sonnet|high|entry": {
+  "usd": 0.024881933333333335,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 2100
+ },
+ "ko|heavy1.0|sonnet|high|hold": {
+  "usd": 0.011734933333333333,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 845
+ },
+ "ko|heavy1.0|opus|low|entry": {
+  "usd": 0.014752266666666666,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 400
+ },
+ "ko|heavy1.0|opus|low|hold": {
+  "usd": 0.008458266666666667,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 145
+ },
+ "ko|heavy1.0|opus|mid|entry": {
+  "usd": 0.024752266666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 900
+ },
+ "ko|heavy1.0|opus|mid|hold": {
+  "usd": 0.012458266666666667,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 345
+ },
+ "ko|heavy1.0|opus|high|entry": {
+  "usd": 0.04875226666666666,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 2100
+ },
+ "ko|heavy1.0|opus|high|hold": {
+  "usd": 0.022458266666666667,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 845
+ },
+ "ko|heavy1.0|haiku|low|entry": {
+  "usd": 0.0024409666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 100
+ },
+ "ko|heavy1.0|haiku|low|hold": {
+  "usd": 0.0018674666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 45
+ },
+ "ko|heavy1.0|haiku|mid|entry": {
+  "usd": 0.0024409666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 100
+ },
+ "ko|heavy1.0|haiku|mid|hold": {
+  "usd": 0.0018674666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 45
+ },
+ "ko|heavy1.0|haiku|high|entry": {
+  "usd": 0.0024409666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1435.1666666666665,
+  "out": 100
+ },
+ "ko|heavy1.0|haiku|high|hold": {
+  "usd": 0.0018674666666666665,
+  "cached_in": 5058.0,
+  "uncached_in": 1136.6666666666665,
+  "out": 45
+ },
+ "ko|heavy1.5|sonnet|low|entry": {
+  "usd": 0.009029299999999999,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 400
+ },
+ "ko|heavy1.5|sonnet|low|hold": {
+  "usd": 0.0058823,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 145
+ },
+ "ko|heavy1.5|sonnet|mid|entry": {
+  "usd": 0.0140293,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 900
+ },
+ "ko|heavy1.5|sonnet|mid|hold": {
+  "usd": 0.0078823,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 345
+ },
+ "ko|heavy1.5|sonnet|high|entry": {
+  "usd": 0.0260293,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 2100
+ },
+ "ko|heavy1.5|sonnet|high|hold": {
+  "usd": 0.0128823,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 845
+ },
+ "ko|heavy1.5|opus|low|entry": {
+  "usd": 0.0169063,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 400
+ },
+ "ko|heavy1.5|opus|low|hold": {
+  "usd": 0.0106123,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 145
+ },
+ "ko|heavy1.5|opus|mid|entry": {
+  "usd": 0.026906299999999998,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 900
+ },
+ "ko|heavy1.5|opus|mid|hold": {
+  "usd": 0.0146123,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 345
+ },
+ "ko|heavy1.5|opus|high|entry": {
+  "usd": 0.0509063,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 2100
+ },
+ "ko|heavy1.5|opus|high|hold": {
+  "usd": 0.0246123,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 845
+ },
+ "ko|heavy1.5|haiku|low|entry": {
+  "usd": 0.0030146500000000002,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 100
+ },
+ "ko|heavy1.5|haiku|low|hold": {
+  "usd": 0.00244115,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 45
+ },
+ "ko|heavy1.5|haiku|mid|entry": {
+  "usd": 0.0030146500000000002,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 100
+ },
+ "ko|heavy1.5|haiku|mid|hold": {
+  "usd": 0.00244115,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 45
+ },
+ "ko|heavy1.5|haiku|high|entry": {
+  "usd": 0.0030146500000000002,
+  "cached_in": 5761.5,
+  "uncached_in": 1938.5,
+  "out": 100
+ },
+ "ko|heavy1.5|haiku|high|hold": {
+  "usd": 0.00244115,
+  "cached_in": 5761.5,
+  "uncached_in": 1640.0,
+  "out": 45
+ },
+ "en|heavy1.0|sonnet|low|entry": {
+  "usd": 0.0068103999999999994,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 400
+ },
+ "en|heavy1.0|sonnet|low|hold": {
+  "usd": 0.0037774,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 145
+ },
+ "en|heavy1.0|sonnet|mid|entry": {
+  "usd": 0.0118104,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 900
+ },
+ "en|heavy1.0|sonnet|mid|hold": {
+  "usd": 0.005777399999999999,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 345
+ },
+ "en|heavy1.0|sonnet|high|entry": {
+  "usd": 0.023810400000000002,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 2100
+ },
+ "en|heavy1.0|sonnet|high|hold": {
+  "usd": 0.0107774,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 845
+ },
+ "en|heavy1.0|opus|low|entry": {
+  "usd": 0.012747399999999999,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 400
+ },
+ "en|heavy1.0|opus|low|hold": {
+  "usd": 0.0066814,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 145
+ },
+ "en|heavy1.0|opus|mid|entry": {
+  "usd": 0.0227474,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 900
+ },
+ "en|heavy1.0|opus|mid|hold": {
+  "usd": 0.010681399999999999,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 345
+ },
+ "en|heavy1.0|opus|high|entry": {
+  "usd": 0.0467474,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 2100
+ },
+ "en|heavy1.0|opus|high|hold": {
+  "usd": 0.020681400000000003,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 845
+ },
+ "en|heavy1.0|haiku|low|entry": {
+  "usd": 0.0019052000000000001,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 100
+ },
+ "en|heavy1.0|haiku|low|hold": {
+  "usd": 0.0013887,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 45
+ },
+ "en|heavy1.0|haiku|mid|entry": {
+  "usd": 0.0019052000000000001,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 100
+ },
+ "en|heavy1.0|haiku|mid|hold": {
+  "usd": 0.0013887,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 45
+ },
+ "en|heavy1.0|haiku|high|entry": {
+  "usd": 0.0019052000000000001,
+  "cached_in": 4367.0,
+  "uncached_in": 968.5,
+  "out": 100
+ },
+ "en|heavy1.0|haiku|high|hold": {
+  "usd": 0.0013887,
+  "cached_in": 4367.0,
+  "uncached_in": 727.0,
+  "out": 45
+ },
+ "en|heavy1.5|sonnet|low|entry": {
+  "usd": 0.0075575,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 400
+ },
+ "en|heavy1.5|sonnet|low|hold": {
+  "usd": 0.0045245,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 145
+ },
+ "en|heavy1.5|sonnet|mid|entry": {
+  "usd": 0.0125575,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 900
+ },
+ "en|heavy1.5|sonnet|mid|hold": {
+  "usd": 0.0065245,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 345
+ },
+ "en|heavy1.5|sonnet|high|entry": {
+  "usd": 0.0245575,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 2100
+ },
+ "en|heavy1.5|sonnet|high|hold": {
+  "usd": 0.0115245,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 845
+ },
+ "en|heavy1.5|opus|low|entry": {
+  "usd": 0.0141185,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 400
+ },
+ "en|heavy1.5|opus|low|hold": {
+  "usd": 0.0080525,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 145
+ },
+ "en|heavy1.5|opus|mid|entry": {
+  "usd": 0.0241185,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 900
+ },
+ "en|heavy1.5|opus|mid|hold": {
+  "usd": 0.0120525,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 345
+ },
+ "en|heavy1.5|opus|high|entry": {
+  "usd": 0.0481185,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 2100
+ },
+ "en|heavy1.5|opus|high|hold": {
+  "usd": 0.0220525,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 845
+ },
+ "en|heavy1.5|haiku|low|entry": {
+  "usd": 0.00227875,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 100
+ },
+ "en|heavy1.5|haiku|low|hold": {
+  "usd": 0.00176225,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 45
+ },
+ "en|heavy1.5|haiku|mid|entry": {
+  "usd": 0.00227875,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 100
+ },
+ "en|heavy1.5|haiku|mid|hold": {
+  "usd": 0.00176225,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 45
+ },
+ "en|heavy1.5|haiku|high|entry": {
+  "usd": 0.00227875,
+  "cached_in": 4982.5,
+  "uncached_in": 1280.5,
+  "out": 100
+ },
+ "en|heavy1.5|haiku|high|hold": {
+  "usd": 0.00176225,
+  "cached_in": 4982.5,
+  "uncached_in": 1039.0,
+  "out": 45
+ }
+}
