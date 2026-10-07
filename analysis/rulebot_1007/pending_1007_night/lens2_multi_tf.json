@@ -1,0 +1,2007 @@
+{
+ "findings": [
+  {
+   "id": "MT1",
+   "claim": "Under rules, every setup and every priority rule loses per trade when pooled, for the 36 and for DeepSeek (in both halves); the per-trade loss is almost exactly the trading cost, because the signals' gross R (before fees, slippage, funding) is about zero in every setup.",
+   "evidence": "5-year (2021-08..2026-09, Binance futures bars, 6 coins), house exits, normal leverage chain. Core36 net R/trade: A -0.147, B -0.136, C-proxy (switch only to higher tf) -0.121, D = -0.134 pooled (15m/30m trader -0.147 + 1h/4h trader -0.087); gross R +0.002 / +0.001 / -0.001 / +0.001; cost R 0.148 / 0.137 / 0.120 / 0.088. DeepSeek44 the same shape (A -0.155, C-proxy -0.121, 1h/4h -0.097). Both halves (IS 2021-08..2024-06 / CF 2024-07..2026-09) negative in every setup. Strategies with mean R > 0 in A: core 1/35 (the only positive one is N14_ICHI_RSI with 3 trades in 5 years), DeepSeek 0/44. summ/pooled.csv, per_strategy.csv.",
+   "confidence": "high",
+   "implication": "The setup choice cannot make a rule account profitable; it only changes the hurdle the AI must clear (about = cost per trade) and how many decisions it gets. Any AI gain must come from selection/exit skill worth more than about 0.09-0.20R per trade (1h/4h 5-year cost to A cost in the last 91 days)."
+  },
+  {
+   "id": "MT2",
+   "claim": "Cost hurdle per trade falls with the held timeframe: the C-proxy (one trader on 15m-4h, switching only to a higher timeframe) cuts the hurdle by ~0.03R/trade vs A, and a 1h/4h-only trader by ~0.06R, entirely through lower cost.",
+   "evidence": "Core36 paired vs A|FC: ALL|SWH +0.026R [95% week-cluster CI +0.022, +0.030], better in 34/35 strategies; ALL|FC +0.011R [95% week-cluster CI +0.009, +0.013], better in 35/35 strategies; HI|FC +0.060R [95% week-cluster CI +0.052, +0.069], better in 35/35 strategies. DeepSeek44: ALL|SWH +0.034R [95% week-cluster CI +0.031, +0.037], better in 44/44 strategies; HI|FC +0.057R [95% week-cluster CI +0.051, +0.064], better in 44/44 strategies. Cost R by single-tf rule account (core): 15m 0.164, 30m 0.119, 1h 0.091, 4h 0.068. Last 91 days of the data (2026-07..09, quieter): A cost 0.197R, ALL|SWH 0.152R, HI 0.107R (net -0.190 / -0.156 / -0.129). paired.csv, recent_cost.csv.",
+   "confidence": "high (differences are cost arithmetic; CIs exclude 0 and nearly every strategy agrees)",
+   "implication": "Lowest cost hurdle per decision: 1h/4h trader (D's second trader) < C-proxy < B < A. At today's volatility the A hurdle is ~0.20R/trade."
+  },
+  {
+   "id": "MT3",
+   "claim": "Decision counts: A and B/C give ~4-5 rule trades/day per trader out of ~25-29 signals/day; a 1h/4h-only trader gets ~1.2-1.5 trades/day out of ~4 signals/day, too few to confirm an AI effect within a 60-day check.",
+   "evidence": "Core36 per trader: A 4.24 trades/day from 24.9 signals/day; ALL|SWH 4.47 from 28.5; HI 1.15 from 3.6. Smallest mean-R change detectable in 60 days (80% power, 5% two-sided, i.i.d. trades = optimistic): A 0.15R, ALL|SWH 0.12R, HI 0.23R (R sd 0.85 / 0.72 / 0.68). Live v4 cross-check (1.5 days): core A 4.47 trades/day/trader, HI 1.76. pooled.csv, dd_quarter_summary.csv, live_check_summary.csv.",
+   "confidence": "medium-high (MDE ignores time clustering, so real MDEs are larger)",
+   "implication": "C-proxy gives the most decisions at the lowest per-trade hurdle with enough n; D's 1h/4h trader has the lowest hurdle but cannot be judged by 12/31 on its own."
+  },
+  {
+   "id": "MT4",
+   "claim": "One position at a time blocks most signals: 60%-77% in setups that include 15m/30m, 48%-55% for a 1h/4h trader; and the blocked signals are no better than the taken ones, so blocking per se does not throw away measurable edge.",
+   "evidence": "Blocked by an open position (ties at the same moment listed separately), core: A 73% (+10%), B 76% (+9%), C-proxy 72% (+12%), HI 55%; blocked signals alone -0.159R vs taken -0.147R (A), -0.154 vs -0.122 (C-proxy). Live v4 (1.5 days, replayed signals): A blocked 82% (core) / 84% (DeepSeek). pooled.csv, live_check_summary.csv.",
+   "confidence": "high for the shares; the 'no better' statement is about rules, an AI choosing among signals could differ",
+   "implication": "The AI has about 5.9-6.4 signals per position slot to choose from (A, C-proxy); a skip-heavy AI loses little by passing. Ranking/skip skill is where an AI could add value."
+  },
+  {
+   "id": "MT5",
+   "claim": "Long 1h/4h holds do block many 15m/30m signals, but the blocked low-tf signals during 4h holds are the worst ones (quiet-market 15m signals with high cost in R).",
+   "evidence": "Core ALL|FC: 1h/4h positions are 26% of held time and cause 23% of blocked 15m/30m signals; 37% of 1h/4h trades block >= 5 and 23% >= 10 15m/30m signals (mean 8.0). With switch-only-to-higher (C-proxy) 1h/4h hold 50% of the time, 30% block >= 10. 15m signals blocked while a 4h position is open: -0.233R alone vs -0.168R when blocked by a 15m position. DeepSeek: by_hi 23%, >=10 21%. blocking_long.csv, blocked_matrix.csv.",
+   "confidence": "high",
+   "implication": "Letting 1h/4h signals occupy the trader is not costly in R terms; it is the reason C/B beat A (fewer expensive 15m trades)."
+  },
+  {
+   "id": "MT6",
+   "claim": "Switching to any new signal (the 'human' switch) is the worst proxy: 3x the trades, more cost, lower R; switching only to a higher timeframe is the best of the four rules.",
+   "evidence": "Core: ALL|SW vs ALL|FC -0.023R [95% week-cluster CI -0.028, -0.018], better in 4/35 strategies; A|SW vs A|FC -0.020R [95% week-cluster CI -0.025, -0.015], better in 5/35 strategies; ALL|SWH vs ALL|FC +0.015R [95% week-cluster CI +0.012, +0.018], better in 29/35 strategies; longer-tf-first on ties vs first-come +0.005R [95% week-cluster CI +0.004, +0.006], better in 27/35 strategies. ALL|SW trades/day 14.7, 11.1 switches/day; the early close itself costs ~0 (+0.004R vs holding), the loss is the extra round trips. DeepSeek same sign: ALL|SW vs ALL|FC -0.016R [95% week-cluster CI -0.020, -0.012], better in 10/44 strategies. paired.csv.",
+   "confidence": "high",
+   "implication": "If the AI may switch, the default should be 'hold unless a higher-timeframe signal arrives'; frequent switching raises the hurdle."
+  },
+  {
+   "id": "MT7",
+   "claim": "Leverage: with the house 2 ATR stop and the 1 ATR liquidation buffer, 20-50x is executable on 15m (and mostly 30m), 20x only on part of 1h, and 4h almost only on BTC (ETH in quiet weeks). Risk-per-stop sizing (2-5%) does not change the 20x limit, because the liquidation buffer binds; it only removes the 15% loss cap that blocks 40-50x.",
+   "evidence": "Share of bars sizable, mean over 6 coins, 5y / last 30 days: 4h at 20x house 19% / 26%, 30x 0.9% / 0%; 1h 20x 77% / 90%, 30x 26% / 33%; 15m 50x house 7% / 11% vs risk-per-stop 2% 51% / 63%. 4h 20x by coin 5y / last30d: BTC 56%/100%; ETH 25%/54%; SOL 4%/0%; DOGE 7%/0%; LTC 13%/1%; BCH 9%/0%. Live v4: 49% of core and 46% of DeepSeek 4h signals sized (rest REJECTED_SIZING). feas.csv, live_check.py.",
+   "confidence": "high (mechanical; brackets inferred from live trades)",
+   "implication": "'4h only where 20x executes' means mostly BTC 4h; in the 5-year simulation it keeps 4h trades rare (core 4h rule account 0.12 trades/day). Admitting sub-20x 4h trades (sensitivity ALLINF vs B) changes R by +0.009 only."
+  },
+  {
+   "id": "MT8",
+   "claim": "Drawdown at fixed risk: with ~4 trades/day, even a zero-net-edge trader at 1% risk per stop breaches the design's 25% drawdown gate in about a quarter of 91-day windows under A, less under the C-proxy, and almost never under a 1h/4h trader.",
+   "evidence": "Rule R series with each strategy's own mean removed (pure noise), 91-day windows, 1% risk per trade: median DD A 17%, p90 31%, windows > 25%: 23%; C-proxy 14% / 25% / 10%; HI 7% / 13% / 0%. With the actual negative drift at 2% risk the median 91-day DD is 72% (A), 69% (C-proxy), 21% (HI); share of 91-day windows with positive sum R: A 2.0%, HI 11.6%. dd_quarter_summary.csv.",
+   "confidence": "medium-high (assumes trade-sequence noise like the rules'; an AI that trades less would see less)",
+   "implication": "The DD gate is easier to pass with fewer, longer trades; at A's frequency the gate partly measures noise. Consider 0.5-1% risk per stop for 15m/30m traders."
+  },
+  {
+   "id": "MT9",
+   "claim": "AI call volume is dominated by holding checks and by whether busy-time signals are shown to the AI; per-trader cost is similar for A, B and C, and a 1h/4h trader costs 36%-55% of an A trader.",
+   "evidence": "Per trader per day (core), entry calls between 'free-time signals only' and 'every signal incl. hold/switch consults', plus a check every 30 min while holding: A 26..47, B/C 30..54, 1h/4h trader 14..17; at $0.03/call (design v2 estimate): $24..$43, $27..$49, $13..$15 per trader-month; 30 traders A: $714..$1279 vs the $500 budget. D needs two traders per strategy (A + 1h/4h): $37..$58 per strategy-month. Checks at each held-timeframe bar close instead of every 30m: A 40/day, C-proxy 28/day, HI 7/day (free-entry calls included). pooled.csv.",
+   "confidence": "medium (call price is the design doc's estimate; an AI that skips more makes more entry calls and fewer hold calls)",
+   "implication": "$500/month covers about 12-21 A traders with 30-min hold checks, not 30, unless hold checks are thinned (e.g. bar-close of the held tf on 1h/4h positions) or busy-time signals are filtered by code."
+  },
+  {
+   "id": "MT10",
+   "claim": "Ranking for 'conditions for the AI' (not profitability): C (one trader, 15m/30m/1h + 4h where 20x sizes, default hold, switch only to a higher timeframe) > B (same scope, first-come) > A on hurdle at the same decision count. D = A's 15m/30m seat plus a 1h/4h seat that has the lowest hurdle but the fewest decisions, and it doubles the seats.",
+   "evidence": "Core: hurdle (cost/trade) C 0.120R, B 0.137R, A 0.148R, D 0.148R (15m/30m seat) + 0.088R (1h/4h seat); trades/day 4.47 / 4.09 / 4.24 / 5.39 (two seats); net R/trade -0.121 / -0.136 / -0.147 / -0.134; zero-edge 91-day DD > 25% at 1% risk 10% / 19% / 23% / 23%+0%. C vs A per strategy: better in 34/35 core and 44/44 DeepSeek. All four remain negative.",
+   "confidence": "medium (rule proxies, not an AI; the ranking is about the starting hurdle and sample size)",
+   "implication": "If one AI seat per strategy, give it 15m/30m/1h (+BTC-type 4h when 20x sizes) with a 'switch only upward' default; keep 4h rule accounts as controls. Do not expect the setup alone to change the sign."
+  }
+ ],
+ "strategy_notes": [
+  {
+   "strategy": "DOGE",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1259609185334759,
+     "IS": -0.1243816121999741,
+     "CF": -0.1279551556059995,
+     "gross": 0.0090924302180832,
+     "gross_IS": 0.0034396950916265,
+     "gross_CF": 0.0162303069625785,
+     "cost": 0.1350533487515591,
+     "trades_per_day": 3.981972428419936,
+     "blocked_share": 0.6028710005476022,
+     "blocked_meanR": -0.1261529061660004
+    },
+    "ALL_FC_meanR": -0.1176917887307276,
+    "ALL_SWH_meanR": -0.1104439462897697,
+    "ALL_SWH_IS_CF": [
+     -0.1008699372689681,
+     -0.1221987018097539
+    ],
+    "ALL_SWH_trades_per_day": 4.67762460233298,
+    "ALL_SWH_cost": 0.1148984602658182,
+    "HI_FC": {
+     "meanR": -0.0606506786315724,
+     "trades_per_day": 1.207847295864263,
+     "gross": 0.0238735930107188
+    },
+    "T4h": {
+     "meanR": null,
+     "trades": null,
+     "sizable_share_20x": null
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.15509189058045733
+   },
+   "note": "A (15m+30m first-come): 3.98 trades/day, net -0.126R (gross +0.009, cost 0.135); C-proxy ALL|SWH -0.110R; 1h+4h trader -0.061R at 1.21/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1449878913359143,
+     "IS": -0.1455540563553409,
+     "CF": -0.1442707911504149,
+     "gross": 0.006189458857877,
+     "gross_IS": 0.0014361035377381,
+     "gross_CF": 0.0122100215292842,
+     "cost": 0.1511773501937913,
+     "trades_per_day": 5.378048780487805,
+     "blocked_share": 0.7044083030173336,
+     "blocked_meanR": -0.1649220805760757
+    },
+    "ALL_FC_meanR": -0.1312006558745408,
+    "ALL_SWH_meanR": -0.1214522086876337,
+    "ALL_SWH_IS_CF": [
+     -0.115654872375055,
+     -0.1289994955904689
+    ],
+    "ALL_SWH_trades_per_day": 5.660657476139979,
+    "ALL_SWH_cost": 0.1204575525636553,
+    "HI_FC": {
+     "meanR": -0.0918722452512084,
+     "trades_per_day": 1.4973488865323437,
+     "gross": -0.0024658315225946
+    },
+    "T4h": {
+     "meanR": -0.0316537327632523,
+     "trades": 276.0,
+     "sizable_share_20x": 0.21540965816603364
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.24566920130352754
+   },
+   "note": "A (15m+30m first-come): 5.38 trades/day, net -0.145R (gross +0.006, cost 0.151); C-proxy ALL|SWH -0.121R; 1h+4h trader -0.092R at 1.50/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1374829911703885,
+     "IS": -0.1315251541840957,
+     "CF": -0.1450735916653817,
+     "gross": 0.0099382175057683,
+     "gross_IS": 0.0099078964866958,
+     "gross_CF": 0.0099768480931627,
+     "cost": 0.1474212086761568,
+     "trades_per_day": 5.952810180275716,
+     "blocked_share": 0.6438648575704787,
+     "blocked_meanR": -0.1546122316330385
+    },
+    "ALL_FC_meanR": -0.1222788615423534,
+    "ALL_SWH_meanR": -0.1147964267782987,
+    "ALL_SWH_IS_CF": [
+     -0.1106172555945222,
+     -0.1201872199270524
+    ],
+    "ALL_SWH_trades_per_day": 6.311240721102863,
+    "ALL_SWH_cost": 0.1204552061318805,
+    "HI_FC": {
+     "meanR": -0.0877336758831703,
+     "trades_per_day": 1.4597030752916225,
+     "gross": 6.842372253607544e-05
+    },
+    "T4h": {
+     "meanR": -0.0402157818187366,
+     "trades": 275.0,
+     "sizable_share_20x": 0.20961995249406176
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.25670916390786785
+   },
+   "note": "A (15m+30m first-come): 5.95 trades/day, net -0.137R (gross +0.010, cost 0.147); C-proxy ALL|SWH -0.115R; 1h+4h trader -0.088R at 1.46/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.0895336392904735,
+     "IS": -0.0691581974973297,
+     "CF": -0.1146993339555153,
+     "gross": 0.0622810589569551,
+     "gross_IS": 0.0798313844480536,
+     "gross_CF": 0.0406046635656315,
+     "cost": 0.1518146982474287,
+     "trades_per_day": 0.7158006362672322,
+     "blocked_share": 0.129595015576324,
+     "blocked_meanR": -0.2004414418840087
+    },
+    "ALL_FC_meanR": -0.0743979579026285,
+    "ALL_SWH_meanR": -0.0878163764190725,
+    "ALL_SWH_IS_CF": [
+     -0.069799595226642,
+     -0.1099071769541734
+    ],
+    "ALL_SWH_trades_per_day": 0.8404029692470838,
+    "ALL_SWH_cost": 0.1416825493791684,
+    "HI_FC": {
+     "meanR": -0.0047472759263796,
+     "trades_per_day": 0.1193001060445387,
+     "gross": 0.0836213804947005
+    },
+    "T4h": {
+     "meanR": 0.1729540311627918,
+     "trades": 9.0,
+     "sizable_share_20x": 0.15517241379310345
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.08849557522123894
+   },
+   "note": "A (15m+30m first-come): 0.72 trades/day, net -0.090R (gross +0.062, cost 0.152); C-proxy ALL|SWH -0.088R; 1h+4h trader -0.005R at 0.12/day. Lowest-hurdle setup with >= 1 trade/day: None."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1372592453446059,
+     "IS": -0.1313729666370538,
+     "CF": -0.1449594226266908,
+     "gross": 0.0044724915666199,
+     "gross_IS": 0.0037574160204565,
+     "gross_CF": 0.005407922719154,
+     "cost": 0.1417317369112259,
+     "trades_per_day": 8.506892895015907,
+     "blocked_share": 0.7922124840138438,
+     "blocked_meanR": -0.1552323288918644
+    },
+    "ALL_FC_meanR": -0.1310666197488442,
+    "ALL_SWH_meanR": -0.1016995835632727,
+    "ALL_SWH_IS_CF": [
+     -0.099047104345926,
+     -0.1054034697036933
+    ],
+    "ALL_SWH_trades_per_day": 8.087486744432661,
+    "ALL_SWH_cost": 0.1013187017644162,
+    "HI_FC": {
+     "meanR": -0.0695401719050862,
+     "trades_per_day": 2.849416755037116,
+     "gross": 0.0136746571528251
+    },
+    "T4h": {
+     "meanR": -0.0698887059682806,
+     "trades": 695.0,
+     "sizable_share_20x": 0.1821930360415394
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.23633805294169377
+   },
+   "note": "A (15m+30m first-come): 8.51 trades/day, net -0.137R (gross +0.004, cost 0.142); C-proxy ALL|SWH -0.102R; 1h+4h trader -0.070R at 2.85/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N05_PSAR_POC",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1491677447384509,
+     "IS": -0.1510813403099895,
+     "CF": -0.146652621378646,
+     "gross": 0.0051806339614666,
+     "gross_IS": 0.0014451791208247,
+     "gross_CF": 0.0100903075983266,
+     "cost": 0.1543483786999176,
+     "trades_per_day": 2.994167550371156,
+     "blocked_share": 0.465810123307752,
+     "blocked_meanR": -0.1947260827586121
+    },
+    "ALL_FC_meanR": -0.1434339422272781,
+    "ALL_SWH_meanR": -0.139362831393217,
+    "ALL_SWH_IS_CF": [
+     -0.148807457942579,
+     -0.1269615658874197
+    ],
+    "ALL_SWH_trades_per_day": 3.3457051961823967,
+    "ALL_SWH_cost": 0.1367724471927104,
+    "HI_FC": {
+     "meanR": -0.0668356997909237,
+     "trades_per_day": 0.6108165429480382,
+     "gross": 0.0251805264775207
+    },
+    "T4h": {
+     "meanR": -0.0514552426309539,
+     "trades": 78.0,
+     "sizable_share_20x": 0.19480519480519481
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.2090713458036749
+   },
+   "note": "A (15m+30m first-come): 2.99 trades/day, net -0.149R (gross +0.005, cost 0.154); C-proxy ALL|SWH -0.139R; 1h+4h trader -0.067R at 0.61/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1592302191494753,
+     "IS": -0.1503437334151606,
+     "CF": -0.1705164141976243,
+     "gross": -0.0019788551401465,
+     "gross_IS": 0.002683718583536,
+     "gross_CF": -0.0079005116920335,
+     "cost": 0.1572513640093288,
+     "trades_per_day": 2.6876988335100744,
+     "blocked_share": 0.4699770036623797,
+     "blocked_meanR": -0.1499937674202109
+    },
+    "ALL_FC_meanR": -0.1377964101347255,
+    "ALL_SWH_meanR": -0.1300610806417147,
+    "ALL_SWH_IS_CF": [
+     -0.1278806013646496,
+     -0.1328300889732711
+    ],
+    "ALL_SWH_trades_per_day": 3.143690349946978,
+    "ALL_SWH_cost": 0.1284206118035474,
+    "HI_FC": {
+     "meanR": -0.1149855742365991,
+     "trades_per_day": 0.9459172852598092,
+     "gross": -0.0248376036746972
+    },
+    "T4h": {
+     "meanR": -0.0723220160565688,
+     "trades": 160.0,
+     "sizable_share_20x": 0.208984375
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.2791902071563089
+   },
+   "note": "A (15m+30m first-come): 2.69 trades/day, net -0.159R (gross -0.002, cost 0.157); C-proxy ALL|SWH -0.130R; 1h+4h trader -0.115R at 0.95/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1439231663530583,
+     "IS": -0.1346682153894571,
+     "CF": -0.1560629266204335,
+     "gross": 0.0084426064584131,
+     "gross_IS": 0.0126067931173898,
+     "gross_CF": 0.0029804243304477,
+     "cost": 0.1523657728114715,
+     "trades_per_day": 3.948038176033934,
+     "blocked_share": 0.5312128879021015,
+     "blocked_meanR": -0.1533247038635914
+    },
+    "ALL_FC_meanR": -0.1321281711619353,
+    "ALL_SWH_meanR": -0.1288627926854066,
+    "ALL_SWH_IS_CF": [
+     -0.1201259609586745,
+     -0.1408357691496105
+    ],
+    "ALL_SWH_trades_per_day": 4.339872746553553,
+    "ALL_SWH_cost": 0.1306813816859563,
+    "HI_FC": {
+     "meanR": -0.0962769902923997,
+     "trades_per_day": 0.8457051961823966,
+     "gross": -0.0047756879070779
+    },
+    "T4h": {
+     "meanR": 0.0150721390351751,
+     "trades": 152.0,
+     "sizable_share_20x": 0.22727272727272727
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.22372702488787266
+   },
+   "note": "A (15m+30m first-come): 3.95 trades/day, net -0.144R (gross +0.008, cost 0.152); C-proxy ALL|SWH -0.129R; 1h+4h trader -0.096R at 0.85/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.165377300080455,
+     "IS": -0.1617508323393689,
+     "CF": -0.1701683016435708,
+     "gross": -0.0002451534957509,
+     "gross_IS": 0.0033730008433531,
+     "gross_CF": -0.0050251720515069,
+     "cost": 0.1651321465847041,
+     "trades_per_day": 1.1420996818663838,
+     "blocked_share": 0.2039269720978298,
+     "blocked_meanR": -0.2675417214694205
+    },
+    "ALL_FC_meanR": -0.154440644340689,
+    "ALL_SWH_meanR": -0.155808562980584,
+    "ALL_SWH_IS_CF": [
+     -0.1530538146435559,
+     -0.1593786756713356
+    ],
+    "ALL_SWH_trades_per_day": 1.3038176033934252,
+    "ALL_SWH_cost": 0.1529554535800991,
+    "HI_FC": {
+     "meanR": -0.0973645253837931,
+     "trades_per_day": 0.1823966065747614,
+     "gross": 0.0029996484558661
+    },
+    "T4h": {
+     "meanR": -0.1894540907815098,
+     "trades": 16.0,
+     "sizable_share_20x": 0.21176470588235294
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.1776798825256975
+   },
+   "note": "A (15m+30m first-come): 1.14 trades/day, net -0.165R (gross -0.000, cost 0.165); C-proxy ALL|SWH -0.156R; 1h+4h trader -0.097R at 0.18/day. Lowest-hurdle setup with >= 1 trade/day: ALL|FC."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.132310669751362,
+     "IS": -0.1365100328955513,
+     "CF": -0.1267999225777321,
+     "gross": 0.0189065397455415,
+     "gross_IS": 0.0106209289151339,
+     "gross_CF": 0.0297795947535715,
+     "cost": 0.1512172094969035,
+     "trades_per_day": 4.56203605514316,
+     "blocked_share": 0.489965583515845,
+     "blocked_meanR": -0.1609335079946434
+    },
+    "ALL_FC_meanR": -0.1216346950121233,
+    "ALL_SWH_meanR": -0.1240018136384212,
+    "ALL_SWH_IS_CF": [
+     -0.1236105011317899,
+     -0.1245284651306587
+    ],
+    "ALL_SWH_trades_per_day": 5.031283138918345,
+    "ALL_SWH_cost": 0.129229459416783,
+    "HI_FC": {
+     "meanR": -0.0673049669525055,
+     "trades_per_day": 0.996288441145281,
+     "gross": 0.0257502050802434
+    },
+    "T4h": {
+     "meanR": -0.0070616733341748,
+     "trades": 158.0,
+     "sizable_share_20x": 0.20856201975850713
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.2427712800519818
+   },
+   "note": "A (15m+30m first-come): 4.56 trades/day, net -0.132R (gross +0.019, cost 0.151); C-proxy ALL|SWH -0.124R; 1h+4h trader -0.067R at 1.00/day. Lowest-hurdle setup with >= 1 trade/day: ALL|FC."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1422629246688079,
+     "IS": -0.1341471809775498,
+     "CF": -0.152641904008611,
+     "gross": 0.0039993101786528,
+     "gross_IS": 0.0064708426111883,
+     "gross_CF": 0.0008385420431866,
+     "cost": 0.1462622348474607,
+     "trades_per_day": 6.884941675503711,
+     "blocked_share": 0.6911054539844171,
+     "blocked_meanR": -0.1588637219692692
+    },
+    "ALL_FC_meanR": -0.1270214251730333,
+    "ALL_SWH_meanR": -0.1189325063711935,
+    "ALL_SWH_IS_CF": [
+     -0.1108015954520426,
+     -0.1292316602021181
+    ],
+    "ALL_SWH_trades_per_day": 7.319194061505833,
+    "ALL_SWH_cost": 0.1148525019257712,
+    "HI_FC": {
+     "meanR": -0.0972569851894182,
+     "trades_per_day": 1.8753976670201484,
+     "gross": -0.0107189634095894
+    },
+    "T4h": {
+     "meanR": -0.0372734204196093,
+     "trades": 285.0,
+     "sizable_share_20x": 0.1695781849169152
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.28726538517007644
+   },
+   "note": "A (15m+30m first-come): 6.88 trades/day, net -0.142R (gross +0.004, cost 0.146); C-proxy ALL|SWH -0.119R; 1h+4h trader -0.097R at 1.88/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1593784434195833,
+     "IS": -0.0980841976815126,
+     "CF": -0.2201810240848886,
+     "gross": -0.0086609448387518,
+     "gross_IS": 0.0488848576819238,
+     "gross_CF": -0.065745150013005,
+     "cost": 0.1507174985808314,
+     "trades_per_day": 0.3950159066808059,
+     "blocked_share": 0.0388888888888888,
+     "blocked_meanR": -0.2155213950472253
+    },
+    "ALL_FC_meanR": -0.1348238893339457,
+    "ALL_SWH_meanR": -0.1329089133771499,
+    "ALL_SWH_IS_CF": [
+     -0.0867890311591295,
+     -0.1785947261154714
+    ],
+    "ALL_SWH_trades_per_day": 0.4485683987274655,
+    "ALL_SWH_cost": 0.1419764665337765,
+    "HI_FC": {
+     "meanR": 0.0371244329715443,
+     "trades_per_day": 0.0567338282078472,
+     "gross": 0.1191004312980189
+    },
+    "T4h": {
+     "meanR": 0.0485518723726272,
+     "trades": 7.0,
+     "sizable_share_20x": 0.2222222222222222
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.2553191489361702
+   },
+   "note": "A (15m+30m first-come): 0.40 trades/day, net -0.159R (gross -0.009, cost 0.151); C-proxy ALL|SWH -0.133R; 1h+4h trader +0.037R at 0.06/day. Lowest-hurdle setup with >= 1 trade/day: None."
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1306216612429439,
+     "IS": -0.1271871517049841,
+     "CF": -0.1350747849658114,
+     "gross": 0.0189622469522776,
+     "gross_IS": 0.016868726402035,
+     "gross_CF": 0.021676668305183,
+     "cost": 0.1495839081952215,
+     "trades_per_day": 4.417815482502651,
+     "blocked_share": 0.525326081946813,
+     "blocked_meanR": -0.1588359353310865
+    },
+    "ALL_FC_meanR": -0.1203208125732096,
+    "ALL_SWH_meanR": -0.1123075164057084,
+    "ALL_SWH_IS_CF": [
+     -0.1180450638762444,
+     -0.1045546027066708
+    ],
+    "ALL_SWH_trades_per_day": 4.752386002120891,
+    "ALL_SWH_cost": 0.1292178073684144,
+    "HI_FC": {
+     "meanR": -0.0787856781926079,
+     "trades_per_day": 0.9957582184517496,
+     "gross": 0.0131506778467674
+    },
+    "T4h": {
+     "meanR": -0.0510102427511845,
+     "trades": 159.0,
+     "sizable_share_20x": 0.22580645161290322
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.25974127793022345
+   },
+   "note": "A (15m+30m first-come): 4.42 trades/day, net -0.131R (gross +0.019, cost 0.150); C-proxy ALL|SWH -0.112R; 1h+4h trader -0.079R at 1.00/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1507014137185481,
+     "IS": -0.1488315511028255,
+     "CF": -0.1529953804224568,
+     "gross": 0.0001671407517943,
+     "gross_IS": -0.0043804063574728,
+     "gross_CF": 0.0057461183544262,
+     "cost": 0.1508685544703425,
+     "trades_per_day": 3.945917285259809,
+     "blocked_share": 0.4146809432444142,
+     "blocked_meanR": -0.1701427071359658
+    },
+    "ALL_FC_meanR": -0.1375251410306191,
+    "ALL_SWH_meanR": -0.1311688882545916,
+    "ALL_SWH_IS_CF": [
+     -0.1436865825982492,
+     -0.1156432515030404
+    ],
+    "ALL_SWH_trades_per_day": 4.345174973488866,
+    "ALL_SWH_cost": 0.1344030527426631,
+    "HI_FC": {
+     "meanR": -0.0634828816618439,
+     "trades_per_day": 0.6808059384941676,
+     "gross": 0.0278957287740684
+    },
+    "T4h": {
+     "meanR": -0.0855702822126688,
+     "trades": 62.0,
+     "sizable_share_20x": 0.1275797373358349
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.21732262735290245
+   },
+   "note": "A (15m+30m first-come): 3.95 trades/day, net -0.151R (gross +0.000, cost 0.151); C-proxy ALL|SWH -0.131R; 1h+4h trader -0.063R at 0.68/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N14_ICHI_RSI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": 0.2013141612211863,
+     "IS": -0.4018486887216568,
+     "CF": 1.4076398611068726,
+     "gross": 0.3373717963695526,
+     "gross_IS": -0.3159806579351425,
+     "gross_CF": 1.6440767049789429,
+     "cost": 0.1360576351483663,
+     "trades_per_day": 0.0015906680805938,
+     "blocked_share": 0.0,
+     "blocked_meanR": null
+    },
+    "ALL_FC_meanR": 0.2173283472657203,
+    "ALL_SWH_meanR": 0.2173283472657203,
+    "ALL_SWH_IS_CF": [
+     -0.179442157347997,
+     1.4076398611068726
+    ],
+    "ALL_SWH_trades_per_day": 0.0021208907741251,
+    "ALL_SWH_cost": 0.1152979806065559,
+    "HI_FC": {
+     "meanR": 0.2653709053993225,
+     "trades_per_day": 0.0005302226935312,
+     "gross": 0.3183899223804474
+    },
+    "T4h": {
+     "meanR": 0.2653709053993225,
+     "trades": 1.0,
+     "sizable_share_20x": 0.6666666666666666
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": null
+   },
+   "note": "A (15m+30m first-come): 0.00 trades/day, net +0.201R (gross +0.337, cost 0.136); C-proxy ALL|SWH +0.217R; 1h+4h trader +0.265R at 0.00/day. Lowest-hurdle setup with >= 1 trade/day: None."
+  },
+  {
+   "strategy": "N15_KC_AO",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1987214577716908,
+     "IS": -0.161477125489286,
+     "CF": -0.2607953449090321,
+     "gross": -0.0475498214364051,
+     "gross_IS": 0.0023714853716748,
+     "gross_CF": -0.1307519994498718,
+     "cost": 0.1511716363352856,
+     "trades_per_day": 0.0593849416755037,
+     "blocked_share": 0.1020408163265306,
+     "blocked_meanR": -0.0684092208343957
+    },
+    "ALL_FC_meanR": -0.1966684233735908,
+    "ALL_SWH_meanR": -0.1803022017613009,
+    "ALL_SWH_IS_CF": [
+     -0.1601341632578166,
+     -0.2154974062085579
+    ],
+    "ALL_SWH_trades_per_day": 0.0742311770943796,
+    "ALL_SWH_cost": 0.1420346002321672,
+    "HI_FC": {
+     "meanR": -0.0647896436663965,
+     "trades_per_day": 0.0127253446447507,
+     "gross": 0.0449093397085865
+    },
+    "T4h": {
+     "meanR": 0.0558301992714405,
+     "trades": 1.0,
+     "sizable_share_20x": 0.2
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.0
+   },
+   "note": "A (15m+30m first-come): 0.06 trades/day, net -0.199R (gross -0.048, cost 0.151); C-proxy ALL|SWH -0.180R; 1h+4h trader -0.065R at 0.01/day. Lowest-hurdle setup with >= 1 trade/day: None."
+  },
+  {
+   "strategy": "N16_BBRSI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1410871137229032,
+     "IS": -0.1490266474164571,
+     "CF": -0.1305987693013833,
+     "gross": 0.0039177233459199,
+     "gross_IS": -0.0094789159486289,
+     "gross_CF": 0.021615055763084,
+     "cost": 0.1450048370688232,
+     "trades_per_day": 4.167020148462354,
+     "blocked_share": 0.4274796291093004,
+     "blocked_meanR": -0.1714288684211652
+    },
+    "ALL_FC_meanR": -0.1324120894929626,
+    "ALL_SWH_meanR": -0.125047414657012,
+    "ALL_SWH_IS_CF": [
+     -0.1297915291210791,
+     -0.1189216156143904
+    ],
+    "ALL_SWH_trades_per_day": 4.646871686108166,
+    "ALL_SWH_cost": 0.12640367926307,
+    "HI_FC": {
+     "meanR": -0.1093031835698683,
+     "trades_per_day": 0.8775185577942736,
+     "gross": -0.0216613621543811
+    },
+    "T4h": {
+     "meanR": -0.0482026168577639,
+     "trades": 140.0,
+     "sizable_share_20x": 0.1774193548387097
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.24571363687975475
+   },
+   "note": "A (15m+30m first-come): 4.17 trades/day, net -0.141R (gross +0.004, cost 0.145); C-proxy ALL|SWH -0.125R; 1h+4h trader -0.109R at 0.88/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N17_KC_RSI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1643138351461947,
+     "IS": -0.1555864184568847,
+     "CF": -0.1759503907319413,
+     "gross": -0.0197938033615154,
+     "gross_IS": -0.0213717775064859,
+     "gross_CF": -0.0176898378348882,
+     "cost": 0.1445200317846792,
+     "trades_per_day": 7.449098621420997,
+     "blocked_share": 0.7945209763420011,
+     "blocked_meanR": -0.1501860451121565
+    },
+    "ALL_FC_meanR": -0.1619137504551162,
+    "ALL_SWH_meanR": -0.1292570821772339,
+    "ALL_SWH_IS_CF": [
+     -0.1219057975799443,
+     -0.1392639241118198
+    ],
+    "ALL_SWH_trades_per_day": 7.4480381760339345,
+    "ALL_SWH_cost": 0.1153402889992845,
+    "HI_FC": {
+     "meanR": -0.1116095956775559,
+     "trades_per_day": 2.273594909862142,
+     "gross": -0.0264589548648045
+    },
+    "T4h": {
+     "meanR": -0.1271964721811029,
+     "trades": 526.0,
+     "sizable_share_20x": 0.1426465167711021
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.07204907118942049
+   },
+   "note": "A (15m+30m first-come): 7.45 trades/day, net -0.164R (gross -0.020, cost 0.145); C-proxy ALL|SWH -0.129R; 1h+4h trader -0.112R at 2.27/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1480670066771186,
+     "IS": -0.1518673186854099,
+     "CF": -0.143277796275272,
+     "gross": 0.0005270318395826,
+     "gross_IS": -0.0095731983092512,
+     "gross_CF": 0.0132554939196185,
+     "cost": 0.1485940385167013,
+     "trades_per_day": 7.244432661717921,
+     "blocked_share": 0.8089145010856355,
+     "blocked_meanR": -0.1479741516270438
+    },
+    "ALL_FC_meanR": -0.1380889339084087,
+    "ALL_SWH_meanR": -0.1220987238535985,
+    "ALL_SWH_IS_CF": [
+     -0.1325398379199372,
+     -0.1081185943596661
+    ],
+    "ALL_SWH_trades_per_day": 6.992046659597031,
+    "ALL_SWH_cost": 0.1135708899238618,
+    "HI_FC": {
+     "meanR": -0.093483015662885,
+     "trades_per_day": 2.0927889713679746,
+     "gross": -0.0062070908386511
+    },
+    "T4h": {
+     "meanR": -0.0716814877230054,
+     "trades": 469.0,
+     "sizable_share_20x": 0.20089064819396338
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.24834972713310022
+   },
+   "note": "A (15m+30m first-come): 7.24 trades/day, net -0.148R (gross +0.001, cost 0.149); C-proxy ALL|SWH -0.122R; 1h+4h trader -0.093R at 2.09/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1559807485001588,
+     "IS": -0.1609863464616855,
+     "CF": -0.1491451233032477,
+     "gross": -0.0066754534486033,
+     "gross_IS": -0.0151485351390462,
+     "gross_CF": 0.0048953541040295,
+     "cost": 0.1493052950515555,
+     "trades_per_day": 2.8510074231177094,
+     "blocked_share": 0.5024364245469773,
+     "blocked_meanR": -0.1262687366135196
+    },
+    "ALL_FC_meanR": -0.1466571869240217,
+    "ALL_SWH_meanR": -0.1355571758335816,
+    "ALL_SWH_IS_CF": [
+     -0.1422616341305842,
+     -0.1265420084513903
+    ],
+    "ALL_SWH_trades_per_day": 3.1850477200424177,
+    "ALL_SWH_cost": 0.134883763992517,
+    "HI_FC": {
+     "meanR": -0.0954150338720635,
+     "trades_per_day": 0.5254506892895016,
+     "gross": -0.0047408464255692
+    },
+    "T4h": {
+     "meanR": -0.1243775588809512,
+     "trades": 64.0,
+     "sizable_share_20x": 0.17988394584139264
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.15022547914317927
+   },
+   "note": "A (15m+30m first-come): 2.85 trades/day, net -0.156R (gross -0.007, cost 0.149); C-proxy ALL|SWH -0.136R; 1h+4h trader -0.095R at 0.53/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1627420180704172,
+     "IS": -0.1545727311880238,
+     "CF": -0.1732263605977371,
+     "gross": -0.0029689861246853,
+     "gross_IS": -0.0001923805856263,
+     "gross_CF": -0.0065324407999629,
+     "cost": 0.1597730319457318,
+     "trades_per_day": 5.04984093319194,
+     "blocked_share": 0.7769507301719895,
+     "blocked_meanR": -0.1884847595601167
+    },
+    "ALL_FC_meanR": -0.1481339590310193,
+    "ALL_SWH_meanR": -0.1224379607602989,
+    "ALL_SWH_IS_CF": [
+     -0.1134415773644321,
+     -0.1342210337593429
+    ],
+    "ALL_SWH_trades_per_day": 5.384941675503711,
+    "ALL_SWH_cost": 0.1241057321949284,
+    "HI_FC": {
+     "meanR": -0.0837336410757978,
+     "trades_per_day": 1.4310710498409331,
+     "gross": 0.0058401742897977
+    },
+    "T4h": {
+     "meanR": -0.0531132974442868,
+     "trades": 295.0,
+     "sizable_share_20x": 0.23784006595218465
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.23136880032354132
+   },
+   "note": "A (15m+30m first-come): 5.05 trades/day, net -0.163R (gross -0.003, cost 0.160); C-proxy ALL|SWH -0.122R; 1h+4h trader -0.084R at 1.43/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1404496385077495,
+     "IS": -0.1458319263234528,
+     "CF": -0.1334886910972621,
+     "gross": 0.0033307074386065,
+     "gross_IS": -0.0087376925352656,
+     "gross_CF": 0.0189388466580947,
+     "cost": 0.143780345946356,
+     "trades_per_day": 7.230116648992577,
+     "blocked_share": 0.7896615070889258,
+     "blocked_meanR": -0.1610764665295639
+    },
+    "ALL_FC_meanR": -0.1291008190181719,
+    "ALL_SWH_meanR": -0.1104057914923323,
+    "ALL_SWH_IS_CF": [
+     -0.1018324282431065,
+     -0.1214642725112874
+    ],
+    "ALL_SWH_trades_per_day": 7.103923647932132,
+    "ALL_SWH_cost": 0.1065909016574553,
+    "HI_FC": {
+     "meanR": -0.0890354092498003,
+     "trades_per_day": 2.305408271474019,
+     "gross": -0.0029667563063971
+    },
+    "T4h": {
+     "meanR": -0.0381101754186892,
+     "trades": 514.0,
+     "sizable_share_20x": 0.19894736842105262
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.28046893218290897
+   },
+   "note": "A (15m+30m first-come): 7.23 trades/day, net -0.140R (gross +0.003, cost 0.144); C-proxy ALL|SWH -0.110R; 1h+4h trader -0.089R at 2.31/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N23_HA_ST",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1365103845899818,
+     "IS": -0.1316709324383499,
+     "CF": -0.1427989874308937,
+     "gross": 0.0093639139637263,
+     "gross_IS": 0.0071952817832812,
+     "gross_CF": 0.0121819326285541,
+     "cost": 0.1458742985537081,
+     "trades_per_day": 8.130965005302228,
+     "blocked_share": 0.807207576611824,
+     "blocked_meanR": -0.1560692196691374
+    },
+    "ALL_FC_meanR": -0.1325652319156806,
+    "ALL_SWH_meanR": -0.1037185585016314,
+    "ALL_SWH_IS_CF": [
+     -0.0992241193696156,
+     -0.1099833593720046
+    ],
+    "ALL_SWH_trades_per_day": 7.907741251325556,
+    "ALL_SWH_cost": 0.1034823196312663,
+    "HI_FC": {
+     "meanR": -0.0830337262381271,
+     "trades_per_day": 2.871686108165429,
+     "gross": 0.0042081122837999
+    },
+    "T4h": {
+     "meanR": 0.0193226975668025,
+     "trades": 713.0,
+     "sizable_share_20x": 0.1929677689409795
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.25501417085222217
+   },
+   "note": "A (15m+30m first-come): 8.13 trades/day, net -0.137R (gross +0.009, cost 0.146); C-proxy ALL|SWH -0.104R; 1h+4h trader -0.083R at 2.87/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1569688805715472,
+     "IS": -0.1484061453053199,
+     "CF": -0.1678987348830965,
+     "gross": -0.0082038363855473,
+     "gross_IS": -0.0054718667899158,
+     "gross_CF": -0.0116910433042999,
+     "cost": 0.1487650441859999,
+     "trades_per_day": 5.933722163308589,
+     "blocked_share": 0.7341845618107952,
+     "blocked_meanR": -0.1675809069233808
+    },
+    "ALL_FC_meanR": -0.1374135320515596,
+    "ALL_SWH_meanR": -0.1150658453009305,
+    "ALL_SWH_IS_CF": [
+     -0.1127311391212291,
+     -0.1181170518546909
+    ],
+    "ALL_SWH_trades_per_day": 6.106044538706256,
+    "ALL_SWH_cost": 0.1152609007041153,
+    "HI_FC": {
+     "meanR": -0.0733365601068091,
+     "trades_per_day": 1.7301166489925768,
+     "gross": 0.0152144708151551
+    },
+    "T4h": {
+     "meanR": -0.0156941533820061,
+     "trades": 354.0,
+     "sizable_share_20x": 0.20389461626575028
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.27620618888575915
+   },
+   "note": "A (15m+30m first-come): 5.93 trades/day, net -0.157R (gross -0.008, cost 0.149); C-proxy ALL|SWH -0.115R; 1h+4h trader -0.073R at 1.73/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N25_DST_CCI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1764729988921531,
+     "IS": -0.1653285054119872,
+     "CF": -0.1909477186010653,
+     "gross": -0.0244370058343963,
+     "gross_IS": -0.0203725361206579,
+     "gross_CF": -0.0297160308503319,
+     "cost": 0.1520359930577567,
+     "trades_per_day": 6.0042417815482505,
+     "blocked_share": 0.7496171627750959,
+     "blocked_meanR": -0.1670696145600229
+    },
+    "ALL_FC_meanR": -0.1512772628090565,
+    "ALL_SWH_meanR": -0.1216783953604564,
+    "ALL_SWH_IS_CF": [
+     -0.1202433989627489,
+     -0.1235502247559439
+    ],
+    "ALL_SWH_trades_per_day": 6.422057264050902,
+    "ALL_SWH_cost": 0.117457656490271,
+    "HI_FC": {
+     "meanR": -0.0822074444768843,
+     "trades_per_day": 1.6617179215270417,
+     "gross": 0.0054184442486176
+    },
+    "T4h": {
+     "meanR": -0.0301163796874054,
+     "trades": 332.0,
+     "sizable_share_20x": 0.21048603138155378
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.215823476055608
+   },
+   "note": "A (15m+30m first-come): 6.00 trades/day, net -0.176R (gross -0.024, cost 0.152); C-proxy ALL|SWH -0.122R; 1h+4h trader -0.082R at 1.66/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "OBV_B",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1546125148476675,
+     "IS": -0.1435012140024601,
+     "CF": -0.1687861202073978,
+     "gross": -0.0121873945689565,
+     "gross_IS": -0.0073831117270686,
+     "gross_CF": -0.0183157507340956,
+     "cost": 0.142425120278711,
+     "trades_per_day": 6.2560975609756095,
+     "blocked_share": 0.7000843821253523,
+     "blocked_meanR": -0.1747265871200602
+    },
+    "ALL_FC_meanR": -0.1521914806827917,
+    "ALL_SWH_meanR": -0.1283604243223001,
+    "ALL_SWH_IS_CF": [
+     -0.1301071285726888,
+     -0.1260470905045486
+    ],
+    "ALL_SWH_trades_per_day": 6.667550371155886,
+    "ALL_SWH_cost": 0.1129884286552014,
+    "HI_FC": {
+     "meanR": -0.1010992530738834,
+     "trades_per_day": 1.7211028632025451,
+     "gross": -0.0142549529313887
+    },
+    "T4h": {
+     "meanR": -0.0997265190164896,
+     "trades": 314.0,
+     "sizable_share_20x": 0.1875268817204301
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.26452089388669175
+   },
+   "note": "A (15m+30m first-come): 6.26 trades/day, net -0.155R (gross -0.012, cost 0.142); C-proxy ALL|SWH -0.128R; 1h+4h trader -0.101R at 1.72/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "OBV_S",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1503110143181423,
+     "IS": -0.1377101606911815,
+     "CF": -0.1672123272279355,
+     "gross": 0.0038233570325486,
+     "gross_IS": 0.0132471428101676,
+     "gross_CF": -0.0088166082378686,
+     "cost": 0.1541343713506909,
+     "trades_per_day": 3.695652173913044,
+     "blocked_share": 0.549257466137192,
+     "blocked_meanR": -0.179662163427926
+    },
+    "ALL_FC_meanR": -0.135505236517531,
+    "ALL_SWH_meanR": -0.1352916154020694,
+    "ALL_SWH_IS_CF": [
+     -0.1286020904453654,
+     -0.1440811783389445
+    ],
+    "ALL_SWH_trades_per_day": 4.130965005302227,
+    "ALL_SWH_cost": 0.1328994078219773,
+    "HI_FC": {
+     "meanR": -0.0807493262202119,
+     "trades_per_day": 0.8250265111346765,
+     "gross": 0.0097322861535611
+    },
+    "T4h": {
+     "meanR": -0.0485430929752052,
+     "trades": 129.0,
+     "sizable_share_20x": 0.23880597014925373
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.20322843928539042
+   },
+   "note": "A (15m+30m first-come): 3.70 trades/day, net -0.150R (gross +0.004, cost 0.154); C-proxy ALL|SWH -0.135R; 1h+4h trader -0.081R at 0.83/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.205241140314793,
+     "IS": -0.1570849753724238,
+     "CF": -0.2729389374076888,
+     "gross": -0.0735839500080749,
+     "gross_IS": -0.0339416593082786,
+     "gross_CF": -0.129312967368658,
+     "cost": 0.1316571903067181,
+     "trades_per_day": 0.088016967126193,
+     "blocked_share": 0.196078431372549,
+     "blocked_meanR": -0.1250479340846284
+    },
+    "ALL_FC_meanR": -0.1602363825987766,
+    "ALL_SWH_meanR": -0.1619230200212951,
+    "ALL_SWH_IS_CF": [
+     -0.1240806179247288,
+     -0.2162942874014191
+    ],
+    "ALL_SWH_trades_per_day": 0.112407211028632,
+    "ALL_SWH_cost": 0.1224785905750606,
+    "HI_FC": {
+     "meanR": 0.0343400123409735,
+     "trades_per_day": 0.02067868504772,
+     "gross": 0.1188016351288518
+    },
+    "T4h": {
+     "meanR": -0.0182696630557378,
+     "trades": 3.0,
+     "sizable_share_20x": 0.2857142857142857
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.0
+   },
+   "note": "A (15m+30m first-come): 0.09 trades/day, net -0.205R (gross -0.074, cost 0.132); C-proxy ALL|SWH -0.162R; 1h+4h trader +0.034R at 0.02/day. Lowest-hurdle setup with >= 1 trade/day: None."
+  },
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1257706955219792,
+     "IS": -0.112231008756637,
+     "CF": -0.1436512006265003,
+     "gross": 0.0172528142273523,
+     "gross_IS": 0.0245643300250902,
+     "gross_CF": 0.0075972292932989,
+     "cost": 0.1430235097493316,
+     "trades_per_day": 7.633616118769884,
+     "blocked_share": 0.8148469830889491,
+     "blocked_meanR": -0.1587510541777831
+    },
+    "ALL_FC_meanR": -0.1193650841496524,
+    "ALL_SWH_meanR": -0.1007905219318284,
+    "ALL_SWH_IS_CF": [
+     -0.0926820249173131,
+     -0.1117647617268163
+    ],
+    "ALL_SWH_trades_per_day": 7.287380699893956,
+    "ALL_SWH_cost": 0.1040769744682822,
+    "HI_FC": {
+     "meanR": -0.0851396148825215,
+     "trades_per_day": 2.428419936373277,
+     "gross": -0.0005739541339492
+    },
+    "T4h": {
+     "meanR": -0.0234303417543023,
+     "trades": 612.0,
+     "sizable_share_20x": 0.22078602620087337
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.27141246050671924
+   },
+   "note": "A (15m+30m first-come): 7.63 trades/day, net -0.126R (gross +0.017, cost 0.143); C-proxy ALL|SWH -0.101R; 1h+4h trader -0.085R at 2.43/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "S3_CMO_SANDWICH",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1743309124648767,
+     "IS": -0.1686798357871919,
+     "CF": -0.1816768420063762,
+     "gross": -0.02067387439188,
+     "gross_IS": -0.0197326607458293,
+     "gross_CF": -0.0218973738277821,
+     "cost": 0.1536570380729966,
+     "trades_per_day": 2.9316012725344645,
+     "blocked_share": 0.4644509165667295,
+     "blocked_meanR": -0.2014352894882951
+    },
+    "ALL_FC_meanR": -0.1667187289112859,
+    "ALL_SWH_meanR": -0.1510903427177055,
+    "ALL_SWH_IS_CF": [
+     -0.1443478156054428,
+     -0.1599759591997212
+    ],
+    "ALL_SWH_trades_per_day": 3.3329798515376456,
+    "ALL_SWH_cost": 0.1372392299426683,
+    "HI_FC": {
+     "meanR": -0.1157879970971324,
+     "trades_per_day": 0.5556733828207847,
+     "gross": -0.0220614738472673
+    },
+    "T4h": {
+     "meanR": -0.1651469629312701,
+     "trades": 68.0,
+     "sizable_share_20x": 0.1776765375854214
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.1784343181438825
+   },
+   "note": "A (15m+30m first-come): 2.93 trades/day, net -0.174R (gross -0.021, cost 0.154); C-proxy ALL|SWH -0.151R; 1h+4h trader -0.116R at 0.56/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (gross R > 0 in one half only)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.152015383262949,
+     "IS": -0.1609692807078988,
+     "CF": -0.1400564237664214,
+     "gross": 0.0115598135095589,
+     "gross_IS": -0.0022111280016732,
+     "gross_CF": 0.0299524891878762,
+     "cost": 0.1635751967725079,
+     "trades_per_day": 5.78950159066808,
+     "blocked_share": 0.6364195815301544,
+     "blocked_meanR": -0.1867119605209846
+    },
+    "ALL_FC_meanR": -0.1410853599298417,
+    "ALL_SWH_meanR": -0.1228311141691188,
+    "ALL_SWH_IS_CF": [
+     -0.1245305466449177,
+     -0.1205544898620031
+    ],
+    "ALL_SWH_trades_per_day": 6.099681866383881,
+    "ALL_SWH_cost": 0.1274750449481324,
+    "HI_FC": {
+     "meanR": -0.0828747569078203,
+     "trades_per_day": 1.647401908801697,
+     "gross": 0.0096557301079406
+    },
+    "T4h": {
+     "meanR": -0.0281280386888257,
+     "trades": 379.0,
+     "sizable_share_20x": 0.2471655328798186
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.21988144359853548
+   },
+   "note": "A (15m+30m first-come): 5.79 trades/day, net -0.152R (gross +0.012, cost 0.164); C-proxy ALL|SWH -0.123R; 1h+4h trader -0.083R at 1.65/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "S5_DONCHIAN_MFI",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "D (under 1 AI-scope trade/day: too few decisions)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1379118949552421,
+     "IS": -0.1779835398536104,
+     "CF": -0.0867825050089697,
+     "gross": 0.0157839986810992,
+     "gross_IS": -0.02633587250972,
+     "gross_CF": 0.0695268216688787,
+     "cost": 0.1536958936363413,
+     "trades_per_day": 0.953340402969247,
+     "blocked_share": 0.1512120046171604,
+     "blocked_meanR": -0.1606579586382014
+    },
+    "ALL_FC_meanR": -0.1318667563631683,
+    "ALL_SWH_meanR": -0.1392111249130945,
+    "ALL_SWH_IS_CF": [
+     -0.1692093952605856,
+     -0.1016248676395499
+    ],
+    "ALL_SWH_trades_per_day": 1.114528101802757,
+    "ALL_SWH_cost": 0.142521108547236,
+    "HI_FC": {
+     "meanR": -0.1017731734044304,
+     "trades_per_day": 0.1664899257688229,
+     "gross": -0.0132340998581616
+    },
+    "T4h": {
+     "meanR": 0.0928157541900873,
+     "trades": 20.0,
+     "sizable_share_20x": 0.23333333333333334
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.12614678899082568
+   },
+   "note": "A (15m+30m first-come): 0.95 trades/day, net -0.138R (gross +0.016, cost 0.154); C-proxy ALL|SWH -0.139R; 1h+4h trader -0.102R at 0.17/day. Lowest-hurdle setup with >= 1 trade/day: ALL|FC."
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1543868217551454,
+     "IS": -0.1476130269599054,
+     "CF": -0.1629049758904571,
+     "gross": -0.01354305084216,
+     "gross_IS": -0.0137051228175236,
+     "gross_CF": -0.0133392427687104,
+     "cost": 0.1408437709129853,
+     "trades_per_day": 3.0259809119830328,
+     "blocked_share": 0.4211630695443645,
+     "blocked_meanR": -0.1400971693108986
+    },
+    "ALL_FC_meanR": -0.1462242715432488,
+    "ALL_SWH_meanR": -0.1405707496476027,
+    "ALL_SWH_IS_CF": [
+     -0.1279424764349829,
+     -0.1560125534279101
+    ],
+    "ALL_SWH_trades_per_day": 3.422587486744433,
+    "ALL_SWH_cost": 0.1248630716130269,
+    "HI_FC": {
+     "meanR": -0.0764237504702158,
+     "trades_per_day": 0.651643690349947,
+     "gross": 0.0089921073276137
+    },
+    "T4h": {
+     "meanR": 0.0330295373411739,
+     "trades": 85.0,
+     "sizable_share_20x": 0.1463768115942029
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.19358424646657138
+   },
+   "note": "A (15m+30m first-come): 3.03 trades/day, net -0.154R (gross -0.014, cost 0.141); C-proxy ALL|SWH -0.141R; 1h+4h trader -0.076R at 0.65/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (gross R > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1301447846250608,
+     "IS": -0.1317284073268452,
+     "CF": -0.1280116534994331,
+     "gross": 0.0145569599860446,
+     "gross_IS": 0.0069568535118138,
+     "gross_CF": 0.024794261876197,
+     "cost": 0.1447017446111054,
+     "trades_per_day": 5.465535524920466,
+     "blocked_share": 0.7241037753819193,
+     "blocked_meanR": -0.1489266555041769
+    },
+    "ALL_FC_meanR": -0.1125213756378876,
+    "ALL_SWH_meanR": -0.1048198022892297,
+    "ALL_SWH_IS_CF": [
+     -0.108967045831484,
+     -0.0991531352887203
+    ],
+    "ALL_SWH_trades_per_day": 6.051431601272535,
+    "ALL_SWH_cost": 0.1178277527836064,
+    "HI_FC": {
+     "meanR": -0.0973863328552342,
+     "trades_per_day": 1.4639448568398727,
+     "gross": -0.0111516635817411
+    },
+    "T4h": {
+     "meanR": -0.0078025644308783,
+     "trades": 288.0,
+     "sizable_share_20x": 0.1868374558303887
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.19627468024338757
+   },
+   "note": "A (15m+30m first-come): 5.47 trades/day, net -0.130R (gross +0.015, cost 0.145); C-proxy ALL|SWH -0.105R; 1h+4h trader -0.097R at 1.46/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "V45_AMB",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (gross R <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "A_FC": {
+     "meanR": -0.1742729334391727,
+     "IS": -0.1676152583961768,
+     "CF": -0.1831489217360182,
+     "gross": -0.0217897970944442,
+     "gross_IS": -0.0203151997791184,
+     "gross_CF": -0.023755724903907,
+     "cost": 0.1524831363447285,
+     "trades_per_day": 3.011134676564157,
+     "blocked_share": 0.632259102364738,
+     "blocked_meanR": -0.1815039712382646
+    },
+    "ALL_FC_meanR": -0.1669226939377429,
+    "ALL_SWH_meanR": -0.149775392257792,
+    "ALL_SWH_IS_CF": [
+     -0.1431590337418311,
+     -0.1586276568129403
+    ],
+    "ALL_SWH_trades_per_day": 3.411452810180276,
+    "ALL_SWH_cost": 0.1326164147969524,
+    "HI_FC": {
+     "meanR": -0.1045261743468815,
+     "trades_per_day": 0.651643690349947,
+     "gross": -0.0152709086526388
+    },
+    "T4h": {
+     "meanR": -0.0257528321689938,
+     "trades": 73.0,
+     "sizable_share_20x": 0.22113502935420742
+    },
+    "lowtf_blocked_by_1h4h_share_ALL_FC": 0.1345565749235474
+   },
+   "note": "A (15m+30m first-come): 3.01 trades/day, net -0.174R (gross -0.022, cost 0.152); C-proxy ALL|SWH -0.150R; 1h+4h trader -0.105R at 0.65/day. Lowest-hurdle setup with >= 1 trade/day: ALL|SWH."
+  },
+  {
+   "strategy": "N21_ST_RSI_ADX",
+   "timeframe": "15m/30m/1h/4h",
+   "grade": "n/a (no signals)",
+   "numbers": {
+    "trades_A_FC": 0
+   },
+   "note": "No 15m-4h signals in the 2021-08..2026-09 window (sim.py wrote no account); cannot be evaluated."
+  },
+  {
+   "strategy": "DeepSeek F1 (3 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F1_MOM_DIV",
+     "F1_PVT_DIV",
+     "F1_RSI_DIV"
+    ],
+    "A_FC": {
+     "meanR": -0.1542944791204587,
+     "IS": -0.1505171135163422,
+     "CF": -0.1590887489176041,
+     "gross": -0.0064290320033443,
+     "cost": 0.1478654471171144,
+     "trades_per_day_per_trader": 5.172499116295511,
+     "blocked_share": 0.5530962183268961
+    },
+    "ALL_FC_meanR": -0.1408690510590664,
+    "ALL_SWH_meanR": -0.1280445403589337,
+    "ALL_SWH_trades_per_day": 5.703428773418168,
+    "HI_FC": {
+     "meanR": -0.080485431895225,
+     "trades_per_day": 1.2486744432661718
+    },
+    "T4h_meanR": -0.0632046031445497
+   },
+   "note": "A -0.154R at 5.17/day per def; ALL|SWH -0.128R (+0.026 vs A); 1h+4h -0.080R at 1.25/day."
+  },
+  {
+   "strategy": "DeepSeek F2 (1 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F2_DEMARK"
+    ],
+    "A_FC": {
+     "meanR": -0.1773784976951986,
+     "IS": -0.1863128150966852,
+     "CF": -0.1656198824106081,
+     "gross": -0.0307756057006937,
+     "cost": 0.1466028919945048,
+     "trades_per_day_per_trader": 5.706786850477201,
+     "blocked_share": 0.7454267278653629
+    },
+    "ALL_FC_meanR": -0.159982961708652,
+    "ALL_SWH_meanR": -0.105797180859853,
+    "ALL_SWH_trades_per_day": 5.158006362672323,
+    "HI_FC": {
+     "meanR": -0.1002914607708774,
+     "trades_per_day": 2.550901378579004
+    },
+    "T4h_meanR": -0.0567008787548648
+   },
+   "note": "A -0.177R at 5.71/day per def; ALL|SWH -0.106R (+0.072 vs A); 1h+4h -0.100R at 2.55/day."
+  },
+  {
+   "strategy": "DeepSeek F3 (3 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F3_BOS",
+     "F3_BOS_ZONE",
+     "F3_HHHL"
+    ],
+    "A_FC": {
+     "meanR": -0.1464271339524335,
+     "IS": -0.1440792050202936,
+     "CF": -0.149494203394375,
+     "gross": 0.0025397286774444,
+     "cost": 0.148966862629878,
+     "trades_per_day_per_trader": 5.757158006362673,
+     "blocked_share": 0.672146444192451
+    },
+    "ALL_FC_meanR": -0.1331050678642662,
+    "ALL_SWH_meanR": -0.1175457879041325,
+    "ALL_SWH_trades_per_day": 6.011311417462,
+    "HI_FC": {
+     "meanR": -0.0958351118980912,
+     "trades_per_day": 1.5979144574054436
+    },
+    "T4h_meanR": -0.0581440135483272
+   },
+   "note": "A -0.146R at 5.76/day per def; ALL|SWH -0.118R (+0.029 vs A); 1h+4h -0.096R at 1.60/day."
+  },
+  {
+   "strategy": "DeepSeek F4 (3 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (approx. gross R (net + mean cost per half) > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "definitions": [
+     "F4_FAN",
+     "F4_PULL",
+     "F4_PULL_RSI"
+    ],
+    "A_FC": {
+     "meanR": -0.1409763670771344,
+     "IS": -0.1386758122412681,
+     "CF": -0.1438917974782231,
+     "gross": 0.0063400941392181,
+     "cost": 0.1473164612163525,
+     "trades_per_day_per_trader": 4.62831389183457,
+     "blocked_share": 0.7690697222518225
+    },
+    "ALL_FC_meanR": -0.1239356352443251,
+    "ALL_SWH_meanR": -0.107391875904069,
+    "ALL_SWH_trades_per_day": 4.703428773418169,
+    "HI_FC": {
+     "meanR": -0.0802936146614429,
+     "trades_per_day": 1.2898550724637683
+    },
+    "T4h_meanR": -0.0493729946982967
+   },
+   "note": "A -0.141R at 4.63/day per def; ALL|SWH -0.107R (+0.034 vs A); 1h+4h -0.080R at 1.29/day."
+  },
+  {
+   "strategy": "DeepSeek F5 (3 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F5_BOX",
+     "F5_BOX_HTF",
+     "F5_BOX_RSI"
+    ],
+    "A_FC": {
+     "meanR": -0.1747218765356601,
+     "IS": -0.1630925343949468,
+     "CF": -0.1877425863967801,
+     "gross": -0.0102705366387799,
+     "cost": 0.1644513398968801,
+     "trades_per_day_per_trader": 1.4685401201838104,
+     "blocked_share": 0.5464595305347228
+    },
+    "ALL_FC_meanR": -0.1686085223675656,
+    "ALL_SWH_meanR": -0.1601280750699917,
+    "ALL_SWH_trades_per_day": 1.693708024036762,
+    "HI_FC": {
+     "meanR": -0.1208369475033537,
+     "trades_per_day": 0.2841993637327677
+    },
+    "T4h_meanR": -0.2745415483388984
+   },
+   "note": "A -0.175R at 1.47/day per def; ALL|SWH -0.160R (+0.015 vs A); 1h+4h -0.121R at 0.28/day."
+  },
+  {
+   "strategy": "DeepSeek F6 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F6_VWAP_CROSS",
+     "F6_VWAP_FAIL"
+    ],
+    "A_FC": {
+     "meanR": -0.1417099069804132,
+     "IS": -0.1344464425062656,
+     "CF": -0.1509865875828835,
+     "gross": 0.0090024875057876,
+     "cost": 0.1507123944862008,
+     "trades_per_day_per_trader": 6.238069989395546,
+     "blocked_share": 0.8159300195432828
+    },
+    "ALL_FC_meanR": -0.1308433219474774,
+    "ALL_SWH_meanR": -0.105686672588796,
+    "ALL_SWH_trades_per_day": 5.842523860021209,
+    "HI_FC": {
+     "meanR": -0.0893916976715302,
+     "trades_per_day": 2.4435312831389187
+    },
+    "T4h_meanR": -0.0728765158260128
+   },
+   "note": "A -0.142R at 6.24/day per def; ALL|SWH -0.106R (+0.036 vs A); 1h+4h -0.089R at 2.44/day."
+  },
+  {
+   "strategy": "DeepSeek F7 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (approx. gross R (net + mean cost per half) > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "definitions": [
+     "F7_RF_ONLY",
+     "F7_RF_TRIPLE"
+    ],
+    "A_FC": {
+     "meanR": -0.1397617674084957,
+     "IS": -0.1436705243878029,
+     "CF": -0.1346325013119586,
+     "gross": 0.0055529748793535,
+     "cost": 0.1453147422878493,
+     "trades_per_day_per_trader": 7.200954400848357,
+     "blocked_share": 0.7543756118537224
+    },
+    "ALL_FC_meanR": -0.1353043033601168,
+    "ALL_SWH_meanR": -0.1075782432157964,
+    "ALL_SWH_trades_per_day": 7.037380699893955,
+    "HI_FC": {
+     "meanR": -0.0847261627539729,
+     "trades_per_day": 2.22083775185578
+    },
+    "T4h_meanR": -0.0365324855338604
+   },
+   "note": "A -0.140R at 7.20/day per def; ALL|SWH -0.108R (+0.032 vs A); 1h+4h -0.085R at 2.22/day."
+  },
+  {
+   "strategy": "DeepSeek F8 (1 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F8_VWICK"
+    ],
+    "A_FC": {
+     "meanR": -0.1659416969044437,
+     "IS": -0.1683690927672081,
+     "CF": -0.1631447434779322,
+     "gross": -0.0192304428344951,
+     "cost": 0.1467112540699486,
+     "trades_per_day_per_trader": 4.220042417815482,
+     "blocked_share": 0.4227233304423243
+    },
+    "ALL_FC_meanR": -0.1622268961677243,
+    "ALL_SWH_meanR": -0.1541085023386068,
+    "ALL_SWH_trades_per_day": 4.592258748674444,
+    "HI_FC": {
+     "meanR": -0.1308808440518212,
+     "trades_per_day": 0.8870625662778366
+    },
+    "T4h_meanR": -0.0938263466095951
+   },
+   "note": "A -0.166R at 4.22/day per def; ALL|SWH -0.154R (+0.012 vs A); 1h+4h -0.131R at 0.89/day."
+  },
+  {
+   "strategy": "DeepSeek F9 (4 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F9_BREAKER",
+     "F9_FVG",
+     "F9_IFVG",
+     "F9_OB"
+    ],
+    "A_FC": {
+     "meanR": -0.1434666669975699,
+     "IS": -0.1394828350083941,
+     "CF": -0.1484400118808977,
+     "gross": 0.0006128239401597,
+     "cost": 0.1440794909377296,
+     "trades_per_day_per_trader": 6.263520678685048,
+     "blocked_share": 0.6439626746820394
+    },
+    "ALL_FC_meanR": -0.1341699792718453,
+    "ALL_SWH_meanR": -0.114150372400945,
+    "ALL_SWH_trades_per_day": 6.649390243902439,
+    "HI_FC": {
+     "meanR": -0.0931823417266314,
+     "trades_per_day": 1.5852332979851538
+    },
+    "T4h_meanR": -0.0404711218967378
+   },
+   "note": "A -0.143R at 6.26/day per def; ALL|SWH -0.114R (+0.029 vs A); 1h+4h -0.093R at 1.59/day."
+  },
+  {
+   "strategy": "DeepSeek F10 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F10_M2022",
+     "F10_OTE"
+    ],
+    "A_FC": {
+     "meanR": -0.1448369363063013,
+     "IS": -0.1372985894730969,
+     "CF": -0.154757966319308,
+     "gross": -0.0005784240556295,
+     "cost": 0.1442585122506718,
+     "trades_per_day_per_trader": 3.961028632025451,
+     "blocked_share": 0.637122450735737
+    },
+    "ALL_FC_meanR": -0.1341598226361196,
+    "ALL_SWH_meanR": -0.1158045547198446,
+    "ALL_SWH_trades_per_day": 4.280222693531283,
+    "HI_FC": {
+     "meanR": -0.0909141679601522,
+     "trades_per_day": 1.0270413573700954
+    },
+    "T4h_meanR": -0.0645170678702614
+   },
+   "note": "A -0.145R at 3.96/day per def; ALL|SWH -0.116R (+0.029 vs A); 1h+4h -0.091R at 1.03/day."
+  },
+  {
+   "strategy": "DeepSeek F11 (3 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F11_PO3",
+     "F11_RAID",
+     "F11_TSOUP"
+    ],
+    "A_FC": {
+     "meanR": -0.1709638475971252,
+     "IS": -0.1636621693623694,
+     "CF": -0.180630768965856,
+     "gross": -0.0197924648774273,
+     "cost": 0.1511713827196979,
+     "trades_per_day_per_trader": 5.679215270413574,
+     "blocked_share": 0.6453627563235141
+    },
+    "ALL_FC_meanR": -0.1542081023429,
+    "ALL_SWH_meanR": -0.124868884493606,
+    "ALL_SWH_trades_per_day": 5.916401555319901,
+    "HI_FC": {
+     "meanR": -0.115126914792109,
+     "trades_per_day": 1.971898197242842
+    },
+    "T4h_meanR": -0.0970381082678674
+   },
+   "note": "A -0.171R at 5.68/day per def; ALL|SWH -0.125R (+0.046 vs A); 1h+4h -0.115R at 1.97/day."
+  },
+  {
+   "strategy": "DeepSeek F12 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F12_MSS",
+     "F12_MSS_DISP"
+    ],
+    "A_FC": {
+     "meanR": -0.1635524683682942,
+     "IS": -0.1691565128921137,
+     "CF": -0.1562625927160449,
+     "gross": -0.0065095183642031,
+     "cost": 0.157042950004091,
+     "trades_per_day_per_trader": 4.959703075291622,
+     "blocked_share": 0.557568689914102
+    },
+    "ALL_FC_meanR": -0.1554061723313398,
+    "ALL_SWH_meanR": -0.1319200136752443,
+    "ALL_SWH_trades_per_day": 5.2476139978791085,
+    "HI_FC": {
+     "meanR": -0.0768112883958308,
+     "trades_per_day": 1.3247613997879109
+    },
+    "T4h_meanR": -0.0216819568012683
+   },
+   "note": "A -0.164R at 4.96/day per def; ALL|SWH -0.132R (+0.032 vs A); 1h+4h -0.077R at 1.32/day."
+  },
+  {
+   "strategy": "DeepSeek F13 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "B (approx. gross R (net + mean cost per half) > 0 in one half only)",
+   "numbers": {
+    "definitions": [
+     "F13_FVG_PD",
+     "F13_RAID_PD"
+    ],
+    "A_FC": {
+     "meanR": -0.1525646106937471,
+     "IS": -0.1435704505881907,
+     "CF": -0.1642159701151246,
+     "gross": -0.0069981111260517,
+     "cost": 0.1455664995676954,
+     "trades_per_day_per_trader": 5.240190880169672,
+     "blocked_share": 0.6486972371690034
+    },
+    "ALL_FC_meanR": -0.1401779014602984,
+    "ALL_SWH_meanR": -0.1236311044978158,
+    "ALL_SWH_trades_per_day": 5.428685047720042,
+    "HI_FC": {
+     "meanR": -0.1063810752314716,
+     "trades_per_day": 1.440880169671262
+    },
+    "T4h_meanR": -0.1126112833021062
+   },
+   "note": "A -0.153R at 5.24/day per def; ALL|SWH -0.124R (+0.029 vs A); 1h+4h -0.106R at 1.44/day."
+  },
+  {
+   "strategy": "DeepSeek F14 (1 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F14_SMT"
+    ],
+    "A_FC": {
+     "meanR": -0.1522384640503883,
+     "IS": -0.1457431292283136,
+     "CF": -0.1600400828755691,
+     "gross": -0.0111248477105739,
+     "cost": 0.1411136163398143,
+     "trades_per_day_per_trader": 6.302226935312832,
+     "blocked_share": 0.6454042042889391
+    },
+    "ALL_FC_meanR": -0.1435888359122787,
+    "ALL_SWH_meanR": -0.1208042641607135,
+    "ALL_SWH_trades_per_day": 7.162248144220572,
+    "HI_FC": {
+     "meanR": -0.100095802001476,
+     "trades_per_day": 1.6770943796394486
+    },
+    "T4h_meanR": -0.1322718905044141
+   },
+   "note": "A -0.152R at 6.30/day per def; ALL|SWH -0.121R (+0.031 vs A); 1h+4h -0.100R at 1.68/day."
+  },
+  {
+   "strategy": "DeepSeek F15 (6 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F15_ASIA_BRK",
+     "F15_ASIA_SWEEP",
+     "F15_LON_BRK",
+     "F15_OPEN0000",
+     "F15_OPEN0930",
+     "F15_ORB"
+    ],
+    "A_FC": {
+     "meanR": -0.2098975532471772,
+     "IS": -0.205708889705843,
+     "CF": -0.215371278624708,
+     "gross": -0.0179697421306048,
+     "cost": 0.1919278111165724,
+     "trades_per_day_per_trader": 1.7129727819017315,
+     "blocked_share": 0.3642712877000628
+    },
+    "ALL_FC_meanR": -0.1855241344648916,
+    "ALL_SWH_meanR": -0.1352922428858705,
+    "ALL_SWH_trades_per_day": 2.399876281371509,
+    "HI_FC": {
+     "meanR": -0.1107243152829301,
+     "trades_per_day": 1.2205726405090138
+    },
+    "T4h_meanR": -0.0305476232248807
+   },
+   "note": "A -0.210R at 1.71/day per def; ALL|SWH -0.135R (+0.075 vs A); 1h+4h -0.111R at 1.22/day."
+  },
+  {
+   "strategy": "DeepSeek F16 (4 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "A (approx. gross R (net + mean cost per half) > 0 in both halves, but far below the cost per trade)",
+   "numbers": {
+    "definitions": [
+     "F16_FIB382",
+     "F16_FIB500",
+     "F16_FIB618",
+     "F16_FIB764"
+    ],
+    "A_FC": {
+     "meanR": -0.1416377769020657,
+     "IS": -0.1441261294981295,
+     "CF": -0.1383800079738281,
+     "gross": 0.0049924099988666,
+     "cost": 0.1466301869009323,
+     "trades_per_day_per_trader": 5.316012725344645,
+     "blocked_share": 0.5759311391090595
+    },
+    "ALL_FC_meanR": -0.1300248293340944,
+    "ALL_SWH_meanR": -0.115152346626314,
+    "ALL_SWH_trades_per_day": 5.750265111346765,
+    "HI_FC": {
+     "meanR": -0.0885351812936145,
+     "trades_per_day": 1.3031548250265113
+    },
+    "T4h_meanR": -0.0682630027351878
+   },
+   "note": "A -0.142R at 5.32/day per def; ALL|SWH -0.115R (+0.026 vs A); 1h+4h -0.089R at 1.30/day."
+  },
+  {
+   "strategy": "DeepSeek F17 (2 defs pooled)",
+   "timeframe": "15m+30m (A) vs 15m-4h (B/C) vs 1h+4h (D)",
+   "grade": "C (approx. gross R (net + mean cost per half) <= 0 in both halves; AI must add direction skill and also beat cost)",
+   "numbers": {
+    "definitions": [
+     "F17_Z",
+     "F17_Z_HL"
+    ],
+    "A_FC": {
+     "meanR": -0.1681048376865891,
+     "IS": -0.1654958674450811,
+     "CF": -0.171744698834649,
+     "gross": -0.0099105709967136,
+     "cost": 0.1581942666898755,
+     "trades_per_day_per_trader": 7.671792152704135,
+     "blocked_share": 0.6109220875557109
+    },
+    "ALL_FC_meanR": -0.1647185051538164,
+    "ALL_SWH_meanR": -0.1307866938534632,
+    "ALL_SWH_trades_per_day": 8.137592788971368,
+    "HI_FC": {
+     "meanR": -0.1166387031325142,
+     "trades_per_day": 2.2386002120890773
+    },
+    "T4h_meanR": -0.1360283142264805
+   },
+   "note": "A -0.168R at 7.67/day per def; ALL|SWH -0.131R (+0.037 vs A); 1h+4h -0.117R at 2.24/day."
+  }
+ ],
+ "files": {
+  "folder": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf",
+  "scripts": [
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/ds_signals.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/precompute.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/parity_check.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/sim.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summarize.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/dd_quarter.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/recent.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/feas.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/live_check.py",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/build_json.py"
+  ],
+  "tables": [
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/pooled.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/per_strategy.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/paired.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/blocking_long.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/blocked_matrix.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/dd_quarter.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/dd_quarter_summary.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/recent_cost.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/live_check.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/live_check_summary.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/summ/live_rejected.csv",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/feas.csv"
+  ],
+  "caches": [
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/ds_sig",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/outc",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/lens2/multi_tf/res"
+  ],
+  "inputs": [
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/signals (sig_<tf>_<coin>.npz: 36 core signals, bars, ATR14)",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/bars (DeepSeek signals via research/deepseek200/lib_c.entries)",
+   "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/rb_analyze/out_real/replay_signals.csv",
+   "repo (read-only): paperbot/sizing.py, config.v3_settings, ladder.py, margin.py; research/strategy_profiles/profiles.py (_scan copied); research/paper_rules/rules_bt.py (one-position account logic, adapted)"
+  ]
+ },
+ "limits": [
+  "Rule proxies only: the AI's choices (skip, early exit, switch) are replaced by fixed priority rules; an AI that skips more changes trades/day, blocking and call counts.",
+  "Sizing uses the 'normal' chain (30x/30% then 20x/20%) for every signal; the live core run gives ~22% of signals 50x/40x ('best'), which changes ladder R slightly (the ROE ladder locks at smaller price moves at higher leverage).",
+  "Stops and ladder checked on 15m bars for all timeframes (live engine uses 1m; the 5-year studies used each tf's own bars). 15m parity with research/strategy_profiles/profiles._scan is exact (3,000 of 3,000 sampled LTC 15m signals to 1e-6); 4h mean R on a 3,000-signal BTC sample is -0.0758R vs -0.0783R on own-tf bars (parity_check.py).",
+  "A position frees the trader only after the 15m bar of its exit (conservative by up to 15 minutes); same-moment signals: one taken, the rest counted as 'ties'.",
+  "Switching closes the held position at the next 15m open (taker fee + slippage); a new signal on the held coin and side is treated as 'hold'.",
+  "Bars are Binance USD-M futures 2021-01..2026-09-29 (scratchpad/binance); 'current' volatility = last 30 days of that data (2026-08-30..09-29) plus the 1.5-day live v4 replay; brackets inferred from live trades, equity $5,000.",
+  "MDE and confidence intervals: pooled CIs are week-cluster bootstraps over 2021-2026, but strategies inside a group are correlated (same coins, overlapping signals; several DeepSeek definitions duplicate each other), so group pooled CIs are optimistic; MDE assumes i.i.d. trades.",
+  "AI cost uses the design doc's ~$0.03 per Sonnet call; actual cost depends on prompt size and caching.",
+  "DeepSeek definitions are run under the house exits (as in paper v4), not their PREREG exits; 'main families' = all 17 families, pooled per family.",
+  "N21_ST_RSI_ADX produced no 15m-4h signals in the 5-year window and cannot be evaluated; N14_ICHI_RSI has only a handful of trades in 5 years.",
+  "Grades in strategy_notes: A = gross R in the A setup > 0 in both halves, B = in one half, C = in neither, D = under 1 trade/day in the A scope; for DeepSeek families gross per half is approximated by net + whole-window mean cost."
+ ],
+ "report_section_md": "## Which timeframe setup for one AI trader per strategy (5-year rule proxies)\n\n**Bottom line.** Under rules every setup loses: the signals' gross R before costs is about 0 in all of them, so the net loss per trade is the trading cost. The setup only changes how high that cost hurdle is and how many decisions the AI gets. Of the four setups, **C (one trader on 15m/30m/1h, plus 4h when 20x can be sized, holding by default and switching only to a higher timeframe)** gives the AI the best conditions: hurdle 0.120R per trade vs 0.148R for A, 4.5 trades/day, and the smallest 60-day detectable effect (0.12R vs 0.15R). D's 1h/4h trader has the lowest hurdle (0.088R) but makes only 1.1 trades/day and needs a second seat. Nothing here says any setup will turn positive.\n\n### Setups, core 36 (pooled, 2021-08..2026-09)\n\n| setup | combo | net R/trade [95% CI] | IS / CF | gross R | cost R | trades/day | signals/day | blocked | blocked signals' R | hold h (mean) | 91d DD @1% risk, zero-edge (median / p90 / >25%) | MDE 60d | AI calls/day (free-entry..all-signal + 30m holds) | $/month/trader |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| A: AI 15m+30m, first-come | A|FC | -0.147 [-0.155, -0.139] | -0.143 / -0.152 | +0.002 | 0.148 | 4.24 | 24.9 | 73% (+10% ties) | -0.159 | 2.6 | 17% / 31% / 23% | 0.15R | 26..47 | $24..$43 |\n| A: AI 15m+30m, switch to higher tf | A|SWH | -0.139 [-0.146, -0.133] | -0.136 / -0.143 | -0.000 | 0.139 | 4.74 | 24.9 | 69% (+12% ties) | -0.161 | 2.4 | 16% / 30% / 19% | 0.13R | 27..47 | $25..$43 |\n| A: AI 15m+30m, switch to any new | A|SW | -0.167 [-0.174, -0.161] | -0.163 / -0.171 | -0.000 | 0.167 | 13.33 | 24.9 | 11% (+35% ties) | -0.143 | 0.8 | 19% / 57% / 37% | 0.06R | 36..47 | $33..$43 |\n| B: one trader 4 tfs, first-come | ALL|FC | -0.136 [-0.143, -0.129] | -0.132 / -0.141 | +0.001 | 0.137 | 4.09 | 28.5 | 76% (+9% ties) | -0.151 | 3.0 | 16% / 29% / 19% | 0.15R | 28..53 | $26..$48 |\n| B: one trader 4 tfs, longer-tf-first on ties | ALL|LTF | -0.131 [-0.138, -0.124] | -0.127 / -0.136 | +0.000 | 0.131 | 3.98 | 28.5 | 77% (+9% ties) | -0.152 | 3.1 | 16% / 29% / 18% | 0.15R | 28..53 | $26..$48 |\n| B: 4 tfs incl. 4h not sizable at 20x (sensitivity) | ALLINF|FC | -0.127 [-0.134, -0.120] | -0.121 / -0.135 | +0.000 | 0.127 | 4.15 | 31.4 | 77% (+10% ties) | -0.140 | 3.1 | 16% / 29% / 19% | 0.14R | 30..57 | $27..$52 |\n| C: 4 tfs (4h only if 20x sizes), switch only to higher tf | ALL|SWH | -0.121 [-0.126, -0.116] | -0.118 / -0.124 | -0.001 | 0.120 | 4.47 | 28.5 | 72% (+12% ties) | -0.154 | 2.8 | 14% / 25% / 10% | 0.12R | 30..54 | $27..$49 |\n| C: 4 tfs, switch to any new signal | ALL|SW | -0.159 [-0.166, -0.153] | -0.156 / -0.163 | -0.000 | 0.159 | 14.66 | 28.5 | 11% (+38% ties) | -0.136 | 0.8 | 19% / 56% / 37% | 0.06R | 39..53 | $36..$48 |\n| D: second trader 1h+4h, first-come | HI|FC | -0.087 [-0.095, -0.080] | -0.086 / -0.088 | +0.001 | 0.088 | 1.15 | 3.6 | 55% (+13% ties) | -0.095 | 5.8 | 7% / 13% / 0% | 0.23R | 14..17 | $13..$15 |\n| rule account 15m alone | T15|FC | -0.162 [-0.171, -0.154] | -0.157 / -0.169 | +0.002 | 0.164 | 3.89 | 16.9 | 67% (+10% ties) | -0.175 | 2.3 | 17% / 34% / 24% | 0.16R | 22..35 | $20..$32 |\n| rule account 30m alone | T30|FC | -0.120 [-0.127, -0.112] | -0.120 / -0.119 | -0.001 | 0.119 | 2.26 | 8.0 | 59% (+13% ties) | -0.129 | 3.4 | 11% / 21% / 5% | 0.18R | 18..23 | $16..$21 |\n| rule account 1h alone | T1h|FC | -0.091 [-0.099, -0.082] | -0.090 / -0.092 | +0.000 | 0.091 | 1.19 | 3.5 | 52% (+14% ties) | -0.096 | 5.3 | 7% / 14% / 0% | 0.23R | 14..16 | $13..$15 |\n| rule account 4h alone | T4h|FC | -0.043 [-0.061, -0.025] | -0.035 / -0.052 | +0.025 | 0.068 | 0.12 | 0.2 | 34% (+9% ties) | -0.076 | 14.0 | 2% / 5% / 0% | 0.61R | 3..4 | $3..$3 |\n\n### Setups, DeepSeek 44 definitions (house exits)\n\n| setup | combo | net R/trade [95% CI] | IS / CF | gross R | cost R | trades/day | signals/day | blocked | blocked signals' R | hold h (mean) | 91d DD @1% risk, zero-edge (median / p90 / >25%) | MDE 60d | AI calls/day (free-entry..all-signal + 30m holds) | $/month/trader |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| A: AI 15m+30m, first-come | A|FC | -0.155 [-0.161, -0.149] | -0.152 / -0.158 | -0.004 | 0.151 | 4.81 | 24.5 | 66% (+14% ties) | -0.162 | 2.5 | 17% / 35% / 26% | 0.14R | 29..48 | $26..$44 |\n| A: AI 15m+30m, switch to higher tf | A|SWH | -0.141 [-0.147, -0.136] | -0.138 / -0.145 | -0.004 | 0.138 | 5.39 | 24.5 | 60% (+18% ties) | -0.165 | 2.3 | 16% / 33% / 22% | 0.11R | 30..50 | $28..$45 |\n| A: AI 15m+30m, switch to any new | A|SW | -0.168 [-0.175, -0.162] | -0.165 / -0.172 | -0.001 | 0.167 | 13.11 | 24.5 | 10% (+37% ties) | -0.145 | 0.9 | 19% / 56% / 39% | 0.06R | 38..49 | $34..$45 |\n| B: one trader 4 tfs, first-come | ALL|FC | -0.144 [-0.150, -0.138] | -0.142 / -0.147 | -0.004 | 0.140 | 4.63 | 28.9 | 70% (+14% ties) | -0.152 | 2.9 | 17% / 31% / 21% | 0.14R | 31..56 | $29..$51 |\n| B: one trader 4 tfs, longer-tf-first on ties | ALL|LTF | -0.135 [-0.141, -0.130] | -0.133 / -0.138 | -0.005 | 0.130 | 4.43 | 28.9 | 72% (+13% ties) | -0.154 | 3.1 | 15% / 30% / 20% | 0.14R | 32..56 | $29..$51 |\n| B: 4 tfs incl. 4h not sizable at 20x (sensitivity) | ALLINF|FC | -0.132 [-0.139, -0.126] | -0.129 / -0.138 | -0.004 | 0.129 | 4.68 | 32.3 | 72% (+14% ties) | -0.139 | 3.1 | 16% / 31% / 22% | 0.13R | 33..61 | $30..$56 |\n| C: 4 tfs (4h only if 20x sizes), switch only to higher tf | ALL|SWH | -0.121 [-0.125, -0.117] | -0.117 / -0.127 | -0.003 | 0.118 | 5.11 | 28.9 | 65% (+17% ties) | -0.157 | 2.8 | 14% / 27% / 14% | 0.11R | 34..58 | $31..$52 |\n| C: 4 tfs, switch to any new signal | ALL|SW | -0.160 [-0.166, -0.154] | -0.157 / -0.163 | -0.001 | 0.159 | 14.40 | 28.9 | 11% (+40% ties) | -0.136 | 0.9 | 19% / 56% / 39% | 0.05R | 41..56 | $38..$51 |\n| D: second trader 1h+4h, first-come | HI|FC | -0.097 [-0.103, -0.092] | -0.096 / -0.099 | -0.009 | 0.089 | 1.47 | 4.4 | 48% (+19% ties) | -0.100 | 5.7 | 7% / 14% / 0% | 0.20R | 18..21 | $17..$19 |\n| rule account 15m alone | T15|FC | -0.167 [-0.175, -0.160] | -0.164 / -0.172 | -0.004 | 0.163 | 4.53 | 16.1 | 58% (+14% ties) | -0.181 | 2.3 | 17% / 35% / 27% | 0.15R | 25..37 | $23..$33 |\n| rule account 30m alone | T30|FC | -0.124 [-0.130, -0.118] | -0.124 / -0.125 | -0.005 | 0.119 | 2.72 | 8.4 | 50% (+17% ties) | -0.131 | 3.3 | 11% / 23% / 7% | 0.16R | 21..27 | $19..$24 |\n| rule account 1h alone | T1h|FC | -0.100 [-0.107, -0.094] | -0.099 / -0.102 | -0.009 | 0.091 | 1.48 | 4.1 | 44% (+20% ties) | -0.101 | 5.3 | 7% / 15% / 0% | 0.20R | 17..20 | $16..$18 |\n| rule account 4h alone | T4h|FC | -0.070 [-0.085, -0.056] | -0.073 / -0.068 | -0.002 | 0.068 | 0.17 | 0.3 | 35% (+11% ties) | -0.075 | 14.1 | 2% / 5% / 0% | 0.51R | 5..5 | $5..$5 |\n\nSetup D pooled (15m/30m seat + 1h/4h seat): core -0.134R at 5.39 trades/day for two seats; DeepSeek -0.141R at 6.27.\n\nColumns: blocked = signals that came while the trader held a position (ties = several signals at the same bar close, one taken); blocked signals' R = what they would have made alone; 91d DD = drawdown in 91-day windows of the rule R series with the strategy's own mean removed (the noise a zero-edge trader still sees), 1% risk per stop; MDE 60d = smallest mean-R change detectable in 60 days (80% power, i.i.d. trades); AI calls = entry decisions (free-time only .. every signal) + a holding check every 30 min; $ at ~$0.03/call.\n\n### Paired differences (same weeks resampled; core 36)\n\n| comparison | difference | strategies better |\n|---|---|---|\n| ALL|SWH minus A|FC | +0.026R [+0.022, +0.030] | 34/35 |\n| ALL|FC minus A|FC | +0.011R [+0.009, +0.013] | 35/35 |\n| ALL|SW minus ALL|FC | -0.023R [-0.028, -0.018] | 4/35 |\n| A|SW minus A|FC | -0.020R [-0.025, -0.015] | 5/35 |\n| HI|FC minus A|FC | +0.060R [+0.052, +0.069] | 35/35 |\n| ALL|SWH minus ALL|FC | +0.015R [+0.012, +0.018] | 29/35 |\n| ALLINF|FC minus ALL|FC | +0.009R [+0.008, +0.011] | 33/35 |\n| ALL|LTF minus ALL|FC | +0.005R [+0.004, +0.006] | 27/35 |\n| A|SWH minus A|FC | +0.008R [+0.005, +0.010] | 24/35 |\n\n### Long 1h/4h holds and the 15m/30m signals they block (core, B = first-come over 4 tfs)\n\n- 1h/4h positions take 26% of the held time and cause 23% of the blocked 15m/30m signals.\n- 37% of 1h/4h trades block at least 5 lower-timeframe signals, 23% at least 10, 11% at least 20.\n- Under switch-only-upward (C proxy) the 1h/4h share of held time rises to 50%, and 30% of 1h/4h trades block 10 or more.\n- The 15m signals blocked by a 4h position would have made -0.233R alone, compared with -0.168R for 15m signals blocked by a 15m position. They come in quiet markets, where a 15m stop is tight and the cost per R is high.\n\n### Leverage that can actually be executed with the house 2 ATR stop (share of bars, mean of 6 coins)\n\n| tf | period | median 2 ATR stop % | house 20x | 30x | 40x | 50x | risk-per-stop 2%: 20x | 30x | 40x | 50x | 5%: 20x | 50x |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| 15m | 5y | 0.99 | 98% | 80% | 34% | 7% | 98% | 89% | 72% | 51% | 94% | 45% |\n| 15m | last30d | 0.86 | 99% | 91% | 43% | 11% | 99% | 96% | 84% | 63% | 93% | 55% |\n| 30m | 5y | 1.43 | 92% | 56% | 13% | 2% | 93% | 72% | 45% | 25% | 92% | 21% |\n| 30m | last30d | 1.25 | 97% | 71% | 17% | 4% | 97% | 85% | 56% | 32% | 96% | 30% |\n| 1h | 5y | 2.08 | 77% | 26% | 3% | 0% | 79% | 42% | 19% | 8% | 79% | 7% |\n| 1h | last30d | 1.82 | 90% | 33% | 4% | 0% | 91% | 54% | 25% | 11% | 91% | 11% |\n| 4h | 5y | 4.38 | 19% | 1% | 0% | 0% | 20% | 3% | 1% | 0% | 20% | 0% |\n| 4h | last30d | 3.66 | 26% | 0% | 0% | 0% | 27% | 4% | 0% | 0% | 27% | 0% |\n\n4h at 20x (house), per coin, 5y / last 30 days: BTC 56% / 100%; ETH 25% / 54%; SOL 4% / 0%; DOGE 7% / 0%; LTC 13% / 1%; BCH 9% / 0%.\n\nRisk-per-stop sizing at 2-5% leaves the 20x limit where it is, because the stop has to sit inside liquidation by 1 ATR. It only removes the 15% loss cap that blocks 40-50x on 15m/30m. In practice, \"4h only where 20x executes\" means BTC 4h, plus ETH 4h in quiet weeks.\n\n### Current market\n\nIn the last 91 days of the data the cost hurdle is higher: A 0.197R, C-proxy 0.152R, 1h/4h 0.107R. The live v4 replay (1.5 days) shows the same blocking: A blocked 82% of core signals, at 4.5 trades/day per trader.\n\n### Limits\n\n- Rule proxies only: the AI's choices (skip, early exit, switch) are replaced by fixed priority rules; an AI that skips more changes trades/day, blocking and call counts.\n- Sizing uses the 'normal' chain (30x/30% then 20x/20%) for every signal; the live core run gives ~22% of signals 50x/40x ('best'), which changes ladder R slightly (the ROE ladder locks at smaller price moves at higher leverage).\n- Stops and ladder checked on 15m bars for all timeframes (live engine uses 1m; the 5-year studies used each tf's own bars). 15m parity with research/strategy_profiles/profiles._scan is exact (3,000 of 3,000 sampled LTC 15m signals to 1e-6); 4h mean R on a 3,000-signal BTC sample is -0.0758R vs -0.0783R on own-tf bars (parity_check.py).\n- A position frees the trader only after the 15m bar of its exit (conservative by up to 15 minutes); same-moment signals: one taken, the rest counted as 'ties'.\n- Switching closes the held position at the next 15m open (taker fee + slippage); a new signal on the held coin and side is treated as 'hold'.\n- Bars are Binance USD-M futures 2021-01..2026-09-29 (scratchpad/binance); 'current' volatility = last 30 days of that data (2026-08-30..09-29) plus the 1.5-day live v4 replay; brackets inferred from live trades, equity $5,000.\n- MDE and confidence intervals: pooled CIs are week-cluster bootstraps over 2021-2026, but strategies inside a group are correlated (same coins, overlapping signals; several DeepSeek definitions duplicate each other), so group pooled CIs are optimistic; MDE assumes i.i.d. trades.\n- AI cost uses the design doc's ~$0.03 per Sonnet call; actual cost depends on prompt size and caching.\n- DeepSeek definitions are run under the house exits (as in paper v4), not their PREREG exits; 'main families' = all 17 families, pooled per family.\n- N21_ST_RSI_ADX produced no 15m-4h signals in the 5-year window and cannot be evaluated; N14_ICHI_RSI has only a handful of trades in 5 years.\n- Grades in strategy_notes: A = gross R in the A setup > 0 in both halves, B = in one half, C = in neither, D = under 1 trade/day in the A scope; for DeepSeek families gross per half is approximated by net + whole-window mean cost.\n"
+}
