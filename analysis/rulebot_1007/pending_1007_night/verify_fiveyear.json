@@ -1,0 +1,104 @@
+{
+ "verdicts": [
+  {
+   "id": "F1",
+   "status": "confirmed",
+   "recomputed": "I wrote my own house-exit simulator (v3sim.py, from the ladder.py rules, repo sizing for 30x/20x 'normal', $5,000) and ran it on random samples of 1,500 rows per timeframe (core 15m/1h/4h) and 1,000 rows (DS 15m/4h, with my own Wilder ATR14). Every sampled row matched the lens pickles (leverage 100%, |dR|>1e-3 in 0 rows). My aggregation of the pickles (v3agg.py, week-clustered t) gives core net R 5m -0.307 (t -40.0), 15m -0.172 (-33.4), 30m -0.125 (-28.6), 1h -0.094 (-19.6), 4h -0.051 (-3.8); core gross R +0.0045/+0.0013/-0.0013/+0.0000/+0.0216; DS net -0.177/-0.128/-0.099/-0.066 and gross -0.0036/-0.0041/-0.0057/+0.0062. The tier-walk mean ROE matches out_binance/profiles.json in 175/175 cells (max diff 9.9e-9). Tier-walk R at 15m is -0.1723 and v4n is -0.1717. Total 8.12M signals.",
+   "note": "Reproduces exactly. Small corrections: (a) 'both halves agree to within 0.01R' fails at core 4h (net IS -0.042 vs CF -0.060; gross +0.032 vs +0.011) and only just holds at 30m (0.011). (b) The DS pooled gross is slightly negative, not zero: week-clustered t is -1.8, -1.9 and -2.1 at 15m, 30m and 1h. (c) The pooled 'gross about 0' hides real differences between cells: 18 cells have BH-significant NEGATIVE gross and 4 have positive gross (see F4). The core 4h gross of +0.022 applies only to the 19.7% of signals that pass sizing. verify_costs C2 (all signals at fixed 30x) gives -0.001R at 4h, so it is not robust. Note also that the lens used the Binance signal cache (scratchpad/binance/signals with out_binance profiles). The research/paper_rules signals give different rows."
+  },
+  {
+   "id": "F2",
+   "status": "corrected",
+   "recomputed": "Live TRADED replay (v3b+v4) median stop: core 15m 0.63%, 30m 0.89%, 1h 1.23%, 4h 2.02%; DS 0.60/0.85/1.23/1.96%. 5-year net R inside the live p10..p90 stop range: core -0.218/-0.155/-0.107/-0.037; DS -0.244/-0.173/-0.120/-0.079. Core 15m stop quintiles: cost R 0.335/0.194/0.147/0.113/0.077, gross +0.004/+0.008/-0.004/+0.001/-0.002, net -0.331 at stops of 0.63% or less (exact match). Position of the live stop size: per signal, 15m 19.9th, 30m 18.5th, 1h 17.8th, 4h 20.9th percentile (core). In contiguous 5-year windows of the live length (2.2 d core, 1.5 d DS), the live MEAN stop is at the 8.6/7.9/5.0th percentile (core 15m/30m/1h) and 6.4/6.5/5.8th (DS). With window medians: 12.9/8.4/6.8th.",
+   "note": "The hurdle numbers (+0.22/+0.16/+0.11/+0.04R) and the stop-size quintiles reproduce within 0.008R. The claim 'live stop sizes at the 2nd-4th percentile of 5-year windows' does not reproduce. It comes from drawing two independent random windows (0.70 d and 1.50 d), which is too narrow a distribution, and from using 2.2-day windows for DS, which ran only 1.5 days. The correct figure is about the 5th-9th percentile of windows, or the 18th-21st percentile of single signals (consistent with verify_costs C4). The market is quiet, but less extreme than claimed."
+  },
+  {
+   "id": "F3",
+   "status": "corrected",
+   "recomputed": "v3win.py: 4,000 contiguous windows per test. Core uses 2.202 d (v3b+v4 are back-to-back: 10/05 01:45Z to 10/07 06:40Z). DS uses 1.503 d (v4 only). Live = replay TRADED mean R. Percentiles: core 15m 0.61, 30m 0.37, 1h 0.33, 4h 0.83; DS 15m 0.90, 30m 0.45, 1h 0.43, 4h 0.39. Stop-matched windows (window mean stop within 15% of the live mean): DS 15m matched median -0.275 and live -0.065, percentile 0.979, two-sided p 0.041 (387 windows). BH across 13 tests gives q of about 0.5. v3a, recomputed with tier-walk R in 2.61-day windows (their live means taken as given): 5m 0.025 (p 0.05; stop-matched 0.11), 15m 0.079, 30m 0.078, 1h 0.76, 4h 0.73. Cell level: |z|>2 in 2/49 core and 2/68 DS cells (2h-cluster SE).",
+   "note": "The substance holds: live sits inside the 5-year distribution, and nothing is significant after correction. However, the tf-level DS test in fy_compare.py (line 344) used RP_LENS = 0.70 d + 1.50 d for DS as well, though DS ran only in v4. That makes the 5-year distribution too narrow and inflates the DS 15m result: the claimed 0.945 (matched 0.995, p 0.009, q 0.12) becomes 0.90 (matched 0.979, p 0.04, q about 0.5). Core used two independent windows rather than one contiguous 2.2-day window. The effect on the percentiles is small (within 0.03)."
+  },
+  {
+   "id": "F4",
+   "status": "corrected",
+   "recomputed": "v3agg.py cells (v4n, sized+resolved, week-clustered). The same 7 cells have n>=30 and net>0: N23_HA_ST@4h +0.027 (t 1.06, IS +0.011 / CF +0.042, n 1,416, 0.75/day), N02_ST_KST@4h +0.010, N09_ALLIG_AROON@4h +0.009, N15_KC_AO@30m +0.025 (n 59), S1_EMA_RSI_CHOP@1h +0.053 (n 43), DS F10_M2022@4h +0.085 (n 39), DS F13_FVG_PD@4h +0.013 (n 68). DS cells positive at 15m/30m/1h: 0. Gross test, BH over 307 cells with n>=200: q<0.05 in 4 POSITIVE cells, N23_HA_ST@4h +0.099 (t 3.95, q 0.006), F16_FIB382@15m +0.026 (t 3.89, q 0.006, net -0.142), F16_FIB500@15m +0.022 (t 3.31, q 0.020, IS +0.019 / CF +0.026) and N20_EMA9_CHOP@5m +0.029 (t 3.24, q 0.021, net -0.315); and in 18 NEGATIVE cells.",
+   "note": "The 'no dependable positive net cell' conclusion holds. 'The two cells with significant positive gross' is wrong: F16_FIB500@15m and N20_EMA9_CHOP@5m also pass BH. N23 has week-clustered t 1.06 (borderline on 'none has t>1'). The finding also leaves out that significant negative gross is 4.5 times as common as positive (18 vs 4). See 'missed'."
+  },
+  {
+   "id": "F5",
+   "status": "confirmed",
+   "recomputed": "v3cells.py, live = replay TRADED v3b+v4, 2h-cluster SE: S4_BB_BBP@15m +0.42 (n 39) vs 5y -0.202 (gross -0.013); N17_KC_RSI@15m +0.11 (n 109) vs -0.160 (gross t -3.35); N20_EMA9_CHOP@30m +0.26 (42) vs -0.150; N20_EMA9_CHOP@1h +0.29 +/-0.10 (17) vs -0.097; N01_ST_EMA@15m +0.16 (30) vs -0.173; DS F1_RSI_DIV@15m +0.45 (18) vs -0.183. Spearman 5y vs live for cells with live n>=10: core -0.097 (49 cells, permutation p 0.51), DS -0.106 (68, p 0.39). v3a was not recomputed.",
+   "note": "Reproduces. Caveat: the 5-year spread between cells within a timeframe (about 0.03R) is far smaller than the live SE per cell (0.1-0.5R). A rank correlation near zero was therefore guaranteed whatever the truth, so this test only shows that live cannot rank cells. It says nothing about whether the 5-year ranks are real."
+  },
+  {
+   "id": "F6",
+   "status": "confirmed",
+   "recomputed": "Cells with live n>=10: core 11 positive observed vs 12.9 expected at the 5-year average mean (theirs 12.5); DS 26 vs 19.9. z=(live-5y)/SE has sd 1.23 (core) and 1.29 (DS), an exact match. |z|>2 in 2/49 and 2/68 (theirs 3/49 and 4/68; the cluster definition differs).",
+   "note": "The expectation at today's stop size (10.4 / 16.2) was not recomputed. The cells share the same market moments, so the observed-vs-expected count has no simple binomial p-value. The DS excess fits the DS 15m stretch in F3."
+  },
+  {
+   "id": "F7",
+   "status": "corrected",
+   "recomputed": "Live submitted signals (replay, v3b+v4) per day vs the 5-year rate: core 15m 0.94, 30m 0.96, 1h 1.21, 4h 0.99; DS 15m 1.08, 30m 1.03, 1h 1.05, 4h 1.29. Core 1h has 406 live signals vs a median of 335 in 2.2-day windows (96th percentile). Cells with >=1 signal/day over 5y (235, v3b+v4 only): log-frequency correlation 0.89, 88% within 0.5-2x. N17_KC_RSI@4h: 5-year 2.2-day window count p5/p50/p95 is 0/7/46, and 28% of windows have <=1 signal, so the live gap is small-count noise.",
+   "note": "The DS ratios match exactly. Their core 'every timeframe ~1' pooled v3a in. In v3b+v4 alone, core 1h runs 21% above the 5-year rate (the 96th percentile of windows, not significant after correction). The conclusion holds. Enterable 4h signals per strategy run up to 0.8/day (core) and 1.9/day (DS), not 1.3."
+  },
+  {
+   "id": "F8",
+   "status": "confirmed",
+   "recomputed": "research/levstop/out/levstop.json, arm k=2.0, pooled over cells by trades. 15m per notional at 10/20/30/40/50x: -0.141/-0.142/-0.142/-0.147/-0.159%; equity per trade -0.28/-0.57/-1.28/-2.36/-3.17%; liquidated share 0.00/0.08/0.48/1.82/4.76%; busts 47/58/61/64/64 of 70. Liquidated share at 50x: 30m 10.97%, 1h 19.16%, 4h 33.89%. Per notional at 50x worsens to -0.224% (1h) and -0.288% (4h).",
+   "note": "Exact. One small understatement: fy_equity_drain.csv applies the 30x per-notional figure (-0.142%) at 50x/50%. At the real 50x per-notional figure (-0.159%, which includes liquidations) the drain is about 3.97%/trade, so equity halves in about 17 trades, not 19."
+  },
+  {
+   "id": "F9",
+   "status": "confirmed",
+   "recomputed": "research/exitstyle/out/exitstyle.json (1,890,071 trades, primary 15m-4h, 2 ATR, tier leverage): equity per trade, ladder -1.415%, tp1R -1.422, tp1.5R -1.418, tp2R -1.389, tp3R -1.378, ladder+2R -1.403. Decision: no arm passes, keep the ladder.",
+   "note": "Exact. The largest pooled difference from the ladder is 0.037% of equity (they said 0.06). The finding misses that exitstyle has BH-significant per-cell gains for fixed TPs exactly in the candidate cells: tp1R at N01_ST_EMA@15m; tp1.5R/tp2R at N24_DMI@15m/30m and N20_EMA9_CHOP@15m/30m. These matter for those traders' custom values even though the pooled effect is about 0."
+  },
+  {
+   "id": "F10",
+   "status": "confirmed",
+   "recomputed": "Core cost R 0.173/0.124/0.094/0.072 with gross about 0 (4h +0.022, t 1.65). Core cells with n>=30 and net>0: 15m 0/34, 30m 1/34, 1h 1/33, 4h 3/27. Class Z+ at 4h: 18 core and 18 DS. Sized share at 4h 19.67%; core 4h enterable signals 7.31/day across 35 strategies. Live 4h replay: core +0.206 (n 28), and +0.068 with the unresolved signals at mark; DS -0.122 (n 51).",
+   "note": "Reproduces exactly."
+  },
+  {
+   "id": "F11",
+   "status": "corrected",
+   "recomputed": "v3ds11.py: house net % per trade (cell average) 15m -0.1485, 30m -0.1523, 1h -0.1598, 4h -0.1886. PREREG (results.csv, IS+CF n-weighted) X5_TRAIL2 -0.152/-0.167/-0.177/-0.213; X2_SL15_TP3 -0.142/-0.148/-0.161/-0.170. Spearman house vs X5/X2: 15m 0.46/0.67, 30m 0.23/0.30, 1h 0.41/0.36, 4h 0.11/0.18. Stage 1 = 2 (F5_BOX@4h X2 CF -0.413%, F13_FVG_PD@4h X5 CF -0.532%), stage 2 = 0. per_tf.csv PREREG gross per trade: -0.045/-0.055/-0.060/-0.020% (IS) and negative in CF on every timeframe.",
+   "note": "The numbers reproduce within 0.003%. 'No DS definition positive in both halves at 15m/30m/1h' is true only for the house exits. Under PREREG X2_SL15_TP3, F5_BOX_RSI@1h has IS +0.008% (n 170) and CF +0.319% (n 123), not significant (p12 0.22, pre-period -1.34%). The units are consistent: house and PREREG are both unlevered net % per notional per trade, though the PREREG % is not normalized for risk (its stops differ)."
+  },
+  {
+   "id": "F12",
+   "status": "confirmed",
+   "recomputed": "research/reel5m/out/h1_trades.csv.gz, IS+CF: 35,858 trades (19.01/day), net -0.1247%/trade, gross_raw +0.0108% (IS) / +0.0072% (CF), r_net -0.549, wins 32.9%. Live reel: 13 trades, mean R -0.458, 46.2% wins, -0.019%/trade. In 1.5-day 5-year windows (p5/p50/p95 -0.43/-0.14/+0.135%), -0.156% sits at the 0.45 percentile.",
+   "note": "Exact (their 0.44). The 'gross' column in the trades file is negative (-0.022/-0.026%) because it already includes slippage. Their +0.011% is gross_raw, the same as h1.json."
+  },
+  {
+   "id": "F13",
+   "status": "confirmed",
+   "recomputed": "v3grade.py: their class and grade rules applied to my own 5-year cells and live (2h-cluster) table, 15m-4h. B 3 (N23_HA_ST@4h, S1_EMA_RSI_CHOP@1h, F10_M2022@4h), C 54, D 115, F 126, thin 17 (theirs B 3, C 54, D 114, F 127, thin 17). 97% of cells agree; the 9 differences sit at the t=-2 or mu+-2SE edges. The candidate lists reproduce: 15m/30m N01_ST_EMA@15m, N10_HA_PSAR@15m, N24_DMI@30m, F7_RF_TRIPLE@30m/15m, F9_IFVG@15m, F6_VWAP_CROSS@15m, F12_MSS@30m, plus 3 rare Z+ cells; 1h/4h list as in fy_candidates.csv.",
+   "note": "The counts are right, but the method is weak. (1) The grade relies on the live sign, which F5/F6 show is noise. As a result, the cells with the strongest 5-year direction evidence (F16_FIB382@15m and F16_FIB500@15m, both BH-significant and positive in both halves) get D because of 13-18 live trades. F9_FVG@15m (gross t 2.56, both halves) is left out. N10_HA_PSAR@15m and N24_DMI@30m are listed as 'best' although their IS gross is negative. (2) A 5-year class 'N+' with t <= -2 plus a positive live sign gets C, the same grade as an untested Z+ cell. (3) The 1h/4h C list consists mostly of low-power 4h cells (n 39-1,416), where t>-2 means a weak test rather than evidence. With 26-36 cells per kind, a few gross t of about 2 are expected by chance (e.g. F15_ORB@4h is +0.041 while F15_ORB@15m is -0.052, t -4.1)."
+  },
+  {
+   "id": "F14",
+   "status": "corrected",
+   "recomputed": "R sd per trade: live replay 15m 1.35, 30m 0.94, 1h 0.77, 4h 0.88; 5-year core 15m 0.90, 30m 0.80, 1h 0.74. n = ((1.645+0.842) sd / 0.2)^2: 15m 125-278, 30m 99-137, 1h 85-92.",
+   "note": "The 15m range starts at 125, not 140. Otherwise it holds. For a paired AI-vs-rule test, the relevant sd is that of the paired difference, which is not estimated here. Clustering raises all of these numbers."
+  }
+ ],
+ "strategy_note_problems": [
+  "The strategy_notes in resume/lens_fiveyear.json cover only 61 of 80 strategies (136 of 351 cells). The full set exists in lens/fiveyear/out/strategy_notes_grouped.json but was not carried over. The 18 omitted include N17_KC_RSI (the busiest core strategy, about 68 sized signals/day at 15m, with BH-significant NEGATIVE gross at 15m/30m/1h, and one of the F5 'best live' cells), N04_ST_KLINGER (74/day at 15m/30m), DOGE, the F5_BOX/F5_BOX_HTF/F5_BOX_RSI duplicate family, F4_PULL (52/day), F9_OB, OBV_B/OBV_S, V45_AMB, S3_CMO_SANDWICH, S5_DONCHIAN_MFI, N13_3OUTSIDE, N14_ICHI_RSI (thin), N19_FIB_CHOP, F3_BOS_ZONE and F8_VWICK.",
+  "Spot check of all 136 cell entries (5-year net, gross, live n and mean, grade) against my tables: the numbers agree within rounding. The one grade difference is F16_FIB500@4h, F (NN) vs my D (Z-), at t of about -2.",
+  "The notes give the gross mean but not its t or BH q, except for F16_FIB382 and N23. Readers cannot tell 'about 0' from 'reliably wrong-way'. For example, the F11_RAID/F13_RAID_PD/F11_TSOUP, F17_Z/F17_Z_HL and F15_ORB/F15_ASIA_SWEEP notes do not say their direction is significantly negative.",
+  "The live part of each note (rp n, mean+-SE) feeds the grade, although the lens's own F5/F6 show it carries no information. Notes such as 'N+/L++' for N20_EMA9_CHOP@1h (live +0.29+/-0.10, n 17) read as a positive signal.",
+  "The F16_FIB382 note says 'best 5y gross edge of all 15m cells'. It does not say that F16_FIB500@15m is also BH-significant, or that the two share only 18% of their signals (3,842 identical of about 21.6k/22.8k), so they are close to independent confirmations of a Fibonacci-retracement edge before costs."
+ ],
+ "missed": [
+  "Anti-edges. 18 cells have BH-significant negative gross (week-clustered, 307 cells with n>=200), against 4 positive. Examples: N17_KC_RSI at 15m (t -3.35), 30m (-2.97) and 1h (-3.90); DS F15_ORB@15m (-4.11); F11_RAID@15m (-4.01) and its duplicates F13_RAID_PD/F11_TSOUP@15m; F17_Z and F17_Z_HL at 15m/1h/4h; F15_ASIA_SWEEP at 15m/30m/1h; F11_PO3 at 30m/1h; F1_PVT_DIV@15m; S4_BB_BBP@5m. These definitions should be the last choice for an AI trader. Flipping them gives only +0.02-0.05R of gross, well below the 0.17R cost at 15m.",
+  "The DS family has a small but consistent negative direction content at 15m/30m/1h (pooled gross -0.004 to -0.006R, week-clustered t -1.8 to -2.1). Core is at about 0.",
+  "Candidate list without the live sign. Ranked on 5-year evidence alone (gross positive in both halves, BH, frequency), the 15m/30m shortlist would be F16_FIB382@15m (gross +0.026, q 0.006, 11.2/day), F16_FIB500@15m (+0.022, q 0.020, 11.8/day), F9_IFVG@15m (+0.016, t 2.6), F9_FVG@15m (+0.017, t 2.56, 18/day), F7_RF_TRIPLE@30m (+0.012, t 2.0, 30/day) and N01_ST_EMA@15m (+0.011, t 1.3, 17/day). Every one is still about -0.14 to -0.17R net. The lens's C list dropped the first two and F9_FVG because of 13-26 live trades.",
+  "The 4h numbers describe a stop-selected subset. v4 sizing admits only 19.7% of 4h signals (narrow stops). The core 4h gross of +0.022R (t 1.65) holds for that subset only; verify_costs C2 finds -0.001R for all 4h signals at fixed 30x. '4h only where 20x is executable' in PLAN_ATTACH matches this subset, but the edge is not significant.",
+  "The window-length error for DS in fy_compare.py (2.2-day windows for a 1.5-day run), plus the use of two independent windows, overstated both the DS 15m live outlier and the 'quiet regime' percentile (F2/F3).",
+  "The research/exitstyle per-cell BH-significant TP gains in candidate cells (N01_ST_EMA@15m tp1R; N24_DMI and N20_EMA9_CHOP at 15m/30m tp1.5R/tp2R) bear directly on those traders' custom values. The lens reported only the pooled result.",
+  "The levstop 'sig_pos_bh' cells (N14_ICHI_RSI@15m/1h/4h, N15_KC_AO@4h, DOGE@4h) rest on 1-2 trades. Anyone reading levstop.json should ignore them. The lens did not warn about this."
+ ]
+}
