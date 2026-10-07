@@ -1,0 +1,27 @@
+[1] base vs rb_analyze replay: closed in both 4236; |dROE| max 2.22e-16, share < 1e-9 1.0000; same exit reason 1.0000
+    current: n 3590, share equal 1.0000, max 2.22e-16
+    run-20261005T183457Z: n 646, share equal 1.0000, max 1.67e-16
+    rb_analyze UNRESOLVED 410 -> exitlab status {'OPEN_END': 321, 'CLOSED': 89}
+    rb_analyze REJECTED_SIZING 102 -> exitlab {'NOT_ENTERED': 102}
+[2] exitlab vs nightly d3 shadows (v4 trades, both resolved):
+         variant    n  share_abs_dROE_lt_0.001  share_lt_0.01  median_abs  mean_d3  mean_exitlab  same_reason
+0           base  735                      1.0            1.0         0.0  -0.0454       -0.0454          1.0
+1   ladder_cap2R  735                      1.0            1.0         0.0  -0.0451       -0.0451          1.0
+2          lev10  611                      1.0            1.0         0.0  -0.0323       -0.0323          1.0
+3       lev20m20  702                      1.0            1.0         0.0  -0.0408       -0.0408          1.0
+4       lev30m30  696                      1.0            1.0         0.0  -0.0501       -0.0501          1.0
+5       lev40m40  446                      1.0            1.0         0.0  -0.0799       -0.0799          1.0
+6       lev50m50   76                      1.0            1.0         0.0  -0.0728       -0.0728          1.0
+7         lock15  711                      1.0            1.0         0.0  -0.0568       -0.0568          1.0
+8         lock20  670                      1.0            1.0         0.0  -0.0706       -0.0706          1.0
+9         lock30  616                      1.0            1.0         0.0  -0.0848       -0.0848          1.0
+10      stopw1.5  735                      1.0            1.0         0.0  -0.0465       -0.0465          1.0
+11      stopw2.5  719                      1.0            1.0         0.0  -0.0366       -0.0366          1.0
+12        stopw3  705                      1.0            1.0         0.0  -0.0280       -0.0280          1.0
+13      timestop  735                      1.0            1.0         0.0  -0.0524       -0.0524          1.0
+14        tp1.5R  603                      1.0            1.0         0.0  -0.0827       -0.0827          1.0
+15          tp1R  665                      1.0            1.0         0.0  -0.0478       -0.0478          1.0
+16          tp2R  557                      1.0            1.0         0.0  -0.1193       -0.1193          1.0
+17          tp3R  506                      1.0            1.0         0.0  -0.1955       -0.1955          1.0
+[3] geo20 on trades whose base leverage is 20x: n 544, max |dpnl| 0
+[3] geo50 on trades whose base leverage is 50x: n 78, max |dpnl| 0

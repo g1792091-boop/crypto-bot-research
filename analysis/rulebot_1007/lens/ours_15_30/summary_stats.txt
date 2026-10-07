@@ -1,0 +1,33 @@
+== 15m: cells 36; tiers {'C': 23, 'D': 13}
+  every-signal n>=20: 24; mean>0: 2; mean<0: 22; CI(4h) above 0: 0; CI below 0: 8
+  BH q<0.05 positive: 0; BH q<0.05 negative: 6; BH q<0.10 negative: 11; tested: 28
+  zero live every-signal rows: 4; n<10: 8
+  persistence v3a -> v3b+v4 (cells n>=10 both, 19): spearman -0.121 (p 0.622); same sign share 0.58; v3a>0: 2, of those later>0: 0
+  persistence v3b -> v4 (cells n>=10 both, 12): spearman -0.266 (p 0.404); same sign 0.58
+  account mean R vs every-signal mean R (acct n>=10, es n>=20; 24 cells): spearman 0.595 (p 0.002); acct>0: 3, of those every-signal<0: 1
+  live every-signal ret/notional vs 5y (es n>=20, 24 cells): spearman -0.276 (p 0.192); live<0: 20, 5y<0: 24; median live -0.00134 5y -0.00138
+  5y: cells with signals 35; mean_ret_notional<0: 34; t<-2: 33; IS<0 & CF<0: 34; gross ret/notional median 0.00001 range -0.00148..0.00257
+  signals/day live vs 5y (5y>0.5/day, 31 cells): spearman 0.979; median ratio live/5y 0.94
+  side-flip cells n_pairs>=20: 16; raw p_better<0.05: 1; their long_share: [['N20_EMA9_CHOP@15m', 0.0, 0.28, -0.065]]
+== 30m: cells 36; tiers {'C': 23, 'D': 9, 'B': 4}
+  every-signal n>=20: 17; mean>0: 4; mean<0: 13; CI(4h) above 0: 0; CI below 0: 7
+  BH q<0.05 positive: 0; BH q<0.05 negative: 7; BH q<0.10 negative: 10; tested: 24
+  zero live every-signal rows: 4; n<10: 12
+  persistence v3a -> v3b+v4 (cells n>=10 both, 14): spearman -0.103 (p 0.725); same sign share 0.64; v3a>0: 2, of those later>0: 0
+  persistence v3b -> v4 (cells n>=10 both, 7): spearman 0.143 (p 0.760); same sign 0.43
+  account mean R vs every-signal mean R (acct n>=10, es n>=20; 17 cells): spearman 0.843 (p 0.000); acct>0: 3, of those every-signal<0: 1
+  live every-signal ret/notional vs 5y (es n>=20, 17 cells): spearman -0.196 (p 0.451); live<0: 14, 5y<0: 17; median live -0.00185 5y -0.00144
+  5y: cells with signals 35; mean_ret_notional<0: 35; t<-2: 32; IS<0 & CF<0: 33; gross ret/notional median -0.00004 range -0.00609..0.00118
+  signals/day live vs 5y (5y>0.5/day, 29 cells): spearman 0.969; median ratio live/5y 0.99
+  side-flip cells n_pairs>=20: 11; raw p_better<0.05: 2; their long_share: [['N20_EMA9_CHOP@30m', 0.0, 0.359, 0.059], ['N24_DMI@30m', 0.114, 0.287, 0.015]]
+== both: cells 72; tiers {'C': 46, 'D': 22, 'B': 4}
+  every-signal n>=20: 41; mean>0: 6; mean<0: 35; CI(4h) above 0: 0; CI below 0: 15
+  BH q<0.05 positive: 0; BH q<0.05 negative: 13; BH q<0.10 negative: 21; tested: 52
+  zero live every-signal rows: 8; n<10: 20
+  persistence v3a -> v3b+v4 (cells n>=10 both, 33): spearman -0.131 (p 0.467); same sign share 0.61; v3a>0: 4, of those later>0: 0
+  persistence v3b -> v4 (cells n>=10 both, 19): spearman -0.111 (p 0.652); same sign 0.53
+  account mean R vs every-signal mean R (acct n>=10, es n>=20; 41 cells): spearman 0.719 (p 0.000); acct>0: 6, of those every-signal<0: 2
+  live every-signal ret/notional vs 5y (es n>=20, 41 cells): spearman -0.112 (p 0.487); live<0: 34, 5y<0: 41; median live -0.00149 5y -0.00141
+  5y: cells with signals 70; mean_ret_notional<0: 69; t<-2: 65; IS<0 & CF<0: 67; gross ret/notional median -0.00002 range -0.00609..0.00257
+  signals/day live vs 5y (5y>0.5/day, 60 cells): spearman 0.979; median ratio live/5y 0.95
+  side-flip cells n_pairs>=20: 27; raw p_better<0.05: 3; their long_share: [['N20_EMA9_CHOP@15m', 0.0, 0.28, -0.065], ['N20_EMA9_CHOP@30m', 0.0, 0.359, 0.059], ['N24_DMI@30m', 0.114, 0.287, 0.015]]
