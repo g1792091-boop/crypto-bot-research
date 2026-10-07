@@ -1,0 +1,5 @@
+1. uncapped joint == alone for all 17: True
+4. brute-force setup B == run() for N10_HA_PSAR : True 13237
+2/3. caps cs3/REC/book8: violations=0, own-overlap=0, intended=taken+blocked_flat: True
+2/3. caps cs2/REC/book6: violations=0, own-overlap=0, intended=taken+blocked_flat: True
+2/3. caps cs4/REC/book10: violations=0, own-overlap=0, intended=taken+blocked_flat: True

@@ -1,0 +1,136 @@
+{
+ "wants": {
+  "raw_signal_same15m": {
+   ">=2": {
+    "events": 386353,
+    "per_year": 74822.6
+   },
+   ">=3": {
+    "events": 180925,
+    "per_year": 35038.6
+   },
+   ">=4": {
+    "events": 88268,
+    "per_year": 17094.3
+   },
+   ">=5": {
+    "events": 43554,
+    "per_year": 8434.8
+   },
+   ">=6": {
+    "events": 21289,
+    "per_year": 4122.9
+   },
+   ">=8": {
+    "events": 4936,
+    "per_year": 955.9
+   },
+   "max": 14
+  },
+  "raw_signal_same1h": {
+   ">=2": {
+    "events": 314751,
+    "per_year": 60955.9
+   },
+   ">=3": {
+    "events": 219369,
+    "per_year": 42483.8
+   },
+   ">=4": {
+    "events": 148417,
+    "per_year": 28743.0
+   },
+   ">=5": {
+    "events": 98940,
+    "per_year": 19161.1
+   },
+   ">=6": {
+    "events": 64709,
+    "per_year": 12531.8
+   },
+   ">=8": {
+    "events": 25976,
+    "per_year": 5030.6
+   },
+   "max": 18
+  },
+  "free_entry_same15m": {
+   ">=2": {
+    "events": 33205,
+    "per_year": 6430.6
+   },
+   ">=3": {
+    "events": 7805,
+    "per_year": 1511.5
+   },
+   ">=4": {
+    "events": 2313,
+    "per_year": 447.9
+   },
+   ">=5": {
+    "events": 764,
+    "per_year": 148.0
+   },
+   ">=6": {
+    "events": 296,
+    "per_year": 57.3
+   },
+   ">=8": {
+    "events": 42,
+    "per_year": 8.1
+   },
+   "max": 11
+  },
+  "free_entry_same1h": {
+   ">=2": {
+    "events": 52873,
+    "per_year": 10239.6
+   },
+   ">=3": {
+    "events": 19742,
+    "per_year": 3823.3
+   },
+   ">=4": {
+    "events": 8333,
+    "per_year": 1613.8
+   },
+   ">=5": {
+    "events": 3759,
+    "per_year": 728.0
+   },
+   ">=6": {
+    "events": 1794,
+    "per_year": 347.4
+   },
+   ">=8": {
+    "events": 472,
+    "per_year": 91.4
+   },
+   "max": 21
+  }
+ },
+ "coin_side_holding_share": {
+  ">=2": 0.9909,
+  ">=3": 0.9299,
+  ">=4": 0.7361,
+  ">=5": 0.4527,
+  ">=6": 0.2302,
+  ">=8": 0.0525,
+  "episodes_>=5": 9604,
+  "episodes_>=5_per_year": 1859.9,
+  "max": 15
+ },
+ "same_dir_exposure": {
+  "long_max": 21,
+  "short_max": 22,
+  "long_p99": 17.0,
+  "short_p99": 17.0,
+  "long_p50": 8.0,
+  "short_p50": 8.0,
+  "share_ge8_same_dir": 0.8528,
+  "share_ge10_same_dir": 0.6611
+ },
+ "years": 5.163586584531143,
+ "n_traders": 23,
+ "scope": "CARD"
+}
