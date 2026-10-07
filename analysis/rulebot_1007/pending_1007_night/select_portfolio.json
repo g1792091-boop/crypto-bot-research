@@ -1,0 +1,380 @@
+{
+ "headline": "Run 16 judged Sonnet traders: 8 from 10/17, 8 pre-registered now for 10/31. Each one is a distinct, frequent signal stream that is not an anti-edge on 5-year data, and together they cover trend, mean reversion, volume, structure/ICT, breakout and one new-information stream. All 16 form one BH family (q 0.05) judged on a single pre-registered window ending 12/26. Expected false passes are about 0.03. If one trader really nets +0.10R per trade, it passes with probability 0.71-0.78. If the AI adds no edge, which is what every lens so far shows, the most likely 12/31 result is zero passes, and that is a correct answer.",
+ "recommended_count_and_why": {
+  "count": "16 judged Sonnet traders (wave 1: 8, wave 2: 8) + 3 non-judged Opus twins (N23_HA_ST, N10_HA_PSAR, F16_FIB382). Every other strategy stays a cost-free rule/shadow/signal-tracking account.",
+  "why": [
+   "More traders give more chances only if each one is a new bet. After merging duplicates (9 DeepSeek nested or identical definitions, the Supertrend/Ichimoku/F16/F9/F7 clusters, N06 inside N18), dropping BH-significant anti-edges (18 cells with negative 5y gross), short-only regime bets (N20, N24) and near-silent strategies, about 16 distinct, frequent streams with non-negative 5y gross remain. A 17th-30th trader would be a twin of one already staffed (fully correlated, no new chance), an anti-edge (lower prior) or too rare to test by 12/31 (power about 0).",
+   "The BH cost of size is small but real. The rank-1 threshold is p <= 0.05/K: K 12 -> 0.0042 (z 2.64), 16 -> 0.0031 (z 2.73), 24 -> 0.0021 (z 2.87), 30 -> 0.0017 (z 2.94). In sel/sim.py (two-stage design verdict, rho 0.3), the chance that one true trader (gross 0.25 over the coin flip, net about +0.10R) is confirmed falls from 0.44 at K 16 to 0.36 at K 30.",
+   "Correlated luck grows with K. Day-30 expected false passes among all-null traders are 0.07 (K 16) vs 0.11 (K 30) at rho 0.3, and 0.19 vs 0.24 at rho 0.6. Merging duplicates is what keeps rho near the low end.",
+   "Budget: verified cost model. 30 traders fit $500 only with ignore-new-signals plus event-only hold checks (P3-ignore $282-361 at the p90 day), which removes the switch-up lever and the hold management the owners want. 10-20 traders fit with switch calls and P2/P3 checks. Scaling the verified per-trader figures ($19-26/trader-month on the draft P4+switch plan, $9-12 on P3-ignore), 16 traders with switch-up and event checks plus 3 twins plus about $55 analyst/coach should land at about $250-420/month. That leaves room for the 3x thinking-token uncertainty and the burst cache-miss risk (about +$280/month at 30 traders without a pre-warm). Measure it in wave 0.",
+   "Operational load and lock discipline: 16 prompts, cards and coin-flip pools are the most that can be built and tested by 10/16."
+  ]
+ },
+ "wave1": {
+  "start": "D0 = 10/17 21:00 KST (after wave 0: replay test 10/14-10/15, 24h decision-only run 10/15-10/16)",
+  "traders": [
+   {
+    "strategy": "N23_HA_ST",
+    "timeframes": "15m/30m/1h + 4h only when the per-signal check (stop + 1 ATR buffer inside 20x liquidation) passes (mostly BTC/ETH)",
+    "family": "trend (Supertrend + Heikin-Ashi; trend ratio 0.72)",
+    "why": "Only core cell with a multiple-testing-surviving 5y gross edge: 4h +0.099R (t 3.69, IS +0.085 / CF +0.113; BH q 0.004 day-clustered, 0.03-0.05 week-clustered), net only +0.008..+0.024R. 15m/30m/1h gross ~0 (+0.005/+0.002/+0.009). Busiest core stream (~64 signals/day at 15m, 29 at 30m, 12 at 1h) so the AI has the most choice; longer-tf-first ties route the trader into its 4h signals when they size.",
+    "risks": "The 4h edge is rarely tradable (0.8 sized/day, live v3b/v4 sizing rejected its DOGE 4h signals); 15m pays 0.23R per trade; Supertrend cluster: N01/N02/N04/S2 signals fall in the same coin-side 4h window 87-98% of the time (sel/ovl.py on live signal_log), so it is the same bet as those and correlated with DOGE (wave 2).",
+    "duplicates_to_merge": [
+     "N02_ST_KST",
+     "N01_ST_EMA",
+     "N04_ST_KLINGER",
+     "S2_ST_ROC (same-bet Supertrend cluster: rule accounts only)"
+    ],
+    "custom_value_candidates": [
+     "longer-tf-first ties / switch-up so 4h signals are taken when executable (only BH-surviving core gross is at 4h)",
+     "1h/4h: R-ladder arming >= 1.5R instead of the ROE ladder (X12: wider geometry better in all 3 runs and 5y at 1h, CI includes 0 under 6h clusters)"
+    ]
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "timeframes": "30m primary, 15m, 1h",
+    "family": "trend/mixed (Heikin-Ashi + PSAR; trend ratio 0.57)",
+    "why": "5y 30m gross +0.012R (t 1.83; IS +0.013 / CF +0.012), 10.5 signals/day at 30m + 24/day at 15m. Only strategy that beat its same-side peers in all three live runs at both 15m and 30m (digest ours_15_30 F7, low confidence); least-bad live base.",
+    "risks": "Live 30m +0.088R, CI [-0.093,+0.259], q 0.057-0.18 (not significant); v4 relative excess only +0.010; 5y net -0.11R at 30m; 30m cost 0.16R.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": [
+     "bar-close lock updates at 30m (+0.023R, 6h CI [0.005,0.037], X7)"
+    ]
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "timeframes": "30m primary, 15m (1h allowed, not prioritised: IS +0.042 / CF -0.023)",
+    "family": "trend (Ichimoku + CMO; trend ratio 0.68)",
+    "why": "5y 30m gross +0.026R (t 2.15, IS +0.019 / CF +0.035), 15m +0.016 (IS +0.015 / CF +0.017); one of the cost lens B cells (+1.8-2.9 bp pre-cost). Ichimoku family representative.",
+    "risks": "B status is at the chance rate (about 3 of 105 cells, cost verifier); only 3.3/day at 30m + 7/day at 15m, so roughly 3 trades/day and n of about 200-250 by 12/26; live window overlap 0.96 with N22_VORTEX_PSAR.",
+    "duplicates_to_merge": [
+     "N12_ICHI_AO (same family; live worse than coin flip, p 0.057)",
+     "N08_ICHI_WR (rare)",
+     "N14_ICHI_RSI (silent)",
+     "N22_VORTEX_PSAR (same coin-side windows)"
+    ],
+    "custom_value_candidates": [
+     "4h-regime agreement used only as a tie-breaker: the one filter positive in both units and both 5y halves, at most about 0.01R (CV5); 5y agree-minus-against +0.01..+0.09R (ours_1h_4h F3)"
+    ]
+   },
+   {
+    "strategy": "F16_FIB382",
+    "timeframes": "15m primary, 1h (30m excluded: 5y gross -0.006)",
+    "family": "structure / ICT (Fibonacci 38.2% trend pullback, DeepSeek F16)",
+    "why": "Strongest 15m 5y gross of all 307 testable cells: +0.026R (t 4.02, BH q 0.006-0.009), positive in both halves (+0.018 / +0.037); 11.2 signals/day at 15m. Its live D grade rests on 13-18 trades (fiveyear verifier: live sign carries no information).",
+    "risks": "Net still -0.14R at 15m (the gross is about 1/9 of the 0.23R cost); DeepSeek family pooled gross slightly negative (t -1.8..-2.1); any 12/31 pass is preliminary until FORWARD_PREREG J1 (2027-02-02).",
+    "duplicates_to_merge": [
+     "F16_FIB500 (same family; 15m +0.022, q 0.02-0.06)",
+     "F16_FIB618 (= F10_OTE at 4h)",
+     "F16_FIB764",
+     "F10_OTE (same coin-side windows)"
+    ],
+    "custom_value_candidates": [
+     "under 1% risk-per-stop sizing, skip or downsize 15m entries whose 2 ATR stop is under about 0.5% of price (cost channel; real money only with risk sizing, CF10)"
+    ]
+   },
+   {
+    "strategy": "F9_FVG",
+    "timeframes": "15m primary, 30m",
+    "family": "structure / ICT (fair-value-gap retrace, DeepSeek F9)",
+    "why": "5y 15m gross +0.017R (t 2.69, IS +0.011 / CF +0.023), 18 signals/day; 30m +0.004 in both halves. On the fiveyear verifier 5y-only shortlist.",
+    "risks": "Net -0.15R at 15m; live F9 15m -0.008R (n 108, single run); DeepSeek forward-test caveat as F16. Possible overlap with F16 (both are trend-pullback entries; not measurable on 4.8 live days), so same pullback cluster cap.",
+    "duplicates_to_merge": [
+     "F13_FVG_PD (9/9 nested)",
+     "F10_M2022 (3/3 nested)",
+     "F9_IFVG (same family; 15m +0.016, t 2.55)",
+     "F9_OB / F9_BREAKER (family; gross <= 0)"
+    ],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "timeframes": "15m + 1h (30m excluded: 5y gross -0.012, t -1.51)",
+    "family": "mean reversion (double Supertrend + CCI; measured trend ratio 0.16)",
+    "why": "The only frequent mean-reversion stream whose 5y gross is not negative in either half (15m +0.004 / +0.000, 1h +0.008 / +0.007; 24.6 + 5.1 signals/day). Every other mean-reversion candidate is an anti-edge or negative (N17_KC_RSI gross t -3.4 at 15m, F17_Z, F11_RAID, F15_ASIA_SWEEP, V45_AMB, S3). It keeps one contrarian stream so the cohort is not all with-trend at the same moments.",
+    "risks": "Gross is about 0 (t 0.33 / 0.67): a not-anti pick, not a good one; mean reversion loses in trends; 15m cost 0.23R.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": [
+     "1h: close at market when <= -0.5R after 4 bars, as a code shadow only (post hoc; +0.012..+0.022R per signal, 14 clusters; AIH-3)"
+    ]
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "timeframes": "15m primary, 30m",
+    "family": "volume (volume-weighted MA + MACD; trend ratio 0.85)",
+    "why": "5y 15m gross +0.012R (t 1.77, IS +0.008 / CF +0.018), 53 signals/day (lots of choice); 30m +0.012 (IS -0.005 / CF +0.035).",
+    "risks": "Live N18@30m was the only cell significantly negative even with 6h clusters (-0.737R, q 0.015), though 5y ranks it no worse than the others (exits verifier X13); one of the six busiest strategies for AI calls (cost model verifier).",
+    "duplicates_to_merge": [
+     "N06_MACD_ORB (its 15m signals were a 13/13 subset of N18 in live data)"
+    ],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "timeframes": "1h primary, 30m (15m excluded: 5y gross -0.013, t -1.73, IS -0.025)",
+    "family": "breakout (Bollinger squeeze + BBP; trend ratio 0.97)",
+    "why": "5y 1h gross +0.019R (t 1.60, IS +0.024 / CF +0.014), 4h +0.052; largest live favourable moves of the 36 (mean MFE 1.565R, about 35% of signals reach +1R), so it is the cleanest test of whether AI exit handling adds R.",
+    "risks": "Only 3.8 signals/day at 1h and 8.7 at 30m (about 2-3 trades/day); the positive live v4 15m result was short signals in a falling market (drift-adjusted side flip +0.25, CI spans 0); validating the live cell to +-0.1R would take about 5 months.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": [
+     "breakeven only after +1R (X8)",
+     "1h R-ladder arming >= 1.5R (X12)"
+    ]
+   }
+  ],
+  "common_custom_value_candidates": [
+   "Code-level only, same for every trader (frozen D0..12/31): exits in R/price, not ROE (X2/X11/DS11)",
+   "lock raised only at the strategy bar close at 15m/30m: +0.026..+0.04R, robust to 6h clusters and dedup, all of it from v4 (X7); not at 1h (-0.017R)",
+   "breakeven move allowed only after MFE >= +1R, code computes the net-zero price: +0.049R on fixed targets at 15m (X8)",
+   "ties broken widest-stop-first (lowest cost in R): +0.014R core / +0.019R DS per trade, free (multi_tf verifier)",
+   "hold by default; switch only to a higher-timeframe signal (MT6/MT10); same-tf switches cost one round trip (AIH-7)",
+   "fixed 2 ATR14 stop of the entry tf, no widening, no time stop (X9/X10)"
+  ]
+ },
+ "wave2": {
+  "start": "D0' = 10/31 21:00 KST. Latest allowed: 11/01, so that D0'+60 <= 12/31 for the design's two-stage verdict and the single window still has about 56 days. The list is fixed now. Wave 2 launches only on operational gates measured on wave 1 (non-response <= 5%, schema errors <= 1%, cost per trader-day <= 1.25x plan, 100% decision logs, no rule-bot impact) and never on any wave-1 P&L or R. If wave 2 cannot start by 11/01, its traders become exploratory: outside the 12/31 family, and K = 8.",
+  "traders": [
+   {
+    "strategy": "F7_RF_TRIPLE",
+    "timeframes": "30m primary, 1h (15m excluded to save calls: 63 signals/day at 0.23R cost, gross +0.006)",
+    "family": "trend (Range Filter + HA triple agreement, DeepSeek F7)",
+    "why": "5y 30m gross +0.012R (t 1.98, IS +0.013 / CF +0.012), 30 signals/day; 1h +0.011 in both halves (12.9/day).",
+    "risks": "DeepSeek family pooled gross slightly negative; live F7@1h -0.39R (n 22, noise); shares coin-side windows with F4_FAN and F3_BOS (DS-trend cluster cap).",
+    "duplicates_to_merge": [
+     "F7_RF_ONLY (75% exact signal overlap)"
+    ],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "DOGE",
+    "timeframes": "15m/30m/1h (no 4h, per design)",
+    "family": "trend (friend bot; trend ratio 0.87)",
+    "why": "5y 1h gross +0.029R (t 2.09, IS +0.027 / CF +0.031); 15m (+0.007 / +0.010) and 30m (+0.012 / +0.003) small positive in both halves; the owners know and can read this strategy.",
+    "risks": "Only 2.2 signals/day at 1h; live coin-side windows overlap S2_ST_ROC (0.81) and N04 (0.85), so it is in the Supertrend cluster with N23; live DOGE 1h D grade rests on 8 signals.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "F6_VWAP_CROSS",
+    "timeframes": "15m/30m/1h + 4h when 20x passes the per-signal check",
+    "family": "volume (daily VWAP cross, DeepSeek F6)",
+    "why": "The DeepSeek lens single exploratory pick: 5y period ranks are consistent (11/3/6 at 15m, 14/1/5 at 30m), the only 5y support that survives DS8; 15m gross +0.005 (t 1.79, both halves), 4h +0.027 (t 2.24); 59 signals/day at 15m.",
+    "risks": "Gross about 0 at 15m-1h; live 15m support is entirely the H2 sell-off (+0.77 vs -0.40 in H1); 30m live -0.125R (n 86).",
+    "duplicates_to_merge": [
+     "F6_VWAP_FAIL (family; gross <= 0)"
+    ],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "F15_ASIA_BRK",
+    "timeframes": "30m primary, 1h (15m IS -0.007)",
+    "family": "breakout (Asia session range break, DeepSeek F15)",
+    "why": "5y 30m gross +0.023R (t 1.97, IS +0.008 / CF +0.040), 1h +0.010 in both halves; a time-of-day breakout distinct from the indicator breakouts.",
+    "risks": "Signals come in a once-a-day burst per coin, so the one-position trader gets about 1-2 trades/day and has low power; mostly a CF-period effect; the rest of F15 (ORB, ASIA_SWEEP, LON_BRK) is anti-edge or negative.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "H3A_RETAIL_FADE",
+    "timeframes": "1h, maker limit entry (0.25 ATR, 2 bars), 1.5 ATR stop / 3 ATR limit target / 48 bars, values frozen from PREREG_ORDERFLOW",
+    "family": "new information (Binance retail long/short ratio extreme -> fade)",
+    "why": "Only new-information hypothesis with usable ~4.7-year evidence: registered before data (research/orderflow), maker round 2 both halves +0.228% / +0.183% per trade at 1x after cost (n 1,563 / 1,450, PF 1.19 / 1.16, p 0.010); neighbouring variants also positive (+0.11/+0.07, +0.10/+0.10). The AI lever matches its known weakness: under one position the taken trades averaged +0.07% while the overlapped, skipped ones averaged +0.41% (research/maker/RESULTS_ROUND2.md).",
+    "risks": "Fails correction (needs p <= 0.0006 over 160 combos); winning coins change between halves and the 5y set includes XRP (6 coins: 3/6 and 2/6 positive); needs the L/S ratio feed and a limit-fill engine that do not exist yet; 20x with 20% margin went bankrupt in both halves, so 0.5-1% risk only; about 1-1.5 trades/day, so P(pass) is only ~0.3 even at +0.10R net. Not in the 91-strategy catalog; it is design v2 item 8.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": [
+     "none: PREREG values frozen"
+    ],
+    "launch_condition": "Launch on 10/31 only if the limit-fill engine reproduces maker round 2 fill rules on replay and the L/S feed has run 7 days with no gaps. If not, K drops to 15 (an operational decision, made blind to results) and H3A stays a cost-free rule record (design 8)."
+   },
+   {
+    "strategy": "F4_FAN",
+    "timeframes": "15m primary, 30m, 1h",
+    "family": "trend (EMA ribbon alignment, DeepSeek F4)",
+    "why": "5y 15m gross +0.015R (t 2.18, IS +0.014 / CF +0.015), 21 signals/day; 1h +0.011 in both halves, 30m +0.011.",
+    "risks": "Its sibling F4_PULL was the most significantly negative unit against the coin flip and is structurally long, and ribbon alignment may lean the same way; it shares coin-side windows with F7 (DS-trend cluster).",
+    "duplicates_to_merge": [
+     "F4_PULL / F4_PULL_RSI (excluded)"
+    ],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "timeframes": "1h primary, 15m (30m excluded: gross -0.015)",
+    "family": "price-action pattern (three outside; trend ratio 0.62)",
+    "why": "5y 1h gross +0.031R (t 1.55, IS +0.021 / CF +0.039); the only luck_flow B unit that held in two live runs (thin: n 15-17, p 0.13-0.20).",
+    "risks": "1h gives about 1 signal/day and 15m about 6/day (gross +0.003), so n is modest; live support is thin.",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": []
+   },
+   {
+    "strategy": "V39_ALL",
+    "timeframes": "15m primary, 30m",
+    "family": "mixed (owners V3.9; trend ratio 0.57)",
+    "why": "5y 15m gross +0.011R in both halves (+0.010 / +0.011), 19 signals/day; no >= 0.5 live overlap with any staffed strategy, so it adds an independent stream.",
+    "risks": "Gross about 0 (t 1.24); 30m is CF-only (-0.003 / +0.031).",
+    "duplicates_to_merge": [],
+    "custom_value_candidates": []
+   }
+  ]
+ },
+ "november_promotion_rule": {
+  "principle": "Day-30 data are used only to stop traders for futility, never to promote one. Rankings do not carry between runs (Spearman -0.13 v3a vs later), live cell spread is 10x the 5y spread, and a 30-day verdict sees only edges of about 0.3R or more.",
+  "day30_checks": "11/16 for wave 1, 11/30 for wave 2. AI calls stop (futility) if (a) the 1%-risk R curve is at -15% or worse, or (b) there are >= 30 trades and the day-clustered 90% upper bound of mean R is < 0 (design 10-3 fail rule). By sel/loss.py, (a) by day 30 catches 69% of zero-skill traders (net -0.17R; median day 23), 4% at net +0.05R and 1% at net +0.10R. A stopped trader keeps its rule account (2/2s), signal tracking and coin flips at cost 0, and it stays in K as a non-pass.",
+  "global_futility": "At 11/16, if the pooled paired AI-minus-rule difference on the same signals (design 10-5 (a), day clusters) has a 90% upper bound < 0 and a point estimate <= -0.05R, stop all AI calls. Rule tracking continues.",
+  "what_promotion_can_mean": "(1) A surviving trader just continues; nothing is added to the 12/31 family after 11/01. (2) A rule-only strategy can be promoted only into an edition-2 pre-registration (start <= 1/1, 2027 candidate) by criteria fixed now: 5y gross >= 0 in both halves, >= 10 signals/day in AI scope, not a merged duplicate, and every-signal replay mean (4h clusters) not below -(cost + 0.1R). Never on account P&L or leaderboards. (3) Budget freed by futility stops is not used for new judged traders (K is fixed). It may keep Opus twins of survivors running.",
+  "real_money": "Only a trader that passes the 12/31 verdict (below), and still at 1% risk per stop."
+ },
+ "exposure_caps": {
+  "why": "52% of core every-signal rows share coin, bar and side with another strategy, and in the 15m replay 2,255 signal-accounts were only 1,152 distinct entries. Overlapping traders hold the same position, so 1% each becomes 3-5% on one event (sizing verifier). Caps also stop five traders passing together on one trending month.",
+  "per_coin_direction": "At most 3 concurrent AI positions on the same coin and side across all 16 traders (3R at 1% risk).",
+  "per_same_bet_cluster": "At most 1 concurrent position per coin-side inside each same-bet cluster: Supertrend {N23_HA_ST, DOGE}; DeepSeek trend {F7_RF_TRIPLE, F4_FAN, F6_VWAP_CROSS}; pullback {F16_FIB382, F9_FVG}. These are the clusters whose live signals fall in the same coin-side 4h window >= 80% of the time, or that are the same entry idea.",
+  "book_direction": "At most 8 concurrent same-direction AI positions across all coins (the 6 coins move together, so long BTC plus long ETH is close to one bet).",
+  "tie_break": "Pre-registered: widest stop first (lowest cost in R, +0.014R free), then a fixed daily rotation of trader IDs. Never by confidence or recent results.",
+  "logging": "Each cap-blocked entry is logged as REJECTED_CAP with its shadow outcome. The coin flip copies realised entries, so caps do not bias the coin-flip test. A trader blocked on >20% of intended entries is flagged in the verdict report.",
+  "coins": "All 6 coins allowed. At 1% risk the notional is small, so BCH/LTC book-walk costs mostly vanish (C6), but BCH then LTC go last in ties. 4h entries only after the per-signal 20x liquidation check (5y: 8.1% of 4h signals at 20x liquidate before the 2 ATR stop)."
+ },
+ "loss_limits": {
+  "risk_per_stop": "Flat 1% for judged traders. Leverage is a code output (the highest of 50/40/30/20x at which stop + buffer sits inside liquidation, floor 3x per design 4-3). Confidence 2-5% sizing only in a non-judged twin until confidence is shown informative (>= 200 trades, Spearman > 0). Basis: at today's cost, 1% at gross 0 halves the account in ~46% of paths by 12/31 and 2% in ~79% (sizing verifier). The verdict is in R either way.",
+  "daily": "-3R per trader per KST day (09:00 reset): no new entries that day. Simulated hit rate: 15% of days for a zero-skill trader, 6% for a net +0.10R trader (sel/loss.py, 4 trades/day). Coin flips apply the same rule.",
+  "trader_review": "-15% on the 1% R curve (about -16R) is a pre-registered futility stop of AI calls, not a pause-and-restart. Hit by 12/31: 99% of zero-skill traders, 33% at net 0, 11% at +0.05R, 2% at +0.10R.",
+  "book": "If the 16 traders together are at <= -12R realised plus unrealised in one KST day, no new AI entries until 09:00 (correlated crash days: per-trader crash losses under risk sizing were single digits to ~20%, Z7).",
+  "existing": "Keep the design risk rules: 3 losses -> 1h cooldown; no re-entry on the same coin and side for 2 own bars after a loss; macro-event entry blackout; bankrupt line 1,000 USDT; stop placed the moment a lock arms (C11)."
+ },
+ "verdict_and_multiple_testing": {
+  "family": "One BH family of K = 16 Sonnet traders (fixed at wave-2 launch, counting futility-stopped and too-few-trade traders as non-passes), q = 0.05, one-sided p against the design 10,000 matched coin flips. Opus twins, H3A rule record, exploratory and rule-only accounts are outside it. Rule (2/2s) family: judge only cells with a custom value adopted through the 5y gate before D0 plus the 16 portfolio strategies' 2s, also q 0.05. The other ~180 rule cells are monitoring only, so the second family keeps some power.",
+  "thresholds": "Rank i needs p <= 0.05*i/16: 0.0031, 0.0063, 0.0094, ... (z >= 2.73 for a lone discovery).",
+  "minimum_trades": ">= 100 resolved trades in the judged window and >= 40 in each half. Below that: insufficient (still counted in K). The design's 30-trade minimum lets a pass rest on an excess of about 0.5R over the coin flip in 30 trades, which is a streak.",
+  "recommended_window": "Single pre-registered window: D0 -> 12/26 09:00 KST (wave 1 ~70 days, ~280 trades at 4/day; wave 2 ~56 days, ~220 trades). Pass = BH pass AND mean R > 0 AND mean R > 0 in each half AND still > 0 without the top 5% of trades AND 1%-curve DD <= 25% AND excess > 0 against the paired side-flip and the same-side random-time baselines (sign only; LF5). Day 30 is a futility look only.",
+  "power": "80% power needs an excess over the coin flip of (2.73+0.84)*sd/sqrt(n): n 280 -> 0.21R (net about +0.06R at 0.15R blended cost), n 220 -> 0.24R (net +0.09R), n 100 -> 0.36R, n 84 (H3A-like 1h trader) -> 0.39R. In sel/sim2.py (sd 1.0R, rho 0.3), one true trader at net +0.05 / +0.10 / +0.15R passes with probability 0.52 / 0.78 / 0.93 in wave 1 and 0.45 / 0.71 / 0.88 in wave 2. A low-frequency 1h trader at net +0.13R passes with ~0.33.",
+  "if_owners_keep_two_stage_design": "Day-30 pass then a separate days 31-60 pass. Power for the same net +0.10R trader is about 0.44 at K 16 (sel/sim.py). False passes are lower: about 0.002-0.005. Never act on day-30 passes: expected false day-30 passes are 0.06-0.19 at K 16 (rho 0-0.6)."
+ },
+ "exclude": [
+  {
+   "what": "N17_KC_RSI (all tfs), F17_Z/F17_Z_HL, F11_RAID/F11_TSOUP/F13_RAID_PD, F15_ORB@15m, F15_ASIA_SWEEP, F11_PO3, F1_PVT_DIV@15m, F1_RSI_DIV@15m, F2_DEMARK@15m, F3_HHHL@15m, OBV_B@30m",
+   "reason": "Anti-edges: BH-significant (or t <= -2.1) negative 5y gross in both halves. Flipping them gives only +0.02-0.05R, far below cost."
+  },
+  {
+   "what": "F4_PULL (and F4_PULL_RSI)",
+   "reason": "Worse than the coin flip (two-sided q 0.056; also at 1h p 0.003), structurally long, so it is a regime bet. Do not reverse it on 1.5 days of data."
+  },
+  {
+   "what": "N20_EMA9_CHOP, N24_DMI (and S6_EMA_DMI_ADX, which overlaps N24)",
+   "reason": "Short-only or short-heavy: their side-flip \"skill\" is the falling market and goes to about 0 after drift adjustment. They would fail in an up month."
+  },
+  {
+   "what": "N14_ICHI_RSI, N15_KC_AO, N21_ST_RSI_ADX, S1_EMA_RSI_CHOP, N11_BREAKAWAY, N03_ADX_GC, N08_ICHI_WR, S5_DONCHIAN_MFI, F5_BOX_RSI, F10_M2022, F4_PULL_RSI, D03_ZONEFLIP",
+   "reason": "Too rare in AI scope (< ~1/day): no power by 12/31. Keep as free rule accounts."
+  },
+  {
+   "what": "Merged duplicates: F13_RAID_PD, F11_TSOUP, F17_Z_HL, F5_BOX_HTF, F12_MSS_DISP, F13_FVG_PD, F16_FIB500/618/764, F10_OTE, F9_IFVG, F7_RF_ONLY, F15_OPEN0000/0930 extra tfs, N06_MACD_ORB, N01/N02/N04/S2 (Supertrend cluster), N12_ICHI_AO, N22_VORTEX_PSAR",
+   "reason": "Same signal stream, nested, or same coin-side window as a staffed trader. Count each once for seats and for BH."
+  },
+  {
+   "what": "Gross <= 0 with no offsetting evidence: F12_MSS, F3_BOS, F3_BOS_ZONE, F8_VWICK, F9_OB, F9_BREAKER, F14_SMT, F15_LON_BRK, F1_MOM_DIV, F6_VWAP_FAIL, F5_BOX (15m/30m), V45_AMB, S3_CMO_SANDWICH, N16_BBRSI, OBV_S, N05_PSAR_POC, N19_FIB_CHOP, N09_ALLIG_AROON (first reserve)",
+   "reason": "Nothing to add over the staffed set. N09_ALLIG_AROON (both halves positive at 15m/30m/1h, t ~1) is the first reserve if a wave-2 trader fails its build check before 10/31."
+  },
+  {
+   "what": "REEL5M_BB_MA200 and any 5m entries",
+   "reason": "5m cost 0.45R; reel matches its 5y study, which predicts a steady loss."
+  },
+  {
+   "what": "4h-only AI traders (D01_VOL_SPIKE_4H, F1/F10/F13 4h cells)",
+   "reason": "20x is impossible or liquidation-prone at 4h (stop 2-5% vs 4.5% liquidation distance); 5y-positive 4h DS cells are chance-level (12/342). Keep as rule or shadow records."
+  },
+  {
+   "what": "Opus twins as candidates; tf-switching on any new signal; confidence-to-leverage",
+   "reason": "Not judged (design); same-tf switches cost a round trip; confidence has shown no information (CF8; 0 of 410 in 5y Study B)."
+  }
+ ],
+ "new_information_candidates": {
+  "staffed": [
+   {
+    "strategy": "H3A_RETAIL_FADE",
+    "status": "wave 2, judged, conditional on the build (see wave2)",
+    "evidence": "research/orderflow PREREG (registered before data) + research/maker round 2: +0.228% / +0.183% per trade at 1x in both halves, p 0.010, uncorrected. The only public-flow statistic with usable multi-year evidence. Not one of the 91 catalog cards: it is design v2 item 8."
+   }
+  ],
+  "from_catalog": [
+   {
+    "strategy": "D04_FUNDING_FADE",
+    "status": "evidence exists and is negative: do not staff",
+    "evidence": "A similar rule over 5 years lost in both periods (-0.18% / -0.20% per trade averaged over exits; best combo -0.05% -> -0.31%). Funding data 2020-01..2026-08 is on disk, so the exact catalog rule can be tested cheaply before any seat."
+   },
+   {
+    "strategy": "D05_FUNDING_TREND",
+    "status": "needs data first (needs a test)",
+    "evidence": "Never tested; data exist (funding 2020+). Run a pre-registered 5y test before edition 2."
+   },
+   {
+    "strategy": "D06_OI_DIVERGENCE",
+    "status": "needs data first",
+    "evidence": "OI history only from 2021-12 (BTC 2020-09), so period 3 is missing; related OI tests -0.16% / -0.20% in the pick period, about -0.02% in the confirm period. Exploratory only, never in the 12/31 family."
+   },
+   {
+    "strategy": "D07_LIQ_CASCADE",
+    "status": "needs data first",
+    "evidence": "No public liquidation history (archive 404 for every month 2020-01..2026-09). Live collection started 10/06; earliest pre-registration is after about a month of data (~11/05), for edition 2."
+   },
+   {
+    "strategy": "D08_CROSS_COIN (lead-lag / relative strength)",
+    "status": "needs data first",
+    "evidence": "The 4h pair rule is untested; daily versions failed (-2% / -6% a year; strongest-coin long had -81..-87% drawdowns)."
+   },
+   {
+    "strategy": "F14_SMT (BTC lead-lag divergence)",
+    "status": "exclude",
+    "evidence": "5y gross -0.004 / -0.012 / -0.014R at 15m / 30m / 1h."
+   }
+  ]
+ },
+ "expected_false_passes": {
+  "proposed_K16_single_window": "About 0.025-0.035 expected false passes (P(any) 0.02-0.03) for rho 0-0.6 between null traders (sel/sim2.py, 10,000 sims: BH q 0.05 + mean > 0 + both halves > 0).",
+  "two_stage_design_K16": "Day-30 interim 0.06 / 0.07 / 0.19 (rho 0 / 0.3 / 0.6); after confirmation 0.001-0.005 (sel/sim.py).",
+  "for_comparison_K30": "Day-30 0.06 / 0.11 / 0.24; confirmed 0.002-0.01.",
+  "rule_family": "At most about 0.05 if judged by BH. In practice about 0, because default rules sit at -cost.",
+  "project": "Nominal project alpha = rule bot 0.10 + AI bot 0.10 (design 10-2). State this on the first line of the 12/31 report.",
+  "p_at_least_one_pass": "If no trader has a real edge (the evidence-based default), P(>= 1 pass) is just the false-pass rate, about 0.02-0.03. If exactly one trader nets +0.10R/trade: about 0.71-0.78 (single window) or 0.44 (two-stage). With an assumed 3% per-trader chance of such an edge (an assumption, not a measurement): expected true passes about 16 x 0.03 x 0.75 = 0.36."
+ },
+ "design_implications": [
+  "Lock K = 16 and the wave-2 list before 10/17; record the actual count at each wave start; futility-stopped traders stay in K.",
+  "Replace or supplement the 30-trade, two-stage day-30/day-60 verdict with the single 12/26 window above (owner decisions D1/D3/D21 are still open). If the two-stage version is kept, write into the verdict code that day-30 passes trigger nothing.",
+  "Raise the minimum to >= 100 trades per judged window (>= 40 per half) and print the MDE beside every verdict (design 10-7).",
+  "Judged traders use flat 1% risk per stop. Leverage is chosen by code from the stop. Exits are in R/price (the ROE ladder converted at 20x geometry, as design 3-4 already does).",
+  "Put the cross-trader caps (coin-side 3, cluster 1, book direction 8) and the book daily stop (-12R) in the risk manager. Log REJECTED_CAP with shadows; the tie-break is widest stop first.",
+  "Hold policy: ignore same-tf and lower-tf signals while holding; wake on higher-tf own signals, opposite signals on the held coin, a 1.0R move (15-minute cooldown) and macro events. Routine held-tf bar-close checks go to the small model. This keeps 16 traders well inside $500 and keeps the switch-up lever.",
+  "Timeframe scope per trader follows its 5y gross sign (e.g. S4 without 15m, F16 without 30m, N25 without 30m). This is a pre-registered card field, not an AI choice.",
+  "Weekly custom-value search is a record only. Adoption needs the money unit (net % per notional) and a z threshold that accounts for best-of-225 (about 3.5), so expect no adoption before 12/31.",
+  "Fix the coin-flip pool (same run and tf vs same coin) in the verdict code before D0. N17-type timing results moved from +0.39 to +0.52 between pool definitions.",
+  "Log every signal each trader saw with its take/skip decision and the same-moment rule replay. The paired AI-minus-rule test (design 10-5 (a)) is the most powerful test of whether the AI adds anything, and it drives global futility.",
+  "H3A needs a limit-fill engine and an L/S ratio feed by 10/30. Its one-position AI version is a different experiment from the 5y multi-position result, so keep the multi-position cost-free record alongside it.",
+  "Pre-register edition 2 (D07 liquidations, D05 funding-trend after a 5y test, promoted rule strategies) in November. Nothing new enters edition 1 after 11/01.",
+  "Wave 0 must measure tokens with usage fields (count_tokens is free), cache writes for the Opus twins, and the 20-second deadline with max_retries set. Late answers are billed."
+ ],
+ "what_would_change_my_mind": [
+  "Wave-0 blind replay shows the AI separates signals: skipped-minus-taken >= +0.15R over >= 300 replayed decisions with day clusters. That raises the prior, and I would expand toward 20-24 traders using the reserves (N09_ALLIG_AROON, N02_ST_KST, N12_ICHI_AO) if the budget allows.",
+  "A measured cost under ~$8/trader-month with switch-up and event checks removes the budget argument. The duplicate and anti-edge arguments still cap distinct seats at about 18-20.",
+  "If a 5y entry-level overlap check shows F16_FIB382 and F9_FVG share > 50% of entries (or DOGE and N23 > 50%), merge them and free a seat for N09.",
+  "If the H3A build is ready and its multi-position record tracks the 5y +0.2%/trade through October, I would weight it as the lead candidate. If its feed is unreliable, it drops out.",
+  "Day-30 pooled AI-minus-rule <= -0.05R with the CI below 0: stop the AI cohort (global futility).",
+  "A volatility regime change (stops back to 5y-typical widths) cuts the cost in R by ~1.5x (hurdle about 0.15R at 15m), which makes 15m-led traders less hopeless. It does not change who is staffed.",
+  "A pre-registered 5y test of D05 or D04 (catalog rule exactly) that passes both halves would justify a new-information seat in edition 2."
+ ],
+ "honest_warnings": [
+  "No strategy beats a coin flip before costs on live data, and on 5 years the best 15m gross (+0.026R) is about 1/9 of the 0.23R cost. These 16 are the least-bad, non-duplicate, frequent bets. They are not good strategies.",
+  "The likeliest 12/31 result is \"no trader passes\". With zero AI edge, the chance of any pass is about 2-3%, and if one appears it should be treated as possibly false until small real money confirms it.",
+  "Every staffed trader at -cost loses about 0.6-0.8R a day. About 70% are expected to hit the -15% futility stop by day 30.",
+  "Wave 2 has less time (~56 days) and the 1h-led or session traders (H3A, F15_ASIA_BRK, N13, S4) have low power. Their inclusion mostly buys a chance, not a likely verdict.",
+  "DeepSeek-based passes (F16, F9, F7, F6, F4_FAN, F15) stay preliminary until the DeepSeek FORWARD_PREREG J1 (2027-02-02).",
+  "Overlap clusters come from 4.8 live days of signal_log (sel/ovl.py). 4h-window overlap is inflated for very busy strategies, and 5y entry-level overlap was not computed.",
+  "The power and false-pass numbers come from simple simulations (sd 1.0R, ~4 trades/day, blended cost 0.15R, equicorrelation rho). Real R tails are heavier and costs at 15m are 0.23R, so treat them as order-of-magnitude.",
+  "Paper still flatters real execution: LTC/BCH/DOGE half-spread is not in slip_best, 41% of v4 stop-slip rows were never measured, and mark-price liquidation is not modelled.",
+  "Caps, futility stops and the single-window verdict change design v2 decisions that are still open (D1, D3, D10, D21). They need the owners' explicit yes before 10/17, and nothing about them may change after D0."
+ ],
+ "sources": {
+  "digest": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/resume/DIGEST_VERIFIED.json (verifier-corrected numbers used)",
+  "fiveyear": "5y = lens/fiveyear/out/fy_cells_is_cf.csv (house exits, v4 leverage, gross R with IS 2021-08..2024-06 / CF 2024-07..2026-09; per day = n/1887 over 6 coins)",
+  "overlap": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sel/ovl.py (live signal_log, 3 runs, SUBMITTED, 15m/30m/1h)",
+  "sims": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sel/sim.py (two-stage BH), sim2.py (single window), loss.py (loss limits)",
+  "repo": "docs/aibot/STRATEGY_CATALOG_KO.md (D section), PLAN_ATTACH_KO.md, AIBOT_DESIGN_KO_v2.md (3-1, 4-3, 7, 10, 14), research/orderflow/RESULTS_ORDERFLOW.md, research/maker/RESULTS_ROUND2.md"
+ }
+}
