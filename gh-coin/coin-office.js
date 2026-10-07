@@ -2284,7 +2284,7 @@ export async function comboTick(force){
   if (CB.running || (!force && !comboCfgOn())) return;
   CB.running = true; fire({kind: "combo"});
   try {
-    for (const c of COINS){ try { await comboScan(c); } catch(e){ CB.err = String(e.message || e).slice(0, 100); } }
+    for (const c of COINS){ try { await comboScan(c); if (CB.fail) delete CB.fail[c.id]; } catch(e){ CB.err = String(e.message || e).slice(0, 100); (CB.fail ||= {})[c.id] = {t: Date.now(), err: String(e.message || e).slice(0, 60)}; } }   // 실패한 코인은 화면에 '못 계산'으로 표시(예전 줄이 있으면 그대로 둠)
     CB.t = Date.now(); if (Object.keys(CB.coins).length) CB.err = "";
   } finally { CB.running = false; fire({kind: "combo"}); }
 }

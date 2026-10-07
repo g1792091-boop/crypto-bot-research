@@ -135,10 +135,11 @@ function scoreHtml(s) {
   const S = s.score; if (!S) return "";
   const r = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v}`, rows = ["scalp", "day", "swing"].map(k => { const x = S.styles[k]; if (!x) return "";
     return `<div class="sc-row${x.on ? "" : " off"}"><b>${E(x.ko)}</b><span title="실제 데모 거래(전체 · 최근 7일)">${x.n ? `${x.n}건 · 승률 ${x.wr}% · 평균 ${r(x.avgR)}R · <i class="${x.pnl >= 0 ? "up" : "dn"}">${x.pnl >= 0 ? "+" : "−"}$${Math.abs(x.pnl).toFixed(1)}</i>` : "실전 거래 없음"}${x.n7 ? ` <small class="dim">(7일 ${x.n7}건 ${x.pnl7 >= 0 ? "+" : "−"}$${Math.abs(x.pnl7).toFixed(1)})</small>` : ""}</span><span class="dim" title="기대 = 지금 실전에 쓰는(검증 통과) 매매법들의 최근 20건 평균(부풀려지기 쉬움) · 표본외 = 앱 체계 그대로 처음 보는 기간(2023~2025)에서 잰 거래당 평균">기대 ${r(x.exp)}R · 표본외 ${x.oos ? r(x.oos.r) : "—"}R · 통과 ${x.nAct}개${x.nLuck ? `(운범위 ${x.nLuck})` : ""}</span><small class="sc-why">${x.on ? "▶ " : ""}${E(x.status)}</small></div>`; }).join("");
-  const ai = S.ai, en = S.engine, rj = S.aiReject;
+  const ai = S.ai, en = S.engine, rj = S.aiReject, aa = s.aiAuto;
   const aiLine = `<div class="brow"><span class="bt pur">AI 대 엔진</span><span class="btx wrap" title="AI 가 승인한 거래와 엔진 혼자 집행한 거래의 실제 성적 · AI 가 거절한 신호를 끝까지 따라가 '손절 먼저'면 AI 가 맞은 것">AI 승인 거래 ${ai.n ? `${ai.n}건 평균 ${r(ai.avgR)}R(승률 ${ai.wr}%)` : "없음"} · 엔진 단독 ${en.n ? `${en.n}건 평균 ${r(en.avgR)}R(승률 ${en.wr}%)` : "없음"} · AI 거절 ${rj?.n ? `${rj.n}건 중 맞음 ${rj.right}건(${rj.pct}%)${rj.missedR > 0 ? ` · 놓친 ${rj.missedR}R` : ""}` : "채점 대기"}</span></div>`;
+  const autoLine = aa ? `<div class="brow"><span class="bt pur">AI 자율</span><span class="btx wrap" title="AI 모델이 자기 시장 읽기(확신 70%↑, 4시간 추세 역행 아님)로 직접 데모 진입 — 리스크 0.25% · 모델당 하루 3번 · 성적이 손실이면 그 모델만 24시간 쉼">${aa.n ? `${aa.n}건 · 승률 ${aa.wr}% · 평균 ${r(aa.avgR)}R` : "아직 진입 없음"}${(aa.by || []).length ? " · " + aa.by.map(b => `${E(b.model)} ${b.n}건 ${r(b.avgR)}R${b.paused ? "(쉼)" : ""}`).join(" · ") : ""}${aa.last ? `<br><small class="dim">마지막 판단: ${E(aa.last.model)} ${E(aa.last.ko)} ${aa.last.bias > 0 ? "▲" : aa.last.bias < 0 ? "▼" : "·"}${aa.last.conf}% → ${E(aa.last.why)}</small>` : ""}</span></div>` : "";
   const hold = (S.hold || []).filter(h => h.n), holdLine = hold.length ? `<div class="brow"><span class="bt warn">관망 채점</span><span class="btx wrap">${hold.map(h => `${E(h.rule)} ${h.right}/${h.n} 맞음${h.missedR > 0 ? `(놓친 ${h.missedR}R)` : ""}`).join(" · ")}</span></div>` : "";
-  return `<div class="nsub">📋 스타일별 성적표 <span class="dim">· 실제 데모 vs 검증 기대 · ▶ 지금 상태(왜 진입 안 하나)</span></div><div class="sc-tbl">${rows}</div>${aiLine}${holdLine}`;
+  return `<div class="nsub">📋 스타일별 성적표 <span class="dim">· 실제 데모 vs 검증 기대 · ▶ 지금 상태(왜 진입 안 하나)</span></div><div class="sc-tbl">${rows}</div>${aiLine}${autoLine}${holdLine}`;
 }
 function setRows(c = {}) {
   return `<div class="nsub" style="margin-top:8px">⚙ 매매 설정 <span class="dim">(누르면 다음 진입부터 적용)</span></div>`
@@ -176,7 +177,12 @@ function holdMoodLine(s) {
 function neutronLine(s) {
   const st = NT?.neutronStatus?.(), top = (s.setups || []).slice(0, 3);
   const a = st?.on ? `내보내기 ${st.exported}회${st.at ? ` · ${ago(st.at)} 전` : ""} · 볼트 ${st.vault}회 · 받은 제안 ${st.inbox}건${st.err ? ` · ⚠ ${E(st.err)}` : ""}` : "exe 로 실행하면 켜짐 (문서/GHNano 사무실/GHCoin 뇌)";
-  return `<div class="nsub">🧠 뉴트론 — Claude Code·옵시디언 연결(MCP)</div><div class="brow"><span class="bt ${st?.on ? "up" : "dim"}">${st?.on ? "연결" : "대기"}</span><span class="btx">${a}</span></div>`
+  // 📓 옵시디언 바로 열기 — obsidian:// 주소(볼트 'GHCoin 뇌' 가 옵시디언에 등록돼 있어야 함 · 2026-10-07 등록)
+  const vault = st?.vaultName || "GHCoin 뇌", ob = f => `obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(f)}`, dd = new Date().toLocaleDateString("sv-SE");
+  const links = [["홈", "00 홈"], ["📓 매매일지", "매매일지/00 매매일지 대시보드"], ["열린 포지션", "매매일지/열린 포지션"], ["오늘 복기", `매매일지/일간/${dd}`], ["✍ 내 메모", "내 메모/사용법"], ["✍ 내 거래", "매매일지/내 거래/사용법"]];
+  const obs = `<div class="nsub">📓 옵시디언 — 볼트 '${E(vault)}' <span class="dim">(앱 → 옵시디언 10분마다 · 옵시디언 → 앱: '내 메모'·'내 거래' 폴더를 읽어 뇌·AI 승인 자료로)</span></div>`
+    + `<div class="brow"><span class="bt ${st?.on ? "up" : "dim"}">${st?.on ? "연결" : "대기"}</span><span class="btx wrap">${links.map(([l, f]) => `<a class="nd-mini" href="${ob(f)}" title="옵시디언에서 '${E(f)}' 열기">${l}</a>`).join(" ")}<br><small class="dim">${st?.vaultAt ? `볼트 갱신 ${ago(st.vaultAt)} 전 · ` : ""}내 메모 학습 ${st?.memos || 0}줄 · 내 거래 학습 ${st?.myTrades || 0}건${st?.path ? ` · ${E(st.path)}\\${E(vault)}` : ""}</small></span></div>`;
+  return obs + `<div class="nsub">🧠 뉴트론 — Claude Code·옵시디언 연결(MCP)</div><div class="brow"><span class="bt ${st?.on ? "up" : "dim"}">${st?.on ? "연결" : "대기"}</span><span class="btx">${a}</span></div>`
     + (top.length ? `<div class="brow"><span class="bt pur">셋업</span><span class="btx" title="기대값 × 승률 × 신뢰도(표본)">${top.map(x => `${E(x.name)}@${x.tf} ${x.score}`).join(" · ")}</span></div>` : "");
 }
 // 🧬 매매법 진화(개선·수정·조합) 현황

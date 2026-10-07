@@ -11,7 +11,7 @@ const readJ = (k, d = null) => { try { return JSON.parse(localStorage.getItem(k)
 const W = (path, content) => codeCall("write", { ws: "office", path, content });
 const day = (t = Date.now()) => new Date(t).toLocaleDateString("sv-SE");
 let started = false, lastErr = "", stats = { exported: 0, vault: 0, inbox: 0, at: 0 };
-export const neutronStatus = () => ({ on: started, ...stats, err: lastErr });
+export const neutronStatus = () => ({ on: started, ...stats, err: lastErr, vaultName: VAULT, path: (() => { try { return localStorage.getItem("neutronPath") || ""; } catch (e) { return ""; } })() });
 
 // ── 상태 사본 ──
 export async function snapshot() {
@@ -36,8 +36,9 @@ export async function snapshot() {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
       positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp ?? null, running: !!p.run, strategy: p.name, riskPct: p.riskPct })),
+      openAll: s.openAll || [], score: s.score || null, aiAuto: s.aiAuto || null,
       mood: s.mood || null, fng: s.fng || null, hold: s.hold ? { ver: s.hold.book?.ver, rules: s.hold.rules, eval: s.hold.eval, log: s.hold.log, prop: s.hold.prop } : null, adj: s.adj ? { stat: s.adj.stat, kind: s.adj.kind, log: s.adj.log, off: s.adj.off, schema: s.adj.schema } : null,
-      regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, calls: s.calls || null, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 40), feed: (s.feed || []).slice(0, 20) },
+      regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, calls: s.calls || null, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 80), feed: (s.feed || []).slice(0, 20) },
     brain, verdicts, demo: book,
     policy: { framework: ENG.FW, live: limits, rules: ["AI 는 주문하지 않는다(주문은 live.js 코드가 한도·승인 안에서만)", "실거래 기본 꺼짐 · 테스트넷 먼저", "최소 20배·손절 ≤ 청산거리 40%·1회 리스크 0.5~1%·동시 리스크 4%·일일 손실 3%"] },
     lib: { strategies: ENG.LIB.map(r => ({ key: r.key, name: r.name, cat: r.cat, tf: r.tf, rr: r.rr })), filters: Object.fromEntries(Object.entries(ENG.FILTERS).map(([k, f]) => [k, f.ko])) },
@@ -54,6 +55,7 @@ export function vaultNotes(S) {
   out["00 홈.md"] = `# 🧠 GHCoin 뇌 (뉴트론)\n_자동 생성 · ${now} · 앱이 10분마다 다시 씀 (직접 고친 내용은 덮어써짐 → 메모는 [[받은 편지함 사용법]] 참고)_\n\n`
     + `## 지금\n- 자본 $${n.equity} (시작 $${n.bankroll}) · 낙폭 ${n.drawdown}% · 거래 ${n.fills}회 승률 ${n.winRate}% · 동시 리스크 ${n.heat}%\n- 뇌 지능 ${B.iq.score}/100 (정확도 ${B.iq.acc}% · ${B.iq.n}판) · 기억 ${B.mem.length}개\n\n`
     + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 뇌: [[뇌/핵심 규칙·교훈·추천 채점]] · 프롬프트: [[프롬프트/차트 분석 프롬프트]]
+- 📓 매매일지: [[매매일지/00 매매일지 대시보드]] · [[매매일지/열린 포지션]] · 내 거래 기록은 [[매매일지/내 거래/사용법]]
 - 관망·감정: [[뇌/관망 규칙·감정·조정 채점]]
 - 매매법: [[매매법/전략 엔진]] · [[매매법/매매법 진화]] · [[매매법/검증된 셋업]]\n- 리스크: [[리스크/정책]] · [[리스크/학습된 리스크·시간대]]\n- 에이전트 팀: [[에이전트팀/데모 전략]] · [[에이전트팀/팀 판정]]\n- 일지: [[일지/${day(S.t)}]]\n- ✍ 내가 쓰는 메모(→ 뇌가 학습): [[내 메모/사용법]]\n`;
   for (const t of types) out[`지식/${t}.md`] = `# ${t}\n[[00 홈]]\n\n` + B.mem.filter(m => (m.type || "관찰") === t).slice(0, 120).map(m => `- ${m.text} ${coinOf(m) ? `[[코인/${coinOf(m)}|${coinOf(m)}]]` : ""}${m.regime ? ` #${String(m.regime).replace(/\s/g, "_")}` : ""} _(가중 ${m.w}·확인 ${m.hits}회·${m.model || "?"})_`).join("\n");
@@ -143,7 +145,86 @@ neutron_strategy_review 의 측정값으로 전략을 평가해줘.
   const todays = (n.trades || []).filter(t => day(t.t || t.t1 || S.t) === day(S.t));
   out[`일지/${day(S.t)}.md`] = `# 거래 일지 ${day(S.t)}\n[[00 홈]]\n\n` + (todays.map(t => `- ${t.ko || t.sym} ${t.side > 0 ? "롱" : "숏"} ${t.lev ?? ""}x · ${esc(t.name || t.strategy || "")} · ${t.why || ""} · ${t.pnl >= 0 ? "+" : ""}${(+t.pnl || 0).toFixed(2)}$ (${(+t.R || 0).toFixed(2)}R)`).join("\n") || "- 오늘 거래 없음") + `\n\n## 최근 활동\n` + (n.feed || []).slice(0, 15).map(f => `- ${esc(f.text)}`).join("\n");
   out["받은 편지함 사용법.md"] = `# 받은 편지함 (Claude Code · Claudian → 앱)\n[[00 홈]]\n\n이 볼트의 노트는 앱이 다시 쓰므로, 앱에 전하고 싶은 것은 뉴트론 MCP 도구로 보낸다:\n- \`neutron_log_note\` — 지식 메모 → 자체 뇌에 학습\n- \`neutron_propose_experiment\` — 매매법 개선·수정·조합 실험 → 다음 자체 백테스트에서 검증, 통과해야 채택\n- \`neutron_add_task\` — 에이전트 팀 과제\n\n주문·설정 변경·키 관련 요청은 받지 않는다(안전 규칙).`;
+  Object.assign(out, journalNotes(S));
   return out;
+}
+
+// ══ 📓 매매일지 (옵시디언) — 거래마다 '결정 기록' 노트 + 일간·주간 복기 + 대시보드 ══
+//   개념 출처(코드 복사 없음): Decision Log 스킬(매수 논리·반증 조건·손절가를 진입 때 남겨 사후 합리화 방지) · Tradebook/LucrJournal/Journalit(거래 = 마크다운 노트 + 속성)
+//   · TRADING-BRAIN 볼트 구조(trades/open·closed · performance · weekly) · alpha-ai-trader(복수 매매·과매매·연속 손실 같은 행동 점검).
+//   노트 앞머리(속성)는 옵시디언 '속성'·Dataview 로 바로 표·필터를 만들 수 있게 영어 키로 쓴다. 플러그인이 없어도 본문 표로 읽힌다.
+const fmtN = v => v == null || !Number.isFinite(+v) ? "—" : (+v >= 1000 ? Math.round(+v).toLocaleString() : (+v).toPrecision(6).replace(/\.?0+$/, ""));
+const hm = t => new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+const STY = { scalp: "스캘핑", day: "단타", swing: "스윙" };
+export const tradeNotePath = t => { const d = new Date(t.t), ym = day(t.t).slice(0, 7), stamp = `${day(t.t)} ${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`; return `매매일지/거래/${ym}/${stamp} ${t.ko} ${t.side > 0 ? "롱" : "숏"}.md`; };
+function weekOf(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const w1 = new Date(d.getFullYear(), 0, 4); return `${d.getFullYear()}-W${String(1 + Math.round(((d - w1) / 864e5 - 3 + ((w1.getDay() + 6) % 7)) / 7)).padStart(2, "0")}`; }
+// 행동 점검: 복수 매매(같은 코인 손실 청산 뒤 30분 안 재진입) · 과매매(하루 12회↑) · 연속 손실(3번↑)
+function behavior(trades) {
+  const T = [...trades].sort((a, b) => (a.opened || a.t) - (b.opened || b.t)), out = { revenge: [], streak: 0, maxStreak: 0, overtrade: [] };
+  for (const x of T) { const prev = T.filter(y => y !== x && y.ko === x.ko && y.t <= (x.opened || x.t) && (x.opened || x.t) - y.t < 30 * 60e3 && (y.R || 0) < 0); if (prev.length) out.revenge.push(x); }
+  let k = 0; for (const x of [...trades].sort((a, b) => a.t - b.t)) { k = (x.R || 0) < 0 ? k + 1 : 0; out.maxStreak = Math.max(out.maxStreak, k); }
+  const byDay = {}; for (const x of trades) (byDay[day(x.opened || x.t)] ||= []).push(x); out.overtrade = Object.entries(byDay).filter(([, a]) => a.length >= 12).map(([d, a]) => `${d} ${a.length}회`);
+  return out;
+}
+const sumUp = a => ({ n: a.length, wr: a.length ? Math.round(a.filter(t => (t.R || 0) > 0).length / a.length * 100) : 0, R: +a.reduce((x, t) => x + (t.R || 0), 0).toFixed(2), pnl: +a.reduce((x, t) => x + (t.pnl || 0), 0).toFixed(2) });
+const row = t => `| ${hm(t.t)} | [[${tradeNotePath(t).replace(/\.md$/, "")}\|${t.ko} ${t.side > 0 ? "롱" : "숏"}]] | ${STY[t.style] || "—"} | ${esc(t.name || "")} | ${t.model ? esc(t.model) : "엔진"} | ${(+t.R || 0).toFixed(2)}R | ${(+t.pnl || 0) >= 0 ? "+" : ""}${(+t.pnl || 0).toFixed(2)}$ | ${esc(t.why || "")} |`;
+const HEAD = `| 청산 | 거래 | 스타일 | 매매법 | 진입자 | R | 손익 | 청산 이유 |\n|---|---|---|---|---|---|---|---|\n`;
+function journalNotes(S) {
+  const n = S.neural || {}, trades = (n.trades || []).filter(t => t.t), out = {}, now = S.t;
+  // 거래마다 결정 기록 노트
+  for (const t of trades) {
+    const res = (+t.R || 0) > 0.05 ? "익절" : (+t.R || 0) < -0.05 ? "손절" : "본전";
+    out[tradeNotePath(t)] = `---\ndate: ${day(t.t)}\nopened: ${t.opened ? new Date(t.opened).toISOString() : ""}\nclosed: ${new Date(t.t).toISOString()}\ncoin: ${t.ko}\nside: ${t.side > 0 ? "long" : "short"}\nstyle: ${t.style || ""}\ntimeframe: ${t.tf || ""}\nstrategy: "${esc(t.name || "")}"\ntrader: "${t.model || "엔진"}"\nentry: ${t.entry}\nexit: ${t.exit}\nstop: ${t.sl0 ?? ""}\ntarget: ${t.tp0 ?? ""}\nleverage: ${t.lev ?? ""}\nR: ${t.R}\npnl: ${t.pnl}\nresult: ${res}\nexit_reason: "${esc(t.why || "")}"\ntags: [매매일지, ${t.ko}, ${STY[t.style] || "기타"}${t.model ? ", AI" : ", 엔진"}]\n---\n`
+      + `# ${t.ko} ${t.side > 0 ? "롱" : "숏"} · ${res} ${(+t.R || 0) >= 0 ? "+" : ""}${(+t.R || 0).toFixed(2)}R\n[[매매일지/00 매매일지 대시보드|대시보드]] · [[매매일지/일간/${day(t.t)}|${day(t.t)} 일간]] · [[코인/${t.ko}|${t.ko}]]\n\n`
+      + `## 결정 기록 (진입할 때의 생각)\n- **진입 근거**: ${esc(t.reason || "기록 없음(예전 거래)")}${t.note ? `\n- **승인·메모**: ${esc(t.note)}` : ""}\n- **무효 조건(이러면 틀린 것)**: ${t.sl0 != null ? `손절 ${fmtN(t.sl0)} 도달` : "손절가 도달(예전 거래라 가격 기록 없음)"} · 상위 추세가 반대로 돌면 조기 정리\n- **손절 / 익절**: ${t.sl0 != null ? `${fmtN(t.sl0)} / ${fmtN(t.tp0)}` : "기록 없음"} · 레버리지 ${t.lev ?? "?"}배 · 국면 ${esc(t.regime || "—")}\n\n`
+      + `## 결과\n- 진입 ${fmtN(t.entry)} → 청산 ${fmtN(t.exit)} (${esc(t.why || "")}) · ${(+t.R || 0).toFixed(2)}R · ${(+t.pnl || 0) >= 0 ? "+" : ""}${(+t.pnl || 0).toFixed(2)}$ · ROE ${t.roe ?? "—"}%\n\n## 복기 (직접 써도 됩니다 — 앱은 이 노트를 다시 쓰지 않습니다)\n- \n`;
+  }
+  // 열린 포지션
+  const open = n.openAll || [];
+  out["매매일지/열린 포지션.md"] = `# 열린 포지션 (데모)\n[[매매일지/00 매매일지 대시보드|대시보드]] · 갱신 ${new Date(now).toLocaleString("ko-KR")}\n\n` + (open.map(p => `## ${p.ko} ${p.side > 0 ? "롱" : "숏"} ${p.lev}배 · ${STY[p.style] || ""} · 지금 ${p.R ?? "?"}R\n- 진입자: ${esc(p.trader || "")} · 매매법: ${esc(p.name || "")} · ${new Date(p.t).toLocaleString("ko-KR")}\n- **진입 근거**: ${esc(p.why || "")}${p.note ? ` · ${esc(p.note)}` : ""}\n- **무효 조건**: 손절 ${fmtN(p.sl)}${p.be ? "(본절로 올림)" : ""} 도달 · 상위 추세 반전\n- 진입 ${fmtN(p.entry)} · 현재 ${fmtN(p.price)} · 익절 ${fmtN(p.tp)} · 처음 손절 ${fmtN(p.sl0)}\n`).join("\n") || "지금 열린 포지션 없음\n");
+  // 일간 복기(최근 7일 중 거래가 있던 날)
+  const days = [...new Set(trades.map(t => day(t.t)))].sort().slice(-7);
+  for (const d of days) { const a = trades.filter(t => day(t.t) === d), s = sumUp(a), b = behavior(a);
+    out[`매매일지/일간/${d}.md`] = `---\ndate: ${d}\ntrades: ${s.n}\nwinrate: ${s.wr}\nR: ${s.R}\npnl: ${s.pnl}\ntags: [매매일지, 일간]\n---\n# ${d} 매매 복기\n[[매매일지/00 매매일지 대시보드|대시보드]] · [[일지/${d}|그날 활동 일지]]\n\n`
+      + `**${s.n}건 · 승률 ${s.wr}% · ${s.R >= 0 ? "+" : ""}${s.R}R · ${s.pnl >= 0 ? "+" : ""}${s.pnl}$**\n\n${HEAD}${a.map(row).join("\n")}\n\n`
+      + `## 행동 점검\n- 복수 매매(같은 코인 손실 뒤 30분 안 재진입): ${b.revenge.length ? b.revenge.map(x => `${x.ko} ${hm(x.opened || x.t)}`).join(", ") : "없음"}\n- 가장 긴 연속 손실: ${b.maxStreak}번${b.maxStreak >= 3 ? " → 다음 24시간 휴식 규칙 작동" : ""}\n- 과매매(하루 12회↑): ${b.overtrade.join(", ") || "없음"}\n`; }
+  // 주간 복기
+  const weeks = [...new Set(trades.map(t => weekOf(t.t)))].sort().slice(-4);
+  for (const w of weeks) { const a = trades.filter(t => weekOf(t.t) === w), s = sumUp(a), b = behavior(a), dayP = {}; for (const t of a) dayP[day(t.t)] = (dayP[day(t.t)] || 0) + (t.pnl || 0);
+    const worst = Object.entries(dayP).sort((x, y) => x[1] - y[1])[0], bySt = Object.entries(STY).map(([k, ko]) => { const x = sumUp(a.filter(t => t.style === k)); return x.n ? `| ${ko} | ${x.n} | ${x.wr}% | ${x.R}R | ${x.pnl}$ |` : ""; }).filter(Boolean).join("\n");
+    const ai = sumUp(a.filter(t => t.model)), en = sumUp(a.filter(t => !t.model));
+    out[`매매일지/주간/${w}.md`] = `---\nweek: ${w}\ntrades: ${s.n}\nwinrate: ${s.wr}\nR: ${s.R}\npnl: ${s.pnl}\ntags: [매매일지, 주간]\n---\n# ${w} 주간 복기\n[[매매일지/00 매매일지 대시보드|대시보드]]\n\n**${s.n}건 · 승률 ${s.wr}% · ${s.R >= 0 ? "+" : ""}${s.R}R · ${s.pnl >= 0 ? "+" : ""}${s.pnl}$** · 가장 나쁜 날 ${worst ? `${worst[0]} ${worst[1].toFixed(2)}$` : "—"}\n\n`
+      + `## 스타일별\n| 스타일 | 거래 | 승률 | R | 손익 |\n|---|---|---|---|---|\n${bySt || "| — | 0 | — | — | — |"}\n\n## AI 대 엔진\n- AI 가 들어간 거래: ${ai.n}건 · 승률 ${ai.wr}% · ${ai.R}R\n- 엔진 단독: ${en.n}건 · 승률 ${en.wr}% · ${en.R}R\n\n`
+      + `## 행동 점검\n- 복수 매매 ${b.revenge.length}번 · 가장 긴 연속 손실 ${b.maxStreak}번 · 과매매 ${b.overtrade.length}일\n`; }
+  // 대시보드
+  const sc = n.score?.styles || {}, aa = n.aiAuto;
+  out["매매일지/00 매매일지 대시보드.md"] = `# 📓 매매일지 대시보드 (GH Coin 데모)\n[[00 홈]] · [[매매일지/열린 포지션|열린 포지션]] · 갱신 ${new Date(now).toLocaleString("ko-KR")}\n\n`
+    + `## 스타일별 성적표 (뉴럴 데스크와 같은 숫자)\n| 스타일 | 켜짐 | 실전 | 승률 | 평균 R | 손익 | 기대(최근 20건) | 표본외 | 지금 상태 |\n|---|---|---|---|---|---|---|---|---|\n`
+    + Object.entries(sc).map(([k, x]) => `| ${esc(x.ko)} | ${x.on ? "✅" : "—"} | ${x.n} | ${x.wr ?? "—"}% | ${x.avgR ?? "—"} | ${x.pnl}$ | ${x.exp ?? "—"} | ${x.oos?.r ?? "—"} | ${esc(x.status)} |`).join("\n")
+    + `\n\n## 🤖 AI 자율 진입\n${aa ? `${aa.n}건 · 승률 ${aa.wr ?? "—"}% · 평균 ${aa.avgR ?? "—"}R` + (aa.by || []).map(b => `\n- ${b.model}: ${b.n}건 · 평균 ${b.avgR}R · 승률 ${b.wr}%${b.paused ? " · 쉬는 중" : ""}`).join("") + (aa.last ? `\n- 마지막 판단: ${esc(aa.last.model)} ${esc(aa.last.ko)} — ${esc(aa.last.why)}` : "") : "아직 없음"}\n\n`
+    + `## 최근 거래\n${HEAD}${trades.slice(0, 15).map(row).join("\n") || "| — | 거래 없음 | | | | | | |"}\n\n`
+    + `## 복기 노트\n- 일간: ${days.slice().reverse().map(d => `[[매매일지/일간/${d}|${d}]]`).join(" · ") || "—"}\n- 주간: ${weeks.slice().reverse().map(w => `[[매매일지/주간/${w}|${w}]]`).join(" · ") || "—"}\n- 내 손매매 기록: [[매매일지/내 거래/사용법|사용법]] (여기에 쓰면 앱이 읽어 자체 뇌에 학습)\n\n`
+    + `## Dataview 로 보기 (Dataview 플러그인이 있으면 표가 자동으로 그려집니다)\n\`\`\`dataview\nTABLE coin, side, style, trader, R, pnl, exit_reason FROM "매매일지/거래" SORT closed DESC LIMIT 30\n\`\`\`\n\`\`\`dataview\nTABLE length(rows) AS 거래, sum(rows.R) AS 합계R FROM "매매일지/거래" GROUP BY style\n\`\`\`\n`;
+  return out;
+}
+// 옵시디언 '매매일지/내 거래' 폴더: 사용자가 직접 한 거래를 노트로 쓰면 읽어 자체 뇌에 학습(앱은 이 폴더를 덮어쓰지 않음)
+const MYT = `${VAULT}/매매일지/내 거래`;
+export const MY_TRADE_TEMPLATE = "---\n날짜: 2026-10-07\n코인: BTC\n방향: 롱\n진입: 85000\n손절: 84000\n익절: 87000\n청산: \n결과R: \n---\n# BTC 롱\n\n## 진입 근거\n- \n\n## 무효 조건(이러면 틀린 것)\n- \n\n## 복기\n- \n";
+export async function ingestMyTrades() {
+  let files = []; try { files = ((await codeCall("glob", { ws: "office", pattern: `${MYT}/**` })).files || []).filter(f => /\.md$/i.test(f) && !/(사용법|_템플릿)\.md$/.test(f)); } catch (e) { return 0; }
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem("neutronMyTradeSeen") || "{}"); } catch (e) {}
+  const BR = await import("./brain.js"); let n = 0;
+  for (const f of files.slice(0, 40)) {
+    let t = ""; try { t = (await codeCall("raw", { ws: "office", path: f })).content || ""; } catch (e) { continue; }
+    const h = hashOf(t); if (seen[f] === h) continue; seen[f] = h;
+    const fm = {}; for (const m of (t.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || "").matchAll(/^([^:\n]+):\s*(.*)$/gm)) fm[m[1].trim()] = m[2].trim();
+    const coin = String(fm["코인"] || "").toUpperCase().replace(/USDT$/, ""), R = parseFloat(fm["결과R"]); if (!coin || !Number.isFinite(R)) continue;   // 결과가 적힌 거래만 학습
+    const why = (t.match(/##\s*진입 근거\s*\r?\n([\s\S]*?)(\r?\n##|$)/)?.[1] || "").replace(/^[-*\s]+/gm, " ").trim().slice(0, 80), rev = (t.match(/##\s*복기\s*\r?\n([\s\S]*?)(\r?\n##|$)/)?.[1] || "").replace(/^[-*\s]+/gm, " ").trim().slice(0, 80);
+    BR.learn({ type: R < 0 ? "교훈" : "패턴", coin, text: `[내 손매매] ${coin} ${fm["방향"] || ""} ${R >= 0 ? "+" : ""}${R}R — ${why || "근거 미기록"}${rev ? " · 복기: " + rev : ""}`, model: "내 거래", w: 1.8 }); n++;
+  }
+  try { localStorage.setItem("neutronMyTradeSeen", JSON.stringify(seen)); } catch (e) {}
+  if (n) { stats.myTrades = (stats.myTrades || 0) + n; try { (await import("./coin-office.js")).addNote("hq", `📓 옵시디언 '내 거래' ${n}건을 자체 뇌에 학습`, "뉴트론"); } catch (e) {} }
+  return n;
 }
 
 const CLAUDE_MD = `# GHCoin 뇌 (뉴트론) — Claude Code · Claudian 작업 규칙
@@ -166,12 +247,18 @@ export async function installFiles(force) {
   const script = abs ? `${abs}\\${VAULT}\\.neutron\\mcp\\neutron-mcp.mjs` : "./.neutron/mcp/neutron-mcp.mjs";
   await W(`${VAULT}/.mcp.json`, JSON.stringify({ mcpServers: { neutron: { command: "node", args: [script], env: abs ? { NEUTRON_DIR: abs } : {} } } }, null, 2));
   await W(`${VAULT}/CLAUDE.md`, CLAUDE_MD);
+  await W(`${MYT}/사용법.md`, "# 내 손매매 기록 (옵시디언 → GH Coin)\n[[매매일지/00 매매일지 대시보드|대시보드]]\n\n이 폴더에 직접 한 거래를 노트 하나씩 쓰면, GH Coin 이 10분 안에 읽어 자체 뇌에 학습합니다(손실은 '교훈', 이익은 '패턴'). 뉴럴 데스크 AI 가 진입을 승인할 때 이 기억을 함께 봅니다.\n\n- [[매매일지/내 거래/_템플릿|_템플릿]] 을 복사해서 쓰세요. 맨 위 속성 중 **코인 · 방향 · 결과R** 이 있어야 학습합니다(결과R 은 손절 한 번 = −1).\n- '진입 근거'와 '복기'를 쓰면 그 문장이 그대로 기억이 됩니다.\n- 앱은 이 폴더의 노트를 덮어쓰지 않습니다.\n");
+  try { const has = await codeCall("raw", { ws: "office", path: `${MYT}/_템플릿.md` }).then(r => !!r.content).catch(() => false); if (!has) await W(`${MYT}/_템플릿.md`, MY_TRADE_TEMPLATE); } catch (e) {}
   await W(`${MEMO}/사용법.md`, "# 내 메모 (옵시디언 → 뇌)\n\n이 폴더에 노트를 쓰면 GH Coin 이 10분 안에 읽어 자체 뇌에 학습합니다.\n- 한 줄에 하나씩 쓰면 각각 기억이 됩니다 (예: '- BTC 는 미국장 개장 직후 가짜 돌파가 많다').\n- 손절·실패·주의·금지 같은 말이 있으면 '교훈'으로, 아니면 '지식'으로 저장합니다.\n- 코인 이름(BTC·ETH…)을 쓰면 그 코인 기억에 연결됩니다.\n- 이 폴더는 앱이 덮어쓰지 않습니다.\n");
   try { sessionStorage.setItem("neutronInstalled", "1"); localStorage.setItem("neutronPath", abs); } catch (e) {}
 }
 
 export async function exportState() { const S = await snapshot(); await W(`${DIR}/state.json`, JSON.stringify(S)); stats.exported++; stats.at = Date.now(); return S; }
-export async function writeVault(S) { S ||= await snapshot(); const notes = vaultNotes(S); for (const [p, c] of Object.entries(notes)) await W(`${VAULT}/${p}`, c); stats.vault++; try { await ingestMemos(); } catch (e) {} return Object.keys(notes).length; }
+export async function writeVault(S) { S ||= await snapshot(); const notes = vaultNotes(S);
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem("neutronJournalSeen") || "{}"); } catch (e) {}
+  for (const [p, c] of Object.entries(notes)) { if (p.startsWith("매매일지/거래/")) { if (seen[p]) continue; seen[p] = 1; } await W(`${VAULT}/${p}`, c); }   // 거래 노트는 한 번만 쓴다(복기 칸을 사용자가 채울 수 있게)
+  try { const ks = Object.keys(seen); if (ks.length > 600) for (const k of ks.slice(0, ks.length - 600)) delete seen[k]; localStorage.setItem("neutronJournalSeen", JSON.stringify(seen)); } catch (e) {}
+  stats.vault++; stats.vaultAt = Date.now(); try { await ingestMemos(); } catch (e) {} try { await ingestMyTrades(); } catch (e) {} return Object.keys(notes).length; }
 
 // ── 옵시디언 → 뇌: 볼트의 '내 메모' 폴더에 사용자·Claudian 이 쓴 노트를 읽어 자체 뇌에 학습 (바뀐 파일만, 앱은 이 폴더를 덮어쓰지 않음) ──
 const MEMO = `${VAULT}/내 메모`;

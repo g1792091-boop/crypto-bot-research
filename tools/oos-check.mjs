@@ -48,7 +48,9 @@ function build(style, coins, run) {
   return T;
 }
 // 데스크 재연: 워크포워드 선별(그 매매법의 직전 20건 — 진입 시점에 이미 청산된 것만) + 관망 규칙집 + 포지션 한도 + 운 보정
-function desk(T, { book = HR.defaultBook(), wf = true, K = 40 } = {}) {
+// HOLD_ON=rsiN,adx 처럼 주면 기본 규칙집에 그 규칙을 켜서 시험(앱의 규칙 진화가 켠 규칙이 표본외에서도 좋은지 확인용)
+const BOOK0 = () => { const b = HR.defaultBook(); for (const id of String(process.env.HOLD_ON || "").split(",").filter(Boolean)) if (b.rules[id]) b.rules[id].on = true; for (const id of String(process.env.HOLD_OFF || "").split(",").filter(Boolean)) if (b.rules[id]) b.rules[id].on = false; return b; };
+function desk(T, { book = BOOK0(), wf = true, K = 40 } = {}) {
   const X = [...T].sort((a, b) => a.t - b.t), hist = {}, byClose = [...T].sort((a, b) => a.t1 - b.t1); let ci = 0;
   const open = [], closed = [], taken = []; let rest = 0;
   for (const x of X) {

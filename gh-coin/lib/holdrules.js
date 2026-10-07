@@ -95,6 +95,8 @@ export function gate(base, cand, minN = 60) {
   const d = +(cand.all.mean - base.all.mean).toFixed(3);
   const need = Math.max(0.02, cand.all.se || 0);
   if (d < need) return { ok: false, why: `평균 ${base.all.mean}→${cand.all.mean}R (개선 ${d} < 필요 ${need.toFixed(3)})`, d };
+  // 거래만 줄여 평균을 올리는 규칙 막기(2026-10-07 표본외: RSI 중립 관망은 평균 0.071→0.064R 인데 거래 −37% 로 합계 53→27R — 앱 2개월 창에서는 평균만 보고 채택됐었음)
+  if (base.all.sum > 0 && cand.all.sum < base.all.sum * 0.85) return { ok: false, why: `합계 ${base.all.sum}→${cand.all.sum}R (거래만 줄임 — 합계 15% 넘게 감소)`, d };
   if (cand.h1.mean < base.h1.mean - 0.005 || cand.h2.mean < base.h2.mean - 0.005) return { ok: false, why: `전반 ${base.h1.mean}→${cand.h1.mean} · 후반 ${base.h2.mean}→${cand.h2.mean} (한쪽이 나빠짐)`, d };
   return { ok: true, why: `평균 ${base.all.mean}→${cand.all.mean}R · 전반 ${base.h1.mean}→${cand.h1.mean} · 후반 ${base.h2.mean}→${cand.h2.mean}`, d };
 }

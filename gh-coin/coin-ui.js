@@ -472,7 +472,7 @@ function onEvent(ev){
   if (ev.kind === "solo"){ bubble(ev.agent.id, "💭 생각 중…", 0); highlight(ev.agent.id); }
   if (ev.kind === "trade"){ bubble(ev.agent.id, ev.text.length > 140 ? ev.text.slice(0, 140) + "…" : ev.text, 9000); refreshBoard(); }
   if (ev.kind === "paper") refreshBoard();
-  if (ev.kind === "alert"){ ctx.toast(`팀 회의 결과 · #${m.name}: ${head(ev.text, 60)}`); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano 팀 회의 · #" + m.name, {body: head(ev.text, 120)}); }
+  if (ev.kind === "alert"){ const ttl = m ? `팀 회의 결과 · #${m.name}` : "📌 지시 완료"; ctx.toast(`${ttl}: ${head(ev.text, 60)}`); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification(m ? "GH Nano 팀 회의 · #" + m.name : "GH Coin · 지시 완료", {body: head(ev.text, 120)}); }
   renderStatus();
 }
 // 시간별 성과 발표: CEO가 무대로 나가고 팀장들이 객석에 모인다 (30초 뒤 자리로)
@@ -664,6 +664,8 @@ function appendEntry(e){
   box.querySelector(".of-empty")?.remove();
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
   box.insertAdjacentHTML("beforeend", entryHTML(e));
+  // 오래 켜 두면 화면 요소가 끝없이 늘던 문제(2026-10-06 장시간 점검: 90분에 19,400 → 31,300) — 화면에는 최근 300개만 남긴다(기록은 저장소에 그대로, 방을 다시 열면 보임)
+  if (box.childElementCount > 350){ const h0 = box.scrollHeight; while (box.childElementCount > 300) box.firstElementChild.remove(); if (!near) box.scrollTop = Math.max(0, box.scrollTop - (h0 - box.scrollHeight)); }
   if (near) box.scrollTop = box.scrollHeight;
 }
 function updateEntry(e){
@@ -715,7 +717,9 @@ async function comboHTML(){
   const log = `<section class="of-lane"><h4>🎯 타점 기록장 — ${done.length ? `채점 ${done.length}건 · 적중(수익 마감) ${win}건 ${Math.round(win / done.length * 100)}% · 누적 ${sumR >= 0 ? "+" : ""}${sumR.toFixed(1)}R` : "아직 채점된 타점 없음"} · 진행 중 ${calls.length - done.length}건</h4>
     <p class="of-dim">타점이 잡히면 자동 기록 → 5분봉으로 익절1(+1.5R)·손절(-1R)·반대 신호·24시간 만료를 코드가 채점합니다. 이 성적이 쌓여야 믿을 수 있습니다.</p>
     ${calls.length ? `<div class="cb-wrap"><table class="of-kt cb-log"><tr><th>시각</th><th>코인</th><th>방향</th><th>진입</th><th>손절</th><th>익절1</th><th>확신</th><th>결과</th></tr>${calls.slice(0, 20).map(c => `<tr><td>${E(new Date(c.t).toLocaleString("ko-KR", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}))}</td><td>${E(c.ko)}</td><td class="${c.side > 0 ? "up" : "dn"}">${c.side > 0 ? "롱" : "숏"}</td><td class="num">${num(c.entry)}</td><td class="num">${num(c.sl)}</td><td class="num">${num(c.tp1)}</td><td class="num">${c.conf}%</td><td>${c.result === "win" ? "✅ 익절1" : c.result === "loss" ? "❌ 손절" : c.result === "expire" ? `⌛ 만료 ${c.r}R` : c.result === "flip" ? `🔄 반대 신호 ${c.r}R` : "⏳ 진행 중"}</td></tr>`).join("")}</table></div>` : ""}</section>`;
-  return `<div class="of-pipe">${head}${tbl}${log}</div>`;
+  const miss = O.COINS.filter(c => !B.coins[c.id]).map(c => `${E(c.ko)}${B.fail?.[c.id] ? `(${E(B.fail[c.id].err)})` : ""}`);
+  const missLine = miss.length ? `<p class="of-dim">⚠ 지금 계산하지 못한 코인: ${miss.join(" · ")} — 시세를 다시 받는 중(1분마다)</p>` : "";
+  return `<div class="of-pipe">${head}${tbl}${missLine}${log}</div>`;
 }
 /* ============ 💬 추천 질문 · 최근 질문 (gemini-clone 방식) ============ */
 const SUGGEST = {hq: ["비트코인 투자위원회 열어서 살지 팔지 결정해줘", "지금 모든 보조지표 종합해서 타점 잡아줘", "거래소 비교하고 김치 프리미엄 알려줘", "VaR랑 스트레스 테스트 해줘"],

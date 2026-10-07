@@ -197,6 +197,10 @@ export function load() {
     if (S.ver !== 2) { S.legacy = Object.values(S.pos || {}); S.pos = {}; S.ver = 2; S.queue = []; }
     if (Array.isArray(S.eng.ensW) && S.eng.ensW.length === 6) ENG.ENS.w = S.eng.ensW;   // 최적화된 앙상블 가중치 복원
     S.hold = HR.normBook(S.hold);
+    // 2026-10-07 표본외 검증으로 되돌림: 규칙 진화가 켠 'RSI 중립 관망'은 2023~2025 기존 6코인에서 거래 −37% · 합계 53→27R(평균은 0.071→0.064R) → 끈다(한 번만)
+    if (S.hold.rules.rsiN?.on && !S.hold.fix1007) { S.hold.rules.rsiN.on = false; S.hold.ver = (S.hold.ver || 1) + 1;
+      S.hold.log = [{ t: Date.now(), ver: S.hold.ver, kind: "되돌림", src: "표본외 검증", e: "'RSI 중립 구간(50±p)이면 관망' 끄기", why: "2023~2025 표본외: 켜면 거래 −37% · 합계 53→27R(평균 0.071→0.064R) — 거래만 줄이는 규칙" }, ...(S.hold.log || [])].slice(0, 30); }
+    S.hold.fix1007 = 1;
   }
   return S;
 }
@@ -285,6 +289,7 @@ function variants() {
   const out = [];
   for (const r of ENG.LIB) { out.push({ ...r, vkey: `${r.key}@${r.tf}` }); if (r.tf === "5" || r.tf === "15") out.push({ ...r, tf: "60", hold: 48, vkey: `${r.key}@60` }); }
   out.push({ key: "aichart", vkey: "aichart@15", tf: "15", name: "🤖 AI 내 지표 실험", cat: "단타", mode: "trend", rr: 2, hold: 32, regimes: null, sig: () => null, exp: true });
+  out.push({ key: "aiauto", vkey: "aiauto@60", tf: "60", name: "🤖 AI 자율 판단", cat: "AI개발", mode: "trend", rr: 2, hold: 24, regimes: null, sig: () => null, exp: true });
   for (const g of S.eng.chart || []) { const r = CL.chartRule(g); out.push({ ...r, prep: r.prep, sig: r.sig, exit: r.exit, vkey: `${r.key}@${r.tf}` }); }   // 📈 내 차트 지표 매매법(연구소에서 데모 투입)
   for (const e of S.eng.evo || []) { const r = ENG.buildEvo(e.gene); if (r) out.push({ ...r, vkey: `${r.key}@60`, tf: "60" }); }   // 🧬 진화 변형(개선·수정·조합)
   if (Q) for (const c of S.eng.custom || []) { const rr = ENG.specRule(Q, c); out.push({ ...rr, prep: rr.prep, sig: rr.sig, exit: rr.exit, vkey: `${c.key}@${c.tf}` }); }
@@ -402,7 +407,7 @@ function openFrom(it, trader, riskOverride, note) {
   S.pos[it.sym] = { sym: it.sym, ko: it.ko, side: it.side, entry: price, price, sl: plan.sl, tp: plan.tp, liq: plan.liq, lev: plan.lev, margin: plan.margin, notional: plan.notional,
     risk: plan.risk, riskPct: plan.riskPct, rr: plan.rr, slPct: plan.slPct, tpPct: plan.tpPct, rDist: Math.abs(price - plan.sl), be: false, roe: 0, proe: 0, seed: +(plan.margin / equity() * 100).toFixed(1),
     vkey: it.vkey, name: it.name, cat: v.cat, tf: v.tf, why: it.why, regime: it.regime, regKey: it.regKey, trader, t: Date.now(), deadline: Date.now() + v.hold * TFMIN[v.tf] * 60e3,
-    hour: new Date().getHours(), spike: !!S.brief?.[it.sym]?.spike, feat: { ...feat }, bReg: BRAIN.regimeOf(feat) };
+    hour: new Date().getHours(), spike: !!S.brief?.[it.sym]?.spike, feat: { ...feat }, bReg: BRAIN.regimeOf(feat), note: note || "", sl0: plan.sl, tp0: plan.tp };
   if (trader !== "자체 엔진") { const M = model(trader); M.opened = (M.opened || 0) + 1; }
   S.day.n = (S.day.n || 0) + 1;
   feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · 손절 가격 −${plan.slPct}% / 익절 +${plan.tpPct}%(손익비 1:${plan.rr}) · 손절 시 −$${plan.risk}(자본 ${plan.riskPct}%) · ROE로는 −${Math.round(plan.slPct * plan.lev)}%${note ? " · " + note : ""}`);
@@ -420,8 +425,10 @@ function closeP(sym, px, why, at) {
   const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
   if (base === "손절" || base === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;
   S.cool[sym] = Math.max(S.cool[sym] || 0, Date.now() + cfg().coolMin * 60e3);   // 어떤 청산이든 설정한 분만큼 같은 코인 재진입 금지   // 쿨다운: 손절 후 2봉 재진입 금지
-  S.trades.unshift({ tf: P.tf, style: styleOf(P.tf), ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, at: at || null, t: Date.now() });
+  S.trades.unshift({ vkey: P.vkey, reason: String(P.why || "").slice(0, 160), note: String(P.note || "").slice(0, 120), regime: P.regime || "", sl0: P.sl0 ?? null, tp0: P.tp0 ?? null, opened: P.t, tf: P.tf, style: styleOf(P.tf), ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, at: at || null, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
+  if (P.vkey === "aiauto@60" && P.trader !== "자체 엔진") { const mine = S.trades.filter(t => t.vkey === "aiauto@60" && t.model === P.trader).slice(0, 12);
+    if (mine.length >= AI_AUTO.pauseN && mine.reduce((a, t) => a + (t.R || 0), 0) / mine.length < 0) { (S.aiAuto ||= { n: {}, paused: {} }).paused[P.trader] = Date.now() + 24 * 3600e3; feed(`🤖 [${shortMd(P.trader)}] AI 자율 진입 최근 ${mine.length}건 평균 손실 → 이 모델만 24시간 쉼`); } }
   // 학습: 뉴런(시각화) · 뇌 지능 · 시간대 · 급변동 · 교훈/패턴
   const good = pret > 0 ? 1 : -1;
   for (const k of NEURONS) { const sig = P.feat?.[k] || 0; if (Math.abs(sig) < 0.08) continue; const correct = (Math.sign(sig) === P.side ? 1 : -1) === good; S.hit[k].n++; if (correct) S.hit[k].ok++; S.w[k] = cl(S.w[k] + LR * (correct ? 1 : -1) * Math.abs(sig), 0.05, 3); }
@@ -639,6 +646,36 @@ export async function calibrate() {
 // ══ 📈 내 차트 지표 데스크: 사용자가 터미널에 띄운 보조지표로 ① 값 튜닝 ② 보조지표 추천 ③ AI 모델이 매매법 설계 → 검증 → 데모 ④ AI 실험 진입 ══
 //   차트에 적용하는 건 사용자가 직접 한다(여기서는 값과 근거만 제안). 주문은 없다(데모).
 function termCell() { try { const st = JSON.parse(localStorage.getItem("nuri:term:state") || "null"); const c = (st?.cells || [])[0] || null; let sym = String(c?.symbol || "BTCUSDT").toUpperCase(); const m = sym.match(/^KRW-(\w+)$/); if (m) sym = m[1] + "USDT"; if (!/USDT$/.test(sym)) sym += "USDT"; return { sym, interval: c?.interval || "15m", n: (st?.inds || []).length }; } catch (e) { return { sym: "BTCUSDT", interval: "15m", n: 0 }; } }
+// 🤖 AI 자율 진입 — 뉴럴 데스크 AI 모델이 '자기 시장 읽기'로 직접 데모 진입한다 (2026-10-07 "AI 모델들이 진입을 안 한다")
+//   원인: 지금까지 AI 는 ① 엔진이 낸 신호를 승인만 했고(신호가 없으면 할 일이 없음) ② 자기 판단 진입은 '내 지표 실험'(차트 지표 15분 60% 동조 + 확신 75%)뿐이었다.
+//   그런데 엔진 신호는 연속 손실 휴식(24시간)·관망 규칙집에 대부분 막혀 36시간 동안 진입 0 → 모델들도 0.
+//   그래서 모델의 읽기를 작은 리스크(0.25%)로 직접 진입시키고, 모델마다 실제 성적으로 채점해 손해면 그 모델만 쉬게 한다(뉴럴 데스크 리더보드에 그 모델 이름으로 기록).
+//   걸리는 것: 확신 70%↑ · 상위(4시간) 추세 역행 금지 · 안전장치(연속 손실 휴식·낙폭 서킷·급락 정지·일/주 손실 한도·뉴스 위험) · 코인당 1포지션·동시 상한 · 모델당 하루 3번 · 단타 스타일 켜짐.
+//   관망 규칙집의 '지표 필터'(EMA 배열·RSI 중립 등)는 엔진 매매법용이라 걸지 않는다 — AI 판단 자체를 시험하는 칸이기 때문.
+//   모델 자격: 시장 읽기 채점 10건 이상이면 적중률 52% 이상만 · 자율 진입 실전 8건 이상 평균이 손실이면 그 모델 24시간 쉼.
+const AI_AUTO = { conf: 70, perDay: 3, minAcc: 0.52, minN: 10, pauseN: 8 };
+function aiAutoEntry({ name, ko, sym, bias, conf, price, note, rg }) {
+  const now = Date.now(), X = (S.aiAuto ||= { day: "", n: {}, paused: {}, last: null }); if (X.day !== today()) { X.day = today(); X.n = {}; }
+  const skip = why => { X.last = { model: shortMd(name), ko, bias, conf, why, t: now }; return false; };
+  if (!bias || conf < AI_AUTO.conf) return skip(`확신 ${conf}% < ${AI_AUTO.conf}%`);
+  if (!styleOk("60")) return skip("단타 스타일 꺼짐");
+  if ((X.paused[name] || 0) > now) return skip(`${shortMd(name)} 자율 진입 성적 손실 → 쉬는 중`);
+  if ((X.n[name] || 0) >= AI_AUTO.perDay) return skip(`${shortMd(name)} 오늘 ${AI_AUTO.perDay}번 다 씀`);
+  const M = S.models[name] || {}; if ((M.scanN || 0) >= AI_AUTO.minN && (M.scanHit || 0) / M.scanN < AI_AUTO.minAcc) return skip(`${shortMd(name)} 시장 읽기 적중 ${Math.round(M.scanHit / M.scanN * 100)}% < 52%`);
+  if (S.pos[sym] || S.queue.some(q => q.sym === sym)) return skip(`${ko} 이미 보유/대기`);
+  if ((rg?.htf || 0) === -bias) return skip(`${ko} 4시간 추세 역행`);
+  if ((S.halt || 0) > now || (S.panic || 0) > now || HR.restUntil(S.hold, closedSeq()) > now || !dayGate() || !weekGate() || (S.news?.blockUntil || 0) > now) return skip("안전장치(휴식·서킷·손실 한도·뉴스) 작동 중");
+  const m60 = MK[sym + "|60"], atr = m60?.I?.atr?.[m60.I.n - 2]; if (!atr) return skip("1시간봉 ATR 없음");
+  const it = { sym, ko, vkey: "aiauto@60", name: `🤖 AI 자율(${shortMd(name)})`, side: bias, sl: price - bias * atr * 1.5, why: `${shortMd(name)} 시장 읽기 ${bias > 0 ? "상승" : "하락"} ${conf}% — ${note || ""}`.slice(0, 120),
+    regime: rg?.label || "", regKey: rg?.key, htf: rg?.htf || 0, st: vstat("aiauto@60"), t: now, px0: price, exp: true };
+  if (openFrom(it, name, undefined, `AI 자율(확신 ${conf}%)`)) { X.n[name] = (X.n[name] || 0) + 1; X.last = { model: shortMd(name), ko, bias, conf, why: "진입", t: now }; return true; }
+  return skip("주문 계획 단계에서 보류(피드 참고)");
+}
+export const aiAutoTry = a => { load(); return aiAutoEntry(a); };   // 하네스 시험용(조건을 맞춘 읽기로 진입 경로 확인)
+export function aiAutoState() { load(); const X = S.aiAuto || {}, tr = (S.trades || []).filter(t => t.vkey === "aiauto@60" || /AI 자율/.test(t.name || ""));
+  const by = {}; for (const t of tr) { const b = by[t.model || "?"] ||= { n: 0, R: 0, w: 0 }; b.n++; b.R += t.R || 0; if (t.R > 0) b.w++; }
+  return { n: tr.length, avgR: tr.length ? +(tr.reduce((a, t) => a + (t.R || 0), 0) / tr.length).toFixed(3) : null, wr: tr.length ? Math.round(tr.filter(t => t.R > 0).length / tr.length * 100) : null,
+    by: Object.entries(by).map(([m, b]) => ({ model: shortMd(m), n: b.n, avgR: +(b.R / b.n).toFixed(2), wr: Math.round(b.w / b.n * 100), paused: (X.paused?.[m] || 0) > Date.now() })), last: X.last || null, today: X.n || {} }; }
 function aiChartExperiment({ name, ko, sym, bias, conf, note, price, myRead, rg }) {
   const now = Date.now(), X = (S.aiExp ||= { day: "", n: 0, pausedUntil: 0 });
   if (X.day !== today()) { X.day = today(); X.n = 0; }
@@ -913,6 +950,7 @@ JSON만:` }] }));
   if (conf >= 70 && note) BRAIN.learn({ type: "관찰", coin: ko, regime: rg.key || "", text: note, model: "스캔:" + shortMd(name), w: 0.8 });
   // 🤖 AI 내 지표 실험 진입: 확신 75%↑ + 내 차트 지표(15분) 60%↑ 같은 방향 + 4시간 추세 역행 아님 → 리스크 0.25% 데모 진입 (실전 성적이 나쁘면 자동 중지)
   try { aiChartExperiment({ name, ko, sym, bias, conf, note, price, myRead, rg }); } catch (e) {}
+  try { aiAutoEntry({ name, ko, sym, bias, conf, note, price, rg }); } catch (e) {}
   save();
 }
 function scoreScans() {   // 1시간 지난 스캔 의견을 실제 가격으로 채점
@@ -1005,6 +1043,7 @@ ${it.whale ? WC.explain(it.whale) : "고래 신호 없음"}
 실시간 수급(팀 도구로 방금 조회):
 ${flow.join(" / ")}
 참고 지식: ${kn || "없음"}
+사용자 메모(옵시디언 '내 메모'·'내 거래'): ${[...BRAIN.recallBy("옵시디언", 2, it.ko), ...BRAIN.recallBy("내 거래", 2, it.ko)].join(" / ") || "없음"}
 </facts>
 
 JSON 한 줄만:` }] }));
@@ -1282,7 +1321,8 @@ export function state() {
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), calls: callStats(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
     chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
-    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, score: scorecard(), mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
+    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, score: scorecard(), aiAuto: aiAutoState(),
+    openAll: allPos.map(p => ({ sym: p.sym, ko: p.ko, side: p.side, lev: p.lev, entry: p.entry, price: p.price, sl: p.sl, tp: p.tp ?? null, sl0: p.sl0 ?? null, tp0: p.tp0 ?? null, be: !!p.be, name: p.name, trader: p.trader, why: p.why, note: p.note || "", regime: p.regime, t: p.t, tf: p.tf, style: styleOf(p.tf), R: p.rDist ? +(((p.price - p.entry) * p.side) / p.rDist).toFixed(2) : null, risk: p.risk })), mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
     pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 64), feed: S.feed.slice(0, 24) };
