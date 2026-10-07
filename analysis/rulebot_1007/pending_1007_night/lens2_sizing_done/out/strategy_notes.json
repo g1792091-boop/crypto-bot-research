@@ -1,0 +1,1136 @@
+[
+ {
+  "strategy": "DOGE",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.02 trades/day, house mean R -0.128 (gross +0.007, cost 0.135R), cost drag 0.54R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.64 (median end x0.47); edge 0 net: r2 0.01, margin 30x rule 0.65",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N01_ST_EMA",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.41 trades/day, house mean R -0.141 (gross +0.010, cost 0.151R), cost drag 0.82R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.19 r2 0.94 (median end x0.33); edge 0 net: r2 0.02, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N02_ST_KST",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.92 trades/day, house mean R -0.137 (gross +0.009, cost 0.147R), cost drag 0.87R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.30 r2 0.95 (median end x0.30); edge 0 net: r2 0.04, margin 30x rule 0.71",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N03_ADX_GC",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.72 trades/day, house mean R -0.093 (gross +0.058, cost 0.152R), cost drag 0.11R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.86); edge 0 net: r2 0.00, margin 30x rule 0.18",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N04_ST_KLINGER",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 8.74 trades/day, house mean R -0.140 (gross +0.001, cost 0.142R), cost drag 1.24R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.78 r2 1.00 (median end x0.18); edge 0 net: r2 0.11, margin 30x rule 0.77",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N05_PSAR_POC",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.02 trades/day, house mean R -0.143 (gross +0.011, cost 0.154R), cost drag 0.47R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.42 (median end x0.54); edge 0 net: r2 0.00, margin 30x rule 0.45",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N06_MACD_ORB",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.66 trades/day, house mean R -0.156 (gross +0.001, cost 0.157R), cost drag 0.42R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.32 (median end x0.58); edge 0 net: r2 0.00, margin 30x rule 0.45",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N07_ICHI_CMO",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.91 trades/day, house mean R -0.148 (gross +0.005, cost 0.153R), cost drag 0.60R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.02 r2 0.72 (median end x0.44); edge 0 net: r2 0.01, margin 30x rule 0.66",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N08_ICHI_WR",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.13 trades/day, house mean R -0.162 (gross +0.003, cost 0.165R), cost drag 0.19R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.78); edge 0 net: r2 0.00, margin 30x rule 0.23",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N09_ALLIG_AROON",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.50 trades/day, house mean R -0.132 (gross +0.020, cost 0.152R), cost drag 0.68R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.05 r2 0.87 (median end x0.38); edge 0 net: r2 0.01, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N10_HA_PSAR",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 6.94 trades/day, house mean R -0.148 (gross -0.002, cost 0.146R), cost drag 1.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.54 r2 0.99 (median end x0.24); edge 0 net: r2 0.06, margin 30x rule 0.73",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N11_BREAKAWAY",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.40 trades/day, house mean R -0.157 (gross -0.007, cost 0.150R), cost drag 0.06R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.93); edge 0 net: r2 0.00, margin 30x rule 0.03",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N12_ICHI_AO",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.38 trades/day, house mean R -0.126 (gross +0.023, cost 0.149R), cost drag 0.65R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.04 r2 0.81 (median end x0.41); edge 0 net: r2 0.01, margin 30x rule 0.65",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N13_3OUTSIDE",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.96 trades/day, house mean R -0.146 (gross +0.005, cost 0.151R), cost drag 0.60R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.70 (median end x0.45); edge 0 net: r2 0.01, margin 30x rule 0.55",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N15_KC_AO",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.06 trades/day, house mean R -0.212 (gross -0.062, cost 0.150R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N16_BBRSI",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.17 trades/day, house mean R -0.138 (gross +0.006, cost 0.145R), cost drag 0.60R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.02 r2 0.75 (median end x0.44); edge 0 net: r2 0.01, margin 30x rule 0.61",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N17_KC_RSI",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.57 trades/day, house mean R -0.160 (gross -0.017, cost 0.143R), cost drag 1.08R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.61 r2 1.00 (median end x0.23); edge 0 net: r2 0.04, margin 30x rule 0.77",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N18_VWMA_MACD",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.34 trades/day, house mean R -0.149 (gross -0.001, cost 0.148R), cost drag 1.09R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.62 r2 0.99 (median end x0.22); edge 0 net: r2 0.06, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N19_FIB_CHOP",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.85 trades/day, house mean R -0.157 (gross -0.008, cost 0.149R), cost drag 0.42R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.33 (median end x0.56); edge 0 net: r2 0.00, margin 30x rule 0.51",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N20_EMA9_CHOP",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.13 trades/day, house mean R -0.160 (gross -0.001, cost 0.160R), cost drag 0.82R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.18 r2 0.94 (median end x0.33); edge 0 net: r2 0.02, margin 30x rule 0.62",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N22_VORTEX_PSAR",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.33 trades/day, house mean R -0.140 (gross +0.004, cost 0.144R), cost drag 1.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.59 r2 1.00 (median end x0.23); edge 0 net: r2 0.06, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N23_HA_ST",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 8.27 trades/day, house mean R -0.139 (gross +0.007, cost 0.146R), cost drag 1.21R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.76 r2 1.00 (median end x0.19); edge 0 net: r2 0.08, margin 30x rule 0.76",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N24_DMI",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.95 trades/day, house mean R -0.160 (gross -0.011, cost 0.149R), cost drag 0.89R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.29 r2 0.95 (median end x0.30); edge 0 net: r2 0.03, margin 30x rule 0.69",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N25_DST_CCI",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 6.08 trades/day, house mean R -0.170 (gross -0.018, cost 0.152R), cost drag 0.92R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.34 r2 0.97 (median end x0.28); edge 0 net: r2 0.03, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_B",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 6.30 trades/day, house mean R -0.156 (gross -0.014, cost 0.142R), cost drag 0.90R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.30 r2 0.97 (median end x0.29); edge 0 net: r2 0.03, margin 30x rule 0.71",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_S",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.68 trades/day, house mean R -0.155 (gross -0.001, cost 0.154R), cost drag 0.57R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.67 (median end x0.46); edge 0 net: r2 0.01, margin 30x rule 0.59",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S1_EMA_RSI_CHOP",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.09 trades/day, house mean R -0.206 (gross -0.076, cost 0.130R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S2_ST_ROC",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.68 trades/day, house mean R -0.142 (gross +0.002, cost 0.144R), cost drag 1.10R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.66 r2 0.99 (median end x0.22); edge 0 net: r2 0.07, margin 30x rule 0.79",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S3_CMO_SANDWICH",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.93 trades/day, house mean R -0.174 (gross -0.020, cost 0.154R), cost drag 0.45R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.39 (median end x0.55); edge 0 net: r2 0.00, margin 30x rule 0.45",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S4_BB_BBP",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.77 trades/day, house mean R -0.156 (gross +0.008, cost 0.164R), cost drag 0.95R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.39 r2 0.96 (median end x0.28); edge 0 net: r2 0.04, margin 30x rule 0.62",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S5_DONCHIAN_MFI",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.95 trades/day, house mean R -0.145 (gross +0.009, cost 0.154R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.82); edge 0 net: r2 0.00, margin 30x rule 0.32",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S6_EMA_DMI_ADX",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.02 trades/day, house mean R -0.159 (gross -0.018, cost 0.141R), cost drag 0.43R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.35 (median end x0.56); edge 0 net: r2 0.00, margin 30x rule 0.52",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V39_ALL",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.49 trades/day, house mean R -0.135 (gross +0.010, cost 0.145R), cost drag 0.80R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.18 r2 0.92 (median end x0.33); edge 0 net: r2 0.03, margin 30x rule 0.73",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V45_AMB",
+  "timeframe": "15m+30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.04 trades/day, house mean R -0.173 (gross -0.021, cost 0.152R), cost drag 0.46R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.45 (median end x0.53); edge 0 net: r2 0.00, margin 30x rule 0.49",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "DOGE",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.54 trades/day, house mean R -0.143 (gross +0.004, cost 0.147R), cost drag 0.52R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.60 (median end x0.48); edge 0 net: r2 0.01, margin 30x rule 0.63",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N01_ST_EMA",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.16 trades/day, house mean R -0.156 (gross +0.011, cost 0.167R), cost drag 0.86R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.26 r2 0.96 (median end x0.31); edge 0 net: r2 0.03, margin 30x rule 0.66",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N02_ST_KST",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.29 trades/day, house mean R -0.153 (gross +0.013, cost 0.166R), cost drag 0.88R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.27 r2 0.96 (median end x0.30); edge 0 net: r2 0.03, margin 30x rule 0.64",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N03_ADX_GC",
+  "timeframe": "15m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.53 trades/day, house mean R -0.105 (gross +0.062, cost 0.167R), cost drag 0.09R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.88); edge 0 net: r2 0.00, margin 30x rule 0.10",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N04_ST_KLINGER",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 9.11 trades/day, house mean R -0.154 (gross -0.000, cost 0.154R), cost drag 1.40R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.91 r2 1.00 (median end x0.15); edge 0 net: r2 0.09, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N05_PSAR_POC",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.54 trades/day, house mean R -0.171 (gross +0.002, cost 0.173R), cost drag 0.44R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.34 (median end x0.57); edge 0 net: r2 0.00, margin 30x rule 0.36",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N06_MACD_ORB",
+  "timeframe": "15m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.09 trades/day, house mean R -0.169 (gross +0.010, cost 0.179R), cost drag 0.37R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.23 (median end x0.62); edge 0 net: r2 0.00, margin 30x rule 0.39",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.18R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N07_ICHI_CMO",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.31 trades/day, house mean R -0.168 (gross +0.006, cost 0.173R), cost drag 0.57R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.68 (median end x0.46); edge 0 net: r2 0.01, margin 30x rule 0.57",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N08_ICHI_WR",
+  "timeframe": "15m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 0.85 trades/day, house mean R -0.185 (gross -0.003, cost 0.182R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.82); edge 0 net: r2 0.00, margin 30x rule 0.15",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.18R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N09_ALLIG_AROON",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.87 trades/day, house mean R -0.155 (gross +0.016, cost 0.171R), cost drag 0.66R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.05 r2 0.81 (median end x0.41); edge 0 net: r2 0.01, margin 30x rule 0.59",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N10_HA_PSAR",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 6.73 trades/day, house mean R -0.159 (gross +0.002, cost 0.161R), cost drag 1.08R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.62 r2 1.00 (median end x0.23); edge 0 net: r2 0.04, margin 30x rule 0.71",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N11_BREAKAWAY",
+  "timeframe": "15m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.28 trades/day, house mean R -0.172 (gross -0.006, cost 0.166R), cost drag 0.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.94); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N12_ICHI_AO",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.73 trades/day, house mean R -0.159 (gross +0.010, cost 0.169R), cost drag 0.63R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.03 r2 0.75 (median end x0.43); edge 0 net: r2 0.01, margin 30x rule 0.53",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N13_3OUTSIDE",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.32 trades/day, house mean R -0.165 (gross +0.004, cost 0.169R), cost drag 0.56R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.66 (median end x0.46); edge 0 net: r2 0.01, margin 30x rule 0.56",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N15_KC_AO",
+  "timeframe": "15m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.306 (gross -0.132, cost 0.174R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N16_BBRSI",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.48 trades/day, house mean R -0.164 (gross -0.002, cost 0.162R), cost drag 0.56R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.65 (median end x0.47); edge 0 net: r2 0.01, margin 30x rule 0.52",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N17_KC_RSI",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.16 trades/day, house mean R -0.162 (gross -0.014, cost 0.148R), cost drag 1.06R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.57 r2 0.99 (median end x0.24); edge 0 net: r2 0.03, margin 30x rule 0.76",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N18_VWMA_MACD",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 6.98 trades/day, house mean R -0.162 (gross +0.001, cost 0.164R), cost drag 1.14R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.67 r2 1.00 (median end x0.21); edge 0 net: r2 0.05, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N19_FIB_CHOP",
+  "timeframe": "15m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.33 trades/day, house mean R -0.165 (gross -0.002, cost 0.163R), cost drag 0.38R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.20 (median end x0.61); edge 0 net: r2 0.00, margin 30x rule 0.44",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N20_EMA9_CHOP",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.99 trades/day, house mean R -0.170 (gross -0.000, cost 0.170R), cost drag 0.85R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.19 r2 0.95 (median end x0.32); edge 0 net: r2 0.03, margin 30x rule 0.59",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N22_VORTEX_PSAR",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.27 trades/day, house mean R -0.151 (gross +0.009, cost 0.160R), cost drag 1.16R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.72 r2 1.00 (median end x0.20); edge 0 net: r2 0.05, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N23_HA_ST",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 8.61 trades/day, house mean R -0.146 (gross +0.012, cost 0.158R), cost drag 1.36R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.89 r2 1.00 (median end x0.16); edge 0 net: r2 0.11, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N24_DMI",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.71 trades/day, house mean R -0.180 (gross -0.016, cost 0.164R), cost drag 0.93R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.34 r2 0.98 (median end x0.29); edge 0 net: r2 0.03, margin 30x rule 0.64",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N25_DST_CCI",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.69 trades/day, house mean R -0.180 (gross -0.014, cost 0.166R), cost drag 0.94R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.36 r2 0.98 (median end x0.28); edge 0 net: r2 0.02, margin 30x rule 0.64",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_B",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.90 trades/day, house mean R -0.165 (gross -0.008, cost 0.157R), cost drag 0.93R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.37 r2 0.98 (median end x0.28); edge 0 net: r2 0.03, margin 30x rule 0.71",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_S",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.08 trades/day, house mean R -0.160 (gross +0.015, cost 0.175R), cost drag 0.54R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.60 (median end x0.48); edge 0 net: r2 0.01, margin 30x rule 0.50",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S1_EMA_RSI_CHOP",
+  "timeframe": "15m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.06 trades/day, house mean R -0.127 (gross +0.013, cost 0.140R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S2_ST_ROC",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 7.82 trades/day, house mean R -0.145 (gross +0.014, cost 0.159R), cost drag 1.24R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.79 r2 1.00 (median end x0.19); edge 0 net: r2 0.08, margin 30x rule 0.71",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S3_CMO_SANDWICH",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.40 trades/day, house mean R -0.190 (gross -0.018, cost 0.173R), cost drag 0.42R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.29 (median end x0.57); edge 0 net: r2 0.00, margin 30x rule 0.37",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S4_BB_BBP",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.23 trades/day, house mean R -0.177 (gross +0.003, cost 0.180R), cost drag 0.94R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.34 r2 0.97 (median end x0.29); edge 0 net: r2 0.03, margin 30x rule 0.58",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.18R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S5_DONCHIAN_MFI",
+  "timeframe": "15m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.72 trades/day, house mean R -0.153 (gross +0.016, cost 0.168R), cost drag 0.12R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.85); edge 0 net: r2 0.00, margin 30x rule 0.23",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S6_EMA_DMI_ADX",
+  "timeframe": "15m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.42 trades/day, house mean R -0.184 (gross -0.029, cost 0.155R), cost drag 0.37R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.21 (median end x0.60); edge 0 net: r2 0.00, margin 30x rule 0.45",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.15R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V39_ALL",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.10 trades/day, house mean R -0.153 (gross +0.008, cost 0.161R), cost drag 0.82R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.18 r2 0.93 (median end x0.33); edge 0 net: r2 0.03, margin 30x rule 0.62",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.16R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V45_AMB",
+  "timeframe": "15m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 2.48 trades/day, house mean R -0.197 (gross -0.028, cost 0.169R), cost drag 0.42R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.32 (median end x0.57); edge 0 net: r2 0.00, margin 30x rule 0.42",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.17R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "DOGE",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.24 trades/day, house mean R -0.110 (gross -0.003, cost 0.108R), cost drag 0.24R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.04 (median end x0.70); edge 0 net: r2 0.00, margin 30x rule 0.59",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N01_ST_EMA",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.80 trades/day, house mean R -0.103 (gross +0.018, cost 0.122R), cost drag 0.34R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.20 (median end x0.62); edge 0 net: r2 0.00, margin 30x rule 0.61",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N02_ST_KST",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.84 trades/day, house mean R -0.120 (gross -0.001, cost 0.119R), cost drag 0.34R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.20 (median end x0.62); edge 0 net: r2 0.00, margin 30x rule 0.64",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N03_ADX_GC",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.23 trades/day, house mean R -0.054 (gross +0.059, cost 0.113R), cost drag 0.03R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.96); edge 0 net: r2 0.00, margin 30x rule 0.02",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N04_ST_KLINGER",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 5.30 trades/day, house mean R -0.112 (gross +0.000, cost 0.112R), cost drag 0.60R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.02 r2 0.78 (median end x0.43); edge 0 net: r2 0.01, margin 30x rule 0.78",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N05_PSAR_POC",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.30 trades/day, house mean R -0.130 (gross -0.004, cost 0.126R), cost drag 0.16R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.35",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N06_MACD_ORB",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.40 trades/day, house mean R -0.132 (gross -0.004, cost 0.128R), cost drag 0.18R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.79); edge 0 net: r2 0.00, margin 30x rule 0.37",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N07_ICHI_CMO",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.75 trades/day, house mean R -0.111 (gross +0.014, cost 0.125R), cost drag 0.22R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.01 (median end x0.73); edge 0 net: r2 0.00, margin 30x rule 0.50",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N08_ICHI_WR",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.39 trades/day, house mean R -0.116 (gross +0.020, cost 0.136R), cost drag 0.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.93); edge 0 net: r2 0.00, margin 30x rule 0.06",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.14R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N09_ALLIG_AROON",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.04 trades/day, house mean R -0.120 (gross +0.003, cost 0.123R), cost drag 0.25R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.04 (median end x0.70); edge 0 net: r2 0.00, margin 30x rule 0.51",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N10_HA_PSAR",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.66 trades/day, house mean R -0.106 (gross +0.012, cost 0.119R), cost drag 0.44R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.43 (median end x0.54); edge 0 net: r2 0.00, margin 30x rule 0.70",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N11_BREAKAWAY",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.12 trades/day, house mean R -0.124 (gross -0.008, cost 0.116R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N12_ICHI_AO",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.94 trades/day, house mean R -0.098 (gross +0.025, cost 0.123R), cost drag 0.24R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.03 (median end x0.71); edge 0 net: r2 0.00, margin 30x rule 0.53",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N13_3OUTSIDE",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.63 trades/day, house mean R -0.138 (gross -0.016, cost 0.122R), cost drag 0.20R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.01 (median end x0.76); edge 0 net: r2 0.00, margin 30x rule 0.41",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N15_KC_AO",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.03 trades/day, house mean R -0.035 (gross +0.078, cost 0.113R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N16_BBRSI",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.88 trades/day, house mean R -0.122 (gross -0.003, cost 0.120R), cost drag 0.22R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.01 (median end x0.74); edge 0 net: r2 0.00, margin 30x rule 0.48",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N17_KC_RSI",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.13 trades/day, house mean R -0.128 (gross -0.017, cost 0.111R), cost drag 0.46R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.46 (median end x0.53); edge 0 net: r2 0.00, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N18_VWMA_MACD",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 3.85 trades/day, house mean R -0.124 (gross -0.005, cost 0.119R), cost drag 0.46R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.51 (median end x0.51); edge 0 net: r2 0.00, margin 30x rule 0.73",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N19_FIB_CHOP",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.11 trades/day, house mean R -0.115 (gross +0.003, cost 0.118R), cost drag 0.13R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.83); edge 0 net: r2 0.00, margin 30x rule 0.37",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N20_EMA9_CHOP",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.71 trades/day, house mean R -0.128 (gross -0.005, cost 0.123R), cost drag 0.33R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.16 (median end x0.63); edge 0 net: r2 0.00, margin 30x rule 0.50",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N22_VORTEX_PSAR",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.27 trades/day, house mean R -0.112 (gross +0.007, cost 0.118R), cost drag 0.51R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.60 (median end x0.49); edge 0 net: r2 0.00, margin 30x rule 0.70",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N23_HA_ST",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.97 trades/day, house mean R -0.118 (gross -0.001, cost 0.117R), cost drag 0.58R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.02 r2 0.75 (median end x0.44); edge 0 net: r2 0.01, margin 30x rule 0.73",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N24_DMI",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 3.21 trades/day, house mean R -0.119 (gross +0.000, cost 0.119R), cost drag 0.38R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.29 (median end x0.58); edge 0 net: r2 0.00, margin 30x rule 0.62",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N25_DST_CCI",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 3.28 trades/day, house mean R -0.136 (gross -0.014, cost 0.121R), cost drag 0.40R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.29 (median end x0.57); edge 0 net: r2 0.00, margin 30x rule 0.60",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_B",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 3.30 trades/day, house mean R -0.133 (gross -0.017, cost 0.116R), cost drag 0.38R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.32 (median end x0.57); edge 0 net: r2 0.00, margin 30x rule 0.67",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_S",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.64 trades/day, house mean R -0.139 (gross -0.014, cost 0.125R), cost drag 0.20R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.01 (median end x0.75); edge 0 net: r2 0.00, margin 30x rule 0.46",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S1_EMA_RSI_CHOP",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.283 (gross -0.174, cost 0.109R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S2_ST_ROC",
+  "timeframe": "30m",
+  "grade": "cost-drag high",
+  "numbers": "5y one-position K30: 4.53 trades/day, house mean R -0.121 (gross -0.004, cost 0.116R), cost drag 0.53R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.01 r2 0.66 (median end x0.47); edge 0 net: r2 0.01, margin 30x rule 0.75",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S3_CMO_SANDWICH",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.20 trades/day, house mean R -0.143 (gross -0.015, cost 0.129R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.30",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S4_BB_BBP",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.92 trades/day, house mean R -0.128 (gross -0.001, cost 0.127R), cost drag 0.37R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.24 (median end x0.60); edge 0 net: r2 0.00, margin 30x rule 0.55",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.13R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S5_DONCHIAN_MFI",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.35 trades/day, house mean R -0.132 (gross -0.011, cost 0.121R), cost drag 0.04R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.95); edge 0 net: r2 0.00, margin 30x rule 0.07",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S6_EMA_DMI_ADX",
+  "timeframe": "30m",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.33 trades/day, house mean R -0.126 (gross -0.014, cost 0.112R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.38",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.11R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V39_ALL",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.88 trades/day, house mean R -0.113 (gross +0.007, cost 0.119R), cost drag 0.34R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.18 (median end x0.62); edge 0 net: r2 0.00, margin 30x rule 0.56",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V45_AMB",
+  "timeframe": "30m",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.31 trades/day, house mean R -0.128 (gross -0.007, cost 0.121R), cost drag 0.16R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.32",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.12R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "DOGE",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.19 trades/day, house mean R -0.063 (gross +0.022, cost 0.085R), cost drag 0.10R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.86); edge 0 net: r2 0.00, margin 30x rule 0.32",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.08R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N01_ST_EMA",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.39 trades/day, house mean R -0.104 (gross -0.012, cost 0.093R), cost drag 0.13R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.83); edge 0 net: r2 0.00, margin 30x rule 0.42",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N02_ST_KST",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.36 trades/day, house mean R -0.080 (gross +0.012, cost 0.092R), cost drag 0.12R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.84); edge 0 net: r2 0.00, margin 30x rule 0.40",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N03_ADX_GC",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.12 trades/day, house mean R -0.049 (gross +0.041, cost 0.089R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N04_ST_KLINGER",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.78 trades/day, house mean R -0.089 (gross -0.003, cost 0.086R), cost drag 0.24R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.07 (median end x0.70); edge 0 net: r2 0.00, margin 30x rule 0.61",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N05_PSAR_POC",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.61 trades/day, house mean R -0.057 (gross +0.037, cost 0.094R), cost drag 0.06R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.92); edge 0 net: r2 0.00, margin 30x rule 0.14",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N06_MACD_ORB",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.87 trades/day, house mean R -0.107 (gross -0.013, cost 0.094R), cost drag 0.08R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.88); edge 0 net: r2 0.00, margin 30x rule 0.24",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N07_ICHI_CMO",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.79 trades/day, house mean R -0.119 (gross -0.024, cost 0.095R), cost drag 0.08R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.89); edge 0 net: r2 0.00, margin 30x rule 0.26",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N08_ICHI_WR",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.17 trades/day, house mean R -0.091 (gross +0.012, cost 0.102R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.97); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.10R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N09_ALLIG_AROON",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.92 trades/day, house mean R -0.088 (gross +0.008, cost 0.096R), cost drag 0.09R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.88); edge 0 net: r2 0.00, margin 30x rule 0.27",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.10R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N10_HA_PSAR",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.81 trades/day, house mean R -0.107 (gross -0.017, cost 0.090R), cost drag 0.16R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.79); edge 0 net: r2 0.00, margin 30x rule 0.47",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N11_BREAKAWAY",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.05 trades/day, house mean R +0.019 (gross +0.103, cost 0.083R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.08R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N12_ICHI_AO",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.93 trades/day, house mean R -0.078 (gross +0.016, cost 0.095R), cost drag 0.09R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.87); edge 0 net: r2 0.00, margin 30x rule 0.26",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N13_3OUTSIDE",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.66 trades/day, house mean R -0.069 (gross +0.024, cost 0.093R), cost drag 0.06R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.92); edge 0 net: r2 0.00, margin 30x rule 0.23",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N16_BBRSI",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.87 trades/day, house mean R -0.115 (gross -0.024, cost 0.091R), cost drag 0.08R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.90); edge 0 net: r2 0.00, margin 30x rule 0.21",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N17_KC_RSI",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.11 trades/day, house mean R -0.114 (gross -0.028, cost 0.086R), cost drag 0.18R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.02 (median end x0.77); edge 0 net: r2 0.00, margin 30x rule 0.52",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N18_VWMA_MACD",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 1.94 trades/day, house mean R -0.100 (gross -0.008, cost 0.092R), cost drag 0.18R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.02 (median end x0.78); edge 0 net: r2 0.00, margin 30x rule 0.53",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N19_FIB_CHOP",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.49 trades/day, house mean R -0.099 (gross -0.005, cost 0.093R), cost drag 0.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.93); edge 0 net: r2 0.00, margin 30x rule 0.12",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N20_EMA9_CHOP",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.36 trades/day, house mean R -0.093 (gross +0.001, cost 0.094R), cost drag 0.13R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.83); edge 0 net: r2 0.00, margin 30x rule 0.38",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N22_VORTEX_PSAR",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.22 trades/day, house mean R -0.090 (gross +0.000, cost 0.091R), cost drag 0.20R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.02 (median end x0.74); edge 0 net: r2 0.00, margin 30x rule 0.54",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N23_HA_ST",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.75 trades/day, house mean R -0.082 (gross +0.008, cost 0.089R), cost drag 0.25R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.06 (median end x0.69); edge 0 net: r2 0.00, margin 30x rule 0.63",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N24_DMI",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.60 trades/day, house mean R -0.073 (gross +0.018, cost 0.091R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.81); edge 0 net: r2 0.00, margin 30x rule 0.39",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N25_DST_CCI",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.63 trades/day, house mean R -0.086 (gross +0.006, cost 0.092R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.40",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_B",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.67 trades/day, house mean R -0.104 (gross -0.014, cost 0.090R), cost drag 0.15R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.80); edge 0 net: r2 0.00, margin 30x rule 0.42",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_S",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.79 trades/day, house mean R -0.069 (gross +0.024, cost 0.093R), cost drag 0.07R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.90); edge 0 net: r2 0.00, margin 30x rule 0.26",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S1_EMA_RSI_CHOP",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.02 trades/day, house mean R +0.093 (gross +0.181, cost 0.088R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S2_ST_ROC",
+  "timeframe": "1h",
+  "grade": "cost-drag medium",
+  "numbers": "5y one-position K30: 2.37 trades/day, house mean R -0.093 (gross -0.004, cost 0.089R), cost drag 0.21R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.02 (median end x0.73); edge 0 net: r2 0.00, margin 30x rule 0.62",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S3_CMO_SANDWICH",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.54 trades/day, house mean R -0.110 (gross -0.013, cost 0.097R), cost drag 0.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.93); edge 0 net: r2 0.00, margin 30x rule 0.15",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.10R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S4_BB_BBP",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.45 trades/day, house mean R -0.088 (gross +0.007, cost 0.095R), cost drag 0.14R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.82); edge 0 net: r2 0.00, margin 30x rule 0.44",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.10R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S5_DONCHIAN_MFI",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.15 trades/day, house mean R -0.121 (gross -0.030, cost 0.091R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S6_EMA_DMI_ADX",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.60 trades/day, house mean R -0.077 (gross +0.011, cost 0.088R), cost drag 0.05R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.93); edge 0 net: r2 0.00, margin 30x rule 0.12",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V39_ALL",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 1.41 trades/day, house mean R -0.101 (gross -0.011, cost 0.090R), cost drag 0.13R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.82); edge 0 net: r2 0.00, margin 30x rule 0.42",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V45_AMB",
+  "timeframe": "1h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.62 trades/day, house mean R -0.107 (gross -0.016, cost 0.091R), cost drag 0.06R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.92); edge 0 net: r2 0.00, margin 30x rule 0.11",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.09R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N01_ST_EMA",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.14 trades/day, house mean R -0.038 (gross +0.033, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N02_ST_KST",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.14 trades/day, house mean R -0.020 (gross +0.050, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N04_ST_KLINGER",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.34 trades/day, house mean R -0.080 (gross -0.009, cost 0.070R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.97); edge 0 net: r2 0.00, margin 30x rule 0.04",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N05_PSAR_POC",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.062 (gross +0.011, cost 0.072R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N06_MACD_ORB",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.08 trades/day, house mean R -0.050 (gross +0.021, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N07_ICHI_CMO",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.08 trades/day, house mean R -0.007 (gross +0.065, cost 0.072R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N09_ALLIG_AROON",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.08 trades/day, house mean R +0.020 (gross +0.091, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N10_HA_PSAR",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.15 trades/day, house mean R -0.010 (gross +0.062, cost 0.072R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N12_ICHI_AO",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.08 trades/day, house mean R -0.109 (gross -0.039, cost 0.070R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N13_3OUTSIDE",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.114 (gross -0.045, cost 0.069R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N16_BBRSI",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.07 trades/day, house mean R -0.065 (gross +0.006, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N17_KC_RSI",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.24 trades/day, house mean R -0.160 (gross -0.093, cost 0.066R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.06",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N18_VWMA_MACD",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.22 trades/day, house mean R -0.094 (gross -0.025, cost 0.069R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.02",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N19_FIB_CHOP",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.03 trades/day, house mean R -0.158 (gross -0.089, cost 0.069R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N20_EMA9_CHOP",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.14 trades/day, house mean R -0.046 (gross +0.024, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N22_VORTEX_PSAR",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.25 trades/day, house mean R -0.007 (gross +0.063, cost 0.071R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.02",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N23_HA_ST",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.35 trades/day, house mean R +0.025 (gross +0.096, cost 0.070R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.97); edge 0 net: r2 0.00, margin 30x rule 0.03",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N24_DMI",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.18 trades/day, house mean R -0.046 (gross +0.023, cost 0.069R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "N25_DST_CCI",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.17 trades/day, house mean R -0.022 (gross +0.050, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.98); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_B",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.16 trades/day, house mean R -0.073 (gross -0.003, cost 0.070R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "OBV_S",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.07 trades/day, house mean R -0.074 (gross -0.003, cost 0.071R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S2_ST_ROC",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.30 trades/day, house mean R -0.008 (gross +0.062, cost 0.070R), cost drag 0.02R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.97); edge 0 net: r2 0.00, margin 30x rule 0.03",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S3_CMO_SANDWICH",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.132 (gross -0.060, cost 0.072R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S4_BB_BBP",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.18 trades/day, house mean R -0.019 (gross +0.051, cost 0.071R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "S6_EMA_DMI_ADX",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.05 trades/day, house mean R +0.023 (gross +0.090, cost 0.067R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V39_ALL",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.15 trades/day, house mean R -0.023 (gross +0.046, cost 0.070R), cost drag 0.01R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x0.99); edge 0 net: r2 0.00, margin 30x rule 0.01",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ },
+ {
+  "strategy": "V45_AMB",
+  "timeframe": "4h",
+  "grade": "cost-drag low",
+  "numbers": "5y one-position K30: 0.04 trades/day, house mean R -0.129 (gross -0.054, cost 0.075R), cost drag 0.00R/day; to 12/31 (76 d) edge=-cost: P(eq<50%) r1 0.00 r2 0.00 (median end x1.00); edge 0 net: r2 0.00, margin 30x rule 0.00",
+  "note": "Size by risk per stop; with the 5-year cost drag this cell needs >= 0.07R/trade of AI-added edge just to break even; ruin numbers are bootstrap (7-day blocks) of 5y days."
+ }
+]
