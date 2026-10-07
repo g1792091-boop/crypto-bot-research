@@ -1,0 +1,118 @@
+{
+ "method": "(no tokenizer offline): digit runs -> ceil(len/3) tokens; ASCII letter runs -> 1 token per <=6 chars;\neach ASCII punctuation/symbol -> 1; each newline -> 1; space runs -> 0 (merged) except runs >1 -> 1;\nHangul syllables -> factor per char (low 0.7 / mid 1.0 / high 1.3); other non-ASCII symbols (·, ※, →) -> 1.5.\nASCII part scaled 0.85 / 1.0 / 1.2 for low / mid / high.",
+ "bar_time_utc": "2026-09-29T23:45:00.000000000",
+ "mine": {
+  "instructions(analyst text)": {
+   "low": 1215,
+   "mid": 1614,
+   "high": 2038,
+   "chars": 2268
+  },
+  "market(real bars, rebuilt)": {
+   "low": 4665,
+   "mid": 5622,
+   "high": 6782,
+   "chars": 8900
+  },
+  "card(analyst text)": {
+   "low": 867,
+   "mid": 1080,
+   "high": 1323,
+   "chars": 1625
+  },
+  "journal 20 lines (design 6-4)": {
+   "low": 474,
+   "mid": 586,
+   "high": 717,
+   "chars": 1010
+  },
+  "wake 2 signals (analyst text)": {
+   "low": 253,
+   "mid": 314,
+   "high": 384,
+   "chars": 526
+  },
+  "TOTAL": {
+   "low": 7474,
+   "mid": 9216,
+   "high": 11244,
+   "chars": 14329
+  }
+ },
+ "analyst_text_my_heuristic": {
+  "instructions": {
+   "low": 1215,
+   "mid": 1614,
+   "high": 2038,
+   "chars": 2268
+  },
+  "market": {
+   "low": 4606,
+   "mid": 5551,
+   "high": 6697,
+   "chars": 8821
+  },
+  "card": {
+   "low": 867,
+   "mid": 1080,
+   "high": 1323,
+   "chars": 1625
+  },
+  "journal10": {
+   "low": 252,
+   "mid": 312,
+   "high": 380,
+   "chars": 530
+  },
+  "wake": {
+   "low": 253,
+   "mid": 314,
+   "high": 384,
+   "chars": 526
+  },
+  "TOTAL": {
+   "low": 7193,
+   "mid": 8871,
+   "high": 10822,
+   "chars": 13770
+  }
+ },
+ "analyst_full_files_my_heuristic": {
+  "S1_entry_S2_ST_ROC_15m_en.txt": {
+   "low": 6305,
+   "mid": 7337,
+   "high": 8713,
+   "chars": 16105
+  },
+  "S1_entry_S2_ST_ROC_15m_ko.txt": {
+   "low": 7192,
+   "mid": 8870,
+   "high": 10822,
+   "chars": 13770
+  },
+  "S2_entry_bundle_F6_VWAP_CROSS_en.txt": {
+   "low": 6524,
+   "mid": 7588,
+   "high": 9006,
+   "chars": 16750
+  },
+  "S2_entry_bundle_F6_VWAP_CROSS_ko.txt": {
+   "low": 7516,
+   "mid": 9266,
+   "high": 11304,
+   "chars": 14437
+  },
+  "S3_hold_N24_DMI_en.txt": {
+   "low": 6174,
+   "mid": 7186,
+   "high": 8535,
+   "chars": 15763
+  },
+  "S3_hold_N24_DMI_ko.txt": {
+   "low": 7046,
+   "mid": 8682,
+   "high": 10588,
+   "chars": 13471
+  }
+ }
+}
