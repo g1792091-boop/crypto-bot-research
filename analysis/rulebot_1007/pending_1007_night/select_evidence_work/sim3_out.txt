@@ -1,0 +1,55 @@
+F16_FIB382 ['15m', '1h'] sig/d 13.6 tr/d 4.69 net -0.117 g 0.0162 IS 0.0056 CF 0.0301 se 0.0084 cost 0.133 occ 0.59 {'15m': 0.84, '1h': 0.16}
+F16_FIB500 ['15m'] sig/d 11.8 tr/d 5.15 net -0.135 g 0.0169 IS 0.0083 CF 0.0283 se 0.0082 cost 0.152 occ 0.5 {'15m': 1.0}
+F9_FVG ['15m', '4h'] sig/d 18.3 tr/d 6.19 net -0.125 g 0.0141 IS -0.0009 CF 0.0326 se 0.0079 cost 0.139 occ 0.63 {'15m': 0.99, '4h': 0.01}
+N02_ST_KST ['15m', '4h'] sig/d 14.9 tr/d 5.16 net -0.145 g 0.0088 IS 0.0094 CF 0.0079 se 0.0088 cost 0.154 occ 0.5 {'15m': 0.99, '4h': 0.01}
+N07_ICHI_CMO ['15m', '30m', '4h'] sig/d 10.4 tr/d 3.82 net -0.142 g 0.0013 IS 0.0059 CF -0.0049 se 0.0106 cost 0.143 occ 0.46 {'15m': 0.66, '30m': 0.33, '4h': 0.01}
+N10_HA_PSAR ['30m'] sig/d 10.5 tr/d 3.67 net -0.09 g 0.0185 IS 0.0178 CF 0.0193 se 0.0092 cost 0.109 occ 0.56 {'30m': 1.0}
+F4_FAN ['15m', '30m', '4h'] sig/d 31.3 tr/d 5.97 net -0.123 g 0.0069 IS -0.0005 CF 0.0166 se 0.0069 cost 0.13 occ 0.72 {'15m': 0.59, '30m': 0.4, '4h': 0.01}
+F7_RF_TRIPLE ['15m', '30m', '1h'] sig/d 106.5 tr/d 6.81 net -0.108 g -0.0017 IS -0.0066 CF 0.0047 se 0.0063 cost 0.107 occ 0.91 {'15m': 0.51, '30m': 0.31, '1h': 0.18}
+DOGE ['1h'] sig/d 2.2 tr/d 1.18 net -0.048 g 0.0313 IS 0.0384 CF 0.0235 se 0.0138 cost 0.079 occ 0.32 {'1h': 1.0}
+S2_ST_ROC ['15m', '4h'] sig/d 49.8 tr/d 7.68 net -0.113 g 0.0228 IS 0.0246 CF 0.0204 se 0.0067 cost 0.136 occ 0.76 {'15m': 0.99, '4h': 0.01}
+F9_IFVG ['15m', '4h'] sig/d 12.0 tr/d 5.16 net -0.132 g 0.0169 IS 0.0172 CF 0.0165 se 0.0078 cost 0.148 occ 0.53 {'15m': 0.99, '4h': 0.01}
+N12_ICHI_AO ['15m', '30m'] sig/d 11.5 tr/d 4.33 net -0.123 g 0.0195 IS 0.0169 CF 0.0229 se 0.0084 cost 0.143 occ 0.47 {'15m': 0.66, '30m': 0.34}
+N01_ST_EMA ['15m'] sig/d 17.1 tr/d 5.2 net -0.145 g 0.0137 IS 0.0157 CF 0.011 se 0.0088 cost 0.158 occ 0.49 {'15m': 1.0}
+V39_ALL ['15m', '4h'] sig/d 19.1 tr/d 5.08 net -0.132 g 0.0158 IS 0.0109 CF 0.0224 se 0.0087 cost 0.147 occ 0.54 {'15m': 0.99, '4h': 0.01}
+N18_VWMA_MACD ['15m'] sig/d 53.3 tr/d 7.32 net -0.138 g 0.0057 IS 0.0005 CF 0.0124 se 0.0069 cost 0.144 occ 0.6 {'15m': 1.0}
+N09_ALLIG_AROON ['15m', '1h', '4h'] sig/d 9.7 tr/d 3.85 net -0.133 g 0.008 IS 0.0044 CF 0.0126 se 0.0095 cost 0.141 occ 0.48 {'15m': 0.82, '1h': 0.17, '4h': 0.01}
+F6_VWAP_CROSS ['15m', '4h'] sig/d 61.2 tr/d 6.1 net -0.116 g 0.0102 IS 0.0112 CF 0.0088 se 0.0082 cost 0.127 occ 0.72 {'15m': 0.95, '4h': 0.05}
+N24_DMI ['1h'] sig/d 4.6 tr/d 1.58 net -0.056 g 0.0298 IS 0.0222 CF 0.0383 se 0.0123 cost 0.085 occ 0.41 {'1h': 1.0}
+N04_ST_KLINGER ['15m'] sig/d 49.9 tr/d 9.41 net -0.137 g 0.002 IS -0.002 CF 0.0073 se 0.0058 cost 0.139 occ 0.82 {'15m': 1.0}
+N23_HA_ST ['1h', '4h'] sig/d 13.0 tr/d 2.54 net -0.078 g -0.0042 IS -0.0129 CF 0.0068 se 0.0094 cost 0.073 occ 0.73 {'1h': 0.93, '4h': 0.07}
+pos overlap (same coin+side concurrent / min held time):
+F16_FIB382 F16_FIB500 0.18
+F16_FIB382 F9_FVG 0.09
+F16_FIB382 N07_ICHI_CMO 0.09
+F16_FIB382 F4_FAN 0.11
+F16_FIB382 F7_RF_TRIPLE 0.14
+F16_FIB382 DOGE 0.11
+F16_FIB382 S2_ST_ROC 0.1
+F16_FIB500 F9_FVG 0.1
+F16_FIB500 F4_FAN 0.09
+F16_FIB500 F7_RF_TRIPLE 0.12
+F16_FIB500 S2_ST_ROC 0.09
+F9_FVG N02_ST_KST 0.09
+F9_FVG F4_FAN 0.1
+F9_FVG F7_RF_TRIPLE 0.11
+F9_FVG S2_ST_ROC 0.09
+N02_ST_KST N07_ICHI_CMO 0.11
+N02_ST_KST F4_FAN 0.13
+N02_ST_KST F7_RF_TRIPLE 0.14
+N02_ST_KST DOGE 0.09
+N02_ST_KST S2_ST_ROC 0.2
+N07_ICHI_CMO N10_HA_PSAR 0.09
+N07_ICHI_CMO F4_FAN 0.15
+N07_ICHI_CMO F7_RF_TRIPLE 0.15
+N07_ICHI_CMO DOGE 0.09
+N07_ICHI_CMO S2_ST_ROC 0.13
+N10_HA_PSAR F4_FAN 0.11
+N10_HA_PSAR F7_RF_TRIPLE 0.14
+N10_HA_PSAR S2_ST_ROC 0.09
+F4_FAN F7_RF_TRIPLE 0.18
+F4_FAN DOGE 0.15
+F4_FAN S2_ST_ROC 0.15
+F7_RF_TRIPLE DOGE 0.18
+F7_RF_TRIPLE S2_ST_ROC 0.15
+DOGE S2_ST_ROC 0.14

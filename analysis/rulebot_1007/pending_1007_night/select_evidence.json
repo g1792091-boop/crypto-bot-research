@@ -1,0 +1,625 @@
+{
+ "headline": "No strategy can be chosen as a likely winner: at today's costs every rule base loses ~0.1-0.2R per trade over 5 years. Only F16_FIB382@15m and F16_FIB500@15m have AI-timeframe direction evidence that survives multiple testing (gross +0.022/+0.026R vs a 0.23R cost). Wave 1 puts those two first, then fills 8 seats for test informativeness (frequency, distinct archetypes, side balance, no anti-edge), because among the remaining non-negative cells the evidence is at chance level and the choice is nearly arbitrary. Start with 10, grow to at most ~19, not 30.",
+ "recommended_count_and_why": {
+  "count": "10 now (wave1); add up to 8-9 (wave2 'to_20' tier) only after the 1-2 week pilot has measured real per-call cost and the paired AI-minus-rule pipeline works; do not go to 30.",
+  "why": [
+   "Evidence: 2 BH-positive AI-tf cells (both F16). Among core cells at 15m/30m/1h, cells with gross t>=1 in both halves are 22 positive vs 15 negative and |t|>=2 is 3 vs 4: chance level. DeepSeek leans negative (18 vs 41; 6 vs 24) (sel/cells.csv). Beyond ~12 seats every addition is a near-duplicate or a zero-evidence filler.",
+   "Power and multiple testing: one month detects only ~0.3R/trade per trader (LF8); 30 traders judged together in one trending month pass together by correlated luck (LF7). Fewer seats mean fewer false 'winners' in November.",
+   "Distinctness: of the 80 A/B definitions about 65 are distinct streams, and wave1 seats already share 9-20% of held time on the same coin+side (sim3), so 30 seats are far fewer independent experiments.",
+   "Cost: 10 traders fit $500 under every setup/policy; 20 fit only in ignore-new-signals mode with 30-min or event-only checks (and B/P1-ignore); 30 fit only ignore + P2/P3 and the reference plan costs $510-775/month depending on the token basis (verify2_cost_model C7/C9). Thinking effort is the biggest unknown (low $523 vs high $1,103)."
+  ]
+ },
+ "selection_method": [
+  "Primary evidence: 5y gross R (direction content before costs) per strategy x tf, week-clustered, BH over 307 cells (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py). Live sign not used.",
+  "Timeframe scope per trader, pre-specified: a tf is an entry tf only if its 5y gross is >0 in both halves and t>=1; others are context only; 4h only where 20x sizes.",
+  "Secondary veto: one-position trader simulation on that scope (TSIM=sel/sim3.py (5y one-position trader on the listed tfs, longer-tf then widest-stop ties, no switching, new signals ignored while holding; gross=v4n_gross/stop_frac; SE with week clusters; 5y cost, today's is ~1.5x)); veto if a half is below -0.005R (F7_RF_TRIPLE, N23_HA_ST, S4_BB_BBP, F15_ASIA_BRK, F12_MSS_DISP vetoed).",
+  "Exclusions: anti-edge (BH-negative), negative-leaning both halves, duplicates/children, near-silent, one-sided regime bets.",
+  "Ties (most seats): chosen for decisions/day, distinct archetype, low overlap (sel/ovl.py signal overlap, sim3 held-time overlap), roughly 50/50 long share. Stated as nearly arbitrary where it is."
+ ],
+ "wave1": [
+  {
+   "strategy": "F16_FIB382",
+   "timeframes": [
+    "15m",
+    "1h (4h never; 30m context only)"
+   ],
+   "why": "One of only two AI-timeframe cells whose 5y direction edge survives multiple testing and is positive in both halves. Best available base for asking whether AI selection/exits add value on a signal with real (if small) direction content.",
+   "evidence": [
+    "15m: gross +0.026R, t 3.89, BH q 0.006, IS +0.018 / CF +0.037, net -0.142R, 11.2 sized signals/day (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py)",
+    "1h: gross +0.015R, t 1.20, IS +0.022 / CF +0.006, 2.4/day; 30m excluded (gross -0.006, t -0.68, IS negative); 4h excluded (-0.037)",
+    "Trader 15m+1h: 4.69 trades/day, gross +0.016R (IS +0.006, CF +0.030, week SE 0.008), 5y cost 0.133R, net -0.117R (TSIM=sel/sim3.py (5y one-position trader on the listed tfs, longer-tf then widest-stop ties, no switching, new signals ignored while holding; gross=v4n_gross/stop_frac; SE with week clusters; 5y cost, today's is ~1.5x))",
+    "verify_fiveyear F4/missed[2]: BH-positive, the lens graded it D only because of 13-18 live trades (live sign not used here)"
+   ],
+   "risks": [
+    "Gross edge is ~1/9 of today's 15m cost (0.23R): AI must still add ~0.2R/trade",
+    "DS family has slightly negative pooled direction (t -1.8..-2.1); F16_FIB618/764 are negative",
+    "With 5m-resolution exits the 5y cell numbers may shrink (as N23 4h did)"
+   ],
+   "expected_trades_per_day": "4.7 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "1h part: wider ladder geometry (10-20x price geometry or R-ladder arming 1.5-2R), X12 (+0.13R live 3 runs, 5y 10x vs 30x +1.76 bps in 28/35 1h cells): pre-registered shadow",
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "F16 family. FIB382 vs FIB500 share only ~18% of signals (verifier: 3,842 identical of ~21.6k/22.8k; sel/ovl.py <25%) and 0.18 of held time on the same coin+side (sim3), so they are near-independent tests of the same idea; count them as one family for BH. F16_FIB618 (~97% inside F10_OTE) and F16_FIB764 are excluded."
+  },
+  {
+   "strategy": "F16_FIB500",
+   "timeframes": [
+    "15m (30m/1h context only)"
+   ],
+   "why": "Second BH-significant AI-timeframe cell; independent replication of the Fibonacci-pullback edge before costs.",
+   "evidence": [
+    "15m: gross +0.022R, t 3.31, BH q 0.020, IS +0.019 / CF +0.026, net -0.150R, 11.8/day (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py)",
+    "30m +0.004 (t 0.48) and 1h +0.0001 excluded by the t>=1 rule; 4h -0.019",
+    "Trader 15m: 5.15 trades/day, gross +0.017R (IS +0.008, CF +0.028, SE 0.008), cost 0.152R, net -0.135R; adding 1h dilutes gross to +0.0085 (TSIM)"
+   ],
+   "risks": [
+    "Same as F16_FIB382; 15m-only means the full 0.23R cost hurdle",
+    "Correlated with FIB382 (18% shared signals)"
+   ],
+   "expected_trades_per_day": "5.2 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "F16 family, see F16_FIB382."
+  },
+  {
+   "strategy": "F9_IFVG",
+   "timeframes": [
+    "15m",
+    "4h only where 20x sizes"
+   ],
+   "why": "Strongest non-BH 15m cell (verifier's 5y-only shortlist), stable at trader level; ICT inversion-FVG archetype distinct from the Fib pullbacks.",
+   "evidence": [
+    "15m: gross +0.016R, t 2.61, q 0.092, IS +0.006 / CF +0.026, 11.9/day; 4h +0.069 t 1.69 both halves + (0.1/day) (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py)",
+    "Trader 15m+4h: 5.16 trades/day, gross +0.017R (IS +0.017, CF +0.017, SE 0.008), cost 0.148R, net -0.132R (TSIM)"
+   ],
+   "risks": [
+    "Not significant after BH: could be chance (DS cells with t>=2: 6 positive vs 24 negative)",
+    "4h part is a stop-selected subset (19.7% sizable)"
+   ],
+   "expected_trades_per_day": "5.2 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "F9 family (F9_FVG, F9_IFVG, F9_OB, F9_BREAKER; F13_FVG_PD and F10_M2022 nest inside F9_FVG). IFVG and FVG share <25% of signals. Choice IFVG over FVG is nearly arbitrary (t 2.61 vs 2.56); IFVG chosen because its trader-level gross is positive in both halves (FVG IS -0.001). F9_OB/F9_BREAKER are negative at 1h (t -2.48/-2.24) and excluded."
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "timeframes": [
+    "15m",
+    "4h only where 20x sizes"
+   ],
+   "why": "Core strategy with the best 15m 5y gross, confirmed as 'B' by two independent simulators (cost lens and its verifier).",
+   "evidence": [
+    "15m: gross +0.019R, t 2.36, q 0.13, IS +0.015 / CF +0.025, 14.7/day (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py); independent sim +0.0187 [+0.0040, ..], P1 +0.015 / P2 +0.024 (verify_costs C12)",
+    "4h: +0.081 t 2.37 both halves + (0.2/day); 30m excluded (IS -0.018); 1h excluded (t 0.42)",
+    "Trader 15m+4h: 5.16 trades/day, gross +0.009R (IS +0.009, CF +0.008, SE 0.009), cost 0.154R, net -0.145R (TSIM)"
+   ],
+   "risks": [
+    "Core 15m-1h cells are at chance level overall (22 vs 15 cells positive vs negative with |t|>=1 both halves; 3 vs 4 at |t|>=2)",
+    "Supertrend family: correlated with S2/N01/N23"
+   ],
+   "expected_trades_per_day": "5.2 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "Supertrend family (N01_ST_EMA, N04_ST_KLINGER, N23_HA_ST, S2_ST_ROC, N25_DST_CCI). Signal overlap with each <25%; held-time overlap with S2_ST_ROC 0.20 (highest pair), so S2 is wave2."
+  },
+  {
+   "strategy": "F4_FAN",
+   "timeframes": [
+    "15m",
+    "30m",
+    "4h only where 20x sizes"
+   ],
+   "why": "EMA-ribbon trend archetype with small positive gross in both halves at every timeframe; high frequency gives many skip decisions.",
+   "evidence": [
+    "15m: gross +0.015R, t 2.11, q 0.20, IS +0.014 / CF +0.015, 21.1/day; 30m +0.011 t 1.33 both +; 4h +0.049 t 1.38 both +; 1h +0.011 t 0.97 (excluded by t<1) (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py)",
+    "Trader 15m+30m+4h: 5.97 trades/day, gross +0.007R (IS -0.0005, CF +0.017, SE 0.007), cost 0.130R, net -0.123R (TSIM)"
+   ],
+   "risks": [
+    "Trader-level IS gross ~0: evidence is cell-level only",
+    "Occupancy 0.72: the trader is busy, so its 'choice' is often first-come"
+   ],
+   "expected_trades_per_day": "6.0 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "F4 family: F4_PULL (live worst vs coin flip, structurally long-biased) and F4_PULL_RSI (1/day) excluded; F4_FAN shares <25% of signals with them."
+  },
+  {
+   "strategy": "N10_HA_PSAR",
+   "timeframes": [
+    "30m (15m/1h context only)"
+   ],
+   "why": "The 30m seat: lowest cost of the 15m/30m options; 30m gross positive in both halves and 'B' in the cost verifier's own simulator.",
+   "evidence": [
+    "30m: gross +0.012R, t 1.79, q 0.33, IS +0.013 / CF +0.012, 10.5/day (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py); verifier own sim +0.0135 [+0.0012], P1 +0.017 / P2 +0.010 (verify_costs C12)",
+    "15m excluded (t 0.34, IS -0.0003); 1h excluded (CF -0.002)",
+    "Trader 30m: 3.67 trades/day, gross +0.019R (IS +0.018, CF +0.019, SE 0.009), cost 0.109R, net -0.090R (TSIM)"
+   ],
+   "risks": [
+    "Live 'least-bad' status is noise and not used",
+    "Ex-best-day live mean falls to +0.03R; nothing here is a verified non-loser"
+   ],
+   "expected_trades_per_day": "3.7 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "30m state cut 'close at market if <= -0.5R after 4 bars' (AIH-3: hold-minus-exit -0.22R, +0.014R per signal; post hoc, threshold-fragile at 30m): code shadow only",
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "Heikin-Ashi family: 42% of N10 signals are also N23_HA_ST signals (N23 not in wave1); 28% inside F7_RF_TRIPLE."
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "timeframes": [
+    "15m",
+    "30m"
+   ],
+   "why": "Ichimoku seat (trend archetype) with positive gross in both halves at 15m and 30m and the most consistent trader-level gross among the Ichimoku cells.",
+   "evidence": [
+    "30m: gross +0.023R, t 1.98, q 0.26, IS +0.018 / CF +0.028, 3.7/day; 15m +0.015 t 1.67 both + (7.8/day) (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py); independent sim 30m +0.0207 [-0.0023, +0.043] (not B; verify_costs)",
+    "Trader 15m+30m: 4.33 trades/day, gross +0.020R (IS +0.017, CF +0.023, SE 0.008), cost 0.143R, net -0.123R (TSIM)"
+   ],
+   "risks": [
+    "N07_ICHI_CMO has equal or better cell evidence at 30m; the N12-vs-N07 choice is nearly arbitrary"
+   ],
+   "expected_trades_per_day": "4.3 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "Ichimoku family (N07_ICHI_CMO, N08_ICHI_WR, N14_ICHI_RSI silent). N12/N07 share 28% of 15m signals; N07 is wave2 (30m-only)."
+  },
+  {
+   "strategy": "DOGE",
+   "timeframes": [
+    "1h"
+   ],
+   "why": "The 1h comparison seat: the lowest cost hurdle among AI timeframes and the best 1h 5y cell; also the owners' friend's bot.",
+   "evidence": [
+    "1h: gross +0.029R, t 2.08, q 0.22, IS +0.027 / CF +0.031, 2.2/day (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py); 15m (+0.009, t 0.82) and 30m (+0.008, t 0.71) excluded by t<1",
+    "Trader 1h: 1.18 trades/day, gross +0.031R (IS +0.038, CF +0.024, SE 0.014), cost 0.079R (today ~0.12R), net -0.048R (TSIM); adding 30m drops gross to -0.007"
+   ],
+   "risks": [
+    "Only ~1.2 rule trades/day: ~90 trades by 12/31, only the bare minimum (85-92) needed to see 0.2R at 1h before clustering is counted",
+    "1h live grade D rests on 8 signals (noise)",
+    "At 1h, 30x sizes only ~79% and 40x ~2%: leverage effectively 20-30x"
+   ],
+   "expected_trades_per_day": "1.2 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "1h wider ladder geometry (X12) and 1h state cut <= -0.5R after 4 bars (AIH-3: -0.29R hold-minus-exit, +0.021R per signal, robust to threshold only at 1h): shadow",
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "No duplicate at 1h. At 30m, 57% of DOGE signals are F7_RF_TRIPLE signals (one more reason not to give DOGE 30m)."
+  },
+  {
+   "strategy": "F6_VWAP_CROSS",
+   "timeframes": [
+    "15m",
+    "4h only where 20x sizes"
+   ],
+   "why": "VWAP archetype (distinct from the trend/pullback seats), the DeepSeek family the deepseek lens recommended first for exploratory AI slots; very high signal supply for skip decisions.",
+   "evidence": [
+    "15m: gross +0.005R, t 1.82, q 0.32, IS +0.003 / CF +0.008, 59.2/day; 4h +0.027 t 2.02 IS +0.024 / CF +0.030 (1.9/day) (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py)",
+    "Trader 15m+4h: 6.1 trades/day, gross +0.010R (IS +0.011, CF +0.009, SE 0.008), cost 0.127R, net -0.116R (TSIM)",
+    "DS14: if DeepSeek gets AI slots, F6 first (period-consistent 5y ranks)"
+   ],
+   "risks": [
+    "Gross edge is tiny; this seat is chosen for distinctness and decision count, not evidence",
+    "Live 15m F6 gain was all in the v4 sell-off half (noise)"
+   ],
+   "expected_trades_per_day": "6.1 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "F6 family: F6_VWAP_FAIL (~0, reserve). 32% of N20_EMA9_CHOP and 40% of F12_MSS_DISP 15m signals coincide with F6_VWAP_CROSS."
+  },
+  {
+   "strategy": "V39_ALL",
+   "timeframes": [
+    "15m",
+    "4h only where 20x sizes"
+   ],
+   "why": "The owners' own composite (V3.9) as a 'mixed' archetype seat; small positive gross in both halves at 15m and 4h; distinct from the other seats.",
+   "evidence": [
+    "15m: gross +0.011R, t 1.20, q 0.54, IS +0.0105 / CF +0.0108, 18.9/day; 4h +0.047 t 1.07 both + (C5Y=lens/fiveyear/verify3/agg_cells.csv (verifier v3agg.py: 5y 2021-08..2026-09, v4n house exits, week-clustered t; IS<2024-07<=CF), BH over 307 cells n>=200 recomputed in sel/tab.py); 30m excluded (IS -0.003); 1h excluded (IS -0.026)",
+    "Trader 15m+4h: 5.08 trades/day, gross +0.016R (IS +0.011, CF +0.022, SE 0.009), cost 0.147R, net -0.132R (TSIM)"
+   ],
+   "risks": [
+    "Weakest cell evidence in wave1 (t 1.2): this seat is nearly arbitrary; S2_ST_ROC is interchangeable (better t, but supertrend overlap with N02)"
+   ],
+   "expected_trades_per_day": "5.1 (5y rule-equivalent when every signal is taken while flat; live quiet-market holds are longer, so expect ~0.6-0.9x, and fewer after AI skips)",
+   "custom_value_candidates": [
+    "HTF-agreement veto (5y: agreeing 15m/30m signals +0.01..+0.09R vs disagreeing, same sign IS and CF in 18/20 definitions, ours_1h_4h F3; CV5 filter-only +0.006 R2 [+0.001,+0.011] but not significant in money and fading in half B): shadow account only, expect <=0.01R",
+    "1.5 ATR stop (CV5 stop-only +0.0026 R2 [+0.0013,+0.0039], money -0.0003 in half B; X10 says it raises cost per R 0.224 vs 0.168 at 15m under risk sizing): shadow only, lowest priority"
+   ],
+   "duplicate_family_note": "No duplicate group (signal overlap with every other strategy <25%)."
+  }
+ ],
+ "wave2": [
+  {
+   "strategy": "S2_ST_ROC",
+   "timeframes": [
+    "15m",
+    "4h@20x"
+   ],
+   "tier": "to_20",
+   "why": "Interchangeable with V39_ALL; most decisions of the trend seats.",
+   "evidence": [
+    "15m +0.010R t 1.73 IS +0.015 / CF +0.003, 49/day; 4h +0.048 t 1.72 both + (C5Y)",
+    "Trader 7.68/day, gross +0.023R (IS +0.025, CF +0.020, SE 0.007), net -0.113 (TSIM; first-come selection, treat as forking-path luck)"
+   ],
+   "risks": [
+    "Held-time overlap with N02 0.20"
+   ],
+   "expected_trades_per_day": "7.7",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Supertrend family; 32% of N01's signals are S2 signals."
+  },
+  {
+   "strategy": "F9_FVG",
+   "timeframes": [
+    "15m",
+    "4h@20x"
+   ],
+   "tier": "to_20",
+   "why": "Second F9 seat, highest-frequency positive-gross DS cell.",
+   "evidence": [
+    "15m +0.017R t 2.56 q 0.097 IS +0.011 / CF +0.023, 18/day (C5Y)",
+    "Trader 6.19/day, gross +0.014 (IS -0.001, CF +0.033) (TSIM)"
+   ],
+   "risks": [
+    "Same family as F9_IFVG"
+   ],
+   "expected_trades_per_day": "6.2",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Parent of F13_FVG_PD (99%) and F10_M2022 (100%): those are context, not seats."
+  },
+  {
+   "strategy": "N07_ICHI_CMO",
+   "timeframes": [
+    "30m (15m only if more decisions are needed)"
+   ],
+   "tier": "to_20",
+   "why": "Best 30m cell, B in two simulators.",
+   "evidence": [
+    "30m +0.026R t 2.19 q 0.18 IS +0.020 / CF +0.035, 3.3/day (C5Y); independent sim +0.0238 [+0.0021] (verify_costs C12)",
+    "Trader 30m: 1.76/day gross +0.018 (IS +0.010, CF +0.030); 15m+30m: 3.82/day gross +0.001 (TSIM)"
+   ],
+   "risks": [
+    "Only ~1.8 trades/day at 30m-only"
+   ],
+   "expected_trades_per_day": "1.8 (30m) / 3.8 (15m+30m)",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Ichimoku family with N12 (28%); 41% of N08 inside N07."
+  },
+  {
+   "strategy": "N01_ST_EMA",
+   "timeframes": [
+    "15m"
+   ],
+   "tier": "to_20",
+   "why": "Supertrend+EMA; carries the only per-cell exit custom value with BH support (exitstyle tp1R).",
+   "evidence": [
+    "15m +0.011R t 1.32 both + 17/day (C5Y)",
+    "Trader 5.2/day gross +0.014 (IS +0.016, CF +0.011) (TSIM)",
+    "research/exitstyle per-cell tp1R BH-significant (verify_fiveyear missed[5]); X6 says fixed TP at 15m lost live in both runs: shadow only"
+   ],
+   "risks": [
+    "Supertrend overlap (34% in N23, 32% in S2)"
+   ],
+   "expected_trades_per_day": "5.2",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Supertrend family."
+  },
+  {
+   "strategy": "N18_VWMA_MACD",
+   "timeframes": [
+    "15m"
+   ],
+   "tier": "to_20",
+   "why": "Volume-weighted MACD trend; 15m gross + both halves; very high signal supply.",
+   "evidence": [
+    "15m +0.012R t 1.79 IS +0.008 / CF +0.018, 53/day (C5Y)",
+    "Trader 7.32/day gross +0.006 (IS +0.0005) (TSIM)",
+    "Live 30m BH-negative (q 0.015) is a sell-off artifact (flipped side +0.27R)"
+   ],
+   "risks": [
+    "30m excluded (IS -0.006)"
+   ],
+   "expected_trades_per_day": "7.3",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Parent of N06_MACD_ORB (98% of N06 inside N18)."
+  },
+  {
+   "strategy": "N09_ALLIG_AROON",
+   "timeframes": [
+    "15m",
+    "1h",
+    "4h@20x"
+   ],
+   "tier": "to_20",
+   "why": "Small positive gross in both halves at 15m/1h/4h; mid frequency.",
+   "evidence": [
+    "15m +0.009 t 1.14; 1h +0.016 t 1.03; 4h +0.080 t 1.65; all both halves + (C5Y)",
+    "Trader 3.85/day gross +0.008 (IS +0.004, CF +0.013) (TSIM)"
+   ],
+   "risks": [
+    "All t < 1.7"
+   ],
+   "expected_trades_per_day": "3.9",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "30% of N09 signals inside N18."
+  },
+  {
+   "strategy": "N24_DMI",
+   "timeframes": [
+    "1h"
+   ],
+   "tier": "to_20",
+   "why": "Second 1h seat with the best 1h trader-level gross.",
+   "evidence": [
+    "1h +0.018R t 1.73 IS +0.004 / CF +0.035, 4.6/day (C5Y)",
+    "Trader 1.58/day gross +0.030 (IS +0.022, CF +0.038) (TSIM)",
+    "exitstyle per-cell tp1.5R/tp2R BH (in-sample)"
+   ],
+   "risks": [
+    "Short-heavy: long share 0.18-0.20 over 5y (sel/ovl.py) = regime bet; must be scored with side-fixed coin-flip baseline"
+   ],
+   "expected_trades_per_day": "1.6",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "46% of S6_EMA_DMI_ADX signals inside N24."
+  },
+  {
+   "strategy": "N04_ST_KLINGER",
+   "timeframes": [
+    "15m"
+   ],
+   "tier": "to_20",
+   "why": "Pure skip-skill test: the most decisions of any non-negative cell, base ~0.",
+   "evidence": [
+    "15m +0.007R t 1.29 IS +0.001 / CF +0.014, 50/day (C5Y)",
+    "Trader 9.41/day gross +0.002 (TSIM)"
+   ],
+   "risks": [
+    "Most expensive seat in calls (cost_model busy list)",
+    "Live 1h CI below 0 (n 57) noise-level"
+   ],
+   "expected_trades_per_day": "9.4",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "Supertrend family."
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "timeframes": [
+    "1h"
+   ],
+   "tier": "only_if_owners_insist",
+   "why": "Optional third 1h seat.",
+   "evidence": [
+    "1h +0.031R t 1.53 both + 1.0/day (C5Y)",
+    "Trader 0.66/day gross +0.037 (TSIM)"
+   ],
+   "risks": [
+    "~50 trades by 12/31: cannot show anything alone"
+   ],
+   "expected_trades_per_day": "0.7",
+   "custom_value_candidates": [
+    "same shared shadow candidates as wave1 (HTF-agreement veto; 1.5 ATR stop)"
+   ],
+   "duplicate_family_note": "No duplicate."
+  }
+ ],
+ "wave2_note": "Only 8 seats ('to_20') plus 1 optional are defensible; a 20th seat and anything toward 30 would be filler from the reserve with no evidence. Use spare budget for 2-3 Opus twins on F16_FIB382/F16_FIB500/N10_HA_PSAR instead.",
+ "reserve": [
+  {
+   "strategy": "N23_HA_ST",
+   "note": "Keep 4h as a cost-free rule account and logged comparison: the most significant 5y cell (4h gross +0.099R, t 3.95, q 0.006, IS +0.085 / CF +0.113, net +0.027 t 1.06; 5m-exit net +0.008). As an AI trader it fails: 4h-only gives 0.34 rule trades/day; 1h+4h is 93% 1h trades with gross -0.004 (IS -0.013) (TSIM). Its 4h state may be shown to other traders as context."
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "note": "30m +0.0125 t 2.0 both +, but trader 15m+30m+1h gross -0.002 (IS -0.007), occupancy 0.91 (always holding) and 57% of DOGE 30m inside it."
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "note": "1h +0.019 t 1.55 / 4h +0.052 both +, but 5m anti-edge (q 0.027) and 15m negative-leaning (t -1.70, IS -0.025); trader 1h+4h +0.004 (CF -0.007). Largest live MFE is not 5y evidence."
+  },
+  {
+   "strategy": "F15_ASIA_BRK",
+   "note": "30m +0.023 t 1.83 but trader 30m 1.49/day with IS -0.028."
+  },
+  {
+   "strategy": "N22_VORTEX_PSAR",
+   "note": "4h +0.064 t 2.49 both + (q 0.10) but 0.24-0.5 trades/day: rule account."
+  },
+  {
+   "strategy": "N05_PSAR_POC / N03_ADX_GC",
+   "note": "Positive-leaning but rare (0.9/day at 1h; N03 ~1/day total)."
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "note": "30m +0.014 t 1.0 both +, trader 30m+1h -0.018: nested inside F12_MSS; context only."
+  },
+  {
+   "strategy": "N19_FIB_CHOP, N25_DST_CCI, OBV_S, F3_BOS, F3_BOS_ZONE, F12_MSS, F15_OPEN0930, F6_VWAP_FAIL",
+   "note": "~0 with mixed halves; no information beyond what the wave1 seats give."
+  },
+  {
+   "strategy": "N20_EMA9_CHOP",
+   "note": "Rule account only. 5m gross BH-positive (+0.029, q 0.021) but net -0.315 at 5m; 15m/30m ~0 or negative; long share 0.00 (short-only regime bet; live wins are the sell-off)."
+  },
+  {
+   "strategy": "D01-D10",
+   "note": "No 5y evidence (3 tested failed gates; D07 has no history). Eligible only after a pre-registered 5y test with BH."
+  }
+ ],
+ "exclude": [
+  {
+   "strategy_or_family": "Anti-edge families: N17_KC_RSI, F11 (RAID/TSOUP/PO3) + F13_RAID_PD, F15_ORB, F15_ASIA_SWEEP, F17 (Z/Z_HL), F1_PVT_DIV",
+   "reason": "BH-significant negative direction (see anti_edge_list). Last choice; keep as cost-free rule accounts at most."
+  },
+  {
+   "strategy_or_family": "F1_RSI_DIV, F1_MOM_DIV",
+   "reason": "Negative-leaning in both halves (15m t -2.19 / -1.76); overlap 52-69% with F1_PVT_DIV (anti-edge)."
+  },
+  {
+   "strategy_or_family": "F2_DEMARK, F3_HHHL, F8_VWICK, F9_OB, F9_BREAKER, F10_OTE, F16_FIB618, F16_FIB764, F14_SMT, F15_LON_BRK, OBV_B, S3_CMO_SANDWICH, V45_AMB, N16_BBRSI, S6_EMA_DMI_ADX",
+   "reason": "Negative-leaning: gross negative in both halves at the AI timeframes with |t| 1.2-2.9 (several q 0.06-0.10); F16_FIB618 is also ~97% inside F10_OTE; S6 has a 5m anti-edge and 46% overlap with N24."
+  },
+  {
+   "strategy_or_family": "F4_PULL, F4_PULL_RSI",
+   "reason": "F4_PULL: 5y ~0/negative at 30m/1h, structurally long in trends, worst-vs-coin-flip in the luck lens (q 0.056, live all-long in the sell-off); F4_PULL_RSI ~1 signal/day. F4 family is represented by F4_FAN."
+  },
+  {
+   "strategy_or_family": "F5_BOX, F5_BOX_HTF, F5_BOX_RSI",
+   "reason": "Short-heavy (long share 0.31-0.36), 15m/30m ~0 or negative, 4h strongly negative; F5_BOX_HTF identical to F5_BOX."
+  },
+  {
+   "strategy_or_family": "Duplicates/children: F13_FVG_PD, F10_M2022 (inside F9_FVG), F7_RF_ONLY (58% inside F7_RF_TRIPLE), N06_MACD_ORB (98% inside N18), F12_MSS_DISP (inside F12_MSS), F15_OPEN0000 (one stream on 15m/30m/1h, ~0)",
+   "reason": "Not separate experiments; use as context features at most (DS6/LF14, sel/ovl.py)."
+  },
+  {
+   "strategy_or_family": "N14_ICHI_RSI, N15_KC_AO, N21_ST_RSI_ADX, S1_EMA_RSI_CHOP, N11_BREAKAWAY, N08_ICHI_WR, S5_DONCHIAN_MFI",
+   "reason": "Near-silent (<~1.5 sized signals/day over all AI tfs; N21 zero): cannot gather decisions by 12/31 (LF11)."
+  },
+  {
+   "strategy_or_family": "N20_EMA9_CHOP, N24_DMI (as wave1)",
+   "reason": "One-sided (long share 0.00 / 0.18-0.20): live results are bets on a falling market (LF4, F5). N24 at 1h is wave2 only with side-fixed baselines."
+  },
+  {
+   "strategy_or_family": "REEL5M_BB_MA200",
+   "reason": "5m, steady loss exactly as its 5y study predicts (fiveyear F12)."
+  },
+  {
+   "strategy_or_family": "D01-D10 (new)",
+   "reason": "Untested or failed their 5y gates; no evidence to select on."
+  }
+ ],
+ "anti_edge_list": {
+  "definition": "5y gross R (before costs) BH-significant NEGATIVE, q<0.05 over 307 cells with n>=200, week-clustered (C5Y; reproduces verifier's 18 negative / 4 positive)",
+  "cells": [
+   {
+    "strategy": "N17_KC_RSI",
+    "cells": "15m -0.021 t -3.35 q 0.020; 30m -0.025 t -2.97 q 0.043; 1h -0.044 t -3.90 q 0.006; 4h -0.084 t -2.46 q 0.105"
+   },
+   {
+    "strategy": "F11_RAID",
+    "cells": "15m -0.019 t -4.01 q 0.006 (1h -0.020 q 0.104)"
+   },
+   {
+    "strategy": "F13_RAID_PD",
+    "cells": "15m -0.016 t -3.40 q 0.020 (95% Jaccard with F11_RAID)"
+   },
+   {
+    "strategy": "F11_TSOUP",
+    "cells": "15m -0.017 t -3.30 q 0.020"
+   },
+   {
+    "strategy": "F11_PO3",
+    "cells": "30m -0.037 t -3.30 q 0.020; 1h -0.036 t -3.22 q 0.022"
+   },
+   {
+    "strategy": "F15_ORB",
+    "cells": "15m -0.052 t -4.11 q 0.006"
+   },
+   {
+    "strategy": "F15_ASIA_SWEEP",
+    "cells": "15m -0.037 t -2.96 q 0.043; 1h -0.042 t -3.51 q 0.017; 30m q 0.057"
+   },
+   {
+    "strategy": "F17_Z",
+    "cells": "1h -0.027 t -3.27 q 0.021; 4h -0.097 t -3.49 q 0.017"
+   },
+   {
+    "strategy": "F17_Z_HL",
+    "cells": "15m -0.019 t -3.48 q 0.017; 1h -0.032 t -3.16 q 0.026"
+   },
+   {
+    "strategy": "F1_PVT_DIV",
+    "cells": "15m -0.027 t -3.54 q 0.017"
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "cells": "5m -0.020 t -3.13 q 0.027 (not an AI timeframe)"
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "cells": "5m -0.025 t -3.38 q 0.020 (not an AI timeframe)"
+   }
+  ],
+  "near_anti_q_below_0_11": [
+   "F15_ASIA_SWEEP 30m q 0.057",
+   "F8_VWICK 1h -0.043 q 0.057",
+   "F2_DEMARK 15m -0.025 q 0.060",
+   "F17_Z_HL 4h q 0.077",
+   "F14_SMT 4h -0.105 q 0.085",
+   "OBV_B 30m -0.020 q 0.094",
+   "F16_FIB618 30m -0.022 q 0.095",
+   "F3_HHHL 15m q 0.104",
+   "F9_OB 1h q 0.104",
+   "F11_RAID 1h q 0.104",
+   "N17_KC_RSI 4h q 0.105"
+  ],
+  "note": "Flipping these gives only +0.02-0.05R gross, far below the 0.23R 15m cost; do not 'reverse' them."
+ },
+ "design_implications": [
+  "Verdict per trader = pre-registered paired AI-minus-rule R over every rule signal it saw (taken, skipped, near-entry), plus both coin-flip baselines (timing-matched side flip and same-side random time), day/week-block CIs, long share reported; >=~150 de-clustered decisions before any promotion (fiveyear F14, LF5). Never account P&L.",
+  "Entry tf scope per trader as listed (cells with evidence); other tfs are shown as context only. Mixing no-evidence tfs fills the one slot with zero-direction trades (TSIM: N07 30m-only +0.018 vs 15m+30m +0.001; DOGE 1h +0.031 vs 30m+1h -0.007), though these differences are within ~2 SE.",
+  "Setup B: assigned tfs, longer tf first on ties, then widest-stop coin first (+0.014R core, +0.019R DS, verify2_multi_tf), no switching, new signals ignored while holding (switching is the worst rule; ignoring is also what fits 20-30 traders in $500).",
+  "Exits in code in price/R at fixed 20x geometry, bar-close lock updates at 15m/30m (X7 +0.02-0.04R), BE only after MFE >= +1R, no time stop, no AI early profit-taking below the first rung; 1h: wider ladder as a pre-registered shadow (X12). Freeze exits per family to 12/31 (X3).",
+  "Sizing: 1% risk per stop (1.5% at 1h/4h), code picks the highest of 50/40/30/20x at which the stop sits inside the liquidation buffer (in practice 20-30x); confidence does not scale size until it is calibrated (Spearman>0 over 200+ shadow trades). 4h needs a per-signal stop+buffer < liquidation check (8.1% of 5y 4h signals at 20x liquidate before the 2 ATR stop).",
+  "Portfolio cap per coin+direction across traders (e.g. total open risk <= 3% per coin/side): wave1 pairs share 9-20% of held time on the same coin+side (F16 pair 0.18, N02-S2 0.20, F4_FAN-F7 0.18).",
+  "Coins: avoid LTC/BCH at large notional (real cost 16-19 bp vs 10 bp BTC/ETH); SOL/DOGE are cheapest per R.",
+  "Custom values: only the HTF-agreement veto and 1.5 ATR stop, in the shadow account, scored in money or R at the default stop, gate N>=100 / delta 0.05R / z adjusted for best-of-225 (~3.5) / both halves; monthly on a 26-week window, never 1-week weekly. Expect <=0.01R. Indicator-value search is negative in money (CV5).",
+  "Prompt: skip is the default; no reverse-direction entries; no carry-over of recent direction lessons; no weight on 'other strategies agree' or 'resistance ahead' (CF5, CF13); deprioritise 15m entries 16-21 KST at most as a tie-breaker.",
+  "Budget: pin effort/thinking per call type, cap max_tokens, set max_retries, pre-warm or stagger caches at bar close, count late answers; Opus twins only 2-3 (each needs its own cache writes).",
+  "Count families, not definitions, in BH and in reporting (F16 pair = one family)."
+ ],
+ "what_would_change_my_mind": [
+  "A trader's pre-registered paired AI-minus-rule gain >= +0.2R/decision at 15m (>= 0.15R at 30m, >= 0.1R at 1h) with a day-block CI above 0 over >=150 de-clustered decisions, holding in both a rising and a falling week, and beating both coin-flip baselines: then weight that strategy up.",
+  "If 5m-resolution exits or a 2020-2021 out-of-period test remove the F16 BH significance, the two F16 seats lose their special status and all 10 seats become informativeness picks.",
+  "If the live every-signal gross of F16_FIB382/500 is below about -0.05R after ~500 signals, drop the F16 rationale (not before; smaller samples are noise).",
+  "If measured per-call cost in the pilot is well below the model (~$0.01/decision or less with thin holding checks), 20 seats are affordable sooner; if thinking runs high (>$0.02), stay at 10.",
+  "A new definition (D-list or other) passing a pre-registered 5y test with BH-positive gross at an AI timeframe would earn a seat ahead of the chance-level fillers.",
+  "Evidence that AI confidence is calibrated would justify risk scaling, not more seats."
+ ],
+ "honest_warnings": [
+  "No strategy is verified not to lose. The best trader-level rule bases still net -0.05R (DOGE 1h) to -0.15R per trade over 5 years, and today's quiet-market cost is ~1.5x the 5y cost. The AI must add ~0.2R/trade at 15m, ~0.16R at 30m, ~0.12R at 1h, about ten times anything measured so far.",
+  "Selection beyond the two F16 cells is nearly arbitrary: core cell evidence is at chance level, and swapping, e.g., V39_ALL for S2_ST_ROC, N12 for N07 or F9_IFVG for F9_FVG would be equally defensible.",
+  "Trader-level 5y gross of every selected seat lies between +0.007 (F4_FAN) and +0.031R (DOGE 1h) with week SE 0.007-0.014: most are within 2 SE of zero. The tf-scope rule and the veto were derived on the same 5 years (in-sample).",
+  "TSIM simplifications: exits on tf bars (5m exits cut N23 4h net from +0.024 to +0.008), hold time in tf bars, entry at the signal bar, no AI behaviour; trades/day are 5y rates, and live holds run longer in quiet markets.",
+  "4h numbers cover only the ~20% of signals that size at 20x (narrow stops); the edge for all 4h signals is ~0.",
+  "Live (v3a/v3b/v4) results were not used for grading; several wave1 cells look bad live (F16 13-18 trades), which is expected noise.",
+  "With ~10-19 traders judged at once in one or two regimes, expect 1-2 traders to look significant by luck in November; only the pre-registered paired test with family-level BH should count.",
+  "DOGE 1h and other 1h seats give ~1-1.6 rule trades/day: they will not reach a verdict by 12/31 on their own; their value is the cross-tf comparison of AI added value."
+ ],
+ "files": {
+  "scripts": "scratchpad/sel/{tab.py,ovl.py,sim3.py}",
+  "tables": "scratchpad/sel/{cells.csv,cells_short.txt,sim3_out.txt}"
+ }
+}
