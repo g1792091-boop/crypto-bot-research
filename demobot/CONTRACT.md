@@ -564,3 +564,8 @@ first and the second half of the closed trades in time order; `coins_up` = coins
 `flags_ko` (plain warnings): "수익의 70% 이상이 거래 5건에서 나옴", "뒤 절반이 앞 절반보다 크게 나쁨" (second_R <
 first_R - 0.2 and second_R < 0), "번 코인이 7개 중 2개 이하", "연속 손실 10번 이상". Shown on the graduation path
 and the ready screen next to each candidate or closest line.
+
+### 9.11 Ranking rows like the rule bot's board
+Each line in `accounts.json` gains `"spark": [30 wallet values, oldest first]` (the line's equity curve sampled
+evenly from the live start to now) and `"pnl_pct_24h": float|null` (the line's P&L % one day ago, from the curve,
+for the rank-change arrows). Positions for the row chips come from `positions.json`.

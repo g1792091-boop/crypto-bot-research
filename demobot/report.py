@@ -52,6 +52,7 @@ def account_header(a: A.Acct, r: dict) -> dict:
         ln = dict(sim["line"])
         sn = [s for s in r["settings_now"] if s.get("L") in (None, L)]
         ln["setting_ko"] = _setting_line(sn)
+        ln.update(_spark(sim["curve"]))
         ssim = (r.get("lines_stop") or {}).get(L)
         if ssim is not None:
             sl = ssim["line"]
@@ -64,6 +65,22 @@ def account_header(a: A.Acct, r: dict) -> dict:
                 rule_ko=a.rule_ko, setting_ko=_setting_line(r["settings_now"] if a.kind != "friend" else
                                                             [s for s in r["settings_now"] if s.get("L") == 20]),
                 lines=lines, switches=len(sw), last_switch_ms=(sw[0]["t_ms"] if sw else None))
+
+
+SPARK_N = 30
+
+
+def _spark(curve: list) -> dict:
+    """A small equity line for the ranking rows (30 points) and the P&L % one day ago (CONTRACT 9.11)."""
+    if not curve:
+        return dict(spark=[], pnl_pct_24h=None)
+    t = np.asarray([c[0] for c in curve], np.int64)
+    v = np.asarray([c[1] for c in curve], float)
+    grid = np.linspace(t[0], t[-1], SPARK_N).astype(np.int64)
+    i = np.clip(np.searchsorted(t, grid, side="right") - 1, 0, len(v) - 1)
+    j = int(np.searchsorted(t, t[-1] - DAY_MS, side="right")) - 1
+    ago = (float(v[j]) - A.SEED) / A.SEED * 100 if j >= 0 else None
+    return dict(spark=[round(float(x), 2) for x in v[i]], pnl_pct_24h=ago)
 
 
 def _setting_line(settings: list) -> str:
