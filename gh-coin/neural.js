@@ -9,6 +9,7 @@ import * as ENG from "./strategies.js";
 import * as CL from "./chartlab.js";
 import * as HR from "./lib/holdrules.js";   // 🧘 관망 규칙집(스스로 고치고 검증해 유지/되돌림)
 import * as OS from "./lib/olschema.js";
+import * as LAB from "./combolab.js";   // 🧪 보조지표 조합 연구소(모델 4개가 조합 하나씩 맡아 데모)
 import * as RB0 from "./lib/robust.js";   // 운 보정 기준선 · runs 검정    // 🧾 로컬 모델 JSON 스키마 강제
 
 // 📚 코인 선물 매매법 지식베이스 — 뇌에 '매매법·지식·대응'을 처음부터 깔아둔다(교훈 외에 실제 매매법 지식).
@@ -1245,6 +1246,7 @@ export async function newsCheck() {
   save();
 }
 export function resetBrain() { BRAIN.reset(); }
+export const lab = LAB;   // 화면에서 연구소 켜기·라운드 길이·다시 시작
 
 // ⚡ 손매매 추천 채점: 시장가 버튼·실시간 진입이 낸 추천을 실제 봉으로 따라가 '익절1 먼저 / 손절 먼저 / 24시간 무승부'를 기록 → 뇌가 교훈·패턴·함정으로 학습
 // ══ 🦫 예측 채점 (Phil 방식 — bennyjo/phil 의 '정직한 지표 brier_delta' 개념, 코드 복사 없음) ══
@@ -1320,6 +1322,7 @@ export async function tick() {
     await step(); modelStep().catch(() => {}); autoK++;
     if (autoK % 10 === 5) { try { BRAIN.consolidate(); } catch (e) {} }
     if (autoK % 20 === 7) scoreCalls().catch(() => {});
+    if (autoK % 5 === 2) LAB.cycle({ models: connectedModels(), feed }).catch(() => {});   // 🧪 조합 연구소 30초마다
     if (autoK % 20 === 13) { scoreShadow().catch(() => {}); scoreAdj().catch(() => {}); }
     if (autoK % 300 === 2) fngCheck().catch(() => {});
     if (autoK % 10 === 3) for (const p of Object.values(S.pos)) levelsFor(p.sym).then(L => { if (S.pos[p.sym]) p.lv = levelsText(L); }).catch(() => {});   // 🧱 보유 코인의 벽·지지·저항(1분마다)
@@ -1348,6 +1351,7 @@ export function state() {
   // 연결된 모델은 아직 승인한 신호가 없어도 리더보드에 항상 표시 (엔진 v2 이후 '승인해야 생기는' 문제 수정)
   for (const c of connectedModels()) if (!S.models[c.model]) traders.push({ name: shortMd(c.model), full: c.model, prov: c.id, pnl: 0, hit: null, fills: 0, wins: 0, lessons: 0, approved: 0, rejected: 0, pos: [], idle: true, scans: 0, scanAcc: null, last: null });
   traders.sort((a, b) => b.pnl - a.pnl || (b.approved + b.rejected) - (a.approved + a.rejected));
+  let lab = null; try { lab = LAB.labState(); for (const tr of traders) { const cs = lab.combos.filter(x => x.owner && x.owner === tr.full); if (cs.length) tr.lab = cs.map(c => ({ ko: c.ko, n: c.n, R: c.R, wr: c.wr })); } } catch (e) {}
   const eq = equity(), peak = Math.max(S.peak || BANKROLL, eq), dd = peak > 0 ? +((peak - eq) / peak * 100).toFixed(1) : 0;
   const avgLev = allPos.length ? +(allPos.reduce((s, p) => s + (p.lev || 0), 0) / allPos.length).toFixed(1) : null;
   const avgSeed = allPos.length ? +(allPos.reduce((s, p) => s + (p.seed || 0), 0) / allPos.length).toFixed(1) : null;
@@ -1358,7 +1362,7 @@ export function state() {
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), calls: callStats(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
     chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
-    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, score: scorecard(), aiAuto: aiAutoState(), phil: forecastStats(),
+    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, score: scorecard(), aiAuto: aiAutoState(), phil: forecastStats(), lab,
     openAll: allPos.map(p => ({ sym: p.sym, ko: p.ko, side: p.side, lev: p.lev, entry: p.entry, price: p.price, sl: p.sl, tp: p.tp ?? null, sl0: p.sl0 ?? null, tp0: p.tp0 ?? null, be: !!p.be, name: p.name, trader: p.trader, why: p.why, note: p.note || "", regime: p.regime, t: p.t, tf: p.tf, style: styleOf(p.tf), R: p.rDist ? +(((p.price - p.entry) * p.side) / p.rDist).toFixed(2) : null, risk: p.risk })), mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },

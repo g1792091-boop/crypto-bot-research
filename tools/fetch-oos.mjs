@@ -1,9 +1,9 @@
 // 표본외 검증용 캔들 내려받기(바이낸스 선물 · 2023-01 부터) — tools/oos-check.mjs 의 입력.
-//   쓰는 법: node tools/fetch-oos.mjs <폴더> [봉들=1h,4h,15m] [코인들=기본 10개]
+//   쓰는 법: node tools/fetch-oos.mjs <폴더> [봉들=1h,4h,15m] [코인들=기본 10개]   (시작일 바꾸기: START=2021-10-01)
 //   바이낸스 무게 한도(분당 2400) 때문에 요청 사이 0.45초 쉬고, 429/418 이면 70초 기다린다(2026-10-06 빠르게 받다가 막힌 적 있음).
 import fs from "fs";
 const OUT = process.argv[2] || "data/oos", IVS = (process.argv[3] || "1h,4h,15m").split(","), SY = (process.argv[4] || "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,BNBUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,LTCUSDT").split(",");
-const MS = { "5m": 300e3, "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 864e5 }, START = Date.UTC(2023, 0, 1), END = Date.now();
+const MS = { "5m": 300e3, "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 864e5 }, START = process.env.START ? Date.parse(process.env.START) : Date.UTC(2023, 0, 1), END = Date.now();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function get(sym, iv, from) { const out = []; let t = from;
   while (t < END) { let r = null;

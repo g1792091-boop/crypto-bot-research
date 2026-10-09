@@ -46,6 +46,10 @@ export async function openNeural(ctx = {}) {
   root.addEventListener("click", async (ev) => {
     const tm = ev.target.closest("[data-tpm]"); if (tm) { const n = N.setCfg({ tpMode: tm.dataset.tpm }); feed(`🎯 익절 방식: ${N.TP_MODES[n.tpMode].ko} — 다음 진입부터 (자체 백테스트도 이 방식으로 다시)`); ST = N.state(); render(); return; }
     const sy = ev.target.closest("[data-sty]"); if (sy) { const c0 = N.cfg(), k = sy.dataset.sty, cur = k === "scalp" ? c0.styles?.scalp === true : c0.styles?.[k] !== false, n = N.setCfg({ styles: { ...(c0.styles || {}), [k]: !cur } }); feed(`🎯 매매 스타일: ${Object.entries(N.STYLES_KO).filter(([x]) => n.styles[x]).map(([, ko]) => ko).join(" · ") || "없음"} — 다음 신호부터`); ST = N.state(); render(); return; }
+    const lc = ev.target.closest("[data-labc]"); if (lc) { labTab = lc.dataset.labc; ST = N.state(); render(); return; }
+    const lo = ev.target.closest("[data-labon]"); if (lo) { const on = N.lab.setOn(!N.lab.load().on); feed(`🧪 조합 연구소 ${on ? "켬" : "멈춤"}`); ST = N.state(); render(); return; }
+    const lh = ev.target.closest("[data-labh]"); if (lh) { const h = N.lab.setRoundH(+lh.dataset.labh); feed(`🧪 조합 연구소 라운드 길이 ${h}시간 — 지금 라운드부터`); ST = N.state(); render(); return; }
+    const lr = ev.target.closest("[data-labrs]"); if (lr) { if (confirm("라운드를 1부터 다시 시작할까요? (값은 5년 백테스트 1위로 돌아가고, 거래 기록은 남습니다)")) { N.lab.restartRounds(); feed("🧪 조합 연구소 라운드 처음부터"); ST = N.state(); render(); } return; }
     const lm = ev.target.closest("[data-levm]"); if (lm) { const n = N.setCfg({ levMode: lm.dataset.levm }); feed(`🎯 레버리지 방식: ${n.levMode === "min" ? "20배 고정" : "손절폭에서 역산"} — 다음 진입부터`); ST = N.state(); render(); return; }
     const cp = ev.target.closest("[data-cdcopy]"); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.cdcopy); cp.textContent = "복사됨"; } catch (e) {} return; }
     const go = ev.target.closest("[data-cdgo]"); if (go) { go.disabled = true; go.textContent = "점검 중…"; try { await N.chartDesk(true); } catch (e) { feed("📈 점검 실패: " + (e?.message || e)); } ST = N.state(); render(); }
@@ -221,7 +225,7 @@ function render() {
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
-      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.last && tr.last.bias != null ? ` <small class="${tr.last.bias > 0 ? "up" : tr.last.bias < 0 ? "dn" : "dim"}" title="${E(tr.last.note || "")}">🔍${E(tr.last.ko)} ${tr.last.bias > 0 ? "▲" : tr.last.bias < 0 ? "▼" : "·"}${tr.last.conf}%</small>` : tr.idle ? ' <small class="dim">스캔 순번 대기</small>' : ""}${tr.scanAcc != null ? ` <small class="dim">읽기적중 ${tr.scanAcc}%</small>` : ""}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
+      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.last && tr.last.bias != null ? ` <small class="${tr.last.bias > 0 ? "up" : tr.last.bias < 0 ? "dn" : "dim"}" title="${E(tr.last.note || "")}">🔍${E(tr.last.ko)} ${tr.last.bias > 0 ? "▲" : tr.last.bias < 0 ? "▼" : "·"}${tr.last.conf}%</small>` : tr.idle ? ' <small class="dim">스캔 순번 대기</small>' : ""}${tr.scanAcc != null ? ` <small class="dim">읽기적중 ${tr.scanAcc}%</small>` : ""}${(tr.lab || []).map(lb => ` <small class="${lb.R >= 0 ? "up" : "dn"}" title="🧪 보조지표 조합 연구소 담당 조합 · 실시간 데모 합계">🧪${E(lb.ko)} ${lb.n}건 ${lb.R >= 0 ? "+" : ""}${lb.R}R</small>`).join("")}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
     engineTable(s) + holdMoodLine(s) + evoLine(s) + chartDeskLine(s) + robinLine(s) + neutronLine(s) +
@@ -300,8 +304,36 @@ function render() {
   const bi = root.querySelector("[data-braininfo]");
   if (bi && s.brain) { const iq = s.brain.iq || {};
     bi.innerHTML = `지능 <b style="color:#b79cff">${iq.score ?? 0}</b>/100 <span class="dim">(정확도 ${iq.acc ?? 0}% ·${iq.n ?? 0}판)</span> · 지식 ${s.brain.n} · 연결 ${(brainG && brainG.edges.length) || 0} · 🛑함정 ${s.brain.traps ?? 0} · 회피 ${s.brain.st?.avoided ?? 0} · 핵심 ${s.brain.byType?.["핵심"] || 0}`; }
+  { const lb = root.querySelector("[data-lab]"); if (lb) lb.innerHTML = labHtml(s.lab); }
   // 라이브 피드 티커
   root.querySelector("[data-feed]").innerHTML = s.feed.map(f => `<span>▸ ${E(f.text)}</span>`).join(" ");
+}
+
+// 🧪 보조지표 조합 연구소 카드 — 조합 탭 · 코인 × (시간봉·레버리지) 칸 · 담당 모델 복기 · 최근 거래
+let labTab = "st_roc";
+function labHtml(L) {
+  if (!L) return `<div class="dim">연구소 준비 중(첫 30초 주기 뒤 표시)</div>`;
+  const sg = v => `${v >= 0 ? "+" : ""}${v}`, hh = Math.floor(L.left / 3600e3), mm = Math.floor(L.left % 3600e3 / 60e3);
+  const cols = L.tfs.flatMap(tf => L.levs[tf].map(lev => [tf, lev]));
+  // 5년 백테스트 요약(시간봉별, 지금 고른 값 기준): 통과 칸 수 · 검증 1년 평균R
+  const bt = L.tfs.map(tf => { let n = 0, p = 0, s = 0, k = 0; for (const c of Object.values(L.grid)) for (const row of Object.values(c)) for (const lev of L.levs[tf]) { const g = row[tf + "|" + lev]; if (!g) continue; n++; if (g.pass) p++; s += g.ho.mean * g.ho.n; k += g.ho.n; }
+    return `${L.tfKo[tf]} 통과 ${p}/${n}칸 · 검증 1년 평균 ${k ? sg(+(s / k).toFixed(3)) : "–"}R`; }).join(" · ");
+  const head = `<div class="lab-top"><b>${L.done ? "✅ 5라운드 끝 — 최종 커스텀 최적값으로 계속 데모" : `라운드 ${L.round}/${L.rounds}`}</b>${L.done ? "" : ` <span class="dim">다음 재채점까지 ${hh}시간 ${mm}분</span>`}${L.on ? "" : ` <b class="dn">멈춤</b>`}
+    <span class="dim">칸 ${L.lanes}개 · 칸마다 가상 $1000 · 1회 위험 0.5% · 손절 ≤ 청산거리 40%</span>
+    <span class="lab-btns"><button class="nd-mini" data-labon>${L.on ? "⏸ 멈추기" : "▶ 켜기"}</button><span class="dim">라운드</span>${[12, 24, 48].map(h => `<button class="nd-mini${L.roundH === h ? " on" : ""}" data-labh="${h}">${h}h</button>`).join("")}<button class="nd-mini" data-labrs title="라운드를 1부터 다시(값은 5년 백테스트 1위로) · 거래 기록은 유지">↺ 처음부터</button></span></div>
+    <div class="lab-note">5년 백테스트(${E(L.from || "")}~, 앞 4년으로 고르고 최근 1년은 고를 때 안 봄): ${bt}</div>`;
+  const tabs = `<div class="lab-cs">${L.combos.map(c => `<button class="lab-c${labTab === c.key ? " on" : ""}" data-labc="${c.key}"><b>${E(c.ko)}</b><span>🖥 담당 ${E(c.ownerShort || "배정 대기")}</span><span class="${c.R >= 0 ? "up" : "dn"}">${c.n}건 · ${sg(c.R)}R · ${money(c.pnl)}</span><small class="dim">승률 ${c.wr ?? "–"}% · 보유 ${c.open} · 검증 통과 ${c.pass}/${c.lanes}칸</small></button>`).join("")}</div>`;
+  const G = L.grid[labTab] || {}, C = L.combos.find(c => c.key === labTab) || {};
+  const th = `<tr><th rowspan="2">코인</th>${L.tfs.map(tf => `<th colspan="${L.levs[tf].length}">${L.tfKo[tf]}</th>`).join("")}</tr><tr>${cols.map(([, lev]) => `<th>${lev}x</th>`).join("")}</tr>`;
+  const rows = L.coins.map(([ko, sym]) => `<tr><th>${ko}</th>${cols.map(([tf, lev]) => { const g = G[sym]?.[tf + "|" + lev]; if (!g) return `<td class="no dim">–</td>`;
+    const tip = `${ko} ${L.tfKo[tf]} ${lev}배 · ${g.p}\n${g.x}\n5년 백테스트: 학습(앞 4년) ${sg(g.tr.mean)}R ${g.tr.n}건 · 검증(최근 1년, 고를 때 안 봄) ${sg(g.ho.mean)}R ${g.ho.n}건 승률 ${g.ho.wr}%\n최근 1~5년: ${g.lb.map((l, i) => `${i + 1}년 ${sg(l[1])}R(${l[0]}건)`).join(" · ")}\n${g.luck ? "운 보정: 운 범위(시험한 경우의 수에 비해 우위가 작음)" : "운 보정 통과"}\n후보 ${g.sel + 1}/${g.nC} 사용 중${g.skip ? ` · 손절폭이 ${lev}배 상한(${(40 / lev).toFixed(2)}%)을 넘어 건너뛴 신호 ${g.skip}개` : ""}`;
+    return `<td class="${g.pass ? "ok" : "no"}" title="${E(tip)}"><span class="mk ${g.pass ? "up" : "dim"}">${g.pass ? "✓" : "✗"}</span>${g.pos ? ` <span class="${g.pos.side > 0 ? "up" : "dn"}">●</span>` : ""} ${g.n ? `<b class="${g.R >= 0 ? "up" : "dn"}">${sg(+g.R.toFixed(1))}R</b><small class="dim">/${g.n}</small>` : `<small class="dim">0건</small>`}<br><small class="dim">검 ${sg(g.ho.mean)}</small></td>`; }).join("")}</tr>`).join("");
+  const rv = (C.reviews || []).map(r => `<div class="brow"><span class="bt pur">${r.r}R 복기</span><span class="btx wrap">${E(r.text)}</span></div>`).join("");
+  const tr = L.trades.filter(t => t.c === labTab).slice(0, 8).map(t => `<div class="trow"><span class="dim">${ago(t.t1)}</span><b>${E(t.ko)}</b><span>${L.tfKo[t.tf]} ${t.lev}x ${t.side > 0 ? "롱" : "숏"}</span><span>${E(t.why)}</span><b class="${t.R >= 0 ? "up" : "dn"}">${sg(t.R)}R</b><small class="dim">${money(t.pnl)}</small></div>`).join("");
+  const lg = L.log.slice(0, 3).map(x => `<div class="dim">· ${ago(x.t)} ${E(x.text)}</div>`).join("");
+  return head + tabs + `<div class="lab-tw"><table class="lab-t">${th}${rows}</table></div>
+    <div class="lab-note">✓ = 앞 4년에서 고른 값이 고를 때 안 본 최근 1년에서도 플러스 · ✗ = 아님 · 칸 숫자 = 실시간 데모 합계R/건수 · '검' = 5년 백테스트 검증 1년 평균R · ● 보유 중 · 칸에 마우스를 올리면 커스텀 값·1~5년 성적</div>
+    ${rv}${tr ? `<div class="nsub">최근 데모 거래 (${E(C.ko || "")})</div>${tr}` : `<div class="dim">아직 이 조합의 데모 거래 없음 — 두 지표 방향이 같아지는 봉 마감에서 진입합니다</div>`}${lg}`;
 }
 
 function draw() {
@@ -326,6 +358,7 @@ const SHELL = `
   <div class="nd-card nd-rtcard"><div class="nd-h">⚡ 실시간 진입 <small>손매매용 · 시장가 기준 · 에이전트 팀 ↔ 뉴럴 데스크 토론 · 주문은 직접</small><span class="rt-coins" data-rtcoins></span><button class="nd-mini" data-rtgo title="지금 모든 코인을 다시 분석하고 토론합니다">전체 분석</button></div><div class="nd-rt" data-rt></div></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">📋 스타일별 성적표 · 데모 거래</div><div class="nd-tr" data-trades></div></div>
+  <div class="nd-card nd-lab"><div class="nd-h">🧪 보조지표 조합 연구소 <small>슈퍼트렌드+ROC · 슈퍼트렌드+클링거 · VWMA+MACD · 슈퍼트렌드+KST — AI 모델이 하나씩 맡아 코인별 커스텀 값으로 데모 · 5라운드 재채점</small></div><div class="nd-labx" data-lab></div></div>
   <div class="nd-card nd-brain"><div class="nd-h">🧠 자체 뇌 FOUNDRY <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><div class="vb" data-vzbrain></div></div>
 </div>`;
 
@@ -350,7 +383,7 @@ function inject() {
 .nd-feed span{margin-right:28px}.nd-clock{color:#6b7a92;font-size:11px;letter-spacing:1px}
 .nd-btn{background:rgba(22,30,44,.65);border:1px solid var(--line2);color:#aeb8c9;padding:5px 11px;border-radius:7px;cursor:pointer;font:inherit;font-size:11px;transition:background .15s,border-color .15s,color .15s}
 .nd-btn:hover{background:rgba(34,46,66,.9);border-color:#32455f;color:#dbe4f1}.nd-x{color:var(--dn)}.nd-x:hover{background:rgba(255,77,100,.15);border-color:rgba(255,77,100,.4)}
-.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(860px,auto) minmax(540px,auto) 500px minmax(900px,auto);gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
+.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(860px,auto) minmax(540px,auto) 500px minmax(900px,auto) auto;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
 .nd-card{position:relative;background:linear-gradient(180deg,rgba(14,20,33,.92),rgba(9,13,22,.92));border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:0;overflow:auto;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px -24px rgba(0,0,0,.9)}
 .nd-card::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),transparent)}
 .nd-h{color:#8291a8;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-left:10px;position:relative}
@@ -365,7 +398,14 @@ function inject() {
 .nd-kpi{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;color:#6f7b90;font-size:11px}.nd-kpi b{color:#dbe2ef;font-weight:700}.nd-kpi>span{display:flex;gap:5px;align-items:baseline}.nd-kpi small{color:#495468}
 .nd-pnl{grid-column:1/2;grid-row:1/2}.nd-mkt{grid-column:2/3;grid-row:1/2}
 .nd-shell{grid-column:1/3;grid-row:2/3;background:#04070d !important;border-color:rgba(127,211,255,.25) !important;box-shadow:0 0 30px -12px rgba(127,211,255,.35) inset}.nd-rtcard{grid-column:1/3;grid-row:3/4}.nd-trd{grid-column:2/3;grid-row:4/5}
-.nd-trades{grid-column:1/2;grid-row:4/5}.nd-brain{grid-column:1/3;grid-row:5/6}
+.nd-trades{grid-column:1/2;grid-row:4/5}.nd-brain{grid-column:1/3;grid-row:5/6}.nd-lab{grid-column:1/3;grid-row:6/7}.nd-card.nd-lab{overflow:visible;min-height:auto}
+.nd-labx{overflow:visible}.lab-tw{overflow-x:auto}.lab-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:8px}.lab-btns{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.nd-mini.on{border-color:var(--accent);color:var(--accent)}
+.lab-cs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px}.lab-c{display:flex;flex-direction:column;gap:2px;text-align:left;padding:7px 9px;background:#0a111c;border:1px solid var(--line2);border-radius:8px;color:var(--txt);font:inherit;cursor:pointer;min-width:0}
+.lab-c.on{border-color:var(--accent);box-shadow:0 0 0 1px rgba(34,211,238,.25) inset}.lab-c span,.lab-c small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lab-t{border-collapse:collapse;width:100%;font-size:11px}.lab-t th,.lab-t td{border:1px solid var(--line);padding:3px 4px;text-align:center;white-space:nowrap}.lab-t th{color:var(--dim);font-weight:600;background:#08101a}
+.lab-t td.ok{background:rgba(38,208,124,.07)}.lab-t td.no{opacity:.72}.lab-t td b{font-weight:700}.lab-t .mk{font-size:10px}.lab-note{margin:6px 0;color:var(--dim)}
+@media(max-width:760px){.lab-cs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .rt-coins{display:flex;gap:4px;margin-left:auto}.rt-coins+.nd-mini{margin-left:6px}.rt-mk{border-color:rgba(247,181,0,.5)!important;color:#ffcf6a!important}
 .nd-rt{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px}
 .rtc{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:rgba(12,18,30,.7)}.rtc.g3{border-color:rgba(38,208,124,.55);box-shadow:0 0 0 1px rgba(38,208,124,.25) inset}.rtc.g2{border-color:rgba(124,159,255,.4)}

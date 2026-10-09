@@ -36,7 +36,7 @@ export async function snapshot() {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
       positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp ?? null, running: !!p.run, strategy: p.name, riskPct: p.riskPct })),
-      openAll: s.openAll || [], score: s.score || null, aiAuto: s.aiAuto || null, phil: s.phil || null, forecasts: (N.forecastRows?.(600) || []),
+      openAll: s.openAll || [], score: s.score || null, aiAuto: s.aiAuto || null, phil: s.phil || null, comboLab: s.lab ? { round: s.lab.round, done: s.lab.done, roundH: s.lab.roundH, made: s.lab.made, combos: s.lab.combos.map(c => ({ combo: c.ko, owner: c.owner, n: c.n, R: c.R, wr: c.wr, pnl: c.pnl, open: c.open, pass: c.pass, lanes: c.lanes })), trades: s.lab.trades.slice(0, 40), log: s.lab.log } : null, forecasts: (N.forecastRows?.(600) || []),
       mood: s.mood || null, fng: s.fng || null, hold: s.hold ? { ver: s.hold.book?.ver, rules: s.hold.rules, eval: s.hold.eval, log: s.hold.log, prop: s.hold.prop } : null, adj: s.adj ? { stat: s.adj.stat, kind: s.adj.kind, log: s.adj.log, off: s.adj.off, schema: s.adj.schema } : null,
       regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, calls: s.calls || null, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 80), feed: (s.feed || []).slice(0, 20) },
     brain, verdicts, demo: book,
