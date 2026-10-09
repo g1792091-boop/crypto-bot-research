@@ -554,3 +554,13 @@ from telegram.json, new-trade sound off by default, D+n strip with the goal stag
   (decompressed, `Content-Disposition: attachment`, id validated against accounts.json) with a "CSV 내려받기" button on
   the account and trades screens. A glossary section ("용어집") in the howto screen: R, 평균 R, 낙폭, 운 기준선,
   부트스트랩 하한, 확인 기간, 정지 규칙, bp, 펀딩, 강제청산, 진입 점검, 사다리 청산, 반익반본, 국면.
+
+### 9.10 Robustness of a line ("버티는 수익인가")
+`judge.json` rows gain `"robust": {"n": int, "pnl": float, "top5_share": float|null, "half": {"first_R": float|null,
+"second_R": float|null, "first_n": int, "second_n": int}, "coins_up": int, "coins_traded": int, "max_lose_streak": int,
+"worst_day": {"day": "2026-10-10", "pnl": 0.0}|null, "flags_ko": [str]}` from the line's closed trades:
+`top5_share` = the 5 best trades' P&L / the line's total P&L (only when the total is > 0); `half` = mean R of the
+first and the second half of the closed trades in time order; `coins_up` = coins with a positive P&L sum.
+`flags_ko` (plain warnings): "수익의 70% 이상이 거래 5건에서 나옴", "뒤 절반이 앞 절반보다 크게 나쁨" (second_R <
+first_R - 0.2 and second_R < 0), "번 코인이 7개 중 2개 이하", "연속 손실 10번 이상". Shown on the graduation path
+and the ready screen next to each candidate or closest line.

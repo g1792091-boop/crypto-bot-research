@@ -73,6 +73,41 @@ def _ours(res: dict, a, L: int, sim: dict) -> dict:
     return dict(pass_=all(c["ok"] for c in checks), checks=checks, n=n, mean_R=mean, luck_lim=lim, boot_low=lowb)
 
 
+def robust(closed: list) -> dict:
+    """Is the profit fragile? (CONTRACT 9.10)"""
+    import time as _t
+    tt = sorted(closed, key=lambda t: t["exit_ms"] or 0)
+    n = len(tt)
+    pnl = sum(t["pnl"] for t in tt)
+    top5 = sum(sorted((t["pnl"] for t in tt), reverse=True)[:5])
+    h = n // 2
+    first, second = tt[:h], tt[h:]
+    mR = lambda xs: (sum(t["R"] for t in xs) / len(xs)) if xs else None    # noqa: E731
+    by_coin, by_day = {}, {}
+    streak = worst = 0
+    for t in tt:
+        by_coin[t["coin"]] = by_coin.get(t["coin"], 0.0) + t["pnl"]
+        d = _t.strftime("%Y-%m-%d", _t.gmtime(((t["exit_ms"] or 0) - 1 + 9 * 3600 * 1000) / 1000))
+        by_day[d] = by_day.get(d, 0.0) + t["pnl"]
+        streak = streak + 1 if t["pnl"] < 0 else 0
+        worst = max(worst, streak)
+    wd = min(by_day.items(), key=lambda kv: kv[1]) if by_day else None
+    share = (top5 / pnl) if pnl > 0 else None
+    fR, sR = mR(first), mR(second)
+    flags = []
+    if share is not None and share >= 0.7:
+        flags.append("수익의 70% 이상이 거래 5건에서 나옴")
+    if fR is not None and sR is not None and sR < fR - 0.2 and sR < 0:
+        flags.append("뒤 절반이 앞 절반보다 크게 나쁨")
+    if n and sum(1 for v in by_coin.values() if v > 0) <= 2:
+        flags.append("번 코인이 7개 중 2개 이하")
+    if worst >= 10:
+        flags.append(f"연속 손실 {worst}번")
+    return dict(n=n, pnl=pnl, top5_share=share, half=dict(first_R=fR, second_R=sR, first_n=len(first), second_n=len(second)),
+                coins_up=sum(1 for v in by_coin.values() if v > 0), coins_traded=len(by_coin), max_lose_streak=worst,
+                worst_day=(dict(day=wd[0], pnl=wd[1]) if wd else None), flags_ko=flags)
+
+
 def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
     a = A.by_id(aid)
     sim = res[aid]["lines"][L]
@@ -91,7 +126,8 @@ def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
     fchecks = [dict(name_ko=RULES_FRIEND[0], ok=pnl7 > 0, value_ko=f"${pnl7:+,.2f} ({len(wk)}건)"),
                dict(name_ko=RULES_FRIEND[1], ok=not bad7, value_ko=("있음" if bad7 else "없음"))]
     friend = dict(pass_=(all(c["ok"] for c in fchecks) if wk else None), checks=fchecks)
-    return dict(id=aid, name=a.name, L=L, ours=_pub(ours), friend=_pub(friend), stops=stops, n=ours["n"],
+    return dict(id=aid, name=a.name, L=L, ours=_pub(ours), friend=_pub(friend), stops=stops, robust=robust(closed),
+                n=ours["n"],
                 mean_R=ours["mean_R"], luck_lim=ours["luck_lim"], boot_low=ours["boot_low"])
 
 

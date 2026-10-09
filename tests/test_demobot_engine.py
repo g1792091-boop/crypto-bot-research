@@ -476,3 +476,22 @@ def test_calendar_and_daily_sum_to_closed_pnl(run):
               if t["status"] == "closed")
     assert abs(sum(d["pnl_sum"] for d in cal["days"]) - tot) < 1e-6
     assert abs(sum(v for acc in daily.values() for day in acc.values() for v in day.values()) - tot) < 1e-6
+
+
+def test_robustness_flags():
+    D = 86_400_000
+    tt = [dict(exit_ms=1_790_000_000_000 + i * D, pnl=(100.0 if i < 3 else -1.0), R=(2.0 if i < 3 else -0.1),
+               coin="BTCUSD") for i in range(20)]
+    r = J.robust(tt)
+    assert r["top5_share"] > 0.7 and r["coins_up"] == 1 and r["max_lose_streak"] == 17
+    assert len(r["flags_ko"]) == 4 and r["half"]["first_n"] == 10
+    ok = [dict(exit_ms=1_790_000_000_000 + i * D, pnl=(5.0 if i % 2 else -3.0), R=(0.5 if i % 2 else -0.3),
+               coin=G.COINS[i % 7]) for i in range(40)]
+    assert J.robust(ok)["flags_ko"] == []
+    assert J.robust([])["top5_share"] is None
+
+
+def test_judge_rows_carry_robustness(run):
+    jd = json.loads((run["dir"] / "snap" / "judge.json").read_text())
+    for r in jd["rows"]:
+        assert set(r["robust"]) >= {"top5_share", "half", "coins_up", "flags_ko"}
