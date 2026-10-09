@@ -1,12 +1,14 @@
 // #/account/<id> 계좌 자세히: the account's rule in one line, its four leverage lines, the equity curves
-// (lightweight-charts), the settings it runs now (per coin / per leverage when they differ), the switch history
-// (교체 기록), open positions and the trade list (filter by leverage). acct/<id>.json every 60 s.
+// (lightweight-charts; with the stop-rule twins, CONTRACT 8.2), the stop-rule comparison per line and the stop events,
+// the P&L split into price / fees / funding / open (8.4), the settings it runs now (per coin / per leverage when they
+// differ), the switch history (교체 기록), open positions and the trade list (filter by leverage; measured cost, the
+// market at entry; a row opens the trade chart #/trade/<id>/<key>). acct/<id>.json every 60 s.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
 import {equityChart, legend} from "../chart.js";
-import {LEVS, COINS, KIND_KO, SUB_KO, kindOfId, reasonKo, sideKo, tfKo} from "../labels.js";
+import {LEVS, COINS, KIND_KO, SUB_KO, kindOfId, reasonKo, sideKo, tfKo, STOP_WHAT_KO, STOP_WHAT_SHORT} from "../labels.js";
 
 const ID_RE = /^[A-Za-z0-9-]{3,40}$/;
 
@@ -23,20 +25,29 @@ export async function mount(el, ctx) {
   const sub = head.querySelector(".sub");
   const ruleBox = h("div"), lineBox = h("div", {class: "dl-lines"}), legendBox = h("div");
   const chartBox = h("div", {class: "dl-chart", role: "img", "aria-label": "배수별 잔고 흐름"});
-  const nowBox = h("div"), openBox = h("div");
+  const nowBox = h("div"), openBox = h("div"), stopBox = h("div"), partBox = h("div");
   const decPager = ui.pager({size: 10, empty: "아직 교체가 없습니다", render: (part) => decisionList(part)});
+  const evPager = ui.pager({size: 10, empty: "아직 정지 규칙이 걸린 적이 없습니다", render: (part) => stopEventList(part)});
   let tradeLev = "all";
-  const tradePager = ui.pager({size: 20, empty: "거래가 없습니다", render: (part) => tradeTable(part)});
+  let chartMode = "plain";
+  const modeSeg = ui.seg([{id: "plain", label: "그대로"}, {id: "stops", label: "정지 규칙 적용 시"}, {id: "both", label: "둘 다"}], chartMode,
+    (v) => { chartMode = v; if (data) paintChart(data); }, {label: "잔고 흐름 보기"});
+  const goTrade = (t) => { location.hash = ctx.href("trade", id, null, t.key); };
+  const tradePager = ui.pager({size: 20, empty: "거래가 없습니다", render: (part) => tradeTable(part, goTrade)});
   const tradeSeg = ui.seg([{id: "all", label: "전체"}, ...LEVS.map((L) => ({id: String(L), label: `${L}배`}))], tradeLev,
     (v) => { tradeLev = v; if (data) paintTrades(data, false); }, {label: "거래 배수"});
 
-  el.append(head, h("div", {class: "row wrap"}, back), ruleBox, lineBox,
-    ui.card({plate: "잔고 흐름", sub: "배수 4줄 · 지갑 + 열린 포지션 평가금 · 점선 = 시작 $1,000"}, chartBox, legendBox),
+  el.append(head, h("div", {class: "row wrap"}, back, h("a", {class: "btn-line", href: ctx.href("compare", null, {ids: id})}, "다른 계좌와 비교")),
+    ruleBox, lineBox,
+    ui.card({plate: "잔고 흐름", sub: "배수 4줄 · 지갑 + 열린 포지션 평가금 · 점선 가로줄 = 시작 $1,000"}, modeSeg, chartBox, legendBox),
+    ui.card({plate: "정지 규칙 적용 시", sub: "같은 진입에 정지 규칙(계좌 −20% · 하루 −5% · 5연패)을 걸었다면"}, stopBox),
+    ui.card({plate: "손익 나눠 보기", sub: "손익 = 가격 차이 − 수수료·슬리피지 + 펀딩 + 열린 포지션"}, partBox),
+    ui.card({plate: "정지 기록", sub: "정지 규칙이 걸린 때 (새것부터)"}, evPager.el),
     ui.card({plate: "지금 쓰는 설정"}, nowBox),
     h("div", {class: "grid2"},
       ui.card({plate: "교체 기록", sub: "새것부터"}, decPager.el),
       ui.card({plate: "열린 포지션", sub: "마크 가격 기준 미실현, 나갈 때 수수료 전"}, openBox)),
-    ui.card({plate: "거래 목록", sub: "새것부터 (최근 600건까지)", acts: tradeSeg}, tradePager.el),
+    ui.card({plate: "거래 목록", sub: "새것부터 (최근 600건까지) · 줄을 누르면 거래 차트", acts: tradeSeg}, tradePager.el),
     ui.note("모의 계좌: 바이낸스 실제 시세, 수수료·슬리피지·실제 펀딩 포함. 주문은 넣지 않습니다."));
 
   let chart = null, data = null, seen = null, chartFailed = false;
@@ -63,6 +74,9 @@ export async function mount(el, ctx) {
     paintRule(d);
     paintLines(d);
     await paintChart(d);
+    paintStops(d);
+    paintParts(d);
+    evPager.set(Array.isArray(d.stop_events) ? d.stop_events : [], !first);
     put(nowBox, settingsNow(d.settings_now || []));
     decPager.set(d.decisions || [], !first);
     paintOpen(d);
@@ -91,18 +105,60 @@ export async function mount(el, ctx) {
         h("span", {class: "s"}, `거래 ${fmt.int(x.trades)} · 승률 ${fmt.ratio(x.win_rate)} · 평균 ${fmt.r(x.mean_R)}`),
         h("span", {class: "s"}, `최대 낙폭 ${fmt.ratio(x.max_dd)} · 열림 ${fmt.int(x.open)} · 오늘 ${fmt.money(x.today_pnl, true)}`),
         (x.skipped || x.liqs) ? h("span", {class: "s muted"}, `건너뜀 ${fmt.int(x.skipped)} · 강제청산 ${fmt.int(x.liqs)} · 최장 연패 ${fmt.int(x.worst_streak)}`) : null,
+        x.stops ? h("span", {class: "s"}, h("span", {class: "muted"}, "정지 규칙이면 "), ui.signed(fmt.pct(x.stops.pnl_pct, true), fmt.tone(x.stops.pnl_pct, fmt.pct(x.stops.pnl_pct, true))),
+          x.stops.halted_ms ? h("span", {class: "muted"}, ` · ${fmt.mmdd(x.stops.halted_ms)} 멈춤`) : null) : null,
         x.setting_ko && x.setting_ko !== d.setting_ko ? h("span", {class: "s mono dl-lset", title: x.setting_ko}, x.setting_ko) : null);
     }));
   }
 
+  function paintStops(d) {
+    const lines = d.lines || {};
+    if (!LEVS.some((L) => (lines[String(L)] || {}).stops)) { put(stopBox, ui.none("준비 중 (엔진이 아직 정지 규칙 줄을 쓰지 않습니다)")); return; }
+    const pc = (v) => { const t = fmt.pct(v, true); return ui.signed(t, fmt.tone(v, t)); };
+    put(stopBox, ui.table([
+      {label: "배수", l: true, get: (L) => h("span", {class: "dl-levtag", dataset: {lev: L}}, `${L}배`)},
+      {label: "손익 그대로", get: (L) => pc((lines[L] || {}).pnl_pct)},
+      {label: "정지 규칙이면", get: (L) => { const sp = (lines[L] || {}).stops; return sp ? h("b", null, pc(sp.pnl_pct)) : "—"; }},
+      {label: "차이", get: (L) => { const x = lines[L] || {}, sp = x.stops; return sp ? pc(Number(sp.pnl_pct) - Number(x.pnl_pct)) : "—"; }},
+      {label: "낙폭 그대로 → 정지", get: (L) => { const x = lines[L] || {}, sp = x.stops; return sp ? `${fmt.ratio(x.max_dd)} → ${fmt.ratio(sp.max_dd)}` : "—"; }},
+      {label: "거래", get: (L) => { const x = lines[L] || {}, sp = x.stops; return sp ? `${fmt.int(x.trades)} → ${fmt.int(sp.trades)}` : "—"; }},
+      {label: "막힌 진입", get: (L) => { const sp = (lines[L] || {}).stops; return sp ? fmt.int(sp.blocked) : "—"; }},
+      {label: "멈춤", get: (L) => { const sp = (lines[L] || {}).stops; if (!sp) return "—";
+        return h("span", {class: "dl-kn"}, sp.halted_ms ? ui.pill(`${fmt.mmdd(sp.halted_ms)} 영구 정지`, "bad") : h("span", {class: "muted"}, "영구 정지 없음"),
+          h("small", {class: "muted"}, `하루 정지 ${fmt.int(sp.day_pauses)}번 · 연패 쉼 ${fmt.int(sp.streak_pauses)}번`)); }},
+    ], LEVS.map(String), {cls: "dl-stoptbl"}),
+    ui.note("정지 규칙은 새 진입만 막습니다. 이미 들어간 포지션은 원래대로 나갑니다. 위 잔고 흐름에서 \"정지 규칙 적용 시\"를 누르면 그 줄들의 흐름을 봅니다."));
+  }
+
+  function paintParts(d) {
+    const lines = d.lines || {};
+    if (!LEVS.some((L) => (lines[String(L)] || {}).parts)) { put(partBox, ui.none("준비 중")); return; }
+    const m = (v) => { const t = fmt.money(v, true); return ui.signed(t, fmt.tone(v, t)); };
+    put(partBox, ui.table([
+      {label: "배수", l: true, get: (L) => h("span", {class: "dl-levtag", dataset: {lev: L}}, `${L}배`)},
+      {label: "가격 차이로", get: (L) => { const p = (lines[L] || {}).parts; return p ? m(p.gross) : "—"; }},
+      {label: "수수료·슬리피지", get: (L) => { const p = (lines[L] || {}).parts; return p ? m(-Math.abs(Number(p.fees) || 0)) : "—"; }},
+      {label: "펀딩", get: (L) => { const p = (lines[L] || {}).parts; return p ? m(p.funding) : "—"; }},
+      {label: "열린 포지션", get: (L) => { const p = (lines[L] || {}).parts; return p ? (p.open == null ? "—" : m(p.open)) : "—"; }},
+      {label: "= 손익", get: (L) => h("b", null, m((lines[L] || {}).pnl))},
+      {label: "수수료가 먹은 몫", get: (L) => { const p = (lines[L] || {}).parts; if (!p || !(Number(p.gross) > 0)) return h("span", {class: "muted"}, "—");
+        return fmt.ratio(Math.abs(Number(p.fees)) / Number(p.gross), 0); }},
+    ], LEVS.map(String), {cls: "dl-parts"}),
+    ui.note("가격 차이·수수료·펀딩은 닫힌 거래만 셉니다. 펀딩 +는 받은 것, −는 낸 것. 수수료에는 가정한 슬리피지(한쪽 0.02%)도 들어 있습니다."));
+  }
+
   async function paintChart(d) {
-    const last = Object.fromEntries(LEVS.map((L) => [L, ((d.lines || {})[String(L)] || {}).equity]));
-    put(legendBox, legend(LEVS, last));
+    const stopsOk = d.curves_stops && typeof d.curves_stops === "object";
+    modeSeg.hidden = !stopsOk;                    // an engine without stop-rule lines: only the plain curves
+    const mode = stopsOk ? chartMode : "plain";
+    const last = Object.fromEntries(LEVS.map((L) => { const x = (d.lines || {})[String(L)] || {}; return [L, mode === "stops" && x.stops ? x.stops.equity : x.equity]; }));
+    put(legendBox, legend(LEVS, last), mode === "both" ? h("p", {class: "note"}, "실선 = 그대로 · 점선 = 정지 규칙 적용 시") : null,
+      !stopsOk && chartMode !== "plain" ? h("p", {class: "note"}, "정지 규칙 잔고 흐름: 준비 중") : null);
     if (chartFailed) return;
     try {
       if (!chart) { chart = await equityChart(chartBox, 1000); ctx.signal.addEventListener("abort", () => chart && chart.dispose()); }
       if (!ctx.alive()) return;
-      chart.update(d.curves || {}, LEVS);
+      chart.update(d.curves || {}, LEVS, stopsOk ? d.curves_stops : null, mode);
     } catch (e) {
       chartFailed = true;
       put(chartBox, ui.empty("차트를 그리지 못했습니다."));
@@ -119,7 +175,7 @@ export async function mount(el, ctx) {
       {label: "증거금", get: (t) => fmt.money(t.margin)},
       {label: "미실현", get: (t) => ui.signed(fmt.money(t.pnl, true), fmt.tone(t.pnl, fmt.money(t.pnl)))},
       {label: "들어간 때", get: (t) => fmt.kst(t.entry_ms)},
-    ], rows.slice(0, 40)) : ui.empty("열린 포지션이 없습니다"));
+    ], rows.slice(0, 40), {onRow: goTrade}) : ui.empty("열린 포지션이 없습니다"));
   }
 
   function paintTrades(d, keep) {
@@ -169,7 +225,16 @@ function decisionList(rows) {
     d.why_ko ? h("div", {class: "note"}, d.why_ko) : null)));
 }
 
-function tradeTable(rows) {
+function stopEventList(rows) {
+  return h("div", {class: "dl-list"}, rows.map((e) => h("div", {class: "dl-ev"},
+    h("div", {class: "dl-evt"}, h("span", {class: "muted num"}, fmt.kst(e.t_ms)), h("span", {class: "dl-levtag", dataset: {lev: e.L}}, `${e.L}배`),
+      ui.pill(STOP_WHAT_SHORT[e.what] || String(e.what ?? "—"), e.what === "halt" ? "bad" : "warn")),
+    h("div", {class: "dl-evb"}, STOP_WHAT_KO[e.what] || String(e.what ?? ""), " · ",
+      e.until_ms ? `${fmt.kst(e.until_ms)}까지 새 진입 없음` : e.what === "halt" ? "이 줄은 다시 들어가지 않음" : "",
+      e.wallet != null ? h("span", {class: "muted"}, ` · 그때 지갑 ${fmt.money(e.wallet)}`) : null))));
+}
+
+function tradeTable(rows, goTrade) {
   return ui.table([
     {label: "닫힌 때", l: true, get: (t) => t.status === "open" ? ui.pill("열림", "accent") : h("span", {class: "num"}, fmt.kst(t.exit_ms))},
     {label: "코인", l: true, get: (t) => h("span", null, h("b", null, fmt.coin(t.coin)), " ", h("span", {class: ["side", Number(t.side) > 0 ? "long" : "short"]}, sideKo(t.side)))},
@@ -179,7 +244,9 @@ function tradeTable(rows) {
     {label: "R", get: (t) => ui.signed(fmt.r(t.R), fmt.tone(t.R, fmt.r(t.R)))},
     {label: "손익", get: (t) => ui.signed(fmt.money(t.pnl, true), fmt.tone(t.pnl, fmt.money(t.pnl)))},
     {label: "증거금 대비", get: (t) => ui.signed(fmt.ratio(t.roe), fmt.tone(t.roe, fmt.ratio(t.roe)))},
+    {label: "실제 비용", get: (t) => ui.costCell(t)},
+    {label: "그때 시장", l: true, get: (t) => (t.trend || t.vol ? ui.regimeChips(t.trend, t.vol) : h("span", {class: "muted"}, "—"))},
     {label: "설정", l: true, get: (t) => h("span", {class: "muted mono dl-tset", title: `${t.setting_ko || ""} · ${t.exit_ko || ""}`}, t.setting_ko || "—")},
     {label: "들어간 때", get: (t) => h("span", {class: "muted num"}, fmt.kst(t.entry_ms))},
-  ], rows);
+  ], rows, {onRow: goTrade, cls: "dl-trades"});
 }

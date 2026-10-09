@@ -35,3 +35,27 @@ export const PHASE_KO = {warm: "과거 채우는 중", live: "실시간", stoppe
 export const SORT_KO = {plateau: "주변 평균(점수)", mean_R: "평균 R (수수료 후)", win_rate: "승률", n: "거래 수",
   mdd_R: "낙폭(R)", whip: "흔들림", mean_G: "수수료 전 R"};
 export const SCOPE_KO = (sc) => (sc === "ALL" ? "전체 코인" : String(sc).replace(/USD$/, ""));
+
+// ---------------------------------------------------------------- round 3 (CONTRACT section 8)
+export const TREND_KO = {up: "상승 추세", down: "하락 추세", range: "횡보"};
+export const VOL_KO = {high: "변동 큼", normal: "보통", low: "변동 작음"};
+export const TRENDS = ["up", "down", "range"];
+export const VOLS = ["high", "normal", "low"];
+export const trendKo = (x) => TREND_KO[x] || "기록 없음";
+export const volKo = (x) => VOL_KO[x] || "기록 없음";
+export const CONFIRM_KO = {confirming: "확인 중", confirmed: "실전 후보", failed: "확인 실패"};
+export const CONFIRM_CLS = {confirming: "accent", confirmed: "good", failed: "bad"};
+export const STOP_WHAT_KO = {halt: "계좌 −20%: 새 진입 영구 정지", day: "하루 −5%: 그날 새 진입 정지", streak: "5연패: 24시간 새 진입 쉼"};
+export const STOP_WHAT_SHORT = {halt: "영구 정지", day: "하루 정지", streak: "연패 쉼"};
+export const TG_KIND_KO = {tick: "거래 알림", switch: "설정 교체", daily: "하루 요약", warn: "경고", warn_clear: "정상 복귀",
+  pass: "기준 통과", confirm_done: "확인 기간 끝", start: "시작", view_ack: "관점 받음", view_err: "관점 이해 못 함",
+  view_cancel: "관점 취소", view_list: "관점 목록", view_help: "관점 도움말", view_done: "관점 끝", weekly: "주간 회의록",
+  backup: "백업"};
+export const tgKindKo = (k) => TG_KIND_KO[k] || String(k ?? "—");
+export const TG_STATUS_KO = {sent: "보냄", queued: "보낼 차례", error: "보내기 실패"};
+export const WATCH_KO = {dead: "엔진이 살아 있나", rank: "순위표가 도나", backup: "백업이 되나"};
+/** The take-profit of a fixed pair "익절 xR · 손절 yATR" (CONTRACT 8.6), or null for any other exit. */
+export function targetR(exitKo) {
+  const m = /^익절\s*([0-9.]+)R\s*·\s*손절\s*[0-9.]+\s*ATR$/.exec(String(exitKo || "").trim());
+  return m ? Number(m[1]) : null;
+}

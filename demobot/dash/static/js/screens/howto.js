@@ -1,6 +1,8 @@
 // #/howto 어떻게 돌아가나: a plain Korean explanation of the demo lab (demobot/CONTRACT.md): what runs, the 48
 // accounts, the exits, the costs, the two judgment rules, that it never places orders, how it differs from the rule bot.
 // The settings' numbers come from /api/grid and the rules' words from /api/judge when they are there.
+// Round 3 (CONTRACT 8): the confirmation period, the stop rules, the 12/31 goal line, and one short card per new screen
+// (거래 차트, 시장 국면, 실제 비용, 비교, 설정 지도, 코인별, 주간 회의록, 알림 기록, 서버 상태의 새 카드).
 import {h, put} from "../dom.js";
 import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
@@ -23,6 +25,7 @@ export async function mount(el, ctx) {
   ctx.setTitle("어떻게 돌아가나");
   const exitCard = ui.card({plate: "청산"});
   const setBox = h("div", {class: "stack tight"}), exitBox = h("div", {class: "stack tight"}), ruleBox = h("div", {class: "grid2"});
+  const stopBox = h("div");
   el.append(ui.screenHead("어떻게 돌아가나", "데모 랩이 하는 일을 짧게"),
     ui.card({hero: true, plate: "한 줄로"},
       h("p", {class: "dl-lead"}, "5년 연구의 매매법 3개를 ", h("em", null, "모든 설정"), "으로 동시에 돌려 실시간 순위를 매기고, 48개 연습 계좌로 \"어떤 고르는 방법이 실제로 통하나\"를 봅니다."),
@@ -60,6 +63,20 @@ export async function mount(el, ctx) {
       h("li", null, "흔들림: 신호 뒤 3봉 안에 반대 신호가 나온 비율. 높으면 시끄러운 설정입니다."))),
     h("h2", {class: "dl-h2"}, "판정 기준 두 가지"), ruleBox,
     ui.note("통과하기 전까지는 \"실전 금지\"입니다. 판정 화면에서 계좌·배수마다 어떤 항목을 넘었는지 볼 수 있습니다."),
+    h("div", {class: "grid3"},
+      ui.card({plate: "확인 기간", sub: "통과한 뒤 한 번 더"}, h("ul", {class: "dl-ul"},
+        h("li", null, "줄이 200개가 넘으면, 실력이 없어도 몇 줄은 운으로 기준을 넘습니다. 그래서 처음 넘은 줄은 그때부터 다시 4주를 봅니다."),
+        h("li", null, "그 4주(거래 20건 이상, 길어도 8주) 동안 새로 들어간 거래만 셉니다: 평균 R > 0, 손익 +, 낙폭 30% 미만, 파산·강제청산 없음."),
+        h("li", null, "모두 넘으면 \"실전 후보\", 못 넘으면 \"확인 실패\"입니다. 실패한 줄도 다시 통과하면 새로 확인합니다."),
+        h("li", null, "실전 후보가 나와도 실제 돈을 쓸지는 두 분이 정합니다."))),
+      ui.card({plate: "정지 규칙", sub: "실제 돈에 쓸 멈춤 장치"}, stopBox),
+      ui.card({plate: "12/31 목표", sub: "홈 맨 위"}, h("ul", {class: "dl-ul"},
+        h("li", null, "단계 다섯: 설치 → 데모 진행 → 우리 기준 통과 → 확인 기간 → 실전 후보."),
+        h("li", null, "홈에는 남은 날, 지금 단계, 그리고 기준에 가장 가까운 줄과 그 줄이 아직 못 넘은 항목이 나옵니다."),
+        h("li", null, "목표는 12/31 자정(한국 시간)까지 실전 후보가 나오는지 보는 것입니다.")))),
+    h("h2", {class: "dl-h2"}, "화면 안내 (새로 생긴 것)"),
+    h("div", {class: "grid2 dl-guide"}, GUIDE.map(([id, name, items]) => ui.card({plate: name,
+      acts: id ? h("a", {class: "btn-line", href: `#/${id}`}, "열기") : null}, h("ul", {class: "dl-ul"}, items.map((x) => h("li", null, x)))))),
     h("div", {class: "grid2"},
       ui.card({plate: "관점 기록장"}, h("ul", {class: "dl-ul"},
         h("li", null, "두 분이 데모 랩 텔레그램 방에 관점을 한 줄로 적으면 (예: ", h("span", {class: "mono"}, "관점 BTC 숏 A 84750-84840 손절 85600"),
@@ -78,13 +95,54 @@ export async function mount(el, ctx) {
   exitCard.append(exitBox);
   paintExits(exitBox, null, exitCard);
   paintRules(ruleBox, null);
+  paintStops(stopBox, null);
   try {
     const [grid, judge] = await Promise.all([ctx.api("/api/grid"), ctx.api("/api/judge").catch(() => null)]);
     paintExits(exitBox, grid, exitCard);
     paintSettings(setBox, grid);
     paintRules(ruleBox, judge);
+    paintStops(stopBox, judge);
   } catch (e) { /* the static words stay */ }
 }
+
+const STOP_DEFAULT = ["계좌 −20%: 새 진입 영구 정지", "하루 −5%: 그날 새 진입 정지", "5연패: 24시간 새 진입 쉼"];
+function paintStops(box, judge) {
+  const items = judge && !isMissing(judge) && Array.isArray(judge.stop_rules_ko) && judge.stop_rules_ko.length ? judge.stop_rules_ko : STOP_DEFAULT;
+  put(box, h("ol", {class: "dl-rules"}, items.map((x) => h("li", null, x))),
+    h("ul", {class: "dl-ul"},
+      h("li", null, "모든 줄을 한 번 더, 이 규칙을 걸고 돌립니다 (진입·크기는 같고, 규칙은 새 진입만 막음)."),
+      h("li", null, "계좌·판정·비교 화면의 \"정지 규칙 적용 시\"가 그 결과입니다. 덜 잃었는지, 번 것을 놓쳤는지 봅니다.")));
+}
+
+// one card per new screen: [route, name, plain words]
+const GUIDE = [
+  ["trades", "거래 차트", ["계좌나 거래 기록에서 거래 한 줄을 누르면 열립니다.",
+    "그 코인의 실제 봉 위에 들어간 곳·손절·(고정 익절이면) 목표·나간 곳을 그립니다. 들어가기 3일 전부터 나온 뒤 1일까지 보입니다.",
+    "옆에는 진입가, 손절, 이유, R, 배수마다 손익, 실제 비용, 그때 시장이 나옵니다."]],
+  ["regime", "시장 국면", ["코인마다 지금 상승 추세·하락 추세·횡보인지, 변동이 큰지 작은지, 언제부터인지.",
+    "아래 띠는 지난 기간 국면이 바뀐 흐름입니다.",
+    "국면별 성적: 같은 계좌가 상승장·하락장·횡보장에서 각각 얼마나 벌었나 (어떤 장에서만 되는 방법인지 보입니다)."]],
+  ["costs", "실제 비용", ["봇은 주문 한 번에 2bp(0.02%) 불리하게 체결된다고 가정합니다.",
+    "실제 바이낸스 호가창을 15분마다 읽어, 주문 크기별로 정말 얼마가 들었을지 잽니다. 크기가 클수록 비쌉니다.",
+    "줄마다 그 차이를 넣은 손익, 그리고 지정가가 \"닿기만\" 해서 체결이 의심스러운 거래도 봅니다."]],
+  ["compare", "비교", ["계좌 2~4개를 고르고 배수 하나를 고르면, 잔고 흐름을 한 차트에 겹쳐 그립니다.",
+    "아래 표에 손익, 거래, 승률, 평균 R, 낙폭, 정지 규칙 적용 시 손익, 확인 기간 상태가 나란히 나옵니다.",
+    "주소를 저장해 두면 같은 비교를 다시 열 수 있습니다."]],
+  ["map", "설정 지도", ["매매법의 설정 두 개(예: ST 기간 × ST 배수)를 가로·세로로 놓고, 칸마다 성적을 색으로 칠합니다.",
+    "나머지 설정은 평균을 내거나 값을 고정합니다. 회색 칸은 거래가 너무 적어 믿기 어려운 칸입니다.",
+    "한 칸만 튀는 곳보다 넓게 좋은 곳이 운이 아닐 가능성이 큽니다."]],
+  ["coins", "코인별", ["코인 하나를 고르면, 모든 계좌·배수가 그 코인에서 거래 몇 번에 얼마를 벌고 잃었는지 줄 세웁니다.",
+    "위 표는 일곱 코인을 한눈에 비교합니다.",
+    "계좌 파일이 최근 600건만 남겨서, 거래가 많은 계좌는 † 표시가 붙고 그 날짜 뒤만 셉니다."]],
+  ["review", "주간 회의록", ["한 주(월요일 0시~일요일 24시)를 숫자로 정리한 회의록입니다. 사람이 아니라 코드가 씁니다.",
+    "맨 위에 두 분이 정할 것, 그 아래 요약 문장, 잘 된 줄·안 된 줄, 판정 변화, 정지 규칙, 실제 비용, 시장이 나옵니다.",
+    "진행 중인 주는 지금까지의 숫자입니다. 지난주 회의록은 월요일 09:00에 텔레그램으로도 갑니다."]],
+  ["telegram", "알림 기록", ["데모 랩 텔레그램 방에 보낸 글을 보낸 그대로 모아 둡니다 (최근 300개).",
+    "종류(거래 알림, 하루 요약, 경고 …)와 상태(보냄, 보낼 차례, 실패)로 거를 수 있습니다."]],
+  ["status", "서버 상태의 새 카드", ["서버 같이 쓰기: 규칙봇과 같은 서버라서, 남은 메모리와 부하, 규칙봇 서비스 상태를 봅니다. \"여유가 줄었음\"이면 화면을 개발자에게 보내 주세요.",
+    "백업: 매일 새벽 다시 만들 수 없는 기록만 텔레그램으로 보냅니다. 바깥 감시: 10분마다 엔진·순위표·백업을 확인합니다.",
+    "살아 있음 신호: 서버가 통째로 멈추면 바깥 서비스(healthchecks.io)가 두 분께 알립니다."]],
+];
 
 function paintExits(box, grid, card) {
   const exits = grid ? grid.exits : null;

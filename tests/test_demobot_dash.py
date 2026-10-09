@@ -526,3 +526,324 @@ def test_rank_with_14_exits_and_a_13_exit_5y_file(tmp_path, folders):
     assert d["missing"] is True and d["exit_not_in_file"] is True
     d = c.get("/api/rank?strat=S2&exit=12").json()
     assert d["total"] == 343 and d["luck95"] is not None
+
+
+# ---------------------------------------------------------------- round 3 (CONTRACT section 8)
+NEW_FILES = {"costs": "costs.json", "regime": "regime.json", "backup": "backup.json", "watch": "watch.json",
+             "review": "review.json", "telegram": "telegram.json"}
+NEW_ROUTES = [f"/api/{k}" for k in NEW_FILES] + ["/api/bars?coin=BTCUSD", "/api/bars?coin=ETHUSD&tf=30m", "/api/coins"]
+
+
+def _bars_file(folders, coin="BTCUSD"):
+    with np.load(os.path.join(folders["snap"], "bars", coin + ".npz")) as z:
+        return {k: z[k] for k in z.files}
+
+
+def test_new_routes_need_the_login(anon):
+    for path in NEW_ROUTES:
+        r = anon.get(path)
+        assert r.status_code == 401, path
+        assert "bars" not in r.text and "coins" not in r.text and "items" not in r.text
+
+
+def test_new_snapshot_routes_return_the_files_and_take_no_parameters(client, folders):
+    for key, name in NEW_FILES.items():
+        r = client.get(f"/api/{key}")
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-store", key
+        assert r.json() == _file(folders, name), key
+        assert client.get(f"/api/{key}?x=1").status_code == 400, key
+    assert client.get("/api/coins?coin=BTCUSD").status_code == 400
+    # the existing routes pass the new fields of section 8 through as they are
+    j = client.get("/api/judge").json()
+    assert {"confirm", "candidates", "lines_judged", "multi_note_ko", "stop_rules_ko"} <= set(j)
+    assert all("stops" in r and "confirm" in r for r in j["rows"])
+    home = client.get("/api/home").json()
+    assert {"goal", "regime_now", "costs_now"} <= set(home)
+    assert "deadman" in client.get("/api/status").json()
+    a = client.get("/api/account/fx-def-S2-15m").json()
+    assert {"curves_stops", "stop_events"} <= set(a)
+
+
+def test_new_files_missing_answer_missing(tmp_path):
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    c = TestClient(create_app(str(snap), None, SECRET, data_dir=str(tmp_path / "nodata")))
+    for key in NEW_FILES:
+        r = c.get(f"/api/{key}")
+        assert r.status_code == 200 and r.json() == {"missing": True}, key
+    assert c.get("/api/coins").json() == {"missing": True}
+    r = c.get("/api/bars?coin=SOLUSD&tf=30m")
+    assert r.status_code == 200 and r.json() == {"missing": True, "coin": "SOLUSD", "tf": "30m"}
+    # --empty (the first minutes of a warm-up): status only, with the dead-man field; everything new still missing
+    fake.build(str(snap), phase="warm", empty=True)
+    assert sorted(os.listdir(snap)) == ["status.json"]
+    assert c.get("/api/status").json()["deadman"]["configured"] is True
+    assert c.get("/api/costs").json() == {"missing": True} and c.get("/api/bars?coin=BTCUSD").json()["missing"] is True
+
+
+@pytest.mark.parametrize("query", [
+    "", "coin=BTC", "coin=btcusd", "coin=BTCUSDT", "coin=..%2Fstatus", "coin=BTCUSD&tf=1h", "coin=BTCUSD&tf=15M",
+    "coin=BTCUSD&from=-1", "coin=BTCUSD&from=1e12", "coin=BTCUSD&to=abc", "coin=BTCUSD&from=" + "9" * 16,
+    "coin=BTCUSD&from=20&to=10", "coin=BTCUSD&limit=0", "coin=BTCUSD&limit=3001", "coin=BTCUSD&limit=x",
+    "coin=BTCUSD&nope=1", "coin=BTCUSD&coin=ETHUSD", "coin=BTCUSD&tf=15m&tf=30m",
+])
+def test_bars_bad_parameters_are_400(client, query):
+    assert client.get("/api/bars?" + query).status_code == 400
+
+
+def test_bars_range_clamp_limit_and_the_30m_pairing(client, folders):
+    z = _bars_file(folders, "ETHUSD")
+    ts = z["ts"]
+    d = client.get("/api/bars?coin=ETHUSD").json()                 # no range: the newest 3000 of the whole file
+    assert d["n"] == 3000 and d["truncated"] is True and len(ts) > 3000
+    assert d["first_ms"] == int(ts[0]) and d["last_ms"] == int(ts[-1]) and d["bars"][-1][0] == int(ts[-1])
+    assert d["bars"][0] == [int(ts[-3000]), float(z["o"][-3000]), float(z["h"][-3000]), float(z["l"][-3000]),
+                            float(z["c"][-3000])]
+    lo, hi = int(ts[100]), int(ts[199])
+    d = client.get(f"/api/bars?coin=ETHUSD&from={lo}&to={hi}").json()
+    assert d["n"] == 100 and d["truncated"] is False and [b[0] for b in d["bars"]] == [int(t) for t in ts[100:200]]
+    d = client.get(f"/api/bars?coin=ETHUSD&from={lo}&to={hi}&limit=10").json()
+    assert d["n"] == 10 and d["truncated"] is True and d["bars"][-1][0] == hi            # the newest of the range
+    d = client.get("/api/bars?coin=ETHUSD&from=0&to=4000000000000").json()               # clamped to the file
+    assert d["from_ms"] == int(ts[0]) and d["to_ms"] == int(ts[-1])
+    d = client.get("/api/bars?coin=ETHUSD&from=1&to=2").json()                            # before the file: nothing
+    assert d["n"] == 0 and d["bars"] == []
+    # 30m: hh:00 + hh:15 and hh:30 + hh:45
+    d = client.get(f"/api/bars?coin=ETHUSD&tf=30m&from={lo}&to={hi}").json()
+    assert d["tf"] == "30m" and d["n"] > 0
+    for t, o, h, l, c in d["bars"]:
+        assert t % (30 * 60_000) == 0
+        i = int(np.searchsorted(ts, t))
+        assert ts[i] == t and ts[i + 1] == t + 15 * 60_000
+        assert (o, h, l, c) == (z["o"][i], max(z["h"][i], z["h"][i + 1]), min(z["l"][i], z["l"][i + 1]), z["c"][i + 1])
+
+
+def test_bars_from_an_odd_file(tmp_path):
+    snap = tmp_path / "snap"
+    (snap / "bars").mkdir(parents=True)
+    M = 15 * 60_000
+    t0 = 1_795_000_000_000 // (2 * M) * (2 * M)
+    ts = np.array([t0 + 3 * M, t0, t0 + M, t0 + 2 * M, t0 + 4 * M, t0 + 6 * M, t0 + 7 * M], np.int64)   # unsorted, gap
+    o = np.array([4, 1, 2, 3, 5, 7, 8], float)
+    c = o + 0.5
+    c[3] = np.nan                                                                          # a broken bar is left out
+    np.savez(snap / "bars" / "BTCUSD.npz", ts=ts, o=o, h=o + 1, l=o - 1, c=c)
+    cl = TestClient(create_app(str(snap), None, SECRET))
+    d = cl.get("/api/bars?coin=BTCUSD").json()
+    assert [b[0] for b in d["bars"]] == [t0, t0 + M, t0 + 3 * M, t0 + 4 * M, t0 + 6 * M, t0 + 7 * M]
+    d = cl.get("/api/bars?coin=BTCUSD&tf=30m").json()
+    # pairs: (t0, t0+M) and (t0+6M, t0+7M); t0+2M is broken, t0+4M has no partner
+    assert [b[0] for b in d["bars"]] == [t0, t0 + 6 * M]
+    assert d["bars"][0] == [t0, 1.0, 3.0, 0.0, 2.5]
+    np.savez(snap / "bars" / "ETHUSD.npz", ts=ts, o=o[:3], h=o, l=o, c=o)                 # lengths differ
+    assert cl.get("/api/bars?coin=ETHUSD").json() == {"missing": True, "bad_shape": True, "coin": "ETHUSD", "tf": "15m"}
+    np.savez(snap / "bars" / "SOLUSD.npz", t=ts, o=o, h=o, l=o, c=o)                       # wrong names
+    assert cl.get("/api/bars?coin=SOLUSD").json()["bad_shape"] is True
+
+
+def test_coins_view_sums_the_account_trades(client, folders):
+    d = client.get("/api/coins").json()
+    assert [c["coin"] for c in d["coins"]] == list(grid.COINS) and d["accounts"] == 50 and d["trade_cap"] == 600
+    want = {}
+    for a in _file(folders, "accounts.json")["accounts"]:
+        for t in _file(folders, "acct", a["id"] + ".json")["trades"]:
+            w = want.setdefault((t["coin"], a["id"], t["L"]), [0, 0.0, 0])
+            w[0] += t["status"] == "closed"
+            w[1] += t["pnl"]
+            w[2] += t["status"] == "open"
+    seen = 0
+    for c in d["coins"]:
+        for ln in c["lines"]:
+            n, pnl, op = want[(c["coin"], ln["id"], ln["L"])]
+            assert (ln["trades"], ln["open"]) == (n, op) and ln["pnl"] == pytest.approx(pnl, abs=0.02)
+            seen += 1
+        assert c["total"]["trades"] == sum(x["trades"] for x in c["lines"])
+        assert [x["pnl"] for x in c["lines"]] == sorted((x["pnl"] for x in c["lines"]), reverse=True)
+    assert seen == len(want)
+    assert d["partial_accounts"] == sum(1 for a in _file(folders, "accounts.json")["accounts"]
+                                        if len(_file(folders, "acct", a["id"] + ".json")["trades"]) >= 600)
+
+
+def test_grid_dims_for_the_settings_map(client):
+    for s in client.get("/api/grid").json()["strategies"]:
+        shape = [len(x["values"]) for x in s["dims"]]
+        assert int(np.prod(shape)) == s["settings"] and all(x["ko"] for x in s["dims"])
+        strat = grid.LONG[s["short"]]
+        assert tuple(s["default_idx"]) == grid.DEFAULT_IDX[strat]
+        assert grid.combo_tuple(strat, 100) == tuple(int(x) for x in np.unravel_index(100, shape))
+
+
+def test_new_endpoints_write_nothing(client, folders):
+    def listing():
+        return {p: os.stat(p).st_mtime_ns for p in glob.glob(os.path.join(folders["snap"], "**"), recursive=True)}
+    before = listing()
+    for path in NEW_ROUTES + ["/api/bars?coin=XRPUSD&tf=30m&from=0&to=9999999999999&limit=50"]:
+        assert client.get(path).status_code == 200, path
+    assert listing() == before
+    for path in ("/api/bars", "/api/coins", "/api/costs"):
+        assert client.post(path).status_code == 405
+
+
+def test_the_fake_writes_section_8_with_the_contract_shapes(folders):
+    st = _file(folders, "status.json")
+    assert set(st["deadman"]) == {"configured", "last_ok_ms", "last_error"}
+    sv = st["server"]                                                            # 8.13
+    assert set(sv) == {"mem_total_mb", "mem_avail_mb", "swap_used_mb", "load", "cpus", "rule_bot"}
+    assert len(sv["load"]) == 3 and sv["cpus"] >= 1 and sv["rule_bot"]
+    assert all(set(u) == {"unit", "active", "mem_mb"} and u["unit"].startswith("paperbot-") for u in sv["rule_bot"])
+    live0 = st["live_start_ms"]
+    # bars: 7 coins, 15m from live start - 7 days to now, contract dtypes
+    for coin in grid.COINS:
+        z = _bars_file(folders, coin)
+        assert set(z) == {"ts", "o", "h", "l", "c"} and z["ts"].dtype == np.int64
+        assert all(z[k].dtype == np.float64 and z[k].shape == z["ts"].shape for k in "ohlc")
+        assert z["ts"][0] <= live0 - 7 * 86_400_000 and z["ts"][-1] == st["generated_ms"] - 15 * 60_000
+        assert (np.diff(z["ts"]) == 15 * 60_000).all() and (z["h"] >= np.maximum(z["o"], z["c"])).all()
+        assert (z["l"] <= np.minimum(z["o"], z["c"])).all()
+    accts = _file(folders, "accounts.json")["accounts"]
+    for a in accts:
+        for L, ln in a["lines"].items():
+            assert set(ln["stops"]) == {"equity", "pnl", "pnl_pct", "max_dd", "trades", "mean_R", "blocked", "halted_ms",
+                                        "day_pauses", "streak_pauses"}
+            p = ln["parts"]
+            assert set(p) == {"gross", "fees", "funding", "open"}
+            assert ln["pnl"] == pytest.approx(p["gross"] - p["fees"] + p["funding"] + p["open"], abs=0.05)
+    assert any(a["lines"][L]["stops"]["halted_ms"] for a in accts for L in a["lines"])        # a stop-rule halt
+    d = _file(folders, "acct", "fx-def-S2-15m.json")
+    assert set(d["curves_stops"]) == {"20", "30", "40", "50"} and all(len(v) <= 800 for v in d["curves_stops"].values())
+    assert len(d["stop_events"]) <= 200 and {e["what"] for e in d["stop_events"]} <= {"halt", "day", "streak"}
+    ts = [e["t_ms"] for e in d["stop_events"]]
+    assert ts == sorted(ts, reverse=True)
+    for t in d["trades"]:
+        assert {"cost_bps", "through_bps", "trend", "vol", "fee", "notional", "funding"} <= set(t)
+        assert t["trend"] in ("up", "down", "range", None) and t["vol"] in ("high", "normal", "low", None)
+        if t["status"] == "open":
+            assert t["funding"] == 0
+    assert any(t["cost_bps"] is not None for t in d["trades"])
+    since = _file(folders, "costs.json")["since_ms"]
+    early = [t for a in accts for t in _file(folders, "acct", a["id"] + ".json")["trades"] if t["entry_ms"] < since]
+    assert early and all(t["cost_bps"] is None for t in early)          # before the order book log: not measured
+    # private maker accounts: maker fills with through_bps, some only touched
+    pv = _file(folders, "acct", "pv-p1-15m.json")["trades"]
+    assert all(t["through_bps"] is not None and t["cost_bps"] is None for t in pv)
+    assert any(t["through_bps"] < 1 for t in pv) and any(t["through_bps"] >= 1 for t in pv)
+    # judge: the three confirmation stories, candidates, stop-rule columns
+    j = _file(folders, "judge.json")
+    assert {c["status"] for c in j["confirm"]} == {"confirming", "confirmed", "failed"}
+    assert j["lines_judged"] == len(j["rows"]) and j["multi_note_ko"] and len(j["stop_rules_ko"]) == 3
+    assert j["verdict_ko"].startswith("실전 금지") and "실전 후보" in j["verdict_ko"]
+    for c in j["confirm"]:
+        assert 0 <= c["progress"] <= 1 and c["need_n"] == 20 and c["min_end_ms"] == c["start_ms"] + 28 * 86_400_000
+        assert (c["decided_ms"] is None) == (c["status"] == "confirming")
+    assert j["candidates"] and all(set(x) == {"id", "name", "L", "decided_ms", "window", "costs", "stops"}
+                                   for x in j["candidates"])
+    assert any(x["costs"]["entry_bps"] is not None for x in j["candidates"])
+    for r in j["rows"]:
+        assert set(r["stops"]) == {"pnl_pct", "max_dd", "ours_pass"}
+        assert r["confirm"] is None or set(r["confirm"]) == {"status", "start_ms", "end_ms"}
+    # costs (8.3)
+    c = _file(folders, "costs.json")
+    assert c["sizes"] == [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000] and c["assumed_bps"] == 2.0
+    for x in c["coins"]:
+        for side in ("buy_bps", "sell_bps"):
+            assert all(len(x[side][k]) == len(c["sizes"]) for k in ("median", "p90", "last"))
+    assert any(None in x["buy_bps"]["last"] for x in c["coins"])                    # a size past the 500 levels
+    assert all(len(s["points"]) <= 800 and all(len(p) == 3 for p in s["points"]) for s in c["series"])
+    assert c["lines"] and c["maker"] and any(m["touch_only"] > 0 for m in c["maker"]) and c["notes_ko"]
+    # regime (8.5)
+    rg = _file(folders, "regime.json")
+    assert [x["coin"] for x in rg["now"]] == list(grid.COINS) and len(rg["history"]) == 7
+    for h in rg["history"]:
+        assert h["points"][0][0] <= live0 - 7 * 86_400_000 and all(len(p) == 3 for p in h["points"])
+    assert all(set(x["trend"]) == {"up", "down", "range"} and set(x["vol"]) == {"high", "normal", "low"} for x in rg["lines"])
+    # home (8.1, 8.7)
+    home = _file(folders, "home.json")
+    g = home["goal"]
+    assert g["stages_ko"] == ["설치", "데모 진행", "우리 기준 통과", "확인 기간", "실전 후보"] and g["stage"] == 4
+    assert g["line_ko"].startswith("12/31까지") and set(g["closest"]) == {"id", "name", "L", "ok", "of", "missing_ko"}
+    assert {"confirming", "candidates"} <= set(home["totals"]) and home["regime_now"] == rg["now"]
+    assert home["costs_now"]["assumed_bps"] == 2.0
+    # backup / watch (8.8)
+    b = _file(folders, "backup.json")
+    assert set(b) == {"last_ok_ms", "last_try_ms", "bytes", "tables", "encrypted", "error_ko"}
+    w = _file(folders, "watch.json")
+    assert w["ok"] is True and {x["what"] for x in w["items"]} == {"dead", "rank", "backup"}
+    # weekly review (8.10): the current week and two finished ones, newest first
+    rv = _file(folders, "review.json")["weeks"]
+    assert [x["final"] for x in rv] == [False, True, True] and rv[0]["start_ms"] > rv[1]["start_ms"]
+    for x in rv:
+        assert x["end_ms"] - x["start_ms"] == 7 * 86_400_000 and (x["start_ms"] + 9 * 3_600_000) % 86_400_000 == 0
+        assert {"numbers", "judge", "stops", "costs", "regime", "views", "decide_ko", "summary_ko"} <= set(x)
+        assert 3 <= len(x["summary_ko"]) <= 6 and len(x["regime"]) == 7
+    # Telegram history (8.11)
+    tg = _file(folders, "telegram.json")["items"]
+    assert 50 <= len(tg) <= 300 and [x["ts_ms"] for x in tg] == sorted((x["ts_ms"] for x in tg), reverse=True)
+    assert len({x["kind"] for x in tg}) >= 8 and {x["status"] for x in tg} == {"sent", "queued", "error"}
+    assert any("<b>" in x["text"] for x in tg)                                      # markup stays text
+
+
+def test_fake_trades_sit_on_the_fake_candles(folders):
+    bars = {c: _bars_file(folders, c) for c in grid.COINS}
+    M = 15 * 60_000
+    checked = 0
+    for aid in ("fx-def-S2-15m", "fr-N04-30m", "pv-p2-30m"):
+        for t in _file(folders, "acct", aid + ".json")["trades"][:150]:
+            z = bars[t["coin"]]
+            i = int(np.searchsorted(z["ts"], t["entry_ms"]))
+            assert z["ts"][i] == t["entry_ms"]
+            assert z["l"][i] * 0.9997 <= t["entry"] <= z["h"][i] * 1.0003
+            if t["status"] == "closed" and t["reason"] not in ("liq", "time"):
+                j = int(np.searchsorted(z["ts"], t["exit_ms"] - M))
+                assert z["l"][j] * 0.999 <= t["exit"] <= z["h"][j] * 1.001 or t["reason"] == "lock"
+            checked += 1
+    assert checked > 100
+
+
+NEW_SCREENS = {"trade": "거래 차트", "regime": "시장 국면", "costs": "실제 비용", "compare": "비교", "review": "주간 회의록",
+               "telegram": "알림 기록", "map": "설정 지도", "coins": "코인별"}
+
+
+def test_new_screens_are_routed_in_the_menu_and_build_dom_from_text_only():
+    app_js = open(os.path.join(STATIC, "js", "app.js"), encoding="utf-8").read()
+    screens = dict(re.findall(r"(\w+): \"(\w+)\"", re.search(r"const SCREENS = \{([^}]*)\}", app_js).group(1)))
+    for name in NEW_SCREENS:
+        assert screens.get(name) == name, name
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        assert "export async function mount(" in src, name
+        # the same scan as for every other file: no markup from strings, no outside host, no eval
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{name}.js uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, name
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src), name
+    for ko in NEW_SCREENS.values():
+        if ko != "거래 차트":                                       # reached from a trade row, not from the menu
+            assert f'ko: "{ko}"' in app_js, ko
+    # the trade route carries the account and the trade key (both URI-encoded): #/trade/<id>/<key>
+    assert "arg2" in app_js and "decodeURIComponent" in app_js
+    # every new screen is explained in the howto, in Korean
+    howto = open(os.path.join(STATIC, "js", "screens", "howto.js"), encoding="utf-8").read()
+    for ko in list(NEW_SCREENS.values()) + ["확인 기간", "정지 규칙", "12/31", "서버 같이 쓰기"]:
+        assert ko in howto, ko
+    # Telegram text is shown as text (pre-wrap), never parsed
+    tg = open(os.path.join(STATIC, "js", "screens", "telegram.js"), encoding="utf-8").read()
+    assert 'h("pre", {class: "tg-text"}, String(x.text' in tg
+    css = open(os.path.join(STATIC, "demo.css"), encoding="utf-8").read()
+    assert re.search(r"\.tg-text \{[^}]*white-space: pre-wrap", css)
+
+
+def test_status_screen_reads_the_section_8_status_blocks():
+    src = open(os.path.join(STATIC, "js", "screens", "status.js"), encoding="utf-8").read()
+    for key in ("/api/backup", "/api/watch", "st.deadman", "st.server", "규칙봇 여유 있음", "여유가 줄었음: 개발자에게 화면 보내기",
+                "알 수 없음", "mem_avail_mb", "rule_bot"):
+        assert key in src, key
+
+
+def test_the_fake_is_deterministic_for_section_8(tmp_path, folders):
+    fake.build(str(tmp_path / "again"))
+    for name in ("costs.json", "regime.json", "review.json", "telegram.json", "backup.json", "watch.json",
+                 os.path.join("acct", "pv-p1-15m.json")):
+        with open(tmp_path / "again" / name, "rb") as a, open(os.path.join(folders["snap"], name), "rb") as b:
+            assert a.read() == b.read(), name
+    for coin in grid.COINS:
+        a, b = _bars_file(folders, coin), np.load(tmp_path / "again" / "bars" / f"{coin}.npz")
+        assert all(np.array_equal(a[k], b[k]) for k in "ohlc") and np.array_equal(a["ts"], b["ts"])

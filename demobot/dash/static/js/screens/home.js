@@ -1,20 +1,28 @@
-// #/home 홈: the verdict headline ("실전 금지" until something passes), live days and totals, the best / worst
-// account lines, mean P&L by account kind and leverage, the ranking leaders against the luck line, recent switches and
-// recent trades. home.json + judge.json, every 60 s (drawn again only when the engine wrote a new snapshot).
+// #/home 홈: the verdict headline ("실전 금지" until something passes; candidates and confirmations first), the goal
+// line to 12/31 (CONTRACT 8.7: the line, the five stages, the line closest to "우리 기준" and what it still misses),
+// live days and totals, the market now (8.5) with the measured entry cost (8.3), the best / worst account lines, mean
+// P&L by account kind and leverage, the ranking leaders against the luck line, recent switches and recent trades
+// (each opens its trade chart). home.json + judge.json, every 60 s (drawn again only when the engine wrote a new one).
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
 import {LEVS, KIND_KO, shortOf, tfKo, WINDOW_KO, reasonKo, sideKo, STRAT_KO} from "../labels.js";
 
+const STAGES_KO = ["설치", "데모 진행", "우리 기준 통과", "확인 기간", "실전 후보"];
+
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
   const verdict = h("section", {class: "card hero dl-verdict", "aria-label": "판정"});
-  const stats = h("div", {class: "stats dl-s5"});
+  const goal = h("section", {class: "card dl-goal", "aria-label": "12/31 목표"});
+  const stats = h("div", {class: "stats dl-s6"});
+  const market = h("div");
   const best = h("div"), worst = h("div"), kinds = h("div"), leaders = h("div"), switches = h("div"), trades = h("div");
   el.append(
     ui.screenHead("홈", "데모 랩 한눈에 보기"),
-    verdict, stats,
+    verdict, goal, stats,
+    ui.card({plate: "지금 시장", sub: "코인마다 추세와 변동 · 실제 진입 비용",
+      acts: h("a", {class: "btn-line", href: "#/regime"}, "시장 국면")}, market),
     h("div", {class: "grid2"},
       ui.card({plate: "잘 되는 줄", sub: "계좌 × 배수 손익 상위 5"}, best),
       ui.card({plate: "안 되는 줄", sub: "계좌 × 배수 손익 하위 5"}, worst)),
@@ -42,43 +50,85 @@ export async function mount(el, ctx) {
     paintVerdict(home, judge);
     if (isMissing(home)) {
       put(stats, ui.missing("홈 요약"));
-      for (const box of [best, worst, kinds, leaders, switches, trades]) put(box, ui.empty("준비 중"));
+      put(goal, h("div", {class: "card-h"}, ui.plate("12/31 목표")), ui.none("준비 중"));
+      for (const box of [market, best, worst, kinds, leaders, switches, trades]) put(box, ui.empty("준비 중"));
       return;
     }
+    paintGoal(home.goal);
+    paintMarket(home.regime_now, home.costs_now);
     paintStats(home);
     put(best, lineList(home.best, ctx));
     put(worst, lineList(home.worst, ctx));
     put(kinds, kindTable(home.by_kind));
     put(leaders, leaderTable(home.leaders, ctx));
     put(switches, switchList(home.recent_switches));
-    put(trades, tradeList(home.recent_trades));
+    put(trades, tradeList(home.recent_trades, ctx));
   }
 
   function paintVerdict(home, judge) {
-    const passed = home && !isMissing(home) && home.totals ? Number(home.totals.passed || 0) : 0;
+    const t = home && !isMissing(home) && home.totals ? home.totals : {};
+    const passed = Number(t.passed || 0), cands = Number(t.candidates || 0), conf = Number(t.confirming || 0);
     const text = judge && !isMissing(judge) && judge.verdict_ko ? judge.verdict_ko : "판정 자료 준비 중";
-    const big = passed > 0
-      ? h("p", {class: "dl-vbig ok"}, `통과 ${fmt.int(passed)}줄`)
-      : h("p", {class: "dl-vbig no"}, "실전 금지");
+    const big = cands > 0
+      ? h("p", {class: "dl-vbig ok"}, `실전 후보 ${fmt.int(cands)}줄`)
+      : conf > 0 ? h("p", {class: "dl-vbig warn"}, `확인 기간 ${fmt.int(conf)}줄`)
+        : passed > 0 ? h("p", {class: "dl-vbig ok"}, `통과 ${fmt.int(passed)}줄`)
+          : h("p", {class: "dl-vbig no"}, "실전 금지");
     put(verdict,
       h("div", {class: "card-h"}, ui.plate("판정"), h("span", {class: "sub"}, "두 가지 기준으로 매일 확인")),
       big,
       h("p", {class: "dl-vline"}, text),
-      h("p", {class: "note"}, passed > 0
-        ? "통과한 줄이 있어도 실전은 두 분이 정합니다. 판정 화면에서 무엇이 통과했는지 보세요."
-        : "아직 어떤 계좌·배수도 기준을 넘지 못했습니다. 넘기 전까지는 실전에 쓰지 않습니다."),
+      h("p", {class: "note"}, cands > 0
+        ? "실전 후보는 통과 뒤 4주 확인 기간까지 넘은 줄입니다. 그래도 실제 돈은 두 분이 정하기 전까지 쓰지 않습니다."
+        : conf > 0 ? "기준을 넘은 줄이 4주 확인 기간을 지나는 중입니다. 운으로 넘었을 수 있어서, 끝날 때까지 실전에 쓰지 않습니다."
+          : passed > 0 ? "통과한 줄이 있어도 실전은 두 분이 정합니다. 판정 화면에서 무엇이 통과했는지 보세요."
+            : "아직 어떤 계좌·배수도 기준을 넘지 못했습니다. 넘기 전까지는 실전에 쓰지 않습니다."),
       h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: "#/judge"}, "판정 자세히"),
         h("a", {class: "btn-line", href: "#/howto"}, "기준이 뭔가요?")));
   }
 
   function paintStats(home) {
     const t = home.totals || {};
+    const opt = (v) => (v == null ? "준비 중" : fmt.int(v));
     put(stats,
-      ui.stat("실시간", home.live_days != null ? `${fmt.num(home.live_days, 1)}일` : "—", home.phase === "warm" ? "과거 채우는 중" : "실시간 시작부터"),
-      ui.stat("계좌", fmt.int(t.accounts), "배수 4줄씩"),
+      ui.stat("실시간", home.live_days != null ? `${fmt.num(home.live_days, 1)}일` : "—", home.phase === "warm" ? "과거 채우는 중" : `계좌 ${fmt.int(t.accounts)}개 · 배수 4줄씩`),
       ui.stat("열린 포지션", fmt.int(t.open_positions), "모든 줄 합계"),
       ui.stat("닫힌 거래", fmt.int(t.trades), "모든 줄 합계"),
-      ui.stat("통과", fmt.int(t.passed), "우리 기준", Number(t.passed) > 0 ? "dl-good" : null));
+      ui.stat("우리 기준 통과", fmt.int(t.passed), "지금 넘은 줄", Number(t.passed) > 0 ? "dl-good" : null),
+      ui.stat("확인 기간", opt(t.confirming), "4주 확인 중인 줄"),
+      ui.stat("실전 후보", opt(t.candidates), "확인 기간까지 넘은 줄", Number(t.candidates) > 0 ? "dl-good" : null));
+  }
+
+  function paintGoal(g) {
+    if (!g) { put(goal, h("div", {class: "card-h"}, ui.plate("12/31 목표")), ui.none("준비 중")); return; }
+    const stages = Array.isArray(g.stages_ko) && g.stages_ko.length ? g.stages_ko : STAGES_KO;
+    const at = Number.isInteger(Number(g.stage)) ? Number(g.stage) : -1;
+    const c = g.closest;
+    put(goal,
+      h("div", {class: "card-h"}, ui.plate("12/31 목표"),
+        h("span", {class: "sub"}, g.deadline_ms ? `${fmt.date(g.deadline_ms - 1)}까지` : ""),
+        g.days_left != null ? h("span", {class: "acts"}, h("b", {class: "dl-dleft"}, `${fmt.int(g.days_left)}일 남음`)) : null),
+      h("p", {class: "dl-goalline"}, g.line_ko || "—"),
+      h("ol", {class: "steps dl-steps", "aria-label": "단계"}, stages.map((x, i) => h("li", {class: i < at ? "done" : i === at ? "now" : "",
+        "aria-current": i === at ? "step" : null}, `${i + 1}. ${x}`))),
+      c ? h("div", {class: "dl-closest"},
+        h("div", {class: "dl-evt"}, h("span", {class: "muted"}, "가장 가까운 줄"),
+          h("a", {href: ctx.href("account", c.id)}, `${c.name || c.id} ${fmt.lev(c.L)}`),
+          ui.pill(`${fmt.int(c.of)}개 중 ${fmt.int(c.ok)}개 통과`, Number(c.ok) >= Number(c.of) ? "good" : "thin")),
+        ui.progress(Number(c.of) ? Number(c.ok) / Number(c.of) : 0, null),
+        (c.missing_ko || []).length ? h("ul", {class: "dl-ul"}, c.missing_ko.map((x) => h("li", null, h("span", {class: "down"}, "✗ "), x)))
+          : h("p", {class: "note"}, "모든 항목을 넘었습니다.")) : null);
+  }
+
+  function paintMarket(rows, costs) {
+    const list = Array.isArray(rows) ? rows : [];
+    const cost = costs && costs.median_entry_bps != null
+      ? h("p", {class: "dl-vline"}, `실제 진입 비용 중간값 ${fmt.num(costs.median_entry_bps, 2)}bp `,
+        h("span", {class: "muted"}, `(봇의 가정 ${fmt.num(costs.assumed_bps ?? 2, 0)}bp · `),
+        h("a", {href: "#/costs"}, "실제 비용"), h("span", {class: "muted"}, ")"))
+      : h("p", {class: "note"}, "실제 진입 비용: 기록 없음");
+    put(market, list.length ? h("div", {class: "dl-mkt"}, list.map((r) => h("div", {class: "dl-mktc"},
+      h("b", null, fmt.coin(r.coin)), ui.regimeChips(r.trend, r.vol)))) : ui.none("준비 중"), cost);
   }
 
   await load();
@@ -133,7 +183,7 @@ function switchList(rows) {
     d.why_ko ? h("div", {class: "note"}, d.why_ko) : null)));
 }
 
-function tradeList(rows) {
+function tradeList(rows, ctx) {
   if (!rows || !rows.length) return ui.empty("아직 거래가 없습니다");
   return h("div", {class: "dl-list"}, rows.slice(0, 8).map((t) => {
     const open = t.status === "open";
@@ -141,7 +191,8 @@ function tradeList(rows) {
       h("div", {class: "dl-evt"}, h("span", {class: "muted num"}, fmt.kst(open ? t.entry_ms : t.exit_ms)),
         t.account ? h("a", {href: `#/account/${encodeURIComponent(t.account)}`}, t.name || t.account) : null),
       h("div", {class: "dl-evb"},
-        h("b", null, fmt.coin(t.coin)), " ", h("span", {class: ["side", Number(t.side) > 0 ? "long" : "short"]}, sideKo(t.side)), " ",
+        t.account && t.key ? h("a", {class: "dl-tlink", href: ctx.href("trade", t.account, null, t.key), title: "거래 차트"}, fmt.coin(t.coin))
+          : h("b", null, fmt.coin(t.coin)), " ", h("span", {class: ["side", Number(t.side) > 0 ? "long" : "short"]}, sideKo(t.side)), " ",
         h("span", {class: "pp thin"}, fmt.lev(t.L)), " ",
         open ? ui.pill("열림", "accent") : h("span", {class: "muted"}, reasonKo(t.reason)), " ",
         ui.signed(fmt.r(t.R), fmt.tone(t.R, fmt.r(t.R))), " · ",

@@ -3,9 +3,16 @@
     DEMOBOT_DASH_PASSWORD_HASH=... DEMOBOT_DASH_SECRET=... python -m demobot.dash --snap /var/lib/demobot/snap
 
 - Reads only: the snapshot files (``status.json``, ``home.json``, ``accounts.json``, ``acct/<id>.json``,
-  ``trades.json``, ``judge.json``, ``views.json``, ``rank_<STRAT>_<tf>.npz``, ``rank_meta.json``) and the 5-year files
+  ``trades.json``, ``judge.json``, ``views.json``, ``rank_<STRAT>_<tf>.npz``, ``rank_meta.json``; CONTRACT 8:
+  ``costs.json``, ``regime.json``, ``backup.json``, ``watch.json``, ``bars/<COIN>.npz``) and the 5-year files
   ``demobot/data/past5y_<STRAT>_<tf>.npz``. Nothing here writes a file, opens the database or places an order.
 - Every file is cached by its modification time; a file that is not there yet answers ``{"missing": true}``.
+- ``/api/bars?coin=BTCUSD&tf=15m&from=<ms>&to=<ms>[&limit=n]``: candles for the trade charts (CONTRACT 8.6), coin and
+  timeframe from a whitelist, the range clamped to the file, at most 3000 bars (the newest of the range when cut);
+  30m bars are built by pairing the 15m bars hh:00 + hh:15 and hh:30 + hh:45 (a half without its partner is left out).
+- ``/api/coins`` ("코인별 보기", CONTRACT 8.12): per coin, every account line's trades and P&L on that coin, summed
+  from the ``acct/<id>.json`` trades (cached until one of those files or accounts.json changes).
+- ``/api/review`` (``review.json``, 8.10) and ``/api/telegram`` (``telegram.json``, 8.11): as-is, like the others.
 - Login: one password (PBKDF2 hash in DEMOBOT_DASH_PASSWORD_HASH, ``python -m demobot.dash hash``) and a signed session
   cookie ``demobot_s`` (DEMOBOT_DASH_SECRET). The helpers are a copy of paperbot/dash/app.py's, so this dashboard does
   not depend on the rule bot's dashboard module.
@@ -55,6 +62,15 @@ PUBLIC_PATHS = frozenset(("/login", "/static/login.js", "/static/login.css", "/s
 
 SNAP_FILES = {"status": "status.json", "home": "home.json", "accounts": "accounts.json", "trades": "trades.json",
               "judge": "judge.json", "rank_meta": "rank_meta.json", "views": "views.json"}
+# CONTRACT 8 (round 3): the same as-is answers, but these refuse any query parameter
+SNAP_FILES_STRICT = {"costs": "costs.json", "regime": "regime.json", "backup": "backup.json", "watch": "watch.json",
+                     "review": "review.json", "telegram": "telegram.json"}
+TRADE_CAP = 600                  # acct/<id>.json keeps the newest 600 trades (CONTRACT 4)
+M15_MS = 15 * 60_000
+BARS_PARAMS = ("coin", "tf", "from", "to", "limit")
+BARS_MAX = 3000                  # bars per answer
+BARS_CACHE = 14                  # 7 coins x 2 timeframes (a coin's 15m file is ~0.4 MB after 3 months)
+MS_RE = re.compile(r"^\d{1,15}$")
 ACCOUNT_ID = re.compile(r"^[A-Za-z0-9-]{3,40}$")   # contract ids carry the upper-case strategy name (fx-def-S2-15m)
 
 
@@ -155,7 +171,9 @@ class Snap:
         self._lock = threading.Lock()
         self._json: dict[str, tuple] = {}
         self._npz: "collections.OrderedDict[str, tuple]" = collections.OrderedDict()
-        self._labels: dict[str, list] = {}
+        self._bars: "collections.OrderedDict[tuple, tuple]" = collections.OrderedDict()   # its own cache: never
+        self._labels: dict[str, list] = {}                                                 # evicts the rank files
+        self._coins: Optional[tuple] = None                                                # (key, body) of /api/coins
 
     # -- json
     def json_bytes(self, rel: str) -> bytes:
@@ -211,6 +229,37 @@ class Snap:
                 self._npz.popitem(last=False)
         return arrays
 
+    # -- bars (CONTRACT 8.6)
+    def bars(self, coin: str, tf: str):
+        """(ts, o, h, l, c) of one coin in 15m or 30m (sorted, finite, one bar per time), None when the file is not
+        there, BAD_BARS when its arrays are not the contract's. coin must already be whitelisted."""
+        path = os.path.join(self.dir, "bars", coin + ".npz")
+        stamp = _stamp(path)
+        if stamp is None:
+            return None
+        key = (coin, tf)
+        with self._lock:
+            hit = self._bars.get(key)
+            if hit and hit[0] == stamp:
+                self._bars.move_to_end(key)
+                return hit[1]
+        try:
+            with np.load(path, allow_pickle=False) as z:
+                raw = {k: np.asarray(z[k]) for k in ("ts", "o", "h", "l", "c") if k in z.files}
+        except (OSError, ValueError, EOFError):
+            with self._lock:
+                hit = self._bars.get(key)
+            return hit[1] if hit else None
+        arr = clean_bars(raw)
+        if arr is not BAD_BARS and tf == "30m":
+            arr = pair_30m(*arr)
+        with self._lock:
+            self._bars[key] = (stamp, arr)
+            self._bars.move_to_end(key)
+            while len(self._bars) > BARS_CACHE:
+                self._bars.popitem(last=False)
+        return arr
+
     def rank_file(self, strat: str, tf: str) -> Optional[dict]:
         for name in (f"rank_{strat}_{tf}.npz", f"rank_{grid.SHORT[strat]}_{tf}.npz"):
             z = self.npz(os.path.join(self.dir, name))
@@ -229,6 +278,182 @@ class Snap:
         if strat not in self._labels:
             self._labels[strat] = [grid.combo_label(strat, c) for c in range(grid.NCOMBO[strat])]
         return self._labels[strat]
+
+
+# ---------------------------------------------------------------- per coin (/api/coins)
+def _num(x) -> float:
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return 0.0
+    return x if math.isfinite(x) else 0.0
+
+
+def coin_view(snap: "Snap") -> bytes:
+    """Every account line's closed trades, wins, mean R, P&L (closed + open) and open positions per coin, from the
+    acct/<id>.json trades. An account whose file holds TRADE_CAP trades only covers its newest ones: "partial"."""
+    accts = snap.json_obj("accounts.json")
+    if not isinstance(accts, dict) or isinstance(accts.get("missing"), bool):
+        return MISSING
+    rows = [a for a in accts.get("accounts") or [] if isinstance(a, dict) and ACCOUNT_ID.fullmatch(str(a.get("id", "")))]
+    key = (_stamp(os.path.join(snap.dir, "accounts.json")),
+           tuple(_stamp(os.path.join(snap.dir, "acct", a["id"] + ".json")) for a in rows))
+    with snap._lock:
+        if snap._coins and snap._coins[0] == key:
+            return snap._coins[1]
+    per = {c: {} for c in grid.COINS}
+    partial = 0
+    for a in rows:
+        d = snap.json_obj(os.path.join("acct", a["id"] + ".json"))
+        trades = d.get("trades") if isinstance(d, dict) else None
+        if not isinstance(trades, list):
+            continue
+        cut = len(trades) >= TRADE_CAP
+        partial += cut
+        since = min((int(_num(t.get("entry_ms"))) for t in trades if isinstance(t, dict) and t.get("entry_ms")), default=None)
+        for t in trades:
+            if not isinstance(t, dict) or t.get("coin") not in per:
+                continue
+            try:
+                L = int(t.get("L"))
+            except (TypeError, ValueError):
+                continue
+            ln = per[t["coin"]].setdefault((a["id"], L), {
+                "id": a["id"], "name": a.get("name") or a["id"], "kind": a.get("kind"), "tf": a.get("tf"), "L": L,
+                "trades": 0, "wins": 0, "sum_R": 0.0, "n_R": 0, "pnl": 0.0, "pnl_closed": 0.0, "open": 0,
+                "partial": cut, "since_ms": since})
+            pnl = _num(t.get("pnl"))
+            ln["pnl"] += pnl
+            if t.get("status") == "open":
+                ln["open"] += 1
+                continue
+            ln["trades"] += 1
+            ln["wins"] += pnl > 0
+            ln["pnl_closed"] += pnl
+            if t.get("R") is not None and math.isfinite(_num(t.get("R"))):
+                ln["sum_R"] += _num(t.get("R"))
+                ln["n_R"] += 1
+    coins = []
+    for c in grid.COINS:
+        lines = []
+        for ln in per[c].values():
+            n_R = ln.pop("n_R")
+            sum_R = ln.pop("sum_R")
+            ln["mean_R"] = round(sum_R / n_R, 4) if n_R else None
+            ln["win_rate"] = round(ln["wins"] / ln["trades"], 4) if ln["trades"] else None
+            ln["pnl"], ln["pnl_closed"] = round(ln["pnl"], 2), round(ln["pnl_closed"], 2)
+            lines.append(ln)
+        lines.sort(key=lambda x: -x["pnl"])
+        n = sum(x["trades"] for x in lines)
+        coins.append({"coin": c, "lines": lines, "total": {
+            "lines": len(lines), "up": sum(1 for x in lines if x["pnl"] > 0), "down": sum(1 for x in lines if x["pnl"] < 0),
+            "trades": n, "wins": sum(x["wins"] for x in lines), "open": sum(x["open"] for x in lines),
+            "pnl": round(sum(x["pnl"] for x in lines), 2)}})
+    body = json.dumps({"generated_ms": accts.get("generated_ms"), "accounts": len(rows), "partial_accounts": partial,
+                       "trade_cap": TRADE_CAP, "coins": coins}, ensure_ascii=False, separators=(",", ":"),
+                      allow_nan=False).encode()
+    with snap._lock:
+        snap._coins = (key, body)
+    return body
+
+
+# ---------------------------------------------------------------- candles for the trade charts (/api/bars)
+BAD_BARS = "bad"
+
+
+def clean_bars(raw: dict):
+    """The contract's arrays (ts int64, o h l c float64, 1-D, one length) -> sorted, finite, unique times."""
+    if set(raw) != {"ts", "o", "h", "l", "c"}:
+        return BAD_BARS
+    ts = raw["ts"]
+    n = ts.shape[0] if ts.ndim == 1 else -1
+    if n < 0 or ts.dtype.kind not in "iu" or any(raw[k].ndim != 1 or raw[k].shape[0] != n or raw[k].dtype.kind not in "fiu"
+                                                 for k in ("o", "h", "l", "c")):
+        return BAD_BARS
+    ts = ts.astype(np.int64)
+    o, h, l, c = (raw[k].astype(np.float64) for k in ("o", "h", "l", "c"))
+    ok = np.isfinite(o) & np.isfinite(h) & np.isfinite(l) & np.isfinite(c) & (ts >= 0)
+    ts, o, h, l, c = ts[ok], o[ok], h[ok], l[ok], c[ok]
+    order = np.argsort(ts, kind="stable")
+    ts, o, h, l, c = ts[order], o[order], h[order], l[order], c[order]
+    if ts.size > 1:                                     # one bar per time (the last written one wins)
+        keep = np.append(ts[1:] != ts[:-1], True)
+        ts, o, h, l, c = ts[keep], o[keep], h[keep], l[keep], c[keep]
+    return ts, o, h, l, c
+
+
+def pair_30m(ts, o, h, l, c):
+    """30m bars from 15m ones (CONTRACT 8.6): hh:00 + hh:15 and hh:30 + hh:45; a half without its partner is dropped."""
+    if ts.size < 2:
+        return ts[:0], o[:0], h[:0], l[:0], c[:0]
+    first = (ts[:-1] % (2 * M15_MS) == 0) & (ts[1:] == ts[:-1] + M15_MS)
+    i = np.flatnonzero(first)
+    return ts[i], o[i], np.maximum(h[i], h[i + 1]), np.minimum(l[i], l[i + 1]), c[i + 1]
+
+
+def strict_params(params, allowed) -> dict:
+    """A query with only known, single, short parameters (else 400)."""
+    seen: dict[str, str] = {}
+    for k, v in params.multi_items():
+        if k not in allowed:
+            _bad(f"unknown parameter: {k[:20]}")
+        if k in seen:
+            _bad(f"repeated parameter: {k}")
+        if len(v) > 40:
+            _bad(f"too long: {k}")
+        seen[k] = v
+    return seen
+
+
+def bars_query(params) -> dict:
+    seen = strict_params(params, BARS_PARAMS)
+    coin = seen.get("coin", "")
+    if coin not in grid.COINS:
+        _bad("coin: " + " | ".join(grid.COINS))
+    tf = seen.get("tf", "15m")
+    if tf not in grid.TFS:
+        _bad("tf: 15m | 30m")
+
+    def ms(name):
+        raw = seen.get(name)
+        if raw is None:
+            return None
+        if not MS_RE.fullmatch(raw):
+            _bad(f"{name}: epoch milliseconds (a whole number)")
+        return int(raw)
+
+    lo, hi = ms("from"), ms("to")
+    if lo is not None and hi is not None and lo > hi:
+        _bad("from must not be after to")
+    raw = seen.get("limit")
+    if raw is not None and (not re.fullmatch(r"\d{1,5}", raw) or not 1 <= int(raw) <= BARS_MAX):
+        _bad(f"limit: a whole number 1-{BARS_MAX}")
+    return {"coin": coin, "tf": tf, "from": lo, "to": hi, "limit": int(raw) if raw is not None else BARS_MAX}
+
+
+def bars_payload(snap: "Snap", q: dict) -> dict:
+    base = {"coin": q["coin"], "tf": q["tf"]}
+    arr = snap.bars(q["coin"], q["tf"])
+    if arr is None:
+        return {"missing": True, **base}
+    if arr is BAD_BARS:
+        return {"missing": True, "bad_shape": True, **base}
+    ts, o, h, l, c = arr
+    if not ts.size:
+        return {**base, "first_ms": None, "last_ms": None, "from_ms": None, "to_ms": None, "n": 0, "truncated": False,
+                "bars": []}
+    first, last = int(ts[0]), int(ts[-1])
+    lo = first if q["from"] is None else max(q["from"], first)
+    hi = last if q["to"] is None else min(q["to"], last)
+    i0 = int(np.searchsorted(ts, lo, "left"))
+    i1 = int(np.searchsorted(ts, hi, "right")) if hi >= lo else i0
+    truncated = i1 - i0 > q["limit"]
+    if truncated:                                        # the newest bars of the range (a chart that ends at "to")
+        i0 = i1 - q["limit"]
+    sl = slice(i0, i1)
+    rows = [list(x) for x in zip(ts[sl].tolist(), o[sl].tolist(), h[sl].tolist(), l[sl].tolist(), c[sl].tolist())]
+    return {**base, "first_ms": first, "last_ms": last, "from_ms": lo, "to_ms": hi, "n": len(rows),
+            "truncated": bool(truncated), "bars": rows}
 
 
 # ---------------------------------------------------------------- the ranking table (/api/rank)
@@ -438,12 +663,20 @@ def rank_table(snap: Snap, p: dict) -> dict:
             "rows": rows}
 
 
+DIM_KO = {"st_atr_len": "ST 기간", "st_mult": "ST 배수", "roc_len": "ROC 기간", "kst_scale": "KST 배율",
+          "kst_signal_len": "KST 신호선", "kvo_scale": "클링거 배율", "kvo_signal_len": "클링거 신호선"}
+
+
 def grid_info() -> dict:
-    """The settings grid in the page's words (demobot/grid.py is the one source)."""
+    """The settings grid in the page's words (demobot/grid.py is the one source). ``dims``: each strategy's parameters
+    in combo order (a combo index is their row-major position, numpy.unravel_index) for the 설정 지도."""
     return {"strategies": [{"id": s, "short": grid.SHORT[s], "settings": grid.NCOMBO[s],
                             "default": grid.combo_label(s, grid.default_combo(s)),
                             "friend": grid.combo_label(s, grid.friend_combo(s)) if grid.friend_combo(s) is not None else None,
-                            "pick": {tf: grid.combo_label(s, grid.PICK[(s, tf)]) for tf in grid.TFS}}
+                            "pick": {tf: grid.combo_label(s, grid.PICK[(s, tf)]) for tf in grid.TFS},
+                            "dims": [{"key": k, "ko": DIM_KO.get(k, k), "values": [float(v) for v in vals]}
+                                     for k, vals in grid.DIMS[s]],
+                            "default_idx": list(grid.DEFAULT_IDX[s])}
                            for s in grid.STRATS],
             "tfs": list(grid.TFS), "exits": [{"i": i, "name": n, "ko": _exit_ko(i)} for i, n in enumerate(grid.EXITS)],
             "scopes": list(grid.SCOPES), "windows": list(grid.WINDOWS), "coins": list(grid.COINS),
@@ -568,6 +801,26 @@ def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_
 
     for key, name in SNAP_FILES.items():
         snap_route(key, name)
+
+    def strict_route(key: str, name: str):
+        def handler(req: Request):
+            strict_params(req.query_params, ())
+            return _json(snap.json_bytes(name))
+        handler.__name__ = f"api_{key}"
+        app.get(f"/api/{key}")(handler)
+
+    for key, name in SNAP_FILES_STRICT.items():
+        strict_route(key, name)
+
+    @app.get("/api/coins")
+    def coins(req: Request):
+        strict_params(req.query_params, ())
+        return _json(coin_view(snap))
+
+    @app.get("/api/bars")
+    def bars(req: Request):
+        body = bars_payload(snap, bars_query(req.query_params))
+        return _json(json.dumps(body, separators=(",", ":"), allow_nan=False).encode())
 
     @app.get("/api/account/{aid}")
     def account(aid: str):

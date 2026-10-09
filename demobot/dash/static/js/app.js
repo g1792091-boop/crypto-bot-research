@@ -1,6 +1,7 @@
 // The shell: the top menu (plain Korean text buttons like the rule bot's), hash routes, the skin switch, the server
 // state dot and chip (/api/status every 30 s), the "마지막 갱신" stamp, and each screen's polling (paused while the page
-// is hidden). Screens: js/screens/<name>.js with mount(el, ctx) (returning an optional cleanup).
+// is hidden). Screens: js/screens/<name>.js with mount(el, ctx) (returning an optional cleanup). A route is
+// #/<screen>[/<arg>[/<arg2>]][?query], e.g. #/trade/<account id>/<trade key> (both parts URI-encoded).
 import {h, put, local} from "./dom.js";
 import {getJSON, isMissing} from "./api.js";
 import {hms, kst, dur} from "./fmt.js";
@@ -10,15 +11,23 @@ import {PHASE_KO} from "./labels.js";
 const MENU = [
   {id: "home", ko: "홈"},
   {id: "rank", ko: "순위표"},
-  {id: "accounts", ko: "계좌", also: ["account"]},
+  {id: "map", ko: "설정 지도"},
+  {id: "accounts", ko: "계좌", also: ["account", "trade"]},
+  {id: "compare", ko: "비교"},
+  {id: "coins", ko: "코인별"},
   {id: "trades", ko: "거래 기록"},
   {id: "judge", ko: "판정"},
+  {id: "regime", ko: "시장 국면"},
+  {id: "costs", ko: "실제 비용"},
+  {id: "review", ko: "주간 회의록"},
   {id: "views", ko: "관점 기록"},
+  {id: "telegram", ko: "알림 기록"},
   {id: "status", ko: "서버 상태"},
   {id: "howto", ko: "어떻게 돌아가나"},
 ];
 const SCREENS = {home: "home", rank: "rank", accounts: "accounts", account: "account", trades: "trades", judge: "judge",
-  views: "views", status: "status", howto: "howto"};
+  views: "views", status: "status", howto: "howto", trade: "trade", regime: "regime", costs: "costs", compare: "compare",
+  review: "review", telegram: "telegram", map: "map", coins: "coins"};
 const TITLE = "데모 랩";
 
 // ---------------------------------------------------------------- skin (two skins of tokens.css, per device)
@@ -127,7 +136,8 @@ function parseHash() {
   const parts = path.split("/").filter(Boolean);
   const name = SCREENS[parts[0]] ? parts[0] : "home";
   const query = Object.fromEntries(new URLSearchParams(qs || ""));
-  return {name, arg: parts[1] ? decodeURIComponent(parts[1]) : null, query};
+  const dec = (x) => { try { return decodeURIComponent(x); } catch (e) { return null; } };
+  return {name, arg: parts[1] ? dec(parts[1]) : null, arg2: parts[2] ? dec(parts[2]) : null, query};
 }
 
 function makeCtx(el, params) {
@@ -155,10 +165,10 @@ function makeCtx(el, params) {
       if (statusNow) fn(statusNow); else pollStatus();
     },
     setTitle(t) { document.title = t ? `${t} · ${TITLE}` : TITLE; },
-    href: (name, arg, q) => `#/${name}${arg ? "/" + encodeURIComponent(arg) : ""}${q && Object.keys(q).length ? "?" + new URLSearchParams(q) : ""}`,
+    href: (name, arg, q, arg2) => `#/${name}${arg ? "/" + encodeURIComponent(arg) : ""}${arg2 ? "/" + encodeURIComponent(arg2) : ""}${q && Object.keys(q).length ? "?" + new URLSearchParams(q) : ""}`,
     /** change the hash's query without remounting (a filter the viewer can bookmark) */
     setQuery(q) {
-      const hash = ctx.href(params.name, params.arg, q);
+      const hash = ctx.href(params.name, params.arg, q, params.arg2);
       if (location.hash !== hash) history.replaceState(null, "", hash);
     },
   };

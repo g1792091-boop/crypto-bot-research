@@ -2,6 +2,7 @@
 // tables, the '준비 중' state. All take plain data and build DOM with h() (text is never parsed as HTML).
 import {h, put} from "./dom.js";
 import {num} from "./fmt.js";
+import {CONFIRM_KO, CONFIRM_CLS, trendKo, volKo} from "./labels.js";
 
 export const plate = (text) => h("span", {class: "plate"}, text);
 export const pill = (text, cls = "", title) => h("span", {class: ["pp", cls], title}, text);
@@ -135,7 +136,8 @@ export function table(cols, rows, o = {}) {
         cols.map((c) => { const v = c.get(r, i); return h("td", {class: [c.l ? "l" : "", c.cls ? (typeof c.cls === "function" ? c.cls(r) : c.cls) : ""]}, v instanceof Node ? v : v ?? "—"); }));
       if (o.onRow) {
         tr.tabIndex = 0;
-        tr.addEventListener("click", () => o.onRow(r));
+        // a link or button inside the row does its own thing (the row's own action is for the rest of the row)
+        tr.addEventListener("click", (e) => { if (!(e.target && e.target.closest && e.target.closest("a, button"))) o.onRow(r); });
         tr.addEventListener("keydown", (e) => { if (e.key === "Enter") o.onRow(r); });
       }
       return tr;
@@ -150,3 +152,38 @@ export function mark(ok, text) {
 
 /** A coloured number: span.num.up/down */
 export const signed = (text, tone, tag = "span") => h(tag, {class: ["num", tone]}, text);
+
+// ---------------------------------------------------------------- round 3 pieces (CONTRACT section 8)
+/** The badge of a line's latest confirmation period ({status} or null -> nothing). */
+export function confirmBadge(c, withNone) {
+  if (!c || !c.status) return withNone ? h("span", {class: "muted"}, "—") : null;
+  return pill(CONFIRM_KO[c.status] || String(c.status), CONFIRM_CLS[c.status] || "thin");
+}
+
+/** A progress bar 0..1 with its words (never colour alone). */
+export function progress(frac, text, cls) {
+  const v = Number.isFinite(Number(frac)) ? Math.max(0, Math.min(1, Number(frac))) : 0;
+  return h("div", {class: ["dl-prog", cls]}, h("div", {class: "dl-progbar", role: "progressbar", "aria-valuemin": "0",
+    "aria-valuemax": "100", "aria-valuenow": String(Math.round(v * 100)), "aria-label": text || "진행"},
+  h("i", {style: {"--p": `${(v * 100).toFixed(1)}%`}})), text ? h("span", {class: "dl-progt"}, text) : null);
+}
+
+/** Trend and volatility chips ("상승 추세" / "변동 큼"); a missing label reads "기록 없음". */
+export function regimeChips(trend, vol) {
+  return h("span", {class: "dl-rgc"}, h("span", {class: ["dl-rg", "t-" + (trend || "none")]}, trendKo(trend)),
+    h("span", {class: ["dl-rg", "v-" + (vol || "none")]}, volKo(vol)));
+}
+
+/** A big "준비 중" / "기록 없음" line for a missing part of a file. */
+export const none = (text = "기록 없음") => h("p", {class: "empty"}, text);
+
+/** A trade's measured entry cost (taker, CONTRACT 8.3) or its limit fill check (maker): "1.35bp" / "지정가 +4.2bp" /
+ *  "닿기만" (the bar did not go 1 bp past the limit: it may not have filled). */
+export function costCell(t) {
+  if (t.through_bps != null) {
+    return Number(t.through_bps) < 1 ? h("span", {class: "warn-t", title: "봉이 지정가를 1bp도 넘지 못함: 체결 안 됐을 수 있음"}, "닿기만")
+      : h("span", {class: "muted", title: "지정가 진입: 봉이 지정가를 넘어간 거리"}, `지정가 +${num(t.through_bps, 1)}bp`);
+  }
+  if (t.cost_bps == null) return h("span", {class: "muted", title: "호가를 재기 전이거나 기록 없음"}, "—");
+  return h("span", {class: ["num", Number(t.cost_bps) > 2 ? "warn-t" : ""], title: "실제 호가로 잰 진입 비용 (가정 2bp)"}, `${num(t.cost_bps, 2)}bp`);
+}

@@ -1,5 +1,6 @@
 // #/trades 거래 기록: the newest trades of all accounts (trades.json, newest 300 rows; each leverage line is its own
-// row), filtered by account kind, coin and open / closed. Every 60 s.
+// row), filtered by account kind, coin and open / closed, with the measured entry cost and the market at entry
+// (CONTRACT 8.3 / 8.5). A row opens its trade chart (#/trade/<account>/<key>). Every 60 s.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -25,7 +26,7 @@ export async function mount(el, ctx) {
   el.append(ui.screenHead("거래 기록", "모든 계좌의 최근 거래 (배수마다 한 줄)"),
     ui.card({plate: "거르기", cls: "dl-controls"}, h("div", {class: "dl-fields"},
       ui.field("계좌 종류", kindSeg), ui.field("상태", stSeg), ui.field("코인", coinSel), ui.field("배수", levSel))),
-    ui.card({plate: "거래"}, count, box, pg.el),
+    ui.card({plate: "거래", sub: "줄을 누르면 거래 차트"}, count, box, pg.el),
     ui.note("손익은 수수료·슬리피지·펀딩을 뺀 값입니다. 열린 거래는 마크 가격 기준 미실현(나갈 때 수수료 전). 주문 없음."));
 
   let rows = null, seen = null;
@@ -68,6 +69,8 @@ function tradeTable(rows, ctx) {
     {label: "상태", get: (t) => t.status === "open" ? ui.pill("열림", "accent") : reasonKo(t.reason)},
     {label: "R", get: (t) => ui.signed(fmt.r(t.R), fmt.tone(t.R, fmt.r(t.R)))},
     {label: "손익", get: (t) => ui.signed(fmt.money(t.pnl, true), fmt.tone(t.pnl, fmt.money(t.pnl)))},
+    {label: "실제 비용", get: (t) => ui.costCell(t)},
+    {label: "그때 시장", l: true, get: (t) => (t.trend || t.vol ? ui.regimeChips(t.trend, t.vol) : h("span", {class: "muted"}, "—"))},
     {label: "설정", l: true, get: (t) => h("span", {class: "muted mono dl-tset", title: `${t.setting_ko || ""} · ${t.exit_ko || ""}`}, t.setting_ko || "—")},
-  ], rows, {cls: "dl-trades"});
+  ], rows, {cls: "dl-trades", onRow: (t) => { if (t.account && t.key) location.hash = ctx.href("trade", t.account, {from: "trades"}, t.key); }});
 }

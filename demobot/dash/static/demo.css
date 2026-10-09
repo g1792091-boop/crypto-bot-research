@@ -271,3 +271,191 @@
 .vw-fh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; }
 .vw-fn { font-weight: 700; color: var(--ink); }
 .vw-fl { overflow-wrap: anywhere; }
+
+/* ================================================================ round 3 (CONTRACT section 8) */
+/* stat rows of 3 and 6 */
+.stats.dl-s3 { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .stats.dl-s3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.stats.dl-s6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 760px) { .stats.dl-s6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .stats.dl-s6 { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.tbl td.dl-wrap2 { white-space: normal; min-width: 132px; max-width: 220px; }
+@media (max-width: 599px) { .tbl td.dl-wrap2 { min-width: 112px; max-width: 150px; } }
+
+/* progress bar (확인 기간, 홈의 가장 가까운 줄) */
+.dl-prog { display: grid; gap: 4px; min-width: 0; }
+.dl-progbar { position: relative; height: 8px; border-radius: 8px; background: var(--surface-3); overflow: hidden; }
+.dl-progbar i { display: block; height: 100%; width: var(--p, 0%); border-radius: inherit; background: var(--accent); }
+.dl-prog.ok .dl-progbar i { background: var(--up); }
+.dl-prog.bad .dl-progbar i { background: var(--down); }
+.dl-progt { color: var(--ink-2); font-size: var(--t-xs); }
+
+/* market regime chips and strips: trend = up / down / range, volatility = high / normal / low */
+.dl-rgc { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.dl-rg { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line-2); font: 700 var(--t-xs)/1.5 var(--f-body); white-space: nowrap; color: var(--ink-2); }
+.dl-rg.t-up { color: var(--up); border-color: var(--up-line); background: var(--up-soft); }
+.dl-rg.t-down { color: var(--down); border-color: var(--down-line); background: var(--down-soft); }
+.dl-rg.t-range { color: var(--ink-2); border-style: dashed; }
+.dl-rg.v-high { color: var(--warn); border-color: var(--warn-line); background: var(--warn-soft); }
+.dl-rg.v-normal { color: var(--muted); }
+.dl-rg.v-low { color: var(--cmp-lo); border-color: var(--line-2); }
+.dl-rg.t-none, .dl-rg.v-none { color: var(--muted); border-style: dotted; font-weight: 400; }
+.dl-stt i.t-up, .dl-share i.t-up, .dl-sw.t-up { background: var(--up); }
+.dl-stt i.t-down, .dl-share i.t-down, .dl-sw.t-down { background: var(--down); }
+.dl-stt i.t-range, .dl-share i.t-range, .dl-sw.t-range { background: var(--muted); }
+.dl-stv i.v-high, .dl-sw.v-high { background: var(--warn); }
+.dl-stv i.v-normal, .dl-sw.v-normal { background: color-mix(in srgb, var(--muted) 55%, var(--surface-2)); }
+.dl-stv i.v-low, .dl-sw.v-low { background: var(--cmp-lo); }
+.dl-stt i.t-none, .dl-stv i.v-none, .dl-sw.t-none { background: var(--surface-3); }
+.dl-lg i.dl-sw { width: 14px; height: 10px; border-radius: 3px; }
+.dl-strip { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+.dl-stc { font-size: var(--t-xs); }
+.dl-stbars { display: grid; gap: 2px; min-width: 0; }
+.dl-stt, .dl-stv { display: flex; width: 100%; overflow: hidden; border-radius: 3px; }
+.dl-stt { height: 14px; }
+.dl-stv { height: 6px; }
+.dl-stt i, .dl-stv i { display: block; height: 100%; flex: none; }
+.dl-stt i + i, .dl-stv i + i { box-shadow: inset 1px 0 0 var(--surface); }
+.dl-stticks { position: relative; height: 18px; color: var(--muted); font-size: var(--t-2xs); }
+.dl-stticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.dl-stticks span:first-child { transform: none; }
+.dl-stticks span:last-child { transform: translateX(-100%); }
+.dl-rgnow { display: grid; gap: 0; }
+.dl-rgrow { display: grid; grid-template-columns: 54px auto minmax(0, 1fr); align-items: center; gap: 4px 12px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.dl-rgrow:first-child { border-top: 0; }
+.dl-rgcoin { font-size: var(--t-sm); }
+.dl-rgsince { font-size: var(--t-xs); }
+.dl-rgnum { grid-column: 2 / -1; font-size: var(--t-xs); }
+@media (min-width: 900px) { .dl-rgrow { grid-template-columns: 60px 200px minmax(0, 1fr) auto; } .dl-rgnum { grid-column: auto; } }
+.dl-rgcell { display: inline-grid; justify-items: end; line-height: 1.35; }
+.dl-rgcell small { font-size: var(--t-2xs); white-space: nowrap; }
+.dl-mkt { display: grid; gap: 6px 10px; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
+.dl-mktc { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); }
+.dl-mktc b { width: 44px; flex: none; font-size: var(--t-sm); white-space: nowrap; }
+
+/* the 12/31 goal line (홈) */
+.dl-goal { gap: 12px; border-color: var(--accent-line); }
+.dl-goalline { font: 800 var(--t-md)/1.55 var(--f-body); color: var(--ink); }
+.dl-dleft { color: var(--accent); font: 800 var(--t-md)/1.2 var(--f-body); white-space: nowrap; }
+.dl-steps li[aria-current="step"] { box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (max-width: 559px) { .steps.dl-steps li { padding: 5px 9px; } .steps.dl-steps li + li { margin-left: 14px; } .steps.dl-steps li + li::before { left: -14px; } }
+.dl-closest { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.dl-tlink { font-weight: 800; color: var(--ink); text-decoration: underline dotted; text-underline-offset: 3px; }
+.dl-tlink:hover { color: var(--accent); }
+
+/* lines in legends: colour AND pattern (solid / dashed / dotted / long dash) */
+.dl-lg i[class*="dl-li-"], .dl-lg i.dl-dash0 { background: var(--pc, var(--ink-2)); }
+.dl-li-acc { --pc: var(--accent); }
+.dl-li-up { --pc: var(--up); }
+.dl-li-down { --pc: var(--down); }
+.dl-li-ink { --pc: var(--ink-2); }
+.dl-li-p1 { --pc: var(--pick-1); }
+.dl-li-p2 { --pc: var(--pick-2); }
+.dl-lg i.dl-dash, .dl-cmph i.dl-dash, .dl-pick-k i.dl-dash { background: repeating-linear-gradient(90deg, var(--pc, var(--ink-2)) 0 4px, transparent 4px 7px); }
+.dl-lg i.dl-dot, .dl-cmph i.dl-dot, .dl-pick-k i.dl-dot { background: repeating-linear-gradient(90deg, var(--pc, var(--ink-2)) 0 2px, transparent 2px 4px); }
+.dl-lg i.dl-dash3, .dl-cmph i.dl-dash3, .dl-pick-k i.dl-dash3 { background: repeating-linear-gradient(90deg, var(--pc, var(--ink-2)) 0 8px, transparent 8px 11px); }
+.dl-cmph i.dl-dash0, .dl-pick-k i.dl-dash0 { background: var(--pc, var(--ink-2)); }
+.dl-lg i[class*="dl-dash"], .dl-lg i.dl-dot { width: 24px; }
+
+/* trade chart */
+.dl-chart.dl-tchart { height: 440px; }
+@media (max-width: 599px) { .dl-chart.dl-tchart { height: 320px; } }
+.dl-tsay { gap: 8px; }
+.dl-tbig { gap: 6px 18px; font-size: var(--t-md); }
+.dl-tbig b { font-size: var(--t-lg); }
+.dl-chart.dl-cchart { height: 260px; }
+
+/* 비교 */
+.dl-picks { display: grid; gap: 8px 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .dl-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dl-pick { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dl-pick .select { flex: 1 1 auto; min-width: 0; height: 36px; font-size: var(--t-sm); }
+.dl-pick-k { flex: none; display: inline-grid; justify-items: center; gap: 3px; width: 30px; color: var(--ink); font-size: var(--t-sm); }
+.dl-pick-k i { display: block; width: 26px; height: 3px; border-radius: 2px; }
+.dl-cmph { display: inline-grid; justify-items: end; gap: 4px; white-space: normal; min-width: 96px; max-width: 170px; text-align: right; }
+.dl-cmph i { display: block; width: 28px; height: 3px; border-radius: 2px; }
+.tbl.dl-cmp th[scope="row"] { color: var(--ink-2); font-weight: 700; white-space: nowrap; }
+.tbl.dl-cmp td { vertical-align: middle; }
+
+/* 판정: candidates and confirmation periods */
+.dl-cand { gap: 10px; border-color: var(--up-line); background-image: radial-gradient(120% 90% at 0% 0%, var(--up-soft), transparent 62%); }
+.dl-candn { font: 800 var(--t-lg)/1.35 var(--f-body); }
+.dl-candn a { color: var(--ink); text-decoration: none; }
+.dl-confl { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .dl-confl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dl-conf { display: grid; gap: 7px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); min-width: 0; }
+.dl-conf.st-confirmed { border-color: var(--up-line); }
+.dl-conf.st-failed { border-color: var(--down-line); }
+.dl-conf.st-confirming { border-color: var(--accent-line); }
+.dl-confs { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--t-xs); }
+.tbl.dl-judge td .dl-kn .pp { justify-self: start; }
+
+/* 주간 회의록 */
+.dl-wkpick { gap: 10px; }
+.dl-wkseg button { min-height: 34px; }
+.dl-decide { border-color: var(--warn-line); background-image: radial-gradient(120% 90% at 0% 0%, var(--warn-soft), transparent 62%); }
+.dl-decl { margin: 0; padding-left: 22px; display: grid; gap: 8px; font: 700 var(--t-md)/1.6 var(--f-body); color: var(--ink); }
+.dl-decl li::marker { color: var(--warn); font-weight: 800; }
+.dl-sum p { font-size: var(--t-md); line-height: 1.7; color: var(--ink); }
+.dl-wkrg { display: grid; gap: 6px; }
+.dl-wkrow { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; min-width: 0; }
+.dl-wkrow .dl-wkpct { grid-column: 2 / 3; font-size: var(--t-2xs); }
+.dl-wkrow .dl-rgc { grid-column: 3 / 4; grid-row: 1 / 3; justify-content: flex-end; }
+.dl-share { display: flex; height: 12px; border-radius: 3px; overflow: hidden; background: var(--surface-3); }
+.dl-share i { display: block; height: 100%; }
+@media (max-width: 559px) { .dl-wkrow { grid-template-columns: 48px minmax(0, 1fr); } .dl-wkrow .dl-rgc { grid-column: 2 / -1; grid-row: auto; justify-content: flex-start; } }
+
+/* 알림 기록: the message text as sent (plain text, line breaks kept) */
+.tg-list { display: grid; gap: 10px; }
+.tg-item { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface-2); min-width: 0; }
+.tg-item.tg-err { border-color: var(--down-line); }
+.tg-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-xs); }
+.tg-id { margin-left: auto; font-family: var(--f-term); }
+.tg-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; font: 400 var(--t-sm)/1.6 var(--f-body); color: var(--ink); }
+
+/* 설정 지도 (heatmap): colour = the value's sign and size, grey = under the window minimum */
+.hm-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.hm { display: grid; grid-template-columns: max-content repeat(var(--nx, 7), minmax(40px, 1fr)); gap: 3px; min-width: 0; }
+.hm-corner { display: grid; align-content: end; gap: 0; padding: 0 6px 4px 0; color: var(--muted); line-height: 1.25; }
+.hm-corner small { font-size: var(--t-2xs); white-space: nowrap; }
+.hm-ax { color: var(--ink-2); font: 700 var(--t-xs)/1.2 var(--f-term); white-space: nowrap; }
+.hm-axx { text-align: center; align-self: end; padding-bottom: 4px; }
+.hm-axy { text-align: right; align-self: center; padding-right: 6px; }
+.hm-c { display: grid; place-items: center; min-height: 40px; padding: 2px; border-radius: 6px; color: var(--ink); text-decoration: none;
+  font: 700 var(--t-2xs)/1.1 var(--f-body); font-variant-numeric: tabular-nums; position: relative; }
+.hm-c.pos { background: color-mix(in srgb, var(--up) var(--mix, 30%), var(--surface-2)); }
+.hm-c.neg { background: color-mix(in srgb, var(--down) var(--mix, 30%), var(--surface-2)); }
+.hm-c.grey, .hm-sw.grey { background: repeating-linear-gradient(45deg, var(--surface-2) 0 4px, var(--surface-3) 4px 8px); color: var(--muted); font-weight: 400; }
+.hm-c.def, .hm-sw.def { box-shadow: inset 0 0 0 2px var(--accent); }
+.hm-c.luck::after, .hm-sw.luck::after { content: ""; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 1.5px var(--surface); }
+a.hm-c:hover, a.hm-c:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.hm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: var(--t-xs); color: var(--ink-2); }
+.hm-scale { display: inline-flex; align-items: center; gap: 6px; }
+.hm-grad { display: inline-block; width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--down), var(--surface-2) 50%, var(--up)); }
+.dl-lg i.hm-sw { position: relative; width: 16px; height: 14px; border-radius: 4px; background-color: var(--surface-2); }
+@media (max-width: 459px) { .hm { grid-template-columns: max-content repeat(var(--nx, 7), minmax(38px, 1fr)); gap: 2px; } .hm-c { min-height: 36px; padding: 1px; } .hm-axy { padding-right: 4px; } }
+
+/* 서버 상태: one plain ok / problem line per side card */
+.dl-okline { display: flex; align-items: flex-start; gap: 8px; font: 700 var(--t-md)/1.5 var(--f-body); color: var(--ink); }
+.dl-okmk { flex: none; display: grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; font: 900 var(--t-xs)/1 var(--f-body); }
+.dl-okline.ok .dl-okmk { background: var(--up-soft); color: var(--up); box-shadow: inset 0 0 0 1px var(--up-line); }
+.dl-okline.bad { color: var(--down); }
+.dl-okline.bad .dl-okmk { background: var(--down-soft); color: var(--down); box-shadow: inset 0 0 0 1px var(--down-line); }
+.dl-okline.na .dl-okmk { background: var(--surface-3); color: var(--muted); }
+.dl-sbar { display: grid; gap: 4px; font-size: var(--t-xs); }
+.dl-sbar .g-bar::before, .dl-sbar .g-bar::after { display: none; }
+[data-screen="status"] .grid3 .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* 15 screens: on a wide window the menu wraps to a second row instead of hiding its end (phones keep the scroll) */
+@media (min-width: 1100px) { .subtabs.strip { flex-wrap: wrap; overflow-x: visible; row-gap: 0; padding-block: 2px; } }
+.dl-list .lrow .lname a { color: var(--ink); text-decoration: none; }
+.dl-list .lrow .lname a:hover { color: var(--accent); }
+.dl-rgcoin { white-space: nowrap; }
+.hm-c.hi { color: var(--bg); }                  /* dark text on a strong colour (both skins have a dark --bg) */
+.hm-c.hi.luck::after { background: var(--bg); box-shadow: none; }
+.hm-axes { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0 0 6px; color: var(--muted); font-size: var(--t-xs); }
+.hm-axes b { color: var(--ink); }
+.hm-wrap { display: grid; }
+.stat b.dl-statname { font-size: var(--t-sm); line-height: 1.45; }
+.stats > .dl-missing, .stats > .errbox { grid-column: 1 / -1; }
+.dl-chart.is-empty { height: auto; overflow: visible; }
+.tbl .dl-rgc { flex-wrap: nowrap; }

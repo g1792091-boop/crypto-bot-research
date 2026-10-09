@@ -1,6 +1,7 @@
 // #/accounts 계좌: the 48 accounts grouped by kind (고정 / 자동 교체 / 친구 규칙 / 동전 던지기), each with its four
-// leverage lines (equity, P&L %, trades, win rate, max drawdown, open, 파산), or one line with the leverage switch.
-// accounts.json every 60 s. A row opens #/account/<id>.
+// leverage lines (equity, P&L %, trades, win rate, max drawdown, open, 파산), or one line with the leverage switch;
+// per line also its latest confirmation (CONTRACT 8.1, from judge.json) and its stop-rule twin's P&L (8.2).
+// accounts.json + judge.json every 60 s. A row opens #/account/<id>.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -19,19 +20,23 @@ export async function mount(el, ctx) {
   const headSub = head.querySelector(".sub");
   el.append(head,
     h("div", {class: "row wrap dl-levbar"}, h("span", {class: "dl-fk"}, "배수"), levSeg), sum, body,
-    ui.note("잔고 = 지갑 + 열린 포지션 평가금. 손익은 시작 $1,000 대비. 파산 = 잔고가 $100 아래로 떨어져 멈춘 줄. 수수료·슬리피지·펀딩 포함, 주문 없음."));
+    ui.note("잔고 = 지갑 + 열린 포지션 평가금. 손익은 시작 $1,000 대비. 파산 = 잔고가 $100 아래로 떨어진 적이 있는 줄 ($1,000에서 다시 시작). "
+      + "확인 기간 = 기준을 넘은 뒤 4주 다시 보는 중(확인 중) · 넘음(실전 후보) · 못 넘음(확인 실패). 정지 규칙 적용 시 = 같은 진입에 계좌 −20% · 하루 −5% · 5연패 멈춤을 걸었다면의 손익. 수수료·슬리피지·펀딩 포함, 주문 없음."));
 
-  let data = null, seen = null;
+  let data = null, seen = null, conf = {};
   async function load() {
-    let d;
-    try { d = await ctx.api("/api/accounts"); } catch (e) {
+    let d, j;
+    try { [d, j] = await Promise.all([ctx.api("/api/accounts"), ctx.api("/api/judge").catch(() => null)]); } catch (e) {
       if (e && e.name === "AbortError") return;
       if (!data) put(body, ui.errorBox(e, load));
       return;
     }
-    if (d && d.generated_ms != null && d.generated_ms === seen) return;
-    seen = d ? d.generated_ms : null;
+    const key = `${d && d.generated_ms}|${j && j.generated_ms}`;
+    if (key === seen) return;
+    seen = key;
     data = d;
+    conf = {};
+    for (const r of (j && !isMissing(j) && j.rows) || []) conf[`${r.id}|${r.L}`] = r.confirm || null;
     paint(d);
   }
 
@@ -61,7 +66,7 @@ export async function mount(el, ctx) {
       const mean = lev === "all" ? null : means[0];
       return ui.card({plate: k.ko, sub: `${rows.length}개 · ${k.desc}`,
         acts: mean != null ? h("span", {class: "dl-kmean"}, "평균 ", ui.signed(fmt.pct(mean, true), fmt.tone(mean, fmt.pct(mean)), "b")) : null},
-      acctTable(rows, levs, ctx));
+      acctTable(rows, levs, ctx, conf));
     });
     put(body, cards);
   }
@@ -78,8 +83,16 @@ function nameCell(a, ctx) {
     h("span", {class: "dl-aset mono", title: a.setting_ko || ""}, a.setting_ko || "—"));
 }
 
-function lineCells(x) {
-  if (!x) return [h("td", {colspan: "7", class: "muted"}, "—")];
+function stopsCell(x) {
+  const sp = x.stops;
+  if (!sp) return h("span", {class: "muted"}, "준비 중");
+  const t = fmt.pct(sp.pnl_pct, true);
+  return h("span", {class: "dl-kn"}, h("b", {class: ["num", fmt.tone(sp.pnl_pct, t)]}, t),
+    sp.halted_ms ? h("small", {class: "muted"}, `${fmt.mmdd(sp.halted_ms)} 멈춤`) : h("small", {class: "muted"}, `막힘 ${fmt.int(sp.blocked)}`));
+}
+
+function lineCells(x, c) {
+  if (!x) return [h("td", {colspan: "9", class: "muted"}, "—")];
   const pnlT = fmt.pct(x.pnl_pct, true);
   return [
     h("td", null, h("b", {class: ["num", fmt.tone(x.pnl_pct, pnlT)]}, pnlT)),
@@ -89,11 +102,13 @@ function lineCells(x) {
     h("td", null, fmt.ratio(x.max_dd)),          // max_dd: a 0-1 ratio of the peak (engine)
     h("td", null, x.open ? h("span", {class: "pp accent"}, fmt.int(x.open)) : "0"),
     h("td", null, x.ruined ? ui.pill("파산", "bad") : x.liqs ? ui.pill(`강제청산 ${x.liqs}`, "warn") : h("span", {class: "muted"}, "정상")),
+    h("td", null, ui.confirmBadge(c, true)),
+    h("td", null, stopsCell(x)),
   ];
 }
 
-function acctTable(rows, levs, ctx) {
-  const heads = ["계좌", ...(levs.length > 1 ? ["배수"] : []), "손익", "잔고", "거래", "승률", "최대 낙폭", "열림", "상태"];
+function acctTable(rows, levs, ctx, conf = {}) {
+  const heads = ["계좌", ...(levs.length > 1 ? ["배수"] : []), "손익", "잔고", "거래", "승률", "최대 낙폭", "열림", "상태", "확인 기간", "정지 규칙 적용 시"];
   const body = [];
   for (const a of rows) {
     levs.forEach((L, i) => {
@@ -101,7 +116,7 @@ function acctTable(rows, levs, ctx) {
       const cells = [];
       if (i === 0) cells.push(h("td", {class: "l dl-c2 dl-acol", rowspan: String(levs.length)}, nameCell(a, ctx)));
       if (levs.length > 1) cells.push(h("td", {class: "dl-lev"}, h("span", {class: "dl-levtag", dataset: {lev: L}}, `${L}배`)));
-      cells.push(...lineCells(x));
+      cells.push(...lineCells(x, conf[`${a.id}|${L}`]));
       const tr = h("tr", {class: ["click", i === levs.length - 1 ? "dl-last" : "dl-mid", x && x.ruined ? "dl-ruined" : ""]}, cells);
       tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = ctx.href("account", a.id); });
       body.push(tr);
