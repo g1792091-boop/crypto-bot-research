@@ -1702,3 +1702,111 @@ def test_r5_the_fake_ranking_rows_have_a_spark_and_the_24h_pnl(folders):
             assert ln["spark"][0] == 1000.0                                         # the live start
             assert ln["pnl_pct_24h"] is None or isinstance(ln["pnl_pct_24h"], (int, float)), (a["id"], L)
     assert any(ln["pnl_pct_24h"] != ln["pnl_pct"] for a in _file(folders, "accounts.json")["accounts"] for ln in a["lines"].values())
+
+
+# ---------------------------------------------------------------- round 5 stage 2A (the v4 look for 요약, 판정, 졸업 길, 실전 준비,
+# 친구 계획, 레버리지 비교, 한눈 지도, 계좌 자세히, 거래 차트, 비교, 코인별, 거래 기록): one new stylesheet, the same endpoints
+R5A_CSS = "v4s2a.css"
+R5A_READS = {
+    "home": ("/api/home", "/api/judge"),
+    "judge": ("/api/judge",),
+    "path": ("/api/judge",),
+    "ready": ("/api/judge", "/api/home", "/api/costs", "/api/accounts", "/api/account/"),
+    "friend": ("/api/accounts", "/api/judge", "/api/account/"),
+    "leverage": ("/api/accounts", "/api/judge"),
+    "glance": ("/api/accounts", "/api/judge"),
+    "account": ("/api/account/", "/api/export"),
+    "trade": ("/api/account/", "/api/bars"),
+    "compare": ("/api/accounts", "/api/judge", "/api/account/"),
+    "coins": ("/api/coins",),
+    "trades": ("/api/trades", "/api/export", "/api/accounts"),
+}
+
+
+def _r5a_src(name):
+    return open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+
+
+def test_r5a_css_is_served_linked_after_the_kit_and_needs_the_login(anon, client):
+    index = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    assert f'href="/static/{R5A_CSS}"' in index
+    assert index.index("/static/v4kit.css") < index.index("/static/v4screens.css") < index.index(f"/static/{R5A_CSS}")
+    r = client.get(f"/static/{R5A_CSS}")
+    assert r.status_code == 200 and r.headers["content-security-policy"] == CSP and ".s2a-" in r.text
+    assert anon.get(f"/static/{R5A_CSS}", follow_redirects=False).status_code == 303
+
+
+def test_r5a_css_uses_tokens_and_the_type_scale_only():
+    src = open(os.path.join(STATIC, R5A_CSS), encoding="utf-8").read()
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", src) and "rgb(" not in src and "hsl(" not in src
+    assert "url(" not in src and "@import" not in src
+    for m in re.finditer(r"font-size:\s*([^;}]+)", src):
+        assert "var(--t-" in m.group(1) or "var(--ts)" in m.group(1), m.group(0)
+    for m in re.finditer(r"(?<![-\w])font:\s*([^;}]+)", src):
+        v = m.group(1).strip()
+        assert v == "inherit" or "var(--t-" in v or "var(--ts)" in v, m.group(0)
+    assert "prefers-reduced-motion" in src
+    # every rule is the stage's own (s2a-) or scopes a kit / v4 class under one of them: no restyle of other screens
+    bare = re.sub(r"@media[^{]*\{", "}", re.sub(r"/\*.*?\*/", "", src, flags=re.S))
+    for sel in re.findall(r"(?:^|})\s*([^{}@]+)\{", bare):
+        for part in sel.split(","):
+            part = part.strip()
+            if part and not part.startswith(("from", "to", "0%", "100%")):
+                assert "s2a-" in part, part
+    # every s2a- class a screen uses is styled here, and the other way round
+    used = set()
+    for name in R5A_READS:
+        used |= set(re.findall(r"(s2a-[\w-]+)", _r5a_src(name)))
+    styled = set(re.findall(r"\.(s2a-[\w-]+)", src))
+    assert used and used == styled, (sorted(used - styled), sorted(styled - used))
+
+
+def test_r5a_screens_read_the_same_endpoints_and_build_dom_from_text_only():
+    for name, reads in R5A_READS.items():
+        src = _r5a_src(name)
+        assert "export async function mount(" in src, name
+        for path in reads:
+            assert path in src, (name, path)
+        # no other endpoint than before (the restyle reads nothing new)
+        allowed = {p.rstrip("/") for p in reads}
+        assert set(re.findall(r"/api/[a-z_]+", src)) <= allowed, (name, set(re.findall(r"/api/[a-z_]+", src)) - allowed)
+        assert 'from "../v4kit.js"' in src, name                                     # the stage 1 kit
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{name}.js uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, name
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src) and "binance.com" not in src, name
+        assert "localStorage" not in src and "sessionStorage" not in src, name
+        assert "준비 중" in src or "ui.missing(" in src, name                         # a missing file says so
+    # the pixel figure and the timeframe chip next to account names on every screen that lists accounts
+    for name in ("home", "judge", "path", "ready", "friend", "leverage", "glance", "account", "trade", "compare", "coins", "trades"):
+        src = _r5a_src(name)
+        assert "acctFig(" in src and ("acctName(" in src or "tfChip(" in src), name
+
+
+def test_r5a_screens_keep_their_numbers_and_features():
+    want = {
+        "home": ("verdict_ko", "stages_ko", "closest", "missing_ko", "regime_now", "costs_now", "median_entry_bps", "best", "worst",
+                 "by_kind", "mean_pnl_pct", "leaders", "luck95", "beats_luck", "recent_switches", "recent_trades", "equity_total",
+                 "pnl_total", "ledbar", "open_positions", "confirming", "candidates", "live_days", "더 보기"),
+        "judge": ("multi_note_ko", "lines_judged", "candidates", "confirm", "rules_ko", "stop_rules_ko", "ours_pass", "confirmBadge",
+                  "실전 금지", "통과·확인 중인 것만", "led-num", "roundtrip_pct_of_pnl", "need_n", "why_ko"),
+        "path": ("luck_lim", "robustLine", "boot_low", "closeness", "하나만 더", "지금 여기", "이 지도 읽는 법", "ResizeObserver"),
+        "ready": ("실제 주문 연결", "두 분", "robust", "top5_share", "worst_day", "pnl_adj_pct", "mean_extra_bps", "START_USD", "led-num"),
+        "friend": ("settings_now", "decisions", "weekStart", "friend", "setQuery", "miniSpark", "COINS"),
+        "leverage": ("skipped", "ruins", "stops", "pass", "median", "divBar", "byKind", "setQuery"),
+        "glance": ('"pnl"', '"checks"', '"confirm"', '"stops"', "ruined", "data", "setQuery", "byKind"),
+        "account": ("CSV 내려받기", "curves_stops", "stop_events", "settings_now", "decisions", "parts", "starBtn", "equityChart",
+                    "다른 계좌와 비교", "miniSpark", "costCell", "regimeChips"),
+        "trade": ("candleChart", "query.at", "positions", "targetR", "cost_bps", "through_bps", "regimeChips", "led-num"),
+        "compare": ("PICK_TOKENS", "DASH_CLS", "curves_stops", "lineChart", "chipToggle", "setQuery", "MAX = 4"),
+        "coins": ("partial", "trade_cap", "since_ms", "setQuery", "wl-bar", "smallSample"),
+        "trades": ("CSV 내려받기", "/api/export/", "costCell", "regimeChips", '"open"', '"closed"', "from: \"trades\"", "LEVS", "COINS"),
+    }
+    for name, keys in want.items():
+        src = _r5a_src(name)
+        for k in keys:
+            assert k in src, (name, k)
+    # read-only: nothing here sends data or places an order
+    for name in R5A_READS:
+        src = _r5a_src(name)
+        assert "method:" not in src and "fetch(" not in src and "XMLHttpRequest" not in src, name
