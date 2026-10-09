@@ -1,10 +1,16 @@
 """Telegram of the demo lab bot ("데모 랩"): the wording (``render``), the outbox (``Outbox``) and the sender.
 
 CONTRACT.md section 5. The engine queues events (``Outbox.queue``), this module words them in Korean at once and
-stores the text in the table ``outbox`` of demo.db; ``Outbox.flush`` sends the oldest unsent rows to the demo lab's
-own Telegram group (a NEW bot and a NEW group, never the rule bot's). Delivery never stops the engine: ``flush``
-never raises on a network or Telegram error, it keeps the error text (token removed) on the row and tries again
-later; a row Telegram refused 5 times, or one that could not go out for 24 hours, is given up.
+stores the text in the table ``outbox`` of demo.db; ``Outbox.flush`` sends the oldest unsent rows with the demo lab's
+own Telegram bot (a NEW bot, never the rule bot's). Delivery never stops the engine: ``flush`` never raises on a
+network or Telegram error, it keeps the error text (token removed) on the row and tries again later; a row Telegram
+refused 5 times, or one that could not go out for 24 hours, is given up.
+
+Where the messages go: ``DEMOBOT_TG_CHAT`` holds one to four chat ids separated by commas (``parse_chats``): by
+default the two owners' private chats with the bot (positive numbers), or a group (-100...), or a mix. Every message
+goes to every listed chat; the outbox remembers per row which chats already have it (column ``sent_to``), so a failure
+in one chat is retried for that chat only and nobody gets a message twice. Commands (the view log) are read only from
+the listed chats: anyone else who finds the bot is ignored.
 
 Wording (the rule bot's Telegram redesign of 2026-10-04 is the reference): plain text (no parse_mode), the first
 line says what happened and may start with one emoji, then short lines; times are KST '%m/%d %H:%M'; coins without
@@ -16,11 +22,17 @@ The token is read from the environment only (DEMOBOT_TG_TOKEN, DEMOBOT_TG_CHAT; 
 never logged, printed or stored: every error text goes through ``redact``.
 
 View log ("관점 기록장", CONTRACT.md 7.3): ``render`` words the replies (``view_ack``, ``view_err``, ``view_cancel``,
-``view_list``, ``view_help``, ``view_done``) and ``poll_commands`` reads the owners' lines from the group (getUpdates,
-only ``DEMOBOT_TG_CHAT``; never raises).
+``view_list``, ``view_help``, ``view_done``; queued like every message, so all listed chats see them: one shared log)
+and ``poll_commands`` reads the owners' lines (getUpdates, only the chats of ``DEMOBOT_TG_CHAT``; never raises).
 
-    python -m demobot.notify test      # sends '🧪 데모 랩 테스트 메시지' to DEMOBOT_TG_CHAT
-    python -m demobot.notify chatid    # lists the groups the bot has seen (to find DEMOBOT_TG_CHAT)
+Round 3 (CONTRACT.md 8.1, 8.8, 8.9): ``pass`` says that the 4-week confirmation period started and when it can end
+at the earliest; ``confirm_done`` gives its result ("실전 후보" or why it failed); ``warn`` knows the outside watch's
+``dead`` / ``rank`` / ``backup`` and ``warn_clear`` says one of them recovered (demobot/watch.py sends both itself);
+``daily`` adds the confirmations, the candidates, the measured entry cost against the assumed 2 bps and the market
+regime of each coin; ``weekly`` (8.10) is the finished week's review ("주간 회의록"), Monday 09:00 KST.
+
+    python -m demobot.notify test      # sends '🧪 데모 랩 테스트 메시지' to every chat of DEMOBOT_TG_CHAT
+    python -m demobot.notify chatid    # lists the people and groups that wrote to the bot (to fill DEMOBOT_TG_CHAT)
 
 Both read the two keys from the environment, else from /etc/demobot/demobot.env (``--env-file``), so the owners
 never paste the token anywhere but the server's editor.
@@ -48,7 +60,8 @@ LIMIT = 4000                 # Telegram's limit is 4096 (UTF-16 units; an emoji 
 LINE_MAX = 600               # one list line at most (a runaway setting text cannot eat the message)
 MAX_TRIES = 5                # Telegram refused a row this many times: given up (error kept)
 MIN_GAP_S = 1.0              # at most one message a second
-PER_MINUTE = 18              # Telegram allows about 20 a minute in one group
+PER_MINUTE = 18              # per chat: Telegram allows about 20 a minute in one group
+MAX_CHATS = 4                # DEMOBOT_TG_CHAT: at most this many chats
 TIMEOUT_S = 10.0
 BACKOFF_S = 30.0             # after a failure the outbox waits 30 s, 60 s, 120 s ... (at most BACKOFF_MAX_S)
 BACKOFF_MAX_S = 900.0
@@ -65,7 +78,15 @@ REASON_KO = {"stop": "손절", "lock": "잠금 익절", "liq": "강제청산", "
              "open": "보유 중"}
 KIND_KO = {"fixed": "고정", "adaptive": "자동", "friend": "친구 규칙", "flip": "동전 던지기"}
 WARN_KO = {"data": "시세 자료 빠짐", "stalled": "멈춤 (새 봉 처리 안 됨)", "error": "오류",
-           "disk": "디스크 공간 부족"}
+           "disk": "디스크 공간 부족",
+           # the outside watch (demobot/watch.py, CONTRACT.md 8.8)
+           "dead": "엔진이 멈춤 (15분 계산이 안 돎)", "rank": "순위표가 안 만들어짐", "backup": "밤 백업이 안 됨"}
+CLEAR_KO = {"dead": "엔진이 다시 돎", "rank": "순위표가 다시 만들어짐", "backup": "밤 백업이 다시 됨",
+            "data": "시세 자료 다시 정상", "stalled": "다시 돎", "error": "오류 없어짐", "disk": "디스크 공간 다시 넉넉함"}
+TREND_KO = {"up": "상승 추세", "down": "하락 추세", "range": "횡보"}
+VOL_KO = {"high": "변동 큼", "normal": "변동 보통", "low": "변동 작음"}
+WEEKDAY_KO = "월화수목금토일"
+CONFIRM_DAYS, CONFIRM_MAX_DAYS, CONFIRM_NEED = 28, 56, 20     # CONTRACT.md 8.1 (the wording only)
 
 
 # ---------------------------------------------------------------- number and name helpers
@@ -82,6 +103,18 @@ def _num(x) -> Optional[float]:
 
 def kst(ms, fmt: str = "%m/%d %H:%M") -> str:
     return time.strftime(fmt, time.gmtime(int(ms) / 1000 + 9 * 3600))
+
+
+def day_ko(ms) -> str:
+    """The KST date with its weekday: '11/07(토)'."""
+    t = time.gmtime(int(ms) / 1000 + 9 * 3600)
+    return f"{time.strftime('%m/%d', t)}({WEEKDAY_KO[t.tm_wday]})"
+
+
+def share(x) -> str:
+    """A 0..1 ratio as a percent (max_dd 0.123 -> '12.3%')."""
+    v = _num(x)
+    return "-" if v is None else f"{v * 100:.1f}%"
 
 
 def px(x) -> str:
@@ -321,11 +354,69 @@ def _daily(p: dict) -> str:
         luck = "운보다 나음" if x.get("beats_luck") else "운과 구별 안 됨"
         leaders.append(f"- {where}{f' ({win})' if win else ''}: {rule} · {rr(x.get('mean_R'))} · "
                        f"승률 {rate(x.get('win_rate'))} · {count(x.get('n'))}건 · 운 기준 {rr(x.get('luck95'))} → {luck}")
+    regime = []
+    for r in p.get("regime") or []:
+        if not isinstance(r, dict):
+            continue
+        tr, vo = r.get("trend"), r.get("vol")
+        parts = [TREND_KO.get(str(tr), str(tr)) if tr else "", VOL_KO.get(str(vo), str(vo)) if vo else ""]
+        regime.append(f"- {coin(r.get('coin'))} " + (" · ".join(x for x in parts if x) or "아직 모름"))
     passed = int(_num(p.get("passed")) or 0)
-    tail = ["", f"우리 기준 통과 {passed}개" + (" (실제 돈은 두 분이 정합니다)" if passed else ""),
-            "통과 전에는 실제 돈 금지"]
+    tail = ["", f"우리 기준 통과 {passed}개" + (" (실제 돈은 두 분이 정합니다)" if passed else "")]
+    conf, cand = _num(p.get("confirming")), _num(p.get("candidates"))
+    if conf is not None or cand is not None:
+        tail.append(f"확인 기간 중 {count(conf or 0)}줄 · 실전 후보 {count(cand or 0)}줄"
+                    + (" (실제 돈은 두 분이 정합니다)" if cand else ""))
+    if "costs" in p:
+        tail.append(_cost_line(p.get("costs")))
+    tail.append("통과 전에는 실제 돈 금지")
     return _fit(head, [("수익 위", best), ("수익 아래", worst), ("종류별 평균 수익", kinds),
-                       ("순위표 1등 vs 운 (운 기준: 무작위 1등의 95% 선)", leaders)], tail)
+                       ("순위표 1등 vs 운 (운 기준: 무작위 1등의 95% 선)", leaders),
+                       ("시장 국면 (4시간 추세 · 15분 변동)", regime)], tail)
+
+
+def _cost_line(c) -> str:
+    """'실제 진입 비용 (호가창, 중앙값) 3.1bp · 가정 2bp보다 1.1bp 큼' (1bp = 0.01%)."""
+    c = c if isinstance(c, dict) else {}
+    a = _num(c.get("assumed_bps"))
+    a = 2.0 if a is None else a
+    m = _num(c.get("median_entry_bps"))
+    if m is None:
+        return f"실제 진입 비용: 아직 잰 거래 없음 (가정 {a:g}bp, 1bp = 0.01%)"
+    d = m - a
+    cmp_ = "가정과 같음" if abs(d) < 0.05 else f"가정 {a:g}bp보다 {abs(d):.1f}bp {'큼' if d > 0 else '작음'}"
+    return f"실제 진입 비용 (호가창, 중앙값) {m:.1f}bp · {cmp_} (1bp = 0.01%)"
+
+
+def _weekly(p: dict) -> str:
+    """The finished week's review (CONTRACT.md 8.10, payload {"week": {...}}), short: the summary sentences, what the
+    owners have to decide, one line each for the judgment, the stop rules, the costs and the views."""
+    w = p.get("week") if isinstance(p.get("week"), dict) else {}
+    label = str(w.get("week_ko") or "").strip()
+    head = [f"📅 데모 랩 주간 회의록{f' · {label}' if label else ''}"]
+    summary = [_clip(str(x).strip(), 400) for x in (w.get("summary_ko") or []) if str(x or "").strip()][:6]
+    head += summary or ["이번 주 요약 없음"]
+    decide = [f"- {_clip(str(x).strip(), 400)}" for x in (w.get("decide_ko") or []) if str(x or "").strip()]
+    j = w.get("judge") if isinstance(w.get("judge"), dict) else None
+    st = w.get("stops") if isinstance(w.get("stops"), dict) else None
+    v = w.get("views") if isinstance(w.get("views"), dict) else None
+    tail = [""]
+    if not decide:
+        tail += ["두 분이 정할 것: 없음", ""]
+    tail.append(f"판정: 우리 기준 통과 {count(j.get('passed'))}줄 · 확인 기간 중 {count(j.get('confirming'))}줄 · "
+                f"실전 후보 {count(j.get('candidates'))}줄" if j else "판정: 기록 없음")
+    net = _num(st.get("net_pct")) if st else None
+    tail.append(f"정지 규칙: 썼다면 줄마다 평균 {net:+.1f}%p (+면 정지 규칙을 쓴 쪽이 나음)" if net is not None
+                else "정지 규칙: 기록 없음")
+    tail.append(_cost_line(w.get("costs")))
+    if v:
+        r24 = _num(v.get("dir24_rate"))
+        tail.append(f"관점: {count(v.get('n') or 0)}개 · 끝남 {count(v.get('done') or 0)}개 · 24시간 방향 적중 "
+                    + (rate(r24) if r24 is not None else "-"))
+    else:
+        tail.append("관점: 기록 없음")
+    tail += ["자세한 내용: 대시보드의 주간 회의록", "실제 돈을 쓸지는 두 분이 정합니다 (봇은 주문하지 않음)"]
+    return _fit(head, [("두 분이 정할 것", decide)], tail)
 
 
 def _warn(p: dict, now_ms: Optional[int]) -> list:
@@ -339,10 +430,31 @@ def _warn(p: dict, now_ms: Optional[int]) -> list:
     return L
 
 
-def _pass(p: dict, now_ms: Optional[int]) -> str:
+def _warn_clear(p: dict, now_ms: Optional[int]) -> list:
+    what = str(p.get("what") or "")
+    if what in CLEAR_KO:
+        title = CLEAR_KO[what]
+    else:
+        title = f"'{WARN_KO.get(what, what)}' 경고 풀림" if what else "경고 풀림"
+    L = [f"✅ 데모 랩 회복 · {title}"]
+    if p.get("detail_ko"):
+        L.append(_clip(str(p["detail_ko"]), 1500))
+    if now_ms:
+        L.append(kst(now_ms))
+    return L
+
+
+def _line_name(p: dict) -> str:
     name = str(p.get("name") or p.get("account") or "?")
     L = _num(p.get("L"))
-    head = [f"🏁 우리 기준 통과 · {name}{f' {int(L)}배' if L else ''}"]
+    return f"{name}{f' {int(L)}배' if L else ''}"
+
+
+def _pass(p: dict, now_ms: Optional[int]) -> str:
+    head = [f"🏁 우리 기준 통과 · {_line_name(p)}"]
+    end = _num(p.get("confirm_end_ms"))
+    if end:
+        head.append(f"4주 확인 기간 시작 · 빨라도 {day_ko(end)}에 끝남 (한국 시간)")
     checks = []
     for c in p.get("checks") or []:
         if not isinstance(c, dict):
@@ -351,10 +463,43 @@ def _pass(p: dict, now_ms: Optional[int]) -> str:
         mark = "" if ok is None else " (충족)" if ok else " (미달)"
         val = f": {c['value_ko']}" if c.get("value_ko") not in (None, "") else ""
         checks.append(f"- {c.get('name_ko') or '?'}{val}{mark}")
-    tail = ["", "데모 계좌의 모의 거래 결과입니다", "실제 돈을 쓸지는 두 분이 정합니다 (봇은 주문하지 않음)"]
+    tail = ["", "데모 계좌의 모의 거래 결과입니다"]
+    if end:
+        tail += ["확인 기간: 지금부터 새로 들어간 거래만 다시 셉니다",
+                 f"{CONFIRM_DAYS}일 안에 거래 {CONFIRM_NEED}건이 안 되면 {CONFIRM_NEED}건이 될 때까지 늘어납니다 "
+                 f"(최대 {CONFIRM_MAX_DAYS // 7}주)",
+                 "확인 기간을 통과해야 '실전 후보'입니다"]
+    tail.append("실제 돈을 쓸지는 두 분이 정합니다 (봇은 주문하지 않음)")
     if now_ms:
         tail.append(kst(now_ms))
     return _fit(head, [("기준", checks)], tail)
+
+
+def _window_lines(p: dict) -> list:
+    w = p.get("window") if isinstance(p.get("window"), dict) else {}
+    start, dec = _num(p.get("start_ms")), _num(p.get("decided_ms"))
+    span = f"{kst(start, '%m/%d')} ~ {kst(dec, '%m/%d')}" if start and dec else \
+        f"{kst(start, '%m/%d')}부터" if start else ""
+    money = f"수익 {usd(w.get('pnl'))}" + (f" ({pct(w['pnl_pct'])})" if _num(w.get("pnl_pct")) is not None else "")
+    L = [f"확인 기간 {span}" if span else "확인 기간"]
+    if w:
+        L.append(f"거래 {count(w.get('n'))}건 · 평균 {rr(w.get('mean_R'))} · {money} · 최대 낙폭 {share(w.get('max_dd'))}")
+    return L
+
+
+def _confirm_done(p: dict) -> list:
+    res = str(p.get("result") or "")
+    who = _line_name(p)
+    if res == "confirmed":
+        return ([f"✅ 확인 기간 통과 · {who}", "이제 '실전 후보'입니다"] + _window_lines(p) +
+                ["실전 후보는 봇의 판정일 뿐입니다", "실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)"])
+    if res == "failed":
+        why = str(p.get("why_ko") or "").strip()
+        return ([f"❌ 확인 기간 실패 · {who}", _clip(f"이유: {why}", 800) if why else "이유: 기록 없음"]
+                + _window_lines(p) +
+                ["다음에 우리 기준을 다시 통과하면 확인 기간이 새로 시작됩니다", "실제 돈 금지 그대로"])
+    return ([f"🏁 확인 기간 끝 · {who}", "결과를 알 수 없음 · 대시보드의 판정 화면을 보세요"] + _window_lines(p) +
+            ["실제 돈 금지 그대로"])
 
 
 # ---------------------------------------------------------------- the view log ("관점 기록장", CONTRACT.md 7.3)
@@ -459,7 +604,7 @@ def _view_list(p: dict) -> str:
 
 
 def _view_help() -> list:
-    return ["📖 관점 기록장 쓰는 법", "단체방에 한 줄로 보냅니다:", VIEW_USAGE, "",
+    return ["📖 관점 기록장 쓰는 법", "이 봇에게 한 줄로 보냅니다 (두 분 모두 확인 답장을 받습니다):", VIEW_USAGE, "",
             "- 시각은 한국 시간, 빼면 받은 시각", "- 코인: BTC ETH SOL DOGE LTC BCH XRP",
             "- 구간 A·B·C 중 하나 이상, 범위는 84750-84840 또는 84750~84840 (쉼표 가능)",
             "- 손절을 빼면 가장 먼 구간에서 0.3% 바깥, 목표를 빼면 1R에 절반 · 본전 · 나머지 2R", "",
@@ -500,8 +645,8 @@ def _view_done(p: dict) -> list:
 
 
 def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
-    """The Korean Telegram text of one event (CONTRACT.md sections 5 and 7.3). ``now_ms`` (optional) adds the KST time to the
-    kinds that carry no time of their own. Pure (no I/O, no clock); never raises; '' for a tick with no trade."""
+    """The Korean Telegram text of one event (CONTRACT.md sections 5, 7.3 and 8). ``now_ms`` (optional) adds the KST time to
+    the kinds that carry no time of their own. Pure (no I/O, no clock); never raises; '' for a tick with no trade."""
     p = payload if isinstance(payload, dict) else {}
     try:
         if kind == "start":
@@ -514,8 +659,14 @@ def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
             text = _daily(p)
         elif kind == "warn":
             text = "\n".join(_warn(p, now_ms))
+        elif kind == "warn_clear":
+            text = "\n".join(_warn_clear(p, now_ms))
         elif kind == "pass":
             text = _pass(p, now_ms)
+        elif kind == "confirm_done":
+            text = "\n".join(_confirm_done(p))
+        elif kind == "weekly":
+            text = _weekly(p)
         elif kind == "view_ack":
             text = "\n".join(_view_ack(p))
         elif kind == "view_err":
@@ -534,6 +685,18 @@ def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
     except Exception as exc:  # noqa: BLE001  (a wording slip must never stop the engine)
         text = f"🧪 데모 랩 알림 · {kind}\n(문장을 만들지 못함: {type(exc).__name__})"
     return text[:LIMIT]
+
+
+# ---------------------------------------------------------------- the chats
+def parse_chats(chat) -> list:
+    """``DEMOBOT_TG_CHAT`` -> the chat ids as strings: '123456789, 987654321' -> ['123456789', '987654321'] (comma
+    separated; blanks and repeats dropped, order kept, at most ``MAX_CHATS``). An int works too."""
+    out: list = []
+    for part in str(chat if chat is not None else "").split(","):
+        c = part.strip()
+        if c and c not in out:
+            out.append(c)
+    return out[:MAX_CHATS]
 
 
 # ---------------------------------------------------------------- the sender
@@ -597,16 +760,27 @@ def send_message(token: str, chat: str, text: str, timeout: float = TIMEOUT_S):
 
 # ---------------------------------------------------------------- the outbox
 OUTBOX_SCHEMA = ("CREATE TABLE IF NOT EXISTS outbox(id INTEGER PRIMARY KEY, ts_ms INTEGER, kind TEXT, payload TEXT, "
-                 "text TEXT, sent_ms INTEGER, tries INTEGER DEFAULT 0, error TEXT)")
+                 "text TEXT, sent_ms INTEGER, tries INTEGER DEFAULT 0, error TEXT, sent_to TEXT)")
+# sent_to: JSON list of the chats that already have the row (added to an older table by Outbox.__init__)
 OUTBOX_INDEX = "CREATE INDEX IF NOT EXISTS outbox_unsent ON outbox(id) WHERE sent_ms IS NULL"
+
+
+def _chat_list(raw) -> list:
+    """The ``sent_to`` column -> list of chat ids ([] when empty or unreadable)."""
+    try:
+        v = json.loads(raw) if raw else []
+    except (TypeError, ValueError):
+        return []
+    return [str(x) for x in v] if isinstance(v, list) else []
 
 
 class Outbox:
     """The queue of Telegram messages in demo.db (table ``outbox``).
 
     ``queue(kind, payload)`` words the event now (``render``) and stores it; ``flush(token, chat)`` sends the oldest
-    unsent rows; ``state()`` is the status.json "telegram" block. A write made while the caller's own transaction
-    is open joins that transaction (the caller commits it); otherwise it is committed at once.
+    unsent rows to every chat of ``chat`` (``parse_chats``); ``state()`` is the status.json "telegram" block. A row
+    is sent (``sent_ms``) once every listed chat has it (``sent_to``). A write made while the caller's own
+    transaction is open joins that transaction (the caller commits it); otherwise it is committed at once.
     ``clock`` (seconds), ``sleep`` and ``monotonic`` are injectable for tests."""
 
     def __init__(self, conn: sqlite3.Connection, clock: Callable[[], float] = time.time,
@@ -614,11 +788,14 @@ class Outbox:
         self.conn = conn
         self._clock, self._sleep, self._mono = clock, sleep, monotonic
         self._write(OUTBOX_SCHEMA)
+        if "sent_to" not in [r[1] for r in self.conn.execute("PRAGMA table_info(outbox)")]:
+            self._write("ALTER TABLE outbox ADD COLUMN sent_to TEXT")          # an outbox made before round 3
         self._write(OUTBOX_INDEX)
         self._configured: Optional[bool] = None
-        self._hold_until_ms = 0
-        self._fails = 0
-        self._sent_at: list = []          # monotonic times of the sends in the last minute
+        self._hold_until_ms: dict = {}    # chat -> paused until (ms) after a failure
+        self._fails: dict = {}            # chat -> failures in a row
+        self._sent_at: dict = {}          # chat -> monotonic times of its sends in the last minute
+        self._last_send: Optional[float] = None
         self._last_prune_ms = 0
 
     def _now_ms(self) -> int:
@@ -652,17 +829,23 @@ class Outbox:
                     (now, str(kind), json.dumps(payload, ensure_ascii=False, default=str), text))
 
     # -------------------------------------------------- flush
-    def _pace(self) -> bool:
-        """Wait for the 1-a-second gap; False when the minute's budget (``PER_MINUTE``) is used up."""
+    def _budget(self, chat: str) -> bool:
+        """False when ``chat``'s minute budget (``PER_MINUTE``) is used up."""
         now = self._mono()
-        self._sent_at = [t for t in self._sent_at if now - t < 60.0]
-        if len(self._sent_at) >= PER_MINUTE:
-            return False
-        if self._sent_at:
-            gap = MIN_GAP_S - (now - self._sent_at[-1])
+        self._sent_at[chat] = [t for t in self._sent_at.get(chat, []) if now - t < 60.0]
+        return len(self._sent_at[chat]) < PER_MINUTE
+
+    def _pace(self, chat: str) -> None:
+        """Wait for the 1-a-second gap (over all chats) and count the send in ``chat``'s minute."""
+        if self._last_send is not None:
+            gap = MIN_GAP_S - (self._mono() - self._last_send)
             if gap > 0:
                 self._sleep(gap)
-        return True
+        self._last_send = self._mono()
+        self._sent_at.setdefault(chat, []).append(self._last_send)
+
+    def _ready(self, chat: str, now_ms: int) -> bool:
+        return now_ms >= self._hold_until_ms.get(chat, 0) and self._budget(chat)
 
     def _prune(self, now: int) -> None:
         if now - self._last_prune_ms < PRUNE_EVERY_MS:
@@ -672,48 +855,59 @@ class Outbox:
                     "OR (sent_ms IS NULL AND tries >= ? AND ts_ms < ?)", (now - KEEP_MS, MAX_TRIES, now - KEEP_MS))
 
     def flush(self, token: str, chat: str, limit: int = 20, send: Optional[Callable] = None) -> int:
-        """Send the oldest unsent rows (at most ``limit``, one a second, ``PER_MINUTE`` a minute); the number sent.
-        ``send(token, chat, text)`` raises (or returns False) on failure; default: ``send_message``. A failure keeps
-        its error on the row (token removed), counts a try unless it was transient (network, 5xx, 429) and pauses
-        the outbox (30 s, doubling, at most 15 min). Never raises on network, Telegram or database errors."""
-        token, chat = (token or "").strip(), str(chat or "").strip()
-        self._configured = bool(token and chat)
-        sent = 0
+        """Send the oldest unsent rows (at most ``limit``) to every chat of ``chat`` (one message a second overall,
+        ``PER_MINUTE`` a minute per chat); the number of rows that every chat now has. ``send(token, chat_id, text)``
+        raises (or returns False) on failure; default: ``send_message``. A failure keeps its error on the row (token
+        removed; with several chats it starts with the chat id), counts a try unless it was transient (network, 5xx,
+        429) and pauses that chat only (30 s, doubling, at most 15 min): the other chats go on, and the paused one
+        gets its rows later, in order, without anyone getting one twice. Never raises on network, Telegram or
+        database errors."""
+        token, chats = (token or "").strip(), parse_chats(chat)
+        self._configured = bool(token and chats)
+        done = 0
         try:
             now = self._now_ms()
             self._prune(now)
-            if not self._configured or now < self._hold_until_ms:
+            if not self._configured or not any(self._ready(c, now) for c in chats):
                 return 0
             self._write("UPDATE outbox SET tries = ?, error = ? WHERE sent_ms IS NULL AND tries < ? AND ts_ms < ?",
                         (MAX_TRIES, "24시간 안에 못 보내 건너뜀", MAX_TRIES, now - STALE_MS))
-            rows = self.conn.execute("SELECT id, text FROM outbox WHERE sent_ms IS NULL AND tries < ? "
+            rows = self.conn.execute("SELECT id, text, sent_to FROM outbox WHERE sent_ms IS NULL AND tries < ? "
                                      "ORDER BY id LIMIT ?", (MAX_TRIES, max(0, int(limit)))).fetchall()
             send = send or send_message
-            for rid, text in rows:
-                if not self._pace():
-                    break
-                try:
-                    self._sent_at.append(self._mono())
-                    if send(token, chat, text) is False:
-                        raise TelegramError("send returned False")
-                except Exception as exc:  # noqa: BLE001  (delivery never stops the engine)
-                    err = redact(str(exc) if isinstance(exc, TelegramError) else f"{type(exc).__name__}: {exc}",
-                                 token)[:300]
-                    transient = bool(getattr(exc, "transient", False))
-                    self._write("UPDATE outbox SET tries = tries + ?, error = ? WHERE id = ?",
-                                (0 if transient else 1, err, rid))
-                    self._fails += 1
-                    wait = min(BACKOFF_MAX_S, BACKOFF_S * 2 ** min(self._fails - 1, 10))
-                    ra = _num(getattr(exc, "retry_after", None))
-                    self._hold_until_ms = self._now_ms() + int(max(wait, ra or 0.0) * 1000)
-                    break
-                self._write("UPDATE outbox SET sent_ms = ? WHERE id = ?", (self._now_ms(), rid))
-                sent += 1
-                self._fails = 0
-                self._hold_until_ms = 0
+            for rid, text, sent_to in rows:
+                if not any(self._ready(c, self._now_ms()) for c in chats):
+                    break                           # every chat paused or out of its minute: the rest waits
+                got = _chat_list(sent_to)
+                for c in [c for c in chats if c not in got]:
+                    if not self._ready(c, self._now_ms()):
+                        continue                    # this chat gets the row later (it is still unsent)
+                    self._pace(c)
+                    try:
+                        if send(token, c, text) is False:
+                            raise TelegramError("send returned False")
+                    except Exception as exc:  # noqa: BLE001  (delivery never stops the engine)
+                        err = redact(str(exc) if isinstance(exc, TelegramError) else f"{type(exc).__name__}: {exc}",
+                                     token)
+                        err = (f"{c}: {err}" if len(chats) > 1 else err)[:300]
+                        transient = bool(getattr(exc, "transient", False))
+                        self._write("UPDATE outbox SET tries = tries + ?, error = ? WHERE id = ?",
+                                    (0 if transient else 1, err, rid))
+                        self._fails[c] = self._fails.get(c, 0) + 1
+                        wait = min(BACKOFF_MAX_S, BACKOFF_S * 2 ** min(self._fails[c] - 1, 10))
+                        ra = _num(getattr(exc, "retry_after", None))
+                        self._hold_until_ms[c] = self._now_ms() + int(max(wait, ra or 0.0) * 1000)
+                        continue
+                    got.append(c)
+                    self._write("UPDATE outbox SET sent_to = ? WHERE id = ?", (json.dumps(got), rid))
+                    self._fails[c] = 0
+                    self._hold_until_ms.pop(c, None)
+                if all(c in got for c in chats):
+                    self._write("UPDATE outbox SET sent_ms = ? WHERE id = ?", (self._now_ms(), rid))
+                    done += 1
         except sqlite3.Error as exc:
             print(f"demobot outbox: {type(exc).__name__}: {exc}"[:300], file=sys.stderr)
-        return sent
+        return done
 
     # -------------------------------------------------- state
     def state(self) -> dict:
@@ -722,7 +916,7 @@ class Outbox:
         configured = self._configured
         if configured is None:
             configured = bool(os.environ.get("DEMOBOT_TG_TOKEN", "").strip()
-                              and os.environ.get("DEMOBOT_TG_CHAT", "").strip())
+                              and parse_chats(os.environ.get("DEMOBOT_TG_CHAT", "")))
         out = {"configured": bool(configured), "queued": 0, "last_ok_ms": None, "last_error": None}
         try:
             c = self.conn
@@ -738,7 +932,7 @@ class Outbox:
         return out
 
 
-# ---------------------------------------------------------------- commands from the group (CONTRACT.md 7.3)
+# ---------------------------------------------------------------- commands from the owners' chats (CONTRACT.md 7.3)
 _poll_err: dict = {"text": None, "t": 0.0}
 
 
@@ -752,11 +946,12 @@ def _poll_log(text: str) -> None:
 
 def poll_commands(token: str, chat: str, offset: int, timeout: int = 25, get: Optional[Callable] = None) -> tuple:
     """getUpdates (long poll ``timeout`` s, ``allowed_updates=["message"]``) from ``offset``; (new offset, items) with
-    items ``{"update_id", "text", "date_ms", "from_name"}`` of the text messages of ``chat`` only (string compare).
+    items ``{"update_id", "text", "date_ms", "from_name"}`` of the text messages of the chats listed in ``chat``
+    (``parse_chats``, string compare) only: that is the security boundary, a stranger who finds the bot is ignored.
     The new offset is the last update id + 1 for every update seen, other chats included, so nothing is read twice.
     Never raises: on any error (network, Telegram, a bad answer) the old offset and [] (the error is logged once,
     token removed). ``get(token, method, params, timeout)`` defaults to ``api``."""
-    token, want = (token or "").strip(), str(chat or "").strip()
+    token, want = (token or "").strip(), set(parse_chats(chat))
     try:
         off = int(offset or 0)
     except (TypeError, ValueError):
@@ -778,7 +973,7 @@ def poll_commands(token: str, chat: str, offset: int, timeout: int = 25, get: Op
             m = u.get("message")
             if not isinstance(m, dict) or not isinstance(m.get("chat"), dict):
                 continue
-            if str(m["chat"].get("id")) != want or not isinstance(m.get("text"), str):
+            if str(m["chat"].get("id")) not in want or not isinstance(m.get("text"), str):
                 continue
             frm = m.get("from") if isinstance(m.get("from"), dict) else {}
             items.append({"update_id": u["update_id"], "text": m["text"],
@@ -829,29 +1024,43 @@ def _hint(err: str) -> str:
     e = err.lower()
     if "401" in e or "unauthorized" in e:
         return "토큰이 틀렸습니다. BotFather의 토큰을 편집기 안에서 다시 넣으세요: " + EDIT
-    if "chat not found" in e or "400" in e:
-        return "방 번호가 틀렸거나 봇이 그 방에 없습니다. python -m demobot.notify chatid 로 번호를 다시 찾으세요."
+    if "initiate conversation" in e or "chat not found" in e:
+        return ("번호가 틀렸거나, 그 사람이 아직 이 봇을 열어 시작(Start)을 누르지 않았습니다 (단체방이면 봇이 그 방에 "
+                "없음). 시작을 누른 뒤 python -m demobot.notify chatid 로 번호를 다시 확인하세요.")
+    if "blocked by the user" in e:
+        return "그 사람이 이 봇을 차단했습니다. 텔레그램에서 봇의 차단을 풀고 시작(Start)을 누르세요."
     if "403" in e or "kicked" in e or "not a member" in e:
-        return "봇이 그 방에서 빠졌습니다. 봇을 단체방에 다시 넣으세요."
+        return "봇이 그 단체방에서 빠졌습니다. 봇을 그 방에 다시 넣으세요."
+    if "400" in e:
+        return "번호가 틀렸습니다. python -m demobot.notify chatid 로 번호를 다시 찾으세요."
     return "서버의 인터넷 연결을 확인하고 잠시 뒤 다시 실행하세요."
 
 
 def cmd_test(token: str, chat: str, send=send_message, out=print) -> int:
+    """Send the test message to every chat of ``chat`` and say how it went for each; 0 when all got it."""
+    chats = parse_chats(chat)
     if not token:
         out(f"DEMOBOT_TG_TOKEN이 비어 있습니다. 편집기 안에서 넣으세요: {EDIT}")
         return 2
-    if not chat:
-        out("DEMOBOT_TG_CHAT이 비어 있습니다. 먼저 방 번호를 찾으세요: python -m demobot.notify chatid")
+    if not chats:
+        out("DEMOBOT_TG_CHAT이 비어 있습니다. 먼저 번호를 찾으세요: python -m demobot.notify chatid")
         return 2
-    text = f"{TEST_TEXT}\n이 방으로 데모 랩 알림이 옵니다 (모의 거래만, 주문 없음)\n{kst(int(time.time() * 1000))}"
-    try:
-        send(token, chat, text)
-    except Exception as exc:  # noqa: BLE001
-        err = redact(str(exc), token)
-        out(f"보내지 못했습니다: {err}")
-        out(_hint(err))
+    text = f"{TEST_TEXT}\n여기로 데모 랩 알림이 옵니다 (모의 거래만, 주문 없음)\n{kst(int(time.time() * 1000))}"
+    bad = 0
+    for c in chats:
+        try:
+            send(token, c, text)
+        except Exception as exc:  # noqa: BLE001
+            err = redact(str(exc), token)
+            out(f"보내지 못했습니다: {c} · {err}")
+            out(f"  {_hint(err)}")
+            bad += 1
+            continue
+        out(f"보냄: {c}")
+    if bad:
+        out(f"{len(chats)}곳 중 {bad}곳에 보내지 못했습니다. 위의 줄대로 고친 뒤 다시 하세요.")
         return 1
-    out("보냈습니다. 텔레그램 단체방을 확인하세요.")
+    out(f"보냈습니다 ({len(chats)}곳). 텔레그램을 확인하세요.")
     return 0
 
 
@@ -874,8 +1083,10 @@ def chats_from_updates(updates) -> dict:
 
 
 def cmd_chatid(token: str, call=api, out=print) -> int:
-    out("텔레그램 방 번호 찾기 (토큰은 화면에 내지 않습니다)")
-    out("먼저: 새 단체방을 만들고 이 봇을 넣은 뒤, 그 방에 메시지를 하나 보내세요 (/start@봇아이디 가 가장 확실합니다).")
+    """List who wrote to the bot recently: people (private chats, '(개인)') first, then groups."""
+    out("텔레그램 번호 찾기 (토큰은 화면에 내지 않습니다)")
+    out("먼저: 두 분이 각자 텔레그램에서 이 봇을 열고 시작(Start)을 누르세요 (이미 눌렀으면 아무 말이나 한 번).")
+    out("단체방을 쓰려면: 봇을 그 방에 넣고 그 방에 /start@봇아이디 를 보내세요.")
     if not token:
         out(f"DEMOBOT_TG_TOKEN이 비어 있습니다. 편집기 안에서 넣으세요: {EDIT}")
         return 2
@@ -888,33 +1099,39 @@ def cmd_chatid(token: str, call=api, out=print) -> int:
         err = redact(str(exc), token)
         out(f"텔레그램에 묻지 못했습니다: {err}")
         if "409" in err:
-            out("이 봇에 webhook이 걸려 있습니다. 새로 만든 봇을 쓰세요 (규칙봇의 봇은 쓰지 않습니다).")
+            out("다른 곳이 이 봇의 메시지를 읽고 있습니다. 데모 랩 엔진이 켜져 있으면 먼저 끄세요 "
+                "(sudo bash /root/demobot-src/deploy/demobot/off.sh), 봇에게 다시 한 번 말한 뒤 이것을 다시 실행합니다. "
+                "webhook이 걸린 봇이면 새로 만든 봇을 쓰세요 (규칙봇의 봇은 쓰지 않습니다).")
         else:
             out(_hint(err))
         return 1
     seen = chats_from_updates(updates)
     if not seen:
         out("")
-        out("최근 메시지가 없습니다. 봇을 단체방에 넣고 그 방에 /start@봇아이디 를 보낸 뒤 다시 실행하세요.")
-        out("(텔레그램은 지난 24시간 메시지만 보여 줍니다)")
+        out("최근 메시지가 없습니다. 각자 봇을 열어 시작(Start)을 누르거나 아무 말이나 보낸 뒤 다시 실행하세요.")
+        out("(텔레그램은 지난 24시간 메시지만 보여 줍니다. 엔진이 켜져 있으면 엔진이 먼저 읽어 가므로 off.sh로 끄고 합니다)")
         return 0
     out("")
-    order = sorted(seen.items(), key=lambda kv: kv[1][1] not in ("group", "supergroup"))
+    order = sorted(seen.items(), key=lambda kv: kv[1][1] != "private")
     for cid, (title, kind, moved) in order:
-        line = f"방 번호 {cid}   이름 {title}   ({kind})"
+        if kind == "private":
+            line = f"개인 번호 {cid}   이름 {title}   (개인)"
+        else:
+            line = f"방 번호 {cid}   이름 {title}   ({kind})"
         if moved:
             line += f"   -> 번호가 {moved} 로 바뀜: 이 새 번호를 쓰세요"
         out(line)
     out("")
-    out("데모 랩 단체방의 번호(보통 -100으로 시작)를 DEMOBOT_TG_CHAT= 뒤에 넣습니다:")
+    out("두 분의 (개인) 번호를 쉼표로 이어 DEMOBOT_TG_CHAT= 뒤에 넣습니다 (예: DEMOBOT_TG_CHAT=123456789,987654321):")
     out(f"  {EDIT}")
-    out("규칙봇 알림방의 번호와 달라야 합니다. 넣은 뒤: python -m demobot.notify test")
+    out("단체방을 쓰면 그 방 번호(보통 -100으로 시작)를 넣거나 함께 적습니다 (최대 4개, 규칙봇 알림방이 아닌 방).")
+    out("넣은 뒤: python -m demobot.notify test")
     return 0
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m demobot.notify",
-                                 description="demo lab Telegram: send a test message, or find the group's chat id")
+                                 description="demo lab Telegram: send a test message, or find the chat ids")
     ap.add_argument("cmd", choices=["test", "chatid"])
     ap.add_argument("--env-file", default=ENV_FILE,
                     help="read DEMOBOT_TG_TOKEN / DEMOBOT_TG_CHAT from here when they are not in the environment")

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Demo lab bot removal: stops and removes its units (engine, dashboard, hourly ranking and its timer), its firewall rule (only the one the install added) and
+# Demo lab bot removal: stops and removes its units (engine, dashboard, hourly ranking, nightly backup, outside watch
+# and their timers), its firewall rule (only the one the install added) and
 # /opt/demobot (code and venv). Keeps the database (/var/lib/demobot) and the env file (/etc/demobot) unless --purge.
 #   sudo bash deploy/demobot/uninstall.sh            # keeps the data
 #   sudo bash deploy/demobot/uninstall.sh --purge    # also deletes the data, the env file and user demobot
@@ -28,13 +29,17 @@ PORT="${PORT:-8090}"
 
 systemctl stop demobot-warm.service 2>/dev/null || true
 systemctl disable --now --quiet demobot-live.service demobot-dash.service demobot-rank.timer 2>/dev/null || true
-systemctl stop demobot-rank.service 2>/dev/null || true
+systemctl disable --now --quiet demobot-backup.timer demobot-watch.timer 2>/dev/null || true
+systemctl stop demobot-rank.service demobot-backup.service demobot-watch.service 2>/dev/null || true
 rm -f /etc/systemd/system/demobot-live.service /etc/systemd/system/demobot-dash.service \
-  /etc/systemd/system/demobot-rank.service /etc/systemd/system/demobot-rank.timer
+  /etc/systemd/system/demobot-rank.service /etc/systemd/system/demobot-rank.timer \
+  /etc/systemd/system/demobot-backup.service /etc/systemd/system/demobot-backup.timer \
+  /etc/systemd/system/demobot-watch.service /etc/systemd/system/demobot-watch.timer
 systemctl daemon-reload
 systemctl reset-failed demobot-live.service demobot-dash.service demobot-rank.service demobot-rank.timer \
+  demobot-backup.service demobot-backup.timer demobot-watch.service demobot-watch.timer \
   demobot-warm.service 2>/dev/null || true
-echo "서비스 지움: demobot-live, demobot-dash, demobot-rank (+ 타이머)"
+echo "서비스 지움: demobot-live, demobot-dash, demobot-rank, demobot-backup, demobot-watch (+ 타이머)"
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -Eq "^$PORT/tcp on tailscale0[[:space:]]+ALLOW"; then
   ufw delete allow in on tailscale0 to any port "$PORT" proto tcp >/dev/null && echo "방화벽 규칙 지움: $PORT/tcp on tailscale0"

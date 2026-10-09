@@ -5,7 +5,8 @@
 #
 # Runs `python -m demobot warm` as user demobot in a temporary systemd unit (demobot-warm) with the engine's sandbox,
 # priority and memory cap and the same env file, so a dropped SSH session does not stop it. Shows its log while it
-# runs. Refuses while the engine or the hourly ranking runs. After a successful fill it runs the ranking once
+# runs. Refuses while the engine, the hourly ranking or the outside watch runs (the watch would report the stopped
+# engine). After a successful fill it runs the ranking once
 # (demobot-rank.service, 2-4 minutes) so the ranking exists before the dashboard is opened.
 # Then: sudo bash deploy/demobot/on.sh
 set -euo pipefail
@@ -20,6 +21,9 @@ fi
 if systemctl is-active --quiet demobot-rank.timer || \
    [ "$(systemctl show -p ActiveState --value demobot-rank.service 2>/dev/null)" = activating ]; then
   echo "순위표(demobot-rank)가 켜져 있습니다. 첫 채우기는 끈 뒤에만 합니다: sudo bash $HERE/off.sh"; exit 1
+fi
+if systemctl is-active --quiet demobot-watch.timer || systemctl is-active --quiet demobot-backup.timer; then
+  echo "감시·밤 백업 타이머가 켜져 있습니다. 첫 채우기는 끈 뒤에만 합니다: sudo bash $HERE/off.sh"; exit 1
 fi
 if systemctl is-active --quiet demobot-warm.service; then
   echo "이미 채우는 중입니다. 진행 보기: journalctl -u demobot-warm -f (Ctrl+C는 보기만 멈춥니다)"; exit 0

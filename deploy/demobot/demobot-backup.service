@@ -1,0 +1,47 @@
+# Demo lab bot ("데모 랩") nightly backup: one pass of `python -m demobot.backup send`, started by demobot-backup.timer
+# (04:40 KST). Copies only the records that cannot be rebuilt from Binance (views, decisions, passes, depth,
+# notified, meta, the last 7 days of outbox) out of demo.db (opened read-only) into a small file, gzips it, encrypts
+# it with openssl when DEMOBOT_BACKUP_PASSPHRASE is set, and sends it to the demo lab's Telegram group
+# (DEMOBOT_BACKUP_CHAT, default DEMOBOT_TG_CHAT). Writes snap/backup.json. A failure exits 1, so this unit fails
+# visibly (demobot-watch.timer reports a backup older than 36 hours). Same user, sandbox and env file as the engine.
+[Unit]
+Description=demobot demo lab nightly backup to Telegram (one pass)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=demobot
+Group=demobot
+UMask=0027
+WorkingDirectory=/opt/demobot/app
+EnvironmentFile=/etc/demobot/demobot.env
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# the backup never needs the dashboard's login values
+UnsetEnvironment=DEMOBOT_DASH_PASSWORD_HASH DEMOBOT_DASH_SECRET
+ExecStart=/opt/demobot/venv/bin/python -m demobot.backup send
+# the upload retries stop by themselves after 15 minutes (demobot/backup.py RUN_LIMIT_S)
+TimeoutStartSec=20min
+KillMode=mixed
+# A guest on the rule bot's server: low priority, a fifth of one CPU, small memory cap (about a minute a night).
+Nice=15
+CPUQuota=20%
+MemoryHigh=250M
+MemoryMax=300M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# Sandbox: read-only system, writes only its own folder (and a private /tmp for the packed file).
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/demobot
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot

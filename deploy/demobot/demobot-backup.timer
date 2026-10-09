@@ -1,0 +1,15 @@
+# Demo lab bot ("데모 랩"): the nightly backup at 19:40 UTC = 04:40 KST (a quiet hour, between two 15-minute ticks).
+# Persistent: a night the server was off (or the timer was off) is caught up once when it comes back.
+# Enabled by install_demobot.sh / on.sh / update.sh (when the bot is on); off.sh turns it off.
+[Unit]
+Description=demobot demo lab nightly backup to Telegram
+
+[Timer]
+OnCalendar=*-*-* 19:40:00 UTC
+Persistent=true
+RandomizedDelaySec=0
+AccuracySec=1min
+Unit=demobot-backup.service
+
+[Install]
+WantedBy=timers.target

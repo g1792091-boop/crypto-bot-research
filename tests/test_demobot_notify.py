@@ -1,7 +1,7 @@
 """Demo lab bot Telegram (demobot/notify.py) and its server kit (deploy/demobot/, docs/demobot/INSTALL_KO.md).
 
-render(): every kind of CONTRACT.md section 5 in Korean, coin names without the quote, one emoji at most and only at
-the start, under Telegram's 4096 characters even with 200 trades. Outbox: queue / flush order, limit, pacing, errors
+render(): every kind of CONTRACT.md sections 5, 7.3 and 8 in Korean, coin names without the quote, one emoji at most and
+only at the start, under Telegram's 4096 characters even with 200 trades. Outbox: queue / flush order, limit, pacing, errors
 kept and retried, giving up after 5 tries, warn at most once per 'what' an hour, never raising, the token never
 stored. The deploy kit statically: the units' sandbox lines, nothing of the rule bot touched, no env file printed."""
 import io
@@ -80,6 +80,27 @@ VIEWS = {
                   "reached": True, "touch": FOLLOW_CLOSED, "confirm": FOLLOW_MISSED,
                   "summary_ko": "끝난 관점 5개 · 표본 부족 (5/30)"}}
 SAMPLES.update(VIEWS)
+# round 3 (CONTRACT.md 8.1, 8.8, 8.9, 8.10)
+WINDOW = {"n": 23, "mean_R": 0.12, "pnl": 123.4, "pnl_pct": 12.34, "max_dd": 0.183}
+CONFIRMED = {"account": "fx-fr-S2-15m", "name": "S2 친구 값 · 15분", "L": 20, "result": "confirmed", "start_ms": T0,
+             "decided_ms": T0 + 28 * 86_400_000, "window": WINDOW, "why_ko": ""}
+FAILED = dict(CONFIRMED, result="failed", why_ko="평균 R이 0 이하 (-0.05R)",
+              window=dict(WINDOW, mean_R=-0.05, pnl=-40.0, pnl_pct=-4.0))
+DAILY3 = dict(DAILY, passed=1, confirming=1, candidates=0, costs={"median_entry_bps": 3.14, "assumed_bps": 2.0},
+              regime=[{"coin": "BTCUSD", "trend": "up", "vol": "normal"}, {"coin": "ETHUSD", "trend": "range",
+                                                                            "vol": "high"},
+                      {"coin": "SOLUSD", "trend": None, "vol": None}])
+WEEK = {"week_ko": "10/12~10/18", "start_ms": T0, "end_ms": T0 + 7 * 86_400_000, "final": True,
+        "summary_ko": ["이번 주 거래 312건, 오른 계좌 20개 · 내린 계좌 28개.", "가장 좋은 줄: S2 친구 값 · 15분 50배 +12.3%.",
+                       "고정 계좌 평균 +1.2%, 자동 계좌 평균 -0.8%."],
+        "decide_ko": ["S2 친구 값 · 15분 20배가 확인 기간을 통과: 실전 후보로 둘지 정하기"],
+        "judge": {"passed": 1, "confirming": 2, "candidates": 1, "closer": [], "further": []},
+        "stops": {"saved": [], "cost": [], "net_pct": 1.25},
+        "costs": {"median_entry_bps": 2.6, "assumed_bps": 2.0, "eaten": []},
+        "regime": [{"coin": "BTCUSD", "trend": "up", "vol": "normal", "share": {"up": 0.5, "down": 0.2, "range": 0.3}}],
+        "views": {"n": 7, "done": 5, "dir24_rate": 0.6}}
+SAMPLES.update({"confirm_done": CONFIRMED, "warn_clear": {"what": "dead", "detail_ko": "마지막 계산 10/10 09:00 (3분 전)"},
+                "weekly": {"week": WEEK}})
 
 
 def emoji_ok(text: str) -> bool:
@@ -169,10 +190,130 @@ def test_daily_summary():
 
 @pytest.mark.parametrize("kind", list(SAMPLES) + ["other"])
 @pytest.mark.parametrize("payload", [None, {}, {"opens": "x", "closes": [None, 3], "items": [1], "best": [None],
-                                                 "checks": "?", "L": "abc", "bar_ms": "?", "live_days": float("nan")}])
+                                                 "checks": "?", "L": "abc", "bar_ms": "?", "live_days": float("nan")},
+                                     {"confirm_end_ms": "?", "result": None, "window": "x", "start_ms": None,
+                                      "decided_ms": float("nan"), "why_ko": None, "confirming": "x", "candidates": None,
+                                      "costs": [], "regime": [None, 1, {"coin": None}], "week": "x", "what": None},
+                                     {"week": {"summary_ko": "x", "decide_ko": [None, 3], "judge": [], "stops": "?",
+                                               "costs": None, "views": {"n": None, "dir24_rate": "?"}}}])
 def test_render_never_raises(kind, payload):
     out = N.render(kind, payload)
     assert isinstance(out, str) and len(out) < 4096
+
+
+# ---------------------------------------------------------------- round 3 kinds (CONTRACT.md 8.1, 8.8, 8.9, 8.10)
+def test_pass_says_the_confirmation_period_started_and_its_earliest_end_in_kst():
+    p = N.render("pass", dict(PASS, confirm_end_ms=T0 + 28 * 86_400_000), now_ms=T0).split("\n")
+    assert p[0] == "🏁 우리 기준 통과 · S2 친구 값 · 15분 20배"
+    assert p[1] == "4주 확인 기간 시작 · 빨라도 11/07(토)에 끝남 (한국 시간)"
+    text = "\n".join(p)
+    assert "지금부터 새로 들어간 거래만 다시 셉니다" in text and "최대 8주" in text and "'실전 후보'" in text
+    assert "실제 돈을 쓸지는 두 분이 정합니다" in text and p[-1] == "10/10 09:00"
+    late = N.render("pass", dict(PASS, confirm_end_ms=1_791_644_400_000))        # 10/10 15:00 UTC = 10/11 00:00 KST
+    assert "빨라도 10/11(일)에 끝남" in late
+    for missing in ({}, {"confirm_end_ms": None}, {"confirm_end_ms": 0}, {"confirm_end_ms": "x"}):
+        old = N.render("pass", dict(PASS, **missing), now_ms=T0)
+        assert "확인 기간" not in old and "- 실시간 거래 100건 이상: 134건 (충족)" in old
+
+
+def test_confirm_done_confirmed_is_a_candidate_and_still_the_owners_decision():
+    c = N.render("confirm_done", CONFIRMED).split("\n")
+    assert c[0] == "✅ 확인 기간 통과 · S2 친구 값 · 15분 20배" and c[1] == "이제 '실전 후보'입니다"
+    assert "확인 기간 10/10 ~ 11/07" in c
+    assert "거래 23건 · 평균 +0.12R · 수익 +$123.40 (+12.3%) · 최대 낙폭 18.3%" in c
+    assert c[-1] == "실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)"
+    assert "이유" not in "\n".join(c)
+
+
+def test_confirm_done_failed_gives_why():
+    f = N.render("confirm_done", FAILED).split("\n")
+    assert f[0] == "❌ 확인 기간 실패 · S2 친구 값 · 15분 20배" and f[1] == "이유: 평균 R이 0 이하 (-0.05R)"
+    assert "거래 23건 · 평균 -0.05R · 수익 -$40.00 (-4.0%) · 최대 낙폭 18.3%" in f
+    assert "확인 기간이 새로 시작됩니다" in f[-2] and f[-1] == "실제 돈 금지 그대로"
+    assert "이유: 기록 없음" in N.render("confirm_done", dict(FAILED, why_ko=None))
+
+
+def test_confirm_done_with_missing_fields():
+    bare = N.render("confirm_done", {"result": "confirmed"}).split("\n")
+    assert bare[0] == "✅ 확인 기간 통과 · ?" and "확인 기간" in bare and not any("거래" in x for x in bare)
+    odd = N.render("confirm_done", {"name": "X", "L": None, "result": "maybe", "start_ms": T0, "window": {}})
+    assert odd.startswith("🏁 확인 기간 끝 · X\n결과를 알 수 없음") and "확인 기간 10/10부터" in odd
+    part = N.render("confirm_done", dict(CONFIRMED, window={"n": 3, "mean_R": None, "pnl": None, "max_dd": None}))
+    assert "거래 3건 · 평균 - · 수익 - · 최대 낙폭 -" in part
+
+
+def test_warn_knows_the_watch_kinds_and_warn_clear_says_it_recovered():
+    for what, ko in (("dead", "엔진이 멈춤"), ("rank", "순위표가 안 만들어짐"), ("backup", "밤 백업이 안 됨")):
+        assert N.WARN_KO[what].startswith(ko)
+        w = N.render("warn", {"what": what, "detail_ko": "자세히"}, now_ms=T0)
+        assert w.startswith(f"⚠ 데모 랩 경고 · {ko}") and "자세히" in w
+    c = N.render("warn_clear", SAMPLES["warn_clear"], now_ms=T0).split("\n")
+    assert c == ["✅ 데모 랩 회복 · 엔진이 다시 돎", "마지막 계산 10/10 09:00 (3분 전)", "10/10 09:00"]
+    assert N.render("warn_clear", {"what": "rank"}) == "✅ 데모 랩 회복 · 순위표가 다시 만들어짐"
+    assert N.render("warn_clear", {"what": "backup"}) == "✅ 데모 랩 회복 · 밤 백업이 다시 됨"
+    assert set(N.CLEAR_KO) >= set(N.WARN_KO)
+    assert N.render("warn_clear", {"what": "zzz", "detail_ko": None}) == "✅ 데모 랩 회복 · 'zzz' 경고 풀림"
+    assert N.render("warn_clear", None) == "✅ 데모 랩 회복 · 경고 풀림"
+
+
+def test_daily_round3_additions():
+    d = N.render("daily", DAILY3)
+    lines = d.split("\n")
+    i = lines.index("시장 국면 (4시간 추세 · 15분 변동)")
+    assert lines[i + 1:i + 4] == ["- BTC 상승 추세 · 변동 보통", "- ETH 횡보 · 변동 큼", "- SOL 아직 모름"]
+    assert lines[-4:] == ["우리 기준 통과 1개 (실제 돈은 두 분이 정합니다)", "확인 기간 중 1줄 · 실전 후보 0줄",
+                          "실제 진입 비용 (호가창, 중앙값) 3.1bp · 가정 2bp보다 1.1bp 큼 (1bp = 0.01%)",
+                          "통과 전에는 실제 돈 금지"]
+    d2 = N.render("daily", dict(DAILY3, candidates=2, costs={"median_entry_bps": 1.2, "assumed_bps": 2.0}))
+    assert "실전 후보 2줄 (실제 돈은 두 분이 정합니다)" in d2 and "가정 2bp보다 0.8bp 작음" in d2
+    assert "가정과 같음" in N.render("daily", dict(DAILY3, costs={"median_entry_bps": 2.0, "assumed_bps": 2.0}))
+    none = N.render("daily", dict(DAILY3, costs={"median_entry_bps": None}, confirming=None, candidates=None,
+                                  regime=None))
+    assert "실제 진입 비용: 아직 잰 거래 없음 (가정 2bp, 1bp = 0.01%)" in none
+    assert "확인 기간 중" not in none and "시장 국면" not in none
+    assert "실제 진입 비용: 아직 잰 거래 없음" in N.render("daily", dict(DAILY, costs=None))
+    old = N.render("daily", DAILY)                                       # an older engine: nothing new shown
+    assert "확인 기간" not in old and "진입 비용" not in old and "시장 국면" not in old
+
+
+def test_weekly_review_is_short():
+    w = N.render("weekly", {"week": WEEK}).split("\n")
+    assert w[0] == "📅 데모 랩 주간 회의록 · 10/12~10/18" and w[1:4] == WEEK["summary_ko"]
+    i = w.index("두 분이 정할 것")
+    assert w[i + 1] == "- S2 친구 값 · 15분 20배가 확인 기간을 통과: 실전 후보로 둘지 정하기"
+    text = "\n".join(w)
+    assert "판정: 우리 기준 통과 1줄 · 확인 기간 중 2줄 · 실전 후보 1줄" in w
+    assert "정지 규칙: 썼다면 줄마다 평균 +1.2%p (+면 정지 규칙을 쓴 쪽이 나음)" in w
+    neg = N.render("weekly", {"week": dict(WEEK, stops={"net_pct": -3.0})})
+    assert "정지 규칙: 썼다면 줄마다 평균 -3.0%p" in neg
+    assert "실제 진입 비용 (호가창, 중앙값) 2.6bp · 가정 2bp보다 0.6bp 큼 (1bp = 0.01%)" in w
+    assert "관점: 7개 · 끝남 5개 · 24시간 방향 적중 60%" in w
+    assert "실제 돈을 쓸지는 두 분이 정합니다" in text and len(w) <= 20
+    many = N.render("weekly", {"week": dict(WEEK, summary_ko=[f"문장 {i}." for i in range(10)])})
+    assert "문장 5." in many and "문장 6." not in many                             # at most 6 sentences
+    nothing = N.render("weekly", {"week": dict(WEEK, decide_ko=[])})
+    assert "두 분이 정할 것: 없음" in nothing.split("\n") and "\n- " not in nothing
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"week": None}, {"week": {}}, {"week": "x"},
+                                     {"week": {"week_ko": None, "summary_ko": None, "decide_ko": None, "judge": None,
+                                               "stops": None, "costs": None, "views": None}}])
+def test_weekly_with_empty_or_missing_fields(payload):
+    w = N.render("weekly", payload).split("\n")
+    assert w[0] == "📅 데모 랩 주간 회의록" and w[1] == "이번 주 요약 없음"
+    assert "두 분이 정할 것: 없음" in w and "판정: 기록 없음" in w and "정지 규칙: 기록 없음" in w
+    assert "실제 진입 비용: 아직 잰 거래 없음 (가정 2bp, 1bp = 0.01%)" in w and "관점: 기록 없음" in w
+
+
+def test_weekly_partial_fields():
+    w = N.render("weekly", {"week": {"week_ko": "10/12~10/18", "summary_ko": ["", "  ", "한 문장."],
+                                     "judge": {"passed": 0}, "stops": {"net_pct": None},
+                                     "views": {"n": 0, "done": 0, "dir24_rate": None}}})
+    lines = w.split("\n")
+    assert lines[1] == "한 문장." and "판정: 우리 기준 통과 0줄 · 확인 기간 중 -줄 · 실전 후보 -줄" in lines
+    assert "정지 규칙: 기록 없음" in lines and "관점: 0개 · 끝남 0개 · 24시간 방향 적중 -" in lines
+    long = N.render("weekly", {"week": dict(WEEK, decide_ko=["x" * 900] * 40)})
+    assert len(long) < 4096 and "외 " in long
 
 
 def test_view_ack_shows_the_zones_stop_targets_and_the_parser_notes():
@@ -226,6 +367,7 @@ def test_helpers():
     assert N.usd(-5.1) == "-$5.10" and N.usd(1234.5) == "+$1,234.50"
     assert N.exit_label("tp1.5R_sl2atr") == "익절 1.5R · 손절 2ATR" and N.exit_label(0) == "사다리(규칙봇 방식)"
     assert N.rate(0.415) == "42%" and N.rate(41.5) == "42%"
+    assert N.day_ko(T0) == "10/10(토)" and N.share(0.183) == "18.3%" and N.share(None) == "-"
 
 
 # ---------------------------------------------------------------- outbox
@@ -478,13 +620,119 @@ def test_state_reads_the_environment_before_any_flush(monkeypatch):
     assert ob.state() == {"configured": True, "queued": 0, "last_ok_ms": None, "last_error": None}
 
 
+OUTBOX_COLS = [("id", "INTEGER", None), ("ts_ms", "INTEGER", None), ("kind", "TEXT", None),
+               ("payload", "TEXT", None), ("text", "TEXT", None), ("sent_ms", "INTEGER", None),
+               ("tries", "INTEGER", "0"), ("error", "TEXT", None), ("sent_to", "TEXT", None)]
+
+
 def test_outbox_table_shape():
     _, conn, _ = box()
     cols = [(r[1], r[2], r[4]) for r in conn.execute("PRAGMA table_info(outbox)")]
-    assert cols == [("id", "INTEGER", None), ("ts_ms", "INTEGER", None), ("kind", "TEXT", None),
-                    ("payload", "TEXT", None), ("text", "TEXT", None), ("sent_ms", "INTEGER", None),
-                    ("tries", "INTEGER", "0"), ("error", "TEXT", None)]
+    assert cols == OUTBOX_COLS
     N.Outbox(conn)                                                         # twice: no error
+
+
+def test_an_older_outbox_table_is_migrated_and_its_rows_still_go_out(tmp_path):
+    path = tmp_path / "demo.db"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE outbox(id INTEGER PRIMARY KEY, ts_ms INTEGER, kind TEXT, payload TEXT, text TEXT, "
+                "sent_ms INTEGER, tries INTEGER DEFAULT 0, error TEXT)")            # as round 2 made it
+    old.execute("INSERT INTO outbox(ts_ms, kind, payload, text, sent_ms, tries) VALUES(?, 'warn', '{}', 'done', ?, 0)",
+                (T0 - 1000, T0 - 500))
+    old.execute("INSERT INTO outbox(ts_ms, kind, payload, text, tries) VALUES(?, 'warn', '{}', 'pending', 0)",
+                (T0 - 1000,))
+    old.commit()
+    old.close()
+    conn = sqlite3.connect(path, isolation_level=None)
+    ob, _, _ = box(conn)
+    assert [(r[1], r[2], r[4]) for r in conn.execute("PRAGMA table_info(outbox)")] == OUTBOX_COLS
+    s = Sender()
+    assert ob.flush(TOKEN, "111,222", send=s) == 1
+    assert [(c, t) for _, c, t in s.sent] == [("111", "pending"), ("222", "pending")]   # the sent row is not resent
+    assert json.loads(conn.execute("SELECT sent_to FROM outbox WHERE text='pending'").fetchone()[0]) == ["111", "222"]
+    N.Outbox(conn)                                                         # again: no second ALTER
+    other = sqlite3.connect(path)                                          # committed for other connections
+    assert "sent_to" in [r[1] for r in other.execute("PRAGMA table_info(outbox)")]
+
+
+def test_parse_chats():
+    assert N.parse_chats("123456789,987654321") == ["123456789", "987654321"]
+    assert N.parse_chats(" 111 , -100222,,111, ") == ["111", "-100222"]
+    assert N.parse_chats(-100777) == ["-100777"] and N.parse_chats("") == [] and N.parse_chats(None) == []
+    assert N.parse_chats("1,2,3,4,5,6") == ["1", "2", "3", "4"]                # at most 4
+
+
+def test_every_message_goes_to_every_listed_chat_in_order():
+    ob, conn, clk = box()
+    for i in range(3):
+        ob.queue("warn", {"what": f"w{i}", "detail_ko": f"#{i}"})
+    s = Sender()
+    assert ob.flush(TOKEN, "111, 222", send=s) == 3
+    assert [(c, t.split("\n")[1]) for _, c, t in s.sent] == [("111", "#0"), ("222", "#0"), ("111", "#1"),
+                                                             ("222", "#1"), ("111", "#2"), ("222", "#2")]
+    assert all(x <= 1.0 for x in clk.slept) and sum(clk.slept) >= 5.0         # one a second over all chats
+    assert ob.state() == {"configured": True, "queued": 0, "last_ok_ms": ob.state()["last_ok_ms"], "last_error": None}
+
+
+def test_a_partial_failure_retries_only_the_failed_chat_and_never_double_sends():
+    ob, conn, clk = box()
+    ob.queue("start", SAMPLES["start"])
+    ob.queue("warn", {"what": "data", "detail_ko": "x"})
+    fail_222 = {"on": True}
+
+    def send(token, chat, text):
+        if chat == "222" and fail_222["on"]:
+            raise N.TelegramError("HTTP 403: Forbidden: bot was blocked by the user")
+        got.append((chat, text.split("\n")[0]))
+    got = []
+    assert ob.flush(TOKEN, "111,222", send=send) == 0                        # no row reached both chats
+    assert got == [("111", "▶️ 데모 랩 시작 · 계좌 48개"), ("111", "⚠ 데모 랩 경고 · 시세 자료 빠짐")]  # 111 goes on
+    r = conn.execute("SELECT sent_ms, tries, error, sent_to FROM outbox ORDER BY id").fetchall()
+    assert r[0][0] is None and r[0][1] == 1 and r[0][2] == "222: HTTP 403: Forbidden: bot was blocked by the user"
+    assert json.loads(r[0][3]) == ["111"] and json.loads(r[1][3]) == ["111"] and r[1][1] == 0   # 222 paused
+    st = ob.state()
+    assert st["queued"] == 2 and st["last_error"].startswith("222: HTTP 403")
+    got.clear()
+    assert ob.flush(TOKEN, "111,222", send=send) == 0 and got == []          # 222 still paused, 111 has all
+    ob.queue("warn", {"what": "disk"})                                     # new rows still reach 111 at once
+    assert ob.flush(TOKEN, "111,222", send=send) == 0 and got == [("111", "⚠ 데모 랩 경고 · 디스크 공간 부족")]
+    got.clear()
+    fail_222["on"] = False
+    clk.advance(N.BACKOFF_S + 1)
+    assert ob.flush(TOKEN, "111,222", send=send) == 3
+    assert got == [("222", "▶️ 데모 랩 시작 · 계좌 48개"), ("222", "⚠ 데모 랩 경고 · 시세 자료 빠짐"),
+                   ("222", "⚠ 데모 랩 경고 · 디스크 공간 부족")]                     # in order, 111 not again
+    assert ob.state()["queued"] == 0 and ob.state()["last_error"] is None
+    assert all(json.loads(x) == ["111", "222"] for (x,) in conn.execute("SELECT sent_to FROM outbox"))
+
+
+def test_a_chat_that_keeps_failing_gives_the_row_up_but_the_other_chat_got_it():
+    ob, conn, clk = box()
+    ob.queue("warn", {"what": "data"})
+    calls = []
+
+    def send(token, chat, text):
+        calls.append(chat)
+        if chat == "999":
+            raise N.TelegramError("HTTP 400: Bad Request: chat not found")
+    for _ in range(N.MAX_TRIES):
+        ob.flush(TOKEN, "111,999", send=send)
+        clk.advance(N.BACKOFF_MAX_S + 1)
+    assert calls == ["111"] + ["999"] * N.MAX_TRIES                         # 111 once, 999 five times
+    row = conn.execute("SELECT sent_ms, tries, sent_to FROM outbox").fetchone()
+    assert row[0] is None and row[1] == N.MAX_TRIES and json.loads(row[2]) == ["111"]
+    assert ob.flush(TOKEN, "111,999", send=send) == 0 and len(calls) == 1 + N.MAX_TRIES    # given up
+
+
+def test_the_minute_budget_is_per_chat():
+    ob, conn, clk = box()
+    for i in range(N.PER_MINUTE + 2):
+        ob.queue("warn", {"what": f"w{i}"})
+    s = Sender()
+    assert ob.flush(TOKEN, "111,222", limit=100, send=s) == N.PER_MINUTE
+    assert len(s.sent) == 2 * N.PER_MINUTE
+    clk.advance(61)
+    assert ob.flush(TOKEN, "111,222", limit=100, send=s) == 2 and len(s.sent) == 2 * N.PER_MINUTE + 4
 
 
 # ---------------------------------------------------------------- commands from the group (poll_commands)
@@ -522,6 +770,21 @@ def test_poll_keeps_only_the_groups_text_messages_and_moves_past_everything_seen
     g0 = Get([])
     assert N.poll_commands(TOKEN, "-100777", 0, get=g0) == (0, []) and "offset" not in g0.calls[0][1]
     assert N.poll_commands(TOKEN, "-100777", 506, get=Get([])) == (506, [])
+
+
+def test_poll_accepts_every_listed_chat_and_ignores_strangers():
+    g = Get([upd(1, chat=111, text="관점 BTC 숏 B 84750-84840", first="민수"),
+             upd(2, chat=222, text="관점목록", first="지훈"),
+             upd(3, chat=333, text="관점 ETH 롱 A 1", first="낯선 사람"),             # someone who found the bot
+             upd(4, chat=-100777, text="취소 1"),                                    # a group not listed
+             upd(5, chat=222, text="/start", first="지훈")])
+    off, items = N.poll_commands(TOKEN, "111, 222", 0, get=g)
+    assert off == 6
+    assert [(i["update_id"], i["from_name"]) for i in items] == [(1, "민수"), (2, "지훈"), (5, "지훈")]
+    off, items = N.poll_commands(TOKEN, "111,-100777", 0, get=Get([upd(4, chat=-100777, text="취소 1"),
+                                                                  upd(6, chat=333, text="관점목록")]))
+    assert [i["update_id"] for i in items] == [4] and off == 7
+    assert N.poll_commands(TOKEN, " , ", 0, get=g) == (0, [])                # no chat listed: nothing read
 
 
 @pytest.mark.parametrize("exc", [N.TelegramError("HTTP 409: Conflict"), urllib.error.URLError("dns"), OSError("x"),
@@ -571,21 +834,40 @@ def test_cli_test_message(capsys):
     assert "sudoedit" in capsys.readouterr().out
 
 
+def test_cli_test_sends_to_every_chat_and_reports_each(capsys):
+    got = []
+
+    def send(t, c, x):
+        if c == "222":
+            raise N.TelegramError(f"HTTP 403: Forbidden: bot can't initiate conversation with a user {TOKEN}")
+        got.append(c)
+    assert N.cmd_test(TOKEN, "111,222,-100333", send=send) == 1
+    o = capsys.readouterr().out
+    assert got == ["111", "-100333"] and "보냄: 111" in o and "보냄: -100333" in o
+    assert "보내지 못했습니다: 222 · HTTP 403" in o and "시작(Start)" in o and "3곳 중 1곳" in o and TOKEN not in o
+    assert N.cmd_test(TOKEN, "111,222", send=lambda t, c, x: got.append(c)) == 0
+    assert "보냈습니다 (2곳)" in capsys.readouterr().out
+
+
 def test_cli_chatid_lists_groups_and_never_the_token(capsys):
     updates = [{"update_id": 1, "my_chat_member": {"chat": {"id": -555, "title": "데모 랩", "type": "group"}}},
                {"update_id": 2, "message": {"chat": {"id": -555, "title": "데모 랩", "type": "group"},
                                             "migrate_to_chat_id": -1001234567890}},
                {"update_id": 3, "message": {"chat": {"id": -1001234567890, "title": "데모 랩", "type": "supergroup"}}},
-               {"update_id": 4, "message": {"chat": {"id": 42, "first_name": "Kim", "type": "private"}}}]
+               {"update_id": 4, "message": {"chat": {"id": 42, "first_name": "Kim", "type": "private"}}},
+               {"update_id": 5, "message": {"chat": {"id": 7001, "first_name": "민수", "last_name": "이",
+                                                     "type": "private"}, "text": "/start"}}]
 
     def call(token, method, params):
         return {"username": "demolab_test_bot"} if method == "getMe" else updates
     assert N.cmd_chatid(TOKEN, call=call) == 0
     o = capsys.readouterr().out
-    assert TOKEN not in o and "/start@demolab_test_bot" in o
+    assert TOKEN not in o and "/start@demolab_test_bot" in o and "시작(Start)" in o
     assert "방 번호 -1001234567890   이름 데모 랩   (supergroup)" in o
-    assert "-1001234567890 로 바뀜" in o and "방 번호 42   이름 Kim   (private)" in o
-    assert o.index("supergroup") < o.index("private")                     # groups first
+    assert "-1001234567890 로 바뀜" in o
+    assert "개인 번호 42   이름 Kim   (개인)" in o and "개인 번호 7001   이름 민수 이   (개인)" in o
+    assert o.index("(개인)") < o.index("supergroup")                      # people first (the default), then groups
+    assert "DEMOBOT_TG_CHAT=123456789,987654321" in o and "쉼표" in o
     assert N.cmd_chatid(TOKEN, call=lambda t, m, p: {} if m == "getMe" else []) == 0
     assert "최근 메시지가 없습니다" in capsys.readouterr().out
     assert N.cmd_chatid("") == 2
@@ -681,9 +963,45 @@ def unit_files():
     return sorted(list(KIT.glob("*.service")) + list(KIT.glob("*.timer")))
 
 
-def test_the_kit_has_the_four_units():
+def test_the_kit_has_the_units():
     assert {p.name for p in unit_files()} == {"demobot-live.service", "demobot-dash.service", "demobot-rank.service",
-                                              "demobot-rank.timer"}
+                                              "demobot-rank.timer", "demobot-backup.service", "demobot-backup.timer",
+                                              "demobot-watch.service", "demobot-watch.timer"}
+
+
+@pytest.mark.parametrize("name,cmd,mem,high", [("demobot-backup.service", "demobot.backup send", "300M", "250M"),
+                                                ("demobot-watch.service", "demobot.watch", "150M", "120M")])
+def test_backup_and_watch_units_are_small_oneshots_with_the_engines_sandbox(name, cmd, mem, high):
+    u = unit(name)
+    svc = u["[Service]"]
+    live = unit("demobot-live.service")["[Service]"]
+    assert svc["Type"] == ["oneshot"] and svc["ExecStart"] == [f"/opt/demobot/venv/bin/python -m {cmd}"]
+    for k in ("User", "Group", "UMask", "WorkingDirectory", "EnvironmentFile", "Environment", "UnsetEnvironment",
+              "ReadWritePaths", "InaccessiblePaths", "RestrictAddressFamilies", "ProtectKernelTunables",
+              "ProtectKernelModules", "ProtectControlGroups", "LockPersonality", "IOSchedulingClass"):
+        assert svc[k] == live[k], k
+    for k, v in {"MemoryMax": mem, "MemoryHigh": high, "CPUQuota": "20%", **HARDENING}.items():
+        assert svc[k] == [v], k
+    assert int(svc["Nice"][0]) >= 10 and svc["User"] == ["demobot"]
+    assert svc["ReadWritePaths"] == ["/var/lib/demobot"]
+    assert set(svc["InaccessiblePaths"][0].split()) >= RULE_BOT_HIDDEN
+    assert "Restart" not in svc and "[Install]" not in u                    # started by their timers only
+    assert "network-online.target" in u["[Unit]"]["After"][0]
+    assert "AF_UNIX" in svc["RestrictAddressFamilies"][0]                   # the watch asks systemd over D-Bus
+
+
+def test_backup_timer_nightly_at_0440_kst_and_caught_up():
+    u = unit("demobot-backup.timer")
+    t = u["[Timer]"]
+    assert t["OnCalendar"] == ["*-*-* 19:40:00 UTC"] and t["Persistent"] == ["true"]
+    assert t["Unit"] == ["demobot-backup.service"] and u["[Install]"]["WantedBy"] == ["timers.target"]
+
+
+def test_watch_timer_every_10_minutes():
+    u = unit("demobot-watch.timer")
+    t = u["[Timer]"]
+    assert t["OnCalendar"] == ["*-*-* *:04/10:00"] and t["Persistent"] == ["false"]
+    assert t["Unit"] == ["demobot-watch.service"] and u["[Install]"]["WantedBy"] == ["timers.target"]
 
 
 @pytest.mark.parametrize("path", unit_files(), ids=lambda p: p.name)
@@ -712,6 +1030,54 @@ def test_the_scripts_handle_the_ranking_timer():
     assert "disable --now --quiet demobot-live.service demobot-dash.service demobot-rank.timer" in text["off.sh"]
     assert "/etc/systemd/system/demobot-rank.timer" in text["uninstall.sh"]
     assert "systemctl start demobot-rank.service" in text["warm.sh"]
+
+
+def test_the_scripts_handle_the_backup_and_watch_timers():
+    text = {p.name: p.read_text(encoding="utf-8") for p in scripts()}
+    inst = text["install_demobot.sh"]
+    files = re.search(r'UNIT_FILES="([^"]+)"', inst)[1].replace("\\\n", " ").split()
+    assert set(files) >= {"demobot-backup.service", "demobot-backup.timer", "demobot-watch.service",
+                          "demobot-watch.timer"}
+    swap = re.search(r'SWAP_UNITS="([^"]+)"', inst)[1].split()
+    assert {"demobot-backup.timer", "demobot-watch.timer"} <= set(swap)
+    assert set(re.search(r'ONESHOTS="([^"]+)"', inst)[1].split()) == {"demobot-rank.service", "demobot-backup.service",
+                                                                       "demobot-watch.service"}
+    enable = inst[inst.index('if [ "$DB_EXISTED" = 1 ]; then'):inst.index("echo \"== firewall\"")]
+    assert ("systemctl enable --quiet demobot-live.service demobot-rank.timer demobot-backup.timer "
+            "demobot-watch.timer") in enable
+    upd = enable[enable.index("else"):]                                      # update: switched on when the engine is
+    assert "systemctl is-enabled --quiet demobot-live.service" in upd and "for t in $NEW_TIMERS" in upd
+    assert 'systemctl enable --quiet "$t"' in upd and 'systemctl start "$t"' in upd
+    assert re.search(r'NEW_TIMERS="demobot-backup\.timer demobot-watch\.timer"', inst)
+    keys = re.search(r'OPTIONAL_KEYS="([^"]+)"', inst)[1].split()
+    assert keys == ["DEMOBOT_DEADMAN_URL", "DEMOBOT_BACKUP_CHAT", "DEMOBOT_BACKUP_PASSPHRASE"]
+    assert 'echo "$k="' in inst and '>> "$ENVF"' in inst                     # empty lines only, never a value
+    on = text["on.sh"]
+    assert "for t in demobot-backup.timer demobot-watch.timer" in on and '/etc/systemd/system/$t' in on
+    off = text["off.sh"]
+    assert "disable --now --quiet demobot-backup.timer demobot-watch.timer 2>/dev/null || true" in off
+    assert "systemctl stop demobot-rank.service demobot-backup.service demobot-watch.service" in off
+    un = text["uninstall.sh"]
+    for f in ("demobot-backup.service", "demobot-backup.timer", "demobot-watch.service", "demobot-watch.timer"):
+        assert f"/etc/systemd/system/{f}" in un
+    assert "demobot-watch.timer" in text["warm.sh"]
+    assert "install_demobot.sh\" --update" in text["update.sh"]
+
+
+def test_update_adds_the_missing_optional_keys_to_an_old_env_file(tmp_path):
+    """The env-file block of install_demobot.sh, run on a round-2 env file: three empty keys appended, once."""
+    inst = (KIT / "install_demobot.sh").read_text(encoding="utf-8")
+    block = inst[inst.index('ADDED=""'):inst.index('DB_PATH="$(envval DEMOBOT_DB)"')]
+    keys = re.search(r'OPTIONAL_KEYS="[^"]+"', inst)[0]
+    envf = tmp_path / "demobot.env"
+    old = "DEMOBOT_TG_TOKEN=x\nDEMOBOT_TG_CHAT=-100\n#DEMOBOT_BACKUP_CHAT=\n"
+    envf.write_text(old, encoding="utf-8")
+    script = f'set -euo pipefail\nENVF="{envf}"\n{keys}\n{block}'
+    for _ in range(2):
+        subprocess.run(["bash", "-c", script], check=True, capture_output=True)
+    got = envf.read_text(encoding="utf-8")
+    assert got.startswith(old) and got.count("DEMOBOT_DEADMAN_URL=") == 1
+    assert got.count("\nDEMOBOT_BACKUP_PASSPHRASE=\n") == 1 and got.count("DEMOBOT_BACKUP_CHAT=") == 1
 
 
 def scripts():
@@ -789,9 +1155,16 @@ def test_env_example_has_the_contract_keys_and_no_values():
     kv = dict(ln.split("=", 1) for ln in (KIT / "demobot.env.example").read_text(encoding="utf-8").splitlines()
               if ln and not ln.startswith("#"))
     assert set(kv) == {"DEMOBOT_TG_TOKEN", "DEMOBOT_TG_CHAT", "DEMOBOT_DASH_PASSWORD_HASH", "DEMOBOT_DASH_SECRET",
-                       "DEMOBOT_DASH_HOST", "DEMOBOT_DASH_PORT", "DEMOBOT_DB", "DEMOBOT_SNAP"}
+                       "DEMOBOT_DASH_HOST", "DEMOBOT_DASH_PORT", "DEMOBOT_DB", "DEMOBOT_SNAP",
+                       "DEMOBOT_DEADMAN_URL", "DEMOBOT_BACKUP_CHAT", "DEMOBOT_BACKUP_PASSPHRASE"}
     assert all(kv[k] == "" for k in ("DEMOBOT_TG_TOKEN", "DEMOBOT_TG_CHAT", "DEMOBOT_DASH_PASSWORD_HASH",
-                                     "DEMOBOT_DASH_SECRET"))
+                                     "DEMOBOT_DASH_SECRET", "DEMOBOT_DEADMAN_URL", "DEMOBOT_BACKUP_CHAT",
+                                     "DEMOBOT_BACKUP_PASSPHRASE"))
+    lines = (KIT / "demobot.env.example").read_text(encoding="utf-8").splitlines()
+    for k in ("DEMOBOT_DEADMAN_URL", "DEMOBOT_BACKUP_CHAT", "DEMOBOT_BACKUP_PASSPHRASE"):   # a Korean comment above
+        i = lines.index(f"{k}=")
+        assert any(re.search(r"[가-힣]", ln) for ln in lines[max(0, i - 3):i] if ln.startswith("#")), k
+    assert "healthchecks.io" in "\n".join(lines) and "openssl rand -hex" in "\n".join(lines)
     assert kv["DEMOBOT_DASH_PORT"] == "8090" and kv["DEMOBOT_DASH_HOST"] == "127.0.0.1"
     assert kv["DEMOBOT_DB"] == "/var/lib/demobot/demo.db" and kv["DEMOBOT_SNAP"] == "/var/lib/demobot/snap"
 
@@ -823,3 +1196,52 @@ def test_owner_guide():
     assert plug.count("sudo bash /root/demobot-src/deploy/demobot/on.sh") == 2
     assert not re.search(r"\bcat\b[^\n|]*(\.env|/etc/demobot)", text)
     assert "cd /opt/crypto-bot-research" not in text and "deploy/install.sh" not in text   # the rule bot's kit
+
+
+def test_owner_guide_private_chats_are_the_default():
+    text = DOC.read_text(encoding="utf-8")
+    tg = text[text.index("## 2. 텔레그램"):text.index("## 3.")]
+    assert "개인 대화" in tg and "시작**(Start)" in tg and "/start" in tg
+    assert "python -m demobot.notify chatid" in tg and "(개인)" in tg
+    assert "SUDO_EDITOR=nano sudoedit /etc/demobot/demobot.env" in tg and "DEMOBOT_TG_CHAT=123456789,987654321" in tg
+    assert "쉼표" in tg and "보냈습니다 (2곳)" in tg and "무시합니다" in tg
+    assert "개인 대화에는 BotFather의 `/setprivacy` 설정이 필요 없습니다" in tg
+    group = tg[tg.index("**단체방으로 받으려면 (선택)**"):]
+    assert "/setprivacy" in group and "`Disable`" in group and "관리자" in group
+    assert "/setprivacy" not in tg[:tg.index("**단체방으로 받으려면")].replace("`/setprivacy` 설정이 필요 없습니다", "")
+    views = text[text.index("## 6. 관점 기록장 쓰는 법"):text.index("## 7.")]
+    assert "개인 대화" in views and "두 분 모두" in views
+    up = text[text.index("## 12."):text.index("## 13.")]
+    assert "개인 대화" in up and "off.sh" in up and "DEMOBOT_TG_CHAT=번호1,번호2" in up
+    rest = text.replace(tg, "").replace(up, "")
+    assert all("단체방" not in ln or "DEMOBOT_TG_CHAT" in ln for ln in rest.splitlines()), \
+        [ln for ln in rest.splitlines() if "단체방" in ln]
+
+
+def guide_section(text, head, nxt):
+    return text[text.index(head):text.index(nxt)]
+
+
+def test_owner_guide_round3_sections():
+    text = DOC.read_text(encoding="utf-8")
+    heads = re.findall(r"^## (\d+)\. ", text, re.M)
+    assert heads == [str(i) for i in range(14)]                               # numbered 0..13, in order
+    hc = guide_section(text, "## 9. 서버 밖 감시: healthchecks.io", "## 10.")
+    assert "새 체크" in hc and "`demolab`" in hc and "Period 15 minutes" in hc and "Grace Time 30 minutes" in hc
+    assert "Ping URL" in hc and "채팅" in hc and "SUDO_EDITOR=nano sudoedit /etc/demobot/demobot.env" in hc
+    assert "DEMOBOT_DEADMAN_URL=" in hc and "초록(up)" in hc and "on.sh" in hc
+    bk = guide_section(text, "## 10. 밤 백업과 되살리기", "## 11.")
+    assert "04:40" in bk and "주간 회의록" in bk and "관점 기록" in bk and "들어 있지 않은 것" in bk
+    assert "바이낸스" in bk and "DEMOBOT_BACKUP_PASSPHRASE=" in bk and "openssl rand -hex 24" in bk
+    assert "sudo -u demobot /opt/demobot/venv/bin/python -m demobot.backup now" in bk
+    assert "-m demobot.backup restore /var/lib/demobot/" in bk and "off.sh" in bk and "integrity_check" in bk
+    assert "sudo install -o demobot -g demobot -m 600" in bk and "warm.sh" in bk
+    w = guide_section(text, "## 11. 감시 (10분마다)", "## 12.")
+    assert all(ko.split(" (")[0] in w for ko in (N.WARN_KO["dead"], N.WARN_KO["rank"], N.WARN_KO["backup"]))
+    assert "3시간에 한 번" in w and "✅ 데모 랩 회복" in w and "healthchecks.io" in w
+    up = guide_section(text, "## 12. 업데이트: 이미 설치한 서버 (2차 → 3차)", "## 13.")
+    assert "cd /root/demobot-src && git pull && sudo bash deploy/demobot/update.sh" in up
+    assert "systemctl list-timers 'demobot-*'" in up and "demobot-backup.timer" in up and "demobot-watch.timer" in up
+    assert "== 요약" in up and "9번" in up and "10번" in up
+    assert "## 13. 이 봇이 하지 않는 것" in text
+    assert "12번 업데이트만" in text[:text.index("## 0.")]                       # existing installs: told at the top

@@ -6,10 +6,13 @@
 #
 # Does (safe to run again): system user demobot, /var/lib/demobot (+ snap/), /etc/demobot, the env file from the
 # template ONLY when it is missing (never printed), the venv /opt/demobot/venv, a copy of only the code paths the bot
-# needs into /opt/demobot/app (staged in app.new, checked, then swapped; the previous copy stays in app.old), the two
-# systemd units (the engine, the dashboard, the hourly ranking and its timer). Starts the engine and the ranking
-# timer only when the database exists (otherwise it prints the first-fill command) and the dashboard only when its
-# password and secret are set. If ufw is on and the dashboard listens on
+# needs into /opt/demobot/app (staged in app.new, checked, then swapped; the previous copy stays in app.old), the
+# systemd units (the engine, the dashboard, the hourly ranking, the nightly backup and the 10-minute outside watch,
+# with their timers). Starts the engine and the timers only when the database exists (otherwise it prints the
+# first-fill command) and the dashboard only when its password and secret are set. --update (update.sh) keeps on/off
+# as it was, except that the timers new in this version are switched on when the engine is on (enabled). The env
+# file gets empty lines for the optional keys it does not have yet (never a value). If ufw is on and the dashboard
+# listens on
 # the Tailscale address, port 8090 is allowed on tailscale0 only (nothing, when tailscale0 is already allowed;
 # firewall.sh, run again by on.sh once the address is set).
 # Never touches the rule bot: none of its units, /etc/paperbot, /var/lib/paperbot, /opt/crypto-bot-research.
@@ -33,10 +36,16 @@ ENVF=$ETC/demobot.env
 # optional private strategy plug-ins (CONTRACT.md 7.2): the folder is made here, the files in it are the owners'
 # (written by a paste box from the developer); this script never reads, changes or removes them
 PLUGINS=$ETC/plugins
-# unit files installed; the units stopped for the code swap and started again (the ranking timer included, so no
-# ranking pass starts on a half-swapped tree); a ranking pass already running is ended, not restarted (next hour)
-UNIT_FILES="demobot-live.service demobot-dash.service demobot-rank.service demobot-rank.timer"
-SWAP_UNITS="demobot-live.service demobot-dash.service demobot-rank.timer"
+# unit files installed; the units stopped for the code swap and started again (the timers included, so no ranking,
+# backup or watch pass starts on a half-swapped tree); a pass already running is ended, not restarted (next run)
+UNIT_FILES="demobot-live.service demobot-dash.service demobot-rank.service demobot-rank.timer \
+demobot-backup.service demobot-backup.timer demobot-watch.service demobot-watch.timer"
+SWAP_UNITS="demobot-live.service demobot-dash.service demobot-rank.timer demobot-backup.timer demobot-watch.timer"
+ONESHOTS="demobot-rank.service demobot-backup.service demobot-watch.service"
+# timers that came with round 3: update.sh switches them on for an install whose engine is on
+NEW_TIMERS="demobot-backup.timer demobot-watch.timer"
+# optional keys added to an existing env file as empty lines (CONTRACT.md 8.8)
+OPTIONAL_KEYS="DEMOBOT_DEADMAN_URL DEMOBOT_BACKUP_CHAT DEMOBOT_BACKUP_PASSPHRASE"
 # the only paths copied from the repository (the rule bot's dashboard files are left out)
 CODE_PATHS="demobot paperbot third_party/sweep research/entry_study/param_defs research/entry_study/DEFS_BC.sha256 \
 research/st_custom/out/picks.csv research/st_custom/PREREG.md research/st_custom/PREREG.sha256"
@@ -118,6 +127,20 @@ else
 fi
 chown root:demobot "$ENVF"
 chmod 640 "$ENVF"
+# an env file made by an older version lacks the optional keys: add them as empty lines (a value is never written),
+# so the owners only paste a value after '=' in the editor
+ADDED=""
+for k in $OPTIONAL_KEYS; do
+  if ! grep -qE "^[#[:space:]]*$k=" "$ENVF"; then ADDED="$ADDED $k"; fi
+done
+if [ -n "$ADDED" ]; then
+  {
+    echo
+    echo "# ---- 선택 (3차): 서버 밖 감시·밤 백업. 비워 두면 꺼짐 / optional, empty = off (docs/demobot/INSTALL_KO.md)"
+    for k in $ADDED; do echo "$k="; done
+  } >> "$ENVF"
+  echo "added empty optional keys to $ENVF:$ADDED"
+fi
 DB_PATH="$(envval DEMOBOT_DB)"; DB_PATH="${DB_PATH:-$LIB/demo.db}"
 # decided now, before any new code runs (a check below must not make a fresh database count as filled)
 if [ -f "$DB_PATH" ]; then DB_EXISTED=1; else DB_EXISTED=0; fi
@@ -202,9 +225,11 @@ trap 'exit 143' TERM
 # shellcheck disable=SC2086
 if [ -n "$RUNNING" ]; then systemctl stop $RUNNING; fi
 # a oneshot pass reads "activating" while it runs (is-active alone would miss it)
-case "$(systemctl show -p ActiveState --value demobot-rank.service 2>/dev/null)" in
-  active|activating|deactivating|reloading) systemctl stop demobot-rank.service ;;
-esac
+for u in $ONESHOTS; do
+  case "$(systemctl show -p ActiveState --value "$u" 2>/dev/null)" in
+    active|activating|deactivating|reloading) systemctl stop "$u" ;;
+  esac
+done
 rm -rf "$APP.old"
 PREV=""
 if [ -d "$APP" ]; then mv "$APP" "$APP.old"; PREV=1; fi
@@ -219,19 +244,34 @@ if [ "$MODE" = install ]; then
   # reboot before it must not start the engine on an empty database), the dashboard once its password is set.
   # on.sh enables and starts them later.
   if [ "$DB_EXISTED" = 1 ]; then
-    systemctl enable --quiet demobot-live.service demobot-rank.timer
+    systemctl enable --quiet demobot-live.service demobot-rank.timer demobot-backup.timer demobot-watch.timer
     if ! systemctl is-active --quiet demobot-live.service; then
       systemctl start demobot-live.service || echo "엔진을 켜지 못했습니다: journalctl -u demobot-live -n 40 --no-pager"
     fi
-    if ! systemctl is-active --quiet demobot-rank.timer; then
-      systemctl start demobot-rank.timer || echo "순위표 타이머를 켜지 못했습니다: systemctl status demobot-rank.timer --no-pager"
-    fi
+    for t in demobot-rank.timer demobot-backup.timer demobot-watch.timer; do
+      if ! systemctl is-active --quiet "$t"; then
+        systemctl start "$t" || echo "타이머를 켜지 못했습니다: systemctl status $t --no-pager"
+      fi
+    done
   fi
   if dash_ready; then
     systemctl enable --quiet demobot-dash.service
     if ! systemctl is-active --quiet demobot-dash.service; then
       systemctl start demobot-dash.service || echo "대시보드를 켜지 못했습니다: journalctl -u demobot-dash -n 40 --no-pager"
     fi
+  fi
+else
+  # update: the units that were on came back with the swap. The timers new in this version (the nightly backup and
+  # the outside watch) are switched on when the engine is on (enabled), as on.sh would; a bot that is off stays off.
+  if systemctl is-enabled --quiet demobot-live.service 2>/dev/null; then
+    for t in $NEW_TIMERS; do
+      if ! systemctl is-enabled --quiet "$t" 2>/dev/null; then
+        systemctl enable --quiet "$t" && echo "새 타이머 켬: $t"
+      fi
+      if ! systemctl is-active --quiet "$t"; then
+        systemctl start "$t" || echo "타이머를 켜지 못했습니다: systemctl status $t --no-pager"
+      fi
+    done
   fi
 fi
 
@@ -249,7 +289,10 @@ echo "코드: $APP (commit ${COMMIT:0:12}${PREV:+; 이전 코드 $APP.old})"
 echo "엔진 demobot-live: $(state demobot-live.service)"
 echo "대시보드 demobot-dash: $(state demobot-dash.service)"
 echo "순위표 demobot-rank.timer (매시 7분): $(state demobot-rank.timer)"
-echo "텔레그램: 토큰 $(yn DEMOBOT_TG_TOKEN) · 방 번호 $(yn DEMOBOT_TG_CHAT)"
+echo "밤 백업 demobot-backup.timer (매일 04:40): $(state demobot-backup.timer) · 암호 $(yn DEMOBOT_BACKUP_PASSPHRASE) (선택)"
+echo "감시 demobot-watch.timer (10분마다): $(state demobot-watch.timer)"
+echo "서버 밖 감시 healthchecks.io (DEMOBOT_DEADMAN_URL): $(yn DEMOBOT_DEADMAN_URL)"
+echo "텔레그램: 토큰 $(yn DEMOBOT_TG_TOKEN) · 받을 번호 $(yn DEMOBOT_TG_CHAT)"
 if dash_ready; then DASH_SET="있음"; else DASH_SET="비어 있음"; fi
 if is_tailscale_ip "$HOST"; then WHERE="Tailscale을 켠 기기에서"; else WHERE="아직 Tailscale 주소가 아님: 3단계"; fi
 echo "대시보드 비밀번호·비밀값: $DASH_SET · 주소 http://${HOST:-<DEMOBOT_DASH_HOST>}:$PORT ($WHERE)"
@@ -259,7 +302,7 @@ echo
 echo "다음 할 일 (docs/demobot/INSTALL_KO.md):"
 NEXT=0
 if ! has DEMOBOT_TG_TOKEN || ! has DEMOBOT_TG_CHAT; then
-  echo "  - 2단계 텔레그램: 토큰과 방 번호 넣기 (SUDO_EDITOR=nano sudoedit $ENVF)"; NEXT=1
+  echo "  - 2단계 텔레그램: 토큰과 두 분의 번호 넣기 (SUDO_EDITOR=nano sudoedit $ENVF)"; NEXT=1
 fi
 if ! dash_ready || ! is_tailscale_ip "$HOST"; then
   echo "  - 3단계 대시보드: 비밀번호·비밀값·Tailscale 주소 넣기"; NEXT=1
@@ -269,8 +312,15 @@ if [ ! -f "$DB_PATH" ]; then
   echo "    끝나면 켜기: sudo bash $HERE/on.sh"; NEXT=1
 elif [ "$MODE" = install ] && { ! systemctl is-active --quiet demobot-live.service || \
      ! systemctl is-active --quiet demobot-rank.timer || \
+     ! systemctl is-active --quiet demobot-backup.timer || \
+     ! systemctl is-active --quiet demobot-watch.timer || \
      { dash_ready && ! systemctl is-active --quiet demobot-dash.service; }; }; then
   echo "  - 켜기: sudo bash $HERE/on.sh (설정 파일을 바꾼 뒤에도 이것으로 다시 읽힘)"; NEXT=1
+elif [ "$MODE" = update ] && ! systemctl is-active --quiet demobot-live.service; then
+  echo "  - 데모 랩은 꺼진 채입니다. 켜려면: sudo bash $HERE/on.sh"; NEXT=1
+fi
+if [ -f "$DB_PATH" ] && ! has DEMOBOT_DEADMAN_URL; then
+  echo "  - (권장) 서버 밖 감시 healthchecks.io: 안내서 9번 (DEMOBOT_DEADMAN_URL)"; NEXT=1
 fi
 if [ "$NEXT" = 0 ]; then
   echo "  - 없음. 대시보드: http://$HOST:$PORT"

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Demo lab bot on: enable and (re)start the engine, the dashboard and the hourly ranking timer, so they also come
-# back after a reboot. Running it again restarts them, so they re-read /etc/demobot/demobot.env (after a change there).
-# When no ranking exists yet, one ranking pass is started at once (2-4 minutes, in the background).
+# Demo lab bot on: enable and (re)start the engine, the dashboard, the hourly ranking timer, the nightly backup timer
+# and the 10-minute outside watch timer, so they also come back after a reboot. Running it again restarts them, so
+# they re-read /etc/demobot/demobot.env (after a change there). When no ranking exists yet, one ranking pass is
+# started at once (2-4 minutes, in the background). A timer whose unit file is not installed yet (the clone was
+# pulled but update.sh not run) is skipped with a hint.
 #   sudo bash deploy/demobot/on.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -16,6 +18,13 @@ if systemctl is-active --quiet demobot-warm.service; then
 fi
 if [ ! -f "$DB" ]; then echo "아직 첫 채우기를 하지 않았습니다: sudo bash $HERE/warm.sh"; exit 1; fi
 UNITS="demobot-live.service demobot-rank.timer"
+for t in demobot-backup.timer demobot-watch.timer; do
+  if [ -f "/etc/systemd/system/$t" ]; then
+    UNITS="$UNITS $t"
+  else
+    echo "$t 이 아직 설치되지 않았습니다. 먼저 업데이트하세요: sudo bash $HERE/update.sh"
+  fi
+done
 H="$(val DEMOBOT_DASH_PASSWORD_HASH)"; S="$(val DEMOBOT_DASH_SECRET)"
 if [[ "$H" == pbkdf2\$* ]] && [ "${#S}" -ge 32 ]; then
   UNITS="$UNITS demobot-dash.service"
@@ -35,6 +44,6 @@ PLUG="$(val DEMOBOT_PLUGINS)"; PLUG="${PLUG:-/etc/demobot/plugins}"
 N_PLUG="$(find "$PLUG" -maxdepth 1 -type f -name '*.py' 2>/dev/null | wc -l)"
 if [ "$N_PLUG" -gt 0 ]; then echo "비공개 매매법 파일 ${N_PLUG}개를 읽습니다 ($PLUG)"; fi
 sleep 3
-for u in demobot-live.service demobot-dash.service demobot-rank.timer; do
+for u in demobot-live.service demobot-dash.service demobot-rank.timer demobot-backup.timer demobot-watch.timer; do
   echo "$u: $(systemctl is-active "$u" || true)"
 done

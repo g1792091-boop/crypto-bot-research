@@ -1,0 +1,15 @@
+# Demo lab bot ("데모 랩"): the outside watch every 10 minutes (at :04, :14, :24, ...: between the 15-minute ticks and
+# away from the ranking at :07). A missed run is not caught up (the next one replaces it).
+# Enabled by install_demobot.sh / on.sh / update.sh (when the bot is on); off.sh turns it off.
+[Unit]
+Description=demobot demo lab outside watch, every 10 minutes
+
+[Timer]
+OnCalendar=*-*-* *:04/10:00
+Persistent=false
+RandomizedDelaySec=0
+AccuracySec=1min
+Unit=demobot-watch.service
+
+[Install]
+WantedBy=timers.target
