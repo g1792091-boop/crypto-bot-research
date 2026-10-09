@@ -2,9 +2,13 @@
 // median P&L %, max drawdown, liquidations, skipped entries (the entry checks), ruins, the stop-rule line's P&L and how
 // many lines pass "우리 기준"; overall or for one kind, and the mean P&L % of each kind per leverage. accounts.json +
 // judge.json every 60 s.
+// Round 5 stage 2: the rule bot's v4 board / analysis cards: the kind switch in one bar, one card per leverage with
+// its median as a big number that counts to new values (and a bar from 0), the table in the v4 table style with the
+// best line's pixel figure, the kinds with their colour swatch, the reading notes behind 펼치기.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import {isMissing} from "../api.js";
 import {LEVS, KINDS, KIND_KO} from "../labels.js";
 import {byKind, divBar} from "../g4.js";
@@ -24,16 +28,16 @@ export async function mount(el, ctx) {
   const tbl = h("div");
   const kinds = h("div");
   el.append(ui.screenHead("레버리지 비교", "같은 진입, 배수만 다를 때"),
-    ui.card({plate: "보기", cls: "dl-controls"}, ctrl),
-    big,
+    ctrl,
+    h("section", {class: "k4-sec", "aria-label": "배수 4개"}, K4.secRow("배수 4개", "줄마다 $1,000에서 시작 · 가운데 값 = 줄들을 줄 세웠을 때 가운데"), big),
     ui.card({plate: "배수마다", sub: "계좌마다 같은 진입 · 줄마다 $1,000에서 시작"}, tbl),
     ui.card({plate: "종류 × 배수", sub: "종류마다 줄의 평균 손익 %"}, kinds),
-    ui.card({plate: "읽는 법"}, h("ul", {class: "dl-ul"},
+    ui.card({plate: "읽는 법"}, ui.disclosure("다섯 가지 펼치기", h("ul", {class: "s2a-dlines"},
       h("li", null, "증거금 = 지갑의 배수% (20배면 지갑의 20%를 걸고 20배로). 배수가 크면 같은 진입에서 이익도 손실도 커집니다."),
       h("li", null, "건너뜀: 손절이 강제청산 가격보다 안쪽에 있어야 들어가는데, 배수가 크면 강제청산 가격이 가까워져서 못 들어가는 신호가 늘어납니다."),
       h("li", null, "파산: 잔고가 $100 아래로 떨어진 횟수 (그때마다 $1,000에서 다시 시작해 기록을 이어 갑니다)."),
       h("li", null, "정지 규칙 손익: 같은 줄에 계좌 −20% · 하루 −5% · 5연패 멈춤을 걸었다면의 손익입니다."),
-      h("li", null, "평균은 한두 줄의 큰 수익에 끌려갈 수 있어서, 가운데 값(중앙값)을 함께 봅니다."))));
+      h("li", null, "평균은 한두 줄의 큰 수익에 끌려갈 수 있어서, 가운데 값(중앙값)을 함께 봅니다.")))));
 
   let accts = null, judge = null, seen = null;
   async function load() {
@@ -56,8 +60,10 @@ export async function mount(el, ctx) {
     const all = accts.accounts || [];
     const present = KINDS.filter((k) => all.some((a) => a.kind === k.id));
     if (kind !== "all" && !present.some((k) => k.id === kind)) kind = "all";
-    put(ctrl, ui.field("계좌", ui.seg([{id: "all", label: "전체"}, ...present.map((k) => ({id: k.id, label: k.ko}))], kind,
-      (v) => { kind = v; local.set("lev-kind", v); ctx.setQuery(v === "all" ? {} : {kind: v}); paint(); }, {label: "계좌 종류"})));
+    put(ctrl, h("div", {class: "s2a-bar"}, h("span", {class: "s2a-barg"}, h("span", {class: "k4-k"}, "계좌"),
+      ui.seg([{id: "all", label: "전체"}, ...present.map((k) => ({id: k.id, label: k.ko}))], kind,
+        (v) => { kind = v; local.set("lev-kind", v); ctx.setQuery(v === "all" ? {} : {kind: v}); paint(); }, {label: "계좌 종류", cls: "scroll"})),
+    h("span", {class: "muted s2a-small"}, kind === "all" ? `모든 계좌 ${fmt.int(all.length)}개` : `${KIND_KO[kind] || kind} ${fmt.int(all.filter((a) => a.kind === kind).length)}개`)));
     const list = kind === "all" ? all : all.filter((a) => a.kind === kind);
     const pass = new Set(((judge && judge.rows) || []).filter((r) => r.ours && r.ours.pass).map((r) => `${r.id}|${r.L}`));
     const per = LEVS.map((L) => {
@@ -73,13 +79,15 @@ export async function mount(el, ctx) {
         best: ls.reduce((b, y) => (b && Number(b.x.pnl_pct) >= Number(y.x.pnl_pct) ? b : y), null)};
     });
     const maxAbs = Math.max(5, ...per.flatMap((p) => [p.median, p.mean].filter((v) => v != null).map(Math.abs)));
-    put(big, h("div", {class: "g4-levcards"}, per.map((p) => h("section", {class: "card g4-levc", "aria-label": `${p.L}배`},
-      h("div", {class: "card-h"}, h("span", {class: "dl-levtag", dataset: {lev: p.L}}, `${p.L}배`), h("span", {class: "sub"}, `${fmt.int(p.n)}줄`)),
-      h("p", {class: "g4-levm"}, h("span", {class: "muted"}, "가운데 손익 "), ui.signed(fmt.pct(p.median, true), fmt.tone(p.median, fmt.pct(p.median)), "b")),
+    put(big, h("div", {class: "s2a-levcards"}, per.map((p) => h("section", {class: "s2a-levc", "aria-label": `${p.L}배`, dataset: {lev: p.L}},
+      h("div", {class: "s2a-hrow"}, h("span", {class: "dl-levtag", dataset: {lev: p.L}}, `${p.L}배`), h("span", {class: "muted s2a-small"}, `${fmt.int(p.n)}줄`)),
+      h("div", {class: "s2a-levm"}, K4.liveNum(p.median, {format: K4.pctFmt(1), tone: true, cls: "s2a-levn"}), h("small", null, "가운데 손익")),
       divBar(p.median, maxAbs, `가운데 손익 ${fmt.pct(p.median, true)} (가운데 선 = 0)`, true),
-      h("p", {class: "dl-rmeta"}, `이익 ${fmt.int(p.up)}/${fmt.int(p.n)}줄 · 파산한 줄 ${fmt.int(p.ruinedLines)} · 기준 통과 ${fmt.int(p.pass)}`)))));
+      h("p", {class: "s2a-levs"}, h("span", null, "평균 ", h("b", {class: fmt.tone(p.mean, fmt.pct(p.mean, true))}, fmt.pct(p.mean, true))),
+        h("span", null, `이익 ${fmt.int(p.up)}/${fmt.int(p.n)}줄`)),
+      h("p", {class: "s2a-levs muted"}, `파산한 줄 ${fmt.int(p.ruinedLines)} · 기준 통과 ${fmt.int(p.pass)}`)))));
     const row = (label, get, title) => h("tr", null, h("th", {scope: "row", class: "l", title}, label), per.map((p) => h("td", null, get(p))));
-    put(tbl, h("div", {class: "tbl-wrap"}, h("table", {class: "tbl dl-cmp g4-lev4"},
+    put(tbl, h("div", {class: "tbl-wrap"}, h("table", {class: "tbl dl-cmp g4-lev4 s2a-tbl"},
       h("thead", null, h("tr", null, h("th", {class: "l"}, ""), per.map((p) => h("th", null, h("span", {class: "dl-levtag", dataset: {lev: p.L}}, `${p.L}배`))))),
       h("tbody", null,
         row("평균 손익", (p) => ui.signed(fmt.pct(p.mean, true), fmt.tone(p.mean, fmt.pct(p.mean)), "b"), "줄들의 손익 % 평균"),
@@ -93,14 +101,16 @@ export async function mount(el, ctx) {
         row("정지 규칙 손익", (p) => h("span", {class: "dl-kn"}, ui.signed(fmt.pct(p.stops, true), fmt.tone(p.stops, fmt.pct(p.stops))),
           h("small", {class: "muted"}, `가운데 ${fmt.pct(p.stopsMedian, true)}`)), "같은 줄에 정지 규칙을 걸었다면 (평균)"),
         row("우리 기준 통과", (p) => (p.pass ? ui.pill(`${fmt.int(p.pass)}줄`, "good") : "0"), "판정의 우리 기준 5개를 모두 넘은 줄"),
-        row("가장 좋은 줄", (p) => (p.best ? h("a", {href: ctx.href("account", p.best.a.id), class: "g4-small"}, `${p.best.a.name || p.best.a.id} ${fmt.pct(p.best.x.pnl_pct, true)}`) : "—"))))));
+        row("가장 좋은 줄", (p) => (p.best ? h("a", {href: ctx.href("account", p.best.a.id), class: "s2a-nm s2a-small", title: p.best.a.id},
+          K4.acctFig(p.best.a, 16), K4.acctName(p.best.a), h("b", {class: ["num", fmt.tone(p.best.x.pnl_pct, fmt.pct(p.best.x.pnl_pct, true))]}, fmt.pct(p.best.x.pnl_pct, true))) : "—"))))));
     put(kinds, ui.table([
-      {label: "종류", l: true, get: (k) => h("span", {class: "dl-kn"}, h("b", null, KIND_KO[k.id] || k.ko), h("small", {class: "muted"}, `${k.rows.length}개`))},
+      {label: "종류", l: true, get: (k) => h("span", {class: "s2a-kn", dataset: {kind: k.id}}, h("i", {class: "k4-sw", "aria-hidden": "true"}), h("b", null, KIND_KO[k.id] || k.ko),
+        h("small", {class: "muted"}, `${k.rows.length}개`))},
       ...LEVS.map((L) => ({label: `${L}배`, get: (k) => {
         const v = mean(nums(k.rows.map((a) => ((a.lines || {})[String(L)] || {}).pnl_pct)));
         return ui.signed(fmt.pct(v, true), fmt.tone(v, fmt.pct(v)));
       }})),
-    ], byKind(all), {cls: "dl-kinds"}));
+    ], byKind(all), {cls: "dl-kinds s2a-tbl"}));
   }
 
   await load();

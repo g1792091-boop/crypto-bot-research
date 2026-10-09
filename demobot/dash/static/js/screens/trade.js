@@ -3,9 +3,13 @@
 // "익절 xR · 손절 yATR" exits only) the target; markers at the entry and the exit. Beside it every fact of the trade,
 // the same entry's P&L on the other leverage lines, the measured cost and the market at entry.
 // acct/<id>.json (the trade) + /api/bars (the candles; 30m bars are paired from 15m on the server).
+// Round 5 stage 2: the rule bot's v4 chart / account trade look: the head card with the account's pixel character and
+// timeframe chip, the result as LED digits (R and P&L), side / leverage / hold / reason chips; the facts in key-value
+// blocks, the four leverage lines in the v4 table style.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import {isMissing} from "../api.js";
 import {candleChart} from "../chart.js";
 import {LEVS, reasonKo, sideKo, tfKo, targetR} from "../labels.js";
@@ -42,7 +46,7 @@ export async function mount(el, ctx) {
     h("span", {class: "dl-lg"}, h("i", {class: "dl-li-up dl-dash"}), "목표 (고정 익절만)"),
     h("span", {class: "dl-lg"}, h("i", {class: "dl-li-ink dl-dot"}), "청산"));
   const chartCard = ui.card({plate: "차트", sub: "진입 3일 전부터 청산 1일 뒤까지 · 한국 시간", acts: tfSeg}, chartBox, legend, chartNote);
-  const factRow = h("div", {class: "grid2"},
+  const factRow = h("div", {class: "s2a-wrap even"},
     ui.card({plate: "이 거래"}, facts),
     h("div", {class: "stack"}, ui.card({plate: "배수마다", sub: "같은 진입을 배수 4줄이 각자 냅니다"}, levBox),
       ui.card({plate: "비용과 시장"}, costBox)));
@@ -83,14 +87,19 @@ export async function mount(el, ctx) {
   const win = Number(t.pnl) > 0;
   const holdS = ((open ? Date.now() : Number(t.exit_ms)) - Number(t.entry_ms)) / 1000;
   const rT = fmt.r(t.R), pT = fmt.money(t.pnl, true);
-  put(say, ui.card({hero: true, plate: `${fmt.coin(t.coin)} · ${sideKo(t.side)} · ${fmt.lev(t.L)}`, cls: "dl-tsay"},
+  const fig = {id, name: acct.name || id, kind: acct.kind, tf: acct.tf, short: acct.short};
+  put(say, ui.card({hero: true, plate: `${fmt.coin(t.coin)} · ${sideKo(t.side)} · ${fmt.lev(t.L)}`, cls: "dl-tsay s2a-tsay"},
+    h("div", {class: "s2a-candn"}, h("a", {class: "s2a-nm", href: ctx.href("account", id), title: id}, K4.acctFig(fig, 26), K4.acctName(fig)),
+      h("span", {class: ["side", Number(t.side) > 0 ? "long" : "short"]}, sideKo(t.side)),
+      h("span", {class: "dl-levtag", dataset: {lev: t.L}}, fmt.lev(t.L)),
+      open ? ui.pill("열림", "accent") : ui.pill(reasonKo(t.reason), win ? "good" : "bad"),
+      ui.pill(`보유 ${fmt.dur(holdS)}`, "thin")),
     h("p", {class: "dl-vline"}, open
       ? `${fmt.kst(t.entry_ms)}에 ${sideKo(t.side)}으로 들어가 아직 열려 있습니다.`
       : `${fmt.kst(t.entry_ms)}에 ${sideKo(t.side)}으로 들어가 ${fmt.kst(t.exit_ms)}에 ${reasonKo(t.reason)}(으)로 나왔습니다.`),
-    h("div", {class: "row wrap dl-tbig"},
-      h("span", null, h("span", {class: "muted"}, open ? "지금 " : "결과 "), ui.signed(rT, fmt.tone(t.R, rT), "b")),
-      h("span", null, h("span", {class: "muted"}, open ? "미실현 " : "손익 "), ui.signed(pT, fmt.tone(t.pnl, pT), "b")),
-      h("span", {class: "muted"}, `보유 ${fmt.dur(holdS)}`))));
+    h("div", {class: "pnl s2a-ledbox"},
+      h("div", null, h("span", {class: "k"}, open ? "지금 R" : "결과 R"), h("b", {class: ["led-num", "num", fmt.tone(t.R, rT)]}, rT)),
+      h("div", {class: "r"}, h("span", {class: "k"}, open ? "미실현 손익" : "손익"), h("b", {class: ["led-sm", "num", fmt.tone(t.pnl, pT)]}, pT)))));
 
   const pct = (a, b) => (fmt.bad(a) || fmt.bad(b) || Number(b) === 0 ? null : (Number(a) - Number(b)) / Number(b) * 100);
   const stopPct = pct(t.stop, t.entry);
@@ -123,7 +132,7 @@ export async function mount(el, ctx) {
     {label: "손익", get: (L) => { const x = same[L]; if (!x) return h("span", {class: "muted"}, "안 들어감"); const v = fmt.money(x.pnl, true); return ui.signed(v, fmt.tone(x.pnl, v)); }},
     {label: "증거금 대비", get: (L) => { const x = same[L]; if (!x) return "—"; const v = fmt.ratio(x.roe); return ui.signed(v, fmt.tone(x.roe, v)); }},
     {label: "이유", get: (L) => (same[L] ? (same[L].status === "open" ? "열림" : reasonKo(same[L].reason)) : "—")},
-  ], LEVS.map(String), {rowCls: (L) => (String(t.L) === L ? "dl-marked" : "")}),
+  ], LEVS.map(String), {cls: "s2a-tbl", rowCls: (L) => (String(t.L) === L ? "dl-marked" : "")}),
   ui.note("안 들어감 = 그 배수에서는 진입 검사(강제청산 여유·증거금·코인당 1개)에 걸려 건너뛰었거나, 계좌 파일의 최근 600건 밖입니다."));
 
   const maker = t.through_bps != null || t.maker === true;

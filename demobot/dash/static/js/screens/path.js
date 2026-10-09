@@ -1,13 +1,25 @@
-// #/path 졸업 길 (CONTRACT 9.8): every line (account × leverage) on its way to 실전 후보: "우리 기준" checks k/5 →
-// 우리 기준 통과 → 확인 기간 (progress) → 실전 후보, closest first; and the luck map: a scatter of every line (x = closed
-// trades n, y = mean R) over the coin-flip 95% limit (judge rows' luck_lim against n, drawn as a smooth fit
-// a + b / √n), coloured AND shaped by stage; a tap shows the line. judge.json every 60 s. SVG built with s() (no markup).
+// #/path 졸업 길 (CONTRACT 9.8; round 5 stage 2: the rule bot's v4 졸업 길 look, path.js / path.css): on top the funnel in
+// the AI-terminal panel (one block per stage with its real count: 기준 확인 중 → 우리 기준 통과 → 확인 기간 → 실전 후보, the
+// furthest stage with a line lit as 지금 여기, "하나만 더" (4 of 5 checks) beside it); the luck map: a scatter of every
+// line (x = closed trades n, y = mean R) over the coin-flip 95% limit (judge rows' luck_lim against n, drawn as a smooth
+// fit a + b / √n), coloured AND shaped by stage; a tap shows the line; then every line (account × leverage) on its way to
+// 실전 후보 in the v4 rows (pixel figure, timeframe chip, name, leverage, the four step lights), closest first.
+// judge.json every 60 s. SVG built with s() (no markup). Read-only; a missing file shows "준비 중".
 import {h, s, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import {isMissing} from "../api.js";
-import {LEVS} from "../labels.js";
+import {LEVS, kindOfId} from "../labels.js";
 import {stageOf, closeness, ticks, robustLine} from "../g4.js";
+
+/** An account-like object for the pixel figure and the name chip, from a row that only carries id and name. */
+function acctOf(id, name) {
+  const x = String(id || "");
+  const tf = /-(15m|30m)$/.exec(x), sh = /(?:^|-)(S2|N02|N04)(?:-|$)/.exec(x);
+  return {id: x, name: name || x, kind: kindOfId(x), tf: tf ? tf[1] : null, short: sh ? sh[1] : null};
+}
+const levTag = (L) => (L ? h("span", {class: "dl-levtag", dataset: {lev: L}}, fmt.lev(L)) : null);
 
 const SHAPE = ["circle", "tri", "square", "diamond"];        // stage 0..3 (a failed confirmation: a cross)
 const PTS_KO = ["기준 확인 중 (점 크기 = 넘은 개수)", "우리 기준 통과", "확인 기간", "실전 후보"];
@@ -22,19 +34,20 @@ export async function mount(el, ctx) {
   const levSeg = ui.seg([{id: "all", label: "전체"}, ...LEVS.map((L) => ({id: String(L), label: `${L}배`}))], lev,
     (v) => { lev = v; paint(); }, {label: "배수"});
   const pager = ui.pager({size: 15, empty: "줄이 없습니다", render: (part, s0) => pathList(part, s0, ctx)});
+  const count = h("span", {class: "s2a-count"});
   el.append(ui.screenHead("졸업 길", "줄마다 실전 후보까지 어디쯤인지"),
     sum,
-    ui.card({plate: "운 지도", sub: "가로 = 닫힌 거래 수 · 세로 = 평균 R (수수료 후)", acts: levSeg}, mapBox, legend, info,
+    ui.card({plate: "운 지도", sub: "가로 = 닫힌 거래 수 · 세로 = 평균 R (수수료 후)", acts: levSeg, cls: "s2a-mapcard"}, mapBox, legend, info,
       ui.disclosure("이 지도 읽는 법", h("ul", {class: "dl-ul"},
         h("li", null, "점 하나 = 계좌 하나의 배수 한 줄입니다. 오른쪽일수록 거래가 많고, 위일수록 거래마다 많이 벌었습니다 (R = 손절 폭을 1로 본 손익)."),
         h("li", null, "흐린 띠 = 운으로도 나올 수 있는 높이입니다. 동전 던지기 계좌(아무 봉에서 아무 방향)를 같은 거래 수만큼 했을 때, 100번 중 95번은 이 선 아래에 머뭅니다."),
         h("li", null, "거래가 적으면 운만으로도 높게 나올 수 있어서 선이 높고, 거래가 많아질수록 선이 내려옵니다. 선 위에 있는 점이라야 운이 아닐 가능성이 큽니다 (우리 기준의 '운 기준선' 항목)."),
         h("li", null, "선은 판정 파일의 줄마다 운 한계(luck_lim)를 a + b ÷ √거래 수 모양으로 맞춘 것입니다. 배수·봉마다 조금씩 달라서 한 줄로 고르게 그렸습니다."),
         h("li", null, "모양과 색이 단계를 말합니다: ● 기준 확인 중 · ▲ 우리 기준 통과 · ■ 확인 기간 · ◆ 실전 후보 · ✕ 확인 실패.")))),
-    ui.card({plate: "줄마다 단계", sub: "가까운 줄부터"}, pager.el,
-      h("p", {class: "note"}, "앞 절반 → 뒤 절반: 닫힌 거래를 시간 순서로 반씩 나눈 평균 R (뒤가 크게 나빠졌으면 처음의 운이 다했을 수 있음). "
+    ui.card({plate: "줄마다 단계", sub: "가까운 줄부터", acts: [count]}, pager.el,
+      h("p", {class: "assume"}, "앞 절반 → 뒤 절반: 닫힌 거래를 시간 순서로 반씩 나눈 평균 R (뒤가 크게 나빠졌으면 처음의 운이 다했을 수 있음). "
         + "⚠ = 버티는 수익 경고: 수익이 거래 몇 건 · 한두 코인에만 기대거나, 연속 손실이 깁니다. 자세한 것은 실전 준비 화면과 용어집에.")),
-    ui.note("실전 후보가 나와도 실제 돈은 두 분이 정합니다. 단계: 우리 기준 5개를 모두 넘으면 '통과', 그때부터 4주(거래 20건 이상) 확인 기간, 그것까지 넘으면 '실전 후보'."));
+    h("p", {class: "assume"}, "실전 후보가 나와도 실제 돈은 두 분이 정합니다. 단계: 우리 기준 5개를 모두 넘으면 '통과', 그때부터 4주(거래 20건 이상) 확인 기간, 그것까지 넘으면 '실전 후보'."));
 
   let data = null, seen = null, ro = null, lastW = 0;
   async function load() {
@@ -57,16 +70,13 @@ export async function mount(el, ctx) {
   }
 
   function paint() {
-    if (!data || isMissing(data)) { put(sum); put(mapBox, ui.missing("판정 자료")); put(legend); pager.set([]); return; }
+    if (!data || isMissing(data)) { put(sum); put(mapBox, ui.missing("판정 자료")); put(legend); pager.set([]); count.textContent = ""; return; }
     const all = lines();
     const by = [0, 1, 2, 3].map((k) => all.filter((x) => x.sg.stage === k).length);
     const four = all.filter((x) => x.sg.stage === 0 && x.sg.ok === x.sg.of - 1).length;
-    put(sum, h("div", {class: "stats dl-s4"},
-      ui.stat("실전 후보", fmt.int(by[3]), "확인 기간까지 넘은 줄", by[3] ? "dl-good" : null),
-      ui.stat("확인 기간", fmt.int(by[2]), "4주 다시 보는 줄"),
-      ui.stat("우리 기준 통과", fmt.int(by[1]), "확인 기간 시작 전"),
-      ui.stat("하나만 더", fmt.int(four), "5개 중 4개 넘은 줄")));
+    put(sum, funnel(all.length, by, four));
     const sorted = [...all].sort((a, b) => closeness(b.r, b.sg) - closeness(a.r, a.sg));
+    count.textContent = `${fmt.int(sorted.length)}줄`;
     pager.set(sorted, true);
     drawMap(all.filter((x) => lev === "all" || String(x.r.L) === lev));
   }
@@ -150,7 +160,8 @@ export async function mount(el, ctx) {
   }
 
   function showPick(x) {
-    put(info, h("div", {class: "dl-evt"}, h("a", {href: ctx.href("account", x.r.id)}, `${x.r.name || x.r.id} ${fmt.lev(x.r.L)}`),
+    const a = acctOf(x.r.id, x.r.name);
+    put(info, h("div", {class: "s2a-pickh"}, h("a", {class: "s2a-nm", href: ctx.href("account", x.r.id), title: x.r.id}, K4.acctFig(a, 20), K4.acctName(a)), levTag(x.r.L),
       ui.pill(stageText(x.sg), x.sg.stage === 3 ? "good" : x.sg.stage >= 1 ? "accent" : "thin")),
     h("p", {class: "dl-rmeta"}, `닫힌 거래 ${fmt.int(x.r.n)}건 · 평균 ${fmt.r(x.r.mean_R)} · 운 한계 ${fmt.r(x.r.luck_lim)}`,
       x.r.boot_low != null ? ` · 부트스트랩 하한 ${fmt.r(x.r.boot_low)}` : "",
@@ -160,6 +171,28 @@ export async function mount(el, ctx) {
   await load();
   ctx.every(60000, load);
   return () => { if (ro) ro.disconnect(); };
+}
+
+/** The funnel (v4 path-funnel): one block per stage with its real count; the furthest stage with a line is 지금 여기. */
+function funnel(n, by, four) {
+  const st = [
+    {ko: "기준 확인 중", n: by[0], sub: "우리 기준 5개를 아직 다 넘지 못한 줄"},
+    {ko: "우리 기준 통과", n: by[1], sub: "확인 기간 시작 전"},
+    {ko: "확인 기간", n: by[2], sub: "4주 다시 보는 줄"},
+    {ko: "실전 후보", n: by[3], sub: "확인 기간까지 넘은 줄"},
+  ];
+  let here = -1;
+  st.forEach((x, i) => { if (Number(x.n) > 0) here = i; });
+  return h("div", {class: "s2a-stage s2a-pathterm"},
+    h("div", {class: "s2a-tline"}, h("span", {class: "s2a-prompt", "aria-hidden": "true"}, ">"), h("span", null, "졸업 길"),
+      h("span", {class: "s2a-tchip"}, `줄 ${fmt.int(n)}개`), h("span", {class: "s2a-tchip"}, "계좌 × 배수 4줄"),
+      h("span", {class: "s2a-tchip"}, "표시만, 판정은 판정 화면")),
+    h("ol", {class: "s2a-funnel", "aria-label": "졸업 단계"}, st.map((x, i) => h("li", {class: ["s2a-fseg", Number(x.n) > 0 ? "has" : "dim", i === here ? "here" : ""],
+      style: {"--i": String(i)}, "aria-current": i === here ? "step" : null},
+    h("span", {class: "s2a-fno"}, i === here ? `0${i + 1} · 지금 여기` : `0${i + 1}`), h("span", {class: "s2a-fko"}, x.ko),
+    h("b", {class: "s2a-fbig num"}, fmt.int(x.n)), h("span", {class: "s2a-fsm"}, Number(x.n) > 0 ? x.sub : "아직 없음")))),
+    h("div", {class: "s2a-fside"}, h("span", {class: "k4-k"}, "하나만 더"), h("b", {class: "num"}, `${fmt.int(four)}줄`),
+      h("small", {class: "muted"}, "우리 기준 5개 중 4개 넘은 줄")));
 }
 
 function stageText(sg) {
@@ -178,7 +211,7 @@ function mark(kind, cx, cy, r) {
 const cross = (cx, cy, r) => s("path", {d: `M${cx - r} ${cy - r} L${cx + r} ${cy + r} M${cx + r} ${cy - r} L${cx - r} ${cy + r}`, class: "g4-x"});
 
 function pathList(rows, s0, ctx) {
-  return h("ol", {class: "g4-path", start: String(s0 + 1)}, rows.map(({r, sg}) => {
+  return h("ol", {class: "g4-path", start: String(s0 + 1)}, rows.map(({r, sg}, i) => {
     const fails = ((r.ours && r.ours.checks) || []).filter((c) => !c.ok);
     const steps = [
       {ko: `기준 ${sg.ok}/${sg.of}`, st: sg.stage >= 1 ? "done" : "now", frac: sg.stage >= 1 ? 1 : sg.ok / sg.of},
@@ -188,12 +221,14 @@ function pathList(rows, s0, ctx) {
       {ko: "실전 후보", st: sg.stage === 3 ? "done" : "todo"},
     ];
     const c = sg.conf;
-    return h("li", {class: ["g4-pl", `s${sg.stage}`]},
-      h("div", {class: "g4-plh"}, h("a", {href: ctx.href("account", r.id), class: "dl-aname"}, r.name || r.id),
-        h("span", {class: "dl-levtag", dataset: {lev: r.L}}, `${r.L}배`),
+    const a = acctOf(r.id, r.name);
+    return h("li", {class: ["g4-pl", "s2a-pl", `s${sg.stage}`]},
+      h("div", {class: "g4-plh"}, h("span", {class: "s2a-rk num"}, String(s0 + i + 1)),
+        h("a", {href: ctx.href("account", r.id), class: "s2a-nm", title: r.id}, K4.acctFig(a, 20), K4.acctName(a)),
+        levTag(r.L),
         sg.failed ? ui.pill("확인 실패 뒤 다시 보는 중", "bad") : null,
         h("span", {class: "grow"}),
-        h("span", {class: "muted num"}, `거래 ${fmt.int(r.n)} · ${fmt.r(r.mean_R)}`)),
+        h("span", {class: "muted num"}, `거래 ${fmt.int(r.n)} · `, h("b", {class: fmt.tone(r.mean_R, fmt.r(r.mean_R))}, fmt.r(r.mean_R))), K4.smallSample(r.n)),
       h("div", {class: "g4-track", role: "list", "aria-label": "단계"}, steps.map((x) => h("span", {class: ["g4-st", x.st], role: "listitem"},
         x.frac != null && x.st === "now" ? h("i", {style: {"--p": `${(x.frac * 100).toFixed(0)}%`}}) : null, h("span", null, x.ko)))),
       sg.stage === 2 && c ? h("p", {class: "dl-rmeta"}, `확인 기간 ${fmt.mmdd(c.start_ms)}부터 · 거래 ${fmt.int(c.n)}/${fmt.int(c.need_n)} · 평균 ${fmt.r(c.mean_R)} · 손익 ${fmt.pct(c.pnl_pct, true)}`,
