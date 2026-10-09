@@ -3,6 +3,7 @@
 import {h, put} from "./dom.js";
 import {num} from "./fmt.js";
 import {CONFIRM_KO, CONFIRM_CLS, trendKo, volKo} from "./labels.js";
+import {starBtn} from "./favs.js";
 
 export const plate = (text) => h("span", {class: "plate"}, text);
 export const pill = (text, cls = "", title) => h("span", {class: ["pp", cls], title}, text);
@@ -12,9 +13,15 @@ export const note = (...kids) => h("p", {class: "note"}, ...kids);
 /** The shared "마지막 갱신" stamp; app.js keeps its text, every screen head carries it. */
 export const stamp = h("span", {class: "dl-upd", "aria-live": "off"}, "마지막 갱신 —");
 
-/** Screen header: h1, the one-line sub, the 마지막 갱신 stamp on the right. */
+/** The menu screen being shown ({id, ko}; null for a page reached from a row: 계좌 자세히, 거래 차트). app.js sets it. */
+let PAGE = null;
+export function setPage(p) { PAGE = p; }
+
+/** Screen header: h1, the ☆ of a menu screen (favs.js), the one-line sub, the 마지막 갱신 stamp on the right. */
 export function screenHead(title, sub) {
-  return h("div", {class: "scr-head"}, h("h1", null, title), sub ? h("span", {class: "sub"}, sub) : null,
+  return h("div", {class: "scr-head"}, h("h1", null, title),
+    PAGE ? starBtn("page", PAGE.id, {label: PAGE.ko, cls: "dl-hstar"}) : null,
+    sub ? h("span", {class: "sub"}, sub) : null,
     h("span", {class: "grow"}), stamp);
 }
 

@@ -1382,3 +1382,208 @@ def test_part_a_screens_are_routed_and_build_dom_from_text_only():
         assert "/api/export" in src and "CSV 내려받기" in src, name
     trade = open(os.path.join(STATIC, "js", "screens", "trade.js"), encoding="utf-8").read()
     assert "query.at" in trade and "positions" in trade
+
+
+# ---------------------------------------------------------------- round 4 part B (CONTRACT 9.5-9.10, the shell)
+R4B_FILES = {"analysis": "analysis.json", "vs5y": "vs5y.json"}
+R4B_SCREENS = {"glance": "한눈 지도", "path": "졸업 길", "analysis": "분석", "strategies": "매매법", "vs5y": "5년 대비",
+               "whatif": "만약 실험실", "friend": "친구 계획", "leverage": "레버리지 비교", "ready": "실전 준비"}
+R4B_JS = ["app.js", "ui.js", "favs.js", "prefs.js", "find.js", "topbar.js", "g4.js", "skin-boot.js"] + \
+    [os.path.join("screens", n + ".js") for n in R4B_SCREENS]
+ROBUST_FLAGS = ("수익의 70% 이상이 거래 5건에서 나옴", "뒤 절반이 앞 절반보다 크게 나쁨", "번 코인이 7개 중 2개 이하", "연속 손실 ")
+
+
+def _app_js():
+    return open(os.path.join(STATIC, "js", "app.js"), encoding="utf-8").read()
+
+
+def test_r4b_routes_need_the_login_and_return_the_files(anon, client, folders):
+    for key, name in R4B_FILES.items():
+        r = anon.get(f"/api/{key}")
+        assert r.status_code == 401 and "accounts" not in r.text and "rows" not in r.text, key
+        r = client.get(f"/api/{key}")
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-store", key
+        assert r.json() == _file(folders, name), key
+        assert client.get(f"/api/{key}?x=1").status_code == 400, key
+    assert anon.get("/api/setting?strat=S2&tf=15m&c=0").status_code == 401
+    for method in ("post", "put", "delete"):
+        assert getattr(client, method)("/api/analysis").status_code == 405
+        assert getattr(client, method)("/api/setting?strat=S2&tf=15m&c=0").status_code == 405
+
+
+def test_r4b_files_missing_answer_missing(tmp_path):
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    c = TestClient(create_app(str(snap), None, SECRET, data_dir=str(tmp_path / "nodata")))
+    for key in R4B_FILES:
+        assert c.get(f"/api/{key}").json() == {"missing": True}, key
+    d = c.get("/api/setting?strat=N04&tf=30m&c=5").json()          # no rank file and no 5-year file
+    assert d["missing"] is True and d["rank"] is False and d["past5y"] is False and d["label"] == grid.combo_label("N04_ST_KLINGER", 5)
+    assert len(d["exits"]) == grid.NEXIT and all(e["w"] is None and e["past"] is None for e in d["exits"])
+
+
+def test_setting_matches_the_rank_rows(client):
+    c = grid.default_combo("S2_ST_ROC")
+    d = client.get(f"/api/setting?strat=S2&tf=15m&c={c}").json()
+    assert d["rank"] is True and d["past5y"] is True and d["missing"] is False and d["c"] == c
+    assert [e["i"] for e in d["exits"]] == list(range(grid.NEXIT)) and d["windows"] == list(grid.WINDOWS)
+    for e in (0, 5, grid.NEXIT - 1):
+        for w in grid.WINDOWS:
+            rk = client.get(f"/api/rank?strat=S2&tf=15m&exit={e}&window={w}&q={d['label']}&limit=200").json()
+            row = next(r for r in rk["rows"] if r["c"] == c)
+            cell = d["exits"][e]["w"][w]
+            for k in ("n", "wins", "win_rate", "mean_R", "mean_G", "mdd_R", "plateau", "min_ok", "beats_luck"):
+                assert cell[k] == row[k], (e, w, k)
+            assert cell["luck95"] == rk["luck95"]
+        assert d["exits"][e]["past"] == row["past"]
+    one = client.get(f"/api/setting?strat=S2_ST_ROC&tf=15m&c={c}&exit=3&scope=BTCUSD").json()
+    assert [e["i"] for e in one["exits"]] == [3] and one["scope"] == "BTCUSD"
+
+
+@pytest.mark.parametrize("query", [
+    "", "strat=S2&tf=15m", "strat=S9&tf=15m&c=1", "strat=S2&tf=1h&c=1", "strat=S2&tf=15m&c=343", "strat=N02&tf=15m&c=-1",
+    "strat=S2&tf=15m&c=1x", "strat=S2&tf=15m&c=1&exit=14", "strat=S2&tf=15m&c=1&exit=a", "strat=S2&tf=15m&c=1&scope=BTC",
+    "strat=S2&tf=15m&c=1&nope=1", "strat=S2&tf=15m&c=1&c=2", "strat=S2&tf=15m&c=" + "1" * 50,
+])
+def test_setting_bad_parameters_are_400(client, query):
+    assert client.get("/api/setting?" + query).status_code == 400
+
+
+def test_r4b_endpoints_write_nothing_and_grid_names_the_marked_combos(client, folders):
+    def listing():
+        return {p: os.stat(p).st_mtime_ns for p in glob.glob(os.path.join(folders["snap"], "**"), recursive=True)}
+    before = listing()
+    for path in ("/api/analysis", "/api/vs5y", "/api/setting?strat=N02&tf=30m&c=7", "/api/grid"):
+        assert client.get(path).status_code == 200, path
+    assert listing() == before
+    for s in client.get("/api/grid").json()["strategies"]:
+        strat = grid.LONG[s["short"]]
+        assert s["default_c"] == grid.default_combo(strat) and s["friend_c"] == grid.friend_combo(strat)
+        assert s["pick_c"] == {tf: grid.PICK[(strat, tf)] for tf in grid.TFS}
+
+
+def test_the_fake_writes_section_9_part_b_with_the_contract_shapes(folders):
+    accts = _file(folders, "accounts.json")["accounts"]
+    for a in accts:                                                            # 9.7
+        assert {"combo", "exit_i"} <= set(a)
+        if a["kind"] == "fixed":
+            assert isinstance(a["combo"], int) and 0 <= a["combo"] < grid.NCOMBO[a["strategy"]] and a["exit_i"] == 0
+            assert grid.combo_label(a["strategy"], a["combo"]) == a["setting_ko"]
+        else:
+            assert a["combo"] is None and a["exit_i"] is None
+    j = _file(folders, "judge.json")
+    for r in j["rows"]:
+        assert {"n", "mean_R", "luck_lim", "boot_low", "robust"} <= set(r)
+        line = next(a for a in accts if a["id"] == r["id"])["lines"][str(r["L"])]
+        assert r["n"] == line["trades"]
+        if r["n"]:
+            assert r["mean_R"] is not None and abs(r["mean_R"] - line["mean_R"]) < 2e-3
+        if r["n"] >= 2:
+            assert r["luck_lim"] is not None                                    # the flip pools have >= 30 trades
+        rb = r["robust"]                                                        # 9.10
+        assert set(rb) == {"n", "pnl", "top5_share", "half", "coins_up", "coins_traded", "max_lose_streak", "worst_day", "flags_ko"}
+        assert set(rb["half"]) == {"first_R", "second_R", "first_n", "second_n"} and rb["half"]["first_n"] + rb["half"]["second_n"] == rb["n"]
+        assert rb["n"] == r["n"] and 0 <= rb["coins_up"] <= rb["coins_traded"] <= len(grid.COINS)
+        assert (rb["top5_share"] is None) == (rb["pnl"] <= 0)
+        assert all(f.startswith(ROBUST_FLAGS) for f in rb["flags_ko"])
+        assert rb["worst_day"] is None or re.fullmatch(r"\d{4}-\d\d-\d\d", rb["worst_day"]["day"])
+    flagged = [r for r in j["rows"] if r["robust"]["flags_ko"]]
+    assert 0 < len(flagged) < len(j["rows"])                                    # some lines carry flags, some none
+    # the luck limit falls as the trade count grows (same timeframe and leverage)
+    lims = sorted((r["n"], r["luck_lim"]) for r in j["rows"] if r["id"].endswith("-15m") and r["L"] == 20 and r["luck_lim"] is not None)
+    assert lims[0][1] > lims[-1][1]
+    an = _file(folders, "analysis.json")                                        # 9.5
+    assert len(an["accounts"]) == len(accts) and {k["kind"] for k in an["kinds"]} == {a["kind"] for a in accts}
+    for x in an["accounts"] + an["kinds"]:
+        assert set(x["by_coin"]) == set(grid.COINS) and set(x["by_side"]) == {"long", "short"}
+        assert len(x["by_hour"]) == 24 and len(x["by_weekday"]) == 7
+        assert len(x["hw_n"]) == 7 and all(len(row) == 24 for row in x["hw_n"]) and len(x["hw_R"]) == 7
+        assert sum(map(sum, x["hw_n"])) == x["n"] == sum(b["n"] for b in x["by_hour"]) == sum(b["n"] for b in x["by_weekday"])
+        for d in range(7):
+            for k in range(24):
+                assert (x["hw_R"][d][k] is None) == (x["hw_n"][d][k] == 0)
+        for b in [*x["by_coin"].values(), *x["by_side"].values(), *x["by_hour"], *x["by_weekday"], *x["by_exit"].values()]:
+            assert set(b) == {"n", "mean_R", "pnl", "win_rate"} and (b["mean_R"] is None) == (b["n"] == 0)
+        assert sum(b["n"] for b in x["by_exit"].values()) == x["n"]
+    a0 = next(x for x in an["accounts"] if x["id"] == "fx-def-S2-15m")
+    assert a0["n"] == next(r for r in j["rows"] if r["id"] == "fx-def-S2-15m" and r["L"] == 20)["n"]
+    assert set(next(k for k in an["kinds"] if k["kind"] == "fixed")["by_tf"]) == set(grid.TFS)
+    v = _file(folders, "vs5y.json")                                            # 9.6
+    fixed = [a for a in accts if a["kind"] == "fixed"]
+    assert [r["id"] for r in v["rows"]] == [a["id"] for a in fixed]
+    with np.load(os.path.join(folders["data"], "past5y_S2_ST_ROC_15m.npz")) as z:
+        st = z["stats"]
+    for r in v["rows"]:
+        assert set(r["past"]) == {"2020", "2021-23", "2024-26", "2020-03", "2022-05", "2022-11"} and r["exit"] == 0
+        if r["live"]["mean_R"] is not None and r["past"]["2024-26"]["mean_R"] is not None:
+            assert abs(r["gap_R"] - (r["live"]["mean_R"] - r["past"]["2024-26"]["mean_R"])) < 2e-4
+        assert r["note_ko"]
+        if r["id"] == "fx-def-S2-15m":                                          # the written 5-year file is the one compared
+            assert r["past"]["2024-26"]["n"] == int(st[2, 0, 0, r["combo"], 0])
+
+
+def test_the_fake_is_deterministic_for_round_4_part_b(tmp_path, folders):
+    fake.build(str(tmp_path / "again"))                                        # no --past5y: vs5y.json is the same
+    for name in ("analysis.json", "vs5y.json", "judge.json", "accounts.json"):
+        with open(tmp_path / "again" / name, "rb") as a, open(os.path.join(folders["snap"], name), "rb") as b:
+            assert a.read() == b.read(), name
+
+
+def test_the_menu_lists_every_screen_in_groups_and_opens_the_terminal_when_there():
+    app_js = _app_js()
+    screens = dict(re.findall(r"(\w+): \"(\w+)\"", re.search(r"const SCREENS = \{([^}]*)\}", app_js).group(1)))
+    menu = re.search(r"const MENU = \[(.*?)\n\];", app_js, re.S).group(1)
+    ids = re.findall(r"\{id: \"(\w+)\"", menu)
+    # every screen of the app is reached from the menu (account and trade are opened from rows) and every entry routes
+    assert set(screens) - {"account", "trade"} <= set(ids) and set(ids) <= set(screens)
+    for name, ko in R4B_SCREENS.items():
+        assert screens.get(name) == name and f'ko: "{ko}"' in menu, name
+    for ko in ("홈", "순위표", "판정", "계좌", "비교", "코인별", "거래 기록", "설정 지도", "시장 국면", "실제 비용", "주간 회의록",
+               "관점 기록", "알림 기록", "서버 상태", "어떻게 돌아가나"):
+        assert f'ko: "{ko}"' in menu, ko
+    # groups: live (part A) first, then main / detail / info; an unknown group goes last; 어떻게 돌아가나 ends its group
+    assert re.search(r'const GROUPS = \[\{id: "live".*"main".*"detail".*"info"', app_js)
+    assert "ids[ids.length - 1]" in app_js and re.search(r'\{id: "howto", ko: "어떻게 돌아가나", group: "info", end: true\}', menu)
+    order = [i for i in ids]
+    assert order.index("judge") < order.index("path") < order.index("ready") and order.index("accounts") < order.index("map")
+    assert 'SCREENS.terminal ? "terminal" : "home"' in app_js and "START()" in app_js
+    index = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    assert 'href="#/"' in index and 'id="toptools"' in index and 'href="/static/demo4b.css"' in index
+
+
+def test_r4b_js_builds_dom_from_text_only_and_keeps_storage_in_try_catch():
+    for rel in R4B_JS:
+        p = os.path.join(STATIC, "js", rel)
+        src = open(p, encoding="utf-8").read()
+        if rel.startswith("screens"):
+            assert "export async function mount(" in src, rel
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{rel} uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, rel
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src), rel
+        if rel != "skin-boot.js":                                              # every storage access goes through dom.js local
+            assert "localStorage" not in src and "sessionStorage" not in src, rel
+    boot = open(os.path.join(STATIC, "js", "skin-boot.js"), encoding="utf-8").read()
+    assert "try {" in boot and "dl-text" not in boot and '"dl-" + k' in boot
+    top = open(os.path.join(STATIC, "js", "topbar.js"), encoding="utf-8").read()
+    # the sound is off until the viewer turns it on; the bell and 자는 동안 read the contract files
+    assert "local.get(SOUND_KEY, false) === true" in top and "AudioContext" in top
+    for path in ("/api/telegram", "/api/trades", "/api/home", "/api/judge"):
+        assert path in top, path
+    css = open(os.path.join(STATIC, "demo4b.css"), encoding="utf-8").read()
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css) and "rgb(" not in css and "hsl(" not in css
+    assert not re.search(r"url\(", css)
+
+
+def test_howto_has_the_glossary_and_the_round_4_screens():
+    src = open(os.path.join(STATIC, "js", "screens", "howto.js"), encoding="utf-8").read()
+    assert "용어집" in src
+    for term in ("R", "평균 R", "낙폭", "운 기준선", "부트스트랩 하한", "확인 기간", "정지 규칙", "bp", "펀딩", "강제청산", "진입 점검",
+                 "사다리 청산", "반익반본", "국면"):
+        assert re.search(r'\["' + re.escape(term) + r'( \(|")', src), term
+    for ko in R4B_SCREENS.values():
+        assert ko in src, ko
+    ready = open(os.path.join(STATIC, "js", "screens", "ready.js"), encoding="utf-8").read()
+    assert "실제 주문 연결" in ready and "두 분" in ready and "robust" in ready
+    path = open(os.path.join(STATIC, "js", "screens", "path.js"), encoding="utf-8").read()
+    assert "luck_lim" in path and "robustLine" in path
