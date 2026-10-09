@@ -52,7 +52,7 @@ export async function klines(sym, iv, from, to, onProg = null, ctx = null) {
   const onReq = (n, msg) => { got += n; onProg?.(need ? Math.min(1, got / need) : 1, msg || `${iv} 캔들 받는 중 ${got}/${need}`); };
   if (parts.length) {
     const before = [], after = [];
-    for (const [x, y] of parts) { const rows = await fetchPart(sym, iv, x, y, onReq, ctx); (C && x < C.from ? before : after).push(...rows); }
+    for (const [x, y] of parts) { const rows = await fetchPart(sym, iv, x, y, onReq, ctx), dst = C && x < C.from ? before : after; for (const r of rows) dst.push(r); }   // push(...rows) 는 5년 15분봉(17만 개)에서 '호출 스택 초과' — 하나씩
     let rows = [...before, ...(C ? colRows(C) : []), ...after].sort((p, q) => p[0] - q[0]);
     rows = rows.filter((r, i) => i === 0 || r[0] !== rows[i - 1][0]).filter(r => r[0] + step <= now);   // 중복 제거 · 아직 안 끝난 봉 제외
     const cols = toCols(rows);

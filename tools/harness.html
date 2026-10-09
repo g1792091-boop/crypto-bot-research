@@ -87,6 +87,19 @@ try {
     R().querySelector("[data-olgo]").click(); const t = Date.now(); while (Date.now() - t < 200e3 && !/끝|❌/.test(R().querySelector("[data-olprog]")?.textContent || "")) await new Promise(r => setTimeout(r, 500));
     out.prog = R().querySelector("[data-olprog]").textContent; R().scrollTop = 0;
     document.title = "DONE"; await new Promise(r => setTimeout(r, 60e3)); }
+  if (q === "opt5y") {   // 🔬 사용자 화면 그대로: BTC · 5년 · 15분·30분·1시간 · 30/40/50배 · 조합 4개 → 끝까지(5년 15분봉 17만 개 받기 = '호출 스택 초과'가 났던 경로)
+    const UI = await import("../gh-coin/optlab-ui.js"), OL = await import("../gh-coin/optlab.js"); UI.openOptLab({}); const R = () => document.getElementById("optlab");
+    R().querySelector('[data-olcoin="BTCUSDT"]').click(); R().querySelector('[data-olpre="1826"]').click();
+    out.est = R().querySelector("[data-olest]").innerText; const t0 = Date.now(); R().querySelector("[data-olgo]").click(); let last = "";
+    while (Date.now() - t0 < 900e3) { const t = R().querySelector("[data-olprog]")?.textContent || ""; if (t !== last) { last = t; document.title = "RUN " + t.slice(0, 40); } if (/끝|❌/.test(t)) break; await new Promise(r => setTimeout(r, 1000)); }
+    out.sec = Math.round((Date.now() - t0) / 1000); out.prog = R().querySelector("[data-olprog]").textContent;
+    out.head = (R().querySelector("[data-olres] .ol-sec")?.innerText || "").slice(0, 300); out.sum = R().querySelector("[data-olres] .ol-sum")?.innerText || "";
+    out.best = [...R().querySelectorAll("[data-olres] .ol-t")[0]?.querySelectorAll("tr") || []].slice(1).map(tr => tr.innerText.replace(/\s+/g, " ").slice(0, 170));
+    const run = OL.runs()[0]; out.run = run && { ko: run.ko, n: run.n, pass: run.pass, ms: run.ms };
+    // 두 번째: 저장된 캔들로(요청 거의 없이) 다시
+    const t1 = Date.now(); R().querySelector("[data-olgo]").click(); await new Promise(r => setTimeout(r, 500));
+    while (Date.now() - t1 < 600e3) { const t = R().querySelector("[data-olprog]")?.textContent || ""; if (/끝|❌/.test(t)) break; await new Promise(r => setTimeout(r, 1000)); }
+    out.sec2 = Math.round((Date.now() - t1) / 1000); out.prog2 = R().querySelector("[data-olprog]").textContent; UI.closeOptLab(); }
   if (q === "optui") {   // 🔬 창 끝까지: 열기 → ETH · 3개월 · 실행(실제 바이낸스 캔들) → 결과 표 → 연구소 적용 → 새 코인(ADA) 적용·해제
     localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom");
     const UI = await import("../gh-coin/optlab-ui.js"), OL = await import("../gh-coin/optlab.js"), LAB = await import("../gh-coin/combolab.js");
