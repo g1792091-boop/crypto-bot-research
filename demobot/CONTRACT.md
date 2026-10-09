@@ -459,3 +459,73 @@ The demo lab runs on the rule bot's server. `status.json` gains `"server": {"mem
 "swap_used_mb": 0.0, "load": [1.0, 1.0, 1.0], "cpus": 4, "rule_bot": [{"unit": "paperbot-live3.service",
 "active": "active", "mem_mb": 0.0}]}` (refreshed at most every 5 minutes; any field may be null; `rule_bot` lists
 the rule bot's main services that exist). The status screen shows whether the rule bot still has room.
+
+## 9. Round 4 (10/09 night, owners: a terminal like the rule bot's v4 and every useful screen)
+
+Same rules as section 8: additive, read-only, a missing file or field shows "준비 중" / "기록 없음". New engine
+snapshot files are written every tick by the engine; live market data is read by the dashboard server itself from
+Binance public endpoints (no key), with caching, never by the browser (CSP stays `connect-src 'self'`).
+
+### 9.1 Live market data (dashboard server, cached; `demobot/dash/live.py`)
+* `GET /api/live` -> `{"generated_ms", "coins": [{"coin": "BTCUSD", "price": 0.0, "change_pct": 0.0,
+  "quote_volume": 0.0, "high": 0.0, "low": 0.0, "mark": 0.0, "funding_rate": 0.0, "next_funding_ms": 0,
+  "open_interest": 0.0, "ok": true}]}` from `/fapi/v1/ticker/24hr`, `/fapi/v1/premiumIndex`,
+  `/fapi/v1/openInterest` (per symbol). Cache 5 s; on a Binance error the last good answer with `"stale": true`.
+* `GET /api/klines?coin=BTCUSD&tf=1m|5m|15m|30m|1h|4h|1d&limit=1..1000` -> `{"coin", "tf", "bars": {"t": [ms], "o": [],
+  "h": [], "l": [], "c": [], "v": []}}` from `/fapi/v1/klines`. Cache 10 s per (coin, tf, limit). Whitelists.
+* `GET /api/market` -> per coin: funding (last 3 x 8 h), open interest now and 24 h change, global long/short account
+  ratio (1 h, last 24) from `/futures/data/globalLongShortAccountRatio`, 24 h change. Cache 60 s.
+* All Binance calls: `https://fapi.binance.com` only, timeout 5 s, at most 4 requests per second overall from the
+  dashboard, `User-Agent: demobot-dash`. Nothing is written to disk.
+
+### 9.2 `positions.json` (engine)
+`{"generated_ms": 0, "positions": [{"id": "fx-def-S2-15m", "name": "...", "kind": "fixed", "L": 20, "coin": "BTCUSD",
+"side": 1, "tf": "15m", "entry_ms": 0, "entry": 0.0, "stop": 0.0, "target": null, "margin": 0.0, "notional": 0.0,
+"unreal": 0.0, "roe": 0.0, "R": 0.0, "last": 0.0, "stop_dist_pct": 0.0, "held_ms": 0, "setting_ko": "...",
+"exit_ko": "..."}], "by_coin": [{"coin": "BTCUSD", "long": 0, "short": 0, "unreal": 0.0}]}` every open position of every
+plain line (stop-rule lines excluded). `target` = entry + side x TP x |entry - stop| for the fixed "익절 xR" exits,
+else null. `last` = the last closed 15m close.
+
+### 9.3 `calendar.json` (engine)
+`{"generated_ms": 0, "days": [{"day": "2026-10-10", "trades": 0, "wins": 0, "pnl_sum": 0.0, "lines_up": 0,
+"lines_down": 0, "by_kind": [{"kind": "fixed", "kind_ko": "고정", "mean_pnl_pct": 0.0}], "best": {"id": "", "name": "",
+"L": 20, "pnl": 0.0}, "worst": {}}]}` per KST day since the live start (closed trades by exit time; `pnl_sum` over all
+plain lines; `mean_pnl_pct` = mean over the kind's lines of the day's P&L / $1,000 x 100). `acct/<id>.json` gains
+`"daily": {"2026-10-10": {"20": 0.0, "30": 0.0, "40": 0.0, "50": 0.0}}` (P&L per KST day per line).
+`home.json` gains `"equity_total": [[t_ms, v]]`: the sum of all plain lines' equity (one point per closed bar of the
+curves, downsampled to 800) for the terminal's P&L chart.
+
+### 9.4 `signals_now.json` (engine)
+`{"generated_ms": 0, "bar_ms": {"15m": 0, "30m": 0}, "votes": [{"coin": "BTCUSD", "tf": "15m", "strategy": "S2_ST_ROC",
+"settings": 343, "long": 0, "short": 0, "history": [[t_ms, long, short]]}], "recent": [{"t_ms": 0, "coin": "BTCUSD",
+"tf": "15m", "side": 1, "accounts": [{"id": "", "name": "", "setting_ko": ""}]}]}`. `long`/`short`: settings whose
+signal fired at the last closed bar of that timeframe; `history`: the last 96 bars. `recent`: signals of the
+accounts' active settings in the last 24 h (newest first, at most 200).
+
+### 9.5 `analysis.json` (engine)
+Per account (its 20x line for R and P&L; the entries are the same on all lines up to skipped ones) and per kind:
+`{"generated_ms": 0, "accounts": [{"id": "", "name": "", "kind": "", "n": 0, "by_coin": {"BTCUSD": {"n": 0, "mean_R": null,
+"pnl": 0.0, "win_rate": null}}, "by_side": {"long": {}, "short": {}}, "by_hour": [{} x 24 (KST entry hour)],
+"by_weekday": [{} x 7 (KST, Monday first)], "by_tf": {}, "by_exit": {"익절": {}, ...reason labels...}}],
+"kinds": [same shape with "kind", "kind_ko"]}`. Buckets with n = 0 have `mean_R: null`.
+
+### 9.6 `vs5y.json` (engine)
+For every fixed account (and the current setting of every adaptive account, all coins together):
+`{"generated_ms": 0, "rows": [{"id": "", "name": "", "strategy": "S2_ST_ROC", "tf": "15m", "combo": 0, "exit": 0,
+"setting_ko": "", "exit_ko": "", "live": {"n": 0, "mean_R": null, "win_rate": null},
+"past": {"2020": {"n": 0, "mean_R": null, "win_rate": null}, "2021-23": {}, "2024-26": {}, "2020-03": {}, "2022-05": {},
+"2022-11": {}}, "gap_R": null, "note_ko": "..."}]}` (`live` from the 20x line's closed trades; `gap_R` = live mean R
+minus the 2024-26 mean R; `note_ko` e.g. "5년 시험과 비슷" / "5년 시험보다 나쁨" with |gap| < 0.1R = 비슷).
+
+### 9.7 Fields added to existing files
+* `accounts.json` account rows: `"combo": int|null`, `"exit_i": int|null` (fixed accounts; null otherwise).
+* `judge.json` rows: `"n": int, "mean_R": float|null, "luck_lim": float|null, "boot_low": float|null`
+  (the numbers behind checks 1, 2 and 5) for the luck map.
+
+### 9.8 Screens (dashboard)
+Terminal ("터미널"), positions ("포지션"), multi-chart ("여러 차트"), market ("시장"), signal votes inside the terminal
+and on their own screen ("신호"), one-glance map ("한눈 지도"), graduation path + luck map ("졸업 길"), analysis
+("분석"), strategy cards ("매매법"), 5-year vs now ("5년 대비"), what-if lab ("만약 실험실": a fixed account's setting
+under all 14 exits from the rank arrays of the live window, and its 4 leverage lines side by side), and the v4-style
+top bar (font size, menu position top/left, favourites, search with "/", "자는 동안" since the last visit, alert bell
+from telegram.json, new-trade sound off by default, D+n strip with the goal stage and the next-tick countdown).
