@@ -1,0 +1,50 @@
+# Demo lab bot ("데모 랩") engine: 48 paper accounts on Binance public market data (demobot/CONTRACT.md).
+# Never places an order, needs no exchange key. Fully separate from the rule bot: its own user, code copy, venv,
+# database (/var/lib/demobot/demo.db) and Telegram bot. The rule bot's folders are made invisible here.
+# Installed by deploy/demobot/install_demobot.sh; on/off: deploy/demobot/on.sh, off.sh.
+[Unit]
+Description=demobot demo lab engine (paper only, no orders)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=demobot
+Group=demobot
+UMask=0027
+WorkingDirectory=/opt/demobot/app
+EnvironmentFile=/etc/demobot/demobot.env
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# the engine never needs the dashboard's login values
+UnsetEnvironment=DEMOBOT_DASH_PASSWORD_HASH DEMOBOT_DASH_SECRET
+ExecStart=/opt/demobot/venv/bin/python -m demobot run
+Restart=always
+RestartSec=20
+KillMode=mixed
+TimeoutStopSec=60
+# A guest on the rule bot's server: low priority, at most 30% of one CPU, hard memory cap.
+Nice=10
+CPUQuota=30%
+MemoryHigh=700M
+MemoryMax=900M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# Sandbox: read-only system, writes only its own folder.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/demobot
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

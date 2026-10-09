@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko" data-skin="ai">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데모 랩 로그인</title>
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/login.css">
+<script src="/static/login.js" defer></script>
+</head>
+<body>
+<form id="f" class="lg-box" method="post" action="/login">
+  <p class="lg-badge">데모 랩</p>
+  <h1>데모 랩 로그인</h1>
+  <p class="lg-sec">주문 없이 설정을 시험하는 연습 봇 · 규칙봇과 다른 대시보드입니다</p>
+  <label class="lg-k" for="pw">비밀번호</label>
+  <input id="pw" name="password" type="password" autocomplete="current-password" required maxlength="1024">
+  <input id="next" name="next" type="hidden" value="/">
+  <button class="lg-go" type="submit">로그인</button>
+  <p id="err" class="lg-err" role="alert"></p>
+</form>
+</body>
+</html>

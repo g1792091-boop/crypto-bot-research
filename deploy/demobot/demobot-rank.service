@@ -1,0 +1,42 @@
+# Demo lab bot ("데모 랩") hourly ranking ("순위표"): one pass of `python -m demobot rank`, started by
+# demobot-rank.timer (minute 7 of every hour). Reads demo.db, writes rank_*.npz + rank_meta.json into the snapshot
+# folder, then exits (about 2-4 minutes of CPU, peak about 700 MB). Same user, sandbox and env file as the engine;
+# lower priority than the engine and much lower than the rule bot. Never places an order.
+[Unit]
+Description=demobot demo lab hourly ranking (one pass)
+
+[Service]
+Type=oneshot
+User=demobot
+Group=demobot
+UMask=0027
+WorkingDirectory=/opt/demobot/app
+EnvironmentFile=/etc/demobot/demobot.env
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# the ranking never needs the dashboard's login values
+UnsetEnvironment=DEMOBOT_DASH_PASSWORD_HASH DEMOBOT_DASH_SECRET
+ExecStart=/opt/demobot/venv/bin/python -m demobot rank
+TimeoutStartSec=40min
+KillMode=mixed
+# A guest on the rule bot's server: lowest priority, at most half of one CPU, hard memory cap.
+Nice=15
+CPUQuota=50%
+MemoryHigh=800M
+MemoryMax=1000M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# Sandbox: read-only system, writes only its own folder.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/demobot
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot

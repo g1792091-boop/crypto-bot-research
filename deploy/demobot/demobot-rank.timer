@@ -1,0 +1,16 @@
+# Demo lab bot ("데모 랩"): the hourly ranking at minute 7 of every hour (after the 15-minute close at :00 has been
+# processed), and once 10 minutes after a boot. A missed hour is not caught up (the next one replaces it).
+# Enabled by install_demobot.sh / on.sh once the first fill is done; off.sh turns it off.
+[Unit]
+Description=demobot demo lab hourly ranking
+
+[Timer]
+OnCalendar=*-*-* *:07:00
+OnBootSec=10min
+Persistent=false
+RandomizedDelaySec=0
+AccuracySec=1min
+Unit=demobot-rank.service
+
+[Install]
+WantedBy=timers.target

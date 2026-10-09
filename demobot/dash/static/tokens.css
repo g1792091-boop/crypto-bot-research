@@ -1,0 +1,313 @@
+/* Copied unchanged from paperbot/dash/static/v4/tokens.css (the demo lab dashboard keeps the rule bot's look and both skins).
+   Do not edit this copy: the demo lab's own rules live in demo.css. */
+/* Paper v4 dashboard: design tokens. Every colour a screen uses comes from here: screens never write a hex value.
+   Fonts are Google Fonts with system fallbacks (the page works without them).
+   Two skins (core/skin.js puts the viewer's choice on <html data-skin>, remembered per device):
+     "ai"      the default (owners, 10/05: "미래 AI 느낌"): charcoal panels, a teal accent, mint up / pink down, a faint
+               white grid and soft teal / pink corner glows (the block at the end of this file)
+     "classic" the first owner-approved look: dark navy, ONE warm yellow accent (the :root block below)
+   Only the chrome changes. The pixel office scene (wood, walls, desks, figures, bubbles, clocks) is the same in both, so
+   the office stays pixel art. Green / red (up / down) only for meaning in both skins. */
+:root {
+  color-scheme: dark;
+  /* surfaces */
+  --bg: #0a1020;
+  --dot: #141d34;
+  --frame: #0d1528;
+  --surface: #111a30;
+  --surface-2: #17223b;
+  --surface-3: #1d2a47;
+  --line: #1f2b47;
+  --line-2: #2d3c60;
+  /* ink */
+  --ink: #eef2f9;
+  --ink-2: #bec7d9;
+  --muted: #97a3bd;
+  /* the one accent */
+  --accent: #f6c445;
+  --accent-hi: #ffd977;
+  --accent-ink: #1d1600;
+  --accent-soft: rgba(246, 196, 69, .12);
+  --accent-line: rgba(246, 196, 69, .5);
+  --accent-glow: rgba(246, 196, 69, .26);
+  /* meaning only */
+  --up: #34d39a;
+  --up-soft: rgba(52, 211, 154, .13);
+  --up-line: rgba(52, 211, 154, .45);
+  --down: #f4646b;
+  --down-soft: rgba(244, 100, 107, .13);
+  --down-line: rgba(244, 100, 107, .45);
+  --warn: #f39a3d;
+  --warn-soft: rgba(243, 154, 61, .14);
+  --warn-line: rgba(243, 154, 61, .45);
+  --amber-soft: rgba(243, 172, 61, .11);
+  --amber-line: rgba(243, 172, 61, .42);
+  --amber-ink: #f5d9a0;
+  --flash: rgba(246, 196, 69, .26);
+  /* glow (wave 2, core/motion.js flashPrice / pulseLive and the panel edge light in components.css) */
+  --up-glow: rgba(52, 211, 154, .55);
+  --down-glow: rgba(244, 100, 107, .55);
+  --live-glow: rgba(52, 211, 154, .5);
+  --edge: var(--line);
+  --edge-hi: var(--accent-line);
+  --edge-glow: transparent;
+  --shim-a: #17223b;
+  --shim-b: #263459;
+  /* the chart deck (core/chartfx.js, core/smcdraw.js). 클래식 stays plain: no ambient / flash / glow there, so those
+     tokens are transparent in this block; the lines, volume and 프리미엄 지표 colours are used by both skins */
+  --amb-up: transparent;
+  --amb-down: transparent;
+  --amb-up-edge: transparent;
+  --amb-down-edge: transparent;
+  --amb-up-seam: transparent;
+  --amb-down-seam: transparent;
+  --amb-up-ink: var(--muted);
+  --amb-down-ink: var(--muted);
+  --flash-up: transparent;
+  --flash-down: transparent;
+  --flash-accent: transparent;
+  --depth-top: transparent;
+  --depth-bot: transparent;
+  --vol-up: rgba(52, 211, 154, .28);
+  --vol-down: rgba(244, 100, 107, .28);
+  --pill-bg: rgba(13, 21, 40, .88);
+  --smc-ob: #f39a3d;
+  --smc-fvg: #f0cf72;
+  --smc-liq: #c9d3e6;
+  --smc-bos: #7aa2ff;
+  --smc-choch: #f39a3d;
+  --smc-trend: #c9d3e6;
+  --smc-prem: #f4646b;
+  --smc-disc: #34d39a;
+  --smc-ote: #f39a3d;
+  /* chrome that used to be written in base.css: the phone tab bar and the tour's dimmed page */
+  --botbar: rgba(13, 21, 40, .97);
+  --scrim: rgba(4, 8, 18, .72);
+  /* the neutral pair of a coin-flip comparison (참고, never a pass or fail): above / below (grid-kit cells) */
+  --cmp-hi: var(--accent);
+  --cmp-lo: var(--term-cyan);
+  /* critical banner */
+  --crit-bg: #3a0d14;
+  --crit-line: #f4646b;
+  --crit-ink: #ffe3e5;
+  /* agent console */
+  --glass: rgba(10, 16, 32, .94);    /* sticky bars over the page (top bar, analysis tabs) */
+  --console: #0a1120;
+  --console-line: #24304d;
+  --console-tab: #24345a;
+  --term-yellow: #f0cf72;
+  --term-cyan: #6fd3ff;
+  /* LED balance bar */
+  --led-bg: #06170f;
+  --led-line: #1c4a33;
+  --led-green: #45d98a;
+  --led-digit: #f6c445;
+  --led-dim: #7f9e8b;   /* captions on the LED boxes (.led-cap, 흐름 .fl-when): 4.8:1 or more on every surface in both skins */
+  /* pixel office */
+  --wood: #a9855a;
+  --wood-2: #a27f55;
+  --wood-seam: #8f6e48;
+  --wall: #4b3624;
+  --wall-dark: #2b1f15;
+  --plate: #131926;
+  --plate-line: #3a4559;
+  --plate-ink: #eef1f6;
+  --desk: #6c4a2e;
+  --desk-top: #8b6343;
+  --monitor: #1b2130;
+  --screen: #4fd38f;
+  --table: #7d5838;
+  --table-edge: #563b24;
+  --bubble: #fbfaf4;
+  --bubble-ink: #141821;
+  --bubble-line: #141821;
+  --bubble-shadow: rgba(10, 16, 32, .45);
+  --sky: #8fc3e8;
+  --sun: #f7d56e;
+  --city: #2d405e;
+  --window-frame: #5b4431;
+  /* the window by Korea time (wave 2 ⑧, core/figure.js skyPhase): dawn / dusk / night skies, low sun, moon, stars */
+  --sky-glow: #f3c79a;
+  --sky-dawn: #b9b3dc;
+  --sky-dusk: #6f5a94;
+  --sky-dusk-glow: #ef9563;
+  --sky-night: #142146;
+  --sun-low: #f59a52;
+  --moon: #f1e6bd;
+  --star: #e9eefb;
+  --city-night: #0c1426;
+  --city-lit: #f7d56e;
+  --clock-face: #f3efe4;
+  --clock-rim: #262c3a;
+  --clock-hand: #1a1f2b;
+  /* pixel figures (core/figure.js) */
+  --px-hair: #3b2b20;
+  --px-skin: #f0c8a0;
+  --px-eye: #1b1b1b;
+  --px-leg: #3a4350;
+  --px-foot: #1d2228;
+  --px-spec: #8b95a3;
+  --px-owner: #27314b;
+  --px-sat: 62%;
+  --px-lit: 52%;
+  /* avatars coloured by hue: hsl(var(--h) ...) */
+  --av-s: 45%; --av-bg-l: 21%; --av-ring-l: 58%; --av-ink-l: 82%; --av-line-l: 34%;
+  /* one fixed colour per group in every chart (race, calendar, group cards, 1:3 card); identity is never colour alone:
+     every line is also named. 동전 봇 = grey: the baseline */
+  --series-core: var(--accent);
+  --series-ds: var(--term-cyan);
+  --series-m5: hsl(300 var(--av-s) var(--av-ring-l));
+  --series-coin: var(--ink-2);
+  /* 매매법 비교 (conv-b, screens/compare.js): the 2-4 picks' lines, each also named and drawn in its own dash; they
+     follow the skin through the tokens they point at (never up / down) */
+  --pick-1: var(--series-core);
+  --pick-2: var(--series-ds);
+  --pick-3: rgb(196, 100, 196);   /* = --series-m5 (hsl(300 45% 58%), the avatars are one set for both skins) written as rgb: lightweight-charts throws on hsl() */
+  --pick-4: var(--smc-bos);
+  /* 차트 그리기 (conv-b, screens/draw-kit.js): the viewer's own lines / boxes / notes, in a hue nothing else on a
+     chart uses (not up / down, not the accent, not the 프리미엄 지표 blues and greys) */
+  --draw: rgb(196, 100, 196);
+  /* type: one scale */
+  --f-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif;
+  --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-pixel: "Silkscreen", "Nanum Gothic Coding", ui-monospace, monospace;
+  --f-led: "VT323", "Nanum Gothic Coding", ui-monospace, monospace;
+  /* type scale (owners 10/06: "예전 대시보드보다 글자가 작다"): no visible text below 12px (--t-2xs), tables and lists
+     13-14px, every font size in v4 css is one of these tokens (or calc(Npx * var(--ts)) for the big LED digits), so the
+     글자 크기 control (core/textsize.js, <html data-text="md|lg|xl">, the blocks at the end of this file) scales all of it */
+  --ts: 1;
+  --t-2xs: 12px;
+  --t-xs: 13px;
+  --t-sm: 14px;
+  --t-md: 15.5px;
+  --t-lg: 19px;
+  --t-xl: 26px;
+  --t-2xl: 36px;
+  --t-led: 50px;
+  /* radii, spacing, motion */
+  --r-xl: 26px;
+  --r-lg: 18px;
+  --r-md: 12px;
+  --r-sm: 8px;
+  --gap: 12px;
+  --gutter: 16px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --t-fast: .18s;      /* screen / tab transitions */
+  --t-count: 600ms;    /* number count-to (core/motion.js reads its own constant) */
+  /* shell */
+  --top-h: 56px;
+  --sub-h: 44px;
+  --bot-h: 62px;       /* phone bottom tab bar (plus the safe area) */
+  --page-max: 1320px;
+}
+
+/* ---------------------------------------------------------------- skin "ai" (the default; "classic" = the block above)
+   Sampled from the owners' reference (10/05): charcoal #121519 / panels #1a1e23, teal accent, mint up, pink down.
+   Text contrast on the panels (#1a1e23 / #1f242a): ink 13.9 / 12.9, ink-2 9.4 / 8.8, muted 6.6 / 6.2, accent 7.6 / 7.1,
+   up 7.9 / 7.4, down 5.0 / 4.7 (WCAG AA for small text is 4.5). The reference's pink #f2496f is lifted a touch to
+   #f4517a so a loss stays readable on the lighter panel. */
+:root:not([data-skin="classic"]) {
+  --bg: #121519;
+  --dot: rgba(255, 255, 255, .035);
+  --frame: #15181d;
+  --surface: #1a1e23;
+  --surface-2: #1f242a;
+  --surface-3: #262c33;
+  --line: #262c33;
+  --line-2: #313841;
+  --ink: #e7eaee;
+  --ink-2: #bcc3cc;
+  --muted: #9aa4b0;
+  --accent: #19c3b1;
+  --accent-hi: #5fe0d2;
+  --accent-ink: #001512;
+  --accent-soft: rgba(25, 195, 177, .12);
+  --accent-line: rgba(25, 195, 177, .45);
+  --accent-glow: rgba(25, 195, 177, .28);
+  --up: #22c9a4;
+  --up-soft: rgba(34, 201, 164, .12);
+  --up-line: rgba(34, 201, 164, .45);
+  --down: #f4517a;
+  --down-soft: rgba(244, 81, 122, .12);
+  --down-line: rgba(244, 81, 122, .45);
+  --warn: #f5a524;
+  --flash: rgba(25, 195, 177, .20);
+  /* glow: a price that moved, the live dot, the thin teal edge light on panels (brighter on hover / focus) */
+  --up-glow: rgba(34, 201, 164, .62);
+  --down-glow: rgba(244, 81, 122, .62);
+  --live-glow: rgba(34, 201, 164, .55);
+  --edge: rgba(25, 195, 177, .16);
+  --edge-hi: rgba(25, 195, 177, .5);
+  --edge-glow: rgba(25, 195, 177, .14);
+  --shim-a: #1f242a;
+  --shim-b: #2a3139;
+  --glass: rgba(18, 21, 25, .93);
+  --botbar: rgba(18, 21, 25, .97);
+  --scrim: rgba(8, 10, 12, .74);
+  --console: #111418;
+  --console-line: #262c33;
+  --console-tab: #1f2a2c;
+  --term-yellow: #f5c46b;
+  --term-cyan: #4fd8c8;
+  --led-bg: #0c1714;
+  --led-line: #18352e;
+  --led-green: #2fe0b0;
+  --led-digit: #19c3b1;
+  --plate: #171b20;
+  --plate-line: #2c3a3c;
+  /* the accent is teal here, so the groups and the comparison pair keep their own hues: 기존 36 stays yellow,
+     딥시크 cyan, 5분봉 magenta, 동전 봇 grey; above / below the coin flips = yellow / blue (colour-blind safe, never
+     the mint / pink of money up / down) */
+  --series-core: #f5c46b;
+  --series-ds: #4fd8c8;
+  --cmp-hi: #f5c46b;
+  --cmp-lo: #7aa2ff;
+  /* the skin's own light: a faint 40 px grid, two corner glows, a hairline ring around cards (base.css) */
+  --skin-grid: rgba(255, 255, 255, .028);
+  --skin-glow-a: rgba(25, 195, 177, .07);
+  --skin-glow-b: rgba(242, 73, 111, .05);
+  --card-ring: rgba(25, 195, 177, .05);
+  --card-shadow: rgba(0, 0, 0, .35);
+  --head-glow: rgba(25, 195, 177, .18);
+  /* the chart deck's light (owners' reference terminal): the Premium half of the pane (above the dealing range's middle) red,
+     the Discount half sky blue (strongest at the outer edges, -seam: the faint end at the split); a real big trade /
+     liquidation flashes the whole pane in the same hues. The halves blink (core/blink.js): these are a strong blink's
+     peak (layer opacity 1); '계속 켜짐' shows them at 0.56, the old steady strength (.22 / .24) */
+  --amb-up: rgba(56, 189, 248, .40);
+  --amb-down: rgba(244, 63, 94, .43);
+  --amb-up-edge: rgba(56, 189, 248, .54);
+  --amb-down-edge: rgba(244, 63, 94, .59);
+  --amb-up-seam: rgba(56, 189, 248, .09);
+  --amb-down-seam: rgba(244, 63, 94, .09);
+  --amb-up-ink: #38bdf8;
+  --amb-down-ink: #f43f5e;
+  --flash-up: rgba(56, 200, 248, .40);
+  --flash-down: rgba(244, 63, 94, .42);
+  --flash-accent: rgba(25, 195, 177, .30);
+  --depth-top: rgba(255, 255, 255, .025);
+  --depth-bot: rgba(0, 0, 0, .22);
+  --vol-up: rgba(34, 201, 164, .26);
+  --vol-down: rgba(244, 81, 122, .26);
+  --pill-bg: rgba(18, 21, 25, .86);
+  --smc-ob: #f5a524;
+  --smc-fvg: #f5d76b;
+  --smc-liq: #d6dde5;
+  --smc-bos: #6ea8ff;
+  --smc-choch: #f5a524;
+  --smc-trend: #d6dde5;
+  --smc-prem: #f4517a;
+  --smc-disc: #22c9a4;
+  --smc-ote: #f5a524;
+}
+
+/* ---------------------------------------------------------------- 글자 크기 (core/textsize.js, per device)
+   보통 = the scale above; 크게 about 112 %; 아주 크게 about 125 %. Every v4 font size reads these tokens. */
+html[data-text="md"] { --ts: 1; }
+html[data-text="lg"] {
+  --ts: 1.12;
+  --t-2xs: 13.5px; --t-xs: 14.5px; --t-sm: 15.5px; --t-md: 17.5px; --t-lg: 21px; --t-xl: 29px; --t-2xl: 40px; --t-led: 56px;
+}
+html[data-text="xl"] {
+  --ts: 1.25;
+  --t-2xs: 15px; --t-xs: 16px; --t-sm: 17.5px; --t-md: 19.5px; --t-lg: 24px; --t-xl: 32.5px; --t-2xl: 45px; --t-led: 62px;
+}

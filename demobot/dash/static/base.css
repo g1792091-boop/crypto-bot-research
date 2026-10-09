@@ -1,0 +1,158 @@
+/* Copied unchanged from paperbot/dash/static/v4/base.css (the demo lab dashboard keeps the rule bot's look and both skins).
+   Do not edit this copy: the demo lab's own rules live in demo.css. */
+/* Paper v4 dashboard: reset, type and the shell (top bar, the menu strip, phone bottom bar, the D+n chip,
+   the health dot, the critical banner, the screen container, toast, tour). Components: components.css. */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--top-h) + var(--sub-h) + 8px); }
+body {
+  margin: 0; min-height: 100vh; color: var(--ink); background-color: var(--bg);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.4px); background-size: 24px 24px;
+  font: 400 var(--t-md)/1.6 var(--f-body); font-variant-numeric: tabular-nums;
+  word-break: keep-all; overflow-wrap: break-word; -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+/* a <small> without its own size never drops below the 12px floor (the browser default is "smaller") */
+small { font-size: max(var(--t-2xs), .86em); }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+a { color: var(--accent); }
+img, svg { max-width: 100%; }
+:where(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3, h4, p { margin: 0; }
+em { font-style: normal; color: var(--accent); }
+.up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); } .ink2 { color: var(--ink-2); }
+.accent { color: var(--accent); } .warn-t { color: var(--warn); }
+.grow { flex: 1 1 auto; }
+.mono { font-family: var(--f-term); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: -999px; top: 0; z-index: 100; padding: 8px 12px; background: var(--accent); color: var(--accent-ink); }
+.skip:focus { left: 8px; top: 8px; }
+.row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row.wrap { flex-wrap: wrap; }
+.stack { display: grid; gap: var(--gap); min-width: 0; align-content: start; }
+.stack.tight { gap: 6px; }
+.grid2 { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); }
+.grid3 { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------------------------------------------------------------- shell: top */
+.shell-top { position: sticky; top: 0; z-index: 30; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: 10px; height: var(--top-h); max-width: var(--page-max); margin-inline: auto; padding-inline: var(--gutter); min-width: 0; }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font: 700 var(--t-sm)/1 var(--f-pixel); letter-spacing: .06em; white-space: nowrap; }
+.brand .bic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); }
+.brand b { color: var(--accent); font-weight: 700; }
+.brand-t { display: none; }
+@media (min-width: 420px) { .brand-t { display: inline; } }
+/* a 1200-1439 px window with the menu on top and 아주 크게: the top bar's settings leave the D+n chip too little room
+   (its "관찰 ~날짜" was cut), so the brand keeps only its mark there */
+@media (min-width: 1200px) and (max-width: 1439px) { :root[data-text="xl"]:not([data-nav="left"]) .brand-t { display: none; } }
+
+/* the one-line D+n chip and its rules panel */
+.dchip { appearance: none; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--ink); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dchip b { color: var(--accent); font-family: var(--f-pixel); font-weight: 700; }
+.dchip .car { color: var(--accent); transition: transform var(--t-fast) var(--ease); }
+.dchip[aria-expanded="true"] .car { transform: rotate(180deg); }
+/* the 판정 date stays on the one line at every width; the 관찰 part leaves on phones (it does not fit next to the
+   brand, the health dot and 모의 there) and shows in the rules panel instead */
+.dchip .opt, .dchip .obs { display: inline; }
+@media (max-width: 459px) { .dchip .obs { display: none; } }
+.rules-pop { max-width: var(--page-max); margin-inline: auto; padding: 0 var(--gutter); overflow: hidden; }
+/* inside the sticky header: never taller than 60% of the screen (it scrolls inside), 닫기 at its foot */
+.rules-pop > .rules-in { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+.rules-in { display: grid; gap: 10px; margin: 4px 0 12px; padding: 14px 16px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface); font-size: var(--t-sm); color: var(--ink-2); }
+.rules-in b { color: var(--ink); }
+.rules-in ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+/* the health dot (one dot for everything; red when something is down) */
+.hdot { appearance: none; flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); }
+.hdot i { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 3px transparent; transition: background-color .3s; }
+.hdot[data-level="ok"] i { background: var(--up); }
+.hdot[data-level="warn"] i { background: var(--warn); }
+.hdot[data-level="bad"] i { background: var(--down); box-shadow: 0 0 0 3px var(--down-soft); }
+/* red: a ring spreads three times when the dot turns red (a real change), then the dot stays lit. Opacity and size of a
+   layer only (the old box-shadow loop repainted 57 times a second all day: fan noise, battery) */
+.hdot i { position: relative; }
+.hdot[data-level="bad"] i::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 4px var(--down-line); opacity: 0; pointer-events: none; animation: dot-ring 1.8s ease-out 3; }
+@keyframes dot-ring { 0% { opacity: 1; transform: scale(.8); } 70% { opacity: 0; transform: scale(1.7); } 100% { opacity: 0; transform: scale(1.7); } }
+.mocktag { flex: none; display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--accent-line); color: var(--accent); font: 700 var(--t-xs)/1 var(--f-body); }
+
+/* sticky critical banner (bust, liquidation burst, feed stale) */
+.crit { background: var(--crit-bg); border-bottom: 2px solid var(--crit-line); color: var(--crit-ink); }
+.crit-in { max-width: var(--page-max); margin-inline: auto; padding: 8px var(--gutter); display: grid; gap: 6px; }
+.crit-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; font-size: var(--t-sm); line-height: 1.45; }
+.crit-row b { color: #fff; }
+.crit-row .ic { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; background: var(--down); color: #fff; font: 700 var(--t-xs)/1 var(--f-pixel); }
+.crit-row .acts { display: flex; gap: 6px; }
+.crit-row button, .crit-row a { appearance: none; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--down-line); background: transparent; color: var(--crit-ink); font: 700 var(--t-xs)/1 var(--f-body); text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
+@media (max-width: 559px) { .crit-in { padding-block: 6px; gap: 4px; } .crit-row { font-size: var(--t-xs); } .crit-row .ic { width: 18px; height: 18px; } }
+
+/* the menu strip under the top bar: every screen its own text button (core/strip.js; the buttons' look and the PC
+   wrap: core/nav.css). One row that scrolls sideways; its real height (one row, or two when it wraps on a PC) is
+   measured into --sub-h, so it never reads --sub-h itself */
+.subtabs { max-width: var(--page-max); margin-inline: auto; padding: 0 var(--gutter); min-height: 44px; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+/* 예전 화면 ↗ (the old dashboard at /v3): at the strip's end, or in the top bar on a PC (core/shell.js) */
+a.oldui { flex: none; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--line-2); color: var(--ink-2); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
+a.oldui:hover { color: var(--ink); border-color: var(--accent-line); }
+/* the skin switch (core/skin.js): two small buttons between 글자 크기 and 예전 화면 (the strip's end, the PC top bar) */
+.skinsw { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px; border: 1px solid var(--line-2); }
+.skinsw .k { padding: 0 6px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
+.skinsw button { appearance: none; height: 28px; padding: 0 9px; border-radius: 7px; border: 0; background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+/* 글자 크기 (core/textsize.js): the same small control, first at the strip's end; 화면 색 follows right after it */
+.textsw + .skinsw { margin-left: 6px; }
+/* 글자 크기 on a phone: one cycling button first in the strip (the full control is at the far end of that row); also the
+   PC top bar's small one below 1680 px. Its two words sit in the middle of the button (baseline alignment put them
+   at its top edge) */
+.textcyc { display: none; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink); font: 800 var(--t-sm)/1 var(--f-body); cursor: pointer; }
+.textcyc small { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); }
+@media (max-width: 759px) { .textcyc { display: inline-flex; } .subtabs .textsw { display: none; } }
+
+/* the screen container */
+.screen { display: block; max-width: var(--page-max); margin-inline: auto; padding: 16px var(--gutter) 40px; min-height: 60vh; outline: none; }
+/* one column that never grows past the page (a scrolling tab row or a wide table inside would widen it otherwise) */
+.screen > .scr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; align-content: start; }
+.scr-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.scr-head h1 { font: 900 var(--t-xl)/1.25 var(--f-body); letter-spacing: -.02em; }
+.scr-head .sub { color: var(--ink-2); font-size: var(--t-sm); }
+
+/* phone bottom tab bar */
+.botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--botbar); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.botbar a { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--muted); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); position: relative; }
+.botbar a svg { width: 20px; height: 20px; flex: none; }
+.botbar a[aria-current="page"] { color: var(--accent); }
+.botbar a[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
+.botbar a .ndot { position: absolute; top: 8px; right: calc(50% - 16px); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+body { padding-bottom: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) { .botbar { display: none; } body { padding-bottom: 0; } }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: calc(var(--bot-h) + 16px); z-index: 60; transform: translate(-50%, 20px); max-width: min(92vw, 520px); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); font-size: var(--t-sm); box-shadow: 0 12px 30px rgba(0, 0, 0, .4); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s var(--ease); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (min-width: 900px) { .toast { bottom: 24px; } }
+
+/* first-visit tour */
+.tour-ring { position: fixed; z-index: 80; border-radius: 12px; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px var(--scrim); pointer-events: none; transition: left .25s var(--ease), top .25s var(--ease), width .25s var(--ease), height .25s var(--ease); }
+.tour-card { position: fixed; z-index: 81; width: min(340px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px 16px; border-radius: 4px; background: var(--bubble); color: var(--bubble-ink); border: 2px solid var(--bubble-line); box-shadow: 4px 4px 0 var(--bubble-shadow); font: 400 var(--t-sm)/1.6 var(--f-body); }
+.tour-card h3 { font: 900 var(--t-md)/1.3 var(--f-body); }
+.tour-card .tn { font: 700 var(--t-xs)/1 var(--f-pixel); color: #8a6a00; }
+.tour-card .acts { display: flex; gap: 8px; align-items: center; }
+.tour-card button { appearance: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 2px solid var(--bubble-line); background: #fff; color: var(--bubble-ink); font: 700 var(--t-xs)/1 var(--f-body); }
+.tour-card button.go { background: var(--accent); }
+.tour-card .skipb { border: 0; background: none; text-decoration: underline; padding: 0; height: auto; }
+
+/* ---------------------------------------------------------------- skin "ai" (the default; tokens.css): a faint grid
+   with two soft corner glows instead of the navy dots, a hairline teal ring around cards and a soft glow on the screen
+   title. Static (no animation), no blur on body text; "classic" keeps the dots and flat cards. */
+:root:not([data-skin="classic"]) body {
+  background-image: radial-gradient(1100px 520px at 75% -10%, var(--skin-glow-a), transparent 60%),
+    radial-gradient(800px 460px at -5% 110%, var(--skin-glow-b), transparent 60%),
+    linear-gradient(var(--skin-grid) 1px, transparent 1px), linear-gradient(90deg, var(--skin-grid) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+}
+:root:not([data-skin="classic"]) .card { box-shadow: 0 0 0 1px var(--card-ring), 0 8px 26px var(--card-shadow); }
+:root:not([data-skin="classic"]) .scr-head h1 { text-shadow: 0 0 16px var(--head-glow); }

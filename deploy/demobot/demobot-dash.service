@@ -1,0 +1,49 @@
+# Demo lab bot ("데모 랩") dashboard: a read-only web view of the engine's snapshot files (/var/lib/demobot/snap).
+# Listens on DEMOBOT_DASH_HOST:DEMOBOT_DASH_PORT (the server's Tailscale address and 8090, like the rule bot's 8080;
+# or 127.0.0.1 with an SSH tunnel). It writes nothing: the only data folder it can see at all is snap/ (read-only);
+# the database, the env file and the rule bot's folders are invisible to it, and the Telegram token is not in its
+# environment.
+[Unit]
+Description=demobot demo lab dashboard (read-only)
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=demobot
+Group=demobot
+UMask=0027
+WorkingDirectory=/opt/demobot/app
+EnvironmentFile=/etc/demobot/demobot.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+UnsetEnvironment=DEMOBOT_TG_TOKEN DEMOBOT_TG_CHAT
+# An empty host would make the server listen on every address: refuse to start instead.
+ExecStartPre=/bin/sh -c 'if [ -z "$$DEMOBOT_DASH_HOST" ] || [ -z "$$DEMOBOT_DASH_PORT" ]; then echo "DEMOBOT_DASH_HOST / DEMOBOT_DASH_PORT empty in /etc/demobot/demobot.env" >&2; exit 1; fi'
+# After a reboot the Tailscale address can appear a few seconds after the network: wait up to 60 s for it so the
+# first start does not fail to bind (Restart=always would retry anyway).
+ExecStartPre=-/bin/sh -c 'n=0; until ip -4 -o addr show | grep -qF " inet $$DEMOBOT_DASH_HOST/" || [ $$n -ge 60 ]; do n=$$((n+1)); sleep 1; done'
+ExecStart=/opt/demobot/venv/bin/python -m demobot.dash --host ${DEMOBOT_DASH_HOST} --port ${DEMOBOT_DASH_PORT}
+Restart=always
+RestartSec=10
+Nice=10
+MemoryHigh=250M
+MemoryMax=300M
+# Sandbox: read-only everywhere; of /var/lib/demobot only snap/ is visible (read-only).
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+TemporaryFileSystem=/var/lib/demobot:ro
+BindReadOnlyPaths=/var/lib/demobot/snap
+InaccessiblePaths=-/etc/demobot -/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target
