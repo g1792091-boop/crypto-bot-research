@@ -2,9 +2,14 @@
 // do in plain Korean, when it goes in, the settings grid (/api/grid), the default / friend / 5-year pick values, their
 // 5-year results with the house exit (/api/setting: the shipped past5y files) and the accounts that run it; then the
 // private plug-in accounts (kind "private"): their name and rule_ko only (their rules never enter this code).
-import {h, put} from "../dom.js";
+// Round 5 stage 2B (the rule bot's v4 매매법 list → detail look): the three strategies as v4 group cards (the pixel
+// character, settings and accounts, the median P&L % of their accounts' 20배 lines); the chosen one opens below in
+// two columns (what it reads and when it goes in · the settings grid, the marked values, the 5-year table, its accounts
+// as tiles). The long indicator texts are cut to three lines with 더 보기. The choice is remembered on this device.
+import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import {isMissing} from "../api.js";
 import {STRAT_KO, SUB_KO, KIND_KO, tfKo} from "../labels.js";
 
@@ -38,15 +43,33 @@ const ABOUT = {
 const PERIODS_SHOWN = ["2020", "2021-23", "2024-26"];
 const valKo = (v) => (Number.isInteger(v) ? String(v) : fmt.num(v, v < 1 ? 2 : 1).replace(/0$/, "").replace(/\.$/, ""));
 
+/** A text cut to `lines` lines with 더 보기 (v4 ui.moreText; components.css .clamp / .more). */
+function moreText(text, lines = 3, cls) {
+  const body = h("p", {class: ["clamp", cls], style: {"--lines": lines}}, text);
+  const btn = h("button", {class: "more", type: "button", hidden: true, "aria-expanded": "false"}, "더 보기");
+  btn.addEventListener("click", () => {
+    const open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "접기" : "더 보기";
+    body.style.setProperty("--full", K4.reduced() ? "none" : body.scrollHeight + "px");
+    body.classList.toggle("open", open);
+  });
+  const check = () => { if (btn.getAttribute("aria-expanded") !== "true" && body.isConnected) btn.hidden = !(body.scrollHeight > body.clientHeight + 2); };
+  requestAnimationFrame(check);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(check, () => {});
+  return h("div", {class: "s2-moretext"}, body, btn);
+}
+
 export async function mount(el, ctx) {
   ctx.setTitle("매매법");
+  const cardsSec = h("section", {class: "k4-sec", "aria-label": "세 매매법"});
   const box = h("div", {class: "stack"});
   const priv = h("div");
   el.append(ui.screenHead("매매법", "세 매매법이 무엇을 보고 들어가나"),
     ui.card({hero: true, plate: "한 줄로"},
       h("p", {class: "dl-lead"}, "세 매매법 모두 ", h("b", null, "슈퍼트렌드로 추세 방향"), "을 잡고, 두 번째 지표(ROC · KST · 클링거)로 ",
         h("b", null, "힘이 붙는 순간"), "을 골라 들어갑니다. 나가는 방법(청산 14가지)은 따로 고르고, 설정 순위가 모든 설정 × 청산을 실시간으로 겨룹니다.")),
-    box, priv,
+    cardsSec, box, priv,
     ui.note("5년 성적: 5년 연구에서 같은 설정을 사다리 청산으로 돌렸을 때의 평균 R (수수료 후, 코인 7개 합침). 기간마다 시장이 달라서, 세 기간 모두 비슷해야 믿을 만합니다."));
 
   let grid, accts;
@@ -58,15 +81,47 @@ export async function mount(el, ctx) {
     return;
   }
   const list = accts && !isMissing(accts) ? accts.accounts || [] : [];
-  const cards = (grid.strategies || []).map((s) => ({s, past: h("div", {class: "g4-past"}, ui.empty("5년 성적을 읽는 중…"))}));
-  put(box, cards.map(({s, past}) => stratCard(s, past, list, grid, ctx)));
+  const strats = grid.strategies || [];
+  let sel = String(local.get("strategies-pick", strats[0] ? strats[0].short : "S2"));
+  if (!strats.some((s) => s.short === sel)) sel = strats[0] ? strats[0].short : sel;
+  const cards = new Map(strats.map((s) => [s.short, {s, past: h("div", {class: "g4-past"}, ui.empty("5년 성적을 읽는 중…"))}]));
+  const pnl20 = (a) => { const x = (a.lines || {})["20"]; return x && x.pnl_pct != null && Number.isFinite(Number(x.pnl_pct)) ? Number(x.pnl_pct) : null; };
+
+  // the three strategies as v4 group cards (tap one: it opens below)
+  const groups = K4.groupCards({label: "매매법 고르기", onPick: (id) => { if (id === sel) return; sel = id; local.set("strategies-pick", id); paintCards(); paintDetail(true); }});
+  function paintCards() {
+    groups.update(strats.map((s) => {
+      const mine = list.filter((a) => a.short === s.short);
+      const meds = mine.map(pnl20).filter((v) => v != null);
+      return {id: s.short, name: `${s.short} · ${STRAT_KO[s.short] || s.id}`, count: `설정 ${fmt.int(s.settings)}가지 · 계좌 ${fmt.int(mine.length)}개`,
+        med: K4.median(meds), vs: meds.length ? `계좌 ${fmt.int(meds.length)}개의 20배 줄 손익 %` : "계좌 자료 준비 중",
+        foot: `기본값 ${s.default || "—"}`, title: s.id};
+    }), sel);
+    // each card's name after its pixel character: the same character as its accounts (v4 stratFigure)
+    for (const b of groups.querySelectorAll(".k4-gcard")) {
+      const s = strats.find((x) => x.short === b.dataset.kind), gn = b.querySelector(".gn");
+      if (s && gn && !gn.querySelector(".sfig")) gn.prepend(K4.acctFig({kind: "fixed", id: s.short, short: s.short}, 20));
+    }
+  }
+  put(cardsSec, K4.secRow("세 매매법", "카드를 누르면 아래에 그 매매법이 펼쳐집니다"), groups);
+  paintCards();
+
+  function paintDetail(user) {
+    const c = cards.get(sel);
+    if (!c) { put(box, ui.none("매매법 정보가 없습니다")); return; }
+    put(box, stratDetail(c.s, c.past, list, grid, ctx));
+    if (user) K4.swap(box);
+  }
+  paintDetail(false);
+
   const pv = list.filter((a) => a.kind === "private");
   put(priv, ui.card({plate: KIND_KO.private || "비공개 매매법", sub: "서버에만 있는 매매법: 이름과 한 줄 설명만"},
-    pv.length ? h("ul", {class: "dl-ul"}, pv.map((a) => h("li", null, h("a", {href: ctx.href("account", a.id)}, h("b", null, a.name || a.id)),
-      a.rule_ko ? ` · ${a.rule_ko}` : ""))) : ui.none(accts ? "비공개 매매법 계좌가 없습니다" : "준비 중"),
+    pv.length ? h("div", {class: "s2-rows"}, pv.map((a) => h("div", {class: "s2-row"},
+      h("div", {class: "s2-rowh"}, K4.acctFig(a, 20), h("a", {href: ctx.href("account", a.id)}, a.name || a.id), a.tf ? K4.tfChip(a.tf) : null),
+      a.rule_ko ? h("div", {class: "s2-line"}, a.rule_ko) : null))) : ui.none(accts ? "비공개 매매법 계좌가 없습니다" : "준비 중"),
     h("p", {class: "note"}, "비공개 매매법의 규칙은 공개 저장소와 이 화면에 들어오지 않습니다. 판정은 같은 봉의 동전 던지기와 비교합니다.")));
   // the 5-year numbers of the marked settings (house exit), every strategy at once
-  await Promise.all(cards.map(async ({s, past}) => {
+  await Promise.all([...cards.values()].map(async ({s, past}) => {
     const picks = [];
     for (const tf of grid.tfs) {
       picks.push({ko: "기본값", tf, c: s.default_c, label: s.default});
@@ -91,28 +146,40 @@ export async function mount(el, ctx) {
         if (!w || !w.n) return h("span", {class: "muted"}, "—");
         return h("span", {class: "dl-5y"}, ui.signed(fmt.r(w.mean_R), fmt.tone(w.mean_R, fmt.r(w.mean_R)), "b"), h("small", {class: "muted"}, `${fmt.int(w.n)}건`));
       }},
-    ], rows, {cls: "g4-pt5"}));
+    ], rows, {cls: "g4-pt5 s2-dense"}));
   }));
 }
 
-function stratCard(s, past, accts, grid, ctx) {
+function stratDetail(s, past, accts, grid, ctx) {
   const a = ABOUT[s.short] || {parts: [], rule: "", dims: {}};
   const mine = accts.filter((x) => x.short === s.short);
   const tfs = grid.tfs || ["15m", "30m"];
-  return ui.card({plate: `${s.short} · ${STRAT_KO[s.short] || s.id}`, sub: s.id, cls: "g4-strat"},
-    h("div", {class: "grid2"},
-      h("div", {class: "stack tight"}, a.parts.map(([name, text]) => h("div", {class: "g4-ind"}, h("b", null, name), h("p", null, text))),
-        h("div", {class: "g4-rule"}, h("b", null, "들어가는 때"), h("p", null, a.rule))),
-      h("div", {class: "stack tight"},
-        h("p", {class: "dl-fk2"}, `설정 격자: ${fmt.int(s.settings)}가지`),
-        h("dl", {class: "g4-dims"}, (s.dims || []).map((d) => h("div", null, h("dt", null, d.ko),
-          h("dd", null, h("span", {class: "mono"}, d.values.map(valKo).join(" · ")), a.dims[d.key] ? h("small", {class: "muted"}, a.dims[d.key]) : null)))),
-        h("dl", {class: "kv g4-marks"},
-          h("div", null, h("dt", null, "기본값"), h("dd", {class: "mono"}, s.default || "—")),
-          h("div", null, h("dt", null, "친구 값"), h("dd", {class: "mono"}, s.friend || "없음")),
-          tfs.map((tf) => h("div", null, h("dt", null, `5년 1등 · ${tfKo(tf)}`), h("dd", {class: "mono"}, (s.pick || {})[tf] || "—")))))),
-    h("p", {class: "dl-fk2"}, "5년 성적 (사다리 청산)"), past,
-    mine.length ? h("div", {class: "stack tight"}, h("p", {class: "dl-fk2"}, `이 매매법을 쓰는 계좌 ${mine.length}개`),
-      h("div", {class: "row wrap dl-pills"}, mine.map((x) => h("a", {class: "pp thin g4-al", href: ctx.href("account", x.id), title: x.rule_ko || ""},
-        `${SUB_KO[x.sub] || x.sub || ""} · ${tfKo(x.tf)}`)))) : null);
+  const fig = K4.acctFig({kind: "fixed", id: s.short, short: s.short}, 34);
+  return h("div", {class: "s2-strat", "aria-label": `${s.short} 자세히`},
+    h("div", {class: "s2-strath"}, fig, h("div", {class: "s2-stratt"}, h("h2", null, `${s.short} · ${STRAT_KO[s.short] || s.id}`),
+      h("span", {class: "muted mono"}, s.id))),
+    h("div", {class: "s2-cols"},
+      h("div", {class: "s2-col"},
+        ui.card({plate: "무엇을 보나", cls: "g4-strat"},
+          a.parts.map(([name, text]) => h("div", {class: "g4-ind"}, h("b", null, name), moreText(text, 3)))),
+        ui.card({plate: "들어가는 때"}, h("div", {class: "g4-rule"}, h("p", null, a.rule))),
+        ui.card({plate: "5년 성적 (사다리 청산)", sub: "기본값 · 친구 값 · 5년 1등 값, 봉마다"}, past)),
+      h("div", {class: "s2-col"},
+        ui.card({plate: "설정 격자", sub: `${fmt.int(s.settings)}가지`},
+          h("dl", {class: "g4-dims s2-dims"}, (s.dims || []).map((d) => h("div", null, h("dt", null, d.ko),
+            h("dd", null, h("span", {class: "s2-vals"}, d.values.map((v) => h("span", {class: "s2-val"}, valKo(v)))),
+              a.dims[d.key] ? h("small", {class: "muted"}, a.dims[d.key]) : null))))),
+        ui.card({plate: "표시된 값"},
+          h("dl", {class: "kv g4-marks s2-marks"},
+            h("div", null, h("dt", null, "기본값"), h("dd", {class: "mono"}, s.default || "—")),
+            h("div", null, h("dt", null, "친구 값"), h("dd", {class: "mono"}, s.friend || "없음")),
+            tfs.map((tf) => h("div", null, h("dt", null, `5년 1등 · ${tfKo(tf)}`), h("dd", {class: "mono"}, (s.pick || {})[tf] || "—"))))),
+        mine.length ? ui.card({plate: `이 매매법을 쓰는 계좌 ${mine.length}개`, sub: "20배 줄 손익 % · 거래"},
+          h("div", {class: "s2-atiles"}, mine.map((x) => {
+            const ln = (x.lines || {})["20"] || {};
+            const t = fmt.pct(ln.pnl_pct, true);
+            return h("a", {class: "s2-atile g4-al", href: ctx.href("account", x.id), title: x.rule_ko || x.name || x.id},
+              h("span", {class: "s2-atn"}, K4.acctFig(x, 18), K4.tfChip(x.tf), h("span", {class: "an-n"}, SUB_KO[x.sub] || x.sub || "")),
+              h("span", {class: "s2-atv"}, h("b", {class: ["num", fmt.tone(ln.pnl_pct, t)]}, t), h("small", {class: "muted"}, `거래 ${fmt.int(ln.trades)}`)));
+          }))) : null)));
 }

@@ -4,11 +4,190 @@
 // Round 3 (CONTRACT 8): the confirmation period, the stop rules, the 12/31 goal line, and one short card per new screen
 // (거래 차트, 시장 국면, 실제 비용, 비교, 설정 지도, 코인별, 주간 회의록, 알림 기록, 서버 상태의 새 카드).
 // Round 4 part B (CONTRACT 9.8-9.10): a card per new screen (한눈 지도 … 만약 실험실, the top bar) and the 용어집.
+// Round 5 stage 2B (the rule bot's v4 자주 묻는 질문 look, faq-items / faq-terms): the one-line card and four stat cards
+// first, then calm question lists in groups (기본 · 판정; 화면 안내 beside them on a wide window), one tap opens an
+// answer, and the 용어집 as a list of terms whose first sentence shows, one tap opens the whole meaning.
 import {h, put} from "../dom.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import {isMissing} from "../api.js";
 import {STRAT_KO} from "../labels.js";
 
+/** One question that opens its answer (v4 faq-items): the question, an optional pill, a caret; kept open across refreshes. */
+function qa(q, kids, o = {}) {
+  const region = h("div", {class: "faq-in s2-qain", hidden: !o.open}, kids);
+  const btn = h("button", {type: "button", class: "s2-qb", "aria-expanded": String(!!o.open)},
+    h("span", {class: "s2-qt"}, q), o.tag ? h("span", {class: "pp thin"}, o.tag) : null, h("i", {class: "s2-car", "aria-hidden": "true"}));
+  btn.addEventListener("click", () => {
+    const open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    region.hidden = !open;
+    if (open) K4.fadeIn(region, 240);
+  });
+  return h("div", {class: "s2-qa"}, btn, region);
+}
+/** A group of questions under its small heading (v4 faq-group / faq-gh). */
+const group = (title, ...items) => h("div", {class: "s2-qgroup"}, h("h3", {class: "s2-qgh"}, title), ...items);
+const ul = (...items) => h("ul", {class: "dl-ul"}, items.map((x) => (x instanceof Node && x.tagName === "LI" ? x : h("li", null, x))));
+
+export async function mount(el, ctx) {
+  ctx.setTitle("어떻게 돌아가나");
+  const exitCount = h("span", null, "청산");
+  const setBox = h("div", {class: "stack tight"}), exitBox = h("div", {class: "stack tight"}), ruleBox = h("div", {class: "grid2"});
+  const stopBox = h("div");
+  const nExits = h("b", {class: "num"}, "14가지");
+  el.append(ui.screenHead("어떻게 돌아가나", "데모 랩이 하는 일을 짧게"),
+    ui.card({hero: true, plate: "한 줄로"},
+      h("p", {class: "dl-lead"}, "5년 연구의 매매법 3개를 ", h("em", null, "모든 설정"), "으로 동시에 돌려 실시간 순위를 매기고, 48개 연습 계좌로 \"어떤 고르는 방법이 실제로 통하나\"를 봅니다."),
+      h("p", {class: "dl-lead"}, h("b", null, "주문은 넣지 않습니다."), " 바이낸스 공개 시세만 읽고, 거래소 키도 없습니다. 모든 돈은 가상입니다.")),
+    h("div", {class: "stats s4 s2-stats"},
+      K4.stat("매매법", "3개", "S2 · N02 · N04 (슈퍼트렌드 + 하나)"),
+      K4.stat("설정", "1,666개", "S2 343 · N02 735 · N04 588"),
+      K4.stat("청산", nExits, "사다리 · 고정 익절 × 손절 · 반익반본"),
+      K4.stat("계좌", "48개 + 비공개", "계좌마다 배수 4줄 · 줄마다 $1,000")),
+    h("div", {class: "s2-faqcols"},
+      h("div", {class: "stack"}, ui.card({plate: "자주 묻는 것", cls: "s2-faq"},
+        group("기본",
+          qa("무엇을 돌리나요?", ul(
+            h("li", null, "매매법 3개: S2 (", STRAT_KO.S2, "), N02 (", STRAT_KO.N02, "), N04 (", STRAT_KO.N04, ")."),
+            "설정은 5년 연구와 같은 격자: S2 343개, N02 735개, N04 588개 (모두 1,666개).",
+            "코인 7개 (BTC ETH SOL DOGE LTC BCH XRP), 봉 2개 (15분, 30분). 30분봉은 15분봉을 합쳐 만듭니다.",
+            "신호가 난 봉이 닫히는 순간(다음 15분봉 시작)에 들어갑니다.",
+            "15분마다 새 봉을 받아 모든 설정의 신호·거래를 계산하고 설정 순위와 계좌를 새로 씁니다."), {open: true}),
+          qa("비용은 어떻게 셉니까?", ul(
+            "수수료 0.05% + 슬리피지 0.02%를 들어갈 때와 나갈 때 각각 뺍니다.",
+            "설정 순위: 펀딩을 8시간마다 0.01%로 셉니다 (5년 연구와 같게).",
+            "계좌: 바이낸스의 실제 펀딩을 씁니다.",
+            "R = 손절 폭을 1로 본 손익. +0.1R이면 거래마다 손절 폭의 10%를 번 셈입니다.")),
+          qa(h("span", null, exitCount, "은 무엇인가요?"), exitBox),
+          qa("계좌는 어떻게 나뉘나요?", [h("p", {class: "note"}, "기본 48개 + 비공개 매매법 · 계좌마다 배수 4줄 (20 · 30 · 40 · 50배), 줄마다 $1,000"),
+            ui.table([
+              {label: "종류", l: true, get: (r) => h("b", null, r[0])},
+              {label: "이름", l: true, get: (r) => h("span", {class: "mono muted"}, r[1])},
+              {label: "개수", get: (r) => String(r[2])},
+              {label: "규칙", l: true, cls: "dl-wrap", get: (r) => r[3]},
+            ], ACCOUNTS, {cls: "s2-dense s2-howacct"}),
+            setBox,
+            ul("매매법 3개 × 봉 2개 = 6쌍. 계좌 이름의 매매법은 S2 / N02 / N04, 봉은 15m / 30m.",
+              "증거금 = 지갑의 배수% (20배면 지갑의 20%), 코인마다 포지션 하나.",
+              "규칙봇과 같은 진입 검사: 손절이 강제청산 가격보다 안쪽이어야 하고, 거래소 최대 배수를 넘지 않아야 합니다. 못 넘으면 건너뜁니다.",
+              "잔고가 $100(10%) 아래로 떨어지면 그 줄은 파산으로 멈춥니다.")]),
+          qa("설정 순위는 어떻게 읽나요?", ul(
+            "기간 3개: 실시간 (실시간 시작부터), 최근 26주 (처음에 과거 자료로 채움), 최근 4주.",
+            "점수 = 주변 평균: 그 설정과 바로 옆 설정들의 평균 R을 평균한 값. 한 설정만 운 좋게 튀는 것을 걸러 냅니다.",
+            "운 기준선: 설정 수만큼 무작위로 들어가는 선수를 세웠을 때, 그 1등이 낼 법한 평균 R의 95% 값. 이 선 위라야 운이 아닐 가능성이 큽니다.",
+            "흔들림: 신호 뒤 3봉 안에 반대 신호가 나온 비율. 높으면 시끄러운 설정입니다.")),
+          qa("주문을 넣나요? (주문은 없습니다)", ul(
+            "주문 코드도, 거래소 키도 없습니다. 바이낸스 공개 시세(fapi.binance.com)만 읽습니다.",
+            "실전에 쓰려면 판정을 통과한 뒤에도 두 분이 따로 정합니다.")),
+          qa("규칙봇과 다른 점은?", ul(
+            "완전히 따로 돕니다: 코드 사본, 사용자, 데이터베이스, 서비스, 텔레그램 방, 대시보드(8090 포트)가 모두 다릅니다.",
+            "규칙봇의 파일(/var/lib/paperbot, /etc/paperbot)은 읽지도 쓰지도 않습니다.",
+            "규칙봇은 정해 둔 매매법들을 모의로 돌립니다. 데모 랩은 설정 고르는 방법 자체를 시험합니다.",
+            "이 화면 위쪽의 \"데모 랩\" 표시로 구분하세요."))),
+        group("판정",
+          qa("판정 기준 두 가지는?", [ruleBox,
+            ui.note("통과하기 전까지는 \"실전 금지\"입니다. 판정 화면에서 계좌·배수마다 어떤 항목을 넘었는지 볼 수 있습니다.")]),
+          qa("확인 기간이란? (통과한 뒤 한 번 더)", ul(
+            "줄이 200개가 넘으면, 실력이 없어도 몇 줄은 운으로 기준을 넘습니다. 그래서 처음 넘은 줄은 그때부터 다시 4주를 봅니다.",
+            "그 4주(거래 20건 이상, 길어도 8주) 동안 새로 들어간 거래만 셉니다: 평균 R > 0, 손익 +, 낙폭 30% 미만, 파산·강제청산 없음.",
+            "모두 넘으면 \"실전 후보\", 못 넘으면 \"확인 실패\"입니다. 실패한 줄도 다시 통과하면 새로 확인합니다.",
+            "실전 후보가 나와도 실제 돈을 쓸지는 두 분이 정합니다.")),
+          qa("정지 규칙이란? (실제 돈에 쓸 멈춤 장치)", stopBox),
+          qa("12/31 목표는? (요약 맨 위)", ul(
+            "단계 다섯: 설치 → 데모 진행 → 우리 기준 통과 → 확인 기간 → 실전 후보.",
+            "요약에는 남은 날, 지금 단계, 그리고 기준에 가장 가까운 줄과 그 줄이 아직 못 넘은 항목이 나옵니다.",
+            "목표는 12/31 자정(한국 시간)까지 실전 후보가 나오는지 보는 것입니다.")),
+          qa("관점 기록장은?", ul(
+            h("li", null, "두 분이 데모 랩 텔레그램 방에 관점을 한 줄로 적으면 (예: ", h("span", {class: "mono"}, "관점 BTC 숏 A 84750-84840 손절 85600"),
+              ") 봇이 받아 적고 시세를 따라갑니다."),
+            "4시간 · 24시간 · 48시간 뒤 방향이 맞았는지, 구간에 닿았는지, 그리고 \"구간 바로 진입\"과 \"15분 종가 확인 진입\" 두 방식으로 따라 했으면 몇 R이었는지 셉니다.",
+            "끝난 관점이 30개가 되기 전에는 \"표본 부족\"입니다. 자세한 것은 관점 기록 화면에 있습니다.")))), glossaryCard()),
+      h("div", {class: "stack"},
+        ui.card({plate: "화면 안내", sub: "화면마다 무엇이 보이나 · 열기 = 그 화면으로", cls: "s2-faq"},
+          group("5차: 규칙봇 v4 모습", ...GUIDE5.map(guideQa)),
+          group("4차: 판정 · 분석 화면과 위쪽 막대", ...GUIDE4B.map(guideQa)),
+          group("새로 생긴 것", ...GUIDE.map(guideQa))))));
+
+  paintExits(exitBox, null, exitCount, nExits);
+  paintRules(ruleBox, null);
+  paintStops(stopBox, null);
+  try {
+    const [grid, judge] = await Promise.all([ctx.api("/api/grid"), ctx.api("/api/judge").catch(() => null)]);
+    paintExits(exitBox, grid, exitCount, nExits);
+    paintSettings(setBox, grid);
+    paintRules(ruleBox, judge);
+    paintStops(stopBox, judge);
+  } catch (e) { /* the static words stay */ }
+}
+
+/** A screen's guide entry as a question: its words and a 열기 link to the screen. */
+function guideQa([id, name, items]) {
+  return qa(name, [h("ul", {class: "dl-ul"}, items.map((x) => h("li", null, x))),
+    id ? h("a", {class: "btn-line", href: `#/${id}`}, "열기") : null], {tag: id ? "화면" : null});
+}
+
+function paintStops(box, judge) {
+  const items = judge && !isMissing(judge) && Array.isArray(judge.stop_rules_ko) && judge.stop_rules_ko.length ? judge.stop_rules_ko : STOP_DEFAULT;
+  put(box, h("ol", {class: "dl-rules"}, items.map((x) => h("li", null, x))),
+    h("ul", {class: "dl-ul"},
+      h("li", null, "모든 줄을 한 번 더, 이 규칙을 걸고 돌립니다 (진입·크기는 같고, 규칙은 새 진입만 막음)."),
+      h("li", null, "계좌·판정·비교 화면의 \"정지 규칙 적용 시\"가 그 결과입니다. 덜 잃었는지, 번 것을 놓쳤는지 봅니다.")));
+}
+
+function paintExits(box, grid, label, stat) {
+  const exits = grid ? grid.exits : null;
+  const half = exits ? exits.find((x) => x.name === "half1R_be_1.5R") : null;
+  if (exits) { label.textContent = `청산 ${exits.length}가지`; stat.textContent = `${exits.length}가지`; }
+  put(box,
+    h("p", null, "0번은 규칙봇과 같은 ", h("b", null, "사다리"), ": 2 ATR 손절로 시작해 이익이 나면 손절을 계단처럼 올립니다. 1~12번은 고정 익절 × 고정 손절입니다: 익절 1 · 1.5 · 2 · 3R × 손절 1.5 · 2 · 3 ATR."),
+    half ? h("p", null, `${half.i}번 `, h("b", null, "반익반본"), ": 2 ATR 손절, 1R에서 절반 익절하고 손절을 본전으로 옮긴 뒤 나머지는 1.5R에서 익절합니다.") : null,
+    exits ? h("div", {class: "s2-exlist"}, exits.map((x) => h("span", {class: "s2-ex"}, h("b", {class: "num"}, `${x.i}.`), ` ${x.ko}`))) : null);
+}
+
+function paintSettings(box, grid) {
+  if (!grid) return;
+  put(box, h("p", {class: "s2-sub"}, "고정 계좌가 쓰는 값"), ui.table([
+    {label: "매매법", l: true, get: (s) => h("b", null, s.short)},
+    {label: "기본값", l: true, get: (s) => h("span", {class: "mono"}, s.default || "—")},
+    {label: "친구 값", l: true, get: (s) => h("span", {class: "mono"}, s.friend || "없음")},
+    {label: "5년 1등 (15분 / 30분)", l: true, get: (s) => h("span", {class: "mono"}, `${s.pick["15m"]} / ${s.pick["30m"]}`)},
+  ], grid.strategies, {cls: "dl-sets s2-dense"}));
+}
+
+function paintRules(box, judge) {
+  const rk = judge && !isMissing(judge) ? judge.rules_ko || {} : {};
+  const list = (items, fallback) => (items && items.length ? h("ol", {class: "dl-rules"}, items.map((x) => h("li", null, x))) : ui.note(fallback));
+  put(box,
+    h("div", {class: "s2-rulebox"}, h("p", {class: "s2-sub"}, "우리 기준"), h("p", null, "실시간 거래만으로 봅니다. 아래를 모두 넘어야 통과입니다."),
+      list(rk.ours, "판정 자료가 나오면 기준 문구가 여기 나옵니다.")),
+    h("div", {class: "s2-rulebox"}, h("p", {class: "s2-sub"}, "친구 기준"), h("p", null, "친구 방식: 지난 26주에 돈을 벌면서 낙폭이 가장 작은 설정을 일주일 돌려 봅니다."),
+      list(rk.friend, "판정 자료가 나오면 기준 문구가 여기 나옵니다.")),
+  );
+}
+
+/** The 용어집 (v4 faq-terms): a term per row with its first sentence; a tap opens the whole meaning. */
+function glossaryCard() {
+  const rows = GLOSSARY.map(([k, v]) => {
+    const first = String(v).split(/(?<=\.)\s/)[0];
+    const full = h("div", {class: "ft-a", hidden: true}, h("p", null, v));
+    const row = h("div", {class: "ft-row"});
+    const btn = h("button", {type: "button", class: "ft-t s2-ft", "aria-expanded": "false"}, h("b", null, k), h("span", {class: "ft-first"}, first),
+      h("i", {class: "s2-car", "aria-hidden": "true"}));
+    btn.addEventListener("click", () => {
+      const open = btn.getAttribute("aria-expanded") !== "true";
+      btn.setAttribute("aria-expanded", String(open));
+      full.hidden = !open;
+      row.classList.toggle("open", open);
+    });
+    row.append(btn, full);
+    return row;
+  });
+  return ui.card({plate: "용어집", sub: "화면에 자주 나오는 말을 쉬운 말로 · 누르면 펼쳐집니다", cls: "s2-gloss", id: "glossary"},
+    h("h2", {class: "sr"}, "용어집"), h("div", {class: "ft-list s2-ftlist"}, rows));
+}
+
+// the 48 accounts by kind: [kind, id pattern, how many, rule]
 const ACCOUNTS = [
   ["고정 · 기본값", "fx-def-매매법-봉", 6, "매매법 기본값을 그대로 돌립니다"],
   ["고정 · 친구 값", "fx-fr-매매법-봉", 4, "친구가 쓰는 값을 그대로 (S2, N04만)"],
@@ -22,99 +201,8 @@ const ACCOUNTS = [
   ["비공개 매매법", "pv-…", "서버에 따라", "서버에만 있는 매매법 (공개 저장소에 없음). 같은 배수 4줄·같은 진입 검사, 판정은 같은 봉 동전 던지기와 비교"],
 ];
 
-export async function mount(el, ctx) {
-  ctx.setTitle("어떻게 돌아가나");
-  const exitCard = ui.card({plate: "청산"});
-  const setBox = h("div", {class: "stack tight"}), exitBox = h("div", {class: "stack tight"}), ruleBox = h("div", {class: "grid2"});
-  const stopBox = h("div");
-  el.append(ui.screenHead("어떻게 돌아가나", "데모 랩이 하는 일을 짧게"),
-    ui.card({hero: true, plate: "한 줄로"},
-      h("p", {class: "dl-lead"}, "5년 연구의 매매법 3개를 ", h("em", null, "모든 설정"), "으로 동시에 돌려 실시간 순위를 매기고, 48개 연습 계좌로 \"어떤 고르는 방법이 실제로 통하나\"를 봅니다."),
-      h("p", {class: "dl-lead"}, h("b", null, "주문은 넣지 않습니다."), " 바이낸스 공개 시세만 읽고, 거래소 키도 없습니다. 모든 돈은 가상입니다.")),
-    h("div", {class: "grid2"},
-      ui.card({plate: "무엇을 돌리나"}, h("ul", {class: "dl-ul"},
-        h("li", null, "매매법 3개: S2 (", STRAT_KO.S2, "), N02 (", STRAT_KO.N02, "), N04 (", STRAT_KO.N04, ")."),
-        h("li", null, "설정은 5년 연구와 같은 격자: S2 343개, N02 735개, N04 588개 (모두 1,666개)."),
-        h("li", null, "코인 7개 (BTC ETH SOL DOGE LTC BCH XRP), 봉 2개 (15분, 30분). 30분봉은 15분봉을 합쳐 만듭니다."),
-        h("li", null, "신호가 난 봉이 닫히는 순간(다음 15분봉 시작)에 들어갑니다."),
-        h("li", null, "15분마다 새 봉을 받아 모든 설정의 신호·거래를 계산하고 설정 순위와 계좌를 새로 씁니다."))),
-      ui.card({plate: "비용"}, h("ul", {class: "dl-ul"},
-        h("li", null, "수수료 0.05% + 슬리피지 0.02%를 들어갈 때와 나갈 때 각각 뺍니다."),
-        h("li", null, "설정 순위: 펀딩을 8시간마다 0.01%로 셉니다 (5년 연구와 같게)."),
-        h("li", null, "계좌: 바이낸스의 실제 펀딩을 씁니다."),
-        h("li", null, "R = 손절 폭을 1로 본 손익. +0.1R이면 거래마다 손절 폭의 10%를 번 셈입니다.")))),
-    exitCard,
-    ui.card({plate: "계좌", sub: "기본 48개 + 비공개 매매법 · 계좌마다 배수 4줄 (20 · 30 · 40 · 50배), 줄마다 $1,000"},
-      ui.table([
-        {label: "종류", l: true, get: (r) => h("b", null, r[0])},
-        {label: "이름", l: true, get: (r) => h("span", {class: "mono muted"}, r[1])},
-        {label: "개수", get: (r) => String(r[2])},
-        {label: "규칙", l: true, cls: "dl-wrap", get: (r) => r[3]},
-      ], ACCOUNTS),
-      setBox,
-      h("ul", {class: "dl-ul"},
-        h("li", null, "매매법 3개 × 봉 2개 = 6쌍. 계좌 이름의 매매법은 S2 / N02 / N04, 봉은 15m / 30m."),
-        h("li", null, "증거금 = 지갑의 배수% (20배면 지갑의 20%), 코인마다 포지션 하나."),
-        h("li", null, "규칙봇과 같은 진입 검사: 손절이 강제청산 가격보다 안쪽이어야 하고, 거래소 최대 배수를 넘지 않아야 합니다. 못 넘으면 건너뜁니다."),
-        h("li", null, "잔고가 $100(10%) 아래로 떨어지면 그 줄은 파산으로 멈춥니다."))),
-    ui.card({plate: "설정 순위 읽기"}, h("ul", {class: "dl-ul"},
-      h("li", null, "기간 3개: 실시간 (실시간 시작부터), 최근 26주 (처음에 과거 자료로 채움), 최근 4주."),
-      h("li", null, "점수 = 주변 평균: 그 설정과 바로 옆 설정들의 평균 R을 평균한 값. 한 설정만 운 좋게 튀는 것을 걸러 냅니다."),
-      h("li", null, "운 기준선: 설정 수만큼 무작위로 들어가는 선수를 세웠을 때, 그 1등이 낼 법한 평균 R의 95% 값. 이 선 위라야 운이 아닐 가능성이 큽니다."),
-      h("li", null, "흔들림: 신호 뒤 3봉 안에 반대 신호가 나온 비율. 높으면 시끄러운 설정입니다."))),
-    h("h2", {class: "dl-h2"}, "판정 기준 두 가지"), ruleBox,
-    ui.note("통과하기 전까지는 \"실전 금지\"입니다. 판정 화면에서 계좌·배수마다 어떤 항목을 넘었는지 볼 수 있습니다."),
-    h("div", {class: "grid3"},
-      ui.card({plate: "확인 기간", sub: "통과한 뒤 한 번 더"}, h("ul", {class: "dl-ul"},
-        h("li", null, "줄이 200개가 넘으면, 실력이 없어도 몇 줄은 운으로 기준을 넘습니다. 그래서 처음 넘은 줄은 그때부터 다시 4주를 봅니다."),
-        h("li", null, "그 4주(거래 20건 이상, 길어도 8주) 동안 새로 들어간 거래만 셉니다: 평균 R > 0, 손익 +, 낙폭 30% 미만, 파산·강제청산 없음."),
-        h("li", null, "모두 넘으면 \"실전 후보\", 못 넘으면 \"확인 실패\"입니다. 실패한 줄도 다시 통과하면 새로 확인합니다."),
-        h("li", null, "실전 후보가 나와도 실제 돈을 쓸지는 두 분이 정합니다."))),
-      ui.card({plate: "정지 규칙", sub: "실제 돈에 쓸 멈춤 장치"}, stopBox),
-      ui.card({plate: "12/31 목표", sub: "요약 맨 위"}, h("ul", {class: "dl-ul"},
-        h("li", null, "단계 다섯: 설치 → 데모 진행 → 우리 기준 통과 → 확인 기간 → 실전 후보."),
-        h("li", null, "요약에는 남은 날, 지금 단계, 그리고 기준에 가장 가까운 줄과 그 줄이 아직 못 넘은 항목이 나옵니다."),
-        h("li", null, "목표는 12/31 자정(한국 시간)까지 실전 후보가 나오는지 보는 것입니다.")))),
-    h("h2", {class: "dl-h2"}, "화면 안내 (새로 생긴 것)"),
-    h("div", {class: "grid2 dl-guide"}, GUIDE.map(([id, name, items]) => ui.card({plate: name,
-      acts: id ? h("a", {class: "btn-line", href: `#/${id}`}, "열기") : null}, h("ul", {class: "dl-ul"}, items.map((x) => h("li", null, x)))))),
-    round4b(),
-    h("div", {class: "grid2"},
-      ui.card({plate: "관점 기록장"}, h("ul", {class: "dl-ul"},
-        h("li", null, "두 분이 데모 랩 텔레그램 방에 관점을 한 줄로 적으면 (예: ", h("span", {class: "mono"}, "관점 BTC 숏 A 84750-84840 손절 85600"),
-          ") 봇이 받아 적고 시세를 따라갑니다."),
-        h("li", null, "4시간 · 24시간 · 48시간 뒤 방향이 맞았는지, 구간에 닿았는지, 그리고 \"구간 바로 진입\"과 \"15분 종가 확인 진입\" 두 방식으로 따라 했으면 몇 R이었는지 셉니다."),
-        h("li", null, "끝난 관점이 30개가 되기 전에는 \"표본 부족\"입니다. 자세한 것은 관점 기록 화면에 있습니다."))),
-      ui.card({plate: "주문은 없습니다"}, h("ul", {class: "dl-ul"},
-        h("li", null, "주문 코드도, 거래소 키도 없습니다. 바이낸스 공개 시세(fapi.binance.com)만 읽습니다."),
-        h("li", null, "실전에 쓰려면 판정을 통과한 뒤에도 두 분이 따로 정합니다."))),
-      ui.card({plate: "규칙봇과 다른 점"}, h("ul", {class: "dl-ul"},
-        h("li", null, "완전히 따로 돕니다: 코드 사본, 사용자, 데이터베이스, 서비스, 텔레그램 방, 대시보드(8090 포트)가 모두 다릅니다."),
-        h("li", null, "규칙봇의 파일(/var/lib/paperbot, /etc/paperbot)은 읽지도 쓰지도 않습니다."),
-        h("li", null, "규칙봇은 정해 둔 매매법들을 모의로 돌립니다. 데모 랩은 설정 고르는 방법 자체를 시험합니다."),
-        h("li", null, "이 화면 위쪽의 \"데모 랩\" 표시로 구분하세요.")))));
-
-  exitCard.append(exitBox);
-  paintExits(exitBox, null, exitCard);
-  paintRules(ruleBox, null);
-  paintStops(stopBox, null);
-  try {
-    const [grid, judge] = await Promise.all([ctx.api("/api/grid"), ctx.api("/api/judge").catch(() => null)]);
-    paintExits(exitBox, grid, exitCard);
-    paintSettings(setBox, grid);
-    paintRules(ruleBox, judge);
-    paintStops(stopBox, judge);
-  } catch (e) { /* the static words stay */ }
-}
-
 const STOP_DEFAULT = ["계좌 −20%: 새 진입 영구 정지", "하루 −5%: 그날 새 진입 정지", "5연패: 24시간 새 진입 쉼"];
-function paintStops(box, judge) {
-  const items = judge && !isMissing(judge) && Array.isArray(judge.stop_rules_ko) && judge.stop_rules_ko.length ? judge.stop_rules_ko : STOP_DEFAULT;
-  put(box, h("ol", {class: "dl-rules"}, items.map((x) => h("li", null, x))),
-    h("ul", {class: "dl-ul"},
-      h("li", null, "모든 줄을 한 번 더, 이 규칙을 걸고 돌립니다 (진입·크기는 같고, 규칙은 새 진입만 막음)."),
-      h("li", null, "계좌·판정·비교 화면의 \"정지 규칙 적용 시\"가 그 결과입니다. 덜 잃었는지, 번 것을 놓쳤는지 봅니다.")));
-}
+
 
 // one card per new screen: [route, name, plain words]
 const GUIDE = [
@@ -146,36 +234,6 @@ const GUIDE = [
     "살아 있음 신호: 서버가 통째로 멈추면 바깥 서비스(healthchecks.io)가 두 분께 알립니다."]],
 ];
 
-function paintExits(box, grid, card) {
-  const exits = grid ? grid.exits : null;
-  const half = exits ? exits.find((x) => x.name === "half1R_be_1.5R") : null;
-  if (card && exits) { const pl = card.querySelector(".plate"); if (pl) pl.textContent = `청산 ${exits.length}가지`; }
-  put(box,
-    h("p", null, "0번은 규칙봇과 같은 ", h("b", null, "사다리"), ": 2 ATR 손절로 시작해 이익이 나면 손절을 계단처럼 올립니다. 1~12번은 고정 익절 × 고정 손절입니다: 익절 1 · 1.5 · 2 · 3R × 손절 1.5 · 2 · 3 ATR."),
-    half ? h("p", null, `${half.i}번 `, h("b", null, "반익반본"), ": 2 ATR 손절, 1R에서 절반 익절하고 손절을 본전으로 옮긴 뒤 나머지는 1.5R에서 익절합니다.") : null,
-    exits ? h("div", {class: "row wrap dl-pills"}, exits.map((x) => h("span", {class: "pp"}, `${x.i}. ${x.ko}`))) : null);
-}
-
-function paintSettings(box, grid) {
-  if (!grid) return;
-  put(box, h("p", {class: "dl-fk2"}, "고정 계좌가 쓰는 값"), ui.table([
-    {label: "매매법", l: true, get: (s) => h("b", null, s.short)},
-    {label: "기본값", l: true, get: (s) => h("span", {class: "mono"}, s.default || "—")},
-    {label: "친구 값", l: true, get: (s) => h("span", {class: "mono"}, s.friend || "없음")},
-    {label: "5년 1등 (15분 / 30분)", l: true, get: (s) => h("span", {class: "mono"}, `${s.pick["15m"]} / ${s.pick["30m"]}`)},
-  ], grid.strategies, {cls: "dl-sets"}));
-}
-
-function paintRules(box, judge) {
-  const rk = judge && !isMissing(judge) ? judge.rules_ko || {} : {};
-  const list = (items, fallback) => (items && items.length ? h("ol", {class: "dl-rules"}, items.map((x) => h("li", null, x))) : ui.note(fallback));
-  put(box,
-    ui.card({plate: "우리 기준"}, h("p", null, "실시간 거래만으로 봅니다. 아래를 모두 넘어야 통과입니다."),
-      list(rk.ours, "판정 자료가 나오면 기준 문구가 여기 나옵니다.")),
-    ui.card({plate: "친구 기준"}, h("p", null, "친구 방식: 지난 26주에 돈을 벌면서 낙폭이 가장 작은 설정을 일주일 돌려 봅니다."),
-      list(rk.friend, "판정 자료가 나오면 기준 문구가 여기 나옵니다.")),
-  );
-}
 
 // ---------------------------------------------------------------- round 4 part B (CONTRACT 9.8-9.10): screens + 용어집
 const GUIDE4B = [
@@ -206,6 +264,7 @@ const GUIDE4B = [
     + "모두 이 기기에만 기억합니다."]],
 ];
 
+
 // round 5 (the rule bot's v4 look): renamed menu entries and the screens rebuilt in that look
 const GUIDE5 = [
   [null, "이름이 바뀐 메뉴", ["요약 = 예전 '홈' (판정, 12/31 목표, 지금 시장, 잘 되는 줄 · 안 되는 줄).",
@@ -226,6 +285,7 @@ const GUIDE5 = [
     "탭: 포지션 · 손절·목표 (손절에 가까운 순) · 체결 기록 (최근 거래, 방향 · 결과로 거름). 코인 칸에는 롱 ↑ · 숏 ↓ 수와 한 방향 몰림 표시."]],
 ];
 
+
 // 용어집: [term, plain words]
 const GLOSSARY = [
   ["R", "손절 폭을 1로 본 손익입니다. 손절에 걸리면 −1R, 손절 폭의 두 배를 벌면 +2R. 배수나 돈 크기와 상관없이 거래끼리 비교할 수 있습니다."],
@@ -244,17 +304,3 @@ const GLOSSARY = [
   ["국면", "시장의 상태: 추세(4시간봉 EMA 기울기로 상승 · 하락 · 횡보)와 변동(15분 ATR이 지난 90일 중 큰 편 · 보통 · 작은 편). 시장 국면 화면에서 봅니다."],
   ["버티는 수익", "수익이 몇 건의 큰 거래, 한두 코인, 운 좋은 앞 시기에만 기대지 않는지 봅니다: 큰 거래 5건의 몫, 앞 절반 → 뒤 절반 평균 R, 번 코인 수, 가장 긴 연속 손실."],
 ];
-
-/** The round 4 screens' guide cards and the glossary (용어집). */
-function round4b() {
-  return h("div", {class: "stack"},
-    h("h2", {class: "dl-h2"}, "화면 안내 (4차: 판정 · 분석 화면과 위쪽 막대)"),
-    h("div", {class: "grid2 dl-guide"}, GUIDE4B.map(([id, name, items]) => ui.card({plate: name,
-      acts: id ? h("a", {class: "btn-line", href: `#/${id}`}, "열기") : null}, h("ul", {class: "dl-ul"}, items.map((x) => h("li", null, x)))))),
-    h("h2", {class: "dl-h2"}, "화면 안내 (5차: 규칙봇 v4 모습)"),
-    h("div", {class: "grid2 dl-guide"}, GUIDE5.map(([id, name, items]) => ui.card({plate: name,
-      acts: id ? h("a", {class: "btn-line", href: `#/${id}`}, "열기") : null}, h("ul", {class: "dl-ul"}, items.map((x) => h("li", null, x)))))),
-    h("h2", {class: "dl-h2", id: "glossary"}, "용어집"),
-    ui.card({plate: "용어집", sub: "화면에 자주 나오는 말을 쉬운 말로"},
-      h("dl", {class: "g4-gloss"}, GLOSSARY.map(([k, v]) => h("div", null, h("dt", null, k), h("dd", null, v))))));
-}

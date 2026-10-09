@@ -1702,3 +1702,102 @@ def test_r5_the_fake_ranking_rows_have_a_spark_and_the_24h_pnl(folders):
             assert ln["spark"][0] == 1000.0                                         # the live start
             assert ln["pnl_pct_24h"] is None or isinstance(ln["pnl_pct_24h"], (int, float)), (a["id"], L)
     assert any(ln["pnl_pct_24h"] != ln["pnl_pct"] for a in _file(folders, "accounts.json")["accounts"] for ln in a["lines"].values())
+
+
+# ---------------------------------------------------------------- round 5 stage 2B (the rule bot's v4 look on 17 more screens)
+R5S2B_CSS = "v4s2b.css"
+# each restyled screen and the snapshot / server routes it reads (unchanged by the restyle)
+R5S2B_SCREENS = {
+    "rank": ["/api/grid", "/api/rank"], "map": ["/api/grid", "/api/rank"], "strategies": ["/api/grid", "/api/accounts", "/api/setting"],
+    "vs5y": ["/api/vs5y"], "whatif": ["/api/accounts", "/api/setting"], "analysis": ["/api/analysis"], "regime": ["/api/regime"],
+    "costs": ["/api/costs"], "market": ["/api/market", "/api/live"], "signals": ["/api/signals_now"], "review": ["/api/review"],
+    "views": ["/api/views"], "telegram": ["/api/telegram"], "status": ["/api/backup", "/api/watch"], "dataq": ["/api/dataq"],
+    "timeline": ["/api/timeline"], "howto": ["/api/grid", "/api/judge"],
+}
+R5S2B_QUERY = {"/api/rank": "?strat=S2&tf=15m", "/api/setting": "?strat=S2&tf=15m&c=0"}
+
+
+def test_r5s2b_css_is_served_linked_after_the_kit_and_needs_the_login(anon, client):
+    index = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    assert f'<link rel="stylesheet" href="/static/{R5S2B_CSS}">' in index
+    # loaded last, right after the stage 1 sheets, so its screen rules win where they meet
+    assert index.index("/static/v4kit.css") < index.index("/static/v4screens.css") < index.index(f"/static/{R5S2B_CSS}") < index.index("skin-boot.js")
+    r = client.get(f"/static/{R5S2B_CSS}")
+    assert r.status_code == 200 and r.headers["content-security-policy"] == CSP and "text/css" in r.headers["content-type"]
+    assert ".s2-" in r.text and "[data-screen=" in r.text
+    assert anon.get(f"/static/{R5S2B_CSS}", follow_redirects=False).status_code == 303
+
+
+def test_r5s2b_css_uses_tokens_the_type_scale_and_stops_its_motion():
+    src = open(os.path.join(STATIC, R5S2B_CSS), encoding="utf-8").read()
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", src) and "rgb(" not in src and "hsl(" not in src
+    assert "url(" not in src and "@import" not in src
+    for m in re.finditer(r"font-size:\s*([^;}]+)", src):
+        assert "var(--t-" in m.group(1) or "var(--ts)" in m.group(1), m.group(0)
+    for m in re.finditer(r"(?<![-\w])font:\s*([^;}]+)", src):
+        v = m.group(1).strip()
+        assert v == "inherit" or "var(--t-" in v or "var(--ts)" in v, m.group(0)
+    assert "prefers-reduced-motion" in src
+    # the v4 pieces it brings: heat-cell steps, the gauge board, tiles, the LED strip, time-stamped rows, the FAQ and the glossary
+    for cls in ('.s2-hc[data-b="-4"]', '.s2-hc[data-b="4"]', ".s2-gboard", ".s2-tile", ".s2-led", ".s2-trow", ".s2-qb", ".ft-row",
+                ".s2-mkt", ".s2-sgc", ".s2-ctl"):
+        assert cls in src, cls
+
+
+def test_r5s2b_screens_build_dom_from_text_only_and_read_the_same_routes():
+    screens = dict(re.findall(r"(\w+): \"(\w+)\"", re.search(r"const SCREENS = \{([^}]*)\}", _app_js()).group(1)))
+    for name, routes in R5S2B_SCREENS.items():
+        assert screens.get(name) == name, name
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        assert "export async function mount(" in src and "ui.screenHead(" in src, name
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{name}.js uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, name
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src), name
+        assert "localStorage" not in src and "sessionStorage" not in src, name
+        for route in routes:
+            assert route in src, (name, route)
+        if name != "howto":                                                 # howto is words only (its numbers have fallbacks)
+            assert "준비 중" in src or "ui.missing(" in src, name
+    # the live screens still load their css and never ask Binance from the browser
+    for name in ("market", "signals", "dataq", "timeline"):
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        assert "needCss()" in src and "binance.com" not in src, name
+    # the v4 look per screen (the kit's pieces, no new features)
+    look = {"rank": ("k4-table", "chipToggle", "k4-th", "liveNum"), "map": ("s2-hc", "s2-scale"), "strategies": ("groupCards", "acctFig", "더 보기"),
+            "vs5y": ("s2-dots", "s2-tag", "한 표로 보기"), "whatif": ("s2-led", "miniSpark"), "analysis": ("s2-head", "s2-hc"),
+            "regime": ("s2-rgmed", "s2-rgt"), "costs": ("s2-led", "s2-cbrow"), "market": ("tickPrice", "s2-mkt", "s2-mfr"),
+            "signals": ("s2-sgc", "s2-trow"), "review": ("◀ 이전 주", "다음 주 ▶", "lrow"), "views": ("s2-led", "s2-prog", "s2-term"),
+            "telegram": ("s2-trow", "더 보기"), "status": ("g-bar", "s2-tile", "s2-gboard", "s2-dotline"), "dataq": ("s2-tile", "s2-lines"),
+            "timeline": ("ui.plate(day.d)", "s2-tli"), "howto": ("s2-qb", "ft-row", "GLOSSARY")}
+    for name, keys in look.items():
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        for key in keys:
+            assert key in src, (name, key)
+
+
+def test_r5s2b_screens_endpoints_answer_unchanged(anon, client, folders):
+    paths = sorted({r for rs in R5S2B_SCREENS.values() for r in rs if r not in ("/api/live", "/api/market")})
+    for path in paths:
+        url = path + R5S2B_QUERY.get(path, "")
+        r = client.get(url)
+        assert r.status_code == 200, url
+        d = r.json()
+        assert isinstance(d, dict) and d.get("missing") is not True, url
+        assert anon.get(url, follow_redirects=False).status_code == 401, url
+    # the same shapes the screens read
+    assert {"exits", "strategies", "tfs", "windows", "scopes", "sorts"} <= set(client.get("/api/grid").json())
+    rk = client.get("/api/rank?strat=S2&tf=15m&sort=mean_R&dir=asc&limit=5").json()
+    assert {"rows", "total", "settings", "luck95", "min_n", "past5y", "periods"} <= set(rk) and len(rk["rows"]) == 5
+    assert {"exits", "rank"} <= set(client.get("/api/setting?strat=S2&tf=15m&c=0").json())
+    assert {"rows"} <= set(client.get("/api/vs5y").json()) and {"kinds", "accounts"} <= set(client.get("/api/analysis").json())
+    assert {"now", "history", "lines"} <= set(client.get("/api/regime").json())
+    assert {"sizes", "coins", "series", "lines", "maker"} <= set(client.get("/api/costs").json())
+    assert {"votes", "recent", "bar_ms"} <= set(client.get("/api/signals_now").json())
+    assert {"weeks"} <= set(client.get("/api/review").json()) and {"summary", "views"} <= set(client.get("/api/views").json())
+    assert {"items"} <= set(client.get("/api/telegram").json()) and {"events"} <= set(client.get("/api/timeline").json())
+    assert {"coins", "ticks", "errors", "issues"} <= set(client.get("/api/dataq").json())
+    # 시장 reads the live routes (Binance through the server only; a fake Binance here)
+    lc = _live_client(folders, _live("on", FakeBinance())[0])
+    assert [x["coin"] for x in lc.get("/api/live").json()["coins"]] == list(grid.COINS)
+    assert "coins" in lc.get("/api/market").json()

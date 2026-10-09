@@ -4,6 +4,10 @@
 // watch (watch.json) and the dead-man ping (status.deadman), each with a plain ok / problem line; 8.13: the shared
 // server (status.server: memory, load, the rule bot's services) and whether the rule bot still has room.
 // 로그아웃 at the foot.
+// Round 5 stage 2B (the rule bot's v4 서버·비용 look, server.css / server-kit.css): the summary card (a status dot, the
+// phase big, one plain line, four health tiles with a coloured edge), the gauge board (ui.gauge: green < 60 %, amber
+// < 85 %, red above, with the 60 % / 85 % marks) for the shared server and the engine process, the three outside
+// checks as dot lines, the data and the problems as v4 problem lines, Telegram and the run's facts as key-values.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -20,23 +24,34 @@ const ROOM_MB = 1.5 * 1024;    // 8.13: the rule bot has room with >= 1.5 GB ava
 const ROOM_LOAD = 0.7;         // ... and a load under 0.7 x the CPUs
 const UNKNOWN = "알 수 없음";
 
+/** A plate heading for a group of gauges (v4 server-kit secHead). */
+const secHead = (text, sub) => h("div", {class: "s2-sech"}, ui.plate(text), sub ? h("span", {class: "muted"}, sub) : null);
+/** The three state colours, one line (v4 server-kit states). */
+const states = () => h("div", {class: "s2-states", "aria-label": "색의 뜻"},
+  h("span", {class: "ok"}, h("i"), "초록 여유"), h("span", {class: "warn"}, h("i"), "주황 지켜볼 것"), h("span", {class: "bad"}, h("i"), "빨강 조치 필요"));
+/** A health tile with a coloured edge (v4 server-kit tile): {k, v (text or node), s, st: ok|warn|bad|none}. */
+const tile = (o) => h("div", {class: ["s2-tile", o.st || "none"], title: o.title}, h("span", {class: "k"}, o.k), o.v instanceof Node ? o.v : h("b", {class: "v"}, o.v ?? "—"),
+  o.s instanceof Node ? o.s : o.s ? h("span", {class: "s"}, o.s) : null);
+
 export async function mount(el, ctx) {
   ctx.setTitle("서버 상태");
-  const top = h("section", {class: "card hero dl-stop", "aria-label": "엔진 상태"});
-  const data = h("div", {class: "stack tight"}), procBox = h("div"), tg = h("div"), facts = h("div"), issues = h("div");
+  const top = h("section", {class: "card hero s2-sum dl-stop", "aria-label": "엔진 상태"});
+  const data = h("div", {class: "stack tight"}), procBox = h("div", {class: "stack tight"}), tg = h("div"), facts = h("div"), issues = h("div");
   const logout = h("form", {method: "post", action: "/logout", class: "row wrap dl-logout"},
     h("button", {class: "btn-line", type: "submit"}, "로그아웃"),
     h("span", {class: "muted"}, "로그아웃하면 다시 비밀번호를 넣어야 합니다."));
-  const backupBox = h("div"), watchBox = h("div"), deadBox = h("div"), serverBox = h("div");
+  const backupBox = h("div", {class: "stack tight"}), watchBox = h("div", {class: "stack tight"}), deadBox = h("div", {class: "stack tight"}), serverBox = h("div", {class: "stack tight"});
   el.append(ui.screenHead("서버 상태", "엔진이 제대로 도는지 (30초마다 새로 읽음)"), top,
-    ui.card({plate: "서버 같이 쓰기 (규칙봇과 같은 서버)", sub: "데모 랩이 규칙봇의 자리를 빼앗지 않는지"}, serverBox),
+    ui.card({plate: "계기판", sub: "60% · 85%에 눈금", cls: "s2-gcard", acts: states()},
+      h("div", {class: "s2-gboard"},
+        h("div", {class: "s2-gsec"}, secHead("서버 같이 쓰기 (규칙봇과 같은 서버)", "데모 랩이 규칙봇의 자리를 빼앗지 않는지"), serverBox),
+        h("div", {class: "s2-gsec"}, secHead("프로세스·디스크", "데모 랩 엔진 (demobot-live)"), procBox))),
     h("div", {class: "grid3"},
       ui.card({plate: "백업", sub: "매일 04:40 · 다시 만들 수 없는 기록만"}, backupBox),
       ui.card({plate: "바깥 감시", sub: "10분마다 따로 도는 감시"}, watchBox),
       ui.card({plate: "살아 있음 신호", sub: "서버가 통째로 멈춰도 밖에서 알림"}, deadBox)),
     h("div", {class: "grid2"}, ui.card({plate: "시세 자료"}, data), ui.card({plate: "문제"}, issues)),
-    h("div", {class: "grid2"}, ui.card({plate: "프로세스·디스크"}, procBox), ui.card({plate: "텔레그램"}, tg)),
-    ui.card({plate: "실행 정보"}, facts), logout);
+    h("div", {class: "grid2"}, ui.card({plate: "텔레그램"}, tg), ui.card({plate: "실행 정보"}, facts)), logout);
 
   let seen = null, last = null;
   const times = {};
@@ -65,7 +80,7 @@ export async function mount(el, ctx) {
   function paint(st) {
     last = st;
     if (!st || isMissing(st)) {
-      put(top, h("p", {class: "dl-vbig warn"}, "준비 중"), ui.missing("엔진 상태 파일(status.json)"));
+      put(top, h("div", {class: "card-h"}, ui.plate("엔진")), verdictLine(null, "준비 중"), ui.missing("엔진 상태 파일(status.json)"));
       for (const b of [data, procBox, tg, facts, issues, deadBox, serverBox]) put(b, ui.empty("준비 중"));
       return;
     }
@@ -75,21 +90,25 @@ export async function mount(el, ctx) {
     const stale = st.phase === "live" && st.last_tick_ms && nowMs - st.last_tick_ms > 40 * 60000;
     const bad = st.phase === "stopped" || (st.errors && st.errors.length) || stale;
     const warn = !bad && (st.phase === "warm" || st.data_ok === false || (st.data_issues && st.data_issues.length));
-    times.tick = h("b", {class: "num"});
-    times.next = h("b", {class: "num"});
+    const lv = bad ? "bad" : warn ? "warn" : "ok";
+    times.tick = h("b", {class: "v num"});
+    times.next = h("b", {class: "v num"});
     times.tickAgo = h("span", {class: "s"});
     times.nextIn = h("span", {class: "s"});
     times.secs = st.tick_seconds != null ? ` · 처리 ${fmt.num(st.tick_seconds, 1)}초` : "";
+    top.dataset.level = lv;
     put(top,
       h("div", {class: "card-h"}, ui.plate("엔진"), h("span", {class: "sub"}, st.version || "")),
-      h("p", {class: ["dl-vbig", bad ? "no" : warn ? "warn" : "ok"]}, PHASE_KO[st.phase] || st.phase || "—"),
-      h("p", {class: "dl-vline"}, bad ? (stale ? "마지막 처리가 오래됐습니다. 엔진을 확인하세요." : st.phase === "stopped" ? "엔진이 멈춰 있습니다." : "오류가 있습니다. 아래 '문제'를 보세요.")
-        : st.phase === "warm" ? "과거 26주 자료를 채우는 중입니다 (처음 한 번, 약 10분)." : warn ? "돌고 있지만 자료 문제가 있습니다." : "정상으로 돌고 있습니다."),
-      h("div", {class: "stats dl-s4"},
-        ui.stat("마지막 처리", times.tick, times.tickAgo),
-        ui.stat("다음 처리", times.next, times.nextIn),
-        ui.stat("실시간 시작", st.live_start_ms ? fmt.kst(st.live_start_ms) : "—", st.live_start_ms ? fmt.ago(st.live_start_ms) : "아직 시작 전"),
-        ui.stat("과거 자료 시작", st.history_start_ms ? fmt.mmdd(st.history_start_ms) : "—", "설정 순위 26주 창")));
+      h("div", {class: ["s2-dotline", "s2-sumline", lv]}, h("i", {"aria-hidden": "true"}),
+        h("span", {class: "s2-sumt"}, PHASE_KO[st.phase] || st.phase || "—"),
+        h("span", {class: "s2-sumsay"}, bad ? (stale ? "마지막 처리가 오래됐습니다. 엔진을 확인하세요." : st.phase === "stopped" ? "엔진이 멈춰 있습니다." : "오류가 있습니다. 아래 '문제'를 보세요.")
+          : st.phase === "warm" ? "과거 26주 자료를 채우는 중입니다 (처음 한 번, 약 10분)." : warn ? "돌고 있지만 자료 문제가 있습니다." : "정상으로 돌고 있습니다.")),
+      h("div", {class: "s2-tiles", style: {"--n": "4"}},
+        tile({k: "마지막 처리", v: times.tick, s: times.tickAgo, st: stale ? "bad" : st.last_tick_ms ? "ok" : "none"}),
+        tile({k: "다음 처리", v: times.next, s: times.nextIn, st: st.next_tick_ms ? "ok" : "none"}),
+        tile({k: "실시간 시작", v: st.live_start_ms ? fmt.kst(st.live_start_ms) : "—", s: st.live_start_ms ? fmt.ago(st.live_start_ms) : "아직 시작 전",
+          st: st.live_start_ms ? "ok" : "warn"}),
+        tile({k: "과거 자료 시작", v: st.history_start_ms ? fmt.mmdd(st.history_start_ms) : "—", s: "설정 순위 26주 창", st: st.history_start_ms ? "ok" : "none"})));
     paintTimes(st);
 
     const lb = st.last_bar_ms || {};
@@ -97,33 +116,35 @@ export async function mount(el, ctx) {
       {label: "봉", l: true, get: (r) => h("b", null, tfKo(r[0]))},
       {label: "마지막 봉 (한국 시간)", get: (r) => fmt.kst(r[1])},
       {label: "얼마 전", get: (r) => fmt.ago(r[1])},
-    ], Object.entries(lb)), h("div", {class: "row wrap dl-pills"},
+    ], Object.entries(lb), {cls: "s2-dense"}), h("div", {class: "row wrap dl-pills"},
       st.data_ok === false ? ui.pill("자료 문제 있음", "bad") : ui.pill("자료 정상", "good"),
       ui.pill(`코인 ${fmt.int((st.coins || []).length)}개`, "thin"),
       ...(st.coins || []).map((c) => h("span", {class: "pp"}, fmt.coin(c)))));
 
     const iss = st.data_issues || [], errs = st.errors || [];
-    put(issues, !iss.length && !errs.length ? ui.empty("문제 없음") : h("div", {class: "stack tight"},
-      errs.length ? h("div", null, h("b", {class: "down"}, `오류 ${errs.length}건`), h("ul", {class: "dl-ul"}, errs.slice(0, 20).map((x) => h("li", null, String(x))))) : null,
-      iss.length ? h("div", null, h("b", {class: "warn-t"}, `자료 문제 ${iss.length}건`), h("ul", {class: "dl-ul"}, iss.slice(0, 20).map((x) => h("li", null, String(x))))) : null));
+    put(issues, !iss.length && !errs.length ? verdictLine(true, "문제 없음") : h("div", {class: "stack tight"},
+      errs.length ? h("div", {class: "stack tight"}, h("b", {class: "down"}, `오류 ${errs.length}건`),
+        h("ul", {class: "s2-lines"}, errs.slice(0, 20).map((x) => h("li", {class: "bad"}, String(x))))) : null,
+      iss.length ? h("div", {class: "stack tight"}, h("b", {class: "warn-t"}, `자료 문제 ${iss.length}건`),
+        h("ul", {class: "s2-lines"}, iss.slice(0, 20).map((x) => h("li", {class: "warn"}, String(x))))) : null));
 
     const p = st.proc || {};
-    put(procBox, h("div", {class: "stack tight"},
-      gauge("메모리 (엔진)", p.rss_mb, MEM_CAP_MB, fmt.mb(p.rss_mb), `한도 ${fmt.mb(MEM_CAP_MB)}`),
+    put(procBox, h("div", {class: "s2-gauges"},
+      gauge("메모리 (엔진)", p.rss_mb, MEM_CAP_MB, fmt.mb(p.rss_mb), `한도 ${fmt.mb(MEM_CAP_MB)}`, "엔진이 쓰는 메모리 (systemd 한도까지)"),
       p.cpu_pct == null && p.cpu_s != null
         ? h("div", {class: "stats"}, ui.stat("CPU (엔진)", fmt.dur(p.cpu_s), "시작부터 쓴 CPU 시간 (한도 30%)"))
-        : gauge("CPU (엔진)", p.cpu_pct, CPU_CAP_PCT, fmt.pct(p.cpu_pct), `한도 ${CPU_CAP_PCT}%`),
-      h("div", {class: "stats"},
-        ui.stat("데이터베이스", fmt.mb(st.db_mb), "demo.db"),
-        ui.stat("남은 디스크", fmt.mb(st.disk_free_mb), Number(st.disk_free_mb) < DISK_LOW_MB ? "모자람" : "여유",
-          Number(st.disk_free_mb) < DISK_LOW_MB ? "dl-bad" : null))));
+        : gauge("CPU (엔진)", p.cpu_pct, CPU_CAP_PCT, fmt.pct(p.cpu_pct), `한도 ${CPU_CAP_PCT}%`, "엔진이 쓰는 CPU (한도 30%)")),
+    h("div", {class: "s2-tiles", style: {"--n": "2"}},
+      tile({k: "데이터베이스", v: fmt.mb(st.db_mb), s: "demo.db", st: st.db_mb != null ? "ok" : "none"}),
+      tile({k: "남은 디스크", v: fmt.mb(st.disk_free_mb), s: Number(st.disk_free_mb) < DISK_LOW_MB ? "모자람" : "여유",
+        st: st.disk_free_mb == null ? "none" : Number(st.disk_free_mb) < DISK_LOW_MB ? "bad" : "ok"})));
 
     const t = st.telegram || {};
     put(tg, ui.kv([
       ["설정", t.configured ? "됨" : "안 됨 (토큰·방 없음)"],
       ["보낼 것", t.queued != null ? `${fmt.int(t.queued)}개` : "—"],
       ["마지막 보냄", t.last_ok_ms ? `${fmt.kst(t.last_ok_ms)} (${fmt.ago(t.last_ok_ms)})` : "—"],
-    ]), t.last_error ? h("p", {class: "errbox"}, `마지막 오류: ${t.last_error}`) : null);
+    ]), t.last_error ? h("ul", {class: "s2-lines"}, h("li", {class: "bad"}, `마지막 오류: ${t.last_error}`)) : null);
 
     const c = st.counts || {}, cost = st.costs || {};
     put(facts, ui.kv([
@@ -150,9 +171,9 @@ export async function mount(el, ctx) {
   }
 }
 
-/** The one plain line of a side card: ok (green) or a problem (red), never colour alone. */
-const verdictLine = (ok, text) => h("p", {class: ["dl-okline", ok == null ? "na" : ok ? "ok" : "bad"]},
-  h("span", {class: "dl-okmk", "aria-hidden": "true"}, ok == null ? "?" : ok ? "✓" : "!"), text);
+/** The one plain line of a card: ok / a problem / unknown, as a v4 status dot line (never colour alone: the words say it). */
+const verdictLine = (ok, text) => h("p", {class: ["s2-dotline", "s2-okline", ok == null ? "none" : ok ? "ok" : "bad"]},
+  h("i", {"aria-hidden": "true"}), h("span", {class: "sr"}, ok == null ? "모름: " : ok ? "정상: " : "문제: "), h("span", null, text));
 const kb = (bytes) => (fmt.bad(bytes) ? UNKNOWN : Number(bytes) >= 1048576 ? `${fmt.num(bytes / 1048576, 1)} MB` : `${fmt.num(bytes / 1024, 0)} KB`);
 const hrsAgo = (ms) => (Date.now() - Number(ms)) / 3.6e6;
 
@@ -170,7 +191,7 @@ function paintBackup(box, b) {
       ["크기", kb(b.bytes)],
       ["암호", b.encrypted == null ? UNKNOWN : b.encrypted ? "걸려 있음" : "안 걸림"],
     ]),
-    tables.length ? h("p", {class: "note"}, "담은 것: " + tables.map(([k, n]) => `${k} ${fmt.int(n)}`).join(" · ")) : null);
+    tables.length ? ui.disclosure("담은 것 (더 보기)", h("p", {class: "note"}, tables.map(([k, n]) => `${k} ${fmt.int(n)}`).join(" · "))) : null);
 }
 
 function paintWatch(box, w) {
@@ -183,7 +204,7 @@ function paintWatch(box, w) {
     verdictLine(ok, ok ? "바깥 감시: 모두 정상입니다."
       : stale ? `바깥 감시 문제: ${WATCH_OK_MIN}분 넘게 감시가 돌지 않았습니다 (마지막 ${w.checked_ms ? fmt.ago(w.checked_ms) : "기록 없음"}).`
         : `바깥 감시가 문제를 봤습니다: ${bad.map((x) => WATCH_KO[x.what] || x.what).join(", ") || "자세한 것 없음"}`),
-    items.length ? h("div", {class: "dl-list"}, items.map((x) => h("div", {class: "dl-ev"},
+    items.length ? h("div", {class: "dl-list s2-wlist"}, items.map((x) => h("div", {class: "dl-ev"},
       h("div", {class: "dl-evt"}, ui.mark(x.ok == null ? null : !!x.ok), h("b", null, WATCH_KO[x.what] || String(x.what ?? "—"))),
       x.detail_ko ? h("div", {class: "dl-evb muted"}, x.detail_ko) : null))) : ui.none(),
     h("p", {class: "note"}, w.checked_ms ? `마지막 감시 ${fmt.kst(w.checked_ms)} (${fmt.ago(w.checked_ms)})` : "마지막 감시: 기록 없음"));
@@ -215,33 +236,35 @@ function paintServer(box, sv) {
   const memOk = avail == null ? null : avail >= ROOM_MB;
   const loadOk = load == null || cpus == null || cpus <= 0 ? null : load < cpus * ROOM_LOAD;
   const room = memOk == null || loadOk == null ? null : memOk && loadOk;
-  const bar = (frac, cls, label) => h("div", {class: ["dl-sbar", cls]}, h("div", {class: "g-bar"}, frac == null ? null
-    : h("i", {style: {"--v": `${Math.max(0, Math.min(1, frac)) * 100}%`}})), h("span", {class: "muted"}, label));
+  const bar = (frac) => h("div", {class: "g-bar s2-nomarks"}, frac == null ? null : h("i", {style: {"--v": `${Math.max(0, Math.min(1, frac)) * 100}%`}}));
   const units = Array.isArray(sv.rule_bot) ? sv.rule_bot : [];
   put(box,
     verdictLine(room, room == null ? `${UNKNOWN}: 메모리나 부하 값이 없습니다.` : room ? "규칙봇 여유 있음" : "여유가 줄었음: 개발자에게 화면 보내기"),
-    h("div", {class: "grid2"},
+    h("div", {class: "s2-gauges"},
       h("div", {class: ["gauge", memOk == null ? "none" : memOk ? "ok" : "bad"]},
         h("div", {class: "g-top"}, h("span", {class: "g-name"}, "남은 메모리"),
           h("span", {class: "g-st"}, memOk == null ? UNKNOWN : memOk ? "여유" : "모자람"),
           h("span", {class: "g-val"}, avail == null ? UNKNOWN : fmt.mb(avail), h("small", null, ` / 전체 ${tot == null ? UNKNOWN : fmt.mb(tot)}`))),
-        bar(avail != null && tot ? avail / tot : null, "", `기준: 1.5 GB 이상 남아야 함${sv.swap_used_mb != null ? ` · 스왑 사용 ${fmt.mb(sv.swap_used_mb)}` : ""}`)),
+        bar(avail != null && tot ? avail / tot : null),
+        h("p", {class: "g-mean"}, `기준: 1.5 GB 이상 남아야 함${sv.swap_used_mb != null ? ` · 스왑 사용 ${fmt.mb(sv.swap_used_mb)}` : ""}`)),
       h("div", {class: ["gauge", loadOk == null ? "none" : loadOk ? "ok" : "bad"]},
         h("div", {class: "g-top"}, h("span", {class: "g-name"}, "부하 (5분 평균)"),
           h("span", {class: "g-st"}, loadOk == null ? UNKNOWN : loadOk ? "여유" : "바쁨"),
           h("span", {class: "g-val"}, load == null ? UNKNOWN : fmt.num(load, 2), h("small", null, ` / CPU ${cpus == null ? UNKNOWN : `${fmt.int(cpus)}개`}`))),
-        bar(load != null && cpus ? load / cpus : null, "", `기준: CPU 수 × 0.7 미만 · 1·5·15분 ${loads.length ? loads.map((x) => (x == null ? "?" : fmt.num(x, 2))).join(" · ") : UNKNOWN}`))),
-    h("p", {class: "dl-fk2"}, "규칙봇 서비스"),
+        bar(load != null && cpus ? load / cpus : null),
+        h("p", {class: "g-mean"}, `기준: CPU 수 × 0.7 미만 · 1·5·15분 ${loads.length ? loads.map((x) => (x == null ? "?" : fmt.num(x, 2))).join(" · ") : UNKNOWN}`))),
+    h("p", {class: "s2-sub"}, "규칙봇 서비스"),
     units.length ? ui.table([
       {label: "서비스", l: true, get: (u) => h("span", {class: "mono", title: String(u.unit ?? "")}, u.unit == null ? UNKNOWN : String(u.unit).replace(/\.service$/, ""))},
       {label: "상태", get: (u) => (u.active == null ? h("span", {class: "muted"}, UNKNOWN)
         : ui.pill(ACTIVE_KO[u.active] || String(u.active), u.active === "active" ? "good" : u.active === "failed" ? "bad" : "thin"))},
       {label: "메모리", get: (u) => (u.mem_mb == null ? h("span", {class: "muted"}, UNKNOWN) : fmt.mb(u.mem_mb))},
-    ], units) : ui.none(`규칙봇 서비스: ${UNKNOWN}`),
+    ], units, {cls: "s2-dense"}) : ui.none(`규칙봇 서비스: ${UNKNOWN}`),
     ui.note("데모 랩은 규칙봇과 같은 서버에서 돕니다. 남은 메모리가 1.5 GB 아래로 내려가거나 부하가 CPU 수의 70%를 넘으면 규칙봇이 느려질 수 있으니, 이 카드를 찍어 개발자에게 보내 주세요."));
 }
 
-function gauge(name, value, cap, shown, capKo) {
+/** v4 ui.gauge: name, state words, the value over its cap, the bar with the 60 % / 85 % marks, one line of meaning. */
+function gauge(name, value, cap, shown, capKo, mean) {
   const have = value != null && Number.isFinite(Number(value));
   const r = have ? Number(value) / cap : null;
   const st = !have ? "none" : r < 0.6 ? "ok" : r < 0.85 ? "warn" : "bad";
@@ -249,5 +272,6 @@ function gauge(name, value, cap, shown, capKo) {
   return h("div", {class: ["gauge", st]},
     h("div", {class: "g-top"}, h("span", {class: "g-name"}, name), h("span", {class: "g-st"}, stKo),
       h("span", {class: "g-val"}, have ? shown : "—", h("small", null, ` · ${capKo}`))),
-    r != null ? h("div", {class: "g-bar"}, h("i", {style: {"--v": Math.max(0, Math.min(1, r)) * 100 + "%"}})) : null);
+    r != null ? h("div", {class: "g-bar", role: "img", "aria-label": `${name} ${fmt.num(r * 100, 0)}%`}, h("i", {style: {"--v": Math.max(0, Math.min(1, r)) * 100 + "%"}})) : null,
+    mean ? h("p", {class: "g-mean"}, mean) : null);
 }
