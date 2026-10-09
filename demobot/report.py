@@ -12,6 +12,7 @@ import numpy as np
 
 from . import accounts as A
 from . import costs as CO
+from . import extra as EX
 from . import grid as G
 from . import regime as RG
 from . import review as RV
@@ -59,6 +60,7 @@ def account_header(a: A.Acct, r: dict) -> dict:
         lines[str(L)] = ln
     sw = r.get("switch_log", [])
     return dict(id=a.id, kind=a.kind, sub=a.sub, name=a.name, strategy=a.strat, short=a.short, tf=a.tf,
+                combo=(a.combo if a.kind == "fixed" else None), exit_i=(0 if a.kind == "fixed" else None),
                 rule_ko=a.rule_ko, setting_ko=_setting_line(r["settings_now"] if a.kind != "friend" else
                                                             [s for s in r["settings_now"] if s.get("L") == 20]),
                 lines=lines, switches=len(sw), last_switch_ms=(sw[0]["t_ms"] if sw else None))
@@ -103,6 +105,18 @@ def write_snapshots(eng, res: dict, judge: dict, snap: str, now_ms: int, tick_in
     regime = RG.snapshot(reg, res, live0, now_ms)
     ST.write_json(os.path.join(snap, "regime.json"), regime)
     write_bars(eng, snap)
+    cal, daily_acct, eq_total, pnl_total = EX.calendar(res, now_ms)
+    ST.write_json(os.path.join(snap, "calendar.json"), cal)
+    ST.write_json(os.path.join(snap, "positions.json"), EX.positions(eng, res, now_ms))
+    ST.write_json(os.path.join(snap, "signals_now.json"), EX.signals_now(eng, res, now_ms))
+    ST.write_json(os.path.join(snap, "analysis.json"), EX.analysis(res, now_ms))
+    ST.write_json(os.path.join(snap, "vs5y.json"), EX.vs5y(res, now_ms))
+    ST.write_json(os.path.join(snap, "timeline.json"), EX.timeline(eng.conn, now_ms))
+    ST.write_json(os.path.join(snap, "dataq.json"), EX.dataq(eng, now_ms, snap))
+    hour = now_ms // 3_600_000
+    if ST.get_meta(eng.conn, "export_hour") != hour or not os.path.exists(os.path.join(snap, "export", "index.json")):
+        EX.write_exports(res, snap, now_ms)
+        ST.set_meta(eng.conn, "export_hour", hour)
     rows = []
     all_trades = []
     for a in A.current_accounts():
@@ -120,6 +134,7 @@ def write_snapshots(eng, res: dict, judge: dict, snap: str, now_ms: int, tick_in
         curves_stops = {str(L): downsample([[int(t), float(v)] for t, v in sim["curve"]]) for L, sim in sl.items()}
         stop_events = sorted((e for sim in sl.values() for e in sim["rules"].events), key=lambda e: -e["t_ms"])
         detail = dict(head, curves=curves, curves_stops=curves_stops, stop_events=stop_events[:STOP_EVENTS_MAX],
+                      daily=daily_acct.get(a.id, {}),
                       trades=pub, decisions=r["switch_log"], settings_now=r["settings_now"],
                       positions=[p for p in pub if p["status"] == "open"])
         ST.write_json(os.path.join(snap, "acct", f"{a.id}.json"), detail)
@@ -137,6 +152,8 @@ def write_snapshots(eng, res: dict, judge: dict, snap: str, now_ms: int, tick_in
     ST.write_json(os.path.join(snap, "judge.json"), jd)
     home = home_snapshot(eng, res, judge, snap, now_ms, rows, all_trades, phase)
     home["goal"] = goal_line(judge, rows, now_ms, phase)
+    home["equity_total"] = eq_total
+    home["pnl_total"] = pnl_total
     home["regime_now"] = regime["now"]
     home["costs_now"] = dict(median_entry_bps=CO.median_entry_bps(costs), assumed_bps=CO.ASSUMED_BPS)
     home["totals"]["confirming"] = sum(1 for c in judge.get("confirm", []) if c["status"] == "confirming")

@@ -12,6 +12,7 @@ from . import accounts as A
 from . import costs as CO
 from . import data as D
 from . import engine as EN
+from . import extra as EX
 from . import judge as J
 from . import rank as RK
 from . import report as RP
@@ -74,6 +75,17 @@ class Runner:
 
     def start(self) -> None:
         self.eng.load()
+        try:
+            ver = EX.code_version()
+            old = ST.get_meta(self.conn, "code_version")
+            now = self.clock_ms()
+            if old and old != ver:
+                EX.add_event(self.conn, now, "update", f"새 코드로 다시 시작 ({old} → {ver})")
+            else:
+                EX.add_event(self.conn, now, "start", f"엔진 시작 (코드 {ver})")
+            ST.set_meta(self.conn, "code_version", ver)
+        except Exception as exc:
+            self.log("timeline start event failed:", type(exc).__name__)
         if self.outbox is not None:
             self._queue("start", {"phase": "live", "accounts": len(A.current_accounts()), "live_start_ms": self.eng.live_start})
             self._flush()
@@ -125,6 +137,8 @@ class Runner:
         info["seconds_total"] = round(time.time() - t0, 1)
         info["deadman"] = dict(self.deadman)
         if res is not None:
+            self._events(res, judge, now)
+        if res is not None:
             try:
                 RP.write_snapshots(self.eng, res, judge, self.snap, now, info,
                                    self.outbox.state() if self.outbox is not None else None)
@@ -143,6 +157,10 @@ class Runner:
             self._queue("warn", {"what": "data", "detail_ko": "; ".join(self.eng.issues)[:500]})
         self._flush()
         self._telegram_log(now)
+        try:
+            EX.record_tick(self.conn, now, info.get("seconds_total"), errors)
+        except Exception as exc:
+            self.log("tick record failed:", type(exc).__name__)
         self.log("tick", info)
         return info
 
@@ -158,6 +176,23 @@ class Runner:
             ST.write_json(os.path.join(self.snap, "telegram.json"), dict(generated_ms=now, items=items))
         except Exception as exc:
             self.log("telegram log failed:", type(exc).__name__)
+
+    def _events(self, res, judge, now: int) -> None:
+        """Timeline events (CONTRACT 9.9): private plug-in set changes, confirmations started and decided."""
+        try:
+            ids = sorted(a.id for a in A.current_accounts() if a.kind == "private")
+            if ids != (ST.get_meta(self.conn, "plugin_ids") or []):
+                EX.add_event(self.conn, now, "plugins", f"비공개 매매법 계좌 {len(ids)}개를 읽음")
+                ST.set_meta(self.conn, "plugin_ids", ids)
+            for aid, L, _start in (judge or {}).get("confirm_started", []):
+                EX.add_event(self.conn, now, "pass", f"{A.by_id(aid).name} {L}배: 우리 기준 통과, 4주 확인 기간 시작")
+            for p in (judge or {}).get("confirm_decided", []):
+                ok = p["status"] == "confirmed"
+                EX.add_event(self.conn, now, "confirmed" if ok else "failed",
+                             f"{A.by_id(p['acct']).name} {p['L']}배: " + ("확인 기간 통과, 실전 후보" if ok else
+                                                                        "확인 기간 실패 · " + p["result"].get("why_ko", "")))
+        except Exception as exc:
+            self.log("timeline events failed:", type(exc).__name__)
 
     def _depth(self, now: int) -> None:
         """The order books of the bar that just opened (CONTRACT 8.3); a failure only skips this tick's record."""

@@ -64,12 +64,13 @@ def _ours(res: dict, a, L: int, sim: dict) -> dict:
         checks.append(dict(name_ko=RULES_OURS[3], ok=line["pnl"] > ref["pnl"],
                            value_ko=f"${line['pnl']:+,.2f} vs {ref_ko} ${ref['pnl']:+,.2f}"))
     mu, sd = _flip_pool(res, a.tf, L)
+    lim = None
     if mean is None or mu is None or n < 2:
         checks.append(dict(name_ko=RULES_OURS[4], ok=False, value_ko="거래가 아직 적음"))
     else:
         lim = mu + 1.645 * sd / math.sqrt(n)
         checks.append(dict(name_ko=RULES_OURS[4], ok=mean > lim, value_ko=f"{mean:+.3f}R vs 기준 {lim:+.3f}R"))
-    return dict(pass_=all(c["ok"] for c in checks), checks=checks)
+    return dict(pass_=all(c["ok"] for c in checks), checks=checks, n=n, mean_R=mean, luck_lim=lim, boot_low=lowb)
 
 
 def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
@@ -90,7 +91,8 @@ def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
     fchecks = [dict(name_ko=RULES_FRIEND[0], ok=pnl7 > 0, value_ko=f"${pnl7:+,.2f} ({len(wk)}건)"),
                dict(name_ko=RULES_FRIEND[1], ok=not bad7, value_ko=("있음" if bad7 else "없음"))]
     friend = dict(pass_=(all(c["ok"] for c in fchecks) if wk else None), checks=fchecks)
-    return dict(id=aid, name=a.name, L=L, ours=_pub(ours), friend=_pub(friend), stops=stops)
+    return dict(id=aid, name=a.name, L=L, ours=_pub(ours), friend=_pub(friend), stops=stops, n=ours["n"],
+                mean_R=ours["mean_R"], luck_lim=ours["luck_lim"], boot_low=ours["boot_low"])
 
 
 def _pub(d: dict) -> dict:

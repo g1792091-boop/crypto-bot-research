@@ -427,3 +427,52 @@ def test_deadman_ping():
     def boom(req, timeout):
         raise OSError("no route https://hc-ping.com/secret")
     assert LV.ping_deadman("https://hc-ping.com/secret", opener=boom) == "OSError"
+
+
+# ------------------------------------------------------------------ round 4 (CONTRACT section 9)
+def test_round4_snapshots(run):
+    import gzip
+    snap = run["dir"] / "snap"
+    for f in ("positions.json", "calendar.json", "signals_now.json", "analysis.json", "vs5y.json", "timeline.json",
+              "dataq.json"):
+        assert (snap / f).exists(), f
+    pos = json.loads((snap / "positions.json").read_text())
+    for p in pos["positions"]:
+        assert p["L"] in G.LEVS and p["side"] in (1, -1) and p["held_ms"] >= 0
+    assert {c["coin"] for c in pos["by_coin"]} == set(G.COINS)
+    sig = json.loads((snap / "signals_now.json").read_text())
+    assert len(sig["votes"]) == len(G.COINS) * len(G.TFS) * len(G.STRATS)
+    for v in sig["votes"]:
+        assert len(v["history"]) == 96 and 0 <= v["long"] + v["short"] <= v["settings"]
+        assert v["history"][-1][1:] == [v["long"], v["short"]]
+    an = json.loads((snap / "analysis.json").read_text())
+    a0 = an["accounts"][0]
+    assert len(a0["by_hour"]) == 24 and len(a0["by_weekday"]) == 7 and len(a0["hw_n"]) == 7
+    assert sum(sum(r) for r in a0["hw_n"]) == a0["n"] == sum(b["n"] for b in a0["by_hour"])
+    vs = json.loads((snap / "vs5y.json").read_text())
+    assert len(vs["rows"]) == 16 and all(set(r["past"]) == {"2020", "2021-23", "2024-26", "2020-03", "2022-05", "2022-11"}
+                                         for r in vs["rows"])
+    home = json.loads((snap / "home.json").read_text())
+    assert home["pnl_total"] and abs(home["pnl_total"][-1][1] - (home["equity_total"][-1][1] - 48 * 4 * A.SEED)) < 1e-6
+    d = json.loads((snap / "acct" / "fx-def-S2-15m.json").read_text())
+    assert isinstance(d["daily"], dict) and d["combo"] == G.default_combo("S2_ST_ROC") and d["exit_i"] == 0
+    jd = json.loads((snap / "judge.json").read_text())
+    assert all({"n", "mean_R", "luck_lim", "boot_low"} <= set(r) for r in jd["rows"])
+    tl = json.loads((snap / "timeline.json").read_text())
+    assert any(e["what"] == "live" for e in tl["events"])
+    dq = json.loads((snap / "dataq.json").read_text())
+    assert len(dq["coins"]) == 7 and dq["coins"][0]["bars_missing"] == 0
+    idx = json.loads((snap / "export" / "index.json").read_text())
+    assert "fx-def-S2-15m.csv.gz" in idx["files"]
+    text = gzip.open(snap / "export" / "fx-def-S2-15m.csv.gz").read().decode("utf-8")
+    assert text.startswith("\ufeffaccount,name,L,coin")
+
+
+def test_calendar_and_daily_sum_to_closed_pnl(run):
+    res = A.run_all(run["runner"].eng, run["clock"][0])
+    from demobot import extra as EX
+    cal, daily, _eq, _pnl = EX.calendar(res, run["clock"][0])
+    tot = sum(t["pnl"] for r in res.values() for sim in r["lines"].values() for t in sim["trades"]
+              if t["status"] == "closed")
+    assert abs(sum(d["pnl_sum"] for d in cal["days"]) - tot) < 1e-6
+    assert abs(sum(v for acc in daily.values() for day in acc.values() for v in day.values()) - tot) < 1e-6
