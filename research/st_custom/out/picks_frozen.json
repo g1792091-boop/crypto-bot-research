@@ -1,0 +1,5 @@
+{
+ "picks_csv_sha256": "50fb1b3f0753614ac3fa325589f76c4968f2c0ff25284f8ff3ffc6c7c589b240",
+ "frozen_utc": "2026-10-09T01:35:42Z",
+ "note": "picks fixed from SEARCH totals only, before any TEST/EXTRA detail, luck, re-opt, account or INTRABAR result was computed"
+}

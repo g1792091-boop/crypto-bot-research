@@ -1,0 +1,27 @@
+{
+ "series": [
+  "BTCUSD",
+  "30m",
+  "EXTRA",
+  0,
+  21568
+ ],
+ "S2_ST_ROC": {
+  "combos": 343,
+  "mismatches": 0,
+  "first_bad": [],
+  "signals": 562827
+ },
+ "N02_ST_KST": {
+  "combos": 735,
+  "mismatches": 0,
+  "first_bad": [],
+  "signals": 493641
+ },
+ "N04_ST_KLINGER": {
+  "combos": 588,
+  "mismatches": 0,
+  "first_bad": [],
+  "signals": 1336234
+ }
+}

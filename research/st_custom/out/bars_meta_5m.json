@@ -1,0 +1,81 @@
+{
+ "BTCUSD": {
+  "pre_rows": 175381,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 709585,
+  "first": "2020-01-01 00:00:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "ETHUSD": {
+  "pre_rows": 175381,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 709585,
+  "first": "2020-01-01 00:00:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "SOLUSD": {
+  "pre_rows": 101281,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 635485,
+  "first": "2020-09-14 07:00:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "DOGEUSD": {
+  "pre_rows": 120263,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 654467,
+  "first": "2020-07-10 09:00:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "LTCUSD": {
+  "pre_rows": 172978,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 707182,
+  "first": "2020-01-09 08:05:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "BCHUSD": {
+  "pre_rows": 175379,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 709583,
+  "first": "2020-01-01 00:00:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ },
+ "XRPUSD": {
+  "pre_rows": 173830,
+  "monthly": 68,
+  "daily": 29,
+  "overlap_rows": 69973,
+  "overlap_max_rel_ohlc": 0.0,
+  "overlap_pre_only": 0,
+  "overlap_new_only": 0,
+  "source": "pre2021 < 2021-01-01 <= binance cache",
+  "rows": 706594,
+  "first": "2020-01-06 08:20:00+00:00",
+  "last": "2026-09-29 23:55:00+00:00"
+ }
+}

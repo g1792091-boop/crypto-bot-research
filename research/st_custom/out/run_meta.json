@@ -1,0 +1,74 @@
+{
+ "written_utc": "2026-10-09T01:53:10Z",
+ "prereg_sha256": "94a311f021665470291ba00d9eee7f6a3967666a39adb8c8f8c115a28c055e57",
+ "addendum_sha256": "203f8cfb23edc546253b50264bfb556cab9743c4e56738512356ab832e439737",
+ "picks_csv_sha256": "50fb1b3f0753614ac3fa325589f76c4968f2c0ff25284f8ff3ffc6c7c589b240",
+ "defs_bc_manifest_sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+ "code_sha256": {
+  "common.py": "af6c1c06ecac9a6ef548d4ab1b667e5520d1e5d7fd8e7bd1255c6f182d7ffb6f",
+  "intrabar.py": "945b48d115edd8e02b9c81655a89c11130c9d02678f2f8399816cf6ef6f7292c",
+  "s0_bars.py": "b7866e5c7e3467a4c06250206a05abceac9d50db33afe42a3c9841842ab397a5",
+  "s1_outcomes.py": "8e82d7088391b6e523c97b3e615f1d6b83883ef04c2da04d7bae1d2b7c3cf41c",
+  "s2_signals.py": "f6b23fe209a8f1beeccf02b8b013f9cd071d02012b92dfa3eb36f78f7b8cc1bf",
+  "s3_select.py": "6544280a669f4280d9f4a40a537776f3d7fccc7b54d88f11ddba7742feb90609",
+  "s4_detail.py": "e82eccd4827399616939e73f358b4b3a4e83a7abf2441842aeb523cd1fff2e6d",
+  "s5_reopt.py": "f3802673784dfec17daedecf6705cbecb5b81520fe6bcfea6344cd1ac6f22da3",
+  "s6_accounts.py": "59105726bec3e13e909c9d4e2456a7be2dd54d94d9cd7122b828e0147a1e2351",
+  "s7_report.py": "e20bfbae6a8eadbfafae3cfffea2c88b38ed09ffcaf13ac74e3530be662f491f",
+  "s8_tables.py": "9aaa7510bcf2f56e4c90df166307b7b9b2cdea7cc1b91be6638642630b1d3aeb",
+  "s9_write_report.py": "e38a38a1cdd74e075f1e8ccf086ce236ef7272c3bef330d475eb0f919dd17a45",
+  "selfcheck.py": "b4487b70ec5f2bcfb0549d8879e0d2edb862f6a755c4d3b1fba7c5fb4da215f8",
+  "verify_memo.py": "6efd61cee9a009f234c3e502f85080753f0ea2874ea4fb67e5bf7c8f1d42b6ef"
+ },
+ "numpy": "2.4.6",
+ "pandas": "2.3.3",
+ "grid": {
+  "S2_ST_ROC": 343,
+  "N02_ST_KST": 735,
+  "N04_ST_KLINGER": 588
+ },
+ "coins": [
+  "BTCUSD",
+  "ETHUSD",
+  "SOLUSD",
+  "DOGEUSD",
+  "LTCUSD",
+  "BCHUSD",
+  "XRPUSD"
+ ],
+ "tfs": [
+  "15m",
+  "30m"
+ ],
+ "periods": {
+  "EXTRA": [
+   "2020-01-01",
+   "2021-01-01"
+  ],
+  "SEARCH": [
+   "2021-01-01",
+   "2024-01-01"
+  ],
+  "TEST": [
+   "2024-01-01",
+   "2026-09-30"
+  ]
+ },
+ "warmup_bars": 500,
+ "spill_bars": 4000,
+ "stages": [
+  "s0_bars",
+  "s1_outcomes",
+  "s2_signals",
+  "s3_select (picks frozen)",
+  "s4_detail",
+  "selfcheck",
+  "verify_memo",
+  "s5_reopt",
+  "s6_accounts",
+  "s7_report",
+  "intrabar test/run/report",
+  "s8_tables",
+  "s9_write_report"
+ ]
+}

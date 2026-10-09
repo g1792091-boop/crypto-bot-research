@@ -1,0 +1,270 @@
+{
+ "prereg": {
+  "prereg_sha256": "94a311f021665470291ba00d9eee7f6a3967666a39adb8c8f8c115a28c055e57",
+  "addendum_sha256": "203f8cfb23edc546253b50264bfb556cab9743c4e56738512356ab832e439737"
+ },
+ "scan_parity": {
+  "BTCUSD": {
+   "x": 0.0,
+   "R": 8.881784197001252e-16,
+   "gross": 0.0,
+   "roe": 1.1102230246251565e-16,
+   "reason": 0.0,
+   "stage1_vs_precompute_R_done_rows": 2.3677538862898473e-07
+  },
+  "DOGEUSD": {
+   "x": 0.0,
+   "R": 4.440892098500626e-16,
+   "gross": 0.0,
+   "roe": 2.220446049250313e-16,
+   "reason": 0.0,
+   "stage1_vs_precompute_R_done_rows": 1.1749268669092316e-07
+  }
+ },
+ "cache_parity_default_S2_15m": {
+  "BTCUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17410
+  },
+  "ETHUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17455
+  },
+  "SOLUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17016
+  },
+  "DOGEUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17570
+  },
+  "LTCUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17600
+  },
+  "BCHUSD": {
+   "bars_common": 201398,
+   "bars_only_here": 0,
+   "bars_only_cache": 0,
+   "signal_mismatch": 0,
+   "signals": 17504
+  }
+ },
+ "selfcheck": {
+  "window": "signal bars 2021-08-02 .. 2026-09-28 (UTC), 6 coins, S2_ST_ROC default 15m",
+  "known": {
+   "trades": 94310,
+   "mean_net_R": -0.1645,
+   "mean_gross_R": 0.0118,
+   "mean_cost_R": 0.1764,
+   "source": "lens2_custom_values_done/out_R2/cell_desc.csv"
+  },
+  "results": {
+   "this_study_house": {
+    "trades": 94310,
+    "mean_net_R": -0.1656,
+    "mean_gross_R": 0.0098,
+    "mean_cost_R": 0.1754,
+    "win_rate": 0.5618
+   },
+   "lens2_geometry_same_signals": {
+    "trades": 94310,
+    "mean_net_R": -0.1645,
+    "mean_gross_R": 0.0118,
+    "mean_cost_R": 0.1763,
+    "win_rate": 0.5219
+   },
+   "lens2_geometry_cache_signals": {
+    "trades": 94310,
+    "mean_net_R": -0.1645,
+    "mean_gross_R": 0.0118,
+    "mean_cost_R": 0.1763,
+    "win_rate": 0.5219
+   }
+  },
+  "dropped": {
+   "this_study_not_closed": 0,
+   "lens2_not_within_4096": 0,
+   "lens2_cache_not_within_4096": 0
+  },
+  "per_coin": {
+   "BTCUSD": {
+    "this_study": {
+     "trades": 15769,
+     "mean_net_R": -0.2592,
+     "mean_gross_R": 0.0105,
+     "mean_cost_R": 0.2697,
+     "win_rate": 0.4902
+    },
+    "lens2_geometry": {
+     "trades": 15769,
+     "mean_net_R": -0.2585,
+     "mean_gross_R": 0.0129,
+     "mean_cost_R": 0.2715,
+     "win_rate": 0.439
+    },
+    "lens2_cache": {
+     "trades": 15769,
+     "mean_net_R": -0.2585,
+     "mean_gross_R": 0.0129,
+     "mean_cost_R": 0.2715,
+     "win_rate": 0.439
+    },
+    "signals_here": 15769,
+    "signals_cache": 15769,
+    "feasible_share": 0.9978438708859154,
+    "lev30_share": 0.9664531676073308
+   },
+   "ETHUSD": {
+    "this_study": {
+     "trades": 15819,
+     "mean_net_R": -0.1959,
+     "mean_gross_R": 0.0009,
+     "mean_cost_R": 0.1967,
+     "win_rate": 0.5398
+    },
+    "lens2_geometry": {
+     "trades": 15819,
+     "mean_net_R": -0.1844,
+     "mean_gross_R": 0.0134,
+     "mean_cost_R": 0.1978,
+     "win_rate": 0.4989
+    },
+    "lens2_cache": {
+     "trades": 15819,
+     "mean_net_R": -0.1844,
+     "mean_gross_R": 0.0134,
+     "mean_cost_R": 0.1978,
+     "win_rate": 0.4989
+    },
+    "signals_here": 15819,
+    "signals_cache": 15819,
+    "feasible_share": 0.9936152727732473,
+    "lev30_share": 0.9044819520829382
+   },
+   "SOLUSD": {
+    "this_study": {
+     "trades": 15362,
+     "mean_net_R": -0.1194,
+     "mean_gross_R": 0.0065,
+     "mean_cost_R": 0.1259,
+     "win_rate": 0.6046
+    },
+    "lens2_geometry": {
+     "trades": 15362,
+     "mean_net_R": -0.1222,
+     "mean_gross_R": 0.0043,
+     "mean_cost_R": 0.1264,
+     "win_rate": 0.5734
+    },
+    "lens2_cache": {
+     "trades": 15362,
+     "mean_net_R": -0.1222,
+     "mean_gross_R": 0.0043,
+     "mean_cost_R": 0.1264,
+     "win_rate": 0.5734
+    },
+    "signals_here": 15362,
+    "signals_cache": 15362,
+    "feasible_share": 0.9603567243848458,
+    "lev30_share": 0.6841557088920713
+   },
+   "DOGEUSD": {
+    "this_study": {
+     "trades": 15787,
+     "mean_net_R": -0.1329,
+     "mean_gross_R": 0.01,
+     "mean_cost_R": 0.1429,
+     "win_rate": 0.5857
+    },
+    "lens2_geometry": {
+     "trades": 15787,
+     "mean_net_R": -0.1325,
+     "mean_gross_R": 0.0111,
+     "mean_cost_R": 0.1436,
+     "win_rate": 0.5536
+    },
+    "lens2_cache": {
+     "trades": 15787,
+     "mean_net_R": -0.1325,
+     "mean_gross_R": 0.0111,
+     "mean_cost_R": 0.1436,
+     "win_rate": 0.5536
+    },
+    "signals_here": 15787,
+    "signals_cache": 15787,
+    "feasible_share": 0.9610438968771774,
+    "lev30_share": 0.7530879837841262
+   },
+   "LTCUSD": {
+    "this_study": {
+     "trades": 15799,
+     "mean_net_R": -0.143,
+     "mean_gross_R": 0.0165,
+     "mean_cost_R": 0.1595,
+     "win_rate": 0.5767
+    },
+    "lens2_geometry": {
+     "trades": 15799,
+     "mean_net_R": -0.1464,
+     "mean_gross_R": 0.014,
+     "mean_cost_R": 0.1604,
+     "win_rate": 0.5343
+    },
+    "lens2_cache": {
+     "trades": 15799,
+     "mean_net_R": -0.1464,
+     "mean_gross_R": 0.014,
+     "mean_cost_R": 0.1604,
+     "win_rate": 0.5343
+    },
+    "signals_here": 15799,
+    "signals_cache": 15799,
+    "feasible_share": 0.9824672447623267,
+    "lev30_share": 0.8247357427685297
+   },
+   "BCHUSD": {
+    "this_study": {
+     "trades": 15774,
+     "mean_net_R": -0.142,
+     "mean_gross_R": 0.0141,
+     "mean_cost_R": 0.1561,
+     "win_rate": 0.5747
+    },
+    "lens2_geometry": {
+     "trades": 15774,
+     "mean_net_R": -0.1418,
+     "mean_gross_R": 0.0151,
+     "mean_cost_R": 0.1569,
+     "win_rate": 0.5336
+    },
+    "lens2_cache": {
+     "trades": 15774,
+     "mean_net_R": -0.1418,
+     "mean_gross_R": 0.0151,
+     "mean_cost_R": 0.1569,
+     "win_rate": 0.5336
+    },
+    "signals_here": 15774,
+    "signals_cache": 15774,
+    "feasible_share": 0.9821224800304298,
+    "lev30_share": 0.8398630658044884
+   }
+  }
+ }
+}
