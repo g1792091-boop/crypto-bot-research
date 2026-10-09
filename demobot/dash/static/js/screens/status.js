@@ -89,7 +89,7 @@ export async function mount(el, ctx) {
         ui.stat("마지막 처리", times.tick, times.tickAgo),
         ui.stat("다음 처리", times.next, times.nextIn),
         ui.stat("실시간 시작", st.live_start_ms ? fmt.kst(st.live_start_ms) : "—", st.live_start_ms ? fmt.ago(st.live_start_ms) : "아직 시작 전"),
-        ui.stat("과거 자료 시작", st.history_start_ms ? fmt.mmdd(st.history_start_ms) : "—", "순위표 26주 창")));
+        ui.stat("과거 자료 시작", st.history_start_ms ? fmt.mmdd(st.history_start_ms) : "—", "설정 순위 26주 창")));
     paintTimes(st);
 
     const lb = st.last_bar_ms || {};
@@ -136,7 +136,7 @@ export async function mount(el, ctx) {
       ["시작 돈 (줄마다)", fmt.money(st.seed)],
       ["수수료 (한 번)", cost.taker != null ? fmt.ratio(cost.taker, 2) : "—"],
       ["슬리피지 (한 번)", cost.slippage != null ? fmt.ratio(cost.slippage, 2) : "—"],
-      ["펀딩 (순위표)", cost.funding_8h_ranking != null ? `8시간마다 ${fmt.ratio(cost.funding_8h_ranking, 2)}` : "—"],
+      ["펀딩 (설정 순위)", cost.funding_8h_ranking != null ? `8시간마다 ${fmt.ratio(cost.funding_8h_ranking, 2)}` : "—"],
       ["펀딩 (계좌)", cost.funding_accounts === "real" ? "바이낸스 실제 값" : String(cost.funding_accounts ?? "—")],
       ["자료 시각", fmt.kst(st.generated_ms)],
     ]));

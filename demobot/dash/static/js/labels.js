@@ -13,7 +13,7 @@ export const WINDOW_SUB = {live: "실시간 시작부터", "26w": "과거 채운
 
 export const KINDS = [
   {id: "fixed", ko: "고정", desc: "설정을 바꾸지 않고 그대로 돌립니다"},
-  {id: "adaptive", ko: "자동 교체", desc: "순위표를 보고 스스로 설정을 바꿉니다"},
+  {id: "adaptive", ko: "자동 교체", desc: "설정 순위를 보고 스스로 설정을 바꿉니다"},
   {id: "friend", ko: "친구 규칙", desc: "매주 친구 방식으로 설정과 청산을 고릅니다"},
   {id: "flip", ko: "동전 던지기", desc: "아무 때나 아무 방향: 운과 비교하는 기준"},
   {id: "private", ko: "비공개 매매법", desc: "서버에만 있는 매매법 (공개 저장소에 없음) · 판정은 같은 봉 동전 던지기와 비교"},
@@ -53,7 +53,7 @@ export const TG_KIND_KO = {tick: "거래 알림", switch: "설정 교체", daily
   backup: "백업"};
 export const tgKindKo = (k) => TG_KIND_KO[k] || String(k ?? "—");
 export const TG_STATUS_KO = {sent: "보냄", queued: "보낼 차례", error: "보내기 실패"};
-export const WATCH_KO = {dead: "엔진이 살아 있나", rank: "순위표가 도나", backup: "백업이 되나"};
+export const WATCH_KO = {dead: "엔진이 살아 있나", rank: "설정 순위가 도나", backup: "백업이 되나"};
 /** The take-profit of a fixed pair "익절 xR · 손절 yATR" (CONTRACT 8.6), or null for any other exit. */
 export function targetR(exitKo) {
   const m = /^익절\s*([0-9.]+)R\s*·\s*손절\s*[0-9.]+\s*ATR$/.exec(String(exitKo || "").trim());

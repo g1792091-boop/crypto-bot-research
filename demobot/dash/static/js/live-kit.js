@@ -3,7 +3,7 @@
 // lightweight-charts, same as chart.js), small SVG sparklines, the long / short vote bar, the sortable table, the
 // trade-chart link of a position, the live P&L of a position at the live price, and the screens' own stylesheet
 // (/static/live.css, loaded once on first use like the rule bot's v4 router does). Text is always text (dom.js h()).
-import {h, s} from "./dom.js";
+import {h, s, put} from "./dom.js";
 import * as fmt from "./fmt.js";
 import {loadLwc, tok, color} from "./chart.js";
 import {sideKo, targetR} from "./labels.js";
@@ -311,6 +311,26 @@ export async function liveChart(box, o = {}) {
       }
     },
     last: () => (data.length ? data[data.length - 1] : null),
+    /** the newest bars of a poll ({t, o, h, l, c, v}, e.g. limit=2): the forming bar replaced, a new bar added */
+    merge(bars) {
+      const b = bars || {}, t = b.t || [];
+      for (let i = 0; i < t.length; i++) {
+        const row = [t[i], b.o[i], b.h[i], b.l[i], b.c[i]].map(Number);
+        if (row.some((x) => !Number.isFinite(x)) || !data.length) continue;
+        const time = Math.floor(row[0] / 1000), last = data[data.length - 1];
+        if (time < last.time) continue;
+        const bar = {time, open: row[1], high: row[2], low: row[3], close: row[4]};
+        if (time === last.time) data[data.length - 1] = bar; else data.push(bar);
+        candles.update(bar);
+        if (vol) vol.update({time, value: Number(b.v && b.v[i]) || 0, color: bar.close >= bar.open ? volUp : volDn});
+      }
+    },
+    /** show or hide the volume bars (a chart made with {volume: true}) */
+    volume(on) {
+      if (!vol) return;
+      vol.applyOptions({visible: !!on});
+      candles.priceScale().applyOptions({scaleMargins: {top: 0.08, bottom: on ? 0.2 : 0.08}});
+    },
     /** the forming bar follows the live price (only while it really is the forming bar) */
     tick(price) {
       const p = Number(price);
@@ -388,4 +408,76 @@ export function tradeMarks(rows, coin) {
     if (t.status === "closed" && t.exit_ms) out.push({t_ms: Number(t.exit_ms) - 1, kind: Number(t.pnl) > 0 ? "win" : "loss"});
   }
   return out;
+}
+
+// ---------------------------------------------------------------- the P&L calendar (calendar.json; 터미널 and 흐름)
+/**
+ * calendar({href, cls, value, text, label}) -> {grid, day, prev, next, title, set(cal), mode({value, text, label})}: one
+ * month, Monday first, a cell per KST day coloured by its value (up / down, stronger = bigger, against the month's
+ * largest); ◀ ▶ step through the months that have days; a tap on a day shows its trades, P&L and best / worst line.
+ * value(day) -> number (default: pnl_sum, the P&L in $ of every plain line); text(v) -> the cell's short text.
+ * A day without a record is "기록 없음" (dashed), never a zero; the last day of the file is today.
+ */
+export function calendar(o = {}) {
+  const st = {cal: null, month: null, day: null, value: o.value || ((d) => Number(d.pnl_sum) || 0), text: o.text || shortNum, label: o.label || "손익 합"};
+  const title = h("span", {class: "lv-calm num"});
+  const prev = h("button", {type: "button", class: "lv-calnav", "aria-label": "이전 달", onclick: () => move(-1)}, "◀");
+  const next = h("button", {type: "button", class: "lv-calnav", "aria-label": "다음 달", onclick: () => move(1)}, "▶");
+  const grid = h("div", {class: ["lv-cal", o.cls], role: "grid", "aria-label": "수익 캘린더"});
+  const day = h("div", {class: "lv-calday"});
+  const ok = () => st.cal && !st.cal.missing && Array.isArray(st.cal.days) && st.cal.days.length;
+  const months = () => (ok() ? [...new Set(st.cal.days.map((d) => String(d.day).slice(0, 7)))].sort() : []);
+  function move(k) {
+    const ms = months(), i = ms.indexOf(st.month);
+    if (i < 0) return;
+    const j = Math.max(0, Math.min(ms.length - 1, i + k));
+    if (j !== i) { st.month = ms[j]; paint(); }
+  }
+  const link = (r, word) => (r && r.id ? h("div", {class: "lv-cdl muted"}, `${word} `,
+    o.href ? h("a", {href: o.href("account", r.id)}, `${r.name || r.id} ${r.L}배`) : `${r.name || r.id} ${r.L}배`, ` ${fmt.money(r.pnl, true)}`) : null);
+  function paint() {
+    if (!st.cal) { put(grid, h("p", {class: "empty"}, "불러오는 중")); return; }
+    if (!ok()) { put(grid, h("div", {class: "lv-pnone"}, h("b", null, "준비 중"), " · 날마다 기록이 아직 없습니다")); title.textContent = ""; put(day); return; }
+    const days = st.cal.days, ms = months();
+    if (!ms.includes(st.month)) st.month = ms[ms.length - 1];
+    const byDay = new Map(days.map((d) => [String(d.day), d]));
+    const today = String(days[days.length - 1].day);
+    if (!st.day || !byDay.has(st.day)) st.day = today;
+    const [y, m] = st.month.split("-").map(Number);
+    title.textContent = `${y}년 ${m}월`;
+    prev.disabled = ms.indexOf(st.month) <= 0;
+    next.disabled = ms.indexOf(st.month) >= ms.length - 1;
+    const pad = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+    const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const inMonth = days.filter((d) => String(d.day).startsWith(st.month));
+    const maxAbs = Math.max(1e-9, ...inMonth.map((d) => Math.abs(st.value(d) || 0)));
+    const cells = ["월", "화", "수", "목", "금", "토", "일"].map((w, i) => h("span", {class: ["lv-cw", i >= 5 ? "we" : ""]}, w));
+    for (let i = 0; i < pad; i++) cells.push(h("span", {class: "lv-cc pad", "aria-hidden": "true"}));
+    for (let dd = 1; dd <= n; dd++) {
+      const key = `${st.month}-${String(dd).padStart(2, "0")}`;
+      const d = byDay.get(key);
+      if (!d) {
+        const later = key > today;                                    // a day still to come is not "기록 없음"
+        cells.push(h("span", {class: ["lv-cc", later ? "later" : "none"], title: `${m}/${dd}: ${later ? "아직 오지 않은 날" : "기록 없음"}`}, h("span", {class: "dn"}, String(dd))));
+        continue;
+      }
+      const v = st.value(d) || 0;
+      const tone = !d.trades || v === 0 ? "flat" : v > 0 ? "up" : "down";
+      cells.push(h("button", {type: "button", class: ["lv-cc", tone, key === today ? "today" : "", key === st.day ? "on" : ""],
+        style: {"--a": (0.1 + 0.55 * Math.min(1, Math.abs(v) / maxAbs)).toFixed(3)},
+        title: `${m}/${dd}: 거래 ${fmt.int(d.trades)}건 · ${st.label} ${st.text(v)} · 오른 줄 ${fmt.int(d.lines_up)} · 내린 줄 ${fmt.int(d.lines_down)}`,
+        "aria-pressed": String(key === st.day), onclick: () => { st.day = key; paint(); }},
+      h("span", {class: "dn"}, String(dd)), h("span", {class: "dv num"}, d.trades ? st.text(v) : "—")));
+    }
+    put(grid, cells);
+    const d = byDay.get(st.day);
+    if (!d) { put(day); return; }
+    const v = fmt.money(d.pnl_sum, true);
+    put(day, h("div", {class: "lv-cdl"}, h("b", null, String(d.day).slice(5).replace("-", "/")), " · 거래 ", h("b", {class: "num"}, fmt.int(d.trades)),
+      "건 · 손익 합 ", h("b", {class: ["num", fmt.tone(d.pnl_sum, v)]}, v), ` · 오른 줄 ${fmt.int(d.lines_up)} · 내린 줄 ${fmt.int(d.lines_down)}`),
+    link(d.best, "가장 잘 된 줄"), link(d.worst, "가장 안 된 줄"));
+  }
+  return {grid, day, prev, next, title,
+    set(cal) { st.cal = cal || null; paint(); },
+    mode(m) { if (m.value) st.value = m.value; if (m.text) st.text = m.text; if (m.label) st.label = m.label; paint(); }};
 }

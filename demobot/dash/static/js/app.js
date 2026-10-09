@@ -4,7 +4,7 @@
 // 메뉴 위치, 화면 색), the "마지막 갱신" stamp, and each screen's polling (paused while the page is hidden).
 // Screens: js/screens/<name>.js with mount(el, ctx) (returning an optional cleanup). A route is
 // #/<screen>[/<arg>[/<arg2>]][?query], e.g. #/trade/<account id>/<trade key> (both parts URI-encoded). #/ opens the
-// terminal when that screen exists, else 홈.
+// terminal when that screen exists, else 요약 (home).
 import {h, put} from "./dom.js";
 import {getJSON, isMissing} from "./api.js";
 import {hms, dur} from "./fmt.js";
@@ -21,15 +21,16 @@ const MENU = [
   {id: "charts", ko: "여러 차트", group: "live"},
   {id: "market", ko: "시장", group: "live"},
   {id: "signals", ko: "신호", group: "live"},
-  {id: "home", ko: "홈"},
-  {id: "rank", ko: "순위표", group: "main"},
+  {id: "home", ko: "요약"},
+  {id: "rank", ko: "설정 순위", group: "main"},
   {id: "judge", ko: "판정", group: "main"},
   {id: "path", ko: "졸업 길", group: "main"},
   {id: "ready", ko: "실전 준비", group: "main"},
   {id: "friend", ko: "친구 계획", group: "main"},
   {id: "leverage", ko: "레버리지 비교", group: "main"},
   {id: "glance", ko: "한눈 지도", group: "main"},
-  {id: "accounts", ko: "계좌", group: "detail", also: ["account", "trade"]},
+  {id: "accounts", ko: "순위표", group: "detail", also: ["account", "trade"]},
+  {id: "flow", ko: "흐름", group: "detail"},
   {id: "compare", ko: "비교", group: "detail"},
   {id: "coins", ko: "코인별", group: "detail"},
   {id: "trades", ko: "거래 기록", group: "detail"},
@@ -49,15 +50,16 @@ const MENU = [
   {id: "howto", ko: "어떻게 돌아가나", group: "info", end: true},
 ];
 const GROUPS = [{id: "live", ko: "실시간"}, {id: "main", ko: "요약 · 판정"}, {id: "detail", ko: "계좌 · 분석"}, {id: "info", ko: "기록 · 안내"}];
-const MENU_TITLE = {home: "홈 (요약)", path: "졸업 길 (운 지도)", glance: "한눈 지도 (모든 계좌 × 배수)", whatif: "만약 실험실 (청산 14가지)"};
+const MENU_TITLE = {home: "요약 (홈)", rank: "설정 순위 (모든 설정을 줄 세운 표)", accounts: "순위표 (계좌 × 배수, 묶음별)",
+  flow: "흐름 (종류별 누적 손익 · 날마다 · 달력)", path: "졸업 길 (운 지도)", glance: "한눈 지도 (모든 계좌 × 배수)", whatif: "만약 실험실 (청산 14가지)"};
 const SCREENS = {home: "home", rank: "rank", accounts: "accounts", account: "account", trades: "trades", judge: "judge",
   views: "views", status: "status", howto: "howto", trade: "trade", regime: "regime", costs: "costs", compare: "compare",
   glance: "glance", path: "path", analysis: "analysis", strategies: "strategies", vs5y: "vs5y", whatif: "whatif",
   friend: "friend", leverage: "leverage", ready: "ready", review: "review", telegram: "telegram", map: "map",
   coins: "coins", terminal: "terminal", positions: "positions", charts: "charts", market: "market",
-  signals: "signals", dataq: "dataq", timeline: "timeline"};
+  signals: "signals", dataq: "dataq", timeline: "timeline", flow: "flow"};
 const TITLE = "데모 랩";
-/** The start screen (#/ and any unknown route): the terminal when this build has it, else 홈. */
+/** The start screen (#/ and any unknown route): the terminal when this build has it, else 요약 (home). */
 const START = () => (SCREENS.terminal ? "terminal" : "home");
 
 /** The menu's groups in order, each with its entries (only screens this build has; "end" entries last). */

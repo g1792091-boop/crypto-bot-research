@@ -1,21 +1,25 @@
-// The top bar's tools (round 4, CONTRACT 9.8; ideas from the rule bot's v4 shell, written again here):
-//   D+n pill    live days, the goal stage (home.json goal) and a countdown to the next tick (status.json next_tick_ms);
-//               a tap opens the goal line, the five stages and the tick times
+// The top bar's tools (round 4, CONTRACT 9.8), laid out like the rule bot's v4 top bar (round 5 stage 1; one row):
+//   DEMO LAB · 글자 크기 [보통|크게|아주 크게] · 화면 색 [AI|클래식] · 메뉴 위치 [위|왼쪽] · ★ · ⚙ 설정 · 찾기 / · 자는 동안 ·
+//   the D+n pill · 종 · 소리 · the status dot · 데모
+//   D+n pill    live days, the goal stage and the days left to 12/31 (home.json goal); a tap opens the goal line, the
+//               five stages and the tick times (status.json last / next tick)
 //   찾기        the search box (find.js; also the "/" key)
 //   ★           the starred screens and accounts (favs.js)
+//   ⚙ 설정      글자 크기, 메뉴 위치, 화면 색 in one panel (the same switches as the top bar's, for a narrower window)
 //   자는 동안   what happened since this viewer last looked (last-visit time in local storage): closed trades
 //               (trades.json), setting switches (home.json), passes and confirmation results (judge.json); "다 봤어요"
 //   종          the Telegram messages (telegram.json): unread since the list was last opened, the latest 20
 //   소리        a short beep when trades.json gets a new trade while the page is open; OFF until turned on (per device)
 // The data is read again only when the engine wrote a new tick (status.json changed; app.js polls it every 30 s), so
-// these cost four small requests per 15 minutes. Every text is set as text (h()), never parsed. On a phone the top bar
-// keeps the pill, 자는 동안, the bell and the status dot; 찾기 and ★ sit at the start of the menu row, 소리 at its end.
+// these cost four small requests per 15 minutes. Every text is set as text (h()), never parsed. Below 1200 px the three
+// switches, ★ and ⚙ move to the end of the menu row (v4 does the same); on a phone 찾기 and 가 sit at its start, 소리 at
+// its end, and the top bar keeps the pill, 자는 동안, the bell and the status dot (v4kit.css).
 import {h, s, put, local} from "./dom.js";
 import {getJSON, isMissing} from "./api.js";
 import * as fmt from "./fmt.js";
-import {favs, onFavs, setFav} from "./favs.js";
+import {favs, onFavs, setFav, favCount} from "./favs.js";
 import {openFind} from "./find.js";
-import {TEXT_SIZES, textNow, applyText, textSwitch, navSwitch, skinSwitch} from "./prefs.js";
+import {textSwitch, navSwitch, skinSwitch, textCycle as prefTextCycle, skinCycle as prefSkinCycle} from "./prefs.js";
 import {tgKindKo, sideKo, reasonKo, TG_STATUS_KO} from "./labels.js";
 
 const HOUR = 3600000, DAY = 86400000;
@@ -26,7 +30,7 @@ const AWAY_GAP = 30 * 60000;          // a hidden tab back after this long start
 const FIRST_LOOK = 8 * HOUR;          // the very first visit: the last 8 hours
 
 const D = {status: null, trades: null, home: null, judge: null, tg: null, accts: null, key: null, keys: null};
-const ui = {pop: null, which: null, btn: null, pill: null, cd: null, cdk: null, away: null, awayN: null, bell: null, bellN: null, snd: [],
+const ui = {pop: null, which: null, btn: null, pill: null, away: null, awayN: null, bell: null, bellN: null, snd: [], favN: [],
   menu: () => [], onText: null, onNav: null, onSkin: null};
 let since = null, firstVisit = false, hiddenAt = null;
 
@@ -37,6 +41,9 @@ const icon = (rects) => s("svg", {viewBox: "0 0 16 16", width: "16", height: "16
 const MOON = [[6, 1, 4, 1], [4, 2, 3, 1], [3, 3, 2, 2], [2, 5, 2, 6], [3, 11, 2, 2], [4, 13, 3, 1], [6, 14, 4, 1], [10, 13, 3, 1], [12, 12, 2, 1],
   [11, 3, 1, 1], [13, 6, 1, 1], [12, 8, 1, 1]];
 const BELL = [[7, 1, 2, 1], [5, 2, 6, 1], [4, 3, 8, 1], [4, 4, 8, 4], [3, 8, 10, 2], [2, 10, 12, 2], [6, 13, 4, 2]];
+const LENS = [[3, 1, 6, 2], [1, 3, 2, 6], [9, 3, 2, 6], [3, 9, 6, 2], [10, 10, 2, 2], [12, 12, 3, 3]];         // v4 찾기
+const GEAR = [[7, 0, 2, 3], [7, 13, 2, 3], [0, 7, 3, 2], [13, 7, 3, 2], [2, 2, 2, 2], [12, 2, 2, 2], [2, 12, 2, 2], [12, 12, 2, 2],
+  [4, 3, 8, 2], [4, 11, 8, 2], [3, 4, 2, 8], [11, 4, 2, 8]];                                                       // v4 설정
 
 // ---------------------------------------------------------------- the one popover under the top bar
 function popEl() {
@@ -54,7 +61,7 @@ function popEl() {
   return ui.pop;
 }
 const BUILD = {pill: pillPanel, fav: favPanel, away: awayPanel, bell: bellPanel, view: viewPanel};
-const POP_KO = {pill: "목표와 처리 시각", fav: "즐겨찾기", away: "자는 동안", bell: "알림", view: "보기 설정"};
+const POP_KO = {pill: "목표와 처리 시각", fav: "즐겨찾기", away: "자는 동안", bell: "알림", view: "설정"};
 function openPop(which, btn) {
   const el = popEl();
   if (ui.which === which) { closePop(true); return; }
@@ -98,35 +105,25 @@ function stageKo() {
   if (!g || !Array.isArray(g.stages_ko)) return null;
   return g.stages_ko[Number(g.stage)] || null;
 }
-function countdown(st) {
-  if (!st || !st.next_tick_ms) return null;
-  const left = Math.round((Number(st.next_tick_ms) - Date.now()) / 1000);
-  if (left <= 0) return "처리 중";
-  if (left >= 3600) return fmt.dur(left);                  // a stale file far from now: hours, not a huge m:ss
-  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+function daysLeft() {
+  const g = D.home && !isMissing(D.home) ? D.home.goal : null;
+  return g && g.days_left != null && Number.isFinite(Number(g.days_left)) ? Number(g.days_left) : null;
 }
+/** "D+44 · 데모 진행 · 12/31까지 83일 ▾" (v4: "D+4/30 · 판정 11/04 · 관찰 ~10/27 ▾"); a phone drops the last part. */
 function paintPill() {
   const b = ui.pill;
   if (!b) return;
   const st = D.status;
-  if (!st || isMissing(st)) { put(b, h("b", null, "준비 중")); b.setAttribute("aria-label", "엔진 상태 준비 중. 누르면 목표"); return; }
+  if (!st || isMissing(st)) { put(b, h("b", null, "준비 중"), h("span", {class: "car", "aria-hidden": "true"}, "▾")); b.setAttribute("aria-label", "엔진 상태 준비 중. 누르면 목표"); return; }
   const d = liveDays(st);
   const stage = stageKo();
-  const cd = countdown(st);
-  ui.cdk = h("span", {class: "tb-cdk", hidden: cd === "처리 중"}, "다음 처리 ");
-  ui.cd = h("span", {class: "tb-cdv"}, cd || "");
+  const left = daysLeft();
   put(b, h("b", null, d != null ? `D+${d}` : st.phase === "warm" ? "준비" : "멈춤"),
     stage ? h("span", {class: "opt"}, ` · ${stage}`) : st.phase === "warm" ? h("span", {class: "opt"}, " · 과거 채우는 중") : null,
-    cd ? h("span", {class: "tb-cd"}, " · ", ui.cdk, ui.cd) : null, h("span", {class: "car", "aria-hidden": "true"}, "▾"));
-  b.setAttribute("aria-label", `실시간 ${d != null ? `${d}일째` : "전"}${stage ? `, 지금 단계 ${stage}` : ""}${cd ? `, 다음 처리 ${cd}` : ""}. 누르면 목표와 처리 시각`);
+    left != null ? h("span", {class: "obs"}, ` · 12/31까지 ${fmt.int(left)}일`) : null,
+    h("span", {class: "car", "aria-hidden": "true"}, "▾"));
+  b.setAttribute("aria-label", `실시간 ${d != null ? `${d}일째` : "전"}${stage ? `, 지금 단계 ${stage}` : ""}${left != null ? `, 12/31까지 ${left}일` : ""}. 누르면 목표와 처리 시각`);
   b.title = st.live_start_ms ? `실시간 시작 ${fmt.kst(st.live_start_ms)} KST` : "";
-}
-function tickCountdown() {
-  if (!ui.cd || document.visibilityState === "hidden") return;
-  const cd = countdown(D.status);
-  if (!cd || !ui.cd.isConnected) { paintPill(); return; }
-  ui.cd.textContent = cd;
-  ui.cdk.hidden = cd === "처리 중";
 }
 function pillPanel() {
   const st = D.status && !isMissing(D.status) ? D.status : null;
@@ -144,45 +141,25 @@ function pillPanel() {
       h("div", null, h("dt", null, "다음 처리"), h("dd", null, st && st.next_tick_ms ? fmt.hms(st.next_tick_ms) : "—"))),
     h("p", {class: "note"}, "엔진은 15분봉이 닫힐 때마다 한 번 계산합니다 (처리). D+n은 실시간 시작부터 지난 날 수입니다."),
     h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: "#/path"}, "졸업 길"), h("a", {class: "btn-line", href: "#/judge"}, "판정"),
-      h("a", {class: "btn-line", href: "#/home"}, "홈 (요약)")));
+      h("a", {class: "btn-line", href: "#/home"}, "요약")));
 }
 
-// ---------------------------------------------------------------- 보기 설정 (글자 크기, 메뉴 위치, 화면 색) and the 가 button
+// ---------------------------------------------------------------- 설정 (글자 크기, 메뉴 위치, 화면 색) and the small buttons
+const after = (fn) => (id) => { if (ui.which === "view") paintPop(); if (fn) fn(id); };
 function viewPanel() {
   return h("div", {class: "stack tight tb-view"},
-    textSwitch((id) => { paintCycles(); if (ui.onText) ui.onText(id); }),
-    navSwitch((id) => { if (ui.onNav) ui.onNav(id); }),
-    skinSwitch((id) => { if (ui.onSkin) ui.onSkin(id); }),
-    h("p", {class: "note"}, "이 기기에만 기억합니다. 메뉴를 왼쪽에 두는 것은 화면이 넓을 때(1000px 이상)만이고, 휴대폰에서는 늘 위에 있습니다."));
+    textSwitch(after(ui.onText)), navSwitch(after(ui.onNav)), skinSwitch(after(ui.onSkin)),
+    h("p", {class: "note"}, "이 기기에만 기억합니다. 메뉴를 왼쪽에 두는 것은 화면이 넓을 때(1000px 이상)만이고, 휴대폰에서는 늘 위에 있습니다."),
+    h("div", {class: "row wrap"}, h("button", {type: "button", class: "btn-line", onclick: () => { closePop(); openFind(); }}, "찾기 (/)"),
+      h("button", {type: "button", class: "btn-line", onclick: () => { closePop(); if (ui.away) openPop("away", ui.away); }}, "자는 동안")));
 }
-let cycles = [];
-function paintCycle(b) {
-  const id = textNow();
-  const ko = (TEXT_SIZES.find((x) => x.id === id) || TEXT_SIZES[0]).ko;
-  b.dataset.text = id;
-  b.lastChild.textContent = ko;
-  b.setAttribute("aria-label", `글자 크기: ${ko} (누르면 바뀝니다)`);
-}
-function paintCycles() {
-  cycles = cycles.filter((b) => b.isConnected);        // a redrawn menu row leaves its old copy behind
-  cycles.forEach(paintCycle);
-}
-/** "가 보통": each tap goes 보통 → 크게 → 아주 크게 → 보통 (remembered on this device). */
-function textCycle(cls) {
-  const b = h("button", {type: "button", class: ["tb-btn", "tb-text", cls], title: "글자 크기: 이 기기에만 기억합니다", onclick: () => {
-    const i = TEXT_SIZES.findIndex((x) => x.id === textNow());
-    const next = TEXT_SIZES[(i + 1) % TEXT_SIZES.length].id;
-    local.set("text", next);
-    applyText(next);
-    paintCycles();
-    if (ui.which === "view") paintPop();
-    if (ui.onText) ui.onText(next);
-  }}, h("span", {class: "tb-ga", "aria-hidden": "true"}, "가"), h("small", {"aria-hidden": "true"}, ""));
-  paintCycle(b);
-  cycles.push(b);
-  return b;
-}
-const viewBtn = (cls) => popBtn("view", ["tb-view", cls], "보기 설정: 글자 크기, 메뉴 위치, 화면 색", h("span", {"aria-hidden": "true"}, "⚙"));
+/** "가 보통" (v4 textCycle): each tap goes 보통 → 크게 → 아주 크게 → 보통 (remembered on this device). */
+const textCycle = (cls) => prefTextCycle(after(ui.onText), cls);
+/** The half-moon 화면 색 button (v4 skinCycle). */
+const skinCycle = (cls) => prefSkinCycle(after(ui.onSkin), cls);
+/** ⚙ 설정 (v4 .setbtn / .setsub): the panel with the three switches. */
+const gearBtn = (cls, sub) => popBtn("view", [sub ? "setsub" : "setbtn", cls], "설정: 글자 크기, 메뉴 위치, 화면 색",
+  [icon(GEAR), h("span", {class: sub ? "setsub-t" : "setbtn-t"}, "설정")]);
 
 // ---------------------------------------------------------------- ★ favourites
 function favPanel() {
@@ -277,7 +254,7 @@ function awayPanel() {
       ev.sw.slice(0, 5).map((d) => h("li", null, h("span", {class: "muted num"}, fmt.kst(d.t_ms)), " ",
         (d.id || d.account) ? h("a", {href: `#/account/${encodeURIComponent(d.id || d.account)}`}, d.name || d.id || d.account) : null,
         h("span", {class: "muted"}, ` → ${d.to_ko || "—"}`)))),
-    h("p", {class: "note"}, "홈 파일은 최근 교체 10개만 담습니다.")));
+    h("p", {class: "note"}, "요약 파일(home.json)은 최근 교체 10개만 담습니다.")));
   }
   return h("div", {class: "stack tight"}, h("div", {class: "row wrap"}, head, h("span", {class: "grow"}), seen),
     secs.length ? secs : h("p", {class: "muted"}, "그 사이에 닫힌 거래, 교체, 판정 변화가 없습니다."));
@@ -380,6 +357,11 @@ function soundBtn(cls) {
 }
 
 // ---------------------------------------------------------------- badges
+function paintFavN() {
+  const n = favCount();
+  ui.favN = ui.favN.filter((x) => x.isConnected);
+  for (const x of ui.favN) x.textContent = n ? String(n) : "";
+}
 function badge(el, n) {
   if (!el) return;
   el.hidden = !(n > 0);
@@ -443,11 +425,18 @@ function popBtn(which, cls, label, kids) {
     "aria-label": label, title: label, dataset: {pop: which}, onclick: () => openPop(which, b)}, kids);
   return b;
 }
-const findBtn = (cls) => h("button", {type: "button", class: ["tb-btn", "tb-find", cls], title: "찾기: 화면·계좌 (단축키 /)", "aria-label": "찾기 (단축키 /)",
-  "aria-keyshortcuts": "/", onclick: () => openFind()}, h("span", {"aria-hidden": "true"}, "⌕"), h("span", {class: "tb-t"}, "찾기"), h("kbd", null, "/"));
-const favBtn = (cls) => popBtn("fav", ["tb-star", cls], "즐겨찾기 목록", h("span", {"aria-hidden": "true"}, "★"));
+/** 찾기 (v4 .findbtn): the pixel lens, "찾기" and the / key; on a phone it moves to the start of the menu row. */
+const findBtn = (cls, sub) => h("button", {type: "button", class: [sub ? "findsub" : "findbtn", cls], title: "찾기: 화면·계좌 (단축키 /)", "aria-label": "찾기 (단축키 /)",
+  "aria-keyshortcuts": "/", onclick: () => openFind()}, icon(LENS), h("span", {class: sub ? null : "findbtn-t"}, "찾기"), sub ? null : h("kbd", null, "/"));
+/** ★ 즐겨찾기 (v4 .favrail.favtop round, .favsub in the menu row): the list drops down; the small number = how many. */
+function favBtn(cls, sub) {
+  const n = h("i", {class: "favrail-n"});
+  ui.favN.push(n);
+  return popBtn("fav", [sub ? "favsub" : "favrail favtop", cls], "즐겨찾기 목록", [h("span", {"aria-hidden": "true"}, "★"), sub ? h("span", null, "즐겨찾기") : null, n]);
+}
 
-/** initTopbar({menu: () => [{id, ko}]}) -> builds the top bar's tools into #toptools and the pill (#livechip). */
+/** initTopbar({menu, onText, onNav, onSkin}) -> builds the top bar's tools into #toptools, the pill (#livechip), and
+ *  the bell and the sound after the pill (v4 order). */
 export function initTopbar(o) {
   ui.menu = o.menu || (() => []);
   ui.onText = o.onText || null;
@@ -462,20 +451,29 @@ export function initTopbar(o) {
     ui.pill.addEventListener("click", () => openPop("pill", ui.pill));
   }
   ui.awayN = h("span", {class: "tb-n", hidden: true});
-  ui.away = popBtn("away", "tb-away", "자는 동안", [icon(MOON), ui.awayN]);
-  ui.bellN = h("span", {class: "tb-n", hidden: true});
-  ui.bell = popBtn("bell", "tb-bell", "알림", [icon(BELL), ui.bellN]);
+  ui.away = popBtn("away", "awaybtn", "자는 동안", [icon(MOON), h("span", {class: "awaybtn-t"}, "자는 동안"), ui.awayN]);
+  ui.bellN = h("span", {class: "tb-n bell-n", hidden: true});
+  ui.bell = popBtn("bell", "bell-btn", "알림", [icon(BELL), ui.bellN]);
   const box = document.getElementById("toptools");
-  if (box) put(box, findBtn("tb-wide"), favBtn("tb-wide"), textCycle("tb-big"), viewBtn("tb-big"), ui.away, ui.bell, soundBtn("tb-wide"));
+  // the switches, ★ and ⚙ (a PC window: 1200 px and up; the full switches from 1400 px, a small button each below)
+  if (box) {
+    put(box, h("span", {class: "tt-set"},
+      h("span", {class: "tt-full"}, textSwitch(after(ui.onText)), skinSwitch(after(ui.onSkin)), navSwitch(after(ui.onNav))),
+      h("span", {class: "tt-mini"}, textCycle(), skinCycle(), navSwitch(after(ui.onNav))),
+      favBtn(), gearBtn()), findBtn(), ui.away);
+  }
+  if (ui.pill) ui.pill.after(ui.bell, soundBtn("tb-top"));
   initSince();
   paintSound();
   paintPill();
-  paintCycles();
-  onFavs(() => { if (ui.which === "fav") paintPop(); });
-  setInterval(tickCountdown, 1000);
+  paintFavN();
+  onFavs(() => { paintFavN(); if (ui.which === "fav") paintPop(); });
+  setInterval(() => { if (document.visibilityState !== "hidden") paintPill(); }, 60000);
 }
 
-/** Copies in the menu row for narrower windows (demo4b.css): 찾기 and ★ at its start below 560 px (kept in view while
- *  the row scrolls; the top bar has no room for them there); 소리 (below 560 px), 가 and ⚙ (below 1000 px) at its end. */
-export const stripLead = () => [findBtn("tb-phone"), favBtn("tb-phone")];
-export const stripTools = () => [soundBtn("tb-phone"), textCycle("tb-small"), viewBtn("tb-small")];
+/** The menu row's copies (v4 core/shell.js strip lead / tools): 찾기 (below 460 px) and 가 (below 760 px) at its start,
+ *  kept in view while the row scrolls; at its end below 1200 px: 글자 크기, 화면 색, 메뉴 위치 (where the left menu can
+ *  be chosen), ★, ⚙ 설정 and, on a phone, 소리. */
+export const stripLead = () => [findBtn("tb-phone", true), textCycle("tb-lead")];
+export const stripTools = () => [textSwitch(after(ui.onText)), skinSwitch(after(ui.onSkin)), navSwitch(after(ui.onNav)), favBtn("", true),
+  gearBtn("", true), soundBtn("tb-phone")];

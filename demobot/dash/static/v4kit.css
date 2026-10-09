@@ -1,0 +1,245 @@
+/* The rule bot's v4 look for the demo lab, as one kit (round 5, stage 1). Loaded after demo.css and demo4b.css, so its
+   rules win where they meet. Copied and adapted from paperbot/dash/static/v4 (same owners): core/nav.css (the top bar's
+   tools, the menu strip), core/settings.css (⚙ 설정, 자는 동안), core/favs.css (★), core/bell.css (종),
+   screens/home-shared.css (group cards, ranking rows), screens/board.css (the dense table), screens/charts.css (the '선'
+   chips, the status dot). tokens.css / base.css / components.css are the v4 files copied unchanged, so every v4 token
+   (both skins, the --t-* type scale with its 12 px floor and <html data-text="md|lg|xl">) already works here.
+   Rules: colours only from the tokens, font sizes only var(--t-*) (or calc(Npx * var(--ts))), no outside files. Motion is off
+   under prefers-reduced-motion (components.css). The JS side is js/v4kit.js. Class names: k4- (kit), plus the v4 names of
+   the top bar's buttons (findbtn, setbtn, awaybtn, favrail, bell-btn, textcyc, skincyc) so v4 markup reads the same. */
+
+/* ================================================================ the top bar (one row, v4 order)
+   DEMO LAB · 글자 크기 · 화면 색 · 메뉴 위치 · ★ · ⚙ 설정 · 찾기 / · 자는 동안 · D+n pill · 종 · 소리 · ● · 데모 */
+.top { gap: 7px; }
+.brand { gap: 9px; }
+.brand-t { letter-spacing: .07em; }
+.dl-mode { border-color: var(--warn-line); color: var(--warn); background: var(--warn-soft); }   /* 데모: not the rule bot's 모의 */
+.toptools { flex: none; display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.tt-set, .tt-full, .tt-mini { display: inline-flex; align-items: center; gap: 5px; }
+.tt-full { display: none; }
+.tt-full .skinsw + .skinsw { margin-left: 0; }
+@media (max-width: 1199px) { .tt-set { display: none; } }
+@media (min-width: 1400px) { :root[data-text="md"] .tt-full { display: inline-flex; } :root[data-text="md"] .tt-mini { display: none; } }
+@media (min-width: 1680px) { .tt-full { display: inline-flex; } .tt-mini { display: none; } }
+.toptools .textcyc { display: inline-flex; }
+/* a PC window: the header spans the window (v4: the same 12 px edge as the 터미널's), the menu wraps under it */
+@media (max-width: 1199px) { :root:not([data-nav="left"]) .subtabs.strip { flex-wrap: nowrap; overflow-x: auto; } }   /* one row that scrolls (v4) */
+@media (min-width: 1200px) {
+  .top, :root:not([data-nav="left"]) .subtabs { max-width: none; padding-inline: 12px; }
+  :root:not([data-nav="left"]) .subtabs { flex-wrap: wrap; overflow: visible; padding-block: 3px; row-gap: 2px; }
+  .tb-pop { right: 12px; }
+}
+
+/* the small buttons (they keep tb-btn for the popover states of demo4b.css; the shapes are v4's) */
+.top .tb-btn, .strip .tb-btn { min-width: 0; }
+.top .tb-btn.favrail, .strip .tb-btn.favrail { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: var(--series-core);
+  font: 700 var(--t-md)/1 var(--f-body); }
+.top .tb-btn.favrail:hover { border-color: var(--series-core); }
+.favrail-n { position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--surface-3);
+  color: var(--ink); font: 700 var(--t-2xs)/16px var(--f-term); font-style: normal; text-align: center; }
+.favrail-n:empty { display: none; }
+.strip .tb-btn.favsub { position: relative; display: inline-flex; flex: none; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border-radius: 8px;
+  color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); }
+.strip .tb-btn.favsub > span:first-child { color: var(--series-core); font-size: var(--t-sm); }
+.strip .favsub .favrail-n { position: static; min-width: 0; height: auto; padding: 0; background: transparent; color: var(--muted); line-height: 1; }
+.top .tb-btn.setbtn, .top .tb-btn.awaybtn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border-radius: 10px;
+  color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); }
+.top .tb-btn.setbtn svg, .top .tb-btn.awaybtn svg, .strip .tb-btn.setsub svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+.top .tb-btn.setbtn { padding: 0; width: 34px; justify-content: center; }
+.setbtn-t { display: none; }
+@media (min-width: 1400px) { :root[data-text="md"] .top .tb-btn.setbtn { width: auto; padding: 0 10px; } :root[data-text="md"] .setbtn-t { display: inline; } }
+@media (min-width: 1680px) { .top .tb-btn.setbtn { width: auto; padding: 0 10px; } .setbtn-t { display: inline; } }
+.strip .tb-btn.setsub { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--ink-2);
+  font: 700 var(--t-xs)/1 var(--f-body); }
+/* 자는 동안: the moon and its words on a PC, the moon alone below 1200 px (the demo keeps it in the phone's top bar) */
+@media (max-width: 1199px) { .top .tb-btn.awaybtn { width: 34px; padding: 0; justify-content: center; border-radius: 50%; } .awaybtn-t { display: none; } }
+.top .tb-btn.bell-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; color: var(--muted); }
+.top .tb-btn.bell-btn:hover { color: var(--ink); }
+.tb-n.bell-n { background: var(--accent); color: var(--accent-ink); border: 2px solid var(--bg); box-shadow: none; line-height: 14px; }
+.top .tb-btn[aria-expanded="true"], .strip .tb-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+/* 찾기 (v4 .findbtn: the pixel lens, the word and the / key; icon only below 760 px; at the menu row's start below 460) */
+.findbtn { appearance: none; flex: none; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.findbtn:hover { color: var(--ink); border-color: var(--accent-line); }
+.findbtn svg, .findsub svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+.findbtn kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--ink-2); font: 700 var(--t-2xs)/1 var(--f-term); }
+@media (max-width: 759px) { .findbtn { width: 34px; padding: 0; justify-content: center; } .findbtn-t, .findbtn kbd { display: none; } }
+.findsub { appearance: none; display: none; flex: none; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); cursor: pointer; }
+@media (max-width: 459px) { .findbtn { display: none; } .findsub { display: inline-flex; } }
+/* 가 (글자 크기) and the half-moon (화면 색): the small versions (v4 nav.css) */
+.skincyc { appearance: none; display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); cursor: pointer; }
+.skincyc i { width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(90deg, var(--accent) 50%, var(--surface-3) 50%); box-shadow: 0 0 0 1px var(--line-2); }
+.skincyc:hover, .textcyc:hover { border-color: var(--accent-line); }
+/* the sound: in the top bar from 460 px, at the menu row's end below */
+.snd-btn.tb-top { flex: none; }
+@media (max-width: 459px) { .snd-btn.tb-top { display: none; } }
+.strip-tools .snd-btn.tb-phone { display: none; }
+@media (max-width: 459px) { .strip-tools .snd-btn.tb-phone { display: grid; } }
+/* the D+n pill: "D+44 · 데모 진행 · 12/31까지 83일 ▾"; a phone keeps the first two parts */
+.dchip.dl-live { flex: 0 1 auto; min-width: 0; padding: 0 11px; }
+.dchip.dl-live > * { flex: none; }
+.dchip.dl-live .obs { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* a tight window cuts this part, never the ▾ */
+/* the switches in the top bar: a little tighter than the menu row's (the whole bar is one row at 1440 px) */
+.toptools .skinsw .k { padding: 0 4px 0 5px; }
+.toptools .skinsw button { padding: 0 7px; }
+.brand .bic { display: grid; }                   /* the phone keeps the mark (demo4b.css hid it for the old badge) */
+@media (max-width: 459px) {
+  .top { gap: 6px; }
+  .top .tb-btn.awaybtn, .top .tb-btn.bell-btn, .hdot { width: 32px; height: 32px; }
+  .dchip.dl-live { padding: 0 9px; }
+  .dl-live .opt { display: inline; }
+  .mocktag { padding: 0 6px; }
+}
+@media (max-width: 359px) { .dl-live .opt { display: none; } }
+
+/* ================================================================ the menu strip (v4 core/nav.css .strip)
+   plain text buttons in one row, the current one bold with an accent underline, a thin line between the groups */
+.strip { column-gap: 15px; }
+.strip .sg-sep { width: 1px; height: 18px; margin: 0 -8px; background: var(--line-2); }
+.strip-lead, .strip-tools { gap: 6px; }
+.strip-tools { padding-left: 4px; }
+.strip-tools .navsw { display: none; }
+@media (min-width: 1000px) { .strip-tools .navsw { display: inline-flex; } }
+@media (min-width: 1200px) { .strip-tools { display: none; } }
+@media (max-width: 759px) {
+  .strip-lead { display: inline-flex; position: sticky; left: calc(-1 * var(--gutter)); z-index: 2; margin-left: calc(-1 * var(--gutter));
+    padding: 0 8px 0 var(--gutter); margin-right: 2px; align-self: stretch; align-items: center; background: var(--bg); box-shadow: 1px 0 0 var(--line-2); }
+}
+@media (min-width: 760px) { .strip-lead { display: none; } }
+.strip-lead .textcyc { display: inline-flex; }
+/* 메뉴 위치 왼쪽 (from 1000 px): the column's foot holds the tools below 1200 px; the top bar has them from 1200 px */
+@media (min-width: 1000px) {
+  :root[data-nav="left"] .strip-tools { flex-wrap: wrap; gap: 6px; }
+  :root[data-nav="left"] .strip-tools .skinsw { flex-wrap: wrap; }
+}
+
+/* ================================================================ kit: sections, group cards (v4 home-shared.css) */
+.k4-sec { display: grid; gap: 10px; min-width: 0; }
+.k4-secrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.k4-hint { color: var(--muted); font-size: var(--t-xs); }
+@media (max-width: 559px) { .k4-secrow .k4-hint { display: none; } }
+.k4-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 760px) { .k4-groups { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; } }
+.k4-gcard { appearance: none; text-align: left; min-width: 0; display: grid; gap: 3px; align-content: start; padding: 12px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  transition: border-color var(--t-fast), background-color var(--t-fast), transform var(--t-fast) var(--ease); }
+.k4-gcard:hover { border-color: var(--line-2); }
+.k4-gcard:active { transform: scale(.985); }
+.k4-gcard[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line); }
+.k4-gcard .gn { font-weight: 700; font-size: var(--t-sm); }
+.k4-gcard .gc { color: var(--muted); font-size: var(--t-xs); line-height: 1.45; }
+.k4-gcard .gmw { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.k4-gcard .gm { font-size: var(--t-lg); font-weight: 800; line-height: 1.3; border-radius: 4px; }
+.k4-gcard .gmw small { color: var(--muted); font-size: var(--t-xs); }
+.k4-gcard .gs { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
+.k4-gcard .gb { color: var(--muted); font-size: var(--t-xs); line-height: 1.5; }
+.k4-gcard .pp { padding: 0 6px; line-height: 1.5; }
+.k4-gcard[data-kind="flip"] .gn::after { content: " ●"; color: var(--series-coin); font-size: var(--t-2xs); vertical-align: 2px; }
+.card .k4-gcard { background: var(--surface-2); border-color: transparent; }
+.card .k4-gcard[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.k4-allbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* ================================================================ kit: 상위 · 하위 rows (v4 home-shared rankRow) */
+.k4-tb { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .k4-tb { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; } }
+.k4-tb > :only-child { grid-column: 1 / -1; }
+.k4-tbcol { min-width: 0; }
+.k4-tbh { display: flex; align-items: baseline; gap: 8px; padding: 2px 2px 6px; color: var(--muted); font-size: var(--t-xs); }
+.k4-tbh b { color: var(--ink); font-size: var(--t-sm); }
+.k4-row { position: relative; display: grid; grid-template-columns: minmax(30px, auto) minmax(0, 1fr) auto; column-gap: 8px; row-gap: 3px; align-items: center;
+  padding: 10px 4px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; transition: background-color var(--t-fast); border-radius: 6px; }
+a.k4-row:hover { background: var(--surface-2); }
+a.k4-row:focus-visible { outline-offset: -2px; }
+.k4-row .rk { display: grid; justify-items: center; gap: 3px; align-self: start; padding-top: 3px; font: 700 var(--t-xs)/1 var(--f-term); color: var(--muted); white-space: nowrap; }
+.k4-row .lname { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 700; font-size: var(--t-sm); color: var(--ink); }
+.k4-row .lname .an { min-width: 0; }
+.k4-row .lname .sfig { flex: none; }
+.k4-row .ret { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; font-weight: 800; font-size: var(--t-md); white-space: nowrap; border-radius: 4px; padding: 0 2px; }
+.k4-row .meta { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-xs); color: var(--muted); line-height: 1.6; }
+.k4-row .meta .pp { line-height: 1.45; }
+.k4-row.dim .lname .an-n, .k4-row.dim .ret { opacity: .62; }
+.k4-rkd { font: 700 var(--t-2xs)/1 var(--f-term); white-space: nowrap; }
+.k4-rkd.up { color: var(--up); } .k4-rkd.down { color: var(--down); }
+.k4-spark { display: inline-flex; vertical-align: middle; opacity: .95; }
+.k4-spark .chart .base { stroke: var(--line-2); stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+@media (max-width: 459px) { .k4-row .ret { font-size: var(--t-sm); gap: 6px; } .k4-row { column-gap: 6px; padding-inline: 2px; } }
+@media (max-width: 459px) { .k4-spark { display: none; } }   /* a phone: the name first (the small line is on the PC and in the table) */
+html[data-text="xl"] .k4-tb .k4-spark { display: none; }
+/* the open-position chip "● ETH 숏 30배 +0.8%" and the neutral 동전 ▲▼ glyph (참고: never green / red) */
+.k4-pos { display: inline-flex; align-items: baseline; gap: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--ink); font-size: var(--t-xs); white-space: nowrap; }
+.k4-pos::before { content: "●"; color: var(--accent); font-size: var(--t-2xs); }
+.k4-pos.up { border-color: var(--up-line); } .k4-pos.down { border-color: var(--down-line); }
+.k4-pos b.up { color: var(--up); } .k4-pos b.down { color: var(--down); }
+.k4-vs { color: var(--ink-2); white-space: nowrap; }
+.k4-vs b { font-weight: 700; font-size: max(var(--t-2xs), .9em); }
+.k4-vs.hi b { color: var(--cmp-hi); } .k4-vs.lo b { color: var(--cmp-lo); }
+.k4-wait { margin: 6px 2px 0; color: var(--muted); font-size: var(--t-xs); }
+
+/* ================================================================ kit: the dense sortable table (v4 board-table) */
+.k4-tscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.k4-table { min-width: 940px; font-size: var(--t-xs); }
+.k4-table td, .k4-table th { white-space: nowrap; padding-block: 6px; vertical-align: middle; }
+.k4-table th { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+.k4-th { appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; white-space: nowrap; }
+.k4-th:hover { color: var(--ink); }
+.k4-table th.on .k4-th { color: var(--accent); }
+.k4-table td.l .an { display: inline-flex; max-width: calc(230px * var(--ts)); }
+.k4-table .k4-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink); text-decoration: none; font-weight: 700; }
+.k4-table .k4-name:hover .an-n { text-decoration: underline dotted; }
+.k4-table .favstar { width: 26px; height: 26px; font-size: var(--t-sm); }
+.k4-table tr.k4-flip td { color: var(--ink-2); }
+.k4-table tr.k4-ruined td .num { color: var(--muted); }
+.k4-table .k4-wl { color: var(--muted); }
+.k4-twrap .k4-tsearch { max-width: 360px; height: 36px; }
+.k4-twrap .tbl td:not(.l) .dl-kn { text-align: right; }
+
+/* ================================================================ kit: chips, the live status, the reading line */
+.k4-chip { appearance: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: transparent; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.k4-chip::before { content: ""; width: 8px; height: 8px; border-radius: 2px; border: 1px solid var(--line-2); }
+.k4-chip[aria-pressed="true"] { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+.k4-chip[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+.k4-live { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-term); white-space: nowrap; }
+.k4-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); flex: none; }
+.k4-live[data-s="ok"] { color: var(--ink-2); }
+.k4-live[data-s="ok"] i { background: var(--up); box-shadow: 0 0 8px var(--up-glow); }
+.k4-live[data-s="warn"] i { background: var(--warn); }
+.k4-live[data-s="bad"] i { background: var(--down); }
+.k4-reading { display: block; margin: 0; padding: 12px 14px; border-radius: var(--r-md);
+  border: 1px solid var(--edge, var(--line)); background: var(--surface); background-image: radial-gradient(120% 90% at 0% 0%, var(--accent-soft), transparent 62%);
+  font: 700 var(--t-md)/1.5 var(--f-body); color: var(--ink); }
+.k4-reading em { color: var(--accent); }
+.k4-reading .pp { font-weight: 700; }
+.k4-reading small { display: block; margin-top: 4px; color: var(--muted); font: 400 var(--t-xs)/1.5 var(--f-body); }
+.k4-k { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-term); letter-spacing: .04em; }
+.k4-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; min-width: 0; }
+.k4-barg { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+
+/* kind colours (one per account kind in every chart, legend and swatch; js/v4kit.js KIND_SERIES) */
+[data-kind] { --kc: var(--series-coin); }
+[data-kind="fixed"] { --kc: var(--series-core); }
+[data-kind="adaptive"] { --kc: var(--series-ds); }
+[data-kind="friend"] { --kc: var(--series-m5); }
+[data-kind="private"] { --kc: var(--pick-4); }
+[data-kind="flip"] { --kc: var(--series-coin); }
+[data-kind="all"] { --kc: var(--ink); }
+.k4-sw { display: inline-block; flex: none; width: 14px; height: 4px; border-radius: 2px; background: var(--kc); }
+[data-kind="flip"] > .k4-sw, .k4-sw[data-kind="flip"] { background: repeating-linear-gradient(90deg, var(--kc) 0 4px, transparent 4px 7px); }
+[data-kind="all"] > .k4-sw, .k4-sw[data-kind="all"] { background: repeating-linear-gradient(90deg, var(--kc) 0 2px, transparent 2px 4px); }
+
+/* ================================================================ kit: a small drop-down menu (<details>, works without JS) */
+.k4-menu { position: relative; flex: none; }
+.k4-menu > summary { list-style: none; cursor: pointer; }
+.k4-menu > summary::-webkit-details-marker { display: none; }
+.k4-menu[open] > summary { border-color: var(--accent-line); color: var(--accent); background: var(--accent-soft); }
+.k4-menupop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: min(380px, calc(100vw - 2 * var(--gutter))); display: grid; gap: 12px;
+  padding: 14px; border-radius: var(--r-md); border: 1px solid var(--edge-hi); background: var(--surface);
+  box-shadow: 0 0 18px var(--edge-glow), 0 14px 34px var(--card-shadow, var(--scrim)); font-size: var(--t-sm); color: var(--ink-2); }
+.k4-mrow { display: grid; gap: 6px; justify-items: start; }
+.k4-mrow b { color: var(--ink); }
+.k4-mrow .select { width: 100%; }
+.k4-menupop .note { margin: 0; }

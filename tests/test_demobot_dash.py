@@ -455,8 +455,12 @@ def test_every_screen_module_exists_and_mounts():
         p = os.path.join(STATIC, "js", "screens", name[1] + ".js")
         assert os.path.exists(p), p
         assert "export async function mount(" in open(p, encoding="utf-8").read(), p
-    for menu in ("홈", "순위표", "계좌", "거래 기록", "판정", "관점 기록", "서버 상태", "어떻게 돌아가나"):
+    for menu in ("요약", "순위표", "설정 순위", "흐름", "거래 기록", "판정", "관점 기록", "서버 상태", "어떻게 돌아가나"):
         assert f'ko: "{menu}"' in app_js
+    # round 5 (the rule bot's v4 names): 홈 -> 요약, the settings ranking -> 설정 순위, the accounts screen -> 순위표
+    for name, ko in (("home", "요약"), ("rank", "설정 순위"), ("accounts", "순위표"), ("flow", "흐름")):
+        assert re.search(r'\{id: "' + name + r'", ko: "' + ko + r'"', app_js), name
+    assert 'ko: "홈"' not in app_js and 'ko: "계좌"' not in app_js
 
 
 def test_the_fake_is_deterministic(tmp_path, folders):
@@ -1538,7 +1542,7 @@ def test_the_menu_lists_every_screen_in_groups_and_opens_the_terminal_when_there
     assert set(screens) - {"account", "trade"} <= set(ids) and set(ids) <= set(screens)
     for name, ko in R4B_SCREENS.items():
         assert screens.get(name) == name and f'ko: "{ko}"' in menu, name
-    for ko in ("홈", "순위표", "판정", "계좌", "비교", "코인별", "거래 기록", "설정 지도", "시장 국면", "실제 비용", "주간 회의록",
+    for ko in ("요약", "설정 순위", "판정", "순위표", "흐름", "비교", "코인별", "거래 기록", "설정 지도", "시장 국면", "실제 비용", "주간 회의록",
                "관점 기록", "알림 기록", "서버 상태", "어떻게 돌아가나"):
         assert f'ko: "{ko}"' in menu, ko
     # groups: live (part A) first, then main / detail / info; an unknown group goes last; 어떻게 돌아가나 ends its group
@@ -1587,3 +1591,114 @@ def test_howto_has_the_glossary_and_the_round_4_screens():
     assert "실제 주문 연결" in ready and "두 분" in ready and "robust" in ready
     path = open(os.path.join(STATIC, "js", "screens", "path.js"), encoding="utf-8").read()
     assert "luck_lim" in path and "robustLine" in path
+
+
+# ---------------------------------------------------------------- round 5 stage 1 (the rule bot's v4 look: kit, top bar, 순위표, 여러 차트, 흐름, 포지션)
+R5_JS = ["v4kit.js", "topbar.js", "prefs.js", "live-kit.js", "app.js", "ui.js"] + \
+    [os.path.join("screens", n + ".js") for n in ("accounts", "charts", "flow", "positions", "terminal", "home", "rank", "howto")]
+R5_CSS = ("v4kit.css", "v4screens.css")
+
+
+def test_r5_kit_files_are_served_linked_and_need_the_login(anon, client):
+    index = open(os.path.join(STATIC, "index.html"), encoding="utf-8").read()
+    for css in R5_CSS:
+        assert f'href="/static/{css}"' in index, css
+    # the kit comes after the round 4 sheets, so its rules win where they meet
+    assert index.index("/static/demo4b.css") < index.index("/static/v4kit.css") < index.index("/static/v4screens.css")
+    # the top bar in the v4 order: the wordmark, the tools, the D+n pill, the status dot, the 데모 badge
+    top = index[index.index('<header class="top">'):index.index("</header>")]
+    assert "DEMO <b>LAB</b>" in top and 'class="mocktag dl-mode"' in top and ">데모<" in top
+    assert top.index('id="toptools"') < top.index('id="livechip"') < top.index('id="hdot"') < top.index("dl-mode")
+    for path in ["/static/" + c for c in R5_CSS] + ["/static/js/v4kit.js", "/static/js/screens/flow.js"]:
+        r = client.get(path)
+        assert r.status_code == 200 and r.headers["content-security-policy"] == CSP, path
+        assert anon.get(path, follow_redirects=False).status_code == 303, path   # not public (only the login page's own files are)
+
+
+def test_r5_css_uses_tokens_and_the_type_scale_only():
+    for name in R5_CSS:
+        src = open(os.path.join(STATIC, name), encoding="utf-8").read()
+        assert not re.search(r"#[0-9a-fA-F]{3,8}\b", src) and "rgb(" not in src and "hsl(" not in src, name
+        assert "url(" not in src, name
+        for m in re.finditer(r"font-size:\s*([^;}]+)", src):
+            assert "var(--t-" in m.group(1) or "var(--ts)" in m.group(1), (name, m.group(0))
+        for m in re.finditer(r"(?<![-\w])font:\s*([^;}]+)", src):
+            v = m.group(1).strip()
+            assert v == "inherit" or "var(--t-" in v or "var(--ts)" in v, (name, m.group(0))
+        assert "prefers-reduced-motion" in src or name == "v4kit.css", name   # the screens' own animations stop
+    kit = open(os.path.join(STATIC, "v4kit.css"), encoding="utf-8").read()
+    # 글자 크기 at 1200 px and up: the full switches from 1400 px at 보통, a small button each below
+    assert ".tt-full" in kit and ".tt-mini" in kit and ':root[data-text="md"] .tt-full' in kit
+    tokens = open(os.path.join(STATIC, "tokens.css"), encoding="utf-8").read()
+    for size in ("md", "lg", "xl"):
+        assert f'html[data-text="{size}"]' in tokens, size                     # the --t-* scale per 글자 크기
+    assert "--t-2xs: 12px" in tokens                                          # the 12 px floor
+
+
+def test_r5_js_builds_dom_from_text_only_and_keeps_storage_in_try_catch():
+    for rel in R5_JS:
+        src = open(os.path.join(STATIC, "js", rel), encoding="utf-8").read()
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{rel} uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, rel
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src), rel
+        assert "localStorage" not in src and "sessionStorage" not in src, rel
+        if not rel.endswith("howto.js"):                                          # howto names the host in words only
+            assert "binance.com" not in src, rel
+        if rel.startswith("screens"):
+            assert "export async function mount(" in src, rel
+    kit = open(os.path.join(STATIC, "js", "v4kit.js"), encoding="utf-8").read()
+    # the kit stage 2 builds on: motion that respects reduced motion, the pixel people, the small line, the rank arrow,
+    # the group cards, the dense table, CSV made in the page
+    for name in ("export const reduced", "export function countTo", "export function figure", "export function acctFig", "export function miniSpark",
+                 "export function rankDelta", "export function groupCards", "export function boardTable", "export function downloadCsv",
+                 "export function segSwitch", "export function chipToggle", "export function liveDot", "prefers-reduced-motion"):
+        assert name in kit, name
+    assert "URL.createObjectURL" in kit and "revokeObjectURL" in kit and "\\ufeff" in kit
+
+
+def test_r5_flow_screen_is_routed_after_the_ranking_and_reads_the_contract():
+    app_js = _app_js()
+    screens = dict(re.findall(r"(\w+): \"(\w+)\"", re.search(r"const SCREENS = \{([^}]*)\}", app_js).group(1)))
+    assert screens.get("flow") == "flow"
+    menu = re.search(r"const MENU = \[(.*?)\n\];", app_js, re.S).group(1)
+    ids = re.findall(r"\{id: \"(\w+)\"", menu)
+    assert ids.index("flow") == ids.index("accounts") + 1                     # 흐름 right after 순위표, in the same group
+    assert re.search(r'\{id: "flow", ko: "흐름", group: "detail"\}', menu)
+    src = open(os.path.join(STATIC, "js", "screens", "flow.js"), encoding="utf-8").read()
+    for key in ("/api/calendar", "/api/home", "by_kind", "mean_pnl_pct", "pnl_total", "pnl_sum", "needCss()", "K.calendar(", "참고",
+                "동전 던지기보다 위", '"day"', '"week"', "준비 중", "drawIn"):
+        assert key in src, key
+    # the terminal and 흐름 share one calendar (live-kit.js)
+    kit = open(os.path.join(STATIC, "js", "live-kit.js"), encoding="utf-8").read()
+    assert "export function calendar(" in kit
+    assert "K.calendar(" in open(os.path.join(STATIC, "js", "screens", "terminal.js"), encoding="utf-8").read()
+    howto = open(os.path.join(STATIC, "js", "screens", "howto.js"), encoding="utf-8").read()
+    for ko in ("흐름", "순위표", "설정 순위", "요약", "여러 차트", "포지션"):
+        assert ko in howto, ko
+
+
+def test_r5_ranking_charts_and_positions_screens_read_the_contract():
+    acc = open(os.path.join(STATIC, "js", "screens", "accounts.js"), encoding="utf-8").read()
+    for key in ("/api/accounts", "/api/positions", "/api/judge", "/api/trades", "/api/export", "pnl_pct_24h", "spark", "downloadCsv",
+                "순위표 CSV", "전체 거래 CSV", "동전 던지기 중앙값보다 위", "비교 기준 (판정 안 함)", "표본 적음", "정지 규칙 적용 시",
+                "confirmBadge", "LEVS", "groupCards", "boardTable", "상위 5", "하위 5"):
+        assert key in acc, key
+    ch = open(os.path.join(STATIC, "js", "screens", "charts.js"), encoding="utf-8").read()
+    for key in ("/api/klines", "/api/live", "/api/positions", '"2x2"', '"3x3"', "포지션 선", "손절·목표", "거래량", "⛶ 크게", "Escape",
+                "시세 6초마다", "차트 하나 크게 →", "needCss()", "IntersectionObserver", 'limit: "2"'):
+        assert key in ch, key
+    pos = open(os.path.join(STATIC, "js", "screens", "positions.js"), encoding="utf-8").read()
+    for key in ("/api/positions", "/api/live", "/api/trades", "손절·목표", "체결 기록", "한 방향 몰림", "needCss()", "groupEntries",
+                "롱 · 숏", "보유", "목표"):
+        assert key in pos, key
+    assert "청산가" not in pos and "liq_price" not in pos and "pos.liq" not in pos   # the demo has no liquidation price per position
+
+
+def test_r5_the_fake_ranking_rows_have_a_spark_and_the_24h_pnl(folders):
+    for a in _file(folders, "accounts.json")["accounts"]:
+        for L, ln in a["lines"].items():
+            assert len(ln["spark"]) == 30 and all(isinstance(v, (int, float)) for v in ln["spark"]), (a["id"], L)
+            assert ln["spark"][0] == 1000.0                                         # the live start
+            assert ln["pnl_pct_24h"] is None or isinstance(ln["pnl_pct_24h"], (int, float)), (a["id"], L)
+    assert any(ln["pnl_pct_24h"] != ln["pnl_pct"] for a in _file(folders, "accounts.json")["accounts"] for ln in a["lines"].values())

@@ -15,7 +15,7 @@ const ID_RE = /^[A-Za-z0-9-]{3,40}$/;
 
 export async function mount(el, ctx) {
   const id = ctx.params.arg || "";
-  const back = h("a", {class: "btn-line", href: "#/accounts"}, "← 계좌 목록");
+  const back = h("a", {class: "btn-line", href: "#/accounts"}, "← 순위표");
   if (!ID_RE.test(id)) {
     el.append(ui.screenHead("계좌"), back, ui.empty("계좌 이름이 맞지 않습니다."));
     return;

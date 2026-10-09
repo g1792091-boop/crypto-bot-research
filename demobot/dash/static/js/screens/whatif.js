@@ -1,5 +1,5 @@
 // #/whatif 만약 실험실 (CONTRACT 9.8): pick a fixed account (accounts.json combo / exit_i); its setting under all 14 exits
-// in the ranking's three windows (/api/setting: the rank arrays, the same numbers as the 순위표 rows; scope all coins),
+// in the ranking's three windows (/api/setting: the rank arrays, the same numbers as the 설정 순위 rows; scope all coins),
 // its own exit marked; and its four leverage lines side by side (P&L, max drawdown, liquidations, skipped entries,
 // ruins, the stop-rule line's P&L). What the ranking saw, not a new simulation of the wallet: said on the screen.
 import {h, put, local} from "../dom.js";
@@ -23,8 +23,8 @@ export async function mount(el, ctx) {
     (v) => { win = v; local.set("whatif-win", v); paintExits(); }, {label: "기간"});
   el.append(ui.screenHead("만약 실험실", "같은 설정에 다른 청산을 썼다면, 다른 배수였다면"),
     ui.card({cls: "dl-cand g4-honest", plate: "먼저 읽기"}, h("p", {class: "dl-vline"},
-      "여기 숫자는 순위표가 본 것입니다. 같은 신호에서 청산만 바꿔 거래마다 R로 센 것이고, 지갑을 새로 돌린 시뮬레이션이 아닙니다."),
-    h("p", {class: "note"}, "실제 계좌는 배수, 진입 검사로 건너뛴 거래, 실제 펀딩 때문에 순위표 숫자와 다를 수 있습니다. 아래 '배수 4줄'이 그 계좌가 실제로 낸 결과입니다.")),
+      "여기 숫자는 설정 순위가 본 것입니다. 같은 신호에서 청산만 바꿔 거래마다 R로 센 것이고, 지갑을 새로 돌린 시뮬레이션이 아닙니다."),
+    h("p", {class: "note"}, "실제 계좌는 배수, 진입 검사로 건너뛴 거래, 실제 펀딩 때문에 설정 순위 숫자와 다를 수 있습니다. 아래 '배수 4줄'이 그 계좌가 실제로 낸 결과입니다.")),
     ui.card({plate: "계좌 고르기", cls: "dl-controls"}, ctrl), head,
     ui.card({plate: "청산 14가지", sub: "평균 R (수수료 후, 코인 7개 합침) · 굵은 줄 = 이 계좌가 쓰는 청산", acts: winSeg}, bars),
     ui.card({plate: "청산 × 기간 표", sub: "실시간 · 최근 26주 · 최근 4주"}, tbl),
@@ -61,7 +61,7 @@ export async function mount(el, ctx) {
       h("b", {class: "mono"}, a.setting_ko || "—"), ` · ${a.short || ""} · ${tfKo(a.tf)}`,
       a.combo == null ? " · 설정 번호 준비 중" : ` · 설정 번호 ${a.combo}`),
     h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: ctx.href("account", a.id)}, "계좌 자세히"),
-      a.combo != null ? h("a", {class: "btn-line", href: ctx.href("rank", null, {strat: a.short, tf: a.tf, window: win, scope: "ALL", q: a.setting_ko || ""})}, "순위표에서 보기") : null)));
+      a.combo != null ? h("a", {class: "btn-line", href: ctx.href("rank", null, {strat: a.short, tf: a.tf, window: win, scope: "ALL", q: a.setting_ko || ""})}, "설정 순위에서 보기") : null)));
     if (a.combo == null || !Number.isInteger(Number(a.combo))) {
       put(bars, ui.none("준비 중: 엔진이 이 계좌의 설정 번호(combo)를 아직 쓰지 않습니다"));
       put(tbl);

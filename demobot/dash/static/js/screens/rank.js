@@ -1,4 +1,4 @@
-// #/rank 순위표: the live ranking of every setting of one strategy and timeframe, for one exit, scope and window
+// #/rank 설정 순위 (round 5: was 순위표; the accounts screen is 순위표 now): the live ranking of every setting of one strategy and timeframe, for one exit, scope and window
 // (/api/rank reads rank_<STRAT>_<tf>.npz), with the luck line, the 5-year study's columns and paging. The choices live
 // in the hash (#/rank?strat=S2&tf=15m&...), so a view can be bookmarked; the last one is remembered on this device.
 import {h, put, local} from "../dom.js";
@@ -35,11 +35,11 @@ function readState(query) {
 }
 
 export async function mount(el, ctx) {
-  ctx.setTitle("순위표");
+  ctx.setTitle("설정 순위");
   if (!GRID) {
     try { GRID = await ctx.api("/api/grid"); } catch (e) {
       if (e && e.name === "AbortError") return;
-      el.append(ui.screenHead("순위표"), ui.errorBox(e, () => location.reload()));
+      el.append(ui.screenHead("설정 순위"), ui.errorBox(e, () => location.reload()));
       return;
     }
   }
@@ -102,7 +102,7 @@ export async function mount(el, ctx) {
   const howto = ui.disclosure("이 표 읽는 법", h("dl", {class: "dl-howcols"},
     COLS_KO.map(([k, v]) => h("div", null, h("dt", null, k), h("dd", null, v)))));
 
-  el.append(ui.screenHead("순위표", "모든 설정을 같은 조건에서 줄 세운 표"), controls,
+  el.append(ui.screenHead("설정 순위", "모든 설정을 같은 조건에서 줄 세운 표 (계좌 순위는 순위표)"), controls,
     ui.card({plate: "순위", cls: "dl-rcard"}, info, howto, tableBox, pbar));
 
   let seenKey = null, lastData = null;

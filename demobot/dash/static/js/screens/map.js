@@ -183,7 +183,7 @@ export async function mount(el, ctx) {
       h("span", {class: "dl-lg"}, h("i", {class: "hm-sw def"}), "기본값이 있는 칸"),
       metric === "mean_R" ? h("span", {class: "dl-lg"}, h("i", {class: "hm-sw luck"}), "운 기준선 위 (점)") : null),
     ui.note(`색: 초록 쪽 = 더하기, 빨강 쪽 = 빼기, 진할수록 큼 (가장 진한 색 = ±${fmt.num(vmax, 2)}). `
-      + (st.mode === "fix" ? "칸을 누르면 순위표에서 그 설정을 찾습니다." : "칸에 손가락이나 마우스를 올리면 설정 수와 거래 수가 나옵니다.")));
+      + (st.mode === "fix" ? "칸을 누르면 설정 순위에서 그 설정을 찾습니다." : "칸에 손가락이나 마우스를 올리면 설정 수와 거래 수가 나옵니다.")));
   }
 
   paintControls();

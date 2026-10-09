@@ -51,7 +51,7 @@ export async function mount(el, ctx) {
         ui.stat("빠진 15분봉", fmt.int(missing), "7코인 합 (과거 채운 기간 포함)", missing ? "dl-bad" : "dl-good"),
         ui.stat("가장 늦은 코인", `${fmt.num(lagMax, 1)}초`, "봉이 닫힌 뒤 읽기까지"),
         ui.stat("처리 시간 중간값", ticks.length ? `${fmt.num(median(ticks.map((t) => Number(t[1]))), 1)}초` : "—", "한 번의 처리에 걸린 시간"),
-        ui.stat("순위표 마지막 계산", d.rank_ms ? fmt.ago(d.rank_ms) : "기록 없음", d.rank_ms ? `${fmt.kst(d.rank_ms)} KST` : "한 시간마다 돌아야 합니다"))));
+        ui.stat("설정 순위 마지막 계산", d.rank_ms ? fmt.ago(d.rank_ms) : "기록 없음", d.rank_ms ? `${fmt.kst(d.rank_ms)} KST` : "한 시간마다 돌아야 합니다"))));
     put(coinBox, coins.length ? ui.table([
       {label: "코인", l: true, get: (c) => h("b", null, fmt.coin(c.coin))},
       {label: "있어야 할 봉", get: (c) => fmt.int(c.bars_expected)},

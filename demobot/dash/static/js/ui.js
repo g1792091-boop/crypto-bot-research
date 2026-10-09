@@ -17,12 +17,13 @@ export const stamp = h("span", {class: "dl-upd", "aria-live": "off"}, "마지막
 let PAGE = null;
 export function setPage(p) { PAGE = p; }
 
-/** Screen header: h1, the ☆ of a menu screen (favs.js), the one-line sub, the 마지막 갱신 stamp on the right. */
-export function screenHead(title, sub) {
+/** Screen header: h1, the ☆ of a menu screen (favs.js), the one-line sub, the 마지막 갱신 stamp on the right; acts (v4:
+ *  buttons at the right of the title, e.g. "순위표 CSV") go before the stamp. */
+export function screenHead(title, sub, acts) {
   return h("div", {class: "scr-head"}, h("h1", null, title),
     PAGE ? starBtn("page", PAGE.id, {label: PAGE.ko, cls: "dl-hstar"}) : null,
     sub ? h("span", {class: "sub"}, sub) : null,
-    h("span", {class: "grow"}), stamp);
+    h("span", {class: "grow"}), acts ? h("span", {class: "row wrap dl-hacts"}, acts) : null, stamp);
 }
 
 /** card({title, plate, sub, acts, cls, hero, id}, ...children) */

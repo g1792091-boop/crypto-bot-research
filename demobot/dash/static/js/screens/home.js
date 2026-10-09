@@ -1,4 +1,4 @@
-// #/home 홈: the verdict headline ("실전 금지" until something passes; candidates and confirmations first), the goal
+// #/home 요약 (round 5: was 홈): the verdict headline ("실전 금지" until something passes; candidates and confirmations first), the goal
 // line to 12/31 (CONTRACT 8.7: the line, the five stages, the line closest to "우리 기준" and what it still misses),
 // live days and totals, the market now (8.5) with the measured entry cost (8.3), the best / worst account lines, mean
 // P&L by account kind and leverage, the ranking leaders against the luck line, recent switches and recent trades
@@ -12,14 +12,14 @@ import {LEVS, KIND_KO, shortOf, tfKo, WINDOW_KO, reasonKo, sideKo, STRAT_KO} fro
 const STAGES_KO = ["설치", "데모 진행", "우리 기준 통과", "확인 기간", "실전 후보"];
 
 export async function mount(el, ctx) {
-  ctx.setTitle("홈");
+  ctx.setTitle("요약");
   const verdict = h("section", {class: "card hero dl-verdict", "aria-label": "판정"});
   const goal = h("section", {class: "card dl-goal", "aria-label": "12/31 목표"});
   const stats = h("div", {class: "stats dl-s6"});
   const market = h("div");
   const best = h("div"), worst = h("div"), kinds = h("div"), leaders = h("div"), switches = h("div"), trades = h("div");
   el.append(
-    ui.screenHead("홈", "데모 랩 한눈에 보기"),
+    ui.screenHead("요약", "데모 랩 한눈에 보기"),
     verdict, goal, stats,
     ui.card({plate: "지금 시장", sub: "코인마다 추세와 변동 · 실제 진입 비용",
       acts: h("a", {class: "btn-line", href: "#/regime"}, "시장 국면")}, market),
@@ -27,8 +27,8 @@ export async function mount(el, ctx) {
       ui.card({plate: "잘 되는 줄", sub: "계좌 × 배수 손익 상위 5"}, best),
       ui.card({plate: "안 되는 줄", sub: "계좌 × 배수 손익 하위 5"}, worst)),
     ui.card({plate: "종류별 평균 손익", sub: "배수마다 계좌 평균 (시작 $1,000 대비)"}, kinds),
-    ui.card({plate: "순위표 1등", sub: "매매법 × 봉마다 주변 평균 1등과 운 기준선",
-      acts: h("a", {class: "btn-line", href: "#/rank"}, "순위표 보기")}, leaders),
+    ui.card({plate: "설정 순위 1등", sub: "매매법 × 봉마다 주변 평균 1등과 운 기준선",
+      acts: h("a", {class: "btn-line", href: "#/rank"}, "설정 순위 보기")}, leaders),
     h("div", {class: "grid2"},
       ui.card({plate: "최근 교체", sub: "자동 교체·친구 규칙 계좌가 바꾼 설정"}, switches),
       ui.card({plate: "최근 거래", sub: "모든 계좌", acts: h("a", {class: "btn-line", href: "#/trades"}, "거래 기록")}, trades)),
@@ -49,7 +49,7 @@ export async function mount(el, ctx) {
     seen = key;
     paintVerdict(home, judge);
     if (isMissing(home)) {
-      put(stats, ui.missing("홈 요약"));
+      put(stats, ui.missing("요약 자료"));
       put(goal, h("div", {class: "card-h"}, ui.plate("12/31 목표")), ui.none("준비 중"));
       for (const box of [market, best, worst, kinds, leaders, switches, trades]) put(box, ui.empty("준비 중"));
       return;
@@ -156,7 +156,7 @@ function kindTable(rows) {
 }
 
 function leaderTable(rows, ctx) {
-  if (!rows || !rows.length) return ui.empty("순위표 준비 중");
+  if (!rows || !rows.length) return ui.empty("설정 순위 준비 중");
   return h("div", {class: "stack tight"},
     ui.table([
       {label: "매매법", l: true, get: (r) => h("span", {title: STRAT_KO[shortOf(r.strategy)]}, h("b", null, shortOf(r.strategy)), ` · ${tfKo(r.tf)}`)},
@@ -169,7 +169,7 @@ function leaderTable(rows, ctx) {
       {label: "운보다", get: (r) => ui.mark(r.beats_luck, r.beats_luck == null ? "" : r.beats_luck ? "위" : "아래")},
     ], rows, {onRow: (r) => { location.hash = ctx.href("rank", null,
       {strat: shortOf(r.strategy), tf: r.tf, window: r.window || "26w", exit: r.exit || "house", scope: "ALL"}); }}),
-    ui.note("운 기준선: 설정 수만큼 무작위 선수를 세웠을 때 그 1등이 낼 법한 평균 R(95%). 이 선 위라야 운이 아닐 가능성이 큽니다. 줄을 누르면 순위표로 갑니다."));
+    ui.note("운 기준선: 설정 수만큼 무작위 선수를 세웠을 때 그 1등이 낼 법한 평균 R(95%). 이 선 위라야 운이 아닐 가능성이 큽니다. 줄을 누르면 설정 순위로 갑니다."));
 }
 
 function switchList(rows) {

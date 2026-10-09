@@ -11,7 +11,8 @@ live start), rank_<STRAT>_<tf>.npz for the 3 strategies x 2 timeframes with the 
 rank_meta and, with --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder. Round 4
 part A (fake_live.py): positions, calendar, signals_now, dataq, timeline, export/<id>.csv.gz, acct "daily" and home
 "equity_total" / "pnl_total". Round 4 part B (CONTRACT 9.5-9.7): analysis.json, vs5y.json (against the fake 5-year numbers, written or not), the fixed accounts'
-combo / exit_i and the judge rows' n / mean_R / luck_lim / boot_low.
+combo / exit_i and the judge rows' n / mean_R / luck_lim / boot_low. CONTRACT 9.11: each accounts.json line's "spark" (30
+equity values from the live start to now) and "pnl_pct_24h" (the line's P&L % one day before), as the engine's report.py.
 
 The trades are played on the fake bars (entries at bar opens, stops k x ATR14, the exits' rules), so a trade chart
 shows them where they happened. The default clock is about six weeks into the run (2026-11-23), long enough for the
@@ -405,6 +406,23 @@ def _down(points, limit):
     return [points[i] for i in idx]
 
 
+SPARK_N = 30
+
+
+def spark_of(curve) -> dict:
+    """CONTRACT 9.11, as the engine's report._spark: 30 equity values sampled evenly from the live start to now (the last
+    point at or before each step) and the P&L % one day before the curve's last point (null without a point that old)."""
+    if not curve:
+        return {"spark": [], "pnl_pct_24h": None}
+    t = np.asarray([c[0] for c in curve], np.int64)
+    v = np.asarray([c[1] for c in curve], float)
+    steps = np.linspace(t[0], t[-1], SPARK_N).astype(np.int64)
+    i = np.clip(np.searchsorted(t, steps, side="right") - 1, 0, len(v) - 1)
+    j = int(np.searchsorted(t, t[-1] - DAY, side="right")) - 1
+    ago = _r((float(v[j]) - SEED_USD) / SEED_USD * 100, 2) if j >= 0 else None
+    return {"spark": [_r(float(x), 2) for x in v[i]], "pnl_pct_24h": ago}
+
+
 # ---------------------------------------------------------------- stop rules (CONTRACT 8.2; same as the engine's)
 def kst_day(t_ms: int) -> int:
     return (int(t_ms) + 9 * HOUR) // DAY
@@ -694,6 +712,7 @@ class _Acct:
                 "setting_ko": self.line_setting.get(str(L), self.setting_ko),
                 "parts": {"gross": _r(sum(t["pnl"] for t in closed) - fund + fees, 2), "fees": _r(fees, 2),
                           "funding": _r(fund, 2), "open": _r(unreal, 2)}}
+        line.update(spark_of(curve))                           # CONTRACT 9.11: the ranking row's small line
         return {"line": line, "trades": trades, "curve": _down(curve, 800)}
 
     def _lines(self):

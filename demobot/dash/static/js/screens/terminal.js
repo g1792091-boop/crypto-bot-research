@@ -81,12 +81,8 @@ export async function mount(el, ctx) {
   const pnlBig = h("b", {class: "lv-pbig num"}, "—"), pnlMeta = h("span", {class: "lv-pmeta"}), pnlBox = h("div", {class: "lv-pchart"});
   const pnlSeg = ui.seg([{id: "24h", label: "24시간"}, {id: "all", label: "전체"}], st.win, (v) => { st.win = v; local.set("term-pnl-win", v); paintPnl(); }, {label: "수익 차트 기간", cls: "lv-mseg"});
   const pnlP = K.panel("수익 차트", {cls: "lv-pnlp", sub: "모든 줄 합계"}, h("div", {class: "lv-phero"}, pnlSeg, h("span", {class: "grow"}), pnlBig), pnlMeta, pnlBox);
-  const calTitle = h("span", {class: "lv-calm num"});
-  const calPrev = h("button", {type: "button", class: "lv-calnav", "aria-label": "이전 달", onclick: () => moveMonth(-1)}, "◀");
-  const calNext = h("button", {type: "button", class: "lv-calnav", "aria-label": "다음 달", onclick: () => moveMonth(1)}, "▶");
-  const calGrid = h("div", {class: "lv-cal", role: "grid", "aria-label": "수익 캘린더"});
-  const calDay = h("div", {class: "lv-calday"});
-  const calP = K.panel("수익 캘린더", {cls: "lv-calp", acts: [calPrev, calTitle, calNext]}, calGrid, calDay);
+  const cal = K.calendar({href: ctx.href});
+  const calP = K.panel("수익 캘린더", {cls: "lv-calp", acts: [cal.prev, cal.title, cal.next]}, cal.grid, cal.day);
 
   // ---------------------------------------------------------------- left: votes, fills
   const voteBox = h("div", {class: "lv-votes"});
@@ -246,61 +242,8 @@ export async function mount(el, ctx) {
       h("span", {class: "lv-pax t0 num"}, fmt.kst(t0)), h("span", {class: "lv-pax t1"}, "지금"));
   }
 
-  // the P&L calendar (calendar.json): one month, Monday first, a cell per KST day coloured by its P&L
-  function months() {
-    const days = D.cal && !isMissing(D.cal) ? D.cal.days || [] : [];
-    return [...new Set(days.map((d) => String(d.day).slice(0, 7)))].sort();
-  }
-  function moveMonth(k) {
-    const ms = months();
-    const i = ms.indexOf(st.month);
-    if (i < 0) return;
-    const j = Math.max(0, Math.min(ms.length - 1, i + k));
-    if (j !== i) { st.month = ms[j]; paintCal(); }
-  }
-  function paintCal() {
-    if (!D.cal) { put(calGrid, ui.empty("불러오는 중")); return; }
-    if (isMissing(D.cal) || !(D.cal.days || []).length) { put(calGrid, h("div", {class: "lv-pnone"}, h("b", null, "준비 중"), " · 날마다 기록이 아직 없습니다")); calTitle.textContent = ""; put(calDay); return; }
-    const ms = months();
-    if (!ms.includes(st.month)) st.month = ms[ms.length - 1];
-    const byDay = new Map(D.cal.days.map((d) => [String(d.day), d]));
-    const today = D.cal.days[D.cal.days.length - 1].day;
-    if (!st.day || !byDay.has(st.day)) st.day = today;
-    const [y, m] = st.month.split("-").map(Number);
-    calTitle.textContent = `${y}년 ${m}월`;
-    calPrev.disabled = ms.indexOf(st.month) <= 0;
-    calNext.disabled = ms.indexOf(st.month) >= ms.length - 1;
-    const first = new Date(Date.UTC(y, m - 1, 1));
-    const pad = (first.getUTCDay() + 6) % 7;
-    const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    const inMonth = D.cal.days.filter((d) => String(d.day).startsWith(st.month));
-    const maxAbs = Math.max(1, ...inMonth.map((d) => Math.abs(Number(d.pnl_sum) || 0)));
-    const cells = ["월", "화", "수", "목", "금", "토", "일"].map((w, i) => h("span", {class: ["lv-cw", i >= 5 ? "we" : ""]}, w));
-    for (let i = 0; i < pad; i++) cells.push(h("span", {class: "lv-cc pad", "aria-hidden": "true"}));
-    for (let dd = 1; dd <= n; dd++) {
-      const key = `${st.month}-${String(dd).padStart(2, "0")}`;
-      const d = byDay.get(key);
-      if (!d) { cells.push(h("span", {class: "lv-cc none", title: `${m}/${dd}: 기록 없음`}, h("span", {class: "dn"}, String(dd)))); continue; }
-      const v = Number(d.pnl_sum) || 0;
-      const tone = !d.trades || v === 0 ? "flat" : v > 0 ? "up" : "down";
-      const b = h("button", {type: "button", class: ["lv-cc", tone, key === today ? "today" : "", key === st.day ? "on" : ""],
-        style: {"--a": (0.1 + 0.55 * Math.min(1, Math.abs(v) / maxAbs)).toFixed(3)},
-        title: `${m}/${dd}: 거래 ${fmt.int(d.trades)}건 · 손익 합 ${fmt.money(v, true)} · 오른 줄 ${fmt.int(d.lines_up)} · 내린 줄 ${fmt.int(d.lines_down)}`,
-        onclick: () => { st.day = key; paintCal(); }},
-      h("span", {class: "dn"}, String(dd)), h("span", {class: "dv num"}, d.trades ? K.shortNum(v) : "—"));
-      cells.push(b);
-    }
-    put(calGrid, cells);
-    const d = byDay.get(st.day);
-    if (!d) { put(calDay); return; }
-    const v = fmt.money(d.pnl_sum, true);
-    put(calDay, h("div", {class: "lv-cdl"}, h("b", null, d.day.slice(5).replace("-", "/")), " · 거래 ", h("b", {class: "num"}, fmt.int(d.trades)),
-      "건 · 손익 합 ", ui.signed(v, fmt.tone(d.pnl_sum, v), "b"), ` · 오른 줄 ${fmt.int(d.lines_up)} · 내린 줄 ${fmt.int(d.lines_down)}`),
-    d.best && d.best.id ? h("div", {class: "lv-cdl muted"}, "가장 잘 된 줄 ", h("a", {href: ctx.href("account", d.best.id)}, `${d.best.name} ${d.best.L}배`),
-      ` ${fmt.money(d.best.pnl, true)}`) : null,
-    d.worst && d.worst.id ? h("div", {class: "lv-cdl muted"}, "가장 안 된 줄 ", h("a", {href: ctx.href("account", d.worst.id)}, `${d.worst.name} ${d.worst.L}배`),
-      ` ${fmt.money(d.worst.pnl, true)}`) : null);
-  }
+  // the P&L calendar (calendar.json): live-kit.js calendar() (흐름 uses the same one)
+  function paintCal() { cal.set(D.cal); }
 
   // signal votes of this coin
   function paintVotes() {
