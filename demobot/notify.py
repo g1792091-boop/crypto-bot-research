@@ -12,11 +12,16 @@ goes to every listed chat; the outbox remembers per row which chats already have
 in one chat is retried for that chat only and nobody gets a message twice. Commands (the view log) are read only from
 the listed chats: anyone else who finds the bot is ignored.
 
-Wording (the rule bot's Telegram redesign of 2026-10-04 is the reference): plain text (no parse_mode), the first
-line says what happened and may start with one emoji, then short lines; times are KST '%m/%d %H:%M'; coins without
-the quote ('BTC', not 'BTCUSD'); no emoji inside the lines. Every message is silent (disable_notification), as the
-owners chose for the rule bot ("전부 다 무음으로", 2026-10-05). Telegram allows 4096 characters: a long list is cut
-and ends with '외 N건은 대시보드에서'.
+Wording: the rule bot's Telegram format (paperbot/notify.py ``telegram_text``, paperbot/tradealerts.py; owners'
+redesign of 2026-10-04): plain text (no parse_mode), a title line '<what> · <whom>' with one emoji first, a blank
+line, short lines, the KST time ('%m/%d %H:%M') last where the message has no time of its own; coins without the
+quote ('BTC'); prices with the decimals their size needs and whole dollars ('+$84'). Trades look like the rule bot's
+blocks and say 데모 where the rule bot says 모의, so the two bots' messages are told apart: '📈 데모 진입 · …',
+'✅ 데모 이익 +$x · …', '❌ 데모 손실 -$x · …', and several in one tick '📊 데모 거래 알림 …' (blocks up to 3, then
+lines grouped by side and coin, or by profit and loss; the side marks 🟢 롱 / 🔴 숏 start their lines as in the rule
+bot). Every message is silent (disable_notification), as the owners chose for the rule bot ("전부 다 무음으로",
+2026-10-05). Telegram allows 4096 characters: a long list is cut and ends with '외 N건은 대시보드에서'.
+``python -m demobot.notify samples`` prints one example of every message.
 
 The token is read from the environment only (DEMOBOT_TG_TOKEN, DEMOBOT_TG_CHAT; /etc/demobot/demobot.env) and is
 never logged, printed or stored: every error text goes through ``redact``.
@@ -33,6 +38,8 @@ regime of each coin; ``weekly`` (8.10) is the finished week's review ("주간 �
 
     python -m demobot.notify test      # sends '🧪 데모 랩 테스트 메시지' to every chat of DEMOBOT_TG_CHAT
     python -m demobot.notify chatid    # lists the people and groups that wrote to the bot (to fill DEMOBOT_TG_CHAT)
+    python -m demobot.notify samples [--out FILE] [--before OLD.json] [--save-json NOW.json]
+                                       # one example of every message (sends nothing); with --before, old and new
 
 Both read the two keys from the environment, else from /etc/demobot/demobot.env (``--env-file``), so the owners
 never paste the token anywhere but the server's editor.
@@ -74,7 +81,7 @@ TEST_TEXT = "🧪 데모 랩 테스트 메시지"
 
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 WINDOW_KO = {"live": "실시간", "26w": "26주", "4w": "4주"}
-REASON_KO = {"stop": "손절", "lock": "잠금 익절", "liq": "강제청산", "tp": "익절", "time": "시간 청산",
+REASON_KO = {"stop": "손절", "lock": "익절 잠금", "liq": "강제청산", "tp": "익절", "time": "시간 청산",
              "open": "보유 중"}
 KIND_KO = {"fixed": "고정", "adaptive": "자동", "friend": "친구 규칙", "flip": "동전 던지기"}
 WARN_KO = {"data": "시세 자료 빠짐", "stalled": "멈춤 (새 봉 처리 안 됨)", "error": "오류",
@@ -128,11 +135,11 @@ def px(x) -> str:
 
 
 def usd(x) -> str:
-    """Signed dollars and cents: '+$12.30', '-$5.10' (never '$-5.10')."""
+    """Signed whole dollars, as the rule bot writes them: '+$1,500', '-$18' (never '$-18')."""
     v = _num(x)
     if v is None:
         return "-"
-    return f"{'-' if v < 0 else '+'}${abs(v):,.2f}"
+    return f"{'-' if v < 0 else '+'}${abs(v):,.0f}"
 
 
 def pct(x) -> str:
@@ -251,52 +258,239 @@ def _fit(head: list, sections: list, tail: list) -> str:
 
 
 # ---------------------------------------------------------------- the messages (CONTRACT.md section 5)
-def _start(p: dict, now_ms: Optional[int]) -> list:
-    n = count(p.get("accounts") or 48)
-    if str(p.get("phase")) == "warm":
-        L = ["▶️ 데모 랩 시작 · 준비 중", "지난 26주 시세를 채우는 중 (10~15분)", f"계좌 {n}개 · 모의 거래만 · 주문 없음"]
-    else:
-        L = [f"▶️ 데모 랩 시작 · 계좌 {n}개"]
-        ls = _num(p.get("live_start_ms"))
-        if ls:
-            again = now_ms is not None and now_ms - ls > 30 * 60_000
-            L.append(f"{'이어서 돌림 · ' if again else ''}실시간 시작 {kst(ls)}")
-        L.append("모의 거래만 · 주문 없음 · 결과는 대시보드에서")
+# The rule bot's layout (paperbot/notify.py ``telegram_text``, paperbot/tradealerts.py): a title line '<what> · <whom>'
+# with one emoji first, a blank line, short lines, the KST time last where the message has none of its own. A trade
+# is a block like the rule bot's ``entry_block`` / ``exit_block``, saying 데모 where the rule bot says 모의.
+def _when(now_ms: Optional[int], fallback=None) -> Optional[int]:
+    v = _num(now_ms)
+    if v:
+        return int(v)
+    f = _num(fallback)
+    return int(f) if f else None
+
+
+def _msg(title: str, body: list, now_ms: Optional[int] = None) -> list:
+    """[title, '', body..., time]: the rule bot's shape (no blank line when there is no body)."""
+    body = [x for x in body if x is not None]
+    L = [title] + ([""] + body if body else [])
+    if now_ms:
+        L.append(kst(now_ms))
     return L
 
 
-def _trade_line(t: dict, closed: bool) -> str:
-    name = str(t.get("name") or t.get("account") or "?")
-    what = f"{coin(t.get('coin'))} {side_ko(t.get('side'))}"
-    setting = str(t.get("setting_ko") or "").strip()
-    ex = str(t.get("exit_ko") or "").strip()
-    rule = " / ".join(x for x in (setting, ex) if x)
-    if not closed:
-        return f"- {name}: {what} {px(t.get('entry'))}" + (f" · {rule}" if rule else "")
-    reason = t.get("reason")
-    why = REASON_KO.get(str(reason), str(reason or "청산"))
+def _start(p: dict, now_ms: Optional[int]) -> list:
+    n = count(p.get("accounts") or 48)
+    if str(p.get("phase")) == "warm":
+        return _msg("▶️ 데모 랩 시작 · 준비 중", ["지난 26주 시세를 채우는 중 (10~15분)",
+                                             f"계좌 {n}개 · 데모 거래만 · 주문 없음"], now_ms)
+    ls = _num(p.get("live_start_ms"))
+    again = bool(ls) and now_ms is not None and now_ms - ls > 30 * 60_000
+    body = ["이어서 돌림" if again else "새로 시작"]
+    if ls:
+        body.append(f"실시간 시작 {kst(ls)}")
+    body.append("데모 거래만 · 주문 없음 · 결과는 대시보드에서")
+    return _msg(f"▶️ 데모 랩 {'재시작' if again else '시작'} · 계좌 {n}개", body, now_ms)
+
+
+# ---- trades (the tick bundle)
+BLOCKS = 3          # up to this many entries (exits) in a message: one block each; more: grouped lines (rule bot)
+MAX_LINES = 12      # grouped lines per section, then '외 n건'
+PAPER = "데모"       # the rule bot says 모의; the demo lab says 데모, so the two bots' messages are told apart
+_PAIR_RE = re.compile(r"익절 ([\d.]+)R · 손절 ([\d.]+)ATR")
+
+
+def side_mark(s) -> str:
+    """'🟢 롱' / '🔴 숏' (the rule bot's trade lines), '' when unknown."""
+    v = _num(s)
+    return "🟢 롱" if v is not None and v > 0 else "🔴 숏" if v is not None and v < 0 else ""
+
+
+def _levs(t: dict) -> list:
+    """The leverage lines of a trade: those in margin_by_L / pnl_by_L (sorted), else []."""
+    for k in ("margin_by_L", "pnl_by_L"):
+        got = [L for L, v in _lev_sorted(t.get(k)) if _num(v) is not None]
+        if got:
+            return got
+    return []
+
+
+def _lev_text(t: dict) -> str:
+    levs = _levs(t)
+    return f" {'·'.join(str(L) for L in levs)}배" if levs else ""
+
+
+def _pnl_total(t: dict) -> Optional[float]:
+    vals = [_num(v) for _, v in _lev_sorted(t.get("pnl_by_L"))]
+    vals = [v for v in vals if v is not None]
+    return sum(vals) if vals else None
+
+
+def _win(t: dict) -> bool:
+    tot = _pnl_total(t)
+    if tot is not None:
+        return tot > 0
     r = _num(t.get("R"))
-    parts = [f"- {name}: {what} {px(t.get('entry'))} → {px(t.get('exit'))} {why}" + (f" {rr(r)}" if r is not None else "")]
-    lev = [f"{L}배 {usd(v)}" for L, v in _lev_sorted(t.get("pnl_by_L")) if _num(v) is not None]
-    if lev:
-        parts.append(" · ".join(lev))
+    return r is not None and r > 0
+
+
+def _dist(price, entry) -> str:
+    p, e = _num(price), _num(entry)
+    return f" ({(p / e - 1) * 100:+.2f}%)" if p is not None and e else ""
+
+
+def _target_lines(t: dict) -> list:
+    """The exit rule: a fixed pair's target price (entry + side x x x |entry - stop|, CONTRACT.md 8.6), the half /
+    break-even exit's two prices, or the rule's name."""
+    ex = str(t.get("exit_ko") or "").strip()
+    e, s, side = _num(t.get("entry")), _num(t.get("stop")), _num(t.get("side"))
+    risk = abs(e - s) if e is not None and s is not None else None
+    sgn = 1 if (side or 0) > 0 else -1
+    m = _PAIR_RE.search(ex)
+    if m and risk and side:
+        tp = e + sgn * float(m[1]) * risk
+        return [f"익절 목표 {px(tp)}{_dist(tp, e)} · {ex}"]
+    if ex.startswith("반익반본") and risk and side:
+        return [f"1R {px(e + sgn * risk)}에 절반 · 손절을 본전으로 · 나머지 1.5R {px(e + sgn * 1.5 * risk)}"]
+    if ex:
+        return [f"청산 방식 {ex}"]
+    return []
+
+
+def entry_block(t: dict) -> list:
+    """'📈 데모 진입 · <account>', '🟢 롱 · BTC 20·30·40·50배', 진입가, 손절가 (±%), the exit rule or target, the
+    setting, the margin of each leverage line (the four lines share the entry)."""
+    side = side_mark(t.get("side"))
+    L = [f"📈 {PAPER} 진입 · {t.get('name') or t.get('account') or '?'}",
+         f"{side + ' · ' if side else ''}{coin(t.get('coin'))}{_lev_text(t)}",
+         f"진입가 {px(t.get('entry'))}"]
+    if _num(t.get("stop")) is not None:
+        L.append(f"손절가 {px(t['stop'])}{_dist(t['stop'], t.get('entry'))}")
+    L += _target_lines(t)
+    if t.get("setting_ko"):
+        L.append(f"설정 {t['setting_ko']}")
+    mg = [f"{L_}배 ${v:,.0f}" for L_, v in ((L_, _num(v)) for L_, v in _lev_sorted(t.get("margin_by_L")))
+          if v is not None]
+    if mg:
+        L.append("증거금 " + " · ".join(mg))
+    return [_clip(x) for x in L]
+
+
+def _why(t: dict) -> str:
+    r = t.get("reason")
+    return REASON_KO.get(str(r), str(r or "청산"))
+
+
+def exit_block(t: dict) -> list:
+    """'✅ 데모 이익 +$x · <account>' / '❌ 데모 손실 -$x · …' (x: the trade's P&L over its leverage lines), the side,
+    coin and reason, the prices and R, the P&L (and ROE) of each line, the setting and exit rule."""
+    win = _win(t)
+    tot = _pnl_total(t)
+    amount = usd(tot) if tot is not None else rr(t.get("R"))
+    side = side_mark(t.get("side"))
+    L = [f"{'✅' if win else '❌'} {PAPER} {'이익' if win else '손실'} {amount} · {t.get('name') or t.get('account') or '?'}",
+         f"{side + ' · ' if side else ''}{coin(t.get('coin'))}{_lev_text(t)} · {_why(t)}"]
+    r = _num(t.get("R"))
+    L.append(f"진입가 {px(t.get('entry'))} → 청산가 {px(t.get('exit'))}" + (f" · {rr(r)}" if r is not None else ""))
+    roe = dict(_lev_sorted(t.get("roe_by_L")))
+    per = []
+    for L_, v in _lev_sorted(t.get("pnl_by_L")):
+        if _num(v) is None:
+            continue
+        x = _num(roe.get(L_))
+        per.append(f"{L_}배 {usd(v)}" + (f" ({x * 100:+.0f}%)" if x is not None else ""))
+    if per:
+        L.append("손익 " + " · ".join(per))
+    rule = " · ".join(x for x in (str(t.get("setting_ko") or "").strip(), str(t.get("exit_ko") or "").strip()) if x)
     if rule:
-        parts.append(rule)
-    return " · ".join(parts)
+        L.append(f"설정 {rule}")
+    return [_clip(x) for x in L]
 
 
-def _tick(p: dict) -> str:
+def _grouped_entries(entries: list) -> list:
+    """(title, lines) sections by side, then coin (the rule bot's ``_grouped_entries``)."""
+    out = []
+    for sgn in (1, -1):
+        es = [t for t in entries if (_num(t.get("side")) or 0) * sgn > 0]
+        if not es:
+            continue
+        lines, shown = [], 0
+        for c in dict.fromkeys(coin(t.get("coin")) for t in es):
+            ce = [t for t in es if coin(t.get("coin")) == c]
+            same = len({_num(t.get("entry")) for t in ce}) == 1
+            body = []
+            for t in ce:
+                if shown >= MAX_LINES:
+                    break
+                shown += 1
+                stop = f" · 손절 {px(t['stop'])}" if _num(t.get("stop")) is not None else ""
+                body.append(_clip(f"- {t.get('name') or t.get('account') or '?'}"
+                                  + ("" if same else f" · 진입 {px(t.get('entry'))}") + stop))
+            if body:
+                lines += [f"{c} · 진입 {px(ce[0].get('entry'))}" if same else c] + body
+        if len(es) > shown:
+            lines.append(f"외 {len(es) - shown}건 (대시보드)")
+        out.append((f"{side_mark(sgn)} {len(es)}건", lines))
+    return out
+
+
+def _grouped_exits(exits: list) -> list:
+    """(title, lines) sections: profits, then losses, biggest first (the rule bot's ``_grouped_exits``)."""
+    out = []
+    for win in (True, False):
+        xs = [t for t in exits if _win(t) == win]
+        if not xs:
+            continue
+        tots = [v for v in (_pnl_total(t) for t in xs) if v is not None]
+        title = f"{'✅ 이익' if win else '❌ 손실'} {len(xs)}건" + (f" {usd(sum(tots))}" if tots else "")
+        listed = sorted(xs, key=lambda t: -abs(_pnl_total(t) or _num(t.get("R")) or 0))[:MAX_LINES]
+        lines = []
+        for t in listed:
+            tot = _pnl_total(t)
+            lines.append(_clip(f"- {t.get('name') or t.get('account') or '?'} · {coin(t.get('coin'))} · {_why(t)}"
+                               + (f" · {rr(t['R'])}" if _num(t.get("R")) is not None else "")
+                               + (f" · {usd(tot)}" if tot is not None else "")))
+        if len(xs) > len(listed):
+            lines.append(f"외 {len(xs) - len(listed)}건 (대시보드)")
+        out.append((title, lines))
+    return out
+
+
+def _tick(p: dict, now_ms: Optional[int] = None) -> str:
+    """One message per tick (the rule bot's trade message): one trade -> its block and the KST time; more -> a header
+    '📊 데모 거래 알림 <time> · 진입 n (롱 a·숏 b) · 청산 m · 합계 ±$', up to ``BLOCKS`` entries (exits) as blocks,
+    more as lines grouped by side and coin (entries) or by profit / loss (exits), and the open positions last."""
     opens = [t for t in (p.get("opens") or []) if isinstance(t, dict)]
     closes = [t for t in (p.get("closes") or []) if isinstance(t, dict)]
     if not opens and not closes:
         return ""
-    what = " · ".join(x for x in (f"진입 {len(opens)}" if opens else "", f"청산 {len(closes)}" if closes else "") if x)
-    head = [f"🧪 데모 랩 모의 거래 · {what}"]
     bar = _num(p.get("bar_ms"))
-    if bar:
-        head.append(f"{kst(bar)} 봉")
-    return _fit(head, [(f"진입 {len(opens)}", [_trade_line(t, False) for t in opens]),
-                       (f"청산 {len(closes)}", [_trade_line(t, True) for t in closes])], [])
+    when = _when(now_ms, bar + 15 * 60_000 if bar else None)
+    stamp = [kst(when)] if when else []
+    open_n = _num(p.get("open"))
+    tail = ["", f"열린 포지션 {count(open_n)}개"] if open_n is not None else []
+    if len(opens) + len(closes) == 1:
+        block = entry_block(opens[0]) if opens else exit_block(closes[0])
+        return "\n".join(block + stamp)[:LIMIT]
+    head = [f"📊 {PAPER} 거래 알림" + (f" {kst(when)}" if when else "")]
+    if opens:
+        nl = sum(1 for t in opens if (_num(t.get("side")) or 0) > 0)
+        head.append(f"진입 {len(opens)}" + (f" (롱 {nl}·숏 {len(opens) - nl})" if 0 < nl < len(opens) else ""))
+    if closes:
+        head.append(f"청산 {len(closes)}")
+        tots = [v for v in (_pnl_total(t) for t in closes) if v is not None]
+        if tots:
+            head.append(f"합계 {usd(sum(tots))}")
+    sections = []
+    if len(opens) <= BLOCKS:
+        sections += [(b[0], b[1:]) for b in (entry_block(t) for t in opens)]
+    else:
+        sections += _grouped_entries(opens)
+    if len(closes) <= BLOCKS:
+        order = sorted(closes, key=lambda t: -abs(_pnl_total(t) or _num(t.get("R")) or 0))
+        sections += [(b[0], b[1:]) for b in (exit_block(t) for t in order)]
+    else:
+        sections += _grouped_exits(closes)
+    return _fit([" · ".join(head)], sections, tail)
 
 
 def _switch(p: dict, now_ms: Optional[int]) -> str:
@@ -313,8 +507,9 @@ def _switch(p: dict, now_ms: Optional[int]) -> str:
         if it.get("why_ko"):
             line += f" · {it['why_ko']}"
         items.append(line)
-    tail = [kst(now_ms)] if now_ms else []
-    return _fit([f"🔁 설정 바꿈 · {name}"], [(f"바뀐 곳 {len(items)}", items)], tail)
+    head = [f"🔁 {PAPER} 설정 바꿈 · {name}"]
+    tail = ["", kst(now_ms)] if now_ms else []
+    return _fit(head, [(f"바뀐 곳 {len(items)}", items)], tail)
 
 
 def _daily(p: dict) -> str:
@@ -328,12 +523,12 @@ def _daily(p: dict) -> str:
     if _num(p.get("trades_24h")) is not None:
         sub.append(f"지난 24시간 거래 {count(p.get('trades_24h'))}건")
     if sub:
-        head.append(" · ".join(sub))
+        head += ["", " · ".join(sub)]
 
     def acct(a) -> str:
         L = _num(a.get("L"))
-        money = f" ({usd(a['pnl'])})" if _num(a.get("pnl")) is not None else ""
-        return f"- {a.get('name') or a.get('id') or '?'}{f' {int(L)}배' if L else ''} {pct(a.get('pnl_pct'))}{money}"
+        money_ = f" ({usd(a['pnl'])})" if _num(a.get("pnl")) is not None else ""
+        return f"- {a.get('name') or a.get('id') or '?'}{f' {int(L)}배' if L else ''} {pct(a.get('pnl_pct'))}{money_}"
 
     best = [acct(a) for a in (p.get("best") or [])[:3] if isinstance(a, dict)]
     worst = [acct(a) for a in (p.get("worst") or [])[:3] if isinstance(a, dict)]
@@ -393,7 +588,7 @@ def _weekly(p: dict) -> str:
     owners have to decide, one line each for the judgment, the stop rules, the costs and the views."""
     w = p.get("week") if isinstance(p.get("week"), dict) else {}
     label = str(w.get("week_ko") or "").strip()
-    head = [f"📅 데모 랩 주간 회의록{f' · {label}' if label else ''}"]
+    head = [f"📅 데모 랩 주간 회의록{f' · {label}' if label else ''}", ""]
     summary = [_clip(str(x).strip(), 400) for x in (w.get("summary_ko") or []) if str(x or "").strip()][:6]
     head += summary or ["이번 주 요약 없음"]
     decide = [f"- {_clip(str(x).strip(), 400)}" for x in (w.get("decide_ko") or []) if str(x or "").strip()]
@@ -421,13 +616,8 @@ def _weekly(p: dict) -> str:
 
 def _warn(p: dict, now_ms: Optional[int]) -> list:
     what = str(p.get("what") or "")
-    L = [f"⚠ 데모 랩 경고 · {WARN_KO.get(what, what or '알림')}"]
-    if p.get("detail_ko"):
-        L.append(_clip(str(p["detail_ko"]), 1500))
-    L.append("규칙봇과는 별개 · 주문 없음")
-    if now_ms:
-        L.append(kst(now_ms))
-    return L
+    body = [_clip(str(p["detail_ko"]), 1500)] if p.get("detail_ko") else []
+    return _msg(f"⚠ 데모 랩 경고 · {WARN_KO.get(what, what or '알림')}", body + ["규칙봇과는 별개 · 주문 없음"], now_ms)
 
 
 def _warn_clear(p: dict, now_ms: Optional[int]) -> list:
@@ -436,12 +626,8 @@ def _warn_clear(p: dict, now_ms: Optional[int]) -> list:
         title = CLEAR_KO[what]
     else:
         title = f"'{WARN_KO.get(what, what)}' 경고 풀림" if what else "경고 풀림"
-    L = [f"✅ 데모 랩 회복 · {title}"]
-    if p.get("detail_ko"):
-        L.append(_clip(str(p["detail_ko"]), 1500))
-    if now_ms:
-        L.append(kst(now_ms))
-    return L
+    body = [_clip(str(p["detail_ko"]), 1500)] if p.get("detail_ko") else []
+    return _msg(f"✅ 데모 랩 회복 · {title}", body, now_ms)
 
 
 def _line_name(p: dict) -> str:
@@ -454,7 +640,7 @@ def _pass(p: dict, now_ms: Optional[int]) -> str:
     head = [f"🏁 우리 기준 통과 · {_line_name(p)}"]
     end = _num(p.get("confirm_end_ms"))
     if end:
-        head.append(f"4주 확인 기간 시작 · 빨라도 {day_ko(end)}에 끝남 (한국 시간)")
+        head += ["", f"4주 확인 기간 시작 · 빨라도 {day_ko(end)}에 끝남 (한국 시간)"]
     checks = []
     for c in p.get("checks") or []:
         if not isinstance(c, dict):
@@ -463,7 +649,7 @@ def _pass(p: dict, now_ms: Optional[int]) -> str:
         mark = "" if ok is None else " (충족)" if ok else " (미달)"
         val = f": {c['value_ko']}" if c.get("value_ko") not in (None, "") else ""
         checks.append(f"- {c.get('name_ko') or '?'}{val}{mark}")
-    tail = ["", "데모 계좌의 모의 거래 결과입니다"]
+    tail = ["", f"{PAPER} 계좌의 거래 결과입니다 (주문 없음)"]
     if end:
         tail += ["확인 기간: 지금부터 새로 들어간 거래만 다시 셉니다",
                  f"{CONFIRM_DAYS}일 안에 거래 {CONFIRM_NEED}건이 안 되면 {CONFIRM_NEED}건이 될 때까지 늘어납니다 "
@@ -480,26 +666,28 @@ def _window_lines(p: dict) -> list:
     start, dec = _num(p.get("start_ms")), _num(p.get("decided_ms"))
     span = f"{kst(start, '%m/%d')} ~ {kst(dec, '%m/%d')}" if start and dec else \
         f"{kst(start, '%m/%d')}부터" if start else ""
-    money = f"수익 {usd(w.get('pnl'))}" + (f" ({pct(w['pnl_pct'])})" if _num(w.get("pnl_pct")) is not None else "")
+    money_ = f"수익 {usd(w.get('pnl'))}" + (f" ({pct(w['pnl_pct'])})" if _num(w.get("pnl_pct")) is not None else "")
     L = [f"확인 기간 {span}" if span else "확인 기간"]
     if w:
-        L.append(f"거래 {count(w.get('n'))}건 · 평균 {rr(w.get('mean_R'))} · {money} · 최대 낙폭 {share(w.get('max_dd'))}")
+        L.append(f"거래 {count(w.get('n'))}건 · 평균 {rr(w.get('mean_R'))} · {money_} · 최대 낙폭 {share(w.get('max_dd'))}")
     return L
 
 
-def _confirm_done(p: dict) -> list:
+def _confirm_done(p: dict, now_ms: Optional[int] = None) -> list:
     res = str(p.get("result") or "")
     who = _line_name(p)
     if res == "confirmed":
-        return ([f"✅ 확인 기간 통과 · {who}", "이제 '실전 후보'입니다"] + _window_lines(p) +
-                ["실전 후보는 봇의 판정일 뿐입니다", "실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)"])
+        return _msg(f"✅ 확인 기간 통과 · {who}",
+                    ["이제 '실전 후보'입니다"] + _window_lines(p) +
+                    ["실전 후보는 봇의 판정일 뿐입니다", "실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)"],
+                    now_ms)
     if res == "failed":
         why = str(p.get("why_ko") or "").strip()
-        return ([f"❌ 확인 기간 실패 · {who}", _clip(f"이유: {why}", 800) if why else "이유: 기록 없음"]
-                + _window_lines(p) +
-                ["다음에 우리 기준을 다시 통과하면 확인 기간이 새로 시작됩니다", "실제 돈 금지 그대로"])
-    return ([f"🏁 확인 기간 끝 · {who}", "결과를 알 수 없음 · 대시보드의 판정 화면을 보세요"] + _window_lines(p) +
-            ["실제 돈 금지 그대로"])
+        return _msg(f"❌ 확인 기간 실패 · {who}",
+                    [_clip(f"이유: {why}", 800) if why else "이유: 기록 없음"] + _window_lines(p) +
+                    ["다음에 우리 기준을 다시 통과하면 확인 기간이 새로 시작됩니다", "실제 돈 금지 그대로"], now_ms)
+    return _msg(f"🏁 확인 기간 끝 · {who}",
+                ["결과를 알 수 없음 · 대시보드의 판정 화면을 보세요"] + _window_lines(p) + ["실제 돈 금지 그대로"], now_ms)
 
 
 # ---------------------------------------------------------------- the view log ("관점 기록장", CONTRACT.md 7.3)
@@ -551,7 +739,7 @@ def _view_head(emoji: str, what: str, p: dict) -> str:
 
 
 def _view_ack(p: dict) -> list:
-    L = [_view_head("📝", "기록", p)]
+    L = [_view_head("📝", "기록", p), ""]
     t = _num(p.get("t_ms"))
     if t:
         L.append(f"{kst(t)} 기준 (한국 시간)")
@@ -570,7 +758,7 @@ def _view_ack(p: dict) -> list:
 
 def _view_err(p: dict) -> list:
     body = str(p.get("text_ko") or "").strip()
-    L = ["❓ 관점을 기록하지 못했습니다"]
+    L = ["❓ 관점을 기록하지 못했습니다", ""]
     L += [_clip(body, 1500)] if body else [f"쓰는 법: {VIEW_USAGE}", f"예: {VIEW_EXAMPLES[0]}"]
     L.append("자세한 쓰는 법: 관점도움")
     return L
@@ -580,8 +768,8 @@ def _view_cancel(p: dict) -> list:
     vid = p.get("id")
     num = f" #{vid}" if vid not in (None, "") else ""
     if p.get("ok"):
-        return [f"🗑 관점{num} 취소했습니다", "채점과 결과에서 빠집니다"]
-    return [f"❓ 관점{num} 취소 안 됨", "없는 번호이거나 이미 끝난 관점입니다 · 목록: 관점목록"]
+        return [f"🗑 관점{num} 취소했습니다", "", "채점과 결과에서 빠집니다"]
+    return [f"❓ 관점{num} 취소 안 됨", "", "없는 번호이거나 이미 끝난 관점입니다 · 목록: 관점목록"]
 
 
 def _view_list(p: dict) -> str:
@@ -598,13 +786,13 @@ def _view_list(p: dict) -> str:
             line += f" · 구간 진입 {rr(v['touch_R'])}"
         items.append(line)
     if not items:
-        return "📒 관점 목록\n아직 기록한 관점이 없습니다 · 쓰는 법: 관점도움"
+        return "📒 관점 목록\n\n아직 기록한 관점이 없습니다 · 쓰는 법: 관점도움"
     return _fit([f"📒 관점 목록 · 최근 {len(items)}개"], [("번호 · 시각 · 코인 · 상태", items)],
                 ["", "방향은 말한 쪽으로 움직인 %, 취소: 취소 번호"])
 
 
 def _view_help() -> list:
-    return ["📖 관점 기록장 쓰는 법", "이 봇에게 한 줄로 보냅니다 (두 분 모두 확인 답장을 받습니다):", VIEW_USAGE, "",
+    return ["📖 관점 기록장 쓰는 법", "", "이 봇에게 한 줄로 보냅니다 (두 분 모두 확인 답장을 받습니다):", VIEW_USAGE, "",
             "- 시각은 한국 시간, 빼면 받은 시각", "- 코인: BTC ETH SOL DOGE LTC BCH XRP",
             "- 구간 A·B·C 중 하나 이상, 범위는 84750-84840 또는 84750~84840 (쉼표 가능)",
             "- 손절을 빼면 가장 먼 구간에서 0.3% 바깥, 목표를 빼면 1R에 절반 · 본전 · 나머지 2R", "",
@@ -634,7 +822,7 @@ def _follow_line(mode: str, f) -> str:
 
 def _view_done(p: dict) -> list:
     d = p.get("dir") if isinstance(p.get("dir"), dict) else {}
-    L = [_view_head("📊", "결과", p),
+    L = [_view_head("🎯", "결과", p), "",
          "말한 방향으로 " + " · ".join(f"{h} {pct2(d.get(k))}"
                                      for k, h in (("4h", "4시간"), ("24h", "24시간"), ("48h", "48시간"))),
          "구간 도달 " + ("예" if p.get("reached") is True else "아니오" if p.get("reached") is False else "-"),
@@ -650,9 +838,9 @@ def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
     p = payload if isinstance(payload, dict) else {}
     try:
         if kind == "start":
-            text = "\n".join(_start(p, now_ms) + ([kst(now_ms)] if now_ms else []))
+            text = "\n".join(_start(p, now_ms))
         elif kind == "tick":
-            text = _tick(p)
+            text = _tick(p, now_ms)
         elif kind == "switch":
             text = _switch(p, now_ms)
         elif kind == "daily":
@@ -664,7 +852,7 @@ def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
         elif kind == "pass":
             text = _pass(p, now_ms)
         elif kind == "confirm_done":
-            text = "\n".join(_confirm_done(p))
+            text = "\n".join(_confirm_done(p, now_ms))
         elif kind == "weekly":
             text = _weekly(p)
         elif kind == "view_ack":
@@ -1129,13 +1317,197 @@ def cmd_chatid(token: str, call=api, out=print) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- samples (python -m demobot.notify samples)
+SAMPLE_NOW = 1_791_590_400_000 + 15 * 60_000 + 30_000      # 2026-10-10 09:15:30 KST (a tick just after a 15m close)
+
+
+def _t(account, name, coin_, side, entry, setting, exit_ko, stop=None, margins=None, **closed):
+    t = {"account": account, "name": name, "coin": coin_, "side": side, "entry": entry, "exit": None, "reason": None,
+         "setting_ko": setting, "exit_ko": exit_ko, "pnl_by_L": None, "R": None}
+    if stop is not None:
+        t["stop"] = stop
+    if margins is not None:
+        t["margin_by_L"] = margins
+    t.update(closed)
+    return t
+
+
+def sample_payloads() -> list:
+    """[(key, label, kind, payload)]: one realistic payload of every Telegram kind (``SAMPLE_NOW`` is the send time).
+    Trade payloads also carry the optional fields ``stop``, ``margin_by_L``, ``roe_by_L`` and the tick's ``open``."""
+    bar = SAMPLE_NOW - 30_000 - 15 * 60_000
+    m4 = {"20": 208.6, "30": 291.4, "40": 388.0, "50": 455.0}
+    e1 = _t("fx-fr-S2-15m", "S2 친구 값 · 15분", "BTCUSD", 1, 62345.1, "ST 8/3 ROC 37", "익절 1.5R · 손절 2ATR",
+            stop=61580.0, margins=m4)
+    e2 = _t("ad-r26-N04-30m", "N04 자동 · 5거래마다(26주) · 30분", "ETHUSD", -1, 2412.37, "ST 20/2 KVOx1 sig 13",
+            "사다리(규칙봇 방식)", stop=2448.9, margins={"20": 200.0, "30": 300.0, "40": 400.0})
+    x1 = _t("fx-fr-S2-15m", "S2 친구 값 · 15분", "DOGEUSD", -1, 0.21345, "ST 8/3 ROC 37", "익절 1.5R · 손절 2ATR",
+            stop=0.21661, exit=0.20871, reason="tp", pnl_by_L={"20": 88.7, "30": 132.4, "40": 176.9, "50": 221.0},
+            R=1.5, roe_by_L={"20": 0.444, "30": 0.666, "40": 0.888, "50": 1.11})
+    x2 = _t("ad-r4-S2-15m", "S2 자동 · 5거래마다(4주) · 15분", "SOLUSD", 1, 141.23, "ST 14/2 ROC 50",
+            "반익반본: 1R 절반 · 본전 · 1.5R", stop=139.4, exit=139.4, reason="stop",
+            pnl_by_L={"20": -52.1, "30": -78.3, "40": -104.2, "50": -130.4}, R=-1.0)
+    coins = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "BTCUSD", "LTCUSD", "BCHUSD", "DOGEUSD"]
+    prices = {"BTCUSD": 62345.1, "ETHUSD": 2412.37, "SOLUSD": 141.23, "XRPUSD": 0.5123, "LTCUSD": 64.82,
+              "BCHUSD": 341.5, "DOGEUSD": 0.21345}
+    many_in = [_t(f"ad-wk-S2-15m-{i}", f"S2 자동 · 매주 · 15분 #{i}", c, 1 if i % 3 else -1, prices[c], "ST 10/6 ROC 9",
+                  "익절 2R · 손절 2ATR", stop=round(prices[c] * (0.985 if i % 3 else 1.015), 5), margins=m4)
+               for i, c in enumerate(coins)]
+    many_out = [_t(f"fr-N02-30m-{i}", f"N02 친구 규칙 · 30분 #{i}", c, -1 if i % 2 else 1, prices[c], "ST 8/3 KST",
+                   "사다리(규칙봇 방식)", exit=prices[c] * (1.01 if i % 2 == 0 else 1.005),
+                   reason="lock" if i % 2 == 0 else "stop", R=0.8 if i % 2 == 0 else -1.0,
+                   pnl_by_L={"20": 40.0 + i if i % 2 == 0 else -50.0 - i, "30": 60.0 if i % 2 == 0 else -75.0,
+                             "40": 80.0 if i % 2 == 0 else -100.0, "50": 100.0 if i % 2 == 0 else -125.0})
+                for i, c in enumerate(coins[:6])]
+    week = {"week_ko": "10/05~10/11", "start_ms": SAMPLE_NOW - 7 * 86_400_000, "end_ms": SAMPLE_NOW, "final": True,
+            "summary_ko": ["이번 주 거래 312건, 오른 계좌 20개 · 내린 계좌 28개.", "가장 좋은 줄: S2 친구 값 · 15분 50배 +12.3%.",
+                           "고정 계좌 평균 +1.2%, 자동 계좌 평균 -0.8%.", "정지 규칙을 썼다면 평균 1.2%p 덜 잃었습니다."],
+            "decide_ko": ["S2 친구 값 · 15분 20배가 확인 기간을 통과: 실전 후보로 둘지 정하기"],
+            "judge": {"passed": 1, "confirming": 2, "candidates": 1}, "stops": {"net_pct": 1.25},
+            "costs": {"median_entry_bps": 2.6, "assumed_bps": 2.0}, "views": {"n": 7, "done": 5, "dir24_rate": 0.6}}
+    zones = {"A": None, "B": [84750.0, 84840.0], "C": [85300.0, 85300.0]}
+    touch = {"status": "closed", "entry": 84750.0, "R": 1.2, "wallet20_pct": 4.8, "legs_ko": "1R 절반 · 본전 청산"}
+    daily = {"day": "2026-10-10", "live_days": 3.25, "trades_24h": 57, "passed": 1, "confirming": 1, "candidates": 0,
+             "best": [{"name": "S2 친구 값 · 15분", "L": 50, "pnl_pct": 12.34, "pnl": 123.4},
+                      {"name": "N04 기본값 · 30분", "L": 40, "pnl_pct": 8.1, "pnl": 81.0}],
+             "worst": [{"name": "동전 던지기 · 15분", "L": 50, "pnl_pct": -45.6, "pnl": -456.0}],
+             "by_kind": [{"kind": "fixed", "kind_ko": "고정", "mean_pnl_pct": {"20": 1.2, "30": 1.8, "40": 2.3,
+                                                                                "50": -2.9}},
+                         {"kind": "flip", "mean_pnl_pct": {"20": -1.0, "30": -1.5, "40": -2.0, "50": -2.5}}],
+             "leaders": [{"strategy": "S2_ST_ROC", "tf": "15m", "window": "26w", "exit": "house",
+                          "label": "ST 20/2 ROC 50", "n": 312, "mean_R": 0.051, "win_rate": 0.41, "luck95": 0.03,
+                          "beats_luck": True}],
+             "costs": {"median_entry_bps": 3.14, "assumed_bps": 2.0},
+             "regime": [{"coin": "BTCUSD", "trend": "up", "vol": "normal"}, {"coin": "ETHUSD", "trend": "range",
+                                                                             "vol": "high"}]}
+    return [
+        ("tick_entry", "15분 거래: 진입 1건", "tick", {"bar_ms": bar, "opens": [e1], "closes": [], "open": 47}),
+        ("tick_exit", "15분 거래: 청산 1건 (이익)", "tick", {"bar_ms": bar, "opens": [], "closes": [x1], "open": 46}),
+        ("tick_small", "15분 거래: 진입 2 · 청산 2", "tick", {"bar_ms": bar, "opens": [e1, e2], "closes": [x1, x2],
+                                                          "open": 48}),
+        ("tick_large", "15분 거래: 진입 8 · 청산 6 (묶음)", "tick", {"bar_ms": bar, "opens": many_in, "closes": many_out,
+                                                              "open": 61}),
+        ("switch", "설정 바꿈", "switch", {"account": "fr-S2-15m", "name": "S2 친구 규칙 · 15분", "items": [
+            {"coin": "ALL", "L": None, "from_ko": "ST 10/6 ROC 9", "to_ko": "ST 20/2 ROC 50",
+             "why_ko": "최근 26주 주변 평균 1등 (-0.05R, 1,234건)"},
+            {"coin": "BTCUSD", "L": 20, "from_ko": "ST 10/6 ROC 9", "to_ko": "ST 8/3 ROC 37",
+             "why_ko": "26주 수익 + 낙폭 최소"}]}),
+        ("daily", "하루 요약 (09:00)", "daily", daily),
+        ("weekly", "주간 회의록 (월요일 09:00)", "weekly", {"week": week}),
+        ("pass", "우리 기준 통과", "pass", {"account": "fx-fr-S2-15m", "name": "S2 친구 값 · 15분", "L": 20,
+                                          "confirm_end_ms": SAMPLE_NOW + 28 * 86_400_000,
+                                          "checks": [{"name_ko": "실시간 거래 100건 이상", "ok": True, "value_ko": "134건"},
+                                                     {"name_ko": "운 기준 넘음", "ok": True, "value_ko": "+0.08R"}]}),
+        ("confirm_done_ok", "확인 기간 통과", "confirm_done",
+         {"account": "fx-fr-S2-15m", "name": "S2 친구 값 · 15분", "L": 20, "result": "confirmed",
+          "start_ms": SAMPLE_NOW - 28 * 86_400_000, "decided_ms": SAMPLE_NOW,
+          "window": {"n": 23, "mean_R": 0.12, "pnl": 123.4, "pnl_pct": 12.34, "max_dd": 0.183}, "why_ko": ""}),
+        ("confirm_done_failed", "확인 기간 실패", "confirm_done",
+         {"account": "fx-fr-S2-15m", "name": "S2 친구 값 · 15분", "L": 30, "result": "failed",
+          "start_ms": SAMPLE_NOW - 30 * 86_400_000, "decided_ms": SAMPLE_NOW,
+          "window": {"n": 21, "mean_R": -0.05, "pnl": -40.0, "pnl_pct": -4.0, "max_dd": 0.312},
+          "why_ko": "최대 낙폭 31% (30% 미만이어야 함)"}),
+        ("warn_data", "경고: 시세 자료", "warn", {"what": "data", "detail_ko": "BTC 최근 15분봉 2개 빠짐"}),
+        ("start_warm", "시작: 첫 채우기", "start", {"phase": "warm", "accounts": 48, "live_start_ms": 0}),
+        ("start_live", "시작: 다시 켬", "start", {"phase": "live", "accounts": 48,
+                                              "live_start_ms": SAMPLE_NOW - 3 * 86_400_000}),
+        ("view_ack", "관점 기록", "view_ack", {"id": 12, "coin": "BTCUSD", "side": -1, "t_ms": SAMPLE_NOW, "zones": zones,
+                                            "stop": 85600.0, "targets": [], "memo": "4시간 저항",
+                                            "notes_ko": ["시각 없음: 받은 시각 10/10 09:15 사용"]}),
+        ("view_err", "관점 못 알아들음", "view_err", {"text_ko": "코인을 모르겠습니다: ADA\n예: 관점 BTC 숏 B 84750-84840"}),
+        ("view_cancel", "관점 취소", "view_cancel", {"id": 12, "ok": True}),
+        ("view_list", "관점 목록", "view_list", {"views": [
+            {"id": 13, "t_ms": SAMPLE_NOW, "coin": "ETHUSD", "side": 1, "status": "watching", "dir24": None,
+             "touch_R": None},
+            {"id": 12, "t_ms": SAMPLE_NOW - 86_400_000, "coin": "BTCUSD", "side": -1, "status": "done", "dir24": -0.83,
+             "touch_R": 1.2}]}),
+        ("view_help", "관점도움", "view_help", {}),
+        ("view_done", "관점 결과 (48시간 뒤)", "view_done",
+         {"id": 12, "coin": "BTCUSD", "side": -1, "dir": {"4h": 0.41, "24h": -0.83, "48h": 1.25}, "reached": True,
+          "touch": touch, "confirm": {"status": "missed"}, "summary_ko": "끝난 관점 5개 · 표본 부족 (5/30)"}),
+    ]
+
+
+def _watch_samples() -> list:
+    """The outside watch's messages (demobot/watch.py), its own detail texts."""
+    from . import watch as W
+    now = SAMPLE_NOW
+    dead = W.check_dead({"now_ms": now, "last_tick_ms": now - 75 * 60_000, "live_state": "active",
+                         "watch_since_ms": now - 86_400_000})
+    off = W.check_dead({"now_ms": now, "last_tick_ms": now - 5 * 60_000, "live_state": "failed"})
+    back = W.check_backup({"now_ms": now, "backup": {"last_ok_ms": now - 40 * 3_600_000,
+                                                    "error_ko": "텔레그램이 백업 파일을 받지 않았습니다 (HTTP 403: "
+                                                                "Forbidden: bot was blocked by the user)"},
+                           "live_start_ms": now - 10 * 86_400_000})
+    ok = W.check_dead({"now_ms": now, "last_tick_ms": now - 2 * 60_000, "live_state": "active"})
+    def body(it) -> str:                   # what watch.decide sends: one part per line
+        return "\n".join(it.get("lines") or [it["detail_ko"]])
+    return [("watch_dead", "감시: 엔진 멈춤 (45분)", "warn", {"what": "dead", "detail_ko": body(dead)}),
+            ("watch_dead_off", "감시: 엔진 서비스 꺼짐", "warn", {"what": "dead", "detail_ko": body(off)}),
+            ("watch_backup", "감시: 밤 백업 안 됨", "warn", {"what": "backup", "detail_ko": body(back)}),
+            ("watch_clear", "감시: 회복", "warn_clear", {"what": "dead", "detail_ko": body(ok)})]
+
+
+def sample_texts() -> list:
+    """[(key, label, text)]: every sample rendered with the code as it is now (plus the backup caption)."""
+    out = [(k, label, render(kind, p, now_ms=SAMPLE_NOW)) for k, label, kind, p in sample_payloads() + _watch_samples()]
+    try:
+        from . import backup as B
+        cap = B.caption(SAMPLE_NOW - 4 * 3_600_000 - 35 * 60_000, 34_567,
+                        {"views": 12, "decisions": 2500, "passes": 2, "depth": 6720, "notified": 410, "meta": 15,
+                         "outbox": 380}, True)
+        out.append(("backup_caption", "밤 백업 파일 설명", cap))
+    except Exception as exc:  # noqa: BLE001
+        out.append(("backup_caption", "밤 백업 파일 설명", f"(만들지 못함: {type(exc).__name__})"))
+    return out
+
+
+def cmd_samples(out_path: Optional[str], before: Optional[str] = None, save_json: Optional[str] = None,
+                out=print) -> int:
+    """Write every sample (now, and ``before``'s text of the same key when given) to ``out_path`` (else print)."""
+    now = sample_texts()
+    old: dict = {}
+    if before:
+        try:
+            with open(before, encoding="utf-8") as fh:
+                old = json.load(fh)
+        except (OSError, ValueError) as exc:
+            out(f"--before를 읽지 못했습니다: {type(exc).__name__}")
+            return 1
+    if save_json:
+        with open(save_json, "w", encoding="utf-8") as fh:
+            json.dump({k: t for k, _, t in now}, fh, ensure_ascii=False, indent=1)
+    L = ["데모 랩 텔레그램 메시지 미리보기 (보내지 않음)",
+         "같은 내용을 지금 모양(before)과 바뀐 모양(after)으로 나란히 보여 줍니다." if old else "",
+         f"보낸 시각은 {kst(SAMPLE_NOW)} (한국 시간)으로 고정한 예시입니다.", ""]
+    for i, (k, label, text) in enumerate(now, 1):
+        L += ["=" * 60, f"{i}. {label}  [{k}]", "=" * 60]
+        if old:
+            L += ["----- before (지금) -----", old.get(k, "(없음: 새 종류)"), "", "----- after (바뀐 뒤) -----"]
+        L += [text, f"({len(text)}자)", ""]
+    text = "\n".join(x for x in L if x is not None)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+        out(f"썼습니다: {out_path} (예시 {len(now)}개)")
+    else:
+        out(text)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m demobot.notify",
-                                 description="demo lab Telegram: send a test message, or find the chat ids")
-    ap.add_argument("cmd", choices=["test", "chatid"])
+                                 description="demo lab Telegram: send a test message, find the chat ids, or print "
+                                             "a sample of every message")
+    ap.add_argument("cmd", choices=["test", "chatid", "samples"])
     ap.add_argument("--env-file", default=ENV_FILE,
                     help="read DEMOBOT_TG_TOKEN / DEMOBOT_TG_CHAT from here when they are not in the environment")
+    ap.add_argument("--out", default=None, help="samples: write them to this file (default: print)")
+    ap.add_argument("--before", default=None, help="samples: a JSON of earlier texts (--save-json) to show side by side")
+    ap.add_argument("--save-json", default=None, help="samples: also save the texts as JSON {key: text}")
     a = ap.parse_args(argv)
+    if a.cmd == "samples":
+        return cmd_samples(a.out, a.before, a.save_json)
     token, chat = credentials(a.env_file)
     if a.cmd == "test":
         return cmd_test(token, chat)

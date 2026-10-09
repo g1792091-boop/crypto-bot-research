@@ -1,7 +1,8 @@
 """Demo lab bot Telegram (demobot/notify.py) and its server kit (deploy/demobot/, docs/demobot/INSTALL_KO.md).
 
-render(): every kind of CONTRACT.md sections 5, 7.3 and 8 in Korean, coin names without the quote, one emoji at most and
-only at the start, under Telegram's 4096 characters even with 200 trades. Outbox: queue / flush order, limit, pacing, errors
+render(): every kind of CONTRACT.md sections 5, 7.3 and 8 in Korean, in the rule bot's layout (title '<what> · <whom>'
+with one emoji first, a blank line, short lines, the KST time last; trades as the rule bot's blocks saying 데모, not
+모의), coin names without the quote, under Telegram's 4096 characters even with 200 trades. Outbox: queue / flush order, limit, pacing, errors
 kept and retried, giving up after 5 tries, warn at most once per 'what' an hour, never raising, the token never
 stored. The deploy kit statically: the units' sandbox lines, nothing of the rule bot touched, no env file printed."""
 import io
@@ -103,82 +104,165 @@ SAMPLES.update({"confirm_done": CONFIRMED, "warn_clear": {"what": "dead", "detai
                 "weekly": {"week": WEEK}})
 
 
-def emoji_ok(text: str) -> bool:
-    """At most one emoji, and only at the very start of the message."""
-    return not any(unicodedata.category(c) == "So" or ord(c) >= 0x1F000 for c in text[3:])
+TRADE_MARKS = ("📈", "✅", "❌", "📊", "🟢", "🔴")
 
 
-# ---------------------------------------------------------------- render
-def test_every_kind_is_korean_short_and_has_one_emoji_at_most_at_the_start():
+def _emojis(s: str) -> list:
+    return [c for c in s if unicodedata.category(c) == "So" or ord(c) >= 0x1F000]
+
+
+def emoji_ok(text: str, kind: str = "") -> bool:
+    """The rule bot's rule: one emoji, first. A trade message (tick) also starts its blocks, side lines and grouped
+    sections with the rule bot's marks (📈 ✅ ❌ 📊 🟢 🔴); never an emoji inside a line."""
+    if kind != "tick":
+        return not _emojis(text[3:])
+    for ln in text.split("\n"):
+        if _emojis(ln[1:]) or (_emojis(ln[:1]) and not ln.startswith(TRADE_MARKS)):
+            return False
+    return True
+
+
+def blocks(text: str) -> list:
+    return text.split("\n\n")
+
+
+# ---------------------------------------------------------------- render: the rule bot's layout
+def test_every_kind_is_korean_titled_and_follows_the_rule_bots_layout():
     for kind, payload in SAMPLES.items():
         text = N.render(kind, payload, now_ms=T0)
         assert text and len(text) < 4096, kind
-        assert re.search(r"[가-힣]", text.split("\n")[0]), kind          # the first line says what happened, in Korean
-        assert emoji_ok(text), (kind, text)
+        lines = text.split("\n")
+        assert re.search(r"[가-힣]", lines[0]), kind                     # the title says what happened, in Korean
+        assert emoji_ok(text, kind), (kind, text)
+        assert _emojis(lines[0][:2]), (kind, lines[0])                    # one emoji first
+        assert len(lines) == 1 or lines[1] == "", (kind, text)           # then a blank line
         assert "USD" not in text and TOKEN not in text, kind
+        assert "모의" not in text, (kind, text)                          # 데모, never the rule bot's 모의
 
 
-def test_tick_bundles_entries_and_exits_one_line_each():
-    text = N.render("tick", SAMPLES["tick"])
-    lines = text.split("\n")
-    assert lines[0] == "🧪 데모 랩 모의 거래 · 진입 2 · 청산 1"
-    assert lines[1] == "10/10 09:00 봉"                                   # KST
-    opens = [ln for ln in lines if ln.startswith("- ") and "→" not in ln]
-    closes = [ln for ln in lines if ln.startswith("- ") and "→" in ln]
-    assert len(opens) == 2 and len(closes) == 1
-    assert "BTC 롱 62,345.1" in opens[0] and "ETH 숏" in opens[1] and "ST 14/2 ROC 50" in opens[0]
-    assert "사다리(규칙봇 방식)" in opens[0]
-    c = closes[0]
-    assert c.startswith("- S2 친구 값 · 15분: DOGE 숏 0.21345 → 0.20871 잠금 익절 +1.50R")
-    assert "20배 +$12.30 · 30배 +$18.45 · 40배 +$24.60 · 50배 -$30.75" in c
-    assert "ST 8/3 ROC 37" in c and "익절 1.5R · 손절 2ATR" in c
+TICK_TEXT = "\n".join([
+    "📊 데모 거래 알림 10/10 09:15 · 진입 2 (롱 1·숏 1) · 청산 1 · 합계 +$25", "",
+    "📈 데모 진입 · S2 자동 · 5거래마다(26주) · 15분", "🟢 롱 · BTC", "진입가 62,345.1", "청산 방식 사다리(규칙봇 방식)",
+    "설정 ST 14/2 ROC 50", "",
+    "📈 데모 진입 · S2 자동 · 5거래마다(26주) · 15분", "🔴 숏 · ETH", "진입가 62,345.1", "청산 방식 사다리(규칙봇 방식)",
+    "설정 ST 14/2 ROC 50", "",
+    "✅ 데모 이익 +$25 · S2 친구 값 · 15분", "🔴 숏 · DOGE 20·30·40·50배 · 익절 잠금",
+    "진입가 0.21345 → 청산가 0.20871 · +1.50R", "손익 20배 +$12 · 30배 +$18 · 40배 +$25 · 50배 -$31",
+    "설정 ST 8/3 ROC 37 · 익절 1.5R · 손절 2ATR"])
 
 
-@pytest.mark.parametrize("reason,ko", [("stop", "손절"), ("lock", "잠금 익절"), ("liq", "강제청산"), ("tp", "익절"),
-                                       ("time", "시간 청산")])
+def test_tick_bundle_is_the_rule_bots_trade_message_with_one_block_per_trade():
+    assert N.render("tick", SAMPLES["tick"]) == TICK_TEXT                # time: the entry bar's open (09:00 + 15m)
+    assert N.render("tick", SAMPLES["tick"], now_ms=T0 + 16 * 60_000).startswith("📊 데모 거래 알림 10/10 09:16 · ")
+    with_open = N.render("tick", dict(SAMPLES["tick"], open=47))
+    assert with_open.endswith("\n\n열린 포지션 47개")
+
+
+def test_one_entry_block_has_the_side_coin_lines_prices_target_and_margins():
+    t = dict(trade(), stop=61580.0, exit_ko="익절 1.5R · 손절 2ATR", setting_ko="ST 8/3 ROC 37",
+             margin_by_L={"20": 208.6, "30": 291.4, "40": 388.0, "50": 455.0})
+    assert N.render("tick", {"bar_ms": T0, "opens": [t], "closes": []}, now_ms=T0 + 15 * 60_000 + 30_000) == "\n".join([
+        "📈 데모 진입 · S2 자동 · 5거래마다(26주) · 15분", "🟢 롱 · BTC 20·30·40·50배", "진입가 62,345.1",
+        "손절가 61,580.0 (-1.23%)", "익절 목표 63,492.8 (+1.84%) · 익절 1.5R · 손절 2ATR", "설정 ST 8/3 ROC 37",
+        "증거금 20배 $209 · 30배 $291 · 40배 $388 · 50배 $455", "10/10 09:15"])
+    short = dict(t, side=-1, entry=2400.0, stop=2424.0, exit_ko="반익반본: 1R 절반 · 본전 · 1.5R",
+                 margin_by_L={"20": 200, "40": 400})                     # 30x and 50x did not enter
+    s = N.render("tick", {"bar_ms": T0, "opens": [short], "closes": []}).split("\n")
+    assert s[1] == "🔴 숏 · BTC 20·40배" and s[3] == "손절가 2,424.0 (+1.00%)"
+    assert s[4] == "1R 2,376.0에 절반 · 손절을 본전으로 · 나머지 1.5R 2,364.0"
+    assert s[-2] == "증거금 20배 $200 · 40배 $400"
+    plug = dict(t, exit_ko="비공개 청산 규칙", stop=None)
+    p = N.render("tick", {"bar_ms": T0, "opens": [plug], "closes": []})
+    assert "청산 방식 비공개 청산 규칙" in p and "손절가" not in p and "익절 목표" not in p   # no stop: no target
+
+
+def test_one_exit_block_shows_the_total_reason_prices_and_each_line():
+    x = trade(2, closed=True)
+    text = N.render("tick", {"bar_ms": T0, "opens": [], "closes": [x]})
+    assert text == "\n".join(["✅ 데모 이익 +$25 · S2 친구 값 · 15분", "🔴 숏 · DOGE 20·30·40·50배 · 익절 잠금",
+                              "진입가 0.21345 → 청산가 0.20871 · +1.50R",
+                              "손익 20배 +$12 · 30배 +$18 · 40배 +$25 · 50배 -$31",
+                              "설정 ST 8/3 ROC 37 · 익절 1.5R · 손절 2ATR", "10/10 09:15"])
+    loss = dict(x, side=1, coin="SOLUSD", reason="stop", R=-1.0, pnl_by_L={"20": -52.1, "30": -78.3},
+                roe_by_L={"20": -0.26, "30": -0.39})
+    lines = N.render("tick", {"bar_ms": T0, "opens": [], "closes": [loss]}).split("\n")
+    assert lines[0] == "❌ 데모 손실 -$130 · S2 친구 값 · 15분" and lines[1] == "🟢 롱 · SOL 20·30배 · 손절"
+    assert lines[3] == "손익 20배 -$52 (-26%) · 30배 -$78 (-39%)"
+    only_r = dict(x, pnl_by_L=None)                                        # no money per line: the R
+    assert N.render("tick", {"opens": [], "closes": [only_r]}).startswith("✅ 데모 이익 +1.50R · S2 친구 값 · 15분\n")
+
+
+@pytest.mark.parametrize("reason,ko", [("stop", "손절"), ("lock", "익절 잠금"), ("liq", "강제청산"), ("tp", "익절"),
+                                       ("time", "시간 청산"), ("other", "other"), (None, "청산")])
 def test_exit_reasons_in_korean(reason, ko):
     t = dict(trade(closed=True), reason=reason)
-    assert f" {ko} " in N.render("tick", {"bar_ms": T0, "opens": [], "closes": [t]})
+    assert N.render("tick", {"bar_ms": T0, "opens": [], "closes": [t]}).split("\n")[1].endswith(f" · {ko}")
 
 
-def test_tick_with_200_trades_is_cut_below_the_limit_and_says_how_many_are_left():
+def test_many_trades_are_grouped_like_the_rule_bot():
+    opens = [dict(trade(i), coin=c, entry=e, stop=e * 0.99) for i, (c, e) in
+             enumerate([("BTCUSD", 62345.1), ("BTCUSD", 62345.1), ("ETHUSD", 2412.37), ("SOLUSD", 141.23)])]
+    opens.append(dict(trade(9), side=-1, coin="XRPUSD", entry=0.5123, stop=0.52))
+    closes = [dict(trade(i, closed=True), name=f"계좌 {i}", pnl_by_L={"20": v}, R=v / 50)
+              for i, v in enumerate([84.0, -133.0, 212.0, -34.0])]
+    text = N.render("tick", {"bar_ms": T0, "opens": opens, "closes": closes, "open": 52})
+    assert blocks(text) == [
+        "📊 데모 거래 알림 10/10 09:15 · 진입 5 (롱 4·숏 1) · 청산 4 · 합계 +$129",
+        "🟢 롱 4건\nBTC · 진입 62,345.1\n- S2 자동 · 5거래마다(26주) · 15분 · 손절 61,721.6\n"
+        "- S2 자동 · 5거래마다(26주) · 15분 · 손절 61,721.6\nETH · 진입 2,412.4\n"
+        "- S2 자동 · 5거래마다(26주) · 15분 · 손절 2,388.2\nSOL · 진입 141.23\n"
+        "- S2 자동 · 5거래마다(26주) · 15분 · 손절 139.82",
+        "🔴 숏 1건\nXRP · 진입 0.51230\n- S2 자동 · 5거래마다(26주) · 15분 · 손절 0.52000",
+        "✅ 이익 2건 +$296\n- 계좌 2 · DOGE · 익절 잠금 · +4.24R · +$212\n- 계좌 0 · DOGE · 익절 잠금 · +1.68R · +$84",
+        "❌ 손실 2건 -$167\n- 계좌 1 · DOGE · 익절 잠금 · -2.66R · -$133\n- 계좌 3 · DOGE · 익절 잠금 · -0.68R · -$34",
+        "열린 포지션 52개"]
+    assert emoji_ok(text, "tick")
+
+
+def test_tick_with_200_trades_stays_below_the_limit_and_says_how_many_are_left():
     text = N.render("tick", {"bar_ms": T0, "opens": [trade(i) for i in range(100)],
                              "closes": [trade(i, closed=True) for i in range(100)]})
     assert len(text) < 4096
-    assert text.split("\n")[0].endswith("진입 100 · 청산 100")
-    shown = sum(1 for ln in text.split("\n") if ln.startswith("- "))
-    m = re.search(r"외 (\d+)건은 대시보드에서$", text)
-    assert m and shown + int(m[1]) == 200 and shown >= 10
-    assert "\n진입 100\n" in text and "\n청산 100\n" in text           # both sections get room
+    assert text.split("\n")[0] == "📊 데모 거래 알림 10/10 09:15 · 진입 100 · 청산 100 · 합계 +$2,460"
+    assert "\n🟢 롱 100건\n" in text and "\n✅ 이익 100건 +$2,460\n" in text
+    assert sum(1 for ln in text.split("\n") if ln.startswith("- ")) == 2 * N.MAX_LINES
+    assert text.count(f"외 {100 - N.MAX_LINES}건 (대시보드)") == 2
 
 
-def test_tick_without_trades_is_empty_and_one_huge_line_is_clipped():
+def test_tick_without_trades_is_empty_and_huge_texts_are_cut():
     assert N.render("tick", {"bar_ms": T0, "opens": [], "closes": []}) == ""
-    t = dict(trade(), setting_ko="x" * 10_000)
+    t = dict(trade(), setting_ko="x" * 10_000, exit_ko="y" * 10_000)
     assert len(N.render("tick", {"bar_ms": T0, "opens": [t] * 20, "closes": []})) < 4096
+    huge = N.render("tick", {"bar_ms": T0, "opens": [t] * 3, "closes": [dict(trade(1, closed=True), setting_ko="z" * 9000,
+                                                                             exit_ko="w" * 9000)] * 3})
+    assert len(huge) < 4096 and huge.startswith("📊 데모 거래 알림 ") and re.search(r"외 \d+건은 대시보드에서$", huge)
 
 
 def test_start_switch_warn_pass():
-    warm = N.render("start", {"phase": "warm", "accounts": 48, "live_start_ms": 0})
-    assert warm.startswith("▶️ 데모 랩 시작 · 준비 중") and "주문 없음" in warm
+    warm = N.render("start", {"phase": "warm", "accounts": 48, "live_start_ms": 0}, now_ms=T0)
+    assert warm == "▶️ 데모 랩 시작 · 준비 중\n\n지난 26주 시세를 채우는 중 (10~15분)\n계좌 48개 · 데모 거래만 · 주문 없음\n10/10 09:00"
     live = N.render("start", SAMPLES["start"], now_ms=T0 + 86_400_000)
-    assert live.startswith("▶️ 데모 랩 시작 · 계좌 48개") and "이어서 돌림 · 실시간 시작 10/10 09:00" in live
+    assert live == ("▶️ 데모 랩 재시작 · 계좌 48개\n\n이어서 돌림\n실시간 시작 10/10 09:00\n"
+                    "데모 거래만 · 주문 없음 · 결과는 대시보드에서\n10/11 09:00")
+    fresh = N.render("start", SAMPLES["start"], now_ms=T0 + 60_000)
+    assert fresh.startswith("▶️ 데모 랩 시작 · 계좌 48개\n\n새로 시작\n실시간 시작 10/10 09:00\n")
     sw = N.render("switch", SWITCH, now_ms=T0)
-    assert sw.startswith("🔁 설정 바꿈 · S2 친구 규칙 · 15분")
-    assert "- 전체 코인: ST 10/6 ROC 9 → ST 20/2 ROC 50 · 최근 26주" in sw and "- BTC 20배: " in sw
+    assert sw.startswith("🔁 데모 설정 바꿈 · S2 친구 규칙 · 15분\n\n바뀐 곳 2\n- 전체 코인: ST 10/6 ROC 9 → ST 20/2 ROC 50 · ")
+    assert "\n- BTC 20배: ST 10/6 ROC 9 → ST 8/3 ROC 37 · 26주 수익 + 낙폭 최소\n\n10/10 09:00" in sw
     for what, ko in N.WARN_KO.items():
         w = N.render("warn", {"what": what, "detail_ko": "자세히"}, now_ms=T0)
-        assert w.startswith(f"⚠ 데모 랩 경고 · {ko}") and "자세히" in w and w.endswith("10/10 09:00")
+        assert w == f"⚠ 데모 랩 경고 · {ko}\n\n자세히\n규칙봇과는 별개 · 주문 없음\n10/10 09:00"
+    assert N.render("warn", {"what": "data"}) == "⚠ 데모 랩 경고 · 시세 자료 빠짐\n\n규칙봇과는 별개 · 주문 없음"
     p = N.render("pass", PASS, now_ms=T0)
-    assert p.startswith("🏁 우리 기준 통과 · S2 친구 값 · 15분 20배")
-    assert "- 실시간 거래 100건 이상: 134건 (충족)" in p and "실제 돈을 쓸지는 두 분이 정합니다" in p
+    assert p.startswith("🏁 우리 기준 통과 · S2 친구 값 · 15분 20배\n\n기준\n- 실시간 거래 100건 이상: 134건 (충족)\n")
+    assert "실제 돈을 쓸지는 두 분이 정합니다" in p and p.endswith("\n10/10 09:00")
 
 
 def test_daily_summary():
     d = N.render("daily", DAILY)
     lines = d.split("\n")
-    assert lines[0] == "📋 데모 랩 하루 요약 · 10/10" and lines[1] == "실시간 3.2일째 · 지난 24시간 거래 57건"
-    assert "- S2 친구 값 · 15분 50배 +12.3% (+$123.40)" in d and "- 동전 던지기 · 15분 50배 -45.6%" in d
+    assert lines[:3] == ["📋 데모 랩 하루 요약 · 10/10", "", "실시간 3.2일째 · 지난 24시간 거래 57건"]
+    assert "- S2 친구 값 · 15분 50배 +12.3% (+$123)" in d and "- 동전 던지기 · 15분 50배 -45.6%" in d
     assert "- 고정 20배 +1.2% · 30배 +1.8% · 40배 +2.3% · 50배 -2.9%" in d and "- 동전 던지기 20배 -1.0%" in d
     assert ("- S2 15분 (26주): ST 20/2 ROC 50 · 사다리(규칙봇 방식) · +0.05R · 승률 41% · 312건 · "
             "운 기준 +0.03R → 운보다 나음") in d
@@ -195,7 +279,11 @@ def test_daily_summary():
                                       "decided_ms": float("nan"), "why_ko": None, "confirming": "x", "candidates": None,
                                       "costs": [], "regime": [None, 1, {"coin": None}], "week": "x", "what": None},
                                      {"week": {"summary_ko": "x", "decide_ko": [None, 3], "judge": [], "stops": "?",
-                                               "costs": None, "views": {"n": None, "dir24_rate": "?"}}}])
+                                               "costs": None, "views": {"n": None, "dir24_rate": "?"}}},
+                                     {"opens": [{"side": "x", "entry": None, "stop": "?", "margin_by_L": "x",
+                                                 "exit_ko": "익절 1.5R · 손절 2ATR"}],
+                                      "closes": [{"pnl_by_L": {"20": "x", "abc": 1}, "roe_by_L": [1], "R": "?"}],
+                                      "open": "x"}])
 def test_render_never_raises(kind, payload):
     out = N.render(kind, payload)
     assert isinstance(out, str) and len(out) < 4096
@@ -204,8 +292,7 @@ def test_render_never_raises(kind, payload):
 # ---------------------------------------------------------------- round 3 kinds (CONTRACT.md 8.1, 8.8, 8.9, 8.10)
 def test_pass_says_the_confirmation_period_started_and_its_earliest_end_in_kst():
     p = N.render("pass", dict(PASS, confirm_end_ms=T0 + 28 * 86_400_000), now_ms=T0).split("\n")
-    assert p[0] == "🏁 우리 기준 통과 · S2 친구 값 · 15분 20배"
-    assert p[1] == "4주 확인 기간 시작 · 빨라도 11/07(토)에 끝남 (한국 시간)"
+    assert p[:3] == ["🏁 우리 기준 통과 · S2 친구 값 · 15분 20배", "", "4주 확인 기간 시작 · 빨라도 11/07(토)에 끝남 (한국 시간)"]
     text = "\n".join(p)
     assert "지금부터 새로 들어간 거래만 다시 셉니다" in text and "최대 8주" in text and "'실전 후보'" in text
     assert "실제 돈을 쓸지는 두 분이 정합니다" in text and p[-1] == "10/10 09:00"
@@ -217,18 +304,18 @@ def test_pass_says_the_confirmation_period_started_and_its_earliest_end_in_kst()
 
 
 def test_confirm_done_confirmed_is_a_candidate_and_still_the_owners_decision():
-    c = N.render("confirm_done", CONFIRMED).split("\n")
-    assert c[0] == "✅ 확인 기간 통과 · S2 친구 값 · 15분 20배" and c[1] == "이제 '실전 후보'입니다"
+    c = N.render("confirm_done", CONFIRMED, now_ms=T0 + 28 * 86_400_000).split("\n")
+    assert c[:3] == ["✅ 확인 기간 통과 · S2 친구 값 · 15분 20배", "", "이제 '실전 후보'입니다"]
     assert "확인 기간 10/10 ~ 11/07" in c
-    assert "거래 23건 · 평균 +0.12R · 수익 +$123.40 (+12.3%) · 최대 낙폭 18.3%" in c
-    assert c[-1] == "실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)"
+    assert "거래 23건 · 평균 +0.12R · 수익 +$123 (+12.3%) · 최대 낙폭 18.3%" in c
+    assert c[-2:] == ["실제 돈을 쓸지는 두 분이 정합니다 (정하기 전에는 실제 돈 금지)", "11/07 09:00"]
     assert "이유" not in "\n".join(c)
 
 
 def test_confirm_done_failed_gives_why():
     f = N.render("confirm_done", FAILED).split("\n")
-    assert f[0] == "❌ 확인 기간 실패 · S2 친구 값 · 15분 20배" and f[1] == "이유: 평균 R이 0 이하 (-0.05R)"
-    assert "거래 23건 · 평균 -0.05R · 수익 -$40.00 (-4.0%) · 최대 낙폭 18.3%" in f
+    assert f[:3] == ["❌ 확인 기간 실패 · S2 친구 값 · 15분 20배", "", "이유: 평균 R이 0 이하 (-0.05R)"]
+    assert "거래 23건 · 평균 -0.05R · 수익 -$40 (-4.0%) · 최대 낙폭 18.3%" in f
     assert "확인 기간이 새로 시작됩니다" in f[-2] and f[-1] == "실제 돈 금지 그대로"
     assert "이유: 기록 없음" in N.render("confirm_done", dict(FAILED, why_ko=None))
 
@@ -237,7 +324,7 @@ def test_confirm_done_with_missing_fields():
     bare = N.render("confirm_done", {"result": "confirmed"}).split("\n")
     assert bare[0] == "✅ 확인 기간 통과 · ?" and "확인 기간" in bare and not any("거래" in x for x in bare)
     odd = N.render("confirm_done", {"name": "X", "L": None, "result": "maybe", "start_ms": T0, "window": {}})
-    assert odd.startswith("🏁 확인 기간 끝 · X\n결과를 알 수 없음") and "확인 기간 10/10부터" in odd
+    assert odd.startswith("🏁 확인 기간 끝 · X\n\n결과를 알 수 없음") and "확인 기간 10/10부터" in odd
     part = N.render("confirm_done", dict(CONFIRMED, window={"n": 3, "mean_R": None, "pnl": None, "max_dd": None}))
     assert "거래 3건 · 평균 - · 수익 - · 최대 낙폭 -" in part
 
@@ -245,10 +332,10 @@ def test_confirm_done_with_missing_fields():
 def test_warn_knows_the_watch_kinds_and_warn_clear_says_it_recovered():
     for what, ko in (("dead", "엔진이 멈춤"), ("rank", "순위표가 안 만들어짐"), ("backup", "밤 백업이 안 됨")):
         assert N.WARN_KO[what].startswith(ko)
-        w = N.render("warn", {"what": what, "detail_ko": "자세히"}, now_ms=T0)
-        assert w.startswith(f"⚠ 데모 랩 경고 · {ko}") and "자세히" in w
+        w = N.render("warn", {"what": what, "detail_ko": "자세히\n둘째 줄"}, now_ms=T0)
+        assert w.startswith(f"⚠ 데모 랩 경고 · {ko}") and "\n\n자세히\n둘째 줄\n규칙봇과는 별개" in w
     c = N.render("warn_clear", SAMPLES["warn_clear"], now_ms=T0).split("\n")
-    assert c == ["✅ 데모 랩 회복 · 엔진이 다시 돎", "마지막 계산 10/10 09:00 (3분 전)", "10/10 09:00"]
+    assert c == ["✅ 데모 랩 회복 · 엔진이 다시 돎", "", "마지막 계산 10/10 09:00 (3분 전)", "10/10 09:00"]
     assert N.render("warn_clear", {"what": "rank"}) == "✅ 데모 랩 회복 · 순위표가 다시 만들어짐"
     assert N.render("warn_clear", {"what": "backup"}) == "✅ 데모 랩 회복 · 밤 백업이 다시 됨"
     assert set(N.CLEAR_KO) >= set(N.WARN_KO)
@@ -278,7 +365,7 @@ def test_daily_round3_additions():
 
 def test_weekly_review_is_short():
     w = N.render("weekly", {"week": WEEK}).split("\n")
-    assert w[0] == "📅 데모 랩 주간 회의록 · 10/12~10/18" and w[1:4] == WEEK["summary_ko"]
+    assert w[:2] == ["📅 데모 랩 주간 회의록 · 10/12~10/18", ""] and w[2:5] == WEEK["summary_ko"]
     i = w.index("두 분이 정할 것")
     assert w[i + 1] == "- S2 친구 값 · 15분 20배가 확인 기간을 통과: 실전 후보로 둘지 정하기"
     text = "\n".join(w)
@@ -288,7 +375,7 @@ def test_weekly_review_is_short():
     assert "정지 규칙: 썼다면 줄마다 평균 -3.0%p" in neg
     assert "실제 진입 비용 (호가창, 중앙값) 2.6bp · 가정 2bp보다 0.6bp 큼 (1bp = 0.01%)" in w
     assert "관점: 7개 · 끝남 5개 · 24시간 방향 적중 60%" in w
-    assert "실제 돈을 쓸지는 두 분이 정합니다" in text and len(w) <= 20
+    assert "실제 돈을 쓸지는 두 분이 정합니다" in text and len(w) <= 21
     many = N.render("weekly", {"week": dict(WEEK, summary_ko=[f"문장 {i}." for i in range(10)])})
     assert "문장 5." in many and "문장 6." not in many                             # at most 6 sentences
     nothing = N.render("weekly", {"week": dict(WEEK, decide_ko=[])})
@@ -300,7 +387,7 @@ def test_weekly_review_is_short():
                                                "stops": None, "costs": None, "views": None}}])
 def test_weekly_with_empty_or_missing_fields(payload):
     w = N.render("weekly", payload).split("\n")
-    assert w[0] == "📅 데모 랩 주간 회의록" and w[1] == "이번 주 요약 없음"
+    assert w[:3] == ["📅 데모 랩 주간 회의록", "", "이번 주 요약 없음"]
     assert "두 분이 정할 것: 없음" in w and "판정: 기록 없음" in w and "정지 규칙: 기록 없음" in w
     assert "실제 진입 비용: 아직 잰 거래 없음 (가정 2bp, 1bp = 0.01%)" in w and "관점: 기록 없음" in w
 
@@ -310,7 +397,7 @@ def test_weekly_partial_fields():
                                      "judge": {"passed": 0}, "stops": {"net_pct": None},
                                      "views": {"n": 0, "done": 0, "dir24_rate": None}}})
     lines = w.split("\n")
-    assert lines[1] == "한 문장." and "판정: 우리 기준 통과 0줄 · 확인 기간 중 -줄 · 실전 후보 -줄" in lines
+    assert lines[2] == "한 문장." and "판정: 우리 기준 통과 0줄 · 확인 기간 중 -줄 · 실전 후보 -줄" in lines
     assert "정지 규칙: 기록 없음" in lines and "관점: 0개 · 끝남 0개 · 24시간 방향 적중 -" in lines
     long = N.render("weekly", {"week": dict(WEEK, decide_ko=["x" * 900] * 40)})
     assert len(long) < 4096 and "외 " in long
@@ -318,7 +405,7 @@ def test_weekly_partial_fields():
 
 def test_view_ack_shows_the_zones_stop_targets_and_the_parser_notes():
     a = N.render("view_ack", VIEWS["view_ack"]).split("\n")
-    assert a[0] == "📝 관점 #12 기록 · BTC 숏" and a[1] == "10/10 14:03 기준 (한국 시간)"
+    assert a[:3] == ["📝 관점 #12 기록 · BTC 숏", "", "10/10 14:03 기준 (한국 시간)"]
     assert "구간 B 84,750~84,840 · C 85,300" in a and "손절 85,600" in a
     assert "목표 없음: 1R에 절반 · 본전 · 나머지 2R" in a and "메모 4시간 저항" in a
     assert "- 시각 없음: 받은 시각 10/10 14:03 사용" in a and a[-1].endswith("취소: 취소 12")
@@ -330,17 +417,17 @@ def test_view_ack_shows_the_zones_stop_targets_and_the_parser_notes():
 
 def test_view_err_cancel_list_help():
     e = N.render("view_err", VIEWS["view_err"])
-    assert e.startswith("❓ 관점을 기록하지 못했습니다\n코인을 모르겠습니다: ADA") and "관점도움" in e
+    assert e.startswith("❓ 관점을 기록하지 못했습니다\n\n코인을 모르겠습니다: ADA") and "관점도움" in e
     assert N.VIEW_EXAMPLES[0] in N.render("view_err", {})                     # no reason given: usage + example
-    assert N.render("view_cancel", {"id": 12, "ok": True}).startswith("🗑 관점 #12 취소했습니다")
-    assert N.render("view_cancel", {"id": 99, "ok": False}).startswith("❓ 관점 #99 취소 안 됨")
+    assert N.render("view_cancel", {"id": 12, "ok": True}) == "🗑 관점 #12 취소했습니다\n\n채점과 결과에서 빠집니다"
+    assert N.render("view_cancel", {"id": 99, "ok": False}).startswith("❓ 관점 #99 취소 안 됨\n\n")
     li = N.render("view_list", VIEWS["view_list"])
-    assert li.startswith("📒 관점 목록 · 최근 2개")
+    assert li.startswith("📒 관점 목록 · 최근 2개\n\n")
     assert "- #13 10/10 09:00 ETH 롱 · 지켜보는 중" in li
     assert "- #12 10/09 09:00 BTC 숏 · 끝남 · 24시간 -0.83% · 구간 진입 +1.20R" in li
-    assert "아직 기록한 관점이 없습니다" in N.render("view_list", {"views": []})
+    assert N.render("view_list", {"views": []}) == "📒 관점 목록\n\n아직 기록한 관점이 없습니다 · 쓰는 법: 관점도움"
     h = N.render("view_help", {})
-    assert h.startswith("📖 관점 기록장 쓰는 법") and N.VIEW_USAGE in h
+    assert h.startswith("📖 관점 기록장 쓰는 법\n\n") and N.VIEW_USAGE in h
     assert all(x in h for x in N.VIEW_EXAMPLES) and len(N.VIEW_EXAMPLES) == 2
     assert "취소 12" in h and "관점목록" in h and "관점도움" in h and "GitHub" in h
     for ex in N.VIEW_EXAMPLES:                                                 # the examples follow 7.3's format
@@ -350,12 +437,12 @@ def test_view_err_cancel_list_help():
 
 def test_view_done_shows_direction_reach_and_both_follow_modes():
     d = N.render("view_done", VIEWS["view_done"]).split("\n")
-    assert d[0] == "📊 관점 #12 결과 · BTC 숏"
-    assert d[1] == "말한 방향으로 4시간 +0.41% · 24시간 -0.83% · 48시간 +1.25%"
-    assert d[2] == "구간 도달 예"
-    assert d[3] == "- 구간 바로 진입: 청산 · 진입 84,750 · +1.20R · 20배 잔고 +4.8% · 1R 절반 · 본전 청산"
-    assert d[4] == "- 15분 종가 확인 진입: 진입 못 함 (48시간 안에)"
-    assert d[5] == "끝난 관점 5개 · 표본 부족 (5/30)"
+    assert d[:2] == ["🎯 관점 #12 결과 · BTC 숏", ""]                  # not 📊: that is the trade bundle's mark
+    assert d[2] == "말한 방향으로 4시간 +0.41% · 24시간 -0.83% · 48시간 +1.25%"
+    assert d[3] == "구간 도달 예"
+    assert d[4] == "- 구간 바로 진입: 청산 · 진입 84,750 · +1.20R · 20배 잔고 +4.8% · 1R 절반 · 본전 청산"
+    assert d[5] == "- 15분 종가 확인 진입: 진입 못 함 (48시간 안에)"
+    assert d[6] == "끝난 관점 5개 · 표본 부족 (5/30)"
     o = N.render("view_done", dict(VIEWS["view_done"], reached=False, dir={"4h": None},
                                    confirm={"status": "open", "entry": 84700.0, "R": -0.3}))
     assert "구간 도달 아니오" in o and "48시간 -" in o and "- 15분 종가 확인 진입: 보유 중 · 진입 84,700 · -0.30R (진행 중)" in o
@@ -364,10 +451,38 @@ def test_view_done_shows_direction_reach_and_both_follow_modes():
 def test_helpers():
     assert N.coin("BTCUSD") == "BTC" and N.coin("DOGEUSDT") == "DOGE" and N.coin("ALL") == "전체 코인"
     assert N.px(62345.12) == "62,345.1" and N.px(0.21345) == "0.21345" and N.px(None) == "-"
-    assert N.usd(-5.1) == "-$5.10" and N.usd(1234.5) == "+$1,234.50"
+    assert N.usd(-5.1) == "-$5" and N.usd(1234.5) == "+$1,234" and N.usd(84.2) == "+$84"   # the rule bot's whole $
     assert N.exit_label("tp1.5R_sl2atr") == "익절 1.5R · 손절 2ATR" and N.exit_label(0) == "사다리(규칙봇 방식)"
     assert N.rate(0.415) == "42%" and N.rate(41.5) == "42%"
     assert N.day_ko(T0) == "10/10(토)" and N.share(0.183) == "18.3%" and N.share(None) == "-"
+    assert N.side_mark(1) == "🟢 롱" and N.side_mark(-1) == "🔴 숏" and N.side_mark(None) == ""
+
+
+# ---------------------------------------------------------------- the samples command (before / after)
+def test_samples_cover_every_kind_and_follow_the_layout(tmp_path):
+    texts = N.sample_texts()
+    kinds = {k for _, _, k, _ in N.sample_payloads() + N._watch_samples()}
+    assert kinds >= {"tick", "switch", "daily", "weekly", "pass", "confirm_done", "warn", "warn_clear", "start",
+                     "view_ack", "view_err", "view_cancel", "view_list", "view_help", "view_done"}
+    assert [k for k, _, _ in texts][-1] == "backup_caption"
+    for key, label, text in texts:
+        assert text and len(text) < 4096, key
+        assert "\n\n" in text or key in ("tick_entry", "tick_exit"), key      # one trade: a block, as in the rule bot
+        assert "모의" not in text and "USD" not in text, key
+    by = {k: t for k, _, t in texts}
+    assert by["tick_entry"].startswith("📈 데모 진입 · ") and by["tick_exit"].startswith("✅ 데모 이익 +$")
+    assert by["tick_small"].startswith("📊 데모 거래 알림 ") and "❌ 데모 손실 -$" in by["tick_small"]
+    assert by["backup_caption"].startswith("💾 데모 랩 밤 백업 · ")
+    assert "\n45분 넘게 새 계산이 없음\n" in by["watch_dead"]                   # the watch's parts: one per line
+    before = tmp_path / "before.json"
+    before.write_text(json.dumps({"tick_entry": "옛 글"}, ensure_ascii=False), encoding="utf-8")
+    out = tmp_path / "s.txt"
+    msgs = []
+    assert N.cmd_samples(str(out), before=str(before), save_json=str(tmp_path / "now.json"), out=msgs.append) == 0
+    got = out.read_text(encoding="utf-8")
+    assert "----- before (지금) -----\n옛 글\n" in got and "(없음: 새 종류)" in got and "----- after (바뀐 뒤) -----" in got
+    assert json.loads((tmp_path / "now.json").read_text(encoding="utf-8"))["tick_entry"] == by["tick_entry"]
+    assert N.main(["samples", "--out", str(tmp_path / "t.txt")]) == 0 and (tmp_path / "t.txt").exists()
 
 
 # ---------------------------------------------------------------- outbox
@@ -422,7 +537,7 @@ def test_queue_stores_the_rendered_text_and_flush_sends_in_order_paced():
     assert json.loads(stored[0][1])["what"] == "w0"
     s = Sender()
     assert ob.flush(TOKEN, "-100123", send=s) == 3
-    assert [t.split("\n")[1] for _, _, t in s.sent] == ["#0", "#1", "#2"]
+    assert [t.split("\n")[2] for _, _, t in s.sent] == ["#0", "#1", "#2"]
     assert all(r[2] is not None for r in rows(conn))
     assert clk.slept and all(x <= 1.0 for x in clk.slept) and sum(clk.slept) >= 2.0     # 1 a second
     st = ob.state()
@@ -573,7 +688,7 @@ def test_warn_at_most_once_per_what_per_hour():
     clk.advance(2 * 60)
     ob.queue("warn", {"what": "data", "detail_ko": "e"})
     texts = [t for (t,) in conn.execute("SELECT text FROM outbox ORDER BY id")]
-    assert len(texts) == 3 and "e" in texts[-1].split("\n")[1]
+    assert len(texts) == 3 and "e" in texts[-1].split("\n")[2]
     ob.queue("start", SAMPLES["start"])
     ob.queue("start", SAMPLES["start"])                                     # only warn is limited
     assert len(rows(conn)) == 5
@@ -668,7 +783,7 @@ def test_every_message_goes_to_every_listed_chat_in_order():
         ob.queue("warn", {"what": f"w{i}", "detail_ko": f"#{i}"})
     s = Sender()
     assert ob.flush(TOKEN, "111, 222", send=s) == 3
-    assert [(c, t.split("\n")[1]) for _, c, t in s.sent] == [("111", "#0"), ("222", "#0"), ("111", "#1"),
+    assert [(c, t.split("\n")[2]) for _, c, t in s.sent] == [("111", "#0"), ("222", "#0"), ("111", "#1"),
                                                              ("222", "#1"), ("111", "#2"), ("222", "#2")]
     assert all(x <= 1.0 for x in clk.slept) and sum(clk.slept) >= 5.0         # one a second over all chats
     assert ob.state() == {"configured": True, "queued": 0, "last_ok_ms": ob.state()["last_ok_ms"], "last_error": None}

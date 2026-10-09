@@ -144,22 +144,24 @@ def _when(t: int, now: int) -> str:
     return f"{N.kst(t)} ({ago(now - t)} 전)"
 
 
-def _item(what: str, ok: bool, detail: str, known: bool = True) -> dict:
-    return {"what": what, "ok": bool(ok), "detail_ko": detail, "known": bool(known)}
+def _item(what: str, ok: bool, detail, known: bool = True) -> dict:
+    """``detail``: one text or a list of short parts. watch.json gets them on one line (' · '); Telegram gets one part
+    per line (the rule bot's short lines)."""
+    parts = [str(x) for x in (detail if isinstance(detail, (list, tuple)) else [detail]) if str(x or "").strip()]
+    return {"what": what, "ok": bool(ok), "detail_ko": " · ".join(parts), "known": bool(known), "lines": parts}
 
 
 def check_dead(f: dict) -> dict:
     now, tick, state = f["now_ms"], f.get("last_tick_ms"), f.get("live_state")
     last = f"마지막 계산 {_when(tick, now)}" if tick else "아직 계산 기록 없음"
     if state in STOPPED:
-        return _item("dead", False, f"엔진 서비스(demobot-live)가 꺼져 있음 ({state}) · {last} · "
-                                    f"다시 켜기: sudo bash {KIT}/on.sh")
+        return _item("dead", False, [f"엔진 서비스(demobot-live)가 꺼져 있음 ({state})", last,
+                                     f"다시 켜기: sudo bash {KIT}/on.sh"])
     ref = max(x for x in (tick, f.get("watch_since_ms"), 0) if x is not None)
     if not ref:
         return _item("dead", True, "확인 못 함: 엔진 상태 파일(status.json)이 아직 없음", known=False)
     if now - ref > DEAD_MS:
-        return _item("dead", False, f"{last} · 45분 넘게 새 계산이 없음 · "
-                                    "기록: journalctl -u demobot-live -n 40 --no-pager")
+        return _item("dead", False, [last, "45분 넘게 새 계산이 없음", "기록: journalctl -u demobot-live -n 40 --no-pager"])
     if not tick:
         return _item("dead", True, "켜진 지 얼마 안 됨: 첫 계산을 기다리는 중")
     return _item("dead", True, last)
@@ -170,15 +172,15 @@ def check_rank(f: dict) -> dict:
     last = f"마지막 순위표 {_when(gen, now)}" if gen else "아직 순위표 없음"
     result, state = f.get("rank_result"), f.get("rank_state")
     if state == "failed" or (result and result != "success"):
-        return _item("rank", False, f"마지막 순위표 계산이 실패함 ({result or state}) · {last} · "
-                                    "기록: journalctl -u demobot-rank -n 40 --no-pager")
+        return _item("rank", False, [f"마지막 순위표 계산이 실패함 ({result or state})", last,
+                                     "기록: journalctl -u demobot-rank -n 40 --no-pager"])
     ref = max(x for x in (gen, f.get("live_start_ms") if not gen else None, f.get("watch_since_ms"), 0)
               if x is not None)
     if not ref:
         return _item("rank", True, "확인 못 함: 순위표도 실시간 시작 시각도 아직 없음", known=False)
     if now - ref > RANK_MS:
-        return _item("rank", False, f"{last} · 3시간 넘게 새 순위표가 없음 · "
-                                    "시간표: systemctl list-timers demobot-rank.timer")
+        return _item("rank", False, [last, "3시간 넘게 새 순위표가 없음",
+                                     "시간표: systemctl list-timers demobot-rank.timer"])
     return _item("rank", True, last)
 
 
@@ -190,15 +192,13 @@ def check_backup(f: dict) -> dict:
     err = str(b.get("error_ko") or "").strip()
     ws = f.get("watch_since_ms")
     if ws and now - ws < BACKUP_SETTLE_MS:
-        return _item("backup", True, f"감시를 막 켬: 1시간 뒤부터 확인 · {last}", known=False)
+        return _item("backup", True, ["감시를 막 켬: 1시간 뒤부터 확인", last], known=False)
     if not ok_ms and not live0:
         return _item("backup", True, "확인 못 함: 실시간 시작 시각이 아직 없음", known=False)
     ref = max(x for x in (ok_ms, live0, f.get("watch_first_ms"), 0) if x is not None)
     if now - ref > BACKUP_MS:
-        detail = f"{last} · 36시간 넘게 백업이 안 됨"
-        if err:
-            detail += f" · 마지막 오류: {N._clip(err, 300)}"
-        return _item("backup", False, detail + " · 기록: journalctl -u demobot-backup -n 30 --no-pager")
+        parts = [last, "36시간 넘게 백업이 안 됨"] + ([f"마지막 오류: {N._clip(err, 300)}"] if err else [])
+        return _item("backup", False, parts + ["기록: journalctl -u demobot-backup -n 30 --no-pager"])
     if not ok_ms:
         return _item("backup", True, "아직 첫 백업 전 (매일 04:40)")
     return _item("backup", True, last)
@@ -252,7 +252,7 @@ def decide(items: list, state: dict, now_ms: int, deliver: Deliver) -> dict:
         s = st["items"].setdefault(what, {})
         if not it.get("known", True):
             continue
-        payload = {"what": what, "detail_ko": it["detail_ko"]}
+        payload = {"what": what, "detail_ko": "\n".join(it.get("lines") or [it["detail_ko"]])}
         kind = None
         if not it["ok"]:
             if not s.get("bad"):

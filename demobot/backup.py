@@ -353,12 +353,12 @@ def file_name(now_ms: int, encrypted: bool) -> str:
 
 def caption(now_ms: int, size: int, counts: Mapping[str, int], encrypted: bool) -> str:
     rows = " · ".join(f"{TABLE_KO.get(t, t)} {N.count(n)}" for t, n in counts.items())
-    lines = [f"💾 데모 랩 밤 백업 · {N.kst(now_ms)}",
+    lines = [f"💾 데모 랩 밤 백업 · {N.kst(now_ms)}", "",
              f"크기 {fmt_size(size)} · 암호화 {'예 (openssl AES-256)' if encrypted else '아니오'}",
              rows,
              "관점·설정 바꿈·확인 기간·호가 비용·주간 회의록이 들어 있음",
-             "시세와 계산 결과는 들어 있지 않음 (바이낸스에서 다시 만듦)",
-             "되살리기: 이 파일을 서버에 올린 뒤 python -m demobot.backup restore 파일 (설치 안내 10번)"]
+             "시세와 계산 결과는 없음 (바이낸스에서 다시 만듦)",
+             "되살리기: 서버에 올려 python -m demobot.backup restore 파일 (설치 안내 10번)"]
     return "\n".join(lines)[:CAPTION_LIMIT]
 
 

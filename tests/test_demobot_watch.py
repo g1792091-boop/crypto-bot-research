@@ -118,8 +118,11 @@ def test_dead_warns_once_per_3_hours_then_clears_once(world):
     assert world.run() == 0
     assert len(world.tg.sent) == 1
     msg = world.tg.sent[0]
-    assert msg.startswith("⚠ 데모 랩 경고 · 엔진이 멈춤") and "마지막 계산 10/10 08:10 (50분 전)" in msg
-    assert "journalctl -u demobot-live" in msg and msg.endswith("10/10 09:00")
+    assert msg == ("⚠ 데모 랩 경고 · 엔진이 멈춤 (15분 계산이 안 돎)\n\n마지막 계산 10/10 08:10 (50분 전)\n"
+                   "45분 넘게 새 계산이 없음\n기록: journalctl -u demobot-live -n 40 --no-pager\n"
+                   "규칙봇과는 별개 · 주문 없음\n10/10 09:00")                  # the rule bot's short lines
+    assert world.items()["dead"]["detail_ko"] == ("마지막 계산 10/10 08:10 (50분 전) · 45분 넘게 새 계산이 없음 · "
+                                                  "기록: journalctl -u demobot-live -n 40 --no-pager")  # watch.json: one line
     assert world.watch_json()["ok"] is False and world.items()["dead"]["ok"] is False
     for k in range(1, 18):                                                  # every 10 minutes for 2 h 50 min
         world.files(now=T0 + k * 10 * MIN, tick_min=50 + k * 10)
@@ -129,7 +132,7 @@ def test_dead_warns_once_per_3_hours_then_clears_once(world):
     assert len(world.tg.sent) == 1 and "3시간 50분 전" in world.tg.sent[0]   # again after 3 hours
     world.files(now=T0 + 3 * H + 10 * MIN, tick_min=2)
     world.run(now=T0 + 3 * H + 10 * MIN)
-    assert world.tg.sent == ["✅ 데모 랩 회복 · 엔진이 다시 돎\n마지막 계산 10/10 12:08 (2분 전)\n10/10 12:10"]
+    assert world.tg.sent == ["✅ 데모 랩 회복 · 엔진이 다시 돎\n\n마지막 계산 10/10 12:08 (2분 전)\n10/10 12:10"]
     world.files(now=T0 + 3 * H + 20 * MIN, tick_min=2)
     world.run(now=T0 + 3 * H + 20 * MIN)
     assert world.tg.sent == []                                               # the clear only once
@@ -200,7 +203,7 @@ def test_rank_rules(world):
     assert world.tg.sent == []                                              # same what within 3 h: quiet
     assert "실패함 (exit-code)" in world.items()["rank"]["detail_ko"]
     world.run(now=T0 + 20 * MIN)
-    assert world.tg.sent == ["✅ 데모 랩 회복 · 순위표가 다시 만들어짐\n마지막 순위표 10/10 08:40 (40분 전)\n10/10 09:20"]
+    assert world.tg.sent == ["✅ 데모 랩 회복 · 순위표가 다시 만들어짐\n\n마지막 순위표 10/10 08:40 (40분 전)\n10/10 09:20"]
 
 
 def test_rank_failed_run_and_missing_ranking(world, tmp_path):
@@ -373,7 +376,8 @@ def test_evaluate_survives_a_slip(monkeypatch):
     monkeypatch.setattr(W, "check_rank", lambda f: 1 / 0)
     items = W.evaluate({"now_ms": T0})
     assert [i["what"] for i in items] == ["dead", "rank", "backup"]
-    assert items[1] == {"what": "rank", "ok": True, "detail_ko": "확인 못 함 (ZeroDivisionError)", "known": False}
+    assert items[1] == {"what": "rank", "ok": True, "detail_ko": "확인 못 함 (ZeroDivisionError)", "known": False,
+                        "lines": ["확인 못 함 (ZeroDivisionError)"]}
 
 
 # ---------------------------------------------------------------- the systemd readers

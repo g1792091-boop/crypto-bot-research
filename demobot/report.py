@@ -343,13 +343,17 @@ def tick_events(eng, res: dict, now_ms: int, bar_ms: int) -> tuple:
                         exit=t0["exit"], reason=t0["reason"] if st_all == "closed" else None,
                         setting_ko=t0["setting_ko"], exit_ko=t0["exit_ko"],
                         pnl_by_L=({str(L): t["pnl"] for L, t in per.items()} if st_all == "closed" else None),
-                        R=(t0["R"] if st_all == "closed" else None))
+                        R=(t0["R"] if st_all == "closed" else None), stop=t0["stop"],
+                        margin_by_L={str(L): t["margin"] for L, t in per.items()},
+                        roe_by_L=({str(L): t["roe"] for L, t in per.items()} if st_all == "closed" else None))
             if old is None:
                 opens.append(item)
             if st_all == "closed":
                 closes.append(item)
             mark.append((a.id, base, st_all))
-    tick = dict(bar_ms=bar_ms, opens=opens, closes=closes) if (opens or closes) else None
+    n_open = sum(1 for a in A.current_accounts() if a.notify
+                 for t in (res[a.id]["lines"].get(20) or {"trades": []})["trades"] if t["status"] == "open")
+    tick = dict(bar_ms=bar_ms, opens=opens, closes=closes, open=n_open) if (opens or closes) else None
     switches = []
     for a in A.current_accounts():
         new = [s for s in (res[a.id].get("switches_new") or []) if s["t_ms"] >= now_ms - 2 * 3600 * 1000]

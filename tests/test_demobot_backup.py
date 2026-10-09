@@ -165,7 +165,7 @@ def test_round_trip_send_then_restore_into_a_fresh_database(tmp_path, capsys):
     assert fields["chat_id"] == "-100777" and fields["disable_notification"] == "true" and "parse_mode" not in fields
     assert fname == "demolab-20261010-0900.db.gz" and data[:2] == b"\x1f\x8b"
     cap = fields["caption"]
-    assert cap.startswith("💾 데모 랩 밤 백업 · 10/10 09:00") and "암호화 아니오" in cap and len(cap) <= 1024
+    assert cap.startswith("💾 데모 랩 밤 백업 · 10/10 09:00\n\n크기 ") and "암호화 아니오" in cap and len(cap) <= 1024
     assert "관점 4 · 설정 바꿈 2,500 · 통과·확인 2 · 호가 비용 300 · 알림 표시 1 · 기본 정보·주간 회의록 7 · " \
            "보낸 알림(7일) 3" in cap
     assert "주간 회의록" in cap and "restore" in cap and TOKEN not in cap
