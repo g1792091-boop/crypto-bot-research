@@ -484,7 +484,8 @@ Binance public endpoints (no key), with caching, never by the browser (CSP stays
 "unreal": 0.0, "roe": 0.0, "R": 0.0, "last": 0.0, "stop_dist_pct": 0.0, "held_ms": 0, "setting_ko": "...",
 "exit_ko": "..."}], "by_coin": [{"coin": "BTCUSD", "long": 0, "short": 0, "unreal": 0.0}]}` every open position of every
 plain line (stop-rule lines excluded). `target` = entry + side x TP x |entry - stop| for the fixed "익절 xR" exits,
-else null. `last` = the last closed 15m close.
+else null. `last` = the last closed 15m close. `by_coin` long/short count the 20x lines (one per account entry);
+`unreal` sums every line.
 
 ### 9.3 `calendar.json` (engine)
 `{"generated_ms": 0, "days": [{"day": "2026-10-10", "trades": 0, "wins": 0, "pnl_sum": 0.0, "lines_up": 0,
@@ -492,25 +493,27 @@ else null. `last` = the last closed 15m close.
 "L": 20, "pnl": 0.0}, "worst": {}}]}` per KST day since the live start (closed trades by exit time; `pnl_sum` over all
 plain lines; `mean_pnl_pct` = mean over the kind's lines of the day's P&L / $1,000 x 100). `acct/<id>.json` gains
 `"daily": {"2026-10-10": {"20": 0.0, "30": 0.0, "40": 0.0, "50": 0.0}}` (P&L per KST day per line).
-`home.json` gains `"equity_total": [[t_ms, v]]`: the sum of all plain lines' equity (one point per closed bar of the
-curves, downsampled to 800) for the terminal's P&L chart.
+`home.json` gains `"equity_total": [[t_ms, v]]` (the sum of all plain lines' wallets on an hourly grid, downsampled to
+800) and `"pnl_total": [[t_ms, v]]` (the same minus lines x $1,000) for the terminal's P&L chart.
 
 ### 9.4 `signals_now.json` (engine)
 `{"generated_ms": 0, "bar_ms": {"15m": 0, "30m": 0}, "votes": [{"coin": "BTCUSD", "tf": "15m", "strategy": "S2_ST_ROC",
 "settings": 343, "long": 0, "short": 0, "history": [[t_ms, long, short]]}], "recent": [{"t_ms": 0, "coin": "BTCUSD",
 "tf": "15m", "side": 1, "accounts": [{"id": "", "name": "", "setting_ko": ""}]}]}`. `long`/`short`: settings whose
-signal fired at the last closed bar of that timeframe; `history`: the last 96 bars. `recent`: signals of the
-accounts' active settings in the last 24 h (newest first, at most 200).
+signal fired at the last closed bar of that timeframe; `history`: the last 96 bars. `recent`: the signals the
+accounts took (entries of their 20x lines) in the last 24 h, grouped by coin, tf, bar and side (newest first, at most
+200).
 
 ### 9.5 `analysis.json` (engine)
 Per account (its 20x line for R and P&L; the entries are the same on all lines up to skipped ones) and per kind:
 `{"generated_ms": 0, "accounts": [{"id": "", "name": "", "kind": "", "n": 0, "by_coin": {"BTCUSD": {"n": 0, "mean_R": null,
 "pnl": 0.0, "win_rate": null}}, "by_side": {"long": {}, "short": {}}, "by_hour": [{} x 24 (KST entry hour)],
-"by_weekday": [{} x 7 (KST, Monday first)], "by_tf": {}, "by_exit": {"익절": {}, ...reason labels...}}],
+"by_weekday": [{} x 7 (KST, Monday first)], "by_tf": {}, "by_exit": {"익절": {}, ...reason labels...},
+"hw_n": [[int x 24] x 7], "hw_R": [[float|null x 24] x 7]}],
 "kinds": [same shape with "kind", "kind_ko"]}`. Buckets with n = 0 have `mean_R: null`.
 
 ### 9.6 `vs5y.json` (engine)
-For every fixed account (and the current setting of every adaptive account, all coins together):
+For every fixed account (the same setting and exit live and in the 5-year study; scope all coins):
 `{"generated_ms": 0, "rows": [{"id": "", "name": "", "strategy": "S2_ST_ROC", "tf": "15m", "combo": 0, "exit": 0,
 "setting_ko": "", "exit_ko": "", "live": {"n": 0, "mean_R": null, "win_rate": null},
 "past": {"2020": {"n": 0, "mean_R": null, "win_rate": null}, "2021-23": {}, "2024-26": {}, "2020-03": {}, "2022-05": {},
@@ -529,3 +532,25 @@ and on their own screen ("신호"), one-glance map ("한눈 지도"), graduation
 under all 14 exits from the rank arrays of the live window, and its 4 leverage lines side by side), and the v4-style
 top bar (font size, menu position top/left, favourites, search with "/", "자는 동안" since the last visit, alert bell
 from telegram.json, new-trade sound off by default, D+n strip with the goal stage and the next-tick countdown).
+
+### 9.9 Six more screens (owners: "필요한 화면들 있으면 그것도 같이")
+* "친구 계획" (`#/friend`): the friend's plan in one place, from existing files: the 6 `fr-*` accounts' current
+  (setting x exit) per coin and leverage (`acct/<id>.json` settings_now), this week's switches (decisions), the friend
+  rule's 7-day check (judge rows' `friend`), the friend-value fixed accounts, and the plan's steps in plain Korean.
+* "레버리지 비교" (`#/leverage`): every account's 4 lines grouped by leverage: mean and median P&L %, max drawdown,
+  liquidations, skipped entries (entry checks), ruins, stop-rule P&L, number of lines passing; per kind and overall.
+* "실전 준비" (`#/ready`): for each candidate (judge.json `candidates`, else the closest line from home.json goal):
+  confirmation window, P&L after measured costs (costs.json lines), stop-rule effect, a small-start example
+  (margin 10% of $300 at the line's leverage), and the checklist of what is not built yet ("실제 주문 연결 없음",
+  "두 분 결정 필요"). Plain warnings; never a buy button.
+* "데이터 점검" (`#/dataq`) from `dataq.json` (engine): `{"generated_ms", "coins": [{"coin", "bars_expected",
+  "bars_have", "bars_missing", "last_bar_ms", "lag_s", "funding_last_ms", "depth_rows", "depth_last_ms"}],
+  "ticks": [[t_ms, seconds, n_errors]] (last 192), "errors": [[t_ms, text]] (newest first, last 50), "issues": [str],
+  "rank_ms": int|null, "warm_issues": [str]}`.
+* "타임라인" (`#/timeline`) from `timeline.json` (engine): `{"generated_ms", "events": [{"t_ms", "what":
+  "start|update|plugins|warm|live|pass|confirmed|failed", "detail_ko"}]}` newest first.
+* Export and glossary: `snap/export/<id>.csv.gz` (engine, hourly; UTF-8 with BOM, every trade of every line) and
+  `snap/export/index.json` (`{"generated_ms", "files": [...]}`); the dashboard serves `GET /api/export/<id>.csv`
+  (decompressed, `Content-Disposition: attachment`, id validated against accounts.json) with a "CSV 내려받기" button on
+  the account and trades screens. A glossary section ("용어집") in the howto screen: R, 평균 R, 낙폭, 운 기준선,
+  부트스트랩 하한, 확인 기간, 정지 규칙, bp, 펀딩, 강제청산, 진입 점검, 사다리 청산, 반익반본, 국면.
