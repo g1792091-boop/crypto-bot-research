@@ -8,7 +8,9 @@ acct/<id> for the 48 accounts plus two neutral private ones (curves, stop-rule c
 measured cost, the maker fills' through_bps, the regime at entry, fee, notional), trades, judge (confirmation periods,
 candidates, stop-rule columns), views, costs, regime, backup, watch, bars/<COIN>.npz (15m bars from 7 days before the
 live start), rank_<STRAT>_<tf>.npz for the 3 strategies x 2 timeframes with the exact shapes (grid.NEXIT exits),
-rank_meta and, with --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder.
+rank_meta and, with --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder. Round 4
+(CONTRACT 9.5-9.7): analysis.json, vs5y.json (against the fake 5-year numbers, written or not), the fixed accounts'
+combo / exit_i and the judge rows' n / mean_R / luck_lim / boot_low.
 
 The trades are played on the fake bars (entries at bar opens, stops k x ATR14, the exits' rules), so a trade chart
 shows them where they happened. The default clock is about six weeks into the run (2026-11-23), long enough for the
@@ -755,7 +757,9 @@ class _Acct:
         return {"id": s["id"], "kind": s["kind"], "sub": s["sub"], "name": s["name"], "strategy": s["strategy"],
                 "short": s["short"], "tf": s["tf"], "rule_ko": s["rule_ko"], "setting_ko": self.setting_ko,
                 "lines": self.lines, "switches": len(self.decisions),
-                "last_switch_ms": self.decisions[0]["t_ms"] if self.decisions else None}
+                "last_switch_ms": self.decisions[0]["t_ms"] if self.decisions else None,
+                # CONTRACT 9.7: the fixed accounts' combo index and exit (the house exit); null for every other kind
+                "combo": s["combo"] if s["kind"] == "fixed" else None, "exit_i": 0 if s["kind"] == "fixed" else None}
 
     def detail(self) -> dict:
         return {**self.row(), "generated_ms": NOW_MS, "curves": self.curves, "curves_stops": self.curves_stops,
@@ -1048,8 +1052,89 @@ def ours_checks(n, mR, dd_ratio, ruined, luck) -> list:
             {"name_ko": OURS_KO[4], "ok": not ruined, "value_ko": "파산" if ruined else "없음"}]
 
 
+WEEK = 7 * DAY
+MONDAY0 = 4 * DAY             # 1970-01-05 00:00 UTC, a Monday (the engine's week blocks)
+
+
+def flip_pools(accts) -> dict:
+    """(tf, L) -> (mean R, sd R) of the coin-flip account's closed trades (the engine's judge._flip_pool)."""
+    out = {}
+    for a in accts:
+        if a.spec["kind"] != "flip":
+            continue
+        for L in grid.LEVS:
+            r = np.array([t["R"] for t in a.sims[L]["trades"] if t["status"] == "closed"], float)
+            out[(a.spec["tf"], L)] = (float(r.mean()), float(r.std())) if len(r) >= 30 else (None, None)
+    return out
+
+
+def line_numbers(a, L, pools) -> dict:
+    """CONTRACT 9.7: the numbers behind the engine's checks 1, 2 and 5 of one line: closed trades, mean R, the
+    coin-flip 95% limit for that many trades (mean + 1.645 sd / sqrt(n) of the same timeframe's flips at the same
+    leverage) and the week-block bootstrap 2.5% lower bound of the mean R (the engine's accounts.boot_low)."""
+    closed = [t for t in a.sims[L]["trades"] if t["status"] == "closed"]
+    n = len(closed)
+    mean = sum(t["R"] for t in closed) / n if n else None
+    mu, sd = pools.get((a.spec["tf"], L), (None, None))
+    lim = mu + 1.645 * sd / math.sqrt(n) if mu is not None and n >= 2 else None
+    low = None
+    if n >= 10:
+        wk = {}
+        for t in closed:
+            w = (t["entry_ms"] - MONDAY0) // WEEK
+            k, s = wk.get(w, (0, 0.0))
+            wk[w] = (k + 1, s + t["R"])
+        arr = np.array(list(wk.values()), float)
+        if len(arr) >= 2:
+            idx = np.random.default_rng(0).integers(0, len(arr), size=(1000, len(arr)))
+            low = float(np.percentile(arr[idx, 1].sum(1) / arr[idx, 0].sum(1), 2.5))
+    return {"n": n, "mean_R": _r(mean, 4), "luck_lim": _r(lim, 4), "boot_low": _r(low, 4), "robust": robust_block(closed)}
+
+
+def robust_block(closed) -> dict:
+    """CONTRACT 9.10 "버티는 수익인가": does a line's profit hold up? The share of the profit in the 5 best trades, the
+    first and second half of its closed trades (by exit time), how many coins made money, the longest losing streak,
+    the worst KST day, and the engine's plain warning flags (the same rules and words as demobot/judge.robust)."""
+    tr = sorted(closed, key=lambda t: t["exit_ms"])
+    n = len(tr)
+    pnl = sum(t["pnl"] for t in tr)
+    top5 = sum(sorted((t["pnl"] for t in tr), reverse=True)[:5])
+    share = top5 / pnl if pnl > 0 else None
+    k = n // 2
+    first, second = tr[:k], tr[k:]
+    mean = lambda xs: sum(t["R"] for t in xs) / len(xs) if xs else None          # noqa: E731
+    by_coin = {}
+    for t in tr:
+        by_coin[t["coin"]] = by_coin.get(t["coin"], 0.0) + t["pnl"]
+    streak = worst = 0
+    for t in tr:
+        streak = streak + 1 if t["pnl"] < 0 else 0
+        worst = max(worst, streak)
+    days = {}
+    for t in tr:
+        d = datetime.datetime.fromtimestamp((t["exit_ms"] - 1) / 1000, datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+        days[d] = days.get(d, 0.0) + t["pnl"]
+    wd = min(days.items(), key=lambda kv: kv[1]) if days else None
+    f_R, s_R = mean(first), mean(second)
+    up = sum(1 for v in by_coin.values() if v > 0)
+    flags = []
+    if share is not None and share >= 0.7:
+        flags.append("수익의 70% 이상이 거래 5건에서 나옴")
+    if f_R is not None and s_R is not None and s_R < f_R - 0.2 and s_R < 0:
+        flags.append("뒤 절반이 앞 절반보다 크게 나쁨")
+    if n and up <= 2:
+        flags.append("번 코인이 7개 중 2개 이하")
+    if worst >= 10:
+        flags.append(f"연속 손실 {worst}번")
+    return {"n": n, "pnl": _r(pnl, 2), "top5_share": _r(share, 4),
+            "half": {"first_R": _r(f_R, 4), "second_R": _r(s_R, 4), "first_n": len(first), "second_n": len(second)},
+            "coins_up": up, "coins_traded": len(by_coin), "max_lose_streak": worst,
+            "worst_day": {"day": wd[0], "pnl": _r(wd[1], 2)} if wd else None, "flags_ko": flags}
+
+
 def judge_rows(accts, rank_luck) -> tuple:
     rows, passed = [], 0
+    pools = flip_pools(accts)
     for a in accts:
         s = a.spec
         luck = rank_luck.get((s["strategy"], s["tf"]), 0.0) if s["strategy"] else 0.0
@@ -1071,7 +1156,7 @@ def judge_rows(accts, rank_luck) -> tuple:
             s_ok = all(c["ok"] for c in ours_checks(sl["trades"], sl["mean_R"], sl["max_dd"], sl["ruined"], luck))
             rows.append({"id": s["id"], "name": s["name"], "L": L, "ours": {"pass": ok, "checks": ours},
                          "friend": friend, "stops": {"pnl_pct": sl["pnl_pct"], "max_dd": sl["max_dd"], "ours_pass": s_ok},
-                         "confirm": None})
+                         "confirm": None, **line_numbers(a, L, pools)})
     return rows, passed
 
 
@@ -1223,6 +1308,85 @@ def fake_regime(accts, mk, rng) -> dict:
                               "vol": bucket(tr, "vol", VOLS)})
     return {"generated_ms": NOW_MS, "labels_ko": {"trend": TREND_KO, "vol": VOL_KO}, "now": mk.now_rows(rng),
             "history": [{"coin": c, "points": mk.history[c][-800:]} for c in grid.COINS], "lines": lines}
+
+
+# ---------------------------------------------------------------- analysis and 5-year vs now (CONTRACT 9.5, 9.6)
+EXIT_REASON_KO = {"stop": "손절", "lock": "잠금 익절", "liq": "강제청산", "tp": "익절", "be": "본전", "time": "시간"}   # the engine's
+
+
+def _bucket(trades) -> dict:
+    n = len(trades)
+    return {"n": n, "mean_R": _r(sum(t["R"] for t in trades) / n, 4) if n else None,
+            "pnl": _r(sum(t["pnl"] for t in trades), 2), "win_rate": _r(sum(1 for t in trades if t["pnl"] > 0) / n, 4) if n else None}
+
+
+def _kst_hw(t_ms):
+    """(KST weekday Monday = 0, KST hour) of an entry time."""
+    k = int(t_ms) + 9 * HOUR
+    return (k // DAY + 3) % 7, (k % DAY) // HOUR
+
+
+def _analysis_of(trades, per_tf=False) -> dict:
+    """The CONTRACT 9.5 buckets of a list of closed trades (one account's 20x line, or a kind's)."""
+    hw = [_kst_hw(t["entry_ms"]) for t in trades]
+    hw_n = [[0] * 24 for _ in range(7)]
+    hw_s = [[0.0] * 24 for _ in range(7)]
+    for t, (d, hh) in zip(trades, hw):
+        hw_n[d][hh] += 1
+        hw_s[d][hh] += t["R"]
+    return {"n": len(trades),
+            "by_coin": {c: _bucket([t for t in trades if t["coin"] == c]) for c in grid.COINS},
+            "by_side": {"long": _bucket([t for t in trades if t["side"] > 0]), "short": _bucket([t for t in trades if t["side"] < 0])},
+            "by_hour": [_bucket([t for t, (_d, hh) in zip(trades, hw) if hh == k]) for k in range(24)],
+            "by_weekday": [_bucket([t for t, (d, _h) in zip(trades, hw) if d == k]) for k in range(7)],
+            "by_tf": {tf: _bucket([t for t in trades if t.get("_tf") == tf]) for tf in grid.TFS} if per_tf else {},
+            "by_exit": {ko: _bucket([t for t in trades if t["reason"] == k]) for k, ko in EXIT_REASON_KO.items()},
+            "hw_n": hw_n, "hw_R": [[_r(hw_s[d][hh] / hw_n[d][hh], 4) if hw_n[d][hh] else None for hh in range(24)] for d in range(7)]}
+
+
+def fake_analysis(accts) -> dict:
+    rows, by_kind = [], {}
+    for a in accts:
+        s = a.spec
+        closed = [{**t, "_tf": s["tf"]} for t in a.sims[20]["trades"] if t["status"] == "closed"]
+        by_kind.setdefault(s["kind"], []).extend(closed)
+        rows.append({"id": s["id"], "name": s["name"], "kind": s["kind"], "tf": s["tf"], **_analysis_of(closed)})
+    kinds = [{"kind": k, "kind_ko": KIND_KO.get(k, k), **_analysis_of(v, per_tf=True)} for k, v in by_kind.items()]
+    return {"generated_ms": NOW_MS, "accounts": rows, "kinds": kinds}
+
+
+def vs5y_note(live_n, gap) -> str:
+    """The engine's words (demobot/extra.vs5y)."""
+    if gap is None:
+        return "거래가 아직 없음" if not live_n else "5년 시험 자료 없음"
+    if live_n < 30:
+        return f"거래 {live_n}건: 아직 비교하기 이름"
+    if abs(gap) < 0.1:
+        return "5년 시험과 비슷"
+    return "5년 시험보다 좋음" if gap > 0 else "5년 시험보다 나쁨"
+
+
+def fake_vs5y(accts, past) -> dict:
+    rows = []
+    for a in accts:
+        s = a.spec
+        if s["kind"] != "fixed":
+            continue
+        closed = [t for t in a.sims[20]["trades"] if t["status"] == "closed"]
+        live = _bucket(closed)
+        st = past[(s["strategy"], s["tf"])]["stats"]
+        per = {}
+        for pi, p in enumerate(PERIODS):
+            n, wr, mR = (float(x) for x in st[pi, 0, 0, s["combo"]])
+            ok = math.isfinite(n) and n > 0
+            per[p] = {"n": int(n) if ok else 0, "mean_R": _r(mR, 4) if ok else None, "win_rate": _r(wr, 4) if ok else None}
+        ref = per["2024-26"]["mean_R"]
+        gap = live["mean_R"] - ref if live["mean_R"] is not None and ref is not None else None
+        rows.append({"id": s["id"], "name": s["name"], "strategy": s["strategy"], "tf": s["tf"], "combo": s["combo"],
+                     "exit": 0, "setting_ko": a.setting_ko, "exit_ko": HOUSE_KO,
+                     "live": {"n": live["n"], "mean_R": live["mean_R"], "win_rate": live["win_rate"]}, "past": per,
+                     "gap_R": _r(gap, 4), "note_ko": vs5y_note(live["n"], gap)})
+    return {"generated_ms": NOW_MS, "rows": rows}
 
 
 # ---------------------------------------------------------------- the weekly review (CONTRACT 8.10)
@@ -1506,7 +1670,7 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
         return {"accounts": 0}
 
     # ranks first (the home leaders and the judge's luck lines read them)
-    leaders, rank_luck, files = [], {}, []
+    leaders, rank_luck, files, past = [], {}, [], {}
     for strat in grid.STRATS:
         for tf in grid.TFS:
             z = fake_rank(strat, tf, rng, live_start)
@@ -1523,9 +1687,10 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
             leaders.append({"strategy": strat, "tf": tf, "window": "26w", "exit": "house", "label": _label(strat, c),
                             "n": n, "mean_R": _r(mR, 4), "win_rate": _r(cell[c, 1] / n, 4) if n else None,
                             "luck95": _r(luck, 4), "beats_luck": bool(mR > luck)})
+            past[(strat, tf)] = fake_past(strat, tf, prng)      # always made (vs5y.json reads it); same stream
             if past5y_dir:
                 os.makedirs(past5y_dir, exist_ok=True)
-                _write_npz(os.path.join(past5y_dir, f"past5y_{strat}_{tf}.npz"), **fake_past(strat, tf, prng))
+                _write_npz(os.path.join(past5y_dir, f"past5y_{strat}_{tf}.npz"), **past[(strat, tf)])
     _write_json(os.path.join(outdir, "rank_meta.json"), {
         "generated_ms": NOW_MS - 40_000, "build_seconds": 6.4, "files": files, "windows": list(grid.WINDOWS),
         "exits": list(grid.EXITS), "scopes": list(grid.SCOPES), "players": status["counts"]["players"],
@@ -1590,6 +1755,9 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
         "multi_note_ko": (f"{n_lines}줄을 한꺼번에 보면 실력이 없어도 몇 줄은 운으로 통과할 수 있어서, "
                           "통과한 줄은 그 뒤 4주(거래 20건 이상) 확인 기간을 거칩니다"),
         "rows": jrows, "confirm": confirm, "candidates": cands})
+    # round 4 part B (CONTRACT 9.5, 9.6): analysis buckets and the fixed accounts against their 5-year numbers
+    _write_json(os.path.join(outdir, "analysis.json"), fake_analysis(accts))
+    _write_json(os.path.join(outdir, "vs5y.json"), fake_vs5y(accts, past))
 
     costs = fake_costs(accts, cm)
     _write_json(os.path.join(outdir, "costs.json"), costs)

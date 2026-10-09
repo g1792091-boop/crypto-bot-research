@@ -12,20 +12,22 @@
 <link rel="stylesheet" href="/static/base.css">
 <link rel="stylesheet" href="/static/components.css">
 <link rel="stylesheet" href="/static/demo.css">
+<link rel="stylesheet" href="/static/demo4b.css">
 <script src="/static/js/skin-boot.js"></script>
 </head>
 <body>
 <a class="skip" href="#screen">본문으로 건너뛰기</a>
 <div class="shell-top">
   <header class="top">
-    <a class="brand" href="#/home" aria-label="데모 랩 첫 화면">
+    <a class="brand" href="#/" aria-label="데모 랩 첫 화면">
       <span class="bic" aria-hidden="true"><svg viewBox="0 0 16 16" width="18" height="18" shape-rendering="crispEdges"><rect class="dl-ic1" x="6" y="1" width="4" height="2"/><rect class="dl-ic1" x="7" y="3" width="2" height="4"/><rect class="dl-ic2" x="4" y="7" width="8" height="2"/><rect class="dl-ic2" x="3" y="9" width="10" height="2"/><rect class="dl-ic2" x="2" y="11" width="12" height="3"/><rect class="dl-ic3" x="5" y="11" width="2" height="1"/><rect class="dl-ic3" x="9" y="12" width="2" height="1"/></svg></span>
       <span class="dl-badge" title="규칙봇이 아닙니다: 주문 없이 설정을 시험하는 데모 랩">데모 랩</span>
     </a>
     <span class="dl-sep" aria-hidden="true"></span>
     <span class="dl-what">설정 시험장 · 규칙봇과 따로</span>
+    <button class="dchip dl-live" id="livechip" type="button"><b>—</b></button>
     <span class="grow"></span>
-    <span class="dchip dl-live" id="livechip" title=""><b>—</b></span>
+    <span class="dl-tt" id="toptools"></span>
     <button class="hdot" id="hdot" type="button" data-level="unknown" aria-label="서버 상태: 확인 중"><i></i></button>
     <span class="mocktag" title="주문을 넣지 않습니다. 모든 계좌는 가상 돈입니다">모의<span class="dl-opt">· 주문 없음</span></span>
   </header>

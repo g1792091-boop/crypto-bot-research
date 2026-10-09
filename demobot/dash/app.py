@@ -13,6 +13,10 @@
 - ``/api/coins`` ("코인별 보기", CONTRACT 8.12): per coin, every account line's trades and P&L on that coin, summed
   from the ``acct/<id>.json`` trades (cached until one of those files or accounts.json changes).
 - ``/api/review`` (``review.json``, 8.10) and ``/api/telegram`` (``telegram.json``, 8.11): as-is, like the others.
+- Round 4 part B: ``/api/analysis`` (``analysis.json``, 9.5) and ``/api/vs5y`` (``vs5y.json``, 9.6) as-is;
+  ``/api/setting?strat=&tf=&c=[&scope=][&exit=]``: one setting under every exit in the three ranking windows plus its
+  5-year periods (the rank and past5y arrays, the same numbers as its /api/rank rows) for 만약 실험실 and 매매법;
+  ``/api/grid`` also names the marked settings' combo indices.
 - Login: one password (PBKDF2 hash in DEMOBOT_DASH_PASSWORD_HASH, ``python -m demobot.dash hash``) and a signed session
   cookie ``demobot_s`` (DEMOBOT_DASH_SECRET). The helpers are a copy of paperbot/dash/app.py's, so this dashboard does
   not depend on the rule bot's dashboard module.
@@ -66,6 +70,8 @@ SNAP_FILES = {"status": "status.json", "home": "home.json", "accounts": "account
 SNAP_FILES_STRICT = {"costs": "costs.json", "regime": "regime.json", "backup": "backup.json", "watch": "watch.json",
                      "review": "review.json", "telegram": "telegram.json"}
 TRADE_CAP = 600                  # acct/<id>.json keeps the newest 600 trades (CONTRACT 4)
+# CONTRACT 9.5 / 9.6 (round 4, part B): as-is, no query parameter, like the round 3 files
+SNAP_FILES_R4B = {"analysis": "analysis.json", "vs5y": "vs5y.json"}
 M15_MS = 15 * 60_000
 BARS_PARAMS = ("coin", "tf", "from", "to", "limit")
 BARS_MAX = 3000                  # bars per answer
@@ -663,6 +669,89 @@ def rank_table(snap: Snap, p: dict) -> dict:
             "rows": rows}
 
 
+# ---------------------------------------------------------------- one setting under every exit (/api/setting)
+SETTING_PARAMS = ("strat", "tf", "c", "scope", "exit")
+
+
+def setting_query(params) -> dict:
+    """/api/setting?strat=S2&tf=15m&c=190[&scope=ALL][&exit=0]: strict like /api/rank (unknown, repeated or out of
+    range values are a 400)."""
+    seen = strict_params(params, SETTING_PARAMS)
+    s = seen.get("strat", "S2")
+    strat = grid.LONG.get(s, s)
+    if strat not in grid.STRATS:
+        _bad("strat: S2 | N02 | N04")
+    tf = seen.get("tf", "15m")
+    if tf not in grid.TFS:
+        _bad("tf: 15m | 30m")
+    raw = seen.get("c", "")
+    if not re.fullmatch(r"\d{1,4}", raw) or int(raw) >= grid.NCOMBO[strat]:
+        _bad(f"c: a setting index 0-{grid.NCOMBO[strat] - 1}")
+    scope = seen.get("scope", "ALL")
+    if scope not in grid.SCOPES:
+        _bad("scope: ALL or a coin (BTCUSD ...)")
+    ex = seen.get("exit")
+    if ex is not None and not (re.fullmatch(r"\d{1,2}", ex) and int(ex) < grid.NEXIT):
+        _bad(f"exit: 0-{grid.NEXIT - 1}")
+    return {"strat": strat, "tf": tf, "c": int(raw), "scope": scope, "exit": int(ex) if ex is not None else None}
+
+
+def setting_view(snap: Snap, q: dict) -> dict:
+    """One setting of one strategy and timeframe under every exit (or the one asked), in the three windows of the
+    ranking and the 5-year periods: the same numbers as its /api/rank rows, read in one call (만약 실험실, 매매법).
+    A rank file that is not there yet leaves the windows null (the 5-year part is shipped with the code)."""
+    strat, tf, c = q["strat"], q["tf"], q["c"]
+    C = grid.NCOMBO[strat]
+    W, S = len(grid.WINDOWS), len(grid.SCOPES)
+    s = grid.SCOPES.index(q["scope"])
+    base = {"strategy": strat, "short": grid.SHORT[strat], "tf": tf, "c": c, "label": snap.labels(strat)[c],
+            "scope": q["scope"], "settings": C, "windows": list(grid.WINDOWS), "periods": list(PERIODS),
+            "periods_ko": [PERIODS_KO[x] for x in PERIODS]}
+    z = snap.rank_file(strat, tf)
+    stats = z.get("stats") if z is not None else None
+    if stats is not None and (stats.ndim != 5 or stats.shape[0] != W or stats.shape[2:] != (S, C, len(STATS_K))
+                              or not 1 <= stats.shape[1] <= grid.NEXIT):
+        stats = None
+    E = stats.shape[1] if stats is not None else 0
+    luck = z.get("luck95") if stats is not None else None
+    luck = luck if luck is not None and luck.shape == (W, E, S) else None
+    mn = z.get("min_n") if stats is not None else None
+    min_n = [int(mn[w, 0 if s == 0 else 1]) for w in range(W)] if mn is not None and mn.shape == (W, 2) else None
+    bounds = z.get("bounds_ms") if stats is not None else None
+    gen = z.get("generated_ms") if stats is not None else None
+    past = snap.past_file(strat, tf)
+    pstats = past.get("stats") if past else None
+    if pstats is not None and (pstats.ndim != 5 or pstats.shape[0] != len(PERIODS) or pstats.shape[2:] != (S, C, 3)):
+        pstats = None
+    exits = []
+    for e in ([q["exit"]] if q["exit"] is not None else range(grid.NEXIT)):
+        row = {"i": e, "name": grid.EXITS[e], "ko": _exit_ko(e), "w": None, "past": None}
+        if stats is not None and e < E:
+            row["w"] = {}
+            for w, wn in enumerate(grid.WINDOWS):
+                k = stats[w, e, s, c].astype(np.float64)
+                n = int(np.nan_to_num(k[KI["n"]]))
+                wins = int(np.nan_to_num(k[KI["wins"]]))
+                l95 = _f(luck[w, e, s]) if luck is not None else None
+                ok = n >= (min_n[w] if min_n is not None else 1)
+                mR = _f(k[KI["mean_R"]])
+                row["w"][wn] = {"n": n, "wins": wins, "win_rate": _r(wins / n) if n else None, "mean_R": _r(mR),
+                                "mean_G": _r(k[KI["mean_G"]]), "mdd_R": _r(k[KI["mdd_R"]]), "plateau": _r(k[KI["plateau"]]),
+                                "min_ok": bool(ok), "luck95": _r(l95, 5),
+                                "beats_luck": bool(mR is not None and n > 0 and mR > l95) if l95 is not None and ok else None}
+        if pstats is not None and e < pstats.shape[1]:
+            row["past"] = {}
+            for pi, per in enumerate(PERIODS):
+                pn, pw, pm = (float(x) for x in pstats[pi, e, s, c])
+                ok = math.isfinite(pn) and pn > 0
+                row["past"][per] = {"n": int(pn) if ok else None, "win_rate": _r(pw) if ok else None,
+                                    "mean_R": _r(pm) if ok else None}
+        exits.append(row)
+    return {**base, "missing": stats is None and pstats is None, "rank": stats is not None, "past5y": pstats is not None,
+            "min_n": min_n, "bounds_ms": [[int(b[0]), int(b[1])] for b in bounds] if bounds is not None and bounds.shape == (W, 2) else None,
+            "generated_ms": int(gen) if gen is not None and gen.size == 1 else None, "exits": exits}
+
+
 DIM_KO = {"st_atr_len": "ST 기간", "st_mult": "ST 배수", "roc_len": "ROC 기간", "kst_scale": "KST 배율",
           "kst_signal_len": "KST 신호선", "kvo_scale": "클링거 배율", "kvo_signal_len": "클링거 신호선"}
 
@@ -676,7 +765,10 @@ def grid_info() -> dict:
                             "pick": {tf: grid.combo_label(s, grid.PICK[(s, tf)]) for tf in grid.TFS},
                             "dims": [{"key": k, "ko": DIM_KO.get(k, k), "values": [float(v) for v in vals]}
                                      for k, vals in grid.DIMS[s]],
-                            "default_idx": list(grid.DEFAULT_IDX[s])}
+                            "default_idx": list(grid.DEFAULT_IDX[s]),
+                            # the marked settings' combo indices (매매법 cards, /api/setting?c=)
+                            "default_c": grid.default_combo(s), "friend_c": grid.friend_combo(s),
+                            "pick_c": {tf: grid.PICK[(s, tf)] for tf in grid.TFS}}
                            for s in grid.STRATS],
             "tfs": list(grid.TFS), "exits": [{"i": i, "name": n, "ko": _exit_ko(i)} for i, n in enumerate(grid.EXITS)],
             "scopes": list(grid.SCOPES), "windows": list(grid.WINDOWS), "coins": list(grid.COINS),
@@ -812,6 +904,9 @@ def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_
     for key, name in SNAP_FILES_STRICT.items():
         strict_route(key, name)
 
+    for key, name in SNAP_FILES_R4B.items():           # 분석, 5년 대비 (CONTRACT 9.5, 9.6)
+        strict_route(key, name)
+
     @app.get("/api/coins")
     def coins(req: Request):
         strict_params(req.query_params, ())
@@ -832,6 +927,11 @@ def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_
     def rank(req: Request):
         p = rank_query(req.query_params)
         body = rank_table(snap, p)
+        return _json(json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode())
+
+    @app.get("/api/setting")
+    def setting(req: Request):
+        body = setting_view(snap, setting_query(req.query_params))
         return _json(json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode())
 
     @app.get("/api/grid")

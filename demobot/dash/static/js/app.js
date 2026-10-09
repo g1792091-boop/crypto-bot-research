@@ -1,76 +1,112 @@
-// The shell: the top menu (plain Korean text buttons like the rule bot's), hash routes, the skin switch, the server
-// state dot and chip (/api/status every 30 s), the "마지막 갱신" stamp, and each screen's polling (paused while the page
-// is hidden). Screens: js/screens/<name>.js with mount(el, ctx) (returning an optional cleanup). A route is
-// #/<screen>[/<arg>[/<arg2>]][?query], e.g. #/trade/<account id>/<trade key> (both parts URI-encoded).
-import {h, put, local} from "./dom.js";
+// The shell: the grouped menu (plain Korean text buttons like the rule bot's, thin lines between the groups; on top or,
+// by choice, as a left column from 1000 px), hash routes, the server state dot (/api/status every 30 s), the top bar's
+// tools (topbar.js: D+n pill, 찾기, ★, 자는 동안, the bell, the sound), the viewer's settings (prefs.js: 글자 크기,
+// 메뉴 위치, 화면 색), the "마지막 갱신" stamp, and each screen's polling (paused while the page is hidden).
+// Screens: js/screens/<name>.js with mount(el, ctx) (returning an optional cleanup). A route is
+// #/<screen>[/<arg>[/<arg2>]][?query], e.g. #/trade/<account id>/<trade key> (both parts URI-encoded). #/ opens the
+// terminal when that screen exists, else 홈.
+import {h, put} from "./dom.js";
 import {getJSON, isMissing} from "./api.js";
-import {hms, kst, dur} from "./fmt.js";
-import {stamp} from "./ui.js";
-import {PHASE_KO} from "./labels.js";
+import {hms, dur} from "./fmt.js";
+import {stamp, setPage} from "./ui.js";
+import {applySkin, skinNow} from "./prefs.js";
+import {initFind} from "./find.js";
+import {initTopbar, onStatus, stripLead, stripTools} from "./topbar.js";
 
+// Menu entries: {id, ko, group, also (routes that light this entry), end (last in its group)}. The groups' order is
+// GROUPS; an entry without a group belongs to "main"; an unknown group goes to the last group.
 const MENU = [
   {id: "home", ko: "홈"},
-  {id: "rank", ko: "순위표"},
-  {id: "map", ko: "설정 지도"},
-  {id: "accounts", ko: "계좌", also: ["account", "trade"]},
-  {id: "compare", ko: "비교"},
-  {id: "coins", ko: "코인별"},
-  {id: "trades", ko: "거래 기록"},
-  {id: "judge", ko: "판정"},
-  {id: "regime", ko: "시장 국면"},
-  {id: "costs", ko: "실제 비용"},
-  {id: "review", ko: "주간 회의록"},
-  {id: "views", ko: "관점 기록"},
-  {id: "telegram", ko: "알림 기록"},
-  {id: "status", ko: "서버 상태"},
-  {id: "howto", ko: "어떻게 돌아가나"},
+  {id: "rank", ko: "순위표", group: "main"},
+  {id: "judge", ko: "판정", group: "main"},
+  {id: "path", ko: "졸업 길", group: "main"},
+  {id: "ready", ko: "실전 준비", group: "main"},
+  {id: "friend", ko: "친구 계획", group: "main"},
+  {id: "leverage", ko: "레버리지 비교", group: "main"},
+  {id: "glance", ko: "한눈 지도", group: "main"},
+  {id: "accounts", ko: "계좌", group: "detail", also: ["account", "trade"]},
+  {id: "compare", ko: "비교", group: "detail"},
+  {id: "coins", ko: "코인별", group: "detail"},
+  {id: "trades", ko: "거래 기록", group: "detail"},
+  {id: "analysis", ko: "분석", group: "detail"},
+  {id: "strategies", ko: "매매법", group: "detail"},
+  {id: "vs5y", ko: "5년 대비", group: "detail"},
+  {id: "whatif", ko: "만약 실험실", group: "detail"},
+  {id: "map", ko: "설정 지도", group: "detail"},
+  {id: "regime", ko: "시장 국면", group: "info"},
+  {id: "costs", ko: "실제 비용", group: "info"},
+  {id: "review", ko: "주간 회의록", group: "info"},
+  {id: "views", ko: "관점 기록", group: "info"},
+  {id: "telegram", ko: "알림 기록", group: "info"},
+  {id: "status", ko: "서버 상태", group: "info"},
+  {id: "howto", ko: "어떻게 돌아가나", group: "info", end: true},
 ];
+const GROUPS = [{id: "live", ko: "실시간"}, {id: "main", ko: "요약 · 판정"}, {id: "detail", ko: "계좌 · 분석"}, {id: "info", ko: "기록 · 안내"}];
+const MENU_TITLE = {home: "홈 (요약)", path: "졸업 길 (운 지도)", glance: "한눈 지도 (모든 계좌 × 배수)", whatif: "만약 실험실 (청산 14가지)"};
 const SCREENS = {home: "home", rank: "rank", accounts: "accounts", account: "account", trades: "trades", judge: "judge",
   views: "views", status: "status", howto: "howto", trade: "trade", regime: "regime", costs: "costs", compare: "compare",
+  glance: "glance", path: "path", analysis: "analysis", strategies: "strategies", vs5y: "vs5y", whatif: "whatif",
+  friend: "friend", leverage: "leverage", ready: "ready",
   review: "review", telegram: "telegram", map: "map", coins: "coins"};
 const TITLE = "데모 랩";
+/** The start screen (#/ and any unknown route): the terminal when this build has it, else 홈. */
+const START = () => (SCREENS.terminal ? "terminal" : "home");
 
-// ---------------------------------------------------------------- skin (two skins of tokens.css, per device)
-const SKINS = [{id: "ai", ko: "AI"}, {id: "classic", ko: "클래식"}];
-function applySkin(id) {
-  const root = document.documentElement;
-  root.dataset.skin = SKINS.some((x) => x.id === id) ? id : "ai";
-  const meta = document.querySelector('meta[name="theme-color"]');
-  const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
-  if (meta && bg) meta.setAttribute("content", bg);
+/** The menu's groups in order, each with its entries (only screens this build has; "end" entries last). */
+function menuGroups() {
+  const ids = GROUPS.map((g) => g.id);
+  const gid = (m) => (ids.includes(m.group || "main") ? m.group || "main" : ids[ids.length - 1]);
+  return GROUPS.map((g) => ({...g, items: MENU.filter((m) => SCREENS[m.id] && gid(m) === g.id)
+    .map((m, i) => ({m, i})).sort((a, b) => (a.m.end ? 1 : 0) - (b.m.end ? 1 : 0) || a.i - b.i).map((x) => x.m)}))
+    .filter((g) => g.items.length);
 }
-function skinSwitch() {
-  const cur = document.documentElement.dataset.skin || "ai";
-  const btns = SKINS.map((x) => h("button", {type: "button", "aria-pressed": String(x.id === cur), dataset: {skin: x.id},
-    onclick: () => {
-      if (document.documentElement.dataset.skin === x.id) return;
-      local.set("skin", x.id);
-      applySkin(x.id);
-      for (const b of btns) b.setAttribute("aria-pressed", String(b.dataset.skin === x.id));
-      remount();                                  // charts read their colours when drawn
-    }}, x.ko));
-  return h("span", {class: "skinsw", role: "group", "aria-label": "화면 색 고르기", title: "화면 색: 이 기기에만 기억합니다"},
-    h("span", {class: "k"}, "화면 색"), btns);
-}
+/** Every menu screen with its group's name (찾기, ★). */
+const menuList = () => menuGroups().flatMap((g) => g.items.map((m) => ({id: m.id, ko: m.ko, title: MENU_TITLE[m.id] || "", groupKo: g.ko})));
 
 // ---------------------------------------------------------------- the menu
 const menu = document.getElementById("menu");
 const links = {};
 function buildMenu() {
-  const items = MENU.map((m) => {
-    const a = h("a", {class: "sb", href: `#/${m.id}`, dataset: {screen: m.id}}, h("span", {class: "sb-t", dataset: {t: m.ko}}, m.ko));
-    links[m.id] = a;
-    return a;
+  for (const k of Object.keys(links)) delete links[k];
+  // one flat row: the groups' buttons with a thin line between groups (a long row wraps or scrolls without leaving
+  // half-empty rows); the group names show only in the left column (메뉴 위치 왼쪽)
+  const kids = [];
+  menuGroups().forEach((g, gi) => {
+    if (gi) kids.push(h("span", {class: "sg-sep", "aria-hidden": "true"}));
+    kids.push(h("span", {class: "sg-k", "aria-hidden": "true", dataset: {group: g.id}}, g.ko));
+    for (const m of g.items) {
+      const a = h("a", {class: "sb", href: `#/${m.id}`, dataset: {screen: m.id, group: g.id}, title: MENU_TITLE[m.id] || null},
+        h("span", {class: "sb-t", dataset: {t: m.ko}}, m.ko));
+      links[m.id] = a;
+      kids.push(a);
+    }
   });
-  put(menu, items, h("span", {class: "strip-tools"}, skinSwitch()));
+  put(menu, h("span", {class: "strip-lead"}, stripLead()), kids, h("span", {class: "strip-tools"}, stripTools()));
+  if (cur) markMenu(cur.name);
+  tidyMenu();
 }
+/** A group line that ends up at a row's end or start of the wrapped PC row is hidden (it would separate nothing). */
+function tidyMenu() {
+  for (const sep of menu.querySelectorAll(".sg-sep")) {
+    const prev = sep.previousElementSibling;
+    let next = sep.nextElementSibling;
+    while (next && next.classList.contains("sg-k")) next = next.nextElementSibling;
+    sep.style.visibility = prev && next && Math.abs(next.offsetTop - prev.offsetTop) > 4 ? "hidden" : "";
+  }
+}
+if (typeof ResizeObserver === "function") new ResizeObserver(() => tidyMenu()).observe(menu);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(tidyMenu, () => {});
 function markMenu(name) {
   for (const m of MENU) {
+    const a = links[m.id];
+    if (!a) continue;
     const on = m.id === name || (m.also || []).includes(name);
-    if (on) links[m.id].setAttribute("aria-current", "page"); else links[m.id].removeAttribute("aria-current");
-    if (on && links[m.id].scrollIntoView && menu.scrollWidth > menu.clientWidth) {
-      const r = links[m.id].getBoundingClientRect(), mr = menu.getBoundingClientRect();
-      if (r.left < mr.left || r.right > mr.right) menu.scrollLeft += r.left - mr.left - 16;
+    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    if (on && menu.scrollWidth > menu.clientWidth + 1) {             // the phone's sideways row: bring it into view
+      const r = a.getBoundingClientRect(), mr = menu.getBoundingClientRect();
+      const lead = menu.querySelector(".strip-lead");               // 찾기 · ★ stay at the row's left edge on a phone
+      const off = lead && getComputedStyle(lead).position === "sticky" ? lead.getBoundingClientRect().width : 0;
+      if (r.left < mr.left + off || r.right > mr.right) menu.scrollLeft += r.left - mr.left - off - 16;
     }
   }
 }
@@ -83,11 +119,10 @@ function touch() {
   stamp.title = "이 화면이 서버에서 자료를 마지막으로 받은 시각 (한국 시간)";
 }
 
-// ---------------------------------------------------------------- server state: the dot and the chip (every 30 s)
+// ---------------------------------------------------------------- server state: the dot (every 30 s); the pill is topbar.js
 const statusFns = new Set();
 let statusNow = null;
 const hdot = document.getElementById("hdot");
-const chip = document.getElementById("livechip");
 function levelOf(st) {
   if (!st || isMissing(st)) return {lv: "warn", ko: "엔진 상태 파일이 아직 없습니다"};
   const now = Date.now();
@@ -103,15 +138,6 @@ function paintState(st) {
   hdot.dataset.level = L.lv;
   hdot.setAttribute("aria-label", `서버 상태: ${L.ko} (누르면 서버 상태 화면)`);
   hdot.title = `서버 상태: ${L.ko}`;
-  if (!st || isMissing(st)) { put(chip, h("b", null, "준비 중")); return; }
-  if (st.phase === "live" && st.live_start_ms) {
-    const days = (Date.now() - st.live_start_ms) / 86400000;
-    put(chip, h("span", {class: "opt"}, "실시간"), h("b", null, `${Math.max(0, days).toFixed(1)}일째`));
-    chip.title = `실시간 시작 ${kst(st.live_start_ms)} KST`;
-  } else {
-    put(chip, h("b", null, PHASE_KO[st.phase] || "—"));
-    chip.title = "";
-  }
 }
 async function pollStatus() {
   try {
@@ -122,6 +148,7 @@ async function pollStatus() {
     statusNow = statusNow || null;
   }
   paintState(statusNow);
+  onStatus(statusNow);
   for (const fn of statusFns) { try { fn(statusNow); } catch (e) { console.error(e); } }
 }
 hdot.addEventListener("click", () => { location.hash = "#/status"; });
@@ -134,7 +161,7 @@ function parseHash() {
   const raw = (location.hash || "").replace(/^#\/?/, "");
   const [path, qs] = raw.split("?");
   const parts = path.split("/").filter(Boolean);
-  const name = SCREENS[parts[0]] ? parts[0] : "home";
+  const name = SCREENS[parts[0]] ? parts[0] : START();
   const query = Object.fromEntries(new URLSearchParams(qs || ""));
   const dec = (x) => { try { return decodeURIComponent(x); } catch (e) { return null; } };
   return {name, arg: parts[1] ? dec(parts[1]) : null, arg2: parts[2] ? dec(parts[2]) : null, query};
@@ -183,6 +210,8 @@ async function mountScreen() {
     try { if (typeof cur.cleanup === "function") cur.cleanup(); } catch (e) { console.error(e); }
   }
   markMenu(params.name);
+  const entry = MENU.find((m) => m.id === params.name);
+  setPage(entry ? {id: entry.id, ko: entry.ko} : null);           // the ☆ next to a menu screen's title
   const el = h("div", {class: "scr", "data-screen": params.name});
   put(main, el);
   const {ctx, ctl, timers} = makeCtx(el, params);
@@ -207,8 +236,10 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("hashchange", mountScreen);
 
+applySkin(skinNow());
+initTopbar({menu: menuList, onText: remount, onNav: () => { buildMenu(); remount(); }, onSkin: () => { applySkin(skinNow()); remount(); }});
+initFind(menuList);
 buildMenu();
-applySkin(document.documentElement.dataset.skin || local.get("skin", "ai"));
 pollStatus();
 setInterval(() => { if (document.visibilityState !== "hidden") pollStatus(); }, 30000);
 mountScreen();

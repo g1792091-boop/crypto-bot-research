@@ -7,6 +7,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
+import {starBtn} from "../favs.js";
 import {equityChart, legend} from "../chart.js";
 import {LEVS, COINS, KIND_KO, SUB_KO, kindOfId, reasonKo, sideKo, tfKo, STOP_WHAT_KO, STOP_WHAT_SHORT} from "../labels.js";
 
@@ -22,6 +23,7 @@ export async function mount(el, ctx) {
   ctx.setTitle("계좌");
   const head = ui.screenHead("계좌", id);
   const title = head.querySelector("h1");
+  title.after(starBtn("account", id, {label: id, cls: "dl-hstar"}));       // ★ 즐겨찾기 (round 4)
   const sub = head.querySelector(".sub");
   const ruleBox = h("div"), lineBox = h("div", {class: "dl-lines"}), legendBox = h("div");
   const chartBox = h("div", {class: "dl-chart", role: "img", "aria-label": "배수별 잔고 흐름"});

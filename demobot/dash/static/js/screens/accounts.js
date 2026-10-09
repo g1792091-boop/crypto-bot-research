@@ -6,6 +6,7 @@ import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
+import {starBtn} from "../favs.js";
 import {LEVS, KINDS, SUB_KO, kindOfId} from "../labels.js";
 
 export async function mount(el, ctx) {
@@ -77,7 +78,8 @@ export async function mount(el, ctx) {
 
 function nameCell(a, ctx) {
   return h("div", {class: "dl-an"},
-    h("a", {href: ctx.href("account", a.id), class: "dl-aname"}, a.name || a.id),
+    h("span", {class: "dl-anrow"}, h("a", {href: ctx.href("account", a.id), class: "dl-aname"}, a.name || a.id),
+      starBtn("account", a.id, {label: a.name || a.id})),
     h("span", {class: "dl-asub"}, SUB_KO[a.sub] ? h("span", {class: "pp thin"}, SUB_KO[a.sub]) : null,
       a.switches ? h("span", {class: "muted"}, ` 교체 ${fmt.int(a.switches)}회`) : null),
     h("span", {class: "dl-aset mono", title: a.setting_ko || ""}, a.setting_ko || "—"));
@@ -118,7 +120,7 @@ function acctTable(rows, levs, ctx, conf = {}) {
       if (levs.length > 1) cells.push(h("td", {class: "dl-lev"}, h("span", {class: "dl-levtag", dataset: {lev: L}}, `${L}배`)));
       cells.push(...lineCells(x, conf[`${a.id}|${L}`]));
       const tr = h("tr", {class: ["click", i === levs.length - 1 ? "dl-last" : "dl-mid", x && x.ruined ? "dl-ruined" : ""]}, cells);
-      tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = ctx.href("account", a.id); });
+      tr.addEventListener("click", (e) => { if (!e.target.closest("a, button")) location.hash = ctx.href("account", a.id); });
       body.push(tr);
     });
   }
