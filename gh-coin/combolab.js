@@ -3,11 +3,12 @@
 //   진입·청산은 규칙대로(코드) — 모델 기분이 섞이지 않아야 '이 조합·이 값'의 실력이 공정하게 채점된다. 모델은 맡은 조합의 라운드 복기를 쓴다.
 //   값: tools/combo-opt.mjs 가 코인별 5년 백테스트로 고른 후보 9개(lib/combo-opt.js). 라운드(기본 24시간)가 끝날 때마다
 //   후보를 '5년 점수 + 최근 데이터 백테스트 + 이번 라운드 실시간 성적'으로 다시 순위 → 5라운드 뒤 가장 꾸준했던 값 = 최종 커스텀 최적값.
+//   ⭐ 코인별 대표: 코인 × 30·40·50배마다 (조합 4 × 시간봉 3) 중 앞 4년 학습 1위(BEST). '대표만 거래'로 좁힐 수 있음.
 //   전부 가상자금(데모). 실주문 경로 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
 import { brainStream } from "../nuri-ai/engine.js";
 import * as CB from "./lib/combos.js";
-import { OPT, META } from "./lib/combo-opt.js";
+import { OPT, META, BEST } from "./lib/combo-opt.js";
 
 const KEY = "coin:combolab", ROUNDS = 5, BARS = 1000, SWITCH = 0.02;   // 1000봉 = 뉴럴 엔진과 같은 요청(캐시 공유)
 let L = null, busy = false;
@@ -17,16 +18,20 @@ const shortMd = m => String(m || "").split("/").pop().replace(/-instruct|-chat/i
 const KO = Object.fromEntries(CB.COINS.map(([ko, s]) => [s, ko]));
 export const LANES = CB.COMBOS.flatMap(c => CB.COINS.flatMap(([, sym]) => CB.TFS.flatMap(tf => CB.LEVS[tf].map(lev => ({ c: c.key, sym, tf, lev, k: lk(c.key, sym, tf, lev) })))));
 
-function blank() { return { on: true, round: 1, t0: Date.now(), roundAt: Date.now(), roundH: 24, own: {}, sel: {}, lanes: {}, trades: [], log: [], reviews: {}, hist: {}, final: null, made: META.made }; }
+function blank() { return { on: true, scope: "all", round: 1, t0: Date.now(), roundAt: Date.now(), roundH: 24, own: {}, sel: {}, lanes: {}, trades: [], log: [], reviews: {}, hist: {}, final: null, made: META.made }; }
 export function load() {
   if (!L) { try { L = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch (e) { L = blank(); }
-    const b = blank(); for (const k of Object.keys(b)) if (L[k] === undefined) L[k] = b[k]; }
+    const b = blank(); for (const k of Object.keys(b)) if (L[k] === undefined) L[k] = b[k];
+    // 최적값 파일을 새로 만들었으면 후보 목록이 달라짐 → 라운드·선택만 처음부터(거래 기록·보유 포지션은 그대로)
+    if (L.made !== META.made) { L.sel = {}; L.hist = {}; L.round = 1; L.roundAt = Date.now(); L.final = null; L.made = META.made;
+      L.log.unshift({ t: Date.now(), round: 0, text: "최적값 새로 만듦(레버리지마다 지표 값·노이즈 거르기까지 따로) → 라운드 1부터 · 거래 기록 유지" }); } }
   return L;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...L, trades: L.trades.slice(0, 400), log: L.log.slice(0, 60) })); } catch (e) {} }
 const cands = (c, sym, tf, lev) => OPT?.[sym]?.[tf]?.[c]?.levs?.[lev] || [];
 const lane = k => L.lanes[k] || (L.lanes[k] = { n: 0, w: 0, R: 0, pnl: 0, pos: null, lastSig: 0, skip: 0 });
 const candOf = x => { const C = cands(x.c, x.sym, x.tf, x.lev); return C[L.sel[x.k] ?? 0] || C[0] || null; };
+const isStar = x => { const b = BEST?.[x.sym]?.[x.lev]; return !!b && b.c === x.c && b.tf === x.tf; };   // ⭐ 코인·레버리지별 대표 칸
 
 // 🤝 담당 배정: 연결된 모델 순서대로 조합 하나씩(모델이 4개보다 적으면 돌아가며 둘 이상 맡음). 모델이 빠지면 다시 배정.
 function assign(models) {
@@ -86,9 +91,9 @@ function laneStep(x, M, c15, px, now, feed) {
     }
   }
   // 새 신호: 마지막 마감봉에서 두 지표가 같은 방향이 됨 + 그 다음 봉이 아직 진행 중일 때만(늦게 본 신호는 버림)
-  if (!ln.pos && li > 0 && D.t[li] > ln.lastSig && CB.isEntry(sig.dir, li) && now < D.t[li] + 2 * CB.TF_MS[x.tf]) {
+  if (!ln.pos && li > 0 && D.t[li] > ln.lastSig && CB.isEntry(sig, li) && now < D.t[li] + 2 * CB.TF_MS[x.tf] && (L.scope !== "best" || isStar(x))) {
     ln.lastSig = D.t[li];
-    const side = sig.dir[li], s = CB.slFrac(D, li, cd.x.k, x.lev);
+    const side = sig.fd[li], s = CB.slFrac(D, li, cd.x.k, x.lev);
     if (s == null) { ln.skip++; return; }   // ATR 손절이 이 레버리지의 손절 상한(청산거리 40%)보다 넓음 → 진입 안 함
     const eq = CB.LANE_EQ + ln.pnl, risk = +(eq * CB.RISK).toFixed(2), notional = Math.min(eq * 3, risk / (s + CB.FEE));
     ln.pos = { side, e: px, s, sl: px * (1 - side * s), tp: px * (1 + side * CB.tpFrac(s, cd.x.rr)), be: false, risk, notional: +notional.toFixed(2), margin: +(notional / x.lev).toFixed(2),
@@ -157,6 +162,7 @@ export async function cycle({ models = [], feed = null } = {}) {
   } finally { busy = false; save(); }
 }
 
+export function setScope(sc) { load(); L.scope = sc === "best" ? "best" : "all"; save(); return L.scope; }   // 대표만: 다른 칸은 새 진입만 멈춤(보유분은 끝까지 관리)
 export function setOn(on) { load(); L.on = !!on; save(); return L.on; }
 export function setRoundH(h) { load(); L.roundH = Math.max(1, Math.min(168, +h || 24)); save(); return L.roundH; }
 export function restartRounds() { load(); L.round = 1; L.roundAt = Date.now(); L.hist = {}; L.final = null; L.sel = {}; L.log.unshift({ t: Date.now(), round: 0, text: "라운드 처음부터(값은 5년 백테스트 1위로 되돌림 · 거래 기록은 유지)" }); save(); }
@@ -166,11 +172,18 @@ export function resetLab() { const own = L?.own; L = blank(); if (own) L.own = o
 export function labState() {
   load(); const now = Date.now(), open = [];
   const combos = CB.COMBOS.map(C => { const st = comboStat(C.key); let pass = 0, luck = 0, tot = 0, op = 0;
-    for (const x of LANES) if (x.c === C.key) { const cd = candOf(x); tot++; if (cd?.pass) pass++; if (cd?.pass && !cd.luck) luck++; const P = L.lanes[x.k]?.pos; if (P) { op++; open.push({ ...x, ko: KO[x.sym], side: P.side, e: P.e, sl: P.sl, tp: P.tp, be: P.be, t: P.t, owner: L.own[C.key] }); } }
+    for (const x of LANES) if (x.c === C.key) { const cd = candOf(x); tot++; if (cd?.pass) pass++; if (cd?.pass && !cd.luck) luck++; const P = L.lanes[x.k]?.pos; if (P) { op++; open.push({ ...x, star: isStar(x), ko: KO[x.sym], side: P.side, e: P.e, sl: P.sl, tp: P.tp, be: P.be, t: P.t, owner: L.own[C.key] }); } }
     return { key: C.key, ko: C.ko, owner: L.own[C.key] || "", ownerShort: shortMd(L.own[C.key]), ...st, open: op, pass, passReal: luck, lanes: tot, cur: comboStat(C.key, L.round), reviews: (L.reviews[C.key] || []).slice(0, 2) }; });
   const grid = {};
   for (const x of LANES) { const cd = candOf(x), ln = L.lanes[x.k] || {};
-    ((grid[x.c] ||= {})[x.sym] ||= {})[x.tf + "|" + x.lev] = cd ? { p: CB.paramText(x.c, cd.p), x: CB.exitText(cd.x), pass: cd.pass, luck: cd.luck, ho: cd.ho, tr: cd.tr, lb: cd.lb, sel: L.sel[x.k] ?? 0, nC: cands(x.c, x.sym, x.tf, x.lev).length, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, skip: ln.skip || 0, pos: ln.pos ? { side: ln.pos.side, be: ln.pos.be } : null } : null; }
-  return { on: L.on, round: Math.min(L.round, ROUNDS), rounds: ROUNDS, done: !!L.final, roundH: L.roundH, left: Math.max(0, L.roundAt + L.roundH * 3600e3 - now), made: META.made, from: META.from,
+    ((grid[x.c] ||= {})[x.sym] ||= {})[x.tf + "|" + x.lev] = cd ? { star: isStar(x), p: CB.paramText(x.c, cd.p), x: CB.exitText(cd.x), pass: cd.pass, luck: cd.luck, ho: cd.ho, tr: cd.tr, lb: cd.lb, sel: L.sel[x.k] ?? 0, nC: cands(x.c, x.sym, x.tf, x.lev).length, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, skip: ln.skip || 0, pos: ln.pos ? { side: ln.pos.side, be: ln.pos.be } : null } : null; }
+  // ⭐ 코인 × 30·40·50배 대표 칸(지금 라운드에서 쓰는 값 + 실시간 성적)
+  const best = [], bs = { n: 0, R: 0, pnl: 0, open: 0 };
+  for (const [ko, sym] of CB.COINS) for (const lev of [30, 40, 50]) { const b = BEST?.[sym]?.[lev]; if (!b) continue;
+    const x = LANES.find(z => z.c === b.c && z.sym === sym && z.tf === b.tf && z.lev === lev), cd = x && candOf(x), ln = (x && L.lanes[x.k]) || {}; if (!cd) continue;
+    bs.n += ln.n || 0; bs.R += ln.R || 0; bs.pnl += ln.pnl || 0; if (ln.pos) bs.open++;
+    best.push({ ko, sym, lev, c: b.c, cko: CB.COMBO_BY[b.c].ko, cshort: CB.COMBO_BY[b.c].short, tf: b.tf, p: CB.paramText(b.c, cd.p), x: CB.exitText(cd.x), cap: +(40 / lev).toFixed(2),
+      tr: cd.tr, ho: cd.ho, lb: cd.lb, pass: cd.pass, luck: b.luck || cd.luck, of: b.of, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, pos: ln.pos ? { side: ln.pos.side } : null }); }
+  return { on: L.on, scope: L.scope, best, bestSum: { ...bs, R: +bs.R.toFixed(2), pnl: +bs.pnl.toFixed(2) }, round: Math.min(L.round, ROUNDS), rounds: ROUNDS, done: !!L.final, roundH: L.roundH, left: Math.max(0, L.roundAt + L.roundH * 3600e3 - now), made: META.made, from: META.from,
     combos, grid, open, trades: L.trades.slice(0, 40), log: L.log.slice(0, 8), tfs: CB.TFS, levs: CB.LEVS, tfKo: CB.TF_KO, coins: CB.COINS, lanes: LANES.length };
 }

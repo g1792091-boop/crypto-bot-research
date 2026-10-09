@@ -2,6 +2,7 @@
 // 순수 함수만(브라우저·노드 공용). 앱(combolab.js)과 도구(tools/combo-opt.mjs)가 같은 계산을 쓴다 → 백테스트와 실시간 데모가 같은 규칙.
 //
 // 신호: 두 지표의 방향(+1/−1)이 '같아지는 첫 마감봉'에서 그 방향으로 다음 봉 진입(이미 같은 방향이던 동안에는 다시 안 들어감).
+//   노이즈 거르기(값의 일부로 같이 고름): flt 0 없음 · 1 ADX(14)≥20(추세 있을 때만) · 2 EMA200 방향 일치(큰 추세 쪽만) · cf 1 = 1봉 더 유지되면 진입(깜빡이는 신호 제외).
 // 청산: 손절(ATR×k) · 익절(순 손익비 rr) · +1R 본절 · 시간(48봉) · 선택: 반대 신호(ex=1) 또는 추세 지표 전환(ex=2).
 // 레버리지: 고정 배수 L 에서 손절 ≤ 청산거리의 40% = 0.4/L (20x 2% · 30x 1.33% · 40x 1% · 50x 0.8%).
 //   ATR×k 손절이 이 상한보다 넓으면 '이 레버리지로는 노이즈를 못 버팀' → 그 신호는 건너뛴다(손절을 억지로 좁히지 않음).
@@ -14,13 +15,15 @@ export const slCapOf = lev => 0.4 / lev;
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
 
 // ── 조합 4개와 지표 값 그리드(순서 있는 축 → 이웃 평균으로 '튀는 값' 거르기) ──
-const ST_GRID = { len: [7, 10, 14], mult: [2, 2.5, 3, 3.5, 4] };
+const ST_GRID = { len: [7, 10, 14, 20], mult: [2, 2.5, 3, 3.5, 4] }, NOISE = { flt: [0, 1, 2], cf: [0, 1] };
+export const CATEGORICAL = new Set(["flt"]);   // 순서 없는 축(이웃 평균에서 제외)
 export const COMBOS = [
-  { key: "st_roc", ko: "슈퍼트렌드 + ROC", a: "슈퍼트렌드", b: "ROC", grid: { ...ST_GRID, roc: [5, 9, 14, 21] } },
-  { key: "st_kvo", ko: "슈퍼트렌드 + 클링거", a: "슈퍼트렌드", b: "클링거", grid: { ...ST_GRID, kvo: [0.6, 0.8, 1, 1.5] } },
-  { key: "vwma_macd", ko: "VWMA + MACD", a: "VWMA", b: "MACD", grid: { vwma: [10, 20, 50, 100, 200], macd: [0.66, 1, 1.5, 2] } },
-  { key: "st_kst", ko: "슈퍼트렌드 + KST", a: "슈퍼트렌드", b: "KST", grid: { ...ST_GRID, kst: [0.5, 0.75, 1, 1.5] } },
+  { key: "st_roc", ko: "슈퍼트렌드 + ROC", short: "ST+ROC", a: "슈퍼트렌드", b: "ROC", grid: { ...ST_GRID, roc: [5, 9, 14, 21], ...NOISE } },
+  { key: "st_kvo", ko: "슈퍼트렌드 + 클링거", short: "ST+클링거", a: "슈퍼트렌드", b: "클링거", grid: { ...ST_GRID, kvo: [0.6, 0.8, 1, 1.5], ...NOISE } },
+  { key: "vwma_macd", ko: "VWMA + MACD", short: "VWMA+MACD", a: "VWMA", b: "MACD", grid: { vwma: [10, 20, 50, 100, 200], macd: [0.66, 1, 1.5, 2], ...NOISE } },
+  { key: "st_kst", ko: "슈퍼트렌드 + KST", short: "ST+KST", a: "슈퍼트렌드", b: "KST", grid: { ...ST_GRID, kst: [0.5, 0.75, 1, 1.5], ...NOISE } },
 ];
+export const FLT_KO = ["", "ADX≥20", "EMA200 방향"];
 export const COMBO_BY = Object.fromEntries(COMBOS.map(c => [c.key, c]));
 // 손절·익절·청산 그리드 (레버리지마다 따로 고름)
 export const EXIT_GRID = { k: [1, 1.5, 2, 2.5], rr: [1, 1.5, 2, 2.5, 3], ex: [0, 1, 2] };
@@ -28,11 +31,11 @@ export const EX_KO = ["손절·익절·시간만", "반대 신호에 청산", "�
 
 export function paramText(combo, p) {
   if (!p) return "";
-  const st = p.len ? `ST(${p.len},${p.mult})` : "";
-  if (combo === "st_roc") return `${st} · ROC(${p.roc})`;
-  if (combo === "st_kvo") { const k = kvoLens(p.kvo); return `${st} · 클링거(${k.f},${k.s},${k.g})`; }
-  if (combo === "st_kst") { const k = kstLens(p.kst); return `${st} · KST(${k.r.join("/")}·${k.m.join("/")}·${k.g})`; }
-  if (combo === "vwma_macd") { const m = macdLens(p.macd); return `VWMA(${p.vwma}) · MACD(${m.f},${m.s},${m.g})`; }
+  const st = p.len ? `ST(${p.len},${p.mult})` : "", nz = (p.flt ? " · " + FLT_KO[p.flt] : "") + (p.cf ? " · 1봉 확인" : "");
+  if (combo === "st_roc") return `${st} · ROC(${p.roc})${nz}`;
+  if (combo === "st_kvo") { const k = kvoLens(p.kvo); return `${st} · 클링거(${k.f},${k.s},${k.g})${nz}`; }
+  if (combo === "st_kst") { const k = kstLens(p.kst); return `${st} · KST(${k.r.join("/")}·${k.m.join("/")}·${k.g})${nz}`; }
+  if (combo === "vwma_macd") { const m = macdLens(p.macd); return `VWMA(${p.vwma}) · MACD(${m.f},${m.s},${m.g})${nz}`; }
   return JSON.stringify(p);
 }
 export const exitText = x => x ? `손절 ATR×${x.k} · 손익비 1:${x.rr} · ${EX_KO[x.ex]}` : "";
@@ -79,6 +82,14 @@ function kst(c, s) { const k = kstLens(s), o = F(c.length), parts = k.r.map((r, 
   for (let i = 0; i < c.length; i++) o[i] = parts[0][i] + 2 * parts[1][i] + 3 * parts[2][i] + 4 * parts[3][i];
   return { kst: o, sig: sma(o, k.g) }; }
 function vwma(D, n) { const { c, v } = D, pv = F(c.length); for (let i = 0; i < c.length; i++) pv[i] = c[i] * v[i]; const a = sma(pv, n), b = sma(Float64Array.from(v), n), o = F(c.length); for (let i = 0; i < c.length; i++) o[i] = b[i] > 0 ? a[i] / b[i] : NaN; return o; }
+// ADX(14, 와일더) — 추세 세기
+function adx(D, n = 14) { const { h, l, c } = D, L = c.length, pd = F(L), md = F(L), tr = F(L);
+  for (let i = 1; i < L; i++) { const up = h[i] - h[i - 1], dn = l[i - 1] - l[i]; pd[i] = up > dn && up > 0 ? up : 0; md[i] = dn > up && dn > 0 ? dn : 0; tr[i] = Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])); }
+  const a = rma(tr, n), p = rma(pd, n), m = rma(md, n), dx = F(L);
+  for (let i = 0; i < L; i++) { const P = 100 * p[i] / a[i], M = 100 * m[i] / a[i]; dx[i] = P + M > 0 ? 100 * Math.abs(P - M) / (P + M) : NaN; }
+  return rma(dx, n); }
+const _flt = new WeakMap();
+function fltOf(D) { let f = _flt.get(D); if (!f) _flt.set(D, f = { adx: adx(D, 14), e200: ema(D.c, 200) }); return f; }
 function macd(c, s) { const m = macdLens(s), f = ema(c, m.f), sl = ema(c, m.s), line = F(c.length); for (let i = 0; i < c.length; i++) line[i] = f[i] - sl[i]; return { line, sig: ema(line, m.g) }; }
 
 // 캔들 배열 → 계산용 열 묶음
@@ -94,7 +105,21 @@ export function agg30(cs) { const out = [];
 // 조합 신호 방향 배열: dir[i] = 두 지표가 같은 방향이면 그 방향, 아니면 0 · A[i] = 추세 쪽 지표(슈퍼트렌드/VWMA) 방향
 const _stC = new WeakMap();
 function stOf(D, len, mult) { let m = _stC.get(D); if (!m) _stC.set(D, m = new Map()); const k = len + ":" + mult; if (!m.has(k)) m.set(k, supertrend(D, len, mult)); return m.get(k); }
+const _base = new WeakMap();
 export function comboDir(D, combo, p) {
+  const bk = combo + "|" + ["len", "mult", "roc", "kvo", "kst", "vwma", "macd"].map(k => p[k] ?? "").join(",");
+  let bm = _base.get(D); if (!bm) _base.set(D, bm = new Map());
+  let b = bm.get(bk); if (!b) { b = baseDir(D, combo, p); bm.set(bk, b); }
+  // 노이즈 거르기 → 진입 표시 ef[i]=1 (거른 방향이 i 에서 새로 시작 + cf 봉 동안 유지)
+  const fd = new Int8Array(D.n), ef = new Uint8Array(D.n), cf = p.cf || 0, F2 = p.flt ? fltOf(D) : null;
+  for (let i = 0; i < D.n; i++) { const d = b.dir[i]; if (!d) continue;
+    if (p.flt === 1 && !(F2.adx[i] >= 20)) continue;
+    if (p.flt === 2 && !(d > 0 ? D.c[i] > F2.e200[i] : D.c[i] < F2.e200[i])) continue;
+    fd[i] = d; }
+  for (let i = cf + 1; i < D.n; i++) { const d = fd[i]; if (!d || fd[i - cf - 1] === d) continue; let ok = true; for (let j = 1; j <= cf; j++) if (fd[i - j] !== d) ok = false; if (ok) ef[i] = 1; }
+  return { dir: b.dir, A: b.A, fd, ef };
+}
+function baseDir(D, combo, p) {
   let A, B;
   if (combo === "vwma_macd") { A = sgn(D.c, vwma(D, p.vwma)); const m = macd(D.c, p.macd); B = sgn(m.line, m.sig); }
   else { A = stOf(D, p.len, p.mult);
@@ -104,8 +129,8 @@ export function comboDir(D, combo, p) {
   const dir = new Int8Array(D.n); for (let i = 0; i < D.n; i++) dir[i] = A[i] && A[i] === B[i] ? A[i] : 0;
   return { dir, A };
 }
-export const isEntry = (dir, i) => i > 0 && dir[i] !== 0 && dir[i] !== dir[i - 1];
-function entriesOf(dir) { const out = []; for (let i = 1; i < dir.length; i++) if (isEntry(dir, i)) out.push(i); return Int32Array.from(out); }
+export const isEntry = (sig, i) => i > 0 && sig.ef[i] === 1;   // 진입 방향 = sig.fd[i]
+function entriesOf(ef) { const out = []; for (let i = 1; i < ef.length; i++) if (ef[i]) out.push(i); return Int32Array.from(out); }
 
 // 손절 거리(분수) — ATR×k, 하한 0.25%, 레버리지 상한 넘으면 null(진입 안 함)
 export function slFrac(D, i, k, lev) { const a = D.atr[i]; if (!(a > 0)) return null; let s = k * a / D.c[i]; if (s > slCapOf(lev)) return null; return Math.max(SL_FLOOR, s); }
@@ -114,11 +139,11 @@ export const tpFrac = (s, rr) => rr * (s + FEE) + FEE;   // 순 손익비 rr (�
 // ── 백테스트(다음 봉 시가 진입 · 같은 봉에 손절·익절 둘 다면 손절 먼저 · +1R 본절 · 수수료) ──
 // 반환: 거래 [{i, j, t, side, R, why}]  (R = 손익 ÷ 위험금액, 손절 −1 · 익절 +rr)
 export function simulate(D, sig, x, lev, from = 1, to = D.n) {
-  const { o, h, l, c } = D, { dir, A } = sig, T = [], ent = sig.ent || (sig.ent = entriesOf(dir)); to = Math.min(to, D.n);
+  const { o, h, l, c } = D, { dir, A, fd } = sig, T = [], ent = sig.ent || (sig.ent = entriesOf(sig.ef)); to = Math.min(to, D.n);
   let free = Math.max(1, from);
   for (let q = 0; q < ent.length; q++) {
     const i = ent[q]; if (i < free) continue; if (i >= to - 1) break;
-    const side = dir[i], s = slFrac(D, i, x.k, lev); if (s == null) continue;
+    const side = fd[i], s = slFrac(D, i, x.k, lev); if (s == null) continue;
     const e = o[i + 1], tp = e * (1 + side * tpFrac(s, x.rr)); let sl = e * (1 - side * s), be = false, j = i + 1, px = null, why = "";
     for (; j < to; j++) {
       if (side > 0 ? l[j] <= sl : h[j] >= sl) { px = sl; why = be ? "본절" : "손절"; break; }
@@ -152,7 +177,7 @@ export const stat = T => { const n = T.length, s = T.reduce((a, t) => a + t.R, 0
 export function gridList(grid) { const ks = Object.keys(grid); let out = [{}];
   for (const k of ks) out = out.flatMap(p => grid[k].map(v => ({ ...p, [k]: v }))); return out; }
 export function neighbors(grid, p) { const out = [];
-  for (const k of Object.keys(grid)) { const a = grid[k], j = a.indexOf(p[k]); for (const d of [-1, 1]) if (a[j + d] !== undefined) out.push({ ...p, [k]: a[j + d] }); }
+  for (const k of Object.keys(grid)) { if (CATEGORICAL.has(k)) continue; const a = grid[k], j = a.indexOf(p[k]); for (const d of [-1, 1]) if (a[j + d] !== undefined) out.push({ ...p, [k]: a[j + d] }); }
   return out; }
 export const pkey = p => Object.keys(p).sort().map(k => k + "=" + p[k]).join(",");
 // 이웃 평균(자기 2배 가중) — 한 점만 튀는 값(우연)보다 주변까지 좋은 '평평한 고원'을 고른다

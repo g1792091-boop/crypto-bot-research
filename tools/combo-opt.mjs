@@ -28,22 +28,25 @@ function evalSet(T, end) {
     yr: f.map(x => [x.n, r3(x.mean)]), lb };
 }
 
+const ONLY = process.env.COINS ? process.env.COINS.split(",") : null;   // 빠른 시험: COINS=BTCUSDT
+const BEST = {}, BEST_LEVS = [30, 40, 50];
 for (const [ko, sym] of CB.COINS) {
+  if (ONLY && !ONLY.includes(sym)) continue;
   const c15 = JSON.parse(fs.readFileSync(`${DIR}/kl_${sym}_15m.json`, "utf8")), c60 = JSON.parse(fs.readFileSync(`${DIR}/kl_${sym}_1h.json`, "utf8"));
   const DATA = { "15": c15, "30": CB.agg30(c15), "60": c60 };
   out[sym] = {};
   for (const tf of CB.TFS) {
-    const D = CB.cols(DATA[tf]), end = D.t[D.n - 1], refLev = CB.LEVS[tf][0];
+    const D = CB.cols(DATA[tf]), end = D.t[D.n - 1];
     out[sym][tf] = {};
     for (const C of CB.COMBOS) {
-      // ① 지표 값 그리드 (기준 청산 · 가장 느슨한 레버리지)
-      const G = CB.gridList(C.grid), sc = new Map(), sigs = new Map();
-      for (const p of G) { const sig = CB.comboDir(D, C.key, p), T = CB.simulate(D, sig, REF, refLev), f = CB.foldStats(T, B);
-        sc.set(CB.pkey(p), { p, ...CB.robust(f.slice(0, 4)) }); sigs.set(CB.pkey(p), sig); }
-      const pl = CB.plateau(C.grid, sc), ind = [...pl.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => ({ p: sc.get(k).p, plat: r3(v), score: r3(sc.get(k).score), n: sc.get(k).n }));
-      const K = G.length * EXITS.length;   // 이 칸에서 시험한 경우의 수(운 보정용)
-      const levs = {};
+      const G = CB.gridList(C.grid), K = G.length * EXITS.length, sigs = new Map(), levs = {};   // K = 이 칸에서 시험한 경우의 수(운 보정용)
+      for (const p of G) sigs.set(CB.pkey(p), CB.comboDir(D, C.key, p));
       for (const lev of CB.LEVS[tf]) {
+        // ① 지표 값 + 노이즈 거르기 — 이 레버리지의 손절 상한(0.4/L) 그대로, 기준 청산으로
+        const sc = new Map();
+        for (const p of G) { const T = CB.simulate(D, sigs.get(CB.pkey(p)), REF, lev), f = CB.foldStats(T, B); sc.set(CB.pkey(p), { p, ...CB.robust(f.slice(0, 4)) }); }
+        const pl = CB.plateau(C.grid, sc), ind = [...pl.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => ({ p: sc.get(k).p, plat: r3(v) }));
+        // ② 상위 3개마다 손절(ATR×k)·손익비·청산 방식
         const cands = [];
         for (const it of ind) {
           const sig = sigs.get(CB.pkey(it.p)), es = new Map(), res = new Map();
@@ -57,17 +60,27 @@ for (const [ko, sym] of CB.COINS) {
         cands.sort((a, b) => b.plat - a.plat);
         levs[lev] = cands;
         const c = cands[0];
-        summary.push({ coin: ko, tf, combo: C.key, lev, p: CB.paramText(C.key, c.p), x: CB.exitText(c.x), tr: c.tr.mean, trN: c.tr.n, ho: c.ho.mean, hoN: c.ho.n, lb: c.lb.map((l, i) => `${i + 1}y ${l[1]}(${l[0]})`).join(" "), pass: !!c.pass, luck: !!c.luck });
+        summary.push({ coin: ko, sym, tf, combo: C.key, lev, plat: c.plat, p: CB.paramText(C.key, c.p), x: CB.exitText(c.x), tr: c.tr.mean, trN: c.tr.n, ho: c.ho.mean, hoN: c.ho.n, lb: c.lb.map((l, i) => `${i + 1}y ${l[1]}(${l[0]})`).join(" "), pass: !!c.pass, luck: !!c.luck });
       }
-      out[sym][tf][C.key] = { ind, levs, K };
+      out[sym][tf][C.key] = { levs, K };
       process.stdout.write(`${ko} ${tf} ${C.key} ✓ (${Math.round((Date.now() - t0) / 1000)}s)\n`);
     }
   }
+  // ⭐ 코인별 대표: 레버리지마다 (조합 4 × 시간봉 3) 중 '앞 4년 학습 점수' 1위 — 고를 때 검증 1년은 안 봄. 운 보정은 12칸 × K 로 더 엄하게.
+  BEST[sym] = {};
+  for (const lev of BEST_LEVS) {
+    const rows = summary.filter(r => r.sym === sym && r.lev === lev).sort((a, b) => b.plat - a.plat), r = rows[0]; if (!r) continue;
+    const c = out[sym][r.tf][r.combo].levs[lev][0], K = out[sym][r.tf][r.combo].K * rows.length, bar = c.tr.n > 1 ? c.tr.sd / Math.sqrt(c.tr.n) * expMaxZ(K) : 9;
+    BEST[sym][lev] = { c: r.combo, tf: r.tf, plat: r.plat, pass: c.pass, luck: c.tr.mean <= bar ? 1 : 0, of: rows.length };
+  }
 }
 const meta = { made: new Date().toISOString(), from: new Date(START).toISOString().slice(0, 10), folds: B.slice(0, 5).map(t => new Date(t).toISOString().slice(0, 10)), ref: REF, exits: CB.EXIT_GRID,
-  note: "앞 4년 학습(연도별 꾸준함 + 이웃 평균) → 마지막 1년 검증. 후보 9개(지표 3 × 청산 3)를 앱이 라운드마다 최근 데이터·실시간 데모로 다시 순위." };
-fs.writeFileSync(OUT, `// 자동 생성: node tools/combo-opt.mjs (${meta.made}) — 손으로 고치지 마세요\nexport const META = ${JSON.stringify(meta)};\nexport const OPT = ${JSON.stringify(out)};\n`);
+  note: "레버리지마다 따로: 지표 값+노이즈 거르기(ADX·EMA200·1봉 확인)를 그 레버리지의 손절 상한으로 고르고 → 손절·익절·청산. 앞 4년 학습(연도별 꾸준함 + 이웃 평균) → 마지막 1년 검증. 후보 9개를 앱이 라운드마다 다시 순위. BEST = 코인·레버리지별 대표(학습 점수 1위)." };
+fs.writeFileSync(OUT, `// 자동 생성: node tools/combo-opt.mjs (${meta.made}) — 손으로 고치지 마세요\nexport const META = ${JSON.stringify(meta)};\nexport const OPT = ${JSON.stringify(out)};\nexport const BEST = ${JSON.stringify(BEST)};\n`);
 fs.writeFileSync("data/combo-opt-summary.json", JSON.stringify(summary, null, 0).replace(/\},\{/g, "},\n{"));
 const pass = summary.filter(s => s.pass), np = summary.filter(s => s.pass && !s.luck);
 console.log(`\n칸 ${summary.length}개 · 통과 ${pass.length} · 통과+운 범위 밖 ${np.length} · ${Math.round((Date.now() - t0) / 1000)}초`);
+console.log("\n⭐ 코인별 대표(30·40·50배, 학습 점수 1위 → 검증 1년):");
+for (const [sym, m] of Object.entries(BEST)) for (const [lev, b] of Object.entries(m)) { const c = out[sym][b.tf][b.c].levs[lev][0];
+  console.log(`${sym.replace("USDT", "")} ${lev}x | ${b.c} ${b.tf}분 | ${CB.paramText(b.c, c.p)} | ${CB.exitText(c.x)} | 학습 ${c.tr.mean}R(${c.tr.n}) 검증 ${c.ho.mean}R(${c.ho.n}) 1~5년 ${c.lb.map(l => l[1]).join("/")} ${b.pass ? "통과" : "실패"}${b.luck ? "·운범위" : ""}`); }
 for (const s of summary.filter(s => s.pass).sort((a, b) => b.ho - a.ho).slice(0, 30)) console.log(`${s.coin} ${s.tf} ${s.combo} ${s.lev}x | ${s.p} | ${s.x} | 학습 ${s.tr}R(${s.trN}) 검증 ${s.ho}R(${s.hoN})${s.luck ? " 운범위" : ""}`);

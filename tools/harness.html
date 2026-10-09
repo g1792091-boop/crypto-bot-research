@@ -85,7 +85,11 @@ try {
     const card = document.querySelector("[data-lab]"); out.card = card ? card.innerText.slice(0, 1400) : "카드 없음";
     document.querySelector('[data-labc="st_kst"]')?.click(); await new Promise(r => setTimeout(r, 300)); out.tabKst = document.querySelector("[data-lab] .lab-c.on")?.innerText || "탭 없음";
     out.lb = [...document.querySelectorAll("#ndesk .nrow.trd")].map(e => e.innerText.replace(/\s+/g, " ")).filter(t => /🧪/.test(t)).slice(0, 4);
-    out.feed = fb.slice(0, 10); (await import("../gh-coin/neural.js")).stopAuto(); document.getElementById("ndesk")?.remove(); LAB.resetLab(); localStorage.removeItem("coin:combolab"); }
+    out.best = st.best.length; out.bestSample = st.best.slice(0, 3).map(b => `${b.ko} ${b.lev}x ${b.cshort} ${b.tf} | ${b.p} | ${b.x} | 검 ${b.ho.mean}(${b.ho.n}) ${b.pass ? "통과" : "실패"}`);
+    out.bestCard = document.querySelector("[data-lab] .nsub")?.innerText || "대표 표 없음";
+    // ⭐ 대표만: 새로 시작해서 한 주기 → 새 포지션이 대표 칸에만 생기는지
+    (await import("../gh-coin/neural.js")).stopAuto(); LAB.resetLab(); LAB.setScope("best"); await LAB.cycle({ models, feed }); const so = LAB.labState().open; out.scopeBest = { open: so.length, notStar: so.filter(o => !o.star).length };
+    out.feed = fb.slice(0, 10); document.getElementById("ndesk")?.remove(); LAB.resetLab(); localStorage.removeItem("coin:combolab"); }
   if (q === "phil") {   // 🦫 예측 채점·정책: AI 자율 진입(예측 기록) → 손절로 청산(채점) · 정책 적용(범위 안/밖)
     const N = await import("../gh-coin/neural.js"), S = N.load(); for (const k of Object.keys(S.pos)) delete S.pos[k]; S.queue = []; S.halt = 0; S.trades = S.trades.filter(t => t.R >= 0); await N.step();
     const sym = Object.keys(S.regime).find(k => S.regime[k].htf) || "BTCUSDT", rg = S.regime[sym], px = S.dec[sym].price;
