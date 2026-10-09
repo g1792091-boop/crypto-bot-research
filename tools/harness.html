@@ -66,6 +66,52 @@ try {
     const sym = Object.keys(S.regime).find(k => S.regime[k].htf) || "BTCUSDT", rg = S.regime[sym], ko = sym.replace("USDT", ""), model = "qwen2.5:3b";
     out.try = { sym, htf: rg.htf, ok: N.aiAutoTry({ name: model, ko, sym, bias: rg.htf || 1, conf: 80, note: "시험 읽기", price: S.dec[sym].price, rg }) };
     out.last = N.state().aiAuto.last; out.open = Object.values(S.pos).map(p => `${p.ko} ${p.side > 0 ? "롱" : "숏"} ${p.lev}x 진입자=${p.trader} ${p.name} 리스크 ${p.riskPct}% sl ${p.sl} tp ${p.tp}`); out.feed = S.feed.slice(0, 4).map(f => f.text.slice(0, 200)); }
+  if (q === "optw") {   // 🔬 정확성: 앱 작업자(optworker.js)에 도구와 같은 XRP 5년 데이터·같은 구간을 넣으면 → 앱에 들어 있는 5년 값(combo-opt.js)과 똑같아야
+    const OPTF = await import("../gh-coin/lib/combo-opt.js"), sym = "XRPUSDT", t0 = performance.now();
+    const col = rows => { const n = rows.length, C = { t: new Float64Array(n), o: new Float64Array(n), h: new Float64Array(n), l: new Float64Array(n), c: new Float64Array(n), v: new Float64Array(n) }; rows.forEach((r, i) => { C.t[i] = r.t; C.o[i] = r.o; C.h[i] = r.h; C.l[i] = r.l; C.c[i] = r.c; C.v[i] = r.v; }); return C; };
+    const k15 = col(await (await fetch("../data/oos5y/kl_" + sym + "_15m.json")).json()), k60 = col(await (await fetch("../data/oos5y/kl_" + sym + "_1h.json")).json());
+    const Y = 365.25 * 864e5, S0 = Date.UTC(2021, 9, 1), B = [S0, S0 + Y, S0 + 2 * Y, S0 + 3 * Y, S0 + 4 * Y, Infinity];
+    const w = new Worker(new URL("../gh-coin/lib/optworker.js", location.href), { type: "module" }); let nProg = 0;
+    const res = await new Promise((ok, bad) => { w.onmessage = ev => { const m = ev.data; if (m.type === "prog") { nProg++; document.title = "RUN " + Math.round(m.f * 100) + "%"; } else if (m.type === "done") ok(m); else bad(new Error(m.msg)); }; w.onerror = e => bad(new Error(e.message));
+      w.postMessage({ k15, k60, tfs: ["15", "30", "60"], opt: { sym, ko: "XRP", B, span: Y, levs: null, combos: null, bestLevs: [30, 40, 50] } }); });
+    w.terminate();
+    out.ms = Math.round(performance.now() - t0); out.prog = nProg; out.bars = res.bars;
+    out.optSame = JSON.stringify(res.r.out) === JSON.stringify(OPTF.OPT[sym]); out.bestSame = JSON.stringify(res.r.best) === JSON.stringify(OPTF.BEST[sym]);
+    if (!out.optSame) { const a1 = OPTF.OPT[sym], b1 = res.r.out; out.diff = []; for (const tf of Object.keys(a1)) for (const c of Object.keys(a1[tf])) for (const lev of Object.keys(a1[tf][c].levs)) if (JSON.stringify(a1[tf][c].levs[lev]) !== JSON.stringify(b1[tf]?.[c]?.levs?.[lev])) out.diff.push(tf + "|" + c + "|" + lev); out.diff = out.diff.slice(0, 8); }
+    out.best = res.r.best; }
+  if (q === "optshot") {   // 🔬 창 화면 보기(스크린샷용): ETH · 1년 · 1시간만 → 결과 표
+    const UI = await import("../gh-coin/optlab-ui.js"); UI.openOptLab({}); const R = () => document.getElementById("optlab");
+    R().querySelector('[data-olcoin="ETHUSDT"]').click(); R().querySelector('[data-olpre="365"]').click();
+    const tf = R().querySelector('[data-oltf="15"]'); tf.checked = false; tf.dispatchEvent(new Event("change", { bubbles: true }));
+    const t3 = R().querySelector('[data-oltf="30"]'); t3.checked = false; t3.dispatchEvent(new Event("change", { bubbles: true }));
+    R().querySelector("[data-olgo]").click(); const t = Date.now(); while (Date.now() - t < 200e3 && !/끝|❌/.test(R().querySelector("[data-olprog]")?.textContent || "")) await new Promise(r => setTimeout(r, 500));
+    out.prog = R().querySelector("[data-olprog]").textContent; R().scrollTop = 0;
+    document.title = "DONE"; await new Promise(r => setTimeout(r, 60e3)); }
+  if (q === "optui") {   // 🔬 창 끝까지: 열기 → ETH · 3개월 · 실행(실제 바이낸스 캔들) → 결과 표 → 연구소 적용 → 새 코인(ADA) 적용·해제
+    localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom");
+    const UI = await import("../gh-coin/optlab-ui.js"), OL = await import("../gh-coin/optlab.js"), LAB = await import("../gh-coin/combolab.js");
+    const wait = async (f, ms = 240e3) => { const t = Date.now(); while (Date.now() - t < ms) { if (f()) return true; await new Promise(r => setTimeout(r, 500)); } return false; };
+    UI.openOptLab({}); const R = () => document.getElementById("optlab");
+    R().querySelector('[data-olcoin="ETHUSDT"]').click(); R().querySelector('[data-olpre="91"]').click();
+    out.est = R().querySelector("[data-olest]").innerText;
+    const t0 = Date.now(); R().querySelector("[data-olgo]").click();
+    out.done = await wait(() => /끝|❌/.test(R().querySelector("[data-olprog]")?.textContent || "")); out.sec = Math.round((Date.now() - t0) / 1000);
+    out.progText = R().querySelector("[data-olprog]").textContent;
+    out.resHead = (R().querySelector("[data-olres] .ol-sec")?.innerText || "").slice(0, 300); out.sum = R().querySelector("[data-olres] .ol-sum")?.innerText || "";
+    out.bestRows = [...R().querySelectorAll("[data-olres] .ol-t")[0]?.querySelectorAll("tr") || []].slice(1).map(tr => tr.innerText.replace(/\s+/g, " ").slice(0, 160));
+    out.runs = OL.runs().length;
+    R().querySelector("[data-olapply]")?.click(); await new Promise(r => setTimeout(r, 300));
+    out.applyMsg = R().querySelector("[data-olprog]").textContent; out.applied = OL.applied().map(u => u.ko + " " + u.spanD + "일");
+    let st = LAB.labState(); const g = st.grid.st_kst.ETHUSDT; out.ethLanes = Object.entries(g).map(([k, v]) => k + (v?.cust ? "🔬" : "") + (v?.star ? "⭐" : "")).join(" "); out.ethBest = st.best.filter(b => b.sym === "ETHUSDT").map(b => `${b.lev}x ${b.cshort} ${b.tf} ${b.cust ? "🔬" : ""} 검 ${b.ho.mean}(${b.ho.n}) 구간${b.spanD}일`);
+    // 새 코인: ADA 60일 · 1시간 · 30배 · ST+ROC 만 (창 없이 함수로)
+    const ra = await OL.run({ sym: "ada", start: Date.now() - 60 * 864e5, end: Date.now(), tfs: ["60"], levs: [30], combos: ["st_roc"] }, () => {});
+    out.ada = { lanes: OL.apply(ra).lanes, best: ra.best, n: ra.summary.length, note: ra.note };
+    st = LAB.labState(); out.coinsAfter = st.coins.map(c => c[0]).join(","); out.lanesAfter = st.lanes;
+    await LAB.cycle({ models: [], feed: () => {} }); out.adaCycle = Object.keys(LAB.load().lanes).filter(k => k.includes("ADAUSDT")).length;
+    OL.unapply("ADAUSDT"); st = LAB.labState(); out.coinsRemoved = st.coins.map(c => c[0]).join(","); out.customLeft = OL.applied().map(u => u.ko + (u.off ? "(해제대기)" : ""));
+    // 없는 코인
+    try { await OL.run({ sym: "zzzqqq", start: Date.now() - 30 * 864e5, end: Date.now(), tfs: ["60"], levs: [30], combos: ["st_roc"] }, () => {}); out.bad = "오류 안 남"; } catch (e) { out.bad = e.message; }
+    UI.closeOptLab(); OL.unapply("ETHUSDT"); localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom"); }
   if (q === "lab") {   // 🧪 조합 연구소: 실제 시세로 한 주기 → 가짜 포지션 손절 청산 → 라운드 5번 재채점(최종값) → 화면 카드
     const LAB = await import("../gh-coin/combolab.js"), AG = await import("../nuri-ai/agent.js"); localStorage.removeItem("coin:combolab");
     const models = [{ id: "ollama", model: "qwen2.5:3b" }, { id: "ollama", model: "llama3.2:3b" }, { id: "ollama", model: "gemma2:2b" }], fb = [], feed = t => fb.push(t);
@@ -85,6 +131,8 @@ try {
     const card = document.querySelector("[data-lab]"); out.card = card ? card.innerText.slice(0, 1400) : "카드 없음";
     document.querySelector('[data-labc="st_kst"]')?.click(); await new Promise(r => setTimeout(r, 300)); out.tabKst = document.querySelector("[data-lab] .lab-c.on")?.innerText || "탭 없음";
     out.lb = [...document.querySelectorAll("#ndesk .nrow.trd")].map(e => e.innerText.replace(/\s+/g, " ")).filter(t => /🧪/.test(t)).slice(0, 4);
+    document.querySelector('#ndesk .nd-top [data-optlab]')?.click(); await new Promise(r => setTimeout(r, 1200)); out.optOpenTop = !!document.getElementById("optlab"); document.getElementById("optlab")?.remove();
+    document.querySelector('#ndesk [data-lab] [data-optlab]')?.click(); await new Promise(r => setTimeout(r, 800)); out.optOpenCard = !!document.getElementById("optlab"); document.getElementById("optlab")?.remove();
     out.best = st.best.length; out.bestSample = st.best.slice(0, 3).map(b => `${b.ko} ${b.lev}x ${b.cshort} ${b.tf} | ${b.p} | ${b.x} | 검 ${b.ho.mean}(${b.ho.n}) ${b.pass ? "통과" : "실패"}`);
     out.bestCard = document.querySelector("[data-lab] .nsub")?.innerText || "대표 표 없음";
     // ⭐ 대표만: 새로 시작해서 한 주기 → 새 포지션이 대표 칸에만 생기는지

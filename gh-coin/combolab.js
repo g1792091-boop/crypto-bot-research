@@ -15,8 +15,16 @@ let L = null, busy = false;
 const MK = {};   // `${sym}|${tf}` → { last, D, sigs: Map }
 const lk = (c, sym, tf, lev) => `${c}|${sym}|${tf}|${lev}`;
 const shortMd = m => String(m || "").split("/").pop().replace(/-instruct|-chat/i, "").slice(0, 18);
-const KO = Object.fromEntries(CB.COINS.map(([ko, s]) => [s, ko]));
-export const LANES = CB.COMBOS.flatMap(c => CB.COINS.flatMap(([, sym]) => CB.TFS.flatMap(tf => CB.LEVS[tf].map(lev => ({ c: c.key, sym, tf, lev, k: lk(c.key, sym, tf, lev) })))));
+// 🔬 직접 최적화 값(optlab.js '지표 최적화 백테스트' 창에서 적용): 그 코인은 기본 5년 값 대신 이 값. 6코인 밖 코인이면 칸이 새로 생김.
+const CKEY = "coin:combolab:custom", BASE = new Set(CB.COINS.map(c => c[1]));
+let CUST = null, _lanes = null, _lk = "";
+function cust() { if (!CUST) { try { CUST = JSON.parse(localStorage.getItem(CKEY)) || {}; } catch (e) { CUST = {}; } } return CUST; }
+function saveCust() { localStorage.setItem(CKEY, JSON.stringify(CUST)); }   // 저장 공간이 모자라면 오류를 그대로 올림(화면에 표시)
+export const coinsAll = () => [...CB.COINS, ...Object.entries(cust()).filter(([s]) => !BASE.has(s)).map(([s, u]) => [u.ko || s.replace(/USDT$/, ""), s])];
+const koOf = sym => (coinsAll().find(c => c[1] === sym) || [sym.replace(/USDT$/, "")])[0];
+export function lanesAll() { const cs = coinsAll(), key = cs.map(c => c[1]).join(","); if (_lanes && _lk === key) return _lanes; _lk = key;
+  return (_lanes = CB.COMBOS.flatMap(c => cs.flatMap(([, sym]) => CB.TFS.flatMap(tf => CB.LEVS[tf].map(lev => ({ c: c.key, sym, tf, lev, k: lk(c.key, sym, tf, lev) })))))); }
+const day = t => new Date(t).toISOString().slice(0, 10);
 
 function blank() { return { on: true, scope: "all", round: 1, t0: Date.now(), roundAt: Date.now(), roundH: 24, own: {}, sel: {}, lanes: {}, trades: [], log: [], reviews: {}, hist: {}, final: null, made: META.made }; }
 export function load() {
@@ -28,10 +36,12 @@ export function load() {
   return L;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...L, trades: L.trades.slice(0, 400), log: L.log.slice(0, 60) })); } catch (e) {} }
-const cands = (c, sym, tf, lev) => OPT?.[sym]?.[tf]?.[c]?.levs?.[lev] || [];
+const cands = (c, sym, tf, lev) => { const u = cust()[sym], a = u?.out?.[tf]?.[c]?.levs?.[lev]; if (a) return a; return u && !BASE.has(sym) ? [] : OPT?.[sym]?.[tf]?.[c]?.levs?.[lev] || []; };
+const isCustom = x => !!cust()[x.sym]?.out?.[x.tf]?.[x.c]?.levs?.[x.lev];
+const bestOf = (sym, lev) => cust()[sym]?.best?.[lev] || (BASE.has(sym) ? BEST?.[sym]?.[lev] : null);
 const lane = k => L.lanes[k] || (L.lanes[k] = { n: 0, w: 0, R: 0, pnl: 0, pos: null, lastSig: 0, skip: 0 });
 const candOf = x => { const C = cands(x.c, x.sym, x.tf, x.lev); return C[L.sel[x.k] ?? 0] || C[0] || null; };
-const isStar = x => { const b = BEST?.[x.sym]?.[x.lev]; return !!b && b.c === x.c && b.tf === x.tf; };   // ⭐ 코인·레버리지별 대표 칸
+const isStar = x => { const b = bestOf(x.sym, x.lev); return !!b && b.c === x.c && b.tf === x.tf; };   // ⭐ 코인·레버리지별 대표 칸
 
 // 🤝 담당 배정: 연결된 모델 순서대로 조합 하나씩(모델이 4개보다 적으면 돌아가며 둘 이상 맡음). 모델이 빠지면 다시 배정.
 function assign(models) {
@@ -58,8 +68,8 @@ function sigOf(M, c, p) { const key = c + "|" + CB.pkey(p); if (!M.sigs.has(key)
 function close(x, P, px, why, now, feed) {
   const s = P.s, R = ((px - P.e) / P.e * P.side - CB.FEE) / (s + CB.FEE), ln = lane(x.k), pnl = +(R * P.risk).toFixed(2);
   ln.n++; if (R > 0) ln.w++; ln.R = +(ln.R + R).toFixed(3); ln.pnl = +(ln.pnl + pnl).toFixed(2); ln.pos = null;
-  L.trades.unshift({ k: x.k, c: x.c, sym: x.sym, ko: KO[x.sym], tf: x.tf, lev: x.lev, side: P.side, e: P.e, x: px, R: +R.toFixed(3), pnl, why, t0: P.t, t1: now, round: P.round, cand: P.cand, owner: L.own[x.c] || "" });
-  if (Math.abs(R) >= 1.5 || why === "익절") feed?.(`🧪 [${shortMd(L.own[x.c])}] ${CB.COMBO_BY[x.c].ko} ${KO[x.sym]} ${CB.TF_KO[x.tf]} ${x.lev}x ${P.side > 0 ? "롱" : "숏"} ${why} ${R >= 0 ? "+" : ""}${R.toFixed(2)}R`);
+  L.trades.unshift({ k: x.k, c: x.c, sym: x.sym, ko: koOf(x.sym), tf: x.tf, lev: x.lev, side: P.side, e: P.e, x: px, R: +R.toFixed(3), pnl, why, t0: P.t, t1: now, round: P.round, cand: P.cand, owner: L.own[x.c] || "" });
+  if (Math.abs(R) >= 1.5 || why === "익절") feed?.(`🧪 [${shortMd(L.own[x.c])}] ${CB.COMBO_BY[x.c].ko} ${koOf(x.sym)} ${CB.TF_KO[x.tf]} ${x.lev}x ${P.side > 0 ? "롱" : "숏"} ${why} ${R >= 0 ? "+" : ""}${R.toFixed(2)}R`);
 }
 
 // 칸 하나: ① 15분봉 고가·저가로 손절·익절(같은 봉이면 손절 먼저) → ② 그 칸 시간봉 마감에서 청산 신호·시간 → ③ 새 신호면 지금 가격으로 진입
@@ -91,7 +101,7 @@ function laneStep(x, M, c15, px, now, feed) {
     }
   }
   // 새 신호: 마지막 마감봉에서 두 지표가 같은 방향이 됨 + 그 다음 봉이 아직 진행 중일 때만(늦게 본 신호는 버림)
-  if (!ln.pos && li > 0 && D.t[li] > ln.lastSig && CB.isEntry(sig, li) && now < D.t[li] + 2 * CB.TF_MS[x.tf] && (L.scope !== "best" || isStar(x))) {
+  if (!ln.pos && li > 0 && D.t[li] > ln.lastSig && CB.isEntry(sig, li) && now < D.t[li] + 2 * CB.TF_MS[x.tf] && (L.scope !== "best" || isStar(x)) && !cust()[x.sym]?.off) {
     ln.lastSig = D.t[li];
     const side = sig.fd[li], s = CB.slFrac(D, li, cd.x.k, x.lev);
     if (s == null) { ln.skip++; return; }   // ATR 손절이 이 레버리지의 손절 상한(청산거리 40%)보다 넓음 → 진입 안 함
@@ -104,7 +114,7 @@ function laneStep(x, M, c15, px, now, feed) {
 // 라운드 끝: 칸마다 후보 9개를 다시 채점 → (1~4라운드) 다음 라운드 값 고르기 · (5라운드) 다섯 번 평균이 가장 좋은 값 = 최종
 function rescore(now, feed) {
   const r = L.round, changes = [];
-  for (const x of LANES) {
+  for (const x of lanesAll()) {
     const C = cands(x.c, x.sym, x.tf, x.lev), M = MK[x.sym + "|" + x.tf]; if (!C.length || !M?.D?.n) continue;
     const cur = L.sel[x.k] ?? 0, H = L.hist[x.k] || (L.hist[x.k] = C.map(() => ({ s: 0, k: 0 })));
     const live = L.trades.filter(t => t.k === x.k && t.round === r && t.cand === cur), lm = live.length ? live.reduce((a, t) => a + t.R, 0) / live.length : 0;
@@ -123,7 +133,7 @@ function rescore(now, feed) {
     if (best !== cur) changes.push(x.k);
     L.sel[x.k] = best;
   }
-  L.log.unshift({ t: now, round: r, changed: changes.length, text: r >= ROUNDS ? `5라운드 끝 — 칸 ${LANES.length}개 최종 커스텀 최적값 확정(다섯 번 평균 1위) · 바뀐 칸 ${changes.length}개` : `${r}라운드 끝 — 후보 다시 채점(앞 4년 학습 점수 + 최근 ${BARS}봉 백테스트 + 이번 라운드 실시간, 건수만큼 가중) · 값이 바뀐 칸 ${changes.length}개` });
+  L.log.unshift({ t: now, round: r, changed: changes.length, text: r >= ROUNDS ? `5라운드 끝 — 칸 ${lanesAll().length}개 최종 커스텀 최적값 확정(다섯 번 평균 1위) · 바뀐 칸 ${changes.length}개` : `${r}라운드 끝 — 후보 다시 채점(앞 4년 학습 점수 + 최근 ${BARS}봉 백테스트 + 이번 라운드 실시간, 건수만큼 가중) · 값이 바뀐 칸 ${changes.length}개` });
   if (r >= ROUNDS) L.final = { t: now, sel: { ...L.sel } };
   feed?.(`🧪 조합 연구소 ${L.log[0].text}`);
   L.round = Math.min(ROUNDS + 1, r + 1); L.roundAt = now;
@@ -135,7 +145,7 @@ function comboStat(c, round = null) { const T = L.trades.filter(t => t.c === c &
 async function reviewRound(r, feed, tg = {}) {
   for (const C of CB.COMBOS) {
     const m = L.own[C.key], target = tg[m]; if (!m || !target) continue;
-    const st = comboStat(C.key, r), by = CB.COINS.map(([ko, sym]) => { const T = L.trades.filter(t => t.c === C.key && t.sym === sym && t.round === r); return `${ko} ${T.length}건 ${T.reduce((a, t) => a + t.R, 0).toFixed(1)}R`; }).join(" · ");
+    const st = comboStat(C.key, r), by = coinsAll().map(([ko, sym]) => { const T = L.trades.filter(t => t.c === C.key && t.sym === sym && t.round === r); return `${ko} ${T.length}건 ${T.reduce((a, t) => a + t.R, 0).toFixed(1)}R`; }).join(" · ");
     const bt = CB.COINS.map(([ko, sym]) => { const c = cands(C.key, sym, "60", 20)[L.sel[lk(C.key, sym, "60", 20)] ?? 0]; return c ? `${ko} 검증1년 ${c.ho.mean}R` : ""; }).filter(Boolean).join(" · ");
     let raw = "";
     try { await brainStream({ target, fallback: false, role: "fast", maxTokens: 220, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {},
@@ -153,11 +163,12 @@ export async function cycle({ models = [], feed = null } = {}) {
   try {
     if (assign(models.map(m => m.model))) feed?.(`🧪 조합 연구소 담당: ${CB.COMBOS.map(c => `${c.ko}=${shortMd(L.own[c.key])}`).join(" · ")}`);
     const now = Date.now();
-    for (const [, sym] of CB.COINS) {
+    for (const [, sym] of coinsAll()) {
       let B; try { B = await bars(sym); } catch (e) { continue; }
       const c15 = B["15"], px = c15.at(-1)?.c; if (!px) continue;
-      for (const tf of CB.TFS) { const M = market(sym, tf, B[tf], now); for (const x of LANES) if (x.sym === sym && x.tf === tf) laneStep(x, M, c15, px, now, feed); }
+      for (const tf of CB.TFS) { const M = market(sym, tf, B[tf], now); for (const x of lanesAll()) if (x.sym === sym && x.tf === tf) laneStep(x, M, c15, px, now, feed); }
     }
+    for (const [s, u] of Object.entries(cust())) if (u.off && !lanesAll().some(x => x.sym === s && L.lanes[x.k]?.pos)) { delete CUST[s]; try { saveCust(); } catch (e) {} }   // 해제한 추가 코인: 보유분이 다 끝나면 칸 삭제
     if (L.round <= ROUNDS && now >= L.roundAt + L.roundH * 3600e3) { const r = L.round; rescore(now, feed); save(); reviewRound(r, feed, tg).catch(() => {}); }
   } finally { busy = false; save(); }
 }
@@ -165,25 +176,47 @@ export async function cycle({ models = [], feed = null } = {}) {
 export function setScope(sc) { load(); L.scope = sc === "best" ? "best" : "all"; save(); return L.scope; }   // 대표만: 다른 칸은 새 진입만 멈춤(보유분은 끝까지 관리)
 export function setOn(on) { load(); L.on = !!on; save(); return L.on; }
 export function setRoundH(h) { load(); L.roundH = Math.max(1, Math.min(168, +h || 24)); save(); return L.roundH; }
-export function restartRounds() { load(); L.round = 1; L.roundAt = Date.now(); L.hist = {}; L.final = null; L.sel = {}; L.log.unshift({ t: Date.now(), round: 0, text: "라운드 처음부터(값은 5년 백테스트 1위로 되돌림 · 거래 기록은 유지)" }); save(); }
+export function restartRounds() { load(); L.round = 1; L.roundAt = Date.now(); L.hist = {}; L.final = null; L.sel = {}; L.log.unshift({ t: Date.now(), round: 0, text: "라운드 처음부터(값은 후보 1위로 되돌림 · 거래 기록은 유지)" }); save(); }
+
+// 🔬 직접 최적화 결과 적용 / 해제 (optlab.js)
+export function applyCustom(r) {
+  load(); const sym = r?.sym; if (!sym || !r.out) throw new Error("적용할 결과가 없습니다");
+  const prev = cust()[sym];
+  CUST[sym] = { id: r.id, sym, ko: r.ko, start: r.start, end: r.end, made: r.made, span: r.span, tfs: r.tfs, levs: r.levs, combos: r.combos, out: r.out, best: r.best, at: Date.now() };
+  try { saveCust(); } catch (e) { if (prev) CUST[sym] = prev; else delete CUST[sym]; throw new Error("저장 공간이 부족합니다 — 다른 코인의 직접 최적화 적용을 해제한 뒤 다시 하세요"); }
+  let n = 0; for (const x of lanesAll()) if (x.sym === sym) { delete L.sel[x.k]; delete L.hist[x.k]; if (isCustom(x)) n++; }
+  L.log.unshift({ t: Date.now(), round: L.round, text: `🔬 ${r.ko} 직접 최적화 값 적용(${day(r.start)}~${day(r.end)} · 칸 ${n}개)${BASE.has(sym) ? "" : " — 새 코인 칸 추가"}` });
+  save(); return { lanes: n };
+}
+export function removeCustom(sym) {
+  load(); const u = cust()[sym]; if (!u) return false;
+  const mine = lanesAll().filter(x => x.sym === sym), open = mine.some(x => L.lanes[x.k]?.pos);
+  if (!BASE.has(sym) && open) u.off = true; else delete CUST[sym];
+  try { saveCust(); } catch (e) {}
+  for (const x of mine) { delete L.sel[x.k]; delete L.hist[x.k]; }
+  L.log.unshift({ t: Date.now(), round: L.round, text: `🔬 ${u.ko} 직접 최적화 값 해제${BASE.has(sym) ? " → 기본 5년 값으로" : open ? " — 보유 포지션이 끝나면 칸 삭제" : " — 칸 삭제"}` });
+  save(); return true;
+}
+export const customList = () => Object.values(cust()).map(u => ({ sym: u.sym, ko: u.ko, start: u.start, end: u.end, made: u.made, id: u.id, tfs: u.tfs, levs: u.levs, spanD: Math.round((u.span || 365.25 * 864e5) / 864e5), off: !!u.off, extra: !BASE.has(u.sym) }));
 export function resetLab() { const own = L?.own; L = blank(); if (own) L.own = own; save(); }
 
 // 화면·뉴트론용 요약
+const spanD = sym => Math.round((cust()[sym]?.span || 365.25 * 864e5) / 864e5);   // 구간 길이(일) — 기본 5년 값은 1년
 export function labState() {
   load(); const now = Date.now(), open = [];
   const combos = CB.COMBOS.map(C => { const st = comboStat(C.key); let pass = 0, luck = 0, tot = 0, op = 0;
-    for (const x of LANES) if (x.c === C.key) { const cd = candOf(x); tot++; if (cd?.pass) pass++; if (cd?.pass && !cd.luck) luck++; const P = L.lanes[x.k]?.pos; if (P) { op++; open.push({ ...x, star: isStar(x), ko: KO[x.sym], side: P.side, e: P.e, sl: P.sl, tp: P.tp, be: P.be, t: P.t, owner: L.own[C.key] }); } }
+    for (const x of lanesAll()) if (x.c === C.key) { const cd = candOf(x); tot++; if (cd?.pass) pass++; if (cd?.pass && !cd.luck) luck++; const P = L.lanes[x.k]?.pos; if (P) { op++; open.push({ ...x, star: isStar(x), ko: koOf(x.sym), side: P.side, e: P.e, sl: P.sl, tp: P.tp, be: P.be, t: P.t, owner: L.own[C.key] }); } }
     return { key: C.key, ko: C.ko, owner: L.own[C.key] || "", ownerShort: shortMd(L.own[C.key]), ...st, open: op, pass, passReal: luck, lanes: tot, cur: comboStat(C.key, L.round), reviews: (L.reviews[C.key] || []).slice(0, 2) }; });
   const grid = {};
-  for (const x of LANES) { const cd = candOf(x), ln = L.lanes[x.k] || {};
-    ((grid[x.c] ||= {})[x.sym] ||= {})[x.tf + "|" + x.lev] = cd ? { star: isStar(x), p: CB.paramText(x.c, cd.p), x: CB.exitText(cd.x), pass: cd.pass, luck: cd.luck, ho: cd.ho, tr: cd.tr, lb: cd.lb, sel: L.sel[x.k] ?? 0, nC: cands(x.c, x.sym, x.tf, x.lev).length, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, skip: ln.skip || 0, pos: ln.pos ? { side: ln.pos.side, be: ln.pos.be } : null } : null; }
+  for (const x of lanesAll()) { const cd = candOf(x), ln = L.lanes[x.k] || {};
+    ((grid[x.c] ||= {})[x.sym] ||= {})[x.tf + "|" + x.lev] = cd ? { star: isStar(x), cust: isCustom(x), spanD: spanD(x.sym), p: CB.paramText(x.c, cd.p), x: CB.exitText(cd.x), pass: cd.pass, luck: cd.luck, ho: cd.ho, tr: cd.tr, lb: cd.lb, sel: L.sel[x.k] ?? 0, nC: cands(x.c, x.sym, x.tf, x.lev).length, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, skip: ln.skip || 0, pos: ln.pos ? { side: ln.pos.side, be: ln.pos.be } : null } : null; }
   // ⭐ 코인 × 30·40·50배 대표 칸(지금 라운드에서 쓰는 값 + 실시간 성적)
   const best = [], bs = { n: 0, R: 0, pnl: 0, open: 0 };
-  for (const [ko, sym] of CB.COINS) for (const lev of [30, 40, 50]) { const b = BEST?.[sym]?.[lev]; if (!b) continue;
-    const x = LANES.find(z => z.c === b.c && z.sym === sym && z.tf === b.tf && z.lev === lev), cd = x && candOf(x), ln = (x && L.lanes[x.k]) || {}; if (!cd) continue;
+  for (const [ko, sym] of coinsAll()) for (const lev of [30, 40, 50]) { const b = bestOf(sym, lev); if (!b) continue;
+    const x = lanesAll().find(z => z.c === b.c && z.sym === sym && z.tf === b.tf && z.lev === lev), cd = x && candOf(x), ln = (x && L.lanes[x.k]) || {}; if (!cd) continue;
     bs.n += ln.n || 0; bs.R += ln.R || 0; bs.pnl += ln.pnl || 0; if (ln.pos) bs.open++;
     best.push({ ko, sym, lev, c: b.c, cko: CB.COMBO_BY[b.c].ko, cshort: CB.COMBO_BY[b.c].short, tf: b.tf, p: CB.paramText(b.c, cd.p), x: CB.exitText(cd.x), cap: +(40 / lev).toFixed(2),
-      tr: cd.tr, ho: cd.ho, lb: cd.lb, pass: cd.pass, luck: b.luck || cd.luck, of: b.of, n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, pos: ln.pos ? { side: ln.pos.side } : null }); }
+      tr: cd.tr, ho: cd.ho, lb: cd.lb, pass: cd.pass, luck: b.luck || cd.luck, of: b.of, cust: isCustom(x), spanD: spanD(sym), n: ln.n || 0, R: ln.R || 0, pnl: ln.pnl || 0, pos: ln.pos ? { side: ln.pos.side } : null }); }
   return { on: L.on, scope: L.scope, best, bestSum: { ...bs, R: +bs.R.toFixed(2), pnl: +bs.pnl.toFixed(2) }, round: Math.min(L.round, ROUNDS), rounds: ROUNDS, done: !!L.final, roundH: L.roundH, left: Math.max(0, L.roundAt + L.roundH * 3600e3 - now), made: META.made, from: META.from,
-    combos, grid, open, trades: L.trades.slice(0, 40), log: L.log.slice(0, 8), tfs: CB.TFS, levs: CB.LEVS, tfKo: CB.TF_KO, coins: CB.COINS, lanes: LANES.length };
+    combos, grid, open, trades: L.trades.slice(0, 40), log: L.log.slice(0, 8), tfs: CB.TFS, levs: CB.LEVS, tfKo: CB.TF_KO, coins: coinsAll(), lanes: lanesAll().length, custom: customList() };
 }
