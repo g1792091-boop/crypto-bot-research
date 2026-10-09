@@ -16,6 +16,9 @@ from demobot import judge as J
 from demobot import live as LV
 from demobot import rank as RK
 from demobot import store as ST
+from demobot import costs as CO
+from demobot import regime as RG
+from demobot import review as RV
 
 M15 = 900_000
 
@@ -105,6 +108,13 @@ class SynthREST:
         a = a[a[:, 0] <= self.clock()]
         a = a[a[:, 0] >= start_time][:limit] if start_time is not None else a[-limit:]
         return [[int(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), int(r[0]) + M15 - 1] for r in a]
+
+    def depth(self, symbol, limit=500):
+        a = self.bars[symbol]
+        a = a[a[:, 0] <= self.clock()]
+        mid = float(a[-1][1])
+        lv = [(mid * (1 + 1e-4 * (i + 0.5)), 2000.0 / mid * (1 + i)) for i in range(limit)]
+        return {"bids": [[2 * mid - p, q] for p, q in lv], "asks": [[p, q] for p, q in lv]}
 
     def funding_rates(self, symbol, start_time=None, limit=1000):
         t0 = int(self.bars[symbol][0, 0]) // 28_800_000 * 28_800_000
@@ -265,3 +275,155 @@ def test_private_plugin_accounts(run, tmp_path, monkeypatch):
     monkeypatch.setenv("DEMOBOT_PLUGINS", str(tmp_path / "none"))
     A.refresh_plugins(log=lambda *a: None)
     assert not any(a.kind == "private" for a in A.current_accounts())
+
+
+# ------------------------------------------------------------------ round 3 (CONTRACT section 8)
+def test_stop_rules_unit():
+    day0 = 1_789_000_000_000 // 86_400_000 * 86_400_000 - 9 * 3_600_000 + 86_400_000   # a KST midnight
+    r = A.StopRules(20)
+    assert not r.block(day0 + 1000, 1000.0)
+    # five losses in a row -> 24 h pause from the 5th close
+    W = 1000.0
+    for i in range(5):
+        r.on_close(day0 + (i + 1) * M15, -2.0, W, W - 2.0)
+        W -= 2.0
+    assert r.streak_pauses == 1 and r.block(day0 + 6 * M15, W)
+    assert not r.block(day0 + 5 * M15 + 24 * 3_600_000 + 1, W)
+    # -5% of the day's first wallet -> blocked until the next KST midnight
+    r2 = A.StopRules(20)
+    r2.block(day0 + 1000, 1000.0)
+    r2.on_close(day0 + 2 * M15, -30.0, 1000.0, 970.0)
+    assert not r2.block(day0 + 3 * M15, 970.0)
+    r2.on_close(day0 + 4 * M15, -25.0, 970.0, 945.0)
+    assert r2.day_pauses == 1 and r2.block(day0 + 5 * M15, 945.0)
+    assert not r2.block(day0 + 86_400_000 + 1, 945.0)
+    # -20% of the start -> never again
+    r3 = A.StopRules(50)
+    r3.on_close(day0 + M15, -210.0, 1000.0, 790.0)
+    assert r3.halted_ms == day0 + M15
+    assert r3.block(day0 + 400 * 86_400_000, 2000.0)
+    assert [e["what"] for e in r3.events] == ["day", "halt"]
+
+
+def test_costs_book_walk_and_interpolation():
+    asks = [[100.1, 10.0], [100.2, 10.0], [100.5, 100.0]]
+    bids = [[99.9, 10.0], [99.8, 10.0]]
+    assert abs(CO.book_cost_bps(asks, 500, 100.0) - 10.0) < 1e-9          # one level: half the spread = 10 bp
+    two = CO.book_cost_bps(asks, 1503, 100.0)                             # 1001 + 502 USD over two levels
+    assert 10.0 < two < 20.0
+    assert CO.book_cost_bps(bids, 10_000, 100.0) is None                  # the book does not cover it
+    bid, ask, buy, sell = CO.curve_from_depth({"bids": bids, "asks": asks})
+    assert (bid, ask) == (99.9, 100.1) and len(buy) == len(CO.SIZES) and buy[0] == pytest.approx(10.0)
+    curve = [1.0, 2.0, 3.0] + [None] * (len(CO.SIZES) - 3)
+    assert CO.interp_bps(curve, 250) == 1.0 and CO.interp_bps(curve, 750) == pytest.approx(1.5)
+    assert CO.interp_bps(curve, 1500) == pytest.approx(2.5) and CO.interp_bps(curve, 3000) is None
+
+
+def test_regime_trend_on_a_steady_rise():
+    n = 96 * 120
+    ts = (1_780_000_000_000 // M15 * M15) + np.arange(n, dtype=np.int64) * M15
+    c = 100 * np.exp(np.linspace(0, 1.0, n)) * (1 + 0.002 * np.sin(np.arange(n)))
+    b = {"ts": ts, "o": np.r_[c[0], c[:-1]], "h": c * 1.002, "l": c * 0.998, "c": c}
+    tr, vo, sl, _ap = RG.coin_regime(b)
+    assert tr[0] == RG.UNK and tr[-1] == 1 and sl[-1] > RG.SLOPE_T
+    assert vo[0] == RG.UNK and vo[-1] in (0, 1, 2)
+    flat = dict(b, c=np.full(n, 100.0), o=np.full(n, 100.0), h=np.full(n, 100.2), l=np.full(n, 99.8))
+    assert RG.coin_regime(flat)[0][-1] == 0
+
+
+def test_week_boundaries_are_kst_mondays():
+    t = 1_791_000_000_000
+    w = RV.week_start(t)
+    import time as _t
+    g = _t.gmtime((w + 9 * 3_600_000) / 1000)
+    assert g.tm_wday == 0 and g.tm_hour == 0 and g.tm_min == 0 and w <= t < w + RV.WEEK_MS
+
+
+def _fake_line(trades):
+    return {"line": {}, "trades": trades, "curve": []}
+
+
+def test_confirmation_period(tmp_path):
+    conn = ST.connect(str(tmp_path / "c.db"))
+    aid, L, t0 = "fx-def-S2-15m", 20, 1_790_000_000_000
+    D = 86_400_000
+    good = [dict(entry_ms=t0 + i * D, exit_ms=t0 + i * D + 3_600_000, status="closed", reason="tp", pnl=5.0, R=0.5)
+            for i in range(25)]
+    res = {aid: {"lines": {L: _fake_line(good)}}}
+    rows = [dict(id=aid, L=L, ours={"pass": True})]
+    out = J.update_confirms(conn, res, rows, t0)
+    assert len(out["started"]) == 1 and out["items"][0]["status"] == "confirming"
+    out = J.update_confirms(conn, res, [dict(id=aid, L=L, ours={"pass": False})], t0 + 10 * D)
+    assert out["items"][0]["status"] == "confirming" and not out["started"]          # a flicker does not restart
+    out = J.update_confirms(conn, res, [dict(id=aid, L=L, ours={"pass": False})], t0 + 28 * D + 1)
+    assert out["items"][0]["status"] == "confirmed" and len(out["decided"]) == 1
+    # a losing line fails and may start again on its next pass
+    aid2 = "fx-def-N02-15m"
+    bad = [dict(g, pnl=-5.0, R=-0.5) for g in good]
+    res[aid2] = {"lines": {L: _fake_line(bad)}}
+    J.update_confirms(conn, res, [dict(id=aid2, L=L, ours={"pass": True})], t0)
+    out = J.update_confirms(conn, res, [dict(id=aid2, L=L, ours={"pass": False})], t0 + 28 * D + 1)
+    it = next(x for x in out["items"] if x["id"] == aid2)
+    assert it["status"] == "failed" and "평균 R" in it["why_ko"]
+    out = J.update_confirms(conn, res, [dict(id=aid2, L=L, ours={"pass": True})], t0 + 30 * D)
+    assert any(p["acct"] == aid2 for p in out["started"])
+    # too few trades: waits up to 56 days, then fails
+    aid3 = "fx-def-N04-15m"
+    res[aid3] = {"lines": {L: _fake_line(good[:5])}}
+    J.update_confirms(conn, res, [dict(id=aid3, L=L, ours={"pass": True})], t0)
+    out = J.update_confirms(conn, res, [dict(id=aid3, L=L, ours={"pass": False})], t0 + 30 * D)
+    assert next(x for x in out["items"] if x["id"] == aid3)["status"] == "confirming"
+    out = J.update_confirms(conn, res, [dict(id=aid3, L=L, ours={"pass": False})], t0 + 56 * D)
+    assert next(x for x in out["items"] if x["id"] == aid3)["status"] == "failed"
+
+
+def test_round3_snapshots(run):
+    snap = run["dir"] / "snap"
+    for f in ("costs.json", "regime.json", "review.json"):
+        assert (snap / f).exists(), f
+    for coin in G.COINS:
+        z = np.load(snap / "bars" / f"{coin}.npz")
+        assert set(z.files) == {"ts", "o", "h", "l", "c"} and len(z["ts"]) > 0
+    acc = json.loads((snap / "accounts.json").read_text())
+    for a in acc["accounts"]:
+        for L, ln in a["lines"].items():
+            p = ln["parts"]
+            assert abs(p["gross"] - p["fees"] + p["funding"] + p["open"] - ln["pnl"]) < 1e-6
+            st = ln["stops"]
+            assert st["blocked"] >= 0 and st["trades"] <= ln["trades"] + st["blocked"] + ln["open"] + 50
+    d = json.loads((snap / "acct" / "fx-def-S2-15m.json").read_text())
+    assert set(d["curves_stops"]) == {"20", "30", "40", "50"} and isinstance(d["stop_events"], list)
+    for t in d["trades"]:
+        assert {"fee", "notional", "cost_bps", "through_bps", "trend", "vol"} <= set(t)
+    jd = json.loads((snap / "judge.json").read_text())
+    assert jd["lines_judged"] == 48 * 4 and len(jd["stop_rules_ko"]) == 3 and "passed" not in jd
+    assert all("stops" in r and "confirm" in r for r in jd["rows"])
+    home = json.loads((snap / "home.json").read_text())
+    assert home["goal"]["stage"] == 1 and home["goal"]["days_left"] >= 0 and "12/31" in home["goal"]["line_ko"]
+    assert {"confirming", "candidates"} <= set(home["totals"])
+    c = json.loads((snap / "costs.json").read_text())
+    assert c["sizes"] == CO.SIZES and len(c["coins"]) == 7 and c["coins"][0]["n"] >= 1
+    assert c["coins"][0]["buy_bps"]["last"][0] == pytest.approx(0.5, abs=0.05)     # the synthetic book: 0.5 bp
+    rv = json.loads((snap / "review.json").read_text())
+    assert rv["weeks"] and rv["weeks"][0]["final"] is False and rv["weeks"][0]["summary_ko"]
+    st = json.loads((snap / "status.json").read_text())
+    assert st["deadman"]["configured"] is False
+
+
+def test_deadman_ping():
+    class Resp:
+        def __init__(self, code):
+            self.status = code
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    assert LV.ping_deadman("https://hc-ping.com/x", opener=lambda req, timeout: Resp(200)) is None
+    assert LV.ping_deadman("https://hc-ping.com/x", opener=lambda req, timeout: Resp(503)) == "HTTP 503"
+
+    def boom(req, timeout):
+        raise OSError("no route https://hc-ping.com/secret")
+    assert LV.ping_deadman("https://hc-ping.com/secret", opener=boom) == "OSError"

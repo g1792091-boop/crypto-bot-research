@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS decisions(acct TEXT, seq INTEGER, t_ms INTEGER, coin 
   exit INTEGER, info TEXT, PRIMARY KEY(acct, seq, coin, L)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS notified(acct TEXT, key TEXT, status TEXT, ts_ms INTEGER, PRIMARY KEY(acct, key))
   WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS passes(acct TEXT, L INTEGER, start_ms INTEGER, status TEXT, decided_ms INTEGER,
+  result TEXT, PRIMARY KEY(acct, L, start_ms)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS depth(coin TEXT, ts INTEGER, bid REAL, ask REAL, buy TEXT, sell TEXT,
+  PRIMARY KEY(coin, ts)) WITHOUT ROWID;
 """
 
 
@@ -216,6 +220,33 @@ def put_notified(conn, rows) -> None:
     now = int(time.time() * 1000)
     conn.executemany("INSERT OR REPLACE INTO notified(acct, key, status, ts_ms) VALUES(?,?,?,?)",
                      [(a, k, s, now) for a, k, s in rows])
+
+
+# ------------------------------------------------------------------ confirmation periods (CONTRACT 8.1)
+def load_passes(conn) -> list:
+    return [dict(acct=a, L=L, start_ms=t, status=st, decided_ms=d, result=json.loads(r or "{}"))
+            for a, L, t, st, d, r in conn.execute(
+                "SELECT acct, L, start_ms, status, decided_ms, result FROM passes ORDER BY start_ms")]
+
+
+def put_pass(conn, acct: str, L: int, start_ms: int, status: str, decided_ms: Optional[int], result: dict) -> None:
+    conn.execute("INSERT OR REPLACE INTO passes(acct, L, start_ms, status, decided_ms, result) VALUES(?,?,?,?,?,?)",
+                 (acct, int(L), int(start_ms), status, None if decided_ms is None else int(decided_ms),
+                  json.dumps(result, ensure_ascii=False)))
+
+
+# ------------------------------------------------------------------ order-book costs (CONTRACT 8.3)
+def put_depth(conn, rows) -> None:
+    """rows: (coin, ts, bid, ask, buy_bps list, sell_bps list)."""
+    conn.executemany("INSERT OR REPLACE INTO depth(coin, ts, bid, ask, buy, sell) VALUES(?,?,?,?,?,?)",
+                     [(c, int(t), float(b), float(a), json.dumps(_clean(bu)), json.dumps(_clean(se)))
+                      for c, t, b, a, bu, se in rows])
+
+
+def load_depth(conn, since_ms: int = 0) -> list:
+    return [dict(coin=c, ts=t, bid=b, ask=a, buy=json.loads(bu), sell=json.loads(se))
+            for c, t, b, a, bu, se in conn.execute(
+                "SELECT coin, ts, bid, ask, buy, sell FROM depth WHERE ts >= ? ORDER BY ts", (int(since_ms),))]
 
 
 def db_mb(path: Optional[str] = None) -> float:

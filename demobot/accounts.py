@@ -550,8 +550,84 @@ def _trade_outcome(ctx: Ctx, coin: str, tf: str, sig_ts: int, side: int, ex: int
                 exit_raw=exit_raw, reason=reason_s if done else "open")
 
 
-def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
-    """events: list of (e_ts, coin_i, sig_ts, side, combo, exit) sorted by (e_ts, coin_i)."""
+def kst_day(t_ms: int) -> int:
+    return (int(t_ms) + 9 * 3600 * 1000) // 86400000
+
+
+class StopRules:
+    """The real-money stop rules (CONTRACT 8.2), applied to NEW entries only: account -20% of the start -> no new
+    entries ever again; realized P&L of the KST day <= -5% of the wallet at the day's first event -> none until the
+    next KST day; 5 losing closes in a row -> none for 24 h after the 5th (the streak then starts again)."""
+    HALT = 0.80
+    DAY = 0.05
+    STREAK = 5
+    PAUSE_MS = 24 * 3600 * 1000
+
+    def __init__(self, L: int):
+        self.L = L
+        self.halted_ms = None
+        self.pause_until = -1
+        self.day = None
+        self.day_start_W = SEED
+        self.day_pnl = 0.0
+        self.day_block_until = -1
+        self.streak = 0
+        self.blocked = 0
+        self.day_pauses = 0
+        self.streak_pauses = 0
+        self.events = []
+
+    def _roll(self, t: int, W: float) -> None:
+        d = kst_day(t)
+        if d != self.day:
+            self.day = d
+            self.day_start_W = W
+            self.day_pnl = 0.0
+
+    def on_close(self, t: int, pnl: float, W_before: float, W_after: float) -> None:
+        self._roll(t, W_before)
+        self.day_pnl += pnl
+        self.streak = self.streak + 1 if pnl < 0 else 0
+        if self.streak >= self.STREAK:
+            self.streak = 0
+            self.pause_until = max(self.pause_until, t + self.PAUSE_MS)
+            self.streak_pauses += 1
+            self.events.append(dict(t_ms=int(t), L=self.L, what="streak", until_ms=int(self.pause_until),
+                                    wallet=float(W_after)))
+        if self.day_block_until < t and self.day_pnl <= -self.DAY * self.day_start_W:
+            self.day_block_until = (self.day + 1) * 86400000 - 9 * 3600 * 1000
+            self.day_pauses += 1
+            self.events.append(dict(t_ms=int(t), L=self.L, what="day", until_ms=int(self.day_block_until),
+                                    wallet=float(W_after)))
+        if self.halted_ms is None and W_after <= self.HALT * SEED:
+            self.halted_ms = int(t)
+            self.events.append(dict(t_ms=int(t), L=self.L, what="halt", until_ms=None, wallet=float(W_after)))
+
+    def block(self, e_ts: int, W: float) -> bool:
+        self._roll(e_ts, W)
+        if self.halted_ms is not None or e_ts < self.pause_until or e_ts < self.day_block_until:
+            self.blocked += 1
+            return True
+        return False
+
+    def summary(self) -> dict:
+        return dict(blocked=self.blocked, halted_ms=self.halted_ms, day_pauses=self.day_pauses,
+                    streak_pauses=self.streak_pauses)
+
+
+def _parts(trades: list, unreal: float) -> dict:
+    closed = [t for t in trades if t["status"] == "closed"]
+    fees = sum(t.get("fee", 0.0) for t in closed)
+    fund = sum(t.get("funding", 0.0) for t in closed)
+    pnl = sum(t["pnl"] for t in closed)
+    return dict(gross=pnl - fund + fees, fees=fees, funding=fund, open=unreal)
+
+
+def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list, rules: Optional[StopRules] = None,
+                  cache: Optional[dict] = None) -> dict:
+    """events: list of (e_ts, coin_i, sig_ts, side, combo, exit) sorted by (e_ts, coin_i). ``rules``: the stop-rule
+    variant of the line (same entries, new entries blocked by the rules). ``cache``: trade outcomes shared between
+    the plain and the stop-rule run of a line (an outcome does not depend on the wallet)."""
     eng = ctx.eng
     W = SEED
     peak = SEED
@@ -569,7 +645,10 @@ def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
         nonlocal W, peak, streak
         while heap and heap[0][0] < t:
             x_ts, ci, pnl, margin, tr = heapq.heappop(heap)
+            W_before = W
             W += pnl
+            if rules is not None:
+                rules.on_close(x_ts + M15, pnl, W_before, W)
             used[ci] -= margin
             tr["status"] = "closed"
             st["trades"] += 1
@@ -596,8 +675,16 @@ def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
             st["skipped"] += 1
             continue
         coin = G.COINS[ci]
-        o = _trade_outcome(ctx, coin, tf, sig_ts, side, ex, L)
+        if cache is not None:
+            ck = (ci, sig_ts, side, ex)
+            if ck not in cache:
+                cache[ck] = _trade_outcome(ctx, coin, tf, sig_ts, side, ex, L)
+            o = cache[ck]
+        else:
+            o = _trade_outcome(ctx, coin, tf, sig_ts, side, ex, L)
         if o is None:
+            continue
+        if rules is not None and rules.block(e_ts, W):
             continue
         ok, qty, margin, why = X.entry_check(coin, side, o["fill"], o["risk"], o["atr"], W, L)
         if not ok or used.sum() + margin > W + 1e-9:
@@ -605,20 +692,27 @@ def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
             continue
         notional = qty * o["fill"]
         pnl = o["roe"] * margin
-        fund = 0.0
+        fund = 0.0                                  # funding received (+) / paid (-) over the hold
+        fee = notional * 2 * (X.TAKER + X.SLIP)     # taker fee and the assumed slippage, both sides
         if o["done"]:
             end = o["x_ts"] + M15
             held = (o["x_ts"] - e_ts) // M15 + 1
-            paid = _funding_paid(eng, coin, e_ts, end, side)
-            if paid is not None and o["reason"] != "liq":
-                fund = notional * (X.F_BAR15 * held - paid)
-                pnl += fund
+            if o["reason"] == "liq":
+                fee = notional * (X.TAKER + X.SLIP)
+            else:
+                paid = _funding_paid(eng, coin, e_ts, end, side)
+                if paid is not None:
+                    pnl += notional * (X.F_BAR15 * held - paid)     # the cells hold the fixed rate: use the real one
+                    fund = -notional * paid
+                else:
+                    fund = -notional * X.F_BAR15 * held
         used[ci] += margin
         tr = dict(key=f"{coin}|{tf}|{sig_ts}|{side}|{L}", L=L, coin=coin, side=int(side), signal_ms=int(sig_ts),
                   entry_ms=int(e_ts), entry=o["fill"], stop=o["stop"],
                   exit_ms=(o["x_ts"] + M15) if o["done"] else None, exit=o["exit_raw"],
                   status="closed" if o["done"] else "open", reason=o["reason"], pnl=pnl, roe=o["roe"], R=o["R"],
-                  margin=margin, funding=fund, combo=int(combo) if combo is not None else None, exit_i=int(ex),
+                  margin=margin, funding=fund, fee=fee, notional=notional, maker=False, risk=o["risk"],
+                  combo=int(combo) if combo is not None else None, exit_i=int(ex),
                   setting_ko=(G.combo_label(combos_strat, combo) if combos_strat and combo is not None else "무작위"),
                   exit_ko=G.exit_ko(ex))
         trades.append(tr)
@@ -641,11 +735,15 @@ def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
                 trades=n, wins=st["wins"], win_rate=(st["wins"] / n if n else None),
                 mean_R=(st["sumR"] / n if n else None), max_dd=st["max_dd"],
                 open=sum(1 for t in trades if t["status"] == "open"), liqs=st["liqs"], skipped=st["skipped"],
-                worst_streak=st["worst_streak"], ruined=st["ruins"] > 0, ruins=st["ruins"])
-    return dict(line=line, trades=trades, curve=curve)
+                worst_streak=st["worst_streak"], ruined=st["ruins"] > 0, ruins=st["ruins"],
+                parts=_parts(trades, unreal))
+    out = dict(line=line, trades=trades, curve=curve)
+    if rules is not None:
+        out["rules"] = rules
+    return out
 
 
-def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
+def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list, rules: Optional[StopRules] = None) -> dict:
     """A private plug-in account line: the plug-in gives entries and exit legs (raw prices); sizing, entry checks,
     fees (maker for limit entries and take-profit legs, taker + slippage otherwise), real funding and the wallet are
     the same as every account."""
@@ -664,7 +762,10 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
         nonlocal W, peak, streak
         while heap and heap[0][0] < t:
             x_ts, _n, ci, pnl, margin, tr = heapq.heappop(heap)
+            W_before = W
             W += pnl
+            if rules is not None:
+                rules.on_close(x_ts + M15, pnl, W_before, W)
             used[ci] -= margin
             tr["status"] = "closed"
             st["trades"] += 1
@@ -701,6 +802,8 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
         sdist = abs(fill - stop)
         if sdist <= 0:
             continue
+        if rules is not None and rules.block(e_ts, W):
+            continue
         atr = float(t["atr"]) if t.get("atr") else sdist / 2
         ok, qty, margin, _why = X.entry_check(coin, side, fill, sdist, atr, W, L)
         if not ok or used.sum() + margin > W + 1e-9:
@@ -708,6 +811,7 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
             continue
         notional = qty * fill
         pnl = -(X.MAKER if maker else X.TAKER) * notional
+        fee = (X.MAKER if maker else X.TAKER + X.SLIP) * notional
         b15 = eng.b15[coin]
         last_c = float(b15["c"][-1])
         legs = list(t["legs"])
@@ -725,6 +829,7 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
             else:
                 px = float(xpx) if kind == "tp" else float(xpx) * (1 - side * X.SLIP)
                 pnl += frac * qty * side * (px - fill) - (X.MAKER if kind == "tp" else X.TAKER) * frac * qty * px
+                fee += frac * qty * (X.MAKER * px if kind == "tp" else X.TAKER * px + abs(float(xpx) - px))
                 exit_px = float(xpx)
         end = (last_x + M15) if done else ctx.now
         held = max(1, (end - e_ts) // M15)
@@ -743,7 +848,8 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
                   signal_ms=int(t["signal_ms"]), entry_ms=e_ts, entry=fill, stop=stop,
                   exit_ms=end if done else None, exit=exit_px if done else None,
                   status="closed" if done else "open", reason=reason, pnl=pnl, roe=pnl / margin, R=R,
-                  margin=margin, funding=fund, combo=None, exit_i=None,
+                  margin=margin, funding=fund, fee=fee, notional=notional, maker=maker, risk=sdist, combo=None,
+                  exit_i=None,
                   setting_ko=str(t.get("setting_ko", ""))[:80], exit_ko=str(t.get("exit_ko", ""))[:80])
         trades.append(tr)
         if done:
@@ -765,8 +871,12 @@ def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
                 trades=n, wins=st["wins"], win_rate=(st["wins"] / n if n else None),
                 mean_R=(st["sumR"] / n if n else None), max_dd=st["max_dd"],
                 open=sum(1 for t in trades if t["status"] == "open"), liqs=st["liqs"], skipped=st["skipped"],
-                worst_streak=st["worst_streak"], ruined=st["ruins"] > 0, ruins=st["ruins"])
-    return dict(line=line, trades=trades, curve=curve)
+                worst_streak=st["worst_streak"], ruined=st["ruins"] > 0, ruins=st["ruins"],
+                parts=_parts(trades, unreal))
+    out = dict(line=line, trades=trades, curve=curve)
+    if rules is not None:
+        out["rules"] = rules
+    return out
 
 
 # ------------------------------------------------------------------ events per account
@@ -882,11 +992,13 @@ def run_all(eng, now_ms: int, log=print) -> dict:
         try:
             pt = a.extra["mod"].trades(a.extra["variant"], eng.b15, ctx.live0, now_ms)
             lines = {L: simulate_plugin_line(ctx, a, L, pt) for L in G.LEVS}
+            slines = {L: _slim(simulate_plugin_line(ctx, a, L, pt, rules=StopRules(L))) for L in G.LEVS}
         except Exception as exc:          # a broken plug-in never stops the engine
             log("plugin failed:", a.id, type(exc).__name__, str(exc)[:200])
             eng.issues.append(f"비공개 매매법 {a.sub} 계산 실패")
             lines = {L: simulate_plugin_line(ctx, a, L, []) for L in G.LEVS}
-        out[a.id] = dict(acct=a, lines=lines, switches_new=[],
+            slines = {L: _slim(simulate_plugin_line(ctx, a, L, [], rules=StopRules(L))) for L in G.LEVS}
+        out[a.id] = dict(acct=a, lines=lines, lines_stop=slines, switches_new=[],
                          settings_now=[dict(coin="ALL", L=None, setting_ko=a.name, exit_ko=a.rule_ko[:60])])
     for a in sorted(ACCOUNTS, key=lambda x: (x.strat or "", x.tf)):
         if a.kind == "adaptive":
@@ -897,18 +1009,30 @@ def run_all(eng, now_ms: int, log=print) -> dict:
             deciders[a.id] = {"friend": dz.friend_timelines(), "dz": dz}
     for a in ACCOUNTS:
         lines = {}
+        slines = {}
         settings = []
         for L in G.LEVS:
             ev, sn = account_events(ctx, a, L, deciders)
-            lines[L] = simulate_line(ctx, a, L, ev)
+            cache = {}
+            lines[L] = simulate_line(ctx, a, L, ev, cache=cache)
+            slines[L] = _slim(simulate_line(ctx, a, L, ev, rules=StopRules(L), cache=cache))
             if a.kind == "friend":
                 settings.extend(sn)
             elif L == G.LEVS[0]:
                 settings = sn
         dz = deciders.get(a.id, {}).get("dz")
-        out[a.id] = dict(acct=a, lines=lines, settings_now=settings,
+        out[a.id] = dict(acct=a, lines=lines, lines_stop=slines, settings_now=settings,
                          switches_new=(dz.switch_events if dz else []))
     return out
+
+
+_SLIM_KEYS = ("entry_ms", "exit_ms", "status", "reason", "pnl", "R", "ruin")
+
+
+def _slim(sim: dict) -> dict:
+    """A stop-rule line keeps what the judgment and the comparison need (memory: one line per account line)."""
+    sim["trades"] = [{k: t.get(k) for k in _SLIM_KEYS} for t in sim["trades"]]
+    return sim
 
 
 def decision_log(conn, a: Acct, limit: int = 200) -> list:

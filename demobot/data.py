@@ -66,6 +66,10 @@ class Market:
             dedup[r[0]] = r
         return [dedup[k] for k in sorted(dedup)], forming
 
+    def depth(self, coin: str, limit: int = 500) -> dict:
+        """The order book (public /fapi/v1/depth): {"bids": [[price, qty], ...], "asks": [...]} best first."""
+        return self.rest.depth(G.binance_symbol(coin), limit=limit)
+
     def funding(self, coin: str, start_ms: Optional[int] = None, limit: int = 1000):
         rows = self.rest.funding_rates(G.binance_symbol(coin), start_time=start_ms, limit=limit)
         return [(int(r["fundingTime"]), float(r["fundingRate"])) for r in rows]

@@ -275,3 +275,187 @@ Telegram kinds (engine queues, `notify.render` formats):
 `notify.poll_commands(token, chat, offset, timeout=25, get=None) -> (new_offset, [{"update_id", "text", "date_ms",
 "from_name"}])`: Telegram getUpdates, only messages of `chat`, never raises (returns the old offset and [] on errors),
 token redacted from errors.
+
+## 8. Additions of 10/09 night, round 3 (owners: "2번 시작해주고 대시보드 ... 모두 추가")
+
+Everything below is additive: a missing field or file means "준비 중" / "기록 없음" (older engine, or not enough data
+yet). Numbers keep the units of section 4 (`pnl_pct` percent, `max_dd` / `win_rate` / shares 0..1 ratios, `bps` =
+1/100 of a percent). The dashboard stays read-only.
+
+### 8.1 Confirmation period after a pass ("확인 기간")
+A line (account x leverage) that passes "우리 기준" for the first time starts a confirmation: from that tick (`start_ms`)
+only the trades **entered at/after `start_ms`** count. It ends at `start_ms + 28 days` when the window holds >= 20
+closed trades, otherwise when it reaches 20 closed trades, at the latest at `start_ms + 56 days`. Result `confirmed`
+when all of: >= 20 closed trades, mean R > 0, window P&L > 0, window max drawdown < 30%, no ruin and no liquidation
+in the window. Otherwise `failed` (with `why_ko`). A `failed` line can start a new confirmation the next time it
+passes. `confirmed` = "실전 후보" (the owners still decide; real money stays forbidden until they do). Stored in the
+DB table `passes` (history kept; restarts do not reset it).
+
+`judge.json` gains:
+```json
+{"lines_judged": 224,
+ "multi_note_ko": "224줄을 한꺼번에 보면 실력이 없어도 몇 줄은 운으로 통과할 수 있어서, 통과 뒤 4주 확인 기간을 둡니다",
+ "confirm": [{"id": "fx-def-S2-15m", "name": "...", "L": 20, "status": "confirming|confirmed|failed",
+              "start_ms": 0, "end_ms": 0, "min_end_ms": 0, "max_end_ms": 0, "decided_ms": null,
+              "progress": 0.0, "n": 0, "need_n": 20, "mean_R": null, "pnl": 0.0, "pnl_pct": 0.0, "max_dd": 0.0,
+              "liqs": 0, "ruins": 0, "why_ko": "..."}],
+ "candidates": [{"id": "...", "name": "...", "L": 20, "decided_ms": 0, "window": {"n": 0, "mean_R": 0.0,
+                 "pnl_pct": 0.0, "max_dd": 0.0}, "costs": {"entry_bps": null, "roundtrip_pct_of_pnl": null},
+                 "stops": {"pnl_pct": 0.0, "max_dd": 0.0}}]}
+```
+`progress` = 0..1 (time and trades, whichever is further behind). Each `rows[]` item gains `"confirm": {"status": ...,
+"start_ms": ..., "end_ms": ...} | null` (the line's latest confirmation). `verdict_ko` mentions candidates first.
+`home.json` `totals` gains `confirming`, `candidates`.
+
+Telegram: `pass` payload gains `"confirm_end_ms": int` (the earliest end). New kind `confirm_done`:
+`{"account": id, "name": str, "L": int, "result": "confirmed|failed", "start_ms": int, "decided_ms": int,
+"window": {"n": int, "mean_R": float|null, "pnl": float, "pnl_pct": float, "max_dd": float}, "why_ko": str}`.
+
+### 8.2 Stop-rule lines ("정지 규칙")
+Every account line is also simulated with the real-money stop rules (same entries, same sizing; the rules only block
+NEW entries, open positions run to their own exits):
+* account stop: realized wallet <= 80% of the $1,000 start -> no new entries ever again (`halted_ms`);
+* day stop: realized P&L of the KST day <= -5% of the wallet at the day's first event -> no new entries until the
+  next KST day 00:00;
+* losing streak: 5 closed losing trades in a row -> no new entries for 24 h after the 5th loss's close (streak resets).
+
+`accounts.json` each line gains `"stops": {"equity": 0.0, "pnl": 0.0, "pnl_pct": 0.0, "max_dd": 0.0, "trades": 0,
+"mean_R": null, "blocked": 0, "halted_ms": null, "day_pauses": 0, "streak_pauses": 0}`. `acct/<id>.json` gains
+`"curves_stops": {"20": [[t, v]], ...}` (same downsampling) and `"stop_events": [{"t_ms": 0, "L": 20,
+"what": "halt|day|streak", "until_ms": 0|null, "wallet": 0.0}]` (newest first, at most 200).
+`judge.json` rows gain `"stops": {"pnl_pct": 0.0, "max_dd": 0.0, "ours_pass": bool}` ("우리 기준" on the stop line).
+Rule text for the UI: `judge.json` `stop_rules_ko`: ["계좌 -20%: 새 진입 영구 정지", "하루 -5%: 그날 새 진입 정지",
+"5연패: 24시간 새 진입 쉼"].
+
+### 8.3 Real costs from the order book ("미끄러짐 기록")
+Each tick (just after the new bars, about 25-40 s after the 15m open, when a real bot would send its order) the
+engine reads the Binance order book (`/fapi/v1/depth`, 500 levels) of the 7 coins and stores per coin the cost of a
+market order of each size `SIZES = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000]` USD:
+`cost_bps` = (VWAP - mid) / mid x 10,000 in the order's adverse direction (includes half the spread), for buys and
+sells; `null` when the 500 levels did not cover the size. DB table `depth` (kept; backed up).
+
+The engine's assumed cost per side is 2 bps of slippage on the bar open (plus the taker fee, which is real and not
+part of this). For every live trade whose entry bar has a book (entry at a 15m open after logging began), the
+measured entry cost at the trade's notional (`qty x fill`, linear between sizes) is compared with the assumption:
+`extra_bps` = measured cost_bps - 2. The exit is assumed to cost the same (`roundtrip`). Maker (limit) entries of the
+private plug-ins are not book-priced; instead their fill bar is checked: `through_bps` = how far the bar traded
+beyond the limit (long: (limit - low) / limit x 10,000). `touch_only` = through_bps < 1 (a limit that was only
+touched may not have filled).
+
+Snapshot `costs.json`:
+```json
+{"generated_ms": 0, "since_ms": 0, "assumed_bps": 2.0, "sizes": [500, 1000],
+ "coins": [{"coin": "BTCUSD", "n": 0, "last_ms": 0, "spread_bps": {"last": 0.0, "median": 0.0},
+            "buy_bps": {"median": [0.0], "p90": [0.0], "last": [0.0]},
+            "sell_bps": {"median": [0.0], "p90": [0.0], "last": [0.0]}}],
+ "series": [{"coin": "BTCUSD", "points": [[0, 0.0, 0.0]]}],
+ "lines": [{"id": "...", "name": "...", "L": 20, "n": 0, "mean_extra_bps": null, "mean_extra_R": null,
+            "pnl": 0.0, "pnl_adj": 0.0, "pnl_adj_pct": 0.0}],
+ "maker": [{"id": "pv-...", "name": "...", "L": 20, "n": 0, "touch_only": 0, "touch_share": null, "pnl": 0.0,
+            "pnl_strict": 0.0}],
+ "notes_ko": ["..."]}
+```
+`series` points: `[t_ms, spread_bps, buy_bps at 10,000 USD]`, at most 800 per coin (downsampled). `lines`: one row per
+account line with >= 1 measured trade; `pnl_adj` = P&L minus the measured extra round-trip cost; `pnl_strict` =
+P&L without the touch-only fills. `acct/<id>.json` trades gain `"cost_bps": float|null` (measured entry cost) and
+`"through_bps": float|null` (maker entries).
+
+### 8.4 P&L breakdown
+Each line in `accounts.json` gains `"parts": {"gross": 0.0, "fees": 0.0, "funding": 0.0, "open": 0.0}` with
+pnl = gross - fees + funding + open: gross / fees / funding over the CLOSED trades (`funding` signed: positive =
+received), `open` = the unrealized P&L of open positions. `fees` = taker/maker fees plus the assumed 2 bps slippage
+per side. Trades gain `"fee": float` and `"notional": float`; a trade's `"funding"` is the funding of the whole hold
+(signed, + = received; 0 while open).
+
+### 8.5 Market regime ("시장 국면")
+Per coin and 15m bar, from closed bars only: trend from 4h bars (built from 15m): EMA50 slope over the last 6
+4h bars divided by the 4h ATR14: `up` > +0.5, `down` < -0.5, else `range`. Volatility: 15m ATR14 / close against
+its own last 90 days: `high` above the 70th percentile, `low` below the 30th, else `normal`. Labels: up "상승 추세",
+down "하락 추세", range "횡보", high "변동 큼", normal "보통", low "변동 작음".
+
+Snapshot `regime.json`:
+```json
+{"generated_ms": 0,
+ "now": [{"coin": "BTCUSD", "trend": "up", "vol": "normal", "slope": 0.0, "atr_pct": 0.0, "since_ms": 0}],
+ "history": [{"coin": "BTCUSD", "points": [[0, "up", "normal"]]}],
+ "lines": [{"id": "...", "name": "...", "L": 20,
+            "trend": {"up": {"n": 0, "mean_R": null, "pnl": 0.0}, "down": {}, "range": {}},
+            "vol": {"high": {}, "normal": {}, "low": {}}}]}
+```
+`history` points: one per change (regime start), live period plus 7 days. Trades in `acct/<id>.json` gain
+`"trend": "up|down|range|null"`, `"vol": "high|normal|low|null"` (at entry).
+
+### 8.6 Bars for trade charts
+`snap/bars/<COIN>.npz` (one per coin, rewritten each tick): `ts` int64 (15m open ms), `o`, `h`, `l`, `c` float64,
+15m bars from `live_start - 7 days`. The dashboard builds 30m bars by pairing (hh:00+hh:15, hh:30+hh:45) and draws a
+trade with its entry, stop and exit; for `exit_ko` of a fixed pair "익절 xR · 손절 yATR" the target is
+entry + side x x x |entry - stop|.
+
+### 8.7 Goal line (12/31)
+`home.json` gains:
+```json
+{"goal": {"deadline_ms": 0, "days_left": 0, "stage": 0, "stages_ko": ["설치", "데모 진행", "우리 기준 통과",
+          "확인 기간", "실전 후보"], "closest": {"id": "...", "name": "...", "L": 20, "ok": 3, "of": 5,
+          "missing_ko": ["..."]}, "line_ko": "12/31까지 83일: 데모 진행 중, 가장 가까운 줄 S2 ... (5개 중 3개 통과)"},
+ "regime_now": [ ...regime.json now... ], "costs_now": {"median_entry_bps": null, "assumed_bps": 2.0}}
+```
+`deadline_ms` = 2026-12-31 24:00 KST. `stage` = index of the furthest stage reached by any line.
+
+### 8.8 Backup and outside watch (separate processes; `demobot/backup.py`, `demobot/watch.py`)
+* Nightly backup (`demobot-backup.timer`, 04:40 KST = 19:40 UTC): copies only the records that cannot be rebuilt
+  from Binance (tables `views`, `decisions`, `passes`, `depth`, `notified`, `meta`, `outbox` last 7 days) into a
+  small SQLite file, gzip, optional openssl AES-256 encryption when `DEMOBOT_BACKUP_PASSPHRASE` is set, and sends
+  it with Telegram `sendDocument` to `DEMOBOT_BACKUP_CHAT` (default `DEMOBOT_TG_CHAT`). Writes `snap/backup.json`:
+  `{"last_ok_ms": 0, "last_try_ms": 0, "bytes": 0, "tables": {"views": 0}, "encrypted": false, "error_ko": null}`.
+  `python -m demobot.backup send|restore FILE|now` (restore: service stopped, INSERT OR REPLACE into demo.db).
+* Watch (`demobot-watch.timer`, every 10 min): reads `snap/status.json` and systemd state; warns in Telegram
+  (`warn` kinds `dead`: no tick for 45 min or demobot-live not active; `rank`: no ranking for 3 h or the last run
+  failed; `backup`: no good backup for 36 h), at most one per what per 3 h, and a `warn_clear` when it recovers.
+  Writes `snap/watch.json`: `{"checked_ms": 0, "ok": true, "items": [{"what": "dead", "ok": true, "detail_ko": "..."}]}`.
+* Dead-man ping: when `DEMOBOT_DEADMAN_URL` is set (a healthchecks.io check), the engine GETs it after every tick
+  that processed new bars (timeout 10 s, never raises). If the server stops, healthchecks.io alerts the owners.
+* `status.json` gains `"deadman": {"configured": bool, "last_ok_ms": 0|null, "last_error": null}`.
+* New env keys (all optional): `DEMOBOT_DEADMAN_URL`, `DEMOBOT_BACKUP_CHAT`, `DEMOBOT_BACKUP_PASSPHRASE`.
+* New Telegram kinds: `warn` gains whats `dead|rank|backup`; `warn_clear`: `{"what": str, "detail_ko": str}`;
+  `backup` is not a queued kind (the backup process sends its own document with a Korean caption).
+
+### 8.9 Daily summary additions
+`daily` payload gains `"confirming": int, "candidates": int, "costs": {"median_entry_bps": float|null,
+"assumed_bps": 2.0}, "regime": [{"coin": "BTCUSD", "trend": "up", "vol": "normal"}]`.
+
+### 8.10 Weekly review ("주간 회의록", made by code, no AI, no cost)
+`snap/review.json`: the current week so far plus finished weeks (KST Monday 00:00 to Sunday 24:00), newest first, at
+most 26. Finished weeks are kept in the DB (meta `reviews`) and backed up.
+```json
+{"generated_ms": 0,
+ "weeks": [{"week_ko": "10/12~10/18", "start_ms": 0, "end_ms": 0, "final": false,
+   "numbers": {"trades": 0, "accounts_up": 0, "accounts_down": 0, "best": [{"id": "", "name": "", "L": 20,
+               "pnl_pct": 0.0}], "worst": [], "by_kind": [{"kind_ko": "고정", "mean_pnl_pct": 0.0}]},
+   "judge": {"passed": 0, "confirming": 0, "candidates": 0, "closer": [{"id": "", "name": "", "L": 20, "ok_from": 2,
+             "ok_to": 3}], "further": []},
+   "stops": {"saved": [{"id": "", "name": "", "L": 20, "diff_pct": 0.0}], "cost": [], "net_pct": 0.0},
+   "costs": {"median_entry_bps": null, "assumed_bps": 2.0, "eaten": [{"id": "", "name": "", "L": 20,
+             "share": 0.0}]},
+   "regime": [{"coin": "BTCUSD", "trend": "up", "vol": "normal", "share": {"up": 0.0, "down": 0.0, "range": 0.0}}],
+   "views": {"n": 0, "done": 0, "dir24_rate": null},
+   "decide_ko": ["..."], "summary_ko": ["..."]}]}
+```
+Week `pnl_pct` / `diff_pct` are the week's P&L as a percent of the $1,000 start (like `pnl_pct` everywhere; a line
+that was ruined and restarted can lose more than 100%). `summary_ko`: 3-6 plain sentences (what happened this week). `decide_ko`: what the owners have to decide or check
+(empty list = nothing). Telegram kind `weekly`: `{"week": <the finished week object above>}` sent Monday 09:00 KST
+for the week that just ended (silent).
+
+### 8.11 Telegram history ("알림 기록")
+`snap/telegram.json`: `{"generated_ms": 0, "items": [{"id": 0, "ts_ms": 0, "kind": "tick", "status": "sent|queued|error",
+"text": "..."}]}` newest first, at most 300 (the rendered text exactly as sent).
+
+### 8.12 Dashboard-only screens (no new engine data)
+* "설정 지도": heatmap of a strategy's settings from `rank_<S>_<tf>.npz` + `/api/grid` (two chosen parameters on the
+  axes, the others fixed or averaged; colour = mean_R or plateau; cells below the window minimum greyed).
+* "코인별 보기": per coin, every account line's P&L and trades on that coin (from `acct/<id>.json` trades).
+
+### 8.13 The shared server ("서버 같이 쓰기")
+The demo lab runs on the rule bot's server. `status.json` gains `"server": {"mem_total_mb": 0.0, "mem_avail_mb": 0.0,
+"swap_used_mb": 0.0, "load": [1.0, 1.0, 1.0], "cpus": 4, "rule_bot": [{"unit": "paperbot-live3.service",
+"active": "active", "mem_mb": 0.0}]}` (refreshed at most every 5 minutes; any field may be null; `rule_bot` lists
+the rule bot's main services that exist). The status screen shows whether the rule bot still has room.

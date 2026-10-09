@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import time
 import traceback
+import urllib.request
 from typing import Optional
 
 from . import accounts as A
+from . import costs as CO
 from . import data as D
 from . import engine as EN
 from . import judge as J
@@ -19,6 +21,19 @@ from . import views as VW
 SETTLE_S = 25
 RANK_EVERY_MS = 60 * 60 * 1000
 DAY_MS = 86400 * 1000
+M15 = 15 * 60 * 1000
+DEADMAN_TIMEOUT_S = 10
+
+
+def ping_deadman(url: str, timeout: float = DEADMAN_TIMEOUT_S, opener=None) -> Optional[str]:
+    """GET the healthchecks.io ping URL; None when it answered 2xx, else a short error (the URL is never echoed)."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "demobot"})
+        with (opener or urllib.request.urlopen)(req, timeout=timeout) as r:
+            code = getattr(r, "status", 200)
+        return None if 200 <= int(code) < 300 else f"HTTP {code}"
+    except Exception as exc:
+        return type(exc).__name__
 
 
 def log(*a) -> None:
@@ -53,6 +68,9 @@ class Runner:
         self.tg_offset = ST.get_meta(conn, "tg_offset", 0) or 0
         self.last_rank_ms = ST.get_meta(conn, "last_rank_ms", 0)
         self.last_funding_ms = 0
+        self.deadman_url = os.environ.get("DEMOBOT_DEADMAN_URL", "").strip()
+        self.deadman = dict(configured=bool(self.deadman_url), last_ok_ms=ST.get_meta(conn, "deadman_ok_ms"),
+                            last_error=None)
 
     def start(self) -> None:
         self.eng.load()
@@ -78,6 +96,9 @@ class Runner:
             errors.append(f"tick: {type(exc).__name__}: {exc}")
             self.log(traceback.format_exc())
         now = self.clock_ms()
+        if info.get("new_bars") and any(info["new_bars"].values()):
+            self._depth(now)
+            self._ping(now)
         if now - self.last_funding_ms > 3600 * 1000:
             try:
                 self.eng.refresh_funding()
@@ -87,7 +108,7 @@ class Runner:
         res = judge = None
         try:
             res = A.run_all(self.eng, now, log=self.log)
-            judge = J.judge_all(res, now)
+            judge = J.judge_all(res, now, conn=self.conn)
         except Exception as exc:
             errors.append(f"accounts: {type(exc).__name__}: {exc}")
             self.log(traceback.format_exc())
@@ -102,6 +123,7 @@ class Runner:
                 self.log(traceback.format_exc())
         info["errors"] = errors
         info["seconds_total"] = round(time.time() - t0, 1)
+        info["deadman"] = dict(self.deadman)
         if res is not None:
             try:
                 RP.write_snapshots(self.eng, res, judge, self.snap, now, info,
@@ -120,8 +142,45 @@ class Runner:
         if self.eng.issues:
             self._queue("warn", {"what": "data", "detail_ko": "; ".join(self.eng.issues)[:500]})
         self._flush()
+        self._telegram_log(now)
         self.log("tick", info)
         return info
+
+    def _telegram_log(self, now: int) -> None:
+        """snap/telegram.json: the messages as sent (CONTRACT 8.11)."""
+        if self.outbox is None:
+            return
+        try:
+            rows = self.conn.execute("SELECT id, ts_ms, kind, text, sent_ms, error FROM outbox ORDER BY id DESC "
+                                     "LIMIT 300").fetchall()
+            items = [dict(id=i, ts_ms=t, kind=k, text=x or "",
+                          status=("sent" if s else ("error" if e else "queued"))) for i, t, k, x, s, e in rows]
+            ST.write_json(os.path.join(self.snap, "telegram.json"), dict(generated_ms=now, items=items))
+        except Exception as exc:
+            self.log("telegram log failed:", type(exc).__name__)
+
+    def _depth(self, now: int) -> None:
+        """The order books of the bar that just opened (CONTRACT 8.3); a failure only skips this tick's record."""
+        last = self.eng.last_bar("15m")
+        if last is None or now - (last + M15) > 10 * 60 * 1000:      # a catch-up tick: the book is not the entry's
+            return
+        try:
+            rows = CO.fetch_rows(self.eng.market, last + M15, log=self.log)
+            if rows:
+                ST.put_depth(self.conn, rows)
+        except Exception as exc:
+            self.log("depth record failed:", type(exc).__name__)
+
+    def _ping(self, now: int) -> None:
+        if not self.deadman_url:
+            return
+        err = ping_deadman(self.deadman_url)
+        self.deadman["last_error"] = err
+        if err is None:
+            self.deadman["last_ok_ms"] = now
+            ST.set_meta(self.conn, "deadman_ok_ms", now)
+        else:
+            self.log("dead-man ping failed:", err)
 
     def _telegram(self, res, judge, now) -> None:
         if self.outbox is None:
@@ -134,14 +193,18 @@ class Runner:
             for s in switches:
                 self._queue("switch", s)
             ST.put_notified(self.conn, mark)
-            sent_pass = set(ST.get_meta(self.conn, "pass_sent", []))
-            for aid, L in judge.get("passed", []):
-                k = f"{aid}|{L}"
-                if k not in sent_pass:
-                    row = next(r for r in judge["rows"] if r["id"] == aid and r["L"] == L)
-                    self._queue("pass", {"account": aid, "name": row["name"], "L": L, "checks": row["ours"]["checks"]})
-                    sent_pass.add(k)
-            ST.set_meta(self.conn, "pass_sent", sorted(sent_pass))
+            for aid, L, start in judge.get("confirm_started", []):
+                row = next(r for r in judge["rows"] if r["id"] == aid and r["L"] == L)
+                self._queue("pass", {"account": aid, "name": row["name"], "L": L, "checks": row["ours"]["checks"],
+                                     "confirm_end_ms": start + J.CONFIRM_MIN_MS})
+            for p in judge.get("confirm_decided", []):
+                w = p["result"]
+                self._queue("confirm_done", {"account": p["acct"], "name": A.by_id(p["acct"]).name, "L": p["L"],
+                                             "result": p["status"], "start_ms": p["start_ms"],
+                                             "decided_ms": p["decided_ms"],
+                                             "window": {k: w.get(k) for k in ("n", "mean_R", "pnl", "pnl_pct",
+                                                                              "max_dd")},
+                                             "why_ko": w.get("why_ko", "")})
             day = time.strftime("%Y-%m-%d", time.gmtime((now + 9 * 3600 * 1000) / 1000))
             kst_hour = time.gmtime((now + 9 * 3600 * 1000) / 1000).tm_hour
             if kst_hour >= 9 and ST.get_meta(self.conn, "daily_sent") != day:
@@ -152,8 +215,18 @@ class Runner:
                 self._queue("daily", {"day": day, "live_days": home.get("live_days"), "best": home.get("best", []),
                                       "worst": home.get("worst", []), "by_kind": home.get("by_kind", []),
                                       "passed": len(judge.get("passed", [])), "leaders": home.get("leaders", []),
-                                      "trades_24h": trades24})
+                                      "trades_24h": trades24,
+                                      "confirming": home.get("totals", {}).get("confirming", 0),
+                                      "candidates": home.get("totals", {}).get("candidates", 0),
+                                      "costs": home.get("costs_now") or {"median_entry_bps": None,
+                                                                         "assumed_bps": CO.ASSUMED_BPS},
+                                      "regime": [{"coin": x["coin"], "trend": x["trend"], "vol": x["vol"]}
+                                                 for x in home.get("regime_now", [])]})
                 ST.set_meta(self.conn, "daily_sent", day)
+            reviews = ST.get_meta(self.conn, "reviews", []) or []
+            if reviews and kst_hour >= 9 and ST.get_meta(self.conn, "weekly_sent") != reviews[0].get("start_ms"):
+                self._queue("weekly", {"week": reviews[0]})
+                ST.set_meta(self.conn, "weekly_sent", reviews[0].get("start_ms"))
         except Exception as exc:
             self.log("telegram events failed:", type(exc).__name__, exc)
 

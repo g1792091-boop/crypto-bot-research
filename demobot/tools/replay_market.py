@@ -94,3 +94,17 @@ class FakeREST:
             m &= t >= start_time
         idx = np.flatnonzero(m)[:limit]
         return [{"fundingTime": int(t[i]), "fundingRate": str(r[i])} for i in idx]
+    def depth(self, symbol, limit=500):
+        """A synthetic order book around the open of the bar that is forming now (replay only: real books are not
+        archived). Spread 1 tick-ish (0.5 bp), each level 0.5 bp apart, size growing with distance."""
+        self.calls += 1
+        a = self.bars[symbol]
+        a = a[a[:, 0] <= self.clock()]
+        if not len(a):
+            return {"bids": [], "asks": []}
+        mid = float(a[-1][1])
+        step = mid * 0.5e-4
+        base = 40_000.0 / mid
+        bids = [[mid - step * (i + 0.5), base * (1 + 0.15 * i)] for i in range(limit)]
+        asks = [[mid + step * (i + 0.5), base * (1 + 0.15 * i)] for i in range(limit)]
+        return {"bids": bids, "asks": asks}
