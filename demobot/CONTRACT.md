@@ -58,7 +58,7 @@ It never reads or writes anything under `/var/lib/paperbot` or `/etc/paperbot`.
 | snapshots (engine -> dashboard) | `/var/lib/demobot/snap/` |
 | env | `/etc/demobot/demobot.env` (root:demobot 640) |
 | user | system user `demobot` (no shell, home `/var/lib/demobot`) |
-| services | `demobot-live.service` (engine; CPUQuota=30%, MemoryMax=900M, Nice=10), `demobot-dash.service` (dashboard; MemoryMax=300M), `demobot-rank.timer` + `demobot-rank.service` (the ranking, hourly at :07, its own process; CPUQuota=50%, MemoryMax=1000M) |
+| services | `demobot-live.service` (engine; CPUQuota=30%, MemoryMax=1200M, Nice=10), `demobot-dash.service` (dashboard; MemoryMax=300M), `demobot-rank.timer` + `demobot-rank.service` (the ranking, hourly at :07, its own process; CPUQuota=50%, MemoryMax=1500M) |
 | dashboard | `http://<DASH_HOST>:8090` (DASH_HOST = the server's Tailscale address, like the rule bot's 8080) |
 
 Env keys (`/etc/demobot/demobot.env`): `DEMOBOT_TG_TOKEN`, `DEMOBOT_TG_CHAT`, `DEMOBOT_DASH_PASSWORD_HASH`,

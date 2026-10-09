@@ -626,7 +626,7 @@ def test_engine_unit():
     assert svc["User"] == ["demobot"] and svc["WorkingDirectory"] == ["/opt/demobot/app"]
     assert svc["EnvironmentFile"] == ["/etc/demobot/demobot.env"]
     assert svc["ExecStart"] == ["/opt/demobot/venv/bin/python -m demobot run"]
-    for k, v in {"Nice": "10", "CPUQuota": "30%", "MemoryMax": "900M", "MemoryHigh": "700M", "Restart": "always",
+    for k, v in {"Nice": "10", "CPUQuota": "30%", "MemoryMax": "1200M", "MemoryHigh": "900M", "Restart": "always",
                  "RestartSec": "20", **HARDENING}.items():
         assert svc[k] == [v], k
     assert svc["ReadWritePaths"] == ["/var/lib/demobot"]
@@ -661,7 +661,7 @@ def test_rank_unit_is_a_capped_oneshot_with_the_engines_sandbox():
     for k in ("User", "Group", "UMask", "WorkingDirectory", "EnvironmentFile", "Environment", "UnsetEnvironment",
               "ReadWritePaths", "InaccessiblePaths", "RestrictAddressFamilies"):
         assert svc[k] == live[k], k                                        # same sandbox and env handling
-    for k, v in {"Nice": "15", "CPUQuota": "50%", "MemoryHigh": "800M", "MemoryMax": "1000M",
+    for k, v in {"Nice": "15", "CPUQuota": "50%", "MemoryHigh": "1200M", "MemoryMax": "1500M",
                  "TimeoutStartSec": "40min", **HARDENING}.items():
         assert svc[k] == [v], k
     assert svc["ReadWritePaths"] == ["/var/lib/demobot"]
@@ -744,8 +744,8 @@ def test_capacity_check_is_read_only():
                 "useradd", "rm ", "mkdir", "install -d", "install -m", " > /", "tee "):
         assert bad not in text, bad
     assert not re.search(r"^\s*(sudo\s+)?apt(-get)?\s", text, re.M)          # only named in a hint, never run
-    assert "같은 서버에 설치해도 됩니다" in text and "1536" in text and "3072" in text and "0.7" in text
-    assert "약 500 MB" in text and "약 1.2 GB" in text and "순위표" in text
+    assert "같은 서버에 설치해도 됩니다" in text and "2048" in text and "3072" in text and "0.7" in text
+    assert "약 800 MB" in text and "약 1.8 GB" in text and "순위표" in text
 
 
 def test_install_copies_only_the_listed_paths_and_handles_the_env_file_safely():

@@ -4,14 +4,15 @@
 #
 #   sudo bash deploy/demobot/capacity_check.sh
 #
-# Verdict "같은 서버에 설치해도 됩니다" when: available memory >= 1.5 GB, free disk >= 3 GB on / and on /var/lib, and
-# the 1-minute load average < CPUs x 0.7. Otherwise it lists what is short. (The demo lab uses about 500 MB normally
-# and up to about 1.2 GB for a few minutes each hour while the ranking runs; hard caps: engine 900 MB and 30% of one
-# CPU, hourly ranking 1000 MB and 50% of one CPU, dashboard 300 MB.)
+# Verdict "같은 서버에 설치해도 됩니다" when: available memory >= 2 GB, free disk >= 3 GB on / and on /var/lib, and
+# the 1-minute load average < CPUs x 0.7. Otherwise it lists what is short. (The demo lab uses about 800 MB normally
+# and up to about 1.8 GB for a few minutes each hour while the ranking runs; hard caps: engine 1200 MB and 30% of one
+# CPU, hourly ranking 1500 MB and 50% of one CPU, dashboard 300 MB. Measured at full size on 10/09: engine 773 MB,
+# ranking 932 MB; both grow slowly with the live period.)
 set -u
 export LC_ALL=C
 
-NEED_MEM_MB=1536
+NEED_MEM_MB=2048
 NEED_DISK_MB=3072
 PORT=8090
 
@@ -123,7 +124,7 @@ fi
 # ---- verdict
 SHORT=()
 if [ "${MEM_AVAIL_MB:-0}" -lt "$NEED_MEM_MB" ]; then
-  SHORT+=("메모리: 쓸 수 있는 메모리 ${MEM_AVAIL_MB} MB (1.5 GB = ${NEED_MEM_MB} MB 이상 필요)")
+  SHORT+=("메모리: 쓸 수 있는 메모리 ${MEM_AVAIL_MB} MB (2 GB = ${NEED_MEM_MB} MB 이상 필요)")
 fi
 for pair in $DISKS; do
   where="${pair%%:*}"; free="${pair##*:}"
@@ -140,7 +141,7 @@ echo
 echo "== 판정"
 if [ "${#SHORT[@]}" -eq 0 ]; then
   echo "같은 서버에 설치해도 됩니다."
-  echo "(데모 랩은 평소 메모리 약 500 MB를 쓰고, 매시 몇 분 동안 순위표를 만들 때 최대 약 1.2 GB까지 씁니다."
+  echo "(데모 랩은 평소 메모리 약 800 MB를 쓰고, 매시 몇 분 동안 순위표를 만들 때 최대 약 1.8 GB까지 씁니다."
   echo " CPU는 엔진이 CPU 1개의 30%, 순위표가 몇 분 동안 50%까지로 묶여 있고, 우선순위는 규칙봇보다 낮습니다.)"
 else
   echo "지금은 같은 서버에 설치하지 않는 것이 좋습니다. 모자란 것:"

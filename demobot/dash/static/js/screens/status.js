@@ -7,7 +7,7 @@ import * as ui from "../ui.js";
 import {isMissing} from "../api.js";
 import {PHASE_KO, tfKo} from "../labels.js";
 
-const MEM_CAP_MB = 900;        // demobot-live.service MemoryMax (CONTRACT.md section 3)
+const MEM_CAP_MB = 1200;       // demobot-live.service MemoryMax (CONTRACT.md section 3)
 const CPU_CAP_PCT = 30;        // demobot-live.service CPUQuota
 const DISK_LOW_MB = 2048;
 

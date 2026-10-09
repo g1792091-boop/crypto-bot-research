@@ -22,8 +22,8 @@ KillMode=mixed
 # A guest on the rule bot's server: lowest priority, at most half of one CPU, hard memory cap.
 Nice=15
 CPUQuota=50%
-MemoryHigh=800M
-MemoryMax=1000M
+MemoryHigh=1200M
+MemoryMax=1500M
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 # Sandbox: read-only system, writes only its own folder.

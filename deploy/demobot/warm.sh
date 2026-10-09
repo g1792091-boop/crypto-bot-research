@@ -36,7 +36,7 @@ set +e
 systemd-run --unit=demobot-warm --description="demobot first fill" --collect --wait --quiet \
   --uid=demobot --gid=demobot \
   -p WorkingDirectory=/opt/demobot/app -p EnvironmentFile=/etc/demobot/demobot.env -p UMask=0027 \
-  -p Nice=10 -p CPUWeight=20 -p MemoryHigh=700M -p MemoryMax=900M \
+  -p Nice=10 -p CPUWeight=20 -p MemoryHigh=900M -p MemoryMax=1200M \
   -p NoNewPrivileges=yes -p PrivateTmp=yes -p PrivateDevices=yes -p ProtectSystem=strict -p ProtectHome=yes \
   -p ReadWritePaths=/var/lib/demobot \
   -p "InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot" \
@@ -61,6 +61,6 @@ if [ "$rc" -eq 0 ]; then
   fi
 else
   echo "첫 채우기가 실패했습니다 (exit $rc). 마지막 줄 보기: journalctl -u demobot-warm -n 40 --no-pager"
-  echo "그 화면을 개발자에게 보내 주세요. (메모리 900 MB 제한에 걸렸으면 'oom'이 보입니다)"
+  echo "그 화면을 개발자에게 보내 주세요. (메모리 1.2 GB 제한에 걸렸으면 'oom'이 보입니다)"
 fi
 exit "$rc"
