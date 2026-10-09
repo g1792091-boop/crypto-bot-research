@@ -32,6 +32,12 @@ export const r = (x, sign = true) => (bad(x) ? "—" : num(x, 3, sign) + "R");
 export const pct = (x, sign = false, dec = 1) => (bad(x) ? "—" : num(x, dec, sign) + "%");
 /** A ratio as percent: 0.413 -> "41.3%". */
 export const ratio = (x, dec = 1) => (bad(x) ? "—" : num(Number(x) * 100, dec) + "%");
+/** A price with decimals by size (BTC 112,301.5 · DOGE 0.24112). */
+export function price(x) {
+  if (bad(x)) return "—";
+  const a = Math.abs(Number(x));
+  return num(x, a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1);
+}
 export const lev = (L) => (bad(L) ? "—" : `${num(L, 0)}배`);
 /** "up" / "down" / "" for a signed value (a value that shows as zero gets no colour). */
 export const tone = (x, shown) => (bad(x) || Number(x) === 0 || (shown != null && !/[1-9]/.test(String(shown))) ? "" : Number(x) > 0 ? "up" : "down");

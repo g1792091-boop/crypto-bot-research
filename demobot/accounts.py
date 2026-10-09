@@ -30,7 +30,7 @@ MONDAY0 = 1577664000000          # 2019-12-30 00:00 UTC, a Monday
 MIN_POOLED, MIN_COIN = 200, 100  # study selection minimums (s3_select)
 FRIEND_MIN_N = 20                # friend rule: trades of a candidate in the last 26 weeks (per coin)
 FRIEND_WEEKS = 26
-NOTIFY_KINDS = ("adaptive", "friend")
+NOTIFY_KINDS = ("adaptive", "friend", "private")
 
 
 @dataclass
@@ -103,6 +103,29 @@ def all_accounts() -> list:
 
 ACCOUNTS = all_accounts()
 BY_ID = {a.id: a for a in ACCOUNTS}
+_PLUGIN_ACCTS: list = []
+
+
+def current_accounts() -> list:
+    """The 48 built-in accounts plus the private plug-in accounts loaded at the last refresh."""
+    return ACCOUNTS + _PLUGIN_ACCTS
+
+
+def by_id(aid: str) -> Acct:
+    return BY_ID.get(aid) or next(a for a in _PLUGIN_ACCTS if a.id == aid)
+
+
+def refresh_plugins(log=print) -> list:
+    from . import plugins as PL
+    accts = []
+    for mod in PL.load(log=log):
+        for spec in mod.ACCOUNTS:
+            v = str(spec["variant"])
+            accts.append(Acct(PL.account_id(mod, v), "private", mod.KEY, str(spec.get("name", f"비공개 {mod.KEY}"))[:60],
+                              None, spec.get("tf", "15m"), str(spec.get("rule_ko", ""))[:300],
+                              extra={"mod": mod, "variant": v}))
+    _PLUGIN_ACCTS[:] = accts
+    return accts
 
 
 # ------------------------------------------------------------------ signal access
@@ -219,7 +242,11 @@ def friend_pick(ctx: Ctx, strat: str, tf: str, T: int, coin: str, levs=G.LEVS) -
         risk = np.abs(fill - (raw - sd * kk * atr))
         rf = risk / fill
         af = atr / fill
-        if e > 0:
+        if e == G.HALFBE:
+            R_e = book.F[k, s, ST.F_HB_R].astype(float)
+            x_e = book.T[k, s, ST.T_HB]
+            dn_e = np.isfinite(R_e) & (x_e >= 0)
+        elif e > 0:
             R_e = book.F[k, s, ST.F_TP_R + e - 1].astype(float)
             x_e = book.T[k, s, ST.T_TP + e - 1]
             dn_e = np.isfinite(R_e) & (x_e >= 0)
@@ -484,6 +511,21 @@ def _trade_outcome(ctx: Ctx, coin: str, tf: str, sig_ts: int, side: int, ex: int
         if not np.isfinite(R):            # entry bar not closed yet: mark at the entry
             R = (-(X.TAKER * 2)) * fill / risk
         reason_s = {0: "stop", 1: "lock", 2: "liq"}.get(reason, "open")
+    elif ex == G.HALFBE:
+        R = float(c["F"][ST.F_HB_R])
+        x = int(c["T"][ST.T_HB])
+        done = np.isfinite(R) and x >= 0
+        if done:
+            gross = float(c["F"][ST.F_HB_G])
+            exit_raw = float(c["F"][ST.F_HB_EXIT])
+            reason_s = "tp" if gross > 0.9 else ("stop" if gross < -0.5 else "be")
+        else:
+            exit_raw = None
+            reason_s = "open"
+            held = max(1, int((ctx.now - (sig_ts + G.TF_MIN[tf] * 60000)) // M15))
+            px = last_c * (1 - side * X.SLIP)
+            roe_p = side * (px / fill - 1) - X.TAKER * (1 + px / fill) - X.F_BAR15 * held
+            R = roe_p * fill / risk
     else:
         j = ex - 1
         R = float(c["F"][ST.F_TP_R + j])
@@ -583,6 +625,130 @@ def simulate_line(ctx: Ctx, acct: Acct, L: int, events: list) -> dict:
         if o["done"]:
             busy[ci] = o["x_ts"]
             heapq.heappush(heap, (int(o["x_ts"]), ci, float(pnl), float(margin), tr))
+        else:
+            busy[ci] = 2**62
+            tr["unreal"] = pnl
+    close_until(ctx.now + 1)
+    unreal = sum(t.get("unreal", 0.0) for t in trades if t["status"] == "open")
+    equity = W + unreal
+    curve.append((ctx.now, equity))
+    n = st["trades"]
+    closed = [t for t in trades if t["status"] == "closed"]
+    kst_day0 = ((ctx.now + 9 * 3600 * 1000) // 86400000) * 86400000 - 9 * 3600 * 1000
+    today = sum(t["pnl"] for t in closed if t["exit_ms"] and t["exit_ms"] >= kst_day0)
+    total_pnl = sum(t["pnl"] for t in closed) + unreal
+    line = dict(equity=equity, wallet=W, pnl=total_pnl, pnl_pct=total_pnl / SEED * 100, today_pnl=today,
+                trades=n, wins=st["wins"], win_rate=(st["wins"] / n if n else None),
+                mean_R=(st["sumR"] / n if n else None), max_dd=st["max_dd"],
+                open=sum(1 for t in trades if t["status"] == "open"), liqs=st["liqs"], skipped=st["skipped"],
+                worst_streak=st["worst_streak"], ruined=st["ruins"] > 0, ruins=st["ruins"])
+    return dict(line=line, trades=trades, curve=curve)
+
+
+def simulate_plugin_line(ctx: Ctx, acct: Acct, L: int, ptrades: list) -> dict:
+    """A private plug-in account line: the plug-in gives entries and exit legs (raw prices); sizing, entry checks,
+    fees (maker for limit entries and take-profit legs, taker + slippage otherwise), real funding and the wallet are
+    the same as every account."""
+    eng = ctx.eng
+    W = SEED
+    peak = SEED
+    used = np.zeros(len(G.COINS))
+    busy = np.full(len(G.COINS), -1, np.int64)
+    heap = []
+    trades = []
+    curve = [(ctx.live0, SEED)]
+    st = dict(trades=0, wins=0, liqs=0, skipped=0, ruins=0, worst_streak=0, max_dd=0.0, sumR=0.0)
+    streak = 0
+
+    def close_until(t):
+        nonlocal W, peak, streak
+        while heap and heap[0][0] < t:
+            x_ts, _n, ci, pnl, margin, tr = heapq.heappop(heap)
+            W += pnl
+            used[ci] -= margin
+            tr["status"] = "closed"
+            st["trades"] += 1
+            st["wins"] += pnl > 0
+            st["liqs"] += tr["reason"] == "liq"
+            st["sumR"] += tr["R"]
+            streak = streak + 1 if pnl < 0 else 0
+            st["worst_streak"] = max(st["worst_streak"], streak)
+            curve.append((x_ts + M15, W))
+            peak = max(peak, W)
+            st["max_dd"] = max(st["max_dd"], 1 - W / peak)
+            if W < RUIN * SEED:
+                st["ruins"] += 1
+                tr["ruin"] = True
+                W = SEED
+                peak = SEED
+                curve.append((x_ts + M15, W))
+
+    order = sorted(ptrades, key=lambda t: (int(t["entry_ms"]), G.COINS.index(t["coin"])))
+    for n_, t in enumerate(order):
+        e_ts = int(t["entry_ms"])
+        if e_ts < ctx.live0 or e_ts > ctx.now:
+            continue
+        close_until(e_ts)
+        coin = t["coin"]
+        ci = G.COINS.index(coin)
+        if busy[ci] >= e_ts:
+            st["skipped"] += 1
+            continue
+        side = int(t["side"])
+        maker = bool(t.get("maker_entry"))
+        fill = float(t["entry"]) if maker else float(t["entry"]) * (1 + side * X.SLIP)
+        stop = float(t["stop"])
+        sdist = abs(fill - stop)
+        if sdist <= 0:
+            continue
+        atr = float(t["atr"]) if t.get("atr") else sdist / 2
+        ok, qty, margin, _why = X.entry_check(coin, side, fill, sdist, atr, W, L)
+        if not ok or used.sum() + margin > W + 1e-9:
+            st["skipped"] += 1
+            continue
+        notional = qty * fill
+        pnl = -(X.MAKER if maker else X.TAKER) * notional
+        b15 = eng.b15[coin]
+        last_c = float(b15["c"][-1])
+        legs = list(t["legs"])
+        done = all(x[1] is not None for x in legs)
+        kinds = [x[3] for x in legs if x[1] is not None]
+        unreal = 0.0
+        last_x = max([int(x[1]) for x in legs if x[1] is not None], default=None)
+        exit_px = None
+        for frac, xms, xpx, kind in legs:
+            if xms is None:
+                px = last_c * (1 - side * X.SLIP)
+                part = frac * qty * side * (px - fill) - X.TAKER * frac * qty * px
+                unreal += part
+                pnl += part
+            else:
+                px = float(xpx) if kind == "tp" else float(xpx) * (1 - side * X.SLIP)
+                pnl += frac * qty * side * (px - fill) - (X.MAKER if kind == "tp" else X.TAKER) * frac * qty * px
+                exit_px = float(xpx)
+        end = (last_x + M15) if done else ctx.now
+        held = max(1, (end - e_ts) // M15)
+        paid = _funding_paid(eng, coin, e_ts, end, side)
+        fund = -notional * (paid if paid is not None else X.F_BAR15 * held)
+        pnl += fund
+        reason = "open"
+        if done:
+            reason = "stop" if "sl" in kinds else ("time" if "time" in kinds else ("be" if "be" in kinds else "tp"))
+        if pnl < -margin:
+            pnl = -margin
+            reason = "liq" if done else reason
+        R = pnl / (qty * sdist)
+        used[ci] += margin
+        tr = dict(key=f"{coin}|{acct.tf}|{int(t['signal_ms'])}|{side}|{L}", L=L, coin=coin, side=side,
+                  signal_ms=int(t["signal_ms"]), entry_ms=e_ts, entry=fill, stop=stop,
+                  exit_ms=end if done else None, exit=exit_px if done else None,
+                  status="closed" if done else "open", reason=reason, pnl=pnl, roe=pnl / margin, R=R,
+                  margin=margin, funding=fund, combo=None, exit_i=None,
+                  setting_ko=str(t.get("setting_ko", ""))[:80], exit_ko=str(t.get("exit_ko", ""))[:80])
+        trades.append(tr)
+        if done:
+            busy[ci] = last_x
+            heapq.heappush(heap, (int(last_x), n_, ci, float(pnl), float(margin), tr))
         else:
             busy[ci] = 2**62
             tr["unreal"] = pnl
@@ -706,11 +872,22 @@ def account_events(ctx: Ctx, a: Acct, L: int, deciders: dict) -> tuple:
     return ev, now_settings
 
 
-def run_all(eng, now_ms: int) -> dict:
+def run_all(eng, now_ms: int, log=print) -> dict:
     """Every account and line. Returns {id: {acct, lines: {L: sim}, settings_now, decisions, switches_new}}."""
     ctx = Ctx(eng, now_ms)
     out = {}
     deciders = {}
+    refresh_plugins(log=log)
+    for a in _PLUGIN_ACCTS:
+        try:
+            pt = a.extra["mod"].trades(a.extra["variant"], eng.b15, ctx.live0, now_ms)
+            lines = {L: simulate_plugin_line(ctx, a, L, pt) for L in G.LEVS}
+        except Exception as exc:          # a broken plug-in never stops the engine
+            log("plugin failed:", a.id, type(exc).__name__, str(exc)[:200])
+            eng.issues.append(f"비공개 매매법 {a.sub} 계산 실패")
+            lines = {L: simulate_plugin_line(ctx, a, L, []) for L in G.LEVS}
+        out[a.id] = dict(acct=a, lines=lines, switches_new=[],
+                         settings_now=[dict(coin="ALL", L=None, setting_ko=a.name, exit_ko=a.rule_ko[:60])])
     for a in sorted(ACCOUNTS, key=lambda x: (x.strat or "", x.tf)):
         if a.kind == "adaptive":
             dz = Decider(ctx, a)

@@ -15,6 +15,10 @@ and ends with '외 N건은 대시보드에서'.
 The token is read from the environment only (DEMOBOT_TG_TOKEN, DEMOBOT_TG_CHAT; /etc/demobot/demobot.env) and is
 never logged, printed or stored: every error text goes through ``redact``.
 
+View log ("관점 기록장", CONTRACT.md 7.3): ``render`` words the replies (``view_ack``, ``view_err``, ``view_cancel``,
+``view_list``, ``view_help``, ``view_done``) and ``poll_commands`` reads the owners' lines from the group (getUpdates,
+only ``DEMOBOT_TG_CHAT``; never raises).
+
     python -m demobot.notify test      # sends '🧪 데모 랩 테스트 메시지' to DEMOBOT_TG_CHAT
     python -m demobot.notify chatid    # lists the groups the bot has seen (to find DEMOBOT_TG_CHAT)
 
@@ -353,8 +357,150 @@ def _pass(p: dict, now_ms: Optional[int]) -> str:
     return _fit(head, [("기준", checks)], tail)
 
 
+# ---------------------------------------------------------------- the view log ("관점 기록장", CONTRACT.md 7.3)
+VIEW_STATUS_KO = {"watching": "지켜보는 중", "done": "끝남", "cancelled": "취소됨"}
+FOLLOW_KO = {"touch": "구간 바로 진입", "confirm": "15분 종가 확인 진입"}
+FOLLOW_STATUS_KO = {"waiting": "진입 대기", "open": "보유 중", "closed": "청산", "missed": "진입 못 함 (48시간 안에)"}
+VIEW_USAGE = "관점 [MM/DD HH:MM] 코인 롱|숏 [A 가격(-가격)] [B …] [C …] [손절 가격] [목표 가격[,가격]] [메모 글]"
+VIEW_EXAMPLES = ("관점 BTC 숏 B 84750-84840 C 85300 손절 85600",
+                 "관점 10/10 14:00 ETH 롱 A 3,050~3,060 손절 3,010 목표 3,120,3,180 메모 지지선 반등")
+
+
+def pct2(x) -> str:
+    """A small move in percent: '+0.41%'."""
+    v = _num(x)
+    return "-" if v is None else f"{v:+.2f}%"
+
+
+def pz(x) -> str:
+    """A view price as typed: px() without trailing zeros ('84,750', '0.21345', '2.5')."""
+    t = px(x)
+    return t.rstrip("0").rstrip(".") if "." in t else t
+
+
+def _zone(z) -> Optional[str]:
+    """[lo, hi] / [x, x] / x -> '84,750~84,840' / '85,300'; None when empty."""
+    if z is None:
+        return None
+    if isinstance(z, (list, tuple)):
+        vals = [v for v in (_num(x) for x in z) if v is not None]
+        if not vals:
+            return None
+        lo, hi = min(vals), max(vals)
+        return pz(lo) if lo == hi else f"{pz(lo)}~{pz(hi)}"
+    return pz(z) if _num(z) is not None else None
+
+
+def zones_text(zones) -> str:
+    """{'A': None, 'B': [84750, 84840], 'C': [85300, 85300]} -> 'B 84,750~84,840 · C 85,300'."""
+    if not isinstance(zones, dict):
+        return "-"
+    parts = [f"{k} {t}" for k in sorted(zones) if (t := _zone(zones[k]))]
+    return " · ".join(parts) or "-"
+
+
+def _view_head(emoji: str, what: str, p: dict) -> str:
+    vid = p.get("id")
+    num = f" #{vid}" if vid not in (None, "") else ""
+    return f"{emoji} 관점{num} {what} · {coin(p.get('coin'))} {side_ko(p.get('side'))}"
+
+
+def _view_ack(p: dict) -> list:
+    L = [_view_head("📝", "기록", p)]
+    t = _num(p.get("t_ms"))
+    if t:
+        L.append(f"{kst(t)} 기준 (한국 시간)")
+    L.append(f"구간 {zones_text(p.get('zones'))}")
+    stop = _num(p.get("stop"))
+    L.append(f"손절 {pz(stop)}" if stop is not None else "손절 없음: 가장 먼 구간에서 0.3% 바깥으로 계산")
+    targets = [pz(v) for v in (p.get("targets") or []) if _num(v) is not None]
+    L.append(f"목표 {', '.join(targets)}" if targets else "목표 없음: 1R에 절반 · 본전 · 나머지 2R")
+    if p.get("memo"):
+        L.append(_clip(f"메모 {p['memo']}", 500))
+    L += [_clip(f"- {n}", 300) for n in (p.get("notes_ko") or []) if n]
+    vid = p.get("id")
+    L.append("48시간 동안 따라가며 채점합니다" + (f" · 취소: 취소 {vid}" if vid not in (None, "") else ""))
+    return L
+
+
+def _view_err(p: dict) -> list:
+    body = str(p.get("text_ko") or "").strip()
+    L = ["❓ 관점을 기록하지 못했습니다"]
+    L += [_clip(body, 1500)] if body else [f"쓰는 법: {VIEW_USAGE}", f"예: {VIEW_EXAMPLES[0]}"]
+    L.append("자세한 쓰는 법: 관점도움")
+    return L
+
+
+def _view_cancel(p: dict) -> list:
+    vid = p.get("id")
+    num = f" #{vid}" if vid not in (None, "") else ""
+    if p.get("ok"):
+        return [f"🗑 관점{num} 취소했습니다", "채점과 결과에서 빠집니다"]
+    return [f"❓ 관점{num} 취소 안 됨", "없는 번호이거나 이미 끝난 관점입니다 · 목록: 관점목록"]
+
+
+def _view_list(p: dict) -> str:
+    items = []
+    for v in p.get("views") or []:
+        if not isinstance(v, dict):
+            continue
+        t = _num(v.get("t_ms"))
+        line = (f"- #{v.get('id', '?')} {kst(t) + ' ' if t else ''}{coin(v.get('coin'))} {side_ko(v.get('side'))}"
+                f" · {VIEW_STATUS_KO.get(str(v.get('status')), str(v.get('status') or '?'))}")
+        if _num(v.get("dir24")) is not None:
+            line += f" · 24시간 {pct2(v['dir24'])}"
+        if _num(v.get("touch_R")) is not None:
+            line += f" · 구간 진입 {rr(v['touch_R'])}"
+        items.append(line)
+    if not items:
+        return "📒 관점 목록\n아직 기록한 관점이 없습니다 · 쓰는 법: 관점도움"
+    return _fit([f"📒 관점 목록 · 최근 {len(items)}개"], [("번호 · 시각 · 코인 · 상태", items)],
+                ["", "방향은 말한 쪽으로 움직인 %, 취소: 취소 번호"])
+
+
+def _view_help() -> list:
+    return ["📖 관점 기록장 쓰는 법", "단체방에 한 줄로 보냅니다:", VIEW_USAGE, "",
+            "- 시각은 한국 시간, 빼면 받은 시각", "- 코인: BTC ETH SOL DOGE LTC BCH XRP",
+            "- 구간 A·B·C 중 하나 이상, 범위는 84750-84840 또는 84750~84840 (쉼표 가능)",
+            "- 손절을 빼면 가장 먼 구간에서 0.3% 바깥, 목표를 빼면 1R에 절반 · 본전 · 나머지 2R", "",
+            "예시", VIEW_EXAMPLES[0], VIEW_EXAMPLES[1], "",
+            "그 밖에", "- 취소 12: 12번 관점 취소", "- 관점목록: 최근 10개", "- 관점도움: 이 설명", "",
+            "채점: 4·24·48시간 뒤 말한 방향으로 움직였는지, 구간에 닿았는지, 두 가지 따라 하기",
+            "(구간 바로 진입 / 15분 종가 확인 진입)의 결과. 끝난 관점 30개 전에는 '표본 부족'입니다.",
+            "기록은 이 서버에만 남고 GitHub에는 올라가지 않습니다."]
+
+
+def _follow_line(mode: str, f) -> str:
+    name = FOLLOW_KO.get(mode, mode)
+    if not isinstance(f, dict) or not f:
+        return f"- {name}: -"
+    st = str(f.get("status") or "")
+    parts = [FOLLOW_STATUS_KO.get(st, st or "-")]
+    if st in ("open", "closed") and _num(f.get("entry")) is not None:
+        parts.append(f"진입 {pz(f['entry'])}")
+    if _num(f.get("R")) is not None:
+        parts.append(rr(f["R"]) + (" (진행 중)" if st == "open" else ""))
+    if _num(f.get("wallet20_pct")) is not None:
+        parts.append(f"20배 잔고 {pct(f['wallet20_pct'])}")
+    if f.get("legs_ko"):
+        parts.append(str(f["legs_ko"]))
+    return _clip(f"- {name}: " + " · ".join(parts), 400)
+
+
+def _view_done(p: dict) -> list:
+    d = p.get("dir") if isinstance(p.get("dir"), dict) else {}
+    L = [_view_head("📊", "결과", p),
+         "말한 방향으로 " + " · ".join(f"{h} {pct2(d.get(k))}"
+                                     for k, h in (("4h", "4시간"), ("24h", "24시간"), ("48h", "48시간"))),
+         "구간 도달 " + ("예" if p.get("reached") is True else "아니오" if p.get("reached") is False else "-"),
+         _follow_line("touch", p.get("touch")), _follow_line("confirm", p.get("confirm"))]
+    if p.get("summary_ko"):
+        L.append(_clip(str(p["summary_ko"]), 1000))
+    return L
+
+
 def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
-    """The Korean Telegram text of one event (CONTRACT.md section 5). ``now_ms`` (optional) adds the KST time to the
+    """The Korean Telegram text of one event (CONTRACT.md sections 5 and 7.3). ``now_ms`` (optional) adds the KST time to the
     kinds that carry no time of their own. Pure (no I/O, no clock); never raises; '' for a tick with no trade."""
     p = payload if isinstance(payload, dict) else {}
     try:
@@ -370,6 +516,18 @@ def render(kind: str, payload: dict, now_ms: Optional[int] = None) -> str:
             text = "\n".join(_warn(p, now_ms))
         elif kind == "pass":
             text = _pass(p, now_ms)
+        elif kind == "view_ack":
+            text = "\n".join(_view_ack(p))
+        elif kind == "view_err":
+            text = "\n".join(_view_err(p))
+        elif kind == "view_cancel":
+            text = "\n".join(_view_cancel(p))
+        elif kind == "view_list":
+            text = _view_list(p)
+        elif kind == "view_help":
+            text = "\n".join(_view_help())
+        elif kind == "view_done":
+            text = "\n".join(_view_done(p))
         else:
             body = p.get("detail_ko") or p.get("text") or ""
             text = f"🧪 데모 랩 알림 · {kind}" + (f"\n{body}" if body else "")
@@ -578,6 +736,58 @@ class Outbox:
         except sqlite3.Error as exc:
             out["last_error"] = f"db: {type(exc).__name__}"
         return out
+
+
+# ---------------------------------------------------------------- commands from the group (CONTRACT.md 7.3)
+_poll_err: dict = {"text": None, "t": 0.0}
+
+
+def _poll_log(text: str) -> None:
+    """One stderr line per distinct poll error, repeated at most every 10 minutes (an outage is not a log flood)."""
+    now = time.time()
+    if text != _poll_err["text"] or now - _poll_err["t"] > 600:
+        _poll_err.update(text=text, t=now)
+        print(f"demobot telegram poll: {text}"[:300], file=sys.stderr)
+
+
+def poll_commands(token: str, chat: str, offset: int, timeout: int = 25, get: Optional[Callable] = None) -> tuple:
+    """getUpdates (long poll ``timeout`` s, ``allowed_updates=["message"]``) from ``offset``; (new offset, items) with
+    items ``{"update_id", "text", "date_ms", "from_name"}`` of the text messages of ``chat`` only (string compare).
+    The new offset is the last update id + 1 for every update seen, other chats included, so nothing is read twice.
+    Never raises: on any error (network, Telegram, a bad answer) the old offset and [] (the error is logged once,
+    token removed). ``get(token, method, params, timeout)`` defaults to ``api``."""
+    token, want = (token or "").strip(), str(chat or "").strip()
+    try:
+        off = int(offset or 0)
+    except (TypeError, ValueError):
+        off = 0
+    if not token or not want:
+        return off, []
+    try:
+        params = {"timeout": str(max(0, int(timeout))), "allowed_updates": json.dumps(["message"])}
+        if off:
+            params["offset"] = str(off)
+        updates = (get or api)(token, "getUpdates", params, float(max(0, int(timeout))) + TIMEOUT_S)
+        if not isinstance(updates, list):
+            raise TelegramError(f"getUpdates answered {type(updates).__name__}")
+        new, items = off, []
+        for u in updates:
+            if not isinstance(u, dict) or not isinstance(u.get("update_id"), int):
+                continue
+            new = max(new, u["update_id"] + 1)
+            m = u.get("message")
+            if not isinstance(m, dict) or not isinstance(m.get("chat"), dict):
+                continue
+            if str(m["chat"].get("id")) != want or not isinstance(m.get("text"), str):
+                continue
+            frm = m.get("from") if isinstance(m.get("from"), dict) else {}
+            items.append({"update_id": u["update_id"], "text": m["text"],
+                          "date_ms": int(_num(m.get("date")) or 0) * 1000,
+                          "from_name": str(frm.get("first_name") or "")})
+        return new, items
+    except Exception as exc:  # noqa: BLE001  (commands are optional; the engine runs on)
+        _poll_log(redact(str(exc) if isinstance(exc, TelegramError) else f"{type(exc).__name__}: {exc}", token))
+        return off, []
 
 
 # ---------------------------------------------------------------- CLI

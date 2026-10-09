@@ -3,7 +3,7 @@
     DEMOBOT_DASH_PASSWORD_HASH=... DEMOBOT_DASH_SECRET=... python -m demobot.dash --snap /var/lib/demobot/snap
 
 - Reads only: the snapshot files (``status.json``, ``home.json``, ``accounts.json``, ``acct/<id>.json``,
-  ``trades.json``, ``judge.json``, ``rank_<STRAT>_<tf>.npz``, ``rank_meta.json``) and the static 5-year files
+  ``trades.json``, ``judge.json``, ``views.json``, ``rank_<STRAT>_<tf>.npz``, ``rank_meta.json``) and the 5-year files
   ``demobot/data/past5y_<STRAT>_<tf>.npz``. Nothing here writes a file, opens the database or places an order.
 - Every file is cached by its modification time; a file that is not there yet answers ``{"missing": true}``.
 - Login: one password (PBKDF2 hash in DEMOBOT_DASH_PASSWORD_HASH, ``python -m demobot.dash hash``) and a signed session
@@ -54,7 +54,7 @@ PUBLIC_PATHS = frozenset(("/login", "/static/login.js", "/static/login.css", "/s
                           "/static/icon.svg", "/favicon.ico"))
 
 SNAP_FILES = {"status": "status.json", "home": "home.json", "accounts": "accounts.json", "trades": "trades.json",
-              "judge": "judge.json", "rank_meta": "rank_meta.json"}
+              "judge": "judge.json", "rank_meta": "rank_meta.json", "views": "views.json"}
 ACCOUNT_ID = re.compile(r"^[A-Za-z0-9-]{3,40}$")   # contract ids carry the upper-case strategy name (fx-def-S2-15m)
 
 
@@ -325,19 +325,33 @@ def _r(x, nd=4) -> Optional[float]:
     return None if x is None else round(x, nd)
 
 
+def _exit_ko(i: int) -> str:
+    """grid.exit_ko, or the exit's own name for an exit grid.py cannot word (never an error in the page)."""
+    try:
+        return grid.exit_ko(i)
+    except (IndexError, ValueError, TypeError):
+        return grid.EXITS[i] if 0 <= i < len(grid.EXITS) else str(i)
+
+
 def rank_table(snap: Snap, p: dict) -> dict:
     strat, tf = p["strat"], p["tf"]
     C = grid.NCOMBO[strat]
     base = {"strategy": strat, "short": grid.SHORT[strat], "tf": tf, "exit": p["exit"], "exit_name": grid.EXITS[p["exit"]],
-            "exit_ko": grid.exit_ko(p["exit"]), "scope": p["scope"], "window": p["window"], "sort": p["sort"],
+            "exit_ko": _exit_ko(p["exit"]), "scope": p["scope"], "window": p["window"], "sort": p["sort"],
             "dir": "desc" if p["desc"] else "asc", "limit": p["limit"], "offset": p["offset"], "settings": C}
     z = snap.rank_file(strat, tf)
     if z is None:
         return {"missing": True, **base}
-    W, E, S = len(grid.WINDOWS), grid.NEXIT, len(grid.SCOPES)
+    # the exit dimension follows grid.NEXIT (CONTRACT 7.1: 14 exits); a file written before an exit was added has
+    # fewer, and that exit is simply not there yet
+    W, S = len(grid.WINDOWS), len(grid.SCOPES)
     stats = z.get("stats")
-    if stats is None or stats.shape != (W, E, S, C, len(STATS_K)):
+    if (stats is None or stats.ndim != 5 or stats.shape[0] != W or stats.shape[2:] != (S, C, len(STATS_K))
+            or not 1 <= stats.shape[1] <= grid.NEXIT):
         return {"missing": True, "bad_shape": True, **base}
+    E = stats.shape[1]
+    if p["exit"] >= E:
+        return {"missing": True, "exit_not_in_file": True, **base}
     w, e, s = grid.WINDOWS.index(p["window"]), p["exit"], grid.SCOPES.index(p["scope"])
     cell = stats[w, e, s].astype(np.float64)                       # (C, K)
     n = np.nan_to_num(cell[:, KI["n"]], nan=0.0)
@@ -391,8 +405,10 @@ def rank_table(snap: Snap, p: dict) -> dict:
 
     past = snap.past_file(strat, tf)
     pstats = past.get("stats") if past else None
-    if pstats is not None and pstats.shape != (len(PERIODS), E, S, C, 3):
+    if pstats is not None and (pstats.ndim != 5 or pstats.shape[0] != len(PERIODS) or pstats.shape[2:] != (S, C, 3)):
         pstats = None
+    # a 5-year file without this exit (written before it was added): its columns stay empty, never an error
+    past_has_exit = pstats is not None and e < pstats.shape[1]
     pick = grid.PICK.get((strat, tf))
     dflt, frd = grid.default_combo(strat), grid.friend_combo(strat)
 
@@ -410,7 +426,7 @@ def rank_table(snap: Snap, p: dict) -> dict:
         if pstats is not None:
             pr = {}
             for pi, per in enumerate(PERIODS):
-                pn, pw, pm = (float(x) for x in pstats[pi, e, s, c])
+                pn, pw, pm = (float(x) for x in pstats[pi, e, s, c]) if past_has_exit else (math.nan,) * 3
                 ok = math.isfinite(pn) and pn > 0
                 pr[per] = {"n": int(pn) if ok else None, "win_rate": _r(pw) if ok else None,
                            "mean_R": _r(pm) if ok else None}
@@ -418,7 +434,7 @@ def rank_table(snap: Snap, p: dict) -> dict:
         rows.append(row)
     return {**base, "generated_ms": generated_ms, "bounds_ms": bounds_ms, "min_n": min_n, "luck95": _r(luck95, 5),
             "total": int(idx.size), "whip_median": _r(whip_median) if whip_median is not None else None,
-            "past5y": pstats is not None, "periods": list(PERIODS), "periods_ko": [PERIODS_KO[x] for x in PERIODS],
+            "past5y": pstats is not None, "past5y_exit": bool(past_has_exit), "periods": list(PERIODS), "periods_ko": [PERIODS_KO[x] for x in PERIODS],
             "rows": rows}
 
 
@@ -429,7 +445,7 @@ def grid_info() -> dict:
                             "friend": grid.combo_label(s, grid.friend_combo(s)) if grid.friend_combo(s) is not None else None,
                             "pick": {tf: grid.combo_label(s, grid.PICK[(s, tf)]) for tf in grid.TFS}}
                            for s in grid.STRATS],
-            "tfs": list(grid.TFS), "exits": [{"i": i, "name": n, "ko": grid.exit_ko(i)} for i, n in enumerate(grid.EXITS)],
+            "tfs": list(grid.TFS), "exits": [{"i": i, "name": n, "ko": _exit_ko(i)} for i, n in enumerate(grid.EXITS)],
             "scopes": list(grid.SCOPES), "windows": list(grid.WINDOWS), "coins": list(grid.COINS),
             "leverages": list(grid.LEVS), "sorts": list(SORTS), "periods": list(PERIODS),
             "periods_ko": [PERIODS_KO[x] for x in PERIODS], "limit_max": LIMIT_MAX}

@@ -13,11 +13,12 @@ const MENU = [
   {id: "accounts", ko: "계좌", also: ["account"]},
   {id: "trades", ko: "거래 기록"},
   {id: "judge", ko: "판정"},
+  {id: "views", ko: "관점 기록"},
   {id: "status", ko: "서버 상태"},
   {id: "howto", ko: "어떻게 돌아가나"},
 ];
 const SCREENS = {home: "home", rank: "rank", accounts: "accounts", account: "account", trades: "trades", judge: "judge",
-  status: "status", howto: "howto"};
+  views: "views", status: "status", howto: "howto"};
 const TITLE = "데모 랩";
 
 // ---------------------------------------------------------------- skin (two skins of tokens.css, per device)

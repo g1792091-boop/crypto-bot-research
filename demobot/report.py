@@ -14,8 +14,9 @@ from . import grid as G
 from . import store as ST
 
 DAY_MS = 86400 * 1000
-KIND_KO = {"fixed": "고정", "adaptive": "자동 교체", "friend": "친구 규칙", "flip": "동전 던지기"}
-REASON_KO = {"stop": "손절", "lock": "잠금 익절", "liq": "강제청산", "tp": "익절", "time": "시간", "open": "보유 중"}
+KIND_KO = {"fixed": "고정", "adaptive": "자동 교체", "friend": "친구 규칙", "flip": "동전 던지기", "private": "비공개 매매법"}
+REASON_KO = {"stop": "손절", "lock": "잠금 익절", "liq": "강제청산", "tp": "익절", "be": "본전", "time": "시간",
+             "open": "보유 중"}
 CURVE_MAX = 800
 TRADES_MAX = 600
 
@@ -67,7 +68,7 @@ def write_snapshots(eng, res: dict, judge: dict, snap: str, now_ms: int, tick_in
     live0 = eng.live_start
     rows = []
     all_trades = []
-    for a in A.ACCOUNTS:
+    for a in A.current_accounts():
         r = res[a.id]
         r["switch_log"] = A.decision_log(eng.conn, a)
         head = account_header(a, r)
@@ -115,12 +116,12 @@ def home_snapshot(eng, res, judge, snap, now_ms, rows, all_trades, phase) -> dic
             m[str(L)] = float(np.mean(v)) if v else None
         by_kind.append(dict(kind=k, kind_ko=ko, mean_pnl_pct=m))
     sw = []
-    for a in A.ACCOUNTS:
+    for a in A.current_accounts():
         for s in res[a.id].get("switch_log", [])[:5]:
             sw.append(dict(s, id=a.id, name=a.name))
     sw.sort(key=lambda s: -s["t_ms"])
     return dict(generated_ms=now_ms, live_days=(now_ms - live0) / DAY_MS, phase=phase,
-                totals=dict(accounts=len(A.ACCOUNTS), open_positions=sum(h["lines"]["20"]["open"] for h in rows),
+                totals=dict(accounts=len(A.current_accounts()), open_positions=sum(h["lines"]["20"]["open"] for h in rows),
                             trades=sum(int(ln["trades"]) for h in rows for ln in h["lines"].values()),
                             passed=len(judge.get("passed", []))),
                 best=best, worst=worst, by_kind=by_kind, leaders=RK.leaders(snap), verdict_ko=judge["verdict_ko"],
@@ -161,7 +162,7 @@ def status_snapshot(eng, now_ms, tick_info, outbox_state, phase) -> dict:
 def tick_events(eng, res: dict, now_ms: int, bar_ms: int) -> tuple:
     """(tick payload or None, switch payloads, notified rows) for the accounts that notify."""
     opens, closes, mark = [], [], []
-    for a in A.ACCOUNTS:
+    for a in A.current_accounts():
         if not a.notify:
             continue
         seen = ST.notified_keys(eng.conn, a.id)
@@ -192,7 +193,7 @@ def tick_events(eng, res: dict, now_ms: int, bar_ms: int) -> tuple:
             mark.append((a.id, base, st_all))
     tick = dict(bar_ms=bar_ms, opens=opens, closes=closes) if (opens or closes) else None
     switches = []
-    for a in A.ACCOUNTS:
+    for a in A.current_accounts():
         new = [s for s in (res[a.id].get("switches_new") or []) if s["t_ms"] >= now_ms - 2 * 3600 * 1000]
         if new and a.kind in ("adaptive", "friend"):
             switches.append(dict(account=a.id, name=a.name, items=new[:20]))

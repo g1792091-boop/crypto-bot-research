@@ -62,7 +62,12 @@ def compute(coin: str, tf: str, b15: dict, sig_ts: np.ndarray, sides: np.ndarray
     F[idx, ST.F_TP_G:ST.F_TP_G + 12] = tg.T
     T[idx, ST.T_TP:ST.T_TP + 12] = np.where(tx.T >= 0, ts15[np.clip(tx.T, 0, len(ts15) - 1)], -1)
     d_tp = np.all(tx >= 0, axis=0)
-    d_all = d_main & d_tp
+    hr, hg, hx, hp = X.halfbe_outcomes(b15, ee, sd, a, lev, liq)
+    F[idx, ST.F_HB_R] = hr
+    F[idx, ST.F_HB_G] = hg
+    F[idx, ST.F_HB_EXIT] = hp
+    T[idx, ST.T_HB] = np.where(hx >= 0, ts15[np.clip(hx, 0, len(ts15) - 1)], -1)
+    d_all = d_main & d_tp & (hx >= 0)
     for li, L in enumerate(G.LEVS):
         lf = np.where(sd > 0, X.first_tier_liq_frac(coin, 1, L), X.first_tier_liq_frac(coin, -1, L))
         rl = X.run_scan(b15, ee, sd, np.full(len(ee), float(L)), lf, X.K_STOP * a, liq_touch=True)
@@ -81,7 +86,8 @@ def n_finished(F: np.ndarray, T: np.ndarray) -> np.ndarray:
     main = (F[:, ST.F_MAIN_REASON] != 3) & (T[:, ST.T_MAIN] >= 0)
     tp = (T[:, ST.T_TP:ST.T_TP + 12] >= 0).sum(axis=1)
     lv = (T[:, ST.T_L:ST.T_L + 4] >= 0).sum(axis=1)
-    return main.astype(int) + tp + lv
+    hb = T[:, ST.T_HB] >= 0
+    return main.astype(int) + tp + lv + hb.astype(int)
 
 
 class Book:

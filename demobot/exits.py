@@ -256,6 +256,99 @@ def tpsl_outcomes(b, e, side, atr, lev, liq_frac, f_bar=F_BAR15, passes=PASSES):
     return R, Gr, X
 
 
+def halfbe_outcomes(b, e, side, atr, lev, liq_frac, f_bar=F_BAR15, passes=PASSES, k=2.0, tp1=1.0, tp2=1.5):
+    """Exit 13 ("반익반본"): stop k x ATR; half closes at tp1 R (limit price), then the rest's stop moves to the entry
+    fill (break-even) and the rest closes at tp2 R or at break-even. Bar rules as tpsl_outcomes: a bar touching the
+    stop and TP1 = stop; after TP1 the rest may reach TP2 in the same bar, break-even counts from the next bar;
+    a stop bar opening beyond the stop fills at the open; exit legs pay taker + slippage. Returns per row net R, gross R,
+    exit 15m index of the last leg, raw exit price of the last leg (NaN / -1 while open). R in units of the stop
+    distance of the fill."""
+    m = len(e)
+    nb = len(b["o"])
+    raw = b["o"][e]
+    fill = raw * (1 + side * SLIP)
+    dist = k * atr
+    stop_px = raw - side * dist
+    t1 = raw + side * tp1 * dist
+    t2 = raw + side * tp2 * dist
+    be = fill
+    risk = np.abs(fill - stop_px)
+    liq = fill * (1 - side * liq_frac)
+    R = np.full(m, np.nan)
+    Gr = np.full(m, np.nan)
+    X = np.full(m, -1, np.int64)
+    XP = np.full(m, np.nan)
+    BIG = 10**12
+    todo = np.arange(m)
+    for H in passes:
+        if not len(todo):
+            break
+        nxt = []
+        step = max(16, 200_000 // H)
+        for c0 in range(0, len(todo), step):
+            sel = todo[c0:c0 + step]
+            J = e[sel][:, None] + np.arange(H)[None, :]
+            valid = J < nb
+            Jc = np.minimum(J, nb - 1)
+            sd = side[sel][:, None]
+            adverse = np.where(sd == 1, b["l"][Jc], -b["h"][Jc])
+            fav = np.where(sd == 1, b["h"][Jc], -b["l"][Jc])
+            hit_s = (adverse <= (side[sel] * stop_px[sel])[:, None]) & valid
+            hit_1 = (fav >= (side[sel] * t1[sel])[:, None]) & valid
+            hit_2 = (fav >= (side[sel] * t2[sel])[:, None]) & valid
+            hit_b = (adverse <= (side[sel] * be[sel])[:, None]) & valid
+            qs = np.where(hit_s.any(1), hit_s.argmax(1), BIG)
+            q1 = np.where(hit_1.any(1), hit_1.argmax(1), BIG)
+            idx = np.arange(H)[None, :]
+            q1c = np.minimum(q1, H)[:, None]
+            h2 = hit_2 & (idx >= q1c)
+            hb = hit_b & (idx > q1c)
+            q2 = np.where(h2.any(1), h2.argmax(1), BIG)
+            qb = np.where(hb.any(1), hb.argmax(1), BIG)
+            full_stop = (qs < BIG) & (qs <= q1)
+            half = (q1 < BIG) & (q1 < qs)
+            rest_done = half & ((q2 < BIG) | (qb < BIG))
+            resolved = full_stop | rest_done | (H == passes[-1]) | (e[sel] + H >= nb)
+            fin = full_stop | rest_done
+            r = np.flatnonzero(fin)
+            if len(r):
+                g = sel[r]
+                sdg = side[g]
+                # full stop
+                fs = full_stop[r]
+                q = np.where(fs, qs[r], np.where(q2[r] <= qb[r], q2[r], qb[r]))
+                xi = np.minimum(e[g] + q, nb - 1)
+                oq = b["o"][xi]
+                gap = fs & ((sdg * oq) <= (sdg * stop_px[g]))
+                stop_raw = np.where(gap, oq, stop_px[g])
+                liq_gap = gap & ((sdg * oq) <= (sdg * liq[g]))
+                # rest leg (after TP1): TP2 or break-even (break-even bar opening beyond it fills at the open)
+                to_t2 = ~fs & (q2[r] <= qb[r])
+                gap_b = ~fs & ~to_t2 & ((sdg * oq) <= (sdg * be[g]))
+                rest_raw = np.where(to_t2, t2[g], np.where(gap_b, oq, be[g]))
+                last_raw = np.where(fs, stop_raw, rest_raw)
+                held = q + 1
+                f = fill[g]
+                px_stop = np.where(liq_gap, liq[g], stop_raw * (1 - sdg * SLIP))
+                px1 = t1[g] * (1 - sdg * SLIP)
+                px2 = rest_raw * (1 - sdg * SLIP)
+                ret_full = sdg * (px_stop / f - 1) - TAKER * (1 + px_stop / f)
+                ret_half = (0.5 * sdg * (px1 / f - 1) + 0.5 * sdg * (px2 / f - 1)
+                            - TAKER * (1 + 0.5 * px1 / f + 0.5 * px2 / f))
+                ret = np.where(fs, ret_full, ret_half) - f_bar * held
+                levg = lev[g]
+                roe = np.where(liq_gap, -1.0, np.maximum(levg * ret, -1.0))
+                R[g] = roe * f / (levg * risk[g])
+                gross_full = sdg * (stop_raw - raw[g]) / risk[g]
+                gross_half = (0.5 * sdg * (t1[g] - raw[g]) + 0.5 * sdg * (rest_raw - raw[g])) / risk[g]
+                Gr[g] = np.where(fs, gross_full, gross_half)
+                X[g] = e[g] + q
+                XP[g] = last_raw
+            nxt.append(sel[~resolved])
+        todo = np.concatenate(nxt) if nxt else np.zeros(0, int)
+    return R.astype(np.float32), Gr.astype(np.float32), X, XP
+
+
 def tpsl_exit_price(raw: float, side: int, atr: float, j: int, x_open: float, is_tp: bool) -> float:
     """Raw exit price of TPSL setting j (for display): the TP price, or the stop / the gap open."""
     tp, k = G.TPSL_CFG[j]

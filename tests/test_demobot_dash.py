@@ -18,7 +18,7 @@ PW = "correct horse battery staple"
 SECRET = b"s" * 40
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "..", "demobot", "dash", "static")
-SNAP_ROUTES = ("status", "home", "accounts", "trades", "judge", "rank_meta")
+SNAP_ROUTES = ("status", "home", "accounts", "trades", "judge", "rank_meta", "views")
 
 
 @pytest.fixture(scope="module")
@@ -149,7 +149,7 @@ def test_every_api_returns_the_fake_snapshot(client, folders):
         assert r.status_code == 200 and r.headers["cache-control"] == "no-store", key
         assert r.json() == _file(folders, f"{key}.json"), key
     accts = _file(folders, "accounts.json")["accounts"]
-    assert len(accts) == 48 and len({a["id"] for a in accts}) == 48
+    assert len(accts) == 50 and len({a["id"] for a in accts}) == 50          # the 48 + two private (CONTRACT 7.2)
     for a in accts:
         r = client.get(f"/api/account/{a['id']}")
         assert r.status_code == 200
@@ -174,17 +174,28 @@ def test_the_fake_has_every_contract_file_with_the_exact_shapes(folders):
         for tf in grid.TFS:
             z = _npz(folders, strat, tf)
             C = grid.NCOMBO[strat]
-            assert z["stats"].shape == (3, 13, 8, C, 11) and z["stats"].dtype == np.float32
-            assert z["luck95"].shape == (3, 13, 8) and z["luck95"].dtype == np.float32
+            E = grid.NEXIT                                          # 14 since CONTRACT 7.1
+            assert z["stats"].shape == (3, E, 8, C, 11) and z["stats"].dtype == np.float32
+            assert z["luck95"].shape == (3, E, 8) and z["luck95"].dtype == np.float32
             assert z["min_n"].shape == (3, 2) and z["min_n"].dtype == np.int32
             assert z["bounds_ms"].shape == (3, 2) and z["bounds_ms"].dtype == np.int64
             assert z["generated_ms"].shape == () and z["generated_ms"].dtype == np.int64
             with np.load(os.path.join(folders["data"], f"past5y_{strat}_{tf}.npz")) as p:
-                assert p["stats"].shape == (6, 13, 8, C, 3)
+                assert p["stats"].shape == (6, E, 8, C, 3)
     st = _file(folders, "status.json")
     assert st["phase"] == "live" and st["counts"]["settings"] == 1666 and st["leverages"] == [20, 30, 40, 50]
     j = _file(folders, "judge.json")
-    assert len(j["rows"]) == 48 * 4 and j["verdict_ko"].startswith("실전 금지")
+    assert len(j["rows"]) == 50 * 4 and j["verdict_ko"].startswith("실전 금지")
+    v = _file(folders, "views.json")
+    assert set(v["summary"]) >= {"n", "n_done", "need", "verdict_ko", "dir", "reached_rate", "follow"}
+    assert set(v["summary"]["follow"]) == {"touch", "confirm"} and set(v["summary"]["dir"]) == {"4h", "24h", "48h"}
+    ts = [x["t_ms"] for x in v["views"]]
+    assert 0 < len(ts) <= 300 and ts == sorted(ts, reverse=True)
+    for x in v["views"]:
+        assert x["side"] in (1, -1) and x["coin"] in grid.COINS and x["status"] in ("watching", "done", "cancelled")
+        assert any(x["zones"][k] for k in ("A", "B", "C"))
+        assert set(x["follow"]) == {"touch", "confirm"}
+        assert all(f["status"] in ("waiting", "open", "closed", "missed") for f in x["follow"].values())
 
 
 def test_missing_files_answer_missing(tmp_path, pw_hash):
@@ -342,7 +353,7 @@ def test_rank_paging_and_the_limit_cap(client):
 
 
 @pytest.mark.parametrize("query", [
-    "strat=S9", "strat=s2", "tf=1h", "exit=13", "exit=-1", "exit=house2", "scope=BTC", "scope=all", "window=1y",
+    "strat=S9", "strat=s2", "tf=1h", f"exit={grid.NEXIT}", "exit=99", "exit=-1", "exit=house2", "scope=BTC", "scope=all", "window=1y",
     "sort=pnl", "dir=up", "limit=abc", "limit=-5", "offset=-1", "offset=1e3", "min_ok=maybe", "win60=2",
     "low_whip=yes%20please", "q=%3Cscript%3E", "q=" + "a" * 41, "nope=1", "strat=S2&strat=N02",
 ])
@@ -444,7 +455,7 @@ def test_every_screen_module_exists_and_mounts():
         p = os.path.join(STATIC, "js", "screens", name[1] + ".js")
         assert os.path.exists(p), p
         assert "export async function mount(" in open(p, encoding="utf-8").read(), p
-    for menu in ("홈", "순위표", "계좌", "거래 기록", "판정", "서버 상태", "어떻게 돌아가나"):
+    for menu in ("홈", "순위표", "계좌", "거래 기록", "판정", "관점 기록", "서버 상태", "어떻게 돌아가나"):
         assert f'ko: "{menu}"' in app_js
 
 
@@ -456,3 +467,62 @@ def test_the_fake_is_deterministic(tmp_path, folders):
     a, b = _npz(folders, "N02_ST_KST", "30m"), np.load(tmp_path / "again" / "rank_N02_ST_KST_30m.npz")
     assert np.array_equal(a["stats"], b["stats"], equal_nan=True)
     assert math.isfinite(float(a["luck95"][1, 0, 0]))
+
+
+# ---------------------------------------------------------------- round 2 (CONTRACT section 7)
+def test_views_route_needs_login_and_returns_the_snapshot(anon, client, folders, tmp_path):
+    assert anon.get("/api/views").status_code == 401
+    d = client.get("/api/views").json()
+    assert d == _file(folders, "views.json")
+    assert any("<b>" in v["memo"] for v in d["views"])           # a memo with markup comes back as plain text data
+    s = d["summary"]
+    assert s["n_done"] >= 30 and not s["verdict_ko"].startswith("표본 부족")
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    c = TestClient(create_app(str(snap), None, SECRET))
+    assert c.get("/api/views").json() == {"missing": True}
+    few = fake.fake_views(np.random.default_rng(1), 8)            # under 30 finished views: 표본 부족
+    assert few["summary"]["verdict_ko"].startswith("표본 부족") and few["summary"]["n_done"] < 30
+
+
+def test_private_accounts_are_in_the_fake_with_neutral_names(folders):
+    accts = _file(folders, "accounts.json")["accounts"]
+    pv = [a for a in accts if a["kind"] == "private"]
+    assert len(pv) == 2 and all(a["id"].startswith("pv-") for a in pv)
+    assert all(a["name"].startswith("비공개 ") and a["strategy"] is None for a in pv)
+    assert set(pv[0]["lines"]) == {"20", "30", "40", "50"}
+    home = _file(folders, "home.json")
+    assert "private" in [k["kind"] for k in home["by_kind"]]
+    labels = open(os.path.join(STATIC, "js", "labels.js"), encoding="utf-8").read()
+    assert 'pv: "private"' in labels and '"비공개 매매법"' in labels
+
+
+def test_rank_with_14_exits_and_a_13_exit_5y_file(tmp_path, folders):
+    assert grid.NEXIT == 14 and grid.EXITS[13] == "half1R_be_1.5R"
+    c = TestClient(create_app(folders["snap"], None, SECRET, data_dir=folders["data"]))
+    for ex in ("13", "half1R_be_1.5R"):
+        d = c.get(f"/api/rank?strat=S2&exit={ex}").json()
+        assert d["exit"] == 13 and d["exit_ko"] == grid.exit_ko(13) and d["total"] == 343 and d["past5y_exit"] is True
+    g = c.get("/api/grid").json()
+    assert len(g["exits"]) == grid.NEXIT and g["exits"][13]["ko"] == grid.exit_ko(13)
+    # a 5-year file written before exit 13 existed: the exit's 5-year columns are empty, the others still filled
+    data = tmp_path / "data"
+    data.mkdir()
+    with np.load(os.path.join(folders["data"], "past5y_S2_ST_ROC_15m.npz")) as p:
+        np.savez(data / "past5y_S2_15m.npz", stats=p["stats"][:, :13])
+    c = TestClient(create_app(folders["snap"], None, SECRET, data_dir=str(data)))
+    d = c.get("/api/rank?strat=S2&exit=13").json()
+    assert d["past5y"] is True and d["past5y_exit"] is False
+    assert all(v["mean_R"] is None and v["n"] is None for r in d["rows"] for v in r["past"].values())
+    d = c.get("/api/rank?strat=S2&exit=0").json()
+    assert d["past5y_exit"] is True and any(r["past"]["2021-23"]["mean_R"] is not None for r in d["rows"])
+    # a ranking file written before exit 13 existed: that exit is 'not there yet', the others still work
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    z = _npz(folders)
+    np.savez(snap / "rank_S2_15m.npz", **{**z, "stats": z["stats"][:, :13], "luck95": z["luck95"][:, :13]})
+    c = TestClient(create_app(str(snap), None, SECRET, data_dir=str(data)))
+    d = c.get("/api/rank?strat=S2&exit=13").json()
+    assert d["missing"] is True and d["exit_not_in_file"] is True
+    d = c.get("/api/rank?strat=S2&exit=12").json()
+    assert d["total"] == 343 and d["luck95"] is not None

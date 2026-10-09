@@ -97,7 +97,7 @@ function lineList(rows, ctx) {
 function kindTable(rows) {
   if (!rows || !rows.length) return ui.empty("아직 없습니다");
   return ui.table([
-    {label: "종류", l: true, get: (r) => h("span", {class: "dl-kn"}, h("b", null, r.kind_ko || KIND_KO[r.kind] || r.kind), r.accounts ? h("small", {class: "muted"}, `${r.accounts}개`) : null)},
+    {label: "종류", l: true, get: (r) => h("span", {class: "dl-kn"}, h("b", null, KIND_KO[r.kind] || r.kind_ko || r.kind), r.accounts ? h("small", {class: "muted"}, `${r.accounts}개`) : null)},
     ...LEVS.map((L) => ({label: `${L}배`, get: (r) => {
       const v = r.mean_pnl_pct ? r.mean_pnl_pct[String(L)] : null;
       return ui.signed(fmt.pct(v, true), fmt.tone(v, fmt.pct(v)));

@@ -16,6 +16,7 @@ export const KINDS = [
   {id: "adaptive", ko: "자동 교체", desc: "순위표를 보고 스스로 설정을 바꿉니다"},
   {id: "friend", ko: "친구 규칙", desc: "매주 친구 방식으로 설정과 청산을 고릅니다"},
   {id: "flip", ko: "동전 던지기", desc: "아무 때나 아무 방향: 운과 비교하는 기준"},
+  {id: "private", ko: "비공개 매매법", desc: "서버에만 있는 매매법 (공개 저장소에 없음) · 판정은 같은 봉 동전 던지기와 비교"},
 ];
 export const KIND_KO = Object.fromEntries(KINDS.map((k) => [k.id, k.ko]));
 export const SUB_KO = {default: "기본값", friend: "친구 값", pick: "5년 1등 값", r26: "5거래마다 · 26주", r4: "5거래마다 · 4주",
@@ -23,7 +24,7 @@ export const SUB_KO = {default: "기본값", friend: "친구 값", pick: "5년 1
 /** The kind of an account id (fx- / ad- / fr- / cf-), when the row does not say it. */
 export function kindOfId(id) {
   const p = String(id || "").split("-")[0];
-  return {fx: "fixed", ad: "adaptive", fr: "friend", cf: "flip"}[p] || "other";
+  return {fx: "fixed", ad: "adaptive", fr: "friend", cf: "flip", pv: "private"}[p] || "other";
 }
 
 export const REASON_KO = {stop: "손절", lock: "익절 잠금", liq: "강제청산", tp: "익절", open: "열림", time: "시간 청산"};

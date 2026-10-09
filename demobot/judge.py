@@ -35,7 +35,7 @@ def _flip_pool(res: dict, tf: str, L: int) -> tuple:
 
 
 def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
-    a = A.BY_ID[aid]
+    a = A.by_id(aid)
     sim = res[aid]["lines"][L]
     line = sim["line"]
     closed = [t for t in sim["trades"] if t["status"] == "closed"]
@@ -51,7 +51,7 @@ def judge_line(res: dict, aid: str, L: int, now_ms: int) -> dict:
     ok3 = line["equity"] > A.SEED and line["max_dd"] < 0.30 and not line["ruined"]
     checks.append(dict(name_ko=RULES_OURS[2], ok=ok3,
                        value_ko=f"${line['equity']:,.2f}, 낙폭 {line['max_dd'] * 100:.1f}%, 파산 {line['ruins']}회"))
-    if a.kind == "fixed" and a.sub == "default":
+    if (a.kind == "fixed" and a.sub == "default") or a.kind == "private":
         ref = res[f"cf-{a.tf}"]["lines"][L]["line"]
         ref_ko = "동전 던지기"
     elif a.kind == "flip":
@@ -88,7 +88,9 @@ def _pub(d: dict) -> dict:
 
 def judge_all(res: dict, now_ms: int) -> dict:
     rows = []
-    for a in A.ACCOUNTS:
+    for a in A.current_accounts():
+        if a.id not in res:
+            continue
         for L in (20, 30, 40, 50):
             rows.append(judge_line(res, a.id, L, now_ms))
     passed = [r for r in rows if r["ours"]["pass"]]

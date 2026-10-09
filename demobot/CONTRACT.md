@@ -204,3 +204,74 @@ Kinds and payload fields:
 * No order code, no exchange key, no paperbot path. Market data: `https://fapi.binance.com` public endpoints only.
 * Text from the server is text in the page (DOM text nodes, never innerHTML), as in the rule bot's v4 tests.
 * Private reference materials never enter this code or the repo.
+
+## 7. Additions of 10/09 evening (owners: "넣을 수 있는 건 최대한 다 넣어서 돌리자")
+
+### 7.1 Exit 14: half at 1R, stop to break-even, rest at 1.5R
+`grid.EXITS` gains index 13 `half1R_be_1.5R` (Korean "반익반본: 1R 절반 · 본전 · 1.5R"; stop 2 x ATR14). Every exit array
+dimension E becomes 14 (`rank_*.npz` stats/luck95, `past5y_*.npz` padded with NaN for the new exit, the friend rule's
+candidates). Use `grid.NEXIT` / `grid.EXITS` / `grid.exit_ko(i)`; never hard-code 13.
+
+### 7.2 Private strategy plug-ins (kind `private`)
+The engine loads optional plug-in modules from `DEMOBOT_PLUGINS` (default `/etc/demobot/plugins`, root-owned,
+read-only for the services). The public repository never contains a plug-in, its name or its rules. Each plug-in
+adds accounts with `kind: "private"`, `sub: <plug-in key>`, ids `pv-<key>-<variant>` and its own Korean `name` /
+`rule_ko`, four leverage lines like every account, the same owners' sizing and entry checks. In `accounts.json` and
+`acct/<id>.json` they look like any account (their trades have `exit_ko` / `setting_ko` from the plug-in). Kind label
+in the UI: "비공개 매매법". Judgment reference: the coin-flip account of the plug-in's timeframe.
+
+### 7.3 View log ("관점 기록장")
+Owners type a view into the demo lab Telegram group in one line; the engine records it, follows the market and
+scores it. Only the group `DEMOBOT_TG_CHAT` is accepted (the bot needs privacy mode off: BotFather /setprivacy ->
+Disable, or the bot as group admin).
+
+Commands (Korean, one line):
+* `관점 [MM/DD HH:MM] <COIN> <롱|숏> [A <x[-y]>] [B <x[-y]>] [C <x[-y]>] [손절 <x>] [목표 <x>[,<y>]] [메모 <text>]`
+  numbers may have commas; ranges `x-y` or `x~y`; coin BTC/ETH/SOL/DOGE/LTC/BCH/XRP (with or without USDT); the time
+  is KST and defaults to the message time. At least one zone is required.
+* `취소 <id>` (cancel a view), `관점목록` (last 10), `관점도움` (usage).
+
+Scoring (fixed before the first view, `demobot/views.py`):
+* reference price = open of the first 15m bar after the view time; direction move (%) in the stated direction at
+  +4h / +24h / +48h (15m closes); hit = move > 0.
+* reached = a 15m bar touches the nearest zone edge within 48 h.
+* follow "touch": a limit at the nearest zone edge (long: the zone's top; short: its bottom), maker entry;
+  follow "confirm": after a touch, the first 15m close back on the trade side of that edge (long: close above the
+  zone top), taker entry at that close. Both: stop = the given stop, else 0.3% beyond the farthest zone; targets =
+  the given ones (first = half, second = rest), else half at 1R, stop to entry, rest at 2R; time cap 48 h after the
+  entry; costs taker 0.05% + slippage 0.02% (maker 0.02% for limit fills); result in R and as % of the wallet at
+  20x with the owners' rule. A view not entered within 48 h is "missed".
+* verdict: below 30 finished views "표본 부족 (n/30)"; from 30: direction hit rate vs 50% (binomial one-sided
+  p < 0.05) and each follow mode's mean R > 0 with the week-block bootstrap lower bound > 0.
+
+Snapshot `views.json`:
+```json
+{"generated_ms": 0, "rules_ko": ["..."],
+ "summary": {"n": 0, "n_done": 0, "need": 30, "verdict_ko": "표본 부족 (0/30)",
+             "dir": {"4h": {"n": 0, "hit": 0, "rate": null, "p": null}, "24h": {}, "48h": {}},
+             "reached_rate": null,
+             "follow": {"touch": {"n": 0, "entered": 0, "mean_R": null, "win_rate": null, "sum_R": 0.0, "ci_low": null,
+                                  "wallet20_pct": 0.0},
+                        "confirm": {}}},
+ "views": [{"id": 1, "t_ms": 0, "entered_ms": 0, "coin": "BTCUSD", "side": -1,
+            "zones": {"A": null, "B": [84750.0, 84840.0], "C": [85300.0, 85300.0]}, "stop": 85600.0,
+            "targets": [], "memo": "", "status": "watching|done|cancelled", "ref_price": 0.0,
+            "dir": {"4h": null, "24h": null, "48h": null}, "reached": null, "reached_ms": null,
+            "follow": {"touch": {"status": "waiting|open|closed|missed", "entry_ms": null, "entry": null,
+                                 "stop": null, "exit_ms": null, "R": null, "wallet20_pct": null, "legs_ko": ""},
+                       "confirm": {}}}]}
+```
+`views` newest first, at most 300.
+
+Telegram kinds (engine queues, `notify.render` formats):
+* `view_ack`: `{"id", "coin", "side", "t_ms", "zones", "stop", "targets", "memo", "notes_ko": [str]}` (reply to a
+  recorded view; notes = assumptions the parser made, e.g. "시각 없음: 받은 시각 10/10 14:03 사용").
+* `view_err`: `{"text_ko": str}` (why a line was not understood, plus the usage example).
+* `view_cancel`: `{"id", "ok": bool}`.
+* `view_list`: `{"views": [{"id", "t_ms", "coin", "side", "status", "dir24": pct|null, "touch_R": R|null}]}`.
+* `view_help`: `{}`.
+* `view_done`: `{"id", "coin", "side", "dir": {"4h", "24h", "48h"}, "reached": bool, "touch": {...}, "confirm": {...},
+  "summary_ko": str}` (once, 48 h after the view or when both follow modes have closed).
+`notify.poll_commands(token, chat, offset, timeout=25, get=None) -> (new_offset, [{"update_id", "text", "date_ms",
+"from_name"}])`: Telegram getUpdates, only messages of `chat`, never raises (returns the old offset and [] on errors),
+token redacted from errors.

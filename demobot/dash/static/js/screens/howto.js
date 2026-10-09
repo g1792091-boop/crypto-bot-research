@@ -16,10 +16,12 @@ const ACCOUNTS = [
   ["자동 · 매주", "ad-wk-매매법-봉", 6, "매주 월요일 09:00(한국 시간), 최근 26주 1등 설정으로 바꿈"],
   ["친구 규칙", "fr-매매법-봉", 6, "매주 월요일, 코인·배수마다 지난 26주에 돈을 번 (설정 × 청산) 가운데 낙폭이 가장 작은 것을 일주일 돌림"],
   ["동전 던지기", "cf-15m, cf-30m", 2, "아무 봉에서 아무 방향으로 들어가고 사다리로 나감: 운과 비교하는 기준"],
+  ["비공개 매매법", "pv-…", "서버에 따라", "서버에만 있는 매매법 (공개 저장소에 없음). 같은 배수 4줄·같은 진입 검사, 판정은 같은 봉 동전 던지기와 비교"],
 ];
 
 export async function mount(el, ctx) {
   ctx.setTitle("어떻게 돌아가나");
+  const exitCard = ui.card({plate: "청산"});
   const setBox = h("div", {class: "stack tight"}), exitBox = h("div", {class: "stack tight"}), ruleBox = h("div", {class: "grid2"});
   el.append(ui.screenHead("어떻게 돌아가나", "데모 랩이 하는 일을 짧게"),
     ui.card({hero: true, plate: "한 줄로"},
@@ -37,8 +39,8 @@ export async function mount(el, ctx) {
         h("li", null, "순위표: 펀딩을 8시간마다 0.01%로 셉니다 (5년 연구와 같게)."),
         h("li", null, "계좌: 바이낸스의 실제 펀딩을 씁니다."),
         h("li", null, "R = 손절 폭을 1로 본 손익. +0.1R이면 거래마다 손절 폭의 10%를 번 셈입니다.")))),
-    ui.card({plate: "청산 13가지"}, exitBox),
-    ui.card({plate: "계좌 48개", sub: "계좌마다 배수 4줄 (20 · 30 · 40 · 50배), 줄마다 $1,000"},
+    exitCard,
+    ui.card({plate: "계좌", sub: "기본 48개 + 비공개 매매법 · 계좌마다 배수 4줄 (20 · 30 · 40 · 50배), 줄마다 $1,000"},
       ui.table([
         {label: "종류", l: true, get: (r) => h("b", null, r[0])},
         {label: "이름", l: true, get: (r) => h("span", {class: "mono muted"}, r[1])},
@@ -59,6 +61,11 @@ export async function mount(el, ctx) {
     h("h2", {class: "dl-h2"}, "판정 기준 두 가지"), ruleBox,
     ui.note("통과하기 전까지는 \"실전 금지\"입니다. 판정 화면에서 계좌·배수마다 어떤 항목을 넘었는지 볼 수 있습니다."),
     h("div", {class: "grid2"},
+      ui.card({plate: "관점 기록장"}, h("ul", {class: "dl-ul"},
+        h("li", null, "두 분이 데모 랩 텔레그램 방에 관점을 한 줄로 적으면 (예: ", h("span", {class: "mono"}, "관점 BTC 숏 A 84750-84840 손절 85600"),
+          ") 봇이 받아 적고 시세를 따라갑니다."),
+        h("li", null, "4시간 · 24시간 · 48시간 뒤 방향이 맞았는지, 구간에 닿았는지, 그리고 \"구간 바로 진입\"과 \"15분 종가 확인 진입\" 두 방식으로 따라 했으면 몇 R이었는지 셉니다."),
+        h("li", null, "끝난 관점이 30개가 되기 전에는 \"표본 부족\"입니다. 자세한 것은 관점 기록 화면에 있습니다."))),
       ui.card({plate: "주문은 없습니다"}, h("ul", {class: "dl-ul"},
         h("li", null, "주문 코드도, 거래소 키도 없습니다. 바이낸스 공개 시세(fapi.binance.com)만 읽습니다."),
         h("li", null, "실전에 쓰려면 판정을 통과한 뒤에도 두 분이 따로 정합니다."))),
@@ -68,20 +75,24 @@ export async function mount(el, ctx) {
         h("li", null, "규칙봇은 정해 둔 매매법들을 모의로 돌립니다. 데모 랩은 설정 고르는 방법 자체를 시험합니다."),
         h("li", null, "이 화면 위쪽의 \"데모 랩\" 표시로 구분하세요.")))));
 
-  paintExits(exitBox, null);
+  exitCard.append(exitBox);
+  paintExits(exitBox, null, exitCard);
   paintRules(ruleBox, null);
   try {
     const [grid, judge] = await Promise.all([ctx.api("/api/grid"), ctx.api("/api/judge").catch(() => null)]);
-    paintExits(exitBox, grid);
+    paintExits(exitBox, grid, exitCard);
     paintSettings(setBox, grid);
     paintRules(ruleBox, judge);
   } catch (e) { /* the static words stay */ }
 }
 
-function paintExits(box, grid) {
+function paintExits(box, grid, card) {
   const exits = grid ? grid.exits : null;
+  const half = exits ? exits.find((x) => x.name === "half1R_be_1.5R") : null;
+  if (card && exits) { const pl = card.querySelector(".plate"); if (pl) pl.textContent = `청산 ${exits.length}가지`; }
   put(box,
-    h("p", null, "0번은 규칙봇과 같은 ", h("b", null, "사다리"), ": 2 ATR 손절로 시작해 이익이 나면 손절을 계단처럼 올립니다. 나머지 12개는 고정 익절 × 고정 손절입니다: 익절 1 · 1.5 · 2 · 3R × 손절 1.5 · 2 · 3 ATR."),
+    h("p", null, "0번은 규칙봇과 같은 ", h("b", null, "사다리"), ": 2 ATR 손절로 시작해 이익이 나면 손절을 계단처럼 올립니다. 1~12번은 고정 익절 × 고정 손절입니다: 익절 1 · 1.5 · 2 · 3R × 손절 1.5 · 2 · 3 ATR."),
+    half ? h("p", null, `${half.i}번 `, h("b", null, "반익반본"), ": 2 ATR 손절, 1R에서 절반 익절하고 손절을 본전으로 옮긴 뒤 나머지는 1.5R에서 익절합니다.") : null,
     exits ? h("div", {class: "row wrap dl-pills"}, exits.map((x) => h("span", {class: "pp"}, `${x.i}. ${x.ko}`))) : null);
 }
 

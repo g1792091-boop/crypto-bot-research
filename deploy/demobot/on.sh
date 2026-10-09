@@ -31,6 +31,9 @@ if [ ! -f "$SNAP/rank_meta.json" ]; then
   systemctl start --no-block demobot-rank.service
   echo "순위표가 아직 없어 지금 한 번 만듭니다 (2~4분, 뒤에서 돎). 그다음은 매시 7분."
 fi
+PLUG="$(val DEMOBOT_PLUGINS)"; PLUG="${PLUG:-/etc/demobot/plugins}"
+N_PLUG="$(find "$PLUG" -maxdepth 1 -type f -name '*.py' 2>/dev/null | wc -l)"
+if [ "$N_PLUG" -gt 0 ]; then echo "비공개 매매법 파일 ${N_PLUG}개를 읽습니다 ($PLUG)"; fi
 sleep 3
 for u in demobot-live.service demobot-dash.service demobot-rank.timer; do
   echo "$u: $(systemctl is-active "$u" || true)"

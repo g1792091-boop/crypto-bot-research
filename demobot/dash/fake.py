@@ -1,9 +1,10 @@
 """A complete, realistic FAKE snapshot folder for developing and testing the demo lab dashboard (never the real bot).
 
-    python -m demobot.dash.fake OUTDIR [--past5y DIR] [--seed 7] [--phase live|warm] [--empty]
+    python -m demobot.dash.fake OUTDIR [--past5y DIR] [--seed 7] [--phase live|warm] [--empty] [--views 40]
 
-Writes every file of demobot/CONTRACT.md section 4 (status, home, accounts, acct/<id> for all 48 accounts, trades,
-judge, rank_<STRAT>_<tf>.npz for the 3 strategies x 2 timeframes with the exact shapes, rank_meta) and, with
+Writes every file of demobot/CONTRACT.md sections 4 and 7 (status, home, accounts, acct/<id> for the 48 accounts plus
+two neutral private ones, trades, judge, views, rank_<STRAT>_<tf>.npz for the 3 strategies x 2 timeframes with the
+exact shapes (grid.NEXIT exits), rank_meta) and, with
 --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder. Deterministic (seeded); the
 numbers are made up and only shaped like the engine's. --empty writes only status.json (the first minutes of a warm-up).
 """
@@ -14,6 +15,7 @@ import datetime
 import json
 import math
 import os
+import re
 import sys
 
 import numpy as np
@@ -34,7 +36,7 @@ ATR_PCT = {"15m": 0.0035, "30m": 0.005}
 TF_KO = {"15m": "15분", "30m": "30분"}
 TF_MS = {"15m": 15 * 60_000, "30m": 30 * 60_000}
 SHORTS = ("S2", "N02", "N04")
-KIND_KO = {"fixed": "고정", "adaptive": "자동 교체", "friend": "친구 규칙", "flip": "동전 던지기"}
+KIND_KO = {"fixed": "고정", "adaptive": "자동 교체", "friend": "친구 규칙", "flip": "동전 던지기", "private": "비공개 매매법"}
 PERIODS = ("2020", "2021-23", "2024-26", "2020-03", "2022-05", "2022-11")
 HOUSE_KO = grid.exit_ko(0)
 
@@ -65,7 +67,7 @@ def coin_ko(c: str) -> str:
     return grid.coin_ko(c)
 
 
-# ---------------------------------------------------------------- the 48 accounts
+# ---------------------------------------------------------------- the 48 accounts (+ 2 private)
 def account_specs() -> list:
     out = []
 
@@ -104,6 +106,10 @@ def account_specs() -> list:
     for tf in grid.TFS:
         add(f"cf-{tf}", "flip", "flip", None, tf, f"동전 던지기 · {TF_KO[tf]}",
             "아무 봉에서 아무 방향으로 들어가고 사다리로 나감 (운 비교용)")
+    # private plug-ins (CONTRACT 7.2): neutral names only, never a real plug-in's name or rules
+    for i, tf in enumerate(grid.TFS, 1):
+        add(f"pv-p{i}-{tf}", "private", f"p{i}", None, tf, f"비공개 {i} · {TF_KO[tf]}",
+            f"서버에만 있는 매매법 {i} (규칙은 공개하지 않습니다)")
     return out
 
 
@@ -127,6 +133,9 @@ class _Acct:
         if spec["kind"] == "flip":
             self.setting_ko = "무작위 진입"
             self.settings_now = [{"coin": "ALL", "L": None, "setting_ko": "무작위 진입", "exit_ko": HOUSE_KO}]
+        elif spec["kind"] == "private":
+            self.setting_ko = "비공개 설정"
+            self.settings_now = [{"coin": "ALL", "L": None, "setting_ko": "비공개 설정", "exit_ko": "비공개 청산"}]
         elif spec["kind"] == "fixed":
             self.setting_ko = _label(strat, spec["combo"])
             self.settings_now = [{"coin": "ALL", "L": None, "setting_ko": self.setting_ko, "exit_ko": HOUSE_KO}]
@@ -230,7 +239,7 @@ class _Acct:
                 R = Rg - cost_r
                 setting = self.setting_ko if spec["kind"] != "friend" else self.settings_now[
                     grid.LEVS.index(L) * 7 + grid.COINS.index(e["coin"])]["setting_ko"]
-                exit_ko = HOUSE_KO if spec["kind"] != "friend" else self.settings_now[
+                exit_ko = self.settings_now[0]["exit_ko"] if spec["kind"] != "friend" else self.settings_now[
                     grid.LEVS.index(L) * 7 + grid.COINS.index(e["coin"])]["exit_ko"]
                 row = {"key": f"{e['coin']}|{tf}|{e['signal_ms']}|{e['side']}|{L}", "L": L, "coin": e["coin"],
                        "side": e["side"], "signal_ms": e["signal_ms"], "entry_ms": e["entry_ms"],
@@ -284,7 +293,7 @@ class _Acct:
 
     def _decisions(self):
         r, spec = self.rng, self.spec
-        if spec["kind"] in ("fixed", "flip"):
+        if spec["kind"] in ("fixed", "flip", "private"):
             return
         strat = spec["strategy"]
         win = "4주" if spec["sub"] == "r4" else "26주"
@@ -329,9 +338,23 @@ class _Acct:
 
 
 # ---------------------------------------------------------------- ranking arrays
-EXIT_X = np.array([1.6] + [tp for tp, _k in grid.TPSL_CFG])                 # payoff of a win, in R
-EXIT_K = np.array([2.0] + [k for _tp, k in grid.TPSL_CFG])                  # stop distance in ATR
-EXIT_NF = np.array([1.0] + [1.3 - 0.12 * tp - 0.04 * k for tp, k in grid.TPSL_CFG])   # faster exits: more trades
+def _exit_arrays():
+    """Per exit of grid.EXITS (read at call time: 13 or 14 exits, CONTRACT 7.1): the payoff of a win in R, the stop
+    distance in ATR, and a trade-count factor (faster exits: more trades)."""
+    X, K, NF = [], [], []
+    for name in grid.EXITS:
+        m = re.fullmatch(r"tp([\d.]+)R_sl([\d.]+)atr", name)
+        if name == "house":
+            x, k, nf = 1.6, 2.0, 1.0
+        elif m:
+            x, k = float(m.group(1)), float(m.group(2))
+            nf = 1.3 - 0.12 * x - 0.04 * k
+        else:                                    # e.g. half1R_be_1.5R: half at 1R, the rest at 1.5R or break-even
+            x, k, nf = 1.0, 2.0, 1.1
+        X.append(x)
+        K.append(k)
+        NF.append(nf)
+    return np.array(X), np.array(K), np.array(NF)
 
 
 def _combo_shape(strat):
@@ -342,6 +365,7 @@ def _combo_shape(strat):
 
 
 def fake_rank(strat, tf, rng, live_start):
+    EXIT_X, EXIT_K, EXIT_NF = _exit_arrays()
     C, u = _combo_shape(strat)
     W, E, S = len(grid.WINDOWS), grid.NEXIT, len(grid.SCOPES)
     edge = (0.03 * np.sin(2.4 * u[:, 0] + 0.6) * np.cos(1.9 * u[:, 1] - 0.4) + 0.025 * (u[:, 2] - 0.5)
@@ -420,6 +444,7 @@ def fake_rank(strat, tf, rng, live_start):
 
 
 def fake_past(strat, tf, rng):
+    EXIT_X, EXIT_K, EXIT_NF = _exit_arrays()
     C, u = _combo_shape(strat)
     P, S = len(PERIODS), len(grid.SCOPES)
     edge = 0.03 * np.sin(2.4 * u[:, 0] + 0.6) * np.cos(1.9 * u[:, 1] - 0.4) + 0.025 * (u[:, 2] - 0.5)
@@ -435,6 +460,149 @@ def fake_past(strat, tf, rng):
     out = np.stack([n, np.where(n > 0, wr, np.nan), np.where(n > 0, mean, np.nan)], -1)
     out[3:, 1:] = np.nan                                     # crash months: only the house exit was computed
     return {"stats": out.astype(np.float32)}
+
+
+# ---------------------------------------------------------------- the view log (CONTRACT 7.3)
+VIEW_MEMOS = ("4시간 저항대 다시 시험, 거래량 줄어듦", "펀딩 과열이라 숏 쪽", "주말이라 얕게만", "어제 고점 돌파 실패",
+              "<b>태그</b>도 글자로 보여야 합니다", "", "", "1시간 다이버전스", "CME 갭 메우기 기대", "발표 전이라 짧게",
+              "지지선 세 번째 터치", "")
+VIEW_RULES_KO = (
+    "기준 가격 = 관점 시각 다음 15분봉의 시가",
+    "방향: 4시간 · 24시간 · 48시간 뒤 15분 종가가 말한 방향으로 움직였으면 맞힘",
+    "도달: 48시간 안에 15분봉이 가장 가까운 구간 끝을 건드렸나",
+    "구간 바로 진입: 가장 가까운 구간 끝에 지정가 (메이커 0.02%)",
+    "15분 종가 확인 진입: 구간을 건드린 뒤 15분 종가가 다시 그 끝의 진입 쪽에서 닫히면 시장가 (수수료 0.05% + 슬리피지 0.02%)",
+    "손절: 적은 값, 없으면 가장 먼 구간에서 0.3% 밖 · 목표: 적은 값 (첫째에서 절반), 없으면 1R 절반 · 본전 · 2R",
+    "들어간 뒤 48시간이면 정리 · 48시간 안에 못 들어가면 놓침 · 잔고 %는 20배, 두 분 규칙(증거금 20%)",
+    "판정은 끝난 관점 30개부터: 방향 적중률이 50%보다 높고 (한쪽 이항검정 p < 0.05), 진입 방식의 평균 R > 0이며 주 단위 부트스트랩 하한도 > 0",
+)
+VIEW_COINS = ("BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGEUSD", "LTCUSD", "BCHUSD")
+VIEW_COIN_P = (0.36, 0.24, 0.16, 0.09, 0.07, 0.04, 0.04)
+
+
+def _binom_p(hit: int, n: int) -> float:
+    """One-sided P(X >= hit) for X ~ Binomial(n, 1/2)."""
+    return sum(math.comb(n, k) for k in range(hit, n + 1)) / 2 ** n
+
+
+def _follow(rng, mode, view, zone_edge, stop, age_ms, reach_ms):
+    """One follow mode's result (touch: a limit at the zone edge; confirm: a later close back on the trade side)."""
+    out = {"status": "waiting", "entry_ms": None, "entry": None, "stop": None, "exit_ms": None, "R": None,
+           "wallet20_pct": None, "legs_ko": ""}
+    if reach_ms is None or (mode == "confirm" and rng.random() < 0.3):
+        out["status"] = "missed" if age_ms >= 48 * HOUR else "waiting"
+        return out
+    entry_ms = reach_ms + (0 if mode == "touch" else int(rng.integers(1, 8)) * 15 * 60_000)
+    if entry_ms > NOW_MS:
+        return out
+    side = view["side"]
+    entry = zone_edge * (1 + side * (0 if mode == "touch" else float(rng.uniform(0.0005, 0.002))))
+    dist = abs(entry - stop) / entry
+    out.update(entry_ms=int(entry_ms), entry=_r(entry, 6), stop=_r(stop, 6))
+    hold = float(rng.uniform(1, 40)) * HOUR
+    if entry_ms + hold > NOW_MS:
+        out["status"] = "open"
+        out["legs_ko"] = "들어가 있음"
+        return out
+    u = rng.random()
+    if u < 0.45:
+        R, legs = -1.0 - (0.06 if mode == "confirm" else 0.03), "손절"
+    elif u < 0.7:
+        R, legs = 0.5 - 0.05, "절반 1R 익절 → 나머지 본전"
+    elif u < 0.9:
+        R, legs = 1.5 - 0.06, "절반 1R 익절 → 나머지 2R 익절"
+    else:
+        R, legs = float(rng.normal(0.1, 0.5)), "48시간 시간 정리"
+    out.update(status="closed", exit_ms=int(entry_ms + hold), R=_r(R, 3), wallet20_pct=_r(R * dist * 4 * 100, 2),
+               legs_ko=legs)
+    return out
+
+
+def fake_views(rng, n: int = 40) -> dict:
+    views = []
+    times = np.sort(rng.uniform(NOW_MS - 21 * DAY, NOW_MS - 20 * 60_000, n)).astype(np.int64)
+    for i, t in enumerate(times, 1):
+        t = int(t) // 60_000 * 60_000
+        coin = str(rng.choice(VIEW_COINS, p=VIEW_COIN_P))
+        side = 1 if rng.random() < 0.5 else -1
+        px = PRICE[coin] * float(np.exp(rng.normal(0, 0.02)))
+        step = px * float(rng.uniform(0.002, 0.005))
+        dec = 1 if px > 1000 else 2 if px > 10 else 4
+        rd = lambda x: round(x, dec)                                   # noqa: E731
+        zones = {}
+        for k, (lab, mult) in enumerate((("A", 1), ("B", 2), ("C", 3))):
+            if lab != "B" and rng.random() < 0.35:
+                zones[lab] = None
+                continue
+            near = px - side * mult * step
+            width = 0.0 if lab == "C" and rng.random() < 0.5 else step * float(rng.uniform(0.15, 0.4))
+            lo, hi = (near - width, near) if side > 0 else (near, near + width)
+            zones[lab] = [rd(lo), rd(hi)]
+        live = [z for z in zones.values() if z]
+        nearest = max(z[1] for z in live) if side > 0 else min(z[0] for z in live)
+        farthest = min(z[0] for z in live) if side > 0 else max(z[1] for z in live)
+        given_stop = rng.random() < 0.7
+        stop = rd(farthest * (1 - side * float(rng.uniform(0.003, 0.006)))) if given_stop else None
+        stop_used = stop if stop is not None else farthest * (1 - side * 0.003)
+        targets = [rd(px + side * 2 * step), rd(px + side * 4 * step)] if rng.random() < 0.5 else []
+        age = NOW_MS - t
+        cancelled = rng.random() < 0.05
+        status = "cancelled" if cancelled else "done" if age >= 48 * HOUR else "watching"
+        dirs = {}
+        for hkey, hh in (("4h", 4), ("24h", 24), ("48h", 48)):
+            dirs[hkey] = None if cancelled or age < hh * HOUR else _r(float(rng.normal(0.06, 0.55) * math.sqrt(hh / 4)), 2)
+        reach_ms = None
+        if not cancelled and rng.random() < 0.68:
+            reach_ms = t + int(float(rng.uniform(0.25, 30)) * HOUR) // (15 * 60_000) * (15 * 60_000)
+            if reach_ms > NOW_MS:
+                reach_ms = None
+        reached = None if cancelled or (reach_ms is None and age < 48 * HOUR) else reach_ms is not None
+        view = {"id": i, "t_ms": t, "entered_ms": t + int(rng.integers(5, 90)) * 1000, "coin": coin, "side": side,
+                "zones": zones, "stop": stop, "targets": targets, "memo": str(VIEW_MEMOS[i % len(VIEW_MEMOS)]),
+                "status": status, "ref_price": _r(px, 6), "dir": dirs, "reached": reached, "reached_ms": reach_ms}
+        if cancelled:
+            view["follow"] = {m: {"status": "missed", "entry_ms": None, "entry": None, "stop": None, "exit_ms": None,
+                                  "R": None, "wallet20_pct": None, "legs_ko": "취소됨"} for m in ("touch", "confirm")}
+        else:
+            view["follow"] = {m: _follow(rng, m, view, nearest, stop_used, age, reach_ms) for m in ("touch", "confirm")}
+        views.append(view)
+    views.reverse()                                                  # newest first
+    live_views = [v for v in views if v["status"] != "cancelled"]
+    done = [v for v in live_views if v["status"] == "done"]
+    summ_dir = {}
+    for hkey in ("4h", "24h", "48h"):
+        vals = [v["dir"][hkey] for v in live_views if v["dir"][hkey] is not None]
+        hit = sum(1 for x in vals if x > 0)
+        summ_dir[hkey] = {"n": len(vals), "hit": hit, "rate": _r(hit / len(vals), 4) if vals else None,
+                          "p": _r(_binom_p(hit, len(vals)), 4) if len(vals) >= 10 else None}
+    reached = [v["reached"] for v in done if v["reached"] is not None]
+    follow = {}
+    for m in ("touch", "confirm"):
+        fs = [v["follow"][m] for v in live_views]
+        rs = [f["R"] for f in fs if f["status"] == "closed"]
+        w = 1.0
+        for f in fs:
+            if f["status"] == "closed":
+                w *= 1 + f["wallet20_pct"] / 100
+        mean = float(np.mean(rs)) if rs else None
+        follow[m] = {"n": len(fs), "entered": sum(1 for f in fs if f["entry_ms"] is not None),
+                     "mean_R": _r(mean, 3) if rs else None,
+                     "win_rate": _r(sum(1 for x in rs if x > 0) / len(rs), 4) if rs else None,
+                     "sum_R": _r(float(np.sum(rs)), 3) if rs else 0.0,
+                     "ci_low": _r(mean - 1.8 * float(np.std(rs)) / math.sqrt(len(rs)), 3) if len(rs) >= 5 else None,
+                     "wallet20_pct": _r((w - 1) * 100, 2)}
+    need = 30
+    if len(done) < need:
+        verdict = f"표본 부족 ({len(done)}/{need})"
+    else:
+        d24 = summ_dir["24h"]
+        verdict = (f"방향 24시간 적중 {d24['rate'] * 100:.1f}% (p {d24['p']:.2f}) · 바로 진입 평균 "
+                   f"{follow['touch']['mean_R']:+.3f}R · 확인 진입 평균 {follow['confirm']['mean_R']:+.3f}R: "
+                   "아직 실력이라 말하기 어렵습니다").replace("-", "−")
+    return {"generated_ms": NOW_MS, "rules_ko": list(VIEW_RULES_KO),
+            "summary": {"n": len(live_views), "n_done": len(done), "need": need, "verdict_ko": verdict, "dir": summ_dir,
+                        "reached_rate": _r(sum(reached) / len(reached), 4) if reached else None, "follow": follow},
+            "views": views[:300]}
 
 
 # ---------------------------------------------------------------- the other files
@@ -469,7 +637,7 @@ def judge_rows(accts, rank_luck) -> tuple:
 
 
 def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empty: bool = False,
-          now_ms: int = FIXED_NOW_MS) -> dict:
+          now_ms: int = FIXED_NOW_MS, views: int = 40) -> dict:
     """Write the fake snapshot folder; returns a few facts about it (for tests). now_ms: the fake 'now' (rounded down
     to 15 minutes); the default is a fixed date so the files are the same on every run."""
     global NOW_MS
@@ -560,6 +728,8 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
             "best": pick(lines[:5]), "worst": pick(lines[::-1][:5]), "by_kind": by_kind, "leaders": leaders,
             "recent_switches": switches[:10], "recent_trades": all_trades[:12]}
     _write_json(os.path.join(outdir, "home.json"), home)
+    # the view log: its own random stream, so the number of views changes nothing else
+    _write_json(os.path.join(outdir, "views.json"), fake_views(np.random.default_rng(seed + 2), views))
     return {"accounts": len(accts), "passed": passed, "trades": len(all_trades), "live_start_ms": live_start}
 
 
@@ -570,10 +740,11 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--phase", default="live", choices=["live", "warm"])
     ap.add_argument("--empty", action="store_true", help="only status.json (nothing else written yet)")
+    ap.add_argument("--views", type=int, default=40, help="views in views.json (under 30 finished: 표본 부족)")
     ap.add_argument("--now", default=None, help="'now' for the current time, or epoch ms (default: a fixed date)")
     a = ap.parse_args(argv)
     now = FIXED_NOW_MS if a.now is None else int(datetime.datetime.now(UTC).timestamp() * 1000) if a.now == "now" else int(a.now)
-    facts = build(a.outdir, seed=a.seed, past5y_dir=a.past5y, phase=a.phase, empty=a.empty, now_ms=now)
+    facts = build(a.outdir, seed=a.seed, past5y_dir=a.past5y, phase=a.phase, empty=a.empty, now_ms=now, views=a.views)
     print(f"fake snapshot written to {a.outdir}: {facts}")
     return 0
 

@@ -15,7 +15,9 @@ export async function mount(el, ctx) {
     (v) => { lev = v; local.set("acct-lev", v); if (data) paint(data); }, {label: "배수"});
   const sum = h("div");
   const body = h("div", {class: "stack"});
-  el.append(ui.screenHead("계좌", "48개 계좌 · 계좌마다 배수 4줄 (각 $1,000에서 시작)"),
+  const head = ui.screenHead("계좌", "계좌마다 배수 4줄 (각 $1,000에서 시작)");
+  const headSub = head.querySelector(".sub");
+  el.append(head,
     h("div", {class: "row wrap dl-levbar"}, h("span", {class: "dl-fk"}, "배수"), levSeg), sum, body,
     ui.note("잔고 = 지갑 + 열린 포지션 평가금. 손익은 시작 $1,000 대비. 파산 = 잔고가 $100 아래로 떨어져 멈춘 줄. 수수료·슬리피지·펀딩 포함, 주문 없음."));
 
@@ -36,6 +38,7 @@ export async function mount(el, ctx) {
   function paint(d) {
     if (isMissing(d)) { put(sum); put(body, ui.missing("계좌 목록")); return; }
     const accts = d.accounts || [];
+    headSub.textContent = `${fmt.int(accts.length)}개 계좌 · 계좌마다 배수 4줄 (각 $1,000에서 시작)`;
     const levs = lev === "all" ? LEVS : [Number(lev)];
     const lines = accts.flatMap((a) => levs.map((L) => (a.lines || {})[String(L)]).filter(Boolean));
     const ruined = lines.filter((x) => x.ruined).length;
@@ -45,8 +48,11 @@ export async function mount(el, ctx) {
       ui.stat("이익 중인 줄", fmt.int(up), lines.length ? `${fmt.num(up / lines.length * 100, 0)}%` : null),
       ui.stat("파산한 줄", fmt.int(ruined), null, ruined ? "dl-bad" : null),
       ui.stat("열린 포지션", fmt.int(lines.reduce((s, x) => s + (Number(x.open) || 0), 0)), "보이는 줄 합계")));
-    const cards = KINDS.map((k) => {
-      const rows = accts.filter((a) => (a.kind || kindOfId(a.id)) === k.id);
+    const known = new Set(KINDS.map((k) => k.id));
+    const kinds = [...KINDS, ...(accts.some((a) => !known.has(a.kind || kindOfId(a.id))) ? [{id: "__other", ko: "기타", desc: "이 화면이 아직 모르는 종류"}] : [])];
+    const kindOf = (a) => (known.has(a.kind || kindOfId(a.id)) ? a.kind || kindOfId(a.id) : "__other");
+    const cards = kinds.map((k) => {
+      const rows = accts.filter((a) => kindOf(a) === k.id);
       if (!rows.length) return null;
       const means = levs.map((L) => {
         const v = rows.map((a) => (a.lines || {})[String(L)]).filter(Boolean).map((x) => Number(x.pnl_pct)).filter(Number.isFinite);

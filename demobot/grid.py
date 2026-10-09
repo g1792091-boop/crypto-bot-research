@@ -55,21 +55,30 @@ PICK = {("S2_ST_ROC", "15m"): 336, ("S2_ST_ROC", "30m"): 307, ("N02_ST_KST", "15
 TPSL_TP = (1.0, 1.5, 2.0, 3.0)
 TPSL_K = (1.5, 2.0, 3.0)
 TPSL_CFG = tuple((tp, k) for k in TPSL_K for tp in TPSL_TP)
-EXITS = ("house",) + tuple(f"tp{tp:g}R_sl{k:g}atr" for tp, k in TPSL_CFG)
+# exit 13 (added 10/09): half at 1R, stop to break-even, rest at 1.5R, stop 2 ATR ("반익반본")
+HALFBE = len(TPSL_CFG) + 1
+EXITS = ("house",) + tuple(f"tp{tp:g}R_sl{k:g}atr" for tp, k in TPSL_CFG) + ("half1R_be_1.5R",)
 NEXIT = len(EXITS)
+
+
+def is_tpsl(e: int) -> bool:
+    return 1 <= int(e) <= len(TPSL_CFG)
 
 
 def exit_ko(e) -> str:
     i = EXITS.index(e) if isinstance(e, str) else int(e)
     if i == 0:
         return "사다리(규칙봇 방식)"
+    if i == HALFBE:
+        return "반익반본: 1R 절반 · 본전 · 1.5R"
     tp, k = TPSL_CFG[i - 1]
     return f"익절 {tp:g}R · 손절 {k:g}ATR"
 
 
 def exit_stop_k(e: int) -> float:
-    """Stop distance in ATR of exit e (house: 2)."""
-    return 2.0 if int(e) == 0 else TPSL_CFG[int(e) - 1][1]
+    """Stop distance in ATR of exit e (house and half/BE: 2)."""
+    e = int(e)
+    return TPSL_CFG[e - 1][1] if is_tpsl(e) else 2.0
 
 
 def combo_index(strat: str, idx) -> int:

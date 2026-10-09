@@ -44,7 +44,7 @@ def study_block(work: str, strat: str, tf: str, per: str) -> np.ndarray:
     for ci, coin in enumerate(G.COINS):
         z = np.load(os.path.join(work, "totals", f"{coin}_{tf}_{per}.npz"))
         T = z[f"{strat}__tot"]                         # (NV, nc, [n, wins, sumR, sumG, sumR2, nsig])
-        for e, v in enumerate(VARIANT_OF_EXIT):
+        for e, v in enumerate(VARIANT_OF_EXIT):          # exit 13 (half/break-even) was not in the study: NaN
             n, w, s = T[v, :, 0], T[v, :, 1], T[v, :, 2]
             with np.errstate(invalid="ignore", divide="ignore"):
                 out[e, ci + 1] = np.stack([n, w / n, s / n], 1)
@@ -52,6 +52,7 @@ def study_block(work: str, strat: str, tf: str, per: str) -> np.ndarray:
     n, w, s = tot_all[..., 0], tot_all[..., 1], tot_all[..., 2]
     with np.errstate(invalid="ignore", divide="ignore"):
         out[:, 0] = np.stack([n, w / n, s / n], -1)
+    out[len(VARIANT_OF_EXIT):] = np.nan
     return out
 
 
@@ -92,6 +93,9 @@ def crash_blocks(db_dir: str) -> dict:
                         if e == 0:
                             R = book.F[k, s, ST.F_MAIN_R].astype(float)
                             d = book.F[k, s, ST.F_MAIN_REASON] != 3
+                        elif e == G.HALFBE:
+                            R = book.F[k, s, ST.F_HB_R].astype(float)
+                            d = np.isfinite(R)
                         else:
                             R = book.F[k, s, ST.F_TP_R + e - 1].astype(float)
                             d = np.isfinite(R)

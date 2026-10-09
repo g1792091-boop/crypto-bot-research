@@ -26,7 +26,8 @@ def test_grid_counts_and_named_settings():
     assert G.combo_label("S2_ST_ROC", G.friend_combo("S2_ST_ROC")) == "ST 8/3 ROC 37"
     assert G.combo_label("N04_ST_KLINGER", G.friend_combo("N04_ST_KLINGER")) == "ST 8/3 KVOx1 sig 13"
     assert G.combo_label("S2_ST_ROC", G.PICK[("S2_ST_ROC", "15m")]) == "ST 20/6 ROC 5"
-    assert len(G.EXITS) == 13 and G.EXITS[5] == "tp1R_sl2atr" and G.exit_stop_k(12) == 3.0
+    assert len(G.EXITS) == 14 and G.EXITS[5] == "tp1R_sl2atr" and G.exit_stop_k(12) == 3.0
+    assert G.EXITS[G.HALFBE] == "half1R_be_1.5R" and G.exit_stop_k(G.HALFBE) == 2.0
 
 
 def test_accounts_list():
@@ -151,7 +152,7 @@ def test_end_to_end_snapshots(run):
         assert set(a["lines"]) == {"20", "30", "40", "50"}
         assert (snap / "acct" / f"{a['id']}.json").exists()
     z = np.load(snap / "rank_S2_15m.npz")
-    assert z["stats"].shape == (3, 13, 8, 343, len(RK.K_STATS))
+    assert z["stats"].shape == (3, G.NEXIT, 8, 343, len(RK.K_STATS))
     st = json.loads((snap / "status.json").read_text())
     assert st["phase"] == "live" and st["counts"]["settings"] == 1666
     jd = json.loads((snap / "judge.json").read_text())
@@ -226,3 +227,41 @@ def test_rank_counts_match_signal_lookup(run):
     assert int(st[0]) == len(vals)
     if vals:
         assert abs(float(st[2]) - float(np.mean(vals))) < 1e-5
+
+
+PLUGIN_SRC = '''
+KEY = "t1"
+ACCOUNTS = [{"variant": "x", "name": "시험 플러그인", "rule_ko": "시험", "tf": "15m"}]
+def trades(variant, bars15, start_ms, now_ms):
+    b = bars15["BTCUSD"]
+    import numpy as np
+    i = int(np.searchsorted(b["ts"], start_ms))
+    if i + 2 >= len(b["ts"]):
+        return []
+    e = float(b["o"][i]); stop = e * 0.99
+    return [dict(coin="BTCUSD", side=1, signal_ms=int(b["ts"][i]) - 900000, entry_ms=int(b["ts"][i]), entry=e,
+                 stop=stop, atr=None, maker_entry=True,
+                 legs=[(0.5, int(b["ts"][i + 1]), e * 1.01, "tp"), (0.5, int(b["ts"][i + 2]), e, "be")],
+                 setting_ko="시험", exit_ko="시험")]
+'''
+
+
+def test_private_plugin_accounts(run, tmp_path, monkeypatch):
+    d = tmp_path / "plugins"
+    d.mkdir()
+    (d / "t1.py").write_text(PLUGIN_SRC)
+    (d / "broken.py").write_text("KEY = 'Bad Key'\n")
+    monkeypatch.setenv("DEMOBOT_PLUGINS", str(d))
+    eng = run["runner"].eng
+    res = A.run_all(eng, run["clock"][0], log=lambda *a: None)
+    assert "pv-t1-x" in res and all(L in res["pv-t1-x"]["lines"] for L in G.LEVS)
+    line = res["pv-t1-x"]["lines"][20]
+    tr = [t for t in line["trades"]]
+    assert len(tr) == 1 and tr[0]["status"] == "closed" and tr[0]["reason"] == "be"
+    # half at +1% (maker), half at break-even: positive before costs, R about 0.5 minus fees
+    assert 0.3 < tr[0]["R"] < 0.5
+    jd = J.judge_all(res, run["clock"][0])
+    assert any(r["id"] == "pv-t1-x" for r in jd["rows"])
+    monkeypatch.setenv("DEMOBOT_PLUGINS", str(tmp_path / "none"))
+    A.refresh_plugins(log=lambda *a: None)
+    assert not any(a.kind == "private" for a in A.current_accounts())

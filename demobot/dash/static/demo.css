@@ -230,3 +230,44 @@
 /* a pager's page never widens the page (its table scrolls inside its own box) */
 .dl-pager { grid-template-columns: minmax(0, 1fr); }
 .dl-pbody { min-width: 0; }
+
+/* ---------------------------------------------------------------- 관점 기록 (#/views) */
+.vw-verdict { gap: 10px; }
+.vw-vtext { font: 800 var(--t-lg)/1.45 var(--f-body); }
+.vw-prog { display: grid; gap: 6px; font-size: var(--t-xs); max-width: 520px; }
+.vw-sum { display: grid; gap: var(--gap); }
+.stats.vw-s3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stats.vw-s1 { grid-template-columns: minmax(0, 1fr); }
+.stats.vw-s5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 560px) { .stats.vw-s5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 559px) { .stats.vw-s5 > .stat:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+@media (max-width: 459px) { .stats.vw-s3 .stat { padding: 8px; } .stats.vw-s3 .stat b { font-size: var(--t-md); } }
+.vw-how { gap: 10px; }
+.vw-fmt { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink); font-size: var(--t-xs); line-height: 1.6;
+  overflow-wrap: anywhere; }
+.vw-ex { display: grid; gap: 6px; }
+.vw-code { display: block; padding: 6px 10px; border-radius: var(--r-sm); border: 1px dashed var(--line-2); color: var(--ink-2);
+  font: 400 var(--t-xs)/1.5 var(--f-term); overflow-wrap: anywhere; }
+.vw-list { display: grid; gap: 10px; }
+.vw { display: grid; gap: 10px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); min-width: 0; }
+.vw.vw-off { opacity: .6; }
+.vw-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--t-sm); }
+.vw-id { font-family: var(--f-term); color: var(--accent); }
+.vw-body { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .vw-body { grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1.2fr); } }
+.vw-plan { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.vw-zones { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.vw-z { padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--line-2); font-size: var(--t-xs); white-space: nowrap; }
+.vw-z b { color: var(--accent); }
+.vw-kv { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--t-xs); }
+.vw-memo { margin: 0; padding: 4px 10px; border-left: 2px solid var(--accent-line); color: var(--ink-2); font-size: var(--t-sm); line-height: 1.55;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.vw-dir { display: grid; gap: 3px; align-content: start; font-size: var(--t-sm); }
+.vw-mv { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+.vw-mv .muted { font-size: var(--t-xs); }
+.vw-fol { display: grid; gap: 8px; align-content: start; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 460px) and (max-width: 899px) { .vw-fol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.vw-f { display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); font-size: var(--t-xs); min-width: 0; }
+.vw-fh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; }
+.vw-fn { font-weight: 700; color: var(--ink); }
+.vw-fl { overflow-wrap: anywhere; }

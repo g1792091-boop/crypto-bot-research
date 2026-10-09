@@ -30,6 +30,9 @@ LIB=/var/lib/demobot
 SNAP=$LIB/snap
 ETC=/etc/demobot
 ENVF=$ETC/demobot.env
+# optional private strategy plug-ins (CONTRACT.md 7.2): the folder is made here, the files in it are the owners'
+# (written by a paste box from the developer); this script never reads, changes or removes them
+PLUGINS=$ETC/plugins
 # unit files installed; the units stopped for the code swap and started again (the ranking timer included, so no
 # ranking pass starts on a half-swapped tree); a ranking pass already running is ended, not restarted (next hour)
 UNIT_FILES="demobot-live.service demobot-dash.service demobot-rank.service demobot-rank.timer"
@@ -102,6 +105,9 @@ install -d -o root -g root -m 755 /opt/demobot
 install -d -o demobot -g demobot -m 700 "$LIB"
 install -d -o demobot -g demobot -m 750 "$SNAP"
 install -d -o root -g demobot -m 750 "$ETC"
+# only the folder itself (owner, mode); never the files inside. The engine and the ranking (user demobot) read it;
+# the dashboard's unit hides all of /etc/demobot.
+install -d -o root -g demobot -m 750 "$PLUGINS"
 
 echo "== env file (template only when missing; values are never printed)"
 if [ ! -f "$ENVF" ]; then

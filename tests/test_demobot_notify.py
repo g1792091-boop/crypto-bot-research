@@ -60,6 +60,26 @@ SAMPLES = {
     "tick": {"bar_ms": T0, "opens": [trade(0), trade(1, coin="ETHUSD", side=-1)], "closes": [trade(2, closed=True)]},
     "switch": SWITCH, "daily": DAILY, "warn": {"what": "data", "detail_ko": "15분봉 2개 빠짐 (BTC, ETH)"},
     "pass": PASS}
+# the view log (CONTRACT.md 7.3)
+ZONES = {"A": None, "B": [84750.0, 84840.0], "C": [85300.0, 85300.0]}
+FOLLOW_CLOSED = {"status": "closed", "entry_ms": T0, "entry": 84750.0, "stop": 85600.0, "exit_ms": T0 + 3600_000,
+                 "R": 1.2, "wallet20_pct": 4.8, "legs_ko": "1R 절반 · 본전 청산"}
+FOLLOW_MISSED = {"status": "missed", "entry_ms": None, "entry": None, "stop": None, "exit_ms": None, "R": None,
+                 "wallet20_pct": None, "legs_ko": ""}
+VIEWS = {
+    "view_ack": {"id": 12, "coin": "BTCUSD", "side": -1, "t_ms": T0 + 5 * 3600_000 + 180_000, "zones": ZONES,
+                 "stop": 85600.0, "targets": [], "memo": "4시간 저항", "notes_ko": ["시각 없음: 받은 시각 10/10 14:03 사용"]},
+    "view_err": {"text_ko": "코인을 모르겠습니다: ADA\n예: 관점 BTC 숏 B 84750-84840"},
+    "view_cancel": {"id": 12, "ok": True},
+    "view_list": {"views": [{"id": 13, "t_ms": T0, "coin": "ETHUSD", "side": 1, "status": "watching", "dir24": None,
+                             "touch_R": None},
+                            {"id": 12, "t_ms": T0 - 86_400_000, "coin": "BTCUSD", "side": -1, "status": "done",
+                             "dir24": -0.83, "touch_R": 1.2}]},
+    "view_help": {},
+    "view_done": {"id": 12, "coin": "BTCUSD", "side": -1, "dir": {"4h": 0.41, "24h": -0.83, "48h": 1.25},
+                  "reached": True, "touch": FOLLOW_CLOSED, "confirm": FOLLOW_MISSED,
+                  "summary_ko": "끝난 관점 5개 · 표본 부족 (5/30)"}}
+SAMPLES.update(VIEWS)
 
 
 def emoji_ok(text: str) -> bool:
@@ -153,6 +173,51 @@ def test_daily_summary():
 def test_render_never_raises(kind, payload):
     out = N.render(kind, payload)
     assert isinstance(out, str) and len(out) < 4096
+
+
+def test_view_ack_shows_the_zones_stop_targets_and_the_parser_notes():
+    a = N.render("view_ack", VIEWS["view_ack"]).split("\n")
+    assert a[0] == "📝 관점 #12 기록 · BTC 숏" and a[1] == "10/10 14:03 기준 (한국 시간)"
+    assert "구간 B 84,750~84,840 · C 85,300" in a and "손절 85,600" in a
+    assert "목표 없음: 1R에 절반 · 본전 · 나머지 2R" in a and "메모 4시간 저항" in a
+    assert "- 시각 없음: 받은 시각 10/10 14:03 사용" in a and a[-1].endswith("취소: 취소 12")
+    b = N.render("view_ack", dict(VIEWS["view_ack"], side=1, coin="ETHUSD", zones={"A": [3050, 3060]}, stop=None,
+                                  targets=[3120, 3180.5], memo="", notes_ko=[]))
+    assert "ETH 롱" in b and "구간 A 3,050~3,060" in b and "목표 3,120, 3,180.5" in b and "손절 없음" in b
+    assert N.zones_text({"C": 85300, "A": [2.5, 2.4]}) == "A 2.4~2.5 · C 85,300" and N.zones_text(None) == "-"
+
+
+def test_view_err_cancel_list_help():
+    e = N.render("view_err", VIEWS["view_err"])
+    assert e.startswith("❓ 관점을 기록하지 못했습니다\n코인을 모르겠습니다: ADA") and "관점도움" in e
+    assert N.VIEW_EXAMPLES[0] in N.render("view_err", {})                     # no reason given: usage + example
+    assert N.render("view_cancel", {"id": 12, "ok": True}).startswith("🗑 관점 #12 취소했습니다")
+    assert N.render("view_cancel", {"id": 99, "ok": False}).startswith("❓ 관점 #99 취소 안 됨")
+    li = N.render("view_list", VIEWS["view_list"])
+    assert li.startswith("📒 관점 목록 · 최근 2개")
+    assert "- #13 10/10 09:00 ETH 롱 · 지켜보는 중" in li
+    assert "- #12 10/09 09:00 BTC 숏 · 끝남 · 24시간 -0.83% · 구간 진입 +1.20R" in li
+    assert "아직 기록한 관점이 없습니다" in N.render("view_list", {"views": []})
+    h = N.render("view_help", {})
+    assert h.startswith("📖 관점 기록장 쓰는 법") and N.VIEW_USAGE in h
+    assert all(x in h for x in N.VIEW_EXAMPLES) and len(N.VIEW_EXAMPLES) == 2
+    assert "취소 12" in h and "관점목록" in h and "관점도움" in h and "GitHub" in h
+    for ex in N.VIEW_EXAMPLES:                                                 # the examples follow 7.3's format
+        assert re.fullmatch(r"관점( \d\d/\d\d \d\d:\d\d)? (BTC|ETH|SOL|DOGE|LTC|BCH|XRP) (롱|숏)( [ABC] [\d,]+([-~][\d,]+)?)+"
+                            r"( 손절 [\d,]+)?( 목표 [\d,]+(,[\d,]+)?)?( 메모 .+)?", ex), ex
+
+
+def test_view_done_shows_direction_reach_and_both_follow_modes():
+    d = N.render("view_done", VIEWS["view_done"]).split("\n")
+    assert d[0] == "📊 관점 #12 결과 · BTC 숏"
+    assert d[1] == "말한 방향으로 4시간 +0.41% · 24시간 -0.83% · 48시간 +1.25%"
+    assert d[2] == "구간 도달 예"
+    assert d[3] == "- 구간 바로 진입: 청산 · 진입 84,750 · +1.20R · 20배 잔고 +4.8% · 1R 절반 · 본전 청산"
+    assert d[4] == "- 15분 종가 확인 진입: 진입 못 함 (48시간 안에)"
+    assert d[5] == "끝난 관점 5개 · 표본 부족 (5/30)"
+    o = N.render("view_done", dict(VIEWS["view_done"], reached=False, dir={"4h": None},
+                                   confirm={"status": "open", "entry": 84700.0, "R": -0.3}))
+    assert "구간 도달 아니오" in o and "48시간 -" in o and "- 15분 종가 확인 진입: 보유 중 · 진입 84,700 · -0.30R (진행 중)" in o
 
 
 def test_helpers():
@@ -422,6 +487,73 @@ def test_outbox_table_shape():
     N.Outbox(conn)                                                         # twice: no error
 
 
+# ---------------------------------------------------------------- commands from the group (poll_commands)
+def upd(uid, chat=-100777, text="관점 BTC 숏 B 84750-84840", date=1_791_608_580, first="민수", kind="message"):
+    m = {"message_id": uid, "date": date, "chat": {"id": chat, "type": "supergroup"}, "from": {"id": 5, "first_name": first}}
+    if text is not None:
+        m["text"] = text
+    return {"update_id": uid, kind: m}
+
+
+class Get:
+    def __init__(self, result=None, exc=None):
+        self.result, self.exc, self.calls = result, exc, []
+
+    def __call__(self, token, method, params, timeout):
+        self.calls.append((method, params, timeout))
+        if self.exc:
+            raise self.exc
+        return self.result
+
+
+def test_poll_keeps_only_the_groups_text_messages_and_moves_past_everything_seen():
+    g = Get([upd(500), upd(501, chat=-100999, text="관점 ETH 롱 A 1"), upd(502, text=None),
+             upd(503, text="관점목록", first=None), {"update_id": 504, "my_chat_member": {"chat": {"id": -100777}}},
+             upd(505, chat=42, text="취소 1"), "junk", {"update_id": "x"}])
+    off, items = N.poll_commands(TOKEN, "-100777", 500, timeout=25, get=g)
+    assert off == 506                                                     # other chats and non-messages too
+    assert items == [{"update_id": 500, "text": "관점 BTC 숏 B 84750-84840", "date_ms": 1_791_608_580_000,
+                      "from_name": "민수"},
+                     {"update_id": 503, "text": "관점목록", "date_ms": 1_791_608_580_000, "from_name": ""}]
+    method, params, timeout = g.calls[0]
+    assert method == "getUpdates" and params["offset"] == "500" and params["timeout"] == "25"
+    assert json.loads(params["allowed_updates"]) == ["message"] and timeout > 25        # HTTP waits past the poll
+    assert N.poll_commands(TOKEN, -100777, 0, get=Get([upd(7)]))[1][0]["update_id"] == 7   # an int chat id works
+    g0 = Get([])
+    assert N.poll_commands(TOKEN, "-100777", 0, get=g0) == (0, []) and "offset" not in g0.calls[0][1]
+    assert N.poll_commands(TOKEN, "-100777", 506, get=Get([])) == (506, [])
+
+
+@pytest.mark.parametrize("exc", [N.TelegramError("HTTP 409: Conflict"), urllib.error.URLError("dns"), OSError("x"),
+                                 ValueError("bad json"), Exception("anything")])
+def test_poll_never_raises_and_keeps_the_offset(exc):
+    assert N.poll_commands(TOKEN, "-100777", 321, get=Get(exc=exc)) == (321, [])
+
+
+def test_poll_bad_answers_and_missing_settings_keep_the_offset():
+    assert N.poll_commands(TOKEN, "-100777", 9, get=Get({"ok": True})) == (9, [])
+    assert N.poll_commands(TOKEN, "-100777", 9, get=Get(None)) == (9, [])
+    g = Get([upd(1)])
+    assert N.poll_commands("", "-100777", 9, get=g) == (9, []) and N.poll_commands(TOKEN, " ", 9, get=g) == (9, [])
+    assert g.calls == [] and N.poll_commands(TOKEN, "-1", "bad", get=Get([])) == (0, [])
+
+
+def test_poll_errors_are_logged_without_the_token(capsys, monkeypatch):
+    monkeypatch.setattr(N, "_poll_err", {"text": None, "t": 0.0})
+    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
+    assert N.poll_commands(TOKEN, "-100777", 3, get=Get(exc=RuntimeError(f"reset by peer at {url}"))) == (3, [])
+    err = capsys.readouterr().err
+    assert "reset by peer" in err and "<token>" in err and TOKEN not in err and TOKEN.split(":")[1] not in err
+    N.poll_commands(TOKEN, "-100777", 3, get=Get(exc=RuntimeError(f"reset by peer at {url}")))
+    assert capsys.readouterr().err == ""                                   # the same error again: not repeated
+
+    def down(req, timeout=None):                                          # the real api(): HTTP error, token in URL
+        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"ok":false}'))
+    monkeypatch.setattr(N.urllib.request, "urlopen", down)
+    assert N.poll_commands(TOKEN, "-100777", 4) == (4, [])
+    assert TOKEN not in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------- CLI
 def test_cli_test_message(capsys):
     out = []
@@ -634,6 +766,25 @@ def test_install_copies_only_the_listed_paths_and_handles_the_env_file_safely():
     assert 'bash "$HERE/firewall.sh"' in text and 'bash "$HERE/firewall.sh"' in (KIT / "on.sh").read_text(encoding="utf-8")
 
 
+def test_plugins_folder_is_made_but_its_files_never_touched():
+    inst = (KIT / "install_demobot.sh").read_text(encoding="utf-8")
+    assert "PLUGINS=$ETC/plugins" in inst and 'install -d -o root -g demobot -m 750 "$PLUGINS"' in inst
+    for ln in code_lines(KIT / "install_demobot.sh"):
+        if "PLUGINS" in ln or "plugins" in ln:
+            assert ln.startswith("PLUGINS=") or ln.startswith('install -d -o root -g demobot -m 750 "$PLUGINS"'), ln
+    for p in scripts():                                                    # no script changes what is inside
+        for ln in code_lines(p):
+            assert not re.search(r"\b(rm|chmod|chown|cp|mv|tee|install)\b[^#]*/etc/demobot/plugins/", ln), (p.name, ln)
+            assert not re.search(r"\b(cat|less|more|head|tail)\b[^|]*plugins", ln), (p.name, ln)
+    dash = unit("demobot-dash.service")["[Service]"]
+    assert "-/etc/demobot" in dash["InaccessiblePaths"][0].split()          # the dashboard cannot see the plug-ins
+    for name in ("demobot-live.service", "demobot-rank.service"):           # the engine and the ranking read them
+        svc = unit(name)["[Service]"]
+        hidden = " ".join(svc.get("InaccessiblePaths", [])) + " ".join(svc.get("TemporaryFileSystem", []))
+        assert "/etc/demobot" not in hidden and svc["User"] == ["demobot"] and svc["ProtectSystem"] == ["strict"]
+    assert "#DEMOBOT_PLUGINS=/etc/demobot/plugins" in (KIT / "demobot.env.example").read_text(encoding="utf-8")
+
+
 def test_env_example_has_the_contract_keys_and_no_values():
     kv = dict(ln.split("=", 1) for ln in (KIT / "demobot.env.example").read_text(encoding="utf-8").splitlines()
               if ln and not ln.startswith("#"))
@@ -662,5 +813,13 @@ def test_owner_guide():
     assert "python -m demobot.notify chatid" in text and "demobot.dash hash" in text
     assert "openssl rand -hex 32" in text and "tailscale ip -4" in text and ":8090" in text
     assert "systemctl list-timers demobot-rank.timer" in text and "매시 7분" in text
+    assert "/setprivacy" in text and "`Disable`" in text and "관리자" in text      # the bot must read the group
+    views = text[text.index("## 6. 관점 기록장 쓰는 법"):text.index("## 7.")]
+    assert all(x in views for x in N.VIEW_EXAMPLES) and N.VIEW_USAGE in views
+    assert "취소 12" in views and "관점목록" in views and "관점도움" in views and "GitHub" in views
+    plug = text[text.index("## 7. 비공개 매매법 넣기 (선택)"):text.index("## 8.")]
+    assert "/etc/demobot/plugins/" in plug and "sha256" in plug and "root:demobot, 640" in plug
+    assert "sudo rm /etc/demobot/plugins/<파일 이름>.py" in plug
+    assert plug.count("sudo bash /root/demobot-src/deploy/demobot/on.sh") == 2
     assert not re.search(r"\bcat\b[^\n|]*(\.env|/etc/demobot)", text)
     assert "cd /opt/crypto-bot-research" not in text and "deploy/install.sh" not in text   # the rule bot's kit

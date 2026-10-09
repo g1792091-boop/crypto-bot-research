@@ -24,12 +24,14 @@ F_L_R = 27                     # 4 (20/30/40/50)
 F_L_REASON = 31                # 4
 F_L_EXIT = 35                  # 4 raw exit price at L
 F_MAIN_EXIT = 39
-NF = 40
+F_HB_R, F_HB_G, F_HB_EXIT = 40, 41, 42   # exit 13: half at 1R, break-even, rest at 1.5R
+NF = 43
 # int layout (exit bar open time, ms; -1 while open)
 T_MAIN = 0
 T_TP = 1                       # 12
 T_L = 13                       # 4
-NT = 17
+T_HB = 17
+NT = 18
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
@@ -260,4 +262,4 @@ def _clean(o):
     return o
 
 
-assert len(G.LEVS) == 4 and NF == F_MAIN_EXIT + 1 and NT == T_L + 4
+assert len(G.LEVS) == 4 and NF == F_HB_EXIT + 1 and NT == T_HB + 1

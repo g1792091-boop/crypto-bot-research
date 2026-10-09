@@ -69,6 +69,9 @@ def _outcome(eng, tf: str, coin_a, k_a, si_a, e: int):
             rs = F[kk, ss, ST.F_MAIN_REASON]
             R[a:b] = np.where(rs != 3, F[kk, ss, ST.F_MAIN_R], np.nan)
             Gv[a:b] = np.where(rs != 3, F[kk, ss, ST.F_MAIN_G], np.nan)
+        elif e == G.HALFBE:
+            R[a:b] = F[kk, ss, ST.F_HB_R]
+            Gv[a:b] = F[kk, ss, ST.F_HB_G]
         else:
             R[a:b] = F[kk, ss, ST.F_TP_R + e - 1]
             Gv[a:b] = F[kk, ss, ST.F_TP_G + e - 1]

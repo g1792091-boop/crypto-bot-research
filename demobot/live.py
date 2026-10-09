@@ -14,6 +14,7 @@ from . import judge as J
 from . import rank as RK
 from . import report as RP
 from . import store as ST
+from . import views as VW
 
 SETTLE_S = 25
 RANK_EVERY_MS = 60 * 60 * 1000
@@ -48,13 +49,15 @@ class Runner:
         self.chat = chat if chat is not None else os.environ.get("DEMOBOT_TG_CHAT", "")
         self.N, self.outbox = _outbox(conn)
         self.rank_inline = rank_inline          # the service leaves the ranking to demobot-rank.timer
+        VW.ensure(conn)
+        self.tg_offset = ST.get_meta(conn, "tg_offset", 0) or 0
         self.last_rank_ms = ST.get_meta(conn, "last_rank_ms", 0)
         self.last_funding_ms = 0
 
     def start(self) -> None:
         self.eng.load()
         if self.outbox is not None:
-            self._queue("start", {"phase": "live", "accounts": len(A.ACCOUNTS), "live_start_ms": self.eng.live_start})
+            self._queue("start", {"phase": "live", "accounts": len(A.current_accounts()), "live_start_ms": self.eng.live_start})
             self._flush()
 
     def _queue(self, kind: str, payload: dict) -> None:
@@ -83,7 +86,7 @@ class Runner:
                 errors.append(f"funding: {type(exc).__name__}")
         res = judge = None
         try:
-            res = A.run_all(self.eng, now)
+            res = A.run_all(self.eng, now, log=self.log)
             judge = J.judge_all(res, now)
         except Exception as exc:
             errors.append(f"accounts: {type(exc).__name__}: {exc}")
@@ -107,6 +110,11 @@ class Runner:
                 errors.append(f"snapshots: {type(exc).__name__}: {exc}")
                 self.log(traceback.format_exc())
             self._telegram(res, judge, now)
+        try:
+            self._views(now)
+        except Exception as exc:
+            errors.append(f"views: {type(exc).__name__}: {exc}")
+            self.log(traceback.format_exc())
         if errors:
             self._queue("warn", {"what": "error", "detail_ko": "; ".join(errors)[:500]})
         if self.eng.issues:
@@ -138,7 +146,7 @@ class Runner:
             kst_hour = time.gmtime((now + 9 * 3600 * 1000) / 1000).tm_hour
             if kst_hour >= 9 and ST.get_meta(self.conn, "daily_sent") != day:
                 home = _read_json(os.path.join(self.snap, "home.json")) or {}
-                trades24 = sum(1 for a in A.ACCOUNTS for sim in res[a.id]["lines"].values()
+                trades24 = sum(1 for a in A.current_accounts() for sim in res[a.id]["lines"].values()
                                for t in sim["trades"] if t["status"] == "closed" and t["exit_ms"] and
                                t["exit_ms"] >= now - DAY_MS)
                 self._queue("daily", {"day": day, "live_days": home.get("live_days"), "best": home.get("best", []),
@@ -148,6 +156,43 @@ class Runner:
                 ST.set_meta(self.conn, "daily_sent", day)
         except Exception as exc:
             self.log("telegram events failed:", type(exc).__name__, exc)
+
+    def _views(self, now: int) -> None:
+        """views.json and the result message of each view that finished since the last tick."""
+        snap, newly = VW.snapshot(self.conn, self.eng.b15, now)
+        ST.write_json(os.path.join(self.snap, "views.json"), snap)
+        for v in newly:
+            f = v["follow"]
+            self._queue("view_done", {"id": v["id"], "coin": v["coin"], "side": v["side"], "dir": v["dir"],
+                                      "reached": bool(v["reached"]), "touch": f["touch"], "confirm": f["confirm"],
+                                      "summary_ko": snap["summary"]["verdict_ko"]})
+        VW.mark_done(self.conn, [v["id"] for v in newly])
+
+    def _price(self, coin: str):
+        b = self.eng.b15.get(coin)
+        return float(b["c"][-1]) if b is not None and len(b["c"]) else None
+
+    def poll_once(self, timeout: float) -> int:
+        """Read Telegram commands (view log) once; returns the number of messages handled."""
+        if self.N is None or not (self.token and self.chat):
+            time.sleep(max(1.0, timeout))
+            return 0
+        t0 = time.time()
+        off, items = self.N.poll_commands(self.token, self.chat, self.tg_offset, timeout=int(max(1, timeout)))
+        if off != self.tg_offset:
+            self.tg_offset = off
+            ST.set_meta(self.conn, "tg_offset", off)
+        for it in items:
+            try:
+                for kind, payload in VW.handle(self.conn, it, self.clock_ms(), price_of=self._price):
+                    self._queue(kind, payload)
+            except Exception as exc:
+                self.log("view command failed:", type(exc).__name__, exc)
+        if items:
+            self._flush()
+        elif time.time() - t0 < 2:
+            time.sleep(5)              # an error answers at once: do not spin
+        return len(items)
 
     def _flush(self) -> None:
         if self.outbox is None or not (self.token and self.chat):
@@ -162,7 +207,12 @@ class Runner:
         while True:
             now_s = time.time()
             nxt = (int(now_s) // 900 + 1) * 900 + SETTLE_S
-            time.sleep(max(1.0, nxt - time.time()))
+            while time.time() < nxt - 1:     # between ticks: answer view-log commands within seconds
+                try:
+                    self.poll_once(min(25.0, nxt - time.time()))
+                except Exception as exc:
+                    self.log("poll failed:", type(exc).__name__)
+                    time.sleep(5)
             self.tick()
 
 
