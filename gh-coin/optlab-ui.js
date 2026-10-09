@@ -103,7 +103,7 @@ async function go() {
 }
 function renderApplied() {
   const el = $("[data-olapplied]"); if (!el) return; const L = OL.applied();
-  el.innerHTML = L.length ? `<span class="ol-l">적용 중</span>${L.map(u => `<span class="ol-tag${u.off ? " off" : ""}">🔬 ${E(u.ko)} ${day(u.start)}~${day(u.end)}${u.extra ? " (새 코인)" : ""}${u.off ? " · 해제 대기(보유 중)" : ""} <button class="ol-mini" data-olunapply="${u.sym}">해제</button></span>`).join("")}` : `<span class="dim">🧪 연구소는 지금 앱 기본 5년 값으로 돌고 있습니다(직접 최적화 적용 없음)</span>`;
+  el.innerHTML = L.length ? `<span class="ol-l">적용 중</span>${L.map(u => `<span class="ol-tag${u.off ? " off" : ""}">🔬 ${E(u.ko)} ${day(u.start)}~${day(u.end)}${u.extra ? " (새 코인)" : ""}${u.off ? " · 해제 대기(보유 중)" : ""}${u.nAuto ? ` · 🔧 손실 자동 ${u.nAuto}칸` : ""} <button class="ol-mini" data-olunapply="${u.sym}">해제</button></span>`).join("")}` : `<span class="dim">🧪 연구소는 지금 앱 기본 5년 값으로 돌고 있습니다(직접 최적화 적용 없음)</span>`;
 }
 
 // ── 결과 ──

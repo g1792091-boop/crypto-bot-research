@@ -112,6 +112,34 @@ try {
     // 없는 코인
     try { await OL.run({ sym: "zzzqqq", start: Date.now() - 30 * 864e5, end: Date.now(), tfs: ["60"], levs: [30], combos: ["st_roc"] }, () => {}); out.bad = "오류 안 남"; } catch (e) { out.bad = e.message; }
     UI.closeOptLab(); OL.unapply("ETHUSDT"); localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom"); }
+  if (q === "labauto") {   // 🔴 진입 보이기 + 🔧 손실 자동 재최적화: 실시세 한 주기(진입 기록·지금 손익) → 한 칸에 손절 3번 → 자동으로 최근 1년 재최적화 → 적용/유지 → 화면
+    localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom");
+    const LAB = await import("../gh-coin/combolab.js"), AG = await import("../nuri-ai/agent.js"), fb = [], feed = t => fb.push(t), models = [{ id: "ollama", model: "qwen2.5:3b" }];
+    LAB.resetLab(); await LAB.cycle({ models, feed });
+    let st = LAB.labState(); out.open = st.open.length; out.openSample = st.open.slice(0, 3).map(p => `${p.ko} ${p.tf} ${p.lev}x ${p.side > 0 ? "롱" : "숏"} ${p.cshort} e=${p.e} px=${p.px} uR=${p.uR} roe=${p.roe}`);
+    out.events = st.events.filter(e => e.ty === "e").length; out.feedEntries = fb.filter(t => /🧪 진입/.test(t)).slice(0, 4);
+    const k = new URLSearchParams(location.search).get("lane") || "st_roc|BTCUSDT|60|20", [kc, ks, ktf, klev] = k.split("|");
+    for (let i = 0; i < 3; i++) { const px = (await AG.candlesFor({ market: ks, exchange: "binancef", timeframe: "15" }, 1000)).cs.at(-1).c, Ls = LAB.load(), now = Date.now(), ln = Ls.lanes[k] || (Ls.lanes[k] = { n: 0, w: 0, R: 0, pnl: 0, lastSig: 0, skip: 0, pos: null });
+      ln.pos = { side: 1, e: px * 1.02, s: 0.01, sl: px * 1.01, tp: px * 1.05, be: false, risk: 5, notional: 500, margin: 25, liq: px * 0.98, t: now, t15: Math.floor(now / 900e3) * 900e3, lastBar: now, bars: 0, round: 1, cand: 0, rr: 3 };
+      await LAB.cycle({ models, feed }); }
+    out.lossTrades = LAB.load().trades.filter(t => t.k === k).map(t => t.R);
+    out.feedExit = fb.filter(t => /🧪 청산/.test(t)).slice(0, 3);
+    const t0 = Date.now(); while (Date.now() - t0 < 180e3) { const lg = LAB.labState().auto.log; if (lg.some(x => /재최적화 끝|실패/.test(x.text))) break; out.autoRunSeen ||= !!LAB.labState().auto.run; await new Promise(r => setTimeout(r, 1000)); }
+    st = LAB.labState(); out.autoSec = Math.round((Date.now() - t0) / 1000); out.autoLog = st.auto.log.map(x => x.text); out.autoQ = st.auto.q; out.nDay = st.auto.nDay;
+    { const g = st.grid[kc][ks][ktf + "|" + klev]; out.custom = st.custom; out.laneCell = g && { auto: g.auto, cust: g.cust, p: g.p, x: g.x, ho: g.ho, tr: g.tr, spanD: g.spanD, pass: g.pass }; }
+    out.since = LAB.load().lanes[k].since > t0 - 200e3; out.cool = (LAB.load().auto.cool[ks] || 0) > Date.now();
+    out.otherLaneSame = st.grid[kc][ks]["60|20"]?.auto === false;   // 같은 코인 다른 칸은 그대로
+    out.feedAuto = fb.filter(t => /🔧/.test(t));
+    // 4번째 손실 — 쿨다운이라 바로 다시 돌지 않고 대기만
+    { const px = (await AG.candlesFor({ market: ks, exchange: "binancef", timeframe: "15" }, 1000)).cs.at(-1).c, Ls = LAB.load(), now = Date.now(); Ls.lanes[k].pos = { side: 1, e: px * 1.02, s: 0.01, sl: px * 1.01, tp: px * 1.05, be: false, risk: 5, notional: 500, margin: 25, liq: px * 0.98, t: now, t15: Math.floor(now / 900e3) * 900e3, lastBar: now, bars: 0, round: 1, cand: 0, rr: 3 }; await LAB.cycle({ models, feed }); }
+    out.afterCool = { q: LAB.labState().auto.q.length, run: !!LAB.labState().auto.run, log0: LAB.labState().auto.log[0]?.text };
+    // 화면
+    const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 6000));
+    const card = document.querySelector("[data-lab]")?.innerText || ""; out.ui = { pos: /연구소 보유 포지션/.test(card), posRows: document.querySelectorAll("[data-lab] .lab-pos tr").length - 1, ev: /최근 진입·청산/.test(card), auto: /손실 자동 재최적화/.test(card), mk: /조합 연구소 보유/.test(document.querySelector("[data-markets]")?.innerText || "") };
+    document.querySelector("[data-lab] [data-labauto]")?.click(); await new Promise(r => setTimeout(r, 300)); out.toggleOff = LAB.load().auto.on === false; document.querySelector("[data-lab] [data-labauto]")?.click(); await new Promise(r => setTimeout(r, 300)); out.toggleOn = LAB.load().auto.on === true;
+    out.feedSample = fb.slice(0, 12);
+    if (new URLSearchParams(location.search).get("keep") === "1") { document.querySelector("[data-lab]")?.scrollIntoView({ block: "start" }); document.title = "DONE"; await new Promise(r => setTimeout(r, 60e3)); }
+    (await import("../gh-coin/neural.js")).stopAuto(); document.getElementById("ndesk")?.remove(); LAB.resetLab(); localStorage.removeItem("coin:combolab"); localStorage.removeItem("coin:combolab:custom"); }
   if (q === "lab") {   // 🧪 조합 연구소: 실제 시세로 한 주기 → 가짜 포지션 손절 청산 → 라운드 5번 재채점(최종값) → 화면 카드
     const LAB = await import("../gh-coin/combolab.js"), AG = await import("../nuri-ai/agent.js"); localStorage.removeItem("coin:combolab");
     const models = [{ id: "ollama", model: "qwen2.5:3b" }, { id: "ollama", model: "llama3.2:3b" }, { id: "ollama", model: "gemma2:2b" }], fb = [], feed = t => fb.push(t);

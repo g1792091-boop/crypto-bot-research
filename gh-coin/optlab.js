@@ -12,13 +12,13 @@ const IV = { "15m": 900e3, "1h": 3600e3 }, WARM = 300, RKEY = "coin:optruns", MA
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 export const normSym = s => { let x = String(s || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, ""); if (!x) return ""; if (!/USDT$/.test(x)) x += "USDT"; return x; };
 export const koOf = sym => sym.replace(/USDT$/, "");
-let stopFlag = false, W = null;
+const UI = { stop: false, W: null };   // 창에서 돌린 실행의 중지 표시 — 손실 자동 재최적화(combolab)는 자기 ctx 를 따로 넘겨 서로 안 막음
 
 // ── 캔들 받기 + 캐시 ──
-async function fetchPart(sym, iv, a, b, onReq) {
+async function fetchPart(sym, iv, a, b, onReq, ctx) {
   const step = IV[iv], out = []; let t = a;
   while (t <= b) {
-    if (stopFlag) throw new Error("중지함");
+    if (ctx?.stop) throw new Error("중지함");
     let rows = null;
     for (let k = 0; k < 5 && !rows; k++) {
       let r; try { r = await fetch(`${apiBase("binancef")}/fapi/v1/klines?symbol=${sym}&interval=${iv}&limit=1500&startTime=${Math.floor(t)}&endTime=${Math.floor(b)}`); } catch (e) { await sleep(1500); continue; }
@@ -42,7 +42,7 @@ const colRows = (C, a = 0, b = C.t.length) => { const out = []; for (let i = a; 
 const sliceCols = (C, from, to) => { let a = 0, b = C.t.length; while (a < b && C.t[a] < from) a++; while (b > a && C.t[b - 1] > to) b--; const o = {}; for (const k of ["t", "o", "h", "l", "c", "v"]) o[k] = C[k].slice(a, b); return o; };
 export const reqEstimate = (from, to, iv) => Math.ceil((to - from) / IV[iv] / 1500);
 
-export async function klines(sym, iv, from, to, onProg = null) {
+export async function klines(sym, iv, from, to, onProg = null, ctx = null) {
   const step = IV[iv], ck = `optk:${sym}:${iv}|`, now = Date.now();
   let C = null; try { C = (await idb.all(ck))[0] || null; } catch (e) {}
   const parts = [];
@@ -52,7 +52,7 @@ export async function klines(sym, iv, from, to, onProg = null) {
   const onReq = (n, msg) => { got += n; onProg?.(need ? Math.min(1, got / need) : 1, msg || `${iv} 캔들 받는 중 ${got}/${need}`); };
   if (parts.length) {
     const before = [], after = [];
-    for (const [x, y] of parts) { const rows = await fetchPart(sym, iv, x, y, onReq); (C && x < C.from ? before : after).push(...rows); }
+    for (const [x, y] of parts) { const rows = await fetchPart(sym, iv, x, y, onReq, ctx); (C && x < C.from ? before : after).push(...rows); }
     let rows = [...before, ...(C ? colRows(C) : []), ...after].sort((p, q) => p[0] - q[0]);
     rows = rows.filter((r, i) => i === 0 || r[0] !== rows[i - 1][0]).filter(r => r[0] + step <= now);   // 중복 제거 · 아직 안 끝난 봉 제외
     const cols = toCols(rows);
@@ -64,8 +64,8 @@ export async function klines(sym, iv, from, to, onProg = null) {
 
 // ── 실행 ──
 // q = { sym, start, end, tfs: ["15","30","60"], levs: [20,30,40,50], combos: ["st_roc",…] }
-export async function run(q, onProg = () => {}) {
-  stopFlag = false;
+export async function run(q, onProg = () => {}, ctx = UI) {
+  ctx.stop = false;
   const sym = normSym(q.sym), now = Date.now(), end = Math.min(+q.end || now, now); let start = +q.start;
   const tfs = CB.TFS.filter(t => (q.tfs || []).includes(t)), levs = [20, 30, 40, 50].filter(l => (q.levs || []).includes(l)), combos = CB.COMBOS.map(c => c.key).filter(k => (q.combos || []).includes(k));
   if (!sym) throw new Error("코인을 입력하세요");
@@ -73,8 +73,8 @@ export async function run(q, onProg = () => {}) {
   if (!tfs.length || !levs.length || !combos.length) throw new Error("시간봉·레버리지·조합을 하나 이상 고르세요");
   if (!tfs.some(tf => CB.LEVS[tf].some(l => levs.includes(l)))) throw new Error("고른 시간봉에 맞는 레버리지가 없습니다(20배는 1시간봉만)");
   const t0 = Date.now(), need15 = tfs.includes("15") || tfs.includes("30"), need60 = tfs.includes("60");
-  const k15 = need15 ? await klines(sym, "15m", start - WARM * 1800e3, end, (f, m) => onProg({ phase: "down", f: need60 ? f * 0.8 : f, msg: m })) : null;
-  const k60 = need60 ? await klines(sym, "1h", start - WARM * 3600e3, end, (f, m) => onProg({ phase: "down", f: need15 ? 0.8 + f * 0.2 : f, msg: m })) : null;
+  const k15 = need15 ? await klines(sym, "15m", start - WARM * 1800e3, end, (f, m) => onProg({ phase: "down", f: need60 ? f * 0.8 : f, msg: m }), ctx) : null;
+  const k60 = need60 ? await klines(sym, "1h", start - WARM * 3600e3, end, (f, m) => onProg({ phase: "down", f: need15 ? 0.8 + f * 0.2 : f, msg: m }), ctx) : null;
   // 상장이 기간 시작보다 늦으면 시작을 (첫 봉 + 예열)로 미룬다
   // (요청한 첫 봉보다 2봉 넘게 늦게 시작하면 = 그 뒤 상장 · 15분 단위 반올림 차이는 무시)
   const from15 = start - WARM * 1800e3, from60 = start - WARM * 3600e3, late = (k15 && k15.t[0] > from15 + 2 * 900e3) || (k60 && k60.t[0] > from60 + 2 * 3600e3);
@@ -86,12 +86,12 @@ export async function run(q, onProg = () => {}) {
   if (minN < 30) note = (note ? note + " · " : "") + `기간이 1년보다 짧아 학습 최소 거래 수를 ${minN}건으로 낮춤(결과가 더 흔들림)`;
   const opt = { sym, ko: koOf(sym), B, span, levs, combos, bestLevs: levs, minN };
   onProg({ phase: "calc", f: 0, msg: "계산 시작" });
-  const res = await compute({ k15, k60, tfs, opt }, onProg);
-  const out = { id: Date.now().toString(36), sym, ko: koOf(sym), start, end, tfs, levs, combos, made: new Date().toISOString(), span, B: B.slice(0, 5), note, bars: res.bars, ms: Date.now() - t0, ...res.r };
+  const res = await compute({ k15, k60, tfs, opt }, onProg, ctx);
+  const out = { id: Date.now().toString(36), sym, ko: koOf(sym), start, end, tfs, levs, combos, made: new Date().toISOString(), span, B: B.slice(0, 5), note, bars: res.bars, ms: Date.now() - t0, auto: q.auto ? String(q.auto) : "", ...res.r };
   await saveRun(out);
   return out;
 }
-function compute(msg, onProg) {
+function compute(msg, onProg, ctx) {
   return new Promise((resolve, reject) => {
     let w = null;
     try { w = new Worker(new URL("./lib/optworker.js", import.meta.url), { type: "module" }); } catch (e) { w = null; }
@@ -99,23 +99,23 @@ function compute(msg, onProg) {
       (async () => { const rows = c => Array.from(c.t, (t, i) => ({ t, o: c.o[i], h: c.h[i], l: c.l[i], c: c.c[i], v: c.v[i] })), d = {};
         if (msg.k15) { const c15 = rows(msg.k15); if (msg.tfs.includes("15")) d["15"] = c15; if (msg.tfs.includes("30")) d["30"] = CB.agg30(c15); }
         if (msg.k60 && msg.tfs.includes("60")) d["60"] = rows(msg.k60);
-        const r = await OPTM.optimizeCoin({ ...msg.opt, tfs: msg.tfs, data: d, tick: async (f, m) => { if (stopFlag) throw new Error("중지함"); onProg({ phase: "calc", f, msg: m + " (화면 계산)" }); await sleep(0); } });
+        const r = await OPTM.optimizeCoin({ ...msg.opt, tfs: msg.tfs, data: d, tick: async (f, m) => { if (ctx.stop) throw new Error("중지함"); onProg({ phase: "calc", f, msg: m + " (화면 계산)" }); await sleep(0); } });
         return { r, bars: Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.length])) }; })().then(resolve, reject);
       return;
     }
-    W = { w, reject };
+    ctx.W = { w, reject };
     w.onmessage = ev => { const m = ev.data;
       if (m.type === "prog") onProg({ phase: "calc", f: m.f, msg: m.msg });
-      else if (m.type === "done") { w.terminate(); W = null; resolve({ r: m.r, bars: m.bars }); }
-      else if (m.type === "err") { w.terminate(); W = null; reject(new Error(m.msg)); } };
-    w.onerror = e => { w.terminate(); W = null; reject(new Error("계산 작업자 오류: " + (e.message || "알 수 없음"))); };
+      else if (m.type === "done") { w.terminate(); ctx.W = null; resolve({ r: m.r, bars: m.bars }); }
+      else if (m.type === "err") { w.terminate(); ctx.W = null; reject(new Error(m.msg)); } };
+    w.onerror = e => { w.terminate(); ctx.W = null; reject(new Error("계산 작업자 오류: " + (e.message || "알 수 없음"))); };
     w.postMessage(msg);
   });
 }
-export function stop() { stopFlag = true; if (W) { W.w.terminate(); W.reject(new Error("중지함")); W = null; } }
+export function stop(ctx = UI) { ctx.stop = true; if (ctx.W) { ctx.W.w.terminate(); ctx.W.reject(new Error("중지함")); ctx.W = null; } }
 
 // ── 실행 기록 (전체는 IndexedDB, 목록은 localStorage) ──
-const runMeta = r => { const s = r.summary || []; return { id: r.id, sym: r.sym, ko: r.ko, start: r.start, end: r.end, tfs: r.tfs, levs: r.levs, combos: r.combos, made: r.made, ms: r.ms, n: s.length, pass: s.filter(x => x.pass).length, real: s.filter(x => x.pass && !x.luck).length }; };
+const runMeta = r => { const s = r.summary || []; return { id: r.id, auto: r.auto || "", sym: r.sym, ko: r.ko, start: r.start, end: r.end, tfs: r.tfs, levs: r.levs, combos: r.combos, made: r.made, ms: r.ms, n: s.length, pass: s.filter(x => x.pass).length, real: s.filter(x => x.pass && !x.luck).length }; };
 export function runs() { try { return JSON.parse(localStorage.getItem(RKEY)) || []; } catch (e) { return []; } }
 async function saveRun(r) {
   try { await idb.put("optrun:" + r.id, r); } catch (e) {}
