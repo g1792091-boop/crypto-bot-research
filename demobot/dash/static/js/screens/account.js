@@ -37,7 +37,15 @@ export async function mount(el, ctx) {
   const tradeSeg = ui.seg([{id: "all", label: "전체"}, ...LEVS.map((L) => ({id: String(L), label: `${L}배`}))], tradeLev,
     (v) => { tradeLev = v; if (data) paintTrades(data, false); }, {label: "거래 배수"});
 
-  el.append(head, h("div", {class: "row wrap"}, back, h("a", {class: "btn-line", href: ctx.href("compare", null, {ids: id})}, "다른 계좌와 비교")),
+  // CSV 내려받기 (CONTRACT 9.9): every trade of every line of this account, when the engine has written its file
+  const csvSlot = h("span", {class: "muted", title: "엔진이 한 시간마다 계좌별 CSV를 씁니다"}, "CSV 준비 중");
+  ctx.api("/api/export").then((x) => {
+    if (!ctx.alive() || !x || !Array.isArray(x.ids) || !x.ids.includes(id)) return;
+    put(csvSlot, h("a", {class: "btn-line", href: `/api/export/${encodeURIComponent(id)}.csv`, download: true,
+      title: "이 계좌의 모든 거래 (배수 4줄) · 엑셀에서 열림 (UTF-8)"}, "CSV 내려받기"));
+    csvSlot.className = ""; csvSlot.title = "";
+  }).catch(() => {});
+  el.append(head, h("div", {class: "row wrap"}, back, h("a", {class: "btn-line", href: ctx.href("compare", null, {ids: id})}, "다른 계좌와 비교"), csvSlot),
     ruleBox, lineBox,
     ui.card({plate: "잔고 흐름", sub: "배수 4줄 · 지갑 + 열린 포지션 평가금 · 점선 가로줄 = 시작 $1,000"}, modeSeg, chartBox, legendBox),
     ui.card({plate: "정지 규칙 적용 시", sub: "같은 진입에 정지 규칙(계좌 −20% · 하루 −5% · 5연패)을 걸었다면"}, stopBox),

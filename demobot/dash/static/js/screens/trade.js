@@ -20,8 +20,9 @@ const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
 export async function mount(el, ctx) {
   const id = ctx.params.arg || "";
   const key = ctx.params.arg2 || "";
-  const fromTrades = ctx.params.query.from === "trades";
-  const back = h("a", {class: "btn-line", href: fromTrades ? "#/trades" : ctx.href("account", id)}, fromTrades ? "← 거래 기록" : "← 계좌");
+  const FROM = {trades: ["#/trades", "← 거래 기록"], positions: ["#/positions", "← 포지션"], terminal: ["#/terminal", "← 터미널"]};
+  const from = FROM[ctx.params.query.from];
+  const back = h("a", {class: "btn-line", href: from ? from[0] : ctx.href("account", id)}, from ? from[1] : "← 계좌");
   ctx.setTitle("거래 차트");
   if (!ID_RE.test(id) || !key || key.length > 120) {
     el.append(ui.screenHead("거래 차트"), h("div", {class: "row wrap"}, back), ui.missing("이 거래의 주소"));
@@ -59,7 +60,10 @@ export async function mount(el, ctx) {
   }
   if (isMissing(acct)) { put(say, ui.missing("이 계좌의 자료")); return; }
   const trades = acct.trades || [];
-  const t = trades.find((x) => x.key === key);
+  // a position (positions.json has no key) comes with its derived key and its entry time (?at=): the time decides
+  const at = Number(ctx.params.query.at), kp = key.split("|");
+  const t = trades.find((x) => x.key === key) || (Number.isFinite(at) && at > 0
+    ? trades.find((x) => Number(x.entry_ms) === at && x.coin === kp[0] && String(x.side) === kp[3] && String(x.L) === kp[4]) : undefined);
   sub.textContent = acct.name || id;
   if (!t) {
     put(say, ui.card({}, h("p", {class: "dl-vline"}, "기록 없음"),

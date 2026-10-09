@@ -3,6 +3,8 @@ python -m demobot.dash hash            # prints a DEMOBOT_DASH_PASSWORD_HASH for
 
 Environment (/etc/demobot/demobot.env): DEMOBOT_DASH_PASSWORD_HASH, DEMOBOT_DASH_SECRET (32+ random characters),
 DEMOBOT_SNAP (default /var/lib/demobot/snap), DEMOBOT_DASH_HOST (default 127.0.0.1), DEMOBOT_DASH_PORT (default 8090).
+DEMOBOT_DASH_LIVE (default on): on = the server reads Binance public market data for 터미널 / 시장 (cached, at most 4
+requests a second, live.py); fake = made-up prices from snap/bars (development, screenshots); off = no market data.
 The dashboard refuses to start without a password hash and a secret."""
 
 import argparse

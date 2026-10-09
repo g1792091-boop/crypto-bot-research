@@ -8,7 +8,9 @@ acct/<id> for the 48 accounts plus two neutral private ones (curves, stop-rule c
 measured cost, the maker fills' through_bps, the regime at entry, fee, notional), trades, judge (confirmation periods,
 candidates, stop-rule columns), views, costs, regime, backup, watch, bars/<COIN>.npz (15m bars from 7 days before the
 live start), rank_<STRAT>_<tf>.npz for the 3 strategies x 2 timeframes with the exact shapes (grid.NEXIT exits),
-rank_meta and, with --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder.
+rank_meta and, with --past5y, a fake past5y_<STRAT>_<tf>.npz per strategy and timeframe into that folder. Round 4
+part A (fake_live.py): positions, calendar, signals_now, dataq, timeline, export/<id>.csv.gz, acct "daily" and home
+"equity_total" / "pnl_total".
 
 The trades are played on the fake bars (entries at bar opens, stops k x ATR14, the exits' rules), so a trade chart
 shows them where they happened. The default clock is about six weeks into the run (2026-11-23), long enough for the
@@ -1539,8 +1541,9 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
     rows = [a.row() for a in accts]
     _write_json(os.path.join(outdir, "accounts.json"), {"generated_ms": NOW_MS, "live_start_ms": live_start,
                                                         "accounts": rows})
+    from . import fake_live                              # round 4 part A files (CONTRACT 9.2-9.4, 9.9)
     for a in accts:
-        _write_json(os.path.join(outdir, "acct", a.spec["id"] + ".json"), a.detail())
+        _write_json(os.path.join(outdir, "acct", a.spec["id"] + ".json"), {**a.detail(), "daily": fake_live.acct_daily(a)})
     all_trades = [{**t, "account": a.spec["id"], "name": a.spec["name"]} for a in accts for t in a.trades]
     all_trades.sort(key=lambda t: (t["exit_ms"] or NOW_MS + 1, t["entry_ms"]), reverse=True)
     _write_json(os.path.join(outdir, "trades.json"), {"generated_ms": NOW_MS, "trades": all_trades[:300]})
@@ -1641,6 +1644,7 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
             "regime_now": regime["now"],
             "costs_now": {"median_entry_bps": _r(float(np.median(meas)), 3) if meas else None,
                           "assumed_bps": ASSUMED_BPS}}
+    home.update(fake_live.home_extra(accts, live_start, NOW_MS))          # equity_total / pnl_total (9.3)
     _write_json(os.path.join(outdir, "home.json"), home)
     # the view log: its own random stream, so the number of views changes nothing else
     vw = fake_views(np.random.default_rng(seed + 2), views)
@@ -1664,11 +1668,12 @@ def build(outdir: str, seed: int = 7, past5y_dir=None, phase: str = "live", empt
             {"what": "dead", "ok": True, "detail_ko": "마지막 처리 4분 전 · demobot-live 켜져 있음"},
             {"what": "rank", "ok": True, "detail_ko": "순위표 41분 전에 새로 씀 (마지막 실행 성공)"},
             {"what": "backup", "ok": True, "detail_ko": f"마지막 백업 {_kst(last_backup)} (정상)"}]})
+    live_facts = fake_live.write(outdir, accts, mk, cm, status, confirm, live_start, seed, NOW_MS)
     statuses = sorted({c["status"] for c in confirm})
     return {"accounts": len(accts), "passed": passed, "trades": len(all_trades), "live_start_ms": live_start,
             "confirm": statuses, "candidates": len(cands), "halts": sum(1 for a in accts for L in grid.LEVS
                                                                          if a.lines[str(L)]["stops"]["halted_ms"]),
-            "touch_only": sum(m["touch_only"] for m in costs["maker"])}
+            "touch_only": sum(m["touch_only"] for m in costs["maker"]), **live_facts}
 
 
 def main(argv=None) -> int:
