@@ -9,6 +9,11 @@ import {stamp} from "./ui.js";
 import {PHASE_KO} from "./labels.js";
 
 const MENU = [
+  {id: "terminal", ko: "터미널", group: "live"},
+  {id: "positions", ko: "포지션", group: "live"},
+  {id: "charts", ko: "여러 차트", group: "live"},
+  {id: "market", ko: "시장", group: "live"},
+  {id: "signals", ko: "신호", group: "live"},
   {id: "home", ko: "홈"},
   {id: "rank", ko: "순위표"},
   {id: "map", ko: "설정 지도"},
@@ -24,10 +29,14 @@ const MENU = [
   {id: "telegram", ko: "알림 기록"},
   {id: "status", ko: "서버 상태"},
   {id: "howto", ko: "어떻게 돌아가나"},
+  {id: "dataq", ko: "데이터 점검", group: "info"},
+  {id: "timeline", ko: "타임라인", group: "info"},
 ];
 const SCREENS = {home: "home", rank: "rank", accounts: "accounts", account: "account", trades: "trades", judge: "judge",
   views: "views", status: "status", howto: "howto", trade: "trade", regime: "regime", costs: "costs", compare: "compare",
-  review: "review", telegram: "telegram", map: "map", coins: "coins"};
+  review: "review", telegram: "telegram", map: "map", coins: "coins",
+  terminal: "terminal", positions: "positions", charts: "charts", market: "market", signals: "signals", dataq: "dataq",
+  timeline: "timeline"};
 const TITLE = "데모 랩";
 
 // ---------------------------------------------------------------- skin (two skins of tokens.css, per device)

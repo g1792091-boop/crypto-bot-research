@@ -13,6 +13,10 @@
 - ``/api/coins`` ("코인별 보기", CONTRACT 8.12): per coin, every account line's trades and P&L on that coin, summed
   from the ``acct/<id>.json`` trades (cached until one of those files or accounts.json changes).
 - ``/api/review`` (``review.json``, 8.10) and ``/api/telegram`` (``telegram.json``, 8.11): as-is, like the others.
+- CONTRACT 9 (round 4, part A): ``/api/positions``, ``/api/calendar``, ``/api/signals_now``, ``/api/dataq``,
+  ``/api/timeline`` (the engine's files as-is, no parameters); ``/api/live``, ``/api/klines``, ``/api/market`` (Binance
+  public market data read by this server, cached: live.py; ``DEMOBOT_DASH_LIVE=on|fake|off``); ``/api/export`` (which
+  accounts have a CSV) and ``/api/export/<id>.csv`` (``snap/export/<id>.csv.gz`` decompressed, as an attachment).
 - Login: one password (PBKDF2 hash in DEMOBOT_DASH_PASSWORD_HASH, ``python -m demobot.dash hash``) and a signed session
   cookie ``demobot_s`` (DEMOBOT_DASH_SECRET). The helpers are a copy of paperbot/dash/app.py's, so this dashboard does
   not depend on the rule bot's dashboard module.
@@ -22,6 +26,7 @@ from __future__ import annotations
 
 import base64
 import collections
+import gzip
 import hashlib
 import hmac
 import json
@@ -40,6 +45,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.staticfiles import StaticFiles
 
 from .. import grid
+from .live import KLINE_TFS, LIMIT_MAX as KLINES_MAX, Live
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
@@ -65,6 +71,11 @@ SNAP_FILES = {"status": "status.json", "home": "home.json", "accounts": "account
 # CONTRACT 8 (round 3): the same as-is answers, but these refuse any query parameter
 SNAP_FILES_STRICT = {"costs": "costs.json", "regime": "regime.json", "backup": "backup.json", "watch": "watch.json",
                      "review": "review.json", "telegram": "telegram.json"}
+# CONTRACT 9 (round 4): the engine's new files, as-is, no query parameters
+SNAP_FILES_LIVE = {"positions": "positions.json", "calendar": "calendar.json", "signals_now": "signals_now.json",
+                   "dataq": "dataq.json", "timeline": "timeline.json"}
+KLINES_PARAMS = ("coin", "tf", "limit")
+EXPORT_MAX_BYTES = 64 * 1024 * 1024    # one account's decompressed CSV (every trade of every line)
 TRADE_CAP = 600                  # acct/<id>.json keeps the newest 600 trades (CONTRACT 4)
 M15_MS = 15 * 60_000
 BARS_PARAMS = ("coin", "tf", "from", "to", "limit")
@@ -456,6 +467,66 @@ def bars_payload(snap: "Snap", q: dict) -> dict:
             "truncated": bool(truncated), "bars": rows}
 
 
+# ---------------------------------------------------------------- live market data (/api/klines, CONTRACT 9.1)
+def klines_query(params) -> dict:
+    seen = strict_params(params, KLINES_PARAMS)
+    coin = seen.get("coin", "")
+    if coin not in grid.COINS:
+        _bad("coin: " + " | ".join(grid.COINS))
+    tf = seen.get("tf", "15m")
+    if tf not in KLINE_TFS:
+        _bad("tf: " + " | ".join(KLINE_TFS))
+    raw = seen.get("limit", "500")
+    if not re.fullmatch(r"\d{1,4}", raw) or not 1 <= int(raw) <= KLINES_MAX:
+        _bad(f"limit: a whole number 1-{KLINES_MAX}")
+    return {"coin": coin, "tf": tf, "limit": int(raw)}
+
+
+def _dump(body: dict) -> bytes:
+    return json.dumps(finite_json(body), ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+
+
+# ---------------------------------------------------------------- CSV export (CONTRACT 9.9)
+def account_ids(snap: "Snap") -> set:
+    accts = snap.json_obj("accounts.json")
+    if not isinstance(accts, dict):
+        return set()
+    return {str(a.get("id")) for a in accts.get("accounts") or [] if isinstance(a, dict)
+            and ACCOUNT_ID.fullmatch(str(a.get("id", "")))}
+
+
+def export_list(snap: "Snap") -> dict:
+    """Which accounts have a CSV now (the files themselves, so the page never offers a missing one), plus the
+    engine's index time."""
+    folder = os.path.join(snap.dir, "export")
+    known = account_ids(snap)
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        names = None
+    if names is None or not known:
+        return {"missing": True, "ids": []}
+    ids = sorted(n[:-7] for n in names if n.endswith(".csv.gz") and n[:-7] in known)
+    idx = snap.json_obj(os.path.join("export", "index.json"))
+    gen = idx.get("generated_ms") if isinstance(idx, dict) and isinstance(idx.get("generated_ms"), (int, float)) else None
+    return {"generated_ms": gen, "ids": ids}
+
+
+def export_csv(snap: "Snap", aid: str) -> bytes:
+    """The decompressed CSV of one account (aid already checked against accounts.json); 404 when it is not there."""
+    path = os.path.join(snap.dir, "export", aid + ".csv.gz")
+    try:
+        with gzip.open(path, "rb") as f:
+            raw = f.read(EXPORT_MAX_BYTES + 1)
+    except FileNotFoundError:
+        raise HTTPException(404, "준비 중: 이 계좌의 CSV가 아직 없습니다") from None
+    except (OSError, EOFError):
+        raise HTTPException(503, "CSV 파일을 읽지 못했습니다 (다시 쓰는 중일 수 있음)") from None
+    if len(raw) > EXPORT_MAX_BYTES:
+        raise HTTPException(413, "CSV가 너무 큽니다")
+    return raw
+
+
 # ---------------------------------------------------------------- the ranking table (/api/rank)
 STATS_K = ("n", "wins", "mean_R", "mean_G", "mdd_R", "whip", "avg_win_R", "avg_loss_R", "plateau", "open", "nsig")
 KI = {k: i for i, k in enumerate(STATS_K)}
@@ -706,11 +777,14 @@ async def _login_body(req: Request) -> dict:
         return {}
 
 
-def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_dir: Optional[str] = None) -> FastAPI:
-    """password_hash None: no login (tests and local development only; __main__ refuses to start without one)."""
+def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_dir: Optional[str] = None,
+               live: Optional[Live] = None) -> FastAPI:
+    """password_hash None: no login (tests and local development only; __main__ refuses to start without one).
+    live: the market data source (default: DEMOBOT_DASH_LIVE from the environment; tests pass one with a fake fetcher)."""
     app = FastAPI(title="demobot dash", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=GZIP_MIN_BYTES)
     snap = app.state.snap = Snap(snap_dir, data_dir)
+    mkt = app.state.live = live if live is not None else Live.from_env(bars=lambda coin: snap.bars(coin, "15m"))
     fails: dict[str, list] = {}
     flock = threading.Lock()
 
@@ -811,6 +885,42 @@ def create_app(snap_dir: str, password_hash: Optional[str], secret: bytes, data_
 
     for key, name in SNAP_FILES_STRICT.items():
         strict_route(key, name)
+
+    for key, name in SNAP_FILES_LIVE.items():
+        strict_route(key, name)
+
+    # ---- live market data (CONTRACT 9.1; the server asks Binance, the page only asks this server)
+    @app.get("/api/live")
+    def live_route(req: Request):
+        strict_params(req.query_params, ())
+        return _json(_dump(mkt.live()))
+
+    @app.get("/api/klines")
+    def klines_route(req: Request):
+        q = klines_query(req.query_params)
+        return _json(_dump(mkt.klines(q["coin"], q["tf"], q["limit"])))
+
+    @app.get("/api/market")
+    def market_route(req: Request):
+        strict_params(req.query_params, ())
+        return _json(_dump(mkt.market()))
+
+    # ---- CSV export (CONTRACT 9.9)
+    @app.get("/api/export")
+    def export_index(req: Request):
+        strict_params(req.query_params, ())
+        return _json(_dump(export_list(snap)))
+
+    @app.get("/api/export/{name}")
+    def export_file(name: str, req: Request):
+        strict_params(req.query_params, ())
+        aid = name[:-4] if name.endswith(".csv") else ""
+        if not ACCOUNT_ID.fullmatch(aid):
+            raise HTTPException(400, "bad account id")
+        if aid not in account_ids(snap):
+            raise HTTPException(404, "no such account")
+        return Response(content=export_csv(snap, aid), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="demolab-{aid}.csv"'})
 
     @app.get("/api/coins")
     def coins(req: Request):

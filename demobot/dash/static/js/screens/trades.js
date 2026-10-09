@@ -23,10 +23,35 @@ export async function mount(el, ctx) {
   const count = h("p", {class: "note"});
   const pg = ui.pager({size: 25, empty: "조건에 맞는 거래가 없습니다", render: (part) => tradeTable(part, ctx)});
   const box = h("div");
+  // CSV 내려받기 (CONTRACT 9.9): one account's every trade (all four lines), picked from the accounts that have a file
+  const csvBox = h("div", {class: "row wrap"}, h("span", {class: "muted"}, "불러오는 중"));
+  const csvCard = ui.card({plate: "CSV 내려받기", sub: "한 계좌의 모든 거래 (배수 4줄) · 엑셀에서 열림"}, csvBox);
+  (async () => {
+    let x, names = {};
+    try {
+      x = await ctx.api("/api/export");
+      if (x && Array.isArray(x.ids) && x.ids.length) {
+        const a = await ctx.api("/api/accounts");
+        for (const r of (a && a.accounts) || []) names[r.id] = r.name;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    if (!ctx.alive()) return;
+    const ids = x && Array.isArray(x.ids) ? x.ids : [];
+    if (!ids.length) { put(csvBox, h("span", {class: "muted"}, "준비 중 · 엔진이 계좌별 CSV를 아직 쓰지 않았습니다 (한 시간마다 씀)")); return; }
+    const pick = local.get("trades-csv");
+    let cur = ids.includes(pick) ? pick : ids[0];
+    const link = h("a", {class: "btn-line", download: true}, "CSV 내려받기");
+    const setLink = () => { link.setAttribute("href", `/api/export/${encodeURIComponent(cur)}.csv`); };
+    setLink();
+    const sel = ui.select(ids.map((i) => ({id: i, label: names[i] ? `${names[i]} (${i})` : i})), cur, (v) => { cur = v; local.set("trades-csv", v); setLink(); }, "계좌");
+    put(csvBox, ui.field("계좌", sel), link,
+      h("span", {class: "note"}, `${fmt.int(ids.length)}개 계좌${x.generated_ms ? ` · ${fmt.kst(x.generated_ms)}에 씀` : ""}`));
+  })();
   el.append(ui.screenHead("거래 기록", "모든 계좌의 최근 거래 (배수마다 한 줄)"),
     ui.card({plate: "거르기", cls: "dl-controls"}, h("div", {class: "dl-fields"},
       ui.field("계좌 종류", kindSeg), ui.field("상태", stSeg), ui.field("코인", coinSel), ui.field("배수", levSel))),
     ui.card({plate: "거래", sub: "줄을 누르면 거래 차트"}, count, box, pg.el),
+    csvCard,
     ui.note("손익은 수수료·슬리피지·펀딩을 뺀 값입니다. 열린 거래는 마크 가격 기준 미실현(나갈 때 수수료 전). 주문 없음."));
 
   let rows = null, seen = null;

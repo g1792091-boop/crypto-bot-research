@@ -847,3 +847,538 @@ def test_the_fake_is_deterministic_for_section_8(tmp_path, folders):
     for coin in grid.COINS:
         a, b = _bars_file(folders, coin), np.load(tmp_path / "again" / "bars" / f"{coin}.npz")
         assert all(np.array_equal(a[k], b[k]) for k in "ohlc") and np.array_equal(a["ts"], b["ts"])
+
+
+# ---------------------------------------------------------------- round 4 part A (CONTRACT 9.1-9.4, 9.8, 9.9)
+import gzip  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+
+from demobot.dash import live as live_mod  # noqa: E402
+from demobot.dash.live import Live, RateLimiter  # noqa: E402
+
+PART_A_FILES = {"positions": "positions.json", "calendar": "calendar.json", "signals_now": "signals_now.json",
+                "dataq": "dataq.json", "timeline": "timeline.json"}
+PART_A_SCREENS = {"terminal": "터미널", "positions": "포지션", "charts": "여러 차트", "market": "시장", "signals": "신호",
+                  "dataq": "데이터 점검", "timeline": "타임라인"}
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """No test reaches Binance: the one door (live._OPENER) refuses."""
+    class Shut:
+        def open(self, *a, **k):
+            raise AssertionError("a test tried to reach the network")
+    monkeypatch.setattr(live_mod, "_OPENER", Shut())
+
+
+class Clock:
+    def __init__(self, t=1_800_000_000.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+class FakeBinance:
+    """Canned Binance answers by path; .fail = "net" / "bad" makes every call fail that way; .calls records them."""
+
+    def __init__(self, delay=0.0):
+        self.calls, self.fail, self.delay = [], None, delay
+        self.lock = threading.Lock()
+
+    def __call__(self, path, params):
+        with self.lock:
+            self.calls.append((path, dict(params)))
+        if self.delay:
+            time.sleep(self.delay)
+        if self.fail == "net":
+            raise live_mod.NetError("URLError")
+        if self.fail == "bad":
+            return {"code": -1}
+        sym = params.get("symbol", "")
+        base = {"BTCUSDT": 100_000.0, "ETHUSDT": 4_000.0}.get(sym, 10.0)
+        if path == "/fapi/v1/ticker/24hr":
+            return {"symbol": sym, "lastPrice": str(base), "priceChangePercent": "1.5", "quoteVolume": "123456789.5",
+                    "highPrice": str(base * 1.02), "lowPrice": str(base * 0.97)}
+        if path == "/fapi/v1/premiumIndex":
+            return [{"symbol": grid.binance_symbol(c), "markPrice": "1.0", "lastFundingRate": "0.0001",
+                     "nextFundingTime": 1_800_028_800_000} for c in grid.COINS] + [{"symbol": "OTHERUSDT"}]
+        if path == "/fapi/v1/openInterest":
+            return {"symbol": sym, "openInterest": "5000.5"}
+        if path == "/fapi/v1/klines":
+            n, step = int(params["limit"]), live_mod.TF_MS[params["interval"]]
+            rows = [[1_700_000_000_000 + i * step, "1", "2", "0.5", "1.5", "10", 0, "0", 1, "0", "0", "0"] for i in range(n)]
+            return rows + [["x"], [1, "nan", "2", "0.5", "1.5", "10"]]          # junk rows are skipped
+        if path == "/fapi/v1/fundingRate":
+            return [{"fundingTime": 1_799_990_000_000 + i * 28_800_000, "fundingRate": "0.0001"} for i in range(3)]
+        if path == "/futures/data/openInterestHist":
+            return [{"timestamp": 1_799_900_000_000 + i * 3_600_000, "sumOpenInterest": str(100 + i),
+                     "sumOpenInterestValue": str((100 + i) * base)} for i in range(25)]
+        if path == "/futures/data/globalLongShortAccountRatio":
+            return [{"timestamp": 1_799_900_000_000 + i * 3_600_000, "longShortRatio": "1.5", "longAccount": "0.6"}
+                    for i in range(24)]
+        raise AssertionError(path)
+
+    def count(self, path):
+        return sum(1 for p, _ in self.calls if p == path)
+
+
+def _live(mode="on", fb=None, clock=None, bars=None):
+    clock = clock or Clock()
+    lim = RateLimiter(clock=clock, sleep=clock.sleep)
+    return Live(mode, fetch=fb or FakeBinance(), bars=bars, limiter=lim, clock=clock), clock
+
+
+def _live_client(folders, live):
+    return TestClient(create_app(folders["snap"], None, SECRET, data_dir=folders["data"], live=live))
+
+
+def test_part_a_routes_need_the_login(anon):
+    for path in [f"/api/{k}" for k in PART_A_FILES] + ["/api/live", "/api/klines?coin=BTCUSD", "/api/market",
+                                                       "/api/export", "/api/export/fx-def-S2-15m.csv"]:
+        r = anon.get(path)
+        assert r.status_code == 401, path
+        assert "positions" not in r.text and "coins" not in r.text and "account" not in r.text
+
+
+def test_part_a_snapshot_routes_return_the_files_and_take_no_parameters(client, folders, tmp_path):
+    for key, name in PART_A_FILES.items():
+        r = client.get(f"/api/{key}")
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-store", key
+        assert r.json() == _file(folders, name), key
+        assert client.get(f"/api/{key}?coin=BTCUSD").status_code == 400, key
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    c = TestClient(create_app(str(snap), None, SECRET, live=Live("off")))
+    for key in PART_A_FILES:
+        assert c.get(f"/api/{key}").json() == {"missing": True}, key
+    assert c.get("/api/export").json() == {"missing": True, "ids": []}
+    assert c.get("/api/export/fx-def-S2-15m.csv").status_code == 404
+
+
+def test_the_fake_writes_part_a_with_the_contract_shapes(folders):
+    snap = folders["snap"]
+    st = _file(folders, "status.json")
+    now, live0 = st["generated_ms"], st["live_start_ms"]
+    accts = {a["id"]: a for a in _file(folders, "accounts.json")["accounts"]}
+    files = {aid: _file(folders, "acct", aid + ".json") for aid in accts}
+    # positions.json (9.2): every open trade of every line, nothing else; by_coin counts the 20x lines
+    pos = _file(folders, "positions.json")
+    keys = {"id", "name", "kind", "L", "coin", "side", "tf", "entry_ms", "entry", "stop", "target", "margin", "notional",
+            "unreal", "roe", "R", "last", "stop_dist_pct", "held_ms", "setting_ko", "exit_ko"}
+    assert pos["generated_ms"] == now and pos["positions"]
+    opened = {(aid, t["key"]) for aid, d in files.items() for t in d["trades"] if t["status"] == "open"}
+    seen = set()
+    for p in pos["positions"]:
+        assert set(p) == keys and p["coin"] in grid.COINS and p["side"] in (1, -1) and p["L"] in grid.LEVS
+        assert p["tf"] == accts[p["id"]]["tf"] and p["kind"] == accts[p["id"]]["kind"]
+        # the trade key the page derives (signal bar = the bar before the entry) finds the account's open trade
+        key = f"{p['coin']}|{p['tf']}|{p['entry_ms'] - (900_000 if p['tf'] == '15m' else 1_800_000)}|{p['side']}|{p['L']}"
+        t = next(x for x in files[p["id"]]["trades"] if x["key"] == key)
+        assert t["status"] == "open" and t["entry"] == p["entry"] and t["pnl"] == p["unreal"] and t["roe"] == p["roe"]
+        assert p["held_ms"] == now - p["entry_ms"] and p["stop_dist_pct"] >= 0
+        assert (p["target"] is not None) == p["exit_ko"].startswith("익절 ")
+        seen.add((p["id"], key))
+    assert seen == opened
+    for b in pos["by_coin"]:
+        mine = [p for p in pos["positions"] if p["coin"] == b["coin"]]
+        assert b["long"] == sum(1 for p in mine if p["L"] == 20 and p["side"] > 0)
+        assert b["short"] == sum(1 for p in mine if p["L"] == 20 and p["side"] < 0)
+        assert b["unreal"] == pytest.approx(sum(p["unreal"] for p in mine), abs=0.05)
+    assert [b["coin"] for b in pos["by_coin"]] == list(grid.COINS)
+    # calendar.json (9.3) and acct daily: the same closed trades, by KST day
+    cal = _file(folders, "calendar.json")["days"]
+    assert cal[0]["day"] <= cal[-1]["day"] and len({d["day"] for d in cal}) == len(cal)
+    assert len(cal) == (now + 9 * 3_600_000) // 86_400_000 - (live0 + 9 * 3_600_000) // 86_400_000 + 1
+    daily = {}
+    for d in files.values():
+        assert set(d["daily"]) <= {x["day"] for x in cal}
+        for day, row in d["daily"].items():
+            assert set(row) == {"20", "30", "40", "50"}
+            daily[day] = daily.get(day, 0.0) + sum(row.values())
+    for d in cal:
+        assert set(d) == {"day", "trades", "wins", "pnl_sum", "lines_up", "lines_down", "by_kind", "best", "worst"}
+        assert d["pnl_sum"] == pytest.approx(daily.get(d["day"], 0.0), abs=1.0)
+        assert d["wins"] <= d["trades"] and d["lines_up"] + d["lines_down"] <= 200
+        assert {k["kind"] for k in d["by_kind"]} == {"fixed", "adaptive", "friend", "flip", "private"}
+        if d["trades"]:
+            assert set(d["best"]) == {"id", "name", "L", "pnl"} and d["best"]["pnl"] >= d["worst"]["pnl"]
+    # home.json equity_total / pnl_total (9.3): hourly, at most 800, pnl = equity - 200 x $1,000; ends at the wallets
+    home = _file(folders, "home.json")
+    eq, pt = home["equity_total"], home["pnl_total"]
+    assert 2 <= len(eq) <= 800 and len(pt) == len(eq) and eq[-1][0] == now
+    assert [x[0] for x in eq] == sorted(x[0] for x in eq)
+    assert all(b[1] == pytest.approx(a[1] - 200 * 1000.0, abs=0.02) for a, b in zip(eq, pt))
+    assert eq[0][1] == pytest.approx(200 * 1000.0) and eq[-1][1] == pytest.approx(
+        sum(ln["wallet"] for a in accts.values() for ln in a["lines"].values()), abs=1.0)
+    # signals_now.json (9.4)
+    sig = _file(folders, "signals_now.json")
+    assert set(sig["bar_ms"]) == {"15m", "30m"} and sig["bar_ms"]["30m"] % 1_800_000 == 0
+    assert len(sig["votes"]) == len(grid.COINS) * 2 * 3
+    for v in sig["votes"]:
+        assert v["settings"] == grid.NCOMBO[v["strategy"]] and 0 < len(v["history"]) <= 96
+        assert [v["long"], v["short"]] == v["history"][-1][1:] and v["history"][-1][0] == sig["bar_ms"][v["tf"]]
+        assert all(0 <= x[1] <= v["settings"] and 0 <= x[2] <= v["settings"] for x in v["history"])
+    rec = sig["recent"]
+    assert 0 < len(rec) <= 200 and [r["t_ms"] for r in rec] == sorted((r["t_ms"] for r in rec), reverse=True)
+    for r in rec[:30]:
+        for a in r["accounts"]:
+            assert any(t["coin"] == r["coin"] and t["side"] == r["side"] and t["signal_ms"] == r["t_ms"] and t["L"] == 20
+                       for t in files[a["id"]]["trades"])
+    # dataq.json and timeline.json (9.9)
+    dq = _file(folders, "dataq.json")
+    assert set(dq) == {"generated_ms", "coins", "ticks", "errors", "issues", "rank_ms", "warm_issues"}
+    assert [c["coin"] for c in dq["coins"]] == list(grid.COINS) and len(dq["ticks"]) == 192
+    for c in dq["coins"]:
+        assert set(c) == {"coin", "bars_expected", "bars_have", "bars_missing", "last_bar_ms", "lag_s", "funding_last_ms",
+                          "depth_rows", "depth_last_ms"}
+        assert c["bars_have"] + c["bars_missing"] == c["bars_expected"]
+    assert all(len(t) == 3 for t in dq["ticks"])
+    assert [e[0] for e in dq["errors"]] == sorted((e[0] for e in dq["errors"]), reverse=True) and len(dq["errors"]) <= 50
+    tl = _file(folders, "timeline.json")["events"]
+    assert [e["t_ms"] for e in tl] == sorted((e["t_ms"] for e in tl), reverse=True)
+    whats = {e["what"] for e in tl}
+    assert whats <= {"start", "update", "plugins", "warm", "live", "pass", "confirmed", "failed"}
+    assert {"live", "pass", "confirmed", "failed"} <= whats and all(e["t_ms"] <= now for e in tl)
+    # export (9.9): a few accounts, UTF-8 with BOM, every trade of every line
+    ex = _file(folders, "export", "index.json")
+    assert ex["files"] and all(n.endswith(".csv.gz") for n in ex["files"])
+    for n in ex["files"]:
+        with open(os.path.join(snap, "export", n), "rb") as fh:
+            raw = gzip.decompress(fh.read())
+        assert raw.startswith("﻿".encode())
+        text = raw.decode("utf-8-sig")
+        lines = text.splitlines()
+        assert lines[0].startswith("account,name,L,coin,side")
+        tkeys = {t["key"] for t in files[n[:-7]]["trades"]}
+        assert len(lines) - 1 >= len(tkeys) and all(k in text for k in sorted(tkeys)[:50])
+
+
+def test_the_fake_is_deterministic_for_part_a(tmp_path, folders):
+    facts = fake.build(str(tmp_path / "again"))
+    assert facts["positions"] > 0 and facts["exports"] >= 3
+    for name in list(PART_A_FILES.values()) + ["home.json", os.path.join("acct", "fx-def-S2-15m.json"),
+                                               os.path.join("export", "index.json"),
+                                               os.path.join("export", "fx-def-S2-15m.csv.gz")]:
+        with open(tmp_path / "again" / name, "rb") as a, open(os.path.join(folders["snap"], name), "rb") as b:
+            assert a.read() == b.read(), name
+
+
+def test_export_serves_the_csv_as_an_attachment(client, folders):
+    d = client.get("/api/export").json()
+    want = sorted(n[:-7] for n in _file(folders, "export", "index.json")["files"])
+    assert d["ids"] == want and d["generated_ms"] == _file(folders, "export", "index.json")["generated_ms"]
+    aid = want[0]
+    r = client.get(f"/api/export/{aid}.csv")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert r.headers["content-disposition"] == f'attachment; filename="demolab-{aid}.csv"'
+    with open(os.path.join(folders["snap"], "export", aid + ".csv.gz"), "rb") as fh:
+        assert r.content == gzip.decompress(fh.read())
+    assert r.headers["content-security-policy"] == CSP and r.headers["cache-control"] == "no-store"
+    # a well-formed id that is not an account, an account without a file, bad names and parameters
+    assert client.get("/api/export/fx-def-S9-15m.csv").status_code == 404
+    no_file = next(a["id"] for a in _file(folders, "accounts.json")["accounts"] if a["id"] not in want)
+    assert client.get(f"/api/export/{no_file}.csv").status_code == 404
+    for bad in ("fx_def.csv", "ab.csv", "x" * 41 + ".csv", f"{aid}.txt", aid, f"{aid}.csv.gz", "..%2Fstatus.csv"):
+        assert client.get(f"/api/export/{bad}").status_code in (400, 404), bad
+    for bad in ("fx_def.csv", "ab.csv", "x" * 41 + ".csv", f"{aid}.txt", aid):
+        assert client.get(f"/api/export/{bad}").status_code == 400, bad
+    assert client.get(f"/api/export/{aid}.csv?x=1").status_code == 400
+    assert client.get("/api/export?x=1").status_code == 400
+    assert client.post(f"/api/export/{aid}.csv").status_code == 405
+
+
+@pytest.mark.parametrize("query", [
+    "", "coin=BTC", "coin=btcusd", "coin=BTCUSDT", "coin=BTCUSD&tf=2h", "coin=BTCUSD&tf=1M", "coin=BTCUSD&tf=15M",
+    "coin=BTCUSD&limit=0", "coin=BTCUSD&limit=1001", "coin=BTCUSD&limit=abc", "coin=BTCUSD&limit=-5", "coin=BTCUSD&limit=1e3",
+    "coin=BTCUSD&nope=1", "coin=BTCUSD&coin=ETHUSD", "coin=BTCUSD&tf=1m&tf=5m", "coin=" + "B" * 41,
+])
+def test_klines_bad_parameters_are_400(folders, query):
+    lv, _ = _live()
+    c = _live_client(folders, lv)
+    assert c.get("/api/klines?" + query).status_code == 400
+    assert lv.requests == 0                                           # refused before anything is asked
+
+
+def test_live_and_market_take_no_parameters(folders):
+    lv, _ = _live()
+    c = _live_client(folders, lv)
+    for path in ("/api/live?coin=BTCUSD", "/api/market?x=1", "/api/live?live=1&live=2"):
+        assert c.get(path).status_code == 400, path
+    assert lv.requests == 0
+
+
+def test_live_answer_and_its_cache(folders):
+    fb = FakeBinance()
+    lv, clock = _live("on", fb)
+    c = _live_client(folders, lv)
+    d = c.get("/api/live").json()
+    assert d["stale"] is False and d["source"] == "binance" and [x["coin"] for x in d["coins"]] == list(grid.COINS)
+    btc = d["coins"][0]
+    assert set(btc) == {"coin", "price", "change_pct", "quote_volume", "high", "low", "mark", "funding_rate",
+                        "next_funding_ms", "open_interest", "ok"}
+    assert (btc["price"], btc["change_pct"], btc["funding_rate"], btc["open_interest"], btc["ok"]) == (100_000.0, 1.5, 0.0001, 5000.5, True)
+    n = len(fb.calls)
+    assert fb.count("/fapi/v1/ticker/24hr") == 7 and fb.count("/fapi/v1/premiumIndex") == 1 and fb.count("/fapi/v1/openInterest") == 7
+    clock.t += 3.0                                                    # inside the 5 s cache: no new request
+    assert c.get("/api/live").json() == d and len(fb.calls) == n
+    clock.t += 3.0                                                    # 6 s: tickers again, open interest still cached (30 s)
+    c.get("/api/live")
+    assert fb.count("/fapi/v1/ticker/24hr") == 14 and fb.count("/fapi/v1/openInterest") == 7
+    clock.t += 30.0
+    c.get("/api/live")
+    assert fb.count("/fapi/v1/openInterest") == 14
+    # every request asked Binance's public USD-M paths with the coin's symbol only
+    assert {p for p, _ in fb.calls} <= live_mod.PATHS
+    assert {q.get("symbol") for p, q in fb.calls if q} <= {grid.binance_symbol(c_) for c_ in grid.COINS}
+
+
+def test_live_keeps_the_last_good_answer_when_binance_fails(folders):
+    fb = FakeBinance()
+    lv, clock = _live("on", fb)
+    c = _live_client(folders, lv)
+    good = c.get("/api/live").json()
+    fb.fail = "net"
+    clock.t += 6.0
+    d = c.get("/api/live").json()
+    assert d["stale"] is True and d["coins"] == good["coins"] and d["generated_ms"] == good["generated_ms"]
+    n = len(fb.calls)
+    clock.t += 1.0                                                    # a failure is not retried before the cache time is up
+    assert c.get("/api/live").json()["stale"] is True and len(fb.calls) == n
+    fb.fail = None
+    clock.t += 5.0
+    assert c.get("/api/live").json()["stale"] is False
+    # garbage answers are failures too; with nothing good yet: unavailable, never an error page
+    fb2 = FakeBinance()
+    fb2.fail = "bad"
+    lv2, _ = _live("on", fb2)
+    d = _live_client(folders, lv2).get("/api/live").json()
+    assert d["unavailable"] is True and d["stale"] is True and d["coins"] == []
+    fb3 = FakeBinance()
+    fb3.fail = "net"
+    lv3, _ = _live("on", fb3)
+    c3 = _live_client(folders, lv3)
+    assert c3.get("/api/klines?coin=ETHUSD&tf=1h&limit=5").json()["unavailable"] is True
+    assert c3.get("/api/market").json()["unavailable"] is True
+    assert len(fb3.calls) <= 3                                        # a network error stops a build at once
+
+
+def test_klines_answer_cache_and_whitelists(folders):
+    fb = FakeBinance()
+    lv, clock = _live("on", fb)
+    c = _live_client(folders, lv)
+    d = c.get("/api/klines?coin=ETHUSD&tf=4h&limit=7").json()
+    assert (d["coin"], d["tf"], d["limit"], d["stale"]) == ("ETHUSD", "4h", 7, False)
+    b = d["bars"]
+    assert set(b) == {"t", "o", "h", "l", "c", "v"} and len(b["t"]) == 7 and all(len(b[k]) == 7 for k in "ohlcv")
+    assert b["t"] == sorted(b["t"]) and b["c"][0] == 1.5 and b["v"][0] == 10.0
+    assert fb.calls[-1] == ("/fapi/v1/klines", {"symbol": "ETHUSDT", "interval": "4h", "limit": 7})
+    assert c.get("/api/klines?coin=ETHUSD&tf=4h&limit=7").json() == d and fb.count("/fapi/v1/klines") == 1
+    c.get("/api/klines?coin=ETHUSD&tf=4h&limit=8")                    # another limit: its own cache entry
+    assert fb.count("/fapi/v1/klines") == 2
+    clock.t += 11.0
+    c.get("/api/klines?coin=ETHUSD&tf=4h&limit=7")
+    assert fb.count("/fapi/v1/klines") == 3
+    d = c.get("/api/klines?coin=XRPUSD").json()                       # defaults: 15m, 500
+    assert (d["tf"], d["limit"], len(d["bars"]["t"])) == ("15m", 500, 500)
+    for tf in live_mod.KLINE_TFS:
+        assert c.get(f"/api/klines?coin=SOLUSD&tf={tf}&limit=1000").status_code == 200
+    # the cache keeps at most KLINES_KEEP answers
+    for lim in range(1, live_mod.KLINES_KEEP + 10):
+        c.get(f"/api/klines?coin=BTCUSD&tf=1m&limit={lim}")
+    assert sum(1 for k in lv._cache if k[0] == "k") <= live_mod.KLINES_KEEP
+
+
+def test_market_answer(folders):
+    fb = FakeBinance()
+    lv, clock = _live("on", fb)
+    c = _live_client(folders, lv)
+    d = c.get("/api/market").json()
+    assert d["stale"] is False and [x["coin"] for x in d["coins"]] == list(grid.COINS)
+    btc = d["coins"][0]
+    assert btc["ok"] is True and len(btc["funding"]) == 3 and len(btc["oi_hist"]) == 25 and len(btc["ls_ratio"]) == 24
+    assert btc["oi_change_24h_pct"] == pytest.approx((124 / 100 - 1) * 100)
+    assert (btc["ls_now"], btc["long_share"], btc["price"]) == (1.5, 0.6, 100_000.0)
+    n = len(fb.calls)
+    assert fb.count("/fapi/v1/fundingRate") == 7 and fb.count("/futures/data/globalLongShortAccountRatio") == 7
+    clock.t += 50.0
+    c.get("/api/market")
+    assert fb.count("/fapi/v1/fundingRate") == 7                      # cached 60 s
+    clock.t += 11.0
+    c.get("/api/market")
+    assert fb.count("/fapi/v1/fundingRate") == 14 and len(fb.calls) > n
+
+
+def test_rate_limit_is_four_requests_a_second_overall(folders):
+    clock = Clock()
+    lim = RateLimiter(clock=clock, sleep=clock.sleep)
+    stamps = []
+    for _ in range(13):
+        lim.acquire()
+        stamps.append(clock.t)
+    assert all(sum(1 for s in stamps if t <= s < t + 1.0) <= 4 for t in stamps)
+    assert stamps[-1] - stamps[0] >= 3.0 - 1e-9                      # 13 requests need at least 3 seconds
+    # the whole dashboard shares one limiter: /api/live (15 requests) then /api/market (21) stay under 4 a second
+    fb = FakeBinance()
+    lv, clock = _live("on", fb)
+    seen = []
+
+    def stamped(path, params):
+        seen.append(clock.t)
+        return fb(path, params)
+    lv._fetch = stamped
+    c = _live_client(folders, lv)
+    c.get("/api/live")
+    c.get("/api/market")
+    assert len(seen) == 36 and all(sum(1 for s in seen if t <= s < t + 1.0) <= 4 for t in seen)
+    # the real limiter (no fake clock): 6 acquisitions take about a second
+    real = RateLimiter()
+    t0 = time.monotonic()
+    for _ in range(6):
+        real.acquire()
+    assert time.monotonic() - t0 >= 0.9
+
+
+def test_one_refresh_at_a_time_and_the_others_get_the_last_answer():
+    fb = FakeBinance(delay=0.05)
+    lv = Live("on", fetch=fb, limiter=RateLimiter(n=1000))
+    out = []
+    ths = [threading.Thread(target=lambda: out.append(lv.klines("BTCUSD", "15m", 5))) for _ in range(8)]
+    for t in ths:
+        t.start()
+    for t in ths:
+        t.join()
+    assert len(out) == 8 and all(o["bars"]["t"] for o in out) and fb.count("/fapi/v1/klines") == 1
+
+
+def test_binance_get_only_asks_binance(monkeypatch):
+    with pytest.raises(ValueError):
+        live_mod.binance_get("/api/v3/account", {})
+    with pytest.raises(ValueError):
+        live_mod.binance_get("https://evil.example/fapi/v1/klines", {})
+    seen = {}
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n):
+            return b'{"ok": 1}'
+
+    class Rec:
+        def open(self, req, timeout):
+            seen.update(url=req.full_url, ua=req.get_header("User-agent"), timeout=timeout)
+            return Resp()
+    monkeypatch.setattr(live_mod, "_OPENER", Rec())
+    assert live_mod.binance_get("/fapi/v1/klines", {"symbol": "BTCUSDT", "interval": "15m", "limit": 3}) == {"ok": 1}
+    assert seen["url"] == "https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=15m&limit=3"
+    assert seen["ua"] == "demobot-dash" and seen["timeout"] == 5.0
+    # a redirect is refused (never followed to another host)
+    with pytest.raises(live_mod.NetError):
+        live_mod._NoRedirect().redirect_request(None, None, 302, "Found", {}, "https://evil.example/")
+
+
+def test_live_off_and_the_env_switch(folders, monkeypatch):
+    for path in ("/api/live", "/api/market", "/api/klines?coin=BTCUSD"):
+        assert _live_client(folders, Live("off")).get(path).json() == {"off": True}, path
+    monkeypatch.setenv("DEMOBOT_DASH_LIVE", "off")
+    c = TestClient(create_app(folders["snap"], None, SECRET, data_dir=folders["data"]))
+    assert c.get("/api/live").json() == {"off": True}
+    monkeypatch.setenv("DEMOBOT_DASH_LIVE", "fake")
+    c = TestClient(create_app(folders["snap"], None, SECRET, data_dir=folders["data"]))
+    assert c.get("/api/live").json()["source"] == "fake"
+    monkeypatch.delenv("DEMOBOT_DASH_LIVE")
+    assert create_app(folders["snap"], None, SECRET).state.live.mode == "on"         # the default
+    with pytest.raises(ValueError):
+        Live("sometimes")
+    # the page still asks only this server
+    assert "connect-src 'self'" in CSP and "binance" not in CSP
+
+
+def test_fake_live_mode_is_built_from_the_bars(folders):
+    clock = Clock(1_800_000_000.0)
+    snap = create_app(folders["snap"], None, SECRET, data_dir=folders["data"]).state.snap
+    lv = Live("fake", bars=lambda coin: snap.bars(coin, "15m"), clock=clock, limiter=RateLimiter(clock=clock, sleep=clock.sleep))
+    c = _live_client(folders, lv)
+    d = c.get("/api/live").json()
+    assert d["source"] == "fake" and d["stale"] is False and all(x["ok"] for x in d["coins"])
+    for x in d["coins"]:
+        last = float(_bars_file(folders, x["coin"])["c"][-1])
+        assert abs(x["price"] / last - 1) < 0.01 and x["low"] <= x["price"] <= x["high"]
+        assert x["next_funding_ms"] % (8 * 3_600_000) == 0 and x["next_funding_ms"] > clock.t * 1000
+    assert c.get("/api/live").json() == d                              # deterministic for one clock
+    z = _bars_file(folders, "BTCUSD")
+    for tf, lim in (("1m", 50), ("5m", 30), ("15m", 40), ("30m", 20), ("1h", 24), ("4h", 10), ("1d", 5)):
+        b = c.get(f"/api/klines?coin=BTCUSD&tf={tf}&limit={lim}").json()["bars"]
+        n = len(b["t"])
+        assert 0 < n <= lim and b["t"] == sorted(set(b["t"])), tf
+        assert all(t % live_mod.TF_MS[tf] == 0 for t in b["t"]), tf
+        assert all(hh >= max(o, cc) - 1e-9 and ll <= min(o, cc) + 1e-9 for o, hh, ll, cc in zip(b["o"], b["h"], b["l"], b["c"])), tf
+        assert b["t"][-1] < int(z["ts"][-1]) + 900_000 and min(b["l"]) >= float(z["l"].min()) - 1e-9, tf
+    b15 = c.get("/api/klines?coin=BTCUSD&tf=15m&limit=3").json()["bars"]
+    assert b15["t"] == [int(x) for x in z["ts"][-3:]] and b15["c"] == [float(x) for x in z["c"][-3:]]
+    m = c.get("/api/market").json()
+    assert m["source"] == "fake" and len(m["coins"]) == 7 and all(len(x["ls_ratio"]) == 24 for x in m["coins"])
+    # no bars file: unavailable, never an error
+    empty = Live("fake", bars=lambda coin: None)
+    assert empty.live()["unavailable"] is True and empty.klines("BTCUSD", "15m", 10)["unavailable"] is True
+
+
+def test_part_a_endpoints_write_nothing(folders):
+    def listing():
+        return {p: os.stat(p).st_mtime_ns for p in glob.glob(os.path.join(folders["snap"], "**"), recursive=True)}
+    before = listing()
+    lv, _ = _live("on")
+    c = _live_client(folders, lv)
+    for path in [f"/api/{k}" for k in PART_A_FILES] + ["/api/live", "/api/klines?coin=BTCUSD&tf=1h", "/api/market",
+                                                       "/api/export", "/api/export/fx-def-S2-15m.csv"]:
+        assert c.get(path).status_code == 200, path
+    assert listing() == before
+
+
+def test_part_a_screens_are_routed_and_build_dom_from_text_only():
+    app_js = open(os.path.join(STATIC, "js", "app.js"), encoding="utf-8").read()
+    screens = dict(re.findall(r"(\w+): \"(\w+)\"", re.search(r"const SCREENS = \{([^}]*)\}", app_js).group(1)))
+    menu = re.search(r"const MENU = \[(.*?)\n\];", app_js, re.S).group(1)
+    entries = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"(?:, group: "(\w+)")?', menu)
+    # the live group first, in this order; data check and timeline in the info group
+    assert [e[0] for e in entries[:5]] == ["terminal", "positions", "charts", "market", "signals"]
+    assert all(e[2] == "live" for e in entries[:5])
+    groups = {e[0]: e[2] for e in entries}
+    assert groups["dataq"] == "info" and groups["timeline"] == "info"
+    for name, ko in PART_A_SCREENS.items():
+        assert screens.get(name) == name, name
+        assert (name, ko) in [(e[0], e[1]) for e in entries], name
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        assert "export async function mount(" in src and "needCss()" in src, name
+        for bad in ("innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser", "document.write", "new Function"):
+            assert bad not in src, f"{name}.js uses {bad}"
+        assert not re.search(r"\beval\s*\(", src) and "toLocaleString" not in src and "Intl." not in src, name
+        assert not re.findall(r"https?://(?!www\.w3\.org)", src), name
+        assert "binance.com" not in src, name                          # the browser never asks Binance
+    kit = open(os.path.join(STATIC, "js", "live-kit.js"), encoding="utf-8").read()
+    assert "innerHTML" not in kit and '"/static/live.css"' in kit and "binance.com" not in kit
+    css = open(os.path.join(STATIC, "live.css"), encoding="utf-8").read()
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css) and "rgb(" not in css and "hsl(" not in css
+    assert not re.search(r"font-size:\s*\d", css) and "url(" not in css
+    # the terminal reads what the contract gives it
+    term = open(os.path.join(STATIC, "js", "screens", "terminal.js"), encoding="utf-8").read()
+    for key in ("/api/live", "/api/klines", "/api/positions", "/api/calendar", "/api/signals_now", "/api/trades",
+                "/api/judge", "pnl_total", "by_coin", "next_tick_ms", "goal", "ctx.every(5000", "ctx.every(60000",
+                '"15m"', "확인 기간", "체결", "포지션"):
+        assert key in term, key
+    # the CSV buttons (9.9) and the trade chart found from a position
+    for name in ("account", "trades"):
+        src = open(os.path.join(STATIC, "js", "screens", name + ".js"), encoding="utf-8").read()
+        assert "/api/export" in src and "CSV 내려받기" in src, name
+    trade = open(os.path.join(STATIC, "js", "screens", "trade.js"), encoding="utf-8").read()
+    assert "query.at" in trade and "positions" in trade
