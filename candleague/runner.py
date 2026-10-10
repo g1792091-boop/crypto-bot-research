@@ -235,11 +235,14 @@ def main(argv: Optional[list] = None) -> int:
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
     ds_money = os.environ.get("CANDLEAGUE_DS_MONEY") == "1"
     lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS)
+    from .notify import Notifier
+    notifier = Notifier(conn)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, done {lg.done}", flush=True)
     while True:
         now = int(time.time() * 1000)
         n = lg.advance(final_end(now))
-        write_snapshots(a.snap, lg, now, ds_money)
+        doc = write_snapshots(a.snap, lg, now, ds_money)
+        notifier.after_pass(doc, now, caught_up=final_end(now) - lg.done < 3 * FIVE)
         if n:
             print(f"[후보 리그] {n} chunk(s), done {time.strftime('%m-%d %H:%M', time.gmtime(lg.done / 1000))} UTC",
                   flush=True)
