@@ -65,11 +65,11 @@ def stop_dist(name: str, atr: float) -> float:
     return spec(name)["stop_atr"] * atr
 
 
-def structure_level(h, l, c, i: int, k: int, side: int, lookback: int = STRUCT_LOOKBACK) -> float:
+def structure_level(h, lo, c, i: int, k: int, side: int, lookback: int = STRUCT_LOOKBACK) -> float:
     """kernel.structure_levels for bar ``i`` and one side: the lowest confirmed swing high above c[i] (side 1) or the
     highest confirmed swing low below it (side -1) among swings at p in [i - lookback, i - k]; NaN when none. A swing
     high at p has a high strictly above the k bars on each side."""
-    h, l = np.asarray(h, float), np.asarray(l, float)
+    h, lo = np.asarray(h, float), np.asarray(lo, float)
     best = math.inf if side > 0 else -math.inf
     n = len(h)
     for p in range(max(0, i - lookback, k), i - k + 1):
@@ -78,8 +78,8 @@ def structure_level(h, l, c, i: int, k: int, side: int, lookback: int = STRUCT_L
         win = np.r_[p - k:p, p + 1:p + k + 1]
         if side > 0 and np.all(h[p] > h[win]) and h[p] > c[i] and h[p] < best:
             best = float(h[p])
-        if side < 0 and np.all(l[p] < l[win]) and l[p] < c[i] and l[p] > best:
-            best = float(l[p])
+        if side < 0 and np.all(lo[p] < lo[win]) and lo[p] < c[i] and lo[p] > best:
+            best = float(lo[p])
     return best if math.isfinite(best) else math.nan
 
 
