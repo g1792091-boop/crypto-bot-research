@@ -72,6 +72,7 @@ MIN = 60_000
 FIVE = 300_000
 MAX_DAYS = 45               # days replayed per night (the first night fills the run so far)
 CHUNK_DAYS = 10             # days whose signals are computed in one pass (bounds memory)
+MIN_STEPS = 1368            # 1m steps a day needs (95% of 1,440) before it is replayed
 MIN_TRADES = 20             # trades a variant and the default each need before a star
 ALPHA = 0.05                # per cell, Bonferroni over its distinct variants
 MULTS = (0.5, 0.75, 1.25, 1.5)     # the study's multipliers (research/entry_study/analysis_bc.py MULTS)
@@ -479,6 +480,10 @@ def run(paper_db: str, out_dir: str, source, rest, settings: Optional[Settings],
                 steps = fetch_steps(rest, list(symbols), s0, s0 + DAY_MS)
             except Exception as exc:  # noqa: BLE001
                 raise ParamShadowError(f"1m bars of {day} unavailable: {type(exc).__name__}: {exc}"[:300]) from None
+            if len(steps) < MIN_STEPS:
+                # a day the exchange answered only in part is not replayed (it would read as a day without trades);
+                # the next night tries it again from the same state
+                raise ParamShadowError(f"1m bars of {day}: {len(steps)} minutes (< {MIN_STEPS}), tried again next night")
             day_sigs = {k: v for k, v in by_close.items() if s0 < k <= s0 + DAY_MS}
             replay_day(engines, active, day_sigs, steps, brackets)
             rows = []

@@ -520,16 +520,75 @@ def v4_card(strategy: str) -> Optional[dict]:
         return None
 
 
+PARAMSHADOW_DIR = os.environ.get("PAPERBOT_PARAMSHADOW_DIR", "/var/lib/paperbot/paramshadow")
+_PS_CACHE: dict = {}
+LIVE_PARAMS_TOP = 3
+LIVE_PARAMS_NOTE = ("참고용 그림자: v4 시작부터 같은 기간을 숫자 하나만 바꿔(x0.5·x0.75·x1.25·x1.5) 실제와 같은 규칙으로 다시 "
+                    "계산한 계좌. 실제 계좌·규칙은 그대로이고 숫자는 저절로 바뀌지 않음. ★ 없는 차이는 우연으로 봄(5년 파라미터 "
+                    "시험 1,680개에서도 숫자 변경의 근거는 없었음). 숫자를 바꾸자는 제안은 30일 판정 뒤 5년 시험과 새 계좌로만.")
+
+
+def _paramshadow_doc(path: str) -> Optional[dict]:
+    """paperbot/paramshadow.py's last.json, re-read only when its mtime changes; None when missing or unreadable."""
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return None
+    hit = _PS_CACHE.get(path)
+    if hit and hit[0] == mt:
+        return hit[1]
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    _PS_CACHE[path] = (mt, doc)
+    return doc
+
+
+def live_params(strategy: str, path: Optional[str] = None) -> Optional[dict]:
+    """커스텀값 그림자 of one of the 36 (paperbot/paramshadow.py): per timeframe the recomputed default, the real
+    account, the share of entries both have, how many variants beat the default, and the variants that beat it most
+    (at most LIVE_PARAMS_TOP, with their star and luck ratio). None when there is no summary or no such strategy."""
+    doc = _paramshadow_doc(path or os.path.join(PARAMSHADOW_DIR, "last.json"))
+    if not doc or doc.get("status") == "no_run":
+        return None
+    cells = [c for c in doc.get("cells") or [] if c.get("strategy") == strategy]
+    if not cells:
+        return None
+    tfs = []
+    for c in cells:
+        vs = [v for v in c.get("variants") or [] if not v.get("same_as_base")]
+        vs.sort(key=lambda v: v.get("diff_pnl") or 0.0, reverse=True)
+        top = [{"variant": v.get("key"), "param": v.get("param"), "x": v.get("mult"), "value": v.get("value"),
+                "default": v.get("default"), "trades": v.get("trades"), "diff_pnl": v.get("diff_pnl"),
+                "star": bool(v.get("star")), "luck_ratio": (v.get("luck") or {}).get("ratio"),
+                "small": bool((v.get("luck") or {}).get("small"))} for v in vs[:LIVE_PARAMS_TOP] if (v.get("diff_pnl") or 0) > 0]
+        b, r = c.get("base") or {}, c.get("real") or {}
+        def brief(x):
+            return {"trades": x.get("trades"), "pnl": x.get("pnl"),
+                    "win_rate": None if x.get("win_rate") is None else round(x["win_rate"], 3)}
+        tfs.append({"tf": c.get("tf"), "base": brief(b), "real": brief(r),
+                    "parity": (c.get("parity") or {}).get("share"), "variants": c.get("k"),
+                    "better": c.get("better"), "stars": c.get("stars"), "top": top})
+    return {"through_day": doc.get("through_day"), "days": doc.get("days"), "status": doc.get("status"),
+            "min_trades": doc.get("min_trades"), "timeframes": tfs, "note": LIVE_PARAMS_NOTE}
+
+
 def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> dict:
     """What one strategy's specialist sees: its four accounts, their wallets against the three coin-flip
     accounts (reference only; the rooms add the checkpoint verdict), the coin-flip league of each timeframe,
-    the strategy's profile card and what the entry study already tested for it. A DeepSeek definition or the reel
-    gets its card from paperbot/ds_profiles.py (``v4_card``) and its earlier tests from agents/ds_prior.json."""
+    the strategy's profile card and what the entry study already tested for it, and the custom-value shadow
+    (``live_params``: the same period replayed with one number changed; None before its first night). A DeepSeek
+    definition or the reel gets its card from paperbot/ds_profiles.py (``v4_card``) and its earlier tests from
+    agents/ds_prior.json."""
     pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}
     copies = [e for e in packet.get("extras") or [] if e.get("kind") == "copy" and e.get("strategy") == strategy]
     return {"meta": packet.get("meta"), "strategy": strategy,
             "by_strategy": (packet.get("by_strategy") or {}).get(strategy), "pass_check": pc,
             "league": packet.get("league"), "profile": profile_card(strategy, cards_path) or v4_card(strategy),
             "research": research_prior(strategy),
+            # 커스텀값 그림자 (paperbot/paramshadow.py, owners' "2번"): one number changed, same period, reference only
+            "live_params": live_params(strategy),
             # its copy accounts, labelled 'copy: <account>, rule ...': never part of the numbers above
             "copies": copies}

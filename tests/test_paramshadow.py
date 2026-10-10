@@ -321,3 +321,44 @@ def test_not_a_trading_file():
     assert "paperbot/paramshadow.py" not in runinfo.TRADING_FILES
     for group in (runinfo.DS_FILES, runinfo.REEL_FILES):
         assert "paperbot/paramshadow.py" not in group
+
+
+# ---------------------------------------------------------------- the specialists' packet
+def test_specialist_packet_carries_live_params(tmp_path, data, monkeypatch):
+    from paperbot.agents import packets3 as P3
+    now = D0 + 2 * DAY + 3_600_000
+    s = _run(tmp_path / "lp", data, now)
+    path = str(tmp_path / "lp" / "out" / "last.json")
+    lp = P3.live_params("S2_ST_ROC", path)
+    assert lp["through_day"] == s["through_day"] and [t["tf"] for t in lp["timeframes"]] == list(TFS)
+    for t in lp["timeframes"]:
+        assert len(t["top"]) <= P3.LIVE_PARAMS_TOP and all(x["diff_pnl"] > 0 for x in t["top"])
+        assert t["top"] == sorted(t["top"], key=lambda x: -x["diff_pnl"])
+    assert len(json.dumps(lp, ensure_ascii=False)) < 4000
+    assert P3.live_params("NOPE", path) is None
+    assert P3.live_params("S2_ST_ROC", str(tmp_path / "missing.json")) is None
+    monkeypatch.setattr(P3, "PARAMSHADOW_DIR", str(tmp_path / "lp" / "out"))
+    sp = P3.specialist_packet({"pass_check": {}, "by_strategy": {}}, "S2_ST_ROC")
+    assert sp["live_params"]["timeframes"][0]["tf"] == "15m"
+    prompt = (REPO / "paperbot" / "agents" / "prompts3" / "rooms_specialist.md").read_text(encoding="utf-8")
+    assert "`specialist.live_params`" in prompt
+
+
+def test_a_day_with_too_few_minutes_is_not_replayed(tmp_path, data):
+    now = D0 + 2 * DAY + 3_600_000
+    full = _steps_from(data)
+
+    def short(rest, symbols, start, end):
+        steps = full(rest, symbols, start, end)
+        return steps if start == D0 else steps[:600]               # the second day comes back in part
+    db = _paper_db(tmp_path / "p.db")
+    out = str(tmp_path / "o")
+    Path(out).mkdir()
+    with pytest.raises(PS.ParamShadowError, match="tried again next night"):
+        PS.run(db, out, PS.FrameSource(data), None, None, BRACKETS, SPECS, now, strategies=STRATS, tfs=TFS,
+               symbols=SYMS, fetch_steps=short, log=lambda s: None)
+    conn = sqlite3.connect(os.path.join(out, "paramshadow.db"))
+    assert [r[0] for r in conn.execute("SELECT day FROM days")] == ["2026-10-05"]
+    conn.close()
+    s = _run(tmp_path, data, now, db=db, out=out)                    # the next night fills the day
+    assert s["through_day"] == "2026-10-06" and s["days"] == 2
