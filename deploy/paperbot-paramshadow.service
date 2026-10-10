@@ -1,0 +1,37 @@
+# 커스텀값 그림자 (paperbot/paramshadow.py, owners' "2번" 2026-10-10): the 36 strategies replayed from the run's start with
+# one number changed (x0.5 / x0.75 / x1.25 / x1.5, the pre-registered parameter study's definitions), next to the default
+# recomputed the same way; the dashboard (매매법 상세 · 분석) and the strategy specialists read the summary.
+# NOT trading: paper3.db is opened read-only (mode=ro, query_only), no order, no account change, no Telegram of its own.
+# Public klines and funding; the read-only key of live.env is used only for the leverage-bracket table, as daily3 does.
+# Writes only /var/lib/paperbot/paramshadow (its kline cache, engine states, shadow trades, last.json / last.txt).
+# Exit 2 = it could not run (bars, definitions, brackets): one Korean warning (paperbot-failed@).
+# Started by paperbot-paramshadow.timer.
+[Unit]
+Description=paperbot custom-value shadow of the 36 strategies (read-only, no orders)
+After=network-online.target paperbot-daily3.service paperbot-dscheck.service
+Wants=network-online.target
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.paramshadow run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/paramshadow
+# Below the live runner: low CPU and disk priority, bounded memory and time (measured: ~300 MB, a few minutes a
+# night; the first night fills the run so far, up to 45 days, about 20 minutes).
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=1200M
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/shadow200 -/var/lib/paperbot/dscheck -/var/lib/paperbot/lab /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

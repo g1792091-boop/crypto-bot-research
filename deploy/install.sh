@@ -129,6 +129,9 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/shadow200
 # the DeepSeek nightly recompute check (paperbot/dscheck.py): its bar cache and its one-line summary for the 09:20 report;
 # the only folder that job writes
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/dscheck
+# the custom-value shadow (paperbot/paramshadow.py): its bar cache, engine states, shadow trades and the summary the
+# dashboard and the specialists read; the only folder that job writes
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/paramshadow
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -165,7 +168,7 @@ if [ "$REPO_DIR" != "$APP" ]; then
   # wait for a running one to finish so it never reads a half-swapped tree.
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
 paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service paperbot-shadow200.service \
-paperbot-dscheck.service"
+paperbot-dscheck.service paperbot-paramshadow.service"
   n=0
   # A oneshot job reports "activating" (not "active") while it runs, so is-active alone never waits for it.
   while busy="$(for j in $JOBS; do case "$(systemctl show -p ActiveState --value "$j" 2>/dev/null)" in
@@ -258,6 +261,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-rehearsal.service paperbot-rehearsal.timer paperbot-obsidian.service paperbot-obsidian.timer \
          paperbot-shadow200.service paperbot-shadow200.timer \
          paperbot-dscheck.service paperbot-dscheck.timer \
+         paperbot-paramshadow.service paperbot-paramshadow.timer \
          paperbot-failed@.service paperbot-debate.service \
          paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
@@ -291,6 +295,9 @@ else
   # The DeepSeek nightly recompute check is read-only (paper3.db opened read-only, public bars, no key, no order, no
   # Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
   systemctl enable --now paperbot-dscheck.timer >/dev/null 2>&1 || echo "dscheck timer could not be enabled: sudo systemctl enable --now paperbot-dscheck.timer"
+  # The custom-value shadow (커스텀값 그림자) is read-only (paper3.db opened read-only, public bars, no order, no account
+  # change, no Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
+  systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
 fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then

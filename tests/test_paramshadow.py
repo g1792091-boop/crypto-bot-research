@@ -1,0 +1,323 @@
+"""paperbot/paramshadow.py, the custom-value shadow (non-trading), on synthetic bars: the param_defs defaults equal the
+locked signals of all 36 strategies; the variant list follows the study; the replay that skips idle engines gives
+the same trades as stepping every engine every minute; a night split in pieces gives the same result as one night;
+parity counts the real account's entries; the luck rule; a new run starts over; paper3.db is never written; the
+unit files and the install script."""
+
+import json
+import os
+import sqlite3
+import warnings
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from paperbot import paramshadow as PS
+from paperbot import sweepsig
+from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.engine import PaperEngine
+from paperbot.margin import BracketTier, Brackets
+from paperbot.models import Bar, Signal
+from paperbot.store3 import Store3
+
+REPO = Path(__file__).resolve().parent.parent
+DAY = 86_400_000
+D0 = 1_791_158_400_000                        # 2026-10-05 00:00 UTC
+RUN_START = D0 + 13 * 3_600_000              # the run started 13:00 UTC
+STRATS = ["S2_ST_ROC", "S1_EMA_RSI_CHOP"]
+TFS = ("15m", "1h")
+SYMS = ("BTCUSDT", "ETHUSDT")
+P0 = {"BTCUSDT": 60000.0, "ETHUSDT": 2500.0}
+HIST_DAYS = 64                                # > the 15m and 1h live windows (2 x 30 days of warm-up)
+
+
+def _synth5(seed: int, p0: float, days: int = HIST_DAYS + 5):
+    n = days * 288
+    rng = np.random.default_rng(seed)
+    r = rng.standard_t(4, n) * 0.0018
+    c = p0 * np.exp(np.cumsum(r))
+    o = np.r_[p0, c[:-1]]
+    hi = np.maximum(o, c) * (1 + np.abs(rng.normal(0, 0.0009, n)))
+    lo = np.minimum(o, c) * (1 - np.abs(rng.normal(0, 0.0009, n)))
+    v = rng.lognormal(10, 0.6, n)
+    ts = D0 - HIST_DAYS * DAY + 300_000 * np.arange(n)
+    return ts.astype(np.int64), o, hi, lo, c, v
+
+
+@pytest.fixture(scope="module")
+def data():
+    return {s: _synth5(i + 3, P0[s]) for i, s in enumerate(SYMS)}
+
+
+def _steps_from(data):
+    """1m steps made from the 5m bars (each 5m bar split into five minutes; funding every 8 h)."""
+    def fetch(rest, symbols, start, end):
+        out = []
+        cols = {s: tuple(a[(data[s][0] >= start) & (data[s][0] < end)] for a in data[s]) for s in symbols}
+        n = len(cols[symbols[0]][0])
+        for j in range(n):
+            for q in range(5):
+                t0 = int(cols[symbols[0]][0][j]) + q * 60_000
+                bars = {}
+                for s in symbols:
+                    ts, o, h, l, c, _v = cols[s]
+                    oo = o[j] + (c[j] - o[j]) * q / 5
+                    cc = o[j] + (c[j] - o[j]) * (q + 1) / 5
+                    hh = max(oo, cc) + (h[j] - max(o[j], c[j])) * (1.0 if q == 2 else 0.3)
+                    ll = min(oo, cc) - (min(o[j], c[j]) - l[j]) * (1.0 if q == 3 else 0.3)
+                    bars[s] = Bar(s, t0, t0 + 59_999, oo, hh, ll, cc, oo, hh, ll, cc)
+                fund = {s: 0.0001 for s in symbols} if t0 % (8 * 3_600_000) == 0 else {}
+                out.append((t0, bars, fund))
+        return out
+    return fetch
+
+
+BRACKETS = {s: Brackets([BracketTier(300_000, 75, 0.005, 0.0), BracketTier(800_000, 50, 0.01, 1500.0),
+                         BracketTier(3_000_000, 20, 0.025, 13500.0)]) for s in SYMS}
+SPECS = {s: {} for s in SYMS}
+
+
+def _paper_db(path, real_trades=()):
+    st = Store3(str(path))
+    lib = sweepsig.lib()
+    from paperbot.sigservice import strategy_names
+    for n in strategy_names(lib):
+        for tf in ("15m", "30m", "1h", "4h"):
+            st.add_account(f"{n}@{tf}", n, tf, "strategy", RUN_START, "paper-v4")
+    st.add_account("RANDOM_1@15m", "RANDOM_1", "15m", "random", RUN_START, "paper-v4")
+    st.put_state("run", RUN_START, {"taker_fee": 0.0005})
+    for aid, rec in real_trades:
+        st.trade(aid, rec)
+    st.commit()
+    st.close()
+    return str(path)
+
+
+def _run(tmp_path, data, now, max_days=PS.MAX_DAYS, db=None, out=None, strategies=STRATS):
+    Path(tmp_path).mkdir(parents=True, exist_ok=True)
+    db = db or _paper_db(tmp_path / "paper3.db")
+    out = out or str(tmp_path / "out")
+    return PS.run(db, out, PS.FrameSource(data), None, None, BRACKETS, SPECS, now, max_days=max_days,
+                  strategies=strategies, tfs=TFS, symbols=SYMS, fetch_steps=_steps_from(data),
+                  log=lambda s: None, brackets_src="test")
+
+
+# ---------------------------------------------------------------- definitions
+def test_defaults_equal_the_locked_signals_of_all_36(data):
+    """param_defs signals() with no override == the locked compute_signals (DOGE: the live doge_join)."""
+    from paperbot.sigservice import doge_join, strategy_names, window_5m
+    lib = sweepsig.lib()
+    tf = "15m"
+    cols = data["BTCUSDT"]
+    end = D0 + 2 * DAY
+    keep = cols[0] < end
+    df = PS.chart_frame(lib, tuple(a[keep][-(window_5m(lib, tf) + 2 * 288):] for a in cols), tf)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        locked = lib.compute_signals({"X": df}, tf, list(lib.NAMES), strict=False)
+    w = lib.warmup_bars(tf)
+    man = PS.defs_manifest()
+    fired = 0
+    for n in strategy_names(lib):
+        mod = PS.param_module(n, man)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            lo, sh = mod.signals(df, tf)
+        side = np.where(lo, 1, np.where(sh, -1, 0))
+        ref = doge_join(locked["DOGE_L"]["X"], locked["DOGE_S"]["X"]) if n == "DOGE" else np.asarray(locked[n]["X"])
+        assert np.array_equal(side[w:], np.asarray(ref)[w:]), n
+        fired += int(np.count_nonzero(ref[w:]))
+    assert fired > 100
+
+
+def test_variants_follow_the_study():
+    man = PS.defs_manifest()
+    for n in ("S2_ST_ROC", "N02_ST_KST", "DOGE"):
+        mod = PS.param_module(n, man)
+        vs = PS.variants_of(mod)
+        assert vs[0]["key"] == "base" and vs[0]["ov"] == {}
+        assert len(vs) == 1 + 4 * len(mod.PARAMS)
+        assert len({v["key"] for v in vs}) == len(vs)
+        for v in vs[1:]:
+            assert list(v["ov"]) == [v["param"]] and v["mult"] in PS.MULTS
+
+
+def test_a_changed_definition_is_refused(tmp_path, monkeypatch):
+    from paperbot import entry_marks as EM
+    fake = tmp_path / "study"
+    (fake / "param_defs").mkdir(parents=True)
+    src = Path(EM.STUDY) / "param_defs" / "S2_ST_ROC.py"
+    (fake / "param_defs" / "S2_ST_ROC.py").write_bytes(src.read_bytes() + b"\n# edited\n")
+    monkeypatch.setattr(EM, "STUDY", str(fake))
+    with pytest.raises(PS.ParamShadowError, match="locked"):
+        PS.param_module("S2_ST_ROC", PS.defs_manifest())
+
+
+# ---------------------------------------------------------------- replay
+def test_skipping_idle_engines_gives_the_same_trades(data):
+    """replay_day steps only engines with a position or a pending signal; stepping every engine every minute (as
+    the live book does) must give identical trades."""
+    settings = v3_settings(taker_fee=0.0005)
+    fetch = _steps_from(data)
+    steps = fetch(None, list(SYMS), D0, D0 + DAY)
+    rng = np.random.default_rng(7)
+    by_close = {}
+    aids = [f"X@15m#k{i}" for i in range(6)]
+    for t in range(D0 + 900_000, D0 + DAY, 900_000):
+        for aid in aids:
+            if rng.random() < 0.15:
+                sym = SYMS[int(rng.integers(2))]
+                price = float(data[sym][4][np.searchsorted(data[sym][0], t) - 1])
+                sig = Signal(ts=t - 1, symbol=sym, timeframe="15m", strategy_id="X", side=int(rng.choice([1, -1])),
+                             stop_price=0.0, tier="best", atr=price * 0.004,
+                             meta={"stop_dist": price * 0.008, "account": aid})
+                by_close.setdefault(t, []).append((aid, sig))
+    a = {aid: PaperEngine(settings, BRACKETS, book=aid) for aid in aids}
+    PS.replay_day(a, set(), by_close, steps, BRACKETS)
+    b = {aid: PaperEngine(settings, BRACKETS, book=aid) for aid in aids}
+    for ts, bars, funding in steps:
+        for e in b.values():
+            e.step(bars, funding)
+        for aid, sig in by_close.get(ts + 60_000, ()):
+            b[aid].submit(sig)
+    n = 0
+    for aid in aids:
+        ta = [(t.symbol, t.entry_time, t.exit_time, t.exit_reason, round(t.pnl, 9)) for t in a[aid].trades]
+        tb = [(t.symbol, t.entry_time, t.exit_time, t.exit_reason, round(t.pnl, 9)) for t in b[aid].trades]
+        assert ta == tb, aid
+        assert a[aid].wallet == pytest.approx(b[aid].wallet, abs=1e-9)
+        n += len(ta)
+    assert n > 10
+
+
+def _trades(out):
+    conn = sqlite3.connect(os.path.join(out, "paramshadow.db"))
+    rows = conn.execute("SELECT account, symbol, side, entry_time, exit_time, exit_reason, round(pnl, 6) FROM trades "
+                        "ORDER BY account, exit_time, entry_time").fetchall()
+    counts = conn.execute("SELECT account, n, diff FROM sigcounts ORDER BY account").fetchall()
+    conn.close()
+    return rows, counts
+
+
+def test_a_night_in_pieces_equals_one_night(tmp_path, data):
+    now = D0 + 3 * DAY + 3_600_000                     # days 10-05 (from 13:00), 10-06, 10-07
+    one = _run(tmp_path / "a", data, now)
+    assert one["status"] == "ok" and one["through_day"] == "2026-10-07" and one["days"] == 3
+    db = _paper_db(tmp_path / "b.db")
+    out = str(tmp_path / "b")
+    s1 = _run(tmp_path, data, now, max_days=1, db=db, out=out)
+    assert s1["status"] == "filling" and s1["days_remaining"] == 2 and "채우는 중" in s1["line_ko"]
+    _run(tmp_path, data, now, max_days=1, db=db, out=out)
+    s3 = _run(tmp_path, data, now, max_days=1, db=db, out=out)
+    assert s3["status"] == "ok" and s3["days_remaining"] == 0
+    assert _trades(str(tmp_path / "a" / "out")) == _trades(out)
+    assert json.dumps(one["cells"], sort_keys=True) == json.dumps(s3["cells"], sort_keys=True)
+    again = _run(tmp_path, data, now, max_days=1, db=db, out=out)       # nothing left: no change
+    assert _trades(out) == _trades(str(tmp_path / "a" / "out")) and again["days"] == 3
+    rows, counts = _trades(out)
+    assert rows and min(r[3] for r in rows) > RUN_START                  # nothing before the run started
+    assert any(c[2] > 0 for c in counts) and all(c[2] == 0 for c in counts if c[0].endswith("#base"))
+
+
+def test_summary_parity_and_paper3_untouched(tmp_path, data):
+    """The real account's entries that the recomputed default also has are counted; paper3.db is opened read-only."""
+    now = D0 + 2 * DAY + 3_600_000
+    probe = _run(tmp_path / "probe", data, now)
+    conn = sqlite3.connect(str(tmp_path / "probe" / "out" / "paramshadow.db"))
+    base = conn.execute("SELECT symbol, side, entry_time, exit_time, pnl, equity_after FROM trades WHERE account = ? "
+                        "ORDER BY exit_time", ("S2_ST_ROC@15m#base",)).fetchall()
+    conn.close()
+    assert len(base) >= 3
+    from paperbot.models import TradeRecord
+    recs = []
+    for sym, side, et, xt, pnl, eq in base[:-1]:                         # the real account has all but one
+        recs.append(("S2_ST_ROC@15m", TradeRecord(strategy_id="S2_ST_ROC", symbol=sym, timeframe="15m", side=side,
+                     signal_ts=et - 1, entry_time=et + 20_000, entry_price=1.0, exit_time=xt, exit_price=1.0,
+                     exit_reason="SL", qty=1.0, leverage=30, tier="normal", margin=100.0, stop_price=1.0,
+                     tp_price=float("nan"), liq_price=0.5, fees=0.0, funding=0.0, pnl=pnl, roe=0.0,
+                     price_move=0.0, mae_price=1.0, mfe_price=1.0, equity_after=eq, score=0.0)))
+    db = _paper_db(tmp_path / "real.db", recs)
+    before = Path(db).read_bytes()
+    s = _run(tmp_path, data, now, db=db, out=str(tmp_path / "real"))
+    cell = next(c for c in s["cells"] if c["strategy"] == "S2_ST_ROC" and c["tf"] == "15m")
+    assert cell["parity"]["real_trades"] == len(base) - 1 and cell["parity"]["same"] == len(base) - 1
+    assert cell["parity"]["share"] == pytest.approx((len(base) - 1) / len(base), abs=1e-4)
+    assert cell["real"]["trades"] == len(base) - 1
+    assert Path(db).read_bytes() == before
+    assert probe["overview"]["cells"] == len(STRATS) * len(TFS)
+    for c in s["cells"]:
+        assert c["k"] == sum(1 for v in c["variants"] if not v["same_as_base"])
+        for v in c["variants"]:
+            assert v["diff_pnl"] == pytest.approx(v["pnl"] - c["base"]["pnl"], abs=0.02)
+            if v["same_as_base"]:
+                assert v["star"] is False and v["luck"] is None
+    txt = (tmp_path / "real" / "last.txt").read_text(encoding="utf-8")
+    assert txt.startswith("커스텀값 그림자 10/6까지 2일")
+
+
+def test_luck_rule():
+    base = {"trades": 40, "mean_ret": 0.0, "sd_ret": 0.05}
+    good = {"trades": 40, "mean_ret": 0.04, "sd_ret": 0.05}
+    meh = {"trades": 40, "mean_ret": 0.01, "sd_ret": 0.05}
+    small = {"trades": 5, "mean_ret": 0.5, "sd_ret": 0.05}
+    assert PS.luck_test(good, base, 16)["beyond"] is True
+    assert PS.luck_test(meh, base, 16)["beyond"] is False
+    r = PS.luck_test(small, base, 16)
+    assert r["small"] is True and r["beyond"] is False
+    # more variants in a cell need a larger z
+    assert PS.luck_test(meh, base, 16)["z_need"] > PS.luck_test(meh, base, 1)["z_need"]
+
+
+def test_a_new_run_starts_over(tmp_path, data):
+    now = D0 + 2 * DAY + 3_600_000
+    db = _paper_db(tmp_path / "p.db")
+    out = str(tmp_path / "o")
+    _run(tmp_path, data, now, db=db, out=out)
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE accounts SET created_ts = ?", (RUN_START + DAY,))
+    conn.commit()
+    conn.close()
+    s = _run(tmp_path, data, now, db=db, out=out)
+    assert s["run_start_ms"] == RUN_START + DAY and s["days"] == 1
+    rows, _ = _trades(out)
+    assert all(r[3] > RUN_START + DAY for r in rows)
+
+
+def test_no_paper_db_and_show(tmp_path, capsys):
+    out = str(tmp_path / "o")
+    s = PS.run(str(tmp_path / "missing.db"), out, None, None, None, {}, {}, D0)
+    assert s["status"] == "no_run"
+    assert PS.read_summary(out).startswith("커스텀값 그림자")
+    assert PS.main(["show", "--out", out]) == 0
+    assert "커스텀값 그림자" in capsys.readouterr().out
+
+
+def test_error_file(tmp_path):
+    PS.write_error(str(tmp_path), "5m klines of BTCUSDT unavailable", D0)
+    d = json.loads((tmp_path / "error.json").read_text(encoding="utf-8"))
+    assert "계산 못 함" in d["line_ko"]
+    PS.write_outputs(str(tmp_path), {"status": "no_run", "line_ko": "커스텀값 그림자: x"})
+    assert not (tmp_path / "error.json").exists()
+
+
+# ---------------------------------------------------------------- deploy
+def test_units_and_install():
+    svc = (REPO / "deploy" / "paperbot-paramshadow.service").read_text()
+    tim = (REPO / "deploy" / "paperbot-paramshadow.timer").read_text()
+    assert "python -m paperbot.paramshadow run" in svc and "--out /var/lib/paperbot/paramshadow" in svc
+    assert "MemoryMax=" in svc and "Nice=" in svc and "OnFailure=paperbot-failed@%n.service" in svc
+    assert "-/var/lib/paperbot/paper3.db" in svc and "ReadOnlyPaths=" in svc
+    assert "OnCalendar=" in tim
+    inst = (REPO / "deploy" / "install.sh").read_text()
+    assert "paperbot-paramshadow.service paperbot-paramshadow.timer" in inst
+    assert "enable --now paperbot-paramshadow.timer" in inst
+    assert "paperbot-paramshadow.service" in inst.split("JOBS=", 1)[1].split("n=0", 1)[0]
+
+
+def test_not_a_trading_file():
+    from paperbot import runinfo
+    assert "paperbot/paramshadow.py" not in runinfo.TRADING_FILES
+    for group in (runinfo.DS_FILES, runinfo.REEL_FILES):
+        assert "paperbot/paramshadow.py" not in group

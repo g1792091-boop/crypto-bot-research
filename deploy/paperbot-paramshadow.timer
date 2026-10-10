@@ -1,0 +1,10 @@
+[Unit]
+Description=paperbot custom-value shadow at 01:00 UTC (10:00 KST, after the nightly checks and the DeepSeek recompute)
+
+[Timer]
+OnCalendar=*-*-* 01:00:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

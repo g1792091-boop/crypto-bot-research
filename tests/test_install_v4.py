@@ -10,6 +10,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SH = (REPO / "deploy" / "install.sh").read_text(encoding="utf-8")
 TIMERS = ("paperbot-obsidian.timer", "paperbot-shadow200.timer", "paperbot-dscheck.timer")
+# switched on outside a reset too (read-only, its own folder); a reset leaves it as it is (it starts over by itself
+# when it sees the new run)
+ENABLED = TIMERS + ("paperbot-paramshadow.timer",)
 
 
 def _enable_block() -> str:
@@ -43,7 +46,7 @@ def test_install_sh_is_valid_bash():
 def test_without_the_variable_the_three_timers_are_switched_on(tmp_path):
     for value in (None, "0", ""):
         out, calls = _run(tmp_path, value)
-        assert calls == [f"enable --now {t}" for t in TIMERS], (value, calls)
+        assert calls == [f"enable --now {t}" for t in ENABLED], (value, calls)
         assert "리셋 중" not in out
         (tmp_path / "systemctl.log").unlink()
 
