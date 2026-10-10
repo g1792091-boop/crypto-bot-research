@@ -38,3 +38,5 @@
   the size is chosen on the select period as the fastest median month with at most 5% chance to end a month under
   half, the test period shows it; four-week months drawn from the period's weeks), and dump_exchange.py's research-
   only "extra" coins (XRP, BNB, ADA, LINK, AVAX, DOT; the bots keep their six).
+- Owners 2026-10-10 evening: no extra coins ("코인 안늘려도돼"). dump_exchange.py is back to the six coins only; a
+  second run, if any, widens numbers at a range's end on the same six coins.
