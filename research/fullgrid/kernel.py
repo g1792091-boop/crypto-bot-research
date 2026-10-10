@@ -202,8 +202,9 @@ def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best,
     """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive). Take-profit (engine
     tp_mode "fixed": fills only when price trades through it, at it or a better gapped open, maker fee; the stop wins a
     bar that touches both): TP_R at the entry reference + tp_val x stop distance, TP_ROE at net ROE tp_val
-    (policy.tp_from_roe on the fill and the leverage), TP_STRUCT at ``tp_price`` when it lies beyond the entry
-    reference price (else none). ``ladder``: the stepped lock (first_lock, step, gap).
+    (policy.tp_from_roe on the fill and the leverage), TP_STRUCT at ``tp_price`` when it lies beyond the fill
+    price (else none: a level at or behind the fill would only take a loss). ``ladder``: the stepped lock
+    (first_lock, step, gap).
     Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
     taker, slip, rt, maker = S[0], S[1], S[5], S[19]
     raw = o[e]
@@ -217,7 +218,7 @@ def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best,
         tp = raw + side * tp_val * stop_dist
     elif tp_kind == TP_STRUCT:
         tp = tp_price
-        has_tp = np.isfinite(tp_price) and (tp_price - raw) * side > 0
+        has_tp = np.isfinite(tp_price) and (tp_price - fill) * side > 0
     else:
         tp = fill * (1.0 + side * (tp_val / lev + rt))
     notional = qty * fill

@@ -52,7 +52,7 @@ class RPolicy(OwnerPolicy):
 
 class LadderTP(PaperEngine):
     """The stepped lock with a take-profit limit as well (engine: tp_mode "ladder" never sets one): at m x R, or
-    (struct=True) at the signal's structure level when it lies beyond the entry reference price."""
+    (struct=True) at the signal's structure level when it lies beyond the fill (entry_price)."""
 
     def __init__(self, *a, m=0.0, struct=False, **k):
         super().__init__(*a, **k)
@@ -65,7 +65,7 @@ class LadderTP(PaperEngine):
             raw = p.signal.meta["ref_price"]
             if self.struct:
                 lvl = p.signal.meta["tp_struct"]
-                if np.isfinite(lvl) and (lvl - raw) * p.side > 0:
+                if np.isfinite(lvl) and (lvl - p.entry_price) * p.side > 0:
                     p.tp_price = lvl
             else:
                 p.tp_price = raw + p.side * self.m * p.signal.meta["stop_dist"]
@@ -270,6 +270,8 @@ def test_exit_variants_match_engine(exit_):
         best = bool(rng.random() < 0.5)
         j = (close - T0) // MIN
         lvl = float(data["c"][j] * (1 + rng.choice([1, -1]) * rng.uniform(0.002, 0.04)))     # beyond or not
+        if rng.random() < 0.15:                                    # between the reference price and the fill
+            lvl = float(data["o"][j] * (1 + side * v3_settings().slippage_frac * 0.5))     # entry minute = j
         d, x, r, lev = kernel_alone(data, close, side, atr, best, WIDE, exit_=exit_, tp_struct=lvl)
         e = replay({"BTCUSDT": data}, [("BTCUSDT", close, side, atr, best, lvl)], {"BTCUSDT": WIDE}, exit_=exit_)
         if r in (K.R_REJECT, K.R_OPEN):

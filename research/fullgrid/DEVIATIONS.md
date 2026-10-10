@@ -11,3 +11,11 @@
   84 exits, 2,322 grid tasks).
 - Smoke run memory: grid workers peaked at about 1.2 GB; outcome tables for 6 coins x 4 timeframes x 84 exits take
   about 4 GB on disk.
+- Second code review before the run (no wrong calculation found). Changes, all before any server run, PREREG re-pinned:
+  the structure take-profit level must lie beyond the fill price, not the entry reference price (a level between the
+  two would only take a loss; PREREG section wording updated, engine-parity test now covers that case); the bootstrap
+  seed wording now names the exit (the code always included it); DeepSeek win rates are hidden with the other money
+  figures (D11); the grid statistics are summed per period in one pass (same numbers, checked against the old formula
+  on random data with gaps); DeepSeek tasks no longer load the unused "best" outcome table. Server script: a restart
+  counts the study's own files toward the 60 GB disk floor, a second copy cannot start while one runs, and the
+  progress line now covers the outcomes step too.

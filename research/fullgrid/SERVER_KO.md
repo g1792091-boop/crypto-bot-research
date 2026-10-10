@@ -39,6 +39,7 @@ apt-get update -y && apt-get install -y git tmux && git clone -q -b claude/keen-
 ```
 
 - 알아서 1/6 설치 → 2/6 자체 점검 → 3/6 자료 받기 → 4/6 계산 → 5/6 고르기·확인 → 6/6 결과 묶기를 합니다.
+  자체 점검은 5~10분 동안 화면이 조용한 게 정상입니다.
 - **창을 닫아도 계속 돕니다.** (tmux 안에서 돕니다. 화면에서 빠져나오려면 `Ctrl+B` 누르고 손을 뗀 뒤 `D`.)
 - `Could not get lock`이 보이면 새 서버가 자동 업데이트 중인 것이니 5분 뒤 같은 줄을 다시 붙여 넣으세요.
 
@@ -49,7 +50,15 @@ ssh root@서버IP
 bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh status
 ```
 
-`계산 중: [grid 1234/5678 3.2h, ~4.1h left] ...` 처럼 남은 시간이 나옵니다. 화면을 다시 보려면 `tmux attach -t fg`.
+계산 단계에서는 이렇게 두 줄이 나옵니다(`left` 앞 숫자가 남은 시간, h = 시간):
+
+```
+진행 중: [10-10 13:05 UTC] 4/6 계산 (모든 조합, 작업 32개 동시에)
+  [grid 1234/2322 3.20h, ~2.8h left] core N01_ST_EMA 15m ETHUSDT 0-729
+```
+
+`outcomes`로 시작하면 계산의 앞부분(거래 결과표, 약 1시간), `grid`로 시작하면 뒷부분입니다. 남은 시간은 처음 몇 분은
+들쭉날쭉하다가 맞아 갑니다. 화면을 다시 보려면 `tmux attach -t fg`.
 
 **멈췄다면**(서버 재부팅, `멈춤:` 메시지, status가 "지금 돌고 있지 않습니다"): 아래를 붙여 넣으면 끝난 부분은 건너뛰고
 이어서 합니다(이미 열린 tmux 창 안이라면 먼저 `exit`로 빠져나온 뒤).
@@ -58,7 +67,8 @@ bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh status
 tmux kill-session -t fg 2>/dev/null; tmux new -s fg "bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh; bash"
 ```
 
-같은 `멈춤:`이 두 번 나오면 그 화면을 복사해 보내 주세요.
+같은 `멈춤:`이 두 번 나오면 그 화면을 복사해 보내 주세요. `exchange.json ... 아직 없습니다`라고 멈췄다면 0번을 아직
+안 한 것이니, 0번을 하고 제가 "준비 완료"라고 한 뒤 화면에 나온 `cd ... && git pull && ...` 줄을 붙여 넣으면 됩니다.
 
 ## 4. 끝나면: 결과 보내기
 
@@ -91,6 +101,6 @@ PC의 명령창(PowerShell)에서: `scp root@서버IP:/root/fg/results.tgz .` �
 | CPU Optimized 32 vCPU / 64 GB | 약 4~5시간 | 약 $1 | 약 $5~8 |
 | CPU Optimized 16 vCPU / 32 GB | 약 7~9시간 | 약 $0.5 | 약 $4~6 |
 
-- 자료 받기 10~20분, 설치·자체 점검 5분 정도가 더 걸립니다.
+- 자료 받기 10~20분, 설치·자체 점검 10~15분 정도가 더 걸립니다.
 - 요금은 Vultr 화면에 나오는 시간당 값이 정확합니다. 큰 서버는 시간당 비싸지만 빨리 끝나서 총비용은 비슷합니다.
 - 서버 크기는 **결과에 영향이 없습니다.** 같은 계산을 몇 개로 나눠 동시에 하느냐만 다릅니다.

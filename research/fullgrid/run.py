@@ -423,20 +423,28 @@ def stage_outcomes(data_dir: str, out: str, procs: int, ex: dict) -> None:
             frame(data_dir, sym, tf)
     jobs = [(data_dir, out, s, tf, ex, e0) for tf in TFS for s in SYMBOLS for e0 in range(0, len(K.EXITS), EXIT_CHUNK)]
     jobs.sort(key=lambda j: {"15m": 0, "30m": 1, "1h": 2, "4h": 3}[j[3]])
-    for msg in run_pool(outcomes_job, jobs, procs, "outcomes",
-                        done=lambda j: os.path.exists(outcome_part(out, j[2], j[3], j[5]))
-                        or os.path.exists(outcome_path(out, j[2], j[3]))):
+
+    def done(j):
+        return os.path.exists(outcome_part(out, j[2], j[3], j[5])) or os.path.exists(outcome_path(out, j[2], j[3]))
+    n_todo = sum(not done(j) for j in jobs)
+    t0, k = time.time(), 0
+    for msg in run_pool(outcomes_job, jobs, procs, "outcomes", done=done):
+        k += 1
         if msg:
-            print("[outcomes]", msg, flush=True)
+            el = time.time() - t0
+            print(f"[outcomes {k}/{n_todo} {el / 3600:.2f}h, ~{el / k * (n_todo - k) / 3600:.1f}h left] {msg}",
+                  flush=True)
     for tf in TFS:
         for sym in SYMBOLS:
             merge_outcomes(out, sym, tf)
 
 
 @functools.lru_cache(maxsize=1)
-def outcome_table(out: str, sym: str, tf: str) -> dict:
-    with np.load(outcome_path(out, sym, tf)) as z:                 # the exit reasons stay on disk
-        return {k: z[k] for k in ("close", "atr", "pnl_best", "pnl_normal")}
+def outcome_table(out: str, sym: str, tf: str, best: bool = True) -> dict:
+    """The outcome arrays a grid task needs (the exit reasons stay on disk; DeepSeek never needs the 'best' group)."""
+    keys = ("close", "atr", "pnl_normal") + (("pnl_best",) if best else ())
+    with np.load(outcome_path(out, sym, tf)) as z:
+        return {k: z[k] for k in keys}
 
 
 # ------------------------------------------------------------------ leverage group (levrule.quality_group, vectorised)
@@ -481,7 +489,7 @@ def best_flags(data_dir: str, name: str, sym: str, tf: str) -> tuple:
 def trade_table(data_dir: str, out: str, kind: str, name: str, sym: str, tf: str) -> np.ndarray:
     """(exit variants, n bars, 2 sides) P&L / equity of a signal on that bar (NaN: not sized, still open at the data
     end, no ATR), with this strategy's leverage group per bar and side."""
-    O = outcome_table(out, sym, tf)
+    O = outcome_table(out, sym, tf, kind == "core")
     if kind == "ds":
         return O["pnl_normal"]
     bl, bs = best_flags(data_dir, name, sym, tf)
@@ -513,20 +521,19 @@ def signals(data_dir: str, kind: str, name: str, sym: str, tf: str, combo: dict)
 
 
 def exit_stats(P: np.ndarray, pid: np.ndarray, lo: np.ndarray, sh: np.ndarray) -> np.ndarray:
-    """(exit variants, 3 periods, [n, sum, sumsq, wins]) of one combination's signals, every exit variant at once."""
+    """(exit variants, 3 periods, [n, sum, sumsq, wins]) of one combination's signals, every exit variant at once.
+    Period by period, so the temporaries stay small; sums in float64."""
     il, is_ = np.flatnonzero(lo), np.flatnonzero(sh)
-    X = np.concatenate([P[:, il, 0], P[:, is_, 1]], axis=1).astype(np.float64)
-    pt = np.r_[pid[il], pid[is_]]
-    ok = np.isfinite(X)
-    Xz = np.where(ok, X, 0.0)
+    pl, ps = pid[il], pid[is_]
     out = np.zeros((P.shape[0], 3, 4))
     for k in range(3):
-        m = ok & (pt == k)[None, :]
-        xk = np.where(m, Xz, 0.0)
-        out[:, k, 0] = m.sum(1)
-        out[:, k, 1] = xk.sum(1)
-        out[:, k, 2] = (xk * xk).sum(1)
-        out[:, k, 3] = (m & (Xz > 0)).sum(1)
+        X = np.concatenate([P[:, il[pl == k], 0], P[:, is_[ps == k], 1]], axis=1)
+        ok = np.isfinite(X)
+        X64 = np.where(ok, X, 0).astype(np.float64)
+        out[:, k, 0] = ok.sum(1)
+        out[:, k, 1] = X64.sum(1)
+        out[:, k, 2] = np.einsum("ij,ij->i", X64, X64)
+        out[:, k, 3] = (X > 0).sum(1)                   # NaN > 0 is False
     return out
 
 
@@ -827,7 +834,7 @@ def cell_trades(data_dir: str, out: str, kind: str, name: str, tf: str, specs: l
         df, close = frame(data_dir, sym, tf)
         P_all = trade_table(data_dir, out, kind, name, sym, tf)
         pid_all = period_ids(close)
-        atr = outcome_table(out, sym, tf)["atr"]
+        atr = outcome_table(out, sym, tf, kind == "core")["atr"]
         bl, bs = best_flags(data_dir, name, sym, tf) if kind == "core" else (None, None)
         for i, (combo, e) in enumerate(specs):
             lo, sh = signals(data_dir, kind, name, sym, tf, combo)

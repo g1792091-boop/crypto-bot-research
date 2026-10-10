@@ -50,7 +50,7 @@ tried with all 84 exit variants of section 5: 85,307,292 (numbers, exit) pairs.
   entry reference price); the 10% lock plus a 2R take-profit; or the 10% lock plus a structure take-profit: the
   nearest confirmed swing high above (long) / swing low below (short) the signal bar's close among the swings of the
   last 300 bars, swings of 3 or 10 bars on each side (`kernel.structure_levels`, known k bars after the swing), used
-  only when it lies beyond the entry reference price. A take-profit is a limit: it fills only when price
+  only when it lies beyond the fill price (entry reference price plus slippage). A take-profit is a limit: it fills only when price
   trades through it, at it or a better gapped open, maker fee 0.02%; a minute touching both stop and take-profit is a
   stop. The live exit is k = 2 with the 10% lock (variant 0). Owners 2026-10-10: "어떤 매매법은 짧게 10%씩 먹고 나오면
   좋은 매매법도 있을꺼고 어떤 매매법은 길게 수익 먹으면 좋은 매매법도 있을꺼고 손절 방식도 마찬가지", "구조 익절로도
@@ -79,7 +79,7 @@ default's (ties: higher select mean, then grid order, then exit order). At most 
 6.2 **Test**: >= 100 test trades; mean > 0; mean > the default's test mean (live numbers, live exit; same cell, same
 period); one-sided
 week-block bootstrap p (all coins' trades of a UTC week together, 2,000 resamples, p = (1 + resamples with mean <= 0) /
-2,001, seed = sha256 of the cell, row and period) passing Benjamini-Hochberg at FDR 10% over ALL picks (core and DeepSeek
+2,001, seed = sha256 of the cell, row, exit and period) passing Benjamini-Hochberg at FDR 10% over ALL picks (core and DeepSeek
 one family; a pick with < 100 test trades stays in the family with p = 1 and cannot pass).
 
 6.3 **Extra**: >= 20 trades in 2020 and mean > 0.

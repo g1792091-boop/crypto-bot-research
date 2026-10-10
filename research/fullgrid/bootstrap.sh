@@ -20,21 +20,29 @@ mkdir -p "$BASE"
 say() { echo "[$(date -u '+%m-%d %H:%M UTC')] $*" | tee -a "$LOG"; }
 die() { say "멈춤: $*"; say "이 화면을 그대로 복사해 개발자에게 보내 주세요."; exit 1; }
 
+RESTART="tmux kill-session -t fg 2>/dev/null; tmux new -s fg \"bash $REPO/research/fullgrid/bootstrap.sh; bash\""
+
+running() {          # the run's own process (RUNNING holds its pid), or a step it left behind
+  local p; p=$(cat "$BASE/RUNNING" 2>/dev/null)
+  { [ -n "$p" ] && kill -0 "$p" 2>/dev/null && grep -qa bootstrap.sh "/proc/$p/cmdline" 2>/dev/null; } \
+    || pgrep -f "[f]ullgrid/(run|data)\.py|[t]ests/test_fullgrid" >/dev/null
+}
+
 status() {
   if [ -f "$BASE/DONE" ]; then
     echo "끝났습니다. 결과: $BASE/results.tgz  (보내기: bash $REPO/research/fullgrid/bootstrap.sh push)"; return
   fi
-  if ! pgrep -f "[f]ullgrid/(run|data)\.py|[t]ests/test_fullgrid|[p]ip install|[a]pt-get" >/dev/null; then
+  if ! running; then
     echo "지금 돌고 있지 않습니다. 마지막 기록:"; grep -E "멈춤|\] [0-9]/6" "$LOG" 2>/dev/null | tail -3
-    echo "이어서 하려면: tmux kill-session -t fg 2>/dev/null; tmux new -s fg \"bash $REPO/research/fullgrid/bootstrap.sh; bash\""
+    echo "이어서 하려면: $RESTART"
     return
   fi
   local step; step=$(grep -E "\] [0-9]/6 " "$LOG" 2>/dev/null | tail -1)
-  echo "진행 중: ${step:-설치 중}" | cut -c1-120
-  if echo "$step" | grep -q "4/6"; then
-    local last; last=$(grep -E '^\[grid [0-9]+/' "$LOG" 2>/dev/null | tail -1)
-    [ -n "$last" ] && echo "  $last" | cut -c1-160
-  fi
+  echo "진행 중: ${step:-설치 중}"
+  case "$step" in
+    *"4/6"*) local last; last=$(grep -E '^\[(outcomes|grid) [0-9]+/' "$LOG" 2>/dev/null | tail -1)
+             [ -n "$last" ] && echo "  ${last%%: *}" ;;
+  esac
 }
 
 push() {
@@ -59,6 +67,10 @@ case "${1:-run}" in
   *) echo "사용법: bash bootstrap.sh [run|status|push]"; exit 2 ;;
 esac
 
+for k in 1 2 3 4 5; do running || break; sleep 2; done      # a restart: let the old run finish dying
+running && { echo "이미 돌고 있습니다. 화면 보기: tmux attach -t fg"; exit 1; }
+echo $$ > "$BASE/RUNNING"
+
 say "1/6 설치 (파이썬 패키지)"
 export DEBIAN_FRONTEND=noninteractive
 if [ ! -f "$BASE/INSTALLED" ]; then
@@ -79,10 +91,13 @@ if [ ! -f "$BASE/INSTALLED" ]; then
   touch "$BASE/INSTALLED"
 fi
 cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
-[ -f research/fullgrid/exchange.json ] || die "research/fullgrid/exchange.json(레버리지 구간 표)이 저장소에 아직 없습니다."
-say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 $(df -BG --output=avail "$BASE" | tail -1 | tr -d ' ')"
+[ -f research/fullgrid/exchange.json ] || die "research/fullgrid/exchange.json(레버리지 구간 표)이 저장소에 아직 없습니다.
+  개발자가 넣었다고 하면: exit 로 이 창에서 나온 뒤 붙여 넣으세요:
+  cd $REPO && git pull && $RESTART"
 FREEG=$(df -BG --output=avail "$BASE" | tail -1 | tr -dc '0-9')
-[ "${FREEG:-0}" -ge 60 ] || [ -f "$BASE/DONE" ] || die "디스크 여유가 60GB보다 적습니다(${FREEG}GB). 더 큰 서버를 쓰세요."
+USEDG=$(du -s -BG "$DATA" "$OUT" 2>/dev/null | awk '{s += $1} END {print s + 0}')    # this study's own files so far
+say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 ${FREEG}GB (이미 받은 것 ${USEDG}GB)"
+[ $(( ${FREEG:-0} + USEDG )) -ge 60 ] || [ -f "$BASE/DONE" ] || die "디스크 여유가 60GB보다 적습니다(${FREEG}GB). 더 큰 서버를 쓰세요."
 
 say "2/6 자체 점검 (계산 엔진 = 규칙봇 엔진, 딥시크 기본값 = 지금 딥시크 신호)"
 HEAD=$(git rev-parse HEAD)
@@ -120,7 +135,7 @@ say "6/6 결과 묶기"
 cp "$DATA/build.json" "$OUT/results/data_build.json" 2>/dev/null
 grep -v -E "^\[grid [0-9]+/" "$LOG" > "$OUT/results/run.log" 2>/dev/null      # without the per-task progress lines
 tar czf "$BASE/results.tgz" -C "$OUT" results >>"$LOG" 2>&1 || die "결과 묶기 실패"
-touch "$BASE/DONE"
+touch "$BASE/DONE"; rm -f "$BASE/RUNNING"
 say "끝. 결과 $(du -h "$BASE/results.tgz" | cut -f1): $BASE/results.tgz"
 say "보내기: bash $REPO/research/fullgrid/bootstrap.sh push   (그다음 Vultr에서 서버 Destroy)"
 head -40 "$OUT/results/RESULTS_KO.md" 2>/dev/null

@@ -283,7 +283,7 @@ def pack(out: str, run) -> str:
 
 
 MONEY_KEYS = ("select_mean", "plateau", "default_select_mean", "default_plateau", "mean", "sum", "best_plateau",
-              "account", "default_numbers_best_exit")
+              "account", "default_numbers_best_exit", "win")
 
 
 def _strip_ds(doc):
