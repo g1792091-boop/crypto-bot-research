@@ -19,3 +19,11 @@
   on random data with gaps); DeepSeek tasks no longer load the unused "best" outcome table. Server script: a restart
   counts the study's own files toward the 60 GB disk floor, a second copy cannot start while one runs, and the
   progress line now covers the outcomes step too.
+- Phase 2 prepared before any result (research/fullgrid/regimes.py, not part of the pinned run): each pick and its
+  cell's default broken down by market state on the select period only (weekend/weekday in KST as
+  paperbot.breakdown; trend and volatility exactly as demobot.regime). The test period stays sealed for checking any
+  market-specific rule it suggests. Server script: the compute server may start before the leverage table is in;
+  it fetches only that file before the compute step (the code stays the self-checked commit).
+- A full rehearsal of bootstrap.sh in the sandbox (real data, the server's package versions, a stand-in GitHub,
+  three cells) found that the script ran ONE worker on any server: it exported OMP_NUM_THREADS=1 before asking
+  nproc for the CPU count, and GNU nproc obeys that variable. Fixed before any server run (the count is read first).
