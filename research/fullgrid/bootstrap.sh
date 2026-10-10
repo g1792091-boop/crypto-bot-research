@@ -80,7 +80,9 @@ if [ ! -f "$BASE/INSTALLED" ]; then
 fi
 cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
 [ -f research/fullgrid/exchange.json ] || die "research/fullgrid/exchange.json(레버리지 구간 표)이 저장소에 아직 없습니다."
-say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB"
+say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 $(df -BG --output=avail "$BASE" | tail -1 | tr -d ' ')"
+FREEG=$(df -BG --output=avail "$BASE" | tail -1 | tr -dc '0-9')
+[ "${FREEG:-0}" -ge 60 ] || [ -f "$BASE/DONE" ] || die "디스크 여유가 60GB보다 적습니다(${FREEG}GB). 더 큰 서버를 쓰세요."
 
 say "2/6 자체 점검 (계산 엔진 = 규칙봇 엔진, 딥시크 기본값 = 지금 딥시크 신호)"
 HEAD=$(git rev-parse HEAD)
