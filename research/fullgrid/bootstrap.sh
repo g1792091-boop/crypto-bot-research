@@ -54,8 +54,7 @@ push() {
   git config credential.helper store
   local br="fullgrid-results-$(date -u +%Y%m%d-%H%M)"
   git checkout -q -b "$br"
-  mkdir -p research/fullgrid/results
-  tar xzf "$BASE/results.tgz" -C research/fullgrid/results
+  tar xzf "$BASE/results.tgz" -C research/fullgrid                 # -> research/fullgrid/results/
   git add -f research/fullgrid/results
   git commit -q -m "Full-grid study results ($(hostname), $(date -u +%F))"
   echo "GitHub 아이디와, 비밀번호 자리에 쓰기 토큰(Contents: Read and write)을 넣으세요."

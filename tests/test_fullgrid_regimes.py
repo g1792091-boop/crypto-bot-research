@@ -25,16 +25,21 @@ def test_weekend_is_kst():
     assert RG.weekend(t).tolist() == [False, True, True, False]
 
 
-def test_tag_uses_the_15m_bar_the_entry_falls_in():
-    M15 = RG.M15
+def test_tag_reads_the_signal_bar_the_15m_bar_and_yesterday():
+    M15, DAY, Y = RG.M15, RG.DAY, RG.Y
     t0 = _ms("2026-10-05T00:00:00")                          # a Monday
     ts = t0 + M15 * np.arange(8)
-    trend = np.array([9, 1, 0, -1, 1, 0, -1, 9], np.int8)
     vol = np.array([9, 2, 1, 0, 2, 1, 0, 9], np.int8)
-    states = [(ts, trend, vol), (ts + 5 * M15, trend, vol)]    # coin 1 starts later
-    T = {"close": np.array([t0 + M15, t0 + 3 * M15, t0 + 7 * M15, t0 + M15, t0 + 6 * M15]),
+    close = t0 + M15 * np.arange(1, 9)                        # a 15m chart: bar k closes at t0 + (k + 1) x 15 min
+    code = np.array([Y.UNKNOWN, Y.TREND, Y.RANGE, Y.SHOCK, Y.NORMAL, Y.TREND, Y.RANGE, Y.SHOCK], np.int8)
+    day = np.array([t0 // DAY - 2, t0 // DAY - 1])           # Saturday above its EMA200, Sunday below
+    st0 = {"close": close, "code": code, "ts15": ts, "vol": vol, "day": day, "above": np.array([1.0, 0.0])}
+    st1 = {"close": close + 5 * M15, "code": code, "ts15": ts + 5 * M15, "vol": vol, "day": day[:1],
+           "above": np.array([1.0])}                         # coin 1 starts later and misses Sunday
+    T = {"close": np.array([t0 + M15, t0 + 3 * M15, t0 + 8 * M15, t0 + M15, t0 + 6 * M15]),
          "coin": np.array([0, 0, 0, 1, 1])}
-    lab = RG.tag(T, states)
-    assert lab["추세"].tolist() == ["상승", "하락", None, None, "상승"]
+    lab = RG.tag(T, [st0, st1])
+    assert lab["장세"].tolist() == [None, "횡보장", "급변장", None, None]
     assert lab["변동성"].tolist() == ["큼", "작음", None, None, "큼"]
+    assert lab["큰 흐름"].tolist() == ["아래", "아래", "아래", None, None]
     assert lab["요일"].tolist() == ["평일"] * 5

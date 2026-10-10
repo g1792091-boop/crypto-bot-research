@@ -27,3 +27,8 @@
 - A full rehearsal of bootstrap.sh in the sandbox (real data, the server's package versions, a stand-in GitHub,
   three cells) found that the script ran ONE worker on any server: it exported OMP_NUM_THREADS=1 before asking
   nproc for the CPU count, and GNU nproc obeys that variable. Fixed before any server run (the count is read first).
+- Testing regimes.py on the rehearsal's output (fake leverage table, three cells): the first lines of its report
+  showed the select-period mean of one rehearsal pick (N01_ST_EMA 4h #1) and of its cell's default. Select period
+  only (where the picks are chosen anyway); no test or 2020 figure was seen, and nothing in the pinned run changed.
+  The rehearsal also showed that no trade happens in the 급변장 regime: the entry check refuses a 2 ATR stop that lies
+  beyond the liquidation price (e.g. S2_ST_ROC 4h BTC: 67 long signals in 급변장, 0 trades).
