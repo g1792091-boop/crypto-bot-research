@@ -120,6 +120,7 @@ export const JOBS = [
   {unit: "paperbot-evening", ko: "저녁 회의", what: "22:00 저녁 점검 회의", cal: {daily: [13, 0]}},
   {unit: "paperbot-rehearsal", ko: "판정 미리 연습", what: "매주 수요일, 진짜 판정에는 영향 없음", cal: {weekly: [3, 3, 30]}},
   {unit: "paperbot-labmonthly", ko: "매달 재검사", what: "매달 6일 새벽", cal: {monthly: [5, 18, 30]}},
+  {unit: "paperbot-paramshadow", ko: "커스텀값 그림자", what: "기존 36 숫자 하나만 바꾼 그림자 계좌 다시 계산 (주문 없음)", cal: {daily: [1, 0]}},
 ];
 
 /** The next time a timer calendar fires after `now` (ms, UTC calendars). */
