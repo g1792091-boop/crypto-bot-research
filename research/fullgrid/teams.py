@@ -28,6 +28,9 @@ import regimes as RG  # noqa: E402
 import run as R  # noqa: E402
 
 STATES = ("추세장", "횡보장", "급변장", "보통")
+DIMS = {"장세": STATES, "큰 흐름": ("위", "아래"), "변동성": ("작음", "보통", "큼")}
+ACTIVE_DIMS = ("장세",)                  # PHASE2_PREREG 7; another dimension only by a pre-result amendment
+SHOW = {"위": "상승장(일봉 EMA200 위)", "아래": "하락장(아래)", "작음": "조용한 장", "큼": "출렁이는 장"}
 MIN_HOME, MIN_PERSIST, MIN_TEAM = 30, 20, 30
 N_BOOT = 2000
 DS_MONEY = os.environ.get("FULLGRID_DS_MONEY") == "1"
@@ -38,13 +41,13 @@ def flip_side(cid: str, close_ms: int) -> int:
     return fs(f"flip|{cid}", int(close_ms))
 
 
-def home_states(x: np.ndarray, state: np.ndarray) -> list | None:
+def home_states(x: np.ndarray, state: np.ndarray, states: tuple = STATES) -> list | None:
     """States (select period) with >= MIN_HOME trades whose mean is > 0 and > the overall mean; None when that is no
     state or every state with enough trades (no role)."""
     if not len(x):
         return None
     overall = float(x.mean())
-    eligible = [s for s in STATES if int((state == s).sum()) >= MIN_HOME]
+    eligible = [s for s in states if int((state == s).sum()) >= MIN_HOME]
     home = [s for s in eligible if x[state == s].mean() > 0 and x[state == s].mean() > overall]
     if not home or set(home) == set(eligible):
         return None
@@ -101,8 +104,8 @@ def member(data_dir: str, out: str, r: dict, states_of: dict) -> dict:
     T = R.combo_trades(data_dir, out, kind, name, tf, R._combo(r), e)
     if tf not in states_of:
         states_of[tf] = [RG.coin_states(data_dir, s, tf) for s in R.SYMBOLS]
-    lab = RG.tag(T, states_of[tf])["장세"]
-    state = np.array([s if s is not None else "모름" for s in lab], object)
+    labels = RG.tag(T, states_of[tf])
+    state = {d: np.array([s if s is not None else "모름" for s in labels[d]], object) for d in DIMS}
     xf = np.full(len(T["x"]), np.nan)
     for ci, sym in enumerate(R.SYMBOLS):
         m = np.flatnonzero(T["coin"] == ci)
@@ -162,6 +165,7 @@ def main(argv=None) -> int:
     ap.add_argument("--work", required=True)
     ap.add_argument("--exchange", required=True)
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    ap.add_argument("--dims", help="comma separated (default: the pre-registered ones)")
     a = ap.parse_args(argv)
     bad = CK.data_mismatch(a.results, a.data)
     if bad:
@@ -171,41 +175,46 @@ def main(argv=None) -> int:
         R.stage_outcomes(a.data, a.work, a.procs, R.exchange(a.exchange, False))
     with open(os.path.join(a.results, "confirm.json")) as fh:
         cands = [r for r in json.load(fh)["rows"] if r.get("pass")]
-    doc = {"rules": "PHASE2_PREREG.md 7", "members": [], "teams": [], "ds_money": DS_MONEY}
+    dims = tuple(d for d in (a.dims.split(",") if a.dims else ACTIVE_DIMS))
+    doc = {"rules": "PHASE2_PREREG.md 7", "dims": list(dims), "members": [], "teams": [], "ds_money": DS_MONEY}
     states_of: dict = {}
+    members = [member(a.data, a.work, r, states_of) for r in cands]
     roles = []
-    for r in cands:
-        mb = member(a.data, a.work, r, states_of)
-        T, st = mb["T"], mb["state"]
-        s = T["pid"] == R.P_SELECT
-        home = home_states(T["x"][s], st[s])
-        by_state = {k: {"n": int((st[s] == k).sum()),
-                        "mean": float(T["x"][s][st[s] == k].mean()) if (st[s] == k).any() else None} for k in STATES}
-        row = {"id": mb["id"], "kind": r["kind"], "name": r["name"], "tf": r["tf"], "rank": r.get("rank"),
-               "exit": r.get("exit"), "select_by_state": by_state, "home": home}
-        if home:
-            mb["home"] = home
-            row["persist"] = persistence(mb, home, f"persist|{mb['id']}")
-            roles.append((mb, row))
-        doc["members"].append(row)
-        print(f"[teams] {mb['id']}: home {home}", flush=True)
-    sig = R.bh([row["persist"]["p"] if row["persist"]["p"] is not None else 1.0 for _mb, row in roles])
-    for (_mb, row), s in zip(roles, sig):
+    for dim in dims:
+        for mb in members:
+            T, st = mb["T"], mb["state"][dim]
+            s = T["pid"] == R.P_SELECT
+            home = home_states(T["x"][s], st[s], DIMS[dim])
+            by_state = {k: {"n": int((st[s] == k).sum()),
+                            "mean": float(T["x"][s][st[s] == k].mean()) if (st[s] == k).any() else None} for k in DIMS[dim]}
+            row = {"id": mb["id"], "dim": dim, "kind": mb["row"]["kind"], "name": mb["row"]["name"], "tf": mb["row"]["tf"],
+                   "rank": mb["row"].get("rank"), "exit": mb["row"].get("exit"), "select_by_state": by_state, "home": home}
+            if home:
+                view = {"id": mb["id"], "T": T, "state": st, "xf": mb["xf"], "home": home}
+                row["persist"] = persistence(view, home, f"persist|{dim}|{mb['id']}")
+                roles.append((dim, view, row))
+            doc["members"].append(row)
+            print(f"[teams] {dim} {mb['id']}: home {home}", flush=True)
+    sig = R.bh([row["persist"]["p"] if row["persist"]["p"] is not None else 1.0 for _d, _v, row in roles])
+    for (_d, _v, row), s in zip(roles, sig):
         p = row["persist"]
         p["holds"] = bool(s and p["d"] is not None and p["d_flip"] is not None and p["d"] - p["d_flip"] > 0
                           and p["n_in"] >= MIN_PERSIST and p["n_out"] >= MIN_PERSIST)
-    for i in range(len(roles)):
-        for j in range(i + 1, len(roles)):
-            ma, mb2 = roles[i][0], roles[j][0]
-            if set(ma["home"]) & set(mb2["home"]):
-                continue
-            t = team_test(ma, mb2, f"team|{ma['id']}|{mb2['id']}")
-            doc["teams"].append({"a": ma["id"], "b": mb2["id"], "a_home": ma["home"], "b_home": mb2["home"], **t})
+    for dim in dims:
+        rd = [v for d, v, _row in roles if d == dim]
+        for i in range(len(rd)):
+            for j in range(i + 1, len(rd)):
+                va, vb = rd[i], rd[j]
+                if set(va["home"]) & set(vb["home"]):
+                    continue
+                t = team_test(va, vb, f"team|{dim}|{va['id']}|{vb['id']}")
+                doc["teams"].append({"dim": dim, "a": va["id"], "b": vb["id"], "a_home": va["home"], "b_home": vb["home"],
+                                     **t})
     tsig = R.bh([t["p"] if t["p"] is not None else 1.0 for t in doc["teams"]])
     for t, s in zip(doc["teams"], tsig):
         t["fdr"] = bool(s)
         t["pass"] = bool(s and t["weekly_mean"] > 0 and all(t["beats"].values()))
-    doc["no_teams"] = len(roles) < 2
+    doc["no_teams"] = {dim: sum(d == dim for d, _v, _r in roles) < 2 for dim in dims}
     with open(os.path.join(a.work, "teams.json"), "w") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=1)
     with open(os.path.join(a.work, "teams_KO.md"), "w") as fh:
@@ -224,28 +233,38 @@ def report_ko(doc: dict) -> str:
          "그리고 잘하는 장에서만 거래하는 두 후보의 팀이 각자 따로, 둘 다 늘 켠 것, 같은 스위치를 단 동전 던지기보다 나은지",
          "봅니다. 장세는 신호 봉까지의 자료로만 정합니다. 통과한 팀은 후보 리그에 새 종이 계좌로 넣자고 제안만 합니다.", ""]
     money = DS_MONEY
-    L += ["## 후보마다 잘하는 장", "", "| 후보 | 잘하는 장 | 강점이 이어짐 |", "|---|---|---|"]
-    for m in doc["members"]:
-        p = m.get("persist")
-        hold = "-" if p is None else ("예" if p.get("holds") else "아니오")
-        L.append(f"| {m['id']} | {', '.join(m['home']) if m['home'] else '정해진 장 없음'} | {hold} |")
-    L.append("")
-    if doc.get("no_teams"):
-        L.append("잘하는 장이 정해진 후보가 2개 미만이라 팀을 만들 수 없습니다.")
-        return "\n".join(L) + "\n"
-    if not doc["teams"]:
-        L.append("잘하는 장이 서로 겹치지 않는 짝이 없어 팀을 만들 수 없습니다.")
-        return "\n".join(L) + "\n"
-    L += ["## 팀 시험 (시험 기간)", "", "| A (장) | B (장) | 거래 | 팀 합계 | A만 | B만 | 둘 다 늘 | 동전 팀 | 판정 |",
-          "|---|---|---|---|---|---|---|---|---|"]
-    for t in doc["teams"]:
-        ds = t["a"].startswith("ds-") or t["b"].startswith("ds-")
-        show = money or not ds
-        f = (lambda v: _p(v)) if show else (lambda v: "숨김")
-        L.append(f"| {t['a']} ({'/'.join(t['a_home'])}) | {t['b']} ({'/'.join(t['b_home'])}) | {t['n']} | "
-                 f"{f(t['total'])} | {f(t['a_total'])} | {f(t['b_total'])} | {f(t['pair_total'])} | {f(t['flip_total'])} | "
-                 f"{'통과' if t['pass'] else '못 넘음'} |")
-    L += ["", "합계 = 시험 기간 매매 손익 ÷ 잔고의 합(모든 신호). 통과 = 우연 보정(BH 10%)을 넘고 넷 모두보다 크며 30건 이상."]
+
+    def nm(v):
+        return SHOW.get(v, v)
+    for dim in doc.get("dims", ["장세"]):
+        L += [f"## 기준: {dim}", "", "| 후보 | 잘하는 장 | 강점이 이어짐 |", "|---|---|---|"]
+        for m in doc["members"]:
+            if m.get("dim", "장세") != dim:
+                continue
+            p = m.get("persist")
+            hold = "-" if p is None else ("예" if p.get("holds") else "아니오")
+            L.append(f"| {m['id']} | {', '.join(nm(h) for h in m['home']) if m['home'] else '정해진 장 없음'} | {hold} |")
+        L.append("")
+        teams = [t for t in doc["teams"] if t.get("dim", "장세") == dim]
+        nt = doc.get("no_teams")
+        if (nt.get(dim) if isinstance(nt, dict) else nt):
+            L += ["잘하는 장이 정해진 후보가 2개 미만이라 팀을 만들 수 없습니다.", ""]
+            continue
+        if not teams:
+            L += ["잘하는 장이 서로 겹치지 않는 짝이 없어 팀을 만들 수 없습니다.", ""]
+            continue
+        L += ["| A (장) | B (장) | 거래 | 팀 합계 | A만 | B만 | 둘 다 늘 | 동전 팀 | 판정 |",
+              "|---|---|---|---|---|---|---|---|---|"]
+        for t in teams:
+            ds = t["a"].startswith("ds-") or t["b"].startswith("ds-")
+            show = money or not ds
+            f = (lambda v: _p(v)) if show else (lambda v: "숨김")
+            L.append(f"| {t['a']} ({'/'.join(nm(h) for h in t['a_home'])}) | {t['b']} ({'/'.join(nm(h) for h in t['b_home'])}) | "
+                     f"{t['n']} | {f(t['total'])} | {f(t['a_total'])} | {f(t['b_total'])} | {f(t['pair_total'])} | "
+                     f"{f(t['flip_total'])} | {'통과' if t['pass'] else '못 넘음'} |")
+        L.append("")
+    L += ["합계 = 시험 기간 매매 손익 ÷ 잔고의 합(모든 신호). 통과 = 우연 보정(BH 10%, 모든 기준의 팀을 한꺼번에)을 넘고",
+          "A만, B만, 둘 다 늘, 동전 팀 넷 모두보다 크며 30건 이상."]
     return "\n".join(L) + "\n"
 
 
