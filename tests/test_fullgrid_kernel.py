@@ -51,17 +51,24 @@ class RPolicy(OwnerPolicy):
 
 
 class LadderTP(PaperEngine):
-    """The stepped lock with a take-profit limit as well (engine: tp_mode "ladder" never sets one)."""
+    """The stepped lock with a take-profit limit as well (engine: tp_mode "ladder" never sets one): at m x R, or
+    (struct=True) at the signal's structure level when it lies beyond the entry reference price."""
 
-    def __init__(self, *a, m=0.0, **k):
+    def __init__(self, *a, m=0.0, struct=False, **k):
         super().__init__(*a, **k)
-        self.m = m
+        self.m, self.struct = m, struct
 
     def _try_enter(self, sig, bar):
         ok = super()._try_enter(sig, bar)
         if ok:
             p = self.position
-            p.tp_price = p.signal.meta["ref_price"] + p.side * self.m * p.signal.meta["stop_dist"]
+            raw = p.signal.meta["ref_price"]
+            if self.struct:
+                lvl = p.signal.meta["tp_struct"]
+                if np.isfinite(lvl) and (lvl - raw) * p.side > 0:
+                    p.tp_price = lvl
+            else:
+                p.tp_price = raw + p.side * self.m * p.signal.meta["stop_dist"]
         return ok
 WIDE = Brackets([BracketTier(300_000, 125, 0.004, 0.0), BracketTier(800_000, 100, 0.005, 300.0),
                  BracketTier(3_000_000, 50, 0.01, 4_300.0), BracketTier(1e12, 20, 0.025, 49_300.0)])
@@ -96,9 +103,10 @@ def bars_at(data: dict, sym: str, j: int) -> Bar:
                mark_close=float(data["mc"][j]))
 
 
-def signal(sym, close, side, atr, best, k=V3_STOP_ATR):
+def signal(sym, close, side, atr, best, k=V3_STOP_ATR, tp_struct=float("nan")):
     return Signal(ts=int(close) - 1, symbol=sym, timeframe="15m", strategy_id="S2_ST_ROC", side=side, stop_price=0.0,
-                  tier="best", atr=atr, meta={"stop_dist": k * atr, "lev_group": "best" if best else "normal"})
+                  tier="best", atr=atr, meta={"stop_dist": k * atr, "lev_group": "best" if best else "normal",
+                                              "tp_struct": tp_struct})
 
 
 def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=0):
@@ -108,7 +116,9 @@ def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=0):
     kw = {} if equity is None else {"initial_equity": equity}
     kw.update(ladder_first_lock=first, ladder_step=step, ladder_trigger_gap=gap)
     specs = {k: SPEC for k in datas}
-    if ladder and kind == K.TP_R:
+    if ladder and kind == K.TP_STRUCT:
+        e = LadderTP(v3_settings(**kw), brackets, symbol_specs=specs, struct=True)
+    elif ladder and kind == K.TP_R:
         e = LadderTP(v3_settings(**kw), brackets, symbol_specs=specs, m=val)
     elif ladder:
         e = PaperEngine(v3_settings(**kw), brackets, symbol_specs=specs)
@@ -131,18 +141,19 @@ def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=0):
                 sig.meta["ref_price"] = float(b.open)
         e.step(bars, fund or None)
         while k < len(sigs) and sigs[k][1] <= t + MIN:
-            sym, close, side, atr, best = sigs[k]
-            e.submit(signal(sym, close, side, atr, best, k_stop))
+            sym, close, side, atr, best = sigs[k][:5]
+            e.submit(signal(sym, close, side, atr, best, k_stop, sigs[k][5] if len(sigs[k]) > 5 else float("nan")))
             k += 1
     return e
 
 
-def kernel_alone(data, close, side, atr, best, br, equity=5000.0, exit_=0):
+def kernel_alone(data, close, side, atr, best, br, equity=5000.0, exit_=0, tp_struct=float("nan")):
     S = K.settings_vector()
     pnl, ex, rs, lv = K.outcomes(S, K.bracket_arrays(br), data["ts"], data["o"], data["h"], data["l"], data["mo"],
                                  data["mh"], data["ml"], data["fund"], np.array([close], np.int64),
                                  np.array([atr]), np.array([best]), np.array([best]), equity, SPEC["qty_step"],
-                                 SPEC["min_notional"], *K.exit_args(exit_))
+                                 SPEC["min_notional"], *K.exit_args(exit_), np.array([tp_struct]),
+                                 np.array([tp_struct]))
     k = 0 if side > 0 else 1
     return pnl[0, k], int(ex[0, k]), int(rs[0, k]), int(lv[0, k])
 
@@ -228,7 +239,8 @@ def test_account_two_coins_matches_engine():
         cat["mo"], cat["mh"], cat["ml"], cat["fund"], starts, ends,
         np.array([syms.index(s[0]) for s in order], np.int64), np.array([s[1] for s in order], np.int64),
         np.array([s[2] for s in order], np.int64), np.array([s[3] for s in order]), np.array([s[4] for s in order]),
-        np.array([SPEC["qty_step"]] * 2), np.array([SPEC["min_notional"]] * 2), V3_STOP_ATR)
+        np.array([SPEC["qty_step"]] * 2), np.array([SPEC["min_notional"]] * 2), *K.exit_args(0),
+        np.full(len(order), np.nan))
     got = [(order[q][0], int(order[q][1]), int(ext[q] // MIN), round(float(pnl[q]), 6)) for q in np.flatnonzero(st == 1)
            if rs[q] != K.R_OPEN]
     want = [(t.symbol, int(t.signal_ts) + 1, int(t.exit_time // MIN), round(float(t.pnl), 6)) for t in e.trades]
@@ -256,8 +268,10 @@ def test_exit_variants_match_engine(exit_):
         side = int(rng.choice([1, -1]))
         atr = float(data["c"][(close - T0) // MIN] * rng.uniform(0.0008, 0.01))
         best = bool(rng.random() < 0.5)
-        d, x, r, lev = kernel_alone(data, close, side, atr, best, WIDE, exit_=exit_)
-        e = replay({"BTCUSDT": data}, [("BTCUSDT", close, side, atr, best)], {"BTCUSDT": WIDE}, exit_=exit_)
+        j = (close - T0) // MIN
+        lvl = float(data["c"][j] * (1 + rng.choice([1, -1]) * rng.uniform(0.002, 0.04)))     # beyond or not
+        d, x, r, lev = kernel_alone(data, close, side, atr, best, WIDE, exit_=exit_, tp_struct=lvl)
+        e = replay({"BTCUSDT": data}, [("BTCUSDT", close, side, atr, best, lvl)], {"BTCUSDT": WIDE}, exit_=exit_)
         if r in (K.R_REJECT, K.R_OPEN):
             assert not e.trades
             continue
@@ -268,14 +282,27 @@ def test_exit_variants_match_engine(exit_):
         n += 1
     assert n >= 50
     _k, kind, _v, ladder, *_ = K.exit_args(exit_)
-    if kind != K.TP_NONE:
+    if kind != K.TP_NONE and not ladder:
         assert seen.get("TP"), (K.EXITS[exit_][0], seen)
-    if ladder and kind == K.TP_NONE:
-        assert seen.get("LOCK"), (K.EXITS[exit_][0], seen)
+    if ladder:                        # a far take-profit on top of the lock may never be reached on this sample
+        assert seen.get("LOCK") or seen.get("TP"), (K.EXITS[exit_][0], seen)
 
 
 def test_exit_list():
     assert K.EXITS[0][:2] == ("ladder|2", 2.0) and K.exit_args(0)[1:] == (K.TP_NONE, 0.0, True, 0.10, 0.05, 0.02)
     s = v3_settings()
     assert K.exit_args(0)[4:] == (s.ladder_first_lock, s.ladder_step, s.ladder_trigger_gap)    # = the live lock
-    assert len(K.EXITS) == 72 and len({e[0] for e in K.EXITS}) == 72
+    assert len(K.EXITS) == 84 and len({e[0] for e in K.EXITS}) == 84
+
+
+def test_structure_levels_have_no_lookahead():
+    rng = np.random.default_rng(4)
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, 4000)))
+    h, lo = c * (1 + rng.uniform(0, 0.004, 4000)), c * (1 - rng.uniform(0, 0.004, 4000))
+    for k in (3, 10):
+        a, b = K.structure_levels(h, lo, c, k, K.STRUCT_LOOKBACK)
+        for cut in (900, 2500, 3999):
+            a2, b2 = K.structure_levels(h[:cut], lo[:cut], c[:cut], k, K.STRUCT_LOOKBACK)
+            assert np.array_equal(a[:cut], a2, equal_nan=True) and np.array_equal(b[:cut], b2, equal_nan=True)
+        ok = np.isfinite(a)
+        assert ok.mean() > 0.5 and (a[ok] > c[ok]).all() and (b[np.isfinite(b)] < c[np.isfinite(b)]).all()

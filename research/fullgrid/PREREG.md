@@ -34,7 +34,7 @@ factors, values outside the declared bounds dropped; thresholds with a neutral p
 f in (0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2), clipped, never at the neutral point. Every combination (product),
 minus combinations that break a rule's own order (`grid.valid`). Core: 779,328 combinations over the 4 timeframes
 (`RANGES_KO.md`); DeepSeek: 236,235. Total 1,015,563 (the default of every cell included). Each combination is
-tried with all 72 exit variants of section 5: 73,120,536 (numbers, exit) pairs.
+tried with all 84 exit variants of section 5: 85,307,292 (numbers, exit) pairs.
 
 ## 5. Trades (`kernel.py`, `run.py`)
 - Rules = `paperbot.engine.PaperEngine` with `config.v3_settings()` (the live v4 rules), on 1m bars, exactly as
@@ -42,15 +42,19 @@ tried with all 72 exit variants of section 5: 73,120,536 (numbers, exit) pairs.
   exit variant): fill at the open of the minute after the signal bar's close (+0.02% slippage), taker 0.05% both ways,
   funding, isolated-margin liquidation on mark price, quality_v1 sizing (best: 50x/50%, 40x/40%, then 30x/30%, 20x/20%;
   normal: 30x/30%, 20x/20%; stop inside liquidation by max(0.2%, 1 ATR); stop loss <= 15% of the wallet).
-- Exit variants (`kernel.EXITS`, 72 = 6 stops x 12 take-profit rules `kernel.TP_RULES`): stop k x ATR14 of the signal
+- Exit variants (`kernel.EXITS`, 84 = 6 stops x 14 take-profit rules `kernel.TP_RULES`): stop k x ATR14 of the signal
   bar from the entry reference price, k in (1, 1.5, 2, 2.5, 3, 4) (sizing uses that stop); take-profit rule:
   the stepped lock starting at 10% net ROE (12% -> 10%, +5% steps; the live rule), at 5% (7% -> 5%) or at 20%
   (22% -> 20%); a fixed take-profit at net ROE 10%, 20%, 30% or 50% (the engine's own tp_mode "fixed",
   policy.tp_from_roe on the fill and the leverage); a fixed take-profit at 1R, 1.5R, 2R or 3R (R = k x ATR14 from the
-  entry reference price); or the 10% lock plus a 2R take-profit. A take-profit is a limit: it fills only when price
+  entry reference price); the 10% lock plus a 2R take-profit; or the 10% lock plus a structure take-profit: the
+  nearest confirmed swing high above (long) / swing low below (short) the signal bar's close among the swings of the
+  last 300 bars, swings of 3 or 10 bars on each side (`kernel.structure_levels`, known k bars after the swing), used
+  only when it lies beyond the entry reference price. A take-profit is a limit: it fills only when price
   trades through it, at it or a better gapped open, maker fee 0.02%; a minute touching both stop and take-profit is a
   stop. The live exit is k = 2 with the 10% lock (variant 0). Owners 2026-10-10: "어떤 매매법은 짧게 10%씩 먹고 나오면
-  좋은 매매법도 있을꺼고 어떤 매매법은 길게 수익 먹으면 좋은 매매법도 있을꺼고 손절 방식도 마찬가지".
+  좋은 매매법도 있을꺼고 어떤 매매법은 길게 수익 먹으면 좋은 매매법도 있을꺼고 손절 방식도 마찬가지", "구조 익절로도
+  해보고".
 - Leverage group: core strategies "best" when the signal bar's strength (`research/entry_study/strength_defs`, default
   numbers) scores >= 4 against `paperbot/quality_edges.json` (levrule.quality_group, as live); DeepSeek always "normal"
   (as live, config "ds200").
@@ -94,7 +98,8 @@ results after the choice (>= 28 days and >= 20 trades) count. The 10/19 $100 tri
 live rule bot's numbers needs the owners' decision after the 30-day verdict, as a new account.
 
 ## 8. Not in this study
-Per-coin choices, leverage rule variants, exits other than the 72 of section 5. The DeepSeek money figures follow the
+Per-coin choices, leverage rule variants, exits other than the 84 of section 5, and market-regime-specific numbers
+(weekend / weekday, trend / range): a later study on this one's candidates. The DeepSeek money figures follow the
 owners' D11 (counts only) in the report until they decide otherwise (`report.DS_MONEY`).
 
 ## 9. Reproducibility

@@ -19,7 +19,8 @@ Semantics (as paperbot/paramshadow.py replays the live account):
   liquidation but gets no gap check and no lock step (ref_price fill).
 - Exit variants (``EXITS``): the stop distance k x ATR14 (sizing uses that stop) x a take-profit rule (``TP_RULES``):
   the stepped lock from 5%, 10% (live) or 20%; a fixed take-profit at net ROE 10/20/30/50% (the engine's own fixed mode)
-  or at 1/1.5/2/3 R from the entry reference (R = the stop distance); the lock with a 2R take-profit.
+  or at 1/1.5/2/3 R from the entry reference (R = the stop distance); the lock with a 2R take-profit; the lock with a
+  take-profit at the nearest swing level (structure, 3- or 10-bar swings).
 - One trade alone (``outcomes``): the wallet before the trade is ``equity``; the result is the wallet change.
   The account (``account``): one position at a time over the coins, signals that arrive while a position is open are
   skipped, ties at one minute go to the coin priority order, bust below $10 stops the account.
@@ -54,7 +55,7 @@ REASON_NAMES = {R_SL: "SL", R_LOCK: "LOCK", R_LIQ: "LIQ", R_OPEN: "OPEN", R_REJE
 # Take-profit rules (PREREG 5): name -> (take-profit kind, value, stepped lock on/off, first lock, lock step, trigger gap).
 # Kind TP_NONE; TP_R: a limit at the entry reference + value x R (R = the stop distance); TP_ROE: a limit at net ROE
 # `value` (the engine's own tp_mode "fixed", policy.tp_from_roe). "ladder" is the live rule (lock 10% at 12%, +5%).
-TP_NONE, TP_R, TP_ROE = 0, 1, 2
+TP_NONE, TP_R, TP_ROE, TP_STRUCT = 0, 1, 2, 3
 TP_RULES = (("ladder", TP_NONE, 0.0, True, 0.10, 0.05, 0.02),
             ("ladder5", TP_NONE, 0.0, True, 0.05, 0.05, 0.02),
             ("ladder20", TP_NONE, 0.0, True, 0.20, 0.05, 0.02),
@@ -66,7 +67,13 @@ TP_RULES = (("ladder", TP_NONE, 0.0, True, 0.10, 0.05, 0.02),
             ("tp1.5R", TP_R, 1.5, False, 0.10, 0.05, 0.02),
             ("tp2R", TP_R, 2.0, False, 0.10, 0.05, 0.02),
             ("tp3R", TP_R, 3.0, False, 0.10, 0.05, 0.02),
-            ("ladder_tp2R", TP_R, 2.0, True, 0.10, 0.05, 0.02))
+            ("ladder_tp2R", TP_R, 2.0, True, 0.10, 0.05, 0.02),
+            # structure: the nearest confirmed swing high above (long) / swing low below (short) the signal bar's close,
+            # swings of 3 or 10 bars each side on the signal timeframe (``structure_levels``), with the 10% lock;
+            # no such level beyond the entry reference price = the lock alone
+            ("swing3", TP_STRUCT, 3.0, True, 0.10, 0.05, 0.02),
+            ("swing10", TP_STRUCT, 10.0, True, 0.10, 0.05, 0.02))
+STRUCT_LOOKBACK = 300          # bars: swings older than this are not used
 STOPS = (2.0, 1.0, 1.5, 2.5, 3.0, 4.0)        # x ATR14; 2.0 (the live stop) first so that EXITS[0] is the live rule
 # Exit variants: (name, stop x ATR14, take-profit kind, value, lock on/off, first lock, lock step, trigger gap).
 EXITS = tuple((f"{r[0]}|{k:g}", k) + r[1:] for k in STOPS for r in TP_RULES)
@@ -75,6 +82,44 @@ EXITS = tuple((f"{r[0]}|{k:g}", k) + r[1:] for k in STOPS for r in TP_RULES)
 def exit_args(e: int) -> tuple:
     """kernel arguments of exit variant e: (stop x ATR, tp kind, tp value, ladder, first lock, lock step, gap)."""
     return EXITS[e][1:]
+
+
+@njit
+def structure_levels(h, l, c, k, lookback):
+    """(tp_long, tp_short) per chart bar: the lowest confirmed swing high above the bar's close and the highest
+    confirmed swing low below it, among swings of the last ``lookback`` bars (NaN when none). A swing high at bar p has
+    a high strictly above the k bars on each side and is known at bar p + k (no look-ahead)."""
+    n = len(c)
+    tl = np.full(n, np.nan)
+    ts = np.full(n, np.nan)
+    ph = np.zeros(n, np.bool_)
+    pl = np.zeros(n, np.bool_)
+    for p in range(k, n - k):
+        hi = True
+        lo = True
+        for j in range(p - k, p + k + 1):
+            if j == p:
+                continue
+            if not h[p] > h[j]:
+                hi = False
+            if not l[p] < l[j]:
+                lo = False
+        ph[p] = hi
+        pl[p] = lo
+    for i in range(n):
+        best_h = np.inf
+        best_l = -np.inf
+        last = i - k                                   # swings at p <= i - k are confirmed at bar i
+        for p in range(max(0, i - lookback), last + 1):
+            if ph[p] and h[p] > c[i] and h[p] < best_h:
+                best_h = h[p]
+            if pl[p] and l[p] < c[i] and l[p] > best_l:
+                best_l = l[p]
+        if best_h < np.inf:
+            tl[i] = best_h
+        if best_l > -np.inf:
+            ts[i] = best_l
+    return tl, ts
 
 
 def settings_vector(settings=None) -> np.ndarray:
@@ -153,11 +198,12 @@ def _size(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional):
 
 @njit
 def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
-           tp_kind, tp_val, ladder, first_lock, step, gap):
+           tp_kind, tp_val, ladder, first_lock, step, gap, tp_price):
     """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive). Take-profit (engine
     tp_mode "fixed": fills only when price trades through it, at it or a better gapped open, maker fee; the stop wins a
     bar that touches both): TP_R at the entry reference + tp_val x stop distance, TP_ROE at net ROE tp_val
-    (policy.tp_from_roe on the fill and the leverage). ``ladder``: the stepped lock (first_lock, step, gap).
+    (policy.tp_from_roe on the fill and the leverage), TP_STRUCT at ``tp_price`` when it lies beyond the entry
+    reference price (else none). ``ladder``: the stepped lock (first_lock, step, gap).
     Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
     taker, slip, rt, maker = S[0], S[1], S[5], S[19]
     raw = o[e]
@@ -169,6 +215,9 @@ def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best,
     has_tp = tp_kind != TP_NONE
     if tp_kind == TP_R:
         tp = raw + side * tp_val * stop_dist
+    elif tp_kind == TP_STRUCT:
+        tp = tp_price
+        has_tp = np.isfinite(tp_price) and (tp_price - raw) * side > 0
     else:
         tp = fill * (1.0 + side * (tp_val / lev + rt))
     notional = qty * fill
@@ -253,9 +302,10 @@ def _entry_index(ts, close):
 
 @njit
 def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, equity, qty_step, min_notional,
-             stop_atr, tp_kind=0, tp_val=0.0, ladder=True, first_lock=0.10, step=0.05, gap=0.02):
+             stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap, tp_long, tp_short):
     """Every chart bar as a signal, each side, alone: arrays [bar, side(0 long, 1 short)] of wallet change / equity,
-    exit minute index, reason and leverage. ``best_l`` / ``best_s``: the bar's group per side (True = "best")."""
+    exit minute index, reason and leverage. ``best_l`` / ``best_s``: the bar's group per side (True = "best");
+    ``tp_long`` / ``tp_short``: the bar's structure take-profit level per side (TP_STRUCT only)."""
     n = len(close)
     pnl = np.full((n, 2), np.nan)
     ex = np.full((n, 2), -1, np.int64)
@@ -275,7 +325,8 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
                 continue
             best = best_l[i] if k == 0 else best_s[i]
             d, x, r, lev = _trade(S, br, o, h, l, mo, mh, ml, fund, e, m, side, stop_atr * a, a, best, equity,
-                                  qty_step, min_notional, tp_kind, tp_val, ladder, first_lock, step, gap)
+                                  qty_step, min_notional, tp_kind, tp_val, ladder, first_lock, step, gap,
+                                  tp_long[i] if k == 0 else tp_short[i])
             rs[i, k] = r
             lv[i, k] = lev
             ex[i, k] = x
@@ -286,8 +337,7 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
 
 @njit
 def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_close, sig_side, sig_atr, sig_best,
-            qty_steps, min_notionals, stop_atr, tp_kind=0, tp_val=0.0, ladder=True, first_lock=0.10, step=0.05,
-            gap=0.02):
+            qty_steps, min_notionals, stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap, sig_tp):
     """One account over several coins (1m arrays concatenated; coin c is [starts[c], ends[c])). Signals must be sorted
     by (entry minute, coin priority). Returns per signal: status (0 skipped, 1 entered, 2 rejected, 3 no fill,
     4 not taken after bust), P&L, exit time (ms), reason, leverage; and the final wallet."""
@@ -322,7 +372,7 @@ def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_c
             continue
         d, j, r, lv_ = _trade(S, brs[c], o[a:b], h[a:b], l[a:b], mo[a:b], mh[a:b], ml[a:b], fund[a:b], e, b - a,
                               sig_side[q], stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c], tp_kind,
-                              tp_val, ladder, first_lock, step, gap)
+                              tp_val, ladder, first_lock, step, gap, sig_tp[q])
         if r == R_REJECT:
             status[q] = 2
             continue

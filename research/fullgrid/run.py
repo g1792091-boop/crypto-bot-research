@@ -180,6 +180,15 @@ def preflight() -> list[str]:
         import numba  # noqa: F401
     except Exception as exc:  # noqa: BLE001
         bad.append(f"numba: {exc}")
+    pins = os.path.join(HERE, "PREREG.sha256")             # PREREG 9: the rules run exactly as pinned
+    if not os.path.exists(pins):
+        bad.append("PREREG.sha256 missing")
+    else:
+        for line in open(pins):
+            if line.strip():
+                h, f = line.split(None, 1)
+                if _sha(os.path.join(HERE, f.strip())) != h:
+                    bad.append(f"{f.strip()} does not match PREREG.sha256")
     return bad
 
 
@@ -341,6 +350,23 @@ def outcome_path(out: str, sym: str, tf: str) -> str:
 EXIT_CHUNK = 12
 
 
+@functools.lru_cache(maxsize=4)
+def struct_levels(data_dir: str, sym: str, tf: str, k: int) -> tuple:
+    """(tp_long, tp_short) structure take-profit levels of every chart bar (kernel.structure_levels)."""
+    df, _c = frame(data_dir, sym, tf)
+    return K.structure_levels(df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float),
+                              int(k), K.STRUCT_LOOKBACK)
+
+
+def exit_levels(data_dir: str, sym: str, tf: str, e: int, n: int) -> tuple:
+    """The structure levels exit variant e uses (NaN arrays for the other take-profit rules)."""
+    args = K.exit_args(e)
+    if args[1] == K.TP_STRUCT:
+        return struct_levels(data_dir, sym, tf, int(args[2]))
+    nan = np.full(n, np.nan)
+    return nan, nan
+
+
 def outcome_part(out: str, sym: str, tf: str, e0: int) -> str:
     return os.path.join(out, "outcomes", "parts", f"{tf}_{sym}_{e0:02d}.npz")
 
@@ -368,7 +394,8 @@ def outcomes_job(args) -> str:
         rs = np.zeros((len(exits), n, 2), np.int8)
         for k, ei in enumerate(exits):
             p, _exi, r, _lv = K.outcomes(S, br, d["ts"], d["o"], d["h"], d["l"], d["mo"], d["mh"], d["ml"], d["fund"],
-                                         close.astype(np.int64), atr, f, f, EQUITY, step, mn, *K.exit_args(ei))
+                                         close.astype(np.int64), atr, f, f, EQUITY, step, mn, *K.exit_args(ei),
+                                         *exit_levels(data_dir, sym, tf, ei, n))
             pnl[k], rs[k] = p, r
         res.update({f"pnl_{g}": pnl, f"reason_{g}": rs})
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -788,7 +815,7 @@ def _seed(*parts) -> int:
     return int(hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:8], 16)
 
 
-TRADE_KEYS = ("close", "coin", "side", "x", "pid", "best", "atr")
+TRADE_KEYS = ("close", "coin", "side", "x", "pid", "best", "atr", "tp")
 
 
 def cell_trades(data_dir: str, out: str, kind: str, name: str, tf: str, specs: list) -> list[dict]:
@@ -806,8 +833,10 @@ def cell_trades(data_dir: str, out: str, kind: str, name: str, tf: str, specs: l
             lo, sh = signals(data_dir, kind, name, sym, tf, combo)
             idx, side, x = per_trade(P_all[e], lo, sh)
             best = np.where(side > 0, bl[idx], bs[idx]) if kind == "core" else np.zeros(len(idx), bool)
+            tl, tsh = exit_levels(data_dir, sym, tf, e, len(close))
+            tp = np.where(side > 0, tl[idx], tsh[idx])
             for k, v in (("close", close[idx]), ("coin", np.full(len(idx), ci)), ("side", side), ("x", x),
-                         ("pid", pid_all[idx]), ("best", best), ("atr", atr[idx])):
+                         ("pid", pid_all[idx]), ("best", best), ("atr", atr[idx]), ("tp", tp)):
                 rows[i][k].append(v)
     return [{k: np.concatenate(v) for k, v in r.items()} for r in rows]
 
@@ -848,7 +877,7 @@ def account_run(data_dir: str, T: dict, ex: dict, lo_ms: int, hi_ms: int, e: int
         cat["o"], cat["h"], cat["l"], cat["mo"], cat["mh"], cat["ml"], cat["fund"], np.array(starts, np.int64),
         np.array(ends, np.int64), T["coin"][qs].astype(np.int64), T["close"][qs].astype(np.int64),
         T["side"][qs].astype(np.int64), T["atr"][qs], T["best"][qs], np.array([ex[s][1] for s in SYMBOLS]),
-        np.array([ex[s][2] for s in SYMBOLS]), *K.exit_args(e))
+        np.array([ex[s][2] for s in SYMBOLS]), *K.exit_args(e), T["tp"][qs].astype(float))
     done = (st == 1) & (rs != K.R_OPEN)
     eq = EQUITY + np.cumsum(pnl[done])
     peak = np.maximum.accumulate(np.r_[EQUITY, eq])
