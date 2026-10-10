@@ -676,7 +676,8 @@ def stage_confirm(data_dir: str, out: str, ex: dict) -> dict:
                      "default_test": defaults[key]["test"], "default_extra": defaults[key]["extra"], "_T": T})
         print(f"[confirm] {p['kind']} {p['name']} {p['tf']} #{p['rank']}: test n={rows[-1]['test']['n']} "
               f"mean={rows[-1]['test']['mean']}", flush=True)
-    sig = bh([r["test"]["p"] if r["test"]["n"] >= MIN_TEST else None for r in rows])
+    # every pick is in the family; one with too few test trades counts with p = 1 (it cannot pass)
+    sig = bh([r["test"]["p"] if r["test"]["n"] >= MIN_TEST and r["test"]["p"] is not None else 1.0 for r in rows])
     for r, s in zip(rows, sig):
         t, e, dt_ = r["test"], r["extra"], r["default_test"]
         checks = {"test_trades": t["n"] >= MIN_TEST, "test_positive": (t["mean"] or 0) > 0,

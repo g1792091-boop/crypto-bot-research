@@ -64,7 +64,7 @@ order). At most 3 per cell.
 6.2 **Test**: >= 100 test trades; mean > 0; mean > the default's test mean (same cell, same period); one-sided
 week-block bootstrap p (all coins' trades of a UTC week together, 2,000 resamples, p = (1 + resamples with mean <= 0) /
 2,001, seed = sha256 of the cell, row and period) passing Benjamini-Hochberg at FDR 10% over ALL picks (core and DeepSeek
-one family; a pick with < 100 test trades has no p and cannot pass).
+one family; a pick with < 100 test trades stays in the family with p = 1 and cannot pass).
 
 6.3 **Extra**: >= 20 trades in 2020 and mean > 0.
 
