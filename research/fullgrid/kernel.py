@@ -17,6 +17,8 @@ Semantics (as paperbot/paramshadow.py replays the live account):
   exits at the open, a low/high through the stop exits at the stop (with slippage), a mark low/high through
   liquidation liquidates, otherwise the lock steps up (from the next minute). The entry minute is checked for stop and
   liquidation but gets no gap check and no lock step (ref_price fill).
+- Exit variants (``EXITS``): the stop distance k x ATR14 (sizing uses that stop), a fixed take-profit at tp x R from the
+  entry reference (R = the stop distance; engine tp_mode "fixed" semantics), the stepped lock on or off.
 - One trade alone (``outcomes``): the wallet before the trade is ``equity``; the result is the wallet change.
   The account (``account``): one position at a time over the coins, signals that arrive while a position is open are
   skipped, ties at one minute go to the coin priority order, bust below $10 stops the account.
@@ -44,9 +46,15 @@ if ROOT not in sys.path:
 
 MIN = 60_000
 # reasons
-R_NONE, R_SL, R_LOCK, R_LIQ, R_OPEN, R_REJECT, R_NOFILL, R_NOATR = 0, 1, 2, 3, 4, 5, 6, 7
+R_NONE, R_SL, R_LOCK, R_LIQ, R_OPEN, R_REJECT, R_NOFILL, R_NOATR, R_TP = 0, 1, 2, 3, 4, 5, 6, 7, 8
 REASON_NAMES = {R_SL: "SL", R_LOCK: "LOCK", R_LIQ: "LIQ", R_OPEN: "OPEN", R_REJECT: "REJECTED", R_NOFILL: "NO_FILL",
-                R_NOATR: "NO_ATR"}
+                R_NOATR: "NO_ATR", R_TP: "TP"}
+
+# Exit variants of the study (PREREG 5): (name, stop x ATR14, take-profit x R (0 = none), stepped lock on/off). R = the
+# stop distance from the entry reference price. Index 0 is the live rule.
+EXITS = tuple((f"{tp}|{k:g}", k, m, lk) for k in (2.0, 1.0, 1.5, 2.5, 3.0, 4.0)
+              for tp, m, lk in (("ladder", 0.0, True), ("tp1R", 1.0, False), ("tp1.5R", 1.5, False),
+                                ("tp2R", 2.0, False), ("tp3R", 3.0, False), ("ladder_tp2R", 2.0, True)))
 
 
 def settings_vector(settings=None) -> np.ndarray:
@@ -54,6 +62,7 @@ def settings_vector(settings=None) -> np.ndarray:
     from paperbot.config import v3_settings
     s = settings or v3_settings()
     assert s.leverage_rule == "quality_v1" and s.tp_mode == "ladder" and s.best_falls_to_normal
+    assert s.stop_first_on_ambiguous_bar
     best = [(t.margin_frac, lev) for t in s.tiers if t.name == "best" for lev in t.leverages]
     normal = [(t.margin_frac, lev) for t in s.tiers if t.name == "normal" for lev in t.leverages]
     assert len(best) == 2 and len(normal) == 2
@@ -61,7 +70,7 @@ def settings_vector(settings=None) -> np.ndarray:
     return np.array([s.taker_fee, s.slippage_frac, s.max_loss_frac, s.liq_buffer_atr_mult, s.liq_buffer_min_frac,
                      s.round_trip_cost, lad.first_lock, lad.step, lad.trigger_gap, s.bust_below, s.initial_equity,
                      best[0][0], best[0][1], best[1][0], best[1][1], normal[0][0], normal[0][1], normal[1][0],
-                     normal[1][1]], float)
+                     normal[1][1], s.maker_fee], float)
 
 
 def bracket_arrays(br) -> np.ndarray:
@@ -123,14 +132,19 @@ def _size(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional):
 
 
 @njit
-def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional):
-    """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive).
-    Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
-    taker, slip, rt = S[0], S[1], S[5]
+def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
+           tp_mult, ladder):
+    """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive). ``tp_mult`` > 0: a
+    take-profit limit at the entry reference + tp_mult x stop distance (engine tp_mode "fixed": fills only when price
+    trades through it, at it or a better gapped open, maker fee; the stop wins a bar that touches both); ``ladder``: the
+    stepped lock. Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
+    taker, slip, rt, maker = S[0], S[1], S[5], S[19]
     first_lock, step, gap = S[6], S[7], S[8]
     raw = o[e]
     fill = raw * (1 + side * slip)
     stop = raw - side * stop_dist
+    has_tp = tp_mult > 0
+    tp = raw + side * tp_mult * stop_dist
     ok, lev, margin, qty, liq = _size(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional)
     if not ok:
         return 0.0, e, R_REJECT, 0
@@ -157,19 +171,27 @@ def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best,
                 mfe = l[j]
         price = -1.0
         liquidate = False
+        at_tp = False
         if not entry_bar:
             if (mo[j] - liq) * side <= 0:
                 liquidate = True
             elif (o[j] - stop) * side <= 0:
                 price = o[j] * (1 - side * slip)
+            elif has_tp and (o[j] - tp) * side > 0:
+                price = o[j]
+                at_tp = True
         if not liquidate and price < 0:
             hit_stop = (l[j] <= stop) if side > 0 else (h[j] >= stop)
+            hit_tp = has_tp and ((h[j] > tp) if side > 0 else (l[j] < tp))
             hit_liq = (ml[j] <= liq) if side > 0 else (mh[j] >= liq)
             if hit_stop:
                 price = stop * (1 - side * slip)
             elif hit_liq:
                 liquidate = True
-            elif not entry_bar:
+            elif hit_tp:
+                price = tp
+                at_tp = True
+            elif ladder and not entry_bar:
                 fr = fpaid / notional
                 bst = lev * (side * (mfe / fill - 1.0) - rt - fr)
                 ft = first_lock + gap
@@ -189,8 +211,8 @@ def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best,
             if gross < -margin:
                 liquidate = True
             else:
-                wallet += gross - qty * price * taker
-                return wallet - equity, j, (R_LOCK if has_lock else R_SL), lev
+                wallet += gross - qty * price * (maker if at_tp else taker)
+                return wallet - equity, j, (R_TP if at_tp else (R_LOCK if has_lock else R_SL)), lev
         if liquidate:
             wallet -= margin
             return wallet - equity, j, R_LIQ, lev
@@ -208,7 +230,7 @@ def _entry_index(ts, close):
 
 @njit
 def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, equity, qty_step, min_notional,
-             stop_atr):
+             stop_atr, tp_mult=0.0, ladder=True):
     """Every chart bar as a signal, each side, alone: arrays [bar, side(0 long, 1 short)] of wallet change / equity,
     exit minute index, reason and leverage. ``best_l`` / ``best_s``: the bar's group per side (True = "best")."""
     n = len(close)
@@ -230,7 +252,7 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
                 continue
             best = best_l[i] if k == 0 else best_s[i]
             d, x, r, lev = _trade(S, br, o, h, l, mo, mh, ml, fund, e, m, side, stop_atr * a, a, best, equity,
-                                  qty_step, min_notional)
+                                  qty_step, min_notional, tp_mult, ladder)
             rs[i, k] = r
             lv[i, k] = lev
             ex[i, k] = x
@@ -241,7 +263,7 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
 
 @njit
 def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_close, sig_side, sig_atr, sig_best,
-            qty_steps, min_notionals, stop_atr):
+            qty_steps, min_notionals, stop_atr, tp_mult=0.0, ladder=True):
     """One account over several coins (1m arrays concatenated; coin c is [starts[c], ends[c])). Signals must be sorted
     by (entry minute, coin priority). Returns per signal: status (0 skipped, 1 entered, 2 rejected, 3 no fill,
     4 not taken after bust), P&L, exit time (ms), reason, leverage; and the final wallet."""
@@ -254,7 +276,6 @@ def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_c
     wallet = S[10]
     busy_until = -1          # exit time (ms) of the open position; a signal must fill strictly after it
     bust = False
-    last_entry_minute = -1
     entered_at = -1
     for q in range(n):
         c = sig_coin[q]
@@ -276,7 +297,8 @@ def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_c
             status[q] = 2
             continue
         d, j, r, lv_ = _trade(S, brs[c], o[a:b], h[a:b], l[a:b], mo[a:b], mh[a:b], ml[a:b], fund[a:b], e, b - a,
-                              sig_side[q], stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c])
+                              sig_side[q], stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c], tp_mult,
+                              ladder)
         if r == R_REJECT:
             status[q] = 2
             continue

@@ -65,7 +65,8 @@ def _fp_array(a: np.ndarray):
     fin = np.isfinite(x)
     xz = np.where(fin, x, 0.0)
     nonfin = np.flatnonzero(~fin)
-    return ("arr", a.shape, str(a.dtype), float(xz.sum()), float(xz @ _weights(len(xz))),
+    # elementwise, not a BLAS dot: a threaded BLAS call costs milliseconds when many workers share the CPUs
+    return ("arr", a.shape, str(a.dtype), float(xz.sum()), float(np.multiply(xz, _weights(len(xz))).sum()),
             tuple(x[:4].tolist()), tuple(x[-4:].tolist()), len(nonfin), hash(nonfin.tobytes()),
             hash(np.isnan(x[~fin]).tobytes()) if len(nonfin) else 0)
 

@@ -24,9 +24,17 @@ status() {
   if [ -f "$BASE/DONE" ]; then
     echo "끝났습니다. 결과: $BASE/results.tgz  (보내기: bash $REPO/research/fullgrid/bootstrap.sh push)"; return
   fi
-  [ -x "$PY" ] || { echo "아직 설치 중입니다."; tail -2 "$LOG" 2>/dev/null; return; }
-  local last; last=$(grep -E '^\[grid [0-9]+/' "$LOG" 2>/dev/null | tail -1)
-  if [ -n "$last" ]; then echo "계산 중: $last" | cut -c1-160; else tail -1 "$LOG" 2>/dev/null; fi
+  if ! pgrep -f "[f]ullgrid/(run|data)\.py|[t]ests/test_fullgrid|[p]ip install|[a]pt-get" >/dev/null; then
+    echo "지금 돌고 있지 않습니다. 마지막 기록:"; grep -E "멈춤|\] [0-9]/6" "$LOG" 2>/dev/null | tail -3
+    echo "이어서 하려면: tmux kill-session -t fg 2>/dev/null; tmux new -s fg \"bash $REPO/research/fullgrid/bootstrap.sh; bash\""
+    return
+  fi
+  local step; step=$(grep -E "\] [0-9]/6 " "$LOG" 2>/dev/null | tail -1)
+  echo "진행 중: ${step:-설치 중}" | cut -c1-120
+  if echo "$step" | grep -q "4/6"; then
+    local last; last=$(grep -E '^\[grid [0-9]+/' "$LOG" 2>/dev/null | tail -1)
+    [ -n "$last" ] && echo "  $last" | cut -c1-160
+  fi
 }
 
 push() {
@@ -45,33 +53,41 @@ push() {
 }
 
 case "${1:-run}" in
+  run) shift || true ;;
   status) status; exit 0 ;;
   push) push; exit 0 ;;
-  run) ;;
   *) echo "사용법: bash bootstrap.sh [run|status|push]"; exit 2 ;;
 esac
 
 say "1/6 설치 (파이썬 패키지)"
 export DEBIAN_FRONTEND=noninteractive
-if [ ! -x "$PY" ]; then
-  for k in 1 2 3 4 5 6 7 8 9 10; do
-    apt-get update -y >>"$LOG" 2>&1 && apt-get install -y python3-venv python3-pip git tmux >>"$LOG" 2>&1 && break
-    say "다른 설치가 끝나기를 기다립니다 (${k}/10)"; sleep 30
+if [ ! -f "$BASE/INSTALLED" ]; then
+  ok=""
+  for k in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if apt-get update -y >>"$LOG" 2>&1 && apt-get install -y python3-venv python3-pip git tmux >>"$LOG" 2>&1; then
+      ok=1; break
+    fi
+    say "다른 설치(자동 업데이트)가 끝나기를 기다립니다 (${k}/20)"; sleep 30
   done
+  [ -n "$ok" ] || die "apt 설치가 10분 넘게 막혀 있습니다. 몇 분 뒤 같은 명령을 다시 실행하세요."
+  rm -rf "$VENV"
   python3 -m venv "$VENV" || die "venv 만들기 실패"
   "$VENV/bin/pip" install -q --upgrade pip >>"$LOG" 2>&1
   "$VENV/bin/pip" install -q "numpy==2.0.2" "pandas==2.3.3" "scipy>=1.11" "numba==0.60.0" "pytest>=8" >>"$LOG" 2>&1 \
     || die "패키지 설치 실패"
+  "$PY" -c "import numba, numpy, pandas; print('numba', numba.__version__)" >>"$LOG" 2>&1 || die "numba를 불러오지 못했습니다"
+  touch "$BASE/INSTALLED"
 fi
 cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
 [ -f research/fullgrid/exchange.json ] || die "research/fullgrid/exchange.json(레버리지 구간 표)이 저장소에 아직 없습니다."
 say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB"
 
 say "2/6 자체 점검 (계산 엔진 = 규칙봇 엔진, 딥시크 기본값 = 지금 딥시크 신호)"
-if [ ! -f "$BASE/CHECKED" ]; then
+HEAD=$(git rev-parse HEAD)
+if [ "$(cat "$BASE/CHECKED" 2>/dev/null)" != "$HEAD" ]; then
   "$PY" -m pytest -q -x tests/test_fullgrid_kernel.py tests/test_fullgrid_ds_defs.py tests/test_fullgrid_memo.py \
     tests/test_fullgrid_run.py >>"$LOG" 2>&1 || die "자체 점검 실패 (run.log 마지막 부분을 보내 주세요)"
-  touch "$BASE/CHECKED"
+  echo "$HEAD" > "$BASE/CHECKED"
 fi
 
 say "3/6 바이낸스 공개 자료 받기 (2020-01 ~ 2026-09, 1분봉·마크 가격·펀딩, 약 10~20분)"
@@ -79,12 +95,17 @@ if [ ! -f "$DATA/build.json" ]; then
   "$PY" research/fullgrid/data.py all --dir "$DATA" --procs 16 >>"$LOG" 2>&1 || die "자료 받기 실패"
 fi
 
-PROCS=$(( $(nproc) ))
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1
+MEMG=$(free -g | awk '/Mem/{print $2}')
+PROCS=$(nproc); BYMEM=$(( MEMG * 10 / 16 ))            # about 1.6 GB per worker at the peak
+[ "$BYMEM" -lt "$PROCS" ] && PROCS=$BYMEM; [ "$PROCS" -lt 1 ] && PROCS=1
 say "4/6 계산 (모든 조합, 작업 ${PROCS}개 동시에)"
 "$PY" research/fullgrid/run.py outcomes --data "$DATA" --out "$OUT" --procs "$PROCS" \
   --exchange research/fullgrid/exchange.json >>"$LOG" 2>&1 || die "거래 결과표 계산 실패"
-"$PY" research/fullgrid/run.py grid --data "$DATA" --out "$OUT" --procs "$PROCS" >>"$LOG" 2>&1 || die "조합 계산 실패"
-"$PY" research/fullgrid/run.py grid --data "$DATA" --out "$OUT" --procs "$PROCS" >>"$LOG" 2>&1 || die "조합 계산 실패"
+"$PY" research/fullgrid/run.py grid --data "$DATA" --out "$OUT" --procs "$PROCS" >>"$LOG" 2>&1 \
+  || say "조합 계산: 실패한 작업이 있어 한 번 더 합니다"
+"$PY" research/fullgrid/run.py grid --data "$DATA" --out "$OUT" --procs "$PROCS" >>"$LOG" 2>&1 \
+  || die "조합 계산 실패 (두 번째에도 빠진 작업이 있음)"
 
 say "5/6 고르기 → 시험 기간 확인 → 보고서"
 "$PY" research/fullgrid/run.py select --out "$OUT" >>"$LOG" 2>&1 || die "고르기 실패"
@@ -94,8 +115,9 @@ say "5/6 고르기 → 시험 기간 확인 → 보고서"
 
 say "6/6 결과 묶기"
 "$PY" research/fullgrid/run.py pack --out "$OUT" >>"$LOG" 2>&1 || die "결과 묶기 실패"
+cp "$DATA/build.json" "$OUT/results/data_build.json" 2>/dev/null
+grep -v -E "^\[grid [0-9]+/" "$LOG" > "$OUT/results/run.log" 2>/dev/null      # without the per-task progress lines
 tar czf "$BASE/results.tgz" -C "$OUT" results >>"$LOG" 2>&1 || die "결과 묶기 실패"
-cp "$LOG" "$OUT/results/run.log" 2>/dev/null
 touch "$BASE/DONE"
 say "끝. 결과 $(du -h "$BASE/results.tgz" | cut -f1): $BASE/results.tgz"
 say "보내기: bash $REPO/research/fullgrid/bootstrap.sh push   (그다음 Vultr에서 서버 Destroy)"

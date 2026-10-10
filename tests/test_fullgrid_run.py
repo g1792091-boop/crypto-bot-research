@@ -78,7 +78,7 @@ def world(tmp_path_factory):
 
 def test_every_stage_writes_its_files(world):
     R, data, out, sel, con, text, dest = world
-    assert len(os.listdir(os.path.join(out, "outcomes"))) == 6
+    assert len([f for f in os.listdir(os.path.join(out, "outcomes")) if f.endswith(".npz")]) == 6
     assert not sel["missing"] and len(sel["cells"]) == 2
     for f in ("RESULTS_KO.md", "select.json", "confirm.json", "candidates.csv", "cells.csv", "grid_stats.npz", "grids.json"):
         assert os.path.exists(os.path.join(dest, f)), f
@@ -94,39 +94,62 @@ def test_every_stage_writes_its_files(world):
 
 def test_grid_stats_equal_a_direct_recount(world):
     R, data, out, *_ = world
+    E = len(R.K.EXITS)
     for kind, name in (("core", "S2_ST_ROC"), ("ds", "F17_Z")):
         st = R.cell_stats(out, kind, name, "1h")
+        assert st.shape[1:] == (E, 3, 4)
         combos = R.cell_grid(kind, name)[2]
         for r in (0, R.default_row(kind, name), len(combos) - 1):
-            T = R.combo_trades(data, out, kind, name, "1h", combos[r])
-            for k in range(3):
-                x = T["x"][T["pid"] == k]
-                assert st[r, k, 0] == len(x)
-                assert abs(st[r, k, 1] - x.sum()) < 1e-9
-                assert st[r, k, 3] == (x > 0).sum()
+            for e in (0, 1, 13, E - 1):
+                T = R.combo_trades(data, out, kind, name, "1h", combos[r], e)
+                for k in range(3):
+                    x = T["x"][T["pid"] == k]
+                    assert st[r, e, k, 0] == len(x)
+                    assert abs(st[r, e, k, 1] - x.sum()) < 1e-5
+                    assert st[r, e, k, 3] == (x > 0).sum()
+
+
+def test_exit_variants_differ(world):
+    R, data, out, *_ = world
+    st = R.cell_stats(out, "core", "S2_ST_ROC", "1h")
+    r0 = R.default_row("core", "S2_ST_ROC")
+    sums = st[r0, :, 0, 1]
+    assert len(set(np.round(sums, 9))) > 20          # 36 exit rules give different results
 
 
 def test_plateau_is_the_neighbourhood_median(world):
     R, data, out, sel, *_ = world
-    st = R.cell_stats(out, "ds", "F17_Z", "1h")
-    mean, plat = R.plateau_scores("ds", "F17_Z", st)
-    ps, vals, combos = R.cell_grid("ds", "F17_Z")
-    r = int(np.nanargmax(np.where(np.isfinite(plat), plat, -np.inf))) if np.isfinite(plat).any() else None
-    if r is None:
-        pytest.skip("no combination with enough trades on the synthetic series")
+    kind, name = "core", "S2_ST_ROC"
+    st = R.cell_stats(out, kind, name, "1h")
+    mean, plat = R.plateau_scores(kind, name, st)
+    ps, vals, combos = R.cell_grid(kind, name)
+    ok = st[:, :, 0, 0] >= R.MIN_SELECT
+    if not np.isfinite(plat).any():
+        pytest.skip("no pair with enough trades on the synthetic series")
+    r, e = np.unravel_index(np.nanargmax(np.where(np.isfinite(plat), plat, -np.inf)), plat.shape)
     c = combos[r]
-    idx = [vals[j].index(c[p["name"]]) for j, p in enumerate(ps)]
-    xs = [mean[r]]
+    idx = [vals[j].index(R._hashable(c[p["name"]])) for j, p in enumerate(ps)]
+    xs = [mean[r, e]]
     for j in range(len(ps)):
         for d in (-1, 1):
             k = idx[j] + d
             if 0 <= k < len(vals[j]):
                 q = [i for i, cc in enumerate(combos) if all(
-                    cc[p["name"]] == (vals[jj][k] if jj == j else c[p["name"]]) for jj, p in enumerate(ps))][0]
-                xs.append(mean[q] if st[q, 0, 0] >= R.MIN_SELECT else 0.0)
-    assert abs(plat[r] - np.median(xs)) < 1e-12
-    picks = [p for p in sel["picks"] if p["name"] == "F17_Z"]
+                    R._hashable(cc[p["name"]]) == (vals[jj][k] if jj == j else R._hashable(c[p["name"]]))
+                    for jj, p in enumerate(ps))]
+                if q:
+                    xs.append(mean[q[0], e] if ok[q[0], e] else 0.0)
+    _n, k_stop, m, lk = R.K.EXITS[e]
+    stops = sorted(kk for _nn, kk, mm, ll in R.K.EXITS if mm == m and ll == lk)
+    i = stops.index(k_stop)
+    for d in (-1, 1):
+        if 0 <= i + d < len(stops):
+            f = [jj for jj, (_nn, kk, mm, ll) in enumerate(R.K.EXITS) if mm == m and ll == lk and kk == stops[i + d]][0]
+            xs.append(mean[r, f] if ok[r, f] else 0.0)
+    assert abs(plat[r, e] - np.median(xs)) < 1e-12
+    picks = [p for p in sel["picks"] if p["name"] == name]
     assert all(p["plateau"] > 0 for p in picks)
+    assert all(p["exit"] == R.K.EXITS[p["exit_index"]][0] for p in picks)
 
 
 def test_rerun_skips_finished_work(world):

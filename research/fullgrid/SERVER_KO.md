@@ -21,7 +21,8 @@ cd /root/crypto-bot-research && git pull && sudo bash -c 'set -a; . /etc/paperbo
 2. 종류: **Optimized Cloud Compute → CPU Optimized**
 3. 위치: **Seoul** (없으면 Tokyo)
 4. 운영체제: **Ubuntu 24.04 LTS x64**
-5. 크기: **32 vCPU / 64 GB** (추천) — 16 vCPU / 32 GB도 됩니다(시간이 약 2배)
+5. 크기: 목록에서 **가장 큰 것**(보통 32 vCPU / 64 GB). 계산은 CPU 수만큼 나눠서 하므로 클수록 빨리 끝나고, 시간 단위
+   요금이라 총비용은 거의 같습니다. 메모리는 CPU 1개당 2 GB 이상이면 됩니다.
 6. 자동 백업(Auto Backups)은 **끕니다**. 나머지는 그대로.
 7. **Deploy Now** → 1~2분 뒤 서버 IP와 root 비밀번호가 나옵니다.
 
@@ -50,13 +51,14 @@ bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh status
 
 `계산 중: [grid 1234/5678 3.2h, ~4.1h left] ...` 처럼 남은 시간이 나옵니다. 화면을 다시 보려면 `tmux attach -t fg`.
 
-**멈췄다면**(서버 재부팅, `멈춤:` 메시지): 2번의 `tmux new ...` 부분만 다시 실행하면 끝난 부분은 건너뛰고 이어서 합니다.
+**멈췄다면**(서버 재부팅, `멈춤:` 메시지, status가 "지금 돌고 있지 않습니다"): 아래를 붙여 넣으면 끝난 부분은 건너뛰고
+이어서 합니다(이미 열린 tmux 창 안이라면 먼저 `exit`로 빠져나온 뒤).
 
 ```bash
-tmux new -s fg "bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh; bash"
+tmux kill-session -t fg 2>/dev/null; tmux new -s fg "bash /root/fg/crypto-bot-research/research/fullgrid/bootstrap.sh; bash"
 ```
 
-`멈춤:` 이 나오면 그 화면을 복사해 보내 주세요.
+같은 `멈춤:`이 두 번 나오면 그 화면을 복사해 보내 주세요.
 
 ## 4. 끝나면: 결과 보내기
 

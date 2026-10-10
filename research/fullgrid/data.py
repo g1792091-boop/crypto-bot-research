@@ -82,8 +82,19 @@ def fetch(raw: str, rel: str, tries: int = 5) -> str:
     last = None
     for k in range(tries):
         try:
-            data = _get(BASE_URL + rel)
-            want = _get(BASE_URL + rel + ".CHECKSUM").decode().split()[0].strip().lower()
+            data = _get(BASE_URL + rel)                     # a 404 here: the month before listing ("missing")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return "missing"
+            last = exc
+            time.sleep(min(30, 2 ** k))
+            continue
+        except Exception as exc:  # noqa: BLE001  network: retry with backoff
+            last = exc
+            time.sleep(min(30, 2 ** k))
+            continue
+        try:
+            want = _get(BASE_URL + rel + ".CHECKSUM").decode().split()[0].strip().lower()   # a 404 here is an error
             got = hashlib.sha256(data).hexdigest()
             if got != want:
                 raise IOError(f"checksum mismatch {rel}: {got} != {want}")
@@ -93,11 +104,7 @@ def fetch(raw: str, rel: str, tries: int = 5) -> str:
                 fh.write(data)
             os.replace(tmp, path)
             return "ok"
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return "missing"
-            last = exc
-        except Exception as exc:  # noqa: BLE001  network: retry with backoff
+        except Exception as exc:  # noqa: BLE001  network or checksum: retry with backoff
             last = exc
         time.sleep(min(30, 2 ** k))
     raise RuntimeError(f"download failed {rel}: {last}")
@@ -237,7 +244,9 @@ def build_symbol(d: str, sym: str, man: dict) -> dict:
     os.makedirs(os.path.dirname(out), exist_ok=True)
     np.savez(out, ts=ts, fund=fund, **cols)
     gaps = np.diff(ts) // MIN - 1
-    return {"symbol": sym, "minutes": int(len(ts)), "read": int(n_read), "zero_volume_dropped": int(n_read - len(ts)),
+    per_month = pd.Series(1, index=pd.to_datetime(ft, unit="ms")).resample("MS").sum()
+    thin = [str(m.date())[:7] for m, c in per_month.iloc[1:].items() if c < 60]   # 3 a day; listing month may be short
+    return {"symbol": sym, "funding_thin_months": thin, "minutes": int(len(ts)), "read": int(n_read), "zero_volume_dropped": int(n_read - len(ts)),
             "first": _iso(ts[0]), "last": _iso(ts[-1]), "mark_filled_from_last": int(no_mark.sum()),
             "missing_minutes": int(gaps[gaps > 0].sum()), "gaps_over_1h": int((gaps >= 60).sum()),
             "funding_events": int(ok.sum()), "funding_after_data_end": lost, "sha256": _sha(out)}
@@ -255,12 +264,36 @@ def _sha(path: str) -> str:
     return h.hexdigest()
 
 
+def coverage_problems(d: str, sym: str, thin_funding=()) -> list[str]:
+    """The series must reach the end of LAST_MONTH, have no hole longer than 3 days after listing, and have funding
+    settlements in every month after listing (``thin_funding``, from build_symbol: a month missing from the archive
+    would otherwise drop silently)."""
+    z = load(d, sym)
+    ts = z["ts"]
+    end = int(pd.Timestamp(LAST_MONTH + "-01", tz="UTC").value // 1_000_000)
+    end = int((pd.Timestamp(end, unit="ms", tz="UTC") + pd.offsets.MonthBegin(1)).value // 1_000_000)
+    out = []
+    if ts[-1] < end - 3_600_000:
+        out.append(f"{sym}: data ends {_iso(ts[-1])}, before {_iso(end)}")
+    gaps = np.diff(ts)
+    if (gaps > 3 * DAY).any():
+        i = int(np.argmax(gaps))
+        out.append(f"{sym}: {gaps[i] / DAY:.1f}-day hole after {_iso(ts[i])}")
+    if thin_funding:
+        out.append(f"{sym}: funding missing in {', '.join(list(thin_funding)[:5])}")
+    return out
+
+
 def build(d: str, symbols=SYMBOLS) -> dict:
     man = _manifest(d)
     rep = {"symbols": [build_symbol(d, s, man) for s in symbols], "months": [FIRST_MONTH, LAST_MONTH],
            "gap_days": len(man.get("gap_days", [])), "missing_files": len(man["missing"])}
-    with open(os.path.join(d, "build.json"), "w") as fh:
+    rep["problems"] = [p for r in rep["symbols"] for p in coverage_problems(d, r["symbol"], r["funding_thin_months"])]
+    with open(os.path.join(d, "build.json.tmp"), "w") as fh:
         json.dump(rep, fh, indent=1)
+    if rep["problems"]:
+        raise SystemExit("data incomplete: " + "; ".join(rep["problems"]))
+    os.replace(os.path.join(d, "build.json.tmp"), os.path.join(d, "build.json"))
     for r in rep["symbols"]:
         print(f"{r['symbol']}: {r['minutes']:,} minutes {r['first']} .. {r['last']}, mark filled {r['mark_filled_from_last']}, "
               f"missing minutes {r['missing_minutes']:,}, funding {r['funding_events']}")
