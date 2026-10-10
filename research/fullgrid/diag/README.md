@@ -12,3 +12,4 @@ WORKROOT에는 `fg1m/`(실행과 같은 1분봉), `fgwork/`(결과표, `frames/`
 | `uncond.py WORKROOT` | 매매법 없이 모든 봉, 롱·숏 | `uncond.json` |
 | `regime_explore.py WORKROOT` | 장세별 강점이 다음 기간에도 유지되나 | `regime_explore.json` → `regime_sum.py` |
 | `top_picks.py WORKROOT` | 시험 기간 1~3등의 승률·손익비·계좌 결과·반대 방향 | `top_picks.json` |
+| `combo_watch.py WORKROOT` | 관찰 후보 38개 계좌(`watch_sel.json`): 겹침·상관, 지금 크기와 1/4 크기 계좌 | → `combo_sum.py` → `combo_sum.json` |
