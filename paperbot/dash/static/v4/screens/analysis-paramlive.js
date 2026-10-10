@@ -1,6 +1,6 @@
 // 분석 › 커스텀값 비교 (owners' "2번", 2026-10-10; the 36 only): GET /api/v4/paramlive (dash/more/paramlive.py) reads
 // the nightly custom-value shadow's summary (paperbot/paramshadow.py, 10:00 KST). Head: the job's own totals in one line
-// (변형 N개 중 기본값보다 번 것 M · ★ S (우연으로도 최대 E) · 재계산 일치 P%), then the 36 x 4 map: one cell per strategy x
+// (변형 N개 중 기본값보다 번 것 M · ★ 붙은 칸 S (우연으로도 최대 E칸) · 재계산 일치 P%), then the 36 x 4 map: one cell per strategy x
 // timeframe with "기본값보다 번 변형 / 신호가 달라진 변형" and the ★ count, lightly tinted by that share (the neutral
 // comparison colour, never up / down), each name and cell a link to the strategy's own table (#/strategies/<id>?tf=).
 // HONESTY: a shadow and a reference, never a verdict; the job's texts (what, base, luck, parity, caution) as they are; a
@@ -77,9 +77,9 @@ export function paramlive(d, env) {
     h("div", {class: "an-pl-stats"},
       ui.stat("변형", `${fmt.int(o.variants || 0)}개`, "신호가 기본값과 달라진 변형"),
       ui.stat("기본값보다 번 것", `${fmt.int(o.better || 0)}개`, o.variants ? `변형의 ${fmt.pct((o.better || 0) / o.variants, 0, false)}` : "—"),
-      ui.stat("★ 붙은 변형", `${fmt.int(o.stars || 0)}개`, `우연으로도 최대 ${fmt.num(o.stars_by_luck || 0, 1)}개`),
+      ui.stat("★ 붙은 칸", `${fmt.int(o.star_cells || 0)}칸`, `우연으로도 최대 ${fmt.num(o.stars_by_luck || 0, 1)}칸 · ★ 변형 ${fmt.int(o.stars || 0)}개`),
       ui.stat("재계산 일치", o.parity == null ? "—" : fmt.pct(o.parity, 0, false), "기본값 재계산 vs 실제 계좌 진입")),
-    h("p", {class: "an-pl-line"}, `변형 ${fmt.int(o.variants || 0)}개 중 기본값보다 번 것 ${fmt.int(o.better || 0)} · ★ ${fmt.int(o.stars || 0)} (우연으로도 최대 ${fmt.num(o.stars_by_luck || 0, 1)}) · 재계산 일치 ${o.parity == null ? "—" : fmt.pct(o.parity, 0, false)}`),
+    h("p", {class: "an-pl-line"}, `변형 ${fmt.int(o.variants || 0)}개 중 기본값보다 번 것 ${fmt.int(o.better || 0)} · ★ 붙은 칸 ${fmt.int(o.star_cells || 0)} (우연으로도 최대 ${fmt.num(o.stars_by_luck || 0, 1)}칸) · 재계산 일치 ${o.parity == null ? "—" : fmt.pct(o.parity, 0, false)}`),
     ...texts(d, ["luck"])));
   out.push(ui.card({plate: "매매법 × 봉", sub: "기본값보다 번 변형 / 신호가 달라진 변형 · ★", cls: "an-pl-map"},
     grid(ctx, d), legend(),

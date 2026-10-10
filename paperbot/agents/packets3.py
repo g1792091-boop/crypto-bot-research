@@ -300,7 +300,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                  "timeframes": list(TRADE_TFS), "original_accounts": f["accounts"], "no_5m": NO_5M_KO,
                  "board_scope": BOARD_SCOPE_KO, "version": f["version"],
                  "groups": {g: v["accounts"] for g, v in f["groups"].items()},
-                 "settings_version": run.get("settings"), "min_n": min_n,
+                 "settings_version": run.get("settings"), "min_n": min_n, "run_start_ms": int(start),
                  "days_running": _r(days, 2), "units": {"roe": "net return on isolated margin (0.10 = +10%)",
                                                         "wallet": f"USDT, each account starts at {INITIAL:,.0f}"},
                  "accounts": len(accts), "extra_accounts": len(extra_ids), "pass_check_note": PASS_CHECK_NOTE},
@@ -546,12 +546,15 @@ def _paramshadow_doc(path: str) -> Optional[dict]:
     return doc
 
 
-def live_params(strategy: str, path: Optional[str] = None) -> Optional[dict]:
+def live_params(strategy: str, path: Optional[str] = None, run_start: Optional[int] = None) -> Optional[dict]:
     """커스텀값 그림자 of one of the 36 (paperbot/paramshadow.py): per timeframe the recomputed default, the real
     account, the share of entries both have, how many variants beat the default, and the variants that beat it most
-    (at most LIVE_PARAMS_TOP, with their star and luck ratio). None when there is no summary or no such strategy."""
+    (at most LIVE_PARAMS_TOP, with their star and luck ratio). None when there is no summary, no such strategy, or the
+    summary is of another run (``run_start``: the board's run start; a reset leaves the old summary until 10:00)."""
     doc = _paramshadow_doc(path or os.path.join(PARAMSHADOW_DIR, "last.json"))
     if not doc or doc.get("status") == "no_run":
+        return None
+    if run_start is not None and doc.get("run_start_ms") is not None and int(doc["run_start_ms"]) != int(run_start):
         return None
     cells = [c for c in doc.get("cells") or [] if c.get("strategy") == strategy]
     if not cells:
@@ -589,6 +592,6 @@ def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> d
             "league": packet.get("league"), "profile": profile_card(strategy, cards_path) or v4_card(strategy),
             "research": research_prior(strategy),
             # 커스텀값 그림자 (paperbot/paramshadow.py, owners' "2번"): one number changed, same period, reference only
-            "live_params": live_params(strategy),
+            "live_params": live_params(strategy, run_start=(packet.get("meta") or {}).get("run_start_ms")),
             # its copy accounts, labelled 'copy: <account>, rule ...': never part of the numbers above
             "copies": copies}

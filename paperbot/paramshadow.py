@@ -13,7 +13,8 @@ parameter study (research/entry_study/param_defs/<NAME>.py, hash-checked against
 shadow account of the real rules: v4 settings (config.v3_settings, the run's taker fee), $5,000, the six coins, one
 position at a time, the 2 x ATR14 stop, the ladder locks, the quality_v1 leverage group (the signal bar's entry
 strength from strength_defs, as the live service records it), funding, liquidation and bust, on Binance's final 1m
-bars with mark prices (daily3.fetch_steps), fills at the next minute's open plus slippage (no order book here).
+bars with mark prices (as daily3.fetch_steps; funding read once per chunk), fills at the next minute's open plus
+slippage (no order book here; the open is the signal's reference price, as live gives its own).
 
 - Signals: the chart frames are built as the live service builds them (recorder.build_frames on final 5m klines,
   at least the live window of 2 x warm-up bars of history before the first day). A signal of a bar that closed after
@@ -28,9 +29,11 @@ bars with mark prices (daily3.fetch_steps), fills at the next minute's open plus
   it is never exactly 100%; a low share means the recomputation is not the live account and says so.
 - Luck: a cell (strategy x timeframe) tests up to 16 variants, so some beat the default by chance. A variant gets a
   star only with >= MIN_TRADES trades on both sides, a mean per-trade return (P&L / equity before the trade) above
-  the default's by more than z(1 - ALPHA / k) standard errors (k = the cell's distinct variants: Bonferroni), AND
-  more P&L than the default in both halves of the period. Under "numbers do not matter" each cell stars with
-  probability <= ALPHA, so up to ALPHA x cells stars are expected by luck; the summary says how many.
+  the default's by more than z(1 - ALPHA / k) standard errors (k = the cell's variants whose signals differ from the
+  default: Bonferroni; variants that equal each other still count, which only makes it stricter), AND more P&L than the
+  default in both halves of the period. Under "numbers do not matter" each cell gets ANY star with probability
+  <= ALPHA, so up to ALPHA x tested cells starred CELLS are expected by luck (variants of one cell star together, so
+  the star count itself is not compared with it); the summary gives both.
 
 Output (<out>, default /var/lib/paperbot/paramshadow): paramshadow.db (5m kline cache, engine states, the shadow
 trades, per-day rows), last.json (the summary the dashboard and the agents read), last.txt (one Korean line),
@@ -72,14 +75,17 @@ MIN = 60_000
 FIVE = 300_000
 MAX_DAYS = 45               # days replayed per night (the first night fills the run so far)
 CHUNK_DAYS = 10             # days whose signals are computed in one pass (bounds memory)
-MIN_STEPS = 1368            # 1m steps a day needs (95% of 1,440) before it is replayed
+MIN_STEPS = 1368            # 1m bars each coin needs in a day (95% of 1,440) before the day is replayed
+ACCEPT_AFTER_DAYS = 3       # ... unless the day is this many days old: then it is replayed with what exists, noted
+PAUSE_S = 0.3               # between this job's REST calls (the live feed shares the server's request limits)
 MIN_TRADES = 20             # trades a variant and the default each need before a star
 ALPHA = 0.05                # per cell, Bonferroni over its distinct variants
 MULTS = (0.5, 0.75, 1.25, 1.5)     # the study's multipliers (research/entry_study/analysis_bc.py MULTS)
 DEFS_BC_MANIFEST_SHA256 = "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"   # analysis_bc pin (520dad0)
 ENGINE_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/sizing.py",
                 "paperbot/policy.py", "paperbot/levrule.py", "paperbot/quality_edges.json", "paperbot/config.py",
-                "paperbot/models.py", "paperbot/recorder.py")     # this file's own meaning: VERSION
+                "paperbot/models.py", "paperbot/recorder.py", "paperbot/sigservice.py", "paperbot/entry_marks.py",
+                "paperbot/binance.py")     # this file's own meaning: VERSION
 
 TEXTS_KO = {
     "what": "기존 36개 매매법을 숫자 하나만 바꿔(×0.5 · ×0.75 · ×1.25 · ×1.5) v4 시작부터 실제와 같은 규칙으로 다시 "
@@ -301,9 +307,14 @@ def chunk_signals(lib, source, cells: dict, symbols: Iterable[str], tfs: Iterabl
                 base_side = None
                 st = None
                 for v in variants:
-                    with _contained(), warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        lo, sh = pmod.signals(df, tf, **v["ov"])
+                    try:
+                        with _contained(), warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            lo, sh = pmod.signals(df, tf, **v["ov"])
+                    except Exception as exc:  # noqa: BLE001  live (strict=False): a failing rule gives no signal
+                        notes.append(f"{strategy} {v['key']} {sym} {tf}: 신호 계산 실패 ({type(exc).__name__}), "
+                                     "이 구간 신호 없음")
+                        lo = sh = np.zeros(len(df), bool)
                     side = np.where(np.asarray(lo, bool), 1, np.where(np.asarray(sh, bool), -1, 0))[idx]
                     if base_side is None:
                         base_side = side
@@ -339,20 +350,82 @@ def chunk_signals(lib, source, cells: dict, symbols: Iterable[str], tfs: Iterabl
 
 
 # ====================================================================== replay
+def stamp_ref(e: PaperEngine, bars: dict) -> None:
+    """Give a pending signal the fill minute's open as ``meta["ref_price"]``, as the live runner gives its signals the
+    price when they were ready: the fill is the same (the engine uses the bar open otherwise), and the engine then
+    treats the entry minute as live does (no lock step on it, engine._handle_exit)."""
+    for sig in e.pending:
+        b = bars.get(sig.symbol)
+        if b is not None and "ref_price" not in sig.meta:
+            sig.meta["ref_price"] = float(b.open)
+
+
 def replay_day(engines: dict, active: set, by_close: dict, steps, brackets) -> None:
     """One day of 1m steps. Only engines with a position or a pending signal are stepped: an idle engine's step
-    changes nothing but its last-seen marks (equity stays its wallet), so skipping it gives the same trades."""
+    changes nothing but its last-seen marks (equity stays its wallet), so skipping it gives the same trades.
+    A signal is submitted after the step of the minute that ends at its bar's close (daily3's replay); when that
+    minute is missing it goes in after the first step past its close, and a close after the day's last step goes in
+    at the end (pending into the next day), so a missing minute never drops a signal."""
+    closes = sorted(by_close)
+    k = 0
     for ts, bars, funding in steps:
         tb = {s: b for s, b in bars.items() if s in brackets}
         for aid in sorted(active):
             e = engines[aid]
+            stamp_ref(e, tb)
             e.step(tb, funding)
             e.outcomes.clear()
             if e.position is None and not e.pending:
                 active.discard(aid)
-        for aid, sig in by_close.get(ts + MIN, ()):
+        while k < len(closes) and closes[k] <= ts + MIN:
+            for aid, sig in by_close[closes[k]]:
+                engines[aid].submit(sig)
+                active.add(aid)
+            k += 1
+    for c in closes[k:]:
+        for aid, sig in by_close[c]:
             engines[aid].submit(sig)
             active.add(aid)
+
+
+def make_fetcher(rest, symbols, start: int, end: int, sleep: Callable[[float], None] = time.sleep,
+                 pause: float = PAUSE_S) -> Callable:
+    """daily3.fetch_steps for this job: the same aligned 1m steps (last and mark price), but funding is read ONCE per
+    coin for the whole chunk [start, end) (the funding-history endpoint has its own small per-IP limit that the live
+    feed already uses) and every call is followed by ``pause`` seconds."""
+    from .binance import bars_from_klines
+    fund: dict[int, dict] = {}
+    for s in symbols:
+        t = start
+        while t < end:
+            rows = rest.funding_rates(s, start_time=t, limit=1000)
+            sleep(pause)
+            for r in rows:
+                ft = int(r["fundingTime"])
+                if start <= ft < end:
+                    fund.setdefault(ft - ft % MIN, {})[s] = float(r["fundingRate"])
+            if len(rows) < 1000:
+                break
+            t = int(rows[-1]["fundingTime"]) + 1
+
+    def fetch(_rest, syms, a: int, b: int):
+        bars: dict[int, dict] = {}
+        for s in syms:
+            t = a
+            while t < b:
+                rows = [r for r in rest.klines(s, "1m", start_time=t, limit=1500) if int(r[0]) < b]
+                sleep(pause)
+                if not rows:
+                    break
+                marks = rest.mark_klines(s, "1m", start_time=t, limit=1500)
+                sleep(pause)
+                for bar in bars_from_klines(s, rows, marks):
+                    bars.setdefault(bar.open_time, {})[s] = bar
+                t = int(rows[-1][0]) + MIN
+                if len(rows) < 1500:
+                    break
+        return [(t, bars[t], fund.get(t, {})) for t in sorted(bars)]
+    return fetch
 
 
 # ====================================================================== store
@@ -464,9 +537,6 @@ def run(paper_db: str, out_dir: str, source, rest, settings: Optional[Settings],
     while d <= yesterday and len(todo) < max_days:
         todo.append(d)
         d = utc_day(day_start(d) + DAY_MS)
-    if fetch_steps is None:
-        from .daily3 import fetch_steps as _fs
-        fetch_steps = _fs
     notes_all: list[str] = []
     t0 = time.time()
     for c0 in range(0, len(todo), CHUNK_DAYS):
@@ -474,16 +544,30 @@ def run(paper_db: str, out_dir: str, source, rest, settings: Optional[Settings],
         a, b = day_start(chunk[0]), day_start(chunk[-1]) + DAY_MS
         by_close, counts, notes = chunk_signals(lib, source, cells, symbols, tfs, a, b, run_start, log=log)
         notes_all += notes
+        try:
+            fetch = fetch_steps or make_fetcher(rest, list(symbols), a, b)
+        except Exception as exc:  # noqa: BLE001
+            raise ParamShadowError(f"1m bars / funding from {chunk[0]} unavailable: {type(exc).__name__}: {exc}"[:300]) \
+                from None
         for day in chunk:
             s0 = day_start(day)
             try:
-                steps = fetch_steps(rest, list(symbols), s0, s0 + DAY_MS)
+                steps = fetch(rest, list(symbols), s0, s0 + DAY_MS)
             except Exception as exc:  # noqa: BLE001
                 raise ParamShadowError(f"1m bars of {day} unavailable: {type(exc).__name__}: {exc}"[:300]) from None
-            if len(steps) < MIN_STEPS:
-                # a day the exchange answered only in part is not replayed (it would read as a day without trades);
-                # the next night tries it again from the same state
-                raise ParamShadowError(f"1m bars of {day}: {len(steps)} minutes (< {MIN_STEPS}), tried again next night")
+            cover = {sym: 0 for sym in symbols}
+            for _t, bars, _f in steps:
+                for sym in bars:
+                    if sym in cover:
+                        cover[sym] += 1
+            short = {sym: n for sym, n in cover.items() if n < MIN_STEPS}
+            if short:
+                gap = ", ".join(f"{sym.replace('USDT', '')} {n}분" for sym, n in short.items())
+                if s0 > day_start(yesterday) - ACCEPT_AFTER_DAYS * DAY_MS:
+                    # a day the exchange answered only in part is not replayed yet (it would read as a day without
+                    # trades); the next nights try again from the same state
+                    raise ParamShadowError(f"1m bars of {day}: {gap} (< {MIN_STEPS} each), tried again next night")
+                notes_all.append(f"{day}: 1분봉이 모자란 채로 계산함 ({gap}; {ACCEPT_AFTER_DAYS}일을 기다려도 그대로)")
             day_sigs = {k: v for k, v in by_close.items() if s0 < k <= s0 + DAY_MS}
             replay_day(engines, active, day_sigs, steps, brackets)
             rows = []
@@ -494,7 +578,7 @@ def run(paper_db: str, out_dir: str, source, rest, settings: Optional[Settings],
                 e.trades.clear()
             store.executemany("INSERT INTO trades VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
             store.execute("INSERT OR REPLACE INTO days VALUES (?,?,?)",
-                          (day, now_ms, json.dumps({"steps": len(steps), "trades": len(rows),
+                          (day, now_ms, json.dumps({"steps": len(steps), "trades": len(rows), "short": short,
                                                     "signals": sum(len(v) for v in day_sigs.values())})))
             meta["last_day"] = day
             _put(store, "run", meta)
@@ -626,6 +710,7 @@ def summarize(store, conn, cells: dict, tfs, run_start: int, through: Optional[s
     for c in out_cells:
         if c["best"] is not None:
             c["best"] = {"key": c["best"]["key"], "diff_pnl": c["best"]["diff_pnl"], "star": c["best"]["star"]}
+    star_cells = sum(1 for c in out_cells if c["stars"])
     days = store.execute("SELECT COUNT(*) FROM days").fetchone()[0]
     parity = round(par_same / par_n, 4) if par_n else None
     expected = round(ALPHA * n_tested_cells, 1)
@@ -638,7 +723,8 @@ def summarize(store, conn, cells: dict, tfs, run_start: int, through: Optional[s
         "brackets_src": brackets_src, "multipliers": list(MULTS), "min_trades": MIN_TRADES,
         "alpha": ALPHA, "tfs": list(tfs),
         "overview": {"cells": len(out_cells), "variants": n_var, "better": n_better, "stars": n_star,
-                     "cells_tested": n_tested_cells, "stars_by_luck": expected, "parity": parity},
+                     "star_cells": star_cells, "cells_tested": n_tested_cells, "stars_by_luck": expected,
+                     "parity": parity},
         "cells": out_cells, "notes": notes[-50:],
         "texts_ko": {**TEXTS_KO, "luck": TEXTS_KO["luck"].format(n=MIN_TRADES)
                      + f" 모든 칸을 합치면 우연으로도 최대 약 {expected:g}칸에 ★가 붙을 수 있습니다."},
@@ -659,8 +745,8 @@ def summary_line(s: dict) -> str:
     head = f"커스텀값 그림자 {_md(s.get('through_day'))}까지 {s.get('days', 0)}일"
     if s.get("days_remaining"):
         head += f"(아직 {s['days_remaining']}일 채우는 중)"
-    return (f"{head}: 변형 {o.get('variants', 0):,}개 중 기본값보다 번 것 {o.get('better', 0):,} · ★ {o.get('stars', 0)}"
-            f"(우연으로도 최대 {o.get('stars_by_luck', 0):g}) · 기본값 재계산 일치 {par}")
+    return (f"{head}: 변형 {o.get('variants', 0):,}개 중 기본값보다 번 것 {o.get('better', 0):,} · ★ 붙은 칸 "
+            f"{o.get('star_cells', 0)}(우연으로도 최대 {o.get('stars_by_luck', 0):g}칸) · 기본값 재계산 일치 {par}")
 
 
 # ====================================================================== outputs
@@ -759,6 +845,10 @@ def main(argv: Optional[list] = None) -> int:
     except ParamShadowError as exc:
         write_error(args.out, str(exc), now)
         print(f"paramshadow could not run: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001  anything else: the same warning, with the reason kept in error.json
+        write_error(args.out, f"{type(exc).__name__}: {exc}", now)
+        print(f"paramshadow failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     print(summ["line_ko"])
     return 0

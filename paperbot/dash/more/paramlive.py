@@ -1,7 +1,8 @@
 """커스텀값 실시간 비교 (owners' "2번", 2026-10-10): what the nightly custom-value shadow (paperbot/paramshadow.py) wrote
 about the 36 strategies' numbers since the v4 run started. Read-only over that job's own output files; nothing is
-recomputed here, no database is opened and paramshadow itself is not imported (numpy / pandas / the engine stay out of
-the dashboard process).
+recomputed here, no database is opened by this module (the run's start, to hide another run's summary after a reset,
+comes through the dashboard's own paper3.db reader) and paramshadow itself is not imported (numpy / pandas / the engine
+stay out of the dashboard process).
 
     GET /api/v4/paramlive               the whole grid: status, the one Korean line, totals, the texts, and one COMPACT
                                         cell per strategy x timeframe (no variant rows)            (분석 › 커스텀값 비교)
@@ -37,6 +38,9 @@ ERROR = "error.json"
 TFS = ("15m", "30m", "1h", "4h")
 
 NONE_KO = "아직 첫 계산 전입니다 (매일 10:00 KST에 계산)"
+OLD_RUN_KO = "새 실행이 시작되어, 다음 10:00 계산부터 새 기록으로 보입니다 (지난 결과는 이전 실행 것)"
+ORIGINAL_KINDS = ("strategy", "random", "ds200", "reel")     # paperbot/accounts.py ORIGINAL_KINDS (not imported here)
+RUN_TTL_S = 60
 BAD_KO = "계산 결과 파일을 읽지 못했습니다 (다음 계산 때 다시 씁니다)"
 UNKNOWN_KO = "그런 매매법이 없습니다"
 LABEL_KO = "그림자 계좌 · 참고용 (판정 아님)"
@@ -47,6 +51,33 @@ SETTING_KEYS = ("version", "initial_equity", "taker_fee", "slippage", "leverage_
 _CACHE: dict = {}
 _LOCK = threading.Lock()
 _BAD = object()                               # a file that exists but cannot be read as a JSON object
+
+
+_RUN: dict = {}
+
+
+def run_start(data) -> Optional[int]:
+    """MIN(created_ts) of the run's original accounts, through the dashboard's own paper3.db reader (``data.conn()``,
+    dash.app.Data; read-only like every dashboard query), re-read at most every RUN_TTL_S; None when it cannot be read
+    (then the summary is shown as it is)."""
+    conn = getattr(data, "conn", None)
+    if conn is None:
+        return None
+    import time
+    now = time.monotonic()
+    hit = _RUN.get(id(data))
+    if hit and now - hit[0] < RUN_TTL_S:
+        return hit[1]
+    val = None
+    try:
+        with conn() as c:
+            r = c.execute(f"SELECT MIN(created_ts) FROM accounts WHERE kind IN "
+                          f"({', '.join('?' * len(ORIGINAL_KINDS))})", ORIGINAL_KINDS).fetchone()
+            val = int(r[0]) if r and r[0] is not None else None
+    except Exception:  # noqa: BLE001  (a missing or busy database: show the summary as it is)
+        val = None
+    _RUN[id(data)] = (now, val)
+    return val
 
 
 def out_dir() -> str:
@@ -176,8 +207,9 @@ def _error(folder: str, summary_stamp, summary_ms) -> dict:
     return {"error_ko": str(line), "error_at": at}
 
 
-def _base(folder: Optional[str]):
-    """(prepared | None, answer head): the parts both routes share, including the not-available states."""
+def _base(folder: Optional[str], run: Optional[int] = None):
+    """(prepared | None, answer head): the parts both routes share, including the not-available states. ``run``: the
+    current run's start; a summary of another run (a reset happened since) is not shown."""
     folder = folder or out_dir()
     stamp, p = _summary(folder)
     ok = p is not None and p is not _BAD
@@ -188,20 +220,23 @@ def _base(folder: Optional[str]):
     if not p["has"]:
         return None, {**out, **p["head"], "available": False,
                       "none_ko": p["head"]["line_ko"] or NONE_KO, **err}
+    rs = p["head"].get("run_start_ms")
+    if run is not None and rs is not None and int(rs) != int(run):
+        return None, {**out, "available": False, "status": "old_run", "none_ko": OLD_RUN_KO}
     return p, {**out, **p["head"], "available": True, **err}
 
 
 # ------------------------------------------------------------------ the answers
-def overview(folder: Optional[str] = None) -> dict:
-    p, out = _base(folder)
+def overview(folder: Optional[str] = None, run: Optional[int] = None) -> dict:
+    p, out = _base(folder, run)
     if p is None:
         return out
     return {**out, "overview": p["overview"], "notes": p["notes"], "cells": p["compact"]}
 
 
-def strategy_view(strategy: str, folder: Optional[str] = None) -> Optional[dict]:
+def strategy_view(strategy: str, folder: Optional[str] = None, run: Optional[int] = None) -> Optional[dict]:
     """One strategy's four cells in full; None (the route's 404) for a name not among the cells of a real summary."""
-    p, out = _base(folder)
+    p, out = _base(folder, run)
     if p is None:
         return {**out, "strategy": strategy}
     cells = p["by"].get(strategy)
@@ -211,15 +246,17 @@ def strategy_view(strategy: str, folder: Optional[str] = None) -> Optional[dict]
 
 
 def register(app, ctx) -> dict:
+    data = getattr(ctx, "data", None)
+
     @app.get("/api/v4/paramlive")
     def get_paramlive():
         """커스텀값 그림자: the 36 x 4 grid (compact cells), status and texts (read-only files, mtime cache)."""
-        return overview()
+        return overview(run=run_start(data))
 
     @app.get("/api/v4/paramlive/{strategy}")
     def get_paramlive_strategy(strategy: str):
         """커스텀값 그림자: one strategy's four timeframes with every one-number variant (read-only files)."""
-        out = strategy_view(strategy)
+        out = strategy_view(strategy, run=run_start(data))
         if out is None:
             raise HTTPException(404, UNKNOWN_KO)
         return out

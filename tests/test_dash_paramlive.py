@@ -349,3 +349,37 @@ def test_the_jobs_list_has_the_shadow_timer(monkeypatch):
     assert d["available"] and row["state"] == "on" and row["ok"] is True
     assert row["last_ms"] == J.parse_ts("Fri 2026-10-09 01:00:03 UTC")
     assert row["next_ms"] == J.parse_ts("Sat 2026-10-10 01:00:00 UTC") and any("paperbot-paramshadow.timer" in c for c in calls)
+
+
+def test_a_summary_of_another_run_is_not_shown(psdir, tmp_path):
+    """After a reset the old run's summary stays until the next 10:00 run: the routes say so instead of showing it."""
+    import contextlib
+    import sqlite3
+    from paperbot.store3 import Store3
+    doc = summary()
+    _write(psdir, P.SUMMARY, doc)
+    db = str(tmp_path / "paper3.db")
+    st = Store3(db)
+    st.add_account("S2_ST_ROC@15m", "S2_ST_ROC", "15m", "strategy", doc["run_start_ms"], "paper-v4")
+    st.commit()
+    st.close()
+
+    class Data:
+        @contextlib.contextmanager
+        def conn(self):
+            c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            try:
+                yield c
+            finally:
+                c.close()
+    data = Data()
+    P._RUN.clear()
+    assert P.run_start(data) == doc["run_start_ms"]
+    assert P.overview(psdir, run=P.run_start(data))["available"] is True
+    other = P.overview(psdir, run=doc["run_start_ms"] + 86_400_000)
+    assert other["available"] is False and other["status"] == "old_run" and "새 실행" in other["none_ko"]
+    assert "cells" not in other
+    one = P.strategy_view("S2_ST_ROC", psdir, run=doc["run_start_ms"] + 86_400_000)
+    assert one["available"] is False and "cells" not in one
+    assert P.run_start(object()) is None                                # no reader: shown as it is
+    assert P.overview(psdir, run=None)["available"] is True

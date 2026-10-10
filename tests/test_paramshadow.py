@@ -179,6 +179,7 @@ def test_skipping_idle_engines_gives_the_same_trades(data):
     b = {aid: PaperEngine(settings, BRACKETS, book=aid) for aid in aids}
     for ts, bars, funding in steps:
         for e in b.values():
+            PS.stamp_ref(e, bars)
             e.step(bars, funding)
         for aid, sig in by_close.get(ts + 60_000, ()):
             b[aid].submit(sig)
@@ -365,3 +366,119 @@ def test_a_day_with_too_few_minutes_is_not_replayed(tmp_path, data):
     conn.close()
     s = _run(tmp_path, data, now, db=db, out=out)                    # the next night fills the day
     assert s["through_day"] == "2026-10-06" and s["days"] == 2
+
+
+def test_entry_minute_gets_the_fill_minutes_open_as_reference(data):
+    """stamp_ref gives a pending signal the next minute's open (the same fill), so the engine skips the lock step on
+    the entry minute as it does for live signals."""
+    settings = v3_settings(taker_fee=0.0005)
+    steps = _steps_from(data)(None, list(SYMS), D0, D0 + DAY)
+    e = PaperEngine(settings, BRACKETS, book="X")
+    t = D0 + 900_000
+    price = float(data["BTCUSDT"][4][np.searchsorted(data["BTCUSDT"][0], t) - 1])
+    by_close = {t: [("X", Signal(ts=t - 1, symbol="BTCUSDT", timeframe="15m", strategy_id="X", side=1, stop_price=0.0,
+                                 tier="best", atr=price * 0.004, meta={"stop_dist": price * 0.008, "account": "X"}))]}
+    PS.replay_day({"X": e}, set(), by_close, steps, BRACKETS)
+    first = next(b for ts, b, _f in steps if ts == t)["BTCUSDT"]
+    assert by_close[t][0][1].meta["ref_price"] == pytest.approx(first.open)
+    entry = e.trades[0].entry_price if e.trades else e.position.entry_price
+    assert entry == pytest.approx(first.open * (1 + settings.slippage_frac))      # the same fill as without it
+
+
+def test_a_missing_minute_does_not_drop_a_signal(data):
+    settings = v3_settings(taker_fee=0.0005)
+    steps = _steps_from(data)(None, list(SYMS), D0, D0 + DAY)
+    t = D0 + 3_600_000                                    # a 1h close
+    gap = [st for st in steps if st[0] != t - 60_000]     # the minute ending at the close is missing
+    price = float(data["BTCUSDT"][4][np.searchsorted(data["BTCUSDT"][0], t) - 1])
+    sig = Signal(ts=t - 1, symbol="BTCUSDT", timeframe="1h", strategy_id="X", side=1, stop_price=0.0, tier="best",
+                 atr=price * 0.004, meta={"stop_dist": price * 0.008, "account": "X"})
+    e = PaperEngine(settings, BRACKETS, book="X")
+    PS.replay_day({"X": e}, set(), {t: [("X", sig)]}, gap, BRACKETS)
+    assert e.trades or e.position is not None
+    last = PaperEngine(settings, BRACKETS, book="Y")       # a close after the day's last step stays pending
+    late = Signal(ts=D0 + DAY - 1, symbol="BTCUSDT", timeframe="1h", strategy_id="X", side=1, stop_price=0.0,
+                  tier="best", atr=price * 0.004, meta={"stop_dist": price * 0.008, "account": "Y"})
+    PS.replay_day({"Y": last}, set(), {D0 + DAY: [("Y", late)]}, steps[:-30], BRACKETS)
+    assert last.pending == [late]
+
+
+def test_a_coin_missing_a_whole_day_is_caught_and_old_short_days_go_in_with_a_note(tmp_path, data):
+    full = _steps_from(data)
+
+    def no_eth(rest, symbols, start, end):
+        steps = full(rest, symbols, start, end)
+        if start == D0 + DAY:
+            steps = [(t, {s: b for s, b in bars.items() if s != "ETHUSDT"}, f) for t, bars, f in steps]
+        return steps
+    db = _paper_db(tmp_path / "p.db")
+    out = str(tmp_path / "o")
+    Path(out).mkdir()
+    with pytest.raises(PS.ParamShadowError, match="ETH 0분"):
+        PS.run(db, out, PS.FrameSource(data), None, None, BRACKETS, SPECS, D0 + 2 * DAY + 3_600_000,
+               strategies=STRATS, tfs=TFS, symbols=SYMS, fetch_steps=no_eth, log=lambda s: None)
+    # four days later the day is replayed with what exists, and the summary says so
+    s = PS.run(db, out, PS.FrameSource(data), None, None, BRACKETS, SPECS, D0 + 5 * DAY + 3_600_000,
+               strategies=STRATS, tfs=TFS, symbols=SYMS, fetch_steps=no_eth, log=lambda s: None)
+    assert s["through_day"] == "2026-10-09" and any("모자란 채로" in n and "ETH 0분" in n for n in s["notes"])
+
+
+def test_the_fetcher_reads_funding_once_per_chunk_and_matches_daily3(data):
+    from paperbot import daily3
+
+    class Rest:
+        def __init__(self):
+            self.calls = []
+
+        def klines(self, s, iv, start_time=None, limit=1500):
+            self.calls.append(("k", s))
+            ts, o, h, l, c, v = data[s]
+            m = (ts >= start_time)
+            idx = np.flatnonzero(m)[:limit]
+            return [[int(ts[i]), o[i], h[i], l[i], c[i], v[i], int(ts[i]) + 59_999] for i in idx]
+
+        def mark_klines(self, s, iv, start_time=None, limit=1500):
+            self.calls.append(("m", s))
+            return self.klines(s, iv, start_time, limit)
+
+        def funding_rates(self, s, start_time=None, limit=1000):
+            self.calls.append(("f", s))
+            return [{"fundingTime": t, "fundingRate": "0.0001"} for t in range(D0, D0 + 3 * DAY, 8 * 3_600_000)
+                    if t >= start_time]
+    r1 = Rest()
+    fetch = PS.make_fetcher(r1, list(SYMS), D0, D0 + 3 * DAY, sleep=lambda s: None)
+    mine = [fetch(r1, list(SYMS), D0 + d * DAY, D0 + (d + 1) * DAY) for d in range(3)]
+    assert sum(1 for c in r1.calls if c[0] == "f") == len(SYMS)               # once per coin for the chunk
+    r2 = Rest()
+    theirs = [daily3.fetch_steps(r2, list(SYMS), D0 + d * DAY, D0 + (d + 1) * DAY) for d in range(3)]
+    assert sum(1 for c in r2.calls if c[0] == "f") == 3 * len(SYMS)
+    for a, b in zip(mine, theirs):
+        assert [(t, sorted(x), f) for t, x, f in a] == [(t, sorted(x), f) for t, x, f in b]
+
+
+def test_luck_compares_starred_cells(tmp_path, data):
+    now = D0 + 2 * DAY + 3_600_000
+    s = _run(tmp_path / "lc", data, now)
+    o = s["overview"]
+    assert o["star_cells"] == sum(1 for c in s["cells"] if c["stars"]) and o["star_cells"] <= o["stars"]
+    assert "★ 붙은 칸" in s["line_ko"] and "칸)" in s["line_ko"]
+
+
+def test_any_failure_writes_the_error_file_and_exits_2(tmp_path, monkeypatch):
+    db = tmp_path / "paper3.db"
+    db.write_bytes(b"")
+    monkeypatch.setattr(PS, "run", lambda *a, **k: (_ for _ in ()).throw(KeyError("boom")))
+    import paperbot.live as L
+    monkeypatch.setattr(L, "_rest", lambda: type("R", (), {"exchange_info": lambda self, s: {}})())
+    monkeypatch.setattr(L, "load_brackets", lambda *a, **k: ({}, "x"))
+    assert PS.main(["run", "--db", str(db), "--out", str(tmp_path / "o")]) == 2
+    d = json.loads((tmp_path / "o" / "error.json").read_text(encoding="utf-8"))
+    assert "KeyError" in d["error"] and "개발자" in d["line_ko"]
+
+
+def test_the_packet_drops_another_runs_shadow(tmp_path, data):
+    from paperbot.agents import packets3 as P3
+    s = _run(tmp_path / "rs", data, D0 + 2 * DAY + 3_600_000)
+    path = str(tmp_path / "rs" / "out" / "last.json")
+    assert P3.live_params("S2_ST_ROC", path, run_start=s["run_start_ms"]) is not None
+    assert P3.live_params("S2_ST_ROC", path, run_start=s["run_start_ms"] + DAY) is None
