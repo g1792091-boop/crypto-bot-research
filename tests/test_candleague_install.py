@@ -1,5 +1,6 @@
 """deploy/candleague: the installer's own code list is enough to run the league (copied alone into an empty folder,
-the selfcheck's imports work there), the units keep the guest limits and the sandbox, the script parses."""
+the selfcheck's imports work there), the units (engine, dashboard, watch) keep the guest limits and the sandbox, the
+firewall opens the dashboard on Tailscale only, the scripts parse."""
 
 from __future__ import annotations
 
@@ -21,8 +22,9 @@ def _code_paths() -> list[str]:
     return m.group(1).replace("\\\n", " ").split()
 
 
-def test_script_parses():
-    subprocess.run(["bash", "-n", SCRIPT], check=True)
+def test_scripts_parse():
+    for name in ("install_candleague.sh", "setup_env.sh", "firewall.sh"):
+        subprocess.run(["bash", "-n", os.path.join(KIT, name)], check=True)
 
 
 def test_the_code_list_alone_runs_the_league(tmp_path):
@@ -44,7 +46,7 @@ def test_the_code_list_alone_runs_the_league(tmp_path):
         ex.write_text(json.dumps({"fetched_utc": "x", "brackets": [{"symbol": s, "brackets": [tier]} for s in SIX],
                                   "specs": {s: {"qty_step": 0.001, "min_notional": 5.0} for s in SIX}}))
     code = ("from paperbot import sweepsig; sweepsig.lib()\n"
-            "from candleague import candidates, dash, league, notify, runner\n"
+            "from candleague import candidates, dash, league, notify, runner, watch\n"
             "from paperbot.config import V3_SYMBOLS\n"
             "runner.load_exchange(runner.EXCHANGE_FILE, V3_SYMBOLS)\n"
             f"assert runner.EXCHANGE_FILE.startswith({str(app)!r})\n"
@@ -70,5 +72,15 @@ def test_units_keep_the_guest_limits_and_sandbox():
     for k in ("MemoryMax=300M", "ReadOnlyPaths=/var/lib/candleague", "UnsetEnvironment=CANDLEAGUE_TG_TOKEN",
               "ExecStart=/opt/candleague/venv/bin/python -m candleague.dash"):
         assert k in dash, k
+    watch = open(os.path.join(KIT, "candleague-watch.service")).read()
+    for k in ("User=candleague", "Type=oneshot", "MemoryMax=120M", "ProtectSystem=strict",
+              "ReadWritePaths=/var/lib/candleague", "-/etc/paperbot", "-/var/lib/demobot",
+              "UnsetEnvironment=CANDLEAGUE_DASH_PASSWORD_HASH CANDLEAGUE_DASH_SECRET",
+              "ExecStart=/opt/candleague/venv/bin/python -m candleague.watch"):
+        assert k in watch, k
+    assert "Unit=candleague-watch.service" in open(os.path.join(KIT, "candleague-watch.timer")).read()
+    fw = open(os.path.join(KIT, "firewall.sh")).read()
+    assert "ufw allow in on tailscale0 to any port" in fw and "/etc/candleague/candleague.env" in fw
+    assert "demobot" not in fw.replace("/etc/demobot", "")                     # no demo lab rule names left
     env = open(os.path.join(KIT, "candleague.env.example")).read()
     assert re.findall(r"^CANDLEAGUE_[A-Z_]+=(.*)$", env, re.M) == ["", "", "", "", "", "8091", "0"]   # no values

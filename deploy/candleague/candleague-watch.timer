@@ -1,0 +1,13 @@
+# 후보 리그 (candidate league): the watch every 10 minutes (at :06, :16, :26, ...). A missed run is not caught up.
+# Enabled by install_candleague.sh together with the engine.
+[Unit]
+Description=candleague candidate league watch, every 10 minutes
+
+[Timer]
+OnCalendar=*-*-* *:06/10:00
+Persistent=false
+AccuracySec=1min
+Unit=candleague-watch.service
+
+[Install]
+WantedBy=timers.target

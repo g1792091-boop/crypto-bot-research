@@ -6,9 +6,10 @@
 # Safe to run again (an update = git pull, then the same command): system user candleague, /var/lib/candleague
 # (+ snap/), /etc/candleague, the env file from the template ONLY when it is missing (never printed), the venv
 # /opt/candleague/venv, a copy of only the code paths the league needs into /opt/candleague/app (staged in app.new,
-# checked as the candleague user, then swapped; the previous copy stays in app.old), the two systemd units. Starts
-# the engine only when a checked candidate list is in the code (candleague/data/candidates.json) and the dashboard
-# only when its password, secret and address are set; otherwise it says what is missing.
+# checked as the candleague user, then swapped; the previous copy stays in app.old), the systemd units (engine,
+# dashboard, the 10-minute watch). Starts the engine and the watch only when a checked candidate list is in the code
+# (candleague/data/candidates.json) and the dashboard only when its password, secret and address are set
+# (deploy/candleague/setup_env.sh fills them, with Telegram); the dashboard port opens on Tailscale only (firewall.sh).
 # Never touches the rule bot or the demo lab: none of their units or folders.
 set -euo pipefail
 
@@ -20,7 +21,7 @@ LIB=/var/lib/candleague
 SNAP=$LIB/snap
 ETC=/etc/candleague
 ENVF=$ETC/candleague.env
-UNITS="candleague-live.service candleague-dash.service"
+UNITS="candleague-live.service candleague-dash.service candleague-watch.service candleague-watch.timer"
 # the only paths copied from the repository
 CODE_PATHS="candleague paperbot third_party/sweep research/entry_study/param_defs research/entry_study/strength_defs \
 research/entry_study/sr.py research/entry_study/DEFS_BC.sha256 research/deepseek200/lib_c.py research/library \
@@ -126,7 +127,7 @@ SC_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LA
 import sys
 from paperbot import sweepsig
 sweepsig.lib()                                     # the locked signal library loads (hash-checked)
-from candleague import candidates, dash, league, notify, runner
+from candleague import candidates, dash, league, notify, runner, watch
 from paperbot.config import V3_SYMBOLS
 runner.load_exchange(runner.EXCHANGE_FILE, V3_SYMBOLS)   # the leverage table and order-size rules of the study
 print(len(candidates.ds_defs().DEFS), "DeepSeek definitions load")
@@ -161,15 +162,20 @@ echo "code swapped: $APP"
 if [ "$CANDS" = 1 ]; then
   systemctl enable --quiet candleague-live.service
   systemctl restart candleague-live.service || echo "엔진을 켜지 못했습니다: journalctl -u candleague-live -n 40 --no-pager"
+  systemctl enable --quiet --now candleague-watch.timer || echo "감시 타이머를 켜지 못했습니다: systemctl status candleague-watch.timer"
   echo "엔진: 켜짐 (처음에는 10월 1일부터 따라잡느라 몇 분~수십 분 걸립니다: journalctl -u candleague-live -f)"
+  echo "감시: 10분마다 (엔진이 1시간 넘게 멈추면 텔레그램으로 [후보 리그] 알림)"
 else
   echo "엔진: 후보 목록(candleague/data/candidates.json)이 아직 없어 켜지 않았습니다. 후보가 정해지면 git pull 후 다시 실행하세요."
 fi
+echo "== firewall (dashboard on Tailscale only)"
+bash "$HERE/firewall.sh" || echo "firewall check failed (nothing else is affected): sudo bash $HERE/firewall.sh"
 if dash_ready; then
   systemctl enable --quiet candleague-dash.service
   systemctl restart candleague-dash.service || echo "대시보드를 켜지 못했습니다: journalctl -u candleague-dash -n 40 --no-pager"
   echo "대시보드: http://$(envval CANDLEAGUE_DASH_HOST):$(envval CANDLEAGUE_DASH_PORT || echo 8091)"
 else
-  echo "대시보드: 비밀번호 해시·비밀값·주소가 아직 없어 켜지 않았습니다. 채우는 법: docs/candleague-ko.md"
+  echo "대시보드: 비밀번호·비밀값·주소가 아직 없어 켜지 않았습니다. 다음 명령 하나로 채웁니다 (텔레그램도 함께):"
+  echo "  sudo bash $HERE/setup_env.sh"
 fi
 echo "끝."

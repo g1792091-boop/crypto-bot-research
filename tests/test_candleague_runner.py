@@ -51,6 +51,14 @@ def test_a_day_at_once_equals_five_minute_pieces(tmp_path):
     assert {a: e.wallet for a, e in one.engines.items()} == {a: e.wallet for a, e in many.engines.items()}
 
 
+def test_catch_up_writes_its_snapshots_as_it_goes(tmp_path):
+    lg = _league(tmp_path / "a.db")
+    seen = []
+    n = lg.advance(START + 3 * TP.DAY, on_chunk=lambda: seen.append(RN.write_snapshots(str(tmp_path / "snap"), lg,
+                                                                                       0)["done_ms"]))
+    assert n == 3 and seen == [START + TP.DAY, START + 2 * TP.DAY, START + 3 * TP.DAY]
+
+
 def test_stop_and_restart_equals_one_run(tmp_path):
     full = _league(tmp_path / "a.db")
     full.advance(START + 3 * TP.DAY)

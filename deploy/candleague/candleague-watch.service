@@ -1,0 +1,43 @@
+# 후보 리그 (candidate league) watch: one check of `python -m candleague.watch`, started by candleague-watch.timer
+# (every 10 minutes), apart from the engine so a stopped engine is still reported: the league's processed time not
+# moving for an hour, or candleague-live not running. At most one warning every 3 hours, and one message when it
+# recovers ([후보 리그] tag, the league's Telegram). Same user, sandbox and env file as the engine.
+[Unit]
+Description=candleague candidate league watch (one check)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=candleague
+Group=candleague
+UMask=0027
+WorkingDirectory=/opt/candleague/app
+EnvironmentFile=/etc/candleague/candleague.env
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# the watch never needs the dashboard's login values
+UnsetEnvironment=CANDLEAGUE_DASH_PASSWORD_HASH CANDLEAGUE_DASH_SECRET
+ExecStart=/opt/candleague/venv/bin/python -m candleague.watch
+TimeoutStartSec=2min
+KillMode=mixed
+# A guest on the rule bot's server: a second every 10 minutes, low priority, small memory cap.
+Nice=10
+CPUQuota=20%
+MemoryHigh=100M
+MemoryMax=120M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/candleague
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot -/etc/demobot -/var/lib/demobot

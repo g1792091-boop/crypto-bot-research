@@ -96,8 +96,9 @@ class League:
     def done(self) -> int:
         return int(self.meta["done"])
 
-    def advance(self, end: int) -> int:
-        """Process (done, end] in chunks of at most one UTC day; returns the number of chunks done."""
+    def advance(self, end: int, on_chunk: Optional[Callable[[], None]] = None) -> int:
+        """Process (done, end] in chunks of at most one UTC day; returns the number of chunks done. ``on_chunk`` runs
+        after each committed chunk (the catch-up from 10-01 writes its snapshots as it goes)."""
         n = 0
         while self.done < end:
             a = self.done
@@ -117,6 +118,8 @@ class League:
             _put(self.conn, "meta", self.meta)
             self.conn.commit()
             n += 1
+            if on_chunk is not None:
+                on_chunk()
         return n
 
 
@@ -270,7 +273,7 @@ def main(argv: Optional[list] = None) -> int:
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, done {lg.done}", flush=True)
     while True:
         now = int(time.time() * 1000)
-        n = lg.advance(final_end(now))
+        n = lg.advance(final_end(now), on_chunk=lambda: write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money))
         doc = write_snapshots(a.snap, lg, now, ds_money)
         notifier.after_pass(doc, now, caught_up=final_end(now) - lg.done < 3 * FIVE)
         if n:

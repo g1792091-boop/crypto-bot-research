@@ -41,7 +41,8 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
 | snapshots | `/var/lib/candleague/snap/` (engine writes, dashboard reads; atomic writes) |
 | env | `/etc/candleague/candleague.env` (root:candleague 640): `CANDLEAGUE_TG_TOKEN`, `CANDLEAGUE_TG_CHAT`, `CANDLEAGUE_DASH_PASSWORD_HASH`, `CANDLEAGUE_DASH_SECRET`, `CANDLEAGUE_DASH_HOST`, `CANDLEAGUE_DASH_PORT` (8091) |
 | user | system user `candleague` |
-| services | `candleague-live.service` (engine; CPUQuota and MemoryMax set from the capacity check), `candleague-dash.service` |
+| services | `candleague-live.service` (engine; CPUQuota 30%, MemoryMax 1.3 GB), `candleague-dash.service`, `candleague-watch.timer` (every 10 min: engine stopped or processed time still for 1 h -> Telegram, at most every 3 h, and a recovery message) |
+| setup | `install_candleague.sh` (code, venv, units; engine + watch only with a candidate list), `setup_env.sh` (Telegram copied on the server from the demo lab bot, dashboard address / secret / password; values never printed), `firewall.sh` (8091 on tailscale0 only) |
 
 Telegram: every message starts with `[후보 리그]`; a 09:00 KST summary and bust notices only.
 
