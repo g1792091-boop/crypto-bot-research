@@ -1,0 +1,135 @@
+"""research/fullgrid/run.py end to end on synthetic 1m bars of the six coins (short periods, one timeframe, two
+cells): outcomes -> grid -> select -> confirm -> report -> pack, and the grid statistics equal a direct recount."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import sys
+
+import numpy as np
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+pytest.importorskip("numba")
+
+MIN = 60_000
+T0 = 1_577_836_800_000            # 2020-01-01
+
+
+def _run_module():
+    spec = importlib.util.spec_from_file_location("fullgrid_run", os.path.join(ROOT, "research", "fullgrid", "run.py"))
+    R = importlib.util.module_from_spec(spec)
+    sys.modules["fullgrid_run"] = R
+    spec.loader.exec_module(R)
+    return R
+
+
+def _synth(d: str, days: int = 100) -> None:
+    os.makedirs(os.path.join(d, "1m"), exist_ok=True)
+    for k, sym in enumerate(("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")):
+        rng = np.random.default_rng(k)
+        n = days * 1440
+        r = rng.normal(0, 0.0006, n) + 0.0002 * np.sin(np.arange(n) / 3000)
+        c = (100.0 * (k + 1)) * np.exp(np.cumsum(r))
+        o = np.r_[c[0], c[:-1]]
+        h = np.maximum(o, c) * (1 + np.abs(rng.normal(0, 0.0005, n)))
+        lo = np.minimum(o, c) * (1 - np.abs(rng.normal(0, 0.0005, n)))
+        ts = T0 + np.arange(n, dtype=np.int64) * MIN
+        fund = np.where(ts % (8 * 3_600_000) == 0, 1e-4, 0.0)
+        np.savez(os.path.join(d, "1m", f"{sym}.npz"), ts=ts, o=o, h=h, l=lo, c=c, v=rng.uniform(1, 10, n),
+                 mo=o, mh=h, ml=lo, mc=c, fund=fund)
+
+
+@pytest.fixture(scope="module")
+def world(tmp_path_factory):
+    base = tmp_path_factory.mktemp("fg")
+    data, out = str(base / "data"), str(base / "out")
+    _synth(data)
+    R = _run_module()
+    R.TFS = ("1h",)
+    R.WARMUP_BARS = 60
+    day = 86_400_000
+    R.PERIOD_MS = [("select", T0 + 30 * day, T0 + 65 * day), ("test", T0 + 65 * day, T0 + 100 * day),
+                   ("extra", T0 + 3 * day, T0 + 30 * day)]
+    R.MIN_SELECT, R.MIN_TEST, R.MIN_EXTRA, R.N_BOOT = 10, 10, 1, 200
+    R.FRAME_DIR[0] = os.path.join(out, "frames")
+    full = R.cell_grid
+
+    def small(kind, name):
+        ps, vals, combos = full(kind, name)
+        if name == "S2_ST_ROC":
+            combos = tuple(c for c in combos if c["st_atr_len"] == 10)
+        return ps, vals, combos
+    R.cell_grid = small
+    R.cells = lambda only="": [("core", "S2_ST_ROC", "1h"), ("ds", "F17_Z", "1h")]
+    ex = R.exchange(None, True)
+    R.stage_outcomes(data, out, 2, ex)
+    R.stage_grid(data, out, 2)
+    sel = R.stage_select(out)
+    con = R.stage_confirm(data, out, ex)
+    rep = R._load("fullgrid_report", os.path.join(R.HERE, "report.py"))
+    text = rep.write(out)
+    dest = rep.pack(out, R)
+    return R, data, out, sel, con, text, dest
+
+
+def test_every_stage_writes_its_files(world):
+    R, data, out, sel, con, text, dest = world
+    assert len(os.listdir(os.path.join(out, "outcomes"))) == 6
+    assert not sel["missing"] and len(sel["cells"]) == 2
+    for f in ("RESULTS_KO.md", "select.json", "confirm.json", "candidates.csv", "cells.csv", "grid_stats.npz", "grids.json"):
+        assert os.path.exists(os.path.join(dest, f)), f
+    assert "## 결론" in text and "규칙봇 36개" in text
+    assert con["family"] == len(sel["picks"])
+    for r in con["rows"]:
+        assert set(r["checks"]) == {"test_trades", "test_positive", "test_beats_default", "test_fdr", "extra_trades",
+                                    "extra_positive"}
+        assert r["pass"] == all(r["checks"].values())
+        if r["pass"]:
+            assert r["account"]["pick"]["trades"] > 0
+
+
+def test_grid_stats_equal_a_direct_recount(world):
+    R, data, out, *_ = world
+    for kind, name in (("core", "S2_ST_ROC"), ("ds", "F17_Z")):
+        st = R.cell_stats(out, kind, name, "1h")
+        combos = R.cell_grid(kind, name)[2]
+        for r in (0, R.default_row(kind, name), len(combos) - 1):
+            T = R.combo_trades(data, out, kind, name, "1h", combos[r])
+            for k in range(3):
+                x = T["x"][T["pid"] == k]
+                assert st[r, k, 0] == len(x)
+                assert abs(st[r, k, 1] - x.sum()) < 1e-9
+                assert st[r, k, 3] == (x > 0).sum()
+
+
+def test_plateau_is_the_neighbourhood_median(world):
+    R, data, out, sel, *_ = world
+    st = R.cell_stats(out, "ds", "F17_Z", "1h")
+    mean, plat = R.plateau_scores("ds", "F17_Z", st)
+    ps, vals, combos = R.cell_grid("ds", "F17_Z")
+    r = int(np.nanargmax(np.where(np.isfinite(plat), plat, -np.inf))) if np.isfinite(plat).any() else None
+    if r is None:
+        pytest.skip("no combination with enough trades on the synthetic series")
+    c = combos[r]
+    idx = [vals[j].index(c[p["name"]]) for j, p in enumerate(ps)]
+    xs = [mean[r]]
+    for j in range(len(ps)):
+        for d in (-1, 1):
+            k = idx[j] + d
+            if 0 <= k < len(vals[j]):
+                q = [i for i, cc in enumerate(combos) if all(
+                    cc[p["name"]] == (vals[jj][k] if jj == j else c[p["name"]]) for jj, p in enumerate(ps))][0]
+                xs.append(mean[q] if st[q, 0, 0] >= R.MIN_SELECT else 0.0)
+    assert abs(plat[r] - np.median(xs)) < 1e-12
+    picks = [p for p in sel["picks"] if p["name"] == "F17_Z"]
+    assert all(p["plateau"] > 0 for p in picks)
+
+
+def test_rerun_skips_finished_work(world):
+    R, data, out, *_ = world
+    assert all(os.path.exists(R.task_path(out, t)) for t in R.plan())
+    assert R.grid_job((data, out, R.plan()[0])) == ""

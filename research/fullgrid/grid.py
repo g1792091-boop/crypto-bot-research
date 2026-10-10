@@ -5,7 +5,8 @@ Every parameter of the 2026-09-30 parameter study (research/entry_study/param_de
 values (fewer when values collide after rounding or clipping); a strategy's grid is every combination (the product),
 minus combinations that break a rule's own order (``valid``).
 
-- length (bars):          default x (1/3, 1/2, 2/3, 0.8, 1, 1.25, 1.5, 2, 3), rounded half up, at least 2
+- length (bars):          default x (1/3, 1/2, 2/3, 0.8, 1, 1.25, 1.5, 2, 3), rounded half up, at least 2 (clipped to a
+                          declared upper bound: the DeepSeek session windows in hours)
 - mult / threshold_abs:   default x the same nine, clipped to the parameter's bounds (``BOUNDS``)
 - threshold_neutral:      neutral + f x (default - neutral), f in (0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2), clipped
                           to the oscillator's range (never crossing the neutral point: the rule keeps its meaning)
@@ -19,7 +20,8 @@ MULTS = (1 / 3, 1 / 2, 2 / 3, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0)
 NEUTRAL_F = (0.25, 0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0)
 
 # (strategy, parameter) -> (low, high): where a value stops meaning the same rule (a body or a fraction above 1, an
-# oscillator level outside its range). Parameters not listed are bounded only by > 0.
+# oscillator level outside its range). Parameters not listed are bounded only by > 0. A parameter spec may carry its
+# own "bounds" (research/fullgrid/ds_defs.py), which wins.
 BOUNDS = {
     ("S5_DONCHIAN_MFI", "mfi_level"): (0.0, 100.0), ("S1_EMA_RSI_CHOP", "rsi_level"): (0.0, 100.0),
     ("N14_ICHI_RSI", "rsi_oversold"): (0.0, 100.0), ("N17_KC_RSI", "rsi_level"): (0.0, 100.0),
@@ -43,14 +45,15 @@ def _round_half_up(x: float) -> int:
 def values(strategy: str, spec: dict) -> list:
     """The parameter's distinct values, ascending, the default included."""
     d, kind = spec["default"], spec["kind"]
-    lo, hi = BOUNDS.get((strategy, spec["name"]), (0.0, math.inf))
+    lo, hi = spec.get("bounds") or BOUNDS.get((strategy, spec["name"]), (0.0, math.inf))
     out = set()
     if kind == "length" and isinstance(d, (list, tuple)):     # a set of lengths scaled together (KST, Klinger)
         out = {tuple(max(2, _round_half_up(x * m)) for x in d) for m in MULTS}
         out.add(tuple(d))
         return [list(v) for v in sorted(out)]
-    if kind == "length":
-        out = {max(2, _round_half_up(d * m)) for m in MULTS}
+    if kind == "length":                                      # a declared upper bound clips (session windows)
+        out = {min(max(2, _round_half_up(d * m)), hi) if hi < math.inf else max(2, _round_half_up(d * m))
+               for m in MULTS}
     elif kind in ("mult", "threshold_abs"):
         for m in MULTS:
             v = round(float(d) * m, 12)
