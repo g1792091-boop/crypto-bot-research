@@ -679,11 +679,27 @@ def write_outputs(out_dir: str, summ: dict) -> None:
         os.remove(os.path.join(out_dir, "error.json"))
 
 
+ERROR_KO = (   # (words in the English reason, what the owners read); the first that matches
+    (("1m bars", "5m klines", "no 5m bars"), "바이낸스 가격 자료를 다 받지 못했습니다. 다음 밤에 빠진 날부터 이어서 계산합니다"),
+    (("brackets", "exchange data"), "거래소의 레버리지 구간 표를 받지 못했습니다. 다음 밤에 다시 시도합니다"),
+    (("sha256", "locked", "DEFS_BC", "multipliers", "variants of", "is missing"),
+     "숫자 정의 파일 확인에 실패했습니다. 개발자에게 알려 주세요"),
+    (("holds the lock",), "앞선 계산이 아직 돌고 있어 이번 실행은 건너뛰었습니다"),
+)
+
+
+def error_ko(msg: str) -> str:
+    for words, ko in ERROR_KO:
+        if any(w in msg for w in words):
+            return ko
+    return "예상하지 못한 문제로 멈췄습니다. 개발자에게 알려 주세요"
+
+
 def write_error(out_dir: str, msg: str, now_ms: int) -> None:
     os.makedirs(out_dir, exist_ok=True)
     _atomic(os.path.join(out_dir, "error.json"),
             json.dumps({"generated_ms": now_ms, "error": msg[:500],
-                        "line_ko": f"커스텀값 그림자: 이번 밤 계산 못 함 ({msg[:120]})"}, ensure_ascii=False))
+                        "line_ko": f"커스텀값 그림자: 이번 밤 계산 못 함 · {error_ko(msg)}"}, ensure_ascii=False))
 
 
 def read_summary(out_dir: str = DEFAULT_OUT) -> Optional[str]:

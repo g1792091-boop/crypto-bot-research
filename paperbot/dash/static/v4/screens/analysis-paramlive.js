@@ -65,7 +65,7 @@ function grid(ctx, d) {
 export function paramlive(d, env) {
   const ctx = env.ctx;
   const out = [viewHead({plate: "커스텀값 비교", q: "숫자 하나만 바꿨다면, v4 시작부터 지금까지 어땠을까",
-    meta: d.available ? metaLine(d) : null,
+    meta: d.available ? `${metaLine(d)} · 매일 10:00 갱신` : null,
     read: d.available && "칸 = 그 매매법 · 봉에서 신호가 달라진 변형 중 기본값(재계산)보다 돈을 더 번 변형 수 / 신호가 달라진 변형 수, ★ = 운 기준선을 넘고 앞뒤 절반 모두 더 번 변형 수. 색이 진할수록 더 번 변형이 많은 칸입니다 (참고, 판정 아님). 매매법 이름이나 칸을 누르면 그 매매법의 변형 표로 갑니다.",
     warn: stateLines(d)})];
   if (!d.available) {

@@ -297,7 +297,10 @@ def test_no_paper_db_and_show(tmp_path, capsys):
 def test_error_file(tmp_path):
     PS.write_error(str(tmp_path), "5m klines of BTCUSDT unavailable", D0)
     d = json.loads((tmp_path / "error.json").read_text(encoding="utf-8"))
-    assert "계산 못 함" in d["line_ko"]
+    assert "계산 못 함" in d["line_ko"] and "가격 자료" in d["line_ko"] and "unavailable" not in d["line_ko"]
+    assert "unavailable" in d["error"]
+    assert "정의 파일" in PS.error_ko("param_defs/X.py: sha256 ab != locked cd")
+    assert "개발자" in PS.error_ko("KeyError: x")
     PS.write_outputs(str(tmp_path), {"status": "no_run", "line_ko": "커스텀값 그림자: x"})
     assert not (tmp_path / "error.json").exists()
 

@@ -40,9 +40,9 @@ export function stateLines(d) {
   return out;
 }
 
-/** "10/08까지 4일 · 10/10 10:00 계산 · 매일 10:00 갱신". */
+/** "10/08까지 4일 · 10/10 10:00 계산" (the card's sub line says 매일 10:00 갱신). */
 export function metaLine(d) {
-  return `${dayKo(d.through_day)}까지 ${fmt.int(d.days || 0)}일 · ${d.generated_ms ? fmt.kst(d.generated_ms) + " 계산" : "계산 시각 —"} · 매일 10:00 갱신`;
+  return `${dayKo(d.through_day)}까지 ${fmt.int(d.days || 0)}일 · ${d.generated_ms ? fmt.kst(d.generated_ms) + " 계산" : "계산 시각 —"}`;
 }
 
 /** The job's texts as small notes (luck, parity, caution), in that order, plus the label. */
