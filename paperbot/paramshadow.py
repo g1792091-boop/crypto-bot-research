@@ -6,9 +6,10 @@ set, so a change here restarts no 30-day window).
     python -m paperbot.paramshadow show [--out DIR]                  print the last one-line summary
 
 What it does. The 36 locked strategies trade on their default numbers. This job replays, from the run's start, every
-strategy x timeframe (15m, 30m, 1h, 4h) a second time with ONE number changed: each parameter of the pre-registered
+strategy x timeframe (15m, 30m, 1h, 4h) again with ONE number changed: each parameter of the pre-registered
 parameter study (research/entry_study/param_defs/<NAME>.py, hash-checked against DEFS_BC.sha256, the same files the
-2026-09-30 study ran) at x0.5, x0.75, x1.25 and x1.5 of its default. Next to them it replays the default the same way
+2026-09-30 study ran) at x0.5, x0.75, x1.25 and x1.5 of its default; and with TWO numbers changed together (every
+pair of parameters, each at x0.75 or x1.25: four per pair; owners 2026-10-10). Up to 40 variants per cell. Next to them it replays the default the same way
 ("base"), so a variant is always compared with a default computed by the very same method. Each variant is its own
 shadow account of the real rules: v4 settings (config.v3_settings, the run's taker fee), $5,000, the six coins, one
 position at a time, the 2 x ATR14 stop, the ladder locks, the quality_v1 leverage group (the signal bar's entry
@@ -70,17 +71,20 @@ from .models import Signal
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB = "/var/lib/paperbot/paper3.db"
 DEFAULT_OUT = "/var/lib/paperbot/paramshadow"
-VERSION = 1                 # bump when the replay's meaning changes: the shadow is rebuilt from the run start
+VERSION = 2                 # bump when the replay's meaning changes: the shadow is rebuilt from the run start
+#                             (2: pairs of numbers changed together, owners 2026-10-10)
 MIN = 60_000
 FIVE = 300_000
 MAX_DAYS = 45               # days replayed per night (the first night fills the run so far)
-CHUNK_DAYS = 10             # days whose signals are computed in one pass (bounds memory)
+CHUNK_DAYS = 6              # days whose signals are computed in one pass (bounds memory: ~5,600 accounts,
+#                             measured ~450 MB at 4 days)
 MIN_STEPS = 1368            # 1m bars each coin needs in a day (95% of 1,440) before the day is replayed
 ACCEPT_AFTER_DAYS = 3       # ... unless the day is this many days old: then it is replayed with what exists, noted
 PAUSE_S = 0.3               # between this job's REST calls (the live feed shares the server's request limits)
 MIN_TRADES = 20             # trades a variant and the default each need before a star
 ALPHA = 0.05                # per cell, Bonferroni over its distinct variants
 MULTS = (0.5, 0.75, 1.25, 1.5)     # the study's multipliers (research/entry_study/analysis_bc.py MULTS)
+PAIR_MULTS = (0.75, 1.25)          # two numbers changed together: the near steps of each, all four ways
 DEFS_BC_MANIFEST_SHA256 = "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"   # analysis_bc pin (520dad0)
 ENGINE_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/sizing.py",
                 "paperbot/policy.py", "paperbot/levrule.py", "paperbot/quality_edges.json", "paperbot/config.py",
@@ -88,8 +92,9 @@ ENGINE_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py"
                 "paperbot/binance.py")     # this file's own meaning: VERSION
 
 TEXTS_KO = {
-    "what": "기존 36개 매매법을 숫자 하나만 바꿔(×0.5 · ×0.75 · ×1.25 · ×1.5) v4 시작부터 실제와 같은 규칙으로 다시 "
-            "계산한 그림자 계좌입니다. 실제 계좌 · 주문 · 30일 판정은 그대로이고, 숫자가 저절로 바뀌는 일은 없습니다.",
+    "what": "기존 36개 매매법의 숫자를 바꿔 v4 시작부터 실제와 같은 규칙으로 다시 계산한 그림자 계좌입니다. 숫자 하나만 "
+            "(×0.5 · ×0.75 · ×1.25 · ×1.5), 그리고 두 숫자를 함께(각각 ×0.75 또는 ×1.25) 바꿉니다. 실제 계좌 · 주문 · "
+            "30일 판정은 그대로이고, 숫자가 저절로 바뀌는 일은 없습니다.",
     "base": "기본값(재계산) = 같은 방법으로 다시 계산한 기본값 계좌입니다. 변형은 이것과 비교합니다(실제 계좌는 호가로 체결해서 "
             "조금 다릅니다).",
     "parity": "재계산 일치 = 기본값 재계산과 실제 계좌의 진입(코인 · 방향 · 진입 분)이 같은 비율입니다. 실제는 호가로 체결하고 "
@@ -134,8 +139,12 @@ def param_module(name: str, manifest: Optional[dict] = None):
 
 
 def variants_of(mod) -> list[dict]:
-    """The base and the module's one-number variants: [{key, param, mult, value, default, kind, ov}]."""
-    out = [{"key": "base", "param": None, "mult": 1.0, "value": None, "default": None, "kind": None, "ov": {}}]
+    """The base, the module's one-number variants and its two-number variants:
+    [{key, combo ("base" | "single" | "pair"), parts [{param, mult, value, default}], param, mult, value, default,
+    kind, ov}]. Singles keep param / mult / value / default; a pair has them None and two parts. Pairs: every two
+    parameters, each at x0.75 or x1.25 (PAIR_MULTS), the four ways; the same per-parameter values as the singles."""
+    out = [{"key": "base", "combo": "base", "parts": [], "param": None, "mult": 1.0, "value": None, "default": None,
+            "kind": None, "ov": {}}]
     mults = tuple(getattr(mod, "MULTIPLIERS", getattr(mod, "MULTS", MULTS)))   # analysis_bc's rule
     if mults != MULTS:
         raise ParamShadowError(f"{mod.NAME}: multipliers {mults} != {MULTS}")
@@ -144,8 +153,20 @@ def variants_of(mod) -> list[dict]:
         if len(ovs) != len(MULTS) or any(list(ov) != [p["name"]] for ov in ovs):
             raise ParamShadowError(f"{mod.NAME}: variants of {p['name']} are not one override per multiplier")
         for m, ov in zip(MULTS, ovs):
-            out.append({"key": f"{p['name']}x{m:g}", "param": p["name"], "mult": float(m), "value": ov[p["name"]],
+            out.append({"key": f"{p['name']}x{m:g}", "combo": "single",
+                        "parts": [{"param": p["name"], "mult": float(m), "value": ov[p["name"]], "default": p["default"]}],
+                        "param": p["name"], "mult": float(m), "value": ov[p["name"]],
                         "default": p["default"], "kind": p["kind"], "ov": ov})
+    singles = {(v["param"], v["mult"]): v for v in out if v["combo"] == "single"}
+    names = [p["name"] for p in mod.PARAMS]
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            for ma in PAIR_MULTS:
+                for mb in PAIR_MULTS:
+                    va, vb = singles[(a, ma)], singles[(b, mb)]
+                    out.append({"key": f"{a}x{ma:g}+{b}x{mb:g}", "combo": "pair",
+                                "parts": [va["parts"][0], vb["parts"][0]], "param": None, "mult": None,
+                                "value": None, "default": None, "kind": None, "ov": {**va["ov"], **vb["ov"]}})
     return out
 
 
@@ -684,7 +705,8 @@ def summarize(store, conn, cells: dict, tfs, run_start: int, through: Optional[s
                 n_sig, n_diff = counts.get(aid, (0, 0))
                 same = n_diff == 0
                 e = engines.get(aid)
-                row = {"key": v["key"], "param": v["param"], "mult": v["mult"], "value": v["value"],
+                row = {"key": v["key"], "combo": v["combo"], "parts": v["parts"], "param": v["param"],
+                       "mult": v["mult"], "value": v["value"],
                        "default": v["default"], "same_as_base": same, "signals": n_sig, "signals_diff": n_diff,
                        **{x: s[x] for x in ("trades", "wins", "win_rate", "pnl", "equity", "max_dd")},
                        "open": e.position is not None if e else False, "bust": bool(e.bust) if e else False,
@@ -709,7 +731,8 @@ def summarize(store, conn, cells: dict, tfs, run_start: int, through: Optional[s
                                           default=None)})
     for c in out_cells:
         if c["best"] is not None:
-            c["best"] = {"key": c["best"]["key"], "diff_pnl": c["best"]["diff_pnl"], "star": c["best"]["star"]}
+            c["best"] = {"key": c["best"]["key"], "combo": c["best"]["combo"], "parts": c["best"]["parts"],
+                         "diff_pnl": c["best"]["diff_pnl"], "star": c["best"]["star"]}
     star_cells = sum(1 for c in out_cells if c["stars"])
     days = store.execute("SELECT COUNT(*) FROM days").fetchone()[0]
     parity = round(par_same / par_n, 4) if par_n else None
@@ -720,9 +743,14 @@ def summarize(store, conn, cells: dict, tfs, run_start: int, through: Optional[s
         "settings": {"version": settings.version, "initial_equity": initial, "taker_fee": settings.taker_fee,
                      "slippage": settings.slippage_frac, "leverage_rule": settings.leverage_rule,
                      "stop_atr": V3_STOP_ATR},
-        "brackets_src": brackets_src, "multipliers": list(MULTS), "min_trades": MIN_TRADES,
+        "brackets_src": brackets_src, "multipliers": list(MULTS), "pair_multipliers": list(PAIR_MULTS),
+        "min_trades": MIN_TRADES,
         "alpha": ALPHA, "tfs": list(tfs),
         "overview": {"cells": len(out_cells), "variants": n_var, "better": n_better, "stars": n_star,
+                     "singles": sum(1 for c in out_cells for v in c["variants"]
+                                    if v["combo"] == "single" and not v["same_as_base"]),
+                     "pairs": sum(1 for c in out_cells for v in c["variants"]
+                                  if v["combo"] == "pair" and not v["same_as_base"]),
                      "star_cells": star_cells, "cells_tested": n_tested_cells, "stars_by_luck": expected,
                      "parity": parity},
         "cells": out_cells, "notes": notes[-50:],

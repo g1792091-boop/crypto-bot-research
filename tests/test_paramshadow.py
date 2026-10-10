@@ -137,11 +137,20 @@ def test_variants_follow_the_study():
     for n in ("S2_ST_ROC", "N02_ST_KST", "DOGE"):
         mod = PS.param_module(n, man)
         vs = PS.variants_of(mod)
-        assert vs[0]["key"] == "base" and vs[0]["ov"] == {}
-        assert len(vs) == 1 + 4 * len(mod.PARAMS)
+        assert vs[0]["key"] == "base" and vs[0]["ov"] == {} and vs[0]["combo"] == "base"
+        k = len(mod.PARAMS)
+        singles = [v for v in vs if v["combo"] == "single"]
+        pairs = [v for v in vs if v["combo"] == "pair"]
+        assert len(singles) == 4 * k and len(pairs) == 4 * k * (k - 1) // 2 and len(vs) == 1 + len(singles) + len(pairs)
         assert len({v["key"] for v in vs}) == len(vs)
-        for v in vs[1:]:
-            assert list(v["ov"]) == [v["param"]] and v["mult"] in PS.MULTS
+        for v in singles:
+            assert list(v["ov"]) == [v["param"]] and v["mult"] in PS.MULTS and len(v["parts"]) == 1
+        one = {(v["param"], v["mult"]): v["ov"][v["param"]] for v in singles}
+        for v in pairs:                    # two different numbers, each at a near step, the singles' own values
+            (a, b) = v["parts"]
+            assert a["param"] != b["param"] and {a["mult"], b["mult"]} <= set(PS.PAIR_MULTS)
+            assert v["ov"] == {a["param"]: one[(a["param"], a["mult"])], b["param"]: one[(b["param"], b["mult"])]}
+            assert v["param"] is None and v["key"] == f"{a['param']}x{a['mult']:g}+{b['param']}x{b['mult']:g}"
 
 
 def test_a_changed_definition_is_refused(tmp_path, monkeypatch):

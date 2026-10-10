@@ -605,5 +605,5 @@ cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
 - 텔레그램에 `ℹ️ 재시작 변경 · 코드 버전 (거래에는 영향 없음)`이 한 번 옵니다. **`거래 규칙 영향 있음`이 오면** 매매 코드가
   바뀐 것이니 그대로 두고 개발자에게 알려 주세요.
 - 새 밤 작업이 켜졌는지: `systemctl list-timers paperbot-paramshadow.timer` (다음 10:00 KST). 바로 한 번 돌려 보려면
-  `sudo systemctl start paperbot-paramshadow` (첫 실행은 v4 시작부터 채워서 10~20분쯤), 결과 한 줄은
+  `sudo systemctl start paperbot-paramshadow` (첫 실행은 v4 시작부터 채워서 15~20분쯤), 결과 한 줄은
   `cat /var/lib/paperbot/paramshadow/last.txt`.

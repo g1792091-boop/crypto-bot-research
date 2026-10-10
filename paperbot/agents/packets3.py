@@ -523,8 +523,8 @@ def v4_card(strategy: str) -> Optional[dict]:
 PARAMSHADOW_DIR = os.environ.get("PAPERBOT_PARAMSHADOW_DIR", "/var/lib/paperbot/paramshadow")
 _PS_CACHE: dict = {}
 LIVE_PARAMS_TOP = 3
-LIVE_PARAMS_NOTE = ("참고용 그림자: v4 시작부터 같은 기간을 숫자 하나만 바꿔(x0.5·x0.75·x1.25·x1.5) 실제와 같은 규칙으로 다시 "
-                    "계산한 계좌. 실제 계좌·규칙은 그대로이고 숫자는 저절로 바뀌지 않음. ★ 없는 차이는 우연으로 봄(5년 파라미터 "
+LIVE_PARAMS_NOTE = ("참고용 그림자: v4 시작부터 같은 기간을 숫자 하나(x0.5·x0.75·x1.25·x1.5) 또는 두 숫자를 함께"
+                    "(각각 x0.75·x1.25) 바꿔 실제와 같은 규칙으로 다시 계산한 계좌. 실제 계좌·규칙은 그대로이고 숫자는 저절로 바뀌지 않음. ★ 없는 차이는 우연으로 봄(5년 파라미터 "
                     "시험 1,680개에서도 숫자 변경의 근거는 없었음). 숫자를 바꾸자는 제안은 30일 판정 뒤 5년 시험과 새 계좌로만.")
 
 
@@ -563,8 +563,10 @@ def live_params(strategy: str, path: Optional[str] = None, run_start: Optional[i
     for c in cells:
         vs = [v for v in c.get("variants") or [] if not v.get("same_as_base")]
         vs.sort(key=lambda v: v.get("diff_pnl") or 0.0, reverse=True)
-        top = [{"variant": v.get("key"), "param": v.get("param"), "x": v.get("mult"), "value": v.get("value"),
-                "default": v.get("default"), "trades": v.get("trades"), "diff_pnl": v.get("diff_pnl"),
+        top = [{"variant": v.get("key"), "combo": v.get("combo"),
+                "changes": [{"param": x.get("param"), "default": x.get("default"), "value": x.get("value")}
+                            for x in v.get("parts") or []],
+                "trades": v.get("trades"), "diff_pnl": v.get("diff_pnl"),
                 "star": bool(v.get("star")), "luck_ratio": (v.get("luck") or {}).get("ratio"),
                 "small": bool((v.get("luck") or {}).get("small"))} for v in vs[:LIVE_PARAMS_TOP] if (v.get("diff_pnl") or 0) > 0]
         b, r = c.get("base") or {}, c.get("real") or {}

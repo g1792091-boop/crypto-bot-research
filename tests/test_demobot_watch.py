@@ -439,5 +439,7 @@ def test_main_uses_the_environment(world, monkeypatch):
     monkeypatch.setattr(W, "systemctl", lambda args, run=None: None)
     sent = []
     monkeypatch.setattr(N, "send_message", lambda t, c, x: sent.append(x))
+    run = W.run       # the fixture's files are written at T0: check at T0, not at today's wall clock
+    monkeypatch.setattr(W, "run", lambda *a, **k: run(*a, now_ms=T0, mono=lambda: MONO, **k))
     assert W.main(["--env-file", "/nonexistent"]) == 0
     assert world.state.exists() and (world.snap / "watch.json").exists() and sent == []

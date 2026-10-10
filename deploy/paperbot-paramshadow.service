@@ -20,13 +20,14 @@ WorkingDirectory=/opt/crypto-bot-research
 EnvironmentFile=/etc/paperbot/live.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.paramshadow run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/paramshadow
-# Below the live runner: low CPU and disk priority, bounded memory and time (measured: up to ~500 MB, a few minutes
-# a night; the first night fills the run so far, up to 45 days, about 30-40 minutes). Its REST calls are paced and
+# Below the live runner: low CPU and disk priority, bounded memory and time (measured with the two-number variants,
+# ~5,600 shadow accounts: ~450-700 MB, about 8 minutes a night; the first night fills the run so far, about 8 minutes
+# per 6 days). Its REST calls are paced and
 # funding history is read once per chunk, so the live feed keeps its share of the server's request limits.
 Nice=15
 CPUWeight=10
 IOSchedulingClass=idle
-MemoryMax=1200M
+MemoryMax=1500M
 TimeoutStartSec=2h
 NoNewPrivileges=yes
 PrivateTmp=yes
