@@ -34,3 +34,28 @@ a.an-pl-cell:hover, a.an-pl-cell:focus-visible { border-color: var(--accent-line
 .an-pl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--t-xs); color: var(--ink-2); }
 .an-pl-sw { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .an-pl-sw .an-pl-cell { display: inline-block; width: 18px; min-height: 0; height: 14px; padding: 0; border-radius: 3px; }
+
+/* 지켜볼 후보: one link row per variant. A phone row is three lines: name · timeframe, the change, then difference |
+   luck; from 720 px of list (a container query) the four parts sit on one line. The list stops at 1100 px so a row's
+   parts stay near each other on a wide screen. The ★ is the accent, the difference keeps up / down. */
+.an-pl-ready { margin: 0; font-size: var(--t-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+.an-pl-ready b { color: var(--ink); }
+.an-pl-empty { margin: 0; font-size: var(--t-sm); font-weight: 700; color: var(--ink-2); line-height: 1.6; overflow-wrap: anywhere; }
+.an-pl-clist { display: grid; min-width: 0; max-width: 1100px; container-type: inline-size; }
+.an-pl-cand { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "nm" "p" "n"; gap: 3px 12px; align-items: center;
+  min-width: 0; min-height: 44px; padding: 9px 6px; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: var(--t-sm); }
+.an-pl-cand:hover, .an-pl-cand:focus-visible { background: var(--surface-2); }
+.an-pl-cand.is-star { background: var(--accent-soft); }
+.an-pl-cand-nm { grid-area: nm; min-width: 0; overflow-wrap: anywhere; }
+.an-pl-cand-p { grid-area: p; min-width: 0; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+/* the difference and the luck share one line while they fit, the luck wraps under it on a narrow phone */
+.an-pl-cand-n { grid-area: n; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 12px; min-width: 0; }
+.an-pl-cand-d { grid-area: d; white-space: nowrap; font-size: var(--t-xs); }
+.an-pl-cand-d b { font-size: var(--t-sm); }                 /* up / down: base.css .up / .down (money, a fact) */
+.an-pl-cand-l { grid-area: l; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: var(--t-xs); color: var(--ink-2); }
+.an-pl-cand-star { color: var(--accent); font-size: var(--t-sm); }
+@container (min-width: 720px) {
+  .an-pl-cand { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto 200px; grid-template-areas: "nm p d l"; }
+  .an-pl-cand-n { display: contents; }
+  .an-pl-cand-d { justify-self: end; }
+}

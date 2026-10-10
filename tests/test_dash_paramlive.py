@@ -158,7 +158,8 @@ def test_overview_is_compact_with_the_jobs_counts(client, psdir):
     assert d["notes"] == s["notes"] and "error_ko" not in d and "error" not in d    # 분석 paints a bare d.error as a failure
     assert len(d["cells"]) == 8
     for c in d["cells"]:
-        assert set(c) == {"strategy", "tf", "name_ko", "base", "real", "parity", "k", "better", "stars", "best"}
+        assert set(c) == {"strategy", "tf", "name_ko", "base", "real", "parity", "k", "better", "stars", "best",
+                          "summary_ko", "summary_rule"}
         assert set(c["base"]) == {"trades", "pnl", "win_rate"} and set(c["real"]) == {"trades", "pnl"}
         assert set(c["parity"]) == {"share"}
     assert "variants" not in json.dumps(d["cells"]) and "params" not in json.dumps(d["cells"])
@@ -197,6 +198,180 @@ def test_strategy_route_gives_full_rows_with_korean_names(client, psdir):
     lens = next(v for v in n03["cells"][0]["variants"] if v["param"] == "kst_roc_lens")
     assert lens["param_ko"] == "KST ROC 길이들" and isinstance(lens["value"], list)
     assert all(v["luck"]["small"] for c in n03["cells"] for v in c["variants"])
+
+
+# ---------------------------------------------------------------- the owners' one line, 지켜볼 후보, cells ready
+def _vrow(key, param, mult, value, default, diff, star=False, same=False, ratio=0.3, small=False, param_ko=None):
+    return {"key": key, "param": param, "param_ko": param_ko, "mult": mult, "value": value, "default": default,
+            "same_as_base": same, "trades": 30, "pnl": -100.0 + diff, "diff_pnl": diff, "star": star,
+            "luck": None if same else {"small": small, "ratio": None if small else ratio, "beyond": star}}
+
+
+def _c(trades=30, k=12, better=3, stars=0):
+    return {"base": {"trades": trades, "pnl": -100.0}, "k": k, "better": better, "stars": stars}
+
+
+def test_cell_summary_rules_first_match_wins():
+    star_a = _vrow("st_atr_lenx1.5", "st_atr_len", 1.5, 15, 10, 1234.5, star=True, ratio=1.4, param_ko="슈퍼트렌드 ATR 길이")
+    star_b = _vrow("st_multx0.5", "st_mult", 0.5, 3.0, 6.0, 300.0, star=True, ratio=1.9, param_ko="슈퍼트렌드 배수")
+    plain = _vrow("st_multx1.5", "st_mult", 1.5, 9.0, 6.0, 50.0)
+    tail = "운으로 설명하기 어려운 차이 → 지켜볼 후보 (바꿀지는 30일 판정 뒤 두 분이)"
+    # 1. too few default trades: before anything else (even a star or k == 0)
+    assert P.cell_summary(_c(trades=12, stars=1), [star_a]) == ("thin", "아직 거래 12건뿐이라 판단하기 이릅니다 (거래 20건부터 판단)")
+    assert P.cell_summary(_c(trades=0, k=0), []) == ("thin", "아직 거래가 없어 판단하기 이릅니다 (거래 20건부터 판단)")
+    assert P.cell_summary(_c(trades=25), [], min_trades=30)[1].endswith("(거래 30건부터 판단)")    # the file's own floor
+    # 2. a star: the starred variant that made the most over the default, its Korean name, default -> value, +$
+    assert P.cell_summary(_c(stars=2, better=9), [plain, star_b, star_a]) == \
+        ("star", f"★ 슈퍼트렌드 ATR 길이 10→15: 기본값보다 +$1,234.50, {tail}")
+    lens = _vrow("kst_roc_lensx1.5", "kst_roc_lens", 1.5, [15, 22, 30, 45], [10, 15, 20, 30], 80.0, star=True)
+    assert P.cell_summary(_c(stars=1), [lens]) == ("star", f"★ kst_roc_lens 10·15·20·30→15·22·30·45: 기본값보다 +$80.00, {tail}")
+    # 3. no variant changed a signal; 4. more than half made more; 5. the rest (half exactly is not "more")
+    assert P.cell_summary(_c(k=0, better=0), []) == ("same", "숫자를 바꿔도 신호가 달라지지 않았습니다")
+    assert P.cell_summary(_c(k=12, better=7), [plain]) == \
+        ("more", "숫자를 바꾼 12개 중 7개가 더 벌었지만 운 기준선을 넘은 것은 없음 → 아직 바꿀 근거 없음")
+    assert P.cell_summary(_c(k=12, better=6), [plain]) == \
+        ("less", "숫자를 바꾼 12개 대부분이 기본값보다 못하거나 비슷함 → 기본값 유지가 무난")
+    assert P.cell_summary(_c(k=5, better=0), []) == ("less", "숫자를 바꾼 5개 대부분이 기본값보다 못하거나 비슷함 → 기본값 유지가 무난")
+    # the page's number words
+    assert [P.value_ko(x) for x in (10, 6.0, 0.75, 1.125, 0.0075, [5, 8, 10, 15], None, 1500)] == \
+        ["10", "6", "0.75", "1.125", "0.0075", "5·8·10·15", "—", "1,500"]
+    assert [P.money_ko(x) for x in (4165.61, -51.15, 0, 0.001, None)] == ["+$4,165.61", "−$51.15", "$0.00", "$0.00", "—"]
+    for rule, line in [P.cell_summary(_c(**kw), vs) for kw, vs in ((dict(trades=3), []), (dict(stars=1), [star_a]),
+                                                                    (dict(k=0), []), (dict(better=9), []), ({}, []))]:
+        assert "통과" not in line and "합격" not in line                          # a shadow, never a verdict
+
+
+def test_every_cell_carries_its_line_on_both_routes(client, psdir):
+    s = summary()
+    s["cells"][1]["base"]["trades"] = 7                                        # S2_ST_ROC 30m: too early
+    _write(psdir, "last.json", s)
+    one = client.get("/api/v4/paramlive/S2_ST_ROC").json()
+    lines = {c["tf"]: (c["summary_rule"], c["summary_ko"]) for c in one["cells"]}
+    assert lines["30m"] == ("thin", "아직 거래 7건뿐이라 판단하기 이릅니다 (거래 20건부터 판단)")
+    assert lines["1h"] == ("star", "★ 슈퍼트렌드 ATR 길이 10→15: 기본값보다 +$20.00, 운으로 설명하기 어려운 차이 → 지켜볼 후보 "
+                                   "(바꿀지는 30일 판정 뒤 두 분이)")
+    assert lines["15m"] == ("less", "숫자를 바꾼 8개 대부분이 기본값보다 못하거나 비슷함 → 기본값 유지가 무난")   # 4 of 8: half
+    grid = client.get("/api/v4/paramlive").json()
+    for c in grid["cells"]:                                                    # the map's tooltips say the same
+        full = next(x for x in client.get(f"/api/v4/paramlive/{c['strategy']}").json()["cells"] if x["tf"] == c["tf"])
+        assert (c["summary_rule"], c["summary_ko"]) == (full["summary_rule"], full["summary_ko"])
+
+
+def test_candidates_closest_to_the_luck_line_first(client, psdir):
+    s = summary()
+    by = {(c["strategy"], c["tf"]): {v["key"]: v for v in c["variants"]} for c in s["cells"]}
+    by[("S2_ST_ROC", "1h")]["st_atr_lenx1.5"]["luck"]["ratio"] = 1.3          # the starred one
+    by[("S2_ST_ROC", "15m")]["st_multx0.5"]["luck"]["ratio"] = 0.9
+    by[("S2_ST_ROC", "30m")]["st_atr_lenx1.25"]["luck"]["ratio"] = -0.2       # below the default per trade: never
+    by[("S2_ST_ROC", "4h")]["st_multx0.75"]["luck"] = {"small": False, "ratio": 5.0}   # same signals: never
+    _write(psdir, "last.json", s)
+    d = client.get("/api/v4/paramlive").json()
+    cands = d["candidates"]
+    assert len(cands) == P.CANDIDATES == 8
+    assert all(set(c) == set(P.CANDIDATE_KEYS) for c in cands)
+    assert set(P.CANDIDATE_KEYS) == {"strategy", "name_ko", "tf", "param", "param_ko", "default", "value", "mult", "trades",
+                                     "diff_pnl", "ratio", "star", "combo", "parts", "change_ko"}
+    assert all(c["combo"] == "single" and len(c["parts"]) == 1 for c in cands)          # a version-1 file: one change each
+    first, second = cands[0], cands[1]
+    assert (first["strategy"], first["tf"], first["param"], first["mult"], first["ratio"], first["star"]) == \
+        ("S2_ST_ROC", "1h", "st_atr_len", 1.5, 1.3, True)
+    assert (first["name_ko"], first["param_ko"], first["default"], first["value"]) == ("슈퍼트렌드·ROC", PARAM_KO["st_atr_len"], 10, 15.0)
+    assert (second["tf"], second["param"], second["mult"], second["ratio"], second["star"]) == ("15m", "st_mult", 0.5, 0.9, False)
+    rest = cands[2:]
+    assert all(c["ratio"] == 0.19 for c in rest)                               # the same ratio: more money first
+    assert [c["diff_pnl"] for c in rest] == sorted((c["diff_pnl"] for c in rest), reverse=True)
+    assert all(c["strategy"] == "S2_ST_ROC" for c in cands)                    # N03's variants are all under the floor
+    assert not any(c["tf"] == "4h" and c["param"] == "st_mult" and c["mult"] == 0.75 for c in cands)
+    assert not any(c["ratio"] <= 0 for c in cands)
+    # nothing the job could test yet: an empty list (the page says so)
+    for c in s["cells"]:
+        for v in c["variants"]:
+            if v["luck"]:
+                v["luck"].update(small=True, ratio=None)
+    _write(psdir, "last.json", s, mtime=time.time() + 5)
+    assert client.get("/api/v4/paramlive").json()["candidates"] == []
+
+
+def test_cells_ready_counts_the_defaults_with_enough_trades(client, psdir):
+    s = summary()
+    _write(psdir, "last.json", s)
+    d = client.get("/api/v4/paramlive").json()
+    assert (d["cells_ready"], d["cells_total"]) == (8, 8)
+    for c in s["cells"][:3]:
+        c["base"]["trades"] = 19                                               # one under the job's floor (20)
+    _write(psdir, "last.json", s, mtime=time.time() + 5)                      # same size: a new mtime
+    d = client.get("/api/v4/paramlive").json()
+    assert (d["cells_ready"], d["cells_total"]) == (5, 8)
+    assert d["overview"] == s["overview"]                                      # the job's own totals stay as written
+    assert "candidates" not in client.get("/api/v4/paramlive/S2_ST_ROC").json()
+
+
+def _with_pairs(s, strategy="S2_ST_ROC", tf="1h", star_pair=True):
+    """The job's version 2 on one cell: singles carry combo + parts, and the four pairs of its two parameters (each
+    x0.75 or x1.25) are added; the x1.25 / x0.75 pair is starred and made the most (or not starred)."""
+    c = next(x for x in s["cells"] if x["strategy"] == strategy and x["tf"] == tf)
+    for v in c["variants"]:
+        v.update(combo="single", parts=[{k: v[k] for k in ("param", "mult", "value", "default")}])
+    (a, b) = c["params"][:2]
+    for ma in (0.75, 1.25):
+        for mb in (0.75, 1.25):
+            win = (ma, mb) == (1.25, 0.75)
+            diff = 60.0 if win else -10.0 * ma
+            parts = [{"param": p["name"], "mult": m, "value": round(p["default"] * m, 3), "default": p["default"]}
+                     for p, m in ((a, ma), (b, mb))]
+            c["variants"].append({
+                "key": f"{a['name']}x{ma:g}+{b['name']}x{mb:g}", "combo": "pair", "parts": parts,
+                "param": None, "mult": None, "value": None, "default": None, "same_as_base": False, "signals": 50,
+                "signals_diff": 9, "trades": 31, "wins": 16, "win_rate": 16 / 31, "pnl": -100.0 + diff, "equity": 4900 + diff,
+                "max_dd": 0.1, "open": False, "bust": False, "diff_pnl": diff,
+                "luck": {"small": False, "z": 3.0 if win else 0.1, "z_need": 2.7, "ratio": 1.5 if win else 0.04, "beyond": win},
+                "both_halves": win, "star": win and star_pair})
+    c["k"] += 4
+    c["better"] += 1
+    c["stars"] = sum(1 for v in c["variants"] if v["star"])
+    s["pair_multipliers"] = [0.75, 1.25]
+    s["overview"].update(singles=s["overview"]["variants"], pairs=4)
+    s["overview"]["variants"] += 4
+    return c
+
+
+def test_pairs_name_both_changes_and_old_rows_read_as_one_change(client, psdir):
+    s = summary()
+    cell = _with_pairs(s)
+    cell["best"] = {"key": "st_atr_lenx1.25+st_multx0.75", "combo": "pair",
+                    "parts": next(v for v in cell["variants"] if v["key"] == "st_atr_lenx1.25+st_multx0.75")["parts"],
+                    "diff_pnl": 60.0, "star": True}
+    _write(psdir, "last.json", s)
+    ko_a, ko_b = PARAM_KO["st_atr_len"], PARAM_KO["st_mult"]
+    pair_words = f"{ko_a} 10→12.5 + {ko_b} 6→4.5"
+    d = client.get("/api/v4/paramlive/S2_ST_ROC").json()
+    assert d["pair_multipliers"] == [0.75, 1.25]
+    h1 = next(c for c in d["cells"] if c["tf"] == "1h")
+    pairs = [v for v in h1["variants"] if v["combo"] == "pair"]
+    assert len(pairs) == 4 and len(h1["variants"]) == 12
+    for v in pairs:
+        assert v["param"] is None and len(v["parts"]) == 2
+        assert [p["param_ko"] for p in v["parts"]] == [ko_a, ko_b]
+    for v in h1["variants"]:
+        if v["combo"] == "single":
+            assert len(v["parts"]) == 1 and v["parts"][0]["param_ko"] == v["param_ko"] == PARAM_KO[v["param"]]
+    # the starred pair made the most of the two starred rows: the one line names both changes
+    assert h1["summary_rule"] == "star"
+    assert h1["summary_ko"] == f"★ {pair_words}: 기본값보다 +$60.00, 운으로 설명하기 어려운 차이 → 지켜볼 후보 (바꿀지는 30일 판정 뒤 두 분이)"
+    # a version-1 row (no combo, no parts) reads as its one change
+    n03 = client.get("/api/v4/paramlive/N03_ADX_GC").json()["cells"][0]["variants"][0]
+    assert n03["combo"] == "single" and n03["parts"] == [{"param": "adx_len", "mult": 0.5, "value": 7.0, "default": 14,
+                                                          "param_ko": PARAM_KO["adx_len"]}]
+    # the map's compact best and 지켜볼 후보 carry both changes
+    grid = client.get("/api/v4/paramlive").json()
+    best = next(c for c in grid["cells"] if c["strategy"] == "S2_ST_ROC" and c["tf"] == "1h")["best"]
+    assert best["combo"] == "pair" and [p["param_ko"] for p in best["parts"]] == [ko_a, ko_b] and best["param"] is None
+    first = grid["candidates"][0]
+    assert (first["combo"], first["change_ko"], first["ratio"], first["star"], first["param"]) == ("pair", pair_words, 1.5, True, None)
+    assert [p["param_ko"] for p in first["parts"]] == [ko_a, ko_b]
+    single = next(c for c in grid["candidates"] if c["combo"] == "single")
+    assert single["change_ko"] == f"{single['param_ko']} {P.value_ko(single['default'])}→{P.value_ko(single['value'])}"
+    assert P.change_ko({"key": "x", "parts": []}) == "x"
 
 
 def test_unknown_strategy_is_404_once_a_summary_exists(client, psdir):
@@ -280,7 +455,7 @@ def test_the_analysis_view_is_registered_for_the_36():
     js = _read(SCREENS, "analysis-paramlive.js")
     assert "export function paramlive(d, env)" in js and 'ctx.href("strategies", s)' in js
     assert 'ctx.href("strategies", c.strategy, {tf: c.tf})' in js
-    assert "변형 ${fmt.int(o.variants || 0)}개 중 기본값보다 번 것" in js and "우연으로도 최대" in js and "재계산 일치" in js
+    assert "변형 ${fmt.int(o.variants || 0)}개${mix} 중 기본값보다 번 것" in js and "우연으로도 최대" in js and "재계산 일치" in js
     _no_unsafe(js)
     for p in ("analysis-paramlive.css", "strategies-paramlive.css"):
         c = re.sub(r"/\*.*?\*/", "", _read(SCREENS, p), flags=re.S)
@@ -299,16 +474,53 @@ def test_the_detail_card_is_for_the_36_only_after_the_parameter_card():
                     lines[i + 1])
     js = _read(SCREENS, "strategies-paramlive.js")
     assert "export function paramliveCard(ctx, name" in js and "`/api/v4/paramlive/${encodeURIComponent(name)}`" in js
-    assert 'plate: "커스텀값 실시간 비교", sub: "v4 시작부터 · 숫자 하나만 바꾼 그림자 계좌 · 매일 10:00 갱신"' in js
+    assert 'plate: "커스텀값 실시간 비교", sub: "v4 시작부터 · 숫자를 바꾼 그림자 계좌 · 매일 10:00 갱신"' in js
     assert 'cls: "strat-o7 strat-pl"' in js and 'nx.classList.contains("strat-pm")' in js
-    for words in ("기본값(재계산)", "실제 계좌", "재계산 일치", "기본값과 신호 같음", "표본 적음", "운 기준선 대비", "채우는 중", "지난 계산 실패",
+    for words in ("기본값(재계산)", "실제 계좌", "재계산 일치", "기본값과 신호 같음", "거래 부족", "운 기준선까지", "채우는 중", "지난 계산 실패",
                   "기본값 대비", "motion.shimmer(", "ui.errorBox(err, load)", "ui.assume()"):
         assert words in js, words
+    assert "운 기준선 대비" not in js and "표본 적음" not in js         # the luck test reads as a percentage now
     assert '"luck", "parity", "caution"' in js
     _no_unsafe(js)
     assert '@import url("strategies-paramlive.css");' in _read(SCREENS, "strategies.css")
     css = _read(SCREENS, "strategies-paramlive.css")
     assert "container-type: inline-size" in css and "@container (min-width: 480px)" in css
+
+
+def test_the_card_reads_at_a_glance():
+    """Second round (10/10): the timeframe's one line on top, five bars per parameter, the luck line as a percentage,
+    the pairs in their own group; all drawn with h() / s() and tokens."""
+    js = _read(SCREENS, "strategies-paramlive.js")
+    # the one-line reading: the server's words, the accent only for a ★
+    assert "function sayLine(c)" in js and "c.summary_ko" in js and 'c.summary_rule === "star"' in js
+    assert js.index("sayLine(c),") < js.index('h("div", {class: "pl-sides"}')           # first in the timeframe
+    # the five bars: an SVG through s(), ×0.5 ×0.75 기본 ×1.25 ×1.5 on one scale, ★ above, 같음, the value under each bar
+    assert 'import {h, s, put, ui, fmt, motion} from "../core/pb.js";' in js
+    assert 's("svg", {class: "pl-ch-svg"' in js and 's("rect", {class: ["pl-ch-bar"' in js and 's("line", {class: "pl-ch-zero"' in js
+    assert 'x.base ? "기본" : multKo(x.mult)' in js and '(x.same ? "같음"' in js and 'h("b", {class: "pl-ch-star"}, "★")' in js
+    assert "숫자 하나만 바꾸면" in js and "가운데가 지금 숫자, 왼쪽은 작게 · 오른쪽은 크게" in js
+    assert js.index("paramChart(g.p, g.rows, c.base)") < js.index("headRow(), g.rows.map(")   # the bars above the rows
+    # the luck line as a percentage, the hint once per timeframe, "거래 부족" for a small sample
+    assert "`운 기준선까지 ${fmt.int(luckPct(l.ratio))}%`" in js and "100%를 넘고 기간 앞·뒤 모두 나아야 ★" in js
+    assert js.count("100%를 넘고 기간 앞·뒤 모두 나아야 ★") == 1 and '"거래 부족")' in js
+    # the pairs: their own group after the parameters, both changes named, top PAIR_TOP then 전체 보기 (N개)
+    assert "두 숫자 함께 바꾸기" in js and "ui.disclosure(`전체 보기 (${fmt.int(n)}개)`" in js and "export const PAIR_TOP = 8;" in js
+    assert "groups(c, minT),\n    pairSection(c, minT)," in js
+    assert "const singles = (c.variants || []).filter((v) => !isPair(v));" in js
+    css = re.sub(r"/\*.*?\*/", "", _read(SCREENS, "strategies-paramlive.css"), flags=re.S)
+    for sel in (".pl-say.is-star", ".pl-ch-bar.up", ".pl-ch-bar.down", ".pl-ch-bar.is-base", ".pl-ch-hl", ".pl-row.is-pair", ".pl-lbar::after"):
+        assert sel in css, sel
+    assert "var(--accent-soft)" in css and "var(--up)" in css and "var(--down)" in css
+    an = _read(SCREENS, "analysis-paramlive.js")
+    assert "function candidatesCard(ctx, d)" in an and "out.push(candidatesCard(ctx, d));" in an
+    assert an.index("out.push(candidatesCard(ctx, d));") < an.index('plate: "한눈에"')        # the top of the view
+    assert "판단할 수 있는 칸 (기본값 거래 ${fmt.int(minT)}건 이상): " in an and "d.cells_ready" in an
+    assert "아직 운 기준선 가까이 간 변형이 없습니다 — 거래가 쌓이면 여기에 나타납니다" in an
+    assert 'href: ctx.href("strategies", c.strategy, {tf: c.tf})' in an and "luckBar(c.ratio)" in an
+    assert "[`${name} · ${fmt.tfKo(c.tf)}`, c.summary_ko," in an                              # the map's tooltips
+    assert "하나씩 ${fmt.int(o.singles || 0)} · 두 숫자 함께 ${fmt.int(o.pairs)}" in an
+    _no_unsafe(an)
+    _no_unsafe(js)
 
 
 def test_value_and_tint_helpers_in_node():
@@ -322,6 +534,50 @@ def test_value_and_tint_helpers_in_node():
             " [[0, 0], [0, 12], [2, 12], [5, 12], [8, 12], [12, 12]].map(([b, k]) => step(b, k))]));")
     out = json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=20, check=True).stdout)
     assert out == [["10", "6", "0.75", "1.125", "0.0075", "5·8·10·15", "—"], ["", "0", "1", "2", "3", "4"]]
+
+
+def test_luck_percent_bars_and_pair_helpers_in_node():
+    """The card's helpers as they run in the page: the luck line as a percentage, the five bars' order and shared
+    scale, the pair rows' order and split, the words of a change (one number or two, a version-1 row too)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    pl, an = _read(SCREENS, "strategies-paramlive.js"), _read(SCREENS, "analysis-paramlive.js")
+    fn = lambda src, n: re.search(r"^export function %s\(.*?^}$" % n, src, re.S | re.M).group(0)[len("export "):]  # noqa: E731
+    one = lambda src, n: re.search(r"^(?:export )?const %s = .*$" % n, src, re.M).group(0).replace("export ", "", 1)  # noqa: E731
+    js = "\n".join([
+        "const fmt = {num: (x, d) => (x < 0 ? '−' : '') + Math.abs(x).toFixed(d)};",
+        fn(pl, "valueKo"), one(pl, "multKo"), fn(pl, "luckPct"), fn(pl, "chartSlots"), one(pl, "CH_H"), fn(pl, "chartScale"),
+        one(pl, "isPair"), fn(pl, "changeKo"), one(pl, "PAIR_TOP"), fn(pl, "pairRows"), fn(an, "changeWords"),
+        "const rows = [{mult: 1.5, pnl: 30, trades: 9}, {mult: 0.5, pnl: -10, trades: 9, star: true}, {mult: 1.25, pnl: 0, trades: 9, same_as_base: true},"
+        " {mult: 0.75, pnl: 5, trades: 9}, {combo: 'pair', mult: null, pnl: 99}];",
+        "const slots = chartSlots({default: 10}, rows.filter((v) => !isPair(v)), {pnl: -20, trades: 30});",
+        "const Y = chartScale([30, -10]);",
+        "const pr = Array.from({length: 11}, (_, i) => ({key: 'p' + i, combo: 'pair', diff_pnl: (i * 7) % 11 - 5}));",
+        "const pp = pairRows(pr.concat([{key: 's', combo: 'single', diff_pnl: 99}]));",
+        "const A = {param: 'st_mult', param_ko: '슈퍼트렌드 배수', mult: 0.75, value: 4.5, default: 6.0};",
+        "const B = {param: 'roc_len', param_ko: 'ROC 길이', mult: 1.25, value: 11, default: 9};",
+        "console.log(JSON.stringify([[0.37, -0.2, 1.21, 0, 0.004, null].map(luckPct),",
+        " slots.map((x) => [x.mult, x.pnl, !!x.base, x.same, x.star]),",
+        " [Y(30), Y(0), Y(-10), CH_H - CH_PAD], (Y(0) - Y(30)) / (Y(-10) - Y(0)), chartScale([0, 0])(0),",
+        " [isPair({combo: 'pair'}), isPair({parts: [A, B]}), isPair({parts: [A]}), isPair({param: 'x'})],",
+        " [changeKo([A, B]), changeKo([A]), changeKo([])],",
+        " [pp.n, pp.top.length, pp.rest.length, pp.top.map((v) => v.diff_pnl), PAIR_TOP],",
+        " [changeWords({parts: [A, B], combo: 'pair'}), changeWords({param: 'st_mult', param_ko: '슈퍼트렌드 배수', mult: 0.5, value: 3, default: 6}),",
+        "  changeWords({change_ko: '서버 글', parts: [A]}), changeWords(null)]]));",
+    ])
+    out = json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=20, check=True).stdout)
+    pct, slots, ys, ratio, flat, pairs, words, prows, cw = out
+    assert pct == [37, 0, 121, 0, 0, None]                                     # below the default: 0%
+    assert slots == [[0.5, -10, False, False, True], [0.75, 5, False, False, False], [1, -20, True, False, False],
+                     [1.25, 0, False, True, False], [1.5, 30, False, False, False]]   # ×0.5 ×0.75 기본 ×1.25 ×1.5
+    assert ys[0] == 3 and ys[2] == ys[3] and ys[0] < ys[1] < ys[2]           # the highest at the top, the lowest at the bottom
+    assert abs(ratio - 3) < 1e-9 and flat == 3                                 # heights in proportion to |P&L|
+    assert pairs == [True, True, False, False]
+    assert words == ["슈퍼트렌드 배수 6→4.5 + ROC 길이 9→11", "슈퍼트렌드 배수 6→4.5", ""]
+    assert prows == [11, 8, 3, [5, 4, 3, 2, 1, 0, -1, -2], 8]                  # pairs only, the most money first
+    assert cw == [["슈퍼트렌드 배수 6→4.5 + ROC 길이 9→11", "×0.75 · ×1.25"], ["슈퍼트렌드 배수 6→3", "×0.5"],
+                  ["서버 글", "×0.75"], ["—", ""]]
 
 
 # ---------------------------------------------------------------- 예약 작업
