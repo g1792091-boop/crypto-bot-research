@@ -1,0 +1,101 @@
+{
+ "symbols": [
+  {
+   "symbol": "BTCUSDT",
+   "funding_thin_months": [],
+   "minutes": 3549330,
+   "read": 3549600,
+   "zero_volume_dropped": 270,
+   "first": "2020-01-01 00:00",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 13015,
+   "missing_minutes": 270,
+   "gaps_over_1h": 1,
+   "funding_events": 7395,
+   "funding_after_data_end": 0,
+   "sha256": "cdb50d97cd517417001e2590e13189349afb3b6f95a9af81638ec5601c04c178"
+  },
+  {
+   "symbol": "ETHUSDT",
+   "funding_thin_months": [],
+   "minutes": 3549298,
+   "read": 3549600,
+   "zero_volume_dropped": 302,
+   "first": "2020-01-01 00:00",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 4386,
+   "missing_minutes": 302,
+   "gaps_over_1h": 1,
+   "funding_events": 7395,
+   "funding_after_data_end": 0,
+   "sha256": "270ad01f816b200905408f78988b0eb5de481bd87dc2205ec6f92c79abdd4667"
+  },
+  {
+   "symbol": "SOLUSDT",
+   "funding_thin_months": [],
+   "minutes": 3178627,
+   "read": 3179100,
+   "zero_volume_dropped": 473,
+   "first": "2020-09-14 07:00",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 11552,
+   "missing_minutes": 473,
+   "gaps_over_1h": 1,
+   "funding_events": 6700,
+   "funding_after_data_end": 0,
+   "sha256": "994e424a40250aec39ee274f3ec684c88ac03c18cee3a182ef68afcac3ae0bf2"
+  },
+  {
+   "symbol": "DOGEUSDT",
+   "funding_thin_months": [],
+   "minutes": 3259802,
+   "read": 3274020,
+   "zero_volume_dropped": 14218,
+   "first": "2020-07-10 09:00",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 4351,
+   "missing_minutes": 14218,
+   "gaps_over_1h": 1,
+   "funding_events": 6821,
+   "funding_after_data_end": 0,
+   "sha256": "a92ff7d69e8ca5b8eca0e7d40d9e1d60540c4fb305d43430d8f96ae74f294201"
+  },
+  {
+   "symbol": "LTCUSDT",
+   "funding_thin_months": [],
+   "minutes": 3537015,
+   "read": 3537591,
+   "zero_volume_dropped": 576,
+   "first": "2020-01-09 08:09",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 4380,
+   "missing_minutes": 576,
+   "gaps_over_1h": 1,
+   "funding_events": 7370,
+   "funding_after_data_end": 0,
+   "sha256": "9b10e25e2fdcd21193400b161b26e08935cbe7d50253a20969b5bd07f15df4b7"
+  },
+  {
+   "symbol": "BCHUSDT",
+   "funding_thin_months": [],
+   "minutes": 3549149,
+   "read": 3549600,
+   "zero_volume_dropped": 451,
+   "first": "2020-01-01 00:00",
+   "last": "2026-09-30 23:59",
+   "mark_filled_from_last": 4384,
+   "missing_minutes": 451,
+   "gaps_over_1h": 1,
+   "funding_events": 7395,
+   "funding_after_data_end": 0,
+   "sha256": "fd6f2d416f7e4be9ce66626e81f91be8e17628f290966c8cab3b6bb981c06e42"
+  }
+ ],
+ "months": [
+  "2020-01",
+  "2026-09"
+ ],
+ "gap_days": 411,
+ "missing_files": 44,
+ "problems": []
+}
