@@ -1,0 +1,57 @@
+/* 커스텀값 실시간 비교 (screens/strategies-paramlive.js on #/strategies/<id>, the 36 only; its state lines are shared with
+   분석 › 커스텀값 비교, analysis.css imports this file too). Tokens only; both skins. The card body is a size container:
+   narrower than 480 px a variant row is variant | trades over win rate | difference over money (three columns, the name
+   keeps the room, nothing scrolls sideways at 390 px); from 480 px the five numbers sit on one line. */
+
+/* shared: the state lines, the meta line, the none state */
+.pl-state { margin: 0; font-size: var(--t-sm); line-height: 1.7; color: var(--ink-2); overflow-wrap: anywhere; }
+.pl-state > .pp { margin-right: 6px; }
+.pl-meta { margin: 0; color: var(--muted); font-size: var(--t-xs); }
+.pl-none { margin: 0; font-weight: 800; font-size: var(--t-md); color: var(--ink); }
+
+/* the card */
+.strat-pl .pl-body { container-type: inline-size; }
+.strat-pl .pl-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.strat-pl .pl-side { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; align-content: start; justify-items: start; }
+.strat-pl .pl-side .k { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.strat-pl .pl-side b { font-size: var(--t-lg); line-height: 1.25; }
+.strat-pl .pl-side .s { color: var(--ink-2); font-size: var(--t-xs); }
+.strat-pl .pl-side .s.muted { color: var(--muted); }
+.strat-pl .pl-par, .strat-pl .pl-sum { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; }
+.strat-pl .pl-par b, .strat-pl .pl-sum b { color: var(--ink); }
+
+/* the variants: a 3-column list on a narrow card, 5 columns on a wide one */
+.strat-pl .pl-list { display: grid; min-width: 0; font-size: var(--t-sm); }
+.strat-pl .pl-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 88px; grid-template-areas: "nm tr df" "nm wr pn";
+  gap: 2px 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); min-width: 0; }
+.strat-pl .pl-row > .pl-nm { grid-area: nm; display: grid; gap: 4px; min-width: 0; }
+.strat-pl .pl-row > .pl-tr { grid-area: tr; }
+.strat-pl .pl-row > .pl-wr { grid-area: wr; }
+.strat-pl .pl-row > .pl-pn { grid-area: pn; }
+.strat-pl .pl-row > .pl-df { grid-area: df; }
+.strat-pl .pl-row > .pl-tr, .strat-pl .pl-row > .pl-wr, .strat-pl .pl-row > .pl-pn, .strat-pl .pl-row > .pl-df { text-align: right; white-space: nowrap; }
+.strat-pl .pl-row > .pl-tr, .strat-pl .pl-row > .pl-wr, .strat-pl .pl-row > .pl-pn { font-size: var(--t-xs); color: var(--ink-2); }
+.strat-pl .pl-row > .pl-pn.up { color: var(--up); }
+.strat-pl .pl-row > .pl-pn.down { color: var(--down); }
+.strat-pl .pl-row.is-same > span, .strat-pl .pl-row.is-same > b { color: var(--muted); }
+.strat-pl .pl-row.is-star { background: var(--accent-soft); }
+.strat-pl .pl-head { padding-top: 0; border-bottom-color: var(--line-2); color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.strat-pl .pl-head > span { color: var(--muted); }
+.strat-pl .pl-group { padding: 12px 2px 2px; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.strat-pl .pl-group b { color: var(--ink); font-size: var(--t-sm); }
+.strat-pl .pl-code { font-size: var(--t-xs); }
+.strat-pl .pl-v { overflow-wrap: anywhere; }
+.strat-pl .pl-star { color: var(--accent); }
+.strat-pl .pl-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.strat-pl .pl-tags:empty { display: none; }
+.strat-pl .pl-luck { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; color: var(--muted); font-size: var(--t-xs); }
+.strat-pl .pl-lw { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.strat-pl .pl-lbar { position: relative; flex: none; width: 44px; height: 6px; border-radius: 3px; background: var(--surface-3); }
+.strat-pl .pl-lbar i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--w); border-radius: 3px; background: var(--muted); }
+/* the luck line (1배, at two thirds of the bar) */
+.strat-pl .pl-lbar::after { content: ""; position: absolute; top: -2px; bottom: -2px; left: 66.67%; width: 2px; background: var(--ink); }
+.strat-pl .pl-lbar.is-over i { background: var(--accent); }
+@container (min-width: 480px) {
+  .strat-pl .pl-row { grid-template-columns: minmax(0, 1fr) 48px 48px 84px 92px; grid-template-areas: "nm tr wr pn df"; }
+  .strat-pl .pl-row > .pl-tr, .strat-pl .pl-row > .pl-wr, .strat-pl .pl-row > .pl-pn { font-size: var(--t-sm); }
+}

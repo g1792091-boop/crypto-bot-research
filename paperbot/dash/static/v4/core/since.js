@@ -31,7 +31,8 @@ const MONEY = new Set(["core", "reel", "extra"]);       // P&L shown per group (
 // the paperbot timers in Korean (the 서버·비용 screen's names, screens/server-kit.js JOBS)
 const JOB_KO = {"paperbot-daily3": "매일 점검", "paperbot-backup": "DB 백업", "paperbot-offsite": "바깥 백업", "paperbot-obsidian": "옵시디언 노트",
   "paperbot-shadow200": "딥시크 200 그림자", "paperbot-agents": "에이전트 점검", "paperbot-checkpoint": "체크포인트 판정",
-  "paperbot-dscheck": "딥시크 밤 재계산", "paperbot-evening": "저녁 회의", "paperbot-rehearsal": "판정 미리 연습", "paperbot-labmonthly": "매달 재검사"};
+  "paperbot-dscheck": "딥시크 밤 재계산", "paperbot-evening": "저녁 회의", "paperbot-rehearsal": "판정 미리 연습", "paperbot-labmonthly": "매달 재검사",
+  "paperbot-paramshadow": "커스텀값 그림자"};
 
 let sheet = null;
 let busy = false;

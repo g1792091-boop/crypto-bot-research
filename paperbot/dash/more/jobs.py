@@ -37,7 +37,7 @@ TIMEOUT_S = 2.0
 # the timers the 예약 작업 card lists (screens/server-kit.js JOBS; deploy/paperbot-*.timer)
 UNITS = ("paperbot-daily3", "paperbot-backup", "paperbot-offsite", "paperbot-obsidian", "paperbot-shadow200",
          "paperbot-agents", "paperbot-checkpoint", "paperbot-dscheck", "paperbot-evening", "paperbot-rehearsal",
-         "paperbot-labmonthly")
+         "paperbot-labmonthly", "paperbot-paramshadow")
 TIMER_PROPS = "Id,LoadState,UnitFileState,ActiveState,LastTriggerUSec,NextElapseUSecRealtime"
 SERVICE_PROPS = "Id,LoadState,ActiveState,SubState,Result,ExecMainExitTimestamp"
 ON_FILE_STATES = ("enabled", "enabled-runtime", "linked", "linked-runtime", "static", "alias", "indirect", "generated",

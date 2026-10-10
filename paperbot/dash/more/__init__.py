@@ -53,6 +53,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     vplevels   봇 매물대: 봇이 쓰는 매물 최다 가격 · 매물대 위/아래 끝 (차트·터미널의 매물대 겹침선과 비교, 읽기만)
     shadowleague 그림자 리그 (#/league): 5년 시험에서 실패한 아이디어를 실제 봉에서 가상 거래로만 따라간 기록 (agents3.db 옆의
             shadow_league.db를 읽기만; 못 읽으면 '오류'와 이유, 없으면 '아직 켜지 않았어요'; 참고용, 판정 아님)
+    paramlive 커스텀값 실시간 비교: 숫자 하나만 바꾼 그림자 계좌 (paperbot/paramshadow.py가 매일 10:00 쓰는 last.json을
+            읽기만; 매매법 상세 카드 + 분석 › 커스텀값 비교; 없으면 '아직 첫 계산 전'; 참고용, 판정 아님)
 """
 from __future__ import annotations
 
@@ -86,6 +88,7 @@ MODULES += ("copycmp", "losslinks", "approvals")   # add-accounts: 원본 vs 복
 MODULES += ("chartplus",)                      # chart-plus: 차트 위 시장 청산 거품·가격대 막대 + 아래 칸의 시장 자료 (liq.db, Binance by the server)
 MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물대 (POC / VAH / VAL, kinds 51-53) for the chart overlay
 MODULES += ("shadowleague",)                   # 그림자 리그 (#/league): shadow_league.db next to agents3.db, read-only, 5 s cache
+MODULES += ("paramlive",)                      # 커스텀값 실시간 비교: paramshadow's last.json / error.json, read-only, mtime cache
 
 
 def register_all(app, **kw) -> dict:

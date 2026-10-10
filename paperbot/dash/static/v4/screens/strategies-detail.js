@@ -1,12 +1,14 @@
 // 매매법 상세 #/strategies/<name> (builder C): the rule in plain words → the chart (indicator lines and lower panes
 // when the server has a view, this account's entries and exits, its open position's lines) → the last closed bar's
 // conditions → its timeframe accounts and live record → wins vs losses by coin / side / timeframe / session → its
-// signal log → the 5-year card → loss cards / loss patterns. Old strat.js, everything kept (INVENTORY section 5).
+// signal log → the 5-year card → 숫자(파라미터) 시험 결과 → 커스텀값 실시간 비교 (the 36 only) → loss cards / loss
+// patterns. Old strat.js, everything kept (INVENTORY section 5).
 // HONESTY: money has assume(); the coin-flip comparison is the 참고 pill + refNote (36 only, never ✓/✕); DeepSeek accounts
 // get no per-account comparison; small samples say 표본 적음; what the server lacks says 준비 전 / 수집 전.
 import {h, put, ui, fmt, motion, local, bars, fullChart, fav, cmp} from "../core/pb.js";
 import {DS_DEFS, FAMILY, REEL, STATUS_KO} from "./strategies-defs.js";
 import {paramsCard} from "./strategies-params.js";
+import {paramliveCard} from "./strategies-paramlive.js";
 import {accountsOf, record, splitTrades, nameKo, groupOfStrategy, strategyIndex, TF_ORDER} from "./strategies-calc.js";
 import {stratChart, loadView} from "./strategies-chart.js";
 import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "./strategies-panels.js";
@@ -106,6 +108,7 @@ export function detailView(ctx, st, name) {
   const profEl = h("div", {class: "stack tight"});
   const profCard = ui.card({plate: "5년 성적", sub: kind === "strategy" ? "과거 시험 · v3 크기 규칙 (모든 신호 50배부터)" : "과거 연구 · 레버리지 없이 가격 %", cls: "strat-o7"}, profEl);
   paramsCard(ctx, name, kind, {after: profCard, scope: sc});      // 숫자(파라미터) 시험 결과, placed after the 5-year card
+  if (group === "core" && kind === "strategy") paramliveCard(ctx, name, {after: profCard, scope: sc, tf: v.tf});   // 커스텀값 실시간 비교 (the 36 only)
 
   const lossSeg = ui.seg([{id: "cards", label: "손실 카드"}, {id: "tags", label: "손실 패턴"}], v.side, (id) => { v.side = id; local.set("strat-side", id); loadLoss(); });
   const lossEl = h("div", {class: "stack tight"});

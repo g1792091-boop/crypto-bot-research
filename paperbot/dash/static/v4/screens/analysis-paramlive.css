@@ -1,0 +1,36 @@
+/* 분석 › 커스텀값 비교 (screens/analysis-paramlive.js). Tokens only; both skins. The map is a name column plus four
+   timeframe columns that shrink to 46 px each, so 36 rows x 4 fit a 390 px phone without sideways scroll (760 px at most on a
+   wide screen, so a name stays near its cells); a cell is
+   tinted by its share of variants that made more than the default, in the neutral comparison colour (--cmp-hi, never
+   up / down). */
+.an-pl-stats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.an-pl-stats .stat { background: var(--surface-2); }
+.an-pl-line { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; }
+
+.an-pl-grid { display: grid; gap: 4px; min-width: 0; max-width: 760px; }
+/* the name column takes the room first (up to 240 px), the four cells share the rest and never go under 46 px */
+.an-pl-row { display: grid; grid-template-columns: minmax(0, 240px) repeat(4, minmax(46px, 1fr)); gap: 4px; align-items: center; min-width: 0; }
+.an-pl-head { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.an-pl-head > span:not(:first-child), .an-pl-foot > span:not(:first-child) { text-align: center; }
+.an-pl-foot { padding-top: 6px; border-top: 1px solid var(--line-2); font-size: var(--t-xs); color: var(--ink-2); }
+.an-pl-foot > span { display: grid; justify-items: center; }
+.an-pl-foot small { color: var(--muted); font-size: var(--t-2xs); }
+.an-pl-nm { min-width: 0; font-size: var(--t-sm); line-height: 1.3; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.an-pl-nm:hover, .an-pl-nm:focus-visible { color: var(--accent); text-decoration: underline; }
+
+.an-pl-cell { --pl-tint: var(--cmp-hi); display: grid; justify-items: center; align-content: center; gap: 0; min-height: 40px; padding: 3px 2px;
+  border-radius: 6px; background: var(--surface-2); border: 1px solid transparent; color: var(--ink); text-decoration: none; min-width: 0; }
+a.an-pl-cell:hover, a.an-pl-cell:focus-visible { border-color: var(--accent-line); }
+.an-pl-cell b { font-size: var(--t-sm); line-height: 1.25; }
+.an-pl-cell small { font-size: var(--t-2xs); line-height: 1.3; color: var(--muted); }
+.an-pl-cell small.is-on { color: var(--accent); font-weight: 800; }
+.an-pl-cell[data-b="1"] { background: color-mix(in srgb, var(--pl-tint) 10%, var(--surface-2)); }
+.an-pl-cell[data-b="2"] { background: color-mix(in srgb, var(--pl-tint) 18%, var(--surface-2)); }
+.an-pl-cell[data-b="3"] { background: color-mix(in srgb, var(--pl-tint) 28%, var(--surface-2)); }
+.an-pl-cell[data-b="4"] { background: color-mix(in srgb, var(--pl-tint) 40%, var(--surface-2)); }
+.an-pl-cell.is-none { color: var(--muted); }
+.an-pl-cell.is-thin { border: 1px dashed var(--line-2); }
+
+.an-pl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--t-xs); color: var(--ink-2); }
+.an-pl-sw { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.an-pl-sw .an-pl-cell { display: inline-block; width: 18px; min-height: 0; height: 14px; padding: 0; border-radius: 3px; }
