@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>후보 리그</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/static/league.css">
 </head>
 <body>
@@ -11,25 +12,74 @@
   <div class="brand"><strong>후보 리그</strong><span class="tag">종이 매매 · 실제 돈 아님</span></div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="rank" aria-selected="true">순위표</button>
+    <button role="tab" data-tab="term">터미널</button>
     <button role="tab" data-tab="open">지금 포지션</button>
+    <button role="tab" data-tab="fills">거래 기록</button>
     <button role="tab" data-tab="status">상태</button>
   </nav>
   <div id="fresh" class="fresh"></div>
 </header>
 <main>
+  <section id="cards" class="cards" aria-label="요약"></section>
+
   <section id="tab-rank" class="tab">
     <p class="hint">후보마다 같은 기간의 <b>기본값</b>(지금 숫자 + 지금 익절·손절)과 <b>동전 던지기</b>(같은 시각, 방향만 동전)를
-      나란히 봅니다. 30번 거래 전에는 "아직 판단 이름". 줄을 누르면 자세히 볼 수 있습니다.</p>
+      바로 아래에 둡니다. 30번 거래 전에는 "아직 판단 이름". 줄을 누르면 자세히 봅니다.</p>
+    <div class="filters" id="rank-filters"></div>
     <div class="tablewrap"><table id="rank"></table></div>
   </section>
+
+  <section id="tab-term" class="tab" hidden>
+    <div class="term-bar">
+      <label class="acct">계좌 <select id="t-acct"></select></label>
+      <div class="seg" id="t-tfs" role="group" aria-label="봉"></div>
+    </div>
+    <div class="term">
+      <div class="term-coins">
+        <h3>코인 <small>숫자 = 열린 포지션</small></h3>
+        <div id="t-coins" class="watch" role="group" aria-label="코인"></div>
+      </div>
+      <div class="term-main">
+        <div class="ticker" id="t-ticker"></div>
+        <div class="tv-wrap"><div id="tv" class="tv" aria-label="캔들 차트 (KST)"></div><div id="tv-msg" class="tv-msg" hidden></div></div>
+        <div class="term-legend">
+          <span><i class="mk mk-long">▲</i>롱 진입</span><span><i class="mk mk-short">▼</i>숏 진입</span>
+          <span><i class="mk mk-exit">●</i>청산 (이유 · 수익률)</span><span><i class="ln ln-ent"></i>진입가</span>
+          <span><i class="ln ln-sl"></i>손절</span><span><i class="ln ln-tp"></i>익절</span>
+          <span class="muted">고른 계좌의 거래만 · 시간은 한국 시각</span>
+        </div>
+        <h3>이 계좌 거래 <small id="t-trades-sub"></small></h3>
+        <div class="tablewrap tall"><table id="t-trades"></table></div>
+      </div>
+      <aside class="term-right">
+        <h3>고른 계좌</h3>
+        <div id="t-acct-card" class="acct-card"></div>
+        <h3>열린 포지션 <small id="t-open-coin"></small></h3>
+        <div id="t-open" class="side-list"></div>
+      </aside>
+      <aside class="term-fills">
+        <h3>최근 체결 <small>후보 리그 전체</small></h3>
+        <div id="t-fills" class="side-list fills"></div>
+      </aside>
+    </div>
+  </section>
+
   <section id="tab-open" class="tab" hidden>
     <div class="tablewrap"><table id="open"></table></div>
   </section>
+
+  <section id="tab-fills" class="tab" hidden>
+    <div class="filters"><label class="acct">계좌 <select id="f-acct"></select></label></div>
+    <div class="tablewrap"><table id="fills"></table></div>
+  </section>
+
   <section id="tab-status" class="tab" hidden>
     <dl id="status" class="status"></dl>
   </section>
+
   <section id="detail" class="detail" hidden></section>
 </main>
+<script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

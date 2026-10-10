@@ -49,4 +49,8 @@ Telegram: every message starts with `[후보 리그]`; a 09:00 KST summary and b
 
 * Nothing here imports or writes the rule bot's or the demo lab's databases, services or folders.
 * The dashboard only reads `snap/`; it never writes there and tolerates a missing file ("준비 중").
+* Its 터미널 reads live market data through the dashboard server only (candleague/live.py, the demo lab's tested
+  module: Binance USD-M public endpoints, no key, 5 s timeout, at most 4 requests a second, short in-memory caches, nothing
+  written to disk); the page's CSP keeps `connect-src 'self'` and `script-src 'self'`. `CANDLEAGUE_DASH_LIVE` = on
+  (default) | fake (tests, screenshots) | off.
 * Candidates are paper only. Using one with real money is the owners' decision after this league's record.

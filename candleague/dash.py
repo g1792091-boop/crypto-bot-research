@@ -83,11 +83,31 @@ def read_snap(snap: str, name: str):
         return None
 
 
-def create_app(snap: str, password_hash: str, secret: bytes):
+KLINE_TFS = ("15m", "30m", "1h", "4h")
+STATIC_FILES = ("app.js", "league.css", "login.css", "vendor/lightweight-charts.standalone.production.js")
+
+
+def klines_query(params) -> Optional[dict]:
+    """coin / tf / limit of /api/klines, whitelisted (None when anything is off)."""
+    from .live import COINS
+    coin, tf = params.get("coin", ""), params.get("tf", "")
+    try:
+        limit = int(params.get("limit", "300"))
+    except ValueError:
+        return None
+    if coin not in COINS or tf not in KLINE_TFS or not 50 <= limit <= 1000:
+        return None
+    return {"coin": coin, "tf": tf, "limit": limit}
+
+
+def create_app(snap: str, password_hash: str, secret: bytes, live=None):
     from fastapi import FastAPI, Request
     from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    if live is None:
+        from .live import Live
+        live = Live.from_env()
 
     def authed(req: Request) -> bool:
         return token_ok(secret, req.cookies.get(COOKIE))
@@ -98,7 +118,8 @@ def create_app(snap: str, password_hash: str, secret: bytes):
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "same-origin"     # no-referrer makes a form POST's Origin "null"
-        resp.headers["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data:; style-src 'self'; "
+        # style attributes: the chart library adds one <style> element (the rule bot's and the demo lab's CSP allow it too)
+        resp.headers["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
                                                    "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
         return resp
 
@@ -132,17 +153,42 @@ def create_app(snap: str, password_hash: str, secret: bytes):
             return RedirectResponse("/login", status_code=303)
         return FileResponse(os.path.join(STATIC, "index.html"))
 
-    @app.get("/static/{name}")
+    @app.get("/static/{name:path}")
     def static(name: str, req: Request):
-        if name not in ("app.js", "league.css", "login.css") or (name == "app.js" and not authed(req)):
+        if name not in STATIC_FILES or (name not in ("league.css", "login.css") and not authed(req)):
             return Response(status_code=404)
         return FileResponse(os.path.join(STATIC, name))
+
+    @app.get("/api/live")
+    def api_live(req: Request):
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        return JSONResponse(finite_json(live.live()))
+
+    @app.get("/api/klines")
+    def api_klines(req: Request):
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        q = klines_query(req.query_params)
+        if q is None:
+            return JSONResponse({"error": "coin / tf / limit"}, status_code=400)
+        return JSONResponse(finite_json(live.klines(q["coin"], q["tf"], q["limit"])))
 
     @app.get("/api/league")
     def league(req: Request):
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
         return JSONResponse(read_snap(snap, "league.json") or {"status": "준비 중"})
+
+    @app.get("/api/fills")
+    def fills(req: Request):
+        """The league's newest closed trades over every account (newest first, at most 300)."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        book = read_snap(snap, "trades.json") or {}
+        rows = [{**t, "account": aid} for aid, b in book.items() for t in (b.get("trades") or [])]
+        rows.sort(key=lambda t: t.get("exit_time") or 0, reverse=True)
+        return JSONResponse({"fills": rows[:300]})
 
     @app.get("/api/trades/{aid}")
     def trades(aid: str, req: Request):
