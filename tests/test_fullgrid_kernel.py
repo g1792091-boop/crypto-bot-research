@@ -33,8 +33,10 @@ K = _load("kernel")
 MIN = 60_000
 T0 = 1_704_067_200_000          # 2024-01-01 00:00 UTC
 REASON = {"SL": K.R_SL, "LOCK": K.R_LOCK, "LIQ": K.R_LIQ, "TP": K.R_TP}
-# (stop x ATR, take-profit x R, stepped lock): the live rule and a spread of the study's exit variants
-EXITS = [(2.0, 0.0, True), (2.0, 1.0, False), (1.0, 3.0, False), (2.5, 2.0, True), (4.0, 0.0, True), (1.5, 1.5, False)]
+# every take-profit rule once, each with a different stop width (index into kernel.EXITS)
+_STOPS = (2.0, 1.0, 1.5, 2.5, 3.0, 4.0)
+EXIT_IDS = [K.EXITS.index(next(x for x in K.EXITS if x[0] == f"{r[0]}|{_STOPS[i % 6]:g}"))
+            for i, r in enumerate(K.TP_RULES)]
 
 
 class RPolicy(OwnerPolicy):
@@ -99,18 +101,22 @@ def signal(sym, close, side, atr, best, k=V3_STOP_ATR):
                   tier="best", atr=atr, meta={"stop_dist": k * atr, "lev_group": "best" if best else "normal"})
 
 
-def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=(2.0, 0.0, True)):
-    """paramshadow.replay_day on the union of minutes: stamp ref price, step, then submit the signals whose bar closed."""
-    k_stop, m, ladder = exit_
+def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=0):
+    """paramshadow.replay_day on the union of minutes: stamp ref price, step, then submit the signals whose bar closed.
+    ``exit_``: index into kernel.EXITS; the engine is set up the way that exit rule means."""
+    k_stop, kind, val, ladder, first, step, gap = K.exit_args(exit_)
     kw = {} if equity is None else {"initial_equity": equity}
+    kw.update(ladder_first_lock=first, ladder_step=step, ladder_trigger_gap=gap)
     specs = {k: SPEC for k in datas}
-    if ladder and m > 0:
-        e = LadderTP(v3_settings(**kw), brackets, symbol_specs=specs, m=m)
+    if ladder and kind == K.TP_R:
+        e = LadderTP(v3_settings(**kw), brackets, symbol_specs=specs, m=val)
     elif ladder:
         e = PaperEngine(v3_settings(**kw), brackets, symbol_specs=specs)
+    elif kind == K.TP_ROE:
+        e = PaperEngine(v3_settings(tp_mode="fixed", default_tp_roe=val, **kw), brackets, symbol_specs=specs)
     else:
         s = v3_settings(tp_mode="fixed", **kw)
-        e = PaperEngine(s, brackets, symbol_specs=specs, policy=RPolicy(s, m))
+        e = PaperEngine(s, brackets, symbol_specs=specs, policy=RPolicy(s, val))
     minutes = np.unique(np.concatenate([d["ts"] for d in datas.values()]))
     idx = {k: {int(t): j for j, t in enumerate(d["ts"])} for k, d in datas.items()}
     sigs = sorted(sigs, key=lambda x: x[1])
@@ -131,12 +137,12 @@ def replay(datas: dict, sigs: list, brackets: dict, equity=None, exit_=(2.0, 0.0
     return e
 
 
-def kernel_alone(data, close, side, atr, best, br, equity=5000.0, exit_=(2.0, 0.0, True)):
+def kernel_alone(data, close, side, atr, best, br, equity=5000.0, exit_=0):
     S = K.settings_vector()
     pnl, ex, rs, lv = K.outcomes(S, K.bracket_arrays(br), data["ts"], data["o"], data["h"], data["l"], data["mo"],
                                  data["mh"], data["ml"], data["fund"], np.array([close], np.int64),
                                  np.array([atr]), np.array([best]), np.array([best]), equity, SPEC["qty_step"],
-                                 SPEC["min_notional"], exit_[0], exit_[1], exit_[2])
+                                 SPEC["min_notional"], *K.exit_args(exit_))
     k = 0 if side > 0 else 1
     return pnl[0, k], int(ex[0, k]), int(rs[0, k]), int(lv[0, k])
 
@@ -239,7 +245,7 @@ def test_settings_vector_is_the_live_rule():
     assert S[9] == 10.0 and S[10] == 5000.0 and S[19] == s.maker_fee
 
 
-@pytest.mark.parametrize("exit_", EXITS)
+@pytest.mark.parametrize("exit_", EXIT_IDS)
 def test_exit_variants_match_engine(exit_):
     """Each exit variant (stop width, fixed take-profit at R multiples, lock + take-profit) gives the engine's trade."""
     data = synth_1m(30_000, seed=17)
@@ -261,12 +267,15 @@ def test_exit_variants_match_engine(exit_):
         seen[t.exit_reason] = seen.get(t.exit_reason, 0) + 1
         n += 1
     assert n >= 50
-    if exit_[1] > 0:
-        assert seen.get("TP"), seen
-    if exit_[2]:
-        assert seen.get("LOCK") or exit_[1] > 0, seen
+    _k, kind, _v, ladder, *_ = K.exit_args(exit_)
+    if kind != K.TP_NONE:
+        assert seen.get("TP"), (K.EXITS[exit_][0], seen)
+    if ladder and kind == K.TP_NONE:
+        assert seen.get("LOCK"), (K.EXITS[exit_][0], seen)
 
 
 def test_exit_list():
-    assert K.EXITS[0] == ("ladder|2", 2.0, 0.0, True)
-    assert len(K.EXITS) == 36 and len({e[0] for e in K.EXITS}) == 36
+    assert K.EXITS[0][:2] == ("ladder|2", 2.0) and K.exit_args(0)[1:] == (K.TP_NONE, 0.0, True, 0.10, 0.05, 0.02)
+    s = v3_settings()
+    assert K.exit_args(0)[4:] == (s.ladder_first_lock, s.ladder_step, s.ladder_trigger_gap)    # = the live lock
+    assert len(K.EXITS) == 72 and len({e[0] for e in K.EXITS}) == 72

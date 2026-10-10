@@ -114,7 +114,7 @@ def test_exit_variants_differ(world):
     st = R.cell_stats(out, "core", "S2_ST_ROC", "1h")
     r0 = R.default_row("core", "S2_ST_ROC")
     sums = st[r0, :, 0, 1]
-    assert len(set(np.round(sums, 9))) > 20          # 36 exit rules give different results
+    assert len(set(np.round(sums, 9))) > 40          # 72 exit rules give different results
 
 
 def test_plateau_is_the_neighbourhood_median(world):
@@ -139,12 +139,13 @@ def test_plateau_is_the_neighbourhood_median(world):
                     for jj, p in enumerate(ps))]
                 if q:
                     xs.append(mean[q[0], e] if ok[q[0], e] else 0.0)
-    _n, k_stop, m, lk = R.K.EXITS[e]
-    stops = sorted(kk for _nn, kk, mm, ll in R.K.EXITS if mm == m and ll == lk)
+    rule, k_stop = R.K.EXITS[e][0].split("|")[0], R.K.EXITS[e][1]
+    same = [(x[1], j) for j, x in enumerate(R.K.EXITS) if x[0].split("|")[0] == rule]
+    stops = sorted(k for k, _j in same)
     i = stops.index(k_stop)
     for d in (-1, 1):
         if 0 <= i + d < len(stops):
-            f = [jj for jj, (_nn, kk, mm, ll) in enumerate(R.K.EXITS) if mm == m and ll == lk and kk == stops[i + d]][0]
+            f = [j for k, j in same if k == stops[i + d]][0]
             xs.append(mean[r, f] if ok[r, f] else 0.0)
     assert abs(plat[r, e] - np.median(xs)) < 1e-12
     picks = [p for p in sel["picks"] if p["name"] == name]

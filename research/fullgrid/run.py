@@ -338,7 +338,7 @@ def outcome_path(out: str, sym: str, tf: str) -> str:
     return os.path.join(out, "outcomes", f"{tf}_{sym}.npz")
 
 
-EXIT_CHUNK = 6
+EXIT_CHUNK = 12
 
 
 def outcome_part(out: str, sym: str, tf: str, e0: int) -> str:
@@ -358,23 +358,23 @@ def outcomes_job(args) -> str:
     atr = _vendor_fg().atr(df, 14).to_numpy(float)
     br, step, mn = ex[sym]
     S = K.settings_vector()
-    assert K.EXITS[0][1] == V3_STOP_ATR and K.EXITS[0][3] and not K.EXITS[0][2]     # index 0 = the live rule
-    exits = K.EXITS[e0:e0 + EXIT_CHUNK]
+    assert K.EXITS[0][0] == "ladder|2" and K.EXITS[0][1] == V3_STOP_ATR    # index 0 = the live rule
+    exits = range(e0, min(len(K.EXITS), e0 + EXIT_CHUNK))
     n = len(close)
     res = {}
     for g, flag in (("best", True), ("normal", False)):
         f = np.full(n, flag)
         pnl = np.full((len(exits), n, 2), np.nan, np.float32)
         rs = np.zeros((len(exits), n, 2), np.int8)
-        for k, (_name, k_stop, tp_mult, ladder) in enumerate(exits):
+        for k, ei in enumerate(exits):
             p, _exi, r, _lv = K.outcomes(S, br, d["ts"], d["o"], d["h"], d["l"], d["mo"], d["mh"], d["ml"], d["fund"],
-                                         close.astype(np.int64), atr, f, f, EQUITY, step, mn, k_stop, tp_mult, ladder)
+                                         close.astype(np.int64), atr, f, f, EQUITY, step, mn, *K.exit_args(ei))
             pnl[k], rs[k] = p, r
         res.update({f"pnl_{g}": pnl, f"reason_{g}": rs})
     os.makedirs(os.path.dirname(path), exist_ok=True)
     np.savez(path + ".tmp.npz", close=close, atr=atr, **res)
     os.replace(path + ".tmp.npz", path)
-    return f"{tf} {sym} exits {e0}-{e0 + len(exits) - 1}: {n:,} bars in {time.time() - t0:.0f}s"
+    return f"{tf} {sym} exits {e0}-{exits[-1]}: {n:,} bars in {time.time() - t0:.0f}s"
 
 
 def merge_outcomes(out: str, sym: str, tf: str) -> None:
@@ -406,7 +406,7 @@ def stage_outcomes(data_dir: str, out: str, procs: int, ex: dict) -> None:
             merge_outcomes(out, sym, tf)
 
 
-@functools.lru_cache(maxsize=2)
+@functools.lru_cache(maxsize=1)
 def outcome_table(out: str, sym: str, tf: str) -> dict:
     with np.load(outcome_path(out, sym, tf)) as z:                 # the exit reasons stay on disk
         return {k: z[k] for k in ("close", "atr", "pnl_best", "pnl_normal")}
@@ -626,8 +626,9 @@ def cell_stats(out: str, kind: str, name: str, tf: str) -> np.ndarray | None:
 def exit_neighbours() -> list[list[int]]:
     """For each exit variant, the variants with the same take-profit rule and the next narrower / wider stop."""
     out = []
-    for name, k, m, lk in K.EXITS:
-        same = sorted((kk, j) for j, (_n, kk, mm, ll) in enumerate(K.EXITS) if mm == m and ll == lk)
+    for name, k, *_rest in K.EXITS:
+        rule = name.split("|")[0]
+        same = sorted((ex[1], j) for j, ex in enumerate(K.EXITS) if ex[0].split("|")[0] == rule)
         ks = [kk for kk, _j in same]
         i = ks.index(k)
         out.append([same[i + d][1] for d in (-1, 1) if 0 <= i + d < len(same)])
@@ -831,7 +832,6 @@ def period_summary(T: dict, k: int, tag: str) -> dict:
 def account_run(data_dir: str, T: dict, ex: dict, lo_ms: int, hi_ms: int, e: int = 0) -> dict:
     """The real account over [lo_ms, hi_ms) with exit variant ``e``: $5,000, one position at a time over the six
     coins, compounding, bust."""
-    _n, k_stop, tp_mult, ladder = K.EXITS[e]
     sel = (T["close"] >= lo_ms) & (T["close"] < hi_ms)
     cat, starts, ends = all_minutes(data_dir)
     em = []
@@ -848,7 +848,7 @@ def account_run(data_dir: str, T: dict, ex: dict, lo_ms: int, hi_ms: int, e: int
         cat["o"], cat["h"], cat["l"], cat["mo"], cat["mh"], cat["ml"], cat["fund"], np.array(starts, np.int64),
         np.array(ends, np.int64), T["coin"][qs].astype(np.int64), T["close"][qs].astype(np.int64),
         T["side"][qs].astype(np.int64), T["atr"][qs], T["best"][qs], np.array([ex[s][1] for s in SYMBOLS]),
-        np.array([ex[s][2] for s in SYMBOLS]), k_stop, tp_mult, ladder)
+        np.array([ex[s][2] for s in SYMBOLS]), *K.exit_args(e))
     done = (st == 1) & (rs != K.R_OPEN)
     eq = EQUITY + np.cumsum(pnl[done])
     peak = np.maximum.accumulate(np.r_[EQUITY, eq])

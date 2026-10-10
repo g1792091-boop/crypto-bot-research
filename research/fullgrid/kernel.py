@@ -17,8 +17,9 @@ Semantics (as paperbot/paramshadow.py replays the live account):
   exits at the open, a low/high through the stop exits at the stop (with slippage), a mark low/high through
   liquidation liquidates, otherwise the lock steps up (from the next minute). The entry minute is checked for stop and
   liquidation but gets no gap check and no lock step (ref_price fill).
-- Exit variants (``EXITS``): the stop distance k x ATR14 (sizing uses that stop), a fixed take-profit at tp x R from the
-  entry reference (R = the stop distance; engine tp_mode "fixed" semantics), the stepped lock on or off.
+- Exit variants (``EXITS``): the stop distance k x ATR14 (sizing uses that stop) x a take-profit rule (``TP_RULES``):
+  the stepped lock from 5%, 10% (live) or 20%; a fixed take-profit at net ROE 10/20/30/50% (the engine's own fixed mode)
+  or at 1/1.5/2/3 R from the entry reference (R = the stop distance); the lock with a 2R take-profit.
 - One trade alone (``outcomes``): the wallet before the trade is ``equity``; the result is the wallet change.
   The account (``account``): one position at a time over the coins, signals that arrive while a position is open are
   skipped, ties at one minute go to the coin priority order, bust below $10 stops the account.
@@ -50,11 +51,30 @@ R_NONE, R_SL, R_LOCK, R_LIQ, R_OPEN, R_REJECT, R_NOFILL, R_NOATR, R_TP = 0, 1, 2
 REASON_NAMES = {R_SL: "SL", R_LOCK: "LOCK", R_LIQ: "LIQ", R_OPEN: "OPEN", R_REJECT: "REJECTED", R_NOFILL: "NO_FILL",
                 R_NOATR: "NO_ATR", R_TP: "TP"}
 
-# Exit variants of the study (PREREG 5): (name, stop x ATR14, take-profit x R (0 = none), stepped lock on/off). R = the
-# stop distance from the entry reference price. Index 0 is the live rule.
-EXITS = tuple((f"{tp}|{k:g}", k, m, lk) for k in (2.0, 1.0, 1.5, 2.5, 3.0, 4.0)
-              for tp, m, lk in (("ladder", 0.0, True), ("tp1R", 1.0, False), ("tp1.5R", 1.5, False),
-                                ("tp2R", 2.0, False), ("tp3R", 3.0, False), ("ladder_tp2R", 2.0, True)))
+# Take-profit rules (PREREG 5): name -> (take-profit kind, value, stepped lock on/off, first lock, lock step, trigger gap).
+# Kind TP_NONE; TP_R: a limit at the entry reference + value x R (R = the stop distance); TP_ROE: a limit at net ROE
+# `value` (the engine's own tp_mode "fixed", policy.tp_from_roe). "ladder" is the live rule (lock 10% at 12%, +5%).
+TP_NONE, TP_R, TP_ROE = 0, 1, 2
+TP_RULES = (("ladder", TP_NONE, 0.0, True, 0.10, 0.05, 0.02),
+            ("ladder5", TP_NONE, 0.0, True, 0.05, 0.05, 0.02),
+            ("ladder20", TP_NONE, 0.0, True, 0.20, 0.05, 0.02),
+            ("roe10", TP_ROE, 0.10, False, 0.10, 0.05, 0.02),
+            ("roe20", TP_ROE, 0.20, False, 0.10, 0.05, 0.02),
+            ("roe30", TP_ROE, 0.30, False, 0.10, 0.05, 0.02),
+            ("roe50", TP_ROE, 0.50, False, 0.10, 0.05, 0.02),
+            ("tp1R", TP_R, 1.0, False, 0.10, 0.05, 0.02),
+            ("tp1.5R", TP_R, 1.5, False, 0.10, 0.05, 0.02),
+            ("tp2R", TP_R, 2.0, False, 0.10, 0.05, 0.02),
+            ("tp3R", TP_R, 3.0, False, 0.10, 0.05, 0.02),
+            ("ladder_tp2R", TP_R, 2.0, True, 0.10, 0.05, 0.02))
+STOPS = (2.0, 1.0, 1.5, 2.5, 3.0, 4.0)        # x ATR14; 2.0 (the live stop) first so that EXITS[0] is the live rule
+# Exit variants: (name, stop x ATR14, take-profit kind, value, lock on/off, first lock, lock step, trigger gap).
+EXITS = tuple((f"{r[0]}|{k:g}", k) + r[1:] for k in STOPS for r in TP_RULES)
+
+
+def exit_args(e: int) -> tuple:
+    """kernel arguments of exit variant e: (stop x ATR, tp kind, tp value, ladder, first lock, lock step, gap)."""
+    return EXITS[e][1:]
 
 
 def settings_vector(settings=None) -> np.ndarray:
@@ -133,21 +153,24 @@ def _size(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional):
 
 @njit
 def _trade(S, br, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
-           tp_mult, ladder):
-    """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive). ``tp_mult`` > 0: a
-    take-profit limit at the entry reference + tp_mult x stop distance (engine tp_mode "fixed": fills only when price
-    trades through it, at it or a better gapped open, maker fee; the stop wins a bar that touches both); ``ladder``: the
-    stepped lock. Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
+           tp_kind, tp_val, ladder, first_lock, step, gap):
+    """One position from entry minute e (fill at o[e]) until an exit or ``end`` (exclusive). Take-profit (engine
+    tp_mode "fixed": fills only when price trades through it, at it or a better gapped open, maker fee; the stop wins a
+    bar that touches both): TP_R at the entry reference + tp_val x stop distance, TP_ROE at net ROE tp_val
+    (policy.tp_from_roe on the fill and the leverage). ``ladder``: the stepped lock (first_lock, step, gap).
+    Returns (wallet change, exit minute index, reason, leverage); reason R_OPEN when no exit before ``end``."""
     taker, slip, rt, maker = S[0], S[1], S[5], S[19]
-    first_lock, step, gap = S[6], S[7], S[8]
     raw = o[e]
     fill = raw * (1 + side * slip)
     stop = raw - side * stop_dist
-    has_tp = tp_mult > 0
-    tp = raw + side * tp_mult * stop_dist
     ok, lev, margin, qty, liq = _size(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional)
     if not ok:
         return 0.0, e, R_REJECT, 0
+    has_tp = tp_kind != TP_NONE
+    if tp_kind == TP_R:
+        tp = raw + side * tp_val * stop_dist
+    else:
+        tp = fill * (1.0 + side * (tp_val / lev + rt))
     notional = qty * fill
     wallet = equity - notional * taker
     fpaid = 0.0
@@ -230,7 +253,7 @@ def _entry_index(ts, close):
 
 @njit
 def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, equity, qty_step, min_notional,
-             stop_atr, tp_mult=0.0, ladder=True):
+             stop_atr, tp_kind=0, tp_val=0.0, ladder=True, first_lock=0.10, step=0.05, gap=0.02):
     """Every chart bar as a signal, each side, alone: arrays [bar, side(0 long, 1 short)] of wallet change / equity,
     exit minute index, reason and leverage. ``best_l`` / ``best_s``: the bar's group per side (True = "best")."""
     n = len(close)
@@ -252,7 +275,7 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
                 continue
             best = best_l[i] if k == 0 else best_s[i]
             d, x, r, lev = _trade(S, br, o, h, l, mo, mh, ml, fund, e, m, side, stop_atr * a, a, best, equity,
-                                  qty_step, min_notional, tp_mult, ladder)
+                                  qty_step, min_notional, tp_kind, tp_val, ladder, first_lock, step, gap)
             rs[i, k] = r
             lv[i, k] = lev
             ex[i, k] = x
@@ -263,7 +286,8 @@ def outcomes(S, br, ts, o, h, l, mo, mh, ml, fund, close, atr, best_l, best_s, e
 
 @njit
 def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_close, sig_side, sig_atr, sig_best,
-            qty_steps, min_notionals, stop_atr, tp_mult=0.0, ladder=True):
+            qty_steps, min_notionals, stop_atr, tp_kind=0, tp_val=0.0, ladder=True, first_lock=0.10, step=0.05,
+            gap=0.02):
     """One account over several coins (1m arrays concatenated; coin c is [starts[c], ends[c])). Signals must be sorted
     by (entry minute, coin priority). Returns per signal: status (0 skipped, 1 entered, 2 rejected, 3 no fill,
     4 not taken after bust), P&L, exit time (ms), reason, leverage; and the final wallet."""
@@ -297,8 +321,8 @@ def account(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_c
             status[q] = 2
             continue
         d, j, r, lv_ = _trade(S, brs[c], o[a:b], h[a:b], l[a:b], mo[a:b], mh[a:b], ml[a:b], fund[a:b], e, b - a,
-                              sig_side[q], stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c], tp_mult,
-                              ladder)
+                              sig_side[q], stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c], tp_kind,
+                              tp_val, ladder, first_lock, step, gap)
         if r == R_REJECT:
             status[q] = 2
             continue

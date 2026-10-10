@@ -97,7 +97,7 @@ fi
 
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1
 MEMG=$(free -g | awk '/Mem/{print $2}')
-PROCS=$(nproc); BYMEM=$(( MEMG * 10 / 16 ))            # about 1.6 GB per worker at the peak
+PROCS=$(nproc); BYMEM=$(( MEMG * 10 / 18 ))            # about 1.8 GB per worker at the peak
 [ "$BYMEM" -lt "$PROCS" ] && PROCS=$BYMEM; [ "$PROCS" -lt 1 ] && PROCS=1
 say "4/6 계산 (모든 조합, 작업 ${PROCS}개 동시에)"
 "$PY" research/fullgrid/run.py outcomes --data "$DATA" --out "$OUT" --procs "$PROCS" \
