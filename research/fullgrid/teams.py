@@ -29,7 +29,7 @@ import run as R  # noqa: E402
 
 STATES = ("추세장", "횡보장", "급변장", "보통")
 DIMS = {"장세": STATES, "큰 흐름": ("위", "아래"), "변동성": ("작음", "보통", "큼")}
-ACTIVE_DIMS = ("장세",)                  # PHASE2_PREREG 7; another dimension only by a pre-result amendment
+ACTIVE_DIMS = ("장세", "큰 흐름", "변동성")   # PHASE2_PREREG 7 + PHASE2_AMEND_1 (fixed before any result)
 SHOW = {"위": "상승장(일봉 EMA200 위)", "아래": "하락장(아래)", "작음": "조용한 장", "큼": "출렁이는 장"}
 MIN_HOME, MIN_PERSIST, MIN_TEAM = 30, 20, 30
 N_BOOT = 2000

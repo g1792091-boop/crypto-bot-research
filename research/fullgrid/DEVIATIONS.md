@@ -46,3 +46,5 @@
   band of the 후보 리그). They are new files and run on the candidates only; the pinned run, its selection and its pass
   rule are unchanged. Their smoke test used the cells' default numbers (live rule), whose 5-year figures were already
   known (docs/combo5y.md, docs/regime5y.md), not any pick of this run or of the rehearsal.
+- 2026-10-10 22:52 KST, still before any result: PHASE2_AMEND_1.md runs the role-split team test (phase 2, section 7)
+  on three market views (장세, 큰 흐름, 변동성) instead of one, with one BH family over all of them.
