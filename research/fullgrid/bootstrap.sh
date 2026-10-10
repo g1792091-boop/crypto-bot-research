@@ -15,6 +15,7 @@ OUT=$BASE/out
 VENV=$BASE/venv
 LOG=$BASE/run.log
 PY=$VENV/bin/python
+NCPU=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)    # nproc obeys OMP_NUM_THREADS, set to 1 below for the workers
 mkdir -p "$BASE"
 
 say() { echo "[$(date -u '+%m-%d %H:%M UTC')] $*" | tee -a "$LOG"; }
@@ -94,7 +95,7 @@ fi
 cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
 FREEG=$(df -BG --output=avail "$BASE" | tail -1 | tr -dc '0-9')
 USEDG=$(du -s -BG "$DATA" "$OUT" 2>/dev/null | awk '{s += $1} END {print s + 0}')    # this study's own files so far
-say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 ${FREEG}GB (이미 받은 것 ${USEDG}GB)"
+say "코드 $(git rev-parse --short HEAD), CPU ${NCPU}개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 ${FREEG}GB (이미 받은 것 ${USEDG}GB)"
 [ $(( ${FREEG:-0} + USEDG )) -ge 60 ] || [ -f "$BASE/DONE" ] || die "디스크 여유가 60GB보다 적습니다(${FREEG}GB). 더 큰 서버를 쓰세요."
 
 say "2/6 자체 점검 (계산 엔진 = 규칙봇 엔진, 딥시크 기본값 = 지금 딥시크 신호)"
@@ -124,7 +125,7 @@ fi
 
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1
 MEMG=$(free -g | awk '/Mem/{print $2}')
-PROCS=$(nproc); BYMEM=$(( MEMG * 10 / 18 ))            # about 1.8 GB per worker at the peak
+PROCS=$NCPU; BYMEM=$(( MEMG * 10 / 18 ))            # about 1.8 GB per worker at the peak
 [ "$BYMEM" -lt "$PROCS" ] && PROCS=$BYMEM; [ "$PROCS" -lt 1 ] && PROCS=1
 say "4/6 계산 (모든 조합, 작업 ${PROCS}개 동시에)"
 "$PY" research/fullgrid/run.py outcomes --data "$DATA" --out "$OUT" --procs "$PROCS" \
