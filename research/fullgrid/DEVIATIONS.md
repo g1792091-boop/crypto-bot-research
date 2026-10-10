@@ -32,3 +32,9 @@
   only (where the picks are chosen anyway); no test or 2020 figure was seen, and nothing in the pinned run changed.
   The rehearsal also showed that no trade happens in the 급변장 regime: the entry check refuses a 2 ATR stop that lies
   beyond the liquidation price (e.g. S2_ST_ROC 4h BTC: 67 long signals in 급변장, 0 trades).
+- Prepared before any result, not part of the pinned run (owners 2026-10-10: widen only where results point, add
+  coins in a second run, study the bet size): edges.py (numbers at a range's end and the values a second run would
+  add; an oscillator level on its end is left out), sizing.py (sizes = the live margins x 1/4 .. 2, leverages kept;
+  the size is chosen on the select period as the fastest median month with at most 5% chance to end a month under
+  half, the test period shows it; four-week months drawn from the period's weeks), and dump_exchange.py's research-
+  only "extra" coins (XRP, BNB, ADA, LINK, AVAX, DOT; the bots keep their six).
