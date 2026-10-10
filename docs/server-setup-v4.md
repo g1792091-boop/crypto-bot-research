@@ -589,3 +589,21 @@ tailscale serve status
 봅니다. 봇이 멈춰도 소리가 나지 않으니 하루 한두 번 텔레그램이나 대시보드를 보세요. 나중에 긴급·경고만 다시 울리게 하려면
 `/etc/paperbot/live.env`(에이전트 방 알림은 `/etc/paperbot/agents.env`)에 `TELEGRAM_SOUND=1` 한 줄을 넣고 `sudo systemctl restart paperbot-live3 paperbot-tgtrades`로 봇과 거래 알림을 다시 켭니다
 (가격 알림은 거래 알림 서비스가 보냅니다. 에이전트·예약 작업은 다음 회차에 읽습니다. 봇 재시작은 실험을 다시 시작하지 않습니다).
+
+## 10. 봇 파일도 바뀐 업데이트 (매매 코드는 그대로, 30일 실험 그대로)
+
+8번(대시보드만)으로 올릴 수 없는 버전, 예를 들어 새 밤 작업(커스텀값 그림자, `docs/param-shadow.md`)처럼 **매매와 무관한 봇
+파일**이 함께 바뀐 버전을 올릴 때 씁니다. 매매 코드(`runinfo.TRADING_FILES`)가 그대로면 30일 기간은 다시 세지 않습니다.
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+```
+
+- 봇·대시보드·거래 알림이 **1분쯤 멈췄다가 저장된 상태에서 그대로 이어서** 돕니다(포지션·잔고 그대로). 예약 작업이 돌고 있으면
+  끝날 때까지 기다렸다가 진행합니다(`waiting for a scheduled job to finish`가 보이면 그대로 두세요).
+- 끝에 `restarted: paperbot-live3 ...`가 보이면 끝입니다.
+- 텔레그램에 `ℹ️ 재시작 변경 · 코드 버전 (거래에는 영향 없음)`이 한 번 옵니다. **`거래 규칙 영향 있음`이 오면** 매매 코드가
+  바뀐 것이니 그대로 두고 개발자에게 알려 주세요.
+- 새 밤 작업이 켜졌는지: `systemctl list-timers paperbot-paramshadow.timer` (다음 10:00 KST). 바로 한 번 돌려 보려면
+  `sudo systemctl start paperbot-paramshadow` (첫 실행은 v4 시작부터 채워서 20분쯤), 결과 한 줄은
+  `cat /var/lib/paperbot/paramshadow/last.txt`.
