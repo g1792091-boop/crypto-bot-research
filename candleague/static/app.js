@@ -140,7 +140,8 @@ function renderRank() {
       td(c.exit_ko, "l"), td(String(c.trades)), td(winRate(c)),
       td(pct(c.mean_ret), sign(c.mean_ret)), td(c.kind === "ds" && c.wallet == null ? "숨김" : usd(c.wallet)),
       td(c.max_dd == null ? "-" : `${(c.max_dd * 100).toFixed(1)}%`),
-      td(VERDICT[j.verdict] || "-", `v-${j.verdict || "early"}`));
+      el("td", { class: `v-${j.verdict || "early"}` }, VERDICT[j.verdict] || "-",
+        j.band && j.band.below ? el("span", { class: "warn small", text: " · 예상보다 아래" }) : null));
     row.addEventListener("click", () => openDetail(c.id));
     row.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(c.id); });
     body.append(row);
@@ -290,7 +291,7 @@ function renderTicker() {
   kids.push(item(`${S.tf} 봉 마감`, mmss(left)), item("KST", `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`));
   if (S.live && S.live.source === "fake") kids.push(item("", "연습용 가짜 시세", "warn"));
   else if (S.live && S.live.stale && !S.live.unavailable) kids.push(item("", "지난 값", "warn"));
-  box.replaceChildren(...kids);
+  box.replaceChildren(...kids.filter(Boolean));
 }
 
 function ensureChart() {
@@ -424,6 +425,8 @@ function renderAcctCard() {
     el("div", { class: "ac-name" }, el("span", { class: `sw sw-${a.role}` }), label(a)),
     el("div", { class: "ac-sub", text: `${ROLE[a.role]} · ${a.exit_ko}${a.bust ? " · 파산" : ""}` }),
     kv("판정", a.role === "cand" ? VERDICT[j.verdict] || "-" : "-", `v-${j.verdict || "early"}`),
+    a.role === "cand" && j.band ? kv(`예상 범위 (${j.band.n}건 기준)`, j.band.below
+      ? `아래 (하위 5% ${pct(j.band.p5)})` : `안 (하위 5% ${pct(j.band.p5)})`, j.band.below ? "warn" : "") : null,
     kv("거래 · 승률", `${a.trades}건 · ${winRate(a)}`),
     kv("한 번 평균", pct(a.mean_ret), sign(a.mean_ret)),
     kv("잔고", a.wallet == null ? "숨김" : usd(a.wallet), sign(a.wallet == null ? null : a.wallet - 5000)),
@@ -440,7 +443,7 @@ function renderAcctCard() {
   const more = el("button", { type: "button", class: "btn", text: "잔고 그래프 · 자세히" });
   more.addEventListener("click", () => openDetail(a.role === "cand" ? a.id : a.id));
   kids.push(more);
-  box.replaceChildren(...kids);
+  box.replaceChildren(...kids.filter(Boolean));
 }
 
 function renderTermSide() {

@@ -60,3 +60,12 @@ def test_accounts_add_a_flip_per_candidate_and_one_base_per_cell(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"candidates": cands}))
     assert len(C.load(str(p))) == 3
+
+
+def test_phase2_bands_ride_along_for_core_only():
+    band = {"10": {"p5": -0.02, "median": 0.004}, "30": {"p5": -0.008, "median": 0.004}}
+    ds_tf = C.ds_defs().TFS_OF["F17_Z"][0]
+    phase2 = {"candidates": [{"id": "core-S2_ST_ROC-15m-1", "band": band}, {"id": f"ds-F17_Z-{ds_tf}-1", "band": band}]}
+    cands = C.from_results(_confirm(), phase2=phase2)
+    assert cands[0]["source"]["band"] == band and "band" not in cands[1]["source"]                   # D11
+    assert "band" not in C.from_results(_confirm())[0]["source"]

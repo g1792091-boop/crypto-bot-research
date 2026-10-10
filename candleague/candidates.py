@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+from typing import Optional
 
 from . import exits as X
 
@@ -57,8 +58,11 @@ def _plain(v):
     return list(v) if isinstance(v, tuple) else v
 
 
-def from_results(confirm: dict, all_picks: bool = False) -> list[dict]:
-    """The league's candidates from confirm.json rows (passed ones unless ``all_picks``)."""
+def from_results(confirm: dict, all_picks: bool = False, phase2: Optional[dict] = None) -> list[dict]:
+    """The league's candidates from confirm.json rows (passed ones unless ``all_picks``); with ``phase2``
+    (research/fullgrid/checks.py's phase2.json) each core candidate carries its forward band (PHASE2_PREREG 8;
+    DeepSeek money stays out of the file, D11)."""
+    bands = {c["id"]: c.get("band") for c in (phase2 or {}).get("candidates", [])}
     out = []
     for r in confirm["rows"]:
         if not (r.get("pass") or all_picks):
@@ -67,6 +71,9 @@ def from_results(confirm: dict, all_picks: bool = False) -> list[dict]:
                "test_n": (r.get("test") or {}).get("n"), "select_n": r.get("select_n")}
         if r["kind"] == "core":
             src["test_mean"] = (r.get("test") or {}).get("mean")
+            band = bands.get(f"{r['kind']}-{r['name']}-{r['tf']}-{r.get('rank')}")
+            if band:
+                src["band"] = band
         out.append({"id": f"{r['kind']}-{r['name']}-{r['tf']}-{r.get('rank')}", "kind": r["kind"], "name": r["name"],
                     "tf": r["tf"], "combo": {k: _plain(v) for k, v in r["combo"].items()}, "exit": r["exit"],
                     "source": src})
@@ -137,12 +144,18 @@ def main(argv=None) -> int:
     m.add_argument("--results", required=True)
     m.add_argument("--out", default=DEFAULT_FILE)
     m.add_argument("--all-picks", action="store_true")
+    m.add_argument("--phase2", help="research/fullgrid/checks.py phase2.json (forward bands)")
     c = sub.add_parser("check")
     c.add_argument("--file", default=DEFAULT_FILE)
     a = ap.parse_args(argv)
     if a.cmd == "make":
         with open(os.path.join(a.results, "confirm.json")) as fh:
-            cands = from_results(json.load(fh), a.all_picks)
+            confirm = json.load(fh)
+        phase2 = None
+        if a.phase2:
+            with open(a.phase2) as fh:
+                phase2 = json.load(fh)
+        cands = from_results(confirm, a.all_picks, phase2)
         bad = check(cands)
         if bad:
             print("refused:\n  " + "\n  ".join(bad), file=sys.stderr)

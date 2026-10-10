@@ -84,6 +84,17 @@ class Notifier:
             out.append(f"{TAG} 파산: " + ", ".join(f"{r['name']} {r['tf']} ({r['role']})" for r in new)
                        + " - 잔고가 $10 아래로 내려가 이 계좌는 멈췄습니다(종이 매매, 실제 돈 아님)")
             self._put("busts_told", sorted(seen | {r["id"] for r in new}))
+        told = set(self._get("band_told") or [])
+        acc = {r["id"]: r for r in doc["accounts"]}
+        low = [(cid, j["band"]) for cid, j in doc.get("judge", {}).items()
+               if j.get("band") and j["band"]["below"] and cid not in told and cid in acc]
+        for cid, b in low:
+            r = acc[cid]
+            out.append(f"{TAG} 예상보다 아래: {r['name']} {r['tf']} ({r['exit_ko']}) - {b['n']}번 이상 거래, 한 번 평균 "
+                       f"{_pct(r['mean_ret'])} < 백테스트 하위 5% {_pct(b['p5'])}. 경고등이지 판정이 아닙니다(후보가 많으면 "
+                       f"20개 중 1개쯤은 운만으로도 나옵니다). 종이 매매, 실제 돈 아님")
+        if low:
+            self._put("band_told", sorted(told | {cid for cid, _b in low}))
         day = time.strftime("%Y-%m-%d", time.gmtime((now_ms + KST) / 1000))
         hour = time.gmtime((now_ms + KST) / 1000).tm_hour
         if caught_up and hour >= SUMMARY_HOUR_KST and self._get("summary_day") != day:

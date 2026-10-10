@@ -176,6 +176,17 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False)
     return out
 
 
+def band_status(trades: int, mean: Optional[float], band: Optional[dict]) -> Optional[dict]:
+    """The forward mean against the backtest band (PHASE2_PREREG 8) at the largest trade count reached."""
+    if not band or mean is None:
+        return None
+    ns = sorted(int(n) for n in band if int(n) <= trades)
+    if not ns:
+        return None
+    b = band[str(ns[-1])]
+    return {"n": ns[-1], "below": bool(mean < b["p5"]), "p5": b["p5"], "median": b["median"]}
+
+
 def judge(rows: list[dict]) -> dict:
     """{candidate id: verdict} by CONTRACT.md 2: under MIN_TRADES 'early'; else mean > 0, > its cell's base, > its
     flip ('ok' only when all three)."""
@@ -184,15 +195,17 @@ def judge(rows: list[dict]) -> dict:
     for r in rows:
         if r["role"] != "cand":
             continue
+        band = band_status(r["trades"], r["mean_ret"], (r.get("source") or {}).get("band"))
+        extra = {"band": band} if band else {}
         base = by_id.get(f"base-{r['kind']}-{r['name']}-{r['tf']}")
         flip = by_id.get(f"{r['id']}-flip")
         if r["trades"] < MIN_TRADES or r["mean_ret"] is None:
-            out[r["id"]] = {"verdict": "early", "trades": r["trades"]}
+            out[r["id"]] = {"verdict": "early", "trades": r["trades"], **extra}
             continue
         checks = {"positive": r["mean_ret"] > 0,
                   "beats_base": base is not None and base["mean_ret"] is not None and r["mean_ret"] > base["mean_ret"],
                   "beats_flip": flip is not None and flip["mean_ret"] is not None and r["mean_ret"] > flip["mean_ret"]}
-        out[r["id"]] = {"verdict": "ok" if all(checks.values()) else "not_yet", "trades": r["trades"], **checks}
+        out[r["id"]] = {"verdict": "ok" if all(checks.values()) else "not_yet", "trades": r["trades"], **checks, **extra}
     return out
 
 

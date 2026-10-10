@@ -106,3 +106,13 @@ def test_final_end_waits_for_the_5m_bar():
     t = RN.FIVE * 1000
     assert RN.final_end(t + RN.SETTLE_MS) == t and RN.final_end(t + RN.SETTLE_MS - 1) == t - RN.FIVE
     assert RN.START_MS == 1_790_812_800_000
+
+
+def test_forward_band_status():
+    band = {"10": {"p5": -0.02, "median": 0.004}, "30": {"p5": -0.008, "median": 0.004}}
+    assert RN.band_status(9, -0.5, band) is None and RN.band_status(40, None, band) is None
+    assert RN.band_status(12, -0.01, band) == {"n": 10, "below": False, "p5": -0.02, "median": 0.004}
+    assert RN.band_status(31, -0.01, band)["below"] and RN.band_status(31, -0.01, None) is None
+    rows = [{"id": "c", "role": "cand", "kind": "core", "name": "S2_ST_ROC", "tf": "15m", "trades": 12,
+             "mean_ret": -0.03, "source": {"band": band}}]
+    assert RN.judge(rows)["c"] == {"verdict": "early", "trades": 12, "band": RN.band_status(12, -0.03, band)}

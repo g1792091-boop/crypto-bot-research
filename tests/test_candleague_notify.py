@@ -54,3 +54,13 @@ def test_a_telegram_failure_never_raises(tmp_path):
     def boom(text):
         raise OSError("down")
     assert len(N.Notifier(conn, sender=boom).after_pass(_doc(bust=True), KST9 + 60_000, caught_up=True)) == 2
+
+
+def test_below_the_band_is_told_once(tmp_path):
+    conn = RN.open_db(str(tmp_path / "l.db"))
+    nt = N.Notifier(conn)
+    doc = _doc()
+    doc["judge"]["c1"]["band"] = {"n": 10, "below": True, "p5": 0.006, "median": 0.01}
+    out = nt.after_pass(doc, KST9 - 3_600_000, caught_up=True)
+    assert len(out) == 1 and out[0].startswith("[후보 리그] 예상보다 아래: S2_ST_ROC 15m") and "+0.40% < 백테스트 하위 5% +0.60%" in out[0]
+    assert nt.after_pass(doc, KST9 - 3_000_000, caught_up=True) == []
