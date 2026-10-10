@@ -371,6 +371,10 @@ def _p(x, d=2) -> str:
     return "-" if x is None else f"{x * 100:+.{d}f}%"
 
 
+def _share(x) -> str:
+    return "-" if x is None else f"{x * 100:.0f}%"
+
+
 def _money(row: dict) -> bool:
     return row["kind"] == "core" or DS_MONEY
 
@@ -417,19 +421,29 @@ def report_ko(doc: dict) -> str:
         else:
             L.append("- 거래 수: 해마다 " + ", ".join(f"{y} {v['n']}" for y, v in ys["rows"].items() if v["n"]))
         ro = r["rulebot_overlap"]
-        L.append(f"- 규칙봇과 겹침: 같은 매매법 기본값과 {_p(ro['own_default'], 0)}, 36개 기본값 중 하나라도 "
-                 f"{_p(ro['any_core36'], 0)} (같은 코인·같은 방향·한 봉 안)")
+        L.append(f"- 규칙봇과 겹침: 같은 매매법 기본값과 {_share(ro['own_default'])}, 36개 기본값 중 하나라도 "
+                 f"{_share(ro['any_core36'])} (같은 코인·같은 방향·한 봉 안)")
         L.append("")
     if doc["pairs"]:
         L += ["## 후보끼리 겹침 (같이 돌릴 때)", "",
               "| 후보 A | 후보 B | 같은 진입 | 하루 손익 상관 | 나쁜 날 겹침 | |", "|---|---|---|---|---|---|"]
         for p in doc["pairs"]:
-            L.append(f"| {p['a']} | {p['b']} | {_p(p['overlap'], 0)} | "
-                     f"{'-' if p['corr'] is None else format(p['corr'], '.2f')} | {_p(p['bad_days'], 0)} | "
+            L.append(f"| {p['a']} | {p['b']} | {_share(p['overlap'])} | "
+                     f"{'-' if p['corr'] is None else format(p['corr'], '.2f')} | {_share(p['bad_days'])} | "
                      f"{'거의 같은 매매' if p['same'] else ''} |")
         L += ["", "나쁜 날 겹침은 서로 상관없으면 5% 안팎입니다. '거의 같은 매매'는 같이 돌려도 위험이 줄지 않습니다.", ""]
     L += ["## 후보 리그 '예상 범위'", "",
-          "시험 기간 거래로 만든 범위입니다. 후보가 많으면 20개 중 1개쯤은 운만으로도 '예상보다 아래'가 나옵니다.", ""]
+          "시험 기간 거래로 만든 범위입니다. 후보 리그에서 그 건수만큼 거래한 뒤 한 번 평균이 '하위 5%'보다 낮으면",
+          "'예상보다 아래'로 표시됩니다. 후보가 많으면 20개 중 1개쯤은 운만으로도 그렇게 나옵니다.", "",
+          "| 후보 | 10건 하위 5% | 30건 하위 5% | 100건 하위 5% | 가운데 |", "|---|---|---|---|---|"]
+    for r in doc["candidates"]:
+        b = r.get("band") or {}
+        if not b:
+            continue
+        if not _money(r):
+            L.append(f"| {r['id']} | 숨김 | 숨김 | 숨김 | 숨김 |")
+            continue
+        L.append(f"| {r['id']} | {_p(b['10']['p5'])} | {_p(b['30']['p5'])} | {_p(b['100']['p5'])} | {_p(b['30']['median'])} |")
     return "\n".join(L) + "\n"
 
 
