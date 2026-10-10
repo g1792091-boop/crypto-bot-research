@@ -1,6 +1,6 @@
 """후보 리그 Telegram: a 09:00 KST summary once a day and a notice when an account goes bust; every message starts with
 [후보 리그] so it is never mistaken for the rule bot's or the demo lab's. Token and chat from the environment
-(CANDLEAGUE_TG_TOKEN, CANDLEAGUE_TG_CHAT); without them nothing is sent. DeepSeek money stays hidden (the snapshot's
+(CANDLEAGUE_TG_TOKEN, CANDLEAGUE_TG_CHAT: 1-4 chat ids, comma separated); without them nothing is sent. DeepSeek money stays hidden (the snapshot's
 own rule)."""
 
 from __future__ import annotations
@@ -58,8 +58,13 @@ class Notifier:
 
     def __init__(self, conn, sender: Optional[Callable[[str], None]] = None):
         self.conn = conn
-        token, chat = os.environ.get("CANDLEAGUE_TG_TOKEN"), os.environ.get("CANDLEAGUE_TG_CHAT")
-        self.sender = sender or ((lambda text: send_telegram(token, chat, text)) if token and chat else None)
+        token = os.environ.get("CANDLEAGUE_TG_TOKEN")
+        chats = [c.strip() for c in os.environ.get("CANDLEAGUE_TG_CHAT", "").split(",") if c.strip()][:4]
+
+        def send_all(text):
+            for chat in chats:
+                send_telegram(token, chat, text)
+        self.sender = sender or (send_all if token and chats else None)
 
     def _get(self, k):
         row = self.conn.execute("SELECT v FROM kv WHERE k = ?", (k,)).fetchone()

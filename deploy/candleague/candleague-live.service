@@ -1,0 +1,48 @@
+# 후보 리그 (candidate league) engine: the full-grid candidates as paper accounts on Binance public data
+# (candleague/CONTRACT.md). Never places an order, needs no exchange key. Separate from the rule bot and the demo lab:
+# its own user, code copy, venv, database (/var/lib/candleague/league.db). Installed by
+# deploy/candleague/install_candleague.sh.
+[Unit]
+Description=candleague candidate league engine (paper only, no orders)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=candleague
+Group=candleague
+UMask=0027
+WorkingDirectory=/opt/candleague/app
+EnvironmentFile=/etc/candleague/candleague.env
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+UnsetEnvironment=CANDLEAGUE_DASH_PASSWORD_HASH CANDLEAGUE_DASH_SECRET
+ExecStart=/opt/candleague/venv/bin/python -m candleague run
+Restart=always
+RestartSec=30
+KillMode=mixed
+TimeoutStopSec=60
+# A guest on the rule bot's server: low priority, at most 30% of one CPU, hard memory cap.
+Nice=10
+CPUQuota=30%
+MemoryHigh=1000M
+MemoryMax=1300M
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/candleague
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/var/backups/paperbot -/etc/demobot -/var/lib/demobot
+
+[Install]
+WantedBy=multi-user.target

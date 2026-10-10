@@ -1,0 +1,40 @@
+# 후보 리그 dashboard: read-only views of /var/lib/candleague/snap behind a password (port 8091 by default).
+[Unit]
+Description=candleague candidate league dashboard (read-only)
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=candleague
+Group=candleague
+UMask=0027
+WorkingDirectory=/opt/candleague/app
+EnvironmentFile=/etc/candleague/candleague.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+UnsetEnvironment=CANDLEAGUE_TG_TOKEN CANDLEAGUE_TG_CHAT
+ExecStartPre=/bin/sh -c 'if [ -z "$$CANDLEAGUE_DASH_HOST" ]; then echo "CANDLEAGUE_DASH_HOST empty in /etc/candleague/candleague.env" >&2; exit 1; fi'
+ExecStartPre=-/bin/sh -c 'n=0; until ip -4 -o addr show | grep -qF " inet $$CANDLEAGUE_DASH_HOST/" || [ $$n -ge 60 ]; do n=$$((n+1)); sleep 1; done'
+ExecStart=/opt/candleague/venv/bin/python -m candleague.dash
+Restart=always
+RestartSec=10
+Nice=10
+MemoryHigh=250M
+MemoryMax=300M
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadOnlyPaths=/var/lib/candleague
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot -/etc/demobot -/var/lib/demobot
+
+[Install]
+WantedBy=multi-user.target
