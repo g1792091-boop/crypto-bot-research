@@ -10,4 +10,5 @@ WORKROOT에는 `fg1m/`(실행과 같은 1분봉), `fgwork/`(결과표, `frames/`
 | `gross_cost.py WORKROOT 4h,1h` | 지금 숫자, 비용 0배와 1배 | `gross_4h_1h.json` → `gross_sum.py` → `gross_sum.json` |
 | `side_skill.py WORKROOT` | 같은 진입 자리, 고른 방향 vs 반대 방향 | `side_skill.json` → `side_sum.py` |
 | `uncond.py WORKROOT` | 매매법 없이 모든 봉, 롱·숏 | `uncond.json` |
-| `regime_explore.py WORKROOT` | 장세별 강점이 다음 기간에도 유지되나 | `regime_explore.json` |
+| `regime_explore.py WORKROOT` | 장세별 강점이 다음 기간에도 유지되나 | `regime_explore.json` → `regime_sum.py` |
+| `top_picks.py WORKROOT` | 시험 기간 1~3등의 승률·손익비·계좌 결과·반대 방향 | `top_picks.json` |
