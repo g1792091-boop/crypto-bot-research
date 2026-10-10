@@ -13,3 +13,4 @@ WORKROOT에는 `fg1m/`(실행과 같은 1분봉), `fgwork/`(결과표, `frames/`
 | `regime_explore.py WORKROOT` | 장세별 강점이 다음 기간에도 유지되나 | `regime_explore.json` → `regime_sum.py` |
 | `top_picks.py WORKROOT` | 시험 기간 1~3등의 승률·손익비·계좌 결과·반대 방향 | `top_picks.json` |
 | `combo_watch.py WORKROOT` | 관찰 후보 38개 계좌(`watch_sel.json`): 겹침·상관, 지금 크기와 1/4 크기 계좌 | → `combo_sum.py` → `combo_sum.json` |
+| `strat_report.py WORKROOT` | 매매법 80개 × 봉 4개: 지금 숫자와 커스텀값 1등의 기간별·장세별·코인별 성적, 계좌 | → `strat_md.py` → `../STRATEGIES_KO.md` (계산 파일은 딥시크 돈 숫자가 들어 있어 올리지 않음) |
