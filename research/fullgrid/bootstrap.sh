@@ -39,6 +39,7 @@ status() {
   fi
   local step; step=$(grep -E "\] [0-9]/6 " "$LOG" 2>/dev/null | tail -1)
   echo "진행 중: ${step:-설치 중}"
+  tail -1 "$LOG" 2>/dev/null | grep -q "exchange.json)를 기다립니다" && echo "  지금은 레버리지 구간 표를 기다리는 중입니다 (0번)."
   case "$step" in
     *"4/6"*) local last; last=$(grep -E '^\[(outcomes|grid) [0-9]+/' "$LOG" 2>/dev/null | tail -1)
              [ -n "$last" ] && echo "  ${last%%: *}" ;;
@@ -91,9 +92,6 @@ if [ ! -f "$BASE/INSTALLED" ]; then
   touch "$BASE/INSTALLED"
 fi
 cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
-[ -f research/fullgrid/exchange.json ] || die "research/fullgrid/exchange.json(레버리지 구간 표)이 저장소에 아직 없습니다.
-  개발자가 넣었다고 하면: exit 로 이 창에서 나온 뒤 붙여 넣으세요:
-  cd $REPO && git pull && $RESTART"
 FREEG=$(df -BG --output=avail "$BASE" | tail -1 | tr -dc '0-9')
 USEDG=$(du -s -BG "$DATA" "$OUT" 2>/dev/null | awk '{s += $1} END {print s + 0}')    # this study's own files so far
 say "코드 $(git rev-parse --short HEAD), CPU $(nproc)개, 메모리 $(free -g | awk '/Mem/{print $2}')GB, 디스크 여유 ${FREEG}GB (이미 받은 것 ${USEDG}GB)"
@@ -110,6 +108,18 @@ fi
 say "3/6 바이낸스 공개 자료 받기 (2020-01 ~ 2026-09, 1분봉·마크 가격·펀딩, 약 10~20분)"
 if [ ! -f "$DATA/build.json" ]; then
   "$PY" research/fullgrid/data.py all --dir "$DATA" --procs 16 >>"$LOG" 2>&1 || die "자료 받기 실패"
+fi
+
+EX=research/fullgrid/exchange.json
+if [ ! -f "$EX" ]; then           # only this file is fetched: the code stays the commit the self-check passed
+  BR=$(git rev-parse --abbrev-ref HEAD)
+  say "레버리지 구간 표(exchange.json)를 기다립니다. 규칙봇 서버에서 0번을 해서 채팅에 붙여 주세요. 개발자가 올리면 1분 안에 저절로 이어 갑니다."
+  for k in $(seq 1 360); do
+    git fetch -q origin "$BR" 2>/dev/null && git checkout -q FETCH_HEAD -- "$EX" 2>/dev/null && break
+    sleep 60
+  done
+  [ -f "$EX" ] || die "6시간 동안 레버리지 구간 표가 오지 않았습니다. 0번을 한 뒤 다시 시작하세요: $RESTART"
+  say "레버리지 구간 표 받음 ($(cut -c1-40 "$EX"))"
 fi
 
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1
