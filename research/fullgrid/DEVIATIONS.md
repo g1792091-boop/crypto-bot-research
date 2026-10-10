@@ -48,3 +48,8 @@
   known (docs/combo5y.md, docs/regime5y.md), not any pick of this run or of the rehearsal.
 - 2026-10-10 22:52 KST, still before any result: PHASE2_AMEND_1.md runs the role-split team test (phase 2, section 7)
   on three market views (장세, 큰 흐름, 변동성) instead of one, with one BH family over all of them.
+- 2026-10-11 KST, after the results (0 / 711 passed): no candidate, so phase 2 and the team test stop at "후보 없음"
+  as pre-registered, and the 후보 리그 is not installed. Reference diagnostics written after seeing the results are in
+  `diag/` and `ANALYSIS_KO.md` (costs x0 vs x1, chosen side vs the opposite side at the same entries, every bar
+  without a strategy, market-state persistence on the default numbers and the picks). They explain the result and
+  guide the next step; they change no verdict, and nothing they show is a candidate.
