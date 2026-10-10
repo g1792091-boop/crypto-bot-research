@@ -1,0 +1,64 @@
+/* 후보 리그: dark like the rule bot v4 and the demo lab. Series colors: the dataviz reference palette's first three
+   dark slots, validated on #1a1e23 (all checks pass): candidate blue, default orange, coin flip aqua. */
+:root {
+  color-scheme: dark;
+  --bg: #121519; --surface: #1a1e23; --surface-2: #1f242a; --line: #2c333b; --grid: #262c33;
+  --ink: #e8ecf1; --ink-2: #bcc3cc; --ink-3: #8a939e;
+  --accent: #3987e5;
+  --series-cand: #3987e5; --series-base: #d95926; --series-flip: #199e70;
+  --good: #3fb950; --bad: #f0605a; --warn: #d6a83a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+             font: 14px/1.45 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+.top { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line);
+       padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.brand strong { font-size: 17px; }
+.tag { margin-left: 8px; color: var(--ink-3); font-size: 12px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: none; border: 1px solid transparent; color: var(--ink-2); padding: 6px 10px;
+               border-radius: 6px; font-size: 14px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--line); background: var(--surface); }
+.fresh { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.fresh.late { color: var(--warn); }
+main { padding: 12px 16px 40px; max-width: 1200px; margin: 0 auto; }
+.hint { color: var(--ink-2); margin: 4px 0 12px; font-size: 13px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { color: var(--ink-3); font-weight: 500; font-size: 12px; background: var(--surface-2); position: sticky; top: 0; }
+td.l, th.l { text-align: left; }
+tr.cand { cursor: pointer; }
+tr.cand:hover td { background: var(--surface-2); }
+tr.ref td { color: var(--ink-3); font-size: 12px; }
+tr.ref td.l { padding-left: 22px; }
+.sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.v-ok { color: var(--good); } .v-not_yet { color: var(--bad); } .v-early { color: var(--ink-3); }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.status { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; background: var(--surface);
+          border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0; }
+.status dt { color: var(--ink-3); } .status dd { margin: 0; }
+.detail { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 16px; }
+.detail h2 { margin: 0 0 4px; font-size: 17px; }
+.detail .meta { color: var(--ink-2); font-size: 13px; margin-bottom: 10px; }
+.detail .close { float: right; background: none; border: 1px solid var(--line); color: var(--ink-2); border-radius: 6px;
+                 padding: 4px 10px; cursor: pointer; }
+.combo { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.combo span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px;
+              font-size: 12px; color: var(--ink-2); }
+.chart { position: relative; margin: 8px 0 14px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--surface-2); border: 1px solid var(--line);
+              border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--ink); white-space: nowrap; }
+.sw-cand { background: var(--series-cand); } .sw-base { background: var(--series-base); }
+.sw-flip { background: var(--series-flip); }
+.chart .gl { stroke: var(--grid); stroke-width: 1; }
+.chart .ax { fill: var(--ink-3); font-size: 11px; }
+.chart .lab { fill: var(--ink-2); font-size: 11px; }
+.chart .xh { stroke: var(--ink-3); stroke-width: 1; }
+.chart .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ln-cand { stroke: var(--series-cand); } .ln-base { stroke: var(--series-base); } .ln-flip { stroke: var(--series-flip); }
+.empty { color: var(--ink-3); padding: 18px; text-align: center; }
+@media (max-width: 640px) { .fresh { margin-left: 0; width: 100%; } }

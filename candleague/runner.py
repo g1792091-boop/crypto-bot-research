@@ -193,16 +193,46 @@ def judge(rows: list[dict]) -> dict:
     return out
 
 
+LAST_TRADES = 200
+TRADE_KEYS = ("symbol", "side", "entry_time", "entry_price", "exit_time", "exit_price", "exit_reason", "leverage",
+              "pnl", "roe")
+
+
+def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = START_MS) -> dict:
+    """{account: {"equity": [[exit ms, wallet after]...] from $5,000, "trades": the last LAST_TRADES, newest first}};
+    DeepSeek accounts without money (no equity line, no P&L) unless ``ds_money``."""
+    out = {}
+    for a in accts:
+        rows = [json.loads(d) for (d,) in
+                conn.execute("SELECT data FROM trades WHERE account = ? ORDER BY exit_time", (a["id"],))]
+        hide = a["kind"] == "ds" and not ds_money
+        eq, curve = EQUITY, [[int(start_ms), EQUITY]]
+        for t in rows:
+            eq += t["pnl"]
+            curve.append([int(t["exit_time"]), round(eq, 2)])
+        last = [{k: t.get(k) for k in TRADE_KEYS} for t in rows[-LAST_TRADES:]][::-1]
+        if hide:
+            for t in last:
+                t["pnl"] = t["roe"] = None
+        out[a["id"]] = {"equity": None if hide else curve, "trades": last}
+    return out
+
+
+def _write(snap: str, name: str, doc) -> None:
+    tmp = os.path.join(snap, f".{name}.{os.getpid()}")
+    with open(tmp, "w") as fh:
+        json.dump(doc, fh, ensure_ascii=False)
+    os.replace(tmp, os.path.join(snap, name))
+
+
 def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = False) -> dict:
     rows = account_rows(league.conn, league.accts, league.engines, ds_money)
     doc = {"generated_ms": now_ms, "done_ms": league.done, "lag_s": max(0, (now_ms - league.done) // 1000),
            "start_ms": league.start_ms, "accounts": rows, "judge": judge(rows), "notes": league.meta.get("notes", []),
            "ds_money": ds_money}
     os.makedirs(snap, exist_ok=True)
-    tmp = os.path.join(snap, f".league.json.{os.getpid()}")
-    with open(tmp, "w") as fh:
-        json.dump(doc, fh, ensure_ascii=False)
-    os.replace(tmp, os.path.join(snap, "league.json"))
+    _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms))
+    _write(snap, "league.json", doc)
     return doc
 
 
