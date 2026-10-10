@@ -40,3 +40,9 @@
   only "extra" coins (XRP, BNB, ADA, LINK, AVAX, DOT; the bots keep their six).
 - Owners 2026-10-10 evening: no extra coins ("코인 안늘려도돼"). dump_exchange.py is back to the six coins only; a
   second run, if any, widens numbers at a range's end on the same six coins.
+- 2026-10-10 22:28 KST, the run at grid task 50 / 2322, no result seen: PHASE2_PREREG.md (sha256 in
+  PHASE2_PREREG.sha256) fixes the checks done on the candidates afterwards (cost x2 / x3, years, coins and sides,
+  the worst stretch, overlap with the rule bot and between candidates, role-split teams by market state, the forward
+  band of the 후보 리그). They are new files and run on the candidates only; the pinned run, its selection and its pass
+  rule are unchanged. Their smoke test used the cells' default numbers (live rule), whose 5-year figures were already
+  known (docs/combo5y.md, docs/regime5y.md), not any pick of this run or of the rehearsal.
