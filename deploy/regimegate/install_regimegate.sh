@@ -46,6 +46,12 @@ if [ ! -f "$REPO_DIR/research/regimegate/PREREG_REGIMEGATE.sha256" ]; then
   echo "규칙 고정 파일(research/regimegate/PREREG_REGIMEGATE.sha256)이 아직 없습니다."
   echo "개발자가 규칙을 고정해 올린 뒤 git pull 하고 다시 실행하세요. 아무것도 바꾸지 않았습니다."; exit 1
 fi
+# a pin made by hand on the server (untracked) is not the committed one: the status check below skips untracked files
+if git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+   && ! git -C "$REPO_DIR" ls-files --error-unmatch research/regimegate/PREREG_REGIMEGATE.sha256 >/dev/null 2>&1; then
+  echo "규칙 고정 파일(research/regimegate/PREREG_REGIMEGATE.sha256)이 커밋된 파일이 아닙니다."
+  echo "개발자가 규칙을 고정해 올린 뒤 git pull 하고 다시 실행하세요. 아무것도 바꾸지 않았습니다."; exit 1
+fi
 for p in $CODE_PATHS; do
   [ -e "$REPO_DIR/$p" ] || { echo "저장소에 없습니다: $p (git pull 후 다시 실행하세요)"; exit 1; }
 done
