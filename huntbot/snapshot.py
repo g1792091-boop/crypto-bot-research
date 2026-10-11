@@ -103,7 +103,7 @@ def lineup_doc(R, mk, complete_ms: int, lineup_res: dict) -> tuple:
             pub.append(base)
             continue
         trades = res["trades"]
-        row = dict(base, **_counts(trades), bust=res["summary"].get("bust"),
+        row = dict(base, **(res.get("counts") or _counts(trades)), bust=res["summary"].get("bust"),
                    bust_month=res["summary"].get("bust_month"), signal_counts=res["summary"].get("signal_counts"))
         tr = [public_trade(t, a["ds"]) for t in sorted(trades, key=lambda t: t["in_ms"], reverse=True)]
         row["positions"] = [t for t in tr if t["open"]]
@@ -148,7 +148,7 @@ def write_all(R, mk, complete_ms: int, results: dict, lineup_res: dict) -> None:
             continue
         sm = res["summary"]
         sc = sm.get("signal_counts") or {}
-        row = dict(base, **_counts(res["trades"]), bust=sm.get("bust"), events=sc.get("events"),
+        row = dict(base, **(res.get("counts") or _counts(res["trades"])), bust=sm.get("bust"), events=sc.get("events"),
                    gated=sc.get("gated"), gated_out=sc.get("gated_out"), both=sc.get("both"),
                    candidates=sm.get("candidates"), skipped=sm.get("skipped"))
         if not ds:

@@ -233,6 +233,26 @@ def _task_events(task):
         return (cid, sym, None, None, None, None, f"{type(e).__name__}: {e}"[:300])
 
 
+KEEP_LAST = 100                    # closed trades per system carried to the snapshot (the dashboard shows 100)
+
+
+def trade_counts(trades: list) -> dict:
+    closed = [t for t in trades if not t["open"]]
+    wins = sum(1 for t in closed if (t.get("pnl") or 0) > 0)
+    return {"n_positions": len(trades), "closed": len(closed), "open_n": len(trades) - len(closed), "wins": wins,
+            "win_share": (wins / len(closed)) if closed else None,
+            "last_trade_ms": max([t["out_ms"] if not t["open"] else t["in_ms"] for t in trades], default=None)}
+
+
+def trim_trades(trades: list, since_ms: Optional[int]) -> list:
+    """What a cycle needs of a system's trades: the open ones, the last KEEP_LAST closed ones and every one closed
+    since ``since_ms`` (the trade log and Telegram); the counts are taken before (``trade_counts``)."""
+    closed = [t for t in trades if not t["open"]]
+    keep = {id(t) for t in closed[-KEEP_LAST:]}
+    keep |= {id(t) for t in trades if t["open"] or since_ms is None or t["out_ms"] >= since_ms}
+    return [t for t in trades if id(t) in keep]
+
+
 def _slim(res: dict, keep_trades: bool = True) -> dict:
     s = res["summary"]
     keys = ("months", "M", "end_multiple", "max_dd", "bust", "bust_month", "n_positions", "months_with_position",
@@ -241,9 +261,11 @@ def _slim(res: dict, keep_trades: bool = True) -> dict:
             "signal_counts", "mean_lnM", "median_M", "share_add_level", "adds_per_month", "day_eq",
             "realized_unit_risk", "share_first_unit_cut")
     out = {"summary": {k: s.get(k) for k in keys}, "equity_now": res["equity_now"], "bust_t": res["bust_t"],
-           "month_names": res["months"]}
-    if keep_trades:
+           "month_names": res["months"], "counts": trade_counts(res["trades"])}
+    if keep_trades is True:
         out["trades"] = res["trades"]
+    elif keep_trades is not False:                      # a time: trimmed (open, last 100, closed since then)
+        out["trades"] = trim_trades(res["trades"], keep_trades)
     if "hourly" in res:
         out["hourly"] = res["hourly"]
     if "actions" in res:
@@ -255,6 +277,7 @@ def _task_cell(task):
     cid, since = task
     R = _W["runner"]
     mk, last_step, var = _W["mk"], _W["last_step"], _W["r05"]
+    keep = True if R.keep_all_trades else _W["keep_since"]
     cell = R.cells[cid]
     try:
         evs = R.load_cell_events(cid, mk)
@@ -262,7 +285,7 @@ def _task_cell(task):
         for spec in cell.systems:
             res = E.run_account(mk, [(spec, 0)], var, last_step, want_probe=not S.is_ds(spec),
                                 action_events=evs if since is not None else None, since_ms=since)
-            out[spec["id"]] = _slim(res)
+            out[spec["id"]] = _slim(res, keep)
         return cid, out, None
     except Exception as e:  # noqa: BLE001
         return cid, None, f"{type(e).__name__}: {e}"[:300] + " | " + traceback.format_exc(limit=3)[-600:]
@@ -309,6 +332,7 @@ class Runner:
         self.done_ms: Optional[int] = None
         self.lineup = {"accounts": [], "error": None, "path": lineup_path}
         self.cycles = 0
+        self.keep_all_trades = False      # tests: every trade of every system in last_results
         self.errors: list = []
         self.reuse_series = True          # off for good if hunt.Series ever holds more than bars / ATR / label
 
@@ -563,7 +587,9 @@ class Runner:
             H.bank_for(mk, (tf,))
         self.lineup = self.read_lineup()
         pri = sorted({c for a in self.lineup["accounts"] for c in a["cells"]})
-        _W.update({"runner": self, "mk": mk, "last_step": last_step, "r05": self.var["r0.5"]})
+        since = getattr(self, "_recorded_through", None)
+        _W.update({"runner": self, "mk": mk, "last_step": last_step, "r05": self.var["r0.5"],
+                   "keep_since": None if since is None else since - DAY})
         # (1) + (2): the lineup first
         t1 = time.monotonic()
         ev1 = self.refresh_events(self.stale_pairs(new_bins, pri))

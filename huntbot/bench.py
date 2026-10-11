@@ -73,7 +73,7 @@ class FakeClock:
 
 
 def make_test_runner(data_dir: str, store, syms: list, warmup_ms: int, clock, systems=None, procs: int = 1,
-                     lineup_path=None, notifier=None, fwd_ms: int = CFG.FORWARD_START_MS):
+                     lineup_path=None, notifier=None, fwd_ms: int = CFG.FORWARD_START_MS, keep_all: bool = True):
     """A Runner over ``store`` with its outputs under ``data_dir`` (tests and the bench)."""
     from . import runner as RN
     from .ledger import Ledger
@@ -83,6 +83,7 @@ def make_test_runner(data_dir: str, store, syms: list, warmup_ms: int, clock, sy
                   os.path.join(data_dir, "snap"), os.path.join(data_dir, "private"), procs=procs, warmup_ms=warmup_ms,
                   fwd_ms=fwd_ms, clock=clock, log=lambda m: None, notifier=notifier,
                   engine={"hunt_sha256": "bench"}, universe_info={"source": "synthetic"}, syms=syms)
+    r.keep_all_trades = keep_all
     if systems is not None:
         from . import systems as S
         r.systems = systems
@@ -129,7 +130,8 @@ def bench_main(argv=None) -> int:
         systems = [s for s in systems if s["family"] in ("F1", "F2")]
     res["systems"] = len(systems)
     clock = FakeClock(at + 60_000)
-    r = make_test_runner(d, store, syms, warm, clock, systems=systems if a.cells != "all" else None, procs=a.procs)
+    r = make_test_runner(d, store, syms, warm, clock, systems=systems if a.cells != "all" else None, procs=a.procs,
+                         keep_all=False)
     res["cells_n"] = len(r.cells)
     cycles = []
     steps = [("catch_up_10_01_to_at", at), ("5m", at + FIVE), ("5m", at + 2 * FIVE), ("15m", at + 3 * FIVE),

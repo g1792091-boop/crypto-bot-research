@@ -265,63 +265,361 @@ the F5 name. Distinct names among the candidates: 87.
 
 ## 6. Test (W6)
 
-* Period: **test 2024-01-01 .. 2026-10-01** (33 months), H 11. **Each pick runs once**, r = 0.5%, base costs, plus its
-  cost x2 run. Systems that are not picks are never run on the test period.
-* **Controls** for each pick: (a) random times and (b) coin-flip sides, **100 seeds each, exactly H 12** (the pick's
-  timeframe, gate, r and period; (a) draws per coin and side the pick's number of gated signals from bars with a known
-  장세 label and a defined ATR14, not gated; (b) the pick's gated signals with fair-coin sides). Seed = sha256 of
+* Period: **test 2024-01-01 .. 2026-10-01** (33 months), H 11. **Each tested pick runs once**, r = 0.5%, base costs,
+  plus its cost x2 run. Systems that are not tested picks are never run on the test period (except the sealed R22 read
+  after the verdict, below).
+* **Batches** (owners (b)): batch 1 is tested. When **at least 5** of the picks of batch n PASS, batch n + 1 is tested
+  the same way (its own controls, its own BH); otherwise no later batch is tested and its members are listed as
+  "untested" (never run on test). Labels: 1군, 2군, 3군. With the 'no pick, fail' system (section 5) there is one
+  batch of one and no later batch.
+* **Controls** for each tested pick: (a) random times and (b) coin-flip sides, **1,000 seeds each, exactly H 12** (the
+  pick's timeframe, gate, r and period; (a) draws per coin and side the pick's number of gated signals from bars with a
+  known 장세 label and a defined ATR14, not gated; (b) the pick's gated signals with fair-coin sides). Seed = sha256 of
   ("hunt-wide", system id, control, period, r, seed number), the parts joined as the v1 code joins its seed parts.
-  d_m per control as H 12. (In the test period every coin is past its 180-day label history and its 300-bar warm-up,
-  so the (a) pool is the same set of bars for G1 and NONE picks.)
+  d_m = ln M_m(pick) - the mean over the 1,000 seeds, per control as H 12. (In the test period every coin is past its
+  180-day label history and its 300-bar warm-up, so the (a) pool is the same set of bars for G1 and NONE picks.)
 * **Per pick, as H 13:** **P0** at least 66 positions, a position open in at least 80% of the test months, no bust;
   **P1** median monthly multiple >= 1.0 and mean monthly ln M > 0; **P3** cost x2 median monthly multiple >= 1.0 and
   cost x2 mean monthly ln M > 0; **P4** max drawdown < 50%.
 * **P2, split:** p_a and p_b = the one-sided month-block bootstrap p of mean d_m for control (a) and for (b), as H 13
   (10,000 resamples of the 33 months; p = (1 + resamples with mean d <= 0) / 10,001; seed as above with "boot" in place
   of the seed number). **p = max(p_a, p_b).** **Seed-rank part**, for (a) and for (b) separately: (1 + seeds whose mean
-  monthly ln M >= the pick's) / 101 < 0.05.
-* **Multiple testing**: Benjamini-Hochberg at **q = 0.10** over the K values of p (sort ascending p_(1) <= ... <=
-  p_(K); k* = the largest k with p_(k) <= 0.10 x k / K; every pick with p <= p_(k*) is BH-significant; none if no such
-  k). Every pick stays in the family whatever else it fails; a pick without a defined p (for example a bust before any
-  full month) enters with p = 1.
-* **A pick PASSES** = P0, P1, P3, P4, both seed-rank parts, and a BH-significant p.
-* **WIDE PASS** = at least one pick passes.
+  monthly ln M >= the pick's) / 1,001 < 0.05.
+* **Multiple testing, per batch**: Benjamini-Hochberg at **q = 0.10** over the K values of p of the batch (sort
+  ascending p_(1) <= ... <= p_(K); k* = the largest k with p_(k) <= 0.10 x k / K; every pick with p <= p_(k*) is
+  BH-significant; none if no such k). Every member stays in its batch's family whatever else it fails; a pick without a
+  defined p (for example a bust before any full month) enters with p = 1. The program-level ledger (R13: a global BH at
+  q = 0.10 and Holm at 0.05 over every test-period hypothesis of both studies) is printed beside the verdicts and
+  changes none of them.
+* **A pick PASSES** = P0, P1, P3, P4, both seed-rank parts, and a BH-significant p within its batch.
+* **WIDE PASS** = at least one PASS in any tested batch.
 * v1 runs unchanged and separately (H 11-13, its own pick and seeds). If v1's pick is also a wide pick, it is run in
   each study with that study's seeds; the two results are reported separately and neither counts for the other.
 * Long steps resume: each finished entry cell of select and each finished pick of test is written to the private
   folder (outside the repository) under the pin's hash; a rerun under the same pin computes only what is missing and
   gives the same result (section 10).
+* **Sealed post-verdict read (R22, panel amendment):** after `test.json` and the verdict are written and their sha256
+  appended to the pin, every system runs once on test at base cost, and each pick's entry neighbours run on test, for
+  R22. Per-system numbers go only to a sealed private file whose sha256 is in the repository; only R22's aggregates are
+  public. No system that is not a pick can become a candidate, a paper account or the basis of a v2 from this read.
+* **Paper lineup** (owners (g), written to `test.json` as `lineup` in the test step, labels only for DeepSeek): see
+  section 12.
 
 ## 7. Reads (W7): reported, never a pass
 
-For each pick unless stated (test period unless stated):
+### 7.0 Reads of the test step (for each tested pick unless stated; test period unless stated)
 
 * **New 24 only**: the pick on the 24 new coins alone (same rules; large group = the top 10 of the 24), select and test.
   A passing pick with new-24 test mean ln M <= 0 is labelled **"carried by the old six"** (H 14).
 * **Extra 2020** (H 11): r = 0.5% and r = 1%.
-* **r = 1% line**: P0-P4 and both seed-rank parts at r = 1% (controls rerun at r = 1%, seeds as section 6 with
-  r = 1%), shown as "1% also passes: yes / no"; and the **cost x2 line at r = 1%**.
-* **One-wallet basket** of all passing picks (when at least two pass): one wallet, r = 0.5% per unit, H 8's caps
-  shared by all of them (one position per coin across all picks, 6 positions, 3 / 3 in the large group, 4% total open
-  risk). Same-close order: 30-day quote volume (H 8), then pick number. Select and test.
-* **Sizing read** for each passing pick and for the basket: **r = 2% and r = 5%**, the total open risk cap **and the
-  margin budget** scaled by r / 0.5% (risk cap 16% / 40%; B = equity / 6 x 4 at 2%, x 10 at 5%), leverage as H 7.3
-  (the smallest L meeting the bracket, the budget and liquidation >= 1.5 x D0, at most 20x), the free wallet still
-  limiting every fill (cuts and skipped adds counted), everything else as here. With B unchanged the read would not
-  take the bet it names: at r = 5% and D0 = 1% of the price the first unit was cut to about 0.8% of equity and no add
-  found room (review, section 16.2). Even scaled, the brackets, the 20x cap and the wallet cut a tight-stop unit, so
-  next to every figure the read reports **the bet actually taken**: the median (and quartiles) of the first unit's
-  realized risk q x D0 / equity at entry, the share of first units cut (by liquidity, margin budget, free wallet) and
-  the share of tried adds that filled. Reported: the **share of test months with M >= 2, >= 10 and >= 30**, the
-  **worst month**, **bust** (and its month), and the full H 10 metric set. This is the honest answer to the owners'
-  goal ($1,000 -> $30,000-50,000 fast, x30-x50): it shows how often a larger bet gave such months and how often it went
-  bust, on data the choice never saw. It is not a pass and not a paper account (section 15 Q9).
-* Also reported, never a pass: the controls in the select period for each pick; the gate diagnostics of H 14 for each
-  pick **in the select period only** (the pick's entry and timeframe under the other gate is another of the 730
-  systems, so section 6 keeps it off the test period; v1 keeps H 14 as written); the select table of all 730 systems
-  (section 11 for DeepSeek rows); the count of "both sides" bars.
+* **r = 1% line**: P0-P4 and both seed-rank parts at r = 1% (controls rerun at r = 1%, 1,000 seeds, seed parts as
+  section 6 with r = 1%), shown as "1% also passes: yes / no"; and the **cost x2 line at r = 1%**.
+* **One-wallet basket** of all passing picks (when at least two pass, any batches): one wallet, r = 0.5% per unit, H 8's
+  caps shared by all of them (one position per coin across all picks, 6 positions, 3 / 3 in the large group, 4% total
+  open risk). Same-close order: 30-day quote volume (H 8), then pick number. Select and test.
+* The controls in the select period for each pick (**seeds 1-200**); the gate diagnostics of H 14 for each pick **in
+  the select period only** (the pick's entry and timeframe under the other gate is another of the 762 systems, so
+  section 6 keeps it off the test period; v1 keeps H 14 as written); the select table of all 762 systems (section 11
+  for DeepSeek rows); the count of "both sides" bars.
+* The sizing read of the first draft (r = 2% / 5%, passing picks only) is **replaced by the R1 goal board** (7.3),
+  which covers every tested pick, both machines and fresh wallets.
 * In the "no pick, fail" case the one system's reads run as a pick's (they are that system at another size, universe
-  or period, never another system); there is no sizing read or basket (no pick passes).
+  or period, never another system).
+
+### 7.1 Read guard and read discipline (panel; also H 14)
+
+1. Every read R1-R24 runs only on **ROWS**, after `picks.json` is hashed: every tested wide pick (pass or fail, every
+   tested batch), the v1 pick (or v1's 'no pick, fail' system), the wide 'no pick, fail' system when that is what ran,
+   the all-K basket of batch 1 (one wallet, H 8 caps shared, same-close order by 30-day quote volume then pick number,
+   labelled "not a candidate") and the passing basket when >= 2 pass. Members of untested batches are never run on
+   test. Nothing enters the select table, except the select-only R4 and the R5 machine map, which choose nothing.
+2. Reads never change the picks, the batches, P0-P4, the seed-rank parts, p, BH, PASS, WIDE PASS or v1 PASS, the
+   2군 / 3군 trigger, the R14 band, the lineup, or what goes to the paper bot. The code writes reads only after
+   `test.json` and the verdict exist, to their own files (`out/<study>/reads_*.json`, `fidelity.json`), and refuses to
+   write (ReadGuardError) when any file of the study's output folder or `picks.json` changed while a read ran.
+3. Read names and parameters (windows, sizes, both machines, crash dates, cost multipliers, Y, seed subsets, the
+   headline cell, the select-fixed size rule, the R14 band lengths) are written here before the pin. **Read code is
+   hashed into the pin before any read output exists**: a reads module (`research/hunt/reads_a.py`, later ones alike)
+   runs only when its file is listed in the pin file with a matching sha256, and each read output says whether that
+   line predates `test.json` (`reads_line_predates_test_json`).
+4. One fixed risk sheet per row is printed, whatever it shows.
+5. A read added after the test is seen goes to `DEVIATIONS.md`, marked post hoc.
+6. Paper accounts at goal sizes exist only by the owners' explicit decision, labelled "goal-size paper, not tested"
+   (Q9).
+7. The research pass rules stay exactly as written.
+
+**Named before the pin:**
+
+* **HEADLINE CELL**: per row, the share of **test calendar months** in which a **fresh $1,000 at goal-mode (machine B)
+  r = 5% touched $5,000** (marked equity at any 5m close), with its Clopper-Pearson 95% interval, beside the control
+  (a) and (b) shares (calendar months pooled over seeds 1-1,000) and the bust share.
+* **SIZE FIXED ON SELECT**: per row, the (machine, r) cell with the highest mean ln(window multiple) over select
+  calendar months among the cells with bust share <= 5% (ties: lower r). Its test row is printed as "size fixed before
+  the test". Any size read off the test board is labelled "forward-only evidence".
+* **Seed subsets**: the pass uses seeds 1-1,000; each read uses the lowest-numbered subset named in it (1-200 or
+  1-100; R1 rolling windows 1-100, or 1-50 when one 30-day window run takes more than 0.03 s, measured on synthetic bars
+  before the run).
+* **Goal reads report multiples** (owners (e)): x2, x5, x10, x20, x30, x50, x100 of the window's start.
+
+### 7.2 Reads interface (code)
+
+`research/hunt/hunt.py` builds one context (`reads_context`) and calls `run(ctx)` of each reads module after
+`test.json` is written (`run_reads_hooks`; again later with `python -m research.hunt.hunt reads --study S`). The context
+gives the ROWS, the tested picks with their lineup labels, the period bounds, the engine (`run(what, start, end, r,
+cost, start_wallet, overrides, path="day"|"5m", close_end, d0_scale, syms)` -> metrics, 5m or daily marked equity,
+peak, trades), the pinned control draws of any seed (`control_signals`, sliced per window, no new draw), the seed
+subsets, the headline cell, the size rule, the live gate, and an output dict and a private dict. Engine read options
+(off by default; at default parameters the engine is bit-identical to the reviewed one, a test checks a seeded case
+against the reviewed code's digest): the per-5m equity path and peak, close-at-end, N4 = (1 + adds) x q x P0, the
+goal-mode bracket rule, fixed leverage with margin = L% (R24), 1m bars and liquidation on mark price (R19). The hook
+writes the public output to `out/<study>/<module>.json` and the private one outside the repository (D11; a float under
+a DeepSeek row in the public output is refused).
+
+### 7.3 Phase A reads (computed right after the verdict on the fixed ROWS: `reads_a.py` and hunt.py)
+
+* **R1 goal board** (`reads_a.py`). Rows: ROWS (7.1). Periods: test (headline), select (labelled "chosen here"),
+  extra 2020 (from the first day with a known 장세 label). Windows: (i) UTC calendar months (headline); (ii) rolling
+  30-day windows [d, d + 30 days), one per UTC start day d with d + 30 <= period end (975 in test, 1,066 in select,
+  about 180 in extra). Each window is a fresh account: **$1,000**, flat, only signals whose signal bar closes inside the
+  window, indicators and labels from full history; the large group is the calendar month's (H 3), not recomputed at the
+  window start; positions open at the window end are closed at the last 5m close with slippage and taker (headline)
+  and also shown marked; bust = marked equity < $100 at any 5m close (the account stops). Sizes r = 0.5, 1, 2, 5, 10,
+  20%. **Machine A** (as written): H 7-8, LEV_MAX 20, total open-risk cap 4% x r / 0.5% and B = equity / 6 x r / 0.5%
+  (the W 7 scaling; the tested values at r = 0.5%). **Machine B** (goal-mode, r >= 5% only, caps of PREREG_ALTPUMP 7):
+  cap = min(4r, 60%), n_max = floor(cap / r) (5% -> 20% and 4 positions; 10% -> 40% and 4; 20% -> 60% and 3) as the
+  position cap and the margin divisor, leverage up to the coin's bracket maximum (fallback 20), H 7.3 (iii) kept, the
+  bracket looked up at the first unit's notional q x P0, an add past that tier's cap skipped and counted "bracket";
+  labelled "goal-mode machine, not the tested machine". Columns per (row, period, window set, machine, r): share of
+  windows ending >= x2, x5, x10, x20, x30, x50, x100; share touching each level at any 5m close; bust share; median,
+  worst and best window; median days to the first touch of x2 and of x5; median give-back (peak - end) / peak among
+  windows that touched x5; median number of positions that made 80% of the gain in windows ending >= x5; realised
+  risk: effective r = r x median(q1 x D0 / U), p90 of q1 x D0 / U, share of first units cut by reason, share of
+  positions filling add 1, 2 and 3, median leverage, max gross notional / equity. Honesty: calendar shares with exact
+  Clopper-Pearson 95% intervals (0 of 33 still allows up to 10.6%); rolling shares with a moving-block bootstrap 90% CI
+  (blocks of 30 start days, 2,000 resamples, seed parts (tag, "goalboard", row, period, machine, r, "boot")) and the
+  line "overlapping windows: about 33 (test) / 36 (select) independent months". Controls on the same board: (a) and
+  (b) through the same machine on the pinned W 6 draws (full-period sets sliced per window, no new draw); calendar
+  months pooled over seeds 1-1,000, rolling windows seeds 1-100 (1-50 under the 0.03 s rule); per cell the pick's
+  share, the pooled control share, the 5-95% range of per-seed shares, and pick minus control with a block-bootstrap
+  90% CI. Altpump's coin-flip goal-50x baseline (about 1% of months) is quoted for scale. The touch columns are
+  descriptive and create no stop-at-target rule.
+* **R24 leverage read** (owners (f), `reads_a.py`): the R1 board at **L = 20, 30, 40** with rule-bot sizing: margin =
+  L% of equity at the previous 5m close, notional = L x margin, isolated, the engine's bracket rule (L lowered to the
+  bracket's maximum at that notional), no adds, no open-risk cap, at most floor(100 / L) positions, the hunt stop and
+  chandelier; the rule-bot check (the first stop must lie inside the liquidation price by max(0.2%, 1 ATR), else the
+  entry is skipped and counted); liquidations, skipped entries and the wallet loss per stop reported. Controls (a) / (b)
+  seeds 1-100. Labelled "rule-bot sizing read, not the tested machine".
+* **Continuous-account reads** (owners, `reads_a.py`): best trough-to-peak run-up inside any 30 days and its dates,
+  geometric mean monthly return, whole-period multiple, max drawdown and the longest time to recover, at r = 0.5% and
+  1% (the tested $5,000 accounts) and at the size fixed on select (fresh $1,000).
+* **R12 / R13 basics** (`reads_a.py`): profit share of the top 10% of positions, of positions >= 10R and of the top
+  month (largest monthly ln M / sum of monthly ln M); signal overlap (same coin and side within one bar of the longer
+  timeframe), time overlap on 5m steps and the correlation of monthly ln M across the tested picks and the v1 pick.
+* **R15 signal rate and burst size** (counts only, D11-safe; `reads_a.py`): for each pick and for the union of all
+  tested picks plus the v1 pick, select and test: events per day, gated (G) and gate-blocked (N) counted separately
+  (mean, p50, p95, max day); events at a single signal close (max, p99) and per hour (p99); the share of closes with
+  more than 10, 20 and 30 events; events taken vs dropped by coin_has_position, six_positions, large_group_direction and
+  risk_cap; by month and year. Daily and monthly call counts x a per-call cost entered as a parameter, compared with the
+  owners' caps (commit ca7a302).
+* **R19 1m + mark fidelity** (`hunt.py fidelity`, on the rented server's 1m set of the coins the tested picks traded,
+  `data_hunt.py --kind fidelity`): every tested pick rerun with the same engine on 1m last-price bars and on 1m last +
+  1m mark-price bars (liquidation checked on the mark bar; a stop the last price reaches while the liquidation price
+  lies beyond it exits first), signals, ATR, labels and D0 from the study's 5m bars, coins without 1m bars on their 5m
+  bars (flagged); also the median control (a) and (b) seed of each pick by mean ln M. Reported: the change from 5m to
+  1m + mark in mean ln M, median M, end multiple, max drawdown, positions, liquidations and adds filled. The panel's
+  extension (the R1 headline cell for every row, the tightest R5 cells, every 15m pick, next to R9's ambiguous-bar
+  count) runs through the same 1m market in a reads module. The R1 headline numbers are called final only after this
+  check.
+* **R23 October 2026** (`hunt.py october --data-oct DIR`): before the pin, the data.binance.vision daily files for
+  2026-10-01 .. 2026-10-10 of the 30 coins (5m klines and 5m mark-price klines) are listed with their sha256; they are
+  downloaded and checksummed only, never opened before `picks.json` and `test.json` exist. The loader puts them into
+  the 5m npz layout (`.CHECKSUM` checked; funding from daily files when present, else 0 and counted). Every tested pick
+  and the v1 pick run on 2026-10-01 .. 2026-10-11 with all earlier bars as warm-up: fresh $1,000 at r = 0.5%; controls
+  (a) and (b), seeds 1-200 drawn in that window (seed parts with period "october"); each 10-day multiple as a
+  percentile of the test period's fresh-wallet rolling 10-day windows (one per start day). Printed: "the owners watched
+  October live; no choice in either study used it; one 10-day draw cannot show an edge". It never swaps or re-ranks a
+  pick; it is extended day by day until the paper bot starts and doubles as its replay check. (The R1 ladder in
+  October runs in a reads module.)
+
+### 7.4 Phase B reads (computed after the verdict on the fixed ROWS by a separate module with its own pin line; they never choose anything)
+
+Each reads (a) and (b) through the same changed machine on the pinned W 6 draws (R1 convention) unless stated; seeds as
+named; DeepSeek rows per D11; old six and new 24 reported separately where a coin split is named.
+
+* **R2 hindsight ceiling and monthly trend supply.** Every table labelled HINDSIGHT CEILING; never a pass, a system or
+  an argument for a size. A single-position ride kernel = H 7.1-7.6 for one position alone (first stop, adds, the row
+  timeframe's chandelier on 5m bars, costs, funding; no portfolio caps, no margin cuts) returning R = net P&L / U.
+  (c) Oracle side: each gated signal of the row takes the side whose ride ends with more R, then the normal portfolio
+  run. (d) Oracle time: per coin and calendar month, the single 1h signal close (ATR14 defined, no gate) and side whose
+  ride gives the most R, truncated at the month end (closed at the last 5m close with exit costs); all 30 coins'
+  oracle entries in one wallet with the normal caps. Trend supply per month: the best and 5th-best oracle ride R across
+  the 30 coins and the number of coins with a ride >= 10R. The R1 board on calendar months only (test, select, extra)
+  for (c) and (d) at every r on both machines, and per row the pick's headline share next to (d)'s. Fixed reading: if
+  (d)'s headline share is itself small, the report says the machine, not the entry search, limits the goal.
+* **R3 leveraged-hold baseline.** A simple hold path, not the engine, on R1's windows (calendar and rolling; test,
+  select, extra), fresh $1,000: (i) BTCUSDT long and (ii) short, each at 2 / 3 / 5 / 10 / 20x isolated with the whole
+  $1,000 as margin; (iii) equal-weight long of the window-start month's 10 large-group coins, $100 margin each, at
+  3 / 5 / 10x; (iv) HINDSIGHT: the coin of the 30 with the best window return held long and the worst held short, at
+  5 / 10x. Entry at the window's first 5m open with 0.02% slippage and 0.05% taker; liquidation on the 5m last-price
+  low / high with the H 7.3 isolated formula and the bracket mmr at the entry notional (whole margin lost); funding as
+  H 2; exit at the window's last 5m close with costs. R1's end and touch shares, liquidation share, median and worst
+  window. Printed: "reference bets; the leverage with the best share is not advice".
+* **R4 selection-luck calibration (select only; after `picks.json` is hashed and before `test.json`).** Changes
+  nothing. (1) select.json stores each system's 36 monthly ln M at base cost and at cost x2 (DeepSeek rows in the
+  private file). (2) CSCV / PBO: 12 blocks of 3 consecutive months, all 924 half / half splits; per split the OOS
+  percentile of the IS-best system and the mean OOS percentile of the IS one-per-name top 10; PBO (share of splits with
+  the IS-best below the OOS median) and the slope of OOS on IS score. (3) Null of the max: 200 replicates with control
+  (a) twins and 200 with (b) twins (every system replaced by its twin: (a) random pool bars with the system's per-coin
+  and per-side select gated-signal counts; (b) its gated signals with fair-coin sides); seed parts ("hunt-wide-null",
+  system id, control, "select", "0.005", i); each twin at base cost and cost x2, then the exact W 5 eligibility, order,
+  one-per-name rule and K; null distributions of the 1st and 10th pick's score and of the number of eligible systems
+  and names; each real pick's percentile against the null at its rank; deflated score = score - null mean at that
+  rank; each replicate's null picks run once on test as controls (the mean select-to-test drop with no edge). (4)
+  Goal-score check: every system's touch-x5 share of select calendar months at goal-mode r = 5% (machine B); its
+  Spearman correlation with the W 5 score and how many of the official top 10 are in the goal-score top 10 (one per
+  name). No goal-score list is ever run on test. Public numbers cover F1, F2 and F5 rows; the all-rows version is
+  private (D11).
+* **R5 machine sensitivity on the fixed picks (the six exit cells, owners (d)), plus a select-only machine map.** On
+  ROWS, select and test, on the r = 0.5% continuous account and on R1 calendar months at goal-mode r = 5%. Cells:
+  chandelier **2 / 3 / 4.5 ATR x adds 3 / 0** (the planned six; PR_CHAND and PR_NADDS); "off-virtual" at 3 ATR (no
+  quantity added, but at each add level the stop moves exactly as if a full unit had filled there; virtual adds skip
+  the risk-cap and margin checks); adds 5 at 3 ATR; D0 x0.75 and x1.5 of the timeframe's value (15m-1h: 1.5 and 3 ATR;
+  4h: 1.125 and 2.25 ATR). Every cell's leverage uses N4 = (1 + adds) x q x P0. Controls seeds 1-200 through each
+  cell's machine. Per cell: mean ln M, median M, pick minus control mean ln M with a month-block bootstrap 90% CI, end
+  multiple, max drawdown, positions, adds per position, exit-source shares and the R1 headline columns.
+  Decompositions: "on" minus "off-virtual" = what the pyramided size earned; "off-virtual" minus "off-plain" = what the
+  tighter stop did. A row is "fragile" when the base cell is the only cell with pick minus control > 0. Machine map
+  (select only, chooses nothing): all 762 systems at the six exit cells, base cost and cost x2; share eligible and median
+  score per cell; Spearman correlation of scores between cells. An exit, stop-width or pyramid-depth variant can become
+  the rule only through a v2 with its own forward test; the paper bot uses the base machine whatever this shows.
+* **R6 extra controls.** 1,000 seeds each in test and 200 in select; seed parts as W 6 with control names "c", "d",
+  "e"; per control mean d_m, its month-block bootstrap p ("boot" seed) and the seed rank; never a pass. (c) Gated
+  random times (G1 rows; for NONE rows it equals (a)): per coin and side the row's number of gated signals, without
+  replacement from the coin's (a)-pool bars labelled 추세장. (d) Coin shuffle: the row's gated signal times and sides,
+  each signal's coin drawn uniformly from the coins with ATR14 > 0 on the same-timeframe bar closing then and a fill
+  bar; D0 from the drawn coin; two draws of one coin at one close resolved by H 8. (e) Momentum-side random times: (a)'s
+  draws with side = sign(close[t] - close[t - 20]) of the drawn bar (0 = no signal, counted). Shown beside (a) and (b).
+* **R7 entry-vs-exit attribution ladder.** Per row, select and test. (1) Entry only: for every gated event the
+  side-adjusted move from P0 to the close of signal bar j + h, h = 1, 2, 4, 8, 16, 32, 64, 128, 256, in D0 units, minus
+  a round trip of 2 x (taker + slippage) x P0 / D0; MFE and MAE within h in D0 units (5m highs / lows); the same for
+  controls (a), (b), (c), (e), seeds 1-200, with month-cluster bootstrap 90% CIs; no portfolio, no exit. (2) Exit swap
+  in the hunt engine on the same events and caps: a fixed take-profit at 1R, 2R or 3R (PR_TP; the whole position exits
+  at P0 +/- k x D0 with taker and slippage, the stop stays at D0, no adds, no chandelier, the stop first when both are
+  touched in one 5m bar); the chandelier with no adds; the full machine; each with controls. (3) Old house exit, old six
+  only: the row's gated events on the six coins fed to research/fullgrid/kernel.account (2 ATR stop, stepped lock,
+  quality_v1 leverage, one position at a time, 1m + mark), select and test. (4) Machine-alone line: control (a)'s
+  absolute mean ln M at base. One table per row: machine alone -> + timing (pick - a) -> + direction (pick - b) -> TP
+  exits / chandelier no adds / full machine / old house exit. Any exit change taken from it is a v2.
+* **R8 concentration ladder.** On the R1 board (calendar and rolling, test and select) at goal-mode r = 5% and 10%,
+  open-risk cap fixed at the goal-mode value: n_max = 1, 2, 3, 4 with B = equity / n_max. Rows: each pick alone, the
+  all-K basket, the passing basket, and the all-K basket restricted to BTCUSDT only, to the old six and to the new 24.
+  At r = 0.5% on machine A: max positions 4, 8 and 10 with B_DIV = max positions, only for a pick that spent > 10% of
+  test time at the six-position cap or lost > 10% of its gated signals to six_positions (else labelled "cap not
+  binding"). Controls seeds 1-100. R1 columns plus the mean number of open positions on the days that made each window
+  ending >= x5.
+* **R9 cost, fill, mark-price and crash stress.** Per row at r = 0.5% and at the R1 headline cell, test and select, old
+  six and new 24 separately. Costs: cost x3 (taker 0.15%, slippage 0.06%); taker x1.5 and x3 alone; funding x2 and x3
+  alone; a best case at taker 0.045%; impact per fill: slippage = 0.02% + Y x sigma_d x sqrt(fill notional / the coin's
+  mean daily quote volume over the previous 30 days), sigma_d = std of the previous 30 daily log returns, Y = 0.5 and
+  1.0; cost x2 and x4 for every R1 cell reaching >= x20 in a test window. Cost anatomy: fees, slippage and funding as
+  shares of gross price P&L; funding by side, by year and for the top 5 coins; the worst 30-day funding drain as a share
+  of equity. Stop fills: 25% of the trigger 5m bar's range beyond the stop; worst case at the bar's low (long) / high
+  (short); extra slippage +0.1 / +0.3 / +1.0% on stop and liquidation exits. Mark price: the 5m mark columns; liquidation
+  on mark; separately, stops triggered on mark (workingType MARK_PRICE); also on control seeds 1-100. Losses: per-
+  position loss in U (max; share beyond 1.25U, 2U, 3U); stop_gap_open count; worst portfolio 5m bar. Crash days (UTC,
+  fixed from memory, not data): 2021-05-19, 2021-12-04, 2022-05-09..12, 2022-06-13, 2022-11-08..10, 2023-03-10..11,
+  2024-04-13, 2024-08-05, 2025-02-03, 2025-04-07, 2025-10-10..11; plus, per period, the 10 hours with the largest
+  absolute median 1h return of the 30 coins; per day / hour: positions open, P&L in U and in % of equity at each R1 r,
+  liquidations, loss beyond 1U. Bust anatomy of every R1 bust window at r >= 2%: liquidation, stop gapped at the open,
+  stop cluster (>= 3 positions stopped within 1 h), or funding. Entry timing: fills at the open of the 2nd and the 4th
+  5m bar after the signal close. Ambiguous bars: 5m bars where the stop and an add level, or two add levels, were
+  touched and settled by H 7.6. No trigger type, cost or date list is changed after the results are seen.
+* **R10 exposure, margin and liquidation-distance ledger.** Engine aggregates at each 5m close with no effect on
+  decisions (a test asserts equity and records bit-identical with the ledger on and off): open positions (max, time
+  histogram 0..n_max); gross notional / equity (max, p95); net long and net short notional / equity (max); sum of
+  isolated margins / equity (max); minimum free wallet / equity; minimum over open positions of liquidation distance /
+  current stop distance; the instant loss if every open position gapped 5%, 10% or 20% through its stop at once (max as
+  a share of equity, with its date). Per position: leverage distribution, fallback-leverage flag, bracket tier,
+  realised first-unit risk / U. Every row at r = 0.5% and 1% and at the R1 sizes on both machines.
+* **R11 position and month anatomy.** Engine: per-position running 5m MFE / MAE and each add's reference price and
+  quantity (decision path bit-identical). Per position: MFE and MAE in R, exit R, give-back, 5m steps to +1R, holding
+  time, costs in R, P&L of the first unit vs adds 1-3. Per row: winner / loser distributions, share of losers that never
+  reached +1R, give-back of the top 10%, cost per position in R by timeframe, R percentiles, longest losing streak in
+  positions and months, time in market, mean open risk, mean gross exposure. Splits: per coin, per half-year, large vs
+  small group, the signal bar's 장세 label, BTC month state (monthly return tercile with select cut points; above or
+  below its 200-day MA), add level reached, exit source. A month-level regression of ln M on BTC's monthly return,
+  |BTC return| and the equal-weight 30-coin index return (alpha, betas, Newey-West t, 3 lags), with BTC-hold and
+  equal-weight-hold rows scaled to the row's monthly volatility. Best and worst: 5 best and 5 worst calendar months and
+  rolling windows at r = 0.5% and goal-mode r = 5% with the positions that made them, BTC's and the median coin's
+  return, the control medians and p95 and R2's trend supply; "market months" = test months where at least half of the
+  rows and the (a) median are in their own top quartile. Drawdowns from day_eq: longest underwater stretch, time to
+  recover from the max drawdown, worst rolling 7 / 30 / 90-day multiple, most consecutive losing months, number of
+  drawdowns deeper than 20%, 30%, 50%. Descriptive: any rule drawn from it is a v2.
+* **R12 (beyond the Phase A basics) profit concentration and fragility.** Per row, select and test, r = 0.5%: mean ln M
+  and median M after dropping the best 1, 2, 3 months; leave-one-coin-out re-simulations (30 runs) and a
+  leave-best-coin-out run; re-runs with the signals of the best 1, 3, 5 positions removed; Herfindahl index of net P&L
+  across coins and months; "fragile" when dropping the best month or coin flips the sign of mean ln M. Downtime: 5% and
+  10% of gated signals dropped at random, 100 seeds each (seed parts ("hunt-wide", "drop", id, fraction, seed)).
+  Alternative p-values for P2 beside the pinned p: stationary bootstrap (mean block 3 months, 10,000), sign-flip
+  permutation of d_m (10,000), month-clustered bootstrap of position R-multiples. Labels only.
+* **R13 (beyond the Phase A basics) pick overlap, BTC beta, effective number of bets, program ledger.** Daily and
+  monthly correlation matrices (checks.py corr_daily), bad-day overlap on the worst 5% of days, each pick's beta to
+  BTC's daily return and its mean ln M in BTC-up / flat / down month terciles (select cut points) with the long / short
+  split, the effective number of independent picks (Li-Ji eigenvalue method on monthly ln M correlations). Program
+  ledger: every test-period hypothesis of the program (the v1 pick, every tested batch, F5 picks, any read that prints a
+  p) with a global BH at q = 0.10 and Holm at 0.05, printed next to the pinned per-batch verdicts with the line that
+  two studies share one test period. DeepSeek rows: labels and ranks only in public.
+* **R14 forward band and golden ledger.** Computed once, right after the verdict, and never recomputed. For every
+  passing pick, the v1 pick (H 15 allows a "v1 failed" shadow) and the passing basket: the 5 / 25 / 50 / 75 / 95
+  percentiles of the multiple of fresh $5,000 accounts over rolling windows of 21, 25 and 30 days (one start per UTC
+  day in test), at r = 0.5% and 1% (the H 15 / W 12 band for the mid-November review). Golden ledger: for each passing
+  pick, every signal, fill, D0, stop path, add, exit and funding cash flow of the last 90 test days (the paper bot's
+  parity reference).
+* **R16 context split of the goal board.** For every R1 window, labels known at its start: BTCUSDT's previous-30-day
+  return tercile; its 30-day realised volatility tercile; the share of the 30 coins whose 1h 장세 label at the start is
+  추세장 (terciles); the mean funding rate of the 30 coins over the previous 3 days (terciles); cut points from select
+  windows applied unchanged to test and extra; a hindsight label shown separately (BTC's return during the window).
+  R1's end and touch shares for x2 and x5 and the bust share, pick vs (a) / (b) per bucket at r = 0.5% and goal-mode
+  r = 5%, block-bootstrap CIs, select and test side by side. A bucket is a candidate signal only if it stands out in
+  both periods; any sizing rule from it is a v2.
+* **R17 capacity ladder.** Per row at r = 0.5% and goal-mode r = 5%, test and select: starting wallets $1k, $5k, $25k,
+  $100k, $500k, each with the fixed 0.02% slippage and with R9's impact model at Y = 0.5 and 1.0: share of units cut by
+  the 0.1%-of-volume cap, bracket tier reached, mean ln M, the R1 goal shares, the starting equity at which the median
+  month falls to half its $5k value; in test windows reaching >= x20, the equity at which the first liquidity or
+  bracket cut started to bind.
+* **R18 real exchange rules.** Before the pin, `research/hunt/exchange30.json` from the paper server (H 18 Q3) and the
+  public exchangeInfo of the 30 symbols (MIN_NOTIONAL, LOT_SIZE and MARKET_LOT_SIZE stepSize and maxQty). Read: every
+  unit rounded down to stepSize, units under the real minimum notional rejected, market orders above MARKET_LOT_SIZE
+  maxQty split (each part with its own slippage), at $1,000 and $100,000 starting wallets and the R1 sizes; per coin the
+  rejected, rounded and split units and which coins use the fallback table. Label: "brackets and filters are 2026
+  values applied to 2020-2026".
+* **R20 extra gate diagnostics.** Per row, select and test, beside H 14's NONE and TS: G1-dir (추세장 and the sign of
+  the 10-bar EMA50 slope equals the trade side, H 18 Q11), BTC-trend (BTCUSDT's own label on the same-timeframe bar
+  closing at the signal close is 추세장) and not-횡보장; controls seeds 1-200 under each gate. No new selection gate; a
+  gate adopted later is a v2.
+* **R21 survivorship reads without new data.** Per row, select and test: (1) no entries in each coin's first 90 days
+  after its first archived bar; (2) the 3 coins with the largest buy-and-hold multiple over 2021-01-01 .. 2026-10-01
+  removed (hindsight sensitivity, labelled); (3) a point-in-time universe in which, each calendar month, only the 20 of
+  the 30 coins with the largest previous-30-day quote volume can open positions. Mean ln M, median M, the R1 headline
+  cell and pick minus (a) / (b). Labels only.
+* **R22 sealed post-verdict read** (section 6 amendment). (1) Every one of the 762 systems once on test at base cost
+  (r = 0.5%, continuous account). Public: the Spearman correlation of select vs test score (F1, F2 and F5 rows public;
+  all rows private), test mean ln M by select-score decile, the picks' percentile among all systems, and the share with
+  test mean ln M > 0 among select-eligible vs non-eligible systems; per-system test numbers only in a sealed private
+  file whose sha256 is in the repository. (2) Entry neighbours: for each numeric parameter of each pick the next lower
+  and next higher value from research/fullgrid/grid.values(), one at a time (F1: H 11.1's neighbours); in select, spike
+  ratio = pick score / median neighbour score, written next to picks.json before the test; on test aggregates only.
+  Nothing in this read can become a candidate, a paper account or the basis of a v2.
+
+### 7.5 Not added (panel, rejected; recorded so that none comes back after the results)
+
+Exit variants as selection choices (762 -> 4,572 systems, 8 -> 48 tries per name; R5 answers it on the fixed picks); a
+plateau score over chandelier widths as the W 5 score; a goal-scored shadow pick list run on test (R4 (4) shows the
+question on select only); partial take-profit; time stop and breakeven move; 1-2 adds and other add spacings; a
+slot-by-risk max-positions rule; flipped intrabar order as an optimistic bracket (R19 settles the 5m ambiguity, R9
+counts it); stops and adds delayed one bar; risk-cap neighbours at r = 0.5%; a graveyard universe of delisted symbols
+(R21 sizes the bias); OHLC spread estimators; a separate whole-wallet goal regime (R8's n_max = 1 rung); loosening any
+pass rule toward goal metrics.
 
 ## 8. Parity (W8): the entries equal the full grid's, before the pin
 
