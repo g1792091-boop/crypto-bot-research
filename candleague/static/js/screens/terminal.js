@@ -18,7 +18,7 @@
 // trades, liquidations, order book, movers, the AI meeting line) have no data source here: left out, never faked.
 import {h, local} from "../dom.js";
 import * as LK from "../lk.js";
-import {liveAllowed, livePnl, inGroup, POS_GROUPS} from "../poskit.js";
+import {liveOk, livePnl, inGroup, POS_GROUPS} from "../poskit.js";
 import {markOf} from "../live.js";
 import {fadeIn} from "../v4kit.js";
 import {COINS} from "../labels.js";
@@ -40,7 +40,7 @@ export function defaultPosition(doc, coin = null, group = "cand") {
   const shown = (doc.positions || []).filter((p) => !hiddenPos(p) && (!coin || p.coin === coin));
   const pool = [shown.filter((p) => p.role === "cand"), shown.filter((p) => inGroup(p, group)), shown].find((x) => x.length);
   if (!pool) return null;
-  if (liveAllowed(doc)) {
+  if (liveOk(doc)) {
     const xs = pool.map((p) => ({p, u: livePnl(p, markOf(p.coin))})).filter((x) => x.u);
     const near = xs.filter((x) => x.u.liqGap != null && x.u.liqGap > 0).sort((a, b) => a.u.liqGap - b.u.liqGap);
     if (near.length) return near[0].p;
@@ -136,7 +136,7 @@ export async function mount(el, ctx) {
   function setGroup(g) {
     if (!POS_GROUPS.some((x) => x.id === g)) return;
     st.grp = g; local.set("tm-grp", g);
-    table.setGroup(); strip.repaint(); feed.repaint(); mine.onPositions(st.pos); chart.onPositions(st.pos);
+    table.setGroup(); strip.repaint(); feed.repaint(); mine.onPositions(st.pos); chart.onPositions(st.pos); top.setGroup();
   }
 
   // ---------------------------------------------------------------- data
@@ -206,13 +206,15 @@ export async function mount(el, ctx) {
   ctx.every(1000, () => { top.tick(); chart.tick(); ages(root); });
   top.tick(); coinChanged();
 
-  await Promise.all([loadFills(), st.sel ? loadBook() : null, chart.ready]);
-  if (!ctx.alive()) return undefined;
-  fit();
-  fadeIn(root, 240);
-  return () => {
+  const cleanup = () => {
     window.removeEventListener("resize", fit);
     document.removeEventListener("visibilitychange", still);
     chart.dispose();
   };
+  await Promise.all([loadFills(), st.sel ? loadBook() : null, chart.ready]);
+  // left while the chart loaded: the shell runs the returned cleanup at once (the chart, its listeners and observer go)
+  if (!ctx.alive()) return cleanup;
+  fit();
+  fadeIn(root, 240);
+  return cleanup;
 }

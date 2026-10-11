@@ -11,12 +11,13 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {liveRow, liveState, serverNow} from "../live.js";
-import {freshLine, staleBanner, liveAllowed, sums, crowd, inGroup} from "../poskit.js";
+import {freshLine, staleBanner, liveOk, waitKo, sums, crowd, inGroup, POS_GROUPS} from "../poskit.js";
 import {tickPrice} from "../v4kit.js";
 import {coinShort} from "../labels.js";
 import {usdt, usdKo, mmss, clockKst, kstMidnight, TF_MS, TF_SHORT} from "./terminal-kit.js";
 
 const FUND_HOT = 0.0005;                    // 5 times the usual 0.01 %: the caution colour, nothing below it
+const GROUP_KO = Object.fromEntries(POS_GROUPS.map((g) => [g.id, g.id === "all" ? "190계좌" : g.ko]));
 
 /** topBar(ctx, st) -> {el, setCoin(), onLive(), onPositions(doc), onLeague(), onFills(rows), tick()} */
 export function topBar(ctx, st) {
@@ -26,7 +27,9 @@ export function topBar(ctx, st) {
   const vol = stat("24시간 거래대금", "x-vol"), mark = stat("마크", "x-mark", "마크 가격: 엔진이 강제청산을 이 가격으로 봅니다 · 미실현 손익도 이 가격 기준");
   const fund = stat("펀딩 / 다음까지", "x-fund"), oi = stat("미결제약정", "x-oi", "바이낸스 이 코인 미결제약정 (코인 수 × 마크, 시장 전체 · 우리 봇 아님)");
   const range = stat("24시간 범위", "x-rng");
-  const ours = stat("우리 포지션", "x-ours", "후보 리그 190계좌가 이 코인에 연 포지션 (딥시크 금액 숨김이어도 개수는 셉니다)");
+  // our positions on this coin, in the 묶음 the table below shows (후보 by default), with the 묶음 on screen: the coin
+  // strip, the chart's chips and 이 코인 포지션 count the same positions
+  const ours = stat("우리 포지션", "x-ours");
   const feed = h("span", {class: "tm-feedst"}, "시세 확인 중");
   const barK = h("span", null, "봉 마감까지"), barV = h("b", {class: "num"}, "—");
   const barBox = h("div", {class: "tm-st x-bar", title: "차트의 지금 봉이 닫히기까지 (한국 시각)"}, barK, barV);
@@ -44,7 +47,7 @@ export function topBar(ctx, st) {
   const chip = (key, href, title) => h("a", {class: ["tm-bc", `c-${key}`], href, title});
   const cStatus = chip("status", "#/status", "엔진 상태 (누르면 서버 상태)");
   const cDay = chip("day", "#/check", "10/01부터 한국 날짜로 며칠째 · 다음 점검까지 (누르면 점검 진행)");
-  const cOpen = chip("open", "#/positions", "지금 열린 포지션 (190계좌 · 누르면 포지션 화면)");
+  const cOpen = chip("open", "#/positions", "지금 열린 포지션: 후보 리그 190계좌 전체 (묶음 고르기와 상관없이 · 누르면 포지션 화면)");
   const cUpnl = chip("upnl", "#/positions", "후보 계좌들의 미실현 손익 합계 (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)");
   const cToday = chip("today", "#/fills", "오늘(한국 날짜) 닫힌 후보 계좌 거래 (누르면 체결 기록)");
   const fresh = freshLine(null, {cls: "tm-fresh"});
@@ -95,9 +98,12 @@ export function topBar(ctx, st) {
     dot.dataset.s = ls.state === "ok" || ls.state === "fake" ? "live" : "down";
   }
   function paintOurs() {
-    const c = doc && doc.counts && doc.counts.by_coin ? doc.counts.by_coin[st.coin] : null;
+    const g = GROUP_KO[st.grp] || "후보";
+    ours.k.textContent = `우리 포지션 · ${g}`;
+    ours.el.title = `${st.grp === "all" ? "후보 리그 190계좌 전체" : `${g} 묶음`}가 이 코인에 연 포지션 (아래 표의 묶음 고르기를 따름 · 딥시크 금액 숨김이어도 개수는 셉니다)`;
     if (!doc || doc.status) { ours.v.textContent = "—"; return; }
-    const L = (c && c.long) || 0, S = (c && c.short) || 0;
+    const ps = (doc.positions || []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
+    const L = ps.filter((p) => Number(p.side) > 0).length, S = ps.length - L;
     const k = crowd({long: L, short: S});
     put(ours.v, L + S ? [h("span", {class: "up"}, `롱 ${fmt.int(L)}`), " · ", h("span", {class: "down"}, `숏 ${fmt.int(S)}`),
       k.on ? h("i", {class: "tm-crowd", title: `한 방향 몰림: ${k.n}개 중 ${Math.round(k.share * 100)}%가 ${k.side > 0 ? "롱" : "숏"}`}) : null] : h("span", {class: "muted"}, "없음"));
@@ -111,18 +117,19 @@ export function topBar(ctx, st) {
     const cps = (d && d.watch && d.watch.checkpoints) || [];
     const next = cps.find((c) => c.ms > now);
     if (d && d.start_ms) {
-      put(cDay, h("b", null, `D+${LK.calDay(d, now)}`), next ? ` · ${String(next.ko || next.id).replace(" 점검", "")} ${fmt.mmdd(next.ms).replace(/^0/, "").replace("/0", "/")}까지 ${Math.ceil((next.ms - now) / 86400000)}일` : " · 점검 끝");
+      put(cDay, h("b", null, `D+${LK.dPlus(d, now)}`), next ? ` · ${String(next.ko || next.id).replace(" 점검", "")} ${fmt.mmdd(next.ms).replace(/^0/, "").replace("/0", "/")}까지 ${Math.ceil((next.ms - now) / 86400000)}일` : " · 점검 끝");
     } else put(cDay, h("b", null, "D+—"));
     if (!doc || doc.status) { put(cOpen, "열린 —"); put(cUpnl, "후보 미실현 —"); }
     else {
       const c = doc.counts || {};
-      put(cOpen, "열린 ", h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
+      put(cOpen, "190계좌 열린 ", h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
         h("span", {class: "down"}, `숏 ${fmt.int(c.short || 0)}`));
       const cand = (doc.positions || []).filter((p) => inGroup(p, "cand"));
-      if (!liveAllowed(doc)) put(cUpnl, "후보 미실현 ", h("span", {class: "warn-t"}, doc.catching_up ? "따라잡는 중" : "엔진 멈춤"));
+      if (!liveOk(doc)) put(cUpnl, "후보 미실현 ", h("span", {class: "warn-t"}, doc.catching_up ? "따라잡는 중" : doc.old ? "엔진 멈춤" : `감춤 (${waitKo(doc)})`));
       else {
         const s = sums(cand);
         put(cUpnl, "후보 미실현 ", s.priced ? h("b", {class: ["num", fmt.tone(s.pnl, usdt(s.pnl))]}, `${usdt(s.pnl)} USDT`) : h("span", {class: "muted"}, cand.length ? "시세 없음" : "포지션 없음"),
+          s.priced && s.unpriced ? h("small", {class: "warn-t"}, ` · 시세 없는 ${fmt.int(s.unpriced)}개 뺌`) : null,
           s.hidden ? h("small", {class: "muted"}, ` · 딥시크 ${fmt.int(s.hidden)}개 뺌`) : null);
       }
     }
@@ -148,6 +155,7 @@ export function topBar(ctx, st) {
     setCoin() { px.dataset.pk = ""; paintCoin(); paintOurs(); },
     onLive() { paintCoin(); paintFeed(); paintBand(); },
     onPositions(d) { doc = d; paintOurs(); paintBand(); paintBanner(); },
+    setGroup() { paintOurs(); },
     onLeague() { paintBand(); },
     onFills(rows) { fills = rows || []; paintBand(); },
     tick() {

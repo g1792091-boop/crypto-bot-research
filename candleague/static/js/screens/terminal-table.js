@@ -10,13 +10,16 @@
 //             nothing is sent to an exchange).
 // Numbers: P&L and ROE at the mark price, before the exit fee (js/poskit.js livePnl); size, margin and the liquidation
 // price are "진입 때 기준" (the server's rebuild). While the engine replays from 10/01 or its record is old, no live P&L,
-// ROE or distance is shown (the entry-time ones are, marked so). On a phone the rows become small cards (no sideways
-// page scroll). D11: a hidden DeepSeek position or trade is counted in the foot line only.
+// ROE or distance is shown (the entry-time ones are, marked so; a lock line then reads "잠금 중", never "닿음"); the same
+// when the prices are over a minute old (poskit liveOk). On a phone the rows become small cards (no sideways page
+// scroll). The 5 s live tick only changes the numbers in their cells: the rows are built and ordered when the positions,
+// the tab or the 묶음 change (and once more when the first prices come), so a focused row or a click is never lost.
+// D11: a hidden DeepSeek position or trade is counted in the foot line only.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {markOf} from "../live.js";
-import {POS_GROUPS, inGroup, livePnl, liveAllowed, gap} from "../poskit.js";
+import {POS_GROUPS, inGroup, livePnl, liveOk, waitKo, gap} from "../poskit.js";
 import {countTo, swap} from "../v4kit.js";
 import {coinShort, coinOf, reasonKo} from "../labels.js";
 import {panel, ratioBar, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, ping} from "./terminal-kit.js";
@@ -59,18 +62,20 @@ export function bottomTable(ctx, st, hooks) {
   const cells = new Map();
   const cellOf = (id) => {
     let c = cells.get(id);
-    if (!c) { c = {pnl: h("b", {class: "num"}), roe: h("span", {class: "num"})}; cells.set(id, c); }
+    if (!c) { c = {pnl: h("b", {class: "num"}), roe: h("span", {class: "num"}), mk: h("span", null, "—")}; cells.set(id, c); }
     return c;
   };
+  // what the shown rows were built from: the live tick repaints these in place (no rebuild, no new order)
+  let shownPos = [], shownStops = [], builtLive = null, builtPriced = 0;
 
   const acctOf = (p) => LK.index().byId[p.id] || {id: p.id, role: p.role, kind: p.kind, name: p.name, tf: p.tf};
   const coinBtn = (coin) => h("button", {type: "button", class: ["tm-coin", coin === st.coin ? "on" : ""], title: "이 코인 보기",
     onclick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); hooks.onCoin(coin); }}, coinShort(coin));
   const table = (cols, rows) => h("table", {class: "tm-t"}, h("thead", null, h("tr", null, cols.map((c) => h("th", {class: c[1] || "", title: c[2] || null}, c[0])))), h("tbody", null, rows));
   const empty = (t) => h("p", {class: "tm-empty"}, t);
-  const allowedNow = () => liveAllowed(T.doc);
+  const allowedNow = () => liveOk(T.doc);
   const stale = () => (T.doc && !T.doc.status && !allowedNow()
-    ? h("span", {class: "warn-t"}, T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 실시간 손익 감춤 · " : "엔진 기록이 멈춤: 실시간 손익 감춤 · ") : null);
+    ? h("span", {class: "warn-t"}, T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 실시간 손익 감춤 · " : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익 감춤 · `) : null);
   const posLink = () => h("a", {class: "tm-more", href: "#/positions"}, "포지션 화면 →");
 
   function inGrp() { return T.doc && !T.doc.status ? (T.doc.positions || []).filter((p) => inGroup(p, st.grp)) : []; }
@@ -85,15 +90,12 @@ export function bottomTable(ctx, st, hooks) {
     const xs = shown.map((p) => ({p, u: allowed ? livePnl(p, markOf(p.coin)) : null}));
     xs.sort((a, b) => (b.u ? Math.abs(b.u.pnl) : -1) - (a.u ? Math.abs(a.u.pnl) : -1) || (b.p.since || 0) - (a.p.since || 0));
     const top = xs.slice(0, MAX);
+    shownPos = top.map((x) => x.p);
+    builtPriced = xs.filter((x) => x.u).length;
     put(foot, h("span", {class: "muted"}, stale(), hid ? `딥시크 ${fmt.int(hid)}개 열림 (금액 숨김: 개수만, 합계에서 뺌) · ` : "",
       shown.length > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(shown.length)}개는 ` : ""), posLink());
     if (!top.length) return empty(all.length ? "고른 묶음의 열린 포지션은 모두 딥시크 (개수만)" : "고른 묶음에 열린 포지션이 없습니다");
-    const roeOf = (x) => (x.u && x.u.roe != null ? x.u.roe : null);
-    for (const x of top) {
-      const c = cellOf(x.p.id);
-      countTo(c.pnl, x.u ? x.u.pnl : null, {format: (v) => usdt(v), tone: true});
-      countTo(c.roe, roeOf(x), {format: (v) => pctOf(v, 1), tone: true});
-    }
+    for (const x of top) paintCells(x.p, x.u, allowed);
     if (narrowNow()) {
       return h("div", {class: "tm-cards"}, top.map((x) => {
         const p = x.p, c = cellOf(p.id);
@@ -101,7 +103,7 @@ export function bottomTable(ctx, st, hooks) {
           title: "누르면 차트에 이 포지션의 진입·손절선"},
         h("span", {class: "tm-pc1"}, sideTag(p.side), acctLabel(acctOf(p)), h("b", {class: "tm-pcc"}, coinShort(p.coin)), h("span", {class: "num muted"}, fmt.lev(p.lev))),
         h("span", {class: "tm-pc2"}, h("span", {class: "muted"}, "미실현"), c.pnl, h("span", {class: "muted"}, "USDT"), h("span", {class: "grow"}), h("span", {class: "muted"}, "ROE"), c.roe),
-        h("span", {class: "tm-pc3 num muted"}, `진입 ${fmt.price(p.entry)} · ${allowed ? `마크 ${fmt.price(markOf(p.coin))} · ` : ""}청산 ${fmt.price(p.liq)} · ${p.stop_is_lock ? "잠금" : "손절"} ${fmt.price(p.stop)}`));
+        h("span", {class: "tm-pc3 num muted"}, `진입 ${fmt.price(p.entry)} · `, allowed ? [c.mk, " · "] : null, `청산 ${fmt.price(p.liq)} · ${p.stop_is_lock ? "잠금" : "손절"} ${fmt.price(p.stop)}`));
       }));
     }
     const rows = top.map((x) => {
@@ -109,7 +111,7 @@ export function bottomTable(ctx, st, hooks) {
       const tr = h("tr", {class: [p.id === st.sel ? "on" : "", "click"], tabindex: "0", title: "누르면 차트에 이 포지션의 진입·손절선"},
         h("td", {class: "nm"}, acctLabel(acctOf(p))), h("td", null, coinBtn(p.coin)), h("td", null, sideTag(p.side)),
         h("td", {class: "r num xn"}, fmt.lev(p.lev)), h("td", {class: "r num xe"}, fmt.price(p.entry)),
-        h("td", {class: "r num muted xm"}, allowed ? fmt.price(markOf(p.coin)) : "—"),
+        h("td", {class: "r num muted xm"}, allowed ? c.mk : "—"),
         h("td", {class: "r"}, c.pnl), h("td", {class: "r"}, c.roe), h("td", {class: "r num warn-t"}, fmt.price(p.liq)),
         h("td", {class: ["r", "num", p.stop_is_lock ? "up" : ""]}, p.stop == null ? "—" : `${p.stop_is_lock ? "잠금 " : ""}${fmt.price(p.stop)}`),
         h("td", {class: "r num muted xs"}, fmt.kst(p.since)));
@@ -157,17 +159,25 @@ export function bottomTable(ctx, st, hooks) {
   }
 
   // ---------------------------------------------------------------- 손절 주문
-  /** every stop / lock / take-profit of the shown positions, the nearest first: at the mark when live numbers are
-   *  allowed, else from the entry (marked "진입 때") */
+  /** one order's distance: from the mark when live numbers are allowed and the coin has a price, else from the entry
+   *  (marked "진입 때"); a lock line from the entry has none (it sits past the entry on the profit side by design) */
+  function orderDist(x, allowed) {
+    const p = x.p;
+    const m = allowed ? markOf(p.coin) : null;
+    x.m = m;
+    x.idle = m == null && x.kind === "lock";
+    const ref = m != null ? m : Number(p.entry);
+    x.d = x.idle ? null : x.kind === "tp" ? -gap(p.side, ref, p.tp) : gap(p.side, ref, p.stop);
+    return x;
+  }
+  /** every stop / lock / take-profit of the shown positions, the nearest first (lock lines without a distance last) */
   function orderRows() {
     const allowed = allowedNow();
     const out = [];
     for (const p of inGrp()) {
       if (hiddenPos(p)) continue;
-      const m = allowed ? markOf(p.coin) : null;
-      const ref = m != null ? m : Number(p.entry);
-      if (p.stop != null) out.push({p, kind: p.stop_is_lock ? "lock" : "stop", price: Number(p.stop), m, d: gap(p.side, ref, p.stop)});
-      if (p.tp != null) out.push({p, kind: "tp", price: Number(p.tp), m, d: -gap(p.side, ref, p.tp)});
+      if (p.stop != null) out.push(orderDist({p, kind: p.stop_is_lock ? "lock" : "stop", price: Number(p.stop)}, allowed));
+      if (p.tp != null) out.push(orderDist({p, kind: "tp", price: Number(p.tp)}, allowed));
     }
     return out.sort((a, b) => (a.d ?? 9) - (b.d ?? 9));
   }
@@ -175,24 +185,25 @@ export function bottomTable(ctx, st, hooks) {
     if (!T.doc || T.doc.status) { put(foot, posLink()); return empty(T.doc ? "엔진 기록 준비 중" : "불러오는 중"); }
     const allowed = allowedNow();
     const xs = orderRows().slice(0, MAX);
+    shownStops = xs;
     const hid = inGrp().filter(hiddenPos).length;
     put(foot, h("span", {class: "muted"}, stale(), "모의 계좌의 손절·잠금·익절 가격 (거래소에 걸린 실제 주문 아님)", hid ? ` · 딥시크 ${fmt.int(hid)}개는 개수만` : ""));
     if (!xs.length) return empty("걸린 손절이 없습니다");
     const KO = {stop: "손절", lock: "잠금", tp: "익절"};
-    const dist = (x) => (x.d == null ? "—" : fmt.pct(x.d * 100, false, 2));
+    for (const x of xs) { x.dEl = h("b"); x.mEl = h("span"); paintDist(x); }
     if (narrowNow()) {
       return h("div", {class: "tm-cards"}, xs.map((x) => h("button", {type: "button", class: ["tm-pcard", x.p.id === st.sel ? "on" : ""], onclick: () => hooks.onPick(x.p.id)},
         h("span", {class: "tm-pc1"}, sideTag(x.p.side), acctLabel(acctOf(x.p)), h("b", {class: "tm-pcc"}, coinShort(x.p.coin))),
         h("span", {class: "tm-pc2"}, h("span", {class: x.kind === "stop" ? "down" : "up"}, KO[x.kind]), h("b", {class: "num"}, fmt.price(x.price)), h("span", {class: "grow"}),
-          h("span", {class: "muted"}, allowed ? "거리" : "진입 때 거리"), h("b", {class: ["num", x.d != null && x.d < 0.005 ? "down" : ""]}, dist(x))))));
+          h("span", {class: "muted"}, allowed ? "거리" : "진입 때 거리"), x.dEl))));
     }
     return table([["계좌"], ["코인"], ["방향"], ["종류"], ["가격", "r"], [allowed ? "지금" : "진입가", "r"], [allowed ? "거리" : "진입 때 거리", "r", "가격이 이만큼 더 움직이면 닿음"], ["청산가", "r"]],
       xs.map((x) => {
         const tr = h("tr", {class: ["click", x.p.id === st.sel ? "on" : ""], tabindex: "0"},
           h("td", {class: "nm"}, acctLabel(acctOf(x.p))), h("td", null, coinBtn(x.p.coin)), h("td", null, sideTag(x.p.side)),
           h("td", {class: x.kind === "stop" ? "down" : "up"}, x.kind === "lock" ? "잠금 (수익 확정선)" : KO[x.kind]),
-          h("td", {class: "r num"}, fmt.price(x.price)), h("td", {class: "r num muted"}, fmt.price(allowed ? x.m : x.p.entry)),
-          h("td", {class: ["r", "num", x.d != null && x.d < 0.005 ? "down" : ""]}, dist(x)), h("td", {class: "r num warn-t"}, fmt.price(x.p.liq)));
+          h("td", {class: "r num"}, fmt.price(x.price)), h("td", {class: "r num muted"}, x.mEl),
+          h("td", {class: "r"}, x.dEl), h("td", {class: "r num warn-t"}, fmt.price(x.p.liq)));
         tr.addEventListener("click", (e) => { if (!(e && e.target && e.target.closest && e.target.closest("button"))) hooks.onPick(x.p.id); });
         return tr;
       }));
@@ -207,7 +218,7 @@ export function bottomTable(ctx, st, hooks) {
     tabs.btn("pos").textContent = T.doc && !T.doc.status ? `포지션 ${fmt.int(all.length)}` : "포지션";
     if (!allowedNow()) {
       countTo(total, null);
-      totBox.title = T.doc && T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 지금 가격으로 계산하지 않습니다" : "엔진 기록이 멈춤: 실시간 손익을 감춥니다";
+      totBox.title = T.doc && T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 지금 가격으로 계산하지 않습니다" : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익을 감춥니다`;
       return;
     }
     let tot = 0, known = 0;
@@ -215,11 +226,48 @@ export function bottomTable(ctx, st, hooks) {
     countTo(total, known ? tot : null, {format: (v) => usdt(v), tone: true});
     totBox.title = "고른 묶음의 미실현 손익 합계 (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)";
   }
+  /** a position row's live cells: 미실현, ROE and the mark */
+  function paintCells(p, u, allowed) {
+    const c = cellOf(p.id);
+    countTo(c.pnl, u ? u.pnl : null, {format: (v) => usdt(v), tone: true});
+    countTo(c.roe, u && u.roe != null ? u.roe : null, {format: (v) => pctOf(v, 1), tone: true});
+    const m = allowed ? markOf(p.coin) : null;
+    c.mk.textContent = narrowNow() ? `마크 ${fmt.price(m)}` : fmt.price(m);
+  }
+  /** an order row's live cells: the price it is measured from and the distance (a lock line from the entry: 잠금 중) */
+  function paintDist(x) {
+    const near = x.d != null && x.d < 0.005;
+    x.dEl.className = ["num", near ? "down" : "", x.idle ? "up" : ""].filter(Boolean).join(" ");
+    x.dEl.textContent = x.idle ? "잠금 중" : x.d == null ? "—" : fmt.pct(x.d * 100, false, 2);
+    x.dEl.title = x.idle ? "진입가에서 재면 잠금선은 늘 수익 쪽에 있어 거리가 없습니다 (닿으면 수익으로 끝남)" : "";
+    x.mEl.textContent = fmt.price(x.m != null ? x.m : x.p.entry);
+  }
+  /** the 5 s tick: numbers only, in the cells already on the page */
+  function liveOnly() {
+    const allowed = allowedNow();
+    if (T.tab === "pos") {
+      for (const p of shownPos) paintCells(p, allowed && !hiddenPos(p) ? livePnl(p, markOf(p.coin)) : null, allowed);
+    } else if (T.tab === "stops") {
+      for (const x of shownStops) { orderDist(x, allowed); paintDist(x); }
+    }
+  }
   function render(user) {
     paintHead();
+    builtLive = allowedNow();
     const body = T.tab === "fills" ? fillsView() : T.tab === "stops" ? stopsView() : posView();
     tbl.replaceChildren(body);
     if (user) swap(tbl);
+  }
+  /** rebuild on a live tick only when the rows were built without what the tick brings: live numbers turned on or off,
+   *  or the first prices of the shown positions (the order is then by |P&L| once) */
+  function needRebuild() {
+    if (T.tab === "fills" || !T.doc || T.doc.status) return false;
+    const allowed = allowedNow();
+    if (allowed !== builtLive) return true;
+    if (T.tab !== "pos" || !allowed) return false;
+    let n = 0;
+    for (const p of inGrp()) if (!hiddenPos(p) && livePnl(p, markOf(p.coin))) n += 1;
+    return n > builtPriced;
   }
   if (typeof matchMedia === "function") {
     const mq = matchMedia(NARROW);
@@ -230,7 +278,7 @@ export function bottomTable(ctx, st, hooks) {
   return {
     el,
     onPositions(d) { T.doc = d; render(false); },
-    onLive() { render(false); },
+    onLive() { if (needRebuild()) render(false); else { paintHead(); liveOnly(); } },
     onFills(rows) { if (rows == null) { T.fillsFailed = true; } else { const had = T.fills; T.fills = rows; T.fillsFailed = false; if (had && rows.length && had[0] !== rows[0]) ping(el); } if (T.tab === "fills" || !T.fills) render(false); },
     setCoin() { render(false); },
     setSel() { render(false); },

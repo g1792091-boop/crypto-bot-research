@@ -5,7 +5,7 @@
   "volume_rel": 0.001,
   "max_share": 0.001
  },
- "written_utc": "2026-10-11 13:52",
+ "written_utc": "2026-10-11 14:39",
  "pass": true,
  "coins": {
   "BTCUSDT": {
@@ -129,5 +129,5 @@
    "first_mismatch": "2021-01-12 06:10"
   }
  },
- "code_sha256": "979c2748f525431b5881643b9cb03c15b2efc3d0750b27e7939a8dd79d2527b7"
+ "code_sha256": "c125ccf3494b3d3083c28f0d692a77056895bc817946e4c4e02134cbe41e8f32"
 }

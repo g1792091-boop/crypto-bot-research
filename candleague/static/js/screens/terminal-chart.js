@@ -14,7 +14,7 @@ import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {loadLwc, color, tok} from "../chart.js";
 import {liveRow, liveState, serverNow, markOf} from "../live.js";
-import {livePnl, liveAllowed, inGroup} from "../poskit.js";
+import {livePnl, liveOk, inGroup} from "../poskit.js";
 import {flashPrice} from "../v4kit.js";
 import {coinShort, coinOf, sideKo, reasonKo, ROLE_SHORT} from "../labels.js";
 import {panel, ping, mmss, TFS, TF_MS, TF_SHORT, hiddenPos, hiddenFill, pctOf} from "./terminal-kit.js";
@@ -87,7 +87,7 @@ export function termChart(ctx, st, hooks) {
   function coinPositions() {
     const all = (doc && !doc.status ? doc.positions || [] : []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
     const shown = all.filter((p) => !hiddenPos(p) && p.entry != null);
-    const allowed = liveAllowed(doc);
+    const allowed = liveOk(doc);
     const score = (p) => { const u = allowed ? livePnl(p, markOf(p.coin)) : null; return u ? Math.abs(u.pnl) : -1; };
     shown.sort((a, b) => (b.id === st.sel) - (a.id === st.sel) || score(b) - score(a) || (b.since || 0) - (a.since || 0));
     return {all, shown, hidden: all.length - shown.length};
@@ -95,7 +95,7 @@ export function termChart(ctx, st, hooks) {
   /** the chips: positions of one side within 0.05 % of each other share one chip ("숏 20배 ×2 +11.0%": the group's
    *  P&L over its margin); the five groups that matter most (the selected one first) */
   function chipGroups() {
-    const allowed = liveAllowed(doc);
+    const allowed = liveOk(doc);
     const groups = [];
     for (const p of coinPositions().shown) {
       const e = Number(p.entry);

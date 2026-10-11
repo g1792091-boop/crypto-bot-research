@@ -1,8 +1,8 @@
 // 후보 리그 dashboard shell, in the rule bot's v4 look (paperbot/dash/static/v4 core/shell.js, strip.js, find.js,
 // settings.js; copied and adapted, nothing imported from it):
 //   top bar   brand · 글자 크기 · 화면 색 · 메뉴 위치 · 설정 (a PC with the menu on top) · 찾기 / · the day pill
-//             "D+11 · 1차 11/11 · 2차 12/11 · 3차 1/11 ▾" (calendar day since 10/01 KST, the next checkpoint lit; its
-//             popover has the processed time) · the engine dot · 모의
+//             "D+10 · 1차 11/11 · 2차 12/11 · 3차 1/11 ▾" (days gone since 10/01 KST, counted like the rule bot's:
+//             10/01 = D+0; the next checkpoint lit; its popover has the processed time) · the engine dot · 모의
 //   menu      every screen its own plain text button, in groups with a thin line between them (거래 | 홈 | 매매법 | 안내),
 //             on top (wraps from 1200 px, one sideways row below) or, by choice, a left column from 1000 px; a phone also
 //             gets the bottom bar of the four groups
@@ -19,7 +19,7 @@ import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import {stamp, setPage} from "./ui.js";
 import {applySkin, skinNow, textSwitch, skinSwitch, navSwitch, textCycle, skinCycle, startPref} from "./prefs.js";
-import {setLeague, getMeta, leagueDay, calDay, catchingUp, health} from "./lk.js";
+import {setLeague, getMeta, leagueDay, calDay, dPlus, catchingUp, health} from "./lk.js";
 import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
 import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js";
@@ -159,7 +159,7 @@ function pillPanel() {
   const next = nextCp(now);
   const left = next ? Math.ceil((next.ms - now) / 86400000) : null;
   return h("div", {class: "tb-pin"},
-    h("div", {class: "tb-ph"}, h("b", null, doc && doc.start_ms ? `D+${calDay(doc, now)} · 10/01부터` : "일정"), h("span", {class: "grow"}),
+    h("div", {class: "tb-ph"}, h("b", null, doc && doc.start_ms ? `D+${dPlus(doc, now)} · 10/01부터 ${calDay(doc, now)}일째` : "일정"), h("span", {class: "grow"}),
       h("button", {class: "btn-line tb-x", type: "button", onclick: closePop}, "닫기")),
     h("p", {class: "tb-lead"}, next ? `다음: ${next.ko} ${fmt.mmdd(next.ms)} (${left}일 남음)` : "점검 일정 준비 중"),
     h("ol", {class: "steps dl-steps", "aria-label": "점검 일정"},
@@ -178,7 +178,7 @@ function pillPanel() {
       h("a", {class: "btn-line", href: "#/status"}, "서버 상태")));
 }
 function paintTop() {
-  const H = health(doc);
+  const H = health(doc, serverNow());
   hdot.dataset.level = H.lv;
   hdot.setAttribute("aria-label", `엔진 상태: ${H.ko} (누르면 서버 상태 화면)`);
   hdot.title = `엔진 상태: ${H.ko}`;
@@ -187,7 +187,7 @@ function paintTop() {
   const next = nextCp(now);
   const cps = checkpoints();
   const day = calDay(doc, now);
-  put(pill, h("b", null, `D+${day}`),
+  put(pill, h("b", null, `D+${dPlus(doc, now)}`),
     cps.map((c) => h("span", {class: ["d-cp", c === next ? "next" : c.ms <= now ? "done" : "later"]},
       h("span", {class: "d-dot", "aria-hidden": "true"}, "·"), cpShort(c), c.ms <= now ? " ✓" : null)),
     h("span", {class: "car", "aria-hidden": "true"}, "▾"));
@@ -240,7 +240,8 @@ function parseHash() {
 function makeCtx(params) {
   const ctl = new AbortController();
   const timers = [];
-  const until = (unsub) => { ctl.signal.addEventListener("abort", unsub); return unsub; };
+  // a subscription made after the screen closed (its mount was still awaiting) is dropped at once, never left running
+  const until = (unsub) => { if (ctl.signal.aborted) unsub(); else ctl.signal.addEventListener("abort", unsub); return unsub; };
   const ctx = {
     params,
     signal: ctl.signal,
@@ -249,6 +250,7 @@ function makeCtx(params) {
     meta: () => getMeta(),
     /** fn(doc) now (when the snapshot is here) and after every new snapshot, until the screen closes. */
     onLeague(fn) {
+      if (ctl.signal.aborted) return;
       fns.add(fn);
       ctl.signal.addEventListener("abort", () => fns.delete(fn));
       if (doc) fn(doc); else pollLeague();
@@ -262,6 +264,7 @@ function makeCtx(params) {
     /** The screen uses the window's full width (the 터미널) until it closes. */
     wide(on = true) { if (on) main.dataset.layout = "wide"; else delete main.dataset.layout; },
     every(ms, fn) {
+      if (ctl.signal.aborted) return;
       const t = {busy: false, id: null};
       const tick = async () => {
         if (document.visibilityState === "hidden" || t.busy || ctl.signal.aborted) return;
@@ -305,7 +308,10 @@ async function mountScreen() {
     if (mod.css) await Promise.all([].concat(mod.css).map((x) => ui.css(x)));
     if (ctl.signal.aborted) return;
     if (mod.wide === true) ctx.wide(true);
-    cur.cleanup = await mod.mount(el, ctx);
+    const cleanup = await mod.mount(el, ctx);
+    // the screen was left while its mount awaited: the old ``cur`` is already cleaned, so its cleanup runs now
+    if (ctl.signal.aborted) { try { if (typeof cleanup === "function") cleanup(); } catch (e) { console.error(e); } }
+    else cur.cleanup = cleanup;
   } catch (e) {
     if (e && (e.name === "AbortError" || e.status === 401)) return;
     console.error(e);

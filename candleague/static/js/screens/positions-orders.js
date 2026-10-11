@@ -19,11 +19,16 @@ const DAY = 86400000, KST = 9 * 3600000;
 export const kstMidnight = (ms) => Math.floor((Number(ms) + KST) / DAY) * DAY - KST;
 
 // ---------------------------------------------------------------- 손절·잠금 주문
-/** Orders nearest first: the stop / lock line's distance from the mark now (live) or from the entry (not live). */
+/** Orders nearest first: the stop / lock line's distance from the mark now (live) or from the entry (not live). A lock
+ *  line measured from the entry is past it on the profit side by design: no distance then (``lockIdle``, never
+ *  "닿음"), only where it sits against the entry (``fromEntry``: signed share, + above), and it goes after the stops. */
 export function orderList(list, markFn = markOf, live = true) {
   return (list || []).filter((p) => !p.hidden && p.stop != null).map((p) => {
     const m = live ? markFn(p.coin) : Number(p.entry);
-    return {p, d: gap(p.side, m, p.stop), dTp: p.tp == null ? null : -gap(p.side, m, p.tp)};
+    const lockIdle = !live && !!p.stop_is_lock;
+    const e = Number(p.entry);
+    return {p, lockIdle, d: lockIdle ? null : gap(p.side, m, p.stop), dTp: p.tp == null ? null : -gap(p.side, m, p.tp),
+      fromEntry: lockIdle && e ? (Number(p.stop) - e) / e : null};
   }).sort((a, b) => (a.d ?? 9) - (b.d ?? 9) || String(a.p.id).localeCompare(String(b.p.id)));
 }
 
@@ -37,7 +42,8 @@ export function orderRow(x, o = {}) {
   h("span", {class: ["ret", "num", lock ? "up" : ""]}, fmt.price(p.stop)),
   h("span", {class: "meta"}, h("span", null, `${coinShort(p.coin)} · ${fmt.lev(p.lev)}`),
     h("span", null, lock ? "잠금선 (스탑 마켓 · 닿으면 수익)" : "손절 (스탑 마켓)"),
-    h("span", null, `${o.live === false ? "진입가와" : "지금과"} ${x.d != null && x.d <= 0 ? "닿음" : dist(x.d)}`),
+    x.lockIdle ? h("span", {class: "up"}, `잠금 중 · 진입가보다 ${fmt.pct(Math.abs(x.fromEntry || 0) * 100, false, 2)} ${(x.fromEntry || 0) >= 0 ? "위" : "아래"}`)
+      : h("span", null, `${o.live === false ? "진입가와" : "지금과"} ${x.d != null && x.d <= 0 ? "닿음" : dist(x.d)}`),
     p.stop_pnl != null ? h("span", {class: fmt.tone(p.stop_pnl)}, `발동 시 ${usdt(p.stop_pnl, true)}`) : null,
     p.tp != null ? h("span", {class: "up"}, `익절 리밋 ${fmt.price(p.tp)}${p.tp_pnl != null ? ` (${usdt(p.tp_pnl, true)})` : ""}`) : null,
     h("span", null, kindKo(p))));

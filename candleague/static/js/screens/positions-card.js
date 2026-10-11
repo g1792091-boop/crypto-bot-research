@@ -237,8 +237,8 @@ export function posCard(p, o = {}) {
     K4.countTo(rowRoi, u && u.roe, {format: (v) => fmt.pct(v * 100, true, 2), tone: true});
     ledNote.textContent = allowed ? (u ? "" : "시세 없음") : waitKo;
     el.classList.toggle("ps-wait", !allowed);
-    if (allowed) K4.tickPrice(markEl, mark ?? null, mark != null ? fmt.price(mark) : "—", p.coin);
-    else { markEl.textContent = "따라잡은 뒤"; delete markEl.dataset.pv; }
+    if (allowed) { markEl.title = ""; K4.tickPrice(markEl, mark ?? null, mark != null ? fmt.price(mark) : "—", p.coin); }
+    else { markEl.textContent = /따라잡/.test(waitKo) ? "따라잡은 뒤" : "감춤"; markEl.title = waitKo; delete markEl.dataset.pv; }
     const dLiq = allowed ? gap(side, mark, p.liq) : null, dStop = allowed ? gap(side, mark, p.stop) : null;
     dLiqEl.textContent = dist(dLiq);
     dStopEl.textContent = dStop != null && dStop <= 0 ? "닿음" : dist(dStop);

@@ -7,6 +7,9 @@
 //   gap(side, mark, line)            share of the mark the price still has to move to reach the line (> 0: not reached)
 //   liveAllowed(doc)                 false while the engine replays from 10/01 or its snapshot is over 15 minutes old:
 //                                    the positions are then "그때 기준" and no live P&L is shown (B2 / B8)
+//   pricesLive() / liveOk(doc)       the prices are live (or under a minute old); liveOk = liveAllowed and pricesLive:
+//                                    every live P&L, ROE and distance on 포지션, 터미널 and 순위표 asks this one
+//   waitKo(doc)                      why live numbers are hidden ("엔진이 따라잡는 중", "시세가 3분 전 값", ...), "" when not
 //   staleBanner(doc), freshLine(doc) the banner and the "엔진 기준 HH:MM (n분 전) · 시세 n초 전" line (B3)
 //   posPill(x)                       "● BTC 롱 30배 +0.1%" (live ROE; a league account with .open or a position); .update()
 //   crowd({long, short})             {on, side, share, n}: 5 or more positions, 80 % or more one way (the rule bot's rule)
@@ -85,24 +88,51 @@ export function roeOf(side, lev, entry, mark) {
 }
 /** True when live P&L may be shown for this snapshot (not replaying from 10/01, not over 15 minutes old). */
 export const liveAllowed = (doc) => !!doc && !doc.status && !doc.catching_up && !doc.old;
+export const PX_GRACE_S = 60;                      // the last good prices count as live for this long (a short hiccup)
+/** True while the page's prices may carry live P&L: fresh (or test) prices, or the last good ones for at most a minute
+ *  while Binance does not answer. Past that the numbers would look live but be old (live.py keeps the last good values
+ *  with no time limit), so every live P&L, ROE and distance is hidden instead. */
+export function pricesLive(ls = liveState()) {
+  if (ls.state === "ok" || ls.state === "fake") return true;
+  return ls.state === "stale" && ls.age_s != null && ls.age_s <= PX_GRACE_S;
+}
+/** Live P&L may be shown: the snapshot is "now" (liveAllowed) and the prices are live (pricesLive). */
+export const liveOk = (doc) => liveAllowed(doc) && pricesLive();
+/** Why live numbers are hidden, in the screens' words; "" when they are shown. */
+export function waitKo(doc) {
+  if (!doc || doc.status) return "엔진 기록 준비 중";
+  if (doc.catching_up) return "엔진이 따라잡는 중";
+  if (doc.old) return "엔진 기록이 멈춤";
+  const ls = liveState();
+  if (pricesLive(ls)) return "";
+  if (ls.state === "stale") return `시세가 ${ageKo(ls.age_s)} 값`;
+  if (ls.state === "wait") return "시세 기다리는 중";
+  if (ls.state === "off") return "시세 꺼짐";
+  return "시세 끊김";
+}
 
-/** Totals of the shown positions (hidden DeepSeek ones are only counted): {n, long, short, hidden, pnl, margin, roe,
- *  winning, losing, priced}. markFn(coin) -> mark (default: the live mark). */
+/** Totals of the shown positions (hidden DeepSeek ones are only counted): {n, long, short, hidden, pnl, margin,
+ *  pricedMargin, roe, winning, losing, priced, unpriced}. ``margin`` is every shown position's margin (묶인 증거금);
+ *  ``roe`` = pnl / pricedMargin, the margin of the positions that have a price (a coin without a price is left out of
+ *  both sides, never counted as zero). markFn(coin) -> mark (default: the live mark). */
 export function sums(list, markFn = markOf) {
-  const out = {n: 0, long: 0, short: 0, hidden: 0, pnl: 0, margin: 0, roe: null, winning: 0, losing: 0, priced: 0, coins: new Set()};
+  const out = {n: 0, long: 0, short: 0, hidden: 0, pnl: 0, margin: 0, pricedMargin: 0, roe: null, winning: 0, losing: 0, priced: 0,
+    unpriced: 0, coins: new Set()};
   for (const p of list || []) {
     out.n += 1;
     out[Number(p.side) > 0 ? "long" : "short"] += 1;
     out.coins.add(p.coin);
     if (p.hidden) { out.hidden += 1; continue; }
-    if (fin(p.margin) != null) out.margin += Number(p.margin);
+    const mg = fin(p.margin);
+    if (mg != null) out.margin += mg;
     const u = livePnl(p, markFn(p.coin));
-    if (!u) continue;
+    if (!u) { out.unpriced += 1; continue; }
     out.priced += 1;
     out.pnl += u.pnl;
+    if (mg != null) out.pricedMargin += mg;
     if (u.pnl > 0) out.winning += 1; else if (u.pnl < 0) out.losing += 1;
   }
-  out.roe = out.margin > 0 && out.priced ? out.pnl / out.margin : null;
+  out.roe = out.pricedMargin > 0 && out.priced ? out.pnl / out.pricedMargin : null;
   return out;
 }
 /** The rule bot's "한 방향 몰림": 5 or more positions and 80 % or more of them on one side. */
@@ -125,6 +155,12 @@ export function inGroup(p, id) {
 
 // ---------------------------------------------------------------- pieces
 const ageKo = (s) => (s == null ? "—" : s < 60 ? `${Math.round(s)}초 전` : `${fmt.dur(s)} 전`);
+/** "시세 4초 전" / "시세 4초 전 (시험용)" / the feed's own words when the prices are not live: the price part of the
+ *  freshness line, shared by every screen that shows the price age (freshLine, the 순위표's live dot). */
+export function pxAgeKo(ls = liveState()) {
+  return ls.state === "ok" || ls.state === "fake" ? `시세 ${ageKo(ls.age_s)}${ls.state === "fake" ? " (시험용)" : ""}`
+    : ls.state === "stale" && ls.age_s != null ? `시세 지난 값 (${ageKo(ls.age_s)})` : ls.ko;
+}
 /** Seconds since the engine wrote the snapshot, by the server's clock (null without one). */
 export function snapAge(doc) {
   if (!doc || !doc.generated_ms) return null;
@@ -132,11 +168,15 @@ export function snapAge(doc) {
 }
 
 /** "엔진 기준 10/10 09:00 KST (3분 전) · 시세 4초 전": what the positions and the prices are as of. Orange when the
- *  snapshot is over 12 minutes old or the prices are not live. el.update(doc) repaints (call it from onLive too). */
+ *  snapshot is over 12 minutes old or the prices are not live. el.update(doc) repaints (call it from onLive too).
+ *  o.only = "px": the price part alone (a screen whose head already shows the engine time). */
 export function freshLine(doc, o = {}) {
+  const pxOnly = o.only === "px";
   const eng = h("span", {class: "kp-fe"}), px = h("span", {class: "kp-fp"});
   const el = h("p", {class: ["kp-fresh", o.cls], role: "status", "aria-live": "off",
-    title: "엔진은 5분마다 계산해 기록을 씁니다 (그래서 새 진입·청산은 몇 분 늦게 보입니다). 시세는 5초마다 다시 받습니다."}, eng, " · ", px);
+    title: pxOnly ? "시세는 대시보드 서버가 5초마다 바이낸스 공개 시세를 받아 보여 줍니다."
+      : "엔진은 5분마다 계산해 기록을 씁니다 (그래서 새 진입·청산은 몇 분 늦게 보입니다). 시세는 5초마다 다시 받습니다."},
+  pxOnly ? null : [eng, " · "], px);
   el.update = (d) => {
     if (d !== undefined) el._doc = d;
     const x = el._doc;
@@ -144,8 +184,9 @@ export function freshLine(doc, o = {}) {
     const ls = liveState();
     if (!x || x.status) eng.textContent = "엔진 기록 준비 중";
     else eng.textContent = `엔진 기준 ${fmt.kst(x.done_ms)} KST (${ageKo(age)} 씀)`;
-    px.textContent = ls.state === "ok" || ls.state === "fake" ? `시세 ${ageKo(ls.age_s)}${ls.state === "fake" ? " (시험용)" : ""}` : ls.ko;
-    const warn = !x || x.status || x.catching_up || (age != null && age > SNAP_WARN_S) || !(ls.state === "ok" || ls.state === "fake");
+    px.textContent = pxAgeKo(ls);
+    const pxWarn = !(ls.state === "ok" || ls.state === "fake");
+    const warn = pxOnly ? pxWarn : !x || x.status || x.catching_up || (age != null && age > SNAP_WARN_S) || pxWarn;
     el.classList.toggle("warn", !!warn);
   };
   el.update(doc);
@@ -170,14 +211,17 @@ export function staleBanner(doc) {
 
 /** "● BTC 롱 30배 +0.1%" for a league account (a.open: {symbol, side, entry, lev}) or an /api/positions entry. The ROE
  *  is live (mark now, before the exit fee) when allowed and known; a hidden DeepSeek position shows coin and side only.
- *  el.update(o) repaints (o.allowed: false hides the ROE). */
+ *  o.hidden: true counts it as hidden whatever the object carries (the caller's money rule; the pill then reads only
+ *  the coin and the side, so a number the snapshot should not have carried never shows). el.update(o) repaints
+ *  (o.allowed: false hides the ROE). */
 export function posPill(x, o = {}) {
-  const pos = x && x.open !== undefined ? x.open : x;
-  if (!pos) return null;
+  const raw = x && x.open !== undefined ? x.open : x;
+  if (!raw) return null;
+  const hidden = !!(o.hidden || x.hidden || (x.kind === "ds" && x.open !== undefined && raw.entry == null));
+  const pos = hidden ? {coin: raw.coin, symbol: raw.symbol, side: raw.side, since: raw.since} : raw;
   const coin = coinShort(pos.coin || pos.symbol);
   const lev = fin(pos.lev);
   const roeEl = h("b", {class: "kp-roe num"});
-  const hidden = !!(x.hidden || (x.kind === "ds" && x.open !== undefined && pos.entry == null));
   const el = h("span", {class: ["kp-pill", hidden ? "hid" : ""],
     title: hidden ? "열린 포지션 (딥시크 금액 숨김: 개수와 방향만)" : "열린 포지션 · 지금 마크 가격 기준 ROE (나갈 때 수수료 전)"},
   h("i", {"aria-hidden": "true"}), `${coin} ${sideKo(pos.side)}${lev && !hidden ? ` ${fmt.lev(lev)}` : ""}`, hidden ? null : roeEl);

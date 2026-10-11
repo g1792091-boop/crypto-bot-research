@@ -7,6 +7,7 @@ import * as fmt from "./fmt.js";
 import {getJSON} from "./api.js";
 import {pill} from "./ui.js";
 import {acctFig} from "./v4kit.js";
+import {serverNow} from "./live.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO} from "./labels.js";
 
 export const EQUITY = 5000;
@@ -48,17 +49,26 @@ export const leagueDay = (d) => (d && d.start_ms ? Math.max(1, Math.floor((d.don
 const KST_MS = 9 * 3600000;
 export const calDay = (d, now = Date.now()) => (d && d.start_ms
   ? Math.max(1, Math.floor((now + KST_MS) / DAY) - Math.floor((d.start_ms + KST_MS) / DAY) + 1) : 0);
+/** The "D+n" of the day pill, counted like the rule bot's (paperbot v4 core/shell.js: days gone since the start, the
+ *  start day is D+0): 10/01 = D+0, 10/10 = D+9. calDay() stays the "n일째" (10/10 = 10일째). */
+export const dPlus = (d, now = Date.now()) => (d && d.start_ms ? Math.max(0, calDay(d, now) - 1) : 0);
 
 /** Still replaying from 10/01 after the install (the processed time has not reached the install time yet). */
 export const catchingUp = (d) => !!(d && d.started_ms && d.done_ms < d.started_ms - 30 * 60000);
 
-/** The engine's state for the top dot: ok (up to date), warn (catching up / a little late / not there yet), bad. */
-export function health(d) {
+/** Seconds since the engine wrote its record after which the record counts as late (warn) and stopped (bad): the same
+ *  numbers as js/poskit.js SNAP_WARN_S / SNAP_OLD_S and the server's ``old`` flag (dash.py /api/positions), so the
+ *  header dot, the 터미널 band and 요약 never say "정상" under a banner that says the engine stopped. */
+export const WRITE_WARN_S = 12 * 60;
+export const WRITE_OLD_S = 15 * 60;
+/** The engine's state for the top dot: ok (up to date), warn (catching up / a little late / not there yet), bad.
+ *  Ages are by the dashboard server's clock (live.js serverNow), never the device's alone. */
+export function health(d, now = serverNow()) {
   if (!d || !d.accounts) return {lv: "warn", ko: "엔진이 첫 기록을 아직 쓰지 않았습니다"};
-  const now = Date.now();
-  const sinceWrite = now - (d.generated_ms || 0), lag = now - (d.done_ms || 0);
-  if (sinceWrite > 40 * 60000) return {lv: "bad", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전에 멈춤`};
+  const sinceWrite = Math.max(0, now - (d.generated_ms || 0)), lag = Math.max(0, now - (d.done_ms || 0));
+  if (sinceWrite > WRITE_OLD_S * 1000) return {lv: "bad", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전에 멈춤`};
   if (catchingUp(d)) return {lv: "warn", ko: `10/01부터 따라잡는 중 (${fmt.kst(d.done_ms)}까지)`};
+  if (sinceWrite > WRITE_WARN_S * 1000) return {lv: "warn", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전 (조금 늦음)`};
   if (lag > 60 * 60000) return {lv: "bad", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음 (시세 연결 확인)`};
   if (lag > 30 * 60000) return {lv: "warn", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음`};
   return {lv: "ok", ko: "정상 (5분마다 처리)"};

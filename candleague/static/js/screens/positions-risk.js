@@ -3,7 +3,9 @@
 // that move with the 5-second mark. A row pulses only for danger: within 0.5 % of its liquidation, or of a stop that would
 // close at a loss. A lock line (the stop already on the profit side) is drawn in the up colour as '잠금까지'.
 // While the engine replays from 10/01 (or its record is old) the live distances mean nothing: the rows then show the
-// distances AT THE ENTRY (from the entry price), and say so. A hidden DeepSeek position (D11: no prices) is not in the
+// distances AT THE ENTRY (from the entry price), and say so; a lock line has no entry-time distance (it sits past the
+// entry on the profit side by design), so it reads "잠금 중" and ranks by its liquidation distance only. A hidden
+// DeepSeek position (D11: no prices) is not in the
 // list; the note counts it. Rows open the 터미널 on that position (its entry / stop lines).
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
@@ -24,11 +26,13 @@ export const closeness = (d, cap) => (d == null ? 0 : Math.max(0, Math.min(1, 1 
 export const danger = (x) => (x.dLiq != null && x.dLiq < NEAR) || (!x.p.stop_is_lock && x.dStop != null && x.dStop < NEAR);
 
 /** The ranking: closest to liquidation first, unknown distances last; hidden positions left out. live: distances from
- *  the mark now (markFn(coin)); otherwise from the entry price (the entry-time distances). */
+ *  the mark now (markFn(coin)); otherwise from the entry price (the entry-time distances), where a lock line gets no
+ *  distance (lockIdle: from the entry it would always read "닿음"). */
 export function rankRisk(list, markFn = markOf, live = true) {
   return (list || []).filter((p) => !p.hidden && p.entry != null).map((p) => {
     const m = live ? markFn(p.coin) : Number(p.entry);
-    return {p, dLiq: gap(p.side, m, p.liq), dStop: gap(p.side, m, p.stop)};
+    const lockIdle = !live && !!p.stop_is_lock;
+    return {p, lockIdle, dLiq: gap(p.side, m, p.liq), dStop: lockIdle ? null : gap(p.side, m, p.stop)};
   }).sort((a, b) => (a.dLiq ?? 9) - (b.dLiq ?? 9) || String(a.p.id).localeCompare(String(b.p.id)));
 }
 
@@ -68,7 +72,7 @@ export function riskLadder(ctx, o = {}) {
     r.liqFill.style.width = `${(closeness(x.dLiq, LIQ_CAP) * 100).toFixed(1)}%`;
     r.stopFill.style.width = `${(closeness(x.dStop, STOP_CAP) * 100).toFixed(1)}%`;
     r.liqTxt.textContent = x.dLiq == null ? "—" : fmt.pct(x.dLiq * 100, false, 2);
-    r.stopTxt.textContent = x.dStop == null ? "—" : x.dStop <= 0 ? "닿음" : fmt.pct(x.dStop * 100, false, 2);
+    r.stopTxt.textContent = x.dStop == null ? (x.lockIdle ? "잠금 중" : "—") : x.dStop <= 0 ? "닿음" : fmt.pct(x.dStop * 100, false, 2);
     r.row.classList.toggle("near", danger(x));
   };
   let order = "";

@@ -14,7 +14,7 @@ import {h, s, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {markOf, serverNow} from "../live.js";
-import {inGroup, livePnl, liveAllowed} from "../poskit.js";
+import {inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
 import {countTo} from "../v4kit.js";
 import {coinShort, coinOf, sideKo, reasonKo, ROLE_KO, KIND_KO} from "../labels.js";
 import {panel, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, short, fromApi, series, windowsFor, axisTicks, todayOf,
@@ -45,11 +45,11 @@ export function selPanel(ctx, st, hooks) {
       if (hid) {
         kids.push(h("p", {class: "tm-hidnote"}, h("b", null, "딥시크 금액 숨김"), " · 이 포지션은 방향·코인·시각만 보입니다 (가격·배수·손익은 두 분 설정으로 숨김, 개수만 셉니다)"));
       } else {
-        const allowed = liveAllowed(doc);
+        const allowed = liveOk(doc);
         live();
         kids.push(h("div", {class: "tm-ledbox"}, h("div", null, h("span", {class: "tm-ledk"}, "미실현 손익 (USDT)"), led.pnl),
           h("div", {class: "r"}, h("span", {class: "tm-ledk"}, "ROE"), led.roe),
-          !allowed ? h("small", {class: "tm-lednote warn-t"}, doc && doc.catching_up ? "엔진이 따라잡는 중: 지금 가격으로 계산하지 않음" : "엔진 기록이 멈춤: 실시간 손익 감춤") : null));
+          !allowed ? h("small", {class: "tm-lednote warn-t"}, doc && doc.catching_up ? "엔진이 따라잡는 중: 지금 가격으로 계산하지 않음" : `${waitKo(doc) || "엔진 기록이 멈춤"}: 실시간 손익 감춤`) : null));
         kids.push(h("div", {class: "tm-kvs"},
           kv("진입가", fmt.price(p.entry)), kv("마크", led.mark, "마크 가격 (엔진이 강제청산을 보는 가격)"),
           kv("청산가", h("b", {class: "num warn-t"}, fmt.price(p.liq)), "진입 때 기준 (펀딩이 쌓이면 조금 달라짐)"),
@@ -87,11 +87,11 @@ export function selPanel(ctx, st, hooks) {
     shownKey = key();
   }
   /** the selection, its position and the snapshot it came from: a change rebuilds the panel, else only the live numbers move */
-  const key = () => { const a = hooks.selAcct(), p = hooks.selPos(), d = hooks.doc(), b = hooks.book(); return `${a ? a.id : ""}|${p ? `${p.id}:${p.since}` : ""}|${d ? d.generated_ms : ""}|${b ? `${b.id}:${(b.trades || []).length}` : ""}|${a ? a.trades : ""}`; };
+  const key = () => { const a = hooks.selAcct(), p = hooks.selPos(), d = hooks.doc(), b = hooks.book(); return `${a ? a.id : ""}|${p ? `${p.id}:${p.since}` : ""}|${d ? d.generated_ms : ""}|${b ? `${b.id}:${(b.trades || []).length}` : ""}|${a ? a.trades : ""}|${liveOk(d)}`; };
   /** the live numbers of the shown position at the mark (5 s): 미실현, ROE, 마크 */
   function live() {
     const p = hooks.selPos(), doc = hooks.doc();
-    const allowed = liveAllowed(doc);
+    const allowed = liveOk(doc);
     const u = p && allowed && !hiddenPos(p) ? livePnl(p, markOf(p.coin)) : null;
     countTo(led.pnl, u ? u.pnl : null, {format: (v) => usdt(v), tone: true});
     countTo(led.roe, u && u.roe != null ? u.roe : null, {format: (v) => pctOf(v, 2), tone: true});
@@ -111,7 +111,7 @@ export function coinPositions(ctx, st, onPick) {
   function render() {
     if (!doc) { put(list, h("p", {class: "tm-empty"}, "불러오는 중")); return; }
     if (doc.status) { put(list, h("p", {class: "tm-empty"}, "엔진 기록 준비 중")); return; }
-    const allowed = liveAllowed(doc);
+    const allowed = liveOk(doc);
     const all = (doc.positions || []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
     const xs = all.filter((p) => !hiddenPos(p)).sort((a, b) => (b.since || 0) - (a.since || 0));
     const L = all.filter((p) => Number(p.side) > 0).length;

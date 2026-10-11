@@ -16,7 +16,7 @@ import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {markOf, liveState} from "../live.js";
-import {livePnl, sums, crowd, POS_GROUPS, inGroup, liveAllowed, freshLine, staleBanner, snapAge} from "../poskit.js";
+import {livePnl, sums, crowd, POS_GROUPS, inGroup, liveAllowed, liveOk, waitKo as whyKo, freshLine, staleBanner, snapAge} from "../poskit.js";
 import {COINS, coinShort, KIND_KO} from "../labels.js";
 import {posCard, nameNode, usdt, HIDDEN_KO, HIDDEN_WHY} from "./positions-card.js";
 import {riskLadder} from "./positions-risk.js";
@@ -55,10 +55,13 @@ export function sortPositions(list, sort, pnlOf, gapOf) {
 export async function mount(el, ctx) {
   el.classList.add("ps-scr", "ps-pos");
   try { await ctx.meta(); } catch (e) { /* names fall back to codes */ }
+  if (!ctx.alive()) return undefined;                          // left while the names loaded: subscribe to nothing
   const q = ctx.params.query || {};
   const st = {
     coin: coinKey(q.coin) || coinKey(local.get("ps-coin", "")), tab: local.get("ps-tab", "pos"), sort: local.get("ps-sort", "pnl"),
     grp: local.get("ps-grp", "cand"), doc: null, open: new Set(), firstOpen: true, focus: q.acct || null, pin: null, countsKey: "", lastGen: null,
+    sortedWith: 0, sortedLive: false, // how many shown positions had a sort value, and were live numbers allowed, when
+                                      // the cards were last ordered
   };
   if (coinKey(q.coin)) local.set("ps-coin", st.coin);          // #/positions?coin=BTCUSD (a link from another screen)
   if (!POS_GROUPS.some((g) => g.id === st.grp)) st.grp = "cand";
@@ -67,18 +70,21 @@ export async function mount(el, ctx) {
   const cards = new Map();            // account id -> {key, el}: reused, so a number counts from its last value
   const wideMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
   let wide = !!(wideMq && wideMq.matches);
-  const allowed = () => liveAllowed(st.doc);
+  /** Live P&L, ROE and distances may show: the snapshot is "now" and the prices are live (poskit liveOk). */
+  const allowed = () => liveOk(st.doc);
+  /** The snapshot alone is "now" (the 진입 뒤 가격 bars then run to the present, not to the engine's time). */
+  const snapNow = () => liveAllowed(st.doc);
   /** Why live numbers are hidden (the words on the cards, the ladder and the orders). */
-  const waitKo = () => (st.doc && st.doc.old && !st.doc.catching_up ? "엔진 기록이 멈춤" : "엔진이 따라잡는 중");
+  const waitKo = () => whyKo(st.doc) || "엔진이 따라잡는 중";
 
   // ---------------------------------------------------------------- 진입 뒤 가격: one /api/klines 5m per coin, again after 5 min
   const px = new Map();               // coin|end -> {at, bars, busy}
-  const pxKey = (coin) => `${coin}|${allowed() ? "" : (st.doc && st.doc.done_ms) || ""}`;
+  const pxKey = (coin) => `${coin}|${snapNow() ? "" : (st.doc && st.doc.done_ms) || ""}`;
   const needPx = (coin) => {
     const key = pxKey(coin), c = px.get(key);
     if (c && (c.busy || Date.now() - c.at < PX_TTL)) return;
     px.set(key, {...(c || {}), busy: true, at: c ? c.at : 0});
-    const end = allowed() || !st.doc ? "" : `&end=${st.doc.done_ms}`;
+    const end = snapNow() || !st.doc ? "" : `&end=${st.doc.done_ms}`;
     ctx.api(`/api/klines?coin=${encodeURIComponent(coin)}&tf=5m&limit=288${end}`).then((d) => {
       px.set(key, {at: Date.now(), bars: d && d.bars ? d.bars : null, busy: false});
       if (ctx.alive()) for (const x of cards.values()) if (x.el.pos.coin === coin) sparkOf(x.el);
@@ -89,9 +95,9 @@ export async function mount(el, ctx) {
     if (p.hidden || p.entry == null) return;
     const c = px.get(pxKey(p.coin));
     if (!c || !c.bars || !Array.isArray(c.bars.t) || !p.since) return;
-    const ok = allowed();
+    const ok = allowed(), now = snapNow();
     const t0 = Math.floor(p.since / M5) * M5;
-    const lim = ok ? Infinity : Number(st.doc.done_ms);
+    const lim = now ? Infinity : Number(st.doc.done_ms);
     // older than the 24 hours of bars: the last 24 hours only (the dashed line still marks the entry price)
     const older = c.bars.t.length > 0 && c.bars.t[0] > t0;
     const vals = older ? [] : [Number(p.entry)];
@@ -101,7 +107,7 @@ export async function mount(el, ctx) {
     }
     const m = ok ? markOf(p.coin) : null;
     if (m != null) vals.push(m);
-    cardEl.setSpark(vals, {note: [older ? "최근 24시간만" : "", ok ? "" : "엔진 기준 시각까지"].filter(Boolean).join(" · ")});
+    cardEl.setSpark(vals, {note: [older ? "최근 24시간만" : "", now ? "" : "엔진 기준 시각까지"].filter(Boolean).join(" · ")});
   };
 
   // ---------------------------------------------------------------- skeleton
@@ -169,14 +175,18 @@ export async function mount(el, ctx) {
     const t = sums(list, ok ? markOf : () => null);
     const allHidden = t.n > 0 && t.hidden === t.n;
     K4.countTo(sumNum, t.priced ? t.pnl : null, {format: (v) => fmt.num(v, 2, true), tone: true});
+    // 묶인 증거금 대비: the P&L over the margin of the same (priced) positions; a coin without a price is out of both
     sumSub.textContent = allHidden ? `딥시크 금액 숨김 (${HIDDEN_KO})` : !ok ? `${waitKo()}: 실시간 손익 감춤`
-      : t.priced && t.margin ? `묶인 증거금 대비 ${fmt.pct((t.pnl / t.margin) * 100, true, 2)}` : t.n ? "시세를 기다리는 중" : "열린 포지션 없음";
+      : t.priced && t.pricedMargin ? `묶인 증거금 대비 ${fmt.pct((t.pnl / t.pricedMargin) * 100, true, 2)}${t.unpriced ? ` (시세 있는 ${fmt.int(t.priced)}개)` : ""}`
+        : t.n ? "시세를 기다리는 중" : "열린 포지션 없음";
     sumSub.className = "s " + (ok && t.priced ? fmt.tone(t.pnl) : "");
     lsEl.textContent = `${fmt.int(t.long)} · ${fmt.int(t.short)}`;
     const scope = [st.coin ? coinShort(st.coin) : "", GROUP_KO[st.grp] || ""].filter(Boolean).join(" · ");
     nOpenSub.textContent = `열린 ${fmt.int(t.n)}개${scope ? " · " + scope : ""}`;
     if (allHidden) put(line, h("span", {class: "muted", title: HIDDEN_WHY}, `딥시크 ${fmt.int(t.hidden)}개 (${HIDDEN_KO}: 서버가 금액·가격을 보내지 않아 합계가 없습니다)`));
     else put(line, ok ? ["수익 중 ", h("b", {class: "up"}, fmt.int(t.winning)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(t.losing)), " · "] : null,
+      ok && t.unpriced ? [h("b", {class: "warn-t", title: "이 코인들은 지금 시세가 없어 손익 합계와 수익 중·손실 중에서 뺐습니다 (0으로 세지 않음)"},
+        `시세 없음 ${fmt.int(t.unpriced)}`), " · "] : null,
       "묶인 증거금 ", h("b", {class: "num"}, usdt(t.margin)),
       t.hidden ? h("span", {class: "muted", title: HIDDEN_WHY}, ` · 딥시크 ${fmt.int(t.hidden)}개 (${HIDDEN_KO}, 합계에서 뺌)`) : null);
     let best = null, worst = null;
@@ -197,7 +207,7 @@ export async function mount(el, ctx) {
     else if (d && !d.status && d.old) liveChip.set(`엔진 기록 ${fmt.dur(snapAge(d) || 0)} 전에 멈춤`, "bad");
     else if (ls.state === "ok") liveChip.set("실시간 · 5초마다", "ok");
     else if (ls.state === "fake") liveChip.set("시험용 시세 · 5초마다", "warn");
-    else if (ls.state === "stale") liveChip.set(`시세 지난 값${ls.generated_ms ? ` (${fmt.hms(ls.generated_ms)})` : ""}`, "warn");
+    else if (ls.state === "stale") liveChip.set(`시세 지난 값${ls.generated_ms ? ` (${fmt.hms(ls.generated_ms)})` : ""}${allowed() ? "" : " · 실시간 손익 감춤"}`, "warn");
     else liveChip.set(ls.ko, ls.state === "wait" ? "off" : "bad");
     el.classList.toggle("ps-stalepx", ls.state === "stale" || ls.state === "unavailable");
     fresh.update(d || undefined);
@@ -275,6 +285,8 @@ export async function mount(el, ctx) {
     put(bannerSlot, staleBanner(st.doc));
     const ok = allowed();
     const list = sortPositions(all().filter(inScope), st.sort, pnlOf, gapOf);
+    st.sortedWith = sortKnown();
+    st.sortedLive = ok;
     const pin = st.pin ? list.findIndex((p) => p.id === st.pin) : -1;
     if (pin > 0) list.unshift(...list.splice(pin, 1));
     if (!list.length) { put(posBody, emptyPos()); } else {
@@ -293,10 +305,21 @@ export async function mount(el, ctx) {
     if (st.tab === "trd" && trPane.loaded) trPane.render(keepPage);
     paintLive();
   }
+  /** How many shown positions in scope have a value for the chosen sort now (0 before the first price for a live sort). */
+  const sortKnown = () => {
+    if (st.sort === "new") return -1;
+    const f = st.sort === "liq" ? gapOf : pnlOf;
+    let n = 0;
+    for (const p of all()) if (!p.hidden && inScope(p) && f(p) != null) n += 1;
+    return n;
+  };
   const onLiveTick = () => {
     const ok = allowed();
     for (const c of cards.values()) if (c.el.isConnected) { c.el.update(markOf(c.el.pos.coin), ok, waitKo()); sparkOf(c.el); }
-    if (st.firstOpen && st.doc && !wide) renderAll(true);
+    // the order was made before these prices (the first tick after a load, a coin whose price came later): order once
+    // more so 수익 큰 순 is true from the first prices, then keep it still until the next snapshot (no jumping cards)
+    if (st.doc && !st.doc.status && st.sort !== "new" && (sortKnown() > st.sortedWith || ok !== st.sortedLive)) renderAll(true);
+    else if (st.firstOpen && st.doc && !wide) renderAll(true);
     renderSum();
     if (st.doc && !st.doc.status) ladder.set(all().filter(inScope), markOf, ok, waitKo());
     if (st.tab === "ord" && st.doc) ordPane.set(all().filter(inScope), markOf, ok, true, waitKo());

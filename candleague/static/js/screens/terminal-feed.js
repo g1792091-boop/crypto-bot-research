@@ -12,7 +12,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {liveRow, markOf} from "../live.js";
-import {crowd, inGroup, livePnl, liveAllowed} from "../poskit.js";
+import {crowd, inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
 import {tickPrice, fadeIn, reduced, visible} from "../v4kit.js";
 import {COINS, coinShort, coinOf, sideKo, reasonKo} from "../labels.js";
 import {panel, ratioBar, ping, ageCell, acctLabel, hiddenFill, hiddenPos, usdt} from "./terminal-kit.js";
@@ -41,7 +41,7 @@ export function coinStrip(ctx, st, onPick) {
     }
   }
   function paintPos() {
-    const allowed = liveAllowed(doc);
+    const allowed = liveOk(doc);
     for (const [c, r] of rows) {
       if (!doc || doc.status) { put(r.pos, "—"); r.pos.className = "tm-wpos muted"; r.pos.title = doc ? "엔진 기록 준비 중" : "불러오는 중"; continue; }
       const ps = (doc.positions || []).filter((p) => p.coin === c && inGroup(p, st.grp));
@@ -56,7 +56,7 @@ export function coinStrip(ctx, st, onPick) {
       r.pos.className = "tm-wpos num";
       r.pos.title = `${coinShort(c)}에 열린 포지션 ${fmt.int(ps.length)}개 (롱 ${fmt.int(L)} · 숏 ${fmt.int(S)})`
         + (k.on ? ` · 한 방향 몰림 (${Math.round(k.share * 100)}%가 ${k.side > 0 ? "롱" : "숏"})` : "")
-        + (known ? ` · 점 = 미실현 합계 ${usdt(pnl)} USDT (마크 가격, ${known}개)` : allowed ? "" : " · 엔진이 따라잡는 중이라 손익 점 없음")
+        + (known ? ` · 점 = 미실현 합계 ${usdt(pnl)} USDT (마크 가격, ${known}개)` : allowed ? "" : ` · 손익 점 없음 (${waitKo(doc)})`)
         + (hid ? ` · 딥시크 ${hid}개는 개수만` : "");
     }
   }
