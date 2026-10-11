@@ -9,8 +9,8 @@ NaN mark values filled; monthly values are never overwritten). Public price data
 
     python -m research.hunt.data_hunt download --kind 5m --out DIR [--workers 8]
     python -m research.hunt.data_hunt download --kind fidelity --out DIR --symbols A,B [--from 2024-01 --to 2026-09]
-    python -m research.hunt.data_hunt verify --data DIR --ref research/hunt/data_ref_5m.json [--report FILE]
-    python -m research.hunt.data_hunt refman --data DIR --out research/hunt/data_ref_5m.json
+    python -m research.hunt.data_hunt verify --data DIR --ref research/hunt/data_manifest.json [--report FILE]
+    python -m research.hunt.data_hunt refman --data DIR --out REF.json
     python -m research.hunt.data_hunt prove --symbol BTCUSDT --month 2024-01 --ref-data DIR --work DIR
     python -m research.hunt.data_hunt symbols [--universe-md FILE]
     python -m research.hunt.data_hunt coins --tests T1.json [T2.json ...]
@@ -27,13 +27,15 @@ Files written (both kinds; ``<sub>`` = ``5m`` or ``1m``):
 * ``<out>/funding/<SYM>.npz``: ``ts`` int64 calc_time (ms, UTC); ``rate`` float64 last_funding_rate.
 * ``<out>/manifest.json``: per coin the coverage fields of coins30 (the hunt reads ``last_nonzero_volume_bar``,
   ``last_bar`` and ``missing_months_funding`` from it), the sha256 of every source zip, of each converted file and of
-  its array content (``arrays_sha256``: keys, dtypes, shapes and bytes; independent of the zip container).
+  its array content: ``content_sha256`` (the hunt's own data identity, research/hunt/hunt.py ``content_sha``: the
+  arrays a study reads) and ``arrays_sha256`` (every key); both independent of the zip container.
 * ``<out>/state.json`` (resume), ``<out>/params.json``, ``<out>/download.log``, ``<out>/COMPLETE`` when every coin
   is done. Zips are deleted once a coin is converted. A rerun skips finished coins and downloaded zips.
 
 npz files are written with a fixed zip timestamp, so the same arrays give the same file bytes on one machine. The
 coins30 files were written by ``np.savez_compressed`` (timestamped), so the comparison with them is on array content:
-``verify`` compares a new manifest with the pinned reference (``refman`` makes it from an existing data folder).
+``verify`` compares a new manifest with the pinned reference, normally research/hunt/data_manifest.json (the hunt's
+``datapin``); ``refman`` makes a wider one (all keys, mark columns included) from an existing data folder.
 No price outcome of any kind is computed here.
 """
 
@@ -258,6 +260,25 @@ def arrays_sha256(path: str) -> str:
         for k in sorted(z.files):
             a = np.ascontiguousarray(z[k])
             h.update(f"{k}|{a.dtype.str}|{a.shape}\n".encode())
+            h.update(a.tobytes())
+    return h.hexdigest()
+
+
+# H 2 data identity of research/hunt/hunt.py (``content_sha``): the arrays a study reads, in this order.
+CONTENT_KEYS = {"5m": ("ts", "o", "h", "l", "c", "v", "qv"), "funding": ("ts", "rate")}
+
+
+def content_sha(path: str, kind: str) -> str | None:
+    """The hunt's data identity (research/hunt/hunt.py content_sha): sha256 over the arrays of CONTENT_KEYS[kind] in
+    that order, each as 'name|dtype|shape' (shape comma-joined) newline then its raw C-order bytes. kind '5m' is used
+    for the 1m bar files too (same keys)."""
+    if not path or not os.path.exists(path):
+        return None
+    h = hashlib.sha256()
+    with np.load(path, allow_pickle=False) as z:
+        for k in CONTENT_KEYS[kind]:
+            a = np.ascontiguousarray(z[k])
+            h.update(f"{k}|{a.dtype.str}|{','.join(str(x) for x in a.shape)}\n".encode())
             h.update(a.tobytes())
     return h.hexdigest()
 
@@ -542,6 +563,8 @@ def build_symbol(src, sym: str, kind: str, out: str, first: str, last: str, work
         "npz_funding_bytes": os.path.getsize(outf) if fts is not None else 0,
         "sha256_funding": sha256_file(outf) if fts is not None else None,
         "arrays_sha256_funding": arrays_sha256(outf) if fts is not None else None,
+        "content_sha256": {iv: content_sha(outp, "5m"), "funding": content_sha(outf, "funding") if fts is not None
+                           else None},
         "daily_fill": fill,
     }
     if fts is not None and lt is not None:
@@ -735,16 +758,35 @@ def coins_from_tests(paths: list, universe: list) -> tuple:
 
 
 # ------------------------------------------------------------------ reference and verify
-def _norm_ref(ref: dict) -> dict:
-    syms = ref.get("symbols", {})
-    if isinstance(syms, list):
-        return {r["symbol"]: r for r in syms}
-    return dict(syms)
+HASHES = ("content_5m", "content_funding", "arrays_sha256", "arrays_sha256_funding")
+
+
+def _norm(doc: dict, sub: str = "5m") -> dict:
+    """{symbol: entry} with the coverage fields and whichever hashes the document has, as
+    content_5m / content_funding (the hunt's identity) and arrays_sha256 / arrays_sha256_funding (all keys).
+    Accepts: research/hunt/data_manifest.json ({"manifest": ..., "content": {SYM: {"5m", "funding"}}}),
+    a refman reference ({"symbols": {SYM: ...}}) and a manifest ({"symbols": [...]})."""
+    if "content" in doc and isinstance(doc.get("manifest"), dict):
+        rows = {r["symbol"]: dict(r) for r in doc["manifest"].get("symbols", [])}
+        for sym, c in (doc.get("content") or {}).items():
+            e = rows.setdefault(sym, {"symbol": sym})
+            e["content_5m"], e["content_funding"] = (c or {}).get("5m"), (c or {}).get("funding")
+        for e in rows.values():
+            for k in ("arrays_sha256", "arrays_sha256_funding"):    # only the hunt identity is pinned there
+                e.pop(k, None)
+        return rows
+    syms = doc.get("symbols", {})
+    rows = {r["symbol"]: dict(r) for r in syms} if isinstance(syms, list) else {k: dict(v) for k, v in syms.items()}
+    for e in rows.values():
+        c = e.get("content_sha256")
+        if isinstance(c, dict):
+            e["content_5m"], e["content_funding"] = c.get(sub), c.get("funding")
+    return rows
 
 
 def make_ref(data: str, sub: str = "5m") -> dict:
-    """Reference of an existing data folder: coverage fields from its manifest.json and the array-content sha256 of
-    every converted file (files checked against the manifest's file sha256 first)."""
+    """Reference of an existing data folder: coverage fields from its manifest.json, the hunt's data identity and
+    the all-keys array sha256 of every converted file (files checked against the manifest's file sha256 first)."""
     mp = os.path.join(data, "manifest.json")
     man = _load_json(mp)
     if man is None:
@@ -761,6 +803,7 @@ def make_ref(data: str, sub: str = "5m") -> dict:
         if r.get("sha256_funding") and sha256_file(pf) != r["sha256_funding"]:
             raise DataError(f"{pf}: file differs from {mp}")
         e = {f: r.get(f) for f in VERIFY_FIELDS if f in r}
+        e["content_sha256"] = {sub: content_sha(p5, "5m"), "funding": content_sha(pf, "funding")}
         e["arrays_sha256"] = arrays_sha256(p5)
         e["arrays_sha256_funding"] = arrays_sha256(pf) if os.path.exists(pf) else None
         e["file_sha256"] = want5
@@ -775,9 +818,18 @@ def make_ref(data: str, sub: str = "5m") -> dict:
             "verify_fields": list(VERIFY_FIELDS), "symbols": out}
 
 
+def _disk_hashes(data: str, sub: str, sym: str) -> dict:
+    p5 = os.path.join(data, sub, f"{sym}.npz")
+    pf = os.path.join(data, "funding", f"{sym}.npz")
+    return {"content_5m": content_sha(p5, "5m"), "content_funding": content_sha(pf, "funding"),
+            "arrays_sha256": arrays_sha256(p5) if os.path.exists(p5) else None,
+            "arrays_sha256_funding": arrays_sha256(pf) if os.path.exists(pf) else None}
+
+
 def verify(manifest_path: str, ref_path: str, data: str | None = None, allow_meta_only: bool = False,
            sub: str = "5m") -> dict:
-    """Compare a manifest (and, with ``data``, the files on disk) with the pinned reference. Any difference fails."""
+    """Compare a manifest (and, with ``data``, the files on disk) with the pinned reference: the coin set, the
+    coverage fields and every hash the reference holds. Any difference fails."""
     man = _load_json(manifest_path)
     ref_doc = _load_json(ref_path)
     diffs = []
@@ -785,38 +837,34 @@ def verify(manifest_path: str, ref_path: str, data: str | None = None, allow_met
         raise DataError(f"{manifest_path} missing")
     if ref_doc is None:
         raise DataError(f"{ref_path} missing")
-    new, ref = _norm_ref(man), _norm_ref(ref_doc)
+    new, ref = _norm(man, sub), _norm(ref_doc, sub)
     if set(new) != set(ref):
         diffs.append(f"symbols differ: missing {sorted(set(ref) - set(new))}, extra {sorted(set(new) - set(ref))}")
-    meta_only = []
+    meta_only, compared = [], set()
     for s in sorted(set(ref) & set(new)):
         r, n = ref[s], new[s]
         for f in VERIFY_FIELDS:
             if f in r and r[f] != n.get(f):
                 diffs.append(f"{s}: {f} {n.get(f)!r} != reference {r[f]!r}")
-        for f in ("arrays_sha256", "arrays_sha256_funding"):
-            if f not in r:
-                meta_only.append(f"{s}:{f}")
-                continue
-            if r.get(f) != n.get(f):
-                diffs.append(f"{s}: {f} differs from the reference")
+        have = [h for h in HASHES if h in r]
+        if not any(h in ("content_5m", "arrays_sha256") for h in have):
+            meta_only.append(s)
+        for h in have:
+            compared.add(h)
+            if r[h] != n.get(h):
+                diffs.append(f"{s}: {h} differs from the reference")
         if data:
-            p5 = os.path.join(data, sub, f"{s}.npz")
-            pf = os.path.join(data, "funding", f"{s}.npz")
-            got5 = arrays_sha256(p5) if os.path.exists(p5) else None
-            gotf = arrays_sha256(pf) if os.path.exists(pf) else None
-            if got5 != n.get("arrays_sha256"):
-                diffs.append(f"{s}: {p5} content differs from its manifest")
-            if gotf != n.get("arrays_sha256_funding"):
-                diffs.append(f"{s}: {pf} content differs from its manifest")
-            if "arrays_sha256" in r and got5 != r["arrays_sha256"]:
-                diffs.append(f"{s}: {p5} content differs from the reference")
-            if "arrays_sha256_funding" in r and gotf != r["arrays_sha256_funding"]:
-                diffs.append(f"{s}: {pf} content differs from the reference")
+            disk = _disk_hashes(data, sub, s)
+            for h in HASHES:
+                if h in n and disk[h] != n[h]:
+                    diffs.append(f"{s}: file content ({h}) differs from its manifest")
+                if h in r and disk[h] != r[h]:
+                    diffs.append(f"{s}: file content ({h}) differs from the reference")
     if meta_only and not allow_meta_only:
-        diffs.append(f"the reference has no array hashes ({len(meta_only)} missing): make it with 'refman'")
+        diffs.append(f"the reference has no array hashes for {len(meta_only)} coins: use research/hunt/"
+                     f"data_manifest.json or a 'refman' reference")
     return {"ok": not diffs, "n_symbols": len(ref), "n_checked": len(set(ref) & set(new)),
-            "differences": diffs[:200], "n_differences": len(diffs),
+            "differences": diffs[:200], "n_differences": len(diffs), "hashes_compared": sorted(compared),
             "manifest": manifest_path, "manifest_sha256": sha256_file(manifest_path),
             "reference": ref_path, "reference_sha256": sha256_file(ref_path),
             "files_rechecked": bool(data), "array_hashes_compared": not meta_only,

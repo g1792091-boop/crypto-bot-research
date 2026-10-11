@@ -3,16 +3,24 @@
 - fixed lists: 191 exclusions in their groups, 14 renames, 28 variants with section 5's ids, caps of section 7;
 - worst-order fills on daily bars (6.7): a gap through the stop fills at the open, a gap beyond liquidation loses the
   margin, the stop counts before an add in the same bar, an add then the moved stop exits the same day (long and short);
+  the stop-fill haircut (a touched stop fills f of the way to the bar's extreme; a fill beyond liquidation liquidates;
+  buy-stop adds mirror it);
 - no look-ahead: changing every value of day d+1 onward (the fill open aside) leaves every day-d signal, indicator and
   the entry's size unchanged;
 - lives: listing day 0 (P3 K1 / K7), archive-start lives, rename successors (within / beyond 60 days), relisting after
-  30 days without a bar (29 is a gap), delisting closes at the last bar's close, zero-volume padding is no bar;
+  30 days without a bar, a 7..29-day pause ends a life (the restart is no listing), delisting closes at the last
+  bar's close, a position closes at the close before a day without a bar inside a life, partial days (archive holes)
+  are not ranked by P4, zero-volume padding is no bar;
 - the volume floor point in time (a later spike does not make an earlier day tradable), the stable filter;
 - the pyramiding stop formula (P0, P0 + 0.667 D0, P0 + 1.25 D0 with full units), leverage choice and the 1.5x rule,
-  risk cap, n_max, liquidity cut, D0 cap, lapse, period end, hold exit, chandelier, funding;
-- bootstrap p, rank p and BH on known inputs; selection (groups, K, none eligible); controls (a) and (b);
-- goal-board arithmetic: fresh $1,000 months, thresholds, bust;
-- pin refusals; the second pass (5m slots in time order, mark-price liquidation, funding events, file converters);
+  risk cap, n_max, liquidity cut, D0 cap, lapse, period end, hold exit, chandelier, funding (the exit day included);
+- bootstrap p (size under a skewed null), rank p and BH on known inputs; selection (groups, K, none eligible);
+  controls (a) and (b): (b) moves the pick's own signal pattern in time within the variant's eligible days, and a
+  zero-edge clustered pick against it is not favoured;
+- goal-board arithmetic: fresh $1,000 months, thresholds, bust; adds and add skips on every board row;
+- values outside a step's window are never loaded (select unchanged when they change);
+- pin refusals and run-once guards (test, board, pass2); the second pass (5m slots in time order, mark-price
+  liquidation, funding events and the fixed fallback, a day without 5m data runs on the daily bar, file converters);
 - the whole select -> test -> board pipeline on a small synthetic universe.
 """
 
@@ -154,26 +162,36 @@ def test_gap_beyond_liquidation_loses_the_margin():
 
 
 def test_stop_before_add_in_the_same_bar():
+    f = AP.STOP_HC
     _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 105, 95.5, 100)])
     rf, ri = _rec(out)
     assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 0 and ri[AP.RI_TRIED] == 0
-    assert rf[AP.R_XPX] == pytest.approx(96 * (1 - SLIP))
+    assert rf[AP.R_XPX] == pytest.approx((96 - f * (96 - 95.5)) * (1 - SLIP))
     _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 104.5, 95, 100)], side=-1)
     rf, ri = _rec(out)
     assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 0
-    assert rf[AP.R_XPX] == pytest.approx(104 * (1 + SLIP))
+    assert rf[AP.R_XPX] == pytest.approx((104 + f * (104.5 - 104)) * (1 + SLIP))
 
 
 def test_add_then_moved_stop_exit_same_day():
-    # add 1 at 104 (full unit) moves the stop to P0 = 100; the day's low 99.9 reaches it -> exit at 100
-    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 104.5, 99.9, 102)])
+    # f = 0: add 1 at 104 (full unit) moves the stop to P0 = 100; the day's low 99.9 reaches it -> exit at 100
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 104.5, 99.9, 102)], stop_hc=0.0)
     rf, ri = _rec(out)
     assert ri[AP.RI_ADDS] == 1 and ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_SRC] == AP.SRC_ADD
     assert rf[AP.R_XPX] == pytest.approx(100 * (1 - SLIP))
-    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 100.1, 95.5, 98)], side=-1)
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 100.1, 95.5, 98)], side=-1, stop_hc=0.0)
     rf, ri = _rec(out)
     assert ri[AP.RI_ADDS] == 1 and ri[AP.RI_REASON] == AP.EX_STOP
     assert rf[AP.R_XPX] == pytest.approx(100 * (1 + SLIP))
+    # f = 0.25: the add fills at 104 + f x (104.5 - 104); the moved stop S_req = (5 x 100 + 5 x ref - 20) / 10; the
+    # exit fills f of the way from that stop to the low 99.9
+    f = 0.25
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 104.5, 99.9, 102)], stop_hc=f)
+    rf, ri = _rec(out)
+    ref = 104 + f * 0.5
+    sreq = (500 + 5 * ref - 20) / 10
+    assert ri[AP.RI_ADDS] == 1 and ri[AP.RI_REASON] == AP.EX_STOP
+    assert rf[AP.R_XPX] == pytest.approx((sreq - f * (sreq - 99.9)) * (1 - SLIP))
 
 
 def test_add_fills_at_gapped_open_and_next_level_from_it():
@@ -279,18 +297,44 @@ def test_hold_exit_at_the_close_of_the_hth_bar_and_funding():
     assert ri[AP.RI_REASON] == AP.EX_HOLD
     assert ri[AP.RI_TOUT] - ri[AP.RI_TIN] == 6                       # entry day = bar 1, exit at bar 7's close
     assert rf[AP.R_XPX] == pytest.approx(100 * (1 - SLIP))
-    assert rf[AP.R_FUND] == pytest.approx(6 * 3 * F8 * 5 * 100)      # 0.09% a day on the bars before the exit bar
+    # 0.09% a day at the closes of the six bars before the exit bar, plus 08:00 and 16:00 of the exit day (2 x 8h)
+    assert rf[AP.R_FUND] == pytest.approx((6 * 3 + 2) * F8 * 5 * 100)
     fees = TAKER * 5 * 100 * (1 + SLIP) + TAKER * 5 * 100 * (1 - SLIP)
     assert rf[AP.R_FEES] == pytest.approx(fees)
     assert rf[AP.R_PNL] == pytest.approx(rf[AP.R_PRICE] - fees - rf[AP.R_FUND])
 
 
-def test_funding_charged_on_gap_days_inside_a_life():
-    b = flat(0, 40) + [(40, 100, 100.5, 99.5, 100, 1e9)] + [(d, 100, 100.5, 99.5, 100, 1e9) for d in range(43, 46)]
+def test_close_before_a_day_without_bar_inside_a_life():
+    # 6.8: days 41-42 have no bar (an archive hole); the position closes at day 40's close (unknown path ahead), pays
+    # the exit day's 2 x 8h, and nothing is held through the hole
+    b = flat(0, 40) + [(40, 100, 100.5, 99.5, 101, 1e9)] + [(d, 100, 100.5, 99.5, 100, 1e9) for d in range(43, 46)]
     mk = market({"AAAUSDT": b}, 30, 46)
+    t40 = local(mk, 40)
+    assert mk.pregap[0, t40] and not mk.delist[0, t40] and mk.lid[0, local(mk, 43)] == mk.lid[0, t40]
     out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM)
-    days = 46 - 40 - 1                                               # closes of days 40..44 (45 = period end: marked)
-    assert out.rf[0, AP.R_FUND] == pytest.approx((days + 1) * 3 * F8 * 5 * 100)
+    rf, ri = _rec(out)
+    assert ri[AP.RI_REASON] == AP.EX_HOLE and ri[AP.RI_TOUT] == t40
+    assert rf[AP.R_XPX] == pytest.approx(101 * (1 - SLIP))
+    assert rf[AP.R_FUND] == pytest.approx(2 * F8 * 5 * 101)
+    # a hold variant too, and a short
+    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", -1)]), VH)
+    assert out.ri[0, AP.RI_REASON] == AP.EX_HOLE and len(out.rf) == 1
+
+
+def test_funding_on_the_exit_day():
+    # intraday stop on day 41: day 40's close (3 x 8h) + day 41's 08:00 and 16:00 (2 x 8h at the exit price)
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 100.5, 95.5, 96), (96, 97, 95, 96)], stop_hc=0.0)
+    rf, ri = _rec(out)
+    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_TOUT] - ri[AP.RI_TIN] == 1
+    assert rf[AP.R_FUND] == pytest.approx(3 * F8 * 5 * 100 + 2 * F8 * 5 * 96)
+    # a gap through the stop at day 41's open: only day 40's close charge (its 00:00 was in it)
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (95, 95.5, 94.5, 95)])
+    rf, ri = _rec(out)
+    assert ri[AP.RI_REASON] == AP.EX_GAP and rf[AP.R_FUND] == pytest.approx(3 * F8 * 5 * 100)
+    # a stop on the entry day: the 2 x 8h of that day
+    _, out = one_pos({}, [(100, 100.5, 95, 96), (96, 97, 95, 96)], stop_hc=0.0)
+    rf, ri = _rec(out)
+    assert ri[AP.RI_TOUT] == ri[AP.RI_TIN] and rf[AP.R_FUND] == pytest.approx(2 * F8 * 5 * 96)
 
 
 def test_chandelier_tightens_from_the_next_bar():
@@ -373,7 +417,9 @@ def test_lives_listing_rename_relist():
         "FTMUSDT": flat(0, 21),
         "SUSDT": flat(100, 120),                                      # 79 days after: a new listing
         "RELUSDT": flat(5, 31) + flat(61, 120),                       # 30 days without a bar -> relisting
-        "GAPUSDT": flat(5, 31) + flat(60, 120),                       # 29 days -> one life with a gap
+        "GAPUSDT": flat(5, 31) + flat(60, 120),                       # 29 days -> a pause: new life, no listing
+        "PAUUSDT": flat(5, 31) + flat(38, 120),                       # 7 days -> a pause
+        "HOLUSDT": flat(5, 31) + flat(37, 120),                       # 6 days -> one life with a gap
     }
     raw = AP.Raw(frame(bars))
     lives = {raw.syms[s]: [] for s in range(len(raw.syms))}
@@ -384,10 +430,15 @@ def test_lives_listing_rename_relist():
     assert lives["POLUSDT"] == [(70, False)] and raw.successor["POLUSDT"] == ("MATICUSDT", 20)
     assert lives["SUSDT"] == [(100, True)] and "SUSDT" not in raw.successor
     assert lives["RELUSDT"] == [(5, True), (61, True)]
-    assert lives["GAPUSDT"] == [(5, True)]
-    # delisted lives: ended before the file's last day
+    assert lives["GAPUSDT"] == [(5, True), (60, False)]               # 3.1: a 7..29-day pause restarts, no listing
+    assert lives["PAUUSDT"] == [(5, True), (38, False)]
+    assert lives["HOLUSDT"] == [(5, True)]
+    ih = raw.sym_ix["HOLUSDT"]
+    assert raw.pregap[ih, 30] and raw.pregap[ih].sum() == 1          # the bar before the 6-day gap
+    assert not raw.pregap[raw.sym_ix["GAPUSDT"]].any()                # a pause ends the life instead
+    # delisted lives: ended before the file's last day (the life before a pause too: closed at its last close)
     dl = {raw.syms[raw.life_sym[i]] for i in range(len(raw.life_first)) if raw.life_delist[i]}
-    assert dl == {"MATICUSDT", "FTMUSDT", "RELUSDT"}
+    assert dl == {"MATICUSDT", "FTMUSDT", "RELUSDT", "GAPUSDT", "PAUUSDT"}
     mk = AP.Market(raw, AP.day_str(G0 + 3), AP.day_str(G0 + 120), excluded=NOEX, warmup=3)
     ir = list(mk.syms).index("RELUSDT")
     assert mk.lbi[ir, local(mk, 61)] == 0 and mk.lid[ir, local(mk, 61)] != mk.lid[ir, local(mk, 30)]
@@ -396,7 +447,8 @@ def test_lives_listing_rename_relist():
     k7 = {"family": "P3", "k": 7, "side": 1}
     s1, t1 = np.nonzero(mk.mask(k1))
     got = sorted((mk.syms[s], int(t + mk.w0g - G0)) for s, t in zip(s1, t1))
-    assert got == sorted([("NEWUSDT", 10), ("RELUSDT", 5), ("RELUSDT", 61), ("SUSDT", 100), ("GAPUSDT", 5)])
+    assert got == sorted([("NEWUSDT", 10), ("RELUSDT", 5), ("RELUSDT", 61), ("SUSDT", 100), ("GAPUSDT", 5),
+                          ("PAUUSDT", 5), ("HOLUSDT", 5)])
     s7, t7 = np.nonzero(mk.mask(k7))
     got7 = sorted((mk.syms[s], int(t + mk.w0g - G0)) for s, t in zip(s7, t7))
     assert ("NEWUSDT", 16) in got7 and ("POLUSDT", 76) not in got7 and ("OLDUSDT", 6) not in got7
@@ -461,6 +513,7 @@ def test_p1_signal_rules():
 
 def test_p4_rank_breakout_event():
     S, T = 16, 5
+    NOSKIP = np.zeros(T, np.bool_)
     trad = np.ones((S, T), np.bool_)
     r7 = np.tile(np.linspace(0.0, 0.15, S)[:, None], (1, T))          # symbol 15 has the best 7-day return
     c = np.full((S, T), 10.0)
@@ -468,16 +521,16 @@ def test_p4_rank_breakout_event():
     ll = np.full((S, T), 9.0)
     c[15, 2:] = 12.0                                                  # breaks out on day 2 and stays above
     c[0, 3] = 8.0                                                     # worst 7-day return breaks down on day 3
-    cond = AP._p4_cond(trad, r7, c, hh, ll, 5, 1)
+    cond = AP._p4_cond(trad, r7, c, hh, ll, 5, 1, NOSKIP)
     assert cond[15].tolist() == [False, False, True, True, True]
-    ev = AP._event(cond, trad, np.zeros((S, T), np.int64))
+    ev = AP._event(cond, trad, np.zeros((S, T), np.int64), NOSKIP)
     assert ev[15].tolist() == [False, False, True, False, False]
-    cs = AP._p4_cond(trad, r7, c, hh, ll, 5, -1)
+    cs = AP._p4_cond(trad, r7, c, hh, ll, 5, -1, NOSKIP)
     assert cs[0].tolist() == [False, False, False, True, False]
-    assert not AP._p4_cond(trad, r7, c, hh, ll, 6, 1).any()           # 16 < 3 x 6 symbols with a 7-day return
+    assert not AP._p4_cond(trad, r7, c, hh, ll, 6, 1, NOSKIP).any()           # 16 < 3 x 6 symbols with a 7-day return
     r7t = r7.copy()
     r7t[10:15] = r7[15, 0]                                            # ties: symbol order decides (10..14 first)
-    assert not AP._p4_cond(trad, r7t, c, hh, ll, 5, 1)[15].any()
+    assert not AP._p4_cond(trad, r7t, c, hh, ll, 5, 1, NOSKIP)[15].any()
 
 
 # ------------------------------------------------------------------ no look-ahead
@@ -524,7 +577,8 @@ def test_bootstrap_rank_and_bh():
     assert AP.boot_p(np.full(10, -0.1), rng, 1000) == pytest.approx(1.0)
     assert AP.boot_p([], rng) == 1.0
     p = AP.boot_p(np.array([0.1, -0.1]), np.random.default_rng(1), 20000)
-    assert 0.70 < p < 0.80                                            # P(mean <= 0) = 3/4 for two months
+    assert p >= 0.70                                                  # sign flip: P(mean* >= 0) = 3/4 for two months
+    assert AP.boot_p(np.random.default_rng(2).standard_normal(26) + 1.5, np.random.default_rng(3), 2000) < 0.01
     assert AP.rank_p(0.5, [0.1, 0.2, 0.6, 0.7]) == pytest.approx(3 / 5)
     assert AP.rank_p(1.0, np.zeros(2000)) == pytest.approx(1 / 2001)
     assert AP.bh([0.01, 0.04, 0.03, 0.5], 0.10) == [True, True, True, False]
@@ -584,18 +638,30 @@ def test_controls_a_and_b():
     a2 = AP.ctrl_a(s, AP.ctrl_seed("a", v["id"], "p2", 0.02, 0))
     assert np.array_equal(a1.side, a2.side) and np.array_equal(a1.day, s.day) and np.array_equal(a1.sym, s.sym)
     assert set(np.unique(a1.side)) <= {-1, 1}
-    pools = mk.control_pools()
+    pools = mk.control_pools(v)
     b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools)
+    multi = 0
     for sym in np.unique(s.sym):
-        n_pick = int((s.sym == sym).sum())
-        got = b.day[b.sym == sym]
-        assert len(got) == min(n_pick, len(pools[sym])) and len(set(got.tolist())) == len(got)
-        assert set(got.tolist()) <= set(pools[sym].tolist())
+        pool = pools[sym]
+        n = len(pool)
+        mine = np.sort(s.day[s.sym == sym])
+        inpool = mine[np.isin(mine, pool)]
+        got = np.sort(b.day[b.sym == sym])
+        assert len(got) == len(inpool) and len(set(got.tolist())) == len(got)     # the pick's count on the symbol
+        assert set(got.tolist()) <= set(pool.tolist())
         assert (b.side[b.sym == sym] == 1).all()
+        if len(inpool) > 1:                                           # one circular offset: spacing kept (mod n)
+            multi += 1
+            pp, pg = np.searchsorted(pool, inpool), np.searchsorted(pool, got)
+            want = np.sort((pp - pp[0]) % n)
+            assert any(np.array_equal(np.sort((pg - pg[k]) % n), want) for k in range(len(pg)))
+    assert multi > 0
     t = pools[int(s.sym[0])]
     assert mk.trad[int(s.sym[0]), t].all() and mk.bar[int(s.sym[0]), t + 1].all()
-    assert (t >= mk.p0).all() and (t <= mk.p1 - 2).all()
+    assert (t >= mk.p0).all() and (t <= mk.p1 - 2).all() and (mk.lbi[int(s.sym[0]), t] >= 20).all()
     assert np.array_equal(np.lexsort((b.sym, -mk.med7[b.sym, b.day], b.day)), np.arange(len(b)))
+    b2 = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools)
+    assert np.array_equal(b.day, b2.day) and np.array_equal(b.sym, b2.sym)          # seeded
 
 
 # ------------------------------------------------------------------ 14 goal board
@@ -708,9 +774,9 @@ def _sub_from_slots(mk, slots: dict, nb: int, fund=None, mark=None) -> AP.Sub:
         fs.append(j)
         fr.append(rate)
         fm.append(mkp)
-    return AP.Sub(off, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], nb, fe_off, fe_cnt,
-                  np.asarray(fs, np.int64), np.asarray(fr, float), np.asarray(fm, float), 1 if fund is not None else 0,
-                  1)
+    slen = np.where(off >= 0, nb, 0).astype(np.int64)
+    return AP.Sub(off, slen, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], nb, fe_off, fe_cnt,
+                  np.asarray(fs, np.int64), np.asarray(fr, float), np.asarray(fm, float), 1 if fund is not None else 0)
 
 
 def test_pass2_slots_in_time_order_beat_the_daily_worst_order():
@@ -740,24 +806,60 @@ def test_pass2_mark_price_liquidation_and_funding_events():
     i = 0
     slots = {(i, t): [(100, 100.5, 99.5), (100, 100.5, 99.5)] for t in range(mk.T) if mk.bar[i, t]}
     t41 = local(mk, 41)
-    # funding at slot 1 of day 41: +0.1% paid by the long on notional at mark 100; then mark wicks to 90 on day 42
-    sub = _sub_from_slots(mk, slots, 2, fund={((i, t41), 1): (0.001, 100.0)},
-                          mark={((i, local(mk, 42)), 1): (100, 100.5, 90.0)})
+    # funding at slot 1 of day 41: +0.1% paid by the long on notional at mark 100; then mark wicks to 90 on day 42.
+    # Every bar day carries an archived (zero) event so that no day falls back to the fixed charge.
+    zero = {((i, t), 0): (0.0, 100.0) for t in range(mk.T) if mk.bar[i, t]}
+    fund = {**zero, ((i, t41), 1): (0.001, 100.0)}
+    sub = _sub_from_slots(mk, slots, 2, fund=fund, mark={((i, local(mk, 42)), 1): (100, 100.5, 90.0)})
     out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub)
     assert out.rf[0, AP.R_FUND] == pytest.approx(0.001 * 5 * 100)
     assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ and out.ri[0, AP.RI_TOUT] == local(mk, 42)
-    out_s = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", -1)]), VM, sub=_sub_from_slots(
-        mk, slots, 2, fund={((i, t41), 1): (0.001, 100.0)}))
+    out_s = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", -1)]), VM, sub=_sub_from_slots(mk, slots, 2, fund=fund))
     assert out_s.rf[0, AP.R_FUND] == pytest.approx(-0.001 * 5 * 100)  # a short receives a positive rate
+    # a symbol-day without any archived event pays the fixed charge (8): day 40 has none here
+    fund2 = {k: v for k, v in fund.items() if k[0] != (i, local(mk, 40))}
+    out2 = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", -1)]), VM, sub=_sub_from_slots(mk, slots, 2, fund=fund2))
+    assert out2.rf[0, AP.R_FUND] == pytest.approx(-0.001 * 5 * 100 + 3 * F8 * 5 * 100)
 
 
-def test_pass2_missing_5m_closes_at_last_daily_close():
-    after = [(100, 100.5, 99.5, 100), (100, 100.5, 99.5, 101), (101, 101.5, 100.5, 101)]
-    mk, _ = one_pos({}, after)
-    slots = {(0, t): [(mk.o[0, t], mk.h[0, t], mk.l[0, t])] for t in range(mk.T) if mk.bar[0, t]}
-    del slots[(0, local(mk, 42))]
-    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=_sub_from_slots(mk, slots, 1))
-    assert out.ri[0, AP.RI_REASON] == AP.EX_MISS and out.rf[0, AP.R_XPX] == pytest.approx(101 * (1 - SLIP))
+def _kl_npz(path, rows):
+    """rows: (epoch ms, o, h, l) 5m bars -> the cache format of convert_kline_zip."""
+    a = np.asarray(rows, float)
+    np.savez_compressed(path, t=a[:, 0].astype(np.int64), o=a[:, 1].astype(np.float32),
+                        h=a[:, 2].astype(np.float32), l=a[:, 3].astype(np.float32), c=a[:, 1].astype(np.float32))
+
+
+def test_pass2_day_without_5m_runs_on_the_daily_bar(tmp_path):
+    # the daily file shows day 42 opening at 80 (beyond the 9x long's liquidation); its 5m bars are missing. The 5m
+    # pass must not escape that move: day 42 runs on its daily bar and liquidates at the open, as the daily pass does
+    after = [(100, 100.5, 99.5, 100), (100, 100.5, 99.5, 101), (80, 81, 70, 75)]
+    mk, daily = one_pos({}, after)
+    assert daily.ri[0, AP.RI_REASON] == AP.EX_LIQ and daily.ri[0, AP.RI_TOUT] == local(mk, 42)
+    cache = str(tmp_path)
+    rows = []
+    for d in (40, 41):                                                # 2021-02-10 and 2021-02-11: one 5m bar each
+        t = local(mk, d)
+        rows.append(((G0 + d) * DAY, mk.o[0, t], mk.h[0, t], mk.l[0, t]))
+    _kl_npz(os.path.join(cache, "klines_AAAUSDT_2021-02.npz"), rows)
+    sub, rep = AP.load_sub5m(mk, cache, ["AAAUSDT"])
+    t42 = local(mk, 42)
+    assert sub.slen[0, local(mk, 40)] == AP.NB5 and sub.slen[0, t42] == 1 and sub.off[0, t42] >= 0
+    assert sub.o[sub.off[0, t42]] == 80.0 and rep["days_on_5m"] == 2
+    assert "AAAUSDT 2021-02" in rep["mark"] and "AAAUSDT 2021-02" in rep["funding"]
+    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub)
+    assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ and out.ri[0, AP.RI_TOUT] == t42
+    assert out.rf[0, AP.R_PNL] == pytest.approx(daily.rf[0, AP.R_PNL])
+    assert out.cnt[AP.C_DAYBAR] >= 1
+    # 5m bars that do not reach the daily low (a hole inside the day) -> the day runs on the daily bar
+    after2 = [(100, 100.5, 99.5, 100), (100, 100.5, 95.0, 99)]
+    mk2, daily2 = one_pos({}, after2)
+    t41 = local(mk2, 41)
+    _kl_npz(os.path.join(cache, "klines_AAAUSDT_2021-02.npz"),
+            [((G0 + 40) * DAY, 100, 100.5, 99.5), ((G0 + 41) * DAY, 100, 100.5, 99.0)])
+    sub2, rep2 = AP.load_sub5m(mk2, cache, ["AAAUSDT"])
+    assert sub2.slen[0, t41] == 1 and rep2["days_5m_short_of_daily_range"] == 1
+    out2 = AP.run_account(mk2, sig(mk2, [(39, "AAAUSDT", 1)]), VM, sub=sub2)
+    assert out2.ri[0, AP.RI_REASON] == daily2.ri[0, AP.RI_REASON] == AP.EX_STOP
 
 
 def _zip(name: str, text: str) -> bytes:
@@ -782,12 +884,14 @@ def test_pass2_converters_and_loader(tmp_path):
     np.savez_compressed(os.path.join(cache, "klines_AAAUSDT_2021-03.npz"), **k)
     np.savez_compressed(os.path.join(cache, "mark_AAAUSDT_2021-03.npz"), **k)
     np.savez_compressed(os.path.join(cache, "funding_AAAUSDT_2021-03.npz"), **f)
-    sub, missing = AP.load_sub5m(mk, cache, ["AAAUSDT"])
+    sub, rep = AP.load_sub5m(mk, cache, ["AAAUSDT"])
     t = local(mk, 59)
     x = sub.off[0, t]
     assert x >= 0 and sub.nb == 288 and sub.o[x + 1] == pytest.approx(1.001, rel=1e-6) and np.isnan(sub.o[x + 3])
-    assert sub.fe_cnt[0, t] == 1 and sub.fe_slot[sub.fe_off[0, t]] == 96
-    assert "AAAUSDT 2021-02" in missing
+    assert sub.slen[0, t] == 288 and sub.fe_cnt[0, t] == 1 and sub.fe_slot[sub.fe_off[0, t]] == 96
+    assert rep["days_on_5m"] == 1 and rep["days_on_daily_bar"] == 5               # days 60-64: daily bars
+    assert sub.off[0, local(mk, 58)] < 0                              # warm-up days are never traded
+    assert rep["klines"] == [] and "AAAUSDT 2021-02" not in rep["klines"]          # February is warm-up only
     test = {"verdict": {"A": {"PASS": True}, "B": {"PASS": False}},
             "traded_symbols": {"p2": {"A": ["XUSDT"], "B": ["YUSDT"]}, "p3": {"A": ["ZUSDT"]}}}
     plan = AP.pass2_plan(test)
@@ -816,6 +920,285 @@ def test_pipeline_select_test_board(tmp_path):
     board = AP.step_board(raw, picks[:1], n_seeds=3, rs=(0.02, 0.20), log=lambda *_: None)
     row = board[picks[0]]["p2"]["r=0.2"]
     assert row["pick"]["months"] == 26 and row["coin_flip_pooled"]["months"] == 3 * 26
+    for key in ("pick_machine", "coin_flip_machine"):
+        assert set(row[key]) >= {"adds_per_position", "share_reaching_add", "add_skips", "entry_cuts"}
+        assert set(row[key]["add_skips"]) == {AP.CNT_NAMES[i] for i in AP.ADD_SKIP_IX}
+    for vid in picks[:2]:
+        for p in AP.TEST_PERIODS:
+            assert set(res["extra"][vid][p]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
+            assert res["rows"][vid][p]["cmp"]["b"]["control_positions_mean"] is not None
+    assert set(table[picks[0]]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
     assert row["caps"] == {"n_max": 3, "risk_cap": pytest.approx(0.6)}
     assert board[picks[0]]["p1"]["r=0.02"]["label"] == "chosen here"
     AP._write_json(os.path.join(str(tmp_path), "t.json"), {"select": table, "test": res, "board": board})
+
+
+# ------------------------------------------------------------------ review fixes (2026-10-11): one regression test each
+def test_stop_fill_haircut_long_short_and_liquidation():
+    # 6.7: a touched stop fills f of the way from the stop to the bar's extreme beyond it
+    for f in (0.0, 0.25, 0.5):
+        _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 100.5, 94, 95)], stop_hc=f)
+        assert out.ri[0, AP.RI_REASON] == AP.EX_STOP
+        assert out.rf[0, AP.R_XPX] == pytest.approx((96 - f * 2) * (1 - SLIP))
+        _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 105, 99.5, 101)], side=-1, stop_hc=f)
+        assert out.ri[0, AP.RI_REASON] == AP.EX_STOP
+        assert out.rf[0, AP.R_XPX] == pytest.approx((104 + f * 1) * (1 + SLIP))
+    # a +60% squeeze through a short's stop at 104: f = 0 keeps the old optimistic fill (1.1 U); with f = 0.25 the fill
+    # (118) lies beyond the 9x short's liquidation (100.1 x (1 + 1/9 - 5%) = 106.2): liquidated, the margin lost
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 160, 99, 150)], side=-1, stop_hc=0.0)
+    assert out.ri[0, AP.RI_REASON] == AP.EX_STOP and out.rf[0, AP.R_XPX] == pytest.approx(104 * (1 + SLIP))
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 160, 99, 150)], side=-1)
+    margin = 5 * 100 * (1 - SLIP) / 9
+    assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ and out.rf[0, AP.R_PRICE] == pytest.approx(-margin)
+    # the same on a -60% day for a long (liquidation 93.98 < stop 96, fill 96 - 0.25 x 56 = 82)
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 100.5, 40, 50)])
+    assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ
+    # the add fills f of the way above its level (buy stop), and the next level is measured from that fill
+    ps = np.zeros((1, AP.NF))
+    pi = np.zeros((1, AP.NPI), np.int64)
+    pi[0, AP.P_SIDE] = 1
+    ps[0, AP.F_Q] = ps[0, AP.F_Q1] = 5.0
+    ps[0, AP.F_COST] = ps[0, AP.F_REFQ] = 500.0
+    ps[0, AP.F_U], ps[0, AP.F_D0], ps[0, AP.F_STOP], ps[0, AP.F_NEXT] = 20.0, 4.0, 96.0, 104.0
+    ps[0, AP.F_LEV], ps[0, AP.F_B], ps[0, AP.F_MED7], ps[0, AP.F_LIQ], ps[0, AP.F_EXT] = 1.0, 1e9, 1e15, 0.0, 100.0
+    acc = np.array([1e9, 500.0, 0.0, 0.0])
+    cnt = np.zeros(AP.NCNT, np.int64)
+    bar = np.array([[101.0, 108.0, 100.5]]).T                       # o, h, l of one slot
+    code, _ = AP._slot(0, 0, True, bar[0], bar[1], bar[2], bar[0], bar[1], bar[2], ps, pi, acc, 0.0, 1e9, 0.0, 0.0,
+                       0.0, 1.0, cnt, AP.BR_CAP, np.zeros(4), 1, 0.5)
+    assert code == -1 and pi[0, AP.P_FILLED] == 1
+    assert ps[0, AP.F_REFQ] == pytest.approx(500 + 5 * (104 + 0.5 * 4))
+    assert ps[0, AP.F_NEXT] == pytest.approx(106 + 4)
+
+
+def test_ctrl_b_pools_follow_the_variants_own_conditions():
+    # 12 (b): young days (life < 21 bars for P1 / P2, < 31 for P4) are never control days; P3 keeps them; P4 also
+    # needs 3N ranked symbols and a non-partial day
+    df = AP.synthetic_frame(60, start="2021-01-01", end="2022-06-30", seed=5, pump_rate=0.02)
+    mk = AP.Market(AP.Raw(df), "2021-06-01", "2022-06-01")
+    young_trad = mk.trad & (mk.lbi >= 0) & (mk.lbi < 30)
+    young_trad[:, :mk.p0] = False
+    assert young_trad.any()                                            # not vacuous: listings inside the period
+    for vid, lo in (("P1_X20_M", 20), ("P2_X30_H7", 20), ("P4L_N5_M", 30), ("P4S_N10_H28", 30)):
+        v = AP.VARIANT[vid]
+        pools = mk.control_pools(v)
+        for s_, pool in enumerate(pools):
+            if len(pool):
+                assert (mk.lbi[s_, pool] >= lo).all(), vid
+                if v["family"] == "P4":
+                    assert (mk.n_ranked[pool] >= 3 * v["n"]).all() and not mk.partial[pool].any()
+        sg = mk.signals(v)                                             # every pick signal with a fill bar is in the pool
+        nxt = mk.bar[sg.sym, sg.day + 1]
+        for d_, s_ in zip(sg.day[nxt], sg.sym[nxt]):
+            assert d_ in set(pools[s_].tolist()), vid
+    p3 = mk.control_pools(AP.VARIANT["P3L_K1_M"])
+    assert any((mk.lbi[s_, pool] < 20).any() for s_, pool in enumerate(p3) if len(pool))
+
+
+def _zero_world(S=24, seed=1, start="2021-01-01", end="2022-06-30"):
+    rng = np.random.default_rng(seed)
+    d0, d1 = AP.gday(start), AP.gday(end)
+    T = d1 - d0 + 1
+    sg = 0.05
+    ret = rng.standard_normal((S, T)) * sg - 0.5 * sg * sg               # martingale prices: no edge anywhere
+    c = 10.0 * np.exp(np.cumsum(ret, axis=1))
+    o = np.concatenate([c[:, :1] * np.exp(-ret[:, :1]), c[:, :-1]], axis=1)
+    h = np.maximum(o, c) * np.exp(np.abs(rng.standard_normal((S, T))) * sg * 0.5)
+    l = np.minimum(o, c) * np.exp(-np.abs(rng.standard_normal((S, T))) * sg * 0.5)
+    s_ix, t_ix = np.nonzero(np.ones((S, T), bool))
+    names = np.asarray([f"Z{i:03d}USDT" for i in range(S)])
+    return pd.DataFrame({"symbol": names[s_ix], "open_time": (d0 + t_ix).astype(np.int64) * DAY,
+                         "open": o[s_ix, t_ix], "high": h[s_ix, t_ix], "low": l[s_ix, t_ix], "close": c[s_ix, t_ix],
+                         "volume": 5e8 / c[s_ix, t_ix], "quote_volume": np.full(len(s_ix), 5e8)})
+
+
+def test_ctrl_b_zero_edge_clustered_pick_is_not_favoured():
+    # a multi-day pump fires on consecutive days and the repeats are skipped (one position per symbol), so a pick
+    # with clustered signals opens far fewer positions than the same number of spread-out random days (the old
+    # control (b)). The circular-shift control keeps the clusters: same positions, no edge for a no-skill pick.
+    mk = AP.Market(AP.Raw(_zero_world()), "2021-03-01", "2022-06-01", excluded=frozenset())
+    v = AP.VARIANT["P1_X20_H7"]
+    pools = mk.control_pools(v)
+    reps, seeds = 16, 30
+    ratio_new, ratio_old, d, low_p = [], [], [], 0
+    for rep in range(reps):
+        rng = np.random.default_rng(700 + rep)
+        D, Sy = [], []
+        for s_ in range(mk.S):
+            for a in rng.choice(np.arange(mk.p0 + 25, mk.p1 - 5), size=2, replace=False):
+                D += [a, a + 1, a + 2]
+                Sy += [s_] * 3
+        key = np.unique(np.asarray(D) * 1000 + np.asarray(Sy))
+        D, Sy = key // 1000, key % 1000
+        o = mk.order(D, Sy)
+        pick = AP.Sig(D[o], Sy[o], np.ones(len(o), np.int64))
+        po = AP.run_account(mk, pick, v)
+        lnm, npos_new, npos_old = [], [], []
+        for i in range(seeds):
+            r_ = AP.ctrl_seed("b", v["id"], f"syn{rep}", 0.02, i)
+            co = AP.run_account(mk, AP.ctrl_b(mk, pick, r_, pools), v)
+            lnm.append(AP.month_ln(co))
+            npos_new.append(len(co.rf))
+            # the old control: the same count per symbol on uniformly drawn days
+            od, osy = [], []
+            for s_ in np.unique(pick.sym):
+                n = int((pick.sym == s_).sum())
+                od.append(r_.choice(pools[s_], size=n, replace=False))
+                osy.append(np.full(n, s_))
+            od, osy = np.concatenate(od), np.concatenate(osy)
+            oo = mk.order(od, osy)
+            npos_old.append(len(AP.run_account(mk, AP.Sig(od[oo], osy[oo], np.ones(len(oo), np.int64)), v).rf))
+        lnm = np.asarray(lnm)
+        c = AP.compare(AP.month_ln(po), {"lnm": lnm, "means": lnm.mean(axis=1), "busts": 0,
+                                         "side_u": np.zeros((seeds, 2)), "positions": np.asarray(npos_new)},
+                       v["id"], f"syn{rep}", "b", 0.02, 999)
+        ratio_new.append(np.mean(npos_new) / len(po.rf))
+        ratio_old.append(np.mean(npos_old) / len(po.rf))
+        d.append(c["mean_d"])
+        low_p += c["p_rank"] < 0.10
+    assert np.mean(ratio_old) > 1.5                                   # the old control traded far more (the bias)
+    assert 0.9 < np.mean(ratio_new) < 1.1                             # the new one matches the pick's positions
+    d = np.asarray(d)
+    assert abs(d.mean()) < 3 * d.std(ddof=1) / np.sqrt(len(d)) + 1e-4  # no systematic edge for a no-skill pick
+    assert low_p <= 5                                                 # p_rank < 0.10 in at most 5 of 16 reps
+
+
+def test_boot_p_size_under_a_skewed_null():
+    # 13: under a true null (mean d = 0) at n = 19 months; the old percentile bootstrap rejected ~17% at nominal 5%
+    # for left-skewed d (the short-side shape: many small wins, rare squeezes)
+    rng = np.random.default_rng(11)
+    B = 499
+
+    def pct(d, r):
+        m = d[r.integers(0, len(d), (B, len(d)))].mean(axis=1)
+        return (1 + (m <= 0).sum()) / (B + 1)
+    left = [-(rng.lognormal(0, 1.0, 19) - np.exp(0.5)) for _ in range(700)]
+    norm = [rng.standard_normal(19) for _ in range(700)]
+    new_left = np.mean([AP.boot_p(x, np.random.default_rng(k), B) < 0.05 for k, x in enumerate(left)])
+    old_left = np.mean([pct(x, np.random.default_rng(k)) < 0.05 for k, x in enumerate(left)])
+    new_norm = np.mean([AP.boot_p(x, np.random.default_rng(k), B) < 0.05 for k, x in enumerate(norm)])
+    assert old_left > 0.13                                            # the problem is real in this setting
+    assert new_left < 0.125 and new_left < old_left - 0.04
+    assert new_norm < 0.075
+
+
+def test_values_outside_the_step_window_are_never_loaded(tmp_path):
+    df = AP.synthetic_frame(40, seed=11, pump_rate=0.02)
+    path = os.path.join(str(tmp_path), "k.csv.gz")
+    df.to_csv(path, index=False, compression="gzip")
+    win = AP.step_windows("select")
+    assert win == [(AP.gday("2021-08-01") - 60, AP.gday("2024-07-01"))]
+    assert AP.step_windows("test") == [(AP.gday("2024-07-01") - 60, AP.gday("2026-09-01")),
+                                       (AP.gday("2020-01-01") - 60, AP.gday("2021-08-01"))]
+    assert AP.step_windows("board") is None
+    raw_w, _ = AP.load_raw(path, value_windows=win)
+    g = AP.Raw(df).dix + AP.Raw(df).first_day
+    outside = (g < win[0][0]) | (g >= win[0][1])
+    assert np.isnan(raw_w.vals["close"][outside]).all() and np.isfinite(raw_w.vals["close"][~outside]).all()
+    assert np.array_equal(raw_w.cal, AP.Raw(df).cal)                  # the calendar is whole
+    with pytest.raises(RuntimeError, match="section 10"):
+        AP.Market(raw_w, *AP.PERIODS["p2"])
+    t_full = AP.step_select(AP.Raw(df), min_pos=5)
+    t_win = AP.step_select(raw_w, min_pos=5)
+    assert json.dumps(t_full, sort_keys=True, default=str) == json.dumps(t_win, sort_keys=True, default=str)
+
+
+def test_partial_days_are_not_ranked_and_the_event_looks_past_them():
+    # 3.1: 11 of 12 lives lack a bar on day 30 -> a partial day; one symbol lacking day 40 alone is not
+    bars = {f"S{i:02d}USDT": [b for b in flat(0, 60) if b[0] != 30] for i in range(11)}
+    bars["S11USDT"] = [b for b in flat(0, 60) if b[0] != 40]
+    raw = AP.Raw(frame(bars))
+    assert raw.partial[30] and raw.partial.sum() == 1
+    assert raw.pregap[raw.sym_ix["S00USDT"], 29] and raw.pregap[raw.sym_ix["S11USDT"], 39]
+    # P4 on a partial day: no ranking; the event's 'previous bar' skips it
+    S, T = 16, 5
+    trad = np.ones((S, T), np.bool_)
+    r7 = np.tile(np.linspace(0.0, 0.15, S)[:, None], (1, T))
+    c = np.full((S, T), 10.0)
+    c[15, 2:] = 12.0
+    hh, ll = np.full((S, T), 11.0), np.full((S, T), 9.0)
+    skip = np.array([False, False, True, False, False])
+    cond = AP._p4_cond(trad, r7, c, hh, ll, 5, 1, skip)
+    assert cond[15].tolist() == [False, False, False, True, True]
+    ev = AP._event(cond, trad, np.zeros((S, T), np.int64), skip)
+    assert ev[15].tolist() == [False, False, False, True, False]
+    cond2 = AP._p4_cond(trad, r7, c, hh, ll, 5, 1, np.zeros(T, np.bool_))
+    cond2[15, 3] = True
+    ev2 = AP._event(cond2, trad, np.zeros((S, T), np.int64), skip)      # true before (day 1? no) and after the hole
+    assert ev2[15].tolist() == [False, False, False, True, False]
+
+
+def test_pause_of_a_week_ends_the_life_and_closes_the_position():
+    # 3.1 / 6.8: 10 days without a bar inside what used to be one life: the position closes at the last bar's close
+    # (like a delisting) and the restart has fresh indicators and is not a P3 listing
+    b = flat(0, 40) + [(40, 100, 100.5, 99.5, 102, 1e9)] + flat(51, 70)
+    mk = market({"AAAUSDT": b, "BBBUSDT": flat(0, 70)}, 30, 70)
+    i = list(mk.syms).index("AAAUSDT")
+    t40, t51 = local(mk, 40), local(mk, 51)
+    assert mk.delist[i, t40] and mk.lbi[i, t51] == 0 and mk.lst_off[i, t51] == -1
+    assert np.isnan(mk.r1[i, t51]) and mk.atr[i, t51] == pytest.approx(2.0)
+    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM)
+    assert out.ri[0, AP.RI_REASON] == AP.EX_DELIST and out.rf[0, AP.R_XPX] == pytest.approx(102 * (1 - SLIP))
+
+
+def _guard_root(tmp_path, passing=True):
+    root = _fake_root(tmp_path)
+    os.makedirs(os.path.join(root, "data", "universe"))
+    data = os.path.join(root, AP.DATA_REL)
+    AP.synthetic_frame(4, start="2024-05-01", end="2024-08-31", seed=1).to_csv(data, index=False, compression="gzip")
+    json.dump({"files": {"klines_1d.csv.gz": {"sha256": AP.sha256_file(data)}}},
+              open(os.path.join(root, AP.MANIFEST_REL), "w"))
+    AP.write_pin(root)
+    AP._write_json(os.path.join(root, AP.PICK_REL), {"status": "picked", "picks": ["P1_X20_M"]})
+    AP.append_pick_line(root)
+    AP._write_json(os.path.join(root, AP.OUT_REL, "test.json"),
+                   {"verdict": {"P1_X20_M": {"PASS": passing}},
+                    "traded_symbols": {"p2": {"P1_X20_M": ["S000USDT", "S001USDT"]}, "p3": {"P1_X20_M": []}}})
+    return root
+
+
+def test_run_once_guards_for_test_board_and_pass2(tmp_path):
+    root = _guard_root(tmp_path)
+    out = os.path.join(root, AP.OUT_REL)
+    with pytest.raises(AP.PinError, match="test.json exists"):
+        AP.main(["--root", root, "test"])
+    AP._write_json(os.path.join(out, "board.json"), {})
+    with pytest.raises(AP.PinError, match="board.json exists"):
+        AP.main(["--root", root, "board"])
+    # pass2 run with an empty cache: the needed 5m months are missing -> refused (no --accept-missing, no DEVIATIONS)
+    with pytest.raises(AP.PinError, match="no 5m klines"):
+        AP.main(["--root", root, "pass2", "run", "--cache", os.path.join(root, "cache")])
+    with pytest.raises(AP.PinError, match="no 5m klines"):
+        AP.main(["--root", root, "pass2", "run", "--accept-missing", "--cache", os.path.join(root, "cache")])
+    AP._write_json(os.path.join(out, "pass2.json"), {})
+    for what in ("run", "fetch"):
+        with pytest.raises(AP.PinError, match="pass2.json exists"):
+            AP.main(["--root", root, "pass2", what, "--cache", os.path.join(root, "cache")])
+    inv = AP.pass2_inventory(AP.Raw(AP.synthetic_frame(4, start="2024-05-01", end="2024-08-31", seed=1)),
+                             {"symbols": {"p2": ["S000USDT"], "p3": ["S000USDT"]}}, os.path.join(root, "cache"))
+    assert inv["klines"] and all(x.startswith("p2 S000USDT 2024-0") for x in inv["klines"])
+    assert AP.cache_digest(os.path.join(root, "nothing"))["files"] == 0
+
+
+def test_board_rows_report_adds_and_their_skips_at_high_r():
+    # 14: three coins rising 10% a day with a 10% range; at r = 20% the margin budget (equity / 3) leaves no room for
+    # adds, at r = 0.5% every add fills; both are on the board row
+    bars = {}
+    for i in range(3):
+        b = [(d, 1.0, 1.05, 0.95, 1.0, 1e9) for d in range(31)]
+        px = 1.0
+        for k in range(27):
+            c = px * 1.10
+            b.append((31 + k, px, c * 1.025, px * 0.975, c, 1e9))
+            px = c
+        bars[f"C{i}USDT"] = b
+    mk = market(bars, 31, 59, warmup=31)
+    sg = sig(mk, [(30, f"C{i}USDT", 1) for i in range(3)])
+    v = AP.VARIANT["P1_X20_M"]
+    hi = AP.board_block(mk, sg, v, "syn", 0.20, n_seeds=2)
+    lo = AP.board_block(mk, sg, v, "syn", 0.005, n_seeds=2)
+    assert hi["pick_machine"]["adds_per_position"] < lo["pick_machine"]["adds_per_position"]
+    assert lo["pick_machine"]["share_reaching_add"][0] == 1.0
+    skips = hi["pick_machine"]["add_skips"]
+    assert skips["add_skip_margin_budget"] + skips["add_skip_free_wallet"] > 0
+    assert hi["caps"]["n_max"] == 3 and "coin_flip_machine" in hi

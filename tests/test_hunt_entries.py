@@ -367,3 +367,26 @@ def test_f4_is_the_league_watch_list():
         assert c["combo"] == p["combo"]
     S = [s for s in EW.systems() if s["family"] == "F4"]
     assert sorted({s["cand_id"] for s in S}) == sorted(p["cand_id"] for p in picks)
+
+
+# ------------------------------------------------------------------ parity on the hunt files (review finding)
+def test_parity_reads_hunt_files_as_the_run_does(tmp_path):
+    """parity_wide --five used every stored row; select / test drop zero-volume (and duplicate, off-grid) rows, so a
+    1h bin made only of zero-volume bars existed in the parity and not in the run. Now both read the same bars."""
+    from research.hunt import hunt as H
+    from research.hunt import parity_wide as PW
+    d = synth(3 * 288, 31)
+    qv = d["qv"].astype(np.float32)
+    qv[24:36] = 0                                     # one whole 1h bin of zero-volume bars
+    ts = d["ts"].copy()
+    ts[100] = ts[99]                                  # duplicate open time
+    (tmp_path / "5m").mkdir()
+    np.savez_compressed(tmp_path / "5m" / "AUSDT.npz", ts=ts, **{k: d[k].astype(np.float32) for k in
+                                                                  ("o", "h", "l", "c", "v")}, qv=qv)
+    (t5, o, h, lo, c, v), counts = PW.five_of(None, None, "AUSDT", str(tmp_path))
+    assert counts["zero_volume"] == 12 and counts["duplicates"] == 1 and len(t5) == len(ts) - 13
+    with np.load(tmp_path / "5m" / "AUSDT.npz") as z:
+        (want_ts, *_), _ = H.clean_5m(z["ts"], z["o"], z["h"], z["l"], z["c"], z["v"], z["qv"])
+    assert np.array_equal(t5, want_ts) and o.dtype == np.float64
+    b = EW.build_bars(t5, o, h, lo, c, v, "1h")
+    assert (int(d["ts"][24]) // 3_600_000) * 3_600_000 not in set(b.open_ms.tolist())   # the zero bin is no bar

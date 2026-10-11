@@ -1836,15 +1836,17 @@ def wide_eligible(base: dict, cost2: dict) -> tuple:
 
 
 def wide_choose(rows: list, k_picks: int = K_PICKS) -> dict:
-    """W 5: order eligible systems by score (mean ln M), ties median M, family, name, timeframe, G1 before NONE,
-    watch rank; take one per strategy name until K."""
+    """W 5: order the eligible F1-F3 systems by score (mean ln M), ties median M, family, name, timeframe, G1 before
+    NONE; take one per strategy name until K. F4 rows are a read only (their numbers were chosen after this test
+    period was seen) and never a pick, also not in the 'no pick' fallback."""
     fam = {"F1": 0, "F2": 1, "F3": 2, "F4": 3}
     gate = {"G1": 0, "NONE": 1}
 
     def key(x):
         return (-x["score"], -x["median_M"], fam[x["family"]], x["name"], TF_ORDER.index(x["tf"]), gate[x["gate"]],
                 x.get("rank") or 0)
-    elig = sorted([x for x in rows if x["eligible"]], key=key)
+    cand = [x for x in rows if x["family"] in PICK_FAMILIES]
+    elig = sorted([x for x in cand if x["eligible"]], key=key)
     picks, names = [], set()
     for x in elig:
         if x["strategy"] in names:
@@ -1855,7 +1857,7 @@ def wide_choose(rows: list, k_picks: int = K_PICKS) -> dict:
             break
     if picks:
         return {"picks": picks, "label": "picks"}
-    best = sorted(rows, key=key)[0] if rows else None
+    best = sorted(cand, key=key)[0] if cand else None
     return {"picks": [best["id"]] if best else [], "label": "no pick, fail"}
 
 
@@ -1867,7 +1869,7 @@ def _stamp(study: str, pin: dict | None) -> dict:
 
 def _write_json(path: str, obj) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
+    tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w") as fh:
         json.dump(obj, fh, indent=1, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o))
         fh.write("\n")
@@ -1891,25 +1893,69 @@ def _universe_and_data(args, end_key: str) -> tuple:
     return data, syms, counts
 
 
+COST2_KEYS = ("mean_lnM", "median_M", "q25_lnM", "q75_lnM", "share_M_lt_0_9", "worst_month", "max_dd", "bust",
+              "end_multiple", "fees", "funding", "n_positions")
+ROLE_READ = "read only: numbers chosen after the test period was seen (W 5)"
+
+
+def private_dir(args) -> str:
+    """The private folder outside the repository (W 11, D11): DeepSeek figures and the resumable parts."""
+    base = args.private or os.path.join(args.data or os.environ.get("HUNT_DATA", "."), "hunt_private")
+    path = os.path.abspath(base)
+    if os.path.commonpath([path, ROOT]) == ROOT:
+        raise SystemExit("--private must be outside the repository (D11)")
+    return path
+
+
+def parts_dir(args, study: str, step: str, pin: dict | None) -> str:
+    """Finished parts of a long step, keyed by the pin they ran under (a rerun under the same pin resumes)."""
+    tag = ((pin or {}).get("pin_sha256") or "nopin")[:16]
+    return os.path.join(private_dir(args), "parts", f"{study}_{step}_{tag}")
+
+
+def _write_part(path: str, obj) -> str:
+    disk_check(path)
+    return _write_json(path, obj)
+
+
+def _read_part(path: str):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def cell_sha(spec: dict) -> str:
+    return hashlib.sha256(json.dumps(cell_key(spec)).encode()).hexdigest()[:16]
+
+
+def _row_of(spec: dict, base: dict, cost2: dict, seconds: float) -> dict:
+    """One select row: the W 5 fields, the H 10 metric set of the base run, the cost x2 summary."""
+    ok, why = wide_eligible(base, cost2)
+    row = {k: spec.get(k) for k in ("id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo")}
+    row.update({"role": "candidate" if spec.get("family") in PICK_FAMILIES else ROLE_READ,
+                "eligible": ok, "fail": why, "score": base["mean_lnM"], "median_M": base["median_M"],
+                "n_positions": base["n_positions"], "bust": base["bust"], "win_share": base["win_share"],
+                "cost2_mean_lnM": cost2["mean_lnM"], "cost2_median_M": cost2["median_M"],
+                "max_dd": base["max_dd"], "end_multiple": base["end_multiple"],
+                "signal_counts": base["signal_counts"], "metrics": base,
+                "cost2_metrics": {k: cost2.get(k) for k in COST2_KEYS}, "seconds": round(seconds, 3)})
+    return row
+
+
 def _sel_task(task) -> list:
-    """Wide select unit: one entry cell (events once), both gates x base / cost x2 (W 5)."""
-    mkey, specs = task
+    """Wide select unit: one entry cell (events once), both gates x base / cost x2 (W 5). Its rows are written to
+    ``part`` (private folder) as soon as they exist, so a rerun under the same pin skips the cell."""
+    mkey, specs, part = task
     mk = _G["mk"][mkey]
     _EVENTS.clear()                               # one entry cell per task: no cache grows across tasks
     _SIGS.clear()
     out = []
     for spec in specs:
         t0 = time.time()
-        base = run_system(mk, spec, R_BASE, "base")
+        base = run_system(mk, spec, R_BASE, "base", detail=True, days=False)
         cost2 = run_system(mk, spec, R_BASE, "x2")
-        ok, why = wide_eligible(base, cost2)
-        row = {k: spec.get(k) for k in ("id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo")}
-        row.update({"eligible": ok, "fail": why, "score": base["mean_lnM"], "median_M": base["median_M"],
-                    "n_positions": base["n_positions"], "bust": base["bust"], "win_share": base["win_share"],
-                    "cost2_mean_lnM": cost2["mean_lnM"], "cost2_median_M": cost2["median_M"],
-                    "max_dd": base["max_dd"], "end_multiple": base["end_multiple"],
-                    "signal_counts": base["signal_counts"], "seconds": round(time.time() - t0, 3)})
-        out.append(row)
+        out.append(_row_of(spec, base, cost2, time.time() - t0))
+    if part:
+        _write_part(part, {"rows": out})
     return out
 
 
@@ -1934,11 +1980,15 @@ def cmd_select(args) -> int:
     if study == "v1":
         prepare_series(syms, V1_TFS)
         rows = {}
+        kw = {"detail": True, "days": False}
         for spec in v1_systems():
             par, main, (lo, hi) = V1_ENTRIES[spec["name"]]
             rows[spec["id"]] = {
-                "main": run_system(mk, spec, R_BASE), "lo": run_system(mk, v1_spec(spec["name"], spec["tf"], lo)),
-                "hi": run_system(mk, v1_spec(spec["name"], spec["tf"], hi)), "one": run_system(mk, spec, R_ONE)}
+                "main": run_system(mk, spec, R_BASE, **kw),
+                "lo": run_system(mk, v1_spec(spec["name"], spec["tf"], lo), R_BASE, **kw),
+                "hi": run_system(mk, v1_spec(spec["name"], spec["tf"], hi), R_BASE, **kw),
+                "one": run_system(mk, spec, R_ONE, **kw)}
+            print(f"v1 select: {spec['id']} done ({time.time() - t0:.0f}s)", flush=True)
         ch = v1_choose(rows)
         sel = {**_stamp(study, pin), "data_counts": counts, "rows": rows, "choice": ch,
                "seconds": round(time.time() - t0, 1)}
@@ -1949,15 +1999,22 @@ def cmd_select(args) -> int:
         specs = wide_systems()
         prepare_series(syms, TF_ORDER)
         groups = _group_cells(specs)
-        res = pmap(_sel_task, [(mk.key, g) for g in groups], args.procs)
-        rows = [r for g in res for r in g]
+        pdir = parts_dir(args, study, "select", pin)
+        part_of = [os.path.join(pdir, f"cell_{cell_sha(g[0])}.json") for g in groups]
+        todo = [i for i, p in enumerate(part_of) if not os.path.exists(p)]
+        if len(todo) < len(groups):
+            print(f"wide select: {len(groups) - len(todo)} of {len(groups)} entry cells already done under this pin "
+                  f"({pdir}); running the other {len(todo)}", flush=True)
+        pmap(_sel_task, [(mk.key, groups[i], part_of[i]) for i in todo], args.procs, label="wide select cells")
+        rows = [r for p in part_of for r in _read_part(p)["rows"]]
         ch = wide_choose(rows)
         by_id = {s["id"]: s for s in specs}
         picks = [{**by_id[i], "pick_no": n + 1} for n, i in enumerate(ch["picks"])]
         public, private = redact_rows(rows)
         priv_sha = write_private(args, "wide_select_private.json", {"rows": private})
         sel = {**_stamp(study, pin), "data_counts": counts, "rows": public, "label": ch["label"],
-               "picks": [p["id"] for p in picks], "private_sha256": priv_sha, "seconds": round(time.time() - t0, 1)}
+               "pick_families": list(PICK_FAMILIES), "picks": [p["id"] for p in picks], "private_sha256": priv_sha,
+               "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "select.json"), sel)
         _write_json(os.path.join(ROOT, PICKS_REL[study]), {**_stamp(study, pin), "picks": picks, "label": ch["label"]})
     h = append_picks_line(study)
@@ -1974,7 +2031,7 @@ def _pick_block(study: str, spec: dict, mks: dict, procs: int, r: float, with_co
                 period: str = "test") -> dict:
     mk = mks[period]
     base = run_system(mk, spec, r, "base", detail=True)
-    cost2 = run_system(mk, spec, r, "x2")
+    cost2 = run_system(mk, spec, r, "x2", detail=True, days=False)
     ctl = run_controls(mk, spec, study, r, procs) if with_controls else None
     res = {"base": base, "cost2": cost2, "checks": judge(base, cost2, ctl, study, spec, mk.period, r)}
     if ctl is not None:
@@ -1984,26 +2041,34 @@ def _pick_block(study: str, spec: dict, mks: dict, procs: int, r: float, with_co
 
 
 def _reads(study: str, spec: dict, mks: dict, procs: int) -> dict:
-    """H 14 / W 7 reads for one pick (never a pass)."""
+    """H 14 / W 7 reads for one pick (never a pass). The gate diagnostics run the pick's entry and timeframe under
+    another gate: v1 in select and test (H 14); wide in select only, since the other gate is one of the 730 systems
+    and W 6 runs no non-pick system on the test period."""
     rd = {}
+    kw = {"detail": True, "days": False}
     rd["r1"] = _pick_block(study, spec, mks, procs, R_ONE)
     rd["select_controls"] = _pick_block(study, spec, mks, procs, R_BASE, True, "select")
-    rd["new24"] = {p: run_system(mks[f"new_{p}"], spec, R_BASE) for p in ("select", "test")}
-    rd["extra2020"] = {f"{r:g}": run_system(mks["extra"], spec, r) for r in (R_BASE, R_ONE)}
+    rd["new24"] = {p: run_system(mks[f"new_{p}"], spec, R_BASE, **kw) for p in ("select", "test")}
+    rd["extra2020"] = {f"{r:g}": run_system(mks["extra"], spec, r, **kw) for r in (R_BASE, R_ONE)}
     diag = ("NONE", "TS") if spec["gate"] == "G1" else ("G1", "TS")
-    rd["gate_diagnostics"] = {g: {p: run_system(mks[p], spec, R_BASE, gate=g) for p in ("select", "test")}
+    periods = ("select", "test") if study == "v1" else ("select",)
+    rd["gate_diagnostics"] = {g: {p: run_system(mks[p], spec, R_BASE, gate=g, **kw) for p in periods}
                               for g in diag}
     return rd
 
 
 def _sizing(mk: Market, parts: list) -> dict:
-    """W 7 sizing read: r = 2% and 5%, total open risk cap scaled by r / 0.5%."""
+    """W 7 sizing read: r = 2% and 5%; the total open risk cap and the margin budget B scaled by r / 0.5%, leverage
+    as H 7.3 (20x cap); the full H 10 metric set plus the bet actually taken (realized unit risk, cut and add
+    shares)."""
     out = {}
     for r in SIZING_RS:
-        s = run_signals(mk, parts, r, "base", RISK_CAP * r / R_BASE)
-        out[f"{r:g}"] = {k: s[k] for k in ("share_M_ge_2", "share_M_ge_10", "share_M_ge_30", "worst_month", "bust",
-                                           "bust_month", "mean_lnM", "median_M", "max_dd", "end_multiple",
-                                           "n_positions", "cut", "adds_skipped", "adds_cut", "skipped")}
+        scale = r / R_BASE
+        s = run_signals(mk, parts, r, "base", RISK_CAP * scale, detail=True, days=False, b_div=B_DIV / scale)
+        s["requested_r"] = r
+        s["risk_cap"] = RISK_CAP * scale
+        s["margin_budget_of_equity"] = scale / B_DIV
+        out[f"{r:g}"] = s
     return out
 
 
@@ -2038,7 +2103,21 @@ def cmd_test(args) -> int:
     else:
         picks = pk["picks"]
         prepare_series(syms, sorted({p["tf"] for p in picks}, key=TF_ORDER.index))
-        blocks = {p["id"]: _pick_block(study, p, mks, args.procs, R_BASE) for p in picks}
+        pdir = parts_dir(args, study, "test", pin)
+        blocks, reads = {}, {}
+        for p in picks:                             # one part per pick: a rerun under the same pin resumes
+            part = os.path.join(pdir, f"pick_{int(p['pick_no']):02d}_"
+                                      f"{hashlib.sha256(p['id'].encode()).hexdigest()[:16]}.json")
+            if not os.path.exists(part):
+                t1 = time.time()
+                _write_part(part, {"id": p["id"], "block": _pick_block(study, p, mks, args.procs, R_BASE),
+                                   "reads": _reads(study, p, mks, args.procs)})
+                print(f"wide test: pick {p['pick_no']}/{len(picks)} {p['id']} done in {time.time() - t1:.0f}s",
+                      flush=True)
+            d = _read_part(part)
+            if d["id"] != p["id"]:
+                raise SystemExit(f"{part} holds {d['id']}, not {p['id']}")
+            blocks[p["id"]], reads[p["id"]] = d["block"], d["reads"]
         pv = [blocks[p["id"]]["checks"].get("p", 1.0) for p in picks]
         sig = bh(pv, BH_Q)
         passes = []
@@ -2049,7 +2128,6 @@ def cmd_test(args) -> int:
                                                                            "rank_ok_b")) and s)
             if c["PASS"]:
                 passes.append(p)
-        reads = {p["id"]: _reads(study, p, mks, args.procs) for p in picks}
         for p in picks:
             c = blocks[p["id"]]["checks"]
             c["carried_by_old_six"] = bool(c["PASS"] and reads[p["id"]]["new24"]["test"]["mean_lnM"] <= 0)
@@ -2078,7 +2156,7 @@ def cmd_test(args) -> int:
 
 # ------------------------------------------------------------------ DeepSeek money (W 11, D11)
 DS_ALLOWED = {"id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo", "eligible", "fail",
-              "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label"}
+              "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label", "role"}
 DS_ALLOWED_CHECKS = {"P0", "P1", "P2_a", "P2_b", "P3", "P4", "rank_ok_a", "rank_ok_b", "bh_significant", "PASS",
                      "carried_by_old_six", "one_pct_also_passes"}
 
@@ -2123,11 +2201,91 @@ def redact_test(full: dict) -> dict:
 
 
 def write_private(args, name: str, obj) -> str:
-    base = args.private or os.path.join(args.data or os.environ.get("HUNT_DATA", "."), "hunt_private")
-    path = os.path.abspath(os.path.join(base, name))
-    if os.path.commonpath([path, ROOT]) == ROOT:
-        raise SystemExit("--private must be outside the repository (D11)")
+    path = os.path.join(private_dir(args), name)
+    disk_check(path)
     return _write_json(path, obj)
+
+
+# ------------------------------------------------------------------ data pin and cross-check (H 2), pin list
+def cmd_datapin(args) -> int:
+    """research/hunt/data_manifest.json: the data folder's manifest.json copied in, plus per coin the H 2 content
+    hash of the 5m and funding arrays the study reads. Run once before the pin, on the finished download."""
+    data = args.data
+    if not data:
+        raise SystemExit("--data <coins30 folder> needed")
+    with open(os.path.join(data, "manifest.json")) as fh:
+        man = json.load(fh)
+    syms = load_universe(data)
+    content = {}
+    for s in syms:
+        p5 = os.path.join(data, "5m", f"{s}.npz")
+        if not os.path.exists(p5):
+            raise SystemExit(f"{p5} missing: the download is not finished")
+        content[s] = {"5m": file_content_sha(p5, "5m"),
+                      "funding": file_content_sha(os.path.join(data, "funding", f"{s}.npz"), "funding")}
+    doc = {"what": "PREREG_HUNT 2 data identity: the coins30 manifest and the content hash of the arrays read",
+           "rule": "sha256 over the arrays in order (5m: ts o h l c v qv; funding: ts rate), each as "
+                   "'name|dtype|shape' newline then its raw C-order bytes",
+           "written_utc": ms_str(int(time.time() * 1000)),
+           "manifest_sha256": sha256_file(os.path.join(data, "manifest.json")), "symbols": syms,
+           "content": content, "manifest": man}
+    print(_write_json(os.path.join(ROOT, DATA_MANIFEST_REL), doc), DATA_MANIFEST_REL)
+    return 0
+
+
+def cross_check_coin(five_path: str, one_path: str) -> dict:
+    """H 2 cross-check of one coin: its 5m bars as the study reads them (clean_5m) against the full grid's 1m bars
+    binned to 5m, on every bar both have: OHLC within 1e-6 relative, base volume within 0.1%. Counts only."""
+    EW = _ew()
+    with np.load(five_path) as z:
+        full = {k: z[k] for k in CONTENT_KEYS["5m"]}
+    sha = content_sha(full, CONTENT_KEYS["5m"])
+    (ts, o, h, lo, c, v, _qv), cnt = clean_5m(full["ts"], full["o"], full["h"], full["l"], full["c"], full["v"],
+                                               full["qv"])
+    del full
+    with np.load(one_path) as z:
+        t1, o1, h1, l1, c1, v1 = EW.resample_1m_to_5m(z["ts"], z["o"], z["h"], z["l"], z["c"], z["v"])
+    common, i5, i1 = np.intersect1d(ts, t1, return_indices=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        px = np.zeros(len(common), bool)
+        for a5, a1 in ((o, o1), (h, h1), (lo, l1), (c, c1)):
+            x, y = np.asarray(a5, np.float64)[i5], np.asarray(a1, np.float64)[i1]
+            px |= ~(np.abs(x - y) <= XCHECK_TOL_PX * np.abs(y))
+        x, y = np.asarray(v, np.float64)[i5], np.asarray(v1, np.float64)[i1]
+        vol = ~(np.abs(x - y) <= XCHECK_TOL_VOL * np.maximum(np.abs(y), 1e-12))
+    bad = px | vol
+    return {"content_sha256": sha, "clean_counts": cnt, "bars_5m": int(len(ts)), "bars_1m_to_5m": int(len(t1)),
+            "common": int(len(common)), "only_5m": int(len(ts) - len(common)), "only_1m": int(len(t1) - len(common)),
+            "ohlc_mismatch": int(px.sum()), "volume_mismatch": int(vol.sum()), "mismatch": int(bad.sum()),
+            "mismatch_share": float(bad.mean()) if len(common) else 1.0,
+            "first_mismatch": ms_str(int(common[np.flatnonzero(bad)[0]])) if bad.any() else None}
+
+
+def cmd_datacheck(args) -> int:
+    """research/hunt/data_check.json: the H 2 cross-check on the old six (counts only; no outcome). Pass = every
+    coin's mismatch share <= 0.1% of the bars both have."""
+    if not args.data or not args.fg1m:
+        raise SystemExit("--data <coins30 folder> and --fg1m <the full grid's data folder> needed")
+    coins = {}
+    for s in OLD_SIX:
+        coins[s] = cross_check_coin(os.path.join(args.data, "5m", f"{s}.npz"), os.path.join(args.fg1m, "1m",
+                                                                                              f"{s}.npz"))
+        print(s, coins[s]["mismatch"], "of", coins[s]["common"], flush=True)
+    ok = all(x["common"] > 0 and x["mismatch_share"] <= XCHECK_MAX_SHARE for x in coins.values())
+    doc = {"what": "PREREG_HUNT 2 cross-check: 5m bars (as read: duplicates, zero volume, off-grid dropped) vs the "
+                   "full grid's 1m archive binned to 5m, on the bars both have; counts only",
+           "tolerance": {"ohlc_rel": XCHECK_TOL_PX, "volume_rel": XCHECK_TOL_VOL, "max_share": XCHECK_MAX_SHARE},
+           "written_utc": ms_str(int(time.time() * 1000)), "pass": bool(ok), "coins": coins,
+           "code_sha256": sha256_file(os.path.abspath(__file__))}
+    print(_write_json(os.path.join(ROOT, DATA_CHECK_REL), doc), DATA_CHECK_REL, "pass" if ok else "FAIL")
+    return 0 if ok else 1
+
+
+def cmd_pinlist(args) -> int:
+    """Print the files the study's pin must list (one per line), for building the pin file before select."""
+    for p in required_files(args.study):
+        print(p)
+    return 0
 
 
 # ------------------------------------------------------------------ report
@@ -2179,6 +2337,20 @@ def cmd_report(args) -> int:
                              f"{yn(c.get('rank_ok_b'))} | {yn(c.get('bh_significant'))} | {yn(c.get('PASS'))} |")
             lines += ["", f"**넓게 통과: {'예' if v['wide_pass'] else '아니오'}** ({v['label']})", "",
                       "v1과 넓게는 같은 시험 기간을 씁니다: 둘 중 하나가 운으로 통과할 가능성은 하나일 때보다 큽니다.", ""]
+            sz = {k: x for k, x in test.get("sizing", {}).items() if isinstance(x, dict)}
+            if sz:
+                lines += ["## 크게 걸면 (참고, 통과 조건 아님)", "",
+                          "| 시스템 | 요청 위험 | 실제 첫 단위 위험(중앙) | 2배 이상 달 | 10배 이상 달 | 30배 이상 달 | 가장 나쁜 달 | 파산 |",
+                          "|---|---:|---:|---:|---:|---:|---:|---|"]
+                for k, rr in sz.items():
+                    for r_, x in rr.items():
+                        ru = (x.get("realized_unit_risk") or {}).get("median")
+                        lines.append(f"| {k} | {float(r_) * 100:g}% | {'-' if ru is None else f'{ru * 100:.2f}%'} | "
+                                     f"{x['share_M_ge_2'] * 100:.0f}% | {x['share_M_ge_10'] * 100:.0f}% | "
+                                     f"{x['share_M_ge_30'] * 100:.0f}% | {x['worst_month']:.2f} | "
+                                     f"{'예 ' + str(x['bust_month']) if x['bust'] else '아니오'} |")
+                lines.append("")
+            lines.append("관찰 후보 38개(F4)는 시험 기간을 본 뒤 고른 숫자라서 고르기에서 참고로만 보고, 시험·통과에는 넣지 않았습니다.")
             lines.append("딥시크 매매법의 돈 숫자는 저장소 밖 파일에만 있습니다(D11).")
     path = os.path.join(out_dir, "RESULTS_KO.md")
     os.makedirs(out_dir, exist_ok=True)
@@ -2355,7 +2527,7 @@ def extrapolate(res: dict, EW) -> dict:
     speed2 = w["procs_1"] / max(w["procs_2"], 1e-9)
     sel_runs = 2 * len(systems)
     sel_cpu = ev_sel + sel_runs * run_s
-    per_pick_runs = 2 + 200 + (2 + 200) + (2 + 200) + 2 + 2 + 4       # test, r=1%, select controls, reads
+    per_pick_runs = 2 + 200 + (2 + 200) + (2 + 200) + 2 + 2 + 2       # test, r=1%, select controls, reads
     test_runs = 10 * per_pick_runs + 2 + 2 * 11
     mean_cell = (cells["sum_s"] + n_f1_cells * f1) / max(cells["timed"] + n_f1_cells, 1)
     worst10 = sum(v for v, _ in cells["slowest"][:10])
@@ -2390,8 +2562,8 @@ def extrapolate(res: dict, EW) -> dict:
                       "series (bars + ATR + 장세 label, 30 coins x 4 timeframes) are built once in the parent before "
                       "forking (serial; counted in full in the wall time)",
                       f"test runs = 10 picks x {per_pick_runs} (base, cost x2, 200 controls at 0.5%; the same at 1%; "
-                      "the same in the select period; new-24 x2; extra 2020 x2; gate diagnostics x4) + basket and "
-                      "sizing reads",
+                      "the same in the select period; new-24 x2; extra 2020 x2; gate diagnostics x2, select only) + "
+                      "basket and sizing reads",
                       "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up on this "
                       "shared 4-core machine",
                       "not included: loading the 30 coins' npz files (about 0.5 GB) and writing outputs"]}
@@ -2412,15 +2584,17 @@ def _compile_probe() -> None:
 # ------------------------------------------------------------------ CLI
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m research.hunt.hunt", description=__doc__.split("\n\n")[0])
-    ap.add_argument("cmd", choices=("select", "test", "report", "universe", "bench"))
+    ap.add_argument("cmd", choices=("select", "test", "report", "universe", "bench", "datapin", "datacheck",
+                                    "pinlist"))
     ap.add_argument("--study", choices=("v1", "wide"), default=None)
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--data", default=None)
     ap.add_argument("--private", default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--fg1m", default=None, help="datacheck: the full grid's data folder (holds 1m/<SYM>.npz)")
     args = ap.parse_args(argv)
-    if args.cmd in ("select", "test", "report") and args.study is None:
-        ap.error("--study {v1,wide} is required for select, test and report")
+    if args.cmd in ("select", "test", "report", "pinlist") and args.study is None:
+        ap.error("--study {v1,wide} is required for select, test, report and pinlist")
     try:
         if args.cmd == "select":
             return cmd_select(args)
@@ -2433,6 +2607,12 @@ def main(argv=None) -> int:
                 raise SystemExit("--data needed")
             print(json.dumps(write_universe30(args.data), indent=1))
             return 0
+        if args.cmd == "datapin":
+            return cmd_datapin(args)
+        if args.cmd == "datacheck":
+            return cmd_datacheck(args)
+        if args.cmd == "pinlist":
+            return cmd_pinlist(args)
         if args.cmd == "bench":
             if not args.out:
                 raise SystemExit("--out <timing.json> needed")

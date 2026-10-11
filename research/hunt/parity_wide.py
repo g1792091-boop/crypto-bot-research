@@ -8,7 +8,10 @@ the 1m archive DIR/1m/<SYM>.npz binned the full grid's way) against the adapter'
 events_on on 5m bars), for every F2 (36 core) and F3 (44 DeepSeek, on their timeframes) entry at its default numbers
 and every F4 watch pick on its timeframe. The adapter's 5m bars: by default the same 1m archive binned to 5m
 (entries_wide.resample_1m_to_5m: the comparison isolates the adapter); with --five, the hunt data's 5m files
-(<five>/5m/<SYM>.npz, float32 cast to float64: PREREG_HUNT_WIDE 8 as written, data differences included).
+(<five>/5m/<SYM>.npz read as select / test read it: hunt.clean_5m drops duplicate, zero-volume, off-grid and
+non-finite rows, float32 cast to float64; PREREG_HUNT_WIDE 8 as written, data differences included; the dropped
+counts are reported per coin). The output's ``code`` holds the sha256 of entries_wide.py, parity_wide.py and hunt.py:
+the wide pin accepts parity.json only when they equal the pinned files and it says pass on the hunt 5m files.
 
 Compared (PREREG_HUNT_WIDE 8) on the bars both series have (same bin), after both series' first run.WARMUP_BARS bars,
 per strategy x timeframe x side, for the raw arrays and for the events (entries_wide.rising, the full grid's arrays
@@ -25,6 +28,7 @@ bar; per coin x timeframe the bar comparison (bars only in one series, bars beyo
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -54,11 +58,25 @@ def cell_key(c: dict) -> str:
 
 
 def five_of(R, fg1m: str, sym: str, five_dir: str | None = None) -> tuple:
+    """(ts, o, h, l, c, v) 5m bars and their H 2 counts. With ``five_dir``: the hunt data's file read exactly as the
+    select and test steps read it (hunt.clean_5m: duplicates, zero-quote-volume, off-grid and non-finite rows
+    dropped), so the parity checks the bars the run computes its signals on."""
     if five_dir:
+        from research.hunt import hunt as H
         with np.load(os.path.join(five_dir, "5m", f"{sym}.npz")) as z:
-            return tuple(np.asarray(z[k], np.int64 if k == "ts" else np.float64) for k in ("ts", "o", "h", "l", "c", "v"))
+            cols = {k: z[k] for k in ("ts", "o", "h", "l", "c", "v", "qv")}
+        (ts, o, h, lo, c, v, _qv), counts = H.clean_5m(cols["ts"], cols["o"], cols["h"], cols["l"], cols["c"],
+                                                       cols["v"], cols["qv"])
+        return (np.asarray(ts, np.int64), *(np.asarray(x, np.float64) for x in (o, h, lo, c, v))), counts
     d = R.minute_data(fg1m, sym)
-    return EW.resample_1m_to_5m(d["ts"], d["o"], d["h"], d["l"], d["c"], d["v"])
+    return EW.resample_1m_to_5m(d["ts"], d["o"], d["h"], d["l"], d["c"], d["v"]), {"source": "1m archive -> 5m"}
+
+
+def _sha(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        h.update(fh.read())
+    return h.hexdigest()
 
 
 def bar_compare(df, close_fg: np.ndarray, b) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -96,13 +114,13 @@ def coin_job(args) -> dict:
     R = EW.fullgrid_run()
     t0 = time.time()
     # every frame and 5m array first (the full grid keeps one coin's minutes at a time)
-    fr, five = {}, {}
+    fr, five, five_counts = {}, {}, {}
     for s in dict.fromkeys((sym, "BTCUSDT")):
         for tf in tfs:
             fr[s, tf] = R.frame(fg1m, s, tf)
-        five[s] = five_of(R, fg1m, s, five_dir)
+        five[s], five_counts[s] = five_of(R, fg1m, s, five_dir)
         R.minute_data.cache_clear()
-    out = {"sym": sym, "bars": {}, "cells": {}}
+    out = {"sym": sym, "bars": {}, "cells": {}, "five_counts": five_counts[sym]}
     for tf in tfs:
         df, close_fg = fr[sym, tf]
         b = EW.build_bars(*five[sym], tf)
@@ -181,7 +199,8 @@ def summarize(per_coin: list[dict]) -> dict:
     return {"pass": not over, "over_1pct_unexcused": over, "over_1pct_any": over_raw,
             "max_mismatch": {"cell": worst[0], "share": worst[1], "unexcused_share": worst[2]},
             "array_kinds": {k: sorted(v) for k, v in sorted(kinds.items())},
-            "bars": {pc["sym"]: pc["bars"] for pc in per_coin}, "cells": dict(sorted(cells.items()))}
+            "bars": {pc["sym"]: pc["bars"] for pc in per_coin},
+            "five_counts": {pc["sym"]: pc.get("five_counts") for pc in per_coin}, "cells": dict(sorted(cells.items()))}
 
 
 def main(argv=None) -> int:
@@ -209,7 +228,7 @@ def main(argv=None) -> int:
                         + ("the hunt data's 5m bars" if a.five else "the same 1m bars -> 5m") + " -> entries_wide); "
                         "signals only, no outcome", "adapter_5m": "hunt 5m files" if a.five else "1m archive -> 5m",
                 "syms": syms, "tfs": list(tfs), "seconds": round(time.time() - t0, 1),
-                "code": {f: EW.fullgrid_run()._sha(os.path.join(HERE, f)) for f in ("entries_wide.py", "parity_wide.py")}})
+                "code": {f: _sha(os.path.join(HERE, f)) for f in ("entries_wide.py", "parity_wide.py", "hunt.py")}})
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as fh:
         json.dump(doc, fh, indent=1)

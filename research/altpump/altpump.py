@@ -1955,59 +1955,93 @@ def pass2_fetch(plan: dict, cache: str, min_free_gb: float = 1.0, workers: int =
     return {"missing": missing}
 
 
-def load_sub5m(mk: Market, cache: str, syms: list) -> tuple:
-    """15: 5m price and mark bars of ``syms`` in the market's days as slot blocks of 288, plus the funding events.
-    A symbol-day with a daily bar but no 5m data has no block (a position needing it closes at the last daily close,
-    a signal filling there lapses, counted). Returns (Sub, list of missing symbol-months)."""
+def _month_days(mk: Market) -> dict:
+    """Window day indexes per UTC calendar month ('YYYY-MM' -> array of t)."""
+    ym = (np.arange(mk.T) + mk.w0g).astype("datetime64[D]").astype("datetime64[M]").astype(str)
+    return {m: np.flatnonzero(ym == m) for m in sorted(set(ym.tolist()))}
+
+
+def load_sub5m(mk: Market, cache: str, syms: list, tol: float = 1e-6) -> tuple:
+    """15: the 5m price and mark bars of ``syms`` as slot blocks of 288 and their archived funding events, plus ONE
+    slot holding the daily bar (6.7 worst order on the day's o/h/l) for every symbol-day of the period that has a
+    daily bar but no 5m block, or whose 5m bars do not reach the daily high and low (a hole in the 5m file): no move
+    the daily file shows is skipped and no position is closed early because data will be missing. Mark missing -> the
+    price bars stand in. A symbol-day without an archived funding event pays the fixed charge (8). Returns (Sub,
+    report): the symbol-months with a daily bar in the period and no klines / mark / funding file, and day counts."""
     ix = {s: i for i, s in enumerate(mk.syms)}
     S, T = mk.S, mk.T
     day0_ms = mk.w0g * DAY_MS
-    off = np.full((S, T), -1, np.int64)
     blocks = {}
-    missing = []
     fe_rows = {}
-    months = sorted({str(np.datetime64(mk.w0g + t, "D").astype("datetime64[M]")) for t in range(T)})
+    rep = {"klines": [], "mark": [], "funding": []}
+    mdays = _month_days(mk)
     for s in syms:
         if s not in ix:
             continue
         si = ix[s]
-        for ym in months:
+        for ym, tdays in mdays.items():
+            need = bool(mk.bar[si, tdays[tdays >= mk.p0]].any())
             pk = os.path.join(cache, f"klines_{s}_{ym}.npz")
             pm = os.path.join(cache, f"mark_{s}_{ym}.npz")
             pf = os.path.join(cache, f"funding_{s}_{ym}.npz")
-            if not os.path.exists(pk):
-                missing.append(f"{s} {ym}")
-                continue
-            k = dict(np.load(pk))
-            mkd = dict(np.load(pm)) if os.path.exists(pm) else None
-            tt = (k["t"] - day0_ms) // DAY_MS
-            jj = ((k["t"] - day0_ms) % DAY_MS) // FIVE_MS
-            for t in np.unique(tt):
-                if t < 0 or t >= T or not mk.bar[si, t]:
-                    continue
-                blk = blocks.setdefault((si, int(t)), np.full((6, NB5), np.nan, np.float32))
-                sel = tt == t
-                blk[0, jj[sel]], blk[1, jj[sel]], blk[2, jj[sel]] = k["o"][sel], k["h"][sel], k["l"][sel]
-                if mkd is not None:
-                    mt = (mkd["t"] - day0_ms) // DAY_MS
-                    ms = mt == t
-                    mj = ((mkd["t"][ms] - day0_ms) % DAY_MS) // FIVE_MS
-                    blk[3, mj], blk[4, mj], blk[5, mj] = mkd["o"][ms], mkd["h"][ms], mkd["l"][ms]
+            for kind, path in (("klines", pk), ("mark", pm), ("funding", pf)):
+                if need and not os.path.exists(path):
+                    rep[kind].append(f"{s} {ym}")
+            if os.path.exists(pk):
+                k = dict(np.load(pk))
+                mkd = dict(np.load(pm)) if os.path.exists(pm) else None
+                tt = (k["t"] - day0_ms) // DAY_MS
+                jj = ((k["t"] - day0_ms) % DAY_MS) // FIVE_MS
+                for t in np.unique(tt):
+                    if t < mk.p0 or t >= T or not mk.bar[si, t]:
+                        continue
+                    blk = blocks.setdefault((si, int(t)), np.full((6, NB5), np.nan, np.float32))
+                    sel = tt == t
+                    blk[0, jj[sel]], blk[1, jj[sel]], blk[2, jj[sel]] = k["o"][sel], k["h"][sel], k["l"][sel]
+                    if mkd is not None:
+                        mt = (mkd["t"] - day0_ms) // DAY_MS
+                        ms = mt == t
+                        mj = ((mkd["t"][ms] - day0_ms) % DAY_MS) // FIVE_MS
+                        blk[3, mj], blk[4, mj], blk[5, mj] = mkd["o"][ms], mkd["h"][ms], mkd["l"][ms]
             if os.path.exists(pf):
                 f = dict(np.load(pf))
                 for tms, rate in zip(f["t"], f["rate"]):
                     t = int((tms - day0_ms) // DAY_MS)
-                    if 0 <= t < T:
+                    if mk.p0 <= t < T:
                         fe_rows.setdefault((si, t), []).append((int(((tms - day0_ms) % DAY_MS) // FIVE_MS), rate))
-    nblk = len(blocks)
-    arr = np.full((6, max(1, nblk) * NB5), np.nan, np.float32)
-    for n, ((si, t), blk) in enumerate(sorted(blocks.items())):
-        # mark price missing -> the price bars stand in for it (counted in 'missing' by the caller's check)
-        for f in range(3):
+    use = {}
+    short = 0
+    for key, blk in blocks.items():
+        si, t = key
+        with np.errstate(all="ignore"):
+            hi, lo = np.nanmax(blk[1]), np.nanmin(blk[2])
+        if np.isfinite(hi) and hi >= mk.h[si, t] * (1.0 - tol) and lo <= mk.l[si, t] * (1.0 + tol):
+            use[key] = blk
+        else:
+            short += 1
+    nblk = len(use)
+    daybar = mk.bar.copy()
+    daybar[:, :mk.p0] = False
+    for si, t in use:
+        daybar[si, t] = False
+    ds, dt = np.nonzero(daybar)
+    total = nblk * NB5 + len(ds)
+    arr = np.full((6, max(1, total)), np.nan)
+    off = np.full((S, T), -1, np.int64)
+    slen = np.zeros((S, T), np.int64)
+    for n, ((si, t), blk) in enumerate(sorted(use.items())):
+        for f in range(3):                                     # mark missing -> the price bars stand in
             bad = np.isnan(blk[3 + f])
             blk[3 + f, bad] = blk[f, bad]
         arr[:, n * NB5:(n + 1) * NB5] = blk
         off[si, t] = n * NB5
+        slen[si, t] = NB5
+    xi = nblk * NB5 + np.arange(len(ds))
+    for f, src in enumerate((mk.o, mk.h, mk.l)):
+        arr[f, xi] = src[ds, dt]
+        arr[3 + f, xi] = src[ds, dt]
+    off[ds, dt] = xi
+    slen[ds, dt] = 1
     fe_off = np.full((S, T), -1, np.int64)
     fe_cnt = np.zeros((S, T), np.int64)
     fs, fr, fm = [], [], []
@@ -2018,14 +2052,49 @@ def load_sub5m(mk: Market, cache: str, syms: list) -> tuple:
         fe_cnt[si, t] = len(evs)
         for j, rate in sorted(evs):
             x = off[si, t] + j
-            mark = arr[3, x] if np.isfinite(arr[3, x]) else mk.o[si, t]
+            mark = arr[3, x] if (slen[si, t] == NB5 and np.isfinite(arr[3, x])) else mk.o[si, t]
             fs.append(j)
             fr.append(rate)
             fm.append(float(mark))
-    sub = Sub(off, arr[0].astype(np.float64), arr[1].astype(np.float64), arr[2].astype(np.float64),
-              arr[3].astype(np.float64), arr[4].astype(np.float64), arr[5].astype(np.float64), NB5,
-              fe_off, fe_cnt, np.asarray(fs, np.int64), np.asarray(fr, np.float64), np.asarray(fm, np.float64), 1, 1)
-    return sub, missing
+    rep["days_on_5m"] = int(nblk)
+    rep["days_on_daily_bar"] = int(len(ds))
+    rep["days_5m_short_of_daily_range"] = int(short)
+    sub = Sub(off, slen, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], NB5, fe_off, fe_cnt,
+              np.asarray(fs, np.int64), np.asarray(fr, np.float64), np.asarray(fm, np.float64), 1)
+    return sub, rep
+
+
+def pass2_inventory(raw: Raw, plan: dict, cache: str, periods: dict = PERIODS) -> dict:
+    """15: from the traded-day calendar only, the symbol-months of each test period in which a planned symbol has a
+    daily bar and the cache has no klines / mark / funding file."""
+    inv = {"klines": [], "mark": [], "funding": []}
+    for p in TEST_PERIODS:
+        g0, g1 = max(gday(periods[p][0]), raw.first_day), min(gday(periods[p][1]), raw.last_day + 1)
+        if g1 <= g0:
+            continue
+        for s in plan["symbols"].get(p, []):
+            if s not in raw.sym_ix:
+                continue
+            days = np.flatnonzero(raw.cal[raw.sym_ix[s], g0 - raw.first_day:g1 - raw.first_day]) + g0
+            for ym in sorted(set(days.astype("datetime64[D]").astype("datetime64[M]").astype(str).tolist())):
+                for kind in inv:
+                    if not os.path.exists(os.path.join(cache, f"{kind}_{s}_{ym}.npz")):
+                        inv[kind].append(f"{p} {s} {ym}")
+    return inv
+
+
+def cache_digest(cache: str) -> dict:
+    """15: sha256 over the sorted cache file list (name, size, sha256 of each file), written into pass2.json."""
+    h = hashlib.sha256()
+    n = 0
+    if os.path.isdir(cache):
+        for name in sorted(os.listdir(cache)):
+            path = os.path.join(cache, name)
+            if not os.path.isfile(path):
+                continue
+            h.update(f"{name} {os.path.getsize(path)} {sha256_file(path)}\n".encode())
+            n += 1
+    return {"files": n, "sha256": h.hexdigest()}
 
 
 def step_pass2(raw: Raw, test: dict, cache: str, periods: dict = PERIODS, n_seeds: int = N_SEEDS,
@@ -2034,11 +2103,11 @@ def step_pass2(raw: Raw, test: dict, cache: str, periods: dict = PERIODS, n_seed
     first-pass failures at p = 1); the goal board redone on 5m."""
     plan = pass2_plan(test, periods)
     passing = plan["passing"]
-    rows, board, missing = {}, {}, {}
+    rows, board, report = {}, {}, {}
     for p in TEST_PERIODS:
         mk = Market(raw, *periods[p], name=p)
-        sub, miss = load_sub5m(mk, cache, plan["symbols"][p])
-        missing[p] = miss
+        sub, rep = load_sub5m(mk, cache, plan["symbols"][p])
+        report[p] = rep
         for vid in passing:
             v = VARIANT[vid]
             sig = mk.signals(v)
@@ -2068,7 +2137,7 @@ def step_pass2(raw: Raw, test: dict, cache: str, periods: dict = PERIODS, n_seed
         else:
             final[vid] = {"label": "fail (first pass)", "PASS_5m": False}
     return {"plan": {"passing": passing, "symbols": plan["symbols"], "files": len(plan["files"])}, "rows": rows,
-            "verdict": final, "board_5m": board, "missing_symbol_months": missing}
+            "verdict": final, "board_5m": board, "data_report": report}
 
 
 # ------------------------------------------------------------------ check (structure only)
@@ -2077,7 +2146,11 @@ def step_check(raw: Raw) -> dict:
     relistings, rename successors, first bars per period."""
     syms = set(raw.syms)
     not_found = sorted(EXCLUDED - syms)
-    relist = sorted({raw.syms[s] for s in raw.life_sym[raw.life_no > 0]})
+    relist = sorted({raw.syms[s] for s in raw.life_sym[raw.life_gap_before >= RELIST_GAP]})
+    paused = sorted(f"{raw.syms[raw.life_sym[i]]} {day_str(raw.first_day + raw.life_first[i])} after "
+                    f"{raw.life_gap_before[i]} days"
+                    for i in np.flatnonzero((raw.life_gap_before >= PAUSE_GAP) & (raw.life_gap_before < RELIST_GAP)))
+    gaps = int(raw.pregap.sum())
     per = {}
     for p, (a, b) in PERIODS.items():
         lo, hi = gday(a) - raw.first_day, gday(b) - raw.first_day
@@ -2089,6 +2162,8 @@ def step_check(raw: Raw) -> dict:
                                                 if raw.syms[raw.life_sym[i]] not in EXCLUDED))}
     return {"symbols": len(syms), "excluded_listed": len(EXCLUDED), "excluded_not_in_file": not_found,
             "kept": len(syms - EXCLUDED), "lives": int(len(raw.life_first)), "relisted_symbols": relist,
+            "pause_restarts_not_listings": paused, "bars_before_a_day_without_bar_in_a_life": gaps,
+            "partial_days": [day_str(raw.first_day + t) for t in np.flatnonzero(raw.partial)],
             "delisted_lives": int(raw.life_delist.sum()),
             "rename_successors": {k: {"old": o, "days_after_old_last_bar": d} for k, (o, d) in raw.successor.items()},
             "renames_not_matched": [f"{o}->{n}" for o, n in RENAMES if n + "USDT" not in raw.successor],
@@ -2225,8 +2300,17 @@ def step_report(out_dir: str) -> str:
 
 
 # ------------------------------------------------------------------ CLI
-def _load_real(root: str, structure_only: bool = False) -> tuple:
-    return load_raw(os.path.join(root, DATA_REL), os.path.join(root, MANIFEST_REL), structure_only)
+def _load_real(root: str, structure_only: bool = False, step: str | None = None) -> tuple:
+    """The daily file, checked against MANIFEST.json; values only inside the step's windows (section 10)."""
+    return load_raw(os.path.join(root, DATA_REL), os.path.join(root, MANIFEST_REL), structure_only,
+                    None if (structure_only or step is None) else step_windows(step))
+
+
+def _refuse_rerun(root: str, name: str, what: str) -> None:
+    path = os.path.join(root, OUT_REL, name)
+    if os.path.exists(path):
+        raise PinError(f"out/{name} exists: {what} is run once. A rerun after a bug fix needs its DEVIATIONS.md "
+                       "entry; move the old file aside first.")
 
 
 def cmd_select(args) -> int:
@@ -2235,11 +2319,12 @@ def cmd_select(args) -> int:
     out_dir = os.path.join(root, OUT_REL)
     if os.path.exists(os.path.join(root, PICK_REL)):
         raise PinError(f"{PICK_REL} exists: select ran already")
-    raw, sha = _load_real(root)
+    raw, sha = _load_real(root, step="select")
     t0 = time.time()
     table, choice, usize = step_select(raw)
     st = stamp(root, pin, sha)
     _write_json(os.path.join(out_dir, "select.json"), {"stamp": st, "period": PERIODS["p1"], "r": R_MAIN,
+                                                       "value_windows": raw.value_windows,
                                                        "universe_size": usize, "table": table, "choice": choice,
                                                        "seconds": round(time.time() - t0, 1)})
     groups = {vid: VARIANT[vid]["group"] for vid in choice["picks"]}
@@ -2254,13 +2339,12 @@ def cmd_test(args) -> int:
     root = args.root
     pin = check_pin("test", root)
     path = os.path.join(root, OUT_REL, "test.json")
-    if os.path.exists(path):
-        raise PinError("out/test.json exists: each test period is run once (11.4). A rerun after a bug fix needs its "
-                       "DEVIATIONS.md entry; move the old file aside first.")
+    _refuse_rerun(root, "test.json", "each test period (11.4)")
     pick = json.load(open(os.path.join(root, PICK_REL)))
-    raw, sha = _load_real(root)
+    raw, sha = _load_real(root, step="test")
     res = step_test(raw, pick["picks"])
     res["status_select"] = pick["status"]
+    res["value_windows"] = raw.value_windows
     if pick["status"] != "picked":
         for vid in res["verdict"]:
             res["verdict"][vid]["PASS"] = False
@@ -2274,8 +2358,9 @@ def cmd_test(args) -> int:
 def cmd_board(args) -> int:
     root = args.root
     pin = check_pin("board", root)
+    _refuse_rerun(root, "board.json", "the goal board (14)")
     pick = json.load(open(os.path.join(root, PICK_REL)))
-    raw, sha = _load_real(root)
+    raw, sha = _load_real(root, step="board")
     res = step_board(raw, pick["picks"])
     _write_json(os.path.join(root, OUT_REL, "board.json"), {"stamp": stamp(root, pin, sha), "board": res,
                                                             "baseline": GOAL50_BASELINE,
@@ -2297,13 +2382,23 @@ def cmd_pass2(args) -> int:
     if not plan["passing"]:
         print("pass2: no pick passed the first pass; nothing to do (section 15)")
         return 0
+    _refuse_rerun(root, "pass2.json", "the second pass (15); its cache does not change after the run")
     if args.what == "fetch":
         res = pass2_fetch(plan, cache)
         _write_json(os.path.join(root, OUT_REL, "pass2_fetch.json"), res)
         return 0
-    raw, sha = _load_real(root)
+    raw, sha = _load_real(root, step="pass2")
+    inv = pass2_inventory(raw, plan, cache)
+    if inv["klines"]:
+        dev = os.path.join(root, "research", "altpump", "DEVIATIONS.md")
+        if not (args.accept_missing and os.path.exists(dev)):
+            raise PinError(f"pass2: {len(inv['klines'])} symbol-months with daily bars have no 5m klines in the cache "
+                           f"(first: {inv['klines'][:5]}). Fetch again; or list them in research/altpump/DEVIATIONS.md "
+                           "and rerun with --accept-missing (those days then run on the daily bar, 6.7 and 15).")
+    digest = cache_digest(cache)
     res = step_pass2(raw, test, cache)
-    _write_json(os.path.join(root, OUT_REL, "pass2.json"), {"stamp": stamp(root, pin, sha), **res})
+    _write_json(os.path.join(root, OUT_REL, "pass2.json"), {"stamp": stamp(root, pin, sha), "cache": digest,
+                                                           "inventory_missing": inv, **res})
     return 0
 
 
@@ -2322,6 +2417,8 @@ def main(argv=None) -> int:
     p2 = sp.add_parser("pass2")
     p2.add_argument("what", choices=("plan", "fetch", "run"))
     p2.add_argument("--cache", default="")
+    p2.add_argument("--accept-missing", action="store_true",
+                    help="run although some needed 5m klines months are missing (needs research/altpump/DEVIATIONS.md)")
     b = sp.add_parser("bench")
     b.add_argument("--out", required=True)
     b.add_argument("--syms", type=int, default=864)

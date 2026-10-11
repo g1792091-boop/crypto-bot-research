@@ -283,7 +283,7 @@ def test_verify_against_reference(tmp_path):
     arr["c"][100] += np.float32(0.5)
     D.save_npz(p, arr)
     rep = D.verify(f"{b}/manifest.json", rp, b)
-    assert not rep["ok"] and any("content differs" in x for x in rep["differences"])
+    assert not rep["ok"] and any("file content" in x for x in rep["differences"])
     assert D.main(["verify", "--data", b, "--ref", rp]) == 1
     # a field the hunt reads
     man = json.load(open(f"{a}/manifest.json"))
@@ -299,8 +299,8 @@ def test_verify_against_reference(tmp_path):
     # a reference without array hashes (a plain coins30 manifest) is refused unless asked
     plain = json.load(open(f"{a}/manifest.json"))
     for r in plain["symbols"]:
-        r.pop("arrays_sha256")
-        r.pop("arrays_sha256_funding")
+        for k in ("arrays_sha256", "arrays_sha256_funding", "content_sha256"):
+            r.pop(k)
     json.dump(plain, open(str(tmp_path / "plain.json"), "w"))
     assert not D.verify(f"{a}/manifest.json", str(tmp_path / "plain.json"))["ok"]
     assert D.verify(f"{a}/manifest.json", str(tmp_path / "plain.json"), allow_meta_only=True)["ok"]
@@ -388,3 +388,49 @@ def test_bootstrap_shell_syntax():
     p = os.path.join(ROOT, "research", "hunt", "bootstrap.sh")
     r = subprocess.run([bash, "-n", p], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_verify_against_the_hunt_data_manifest_format(tmp_path):
+    """research/hunt/data_manifest.json: {"manifest": <the data's manifest copy>, "content": {SYM: {"5m", "funding"}}}
+    with the hunt's own identity hash (the arrays a study reads)."""
+    src = str(tmp_path / "src")
+    make_archive(src)
+    a, b = str(tmp_path / "a"), str(tmp_path / "b")
+    for o in (a, b):
+        D.download(D.DirSource(src), [SYM], "5m", o, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    man = json.load(open(f"{a}/manifest.json"))
+    plain = {"symbols": [{k: v for k, v in r.items() if "sha256" not in k} for r in man["symbols"]]}
+    dm = {"manifest": plain, "content": {SYM: {"5m": D.content_sha(f"{a}/5m/{SYM}.npz", "5m"),
+                                                "funding": D.content_sha(f"{a}/funding/{SYM}.npz", "funding")}}}
+    rp = str(tmp_path / "data_manifest.json")
+    json.dump(dm, open(rp, "w"))
+    rep = D.verify(f"{b}/manifest.json", rp, b)
+    assert rep["ok"] and rep["hashes_compared"] == ["content_5m", "content_funding"]
+    p = f"{b}/5m/{SYM}.npz"
+    with np.load(p) as z:
+        arr = {k: z[k].copy() for k in z.files}
+    arr["mc"][5] += np.float32(1.0)                         # a mark value: not part of the hunt's identity
+    D.save_npz(p, arr)
+    rep = D.verify(f"{b}/manifest.json", rp, b)
+    assert not rep["ok"] and all("arrays_sha256" in x for x in rep["differences"])   # caught only by its manifest
+    arr["qv"][7] += np.float32(1.0)                         # a quote volume: part of it
+    D.save_npz(p, arr)
+    rep = D.verify(f"{b}/manifest.json", rp, b)
+    assert any("content_5m) differs from the reference" in x for x in rep["differences"])
+    dm["manifest"]["symbols"][0]["last_nonzero_volume_bar"] = "2024-02-28 00:00"
+    json.dump(dm, open(rp, "w"))
+    assert any("last_nonzero_volume_bar" in x for x in D.verify(f"{a}/manifest.json", rp)["differences"])
+
+
+def test_content_sha_is_the_hunt_identity(tmp_path):
+    """data_hunt.content_sha must equal research/hunt/hunt.py's own data identity (when that code has one)."""
+    H = pytest.importorskip("research.hunt.hunt")
+    if not hasattr(H, "file_content_sha"):
+        pytest.skip("research/hunt/hunt.py has no file_content_sha")
+    src = str(tmp_path / "src")
+    make_archive(src)
+    a = str(tmp_path / "a")
+    D.download(D.DirSource(src), [SYM], "5m", a, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    for kind, p in (("5m", f"{a}/5m/{SYM}.npz"), ("funding", f"{a}/funding/{SYM}.npz")):
+        assert D.content_sha(p, kind) == H.file_content_sha(p, kind)
+        assert tuple(D.CONTENT_KEYS[kind]) == tuple(H.CONTENT_KEYS[kind])

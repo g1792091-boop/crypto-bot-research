@@ -133,11 +133,34 @@ def test_liquidation_at_open_loses_whole_margin():
     assert rf[H.RF_PNL] == pytest.approx(-margin - TAKER * q * 100 * (1 + SLIP))
 
 
-def test_stop_counts_before_add_in_the_same_bar():
+def test_add_comes_first_when_the_bar_reaches_a_level_and_the_old_stop():
+    """H 7.6 step 4 (as reviewed): a bar reaching add level 102 and the old stop 98 adds first, then exits at the
+    moved stop (P0 = 100), the worse order for the account."""
     mk = market({"AUSDT": coin("AUSDT", [(100, 100.5, 99.5, 100.4), (100.4, 102.5, 97.9, 99)], pad_to=288)})
+    rf, ri = rec(sim(mk, [{"k": 0, "t": 0}]))
+    assert ri[H.RI_REASON] == H.EX_STOP and ri[H.RI_ADDS] == 1 and ri[H.RI_TRIED] == 1 and ri[H.RI_TOUT] == 1
+    assert ri[H.RI_SRC] == H.SRC_ADD
+    assert rf[H.RF_XPX] == pytest.approx(100 * (1 - SLIP))
+    q = 0.005 * 5000 / 2.0
+    xf = 100 * (1 - SLIP)
+    fills = (100 * (1 + SLIP), 102 * (1 + SLIP))
+    want = sum(q * (xf - f) for f in fills) - TAKER * q * (sum(fills) + 2 * xf)
+    assert rf[H.RF_PNL] == pytest.approx(want, rel=1e-9)
+    assert rf[H.RF_PNL] < q * (98 * (1 - SLIP) - fills[0]) - TAKER * q * (fills[0] + 98 * (1 - SLIP))
+
+
+def test_bar_reaching_no_add_level_exits_at_the_stop():
+    mk = market({"AUSDT": coin("AUSDT", [(100, 100.5, 99.5, 100.4), (100.4, 101.9, 97.9, 99)], pad_to=288)})
     rf, ri = rec(sim(mk, [{"k": 0, "t": 0}]))
     assert ri[H.RI_REASON] == H.EX_STOP and ri[H.RI_ADDS] == 0 and ri[H.RI_TRIED] == 0
     assert rf[H.RF_XPX] == pytest.approx(98 * (1 - SLIP))
+
+
+def test_short_add_comes_first_too():
+    bars = [(100, 100.5, 99.5, 99.6), (99.6, 102.1, 97.5, 101)]
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288)})
+    rf, ri = rec(sim(mk, [{"k": 0, "t": 0, "side": -1}]))
+    assert ri[H.RI_ADDS] == 1 and ri[H.RI_TOUT] == 1 and rf[H.RF_XPX] == pytest.approx(100 * (1 + SLIP))
 
 
 def test_add_then_moved_stop_hit_in_the_same_bar():
@@ -490,12 +513,21 @@ def test_benjamini_hochberg():
 def test_judge_p2_split_and_checks():
     base = {"months": 3, "lnM": [0.1, 0.1, 0.1], "n_positions": 6, "share_months_with_position": 1.0,
             "bust": False, "median_M": 1.1, "mean_lnM": 0.1, "max_dd": 0.2}
-    cost2 = {"median_M": 1.05}
+    cost2 = {"median_M": 1.05, "mean_lnM": 0.02}
     ctl = {"a": np.zeros((100, 3)), "b": np.full((100, 3), 0.2)}
     j = H.judge(base, cost2, ctl, "wide", {"id": "F1:E1:1h:G1"}, "test", 0.005)
     assert j["P0"] and j["P1"] and j["P3"] and j["P4"]
     assert j["P2_a"] and j["rank_ok_a"] and not j["P2_b"] and not j["rank_ok_b"]
     assert j["p"] == max(j["p_a"], j["p_b"]) and j["p_b"] == 1.0
+
+
+def test_p3_needs_mean_ln_m_above_zero_at_cost_x2():
+    """H 13 P3 (as reviewed): cost x2 median monthly multiple >= 1.0 AND mean monthly ln M > 0."""
+    base = {"months": 3, "lnM": [0.1, 0.1, 0.1], "n_positions": 6, "share_months_with_position": 1.0,
+            "bust": False, "median_M": 1.1, "mean_lnM": 0.1, "max_dd": 0.2}
+    assert not H.judge(base, {"median_M": 1.0, "mean_lnM": -0.01}, None, "v1", {}, "test", 0.005)["P3"]
+    assert not H.judge(base, {"median_M": 0.99, "mean_lnM": 0.05}, None, "v1", {}, "test", 0.005)["P3"]
+    assert H.judge(base, {"median_M": 1.0, "mean_lnM": 0.001}, None, "v1", {}, "test", 0.005)["P3"]
 
 
 # ------------------------------------------------------------------ selection (H 11.2, W 5)
@@ -511,11 +543,24 @@ def test_wide_choose_one_per_name_and_order():
             _row(6, "DOGE", 0.02, fam="F2"), _row(7, "E", 0.04, med=1.2)]
     ch = H.wide_choose(rows, k_picks=10)
     assert ch["label"] == "picks"
-    # A once (its 4h), then ties at 0.04: higher median (E), then family F1 (D) before F2 (B); DOGE once (F4)
-    assert ch["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1", "F1:D:1h:G1", "F2:B:1h:G1", "F4:DOGE:15m:G1:r1"]
+    # A once (its 4h), then ties at 0.04: higher median (E), then family F1 (D) before F2 (B); the F4 DOGE row is a
+    # read only (W 5), so DOGE enters through its F2 row
+    assert ch["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1", "F1:D:1h:G1", "F2:B:1h:G1", "F2:DOGE:1h:G1"]
     assert H.wide_choose(rows, k_picks=2)["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1"]
     none = H.wide_choose([_row(0, "A", -0.1, eligible=False), _row(1, "B", -0.05, eligible=False)])
     assert none == {"picks": ["F2:B:1h:G1"], "label": "no pick, fail"}
+
+
+def test_f4_is_never_a_pick_nor_the_fallback():
+    """W 5 (review finding: the watch picks' numbers were chosen after the test period was seen): an F4 row is never a
+    pick, also when it scores best, and never the 'no pick' fallback."""
+    rows = [_row(0, "DOGE", 0.30, fam="F4", tf="15m", rank=1), _row(1, "X", 0.01)]
+    assert H.wide_choose(rows)["picks"] == ["F2:X:1h:G1"]
+    only_f4 = [_row(0, "DOGE", 0.30, fam="F4", tf="15m", rank=1)]
+    assert H.wide_choose(only_f4) == {"picks": [], "label": "no pick, fail"}
+    none = H.wide_choose([_row(0, "DOGE", 0.3, fam="F4", eligible=False, rank=1), _row(1, "B", -0.5, eligible=False)])
+    assert none["picks"] == ["F2:B:1h:G1"]
+    assert H.PICK_FAMILIES == ("F1", "F2", "F3")
 
 
 def test_wide_eligible():
@@ -543,14 +588,35 @@ def test_v1_choose_plateau():
 def test_sizing_read_scales_the_risk_cap(monkeypatch):
     seen = []
 
-    def fake(mk, parts, r, cost, risk_cap, detail=False):
-        seen.append((r, risk_cap))
-        return {k: 0 for k in ("share_M_ge_2", "share_M_ge_10", "share_M_ge_30", "worst_month", "bust", "bust_month",
-                               "mean_lnM", "median_M", "max_dd", "end_multiple", "n_positions", "cut",
-                               "adds_skipped", "adds_cut", "skipped")}
+    def fake(mk, parts, r, cost, risk_cap, detail=False, days=None, b_div=H.B_DIV):
+        seen.append((r, risk_cap, b_div, detail))
+        return {"mean_lnM": 0.0}
     monkeypatch.setattr(H, "run_signals", fake)
-    H._sizing(None, [])
-    assert seen == [(0.02, pytest.approx(0.16)), (0.05, pytest.approx(0.40))]
+    out = H._sizing(None, [])
+    assert seen == [(0.02, pytest.approx(0.16), pytest.approx(1.5), True),
+                    (0.05, pytest.approx(0.40), pytest.approx(0.6), True)]
+    assert out["0.05"]["margin_budget_of_equity"] == pytest.approx(10 / 6) and out["0.02"]["requested_r"] == 0.02
+
+
+def test_sizing_read_takes_the_bet_it_names():
+    """W 7 (review finding: with B = equity / 6 a '5%' bet was cut to under 1% and lost its adds). One coin, D0 = 1%
+    of P0 at 4% wide stops: the first unit's realized risk is the requested r as far as the free wallet allows, and it
+    is reported."""
+    bars = [(100, 100.5, 99.5, 100.4)] + [(100.4, 100.6, 100.2, 100.4)] * 3
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288)})
+    raw = H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 4.0}]), r=0.02, risk_cap=0.16,
+                     b_div=H.B_DIV / 4)
+    s = H.summarize(mk, raw, detail=False)
+    assert s["realized_unit_risk"]["median"] == pytest.approx(0.02, rel=1e-9) and s["share_first_unit_cut"] == 0.0
+    old = H.summarize(mk, H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 4.0}]), r=0.02,
+                                     risk_cap=0.16), detail=False)
+    assert old["realized_unit_risk"]["median"] == pytest.approx(0.02, rel=1e-9)    # wide stop: B = E / 6 fits too
+    tight = H.summarize(mk, H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 0.5}]), r=0.05,
+                                       risk_cap=0.40), detail=False)
+    assert tight["realized_unit_risk"]["median"] < 0.01 and tight["share_first_unit_cut"] == 1.0   # B = E / 6 cuts
+    scaled = H.summarize(mk, H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 0.5}]), r=0.05,
+                                        risk_cap=0.40, b_div=H.B_DIV / 10), detail=False)
+    assert scaled["realized_unit_risk"]["median"] > tight["realized_unit_risk"]["median"] * 2
 
 
 def test_month_starts():
@@ -570,17 +636,36 @@ def test_clean_5m_drops_duplicates_zero_volume_off_grid():
 
 
 # ------------------------------------------------------------------ pin (W 10)
-def _pin_tree(tmp_path, monkeypatch, study="wide"):
+CODE_SHA = {f: H.sha256_file(os.path.join(H.HERE, f)) for f in H.PARITY_CODE}
+
+
+def _good_json(f):
+    """Pinned result files that say pass (H 2, W 8)."""
+    sha5 = {s: f"{i:064x}" for i, s in enumerate(H.OLD_SIX)}
+    if f == H.PARITY_REL:
+        return {"pass": True, "adapter_5m": "hunt 5m files", "syms": list(H.OLD_SIX), "code": dict(CODE_SHA)}
+    if f == H.DATA_CHECK_REL:
+        return {"pass": True, "coins": {s: {"content_sha256": sha5[s], "mismatch_share": 0.0} for s in H.OLD_SIX}}
+    if f == H.DATA_MANIFEST_REL:
+        return {"content": {s: {"5m": sha5[s], "funding": None} for s in H.OLD_SIX}, "manifest": {"symbols": []}}
+    return None
+
+
+def _pin_tree(tmp_path, monkeypatch, study="wide", patch=None):
     root = tmp_path
     (root / "research" / "hunt").mkdir(parents=True)
     files = list(H.PREREGS[study]) + ["research/hunt/hunt.py", H.UNIVERSE_REL] + list(H.PIN_EXTRA[study])
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
-        (root / f).write_text(f"content of {f}\n")
+        doc = _good_json(f)
+        if doc is not None and patch and f in patch:
+            doc.update(patch[f])
+        (root / f).write_text(json.dumps(doc) if doc is not None else f"content of {f}\n")
     lines = [f"{H.sha256_file(str(root / f))}  {f}" for f in files]
     (root / H.PIN[study]).write_text("\n".join(lines) + "\n")
     monkeypatch.setattr(H, "ROOT", str(root))
     monkeypatch.setattr(H, "hunt_modules", lambda: ["research/hunt/hunt.py"])
+    monkeypatch.setattr(H, "signal_path_files", lambda study: [])
     return root
 
 
@@ -623,6 +708,40 @@ def test_pin_requires_the_prereg_file_list(tmp_path, monkeypatch):
     (root / H.EXCHANGE_REL).write_text("{}")
     with pytest.raises(H.PinError, match="not pinned research/hunt/exchange30.json"):
         H.check_pin("v1", "select")
+
+
+@pytest.mark.parametrize("study,patch,msg", [
+    ("wide", {H.PARITY_REL: {"pass": False}}, "parity.json does not say pass"),
+    ("wide", {H.PARITY_REL: {"adapter_5m": "1m archive -> 5m"}}, "not run on the hunt 5m files"),
+    ("wide", {H.PARITY_REL: {"code": {**CODE_SHA, "entries_wide.py": "0" * 64}}}, "another research/hunt/entries_wide"),
+    ("wide", {H.PARITY_REL: {"syms": ["BTCUSDT"]}}, "parity.json is not on the old six"),
+    ("v1", {H.DATA_CHECK_REL: {"pass": False}}, "data_check.json does not say pass"),
+    ("v1", {H.DATA_CHECK_REL: {"coins": {s: {"content_sha256": "f" * 64} for s in H.OLD_SIX}}},
+     "checked other BTCUSDT data"),
+])
+def test_pin_refuses_result_files_that_do_not_pass(tmp_path, monkeypatch, study, patch, msg):
+    """Review finding: parity.json (and the H 2 data check) were pinned by hash only; a failing, stale or 1m-path file
+    was accepted. Now their content must say pass for the current code and data."""
+    _pin_tree(tmp_path, monkeypatch, study, patch=patch)
+    with pytest.raises(H.PinError, match=msg):
+        H.check_pin(study, "select")
+
+
+def test_pin_lists_cover_the_signal_path():
+    """Review findings: the v1 pin lacked regime5y.py; the wide pin lacked research/deepseek200/lib_c.py and
+    research/fullgrid/memo.py. Both are now required, and the signal-path scan (each entry cell run once on synthetic
+    bars) finds every repository file the definitions load, the vendored indicator code included."""
+    assert "paperbot/dash/tools/regime5y.py" in H.PIN_EXTRA["v1"]
+    for f in ("research/deepseek200/lib_c.py", "research/fullgrid/memo.py", H.DATA_MANIFEST_REL, H.DATA_CHECK_REL):
+        assert f in H.PIN_EXTRA["wide"]
+    files = set(H.signal_path_files("wide"))
+    for f in ("research/deepseek200/lib_c.py", "research/fullgrid/memo.py", "research/fullgrid/ds_defs.py",
+              "research/fullgrid/run.py", "research/hunt/entries_wide.py", "paperbot/dash/tools/regime5y.py",
+              "paperbot/sweepsig.py", "research/entry_study/param_defs/N17_KC_RSI.py",
+              "third_party/sweep/harness/vendor/fg_indicators.py"):
+        assert f in files, f
+    assert not any(f.startswith("tests/") for f in files)
+    assert {"research/hunt/entries_wide.py", "paperbot/dash/tools/regime5y.py"} <= set(H.signal_path_files("v1"))
 
 
 def test_cli_refuses_without_pin(tmp_path, monkeypatch, capsys):
@@ -719,7 +838,12 @@ def test_end_to_end_wide(tmp_path, monkeypatch):
     sel = json.load(open(out / "wide" / "select.json"))
     assert len(sel["rows"]) == 10 and sel["label"] == "picks"
     ds = [r for r in sel["rows"] if r["kind"] == "ds"]
-    assert ds and all("score" not in r and "median_M" not in r for r in ds)       # D11
+    assert ds and all("score" not in r and "median_M" not in r and "metrics" not in r for r in ds)       # D11
+    core = [r for r in sel["rows"] if r["kind"] != "ds"]
+    assert all({"by_year", "by_side", "by_group", "q75_lnM"} <= set(r["metrics"]) for r in core)         # H 10
+    assert all("day_eq" not in r["metrics"] for r in core)
+    parts = list((priv / "parts").glob("wide_select_*/cell_*.json"))
+    assert len(parts) == 5                                       # one part per entry cell (resume)
     assert sel["private_sha256"] == H.sha256_file(str(priv / "wide_select_private.json"))
     picks = json.load(open(out / "wide" / "picks.json"))["picks"]
     assert [p["pick_no"] for p in picks] == list(range(1, len(picks) + 1))
@@ -741,6 +865,12 @@ def test_end_to_end_wide(tmp_path, monkeypatch):
             r = test["reads"][p["id"]]
             assert set(r) == {"r1", "select_controls", "new24", "extra2020", "gate_diagnostics"}
             assert len(r["r1"]["controls"]["a_mean_lnM"]) == 3
+            # review finding: the other gate is a non-pick system; wide runs it in select only (W 6)
+            assert all(set(g) == {"select"} for g in r["gate_diagnostics"].values())
+            # review finding: the sizing read reports the full H 10 set and the bet actually taken
+            for x in test["sizing"][p["id"]].values():
+                assert {"by_year", "by_side", "by_group", "q25_lnM", "share_M_lt_0_9", "top10_share_of_profit",
+                        "realized_unit_risk", "share_first_unit_cut", "time_at_cap"} <= set(x)
     assert isinstance(test["basket"], str)                                      # holds a DeepSeek pick
     full = json.load(open(priv / "wide_test_private.json"))
     assert set(full["basket"]) == {"select", "test"} and "basket" in full["sizing"]
@@ -761,6 +891,7 @@ def test_end_to_end_v1(tmp_path, monkeypatch):
     assert {"P0", "P1", "P2", "P3", "P4", "p_a", "p_b", "rank_p_a", "rank_p_b"} <= set(c)
     assert set(test["verdict"]) == {"v1_pass", "label", "one_pct_also_passes", "carried_by_old_six"}
     assert set(test["reads"]["gate_diagnostics"]) == {"NONE", "TS"}
+    assert all(set(g) == {"select", "test"} for g in test["reads"]["gate_diagnostics"].values())       # H 14
     assert len(test["result"]["base"]["day_eq"]) == 61 and test["result"]["base"]["months"] == 2
     assert H.main(["report", "--study", "v1"]) == 0
 
@@ -789,7 +920,12 @@ def test_loader_on_synthetic_files(tmp_path, monkeypatch):
     c = H.load_coin(str(d), "AUSDT", end, H._manifest(str(d)))
     assert c.ts.max() < end and c.o.dtype == np.float32 and c.f64()["o"].dtype == np.float64
     assert c.counts["zero_volume"] == 1 and c.counts["duplicates"] == 1 and len(c.ts) == 298
-    assert c.last_ms == int(ts[-1]) and c.counts["missing_months_funding"] == ["2022-04"]
+    # the manifest's coin end and missing month lie after ``end``: nothing of them is carried (review finding)
+    assert c.last_ms == 2 ** 62 and c.counts["missing_months_funding"] == []
+    assert c.counts["content_sha256"] == H.file_content_sha(str(d / "5m" / "AUSDT.npz"), "5m")
+    full = H.load_coin(str(d), "AUSDT", H.day_ms("2022-05-01"), H._manifest(str(d)))
+    assert full.last_ms == int(ts[-1])                            # the coin ends inside this span
+    assert full.counts["missing_months_funding"] == []           # 2022-04 is after the coin end (2022-03-03)
     fts, rate = H.load_funding(str(d), "AUSDT", end)
     assert len(fts) == 1 and rate[0] == 0.0001
     with pytest.raises(FileNotFoundError):
@@ -800,3 +936,196 @@ def test_loader_on_synthetic_files(tmp_path, monkeypatch):
     u = H.write_universe30(str(d))
     assert u["universe_md_sha256"] == H.sha256_file(str(d / "UNIVERSE.md")) and len(u["new"]) == 30
     assert H.load_universe(None) == u["symbols"]
+
+
+# ------------------------------------------------------------------ H 2 data checks (review finding: not implemented)
+def _npz5(path, ts, p, v=None, qv=None):
+    p = np.asarray(p, np.float32)
+    v = np.full(len(ts), 10.0, np.float32) if v is None else np.asarray(v, np.float32)
+    qv = (v * p).astype(np.float32) if qv is None else np.asarray(qv, np.float32)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, ts=np.asarray(ts, np.int64), o=p, h=p * np.float32(1.001), l=p * np.float32(0.999),
+                        c=p, v=v, qv=qv, mo=p, mh=p, ml=p, mc=p)
+
+
+def test_select_carries_nothing_of_2024_from_the_manifest(tmp_path):
+    """Review finding: select copied the manifest's later coin end and missing funding months (2025-07 ..) into
+    select.json. Only what lies before the step's end is carried now."""
+    d = tmp_path / "coins30"
+    ts = H.day_ms("2023-12-25") + np.arange(16 * 288, dtype=np.int64) * FIVE          # to 2024-01-10
+    _npz5(d / "5m" / "XUSDT.npz", ts, np.linspace(10, 11, len(ts)))
+    man = {"XUSDT": {"symbol": "XUSDT", "last_nonzero_volume_bar": "2025-01-06 09:00",
+                     "missing_months_funding": ["2025-07", "2025-08", "2026-09"]}}
+    c = H.load_coin(str(d), "XUSDT", H.day_ms("2024-01-01"), man)
+    assert c.ts.max() < H.day_ms("2024-01-01") and c.last_ms == 2 ** 62
+    assert c.counts["missing_months_funding"] == []
+    t = H.load_coin(str(d), "XUSDT", H.day_ms("2026-10-01"), man)
+    assert t.last_ms == H.day_ms("2025-01-06") + 9 * 3_600_000
+    assert t.counts["missing_months_funding"] == []              # all after the coin end (2025-01-06)
+    man["XUSDT"]["missing_months_funding_while_trading"] = ["2024-11"]
+    assert H.load_coin(str(d), "XUSDT", H.day_ms("2026-10-01"), man).counts["missing_months_funding"] == ["2024-11"]
+
+
+def test_data_identity_stops_a_step(tmp_path, monkeypatch):
+    d = tmp_path / "data"
+    ts = START + np.arange(600, dtype=np.int64) * FIVE
+    for s_ in ("AUSDT", "BUSDT"):
+        _npz5(d / "5m" / f"{s_}.npz", ts, np.linspace(10, 11, 600))
+    (d / "funding").mkdir()
+    np.savez_compressed(d / "funding" / "AUSDT.npz", ts=np.array([START], np.int64), rate=np.array([1e-4]))
+    (d / "manifest.json").write_text(json.dumps({"symbols": []}))
+    (d / "universe.json").write_text(json.dumps({"universe": ["AUSDT", "BUSDT"]}))
+    root = tmp_path / "repo"
+    (root / "research" / "hunt").mkdir(parents=True)
+    monkeypatch.setattr(H, "ROOT", str(root))
+    args = types.SimpleNamespace(data=str(d), study="v1", private=str(tmp_path / "priv"))
+    with pytest.raises(SystemExit, match="data_manifest.json missing"):
+        H._universe_and_data(args, "select")
+    assert H.main(["datapin", "--data", str(d)]) == 0
+    dm = json.load(open(root / H.DATA_MANIFEST_REL))
+    assert dm["content"]["AUSDT"]["funding"] and dm["content"]["BUSDT"]["funding"] is None
+    _, syms, counts = H._universe_and_data(args, "select")
+    assert syms == ["AUSDT", "BUSDT"] and counts["AUSDT"]["content_sha256"] == dm["content"]["AUSDT"]["5m"]
+    p = np.linspace(10, 11, 600)
+    p[599] = 12.0                                                  # one changed value
+    _npz5(d / "5m" / "BUSDT.npz", ts, p)
+    with pytest.raises(SystemExit, match="BUSDT 5m arrays differ"):
+        H._universe_and_data(args, "select")
+
+
+def test_disk_check_stops_under_one_gb(tmp_path, monkeypatch):
+    H.disk_check(str(tmp_path))
+    monkeypatch.setattr(H.shutil, "disk_usage", lambda p: types.SimpleNamespace(free=500 * 1024 ** 2))
+    with pytest.raises(SystemExit, match="free disk"):
+        H.disk_check(str(tmp_path / "not" / "yet"))
+
+
+def test_cross_check_counts_and_pass_rule(tmp_path, monkeypatch):
+    """H 2 cross-check on synthetic files: the 5m bars as read vs 1m binned to 5m; a value beyond tolerance is a
+    mismatch; a zero-volume 5m bar is dropped (not compared); more than 0.1% of the bars mismatched fails."""
+    n1 = 5 * 4000
+    t1 = START + np.arange(n1, dtype=np.int64) * 60_000
+    rng = np.random.default_rng(3)
+    c1 = 100 * np.exp(np.cumsum(rng.normal(0, 1e-4, n1)))
+    o1 = np.r_[c1[0], c1[:-1]]
+    h1, l1, v1 = np.maximum(o1, c1) * 1.0002, np.minimum(o1, c1) * 0.9998, rng.uniform(1, 2, n1)
+    fg = tmp_path / "fg1m"
+    (fg / "1m").mkdir(parents=True)
+    np.savez_compressed(fg / "1m" / "AUSDT.npz", ts=t1, o=o1, h=h1, l=l1, c=c1, v=v1)
+    from research.hunt import entries_wide as EW
+    t5, o5, h5, l5, c5, v5 = EW.resample_1m_to_5m(t1, o1, h1, l1, c1, v1)
+    qv = (v5 * c5).astype(np.float32)
+    qv[7] = 0                                                    # zero volume: dropped, so not compared
+    c5b = c5.copy()
+    c5b[100] *= 1.001                                            # beyond 1e-6
+    d = tmp_path / "data"
+    (d / "5m").mkdir(parents=True)
+    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5.astype(np.float32), h=h5.astype(np.float32),
+                        l=l5.astype(np.float32), c=c5b.astype(np.float32), v=v5.astype(np.float32), qv=qv)
+    r = H.cross_check_coin(str(d / "5m" / "AUSDT.npz"), str(fg / "1m" / "AUSDT.npz"))
+    assert r["common"] == 3999 and r["only_1m"] == 1 and r["mismatch"] == 1 and r["ohlc_mismatch"] == 1
+    assert r["mismatch_share"] == pytest.approx(1 / 3999) and r["mismatch_share"] < H.XCHECK_MAX_SHARE * 3
+    v5b = v5.astype(np.float32)
+    v5b[200:210] *= 1.01                                         # 10 volume mismatches: 0.25% > 0.1%
+    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5.astype(np.float32), h=h5.astype(np.float32),
+                        l=l5.astype(np.float32), c=c5.astype(np.float32), v=v5b, qv=qv)
+    r = H.cross_check_coin(str(d / "5m" / "AUSDT.npz"), str(fg / "1m" / "AUSDT.npz"))
+    assert r["volume_mismatch"] == 10 and r["ohlc_mismatch"] == 0 and r["mismatch_share"] > H.XCHECK_MAX_SHARE
+    monkeypatch.setattr(H, "OLD_SIX", ("AUSDT",))
+    monkeypatch.setattr(H, "ROOT", str(tmp_path))
+    (tmp_path / "research" / "hunt").mkdir(parents=True)
+    assert H.main(["datacheck", "--data", str(d), "--fg1m", str(fg)]) == 1
+    assert json.load(open(tmp_path / H.DATA_CHECK_REL))["pass"] is False
+
+
+def test_pin_requires_data_build_files(tmp_path, monkeypatch):
+    root = _pin_tree(tmp_path, monkeypatch, "v1")
+    (root / H.DATA_BUILD_REL).mkdir(parents=True)
+    (root / H.DATA_BUILD_REL / "c30.py").write_text("# builder\n")
+    with pytest.raises(H.PinError, match="not pinned research/hunt/data_build/c30.py"):
+        H.check_pin("v1", "select")
+
+
+# ------------------------------------------------------------------ robustness (review findings)
+def _die_on_three(x):
+    if x == 3 and not os.path.exists(_DIE_FLAG[0]):
+        open(_DIE_FLAG[0], "w").close()
+        os.kill(os.getpid(), 9)
+    return x * x
+
+
+_DIE_FLAG = [""]
+
+
+def test_pmap_survives_a_killed_worker(tmp_path, capsys):
+    """Review finding: Pool.map hung forever when a worker was killed. Now the pool is rebuilt and only unfinished
+    tasks are sent again."""
+    _DIE_FLAG[0] = str(tmp_path / "died")
+    assert H.pmap(_die_on_three, list(range(8)), 2, label="t") == [x * x for x in range(8)]
+    assert os.path.exists(_DIE_FLAG[0]) and "a worker died" in capsys.readouterr().out
+
+
+def _always_die(x):
+    os.kill(os.getpid(), 9)
+
+
+def test_pmap_stops_when_workers_keep_dying(monkeypatch):
+    monkeypatch.setattr(H, "MAX_RESTARTS", 1)
+    with pytest.raises(SystemExit, match="workers keep dying"):
+        H.pmap(_always_die, [1, 2, 3], 2, label="t")
+
+
+def _boom(x):
+    if x == 2:
+        raise ValueError("bad cell")
+    return x
+
+
+def test_pmap_raises_a_task_error():
+    with pytest.raises(ValueError, match="bad cell"):
+        H.pmap(_boom, [1, 2, 3, 4], 2)
+
+
+def test_wide_select_and_test_resume_from_parts(tmp_path, monkeypatch):
+    """Review finding: a crash lost all finished work. Each entry cell (select) and each pick (test) is written to the
+    private parts folder as soon as it is done; a rerun under the same pin computes only what is missing and gives
+    the same picks and results."""
+    out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    priv = tmp_path / "private"
+    args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+    real = H._sel_task
+    calls = []
+
+    def flaky(task):
+        calls.append(task[1][0]["id"])
+        if len(calls) == 3:
+            raise RuntimeError("crash in the third cell")
+        return real(task)
+    monkeypatch.setattr(H, "_sel_task", flaky)
+    with pytest.raises(RuntimeError, match="third cell"):
+        H.main(["select", "--study", "wide"] + args)
+    assert len(list((priv / "parts").glob("wide_select_*/cell_*.json"))) == 2
+    calls.clear()
+    monkeypatch.setattr(H, "_sel_task", lambda task: (calls.append(task[1][0]["id"]), real(task))[1])
+    assert H.main(["select", "--study", "wide"] + args) == 0
+    assert len(calls) == 3                                     # only the three missing cells ran
+    picks = json.load(open(out / "wide" / "picks.json"))["picks"]
+    sel = json.load(open(out / "wide" / "select.json"))
+    calls.clear()
+    assert H.main(["select", "--study", "wide"] + args) == 0  # (the pin check is patched here) nothing recomputed
+    assert calls == [] and json.load(open(out / "wide" / "picks.json"))["picks"] == picks
+    assert json.load(open(out / "wide" / "select.json"))["rows"] == sel["rows"]
+    real_block = H._pick_block
+    n_block = []
+
+    def counting(*a, **k):
+        n_block.append(a[1]["id"])
+        return real_block(*a, **k)
+    monkeypatch.setattr(H, "_pick_block", counting)
+    assert H.main(["test", "--study", "wide"] + args) == 0
+    first = json.load(open(out / "wide" / "test.json"))
+    done = len(n_block)
+    assert H.main(["test", "--study", "wide"] + args) == 0
+    assert len(n_block) == done                                # every pick taken from its part
+    again = json.load(open(out / "wide" / "test.json"))
+    assert again["results"] == first["results"] and again["verdict"] == first["verdict"]
