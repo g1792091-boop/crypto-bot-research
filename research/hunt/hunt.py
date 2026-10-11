@@ -91,6 +91,10 @@ UNIVERSE_REL = "research/hunt/universe30.json"
 EXCHANGE_REL = "research/hunt/exchange30.json"
 OUT_REL = {"v1": "research/hunt/out/v1", "wide": "research/hunt/out/wide"}
 PICKS_REL = {"v1": "research/hunt/out/v1/pick.json", "wide": "research/hunt/out/wide/picks.json"}
+PIN_EXTRA = {"v1": ("tests/test_hunt.py",),                       # H 16 / W 10: files the pin must list
+             "wide": ("tests/test_hunt.py", "tests/test_hunt_entries.py", "research/hunt/out/wide/parity.json",
+                      "research/fullgrid/diag/watch_sel.json", "research/fullgrid/PREREG.sha256",
+                      "research/entry_study/DEFS_BC.sha256", "paperbot/dash/tools/regime5y.py")}
 
 CHOICES = [
     "H7.6: a 5m bar's entries (fills at its open) are decided first, on the state at the previous 5m close (equity, "
@@ -237,7 +241,9 @@ def check_pin(study: str, step: str) -> dict:
             bad.append(f"missing {p}")
         elif sha256_file(full) != h:
             bad.append(f"changed {p}")
-    need = list(PREREGS[study]) + ["research/hunt/hunt.py", UNIVERSE_REL] + hunt_modules()
+    need = list(PREREGS[study]) + ["research/hunt/hunt.py", UNIVERSE_REL] + hunt_modules() + list(PIN_EXTRA[study])
+    if os.path.exists(os.path.join(ROOT, EXCHANGE_REL)):
+        need.append(EXCHANGE_REL)
     for p in need:
         if p not in listed:
             bad.append(f"not pinned {p}")
@@ -1149,11 +1155,13 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
             closed = False
             if bp < pi[k, P_BEND] and b_t[bp] == t:
                 pi[k, P_BPTR] = bp + 1
-                others = 0.0
-                for jj in range(npos):
-                    kk = openl[jj]
-                    if kk != k and pi[kk, P_OPEN] == 1:
-                        others += _risk(kk, ps, pi)
+                others = 0.0                       # other positions' open risk: only needed when an add is reached
+                if pi[k, P_TRIED] < n_adds and ((side > 0 and b_h[bp] >= ps[k, F_NEXT]) or
+                                                (side < 0 and b_l[bp] <= ps[k, F_NEXT])):
+                    for jj in range(npos):
+                        kk = openl[jj]
+                        if kk != k and pi[kk, P_OPEN] == 1:
+                            others += _risk(kk, ps, pi)
                 code, X = _bar(k, b_o[bp], b_h[bp], b_l[bp], ps, pi, acc, others, risk_cap * E_prev, taker, slip,
                                min_not[k], askip, acut, n_adds, br_n[k], br_cap[k], br_mmr[k], br_cum[k])
                 if code >= 0:
@@ -1634,6 +1642,7 @@ def _group_cells(specs: list) -> list:
 def cmd_select(args) -> int:
     study = args.study
     pin = check_pin(study, "select")
+    _compile_probe()                               # compile once in the parent; forked workers inherit it
     if study == "wide":
         _ew().fullgrid_pins()
     data, syms, counts = _universe_and_data(args, "select")
@@ -1720,6 +1729,7 @@ def _sizing(mk: Market, parts: list) -> dict:
 def cmd_test(args) -> int:
     study = args.study
     pin = check_pin(study, "test")
+    _compile_probe()
     if study == "wide":
         _ew().fullgrid_pins()
     pk = _load_picks(study)

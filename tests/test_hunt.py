@@ -573,8 +573,9 @@ def test_clean_5m_drops_duplicates_zero_volume_off_grid():
 def _pin_tree(tmp_path, monkeypatch, study="wide"):
     root = tmp_path
     (root / "research" / "hunt").mkdir(parents=True)
-    files = list(H.PREREGS[study]) + ["research/hunt/hunt.py", H.UNIVERSE_REL]
+    files = list(H.PREREGS[study]) + ["research/hunt/hunt.py", H.UNIVERSE_REL] + list(H.PIN_EXTRA[study])
     for f in files:
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")
     lines = [f"{H.sha256_file(str(root / f))}  {f}" for f in files]
     (root / H.PIN[study]).write_text("\n".join(lines) + "\n")
@@ -585,14 +586,15 @@ def _pin_tree(tmp_path, monkeypatch, study="wide"):
 
 def test_pin_matches_and_refusals(tmp_path, monkeypatch):
     root = _pin_tree(tmp_path, monkeypatch)
-    assert H.check_pin("wide", "select")["files"] == 4
+    n = len(H.PIN_EXTRA["wide"]) + 4
+    assert H.check_pin("wide", "select")["files"] == n
     with pytest.raises(H.PinError, match="not pinned"):
         H.check_pin("wide", "test")                                       # no picks line yet
     picks = root / H.PICKS_REL["wide"]
-    picks.parent.mkdir(parents=True)
+    picks.parent.mkdir(parents=True, exist_ok=True)
     picks.write_text("{}\n")
     H.append_picks_line("wide")
-    assert H.check_pin("wide", "test")["files"] == 5
+    assert H.check_pin("wide", "test")["files"] == n + 1
     with pytest.raises(H.PinError, match="already pinned"):
         H.check_pin("wide", "select")
     picks.write_text('{"changed": 1}\n')
@@ -607,6 +609,19 @@ def test_pin_refuses_changed_or_unlisted(tmp_path, monkeypatch):
         H.check_pin("v1", "select")
     monkeypatch.setattr(H, "hunt_modules", lambda: ["research/hunt/hunt.py", "research/hunt/entries_wide.py"])
     with pytest.raises(H.PinError, match="not pinned research/hunt/entries_wide.py"):
+        H.check_pin("v1", "select")
+
+
+def test_pin_requires_the_prereg_file_list(tmp_path, monkeypatch):
+    """W 10: the wide pin must list parity.json, the full grid's inputs and regime5y.py; exchange30.json when present."""
+    root = _pin_tree(tmp_path, monkeypatch, "wide")
+    pin = root / H.PIN["wide"]
+    pin.write_text("".join(x + "\n" for x in pin.read_text().splitlines() if "parity.json" not in x))
+    with pytest.raises(H.PinError, match="not pinned research/hunt/out/wide/parity.json"):
+        H.check_pin("wide", "select")
+    root = _pin_tree(tmp_path / "b", monkeypatch, "v1")
+    (root / H.EXCHANGE_REL).write_text("{}")
+    with pytest.raises(H.PinError, match="not pinned research/hunt/exchange30.json"):
         H.check_pin("v1", "select")
 
 
