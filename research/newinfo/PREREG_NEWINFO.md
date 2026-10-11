@@ -53,7 +53,8 @@ effect follows from 2.4's rules; nothing is filled.
 - a 5-minute metrics row stamped t only when t + 5 min <= T: the bar's value is the row with the latest such t, and is
   missing when that t < T - 30 min;
 - a funding settlement from its calc time floored to the minute (the minute the 1m archive pays it on): the bar
-  closing at T sees the settlements whose floored calc time is <= T. The settled rate is the last value of the
+  closing at T sees the settlements whose floored calc time is <= T (every calc time is within T's first second,
+  2.2). The settled rate is the last value of the
   estimated rate the exchange shows live, so a bot can know it at the settlement. A position filled at that minute
   does not pay it (kernel.py: no funding on the entry minute);
 - for the daily VWAP, 1m bars with open < T;
@@ -70,13 +71,18 @@ ties averaged.
 Entry, as the full grid: the fill is at the open of the minute after the signal bar's last minute, +0.02% slippage
 (kernel.py `_entry_index`).
 
-2.5 **Outcome tables reused.** The full grid's per-bar outcome tables (`OUT/outcomes/<tf>_<SYMBOL>.npz`, run.py stage
-1: every chart bar as a signal, each side, alone, all 84 exit variants, $5,000 wallet, research/fullgrid/exchange.json
-brackets) give the trades of sections 6.1-6.3, read from `pnl_normal`. Before use: kernel.py's sha256 equals the one
-pinned in research/fullgrid/PREREG.sha256; every table's `close` equals its frame's close times; 300 random
-(bar, side, exit) entries per table among section 4's exits (seed `run._seed("newinfo", "verify", table name)`)
-recomputed with `kernel.outcomes` equal the stored values (float32; NaN where NaN). Any failure: the tables are rebuilt
-with `run.py outcomes` before anything else.
+2.5 **Outcome tables reused.** The per-bar outcome tables of the full grid's outcomes stage
+(`OUT/outcomes/<tf>_<SYMBOL>.npz`, run.py stage 1: every chart bar as a signal, each side, alone, all 84 exit variants,
+$5,000 wallet, research/fullgrid/exchange.json brackets) give the trades of sections 6.1-6.3, read from `pnl_normal`.
+Before use: kernel.py's and run.py's sha256 equal the ones pinned in research/fullgrid/PREREG.sha256;
+research/fullgrid/exchange.json has sha256 176e234b3f84a96eecd2a0ea4e6b3e1ffbb3a40bf7fa77dbd994e33144413ffa (the file
+of commit f1e824f, the full grid's run); paperbot/config.py is unchanged since that commit (`git diff f1e824f --
+paperbot/config.py` empty), so `kernel.settings_vector()`, which every recomputation below uses, is the one the tables
+were made with; every table's `close` equals its frame's close times; 300 random (bar, side, exit) entries per table
+among section 4's exits (seed `run._seed("newinfo", "verify", table name)`) recomputed with `kernel.outcomes` equal the
+stored values (float32; NaN where NaN). A failed file check stops the study until `DEVIATIONS_NEWINFO.md` explains it;
+a table failing only the recomputation is rebuilt with `run.py outcomes` before anything else. The sha256 of every
+table read is printed.
 
 ## 3. Rules
 Common: bar i of a coin's chart closing at T; O, H, L, C, V of the bar; ATR = ATR14 (`fg_indicators.atr`, as the
@@ -131,10 +137,12 @@ new low and z_i < -oi_z; once per episode.
 Grid: window_h (12, **24**, 48); oi_z (0.5, **1.0**, 1.5); z_lookback_d (15, **30**, 60). 27.
 
 **3.5 D08_CROSS_COIN.** Ranking times: bar closes T where T / bar length is divisible by `rebalance_bars` (UTC-aligned,
-the same times on every coin). Each coin with bars closing at T and at T - `rank_bars` x bar length:
-ret = C_T / C_(T - rank_bars) - 1; at least 4 such coins, else no signal; ties go to the coin order BTC, ETH, SOL,
-DOGE, LTC, BCH. Long the coin with the highest ret, short the one with the lowest. With `abs_filter` on, the long only
-when its ret > 0 and the short only when its ret < 0.
+the same times on every coin). Each coin past its warm-up bars (section 3) with bars closing at T and at
+T - `rank_bars` x bar length: ret = C_T / C_(T - rank_bars) - 1; at least 4 such coins, else no signal; ties go to the
+coin order BTC, ETH, SOL, DOGE, LTC, BCH. Long the coin with the highest ret, short the one with the lowest among the
+other coins (never the same coin). With `abs_filter` on, the long only when its ret > 0 and the short only when its
+ret < 0. Each ranking time gives new signals; a position from an earlier ranking time is not closed by it (the exit
+decides, section 4).
 Grid: rank_bars (12, **24**, 48); rebalance_bars (3, **6**, 12); abs_filter (**off**, on). 18.
 
 **3.6 D10_VWAP_REVERT.** VWAP_i = sum(typical x volume) / sum(volume) over the 1m bars of the UTC day of bar i's open,

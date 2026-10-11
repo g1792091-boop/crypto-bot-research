@@ -1,8 +1,9 @@
 # 장세 문지기 (regime gate): pre-registration
 
-Written 2026-10-11 (KST), before any result of this gate was computed. To be pinned, together with `gate.py` and
-`style_map.json`, by `PREREG_REGIMEGATE.sha256`; `gate.py` refuses to run `history` or `forward` without a matching pin.
-Any later change goes to `DEVIATIONS.md` in this folder with its reason, never into this file.
+Written 2026-10-11 (KST), before any result of this gate was computed. To be pinned, together with `gate.py`,
+`style_map.json` and the label, bracket and sizing files they read (section 10), by `PREREG_REGIMEGATE.sha256`;
+`gate.py` refuses to run `history` or `forward` without a matching pin. Any later change goes to `DEVIATIONS.md` in this
+folder with its reason, never into this file.
 
 Owners' words. Friend: "추세장 횡보장 매매법을 찾아서 ... 추세장이면 추세장 매매법을 사용 ... 횡보장이면 진입 금지".
 Owner: "횡보장에서도 발라먹고 추세장에서도 발라먹는 매매법"; the goal is to grow a small account fast. On 2026-10-11 both
@@ -27,6 +28,16 @@ the ones it blocks, and do the let-through signals make money after costs?
   the author of this file.
 * `ANALYSIS_KO.md` 5-4: the rule bot's entries show almost no direction skill (the opposite side at the same entries,
   or entries on any bar, did about as well).
+* `analysis/rulebot_1007/workflow/section_context_filters.md` (2026-10-07, read by the main session and quoted in the
+  AI design, `docs/aibot/design_v3_work/spec_decision.md`: "장세 맞추기(추세장/횡보장): 5년 0.04R 이하"): a close
+  relative of this question, with other labels (signal_ctx regime and ER, R units) and other style classes. Over five
+  years "trend strategies in high ER" was +0.04 / +0.02 R and "revert strategies in low ER" about 0; live (paper runs
+  v3a, v3b and v4 up to 10-07) no context replicated, and v4 had no higher-timeframe trend signal at all. The dashboard's
+  장세 스위치 result (`docs/regime5y.md`: 0 of 92 cells) is likewise quoted in the AI design documents.
+* **Part of the forward window has already happened.** The window starts at the v4 run's start (2026-10-05 18:35
+  UTC); by this file's date about 6 of its 24 days are past. The rule bot's live results for those days were read per
+  strategy and timeframe (`research/live_interim`), and its first 1.5 days were cut by market context (above), but not
+  by this gate's labels and classes. The gate rules come from the owners' words, not from those days.
 
 So the history part can be roughly reconstructed from published per-strategy tables; it is a check, not a blind test.
 The gate rules below come from the owners' words, and the classes from the catalog's style column (which describes the
@@ -111,8 +122,9 @@ a strategy's name (OBV_S, "OBV 추세형", measured 섞임 0.55: other).
 
 ### 5.1 HISTORY
 
-All 315 cells (80 strategies), six coins, signal bars closing 2021-01-01 00:00 .. 2026-09-30 24:00 UTC (the full grid's
-select and test periods; 2020 is left out: too little history for the labels). This exact gate was never run.
+All 315 cells (80 strategies), six coins, signal bars closing in [2021-01-01 00:00, 2026-10-01 00:00) UTC (the full
+grid's select and test periods, same edges; 2020 is left out: too little history for the labels). This exact gate was
+never run.
 Bootstrap blocks: UTC weeks from Monday (`run.MONDAY0`).
 
 ### 5.2 FORWARD
@@ -122,13 +134,18 @@ Bootstrap blocks: UTC weeks from Monday (`run.MONDAY0`).
 * 1m data: the full archive plus Binance's daily 1m and mark-price klines 2026-10-01 .. **2026-10-30** from
   data.binance.vision (checksum-verified), so every signal has at least one day to finish; a trade still open at
   2026-10-30 24:00 UTC is left out and counted. The whole archive is kept in front, so the labels have their full
-  history and are computed exactly as in history. October funding is not in the public archive yet: it is 0 (as
-  `research/live_interim/replay/live_bt.py`); this touches allowed and blocked signals alike.
-* The trades are recomputed with the same kernel and the same `research/fullgrid/exchange.json` brackets, for the
-  window's bars only. The rule bot's own accounts (one position at a time) are not the unit; the replay of its rules is
-  (the interim replay matched the live bot's daily results closely, `research/live_interim/README_KO.md`).
-* Run on or after 2026-10-31 KST, when the 2026-10-30 files are published; the window does not depend on the day it
-  runs. A run with another `--last-day` is a look, marked as such, never the verdict.
+  history and are computed exactly as in history. October funding is not in the public archive yet (only a monthly
+  file, published in November): it is 0 (as `research/live_interim/replay/live_bt.py`). This touches allowed and
+  blocked signals alike in conditions 2, 4 and 5; in condition 3 (allowed mean > 0) the funding a trade would have
+  paid or received is missing (usually small for trades of hours), and the result says so.
+* The trades are recomputed with the same kernel and the same `research/fullgrid/exchange.json` brackets (pinned; there
+  is no option to pass another file), for the window's bars only. The rule bot's own accounts (one position at a time)
+  are not the unit; the replay of its rules is (the interim replay matched the live bot's daily results closely,
+  `research/live_interim/README_KO.md`).
+* Run on or after 2026-10-31 KST, once Binance has published the 2026-10-30 daily files (a day's file appears the
+  next UTC day, so from about 10-31 09:00 KST at the earliest; the run stops with "not published yet" before that and is
+  simply repeated later). The window does not depend on the day it runs. A run with another `--last-day` is a look,
+  marked as such, never the verdict.
 * Bootstrap blocks: **UTC days** (about 25). History uses weeks, as the full grid does; with about 3.5 weeks here, four
   blocks cannot give a usable p, so the forward part uses days (market states last hours to days; this is the one
   departure from the brief's week blocks, fixed now).
@@ -147,8 +164,20 @@ pooled, on the evaluation's universe (history: all 80; forward: the 36). A line 
    the gate blocked there, chosen at random (seed `run._seed("regimegate|flip", evaluation, read)`); the gate's
    difference must beat them: (1 + draws with a difference >= the gate's) / 1,001 < 0.05. Because the same number is
    blocked in every cell, the control removes any gain from simply blocking more of a bad strategy or timeframe; what is
-   left is the timing the gate adds. Random signals are less bunched in time than market states, so the control is a
-   floor, and condition 2 carries the time clustering.
+   left is the timing the gate adds.
+5. **above the coin-flip average, with time clustering**: the gate's difference minus the control's expected
+   difference, which is (1/NA + 1/NB) x the sum over cells of (nb x SA - na x SB) / n (na, nb, n: the cell's allowed,
+   blocked and all trades; SA, SB: their sums; NA, NB: the line's totals), i.e. the within-cell allowed - blocked
+   differences weighted by na x nb / n, must be > 0 with a one-sided block bootstrap p < 0.05: 2,000 resamples of
+   whole blocks as in condition 2, a resample without an allowed or a blocked trade counting against; seed
+   `run._seed("regimegate|within", evaluation, read, gate, universe, group, timeframe)`.
+
+Why 5 (added in review, before pinning and before any result): random draws are spread evenly in time while market
+states last hours to days, so condition 4 alone lets clustered luck through; condition 2 alone lets a mix effect
+through (a gate that blocks more of a worse strategy or timeframe). A gate with a mix effect and no timing skill could
+pass 2 and 4 together far more often than 5% (a synthetic check with day-long common shocks: condition 4 alone passed
+37% of null runs, condition 5 2.5%; `tests/test_regimegate.py`). Condition 5 holds the mix fixed per cell, as the
+control does, and keeps the clustering by resampling whole blocks.
 
 Reported, never verdicts: every line per timeframe; in history the rule bot only and DeepSeek only; each gate with the
 trend and reversion markets swapped (G1s, G2s: if the swapped gate also "works", the state helps every strategy and the
