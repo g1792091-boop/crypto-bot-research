@@ -163,7 +163,8 @@ Grid: vol_mult (2, **3**, 4); vol_len (10, **20**, 40); ema_filter (**off**, on)
 - **Exits** (kernel.EXITS names; their rules as PREREG.md 5), in this order: `ladder|2` (the rule bot's live exit:
   2 ATR stop, stepped lock from 10% net ROE), `tp2R|2`, `tp3R|1.5`, `tp3R|2`, `tp3R|3`, `tp3R|4` (stop k x ATR14 of the
   signal bar from the entry reference; take-profit a limit at 2R or 3R, maker fee; a minute touching both is a stop).
-  Exit neighbours for 6.1: tp3R|1.5 - tp3R|2 - tp3R|3 - tp3R|4; ladder|2 and tp2R|2 have none.
+  Exit neighbours for 6.1: tp3R|1.5 - tp3R|2 - tp3R|3 - tp3R|4; ladder|2 and tp2R|2 have none. No other exit of
+  kernel.EXITS is computed or used anywhere in sections 6.1-6.3.
 - **Size**: quality_v1 "normal" for every signal (30x at 30% margin, else 20x at 20%; stop inside liquidation by
   max(0.2%, 1 ATR); stop loss with fees and slippage <= 15% of the wallet; else the signal is not a trade). No strength
   score: the "best" tier needs strength definitions these rules do not have (the DeepSeek strategies were sized the same
@@ -182,12 +183,14 @@ Periods by the signal bar's close (UTC):
 | rules | select | test | extra |
 |---|---|---|---|
 | D01, D04, D05, D08, D10 | 2021-01-01 .. 2024-01-01 | 2024-01-01 .. 2026-10-01 | 2020-01-01 .. 2021-01-01 |
-| H3A, D06 (metrics) | 2021-12-01 .. 2024-01-01 | 2024-01-01 .. 2026-10-01 | none |
+| H3A, D06 (metrics) | 2021-12-01 .. 2024-01-01 | 2024-01-01 .. 2026-10-01 | BTC only, 2020-09-01 .. 2021-12-01 |
 
 H3A and D06 need the 5-minute metrics, which the archive has for five of the six coins only from 2021-12-01: their
-select period starts at the first full month of data for all six coins (BTC's earlier metrics serve only as window
-history), and their trailing windows leave the first 14-60 days of it without signals. They have no extra period, so
-6.3 does not apply and they pass one check fewer; the report says so next to them.
+select period starts at the first full month of data for all six coins. Their trailing windows fill from each coin's
+first metrics day, so the first 15-62 days of data give no signal; and the account ratio's hole of 2021-12-30 ..
+2022-01-19 (2.3) leaves H3A almost without signals until about February (14-day window) to mid-March 2022 (60-day
+window) on every coin, BTC included. Their extra period is BTC's earlier metrics (from 2020-09-01, windows filled from
+that day): one coin instead of six, so a weaker check than the others'; the report says so next to them.
 
 **6.1 Select** (select period only), per cell, over the (numbers, exit) pairs with >= 150 trades. Plateau score =
 median of the pair's mean per-trade P&L and its neighbours' (one number one step up or down with the same exit; or the
