@@ -525,7 +525,7 @@ def test_run_end_to_end_on_synthetic_coins(synth, monkeypatch):
     assert set(lev["wallet_risk_table_test_signals"]) == {"20", "30", "40"}
     # DeepSeek row and the basket that holds it: labels and counts in public, everything in private
     pd = out["r1_goal_board"]["pick:F3:DSX:1h:NONE"]
-    assert pd["note"] == RA.DS_NOTE and "headline" not in pd
+    assert pd["note"] == RA.DS_NOTE and set(pd["headline"]) == {"what", "n_windows"}
     assert priv["r1_goal_board"]["pick:F3:DSX:1h:NONE"]["headline"]["n_windows"] == 1
     assert out["r1_goal_board"]["basket_batch1"]["note"] == RA.DS_NOTE
     assert "basket_batch1" in priv["continuous"]

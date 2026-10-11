@@ -52,6 +52,34 @@ def params_of(variant: dict) -> np.ndarray:
 
 
 # ---------------------------------------------------------------- stops in force (probe)
+def _flat_arrays(mk) -> dict:
+    """The market's per-bar flat arrays (b_t, b_o, ..., and whatever hunt.py adds later, e.g. the mark-price bars),
+    grouped by identity: an array that is an alias of another (b_mo is b_o when the market reads no mark price)
+    stays an alias in the probe's copy."""
+    n = len(mk.b_t)
+    groups: dict = {}
+    for name, v in vars(mk).items():
+        if name.startswith("b_") and name != "b_off" and isinstance(v, np.ndarray) and v.ndim == 1 and len(v) == n:
+            groups.setdefault(id(v), []).append(name)
+    return {tuple(sorted(names)): getattr(mk, names[0]) for names in groups.values()}
+
+
+def _probe_value(names: tuple, side: int, p: float, tp: int, last):
+    """The extra bar: open = close = the last close; low 0 (long) / high far above (short); the step after the data."""
+    n = min(names, key=len)
+    if n == "b_t":
+        return tp
+    if n.endswith("qv"):
+        return last
+    if n.endswith("h"):
+        return p if side > 0 else p * 1e6
+    if n.endswith("l"):
+        return 0.0 if side > 0 else p
+    if n.endswith(("o", "c")):
+        return p
+    return last
+
+
 def probe_stops(mk, bank, cands: dict, prm: np.ndarray, raw: tuple, last_step: int) -> dict:
     """{record index: {"stop": price or None, "kind": "stop" | "liq" | "gap", "source": stop source}} for every
     position still open at the end of ``raw`` (one more ``hunt.simulate`` call, see the module text)."""
@@ -64,31 +92,31 @@ def probe_stops(mk, bank, cands: dict, prm: np.ndarray, raw: tuple, last_step: i
     tp = int(last_step) + 1
     side_of = {int(ri[i, H.RI_COIN]): int(ri[i, H.RI_SIDE]) for i in open_idx}
     last_px = {int(ri[i, H.RI_COIN]): float(rf[i, H.RF_XPX]) for i in open_idx}
-    cols = {n: [] for n in ("t", "o", "h", "l", "c", "qv")}
+    flat = _flat_arrays(mk)
+    parts = {g: [] for g in flat}
     off, shift, ins = [0], np.zeros(mk.K, np.int64), 0
     for k in range(mk.K):
         a, b = int(mk.b_off[k]), int(mk.b_off[k + 1])
         shift[k] = ins
-        for n, src in (("t", mk.b_t), ("o", mk.b_o), ("h", mk.b_h), ("l", mk.b_l), ("c", mk.b_c), ("qv", mk.b_qv)):
-            cols[n].append(src[a:b])
+        if k in side_of and b > a and int(mk.b_t[b - 1]) >= tp:
+            return {}
+        for g, arr in flat.items():
+            parts[g].append(arr[a:b])
+            if k in side_of:
+                last = arr[b - 1] if b > a else 0
+                parts[g].append(np.asarray([_probe_value(g, side_of[k], last_px[k], tp, last)], arr.dtype))
         if k in side_of:
-            p, s = last_px[k], side_of[k]
-            if b > a and int(mk.b_t[b - 1]) >= tp:
-                return {}
-            qv = float(mk.b_qv[b - 1]) if b > a else 0.0
-            for n, v in (("t", tp), ("o", p), ("h", p if s > 0 else p * 1e6), ("l", 0.0 if s > 0 else p), ("c", p),
-                         ("qv", qv)):
-                cols[n].append(np.asarray([v], np.int64 if n == "t" else np.float64))
             ins += 1
         off.append(off[-1] + (b - a) + (1 if k in side_of else 0))
     mp = copy.copy(mk)
     mp.b_off = np.asarray(off, np.int64)
-    mp.b_t = np.concatenate(cols["t"]).astype(np.int64)
-    mp.b_o, mp.b_h, mp.b_l, mp.b_c, mp.b_qv = (np.concatenate(cols[n]).astype(np.float64)
-                                               for n in ("o", "h", "l", "c", "qv"))
+    for g, arr in flat.items():
+        new = np.concatenate(parts[g]).astype(arr.dtype)
+        for name in g:
+            setattr(mp, name, new)
     if tp >= mk.T:
         mt = np.asarray(mk.month_t0, np.int64).copy()
-        mt[-1] = int(mk.T) + H.BARS_PER_DAY
+        mt[-1] = int(mk.T) + int(getattr(mk, "bpd", H.BARS_PER_DAY))
         mp.month_t0 = mt
     cp = dict(cands)
     cp["bi"] = np.asarray(cands["bi"], np.int64) + shift[np.asarray(cands["coin"], np.int64)]
@@ -99,12 +127,12 @@ def probe_stops(mk, bank, cands: dict, prm: np.ndarray, raw: tuple, last_step: i
     for i in open_idx:
         if i >= len(rip) or int(rip[i, H.RI_TOUT]) != tp:
             continue
-        s = int(ri[i, H.RI_SIDE])
+        s_ = int(ri[i, H.RI_SIDE])
         reason = int(rip[i, H.RI_REASON])
         x = float(rfp[i, H.RF_XPX])
         src = H.STOP_SRC_NAMES[int(rip[i, H.RI_SRC])]
         if reason == H.EX_STOP:
-            out[int(i)] = {"stop": x / (1.0 - s * slip), "kind": "stop", "source": src}
+            out[int(i)] = {"stop": x / (1.0 - s_ * slip), "kind": "stop", "source": src}
         elif reason == H.EX_LIQ:
             out[int(i)] = {"stop": x, "kind": "liq", "source": src}
         elif reason == H.EX_GAP:

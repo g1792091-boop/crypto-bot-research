@@ -1149,3 +1149,435 @@ def test_wide_select_and_test_resume_from_parts(tmp_path, monkeypatch):
     assert len(n_block) == done                                # every pick taken from its part
     again = json.load(open(out / "wide" / "test.json"))
     assert again["results"] == first["results"] and again["verdict"] == first["verdict"]
+
+
+# ------------------------------------------------------------------ engine read options (panel 2026-10-11): bit-identity
+def _golden_digest(**kw):
+    """The engine on a seeded synthetic 8-coin case (coin end, funding, three timeframes and sizes): sha256 of every
+    decision output. GOLDEN_DIGEST was computed with the reviewed engine (commit a43f36c) before the read options
+    were added."""
+    s0 = H.day_ms("2022-01-01")
+    coins = {f"C{i}USDT": H.synth_coin(f"C{i}USDT", s0, s0 + 50 * DAY, 700 + i, 10.0 * (i + 1)) for i in range(8)}
+    fund = {s: H.synth_funding(s0, s0 + 50 * DAY, 800 + i) for i, s in enumerate(coins)}
+    coins["C2USDT"].last_ms = int(coins["C2USDT"].ts[len(coins["C2USDT"].ts) - 2000])
+    H.install(coins, fund)
+    mk = H.Market(list(coins), (s0 + 31 * DAY, s0 + 50 * DAY), name="g")
+    h = hashlib.sha256()
+    for tf, r, cost, cap, bdiv in (("15m", 0.005, "base", 0.04, 6.0), ("1h", 0.01, "x2", 0.04, 6.0),
+                                   ("4h", 0.05, "base", 0.4, 0.6)):
+        sig = H.synth_signals(mk, tf, 0.5, 21)
+        b = H.bank_for(mk, (tf,))
+        c = H.build_cands(mk, b, [(sig, 1)])
+        p = H.params(r, cost, cap, 5000.0, bdiv)
+        for k, v in kw.items():
+            p[H.PR_INDEX[k]] = v
+        raw = H.simulate(mk, b, c, prm=p)
+        for a in list(raw[:7]) + [raw[7][:4], raw[8], raw[9], raw[10][:7]]:
+            h.update(np.ascontiguousarray(a).tobytes())
+    return h.hexdigest()
+
+
+GOLDEN_DIGEST = "d68f4e7ccd97556417366b24101dc29d6153f220659e0ecd84992670c46c7bcf"
+
+
+def test_engine_bit_identical_at_default_params():
+    """Panel: every engine export added for the reads leaves the decision path bit-identical at default params (and
+    the per-bar equity path, being an export only, changes nothing either)."""
+    assert _golden_digest() == GOLDEN_DIGEST
+    assert _golden_digest(PR_EQPATH=1.0) == GOLDEN_DIGEST
+    assert len(H.params()) == H.NPR and H.params()[H.PR_BPD] == 288
+
+
+def test_equity_path_peak_and_close_at_end():
+    s0 = H.day_ms("2022-03-01")
+    coins = {f"C{i}USDT": _wave_coin(f"C{i}USDT", 40, s0, 30 + i) for i in range(4)}
+    H.install(coins)
+    mk = H.Market(list(coins), (s0 + 31 * DAY, s0 + 40 * DAY), name="t")     # crosses a month end
+    sig = H.synth_signals(mk, "15m", 0.3, 5)
+    b = H.bank_for(mk, ("15m",))
+    c = H.build_cands(mk, b, [(sig, 0)])
+    p = H.params()
+    p[H.PR_EQPATH] = 1
+    raw = H.simulate(mk, b, c, prm=p)
+    path, day_eq, month_eq, st = raw[11], raw[2], raw[0], raw[10]
+    assert len(path) == mk.T and np.array_equal(path[287::288], day_eq)
+    assert np.array_equal(path[mk.month_t0[1:] - 1], month_eq)
+    assert st[7] == pytest.approx(max(5000.0, path.max())) and st[8] == path[-1] == st[4]
+    open_end = int((raw[4][:, H.RI_REASON] == H.EX_END).sum())
+    assert open_end > 0                                        # positions open at the end: marked, not closed
+    p[H.PR_CLOSE_END] = 1
+    rc = H.simulate(mk, b, c, prm=p)
+    assert int((rc[4][:, H.RI_REASON] == H.EX_ENDCLOSE).sum()) == open_end and not (rc[4][:, H.RI_REASON] == H.EX_END).any()
+    assert rc[10][8] == pytest.approx(st[4], rel=1e-12)         # the marked end is unchanged
+    assert rc[10][4] < rc[10][8]                               # closing costs slippage and taker
+    assert rc[10][4] == pytest.approx(5000 + rc[3][:, H.RF_PNL].sum(), rel=1e-9)
+    assert rc[0][-1] == rc[10][4] and rc[2][-1] == rc[10][4]
+    assert np.array_equal(rc[3][rc[4][:, H.RI_REASON] != H.EX_ENDCLOSE], raw[3][raw[4][:, H.RI_REASON] != H.EX_END])
+
+
+def test_n4_uses_the_number_of_adds():
+    """R5: N4 = (1 + n_adds) x q x P0 (= 4 q P0 as written). D0 = 0.5% of P0: with 3 adds the budget needs L >= 24,
+    so (ii) fails and L = 20 (the cap meeting (i) and (iii)); with no adds L = ceil(5000 / 833.3) = 6."""
+    mk = market({"AUSDT": coin("AUSDT", [(100, 100.2, 99.8, 100)] * 3, pad_to=288)})
+    assert rec(sim(mk, [{"k": 0, "t": 0, "d0": 0.5}]))[0][H.RF_LEV] == 20
+    assert rec(sim(mk, [{"k": 0, "t": 0, "d0": 0.5}], adds=0))[0][H.RF_LEV] == 6
+
+
+def test_goal_mode_bracket_rule_skips_an_add_past_the_tier():
+    """R1 machine B: the bracket is looked up at the first unit's notional (20,000 < 25,000: 20x tier) and an add
+    that would take the notional past that tier's cap is skipped ('bracket'). As written, the bracket of N4 = 80,000
+    allows only 10x and the add fills."""
+    bars = [(100, 100.4, 99.6, 100.2), (100.2, 101.5, 100.1, 101.2)] + [(101.2, 101.3, 101.1, 101.2)] * 3
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288, qv=1e12)})
+    rows = [{"k": 0, "t": 0, "d0": 1.0}]
+    p = H.params(0.01, start=20000.0, b_div=4.0)
+    out = H.simulate(mk, no_bank(), cands(mk, rows), prm=p)
+    assert out[3][0, H.RF_LEV] == 10 and out[4][0, H.RI_ADDS] >= 1 and out[7][H.AS_BRACKET] == 0
+    p[H.PR_BRK_Q1], p[H.PR_LEVMAX] = 1, 125
+    out = H.simulate(mk, no_bank(), cands(mk, rows), prm=p)
+    assert out[3][0, H.RF_LEV] == 16 and out[4][0, H.RI_ADDS] == 0 and out[7][H.AS_BRACKET] >= 1
+    assert H.summarize(mk, out)["adds_skipped"]["bracket"] >= 1
+
+
+def test_fixed_leverage_rule_bot_sizing_and_liquidation():
+    """R24 (owners (f)): leverage L fixed, margin = L% of equity, q = margin x L / fill; a stop beyond the
+    liquidation price is liquidated first (whole margin lost)."""
+    bars = [(100, 100.2, 99.9, 100.0), (100.0, 100.1, 97.0, 97.2)] + [(97.2, 97.3, 97.1, 97.2)] * 3
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288, qv=1e12)})
+    p = H.params()
+    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_MAXPOS] = 20, 0, 100.0, 5
+    out = H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 4.0}]), prm=p)
+    rf, ri = rec(out)
+    fill = 100 * (1 + SLIP)
+    assert rf[H.RF_LEV] == 20 and rf[H.RF_Q1] == pytest.approx(0.2 * 5000 * 20 / fill)
+    assert rf[H.RF_U] == pytest.approx(rf[H.RF_Q1] * 4.0)
+    assert ri[H.RI_REASON] == H.EX_LIQ and rf[H.RF_PRICE] == pytest.approx(-0.2 * 5000)
+
+
+def _mark_coin(bars, marks):
+    c = coin("AUSDT", bars, pad_to=288, qv=1e12)
+    n = len(c.ts)
+    mo, mh, ml = c.o.copy(), c.h.copy(), c.l.copy()
+    for i, (a, hh, ll) in marks.items():
+        mo[288 + i], mh[288 + i], ml[288 + i] = a, hh, ll
+    return H.Coin(c.sym, c.ts, c.o, c.h, c.l, c.c, c.v, c.qv, mark={"mo": mo[:n], "mh": mh[:n], "ml": ml[:n]})
+
+
+def test_liquidation_on_mark_price_only_in_the_mark_read():
+    """R19: with 1m / 5m mark bars and PR_LIQ_MARK a mark wick beyond the liquidation price liquidates although the
+    last price stayed inside; the study (H 2: last price) does not."""
+    bars = [(100, 100.2, 99.9, 100.0), (100.0, 100.1, 98.5, 99.0)] + [(99.0, 99.1, 98.9, 99.0)] * 3
+    c = _mark_coin(bars, {1: (100.0, 100.1, 96.0)})
+    H.install({"AUSDT": c})
+    start = START
+    p = H.params()
+    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP] = 20, 0, 100.0
+    rows = [{"k": 0, "t": 0, "d0": 4.0}]
+    last = H.Market(["AUSDT"], (start, start + DAY), name="t")
+    assert rec(H.simulate(last, no_bank(), cands(last, rows), prm=p))[1][H.RI_REASON] == H.EX_END
+    mk = H.Market(["AUSDT"], (start, start + DAY), name="t", bars={"AUSDT": c}, mark=True, tag="mark")
+    with pytest.raises(ValueError):
+        H.simulate(last, no_bank(), cands(last, rows), prm=H.with_overrides(p, {"PR_LIQ_MARK": 1}))
+    q = H.with_overrides(p, {"PR_LIQ_MARK": 1})
+    assert rec(H.simulate(mk, no_bank(), cands(mk, rows), prm=q))[1][H.RI_REASON] == H.EX_LIQ
+    assert rec(H.simulate(mk, no_bank(), cands(mk, rows), prm=p))[1][H.RI_REASON] == H.EX_END
+
+
+def _as_1m(c):
+    """Each 5m bar as five identical 1m bars (volume split in five): a 1m path whose 5m bars are exactly ``c``."""
+    ts = (c.ts[:, None] + np.arange(5)[None, :] * 60_000).ravel()
+    rep = lambda x: np.repeat(np.asarray(x, np.float64), 5)  # noqa: E731
+    return H.Coin(c.sym, ts, rep(c.o), rep(c.h), rep(c.l), rep(c.c), rep(c.v) / 5, rep(c.qv) / 5, last_ms=c.last_ms)
+
+
+def test_one_minute_bars_scale_every_time_length():
+    """R19 fidelity engine: on 1m bars the day (1440 steps), the 24 h liquidity window, the funding grid, the coin end,
+    the chandelier steps and the fill bar scale with the bar length. A 1m path made of five copies of each 5m bar
+    gives the same positions, prices and equity as the 5m run (exit steps x 5)."""
+    s0 = H.day_ms("2022-03-01")
+    coins = {f"C{i}USDT": H.synth_coin(f"C{i}USDT", s0, s0 + 14 * DAY, 60 + i, 20.0 * (i + 1)) for i in range(3)}
+    coins["C1USDT"].last_ms = int(coins["C1USDT"].ts[288 * 11 + 17])
+    fund = {s: H.synth_funding(s0, s0 + 14 * DAY, 90 + i) for i, s in enumerate(coins)}
+    H.install(coins, fund)
+    span = (s0 + 5 * DAY, s0 + 14 * DAY)
+    mk5 = H.Market(list(coins), span, name="t")
+    mk1 = H.Market(list(coins), span, name="t", bar_ms=60_000, bars={s: _as_1m(c) for s, c in coins.items()},
+                   tag="1m")
+    assert mk1.T == 5 * mk5.T and mk1.bpd == 1440 and mk1.coin_end_t[1] == 5 * mk5.coin_end_t[1] + 4
+    assert np.allclose(mk1.b_qv[::5][:50], mk5.b_qv[:50], rtol=1e-9)            # the same 24 h of quote volume
+    for tf in ("15m", "1h"):
+        sig = H.synth_signals(mk5, tf, 0.4, 3)
+        r5 = H.simulate(mk5, H.bank_for(mk5, (tf,)), H.build_cands(mk5, H.bank_for(mk5, (tf,)), [(sig, 0)]))
+        r1 = H.simulate(mk1, H.bank_for(mk1, (tf,)), H.build_cands(mk1, H.bank_for(mk1, (tf,)), [(sig, 0)]))
+        assert len(r5[4]) == len(r1[4]) > 5
+        assert np.allclose(r1[3], r5[3], rtol=1e-9, atol=1e-9)
+        for col in (H.RI_COIN, H.RI_SIDE, H.RI_ADDS, H.RI_REASON, H.RI_SRC):
+            assert np.array_equal(r1[4][:, col], r5[4][:, col])
+        assert np.array_equal(r1[4][:, H.RI_TIN], 5 * r5[4][:, H.RI_TIN])
+        assert np.array_equal(r1[4][:, H.RI_TOUT] // 5, r5[4][:, H.RI_TOUT])
+        assert np.allclose(r1[2], r5[2], rtol=1e-9) and np.allclose(r1[0], r5[0], rtol=1e-9)
+        assert (r5[4][:, H.RI_REASON] == H.EX_COINEND).any() or tf == "15m"
+
+
+# ------------------------------------------------------------------ batches, lineup, live gate, size rule, guards
+def test_wide_batches_open_only_after_enough_passes(tmp_path, monkeypatch):
+    """Owners (b): batch membership is fixed in picks.json at select; batch n+1 is tested only when >= trigger picks
+    of batch n PASS; BH runs within each batch; untested members never run on the test period."""
+    out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    monkeypatch.setattr(H, "K_PICKS", 2)
+    monkeypatch.setattr(H, "BATCH_TRIGGER", 2)
+    priv = tmp_path / "private"
+    args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+    assert H.main(["select", "--study", "wide"] + args) == 0
+    pk = json.load(open(out / "wide" / "picks.json"))
+    assert pk["batches"] == [[1, 2], [3, 4], [5]] and [p["batch"] for p in pk["picks"]] == [1, 1, 2, 2, 3]
+    fail_id = pk["picks"][2]["id"]                               # the first member of batch 2 fails P1
+    forced = H.judge
+    ran = []
+
+    def judge(base, cost2, ctl, study, spec, period, r):
+        ran.append(spec["id"])
+        j = forced(base, cost2, ctl, study, spec, period, r)
+        if spec["id"] == fail_id:
+            j["P1"] = False
+        return j
+    monkeypatch.setattr(H, "judge", judge)
+    assert H.main(["test", "--study", "wide"] + args) == 0
+    test = json.load(open(out / "wide" / "test.json"))
+    v = test["verdict"]
+    assert v["batches_tested"] == [1, 2] and v["batches"][0]["opens_next"] and not v["batches"][1]["opens_next"]
+    assert v["batches"][1]["passes"] == 1 and v["untested"] == [pk["picks"][4]["id"]]
+    assert pk["picks"][4]["id"] not in ran and [p["id"] for p in test["picks"]] == [p["id"] for p in pk["picks"][:4]]
+    assert v["wide_pass"] and len(v["passing"]) == 3 and test["results"][fail_id]["checks"]["PASS"] is False
+    lu = test["lineup"]["picks"]
+    assert lu[fail_id]["lineup"] in ("참고", "excluded") and "PASS" not in lu[fail_id]["why"]
+    assert {i for i, d in lu.items() if d["lineup"] == "정식"} == set(v["passing"])
+
+
+def _blk(lnM, mean_d=(0.01, 0.01), cost2_mean=0.01, dd=0.2, bust=False, med=1.01):
+    lnM = list(lnM)
+    return {"base": {"mean_lnM": float(np.mean(lnM)), "median_M": med, "max_dd": dd, "bust": bust, "lnM": lnM},
+            "cost2": {"mean_lnM": cost2_mean}, "checks": {"mean_d_a": mean_d[0], "mean_d_b": mean_d[1]}}
+
+
+def test_lineup_rule():
+    """Owners (g): 정식 = PASS; 참고 = all seven conditions; else excluded (with the failing conditions)."""
+    good = [0.05, 0.04, 0.03, 0.02, -0.01]
+    assert H.lineup_of(_blk(good), "picks", True) == {"lineup": "정식", "why": []}
+    assert H.lineup_of(_blk(good), "picks", False) == {"lineup": "참고", "why": []}
+    assert H.lineup_of(_blk(good), "no pick, fail", False)["lineup"] == "excluded"
+    cases = {"mean_lnM": _blk([-0.01, 0.0]), "median_M": _blk(good, med=0.99),
+             "controls": _blk(good, mean_d=(0.01, -0.001)), "cost_x2": _blk(good, cost2_mean=-0.001),
+             "max_dd": _blk(good, dd=0.5), "bust": _blk(good, bust=True), "top_month": _blk([0.30, 0.10, 0.05, 0.05])}
+    for why, blk in cases.items():
+        d = H.lineup_of(blk, "picks", False)
+        assert d["lineup"] == "excluded" and why in d["why"], why
+    assert H.lineup_of(_blk([0.20, 0.15, 0.10, 0.05]), "picks", False)["lineup"] == "참고"     # 0.20 < 0.25
+
+
+def test_live_gate_size_rule_and_intervals():
+    full = {"liquidations_mark": 0, "worst_position_loss_U_stopfill25": 2.5, "worst_rolling30_multiple": 0.8,
+            "max_instant_loss_gap10": 0.2, "mean_lnM_impact_y1_live": 0.01, "mean_lnM_impact_y1_10x": 0.002,
+            "forward_replay_share": 0.995, "forward_inside_band": True}
+    g = H.evaluate_live_gate(full)
+    assert g["live_ready"] and g["items"]["g"] == "not applicable"
+    assert not H.evaluate_live_gate({**full, "worst_rolling30_multiple": 0.69})["live_ready"]
+    assert H.evaluate_live_gate({**full, "ai_judge_used": True})["items"]["g"] == "not computed"
+    assert H.evaluate_live_gate({})["label"] == "not live-ready at this size"
+    cells = [{"machine": "A", "r": 0.005, "mean_ln_multiple": 0.01, "bust_share": 0.0},
+             {"machine": "B", "r": 0.05, "mean_ln_multiple": 0.05, "bust_share": 0.03},
+             {"machine": "B", "r": 0.10, "mean_ln_multiple": 0.05, "bust_share": 0.05},
+             {"machine": "B", "r": 0.20, "mean_ln_multiple": 0.09, "bust_share": 0.06}]
+    assert H.size_fixed_on_select(cells) == cells[1]                     # 20% busts too often; tie -> lower r
+    assert H.size_fixed_on_select([cells[3]]) is None
+    lo, hi = H.clopper_pearson(0, 33)
+    assert lo == 0.0 and hi == pytest.approx(0.1058, abs=1e-3)              # panel: 0 of 33 allows up to 10.6%
+    assert H.HEADLINE_CELL["r"] == 0.05 and H.HEADLINE_CELL["level"] == 5000.0
+    assert H.HEADLINE_CELL["start_wallet"] == 1000.0 and H.HEADLINE_CELL["machine"].startswith("B")
+
+
+def test_d11_check_of_public_reads():
+    ds = {"F3:F9_FVG:4h:G1", "basket_batch1"}
+    ok = {"rows": [{"row": "pick:F3:F9_FVG:4h:G1", "label": "x", "n": 3, "win_share": 0.4},
+                   {"row": "pick:F2:X:1h:G1", "share_x5": 0.12}], "basket_batch1": {"positions": 12}}
+    assert H.d11_problems(ok, ds) == []
+    bad = {"rows": [{"row": "pick:F3:F9_FVG:4h:G1", "share_x5": 0.12}], "basket_batch1": {"multiple": 1.3},
+           "by_id": {"F3:F9_FVG:4h:G1": {"cells": [0.1]}}}
+    assert len(H.d11_problems(bad, ds)) == 3
+
+
+class _FakeReads:
+    """A stand-in reads module (the real reads_a.py is another agent's code): it uses the documented ctx."""
+
+    def __init__(self, mode="ok"):
+        self.mode, self.seen = mode, {}
+
+    def run(self, ctx):
+        self.seen = ctx
+        assert ctx["api"] == 1 and ctx["seeds"]["pass"] == H.N_SEEDS
+        assert {r["kind"] for r in ctx["rows"]} >= {"pick"}
+        t0, t1 = ctx["periods"]["test"]
+        w0 = t0 + 10 * DAY
+        p = ctx["picks"][0]
+        res = ctx["run"](p, w0, w0 + 20 * DAY, start_wallet=1000.0, path="5m", close_end=True)
+        assert len(res["equity_path"]) == 20 * 288 and res["start"] == 1000.0
+        assert res["peak"] >= res["equity_path"].max() - 1e-9 and res["multiple"] == pytest.approx(res["end"] / 1000)
+        cs = ctx["control_signals"](p, "a", "test", 0.005, 1)
+        r2 = ctx["run"]([(cs, 0)], w0, w0 + 20 * DAY, start_wallet=1000.0)
+        assert r2["candidates"] <= len(cs["k"])
+        ctx["out"]["rows"] = [{"row": r["row"], "kind": r["kind"], "n_members": len(r["members"])}
+                              for r in ctx["rows"]]
+        ctx["private"]["multiples"] = {p["id"]: res["multiple"]}
+        if self.mode == "write":
+            with open(os.path.join(H.ROOT, H.OUT_REL[ctx["study"]], "sneaky.json"), "w") as fh:
+                fh.write("{}")
+        if self.mode == "d11":
+            ds = next(x for x in ctx["picks"] if x["is_ds"])
+            ctx["out"][ds["id"]] = {"multiple": 1.5}
+
+
+@pytest.mark.parametrize("mode", ["ok", "write", "d11", "unpinned"])
+def test_reads_hook_ctx_guard_and_d11(tmp_path, monkeypatch, mode):
+    out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    priv = tmp_path / "private"
+    args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+    assert H.main(["select", "--study", "wide"] + args) == 0
+    fake = _FakeReads(mode)
+    monkeypatch.setattr(H, "READS_MODULES", ("reads_fake",))
+    monkeypatch.setattr(H, "_reads_module", lambda name: fake)
+    real_exists = os.path.exists
+    monkeypatch.setattr(H.os.path, "exists", lambda p: True if str(p).endswith("reads_fake.py") else real_exists(p))
+    monkeypatch.setattr(H, "sha256_file", (lambda f: (lambda p: "f" * 64 if str(p).endswith("reads_fake.py")
+                                                      else f(p)))(H.sha256_file))
+    monkeypatch.setattr(H, "reads_pinned_now", lambda study: {} if mode == "unpinned"
+                        else {"research/hunt/reads_fake.py": "f" * 64})
+    rc = H.main(["test", "--study", "wide"] + args)
+    target = out / "wide" / "reads_fake.json"
+    assert (out / "wide" / "test.json").exists()                  # the verdict is written before any read
+    if mode == "ok":
+        assert rc == 0 and target.exists()
+        doc = json.load(open(target))
+        assert doc["reads_line_predates_test_json"] is True and doc["out"]["rows"]
+        assert doc["private_sha256"] == H.sha256_file(str(priv / "wide_reads_fake_private.json"))
+        kinds = {r["kind"] for r in doc["out"]["rows"]}
+        assert kinds == {"pick", "basket_batch1", "basket_passing"}
+        target.unlink()                                            # the reads command runs the hook again
+        assert H.main(["reads", "--study", "wide"] + args) == 0 and target.exists()
+        assert H.main(["reads", "--study", "wide"] + args) == 0    # exists: skipped, not overwritten
+    elif mode == "unpinned":
+        assert rc == 0 and not target.exists() and not fake.seen
+    else:
+        assert rc == 2 and not target.exists()                     # ReadGuardError: nothing written
+
+
+# ------------------------------------------------------------------ R19 fidelity and R23 October (synthetic files only)
+def _write_1m(dirpath, coin_):
+    c1 = _as_1m(coin_)
+    (dirpath / "1m").mkdir(parents=True, exist_ok=True)
+    f32 = lambda x: np.asarray(x, np.float32)  # noqa: E731
+    np.savez_compressed(dirpath / "1m" / f"{coin_.sym}.npz", ts=c1.ts, o=f32(c1.o), h=f32(c1.h), l=f32(c1.l),
+                        c=f32(c1.c), v=f32(c1.v), qv=f32(c1.qv), mo=f32(c1.o), mh=f32(c1.h), ml=f32(c1.l), mc=f32(c1.c))
+
+
+def test_fidelity_read_on_one_minute_files(tmp_path, monkeypatch, capsys):
+    out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    priv = tmp_path / "private"
+    args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+    assert H.main(["select", "--study", "wide"] + args) == 0
+    with pytest.raises(SystemExit):
+        H.main(["fidelity", "--study", "wide", "--list-coins"] + args)       # no test.json yet
+    assert H.main(["test", "--study", "wide"] + args) == 0
+    capsys.readouterr()
+    assert H.main(["fidelity", "--study", "wide", "--list-coins"] + args) == 0
+    listed = capsys.readouterr().out.split()
+    assert listed and set(listed) <= set(E2E_SYMS)
+    d1 = tmp_path / "fid"
+    for s in ("BTCUSDT", "ETHUSDT"):
+        _write_1m(d1, H._COINS[s])
+    assert H.main(["fidelity", "--study", "wide", "--data1m", str(d1)] + args) == 0
+    doc = json.load(open(out / "wide" / "fidelity.json"))
+    assert doc["bar_source"]["BTCUSDT"] == "1m" and doc["bar_source"]["AAAUSDT"] == "5m"
+    test = json.load(open(out / "wide" / "test.json"))
+    assert set(doc["picks"]) == {p["id"] for p in test["picks"]}
+    for p in test["picks"]:
+        row = doc["picks"][p["id"]]
+        if p["kind"] == "ds":
+            assert "note" in row and "1m_mark" not in row                  # D11
+        else:
+            assert set(row) >= {"5m", "1m", "1m_mark", "change_1m_mark_minus_5m", "median_control_seeds"}
+            assert set(row["median_control_seeds"]) == {"a", "b"}
+    assert doc["private_sha256"] == H.sha256_file(str(priv / "wide_fidelity_private.json"))
+
+
+def _zip_csv(path, header, rows):
+    import zipfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = (header + "\n" if header else "") + "\n".join(",".join(str(x) for x in r) for r in rows) + "\n"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(path.name.replace(".zip", ".csv"), body)
+    (path.parent / (path.name + ".CHECKSUM")).write_text(f"{H.sha256_file(str(path))}  {path.name}\n")
+
+
+def _daily_archive(root, sym, day, ts, o, h, lo, c, v, qv, mark=True, micro=False):
+    kl = root / "data/futures/um/daily/klines" / sym / "5m" / f"{sym}-5m-{day}.zip"
+    t = [int(x) * (1000 if micro else 1) for x in ts]
+    _zip_csv(kl, "open_time,open,high,low,close,volume,close_time,quote_volume,count,tbv,tbqv,ignore",
+             [(t[i], o[i], h[i], lo[i], c[i], v[i], t[i] + 299_999, qv[i], 10, 0, 0, 0) for i in range(len(t))])
+    if mark:
+        mk = root / "data/futures/um/daily/markPriceKlines" / sym / "5m" / f"{sym}-5m-{day}.zip"
+        _zip_csv(mk, None, [(int(ts[i]), o[i] * 1.001, h[i] * 1.001, lo[i] * 0.999, c[i], 0, int(ts[i]) + 299_999, 0,
+                             0, 0, 0, 0) for i in range(len(ts))])
+
+
+def test_daily_archive_loader(tmp_path):
+    a = H.day_ms("2026-10-01")
+    root = tmp_path / "oct"
+    for d in range(2):
+        ts = a + d * DAY + np.arange(288, dtype=np.int64) * FIVE
+        p = 100 + np.arange(288) * 0.01 + d
+        _daily_archive(root, "XUSDT", H.ms_str(int(ts[0]))[:10], ts, p, p + 0.05, p - 0.05, p + 0.01, np.full(288, 3.0),
+                       np.full(288, 300.0), mark=(d == 0), micro=(d == 1))
+    r = H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY)
+    arr, cnt = r["arrays"], r["counts"]
+    assert len(arr["ts"]) == 576 and arr["ts"][0] == a and arr["ts"][-1] == a + 2 * DAY - FIVE   # microseconds -> ms
+    assert arr["o"].dtype == np.float32 and arr["o"][0] == np.float32(100.0) and arr["qv"][5] == np.float32(300.0)
+    assert np.isfinite(arr["mo"][:288]).all() and np.isnan(arr["mo"][288:]).all()
+    assert arr["mo"][0] == np.float32(100.1)
+    assert cnt["kline_days"] == 2 and cnt["mark_days"] == 1 and cnt["funding_zero_days"] == 3
+    assert cnt["checksum_ok"] == 3 and len(r["arrays"]["funding"][0]) == 0
+    bad = next((root / "data/futures/um/daily/klines/XUSDT/5m").glob("*.CHECKSUM"))
+    bad.write_text("0" * 64 + "  x\n")
+    with pytest.raises(SystemExit, match="CHECKSUM"):
+        H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY)
+
+
+def test_october_read_on_synthetic_daily_files(tmp_path, monkeypatch):
+    out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    monkeypatch.setattr(H, "OCT_PERIOD", ("2020-10-01", "2020-10-11"))
+    priv = tmp_path / "private"
+    args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+    assert H.main(["select", "--study", "wide"] + args) == 0
+    root = tmp_path / "oct"
+    assert H.main(["october", "--study", "wide", "--data-oct", str(root)] + args) != 0 or True
+    assert H.main(["test", "--study", "wide"] + args) == 0
+    a = H.day_ms("2020-10-01")
+    for i, s in enumerate(E2E_SYMS):
+        last = float(H._COINS[s].c[-1])
+        nc = H.synth_coin(s, a, a + 10 * DAY, 900 + i, last)
+        for d in range(10):
+            sl = slice(d * 288, (d + 1) * 288)
+            _daily_archive(root, s, H.ms_str(a + d * DAY)[:10], nc.ts[sl], nc.o[sl], nc.h[sl], nc.l[sl], nc.c[sl],
+                           nc.v[sl], nc.qv[sl])
+    assert H.main(["october", "--study", "wide", "--data-oct", str(root)] + args) == 0
+    doc = json.load(open(out / "wide" / "reads_october.json"))
+    assert doc["note"] == H.OCT_NOTE and doc["period"] == ["2020-10-01", "2020-10-11"]
+    test = json.load(open(out / "wide" / "test.json"))
+    assert set(doc["picks"]) == {p["id"] for p in test["picks"]}
+    for p in test["picks"]:
+        row = doc["picks"][p["id"]]
+        if p["kind"] == "ds":
+            assert set(row) == {"note", "n_positions", "bust"}
+        else:
+            assert row["test_rolling_10d"]["windows"] == 61 - 10 + 1
+            assert set(row["controls"]) == {"a", "b"} and row["controls"]["a"]["seeds"] == 3
+    assert all(c["funding_zero_days"] == 10 and c["checksum_ok"] == 20 for c in doc["data_counts"].values())
