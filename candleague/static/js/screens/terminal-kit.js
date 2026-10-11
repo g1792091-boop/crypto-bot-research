@@ -14,6 +14,10 @@ import {ROLE_SHORT, tfKo, sideKo} from "../labels.js";
 export const H = 3600000;
 export const D = 24 * H;
 export const KST = 9 * H;
+/** The chart's timeframes (the engine trades 15분 · 30분 · 1시간 · 4시간; 1분 · 5분 are for looking closer). */
+export const TFS = ["1m", "5m", "15m", "30m", "1h", "4h"];
+export const TF_MS = {"1m": 60e3, "5m": 300e3, "15m": 900e3, "30m": 1800e3, "1h": 3600e3, "4h": 14400e3};
+export const TF_SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
 
 // ---------------------------------------------------------------- numbers as the rule bot's terminal prints them
 /** USDT amount with its sign: 1234.5 -> "+1,234.50" (null -> "—"). */

@@ -5,11 +5,11 @@
   "volume_rel": 0.001,
   "max_share": 0.001
  },
- "written_utc": "2026-10-11 12:37",
+ "written_utc": "2026-10-11 13:52",
  "pass": true,
  "coins": {
   "BTCUSDT": {
-   "content_sha256": "e8e2eaa92380cef321899aa883bb9af9cff49ff427e7392d2f10de83ccc262d9",
+   "content_sha256": "2920551b68125301c1db28fdbaf4a5046e853b1a1f8918efd15e8244522c7710",
    "clean_counts": {
     "rows": 709920,
     "duplicates": 0,
@@ -29,7 +29,7 @@
    "first_mismatch": "2021-01-12 06:10"
   },
   "ETHUSDT": {
-   "content_sha256": "653e325529c795a28c108cf8aa49187b1d72356a588d26099c3bcba96e9861d9",
+   "content_sha256": "0c6878a77fd87fb104e308542327d8db65ec5bc89c07721d379ed927544f24f5",
    "clean_counts": {
     "rows": 709920,
     "duplicates": 0,
@@ -49,7 +49,7 @@
    "first_mismatch": "2021-01-12 06:10"
   },
   "SOLUSDT": {
-   "content_sha256": "214eaf64658a65c77762b957d5198e7d0532789c37f893653e7eb9c448a8d3b5",
+   "content_sha256": "dff88af4f5e121d396ca076d693455ad496b8015329f87101f118716bfebf31a",
    "clean_counts": {
     "rows": 635820,
     "duplicates": 0,
@@ -69,7 +69,7 @@
    "first_mismatch": "2021-01-12 06:10"
   },
   "DOGEUSDT": {
-   "content_sha256": "cd8ce041996deb72bf144628fa6a5be89903616091b69504182cc23e1305f30b",
+   "content_sha256": "add1e260cf13aa35e03710ddf8ef659fd2b556975a5f8c1d32e1aff014a76138",
    "clean_counts": {
     "rows": 654804,
     "duplicates": 0,
@@ -89,7 +89,7 @@
    "first_mismatch": "2021-01-12 06:10"
   },
   "LTCUSDT": {
-   "content_sha256": "4f98abf88b79bbb94c9ed4c07d9d8e0a8fa5ae24ceae9b49bbc9e867082399b8",
+   "content_sha256": "df7a2937960fe819224aac5d8513403a66f26636cc7895496163d7e0eae5776a",
    "clean_counts": {
     "rows": 707519,
     "duplicates": 0,
@@ -109,7 +109,7 @@
    "first_mismatch": "2021-01-12 06:10"
   },
   "BCHUSDT": {
-   "content_sha256": "41383526b80c52fe021ac431071bb3c9c2ee0a5e8fac4498514b77b0ced81ea2",
+   "content_sha256": "443a463dc0e3a63610a20eeb67d2fbaa467400053aa0d118a783026ac5661892",
    "clean_counts": {
     "rows": 709920,
     "duplicates": 0,
@@ -129,5 +129,5 @@
    "first_mismatch": "2021-01-12 06:10"
   }
  },
- "code_sha256": "1e040265c8efd61ee8a18ca135c167cb1fe49d0132088ed595feb4f0752a2ded"
+ "code_sha256": "979c2748f525431b5881643b9cb03c15b2efc3d0750b27e7939a8dd79d2527b7"
 }
