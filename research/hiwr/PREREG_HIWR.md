@@ -52,8 +52,8 @@ It passes when it does all four of these:
 * (c) has a positive mean net result per trade, also at double costs;
 * (d) does better than the same exits fed with coin-flip sides and with random entry times.
 
-Condition (d) is needed because (a) alone is no evidence. With a +0.30-0.40% take-profit and a wider stop, random
-entries already win 60-80% of the time (section 15).
+Condition (d) is needed because (a) alone is no evidence. With a +0.39-0.54% take-profit (2.1) and a wider stop,
+random entries already win about 52-79% of the time (section 15).
 
 ## 2. The owners' targets (confirmed 2026-10-12, section 21)
 
@@ -571,7 +571,7 @@ How T6 works:
 | read | what |
 |---|---|
 | **R1 with weekends** | the same pick with weekend entries allowed and its own f* from SEL with weekends; the trade list and the account on SEL and TEST, beside every verdict (the comparison the owners asked for) |
-| **R2 other tiers** | the pick's TP price, stop and fill at each other tier whose ROE range contains that price (stop room changes): trades, win rate, mean, f*, margin % |
+| **R2 other tiers** | the pick's TP price, stop and fill at each other tier whose after-fee ROE range (2.1, for the same fill) contains that price (stop room changes): trades, win rate, mean, f*, margin % |
 | **R3 loose buffer** | 0.2% only, with the count of liquidations |
 | **R4 gross ROE reading** | the pick with the TP at the gross reading (ROE before fees, price move ROE / L, 2.1), its own f* from SEL; the trade list and the account on SEL and TEST |
 | **R5 coins** | old six alone, new 24 alone, the 22 still-listed coins alone, the 8 proxy coins alone. The label "carried by the old six" when the new-24 TEST mean r <= 0 |
@@ -593,86 +593,98 @@ How T6 works:
 
 ## 15. Honest expectation (from the practice period, before any search)
 
-These numbers come from the feasibility runs and the review re-runs of section 22: SEL only, the 6 old coins, the 36
-core strategies at default numbers for the owners' TP grid, and a sample of the full grid's exits. They are SEL numbers
-and in sample. Where the feasibility differs from this design (closed-trade DD, no size ceiling, no stop-inside-TP skip,
-7 of the 9 stops, a maker fill at a better gapped open, one cost for the net reading), section 22.1 says so and the
-figures below say which basis they use.
+All numbers here are SEL only, on the 6 old coins, and in sample. Two sources:
+* **The net-reading re-run** (22.5): the 36 core strategies at default numbers under the registered rules (2.1, 7.2,
+  7.3: the net TP for each fill, all 9 stops, the stop-inside-TP skip, the maker TP filled at T, the house buffer).
+  Every count below comes from it unless it is labelled otherwise.
+* **The feasibility runs** (22.1): the full grid's own exits on sampled numbers, and the closed-trade-DD size medians.
+  Where a figure comes from them, it says so.
 
 ### 15.1 Costs against the target
 
-| TP price move | taker-TP round trip 0.14%, as a share of the TP | maker-TP round trip 0.09%, as a share of the TP |
-|---|---|---|
-| +0.30% | 47% | 30% |
-| +0.35% | 40% | 26% |
-| +0.40% | 35% | 22.5% |
+The net reading adds the cost to the TP price, so the cost does not eat the target ROE; it moves the target further
+away. Share of the TP's price move that is cost, at 30x:
+
+| ROE step | taker TP | cost 0.14% as a share of it | maker TP | cost 0.09% as a share of it |
+|---|---|---|---|---|
+| 9% | +0.44% | 32% | +0.39% | 23% |
+| 10.5% | +0.49% | 29% | +0.44% | 20% |
+| 12% | +0.54% | 26% | +0.49% | 18% |
 
 ### 15.2 Break-even win rate
 
-Take a driftless path with TP distance a and stop distance b, ignoring gaps and funding:
+Take a driftless path with TP distance a, stop distance b and net target R = ROE / L, ignoring gaps and funding:
 * A random entry hits the TP first with probability p0 = b / (a + b).
-* Break-even after costs is p* = (b + 0.14) / (a + b) with a taker TP, and (b + 0.14) / (a + b + 0.05) with a maker TP.
+* A win nets R and a loss costs b + 0.14%, so break-even is p* = (b + 0.14) / (R + b + 0.14). It is the same for both
+  fills. The maker TP is closer (a = R + 0.09% instead of R + 0.14%), so a random entry wins more often with it.
 
-| TP a | stop b | random p0 | break-even, taker TP | break-even, maker TP | skill needed (taker / maker) |
+| net target R (30x step) | stop b | taker TP a, random p0 | maker TP a, random p0 | break-even, both fills | skill needed (taker / maker) |
 |---|---|---|---|---|---|
-| 0.30% | 0.6% | 66.7% | 82.2% | 77.9% | +15.6 / +11.2 pp |
-| 0.30% | 1.0% | 76.9% | 87.7% | 84.4% | +10.8 / +7.5 pp |
-| 0.30% | 1.5% | 83.3% | 91.1% | 88.6% | +7.8 / +5.3 pp |
-| 0.40% | 1.0% | 71.4% | 81.4% | 78.6% | +10.0 / +7.2 pp |
+| 0.30% (9%) | 0.6% | 0.44%, 57.7% | 0.39%, 60.6% | 71.2% | +13.5 / +10.5 pp |
+| 0.30% (9%) | 1.0% | 0.44%, 69.4% | 0.39%, 71.9% | 79.2% | +9.7 / +7.2 pp |
+| 0.30% (9%) | 1.5% | 0.44%, 77.3% | 0.39%, 79.4% | 84.5% | +7.2 / +5.2 pp |
+| 0.40% (12%) | 1.0% | 0.54%, 64.9% | 0.49%, 67.1% | 74.0% | +9.1 / +6.9 pp |
 
 The loss autopsy measured the rule bot's chosen side beating a coin flip in exactly 50.0% of trades.
 
 ### 15.3 What SEL showed
 
-* **Random entry at every bar** through these exits wins about 60-80% of the time and still loses.
-  - The mean per trade is about -0.10% of notional with a maker TP and -0.14% with a taker TP, on every timeframe and
-    stop. That is exactly the cost.
-  - Example, 1h, +0.35% maker TP, 1% stop: 73.2% wins against a break-even of 80.3%, -0.100% per trade (-0.088R).
-* **The 36 at default numbers, per TP reading** (house buffer; 4,536 strategy-settings per reading and timeframe:
-  36 x 3 tiers x 3 TP steps x 7 stops x 2 fills). Settings passing B (150 trades, win rate 70%, mean > 0, cost x2 > 0):
+* **Random entry at every bar** through these exits wins about 52-79% of the time and still loses.
+  - The median mean per trade over the settings is about -0.11% of notional with a maker TP and -0.14 to -0.15% with a
+    taker TP, on every timeframe. That is the cost.
+  - Example, 1h, 30x 10.5% maker TP (+0.44%), 1% stop: 68.6% wins against a break-even of 75.5%, -0.105% per trade
+    (-0.092R).
+* **The 36 at default numbers** (house buffer; 5,832 strategy-settings per reading and timeframe: 36 x 3 tiers x 3 TP
+  steps x 9 stops x 2 fills). Settings passing B (150 trades, win rate 70%, mean > 0, cost x2 > 0):
 
 | reading | weekends | 15m | 30m | 1h | 4h |
 |---|---|---|---|---|---|
-| **gross (the rule, 2.1)** | **skipped (the rule)** | **0** | **0** | **0** | **2: S4_BB_BBP, 30x, maker +0.40%, 1 ATR and 1% stops** |
-| gross | included (comparison) | 0 | 0 | 0 | 0 |
-| net as run (Q1 alternative) | skipped | 0 | 0 | 0 | 6, all S4_BB_BBP 30x maker |
-| net as run | included | 0 | 0 | 1 (N06_MACD_ORB 40x maker) | 2 (S4_BB_BBP 30x maker) |
-| each coin-flip seed alone | any row | 0 | 0 | 0 | 0 |
+| **net (the rule, 2.1)** | **skipped (the rule)** | **0** | **0** | **0** | **8, all S4_BB_BBP 30x maker: TP +0.39% (1 ATR, 1.25% stops), +0.44% and +0.49% (1 ATR, 1%, 1.25%)** |
+| net | included (comparison) | 0 | 0 | 10: N06_MACD_ORB (1, 40x maker), N18_VWMA_MACD (3, 50x maker), N20_EMA9_CHOP (6, 50x taker and maker) | 1 (S4_BB_BBP 30x maker +0.49%, 1 ATR) |
+| gross (comparison, R4) | skipped | 0 | 0 | 0 | 3 (S4_BB_BBP 30x maker +0.40%; 1 ATR, 1%, 1.25%) |
+| gross | included | 0 | 0 | 3 (N20_EMA9_CHOP 50x maker) | 0 |
+| each coin-flip seed alone (3 seeds) | any row | 0 | 0 | 0 | 0 |
 
-  - The net rows were run with +0.14% for both fills. With the corrected maker targets (2.1: ROE / L + 0.09%), the
-    0.44% and 0.49% maker settings match the 10.5% and 12% steps at 30x, the 0.54% ones (and N06's 0.515% at 40x) lie
-    above the owners' range, and +0.39% was not run. So 4 of the 6 net passers sit on a corrected net target.
-  - The first draft of this file quoted "8 on 4h, and with weekends 1 on 1h and 2 on 4h"; that pooled both readings.
-* **At default numbers the registered selection finds 0 eligible pairs on every timeframe.** Both gross passers fail
-  the exit plateau (10.3 b): their +0.35% TP neighbour fails cost x2 (-0.025% with the 1 ATR stop, -0.037% with 1%).
-  The 1 ATR pair's wider neighbour, 1.5 ATR, has 83 trades and a cost-x2 mean of -0.050%, so it fails even under Q21's
-  relaxed rule.
-* **The pass rests on the maker fee.** With a taker TP both gross passers fail cost x2 (-0.067% and -0.083% per trade).
-  Filling the maker TP exactly at T instead of a better gapped open changed nothing (identical to four decimals), and
-  neither did a required pierce of 0.01% or 0.02%, although 11-13% and 20-25% of their TP exits pierced by less. 6 of
-  133 and 8 of 261 TP fills came inside the entry minute (R7).
-* **The entries add a little win rate, far less than needed.** Gross reading, weekend skip, house buffer:
+* **At default numbers the registered selection finds 0 eligible pairs on every timeframe.** All 8 net passers fail
+  the exit plateau (10.3 b, with Q21):
+  - the 1 ATR pairs through their wider stop, 1.5 ATR: 83 trades, so the relaxed rule applies, and its cost-x2 mean
+    is -0.03 to -0.04%;
+  - the 1% pairs through 0.75% (420 trades, cost x2 -0.08%), and the +0.44% one also through its +0.39% neighbour (cost
+    x2 -0.008%);
+  - the 1.25% pairs through 1.5% (133 trades, cost x2 -0.018 to -0.029%), and the +0.39% one also through 1% (cost x2
+    -0.008%).
+  The with-weekend passers (comparison) fail it too. The number plateau (10.3 c) needs other numbers and was not
+  checked.
+* **They beat the coin flip on SEL.** Each of the 8 has a mean above the 95th percentile of 200 coin-flip seeds flipped
+  per signal bar and side (10.3 e); the seeds' mean is -0.03 to -0.08%.
+* **The pass rests on the maker fee.** With a taker TP at the same ROE step (0.05% further), all 8 keep a positive mean
+  (+0.07 to +0.12%) but fail cost x2 (-0.01 to -0.07%). Requiring the price to pierce T by 0.01% or 0.02% kept every
+  maker mean positive (+0.09 to +0.13% at 0.02%), although 16-23% of their TP exits pierced by less than 0.02%. Two to
+  seven of their 130-261 TP fills came inside the entry minute (R7).
+* **The entries add a little win rate, far less than needed.** Net reading, weekend skip, house buffer:
 
 | | 15m | 30m | 1h | 4h |
 |---|---|---|---|---|
-| strategy-settings with win rate >= 70% and >= 150 trades | 1,570 | 1,882 | 1,686 | 204 |
-| the same for each coin-flip seed | 1,528-1,582 | 1,684-1,764 | 1,468-1,530 | 172-186 |
-| median win rate, 30x maker settings: strategies minus coin flips at the same moments | +0.2 pp | +0.8 pp | +1.5 pp | +1.7 pp |
+| strategy-settings with win rate >= 70% and >= 150 trades | 1,185 | 1,335 | 1,346 | 191 |
+| the same for each coin-flip seed | 1,087-1,136 | 1,072-1,158 | 986-1,041 | 128-147 |
+| median win rate, 30x maker settings: strategies minus coin flips at the same moments | +0.3 pp | +0.7 pp | +1.6 pp | +2.4 pp |
 
-  On 30m-4h the strategies have 7-19% more 70% settings than every seed, so the entries carry a small real effect. The
-  break-even needs 5-16 pp over a random entry (15.2).
-* **The full grid's own exits on sampled numbers** (3,705 combos x 84 exits; default numbers, the full grid's own SEL
-  picks, and random numbers; core, default plus random numbers, weekend skip, pairs with >= 150 trades):
-  - roe10 is the closest existing exit to the owners' range: a limit TP at net ROE 10% on the house leverage, +0.34%
-    from the fill at 50x, +0.39% at 40x, +0.47% at 30x and +0.64% at 20x.
+  On 30m-4h the strategies have 15-30% more 70% settings than every seed (15m: 4%), so the entries carry a small real
+  effect. The break-even needs 5-14 pp over a random entry (15.2).
+* **The full grid's own exits on sampled numbers** (feasibility, 3,705 combos x 84 exits; default numbers, the full
+  grid's own SEL picks, and random numbers; core, default plus random numbers, weekend skip, pairs with >= 150 trades):
+  - roe10 is a limit TP at net ROE 10% on the house leverage, priced with +0.14% (the registered maker TP adds 0.09%):
+    +0.34% from the fill at 50x, +0.39% at 40x, +0.47% at 30x and +0.64% at 20x. At 30x it sits inside the owners'
+    range.
   - roe10's median win rate is 68.5 / 72.6 / 75.2 / 76.8% on 15m / 30m / 1h / 4h, against 68.4 / 72.3 / 74.1 / 74.6%
     for coin-flip sides at the same moments.
   - roe10 pairs passing B: 0 / 5 / 4 / 77. Coin flips: 0 / 0.3 / 0.3 / 4.0 (mean of 3 seeds).
   - All 84 exits together: 0 / 20 / 19 / 366, coin flips 0 / 0.7 / 2.0 / 11.7. Most are roe20 (0 / 7 / 9 / 139) and
-    the ladders (ladder20 0 / 4 / 2 / 56, ladder 0 / 2 / 1 / 28), far outside +0.30-0.40% (`feas/A_pass4_by_exit.csv`).
+    the ladders (ladder20 0 / 4 / 2 / 56, ladder 0 / 2 / 1 / 28), far outside the owners' range
+    (`feas/A_pass4_by_exit.csv`).
   - DeepSeek, all 84 exits, counts only: 0 / 0 / 30 / 163 (coin flips 0 / 0.3 / 3.3 / 17).
 * **Stop room decides most of the leverage question.** At 50x the liquidation price is only 1.6% away even for
-  BTC/ETH. Share of bars skipped with a 1 ATR stop at 30 / 40 / 50x (weekend skip):
+  BTC/ETH. Share of bars skipped with a 1 ATR stop at 30 / 40 / 50x (weekend skip; feasibility):
 
 | | 30x | 40x | 50x |
 |---|---|---|---|
@@ -680,49 +692,47 @@ The loss autopsy measured the rule bot's chosen side beating a coin flip in exac
 | 1h | 41% | 68% | 85% |
 | 4h | 89% | 97% | 99% |
 
-  A 1.5% stop never fits at 50x. Because the price targets are the same band at every tier, 40x and 50x added nothing
-  in SEL. On the 1.0%-mmr coins of the 30-coin universe the room is smaller still (section 4).
-* **Stop inside the TP.** The feasibility did not apply 7.3's rule that the stop be wider than the TP. Share of SEL
-  long bars that fit at 30x but whose 1 ATR stop is not wider than the TP: 15m 12 / 18 / 25% at TP 0.30 / 0.35 / 0.40%;
-  30m 4.4-10.6%; 1h 1.3-3.9%; 4h 0 (1.5 ATR: 15m 4.4-10.1%). So the 15m and 30m ATR-stop win rates and 70% counts above
-  include trades this design skips.
-* **The weekend skip** changed the per-trade mean by only +0.002 to +0.006% of notional on 15m-1h, and was slightly
-  worse on 4h.
+  A 1.5% stop never fits at 50x. 40x and 50x added no passer on the weekend-skip rows. On the 1.0%-mmr coins of the
+  30-coin universe the room is smaller still (section 4).
+* **Stop inside the TP** (7.3, now applied). Share of SEL bars that fit at 30x but whose 1 ATR stop is not wider than
+  the net TP (weekend skip; maker +0.39-0.49% / taker +0.44-0.54%): 15m 19-34% / 26-42%; 30m 7-14% / 10-19%; 1h 2-5% /
+  3-8%; 4h 0-0.1% / 0-0.6%. So the net reading skips more 15m ATR-stop trades than the gross one would.
+* **The weekend skip** changed the median per-trade mean by +0.003% on 15m, +0.002% on 30m, +0.005% on 1h and -0.002% on
+  4h (net reading, settings with >= 150 trades both ways).
 
 ### 15.4 What the drawdown caps do to size and to the monthly return
 
-* **Medians over the settings above** (closed-trade DD, margin allowed up to 100%, so these are upper bounds: the
-  registered size uses the mark-to-market DD and the bootstrap rule of 8.4, which only make it smaller). The margin
-  that keeps the SEL drawdown inside the cap is 0.11-0.16% of the wallet on 15m, 0.3-0.6% on 30m, 1.2-2.7% on 1h and
-  2.4-5.1% on 4h. Nearly all of these settings lose; for them the monthly return at that size says nothing new. A
-  setting that loses steadily, sized so that its 36-month drawdown equals the cap, loses about the cap over SEL by
-  construction: (1 - cap)^(1/36) - 1 = -0.45%, -0.62% and -0.99% a month at 15%, 20% and 30%.
-* **The two gross B-passers** (4h S4_BB_BBP, 30x, maker +0.40%, house buffer, weekend skip; 6 coins, in sample, the
-  best of many, and both fail the exit plateau above), sized three ways (`feas/B_accounts_sizes.csv`):
+* **Medians over all settings** (feasibility net rows, which priced the maker TP at +0.14%; closed-trade DD, margin
+  allowed up to 100%, so upper bounds of 8.4's size). The margin that keeps the SEL drawdown inside the cap is
+  0.12-0.17% of the wallet on 15m, 0.3-0.6% on 30m, 1.3-2.9% on 1h and 2.4-5.1% on 4h. Nearly all of these settings
+  lose. A setting that loses steadily, sized so that its 36-month drawdown equals the cap, loses about the cap over SEL
+  by construction: (1 - cap)^(1/36) - 1 = -0.45%, -0.62% and -0.99% a month at 15%, 20% and 30%.
+* **The 8 net B-passers** (4h S4_BB_BBP, 30x, maker, house buffer, weekend skip; 6 coins, in sample, the best of many,
+  and all fail the exit plateau), sized by 8.3 and 8.4 (`acct_net.py`):
 
-| stop | trade list | account | closed-trade DD (the feasibility's basis) | mark-to-market DD, SEL path (f_path) | registered f* (8.4) |
+| TP | stop | trade list: trades, wins, mean, cost-x2 mean | account trades | SEL-path size f_path: margin, a month | registered f* (8.4): margin, a month (36 months) |
 |---|---|---|---|---|---|
-| 1 ATR | 159 trades, 83.7% wins, +0.098% / trade, cost x2 +0.016% | 116 trades | margin 30.2%, +3.56% / month | margin 26.5%, +3.16% / month (x3.06 in 36 months) | margin 20.5%, +2.49% / month (x2.42) |
-| 1% | 314 trades, 83.1% wins, +0.082% / trade, cost x2 +0.0002% | 231 trades | margin 21.3%, +4.08% / month | margin 20.2%, +3.89% / month (x3.96) | margin 11.9%, +2.36% / month (x2.32) |
+| +0.39% | 1 ATR | 159, 83.7%, +0.090%, +0.008% | 116 | 26.5%, +2.93% | 20.0%, +2.27% (x2.24) |
+| +0.39% | 1.25% | 213, 86.9%, +0.095%, +0.016% | 154 | 18.0%, +2.33% | 13.7%, +1.80% (x1.90) |
+| +0.44% | 1 ATR | 159, 83.7%, +0.131%, +0.039% | 116 | 26.7%, +4.08% | 22.2%, +3.42% (x3.36) |
+| +0.44% | 1% | 314, 83.1%, +0.115%, +0.013% | 231 | 20.3%, +5.28% | 12.9%, +3.42% (x3.35) |
+| +0.44% | 1.25% | 213, 86.4%, +0.130%, +0.034% | 154 | 18.2%, +3.37% | 15.4%, +2.88% (x2.78) |
+| +0.49% | 1 ATR | 158, 82.3%, +0.150%, +0.047% | 116 | 27.0%, +4.59% | 19.3%, +3.34% (x3.27) |
+| +0.49% | 1% | 314, 79.9%, +0.107%, +0.013% | 229 | 16.2%, +3.69% | 9.7%, +2.26% (x2.24) |
+| +0.49% | 1.25% | 213, 83.6%, +0.123%, +0.024% | 154 | 15.9%, +2.86% | 13.1%, +2.40% (x2.35) |
 
-  - At f_path, 24% (1 ATR) and 49% (1%) of the week-block resampled SEL paths break the 30% cap; at f*, 5%.
-  - At the 8.4 (iii) ceiling (f = 9, margin 30%) the 1 ATR account's mark-to-market DD is 33.4%, above the cap (its
-    closed-trade DD is 29.8%).
-  - Coin-flip sides at the same moments made -0.88% and -0.35% a month (feasibility basis).
-* **Two accounts quoted in the first draft fail B** and are kept here only so the change is visible:
-  - 4h S4_BB_BBP, 1 ATR, maker +0.35% (cost x2 -0.025%). The draft's "+4.5% a month at 44% margin" was closed-trade DD
-    with no ceiling; under this file's rules it is margin 30% (the ceiling), +3.16% a month, and at f* 21.5%, +2.32%.
-  - 1h S5_DONCHIAN_MFI, 1%, maker +0.40% (cost x2 -0.056%). Closed-trade 24.5%, +1.49% a month; mark-to-market 22.7%,
-    +1.40%; f* 10.4%, +0.71%. A quarter of its TP fills (30 of 122) came inside the entry minute.
-  - The best on 30m made +0.11% a month (closed-trade basis); on 15m every account lost.
+  - At f_path, 13-45% of the week-block resampled SEL paths break the 30% cap; at f*, 5%.
+  - At the 8.4 (iii) ceiling (f = 9, margin 30%) the 1 ATR accounts' mark-to-market DD is 32.8-33.4%, above the cap.
+  - Gross reading (comparison): the previous revision's two passers (+0.40%, 1 ATR and 1%) made +2.49% and +2.36% a
+    month at f* (`feas/B_accounts_sizes.csv`, 22.4).
 * **Why the rule bot's own sizing breaks the caps.** The rule bot puts L% of the wallet as margin, so f = L^2 / 100. A
-  stop then costs f x (b + 0.14%) of equity:
+  stop then costs f x (b + 0.14%) of equity, and a TP at the lowest ROE step gains the margin x the ROE:
 
 | | 30x, margin 30% | 40x, margin 40% | 50x, margin 50% |
 |---|---|---|---|
 | loss per stop, 0.6% stop | 6.7% | 11.8% | 18.5% (one stop breaks the 15% cap) |
 | loss per stop, 1.0% stop | 10.3% | 18.2% | 28.5% |
-| gain per win, 0.30% TP (taker / maker) | 1.4 / 1.9% | 2.6 / 3.4% | 4.0 / 5.25% |
+| gain per win, lowest ROE step (9 / 12 / 15%) | 2.7% | 4.8% | 7.5% |
 
   At a 25% loss rate, the chance of 3 losses in a row somewhere in 500 trades is about 99.8%. Sized like the rule bot,
   a 15m account breaks its 15% cap almost surely.
@@ -731,24 +741,25 @@ The loss autopsy measured the rule bot's chosen side beating a coin flip in exac
 
 * **Size under a 15% cap.** Take a 1% stop. The cap allows a five-loss streak (the expected worst streak in about
   1,000 trades at a 25% loss rate) at f of about 2.85, i.e. margin 9.5% at 30x.
-* **One win and one loss at that size**, with a +0.30% maker TP: a win is +0.60% of equity and a loss is -3.25%.
-* **Even at a 100% win rate**, x5 needs about 270 wins in a row.
-* **At break-even + 2 pp** (86.4% wins) the mean is about +0.075% of equity per trade, so x5 needs about 2,200 trades.
-* **The best SEL pace** is that of the only gross B-passer, which still fails the exit plateau: +2.4 to +2.5% a month
-  at the registered size, about x2.3-2.4 over 36 months (x3.1-4.0 at the SEL-path size; +3.6 to +4.1% a month on the
-  feasibility's closed-trade basis). The goal of x5 to x100 in one month is about two orders of magnitude away. **x5 in
-  a month does not fit a 15-30% drawdown cap** unless the edge is far larger than anything this program has measured.
+* **One win and one loss at that size**, with the 30x 9% step: a win is +0.86% of equity (9.5% x 9%) and a loss is
+  -3.25%.
+* **Even at a 100% win rate**, x5 needs about 190 wins in a row.
+* **At break-even + 2 pp** (81.2% wins) the mean is about +0.08% of equity per trade, so x5 needs about 2,000 trades.
+* **The best SEL pace** is that of the 8 net B-passers, which all fail the exit plateau: +1.8 to +3.4% a month at the
+  registered size, about x1.9-3.4 over 36 months (+2.3 to +5.3% a month at the SEL-path size). The goal of x5 to x100
+  in one month is about two orders of magnitude away. **x5 in a month does not fit a 15-30% drawdown cap** unless the
+  edge is far larger than anything this program has measured.
 
 ### 15.6 What to expect from this study
 
 * **SEL passers will exist, by chance.** About 164.5 million pairs are searched on SEL, so pairs passing every SEL
   condition will be found whether or not any edge exists. The full grid's picks, chosen on this same practice period,
   are the example: their select-period mean was +2.47% per trade, in sample; section 19 says how they fared later.
-* **At default numbers the registered rules pick nothing** (15.3). Picks will come from other numbers, where the
-  selection luck is largest.
+* **At default numbers the registered rules pick nothing** (15.3), under the net and the gross reading alike. Picks
+  will come from other numbers, where the selection luck is largest.
 * **The most likely result** is no pass on 15m and 30m.
-* **If there is a pass at all**, it will most likely be on 4h at 30x with a maker TP. Even then its practice-period
-  pace at the registered size is about 2-3% a month.
+* **If there is a pass at all**, it will most likely be on 4h at 30x with a maker TP, an S4_BB_BBP-type entry. Even then
+  its practice-period pace at the registered size is about 2-3.5% a month.
 
 ## 16. What a result means, and after
 
@@ -826,7 +837,8 @@ Rules after the result:
 
 ### 17.1 Code (none written yet)
 
-The code is written after the open questions are closed, then reviewed, then pinned. It lives in `research/hiwr/`:
+The code is written now that the questions are closed (section 21), then reviewed, then pinned. It lives in
+`research/hiwr/`:
 * `data.py`: a copy of the full grid's `data.py` for the 30 symbols, with month bounds.
 * `walk.py`: numba exit-event tables per coin and timeframe. One 1m pass finds the first event of every stop, every TP
   (both fills) and every liquidation level. It is taken from the scratch prototype.
@@ -1038,7 +1050,8 @@ TEST 2024-01 .. 2026-09 looked at once.
 
 **Outputs and scripts** are in the session scratchpad: `hiwr/feas/` (tables), `hiwr/private/` (raw results and
 DeepSeek figures), and `hiwr/work/` (`tpgrid.py`, `feasA.py`, `parity_a.py`, `parity_b.py`, `report_a.py`,
-`report_b.py`, `headline.py`). Section 15 quotes them; DeepSeek appears there as counts only.
+`report_b.py`, `headline.py`). Section 15 quotes them where it says so (part A, the stop-room shares, the closed-trade
+size medians); its part B counts now come from the net-reading re-run of 22.5. DeepSeek appears there as counts only.
 
 ### 22.2 Design inventory (2026-10-11, no computation)
 
@@ -1087,17 +1100,19 @@ decimals. Their confirmed findings changed this file:
 **Decisions.** The owners answered three questions on the morning of 2026-10-12 KST: Q1 net ROE ("1번은 수수료
 뺀후고"), Q2 4h cap 30% ("4시간봉 낙폭 30% 맞고"), Q15 a separate server after the hunt server is Destroyed ("32 vcpu로
 두대를 못돌리는거야? 그러면 따로 돌려야지"). All other questions closed at their defaults (section 21). Changed with them:
-2.1 (the net price table per tier and TP fill; gross becomes read R4), 2.2, 6.2, 6.3, 7.2, 7.3, 7.7, 8.4, 10.3 (e), R4,
-R7, 15 (net numbers), 16.1, 17.4 (server plan; the paragraph on a server the owners had created is removed), 19, 20,
-21 (a decision log) and the status line. The status stays DRAFT: no code exists yet.
+the status line, 1, 2.1 (the net price table per tier and TP fill; gross becomes read R4), 2.2, 6.2, 6.3, 7.2, 7.3,
+7.7, 8.4, 10.3 (e), R2, R4, R7, 15 (net numbers), 16.1, 17.1, 17.4 (server plan; the 5-step row and the paragraph on a
+server the owners had created are removed), 19, 20, 21 (a decision log), 22.1 and 22.3. The status stays DRAFT: no
+code exists yet.
 
 **Why a re-run.** The feasibility's net rows (22.1) priced the maker TP at ROE / L + 0.14%, not the registered + 0.09%,
 used 7 of the 9 stops and did not skip a stop inside the TP. Their counts were 0 / 0 / 0 / 6 (15m / 30m / 1h / 4h) with
 weekends skipped and 0 / 0 / 1 / 2 with weekends, and they could not say whether a net passer meets the exit plateau.
 So part B was re-run under the registered net rules before the counts were quoted.
 
-**The re-run** (session scratchpad `hiwrbuild/`: `netgrid.py`, `ana.py`, `acct_net.py`, `pierce.py`; outputs in
-`hiwrbuild/out/`).
+**The re-run** (session scratchpad `hiwrbuild/`: `netgrid.py`, `ana.py`, `acct_net.py`, `pierce.py`; the quoted
+results are the JSON files in `hiwrbuild/out/`; the per-setting tables were deleted to save disk, and `netgrid.py`
+rebuilds them in at most 15 minutes per timeframe on one core).
 * Hygiene: the 1m arrays of the 6 old coins were cut at 2024-01-01 00:00 UTC right after loading, and the chart frames
   were built from the cut arrays (no stored frame or outcome of the full grid was read). Signal-bar closes 2021-01-01 ..
   2024-01-01; 2020 bars were indicator warm-up only; trades not resolved by the cut were dropped. Nothing from
@@ -1106,8 +1121,8 @@ So part B was re-run under the registered net rules before the counts were quote
   + 0.09%) and at the gross reading for comparison; all 9 stops; the stop-inside-TP skip (7.3); the maker TP filled at
   T (7.2); the house buffer; with and without weekends; three coin-flip seeds; cost x2 with the TP price unchanged.
 * Parity with the feasibility code: on every setting both runs share and where no stop-inside-TP skip applies, the
-  taker results are identical (trade counts and sums of r); the maker sums differ by at most 0.003 in total, from the
+  taker results are identical (trade counts and sums of r); the maker sums differ by at most 0.004 in total, from the
   fill at T on a gapped open. The account script (`acct_net.py`, built on the review's independent minute loop)
-  reproduced the 8 passers' trade lists exactly.
+  reproduced the 8 passers' trade lists (trades, win rate, mean and cost-x2 mean to four decimals).
 * Results: section 15 (counts, plateau, coin-flip check, maker realism, sizes).
 
