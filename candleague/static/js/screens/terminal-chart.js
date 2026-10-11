@@ -30,7 +30,8 @@ const CHIP_H = 20;
 export function termChart(ctx, st, hooks) {
   const tfBtns = new Map();
   const tfBar = h("div", {class: "tm-tfs", role: "tablist", "aria-label": "봉"}, TFS.map((tf) => {
-    const b = h("button", {type: "button", role: "tab", "aria-selected": String(tf === st.tf), title: `${TF_SHORT[tf]}봉`, onclick: () => hooks.onTf(tf)}, TF_SHORT[tf]);
+    const b = h("button", {type: "button", role: "tab", "aria-selected": String(tf === st.tf), title: `${TF_SHORT[tf]}봉`,
+      onclick: () => { if (tf === st.tf && endMode) { st.at = null; load(true); } else hooks.onTf(tf); }}, TF_SHORT[tf]);
     tfBtns.set(tf, b);
     return b;
   }));
@@ -47,13 +48,15 @@ export function termChart(ctx, st, hooks) {
   let C = null, candles = null, vol = null, ro = null, plines = [], first = null, lastBar = null, key = null, resetting = 0, endMode = false;
   let doc = null, focus = [];       // focus: the selected position's entry / stop / take-profit (kept inside the price scale)
   let failed = false;
+  const chipEls = new Map();         // group of position ids -> its chip button (kept across repaints)
 
   function showMsg(text) { msg.hidden = !text; msg.textContent = text || ""; }
   function paintLegend(d) {
     if (!d) { legend.textContent = ""; return; }
     const ch = d.open ? (d.close - d.open) / d.open : null;
     put(legend, h("b", null, `${coinShort(st.coin)} · ${TF_SHORT[st.tf]}`), ` 시 ${fmt.price(d.open)} 고 ${fmt.price(d.high)} 저 ${fmt.price(d.low)} 종 ${fmt.price(d.close)} `,
-      h("span", {class: fmt.tone(ch, pctOf(ch, 2))}, pctOf(ch, 2)));
+      h("span", {class: fmt.tone(ch, pctOf(ch, 2))}, pctOf(ch, 2)),
+      endMode ? h("span", {class: "warn-t"}, " · 지난 거래 둘레의 봉 (지금 봉은 봉 단추를 다시 누르면)") : null);
   }
 
   // ---------------------------------------------------------------- overlays: the price tag, the position chips
@@ -62,7 +65,7 @@ export function termChart(ctx, st, hooks) {
     catch (e) { return null; }
   }
   function placeTag() {
-    if (!candles || !lastBar) { tag.hidden = true; return; }
+    if (!candles || !lastBar || endMode) { tag.hidden = true; return; }
     const sb = scaleBox();
     const y = candles.priceToCoordinate(lastBar.close);
     if (!sb || y == null || y < 0 || y > sb.H) { tag.hidden = true; return; }
@@ -126,18 +129,31 @@ export function termChart(ctx, st, hooks) {
       return {g, y, edge};
     }).sort((a, b) => a.y - b.y);
     for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < CHIP_H + 2) items[i].y = items[i - 1].y + CHIP_H + 2;
-    put(chips, items.map(({g, y, edge}) => {
+    // a chip that stays (same positions) is updated in place, so a hover or a click is never lost to the 5 s repaint
+    const keep = new Set();
+    const nodes = items.map(({g, y, edge}) => {
       const first = g.items[0], n = g.items.length;
+      const gid = g.items.map((p) => p.id).sort().join(",");
+      keep.add(gid);
       const levs = new Set(g.items.map((p) => p.lev));
       const roeTxt = g.roe != null ? pctOf(g.roe, 1) : "";
       const names = g.items.slice(0, 4).map((p) => `${LK.stratKo(p.name)} (${ROLE_SHORT[p.role] || ""})`).join(", ") + (n > 4 ? ` 외 ${n - 4}개` : "");
-      return h("button", {type: "button", class: ["tm-chip", g.side > 0 ? "long" : "short", g.on ? "on" : "", g.pnl != null ? fmt.tone(g.pnl, roeTxt) : ""],
-        style: {transform: `translateY(${Math.round(y)}px)`},
-        title: `진입 ${fmt.price(g.price)} · ${names}${edge ? " · 차트 범위 밖" : ""}${roeTxt ? " · ROE: 마크 가격 기준, 나갈 때 수수료 전" : ""} · 누르면 이 포지션의 선`,
-        onclick: () => hooks.onPick(g.on ? st.sel : first.id)},
-      edge, `${sideKo(g.side)}${levs.size === 1 ? ` ${fmt.lev(first.lev)}` : ""}${n > 1 ? ` ×${n}` : ""}`, roeTxt ? h("b", {class: "num"}, ` ${roeTxt}`) : null,
-      n === 1 ? h("small", null, ` ${ROLE_SHORT[first.role] || ""}`) : null);
-    }));
+      let b = chipEls.get(gid);
+      if (!b) {
+        b = h("button", {type: "button", onclick: () => hooks.onPick(b._on ? st.sel : b._first)});
+        chipEls.set(gid, b);
+      }
+      b._on = g.on; b._first = first.id;
+      b.className = ["tm-chip", g.side > 0 ? "long" : "short", g.on ? "on" : "", g.pnl != null ? fmt.tone(g.pnl, roeTxt) : ""].filter(Boolean).join(" ");
+      b.style.transform = `translateY(${Math.round(y)}px)`;
+      b.title = `진입 ${fmt.price(g.price)} · ${names}${edge ? " · 차트 범위 밖" : ""}${roeTxt ? " · ROE: 마크 가격 기준, 나갈 때 수수료 전" : ""} · 누르면 이 포지션의 선`;
+      put(b, edge, `${sideKo(g.side)}${levs.size === 1 ? ` ${fmt.lev(first.lev)}` : ""}${n > 1 ? ` ×${n}` : ""}`, roeTxt ? h("b", {class: "num"}, ` ${roeTxt}`) : null,
+        n === 1 ? h("small", null, ` ${ROLE_SHORT[first.role] || ""}`) : null);
+      return b;
+    });
+    for (const k of [...chipEls.keys()]) if (!keep.has(k)) chipEls.delete(k);
+    const same = nodes.length === chips.childNodes.length && nodes.every((x, i) => chips.childNodes[i] === x);
+    if (!same) put(chips, nodes);
   }
   function paintKey() {
     const {all, shown, hidden} = coinPositions();

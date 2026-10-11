@@ -91,19 +91,28 @@ export function fillsFeed(ctx, st, onPick) {
     S.ev.push(e);
     return true;
   };
+  // an event keeps its source row; the account and the D11 rule are read when the list is drawn (the snapshot or the
+  // positions answer may come after the fills), so a row is never shown with money it should not have
   const fromFill = (f, isLive) => {
-    const a = LK.index().byId[f.account] || null;
-    const hid = hiddenFill(f, a, dsMoney());
-    const out = [{key: `x:${f.account}:${f.exit_time}`, t: Number(f.exit_time) || 0, kind: "exit", id: f.account, a, hid, coin: coinOf(f.symbol),
-      side: Number(f.side) > 0 ? 1 : -1, lev: f.leverage, pnl: hid ? null : f.pnl, roe: hid ? null : f.roe, reason: f.exit_reason,
-      win: f.pnl != null ? f.pnl > 0 : !!f.win, at: f.entry_time, live: isLive}];
-    if (f.entry_time) out.push({key: `e:${f.account}:${f.entry_time}`, t: Number(f.entry_time), kind: "entry", id: f.account, a, hid, coin: coinOf(f.symbol),
-      side: Number(f.side) > 0 ? 1 : -1, lev: f.leverage, price: hid ? null : f.entry_price, at: f.entry_time, live: false});
+    const base = {id: f.account, src: f, fill: true, coin: coinOf(f.symbol), side: Number(f.side) > 0 ? 1 : -1, at: f.entry_time};
+    const out = [{...base, key: `x:${f.account}:${f.exit_time}`, t: Number(f.exit_time) || 0, kind: "exit", reason: f.exit_reason,
+      win: f.pnl != null ? f.pnl > 0 : !!f.win, live: isLive}];
+    if (f.entry_time) out.push({...base, key: `e:${f.account}:${f.entry_time}`, t: Number(f.entry_time), kind: "entry", live: false});
     return out;
   };
-  const fromPos = (p, isLive) => ({key: `e:${p.id}:${p.since}`, t: Number(p.since) || 0, kind: "entry", id: p.id,
-    a: LK.index().byId[p.id] || {id: p.id, role: p.role, kind: p.kind, name: p.name, tf: p.tf}, hid: hiddenPos(p), coin: p.coin,
-    side: Number(p.side) > 0 ? 1 : -1, lev: p.lev, price: hiddenPos(p) ? null : p.entry, at: p.since, open: true, live: isLive});
+  const fromPos = (p, isLive) => ({key: `e:${p.id}:${p.since}`, t: Number(p.since) || 0, kind: "entry", id: p.id, src: p, fill: false,
+    coin: p.coin, side: Number(p.side) > 0 ? 1 : -1, at: p.since, open: true, live: isLive});
+  /** the account of an event (the snapshot's row, else what the position itself says) */
+  const acctOf = (e) => LK.index().byId[e.id] || (e.fill ? null : {id: e.id, role: e.src.role, kind: e.src.kind, name: e.src.name, tf: e.src.tf});
+  /** the event's numbers as they may be shown: nothing at all for a hidden DeepSeek account (D11) */
+  function view(e) {
+    const a = acctOf(e);
+    const hid = e.fill ? hiddenFill(e.src, a, dsMoney()) : hiddenPos(e.src);
+    if (hid) return {a, hid: true};
+    const f = e.src;
+    return e.fill ? {a, hid: false, lev: f.leverage, pnl: f.pnl, roe: f.roe, price: e.kind === "entry" ? f.entry_price : f.exit_price}
+      : {a, hid: false, lev: f.lev, price: f.entry};
+  }
 
   function models() {
     S.ev.sort((x, y) => y.t - x.t || (x.kind === "exit" ? -1 : 1));
@@ -111,9 +120,10 @@ export function fillsFeed(ctx, st, onPick) {
     const out = [], fold = new Map();
     for (const e of S.ev) {
       if (out.length >= MAX_ROWS) break;
-      const a = e.a || {};
+      const v = view(e);
+      const a = v.a || {};
       if (!inGroup({role: a.role, kind: a.kind}, st.grp)) continue;
-      if (!e.hid) { out.push({id: e.key, one: e, live: e.live, t: e.t}); continue; }
+      if (!v.hid) { out.push({id: e.key, one: e, v, live: e.live, t: e.t}); continue; }
       const k = `ds:${e.kind}:${Math.floor(e.t / 60000)}`;
       let m = fold.get(k);
       if (!m) { m = {id: "f:" + k, kind: e.kind, t: e.t, n: 0, L: 0, S: 0, win: 0, coins: new Set(), live: false}; fold.set(k, m); out.push(m); }
@@ -128,14 +138,14 @@ export function fillsFeed(ctx, st, onPick) {
     : h("span", {class: ["tm-tag", e.reason === "LIQ" ? "liq" : e.win ? "up" : "down"], title: reasonKo(e.reason)}, REASON_SHORT[e.reason] || reasonKo(e.reason)));
   function rowOf(m) {
     if (m.one) {
-      const e = m.one;
-      const right = e.kind === "exit" ? h("b", {class: ["num", "tm-fv", fmt.tone(e.pnl, usdt(e.pnl))]}, usdt(e.pnl))
-        : h("span", {class: "num tm-fv muted"}, e.price == null ? "" : fmt.price(e.price));
-      const what = `${coinShort(e.coin)} ${sideKo(e.side)}${e.lev ? ` ${fmt.lev(e.lev)}` : ""}${e.kind === "exit" && e.roe != null ? ` · ROE ${fmt.pct(e.roe * 100, true, 0)}` : ""}`;
+      const e = m.one, v = m.v;
+      const right = e.kind === "exit" ? h("b", {class: ["num", "tm-fv", fmt.tone(v.pnl, usdt(v.pnl))]}, usdt(v.pnl))
+        : h("span", {class: "num tm-fv muted"}, v.price == null ? "" : fmt.price(v.price));
+      const what = `${coinShort(e.coin)} ${sideKo(e.side)}${v.lev ? ` ${fmt.lev(v.lev)}` : ""}${e.kind === "exit" && v.roe != null ? ` · ROE ${fmt.pct(v.roe * 100, true, 0)}` : ""}`;
       return h("button", {type: "button", class: ["tm-fr", "fl", e.open ? "open" : ""], role: "listitem",
         title: `${e.id} · ${what} · ${e.kind === "exit" ? `${reasonKo(e.reason)} ` : "진입 "}${fmt.kst(e.t)} KST${e.open ? " · 지금 열려 있음" : ""} · 누르면 차트에서 보기`,
         onclick: () => onPick({account: e.id, coin: e.coin, at: e.at})},
-      ageCell(e.t), tagOf(e), h("span", {class: "tm-fn"}, acctLabel(e.a, {role: true})),
+      ageCell(e.t), tagOf(e), h("span", {class: "tm-fn"}, acctLabel(v.a || {id: e.id}, {role: true})),
       h("span", {class: "tm-fc"}, coinShort(e.coin), " ", h("span", {class: e.side > 0 ? "up" : "down"}, sideKo(e.side))), right);
     }
     const detail = m.kind === "entry" ? `롱 ${fmt.int(m.L)} · 숏 ${fmt.int(m.S)}` : `이김 ${fmt.int(m.win)} · 짐 ${fmt.int(m.n - m.win)}`;
@@ -149,7 +159,7 @@ export function fillsFeed(ctx, st, onPick) {
     const nodes = [];
     const motionOk = !reduced() && visible();
     for (const m of ms) {
-      const sig = m.one ? `${m.id}:${m.one.open ? 1 : 0}` : `${m.id}:${m.n}:${m.win}`;
+      const sig = m.one ? `${m.id}:${m.one.open ? 1 : 0}:${m.v.a ? 1 : 0}` : `${m.id}:${m.n}:${m.win}`;
       const was = S.nodes.get(m.id);
       if (was && was.sig === sig) { nodes.push(was.node); continue; }
       const node = rowOf(m);
@@ -167,7 +177,8 @@ export function fillsFeed(ctx, st, onPick) {
     if (anyLive) ping(el);
     let L = 0, Sh = 0, n = 0;
     for (const e of S.ev) {
-      if (e.kind !== "entry" || !inGroup({role: e.a && e.a.role, kind: e.a && e.a.kind}, st.grp)) continue;
+      const a = e.kind === "entry" ? acctOf(e) : null;
+      if (!a || !inGroup({role: a.role, kind: a.kind}, st.grp)) continue;
       if (e.side > 0) L += 1; else Sh += 1;
       if (++n >= 100) break;
     }

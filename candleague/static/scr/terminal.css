@@ -428,6 +428,10 @@ button.tm-cr:hover { background: var(--surface-2); }
   .tm-ckey { display: none; }
   .tm-mid { grid-template-rows: auto minmax(0, 1fr) 196px; }
 }
+/* 아주 크게 on a short PC window: the chart's key line goes so the chart keeps its room */
+@media (min-width: 1200px) and (max-height: 959px) {
+  html[data-text="xl"] .tm-ckey { display: none; }
+}
 /* 크게 / 아주 크게: wider side columns so names and numbers keep their room */
 @media (min-width: 1440px) {
   html[data-text="lg"] .tm-grid { grid-template-columns: 316px minmax(0, 1fr) 340px; }

@@ -269,6 +269,15 @@ await L.liveRefresh(); await tick(60);
 out.led2 = q1(el, "b.tm-led"); out.total2 = q1(el, "b.tm-utot"); out.band2 = q1(el, "div.tm-band");
 out.chips2 = el.querySelectorAll("button.tm-chip").map((x) => x.textContent);
 out.last = CH.cs.data[CH.cs.data.length - 1].close;
+out.feed = el.querySelectorAll("button.tm-fr").map((x) => x.textContent);
+out.fold = el.querySelectorAll("div.tm-fr").map((x) => x.textContent);
+// a new engine snapshot with a new 후보 position: the table, the band and the feed take it (no reload)
+const P4 = {...P1, id: "core-OBV_S-1h-3", name: "OBV_S", coin: "ETHUSD", symbol: "ETHUSDT", side: -1, since: NOW - 60e3, entry: 2600, qty: 1, margin: 86.67, liq: 2680};
+API["/api/positions"] = doc({positions: [P1, P2, LEAK, HID, P4], generated_ms: NOW - 30e3});
+await K.kickPositions(); await tick(80);
+out.rows3 = el.querySelectorAll("tr.click").length;
+out.total3 = q1(el, "b.tm-utot");
+out.feed3 = el.querySelectorAll("button.tm-fr").map((x) => x.textContent);
 """)
     assert o["led"] == "+100.00" and o["roe"] == "+30.00%"
     assert "BTCUSDT" in o["sel"] and "격리 30배" in o["sel"] and "손절에 닿으면−200.00 USDT" in o["sel"] and "왜 30배" in o["sel"]
@@ -285,6 +294,11 @@ out.last = CH.cs.data[CH.cs.data.length - 1].close;
     assert o["query"] == {"acct": "core-DOGE-1h-1", "coin": "BTCUSD", "tf": "15m"}
     assert o["led2"] == "+200.00" and o["total2"] == "+200.00" and "후보 미실현 +200.00 USDT" in o["band2"]
     assert o["chips2"] == ["롱 30배 +60.0% 후보"] and o["last"] == 102000      # the forming bar follows the live price
+    assert any("익절" in r and "+150.50" in r and "BTC" in r for r in o["feed"])      # a closed 후보 trade
+    assert any("진입" in r and "100,000.0" in r for r in o["feed"])                   # the open position's entry
+    assert o["fold"] and all("딥시크" in r and "개수만" in r for r in o["fold"])         # the hidden 후보 one, counted
+    assert o["rows3"] == 2 and o["total3"] == "+250.00"                                # +200 BTC, +50 ETH (2,600 -> 2,550)
+    assert "진입" in o["feed3"][0] and "ETH" in o["feed3"][0] and "2,600.0" in o["feed3"][0]
 
 
 def test_hidden_deepseek_never_shows_money(tmp_path):
