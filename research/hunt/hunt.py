@@ -5,12 +5,21 @@ research/hunt/PREREG_HUNT.md (study ``v1``) and research/hunt/PREREG_HUNT_WIDE.m
     python -m research.hunt.hunt test   --study {v1,wide} --data <coins30 dir> [--procs N] [--private DIR]
     python -m research.hunt.hunt report --study {v1,wide}
     python -m research.hunt.hunt universe --data <coins30 dir>        (writes research/hunt/universe30.json)
+    python -m research.hunt.hunt datapin --data <coins30 dir>         (writes research/hunt/data_manifest.json, H 2)
+    python -m research.hunt.hunt datacheck --data <coins30 dir> --fg1m <fg1m dir>   (research/hunt/data_check.json)
+    python -m research.hunt.hunt pinlist --study {v1,wide}            (the files the study's pin must list)
     python -m research.hunt.hunt bench --out <timing.json> [--procs 2] (synthetic bars only, no real price)
 
 ``select`` and ``test`` refuse to run unless the study's pin file (PREREG_HUNT.sha256 / PREREG_HUNT_WIDE.sha256, one
-line per file ``<sha256>  <path>``) matches every file it lists and lists the prereg(s), this file, every module of
-research/hunt the run imports and research/hunt/universe30.json; ``test`` also needs the picks line. ``select``
-appends the picks line itself after writing the picks (PREREG_HUNT 11.3, WIDE 5) and refuses when one is already there.
+line per file ``<sha256>  <path>``) matches every file it lists and lists every file of ``pinlist``: the prereg(s),
+this file, the hunt tests, research/hunt/universe30.json, data_manifest.json and data_check.json (H 2), every
+repository Python file the study's signal code loads (found by running each entry cell once on synthetic bars: the
+full grid's code, research/deepseek200/lib_c.py, research/fullgrid/memo.py, the vendored indicator code, regime5y...),
+and for wide parity.json, whose content must also say pass on the hunt 5m files under the current code (W 8). The
+data check (H 2) must say pass on the old six, and the data read must equal data_manifest.json's array hashes. ``test``
+also needs the picks line. ``select`` appends the picks line itself after writing the picks (PREREG_HUNT 11.3, WIDE 5)
+and refuses when one is already there. Long steps keep finished parts under the private folder and resume from them
+(same pin only); a worker that dies is replaced and its items sent again.
 
 What runs where (section numbers "H n" = PREREG_HUNT.md, "W n" = PREREG_HUNT_WIDE.md):
 * data (H 2, W 9): ``<data>/5m/<SYM>.npz`` (ts int64 ms; o h l c v qv float32, cast to float64 at use; duplicate open
@@ -34,6 +43,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -75,7 +85,11 @@ OLD_SIX = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
 N_SEEDS, N_BOOT = 100, 10_000
 POS_PER_MONTH, MONTH_COVER, DD_MAX = 2, 0.80, 0.50             # H 11.2 / H 13
 P_ALPHA, BH_Q, K_PICKS = 0.05, 0.10, 10
+PICK_FAMILIES = ("F1", "F2", "F3")         # W 5: F4 (numbers chosen after this test period was seen) = select read only
 SEED_TAG = {"v1": "hunt", "wide": "hunt-wide"}
+MIN_FREE_BYTES = 1024 ** 3                                     # H 2: stop when free disk falls under 1 GB
+XCHECK_TOL_PX, XCHECK_TOL_VOL, XCHECK_MAX_SHARE = 1e-6, 1e-3, 0.001   # H 2 cross-check of the old six
+CONTENT_KEYS = {"5m": ("ts", "o", "h", "l", "c", "v", "qv"), "funding": ("ts", "rate")}  # H 2 data identity
 UNKNOWN, TREND, RANGE, SHOCK, NORMAL = 0, 1, 2, 3, 4          # regime5y codes
 GATES = ("G1", "NONE", "TS")                                   # TS = 추세장 or 급변장 (H 14 diagnostic only)
 
@@ -88,16 +102,28 @@ PREREGS = {"v1": ("research/hunt/PREREG_HUNT.md",),
            "wide": ("research/hunt/PREREG_HUNT_WIDE.md", "research/hunt/PREREG_HUNT.md")}
 UNIVERSE_REL = "research/hunt/universe30.json"
 EXCHANGE_REL = "research/hunt/exchange30.json"
+DATA_MANIFEST_REL = "research/hunt/data_manifest.json"          # H 2: manifest copy + array content hashes
+DATA_CHECK_REL = "research/hunt/data_check.json"                # H 2: 5m vs the full grid's 1m, old six
+DATA_BUILD_REL = "research/hunt/data_build"                     # H 2: the data job's scripts (every file pinned)
+PARITY_REL = "research/hunt/out/wide/parity.json"               # W 8
+PARITY_CODE = ("entries_wide.py", "parity_wide.py", "hunt.py")  # parity.json must be made by these exact files
 OUT_REL = {"v1": "research/hunt/out/v1", "wide": "research/hunt/out/wide"}
 PICKS_REL = {"v1": "research/hunt/out/v1/pick.json", "wide": "research/hunt/out/wide/picks.json"}
-PIN_EXTRA = {"v1": ("tests/test_hunt.py",),                       # H 16 / W 10: files the pin must list
-             "wide": ("tests/test_hunt.py", "tests/test_hunt_entries.py", "research/hunt/out/wide/parity.json",
+_DATA_PINS = (DATA_MANIFEST_REL, DATA_CHECK_REL)
+PIN_EXTRA = {"v1": ("tests/test_hunt.py", "tests/test_hunt_entries.py", "paperbot/dash/tools/regime5y.py")
+             + _DATA_PINS,                                      # H 16 / W 10: files the pin must list
+             "wide": ("tests/test_hunt.py", "tests/test_hunt_entries.py", PARITY_REL,
                       "research/fullgrid/diag/watch_sel.json", "research/fullgrid/PREREG.sha256",
-                      "research/entry_study/DEFS_BC.sha256", "paperbot/dash/tools/regime5y.py")}
+                      "research/entry_study/DEFS_BC.sha256", "third_party/sweep/PREREG.sha256",
+                      "paperbot/dash/tools/regime5y.py", "research/deepseek200/lib_c.py",
+                      "research/fullgrid/memo.py") + _DATA_PINS}
 
 CHOICES = [
     "H7.6: a 5m bar's entries (fills at its open) are decided first, on the state at the previous 5m close (equity, "
     "open positions, caps); then every open position, the new ones included, runs the bar in the order of H 7.6.",
+    "H7.6: a bar whose high (long) reaches the next untried add level fills every add level it reaches first (each "
+    "moving the stop and the liquidation price), and only then checks the low against the (moved) stop, also when "
+    "the low had reached the old stop; a bar that reaches no add level checks the stop at once.",
     "H7.6: when the liquidation price lies inside the stop (only possible after a gapped add or a fallback leverage), "
     "the low (long) reaching it liquidates before the stop; otherwise the stop exits first.",
     "H7.3: liquidation price = Binance's isolated one-way formula with the bracket's mmr and cum at the position's "
@@ -126,9 +152,23 @@ CHOICES = [
     "H13 P0: 'a position open in a month' = at least one position open at some 5m step of that month.",
     "H11.2/W5: 72 / 66 positions = 2 x the period's months; positions = entries opened.",
     "W3.2: a bar with a long and a short event gives no entry and is counted 'both'; F2-F4 warm-up of 300 bars is "
-    "applied by entries_wide.events_on.",
-    "Outputs go to research/hunt/out/<study>/ (W10); PREREG_HUNT 11.3 and 16 name research/hunt/out/pick.json for "
-    "v1, which this code writes as research/hunt/out/v1/pick.json.",
+    "applied by entries_wide.events_on; the event edge is taken before the gate (a run of True bars that starts on a "
+    "bar the gate blocks gives no entry later in the run).",
+    "W5: picks come from F1-F3 only; the 76 F4 systems run in select as a labelled read (their numbers were chosen "
+    "after this test period was seen) and never in test; the 'no pick' fallback is the best F1-F3 system.",
+    "W7: in the wide study the gate diagnostics run in the select period only (the other gate is a non-pick system); "
+    "v1 runs them in select and test as H 14 says. In the 'no pick, fail' case the one system's reads run as a pick's.",
+    "W7 sizing read: r = 2% / 5% with the total open risk cap and the margin budget B both scaled by r / 0.5% "
+    "(B = equity / 6 x r / 0.5%), leverage as H 7.3 (20x cap, brackets, liquidation >= 1.5 x D0); the free wallet "
+    "still limits each fill. Realized unit risk (first unit q x D0 / equity at entry), cut shares and add shares are "
+    "reported next to every figure.",
+    "H10: select runs report the metric set without the daily equity path (by year / side / group included); test "
+    "runs include it. DeepSeek rows keep only counts and labels in the repository (W 11).",
+    "H2: data identity = sha256 over the arrays the study reads, in order, each as 'name|dtype|shape' newline then its "
+    "raw C-order bytes (5m: ts o h l c v qv; funding: ts rate); compared with research/hunt/data_manifest.json at "
+    "every select / test. Coin end and missing funding months come from that pinned manifest copy; a coin end at or "
+    "after the period end, and missing months outside the loaded span or after the coin end, are not carried into a "
+    "step (select keeps nothing about 2024+).",
 ]
 
 
@@ -228,8 +268,108 @@ def hunt_modules() -> list:
     return sorted(set(out))
 
 
+def _repo_py_loaded() -> list:
+    """Repository .py files of every loaded module (tests excluded)."""
+    out = set()
+    for m in list(sys.modules.values()):
+        f = getattr(m, "__file__", None) or ""
+        if not f.endswith(".py"):
+            continue
+        a = os.path.abspath(f)
+        if os.path.commonpath([a, ROOT]) != ROOT:
+            continue
+        rel = os.path.relpath(a, ROOT)
+        if rel.startswith(("tests" + os.sep, ".")) or os.sep + "site-packages" + os.sep in a:
+            continue
+        out.add(rel)
+    return sorted(out)
+
+
+def signal_path_files(study: str) -> list:
+    """Every repository Python file the study's signal code loads (W 10, H 16): each entry cell of the study is run
+    once on a short synthetic series (no real price), then the loaded modules are listed. A file imported lazily by a
+    strategy definition is found this way too."""
+    EW = _ew()
+    n = 75 * BARS_PER_DAY
+    t0 = day_ms("2021-03-01")
+    rng = np.random.default_rng(7)
+
+    def five(seed):
+        r = np.random.default_rng(seed)
+        c = 100.0 * np.exp(np.cumsum(r.normal(0, 0.002, n)))
+        o = np.r_[c[0], c[:-1]]
+        v = r.lognormal(0, 1, n) * 100.0
+        return {"ts": t0 + np.arange(n, dtype=np.int64) * FIVE, "o": o, "h": np.maximum(o, c) * 1.001,
+                "l": np.minimum(o, c) * 0.999, "c": c, "v": v, "qv": v * c}
+    eth, btc = five(int(rng.integers(1 << 30))), five(int(rng.integers(1 << 30)))
+    if study == "v1":
+        cells = [dict(s, id="probe") for s in v1_systems()]
+    else:
+        cells = [dict(c, id="probe", gate="NONE") for c in EW.entry_cells()]
+    for spec in cells:
+        bars, _ = EW.events(spec, eth, "ETHUSDT", btc)
+        EW.regime_code(bars)
+        EW.atr14(bars)
+    return _repo_py_loaded()
+
+
+def required_files(study: str) -> list:
+    """The files the study's pin must list (``pinlist``), the picks file excluded."""
+    need = list(PREREGS[study]) + ["research/hunt/hunt.py", UNIVERSE_REL] + hunt_modules() + list(PIN_EXTRA[study])
+    need += signal_path_files(study)
+    if os.path.exists(os.path.join(ROOT, EXCHANGE_REL)):
+        need.append(EXCHANGE_REL)
+    bdir = os.path.join(ROOT, DATA_BUILD_REL)
+    if os.path.isdir(bdir):
+        for dp, _dn, fns in os.walk(bdir):
+            for f in fns:
+                if "__pycache__" not in dp and not f.endswith(".pyc"):
+                    need.append(os.path.relpath(os.path.join(dp, f), ROOT))
+    return sorted(set(need))
+
+
+def _load_json_rel(rel: str):
+    p = os.path.join(ROOT, rel)
+    if not os.path.exists(p):
+        return None
+    with open(p) as fh:
+        return json.load(fh)
+
+
+def pin_content_problems(study: str) -> list:
+    """What the pinned result files must say (H 2, W 8): data_check.json passes on the old six for the data of
+    data_manifest.json; for wide, parity.json passes on the hunt 5m files and was made by the current adapter code."""
+    bad = []
+    dm, dc = _load_json_rel(DATA_MANIFEST_REL), _load_json_rel(DATA_CHECK_REL)
+    if dc is not None:
+        if dc.get("pass") is not True:
+            bad.append(f"{DATA_CHECK_REL} does not say pass")
+        if sorted(dc.get("coins", {})) != sorted(OLD_SIX):
+            bad.append(f"{DATA_CHECK_REL} is not on the old six")
+        if dm is not None:
+            for s in OLD_SIX:
+                got = (dc.get("coins", {}).get(s) or {}).get("content_sha256")
+                if got != ((dm.get("content") or {}).get(s) or {}).get("5m"):
+                    bad.append(f"{DATA_CHECK_REL} checked other {s} data than {DATA_MANIFEST_REL}")
+    if study == "wide":
+        pj = _load_json_rel(PARITY_REL)
+        if pj is not None:
+            if pj.get("pass") is not True:
+                bad.append(f"{PARITY_REL} does not say pass")
+            if pj.get("adapter_5m") != "hunt 5m files":
+                bad.append(f"{PARITY_REL} was not run on the hunt 5m files (--five)")
+            if list(pj.get("syms", [])) != list(OLD_SIX):
+                bad.append(f"{PARITY_REL} is not on the old six")
+            code = pj.get("code") or {}
+            for f in PARITY_CODE:
+                if code.get(f) != sha256_file(os.path.join(HERE, f)):
+                    bad.append(f"{PARITY_REL} was made by another research/hunt/{f}")
+    return bad
+
+
 def check_pin(study: str, step: str) -> dict:
-    """Refuse (PinError) unless every listed file matches and the required files are listed (W 10)."""
+    """Refuse (PinError) unless every listed file matches, the required files are listed and the pinned result files
+    say pass (W 10, H 2, W 8)."""
     _ew()                                         # the modules a run imports are part of the pin
     rows = read_pin(study)
     listed = {p: h for h, p in rows}
@@ -240,12 +380,10 @@ def check_pin(study: str, step: str) -> dict:
             bad.append(f"missing {p}")
         elif sha256_file(full) != h:
             bad.append(f"changed {p}")
-    need = list(PREREGS[study]) + ["research/hunt/hunt.py", UNIVERSE_REL] + hunt_modules() + list(PIN_EXTRA[study])
-    if os.path.exists(os.path.join(ROOT, EXCHANGE_REL)):
-        need.append(EXCHANGE_REL)
-    for p in need:
+    for p in required_files(study):
         if p not in listed:
             bad.append(f"not pinned {p}")
+    bad += pin_content_problems(study)
     picks = PICKS_REL[study]
     if step == "select" and picks in listed:
         bad.append(f"{picks} is already pinned: select ran; the picks do not change")
@@ -312,40 +450,109 @@ def _manifest(data_dir: str) -> dict:
     return {s["symbol"]: s for s in m.get("symbols", [])}
 
 
+def study_manifest(data_dir: str) -> dict:
+    """The coin fields a step reads (coin end, missing funding months): the pinned copy in
+    research/hunt/data_manifest.json when it exists (H 2), else the data folder's manifest.json (tests, timing)."""
+    dm = _load_json_rel(DATA_MANIFEST_REL)
+    if dm is not None and "manifest" in dm:
+        return {s["symbol"]: s for s in dm["manifest"].get("symbols", [])}
+    return _manifest(data_dir)
+
+
 def _parse_utc(s: str) -> int:
     return int(dt.datetime.strptime(s, "%Y-%m-%d %H:%M").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
 
 
+def content_sha(arrays: dict, keys) -> str:
+    """H 2 data identity: sha256 over the arrays in ``keys`` order, each as 'name|dtype|shape' newline then its raw
+    C-order bytes (as stored in the npz; independent of the zip container)."""
+    h = hashlib.sha256()
+    for k in keys:
+        a = np.ascontiguousarray(arrays[k])
+        h.update(f"{k}|{a.dtype.str}|{','.join(str(x) for x in a.shape)}\n".encode())
+        h.update(a.tobytes())
+    return h.hexdigest()
+
+
+def file_content_sha(path: str, kind: str) -> str | None:
+    if not os.path.exists(path):
+        return None
+    with np.load(path) as z:
+        return content_sha({k: z[k] for k in CONTENT_KEYS[kind]}, CONTENT_KEYS[kind])
+
+
 def load_coin(data_dir: str, sym: str, end_ms: int, manifest: dict | None = None) -> Coin:
-    """The coin's 5m bars with open < end_ms (no later bar is read into the arrays; W 5)."""
+    """The coin's 5m bars with open < end_ms. The npz columns are decompressed whole (their content hash is taken,
+    H 2) and cut at ``end_ms`` before anything else uses them: no bar at or after ``end_ms`` is kept or used (W 5,
+    H 11). Of the manifest only what lies before ``end_ms`` is carried (coin end, missing funding months)."""
     path = os.path.join(data_dir, "5m", f"{sym}.npz")
     if not os.path.exists(path):
         raise FileNotFoundError(f"{path} missing: the universe is fixed, select / test stop (W 9)")
     with np.load(path) as z:
-        ts = z["ts"]
-        cut = ts < end_ms
-        cols = [z[k][cut] for k in ("o", "h", "l", "c", "v", "qv")]
-        ts = ts[cut]
+        full = {k: z[k] for k in CONTENT_KEYS["5m"]}
+    sha = content_sha(full, CONTENT_KEYS["5m"])
+    cut = full["ts"] < end_ms
+    cols = [full[k][cut] for k in ("o", "h", "l", "c", "v", "qv")]
+    ts = full["ts"][cut]
+    del full
     (ts, o, h, lo, c, v, qv), counts = clean_5m(ts, *cols)
+    counts["content_sha256"] = sha
     info = (manifest or {}).get(sym, {})
     last = info.get("last_nonzero_volume_bar") or info.get("last_bar")
     last_ms = _parse_utc(last) if last else None
     if last_ms is None:
         last_ms = int(ts[-1]) if len(ts) else None
-        if last_ms is not None and last_ms >= end_ms - FIVE:
-            last_ms = None                       # unknown beyond the loaded data: treated as continuing
-    counts["missing_months_funding"] = info.get("missing_months_funding", [])
+    if last_ms is not None and last_ms >= end_ms - FIVE:
+        last_ms = None                           # trades to the end of the loaded span: continuing (nothing later kept)
+    end_month = month_key(end_ms)
+    mm = info.get("missing_months_funding_while_trading")
+    if mm is None:                               # older manifests: cut at the coin end
+        stop = month_key(last_ms) if last_ms is not None else "9999-99"
+        mm = [m for m in info.get("missing_months_funding", []) if m <= stop]
+    counts["missing_months_funding"] = [m for m in mm if m < end_month]
     return Coin(sym, ts, o, h, lo, c, v, qv, last_ms=last_ms if last_ms is not None else 2 ** 62, counts=counts)
 
 
-def load_funding(data_dir: str, sym: str, end_ms: int) -> tuple:
+def load_funding(data_dir: str, sym: str, end_ms: int, with_sha: bool = False) -> tuple:
     path = os.path.join(data_dir, "funding", f"{sym}.npz")
     if not os.path.exists(path):
-        return np.zeros(0, np.int64), np.zeros(0)
+        out = (np.zeros(0, np.int64), np.zeros(0))
+        return (*out, None) if with_sha else out
     with np.load(path) as z:
-        ts, rate = np.asarray(z["ts"], np.int64), np.asarray(z["rate"], np.float64)
+        full = {k: z[k] for k in CONTENT_KEYS["funding"]}
+    sha = content_sha(full, CONTENT_KEYS["funding"])
+    ts, rate = np.asarray(full["ts"], np.int64), np.asarray(full["rate"], np.float64)
     keep = ts < end_ms
-    return ts[keep], rate[keep]
+    return (ts[keep], rate[keep], sha) if with_sha else (ts[keep], rate[keep])
+
+
+def disk_check(*paths) -> None:
+    """H 2: stop when free disk under any output path falls under 1 GB."""
+    for p in paths:
+        if not p:
+            continue
+        q = os.path.abspath(p)
+        while not os.path.exists(q):
+            q = os.path.dirname(q)
+        free = shutil.disk_usage(q).free
+        if free < MIN_FREE_BYTES:
+            raise SystemExit(f"stopped: free disk under {p} is {free / 1e9:.2f} GB (< 1 GB, H 2)")
+
+
+def data_identity_problems(counts: dict, fund_sha: dict) -> list:
+    """Differences between the data read and research/hunt/data_manifest.json's array hashes (H 2)."""
+    dm = _load_json_rel(DATA_MANIFEST_REL)
+    if dm is None:
+        return [f"{DATA_MANIFEST_REL} missing (python -m research.hunt.hunt datapin --data DIR, before the pin)"]
+    want = dm.get("content") or {}
+    bad = []
+    for s, cnt in counts.items():
+        w = want.get(s) or {}
+        if cnt.get("content_sha256") != w.get("5m"):
+            bad.append(f"{s} 5m arrays differ")
+        if fund_sha.get(s) != w.get("funding"):
+            bad.append(f"{s} funding arrays differ")
+    return bad
 
 
 def load_universe(data_dir: str | None = None) -> list:
@@ -437,9 +644,15 @@ def install(coins: dict, funding: dict | None = None) -> None:
 
 
 def load_study_data(data_dir: str, syms: list, end_ms: int) -> dict:
-    man = _manifest(data_dir)
+    """Load and install the universe's data up to ``end_ms``; returns per coin the H 2 counts with the content hashes
+    of the 5m and funding arrays read (``content_sha256``, ``funding_content_sha256``)."""
+    man = study_manifest(data_dir)
     coins = {s: load_coin(data_dir, s, end_ms, man) for s in syms}
-    fund = {s: load_funding(data_dir, s, end_ms) for s in syms}
+    fund = {}
+    for s in syms:
+        fts, rate, fsha = load_funding(data_dir, s, end_ms, with_sha=True)
+        fund[s] = (fts, rate)
+        coins[s].counts["funding_content_sha256"] = fsha
     install(coins, fund)
     return {s: coins[s].counts for s in syms}
 
@@ -722,8 +935,8 @@ P_OPEN, P_SIDE, P_TRIED, P_FILLED, P_BPTR, P_BEND, P_FPTR, P_FEND, P_SPTR, P_SEN
     P_CUT = range(15)
 NPI = 15
 # records (one per opened position)
-RF_U, RF_PNL, RF_FEES, RF_FUND, RF_P0, RF_D0, RF_Q1, RF_XPX, RF_LEV, RF_PRICE = range(10)
-NRF = 10
+RF_U, RF_PNL, RF_FEES, RF_FUND, RF_P0, RF_D0, RF_Q1, RF_XPX, RF_LEV, RF_PRICE, RF_EQ = range(11)
+NRF = 11
 RI_COIN, RI_SIDE, RI_TIN, RI_TOUT, RI_ADDS, RI_REASON, RI_CAND, RI_SRC, RI_LARGE, RI_CUT, RI_TRIED = range(11)
 NRI = 11
 # exit reasons, stop sources
@@ -854,55 +1067,46 @@ def _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
 
 @njit(cache=True)
 def _bar(k, o, h, lo, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n_adds, n, cap, mmr, cum):
-    """H 7.6 for one position on one 5m bar. Returns (code, price): 0 none, EX_STOP at the stop, EX_GAP at the open,
-    EX_LIQ liquidated."""
+    """H 7.6 for one position on one 5m bar (long; short mirror): 1. open at / beyond the liquidation price ->
+    liquidated at the open; 2. open at / beyond the stop -> exit at the open; 4. the bar reaches the next untried add
+    level -> every add level it reaches fills in order first (each moving the stop and the liquidation price), also
+    when the bar had reached the old stop; 3./4. then the low reaching the (moved) stop exits there, or the
+    liquidation price when it lies inside the stop (5.). Returns (code, price): -1 none, EX_STOP, EX_GAP, EX_LIQ."""
     side = pi[k, P_SIDE]
-    stop = ps[k, F_STOP]
-    liq = ps[k, F_LIQ]
     if side > 0:
-        if o <= liq:
+        if o <= ps[k, F_LIQ]:
             return EX_LIQ, o
-        if o <= stop:
+        if o <= ps[k, F_STOP]:
             return EX_GAP, o
-        if lo <= stop or lo <= liq:
-            if liq > stop:
-                return EX_LIQ, liq
-            return EX_STOP, stop
         while pi[k, P_TRIED] < n_adds and h >= ps[k, F_NEXT]:
             lvl = ps[k, F_NEXT]
             ref = o if o >= lvl else lvl
             ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n, cap, mmr, cum)
             pi[k, P_TRIED] += 1
             ps[k, F_NEXT] = (ref if ok else lvl) + ps[k, F_D0]
-            if ok:
-                stop = ps[k, F_STOP]
-                liq = ps[k, F_LIQ]
-                if lo <= stop or lo <= liq:
-                    if liq > stop:
-                        return EX_LIQ, liq
-                    return EX_STOP, stop
-    else:
-        if o >= liq:
-            return EX_LIQ, o
-        if o >= stop:
-            return EX_GAP, o
-        if h >= stop or h >= liq:
-            if liq < stop:
+        stop = ps[k, F_STOP]
+        liq = ps[k, F_LIQ]
+        if lo <= stop or lo <= liq:
+            if liq > stop:
                 return EX_LIQ, liq
             return EX_STOP, stop
+    else:
+        if o >= ps[k, F_LIQ]:
+            return EX_LIQ, o
+        if o >= ps[k, F_STOP]:
+            return EX_GAP, o
         while pi[k, P_TRIED] < n_adds and lo <= ps[k, F_NEXT]:
             lvl = ps[k, F_NEXT]
             ref = o if o <= lvl else lvl
             ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n, cap, mmr, cum)
             pi[k, P_TRIED] += 1
             ps[k, F_NEXT] = (ref if ok else lvl) - ps[k, F_D0]
-            if ok:
-                stop = ps[k, F_STOP]
-                liq = ps[k, F_LIQ]
-                if h >= stop or h >= liq:
-                    if liq < stop:
-                        return EX_LIQ, liq
-                    return EX_STOP, stop
+        stop = ps[k, F_STOP]
+        liq = ps[k, F_LIQ]
+        if h >= stop or h >= liq:
+            if liq < stop:
+                return EX_LIQ, liq
+            return EX_STOP, stop
     return -1, 0.0
 
 
@@ -1119,6 +1323,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
             pi[k, P_TIN] = t
             pi[k, P_CUT] = cutf
             rf[nrec, RF_U] = U
+            rf[nrec, RF_EQ] = E_prev
             rf[nrec, RF_P0] = P0
             rf[nrec, RF_D0] = D0
             rf[nrec, RF_Q1] = q
@@ -1256,19 +1461,21 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
     return month_eq, month_pos, day_eq, rf[:nrec], ri[:nrec], skip, cut, askip, acut, capt, stats
 
 
-def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, start: float = START_WALLET):
+def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, start: float = START_WALLET,
+           b_div: float = B_DIV):
     taker, slip = COSTS[cost]
     p = np.zeros(14)
     p[PR_START], p[PR_R], p[PR_CAP], p[PR_TAKER], p[PR_SLIP] = start, r, risk_cap, taker, slip
-    p[PR_LIQF], p[PR_BUST], p[PR_CHAND], p[PR_BDIV], p[PR_LEVMAX] = LIQ_FRAC, BUST_FRAC, CHAND_MULT, B_DIV, LEV_MAX
+    p[PR_LIQF], p[PR_BUST], p[PR_CHAND], p[PR_BDIV], p[PR_LEVMAX] = LIQ_FRAC, BUST_FRAC, CHAND_MULT, b_div, LEV_MAX
     p[PR_LIQMULT], p[PR_MAXPOS], p[PR_MAXDIR], p[PR_NADDS] = LIQ_MULT, MAX_POS, MAX_DIR, N_ADDS
     return p
 
 
 def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str = "base",
-             risk_cap: float = RISK_CAP, start: float = START_WALLET, prm: np.ndarray | None = None) -> tuple:
+             risk_cap: float = RISK_CAP, start: float = START_WALLET, prm: np.ndarray | None = None,
+             b_div: float = B_DIV) -> tuple:
     br = mk.br
-    p = params(r, cost, risk_cap, start) if prm is None else prm
+    p = params(r, cost, risk_cap, start, b_div) if prm is None else prm
     return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c,
                    mk.b_qv, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
                    br["lev"], br["mmr"], br["cum"], mk.large, bank.s_ct, bank.s_h, bank.s_l, bank.s_atr,
@@ -1276,7 +1483,11 @@ def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str =
 
 
 # ------------------------------------------------------------------ metrics (H 10)
-def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool = True) -> dict:
+def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool = True,
+              days: bool | None = None) -> dict:
+    """The H 10 metric set of one run. ``detail``: the per-year / side / group splits and positions per month;
+    ``days`` (default = detail): the daily marked equity path."""
+    days = detail if days is None else days
     month_eq, month_pos, day_eq, rf, ri, skip, cut, askip, acut, capt, st = raw
     n_m = len(month_eq)
     eq0 = np.r_[start, month_eq[:-1]]
@@ -1602,12 +1813,18 @@ def _write_json(path: str, obj) -> str:
 
 
 def _universe_and_data(args, end_key: str) -> tuple:
+    """H 2 before any step: free disk, the universe, the data up to the step's end, and the data identity against
+    research/hunt/data_manifest.json (any difference stops the step)."""
     data = args.data or os.environ.get("HUNT_DATA")
     if not data:
         raise SystemExit("--data <coins30 folder> (or $HUNT_DATA) is needed")
+    disk_check(os.path.join(ROOT, OUT_REL[args.study]), private_dir(args))
     syms = load_universe(data)
     end = day_ms(PERIODS[end_key][1])
     counts = load_study_data(data, syms, end)
+    bad = data_identity_problems(counts, {s: c.get("funding_content_sha256") for s, c in counts.items()})
+    if bad:
+        raise SystemExit("stopped: the data differ from research/hunt/data_manifest.json (H 2): " + "; ".join(bad))
     return data, syms, counts
 
 

@@ -44,6 +44,8 @@ PIN_REL = "research/altpump/PREREG_ALTPUMP.sha256"
 OUT_REL = "research/altpump/out"
 PICK_REL = "research/altpump/out/pick.json"
 FUNDING_FLAG = "funding assumed 0.03%/8h"                       # 8: on every output
+LIQ_NOTE = ("daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill "
+            "beyond it (6.7); the 5m pass (15) measures liquidations")
 
 DAY_MS = 86_400_000
 COLS = ("symbol", "open_time", "open", "high", "low", "close", "volume", "quote_volume")
@@ -294,20 +296,59 @@ def check_data_sha(path: str, manifest_path: str) -> str:
     return got
 
 
-def read_frame(path: str, structure_only: bool = False) -> pd.DataFrame:
+VALUE_COLS = ("open", "high", "low", "close", "quote_volume")
+
+
+def read_frame(path: str, structure_only: bool = False, value_windows=None) -> pd.DataFrame:
+    """Read the daily file. ``value_windows`` (a list of (first day, end day) as days since 1970-01-01, end
+    excluded): the price and quote-volume values of rows outside every window are dropped (NaN) chunk by chunk while
+    reading, and ``volume`` keeps only whether it is > 0 (the calendar, section 10). None = keep every value."""
     cols = ["symbol", "open_time", "volume"] if structure_only else list(COLS)
     dtypes = {"symbol": str, "open_time": np.int64}
-    return pd.read_csv(path, usecols=cols, dtype=dtypes)
+    if structure_only or value_windows is None:
+        return pd.read_csv(path, usecols=cols, dtype=dtypes)
+    parts = []
+    for ch in pd.read_csv(path, usecols=cols, dtype=dtypes, chunksize=200_000):
+        g = ch["open_time"].values // DAY_MS
+        keep = np.zeros(len(ch), np.bool_)
+        for a, b in value_windows:
+            keep |= (g >= a) & (g < b)
+        for c in VALUE_COLS:
+            ch[c] = np.where(keep, ch[c].values.astype(np.float64), np.nan)
+        ch["volume"] = np.where(keep, ch["volume"].values, (ch["volume"].values > 0).astype(np.float64))
+        parts.append(ch)
+    df = pd.concat(parts, ignore_index=True)
+    df.attrs["value_windows"] = [tuple(int(x) for x in w) for w in value_windows]
+    return df
+
+
+def step_windows(step: str, periods: dict = None) -> list | None:
+    """Section 10: the days whose values a step may read. select: period 1 with its 60-day warm-up; test and pass2:
+    periods 2 (with warm-up) and 3; board (all three periods are shown) and check (structure only): None."""
+    periods = periods or PERIODS
+
+    def win(p):
+        a, b = periods[p]
+        return (gday(a) - WARMUP_DAYS, gday(b))
+    if step == "select":
+        return [win("p1")]
+    if step in ("test", "pass2"):
+        return [win("p2"), win("p3")]
+    return None
 
 
 class Raw:
     """The whole file: the traded-day calendar of every symbol (structure, readable for every day, 3.1) and the rows'
-    values, which only build_market reads, inside its window (section 10)."""
+    values, which only Market reads, inside its window (section 10). ``value_windows`` (from read_frame or given):
+    a Market whose window is not inside one of them refuses to build."""
 
-    def __init__(self, df: pd.DataFrame, renames=RENAMES):
+    def __init__(self, df: pd.DataFrame, renames=RENAMES, value_windows=None):
         syms = sorted(df["symbol"].unique().tolist())
         self.syms = syms
         self.sym_ix = {s: i for i, s in enumerate(syms)}
+        if value_windows is None:
+            value_windows = df.attrs.get("value_windows")
+        self.value_windows = None if value_windows is None else [tuple(int(x) for x in w) for w in value_windows]
         code = pd.Categorical(df["symbol"].values, categories=syms).codes.astype(np.int64)
         day = (df["open_time"].values.astype(np.int64) // DAY_MS).astype(np.int64)
         self.first_day = int(day.min())
@@ -319,22 +360,37 @@ class Raw:
         self.cal = np.zeros((len(syms), self.n_days), dtype=np.bool_)
         self.cal[self.code, self.dix] = True
         self.vals = {}
-        for c in ("open", "high", "low", "close", "quote_volume"):
+        for c in VALUE_COLS:
             if c in df.columns:
-                self.vals[c] = df[c].values[has].astype(np.float64)
+                v = df[c].values[has].astype(np.float64)
+                if self.value_windows is not None:                # values outside the windows never enter (10)
+                    g = day[has]
+                    keep = np.zeros(len(g), np.bool_)
+                    for a, b in self.value_windows:
+                        keep |= (g >= a) & (g < b)
+                    v = np.where(keep, v, np.nan)
+                self.vals[c] = v
         self._lives(renames)
+
+    def values_cover(self, g0: int, g1: int) -> bool:
+        """True when the values of days g0 .. g1-1 were loaded (section 10)."""
+        if self.value_windows is None:
+            return True
+        return any(a <= g0 and g1 <= b for a, b in self.value_windows)
 
     def _lives(self, renames) -> None:
         S, T = self.cal.shape
         self.lid = np.full((S, T), -1, np.int64)
         self.lbi = np.full((S, T), -1, np.int64)
-        lf, ll, ls, lno = [], [], [], []
+        self.pregap = np.zeros((S, T), np.bool_)                   # 6.8: a bar followed by a day without a bar, same life
+        lf, ll, ls, lno, lgap = [], [], [], [], []
         for s in range(S):
             bars = np.flatnonzero(self.cal[s])
             if not len(bars):
                 continue
             gaps = np.diff(bars) - 1
-            new = np.r_[True, gaps >= RELIST_GAP]
+            new = np.r_[True, gaps >= PAUSE_GAP]                  # 3.1: 7+ days without a bar end a life
+            gap_before = np.r_[-1, gaps]
             starts = np.flatnonzero(new)
             ends = np.r_[starts[1:], len(bars)]
             for n, (a, b) in enumerate(zip(starts, ends)):
@@ -342,16 +398,28 @@ class Raw:
                 seg = bars[a:b]
                 self.lid[s, seg] = li
                 self.lbi[s, seg] = np.arange(len(seg))
+                self.pregap[s, seg[:-1][np.diff(seg) > 1]] = True
                 lf.append(int(seg[0]))
                 ll.append(int(seg[-1]))
                 ls.append(s)
                 lno.append(n)
+                lgap.append(int(gap_before[a]))
         self.life_first = np.asarray(lf, np.int64)
         self.life_last = np.asarray(ll, np.int64)
         self.life_sym = np.asarray(ls, np.int64)
         self.life_no = np.asarray(lno, np.int64)
+        self.life_gap_before = np.asarray(lgap, np.int64)         # days without a bar before the life (-1: first life)
         self.life_delist = self.life_last < T - 1                 # 3.1: a life ending before the file's last day
-        listing = self.life_first > 0                             # 3.1: not a life starting on the archive's first day
+        # 3.1 partial days (archive holes): many lives covering the day lack a bar on it
+        cover = np.zeros(T + 1, np.int64)
+        np.add.at(cover, self.life_first, 1)
+        np.add.at(cover, self.life_last + 1, -1)
+        cover = np.cumsum(cover)[:T]
+        lacking = cover - self.cal.sum(axis=0)
+        self.partial = (lacking >= PARTIAL_MIN_MISSING) & (lacking >= PARTIAL_FRAC * np.maximum(cover, 1))
+        # 3.1: a listing = the first bar of a symbol's first life or of a life after 30+ days without a bar; not a
+        # life on the archive's first day, not a life after a 7..29-day pause, not a rename successor (below)
+        listing = (self.life_first > 0) & ((self.life_no == 0) | (self.life_gap_before >= RELIST_GAP))
         self.successor = {}
         for old, new in renames:
             o, n_ = old + "USDT", new + "USDT"
@@ -374,9 +442,9 @@ class Raw:
         self.life_listing = listing
 
 
-def load_raw(path: str, manifest_path: str | None = None, structure_only: bool = False) -> tuple:
+def load_raw(path: str, manifest_path: str | None = None, structure_only: bool = False, value_windows=None) -> tuple:
     sha = check_data_sha(path, manifest_path) if manifest_path else sha256_file(path)
-    return Raw(read_frame(path, structure_only)), sha
+    return Raw(read_frame(path, structure_only, value_windows)), sha
 
 
 # ------------------------------------------------------------------ 4: indicators (numba)
@@ -471,14 +539,16 @@ def _indicators(bar, h, l, c, qv, lid):
 
 
 @njit(cache=True)
-def _p4_cond(trad, r7, c, hh30, ll30, N, side):
+def _p4_cond(trad, r7, c, hh30, ll30, N, side, skip):
     """5 P4: on day t, among tradable symbols with a 7-day return (at least 3N of them), the top N (long; bottom N
-    short; ties by symbol order) whose close breaks the 30-day high (low)."""
+    short; ties by symbol order) whose close breaks the 30-day high (low). Not ranked on a partial day (skip, 3.1)."""
     S, T = trad.shape
     out = np.zeros((S, T), np.bool_)
     cand = np.empty(S, np.int64)
     key = np.empty(S)
     for t in range(T):
+        if skip[t]:
+            continue
         n = 0
         for s in range(S):
             if trad[s, t] and np.isfinite(r7[s, t]):
@@ -500,14 +570,15 @@ def _p4_cond(trad, r7, c, hh30, ll30, N, side):
 
 
 @njit(cache=True)
-def _event(cond, bar, lid):
-    """True on a bar where cond holds and held not on the symbol's previous bar of the same life."""
+def _event(cond, bar, lid, skip):
+    """True on a bar where cond holds and held not on the symbol's previous bar of the same life. Partial days (skip,
+    3.1) are not evaluated: never an event, and never the 'previous bar' (the check looks past them)."""
     S, T = cond.shape
     out = np.zeros((S, T), np.bool_)
     for s in range(S):
         prev = -1
         for t in range(T):
-            if not bar[s, t]:
+            if not bar[s, t] or skip[t]:
                 continue
             was = False
             if prev >= 0 and lid[s, prev] == lid[s, t]:
@@ -528,6 +599,9 @@ class Market:
         p0g, p1g = gday(start), min(gday(end), raw.last_day + 1)
         w0g = max(raw.first_day, p0g - warmup)
         self.w0g, self.p0g, self.p1g = w0g, p0g, p1g
+        if not raw.values_cover(w0g, p1g):
+            raise RuntimeError(f"Market {name or start}: days {day_str(w0g)}..{day_str(p1g - 1)} lie outside the values "
+                               "this step loaded (section 10)")
         T = p1g - w0g
         self.T = T
         self.p0, self.p1 = p0g - w0g, T
@@ -541,6 +615,8 @@ class Market:
         self.bar = np.ascontiguousarray(raw.cal[keep, a:b])
         self.lid = np.ascontiguousarray(raw.lid[keep, a:b])
         self.lbi = np.ascontiguousarray(raw.lbi[keep, a:b])
+        self.pregap = np.ascontiguousarray(raw.pregap[keep, a:b])  # 6.8: next calendar day has no bar, same life
+        self.partial = np.ascontiguousarray(raw.partial[a:b])      # 3.1: archive-hole days (P4 not ranked)
         sel = (raw.dix >= a) & (raw.dix < b) & (remap[raw.code] >= 0)    # only rows inside the window are read
         rs, rt = remap[raw.code[sel]], raw.dix[sel] - a
         arr = {}
@@ -565,6 +641,7 @@ class Market:
          self.sd30) = _indicators(self.bar, self.h, self.l, self.c, self.qv, self.lid)
         stable_ok = (self.lbi + 1 < STABLE_MIN_BARS) | ~(self.sd30 < STABLE_STD)
         self.trad = self.bar & (self.med7 >= VOL_FLOOR) & stable_ok          # 3.3 (a)-(d)
+        self.n_ranked = (self.trad & np.isfinite(self.r7)).sum(axis=0)      # 5 P4: symbols with a 7-day return
         # months of the period (UTC calendar)
         days = (np.arange(T) + w0g).astype("datetime64[D]")
         ym = days.astype("datetime64[M]")
@@ -604,8 +681,9 @@ class Market:
         elif fam == "P3":
             m = self.trad & (self.lst_off == v["k"] - 1)
         elif fam == "P4":
-            cond = _p4_cond(self.trad, self.r7, self.c, self.hh30, self.ll30, int(v["n"]), int(v["side"]))
-            m = _event(cond, self.bar, self.lid) & (self.lbi >= 30)
+            cond = _p4_cond(self.trad, self.r7, self.c, self.hh30, self.ll30, int(v["n"]), int(v["side"]),
+                            self.partial)
+            m = _event(cond, self.bar, self.lid, self.partial) & (self.lbi >= 30)
         else:
             raise ValueError(fam)
         m = m & ok
@@ -621,14 +699,23 @@ class Market:
         o = self.order(t, s)
         return Sig(t[o].astype(np.int64), s[o].astype(np.int64), np.full(len(o), v["side"], np.int64))
 
-    def control_pools(self) -> list:
-        """12 (b): per symbol, its tradable days in the period whose next day has a bar (and lies in the period)."""
+    def control_pools(self, v: dict) -> list:
+        """12 (b): per symbol, the days on which variant ``v`` could have fired apart from its event: tradable, in the
+        period with the next day in it and holding a bar, and the variant's own non-event conditions (P1 / P2: the
+        life has >= 21 bars; P4: >= 31 bars, at least 3N ranked symbols, not a partial day; P3: none)."""
         ok = self.trad.copy()
         ok[:, :self.p0] = False
         ok[:, max(self.p0, self.p1 - 1):] = False
         nxt = np.zeros_like(self.bar)
         nxt[:, :-1] = self.bar[:, 1:]
         ok &= nxt
+        fam = v["family"]
+        if fam in ("P1", "P2"):
+            ok &= self.lbi >= 20
+        elif fam == "P4":
+            ok &= (self.lbi >= 30) & (self.n_ranked >= 3 * int(v["n"]))[None, :] & ~self.partial[None, :]
+        elif fam != "P3":
+            raise ValueError(fam)
         return [np.flatnonzero(ok[s]) for s in range(self.S)]
 
     def daily_sub(self) -> "Sub":
@@ -648,12 +735,15 @@ class Sig:
 
 
 class Sub:
-    """Intraday fills: nb slots per day (1 = the daily bar itself; 288 = 5m bars, section 15), price o/h/l and mark
-    o/h/l for liquidation, funding events (fund_mode 1) or the fixed daily charge (fund_mode 0)."""
+    """Intraday fills (6.7, 15): for each symbol-day with data, ``slen`` slots starting at ``off`` (1 = one bar for
+    the whole day: the daily bar, or in the 5m pass a day whose 5m bars are missing or do not reach the daily high and
+    low; 288 = 5m bars); ``nb`` = the most slots of any day. Price o/h/l and mark o/h/l (liquidation), funding events
+    (fund_mode 1; a symbol-day without events pays the fixed charge) or the fixed daily charge (fund_mode 0)."""
 
-    def __init__(self, off, o, h, l, mo, mh, ml, nb, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark, fund_mode, miss):
-        self.off, self.o, self.h, self.l, self.mo, self.mh, self.ml = off, o, h, l, mo, mh, ml
-        self.nb, self.fund_mode, self.miss = nb, fund_mode, miss
+    def __init__(self, off, slen, o, h, l, mo, mh, ml, nb, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark, fund_mode):
+        self.off, self.slen = off, slen
+        self.o, self.h, self.l, self.mo, self.mh, self.ml = o, h, l, mo, mh, ml
+        self.nb, self.fund_mode = nb, fund_mode
         self.fe_off, self.fe_cnt, self.fe_slot, self.fe_rate, self.fe_mark = fe_off, fe_cnt, fe_slot, fe_rate, fe_mark
 
     @classmethod
@@ -661,8 +751,8 @@ class Sub:
         S, T = mk.S, mk.T
         off = np.where(mk.bar, np.arange(S)[:, None] * T + np.arange(T)[None, :], -1).astype(np.int64)
         o, h, l = mk.o.ravel(), mk.h.ravel(), mk.l.ravel()
-        return cls(off, o, h, l, o, h, l, 1, np.full((S, T), -1, np.int64), np.zeros((S, T), np.int64),
-                   np.zeros(0, np.int64), np.zeros(0), np.zeros(0), 0, 0)
+        return cls(off, mk.bar.astype(np.int64), o, h, l, o, h, l, 1, np.full((S, T), -1, np.int64),
+                   np.zeros((S, T), np.int64), np.zeros(0, np.int64), np.zeros(0), np.zeros(0), 0)
 
 
 # ------------------------------------------------------------------ 6-9: the account engine (numba)
@@ -675,26 +765,26 @@ R_PNL, R_PRICE, R_FEES, R_FUND, R_U, R_RISK1, R_LEV, R_P0, R_XPX, R_D0F = range(
 NRF = 10
 RI_TIN, RI_TOUT, RI_SYM, RI_SIDE, RI_ADDS, RI_TRIED, RI_REASON, RI_SRC, RI_D0CAP, RI_MONTH, RI_FLAG = range(11)
 NRI = 11
-EX_STOP, EX_GAP, EX_LIQ, EX_HOLD, EX_DELIST, EX_PEND, EX_MEND, EX_BUST, EX_MISS = range(9)
+EX_STOP, EX_GAP, EX_LIQ, EX_HOLD, EX_DELIST, EX_PEND, EX_MEND, EX_BUST, EX_HOLE = range(9)
 EXIT_NAMES = ("stop", "stop_gap_open", "liquidation", "hold_close", "delisting_close", "period_end_marked",
-              "month_end_close", "bust_close", "missing_5m_close")
+              "month_end_close", "bust_close", "close_before_no_bar_day")
 SRC_FIRST, SRC_ADD, SRC_CHAND = range(3)
 SRC_NAMES = ("first_stop", "add_moved_stop", "chandelier")
 CNT_NAMES = ("signals_seen", "lapsed_no_next_bar", "skip_has_position", "skip_n_max", "skip_risk_cap",
-             "skip_no_leverage", "skip_min_notional", "skip_bad_d0", "skip_after_bust", "skip_missing_5m",
+             "skip_no_leverage", "skip_min_notional", "skip_bad_d0", "skip_after_bust", "pass2_daily_bar_days",
              "cut_liquidity", "cut_margin_budget", "cut_free_wallet", "d0_cap",
              "add_skip_risk_cap", "add_skip_margin_budget", "add_skip_free_wallet", "add_skip_liquidity",
              "add_skip_min_notional", "add_skip_liq_not_beyond_stop", "add_cut_liquidity", "add_cut_margin_budget",
              "add_cut_free_wallet", "adds_filled")
-(C_SEEN, C_LAPSE, C_HASPOS, C_NMAX, C_RISK, C_NOLEV, C_MINNOT, C_BADD0, C_STOPPED, C_MISS, C_CUT_LIQ, C_CUT_MARGIN,
+(C_SEEN, C_LAPSE, C_HASPOS, C_NMAX, C_RISK, C_NOLEV, C_MINNOT, C_BADD0, C_STOPPED, C_DAYBAR, C_CUT_LIQ, C_CUT_MARGIN,
  C_CUT_FREE, C_D0CAP, A_RISK, A_MARGIN, A_FREE, A_LIQUIDITY, A_MINNOT, A_LIQBEYOND, A_CUT_LIQ, A_CUT_MARGIN,
  A_CUT_FREE, A_FILLED) = range(24)
 NCNT = 24
 PR_START, PR_R, PR_CAP, PR_TAKER, PR_SLIP, PR_FUNDDAY, PR_BUST, PR_CHAND, PR_D0ATR, PR_D0CAP, PR_LIQFRAC, \
-    PR_MINNOT, PR_LIQMULT = range(13)
-NPR = 13
-IP_NMAX, IP_LEVMAX, IP_NADDS, IP_HOLD, IP_MONTHLY, IP_FUNDMODE, IP_NB, IP_P0, IP_P1, IP_TRAIL, IP_MISS = range(11)
-NIP = 11
+    PR_MINNOT, PR_LIQMULT, PR_STOPHC = range(14)
+NPR = 14
+IP_NMAX, IP_LEVMAX, IP_NADDS, IP_HOLD, IP_MONTHLY, IP_FUNDMODE, IP_NB, IP_P0, IP_P1, IP_TRAIL = range(10)
+NIP = 10
 
 
 @njit(cache=True)
@@ -867,9 +957,39 @@ def _equity(acc, ps, pi, order, npos):
 
 
 @njit(cache=True)
-def _slot(k, j, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others, cap_abs, taker, slip,
-          min_not, liq_frac, cnt, br_cap, br_mmr, n_adds):
-    """6.7 / PREREG_HUNT 7.6 for one position on one (sub-)bar. Returns (code, price): -1 = still open."""
+def _stop_hit(side, stop, liq, h, l, mh, ml, hc):
+    """6.7: the stop or a liquidation inside one (sub-)bar (long; short mirror). The mark reaching liquidation before
+    the price reaches the stop is a liquidation. A touched stop fills ``hc`` of the way from the stop to the bar's
+    extreme beyond it (stop - hc x (stop - low)); a fill at or beyond the liquidation price is a liquidation (the
+    whole isolated margin is lost). Returns (code, price), -1 = neither."""
+    if side > 0:
+        hs = l <= stop
+        if ml <= liq and ((not hs) or liq >= stop):
+            return EX_LIQ, liq
+        if hs:
+            fill = stop - hc * (stop - l)
+            if fill <= liq:
+                return EX_LIQ, liq
+            return EX_STOP, fill
+    else:
+        hs = h >= stop
+        if mh >= liq and ((not hs) or liq <= stop):
+            return EX_LIQ, liq
+        if hs:
+            fill = stop + hc * (h - stop)
+            if fill >= liq:
+                return EX_LIQ, liq
+            return EX_STOP, fill
+    return -1, 0.0
+
+
+@njit(cache=True)
+def _slot(k, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others, cap_abs, taker, slip,
+          min_not, liq_frac, cnt, br_cap, br_mmr, n_adds, hc):
+    """6.7 / PREREG_HUNT 7.6 for one position on one (sub-)bar. Returns (code, price): -1 = still open. Order: open
+    beyond liquidation, open at or beyond the stop (fills at the open), the stop (hair-cut fill), then each add level
+    the bar reaches (a buy-stop add fills at the open when the open is beyond its level, else hc of the way from the
+    level to the bar's extreme), each followed by the moved-stop check."""
     o = sb_o[x]
     h = sb_h[x]
     l = sb_l[x]
@@ -877,64 +997,37 @@ def _slot(k, j, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc
     mh = sb_mh[x]
     ml = sb_ml[x]
     side = pi[k, P_SIDE]
-    stop = ps[k, F_STOP]
-    liq = ps[k, F_LIQ]
-    if side > 0:
-        if not skip_open:
-            if mo <= liq:
-                return EX_LIQ, liq
-            if o <= stop:
+    if not skip_open:
+        if side > 0:
+            if mo <= ps[k, F_LIQ]:
+                return EX_LIQ, ps[k, F_LIQ]
+            if o <= ps[k, F_STOP]:
                 return EX_GAP, o
-        hs = l <= stop
-        hl = ml <= liq
-        if hl and ((not hs) or liq >= stop):
-            return EX_LIQ, liq
-        if hs:
-            return EX_STOP, stop
-        while pi[k, P_TRIED] < n_adds and h >= ps[k, F_NEXT]:
-            lvl = ps[k, F_NEXT]
-            ref = o if o >= lvl else lvl
-            ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr)
-            pi[k, P_TRIED] += 1
-            ps[k, F_NEXT] = (ref if ok else lvl) + ps[k, F_D0]
-            if ok:
-                stop = ps[k, F_STOP]
-                liq = ps[k, F_LIQ]
-                hs = l <= stop
-                hl = ml <= liq
-                if hl and ((not hs) or liq >= stop):
-                    return EX_LIQ, liq
-                if hs:
-                    return EX_STOP, stop
+        else:
+            if mo >= ps[k, F_LIQ]:
+                return EX_LIQ, ps[k, F_LIQ]
+            if o >= ps[k, F_STOP]:
+                return EX_GAP, o
+    code, px = _stop_hit(side, ps[k, F_STOP], ps[k, F_LIQ], h, l, mh, ml, hc)
+    if code >= 0:
+        return code, px
+    while pi[k, P_TRIED] < n_adds and ((side > 0 and h >= ps[k, F_NEXT]) or (side < 0 and l <= ps[k, F_NEXT])):
+        lvl = ps[k, F_NEXT]
+        if side > 0:
+            ref = o if o >= lvl else lvl + hc * (h - lvl)
+        else:
+            ref = o if o <= lvl else lvl - hc * (lvl - l)
+        ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr)
+        pi[k, P_TRIED] += 1
+        ps[k, F_NEXT] = (ref if ok else lvl) + side * ps[k, F_D0]
+        if ok:
+            code, px = _stop_hit(side, ps[k, F_STOP], ps[k, F_LIQ], h, l, mh, ml, hc)
+            if code >= 0:
+                return code, px
+    if side > 0:
         if h > ps[k, F_EXT]:
             ps[k, F_EXT] = h
     else:
-        if not skip_open:
-            if mo >= liq:
-                return EX_LIQ, liq
-            if o >= stop:
-                return EX_GAP, o
-        hs = h >= stop
-        hl = mh >= liq
-        if hl and ((not hs) or liq <= stop):
-            return EX_LIQ, liq
-        if hs:
-            return EX_STOP, stop
-        while pi[k, P_TRIED] < n_adds and l <= ps[k, F_NEXT]:
-            lvl = ps[k, F_NEXT]
-            ref = o if o <= lvl else lvl
-            ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr)
-            pi[k, P_TRIED] += 1
-            ps[k, F_NEXT] = (ref if ok else lvl) - ps[k, F_D0]
-            if ok:
-                stop = ps[k, F_STOP]
-                liq = ps[k, F_LIQ]
-                hs = h >= stop
-                hl = mh >= liq
-                if hl and ((not hs) or liq <= stop):
-                    return EX_LIQ, liq
-                if hs:
-                    return EX_STOP, stop
         if l < ps[k, F_EXT]:
             ps[k, F_EXT] = l
     return -1, 0.0
@@ -951,13 +1044,14 @@ def _others(order, npos, k, ps, pi):
 
 
 @njit(cache=True)
-def _fund_events(k, s, t, j, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark):
-    """15: archived funding events at slot j: long pays rate x notional at mark, short receives (signed)."""
+def _fund_events(k, s, t, jlo, jhi, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark):
+    """15: the archived funding events of symbol-day (s, t) at slots jlo .. jhi-1: long pays rate x notional at mark,
+    short receives (signed)."""
     a = fe_off[s, t]
     if a < 0:
         return
     for e in range(a, a + fe_cnt[s, t]):
-        if fe_slot[e] == j:
+        if fe_slot[e] >= jlo and fe_slot[e] < jhi:
             fee = pi[k, P_SIDE] * fe_rate[e] * ps[k, F_Q] * fe_mark[e]
             acc[0] -= fee
             acc[3] += fee
@@ -965,19 +1059,34 @@ def _fund_events(k, s, t, j, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_m
 
 
 @njit(cache=True)
-def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist, month_of_day,
-            sb_off, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark,
+def _fund_fixed(k, rate, px, ps, acc):
+    """8: the fixed funding charge, rate x notional at px, against the position whatever its side."""
+    fee = rate * ps[k, F_Q] * px
+    acc[0] -= fee
+    acc[3] += fee
+    ps[k, F_FUND] += fee
+
+
+@njit(cache=True)
+def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist, pregap, month_of_day,
+            sb_off, sb_len, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark,
             sig_day, sig_sym, sig_side):
     """One account (sections 6-9): continuous (iprm[IP_MONTHLY] = 0) or a fresh wallet every calendar month (14).
     Day order: (0) funding events at 00:00 (5m pass), (1) existing positions: liquidation / gap at the open, (2) the
     entries of yesterday's signals at the open, (3) the intraday slots (stop first, then adds, moved-stop exit),
-    (4) the close: hold exit, delisting close, chandelier, fixed funding, equity, bust, month / period end."""
+    (4) the close: hold exit, delisting close, close before a day without a bar, chandelier, funding, equity, bust,
+    month / period end.
+    Funding (8), fixed mode (the daily pass, or a 5m-pass symbol-day without archived events): a position open at a
+    daily close pays one day (3 x 8h: 08:00 and 16:00 of the day, 00:00 of the next); a position that exits during
+    the day or at its close pays 2 x 8h for that day (08:00 and 16:00, the worse case when the exit time is unknown);
+    an exit at the open pays nothing more (its 00:00 was charged at the previous close)."""
     start = prm[PR_START]
     r = prm[PR_R]
     cap = prm[PR_CAP]
     taker = prm[PR_TAKER]
     slip = prm[PR_SLIP]
     fund_day = prm[PR_FUNDDAY]
+    f8 = fund_day / 3.0
     bust_eq = prm[PR_BUST] * start
     chand = prm[PR_CHAND]
     d0_atr = prm[PR_D0ATR]
@@ -985,6 +1094,7 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
     liq_frac = prm[PR_LIQFRAC]
     min_not = prm[PR_MINNOT]
     liq_mult = prm[PR_LIQMULT]
+    hc = prm[PR_STOPHC]
     n_max = iprm[IP_NMAX]
     lev_max = iprm[IP_LEVMAX]
     n_adds = iprm[IP_NADDS]
@@ -995,7 +1105,6 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
     p0 = iprm[IP_P0]
     p1 = iprm[IP_P1]
     trail = iprm[IP_TRAIL]
-    miss = iprm[IP_MISS]
     S, T = bar.shape
     n_m = month_of_day[p1 - 1] + 1
     ns = len(sig_day)
@@ -1052,19 +1161,12 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
         for i in range(nsnap):
             k = snap[i]
             s = pi[k, P_SYM]
-            if fund_mode == 1:
-                _fund_events(k, s, t, 0, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
+            if fund_mode == 1 and fe_cnt[s, t] > 0:
+                _fund_events(k, s, t, 0, 1, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
             if not bar[s, t]:
                 continue
             x0 = sb_off[s, t]
-            if x0 < 0:
-                if miss == 1:
-                    _close(k, ps[k, F_LASTC], EX_MISS, t, ps, pi, rf, ri, acc, taker, slip)
-                    used[k] = False
-                    has[s] = -1
-                    npos = _drop(order, npos, k)
-                continue
-            if np.isnan(sb_o[x0]):
+            if x0 < 0 or np.isnan(sb_o[x0]):
                 continue
             side = pi[k, P_SIDE]
             code = -1
@@ -1093,11 +1195,8 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
             d = t - 1
             si += 1
             cnt[C_SEEN] += 1
-            if not bar[s, t]:
+            if not bar[s, t] or sb_off[s, t] < 0:
                 cnt[C_LAPSE] += 1
-                continue
-            if miss == 1 and sb_off[s, t] < 0:
-                cnt[C_MISS] += 1
                 continue
             if has[s] >= 0:
                 cnt[C_HASPOS] += 1
@@ -1215,17 +1314,26 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
                 if not bar[s, t]:
                     continue
                 x0 = sb_off[s, t]
-                if x0 < 0:
+                if x0 < 0 or j >= sb_len[s, t]:
                     continue
-                if fund_mode == 1 and j > 0:
-                    _fund_events(k, s, t, j, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
+                fixed = fund_mode == 0 or fe_cnt[s, t] == 0
+                if not fixed:
+                    if sb_len[s, t] == 1:
+                        # one bar stands for the whole day: all its later events first (the worse order)
+                        _fund_events(k, s, t, 1, 1 << 30, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
+                    elif j > 0:
+                        _fund_events(k, s, t, j, j + 1, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
+                if j == 0 and nb > 1 and sb_len[s, t] == 1:
+                    cnt[C_DAYBAR] += 1
                 x = x0 + j
                 if np.isnan(sb_o[x]):
                     continue
                 others = _others(order, npos, k, ps, pi)
-                code, px = _slot(k, j, x, j == 0, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others,
-                                 cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr, n_adds)
+                code, px = _slot(k, x, j == 0, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others,
+                                 cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr, n_adds, hc)
                 if code >= 0:
+                    if fixed:
+                        _fund_fixed(k, 2.0 * f8, px, ps, acc)
                     _close(k, px, code, t, ps, pi, rf, ri, acc, taker, slip)
                     used[k] = False
                     has[s] = -1
@@ -1238,18 +1346,22 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
             k = snap[i]
             s = pi[k, P_SYM]
             side = pi[k, P_SIDE]
+            fixed = fund_mode == 0 or fe_cnt[s, t] == 0
             if bar[s, t]:
                 pi[k, P_BARS] += 1
                 ps[k, F_LASTC] = c_d[s, t]
                 ps[k, F_MED7] = med7[s, t]
+                xc = -1
                 if hold > 0 and pi[k, P_BARS] >= hold:
-                    _close(k, c_d[s, t], EX_HOLD, t, ps, pi, rf, ri, acc, taker, slip)
-                    used[k] = False
-                    has[s] = -1
-                    npos = _drop(order, npos, k)
-                    continue
-                if delist[s, t]:
-                    _close(k, c_d[s, t], EX_DELIST, t, ps, pi, rf, ri, acc, taker, slip)
+                    xc = EX_HOLD
+                elif delist[s, t]:
+                    xc = EX_DELIST
+                elif pregap[s, t]:
+                    xc = EX_HOLE
+                if xc >= 0:
+                    if fixed:
+                        _fund_fixed(k, 2.0 * f8, c_d[s, t], ps, acc)
+                    _close(k, c_d[s, t], xc, t, ps, pi, rf, ri, acc, taker, slip)
                     used[k] = False
                     has[s] = -1
                     npos = _drop(order, npos, k)
@@ -1265,11 +1377,8 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
                         if ch < ps[k, F_STOP]:
                             ps[k, F_STOP] = ch
                             pi[k, P_SRC] = SRC_CHAND
-            if fund_mode == 0:
-                fee = fund_day * ps[k, F_Q] * ps[k, F_LASTC]
-                acc[0] -= fee
-                acc[3] += fee
-                ps[k, F_FUND] += fee
+            if fixed:
+                _fund_fixed(k, fund_day, ps[k, F_LASTC], ps, acc)
         E = _equity(acc, ps, pi, order, npos)
         if E < bust_eq:
             nsnap = npos
@@ -1320,8 +1429,10 @@ class Out:
 
 
 def run_account(mk: Market, sig: Sig, v: dict, r: float = R_MAIN, cost: str = "base", fund8h: float | None = None,
-                monthly: bool = False, start: float = START, sub: Sub | None = None) -> Out:
-    """One account of variant ``v`` (its exit) on ``sig`` (sections 6-9, 14 when monthly)."""
+                monthly: bool = False, start: float = START, sub: Sub | None = None,
+                stop_hc: float | None = None) -> Out:
+    """One account of variant ``v`` (its exit) on ``sig`` (sections 6-9, 14 when monthly). ``stop_hc``: the stop-fill
+    haircut of 6.7 (default STOP_HC; 16 reports 0 and 0.5)."""
     taker, slip, f8 = COSTS[cost]
     if fund8h is not None:
         f8 = fund8h
@@ -1331,14 +1442,15 @@ def run_account(mk: Market, sig: Sig, v: dict, r: float = R_MAIN, cost: str = "b
     prm[PR_START], prm[PR_R], prm[PR_CAP], prm[PR_TAKER], prm[PR_SLIP] = start, r, cap, taker, slip
     prm[PR_FUNDDAY], prm[PR_BUST], prm[PR_CHAND], prm[PR_D0ATR], prm[PR_D0CAP] = 3.0 * f8, BUST_FRAC, CHAND, D0_ATR, D0_CAP
     prm[PR_LIQFRAC], prm[PR_MINNOT], prm[PR_LIQMULT] = LIQ_FRAC, MIN_NOTIONAL, LIQ_MULT
+    prm[PR_STOPHC] = STOP_HC if stop_hc is None else stop_hc
     ip = np.zeros(NIP, np.int64)
     is_m = v["exit"] == "M"
     ip[IP_NMAX], ip[IP_LEVMAX], ip[IP_NADDS] = n_max, LEV_MAX, N_ADDS if is_m else 0
     ip[IP_HOLD], ip[IP_MONTHLY], ip[IP_FUNDMODE] = 0 if is_m else v["hold"], int(monthly), sub.fund_mode
-    ip[IP_NB], ip[IP_P0], ip[IP_P1], ip[IP_TRAIL], ip[IP_MISS] = sub.nb, mk.p0, mk.p1, int(is_m), sub.miss
-    raw = _engine(prm, ip, BR_CAP, BR_LEV, BR_MMR, mk.bar, mk.o, mk.c, mk.atr, mk.med7, mk.delist, mk.month_of_day,
-                  sub.off, sub.o, sub.h, sub.l, sub.mo, sub.mh, sub.ml, sub.fe_off, sub.fe_cnt, sub.fe_slot,
-                  sub.fe_rate, sub.fe_mark, sig.day, sig.sym, sig.side)
+    ip[IP_NB], ip[IP_P0], ip[IP_P1], ip[IP_TRAIL] = sub.nb, mk.p0, mk.p1, int(is_m)
+    raw = _engine(prm, ip, BR_CAP, BR_LEV, BR_MMR, mk.bar, mk.o, mk.c, mk.atr, mk.med7, mk.delist, mk.pregap,
+                  mk.month_of_day, sub.off, sub.slen, sub.o, sub.h, sub.l, sub.mo, sub.mh, sub.ml, sub.fe_off,
+                  sub.fe_cnt, sub.fe_slot, sub.fe_rate, sub.fe_mark, sig.day, sig.sym, sig.side)
     return Out(raw, start, monthly, mk.p0, mk.p1)
 
 
@@ -1416,6 +1528,7 @@ def summarize(mk: Market, out: Out, detail: bool = True) -> dict:
         "price_pnl": _f(price_sum),
         "funding_share_of_gross": _f(fund_sum / abs(price_sum)) if price_sum != 0 else None,
         "per_year": years, "per_side": side_rows, "funding_flag": FUNDING_FLAG,
+        "liquidation_note": LIQ_NOTE,
     })
     return d
 
@@ -1432,23 +1545,30 @@ def ctrl_a(sig: Sig, rng: np.random.Generator) -> Sig:
 
 
 def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list) -> Sig:
-    """12 (b): per symbol and side, as many signals as the pick had, on days drawn uniformly without replacement from
-    the symbol's tradable days in the period whose next day has a bar (all of them if fewer)."""
+    """12 (b): per symbol, the pick's signals that lie in the symbol's pool (Market.control_pools of the variant),
+    moved together by one random circular offset over the pool: position i -> (i + k) mod n, k uniform on 0..n-1, one
+    k per symbol (symbols in index order). Keeps each symbol's count, the spacing and clustering of its signals (in
+    pool days) and their sides. A pick signal outside the pool (its next day has no bar: it lapsed) is not moved."""
     if not len(sig):
         return sig
-    key = sig.sym * 2 + (sig.side > 0)
-    uk, cnts = np.unique(key, return_counts=True)
     D, Sy, Sd = [], [], []
-    for kk, n in zip(uk, cnts):
-        s, side = int(kk // 2), (1 if kk % 2 else -1)
+    for s in np.unique(sig.sym):
+        s = int(s)
         pool = pools[s]
-        n = min(int(n), len(pool))
+        n = len(pool)
         if n == 0:
             continue
-        draw = pool if n == len(pool) else rng.choice(pool, size=n, replace=False)
-        D.append(np.asarray(draw, np.int64))
-        Sy.append(np.full(n, s, np.int64))
-        Sd.append(np.full(n, side, np.int64))
+        sel = sig.sym == s
+        days, sides = sig.day[sel], sig.side[sel]
+        pos = np.searchsorted(pool, days)
+        inpool = (pos < n) & (pool[np.minimum(pos, n - 1)] == days)
+        if not inpool.any():
+            continue
+        k = int(rng.integers(0, n))
+        newpos = (pos[inpool] + k) % n
+        D.append(pool[newpos].astype(np.int64))
+        Sy.append(np.full(len(newpos), s, np.int64))
+        Sd.append(sides[inpool].astype(np.int64))
     if not D:
         return Sig(np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros(0, np.int64))
     day, sym, side = np.concatenate(D), np.concatenate(Sy), np.concatenate(Sd)
@@ -1461,14 +1581,29 @@ def ctrl_seed(ctl: str, vid: str, period: str, r: float, n: int) -> np.random.Ge
 
 
 def boot_p(d, rng: np.random.Generator, n_boot: int = N_BOOT) -> float:
-    """13: one-sided month-block bootstrap: resample the months with replacement; (1 + resamples with mean <= 0) /
-    (n_boot + 1)."""
+    """13: one-sided p for mean d > 0 over the period's months = the larger of (i) a studentized month bootstrap
+    (bootstrap-t: resample the months with replacement; t* = (mean* - mean) / se*; p = (1 + #{t* >= t}) /
+    (n_boot + 1), t = mean / se) and (ii) a sign-flip test (each month's d times a random sign; p = (1 + #{mean* >=
+    mean}) / (n_boot + 1)). The plain percentile bootstrap rejects too often with 19-26 months, most with left-skewed
+    d; (i) corrects most of the skew, (ii) is exact for a symmetric null (tests: size under skewed nulls)."""
     d = np.asarray(d, float)
-    if not len(d):
+    n = len(d)
+    if not n:
         return 1.0
-    idx = rng.integers(0, len(d), size=(n_boot, len(d)))
-    means = d[idx].mean(axis=1)
-    return float((1 + int((means <= 0).sum())) / (n_boot + 1))
+    m = float(d.mean())
+    sd = float(d.std(ddof=1)) if n > 1 else 0.0
+    if not (sd > 0.0):
+        return float(1.0 / (n_boot + 1)) if m > 0 else 1.0
+    t_obs = m / (sd / math.sqrt(n))
+    x = d[rng.integers(0, n, size=(n_boot, n))]
+    num = x.mean(axis=1) - m
+    se = x.std(axis=1, ddof=1) / math.sqrt(n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ts = np.where(se > 0, num / se, np.where(num > 0, np.inf, np.where(num < 0, -np.inf, 0.0)))
+    p_t = (1 + int((ts >= t_obs).sum())) / (n_boot + 1)
+    sg = np.where(rng.random((n_boot, n)) < 0.5, -1.0, 1.0)
+    p_f = (1 + int(((sg * d).mean(axis=1) >= m).sum())) / (n_boot + 1)
+    return float(max(p_t, p_f))
 
 
 def rank_p(pick_mean: float, seed_means) -> float:
@@ -1498,9 +1633,10 @@ def run_controls(mk: Market, sig: Sig, v: dict, period: str, r: float = R_MAIN, 
                  ctl: str = "a", sub: Sub | None = None) -> dict:
     """Section 12: n_seeds accounts of control ``ctl`` -> per-seed monthly ln M (post-bust months 0), the seeds'
     means, per-side P&L in U, and the symbols they traded."""
-    pools = mk.control_pools() if ctl == "b" else None
+    pools = mk.control_pools(v) if ctl == "b" else None
     lnm = np.zeros((n_seeds, mk.n_months))
     side_u = np.zeros((n_seeds, 2))
+    npos = np.zeros(n_seeds)
     busts = 0
     traded = set()
     for i in range(n_seeds):
@@ -1508,6 +1644,7 @@ def run_controls(mk: Market, sig: Sig, v: dict, period: str, r: float = R_MAIN, 
         cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools)
         out = run_account(mk, cs, v, r=r, sub=sub)
         lnm[i] = month_ln(out)
+        npos[i] = len(out.rf)
         busts += int((out.m_state == 1).any())
         if len(out.rf):
             u = out.rf[:, R_PNL] / out.rf[:, R_U]
@@ -1515,7 +1652,8 @@ def run_controls(mk: Market, sig: Sig, v: dict, period: str, r: float = R_MAIN, 
             side_u[i, 0] = u[sd > 0].sum()
             side_u[i, 1] = u[sd < 0].sum()
             traded.update(np.unique(out.ri[:, RI_SYM]).tolist())
-    return {"lnm": lnm, "means": lnm.mean(axis=1), "busts": busts, "side_u": side_u, "traded": traded}
+    return {"lnm": lnm, "means": lnm.mean(axis=1), "busts": busts, "side_u": side_u, "traded": traded,
+            "positions": npos}
 
 
 def compare(pick_ln: np.ndarray, ctl: dict, vid: str, period: str, ctl_name: str, r: float = R_MAIN,
@@ -1526,6 +1664,7 @@ def compare(pick_ln: np.ndarray, ctl: dict, vid: str, period: str, ctl_name: str
     pr = rank_p(float(pick_ln.mean()), ctl["means"])
     return {"mean_d": _f(d.mean()), "p_boot": pb, "p_rank": pr, "control_mean_ln": _f(ctl["means"].mean()),
             "control_busts": int(ctl["busts"]),
+            "control_positions_mean": _f(np.mean(ctl["positions"])) if "positions" in ctl else None,
             "control_side_U_mean": {"long": _f(ctl["side_u"][:, 0].mean()), "short": _f(ctl["side_u"][:, 1].mean())}}
 
 

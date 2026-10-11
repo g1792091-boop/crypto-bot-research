@@ -280,7 +280,8 @@ def fetch_verified(src, key: str, dest: str, has_ck: bool, log=print) -> tuple:
     Resume: a dest with its '.ok' file is not fetched again."""
     ok = dest + ".ok"
     if os.path.exists(dest) and os.path.exists(ok):
-        parts = open(ok).read().split()
+        with open(ok) as fh:
+            parts = fh.read().split()
         st = parts[0] if parts else "ok"
         return st, (parts[1] if len(parts) > 1 else sha256_file(dest))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -793,7 +794,7 @@ def verify(manifest_path: str, ref_path: str, data: str | None = None, allow_met
             if f in r and r[f] != n.get(f):
                 diffs.append(f"{s}: {f} {n.get(f)!r} != reference {r[f]!r}")
         for f in ("arrays_sha256", "arrays_sha256_funding"):
-            if r.get(f) is None and f not in r:
+            if f not in r:
                 meta_only.append(f"{s}:{f}")
                 continue
             if r.get(f) != n.get(f):
