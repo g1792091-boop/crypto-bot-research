@@ -50,10 +50,12 @@ coin-flip sides?
   go into `research/hunt/data_check.json`, which the pin lists.
 * **Identity of the data.** The npz files stay outside the repository (about 0.55 GB). Before the pin, `manifest.json`
   is copied to `research/hunt/data_manifest.json` and the data job's scripts (`c30.py`, `c30_fill.py`,
-  `write_universe_md.py`, `universe_addendum.py`) to `research/hunt/data_build/`; the pin lists them. `select` and
-  `test` check the sha256 of every npz they read against `data_manifest.json` and stop on any difference, so a run on
-  another machine uses copies of the same files, not a rebuild. Downloads at most 2 at a time. The run stops if free
-  disk falls under 1 GB.
+  `write_universe_md.py`, `universe_addendum.py`) to `research/hunt/data_build/`; the pin lists them. Because a zip's
+  bytes change with its write time, identity is checked on content: `data_manifest.json` also holds, per coin, the
+  sha256 of the arrays the study reads (5m: ts, o, h, l, c, v, qv; funding: ts, rate; in that order, as stored), taken
+  once from the built files before the pin. `select` and `test` recompute them and stop on any difference, so a run on
+  another machine either copies the files or rebuilds them with the pinned scripts and must reproduce the same content.
+  Downloads at most 2 at a time. The run stops if free disk falls under 1 GB.
 
 ## 3. Universe
 
@@ -339,7 +341,7 @@ verdicts, and the two verdicts are never merged into one "the hunt passed".
   `research/hunt/data_manifest.json`, `research/hunt/data_check.json` and `research/hunt/data_build/` (section 2).
 * Commands: `hunt.py select --study v1`, `hunt.py test --study v1`, `hunt.py report --study v1`; outputs in
   `research/hunt/out/v1/` (select.json, pick.json, test.json, RESULTS_KO.md), each with the git commit and the pin it
-  ran under, and the sha256 of every data file read.
+  ran under, and the content sha256 of every coin's data it read (section 2).
 * Compute: at most 2 processes; select is 24 accounts + diagnostics, test is the pick, 200 control accounts, the cost
   x2 and reads. Disk under 2 GB in total (section 2).
 
@@ -407,7 +409,7 @@ only. No pin file and no `research/hunt/out/` existed. The reviewer read `UNIVER
 
 1. Section 2: the data as actually built (daily-file fills, mark-price columns present but unread, zero-volume tails),
    the coin-end rule, funding timing as coded, the cross-check still to run on all six coins, and the data identity
-   (manifest and build scripts into the repository, sha256 check at run time).
+   (manifest and build scripts into the repository, a content-hash check at run time).
 2. Section 3: the real rule and list; the eight coins that stop; no coin listed after 2021-01; when each coin can pass
    the gate; the bias statement corrected (the list is point in time for the test period, look-ahead only in select).
 3. Section 5: an event needs every value defined on t and t-1. Section 4: incomplete first and last bins dropped.
