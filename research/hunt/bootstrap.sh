@@ -24,7 +24,7 @@ ARG=""
 for a in "$@"; do
   case "$a" in
     --dry-run) DRYRUN=1 ;;
-    run|status|push|update) MODE=$a ;;
+    run|status|push|update|idle) MODE=$a ;;
     *) if [ "$MODE" = update ] && [ -z "$ARG" ]; then ARG=$a
        else echo "사용법: bash bootstrap.sh [run|status|push|update <커밋>] [--dry-run]"; exit 2; fi ;;
   esac
@@ -74,7 +74,7 @@ AP_OUT=$REPO/research/altpump/out
 NCPU=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)    # nproc obeys OMP_NUM_THREADS, set to 1 below
 SELF=$REPO/research/hunt/bootstrap.sh
 NST=9
-RESTART="tmux respawn-pane -k -t hunt \"bash $SELF; bash\" 2>/dev/null || tmux new -d -s hunt \"bash $SELF; bash\"; [ -n \"\$TMUX\" ] || tmux attach -t hunt"
+RESTART="bash $SELF idle && { tmux respawn-pane -k -t hunt \"bash $SELF; bash\" 2>/dev/null || tmux new -d -s hunt \"bash $SELF; bash\"; [ -n \"\$TMUX\" ] || tmux attach -t hunt; }"
 [ "$DRYRUN" = 1 ] && RESTART="DRYRUN=1 HUNT_BASE=$BASE HUNT_REPO=$REPO HUNT_DATA=$DATA bash $SELF --dry-run"
 
 say() { echo "[$(date -u '+%m-%d %H:%M UTC')] $*" | tee -a "$LOG"; }
@@ -149,7 +149,8 @@ running() {                  # the run's own process (RUNNING holds its pid), or
 
 incomplete_msg() {
   echo "거의 끝: 결과는 묶었지만 알트 급등 5분봉 2차 확인이 끝나지 않았습니다 ($(cat "$BASE/AP_PASS2_INCOMPLETE" 2>/dev/null))."
-  echo "  1) 몇 분 뒤 이 줄을 한 번 더 붙여 넣으세요 (빠진 파일만 다시 받습니다): $RESTART"
+  echo "  1) 몇 분 뒤 아래 한 줄 전체를 한 번 더 붙여 넣으세요 (빠진 파일만 다시 받습니다):"
+  echo "$RESTART"
   echo "  2) 같은 말이 또 나오면: 결과를 보내고(bash $SELF push) 이 화면을 개발자에게 보내 주세요."
   echo "     개발자가 'Destroy 해도 된다'고 할 때까지 서버를 두세요 (시간당 약 \$1)."
 }
@@ -253,6 +254,8 @@ case "$MODE" in
   status) status; exit 0 ;;
   push) push; exit $? ;;
   update) update "$ARG"; exit $? ;;
+  idle) running && { echo "이미 돌고 있습니다. 다시 시작할 필요 없습니다. 진행 보기: bash $SELF status"; exit 1; }
+        exit 0 ;;              # the printed restart line starts with this guard: a paste during a run changes nothing
 esac
 
 for k in 1 2 3 4 5; do running || break; sleep 2; done      # a restart: let the old run finish dying
@@ -445,7 +448,8 @@ hunt_test() {
   if [ "$rc" != 0 ]; then
     [ -s "$out" ] || die "$st 시험 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
     # test.json is written (atomically) before the reads hook: the verdict stands; the read stopped (workers, memory, kill)
-    warn "$st 판정(test.json)은 쓰였고, 그 뒤 참고 분석에서 멈췄습니다 (종료 코드 $rc, run.log 참고; 다른 결과는 그대로 묶습니다)"
+    sub "$st 판정(test.json)은 쓰였고, 그 뒤 참고 분석에서 멈췄습니다 (종료 코드 $rc); 목표판은 아래에서 한 번 더 계산합니다"
+    [ "$st" = wide ] && WIDE_TEST_RC=$rc
     return 0                 # not marked as run here: ensure_reads_a tries the read once more
   fi
   [ -s "$out" ] || die "$st 시험은 끝났는데 결과 파일($out)이 없습니다"
@@ -462,14 +466,15 @@ ensure_reads_a() {           # reads_a (R1 goal board, R24 20/30/40x, continuous
                 return 0 ;;
   esac
   if [ "$(cat "$tried" 2>/dev/null)" = "$HEAD" ]; then
-    warn "목표판·20/30/40배 표(reads_a)는 이 코드로 이미 한 번 다시 해 봤고 끝나지 않아 또 하지 않습니다 (개발자에게 보내 주세요)"
+    warn "목표판·20/30/40배 표(reads_a)는 이 코드로 이미 한 번 해 봤고(시험 안에서 또는 이어서 계산) 끝나지 않아 또 하지 않습니다 (개발자에게 보내 주세요)"
     return 0
   fi
-  echo "$HEAD" > "$tried"
-  grep -qF "workers keep dying" "$LOG" 2>/dev/null && procs=$(( PROCS > 2 ? PROCS / 2 : 1 ))   # memory: half the workers
+  { grep -qF "workers keep dying" "$LOG" 2>/dev/null || [ "${WIDE_TEST_RC:-0}" = 137 ]; } \
+    && procs=$(( PROCS > 2 ? PROCS / 2 : 1 ))   # memory (dying workers or an OOM kill): half the workers
   sub "목표판·20/30/40배 표 (reads_a): 판정은 끝났는데 파일이 없어 이어서 계산합니다 (몇 시간, 작업 ${procs}개)"
   "${HUNT[@]}" reads --study wide --data "$DATA" --procs "$procs" --private "$PRIV" >>"$LOG" 2>&1 \
     || warn "목표판·20/30/40배 표(reads_a) 이어서 계산 실패 (run.log의 [reads] 줄 참고, 다른 결과는 그대로 묶습니다)"
+  echo "$HEAD" > "$tried"    # after the call: a kill of the whole run leaves the one retry for the next restart
   [ -s "$out" ] || warn "목표판·20/30/40배 표(reads_a.json)가 없습니다 (run.log의 [reads] 줄 참고)"
 }
 
@@ -477,6 +482,7 @@ stage 6 "추세 사냥 계산 (v1·넓게 고르기 → 두 시험, 작업 ${PRO
 hunt_select v1
 hunt_select wide
 TEST_RAN_HERE=""
+WIDE_TEST_RC=0
 hunt_test v1
 hunt_test wide
 ensure_reads_a
@@ -597,9 +603,13 @@ owner_reads() {              # PREREG_HUNT_WIDE 7.4a (O1 weekend version on all 
   [ -f research/hunt/reads_o.py ] || { warn "추가 분석(주말 뺀 버전 등): reads_o.py 없음"; return 0; }
   [ -s research/hunt/out/wide/test.json ] || { warn "추가 분석(주말 뺀 버전 등): 넓게 시험 결과가 없어 건너뜀"; return 0; }
   sub "추가 분석: 주말 뺀 버전(4개 봉)·롱만·FOMC/고용지표 시간 피하기·모멘텀 비교 (7.4a)"
-  local rc=0
+  local rc=0 to
   timeout "${HUNT_READS_O_HOURS:-8}h" "${READS_O[@]}" --study wide --data "$DATA" --private "$PRIV" --procs "$PROCS" \
-    >>"$LOG" 2>&1 || rc=$?
+    >>"$LOG" 2>&1 &
+  to=$!                      # timeout runs the read in its own process group: pass a pane kill or Ctrl+C on to it
+  trap 'kill -TERM "$to" 2>/dev/null; exit 1' HUP INT TERM
+  wait "$to" || rc=$?
+  trap - HUP INT TERM
   if [ "$rc" = 124 ]; then
     warn "추가 분석(주말 뺀 버전 등)이 ${HUNT_READS_O_HOURS:-8}시간 안에 끝나지 않아 멈췄습니다 (다른 결과는 그대로 묶습니다)"
   elif [ "$rc" != 0 ]; then
@@ -727,7 +737,7 @@ stage 9 "결과 묶기"
 pack || die "결과 묶기 실패 (tail -50 $LOG)"
 rm -f "$BASE/RUNNING"
 if [ -f "$BASE/AP_PASS2_INCOMPLETE" ]; then
-  incomplete_msg | while IFS= read -r line; do say "$line"; done
+  incomplete_msg | tee -a "$LOG"
   exit 1
 fi
 touch "$BASE/DONE"

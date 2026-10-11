@@ -24,7 +24,12 @@
   same commit afterwards. The code commit has the same pin files as ca561234bd and changes only unpinned files:
   - `bootstrap.sh`:
     - A verdict written before a read stops is kept, and the run goes on.
-    - reads_a resumes once after a restart (`READS_A_TRIED`).
+    - reads_a is tried at most once more per code commit (`READS_A_TRIED`, written after the call): right away when
+      `hunt test` stops after writing test.json (half the workers if run.log says "workers keep dying" or after an
+      OOM kill), or after a restart that skipped the test step. There is no retry after a Python error caught inside
+      the test's own read hook.
+    - The printed restart line starts with `bootstrap.sh idle`, so a paste during a run changes nothing; reads_o
+      stops with the run (pane kill or Ctrl+C).
     - A reads_o timeout (8 h) is reported apart from a failure.
     - The restart line works inside tmux and is printed on its own line.
     - The status and update messages are clearer.

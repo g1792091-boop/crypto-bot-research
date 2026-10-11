@@ -78,10 +78,11 @@ bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh status
 
 **멈췄다면 → 이어서 하기** (서버 재부팅, `멈춤:` 메시지, status가 "지금 돌고 있지 않습니다"): 아래를 붙여 넣으면 끝난 부분은
 건너뛰고 이어서 합니다 (tmux 창 안에서 붙여 넣어도 됩니다). 처음에 정한 설정은 서버에 남아 있어서 이 줄에는 따로 적을 것이
-없습니다. **돌고 있는 중에는 붙여 넣지 마세요** (status로 먼저 확인).
+없습니다. 돌고 있는 중에 붙여 넣으면 "이미 돌고 있습니다"만 나오고 아무것도 바뀌지 않습니다. 개발자가 준 줄에 다시 시작이
+같이 들어 있으면(줄 안에 `tmux respawn-pane`이 있으면) 이 줄을 더 붙여 넣을 필요가 없습니다.
 
 ```bash
-tmux respawn-pane -k -t hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash" 2>/dev/null || tmux new -d -s hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash"; [ -n "$TMUX" ] || tmux attach -t hunt
+bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh idle && { tmux respawn-pane -k -t hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash" 2>/dev/null || tmux new -d -s hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash"; [ -n "$TMUX" ] || tmux attach -t hunt; }
 ```
 
 같은 `멈춤:`이 두 번 나오면 **그 화면을 그대로 복사해** 보내 주세요. 아래 줄의 결과도 같이 주시면 더 빨리 고칩니다.
@@ -139,7 +140,7 @@ Stop은 서버가 꺼져 있어도 요금이 계속 나갑니다.
 | 목표판 · 20/30/40배 표 · 계속 굴린 계좌 (reads_a, 6/9 안) | 약 4 ~ 9시간 | 약 2 ~ 5시간 |
 | 알트 급등 (이번에는 안 함) | - | - |
 | 정밀 재확인 (1분봉 받기 + 계산) | 약 20 ~ 40분 | 약 20 ~ 40분 |
-| 추가 분석: 주말 뺀 버전 등 (reads_o, 8/9 안) | 약 1.5 ~ 5시간 | 약 1 ~ 3시간 |
+| 추가 분석: 주말 뺀 버전 등 (reads_o, 8/9 안; 8시간이 넘으면 멈추고 나머지는 그대로 묶음) | 약 1.5 ~ 5시간 | 약 1 ~ 3시간 |
 | **합계** | **약 8 ~ 16시간** | **약 5 ~ 10시간** |
 
 - 알트 급등에서 1차를 통과한 것이 있으면, 5분봉 2차 확인 자료를 한 번에 2개씩 받느라(사전 등록 규칙) **1시간 남짓 더**
