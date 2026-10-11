@@ -434,7 +434,7 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
 * Reported per pick, period and r: the share of months ending **>= x5, x10, x20, x30, x50, x100** ($5,000 ..
   $100,000), the share busted, the median month and the **worst month**; the number of months; and how the machine
   actually ran at that size: the realised first-unit risk / intended, adds per position, the share of positions
-  reaching each add level, add skips by reason and entry cuts by reason (pick and coin flip pooled).
+  reaching each add level, add skips by reason and entry cuts by reason (the pick, and each control pooled).
 * **At high r the margin budget usually leaves no room for adds.** B = equity / n_max (6.3) and the 1.5x liquidation
   rule keeps alt leverage low (often 1x or 2x), so at r = 10% and 20% the first unit uses up B and the three adds are
   skipped (synthetic trend: 3 adds per position at r = 0.5%, 2 at 2%, 1 at 5%, 0 at 10% and 20%, with the first unit
@@ -651,7 +651,7 @@ sections above, with a synthetic regression test in `tests/test_altpump.py`.
 
 | # | change | sections |
 |---|---|---|
-| 1 | Control (b) moves the pick's own signal pattern in time (one circular offset per symbol over its pool) instead of drawing the same count of uniform days: clustered signals had made (b) open more positions and pay more costs, biasing T2 toward the pick | 12 |
+| 1 | Control (b) moves the pick's own signal pattern in time (one circular offset per symbol over its pool) instead of drawing the same count of uniform days: clustered signals had made (b) open more positions and pay more costs, biasing T2 toward the pick (replaced by common offsets for all symbols, change 17) | 12 |
 | 2 | Control (b)'s pool keeps only days the variant could trade apart from its event (life >= 21 / 31 bars, 3N ranked, not partial): young-listing days had dragged long controls down and helped short ones | 12 |
 | 3 | p_boot = the larger of a bootstrap-t and a sign-flip p, not the percentile bootstrap (too many rejections with 19-26 months and left-skewed d) | 13 |
 | 4 | Control (a) stated as a side-and-market control, not a timing control; (b) is the timing control | 12, 13, README_KO |
