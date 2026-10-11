@@ -466,6 +466,8 @@ button.tm-cr:hover { background: var(--surface-2); }
   .tm-chart { height: 380px; flex: none; }
   /* the OHLC line gets its own strip above the price pane (a line's label never sits on it) */
   .tm-cbox { top: 24px; }
+  /* the chips start under the top edge label here (terminal-chart.js placeChips), so the label may use the width */
+  .tm-cedge { max-width: 82%; }
   .tm-legend { top: 4px; right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tm-table { flex: none; }
   .tm-table .tm-tw { max-height: 560px; }

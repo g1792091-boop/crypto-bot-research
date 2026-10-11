@@ -27,6 +27,8 @@ const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 :
 const MAX_CHIPS = 5;
 const NEAR = 0.0005;                    // entries this close share one chip (the rule bot's chart-lines.js)
 const CHIP_H = 20;
+const EDGE_H = 20;                     // the top edge label's height and gap (.tm-cedge: 16 px line + border)
+const NARROW_PLOT = 560;               // a plot narrower than this has no room for the chips and the edge label side by side
 
 /** Whether a line of the selected position stays inside the price scale: the entry always; a stop or take-profit while
  *  it lies within one more bar range (at least 0.2 % of the price) above or below the visible bars, so the candles keep
@@ -134,7 +136,10 @@ export function termChart(ctx, st, hooks) {
     if (!sb) return;
     paintEdge(sb);
     const oy = box.offsetTop || 0;                // a phone: the legend has its own line above the chart
-    const TOP = oy ? oy + 2 : 26;                 // under the legend line
+    // a narrow plot (a phone, a small window): the top edge label ("익절 … · 차트 밖", right-aligned) and the chips
+    // (left) do not fit side by side, so the chips start under the label instead of on it
+    const under = !edgeUp.hidden && (sb.W || 0) - sb.sw < NARROW_PLOT ? EDGE_H : 0;
+    const TOP = (oy ? oy + 2 : 26) + under;       // under the legend line (and the edge label)
     const items = chipGroups().map((g) => {
       const c = candles.priceToCoordinate(g.price);
       const raw = c == null ? null : c + oy;

@@ -194,6 +194,35 @@ out.band2 = q1(el, "div.tm-band");
     assert "우리 포지션 · 후보" in o["top"] and "190계좌 열린 4" in o["band2"]
 
 
+def test_terminal_chips_start_under_the_edge_label_on_a_narrow_chart(tmp_path):
+    """A take-profit left off the scale is named at the chart's top edge (right-aligned); on a narrow plot (a phone) the
+    chips above the visible range start under that label instead of on it; a wide plot keeps them at the top."""
+    o = TU._run(tmp_path, TU.FIXTURE + r"""
+const mk = window.LightweightCharts.createChart;
+window.LightweightCharts.createChart = (...a) => {
+  const c = mk(...a); const add = c.addCandlestickSeries;
+  c.addCandlestickSeries = (opts) => { CH.copts = opts; return add(opts); };
+  return c;
+};
+const el = await mountOn(doc(), live(101000, 2550), {});
+const box = el.querySelector("div.tm-cbox");
+Object.defineProperty(box, "clientHeight", {value: 380, configurable: true});
+CH.cs.priceToCoordinate = () => -50;                          // every chip's entry is above the bars on screen
+CH.copts.autoscaleInfoProvider(() => ({priceRange: {minValue: 99000, maxValue: 101000}}));   // take-profit off the scale
+const tops = async (w) => {
+  Object.defineProperty(box, "clientWidth", {value: w, configurable: true});
+  await L.liveRefresh(); await tick(60);
+  return {edge: el.querySelectorAll("span.tm-cedge").filter((x) => !x.hidden).map((x) => x.textContent),
+    chips: el.querySelectorAll("button.tm-chip").map((b) => b.style.transform)};
+};
+out.narrow = await tops(330);
+out.wide = await tops(900);
+""")
+    assert any(e.startswith("익절") for e in o["narrow"]["edge"]), o["narrow"]
+    assert o["narrow"]["chips"] and o["narrow"]["chips"][0] == "translateY(46px)", o["narrow"]
+    assert o["wide"]["chips"] and o["wide"]["chips"][0] == "translateY(26px)", o["wide"]
+
+
 def test_terminal_lock_line_while_replaying_and_cleanup_when_left(tmp_path):
     o = TU._run(tmp_path, TU.FIXTURE + r"""
 localStorage.setItem("cl-tm-grp", JSON.stringify("all"));
