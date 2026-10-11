@@ -497,7 +497,7 @@ hour and from the hunt bot every 5 minutes. Owners' click-by-click creation step
 * Outcomes: standalone R equals the hunt code on synthetic paths (adds, stop moves, chandelier, intrabar order, funding
   sign); exact coin-flip expectation; marking; late-fill.
 * Evaluation on simulated data, 2,000 runs: AI with no skill -> S1/S2/S3 PASS share <= 2.5% each; strong AI (Delta1 = 6R,
-  60 signals) -> PASS >= 80%; counts below minimum -> INSUFFICIENT; no-answer 6% -> INVALID; same seed twice -> byte-
+  60 signals, R sd 3R) -> PASS >= 80%; counts below minimum -> INSUFFICIENT; no-answer 6% -> INVALID; same seed twice -> byte-
   identical output; S1-N not evaluated unless S1 passes.
 
 ## 19. Volume and cost derivation (estimates)
@@ -506,7 +506,7 @@ Signal rate: PREREG_HUNT gives floors only (>= 2 positions a month for eligibili
 and no study data was opened for this spec. Textbook-order guesses per coin on 1h bars: E1 (fresh 55-bar breakout with
 volume >= 2x) about 0.1-0.2 events a day; E2 (squeeze release) about 0.2-0.4; E3 (ATR ratio crossing 1.5) about
 0.1-0.3. Times 30 coins: a 1h pick gives about 3-12 events a day (4h: 1-3); G1 passes about 15-40% of them. S1 asks
-every event (G and N): **low 2 a day (4h pick), mid 8 (1h pick), high 15**. S3: 6 scans a day = 182 a month. The hunt
+every event (G and N): **low 2 a day (4h pick), mid 8 (1h pick), high 15** (above the top of the guess, as margin). S3: 6 scans a day = 182 a month. The hunt
 select output (events and gated signals per month of the pick) replaces these numbers before D0.
 
 Tokens per call: S1 input 11,500 (5,500 cached prefix: system 3,000 + market 2,500; coin block 6,000), 1.5 asks per
