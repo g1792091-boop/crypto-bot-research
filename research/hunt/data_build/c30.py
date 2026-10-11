@@ -355,7 +355,7 @@ def build_symbol(sym):
     ts = merged["ts"].values.astype(np.int64)
     arrs = {"ts": ts}
     for c in ["o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc"]:
-        arrs[c] = merged[c].values.astype(np.float32)
+        arrs[c] = merged[c].values.astype(np.float64)   # as parsed (the exchange's decimal)
     # bar-level coverage (data quality only, no trading quantities)
     step = 300_000
     d = np.diff(ts)
@@ -437,7 +437,7 @@ def write_manifest(state, universe):
         "source": "https://data.binance.vision (Binance USD-M futures monthly archives)",
         "range": [RANGE_START, RANGE_END],
         "format": {"5m": "np.savez_compressed; keys ts(int64 ms open time UTC),o,h,l,c,v(base vol),qv(quote vol),"
-                         "mo,mh,ml,mc (mark price OHLC, NaN where no mark bar); all float32 except ts",
+                         "mo,mh,ml,mc (mark price OHLC, NaN where no mark bar); all float64 except ts",
                    "funding": "np.savez_compressed; keys ts(int64 ms calc_time UTC), rate(float64 last_funding_rate)"},
         "notes": ["rows are raw exchange bars: nothing forward-filled or synthesized, zero-volume bars kept",
                   "ts converted to ms if source used microseconds",

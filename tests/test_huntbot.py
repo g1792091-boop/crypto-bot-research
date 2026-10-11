@@ -258,8 +258,10 @@ def test_system_list_and_cells(sysl):
     assert S.cell_id(by_id["F1:E2:4h:NONE"]) == "F1:E2:4h"
     f4 = next(s for s in systems if s["family"] == "F4")
     assert S.cell_id(f4).startswith("F4:") and S.cell_id(f4).endswith(f":r{f4['rank']}")
-    v = S.variants()
-    assert v["goal2"]["risk_cap"] == pytest.approx(0.16) and v["goal5"]["b_div"] == pytest.approx(0.6)
+    v = S.variants()                     # W 7.3 R1 cells: machine A 2% (B = equity / 6 as written), machine B 5%
+    assert sorted(v) == ["A2", "B5", "r0.5", "r1"] and not any(k.startswith("goal") for k in v)
+    assert v["A2"]["risk_cap"] == pytest.approx(0.16) and v["A2"]["b_div"] == pytest.approx(6.0)
+    assert v["B5"]["risk_cap"] == pytest.approx(0.20) and v["B5"]["b_div"] == pytest.approx(4.0)
 
 
 def test_lineup_checks(sysl, tmp_path):
@@ -285,19 +287,28 @@ def test_lineup_checks(sysl, tmp_path):
 
 
 def test_suggest_lineup(tmp_path):
+    """The proposal follows test.json's own 'lineup' (W 12), not a rule of its own (tests/test_huntbot_lineup.py has
+    the rest)."""
     out = tmp_path / "research" / "hunt" / "out"
     (out / "wide").mkdir(parents=True)
     (out / "v1").mkdir(parents=True)
-    (out / "v1" / "pick.json").write_text(json.dumps({"pick": {"id": "v1:E1:4h"}, "label": "pick"}))
-    (out / "v1" / "test.json").write_text(json.dumps({"verdict": {"v1_pass": False}}))
-    (out / "wide" / "picks.json").write_text(json.dumps({"picks": [{"id": "F2:A:1h:G1", "pick_no": 1},
-                                                                   {"id": "F2:B:4h:NONE", "pick_no": 2},
-                                                                   {"id": "F3:C:1h:G1", "pick_no": 3}]}))
-    (out / "wide" / "test.json").write_text(json.dumps({"verdict": {"passing": ["F2:A:1h:G1", "F2:B:4h:NONE"]}}))
-    lu = S.suggest_lineup(str(tmp_path))
-    by = [(a.get("system") or "basket", a["label"], a["variant"]) for a in lu["accounts"]]
+
+    def lu(**tiers):
+        picks = {i: {"lineup": t, "why": [] if t != "excluded" else ["cost_x2"], "batch": 1, "pick_no": n}
+                 for n, (i, t) in enumerate(tiers.items(), 1)}
+        return {"picks": picks, **{t: [i for i, d in picks.items() if d["lineup"] == t]
+                                   for t in ("정식", "참고", "excluded")}}
+    (out / "v1" / "test.json").write_text(json.dumps({"pick": {"id": "v1:E1:4h"}, "verdict": {"v1_pass": False},
+                                                      "lineup": lu(**{"v1:E1:4h": "참고"})}))
+    (out / "wide" / "test.json").write_text(json.dumps({
+        "verdict": {"passing": ["F2:A:1h:G1", "F2:B:4h:NONE"]},
+        "lineup": lu(**{"F2:A:1h:G1": "정식", "F2:B:4h:NONE": "정식", "F3:C:1h:G1": "excluded"})}))
+    res = S.suggest_lineup(str(tmp_path))
+    by = [(a.get("system") or "basket", a["label"], a["variant"]) for a in res["accounts"]]
     assert ("v1:E1:4h", "참고", "r0.5") in by and ("F2:A:1h:G1", "정식", "r1") in by
-    assert ("F2:A:1h:G1", "참고", "goal5") in by and ("F3:C:1h:G1", "참고", "r0.5") in by
+    assert not any(v in ("A2", "B5") or v.startswith("goal") for _, _, v in by)     # goal size: owners only
+    assert not any(s == "F3:C:1h:G1" for s, _, _ in by)                          # excluded: no paper account
+    assert [x["system"] for x in res["excluded"]] == ["F3:C:1h:G1"]
     assert ("basket", "정식", "r0.5") in by
 
 

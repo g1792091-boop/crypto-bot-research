@@ -27,7 +27,8 @@ and refuses when one is already there. Long steps keep finished parts under the 
 (same pin only); a worker that dies is replaced and its items sent again.
 
 What runs where (section numbers "H n" = PREREG_HUNT.md, "W n" = PREREG_HUNT_WIDE.md):
-* data (H 2, W 9): ``<data>/5m/<SYM>.npz`` (ts int64 ms; o h l c v qv float32, cast to float64 at use; duplicate open
+* data (H 2, W 9): ``<data>/5m/<SYM>.npz`` (ts int64 ms; o h l c v qv float64, the archive's decimals as parsed, kept
+  float64 end to end (a float32 copy flips exact ties of path-dependent indicators, W 8); duplicate open
   times dropped keeping the last, zero-quote-volume bars dropped, off-grid / non-finite rows dropped and counted; the
   mark-price columns are never read), ``<data>/funding/<SYM>.npz`` (ts, rate), ``<data>/manifest.json`` (coin end).
 * signal bars, indicators, label, entries: research/hunt/entries_wide.py (H 4-6, W 3), imported read-only.
@@ -461,14 +462,15 @@ def append_picks_line(study: str) -> str:
 
 # ------------------------------------------------------------------ data (H 2, W 9)
 class Coin:
-    """One coin's 5m bars up to (not including) ``end_ms``, cleaned as H 2 (float32 storage, as in the files)."""
+    """One coin's 5m bars up to (not including) ``end_ms``, cleaned as H 2. Prices, volumes and mark OHLC are kept
+    float64 (as in the files: the exchange's decimals as parsed; never narrowed to float32), ts int64."""
 
     def __init__(self, sym, ts, o, h, lo, c, v, qv, last_ms=None, counts=None, mark=None):
         self.sym = sym
         self.ts = np.asarray(ts, np.int64)
-        self.o, self.h, self.l, self.c, self.v, self.qv = (np.asarray(x, np.float32) for x in (o, h, lo, c, v, qv))
+        self.o, self.h, self.l, self.c, self.v, self.qv = (np.asarray(x, np.float64) for x in (o, h, lo, c, v, qv))
         if mark is not None:                        # mark-price OHLC (fidelity / October reads only; H 2: unread)
-            self.mo, self.mh, self.ml = (np.asarray(mark[k], np.float32) for k in ("mo", "mh", "ml"))
+            self.mo, self.mh, self.ml = (np.asarray(mark[k], np.float64) for k in ("mo", "mh", "ml"))
         self.last_ms = int(self.ts[-1]) if last_ms is None and len(self.ts) else last_ms
         self.counts = counts or {}
         self.cq = np.concatenate(([0.0], np.cumsum(self.qv, dtype=np.float64)))
@@ -3078,7 +3080,7 @@ def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: i
             ts = np.asarray(z["ts"], np.int64)
             cut = (ts >= start_ms) & (ts < end_ms)
             cols = [np.asarray(z[k])[cut] for k in ("o", "h", "l", "c", "v", "qv")]
-            mk_ = [np.asarray(z[k])[cut] if k in keys else np.full(int(cut.sum()), np.nan, np.float32)
+            mk_ = [np.asarray(z[k])[cut] if k in keys else np.full(int(cut.sum()), np.nan, np.float64)
                    for k in ("mo", "mh", "ml")]
         (t2, o, h, lo, c, v, qv, mo, mh, ml), cnt = clean_5m(ts[cut], *cols, step=step, extra=tuple(mk_))
         cnt["bars_without_mark"] = int((~np.isfinite(np.asarray(mo, float))).sum())
@@ -3135,7 +3137,7 @@ def scan_daily_archive(root: str) -> dict:
 def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: dict | None = None,
                        allowed: dict | None = None) -> dict:
     """R23 loader: data.binance.vision daily 5m kline, 5m mark-price kline and (if any) funding zips of ``sym`` for
-    the UTC days in [start, end) -> the 5m npz layout (ts int64; o h l c v qv mo mh ml mc float32) and funding (ts,
+    the UTC days in [start, end) -> the 5m npz layout (ts int64; o h l c v qv mo mh ml mc float64) and funding (ts,
     rate). Each zip with a ``.CHECKSUM`` file next to it is checked (sha256; a mismatch stops). Funding without a
     daily file is 0 and counted (R23). With ``allowed`` (the pinned october_files.json list, '<kind>/<file>' ->
     sha256) a zip missing from the list, differing from it or without its .CHECKSUM stops before it is opened."""
@@ -3201,7 +3203,7 @@ def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: d
         mo[hit] = ma[pos[hit]]
     for i, k in enumerate(("mo", "mh", "ml", "mc")):
         out[k] = mo[:, i]
-    out = {k: (v.astype(np.float32) if k != "ts" else v.astype(np.int64)) for k, v in out.items()}
+    out = {k: (v.astype(np.float64) if k != "ts" else v.astype(np.int64)) for k, v in out.items()}
     if fr:
         ft = np.concatenate([x[0] for x in fr])
         rate = np.concatenate([x[1][:, 0] for x in fr])

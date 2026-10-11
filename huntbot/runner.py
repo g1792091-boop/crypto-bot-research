@@ -75,7 +75,7 @@ ENGINE_API = ("Coin", "clean_5m", "install", "Market", "Series", "series", "syst
               "simulate", "summarize", "params", "gate_mask", "entry_events", "cell_key", "wide_systems", "v1_systems",
               "run_system", "prepare_series", "pmap", "_compile_probe", "_ew", "_COINS", "_SERIES", "_EVENTS", "_SIGS",
               "TF_ORDER", "D0_MULT", "TREND", "FIVE", "DAY_MS", "BARS_PER_DAY", "R_BASE", "R_ONE", "RISK_CAP", "B_DIV",
-              "SIZING_RS", "START_WALLET", "MAX_POS", "COSTS", "PR_SLIP", "EXIT_NAMES", "STOP_SRC_NAMES", "EX_END",
+              "with_overrides", "START_WALLET", "MAX_POS", "COSTS", "PR_SLIP", "EXIT_NAMES", "STOP_SRC_NAMES", "EX_END",
               "EX_STOP", "EX_GAP", "EX_LIQ", "RF_PNL", "RF_U", "RF_P0", "RF_D0", "RF_Q1", "RF_XPX", "RF_LEV", "RF_PRICE",
               "RF_EQ", "RF_FEES", "RF_FUND", "RI_COIN", "RI_SIDE", "RI_TIN", "RI_TOUT", "RI_ADDS", "RI_REASON",
               "RI_CAND", "RI_SRC", "RI_LARGE", "RI_CUT", "RI_TRIED")

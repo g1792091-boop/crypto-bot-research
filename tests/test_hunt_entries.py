@@ -387,18 +387,22 @@ def test_parity_reads_hunt_files_as_the_run_does(tmp_path):
     from research.hunt import hunt as H
     from research.hunt import parity_wide as PW
     d = synth(3 * 288, 31)
-    qv = d["qv"].astype(np.float32)
+    qv = d["qv"].astype(np.float64)
     qv[24:36] = 0                                     # one whole 1h bin of zero-volume bars
     ts = d["ts"].copy()
     ts[100] = ts[99]                                  # duplicate open time
     (tmp_path / "5m").mkdir()
-    np.savez_compressed(tmp_path / "5m" / "AUSDT.npz", ts=ts, **{k: d[k].astype(np.float32) for k in
+    np.savez_compressed(tmp_path / "5m" / "AUSDT.npz", ts=ts, **{k: d[k].astype(np.float64) for k in
                                                                   ("o", "h", "l", "c", "v")}, qv=qv)
     (t5, o, h, lo, c, v), counts = PW.five_of(None, None, "AUSDT", str(tmp_path))
     assert counts["zero_volume"] == 12 and counts["duplicates"] == 1 and len(t5) == len(ts) - 13
     with np.load(tmp_path / "5m" / "AUSDT.npz") as z:
         (want_ts, *_), _ = H.clean_5m(z["ts"], z["o"], z["h"], z["l"], z["c"], z["v"], z["qv"])
     assert np.array_equal(t5, want_ts) and o.dtype == np.float64
+    with np.load(tmp_path / "5m" / "AUSDT.npz") as z:                 # float64 as stored: no narrowing on the way
+        keep = np.isin(z["ts"], t5) & (z["qv"] > 0)
+        keep[99] = False                                               # the duplicate: the later row is kept
+        assert np.array_equal(o, z["o"][keep]) and np.array_equal(v, z["v"][keep])
     b = EW.build_bars(t5, o, h, lo, c, v, "1h")
     assert (int(d["ts"][24]) // 3_600_000) * 3_600_000 not in set(b.open_ms.tolist())   # the zero bin is no bar
 

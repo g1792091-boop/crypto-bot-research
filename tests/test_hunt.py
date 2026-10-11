@@ -978,14 +978,14 @@ def test_end_to_end_v1(tmp_path, monkeypatch):
 
 
 def test_loader_on_synthetic_files(tmp_path, monkeypatch):
-    """<data>/5m/<SYM>.npz (ts + float32 o h l c v qv mo mh ml mc), funding npz, manifest.json, universe.json."""
+    """<data>/5m/<SYM>.npz (ts + float64 o h l c v qv mo mh ml mc), funding npz, manifest.json, universe.json."""
     d = tmp_path / "coins30"
     (d / "5m").mkdir(parents=True)
     (d / "funding").mkdir()
     n = 600
     ts = START + np.arange(n, dtype=np.int64) * FIVE
-    p = np.linspace(100, 110, n).astype(np.float32)
-    qv = np.full(n, 1e6, np.float32)
+    p = np.linspace(100, 110, n)
+    qv = np.full(n, 1e6)
     qv[10] = 0                                                    # zero-volume bar: dropped
     ts[20] = ts[19]                                               # duplicate open time: last kept
     cols = {k: p for k in ("o", "h", "l", "c", "mo", "mh", "ml", "mc")}
@@ -999,7 +999,8 @@ def test_loader_on_synthetic_files(tmp_path, monkeypatch):
     (d / "UNIVERSE.md").write_text("# rule\n")
     end = START + 300 * FIVE
     c = H.load_coin(str(d), "AUSDT", end, H._manifest(str(d)))
-    assert c.ts.max() < end and c.o.dtype == np.float32 and c.f64()["o"].dtype == np.float64
+    assert c.ts.max() < end and c.o.dtype == np.float64 and c.f64()["o"].dtype == np.float64
+    assert np.array_equal(c.o, p[np.r_[0:10, 11:19, 20:300]])         # float64 kept as stored (no float32 narrowing)
     assert c.counts["zero_volume"] == 1 and c.counts["duplicates"] == 1 and len(c.ts) == 298
     # the manifest's coin end and missing month lie after ``end``: nothing of them is carried (review finding)
     assert c.last_ms == 2 ** 62 and c.counts["missing_months_funding"] == []
@@ -1021,11 +1022,11 @@ def test_loader_on_synthetic_files(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------ H 2 data checks (review finding: not implemented)
 def _npz5(path, ts, p, v=None, qv=None):
-    p = np.asarray(p, np.float32)
-    v = np.full(len(ts), 10.0, np.float32) if v is None else np.asarray(v, np.float32)
-    qv = (v * p).astype(np.float32) if qv is None else np.asarray(qv, np.float32)
+    p = np.asarray(p, np.float64)
+    v = np.full(len(ts), 10.0) if v is None else np.asarray(v, np.float64)
+    qv = v * p if qv is None else np.asarray(qv, np.float64)
     path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(path, ts=np.asarray(ts, np.int64), o=p, h=p * np.float32(1.001), l=p * np.float32(0.999),
+    np.savez_compressed(path, ts=np.asarray(ts, np.int64), o=p, h=p * 1.001, l=p * 0.999,
                         c=p, v=v, qv=qv, mo=p, mh=p, ml=p, mc=p)
 
 
@@ -1095,21 +1096,19 @@ def test_cross_check_counts_and_pass_rule(tmp_path, monkeypatch):
     np.savez_compressed(fg / "1m" / "AUSDT.npz", ts=t1, o=o1, h=h1, l=l1, c=c1, v=v1)
     from research.hunt import entries_wide as EW
     t5, o5, h5, l5, c5, v5 = EW.resample_1m_to_5m(t1, o1, h1, l1, c1, v1)
-    qv = (v5 * c5).astype(np.float32)
+    qv = v5 * c5
     qv[7] = 0                                                    # zero volume: dropped, so not compared
     c5b = c5.copy()
     c5b[100] *= 1.001                                            # beyond 1e-6
     d = tmp_path / "data"
     (d / "5m").mkdir(parents=True)
-    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5.astype(np.float32), h=h5.astype(np.float32),
-                        l=l5.astype(np.float32), c=c5b.astype(np.float32), v=v5.astype(np.float32), qv=qv)
+    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5, h=h5, l=l5, c=c5b, v=v5, qv=qv)
     r = H.cross_check_coin(str(d / "5m" / "AUSDT.npz"), str(fg / "1m" / "AUSDT.npz"))
     assert r["common"] == 3999 and r["only_1m"] == 1 and r["mismatch"] == 1 and r["ohlc_mismatch"] == 1
     assert r["mismatch_share"] == pytest.approx(1 / 3999) and r["mismatch_share"] < H.XCHECK_MAX_SHARE * 3
-    v5b = v5.astype(np.float32)
+    v5b = v5.copy()
     v5b[200:210] *= 1.01                                         # 10 volume mismatches: 0.25% > 0.1%
-    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5.astype(np.float32), h=h5.astype(np.float32),
-                        l=l5.astype(np.float32), c=c5.astype(np.float32), v=v5b, qv=qv)
+    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=t5, o=o5, h=h5, l=l5, c=c5, v=v5b, qv=qv)
     r = H.cross_check_coin(str(d / "5m" / "AUSDT.npz"), str(fg / "1m" / "AUSDT.npz"))
     assert r["volume_mismatch"] == 10 and r["ohlc_mismatch"] == 0 and r["mismatch_share"] > H.XCHECK_MAX_SHARE
     monkeypatch.setattr(H, "OLD_SIX", ("AUSDT",))
@@ -1233,12 +1232,23 @@ def _rand_sig(mk, tf, per_days, seed):
     return {"tf": tf, "k": np.concatenate(K), "j": np.concatenate(J), "side": np.concatenate(S)}
 
 
-def _golden_digest(**kw):
+def _f32_values(c):
+    """The coin with every price and volume rounded to the nearest float32 value (kept float64): what the reviewed
+    engine's Coin held when it stored float32 (before 2026-10-11)."""
+    r = lambda x: np.asarray(np.asarray(x, np.float32), np.float64)  # noqa: E731
+    return H.Coin(c.sym, c.ts, r(c.o), r(c.h), r(c.l), r(c.c), r(c.v), r(c.qv), last_ms=c.last_ms, counts=c.counts)
+
+
+def _golden_digest(f32_values=False, **kw):
     """The engine on a seeded synthetic 8-coin case (coin end, funding, three timeframes and sizes): sha256 of every
     decision output. GOLDEN_DIGEST was computed with the reviewed engine (commit a43f36c) before the read options
-    were added."""
+    were added; that engine's Coin stored float32, so it is reproduced on the bars rounded to float32 values
+    (``f32_values``). GOLDEN_DIGEST_F64 is the same case on the float64 bars synth_coin makes (Coin float64 since
+    2026-10-11)."""
     s0 = H.day_ms("2022-01-01")
     coins = {f"C{i}USDT": H.synth_coin(f"C{i}USDT", s0, s0 + 50 * DAY, 700 + i, 10.0 * (i + 1)) for i in range(8)}
+    if f32_values:
+        coins = {s: _f32_values(c) for s, c in coins.items()}
     fund = {s: H.synth_funding(s0, s0 + 50 * DAY, 800 + i) for i, s in enumerate(coins)}
     coins["C2USDT"].last_ms = int(coins["C2USDT"].ts[len(coins["C2USDT"].ts) - 2000])
     H.install(coins, fund)
@@ -1261,13 +1271,21 @@ def _golden_digest(**kw):
 
 
 GOLDEN_DIGEST = ("d99d9b0110245102dcc440922accc3e697ad6d404b209e5e8b134a2200a76cca", 584)
+# float64 switch (2026-10-11, W 8 parity): Coin keeps prices and volumes float64. Computed with this code on the same
+# case, unrounded bars; the only difference from GOLDEN_DIGEST is the input bars' precision: on the float32-rounded
+# bars (values both precisions hold exactly) the float64 code gives GOLDEN_DIGEST itself (first assertion below).
+GOLDEN_DIGEST_F64 = ("21d6fe39ceb88413f79e37d0d2216bddf76d6f6ad160daa2dc8ad7a57b7bbcbf", 584)
 
 
 def test_engine_bit_identical_at_default_params():
     """Panel: every engine export added for the reads leaves the decision path bit-identical at default params (and
-    the per-bar equity path, being an export only, changes nothing either)."""
-    assert _golden_digest() == GOLDEN_DIGEST
-    assert _golden_digest(PR_EQPATH=1.0) == GOLDEN_DIGEST
+    the per-bar equity path, being an export only, changes nothing either). The float64 Coin reproduces the reviewed
+    engine's digest bit for bit on bars it could already hold (float32 values); on float64 bars it gives
+    GOLDEN_DIGEST_F64."""
+    assert _golden_digest(f32_values=True) == GOLDEN_DIGEST
+    assert _golden_digest(f32_values=True, PR_EQPATH=1.0) == GOLDEN_DIGEST
+    assert _golden_digest() == GOLDEN_DIGEST_F64
+    assert _golden_digest(PR_EQPATH=1.0) == GOLDEN_DIGEST_F64
     assert len(H.params()) == H.NPR and H.params()[H.PR_BPD] == 288
 
 
@@ -1652,9 +1670,9 @@ def test_reads_hook_ctx_guard_and_d11(tmp_path, monkeypatch, mode):
 def _write_1m(dirpath, coin_):
     c1 = _as_1m(coin_)
     (dirpath / "1m").mkdir(parents=True, exist_ok=True)
-    f32 = lambda x: np.asarray(x, np.float32)  # noqa: E731
-    np.savez_compressed(dirpath / "1m" / f"{coin_.sym}.npz", ts=c1.ts, o=f32(c1.o), h=f32(c1.h), l=f32(c1.l),
-                        c=f32(c1.c), v=f32(c1.v), qv=f32(c1.qv), mo=f32(c1.o), mh=f32(c1.h), ml=f32(c1.l), mc=f32(c1.c))
+    f64 = lambda x: np.asarray(x, np.float64)  # noqa: E731
+    np.savez_compressed(dirpath / "1m" / f"{coin_.sym}.npz", ts=c1.ts, o=f64(c1.o), h=f64(c1.h), l=f64(c1.l),
+                        c=f64(c1.c), v=f64(c1.v), qv=f64(c1.qv), mo=f64(c1.o), mh=f64(c1.h), ml=f64(c1.l), mc=f64(c1.c))
 
 
 def test_fidelity_read_on_one_minute_files(tmp_path, monkeypatch, capsys):
@@ -1718,9 +1736,9 @@ def test_daily_archive_loader(tmp_path):
     r = H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY)
     arr, cnt = r["arrays"], r["counts"]
     assert len(arr["ts"]) == 576 and arr["ts"][0] == a and arr["ts"][-1] == a + 2 * DAY - FIVE   # microseconds -> ms
-    assert arr["o"].dtype == np.float32 and arr["o"][0] == np.float32(100.0) and arr["qv"][5] == np.float32(300.0)
+    assert arr["o"].dtype == np.float64 and arr["o"][0] == 100.0 and arr["qv"][5] == 300.0
     assert np.isfinite(arr["mo"][:288]).all() and np.isnan(arr["mo"][288:]).all()
-    assert arr["mo"][0] == np.float32(100.1)
+    assert arr["mo"][0] == 100.0 * 1.001 and arr["h"][3] == 100 + 3 * 0.01 + 0.05    # the CSV's decimal, float64
     assert cnt["kline_days"] == 2 and cnt["mark_days"] == 1 and cnt["funding_zero_days"] == 3
     assert cnt["checksum_ok"] == 3 and len(r["arrays"]["funding"][0]) == 0
     # R23 (review): with the pinned list a zip missing from it, differing from it or without .CHECKSUM stops

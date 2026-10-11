@@ -3,7 +3,7 @@
 This is the repository copy of the coins30 builder that made the data the hunt studies were pinned on (the scratch
 ``c30.py download`` plus ``c30_fill.py``): the same listing source (the S3 listing of data.binance.vision), the same
 ``.CHECKSUM`` (sha256) check of every zip, the same conversion (pandas read, microsecond times to ms, duplicate open
-times keep the last, mark price left-joined on the kline open time, int64 / float32 arrays) and the same second pass
+times keep the last, mark price left-joined on the kline open time, int64 / float64 arrays) and the same second pass
 that fills whole days missing from the monthly archives from the daily archives (only absent bars are inserted and only
 NaN mark values filled; monthly values are never overwritten). Public price data only: no key of any kind.
 
@@ -21,8 +21,10 @@ Symbols: ``--symbols A,B`` or, without it, ``research/hunt/universe30.json`` whe
 
 Files written (both kinds; ``<sub>`` = ``5m`` or ``1m``):
 
-* ``<out>/<sub>/<SYM>.npz``: ``ts`` int64 open time (ms, UTC); ``o h l c`` float32 last-price OHLC; ``v`` float32 base
-  volume; ``qv`` float32 quote volume; ``mo mh ml mc`` float32 mark-price OHLC (NaN where the bar has no mark bar).
+* ``<out>/<sub>/<SYM>.npz``: ``ts`` int64 open time (ms, UTC); ``o h l c`` float64 last-price OHLC; ``v`` float64 base
+  volume; ``qv`` float64 quote volume; ``mo mh ml mc`` float64 mark-price OHLC (NaN where the bar has no mark bar).
+  float64 is the archive CSV's decimal parsed by pandas, kept as parsed (the exchange prices the bots trade on); a
+  float32 copy flips exact ties of path-dependent indicators (PSAR, ADX / DMI, Klinger, DeMark, Ichimoku).
   Rows are raw exchange bars: nothing forward-filled or synthesized, zero-volume bars kept.
 * ``<out>/funding/<SYM>.npz``: ``ts`` int64 calc_time (ms, UTC); ``rate`` float64 last_funding_rate.
 * ``<out>/manifest.json``: per coin the coverage fields of coins30 (the hunt reads ``last_nonzero_volume_bar``,
@@ -463,7 +465,7 @@ def build_symbol(src, sym: str, kind: str, out: str, first: str, last: str, work
     ts = merged["ts"].values.astype(np.int64)
     a = {"ts": ts}
     for c in ["o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc"]:
-        a[c] = merged[c].values.astype(np.float32)
+        a[c] = merged[c].values.astype(np.float64)
     last_bar_pre = int(ts[-1])
 
     # --- funding
@@ -507,9 +509,9 @@ def build_symbol(src, sym: str, kind: str, out: str, first: str, last: str, work
                 n = len(kdf)
                 new = {"ts": kdf[0].values.astype(np.int64)}
                 for c, j in zip(["o", "h", "l", "c", "v", "qv"], [1, 2, 3, 4, 5, 7]):
-                    new[c] = kdf[j].values.astype(np.float32)
+                    new[c] = kdf[j].values.astype(np.float64)
                 for c in ["mo", "mh", "ml", "mc"]:
-                    new[c] = np.full(n, np.nan, np.float32)
+                    new[c] = np.full(n, np.nan, np.float64)
                 for k in a:
                     a[k] = np.concatenate([a[k], new[k]])
                 o = np.argsort(a["ts"], kind="stable")
@@ -528,7 +530,7 @@ def build_symbol(src, sym: str, kind: str, out: str, first: str, last: str, work
             if len(idx):
                 sub_df = mdf.loc[ts[idx]]
                 for c, j in zip(["mo", "mh", "ml", "mc"], [1, 2, 3, 4]):
-                    a[c][idx] = sub_df[j].values.astype(np.float32)
+                    a[c][idx] = sub_df[j].values.astype(np.float64)
                 fill["mark_bars_filled"] = int(len(idx))
 
     # --- write
@@ -626,7 +628,7 @@ def write_manifest(out: str, state: dict, syms: list, params: dict) -> dict:
                     "numpy": np.__version__, "pandas": pd.__version__, "python": sys.version.split()[0]},
         "kind": params["kind"], "range": [params["from"], params["to"]], "universe": list(syms),
         "format": {iv: f"np.savez_compressed layout (fixed zip timestamps); keys ts(int64 ms open time UTC),o,h,l,c,"
-                       f"v(base vol),qv(quote vol),mo,mh,ml,mc (mark price OHLC, NaN where no mark bar); all float32 "
+                       f"v(base vol),qv(quote vol),mo,mh,ml,mc (mark price OHLC, NaN where no mark bar); all float64 "
                        f"except ts; file <{K['sub']}>/<SYM>.npz",
                    "funding": "keys ts(int64 ms calc_time UTC), rate(float64 last_funding_rate); "
                               "file funding/<SYM>.npz",

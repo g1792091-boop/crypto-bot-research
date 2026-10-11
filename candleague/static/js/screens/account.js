@@ -8,6 +8,11 @@ import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {ROLES, ROLE_KO, ROLE_DESC, tfKo, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 import {paramTable, originBox} from "./custom.js";
+import {posPill} from "../poskit.js";
+import {serverNow} from "../live.js";
+
+/** Live ROE may be shown: the engine is not replaying from 10/01 and wrote its record in the last 15 minutes. */
+const liveOk = (d) => !!d && !LK.catchingUp(d) && !(d.generated_ms && serverNow() - d.generated_ms > 15 * 60000);
 
 export async function mount(el, ctx) {
   let meta = null;
@@ -21,8 +26,10 @@ export async function mount(el, ctx) {
     params,
     ui.card({plate: "거래 기록", sub: "이 계좌 · 최신 200번까지 · 코인을 누르면 터미널"}, trades));
   el.append(head, body);
-  let seen = null;
+  let seen = null, pill = null, doc = null;
+  ctx.onLive(() => { if (pill) pill.update({allowed: liveOk(doc)}); });
   ctx.onLeague(async (d) => {
+    doc = d;
     const ix = LK.index(d);
     const a = ix.byId[id];
     body.hidden = !a;
@@ -34,12 +41,15 @@ export async function mount(el, ctx) {
     const c = LK.pickOf(a, ix) || a;
     const set = ix.sets[c.id] || {[a.role]: a};
     ctx.setTitle(`${LK.pickKo(c, meta)} ${ROLE_KO[a.role]}`);
+    // the open position with its live ROE (rule bot 순위표 pill); a hidden DeepSeek position: coin and side only
+    const hid = LK.dsHidden(a) || (a.kind === "ds" && a.wallet == null);
+    pill = a.open ? posPill(hid ? {...a, open: {symbol: a.open.symbol, side: a.open.side, since: a.open.since}} : a, {allowed: liveOk(d)}) : null;
     put(head, ui.screenHead(`${LK.pickKo(c, meta)}`, `${ROLE_KO[a.role]} 계좌 · ${a.id}`,
       [h("a", {class: "btn-line", href: `#/terminal?acct=${encodeURIComponent(a.id)}`}, "터미널에서 보기"),
         h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(c.name)}`}, "커스텀값"),
         h("a", {class: "btn-line", href: "#/rank"}, "순위표")]),
-    h("div", {class: "row wrap cl-acthead"}, LK.roleChip(a.role), LK.kindChip(a.kind), LK.styleChip((LK.pickMeta(c.id, meta) || {}).style),
-      h("span", {class: "pp thin"}, a.exit_ko), a.bust ? ui.pill("파산", "bad") : null, h("span", {class: "muted"}, ROLE_DESC[a.role])));
+    h("div", {class: "row wrap cl-acthead"}, LK.fig(a, 28), LK.roleChip(a.role), LK.kindChip(a.kind), LK.styleChip((LK.pickMeta(c.id, meta) || {}).style),
+      h("span", {class: "pp thin"}, a.exit_ko), pill, a.bust ? ui.pill("파산", "bad") : null, h("span", {class: "muted"}, ROLE_DESC[a.role])));
     const j = ix.judge[c.id];
     put(stats, h("div", {class: "stats cl-stats6"},
       ui.stat("거래", `${fmt.int(a.trades)}번`, a.trades < 30 ? "30번 전: 아직 판단 안 함" : `승 ${fmt.int(a.wins)} · 패 ${fmt.int(a.trades - a.wins)}`),

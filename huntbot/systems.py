@@ -7,9 +7,15 @@
   (``v1:E1:1h``) is an alias the lineup may use.
 * Cells: one entry on one timeframe with its numbers (research/hunt/hunt.py ``cell_key``); the two gate systems of a
   cell share its events. Cell id = the system id without the gate (``F2:X:15m``, ``F4:X:15m:r3``).
-* Variants (one $5,000 wallet each, the machine of PREREG_HUNT 7-10): ``r0.5`` (r = 0.5%, the prereg's main account),
-  ``r1`` (r = 1%, PREREG_HUNT 15 / WIDE 12 "both sizes"), ``goal2`` / ``goal5`` (the W 7 sizing read: r = 2% / 5%, total
-  open-risk cap and margin budget scaled by r / 0.5%; a labelled read, never a pass).
+* Variants (one $5,000 wallet each): ``r0.5`` (r = 0.5%, the tested machine of PREREG_HUNT 7-10, the prereg's main
+  account) and ``r1`` (r = 1%, PREREG_HUNT 15 / WIDE 12 "both sizes"); and two goal-size cells of the R1 goal board
+  (PREREG_HUNT_WIDE W 7.3), with the machine taken from ``research/hunt/reads_a.cell_overrides`` so they stay the
+  board's machines: ``A2`` (machine A at r = 2%: the tested machine, open-risk cap 4% x r / 0.5%, margin budget
+  B = equity / 6 as written) and ``B5`` (machine B, the goal-mode machine of the headline cell, at r = 5%: open-risk cap
+  min(4r, 60%), n_max = floor(cap / r) positions and margin divisor, leverage up to the bracket maximum). The goal-size
+  cells are paper "not tested" (W 7.1 rule 6, Q9): a lineup account may use one only with an ``owners_decision`` text
+  (who decided and when), and ``suggest_lineup`` never proposes one. They replace the retired ``goal2`` / ``goal5`` of
+  the first draft's W 7 sizing read (B scaled with r), which no longer exists in W 7.
 * Lineup (``huntbot/lineup.json``, empty at install): the owners' accounts once the picks are known. Every system is
   recorded at r0.5 either way; the lineup only decides what the dashboard shows first and what Telegram sends.
 
@@ -18,7 +24,8 @@
        {"system": "F2:X:1h:G1", "label": "정식", "variant": "r0.5", "pick_no": 1, "study": "wide"},
        {"system": "v1:E1:1h", "label": "참고", "variant": "r0.5", "study": "v1"},
        {"basket": ["F2:X:1h:G1", "F1:E2:4h:NONE"], "pick_nos": [1, 3], "label": "정식", "variant": "r0.5",
-        "name": "바구니"}]}
+        "name": "바구니"},
+       {"system": "F2:X:1h:G1", "label": "정식", "variant": "B5", "owners_decision": "두 분, 2026-11-.."}]}
 """
 
 from __future__ import annotations
@@ -44,14 +51,27 @@ def _H():
     return H
 
 
+# Goal-size paper cells (W 7.3 R1 board): (variant, machine, r). A2 = machine A at 2%; B5 = machine B (goal-mode) at
+# 5%, the headline cell's machine and size. W 7.1 rule 6: only by the owners' explicit decision, "not tested".
+GOAL_CELLS = (("A2", "A", 0.02), ("B5", "B", 0.05))
+GOAL_KO = {"A": "목표 크기 모의 · 기계 A {r}% (시험 안 함)", "B": "목표 크기 모의 · 기계 B 목표 모드 {r}% (시험 안 함)"}
+RETIRED_VARIANTS = {"goal2": "A2", "goal5": "B5"}       # the first draft's W 7 sizing read (B scaled with r): gone
+
+
 def variants() -> dict:
+    """{name: {"r", "risk_cap", "b_div", "overrides" (engine PR_* overrides), "machine", "ko", "read"}}; ``read``
+    marks a goal-size cell (not the tested machine at a tested size)."""
     H = _H()
-    out = {"r0.5": {"r": H.R_BASE, "risk_cap": H.RISK_CAP, "b_div": H.B_DIV, "ko": "위험 0.5%", "read": False},
-           "r1": {"r": H.R_ONE, "risk_cap": H.RISK_CAP, "b_div": H.B_DIV, "ko": "위험 1%", "read": False}}
-    for r in H.SIZING_RS:
-        scale = r / H.R_BASE
-        out[f"goal{r * 100:g}"] = {"r": r, "risk_cap": H.RISK_CAP * scale, "b_div": H.B_DIV / scale,
-                                   "ko": f"목표 모드 {r * 100:g}% (참고 읽기)", "read": True}
+    out = {"r0.5": {"r": H.R_BASE, "risk_cap": H.RISK_CAP, "b_div": H.B_DIV, "overrides": {}, "machine": "tested",
+                    "ko": "위험 0.5%", "read": False},
+           "r1": {"r": H.R_ONE, "risk_cap": H.RISK_CAP, "b_div": H.B_DIV, "overrides": {}, "machine": "tested",
+                  "ko": "위험 1%", "read": False}}
+    from research.hunt import reads_a as RA                 # the R1 board's own machines (W 7.3), not a copy
+    for name, machine, r in GOAL_CELLS:
+        r_, ov = RA.cell_overrides(machine, r)
+        out[name] = {"r": float(r_), "risk_cap": float(ov.get("PR_CAP", H.RISK_CAP)),
+                     "b_div": float(ov.get("PR_BDIV", H.B_DIV)), "overrides": dict(ov), "machine": machine,
+                     "ko": GOAL_KO[machine].format(r=f"{r * 100:g}"), "read": True}
     return out
 
 
@@ -164,8 +184,16 @@ def parse_lineup(doc: dict, systems_by_id: dict, aliases: dict) -> list:
         if label not in LABELS:
             raise LineupError(f"account {i}: label must be 정식 or 참고 (got {label!r})")
         v = a.get("variant", "r0.5")
+        if v in RETIRED_VARIANTS:
+            raise LineupError(f"account {i}: variant {v!r} was the retired W 7 sizing read; the R1 board cell is "
+                              f"{RETIRED_VARIANTS[v]!r} (PREREG_HUNT_WIDE W 7.3)")
         if v not in var:
             raise LineupError(f"account {i}: variant must be one of {sorted(var)} (got {v!r})")
+        decided = a.get("owners_decision")
+        if var[v]["read"] and not (isinstance(decided, str) and decided.strip()):
+            raise LineupError(f"account {i}: {v} is goal-size paper, not tested: it exists only by the owners' "
+                              f"explicit decision (PREREG_HUNT_WIDE W 7.1 rule 6, Q9); write who decided and when "
+                              f"in 'owners_decision'")
         if a.get("machine", "hunt") != "hunt":
             raise LineupError(f"account {i}: only the hunt machine (PREREG_HUNT 7-10) exists")
         if a.get("basket"):
@@ -185,7 +213,7 @@ def parse_lineup(doc: dict, systems_by_id: dict, aliases: dict) -> list:
             acct = {"system": sid, "alias": a.get("system") if a.get("system") != sid else None,
                     "parts": [(systems_by_id[sid], 0)]}
         acct.update({"label": label, "variant": v, "pick_no": a.get("pick_no"), "study": a.get("study"),
-                     "note": a.get("note")})
+                     "note": a.get("note"), "owners_decision": decided if var[v]["read"] else None})
         acct["id"] = account_id(acct)
         if acct["id"] in seen:
             raise LineupError(f"account {i}: {acct['id']} twice")
@@ -211,40 +239,75 @@ def read_lineup(path: str, systems_by_id: dict, aliases: dict) -> dict:
     return res
 
 
-def suggest_lineup(root: str = CFG.ROOT) -> dict:
-    """A lineup proposal from the studies' outputs (research/hunt/out/...): a passing pick -> 정식 at r0.5 and r1
-    (PREREG_HUNT 15, WIDE 12), plus its W 7 goal reads (r 2% / 5%) labelled 참고; a pick that did not pass -> 참고 at
-    r0.5 (H 15: "may still run as a paper shadow"); two or more passing wide picks -> the one-wallet basket (정식,
-    r0.5 and r1). Only a proposal: the owners / main session decide and write the file."""
-    out = {"version": 1, "note": "proposal from research/hunt/out (huntbot.systems.suggest_lineup)", "accounts": []}
+LINEUP_VARIANTS = {"정식": ("r0.5", "r1"), "참고": ("r0.5",)}   # W 12 / H 15: 정식 at both sizes; 참고 one r = 0.5%
+LINEUP_TIERS = ("정식", "참고", "excluded")
 
-    def load(rel):
-        p = os.path.join(root, rel)
-        if os.path.exists(p):
-            with open(p) as fh:
-                return json.load(fh)
-        return None
-    v1p, v1t = load("research/hunt/out/v1/pick.json"), load("research/hunt/out/v1/test.json")
-    if v1p:
-        sid = v1p["pick"]["id"]
-        ok = bool(v1t and (v1t.get("verdict") or {}).get("v1_pass"))
-        for v in (("r0.5", "r1") if ok else ("r0.5",)):
-            out["accounts"].append({"system": sid, "label": "정식" if ok else "참고", "variant": v, "study": "v1",
-                                    "pick_no": 1})
-    wp, wt = load("research/hunt/out/wide/picks.json"), load("research/hunt/out/wide/test.json")
-    passing = set(((wt or {}).get("verdict") or {}).get("passing") or [])
-    passed = []
-    for p in (wp or {}).get("picks", []):
-        ok = p["id"] in passing
-        if ok:
-            passed.append(p)
-        for v in (("r0.5", "r1", "goal2", "goal5") if ok else ("r0.5",)):
-            out["accounts"].append({"system": p["id"], "label": "정식" if ok and not v.startswith("goal") else "참고",
-                                    "variant": v, "study": "wide", "pick_no": p.get("pick_no")})
-    if len(passed) >= 2:
+
+def _study_lineup(study: str, test: dict) -> tuple:
+    """(proposed accounts, excluded rows, status) of one study from its test.json's own ``lineup`` field (written by
+    the test step, research/hunt/hunt.py ``lineup_table``: W 12 / H 15). Raises LineupError when the field is missing
+    or does not agree with the verdict: nothing is guessed."""
+    lu = test.get("lineup")
+    if not isinstance(lu, dict) or not isinstance(lu.get("picks"), dict):
+        raise LineupError("test.json has no 'lineup' field (W 12): nothing proposed")
+    picks = lu["picks"]
+    for sid, d in picks.items():
+        if not isinstance(d, dict) or d.get("lineup") not in LINEUP_TIERS:
+            raise LineupError(f"lineup of {sid}: {(d or {}).get('lineup')!r} is not 정식 / 참고 / excluded")
+    for tier in LINEUP_TIERS:                                 # the lists, when present, must say what 'picks' says
+        if tier in lu and sorted(lu[tier]) != sorted(i for i, d in picks.items() if d["lineup"] == tier):
+            raise LineupError(f"lineup '{tier}' list disagrees with lineup 'picks'")
+    formal = {i for i, d in picks.items() if d["lineup"] == "정식"}
+    verdict = test.get("verdict") or {}
+    passing = set(verdict.get("passing") or []) if study == "wide" else \
+        ({(test.get("pick") or {}).get("id")} if verdict.get("v1_pass") else set())
+    if formal != passing:                                     # 정식 = research PASS (W 12), nothing else
+        raise LineupError(f"lineup 정식 {sorted(formal)} is not the verdict's PASS {sorted(passing)}")
+    accts, excluded = [], []
+    for sid in sorted(picks, key=lambda i: (int(picks[i].get("pick_no") or 0), i)):
+        d = picks[sid]
+        if d["lineup"] == "excluded":
+            excluded.append({"system": sid, "study": study, "pick_no": d.get("pick_no"), "batch": d.get("batch"),
+                             "why": list(d.get("why") or [])})
+            continue
+        for v in LINEUP_VARIANTS[d["lineup"]]:
+            accts.append({"system": sid, "label": d["lineup"], "variant": v, "study": study,
+                          "pick_no": d.get("pick_no"), "batch": d.get("batch")})
+    if study == "wide" and len(formal) >= 2:                  # W 12: the one-wallet basket of the passing picks
+        members = sorted(formal, key=lambda i: (int(picks[i].get("pick_no") or 0), i))
         for v in ("r0.5", "r1"):
-            out["accounts"].append({"basket": [p["id"] for p in passed], "pick_nos": [p["pick_no"] for p in passed],
-                                    "label": "정식", "variant": v, "name": "바구니 (통과한 픽 한 지갑)", "study": "wide"})
+            accts.append({"basket": members, "pick_nos": [int(picks[i].get("pick_no") or 0) for i in members],
+                          "label": "정식", "variant": v, "name": "바구니 (통과한 픽 한 지갑)", "study": "wide"})
+    status = {t: sum(1 for d in picks.values() if d["lineup"] == t) for t in LINEUP_TIERS}
+    return accts, excluded, status
+
+
+def suggest_lineup(root: str = CFG.ROOT) -> dict:
+    """A lineup proposal read from each study's test.json ``lineup`` field (research/hunt/out/<study>/test.json; the
+    test step labels every tested pick 정식 / 참고 / excluded per PREREG_HUNT_WIDE W 12, also the v1 pick, H 15):
+    정식 -> r0.5 and r1 (H 15 / W 12 "both sizes"); 참고 -> r0.5 only; excluded -> no account (listed under
+    "excluded" with its failing conditions); two or more 정식 wide picks -> the one-wallet basket (정식, r0.5 and r1).
+    A study without test.json, or whose test.json has no ``lineup`` field or one that disagrees with its verdict, gets
+    no account (its status says why). Goal-size cells (A2, B5) are never proposed (W 7.1 rule 6: the owners' explicit
+    decision only). Only a proposal: the owners / main session decide and write the file."""
+    out = {"version": 1, "note": "proposal from research/hunt/out/<study>/test.json 'lineup' "
+                                 "(huntbot.systems.suggest_lineup); real money only from 정식 (W 12)",
+           "accounts": [], "excluded": [], "studies": {}}
+    for study in ("v1", "wide"):
+        p = os.path.join(root, "research", "hunt", "out", study, "test.json")
+        if not os.path.exists(p):
+            out["studies"][study] = "no test.json: nothing proposed"
+            continue
+        try:
+            with open(p) as fh:
+                test = json.load(fh)
+            accts, excl, status = _study_lineup(study, test)
+        except (OSError, ValueError, LineupError) as e:
+            out["studies"][study] = f"{type(e).__name__}: {e}"
+            continue
+        out["accounts"] += accts
+        out["excluded"] += excl
+        out["studies"][study] = status
     return out
 
 

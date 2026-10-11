@@ -6,11 +6,12 @@
 **Status: DRAFT, written 2026-10-11 (KST), before any data for this study was downloaded and before any code for it
 existed. Reviewed and corrected the same day, before the pin, after the 30-coin data had been built and the code
 drafted; no trading outcome had been computed on any period (section 19.2 lists every change). Extended the same day
-with the owners' decisions and the panel review, still before the pin and before any select or test (section 19.3).** The open questions of
-section 18 are closed by the owners (or by the default written next to each) before the file is pinned. Pinning =
-`PREREG_HUNT.sha256` over this file, the study's code and the files of section 16; the code refuses the `select` and
-`test` steps without a matching pin. After the pin nothing here changes; a change goes to `DEVIATIONS.md` with its
-reason and date.
+with the owners' decisions and the panel review, still before the pin and before any select or test (section 19.3).
+Switched to float64 data the same day, before the pin and before any select or test (section 19.4).** The open
+questions of section 18 are closed by the owners (or by the default written next to each) before the file is pinned.
+Pinning = `PREREG_HUNT.sha256` over this file, the study's code and the files of section 16; the code refuses the
+`select` and `test` steps without a matching pin. After the pin nothing here changes; a change goes to `DEVIATIONS.md`
+with its reason and date.
 
 Owners' brief (2026-10-11): a "trend hunt" system, 스캐너 → 장세 문지기 → 진입·첫 손절 → 불타기 → 추적 손절 청산, on
 many coins, tested before the mid-November 2026 review ("11월 중순까지는 성공시키고 싶어 ... 일단 계획을 그렇게 잡아보자").
@@ -28,12 +29,17 @@ coin-flip sides?
   `data/futures/um/monthly/klines/<SYM>/5m/`, `markPriceKlines/<SYM>/5m/` and `fundingRate/<SYM>/` files from the
   coin's first archived month (2020-01 at the earliest) to 2026-09. Where a monthly file lacks whole days, those days
   come from the official daily files of the same archive (checksum-verified; only absent bars are added). Built by the
-  `coins30` data job on 2026-10-11 (6,657 monthly and 298 daily files) into one file per coin, `5m/<SYM>.npz` (open
-  time, OHLC, base and quote volume, mark-price OHLC) and `funding/<SYM>.npz`, plus `manifest.json` (coverage, gaps,
-  the last bar with volume, each file's sha256). The last period ends 2026-10-01 00:00 UTC; open positions are marked
+  `coins30` data job on 2026-10-11 (6,657 monthly and 298 daily files) and rebuilt from the archive as float64 before
+  the pin (19.4) into one file per coin, `5m/<SYM>.npz` (int64 open time; float64 OHLC, base and quote volume,
+  mark-price OHLC) and `funding/<SYM>.npz`, plus `manifest.json` (coverage, gaps, the last bar with volume, each file's
+  sha256). The last period ends 2026-10-01 00:00 UTC; open positions are marked
   there (section 10).
 * 5m bars as the study reads them: duplicate open times dropped (last kept), off-grid or non-finite rows dropped,
   **zero-volume bars dropped**; each count is reported. Volume = the quote-asset volume column.
+* **Precision: float64 throughout.** Prices, volumes and mark-price OHLC are stored as float64 and the engine's coin
+  arrays keep them as float64 (no float32 step), as the exchange prices the live bots trade on. A first build stored
+  float32, which flipped exact ties in path-dependent indicators of the wide study's parity check (W 8); it was replaced
+  before the pin (19.4).
 * **Coin end.** A coin's tradable span ends at its `last_nonzero_volume_bar` in the manifest. After it the archive can
   hold flat zero-volume bars and funding rows (8 of the 30 coins, section 3); none of them is read as trading. A
   position still open on that coin is closed at the close of that last bar like a stop-market exit (slippage and taker
@@ -49,7 +55,7 @@ coin-flip sides?
   mismatch on more than 0.1% of the bars of any of the six stops the pin. The data job compared BTC closes only
   (99.997% equal); the full check (six coins, open, high, low, close and volume) still has to run. Its per-coin counts
   go into `research/hunt/data_check.json`, which the pin lists.
-* **Identity of the data.** The npz files stay outside the repository (about 0.55 GB). Before the pin,
+* **Identity of the data.** The npz files stay outside the repository (about 1.1 GB as float64). Before the pin,
   `python -m research.hunt.hunt datapin --data <coins30>` writes `research/hunt/data_manifest.json`: the data folder's
   `manifest.json` copied in, plus, per coin, the sha256 of the arrays the study reads (5m: ts, o, h, l, c, v, qv;
   funding: ts, rate; in that order, as stored). Each array enters the hash as the line `name|dtype|shape` (shape
@@ -347,7 +353,7 @@ verdicts are never merged into one "the hunt passed".
 
 | result | then |
 |---|---|
-| v1 PASS | **forward paper bot from about 2026-10-20** on the coins of the 30 that still trade (22 at 2026-09-30; never a coin outside the 30, no new listings): the pick exactly as here, both sizes, $5,000 each, on the paper bot server (fapi reachable there), nothing else changed. **No real money before the mid-November 2026 review**; real money after it is the owners' decision only, and only for a pick labelled 정식 that met the forward criteria and the live-readiness gate (`PREREG_HUNT_WIDE.md` W 12) |
+| v1 PASS | **forward paper bot** (`huntbot`, `PREREG_HUNT_WIDE.md` W 12) on its **own new server `hunt-judge`** (not the rule bot's paper server), switched on by the owners when good strategies exist; whatever day it is switched on it records every hunt system from **2026-10-01 00:00 UTC** on the coins of the 30 that still trade (22 at 2026-09-30; never a coin outside the 30, no new listings). The pick (정식) in its lineup exactly as here, both sizes, $5,000 each, nothing else changed. **No real money before the mid-November 2026 review**; real money after it is the owners' decision only, and only for a pick labelled 정식 that met the forward criteria and the live-readiness gate (`PREREG_HUNT_WIDE.md` W 12) |
 | v1 fail (any P) | recorded as a fail with every number. No tuning on the test period. The pick goes to the paper lineup as 참고 only when it meets the lineup rule of `PREREG_HUNT_WIDE.md` W 12 (computed in the test step and written to `test.json` as `lineup`), else it is excluded; it is not a candidate for real money |
 | no pick | recorded as a fail with every number; the "no pick, fail" system is excluded from the paper lineup (`PREREG_HUNT_WIDE.md` W 12) and is never a candidate |
 
@@ -355,12 +361,15 @@ verdicts are never merged into one "the hunt passed".
   says) is fixed in `DEVIATIONS.md`, with the line of this file it breaks; the test is rerun once and both results are
   shown. **The rerun's verdict is the verdict**, whichever way it goes; a fix that changes a rule rather than the code's
   agreement with this file is not a bug fix. Any changed rule (gate, entries, numbers, exits, sizes) is a v2: it needs
-  its own pre-registration and is judged only on data after its fixing date (the test period is spent).
-* The mid-November review sees about 3.5 weeks of forward data: a handful of trends at most. It checks that the paper
-  bot followed these rules (a replay of the same days from the archive reproduces its positions), that its forward
-  multiple lies inside the 5th..95th percentile of the test period's rolling windows of the same length (one start per
-  UTC day), and that nothing broke. It cannot prove the system makes money; it can show that it does not behave as
-  tested.
+  its own pre-registration. A v2 designed and selected on 2021-2023 only is judged as every later round
+  (`PREREG_HUNT_WIDE.md` W 14, owners 2026-10-11: one confirm look per version on 2024-01 .. 2026-10, every look counted
+  in the program-wide ledger, plus forward paper data); a change taken from what the test period showed (a read on
+  test, section 14) is judged only on data after its fixing date.
+* The mid-November review sees about six weeks of forward record (from 2026-10-01; the owners watched its first days
+  live, W R23): a handful of trends at most. It checks that the paper bot followed these rules (a replay of the same
+  days from the archive reproduces its positions), that its forward multiple lies inside the 5th..95th percentile of
+  the test period's rolling windows of the same length (one start per UTC day), and that nothing broke. It cannot
+  prove the system makes money; it can show that it does not behave as tested.
 * Every result, pass or fail, goes into `research/hunt/RESULTS_KO.md` and the owners' summary.
 
 ## 16. Code, compute, reproducibility
@@ -387,8 +396,8 @@ verdicts are never merged into one "the hunt passed".
   it ran under, and the content sha256 of every coin's data it read (section 2).
 * Compute: select is 24 accounts + diagnostics; test is the pick, 2 x 1,000 control accounts at r = 0.5% and again at
   r = 1%, 2 x 200 in the select period, the cost x2 and reads (one control run of 33 months on 30 coins took 0.15-0.21
-  s on synthetic bars, 2026-10-11: about 11-16 CPU-minutes for the pick's controls). Disk under 2 GB in total
-  (section 2).
+  s on synthetic bars, 2026-10-11: about 11-16 CPU-minutes for the pick's controls). Disk about 3 GB in total (the
+  float64 5m files about 1.1 GB, section 2).
 
 ## 17. Not in v1
 
@@ -396,8 +405,9 @@ verdicts are never merged into one "the hunt passed".
   It cannot be tested honestly on 2020-2026: the model may remember those prices, and nothing stops hindsight. A replay
   on masked past charts (coin names, dates and price levels hidden) would reduce that memory but not remove it (famous
   crashes and pumps keep their shape); at most it is a cheap pre-check, never proof. The real test is forward, as a
-  shadow beside the paper bot from 2026-10-20 (same signals; "AI take" and "AI skip" paths both tracked), with the
-  owners' go and its API cost. It is not part of the v1 pass and does not change v1.
+  shadow beside the paper bot of section 15, which records every signal from 2026-10-01 (same signals; "AI take" and
+  "AI skip" paths both tracked), with the owners' go and its API cost. It is not part of the v1 pass and does not
+  change v1.
 * Per-coin numbers, a second entry per system, partial take-profits, limit (maker) orders, risk above 1%, regimes
   other than G1 as the rule, other timeframes, and coins listed after 2021-01.
 * The AI bot design (`docs/aibot/DECISIONS_KO.md`) forbids pyramiding; this is a separate system and changes nothing
@@ -421,8 +431,8 @@ verdicts are never merged into one "the hunt passed".
    bust risk. [Report only]
 6. **Mark price** is in the files but not read (section 2). [Last price, conservative; identical in the wide addendum]
 7. **Power.** One pick, 33 test months: a real but small edge may not reach p < 0.05. [Accept]
-8. **Forward length.** 3.5 weeks to mid-November cannot confirm a trend system (section 15). [Accept; the review checks
-   behaviour, not proof]
+8. **Forward length.** About six weeks (2026-10-01 to mid-November) cannot confirm a trend system (section 15).
+   [Accept; the review checks behaviour, not proof]
 9. **Additions not in the brief**: events as first crossings; margin budget equity / 6; liquidation >= 1.5 x the stop
    distance; the 0.1%-of-volume liquidity cap; entry order by liquidity; fixed add levels tried once; the moved-stop
    check in the add bar; the large group by 30-day volume; P0 and the seed-rank part of P2. [Keep]
@@ -502,3 +512,19 @@ computed on any real price period. Changes:
    0.4% for r = 0.5% and 0.8% for r = 1%; the whole-number rule at both sizes); section 15's "no pick" row says what
    the code and W 12 do (excluded from the paper lineup); the read guard's rule 3 is judged at the first test start for
    the pick (W 7.1).
+
+### 19.4 Float64 data, the paper bot, later rounds (2026-10-11, before the pin)
+
+Done before any select or test of either study; no trading outcome had been computed on any real price period.
+Changes:
+
+1. **Float64** (sections 2, 16): the wide study's parity check on the float32 5m files failed on exact ties
+   (`PREREG_HUNT_WIDE.md` W 8: 19 cells over the 1% limit) and the live bots trade float64 exchange prices, so the 5m
+   files and the engine's coin arrays (prices, volumes, mark OHLC) are float64 and the data was rebuilt from the
+   Binance archive before the pin, with `data_manifest.json` and `data_check.json` rerun on it.
+2. **Paper bot** (sections 15, 17, Q8): its own server `hunt-judge` (not the rule bot's paper server), switched on by
+   the owners when good strategies exist, recording every hunt system from 2026-10-01 on the coins still trading (22
+   at 2026-09-30); real money only from 정식, never before the mid-November review (W 12).
+3. **v2 and later rounds** (section 15): judged as `PREREG_HUNT_WIDE.md` W 14 (designed and selected on 2021-2023
+   only, one confirm look per version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper
+   data); a change taken from a test-period read stays forward-only.

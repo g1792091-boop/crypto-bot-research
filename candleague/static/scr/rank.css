@@ -1,0 +1,93 @@
+/* 순위표 (RANK builder, js/screens/rank*.js): the rule bot's v4 board look (paperbot/dash/static/v4/screens/board.css,
+   home-shared.css) on top of the shared kit (v4kit.css k4-groups / k4-gcard / k4-row / k4-tb, kit.css kp-pill). Loaded
+   by app.js before the screen mounts (rank.js `export const css`). Screen-only rules, class prefix rk-, scoped to the
+   screen; colours only from the tokens (both skins), font sizes only var(--t-*). */
+
+.scr[data-screen="rank"] .rk-banner:empty { display: none; }
+.scr[data-screen="rank"] .rk-sec { gap: 10px; }
+.scr[data-screen="rank"] .k4-allbtn { min-height: 34px; }
+
+/* ---------------------------------------------------------------- the four 묶음 cards */
+.scr[data-screen="rank"] .rk-groups { align-items: stretch; }
+@media (min-width: 760px) { .scr[data-screen="rank"] .rk-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.scr[data-screen="rank"] .rk-gcard { gap: 4px; padding: 13px 14px; }
+.scr[data-screen="rank"] .rk-gcard .gm { font-size: var(--t-xl); line-height: 1.15; }
+.scr[data-screen="rank"] .rk-gcard .rk-hid { color: var(--muted); font-weight: 800; }
+.scr[data-screen="rank"] .rk-gcard .rk-gs2 { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
+.scr[data-screen="rank"] .rk-gcard .rk-pool { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 4px; padding-top: 6px;
+  border-top: 1px dashed var(--line-2); color: var(--muted); font-size: var(--t-2xs); line-height: 1.5; }
+.scr[data-screen="rank"] .rk-gcard .rk-pool .k4-vs { color: var(--ink-2); }
+@media (max-width: 459px) {
+  .scr[data-screen="rank"] .rk-gcard { padding: 11px 10px; }
+  .scr[data-screen="rank"] .rk-gcard .gm { font-size: var(--t-lg); }
+}
+
+/* ---------------------------------------------------------------- 상위 · 하위 */
+.scr[data-screen="rank"] .rk-tbcard { gap: 14px; }
+.scr[data-screen="rank"] .rk-stats .stat b { font-size: var(--t-md); }
+@media (min-width: 760px) { .scr[data-screen="rank"] .rk-stats .stat b { font-size: var(--t-lg); } }
+.scr[data-screen="rank"] .rk-sub button { height: 30px; }
+.scr[data-screen="rank"] .rk-tb .k4-tbh { padding-top: 4px; }
+.scr[data-screen="rank"] .rk-tbfoot:empty { display: none; }
+.scr[data-screen="rank"] .rk-monote { margin-top: 2px; }
+.scr[data-screen="rank"] .rk-tbcard .card-h .acts { flex-wrap: wrap; justify-content: flex-end; gap: 6px 12px; }
+.scr[data-screen="rank"] .rk-live { font-size: var(--t-2xs); }
+.scr[data-screen="rank"] .rk-live[data-s="warn"] { color: var(--warn); }
+@media (max-width: 459px) { .scr[data-screen="rank"] .rk-sparknote { display: none; } }
+
+/* one ranking row (rank + arrow | character · 15분 · name | line · % ; then the meta line) */
+.scr[data-screen="rank"] .rk-row { align-items: center; padding-block: 11px; }
+.scr[data-screen="rank"] .rk-row .rk { min-width: 30px; font-size: var(--t-xs); }
+.scr[data-screen="rank"] .rk-row .lname .an { gap: 7px; }
+.scr[data-screen="rank"] .rk-row .lname .an-n { font-weight: 800; }
+.scr[data-screen="rank"] .rk-row .rk-r2 { flex: none; color: var(--muted); font-size: var(--t-2xs); font-weight: 600; }
+.scr[data-screen="rank"] .rk-row .cl-role { flex: none; }
+.scr[data-screen="rank"] .rk-row .ret { font-size: var(--t-md); }
+.scr[data-screen="rank"] .rk-row .rk-spark { margin-right: 2px; }
+.scr[data-screen="rank"] .rk-row .meta { gap: 4px 10px; }
+.scr[data-screen="rank"] .rk-row .meta .kp-pill { font-size: var(--t-xs); }
+.scr[data-screen="rank"] .rk-row.co .lname .an-n { color: var(--ink-2); }
+.scr[data-screen="rank"] .rk-row .rk-co { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+/* a coin-flip row: dimmed and dashed, as the rule bot's coin flips in the list */
+.scr[data-screen="rank"] .rk-row.flip { border-top-style: dashed; }
+.scr[data-screen="rank"] .rk-row.flip .lname .an-n { color: var(--ink-2); }
+@media (max-width: 459px) {
+  .scr[data-screen="rank"] .rk-row { padding-block: 10px; }
+  .scr[data-screen="rank"] .rk-row .ret { font-size: var(--t-sm); }
+  .scr[data-screen="rank"] .rk-row .lname { gap: 5px; }
+  .scr[data-screen="rank"] .rk-row .rk-r2 { display: none; }
+}
+
+/* ---------------------------------------------------------------- 전체 목록: filters, cards / table */
+.scr[data-screen="rank"] .rk-listcard .card-h .acts { flex-wrap: wrap; justify-content: flex-end; }
+.scr[data-screen="rank"] .rk-view button { height: 30px; }
+.scr[data-screen="rank"] .rk-count { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+.scr[data-screen="rank"] .rk-filters { gap: 8px; }
+.scr[data-screen="rank"] .rk-search { height: 38px; }
+.scr[data-screen="rank"] .rk-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.scr[data-screen="rank"] .rk-seg button { height: 32px; }
+.scr[data-screen="rank"] .rk-sort { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-xs); }
+.scr[data-screen="rank"] .rk-sort .select { height: 34px; }
+.scr[data-screen="rank"] .rk-list > .k4-row:first-child { border-top-color: transparent; }
+@media (max-width: 559px) {
+  .scr[data-screen="rank"] .rk-frow .rk-seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  .scr[data-screen="rank"] .rk-frow .rk-seg::-webkit-scrollbar { display: none; }
+  .scr[data-screen="rank"] .rk-kindbox { max-width: 100%; }
+}
+
+/* the dense table (rank-table.js): scrolls inside its own box */
+.scr[data-screen="rank"] .rk-table { min-width: 1360px; }
+.scr[data-screen="rank"] .rk-table td, .scr[data-screen="rank"] .rk-table th { padding-inline: 7px; }
+.scr[data-screen="rank"] .rk-table .rk-tname { gap: 6px; }
+.scr[data-screen="rank"] .rk-table .rk-tname .an { max-width: 220px; }
+.scr[data-screen="rank"] .rk-table .rk-tname .an-tf { font-size: var(--t-2xs); }
+.scr[data-screen="rank"] .rk-table .rk-r2 { color: var(--muted); font-size: var(--t-2xs); }
+.scr[data-screen="rank"] .rk-table tr.rk-cotr td { color: var(--ink-2); }
+.scr[data-screen="rank"] .rk-table tbody tr:hover td { background: var(--surface-2); }
+
+/* ---------------------------------------------------------------- 봉별 요약, links */
+.scr[data-screen="rank"] .rk-tfbody { min-width: 0; }
+.scr[data-screen="rank"] .rk-tf td a.rk-best { display: inline-flex; align-items: baseline; gap: 6px; max-width: 300px; color: var(--ink); text-decoration: none; }
+.scr[data-screen="rank"] .rk-tf td a.rk-best .an-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scr[data-screen="rank"] .rk-tf td a.rk-best:hover .an-n { text-decoration: underline dotted; }
+.scr[data-screen="rank"] .rk-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px; }

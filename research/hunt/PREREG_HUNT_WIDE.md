@@ -7,8 +7,9 @@
 any hunt selection or test was run; reviewed and corrected the same day before the pin (section 16.2), still before any
 hunt selection or test; extended the same day with the owners' decisions (a)-(h) and the panel review of 23 reads
 (section 0.1, section 16.3), still before any hunt selection or test and before any trading outcome on a real price
-period.** The open questions of section 15 are closed by the owners (or by the default written next to
-each) before the file is pinned. Pinning = `PREREG_HUNT_WIDE.sha256` over this file, `PREREG_HUNT.md`
+period; switched to float64 data the same day after the parity check failed on float32 ties (section 16.5).** The
+open questions of section 15 are closed by the owners (or by the default written next to each) before the file is
+pinned. Pinning = `PREREG_HUNT_WIDE.sha256` over this file, `PREREG_HUNT.md`
 and the files of section 10; the code refuses the wide `select` and `test` steps without a matching pin. After the pin
 nothing here changes; a change goes to `research/hunt/DEVIATIONS.md` with its reason and date.
 
@@ -47,7 +48,8 @@ Compute cost is not a constraint (a rented many-core server is allowed).
   forward criteria (section 12).
 * **(h) F4 out of the test:** the 38 watch picks were chosen after 2024-2026 was seen: select-only read (section 3).
 * **Deferred to round 2 (not in this addendum):** new-information entries, the loss-autopsy noise filters, custom
-  values (section 14).
+  values (section 14: each its own pre-registered study, designed and selected on 2021-2023 only, confirmed once per
+  version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper data).
 
 ## 1. Question
 
@@ -611,8 +613,9 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   BTC's daily return and its mean ln M in BTC-up / flat / down month terciles (select cut points) with the long / short
   split, the effective number of independent picks (Li-Ji eigenvalue method on monthly ln M correlations). Program
   ledger: every test-period hypothesis of the program (the v1 pick, every tested batch, F5 picks, any read that prints a
-  p) with a global BH at q = 0.10 and Holm at 0.05, printed next to the pinned per-batch verdicts with the line that
-  two studies share one test period. DeepSeek rows: labels and ranks only in public.
+  p, and every confirm look of a later round, section 14) with a global BH at q = 0.10 and Holm at 0.05, printed next
+  to the pinned per-batch verdicts with the line that two studies share one test period. DeepSeek rows: labels and
+  ranks only in public.
 * **R14 forward band and golden ledger.** Computed once, right after the verdict, and never recomputed: its module is
   listed in the pin before `test.json` exists (read guard 3; a later line makes R14 post hoc) and its output's sha256 is
   appended to the pin before the paper bot starts or any forward comparison uses the band (the panel had R14 inside
@@ -696,6 +699,12 @@ pass rule toward goal metrics.
   cells identical and 11 differing bars in 5 cells (F6_VWAP_CROSS 15m / 30m / 1h, F6_VWAP_FAIL 30m / 1h; at most
   0.011%): a last-bit difference in the daily VWAP's volume sum flips an exact `>=` tie. The pinned run is the one on
   the hunt files.
+* A run on the hunt files as first built (float32 storage, and float32 coin arrays in `hunt.Coin`; 2026-10-11, signals
+  only) **failed**: 19 strategy x timeframe cells above the 1% unexcused limit (worst N08_ICHI_WR 4h, 3.4%). Rounding
+  to float32 flips exact ties in path-dependent indicators (PSAR, ADX / DMI, Klinger, DeMark, Ichimoku); bars binned in
+  float64 from the full grid's 1m archive matched except the VWAP ties above. No mismatch was excused and no cell was
+  dropped: the 5m files and the engine's coin arrays became float64 and the data was rebuilt from the archive before
+  the pin (section 16.5); the pinned `parity.json` is the run on the float64 files.
 * F1 and F5 are this study's own code with no full-grid version: they are checked on synthetic bars (H 5 read bar by
   bar; famous.py's `donchian` and `tsmom` equality; no look-ahead), not by the parity run. `parity.json` records the
   sha256 of `entries_wide.py`, so it is rerun after the F5 addition.
@@ -703,7 +712,8 @@ pass rule toward goal metrics.
 ## 9. Data (W9)
 
 * The H 2 data of the 30 coins: per coin a 5m array file `<data>/5m/<SYM>.npz` with keys `ts` (int64 open time, ms) and
-  `o h l c v qv mo mh ml mc` (float32; `v` base volume, `qv` quote volume, `m*` mark price), cast to float64 at load;
+  `o h l c v qv mo mh ml mc` (**float64**; `v` base volume, `qv` quote volume, `m*` mark price), kept float64 in the
+  engine's coin arrays (prices, volumes and mark OHLC; no float32 step anywhere, H 2 and section 16.5);
   funding in `<data>/funding/`; the universe from `<data>/UNIVERSE.md` and `manifest.json` (copied into
   `research/hunt/universe30.json` as H 3). The mark-price columns are not read by select or test (H 2: liquidation on
   last-price bars; section 15 Q4); only reads after the verdict read mark prices (R19 on 1m bars, R9 on 5m bars).
@@ -782,7 +792,7 @@ pass rule toward goal metrics.
 
 | result | then |
 |---|---|
-| WIDE PASS | **forward paper bot from about 2026-10-20** on the 30 coins, **beside the v1 pick**: each passing pick (정식) exactly as here, r = 0.5% and r = 1%, $5,000 each; plus the one-wallet basket when two or more pass. Nothing else changed. **No real money before the mid-November 2026 review**; after it, real money is the owners' decision only, for 정식 picks only, after the forward criteria and the live-readiness gate below |
+| WIDE PASS | each passing pick (정식) goes to the **forward paper bot** (below) **beside the v1 pick**, exactly as here, r = 0.5% and r = 1%, $5,000 each; plus the one-wallet basket when two or more pass. Nothing else changed. **No real money before the mid-November 2026 review**; after it, real money is the owners' decision only, for 정식 picks only, after the forward criteria and the live-readiness gate below |
 | a pick fails | recorded as a fail with its numbers (DeepSeek: labels). Not a candidate. It may run as a paper account labelled 참고 when it meets the lineup rule below; never real money |
 | WIDE fail (no pick passes, or no eligible system) | recorded. **No tuning on the test period**; systems that are not picks are never run on it |
 
@@ -793,6 +803,16 @@ pass rule toward goal metrics.
   Every other tested pick is **excluded** from the paper lineup (the failing conditions are listed). 참고 accounts are
   paper only and labelled; **real money only from 정식**, after the forward criteria (H 15: the replay reproduces the
   positions; the forward multiple inside the R14 band) and the live-readiness gate.
+* **Forward paper bot** (`huntbot`, owners' guide `docs/huntbot-ko.md`; the same for both studies, H 15): it runs on its
+  **own new server, `hunt-judge`**, not on the rule bot's paper server (public Binance prices only; no key, no order
+  code). The owners switch it on when good strategies exist (a 정식 or 참고 account in a `lineup`). Whatever day it is
+  switched on, it records **every** system of both studies from **2026-10-01 00:00 UTC** on the coins of the 30 that
+  still trade (22 at 2026-09-30; never a coin outside the 30, no new listings; a coin that stops trading ends as H 2),
+  one $5,000 wallet per system at r = 0.5%, recomputed from 2026-10-01 after every 5m bar with this study's own engine
+  (`hunt.py`). The lineup accounts (정식 and 참고, read from `test.json`'s `lineup`) are shown first and sent to
+  Telegram; the other systems are recorded only and become nothing from this study (a later round may use them only as
+  section 14 says). Goal-size paper accounts only as 7.1 rule 6. **Real money only from 정식, never before the
+  mid-November 2026 review.**
 * **Live-readiness gate (risk 12), separate from the research PASS**, evaluated on the test period at whatever size the
   owners propose for real money (`evaluate_live_gate`; the spec is in `test.json`): (a) no liquidation under R9's
   mark-price read; (b) worst single-position loss <= 3U with R9's 25%-of-range stop fill; (c) worst rolling 30-day
@@ -804,11 +824,15 @@ pass rule toward goal metrics.
 * Owner-facing goal numbers are multiples (owners (e)).
 * Nothing is tuned after the test period is seen. A bug found after the test is fixed in `DEVIATIONS.md`, the test
   rerun once, both results shown. Any changed rule (entries, numbers, gate, exits, size, K, batches, scores) is a new
-  study with its own pre-registration, judged only on data after its fixing date.
+  study with its own pre-registration. A later round designed and selected on 2021-2023 only is judged as section 14
+  says (one confirm per version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper data);
+  a change taken from a test-period figure (a read of section 7 on test, for example R5, R7, R16 or R20) is judged
+  only on data after its fixing date.
 * **Two studies, one test period.** v1 and wide each have their own pass; the chance that at least one of the two
   passes by luck is larger than either alone. The report says this next to the two verdicts.
 * The mid-November review checks the paper bot as H 15 (it followed the rules; its forward multiple lies inside the
-  test period's rolling-window range; nothing broke). About 3.5 weeks of forward data cannot prove a trend system.
+  test period's rolling-window range; nothing broke). About six weeks of forward record (from 2026-10-01; the owners
+  watched its first days live, R23) cannot prove a trend system.
 
 ## 13. Known limits (stated before any result)
 
@@ -851,8 +875,19 @@ pass rule toward goal metrics.
 Numbers other than the defaults and the 38 watch picks' numbers; combining entries inside one system (the basket is a
 read); exits other than the chandelier (the six exit cells are R5 reads); r above 0.5% as the rule; gates other than G1
 and NONE; the AI judgment layer (H 17); timeframes other than 15m, 30m, 1h, 4h. **Deferred to round 2** (owners
-2026-10-11; not added now): new-information entries, the loss-autopsy noise filters and custom values (each a new
-study with its own pre-registration and forward data).
+2026-10-11; not added now): new-information entries, the loss-autopsy noise filters and custom values (with a plateau
+rule).
+
+**How every later round is judged (owners' agreed process, 2026-10-11).** Each later round (new-information entries,
+loss-autopsy noise filters, custom values with a plateau rule, and any later version of them) is **its own
+pre-registered study**: it is designed and selected on **2021-2023 only** (no bar from 2024-01-01 on enters its design
+or its choice), then **confirmed once per version on 2024-01 .. 2026-10** with its rules, picks and pass fixed and
+hashed before that look; a new version is a new pre-registration and gets one new confirm look, never a rerun of an old
+one. **Every confirm look of every version counts in the program-wide ledger** (R13: a global BH at q = 0.10 and Holm
+at 0.05 over every test-period hypothesis of the program, this study's and v1's included), printed beside each round's
+verdict, so repeated looks at the same 2024-2026 months are paid for. **Forward paper data** (the paper bot records
+every system from 2026-10-01, section 12) is added to each round's verdict as the out-of-sample check. Each round's
+pre-registration states what of this study's test results its designers had seen.
 
 ## 15. Open questions (closed before the pin; default in brackets)
 
@@ -1002,3 +1037,20 @@ Three reviewers (leak, math, docs) read the code and this file. Changes:
 7. **R23**: the October zips are listed in `october_files.json` (`octlist`), pinned; `october` refuses anything else.
 8. **Headline cell as a multiple** (touched x5), owners (e). Extra-2020 rolling windows: about 155. Section 13's add
    arithmetic corrected (0.4% tier edge at r = 0.5%, 0.8% at r = 1%; 1% leaves about 2.94 adds).
+
+### 16.5 Float64 data, the paper bot, later rounds (2026-10-11, before the pin)
+
+Done before any select or test of either study; no trading outcome had been computed on any real price period (the
+parity run below is signals only). Changes:
+
+1. **Float64** (sections 8, 9; H 2): the parity check on the float32 hunt files failed on exact ties (19 cells over the
+   1% limit) and the live bots trade float64 exchange prices, so the 5m files and the engine's coin arrays (prices,
+   volumes, mark OHLC) are float64, the data rebuilt from the Binance archive and every pin input (`data_manifest.json`,
+   `data_check.json`, `parity.json`, `bench_window.json`) rerun on it before the pin; no difference excused, no cell
+   dropped.
+2. **Paper bot** (section 12; H 15): its own server `hunt-judge` (not the rule bot's paper server), switched on by the
+   owners when good strategies exist, recording every system from 2026-10-01 on the coins still trading (22 at
+   2026-09-30); its lineup from `test.json`'s `lineup`; real money only from 정식, never before the mid-November review.
+3. **Later rounds** (sections 0.1, 12, 14, R13): the owners' process of 2026-10-11 (each round its own pre-registered
+   study, designed and selected on 2021-2023 only, confirmed once per version on 2024-01 .. 2026-10, every confirm look
+   in the program-wide ledger, plus forward paper data) replaces "forward data only".

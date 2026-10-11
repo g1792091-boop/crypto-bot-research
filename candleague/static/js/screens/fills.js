@@ -1,19 +1,25 @@
-// #/fills 체결 기록: the league's newest closed trades (300, every account, newest first) in the dense sortable table,
-// filtered by account role, kind and coin, with a search by strategy name. A row opens the terminal on that trade.
-// Data: /api/fills every 30 s + the shared snapshot for names.
-import {h, put} from "../dom.js";
+// #/fills 체결 기록: the league's newest closed trades (300, every account, newest first). Two views:
+//   목록  the rule bot's 체결 기록 rows (the same rows as 포지션 › 체결 기록: positions-orders.js fillRow / fillSum) with
+//         기간 · 결과 · 묶음 · 코인 filters and the sum line
+//   표    the dense sortable table (filters 계좌 · 종류 · 코인, a search by strategy name)
+// A row opens the terminal on that trade. Data: /api/fills every 30 s + the shared snapshot for names. D11: a hidden
+// DeepSeek trade (the server sent no money) is counted only.
+import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {COINS, ROLES, ROLE_KO, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
+import {tradesPane} from "./positions-orders.js";
+
+export const css = "scr/positions.css";
 
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
 const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
 
-export async function mount(el, ctx) {
-  try { await ctx.meta(); } catch (e) { /* codes */ }
-  const st = {role: "all", kind: "all", coin: "all", fills: []};
+/** The dense table view (the screen as it was before the rule-bot rows). */
+function tableView(ctx) {
+  const st = {role: "all", kind: "all", coin: "all", fills: [], loaded: false};
   const info = h("p", {class: "note"});
   const board = K4.boardTable({
     page: 50, sort: {id: "t", dir: -1},
@@ -28,12 +34,11 @@ export async function mount(el, ctx) {
       {id: "ep", label: "진입가", get: (r) => (r.f.entry_price == null ? "숨김" : px(r.f.entry_price))},
       {id: "xp", label: "청산가", get: (r) => (r.f.exit_price == null ? "숨김" : px(r.f.exit_price))},
       {id: "why", label: "이유", sort: (r) => r.f.exit_reason, get: (r) => reasonKo(r.f.exit_reason)},
-      {id: "lev", label: "배수", sort: (r) => r.f.leverage, get: (r) => (r.f.leverage ? `${fmt.int(r.f.leverage)}배` : "—")},
+      {id: "lev", label: "배수", sort: (r) => r.f.leverage, get: (r) => (r.f.pnl == null && r.f.roe == null ? "—" : r.f.leverage ? `${fmt.int(r.f.leverage)}배` : "—")},
       {id: "roe", label: "증거금 대비", sort: (r) => r.f.roe, get: (r) => (r.f.roe == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.roe)]}, fmt.pct(r.f.roe * 100, true, 1)))},
       {id: "pnl", label: "손익", sort: (r) => r.f.pnl, get: (r) => (r.f.pnl == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.pnl)]}, fmt.money(r.f.pnl, true)))},
     ]});
-  el.append(
-    ui.screenHead("체결 기록", "후보 리그 전체의 최근 닫힌 거래 300건 · 줄을 누르면 터미널에서 그 거래"),
+  const el = h("div", {class: "stack"},
     h("div", {class: "dl-fields"},
       ui.field("계좌", ui.seg([{id: "all", label: "전체"}, ...ROLES.map((r) => ({id: r, label: ROLE_KO[r]}))], st.role, (v) => { st.role = v; paint(); }, {label: "계좌"})),
       ui.field("종류", ui.seg([{id: "all", label: "전체"}, {id: "core", label: "기존 36"}, {id: "ds", label: "딥시크"}], st.kind, (v) => { st.kind = v; paint(); }, {label: "종류"})),
@@ -48,8 +53,26 @@ export async function mount(el, ctx) {
     const wins = rows.filter((r) => (r.f.pnl != null ? r.f.pnl > 0 : r.f.roe != null ? r.f.roe > 0 : !!r.f.win)).length;
     info.textContent = rows.length ? `${rows.length}건 · 이긴 거래 ${wins}건 (${fmt.pct((100 * wins) / rows.length, false, 0)}) · 증거금 대비 = 그 거래의 증거금에 대한 손익` : "";
   }
-  async function load() { try { st.fills = (await ctx.api("/api/fills")).fills || []; } catch (e) { return; } paint(); }
-  ctx.onLeague(paint);
-  await load();
-  ctx.every(30000, load);
+  async function load() { try { st.fills = (await ctx.api("/api/fills")).fills || []; st.loaded = true; } catch (e) { return; } paint(); }
+  return {el, load, paint, get loaded() { return st.loaded; }};
+}
+
+export async function mount(el, ctx) {
+  el.classList.add("ps-scr", "ps-fills");
+  try { await ctx.meta(); } catch (e) { /* codes */ }
+  let view = local.get("fills-view", "list") === "table" ? "table" : "list";
+  const list = tradesPane(ctx, {coinSeg: true, size: 20, per: "all", perKey: "fills-tper"});
+  const table = tableView(ctx);
+  const body = h("div");
+  const show = () => {
+    const v = view === "table" ? table : list;
+    put(body, view === "table" ? v.el : ui.card({plate: "체결 기록", sub: "최근 닫힌 거래 · 한 줄을 누르면 터미널에서 그 거래", cls: "ps-fcard"}, v.el));
+    if (!v.loaded) v.load(); else if (view === "table") v.paint(); else v.render(true);
+  };
+  const viewSeg = ui.seg([{id: "list", label: "목록"}, {id: "table", label: "표"}], view, (v) => { view = v; local.set("fills-view", v); show(); }, {label: "보기"});
+  el.append(ui.screenHead("체결 기록", "후보 리그 전체의 최근 닫힌 거래 300건 · 줄을 누르면 터미널에서 그 거래", viewSeg), body,
+    h("p", {class: "assume once"}, "모의 · 실제 시세 · 닫힌 거래 손익은 수수료·펀딩·슬리피지 포함 · 주문 버튼 없음"));
+  show();
+  ctx.onLeague(() => { if (view === "table" && table.loaded) table.paint(); else if (list.loaded) list.render(true); });
+  ctx.every(30000, () => (view === "table" ? table.load() : list.load()));
 }

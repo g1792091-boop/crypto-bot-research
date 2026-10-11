@@ -144,8 +144,9 @@ def make_archive(root: str, sym: str = SYM, bad_mark_checksum: bool = False, see
     return S
 
 
-def f32(strings) -> np.ndarray:
-    return np.array([np.float32(float(s)) for s in strings], np.float32)
+def f64(strings) -> np.ndarray:
+    """The archive's decimal strings as float64 (the stored precision; never narrowed to float32)."""
+    return np.array([float(s) for s in strings], np.float64)
 
 
 # ------------------------------------------------------------------ conversion
@@ -158,18 +159,18 @@ def test_build_5m_converts_fills_and_keeps_monthly_values(tmp_path):
     with np.load(os.path.join(out, "5m", f"{SYM}.npz")) as z:
         a = {k: z[k] for k in z.files}
     assert sorted(a) == sorted(["ts", "o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc"])
-    assert a["ts"].dtype == np.int64 and all(a[k].dtype == np.float32 for k in a if k != "ts")
+    assert a["ts"].dtype == np.int64 and all(a[k].dtype == np.float64 for k in a if k != "ts")
     assert np.array_equal(a["ts"], S["ts"])                                # hole filled, us -> ms, duplicate dropped
     for k in ("o", "h", "l", "v", "qv"):
-        assert np.array_equal(a[k], f32(S[k])), k
-    want_c = f32(S["c"])
+        assert np.array_equal(a[k], f64(S[k])), k
+    want_c = f64(S["c"])
     i = S["dup_index"]                                   # the repeated open time keeps the later (February) row
-    want_c[i] = np.float32(float(f"{float(S['c'][i]) * 1.01:.4f}"))
+    want_c[i] = float(f"{float(S['c'][i]) * 1.01:.4f}")
     assert np.array_equal(a["c"], want_c)
     nan = np.isnan(a["mc"])
     assert np.array_equal(np.flatnonzero(nan), S["mark_nan"])             # 5 lone bars stay NaN, the day is filled
     for k in ("mo", "mh", "ml", "mc"):
-        assert np.array_equal(a[k][~nan], f32(S[k])[~nan]), k
+        assert np.array_equal(a[k][~nan], f64(S[k])[~nan]), k
     with np.load(os.path.join(out, "funding", f"{SYM}.npz")) as z:
         assert z["ts"].dtype == np.int64 and z["rate"].dtype == np.float64
         assert len(z["ts"]) == 40 and np.all(np.diff(z["ts"]) > 0)
@@ -347,7 +348,7 @@ def test_verify_against_reference(tmp_path):
     p = f"{b}/5m/{SYM}.npz"
     with np.load(p) as z:
         arr = {k: z[k].copy() for k in z.files}
-    arr["c"][100] += np.float32(0.5)
+    arr["c"][100] += 0.5
     D.save_npz(p, arr)
     rep = D.verify(f"{b}/manifest.json", rp, b)
     assert not rep["ok"] and any("file content" in x for x in rep["differences"])
@@ -473,11 +474,11 @@ def test_verify_against_the_hunt_data_manifest_format(tmp_path):
     p = f"{b}/5m/{SYM}.npz"
     with np.load(p) as z:
         arr = {k: z[k].copy() for k in z.files}
-    arr["mc"][5] += np.float32(1.0)                         # a mark value: not part of the hunt's identity
+    arr["mc"][5] += 1.0                                     # a mark value: not part of the hunt's identity
     D.save_npz(p, arr)
     rep = D.verify(f"{b}/manifest.json", rp, b)
     assert not rep["ok"] and all("arrays_sha256" in x for x in rep["differences"])   # caught only by its manifest
-    arr["qv"][7] += np.float32(1.0)                         # a quote volume: part of it
+    arr["qv"][7] += 1.0                                     # a quote volume: part of it
     D.save_npz(p, arr)
     rep = D.verify(f"{b}/manifest.json", rp, b)
     assert any("content_5m) differs from the reference" in x for x in rep["differences"])

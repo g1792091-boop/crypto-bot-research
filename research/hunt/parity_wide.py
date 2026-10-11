@@ -9,7 +9,7 @@ events_on on 5m bars), for every F2 (36 core) and F3 (44 DeepSeek, on their time
 and every F4 watch pick on its timeframe. The adapter's 5m bars: by default the same 1m archive binned to 5m
 (entries_wide.resample_1m_to_5m: the comparison isolates the adapter); with --five, the hunt data's 5m files
 (<five>/5m/<SYM>.npz read as select / test read it: hunt.clean_5m drops duplicate, zero-volume, off-grid and
-non-finite rows, float32 cast to float64; PREREG_HUNT_WIDE 8 as written, data differences included; the dropped
+non-finite rows; float64 as stored, no narrowing; PREREG_HUNT_WIDE 8 as written, data differences included; the dropped
 counts are reported per coin). The output's ``code`` holds the sha256 of entries_wide.py, parity_wide.py and hunt.py:
 the wide pin accepts parity.json only when they equal the pinned files and it says pass on the hunt 5m files.
 

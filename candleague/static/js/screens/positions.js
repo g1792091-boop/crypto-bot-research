@@ -1,91 +1,354 @@
-// #/positions 포지션: every open league position (190 accounts), with its account, role, coin, side, entry, the price
-// move since (live), stop and take-profit and the entry time; filters 계좌 종류 and 코인; summary of long / short counts per
-// coin. A row opens the terminal on that account. Data: the shared snapshot + /api/live every 10 s.
-import {h, put} from "../dom.js";
+// #/positions 포지션 · 모의 계좌의 열린 포지션, in the rule bot's v4 look (copied and adapted from
+// paperbot/dash/static/v4/screens/positions.js; nothing imported from it). From the top:
+//   the freshness line (엔진 기준 HH:MM · 시세 n초 전) and, while the engine replays from 10/01 or its record is old, a
+//   banner (no live P&L then: the positions are "그때 기준")
+//   the summary over the chosen 묶음 and coin: 미실현 손익 합계 (USDT) at the mark, 묶인 증거금 대비 %, 롱 · 숏, 수익 중 /
+//   손실 중, 묶인 증거금, hidden DeepSeek positions counted only; 가장 많이 버는·잃는 포지션
+//   the coin chips (전체 n, BTC n↑ m↓ with the 한 방향 몰림 dot)
+//   tabs 포지션 n / 손절·잠금 주문 / 체결 기록; 묶음 and sort selects; the position cards (all open in a 2-3 column grid at
+//   1280 px and wider, one-line rows that open below), 12 per page
+//   the side card 위험 사다리 (청산까지 / 손절선까지)
+// Data: /api/positions (poskit: every 30 s and on each new engine snapshot), /api/live (5 s: the mark), /api/klines 5m
+// (진입 뒤 가격, per coin, again after 5 minutes), /api/fills (체결 기록). Nothing here can place an order.
+import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
+import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
-import {COINS, ROLES, ROLE_KO, sideKo, coinOf, coinShort} from "../labels.js";
+import {markOf, liveState} from "../live.js";
+import {livePnl, sums, crowd, POS_GROUPS, inGroup, liveAllowed, freshLine, staleBanner, snapAge} from "../poskit.js";
+import {COINS, coinShort, KIND_KO} from "../labels.js";
+import {posCard, nameNode, usdt, HIDDEN_KO, HIDDEN_WHY} from "./positions-card.js";
+import {riskLadder} from "./positions-risk.js";
+import {ordersPane, tradesPane} from "./positions-orders.js";
 
-const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
-const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
+export const css = "scr/positions.css";
+
+const SORTS = [{id: "pnl", label: "수익 큰 순"}, {id: "loss", label: "손실 큰 순"}, {id: "new", label: "최근 진입"}, {id: "liq", label: "청산 가까운 순"}];
+const GROUP_KO = Object.fromEntries(POS_GROUPS.map((g) => [g.id, g.ko]));
+const PAGE = 12;
+const PX_TTL = 5 * 60000;
+const M5 = 300000;
+export const ASSUME_KO = "모의 · 실제 시세 · 마크 가격 기준 미실현 (나갈 때 수수료 전) · 주문 버튼 없음 · 크기·증거금·청산가는 진입 때 기준 (펀딩 전)";
+
+const coinKey = (c) => {
+  const x = String(c || "").toUpperCase().replace(/USDT$/, "USD");
+  const k = x && !x.endsWith("USD") ? `${x}USD` : x;
+  return COINS.includes(k) ? k : "";
+};
+
+/** The order of a list: the shown positions by the chosen sort, the hidden (count-only) ones last by entry time, so their
+ *  place never says how much they made. pnlOf(p) -> live P&L or null; gapOf(p) -> distance to liquidation or null. */
+export function sortPositions(list, sort, pnlOf, gapOf) {
+  const shown = list.filter((p) => !p.hidden), hid = list.filter((p) => p.hidden);
+  const since = (a, b) => (b.since || 0) - (a.since || 0) || String(a.id).localeCompare(String(b.id));
+  const nullLast = (va, vb, dir) => (va == null && vb == null ? 0 : va == null ? 1 : vb == null ? -1 : dir * (va - vb));
+  const by = {
+    pnl: (a, b) => nullLast(pnlOf(a), pnlOf(b), -1) || since(a, b),
+    loss: (a, b) => nullLast(pnlOf(a), pnlOf(b), 1) || since(a, b),
+    new: since,
+    liq: (a, b) => nullLast(gapOf(a), gapOf(b), 1) || since(a, b),
+  };
+  return [...shown.sort(by[sort] || by.pnl), ...hid.sort(since)];
+}
 
 export async function mount(el, ctx) {
-  try { await ctx.meta(); } catch (e) { /* codes */ }
-  const st = {role: "all", coin: "all", live: null};
-  const sum = h("div"), table = h("div");
-  el.append(
-    ui.screenHead("포지션", "지금 열려 있는 후보 리그 포지션 (190계좌) · 줄을 누르면 터미널"),
-    h("div", {class: "dl-fields"},
-      ui.field("계좌", ui.seg([{id: "all", label: "전체"}, ...ROLES.map((r) => ({id: r, label: ROLE_KO[r]}))], st.role, (v) => { st.role = v; paint(); }, {label: "계좌"})),
-      ui.field("코인", ui.seg([{id: "all", label: "전체"}, ...COINS.map((c) => ({id: c, label: coinShort(c)}))], st.coin, (v) => { st.coin = v; paint(); }, {label: "코인"}))),
-    ui.card({plate: "코인별", sub: "롱 · 숏 수 (모든 계좌)"}, sum),
-    ui.card({plate: "열린 포지션", sub: "가격 변화 = 진입가에서 지금 가격까지 (방향 반영, 레버리지 전) · 증거금 대비 = 가격 변화 × 레버리지 (수수료 전) · 10초마다"}, table));
-  const live = (c) => (st.live && st.live.coins ? st.live.coins.find((x) => x.coin === c) : null);
-  // the server kept an old price (Binance unreachable) or this browser has not had a fresh one for 30 s
-  const old = () => !st.live || st.live.stale || st.live.unavailable || !st.liveAt || Date.now() - st.liveAt > 30000;
-  function paint() {
-    const d = LK.league();
-    if (!d || !d.accounts) { put(table, ui.none("준비 중")); return; }
-    const ix = LK.index(d);
-    const open = d.accounts.filter((a) => a.open);
-    // the 후보 accounts on the same coin and side at once move together: the pool's result rests on fewer bets
-    const cands = open.filter((a) => a.role === "cand");
-    const crowd = {};
-    for (const a of cands) { const k = `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`; crowd[k] = (crowd[k] || 0) + 1; }
-    const top = Object.entries(crowd).sort((x, y) => y[1] - x[1]).slice(0, 3);
-    put(sum, h("div", {class: "cl-coinsum"}, COINS.map((c) => {
-      const rows = open.filter((a) => coinOf(a.open.symbol) === c);
-      return h("div", {class: "cl-coinbox"}, h("b", null, coinShort(c)), h("span", {class: "num"}, `${rows.length}개`),
-        h("span", {class: "side long"}, `롱 ${rows.filter((a) => a.open.side > 0).length}`), h("span", {class: "side short"}, `숏 ${rows.filter((a) => a.open.side < 0).length}`));
-    })), h("p", {class: "note"}, top.length
-      ? `후보 계좌 ${fmt.int(ix.cands.length)}개 중 ${fmt.int(cands.length)}개가 포지션 보유 · 가장 많이 겹친 곳: ${top.map(([k, n]) => `${k} ${n}개`).join(" · ")}. ` +
-        "같은 코인 · 같은 방향의 후보는 함께 벌고 함께 잃어서, 묶음 결과가 생각보다 적은 수의 시장 움직임에 기대게 됩니다."
-      : "지금 포지션을 가진 후보 계좌가 없습니다."));
-    const rows = open.filter((a) => (st.role === "all" || a.role === st.role) && (st.coin === "all" || coinOf(a.open.symbol) === st.coin))
-      .sort((a, b) => b.open.since - a.open.since);
-    if (!rows.length) { put(table, ui.empty("조건에 맞는 열린 포지션이 없습니다")); return; }
-    const was = table.querySelector(".tbl-wrap");
-    const keepX = was ? was.scrollLeft : 0;  // a phone scrolled to the right columns stays there over the 10 s repaint
-    put(table, st.live && !st.live.off && old() ? h("p", {class: "note warn-t"}, `시세: 지난 값${st.live.generated_ms ? ` (${fmt.hms(st.live.generated_ms)})` : ""} · 바이낸스 연결 확인 중`) : null,
-      ui.table([
-      {label: "계좌", l: true, get: (a) => h("span", null, LK.pickName(LK.pickOf(a, ix) || a, {code: false}), " ", LK.roleChip(a.role))},
-      {label: "코인", l: true, get: (a) => h("b", null, coinShort(coinOf(a.open.symbol)))},
-      {label: "방향", l: true, get: (a) => h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, sideKo(a.open.side))},
-      {label: "진입가", get: (a) => (a.open.entry == null ? h("span", {class: "muted"}, "숨김") : px(a.open.entry))},
-      {label: "지금 가격", get: (a) => { const r = live(coinOf(a.open.symbol)); return r ? px(r.price) : "—"; }},
-      {label: "가격 변화", get: (a) => {
-        const r = live(coinOf(a.open.symbol));
-        const m = a.open.entry != null && r && r.price != null ? a.open.side * (r.price / a.open.entry - 1) * 100 : null;
-        return m == null ? "—" : h("span", {class: ["num", old() ? "muted" : fmt.tone(m)]}, fmt.pct(m, true, 2));
-      }},
-      {label: "증거금 대비", title: "가격 변화 × 레버리지 (바이낸스처럼 수수료 전, 최대 손실 −100%)", get: (a) => {
-        const r = live(coinOf(a.open.symbol));
-        if (!(a.open.entry != null && a.open.lev && r && r.price != null)) return "—";
-        const m = Math.max(-100, a.open.side * (r.price / a.open.entry - 1) * 100 * a.open.lev);
-        // past the stop / take-profit: the engine books it at its next 5-minute pass, not at this number
-        const past = a.open.stop != null && a.open.side * (r.price - a.open.stop) <= 0 ? "손절선 지남"
-          : a.open.tp != null && a.open.side * (r.price - a.open.tp) >= 0 ? "익절선 지남" : null;
-        return h("span", {class: ["num", old() ? "muted" : fmt.tone(m)], title: `${fmt.int(a.open.lev)}배${past ? " · 다음 계산(5분마다)에 청산" : ""}`},
-          fmt.pct(m, true, 1), past ? h("small", {class: "warn-t"}, ` ${past}`) : null);
-      }},
-      {label: "손절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.stop == null ? "—" : px(a.open.stop))},
-      {label: "익절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.tp == null ? h("span", {class: "muted"}, "계단 잠금") : px(a.open.tp))},
-      {label: "진입 (KST)", get: (a) => h("span", {class: "num muted"}, fmt.kst(a.open.since))},
-      {label: "보유", get: (a) => h("span", {class: "num muted"}, fmt.dur((Date.now() - a.open.since) / 1000))},
-    ], rows, {cls: "lv-dense", onRow: (a) => { location.hash = `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(a.open.symbol)}`; }}));
-    const now = table.querySelector(".tbl-wrap");
-    if (now && keepX) now.scrollLeft = keepX;
+  el.classList.add("ps-scr", "ps-pos");
+  try { await ctx.meta(); } catch (e) { /* names fall back to codes */ }
+  const q = ctx.params.query || {};
+  const st = {
+    coin: coinKey(q.coin) || coinKey(local.get("ps-coin", "")), tab: local.get("ps-tab", "pos"), sort: local.get("ps-sort", "pnl"),
+    grp: local.get("ps-grp", "cand"), doc: null, open: new Set(), firstOpen: true, focus: q.acct || null, pin: null, countsKey: "", lastGen: null,
+  };
+  if (coinKey(q.coin)) local.set("ps-coin", st.coin);          // #/positions?coin=BTCUSD (a link from another screen)
+  if (!POS_GROUPS.some((g) => g.id === st.grp)) st.grp = "cand";
+  if (!SORTS.some((x) => x.id === st.sort)) st.sort = "pnl";
+  if (!["pos", "ord", "trd"].includes(st.tab)) st.tab = "pos";
+  const cards = new Map();            // account id -> {key, el}: reused, so a number counts from its last value
+  const wideMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
+  let wide = !!(wideMq && wideMq.matches);
+  const allowed = () => liveAllowed(st.doc);
+  /** Why live numbers are hidden (the words on the cards, the ladder and the orders). */
+  const waitKo = () => (st.doc && st.doc.old && !st.doc.catching_up ? "엔진 기록이 멈춤" : "엔진이 따라잡는 중");
+
+  // ---------------------------------------------------------------- 진입 뒤 가격: one /api/klines 5m per coin, again after 5 min
+  const px = new Map();               // coin|end -> {at, bars, busy}
+  const pxKey = (coin) => `${coin}|${allowed() ? "" : (st.doc && st.doc.done_ms) || ""}`;
+  const needPx = (coin) => {
+    const key = pxKey(coin), c = px.get(key);
+    if (c && (c.busy || Date.now() - c.at < PX_TTL)) return;
+    px.set(key, {...(c || {}), busy: true, at: c ? c.at : 0});
+    const end = allowed() || !st.doc ? "" : `&end=${st.doc.done_ms}`;
+    ctx.api(`/api/klines?coin=${encodeURIComponent(coin)}&tf=5m&limit=288${end}`).then((d) => {
+      px.set(key, {at: Date.now(), bars: d && d.bars ? d.bars : null, busy: false});
+      if (ctx.alive()) for (const x of cards.values()) if (x.el.pos.coin === coin) sparkOf(x.el);
+    }).catch(() => { px.set(key, {at: Date.now(), bars: (c && c.bars) || null, busy: false}); });
+  };
+  const sparkOf = (cardEl) => {
+    const p = cardEl.pos;
+    if (p.hidden || p.entry == null) return;
+    const c = px.get(pxKey(p.coin));
+    if (!c || !c.bars || !Array.isArray(c.bars.t) || !p.since) return;
+    const ok = allowed();
+    const t0 = Math.floor(p.since / M5) * M5;
+    const lim = ok ? Infinity : Number(st.doc.done_ms);
+    // older than the 24 hours of bars: the last 24 hours only (the dashed line still marks the entry price)
+    const older = c.bars.t.length > 0 && c.bars.t[0] > t0;
+    const vals = older ? [] : [Number(p.entry)];
+    for (let i = 0; i < c.bars.t.length; i++) {
+      const t = c.bars.t[i];
+      if (t >= t0 && t <= lim) vals.push(c.bars.c[i]);
+    }
+    const m = ok ? markOf(p.coin) : null;
+    if (m != null) vals.push(m);
+    cardEl.setSpark(vals, {note: [older ? "최근 24시간만" : "", ok ? "" : "엔진 기준 시각까지"].filter(Boolean).join(" · ")});
+  };
+
+  // ---------------------------------------------------------------- skeleton
+  const fresh = freshLine(null, {cls: "ps-fresh"});
+  const bannerSlot = h("div", {class: "ps-banner"});
+  const sumNum = h("b", {class: "num ps-big ps-pnl"}, "—");
+  const sumSub = h("span", {class: "s"}, "");
+  const lsEl = h("b", {class: "num ps-big"}, "—"), nOpenSub = h("span", {class: "s"}, "");
+  const liveChip = K4.liveDot("시세 기다리는 중", "off");
+  const line = h("p", {class: "ps-line"});
+  const bestLine = h("div", {class: "ps-bw"});
+  const sumCard = h("section", {class: "card ps-sum", "aria-label": "열린 포지션 요약"},
+    h("div", {class: "stats"},
+      K4.stat(h("span", null, "미실현 손익 합계 (USDT) ", h("span", {class: "ps-tip", tabindex: "0", role: "note", title: ASSUME_KO, "aria-label": `설명: ${ASSUME_KO}`}, "ⓘ")), sumNum, sumSub),
+      K4.stat("롱 · 숏", lsEl, nOpenSub)),
+    h("div", {class: "ps-sumfoot"}, line, liveChip),
+    ui.disclosure("가장 많이 버는·잃는 포지션", bestLine));
+  const coinBar = h("div", {class: "ps-coins"});
+  const tabBar = h("div", {class: "ps-tabs"});
+  const tabBody = h("div", {class: "stack"});
+  const ladder = riskLadder(ctx);
+  const side = h("div", {class: "stack ps-side"}, ladder.el);
+  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), fresh, bannerSlot, sumCard, coinBar,
+    h("div", {class: "ps-cols"}, h("div", {class: "stack ps-main"}, tabBar, tabBody), side),
+    h("p", {class: "assume once ps-assume"}, ASSUME_KO));
+
+  // ---------------------------------------------------------------- data helpers
+  const all = () => (st.doc && Array.isArray(st.doc.positions) ? st.doc.positions : []);
+  const inScope = (p) => (!st.coin || p.coin === st.coin) && inGroup(p, st.grp);
+  const pnlOf = (p) => { if (!allowed()) return null; const u = livePnl(p); return u ? u.pnl : null; };
+  const gapOf = (p) => { if (allowed()) { const u = livePnl(p); return u ? u.liqGap : null; } return p.liq_dist_entry ?? null; };
+
+  // ---------------------------------------------------------------- the coin chips (counts of open positions)
+  const renderCoins = () => {
+    if (!st.doc || st.doc.status) { st.countsKey = ""; put(coinBar); return; }
+    const mine = all().filter((p) => inGroup(p, st.grp));
+    const sides = {};
+    for (const c of COINS) sides[c] = {long: 0, short: 0};
+    for (const p of mine) if (sides[p.coin]) sides[p.coin][Number(p.side) > 0 ? "long" : "short"] += 1;
+    const key = JSON.stringify([sides, st.coin, st.grp]);
+    if (key === st.countsKey) return;
+    st.countsKey = key;
+    const skewed = COINS.some((c) => crowd(sides[c]).on);
+    const lab = (c) => {
+      const x = sides[c], k = crowd(x);
+      return [coinShort(c), h("small", {class: "ps-cnt ps-ls", title: `롱 ${fmt.int(x.long)} · 숏 ${fmt.int(x.short)}`},
+        h("span", {class: x.long ? "up" : ""}, `${fmt.int(x.long)}↑`), " ", h("span", {class: x.short ? "down" : ""}, `${fmt.int(x.short)}↓`)),
+      k.on ? h("i", {class: "ps-skew", role: "img", "aria-label": `한 방향 몰림: ${k.side > 0 ? "롱" : "숏"}이 80% 이상`,
+        title: `한 방향 몰림 · ${k.side > 0 ? "롱" : "숏"} ${fmt.int(k.side > 0 ? x.long : x.short)} / ${fmt.int(k.n)}`}) : null];
+    };
+    const opts = [{id: "", label: ["전체", h("small", {class: "ps-cnt"}, fmt.int(mine.length))]}, ...COINS.map((c) => ({id: c, label: lab(c)}))];
+    put(coinBar, ui.seg(opts, st.coin, (v) => { st.coin = v; st.pin = null; local.set("ps-coin", v); st.countsKey = ""; renderAll(false); }, {label: "코인 고르기", cls: "scroll"}),
+      h("p", {class: "pos-note ps-skew-note"}, "↑ 롱 · ↓ 숏 개수",
+        skewed ? [" · ", h("i", {class: "ps-skew", "aria-hidden": "true"}), " 한 방향 몰림 (5개 이상 중 한쪽 80% 이상)"] : null,
+        st.grp !== "all" ? ` · ${GROUP_KO[st.grp]} 묶음` : ""));
+  };
+
+  // ---------------------------------------------------------------- the summary (follows the coin and 묶음)
+  const renderSum = () => {
+    const d = st.doc;
+    if (!d) { sumNum.textContent = "—"; sumSub.textContent = ""; lsEl.textContent = "—"; nOpenSub.textContent = "불러오는 중"; put(line, "불러오는 중"); put(bestLine); return; }
+    if (d.status) { sumNum.textContent = "—"; sumSub.textContent = ""; lsEl.textContent = "—"; nOpenSub.textContent = "준비 중"; put(line, "엔진이 첫 기록을 쓰면 저절로 나타납니다."); put(bestLine); return; }
+    const ok = allowed();
+    const list = all().filter(inScope);
+    const t = sums(list, ok ? markOf : () => null);
+    const allHidden = t.n > 0 && t.hidden === t.n;
+    K4.countTo(sumNum, t.priced ? t.pnl : null, {format: (v) => fmt.num(v, 2, true), tone: true});
+    sumSub.textContent = allHidden ? `딥시크 금액 숨김 (${HIDDEN_KO})` : !ok ? `${waitKo()}: 실시간 손익 감춤`
+      : t.priced && t.margin ? `묶인 증거금 대비 ${fmt.pct((t.pnl / t.margin) * 100, true, 2)}` : t.n ? "시세를 기다리는 중" : "열린 포지션 없음";
+    sumSub.className = "s " + (ok && t.priced ? fmt.tone(t.pnl) : "");
+    lsEl.textContent = `${fmt.int(t.long)} · ${fmt.int(t.short)}`;
+    const scope = [st.coin ? coinShort(st.coin) : "", GROUP_KO[st.grp] || ""].filter(Boolean).join(" · ");
+    nOpenSub.textContent = `열린 ${fmt.int(t.n)}개${scope ? " · " + scope : ""}`;
+    if (allHidden) put(line, h("span", {class: "muted", title: HIDDEN_WHY}, `딥시크 ${fmt.int(t.hidden)}개 (${HIDDEN_KO}: 서버가 금액·가격을 보내지 않아 합계가 없습니다)`));
+    else put(line, ok ? ["수익 중 ", h("b", {class: "up"}, fmt.int(t.winning)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(t.losing)), " · "] : null,
+      "묶인 증거금 ", h("b", {class: "num"}, usdt(t.margin)),
+      t.hidden ? h("span", {class: "muted", title: HIDDEN_WHY}, ` · 딥시크 ${fmt.int(t.hidden)}개 (${HIDDEN_KO}, 합계에서 뺌)`) : null);
+    let best = null, worst = null;
+    if (ok) for (const p of list) { const v = pnlOf(p); if (v == null) continue; if (!best || v > best.v) best = {p, v}; if (!worst || v < worst.v) worst = {p, v}; }
+    const bw = (lab, b) => (b ? h("a", {class: "ps-bwl", href: ctx.href("positions", null, {acct: b.p.id, coin: b.p.coin})},
+      h("span", {class: "muted"}, lab), h("b", {class: "ps-bwn"}, nameNode(b.p)), h("span", {class: "muted"}, `${coinShort(b.p.coin)} ${Number(b.p.side) > 0 ? "롱" : "숏"}`),
+      h("b", {class: ["num", fmt.tone(b.v)]}, usdt(b.v, true))) : null);
+    const byG = {};
+    for (const p of list) { const g = `${KIND_KO[p.kind] || p.kind} ${GROUP_KO[p.role] || p.role}`; byG[g] = (byG[g] || 0) + 1; }
+    put(bestLine, bw("가장 많이 버는 중", best && best.v > 0 ? best : null), bw("가장 많이 잃는 중", worst && worst.v < 0 ? worst : null),
+      !ok ? h("p", {class: "pos-note"}, `${waitKo()}이라 지금 손익 순위는 감춥니다.`) : null,
+      list.length ? h("p", {class: "ps-groups muted"}, "묶음별 ", Object.entries(byG).map(([g, n]) => `${g} ${fmt.int(n)}`).join(" · ")) : null);
+  };
+  const paintLive = () => {
+    const ls = liveState();
+    const d = st.doc;
+    if (d && !d.status && d.catching_up) liveChip.set("엔진 따라잡는 중 · 실시간 손익 감춤", "warn");
+    else if (d && !d.status && d.old) liveChip.set(`엔진 기록 ${fmt.dur(snapAge(d) || 0)} 전에 멈춤`, "bad");
+    else if (ls.state === "ok") liveChip.set("실시간 · 5초마다", "ok");
+    else if (ls.state === "fake") liveChip.set("시험용 시세 · 5초마다", "warn");
+    else if (ls.state === "stale") liveChip.set(`시세 지난 값${ls.generated_ms ? ` (${fmt.hms(ls.generated_ms)})` : ""}`, "warn");
+    else liveChip.set(ls.ko, ls.state === "wait" ? "off" : "bad");
+    el.classList.toggle("ps-stalepx", ls.state === "stale" || ls.state === "unavailable");
+    fresh.update(d || undefined);
+  };
+
+  // ---------------------------------------------------------------- tab: 포지션 (cards, paged)
+  const sortSel = ui.select(SORTS, st.sort, (v) => { st.sort = v; st.pin = null; local.set("ps-sort", v); renderAll(false); }, "정렬");
+  const grpSel = ui.select(POS_GROUPS.map((g) => ({id: g.id, label: g.id === "all" ? "모든 묶음" : g.ko})), st.grp,
+    (v) => { st.grp = v; st.pin = null; local.set("ps-grp", v); st.countsKey = ""; renderAll(false); }, "묶음");
+  const keyOf = (p, open) => [open ? "o" : "c", p.hidden ? "h" : "m", p.since, p.stop, p.tp, p.liq, p.lev, p.margin, p.stop_is_lock].join("|");
+  const onToggle = (id, o) => {
+    if (o) st.open.add(id); else st.open.delete(id);
+    const x = cards.get(id);
+    if (x) x.key = keyOf(x.el.pos, o);
+  };
+  const cardOf = (p) => {
+    const open = wide || st.open.has(p.id);
+    const key = keyOf(p, open);
+    let c = cards.get(p.id);
+    if (!c || c.key !== key) {
+      const elc = posCard(p, {open, href: ctx.href, onToggle});
+      c = {key, el: elc};
+      cards.set(p.id, c);
+      elc.update(markOf(p.coin), allowed(), waitKo());
+      sparkOf(elc);
+    }
+    if (!p.hidden) needPx(p.coin);
+    return c.el;
+  };
+  const emptyPos = () => {
+    if (!st.doc) return h("p", {class: "empty"}, "불러오는 중");
+    if (st.doc.status) return ui.missing("포지션 자료");
+    const n = all().length;
+    if (!n) return h("div", {class: "ps-empty"}, h("b", null, "지금 열린 포지션이 없습니다"),
+      h("span", null, "엔진은 5분마다 신호를 확인합니다. 새 포지션은 들어간 뒤 5~10분 안에 여기에 나타납니다."),
+      h("a", {class: "btn-line", href: "#/entries"}, "진입 차트 보기"));
+    return h("div", {class: "ps-empty"}, h("b", null, "조건에 맞는 열린 포지션이 없습니다"),
+      h("span", null, `${st.coin ? coinShort(st.coin) + " · " : ""}${GROUP_KO[st.grp] || ""} 묶음에는 없고, 전체로는 ${fmt.int(n)}개가 열려 있습니다.`),
+      h("button", {class: "btn-line", type: "button", onclick: () => { st.coin = ""; st.grp = "all"; local.set("ps-coin", ""); local.set("ps-grp", "all"); grpSel.value = "all"; st.countsKey = ""; renderAll(false); }}, "전체 보기"));
+  };
+  const posPager = ui.pager({size: PAGE, render: (part) => h("div", {class: "ps-grid", role: "list"}, part.map(cardOf))});
+  const posNote = h("p", {class: "pos-note"});
+  const notePos = () => {
+    posNote.textContent = (wide ? "넓은 화면이라 모든 카드를 펼쳐 둡니다. " : "한 줄을 누르면 펼쳐집니다. ") +
+      "미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다. 새 진입·청산은 엔진이 5분마다 계산해 몇 분 늦게 보입니다.";
+  };
+  notePos();
+  const posBody = h("div");
+  const posPane = h("div", {class: "stack"}, h("div", {class: "row wrap ps-filters"}, grpSel, sortSel), posBody, posNote);
+
+  // ---------------------------------------------------------------- tabs 손절·잠금 주문 / 체결 기록
+  const ordPane = ordersPane(ctx);
+  const trPane = tradesPane(ctx, {coin: () => st.coin, grp: st.grp});
+  let tabKey = "";
+  const renderTabBar = () => {
+    const n = all().filter(inScope).length;
+    const opts = [{id: "pos", label: st.doc && !st.doc.status ? `포지션 ${fmt.int(n)}` : "포지션"}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
+    const key = opts.map((o) => o.label).join("|") + st.tab;
+    if (key === tabKey) return;
+    tabKey = key;
+    put(tabBar, ui.seg(opts, st.tab, (v) => { st.tab = v; local.set("ps-tab", v); tabKey = ""; renderTabBar(); showTab(true); }, {label: "포지션 보기"}));
+  };
+  const showTab = (animate) => {
+    const pane = st.tab === "ord" ? ordPane.el : st.tab === "trd" ? trPane.el : posPane;
+    if (tabBody.firstChild !== pane) put(tabBody, pane);
+    if (animate) K4.swap(tabBody);
+    if (st.tab === "trd") { if (!trPane.loaded) trPane.load(); else trPane.render(true); }
+    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, allowed(), false, waitKo());
+  };
+
+  // ---------------------------------------------------------------- render everything
+  function renderAll(keepPage) {
+    renderCoins();
+    renderTabBar();
+    put(bannerSlot, staleBanner(st.doc));
+    const ok = allowed();
+    const list = sortPositions(all().filter(inScope), st.sort, pnlOf, gapOf);
+    const pin = st.pin ? list.findIndex((p) => p.id === st.pin) : -1;
+    if (pin > 0) list.unshift(...list.splice(pin, 1));
+    if (!list.length) { put(posBody, emptyPos()); } else {
+      if (posBody.firstChild !== posPager.el) put(posBody, posPager.el);
+      if (st.firstOpen && !wide && (ok ? liveState().state !== "wait" : true)) {     // the top row starts open (once)
+        st.firstOpen = false;
+        st.open.add(list[0].id);
+      }
+      posPager.set(list, keepPage);
+    }
+    for (const id of [...cards.keys()]) if (!all().some((p) => p.id === id)) cards.delete(id);
+    renderSum();
+    if (!st.doc || st.doc.status) ladder.loading(st.doc ? "준비 중" : "불러오는 중");
+    else ladder.set(all().filter(inScope), markOf, ok, waitKo());
+    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, ok, keepPage, waitKo());
+    if (st.tab === "trd" && trPane.loaded) trPane.render(keepPage);
+    paintLive();
   }
-  async function pollLive() {
-    try {
-      const d = await ctx.api("/api/live");
-      st.live = d;
-      if (d && !d.stale && !d.unavailable && !d.off) st.liveAt = Date.now();
-    } catch (e) { if (e && e.name === "AbortError") return; }
-    paint();
-  }
-  ctx.onLeague(paint);
-  await pollLive();
-  ctx.every(10000, pollLive);
+  const onLiveTick = () => {
+    const ok = allowed();
+    for (const c of cards.values()) if (c.el.isConnected) { c.el.update(markOf(c.el.pos.coin), ok, waitKo()); sparkOf(c.el); }
+    if (st.firstOpen && st.doc && !wide) renderAll(true);
+    renderSum();
+    if (st.doc && !st.doc.status) ladder.set(all().filter(inScope), markOf, ok, waitKo());
+    if (st.tab === "ord" && st.doc) ordPane.set(all().filter(inScope), markOf, ok, true, waitKo());
+    paintLive();
+  };
+  const focusAcct = () => {
+    if (!st.focus || !st.doc || st.doc.status) return;
+    const p = all().find((x) => x.id === st.focus);
+    st.focus = null;
+    if (!p) return;
+    if (!inGroup(p, st.grp)) { st.grp = "all"; grpSel.value = "all"; }
+    st.coin = p.coin;
+    st.tab = "pos";
+    st.open.add(p.id);
+    st.countsKey = ""; tabKey = "";
+    st.pin = p.id;
+    showTab(false);
+    renderAll(false);
+    ctx.setQuery({});                                          // the address loses ?acct= (a reload does not jump again)
+    const c = cards.get(p.id);
+    if (c && c.el.isConnected && typeof c.el.scrollIntoView === "function") {
+      c.el.scrollIntoView({block: "center", behavior: K4.reduced() ? "auto" : "smooth"});
+      K4.flash(c.el, null);
+    }
+  };
+
+  // ---------------------------------------------------------------- wiring
+  const onWide = () => {
+    const w = !!(wideMq && wideMq.matches);
+    if (w === wide) return;
+    wide = w;
+    el.classList.toggle("ps-wide", wide);
+    notePos();
+    renderAll(true);
+  };
+  el.classList.toggle("ps-wide", wide);
+  if (wideMq) wideMq.addEventListener("change", onWide);
+  renderTabBar();
+  showTab(false);
+  renderAll(true);
+  ctx.onPositions((d) => {
+    const gen = d ? `${d.generated_ms}|${d.done_ms}|${d.catching_up}|${d.old}` : "";
+    st.doc = d;
+    renderAll(true);
+    if (gen !== st.lastGen) {
+      st.lastGen = gen;
+      if (st.tab === "trd" && trPane.loaded) trPane.load();
+    }
+    focusAcct();
+  });
+  ctx.onLive(onLiveTick);
+  ctx.onLeague(() => { for (const c of cards.values()) c.key = ""; if (st.doc) renderAll(true); });
+  ctx.every(30000, () => { if (st.doc) paintLive(); });
+  return () => { if (wideMq) wideMq.removeEventListener("change", onWide); };
 }

@@ -150,8 +150,8 @@ def test_coin_end_matches_hunt_load_study_data(tmp_path, patched):
     os.makedirs(os.path.join(d, "5m"))
     os.makedirs(os.path.join(d, "funding"))
     man = {"symbols": []}
-    for s, x in arrays.items():
-        np.savez(os.path.join(d, "5m", f"{s}.npz"), ts=x["ts"], **{k: x[k].astype(np.float32)
+    for s, x in arrays.items():                              # the 5m files are float64 (H 2, W 9), as the feed's bars
+        np.savez(os.path.join(d, "5m", f"{s}.npz"), ts=x["ts"], **{k: x[k].astype(np.float64)
                                                                    for k in ("o", "h", "l", "c", "v", "qv")})
         np.savez(os.path.join(d, "funding", f"{s}.npz"), ts=x["fts"], rate=x["frate"])
         nz = x["ts"][x["qv"] > 0]

@@ -48,7 +48,11 @@ def simulate_hourly(mk, bank, cands: dict, prm: np.ndarray) -> tuple:
 
 
 def params_of(variant: dict) -> np.ndarray:
-    return H.params(variant["r"], "base", variant["risk_cap"], H.START_WALLET, variant["b_div"])
+    """The engine's parameter vector of an account variant (huntbot.systems.variants): the tested machine at its r, or
+    a goal-size R1 board cell (W 7.3 machine A / B) through its engine overrides. No override = the reviewed vector."""
+    p = H.params(variant["r"], "base", variant["risk_cap"], H.START_WALLET, variant["b_div"])
+    ov = variant.get("overrides")
+    return H.with_overrides(p, ov) if ov else p
 
 
 # ---------------------------------------------------------------- stops in force (probe)

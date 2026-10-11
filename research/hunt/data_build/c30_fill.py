@@ -93,9 +93,9 @@ def main():
                     n = len(kdf)
                     new = {"ts": kdf[0].values.astype(np.int64)}
                     for c, j in zip(["o", "h", "l", "c", "v", "qv"], [1, 2, 3, 4, 5, 7]):
-                        new[c] = kdf[j].values.astype(np.float32)
+                        new[c] = kdf[j].values.astype(np.float64)
                     for c in ["mo", "mh", "ml", "mc"]:
-                        new[c] = np.full(n, np.nan, np.float32)
+                        new[c] = np.full(n, np.nan, np.float64)
                     for k in a:
                         a[k] = np.concatenate([a[k], new[k]])
                     o = np.argsort(a["ts"], kind="stable")
@@ -114,7 +114,7 @@ def main():
                 if len(idx):
                     sub = mdf.loc[ts[idx]]
                     for c, j in zip(["mo", "mh", "ml", "mc"], [1, 2, 3, 4]):
-                        a[c][idx] = sub[j].values.astype(np.float32)
+                        a[c][idx] = sub[j].values.astype(np.float64)
                     fill["mark_bars_filled"] = int(len(idx))
                     changed = True
         if changed:
