@@ -3,12 +3,16 @@
 (한국어 설명: `README_KO.md`. 이 파일은 계산 전에 고정하는 규칙입니다. 결과를 본 뒤에는 바꾸지 않고, 바꿀 일이 생기면
 `DEVIATIONS.md`에 따로 적습니다.)
 
-**Status: DRAFT, written 2026-10-11 (about 15:50 UTC), revised about 16:40 UTC after two reviews (section 22.4). Not
-pinned.** No code for this study exists in the repository yet. The only computations behind this draft are the
-practice-period feasibility runs and review re-runs of section 22. They used signals whose bar closed before 2024-01-01
-only. Nothing from 2024-01-01 on was read, computed or printed, and 2020 was not used. Section 2 is the main session's reading of the owners' words. **It is an assumption the owners can correct**,
-and so is every default of section 21. The open questions of section 21 are closed (by the owners, or by the default in
-brackets) before the pin.
+**Status: DRAFT, written 2026-10-11 (about 15:50 UTC), revised about 16:40 UTC after two reviews (section 22.4) and
+about 21:30 UTC after the owners' answers (section 22.5). Not pinned.** No code for this study exists in the repository
+yet. The only computations behind this draft are the practice-period feasibility runs and re-runs of section 22. They
+used signals whose bar closed before 2024-01-01 only. Nothing from 2024-01-01 on was read, computed or printed, and 2020
+was not used.
+
+**All questions are closed** (section 21, a decision log since 2026-10-12 KST). The owners answered three: the ROE is
+read after fees (Q1), the 4h cap is 30% (Q2), and track 2 runs on its own server after the hunt server is Destroyed
+(Q15). Every other question closed at its default. The status stays DRAFT until the code is written, reviewed and
+pinned.
 
 Pinning means `research/hiwr/PREREG_HIWR.sha256` over this file, the study's code and the files of section 17.3. The
 code refuses `select` without a matching pin. It refuses the confirm stage until the picks' hash is appended to the pin
@@ -37,7 +41,7 @@ Their overall goal is $1,000 → x5 .. x100 in a month. The agreed process for e
 Take each strategy and timeframe (15m, 30m, 1h, 4h). Is there one setting, with weekend entries skipped, that passes
 on data its choice never saw (the confirm period)? A setting is:
 * the strategy's own indicator numbers;
-* a take-profit inside the owners' ROE range at 30x, 40x or 50x;
+* a take-profit inside the owners' ROE range at 30x, 40x or 50x, read after fees (2.1);
 * a stop wider than the take-profit;
 * a taker or a maker take-profit order.
 
@@ -51,37 +55,38 @@ It passes when it does all four of these:
 Condition (d) is needed because (a) alone is no evidence. With a +0.30-0.40% take-profit and a wider stop, random
 entries already win 60-80% of the time (section 15).
 
-## 2. The owners' targets as read here (open for correction, section 21)
+## 2. The owners' targets (confirmed 2026-10-12, section 21)
 
-### 2.1 Take-profit
+### 2.1 Take-profit: ROE after fees (Q1)
 
-"30배 9%에서 12%" is read as a per-trade take-profit at an ROE of 9-12% on the isolated margin of a 30x position.
-Likewise 40x is 12-15% and 50x is 15-18%. ROE = price move from the fill x leverage, **before fees**. That is the ROE
-Binance shows on its position screen. In price terms:
+"30배 9%에서 12%" is a per-trade take-profit at an ROE of 9-12% on the isolated margin of a 30x position. Likewise 40x
+is 12-15% and 50x is 15-18%. **The ROE is read after fees** (owners, 2026-10-12: "1번은 수수료 뺀후고"). This is how
+the rule bot's own `default_tp_roe` and the full grid's ROE take-profits are defined. The TP price move from the fill
+is the ROE step divided by the leverage plus the round-trip cost of 7.7:
+* **taker TP:** t = ROE / L + 0.14%;
+* **maker TP:** t = ROE / L + 0.09%.
 
-| tier | owners' ROE range | TP steps used (low / mid / high) | price move from the fill |
-|---|---|---|---|
-| 30x | 9-12% | 9 / 10.5 / 12% | +0.30 / +0.35 / +0.40% |
-| 40x | 12-15% | 12 / 13.5 / 15% | +0.30 / +0.3375 / +0.375% |
-| 50x | 15-18% | 15 / 16.5 / 18% | +0.30 / +0.33 / +0.36% |
+| tier | owners' ROE range (after fees) | TP steps used (low / mid / high) | taker TP: price move from the fill | maker TP: price move from the fill |
+|---|---|---|---|---|
+| 30x | 9-12% | 9 / 10.5 / 12% | +0.44 / +0.49 / +0.54% | +0.39 / +0.44 / +0.49% |
+| 40x | 12-15% | 12 / 13.5 / 15% | +0.44 / +0.4775 / +0.515% | +0.39 / +0.4275 / +0.465% |
+| 50x | 15-18% | 15 / 16.5 / 18% | +0.44 / +0.47 / +0.50% | +0.39 / +0.42 / +0.45% |
 
-All three tiers ask for the same move of about 0.30-0.40% in price. Leverage does not change what happens to a trade
-in price. For a fixed notional, the tier changes only three things:
+* A TP exit then keeps the step's ROE. The 0.14% and 0.09% include the entry slippage, which the fill F already
+  contains. So a TP exit nets about 0.02% of notional more than the step, before funding (0.6 / 0.8 / 1.0 ROE points
+  at 30 / 40 / 50x). The rule keeps the owners' formula as given.
+* Funding is not in the target, because it is not known at the fill. It is charged as it falls (7.6).
+* A 1% stop costs about 34% ROE at 30x, 46% at 40x and 57% at 50x ((1.0 + 0.14) x L).
+* **The gross reading** (ROE before fees, as on Binance's position screen; price move = ROE / L, +0.30 .. +0.40%) is
+  a comparison only (R4). It was the draft's default before the owners answered.
+
+All three tiers ask for about the same move in price: +0.44-0.54% with a taker TP, +0.39-0.49% with a maker TP.
+Leverage does not change what happens to a trade in price. For a fixed notional, the tier changes only three things:
 * how far away the liquidation price is, and so which stops fit (7.4);
 * the margin locked, and with it the most an isolated position can lose;
 * the bracket tier.
 
 So the tier is a margin label on one backtest plus a stop-room limit. Section 8.4 reports the margin % it implies.
-
-**In ROE after costs** (what the account actually keeps): a 30x 9% take-profit (+0.30%) nets about 4.8% ROE with a
-taker TP ((0.30 - 0.14) x 30) and 6.3% with a maker TP ((0.30 - 0.09) x 30); the 40x 12% and 50x 15% steps net 6.4 / 8.4%
-and 8.0 / 10.5%. A 1% stop costs about 34% ROE at 30x, 46% at 40x and 57% at 50x ((1.0 + 0.14) x L).
-
-**The "net" reading is not used unless the owners choose it (Q1).** It reads the ROE as after the round-trip cost, the
-way the rule bot's own `default_tp_roe` and the full grid's ROE take-profits are defined. The price move is then
-ROE / L + 0.14% with a taker TP and ROE / L + 0.09% with a maker TP (7.7), i.e. +0.44 .. +0.54% (taker) and
-+0.39 .. +0.49% (maker). If the owners choose it before the pin, it replaces the price column above; nothing else
-changes.
 
 ### 2.2 Drawdown
 
@@ -92,8 +97,8 @@ caps:
 |---|---|---|---|---|
 | cap | 15% | 20% | 30% | 30% |
 
-The owners named no 4h cap; 30%, the same as 1h, is a default (Q2). The cap is met by choosing the margin per trade on
-the practice period (8.4). It is not met by changing the strategy.
+The owners named 15m, 30m and 1h in the brief and confirmed 30% for 4h on 2026-10-12 ("4시간봉 낙폭 30% 맞고", Q2).
+The cap is met by choosing the margin per trade on the practice period (8.4). It is not met by changing the strategy.
 
 ### 2.3 Win rate
 
@@ -218,12 +223,13 @@ imported read-only):
 * thresholds with a neutral point use f = 0.25 .. 2;
 * every valid combination: 779,328 core + 236,235 DeepSeek = **1,015,563 combos**, defaults included.
 
-The smaller 5-step subset is the alternative (Q4).
+The smaller 5-step subset is not used (Q4).
 
 ### 6.3 Exit configs per combo
 
 Each combo is tried with 3 tiers x 3 TP steps (2.1) x 9 stops (7.3) x 2 TP fills (7.2) = 162 exit configs. That makes
-about 164.5 million (combo, exit) pairs.
+about 164.5 million (combo, exit) pairs. The TP price of a step depends on the fill (2.1): at the same ROE step a taker
+TP lies 0.05% further from the fill than a maker TP.
 
 ### 6.4 Entry conditions
 
@@ -251,8 +257,8 @@ about 164.5 million (combo, exit) pairs.
 
 ### 7.2 Take-profit
 
-The level is T = F x (1 + t) for a long (F x (1 - t) for a short), where t is the TP step's price move. It is placed
-at the fill.
+The level is T = F x (1 + t) for a long (F x (1 - t) for a short), where t is the TP step's price move for that fill
+(2.1): ROE / L + 0.14% for a taker TP, ROE / L + 0.09% for a maker TP. It is placed at the fill.
 
 * **Taker TP** (a take-profit-market order):
   - It triggers when the 1m high reaches T (low for a short).
@@ -280,7 +286,8 @@ at the fill.
 * ATR14 = `_vendor_fg().atr(frame, 14)`, as in the full grid.
 * It fills at S x (1 - 0.0002) for a long when the 1m low touches S, or at a gapped open x (1 - 0.0002). Taker fee.
 * **The stop must be wider than the take-profit.** A candidate whose stop distance from the fill, |F - S| / F, is not
-  greater than t is skipped and counted as "stop inside TP". Only ATR stops on calm bars can hit this.
+  greater than t is skipped and counted as "stop inside TP". Only ATR stops on calm bars can hit this: the narrowest
+  price stop (0.60%, about 0.62% from the fill) is wider than the widest TP (+0.54%).
 
 ### 7.4 Stop room at the tier (isolated liquidation)
 
@@ -327,7 +334,8 @@ is minus the margin minus the entry fee.
   - Taker 0.05% on every market fill, plus 0.02% slippage against every market fill.
   - Maker 0.02% on maker TP fills.
   - Funding as charged.
-* **Round trip:** 0.14% with a taker TP or a stop; 0.09% with a maker TP.
+* **Round trip:** 0.14% with a taker TP or a stop; 0.09% with a maker TP. These are the costs the ROE reading adds to
+  the TP price (2.1). They stay fixed in the TP price when costs are doubled for the cost-x2 test.
 * **Cost x2:** taker 0.10%, slippage 0.04%, maker 0.04%; funding unchanged.
 * **Net result r.** Per notional: the price return from F to the exit price, minus fees and funding per notional (the
   prototype's `trade_r`).
@@ -388,8 +396,8 @@ For a pair at its tier L, **f* (the registered size)** is the largest f that mee
 **Why (i').** If the size is fitted so that the SEL path sits exactly at the cap, a genuine edge that does not change
 between the periods still breaks the cap on TEST about half the time, because the TEST path is a new draw of the same
 luck (iid simulation, `review_stats/t2_sim.py`: 0.45-0.49; 0.29 when the 30x ceiling binds). T2 would then mostly test
-drawdown-path luck. At the bootstrap 95% size the breach is about 0.10. The SEL feasibility shows the same: at f_path,
-24% and 49% of resampled SEL paths of the two 4h B-passers break the cap (15.4).
+drawdown-path luck. At the bootstrap 95% size the breach is about 0.10. The SEL re-run shows the same: at f_path,
+13-45% of the resampled SEL paths of the eight net-reading 4h B-passers break the cap (15.4).
 
 **The bootstrap.** The pair's SEL account trades (8.2, taken at the SEL path) are grouped by the UTC week (Monday) of
 their fill minute; SEL has 157 such weeks, empty ones included. A resample draws 157 weeks with replacement and runs
@@ -465,7 +473,8 @@ A pair is eligible when all of (a) to (e) hold.
 * **(e) SEL coin-flip check** (an addition, Q11). The pair's SEL mean r is above the 95th percentile of coin-flip seeds
   1-200 (control (a) of section 11, flipped per signal bar as there, run on SEL). A check against the seeds' mean would
   remove nothing: coin-flip means sit near minus the cost (about -0.10%), and (a) already asks for mean > 0 and
-  cost-x2 mean > 0. Every B-passer of the feasibility beat its coin-flip mean.
+  cost-x2 mean > 0. Every B-passer of the feasibility beat its coin-flip mean, and the 8 net-reading B-passers of the
+  re-run (15.3) were also above the 95th percentile of 200 such seeds.
 
 ### 10.4 Plateau score
 
@@ -564,10 +573,10 @@ How T6 works:
 | **R1 with weekends** | the same pick with weekend entries allowed and its own f* from SEL with weekends; the trade list and the account on SEL and TEST, beside every verdict (the comparison the owners asked for) |
 | **R2 other tiers** | the pick's TP price, stop and fill at each other tier whose ROE range contains that price (stop room changes): trades, win rate, mean, f*, margin % |
 | **R3 loose buffer** | 0.2% only, with the count of liquidations |
-| **R4 other ROE reading** | net if gross is the rule (2.1) |
+| **R4 gross ROE reading** | the pick with the TP at the gross reading (ROE before fees, price move ROE / L, 2.1), its own f* from SEL; the trade list and the account on SEL and TEST |
 | **R5 coins** | old six alone, new 24 alone, the 22 still-listed coins alone, the 8 proxy coins alone. The label "carried by the old six" when the new-24 TEST mean r <= 0 |
 | **R6 extra 2020** | the trade list and the account at f* |
-| **R7 maker realism** | TP fills only with a pierce of δ = 0.01% and 0.02% beyond T; the share of maker TP exits whose pierce was under 0.02%; the share of TP fills inside the entry minute, and the result when those trades must wait for a later minute; the taker version of a maker pick (the SEL feasibility passers fail cost x2 with a taker TP, 15.4) |
+| **R7 maker realism** | TP fills only with a pierce of δ = 0.01% and 0.02% beyond T; the share of maker TP exits whose pierce was under 0.02%; the share of TP fills inside the entry minute, and the result when those trades must wait for a later minute; the taker version of a maker pick at the same ROE step (TP 0.05% further; the SEL net-reading passers fail cost x2 with a taker TP, 15.3) |
 | **R8 goal board** | monthly multiples at f* by the month bootstrap of `research/fullgrid/sizing.py` (4 weekly blocks drawn, 10,000 draws): P(month >= x2, x5, x10, x100), median month; the 33-month compounding |
 | **R9 DD bootstrap** | the 95th percentile of the week-block bootstrap max DD (8.4) and the share of paths over the cap, at f* and at f_path, on SEL and on TEST; the TEST account at f_path (the Q8 alternative) |
 | **R10 flat by Saturday** | open positions closed at Saturday 00:00 UTC |
@@ -768,7 +777,7 @@ Rules after the result:
   - It trades the coins of the 30 that still trade (22).
   - It runs on the track 1 paper server `hunt-judge` beside huntbot (Q16).
   - Its accounts are shown side by side with track 1, never merged.
-  - huntbot itself is 5m-based and too coarse for a 0.3% TP against a 0.6-1.5% stop.
+  - huntbot itself is 5m-based and too coarse for a 0.4-0.5% TP against a 0.6-1.5% stop.
 * **Accounts per pick**, $1,000 each:
   - main: f* at its tier, with the pick's fill;
   - coin-flip twin;
@@ -886,7 +895,6 @@ The server recipe is the hunt's: CPU Optimized, 32 vCPU, Tokyo, Ubuntu 24.04, ab
 | plateau, accounts, f_path and f* (1m mark-to-market, 10,000 bootstrap paths per bisection step) for pairs passing B; SEL coin-flip seeds 1-200 for those still eligible | about 1 h |
 | **select, in total** | **about 8-9 h, about $8-10** |
 | confirm stage, after the picks' hash: TEST 1m download (about 2.3 GB of zips), the picks only, 2 x 100,000 control seeds (sums over precomputed outcomes; 1,000 with accounts), the reads | about 1 h |
-| with the 5-step subset instead (Q4) | about 25-40 CPU-h; 1-1.5 h wall for select |
 
 **Basis for the estimates:**
 * The scratch prototype ran on this shared 4-core box with one process, 6 coins, SEL and default numbers: 15m 1,243 s,
@@ -894,24 +902,22 @@ The server recipe is the hunt's: CPU Optimized, 32 vCPU, Tokyo, Ubuntu 24.04, ab
 * The full grid's own estimate was 70-80 CPU-h for 6 coins over 2020-2026.
 * 30 coins give about 5.0 times the 6-coin SEL bars.
 
-**Which server:**
-* The code does not exist yet; the select run starts only after the pin.
-* The hunt server (`hunt-compute`, running the pinned hunt with all CPUs since 2026-10-11 15:12 UTC) is not shared.
-  Track 2 never touches `/root/hunt` and never runs beside the hunt.
-* Option (a): after the hunt prints 끝. and its results are pushed, clone into `/root/hiwr` on the same server before it
-  is Destroyed. This works only if hiwr is pinned by then.
-* Option (b): a separate server, `hiwr-compute` [default].
-* A server rented before the pin costs about $1 an hour while it waits (Vultr bills a stopped server too). A
-  wait_go-style line, as the hunt used, can start the run as soon as the pin lands.
-* The confirm stage downloads its own data and can run later on any server.
+**Which server (Q15, decided 2026-10-12).** Track 2 runs on its **own server, after the hunt server is gone**. The
+owners: "32 vcpu로 두대를 못돌리는거야? 그러면 따로 돌려야지". Vultr's monthly fee limit already refused a 64 vCPU server,
+so two 32 vCPU servers at once would likely be refused too. The order:
+1. The code is written, reviewed and pinned (the kit). Nothing of track 2 runs before that.
+2. The hunt (track 1) finishes on `hunt-compute`, its results are pushed, and the owners Destroy that server. Track 2
+   never touches `/root/hunt` and never runs beside the hunt.
+3. The owners create a new server, `hiwr-compute`, with the same recipe (32 vCPU), and paste one line from
+   `research/hiwr/SERVER_KO.md`. Like the hunt's `wait_go.sh`, that line clones the branch, waits until the pinned
+   commit is published on it, checks the pins, and starts `select`. If the pin is already published, it starts at once.
+4. After `select` the results are pushed and the server is Destroyed.
+
+Notes:
+* The confirm stage downloads its own data. It needs the picks' hash in the pin (10.6) and can run later on any server.
+* A server rented while it waits costs about $1 an hour (Vultr bills a stopped server too), so it is created only after
+  step 2.
 * This dev box cannot hold the 30-coin 1m data (about 2 GB free, shared).
-* **The owners said during this revision (2026-10-11 UTC) that they had created a server.** Which one is not yet known:
-  `hiwr-compute` for this study, `hunt-judge` (track 1's paper server, `docs/huntbot-ko.md`), or another. If it is meant
-  for track 2, nothing can run on it yet: the open questions of section 21 must be closed, and the code written,
-  reviewed and pinned first. That takes at least one to two days after the answers. Two ways:
-  - (a) [default] Destroy it now and create it again after the pin (about 10 minutes of setup);
-  - (b) keep it and arm a wait_go line; it costs about $24 a day while it waits.
-  Track 2 is never put on `hunt-compute` while the hunt runs. README_KO.md has the owners' version.
 
 ## 18. DeepSeek (D11)
 
@@ -926,9 +932,9 @@ The server recipe is the hunt's: CPU Optimized, 32 vCPU, Tokyo, Ubuntu 24.04, ab
 
 * **SEL has been looked at closely.** The loss autopsy, the full grid's SEL selection and this study's feasibility runs
   all used it. The feasibility runs used default numbers on the owners' TP steps and 7 of the 9 stops (no 0.75% and
-  1.25%), without the stop-inside-TP skip (section 22.1). The design (TP steps, stop grid, buffer, weekend rule, size
-  rule) was made knowing those results. That is allowed in the practice period, but every SEL figure of a pick is in
-  sample.
+  1.25%), without the stop-inside-TP skip (section 22.1); the net-reading re-run (22.5) used all 9 stops and the skip.
+  The design (TP steps, stop grid, buffer, weekend rule, size rule) was made knowing those results. That is allowed in
+  the practice period, but every SEL figure of a pick is in sample.
 * **TEST is not blind on the old six.** The owners and the main session have read the full grid's results on
   2024-2026: its 711 picks and the default numbers under the house exits, including roe10, a fixed limit TP +0.34% to
   +0.64% from the fill at the house leverage. They know that the full grid's SEL picks did not hold up on its confirm
@@ -963,54 +969,39 @@ The server recipe is the hunt's: CPU Optimized, 32 vCPU, Tokyo, Ubuntu 24.04, ab
 * timeframes other than the four, and coins outside the 30;
 * an AI judgment layer;
 * leverage other than 30x, 40x and 50x;
-* the net ROE reading, unless the owners choose it (Q1).
+* the gross ROE reading as a rule (it is read R4 only, Q1).
 
-## 21. Open questions for the owners (closed before the pin; default in brackets)
+## 21. Decision log (all closed 2026-10-12 KST)
 
-1. **ROE reading.** Gross (the ROE on Binance's position screen, before fees) or net (after the round trip: 0.14%
-   with a taker TP, which makes the TP +0.44% .. +0.54%; 0.09% with a maker TP, +0.39% .. +0.49%)? [gross]
-2. **4h drawdown cap.** The owners named 15m, 30m and 1h only. [30%, the same as 1h]
-3. **The 8 coins that stopped trading.** Options: a proxy table (the SAND/COMP table); exclude them (survivorship);
-   old six only. [proxy; the 22 still-listed coins and the old six as reads, R5]
-4. **Numbers grid.** The full 9-step 1/3x..3x grid, as asked (about 8 h on 32 vCPU, about $8-10). Or the 5-step
-   subset: lengths x (1/2, 2/3, 1, 1.5, 2), thresholds f = 0.5 .. 1.5. It has fewer values, so less selection luck, and
-   takes about 1-1.5 h. [9-step]
-5. **Picks per cell.** One, any tier; or one per tier, up to 3 per cell, which triples the multiple-testing load.
-   [one]
-6. **Stop-room buffer.** The house buffer max(0.2%, 1 ATR), or 0.2% only. The 0.2% buffer lets more trades fit at
-   40x/50x and on 1h/4h, with more liquidation risk. [house; 0.2% as read R3]
-7. **Size ceiling.** Margin at most L% of the wallet, and a single loss at most 15% of the wallet: the rule bot's and
-   the paper rules' own limits. [yes]
-8. **f* basis.** The 95th percentile of a week-block bootstrap DD (8.4), or the SEL path itself (f_path). Sized on the
-   SEL path alone, a genuine edge that does not change breaks the cap on TEST in about 45-50% of cases (29% when the
-   30x ceiling binds), so T2 would mostly test drawdown luck; at the bootstrap size about 10%. The bootstrap size is
-   smaller: for the 4h SEL B-passers, margin 12-21% instead of 20-27%, and +2.4-2.5% a month instead of +3.2-3.9%.
-   [bootstrap 95%; f_path shown beside it, R9]
-9. **Weekend.** Skip entries only, so a Friday position keeps running; or be flat by Saturday 00:00 UTC. [entries only;
-   flat-by-Saturday as read R10]
-10. **Weekend clock.** UTC Saturday 00:00 - Monday 00:00 (KST Saturday 09:00 - Monday 09:00), or KST Saturday 00:00 -
-    Monday 00:00. [UTC]
-11. **SEL coin-flip check as a selection condition** (10.3 e): the pair's SEL mean above the 95th percentile of 200
-    coin-flip seeds. An addition not in the brief. A check against the seeds' mean would remove nothing. [yes, at the
-    95th percentile]
-12. **FOMC/NFP 120-minute blackout as an entry rule.** The calendar `research/hunt/macro_calendar.json` is still
-    unverified. [no; at most a read once the calendar is verified]
-13. **Positions at once.** One at a time, or up to 3 with a same-side cap. [one; 3 is not run]
-14. **Starting wallet.** [$1,000, the owners' goal]
-15. **Server.** A separate `hiwr-compute` server once the kit is pinned, or the hunt server after the hunt is done.
-    The owners said they created a server on 2026-10-11: which one is it, and Destroy it until the pin or keep it
-    waiting at about $24 a day (17.4)? [separate; Destroy until the pin if it is for track 2]
-16. **Paper accounts on `hunt-judge` next to track 1.** [yes]
-17. **Minimum trades.** 150 on SEL (100 in the account), 100 on TEST. [yes]
-18. **TP steps.** Low, mid and high of each tier's range, or only the two ends. [low / mid / high]
-19. **Stop grid.** ATR 1 / 1.5 / 2 / 3 and price 0.60 / 0.75 / 1.00 / 1.25 / 1.50%. [yes]
-20. **Additions not in the brief**: the stop must be wider than the TP; the house buffer; one position at a time; the
-    account minimum; the plateau rule; T6 as the largest of three p-values; mark-to-market DD; the bootstrap size; the
-    maker TP filled at T; controls that keep bar groups together; 100,000 control seeds; the 참고 rule. [keep]
-21. **Exit plateau with thinned neighbours** (10.3 b). A neighbour with fewer than 150 trades only because more trades
-    are skipped: check it on mean > 0 and cost-x2 mean > 0 when it has 50-149 trades, and treat it as missing below 50.
-    Or keep the strict rule, under which nearly every ATR-stop pair on 1h and 4h fails through its wider neighbour.
-    [relaxed]
+The owners answered Q1, Q2 and Q15 on the morning of 2026-10-12 KST, in Korean (quoted). They had been told that every
+other question closes at its default unless they answer; they did not object, so those closed at their defaults.
+Earlier decisions stay as they were: weekends excluded on all four timeframes, 4h included (with weekends only as a
+comparison, R1); caps 15m 15%, 30m 20%, 1h 30%; win rate at least 70% after costs; SEL 2021-2023 for the search and
+TEST 2024-01 .. 2026-09 looked at once.
+
+| Q | question | decision | by |
+|---|---|---|---|
+| 1 | ROE reading | **net, after fees**: TP price move = ROE / L + 0.14% (taker TP) or + 0.09% (maker TP), 2.1. Gross is read R4 only | owners: "1번은 수수료 뺀후고" |
+| 2 | 4h drawdown cap | **30%**, the same as 1h (2.2) | owners: "4시간봉 낙폭 30% 맞고" |
+| 3 | the 8 coins that stopped trading | proxy table (SAND/COMP, section 4); the 22 still-listed coins and the old six as reads (R5) | default |
+| 4 | numbers grid | full 9-step grid, 1/3x .. 3x (6.2); the 5-step subset is not run | default |
+| 5 | picks per cell | one, any tier (10.5) | default |
+| 6 | stop-room buffer | house, max(0.2%, 1 ATR) (7.4); 0.2% only as read R3 | default |
+| 7 | size ceiling | margin at most L% of the wallet, one loss at most 15% of the wallet (8.4) | default |
+| 8 | f* basis | bootstrap 95% (8.4); f_path shown beside it (R9) | default |
+| 9 | weekend | entries only skipped; flat by Saturday as read R10 | default |
+| 10 | weekend clock | UTC Saturday 00:00 - Monday 00:00 (KST Saturday 09:00 - Monday 09:00) | default |
+| 11 | SEL coin-flip check as a selection condition | yes, above the 95th percentile of 200 seeds (10.3 e) | default |
+| 12 | FOMC/NFP blackout as an entry rule | no; at most a read once the calendar is verified | default |
+| 13 | positions at once | one | default |
+| 14 | starting wallet | $1,000 | default |
+| 15 | server | **a separate 32 vCPU server, created after the hunt server has finished and been Destroyed** (17.4). Vultr's monthly fee limit refused a 64 vCPU server, so two 32 vCPU servers at once would likely be refused too | owners: "32 vcpu로 두대를 못돌리는거야? 그러면 따로 돌려야지" |
+| 16 | paper accounts | on `hunt-judge` next to track 1 (16.1) | default |
+| 17 | minimum trades | 150 on SEL (100 in the account), 100 on TEST | default |
+| 18 | TP steps | low / mid / high of each tier's range | default |
+| 19 | stop grid | ATR 1 / 1.5 / 2 / 3 and price 0.60 / 0.75 / 1.00 / 1.25 / 1.50% | default |
+| 20 | additions not in the brief | kept: stop wider than the TP, house buffer, one position at a time, the account minimum, the plateau rule, T6 as the largest of three p-values, mark-to-market DD, the bootstrap size, the maker TP filled at T, controls that keep bar groups together, 100,000 control seeds, the 참고 rule | default |
+| 21 | exit plateau with thinned neighbours | relaxed (10.3 b): 50-149 trades need mean > 0 and cost-x2 mean > 0; below 50 the neighbour counts as missing | default |
 
 ## 22. Before this file was fixed
 
@@ -1065,7 +1056,7 @@ DeepSeek figures), and `hiwr/work/` (`tpgrid.py`, `feasA.py`, `parity_a.py`, `pa
 ### 22.3 This draft (2026-10-11, about 15:50 UTC)
 
 * Written before any code of `research/hiwr` and before any 1m data of the new 24 coins was downloaded.
-* The interpretation of section 2 is the main session's. The owners have not yet confirmed it.
+* The interpretation of section 2 was the main session's. The owners answered on 2026-10-12 (22.5).
 
 ### 22.4 Review fixes (2026-10-11, about 16:40 UTC, SEL only)
 
@@ -1090,3 +1081,33 @@ decimals. Their confirmed findings changed this file:
 * Re-runs: `fix/acct_fix.py` (S4_BB_BBP 4h and S5_DONCHIAN_MFI 1h at default numbers, 6 coins, data cut at 2024-01-01
   on load, unresolved trades dropped), `review_stats/t2_sim.py` (synthetic), `review_feas/stopinside.py` (bar ATR
   only). All in the session scratchpad `hiwr/`.
+
+### 22.5 Owners' answers and the net-reading re-run (2026-10-11, about 21:30 UTC = 2026-10-12 06:30 KST, SEL only)
+
+**Decisions.** The owners answered three questions on the morning of 2026-10-12 KST: Q1 net ROE ("1번은 수수료
+뺀후고"), Q2 4h cap 30% ("4시간봉 낙폭 30% 맞고"), Q15 a separate server after the hunt server is Destroyed ("32 vcpu로
+두대를 못돌리는거야? 그러면 따로 돌려야지"). All other questions closed at their defaults (section 21). Changed with them:
+2.1 (the net price table per tier and TP fill; gross becomes read R4), 2.2, 6.2, 6.3, 7.2, 7.3, 7.7, 8.4, 10.3 (e), R4,
+R7, 15 (net numbers), 16.1, 17.4 (server plan; the paragraph on a server the owners had created is removed), 19, 20,
+21 (a decision log) and the status line. The status stays DRAFT: no code exists yet.
+
+**Why a re-run.** The feasibility's net rows (22.1) priced the maker TP at ROE / L + 0.14%, not the registered + 0.09%,
+used 7 of the 9 stops and did not skip a stop inside the TP. Their counts were 0 / 0 / 0 / 6 (15m / 30m / 1h / 4h) with
+weekends skipped and 0 / 0 / 1 / 2 with weekends, and they could not say whether a net passer meets the exit plateau.
+So part B was re-run under the registered net rules before the counts were quoted.
+
+**The re-run** (session scratchpad `hiwrbuild/`: `netgrid.py`, `ana.py`, `acct_net.py`, `pierce.py`; outputs in
+`hiwrbuild/out/`).
+* Hygiene: the 1m arrays of the 6 old coins were cut at 2024-01-01 00:00 UTC right after loading, and the chart frames
+  were built from the cut arrays (no stored frame or outcome of the full grid was read). Signal-bar closes 2021-01-01 ..
+  2024-01-01; 2020 bars were indicator warm-up only; trades not resolved by the cut were dropped. Nothing from
+  2024-01-01 on was read, computed or printed.
+* Rules: the 36 core strategies at default numbers; 30x / 40x / 50x; TP steps at the net reading (taker + 0.14%, maker
+  + 0.09%) and at the gross reading for comparison; all 9 stops; the stop-inside-TP skip (7.3); the maker TP filled at
+  T (7.2); the house buffer; with and without weekends; three coin-flip seeds; cost x2 with the TP price unchanged.
+* Parity with the feasibility code: on every setting both runs share and where no stop-inside-TP skip applies, the
+  taker results are identical (trade counts and sums of r); the maker sums differ by at most 0.003 in total, from the
+  fill at T on a gapped open. The account script (`acct_net.py`, built on the review's independent minute loop)
+  reproduced the 8 passers' trade lists exactly.
+* Results: section 15 (counts, plateau, coin-flip check, maker realism, sizes).
+
