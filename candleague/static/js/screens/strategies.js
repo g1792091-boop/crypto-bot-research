@@ -33,7 +33,8 @@ export async function mount(el, ctx) {
       const picks = ix.cands.filter((c) => c.name === n).sort((a, b) => TFS.indexOf(a.tf) - TFS.indexOf(b.tf));
       const w = ws[n];
       return ui.card({plate: sm.ko, sub: `${n} · ${sm.family}`, id: `s-${n}`, cls: "cl-stratcard",
-        acts: h("span", {class: "row wrap"}, LK.kindChip(sm.kind), h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(n)}`}, "커스텀값 보기"))},
+        acts: h("span", {class: "row wrap"}, LK.kindChip(sm.kind), h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(n)}`}, "커스텀값 보기"),
+          h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(n)}`}, "진입 차트"))},
       h("div", {class: "cl-pickgrid"},
         h("div", {class: "stack tight"},
           h("h3", {class: "cl-h3"}, "어떻게 들어가나"),

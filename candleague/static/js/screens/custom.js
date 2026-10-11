@@ -96,6 +96,7 @@ export async function mount(el, ctx) {
       const changed = Object.keys(c.combo || {}).filter((k) => set.base && set.base.combo && JSON.stringify(set.base.combo[k]) !== JSON.stringify(c.combo[k])).length;
       return ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.name} · 바뀐 값 ${changed}개`, cls: "cl-pickcard",
         acts: h("span", {class: "row wrap"}, LK.kindChip(c.kind), LK.styleChip(pm.style),
+          h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(c.name)}`}, "진입 차트"),
           h("a", {class: "btn-line", href: `#/account/${encodeURIComponent(c.id)}`}, "계좌 자세히"))},
       h("div", {class: "cl-pickgrid"},
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "숫자"), paramTable(c, set.base, meta),

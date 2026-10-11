@@ -108,17 +108,31 @@ PUBLIC_FILES = frozenset(("tokens.css", "base.css", "login.css", "login.js", "ic
 META_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "strategies_ko.json")
 
 
-def klines_query(params) -> Optional[dict]:
-    """coin / tf / limit of /api/klines, whitelisted (None when anything is off)."""
-    from .live import COINS
+KLINE_END_MIN = 1_790_812_800_000            # 2026-10-01 00:00 UTC: the league's first day (an older end is refused)
+
+
+def klines_query(params, now_ms: Optional[int] = None) -> Optional[dict]:
+    """coin / tf / limit (and an optional ``end``, ms: the bars before it, for a past entry's chart) of /api/klines,
+    whitelisted (None when anything is off). ``end`` is rounded up to 24 bars of the timeframe so the cache serves
+    nearby entries with one answer; an end after now means the latest bars."""
+    from .live import COINS, TF_MS
     coin, tf = params.get("coin", ""), params.get("tf", "")
     try:
         limit = int(params.get("limit", "300"))
+        end = int(params["end"]) if params.get("end") not in (None, "") else None
     except ValueError:
         return None
     if coin not in COINS or tf not in KLINE_TFS or not 50 <= limit <= 1000:
         return None
-    return {"coin": coin, "tf": tf, "limit": limit}
+    if end is not None:
+        now = int(time.time() * 1000) if now_ms is None else now_ms
+        if end < KLINE_END_MIN:
+            return None
+        block = TF_MS[tf] * 24
+        end = -(-end // block) * block
+        if end > now:
+            end = None
+    return {"coin": coin, "tf": tf, "limit": limit, "end": end}
 
 
 def open_ok(host: str) -> bool:
@@ -286,7 +300,7 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         q = klines_query(req.query_params)
         if q is None:
             return JSONResponse({"error": "coin / tf / limit"}, status_code=400)
-        return JSONResponse(finite_json(live.klines(q["coin"], q["tf"], q["limit"])))
+        return JSONResponse(finite_json(live.klines(q["coin"], q["tf"], q["limit"], q["end"])))
 
     @app.get("/api/league")
     def league(req: Request):

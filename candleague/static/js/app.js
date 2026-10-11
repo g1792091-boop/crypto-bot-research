@@ -19,6 +19,7 @@ const MENU = [
   {id: "strategies", ko: "매매법", group: "detail"},
   {id: "weekly", ko: "주간 흐름", group: "detail"},
   {id: "terminal", ko: "터미널", group: "live"},
+  {id: "entries", ko: "진입 차트", group: "live"},
   {id: "positions", ko: "포지션", group: "live"},
   {id: "fills", ko: "체결 기록", group: "live"},
   {id: "status", ko: "서버 상태", group: "info"},
@@ -29,9 +30,9 @@ const GROUPS = [{id: "main", ko: "요약 · 점검"}, {id: "detail", ko: "매매
 const MENU_TITLE = {home: "요약 (첫 화면)", check: "점검 진행 (11/11 · 12/11 · 1/11 기준이 지금 어떤지)",
   rank: "순위표 (후보 38개와 비교 계좌)", compare: "5계좌 비교 (후보 · 1/4 · 청산만 · 기본값 · 동전)",
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
-  weekly: "주간 흐름 (주마다 후보 · 기본값 · 동전)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
+  weekly: "주간 흐름 (주마다 후보 · 기본값 · 동전)", entries: "진입 차트 (매매법마다 따로, 후보가 들어간 자리)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
 const SCREENS = {home: "home", check: "check", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
-  weekly: "weekly", terminal: "terminal", positions: "positions", fills: "fills", status: "status", howto: "howto",
+  weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
   account: "account"};
 const TITLE = "후보 리그";
 const START = "home";

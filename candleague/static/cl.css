@@ -193,3 +193,25 @@ tr.cl-bust td { opacity: .55; }
   .tbl.cl-params .cl-code { display: block; margin-left: 0; }
   .tbl.cl-params .cl-edge { margin-left: 0; }
 }
+
+/* 진입 차트: one chart per pick, grouped by strategy */
+.cl-erule { display: grid; gap: 4px; margin: 0; font-size: var(--t-xs); color: var(--ink-2); }
+.cl-erule > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: start; }
+.cl-erule dd { margin: 0; }
+.cl-egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.cl-ecard { display: grid; gap: 6px; align-content: start; align-self: start; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-md, 10px); background: var(--surface-2); min-width: 0; }
+.cl-enav[hidden] { display: none; }
+.cl-ehead, .cl-enav { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.cl-ehead b { font-size: var(--t-sm); }
+.cl-elink { font-size: var(--t-xs); color: var(--muted); }
+.cl-enav .btn-line { min-height: 28px; padding: 0 10px; }
+.cl-ewrap { position: relative; }
+.cl-ewrap[hidden] { display: none; }
+.cl-ebox { height: 230px; width: 100%; border-radius: 8px; overflow: hidden; background: var(--surface); }
+.cl-emsg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 12px; color: var(--muted);
+  font-size: var(--t-xs); background: color-mix(in srgb, var(--surface) 82%, transparent); border-radius: 8px; }
+.cl-emsg[hidden] { display: none; }
+.cl-ecap { display: grid; gap: 3px; font-size: var(--t-xs); }
+.cl-ecl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cl-esel .select { min-width: 220px; }
+@media (max-width: 559px) { .cl-ebox { height: 210px; } .cl-esel .select { min-width: 0; width: 100%; } }

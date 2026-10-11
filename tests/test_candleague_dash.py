@@ -218,3 +218,27 @@ def test_trades_file_is_read_again_when_it_changes(tmp_path):
     os.utime(snap / "trades.json", ns=(10**18, 10**18))
     assert c.get("/api/trades/a").json()["trades"] == [t2, t1]
     assert [f["exit_time"] for f in c.get("/api/fills").json()["fills"]] == [2, 1]
+
+
+def test_klines_before_a_past_entry():
+    """The 진입 차트 asks for the bars before a past entry: ``end`` is whitelisted, rounded up to 24 bars (one cached
+    answer serves nearby entries), refused before the league's first day, and dropped when it is in the future; the
+    Binance request carries endTime and fake mode cuts its bars there."""
+    now = 1_791_636_000_000
+    q = D.klines_query({"coin": "BTCUSD", "tf": "15m", "limit": "150", "end": "1791436000000"}, now_ms=now)
+    assert q["end"] == 1_791_439_200_000 and q["end"] % (900_000 * 24) == 0 and q["end"] >= 1_791_436_000_000
+    assert D.klines_query({"coin": "BTCUSD", "tf": "15m", "limit": "150", "end": str(now - 1000)}, now_ms=now)["end"] is None
+    for bad in ("1000", "x", "1.5e12", str(D.KLINE_END_MIN - 1)):          # before 2026-10-01: refused
+        assert D.klines_query({"coin": "BTCUSD", "tf": "15m", "limit": "150", "end": bad}, now_ms=now) is None, bad
+    seen = []
+
+    def fetch(path, params):
+        seen.append(params)
+        return [[1_791_436_000_000 - 900_000 * i, "1", "2", "0.5", "1.5", "10"] for i in range(3, 0, -1)]
+    lv = Live(mode="on", fetch=fetch)
+    k = lv.klines("BTCUSD", "15m", 150, 1_791_439_200_000)
+    assert seen[-1]["endTime"] == 1_791_439_199_999 and k["end"] == 1_791_439_200_000 and len(k["bars"]["t"]) == 3
+    lv.klines("BTCUSD", "15m", 150)
+    assert "endTime" not in seen[-1]
+    fk = Live(mode="fake", clock=lambda: now / 1000).klines("ETHUSD", "1h", 120, 1_791_504_000_000)
+    assert len(fk["bars"]["t"]) == 120 and max(fk["bars"]["t"]) < 1_791_504_000_000

@@ -4,12 +4,14 @@ public endpoints (no key) and hands the page small cached answers; the browser n
 stays ``connect-src 'self'``).
 
     GET /api/live                           price, 24 h change, volume, high / low, mark, funding, open interest (6 coins)
-    GET /api/klines?coin=BTCUSD&tf=15m&limit=500     candles {"t", "o", "h", "l", "c", "v"} (1m 5m 15m 30m 1h 4h 1d)
+    GET /api/klines?coin=BTCUSD&tf=15m&limit=500[&end=ms]   candles {"t", "o", "h", "l", "c", "v"} (1m 5m 15m 30m 1h 4h
+                                            1d); ``end``: the bars before it (the 진입 차트's past entries)
     GET /api/market                         funding (last 3), open interest now / 24 h change, long/short account ratio
 
 Rules (CONTRACT 9.1): ``https://fapi.binance.com`` only (redirects refused), timeout 5 s, at most 4 requests per second
 from the whole dashboard (one limiter for every viewer), ``User-Agent: demobot-dash``, nothing written to disk. Caches:
-live 5 s, klines 10 s per (coin, tf, limit) (at most KLINES_KEEP of them), market 60 s, open interest 30 s. A request
+live 5 s, klines 10 s per (coin, tf, limit) and 10 min per past end (at most KLINES_KEEP of them), market 60 s, open
+interest 30 s. A request
 that fails keeps the last good answer and marks it ``"stale": true`` (and is not retried before its cache time is up,
 so a Binance outage costs at most one try per cache period); with no good answer yet the reply says
 ``"unavailable": true``. While one viewer's request is refreshing a key, the others get the last good answer at once
@@ -42,7 +44,8 @@ TIMEOUT_S = 5.0
 RATE_PER_S = 4
 MAX_BYTES = 4 * 1024 * 1024           # one answer (the klines at limit 1000 are ~150 KB)
 LIVE_TTL, KLINES_TTL, MARKET_TTL, OI_TTL = 5.0, 10.0, 60.0, 30.0
-KLINES_KEEP = 32                      # (coin, tf, limit) answers kept in memory
+KLINES_KEEP = 96                      # (coin, tf, limit, end) answers kept in memory (the 진입 차트 asks for many)
+KLINES_PAST_TTL = 600.0               # bars before a past end do not change: kept 10 minutes
 LIMIT_MAX = 1000
 KLINE_TFS = ("1m", "5m", "15m", "30m", "1h", "4h", "1d")
 TF_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000,
@@ -322,20 +325,25 @@ class Live:
         return _clean({"generated_ms": int(self.clock() * 1000), "source": "binance", "coins": rows})
 
     # -- /api/klines
-    def klines(self, coin: str, tf: str, limit: int) -> dict:
-        """coin / tf / limit must already be whitelisted (app.klines_query)."""
+    def klines(self, coin: str, tf: str, limit: int, end: Optional[int] = None) -> dict:
+        """coin / tf / limit / end must already be whitelisted (app.klines_query); ``end`` (ms): the bars that open
+        before it (a past entry's chart), else the latest."""
         if self.mode == "off":
             return {"off": True}
-        build = (lambda: self._fake_klines(coin, tf, limit)) if self.mode == "fake" else \
-            (lambda: self._build_klines(coin, tf, limit))
-        v, stale, err = self._cached(("k", coin, tf, limit), KLINES_TTL, build, keep=KLINES_KEEP)
+        build = (lambda: self._fake_klines(coin, tf, limit, end)) if self.mode == "fake" else \
+            (lambda: self._build_klines(coin, tf, limit, end))
+        v, stale, err = self._cached(("k", coin, tf, limit, end), KLINES_TTL if end is None else KLINES_PAST_TTL, build,
+                                     keep=KLINES_KEEP)
         if v is None:
-            return {"coin": coin, "tf": tf, "limit": limit, "generated_ms": int(self.clock() * 1000), "stale": True,
-                    "unavailable": True, "error": err, "bars": {k: [] for k in "tohlcv"}}
+            return {"coin": coin, "tf": tf, "limit": limit, "end": end, "generated_ms": int(self.clock() * 1000),
+                    "stale": True, "unavailable": True, "error": err, "bars": {k: [] for k in "tohlcv"}}
         return {**v, "stale": stale}
 
-    def _build_klines(self, coin: str, tf: str, limit: int) -> dict:
-        raw = self._get("/fapi/v1/klines", {"symbol": grid.binance_symbol(coin), "interval": tf, "limit": limit})
+    def _build_klines(self, coin: str, tf: str, limit: int, end: Optional[int] = None) -> dict:
+        params = {"symbol": grid.binance_symbol(coin), "interval": tf, "limit": limit}
+        if end is not None:
+            params["endTime"] = int(end) - 1
+        raw = self._get("/fapi/v1/klines", params)
         if not isinstance(raw, list):
             raise LiveError("bad klines")
         cols = {k: [] for k in "tohlcv"}
@@ -353,7 +361,7 @@ class Live:
                 cols[k].append(x)
         if not cols["t"]:
             raise LiveError("no bars")
-        return {"coin": coin, "tf": tf, "limit": limit, "generated_ms": int(self.clock() * 1000), "bars": cols}
+        return {"coin": coin, "tf": tf, "limit": limit, "end": end, "generated_ms": int(self.clock() * 1000), "bars": cols}
 
     # -- /api/market
     def market(self) -> dict:
@@ -460,8 +468,13 @@ class Live:
         walk = sum(float(self._rng("oi", coin, hour - j).normal(0, 0.006)) for j in range(48))
         return base * math.exp(walk)
 
-    def _fake_klines(self, coin: str, tf: str, limit: int) -> dict:
+    def _fake_klines(self, coin: str, tf: str, limit: int, end: Optional[int] = None) -> dict:
         ts, o, h, lo_, c = self._base(coin)
+        if end is not None:
+            keep = ts < int(end) // TF_MS[tf] * TF_MS[tf]            # whole bars of the timeframe before ``end``
+            ts, o, h, lo_, c = ts[keep], o[keep], h[keep], lo_[keep], c[keep]
+            if not len(ts):
+                raise LiveError("no bars before end")
         step = TF_MS[tf]
         cols = {k: [] for k in "tohlcv"}
         if step >= M15:                                          # 15m and longer: group the 15m bars
@@ -500,7 +513,7 @@ class Live:
         for t0, oo, cc in zip(cols["t"], cols["o"], cols["c"]):
             r = self._rng("vol", coin, tf, t0)
             cols["v"].append(round(float(r.lognormal(0, 0.4)) * (1 + 40 * abs(cc / oo - 1)) * 100 * step / M15, 3))
-        return _clean({"coin": coin, "tf": tf, "limit": limit, "generated_ms": int(self.clock() * 1000),
+        return _clean({"coin": coin, "tf": tf, "limit": limit, "end": end, "generated_ms": int(self.clock() * 1000),
                        "source": "fake", "bars": cols})
 
     def _fake_market(self) -> dict:
