@@ -403,9 +403,10 @@ verdicts, and the two verdicts are never merged into one "the hunt passed".
 ### 19.2 Review before the pin (2026-10-11, about 10:00 UTC)
 
 Done after the `coins30` data job (download, checksums, coverage counts, the last bar with volume per coin; no trading
-outcome on any period, per its report) and after the code of section 16 had been drafted and run on synthetic bars
-only. No pin file and no `research/hunt/out/` existed. The reviewer read `UNIVERSE.md`, `universe.json`,
-`manifest.json` (coverage fields only) and the code, and computed nothing from prices. Changes:
+outcome on any period, per its report) and after the code of section 16 had been drafted (work-in-progress commits
+labelled "no results"). No pin file and no `research/hunt/out/` existed. The reviewer read `UNIVERSE.md`,
+`universe.json` (rank order and flags), `manifest.json` (coverage fields only), `research/fullgrid/exchange.json`
+(brackets) and the code, and computed nothing from prices. Changes:
 
 1. Section 2: the data as actually built (daily-file fills, mark-price columns present but unread, zero-volume tails),
    the coin-end rule, funding timing as coded, the cross-check still to run on all six coins, and the data identity
