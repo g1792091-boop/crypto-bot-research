@@ -3,9 +3,14 @@
 #
 #   sudo bash deploy/candleague/setup_env.sh                  # Telegram, dashboard address / secret / password
 #   sudo bash deploy/candleague/setup_env.sh --new-password   # only to change the dashboard password later
+#   sudo bash deploy/candleague/setup_env.sh --own-telegram   # the league's own Telegram bot and chat (then as above)
 #
 # 1. Telegram: when the league has none yet, the demo lab bot's token and chats (/etc/demobot/demobot.env) are copied
 #    in on this server (every league message starts with [후보 리그]); no new key, nothing pasted anywhere.
+#    --own-telegram: a separate chat instead. The owners make a new bot with @BotFather, type its token here (hidden,
+#    on this server only; never in a chat), press Start on the bot or add it to a group; the chats are found with the
+#    new bot's getUpdates (the demo lab bot polls its own updates, so its token is never used for this), a test
+#    message goes to each, and token + chats replace the league's Telegram settings.
 # 2. Dashboard: the server's Tailscale address, a random secret, and a password typed twice (stored only as a hash).
 # Values go only into /etc/candleague/candleague.env (root:candleague 640) and are never printed (the Tailscale
 # address is printed: it is the dashboard's address). Then the firewall check (Tailscale only) and a restart of the
@@ -53,9 +58,83 @@ PY
   chmod 640 "$ENVF"
 }
 
+tg_api() {   # tg_api METHOD [JSON_PARAMS]: the token travels in the environment (TK), never on a command line or screen
+  M="$1" P="${2:-{\}}" "$VENV/bin/python" - <<'PY'
+import json, os, sys, urllib.error, urllib.parse, urllib.request
+tk, m, p = os.environ["TK"], os.environ["M"], json.loads(os.environ["P"])
+data = urllib.parse.urlencode({k: (json.dumps(v) if isinstance(v, (list, dict)) else v) for k, v in p.items()}).encode()
+try:
+    with urllib.request.urlopen(f"https://api.telegram.org/bot{tk}/{m}", data, timeout=20) as r:
+        print(r.read().decode())
+except urllib.error.HTTPError as exc:          # str(exc) holds no URL, so the token never reaches the screen
+    print(json.dumps({"ok": False, "error": f"HTTP {exc.code}"}))
+except Exception as exc:  # noqa: BLE001
+    print(json.dumps({"ok": False, "error": type(exc).__name__}))
+PY
+}
+
+own_telegram() {
+  echo "== 1. 텔레그램 (후보 리그 전용 대화방)"
+  echo "휴대폰 텔레그램에서 @BotFather → /newbot → 이름과 아이디(끝이 bot)를 정하면 토큰이 나옵니다."
+  echo "그 토큰을 아래에 붙여 넣으세요. 화면에 안 보이는 게 정상입니다. 이 채팅 말고 다른 곳(채팅·메모)에는 붙이지 마세요."
+  read -rs -p "새 봇 토큰: " TK; echo
+  export TK
+  local me
+  me="$(tg_api getMe | "$VENV/bin/python" -c 'import json,sys; d=json.load(sys.stdin); print(d["result"]["username"] if d.get("ok") else "")')"
+  if [ -z "$me" ]; then echo "토큰이 맞지 않습니다(텔레그램이 거절). 다시 실행하세요: sudo bash $0 --own-telegram"; unset TK; exit 1; fi
+  echo "봇 확인: @$me"
+  echo "이제 휴대폰에서 @$me 를 열고 '시작'(START)을 누르세요."
+  echo "친구분도 받으려면: 친구분도 @$me 에서 '시작'을 누르거나, 두 분이 있는 그룹을 만들어 @$me 를 넣으세요."
+  local ids="" tries=0 found
+  while [ -z "$ids" ] && [ "$tries" -lt 3 ]; do
+    read -r -p "다 했으면 엔터를 누르세요..." _
+    tries=$((tries + 1))
+    found="$(tg_api getUpdates '{"allowed_updates": ["message", "my_chat_member"]}' | "$VENV/bin/python" -c '
+import json, sys
+d = json.load(sys.stdin)
+chats = {}
+for u in d.get("result", []) if d.get("ok") else []:
+    for k in ("message", "my_chat_member"):
+        c = (u.get(k) or {}).get("chat")
+        if c:
+            chats[c["id"]] = c
+names = []
+for c in list(chats.values())[:4]:
+    if c.get("type") == "private":
+        names.append("개인 대화: " + (c.get("first_name") or "") + " " + (c.get("last_name") or ""))
+    else:
+        names.append("그룹: " + (c.get("title") or ""))
+for i, n in enumerate(names, 1):
+    print(f"  {i}. {n.strip()}", file=sys.stderr)
+print(",".join(str(i) for i in list(chats)[:4]))
+')"
+    ids="$found"
+    [ -n "$ids" ] || echo "아직 찾지 못했습니다. @$me 에서 '시작'을 눌렀는지(그룹이면 봇을 넣었는지) 확인하세요."
+  done
+  if [ -z "$ids" ]; then echo "대화방을 찾지 못해 바꾸지 않았습니다. 다시 실행하세요: sudo bash $0 --own-telegram"; unset TK; exit 1; fi
+  read -r -p "위 대화방으로 후보 리그 알림을 받을까요? (y/n) " yn
+  if [ "$yn" != "y" ] && [ "$yn" != "Y" ]; then echo "바꾸지 않았습니다."; unset TK; exit 1; fi
+  local ok=0 chat
+  IFS=',' read -ra arr <<< "$ids"
+  for chat in "${arr[@]}"; do
+    if tg_api sendMessage "{\"chat_id\": \"$chat\", \"text\": \"[후보 리그] 이 대화방으로 후보 리그 알림이 옵니다 (아침 9시 요약, 파산, 예상보다 아래, 멈춤). 종이 매매, 실제 돈 아님.\"}" \
+        | grep -q '"ok": *true'; then ok=$((ok + 1)); fi
+  done
+  put CANDLEAGUE_TG_TOKEN "$TK"
+  put CANDLEAGUE_TG_CHAT "$ids"
+  unset TK
+  echo "저장했습니다 (값은 화면에 나오지 않습니다). 시험 메시지 ${ok}/${#arr[@]}개 보냄 - 텔레그램을 확인하세요."
+}
+
+if [ "${1:-}" = "--own-telegram" ]; then
+  own_telegram
+fi
+
 if [ "${1:-}" != "--new-password" ]; then
-  echo "== 1. 텔레그램"
-  if [ -n "$(get CANDLEAGUE_TG_TOKEN "$ENVF")" ] && [ -n "$(get CANDLEAGUE_TG_CHAT "$ENVF")" ]; then
+  [ "${1:-}" = "--own-telegram" ] || echo "== 1. 텔레그램"
+  if [ "${1:-}" = "--own-telegram" ]; then
+    :
+  elif [ -n "$(get CANDLEAGUE_TG_TOKEN "$ENVF")" ] && [ -n "$(get CANDLEAGUE_TG_CHAT "$ENVF")" ]; then
     echo "이미 채워져 있습니다 (그대로 둡니다)"
   elif [ -n "$(get DEMOBOT_TG_TOKEN "$DEMO")" ] && [ -n "$(get DEMOBOT_TG_CHAT "$DEMO")" ]; then
     put CANDLEAGUE_TG_TOKEN "$(get DEMOBOT_TG_TOKEN "$DEMO")"
