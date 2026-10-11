@@ -179,7 +179,7 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False,
                "bust": bool(e.bust),
                "open": None if pos is None else {"symbol": pos.symbol, "side": pos.side, "entry": pos.entry_price,
                                                  "stop": pos.stop_price, "tp": None if math.isnan(pos.tp_price)
-                                                 else pos.tp_price, "since": pos.entry_time}}
+                                                 else pos.tp_price, "since": pos.entry_time, "lev": pos.leverage}}
         if a["kind"] == "ds" and not ds_money:
             for k in ("mean_ret", "wallet", "max_dd"):
                 row[k] = None

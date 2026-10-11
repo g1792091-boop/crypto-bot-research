@@ -217,6 +217,8 @@ tr.cl-bust td { opacity: .55; }
 .cl-eshape { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--t-xs); color: var(--ink-2); }
 .cl-eshape b { color: var(--ink); margin-right: 4px; }
 .cl-epick { font-size: var(--t-xs); color: var(--muted); }
+.cl-elive { font-size: var(--t-sm); }
+.cl-elive-pct { font-weight: 700; }
 .cl-epick[hidden] { display: none; }
 .cl-ecl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .cl-esel .select { min-width: 220px; }

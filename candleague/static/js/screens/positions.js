@@ -20,7 +20,7 @@ export async function mount(el, ctx) {
       ui.field("계좌", ui.seg([{id: "all", label: "전체"}, ...ROLES.map((r) => ({id: r, label: ROLE_KO[r]}))], st.role, (v) => { st.role = v; paint(); }, {label: "계좌"})),
       ui.field("코인", ui.seg([{id: "all", label: "전체"}, ...COINS.map((c) => ({id: c, label: coinShort(c)}))], st.coin, (v) => { st.coin = v; paint(); }, {label: "코인"}))),
     ui.card({plate: "코인별", sub: "롱 · 숏 수 (모든 계좌)"}, sum),
-    ui.card({plate: "열린 포지션", sub: "가격 변화 = 진입가에서 지금 가격까지 (방향 반영, 레버리지 전)"}, table));
+    ui.card({plate: "열린 포지션", sub: "가격 변화 = 진입가에서 지금 가격까지 (방향 반영, 레버리지 전) · 증거금 대비 = 가격 변화 × 레버리지 (수수료 전) · 10초마다"}, table));
   const live = (c) => (st.live && st.live.coins ? st.live.coins.find((x) => x.coin === c) : null);
   function paint() {
     const d = LK.league();
@@ -53,6 +53,11 @@ export async function mount(el, ctx) {
         const r = live(coinOf(a.open.symbol));
         const m = a.open.entry != null && r && r.price != null ? a.open.side * (r.price / a.open.entry - 1) * 100 : null;
         return m == null ? "—" : h("span", {class: ["num", fmt.tone(m)]}, fmt.pct(m, true, 2));
+      }},
+      {label: "증거금 대비", title: "가격 변화 × 레버리지 (바이낸스처럼 수수료 전)", get: (a) => {
+        const r = live(coinOf(a.open.symbol));
+        const m = a.open.entry != null && a.open.lev && r && r.price != null ? a.open.side * (r.price / a.open.entry - 1) * 100 * a.open.lev : null;
+        return m == null ? "—" : h("span", {class: ["num", fmt.tone(m)], title: `${fmt.int(a.open.lev)}배`}, fmt.pct(m, true, 1));
       }},
       {label: "손절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.stop == null ? "—" : px(a.open.stop))},
       {label: "익절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.tp == null ? h("span", {class: "muted"}, "계단 잠금") : px(a.open.tp))},

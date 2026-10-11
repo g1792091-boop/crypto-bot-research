@@ -4,8 +4,11 @@
 // with (the live ones while it is open). Each strategy's section says how its 후보 trades end (손절 · 익절 · 계단 잠금,
 // the median hold, in R the losers that first went +1R and the winners that first went −0.5R) and its pace toward 300.
 // ◀ ▶ walks through that account's entries (the open position first, then the closed trades, newest first). A card
-// loads its trades and candles only when it scrolls into view (38 charts never load at once).
-// Data: the shared snapshot (accounts, open positions), /api/trades/<account> per card, /api/klines?...&end= per entry.
+// loads its trades and candles only when it scrolls into view (38 charts never load at once). An open position shows
+// its result now (가격 % and 증거금 대비 %, before fees like Binance's, from /api/live every 10 s) on a 지금 line and
+// under the chart; its latest bars come in every minute while the card is on screen.
+// Data: the shared snapshot (accounts, open positions), /api/trades/<account> per card, /api/klines?...&end= per entry,
+// /api/live (the last price per coin).
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -17,6 +20,7 @@ const two = (n) => String(n).padStart(2, "0");
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
 const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
 const BEFORE = 40, AFTER = 20;            // bars shown before the entry and after the exit
+const LIVE_MS = 10_000, BARS_EVERY = 6;   // the price every 10 s; an open chart's latest bars every 6th time (1 min)
 const R_TITLE = "R = 진입가와 처음 손절 사이 거리 (−1R = 처음 손절에 닿음 · 수수료 빼기 전 가격 기준)";
 const REASON_ORDER = ["SL", "TP", "LOCK", "LIQ"];
 
@@ -81,6 +85,7 @@ export async function mount(el, ctx) {
     ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); const c = byEl.get(e.target); if (c) c.show(); } }, {rootMargin: "400px 0px"})
     : null;
   const byEl = new WeakMap();
+  const prices = {map: null, off: false};  // coin -> last price (/api/live), shared by every card
   const shapeBoxes = new Map();            // strategy name -> its section's shape + pace line (refreshed every snapshot)
   let sig = "";
 
@@ -144,12 +149,13 @@ export async function mount(el, ctx) {
     const withEntry = rows.filter((x) => x.a.trades || x.a.open).length;
     info.textContent = `후보 ${rows.length}개 중 진입이 있는 것 ${withEntry}개 · ${ROLE_KO[st.role]} 계좌의 진입 · ` +
       "차트마다 그 후보의 봉(15분 · 30분 · 1시간 · 4시간) · ◀ ▶로 다른 진입 · 한국 시각 · " +
-      "선: 진입가(점선) · 처음 손절(빨강) · 익절(초록, 계단 청산이면 없음) · 청산가 · " + R_TITLE;
+      "선: 진입가(점선) · 처음 손절(빨강) · 익절(초록, 계단 청산이면 없음) · 청산가 · 열린 포지션은 '지금' 선과 +% −% (10초마다) · " + R_TITLE;
   }
 
   // ------------------------------------------------------------ one pick's card
   function makeCard(c, a) {
     let acct = a, items = [], i = 0, loaded = false, failed = false, count = -1, chart = null, candles = null, plines = [], ro = null, seq = 0;
+    let nowLine = null, liveRow = null, lastBar = 0, ticks = 0, barsBusy = false;
     const box = h("div", {class: "cl-ebox"});
     const msgEl = h("div", {class: "cl-emsg"});
     const cap = h("div", {class: "cl-ecap"});
@@ -178,7 +184,7 @@ export async function mount(el, ctx) {
     function entries() {
       const out = [];
       if (acct.open) out.push({open: true, symbol: acct.open.symbol, side: acct.open.side, entry_time: acct.open.since, entry_price: acct.open.entry,
-        stop: acct.open.stop, tp: acct.open.tp});
+        stop: acct.open.stop, tp: acct.open.tp, lev: acct.open.lev});
       return out;
     }
     async function load() {
@@ -271,6 +277,7 @@ export async function mount(el, ctx) {
       makeChart();
       msg("");
       const n = b.t.length, dec = priceDec(b.c[n - 1]);
+      lastBar = b.t[n - 1];
       // the latest price line only while the position is open (a past trade's chart ends after its exit)
       candles.applyOptions({priceFormat: {type: "price", precision: dec, minMove: 10 ** -dec}, priceLineVisible: !!it.open, lastValueVisible: !!it.open});
       candles.setData(b.t.map((t, k) => ({time: t / 1000, open: b.o[k], high: b.h[k], low: b.l[k], close: b.c[k]})));
@@ -289,6 +296,7 @@ export async function mount(el, ctx) {
       candles.setMarkers(ms);
       for (const p of plines) candles.removePriceLine(p);
       plines = [];
+      nowLine = null;
       const line = (p, col, title, style) => { if (p != null && !fmt.bad(p)) plines.push(candles.createPriceLine({price: p, color: col, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title})); };
       line(it.entry_price, color("--ink-2"), "진입가", 2);
       // the plan the trade was opened with (the live stop / take-profit while open), kept in view by the price scale
@@ -310,20 +318,84 @@ export async function mount(el, ctx) {
       try { chart.timeScale().setVisibleRange({from, to}); } catch (e) { chart.timeScale().fitContent(); }
       if (it.entry_time < first) msg("진입이 이 차트보다 앞입니다 (터미널에서 보기)");
       caption(it);
+      paintLive();
+    }
+
+    // ---------------------------------------------------------- an open position now (every LIVE_MS)
+    /** {price, move: 가격 % (side-signed), roe: 증거금 대비 % (move × leverage, before fees)} of the open item, or null. */
+    function liveNow(it) {
+      const r = it && it.open && prices.map ? prices.map[coinOf(it.symbol)] : null;
+      if (!r || r.price == null || fmt.bad(r.price) || it.entry_price == null || fmt.bad(it.entry_price)) return null;
+      const move = it.side * (r.price / it.entry_price - 1) * 100;
+      return {price: r.price, move, roe: it.lev ? move * it.lev : null};
+    }
+    function paintLive() {
+      const it = items[i];
+      const m = liveNow(it);
+      if (liveRow) {
+        put(liveRow, m ? [h("span", {class: "muted"}, "지금"), h("span", {class: "num"}, px(m.price)),
+          h("span", {class: ["num", "cl-elive-pct", fmt.tone(m.move)]}, `가격 ${fmt.pct(m.move, true, 2)}`),
+          m.roe != null ? h("span", {class: ["num", "cl-elive-pct", fmt.tone(m.roe)]}, `증거금 대비 ${fmt.pct(m.roe, true, 1)}`) : null,
+          h("span", {class: "muted"}, `${it.lev ? `${fmt.int(it.lev)}배 · ` : ""}수수료 전 · 10초마다`)]
+          : h("span", {class: "muted"}, !it || it.entry_price == null || prices.off ? "" : "지금 가격을 기다리는 중…"));
+      }
+      if (!candles) return;
+      if (!m) {
+        if (nowLine) { candles.removePriceLine(nowLine); plines = plines.filter((p) => p !== nowLine); nowLine = null; }
+        if (it && it.open) candles.applyOptions({priceLineVisible: true, lastValueVisible: true});
+        return;
+      }
+      const opt = {price: m.price, color: m.move > 0 ? color("--up") : m.move < 0 ? color("--down") : color("--ink-2"), lineWidth: 1, lineStyle: 3,
+        axisLabelVisible: true, title: `지금 ${fmt.pct(m.roe != null ? m.roe : m.move, true, 1)}`};
+      if (nowLine) nowLine.applyOptions(opt); else { nowLine = candles.createPriceLine(opt); plines.push(nowLine); }
+      candles.applyOptions({priceLineVisible: false, lastValueVisible: false});   // the 지금 line carries the price
+    }
+    function onScreen() {
+      const r = el.getBoundingClientRect();
+      return r.bottom > 0 && r.top < (window.innerHeight || 800);
+    }
+    /** The latest bars of an open position's chart (the newest bar grows, a new one appears) without moving the view. */
+    async function moreBars() {
+      const it = items[i];
+      if (!it || !it.open || !candles || barsBusy) return;
+      barsBusy = true;
+      const my = seq;
+      try {
+        const d = await ctx.api(`/api/klines?coin=${coinOf(it.symbol)}&tf=${c.tf}&limit=50`);
+        const b = d && d.bars;
+        if (my !== seq || !candles || !b || !b.t || !b.t.length) return;
+        if (b.t[0] > lastBar + TF_MS[c.tf]) { draw(); return; }        // away longer than these bars cover: draw again
+        for (let k = 0; k < b.t.length; k++) {
+          if (b.t[k] < lastBar) continue;
+          candles.update({time: b.t[k] / 1000, open: b.o[k], high: b.h[k], low: b.l[k], close: b.c[k]});
+          lastBar = b.t[k];
+        }
+      } catch (e) { /* the next minute tries again */ } finally { barsBusy = false; }
+    }
+    function tick() {
+      const it = items[i];
+      if (!loaded || !it || !it.open) return;
+      paintLive();
+      if (++ticks % BARS_EVERY === 0 && onScreen()) moreBars();
     }
     const win = (t) => (t.pnl != null ? t.pnl > 0 : t.roe != null ? t.roe > 0 : t.win != null ? !!t.win : null);
     function caption(it) {
+      liveRow = null;
       const hold = (it.open ? Date.now() : it.exit_time) - it.entry_time;
       put(cap,
         h("div", {class: "cl-ecl"}, h("b", null, coinShort(coinOf(it.symbol))), h("span", {class: ["side", it.side > 0 ? "long" : "short"]}, sideKo(it.side)),
           h("span", {class: "muted"}, `진입 ${fmt.kst(it.entry_time)}`), it.entry_price == null ? h("span", {class: "muted"}, "가격 숨김") : h("span", {class: "num"}, px(it.entry_price))),
         it.open
-          ? h("div", {class: "cl-ecl"}, ui.pill("지금 열림", "accent"), h("span", {class: "muted"}, `${fmt.dur(hold / 1000)}째`),
-            it.stop != null ? h("span", {class: "muted"}, `손절 ${px(it.stop)}`) : null, it.tp != null ? h("span", {class: "muted"}, `익절 ${px(it.tp)}`) : null)
+          ? [h("div", {class: "cl-ecl"}, ui.pill("지금 열림", "accent"), h("span", {class: "muted"}, `${fmt.dur(hold / 1000)}째`),
+            it.stop != null ? h("span", {class: "muted"}, `손절 ${px(it.stop)}`) : null, it.tp != null ? h("span", {class: "muted"}, `익절 ${px(it.tp)}`) : null),
+            (liveRow = h("div", {class: "cl-ecl cl-elive", "aria-live": "off"}))]
           : h("div", {class: "cl-ecl"}, h("span", {class: "muted"}, `청산 ${fmt.kst(it.exit_time)}`), h("b", null, reasonKo(it.exit_reason)),
             it.leverage ? h("span", {class: "muted"}, `${fmt.int(it.leverage)}배`) : null,
             it.roe == null ? h("span", {class: "muted"}, win(it) == null ? "" : win(it) ? "이김" : "짐")
               : h("span", {class: ["num", fmt.tone(it.roe)]}, `증거금 대비 ${fmt.pct(it.roe * 100, true, 1)}`),
+            ((mv) => (mv == null ? null : h("span", {class: ["num", fmt.tone(mv)], title: "진입가에서 청산가까지 (방향 반영, 레버리지 전)"}, `가격 ${fmt.pct(mv, true, 2)}`)))(
+              it.entry_price != null && it.exit_price != null && !fmt.bad(it.entry_price) && !fmt.bad(it.exit_price)
+                ? it.side * (it.exit_price / it.entry_price - 1) * 100 : null),
             h("span", {class: "muted"}, `보유 ${fmt.dur(hold / 1000)}`)),
         it.open ? null : ((m) => (m ? h("div", {class: "cl-ecl", title: R_TITLE},
           h("span", {class: "muted"}, "가장 유리"), h("span", {class: "num"}, rTxt(m.best)),
@@ -335,11 +407,22 @@ export async function mount(el, ctx) {
       seq++;
       if (ro) ro.disconnect();
       try { if (chart) chart.remove(); } catch (e) { /* gone */ }
-      chart = null; candles = null;
+      chart = null; candles = null; nowLine = null;
     }
-    return {el, show, update, destroy};
+    return {el, show, update, destroy, tick};
   }
 
+  async function pollLive() {
+    let d;
+    try { d = await ctx.api("/api/live"); } catch (e) { return; }
+    const map = {};
+    for (const r of (d && d.coins) || []) if (r && r.coin && r.price != null) map[r.coin] = r;
+    prices.off = !!(d && d.off);
+    prices.map = prices.off ? null : map;
+    for (const c of cards.values()) c.tick();
+  }
   ctx.onLeague(paint);
+  pollLive();
+  ctx.every(LIVE_MS, pollLive);
   return () => { if (io) io.disconnect(); for (const c of cards.values()) c.destroy(); };
 }
