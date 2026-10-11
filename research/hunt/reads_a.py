@@ -120,6 +120,8 @@ CHOICES = [
     "of counts as observed values (inverted CDF); skips by reason are run totals (the engine counts skips, not per "
     "candidate); by month: candidates (fill month) and positions opened.",
     "R12 top month share = largest monthly ln M / sum of monthly ln M (defined when the sum is positive).",
+    "Not computed in Phase A (W 7.3): R1's max gross notional / equity (the engine does not export it; R10, Phase B) "
+    "is None; R15's drops by reason are run totals; R15's cost needs --judge-usd-per-call (else counts only).",
     "R13: signal overlap = same coin and side within one bar of the longer timeframe; time overlap on 5m steps; "
     "monthly ln M correlation from the r = 0.5% continuous runs; tested picks and the v1 pick.",
 ]

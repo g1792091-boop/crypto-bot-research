@@ -1,6 +1,7 @@
 """deploy/huntbot: the scripts parse, the units run as the huntbot user in a sandbox with only /var/lib/huntbot
-writable, the dashboard cannot read the private folder or the Telegram token, the env template holds no value, and
-the code copy covers every module the hunt's entry definitions load (the install's selfcheck runs them for real)."""
+writable, the dashboard sees only snap/ (not store.db, run.db, events.db, private/ or /etc/huntbot with the Telegram
+token), the env template holds no value, and the code copy covers every module the hunt's entry definitions load
+(the install's selfcheck runs them for real)."""
 
 from __future__ import annotations
 
@@ -39,7 +40,8 @@ def test_units_sandboxed(unit):
     assert "EnvironmentFile=/etc/huntbot/huntbot.env" in u
     assert re.search(r"ExecStart=/opt/huntbot/venv/bin/python -m huntbot (feed run|run|dash)$", u, re.M)
     if unit == "huntbot-dash.service":
-        assert "ReadOnlyPaths=/var/lib/huntbot" in u and "InaccessiblePaths=-/var/lib/huntbot/private" in u
+        assert "TemporaryFileSystem=/var/lib/huntbot:ro" in u and "BindReadOnlyPaths=/var/lib/huntbot/snap" in u
+        assert "InaccessiblePaths=-/etc/huntbot" in u
         assert "UnsetEnvironment=HUNTBOT_TG_TOKEN HUNTBOT_TG_CHAT" in u
         assert "ReadWritePaths" not in u
     else:
@@ -61,11 +63,12 @@ def test_install_copies_every_code_path_the_engine_loads():
     sh = _read("install_huntbot.sh")
     m = re.search(r'CODE_PATHS="([^"]+)"', sh, re.S)
     paths = m.group(1).replace("\\\n", " ").split()
-    for p in paths:
+    pb = re.search(r'PAPERBOT_FILES="([^"]+)"', sh, re.S).group(1).replace("\\\n", " ").split()
+    for p in [x for x in paths if not x.startswith("$")] + pb:
         assert os.path.exists(os.path.join(ROOT, p)), p
     # what the wide entries load (research/hunt/entries_wide.py, the full grid's run.py, the famous rules, the label)
     for need in ("huntbot", "research/hunt", "research/fullgrid", "research/entry_study", "research/deepseek200",
-                 "research/library", "research/search", "research/famous", "third_party/sweep", "paperbot"):
+                 "research/library", "research/search", "research/famous", "third_party/sweep", "$PAPERBOT_FILES"):
         assert need in paths, need
     assert 'git -C "$REPO_DIR" archive --format=tar "$COMMIT"' in sh            # committed code only, pinned
     assert "numpy==2.0.2" in sh and "pandas==2.3.3" in sh and "numba==0.60.0" in sh   # the backtest's versions
@@ -78,6 +81,7 @@ def test_loaded_signal_modules_are_inside_the_copied_paths():
     EW.systems()
     sh = _read("install_huntbot.sh")
     paths = re.search(r'CODE_PATHS="([^"]+)"', sh, re.S).group(1).replace("\\\n", " ").split()
+    paths += re.search(r'PAPERBOT_FILES="([^"]+)"', sh, re.S).group(1).replace("\\\n", " ").split()
     for mod in list(sys.modules.values()):
         f = getattr(mod, "__file__", None) or ""
         if not f.endswith(".py"):

@@ -12,6 +12,8 @@ research/hunt/PREREG_HUNT.md (study ``v1``) and research/hunt/PREREG_HUNT_WIDE.m
     python -m research.hunt.hunt reads --study {v1,wide} --data <dir>  (the reads hook again, after test.json)
     python -m research.hunt.hunt fidelity --study S --data <dir> --data1m <dir>  [--list-coins]   (R19, after test)
     python -m research.hunt.hunt october --study S --data <dir> --data-oct <daily zips dir>       (R23, after test)
+    python -m research.hunt.hunt octlist --data-oct <daily zips dir>  (R23 file list, before the pin; no zip opened)
+    python -m research.hunt.hunt benchwin                             (W 7.1 0.03 s rule: synthetic bars only)
 
 ``select`` and ``test`` refuse to run unless the study's pin file (PREREG_HUNT.sha256 / PREREG_HUNT_WIDE.sha256, one
 line per file ``<sha256>  <path>``) matches every file it lists and lists every file of ``pinlist``: the prereg(s),
@@ -39,8 +41,8 @@ What runs where (section numbers "H n" = PREREG_HUNT.md, "W n" = PREREG_HUNT_WID
   study may change; D11 check of the public output). ``fidelity`` (R19: 1m last + mark bars, same engine) and
   ``october`` (R23: daily archive files) are reads of the same kind.
 * engine read options (all off by default, the engine is then bit-identical to the reviewed one): bar length (5m / 1m),
-  per-bar equity path, close at the end, liquidation on mark price, the goal-mode bracket rule, fixed leverage
-  (rule-bot sizing), N4 = (1 + adds) x q x P0 (= 4 q P0 as written).
+  per-bar equity path, close at the end, liquidation on mark price, the goal-mode bracket rule, fixed leverage with
+  the rule bot's tier walk and checks (R24), N4 = (1 + adds) x q x P0 (= 4 q P0 as written).
 
 Choices where the prereg leaves room are listed in ``CHOICES`` (also written into every output).
 No absolute path is written here: data comes from ``--data`` (or $HUNT_DATA), the DeepSeek money file (W 11, D11)

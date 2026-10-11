@@ -450,7 +450,7 @@ class Runner:
         self.last_ins = max(self.last_ins, mx)
         for sym in self.syms:                               # the newest two days in memory = the store's
             d = self.data.get(sym)
-            if d is None or not len(d["ts"]):
+            if d is None or not len(d["ts"]) or sym in stats["late"]:      # (a coin reloaded just now is the store's)
                 continue
             hi = int(d["ts"][-1]) + FIVE
             lo = max(self.warmup_ms, hi - 2 * DAY)

@@ -2,7 +2,8 @@
 account reads, R15, R12 / R13 basics, D11). Synthetic paths and synthetic bars only; no real price is read.
 
 - pure functions: windows, caps, one window, bits, intervals, board cell, controls, headline, size-fix inputs,
-  continuous reads, the rule-bot unit and its fixed point, wallet risk, signal rate, concentration, overlap, D11
+  continuous reads, the rule-bot tier walk and checks (mirror of the engine), wallet risk, signal rate, concentration,
+  overlap, D11
 - engine: machine A at r = 0.5% is the tested machine bit for bit; run(ctx) end to end through hunt.reads_context on
   synthetic coins (D11 check of the hook, determinism, counts)
 """

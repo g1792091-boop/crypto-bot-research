@@ -234,7 +234,13 @@ class Feed:
                 self.store.log("warn", f"{sym}: {n} history bar(s) before {CFG.ms_str(first)} were missing; fetched")
                 self.out(f"{CFG.TAG} {sym}: {n:,} missing history bars fetched (before {CFG.ms_str(first)} UTC)")
                 if (self.store.first_open(sym) or first) > ex_first:
-                    return False
+                    tries = dict(self.store.get("history_tries", {}) or {})
+                    tries[sym] = int(tries.get(sym, 0)) + 1
+                    self.store.put("history_tries", tries)
+                    if tries[sym] < GAP_TRIES:
+                        return False                    # try again next pass; after GAP_TRIES passes: taken as is
+                    self.store.log("warn", f"{sym}: history before {CFG.ms_str(self.store.first_open(sym))} not "
+                                           f"fetched after {tries[sym]} tries: taken as it is")
         ok.add(sym)
         self.store.put("history_ok", sorted(ok))
         return True
@@ -244,10 +250,10 @@ class Feed:
         (a hole Binance itself has stays after that)."""
         tried = dict(self.store.get("gaps_tried", {}) or {})
         found = filled = 0
-        for a, b in self.store.gaps(sym, self.warmup_ms)[:GAPS_PER_PASS]:
+        todo = [(a, b) for a, b in self.store.gaps(sym, self.warmup_ms)
+                if int(tried.get(f"{sym}:{a}:{b}", 0)) < GAP_TRIES]
+        for a, b in todo[:GAPS_PER_PASS]:
             key = f"{sym}:{a}:{b}"
-            if int(tried.get(key, 0)) >= GAP_TRIES:
-                continue
             found += 1
             n = self.fill_span(sym, a, b)
             filled += n

@@ -256,9 +256,9 @@ the F5 name. Distinct names among the candidates: 87.
   (3군)**; with fewer eligible names a batch holds what exists (K of a batch = its size). F4 rows are never taken
   (section 3), whatever their score. **Membership of every batch is fixed here**, before any test bar is read;
   batches are never re-ordered after a test result.
-* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 or F5
-  system (eligibility ignored; F4 never) is still run on the test period with its reads (section 7), labelled "no pick, fail"; no other
-  system is.
+* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 or F5 system
+  (eligibility ignored; F4 never) is still run on the test period with its reads (section 7), labelled "no pick, fail";
+  no other system is.
 * `research/hunt/out/wide/picks.json` (each pick's system id, family, name, timeframe, gate, numbers, pick number 1..n
   and batch number; the batches as lists of pick numbers; the batch size 10, the trigger 5 and the batch rule) is
   written, and its sha256 appended to `PREREG_HUNT_WIDE.sha256`, **before any test-period bar is read**. The test step
@@ -300,11 +300,11 @@ the F5 name. Distinct names among the candidates: 87.
   folder (outside the repository) under the pin's hash; a rerun under the same pin computes only what is missing and
   gives the same result (section 10).
 * **Sealed post-verdict read (R22, panel amendment):** after `test.json` and the verdict are written and their sha256
-  appended to the pin, every one of the **686 candidate systems** (F1-F3 and F5, untested batch members included; **never
-  an F4 system**) runs once on test at base cost, and each pick's entry neighbours run on test, for R22. This is the
-  single sealed exception to "systems that are not tested picks are never run on the test period". Per-system numbers
-  go only to a sealed private file whose sha256 is in the repository; only R22's aggregates are public. No system that
-  is not a pick can become a candidate, a paper account or the basis of a v2 from this read.
+  appended to the pin, every one of the **686 candidate systems** (F1-F3 and F5, untested batch members included;
+  **never an F4 system**) runs once on test at base cost, and each pick's entry neighbours run on test, for R22. This is
+  the single sealed exception to "systems that are not tested picks are never run on the test period". Per-system
+  numbers go only to a sealed private file whose sha256 is in the repository; only R22's aggregates are public. No
+  system that is not a pick can become a candidate, a paper account or the basis of a v2 from this read.
 * **Paper lineup** (owners (g), written to `test.json` as `lineup` in the test step, labels only for DeepSeek): see
   section 12.
 
@@ -337,7 +337,7 @@ the F5 name. Distinct names among the candidates: 87.
    labelled "not a candidate") and the passing basket when >= 2 pass. Members of untested batches are never run on
    test. Nothing enters the select table, except the select-only R4 and the R5 machine map, which choose nothing.
    **Named exceptions** (each chooses nothing and is labelled): R4 (select runs of the 686 candidates; part (3)'s null
-   picks run on test as controls, not systems, after the verdict), the R5 machine map (select only, 686 candidates),
+   picks run on test as controls, not systems, after the verdict), the R5 machine map (select only),
    R22 (the sealed post-verdict read: the 686 candidates, untested batch members included, and the picks' entry
    neighbours on test; never F4), R2 (d) (oracle entries, labelled HINDSIGHT CEILING) and R3 (hold baselines, not
    systems). F4 systems run nowhere but the select table (section 3).
@@ -349,7 +349,11 @@ the F5 name. Distinct names among the candidates: 87.
    headline cell, the select-fixed size rule, the R14 band lengths) are written here before the pin. **Read code is
    hashed into the pin before any read output exists**: a reads module (`research/hunt/reads_a.py`, later ones alike)
    runs only when its file is listed in the pin file with a matching sha256, and each read output says whether that
-   line predates `test.json` (`reads_line_predates_test_json`).
+   line predates `test.json` (`reads_line_predates_test_json`), judged against the reads lines in the pin at the
+   **first** test start for these picks (kept once in the private folder, never overwritten; also in `test.json` as
+   `reads_pinned_at_test`), so a line appended after an interrupted test had written any part is never called earlier.
+   A fixed reads module is appended again; its older line stays in the pin and is reported as superseded (the read is
+   then post hoc, rule 5); no other pinned file may be superseded.
 4. One fixed risk sheet per row is printed, whatever it shows.
 5. A read added after the test is seen goes to `DEVIATIONS.md`, marked post hoc.
 6. Paper accounts at goal sizes exist only by the owners' explicit decision, labelled "goal-size paper, not tested"
@@ -358,15 +362,16 @@ the F5 name. Distinct names among the candidates: 87.
 
 **Named before the pin:**
 
-* **HEADLINE CELL**: per row, the share of **test calendar months** in which a **fresh $1,000 at goal-mode (machine B)
-  r = 5% touched $5,000** (marked equity at any 5m close), with its Clopper-Pearson 95% interval, beside the control
-  (a) and (b) shares (calendar months pooled over seeds 1-1,000) and the bust share.
+* **HEADLINE CELL**: per row, the share of **test calendar months** in which a **fresh account (start $1,000) at
+  goal-mode (machine B) r = 5% touched x5** (marked equity at any 5m close >= 5 x its start), with its Clopper-Pearson
+  95% interval, beside the control (a) and (b) shares (calendar months pooled over seeds 1-1,000) and the bust share.
 * **SIZE FIXED ON SELECT**: per row, the (machine, r) cell with the highest mean ln(window multiple) over select
   calendar months among the cells with bust share <= 5% (ties: lower r). Its test row is printed as "size fixed before
   the test". Any size read off the test board is labelled "forward-only evidence".
 * **Seed subsets**: the pass uses seeds 1-1,000; each read uses the lowest-numbered subset named in it (1-200 or
   1-100; R1 rolling windows 1-100, or 1-50 when one 30-day window run takes more than 0.03 s, measured on synthetic bars
-  before the run).
+  before the run by `hunt.py benchwin` and written to `research/hunt/bench_window.json`, which counts only when it is
+  listed in the pin with a matching sha256; without it the subset is 1-100. No read times a run on the study's data).
 * **Goal reads report multiples** (owners (e)): x2, x5, x10, x20, x30, x50, x100 of the window's start.
 
 ### 7.2 Reads interface (code)
@@ -379,45 +384,58 @@ peak, trades), the pinned control draws of any seed (`control_signals`, sliced p
 subsets, the headline cell, the size rule, the live gate, and an output dict and a private dict. Engine read options
 (off by default; at default parameters the engine is bit-identical to the reviewed one, a test checks a seeded case
 against the reviewed code's digest): the per-5m equity path and peak, close-at-end, N4 = (1 + adds) x q x P0, the
-goal-mode bracket rule, fixed leverage with margin = L% (R24), 1m bars and liquidation on mark price (R19). The hook
+goal-mode bracket rule, the rule bot's sizing with its tier walk and checks (R24), 1m bars and liquidation on mark
+price (R19). The context also carries the pinned synthetic window timing (`window_seconds`, 7.1) and the judge's
+per-call cost (`--judge-usd-per-call`, R15; recorded in the read, absent = counts only). The hook
 writes the public output to `out/<study>/<module>.json` and the private one outside the repository (D11; a float under
 a DeepSeek row in the public output is refused).
 
 ### 7.3 Phase A reads (computed right after the verdict on the fixed ROWS: `reads_a.py` and hunt.py)
 
-* **R1 goal board** (`reads_a.py`). Rows: ROWS (7.1). Periods: test (headline), select (labelled "chosen here"),
-  extra 2020 (from the first day with a known 장세 label). Windows: (i) UTC calendar months (headline); (ii) rolling
-  30-day windows [d, d + 30 days), one per UTC start day d with d + 30 <= period end (975 in test, 1,066 in select,
-  about 180 in extra). Each window is a fresh account: **$1,000**, flat, only signals whose signal bar closes inside the
-  window, indicators and labels from full history; the large group is the calendar month's (H 3), not recomputed at the
-  window start; positions open at the window end are closed at the last 5m close with slippage and taker (headline)
-  and also shown marked; bust = marked equity < $100 at any 5m close (the account stops). Sizes r = 0.5, 1, 2, 5, 10,
-  20%. **Machine A** (as written, panel): H 7-8, B = equity / 6, LEV_MAX 20, total open-risk cap 4% x r / 0.5% (so at
-  higher r the margin budget and the brackets cut the unit; the realised risk is printed next to the nominal r).
-  **Machine B** (goal-mode, r >= 5% only, caps of PREREG_ALTPUMP 7):
+* **R1 goal board** (`reads_a.py`). Rows: ROWS (7.1). Periods: test (headline), select (labelled "chosen here"), extra
+  2020 (from the first day with a known 장세 label). Windows: (i) UTC calendar months (headline); (ii) rolling 30-day
+  windows [d, d + 30 days), one per UTC start day d with d + 30 <= period end (975 in test, 1,066 in select, about 155
+  in extra: labels start about 2020-06-29, after the 180-day 장세 history). Each window is a fresh account: **$1,000**,
+  flat, only signals whose signal bar closes inside the window, indicators and labels from full history; the large group
+  is the calendar month's (H 3), not recomputed at the window start; positions open at the window end are closed at the
+  last 5m close with slippage and taker (headline) and also shown marked; bust = marked equity < $100 at any 5m close
+  (the account stops). Sizes r = 0.5, 1, 2, 5, 10, 20%. **Machine A** (as written, panel): H 7-8, B = equity / 6,
+  LEV_MAX 20, total open-risk cap 4% x r / 0.5% (so at higher r the margin budget and the brackets cut the unit; the
+  realised risk is printed next to the nominal r). **Machine B** (goal-mode, r >= 5% only, caps of PREREG_ALTPUMP 7):
   cap = min(4r, 60%), n_max = floor(cap / r) (5% -> 20% and 4 positions; 10% -> 40% and 4; 20% -> 60% and 3) as the
   position cap and the margin divisor, leverage up to the coin's bracket maximum (fallback 20), H 7.3 (iii) kept, the
   bracket looked up at the first unit's notional q x P0, an add past that tier's cap skipped and counted "bracket";
   labelled "goal-mode machine, not the tested machine". Columns per (row, period, window set, machine, r): share of
   windows ending >= x2, x5, x10, x20, x30, x50, x100; share touching each level at any 5m close; bust share; median,
   worst and best window; median days to the first touch of x2 and of x5; median give-back (peak - end) / peak among
-  windows that touched x5; median number of positions that made 80% of the gain in windows ending >= x5; realised
-  risk: effective r = r x median(q1 x D0 / U), p90 of q1 x D0 / U, share of first units cut by reason, share of
-  positions filling add 1, 2 and 3, median leverage, max gross notional / equity. Honesty: calendar shares with exact
-  Clopper-Pearson 95% intervals (0 of 33 still allows up to 10.6%); rolling shares with a moving-block bootstrap 90% CI
-  (blocks of 30 start days, 2,000 resamples, seed parts (tag, "goalboard", row, period, machine, r, "boot")) and the
-  line "overlapping windows: about 33 (test) / 36 (select) independent months". Controls on the same board: (a) and
-  (b) through the same machine on the pinned W 6 draws (full-period sets sliced per window, no new draw); calendar
-  months pooled over seeds 1-1,000, rolling windows seeds 1-100 (1-50 under the 0.03 s rule); per cell the pick's
-  share, the pooled control share, the 5-95% range of per-seed shares, and pick minus control with a block-bootstrap
-  90% CI. Altpump's coin-flip goal-50x baseline (about 1% of months) is quoted for scale. The touch columns are
-  descriptive and create no stop-at-target rule.
-* **R24 leverage read** (owners (f), `reads_a.py`): the R1 board at **L = 20, 30, 40** with rule-bot sizing: margin =
-  L% of equity at the previous 5m close, notional = L x margin, isolated, the engine's bracket rule (L lowered to the
-  bracket's maximum at that notional), no adds, no open-risk cap, at most floor(100 / L) positions, the hunt stop and
-  chandelier; the rule-bot check (the first stop must lie inside the liquidation price by max(0.2%, 1 ATR), else the
-  entry is skipped and counted); liquidations, skipped entries and the wallet loss per stop reported. Controls (a) / (b)
-  seeds 1-100. Labelled "rule-bot sizing read, not the tested machine".
+  windows that touched x5; median number of positions that made 80% of the gain in windows ending >= x5; realised risk:
+  effective r = r x median(q1 x D0 / U), p90 of q1 x D0 / U, share of first units cut by reason, share of positions
+  filling add 1, 2 and 3, median leverage (max gross notional / equity is not computed in Phase A: R10). Honesty:
+  calendar shares with exact Clopper-Pearson 95% intervals (0 of 33 still allows up to 10.6%); rolling shares with a
+  moving-block bootstrap 90% CI (blocks of 30 start days, 2,000 resamples, seed parts (tag, "goalboard", row, period,
+  machine, r, "boot")) and the line "overlapping windows: about 33 (test) / 36 (select) independent months". Controls on
+  the same board: (a) and (b) through the same machine on the pinned W 6 draws (full-period sets sliced per window, no
+  new draw; extra 2020 has no W 6 draws, so its controls are drawn over the extra period with the W 6 seed parts and
+  period "extra"); calendar months pooled over seeds 1-1,000, rolling windows seeds 1-100 (1-50 under the 0.03 s rule);
+  per cell the pick's share, the pooled control share, the 5-95% range of per-seed shares, and pick minus control with a
+  block-bootstrap 90% CI. Altpump's coin-flip goal-50x baseline (about 1% of months) is quoted for scale. The touch
+  columns are descriptive and create no stop-at-target rule.
+* **R24 leverage read** (owners (f), `reads_a.py`, engine `PR_FIXLEV`): the R1 board at **L = 20, 30, 40** with the
+  rule bot's sizing (`paperbot/sizing.py`, v3 quality tiers, `paperbot/config.py`), checked by the engine at each entry
+  on the planned unit at the equity of the previous 5m close (one sequential run per window): the candidates are L,
+  then each lower tier down to 20x (40: 40, 30, 20; 30: 30, 20; 20: 20); for a candidate L', margin = L'% of equity
+  and notional = L' x margin, isolated; it is taken when (1) the bracket allows L' at that notional, (2) the first stop
+  lies inside the liquidation price by at least max(0.2% of the fill, 1 ATR14) and (3) the loss at the first stop, fill
+  and exit slippage and taker both ways, is at most 15% of equity; the first candidate that passes is used, else the
+  entry is skipped and counted by the lowest tier's reason (bracket, liquidation buffer, loss). A larger L's candidates
+  include the smaller one's, so the leverage used never falls as L rises. The liquidity and free-wallet cuts after the
+  check keep L. No adds, no open-risk cap, at most floor(100 / L) positions, the hunt stop and chandelier.
+  Reported: liquidations, skips by reason, the leverage used, and the wallet loss per first stop over the row's test
+  signals, both at L itself (capped at the isolated margin plus fees; the share of stops beyond the liquidation price
+  shown) and under the rule bot's walk at a fresh $1,000. Controls (a) / (b): calendar months seeds 1-100; rolling
+  windows the R1 subset (1-100, or 1-50 under the 0.03 s rule). Labelled "rule-bot sizing read, not the tested
+  machine". On a coin without real brackets (the fallback table: 20x up to $25,000) 30x and 40x are never allowed, so
+  those cells run at 20x, and no tier passes once 20x needs more than $25,000 (equity above $6,250).
 * **Continuous-account reads** (owners, `reads_a.py`): best trough-to-peak run-up inside any 30 days and its dates,
   geometric mean monthly return, whole-period multiple, max drawdown and the longest time to recover, at r = 0.5% and
   1% (the tested $5,000 accounts) and at the size fixed on select (fresh $1,000).
@@ -428,8 +446,10 @@ a DeepSeek row in the public output is refused).
   tested picks plus the v1 pick, select and test: events per day, gated (G) and gate-blocked (N) counted separately
   (mean, p50, p95, max day); events at a single signal close (max, p99) and per hour (p99); the share of closes with
   more than 10, 20 and 30 events; events taken vs dropped by coin_has_position, six_positions, large_group_direction and
-  risk_cap; by month and year. Daily and monthly call counts x a per-call cost entered as a parameter, compared with the
-  owners' caps (commit ca7a302).
+  risk_cap (the drops by reason as run totals: the engine counts skips per run, not per candidate; candidates and
+  positions by month and year). Daily and monthly call counts x a per-call cost entered as a parameter
+  (`--judge-usd-per-call`, recorded in the read; without it R15 reports counts only), compared with the owners' caps
+  (commit ca7a302).
 * **R19 1m + mark fidelity** (`hunt.py fidelity`, on the rented server's 1m set of the coins the tested picks traded,
   `data_hunt.py --kind fidelity`): every tested pick rerun with the same engine on 1m last-price bars and on 1m last +
   1m mark-price bars (liquidation checked on the mark bar; a stop the last price reaches while the liquidation price
@@ -440,9 +460,12 @@ a DeepSeek row in the public output is refused).
   count) runs through the same 1m market in a reads module. The R1 headline numbers are called final only after this
   check.
 * **R23 October 2026** (`hunt.py october --data-oct DIR`): before the pin, the data.binance.vision daily files for
-  2026-10-01 .. 2026-10-10 of the 30 coins (5m klines and 5m mark-price klines) are listed with their sha256; they are
-  downloaded and checksummed only, never opened before `picks.json` and `test.json` exist. The loader puts them into
-  the 5m npz layout (`.CHECKSUM` checked; funding from daily files when present, else 0 and counted). Every tested pick
+  2026-10-01 .. 2026-10-10 of the 30 coins (5m klines and 5m mark-price klines) are listed with the sha256 of their
+  bytes in `research/hunt/october_files.json` (`hunt.py octlist --data-oct DIR`: each zip checked against its
+  `.CHECKSUM`, none opened), which `pinlist` then lists; they are downloaded and checksummed only, never opened before
+  `picks.json` and `test.json` exist. `october` refuses unless that list is in the pin with a matching sha256, and stops
+  at any zip missing from the list, differing from it or without its `.CHECKSUM`. The loader puts them into the 5m npz
+  layout (funding from daily files when present, else 0 and counted). Every tested pick
   and the v1 pick run on 2026-10-01 .. 2026-10-11 with all earlier bars as warm-up: fresh $1,000 at r = 0.5%; controls
   (a) and (b), seeds 1-200 drawn in that window (seed parts with period "october"); each 10-day multiple as a
   percentile of the test period's fresh-wallet rolling 10-day windows (one per start day). Printed: "the owners watched
@@ -686,7 +709,8 @@ pass rule toward goal metrics.
   last-price bars; section 15 Q4); only reads after the verdict read mark prices (R19 on 1m bars, R9 on 5m bars).
 * After the verdict only: the 1m fidelity set (`<dir>/1m/<SYM>.npz`, same keys, `data_hunt.py download --kind
   fidelity`, the coins the tested picks traded; its content hashes are written into `fidelity.json`) and the October
-  daily archive zips (R23; their sha256 listed in the pin before they are opened).
+  daily archive zips (R23; their sha256 listed in `research/hunt/october_files.json`, which is in the pin, before they
+  are opened).
 * The download is still running when this is written. No code waits on it: every path is given by `--data`, and a
   coin whose file is missing stops `select` and `test` (the universe is fixed) but not the tests on synthetic bars.
 * Parity (section 8) also reads the full grid's 1m archive of the old six, given by its own path argument.
@@ -700,10 +724,13 @@ pass rule toward goal metrics.
   matches every file it lists; `test` also needs the picks line (section 5). After the test: `reads --study S` (the
   reads hook again; a reads module runs only when its file is listed in the pin, 7.1), `fidelity --study S --data1m
   DIR` (R19; `--list-coins` prints the coins the tested picks traded, for the 1m download) and `october --study S
-  --data-oct DIR` (R23). Each refuses before `test.json` exists and writes only its own output file.
+  --data-oct DIR` (R23). Each refuses before `test.json` exists and writes only its own output file. Before the pin:
+  `octlist --data-oct DIR` (R23's file list) and `benchwin` (7.1's synthetic window timing).
 * `PREREG_HUNT_WIDE.sha256` lists exactly what `python -m research.hunt.hunt pinlist --study wide` prints: this file;
   `PREREG_HUNT.md`; `research/hunt/universe30.json`, `data_manifest.json` and `data_check.json` (H 2), the data builder
-  `research/hunt/data_hunt.py` and every file under `research/hunt/data_build/` when they exist; `research/hunt/exchange30.json` when it exists (H 7.3); every
+  `research/hunt/data_hunt.py` and every file under `research/hunt/data_build/` when they exist;
+  `research/hunt/exchange30.json` (H 7.3), `research/hunt/october_files.json` (R23) and
+  `research/hunt/bench_window.json` (7.1) when they exist; every
   Python file under `research/hunt/` that the command imports; the hunt tests under `tests/`;
   `research/hunt/out/wide/parity.json`; as read-only inputs checked by hash, `research/fullgrid/diag/watch_sel.json`,
   `research/fullgrid/PREREG.sha256` (whose own list must match), `research/entry_study/DEFS_BC.sha256` and
@@ -728,7 +755,9 @@ pass rule toward goal metrics.
 * Tests on synthetic bars only (the event edge rule, the F5 events against famous.py, the 15m/30m D0 and chandelier,
   the selection order, one-per-name rule and batches, BH per batch and the batch trigger, the lineup rule, the live
   gate, the size rule, the read guard and the D11 check of reads, the engine read options bit-identical at default
-  parameters against the reviewed engine's digest, the 1m bar length, the daily-archive loader, refusal without a pin),
+  parameters against the reviewed engine's digest, the 1m bar length, the daily-archive loader and its pinned list,
+  R24's tier walk and checks against a Python mirror, the superseded reads line, the first-test-start record, refusal
+  without a pin),
   in addition to v1's (H 16).
 * Run time is measured on synthetic bars once the code exists and written in `DEVIATIONS.md` before the run; if select
   plus test would take more than about a day at 2 processes, the run goes to a rented server (section 15 Q10).
@@ -805,9 +834,11 @@ pass rule toward goal metrics.
   what is tested, not a reason to change the costs.
 * **Pyramiding is margin-limited on tight stops and in larger accounts (H 7.3 as written).** The leverage H 7.3 (ii)
   asks for is N4 / B = 24 x r / (D0 / P0), with N4 = 4 x q x P0 taken at P0, while the adds fill higher (long). With the
-  fallback brackets at r = 0.5% and a $5,000 wallet: D0 / P0 = 0.3% leaves no room for any add (L = 10, the first unit
-  is already cut to the budget); 0.5% leaves room for about 2.3 of the 3 adds (L = 20); 1% leaves 2.97, so the third
-  add is cut. Whenever 0.12 / (D0 / P0) is a whole number of at most 20 (D0 = 1%, 2%, 4% of the price ...), L uses B
+  fallback brackets at r = 0.5% and a $5,000 wallet: at or below D0 / P0 = 0.4% N4 reaches the $25,000 tier and L = 10,
+  so at most a third of one add finds room (none at 0.3%, where the first unit takes the whole budget); 0.5% leaves room
+  for about 2.3 of the 3 adds (L = 20); 1% leaves about 2.94, so the third add is cut. At r = 1% the tier is reached at
+  or below 0.8%, and at or below 0.5% the first unit itself is cut to B. Whenever N4 / B = 0.12 / (D0 / P0) at r = 0.5%
+  (0.24 / (D0 / P0) at r = 1%) is a whole number of at most 20 (at r = 0.5%: D0 = 1%, 2%, 4% of the price ...), L uses B
   exactly and the third add is always cut, so the "full units" stops of H 7.4 (P0 + 0.667 D0, P0 + 1.25 D0) do not hold
   exactly. Tight stops are typical of the new 15m and 30m systems, so selection compares timeframes under this
   asymmetry. N4 / B does not depend on the equity, but the bracket of N4 does: a compounding account crosses the
@@ -841,8 +872,8 @@ study with its own pre-registration and forward data).
 8. **Sizing read**: replaced by the R1 goal board (section 7.3). Machine A is the tested machine with the open-risk cap
    scaled by r / 0.5% and B = equity / 6 as written (panel: at higher r the margin budget and the brackets cut the
    unit, and the realised risk is printed next to the nominal r); machine B is the goal-mode machine. Alternative: B
-   also scaled by r / 0.5% on machine A (the first draft's sizing read; the reads module drafted on 2026-10-11 codes
-   this). [Panel: B = equity / 6 on machine A]
+   also scaled by r / 0.5% on machine A (the first draft's sizing read; one line in `reads_a.cell_overrides`, which
+   follows the default). [Panel: B = equity / 6 on machine A]
 9. **Paper accounts at 2% or 5%.** [None; the owners decide after reading the goal board, labelled "goal-size paper,
    not tested"]
 10. **Where it runs.** [The development machine at 2 processes if the measured time allows; otherwise a rented server
@@ -941,3 +972,33 @@ full; the owners' decisions (a)-(h) are binding (section 0.1). Changes:
    goal-mode bracket rule, fixed leverage with margin = L%, 1m bars and liquidation on mark. Commands `reads`,
    `fidelity`, `october`.
 9. Deferred to round 2: new-information entries, autopsy noise filters, custom values (section 14).
+
+### 16.4 Phase-A review (2026-10-11, before the pin)
+
+Done after the Phase-A reads module (`reads_a.py`) and the core changes of 16.3 were drafted and tested on synthetic
+bars only; no select or test of either study had run and no trading outcome had been computed on any real price period.
+Three reviewers (leak, math, docs) read the code and this file. Changes:
+
+1. **F4 never runs on test, R22 included**: R22 (1) and R4 (2)-(4) cover the 686 candidates (F1-F3 and F5); R22's
+   public aggregates that carry ln M use F1, F2 and F5 rows only (sections 3, 6, 7.4, Q2). 16.2 #1 ("come from F1-F3")
+   is superseded: the picks, the BH family, WIDE PASS and the 'no pick, fail' system come from F1-F3 and F5 (sections 3,
+   5, Q13; the code's CHOICES say the same).
+2. **7.1 rule 1 names its exceptions** (R4, the R5 machine map, R22, R2 (d), R3). **Rule 3**: the reads lines are judged
+   against the first test start for these picks (kept once in the private folder); a fixed reads module is appended
+   again and its older line is reported as superseded. **R14** is listed in the pin before `test.json` and its output
+   before the paper bot starts.
+3. **7.3a**: R4's select parts and R22 (2)'s select spike ratio come between `picks.json` and `test.json` from a pinned
+   file, or are post hoc; `test.json` records which (`pretest_reads`).
+4. **Machine A of R1 follows 7.3 and Q8's default** (B = equity / 6, only the open-risk cap scaled); 16.2 #2 ("the
+   margin budget is scaled with r") is superseded for R1, which replaced the sizing read. The retired sizing read's
+   code is removed.
+5. **R24 copies the rule bot**: the tier walk 40 -> 30 -> 20 (the old rule lowered L to the bracket maximum at L's own
+   notional, so 40x could run at less leverage than 20x) and its third check (loss at the stop <= 15% of equity), both
+   in the engine at entry time (one sequential run instead of a fixed point; synthetic 30 coins, one 30-day window:
+   3-4 ms per L cell vs 9 ms for machine A at r = 0.5%); the wallet-loss table is capped at the isolated margin.
+6. **The 0.03 s rule** reads only a pinned synthetic timing (`benchwin` -> `bench_window.json`), never times real data;
+   the judge's per-call cost is a recorded parameter (`--judge-usd-per-call`); columns the engine does not export are
+   marked "not computed in Phase A".
+7. **R23**: the October zips are listed in `october_files.json` (`octlist`), pinned; `october` refuses anything else.
+8. **Headline cell as a multiple** (touched x5), owners (e). Extra-2020 rolling windows: about 155. Section 13's add
+   arithmetic corrected (0.4% tier edge at r = 0.5%, 0.8% at r = 1%; 1% leaves about 2.94 adds).

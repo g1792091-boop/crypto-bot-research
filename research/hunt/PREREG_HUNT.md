@@ -186,10 +186,12 @@ is an approximation, not a verified lower bound: some small alts' real first tie
 table (its last add first). Every bracket table is a 2026 snapshot applied to 2020-2026. The per-coin source
 (exchange30 or fallback) and the leverage and margin cuts per coin are reported. Quantity steps are ignored.
 **Note on the third add and the margin (review).** N4 is taken at P0 while the adds fill higher (long), so the margin
-budget B can run out before the last add: whenever 0.12 / (D0 / P0) is a whole number of at most 20 (D0 = 1%, 2%, 4%
-of the price ...), L uses B exactly and the third add is always cut; on tight stops (D0 / P0 under about 0.5%) the
-first unit is already cut to B and no add finds room. A compounding account also crosses the $25,000 / $100,000 /
-$250,000 tiers and loses adds as it grows. So the "full units" stops of 7.4 (P0 + 0.667 D0, P0 + 1.25 D0) do not
+budget B can run out before the last add. With a $5,000 wallet and the fallback table, N4 / B = 0.12 / (D0 / P0) at
+r = 0.5% (0.24 / (D0 / P0) at r = 1%); whenever that is a whole number of at most 20 (at r = 0.5%: D0 = 1%, 2%, 4% of
+the price ...), L uses B exactly and the third add is always cut (D0 = 1% at r = 0.5% leaves about 2.94 adds). At or
+below D0 / P0 = 0.4% at r = 0.5% (0.8% at r = 1%) N4 reaches the $25,000 tier, L falls to 10 and at most a third of one
+add finds room (none at 0.3%); at r = 1% and D0 / P0 at or below 0.5% the first unit itself is cut to B. A compounding
+account also crosses the $25,000 / $100,000 / $250,000 tiers and loses adds as it grows. So the "full units" stops of 7.4 (P0 + 0.667 D0, P0 + 1.25 D0) do not
 always hold. This is part of the machine as written; adds skipped and cut by margin are counted per run. The
 alternative (N4 at the planned add levels) is Q13.
 
@@ -347,7 +349,7 @@ verdicts are never merged into one "the hunt passed".
 |---|---|
 | v1 PASS | **forward paper bot from about 2026-10-20** on the coins of the 30 that still trade (22 at 2026-09-30; never a coin outside the 30, no new listings): the pick exactly as here, both sizes, $5,000 each, on the paper bot server (fapi reachable there), nothing else changed. **No real money before the mid-November 2026 review**; real money after it is the owners' decision only, and only for a pick labelled 정식 that met the forward criteria and the live-readiness gate (`PREREG_HUNT_WIDE.md` W 12) |
 | v1 fail (any P) | recorded as a fail with every number. No tuning on the test period. The pick goes to the paper lineup as 참고 only when it meets the lineup rule of `PREREG_HUNT_WIDE.md` W 12 (computed in the test step and written to `test.json` as `lineup`), else it is excluded; it is not a candidate for real money |
-| no pick | as fail |
+| no pick | recorded as a fail with every number; the "no pick, fail" system is excluded from the paper lineup (`PREREG_HUNT_WIDE.md` W 12) and is never a candidate |
 
 * **Nothing is tuned after the test period is seen.** A bug found after the test run (the code not doing what this file
   says) is fixed in `DEVIATIONS.md`, with the line of this file it breaks; the test is rerun once and both results are
@@ -496,3 +498,7 @@ computed on any real price period. Changes:
    for a 정식 pick after the forward criteria and the live-readiness gate.
 7. Section 16: the pinned list is what `pinlist --study v1` prints; select and test refuse unless `data_check.json`
    passes; one fixed checkout. Q13 and Q14 added.
+8. Phase-A review (`PREREG_HUNT_WIDE.md` 16.4): the 7.3 note's numbers corrected (the $25,000 tier edge at D0 / P0 =
+   0.4% for r = 0.5% and 0.8% for r = 1%; the whole-number rule at both sizes); section 15's "no pick" row says what
+   the code and W 12 do (excluded from the paper lineup); the read guard's rule 3 is judged at the first test start for
+   the pick (W 7.1).
