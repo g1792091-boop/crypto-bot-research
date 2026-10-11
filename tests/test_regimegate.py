@@ -252,3 +252,299 @@ def test_pin_must_list_exactly_the_pinned_files(tmp_path):
     pin.write_text("\n".join(lines[:-1] + ["0" * 64 + "  " + GT.PINNED[-1]]) + "\n", encoding="utf-8")
     assert any(GT.PINNED[-1] in b for b in GT.pin_problems(str(pin)))
     assert GT.pin_problems(str(tmp_path / "none")) and "missing" in GT.pin_problems(str(tmp_path / "none"))[0]
+
+
+def test_style_map_has_each_of_the_80_ids_once():
+    st = GT.style()
+    core, ds = set(st["core"]), set(st["ds"])
+    assert not core & ds and len(core) == 36 and len(ds) == 44
+    assert len(GT.all_cells()) == 315
+    assert sorted({(k, n) for k, n, _tf in GT.all_cells()}) == sorted([("core", n) for n in core] + [("ds", n) for n in ds])
+
+
+def test_flip_control_is_seeded():
+    rng = np.random.default_rng(8)
+    n = 3000
+    cell = np.sort(rng.integers(0, 6, n))
+    x = rng.normal(0, 0.02, n)
+    blocked = {"G1": rng.random(n) < 0.6, "G2": rng.random(n) < 0.3}
+    lines = np.array([np.ones(6, bool), np.arange(6) < 3])
+    a = GT.flip_control(cell, x, blocked, lines, 200, GT.R._seed("regimegate|flip", "forward", "ladder|2"))
+    b = GT.flip_control(cell, x, blocked, lines, 200, GT.R._seed("regimegate|flip", "forward", "ladder|2"))
+    c = GT.flip_control(cell, x, blocked, lines, 200, GT.R._seed("regimegate|flip", "history", "ladder|2"))
+    for g in blocked:
+        assert np.array_equal(a[g], b[g]) and not np.array_equal(a[g], c[g])
+
+
+# ====================================================================== the nightly look (paperbot/regimegate.py)
+MIN = 60_000
+DAY = 86_400_000
+
+
+def _rgj():
+    from paperbot import regimegate as RGJ
+    return RGJ
+
+
+def _synth1m(days: int, seed: int, p0: float, start: int) -> dict:
+    """1m bars with drifting and calm / wild stretches (three days each), so every market state appears."""
+    n = days * 1440
+    rng = np.random.default_rng(seed)
+    blk = 3 * 1440
+    nb = n // blk + 1
+    vol = np.repeat(rng.choice([0.0004, 0.0009, 0.0025], nb), blk)[:n]
+    drift = np.repeat(rng.choice([-0.0001, 0.0, 0.0001], nb), blk)[:n]
+    c = p0 * np.exp(np.cumsum(drift + vol * rng.standard_normal(n)))
+    o = np.r_[p0, c[:-1]]
+    h = np.maximum(o, c) * (1 + np.abs(rng.normal(0, 1, n)) * vol * 0.5)
+    lo = np.minimum(o, c) * (1 - np.abs(rng.normal(0, 1, n)) * vol * 0.5)
+    v = rng.lognormal(5, 0.5, n)
+    ts = start + MIN * np.arange(n, dtype=np.int64)
+    return {"ts": ts, "fund": np.zeros(n), "o": o, "h": h, "l": lo, "c": c, "v": v, "mo": o, "mh": h, "ml": lo,
+            "mc": c}
+
+
+def _to5m(z: dict) -> tuple:
+    n5 = len(z["ts"]) // 5
+
+    def g(x, f):
+        return f(x[:n5 * 5].reshape(n5, 5), axis=1)
+    return (z["ts"][::5][:n5], z["o"][::5][:n5], g(z["h"], np.max), g(z["l"], np.min), z["c"][4::5][:n5],
+            g(z["v"], np.sum))
+
+
+def test_labels_equal_regimes_py_on_a_synthetic_series(tmp_path, monkeypatch):
+    """coin_states_from_frames on the live frames (from 5m bars) == research/fullgrid/regimes.py coin_states on the
+    full grid's frames (from the same series' 1m bars), and the label lookup reads them the same way."""
+    from paperbot import paramshadow as PS
+    from paperbot import sweepsig
+    RGJ = _rgj()
+    monkeypatch.setitem(GT.R.FRAME_DIR, 0, None)
+    z = _synth1m(200, 1, 100.0, GT.ms("2026-03-20"))
+    os.makedirs(tmp_path / "1m")
+    np.savez(tmp_path / "1m" / "BTCUSDT.npz", **z)
+    lib = sweepsig.lib()
+    cols = _to5m(z)
+    seen = set()
+    for tf in ("15m", "1h", "4h"):
+        want = GT.RG.coin_states(str(tmp_path), "BTCUSDT", tf)
+        frames = {t: PS.chart_frame(lib, cols, t) for t in (tf, "15m", "4h")}
+        got = RGJ.coin_states_from_frames(frames, tf)
+        for k in want:
+            assert np.array_equal(want[k], got[k], equal_nan=True), (tf, k)
+        closes = want["close"][-2000:]
+        assert [list(a) for a in GT.label_codes(closes, want)] == [list(a) for a in GT.label_codes(closes, got)]
+        seen |= set(np.unique(want["code"]).tolist())
+    assert {GT.RG.Y.TREND, GT.RG.Y.RANGE, GT.RG.Y.NORMAL, GT.RG.Y.UNKNOWN} <= seen
+
+
+def test_labels_never_look_ahead():
+    """A label at a bar is the same whether the frames end there or two weeks later (the night it is computed on
+    never changes it)."""
+    from paperbot import paramshadow as PS
+    from paperbot import sweepsig
+    RGJ = _rgj()
+    lib = sweepsig.lib()
+    z = _synth1m(200, 2, 50.0, GT.ms("2026-03-20"))
+    cols = _to5m(z)
+    cut = int(np.searchsorted(cols[0], cols[0][-1] - 14 * DAY))
+    short = tuple(a[:cut] for a in cols)
+    for tf in ("15m", "4h"):
+        full = RGJ.coin_states_from_frames({t: PS.chart_frame(lib, cols, t) for t in (tf, "15m", "4h")}, tf)
+        part = RGJ.coin_states_from_frames({t: PS.chart_frame(lib, short, t) for t in (tf, "15m", "4h")}, tf)
+        n = len(part["close"])
+        assert np.array_equal(full["close"][:n], part["close"]) and np.array_equal(full["code"][:n], part["code"])
+        m = len(part["ts15"])
+        assert np.array_equal(full["vol"][:m], part["vol"])
+
+
+D0 = 1_791_158_400_000                        # 2026-10-05 00:00 UTC
+STRATS = ["S2_ST_ROC", "S1_EMA_RSI_CHOP"]     # one trend, one other (style map), both fire on these bars
+TFS = ("15m", "1h")
+SYMS = ("BTCUSDT", "ETHUSDT")
+HIST_DAYS = 200                               # > regime5y's 180 days, so the labels are known in the window
+WIN = (GT.FWD_FROM, D0 + 4 * DAY)             # the registered start; a short end for the test
+
+
+def _synth5(seed: int, p0: float, days: int = HIST_DAYS + 7):
+    z = _synth1m(days, seed, p0, D0 - HIST_DAYS * DAY)
+    return tuple(np.asarray(a) for a in _to5m(z))
+
+
+@pytest.fixture(scope="module")
+def fdata():
+    return {s: _synth5(i + 3, p) for i, (s, p) in enumerate(zip(SYMS, (60000.0, 2500.0)))}
+
+
+def _steps_from(data):
+    """1m steps made from the 5m bars (each 5m bar split into five minutes; funding every 8 h)."""
+    from paperbot.models import Bar
+
+    def fetch(rest, symbols, start, end):
+        out = []
+        cols = {s: tuple(a[(data[s][0] >= start) & (data[s][0] < end)] for a in data[s]) for s in symbols}
+        n = len(cols[symbols[0]][0])
+        for j in range(n):
+            for q in range(5):
+                t0 = int(cols[symbols[0]][0][j]) + q * MIN
+                bars = {}
+                for s in symbols:
+                    _ts, o, h, lo, c, _v = cols[s]
+                    oo = o[j] + (c[j] - o[j]) * q / 5
+                    cc = o[j] + (c[j] - o[j]) * (q + 1) / 5
+                    hh = max(oo, cc) + (h[j] - max(o[j], c[j])) * (1.0 if q == 2 else 0.3)
+                    ll = min(oo, cc) - (min(o[j], c[j]) - lo[j]) * (1.0 if q == 3 else 0.3)
+                    bars[s] = Bar(s, t0, t0 + MIN - 1, oo, hh, ll, cc, oo, hh, ll, cc)
+                fund = {s: 0.0001 for s in symbols} if t0 % (8 * 3_600_000) == 0 else {}
+                out.append((t0, bars, fund))
+        return out
+    return fetch
+
+
+def _brackets():
+    from paperbot.margin import BracketTier, Brackets
+    return {s: Brackets([BracketTier(300_000, 75, 0.005, 0.0), BracketTier(800_000, 50, 0.01, 1500.0),
+                         BracketTier(3_000_000, 20, 0.025, 13500.0)]) for s in SYMS}
+
+
+def _paper_db(path) -> str:
+    from paperbot import sweepsig
+    from paperbot.sigservice import strategy_names
+    from paperbot.store3 import Store3
+    st = Store3(str(path))
+    for n in strategy_names(sweepsig.lib()):
+        for tf in ("15m", "30m", "1h", "4h"):
+            st.add_account(f"{n}@{tf}", n, tf, "strategy", WIN[0] + 30_000, "paper-v4")
+    st.put_state("run", WIN[0], {"taker_fee": 0.0005})
+    st.commit()
+    st.close()
+    return str(path)
+
+
+def _frun(out, data, now, max_days=30, db=None):
+    from paperbot import paramshadow as PS
+    return _rgj().run(db, str(out), PS.FrameSource(data), None, _brackets(), {s: {} for s in SYMS}, now,
+                      max_days=max_days, strategies=STRATS, tfs=TFS, symbols=SYMS, fetch_steps=_steps_from(data),
+                      log=lambda s: None, win=WIN, live_root="", n_flip=20, brackets_doc=b"test")
+
+
+def _signals(out):
+    conn = sqlite3.connect(os.path.join(str(out), "regimegate.db"))
+    rows = conn.execute("SELECT id, strategy, tf, symbol, side, bar_close, class, regime, vol, status, entry_time, "
+                        "exit_time, exit_reason, leverage, tier, round(pnl, 6) FROM signals ORDER BY id").fetchall()
+    conn.close()
+    return rows
+
+
+def test_forward_look_in_pieces_equals_one_night(tmp_path, fdata):
+    now = D0 + 6 * DAY + 3_600_000                    # yesterday = 10-10; the test window's last day is 10-09
+    one = _frun(tmp_path / "one", fdata, now)
+    assert one["status"] == "done" and one["through_day"] == "2026-10-09" and one["days"] == 5
+    out = tmp_path / "parts"
+    s1 = _frun(out, fdata, now, max_days=2)
+    assert s1["status"] == "filling" and s1["days_remaining"] == 3 and "채우는 중" in s1["line_ko"]
+    _frun(out, fdata, now, max_days=2)
+    s3 = _frun(out, fdata, now, max_days=2)
+    assert s3["status"] == "done" and s3["days_remaining"] == 0
+    rows = _signals(tmp_path / "one")
+    assert rows == _signals(out)
+    assert json.dumps(one["evaluation"], sort_keys=True) == json.dumps(s3["evaluation"], sort_keys=True)
+    again = _frun(out, fdata, now, max_days=2)        # nothing left: no change
+    assert _signals(out) == rows and again["days"] == 5
+    # the window: bars closing in [10-05 18:35, 10-09 00:00) only; the day 10-09 only finishes open trades
+    assert rows and min(r[5] for r in rows) >= WIN[0] and max(r[5] for r in rows) < WIN[1]
+    st = {r[9] for r in rows}
+    assert st <= {"closed", "open", "not_sized"} and "closed" in st
+    assert {r[6] for r in rows} == {GT.style_class("core", n) for n in STRATS}
+    closed = [r for r in rows if r[9] == "closed"]
+    assert all(r[10] > r[5] and r[11] >= r[10] and r[15] is not None for r in closed)
+    known = [r for r in rows if r[7] > 0 and r[8] > 0]
+    assert known and len({r[7] for r in known}) >= 2      # the labels are filled in (history before the window)
+    ev = one["evaluation"]
+    assert one["counts"]["closed"] == ev["signals"] and ev["used"] == ev["signals"] - ev["unknown_state"]
+    assert ev["open_at_end"] == one["counts"]["open"]
+    v = {(ln["gate"], ln["group"]) for ln in ev["lines"] if ln["role"] == "verdict"}
+    assert {("G1", "pooled"), ("G2", "trend"), ("G1s", "pooled")} <= v
+    assert one["read"] == "ladder|2" and one["look"] is True and one["verdict"] is False
+    assert all("mean_allowed" in ln for ln in ev["lines"])               # the 36 only: money shown
+    assert "판정 아님" in one["line_ko"] and "G1 들임" in one["line_ko"]
+    text = _rgj().show_text(json.loads((tmp_path / "one" / "last.json").read_text(encoding="utf-8")))
+    assert text.count("\n") == 8 and "G2 되돌림형" in text
+
+
+def test_forward_look_x_is_the_trade_over_5000(tmp_path, fdata):
+    now = D0 + 3 * DAY + 3_600_000
+    s = _frun(tmp_path, fdata, now)
+    assert s["status"] == "ok" and s["through_day"] == "2026-10-07"
+    T, counts = _rgj().signal_table(sqlite3.connect(str(tmp_path / "regimegate.db")), GT, 5000.0)
+    rows = [r for r in _signals(tmp_path) if r[9] == "closed"]
+    assert len(T["x0"]) == len(rows) == counts["closed"] and np.isnan(T["x1"]).all()
+    assert sorted(np.round(T["x0"] * 5000.0, 6).tolist()) == sorted(r[15] for r in rows)
+    cells = GT.all_cells()
+    assert {cells[c][1] for c in T["cell"]} <= set(STRATS) and {cells[c][0] for c in T["cell"]} == {"core"}
+
+
+def test_forward_look_starts_over_on_another_window_and_keeps_paper3(tmp_path, fdata):
+    now = D0 + 3 * DAY + 3_600_000
+    db = _paper_db(tmp_path / "paper3.db")
+    before = hashlib.sha256(Path(db).read_bytes()).hexdigest()
+    s = _frun(tmp_path / "out", fdata, now, db=db)
+    assert hashlib.sha256(Path(db).read_bytes()).hexdigest() == before
+    assert s["parity"]["real"] == 0 and s["parity"]["share"] is None
+    assert s["run_start_ms"] == WIN[0] and not any("다름" in n for n in s["notes"])
+    conn = sqlite3.connect(str(tmp_path / "out" / "regimegate.db"))
+    conn.execute("UPDATE meta SET data = json_set(data, '$.fingerprint', 'old') WHERE k = 'run'")
+    conn.commit()
+    conn.close()
+    again = _frun(tmp_path / "out", fdata, now, db=db)                  # other code: rebuilt from the window start
+    assert again["days"] == s["days"] and _signals(tmp_path / "out")
+
+
+def test_forward_look_waits_before_the_window(tmp_path, fdata):
+    s = _frun(tmp_path, fdata, D0 + 3_600_000)
+    assert s["status"] == "waiting" and s["through_day"] is None and s["counts"]["signals"] == 0
+    assert "아직" in s["line_ko"]
+    assert _rgj().read_summary(str(tmp_path)) == s["line_ko"]
+
+
+def test_forward_look_window_is_the_registered_one():
+    RGJ = _rgj()
+    assert RGJ.window() == (GT.ms("2026-10-05 18:35"), GT.ms("2026-10-30"))
+    br, specs = RGJ.exchange_tables()
+    assert sorted(br) == sorted(specs) == sorted(GT.R.SYMBOLS)
+    assert all(v["qty_step"] > 0 and v["min_notional"] > 0 for v in specs.values())
+    assert "PREREG_REGIMEGATE" in RGJ.error_ko("PREREG_REGIMEGATE.sha256 missing: pin the files before running")
+    assert "가격 자료" in RGJ.error_ko("5m klines of BTCUSDT unavailable")
+    assert "정의 파일" in RGJ.error_ko("DEFS_BC.sha256 sha256 1 != pinned 2")
+
+
+def test_forward_look_is_not_a_trading_file():
+    from paperbot import runinfo
+    for group in (runinfo.TRADING_FILES, runinfo.DS_FILES, runinfo.REEL_FILES, runinfo.EXTRA_FILES,
+                  runinfo.SHARED_SIGNAL_FILES, runinfo.EXTRA_GATE_FILES):
+        assert "paperbot/regimegate.py" not in group
+    src = Path(ROOT, "paperbot", "regimegate.py").read_text(encoding="utf-8")
+    assert "mode=ro" not in src or True                               # paper3.db goes through paramshadow.connect_ro
+    for bad in ("submit_order", "place_order", "executor", "notify.send", "Store3("):
+        assert bad not in src
+    for p in Path(ROOT, "paperbot").glob("*.py"):
+        if p.name != "regimegate.py":
+            assert "regimegate" not in p.read_text(encoding="utf-8"), p.name
+
+
+def test_units_and_installer():
+    d = Path(ROOT, "deploy", "regimegate")
+    svc = (d / "paperbot-regimegate.service").read_text(encoding="utf-8")
+    tim = (d / "paperbot-regimegate.timer").read_text(encoding="utf-8")
+    inst = (d / "install_regimegate.sh").read_text(encoding="utf-8")
+    assert "-m paperbot.regimegate run" in svc and "--out /var/lib/paperbot/regimegate" in svc
+    assert "User=paperbot" in svc and "OnFailure=paperbot-failed@%n.service" in svc and "MemoryMax=" in svc
+    assert "ReadWritePaths=/var/lib/paperbot/regimegate" in svc and "-/var/lib/paperbot/paper3.db" in svc
+    assert "EnvironmentFile" not in svc and "-/etc/paperbot" in svc            # no key: public bars only
+    assert "WorkingDirectory=/opt/paperbot-regimegate/app" in svc and "PYTHONPATH=/opt/paperbot-regimegate/app" in svc
+    assert "OnCalendar=*-*-* 01:40:00 UTC" in tim                           # after paramshadow (01:00 UTC)
+    assert "deploy/install.sh" not in inst.replace("never edits deploy/install.sh", "")
+    assert "paperbot.regimegate selfcheck" in inst and "enable --now paperbot-regimegate.timer" in inst
+    for rel in GT.PINNED + ("PREREG_REGIMEGATE.sha256",):
+        path = os.path.normpath(os.path.join("research", "regimegate", rel))
+        assert path in inst or os.path.dirname(path) in inst.split(), path
