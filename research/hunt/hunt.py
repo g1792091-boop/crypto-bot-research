@@ -2083,8 +2083,8 @@ def extrapolate(res: dict, EW) -> dict:
     test_cpu = test_runs * max(run_s, res["control_run_s"])
     ser_sel, ser_test = ser * sel_len, ser * test_len
 
-    def wall(cpu, ser_s, procs, eff):
-        return round((ser_s + cpu / (procs * eff)) / 3600, 2)
+    def wall(cpu, serial_s, procs, eff):
+        return round((serial_s + cpu / (procs * eff)) / 3600, 2)
     eff2 = speed2 / 2
     return {"systems": len(systems), "select_engine_runs": sel_runs,
             "engine_s_per_run": round(run_s, 4), "control_s_per_run": res["control_run_s"],
@@ -2097,15 +2097,16 @@ def extrapolate(res: dict, EW) -> dict:
             "test_cpu_s": {"engine": round(test_cpu), "events_typical": round(test_ev_typ),
                            "events_if_the_10_slowest_cells_are_picked": round(test_ev_worst),
                            "series_once": round(ser_test)},
-            "test_wall_h": {"here_2_procs": wall(test_cpu + test_ev_typ, ser_test, 2, eff2),
-                            "here_2_procs_worst_events": wall(test_cpu + test_ev_worst, ser_test, 2, eff2),
-                            "server_32_procs": wall(test_cpu + test_ev_typ, ser_test, 32, 0.85)},
+            "test_wall_h": {"here_2_procs": wall(test_cpu, ser_test + test_ev_typ, 2, eff2),
+                            "here_2_procs_worst_events": wall(test_cpu, ser_test + test_ev_worst, 2, eff2),
+                            "server_32_procs": wall(test_cpu, ser_test + test_ev_typ, 32, 0.85),
+                            "server_32_procs_worst_events": wall(test_cpu, ser_test + test_ev_worst, 32, 0.85)},
             "notes": ["engine s/run measured on 36-month select periods with 1 signal per coin per 2 days; "
                       "the test period is 33 months (used as is: slight overestimate)",
                       "events: every F2 / F3 / F4 cell timed once on one synthetic coin of 42 months, x 30 coins, "
                       "scaled linearly to the data loaded (select 48 months, test 81 months); F1 by its real code",
-                      "test events: the picks' cells only are computed in the parent (not parallel), typical = mean "
-                      "cell time, worst = the 10 slowest cells",
+                      "test events: only the picks' cells, computed in the parent (serial, so not divided by the "
+                      "process count); typical = mean cell time, worst = the 10 slowest cells",
                       "series (bars + ATR + 장세 label, 30 coins x 4 timeframes) are built once in the parent before "
                       "forking (serial; counted in full in the wall time)",
                       f"test runs = 10 picks x {per_pick_runs} (base, cost x2, 200 controls at 0.5%; the same at 1%; "
