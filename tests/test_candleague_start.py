@@ -228,7 +228,7 @@ out.posSame = A.afterPositions(PP) === PP;
     assert o["day"] == [1, 2, 0, 1]
     assert o["line"] == "D+1 · 10/11 12:00 시작부터 2일째" and o["from"] == "10/11 12:00 시작부터" and o["start"] == "10/11 12:00"
     assert o["replay"] == [False, True] and o["catching"] == [False, True, False]
-    assert o["health"].startswith("따라잡는 중 (10/11 12:00 시작부터")
+    assert o["health"] == "따라잡는 중 (10/11 13:01까지 계산)"
     assert o["install"] == [None, 1791687600000 + 207000] and o["afterOn"] is False and o["barHidden"] and o["posSame"]
 
 
@@ -267,7 +267,7 @@ out.status = st.textContent;
 """)
     assert "10/01" not in o["home"] and "10월 1일" not in o["home"] and o["switchShown"] == 0
     g = o["goal"]
-    assert "D+1" in g and "10/11 12:00 시작부터 2일째" in g and "시작 12:00 (설치)" in g and "다시 돌리기" not in g
+    assert "D+1 (2일째, 한국 날짜)" in g and "시작 12:00 (설치)" in g and "다시 돌리기" not in g
     assert "봇을 켠 때(10/11 12:00)부터 모든 계좌 $5,000으로 시작" in g
     assert "시작부터" in o["home"] and "시작 후 한 달 · 멈출지 보기" in o["home"]
     s = o["status"]

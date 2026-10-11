@@ -133,7 +133,7 @@ die_retry() {                # a stop that a later restart can get past (network
 
 # ------------------------------------------------------------------ time estimates (32 vCPU basis, see SERVER_KO)
 # Measured 2026-10-12 on SEL-cut data of the old six (3 coins, 2 processes), scaled to 30 coins: the select grid is about
-# 430 CPU-hours (15m 222, 30m 118, 1h 64, 4h 20); x1.3 margin. Its wall time is the larger of that spread over the
+# 430 CPU-hours (15m 222, 30m 123, 1h 64, 4h about 20); x1.3 margin. Its wall time is the larger of that spread over the
 # workers and the longest single task: with whole-cell tasks (about 390 tasks) the longest is N01_ST_EMA 15m, about 33 h
 # (x1.3 = 43 h); with combo chunks (over 1,000 tasks) it is a few hours.
 picks_n() { cat "$BASE/PICKS_N" 2>/dev/null; }
@@ -585,12 +585,12 @@ if [ -f "$BASE/SEL_VERIFIED" ]; then
   sub "건너뜀: 이미 확인했습니다"
 else
   helper build "$KIT" "$BPROCS" >>"$LOG" 2>&1 || die_fix "자료 만들기 실패 (tail -50 $LOG)"
-  pr=$(grep -E '^PROBLEM ' "$LOG" | tail -5 | sed 's/^PROBLEM //' | tr '\n' ' ')
-  [ -n "$pr" ] && warn "자료 만들기에서 알린 것 (고정 기준과 같으면 그대로 진행): $pr"
   helper verify "$KIT" "$BASE/verify_sel.json" >>"$LOG" 2>&1 \
     || die_fix "받은 자료가 고정된 자료 기준과 다릅니다 ($(grep -E '^VERIFY' "$LOG" | tail -1 | cut -c1-200)). 계산하지 않습니다"
   touch "$BASE/SEL_VERIFIED"
 fi
+pr=$(grep -E '^PROBLEM ' "$LOG" | tail -5 | sed 's/^PROBLEM //' | tr '\n' ' ')   # listed again on a resume
+[ -n "$pr" ] && warn "자료 만들기에서 알린 것 (고정 기준과 같아서 그대로 진행): $pr"
 sub "$(grep -E '^VERIFY' "$LOG" | tail -1)"
 
 # ------------------------------------------------------------------ 6 select (SEL only; the long step)

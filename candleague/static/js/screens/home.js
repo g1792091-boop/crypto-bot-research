@@ -142,7 +142,7 @@ export async function mount(el, ctx) {
     };
     put(goal,
       h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
-        ` (${LK.fromKo(d)} ${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
+        ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
       h("p", {class: "s2a-goalline"}, LK.replayedBefore(d) ? `${fmt.mmdd(d.start_ms)}부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`
         : `봇을 켠 때(${LK.startKo(d)})부터 모든 계좌 $5,000으로 시작해 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`,
         h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),

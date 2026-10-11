@@ -46,8 +46,9 @@ export function paceLine(d, n, min = 300) {
 // THE START (owners 10/12, "커스텀값 봇 돌린 시점부터 ... 규칙봇 형식처럼"): the league starts at its install time, every
 // account at $5,000 then; the snapshot's start_ms (league meta, the install time floored to 5 minutes) is the one
 // source of every "시작부터", "D+n" and "n일째" (no date is written into the page). started_ms is the install time.
-/** Days the engine has processed since the start (the start's day = 1일째). */
-export const leagueDay = (d) => (d && d.start_ms ? Math.max(1, Math.floor((d.done_ms - d.start_ms) / DAY) + 1) : 0);
+/** The league's day in Korea at the engine's processed time (the start's KST date = 1일째; calDay at done_ms), so the
+ *  processed day and the calendar day read alike (a start at 12:00 KST is not "1일째" until noon the next day). */
+export const leagueDay = (d) => (d && d.start_ms ? calDay(d, d.done_ms) : 0);
 /** The calendar day of the league in Korea (the start's KST date = 1일째), whatever the engine has processed: the top
  *  pill's "n일째" (a catch-up does not turn it back). ``now`` defaults to the device's clock. */
 const KST_MS = 9 * 3600000;
@@ -84,7 +85,7 @@ export function health(d, now = serverNow()) {
   if (!d || !d.accounts) return {lv: "warn", ko: "엔진이 첫 기록을 아직 쓰지 않았습니다"};
   const sinceWrite = Math.max(0, now - (d.generated_ms || 0)), lag = Math.max(0, now - (d.done_ms || 0));
   if (sinceWrite > WRITE_OLD_S * 1000) return {lv: "bad", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전에 멈춤`};
-  if (catchingUp(d)) return {lv: "warn", ko: `따라잡는 중 (${fromKo(d)} ${fmt.kst(d.done_ms)}까지 계산)`};
+  if (catchingUp(d)) return {lv: "warn", ko: `따라잡는 중 (${fmt.kst(d.done_ms)}까지 계산)`};
   if (sinceWrite > WRITE_WARN_S * 1000) return {lv: "warn", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전 (조금 늦음)`};
   if (lag > 60 * 60000) return {lv: "bad", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음 (시세 연결 확인)`};
   if (lag > 30 * 60000) return {lv: "warn", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음`};
