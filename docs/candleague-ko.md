@@ -108,4 +108,4 @@ sudo systemctl stop candleague-live candleague-dash candleague-watch.timer     #
 2. 백테스트 결과 → 통과한 후보를 후보 리그에 넣습니다. 통과가 0개면 그대로 보고드리고, 무엇을 넣을지(넣지 않을지) 두 분과
    정합니다.
 3. 두 분이 설치 → 첫날부터 10월 성적이 보입니다.
-4. 1~2주 지켜본 뒤, 실전에 쓸지 두 분이 결정합니다.
+4. 실전 여부는 미리 정한 점검(시작 + 1개월, + 2개월, 필요하면 + 3개월, research/fullgrid/WATCH_PREREG.md)을 통과한 매매법만 두 분이 결정합니다. 며칠~몇 주 성적으로는 정하지 않습니다.
