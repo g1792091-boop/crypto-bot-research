@@ -237,7 +237,6 @@ const mountOn = async (d, lv, q) => {
   return el;
 };
 const q1 = (el, sel) => { const x = el.querySelector(sel); return x ? x.textContent : null; };
-const SECRETS = ["123,456", "123456", "124,999", "7.777", "4,321", "4321", "125,432", "987.65", "6,543", "50배", "좋은 자리"];
 """
 
 
@@ -275,7 +274,7 @@ out.last = CH.cs.data[CH.cs.data.length - 1].close;
     assert prices[100000].startswith("진입 롱 30배") and prices[98000] == "손절" and prices[106000] == "익절" and prices[96900] == "청산 추정"
     assert "롱 열림" in o["marks"] and any(m.startswith("익절") for m in o["marks"])
     assert o["chips"] == ["롱 30배 +30.0% 후보"]
-    assert o["strip"][0].startswith("BTC") and "1↑ 0↓" in o["strip"][0]
+    assert o["strip"][0].startswith("BTC") and "1↑ 1↓" in o["strip"][0]      # counts include the hidden one
     assert len(o["mine"]) == 1 and "+30.0%" in o["mine"][0]
     assert "101,000" in o["top"] and "롱이 냄" in o["top"]
     assert o["query"] == {"acct": "core-DOGE-1h-1", "coin": "BTCUSD", "tf": "15m"}
@@ -328,7 +327,7 @@ out.shownFill = TK.hiddenFill(fills.fills[0], {kind: "core"}, false);
     assert o["hidFill"] is True and o["shownFill"] is False
 
 
-SECRETS_PY = ["123,456", "123456", "124,999", "7.777", "4,321", "4321", "125,432", "987.65", "6,543", "50배", "좋은 자리"]
+SECRETS_PY = ["123,456", "123456.7", "124,999", "124999", "7.777", "4,321", "4321.09", "125,432", "125432", "987.65", "6,543", "6543.21", "50배", "좋은 자리"]
 
 
 def test_catchup_hides_live_numbers_and_says_why(tmp_path):
@@ -388,7 +387,7 @@ def test_realized_pnl_math(tmp_path):
     o = _run(tmp_path, r"""
 const H = 3600e3, D = 24 * H, KST = 9 * H;
 const start = Date.UTC(2026, 9, 1, 0, 0), now = Date.UTC(2026, 9, 3, 6, 30);      // 10/01 09:00 KST, 10/03 15:30 KST
-const api = {hours: [[start + 2 * H, 100, 2, 2], [start + 5 * H, -250, 3, 0], [start + 30 * H, 80, 1, 1]], days: [[TK.kstMidnight(start), -150, 5, 2]]};
+const api = {hours: [[start + 2 * H, 100, 2, 2], [start + 5 * H, -250, 3, 0], [start + 52 * H, 80, 1, 1]], days: [[TK.kstMidnight(start), -150, 5, 2]]};
 const cur = TK.fromApi(api, start, now);
 out.hours = cur.hours;
 const sr = TK.series(cur, null);
@@ -413,7 +412,8 @@ out.usdKo = [TK.usdKo(1.234e9), TK.usdKo(34000), TK.usdKo(950)];
     assert o["today"] == {"n": 1, "w": 1, "l": 0, "pnl": 80}               # 10/03 KST: the 15:00 hour
     assert o["windows"] == ["24h", "all"]
     c = o["cal"]
-    assert c["label"] == "2026.10" and c["n"] == 7 and c["pads"] == 0 and c["first"]["state"] == "before"
+    assert c["label"] == "2026.10" and c["n"] == 7 and c["pads"] == 3                 # Monday 9/28 .. Sunday 10/4
+    assert c["first"]["d"] == 1 and c["first"]["state"] == "done" and c["first"]["v"] == -150
     assert c["today"] == 3 and c["future"] == 1 and c["noRecord"] == 1     # 10/02 closed nothing: no zero drawn
     assert o["empty"] is True and o["hp"] == [True, True, False]
     assert o["mmss"] == "1:02:05" and o["usdKo"] == ["12.3억", "3만", "950"]

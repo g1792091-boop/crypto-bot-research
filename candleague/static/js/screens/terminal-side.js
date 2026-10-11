@@ -126,7 +126,8 @@ export function coinPositions(ctx, st, onPick) {
         const roe = h("b", {class: "num tm-roe"}, "—");
         const node = h("button", {type: "button", class: "tm-cr", role: "listitem", onclick: () => onPick(p.id),
           title: `${p.id} · 진입 ${fmt.price(p.entry)} · ${fmt.lev(p.lev)} · 청산가 ${fmt.price(p.liq)} (진입 때 기준) · ${fmt.kst(p.since)}`},
-        sideTag(p.side), h("span", {class: "tm-cfn"}, acctLabel(LK.index().byId[p.id] || p)), h("span", {class: "muted num"}, fmt.lev(p.lev)), roe);
+        sideTag(p.side), h("span", {class: "tm-cfn"}, acctLabel(LK.index().byId[p.id] || p, {role: false}),
+          h("i", {class: ["tm-rsq", `r-${p.role}`], title: ROLE_KO[p.role] || "", "aria-label": ROLE_KO[p.role] || ""})), h("span", {class: "muted num"}, fmt.lev(p.lev)), roe);
         r = {key: `${p.since}`, node, roe};
         rows.set(p.id, r);
       }
