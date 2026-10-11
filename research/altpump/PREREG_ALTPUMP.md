@@ -55,7 +55,7 @@ such a rule turn $1,000 into x5 to x100 within one calendar month?
     BNX from 2023-02-01 for 21 days, PUMP from 2025-06-14 for 26 days). A perpetual does not stop trading for weeks
     with positions left open: the exchange settles them (a delisting, a token swap or migration), so the life before
     the pause ends like a delisting (6.8). PUMP restarts in July 2025 and is probably a different token under the
-    same ticker; the archive cannot tell, so the rule is the same for all three. Any threshold from 4 to 18 days gives
+    same ticker; the archive cannot tell, so the rule is the same for all three. Any threshold from 4 to 19 days gives
     the same lives on this file (the other stretches are 1 to 3 days).
 * A stretch of **1 to 6 days without a bar inside a life** is a **gap** (103 in the file before this rule, 100 after
   it: 97 of them are the two archive holes below; the other 3 are one-day and three-day gaps of BNX in 2022). The days
