@@ -370,10 +370,10 @@ verdicts are never merged into one "the hunt passed".
   only on data after its fixing date.
 * The mid-November review sees about six weeks of forward record (from 2026-10-01; the owners watched its first days
   live, W R23): a handful of trends at most. It checks that the paper bot followed these rules (a replay of the same
-  days from the archive reproduces its positions), that its forward multiple lies inside the 5th..95th percentile of
-  the test period's rolling windows of about the same length (one start per UTC day; the R14 band of
-  `PREREG_HUNT_WIDE.md` W 7.4 at the listed length nearest to the record's days: 40, 45 or 50), and that nothing broke.
-  It cannot prove the system makes money; it can show that it does not behave as tested.
+  days from the archive reproduces its positions), that its forward multiple over the record's first N days lies
+  inside the 5th..95th percentile of the test period's rolling windows of the same length N (one start per UTC day;
+  R14 of `PREREG_HUNT_WIDE.md` W 7.4: N = 40, 45 or 50, the longest the record has reached on the review date), and
+  that nothing broke. It cannot prove the system makes money; it can show that it does not behave as tested.
 * Every result, pass or fail, goes into `research/hunt/RESULTS_KO.md` and the owners' summary.
 
 ## 16. Code, compute, reproducibility
