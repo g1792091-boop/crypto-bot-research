@@ -384,8 +384,9 @@ a DeepSeek row in the public output is refused).
   window, indicators and labels from full history; the large group is the calendar month's (H 3), not recomputed at the
   window start; positions open at the window end are closed at the last 5m close with slippage and taker (headline)
   and also shown marked; bust = marked equity < $100 at any 5m close (the account stops). Sizes r = 0.5, 1, 2, 5, 10,
-  20%. **Machine A** (as written): H 7-8, LEV_MAX 20, total open-risk cap 4% x r / 0.5% and B = equity / 6 x r / 0.5%
-  (the W 7 scaling; the tested values at r = 0.5%). **Machine B** (goal-mode, r >= 5% only, caps of PREREG_ALTPUMP 7):
+  20%. **Machine A** (as written, panel): H 7-8, B = equity / 6, LEV_MAX 20, total open-risk cap 4% x r / 0.5% (so at
+  higher r the margin budget and the brackets cut the unit; the realised risk is printed next to the nominal r).
+  **Machine B** (goal-mode, r >= 5% only, caps of PREREG_ALTPUMP 7):
   cap = min(4r, 60%), n_max = floor(cap / r) (5% -> 20% and 4 positions; 10% -> 40% and 4; 20% -> 60% and 3) as the
   position cap and the margin divisor, leverage up to the coin's bracket maximum (fallback 20), H 7.3 (iii) kept, the
   bracket looked up at the first unit's notional q x P0, an add past that tier's cap skipped and counted "bracket";
@@ -647,14 +648,20 @@ pass rule toward goal metrics.
   cells identical and 11 differing bars in 5 cells (F6_VWAP_CROSS 15m / 30m / 1h, F6_VWAP_FAIL 30m / 1h; at most
   0.011%): a last-bit difference in the daily VWAP's volume sum flips an exact `>=` tie. The pinned run is the one on
   the hunt files.
+* F1 and F5 are this study's own code with no full-grid version: they are checked on synthetic bars (H 5 read bar by
+  bar; famous.py's `donchian` and `tsmom` equality; no look-ahead), not by the parity run. `parity.json` records the
+  sha256 of `entries_wide.py`, so it is rerun after the F5 addition.
 
 ## 9. Data (W9)
 
 * The H 2 data of the 30 coins: per coin a 5m array file `<data>/5m/<SYM>.npz` with keys `ts` (int64 open time, ms) and
   `o h l c v qv mo mh ml mc` (float32; `v` base volume, `qv` quote volume, `m*` mark price), cast to float64 at load;
   funding in `<data>/funding/`; the universe from `<data>/UNIVERSE.md` and `manifest.json` (copied into
-  `research/hunt/universe30.json` as H 3). The mark-price columns are not read (H 2: liquidation on last-price bars;
-  section 15 Q4).
+  `research/hunt/universe30.json` as H 3). The mark-price columns are not read by select or test (H 2: liquidation on
+  last-price bars; section 15 Q4); only reads after the verdict read mark prices (R19 on 1m bars, R9 on 5m bars).
+* After the verdict only: the 1m fidelity set (`<dir>/1m/<SYM>.npz`, same keys, `data_hunt.py download --kind
+  fidelity`, the coins the tested picks traded; its content hashes are written into `fidelity.json`) and the October
+  daily archive zips (R23; their sha256 listed in the pin before they are opened).
 * The download is still running when this is written. No code waits on it: every path is given by `--data`, and a
   coin whose file is missing stops `select` and `test` (the universe is fixed) but not the tests on synthetic bars.
 * Parity (section 8) also reads the full grid's 1m archive of the old six, given by its own path argument.
@@ -665,7 +672,10 @@ pass rule toward goal metrics.
 
 * Command: `python -m research.hunt.hunt {select,test,report} --study {v1,wide} [--procs N] [--data DIR]`. `select`
   and `test` refuse to run unless the study's pin file (`PREREG_HUNT.sha256` for v1, `PREREG_HUNT_WIDE.sha256` for wide)
-  matches every file it lists; `test` also needs the picks line (section 5).
+  matches every file it lists; `test` also needs the picks line (section 5). After the test: `reads --study S` (the
+  reads hook again; a reads module runs only when its file is listed in the pin, 7.1), `fidelity --study S --data1m
+  DIR` (R19; `--list-coins` prints the coins the tested picks traded, for the 1m download) and `october --study S
+  --data-oct DIR` (R23). Each refuses before `test.json` exists and writes only its own output file.
 * `PREREG_HUNT_WIDE.sha256` lists exactly what `python -m research.hunt.hunt pinlist --study wide` prints: this file;
   `PREREG_HUNT.md`; `research/hunt/universe30.json`, `data_manifest.json` and `data_check.json` (H 2), the data builder
   `research/hunt/data_hunt.py` and every file under `research/hunt/data_build/` when they exist; `research/hunt/exchange30.json` when it exists (H 7.3); every
@@ -673,26 +683,33 @@ pass rule toward goal metrics.
   `research/hunt/out/wide/parity.json`; as read-only inputs checked by hash, `research/fullgrid/diag/watch_sel.json`,
   `research/fullgrid/PREREG.sha256` (whose own list must match), `research/entry_study/DEFS_BC.sha256` and
   `third_party/sweep/PREREG.sha256`; and **every repository Python file the signal code loads**, found by running each
-  of the 365 entry cells once on a short synthetic series and listing the loaded modules (among them
+  of the 381 entry cells once on a short synthetic series and listing the loaded modules (among them
   `research/deepseek200/lib_c.py`, whose helpers every DeepSeek definition calls, `research/fullgrid/memo.py`, which
   wraps the core definitions' indicators, `paperbot/dash/tools/regime5y.py`, `paperbot/sweepsig.py`, the vendored
   indicator code under `third_party/sweep/`, the 36 core definitions, and the paper-bot modules they import, read only).
   `select` and `test` repeat the scan and refuse a file that is not listed. Later, the picks line. Because rule-bot
   files are on that list, select and test run from one fixed checkout (a separate worktree at the pinned commit), so
   rule-bot commits made between the two steps do not stop the test.
-* Outputs: `research/hunt/out/wide/` (select.json, picks.json, test.json with the reads inside it, parity.json and a
-  Korean results page), each stamped with the git commit and the sha256 of the pin file it ran under, and with the
-  content hash of every coin's data it read (H 2).
+* Outputs: `research/hunt/out/wide/` (select.json, picks.json, test.json with the section 7.0 reads, the batches, the
+  lineup and the live-gate spec inside it, the reads files `reads_a.json`, `fidelity.json`, `reads_october.json`,
+  parity.json and a Korean results page), each stamped with the git commit and the sha256 of the pin file it ran under,
+  and with the content hash of every coin's data it read (H 2).
 * Compute: systems are independent, so select splits by entry cell and test by pick x control seed; `--procs N` sets
   the worker count (at most 2 on the development machine; any number on a rented server). Results do not depend on N:
   seeds depend only on the parts written in section 6. No absolute path is written in the code. Progress is printed
   every minute. A worker that dies (out of memory, killed) is replaced and only its unfinished items are sent again
   (with fewer workers; after five rebuilds the step stops with a message instead of hanging). Finished entry cells
   (select) and picks (test) are kept under the private folder and reused by a rerun under the same pin.
-* Tests on synthetic bars only (the event edge rule, the 15m/30m D0 and chandelier, the selection order and
-  one-per-name rule, BH, the scaled risk cap of the sizing read, refusal without a pin), in addition to v1's (H 16).
+* Tests on synthetic bars only (the event edge rule, the F5 events against famous.py, the 15m/30m D0 and chandelier,
+  the selection order, one-per-name rule and batches, BH per batch and the batch trigger, the lineup rule, the live
+  gate, the size rule, the read guard and the D11 check of reads, the engine read options bit-identical at default
+  parameters against the reviewed engine's digest, the 1m bar length, the daily-archive loader, refusal without a pin),
+  in addition to v1's (H 16).
 * Run time is measured on synthetic bars once the code exists and written in `DEVIATIONS.md` before the run; if select
   plus test would take more than about a day at 2 processes, the run goes to a rented server (section 15 Q10).
+  Measured 2026-10-11 for the 1,000 seeds (synthetic, 30 coins, 33 months, shared 4-core machine): one control run
+  0.15 s (4h) to 0.21 s (15m); 4,400 control runs per pick (2 x 1,000 at 0.5%, 2 x 1,000 at 1%, 2 x 200 in select),
+  about 11-16 CPU-minutes per pick; a batch of 10 about 1.1-1.6 h at 2 processes here, about 5 minutes on 32 vCPU.
 
 ## 11. Reporting and DeepSeek money (D11)
 
@@ -703,18 +720,37 @@ pass rule toward goal metrics.
   are written only to a file outside the repository whose sha256 is written in the repository output, so the selection
   and the test can be checked later without the figures being in the repository.
 * Every result, pass or fail, goes into the results page and the owners' summary, next to v1's.
+* Reads files follow the same rule: the hook writes a reads module's public output only when no float stands under a
+  DeepSeek pick or a row containing one (except win shares); the figures go to the private file whose sha256 is in the
+  public file.
 
 ## 12. What a result means, and after
 
 | result | then |
 |---|---|
-| WIDE PASS | **forward paper bot from about 2026-10-20** on the 30 coins, **beside the v1 pick**: each passing pick exactly as here, r = 0.5% and r = 1%, $5,000 each; plus the one-wallet basket when two or more pass. Nothing else changed. **No real money before the mid-November 2026 review**; after it, real money is the owners' decision only |
-| a pick fails | recorded as a fail with its numbers (DeepSeek: labels). Not a candidate |
+| WIDE PASS | **forward paper bot from about 2026-10-20** on the 30 coins, **beside the v1 pick**: each passing pick (정식) exactly as here, r = 0.5% and r = 1%, $5,000 each; plus the one-wallet basket when two or more pass. Nothing else changed. **No real money before the mid-November 2026 review**; after it, real money is the owners' decision only, for 정식 picks only, after the forward criteria and the live-readiness gate below |
+| a pick fails | recorded as a fail with its numbers (DeepSeek: labels). Not a candidate. It may run as a paper account labelled 참고 when it meets the lineup rule below; never real money |
 | WIDE fail (no pick passes, or no eligible system) | recorded. **No tuning on the test period**; systems that are not picks are never run on it |
 
+* **Paper lineup (owners (g)), computed in the test step and written to `test.json` as `lineup` (also for the v1 pick):**
+  **정식** = research PASS. **참고** = a tested pick (not the "no pick, fail" system) with test mean monthly ln M > 0,
+  median monthly multiple >= 1, mean d_m > 0 against both controls (its mean ln M above both controls' seed means), cost
+  x2 mean ln M > 0, max drawdown < 50%, no bust, and its best month < 50% of the total log gain (sum of monthly ln M).
+  Every other tested pick is **excluded** from the paper lineup (the failing conditions are listed). 참고 accounts are
+  paper only and labelled; **real money only from 정식**, after the forward criteria (H 15: the replay reproduces the
+  positions; the forward multiple inside the R14 band) and the live-readiness gate.
+* **Live-readiness gate (risk 12), separate from the research PASS**, evaluated on the test period at whatever size the
+  owners propose for real money (`evaluate_live_gate`; the spec is in `test.json`): (a) no liquidation under R9's
+  mark-price read; (b) worst single-position loss <= 3U with R9's 25%-of-range stop fill; (c) worst rolling 30-day
+  fresh-wallet multiple >= 0.70; (d) R10's instant loss if every open stop gaps 10% <= 25% of equity at every 5m close;
+  (e) mean ln M > 0 under R9's impact model with Y = 1.0 at the live starting equity and at 10x it; (f) forward paper:
+  the replay reproduces >= 99% of positions (H 15) and the forward multiple lies inside the R14 band; (g) if the AI
+  judge is used, R15's p95 events per day <= the owners' daily call cap. A size that fails any item is labelled "not
+  live-ready at this size". The research verdict is untouched and real money stays the owners' decision.
+* Owner-facing goal numbers are multiples (owners (e)).
 * Nothing is tuned after the test period is seen. A bug found after the test is fixed in `DEVIATIONS.md`, the test
-  rerun once, both results shown. Any changed rule (entries, numbers, gate, exits, size, K, scores) is a new study with
-  its own pre-registration, judged only on data after its fixing date.
+  rerun once, both results shown. Any changed rule (entries, numbers, gate, exits, size, K, batches, scores) is a new
+  study with its own pre-registration, judged only on data after its fixing date.
 * **Two studies, one test period.** v1 and wide each have their own pass; the chance that at least one of the two
   passes by luck is larger than either alone. The report says this next to the two verdicts.
 * The mid-November review checks the paper bot as H 15 (it followed the rules; its forward multiple lies inside the
@@ -728,9 +764,14 @@ pass rule toward goal metrics.
   does not make a result clean: the new 24 coins trade in the same 2024-2026 market and move with the old six.
 * **The 38 F4 picks were chosen after the full grid's test period and 2020 were seen** (WATCH_PREREG 0): their test here
   would be out of sample on no coin set, which is why F4 is a select-period read only (section 3).
-* **Winner's curse.** The best of 730 select runs looks better on 2021-2023 than it is. Only the single test, the
-  controls and BH over K speak to that.
-* **Power.** 33 test months and BH over up to ten picks: a real but small edge may not pass.
+* **Winner's curse.** The best of 762 select runs looks better on 2021-2023 than it is. Only the single test, the
+  controls and BH over each batch speak to that; R4 measures it on select.
+* **Power.** 33 test months and BH over up to ten picks per batch: a real but small edge may not pass. A later batch
+  opens only after >= 5 passes, so the extra tests cost little when batch 1 shows no common edge; the program-level
+  ledger (R13) is printed beside the verdicts.
+* **F5 is not blind either.** The famous rules' daily results on the old six (research/famous) have been read; their
+  intraday adaptation (lengths in bars, the weekly TSMOM decision at the Monday 00:00 close) was fixed here without
+  any run on these coins. The four timeframes of one TSMOM rule share their decision moments.
 * The universe is a 2026 list (H 3, H 18 Q2). The strategies were written for the old six; DeepSeek definitions that
   read BTC context get BTCUSDT's bars on every coin.
 * The edge rule (3.2) makes state and mixed strategies enter less often than the full grid counted them, and under G1
@@ -752,8 +793,10 @@ pass rule toward goal metrics.
 ## 14. Not in this study
 
 Numbers other than the defaults and the 38 watch picks' numbers; combining entries inside one system (the basket is a
-read); exits other than the chandelier; r above 0.5% as the rule; gates other than G1 and NONE; the AI judgment layer
-(H 17); timeframes other than 15m, 30m, 1h, 4h.
+read); exits other than the chandelier (the six exit cells are R5 reads); r above 0.5% as the rule; gates other than G1
+and NONE; the AI judgment layer (H 17); timeframes other than 15m, 30m, 1h, 4h. **Deferred to round 2** (owners
+2026-10-11; not added now): new-information entries, the loss-autopsy noise filters and custom values (each a new
+study with its own pre-registration and forward data).
 
 ## 15. Open questions (closed before the pin; default in brackets)
 
@@ -766,14 +809,15 @@ read); exits other than the chandelier; r above 0.5% as the rule; gates other th
 3. **Long and short event on the same bar and coin.** [No entry; counted]
 4. **Mark price.** The new 5m files hold mark-price columns, but H 2 and H 7.6 check liquidation on last price and this
    study keeps the machine identical to v1. [Last price, as H 2; mark columns unread]
-5. **K = 10, one per name.** [Keep]
+5. **K = 10, one per name.** [Keep, in batches (owners (b)): batch 1 = positions 1-10; later batches of 10 only after
+   >= 5 passes; membership fixed at select]
 6. **72 positions in 36 months** may exclude many 4h G1 systems. [Keep; the gate is not changed for it]
 7. **Score = mean ln M**; the median is only a tie-break here (v1 uses a median-based plateau). [Keep]
-8. **Sizing read**: with B = equity / 6 a 5% unit is cut to about 1% or less and loses its adds, so the read would not
-   show what a 5% bet does. [B scaled with r (section 7); 20x cap and brackets unchanged; the realized unit risk, cut
-   and add shares reported next to every figure. Alternative: B unchanged, the read labelled "requested 2% / 5%, taken
-   about X%"]
-9. **Paper accounts at 2% or 5%.** [None; the owners decide after reading the sizing read, labelled as such]
+8. **Sizing read**: replaced by the R1 goal board (section 7.3): machine A scales B and the open-risk cap with r as the
+   first draft's sizing read did; machine B is the goal-mode machine; the realised unit risk is reported next to every
+   figure. [As written in 7.3]
+9. **Paper accounts at 2% or 5%.** [None; the owners decide after reading the goal board, labelled "goal-size paper,
+   not tested"]
 10. **Where it runs.** [The development machine at 2 processes if the measured time allows; otherwise a rented server
     started by the owners, same commit and pin]
 11. **State arrays and the edge rule** (3.2). The design brief took every firing bar and the first bar only for state
@@ -789,6 +833,11 @@ read); exits other than the chandelier; r above 0.5% as the rule; gates other th
     the per-unit budget check. [H 7.3 as written; the margin-limited adds counted and reported]
 15. **Rule-bot files in the pin** (section 10). The signal code imports paper-bot modules, so they are hashed. [Run
     select and test from one fixed checkout of the pinned commit]
+16. **F5 on intraday bars** (section 3.3). famous.py's daily rules become bar-count lookbacks (days x bars per day);
+    TSMOM keeps its weekly decision at the close of the UTC Sunday, so its four timeframes share decision moments.
+    Alternative: TSMOM's sign checked at every bar's close (many more flips on 15m). [Weekly, as famous.py]
+17. **Number of batches.** [3 (30 names), as the panel; a fourth would need >= 5 passes in batch 3]
+18. **The 참고 tier** (owners (g)). [Paper only, labelled; never real money; never a research pass]
 
 ## 16. Before this file was fixed
 
@@ -843,3 +892,25 @@ files and `manifest.json`'s coverage fields, and ran synthetic cases. Changes:
     the planned add levels) and Q15 (one fixed checkout) added. Section 10's output list corrected (the reads are in
     test.json).
 
+### 16.3 Owners' decisions and panel review (2026-10-11, before the pin)
+
+Done after the engine review (105 tests) and before any select or test of either study; no trading outcome had been
+computed on any real price period. The panel's 23 reads, its pass-rule changes and its rejected items were read in
+full; the owners' decisions (a)-(h) are binding (section 0.1). Changes:
+
+1. **F5** (owners (a)): the four famous trend rules as events (3.3), 32 systems; 762 systems, 686 candidates, 87
+   strategy names (sections 1, 3, 4).
+2. **Batches** (owners (b)): one-per-name walk to 30 names, batches of 10 fixed in `picks.json` at select, BH per
+   batch, the next batch only after >= 5 passes, labels 1군 / 2군 / 3군 (sections 5, 6).
+3. **Controls with 1,000 seeds** (owners (c); H 12); select-period controls seeds 1-200.
+4. **Reads** (owners (d), (e), (f); panel): the read guard and discipline, the headline cell, the select-fixed size
+   rule, seed subsets (7.1); the reads interface (7.2); Phase A reads incl. R1, the R24 leverage read, R19 and R23
+   (7.3); Phase B specs R2-R22 (7.4); the rejected items (7.5). The first draft's sizing read is replaced by R1.
+5. **Paper lineup** (owners (g)) and the **live-readiness gate** (section 12); goal numbers as multiples (owners (e)).
+6. **W 6 amendment** for the sealed post-verdict read R22 (section 6).
+7. **F4** stays a select-only read (owners (h), unchanged).
+8. Engine read options added to `hunt.py`, all off by default and bit-identical at default parameters (tested against
+   the reviewed engine's digest): per-5m equity path and peak, close at the end, N4 = (1 + adds) x q x P0, the
+   goal-mode bracket rule, fixed leverage with margin = L%, 1m bars and liquidation on mark. Commands `reads`,
+   `fidelity`, `october`.
+9. Deferred to round 2: new-information entries, autopsy noise filters, custom values (section 14).

@@ -571,12 +571,12 @@ class Runner:
         started = self.now_ms()
         self.errors = []
         phase = {}
+        if complete_ms is None or complete_ms <= self.fwd:       # the feed sets the mark once every coin has history
+            SN.write_status(self, complete_ms, started, None, {"waiting": "과거 5분봉을 받는 중 (처음 30~40분)"})
+            return {"skipped": True}
         if not self.data:
             self.load_data()
         sync = self.sync_data()
-        if complete_ms is None or complete_ms <= self.fwd:
-            SN.write_status(self, complete_ms, started, None, {"waiting": "자료가 10/01까지 아직 안 모임"})
-            return {"skipped": True}
         coins, fund = self.build_coins(complete_ms)
         H.install(coins, fund)
         new_bins = self.refresh_series()

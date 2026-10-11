@@ -25,7 +25,6 @@ from research.hunt import hunt as H  # noqa: E402
 from huntbot import bench as B  # noqa: E402
 from huntbot import config as CFG  # noqa: E402
 from huntbot import engine as E  # noqa: E402
-from huntbot import systems as S  # noqa: E402
 
 FIVE, DAY = H.FIVE, H.DAY_MS
 FWD = CFG.FORWARD_START_MS
