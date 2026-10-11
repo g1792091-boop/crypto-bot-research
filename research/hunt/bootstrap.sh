@@ -146,6 +146,8 @@ if [ -f "$BASE/DONE" ]; then
   exit 0
 fi
 echo $$ > "$BASE/RUNNING"
+rm -f "$BASE/WARNINGS"                       # every stage that warns re-runs on a resume, so it warns again
+echo "0|run start|$(date +%s)" >> "$BASE/STAGES"
 [ "$DRYRUN" = 1 ] && say "연습 모드 (DRYRUN): 설치·자료 받기·보내기는 하지 않습니다"
 
 # ------------------------------------------------------------------ 1 install
@@ -346,7 +348,7 @@ fidelity() {
       coins="$coins $c"
     done
   fi
-  coins=$(tr ' ' '\n' <<<"$coins" | grep -E '^[A-Z0-9]+USDT$' | sort -u | tr '\n' ' ')
+  coins=$(tr ' ' '\n' <<<"$coins" | grep -E '^[A-Z0-9]+USDT$' | sort -u | tr '\n' ' ' | sed 's/ *$//')
   if [ -z "${coins// /}" ]; then
     coins=$("$PY" -m research.hunt.data_hunt coins --tests research/hunt/out/v1/test.json \
             research/hunt/out/wide/test.json 2>>"$LOG") || { warn "코인 목록 실패: 정밀 재확인 건너뜀"; return 0; }

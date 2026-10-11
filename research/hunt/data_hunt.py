@@ -650,6 +650,10 @@ def download(src, syms: list, kind: str, out: str, first: str, last: str, worker
             f"problems {len(info['download_problems'])}, fill +{info['daily_fill']['kline_rows_added']} rows "
             f"/ {info['daily_fill']['mark_bars_filled']} marks, {info['build_seconds']}s")
     man = write_manifest(out, state, syms, params)
+    try:
+        os.rmdir(os.path.join(out, "raw"))         # only when empty (every coin converted)
+    except OSError:
+        pass
     done = [s for s in syms if s in state]
     if len(done) == len(syms) and not failed:
         with open(comp, "w") as fh:

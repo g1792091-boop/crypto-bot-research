@@ -54,7 +54,10 @@ PERIODS = {"p1": ("2021-08-01", "2024-07-01"),                 # 10: select
            "p3": ("2020-01-01", "2021-08-01")}                 # 10: test
 TEST_PERIODS = ("p2", "p3")
 WARMUP_DAYS = 60                                                # 10
-RELIST_GAP = 30                                                 # 3.1: >= 30 days without a bar -> a new life
+RELIST_GAP = 30                                                 # 3.1: >= 30 days without a bar -> a new life, a listing
+PAUSE_GAP = 7                                                   # 3.1: 7..29 days without a bar -> a new life, no listing
+PARTIAL_MIN_MISSING = 10                                        # 3.1: a partial day (archive hole): >= 10 symbols and
+PARTIAL_FRAC = 0.10                                             #      >= 10% of the lives covering the day lack a bar
 RENAME_DAYS = 60                                                # 3.1
 VOL_FLOOR = 5_000_000.0                                         # 3.3 (c)
 STABLE_STD = 0.005                                              # 3.3 (d)
@@ -68,6 +71,8 @@ LIQ_MULT = 1.5                                                  # 6.3
 BRACKETS = ((25_000.0, 10, 0.05), (100_000.0, 5, 0.10), (250_000.0, 3, 0.15), (math.inf, 1, 0.25))  # 6.3
 N_ADDS = 3                                                      # 6.4
 CHAND = 3.0                                                     # 6.5
+STOP_HC = 0.25                                                  # 6.7: a touched stop fills 25% of the way to the
+STOP_HC_SENS = (0.0, 0.5)                                       #      bar's extreme beyond it; 16: f = 0 and 0.5 reported
 START = 1000.0                                                  # 9, 14
 BUST_FRAC = 0.10                                                # 9: < $100
 COSTS = {"base": (0.0005, 0.0010, 0.0003),                      # 8: (taker, slippage, funding per 8h)
