@@ -9,7 +9,7 @@ Sources this spec builds on (read them; do not re-derive what they fix):
 |---|---|
 | `research/hunt/PREREG_HUNT.md` (DRAFT) | the machine: bars, entries E1-E3, gate G1, fills, first stop, adds, chandelier, intrabar order, portfolio caps, costs (sections 4-9); section 17 (AI only as a forward shadow) |
 | `docs/aibot/AIBOT_DESIGN_V3_KO.md` | safety principles (9-1), key handling (9-2), "AI never orders" layers (9-3), failure table (9-4), off/pause (9-5), one writer per DB (2-2), late-signal rule (2-3, 5-1 item 7), screen check (4-5), one locked schema + code-side checks (4-8), zero retries and no fallbacks (4-9), budget ledger / reservation / 95% stop (8-1), lock manifest (7-1) |
-| claude-api skill, `/tmp/claude-0/bundled-skills/2.1.296/f14aa290d24f440d46c4d45d14ef7497/claude-api/` (cited below as `skill:<path>`). `skill:SKILL.md` is the skill's main page as served by the Skill tool (it is not extracted to disk); every price used here is also in an on-disk file: `shared/models.md`, `shared/prompt-caching.md`, `shared/model-migration.md`. The 2.1.289 copy named in the task has the same Fable 5.1 / Opus 5.5 prices and cache multipliers (checked) | model ids, prices, caching rules, structured outputs, effort/thinking parameters, SDK call shapes |
+| claude-api skill, `/tmp/claude-0/bundled-skills/2.1.296/f14aa290d24f440d46c4d45d14ef7497/claude-api/` (cited below as `skill:<path>`). `skill:SKILL.md` is the skill's main page as served by the Skill tool (it is not extracted to disk); every price used here is also in an on-disk file: `shared/models.md`, `shared/prompt-caching.md`, `shared/model-migration.md`. The 2.1.289 copy named in the task (`/tmp/claude-0/bundled-skills/2.1.289/e8c740e3bb9c5b2e5365e21a91dd3af9/claude-api/`) was re-checked file by file in review: ids, $10/$50 and $4/$20, cache reads $0.25 / $0.20, writes 1.25x / 2x, Opus 5.5 fast mode $8/$40 (`shared/model-migration.md`, Migrating to Claude Opus 5.5), 512-token cache minimum, structured-output support on both models. No file in either copy gives an output speed (tokens per second) for any model | model ids, prices, caching rules, structured outputs, effort/thinking parameters, SDK call shapes |
 
 Owners (2026-10-11): cost does not matter; they want an AI that judges like a person in real time, entering against the
 rule when it looks right and staying out when it does not. First as a recorded shadow, start about 2026-10-20, judged
@@ -46,6 +46,12 @@ trader of `AIBOT_DESIGN_V3_KO.md` (separate system, separate workspace and key).
 
 * One writer per DB; every other process opens it `mode=ro`. The judge never writes hunt.db; the hunt bot never opens
   judge.db or book.db.
+* **Readers must never block the hunt bot's writes.** hunt.db runs in WAL mode (set by the hunt bot; checked at the
+  start gate, 14.4): in WAL a reader cannot block the writer, in rollback-journal mode a reader's shared lock can make
+  the hunt bot's commit wait or fail with `SQLITE_BUSY`. Readers keep each read transaction to one query batch, never
+  hold one across an API call, a sleep or a long computation, and the book's nightly full recompute reads the nightly
+  `VACUUM INTO` copy of hunt.db, not the live file. `hunt-book` and `hunt-eval` run with `Nice=10`, `MemoryMax=2G`,
+  `OOMScoreAdjust=500`, and start no heavy job inside B-60 s..B+120 s of an hour.
 * `hunt-judge` units: `After=hunt-paper.service` only (no `Wants`/`Requires`/`BindsTo`), `ProtectSystem=strict`,
   `ReadWritePaths=/var/lib/huntai`, `ReadOnlyPaths=/var/lib/hunt /var/lib/huntbook`, `InaccessiblePaths=/etc/huntjudge`
   after the env is loaded, `NoNewPrivileges=yes`, `MemoryMax=1G`, `OOMScoreAdjust=500`, `Nice=5`, watchdog.
@@ -70,9 +76,12 @@ signal bar closes at B:
   BLOCKED_COIN_BUSY, BLOCKED_CAP, CUT_*, SKIPPED_*), `atr14`, `d0`, `engine_hash`. **Every event of the pick on all 30
   coins, both sides, every class** (not only the ones it opens).
 * `bars_5m` (`symbol`, `open_ms`, o, h, l, c, quote_vol) with >= 400 days of history (the 365-day ATR% percentile of
-  the gate needs it); `funding` (`symbol`, `calc_ms`, `rate`); `oi` (`symbol`, `ts_ms`, `oi`) at 5m resolution;
-  `heartbeat`.
+  the gate needs it); `funding` (`symbol`, `calc_ms`, `rate`, `seen_ms`); `oi` (`symbol`, `ts_ms`, `oi`, `seen_ms`) at
+  5m resolution; `heartbeat`. `seen_ms` = the hunt bot's clock when the row arrived (the exchange timestamp of an OI
+  row may be the start of its 5m period, so `ts_ms <= B` alone does not prove the value was known at B).
 * `universe30.json` and the pick (`pick.json`) from the hunt study, hashed.
+* These are logging additions only: written after the hunt bot's own bar processing, never read by its trading code.
+  `RULE_REPLAY` parity (section 8, 14.4) shows they changed nothing.
 
 `rule_action` and anything about positions are **never** put in a packet (BLOCKED_COIN_BUSY would reveal an open
 position).
@@ -89,7 +98,7 @@ the audit hash). Keys are short English; the system prompt explains them once.
 |---|---|---|---|---|
 | system `S1-v1` | role; the hunt machine in plain words (entries, gate, D0, adds, one-unit open risk, chandelier, costs); what TAKE/SKIP mean for G and N; confidence and size meaning; packet keys; answer rules (Korean reason, two short lines; invalidation as a close beyond a price); "you see data up to the bar close only and will never be told outcomes". No dates, no names, no versions in the text | every S1 call | breakpoint 1, `{"type": "ephemeral"}` (5 min) | ~3,000 |
 | user block A `market` | bar close time; BTCUSDT 1h last 24 rows and 4h last 30 rows; BTC regime labels 1h/4h; breadth line (of the 30: count with 4h close > EMA50; count by regime code on the pick tf) | every S1 call at this bar close | breakpoint 2, 5 min | ~2,500 |
-| user block B `signal` | class G/N; system; symbol; side; entry values; last close at B (not P0: P0 is after B); ATR14 (value, %); D0 (price, %); first stop; add levels; chandelier multiple; regime labels of both tfs with components (ADX14, DI+, DI-, EMA50 10-bar slope in ATR, ATR14% percentile in trailing 365 d); ATR14/ATR100; BB bandwidth and its 120-bar percentile; distance to the 55-bar high/low in ATR; funding: last 6 rates and next funding time; OI change 1h/4h/24h %; coin 1h last 72 rows; coin 4h last 60 rows (`t,o,h,l,c,vr`, vr = volume / mean of previous 20 bars); this coin's last 10 events (time, system, side, class; no outcome, no rule_action) | one call | none | ~6,000 |
+| user block B `signal` | class G/N; system; symbol; side; entry values; last close at B (not P0: P0 is after B); ATR14 (value, %); D0 (price, %); first stop and add levels **computed by the judge from the close at B** (C_B -/+ D0, C_B + n x D0; labelled "approx., from close at B"; never the hunt bot's P0-based levels, which would reveal P0); chandelier multiple; regime labels of both tfs with components (ADX14, DI+, DI-, EMA50 10-bar slope in ATR, ATR14% percentile in trailing 365 d); ATR14/ATR100; BB bandwidth and its 120-bar percentile; distance to the 55-bar high/low in ATR; funding: last 6 rates and next funding time; OI change 1h/4h/24h %; coin 1h last 72 rows; coin 4h last 60 rows (`t,o,h,l,c,vr`, vr = volume / mean of previous 20 bars); this coin's last 10 events (time, system, side, class; no outcome, no rule_action) | one call | none | ~6,000 |
 
 Measured with `messages.count_tokens` (`skill:shared/token-counting.md`) on the start-gate replay; budget: total <= 14,000
 input tokens, block B <= 8,000. Over budget: drop 1h rows to 48, then 4h rows to 40 (fixed order, locked before D0).
@@ -101,16 +110,21 @@ input tokens, block B <= 8,000. Over budget: drop 1h rows to 48, then 4h rows to
 | system `S3-v1` | as S1 plus: "propose 0-3 entries outside the rules; each is run by the same machine; code drops coins you already hold and entries over the portfolio limits; an empty list is a valid answer" | ~3,500 |
 | user | 4h bar close time; BTC block as S1; breadth; then per coin in `universe30.json` order: summary line (labels 1h/4h, ADX14, DI+/-, EMA50 slope, ATR14 %, ATR14/ATR100, BB bandwidth percentile, distance to 55-bar high/low), 4h last 30 rows, 1h last 12 rows, funding last 3, OI change 4h/24h, last 5 events (no outcome) | ~48,500 |
 
-Budget: total <= 60,000. Over: 1h rows to 8, then 4h rows to 24. No cache benefit (4h gaps); the system block still
-carries a breakpoint (harmless).
+Budget: total <= 60,000. Over: 1h rows to 8, then 4h rows to 24. No cache benefit (4h gaps, longer than any TTL), so
+S3 requests carry **no** `cache_control`: a breakpoint would only add the 1.25x write premium on every call.
 
 ## 5. Anti-leakage (strict; checked in code before every send)
 
-1. Every series used has `max(bar close) <= B`; funding `calc_ms <= B`; OI `ts_ms <= B`; event rows `bar_close_ms <= B`.
+1. Every series used has `max(bar close) <= B`; funding `calc_ms <= B` and `seen_ms <= B`; OI `ts_ms <= B` and
+   `seen_ms <= B`; event rows `bar_close_ms <= B`.
 2. Packets are built only from `bars_5m`, `funding`, `oi` and the columns (`event_id`, `system`, `symbol`, `tf`, `side`,
-   `bar_close_ms`, `gated`) of `events`. Never from positions, trades, equity, `rule_action`, book.db or past answers.
+   `bar_close_ms`, `gated`, `entry_values`, `atr14`, `d0`; all fixed at B from the signal bar) of `events`. Never from
+   positions, trades, equity, P0 or anything priced after B, `rule_action`, book.db or past answers. Stop and add levels
+   shown to the model are recomputed from the close at B (4.1).
 3. The user blocks are scanned for a locked forbidden-token list (`pnl`, `profit`, `loss`, `equity`, `balance`, `win`,
    `R=`, `손익`, `수익`, `손실`, `잔고`, `승률`, account and model names). The system prompt is excluded from the scan.
+   Latin tokens match as whole words, case-insensitive (so a key such as `window` does not trip `win`); the start-gate
+   replay must show zero `screen_check` hits caused by the packet format itself.
 4. Every call is a fresh single user turn: no history, no memory tool, no tools, no web search, no Files API.
 5. The S1 twin's answer, S1 answers and S3 answers are never shown to any model.
 6. A failed check means the call is not sent; the ask is recorded `screen_check` (counts as no answer).
@@ -125,7 +139,7 @@ carries a breakpoint (harmless).
 |---|---|---|---|---|---|
 | S1 primary | `claude-fable-5-1` | `high` | 16,000 | `client.messages.stream(...)` in a worker thread, `stream.get_final_message()` | logged by B+60 s (answer cut at B+55 s) |
 | S1 twin | `claude-opus-5-5` | same as primary (set explicitly: its default is `medium`, `skill:SKILL.md`) | 16,000 | same | same; never delays the primary |
-| S3 | `claude-fable-5-1` | `high` | 64,000 (stream, `skill:SKILL.md` Common Pitfalls) | same | logged by B4h+60 s (fallback 300 s, 14.3) |
+| S3 | `claude-fable-5-1` | `high` | 64,000 (stream, `skill:SKILL.md` Common Pitfalls) | same | logged by B4h+240 s (answer cut at B4h+230 s; section 7) |
 | warm-up | stage's model | stage's effort | stage's | same | none; one per model and stage at service start (schemas compile once and are cached 24 h, `skill:shared/tool-use-concepts.md`); kind `warm`, excluded |
 
 Common to all calls:
@@ -145,8 +159,10 @@ Common to all calls:
   refused question answered by another model would mix models inside the judged series (same reason as V3 4-9). A
   refusal is a no answer; the twin's answer exists anyway as a separate record. The owners may reverse this before D0.
 * Fable 5.1 needs the org's data retention to allow it (30-day retention; a zero-retention org gets
-  `400 invalid_request_error`, `skill:shared/model-migration.md` Data retention requirement). Seen at the start gate ->
-  Opus 5.5 becomes the S1 primary and S3 model (14.3).
+  `400 invalid_request_error`, `skill:shared/model-migration.md` Data retention requirement). The owners check this in
+  the console before the gate (DESIGN_KO 8, step 9); a zero-retention org can enable 30-day retention for the
+  `hunt-judge` workspace alone (same file, Migration Checklist). Only if Fable is still refused at the start gate does
+  Opus 5.5 become the S1 primary and S3 model (14.3).
 
 ### 6.2 Fan-out at one bar close (cache)
 
@@ -238,7 +254,18 @@ S1 (1h example; 4h identical at 4h closes):
 | B+55 s | answer cut |
 | **B+60 s** | logged or `late` |
 
-S3: same at each 4h close; deadline B+60 s; fallback 300 s only by the ladder rule (14.3), reported as "slow S3".
+S3: same at each 4h close; answer cut B+230 s, logged by **B+240 s**. Why S3 differs from S1: an S3 entry fills at
+the open of the first 5m bar at or after `logged_at`, and its coin-flip control uses that same fill. Any answer logged
+inside (B, B+300 s) fills at the B+5 min open, so 60 s and 240 s give identical numbers; a 60 s S3 window would only
+force the ladder off Fable high (52,000 input tokens plus 3,000-20,000 output tokens is unlikely to finish in about
+50 s) for no gain. S1 keeps 60 s because its judged R uses the rule's own fill P0 at B, and a later real-money version
+would place its order at answer time: the shorter the wait, the closer that fill stays to P0.
+
+Latency arithmetic (no skill file gives an output speed; only the gate measures it). S1 is sent at about B+7 s; the
+ladder's p95 target of B+45 s leaves about 36 s of generation after prefill. That needs roughly 80 output tokens per
+second for the mid thinking case (3,000 tokens) and roughly 220 for the long case (8,000). If Fable high is slower,
+long-thinking answers arrive late: they are still billed (section 19's long column is then mostly late answers) and
+the ladder moves S1 to a faster rung. S3 at 240 s needs roughly 40 tokens per second for 8,000 and 100 for 20,000.
 
 The clock is `chrony`-synced; offset > 1 s WARN, > 5 s stops new asks (`clock`). Restarts of the judge avoid
 B-60 s..B+120 s around every hour (max wait 3 min) unless `--now`.
@@ -291,8 +318,11 @@ computed_ms), `s3_outcomes` (proposal_id, R_ai, R_long, R_short, R_late), `accou
 `parity`. View `v_decision` joins ask, primary and twin answers, outcomes and codes in one row per ask.
 
 Retention: nothing deleted before 2027-03-31. Nightly `VACUUM INTO` backups (14 days), off-site copy to the owners'
-Telegram backup chat (as `docs/offsite-backup.md`), Vultr automatic backups on. Keys and env files are never backed up.
-A nightly `secrets-check` counts key-shaped strings in journals, DBs and backups; must be 0.
+Telegram backup chat (as `docs/offsite-backup.md`), Vultr automatic backups on. Our own backups (`VACUUM INTO`,
+Telegram) never contain keys or env files. Vultr automatic backups are whole-disk images and therefore **do** contain
+`/etc/huntjudge/judge.env`; they stay inside the owners' Vultr account (the same trust boundary as the server). After
+a key is rotated or disabled, old images hold only the dead key. A nightly `secrets-check` counts key-shaped strings in
+journals, DBs and our backups; must be 0.
 
 ## 11. Locks and changes
 
@@ -322,12 +352,17 @@ Prices sit in an env-overridable, versioned table; owners re-check them in the c
   (`cache_creation.ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`, `skill:shared/prompt-caching.md`). No usage
   (timeout, cut connection): conservative estimate = packet tokens at full input price + max_tokens at output price,
   `cost_basis = estimate`.
-* Reservation before send: worst case (S1 Fable 11,500 x $10 + 16,000 x $50 = $0.92; S3 52,000 x $10 + 64,000 x $50 =
-  $3.72). Not sent (`budget`) if month spend + open reservations + this > 95% of the monthly cap, or day spend + this >
-  daily cap.
+* Reservation before send: worst case at the token budgets of 4.1/4.2 (S1 Fable 14,000 x $12.50 (all as 5-minute
+  write) + 16,000 x $50 = $0.98; S1 twin 14,000 x $5 + 16,000 x $20 = $0.39; S3 60,000 x $10 + 64,000 x $50 = $3.80).
+  Not sent (`budget`) if month spend + open reservations + this > 95% of the monthly cap, or day spend + this > daily
+  cap (open reservations are left out of the daily test on purpose: a burst bar of 30-40 parallel asks would otherwise
+  block itself on worst-case reservations that a 55 s answer can never use).
 * Caps (owners may change before D0): console workspace `hunt-judge` monthly limit **$700**; code: stop all calls at
   95% ($665), daily **$45**. Month and day boundaries are UTC (09:00 KST), as V3 8-1.
-* Shedding order when projected month-end > 95%: S1 twin first; then nothing else is shed before the 95% stop.
+* Shedding order, so a cap never removes judged asks before the twin: the S1 twin stops for the rest of the UTC day
+  when day spend reaches 60% of the daily cap, and for the rest of the month when projected month-end spend exceeds
+  95%; only then can the primary or S3 hit `budget`. (A heavy day of 60 S1 asks at long thinking costs about $52 with
+  the twin and about $39 without it, S3 included.)
 * Workspace limit (HTTP 400 "workspace API usage limits") or org limit (HTTP 429 `enforced_spend_limit_reached`) =
   `BUDGET_STOP` for all calls, CRITICAL (V3 8-1 item 5). Weekly, the owners compare console usage with the ledger
   (start gate +-5%, live +-10%).
@@ -357,22 +392,31 @@ Pauses are for operational reasons only and are written with a reason; their tot
 
 14.1 **Replay** (operational only; no outcome is computed or looked at; no prompt change may be based on outcomes):
 the most recent 200 events of the pick (G and N mixed) up to 2026-10-15 rebuilt as packets from the archive, sent to
-both models at the current ladder rung with a simulated B; then 30 S3 scans. Measured: end-to-end time B -> logged,
-schema-valid share, refusal share, `count_tokens` and usage tokens, cost per call. Budget cap for the gate: $150.
+both models at the first ladder rung with a simulated B (send time - 7 s); then 30 S3 scans. Measured: end-to-end
+time B -> logged, schema-valid share, refusal share, `count_tokens` and usage tokens, cost per call. A later rung
+replays the same packets to its primary model only, reuses any (model, effort) already measured (the Opus 5.5 high
+rung reuses the first rung's twin timings), and stops early as soon as it can no longer pass (more than 10 of 200 over
+the p95 target, or more late answers than its limit allows). Expected gate cost about $100 if the first rung passes;
+about $340 if every rung is replayed in full at mid thinking. Budget cap for the gate: **$350**.
 
 14.2 **Rehearsal**: 24 h live on the new server with real events (stage `rehearsal`, excluded from every statistic).
 
 14.3 **Ladder** (fixed now; decided by speed and format only):
-S1 rungs: Fable 5.1 high -> Fable 5.1 medium -> Opus 5.5 high -> Opus 5.5 medium -> Opus 5.5 medium with fast mode.
-The first rung with p95(B -> logged) <= 45 s, late <= 2%, schema-valid >= 99% and refusals <= 1% is locked; the twin is
-the other model at the same effort (Opus 5.5 high when Fable is primary). If no rung passes, the last rung is used and
-the gap is reported. S3 rungs: Fable 5.1 high -> medium -> low -> Opus 5.5 medium; criterion p95 <= 50 s and late <= 5%;
-if none passes, S3 uses the first rung with p95 <= 240 s and a 300 s deadline, labelled "slow S3" in every report.
-A Fable `400 invalid_request_error` caused by data retention skips all Fable rungs.
+S1 rungs: Fable 5.1 high -> Fable 5.1 medium -> Fable 5.1 low -> Opus 5.5 high -> Opus 5.5 medium -> Opus 5.5 medium
+with fast mode. (Fable low comes before any Opus rung: the skill says Fable 5.1 at low effort often exceeds earlier
+models at their highest effort, `skill:shared/model-migration.md` Migrating to Claude Fable 5.1, and it keeps the
+primary on the model the owners chose.) The first rung with p95(B -> logged) <= 45 s, late <= 2%, schema-valid >= 99%
+and refusals <= 1% is locked; the twin is the other model at the same effort (Opus 5.5 high when Fable high is
+primary). If no rung passes, the last rung is used and the gap is reported. S3 rungs: Fable 5.1 high -> medium -> low ->
+Opus 5.5 medium; criterion p95(B -> logged) <= 200 s and late (240 s) <= 5%; if none passes, the last rung is used and
+the gap is reported. A Fable `400 invalid_request_error` caused by data retention skips all Fable rungs.
 
 14.4 **Gate checks** (all): rung locked; schema-valid >= 99%; secrets-check = 0; `RULE_REPLAY` parity with the hunt bot
 on the rehearsal day; clock offset < 1 s; ledger vs console within +-5% for the replay; restore drill of the morning
-backup reproduces the day's outcomes. Failing a check delays D0 by a day; no gate number is changed to pass.
+backup reproduces the day's outcomes; hunt.db is in WAL mode and the hunt bot logged no `SQLITE_BUSY` during the
+rehearsal; the workspace's rate limits (console) cover a burst bar of 30 S1 asks per model sent together plus one S3
+scan (a 429 is a no answer, and burst bars are the big-move bars, so missing them is not random). Failing a check
+delays D0 by a day; no gate number is changed to pass.
 
 14.5 **Pin** (section 11), then D0 = the first full UTC hour after the pin. The hunt bot starts on its own schedule and
 never waits for the judge.
@@ -384,7 +428,9 @@ never waits for the judge.
 * Looks: **L1 cutoff 2026-11-15 00:00 UTC (09:00 KST)**; **L2 cutoff 2026-12-27 00:00 UTC**. A look uses items whose
   signal bar (S3: scan bar) closed in [D0, cutoff - 24 h). Open positions are marked at the cutoff (section 8).
 * Week blocks: block(i) = floor((bar_close_i - A) / 7 days); a last block shorter than 3 days merges into the previous.
-* R: standalone net R (section 8). For S3: `R_ai`, `R_long`, `R_short`.
+* R: standalone net R (section 8). For S3: `R_ai`, `R_long`, `R_short`. An item whose standalone position is not
+  placed (below the minimum notional after a cut, PREREG_HUNT 7.2-7.3) has R = 0 for every side and is counted in the
+  report; it stays in its set (a cut depends on size and price only, not on the AI's answer).
 * Valid answer: a primary answer passing 6.4 (codes 1-11). Twin answers never enter a decision.
 * G_valid: S1 asks of class G with a valid answer. T = TAKE in G_valid, S = SKIP in G_valid. N_valid and O = TAKE in
   N_valid likewise. E = valid S3 proposals (<= 3 per scan, including those dropped by `held`/`cap`/`cut`).
@@ -400,7 +446,8 @@ labels among that block's G_valid items (counts kept), 10,000 times; p_perm = (1
 mean_T(R) > 0 and operational validity (15.6). Baseline reported beside it: mean and sum of R over all G (the rule),
 over G_valid, and over the G asks without a valid answer.
 
-15.3 **S1-N overrides** (tested only at a look where S1 PASSES, fixed sequence, no extra alpha):
+15.3 **S1-N overrides** (tested only once S1 has PASSED, fixed sequence, no extra alpha: at the look where S1 passes,
+and again at L2 only if S1 passed at L1 and S1-N was INSUFFICIENT there):
 **PASS** = |O| >= 10 and mean_O(R) > 0 with p_boot (statistic mean_O(R)) < 0.025 and mean_O(R) > mean_{N_valid}(R).
 
 15.4 **S2 size.** On G_valid with sizes m_i in {0.5, 1.0, 1.5}: Delta2 = sum(m R) / sum(m) - mean(R).
@@ -409,14 +456,20 @@ over G_valid, and over the G asks without a valid answer.
 15.5 **S3 discretionary.** d_i = R_ai,i - (R_long,i + R_short,i) / 2 (exact coin-flip expectation at the same coin,
 time and stop; no seeds). Delta3 = mean_E(d). **PASS** = counts (15.6) and Delta3 > 0 and p_boot < 0.025 and
 mean_E(R_ai) > 0 and S3 validity (15.6). Reads: `AI_DISC` equity vs the 100 `FLIP_DISC` accounts (rank), vs
-`RANDCOIN_DISC`, share of proposals that coincide with a hunt event (same coin and side within 4 h).
+`RANDCOIN_DISC`, share of proposals that coincide with a hunt event (same coin and side within 4 h); a simple-momentum
+read: share of proposals whose side equals the sign of (4h close - close 20 bars earlier) and mean of
+R_ai - R_momentum_side (both already computed from `R_long`/`R_short`), so a pass can be told apart from "it just
+follows the last move".
 
 15.6 **Minimum counts and validity** (evaluated per look; below minimum = **INSUFFICIENT**, not a fail):
 S1: |T| >= 15, |S| >= 10, >= 3 eligible blocks. S1-N: |O| >= 10. S2: |G_valid| >= 30 with >= 5 at 0.5 and >= 5 at 1.5.
 S3: |E| >= 20, >= 3 eligible blocks.
-Operational validity (else **INVALID**): S1 primary no-answer share over G asks <= 5% (all codes of 6.4, including
-`late_pickup` and `screen_check`; excluding only pause/budget time); paused or budget-stopped time <= 3 days in total;
-S3 no-answer share over scans <= 10%; lock hashes match.
+Operational validity (else **INVALID**): S1 primary no-answers over G events <= max(5% of G events, 3) (all codes of
+6.4, including `late_pickup` and `screen_check`, plus G events found only by the nightly replay, `missed`; excluding
+only pause/budget time). The floor of 3 is there because at L1 the mid case has only about 50 G events: a plain 5%
+would allow 2, and a healthy 2-3% no-answer rate would then make roughly one run in five to ten INVALID by chance
+alone (Poisson, mean 1.0-1.5 no-answers; with the floor, about one in twenty or fewer). Paused or budget-stopped time
+<= 3 days in total; S3 no-answer share over scans <= 10%; lock hashes match.
 
 15.7 **Labels and actions.**
 
@@ -445,8 +498,18 @@ pass status is computed, shown or sent before a look.
 15.10 **Power (stated now).** Trend-system R per signal is fat-tailed (many -1R, a few > +10R); assume a standard
 deviation of 3-5R. With |T| = 26 and |S| = 14 at L1 (about the mid case of a 1h pick), the 80%-power minimum detectable
 Delta1 at one-sided 0.025 is about 2.8 x sd x sqrt(1/26 + 1/14), i.e. about 3-5R. With 3-4 week blocks the bootstrap is
-coarse, which is why the within-block permutation test must agree. The most likely L1 result is INSUFFICIENT or FAIL
-for S1 and S2; S3 accumulates fastest (6 scans a day, 0-3 proposals each).
+coarse, which is why the within-block permutation test must agree. With exactly 3 eligible blocks a resample made of
+one block three times has probability 1/27 = 0.037 > 0.025, so S1 can pass only if every block on its own shows
+Delta1 > 0; with 4 blocks that floor is 1/256. D0 on 10/20-10/21 gives 4 blocks at L1, a later D0 gives 3.
+
+Reachability of the minimum counts at L1 (items from D0 to 11/14 00:00 UTC, about 25 days; event rates of section 19,
+G share 15-40%): a 1h pick gives about 10-120 G events (middle about 50), so |T| >= 15 and |S| >= 10 are reachable
+when the AI takes between about 30% and 80% of them; a 4h pick gives about 4-30 G events, so **S1 and S2 are almost
+certainly INSUFFICIENT at L1 for a 4h pick** and marginal at L2 (about 10-80 over 67 days). PREREG_HUNT section 6
+expects G1 to block most E2 and E3 events, so an E2 or E3 pick may sit below the 15% G share and make S1 INSUFFICIENT
+even at L2; S1-N then holds most of the data (it is tested only after S1 passes). The most likely L1 result is
+INSUFFICIENT or FAIL for S1 and S2; S3 accumulates fastest (about 150 scans by L1, 0-3 proposals each; |E| >= 20 needs
+an average of only 0.14 proposals a scan).
 
 15.11 **Family-wise note.** Three independent stage families (S1 with S1-N nested, S2, S3), each <= 0.05 over both looks:
 the chance that at least one passes by luck when the AI adds nothing is at most about 15%. A pass changes paper
@@ -486,8 +549,9 @@ hour and from the hunt bot every 5 minutes. Owners' click-by-click creation step
 
 ## 18. Tests (all against synthetic bars and a fake API server; no key)
 
-* Packets: same inputs -> same bytes; a bar after B injected -> `screen_check`; forbidden token in block B ->
-  `screen_check`; `rule_action` never present; token budget trimming order.
+* Packets: same inputs -> same bytes; a bar after B injected -> `screen_check`; an OI or funding row with
+  `seen_ms > B` -> `screen_check`; forbidden token in block B -> `screen_check`; `rule_action` never present; P0 and
+  P0-based levels never present (stop and add levels equal C_B -/+ n x D0); token budget trimming order.
 * Calls: fake server injecting latency (deadline and `late`), 429, 5xx, 529, refusal with category, `max_tokens`,
   wrong `model`, malformed JSON, out-of-range confidence, duplicate S3 coin, > 3 entries; `sending` row prevents a
   second bill after a crash between send and response; leader-follower start rule; circuit breaker timings; budget
@@ -497,8 +561,8 @@ hour and from the hunt bot every 5 minutes. Owners' click-by-click creation step
 * Outcomes: standalone R equals the hunt code on synthetic paths (adds, stop moves, chandelier, intrabar order, funding
   sign); exact coin-flip expectation; marking; late-fill.
 * Evaluation on simulated data, 2,000 runs: AI with no skill -> S1/S2/S3 PASS share <= 2.5% each; strong AI (Delta1 = 6R,
-  60 signals, R sd 3R) -> PASS >= 80%; counts below minimum -> INSUFFICIENT; no-answer 6% -> INVALID; same seed twice -> byte-
-  identical output; S1-N not evaluated unless S1 passes.
+  60 signals, R sd 3R) -> PASS >= 80%; counts below minimum -> INSUFFICIENT; no-answers above max(5%, 3) -> INVALID;
+  same seed twice -> byte-identical output; S1-N not evaluated unless S1 passes.
 
 ## 19. Volume and cost derivation (estimates)
 
@@ -525,7 +589,11 @@ Monthly, USD and KRW at **1 USD = 1,400 KRW**:
 | high (456 asks) | $233 / 326,000 | $348 / 487,000 | $631 / 883,000 |
 
 Mid/mid split: S1 primary + twin $87, S3 $168, reserve $13. Without caching mid/mid would be $271 (caching saves ~1%
-at this cadence). One-time start gate (200 S1 packets x 2 models + 30 S3 scans): about $99 (139,000 KRW), capped at $150.
+at this cadence). (All nine cells, the per-call figures and the no-cache figure were recomputed in review and match.)
+The long column assumes 8,000 output tokens per S1 answer; if the gate shows the top rung cannot produce that inside
+the 60 s window (section 7), those answers are late (billed, not used) and the ladder locks a faster rung, which then
+costs less. One-time start gate: about $100 (140,000 KRW) if the first rungs pass (200 S1 packets x 2 models + 30 S3
+scans); about $340 if every ladder rung is replayed in full (14.1); capped at $350.
 Everything is console spend before tax; card charges add tax, foreign-payment fees and the day's exchange rate.
 
 ## 20. Open questions and dependencies
@@ -545,4 +613,9 @@ Everything is console spend before tax; card charges add tax, foreign-payment fe
 9. Dependency: the hunt study's select/test (10/15-10/17) gives the pick, its timeframe and the real event rate; the
    cost table and the token budgets are recomputed then. If the hunt grows into the wider version (more entries and
    timeframes), S1 volume and cost scale with the number of events asked.
-10. Fable 5.1 latency inside 60 s is unknown until the start gate; the ladder (14.3) decides without owner input.
+10. Fable 5.1 latency inside 60 s is unknown until the start gate; the ladder (14.3) decides without owner input. S3
+    uses 240 s (section 7), so it very likely keeps Fable high.
+11. The S1 60 s window keeps a later real-money version close to the rule's fill P0, but it is what may push S1 off
+    Fable high. A longer S1 window (up to 240 s) would change no paper fill (judged R uses P0, and the late-fill
+    shadow lands on the same B+5 min bar either way) and would very likely keep Fable high. Default 60 s; the owners
+    may choose 240 s before D0.
