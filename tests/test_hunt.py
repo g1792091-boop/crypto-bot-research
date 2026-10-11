@@ -648,3 +648,155 @@ def test_private_file_must_be_outside_repo(tmp_path):
     args = types.SimpleNamespace(private=str(tmp_path), data=None)
     h = H.write_private(args, "x.json", {"a": 1})
     assert h == H.sha256_file(str(tmp_path / "x.json"))
+
+
+# ------------------------------------------------------------------ select -> test -> report, end to end (synthetic)
+E2E_SYMS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "AAAUSDT", "BBBUSDT", "CCCUSDT")
+
+
+def _e2e_setup(tmp_path, monkeypatch, force_pass=False):
+    a = H.day_ms("2019-12-01")
+    full = {s: H.synth_coin(s, a, H.day_ms("2020-10-01"), 50 + i, 20.0 * (i + 1)) for i, s in enumerate(E2E_SYMS)}
+    fts = np.arange(a, H.day_ms("2020-10-01"), 8 * 3_600_000, dtype=np.int64)
+    loaded = {}
+
+    def fake_data(args, end_key):
+        end = H.day_ms(H.PERIODS[end_key][1])
+        cs = {}
+        for s, c in full.items():
+            k = c.ts < end
+            cs[s] = H.Coin(s, c.ts[k], c.o[k], c.h[k], c.l[k], c.c[k], c.v[k], c.qv[k])
+        H.install(cs, {s: (fts[fts < end], np.full((fts < end).sum(), 0.0001)) for s in cs})
+        loaded[end_key] = max(int(c.ts[-1]) for c in cs.values())
+        return str(tmp_path / "data"), list(E2E_SYMS), {s: {} for s in E2E_SYMS}
+
+    def fake_events(spec, sym, ser, btc):
+        rng = np.random.default_rng(abs(int(hashlib.sha256(f"{spec['name']}{sym}".encode()).hexdigest()[:8], 16)))
+        n = len(ser.bars)
+        return rng.random(n) < 0.04, rng.random(n) < 0.04
+
+    def spec(fam, name, kind, tf, gate):
+        return {"id": f"{fam}:{name}:{tf}:{gate}", "family": fam, "name": name, "strategy": name, "kind": kind,
+                "tf": tf, "gate": gate, "combo": {}}
+    systems = [spec(f, n, k, tf, g) for f, n, k, tf in (("F1", "E1", "hunt", "1h"), ("F1", "E3", "hunt", "4h"),
+                                                        ("F2", "X", "core", "1h"), ("F3", "F9_FVG", "ds", "4h"),
+                                                        ("F2", "X", "core", "4h"))
+               for g in ("G1", "NONE")]
+    monkeypatch.setattr(H, "PERIODS", {"extra": ("2020-06-01", "2020-07-01"), "select": ("2020-07-01", "2020-08-01"),
+                                       "test": ("2020-08-01", "2020-10-01")})
+    monkeypatch.setattr(H, "N_SEEDS", 3)
+    monkeypatch.setattr(H, "N_BOOT", 200)
+    monkeypatch.setattr(H, "POS_PER_MONTH", 0)
+    monkeypatch.setattr(H, "_universe_and_data", fake_data)
+    monkeypatch.setattr(H, "entry_events", fake_events)
+    monkeypatch.setattr(H, "wide_systems", lambda: systems)
+    monkeypatch.setattr(H, "check_pin", lambda study, step: {"pin_file": "x", "pin_sha256": "0" * 64, "files": 0})
+    monkeypatch.setattr(H, "append_picks_line", lambda study: "0" * 64)
+    monkeypatch.setattr(H._ew(), "fullgrid_pins", lambda: {})
+    out = tmp_path / "out"
+    monkeypatch.setattr(H, "OUT_REL", {"v1": str(out / "v1"), "wide": str(out / "wide")})
+    monkeypatch.setattr(H, "PICKS_REL", {"v1": str(out / "v1" / "pick.json"), "wide": str(out / "wide" / "picks.json")})
+    if force_pass:
+        monkeypatch.setattr(H, "wide_eligible", lambda base, cost2: (True, []))
+        real = H.judge
+
+        def judge(*a, **k):
+            j = real(*a, **k)
+            for x in ("P0", "P1", "P3", "P4", "rank_ok_a", "rank_ok_b", "P2", "P2_a", "P2_b"):
+                j[x] = True
+            if "p" in j:
+                j["p"] = 0.001
+            return j
+        monkeypatch.setattr(H, "judge", judge)
+    return out, loaded
+
+
+def test_end_to_end_wide(tmp_path, monkeypatch):
+    out, loaded = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+    priv = tmp_path / "private"
+    assert H.main(["select", "--study", "wide", "--procs", "2", "--data", "x", "--private", str(priv)]) == 0
+    assert loaded["select"] < H.day_ms("2020-08-01")                 # select reads no test bar
+    sel = json.load(open(out / "wide" / "select.json"))
+    assert len(sel["rows"]) == 10 and sel["label"] == "picks"
+    ds = [r for r in sel["rows"] if r["kind"] == "ds"]
+    assert ds and all("score" not in r and "median_M" not in r for r in ds)       # D11
+    assert sel["private_sha256"] == H.sha256_file(str(priv / "wide_select_private.json"))
+    picks = json.load(open(out / "wide" / "picks.json"))["picks"]
+    assert [p["pick_no"] for p in picks] == list(range(1, len(picks) + 1))
+    assert len({p["strategy"] for p in picks}) == len(picks) == 4                # one per name: E1 E3 X F9_FVG
+    assert H.main(["test", "--study", "wide", "--procs", "2", "--data", "x", "--private", str(priv)]) == 0
+    test = json.load(open(out / "wide" / "test.json"))
+    assert test["verdict"]["wide_pass"] and len(test["verdict"]["passing"]) == 4
+    for p in picks:
+        c = test["results"][p["id"]]["checks"]
+        assert c["PASS"] and c["bh_significant"]
+        assert c["one_pct_also_passes"]
+        if p["kind"] == "ds":
+            assert "p_a" not in c and "base" in test["results"][p["id"]]
+            assert set(test["reads"][p["id"]]["r1_checks"]) <= H.DS_ALLOWED_CHECKS
+            assert "mean_lnM" not in test["results"][p["id"]]["base"]
+            assert isinstance(test["sizing"][p["id"]], str)
+        else:
+            assert set(test["sizing"][p["id"]]) == {"0.02", "0.05"}
+            r = test["reads"][p["id"]]
+            assert set(r) == {"r1", "select_controls", "new24", "extra2020", "gate_diagnostics"}
+            assert len(r["r1"]["controls"]["a_mean_lnM"]) == 3
+    assert isinstance(test["basket"], str)                                      # holds a DeepSeek pick
+    full = json.load(open(priv / "wide_test_private.json"))
+    assert set(full["basket"]) == {"select", "test"} and "basket" in full["sizing"]
+    assert H.main(["report", "--study", "wide"]) == 0
+    assert "넓게 통과: 예" in (out / "wide" / "RESULTS_KO.md").read_text()
+
+
+def test_end_to_end_v1(tmp_path, monkeypatch):
+    out, loaded = _e2e_setup(tmp_path, monkeypatch)
+    assert H.main(["select", "--study", "v1", "--data", "x", "--private", str(tmp_path / "p")]) == 0
+    sel = json.load(open(out / "v1" / "select.json"))
+    assert len(sel["rows"]) == 6 and set(sel["rows"]["v1:E1:1h"]) == {"main", "lo", "hi", "one"}
+    pick = json.load(open(out / "v1" / "pick.json"))
+    assert pick["pick"]["id"] == sel["choice"]["pick"]
+    assert H.main(["test", "--study", "v1", "--data", "x", "--private", str(tmp_path / "p")]) == 0
+    test = json.load(open(out / "v1" / "test.json"))
+    c = test["result"]["checks"]
+    assert {"P0", "P1", "P2", "P3", "P4", "p_a", "p_b", "rank_p_a", "rank_p_b"} <= set(c)
+    assert set(test["verdict"]) == {"v1_pass", "label", "one_pct_also_passes", "carried_by_old_six"}
+    assert set(test["reads"]["gate_diagnostics"]) == {"NONE", "TS"}
+    assert len(test["result"]["base"]["day_eq"]) == 61 and test["result"]["base"]["months"] == 2
+    assert H.main(["report", "--study", "v1"]) == 0
+
+
+def test_loader_on_synthetic_files(tmp_path, monkeypatch):
+    """<data>/5m/<SYM>.npz (ts + float32 o h l c v qv mo mh ml mc), funding npz, manifest.json, universe.json."""
+    d = tmp_path / "coins30"
+    (d / "5m").mkdir(parents=True)
+    (d / "funding").mkdir()
+    n = 600
+    ts = START + np.arange(n, dtype=np.int64) * FIVE
+    p = np.linspace(100, 110, n).astype(np.float32)
+    qv = np.full(n, 1e6, np.float32)
+    qv[10] = 0                                                    # zero-volume bar: dropped
+    ts[20] = ts[19]                                               # duplicate open time: last kept
+    cols = {k: p for k in ("o", "h", "l", "c", "mo", "mh", "ml", "mc")}
+    np.savez_compressed(d / "5m" / "AUSDT.npz", ts=ts, v=qv / p, qv=qv, **cols)
+    np.savez_compressed(d / "funding" / "AUSDT.npz", ts=np.array([START + 8 * 3_600_000], np.int64),
+                        rate=np.array([0.0001]))
+    last = H.ms_str(int(ts[-1]))
+    (d / "manifest.json").write_text(json.dumps({"symbols": [{"symbol": "AUSDT", "last_nonzero_volume_bar": last,
+                                                              "missing_months_funding": ["2022-04"]}]}))
+    (d / "universe.json").write_text(json.dumps({"universe": [f"S{i:02d}USDT" for i in range(29)] + ["AUSDT"]}))
+    (d / "UNIVERSE.md").write_text("# rule\n")
+    end = START + 300 * FIVE
+    c = H.load_coin(str(d), "AUSDT", end, H._manifest(str(d)))
+    assert c.ts.max() < end and c.o.dtype == np.float32 and c.f64()["o"].dtype == np.float64
+    assert c.counts["zero_volume"] == 1 and c.counts["duplicates"] == 1 and len(c.ts) == 298
+    assert c.last_ms == int(ts[-1]) and c.counts["missing_months_funding"] == ["2022-04"]
+    fts, rate = H.load_funding(str(d), "AUSDT", end)
+    assert len(fts) == 1 and rate[0] == 0.0001
+    with pytest.raises(FileNotFoundError):
+        H.load_coin(str(d), "BUSDT", end)
+    monkeypatch.setattr(H, "ROOT", str(tmp_path))
+    (tmp_path / "research" / "hunt").mkdir(parents=True)
+    assert H.load_universe(str(d))[-1] == "AUSDT"                 # no universe30.json yet: the data folder's list
+    u = H.write_universe30(str(d))
+    assert u["universe_md_sha256"] == H.sha256_file(str(d / "UNIVERSE.md")) and len(u["new"]) == 30
+    assert H.load_universe(None) == u["symbols"]

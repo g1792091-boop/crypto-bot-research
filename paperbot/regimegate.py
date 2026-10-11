@@ -635,9 +635,11 @@ def _lock(out_dir: str):
         fh.close()
 
 
-def foreign_modules(root: str = ROOT, live_root: str = LIVE_ROOT) -> list[str]:
+def foreign_modules(root: Optional[str] = None, live_root: Optional[str] = None) -> list[str]:
     """Loaded modules whose file is in the rule bot's tree instead of this copy. The venv's paperbot-app.pth puts that
     tree on sys.path after this copy's PYTHONPATH, so a path the installer did not copy would load from it silently."""
+    root = ROOT if root is None else root
+    live_root = LIVE_ROOT if live_root is None else live_root
     if not live_root or not os.path.isdir(live_root) or os.path.realpath(live_root) == os.path.realpath(root):
         return []
     base = os.path.realpath(live_root) + os.sep

@@ -29,7 +29,6 @@ goes to ``--private`` (default ``<data>/hunt_private``, outside the repository).
 from __future__ import annotations
 
 import argparse
-import calendar
 import datetime as dt
 import hashlib
 import json
@@ -269,10 +268,10 @@ def append_picks_line(study: str) -> str:
 class Coin:
     """One coin's 5m bars up to (not including) ``end_ms``, cleaned as H 2 (float32 storage, as in the files)."""
 
-    def __init__(self, sym, ts, o, h, l, c, v, qv, last_ms=None, counts=None):
+    def __init__(self, sym, ts, o, h, lo, c, v, qv, last_ms=None, counts=None):
         self.sym = sym
         self.ts = np.asarray(ts, np.int64)
-        self.o, self.h, self.l, self.c, self.v, self.qv = (np.asarray(x, np.float32) for x in (o, h, l, c, v, qv))
+        self.o, self.h, self.l, self.c, self.v, self.qv = (np.asarray(x, np.float32) for x in (o, h, lo, c, v, qv))
         self.last_ms = int(self.ts[-1]) if last_ms is None and len(self.ts) else last_ms
         self.counts = counts or {}
         self.cq = np.concatenate(([0.0], np.cumsum(self.qv, dtype=np.float64)))
@@ -283,7 +282,7 @@ class Coin:
                 "qv": self.qv.astype(np.float64)}
 
 
-def clean_5m(ts, o, h, l, c, v, qv):
+def clean_5m(ts, o, h, lo, c, v, qv):
     """H 2: duplicate open times dropped (last kept), zero-volume bars dropped (quote volume <= 0); rows off the 5m
     grid or with a non-finite price dropped too. Returns (arrays, counts)."""
     ts = np.asarray(ts, np.int64)
@@ -293,7 +292,7 @@ def clean_5m(ts, o, h, l, c, v, qv):
     last = np.r_[ts_s[1:] != ts_s[:-1], True]
     idx = order[last]
     n_dup = n0 - len(idx)
-    arr = [np.asarray(x)[idx] for x in (o, h, l, c, v, qv)]
+    arr = [np.asarray(x)[idx] for x in (o, h, lo, c, v, qv)]
     ts = ts[idx]
     fin = np.isfinite(arr[0]) & np.isfinite(arr[1]) & np.isfinite(arr[2]) & np.isfinite(arr[3])
     grid = ts % FIVE == 0
@@ -327,7 +326,7 @@ def load_coin(data_dir: str, sym: str, end_ms: int, manifest: dict | None = None
         cut = ts < end_ms
         cols = [z[k][cut] for k in ("o", "h", "l", "c", "v", "qv")]
         ts = ts[cut]
-    (ts, o, h, l, c, v, qv), counts = clean_5m(ts, *cols)
+    (ts, o, h, lo, c, v, qv), counts = clean_5m(ts, *cols)
     info = (manifest or {}).get(sym, {})
     last = info.get("last_nonzero_volume_bar") or info.get("last_bar")
     last_ms = _parse_utc(last) if last else None
@@ -336,7 +335,7 @@ def load_coin(data_dir: str, sym: str, end_ms: int, manifest: dict | None = None
         if last_ms is not None and last_ms >= end_ms - FIVE:
             last_ms = None                       # unknown beyond the loaded data: treated as continuing
     counts["missing_months_funding"] = info.get("missing_months_funding", [])
-    return Coin(sym, ts, o, h, l, c, v, qv, last_ms=last_ms if last_ms is not None else 2 ** 62, counts=counts)
+    return Coin(sym, ts, o, h, lo, c, v, qv, last_ms=last_ms if last_ms is not None else 2 ** 62, counts=counts)
 
 
 def load_funding(data_dir: str, sym: str, end_ms: int) -> tuple:
@@ -854,7 +853,7 @@ def _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
 
 
 @njit(cache=True)
-def _bar(k, o, h, l, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n_adds, n, cap, mmr, cum):
+def _bar(k, o, h, lo, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n_adds, n, cap, mmr, cum):
     """H 7.6 for one position on one 5m bar. Returns (code, price): 0 none, EX_STOP at the stop, EX_GAP at the open,
     EX_LIQ liquidated."""
     side = pi[k, P_SIDE]
@@ -865,7 +864,7 @@ def _bar(k, o, h, l, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
             return EX_LIQ, o
         if o <= stop:
             return EX_GAP, o
-        if l <= stop or l <= liq:
+        if lo <= stop or lo <= liq:
             if liq > stop:
                 return EX_LIQ, liq
             return EX_STOP, stop
@@ -878,7 +877,7 @@ def _bar(k, o, h, l, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
             if ok:
                 stop = ps[k, F_STOP]
                 liq = ps[k, F_LIQ]
-                if l <= stop or l <= liq:
+                if lo <= stop or lo <= liq:
                     if liq > stop:
                         return EX_LIQ, liq
                     return EX_STOP, stop
@@ -891,7 +890,7 @@ def _bar(k, o, h, l, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
             if liq < stop:
                 return EX_LIQ, liq
             return EX_STOP, stop
-        while pi[k, P_TRIED] < n_adds and l <= ps[k, F_NEXT]:
+        while pi[k, P_TRIED] < n_adds and lo <= ps[k, F_NEXT]:
             lvl = ps[k, F_NEXT]
             ref = o if o <= lvl else lvl
             ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n, cap, mmr, cum)
@@ -1774,6 +1773,9 @@ def cmd_test(args) -> int:
         for p in picks:
             c = blocks[p["id"]]["checks"]
             c["carried_by_old_six"] = bool(c["PASS"] and reads[p["id"]]["new24"]["test"]["mean_lnM"] <= 0)
+            one = reads[p["id"]]["r1"]["checks"]           # W 7: P0, P1, P3, P4, both seed ranks, p < 0.05 at 1%
+            c["one_pct_also_passes"] = bool(all(one[x] for x in ("P0", "P1", "P3", "P4", "rank_ok_a", "rank_ok_b"))
+                                            and one["p"] < P_ALPHA)
         basket, sizing = {}, {}
         for p in passes:
             sizing[p["id"]] = _sizing(mks["test"], [(system_signals(mks["test"], p), 0)])
@@ -1798,7 +1800,7 @@ def cmd_test(args) -> int:
 DS_ALLOWED = {"id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo", "eligible", "fail",
               "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label"}
 DS_ALLOWED_CHECKS = {"P0", "P1", "P2_a", "P2_b", "P3", "P4", "rank_ok_a", "rank_ok_b", "bh_significant", "PASS",
-                     "carried_by_old_six"}
+                     "carried_by_old_six", "one_pct_also_passes"}
 
 
 def redact_rows(rows: list) -> tuple:
@@ -1823,7 +1825,11 @@ def redact_test(full: dict) -> dict:
         if is_ds(p):
             out["results"][pid] = {"base": _labels_only(blk["base"]), "cost2": _labels_only(blk["cost2"]),
                                    "checks": {k: v for k, v in blk["checks"].items() if k in DS_ALLOWED_CHECKS}}
-            out["reads"][pid] = "DeepSeek pick: figures in the private file (D11)"
+            rd = full["reads"][pid]
+            out["reads"][pid] = {"note": "DeepSeek pick: figures in the private file (D11)",
+                                 "r1_checks": {k: v for k, v in rd["r1"]["checks"].items() if k in DS_ALLOWED_CHECKS},
+                                 "new24_positions": {p_: rd["new24"][p_]["n_positions"] for p_ in rd["new24"]},
+                                 "extra2020_bust": {r_: rd["extra2020"][r_]["bust"] for r_ in rd["extra2020"]}}
         else:
             out["results"][pid] = blk
             out["reads"][pid] = full["reads"][pid]
@@ -1999,7 +2005,6 @@ def cmd_bench(args) -> int:
         sig = synth_signals(mk, tf, 2.0, 7)
         per_tf[tf] = {"s_per_run_1proc": round(float(np.median(ts_)), 4), "signals": sig["counts"]["gated"]}
     res["engine_run_s"] = per_tf
-    run_s = float(np.mean([v["s_per_run_1proc"] for v in per_tf.values()]))
     # 2 procs: 40 runs
     tasks = [(mk.key, TF_ORDER[i % 4], 100 + i) for i in range(40)]
     t0 = time.perf_counter()
@@ -2127,12 +2132,14 @@ def _compile_probe() -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m research.hunt.hunt", description=__doc__.split("\n\n")[0])
     ap.add_argument("cmd", choices=("select", "test", "report", "universe", "bench"))
-    ap.add_argument("--study", choices=("v1", "wide"), default="v1")
+    ap.add_argument("--study", choices=("v1", "wide"), default=None)
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--data", default=None)
     ap.add_argument("--private", default=None)
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
+    if args.cmd in ("select", "test", "report") and args.study is None:
+        ap.error("--study {v1,wide} is required for select, test and report")
     try:
         if args.cmd == "select":
             return cmd_select(args)

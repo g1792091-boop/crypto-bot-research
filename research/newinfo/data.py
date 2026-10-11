@@ -171,7 +171,10 @@ def _times_ms(x: pd.Series) -> np.ndarray:
     if pd.api.types.is_numeric_dtype(x):
         v = x.to_numpy(np.int64)
         return np.where(v >= 10 ** 14, v // 1000, v)
-    return (pd.to_datetime(x, utc=True).astype("int64") // 1_000_000).to_numpy(np.int64)
+    # whatever resolution pandas parses to (ns in pandas 2, possibly us later): a raw int64 cast would be off by 1000x
+    # and silently leave every metrics value stale (no H3A / D06 signal at all)
+    d = pd.to_datetime(x, utc=True)
+    return ((d - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta(milliseconds=1)).to_numpy(np.int64)
 
 
 def _read_metrics_csv(raw: bytes, gz: bool) -> pd.DataFrame:
