@@ -41,9 +41,9 @@ def test_structure_level_equals_the_kernel(k):
             or a == X.structure_level(h[:i + 1], lo[:i + 1], c[:i + 1], int(i), k, 1)
 
 
-def _replay(data, sigs, br, name):
+def _replay(data, sigs, br, name, size=1.0):
     """tests/test_fullgrid_kernel.replay with the league's engine factory."""
-    e = X.make_engine(name, br, {"BTCUSDT": TK.SPEC})
+    e = X.make_engine(name, br, {"BTCUSDT": TK.SPEC}, size=size)
     k_stop = X.spec(name)["stop_atr"]
     sigs = sorted(sigs, key=lambda x: x[1])
     q = 0
@@ -85,3 +85,31 @@ def test_league_engine_gives_the_kernels_trade(exit_):
         assert abs(t.pnl / 5000.0 - d) < 1e-12, (name, t.pnl, d * 5000)
         n += 1
     assert n >= 30
+
+
+def test_quarter_size_keeps_the_leverage_and_takes_a_quarter_of_the_margin():
+    full, quarter = X.settings_for("tp3R|4"), X.settings_for("tp3R|4", size=0.25)
+    assert [(t.name, t.leverages) for t in quarter.tiers] == [(t.name, t.leverages) for t in full.tiers]
+    assert [round(t.margin_frac, 6) for t in quarter.tiers] == [round(t.margin_frac / 4, 6) for t in full.tiers]
+    data = TK.synth_1m(30_000, seed=17)
+    rng = np.random.default_rng(29)
+    n = 0
+    for _ in range(40):
+        close = int(TK.T0 + rng.integers(5, 1900) * 15 * TK.MIN)
+        side = int(rng.choice([1, -1]))
+        atr = float(data["c"][(close - TK.T0) // TK.MIN] * rng.uniform(0.0008, 0.004))
+        sig = [("BTCUSDT", close, side, atr, False, float("nan"))]
+        a = _replay(data, sig, {"BTCUSDT": TK.WIDE}, "tp3R|4")
+        b = _replay(data, sig, {"BTCUSDT": TK.WIDE}, "tp3R|4", size=0.25)
+        if not a.trades or not b.trades:
+            continue
+        ta, tb = a.trades[0], b.trades[0]
+        # a smaller position can pass the 15%-of-wallet stop-loss cap at a higher tier (as sizing.size_vector)
+        assert tb.leverage >= ta.leverage
+        if tb.leverage != ta.leverage:
+            continue
+        assert (tb.exit_time, tb.exit_reason) == (ta.exit_time, ta.exit_reason)
+        assert abs(tb.pnl - ta.pnl / 4) <= 0.03 * abs(ta.pnl) + 0.05
+        n += 1
+    assert n >= 10
+

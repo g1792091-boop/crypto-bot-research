@@ -53,3 +53,7 @@
   `diag/` and `ANALYSIS_KO.md` (costs x0 vs x1, chosen side vs the opposite side at the same entries, every bar
   without a strategy, market-state persistence on the default numbers and the picks). They explain the result and
   guide the next step; they change no verdict, and nothing they show is a candidate.
+- 2026-10-11 KST, owners: run the reference-only watch list (16 strategies, 38 picks, `diag/watch_sel.json`) as paper
+  accounts in the 후보 리그 from today, with 1/4-size and exit-only comparison accounts. The forward checks are fixed in
+  `WATCH_PREREG.md` (sha256 in `WATCH_PREREG.sha256`) before the league runs them. Nothing in the pinned study changes;
+  none of these picks is a candidate.

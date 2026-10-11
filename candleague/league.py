@@ -138,5 +138,5 @@ def chunk_signals(lib, source, accts: list[dict], symbols: Iterable[str], start:
 
 def make_engines(accts: list[dict], brackets: dict, specs: dict) -> dict:
     """{account id: engine}: each account's exit rule on the paper bot's engine."""
-    return {a["id"]: X.make_engine(a["exit"], brackets, specs, book=a["id"]) for a in accts}
+    return {a["id"]: X.make_engine(a["exit"], brackets, specs, book=a["id"], size=a.get("size", 1.0)) for a in accts}
 

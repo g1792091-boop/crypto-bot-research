@@ -12,6 +12,10 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
 * **Accounts**, per candidate: `cand` (its numbers, its exit), `base` (the cell's default numbers, the live exit
   `ladder|2`; one per cell, shared by its candidates), `flip` (the candidate's own signal times, side from a seeded coin:
   sha256 of the account id and the signal close).
+* **Watch list** (owners 2026-10-11, `research/fullgrid/WATCH_PREREG.md`): no pick passed, so `candidates.json` holds
+  the 38 watch picks (`python -m candleague.candidates watch`, each `passed: false`, `watch: true`). A watch candidate
+  also gets `quarter` (`<id>-q`: its numbers and exit, every margin fraction x 1/4, leverages kept) and `exitonly`
+  (`<id>-x`: the cell's default numbers with its exit). 38 x 5 = 190 accounts.
 * **Engine**: paperbot.engine.PaperEngine through `candleague.exits.make_engine` (parity with the study's kernel is
   tests/test_candleague_exits.py): v3_settings (quality_v1 sizing, $5,000, taker 0.05%, slippage 0.02%, maker 0.02% on
   take-profits, funding, mark-price liquidation, bust below $10), one position at a time per account, six coins
@@ -30,6 +34,8 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
 * Under 30 closed trades: "아직 판단 이름".
 * From 30: mean P&L per trade (fraction of the wallet before it) > 0, and > the cell's `base` over the same days, and >
   the candidate's `flip`. Shown with the trade count and the days run; no automatic action.
+* The watch list adds pooled checkpoints (C1 2026-11-11, C2 2026-12-11 / 2027-01-11) fixed in
+  `research/fullgrid/WATCH_PREREG.md`; they are computed from the snapshots, not by the engine.
 
 ## 3. Server layout (like the demo lab, separate from it)
 

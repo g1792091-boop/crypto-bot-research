@@ -4,7 +4,7 @@
 "use strict";
 
 const VERDICT = { early: "아직 판단 이름", ok: "기준 통과", not_yet: "기준 미달" };
-const ROLE = { cand: "후보", base: "기본값", flip: "동전 던지기" };
+const ROLE = { cand: "후보", base: "기본값", flip: "동전 던지기", quarter: "1/4 크기", exitonly: "청산만 바꾼 기본값" };
 const REASON = { SL: "손절", TP: "익절", LOCK: "사다리 익절", LIQ: "강제청산" };
 const COINS = ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD"];
 const TFS = ["15m", "30m", "1h", "4h"];
@@ -145,7 +145,8 @@ function renderRank() {
     row.addEventListener("click", () => openDetail(c.id));
     row.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(c.id); });
     body.append(row);
-    for (const [role, id] of [["base", `base-${c.kind}-${c.name}-${c.tf}`], ["flip", `${c.id}-flip`]]) {
+    for (const [role, id] of [["quarter", `${c.id}-q`], ["exitonly", `${c.id}-x`],
+      ["base", `base-${c.kind}-${c.name}-${c.tf}`], ["flip", `${c.id}-flip`]]) {
       const r = acc[id];
       if (!r) continue;
       body.append(el("tr", { class: "ref" },
@@ -218,7 +219,8 @@ function renderFills() {
 
 function fillAcctSelect(sel, current, withAll) {
   const doc = S.doc;
-  const groups = [["cand", "후보"], ["base", "기본값"], ["flip", "동전 던지기"]];
+  const groups = [["cand", "후보"], ["quarter", "1/4 크기"], ["exitonly", "청산만 바꾼 기본값"], ["base", "기본값"],
+    ["flip", "동전 던지기"]];
   const opts = [];
   if (withAll) opts.push(el("option", { value: "all", text: "전체 계좌" }), el("option", { value: "cand", text: "후보 계좌만" }));
   for (const [role, name] of groups) {
@@ -433,8 +435,12 @@ function renderAcctCard() {
     kv("최대 낙폭", a.max_dd == null ? "-" : `${(a.max_dd * 100).toFixed(1)}%`),
   ];
   if (a.role === "cand") {
+    const q = acctById(`${a.id}-q`), x = acctById(`${a.id}-x`);
     kids.push(kv("같은 기간 기본값", base ? pct(base.mean_ret) : "-", sign(base && base.mean_ret)),
-      kv("같은 기간 동전", flip ? pct(flip.mean_ret) : "-", sign(flip && flip.mean_ret)));
+      x ? kv("같은 기간 청산만 바꾼 기본값", pct(x.mean_ret), sign(x.mean_ret)) : null,
+      kv("같은 기간 동전", flip ? pct(flip.mean_ret) : "-", sign(flip && flip.mean_ret)),
+      q ? kv("1/4 크기 잔고", q.wallet == null ? "숨김" : usd(q.wallet), sign(q.wallet == null ? null : q.wallet - 5000))
+        : null);
   }
   if (a.combo) {
     kids.push(el("div", { class: "combo" }, ...Object.entries(a.combo).map(([k, v]) =>
@@ -604,9 +610,9 @@ async function openDetail(id) {
   S.detail = id;
   const c = acctById(id);
   if (!c) return;
-  const cand = c.role === "cand" ? c : acctById((c.id.endsWith("-flip") ? c.id.slice(0, -5) : "")) || c;
+  const cand = c.role === "cand" ? c : acctById(c.of || "") || c;
   const baseId = `base-${cand.kind}-${cand.name}-${cand.tf}`, flipId = `${cand.id}-flip`;
-  const ids = cand.role === "cand" ? [cand.id, baseId, flipId] : [cand.id];
+  const ids = cand.role === "cand" ? [cand.id, `${cand.id}-q`, `${cand.id}-x`, baseId, flipId] : [cand.id];
   const books = await Promise.all(ids.map((a) => accountTrades(a, true)));
   const d = $("detail");
   const close = el("button", { class: "close", text: "닫기" });
@@ -616,7 +622,8 @@ async function openDetail(id) {
   const src = cand.source || {};
   const combo = el("div", { class: "combo" }, ...Object.entries(cand.combo || {}).map(([k, v]) =>
     el("span", { text: `${k} = ${Array.isArray(v) ? v.join("/") : v}` })));
-  const roles = cand.role === "cand" ? [["cand", "후보"], ["base", "기본값"], ["flip", "동전"]] : [[cand.role, ROLE[cand.role]]];
+  const roles = cand.role === "cand" ? [["cand", "후보"], ["quarter", "1/4 크기"], ["exitonly", "청산만 바꾼 기본값"],
+    ["base", "기본값"], ["flip", "동전"]] : [[cand.role, ROLE[cand.role]]];
   const series = roles.map(([role, lab], i) => [role, lab, books[i]])
     .filter(([, , b]) => b && b.equity).map(([role, lab, b]) => ({ role, label: lab, points: b.equity }));
   const trades = el("table");

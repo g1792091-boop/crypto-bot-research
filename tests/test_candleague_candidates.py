@@ -69,3 +69,24 @@ def test_phase2_bands_ride_along_for_core_only():
     cands = C.from_results(_confirm(), phase2=phase2)
     assert cands[0]["source"]["band"] == band and "band" not in cands[1]["source"]                   # D11
     assert "band" not in C.from_results(_confirm())[0]["source"]
+
+
+def test_watch_list_runs_each_pick_with_quarter_size_and_exit_only_comparisons():
+    conf = _confirm()
+    ds_tf = C.ds_defs().TFS_OF["F17_Z"][0]
+    select = [{"kind": "core", "name": "S2_ST_ROC", "tf": "15m", "rank": 2},
+              {"kind": "ds", "name": "F17_Z", "tf": ds_tf, "rank": 1}]
+    band = {"30": {"p5": -0.03, "median": 0.01}}
+    cands = C.from_watch(conf, select, {"core-S2_ST_ROC-15m-2": band, f"ds-F17_Z-{ds_tf}-1": band})
+    assert [c["id"] for c in cands] == ["core-S2_ST_ROC-15m-2", f"ds-F17_Z-{ds_tf}-1"]
+    assert all(c["source"]["watch"] for c in cands) and not cands[0]["source"]["passed"]
+    assert cands[0]["source"]["band"] == band and "band" not in cands[1]["source"]            # D11
+    assert "test_mean" not in cands[1]["source"] and C.check(cands) == []
+    acc = {a["id"]: a for a in C.accounts(cands)}
+    q, x = acc["core-S2_ST_ROC-15m-2-q"], acc["core-S2_ST_ROC-15m-2-x"]
+    assert q["role"] == "quarter" and q["size"] == C.QUARTER and q["combo"] == cands[0]["combo"]
+    assert x["role"] == "exitonly" and x["exit"] == cands[0]["exit"] and x.get("size", 1.0) == 1.0
+    assert x["combo"] == {k: C._plain(v) for k, v in C.default_combo("core", "S2_ST_ROC").items()}
+    assert sorted(a["role"] for a in acc.values()).count("base") == 2
+    bad = C.check([{**cands[0], "variants": ["double"]}])
+    assert any("variants" in b for b in bad)

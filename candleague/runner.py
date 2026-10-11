@@ -60,8 +60,8 @@ def _put(conn, k: str, v) -> None:
 
 def fingerprint(accts: list[dict]) -> str:
     import hashlib
-    body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"]] for a in accts],
-                      sort_keys=True)
+    body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
+                       for a in accts], sort_keys=True)
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
@@ -161,6 +161,7 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False)
         pos = e.position
         row = {"id": a["id"], "role": a["role"], "kind": a["kind"], "name": a["name"], "tf": a["tf"],
                "exit": a["exit"], "exit_ko": X.exit_ko(a["exit"]), "combo": a["combo"], "of": a.get("of"),
+               "size": a.get("size", 1.0),
                "source": a.get("source", {}), "trades": len(pnl), "wins": sum(p > 0 for p in pnl),
                "mean_ret": (sum(rets) / len(rets)) if rets else None, "wallet": e.wallet, "max_dd": dd,
                "bust": bool(e.bust),

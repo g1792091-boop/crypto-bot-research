@@ -115,10 +115,16 @@ class LadderTP(PaperEngine):
         return ok
 
 
-def settings_for(name: str, **kw):
-    """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides)."""
+def settings_for(name: str, size: float = 1.0, **kw):
+    """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides). ``size``
+    multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector)."""
     s = spec(name)
     kw = {**kw, "ladder_first_lock": s["first_lock"], "ladder_step": s["step"], "ladder_trigger_gap": s["gap"]}
+    if size != 1.0:
+        from paperbot.config import V3_QUALITY_TIERS, Tier
+        tiers = tuple(Tier(t.name, round(t.margin_frac * size, 6), t.leverages) for t in V3_QUALITY_TIERS)
+        kw.update(tiers=tiers, min_margin_frac=min(t.margin_frac for t in tiers),
+                  max_margin_frac=max(0.50, max(t.margin_frac for t in tiers)))
     if not s["ladder"]:
         kw["tp_mode"] = "fixed"
         if s["tp_kind"] == TP_ROE:
@@ -126,10 +132,10 @@ def settings_for(name: str, **kw):
     return v3_settings(**kw)
 
 
-def make_engine(name: str, brackets: dict, specs: dict, book=None, **kw) -> PaperEngine:
+def make_engine(name: str, brackets: dict, specs: dict, book=None, size: float = 1.0, **kw) -> PaperEngine:
     """A paper account that exits by rule ``name`` (signals must carry meta stop_dist = stop_dist(name, atr), and
-    tp_struct for a structure rule)."""
-    s, st = spec(name), settings_for(name, **kw)
+    tp_struct for a structure rule); ``size`` scales the margin fractions (settings_for)."""
+    s, st = spec(name), settings_for(name, size=size, **kw)
     extra = {} if book is None else {"book": book}
     if s["ladder"] and s["tp_kind"] == TP_STRUCT:
         return LadderTP(st, brackets, symbol_specs=specs, struct=True, **extra)

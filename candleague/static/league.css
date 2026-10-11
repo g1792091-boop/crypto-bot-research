@@ -5,7 +5,8 @@
   --bg: #121519; --surface: #1a1e23; --surface-2: #1f242a; --line: #2c333b; --grid: #262c33;
   --ink: #e8ecf1; --ink-2: #bcc3cc; --ink-3: #8a939e;
   --accent: #3987e5;
-  --series-cand: #3987e5; --series-base: #d95926; --series-flip: #199e70;
+  --series-cand: #3987e5; --series-base: #d95926; --series-flip: #199e70; --series-quarter: #8b62d6;
+  --series-exitonly: #b8860b;
   --good: #3fb950; --bad: #f0605a; --warn: #d6a83a;
   --up: #34d39a; --down: #f4646b; --long: #5aa9ff; --short: #ffb347;
 }
@@ -56,12 +57,14 @@ tr.ref td.l { padding-left: 22px; }
               border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--ink); white-space: nowrap; }
 .sw-cand { background: var(--series-cand); } .sw-base { background: var(--series-base); }
 .sw-flip { background: var(--series-flip); }
+.sw-quarter { background: var(--series-quarter); } .sw-exitonly { background: var(--series-exitonly); }
 .chart .gl { stroke: var(--grid); stroke-width: 1; }
 .chart .ax { fill: var(--ink-3); font-size: 11px; }
 .chart .lab { fill: var(--ink-2); font-size: 11px; }
 .chart .xh { stroke: var(--ink-3); stroke-width: 1; }
 .chart .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ln-cand { stroke: var(--series-cand); } .ln-base { stroke: var(--series-base); } .ln-flip { stroke: var(--series-flip); }
+.ln-quarter { stroke: var(--series-quarter); } .ln-exitonly { stroke: var(--series-exitonly); }
 .empty { color: var(--ink-3); padding: 18px; text-align: center; }
 
 /* summary cards */
