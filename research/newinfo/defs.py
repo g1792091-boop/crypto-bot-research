@@ -98,7 +98,7 @@ def reference_row(rule: str) -> int:
 
 
 # ------------------------------------------------------------------ bars and inputs
-def bars(ts, o, h, l, c, v, step: int) -> dict:
+def bars(ts, o, h, lo, c, v, step: int) -> dict:
     """UTC bins of 1m bars, exactly as research/fullgrid/run.py build_frame: the first bin dropped when the data start
     after its open, the last when the data end before its close; a bin with missing minutes is kept."""
     ts = np.asarray(ts, np.int64)
@@ -117,7 +117,7 @@ def bars(ts, o, h, l, c, v, step: int) -> dict:
         keep[-1] = False
     return {"open_ms": open_ms[keep], "o": np.asarray(o, float)[st][keep],
             "h": np.maximum.reduceat(np.asarray(h, float), st)[keep],
-            "l": np.minimum.reduceat(np.asarray(l, float), st)[keep], "c": np.asarray(c, float)[en - 1][keep],
+            "l": np.minimum.reduceat(np.asarray(lo, float), st)[keep], "c": np.asarray(c, float)[en - 1][keep],
             "v": np.add.reduceat(np.asarray(v, float), st)[keep]}
 
 
@@ -133,9 +133,9 @@ def ema(x: np.ndarray, n: int) -> np.ndarray:
     return _fg().ema(pd.Series(np.asarray(x, float)), int(n)).to_numpy(float)
 
 
-def atr14(h, l, c) -> np.ndarray:
+def atr14(h, lo, c) -> np.ndarray:
     """fg_indicators.atr(df, 14), the ATR the exits use."""
-    df = pd.DataFrame({"high": np.asarray(h, float), "low": np.asarray(l, float), "close": np.asarray(c, float)})
+    df = pd.DataFrame({"high": np.asarray(h, float), "low": np.asarray(lo, float), "close": np.asarray(c, float)})
     return _fg().atr(df, 14).to_numpy(float)
 
 
@@ -147,12 +147,12 @@ class Coin:
     htf      dict close_ms, c of the higher timeframe's bars (D05)
     Derived series are memoised per object (``cached``)."""
 
-    def __init__(self, sym: str, tf: str, open_ms, o, h, l, c, v, minutes=None, metrics=None, funding=None, htf=None,
+    def __init__(self, sym: str, tf: str, open_ms, o, h, lo, c, v, minutes=None, metrics=None, funding=None, htf=None,
                  atr=None):
         self.sym, self.tf, self.step = sym, tf, TF_MS[tf]
         self.open_ms = np.asarray(open_ms, np.int64)
         self.close_ms = self.open_ms + self.step
-        self.o, self.h, self.l, self.c, self.v = (np.asarray(x, float) for x in (o, h, l, c, v))
+        self.o, self.h, self.l, self.c, self.v = (np.asarray(x, float) for x in (o, h, lo, c, v))
         self.minutes, self.metrics, self.funding, self.htf = minutes, metrics, funding, htf
         self.memo = {} if atr is None else {("atr",): np.asarray(atr, float)}
 

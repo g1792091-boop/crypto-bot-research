@@ -83,3 +83,10 @@ python3 research/regimegate/gate.py report  --out <결과 폴더>
 ```
 
 결과: `<결과 폴더>/RESULTS_KO.md`(한국어 표), `history.json`, `forward.json`, 둘 다 있으면 `decision.json`.
+
+## 서버 밤 계산 (참고, 판정 아님)
+
+실전 기간 동안 규칙봇 서버에서 매일 밤(10:40 한국 시간) 같은 문지기로 '지금까지'를 계산합니다: `paperbot/regimegate.py`,
+설치와 읽는 법은 `docs/regime-gate-ko.md`. 묶음 · 문지기 · 통과 조건 · 통계는 `gate.py`의 것을 그대로 불러 쓰고, 고정 파일이
+맞지 않으면 돌지 않습니다. 다만 지금 청산만 보고 펀딩은 실제 값이라 판정 숫자와 조금 다를 수 있습니다. **판정은 위
+`gate.py forward` 한 번**입니다.

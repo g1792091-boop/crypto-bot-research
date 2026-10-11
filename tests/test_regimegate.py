@@ -539,7 +539,11 @@ def test_units_and_installer():
     inst = (d / "install_regimegate.sh").read_text(encoding="utf-8")
     assert "-m paperbot.regimegate run" in svc and "--out /var/lib/paperbot/regimegate" in svc
     assert "User=paperbot" in svc and "OnFailure=paperbot-failed@%n.service" in svc and "MemoryMax=" in svc
-    assert "ReadWritePaths=/var/lib/paperbot/regimegate" in svc and "-/var/lib/paperbot/paper3.db" in svc
+    ro = svc.split("ReadOnlyPaths=", 1)[1].split("\n", 1)[0].split()
+    assert "ReadWritePaths=/var/lib/paperbot\n" in svc                 # as paramshadow: paper3.db's WAL is readable
+    for p in ("-/var/lib/paperbot/paper3.db", "-/var/lib/paperbot/paramshadow", "/opt/paperbot-regimegate",
+              "-/opt/crypto-bot-research"):
+        assert p in ro, p
     assert "EnvironmentFile" not in svc and "-/etc/paperbot" in svc            # no key: public bars only
     assert "WorkingDirectory=/opt/paperbot-regimegate/app" in svc and "PYTHONPATH=/opt/paperbot-regimegate/app" in svc
     assert "OnCalendar=*-*-* 01:40:00 UTC" in tim                           # after paramshadow (01:00 UTC)

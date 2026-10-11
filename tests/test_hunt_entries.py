@@ -163,7 +163,11 @@ def test_adapter_equals_run_signals(monkeypatch, kind, name, sym):
         ev = EW.events_on(spec, b, sym, btc)
         assert len(b) == len(want_l)
         assert np.array_equal(ev["raw_long"], want_l) and np.array_equal(ev["raw_short"], want_s), (name, tf)
-        assert np.array_equal(ev["long"], EW.rising(want_l)) and np.array_equal(ev["short"], EW.rising(want_s))
+        el, es = EW.rising(want_l), EW.rising(want_s)
+        el[:R.WARMUP_BARS] = False                    # the full grid's warm-up (PREREG_HUNT_WIDE 3.1)
+        es[:R.WARMUP_BARS] = False
+        assert np.array_equal(ev["long"], el) and np.array_equal(ev["short"], es)
+        assert not (ev["long"] & ev["short"]).any()
     R._LAST_SERIES[0] = None
 
 
@@ -181,7 +185,7 @@ def test_ds_needs_btc_context():
 # ------------------------------------------------------------------ events
 def test_rising_and_classify():
     x = np.array([1, 1, 0, 1, 0, 0, 1, 1, 1, 0], bool)
-    assert EW.rising(x).tolist() == [1, 0, 0, 1, 0, 0, 1, 0, 0, 0]
+    assert EW.rising(x).tolist() == [0, 0, 0, 1, 0, 0, 1, 0, 0, 0]          # the first bar gives none
     assert EW.rising(np.zeros(0, bool)).shape == (0,)
     z = np.zeros(10, bool)
     assert EW.classify(x, z)["kind"] == "state" and EW.classify(x, z)["continuation"] == 3     # 3 of 6: half
@@ -327,7 +331,8 @@ def test_systems_count_ids_stable():
     assert fam == {"F1": 24, "F2": 288, "F3": 342, "F4": 76}
     assert {s["gate"] for s in S} == {"G1", "NONE"}
     for s in S:
-        assert s["id"].endswith("-" + s["gate"]) and s["strategy"] == s["name"]
+        want = f"{s['family']}:{s['name']}:{s['tf']}:{s['gate']}" + (f":r{s['rank']}" if s["family"] == "F4" else "")
+        assert s["id"] == want and s["strategy"] == s["name"]
         assert s["tf"] in EW.TFS
     R = EW.fullgrid_run()
     D = R.ds_module()
@@ -344,7 +349,7 @@ def test_systems_count_ids_stable():
     assert len(EW.entry_cells()) == 365
 
 
-PINNED_IDS_SHA = "596a727114208c5bbd5c1216759f96bab03b8160404630e4a98132a422532f96"
+PINNED_IDS_SHA = "2c470bf319f61da3ccb5b4091c7f6c286764991fb9768e4527e6685222a8e658"
 
 
 def test_f4_is_the_league_watch_list():
