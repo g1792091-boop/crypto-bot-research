@@ -992,7 +992,7 @@ def test_ctrl_b_pools_follow_the_variants_own_conditions():
                 assert (mk.lbi[s_, pool] >= lo).all(), vid
                 if v["family"] == "P4":
                     assert (mk.n_ranked[pool] >= 3 * v["n"]).all() and not mk.partial[pool].any()
-        sg = mk.signals(v)                                             # every pick signal with a fill bar is in the pool
+        sg = mk.signals(v)                                             # each pick signal with a fill bar is in the pool
         nxt = mk.bar[sg.sym, sg.day + 1]
         for d_, s_ in zip(sg.day[nxt], sg.sym[nxt]):
             assert d_ in set(pools[s_].tolist()), vid

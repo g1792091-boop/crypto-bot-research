@@ -57,7 +57,7 @@ PERIODS = {"p1": ("2021-08-01", "2024-07-01"),                 # 10: select
 TEST_PERIODS = ("p2", "p3")
 WARMUP_DAYS = 60                                                # 10
 RELIST_GAP = 30                                                 # 3.1: >= 30 days without a bar -> a new life, a listing
-PAUSE_GAP = 7                                                   # 3.1: 7..29 days without a bar -> a new life, no listing
+PAUSE_GAP = 7                                                   # 3.1: 7..29 days without a bar -> new life, no listing
 PARTIAL_MIN_MISSING = 10                                        # 3.1: a partial day (archive hole): >= 10 symbols and
 PARTIAL_FRAC = 0.10                                             #      >= 10% of the lives covering the day lack a bar
 RENAME_DAYS = 60                                                # 3.1
@@ -74,7 +74,7 @@ BRACKETS = ((25_000.0, 10, 0.05), (100_000.0, 5, 0.10), (250_000.0, 3, 0.15), (m
 N_ADDS = 3                                                      # 6.4
 CHAND = 3.0                                                     # 6.5
 STOP_HC = 0.25                                                  # 6.7: a touched stop fills 25% of the way to the
-STOP_HC_SENS = (0.0, 0.5)                                       #      bar's extreme beyond it; 16: f = 0 and 0.5 reported
+STOP_HC_SENS = (0.0, 0.5)                                       #      bar's extreme beyond it; 16: f = 0, 0.5 reported
 START = 1000.0                                                  # 9, 14
 BUST_FRAC = 0.10                                                # 9: < $100
 COSTS = {"base": (0.0005, 0.0010, 0.0003),                      # 8: (taker, slippage, funding per 8h)
@@ -382,7 +382,7 @@ class Raw:
         S, T = self.cal.shape
         self.lid = np.full((S, T), -1, np.int64)
         self.lbi = np.full((S, T), -1, np.int64)
-        self.pregap = np.zeros((S, T), np.bool_)                   # 6.8: a bar followed by a day without a bar, same life
+        self.pregap = np.zeros((S, T), np.bool_)                   # 6.8: a bar followed by a no-bar day, same life
         lf, ll, ls, lno, lgap = [], [], [], [], []
         for s in range(S):
             bars = np.flatnonzero(self.cal[s])
@@ -600,8 +600,8 @@ class Market:
         w0g = max(raw.first_day, p0g - warmup)
         self.w0g, self.p0g, self.p1g = w0g, p0g, p1g
         if not raw.values_cover(w0g, p1g):
-            raise RuntimeError(f"Market {name or start}: days {day_str(w0g)}..{day_str(p1g - 1)} lie outside the values "
-                               "this step loaded (section 10)")
+            raise RuntimeError(f"Market {name or start}: days {day_str(w0g)}..{day_str(p1g - 1)} lie outside the "
+                               "values this step loaded (section 10)")
         T = p1g - w0g
         self.T = T
         self.p0, self.p1 = p0g - w0g, T

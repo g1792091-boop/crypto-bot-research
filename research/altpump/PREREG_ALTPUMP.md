@@ -5,10 +5,11 @@
 
 **Status: DRAFT, written 2026-10-11 (KST), before any code for this study existed and before any trading outcome of
 any rule below was computed on these data; revised the same day after a code and bias review (section 22 lists every
-change; still no outcome of any rule computed on these data).** The open questions of section 20 are closed by the owners (or by the
-default written next to each) before the file is pinned. Pinning = `PREREG_ALTPUMP.sha256` over this file and the code
-of section 18; the code refuses the `select`, `test`, `board` and `pass2` steps without a matching pin. After the pin
-nothing here changes; a change goes to `research/altpump/DEVIATIONS.md` with its reason and date.
+change; still no outcome of any rule computed on these data).** The open questions of section 20 are closed by the
+owners (or by the default written next to each) before the file is pinned. Pinning = `PREREG_ALTPUMP.sha256` over
+this file and the code of section 18; the code refuses the `select`, `test`, `board` and `pass2` steps without a
+matching pin. After the pin nothing here changes; a change goes to `research/altpump/DEVIATIONS.md` with its reason
+and date.
 
 Owners (2026-10-11): the goal is "1000달러로 1달만에 5000달러, 10000달러, 2만달러 ... 10만달러", and today: "규칙봇
 매매법 36개 + 딥시크 44개 + 커스텀봇 후보 38개 + 새 신호 3개 매매법들 이렇게만 테스트하면 될까? 더 많은 매매법을
@@ -326,8 +327,8 @@ groups with an eligible variant: fewer picks, K = their number. **None eligible*
 single variant with the highest mean monthly ln M is still run on both test periods, labelled "no pick, fail".
 
 11.4 The picks are written to `research/altpump/out/pick.json`, and its sha256 is appended to `PREREG_ALTPUMP.sha256`
-before any value of period 2, or of period 3 outside the warm-up of section 10, is loaded (`select` never loads them). Each test period is run
-**once**. **The other variants are not run on the test periods.**
+before any value of period 2, or of period 3 outside the warm-up of section 10, is loaded (`select` never loads
+them). Each test period is run **once**. **The other variants are not run on the test periods.**
 
 ## 12. Controls (2,000 seeds each, same machine)
 
