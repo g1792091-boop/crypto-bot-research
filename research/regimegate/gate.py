@@ -15,7 +15,8 @@ history  Every signal of the 80 strategies' default numbers (rule bot 36 and Dee
 forward  The same for the rule bot's 36 on the live run's days: signal bars closing 2026-10-05 18:35 UTC .. the
          --last-day 00:00 UTC, 1m data to the end of --last-day (the full-grid archive DATA plus Binance's daily 1m and
          mark-price files of October in FWD/raw; October funding is not in the public archive yet: 0), the same kernel
-         (each signal alone, $5,000): FWD/1m, FWD/frames, FWD/outcomes, OUT/parts/forward/*, OUT/forward.json.
+         (each signal alone, $5,000): FWD/<last day>/{1m,frames,outcomes}, OUT/parts/forward/*, OUT/forward.json.
+         Use a new OUT for a look with another --last-day (parts of another window are refused).
 report   OUT/RESULTS_KO.md from whichever of history.json / forward.json exists, and OUT/decision.json when both do.
 
 The gates (PREREG 4): G1 by 장세 (trend and other classes only in 추세장, reversion only in 횡보장), G2 by 변동성
@@ -127,6 +128,7 @@ def code_stamp() -> dict:
 
 # ------------------------------------------------------------------ per-signal tables
 COLS = ("cell", "coin", "side", "close", "x0", "x1", "regime", "vol")
+DTYPES = {"cell": np.int16, "coin": np.int8, "side": np.int8, "close": np.int64, "x0": np.float64, "x1": np.float64}
 
 
 @functools.lru_cache(maxsize=4)
@@ -159,6 +161,9 @@ def table_job(args) -> str:
     ev, data_dir, work, out, tf, sym, lo_ms, hi_ms, ex = args
     path = part_path(out, ev, tf, sym)
     if os.path.exists(path):
+        with np.load(path) as z:
+            if int(z["lo_ms"]) != lo_ms or int(z["hi_ms"]) != hi_ms:
+                raise SystemExit(f"{path} is for another window: use another --out")
         return ""
     t0 = time.time()
     ci = R.SYMBOLS.index(sym)
@@ -169,9 +174,9 @@ def table_job(args) -> str:
     if ev == "forward":
         oc = forward_outcomes(data_dir, work, sym, tf, lo_ms, hi_ms, ex)
         if not np.array_equal(oc["bars"], np.flatnonzero(win)):
-            raise SystemExit(f"{work}/outcomes/{tf}_{sym}.npz is for other bars: remove FWD/outcomes and run again")
-    rows = {k: [] for k in COLS}
-    open_end = 0
+            raise SystemExit(f"{work}/outcomes/{tf}_{sym}.npz is for other bars: remove {work}/outcomes")
+    rows = {k: [] for k in DTYPES}
+    open_end = np.zeros(len(READS), np.int64)        # per read: trades still open at the data end (forward)
     for c, (kind, name, ctf) in enumerate(all_cells()):
         if ctf != tf or (ev == "forward" and kind != "core"):
             continue
@@ -189,22 +194,22 @@ def table_job(args) -> str:
             for r in range(len(READS)):
                 xs.append(np.where(best, oc[f"pnl{r}_best"][j, col], oc[f"pnl{r}_normal"][j, col]).astype(np.float64))
                 rs = np.where(best, oc[f"reason{r}_best"][j, col], oc[f"reason{r}_normal"][j, col])
-                open_end += int((rs == K.R_OPEN).sum())
+                open_end[r] += int((rs == K.R_OPEN).sum())
         keep = np.isfinite(xs[0]) | np.isfinite(xs[1])
         n = int(keep.sum())
         for k, v in (("cell", np.full(n, c, np.int16)), ("coin", np.full(n, ci, np.int8)), ("side", side[keep]),
                      ("close", close[idx][keep].astype(np.int64)), ("x0", xs[0][keep]), ("x1", xs[1][keep])):
             rows[k].append(v)
-    T = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in rows.items() if k not in ("regime", "vol")}
+    T = {k: (np.concatenate(v) if v else np.zeros(0)).astype(DTYPES[k]) for k, v in rows.items()}
     T["regime"], T["vol"] = label_codes(T["close"], coin_state(data_dir, sym, tf))
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    np.savez(path + ".tmp.npz", open_at_end=open_end, seconds=time.time() - t0, **T)
+    np.savez(path + ".tmp.npz", open_at_end=open_end, seconds=time.time() - t0, lo_ms=lo_ms, hi_ms=hi_ms, **T)
     os.replace(path + ".tmp.npz", path)
     return f"{ev} {tf} {sym}: {len(T['x0']):,} signals in {time.time() - t0:.0f}s"
 
 
-def load_table(out: str, ev: str) -> dict:
-    """The evaluation's signals of every part, concatenated; fails when a part is missing."""
+def load_table(out: str, ev: str, lo_ms: int, hi_ms: int) -> dict:
+    """The evaluation's signals of every part, concatenated; fails when a part is missing or of another window."""
     parts = []
     for tf in R.TFS:
         for sym in R.SYMBOLS:
@@ -212,25 +217,36 @@ def load_table(out: str, ev: str) -> dict:
             if not os.path.exists(p):
                 raise SystemExit(f"{p} missing: run '{ev}' first")
             with np.load(p) as z:
+                if int(z["lo_ms"]) != lo_ms or int(z["hi_ms"]) != hi_ms:
+                    raise SystemExit(f"{p} is for another window: use another --out")
                 parts.append({k: z[k] for k in COLS + ("open_at_end",)})
     T = {k: np.concatenate([p[k] for p in parts]) for k in COLS}
-    T["open_at_end"] = int(sum(int(p["open_at_end"]) for p in parts))
+    T["open_at_end"] = np.sum([p["open_at_end"] for p in parts], axis=0).astype(int).tolist()
     return T
 
 
 # ------------------------------------------------------------------ forward data and outcomes
-def build_forward_data(archive: str, fwd: str, last_day: str) -> None:
-    """FWD/1m/<SYMBOL>.npz = the whole full-grid archive (2020-01 .. 2026-09, so every market state has its history)
-    plus Binance's daily 1m and mark-price klines 2026-10-01 .. last_day (checksum-verified; as
-    research/live_interim/replay/live_bt.py). Funding of the new days is 0: October's file is not in the archive yet."""
+def forward_dir(fwd: str, last_day: str) -> str:
+    """FWD/<last day>: the forward data of one window (1m/, frames/, outcomes/), so a look with another last day never
+    mixes into the verdict's; the downloads (FWD/raw) are shared."""
+    return os.path.join(fwd, last_day)
+
+
+def build_forward_data(archive: str, fwd: str, last_day: str) -> str:
+    """FWD/<last day>/1m/<SYMBOL>.npz = the whole full-grid archive (2020-01 .. 2026-09, so every market state has its
+    history) plus Binance's daily 1m and mark-price klines 2026-10-01 .. last_day and nothing later (checksum-verified;
+    as research/live_interim/replay/live_bt.py). Funding of the new days is 0: October's file is not in the archive
+    yet. Returns the data folder."""
     days = [str(d.date()) for d in pd.date_range("2026-10-01", last_day, freq="D")]
     raw = os.path.join(fwd, "raw")
+    ddir = forward_dir(fwd, last_day)
     end = ms(last_day) + DAY
     for sym in R.SYMBOLS:
-        out = os.path.join(fwd, "1m", f"{sym}.npz")
+        out = os.path.join(ddir, "1m", f"{sym}.npz")
         if os.path.exists(out):
-            if DATA.load(fwd, sym)["ts"][-1] < end - 3_600_000:
-                raise SystemExit(f"{out} ends before {last_day}: remove FWD/1m and run again")
+            last = DATA.load(ddir, sym)["ts"][-1]
+            if not end - 3_600_000 <= last < end:
+                raise SystemExit(f"{out} does not end on {last_day}: remove {ddir} and run again")
             continue
         base = DATA.load(archive, sym)
         kl, mk = [], []
@@ -251,11 +267,14 @@ def build_forward_data(archive: str, fwd: str, last_day: str) -> None:
             new[a] = np.where(no_mark, new[fall], mkd[b].to_numpy(float))
         if not new["ts"][0] > base["ts"][-1]:
             raise SystemExit(f"{sym}: October overlaps the archive")
+        if not new["ts"][-1] < end:
+            raise SystemExit(f"{sym}: a daily file holds minutes after {last_day}")
         allv = {key: np.concatenate([base[key], new[key]]) for key in base}
         os.makedirs(os.path.dirname(out), exist_ok=True)
         np.savez(out + ".tmp.npz", **allv)
         os.replace(out + ".tmp.npz", out)
         print(f"[forward] {sym}: {len(new['ts']):,} October minutes, mark filled {int(no_mark.sum())}", flush=True)
+    return ddir
 
 
 def forward_outcomes(data_dir: str, work: str, sym: str, tf: str, lo_ms: int, hi_ms: int, ex: dict) -> dict:
@@ -406,8 +425,8 @@ def evaluate(T: dict, ev: str, cells: tuple, money: bool = DS_MONEY, n_flip: int
                 add(u, grp, "all", "universe")
     L = np.array(lines)
     known = (T["regime"] > 0) & (T["vol"] > 0)
-    doc = {"evaluation": ev, "universe": universe, "ds_money": money, "open_at_end": int(T.get("open_at_end", 0)),
-           "reads": {}}
+    doc = {"evaluation": ev, "universe": universe, "ds_money": money, "reads": {}}
+    open_end = T.get("open_at_end", [0] * len(READS))
     for r, read in enumerate(READS):
         xr = T[f"x{r}"]
         use = np.isfinite(xr) & known
@@ -419,7 +438,7 @@ def evaluate(T: dict, ev: str, cells: tuple, money: bool = DS_MONEY, n_flip: int
         flips = flip_control(cell, x, {g: ~a for g, a in allow.items() if g in GATES}, L, n_flip,
                              R._seed("regimegate|flip", ev, read))
         out = {"signals": int(np.isfinite(xr).sum()), "unknown_state": int((np.isfinite(xr) & ~known).sum()),
-               "used": int(use.sum()), "lines": []}
+               "used": int(use.sum()), "open_at_end": int(open_end[r]), "lines": []}
         for g in gates:
             for li, key in enumerate(keys):
                 if g in SWAPS and not (key["role"] == "verdict"):
@@ -514,7 +533,7 @@ def main(argv=None) -> int:
     ap.add_argument("stage", choices=("history", "forward", "report"))
     ap.add_argument("--data", help="the full-grid 1m archive (research/fullgrid/data.py build)")
     ap.add_argument("--work", help="history: the full grid's work folder (frames/, outcomes/)")
-    ap.add_argument("--fwd", help="forward: its own folder (raw/, 1m/, frames/, outcomes/)")
+    ap.add_argument("--fwd", help="forward: its own folder (raw/ and one <last day>/ with 1m/, frames/, outcomes/)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--last-day", default=FWD_LAST_DAY)
     ap.add_argument("--exchange", default=os.path.join(FG, "exchange.json"))
@@ -528,22 +547,23 @@ def main(argv=None) -> int:
     if a.stage == "history":
         R.FRAME_DIR[0] = os.path.join(a.work, "frames")
         run_tables("history", a.data, a.work, a.out, a.procs, HIST_FROM, HIST_TO, None)
-        doc = evaluate(load_table(a.out, "history"), "history", all_cells())
+        doc = evaluate(load_table(a.out, "history", HIST_FROM, HIST_TO), "history", all_cells())
         doc.update({"window": [R.PERIODS[R.P_SELECT][1], R.PERIODS[R.P_TEST][2]], "code": code_stamp()})
         write_json(os.path.join(a.out, "history.json"), doc)
     elif a.stage == "forward":
         if a.last_day != FWD_LAST_DAY:
             print(f"[regimegate] --last-day {a.last_day} is not the pre-registered {FWD_LAST_DAY}: a look, not the "
                   "verdict", flush=True)
-        build_forward_data(a.data, a.fwd, a.last_day)
-        R.FRAME_DIR[0] = os.path.join(a.fwd, "frames")        # never the archive's frames (same file names)
+        ddir = build_forward_data(a.data, a.fwd, a.last_day)
+        R.FRAME_DIR[0] = os.path.join(ddir, "frames")         # never the archive's frames (same file names)
         hi = ms(a.last_day)
         for s in R.SYMBOLS:
             for tf in R.TFS:                                  # built once here; the workers only read them
-                if R.frame(a.fwd, s, tf)[1][-1] < hi + DAY - 3_600_000:
-                    raise SystemExit(f"{s} {tf}: frames end before {a.last_day}: remove FWD/frames and run again")
-        run_tables("forward", a.fwd, a.fwd, a.out, a.procs, FWD_FROM, hi, R.exchange(a.exchange, False))
-        doc = evaluate(load_table(a.out, "forward"), "forward", all_cells())
+                last = R.frame(ddir, s, tf)[1][-1]
+                if not hi < last <= hi + DAY:                  # not the archive's, not a later day's
+                    raise SystemExit(f"{s} {tf}: frames do not end on {a.last_day}: remove {ddir}/frames")
+        run_tables("forward", ddir, ddir, a.out, a.procs, FWD_FROM, hi, R.exchange(a.exchange, False))
+        doc = evaluate(load_table(a.out, "forward", FWD_FROM, hi), "forward", all_cells())
         doc.update({"window": ["2026-10-05 18:35", f"{a.last_day} 00:00"], "data_to": f"{a.last_day} 23:59",
                     "funding": "0 (October not in the archive)", "verdict_window": a.last_day == FWD_LAST_DAY,
                     "code": code_stamp()})
@@ -600,7 +620,8 @@ def report_ko(docs: dict) -> str:
         doc = docs[ev]
         L += [f"## {EV_KO[ev]}", ""]
         if ev == "forward":
-            L += [f"자료 끝 {doc.get('data_to')}, 펀딩 {doc.get('funding')}, 끝까지 안 끝난 거래 {doc['open_at_end']}건(빠짐)."
+            L += [f"자료 끝 {doc.get('data_to')}, 10월 펀딩 0(공개 자료에 아직 없음). 자료 끝까지 안 끝난 거래는 뺐습니다"
+                  f"(청산 방식별 {', '.join(str(rd['open_at_end']) for rd in doc['reads'].values())}건)."
                   + ("" if doc.get("verdict_window") else " **미리 정한 기간이 아니라 판정이 아닙니다.**"), ""]
         for read, rd in doc["reads"].items():
             L += [f"### {READ_KO[read]}", "",
