@@ -55,7 +55,8 @@ effect follows from 2.4's rules; nothing is filled.
 - a funding settlement from its calc time floored to the minute (the minute the 1m archive pays it on): the bar
   closing at T sees the settlements whose floored calc time is <= T (every calc time is within its minute's first
   second, 2.2). The settled rate is the last value of the estimated rate the exchange shows live, so a bot can know it
-  at the settlement. A position filled at that minute does not pay it (kernel.py: no funding on the entry minute);
+  at the settlement. A position filled at that minute does not pay it (kernel.py: no funding on the entry minute).
+  Settlement times are floored calc times everywhere, the edges of the D04 and D05 windows included;
 - for the daily VWAP, 1m bars with open < T;
 - other coins' bars closing at or before T;
 - a higher-timeframe bar only once it has closed (its close <= T).
