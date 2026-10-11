@@ -199,7 +199,7 @@ def git_commit(root: str = ROOT) -> str:
 
 
 def _write_json(path: str, obj) -> str:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w") as fh:
         json.dump(obj, fh, indent=1, sort_keys=False, default=_json_default)
