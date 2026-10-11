@@ -74,7 +74,7 @@ AP_OUT=$REPO/research/altpump/out
 NCPU=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)    # nproc obeys OMP_NUM_THREADS, set to 1 below
 SELF=$REPO/research/hunt/bootstrap.sh
 NST=9
-RESTART="tmux kill-session -t hunt 2>/dev/null; tmux new -s hunt \"bash $SELF; bash\""
+RESTART="tmux respawn-pane -k -t hunt \"bash $SELF; bash\" 2>/dev/null || tmux new -d -s hunt \"bash $SELF; bash\"; [ -n \"\$TMUX\" ] || tmux attach -t hunt"
 [ "$DRYRUN" = 1 ] && RESTART="DRYRUN=1 HUNT_BASE=$BASE HUNT_REPO=$REPO HUNT_DATA=$DATA bash $SELF --dry-run"
 
 say() { echo "[$(date -u '+%m-%d %H:%M UTC')] $*" | tee -a "$LOG"; }
@@ -144,7 +144,7 @@ running() {                  # the run's own process (RUNNING holds its pid), or
     return 0
   fi
   [ "$DRYRUN" = 1 ] && return 1
-  pgrep -f "[r]esearch\.hunt\.(hunt|data_hunt)|[a]ltpump/altpump\.py|[t]ests/test_(hunt|data_hunt|altpump)" >/dev/null
+  pgrep -f "[r]esearch\.hunt\.(hunt|data_hunt|reads_o)|[a]ltpump/altpump\.py|[t]ests/test_(hunt|data_hunt|altpump)" >/dev/null
 }
 
 incomplete_msg() {
@@ -182,6 +182,10 @@ status() {
          [ -n "$last" ] && echo "  자료: $last" ;;
     7) t=$(ap_files_total)
        [ "$t" -gt 0 ] && echo "  알트 급등 2차 자료: $(( t - $(ap_files_left) ))/$t 파일" ;;
+  esac
+  case "$n" in
+    6) echo "  6/9는 판정 뒤 목표판·20/30/40배 표 계산까지 몇 시간(4~9시간) 걸릴 수 있습니다. 남은 시간이 그대로여도 정상이니 다시 시작하지 마세요." ;;
+    8) echo "  8/9의 추가 분석(주말 뺀 버전 등)은 최대 ${HUNT_READS_O_HOURS:-5}시간 걸릴 수 있습니다. 정상이니 다시 시작하지 마세요." ;;
   esac
 }
 
@@ -225,7 +229,8 @@ push() {
 update() {                   # update <commit>: the developer's fix, only while nothing has been computed
   local want=$1
   [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "사용법: bash $SELF update <커밋 번호 (개발자가 준 것)>"; return 2; }
-  if running; then echo "지금 돌고 있습니다. 먼저 멈추세요: tmux kill-session -t hunt"; return 1; fi
+  [ -f "$BASE/DONE" ] && { echo "이미 끝났습니다. 바꿀 것 없습니다 (결과: $BASE/results.tgz, 보내기: bash $SELF push)"; return 1; }
+  if running; then echo "이미 돌고 있습니다. 다시 붙여 넣을 필요 없습니다. 진행 보기: bash $SELF status"; return 1; fi
   if computed; then
     echo "이미 계산을 시작해서(6/9 이후) 코드를 바꾸지 않습니다. 이 화면을 개발자에게 보내 주세요."; return 1
   fi
@@ -239,7 +244,7 @@ update() {                   # update <commit>: the developer's fix, only while 
   case " $GIVEN " in *" HUNT_GO "*) ;; *) GIVEN="$GIVEN HUNT_GO" ;; esac
   save_settings
   rm -f "$BASE/CHECKED"
-  echo "코드를 ${want:0:10} 으로 바꿨습니다. 이제 이 줄을 붙여 넣으세요:"
+  echo "코드를 ${want:0:10} 으로 바꿨습니다. (다시 시작 줄이 같이 있었다면 더 붙여 넣을 것 없음. 아니면 이 줄:)"
   echo "  $RESTART"
 }
 
@@ -578,8 +583,14 @@ owner_reads() {              # PREREG_HUNT_WIDE 7.4a (O1 weekend version on all 
   [ -f research/hunt/reads_o.py ] || { warn "추가 분석(주말 뺀 버전 등): reads_o.py 없음"; return 0; }
   [ -s research/hunt/out/wide/test.json ] || { warn "추가 분석(주말 뺀 버전 등): 넓게 시험 결과가 없어 건너뜀"; return 0; }
   sub "추가 분석: 주말 뺀 버전(4개 봉)·롱만·FOMC/고용지표 시간 피하기·모멘텀 비교 (7.4a)"
+  local rc=0
   timeout "${HUNT_READS_O_HOURS:-5}h" "${READS_O[@]}" --study wide --data "$DATA" --private "$PRIV" --procs "$PROCS" \
-    >>"$LOG" 2>&1 || warn "추가 분석(주말 뺀 버전 등)이 끝나지 않음 (run.log 참고, 다른 결과는 그대로 묶습니다)"
+    >>"$LOG" 2>&1 || rc=$?
+  if [ "$rc" = 124 ]; then
+    warn "추가 분석(주말 뺀 버전 등)이 ${HUNT_READS_O_HOURS:-5}시간 안에 끝나지 않아 멈췄습니다 (다른 결과는 그대로 묶습니다)"
+  elif [ "$rc" != 0 ]; then
+    warn "추가 분석(주말 뺀 버전 등) 실패 (종료 코드 $rc, run.log 참고, 다른 결과는 그대로 묶습니다)"
+  fi
 }
 
 stage 8 "정밀 재확인 (고른 것이 거래한 코인만 1분봉·마크 가격으로 다시) + 추가 분석 (주말 뺀 버전 등)"
@@ -673,7 +684,16 @@ PYEOF
     if [ -s "$BASE/WARNINGS" ]; then echo "* 건너뛰거나 빠진 것이 있습니다: WARNINGS.txt"; else echo "* 건너뛴 것 없음"; fi
     echo
     echo "* hunt/v1, hunt/wide: 추세 사냥 출력 (select, pick(s), test, RESULTS_KO.md, fidelity가 있으면 fidelity.json)"
-    echo "* hunt/wide/reads_o.json: 추가 분석 (주말 뺀 버전 4개 봉, 롱만, FOMC/고용지표 시간, 모멘텀 비교; 7.4a)"
+    if [ -s research/hunt/out/wide/reads_o.json ]; then
+      echo "* hunt/wide/reads_o.json: 추가 분석 (주말 뺀 버전 4개 봉, 롱만, FOMC/고용지표 시간, 모멘텀 비교; 7.4a)"
+    else
+      echo "* hunt/wide/reads_o.json: 없음 (추가 분석이 끝나지 않음: WARNINGS.txt)"
+    fi
+    if [ -s research/hunt/out/wide/reads_a.json ]; then
+      echo "* hunt/wide/reads_a.json: 목표판(R1), 20/30/40배 표(R24), 계속 굴린 계좌"
+    else
+      echo "* hunt/wide/reads_a.json: 없음 (목표판이 끝나지 않음: WARNINGS.txt)"
+    fi
     echo "* altpump: 알트 급등 출력 (pass2_cache 제외)"
     echo "* pins: 고정 파일 (고르기 뒤 picks 줄이 붙은 것)"
     echo "* data: 받은 자료 목록(manifest), 고정 기준 두 개와의 비교(verify_5m.json, verify_5m_allkeys.json), 1분봉 목록"
