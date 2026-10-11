@@ -843,12 +843,17 @@ def test_pass2_day_without_5m_runs_on_the_daily_bar(tmp_path):
     _kl_npz(os.path.join(cache, "klines_AAAUSDT_2021-02.npz"), rows)
     sub, rep = AP.load_sub5m(mk, cache, ["AAAUSDT"])
     t42 = local(mk, 42)
-    assert sub.slen[0, local(mk, 40)] == AP.NB5 and sub.slen[0, t42] == 1 and sub.off[0, t42] >= 0
-    assert sub.o[sub.off[0, t42]] == 80.0 and rep["days_on_5m"] == 2
+    assert sub.slen[0, local(mk, 40)] == AP.NB5 and sub.off[0, t42] < 0
+    assert rep["days_on_5m"] == 2 and rep["days_on_daily_bar"] == 11      # days 30-39 and 42 of the period
     assert "AAAUSDT 2021-02" in rep["mark"] and "AAAUSDT 2021-02" in rep["funding"]
     out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub)
     assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ and out.ri[0, AP.RI_TOUT] == t42
     assert out.rf[0, AP.R_PNL] == pytest.approx(daily.rf[0, AP.R_PNL])
+    # the same through any Sub without sub-bars for that day (the engine falls back to the daily bar)
+    slots = {(0, t): [(mk.o[0, t], mk.h[0, t], mk.l[0, t])] for t in range(mk.T) if mk.bar[0, t]}
+    del slots[(0, t42)]
+    out1 = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=_sub_from_slots(mk, slots, 1))
+    assert out1.ri[0, AP.RI_REASON] == AP.EX_LIQ and out1.rf[0, AP.R_PNL] == pytest.approx(daily.rf[0, AP.R_PNL])
     # 5m bars that do not reach the daily low (a hole inside the day) -> the day runs on the daily bar
     after2 = [(100, 100.5, 99.5, 100), (100, 100.5, 95.0, 99)]
     mk2, daily2 = one_pos({}, after2)
@@ -856,7 +861,7 @@ def test_pass2_day_without_5m_runs_on_the_daily_bar(tmp_path):
     _kl_npz(os.path.join(cache, "klines_AAAUSDT_2021-02.npz"),
             [((G0 + 40) * DAY, 100, 100.5, 99.5), ((G0 + 41) * DAY, 100, 100.5, 99.0)])
     sub2, rep2 = AP.load_sub5m(mk2, cache, ["AAAUSDT"])
-    assert sub2.slen[0, t41] == 1 and rep2["days_5m_short_of_daily_range"] == 1
+    assert sub2.off[0, t41] < 0 and rep2["days_5m_short_of_daily_range"] == 1
     out2 = AP.run_account(mk2, sig(mk2, [(39, "AAAUSDT", 1)]), VM, sub=sub2)
     assert out2.ri[0, AP.RI_REASON] == daily2.ri[0, AP.RI_REASON] == AP.EX_STOP
     assert out2.cnt[AP.C_DAYBAR] == 1 and out2.rf[0, AP.R_XPX] == pytest.approx(daily2.rf[0, AP.R_XPX])

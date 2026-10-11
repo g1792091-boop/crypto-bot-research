@@ -735,10 +735,11 @@ class Sig:
 
 
 class Sub:
-    """Intraday fills (6.7, 15): for each symbol-day with data, ``slen`` slots starting at ``off`` (1 = one bar for
-    the whole day: the daily bar, or in the 5m pass a day whose 5m bars are missing or do not reach the daily high and
-    low; 288 = 5m bars); ``nb`` = the most slots of any day. Price o/h/l and mark o/h/l (liquidation), funding events
-    (fund_mode 1; a symbol-day without events pays the fixed charge) or the fixed daily charge (fund_mode 0)."""
+    """Intraday fills (6.7, 15): for each symbol-day with sub-bars, ``slen`` slots starting at ``off`` (1 = one bar
+    for the whole day; 288 = 5m bars); ``nb`` = the most slots of any day. A day with a daily bar and off < 0 (in the
+    5m pass: its 5m bars are missing or do not reach the daily high and low) runs on the daily bar in the engine.
+    Price o/h/l and mark o/h/l (liquidation), funding events (fund_mode 1; a symbol-day without events pays the fixed
+    charge) or the fixed daily charge (fund_mode 0)."""
 
     def __init__(self, off, slen, o, h, l, mo, mh, ml, nb, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark, fund_mode):
         self.off, self.slen = off, slen
@@ -1069,13 +1070,14 @@ def _fund_fixed(k, rate, px, ps, acc):
 
 @njit(cache=True)
 def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist, pregap, month_of_day,
-            sb_off, sb_len, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark,
-            sig_day, sig_sym, sig_side):
+            od_f, hd_f, ld_f, sb_off, sb_len, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, fe_off, fe_cnt, fe_slot,
+            fe_rate, fe_mark, sig_day, sig_sym, sig_side):
     """One account (sections 6-9): continuous (iprm[IP_MONTHLY] = 0) or a fresh wallet every calendar month (14).
     Day order: (0) funding events at 00:00 (5m pass), (1) existing positions: liquidation / gap at the open, (2) the
     entries of yesterday's signals at the open, (3) the intraday slots (stop first, then adds, moved-stop exit),
     (4) the close: hold exit, delisting close, close before a day without a bar, chandelier, funding, equity, bust,
-    month / period end.
+    month / period end. A day with a daily bar and no sub-bars (sb_off < 0) runs on the daily bar itself (od_f, hd_f,
+    ld_f = the daily o/h/l flattened [s * T + t], mark = price): no bar day is ever skipped (15).
     Funding (8), fixed mode (the daily pass, or a 5m-pass symbol-day without archived events): a position open at a
     daily close pays one day (3 x 8h: 08:00 and 16:00 of the day, 00:00 of the next); a position that exits during
     the day or at its close pays 2 x 8h for that day (08:00 and 16:00, the worse case when the exit time is unknown);
@@ -1166,21 +1168,27 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
             if not bar[s, t]:
                 continue
             x0 = sb_off[s, t]
-            if x0 < 0 or np.isnan(sb_o[x0]):
+            if x0 >= 0:
+                op = sb_o[x0]
+                mop = sb_mo[x0]
+            else:
+                op = o_d[s, t]
+                mop = op
+            if np.isnan(op):
                 continue
             side = pi[k, P_SIDE]
             code = -1
             px = 0.0
             if side > 0:
-                if sb_mo[x0] <= ps[k, F_LIQ]:
+                if mop <= ps[k, F_LIQ]:
                     code, px = EX_LIQ, ps[k, F_LIQ]
-                elif sb_o[x0] <= ps[k, F_STOP]:
-                    code, px = EX_GAP, sb_o[x0]
+                elif op <= ps[k, F_STOP]:
+                    code, px = EX_GAP, op
             else:
-                if sb_mo[x0] >= ps[k, F_LIQ]:
+                if mop >= ps[k, F_LIQ]:
                     code, px = EX_LIQ, ps[k, F_LIQ]
-                elif sb_o[x0] >= ps[k, F_STOP]:
-                    code, px = EX_GAP, sb_o[x0]
+                elif op >= ps[k, F_STOP]:
+                    code, px = EX_GAP, op
             if code >= 0:
                 _close(k, px, code, t, ps, pi, rf, ri, acc, taker, slip)
                 used[k] = False
@@ -1195,7 +1203,7 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
             d = t - 1
             si += 1
             cnt[C_SEEN] += 1
-            if not bar[s, t] or sb_off[s, t] < 0:
+            if not bar[s, t]:
                 cnt[C_LAPSE] += 1
                 continue
             if has[s] >= 0:
@@ -1314,22 +1322,31 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
                 if not bar[s, t]:
                     continue
                 x0 = sb_off[s, t]
-                if x0 < 0 or j >= sb_len[s, t]:
-                    continue
+                if x0 >= 0:
+                    if j >= sb_len[s, t]:
+                        continue
+                    oneday = sb_len[s, t] == 1
+                    x = x0 + j
+                    ao, ah, al, amo, amh, aml = sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml
+                else:
+                    if j > 0:
+                        continue
+                    oneday = True
+                    x = s * T + t
+                    ao, ah, al, amo, amh, aml = od_f, hd_f, ld_f, od_f, hd_f, ld_f
                 fixed = fund_mode == 0 or fe_cnt[s, t] == 0
                 if not fixed:
-                    if sb_len[s, t] == 1:
+                    if oneday:
                         # one bar stands for the whole day: all its later events first (the worse order)
                         _fund_events(k, s, t, 1, 1 << 30, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
                     elif j > 0:
                         _fund_events(k, s, t, j, j + 1, ps, pi, acc, fe_off, fe_cnt, fe_slot, fe_rate, fe_mark)
-                if j == 0 and nb > 1 and sb_len[s, t] == 1:
+                if oneday and nb > 1:
                     cnt[C_DAYBAR] += 1
-                x = x0 + j
-                if np.isnan(sb_o[x]):
+                if np.isnan(ao[x]):
                     continue
                 others = _others(order, npos, k, ps, pi)
-                code, px = _slot(k, x, j == 0, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others,
+                code, px = _slot(k, x, j == 0, ao, ah, al, amo, amh, aml, ps, pi, acc, others,
                                  cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr, n_adds, hc)
                 if code >= 0:
                     if fixed:
@@ -1449,8 +1466,9 @@ def run_account(mk: Market, sig: Sig, v: dict, r: float = R_MAIN, cost: str = "b
     ip[IP_HOLD], ip[IP_MONTHLY], ip[IP_FUNDMODE] = 0 if is_m else v["hold"], int(monthly), sub.fund_mode
     ip[IP_NB], ip[IP_P0], ip[IP_P1], ip[IP_TRAIL] = sub.nb, mk.p0, mk.p1, int(is_m)
     raw = _engine(prm, ip, BR_CAP, BR_LEV, BR_MMR, mk.bar, mk.o, mk.c, mk.atr, mk.med7, mk.delist, mk.pregap,
-                  mk.month_of_day, sub.off, sub.slen, sub.o, sub.h, sub.l, sub.mo, sub.mh, sub.ml, sub.fe_off,
-                  sub.fe_cnt, sub.fe_slot, sub.fe_rate, sub.fe_mark, sig.day, sig.sym, sig.side)
+                  mk.month_of_day, mk.o.ravel(), mk.h.ravel(), mk.l.ravel(), sub.off, sub.slen, sub.o, sub.h, sub.l,
+                  sub.mo, sub.mh, sub.ml, sub.fe_off, sub.fe_cnt, sub.fe_slot, sub.fe_rate, sub.fe_mark, sig.day,
+                  sig.sym, sig.side)
     return Out(raw, start, monthly, mk.p0, mk.p1)
 
 
@@ -1962,12 +1980,12 @@ def _month_days(mk: Market) -> dict:
 
 
 def load_sub5m(mk: Market, cache: str, syms: list, tol: float = 1e-6) -> tuple:
-    """15: the 5m price and mark bars of ``syms`` as slot blocks of 288 and their archived funding events, plus ONE
-    slot holding the daily bar (6.7 worst order on the day's o/h/l) for every symbol-day of the period that has a
-    daily bar but no 5m block, or whose 5m bars do not reach the daily high and low (a hole in the 5m file): no move
-    the daily file shows is skipped and no position is closed early because data will be missing. Mark missing -> the
-    price bars stand in. A symbol-day without an archived funding event pays the fixed charge (8). Returns (Sub,
-    report): the symbol-months with a daily bar in the period and no klines / mark / funding file, and day counts."""
+    """15: the 5m price and mark bars of ``syms`` as slot blocks of 288 and their archived funding events. A
+    symbol-day of the period with a daily bar but no 5m block, or whose 5m bars do not reach the daily high and low (a
+    hole in the 5m file), gets no block: the engine runs it on the daily bar (6.7 worst order), so no move the daily
+    file shows is skipped and no position is closed early because data will be missing. Mark missing -> the price bars
+    stand in. A symbol-day without an archived funding event pays the fixed charge (8). Returns (Sub, report): the
+    symbol-months with a daily bar in the period and no klines / mark / funding file, and day counts."""
     ix = {s: i for i, s in enumerate(mk.syms)}
     S, T = mk.S, mk.T
     day0_ms = mk.w0g * DAY_MS
@@ -2020,13 +2038,7 @@ def load_sub5m(mk: Market, cache: str, syms: list, tol: float = 1e-6) -> tuple:
         else:
             short += 1
     nblk = len(use)
-    daybar = mk.bar.copy()
-    daybar[:, :mk.p0] = False
-    for si, t in use:
-        daybar[si, t] = False
-    ds, dt = np.nonzero(daybar)
-    total = nblk * NB5 + len(ds)
-    arr = np.full((6, max(1, total)), np.nan)
+    arr = np.full((6, max(1, nblk) * NB5), np.nan)
     off = np.full((S, T), -1, np.int64)
     slen = np.zeros((S, T), np.int64)
     for n, ((si, t), blk) in enumerate(sorted(use.items())):
@@ -2036,28 +2048,26 @@ def load_sub5m(mk: Market, cache: str, syms: list, tol: float = 1e-6) -> tuple:
         arr[:, n * NB5:(n + 1) * NB5] = blk
         off[si, t] = n * NB5
         slen[si, t] = NB5
-    xi = nblk * NB5 + np.arange(len(ds))
-    for f, src in enumerate((mk.o, mk.h, mk.l)):
-        arr[f, xi] = src[ds, dt]
-        arr[3 + f, xi] = src[ds, dt]
-    off[ds, dt] = xi
-    slen[ds, dt] = 1
+    planned = np.zeros(S, np.bool_)
+    planned[[ix[x] for x in syms if x in ix]] = True
+    daybar = mk.bar & (off < 0) & planned[:, None]
+    daybar[:, :mk.p0] = False
     fe_off = np.full((S, T), -1, np.int64)
     fe_cnt = np.zeros((S, T), np.int64)
     fs, fr, fm = [], [], []
     for (si, t), evs in sorted(fe_rows.items()):
-        if off[si, t] < 0:
+        if not mk.bar[si, t]:
             continue
         fe_off[si, t] = len(fs)
         fe_cnt[si, t] = len(evs)
         for j, rate in sorted(evs):
             x = off[si, t] + j
-            mark = arr[3, x] if (slen[si, t] == NB5 and np.isfinite(arr[3, x])) else mk.o[si, t]
+            mark = arr[3, x] if (off[si, t] >= 0 and np.isfinite(arr[3, x])) else mk.o[si, t]
             fs.append(j)
             fr.append(rate)
             fm.append(float(mark))
     rep["days_on_5m"] = int(nblk)
-    rep["days_on_daily_bar"] = int(len(ds))
+    rep["days_on_daily_bar"] = int(daybar.sum())
     rep["days_5m_short_of_daily_range"] = int(short)
     sub = Sub(off, slen, arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], NB5, fe_off, fe_cnt,
               np.asarray(fs, np.int64), np.asarray(fr, np.float64), np.asarray(fm, np.float64), 1)
