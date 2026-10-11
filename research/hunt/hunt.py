@@ -1765,6 +1765,8 @@ def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool 
             out["by_group"] = {"old_six": grp(old), "new": grp(~old)}
             mi = np.searchsorted(mk.month_t0, ri[:, RI_TIN], "right") - 1
             out["positions_by_month"] = np.bincount(mi, minlength=n_m).tolist()
+            traded = set(sym.tolist())
+            out["coins_traded"] = [x for x in mk.syms if x in traded]
     else:
         out.update({"positions_per_month": 0.0, "adds_per_month": 0.0, "share_add_level": [0.0, 0.0, 0.0],
                     "mean_pnl_U": None, "median_pnl_U": None, "win_share": None, "top10_share_of_profit": None,
@@ -2218,14 +2220,20 @@ def cmd_select(args) -> int:
         rows = [r for p in part_of for r in _read_part(p)["rows"]]
         ch = wide_choose(rows)
         by_id = {s["id"]: s for s in specs}
-        picks = [{**by_id[i], "pick_no": n + 1} for n, i in enumerate(ch["picks"])]
+        bno = {i: b + 1 for b, ids in enumerate(ch["batches"]) for i in ids}
+        picks = [{**by_id[i], "pick_no": n + 1, "batch": bno[i]} for n, i in enumerate(ch["picks"])]
+        no_of = {p["id"]: p["pick_no"] for p in picks}
+        batches = [[no_of[i] for i in ids] for ids in ch["batches"]]
         public, private = redact_rows(rows)
         priv_sha = write_private(args, "wide_select_private.json", {"rows": private})
         sel = {**_stamp(study, pin), "data_counts": counts, "rows": public, "label": ch["label"],
-               "pick_families": list(PICK_FAMILIES), "picks": [p["id"] for p in picks], "private_sha256": priv_sha,
-               "seconds": round(time.time() - t0, 1)}
+               "pick_families": list(PICK_FAMILIES), "picks": [p["id"] for p in picks], "batches": batches,
+               "private_sha256": priv_sha, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "select.json"), sel)
-        _write_json(os.path.join(ROOT, PICKS_REL[study]), {**_stamp(study, pin), "picks": picks, "label": ch["label"]})
+        _write_json(os.path.join(ROOT, PICKS_REL[study]),
+                    {**_stamp(study, pin), "picks": picks, "label": ch["label"], "batches": batches,
+                     "batch_size": K_PICKS, "batch_trigger": BATCH_TRIGGER, "batch_labels": list(BATCH_LABELS),
+                     "batch_rule": BATCH_RULE})
     h = append_picks_line(study)
     print(f"{study} select done in {time.time() - t0:.0f}s; picks sha256 {h} appended to {PIN[study]}")
     return 0
@@ -2237,26 +2245,28 @@ def _load_picks(study: str) -> dict:
 
 
 def _pick_block(study: str, spec: dict, mks: dict, procs: int, r: float, with_controls: bool = True,
-                period: str = "test") -> dict:
+                period: str = "test", n_seeds: int | None = None) -> dict:
     mk = mks[period]
     base = run_system(mk, spec, r, "base", detail=True)
     cost2 = run_system(mk, spec, r, "x2", detail=True, days=False)
-    ctl = run_controls(mk, spec, study, r, procs) if with_controls else None
-    res = {"base": base, "cost2": cost2, "checks": judge(base, cost2, ctl, study, spec, mk.period, r)}
+    ctl = run_controls(mk, spec, study, r, procs, n_seeds) if with_controls else None
+    res = {"base": base, "cost2": cost2, "checks": judge(base, cost2, ctl, study, spec, mk.period, r),
+           "coins_traded": list(base.get("coins_traded", []))}
     if ctl is not None:
         res["controls"] = {"a_mean_lnM": ctl["a"].mean(axis=1).tolist(), "b_mean_lnM": ctl["b"].mean(axis=1).tolist(),
-                           "gated_signals": ctl["gated"]}
+                           "gated_signals": ctl["gated"], "seeds": int(ctl["a"].shape[0])}
     return res
 
 
 def _reads(study: str, spec: dict, mks: dict, procs: int) -> dict:
     """H 14 / W 7 reads for one pick (never a pass). The gate diagnostics run the pick's entry and timeframe under
-    another gate: v1 in select and test (H 14); wide in select only, since the other gate is one of the 730 systems
-    and W 6 runs no non-pick system on the test period."""
+    another gate: v1 in select and test (H 14); wide in select only, since the other gate is one of the 762 systems
+    and W 6 runs no non-pick system on the test period. The select-period controls use seeds 1-200 (W 7)."""
     rd = {}
     kw = {"detail": True, "days": False}
     rd["r1"] = _pick_block(study, spec, mks, procs, R_ONE)
-    rd["select_controls"] = _pick_block(study, spec, mks, procs, R_BASE, True, "select")
+    rd["select_controls"] = _pick_block(study, spec, mks, procs, R_BASE, True, "select",
+                                        n_seeds=min(N_SEEDS_READ, N_SEEDS))
     rd["new24"] = {p: run_system(mks[f"new_{p}"], spec, R_BASE, **kw) for p in ("select", "test")}
     rd["extra2020"] = {f"{r:g}": run_system(mks["extra"], spec, r, **kw) for r in (R_BASE, R_ONE)}
     diag = ("NONE", "TS") if spec["gate"] == "G1" else ("G1", "TS")
@@ -2281,19 +2291,48 @@ def _sizing(mk: Market, parts: list) -> dict:
     return out
 
 
-def cmd_test(args) -> int:
-    study = args.study
-    pin = check_pin(study, "test")
-    _compile_probe()
-    if study == "wide":
-        _ew().fullgrid_pins()
-    pk = _load_picks(study)
-    data, syms, counts = _universe_and_data(args, "test")
+def _test_markets(syms: list) -> dict:
     new = [s for s in syms if s not in OLD_SIX]
     mks = {"test": Market(syms, "test"), "select": Market(syms, "select"), "extra": Market(syms, "extra"),
            "new_test": Market(new, "test"), "new_select": Market(new, "select")}
     for m in mks.values():
         _G["mk"][m.key] = m
+    return mks
+
+
+def _pick_part(args, study: str, pin, p: dict, mks: dict) -> tuple:
+    """One tested pick (W 6 block + W 7 reads), from its part file when a rerun under the same pin finds it."""
+    pdir = parts_dir(args, study, "test", pin)
+    part = os.path.join(pdir, f"pick_{int(p['pick_no']):02d}_{hashlib.sha256(p['id'].encode()).hexdigest()[:16]}.json")
+    if not os.path.exists(part):
+        t1 = time.time()
+        _write_part(part, {"id": p["id"], "block": _pick_block(study, p, mks, args.procs, R_BASE),
+                           "reads": _reads(study, p, mks, args.procs)})
+        print(f"{study} test: pick {p['pick_no']} (batch {p.get('batch', 1)}) {p['id']} done in "
+              f"{time.time() - t1:.0f}s", flush=True)
+    d = _read_part(part)
+    if d["id"] != p["id"]:
+        raise SystemExit(f"{part} holds {d['id']}, not {p['id']}")
+    return d["block"], d["reads"]
+
+
+def pick_batches(pk: dict) -> list:
+    """The batches of picks.json as lists of pick dicts (an older picks.json without batches: one batch)."""
+    by_no = {int(p["pick_no"]): p for p in pk["picks"]}
+    nos = pk.get("batches") or [[int(p["pick_no"]) for p in pk["picks"]]]
+    return [[{**by_no[int(n)], "batch": b + 1} for n in grp] for b, grp in enumerate(nos)]
+
+
+def cmd_test(args) -> int:
+    study = args.study
+    pin = check_pin(study, "test")
+    reads_at_start = reads_pinned_now(study)            # read guard 3: which reads lines predate test.json
+    _compile_probe()
+    if study == "wide":
+        _ew().fullgrid_pins()
+    pk = _load_picks(study)
+    data, syms, counts = _universe_and_data(args, "test")
+    mks = _test_markets(syms)
     out_dir = os.path.join(ROOT, OUT_REL[study])
     t0 = time.time()
     if study == "v1":
@@ -2306,60 +2345,64 @@ def cmd_test(args) -> int:
         verdict = {"v1_pass": bool(ok and pk["label"] == "pick"), "label": pk["label"],
                    "one_pct_also_passes": bool(all(one[p] for p in ("P0", "P1", "P2", "P3", "P4"))),
                    "carried_by_old_six": bool(ok and rd["new24"]["test"]["mean_lnM"] <= 0)}
+        lineup = lineup_table([{**spec, "pick_no": 1, "batch": 1}], {spec["id"]: blk}, pk["label"],
+                              [spec["id"]] if verdict["v1_pass"] else [])
         test = {**_stamp(study, pin), "pick": spec, "result": blk, "verdict": verdict, "reads": rd,
+                "lineup": lineup, "live_gate_spec": LIVE_GATE, "reads_pinned_at_test": reads_at_start,
                 "data_counts": counts, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "test.json"), test)
+        full = None
     else:
-        picks = pk["picks"]
-        prepare_series(syms, sorted({p["tf"] for p in picks}, key=TF_ORDER.index))
-        pdir = parts_dir(args, study, "test", pin)
-        blocks, reads = {}, {}
-        for p in picks:                             # one part per pick: a rerun under the same pin resumes
-            part = os.path.join(pdir, f"pick_{int(p['pick_no']):02d}_"
-                                      f"{hashlib.sha256(p['id'].encode()).hexdigest()[:16]}.json")
-            if not os.path.exists(part):
-                t1 = time.time()
-                _write_part(part, {"id": p["id"], "block": _pick_block(study, p, mks, args.procs, R_BASE),
-                                   "reads": _reads(study, p, mks, args.procs)})
-                print(f"wide test: pick {p['pick_no']}/{len(picks)} {p['id']} done in {time.time() - t1:.0f}s",
-                      flush=True)
-            d = _read_part(part)
-            if d["id"] != p["id"]:
-                raise SystemExit(f"{part} holds {d['id']}, not {p['id']}")
-            blocks[p["id"]], reads[p["id"]] = d["block"], d["reads"]
-        pv = [blocks[p["id"]]["checks"].get("p", 1.0) for p in picks]
-        sig = bh(pv, BH_Q)
-        passes = []
-        for p, s in zip(picks, sig):
-            c = blocks[p["id"]]["checks"]
-            c["bh_significant"] = bool(s)
-            c["PASS"] = bool(pk["label"] == "picks" and all(c[x] for x in ("P0", "P1", "P3", "P4", "rank_ok_a",
-                                                                           "rank_ok_b")) and s)
-            if c["PASS"]:
-                passes.append(p)
-        for p in picks:
+        batches = pick_batches(pk)
+        blocks, reads, tested, passes, batch_info = {}, {}, [], [], []
+        for b, members in enumerate(batches):
+            prepare_series(syms, sorted({p["tf"] for p in members}, key=TF_ORDER.index))
+            for p in members:                           # one part per pick: a rerun under the same pin resumes
+                blocks[p["id"]], reads[p["id"]] = _pick_part(args, study, pin, p, mks)
+            sig = bh([blocks[p["id"]]["checks"].get("p", 1.0) for p in members], BH_Q)   # BH within the batch
+            n_pass = 0
+            for p, s_ in zip(members, sig):
+                c = blocks[p["id"]]["checks"]
+                c["bh_significant"] = bool(s_)
+                c["batch"] = b + 1
+                c["PASS"] = bool(pk["label"] == "picks" and all(c[x] for x in ("P0", "P1", "P3", "P4", "rank_ok_a",
+                                                                               "rank_ok_b")) and s_)
+                if c["PASS"]:
+                    passes.append(p)
+                    n_pass += 1
+            tested += members
+            opens = bool(pk["label"] == "picks" and n_pass >= BATCH_TRIGGER and b + 1 < len(batches))
+            batch_info.append({"batch": b + 1, "label": BATCH_LABELS[b] if b < len(BATCH_LABELS) else f"{b + 1}군",
+                               "pick_nos": [int(p["pick_no"]) for p in members], "passes": n_pass,
+                               "bh_q": BH_Q, "opens_next": opens})
+            if not opens:
+                break
+        tested_ids = {p["id"] for p in tested}
+        untested = [p for p in pk["picks"] if p["id"] not in tested_ids]
+        for p in tested:
             c = blocks[p["id"]]["checks"]
             c["carried_by_old_six"] = bool(c["PASS"] and reads[p["id"]]["new24"]["test"]["mean_lnM"] <= 0)
             one = reads[p["id"]]["r1"]["checks"]           # W 7: P0, P1, P3, P4, both seed ranks, p < 0.05 at 1%
             c["one_pct_also_passes"] = bool(all(one[x] for x in ("P0", "P1", "P3", "P4", "rank_ok_a", "rank_ok_b"))
                                             and one["p"] < P_ALPHA)
-        basket, sizing = {}, {}
-        for p in passes:
-            sizing[p["id"]] = _sizing(mks["test"], [(system_signals(mks["test"], p), 0)])
-        if len(passes) >= 2:
+        basket = {}
+        if len(passes) >= 2:                               # W 7: one wallet of the passing picks, select and test
             for per in ("select", "test"):
                 parts = [(system_signals(mks[per], p), p["pick_no"]) for p in passes]
                 basket[per] = run_signals(mks[per], parts, R_BASE, detail=True)
-            sizing["basket"] = _sizing(mks["test"], [(system_signals(mks["test"], p), p["pick_no"]) for p in passes])
-        verdict = {"wide_pass": bool(passes), "label": pk["label"], "passing": [p["id"] for p in passes]}
-        full = {"picks": picks, "results": blocks, "reads": reads, "basket": basket, "sizing": sizing,
-                "verdict": verdict}
+        verdict = {"wide_pass": bool(passes), "label": pk["label"], "passing": [p["id"] for p in passes],
+                   "batches_tested": [x["batch"] for x in batch_info], "batches": batch_info,
+                   "untested": [p["id"] for p in untested]}
+        lineup = lineup_table(tested, blocks, pk["label"], verdict["passing"])
+        full = {"picks": tested, "untested": untested, "results": blocks, "reads": reads, "basket": basket,
+                "verdict": verdict, "lineup": lineup}
         public = redact_test(full)
         priv_sha = write_private(args, "wide_test_private.json", full)
-        test = {**_stamp(study, pin), **public, "private_sha256": priv_sha, "data_counts": counts,
-                "seconds": round(time.time() - t0, 1)}
+        test = {**_stamp(study, pin), **public, "live_gate_spec": LIVE_GATE, "reads_pinned_at_test": reads_at_start,
+                "private_sha256": priv_sha, "data_counts": counts, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "test.json"), test)
     print(f"{study} test done in {time.time() - t0:.0f}s")
+    run_reads_hooks(args, study, pin, mks, syms, test, full)
     return 0
 
 
@@ -2367,7 +2410,7 @@ def cmd_test(args) -> int:
 DS_ALLOWED = {"id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo", "eligible", "fail",
               "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label", "role"}
 DS_ALLOWED_CHECKS = {"P0", "P1", "P2_a", "P2_b", "P3", "P4", "rank_ok_a", "rank_ok_b", "bh_significant", "PASS",
-                     "carried_by_old_six", "one_pct_also_passes"}
+                     "carried_by_old_six", "one_pct_also_passes", "batch"}
 
 
 def redact_rows(rows: list) -> tuple:
@@ -2379,19 +2422,22 @@ def redact_rows(rows: list) -> tuple:
 
 def _labels_only(d: dict) -> dict:
     keep = ("n_positions", "win_share", "bust", "candidates", "signal_counts", "skipped", "cut", "adds_skipped",
-            "adds_cut", "months_with_position", "exit_reasons")
+            "adds_cut", "months_with_position", "exit_reasons", "coins_traded")
     return {k: d[k] for k in keep if k in d}
 
 
 def redact_test(full: dict) -> dict:
-    out = {"picks": full["picks"], "verdict": full["verdict"], "results": {}, "reads": {}, "basket": {},
-           "sizing": {}}
+    """The public test.json part (W 11): core / F1 / F5 picks in full; DeepSeek picks as counts, labels, the coins
+    they traded and their batch / lineup labels only."""
+    out = {"picks": full["picks"], "untested": full.get("untested", []), "verdict": full["verdict"],
+           "lineup": full.get("lineup"), "results": {}, "reads": {}, "basket": {}}
     for p in full["picks"]:
         pid = p["id"]
         blk = full["results"][pid]
         if is_ds(p):
             out["results"][pid] = {"base": _labels_only(blk["base"]), "cost2": _labels_only(blk["cost2"]),
-                                   "checks": {k: v for k, v in blk["checks"].items() if k in DS_ALLOWED_CHECKS}}
+                                   "checks": {k: v for k, v in blk["checks"].items() if k in DS_ALLOWED_CHECKS},
+                                   "coins_traded": list(blk.get("coins_traded", []))}
             rd = full["reads"][pid]
             out["reads"][pid] = {"note": "DeepSeek pick: figures in the private file (D11)",
                                  "r1_checks": {k: v for k, v in rd["r1"]["checks"].items() if k in DS_ALLOWED_CHECKS},
@@ -2403,9 +2449,6 @@ def redact_test(full: dict) -> dict:
     any_ds = any(is_ds(p) for p in full["picks"] if p["id"] in full["verdict"]["passing"])
     out["basket"] = "contains a DeepSeek pick: figures in the private file (D11)" if any_ds and full["basket"] \
         else full["basket"]
-    for k, v in full["sizing"].items():
-        ds = (k == "basket" and any_ds) or (k != "basket" and is_ds(next(p for p in full["picks"] if p["id"] == k)))
-        out["sizing"][k] = "DeepSeek: figures in the private file (D11)" if ds else v
     return out
 
 

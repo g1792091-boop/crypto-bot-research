@@ -291,24 +291,12 @@ class Runner:
         self.lineup = {"accounts": [], "error": None, "path": lineup_path}
         self.cycles = 0
         self.errors: list = []
-        self.reuse_series = self._series_reusable()
+        self.reuse_series = True          # off for good if hunt.Series ever holds more than bars / ATR / label
 
     def now_ms(self) -> int:
         return int(self.clock() * 1000)
 
     # ------------------------------------------------------------ data
-    def _series_reusable(self) -> bool:
-        try:
-            src = inspect.getsource(H.Series.__init__)
-        except (OSError, TypeError):
-            return False
-        attrs = {x.split("=")[0].strip().split(".")[1] for x in src.split("\n") if x.strip().startswith("self.")
-                 and "=" in x and "." in x.split("=")[0]}
-        names = set()
-        for a in attrs:
-            names.update(n.strip().replace("self.", "") for n in a.split(","))
-        return names <= SERIES_ATTRS
-
     def pick_syms(self) -> list:
         if self.fixed_syms is not None:
             return list(self.fixed_syms)
@@ -400,6 +388,8 @@ class Runner:
                 if ser is None:
                     ser = H.Series(s, tf)
                     new.add((s, tf))
+                    if not set(vars(ser)) <= SERIES_ATTRS:
+                        self.reuse_series = False
                 self.series[(s, tf)] = ser
                 H._SERIES[(s, tf)] = ser
         self.dirty.clear()
