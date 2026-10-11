@@ -1407,9 +1407,10 @@ def control_b(sig: dict, rng: np.random.Generator) -> dict:
     return {"tf": sig["tf"], "k": sig["k"].copy(), "j": sig["j"].copy(), "side": np.where(flips, 1, -1)}
 
 
-def boot_p(d, seed: int, n_boot: int = N_BOOT) -> float:
+def boot_p(d, seed: int, n_boot: int | None = None) -> float:
     """One-sided month-block bootstrap (H 13): resample the months with replacement; p = (1 + resamples with mean
     d <= 0) / (n_boot + 1)."""
+    n_boot = N_BOOT if n_boot is None else n_boot
     d = np.asarray(d, float)
     if not len(d):
         return 1.0
@@ -1439,8 +1440,9 @@ def bh(pvals, q: float = BH_Q) -> list:
     return [bool(x <= thr) for x in p]
 
 
-def run_controls(mk: Market, spec: dict, study: str, r: float, procs: int, n_seeds: int = N_SEEDS) -> dict:
+def run_controls(mk: Market, spec: dict, study: str, r: float, procs: int, n_seeds: int | None = None) -> dict:
     """Both controls x n_seeds for one pick on one market (seed parts of H 12 / W 6)."""
+    n_seeds = N_SEEDS if n_seeds is None else n_seeds
     sig = system_signals(mk, spec)
     tasks = [(mk.key, spec, study, ctl, s, r) for ctl in ("a", "b") for s in range(1, n_seeds + 1)]
     _G["mk"][mk.key] = mk

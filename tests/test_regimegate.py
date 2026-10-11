@@ -534,6 +534,30 @@ def test_forward_look_is_not_a_trading_file():
             assert "regimegate" not in Path(ROOT, rel).read_text(encoding="utf-8"), rel
 
 
+def test_selfcheck_names_modules_loaded_from_the_rule_bots_tree(tmp_path):
+    """The venv's .pth puts the rule bot's tree after the copy: a module that loaded from there is named."""
+    import types
+    RGJ = _rgj()
+    live = tmp_path / "crypto-bot-research"
+    (live / "paperbot").mkdir(parents=True)
+    f = live / "paperbot" / "stray.py"
+    f.write_text("X = 1\n", encoding="utf-8")
+    mod = types.ModuleType("regimegate_test_stray")
+    mod.__file__ = str(f)
+    sys.modules[mod.__name__] = mod
+    try:
+        assert RGJ.foreign_modules(ROOT, str(live)) == [mod.__name__]
+        assert RGJ.foreign_modules(str(live), str(live)) == []          # running from that tree itself: no check
+        assert RGJ.foreign_modules(ROOT, str(tmp_path / "missing")) == []
+    finally:
+        sys.modules.pop(mod.__name__, None)
+    src = Path(ROOT, "paperbot", "regimegate.py").read_text(encoding="utf-8")
+    sc = src.split("def selfcheck", 1)[1].split("\ndef ", 1)[0]
+    assert "foreign_modules()" in sc and "dscheck" in sc and "binance" in sc and "recorder" in sc
+    fp = src.split("def fingerprint", 1)[1].split("\ndef ", 1)[0]
+    assert '"paperbot/regimegate.py"' in fp                         # a change here starts the look over
+
+
 def test_units_and_installer():
     d = Path(ROOT, "deploy", "regimegate")
     svc = (d / "paperbot-regimegate.service").read_text(encoding="utf-8")
