@@ -191,13 +191,15 @@ def test_build_5m_converts_fills_and_keeps_monthly_values(tmp_path):
     assert not os.path.exists(os.path.join(out, "raw", SYM))              # zips deleted after conversion
 
 
-def test_checksum_mismatch_month_is_dropped_and_reported(tmp_path):
+def test_checksum_mismatch_month_is_dropped_reported_and_not_complete(tmp_path):
     src = str(tmp_path / "src")
     make_archive(src, bad_mark_checksum=True)
     out = str(tmp_path / "out")
-    D.download(D.DirSource(src), [SYM], "5m", out, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    rc = D.download(D.DirSource(src), [SYM], "5m", out, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    assert rc == 1 and not os.path.exists(os.path.join(out, "COMPLETE"))  # a failed file is not a finished download
     info = json.load(open(os.path.join(out, "manifest.json")))["symbols"][0]
     assert info["download_problems"] == {"mk:2024-02": "mismatch"}
+    assert D.coin_problems(info) == ["mk:2024-02 mismatch"]
     assert info["missing_months_mark"] == ["2024-02"]
     assert info["checksum_status_counts"] == {"ok": 5, "mismatch": 1}
     assert info["daily_fill"]["daily_status"]["mark"][MARK_DAY] == "ok"   # only that day has a daily mark file
@@ -205,6 +207,70 @@ def test_checksum_mismatch_month_is_dropped_and_reported(tmp_path):
         feb = z["ts"] >= ms("2024-02-01")
         filled = (z["ts"] >= ms(MARK_DAY)) & (z["ts"] < ms(MARK_DAY) + DAY)
         assert np.isnan(z["mc"][feb & ~filled]).all() and not np.isnan(z["mc"][filled]).any()
+    assert os.path.isdir(os.path.join(out, "raw", SYM))                   # zips kept for the rerun
+    res = D.problems(out)
+    assert not res["complete"] and res["problems"] == {SYM: ["mk:2024-02 mismatch"]} and res["not_built"] == []
+    assert D.main(["problems", "--data", out]) == 1
+    # the archive is fixed (republished checksum): the rerun rebuilds the coin, fetching only the failed file
+    key = f"data/futures/um/monthly/markPriceKlines/{SYM}/5m/{SYM}-5m-2024-02.zip"
+    good = hashlib.sha256(open(os.path.join(src, key), "rb").read()).hexdigest()
+    with open(os.path.join(src, key + ".CHECKSUM"), "w") as fh:
+        fh.write(f"{good}  {os.path.basename(key)}\n")
+    again = Counting(D.DirSource(src))
+    assert D.download(again, [SYM], "5m", out, "2024-01", "2024-02", workers=2, log=D.Log(None)) == 0
+    assert {k for k in again.fetches if k.endswith(".zip")} == {key}
+    assert D.problems(out)["complete"] and D.main(["problems", "--data", out]) == 0
+    assert not os.path.exists(os.path.join(out, "raw"))
+    clean = str(tmp_path / "clean")
+    D.download(D.DirSource(src), [SYM], "5m", clean, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    assert D.arrays_sha256(f"{out}/5m/{SYM}.npz") == D.arrays_sha256(f"{clean}/5m/{SYM}.npz")
+
+
+def test_fidelity_funding_checksum_failure_is_not_complete(tmp_path):
+    """A funding month that keeps failing its checksum: the coin is written (no funding file), COMPLETE is not."""
+    src = str(tmp_path / "src")
+    S = truth("2024-03-01", "2024-03-04", ONE, 5)
+    put(src, f"data/futures/um/monthly/klines/{SYM}/1m/{SYM}-1m-2024-03.zip", kline_csv(S, range(len(S["ts"])), ONE, True))
+    put(src, f"data/futures/um/monthly/markPriceKlines/{SYM}/1m/{SYM}-1m-2024-03.zip",
+        mark_csv(S, range(len(S["ts"])), ONE, True))
+    put(src, f"data/futures/um/monthly/fundingRate/{SYM}/{SYM}-fundingRate-2024-03.zip",
+        f"{ms('2024-03-01')},8,0.0001\n", checksum="bad")
+    out = str(tmp_path / "fid")
+    assert D.download(D.DirSource(src), [SYM], "fidelity", out, "2024-03", "2024-03", 2, D.Log(None)) == 1
+    assert not os.path.exists(os.path.join(out, "COMPLETE"))
+    info = json.load(open(os.path.join(out, "manifest.json")))["symbols"][0]
+    assert info["missing_months_funding"] == ["2024-03"] and info["funding_rows"] == 0
+    assert D.problems(out)["problems"] == {SYM: ["fr:2024-03 mismatch"]}
+
+
+def test_daily_fill_checksum_failure_is_a_problem_and_a_daily_404_is_not(tmp_path):
+    src = str(tmp_path / "src")
+    make_archive(src)
+    day = "2024-01-11"
+    key = f"data/futures/um/daily/klines/{SYM}/5m/{SYM}-5m-{day}.zip"
+    with open(os.path.join(src, key + ".CHECKSUM"), "w") as fh:
+        fh.write("0" * 64 + "  x.zip\n")
+    out = str(tmp_path / "out")
+    assert D.download(D.DirSource(src), [SYM], "5m", out, "2024-01", "2024-02", workers=2, log=D.Log(None)) == 1
+    info = json.load(open(os.path.join(out, "manifest.json")))["symbols"][0]
+    assert info["download_problems"] == {} and D.coin_problems(info) == [f"daily klines {day} mismatch"]
+    os.remove(os.path.join(src, key))                                     # the day has no daily file at all
+    os.remove(os.path.join(src, key + ".CHECKSUM"))
+    out2 = str(tmp_path / "out2")
+    assert D.download(D.DirSource(src), [SYM], "5m", out2, "2024-01", "2024-02", workers=2, log=D.Log(None)) == 0
+    info = json.load(open(os.path.join(out2, "manifest.json")))["symbols"][0]
+    assert info["daily_fill"]["daily_status"]["klines"][day] == "404" and D.coin_problems(info) == []
+
+
+def test_problems_on_a_folder_without_manifest_or_with_a_coin_not_built(tmp_path):
+    assert D.main(["problems", "--data", str(tmp_path / "none")]) == 2
+    src = str(tmp_path / "src")
+    make_archive(src)
+    out = str(tmp_path / "out")
+    assert D.download(D.DirSource(src), [SYM, "GONEUSDT"], "5m", out, "2024-01", "2024-02", 2, D.Log(None)) == 1
+    res = D.problems(out)
+    assert res["not_built"] == ["GONEUSDT"] and res["problems"] == {} and not res["complete"]
+    assert D.main(["problems", "--data", out]) == 2
 
 
 def test_fetch_verified_statuses(tmp_path):
@@ -370,17 +436,6 @@ def test_symbol_sources(tmp_path):
         D.resolve_symbols(None, None, str(tmp_path / "none.json"))
 
 
-def test_coins_from_tests(tmp_path):
-    uni = ["AUSDT", "BUSDT", "CUSDT"]
-    t1 = tmp_path / "t1.json"
-    t1.write_text(json.dumps({"results": {"x": {"base": {"n_positions": 3}}}}))
-    assert D.coins_from_tests([str(t1)], uni) == (uni, "all coins (the test outputs list no coins)")
-    t2 = tmp_path / "t2.json"
-    t2.write_text(json.dumps({"a": {"by_coin": {"CUSDT": {"n": 2}, "BUSDT": {"n": 0}}},
-                              "b": {"coins_traded": ["AUSDT"]}}))
-    assert D.coins_from_tests([str(t1), str(t2)], uni) == (["AUSDT", "CUSDT"], "test outputs")
-
-
 def test_bootstrap_shell_syntax():
     bash = shutil.which("bash")
     if not bash:
@@ -388,6 +443,14 @@ def test_bootstrap_shell_syntax():
     p = os.path.join(ROOT, "research", "hunt", "bootstrap.sh")
     r = subprocess.run([bash, "-n", p], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_bootstrap_shellcheck():
+    sc = shutil.which("shellcheck")
+    if not sc:
+        pytest.skip("no shellcheck")
+    r = subprocess.run([sc, os.path.join(ROOT, "research", "hunt", "bootstrap.sh")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_verify_against_the_hunt_data_manifest_format(tmp_path):
@@ -420,6 +483,33 @@ def test_verify_against_the_hunt_data_manifest_format(tmp_path):
     dm["manifest"]["symbols"][0]["last_nonzero_volume_bar"] = "2024-02-28 00:00"
     json.dump(dm, open(rp, "w"))
     assert any("last_nonzero_volume_bar" in x for x in D.verify(f"{a}/manifest.json", rp)["differences"])
+
+
+def test_republished_mark_values_pass_the_hunt_identity_but_not_the_all_keys_reference(tmp_path):
+    """bootstrap step 5 checks both references: data_manifest.json (the arrays the hunt reads) and data_ref_5m.json
+    (refman, every key: the mark columns too)."""
+    src = str(tmp_path / "src")
+    make_archive(src)
+    a = str(tmp_path / "a")
+    D.download(D.DirSource(src), [SYM], "5m", a, "2024-01", "2024-02", workers=2, log=D.Log(None))
+    man = json.load(open(f"{a}/manifest.json"))
+    dm = {"manifest": {"symbols": [{k: v for k, v in r.items() if "sha256" not in k} for r in man["symbols"]]},
+          "content": {SYM: {"5m": D.content_sha(f"{a}/5m/{SYM}.npz", "5m"),
+                            "funding": D.content_sha(f"{a}/funding/{SYM}.npz", "funding")}}}
+    rp, ra = str(tmp_path / "data_manifest.json"), str(tmp_path / "data_ref_5m.json")
+    json.dump(dm, open(rp, "w"))
+    assert D.main(["refman", "--data", a, "--out", ra]) == 0
+    S2 = truth("2024-01-01", "2024-03-01", FIVE, 1, zero_from="2024-02-28")   # every January mark value +1%
+    for k in ("mo", "mh", "ml", "mc"):
+        S2[k] = [f"{float(x) * 1.01:.5f}" for x in S2[k]]
+    put(src, f"data/futures/um/monthly/markPriceKlines/{SYM}/5m/{SYM}-5m-2024-01.zip",
+        mark_csv(S2, month_idx(S2, "2024-01"), FIVE, True))
+    b = str(tmp_path / "b")
+    assert D.download(D.DirSource(src), [SYM], "5m", b, "2024-01", "2024-02", workers=2, log=D.Log(None)) == 0
+    assert D.verify(f"{b}/manifest.json", rp, b)["ok"]                    # the hunt's arrays are the same
+    rep = D.verify(f"{b}/manifest.json", ra, b)
+    assert not rep["ok"] and any("arrays_sha256 differs from the reference" in x for x in rep["differences"])
+    assert D.main(["verify", "--data", b, "--ref", ra]) == 1
 
 
 def test_content_sha_is_the_hunt_identity(tmp_path):

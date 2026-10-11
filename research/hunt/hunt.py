@@ -413,10 +413,12 @@ def append_picks_line(study: str) -> str:
 class Coin:
     """One coin's 5m bars up to (not including) ``end_ms``, cleaned as H 2 (float32 storage, as in the files)."""
 
-    def __init__(self, sym, ts, o, h, lo, c, v, qv, last_ms=None, counts=None):
+    def __init__(self, sym, ts, o, h, lo, c, v, qv, last_ms=None, counts=None, mark=None):
         self.sym = sym
         self.ts = np.asarray(ts, np.int64)
         self.o, self.h, self.l, self.c, self.v, self.qv = (np.asarray(x, np.float32) for x in (o, h, lo, c, v, qv))
+        if mark is not None:                        # mark-price OHLC (fidelity / October reads only; H 2: unread)
+            self.mo, self.mh, self.ml = (np.asarray(mark[k], np.float32) for k in ("mo", "mh", "ml"))
         self.last_ms = int(self.ts[-1]) if last_ms is None and len(self.ts) else last_ms
         self.counts = counts or {}
         self.cq = np.concatenate(([0.0], np.cumsum(self.qv, dtype=np.float64)))
@@ -427,9 +429,10 @@ class Coin:
                 "qv": self.qv.astype(np.float64)}
 
 
-def clean_5m(ts, o, h, lo, c, v, qv):
-    """H 2: duplicate open times dropped (last kept), zero-volume bars dropped (quote volume <= 0); rows off the 5m
-    grid or with a non-finite price dropped too. Returns (arrays, counts)."""
+def clean_5m(ts, o, h, lo, c, v, qv, step: int = FIVE, extra: tuple = ()):
+    """H 2: duplicate open times dropped (last kept), zero-volume bars dropped (quote volume <= 0); rows off the bar
+    grid (``step``, 5m for the study, 1m for the fidelity bars) or with a non-finite price dropped too. ``extra``
+    arrays (mark price) follow the same rows. Returns (arrays, counts)."""
     ts = np.asarray(ts, np.int64)
     n0 = len(ts)
     order = np.argsort(ts, kind="stable")
@@ -438,14 +441,15 @@ def clean_5m(ts, o, h, lo, c, v, qv):
     idx = order[last]
     n_dup = n0 - len(idx)
     arr = [np.asarray(x)[idx] for x in (o, h, lo, c, v, qv)]
+    ext = [np.asarray(x)[idx] for x in extra]
     ts = ts[idx]
     fin = np.isfinite(arr[0]) & np.isfinite(arr[1]) & np.isfinite(arr[2]) & np.isfinite(arr[3])
-    grid = ts % FIVE == 0
+    grid = ts % step == 0
     vol = np.asarray(arr[5], np.float64) > 0
     keep = fin & grid & vol
     counts = {"rows": int(n0), "duplicates": int(n_dup), "zero_volume": int((fin & grid & ~vol).sum()),
               "off_grid": int((~grid).sum()), "non_finite": int((~fin & grid).sum())}
-    return (ts[keep], *[a[keep] for a in arr]), counts
+    return (ts[keep], *[a[keep] for a in arr], *[a[keep] for a in ext]), counts
 
 
 def _manifest(data_dir: str) -> dict:
@@ -750,6 +754,7 @@ class Market:
                 self.bar_source[s] = "5m"
             else:
                 self.bar_source[s] = f"{self.step // 60_000}m"
+            n_liq = LIQ_BARS if self.bar_source[s] == "5m" else liq_n
             p0 = int(np.searchsorted(c.ts, self.start, "left"))
             p1 = int(np.searchsorted(c.ts, self.end, "left"))
             p0s.append(p0)
@@ -766,7 +771,7 @@ class Market:
                         v[bad] = np.asarray(last[p0:p1], np.float64)[bad]
                     dst.append(v)
             idx = np.arange(p0, p1)
-            bq.append(c.cq[idx] - c.cq[np.maximum(0, idx - liq_n)])
+            bq.append(c.cq[idx] - c.cq[np.maximum(0, idx - n_liq)])
             off.append(off[-1] + (p1 - p0))
             ce = -1
             last_ms = _COINS[s].last_ms if s in _COINS else c.last_ms
@@ -2406,6 +2411,834 @@ def cmd_test(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ batches, lineup, read guard, reads hook (W 5-7, W 12)
+BATCH_RULE = ("W 5 / W 6: picks.json lists positions 1-10 (batch 1, 1군), 11-20 (2군) and 21-30 (3군) of the "
+              "one-per-name walk, fixed at select before any test bar is read. Batch 1 is tested. Batch n+1 is tested "
+              "the same way (its own controls, BH q = 0.10 over its own p-values) only when >= 5 of the 10 picks of "
+              "batch n PASS. Batches are never re-ordered after a test result. WIDE PASS = at least one PASS in any "
+              "tested batch.")
+LINEUP_RULE = ("W 12 (owners 2026-10-11 (g)): 정식 = research PASS. 참고 = a tested pick (not 'no pick, fail') with "
+               "test mean monthly ln M > 0, median monthly multiple >= 1, mean d_m > 0 against both controls, cost x2 "
+               "mean ln M > 0, max drawdown < 50%, no bust and its best month < 50% of the total log gain. Every other "
+               "tested pick is excluded from the paper lineup. Real money only from 정식, after the forward criteria "
+               "(H 15 / W 12) and the live-readiness gate.")
+HEADLINE_CELL = {"name": "R1 headline cell", "rows": "every R1 row", "period": "test", "windows": "UTC calendar months",
+                 "machine": "B (goal-mode)", "r": 0.05, "start_wallet": 1000.0, "level": 5000.0,
+                 "statistic": "share of test calendar months in which the fresh $1,000 account's marked equity "
+                              "touched $5,000 at any 5m close",
+                 "interval": "Clopper-Pearson 95%",
+                 "beside": ["control (a) share (seeds 1-1,000 pooled)", "control (b) share (seeds 1-1,000 pooled)",
+                            "bust share"]}
+SIZE_RULE = ("Per row, the (machine, r) cell with the highest mean ln(window multiple) over select calendar months "
+             "among the cells whose bust share over select calendar months is <= 5% (ties: lower r). Its test row is "
+             "printed as 'size fixed before the test'; any size read off the test board is labelled "
+             "'forward-only evidence'.")
+SIZE_BUST_MAX = 0.05
+LIVE_GATE = {
+    "rule": "risk 12: separate from the research PASS; evaluated on the test period at the size the owners propose "
+            "for real money; a size that fails any item is 'not live-ready at this size'. The research verdict is "
+            "untouched and real money stays the owners' decision.",
+    "a": "no liquidation under R9's mark-price read",
+    "b": "worst single-position loss <= 3U with R9's 25%-of-range stop fill",
+    "c": "worst rolling 30-day fresh-wallet multiple >= 0.70",
+    "d": "R10's instant loss if every open stop gaps 10% stays <= 25% of equity at every 5m close",
+    "e": "mean ln M > 0 under R9's impact model with Y = 1.0, at the live starting equity and at 10x it",
+    "f": "forward paper: the replay reproduces >= 99% of positions (H 15) and the forward multiple lies inside the "
+         "R14 band",
+    "g": "if the AI judge is used: R15's p95 events per day <= the owners' daily call cap"}
+
+
+def clopper_pearson(k: int, n: int, alpha: float = 0.05) -> tuple:
+    """Exact two-sided (1 - alpha) interval of a share k / n (R1 calendar shares)."""
+    from scipy.stats import beta
+    if n <= 0:
+        return (0.0, 1.0)
+    lo = 0.0 if k <= 0 else float(beta.ppf(alpha / 2, k, n - k + 1))
+    hi = 1.0 if k >= n else float(beta.ppf(1 - alpha / 2, k + 1, n - k))
+    return (lo, hi)
+
+
+def size_fixed_on_select(cells: list, bust_max: float = SIZE_BUST_MAX):
+    """SIZE FIXED ON SELECT (named before the pin): ``cells`` = [{"machine", "r", "mean_ln_multiple",
+    "bust_share"}, ...] over select calendar months; the cell with the highest mean ln(window multiple) among those
+    with bust share <= 5% (ties: lower r, then machine A before B). None when no cell qualifies."""
+    ok = [c for c in cells if c.get("bust_share") is not None and c["bust_share"] <= bust_max + 1e-12
+          and c.get("mean_ln_multiple") is not None and np.isfinite(c["mean_ln_multiple"])]
+    if not ok:
+        return None
+    return sorted(ok, key=lambda c: (-c["mean_ln_multiple"], c["r"], str(c.get("machine"))))[0]
+
+
+def evaluate_live_gate(inputs: dict) -> dict:
+    """The live-readiness gate (LIVE_GATE) from the reads' measured values; a missing input is 'not computed'."""
+    x = inputs or {}
+
+    def cmp(key, fn):
+        return "not computed" if x.get(key) is None else ("pass" if fn(x[key]) else "fail")
+    items = {"a": cmp("liquidations_mark", lambda v: v == 0),
+             "b": cmp("worst_position_loss_U_stopfill25", lambda v: v <= 3.0),
+             "c": cmp("worst_rolling30_multiple", lambda v: v >= 0.70),
+             "d": cmp("max_instant_loss_gap10", lambda v: v <= 0.25)}
+    e1, e2 = x.get("mean_lnM_impact_y1_live"), x.get("mean_lnM_impact_y1_10x")
+    items["e"] = "not computed" if e1 is None or e2 is None else ("pass" if e1 > 0 and e2 > 0 else "fail")
+    fr, band = x.get("forward_replay_share"), x.get("forward_inside_band")
+    items["f"] = "not computed" if fr is None or band is None else ("pass" if fr >= 0.99 and band else "fail")
+    if not x.get("ai_judge_used"):
+        items["g"] = "not applicable"
+    else:
+        p95, cap = x.get("events_p95_per_day"), x.get("daily_call_cap")
+        items["g"] = "not computed" if p95 is None or cap is None else ("pass" if p95 <= cap else "fail")
+    ready = all(v in ("pass", "not applicable") for v in items.values())
+    return {"items": items, "live_ready": bool(ready),
+            "label": "live-ready at this size" if ready else "not live-ready at this size"}
+
+
+def lineup_of(block: dict, label: str, passed: bool) -> dict:
+    """W 12 lineup (g) of one tested pick from its test block (full figures; the label alone is public)."""
+    if label != "pick":
+        return {"lineup": "excluded", "why": ["no pick, fail"]}
+    if passed:
+        return {"lineup": "정식", "why": []}
+    base, cost2, c = block["base"], block["cost2"], block["checks"]
+    why = []
+    if not base["mean_lnM"] > 0:
+        why.append("mean_lnM")
+    if not base["median_M"] >= 1.0:
+        why.append("median_M")
+    if not (c.get("mean_d_a") is not None and c["mean_d_a"] > 0 and c.get("mean_d_b") is not None
+            and c["mean_d_b"] > 0):
+        why.append("controls")
+    if not cost2["mean_lnM"] > 0:
+        why.append("cost_x2")
+    if not base["max_dd"] < DD_MAX:
+        why.append("max_dd")
+    if base["bust"]:
+        why.append("bust")
+    lnM = np.asarray(base.get("lnM") or [0.0], float)
+    total = float(lnM.sum())
+    if not (total > 0 and float(lnM.max()) < LINEUP_TOP_MONTH_MAX * total):
+        why.append("top_month")
+    return {"lineup": "참고" if not why else "excluded", "why": why}
+
+
+def lineup_table(tested: list, blocks: dict, label: str, passing: list) -> dict:
+    per = {}
+    for p in tested:
+        d = lineup_of(blocks[p["id"]], label, p["id"] in passing)
+        per[p["id"]] = {**d, "batch": int(p.get("batch", 1)), "pick_no": int(p.get("pick_no", 1))}
+    return {"rule": LINEUP_RULE, "picks": per,
+            "정식": [i for i, d in per.items() if d["lineup"] == "정식"],
+            "참고": [i for i, d in per.items() if d["lineup"] == "참고"],
+            "excluded": [i for i, d in per.items() if d["lineup"] == "excluded"],
+            "real_money": "only 정식, after the forward criteria and the live-readiness gate (W 12)"}
+
+
+class ReadGuardError(RuntimeError):
+    pass
+
+
+READS_MODULES = ("reads_a",)        # research/hunt/<name>.py with run(ctx), called after test.json when present
+
+
+def reads_pinned_now(study: str) -> dict:
+    """{path: sha256} of the research/hunt/reads_*.py lines in the study's pin file right now ({} without a pin)."""
+    try:
+        rows = read_pin(study)
+    except PinError:
+        return {}
+    return {p: h for h, p in rows if p.startswith("research/hunt/reads_") and p.endswith(".py")}
+
+
+def reads_pin_status(study: str, name: str, at_test: dict | None) -> dict:
+    rel = f"research/hunt/{name}.py"
+    full = os.path.join(ROOT, rel)
+    sha = sha256_file(full) if os.path.exists(full) else None
+    now = reads_pinned_now(study)
+    return {"module": rel, "sha256": sha, "listed_in_pin": bool(sha and now.get(rel) == sha),
+            "listed_before_test_json": bool(sha and (at_test or {}).get(rel) == sha)}
+
+
+def _reads_module(name: str):
+    if not os.path.exists(os.path.join(HERE, f"{name}.py")):
+        return None
+    import importlib
+    return importlib.import_module(f"research.hunt.{name}")
+
+
+def _guard_snapshot(study: str) -> dict:
+    """sha256 of every file under the study's output folder and of picks.json (read guard)."""
+    snap = {}
+    out_dir = os.path.join(ROOT, OUT_REL[study])
+    if os.path.isdir(out_dir):
+        for f in sorted(os.listdir(out_dir)):
+            p = os.path.join(out_dir, f)
+            if os.path.isfile(p):
+                snap[p] = sha256_file(p)
+    pk = os.path.join(ROOT, PICKS_REL[study])
+    if os.path.exists(pk):
+        snap[pk] = sha256_file(pk)
+    return snap
+
+
+def d11_problems(public, ds_ids: set, path: str = "out", under: bool = False) -> list:
+    """D11 check of a public reads output: no float under a key (or a row dict) that names a DeepSeek pick, except
+    under 'win_share' / 'win_shares'."""
+    bad = []
+    if isinstance(public, dict):
+        names = under or any(str(public.get(k)) in ds_ids or any(i in str(public.get(k)) for i in ds_ids)
+                             for k in ("id", "row") if k in public)
+        for k, v in public.items():
+            if k in ("win_share", "win_shares"):
+                continue
+            hit = names or any(i in str(k) for i in ds_ids)
+            bad += d11_problems(v, ds_ids, f"{path}.{k}", hit)
+    elif isinstance(public, (list, tuple)):
+        for i, v in enumerate(public):
+            bad += d11_problems(v, ds_ids, f"{path}[{i}]", under)
+    elif under and isinstance(public, float) and not isinstance(public, bool):
+        bad.append(path)
+    elif under and isinstance(public, np.ndarray) and public.dtype.kind == "f":
+        bad.append(path)
+    return bad
+
+
+def _remap(sig: dict, mk: Market) -> dict:
+    """A signal dict drawn on another market of the same symbols order (or a superset) re-indexed to ``mk``."""
+    syms = sig.get("syms")
+    if syms is None or list(syms) == mk.syms:
+        return sig
+    pos = {s: i for i, s in enumerate(mk.syms)}
+    kk = np.asarray([pos.get(syms[k], -1) for k in sig["k"]], np.int64)
+    keep = kk >= 0
+    return {"tf": sig["tf"], "k": kk[keep], "j": np.asarray(sig["j"])[keep], "side": np.asarray(sig["side"])[keep]}
+
+
+MARKET_LRU = 6
+
+
+def market_for(syms: list, start_ms: int, end_ms: int, mks: dict | None = None) -> Market:
+    """A Market for [start, end) of ``syms`` (a study market when one matches; else a small LRU cache whose evicted
+    markets also leave the bank, signal and pool caches)."""
+    for m in (mks or {}).values():
+        if m.start == start_ms and m.end == end_ms and m.syms == list(syms) and m.native:
+            return m
+    key = (tuple(syms), int(start_ms), int(end_ms))
+    mk = _MARKETS.pop(key, None)
+    if mk is None:
+        mk = Market(list(syms), (int(start_ms), int(end_ms)), name=f"w:{start_ms}:{end_ms}")
+        _G["mk"][mk.key] = mk
+    _MARKETS[key] = mk
+    while len(_MARKETS) > MARKET_LRU:
+        old_key = next(iter(_MARKETS))
+        old = _MARKETS.pop(old_key)
+        _G["mk"].pop(old.key, None)
+        for cache in (_BANKS, _SIGS, _POOLS):
+            for kk in [k for k in cache if k[0] == old.key]:
+                cache.pop(kk, None)
+    return mk
+
+
+TRADE_F = {"U": RF_U, "pnl": RF_PNL, "fees": RF_FEES, "funding": RF_FUND, "P0": RF_P0, "D0": RF_D0, "q1": RF_Q1,
+           "exit_px": RF_XPX, "lev": RF_LEV, "price_pnl": RF_PRICE, "eq_at_entry": RF_EQ}
+TRADE_I = {"coin": RI_COIN, "side": RI_SIDE, "t_in": RI_TIN, "t_out": RI_TOUT, "adds": RI_ADDS, "reason": RI_REASON,
+           "stop_source": RI_SRC, "cut": RI_CUT, "tried": RI_TRIED, "large": RI_LARGE}
+
+
+def run_engine(what, start_ms: int, end_ms: int, *, r: float = R_BASE, cost: str = "base",
+               start_wallet: float = START_WALLET, overrides: dict | None = None, path: str = "day",
+               close_end: bool = False, detail: bool = False, syms: list | None = None, d0_scale: float = 1.0,
+               mks: dict | None = None, universe: list | None = None, mk: Market | None = None) -> dict:
+    """One engine run for a read (reads interface ``run``): ``what`` = a spec, a list of specs (one wallet; src =
+    their pick_no) or a list of (signals, src); a fresh account of ``start_wallet`` on [start, end); see
+    reads_interface in PREREG_HUNT_WIDE W 7.1 for the fields."""
+    syms = list(syms or universe or (mk.syms if mk else []))
+    if mk is None:
+        mk = market_for(syms, start_ms, end_ms, mks)
+    if isinstance(what, dict):
+        parts = [(system_signals(mk, what), 0)]
+    else:
+        parts = []
+        for i, x in enumerate(what):
+            if isinstance(x, dict):
+                parts.append((system_signals(mk, x), int(x.get("pick_no") or i + 1)))
+            else:
+                sig, src = x
+                parts.append((_remap(sig, mk), int(src)))
+    tfs = tuple(sorted({sig["tf"] for sig, _ in parts}, key=TF_ORDER.index)) or ("1h",)
+    bank = bank_for(mk, tfs)
+    cands = build_cands(mk, bank, parts, d0_scale)
+    p = params(r, cost, RISK_CAP, start_wallet)
+    p = with_overrides(p, overrides)
+    if path == "5m":
+        p[PR_EQPATH] = 1.0
+    if close_end:
+        p[PR_CLOSE_END] = 1.0
+    raw = simulate(mk, bank, cands, prm=p)
+    met = summarize(mk, raw, start=start_wallet, detail=detail, days=False)
+    rf, ri, st = raw[3], raw[4], raw[10]
+    trades = {k: rf[:, i].copy() for k, i in TRADE_F.items()}
+    trades.update({k: ri[:, i].copy() for k, i in TRADE_I.items()})
+    trades["sym"] = np.asarray(mk.syms, dtype=object)[ri[:, RI_COIN]] if len(ri) else np.zeros(0, object)
+    trades["reason_name"] = np.asarray(EXIT_NAMES, dtype=object)[ri[:, RI_REASON]] if len(ri) else np.zeros(0, object)
+    return {"metrics": met, "start": float(start_wallet), "end": float(st[4]), "end_marked": float(st[8]),
+            "multiple": float(st[4] / start_wallet), "peak": float(st[7]), "bust": bool(st[1] >= 0),
+            "bust_step": int(st[1]), "equity_day": np.asarray(raw[2]), "equity_path": raw[11] if path == "5m" else None,
+            "trades": trades, "skipped": met["skipped"], "cut": met["cut"], "adds_skipped": met["adds_skipped"],
+            "adds_cut": met["adds_cut"], "candidates": int(len(cands["t"])), "step_ms": int(mk.step)}
+
+
+def _row_list(study: str, tested: list, passing: list, label: str) -> list:
+    rows = []
+    for p in tested:
+        rows.append({"row": f"pick:{p['id']}", "kind": "pick", "label": label if label != "picks" else "pick",
+                     "members": [p], "src": [int(p.get("pick_no", 1))], "is_ds": is_ds(p), "candidate": True})
+    if study == "wide":
+        v1p = os.path.join(ROOT, PICKS_REL["v1"])
+        if os.path.exists(v1p):
+            with open(v1p) as fh:
+                v1 = json.load(fh)
+            sp = {**v1["pick"], "pick_no": 0}
+            rows.append({"row": f"v1:{sp['id']}", "kind": "v1", "label": f"v1 {v1.get('label', 'pick')}",
+                         "members": [sp], "src": [0], "is_ds": False, "candidate": False})
+        b1 = [p for p in tested if int(p.get("batch", 1)) == 1]
+        if len(b1) >= 2:
+            rows.append({"row": "basket_batch1", "kind": "basket_batch1", "label": "not a candidate",
+                         "members": b1, "src": [int(p["pick_no"]) for p in b1], "is_ds": any(is_ds(p) for p in b1),
+                         "candidate": False})
+        ps_ = [p for p in tested if p["id"] in passing]
+        if len(ps_) >= 2:
+            rows.append({"row": "basket_passing", "kind": "basket_passing", "label": "passing basket",
+                         "members": ps_, "src": [int(p["pick_no"]) for p in ps_], "is_ds": any(is_ds(p) for p in ps_),
+                         "candidate": False})
+    return rows
+
+
+def reads_context(study: str, *, args, pin, mks: dict, syms: list, test_doc: dict, full: dict | None,
+                  reads_pin: dict, private_path: str) -> dict:
+    """The context a reads module receives (reads interface api 1; PREREG_HUNT_WIDE W 7.1). Plain dict; the
+    functions close over the loaded data and the study's markets."""
+    import copy
+    if study == "v1":
+        tested = [{**test_doc["pick"], "pick_no": 1, "batch": 1}]
+        passing = [tested[0]["id"]] if test_doc["verdict"]["v1_pass"] else []
+        label = test_doc["verdict"]["label"]
+        coins = {tested[0]["id"]: test_doc["result"].get("coins_traded", [])}
+        untested = []
+    else:
+        tested = list(test_doc["picks"])
+        passing = list(test_doc["verdict"]["passing"])
+        label = test_doc["verdict"]["label"]
+        coins = {p["id"]: (test_doc["results"][p["id"]].get("coins_traded") or []) for p in tested}
+        untested = list(test_doc.get("untested", []))
+    lineup = (test_doc.get("lineup") or {}).get("picks", {})
+    picks = [{**{k: p.get(k) for k in ("id", "family", "name", "strategy", "kind", "tf", "gate", "combo",
+                                         "pick_no", "batch", "rank")},
+              "label": "pick" if label in ("pick", "picks") else label, "is_ds": is_ds(p),
+              "passed": p["id"] in passing, "lineup": (lineup.get(p["id"]) or {}).get("lineup"),
+              "coins_traded": coins.get(p["id"], [])} for p in tested]
+    periods = {k: [day_ms(a), day_ms(b)] for k, (a, b) in PERIODS.items()}
+
+    def market(start_ms, end_ms, syms_=None):
+        return market_for(list(syms_ or syms), int(start_ms), int(end_ms), mks)
+
+    def signals(spec, mk):
+        return system_signals(mk, spec)
+
+    def control_signals(spec, ctl, period, r, seed):
+        st = "v1" if str(spec["id"]).startswith("v1:") else "wide"
+        mk = mks[period]
+        sig = system_signals(mk, spec)
+        rng = rng_of(*control_seed_parts(st, spec, ctl, mk.period, r, seed))
+        c = control_a(mk, sig, rng) if ctl == "a" else control_b(sig, rng)
+        c["syms"] = list(mk.syms)
+        return c
+
+    def run(what, start_ms, end_ms, **kw):
+        return run_engine(what, start_ms, end_ms, mks=mks, universe=syms, **kw)
+
+    machine = {"defaults": {n: float(v) for n, v in zip(PR_NAMES, params())}, "index": dict(PR_INDEX),
+               "constants": {"D0_MULT": dict(D0_MULT), "CHAND_MULT": CHAND_MULT, "B_DIV": B_DIV, "LEV_MAX": LEV_MAX,
+                             "RISK_CAP": RISK_CAP, "MAX_POS": MAX_POS, "MAX_DIR": MAX_DIR, "N_ADDS": N_ADDS,
+                             "LIQ_MULT": LIQ_MULT, "COSTS": {k: list(v) for k, v in COSTS.items()},
+                             "BUST_FRAC": BUST_FRAC, "START_WALLET": START_WALLET, "R_BASE": R_BASE,
+                             "R_ONE": R_ONE}}
+    return {"api": 1, "study": study, "pin": pin, "reads_pin": reads_pin, "periods": periods,
+            "syms": list(syms), "old_six": [s for s in OLD_SIX if s in syms],
+            "new": [s for s in syms if s not in OLD_SIX], "picks": picks, "untested": untested,
+            "rows": _row_list(study, tested, passing, label), "machine": machine, "run": run, "market": market,
+            "signals": signals, "control_signals": control_signals,
+            "seeds": {"pass": N_SEEDS, "read_default": N_SEEDS_READ, "rolling": 100,
+                      "seed_parts": control_seed_parts},
+            "test_doc": copy.deepcopy(test_doc), "test_private": copy.deepcopy(full) if full is not None else None,
+            "verdict": copy.deepcopy(test_doc["verdict"]), "out": {}, "private": {}, "private_path": private_path,
+            "is_ds": lambda x: bool(x.get("is_ds")) if "members" in x else is_ds(x),
+            "headline_cell": dict(HEADLINE_CELL), "size_fixed_on_select": size_fixed_on_select,
+            "size_rule": SIZE_RULE, "live_gate": dict(LIVE_GATE), "evaluate_live_gate": evaluate_live_gate,
+            "procs": int(getattr(args, "procs", 1) or 1), "pmap": pmap,
+            "helpers": {"summarize": summarize, "boot_p": boot_p, "seed_int": seed_int, "rng_of": rng_of, "bh": bh,
+                        "month_starts": month_starts, "clopper_pearson": clopper_pearson, "ms_str": ms_str,
+                        "day_ms": day_ms},
+            "log": lambda msg: print(f"[reads] {msg}", flush=True)}
+
+
+def run_reads_hooks(args, study: str, pin, mks: dict, syms: list, test_doc: dict, full: dict | None,
+                    names=None) -> dict:
+    """After test.json: each reads module of READS_MODULES that exists and is pinned gets ``run(ctx)``; its outputs
+    are written by this function only (out/<study>/<name>.json and the private file), after the read guard and the
+    D11 check. Returns {name: status}."""
+    status = {}
+    for name in (names or READS_MODULES):
+        mod_path = os.path.join(HERE, f"{name}.py")
+        if not os.path.exists(mod_path):
+            status[name] = "absent"
+            continue
+        out_path = os.path.join(ROOT, OUT_REL[study], f"{name}.json")
+        if os.path.exists(out_path):
+            print(f"[reads] {name}: {os.path.relpath(out_path, ROOT)} exists; delete it to run the read again")
+            status[name] = "exists"
+            continue
+        rp = reads_pin_status(study, name, test_doc.get("reads_pinned_at_test"))
+        if not rp["listed_in_pin"]:
+            print(f"[reads] {name}: research/hunt/{name}.py is not in {PIN[study]} with its current sha256: not run "
+                  f"(append its line, then `python -m research.hunt.hunt reads --study {study}`)", flush=True)
+            status[name] = "not pinned"
+            continue
+        mod = _reads_module(name)
+        priv_path = os.path.join(private_dir(args), f"{study}_{name}_private.json")
+        ctx = reads_context(study, args=args, pin=pin, mks=mks, syms=syms, test_doc=test_doc, full=full,
+                            reads_pin=rp, private_path=priv_path)
+        print(f"[reads] {name}: reads line predates test.json: {'yes' if rp['listed_before_test_json'] else 'no'}",
+              flush=True)
+        before = _guard_snapshot(study)
+        t0 = time.time()
+        mod.run(ctx)
+        after = _guard_snapshot(study)
+        if after != before:
+            changed = sorted(set(before) ^ set(after) | {k for k in before if after.get(k) != before[k]})
+            raise ReadGuardError(f"{name} changed files of the study ({changed}): reads never write; nothing written")
+        ds_ids = {p["id"] for p in ctx["picks"] if p["is_ds"]} | {r_["row"] for r_ in ctx["rows"] if r_["is_ds"]}
+        bad = d11_problems(ctx["out"], ds_ids)
+        if bad:
+            raise ReadGuardError(f"{name}: DeepSeek figures in the public output (D11): {bad[:10]}")
+        priv_sha = write_private(args, f"{study}_{name}_private.json", ctx["private"])
+        doc = {**_stamp(study, pin), "module": rp["module"], "module_sha256": rp["sha256"], "reads_pin": rp,
+               "reads_line_predates_test_json": rp["listed_before_test_json"],
+               "test_json_sha256": sha256_file(os.path.join(ROOT, OUT_REL[study], "test.json")),
+               "headline_cell": HEADLINE_CELL, "size_rule": SIZE_RULE, "out": ctx["out"],
+               "private_sha256": priv_sha, "seconds": round(time.time() - t0, 1)}
+        _write_json(out_path, doc)
+        status[name] = "written"
+        print(f"[reads] {name}: written {os.path.relpath(out_path, ROOT)} in {time.time() - t0:.0f}s", flush=True)
+    return status
+
+
+def _load_test_doc(study: str) -> dict:
+    p = os.path.join(ROOT, OUT_REL[study], "test.json")
+    if not os.path.exists(p):
+        raise SystemExit(f"{os.path.relpath(p, ROOT)} does not exist: reads run only after the test step")
+    with open(p) as fh:
+        return json.load(fh)
+
+
+def cmd_reads(args) -> int:
+    """The reads hook again, after test.json exists (a reads module pinned after the test step)."""
+    study = args.study
+    test_doc = _load_test_doc(study)
+    full = None
+    if study == "wide":
+        pp = os.path.join(private_dir(args), "wide_test_private.json")
+        if os.path.exists(pp):
+            with open(pp) as fh:
+                full = json.load(fh)
+    _compile_probe()
+    if study == "wide":
+        _ew().fullgrid_pins()
+    data, syms, counts = _universe_and_data(args, "test")
+    mks = _test_markets(syms)
+    st = run_reads_hooks(args, study, test_doc.get("pin"), mks, syms, test_doc, full)
+    print(json.dumps(st))
+    return 0
+
+
+# ------------------------------------------------------------------ R19 fidelity (1m last + mark) and R23 October reads
+FID_STEP = 60_000
+OCT_PERIOD = ("2026-10-01", "2026-10-11")       # R23: the daily archive files 2026-10-01 .. 2026-10-10
+OCT_NOTE = ("the owners watched October live; no choice in either study used it; one 10-day draw cannot show an "
+            "edge")
+FID_KEYS = ("mean_lnM", "median_M", "end_multiple", "max_dd", "bust", "n_positions", "adds_per_month",
+            "share_add_level", "win_share")
+
+
+def _tested_picks(study: str, test_doc: dict) -> list:
+    if study == "v1":
+        return [{**test_doc["pick"], "pick_no": 1, "batch": 1}]
+    return list(test_doc["picks"])
+
+
+def coins_traded_of(study: str, test_doc: dict) -> list:
+    """The coins the tested picks traded in the test period (the fidelity download list), universe order."""
+    found = set()
+    if study == "v1":
+        found.update(test_doc["result"].get("coins_traded") or [])
+    else:
+        for p in test_doc["picks"]:
+            found.update((test_doc["results"].get(p["id"]) or {}).get("coins_traded") or [])
+    try:
+        uni = load_universe(None)
+    except FileNotFoundError:
+        uni = sorted(found)
+    return [s for s in uni if s in found] + sorted(found - set(uni))
+
+
+def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: int, step: int) -> tuple:
+    """``<data_dir>/<sub>/<SYM>.npz`` bars (ts, o h l c v qv, mo mh ml) with open in [start, end), cleaned as H 2 on
+    the ``step`` grid; mark columns kept (NaN where no mark bar). Coins without a file are left out (the market then
+    steps through their 5m bars). Returns ({sym: Coin}, {sym: counts})."""
+    coins, counts = {}, {}
+    for s in syms:
+        p = os.path.join(data_dir, sub, f"{s}.npz")
+        if not os.path.exists(p):
+            counts[s] = {"file": "missing (5m bars used)"}
+            continue
+        with np.load(p) as z:
+            keys = set(z.files)
+            ts = np.asarray(z["ts"], np.int64)
+            cut = (ts >= start_ms) & (ts < end_ms)
+            cols = [np.asarray(z[k])[cut] for k in ("o", "h", "l", "c", "v", "qv")]
+            mk_ = [np.asarray(z[k])[cut] if k in keys else np.full(int(cut.sum()), np.nan, np.float32)
+                   for k in ("mo", "mh", "ml")]
+        (t2, o, h, lo, c, v, qv, mo, mh, ml), cnt = clean_5m(ts[cut], *cols, step=step, extra=tuple(mk_))
+        cnt["bars_without_mark"] = int((~np.isfinite(np.asarray(mo, float))).sum())
+        coins[s] = Coin(s, t2, o, h, lo, c, v, qv, last_ms=_COINS[s].last_ms if s in _COINS else None,
+                        counts=cnt, mark={"mo": mo, "mh": mh, "ml": ml})
+        counts[s] = cnt
+    return coins, counts
+
+
+def _read_archive_zip(path: str, usecols: list):
+    """One data.binance.vision CSV zip (header line or none; microsecond times -> ms), as a float64 array."""
+    import io
+    import zipfile
+    import pandas as pd
+    frames = []
+    with zipfile.ZipFile(path) as z:
+        for n in z.namelist():
+            if not n.endswith(".csv"):
+                continue
+            raw = z.read(n)
+            if not raw.strip():
+                continue
+            skip = 0 if raw[:64].lstrip()[:1].isdigit() else 1
+            frames.append(pd.read_csv(io.BytesIO(raw), header=None, skiprows=skip, usecols=usecols))
+    if not frames:
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    df = df[pd.to_numeric(df[usecols[0]], errors="coerce").notna()]
+    a = df.to_numpy(np.float64)
+    t = a[:, 0].astype(np.int64)
+    t = np.where(t > 10 ** 14, t // 1000, t)
+    return t, a[:, 1:]
+
+
+def scan_daily_archive(root: str) -> dict:
+    """{(kind, sym, day): path} of the daily archive zips under ``root`` (any layout; kind from the path: klines,
+    markPriceKlines, fundingRate)."""
+    import re
+    out = {}
+    pat = re.compile(r"^([A-Z0-9]+)-(5m|fundingRate)-(\d{4}-\d{2}-\d{2})\.zip$")
+    for dp, _dn, fns in os.walk(root):
+        parts = set(os.path.normpath(dp).split(os.sep))
+        for f in fns:
+            m = pat.match(f)
+            if not m:
+                continue
+            kind = ("markPriceKlines" if "markPriceKlines" in parts else "fundingRate" if m.group(2) == "fundingRate"
+                    else "klines")
+            out[(kind, m.group(1), m.group(3))] = os.path.join(dp, f)
+    return out
+
+
+def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: dict | None = None) -> dict:
+    """R23 loader: data.binance.vision daily 5m kline, 5m mark-price kline and (if any) funding zips of ``sym`` for
+    the UTC days in [start, end) -> the 5m npz layout (ts int64; o h l c v qv mo mh ml mc float32) and funding (ts,
+    rate). Each zip with a ``.CHECKSUM`` file next to it is checked (sha256; a mismatch stops). Funding without a
+    daily file is 0 and counted (R23)."""
+    index = scan_daily_archive(root) if index is None else index
+    days = [ms_str(d)[:10] for d in range(start_ms, end_ms, DAY_MS)]
+    cnt = {"days": len(days), "kline_days": 0, "mark_days": 0, "funding_days": 0, "checksum_ok": 0,
+           "checksum_absent": 0, "files": {}}
+    kl, mk_, fr = [], [], []
+    for d in days:
+        for kind, store, cols in (("klines", kl, [0, 1, 2, 3, 4, 5, 7]), ("markPriceKlines", mk_, [0, 1, 2, 3, 4]),
+                                  ("fundingRate", fr, None)):
+            path = index.get((kind, sym, d))
+            if path is None:
+                continue
+            ck = path + ".CHECKSUM"
+            sha = sha256_file(path)
+            if os.path.exists(ck):
+                with open(ck) as fh:
+                    want = fh.read().split()[0].strip().lower()
+                if want != sha:
+                    raise SystemExit(f"{path}: sha256 differs from its .CHECKSUM: stopped")
+                cnt["checksum_ok"] += 1
+            else:
+                cnt["checksum_absent"] += 1
+            cnt["files"][os.path.basename(path)] = sha
+            if kind == "fundingRate":
+                r_ = _read_archive_zip(path, [0, 2])
+            else:
+                r_ = _read_archive_zip(path, cols)
+            if r_ is not None:
+                store.append(r_)
+                cnt[{"klines": "kline_days", "markPriceKlines": "mark_days", "fundingRate": "funding_days"}[kind]] += 1
+    if kl:
+        t = np.concatenate([x[0] for x in kl])
+        a = np.concatenate([x[1] for x in kl])
+        o_ = np.argsort(t, kind="stable")
+        t, a = t[o_], a[o_]
+        lastk = np.r_[t[1:] != t[:-1], True]                  # duplicate open time: last kept
+        t, a = t[lastk], a[lastk]
+    else:
+        t, a = np.zeros(0, np.int64), np.zeros((0, 6))
+    keep = (t >= start_ms) & (t < end_ms)
+    t, a = t[keep], a[keep]
+    out = {"ts": t, "o": a[:, 0], "h": a[:, 1], "l": a[:, 2], "c": a[:, 3], "v": a[:, 4], "qv": a[:, 5]}
+    mo = np.full((len(t), 4), np.nan)
+    if mk_ and len(t):
+        mt = np.concatenate([x[0] for x in mk_])
+        ma = np.concatenate([x[1] for x in mk_])
+        o_ = np.argsort(mt, kind="stable")
+        mt, ma = mt[o_], ma[o_]
+        lastm = np.r_[mt[1:] != mt[:-1], True]
+        mt, ma = mt[lastm], ma[lastm]
+        pos = np.searchsorted(mt, t)
+        hit = (pos < len(mt)) & (mt[np.minimum(pos, len(mt) - 1)] == t)
+        mo[hit] = ma[pos[hit]]
+    for i, k in enumerate(("mo", "mh", "ml", "mc")):
+        out[k] = mo[:, i]
+    out = {k: (v.astype(np.float32) if k != "ts" else v.astype(np.int64)) for k, v in out.items()}
+    if fr:
+        ft = np.concatenate([x[0] for x in fr])
+        rate = np.concatenate([x[1][:, 0] for x in fr])
+        o_ = np.argsort(ft, kind="stable")
+        out["funding"] = (ft[o_], rate[o_].astype(np.float64))
+    else:
+        out["funding"] = (np.zeros(0, np.int64), np.zeros(0))
+    cnt["bars"] = int(len(t))
+    cnt["funding_zero_days"] = len(days) - cnt["funding_days"]
+    return {"arrays": out, "counts": cnt}
+
+
+def _fid_summary(res: dict) -> dict:
+    m = res if "mean_lnM" in res else res["metrics"]
+    out = {k: m.get(k) for k in FID_KEYS}
+    out["liquidations"] = int((m.get("exit_reasons") or {}).get("liquidation", 0))
+    out["adds_filled"] = int(round((m.get("adds_per_month") or 0.0) * m.get("months", 0)))
+    return out
+
+
+def _fid_diff(a: dict, b: dict) -> dict:
+    d = {}
+    for k in ("mean_lnM", "median_M", "end_multiple", "max_dd", "n_positions", "liquidations", "adds_filled"):
+        if a.get(k) is not None and b.get(k) is not None:
+            d[k] = b[k] - a[k]
+    return d
+
+
+def _median_seed(means) -> int | None:
+    """Seed number (1-based) whose mean monthly ln M is the median of the seeds (lower median)."""
+    if not means:
+        return None
+    o = np.argsort(np.asarray(means, float), kind="stable")
+    return int(o[(len(o) - 1) // 2]) + 1
+
+
+def _read_guarded(study: str, fn) -> None:
+    before = _guard_snapshot(study)
+    fn()
+    after = _guard_snapshot(study)
+    if after != before:
+        raise ReadGuardError("a read changed the study's files: nothing written")
+
+
+def _write_read(args, study: str, name: str, pin, public: dict, private: dict, t0: float) -> str:
+    priv_sha = write_private(args, f"{study}_{name}_private.json", private)
+    doc = {**_stamp(study, pin), **public, "private_sha256": priv_sha,
+           "test_json_sha256": sha256_file(os.path.join(ROOT, OUT_REL[study], "test.json")),
+           "seconds": round(time.time() - t0, 1)}
+    path = os.path.join(ROOT, OUT_REL[study], f"{name}.json")
+    _write_json(path, doc)
+    return path
+
+
+def cmd_fidelity(args) -> int:
+    """R19: the tested picks rerun with the same engine on 1m last-price bars, and on 1m last + mark-price bars
+    (liquidation on mark), from ``--data1m`` (``<dir>/1m/<SYM>.npz``, research/hunt/data_hunt.py kind fidelity);
+    coins without 1m bars keep their 5m bars. Signals, ATR, labels and D0 come from the study's 5m bars, as in the
+    test. Also the median control (a) and (b) seed of each pick. Only after test.json; writes
+    out/<study>/fidelity.json (DeepSeek figures private, D11)."""
+    study = args.study
+    test_doc = _load_test_doc(study)
+    if args.list_coins:
+        print(" ".join(coins_traded_of(study, test_doc)))
+        return 0
+    data1m = args.data1m or args.fid or os.environ.get("HUNT_FID")
+    if not data1m:
+        raise SystemExit("--data1m <folder with 1m/<SYM>.npz> (or --fid / $HUNT_FID) is needed")
+    pin = check_pin(study, "test")
+    _compile_probe()
+    if study == "wide":
+        _ew().fullgrid_pins()
+    t0 = time.time()
+    data, syms, counts = _universe_and_data(args, "test")
+    mks = _test_markets(syms)
+    a, b = (day_ms(x) for x in PERIODS["test"])
+    bars1, cnt1 = load_bar_coins(data1m, "1m", syms, a, b, FID_STEP)
+    mk1 = Market(syms, "test", bar_ms=FID_STEP, bars=bars1, mark=False, tag="1m")
+    mk1m = Market(syms, "test", bar_ms=FID_STEP, bars=bars1, mark=True, tag="1m")
+    for m in (mk1, mk1m):
+        _G["mk"][m.key] = m
+    full = None
+    if study == "wide":
+        pp = os.path.join(private_dir(args), "wide_test_private.json")
+        if os.path.exists(pp):
+            with open(pp) as fh:
+                full = json.load(fh)
+    res_pub, res_priv = {}, {}
+
+    def go():
+        for p in _tested_picks(study, test_doc):
+            prepare_series(syms, (p["tf"],))
+            five = run_engine(p, a, b, mk=mks["test"])
+            one = run_engine(p, a, b, mk=mk1)
+            onem = run_engine(p, a, b, mk=mk1m, overrides={"PR_LIQ_MARK": 1})
+            row = {"5m": _fid_summary(five), "1m": _fid_summary(one), "1m_mark": _fid_summary(onem)}
+            row["change_1m_mark_minus_5m"] = _fid_diff(row["5m"], row["1m_mark"])
+            blk = (full or {}).get("results", {}).get(p["id"]) if study == "wide" else test_doc["result"]
+            ctl = (blk or {}).get("controls") or {}
+            row["median_control_seeds"] = {}
+            for c_ in ("a", "b"):
+                sd = _median_seed(ctl.get(f"{c_}_mean_lnM"))
+                if sd is None:
+                    continue
+                sig = system_signals(mks["test"], p)
+                rng = rng_of(*control_seed_parts(study, p, c_, "test", R_BASE, sd))
+                cs = control_a(mks["test"], sig, rng) if c_ == "a" else control_b(sig, rng)
+                f5 = _fid_summary(run_engine([(cs, 0)], a, b, mk=mks["test"]))
+                f1 = _fid_summary(run_engine([(cs, 0)], a, b, mk=mk1m, overrides={"PR_LIQ_MARK": 1}))
+                row["median_control_seeds"][c_] = {"seed": sd, "5m": f5, "1m_mark": f1,
+                                                   "change_1m_mark_minus_5m": _fid_diff(f5, f1)}
+            res_priv[p["id"]] = row
+            res_pub[p["id"]] = ({"note": "DeepSeek pick: figures in the private file (D11)",
+                                 "n_positions": {k: row[k]["n_positions"] for k in ("5m", "1m", "1m_mark")},
+                                 "liquidations": {k: row[k]["liquidations"] for k in ("5m", "1m", "1m_mark")}}
+                                if is_ds(p) else row)
+            print(f"fidelity: {p['id']} done ({time.time() - t0:.0f}s)", flush=True)
+    _read_guarded(study, go)
+    pub = {"what": "R19: tested picks on 1m last-price bars and on 1m last + mark-price bars (liquidation on mark), "
+                   "same engine, signals from the study's 5m bars; the median control seeds alike",
+           "bar_source": mk1.bar_source, "bars_1m_counts": cnt1, "picks": res_pub}
+    path = _write_read(args, study, "fidelity", pin, pub, {"picks": res_priv}, t0)
+    print(path)
+    return 0
+
+
+def october_coins(data_oct: str, syms: list, a: int, b: int) -> tuple:
+    """The study coins with the October daily bars appended (R23); funding from daily files or 0 (counted)."""
+    index = scan_daily_archive(data_oct)
+    coins, fund, counts = {}, {}, {}
+    for s in syms:
+        c = _COINS[s]
+        d = load_daily_archive(data_oct, s, a, b, index)
+        arr = d["arrays"]
+        keep = arr["ts"] >= (int(c.ts[-1]) + FIVE if len(c.ts) else 0)
+        (ts, o, h, lo, cc, v, qv), cnt = clean_5m(arr["ts"][keep], *(arr[k][keep] for k in ("o", "h", "l", "c", "v",
+                                                                                              "qv")))
+        cnt.update(d["counts"])
+        counts[s] = cnt
+        last = c.last_ms
+        if len(ts):
+            last = 2 ** 62                              # trades into October: no coin end inside the read
+        coins[s] = Coin(s, np.r_[c.ts, ts], np.r_[c.o, o], np.r_[c.h, h], np.r_[c.l, lo], np.r_[c.c, cc],
+                        np.r_[c.v, v], np.r_[c.qv, qv], last_ms=last, counts=dict(c.counts))
+        fts, frate = _FUND.get(s, (np.zeros(0, np.int64), np.zeros(0)))
+        ft2, fr2 = arr["funding"]
+        fund[s] = (np.r_[fts, ft2].astype(np.int64), np.r_[frate, fr2].astype(np.float64))
+    return coins, fund, counts
+
+
+def cmd_october(args) -> int:
+    """R23: the tested picks (and the v1 pick in the wide read) on 2026-10-01 .. 2026-10-11 from the daily archive
+    files of ``--data-oct``: fresh $1,000 at r = 0.5%, controls (a) / (b) seeds 1-200 drawn in that window, and each
+    10-day multiple as a percentile of the test period's fresh-wallet rolling 10-day windows (one per start day).
+    Only after test.json; never swaps or re-ranks a pick. Writes out/<study>/reads_october.json (D11 private)."""
+    study = args.study
+    test_doc = _load_test_doc(study)
+    if not args.data_oct:
+        raise SystemExit("--data-oct <folder with the daily archive zips> is needed")
+    pin = check_pin(study, "test")
+    _compile_probe()
+    if study == "wide":
+        _ew().fullgrid_pins()
+    t0 = time.time()
+    data, syms, counts = _universe_and_data(args, "test")
+    a, b = (day_ms(x) for x in OCT_PERIOD)
+    ta, tb = (day_ms(x) for x in PERIODS["test"])
+    coins, fund, oct_counts = october_coins(args.data_oct, syms, a, b)
+    install(coins, fund)
+    mk_oct = Market(syms, (a, b), name="october")
+    mk_test = Market(syms, "test")
+    for m in (mk_oct, mk_test):
+        _G["mk"][m.key] = m
+    rows = list(_tested_picks(study, test_doc))
+    if study == "wide" and os.path.exists(os.path.join(ROOT, PICKS_REL["v1"])):
+        with open(os.path.join(ROOT, PICKS_REL["v1"])) as fh:
+            rows.append({**json.load(fh)["pick"], "pick_no": 0})
+    n_seeds = min(N_SEEDS_READ, N_SEEDS)
+    res_pub, res_priv = {}, {}
+    win = 10 * DAY_MS
+
+    def go():
+        for p in rows:
+            prepare_series(syms, (p["tf"],))
+            st = "v1" if str(p["id"]).startswith("v1:") else study
+            o_ = run_engine(p, a, b, mk=mk_oct, start_wallet=1000.0, detail=True)
+            sig = system_signals(mk_oct, p)
+            ctl = {}
+            for c_ in ("a", "b"):
+                mults = []
+                for sd in range(1, n_seeds + 1):
+                    rng = rng_of(*control_seed_parts(st, p, c_, "october", R_BASE, sd))
+                    cs = control_a(mk_oct, sig, rng) if c_ == "a" else control_b(sig, rng)
+                    mults.append(run_engine([(cs, 0)], a, b, mk=mk_oct, start_wallet=1000.0)["multiple"])
+                ctl[c_] = {"seeds": n_seeds, "median_multiple": float(np.median(mults)),
+                           "share_below_pick": float(np.mean(np.asarray(mults) < o_["multiple"]))}
+            roll = []
+            for d in range(ta, tb - win + 1, DAY_MS):
+                roll.append(run_engine(p, d, d + win, start_wallet=1000.0, mks={"test": mk_test},
+                                       universe=syms)["multiple"])
+            roll = np.asarray(roll)
+            row = {"multiple": o_["multiple"], "end_marked": o_["end_marked"], "n_positions": o_["metrics"]["n_positions"],
+                   "bust": o_["bust"], "controls": ctl, "test_rolling_10d": {
+                       "windows": int(len(roll)), "percentile_of_october": float(np.mean(roll <= o_["multiple"]))
+                       if len(roll) else None, "p5": float(np.quantile(roll, 0.05)) if len(roll) else None,
+                       "median": float(np.median(roll)) if len(roll) else None,
+                       "p95": float(np.quantile(roll, 0.95)) if len(roll) else None}}
+            res_priv[p["id"]] = row
+            res_pub[p["id"]] = ({"note": "DeepSeek pick: figures in the private file (D11)",
+                                 "n_positions": row["n_positions"], "bust": row["bust"]} if is_ds(p) else row)
+            print(f"october: {p['id']} done ({time.time() - t0:.0f}s)", flush=True)
+    _read_guarded(study, go)
+    pub = {"what": "R23: 2026-10-01 .. 2026-10-11, fresh $1,000 at r = 0.5%, daily archive files", "note": OCT_NOTE,
+           "period": list(OCT_PERIOD), "funding": "daily funding files when present, else 0 and counted",
+           "data_counts": oct_counts, "picks": res_pub}
+    path = _write_read(args, study, "reads_october", pin, pub, {"picks": res_priv}, t0)
+    print(OCT_NOTE)
+    print(path)
+    return 0
+
+
 # ------------------------------------------------------------------ DeepSeek money (W 11, D11)
 DS_ALLOWED = {"id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo", "eligible", "fail",
               "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label", "role"}
@@ -2838,16 +3671,20 @@ def _compile_probe() -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m research.hunt.hunt", description=__doc__.split("\n\n")[0])
     ap.add_argument("cmd", choices=("select", "test", "report", "universe", "bench", "datapin", "datacheck",
-                                    "pinlist"))
+                                    "pinlist", "reads", "fidelity", "october"))
     ap.add_argument("--study", choices=("v1", "wide"), default=None)
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--data", default=None)
     ap.add_argument("--private", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--fg1m", default=None, help="datacheck: the full grid's data folder (holds 1m/<SYM>.npz)")
+    ap.add_argument("--data1m", default=None, help="fidelity: folder with 1m/<SYM>.npz (data_hunt kind fidelity)")
+    ap.add_argument("--fid", default=None, help="fidelity: same as --data1m (or $HUNT_FID)")
+    ap.add_argument("--list-coins", action="store_true", help="fidelity: print the coins the tested picks traded")
+    ap.add_argument("--data-oct", default=None, help="october: folder with the daily archive zips (R23)")
     args = ap.parse_args(argv)
-    if args.cmd in ("select", "test", "report", "pinlist") and args.study is None:
-        ap.error("--study {v1,wide} is required for select, test, report and pinlist")
+    if args.cmd in ("select", "test", "report", "pinlist", "reads", "fidelity", "october") and args.study is None:
+        ap.error("--study {v1,wide} is required for select, test, report, pinlist, reads, fidelity and october")
     try:
         if args.cmd == "select":
             return cmd_select(args)
@@ -2866,11 +3703,17 @@ def main(argv=None) -> int:
             return cmd_datacheck(args)
         if args.cmd == "pinlist":
             return cmd_pinlist(args)
+        if args.cmd == "reads":
+            return cmd_reads(args)
+        if args.cmd == "fidelity":
+            return cmd_fidelity(args)
+        if args.cmd == "october":
+            return cmd_october(args)
         if args.cmd == "bench":
             if not args.out:
                 raise SystemExit("--out <timing.json> needed")
             return cmd_bench(args)
-    except PinError as e:
+    except (PinError, ReadGuardError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
     return 1

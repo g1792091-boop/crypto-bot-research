@@ -207,9 +207,9 @@ def read_lineup(path: str, systems_by_id: dict, aliases: dict) -> dict:
 
 def suggest_lineup(root: str = CFG.ROOT) -> dict:
     """A lineup proposal from the studies' outputs (research/hunt/out/...): a passing pick -> 정식 at r0.5 and r1
-    (+ the W 7 goal reads as 참고... no: reads are not accounts, they ride along as 참고 variants), a pick that did not
-    pass -> 참고 at r0.5; two or more passing wide picks -> the one-wallet basket (정식, r0.5 and r1). Only a
-    proposal: the owners / main session write the file."""
+    (PREREG_HUNT 15, WIDE 12), plus its W 7 goal reads (r 2% / 5%) labelled 참고; a pick that did not pass -> 참고 at
+    r0.5 (H 15: "may still run as a paper shadow"); two or more passing wide picks -> the one-wallet basket (정식,
+    r0.5 and r1). Only a proposal: the owners / main session decide and write the file."""
     out = {"version": 1, "note": "proposal from research/hunt/out (huntbot.systems.suggest_lineup)", "accounts": []}
 
     def load(rel):

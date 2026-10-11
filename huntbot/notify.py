@@ -74,7 +74,7 @@ def _dur(ms: int) -> str:
 
 
 def acct_title(a: dict) -> str:
-    name = a.get("name") or "바구니" if a.get("basket") else S.label_ko(a["parts"][0][0])
+    name = (a.get("name") or "바구니") if a.get("basket") else S.label_ko(a["parts"][0][0])
     v = S.variants()[a["variant"]]["ko"]
     return f"{a['label']} · {name} ({v})"
 

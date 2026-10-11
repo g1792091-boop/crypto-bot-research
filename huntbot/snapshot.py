@@ -64,10 +64,7 @@ def kst_day_start(ms: int) -> int:
 def public_trade(t: dict, ds: bool) -> dict:
     keys = DS_TRADE_KEYS if ds else MONEY_TRADE_KEYS
     out = {k: t.get(k) for k in keys if k in t}
-    if ds:
-        out["win"] = None if t.get("open") else bool((t.get("pnl") or 0) > 0)
-    else:
-        out["win"] = None if t.get("open") else bool((t.get("pnl") or 0) > 0)
+    out["win"] = None if t.get("open") else bool((t.get("pnl") or 0) > 0)
     return out
 
 
@@ -178,6 +175,7 @@ def write_all(R, mk, complete_ms: int, results: dict, lineup_res: dict) -> None:
                          "lineup": a["label"], "variant": a["variant"], "ds": a["ds"], "label_ko": a["name_ko"],
                          "lineup_account": True, **t})
     now = R.now_ms()
+    R.last_counts = {"systems": len(rows), "open": len(positions), "recent": len(recent)}
     write_json(R.snap, "systems.json", {"generated_ms": now, "complete_ms": complete_ms, "forward_start_ms": R.fwd,
                                         "months": list(mk.months), "rows": rows})
     write_json(R.snap, "positions.json", {"generated_ms": now, "complete_ms": complete_ms,

@@ -12,8 +12,8 @@ NaN mark values filled; monthly values are never overwritten). Public price data
     python -m research.hunt.data_hunt verify --data DIR --ref research/hunt/data_manifest.json [--report FILE]
     python -m research.hunt.data_hunt refman --data DIR --out REF.json
     python -m research.hunt.data_hunt prove --symbol BTCUSDT --month 2024-01 --ref-data DIR --work DIR
+    python -m research.hunt.data_hunt problems --data DIR
     python -m research.hunt.data_hunt symbols [--universe-md FILE]
-    python -m research.hunt.data_hunt coins --tests T1.json [T2.json ...]
 
 Symbols: ``--symbols A,B`` or, without it, ``research/hunt/universe30.json`` when it exists, else the table of the
 ``--universe-md`` file (coins30 UNIVERSE.md). Range: kind 5m 2020-01..2026-09 (as coins30), kind fidelity
@@ -29,8 +29,12 @@ Files written (both kinds; ``<sub>`` = ``5m`` or ``1m``):
   ``last_bar`` and ``missing_months_funding`` from it), the sha256 of every source zip, of each converted file and of
   its array content: ``content_sha256`` (the hunt's own data identity, research/hunt/hunt.py ``content_sha``: the
   arrays a study reads) and ``arrays_sha256`` (every key); both independent of the zip container.
-* ``<out>/state.json`` (resume), ``<out>/params.json``, ``<out>/download.log``, ``<out>/COMPLETE`` when every coin
-  is done. Zips are deleted once a coin is converted. A rerun skips finished coins and downloaded zips.
+* ``<out>/state.json`` (resume), ``<out>/params.json``, ``<out>/download.log``, ``<out>/COMPLETE`` only when every
+  coin is built with no download problem: a listed file that gave 404 or failed its ``.CHECKSUM`` four times, or a
+  daily fill file that failed its ``.CHECKSUM`` (``coin_problems``). A coin with a problem is still written (so the
+  manifest shows it) but keeps its downloaded zips, is rebuilt by the next run (only the failed files are fetched
+  again) and keeps the download's exit code at 1. ``problems`` lists them. Zips are deleted once a coin is converted
+  without problems. A rerun skips finished coins and downloaded zips.
 
 npz files are written with a fixed zip timestamp, so the same arrays give the same file bytes on one machine. The
 coins30 files were written by ``np.savez_compressed`` (timestamped), so the comparison with them is on array content:
@@ -331,6 +335,16 @@ def fetch_verified(src, key: str, dest: str, has_ck: bool, log=print) -> tuple:
     return "mismatch", None
 
 
+def coin_problems(info: dict) -> list:
+    """What keeps a built coin from counting as complete: listed monthly files that gave 404 or failed their
+    .CHECKSUM (``download_problems``) and daily fill files that failed theirs. A daily 404 is not one (the archive has
+    no file for that day; the gap stays and is counted in the coverage fields)."""
+    out = [f"{k} {v}" for k, v in sorted((info.get("download_problems") or {}).items())]
+    for kind, st in sorted(((info.get("daily_fill") or {}).get("daily_status") or {}).items()):
+        out += [f"daily {kind} {d} {v}" for d, v in sorted(st.items()) if v == "mismatch"]
+    return out
+
+
 # ------------------------------------------------------------------ build one coin
 def _prefixes(sym: str, iv: str) -> dict:
     return {"kl": (f"data/futures/um/monthly/klines/{sym}/{iv}/", iv),
@@ -579,8 +593,9 @@ def build_symbol(src, sym: str, kind: str, out: str, first: str, last: str, work
             info[f"missing_months_{k}_while_trading"] = [m for m in info[f"missing_months_{k}"] if m <= lm]
     info["source_zips"] = dict(sorted(zsha.items()))
     info["build_seconds"] = round(time.time() - t0, 1)
-    shutil.rmtree(raw, ignore_errors=True)          # delete zips after conversion
-    return info
+    if not coin_problems(info):
+        shutil.rmtree(raw, ignore_errors=True)      # delete zips after conversion
+    return info                                     # with problems: kept, so a rerun fetches only the failed files
 
 
 # ------------------------------------------------------------------ the download command
@@ -649,10 +664,10 @@ def download(src, syms: list, kind: str, out: str, first: str, last: str, worker
         os.remove(comp)
     log(f"download {kind}: start, {len(syms)} coins, {first}..{last}, already done "
         f"{sum(1 for s in syms if s in state)}, workers {workers}")
-    failed = []
+    failed, with_problems = [], []
     for n, sym in enumerate(syms, 1):
         info = state.get(sym)
-        if info and os.path.exists(os.path.join(out, info[f"npz_{iv}"])) \
+        if info and not coin_problems(info) and os.path.exists(os.path.join(out, info[f"npz_{iv}"])) \
                 and sha256_file(os.path.join(out, info[f"npz_{iv}"])) == info[f"sha256_{iv}"]:
             log(f"[data {n}/{len(syms)}] {sym}: already done")
             continue
@@ -671,23 +686,43 @@ def download(src, syms: list, kind: str, out: str, first: str, last: str, worker
         state[sym] = info
         _dump_json(os.path.join(out, "state.json"), state)
         write_manifest(out, state, syms, params)
+        probs = coin_problems(info)
+        if probs:
+            with_problems.append(sym)
+            log(f"PROBLEM {sym}: {'; '.join(probs)} (rerun to fetch them again)")
         log(f"[data {n}/{len(syms)}] {sym}: rows {info['rows']} {info['first_bar']}..{info['last_bar']}, "
-            f"problems {len(info['download_problems'])}, fill +{info['daily_fill']['kline_rows_added']} rows "
+            f"problems {len(probs)}, fill +{info['daily_fill']['kline_rows_added']} rows "
             f"/ {info['daily_fill']['mark_bars_filled']} marks, {info['build_seconds']}s")
     man = write_manifest(out, state, syms, params)
     try:
-        os.rmdir(os.path.join(out, "raw"))         # only when empty (every coin converted)
+        os.rmdir(os.path.join(out, "raw"))         # only when empty (every coin converted without problems)
     except OSError:
         pass
     done = [s for s in syms if s in state]
-    if len(done) == len(syms) and not failed:
+    if len(done) == len(syms) and not failed and not with_problems:
         with open(comp, "w") as fh:
             fh.write(json.dumps({"symbols": syms, "kind": kind, "range": [first, last],
                                  "manifest_symbols": man["n_symbols_done"]}) + "\n")
         log(f"download {kind}: finished {len(done)}/{len(syms)}")
         return 0
-    log(f"download {kind}: {len(done)}/{len(syms)} done, failed {failed} (rerun to resume)")
+    log(f"download {kind}: {len(done)}/{len(syms)} built, not built {failed}, with download problems "
+        f"{with_problems} (rerun to resume; COMPLETE not written)")
     return 1
+
+
+def problems(out: str) -> dict:
+    """What keeps a download folder from being complete: coins of its universe not built, and built coins with
+    download problems (``coin_problems``)."""
+    man = _load_json(os.path.join(out, "manifest.json"))
+    if man is None:
+        return {"complete": False, "manifest": False, "not_built": [], "problems": {}}
+    built = {r["symbol"]: r for r in man.get("symbols", [])}
+    uni = list(man.get("universe") or built)
+    res = {"manifest": True, "not_built": [s for s in uni if s not in built],
+           "problems": {s: coin_problems(built[s]) for s in uni if s in built and coin_problems(built[s])}}
+    res["complete"] = bool(not res["not_built"] and not res["problems"]
+                           and os.path.exists(os.path.join(out, "COMPLETE")))
+    return res
 
 
 # ------------------------------------------------------------------ symbols
@@ -725,36 +760,6 @@ def resolve_symbols(symbols: str | None, universe_md: str | None, universe_json:
     if universe_md:
         return symbols_from_md(universe_md), universe_md
     raise DataError("no symbols: give --symbols, create research/hunt/universe30.json or pass --universe-md")
-
-
-def coins_from_tests(paths: list, universe: list) -> tuple:
-    """Coins the picks traded, from test outputs that list them (keys 'coins_traded' / 'traded_coins' lists, or
-    'by_coin' / 'positions_by_coin' maps with a count > 0). Without any, the whole universe."""
-    found = set()
-
-    def walk(x):
-        if isinstance(x, dict):
-            for k, v in x.items():
-                if k in ("coins_traded", "traded_coins") and isinstance(v, list):
-                    found.update(str(s) for s in v)
-                elif k in ("by_coin", "positions_by_coin") and isinstance(v, dict):
-                    for s, n in v.items():
-                        cnt = n.get("n", 0) if isinstance(n, dict) else n
-                        if isinstance(cnt, (int, float)) and cnt > 0:
-                            found.add(str(s))
-                else:
-                    walk(v)
-        elif isinstance(x, list):
-            for v in x:
-                walk(v)
-
-    for p in paths:
-        if os.path.exists(p):
-            walk(_load_json(p))
-    if found:
-        order = [s for s in universe if s in found] + sorted(found - set(universe))
-        return order, "test outputs"
-    return list(universe), "all coins (the test outputs list no coins)"
 
 
 # ------------------------------------------------------------------ reference and verify
@@ -942,9 +947,9 @@ def main(argv=None) -> int:
     s = sp.add_parser("symbols", help="print the symbol list the download would use")
     s.add_argument("--symbols", default=None)
     s.add_argument("--universe-md", default=None)
-    c = sp.add_parser("coins", help="coins the picks traded (from test outputs), else the whole universe")
-    c.add_argument("--tests", nargs="*", default=[])
-    c.add_argument("--universe-md", default=None)
+    q = sp.add_parser("problems", help="coins of a download folder not built or with download problems "
+                                       "(exit 0 complete, 1 problems, 2 coins not built or no manifest)")
+    q.add_argument("--data", required=True)
     args = ap.parse_args(argv)
     try:
         if args.cmd == "download":
@@ -978,12 +983,18 @@ def main(argv=None) -> int:
             print(" ".join(syms))
             print(f"({len(syms)} from {where})", file=sys.stderr)
             return 0
-        if args.cmd == "coins":
-            uni, _ = resolve_symbols(None, args.universe_md)
-            coins, why = coins_from_tests(args.tests, uni)
-            print(" ".join(coins))
-            print(f"({len(coins)} coins: {why})", file=sys.stderr)
-            return 0
+        if args.cmd == "problems":
+            res = problems(args.data)
+            if not res["manifest"]:
+                print(f"NOT BUILT: no manifest.json in {args.data}")
+                return 2
+            for sym in res["not_built"]:
+                print(f"NOT BUILT {sym}")
+            for sym, probs in res["problems"].items():
+                print(f"PROBLEM {sym}: {'; '.join(probs)}")
+            print(("COMPLETE" if res["complete"] else "INCOMPLETE") + f": {len(res['not_built'])} coins not built, "
+                  f"{len(res['problems'])} with download problems")
+            return 0 if res["complete"] else (2 if res["not_built"] or not res["problems"] else 1)
     except DataError as e:
         print(f"data_hunt: {e}", file=sys.stderr)
         return 2
