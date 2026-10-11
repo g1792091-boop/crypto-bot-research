@@ -22,13 +22,18 @@ Families (W2; each long and short; the strategies' own exits / take-profits / st
   (columns ts open high low close volume, attrs["tf"]), built from the 5m bars, volume = BASE volume (the full grid's
   1m archive column ``v``), so every number the definitions compare means what it meant in the full grid.
 
-Event rule (one rule for every family): the long (short) event of bar t = the side's signal array is True on bar t
-and False on bar t-1 (the previous bar of the array; bar 0: previous = False). For an array that marks single bars
-(a cross, a breakout) this is the array itself; for a state array (true for as long as a condition holds) it is the
-first bar where the state turns on; a run of consecutive True bars gives one event, at its first bar. This is
-PREREG_HUNT section 5's own definition ("true on bar t and false on bar t-1"), so F1 and F2-F4 follow one rule.
-``events_on`` returns the raw arrays too (``raw_long`` / ``raw_short``); ``ARRAY_KIND`` documents which strategies'
-arrays are single-bar events and which are states (``classify`` measures it on synthetic bars; tests check it).
+Event rule (one rule for every family, PREREG_HUNT_WIDE 3.2): the long (short) event of bar t = the side's signal
+array is True on bar t and False on bar t-1 (the previous bar of the same series; the first bar of a series gives
+none). For an array that marks single bars (a cross, a breakout) this is the array itself; for a state array (True for
+as long as a condition holds) it is the first bar where the state turns on; a run of consecutive True bars gives one
+event, at its first bar. This is PREREG_HUNT section 5's own definition, so F1 and F2-F4 follow one rule. F2-F4 also
+keep the full grid's warm-up: no event on a series' first run.WARMUP_BARS (300) bars. ``events_on`` returns the raw
+arrays too (``raw_long`` / ``raw_short``, untouched); ``classify`` measures how much of an array is continuation
+(event / mixed / state). On synthetic bars the states are N17_KC_RSI, N18_VWMA_MACD and F14_SMT, the mixed ones
+(some True bars continue a run) F2_DEMARK, F4_PULL, V45_AMB, F5_BOX*, OBV_S, N19_FIB_CHOP and a few zone definitions at
+under 3%; the parity check (parity_wide.py) reports the same on the old six's real bars. A long and a short event on
+the same bar cannot happen: the arrays are cleaned to one side by their own code (core: short & ~long; DeepSeek:
+both removed) and E1-E3 cannot hold both ways.
 
 Timing: a signal / event on bar t is known at the bar's close, close_ms[t] = open_ms[t] + the timeframe (the UTC
 bin's scheduled end, also when the bin has missing 5m bars). bars.first5[t] = index of the first 5m bar with open
@@ -42,10 +47,16 @@ bin when the data ends before its last 5m slot (a bin is never used before it is
 Systems (W4): (entry, timeframe, gate) for F1-F3 on 15m / 30m / 1h / 4h (F3 where defined) and F4 on its own
 timeframe, gates G1 and NONE: (3 + 36) x 4 x 2 + (39 x 4 + 5 x 3) x 2 + 38 x 2 = 312 + 342 + 76 = 730 systems
 (the design's "740" counted 44 x 4 DeepSeek cells; ds_defs raises on F15_* 4h, so those 5 x 2 systems do not exist).
+System ids (PREREG_HUNT_WIDE 4): ``F<n>:<name>:<tf>:<gate>``, F4 ``F4:<name>:<tf>:<gate>:r<rank>``.
+
+Before the first F2-F4 signal of a process the full grid's pinned files are checked against
+research/fullgrid/PREREG.sha256 (``fullgrid_pins``), and core definitions load only through run.core_module (which
+refuses a file that does not match DEFS_BC.sha256).
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import json
@@ -90,6 +101,22 @@ def fullgrid_run():
             sys.modules.pop("fullgrid_run", None)
             raise
     return mod
+
+
+@functools.lru_cache(maxsize=1)
+def fullgrid_pins() -> dict:
+    """{file: sha256} of research/fullgrid/PREREG.sha256 after checking every listed file (raises on a mismatch)."""
+    R = fullgrid_run()
+    want = {}
+    with open(os.path.join(FULLGRID, "PREREG.sha256")) as fh:
+        for line in fh:
+            if line.strip():
+                h, f = line.split(None, 1)
+                want[f.strip()] = h
+    bad = [f for f, h in want.items() if R._sha(os.path.join(FULLGRID, f)) != h]
+    if bad:
+        raise RuntimeError(f"research/fullgrid files differ from PREREG.sha256: {bad}")
+    return want
 
 
 def _regime5y():
@@ -180,10 +207,11 @@ def resample_1m_to_5m(ts, o, h, l, c, v):
 
 # ------------------------------------------------------------------ events
 def rising(x) -> np.ndarray:
-    """x[t] and not x[t-1] (bar 0: not x[-1] = True)."""
+    """x[t] and not x[t-1]; bar 0 (no previous bar) is never an event."""
     x = np.asarray(x, bool)
     out = x.copy()
     out[1:] &= ~x[:-1]
+    out[:1] = False
     return out
 
 
@@ -273,6 +301,7 @@ def grid_raw(kind: str, name: str, bars: Bars, sym: str, combo: dict, btc: Bars 
              cache: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
     """F2-F4 signal arrays, exactly as research/fullgrid/run.signals computes them on a frame (kind 'core' / 'ds')."""
     R = fullgrid_run()
+    fullgrid_pins()
     R.M.clear()                                   # the indicator memo is per series in the full grid too
     df = bars.df
     if kind == "core":
@@ -298,14 +327,19 @@ def grid_raw(kind: str, name: str, bars: Bars, sym: str, combo: dict, btc: Bars 
 
 def events_on(spec: dict, bars: Bars, sym: str, btc: Bars | None = None) -> dict:
     """{"long", "short"}: the system's entry events per bar of ``bars`` (ungated; ``gate_ok`` gives the gate), and
-    {"raw_long", "raw_short"}: the signal arrays the events come from."""
+    {"raw_long", "raw_short"}: the signal arrays the events come from (F2-F4: untouched by the warm-up)."""
     if bars.tf != spec["tf"]:
-        raise ValueError(f"system {spec['id']} is on {spec['tf']}, the bars are {bars.tf}")
+        raise ValueError(f"system {spec.get('id')} is on {spec['tf']}, the bars are {bars.tf}")
     if spec["kind"] == "hunt":
         lg, sh = hunt_raw(spec["name"], bars, next(iter(spec["combo"].values())) if spec["combo"] else None)
+        el, es = rising(lg), rising(sh)
     else:
         lg, sh = grid_raw(spec["kind"], spec["name"], bars, sym, _combo_args(spec["combo"]), btc)
-    return {"long": rising(lg), "short": rising(sh), "raw_long": lg, "raw_short": sh}
+        el, es = rising(lg), rising(sh)
+        w = fullgrid_run().WARMUP_BARS
+        el[:w] = False
+        es[:w] = False
+    return {"long": el, "short": es, "raw_long": lg, "raw_short": sh}
 
 
 def events(spec: dict, five: dict, sym: str, btc_five: dict | None = None) -> tuple[Bars, dict]:
@@ -375,7 +409,7 @@ def _canon(x) -> str:
 
 def _spec(family: str, name: str, kind: str, tf: str, gate: str, combo: dict, rank: int | None = None,
           cand_id: str | None = None) -> dict:
-    sid = f"{family}-{name}-{tf}" + (f"-r{rank}" if rank is not None else "") + f"-{gate}"
+    sid = f"{family}:{name}:{tf}:{gate}" + (f":r{rank}" if rank is not None else "")
     combo = {k: (list(v) if isinstance(v, tuple) else v) for k, v in combo.items()}
     core = {"family": family, "name": name, "kind": kind, "tf": tf, "gate": gate, "combo": combo}
     d = {"id": sid, "strategy": name, **core, "spec_sha": hashlib.sha256(_canon(core).encode()).hexdigest()[:16]}
@@ -387,7 +421,7 @@ def _spec(family: str, name: str, kind: str, tf: str, gate: str, combo: dict, ra
 def systems() -> list[dict]:
     """Every WIDE system (W4) in a fixed order: family F1..F4; F1 E1, E2, E3; F2 run.core_names() (sorted); F3
     ds_defs.DEFS order; F4 watch_sel.json order; timeframes 15m, 30m, 1h, 4h; gates G1, NONE. ``id`` is stable
-    (family-name-tf[-r<rank>]-gate) and ``spec_sha`` hashes everything that decides the events."""
+    (family:name:tf:gate[:r<rank>]) and ``spec_sha`` hashes everything that decides the events."""
     R = fullgrid_run()
     D = R.ds_module()
     out = []
