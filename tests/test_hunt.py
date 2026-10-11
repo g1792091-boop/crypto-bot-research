@@ -648,7 +648,8 @@ def _good_json(f):
     """Pinned result files that say pass (H 2, W 8)."""
     sha5 = {s: f"{i:064x}" for i, s in enumerate(H.OLD_SIX)}
     if f == H.PARITY_REL:
-        return {"pass": True, "adapter_5m": "hunt 5m files", "syms": list(H.OLD_SIX), "code": dict(CODE_SHA)}
+        return {"pass": True, "adapter_5m": "hunt 5m files", "syms": list(H.OLD_SIX), "code": dict(CODE_SHA),
+                "five_counts": {s: {"rows": 1, "content_sha256": sha5[s]} for s in H.OLD_SIX}}
     if f == H.DATA_CHECK_REL:
         return {"pass": True, "coins": {s: {"content_sha256": sha5[s], "mismatch_share": 0.0} for s in H.OLD_SIX}}
     if f == H.DATA_MANIFEST_REL:
@@ -787,6 +788,9 @@ def test_pin_requires_the_prereg_file_list(tmp_path, monkeypatch):
     ("wide", {H.PARITY_REL: {"adapter_5m": "1m archive -> 5m"}}, "not run on the hunt 5m files"),
     ("wide", {H.PARITY_REL: {"code": {**CODE_SHA, "entries_wide.py": "0" * 64}}}, "another research/hunt/entries_wide"),
     ("wide", {H.PARITY_REL: {"syms": ["BTCUSDT"]}}, "parity.json is not on the old six"),
+    ("wide", {H.PARITY_REL: {"five_counts": {s: {"content_sha256": "f" * 64} for s in H.OLD_SIX}}},
+     "parity.json ran on other BTCUSDT data"),
+    ("wide", {H.PARITY_REL: {"five_counts": {s: {"rows": 1} for s in H.OLD_SIX}}}, "parity.json ran on other BTCUSDT"),
     ("v1", {H.DATA_CHECK_REL: {"pass": False}}, "data_check.json does not say pass"),
     ("v1", {H.DATA_CHECK_REL: {"coins": {s: {"content_sha256": "f" * 64} for s in H.OLD_SIX}}},
      "checked other BTCUSDT data"),
@@ -1673,6 +1677,25 @@ def _write_1m(dirpath, coin_):
     f64 = lambda x: np.asarray(x, np.float64)  # noqa: E731
     np.savez_compressed(dirpath / "1m" / f"{coin_.sym}.npz", ts=c1.ts, o=f64(c1.o), h=f64(c1.h), l=f64(c1.l),
                         c=f64(c1.c), v=f64(c1.v), qv=f64(c1.qv), mo=f64(c1.o), mh=f64(c1.h), ml=f64(c1.l), mc=f64(c1.c))
+
+
+def test_bar_files_must_be_float64(tmp_path):
+    """Review finding (float64 switch): load_bar_coins (the R19 1m fidelity bars) took a float32 file silently. It now
+    refuses a file whose price, volume or mark columns are not float64, naming the file and the column; a float64
+    file loads exactly as stored."""
+    n, step = 30, 60_000
+    arrs = {"ts": START + np.arange(n, dtype=np.int64) * step, "v": np.ones(n)}
+    p = 100.0 + np.arange(n) * 0.12345                           # decimals float32 cannot hold
+    arrs.update({k: p.copy() for k in ("o", "h", "l", "c", "qv", "mo", "mh", "ml", "mc")})
+    (tmp_path / "1m").mkdir()
+    f = tmp_path / "1m" / "AUSDT.npz"
+    np.savez_compressed(f, **arrs)
+    coins, _ = H.load_bar_coins(str(tmp_path), "1m", ["AUSDT"], START, START + n * step, step)
+    assert np.array_equal(coins["AUSDT"].o, p) and np.array_equal(coins["AUSDT"].ml, p)
+    for k in ("o", "qv", "ml"):
+        np.savez_compressed(f, **{**arrs, k: arrs[k].astype(np.float32)})
+        with pytest.raises(ValueError, match=f"AUSDT.npz: {k} is float32, not float64"):
+            H.load_bar_coins(str(tmp_path), "1m", ["AUSDT"], START, START + n * step, step)
 
 
 def test_fidelity_read_on_one_minute_files(tmp_path, monkeypatch, capsys):

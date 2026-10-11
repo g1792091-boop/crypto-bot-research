@@ -396,6 +396,8 @@ def test_parity_reads_hunt_files_as_the_run_does(tmp_path):
                                                                   ("o", "h", "l", "c", "v")}, qv=qv)
     (t5, o, h, lo, c, v), counts = PW.five_of(None, None, "AUSDT", str(tmp_path))
     assert counts["zero_volume"] == 12 and counts["duplicates"] == 1 and len(t5) == len(ts) - 13
+    # review finding: parity.json names the data it ran on (the H 2 content hash the wide pin compares, W 8)
+    assert counts["content_sha256"] == H.file_content_sha(str(tmp_path / "5m" / "AUSDT.npz"), "5m")
     with np.load(tmp_path / "5m" / "AUSDT.npz") as z:
         (want_ts, *_), _ = H.clean_5m(z["ts"], z["o"], z["h"], z["l"], z["c"], z["v"], z["qv"])
     assert np.array_equal(t5, want_ts) and o.dtype == np.float64

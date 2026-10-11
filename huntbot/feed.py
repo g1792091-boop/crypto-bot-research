@@ -476,14 +476,31 @@ class Feed:
                     pass
 
 
+F64_COLS = ("o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc")
+
+
+def npz_not_float64(path: str) -> dict:
+    """{column: dtype} of the price, volume and mark columns of a 5m npz that are not stored as float64."""
+    with np.load(path) as z:
+        return {k: str(z[k].dtype) for k in F64_COLS if k in z.files and z[k].dtype != np.float64}
+
+
 def import_npz(store: Store, src: str, universe: list, from_ms: int, log=print) -> dict:
     """Bars, mark bars and funding of a coins30-format folder (<src>/5m/<SYM>.npz, <src>/funding/<SYM>.npz) with
-    open >= from_ms into the store (INSERT OR IGNORE: rows already stored stay)."""
+    open >= from_ms into the store (INSERT OR IGNORE: rows already stored stay). Every 5m file is checked first: when
+    any price, volume or mark column is not float64 (an old float32 copy rounds the exchange's prices, and a rounded
+    row would stay in the store for good), nothing is imported and ValueError names the files (PREREG_HUNT 2: float64
+    throughout, as the research engine reads them)."""
+    found = [(sym, os.path.join(src, "5m", f"{sym}.npz")) for sym in universe]
+    found = [(sym, p5) for sym, p5 in found if os.path.exists(p5)]
+    bad = {p5: d for _sym, p5 in found if (d := npz_not_float64(p5))}
+    if bad:
+        p0, d0 = next(iter(bad.items()))
+        raise ValueError(f"refused, nothing imported: {len(bad)} of {len(found)} 5m files are not float64, e.g. {p0} ("
+                         + ", ".join(f"{k} {t}" for k, t in d0.items()) + "); use a float64 folder "
+                         "(python -m research.hunt.data_hunt download, PREREG_HUNT 2)")
     out = {}
-    for sym in universe:
-        p5 = os.path.join(src, "5m", f"{sym}.npz")
-        if not os.path.exists(p5):
-            continue
+    for sym, p5 in found:
         with np.load(p5) as z:
             ts = np.asarray(z["ts"], np.int64)
             keep = ts >= from_ms
@@ -535,7 +552,11 @@ def main(argv=None) -> int:
         if not a.src:
             ap.error("import-npz needs the folder")
         frm = CFG.day_ms(a.from_) if a.from_ else CFG.warmup_start_ms()
-        import_npz(store, a.src, uni["symbols"], frm)
+        try:
+            import_npz(store, a.src, uni["symbols"], frm)
+        except ValueError as e:
+            print(f"{CFG.TAG} import-npz {e}", file=sys.stderr)
+            return 2
         return 0
     feed = Feed(store, Client(), uni["symbols"], CFG.warmup_start_ms(), log=lambda m: print(m, flush=True))
     if a.cmd == "backfill":

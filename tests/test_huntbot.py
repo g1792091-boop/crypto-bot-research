@@ -19,6 +19,7 @@ import re
 import sys
 import urllib.parse
 
+import numpy as np
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -144,6 +145,27 @@ def test_store_append_only_and_late_bars(tmp_path):
     st.commit()
     assert [r[0] for r in st.bars_since(ins)["BTCUSDT"]] == [T0 + 5 * FIVE]
     assert any("late" in r["msg"] for r in st.recent_log())
+
+
+def test_import_npz_refuses_float32_files(tmp_path):
+    """Review finding (float64 switch): ``feed import-npz`` cast a float32 coins30 copy to float64 and stored the
+    rounded prices for good (INSERT OR IGNORE). It now refuses the folder when any 5m file holds a price, volume or
+    mark column that is not float64, before anything is stored; a float64 folder is stored exactly as in the file."""
+    n = 5
+    arrs = {"ts": T0 + np.arange(n, dtype=np.int64) * FIVE}
+    p = np.array([0.12345, 1.2345678, 2.5, 3.75, 4.125])            # the first two are not float32 values
+    arrs.update({k: p.copy() for k in ("o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc")})
+    src = tmp_path / "src"
+    (src / "5m").mkdir(parents=True)
+    np.savez_compressed(src / "5m" / "AUSDT.npz", **arrs)
+    np.savez_compressed(src / "5m" / "BUSDT.npz", **{**arrs, "c": arrs["c"].astype(np.float32)})
+    st = Store(str(tmp_path / "s.db"))
+    with pytest.raises(ValueError, match=r"nothing imported: 1 of 2 .*BUSDT.npz \(c float32\)"):
+        FD.import_npz(st, str(src), ["AUSDT", "BUSDT"], 0, log=lambda m: None)
+    assert st.load_bars("AUSDT")["o"].size == 0 and st.max_open("AUSDT") is None     # nothing stored
+    assert FD.import_npz(st, str(src), ["AUSDT"], 0, log=lambda m: None)["AUSDT"]["bars"] == n
+    got = st.load_bars("AUSDT")
+    assert np.array_equal(np.asarray(got["o"], np.float64), p) and np.array_equal(np.asarray(got["c"], np.float64), p)
 
 
 def test_feed_backfill_settle_and_complete(tmp_path):
