@@ -396,8 +396,7 @@ def test_lives_listing_rename_relist():
     k7 = {"family": "P3", "k": 7, "side": 1}
     s1, t1 = np.nonzero(mk.mask(k1))
     got = sorted((mk.syms[s], int(t + mk.w0g - G0)) for s, t in zip(s1, t1))
-    assert got == [("NEWUSDT", 10), ("RELUSDT", 5), ("RELUSDT", 61), ("SUSDT", 100), ("GAPUSDT", 5)] or \
-        sorted(got) == sorted([("NEWUSDT", 10), ("RELUSDT", 5), ("RELUSDT", 61), ("SUSDT", 100), ("GAPUSDT", 5)])
+    assert got == sorted([("NEWUSDT", 10), ("RELUSDT", 5), ("RELUSDT", 61), ("SUSDT", 100), ("GAPUSDT", 5)])
     s7, t7 = np.nonzero(mk.mask(k7))
     got7 = sorted((mk.syms[s], int(t + mk.w0g - G0)) for s, t in zip(s7, t7))
     assert ("NEWUSDT", 16) in got7 and ("POLUSDT", 76) not in got7 and ("OLDUSDT", 6) not in got7
@@ -443,8 +442,8 @@ def test_p1_signal_rules():
     pump = base + [(30, 100, 135, 99, 131, 4e7)]
     mk = market({"AAAUSDT": pump}, 25, 31, warmup=25)
     t = local(mk, 30)
-    for x, want in ((0.2, True), (0.3, True), (0.5, False)):
-        assert bool(mk.mask({"family": "P1", "x": x, "side": 1})[0, t - 0]) is False  # last day: no fill day
+    for x in (0.2, 0.3, 0.5):                                        # the period's last day: no fill day
+        assert not mk.mask({"family": "P1", "x": x, "side": 1})[0, t]
     mk = market({"AAAUSDT": pump + [(31, 131, 132, 130, 131, 1e7)]}, 25, 32, warmup=25)
     t = local(mk, 30)
     got = {x: bool(mk.mask({"family": "P1", "x": x, "side": 1})[0, t]) for x in (0.2, 0.3, 0.5)}
@@ -505,6 +504,8 @@ def test_no_look_ahead_signals_indicators_and_size():
             assert np.array_equal(a, b, equal_nan=True) if a.dtype != bool else np.array_equal(a, b), name
         for v in AP.VARIANTS:
             assert np.array_equal(mk.mask(v)[:, :t + 1], mk2.mask(v)[:, :t + 1]), v["id"]
+        for fam in ("P1", "P3", "P4"):                                 # not vacuous: every family has signals by d
+            assert sum(int(mk.mask(v)[:, :t + 1].sum()) for v in AP.VARIANTS if v["family"] == fam) > 0
         # the size of an entry decided on day d: the same U, first-unit risk, leverage and D0 when only d+1's open is
         # kept and everything else from d+1 on changes
         cand = np.flatnonzero(mk.trad[:, t] & mk.bar[:, t + 1])

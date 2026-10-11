@@ -1997,7 +1997,7 @@ def bench(n_syms: int, out_path: str, n_seeds: int = N_SEEDS, n_boot: int = N_BO
             break
     tm["bench_picks"] = picks
     t0 = time.time()
-    test = step_test(raw, picks, n_seeds=n_seeds, n_boot=n_boot, log=log)
+    step_test(raw, picks, n_seeds=n_seeds, n_boot=n_boot, log=log)
     tm["test_with_controls_s"] = round(time.time() - t0, 2)
     tm["test_accounts"] = len(picks) * 2 * (1 + 4 + 2 * n_seeds) + len(picks)
     t0 = time.time()
