@@ -1,43 +1,43 @@
 {
  "what": "PREREG_HUNT 7.3 leverage brackets and minimum notional of the 30 coins (format of research/fullgrid/exchange.json); a coin missing from 'brackets' uses the fallback table",
- "fetched_utc": "2026-10-10 12:21",
- "built_from": "research/fullgrid/exchange.json",
- "built_utc": "2026-10-11 12:39",
+ "fetched_utc": "2026-10-11 14:33",
+ "built_from": "research/hunt/exchange_dump_20261011.json",
+ "built_utc": "2026-10-11 14:33",
  "counts": {
-  "exchange": 6,
-  "fallback": 24,
+  "exchange": 22,
+  "fallback": 8,
   "fallback_stopped": 8
  },
  "source": {
-  "BTCUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
-  "ETHUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
-  "SOLUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
-  "XRPUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "DOGEUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
-  "BNBUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "LTCUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
+  "BTCUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "ETHUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "SOLUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "XRPUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "DOGEUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "BNBUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "LTCUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "MATICUSDT": "fallback: stopped trading inside the data (last bar with volume 2024-09-04 08:55 UTC)",
-  "BCHUSDT": "exchange: research/fullgrid/exchange.json (fetched 2026-10-10 12:21 UTC)",
-  "LINKUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "AVAXUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "ADAUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "TRBUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "FILUSDT": "fallback: not in research/fullgrid/exchange.json",
+  "BCHUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "LINKUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "AVAXUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "ADAUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "TRBUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "FILUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "FTMUSDT": "fallback: stopped trading inside the data (last bar with volume 2025-01-06 09:00 UTC)",
-  "ETCUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "DOTUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "NEARUSDT": "fallback: not in research/fullgrid/exchange.json",
+  "ETCUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "DOTUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "NEARUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "EOSUSDT": "fallback: stopped trading inside the data (last bar with volume 2025-05-21 08:55 UTC)",
-  "CRVUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "SANDUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "ATOMUSDT": "fallback: not in research/fullgrid/exchange.json",
+  "CRVUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "SANDUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "ATOMUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "TOMOUSDT": "fallback: stopped trading inside the data (last bar with volume 2023-11-14 08:55 UTC)",
-  "AXSUSDT": "fallback: not in research/fullgrid/exchange.json",
+  "AXSUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "STORJUSDT": "fallback: stopped trading inside the data (last bar with volume 2026-08-26 09:00 UTC)",
   "MKRUSDT": "fallback: stopped trading inside the data (last bar with volume 2025-09-08 08:55 UTC)",
   "BLZUSDT": "fallback: stopped trading inside the data (last bar with volume 2024-12-23 08:55 UTC)",
-  "COMPUSDT": "fallback: not in research/fullgrid/exchange.json",
-  "RUNEUSDT": "fallback: not in research/fullgrid/exchange.json",
+  "COMPUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
+  "RUNEUSDT": "exchange: research/hunt/exchange_dump_20261011.json (fetched 2026-10-11 14:33 UTC)",
   "WAVESUSDT": "fallback: stopped trading inside the data (last bar with volume 2024-06-11 08:55 UTC)"
  },
  "fallback": {
@@ -365,6 +365,99 @@
    ]
   },
   {
+   "symbol": "XRPUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 100,
+     "notionalCap": 40000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 75,
+     "notionalCap": 80000,
+     "notionalFloor": 40000,
+     "maintMarginRatio": 0.006,
+     "cum": 40.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 50,
+     "notionalCap": 150000,
+     "notionalFloor": 80000,
+     "maintMarginRatio": 0.01,
+     "cum": 360.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 40,
+     "notionalCap": 400000,
+     "notionalFloor": 150000,
+     "maintMarginRatio": 0.0125,
+     "cum": 735.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 25,
+     "notionalCap": 1000000,
+     "notionalFloor": 400000,
+     "maintMarginRatio": 0.02,
+     "cum": 3735.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 20,
+     "notionalCap": 2000000,
+     "notionalFloor": 1000000,
+     "maintMarginRatio": 0.025,
+     "cum": 8735.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 10,
+     "notionalCap": 10000000,
+     "notionalFloor": 2000000,
+     "maintMarginRatio": 0.05,
+     "cum": 58735.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 5,
+     "notionalCap": 20000000,
+     "notionalFloor": 10000000,
+     "maintMarginRatio": 0.1,
+     "cum": 558735.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 4,
+     "notionalCap": 25000000,
+     "notionalFloor": 20000000,
+     "maintMarginRatio": 0.125,
+     "cum": 1058735.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 2,
+     "notionalCap": 50000000,
+     "notionalFloor": 25000000,
+     "maintMarginRatio": 0.25,
+     "cum": 4183735.0
+    },
+    {
+     "bracket": 11,
+     "initialLeverage": 1,
+     "notionalCap": 100000000,
+     "notionalFloor": 50000000,
+     "maintMarginRatio": 0.5,
+     "cum": 16683735.0
+    }
+   ]
+  },
+  {
    "symbol": "DOGEUSDT",
    "brackets": [
     {
@@ -446,6 +539,91 @@
      "notionalFloor": 100000000,
      "maintMarginRatio": 0.5,
      "cum": 33366280.0
+    }
+   ]
+  },
+  {
+   "symbol": "BNBUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 200000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.006,
+     "cum": 10.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 400000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.01,
+     "cum": 810.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 1500000,
+     "notionalFloor": 400000,
+     "maintMarginRatio": 0.02,
+     "cum": 4810.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 3000000,
+     "notionalFloor": 1500000,
+     "maintMarginRatio": 0.025,
+     "cum": 12310.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 15000000,
+     "notionalFloor": 3000000,
+     "maintMarginRatio": 0.05,
+     "cum": 87310.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 30000000,
+     "notionalFloor": 15000000,
+     "maintMarginRatio": 0.1,
+     "cum": 837310.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 37500000,
+     "notionalFloor": 30000000,
+     "maintMarginRatio": 0.125,
+     "cum": 1587310.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 75000000,
+     "notionalFloor": 37500000,
+     "maintMarginRatio": 0.25,
+     "cum": 6274810.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 150000000,
+     "notionalFloor": 75000000,
+     "maintMarginRatio": 0.5,
+     "cum": 25024810.0
     }
    ]
   },
@@ -618,32 +796,1432 @@
      "cum": 13345350.0
     }
    ]
+  },
+  {
+   "symbol": "LINKUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 200000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 50.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 400000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.015,
+     "cum": 1050.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 800000,
+     "notionalFloor": 400000,
+     "maintMarginRatio": 0.02,
+     "cum": 3050.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 1600000,
+     "notionalFloor": 800000,
+     "maintMarginRatio": 0.025,
+     "cum": 7050.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 8000000,
+     "notionalFloor": 1600000,
+     "maintMarginRatio": 0.05,
+     "cum": 47050.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 16000000,
+     "notionalFloor": 8000000,
+     "maintMarginRatio": 0.1,
+     "cum": 447050.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 20000000,
+     "notionalFloor": 16000000,
+     "maintMarginRatio": 0.125,
+     "cum": 847050.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 40000000,
+     "notionalFloor": 20000000,
+     "maintMarginRatio": 0.25,
+     "cum": 3347050.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 80000000,
+     "notionalFloor": 40000000,
+     "maintMarginRatio": 0.5,
+     "cum": 13347050.0
+    }
+   ]
+  },
+  {
+   "symbol": "AVAXUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 25000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 80000,
+     "notionalFloor": 25000,
+     "maintMarginRatio": 0.01,
+     "cum": 125.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 160000,
+     "notionalFloor": 80000,
+     "maintMarginRatio": 0.015,
+     "cum": 525.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 800000,
+     "notionalFloor": 160000,
+     "maintMarginRatio": 0.02,
+     "cum": 1325.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 1600000,
+     "notionalFloor": 800000,
+     "maintMarginRatio": 0.025,
+     "cum": 5325.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 8000000,
+     "notionalFloor": 1600000,
+     "maintMarginRatio": 0.05,
+     "cum": 45325.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 16000000,
+     "notionalFloor": 8000000,
+     "maintMarginRatio": 0.1,
+     "cum": 445325.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 20000000,
+     "notionalFloor": 16000000,
+     "maintMarginRatio": 0.125,
+     "cum": 845325.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 40000000,
+     "notionalFloor": 20000000,
+     "maintMarginRatio": 0.25,
+     "cum": 3345325.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 80000000,
+     "notionalFloor": 40000000,
+     "maintMarginRatio": 0.5,
+     "cum": 13345325.0
+    }
+   ]
+  },
+  {
+   "symbol": "ADAUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 50.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 200000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.015,
+     "cum": 300.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 1000000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.02,
+     "cum": 1300.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 2000000,
+     "notionalFloor": 1000000,
+     "maintMarginRatio": 0.025,
+     "cum": 6300.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 10000000,
+     "notionalFloor": 2000000,
+     "maintMarginRatio": 0.05,
+     "cum": 56300.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 20000000,
+     "notionalFloor": 10000000,
+     "maintMarginRatio": 0.1,
+     "cum": 556300.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 25000000,
+     "notionalFloor": 20000000,
+     "maintMarginRatio": 0.125,
+     "cum": 1056300.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 50000000,
+     "notionalFloor": 25000000,
+     "maintMarginRatio": 0.25,
+     "cum": 4181300.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 100000000,
+     "notionalFloor": 50000000,
+     "maintMarginRatio": 0.5,
+     "cum": 16681300.0
+    }
+   ]
+  },
+  {
+   "symbol": "TRBUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 50,
+     "notionalCap": 5000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.015,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 25,
+     "notionalCap": 10000,
+     "notionalFloor": 5000,
+     "maintMarginRatio": 0.02,
+     "cum": 25.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 20,
+     "notionalCap": 25000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.025,
+     "cum": 75.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 10,
+     "notionalCap": 62500,
+     "notionalFloor": 25000,
+     "maintMarginRatio": 0.05,
+     "cum": 700.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 5,
+     "notionalCap": 125000,
+     "notionalFloor": 62500,
+     "maintMarginRatio": 0.1,
+     "cum": 3825.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 4,
+     "notionalCap": 250000,
+     "notionalFloor": 125000,
+     "maintMarginRatio": 0.125,
+     "cum": 6950.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 3,
+     "notionalCap": 500000,
+     "notionalFloor": 250000,
+     "maintMarginRatio": 0.1667,
+     "cum": 17375.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 2,
+     "notionalCap": 7500000,
+     "notionalFloor": 500000,
+     "maintMarginRatio": 0.25,
+     "cum": 59025.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 1,
+     "notionalCap": 12000000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.5,
+     "cum": 1934025.0
+    }
+   ]
+  },
+  {
+   "symbol": "FILUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 20000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 200000,
+     "notionalFloor": 20000,
+     "maintMarginRatio": 0.015,
+     "cum": 100.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 400000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.02,
+     "cum": 1100.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 800000,
+     "notionalFloor": 400000,
+     "maintMarginRatio": 0.025,
+     "cum": 3100.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 10,
+     "notionalCap": 3000000,
+     "notionalFloor": 800000,
+     "maintMarginRatio": 0.05,
+     "cum": 23100.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 5,
+     "notionalCap": 7500000,
+     "notionalFloor": 3000000,
+     "maintMarginRatio": 0.1,
+     "cum": 173100.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 4,
+     "notionalCap": 10000000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.125,
+     "cum": 360600.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 2,
+     "notionalCap": 12500000,
+     "notionalFloor": 10000000,
+     "maintMarginRatio": 0.25,
+     "cum": 1610600.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 1,
+     "notionalCap": 15000000,
+     "notionalFloor": 12500000,
+     "maintMarginRatio": 0.5,
+     "cum": 4735600.0
+    }
+   ]
+  },
+  {
+   "symbol": "ETCUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.005,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 50.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 80000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.015,
+     "cum": 300.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 400000,
+     "notionalFloor": 80000,
+     "maintMarginRatio": 0.02,
+     "cum": 700.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 800000,
+     "notionalFloor": 400000,
+     "maintMarginRatio": 0.025,
+     "cum": 2700.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 3000000,
+     "notionalFloor": 800000,
+     "maintMarginRatio": 0.05,
+     "cum": 22700.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 5000000,
+     "notionalFloor": 3000000,
+     "maintMarginRatio": 0.1,
+     "cum": 172700.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 7000000,
+     "notionalFloor": 5000000,
+     "maintMarginRatio": 0.125,
+     "cum": 297700.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 8000000,
+     "notionalFloor": 7000000,
+     "maintMarginRatio": 0.25,
+     "cum": 1172700.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 9000000,
+     "notionalFloor": 8000000,
+     "maintMarginRatio": 0.5,
+     "cum": 3172700.0
+    }
+   ]
+  },
+  {
+   "symbol": "DOTUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.0065,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 35.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 100000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.015,
+     "cum": 285.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 500000,
+     "notionalFloor": 100000,
+     "maintMarginRatio": 0.02,
+     "cum": 785.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 800000,
+     "notionalFloor": 500000,
+     "maintMarginRatio": 0.025,
+     "cum": 3285.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 4000000,
+     "notionalFloor": 800000,
+     "maintMarginRatio": 0.05,
+     "cum": 23285.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 8000000,
+     "notionalFloor": 4000000,
+     "maintMarginRatio": 0.1,
+     "cum": 223285.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 10000000,
+     "notionalFloor": 8000000,
+     "maintMarginRatio": 0.125,
+     "cum": 423285.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 30000000,
+     "notionalFloor": 10000000,
+     "maintMarginRatio": 0.25,
+     "cum": 1673285.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 50000000,
+     "notionalFloor": 30000000,
+     "maintMarginRatio": 0.5,
+     "cum": 9173285.0
+    }
+   ]
+  },
+  {
+   "symbol": "NEARUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 20000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 200000,
+     "notionalFloor": 20000,
+     "maintMarginRatio": 0.015,
+     "cum": 100.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 1000000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.02,
+     "cum": 1100.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 2000000,
+     "notionalFloor": 1000000,
+     "maintMarginRatio": 0.025,
+     "cum": 6100.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 10,
+     "notionalCap": 10000000,
+     "notionalFloor": 2000000,
+     "maintMarginRatio": 0.05,
+     "cum": 56100.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 5,
+     "notionalCap": 20000000,
+     "notionalFloor": 10000000,
+     "maintMarginRatio": 0.1,
+     "cum": 556100.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 4,
+     "notionalCap": 25000000,
+     "notionalFloor": 20000000,
+     "maintMarginRatio": 0.125,
+     "cum": 1056100.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 2,
+     "notionalCap": 30000000,
+     "notionalFloor": 25000000,
+     "maintMarginRatio": 0.25,
+     "cum": 4181100.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 1,
+     "notionalCap": 35000000,
+     "notionalFloor": 30000000,
+     "maintMarginRatio": 0.5,
+     "cum": 11681100.0
+    }
+   ]
+  },
+  {
+   "symbol": "CRVUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.0065,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 35.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 80000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.015,
+     "cum": 285.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 300000,
+     "notionalFloor": 80000,
+     "maintMarginRatio": 0.02,
+     "cum": 685.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 600000,
+     "notionalFloor": 300000,
+     "maintMarginRatio": 0.025,
+     "cum": 2185.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 3000000,
+     "notionalFloor": 600000,
+     "maintMarginRatio": 0.05,
+     "cum": 17185.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 6000000,
+     "notionalFloor": 3000000,
+     "maintMarginRatio": 0.1,
+     "cum": 167185.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 7500000,
+     "notionalFloor": 6000000,
+     "maintMarginRatio": 0.125,
+     "cum": 317185.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 15000000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.25,
+     "cum": 1254685.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 30000000,
+     "notionalFloor": 15000000,
+     "maintMarginRatio": 0.5,
+     "cum": 5004685.0
+    }
+   ]
+  },
+  {
+   "symbol": "SANDUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 5000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 10000,
+     "notionalFloor": 5000,
+     "maintMarginRatio": 0.015,
+     "cum": 25.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.02,
+     "cum": 75.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 100000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.025,
+     "cum": 325.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 15,
+     "notionalCap": 175000,
+     "notionalFloor": 100000,
+     "maintMarginRatio": 0.0333,
+     "cum": 1155.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 250000,
+     "notionalFloor": 175000,
+     "maintMarginRatio": 0.05,
+     "cum": 4077.5
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 750000,
+     "notionalFloor": 250000,
+     "maintMarginRatio": 0.1,
+     "cum": 16577.5
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 1500000,
+     "notionalFloor": 750000,
+     "maintMarginRatio": 0.125,
+     "cum": 35327.5
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 3,
+     "notionalCap": 4500000,
+     "notionalFloor": 1500000,
+     "maintMarginRatio": 0.1667,
+     "cum": 97877.5
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 2,
+     "notionalCap": 7500000,
+     "notionalFloor": 4500000,
+     "maintMarginRatio": 0.25,
+     "cum": 472727.5
+    },
+    {
+     "bracket": 11,
+     "initialLeverage": 1,
+     "notionalCap": 12500000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.5,
+     "cum": 2347727.5
+    }
+   ]
+  },
+  {
+   "symbol": "ATOMUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 10000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.006,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.01,
+     "cum": 40.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 40,
+     "notionalCap": 80000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.015,
+     "cum": 290.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 25,
+     "notionalCap": 200000,
+     "notionalFloor": 80000,
+     "maintMarginRatio": 0.02,
+     "cum": 690.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 20,
+     "notionalCap": 600000,
+     "notionalFloor": 200000,
+     "maintMarginRatio": 0.025,
+     "cum": 1690.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 2000000,
+     "notionalFloor": 600000,
+     "maintMarginRatio": 0.05,
+     "cum": 16690.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 4000000,
+     "notionalFloor": 2000000,
+     "maintMarginRatio": 0.1,
+     "cum": 116690.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 5000000,
+     "notionalFloor": 4000000,
+     "maintMarginRatio": 0.125,
+     "cum": 216690.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 12000000,
+     "notionalFloor": 5000000,
+     "maintMarginRatio": 0.25,
+     "cum": 841690.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 20000000,
+     "notionalFloor": 12000000,
+     "maintMarginRatio": 0.5,
+     "cum": 3841690.0
+    }
+   ]
+  },
+  {
+   "symbol": "AXSUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 5000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 10000,
+     "notionalFloor": 5000,
+     "maintMarginRatio": 0.015,
+     "cum": 25.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 25000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.02,
+     "cum": 75.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 50000,
+     "notionalFloor": 25000,
+     "maintMarginRatio": 0.025,
+     "cum": 200.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 10,
+     "notionalCap": 125000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.05,
+     "cum": 1450.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 5,
+     "notionalCap": 250000,
+     "notionalFloor": 125000,
+     "maintMarginRatio": 0.1,
+     "cum": 7700.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 4,
+     "notionalCap": 500000,
+     "notionalFloor": 250000,
+     "maintMarginRatio": 0.125,
+     "cum": 13950.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 3,
+     "notionalCap": 1000000,
+     "notionalFloor": 500000,
+     "maintMarginRatio": 0.1667,
+     "cum": 34800.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 7500000,
+     "notionalFloor": 1000000,
+     "maintMarginRatio": 0.25,
+     "cum": 118100.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 12500000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.5,
+     "cum": 1993100.0
+    }
+   ]
+  },
+  {
+   "symbol": "COMPUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 5000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 10000,
+     "notionalFloor": 5000,
+     "maintMarginRatio": 0.015,
+     "cum": 25.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 50000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.02,
+     "cum": 75.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 100000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.025,
+     "cum": 325.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 15,
+     "notionalCap": 175000,
+     "notionalFloor": 100000,
+     "maintMarginRatio": 0.0333,
+     "cum": 1155.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 10,
+     "notionalCap": 250000,
+     "notionalFloor": 175000,
+     "maintMarginRatio": 0.05,
+     "cum": 4077.5
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 5,
+     "notionalCap": 750000,
+     "notionalFloor": 250000,
+     "maintMarginRatio": 0.1,
+     "cum": 16577.5
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 4,
+     "notionalCap": 1500000,
+     "notionalFloor": 750000,
+     "maintMarginRatio": 0.125,
+     "cum": 35327.5
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 3,
+     "notionalCap": 4500000,
+     "notionalFloor": 1500000,
+     "maintMarginRatio": 0.1667,
+     "cum": 97877.5
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 2,
+     "notionalCap": 7500000,
+     "notionalFloor": 4500000,
+     "maintMarginRatio": 0.25,
+     "cum": 472727.5
+    },
+    {
+     "bracket": 11,
+     "initialLeverage": 1,
+     "notionalCap": 12000000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.5,
+     "cum": 2347727.5
+    }
+   ]
+  },
+  {
+   "symbol": "RUNEUSDT",
+   "brackets": [
+    {
+     "bracket": 1,
+     "initialLeverage": 75,
+     "notionalCap": 5000,
+     "notionalFloor": 0,
+     "maintMarginRatio": 0.01,
+     "cum": 0.0
+    },
+    {
+     "bracket": 2,
+     "initialLeverage": 50,
+     "notionalCap": 10000,
+     "notionalFloor": 5000,
+     "maintMarginRatio": 0.015,
+     "cum": 25.0
+    },
+    {
+     "bracket": 3,
+     "initialLeverage": 25,
+     "notionalCap": 25000,
+     "notionalFloor": 10000,
+     "maintMarginRatio": 0.02,
+     "cum": 75.0
+    },
+    {
+     "bracket": 4,
+     "initialLeverage": 20,
+     "notionalCap": 50000,
+     "notionalFloor": 25000,
+     "maintMarginRatio": 0.025,
+     "cum": 200.0
+    },
+    {
+     "bracket": 5,
+     "initialLeverage": 10,
+     "notionalCap": 125000,
+     "notionalFloor": 50000,
+     "maintMarginRatio": 0.05,
+     "cum": 1450.0
+    },
+    {
+     "bracket": 6,
+     "initialLeverage": 5,
+     "notionalCap": 250000,
+     "notionalFloor": 125000,
+     "maintMarginRatio": 0.1,
+     "cum": 7700.0
+    },
+    {
+     "bracket": 7,
+     "initialLeverage": 4,
+     "notionalCap": 500000,
+     "notionalFloor": 250000,
+     "maintMarginRatio": 0.125,
+     "cum": 13950.0
+    },
+    {
+     "bracket": 8,
+     "initialLeverage": 3,
+     "notionalCap": 1000000,
+     "notionalFloor": 500000,
+     "maintMarginRatio": 0.1667,
+     "cum": 34800.0
+    },
+    {
+     "bracket": 9,
+     "initialLeverage": 2,
+     "notionalCap": 7500000,
+     "notionalFloor": 1000000,
+     "maintMarginRatio": 0.25,
+     "cum": 118100.0
+    },
+    {
+     "bracket": 10,
+     "initialLeverage": 1,
+     "notionalCap": 12500000,
+     "notionalFloor": 7500000,
+     "maintMarginRatio": 0.5,
+     "cum": 1993100.0
+    }
+   ]
   }
  ],
  "specs": {
   "BTCUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 0.001,
-   "min_notional": 50.0
+   "min_notional": 50.0,
+   "lot_step": 0.001,
+   "lot_min_qty": 0.001,
+   "lot_max_qty": 1000.0,
+   "market_lot_step": 0.001,
+   "market_lot_max_qty": 120.0
   },
   "ETHUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 0.001,
-   "min_notional": 20.0
+   "min_notional": 20.0,
+   "lot_step": 0.001,
+   "lot_min_qty": 0.001,
+   "lot_max_qty": 10000.0,
+   "market_lot_step": 0.001,
+   "market_lot_max_qty": 2000.0
   },
   "SOLUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 0.01,
-   "min_notional": 5.0
+   "min_notional": 5.0,
+   "lot_step": 0.01,
+   "lot_min_qty": 0.01,
+   "lot_max_qty": 1000000.0,
+   "market_lot_step": 0.01,
+   "market_lot_max_qty": 80000.0
+  },
+  "XRPUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.1,
+   "min_notional": 5.0,
+   "lot_step": 0.1,
+   "lot_min_qty": 0.1,
+   "lot_max_qty": 10000000.0,
+   "market_lot_step": 0.1,
+   "market_lot_max_qty": 2000000.0
   },
   "DOGEUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 1.0,
-   "min_notional": 5.0
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 300000000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 30000000.0
+  },
+  "BNBUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.01,
+   "min_notional": 5.0,
+   "lot_step": 0.01,
+   "lot_min_qty": 0.01,
+   "lot_max_qty": 100000.0,
+   "market_lot_step": 0.01,
+   "market_lot_max_qty": 2000.0
   },
   "LTCUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 0.001,
-   "min_notional": 20.0
+   "min_notional": 20.0,
+   "lot_step": 0.001,
+   "lot_min_qty": 0.001,
+   "lot_max_qty": 170000.0,
+   "market_lot_step": 0.001,
+   "market_lot_max_qty": 100000.0
   },
   "BCHUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
    "qty_step": 0.001,
-   "min_notional": 20.0
+   "min_notional": 20.0,
+   "lot_step": 0.001,
+   "lot_min_qty": 0.001,
+   "lot_max_qty": 20000.0,
+   "market_lot_step": 0.001,
+   "market_lot_max_qty": 2000.0
+  },
+  "LINKUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.01,
+   "min_notional": 20.0,
+   "lot_step": 0.01,
+   "lot_min_qty": 0.01,
+   "lot_max_qty": 700000.0,
+   "market_lot_step": 0.01,
+   "market_lot_max_qty": 50000.0
+  },
+  "AVAXUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 500000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 50000.0
+  },
+  "ADAUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 30000000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 3000000.0
+  },
+  "TRBUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.1,
+   "min_notional": 5.0,
+   "lot_step": 0.1,
+   "lot_min_qty": 0.1,
+   "lot_max_qty": 60000.0,
+   "market_lot_step": 0.1,
+   "market_lot_max_qty": 4000.0
+  },
+  "FILUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.1,
+   "min_notional": 5.0,
+   "lot_step": 0.1,
+   "lot_min_qty": 0.1,
+   "lot_max_qty": 6000000.0,
+   "market_lot_step": 0.1,
+   "market_lot_max_qty": 600000.0
+  },
+  "ETCUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.01,
+   "min_notional": 20.0,
+   "lot_step": 0.01,
+   "lot_min_qty": 0.01,
+   "lot_max_qty": 400000.0,
+   "market_lot_step": 0.01,
+   "market_lot_max_qty": 40000.0
+  },
+  "DOTUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.1,
+   "min_notional": 5.0,
+   "lot_step": 0.1,
+   "lot_min_qty": 0.1,
+   "lot_max_qty": 3000000.0,
+   "market_lot_step": 0.1,
+   "market_lot_max_qty": 300000.0
+  },
+  "NEARUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 5000000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 400000.0
+  },
+  "CRVUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.1,
+   "min_notional": 5.0,
+   "lot_step": 0.1,
+   "lot_min_qty": 0.1,
+   "lot_max_qty": 4000000.0,
+   "market_lot_step": 0.1,
+   "market_lot_max_qty": 400000.0
+  },
+  "SANDUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 30000000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 3000000.0
+  },
+  "ATOMUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.01,
+   "min_notional": 5.0,
+   "lot_step": 0.01,
+   "lot_min_qty": 0.01,
+   "lot_max_qty": 2000000.0,
+   "market_lot_step": 0.01,
+   "market_lot_max_qty": 200000.0
+  },
+  "AXSUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 700000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 110000.0
+  },
+  "COMPUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 0.001,
+   "min_notional": 5.0,
+   "lot_step": 0.001,
+   "lot_min_qty": 0.001,
+   "lot_max_qty": 50000.0,
+   "market_lot_step": 0.001,
+   "market_lot_max_qty": 5000.0
+  },
+  "RUNEUSDT": {
+   "status": "TRADING",
+   "contract_type": "PERPETUAL",
+   "qty_step": 1.0,
+   "min_notional": 5.0,
+   "lot_step": 1.0,
+   "lot_min_qty": 1.0,
+   "lot_max_qty": 2000000.0,
+   "market_lot_step": 1.0,
+   "market_lot_max_qty": 300000.0
   }
  }
 }
