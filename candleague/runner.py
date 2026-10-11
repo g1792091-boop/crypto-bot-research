@@ -1,18 +1,31 @@
-"""후보 리그 runner: catch up from 2026-10-01, then keep up with the market; state in SQLite, snapshots for the dashboard.
+"""후보 리그 runner: the league starts at its install time, catches up to now, then keeps up with the market; state in
+SQLite, snapshots for the dashboard.
 
     python -m candleague run      [--db ...] [--snap ...] [--candidates ...]   (the service: loops forever)
     python -m candleague once     [...]                                       (one catch-up pass, then exit)
     python -m candleague status   [...]
+    python -m candleague backup   [...]   (install script, engine stopped: copy the database when this code starts over)
 
 Each pass processes (done, end] in chunks of at most one UTC day, ``end`` being the last 5-minute boundary whose 5m
 kline is final (the 5m cache's own rule): signals of chart bars closing in the chunk (league.chunk_signals), the
 chunk's 1m steps (public klines, mark-price klines, funding), league engines stepped (paramshadow.replay_day). The
 engine states, the chunk's closed trades and ``done`` are committed together, so a stop at any point resumes cleanly.
 Results are the same whether a day is processed at once or in 5-minute pieces (the engine only sees 1m bars).
+
+The start (owners 2026-10-12: "커스텀값 봇 돌린 시점부터 ... 규칙봇 형식처럼"): every account starts with $5,000 at the
+league's start ``meta.start_ms`` and every trade, balance and day count is from then on. The start is recorded once and
+kept: a fresh database starts at its first run (floored to the 5-minute grid; CANDLEAGUE_START rebuilds a lost
+database from a known start), and a league that starts over (another candidate list, a new VERSION) starts again from
+the SAME recorded start, never from a later 'now'. VERSION 1 (until 2026-10-12) replayed from 2026-10-01 and recorded
+only its install time (``meta.started_ms``); its first run under VERSION 2 starts over from that install time.
+Before a start-over deletes anything, the whole old database is copied next to it (``backup_db``: e.g.
+league_replay_from_1001_20261012.db; the install script makes the same copy before the code swap and the engine does
+not copy twice). The copies are never shown on the dashboard.
 """
 
 from __future__ import annotations
 
+import glob
 import json
 import math
 import os
@@ -29,11 +42,15 @@ from . import exits as X
 from . import league as L
 from . import summary as SM
 
-START_MS = 1_790_812_800_000            # 2026-10-01 00:00 UTC: the first day after the study's data
+REPLAY_FROM_MS = 1_790_812_800_000      # 2026-10-01 00:00 UTC: where VERSION 1 replayed from (history; nothing starts there now)
 DAY = 86_400_000
 FIVE = 300_000
 SETTLE_MS = 90_000
-VERSION = 1                       # bump when the meaning of a replay changes: the league starts over from START_MS
+CATCHING_MS = 30 * 60_000         # processed time this far behind the clock when the snapshot is written: "따라잡는 중"
+# Bump when the meaning of a replay changes: the league starts over FROM ITS RECORDED START (meta.start_ms).
+# 2 (owners 2026-10-12): the league starts at its install time; 1: replayed from 2026-10-01 (REPLAY_FROM_MS).
+VERSION = 2
+CARRY_KEYS = ("summary_day",)     # kv kept through a start-over (no second 09:00 summary on the day of an update)
 EQUITY = 5000.0
 MIN_TRADES = 30
 
@@ -66,26 +83,117 @@ def fingerprint(accts: list[dict]) -> str:
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
+def league_start(meta: dict, fresh_ms: int, now_ms: int) -> tuple[int, int]:
+    """(start_ms, started_ms) of a league that starts (over) now from the database's old ``meta``.
+
+    The start is the recorded meta.start_ms when there is one (a later VERSION or candidate list keeps it); a VERSION 1
+    record (replayed from 2026-10-01, no start recorded) starts at its install time meta.started_ms; a fresh database
+    at ``fresh_ms``. Floored to the engine's 5-minute grid (``done`` is always a 5-minute boundary). started_ms, the
+    time the league was first installed, is kept as it is (``now_ms`` for a fresh database)."""
+    started = int(meta.get("started_ms") or now_ms)
+    if meta.get("start_ms") is not None:
+        start = int(meta["start_ms"])
+    elif meta.get("started_ms"):
+        start = started
+    else:
+        start = int(fresh_ms)
+    return start // FIVE * FIVE, started
+
+
+def _utc(ms: int, fmt: str) -> str:
+    return time.strftime(fmt, time.gmtime(ms / 1000))
+
+
+def _record_of(conn) -> Optional[tuple]:
+    """(fingerprint, done, trade rows) of a league database: what makes two copies the same record."""
+    try:
+        meta = _get(conn, "meta") or {}
+        n = conn.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
+    except sqlite3.Error:
+        return None
+    return meta.get("fingerprint"), meta.get("done"), int(n)
+
+
+def backup_db(conn, db_path: str, meta: dict, now_ms: int) -> str:
+    """Copy the whole league database ``conn`` (file ``db_path``) next to it before a start-over deletes its record:
+    <stem>_replay_from_1001_<UTC date>.db for the VERSION 1 replay, <stem>_from_<MMDD>_<UTC date>.db for a later
+    record (MMDD: its start). SQLite's backup (consistent while the WAL holds pages), stored as one plain file. A copy
+    of the same record already there (the install script's, made before the code swap) is kept and not made again.
+    Returns the copy's path; raises OSError / sqlite3.Error when it cannot copy (the caller then deletes nothing)."""
+    folder = os.path.dirname(os.path.abspath(db_path))
+    stem = os.path.splitext(os.path.basename(db_path))[0]
+    mine = _record_of(conn)
+    for old in sorted(glob.glob(os.path.join(folder, f"{stem}_*.db"))):
+        try:
+            c = sqlite3.connect(f"file:{old}?immutable=1", uri=True)
+            try:
+                if _record_of(c) == mine:
+                    return old
+            finally:
+                c.close()
+        except sqlite3.Error:
+            continue
+    what = "replay_from_1001" if meta.get("start_ms") is None else f"from_{_utc(int(meta['start_ms']), '%m%d')}"
+    base = os.path.join(folder, f"{stem}_{what}_{_utc(now_ms, '%Y%m%d')}")
+    path, k = base + ".db", 1
+    while os.path.exists(path):
+        k += 1
+        path = f"{base}_{k}.db"
+    tmp = f"{path}.part"
+    try:
+        dst = sqlite3.connect(tmp)
+        try:
+            conn.commit()
+            conn.backup(dst)
+            dst.execute("PRAGMA journal_mode=DELETE")
+            dst.commit()
+        finally:
+            dst.close()
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    return path
+
+
 class League:
-    """The league's accounts and their engines over the database ``conn``."""
+    """The league's accounts and their engines over the database ``conn``.
+
+    ``start_ms`` is only the start of a league with nothing recorded yet (a fresh database; default: now floored to
+    5 minutes). ``db_path`` (the file of ``conn``) is where a start-over keeps its copy of the old record; without it
+    (tests on a database of their own) nothing is copied."""
 
     def __init__(self, conn, accts: list[dict], brackets: dict, specs: dict, lib, source,
-                 fetch_steps: Callable, symbols, start_ms: int = START_MS, log: Callable[[str], None] = print):
+                 fetch_steps: Callable, symbols, start_ms: Optional[int] = None, log: Callable[[str], None] = print,
+                 db_path: Optional[str] = None, now_ms: Optional[int] = None):
         self.conn, self.accts, self.brackets, self.specs = conn, accts, brackets, specs
         self.lib, self.source, self.fetch_steps, self.symbols = lib, source, fetch_steps, list(symbols)
-        self.start_ms, self.log = start_ms, log
+        self.log = log
         self.strategies = L.Strategies()
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         meta = _get(conn, "meta") or {}
         fp = fingerprint(accts)
-        if meta.get("fingerprint") != fp:
+        if meta.get("fingerprint") != fp or meta.get("start_ms") is None:
+            start, started = league_start(meta, now if start_ms is None else int(start_ms), now)
+            backup = None
+            if meta and db_path:
+                backup = backup_db(conn, db_path, meta, now)          # raises: nothing is deleted without a copy
             if meta:
-                log("후보 목록이나 계산 방식이 바뀌어 처음(10/01)부터 다시 돌립니다")
+                log(f"후보 목록이나 계산 방식이 바뀌어 시작 시각({_utc(start, '%m-%d %H:%M')} UTC)부터 새로 계산합니다"
+                    + (f" (이전 기록 복사: {os.path.basename(backup)})" if backup else ""))
+            keep = {k: _get(conn, k) for k in CARRY_KEYS}
             conn.execute("DELETE FROM kv")
             conn.execute("DELETE FROM trades")
-            meta = {"fingerprint": fp, "done": start_ms, "started_ms": int(time.time() * 1000)}
+            meta = {"fingerprint": fp, "done": start, "start_ms": start, "started_ms": started, "reset_ms": now}
+            if backup:
+                meta["backup"] = os.path.basename(backup)
             _put(conn, "meta", meta)
+            for k, v in keep.items():
+                if v is not None:
+                    _put(conn, k, v)
             conn.commit()
         self.meta = meta
+        self.start_ms = int(meta["start_ms"])
         self.engines = L.make_engines(accts, brackets, specs)
         saved = _get(conn, "engines") or {}
         for aid, e in self.engines.items():
@@ -99,7 +207,7 @@ class League:
 
     def advance(self, end: int, on_chunk: Optional[Callable[[], None]] = None) -> int:
         """Process (done, end] in chunks of at most one UTC day; returns the number of chunks done. ``on_chunk`` runs
-        after each committed chunk (the catch-up from 10-01 writes its snapshots as it goes)."""
+        after each committed chunk (a catch-up writes its snapshots as it goes)."""
         n = 0
         while self.done < end:
             a = self.done
@@ -233,8 +341,7 @@ def _finite(v):
     return None if isinstance(v, float) and not math.isfinite(v) else v
 
 
-def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = START_MS,
-               book: Optional[dict] = None) -> dict:
+def trade_book(conn, accts: list[dict], ds_money: bool, start_ms: int, book: Optional[dict] = None) -> dict:
     """{account: {"equity": [[exit ms, wallet after]...] from $5,000, "trades": the last LAST_TRADES, newest first}};
     DeepSeek accounts without money (no equity line, no P&L) unless ``ds_money``."""
     book = closed_trades(conn, accts) if book is None else book
