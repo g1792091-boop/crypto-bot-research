@@ -23,7 +23,7 @@ import {panel, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, short, fr
 // ---------------------------------------------------------------- 고른 포지션
 /** selPanel(ctx, st, hooks) -> {el, paint()} ; hooks: {selAcct(), selPos(), book(), doc()} */
 export function selPanel(ctx, st, hooks) {
-  const body = h("div", {class: "tm-sel"});
+  const body = h("div", {class: "tm-selb"});
   const el = panel("고른 포지션", {cls: "tm-selp", scroll: true, tip: "표·차트·이 코인 포지션·체결에서 고른 계좌 (주소의 ?acct=로도 고름)"}, body);
   const led = {pnl: h("b", {class: "num tm-led"}), roe: h("b", {class: "num tm-ledsm"}), mark: h("b", {class: "num"}, "—")};
   let shownKey = null;
@@ -126,8 +126,8 @@ export function coinPositions(ctx, st, onPick) {
         const roe = h("b", {class: "num tm-roe"}, "—");
         const node = h("button", {type: "button", class: "tm-cr", role: "listitem", onclick: () => onPick(p.id),
           title: `${p.id} · 진입 ${fmt.price(p.entry)} · ${fmt.lev(p.lev)} · 청산가 ${fmt.price(p.liq)} (진입 때 기준) · ${fmt.kst(p.since)}`},
-        sideTag(p.side), h("span", {class: "tm-cfn"}, acctLabel(LK.index().byId[p.id] || p, {role: false}),
-          h("i", {class: ["tm-rsq", `r-${p.role}`], title: ROLE_KO[p.role] || "", "aria-label": ROLE_KO[p.role] || ""})), h("span", {class: "muted num"}, fmt.lev(p.lev)), roe);
+        sideTag(p.side), h("span", {class: "tm-cfn"}, h("i", {class: ["tm-rsq", `r-${p.role}`], title: ROLE_KO[p.role] || "", "aria-label": ROLE_KO[p.role] || ""}),
+          acctLabel(LK.index().byId[p.id] || p, {role: false})), h("span", {class: "muted num"}, fmt.lev(p.lev)), roe);
         r = {key: `${p.since}`, node, roe};
         rows.set(p.id, r);
       }
@@ -158,12 +158,12 @@ export function pnlPanel(ctx) {
   const todayV = h("b", {class: "num tm-tdv"}, "—"), todayK = h("span", {class: "tm-tdk"}, "");
   const calMonth = h("span", {class: "tm-calm num"}, "");
   const calBox = h("div", {class: "tm-cal"});
-  const kindSeg = h("div", {class: "seg tm-seg tm-kseg", role: "tablist", "aria-label": "어느 후보"}, KINDS.map((k) =>
-    h("button", {type: "button", role: "tab", "aria-selected": String(k.id === P.kind), dataset: {id: k.id}, onclick: () => setKind(k.id)}, k.label)));
-  const el = panel("수익 차트", {cls: "tm-pnl", tip: "후보 계좌(38개)가 닫은 거래의 실현 손익 합 (열린 포지션 빼고 · 수수료·펀딩 포함 · 한국 시간) · 중간 기록일 뿐 판정이 아닙니다",
-    acts: [h("span", {class: "tm-plg"}, h("span", null, h("i", {class: "k-line", "aria-hidden": "true"}), "누적"), h("span", null, h("i", {class: "k-bar", "aria-hidden": "true"}), "구간별")),
-      h("span", {class: "pp ref"}, "")]},
-  kindSeg,
+  const kindSel = h("select", {class: "select tm-sel tm-ksel", "aria-label": "어느 후보 계좌", title: "후보 38개 전체 · 기존 36의 후보 · 딥시크의 후보"},
+    KINDS.map((k) => h("option", {value: k.id}, k.label)));
+  kindSel.value = P.kind;
+  kindSel.addEventListener("change", () => setKind(kindSel.value));
+  const el = panel("수익 차트", {cls: "tm-pnl", tip: "후보 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고 · 수수료·펀딩 포함 · 한국 시간) · 선 = 누적, 막대 = 그 시간(또는 그날) 실현 · 중간 기록일 뿐 판정이 아닙니다",
+    acts: [kindSel, h("span", {class: "pp ref"}, "")]},
   h("div", {class: "tm-phero"}, segBox, h("span", {class: "tm-pnum"}, big, h("span", {class: "tm-punit"}, "USDT"))),
   meta, chartBox,
   h("div", {class: "tm-today"}, h("span", {class: "tm-tdt"}, "오늘 수익"), todayK, h("span", {class: "grow"}), todayV, h("span", {class: "tm-punit"}, "USDT")),
@@ -172,8 +172,7 @@ export function pnlPanel(ctx) {
 
   function setKind(id) {
     if (id === P.kind) return;
-    P.kind = id; local.set("tm-pnl-kind", id);
-    for (const b of kindSeg.querySelectorAll("button")) b.setAttribute("aria-selected", String(b.dataset.id === id));
+    P.kind = id; local.set("tm-pnl-kind", id); kindSel.value = id;
     P.doc = null; P.state = "loading"; draw(); load();
   }
   const startMs = () => { const d = LK.league(); return d && d.start_ms ? d.start_ms : null; };
@@ -255,7 +254,7 @@ export function pnlPanel(ctx) {
     put(meta, h("span", null, `${fmt.int(d.accounts)}계좌 · ${w.ms ? `최근 ${w.ko} · ` : ""}`),
       sr.empty ? h("span", null, "아직 닫힌 거래 없음") : h("span", null, `거래 ${fmt.int(sr.trades)} · `, h("b", {class: "up"}, `${fmt.int(sr.wins)}승`), " ", h("b", {class: "down"}, `${fmt.int(sr.losses)}패`)),
       sr.empty ? null : h("span", {title: "최대 낙폭: 실현 손익 선이 그 전 최고점(시작 0 포함)에서 가장 깊게 내려간 만큼 (USDT) · 닫힌 거래만 · 참고"}, ` · 최대 낙폭 ${sr.mdd > 0 ? "−" : ""}${fmt.num(sr.mdd, 0)} (참고)`),
-      d.hidden ? h("span", {class: "muted"}, ` · 딥시크 ${fmt.int(d.hidden)}계좌는 금액 숨김이라 뺌`) : null,
+      d.hidden ? h("span", {class: "muted", title: "딥시크 금액을 숨기는 설정: 그 계좌들은 합계에서 뺍니다"}, ` · 딥시크 ${fmt.int(d.hidden)}계좌 뺌 (금액 숨김)`) : null,
       P.state === "failed" ? h("span", {class: "down"}, ` · 새로 받지 못함 (${fmt.ago(P.at, now)} 자료)`) : null);
     const td = todayOf(cur, now);
     countTo(todayV, td.pnl, {format: (v) => usdt(v), tone: true});

@@ -204,7 +204,12 @@ const live = (btc, eth) => ({generated_ms: Date.now(), server_ms: Date.now(), so
   coins: [{coin: "BTCUSD", price: btc, mark: btc, change_pct: 1.2, quote_volume: 1.2e9, high: btc + 500, low: btc - 900, funding_rate: 0.0001,
     next_funding_ms: NOW + 3600e3, open_interest: 9000, ok: true},
     {coin: "ETHUSD", price: eth, mark: eth, ok: true}, {coin: "SOLUSD", price: 150, mark: 150, ok: true}]});
-const bars = () => { const t = [], c = [], v = []; for (let i = 0; i < 288; i++) { t.push(Math.floor((NOW - (288 - i) * 300e3) / 300e3) * 300e3); c.push(100000 + i); v.push(5); } return {bars: {t, o: c, h: c, l: c, c, v}}; };
+const TFMS = {"1m": 60e3, "5m": 300e3, "15m": 900e3, "30m": 1800e3, "1h": 3600e3, "4h": 14400e3};
+const bars = (path) => {          // the bars of the asked timeframe, the last one the bar forming now
+  const step = TFMS[new URLSearchParams(String(path).split("?")[1]).get("tf")] || 900e3, t = [], c = [], v = [];
+  for (let i = 0; i < 288; i++) { t.push(Math.floor(NOW / step) * step - (287 - i) * step); c.push(100000 + i); v.push(5); }
+  return {bars: {t, o: c, h: c, l: c, c, v}};
+};
 const fills = {fills: [
   {symbol: "BTCUSDT", side: 1, entry_time: NOW - 9e6, entry_price: 99000, exit_time: NOW - 6e6, exit_price: 99500, exit_reason: "TP", leverage: 30, pnl: 150.5, roe: 0.45, account: "core-DOGE-1h-1"},
   {symbol: "SOLUSDT", side: -1, entry_time: NOW - 9e6, entry_price: null, exit_time: NOW - 5e6, exit_price: null, exit_reason: "SL", leverage: 50, pnl: null, roe: null, win: false, account: "ds-F5_BOX-15m-1"},
@@ -247,7 +252,7 @@ def test_opens_on_a_live_position_and_refreshes(tmp_path):
     o = _run(tmp_path, FIXTURE + r"""
 const el = await mountOn(doc(), live(101000, 2550), {});
 out.led = q1(el, "b.tm-led"); out.roe = q1(el, "b.tm-ledsm");
-out.sel = q1(el, "div.tm-sel");
+out.sel = q1(el, "div.tm-selb");
 out.total = q1(el, "b.tm-utot");
 out.band = q1(el, "div.tm-band");
 out.rows = el.querySelectorAll("tr.click").length;
@@ -289,7 +294,7 @@ def test_hidden_deepseek_never_shows_money(tmp_path):
     o = _run(tmp_path, FIXTURE + r"""
 localStorage.setItem("cl-tm-grp", JSON.stringify("all"));
 const el = await mountOn(doc(), live(101000, 2550), {acct: "ds-F5_BOX-15m-1"});
-out.sel = q1(el, "div.tm-sel");
+out.sel = q1(el, "div.tm-selb");
 out.all = allText(el);
 out.linePrices = CH.cs.lines.map((x) => x.price);
 out.marks = CH.cs.marks.length;
@@ -370,7 +375,7 @@ const el = await mountOn(doc(), live(101000, 2550), {acct: "core-OBV_S-1h-3-q", 
 out.query = queries[queries.length - 1];
 out.cards = el.querySelectorAll("button.tm-pcard").map((x) => x.textContent);
 out.table = el.querySelectorAll("table.tm-t").length;
-out.sel = q1(el, "div.tm-sel");
+out.sel = q1(el, "div.tm-selb");
 out.tf = el.querySelector("div.tm-tfs").querySelectorAll("button").filter((b) => b.getAttribute("aria-selected") === "true").map((b) => b.textContent);
 """)
     assert o["d1"] == "core-DOGE-1h-1" and o["d2"] == "core-X-1h-1" and o["d3"] == "core-X-1h-1"
@@ -443,11 +448,11 @@ def test_text_only_tokens_and_prefix():
             if not part or part.startswith("@media"):
                 continue
             part = re.sub(r'^(:root:not\(\[data-skin="classic"\]\)|html\[data-text="\w+"\])\s+', "", part)
-            assert part.startswith(".tm") or part.startswith('.screen[data-screen="terminal"]'), part
+            assert re.match(r"^([a-z]+)?\.tm", part) or part.startswith('.screen[data-screen="terminal"]'), part
     own = set(re.findall(r"\.(tm-[\w-]+)", css))
     assert {"tm-p", "tm-top", "tm-band", "tm-coins", "tm-chart", "tm-chip", "tm-t", "tm-pcard", "tm-fr", "tm-cr", "tm-psvg", "tm-cal"} <= own
     for cls in re.findall(r'class: (?:\[)?"(tm-[\w-]+)', "".join(open(os.path.join(JS, "screens", f)).read() for f in OWN_JS)):
-        assert cls in own or cls in ("tm-sel",), cls
+        assert cls in own, cls
     term = open(os.path.join(JS, "screens", "terminal.js")).read()
     assert 'export const css = "scr/terminal.css"' in term and "export const wide = true" in term
     # the shell's own terminal routes stay as they were (the menu's first button, the links into it)
