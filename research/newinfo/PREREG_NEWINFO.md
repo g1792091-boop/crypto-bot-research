@@ -5,8 +5,10 @@
 
 Written 2026-10-11, before any result of these rules: no signal of the seven definitions below has been computed on
 real data. Owners' agreement of 2026-10-11, item (A): a pre-registered backtest of seven strategies that use
-information the 80 strategies of the full grid (research/fullgrid) do not use: crowd positioning, funding, open
-interest, cross-coin strength, the daily VWAP, volume spikes. Owners' words: friend: "추세장 횡보장 매매법을 찾아서 ...
+information, or a use of it, the 80 strategies of the full grid (research/fullgrid) do not have: crowd positioning,
+funding, open interest and cross-coin strength (none of the 80 uses them); a fade toward the daily VWAP (two DeepSeek
+definitions of the full grid, the F6 pair, use the same daily VWAP but follow its crosses); volume spikes (some of the 80
+use volume, none a spike rule). Owners' words: friend: "추세장 횡보장 매매법을 찾아서 ...
 추세장이면 추세장 매매법을 사용 ... 횡보장이면 진입 금지"; owner: "횡보장에서도 발라먹고 추세장에서도 발라먹는 매매법",
 with the goal of growing a small amount fast. Item (B) of the same agreement, the regime-gate ("장세 문지기") shadow
 judged by 2026-10-31, is registered separately and changes nothing here.
@@ -14,8 +16,9 @@ judged by 2026-10-31, is registered separately and changes nothing here.
 ## 1. Question
 For each rule x timeframe ("cell"), is there a combination of the rule's numbers and one of six exits that, chosen on
 the select period, earns on the test period under the paper engine's v4 rules (research/fullgrid/kernel.py), beats the
-same signal times with coin-flip sides, survives a multiple-test correction over the whole batch, still earns at twice
-the cost and, where the data reach back, earns in 2020?
+same signal times with coin-flip sides and the same sides taken at random times, survives a multiple-test correction
+over the whole batch, still earns at twice the cost and earns in an extra period before the select period (2020; for
+the two metrics rules BTC alone, 2020-09 .. 2021-11)?
 
 ## 2. Data and timing
 2.1 **Price.** The full grid's 1m archive (research/fullgrid/data.py: Binance USD-M 1m last and mark price, funding,
