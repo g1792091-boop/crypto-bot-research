@@ -1731,21 +1731,46 @@ def board_stats(M: np.ndarray, bust: np.ndarray) -> dict:
     return d
 
 
+ADD_SKIP_IX = (A_RISK, A_MARGIN, A_FREE, A_LIQUIDITY, A_MINNOT, A_LIQBEYOND)
+ENTRY_CUT_IX = (C_CUT_LIQ, C_CUT_MARGIN, C_CUT_FREE)
+
+
+def adds_stats(outs: list) -> dict:
+    """14: how the machine actually ran at this size, pooled over ``outs``: positions, first-unit risk / intended U,
+    adds per position, the share of positions reaching each add level, add skips by reason, entry cuts by reason. At
+    high r the margin budget B = E / n_max is often used up by the first unit, so few or no adds fill."""
+    ri = [o.ri for o in outs if len(o.ri)]
+    rf = [o.rf for o in outs if len(o.rf)]
+    adds = np.concatenate([x[:, RI_ADDS] for x in ri]) if ri else np.zeros(0, np.int64)
+    r1 = np.concatenate([x[:, R_RISK1] for x in rf]) if rf else np.zeros(0)
+    cnt = np.sum([o.cnt for o in outs], axis=0) if outs else np.zeros(NCNT, np.int64)
+    n = len(adds)
+    return {"positions": int(n), "first_unit_risk_over_U": _f(r1.mean()) if n else None,
+            "adds_per_position": _f(adds.mean()) if n else None,
+            "share_reaching_add": [_f((adds >= i).mean()) if n else None for i in (1, 2, 3)],
+            "add_skips": {CNT_NAMES[i]: int(cnt[i]) for i in ADD_SKIP_IX},
+            "adds_filled": int(cnt[A_FILLED]),
+            "entry_cuts": {CNT_NAMES[i]: int(cnt[i]) for i in ENTRY_CUT_IX}}
+
+
 def board_block(mk: Market, sig: Sig, v: dict, period: str, r: float, n_seeds: int = N_SEEDS,
                 sub: Sub | None = None) -> dict:
     out = run_account(mk, sig, v, r=r, monthly=True, sub=sub)
     M, b = month_multiples(out)
-    row = {"pick": board_stats(M, b), "first_unit_risk_over_U": _f(out.rf[:, R_RISK1].mean()) if len(out.rf) else None}
-    Ms, Bs = [], []
+    row = {"pick": board_stats(M, b), "first_unit_risk_over_U": _f(out.rf[:, R_RISK1].mean()) if len(out.rf) else None,
+           "pick_machine": adds_stats([out])}
+    Ms, Bs, outs = [], [], []
     for i in range(n_seeds):
         cs = ctrl_a(sig, ctrl_seed("a", v["id"], period, r, i))
         o2 = run_account(mk, cs, v, r=r, monthly=True, sub=sub)
         m2, b2 = month_multiples(o2)
         Ms.append(m2)
         Bs.append(b2)
+        outs.append(o2)
     row["coin_flip_pooled"] = board_stats(np.concatenate(Ms) if Ms else np.zeros(0),
                                           np.concatenate(Bs) if Bs else np.zeros(0, bool))
-    row["caps"] = {"n_max": caps(r)[0], "risk_cap": caps(r)[1]}
+    row["coin_flip_machine"] = adds_stats(outs)
+    row["caps"] = {"n_max": caps(r)[0], "risk_cap": caps(r)[1], "margin_budget_per_position": f"equity / {caps(r)[0]}"}
     return row
 
 
@@ -1761,7 +1786,8 @@ def stamp(root: str, pin: dict | None, data_sha: str) -> dict:
 
 def step_select(raw: Raw, periods: dict = PERIODS, variants=None, k_picks: int = K_PICKS,
                 min_pos: int = MIN_POS_SELECT) -> tuple:
-    """11: every variant on period 1 at r = 2%, normal costs and cost x2. Returns (table, choice, universe size)."""
+    """11: every variant on period 1 at r = 2%, normal costs and cost x2 (and, reported only, the stop-fill haircut
+    f = 0 and 0.5 of section 16). Returns (table, choice, universe size)."""
     variants = variants or VARIANTS
     mk = Market(raw, *periods["p1"], name="p1")
     table = {}
@@ -1770,6 +1796,8 @@ def step_select(raw: Raw, periods: dict = PERIODS, variants=None, k_picks: int =
         row = {"signals": len(sig)}
         for cost in ("base", "x2"):
             row[cost] = summarize(mk, run_account(mk, sig, v, r=R_MAIN, cost=cost), detail=(cost == "base"))
+        row["stop_fill_sensitivity"] = {f"f={f:g}": summarize(mk, run_account(mk, sig, v, r=R_MAIN, stop_hc=f),
+                                                              detail=False) for f in STOP_HC_SENS}   # 16, not a rule
         table[v["id"]] = row
     return table, choose(table, k_picks, min_pos), mk.universe_size()
 
@@ -1794,7 +1822,9 @@ def step_test(raw: Raw, picks: list, periods: dict = PERIODS, n_seeds: int = N_S
                   "cost_x2": summarize(mk, run_account(mk, sig, v, cost="x2"), detail=False),
                   "r_0.5pct": summarize(mk, run_account(mk, sig, v, r=R_LOW), detail=False),
                   "funding_sensitivity": {f"{f * 100:.2f}%/8h": summarize(mk, run_account(mk, sig, v, fund8h=f),
-                                                                            detail=False) for f in FUND_SENS}}
+                                                                            detail=False) for f in FUND_SENS},
+                  "stop_fill_sensitivity": {f"f={f:g}": summarize(mk, run_account(mk, sig, v, stop_hc=f),
+                                                                  detail=False) for f in STOP_HC_SENS}}
             if mk_all is not None:
                 ex["without_tradfi_exclusion"] = summarize(mk_all, run_account(mk_all, mk_all.signals(v), v),
                                                            detail=False)

@@ -590,7 +590,8 @@ def write_manifest(out: str, state: dict, syms: list, params: dict) -> dict:
         "format": {iv: f"np.savez_compressed layout (fixed zip timestamps); keys ts(int64 ms open time UTC),o,h,l,c,"
                        f"v(base vol),qv(quote vol),mo,mh,ml,mc (mark price OHLC, NaN where no mark bar); all float32 "
                        f"except ts; file <{K['sub']}>/<SYM>.npz",
-                   "funding": "keys ts(int64 ms calc_time UTC), rate(float64 last_funding_rate); file funding/<SYM>.npz",
+                   "funding": "keys ts(int64 ms calc_time UTC), rate(float64 last_funding_rate); "
+                              "file funding/<SYM>.npz",
                    "arrays_sha256": "sha256 over the sorted keys: name|dtype|shape newline, then the raw bytes"},
         "notes": ["rows are raw exchange bars: nothing forward-filled or synthesized, zero-volume bars kept",
                   "ts converted to ms if source used microseconds",
@@ -832,7 +833,8 @@ def prove(src, sym: str, month: str, ref_data: str, work: str, keep: bool = Fals
     a0, a1 = month_ms(month), month_ms(next_month(month))
     res = {"symbol": sym, "month": month, "rows_new": info["rows"], "zips": info["source_zips"],
            "checksum_status_counts": info["checksum_status_counts"], "keys": {}}
-    with np.load(os.path.join(work, "5m", f"{sym}.npz")) as zn, np.load(os.path.join(ref_data, "5m", f"{sym}.npz")) as zr:
+    pn, pr = os.path.join(work, "5m", f"{sym}.npz"), os.path.join(ref_data, "5m", f"{sym}.npz")
+    with np.load(pn) as zn, np.load(pr) as zr:
         cut = (zr["ts"] >= a0) & (zr["ts"] < a1)
         res["rows_ref"] = int(cut.sum())
         res["same_keys"] = sorted(zn.files) == sorted(zr.files)

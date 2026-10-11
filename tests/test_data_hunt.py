@@ -23,7 +23,8 @@ from research.hunt import data_hunt as D  # noqa: E402
 D.RETRY_SLEEP = 0.0
 FIVE, ONE, DAY = 300_000, 60_000, 86_400_000
 SYM = "SYNUSDT"
-KHEAD = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore"
+KHEAD = ("open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,"
+         "taker_buy_quote_volume,ignore")
 
 
 def ms(s: str) -> int:
@@ -375,7 +376,8 @@ def test_coins_from_tests(tmp_path):
     t1.write_text(json.dumps({"results": {"x": {"base": {"n_positions": 3}}}}))
     assert D.coins_from_tests([str(t1)], uni) == (uni, "all coins (the test outputs list no coins)")
     t2 = tmp_path / "t2.json"
-    t2.write_text(json.dumps({"a": {"by_coin": {"CUSDT": {"n": 2}, "BUSDT": {"n": 0}}}, "b": {"coins_traded": ["AUSDT"]}}))
+    t2.write_text(json.dumps({"a": {"by_coin": {"CUSDT": {"n": 2}, "BUSDT": {"n": 0}}},
+                              "b": {"coins_traded": ["AUSDT"]}}))
     assert D.coins_from_tests([str(t1), str(t2)], uni) == (["AUSDT", "CUSDT"], "test outputs")
 
 

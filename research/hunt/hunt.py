@@ -1535,6 +1535,16 @@ def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool 
                                          for i in range(len(STOP_SRC_NAMES))},
                     "open_at_end": int((ri[:, RI_REASON] == EX_END).sum()),
                     "leverage_median": float(np.median(rf[:, RF_LEV]))})
+        # the bet actually taken (W 7): first unit's risk q x D0 over the marked equity at its entry, and the cuts
+        real = rf[:, RF_Q1] * rf[:, RF_D0] / np.where(rf[:, RF_EQ] > 0, rf[:, RF_EQ], np.nan)
+        tried = ri[:, RI_TRIED].sum()
+        out.update({"realized_unit_risk": {"median": float(np.nanmedian(real)), "mean": float(np.nanmean(real)),
+                                           "q25": float(np.nanquantile(real, 0.25)),
+                                           "q75": float(np.nanquantile(real, 0.75))},
+                    "share_first_unit_cut": float((ri[:, RI_CUT] != 0).mean()),
+                    "share_first_unit_cut_by": {CUT_NAMES[i]: float(((ri[:, RI_CUT] >> i) & 1).mean())
+                                                for i in range(len(CUT_NAMES))},
+                    "share_adds_filled_of_tried": float(adds.sum() / tried) if tried else None})
         if detail:
             t_in_ms = mk.start + ri[:, RI_TIN] * FIVE
             years = np.asarray([dt.datetime.fromtimestamp(x / 1000, dt.timezone.utc).year for x in t_in_ms])
@@ -1551,27 +1561,29 @@ def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool 
             out["positions_by_month"] = np.bincount(mi, minlength=n_m).tolist()
     else:
         out.update({"positions_per_month": 0.0, "adds_per_month": 0.0, "share_add_level": [0.0, 0.0, 0.0],
-                    "mean_pnl_U": None, "median_pnl_U": None, "win_share": None, "top10_share_of_profit": None})
-    if detail:
+                    "mean_pnl_U": None, "median_pnl_U": None, "win_share": None, "top10_share_of_profit": None,
+                    "realized_unit_risk": None, "share_first_unit_cut": None, "share_first_unit_cut_by": None,
+                    "share_adds_filled_of_tried": None})
+    if days:
         out["day_eq"] = [round(float(x), 4) for x in day_eq]
     return out
 
 
 # ------------------------------------------------------------------ one system / one candidate list
 def run_signals(mk: Market, parts: list, r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP,
-                detail: bool = False) -> dict:
+                detail: bool = False, days: bool | None = None, b_div: float = B_DIV) -> dict:
     tfs = tuple(sorted({sig["tf"] for sig, _ in parts}, key=TF_ORDER.index))
     bank = bank_for(mk, tfs)
     cands = build_cands(mk, bank, parts)
-    out = summarize(mk, simulate(mk, bank, cands, r, cost, risk_cap), detail=detail)
+    out = summarize(mk, simulate(mk, bank, cands, r, cost, risk_cap, b_div=b_div), detail=detail, days=days)
     out["candidates"] = int(len(cands["t"]))
     return out
 
 
 def run_system(mk: Market, spec: dict, r: float = R_BASE, cost: str = "base", gate: str | None = None,
-               risk_cap: float = RISK_CAP, detail: bool = False) -> dict:
+               risk_cap: float = RISK_CAP, detail: bool = False, days: bool | None = None) -> dict:
     sig = system_signals(mk, spec, gate)
-    out = run_signals(mk, [(sig, 0)], r, cost, risk_cap, detail)
+    out = run_signals(mk, [(sig, 0)], r, cost, risk_cap, detail, days)
     out["signal_counts"] = dict(sig["counts"])
     return out
 
@@ -1687,7 +1699,8 @@ def judge(base: dict, cost2: dict, ctl: dict | None, study: str, spec: dict, per
     res = {"P0": bool(base["n_positions"] >= POS_PER_MONTH * n_m and base["share_months_with_position"] >= MONTH_COVER
                       and not base["bust"]),
            "P1": bool(base["median_M"] >= 1.0 and base["mean_lnM"] > 0),
-           "P3": bool(cost2["median_M"] >= 1.0), "P4": bool(base["max_dd"] < DD_MAX)}
+           "P3": bool(cost2["median_M"] >= 1.0 and cost2["mean_lnM"] > 0),     # H 13 (both tests of P1 at cost x2)
+           "P4": bool(base["max_dd"] < DD_MAX)}
     if ctl is not None:
         for c in ("a", "b"):
             seeds = ctl[c]
