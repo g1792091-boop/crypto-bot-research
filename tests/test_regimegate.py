@@ -437,7 +437,7 @@ def _signals(out):
 
 
 def test_forward_look_in_pieces_equals_one_night(tmp_path, fdata):
-    now = D0 + 6 * DAY + 3_600_000                    # yesterday = 10-10; the test window's last day is 10-09
+    now = D0 + 6 * DAY + 7_200_000                    # yesterday = 10-10; the test window's last day is 10-09
     one = _frun(tmp_path / "one", fdata, now)
     assert one["status"] == "done" and one["through_day"] == "2026-10-09" and one["days"] == 5
     out = tmp_path / "parts"
@@ -473,7 +473,9 @@ def test_forward_look_in_pieces_equals_one_night(tmp_path, fdata):
 
 
 def test_forward_look_x_is_the_trade_over_5000(tmp_path, fdata):
-    now = D0 + 3 * DAY + 3_600_000
+    early = _frun(tmp_path, fdata, D0 + 3 * DAY + 1_800_000)         # 00:30 UTC: 10-07's next bars not final yet
+    assert early["through_day"] == "2026-10-06"
+    now = D0 + 3 * DAY + 7_200_000
     s = _frun(tmp_path, fdata, now)
     assert s["status"] == "ok" and s["through_day"] == "2026-10-07"
     T, counts = _rgj().signal_table(sqlite3.connect(str(tmp_path / "regimegate.db")), GT, 5000.0)
@@ -485,7 +487,7 @@ def test_forward_look_x_is_the_trade_over_5000(tmp_path, fdata):
 
 
 def test_forward_look_starts_over_on_another_window_and_keeps_paper3(tmp_path, fdata):
-    now = D0 + 3 * DAY + 3_600_000
+    now = D0 + 3 * DAY + 7_200_000
     db = _paper_db(tmp_path / "paper3.db")
     before = hashlib.sha256(Path(db).read_bytes()).hexdigest()
     s = _frun(tmp_path / "out", fdata, now, db=db)

@@ -5,6 +5,7 @@ copy (deploy/regimegate/install_regimegate.sh), never from the rule bot's tree.
 
     python -m paperbot.regimegate run  [--db FILE] [--out DIR] [--max-days N]
     python -m paperbot.regimegate show [--out DIR]                 the last one-line summary and the verdict lines
+    python -m paperbot.regimegate selfcheck                        what the installer checks before it swaps the code
 
 What it does. The pre-registered forward window: every default-number signal of the rule bot's 36 strategies, 15m 30m
 1h 4h, six coins, whose bar closes in [2026-10-05 18:35 UTC (the v4 run's start), 2026-10-30 00:00 UTC), each its own
@@ -30,10 +31,11 @@ This is a LOOK, never the verdict: the verdict is ``gate.py forward`` on Binance
 (PREREG 5.2: the full grid's kernel, October funding 0, both reads). This look reads the live exit (ladder|2) only (the
 engine has no 3R take-profit), uses real funding and the exchange's REST bars, so its numbers can differ slightly.
 
-Days: one UTC day at a time from the window's first day (or the day after the last one done) to yesterday, at most
-``--max-days`` per night, up to 2026-10-30 (the day that only finishes the open trades). Signals, trades and the open
-engines of a day are committed together, so a stopped night resumes cleanly; other settings, definitions, engine,
-pinned files or window (fingerprint) start over from the window's start.
+Days: one UTC day at a time from the window's first day (or the day after the last one done) to yesterday (from
+01:05 UTC on: the 15m bar a midnight signal falls in must be final), at most ``--max-days`` per night, up to 2026-10-30
+(the day that only finishes the open trades). Signals, trades and the open engines of a day are committed together, so
+a stopped night resumes cleanly; other settings, definitions, engine, pinned files or window (fingerprint) start over
+from the window's start.
 
 Output (<out>, default /var/lib/paperbot/regimegate): regimegate.db (5m bar cache, signals with their state and result,
 open engines, per-day rows), last.json (the look: gate.py's evaluation of the live exit, counts, parity with the real
@@ -71,7 +73,6 @@ LIVE_ROOT = "/opt/crypto-bot-research"     # the rule bot's own tree: its engine
 VERSION = 1                 # bump when the replay's meaning changes: the look is rebuilt from the window's start
 MIN = 60_000
 DAY = 86_400_000
-FIVE = 300_000
 MAX_DAYS = 30               # days replayed per night (the first night fills the window so far)
 CHUNK_DAYS = 6              # days whose signals are computed in one pass
 LABEL_DAYS = 430            # 5m history before the window for the labels: regime5y's 365-day ATR% window plus the
@@ -298,7 +299,9 @@ def run(paper_db: Optional[str], out_dir: str, source, rest, brackets: dict, spe
         engines[sid] = e
     active = set(engines)
 
-    yesterday = utc_day(now_ms - DAY)
+    # a day is replayed only once the bars after its end exist (the 15m bar a midnight signal falls in, LABEL_PAD):
+    # a label is stored once and never recomputed, so a run just after midnight must not take that day yet
+    yesterday = utc_day(now_ms - LABEL_PAD - 5 * MIN - DAY)
     first = utc_day(win[0]) if meta.get("last_day") is None else utc_day(day_start(meta["last_day"]) + DAY)
     todo = []
     d = first
