@@ -2018,23 +2018,25 @@ def cmd_bench(args) -> int:
             for s in syms[:3]:
                 entry_events(spec, s, series(s, tf), None)
             ev[f"F1:{name}:{tf}"] = round((time.perf_counter() - t0) / 3, 4)
-    sample = []
-    try:
-        for s in EW.systems():
-            if s["gate"] != "G1" or s["family"] not in ("F2", "F3"):
-                continue
-            sample.append(s)
-        pick = [x for x in sample if x["tf"] in ("15m", "4h")]
-        rng = np.random.default_rng(3)
-        pick = [pick[i] for i in sorted(rng.choice(len(pick), size=min(12, len(pick)), replace=False))]
-        for spec in pick:
-            t0 = time.perf_counter()
-            for s in syms[:2]:
-                btc = series(syms[0], spec["tf"]) if spec["kind"] == "ds" else None
-                entry_events(spec, s, series(s, spec["tf"]), btc)
-            ev[f"{spec['family']}:{spec['name']}:{spec['tf']}"] = round((time.perf_counter() - t0) / 2, 4)
-    except Exception as e:  # pragma: no cover - timing only
-        res["f2f3_error"] = repr(e)[:500]
+    cells = _group_cells(EW.systems())
+    cell_s, errs = {}, {}
+    for g in cells:                                # every F2 / F3 / F4 cell once, on one coin (BTC context: C00)
+        spec = g[0]
+        if spec["kind"] == "hunt":
+            continue
+        key = f"{spec['family']}:{spec['name']}:{spec['tf']}" + (f":r{spec['rank']}" if spec.get("rank") else "")
+        t0 = time.perf_counter()
+        try:
+            btc = series(syms[0], spec["tf"]) if spec["kind"] == "ds" else None
+            entry_events(spec, syms[1], series(syms[1], spec["tf"]), btc)
+            cell_s[key] = round(time.perf_counter() - t0, 4)
+        except Exception as e:  # pragma: no cover - timing only
+            errs[key] = repr(e)[:300]
+    res["f2_f4_cells_one_coin"] = {"timed": len(cell_s), "errors": errs,
+                                   "sum_s": round(sum(cell_s.values()), 1),
+                                   "sum_by_tf_s": {tf: round(sum(v for k, v in cell_s.items()
+                                                                 if k.split(":")[2] == tf), 1) for tf in TF_ORDER},
+                                   "slowest": sorted(((v, k) for k, v in cell_s.items()), reverse=True)[:10]}
     res["events_s_per_coin_series_42_months"] = ev
     # one control run (draw + candidates + engine), as the test step runs 600 of them per pick
     sig = synth_signals(mk, "1h", 2.0, 11)
@@ -2054,16 +2056,12 @@ def cmd_bench(args) -> int:
 def extrapolate(res: dict, EW) -> dict:
     """Wall time of wide select and test from the synthetic measurements (all scalings written in ``notes``)."""
     ev = res["events_s_per_coin_series_42_months"]
-    f1 = [v for k, v in ev.items() if k.startswith("F1")]
-    f23 = {tf: [v for k, v in ev.items() if not k.startswith("F1") and k.endswith(":" + tf)] for tf in TF_ORDER}
-    m15 = float(np.mean(f23["15m"])) if f23["15m"] else 1.0
-    m4h = float(np.mean(f23["4h"])) if f23["4h"] else m15 / 16
-    per_tf = {"15m": m15, "30m": m15 / 2, "1h": m15 / 4, "4h": m4h}       # 30m / 1h: by bar count
+    f1 = float(np.mean([v for k, v in ev.items() if k.startswith("F1")]))
+    cells = res["f2_f4_cells_one_coin"]
     systems = EW.systems()
-    cells = _group_cells(systems)
+    n_f1_cells = len({(s["name"], s["tf"]) for s in systems if s["family"] == "F1"})
     sel_len, test_len = 48 / 42, 81 / 42        # data loaded: 2020-01..2024-01 / ..2026-10 vs the bench's 42 months
-    ev_sel = sum(30 * (float(np.mean(f1)) if (g[0]["kind"] == "hunt" and f1) else per_tf[g[0]["tf"]])
-                 for g in cells) * sel_len
+    ev_sel = 30 * (cells["sum_s"] + n_f1_cells * f1) * sel_len
     run_s = float(np.mean([v["s_per_run_1proc"] for v in res["engine_run_s"].values()]))
     ser = sum(res["series_build_s_30_coins"].values())
     w = res["engine_40_runs_wall_s"]
@@ -2072,33 +2070,43 @@ def extrapolate(res: dict, EW) -> dict:
     sel_cpu = ev_sel + sel_runs * run_s
     per_pick_runs = 2 + 200 + (2 + 200) + (2 + 200) + 2 + 2 + 4       # test, r=1%, select controls, reads
     test_runs = 10 * per_pick_runs + 2 + 2 * 11
-    test_cpu = test_runs * max(run_s, res["control_run_s"]) + 10 * 30 * m15 * test_len
+    mean_cell = (cells["sum_s"] + n_f1_cells * f1) / max(cells["timed"] + n_f1_cells, 1)
+    worst10 = sum(v for v, _ in cells["slowest"][:10])
+    test_ev_typ, test_ev_worst = 10 * 30 * mean_cell * test_len, 30 * worst10 * test_len
+    test_cpu = test_runs * max(run_s, res["control_run_s"])
     ser_sel, ser_test = ser * sel_len, ser * test_len
 
     def wall(cpu, ser_s, procs, eff):
         return round((ser_s + cpu / (procs * eff)) / 3600, 2)
     eff2 = speed2 / 2
-    return {"systems": len(systems), "entry_cells": len(cells), "select_engine_runs": sel_runs,
+    return {"systems": len(systems), "select_engine_runs": sel_runs,
             "engine_s_per_run": round(run_s, 4), "control_s_per_run": res["control_run_s"],
             "speedup_2_procs_measured": round(speed2, 2),
             "select_cpu_s": {"series_once": round(ser_sel), "events": round(ev_sel), "engine": round(sel_runs * run_s),
                              "total": round(ser_sel + sel_cpu)},
             "select_wall_h": {"here_2_procs": wall(sel_cpu, ser_sel, 2, eff2),
                               "server_32_procs": wall(sel_cpu, ser_sel, 32, 0.85)},
-            "test_engine_runs": test_runs, "test_cpu_s": round(test_cpu + ser_test),
-            "test_wall_h": {"here_2_procs": wall(test_cpu, ser_test, 2, eff2),
-                            "server_32_procs": wall(test_cpu, ser_test, 32, 0.85)},
+            "test_engine_runs": test_runs,
+            "test_cpu_s": {"engine": round(test_cpu), "events_typical": round(test_ev_typ),
+                           "events_if_the_10_slowest_cells_are_picked": round(test_ev_worst),
+                           "series_once": round(ser_test)},
+            "test_wall_h": {"here_2_procs": wall(test_cpu + test_ev_typ, ser_test, 2, eff2),
+                            "here_2_procs_worst_events": wall(test_cpu + test_ev_worst, ser_test, 2, eff2),
+                            "server_32_procs": wall(test_cpu + test_ev_typ, ser_test, 32, 0.85)},
             "notes": ["engine s/run measured on 36-month select periods with 1 signal per coin per 2 days; "
                       "the test period is 33 months (used as is: slight overestimate)",
-                      "events: F1 real code; F2/F3 from a random sample of definitions at 15m and 4h on synthetic "
-                      "coins; 30m and 1h scaled from 15m by bar count; select data 48 months, test data 81 months "
-                      "(linear scaling from the bench's 42 months)",
+                      "events: every F2 / F3 / F4 cell timed once on one synthetic coin of 42 months, x 30 coins, "
+                      "scaled linearly to the data loaded (select 48 months, test 81 months); F1 by its real code",
+                      "test events: the picks' cells only are computed in the parent (not parallel), typical = mean "
+                      "cell time, worst = the 10 slowest cells",
                       "series (bars + ATR + 장세 label, 30 coins x 4 timeframes) are built once in the parent before "
                       "forking (serial; counted in full in the wall time)",
                       f"test runs = 10 picks x {per_pick_runs} (base, cost x2, 200 controls at 0.5%; the same at 1%; "
                       "the same in the select period; new-24 x2; extra 2020 x2; gate diagnostics x4) + basket and "
                       "sizing reads",
-                      "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up"]}
+                      "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up on this "
+                      "shared 4-core machine",
+                      "not included: loading the 30 coins' npz files (about 0.5 GB) and writing outputs"]}
 
 
 def _compile_probe() -> None:
