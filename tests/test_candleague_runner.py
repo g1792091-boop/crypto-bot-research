@@ -116,3 +116,20 @@ def test_forward_band_status():
     rows = [{"id": "c", "role": "cand", "kind": "core", "name": "S2_ST_ROC", "tf": "15m", "trades": 12,
              "mean_ret": -0.03, "source": {"band": band}}]
     assert RN.judge(rows)["c"] == {"verdict": "early", "trades": 12, "band": RN.band_status(12, -0.03, band)}
+
+
+def test_hidden_deepseek_keeps_its_labels(tmp_path):
+    """With DeepSeek money hidden, a DeepSeek pick still gets its pass / fail verdict (judged on the full rows), and its
+    hidden trades keep win / loss but lose the money and the prices."""
+    lg = _league(tmp_path / "a.db")
+    lg.advance(START + 2 * TP.DAY)
+    lg.accts = [dict(a, kind="ds") for a in lg.accts]
+    doc = RN.write_snapshots(str(tmp_path / "snap"), lg, START + 2 * TP.DAY + 60_000, ds_money=False)
+    shown = RN.judge(RN.account_rows(lg.conn, lg.accts, lg.engines, True))
+    assert doc["judge"] == shown
+    book = json.load(open(tmp_path / "snap" / "trades.json"))
+    t = next(t for b in book.values() for t in b["trades"])
+    assert t["pnl"] is None and t["roe"] is None and t["entry_price"] is None and t["exit_price"] is None
+    assert isinstance(t["win"], bool) and t["symbol"] and t["side"] in (1, -1)
+    w = doc["watch"]["pools"]["ds"]
+    assert w["size"]["cand"]["wallet_sum"] is None and w["size"]["cand"]["accounts"] == 1

@@ -23,7 +23,7 @@ import sys
 import time
 from typing import Callable, Optional
 
-from .notify import KST, TAG, send_telegram
+from .notify import KST, NAME, TAG, send_telegram
 
 STALL_MS = 60 * 60_000
 REPEAT_MS = 3 * 3_600_000
@@ -70,11 +70,12 @@ def check(state: dict, league: Optional[dict], svc: str, now_ms: int) -> tuple[d
     msgs = []
     if problems:
         if not st.get("warned_ms") or now_ms - st["warned_ms"] >= REPEAT_MS:
-            msgs.append(f"{TAG} ⚠️ 멈춤 확인 필요 (종이 매매, 실제 돈 아님)\n" + "\n".join(f"- {p}" for p in problems)
-                        + "\n서버에서 확인: sudo journalctl -u candleague-live -n 40 --no-pager")
+            msgs.append(f"⚠ 엔진 멈춤 확인 · {NAME}\n\n" + "\n".join(problems)
+                        + "\n서버에서 확인: sudo journalctl -u candleague-live -n 40 --no-pager\n후보 리그 · 종이 매매 (실제 돈 아님)\n\n"
+                        + f"{_kst(now_ms)} KST")
             st["warned_ms"] = now_ms
     elif st.get("warned_ms"):
-        msgs.append(f"{TAG} ✅ 다시 정상으로 돕니다 ({_kst(done)} KST까지 처리)")
+        msgs.append(f"✅ 다시 정상 · {NAME}\n\n{_kst(done)} KST까지 처리\n\n{_kst(now_ms)} KST")
         st["warned_ms"] = None
     return st, msgs
 

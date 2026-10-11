@@ -26,7 +26,7 @@ def test_fresh_install_waits_then_a_stall_is_told_once_and_the_recovery():
     st, msgs = W.check(st, {"done_ms": 5}, "active", T0 + 69 * M)
     assert msgs == []                                                       # 59 minutes without a move: fine
     st, msgs = W.check(st, {"done_ms": 5}, "active", T0 + 70 * M)
-    assert len(msgs) == 1 and "60분째" in msgs[0] and msgs[0].startswith(W.TAG)
+    assert len(msgs) == 1 and "60분째" in msgs[0] and msgs[0].startswith("⚠ 엔진 멈춤 확인 · 후보 리그\n\n")
     st, msgs = W.check(st, {"done_ms": 5}, "active", T0 + 80 * M)
     assert msgs == []                                                       # not every 10 minutes
     st, msgs = W.check(st, {"done_ms": 5}, "active", T0 + 70 * M + W.REPEAT_MS)

@@ -3,9 +3,14 @@
     python -m candleague.dash            serve on CANDLEAGUE_DASH_HOST:CANDLEAGUE_DASH_PORT (default 127.0.0.1:8091)
     python -m candleague.dash hash       print a password hash for CANDLEAGUE_DASH_PASSWORD_HASH
 
-Reads only CANDLEAGUE_SNAP (league.json, trades.json); never writes there; a missing file shows "준비 중". The login
+CANDLEAGUE_DASH_OPEN=1 (setup_env.sh --no-password) serves it without the password, only on a Tailscale or loopback
+address (open_ok); the firewall keeps the port to Tailscale.
+
+Reads only CANDLEAGUE_SNAP (league.json, trades.json) and candleague/data/strategies_ko.json; never writes; a missing
+file shows "준비 중". The page is the rule bot's v4 look (static/: the v4 css and the demo lab's js kit, copied). The login
 pieces are the demo lab dashboard's (pbkdf2 password hash, signed session cookie, same-origin POST)."""
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -84,7 +89,22 @@ def read_snap(snap: str, name: str):
 
 
 KLINE_TFS = ("15m", "30m", "1h", "4h")
-STATIC_FILES = ("app.js", "league.css", "login.css", "vendor/lightweight-charts.standalone.production.js")
+STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml"}
+
+
+def _static_files() -> frozenset:
+    """Every .js / .css / .svg file under static/ (relative paths): the only files /static/ serves."""
+    out = []
+    for root, _dirs, files in os.walk(STATIC):
+        for f in files:
+            if os.path.splitext(f)[1] in STATIC_TYPES:
+                out.append(os.path.relpath(os.path.join(root, f), STATIC).replace(os.sep, "/"))
+    return frozenset(out)
+
+
+STATIC_FILES = _static_files()
+PUBLIC_FILES = frozenset(("tokens.css", "base.css", "login.css", "login.js", "icon.svg"))   # the login page's own
+META_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "strategies_ko.json")
 
 
 def klines_query(params) -> Optional[dict]:
@@ -100,7 +120,33 @@ def klines_query(params) -> Optional[dict]:
     return {"coin": coin, "tf": tf, "limit": limit}
 
 
-def create_app(snap: str, password_hash: str, secret: bytes, live=None):
+def open_ok(host: str) -> bool:
+    """A dashboard may run without the password only where nobody but the owners' own devices can reach it: a Tailscale
+    address (100.64.0.0/10) or this machine (loopback). Anything else keeps the login."""
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address((host or "").strip())
+    except ValueError:
+        return False
+    return ip.is_loopback or ip in ipaddress.ip_network("100.64.0.0/10")
+
+
+def host_ok(header: str, hosts) -> bool:
+    """The request's Host (without its port) is one of ``hosts``, or this machine's Tailscale name (``name`` or
+    ``name.<tailnet>.ts.net``). Without the password a page on another site could otherwise point its own name at the
+    dashboard's address (DNS rebinding) and read the league from the owner's browser."""
+    h = (header or "").strip().lower()
+    h = h[1:h.index("]")] if h.startswith("[") and "]" in h else h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    if h in hosts:
+        return True
+    import socket
+    me = socket.gethostname().lower().split(".")[0]
+    return bool(me) and (h == me or (h.startswith(me + ".") and h.endswith(".ts.net")))
+
+
+def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: bool = False, hosts=None):
+    """``open_``: no password (owners 2026-10-11, "비밀번호 없애고 싶은데"); main() allows it only on a Tailscale or
+    loopback address (open_ok), and then answers only requests addressed to this dashboard (``hosts``, host_ok)."""
     from fastapi import FastAPI, Request
     from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
@@ -110,10 +156,12 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None):
         live = Live.from_env()
 
     def authed(req: Request) -> bool:
-        return token_ok(secret, req.cookies.get(COOKIE))
+        return open_ or token_ok(secret, req.cookies.get(COOKIE))
 
     @app.middleware("http")
     async def headers(req: Request, call_next):
+        if open_ and hosts is not None and not host_ok(req.headers.get("host", ""), hosts):
+            return Response("이 대시보드는 Tailscale 주소로 여세요 (예: http://100.x.x.x:8091)", status_code=400)
         resp = await call_next(req)
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -125,7 +173,9 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None):
 
     @app.get("/login")
     def login_page():
-        return FileResponse(os.path.join(STATIC, "login.html"))
+        if open_:
+            return RedirectResponse("/", status_code=303)
+        return FileResponse(os.path.join(STATIC, "login.html"), headers={"Cache-Control": "no-cache"})
 
     @app.post("/login")
     async def login(req: Request):
@@ -134,7 +184,7 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None):
         form = urllib.parse.parse_qs((await req.body()).decode(errors="replace"))
         pw = (form.get("password") or [""])[0]
         if not password_hash or not check_password(pw, password_hash):
-            time.sleep(1.0)
+            await asyncio.sleep(1.0)                       # slows guessing without stalling other requests
             return RedirectResponse("/login?bad=1", status_code=303)
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie(COOKIE, make_token(secret), max_age=SESSION_S, httponly=True, samesite="strict",
@@ -151,13 +201,58 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None):
     def index(req: Request):
         if not authed(req):
             return RedirectResponse("/login", status_code=303)
-        return FileResponse(os.path.join(STATIC, "index.html"))
+        return FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
 
     @app.get("/static/{name:path}")
     def static(name: str, req: Request):
-        if name not in STATIC_FILES or (name not in ("league.css", "login.css") and not authed(req)):
+        if name not in STATIC_FILES or (name not in PUBLIC_FILES and not authed(req)):
             return Response(status_code=404)
-        return FileResponse(os.path.join(STATIC, name))
+        return FileResponse(os.path.join(STATIC, name), media_type=STATIC_TYPES[os.path.splitext(name)[1]],
+                            headers={"Cache-Control": "no-cache"})
+
+    @app.get("/favicon.ico")
+    def favicon():
+        return FileResponse(os.path.join(STATIC, "icon.svg"), media_type="image/svg+xml")
+
+    cp_cache: dict = {}
+
+    @app.get("/api/checkpoints")
+    def checkpoints(req: Request):
+        """The confirmed checkpoint results (WATCH_PREREG 3) for every checkpoint date already reached, computed from the
+        snapshot exactly as research/fullgrid/diag/watch_check.py does (candleague/checkpoint.py); "final" once the
+        engine has processed past that date. Cached until the snapshot changes."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        from . import checkpoint as CP
+        from . import summary as SM
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        due = [c for c in SM.CHECKPOINTS if c["date"] <= today]
+        if not due:
+            return JSONResponse({"due": [], "results": {}})
+        try:
+            key = (os.path.getmtime(os.path.join(snap, "league.json")), os.path.getmtime(os.path.join(snap, "trades.json")),
+                   tuple(c["date"] for c in due))
+        except OSError:
+            return JSONResponse({"due": [c["date"] for c in due], "results": {}, "status": "준비 중"})
+        if cp_cache.get("key") != key:
+            league, book = read_snap(snap, "league.json"), read_snap(snap, "trades.json")
+            if not league or not league.get("accounts") or book is None:
+                return JSONResponse({"due": [c["date"] for c in due], "results": {}, "status": "준비 중"})
+            res = {}
+            for c in due:
+                r = CP.check(league, book, c["date"])
+                r["final"] = int(league.get("done_ms") or 0) >= SM.day_ms(c["date"])
+                r["ko"] = c["ko"]
+                res[c["date"]] = r
+            cp_cache.update(key=key, doc=finite_json({"due": [c["date"] for c in due], "results": res}))
+        return JSONResponse(cp_cache["doc"])
+
+    @app.get("/api/meta")
+    def meta(req: Request):
+        """Korean names, entry rules, parameter meanings and each pick's character (candleague/data/strategies_ko.json)."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        return JSONResponse(read_snap(os.path.dirname(META_FILE), os.path.basename(META_FILE)) or {})
 
     @app.get("/api/live")
     def api_live(req: Request):
@@ -211,14 +306,20 @@ def main(argv=None) -> int:
         print(hash_password(pw))
         return 0
     import uvicorn
+    host = os.environ.get("CANDLEAGUE_DASH_HOST", "127.0.0.1")
+    want_open = os.environ.get("CANDLEAGUE_DASH_OPEN") == "1"
+    open_ = want_open and open_ok(host)
+    if want_open and not open_:
+        print(f"CANDLEAGUE_DASH_OPEN=1 but {host} is not a Tailscale or loopback address: the login stays on",
+              file=sys.stderr)
     secret = os.environ.get("CANDLEAGUE_DASH_SECRET", "").encode()
-    if len(secret) < 16 or not os.environ.get("CANDLEAGUE_DASH_PASSWORD_HASH"):
+    if not open_ and (len(secret) < 16 or not os.environ.get("CANDLEAGUE_DASH_PASSWORD_HASH")):
         print("CANDLEAGUE_DASH_SECRET (16자 이상)과 CANDLEAGUE_DASH_PASSWORD_HASH가 필요합니다", file=sys.stderr)
         return 2
     app = create_app(os.environ.get("CANDLEAGUE_SNAP", "/var/lib/candleague/snap"),
-                     os.environ["CANDLEAGUE_DASH_PASSWORD_HASH"], secret)
-    uvicorn.run(app, host=os.environ.get("CANDLEAGUE_DASH_HOST", "127.0.0.1"),
-                port=int(os.environ.get("CANDLEAGUE_DASH_PORT", "8091")), log_level="warning")
+                     os.environ.get("CANDLEAGUE_DASH_PASSWORD_HASH", ""), secret or os.urandom(32), open_=open_,
+                     hosts={host.lower(), "localhost", "127.0.0.1", "::1"})
+    uvicorn.run(app, host=host, port=int(os.environ.get("CANDLEAGUE_DASH_PORT", "8091")), log_level="warning")
     return 0
 
 

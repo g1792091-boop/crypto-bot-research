@@ -61,3 +61,24 @@
   prepared but **not started**. If it starts after 2026-10-11, C1 and C2 move by the same number of days (C1 = start + 1
   month, C2 = start + 2 months, the repeat = start + 3 months). The replay still begins at 2026-10-01. Any change to the
   list is made before the start and recorded here.
+- 2026-10-11 about 12:00 KST (03:00 UTC): the owners installed and started the 후보 리그 on the paper bot server
+  (commit 71631467, the 38 picks of `WATCH_PREREG.md` unchanged). It started on 2026-10-11, so C1, C2 and the repeat keep
+  their dates: 2026-11-11, 2026-12-11, 2027-01-11. The replay begins at 2026-10-01 as written.
+- 2026-10-11 KST, owners on the league dashboard: "딥시크 쪽은 왜 금액없이야 똑같이 해야지". The 후보 리그 dashboard and its
+  snapshots now show DeepSeek money like the core picks (wallet, mean per trade, equity line), as the rule bot's own
+  dashboard does (`CANDLEAGUE_DS_MONEY` defaults to on; `0` hides it again). This changes WATCH_PREREG section 2's
+  "DeepSeek money stays out of every report" for the league's screens only; the checks, their rules and their dates do
+  not change. Files committed to the repository still carry no DeepSeek money figure.
+- 2026-10-11 KST, before any checkpoint: `diag/watch_check.py` (WATCH_PREREG 5) is committed. Its reading of "at the
+  checkpoint": the trades closed before 00:00 UTC of the checkpoint date (09:00 KST that day), so the numbers do not depend
+  on when on that day it runs. It takes each trade's result from the snapshot's equity line (wallet after each closed
+  trade), which keeps every trade (the trade list keeps the newest 200 only). The dashboard's 점검 진행 screen shows the
+  same rules on the day's numbers as a preview (candleague/summary.py, the same functions).
+- 2026-10-11 KST, before any checkpoint: the reading of WATCH_PREREG 3.5 ("the same three conditions and a
+  Benjamini-Hochberg 10% over the 16 strategies") used by `diag/watch_check.py` and the dashboard. A strategy passes when
+  its pooled `cand` trades meet C2's three conditions (mean > 0 with p < 0.05 on its own seed "watch|" + strategy name +
+  date, mean > its `base` and > its `flip`, at least 300 closed `cand` trades) and it is among the BH 10% discoveries
+  over all 16 strategies. A strategy under 300 trades stays in the family of 16 with p = 1 and cannot pass (the same as
+  `run.py`'s family under its trade minimum), so the family size never shrinks. The strategy section is computed only
+  when the snapshot carries both pools' money; otherwise the script says so instead of computing a smaller family. The
+  script also refuses to give checkpoint numbers while the league has not processed past 00:00 UTC of the date.

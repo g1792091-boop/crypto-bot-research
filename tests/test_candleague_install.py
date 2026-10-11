@@ -46,7 +46,7 @@ def test_the_code_list_alone_runs_the_league(tmp_path):
         ex.write_text(json.dumps({"fetched_utc": "x", "brackets": [{"symbol": s, "brackets": [tier]} for s in SIX],
                                   "specs": {s: {"qty_step": 0.001, "min_notional": 5.0} for s in SIX}}))
     code = ("from paperbot import sweepsig; sweepsig.lib()\n"
-            "from candleague import candidates, dash, league, notify, runner, watch\n"
+            "from candleague import candidates, checkpoint, dash, league, notify, runner, summary, watch\n"
             "from paperbot.config import V3_SYMBOLS\n"
             "runner.load_exchange(runner.EXCHANGE_FILE, V3_SYMBOLS)\n"
             f"assert runner.EXCHANGE_FILE.startswith({str(app)!r})\n"
@@ -83,4 +83,7 @@ def test_units_keep_the_guest_limits_and_sandbox():
     assert "ufw allow in on tailscale0 to any port" in fw and "/etc/candleague/candleague.env" in fw
     assert "demobot" not in fw.replace("/etc/demobot", "")                     # no demo lab rule names left
     env = open(os.path.join(KIT, "candleague.env.example")).read()
-    assert re.findall(r"^CANDLEAGUE_[A-Z_]+=(.*)$", env, re.M) == ["", "", "", "", "", "8091", "0"]   # no values
+    assert re.findall(r"^CANDLEAGUE_[A-Z_]+=(.*)$", env, re.M) == ["", "", "", "", "", "8091", "1"]   # no values
+    # owners 2026-10-11: DeepSeek money shown; an existing env file's old default 0 is switched once, a later 0 stays
+    inst = open(os.path.join(KIT, "install_candleague.sh")).read()
+    assert "grep -qx 'CANDLEAGUE_DS_MONEY=0'" in inst and "# ds-money-shown-2026-10-11" in inst

@@ -1,0 +1,180 @@
+/* 후보 리그 dashboard: what the rule bot's v4 css (tokens / base / components, copied unchanged) and the demo lab's kit
+   (demo, demo4b, v4kit, v4screens, v4s2a, v4s2b, live: copied) do not have. Colours only from the tokens (both skins: ai
+   and classic), font sizes only var(--t-*). Class names start cl-. Loaded last. */
+
+/* one colour per account role in every list and chart (identity is never colour alone: the role's name is always next
+   to it); the 후보 takes the skin's accent, the others hues no up / down meaning uses */
+:root { --r-cand: var(--accent); --r-quarter: var(--smc-bos); --r-exitonly: var(--pick-3); --r-base: var(--term-yellow); --r-flip: var(--ink-2); }
+:root[data-skin="classic"] { --r-cand: var(--term-cyan); }
+.r-cand { --rc: var(--r-cand); } .r-quarter { --rc: var(--r-quarter); } .r-exitonly { --rc: var(--r-exitonly); }
+.r-base { --rc: var(--r-base); } .r-flip { --rc: var(--r-flip); }
+
+/* the brand mark */
+.cl-ic1 { fill: var(--accent); } .cl-ic2 { fill: var(--series-core); } .cl-ic3 { fill: var(--term-cyan); }
+.cl-tt { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 1399px) { .toptools .cl-tt { display: none; } }
+.cl-striptools { display: none; }
+@media (max-width: 1399px) { .cl-striptools { display: inline-flex; } }
+
+/* names and chips */
+.cl-an { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
+.cl-an .an-n { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-code { color: var(--muted); font-family: var(--f-term); font-size: var(--t-2xs); white-space: nowrap; margin-left: 4px; }
+.cl-kind { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; border: 1px solid var(--line-2);
+  font: 700 var(--t-2xs)/1 var(--f-body); white-space: nowrap; color: var(--ink-2); }
+.cl-kind.k-core { color: var(--series-core); border-color: color-mix(in srgb, var(--series-core) 45%, transparent); }
+.cl-kind.k-ds { color: var(--series-ds); border-color: color-mix(in srgb, var(--series-ds) 45%, transparent); }
+.cl-role { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font: 700 var(--t-2xs)/1.2 var(--f-body); color: var(--ink-2); }
+.cl-role i { flex: none; width: 9px; height: 9px; border-radius: 2px; background: var(--rc, var(--muted)); }
+.cl-role.r-flip i { background: transparent; border: 2px dashed var(--rc); width: 10px; height: 10px; }
+.cl-style { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; font: 700 var(--t-2xs)/1 var(--f-body);
+  white-space: nowrap; border: 1px solid var(--line-2); color: var(--ink-2); }
+.cl-style.s-trend { color: var(--accent); border-color: var(--accent-line); }
+.cl-style.s-mixed { color: var(--term-yellow); border-color: color-mix(in srgb, var(--term-yellow) 45%, transparent); }
+.cl-style.s-reversal { color: var(--smc-bos); border-color: color-mix(in srgb, var(--smc-bos) 45%, transparent); }
+.cl-vs { font-weight: 700; white-space: nowrap; font-size: var(--t-xs); }
+.cl-vs.up { color: var(--up); } .cl-vs.down { color: var(--down); }
+.cl-exit { font-size: var(--t-xs); color: var(--ink-2); white-space: nowrap; }
+.cl-vcell { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.cl-tfs { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.cl-plain { color: inherit; text-decoration: none; }
+.cl-plain:hover .an-n, .cl-plain:hover b { color: var(--accent-hi); }
+.cl-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cl-chips a.pp { text-decoration: none; }
+.cl-marks { gap: 10px; align-items: center; }
+.cl-dleft { font: 800 var(--t-lg)/1 var(--f-pixel); color: var(--accent); margin-left: 6px; }
+tr.cl-bust td { opacity: .55; }
+
+/* stat grids */
+.stats.cl-stats3, .stats.cl-stats4, .stats.cl-stats6 { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.stats.cl-stats6 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+/* 요약: the pools' rows, the trades progress, the LED bars */
+.cl-prow { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, .6fr) minmax(0, 1fr); gap: 8px; align-items: center;
+  padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
+.cl-prow > :nth-child(n+2) { text-align: right; }
+.cl-prow.hd { color: var(--muted); font-size: var(--t-2xs); padding-block: 2px; }
+.cl-prow:last-of-type { border-bottom: 0; }
+.cl-prog { display: grid; gap: 4px; margin-top: 6px; }
+.cl-progh { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-xs); }
+.cl-ledbars { width: 100%; height: 56px; display: block; }
+.cl-ledbars .u { fill: var(--led-green); } .cl-ledbars .d { fill: var(--down); opacity: .85; }
+.cl-ledbars .bl { stroke: var(--led-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* 점검 진행 */
+.cl-cps { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.cl-cp { display: grid; gap: 6px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); }
+.cl-cp.past { opacity: .6; }
+.cl-cph { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-cph b { font-size: var(--t-md); }
+.cl-cp p { color: var(--ink-2); font-size: var(--t-sm); }
+.cl-rbars { display: grid; gap: 4px; }
+.cl-rbar { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 1fr) minmax(120px, 2fr) minmax(70px, .7fr); gap: 10px; align-items: center;
+  padding: 5px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
+.cl-rbar > :last-child { text-align: right; }
+.cl-div { position: relative; display: block; height: 10px; border-radius: 3px; background: var(--surface-3); }
+.cl-div::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-2); }
+.cl-div i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.cl-div i.u { background: var(--up); } .cl-div i.d { background: var(--down); }
+.cl-c12 { margin-top: 10px; }
+.cl-cbox { display: grid; gap: 8px; align-content: start; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); }
+.cl-cboxh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cl-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--t-sm); }
+.cl-checks li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+@media (max-width: 759px) {
+  .cl-rbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .cl-rbar .cl-div { grid-column: 1 / -1; order: 3; }
+}
+
+/* 5계좌 비교 */
+.tbl.cl-cmp td.cl-cell { text-align: right; vertical-align: top; min-width: 96px; }
+.tbl.cl-cmp td.cl-cell small { display: block; margin-top: 2px; }
+.tbl.cl-cmp td.best { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.cl-star { color: var(--accent); }
+.tbl.cl-cmp th { text-align: right; } .tbl.cl-cmp th.l { text-align: left; }
+
+/* 커스텀값 */
+.cl-pickgrid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .cl-pickgrid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+.cl-h3 { font: 800 var(--t-sm)/1.3 var(--f-body); color: var(--ink); }
+.cl-h3::before { content: ""; display: inline-block; width: 3px; height: 11px; margin-right: 7px; border-radius: 2px; background: var(--accent); vertical-align: -1px; }
+.tbl.cl-params td { vertical-align: middle; }
+.tbl.cl-params tr.cl-changed td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.tbl.cl-params td.l b { font-weight: 700; }
+.cl-up { color: var(--term-yellow); font-weight: 700; } .cl-dn { color: var(--smc-bos); font-weight: 700; }
+.cl-exits { display: grid; gap: 6px; }
+.cl-exits > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+.cl-origin { display: grid; gap: 8px; }
+.cl-states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--t-xs); }
+.cl-five { display: grid; gap: 2px; }
+.cl-fiverow { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, .7fr) minmax(0, .6fr) minmax(0, .9fr) minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  padding: 6px 6px; border-radius: var(--r-sm); color: inherit; text-decoration: none; font-size: var(--t-sm); }
+.cl-fiverow > :nth-child(n+2) { text-align: right; }
+.cl-fiverow:hover { background: var(--surface-2); }
+.cl-fivehd, .cl-fivehd:hover { background: none; color: var(--muted); font-size: var(--t-xs); padding-top: 0; padding-bottom: 2px; }
+@media (max-width: 559px) { .cl-fiverow { grid-template-columns: minmax(0, 1fr) auto auto; } .cl-fiverow > :nth-child(3), .cl-fiverow > :nth-child(5) { display: none; } }
+
+/* 매매법 */
+.cl-entry dd { line-height: 1.6; }
+.cl-plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--t-sm); }
+.cl-plist2 { display: grid; gap: 2px; }
+.cl-pickrow { display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: var(--r-sm); color: inherit; text-decoration: none; font-size: var(--t-sm); flex-wrap: wrap; }
+.cl-pickrow:hover { background: var(--surface-2); }
+
+/* 주간 흐름 */
+.cl-wsum { display: grid; grid-template-columns: minmax(80px, 1fr) auto; gap: 4px 10px; align-items: center; }
+.cl-wsum small { grid-column: 1 / -1; text-align: right; }
+.tbl.cl-weeks td { white-space: nowrap; }
+
+/* 계좌 자세히: the equity lines */
+.cl-acthead { gap: 8px; align-items: center; }
+.cl-eq { display: grid; gap: 8px; }
+.cl-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.cl-eqwrap { position: relative; }
+.cl-eqsvg { display: block; width: 100%; height: 280px; }
+.cl-eqsvg .gl { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.cl-eqsvg .base { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.cl-eqsvg .ax { fill: var(--muted); font-size: 12px; font-family: var(--f-term); }
+.cl-eqsvg .ln { fill: none; stroke: var(--rc); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.cl-eqsvg .ln.r-flip { stroke-dasharray: 5 4; }
+.cl-eqsvg .ln.r-quarter { stroke-dasharray: 2 3; }
+.cl-eqsvg .lab { fill: var(--rc); font-size: 12px; font-weight: 700; font-family: var(--f-body); }
+.cl-eqsvg .xh { stroke: var(--ink-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.cl-tip { position: absolute; top: 8px; z-index: 5; display: grid; gap: 3px; min-width: 200px; padding: 8px 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: var(--pill-bg); font-size: var(--t-xs); pointer-events: none; }
+
+/* 터미널 */
+.cl-tside { max-height: 300px; }
+.cl-tlist { display: grid; }
+.cl-ti { appearance: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 4px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; color: inherit; font: inherit; font-size: var(--t-xs); text-align: left; cursor: pointer; }
+.cl-ti:hover { background: var(--surface-2); }
+.cl-ti.on { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-soft); }
+.cl-tin { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
+.cl-tkv { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-xs); }
+.cl-tkv > span { color: var(--muted); }
+.cl-tfive { display: grid; gap: 4px; }
+.cl-tfive .cl-fiverow { font-size: var(--t-xs); padding: 3px 2px; grid-template-columns: minmax(0, 1.3fr) auto auto minmax(0, 1fr); }
+.cl-tfive .cl-fiverow > :nth-child(5), .cl-tfive .cl-fiverow > :nth-child(6) { display: none; }
+
+/* 포지션 */
+.cl-coinsum { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.cl-coinbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+.cl-coinbox b { margin-right: auto; }
+
+/* 서버 상태 */
+.cl-notes { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--t-sm); color: var(--ink-2); }
+
+/* 롱 · 숏 · 코인별 */
+.cl-split { display: grid; gap: 4px; }
+.cl-srow { display: grid; grid-template-columns: 52px minmax(0, .8fr) minmax(0, .6fr) minmax(0, 1fr); gap: 10px; align-items: center;
+  padding: 5px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
+.cl-srow > :nth-child(n+2) { text-align: right; }
+.cl-scoins { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.cl-sidebox { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--t-xs); }
+.cl-share { display: grid; grid-template-columns: 64px minmax(80px, auto) minmax(0, 1fr); gap: 10px; align-items: center; font-size: var(--t-sm); }
+.cl-sizerow { display: grid; grid-template-columns: minmax(90px, 1fr) repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center; font-size: var(--t-sm); }
+.cl-sizerow > :nth-child(n+2) { text-align: right; }
+.cl-sizerow.hd { color: var(--muted); font-size: var(--t-2xs); }
+.cl-caveat { color: var(--warn); }

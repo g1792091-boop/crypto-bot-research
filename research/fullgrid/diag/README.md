@@ -19,3 +19,4 @@ WORKROOT에는 `fg1m/`(실행과 같은 1분봉), `fgwork/`(결과표, `frames/`
 | `landscape.py RESULTS OUT` | 커스텀값 지형(모든 커스텀값, 지금 청산)과 청산 84가지 순위 | 딥시크는 결과 파일에 돈 숫자가 없어 빈칸 |
 | `strat_eval.py ANA RESULTS OUT` | 위 계산을 모아 매매법별 평가와 등급 → `../STRATEGY_EVAL_KO.md` (`eval_notes_ko.json`의 해석 포함) | |
 | `eval_html.py MD OUT.html` | `STRATEGY_EVAL_KO.md`를 등급 필터·검색이 있는 웹페이지로 | |
+| `watch_check.py SNAPDIR --date 2026-11-11` | 관찰 리그(후보 리그) 점검 숫자: 1차 멈춤, 2차 통과, 매매법별 BH 10% (`WATCH_PREREG.md` 5, 시작 뒤 리그 스냅샷만 읽음) | `--json OUT` |

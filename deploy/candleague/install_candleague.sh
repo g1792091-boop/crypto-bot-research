@@ -91,6 +91,13 @@ if [ ! -f "$ENVF" ]; then
   echo "made $ENVF from the template (empty values)"
 else
   echo "$ENVF exists: kept as it is"
+  # owners 2026-10-11 ("딥시크 쪽은 왜 금액없이야 똑같이 해야지"): the old template's hidden DeepSeek money becomes shown,
+  # once; a 0 written after this (marked file) stays 0
+  if grep -qx 'CANDLEAGUE_DS_MONEY=0' "$ENVF" && ! grep -q '^# ds-money-shown-2026-10-11' "$ENVF"; then
+    sed -i 's/^CANDLEAGUE_DS_MONEY=0$/CANDLEAGUE_DS_MONEY=1/' "$ENVF"
+    printf '%s\n' '# ds-money-shown-2026-10-11 (두 분 요청으로 딥시크 금액 보이기로 바꿈; 숨기려면 위 값을 0으로)' >> "$ENVF"
+    echo "딥시크 금액: 보이기로 바꿨습니다 (두 분 요청, 숨기려면 CANDLEAGUE_DS_MONEY=0)"
+  fi
 fi
 chown root:candleague "$ENVF"
 chmod 640 "$ENVF"
@@ -115,6 +122,12 @@ tar -C "$REPO_DIR" --exclude='__pycache__' --exclude='*.pyc' --exclude='paperbot
 printf '{"commit": "%s", "source": "install_candleague.sh", "installed_at": "%s"}\n' "$COMMIT" \
   "$(date -u +%FT%TZ)" > "$APP.new/VERSION.json"
 "$VENV/bin/python" -m compileall -q "$APP.new" >/dev/null 2>&1 || true
+# the league's own code must compile (a module imported only later, e.g. the checkpoint one, would otherwise fail on its day)
+if ! CL_OUT="$("$VENV/bin/python" -m compileall -q -f "$APP.new/candleague" 2>&1)"; then
+  printf '%s\n' "$CL_OUT" | tail -n 20
+  rm -rf "$APP.new"
+  echo "selfcheck failed (the league code does not compile): nothing was changed. 이 화면을 개발자에게 보내 주세요."; exit 1
+fi
 chown -R root:candleague "$APP.new"
 chmod -R u+rwX,g+rX,g-w,o-rwx "$APP.new"
 
@@ -127,7 +140,7 @@ SC_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LA
 import sys
 from paperbot import sweepsig
 sweepsig.lib()                                     # the locked signal library loads (hash-checked)
-from candleague import candidates, dash, league, notify, runner, watch
+from candleague import candidates, checkpoint, dash, league, notify, runner, summary, watch
 from paperbot.config import V3_SYMBOLS
 runner.load_exchange(runner.EXCHANGE_FILE, V3_SYMBOLS)   # the leverage table and order-size rules of the study
 print(len(candidates.ds_defs().DEFS), "DeepSeek definitions load")

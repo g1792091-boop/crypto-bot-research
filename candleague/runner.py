@@ -27,6 +27,7 @@ from paperbot.paramshadow import replay_day
 from . import candidates as C
 from . import exits as X
 from . import league as L
+from . import summary as SM
 
 START_MS = 1_790_812_800_000            # 2026-10-01 00:00 UTC: the first day after the study's data
 DAY = 86_400_000
@@ -144,13 +145,22 @@ def final_end(now_ms: int) -> int:
 
 
 # ---------------------------------------------------------------- summaries (dashboard, Telegram, judging)
-def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False) -> list[dict]:
+def closed_trades(conn, accts: list[dict]) -> dict:
+    """{account: its closed trades (dicts) in exit order}: one read for every summary of a snapshot."""
+    book = {a["id"]: [] for a in accts}
+    for aid, d in conn.execute("SELECT account, data FROM trades ORDER BY account, exit_time, rowid"):
+        if aid in book:
+            book[aid].append(json.loads(d))
+    return book
+
+
+def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False, book: Optional[dict] = None) -> list[dict]:
     """Per account: trades, wins, mean P&L per trade as a fraction of the wallet before it, closed-trade drawdown,
     wallet, the open position; DeepSeek money hidden unless ``ds_money`` (D11)."""
+    book = closed_trades(conn, accts) if book is None else book
     out = []
     for a in accts:
-        pnl = [json.loads(d)["pnl"] for (d,) in
-               conn.execute("SELECT data FROM trades WHERE account = ? ORDER BY exit_time", (a["id"],))]
+        pnl = [t["pnl"] for t in book[a["id"]]]
         eq, rets, peak, dd = EQUITY, [], EQUITY, 0.0
         for p in pnl:
             rets.append(p / eq if eq > 0 else 0.0)
@@ -215,13 +225,14 @@ TRADE_KEYS = ("symbol", "side", "entry_time", "entry_price", "exit_time", "exit_
               "pnl", "roe")
 
 
-def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = START_MS) -> dict:
+def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = START_MS,
+               book: Optional[dict] = None) -> dict:
     """{account: {"equity": [[exit ms, wallet after]...] from $5,000, "trades": the last LAST_TRADES, newest first}};
     DeepSeek accounts without money (no equity line, no P&L) unless ``ds_money``."""
+    book = closed_trades(conn, accts) if book is None else book
     out = {}
     for a in accts:
-        rows = [json.loads(d) for (d,) in
-                conn.execute("SELECT data FROM trades WHERE account = ? ORDER BY exit_time", (a["id"],))]
+        rows = book[a["id"]]
         hide = a["kind"] == "ds" and not ds_money
         eq, curve = EQUITY, [[int(start_ms), EQUITY]]
         for t in rows:
@@ -229,8 +240,9 @@ def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = 
             curve.append([int(t["exit_time"]), round(eq, 2)])
         last = [{k: t.get(k) for k in TRADE_KEYS} for t in rows[-LAST_TRADES:]][::-1]
         if hide:
-            for t in last:
-                t["pnl"] = t["roe"] = None
+            for t in last:                     # win / loss stays (a label); the money and the prices go
+                t["win"] = bool(t["pnl"] is not None and t["pnl"] > 0)
+                t["pnl"] = t["roe"] = t["entry_price"] = t["exit_price"] = None
         out[a["id"]] = {"equity": None if hide else curve, "trades": last}
     return out
 
@@ -242,13 +254,29 @@ def _write(snap: str, name: str, doc) -> None:
     os.replace(tmp, os.path.join(snap, name))
 
 
-def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = False) -> dict:
-    rows = account_rows(league.conn, league.accts, league.engines, ds_money)
+def server_info(pass_s: Optional[float] = None) -> dict:
+    """What the 상태 screen shows about the machine: load, CPUs, this process's peak memory, the last pass's time."""
+    import resource
+    try:
+        load = [round(x, 2) for x in os.getloadavg()]
+    except OSError:
+        load = None
+    return {"load": load, "cpus": os.cpu_count(), "rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+            "pass_s": None if pass_s is None else round(pass_s, 2)}
+
+
+def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = False,
+                    pass_s: Optional[float] = None) -> dict:
+    book = closed_trades(league.conn, league.accts)
+    rows = account_rows(league.conn, league.accts, league.engines, ds_money, book)
+    # the verdicts from the full rows (labels and counts only: a hidden DeepSeek pick still gets its pass / fail label)
+    verdicts = judge(rows if ds_money else account_rows(league.conn, league.accts, league.engines, True, book))
     doc = {"generated_ms": now_ms, "done_ms": league.done, "lag_s": max(0, (now_ms - league.done) // 1000),
-           "start_ms": league.start_ms, "accounts": rows, "judge": judge(rows), "notes": league.meta.get("notes", []),
-           "ds_money": ds_money}
+           "start_ms": league.start_ms, "started_ms": league.meta.get("started_ms"), "accounts": rows,
+           "judge": verdicts, "notes": league.meta.get("notes", []), "ds_money": ds_money,
+           "watch": SM.watch_summary(league.accts, book, now_ms, ds_money), "server": server_info(pass_s)}
     os.makedirs(snap, exist_ok=True)
-    _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms))
+    _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)
     return doc
 
@@ -280,15 +308,17 @@ def main(argv: Optional[list] = None) -> int:
 
     def fetch(_rest, syms, s, e):
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
-    ds_money = os.environ.get("CANDLEAGUE_DS_MONEY") == "1"
+    # owners 2026-10-11: DeepSeek money shown like core; 0 / off / false / no hides it again
+    ds_money = os.environ.get("CANDLEAGUE_DS_MONEY", "1").strip().lower() not in ("0", "off", "false", "no")
     lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS)
     from .notify import Notifier
     notifier = Notifier(conn)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, done {lg.done}", flush=True)
     while True:
         now = int(time.time() * 1000)
+        t0 = time.monotonic()
         n = lg.advance(final_end(now), on_chunk=lambda: write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money))
-        doc = write_snapshots(a.snap, lg, now, ds_money)
+        doc = write_snapshots(a.snap, lg, now, ds_money, pass_s=time.monotonic() - t0)
         notifier.after_pass(doc, now, caught_up=final_end(now) - lg.done < 3 * FIVE)
         if n:
             print(f"[후보 리그] {n} chunk(s), done {time.strftime('%m-%d %H:%M', time.gmtime(lg.done / 1000))} UTC",

@@ -1,5 +1,6 @@
-"""candleague/notify.py: the [후보 리그] tag, the summary once a day after 09:00 KST when caught up, bust notices
-once, DeepSeek money hidden, a Telegram failure never raises."""
+"""candleague/notify.py: the rule bot's wording (emoji, title, blank line, short lines, KST time last, 후보 리그 named),
+the summary once a day after 09:00 KST when caught up, bust notices once, DeepSeek money hidden when it is, a Telegram
+failure never raises, every message silent."""
 
 from __future__ import annotations
 
@@ -27,11 +28,38 @@ def _doc(bust=False):
 
 
 def test_summary_text():
-    t = N.summary_text(_doc())
-    assert t.startswith("[후보 리그] 아침 요약 (10-05 09:00 KST까지)")
-    assert "S2_ST_ROC 15m (고정 익절 2R · 손절 1.5 ATR): 12건, 한 번 평균 +0.40%, 잔고 $5,200" in t
-    assert "기본값 +0.10%, 동전 -0.10%" in t and "아직 판단 이름" in t
-    assert "F17_Z 15m (고정 익절 2R · 손절 1.5 ATR): 7건 (딥시크: 금액 숨김)" in t
+    doc = _doc()
+    doc["start_ms"] = KST9 - 4 * 86_400_000
+    doc["watch"] = {"checkpoints": [{"ko": "1차 점검", "ms": KST9 + 37 * 86_400_000, "days_left": 37.0}],
+                    "pools": {"core": {"picks": 1, "money": True, "roles": {"cand": {"n": 12, "mean": 0.004}},
+                                       "c2": {"beats_base": True, "beats_flip": False}},
+                              "ds": {"picks": 1, "money": False, "roles": {"cand": {"n": 7, "mean": None}},
+                                     "c2": {"beats_base": None, "beats_flip": True}}}}
+    t = N.summary_text(doc, KST9 + 60_000)
+    lines = t.split("\n")
+    assert lines[0] == "📊 아침 요약 · 후보 리그" and lines[1] == "" and lines[-1] == "10/05 09:01 KST"
+    assert "10/01부터 5일째 · 10/05 09:00 KST까지 처리" in t and "다음 점검: 1차 11/11 · 37일 남음" in t
+    assert "  후보 거래 12번 · 한 번 평균 +0.40%" in t and "  기본값보다 ▲ · 동전보다 ▼" in t
+    assert "딥시크 묶음 (후보 1개)" in t and "  후보 거래 7번 · 금액 숨김" in t and "  기본값보다 — · 동전보다 ▲" in t
+    assert "1. S2_ST_ROC 15분 · +0.40% · 12번 · $5,200" in t and "(거래 30번 전이라 운이 큽니다. 판단은 하지 않습니다)" in t
+    assert "(딥시크 후보 1개는 금액 숨김 설정이라 순위에서 빠짐)" in t and "후보 리그 · 종이 매매 (실제 돈 아님)" in t
+
+
+def test_korean_names_and_silent_sending(monkeypatch):
+    assert N.strat_ko("DOGE") == "도지 봇" and N.strat_ko("NOPE") == "NOPE"
+    assert N.pick_ko({"name": "F5_BOX", "tf": "4h", "role": "quarter"}) == "박스권 양 끝 반전 4시간 1/4 크기"
+    sent = {}
+
+    class R:
+        def read(self):
+            return b"{}"
+
+    def fake(url, body, timeout):
+        sent["url"], sent["body"] = url, body.decode()
+        return R()
+    monkeypatch.setattr(N.urllib.request, "urlopen", fake)
+    N.send_telegram("T", "42", "hi")
+    assert "disable_notification=true" in sent["body"] and "chat_id=42" in sent["body"]
 
 
 def test_once_a_day_and_bust_once(tmp_path):
@@ -43,9 +71,9 @@ def test_once_a_day_and_bust_once(tmp_path):
     assert len(nt.after_pass(_doc(), KST9 + 120_000, caught_up=True)) == 1        # the day's summary
     assert nt.after_pass(_doc(), KST9 + 3_600_000, caught_up=True) == []          # not twice
     out = nt.after_pass(_doc(bust=True), KST9 + 7_200_000, caught_up=True)
-    assert len(out) == 1 and out[0].startswith("[후보 리그] 파산: F17_Z 15m (cand)")
+    assert len(out) == 1 and out[0].startswith("🚨 후보 리그 파산 · F17_Z 15분\n\n") and "후보 리그" in out[0]
     assert nt.after_pass(_doc(bust=True), KST9 + 7_300_000, caught_up=True) == []
-    assert len(sent) == 2 and all(t.startswith("[후보 리그]") for t in sent)
+    assert len(sent) == 2 and all("후보 리그" in t and t.split("\n")[1] == "" for t in sent)
 
 
 def test_a_telegram_failure_never_raises(tmp_path):
@@ -56,11 +84,27 @@ def test_a_telegram_failure_never_raises(tmp_path):
     assert len(N.Notifier(conn, sender=boom).after_pass(_doc(bust=True), KST9 + 60_000, caught_up=True)) == 2
 
 
+def test_one_failing_chat_never_stops_the_others(tmp_path, monkeypatch):
+    conn = RN.open_db(str(tmp_path / "l.db"))
+    got = []
+
+    def send(token, chat, text):
+        if chat == "111":
+            raise OSError("blocked")
+        got.append(chat)
+    monkeypatch.setattr(N, "send_telegram", send)
+    monkeypatch.setenv("CANDLEAGUE_TG_TOKEN", "T")
+    monkeypatch.setenv("CANDLEAGUE_TG_CHAT", "111,222")
+    assert len(N.Notifier(conn).after_pass(_doc(bust=True), KST9 + 60_000, caught_up=True)) == 2
+    assert got == ["222", "222"]
+
+
 def test_below_the_band_is_told_once(tmp_path):
     conn = RN.open_db(str(tmp_path / "l.db"))
     nt = N.Notifier(conn)
     doc = _doc()
     doc["judge"]["c1"]["band"] = {"n": 10, "below": True, "p5": 0.006, "median": 0.01}
     out = nt.after_pass(doc, KST9 - 3_600_000, caught_up=True)
-    assert len(out) == 1 and out[0].startswith("[후보 리그] 예상보다 아래: S2_ST_ROC 15m") and "+0.40% < 백테스트 하위 5% +0.60%" in out[0]
+    assert len(out) == 1 and out[0].startswith("⚠ 후보 리그 경고등 · S2_ST_ROC 15분\n\n") and "한 번 평균 +0.40%" in out[0]
+    assert "백테스트 예상 하위 5% +0.60%보다 낮음" in out[0]
     assert nt.after_pass(doc, KST9 - 3_000_000, caught_up=True) == []

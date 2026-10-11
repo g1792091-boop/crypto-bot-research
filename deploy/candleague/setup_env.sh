@@ -2,11 +2,13 @@
 # 후보 리그 (candidate league) settings in one go, after install_candleague.sh (docs/candleague-ko.md "설치"):
 #
 #   sudo bash deploy/candleague/setup_env.sh                  # Telegram, dashboard address / secret / password
-#   sudo bash deploy/candleague/setup_env.sh --new-password   # only to change the dashboard password later
+#   sudo bash deploy/candleague/setup_env.sh --new-password   # only to change the dashboard password later (and turn
+#                                                             # the password back on after --no-password)
+#   sudo bash deploy/candleague/setup_env.sh --no-password    # the dashboard without a password (Tailscale address only)
 #   sudo bash deploy/candleague/setup_env.sh --own-telegram   # the league's own Telegram bot and chat (then as above)
 #
 # 1. Telegram: when the league has none yet, the demo lab bot's token and chats (/etc/demobot/demobot.env) are copied
-#    in on this server (every league message starts with [후보 리그]); no new key, nothing pasted anywhere.
+#    in on this server (every league message names 후보 리그 in its title line); no new key, nothing pasted anywhere.
 #    --own-telegram: a separate chat instead. The owners make a new bot with @BotFather, type its token here (hidden,
 #    on this server only; never in a chat), press Start on the bot or add it to a group; the chats are found with the
 #    new bot's getUpdates (the demo lab bot polls its own updates, so its token is never used for this), a test
@@ -126,6 +128,28 @@ print(",".join(str(i) for i in list(chats)[:4]))
   echo "저장했습니다 (값은 화면에 나오지 않습니다). 시험 메시지 ${ok}/${#arr[@]}개 보냄 - 텔레그램을 확인하세요."
 }
 
+tailscale_addr() {   # 100.64.0.0/10 (Tailscale) or loopback
+  local a b c d
+  IFS=. read -r a b c d <<< "$1"
+  if [ "$1" = "127.0.0.1" ]; then return 0; fi
+  [[ "$a" == 100 && "$b" =~ ^[0-9]+$ && "$b" -ge 64 && "$b" -le 127 && -n "$d" ]]
+}
+
+if [ "${1:-}" = "--no-password" ]; then
+  HOST="$(get CANDLEAGUE_DASH_HOST "$ENVF")"
+  if ! grep -q CANDLEAGUE_DASH_OPEN "$APP/candleague/dash.py"; then
+    echo "설치된 대시보드가 아직 예전 것입니다. 먼저 업데이트: sudo bash $HERE/install_candleague.sh"; exit 1
+  fi
+  if ! tailscale_addr "$HOST"; then
+    echo "대시보드 주소($HOST)가 Tailscale 주소가 아니라 비밀번호를 끌 수 없습니다. 먼저: sudo bash $0"; exit 1
+  fi
+  put CANDLEAGUE_DASH_OPEN 1
+  systemctl restart candleague-dash.service || echo "대시보드를 다시 켜지 못했습니다: journalctl -u candleague-dash -n 40 --no-pager"
+  echo "이제 비밀번호 없이 열립니다: http://$HOST:$(get CANDLEAGUE_DASH_PORT "$ENVF" | sed 's/^$/8091/')"
+  echo "Tailscale에 로그인한 두 분 기기에서만 들어올 수 있습니다. 비밀번호를 다시 켜려면: sudo bash $0 --new-password"
+  exit 0
+fi
+
 if [ "${1:-}" = "--own-telegram" ]; then
   own_telegram
 fi
@@ -140,7 +164,7 @@ if [ "${1:-}" != "--new-password" ]; then
     put CANDLEAGUE_TG_TOKEN "$(get DEMOBOT_TG_TOKEN "$DEMO")"
     put CANDLEAGUE_TG_CHAT "$(get DEMOBOT_TG_CHAT "$DEMO")"
     echo "데모 랩 봇의 토큰과 받는 사람을 이 서버 안에서 옮겨 넣었습니다 (값은 화면에 나오지 않습니다)."
-    echo "후보 리그 메시지는 같은 대화방에 [후보 리그]로 시작해서 옵니다."
+    echo "후보 리그 메시지는 같은 대화방에 옵니다. 첫 줄 제목에 '후보 리그'가 들어 있습니다 (조용히 옴)."
   else
     echo "데모 랩 봇 설정을 찾지 못했습니다. 텔레그램 없이도 리그와 대시보드는 돕니다."
     echo "나중에 넣으려면: SUDO_EDITOR=nano sudoedit $ENVF  (CANDLEAGUE_TG_TOKEN, CANDLEAGUE_TG_CHAT)"
@@ -181,6 +205,10 @@ else
   if [[ "$H" != pbkdf2\$* ]]; then echo "비밀번호를 정하지 못했습니다. 같은 명령을 다시 실행하세요."; exit 1; fi
   put CANDLEAGUE_DASH_PASSWORD_HASH "$H"
   echo "저장했습니다 (해시로만)"
+  if [ "${1:-}" = "--new-password" ] && [ "$(get CANDLEAGUE_DASH_OPEN "$ENVF")" = "1" ]; then
+    put CANDLEAGUE_DASH_OPEN 0
+    echo "비밀번호를 다시 켰습니다"
+  fi
 fi
 
 echo "== 5. 방화벽 (Tailscale에만, 인터넷에는 열지 않음)"
