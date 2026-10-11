@@ -181,6 +181,7 @@ def replay_main(argv=None) -> int:
     ap.add_argument("--to", required=True)
     ap.add_argument("--systems", default="")
     ap.add_argument("--procs", type=int, default=CFG.procs())
+    ap.add_argument("--warmup", default=None, help="history start (default HUNTBOT_WARMUP_START): the runner's own")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     from . import runner as RN
@@ -194,7 +195,8 @@ def replay_main(argv=None) -> int:
     pick = [x.strip() for x in a.systems.split(",") if x.strip()]
     specs = [s for s in syms_all if not pick or s["id"] in {aliases.get(p, p) for p in pick}]
     r = RN.Runner(store, _NullLedger(), RN.open_run_db(os.path.join(tempfile.mkdtemp(), "run.db")), uni, "",
-                  tempfile.mkdtemp(), tempfile.mkdtemp(), warmup_ms=CFG.warmup_start_ms(), fwd_ms=lo)
+                  tempfile.mkdtemp(), tempfile.mkdtemp(),
+                  warmup_ms=CFG.day_ms(a.warmup) if a.warmup else CFG.warmup_start_ms(), fwd_ms=lo)
     r.load_data()
     r.sync_data()
     coins, fund = r.build_coins(hi)

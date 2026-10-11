@@ -256,3 +256,27 @@ def test_a_repainting_definition_is_frozen_and_reported(tmp_path, patched):
             later = {(t["coin"], t["in_ms"]): t for t in by2["F2:LEAK:15m:NONE"]}
             for k, t in closed.items():
                 assert k in later and _same_trade(t, later[k])
+
+
+def test_replay_command_gives_the_runner_record(tmp_path, patched, monkeypatch):
+    """python -m huntbot replay (the H 15 review check) on the stored bars = the runner's last cycle."""
+    import json
+    from huntbot import bench as BB
+    arrays = B.synth_arrays(SYMS, WARM, END + DAY, seed=13)
+    systems = [s for s in specs() if s["id"] in ("F1:E2:15m:NONE", "F2:FAKE:30m:NONE")]
+    r, seen = _run(tmp_path, arrays, _cycles()[:6] + [END], systems)
+    uni = tmp_path / "u.json"
+    uni.write_text(json.dumps({"symbols": SYMS}))
+    monkeypatch.setenv("HUNTBOT_DATA", str(tmp_path))
+    monkeypatch.setenv("HUNTBOT_UNIVERSE", str(uni))
+    monkeypatch.setattr(BB.H, "wide_systems", lambda: systems)
+    monkeypatch.setattr(BB.H, "v1_systems", lambda: [])
+    out = tmp_path / "replay.json"
+    assert BB.replay_main(["--to", CFG.ms_str(END)[:10], "--warmup", "2026-08-20", "--procs", "1",
+                           "--out", str(out)]) == 0
+    rep = json.load(open(out))["results"]
+    for spec in systems:
+        mine = r.last_results[spec["id"]]
+        assert rep[spec["id"]]["n_positions"] == mine["summary"]["n_positions"] > 0
+        assert rep[spec["id"]]["end_multiple"] == mine["summary"]["end_multiple"]
+        assert rep[spec["id"]]["day_eq"] == mine["summary"]["day_eq"]
