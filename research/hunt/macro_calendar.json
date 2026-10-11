@@ -1,0 +1,2522 @@
+{
+ "what": "O2 macro blackout calendar (PREREG_HUNT_WIDE W 7.4a): FOMC policy-statement release times and US Employment Situation (nonfarm payrolls) release times, 2020-2026, in ET and UTC. Dates only: no market outcome was read to make it. research/hunt/reads_o.py uses it only when this file's line is in PREREG_HUNT_WIDE.sha256 with its sha256 and every event inside the read periods has verified_official true.",
+ "status": "UNVERIFIED DRAFT: no official page could be fetched from the building session (the egress proxy denied CONNECT to www.federalreserve.gov and www.bls.gov; the fetch tool could not resolve them). Every date below was cross-checked only against search-engine excerpts of the official pages (field 'evidence'), or not at all where it says 'prior knowledge'. verified_official is false everywhere. To verify: open the two official pages named in 'how_to_verify', compare every date and time, set verified_official true on each event checked (fix any that differ), keep 'counts' equal to the events, then append this file's line to the pin before the read runs.",
+ "how_to_verify": [
+  "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm (2021-2027 meetings; each meeting's statement link and 'Released ... at 2:00 p.m.')",
+  "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm (2020, incl. the unscheduled meetings and the March 23 notation vote)",
+  "https://www.bls.gov/bls/news-release/empsit.htm (every past Employment Situation release; the file name empsit_MMDDYYYY is the release date; each release's first line gives the 8:30 a.m. ET embargo)",
+  "https://www.bls.gov/schedule/news_release/empsit.htm and https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm (2025-2026 schedule and the rescheduled releases)"
+ ],
+ "built_utc": "2026-10-11T15:25Z",
+ "dst_rule": "US Eastern: EDT (UTC-4) from the second Sunday of March to the first Sunday of November (02:00 local), EST (UTC-5) otherwise; all listed times are after 02:00 local",
+ "definitions": {
+  "FOMC": "T = release time of the FOMC's post-meeting monetary policy statement (14:00 ET for every scheduled meeting of 2020-2026; the 2020 unscheduled meetings and the 2020-03-23 notation vote at their own release times); meeting_type scheduled / unscheduled / notation_vote",
+  "NFP": "T = release time of the BLS Employment Situation news release (08:30 ET), on the actual release date (rescheduled dates where BLS moved a release)"
+ },
+ "sources": [
+  {
+   "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+   "what": "FOMC meeting calendars 2021-2027 (statement links and release times)",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search restricted to federalreserve.gov (excerpts); direct fetch refused by the egress proxy"
+  },
+  {
+   "url": "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+   "what": "FOMC 2020 historical calendar (unscheduled meetings, cancelled March 17-18, March 23 notation vote)",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts; direct fetch refused"
+  },
+  {
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+   "what": "2020 FOMC press releases",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts; direct fetch refused"
+  },
+  {
+   "url": "https://www.federalreserve.gov/monetarypolicy/fomcpresconf<YYYYMMDD>.htm",
+   "what": "each meeting's page (statement release time)",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts for 2020-03-03, 2020-03-15, 2021 (5 meetings), 2022 (3), 2026 (6)"
+  },
+  {
+   "url": "https://www.bls.gov/bls/news-release/empsit.htm",
+   "what": "Employment Situation archived news releases",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search restricted to bls.gov (excerpts); direct fetch refused"
+  },
+  {
+   "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+   "what": "Schedule of releases for the Employment Situation",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts; direct fetch refused"
+  },
+  {
+   "url": "https://www.bls.gov/schedule/<YYYY>/home.htm",
+   "what": "BLS schedule of selected releases, 2021-2026",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts; direct fetch refused"
+  },
+  {
+   "url": "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+   "what": "Revised news release dates following the 2025 and 2026 lapses in appropriations",
+   "searched_utc": "2026-10-11T15:05Z..15:20Z",
+   "method": "web search excerpts; direct fetch refused"
+  }
+ ],
+ "excluded": [
+  {
+   "kind": "FOMC",
+   "date_et": "2020-03-18",
+   "why": "the scheduled March 17-18, 2020 meeting was cancelled (2020 historical calendar excerpt)"
+  },
+  {
+   "kind": "FOMC",
+   "date_et": "2025-08-22",
+   "why": "notation vote on the revised Statement on Longer-Run Goals and Monetary Policy Strategy: not a policy-decision statement (open for the owners: include it as a T?)"
+  },
+  {
+   "kind": "NFP",
+   "date_et": "2025-10-03",
+   "why": "the September 2025 release was moved to 2025-11-20 (lapse in appropriations); no October 2025 release"
+  },
+  {
+   "kind": "NFP",
+   "date_et": "2026-02-06",
+   "why": "the January 2026 release was moved to 2026-02-11"
+  }
+ ],
+ "count_exceptions": {
+  "FOMC:2020": "7 scheduled meetings held (March 17-18 cancelled) plus 2 unscheduled meetings and 1 notation vote with a policy statement: 10 statements",
+  "NFP:2025": "11 releases: no October 2025 Employment Situation (BLS: October establishment data published with November's on 2025-12-16)"
+ },
+ "events": [
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2019-12",
+   "reference_month": "2019-12",
+   "date_et": "2020-01-10",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2020-01-10T13:30Z",
+   "t_ms": 1578663000000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01102020.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (archived release empsit_01102020, embargo 8:30 a.m.)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-01-28/01-29",
+   "meeting": "2020-01-28/01-29",
+   "meeting_type": "scheduled",
+   "date_et": "2020-01-29",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2020-01-29T19:00Z",
+   "t_ms": 1580324400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200129.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-01",
+   "reference_month": "2020-01",
+   "date_et": "2020-02-07",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2020-02-07T13:30Z",
+   "t_ms": 1581082200000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02072020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-03-02 (unscheduled; statement released 2020-03-03)",
+   "meeting": "2020-03-02 (unscheduled; statement released 2020-03-03)",
+   "meeting_type": "unscheduled",
+   "date_et": "2020-03-03",
+   "time_et": "10:00",
+   "tz": "EST",
+   "utc": "2020-03-03T15:00Z",
+   "t_ms": 1583247600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200303.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched) (meeting page: statement released 10:00 a.m.)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-02",
+   "reference_month": "2020-02",
+   "date_et": "2020-03-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2020-03-06T13:30Z",
+   "t_ms": 1583501400000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03062020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-03-15 (unscheduled, Sunday)",
+   "meeting": "2020-03-15 (unscheduled, Sunday)",
+   "meeting_type": "unscheduled",
+   "date_et": "2020-03-15",
+   "time_et": "17:00",
+   "tz": "EDT",
+   "utc": "2020-03-15T21:00Z",
+   "t_ms": 1584306000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200315.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched) (meeting page: statement released 5:00 p.m.)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-03-23 (notation vote; FOMC statement on purchases)",
+   "meeting": "2020-03-23 (notation vote; FOMC statement on purchases)",
+   "meeting_type": "notation_vote",
+   "date_et": "2020-03-23",
+   "time_et": "08:00",
+   "tz": "EDT",
+   "utc": "2020-03-23T12:00Z",
+   "t_ms": 1584964800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200323a.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); the 08:00 ET release time is the agent's prior knowledge only (not seen)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-03",
+   "reference_month": "2020-03",
+   "date_et": "2020-04-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-04-03T12:30Z",
+   "t_ms": 1585917000000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04032020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-04-28/04-29",
+   "meeting": "2020-04-28/04-29",
+   "meeting_type": "scheduled",
+   "date_et": "2020-04-29",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2020-04-29T18:00Z",
+   "t_ms": 1588183200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200429.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-04",
+   "reference_month": "2020-04",
+   "date_et": "2020-05-08",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-05-08T12:30Z",
+   "t_ms": 1588941000000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05082020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-05",
+   "reference_month": "2020-05",
+   "date_et": "2020-06-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-06-05T12:30Z",
+   "t_ms": 1591360200000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06052020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-06-09/06-10",
+   "meeting": "2020-06-09/06-10",
+   "meeting_type": "scheduled",
+   "date_et": "2020-06-10",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2020-06-10T18:00Z",
+   "t_ms": 1591812000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200610.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-06",
+   "reference_month": "2020-06",
+   "date_et": "2020-07-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-07-02T12:30Z",
+   "t_ms": 1593693000000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07022020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false,
+   "note": "Thursday (Independence Day observed Friday 2020-07-03)"
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-07-28/07-29",
+   "meeting": "2020-07-28/07-29",
+   "meeting_type": "scheduled",
+   "date_et": "2020-07-29",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2020-07-29T18:00Z",
+   "t_ms": 1596045600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200729.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-07",
+   "reference_month": "2020-07",
+   "date_et": "2020-08-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-08-07T12:30Z",
+   "t_ms": 1596803400000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08072020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-08",
+   "reference_month": "2020-08",
+   "date_et": "2020-09-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-09-04T12:30Z",
+   "t_ms": 1599222600000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09042020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-09-15/09-16",
+   "meeting": "2020-09-15/09-16",
+   "meeting_type": "scheduled",
+   "date_et": "2020-09-16",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2020-09-16T18:00Z",
+   "t_ms": 1600279200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20200916.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-09",
+   "reference_month": "2020-09",
+   "date_et": "2020-10-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2020-10-02T12:30Z",
+   "t_ms": 1601641800000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10022020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-11-04/11-05",
+   "meeting": "2020-11-04/11-05",
+   "meeting_type": "scheduled",
+   "date_et": "2020-11-05",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2020-11-05T19:00Z",
+   "t_ms": 1604602800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20201105.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-10",
+   "reference_month": "2020-10",
+   "date_et": "2020-11-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2020-11-06T13:30Z",
+   "t_ms": 1604669400000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11062020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-11",
+   "reference_month": "2020-11",
+   "date_et": "2020-12-04",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2020-12-04T13:30Z",
+   "t_ms": 1607088600000,
+   "source_urls": [
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12042020.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2020-12-15/12-16",
+   "meeting": "2020-12-15/12-16",
+   "meeting_type": "scheduled",
+   "date_et": "2020-12-16",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2020-12-16T19:00Z",
+   "t_ms": 1608145200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
+    "https://www.federalreserve.gov/newsevents/pressreleases/2020-press-fomc.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20201216.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2020-12",
+   "reference_month": "2020-12",
+   "date_et": "2021-01-08",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2021-01-08T13:30Z",
+   "t_ms": 1610112600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01082021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-01-26/01-27",
+   "meeting": "2021-01-26/01-27",
+   "meeting_type": "scheduled",
+   "date_et": "2021-01-27",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2021-01-27T19:00Z",
+   "t_ms": 1611774000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210127.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-01",
+   "reference_month": "2021-01",
+   "date_et": "2021-02-05",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2021-02-05T13:30Z",
+   "t_ms": 1612531800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02052021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-02",
+   "reference_month": "2021-02",
+   "date_et": "2021-03-05",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2021-03-05T13:30Z",
+   "t_ms": 1614951000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03052021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-03-16/03-17",
+   "meeting": "2021-03-16/03-17",
+   "meeting_type": "scheduled",
+   "date_et": "2021-03-17",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-03-17T18:00Z",
+   "t_ms": 1616004000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210317.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-03",
+   "reference_month": "2021-03",
+   "date_et": "2021-04-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-04-02T12:30Z",
+   "t_ms": 1617366600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04022021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-04-27/04-28",
+   "meeting": "2021-04-27/04-28",
+   "meeting_type": "scheduled",
+   "date_et": "2021-04-28",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-04-28T18:00Z",
+   "t_ms": 1619632800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210428.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-04",
+   "reference_month": "2021-04",
+   "date_et": "2021-05-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-05-07T12:30Z",
+   "t_ms": 1620390600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05072021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-05",
+   "reference_month": "2021-05",
+   "date_et": "2021-06-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-06-04T12:30Z",
+   "t_ms": 1622809800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06042021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-06-15/06-16",
+   "meeting": "2021-06-15/06-16",
+   "meeting_type": "scheduled",
+   "date_et": "2021-06-16",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-06-16T18:00Z",
+   "t_ms": 1623866400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210616.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-06",
+   "reference_month": "2021-06",
+   "date_et": "2021-07-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-07-02T12:30Z",
+   "t_ms": 1625229000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07022021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-07-27/07-28",
+   "meeting": "2021-07-27/07-28",
+   "meeting_type": "scheduled",
+   "date_et": "2021-07-28",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-07-28T18:00Z",
+   "t_ms": 1627495200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210728.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-07",
+   "reference_month": "2021-07",
+   "date_et": "2021-08-06",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-08-06T12:30Z",
+   "t_ms": 1628253000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08062021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-08",
+   "reference_month": "2021-08",
+   "date_et": "2021-09-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-09-03T12:30Z",
+   "t_ms": 1630672200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09032021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-09-21/09-22",
+   "meeting": "2021-09-21/09-22",
+   "meeting_type": "scheduled",
+   "date_et": "2021-09-22",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-09-22T18:00Z",
+   "t_ms": 1632333600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20210922.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-09",
+   "reference_month": "2021-09",
+   "date_et": "2021-10-08",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-10-08T12:30Z",
+   "t_ms": 1633696200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10082021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-11-02/11-03",
+   "meeting": "2021-11-02/11-03",
+   "meeting_type": "scheduled",
+   "date_et": "2021-11-03",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2021-11-03T18:00Z",
+   "t_ms": 1635962400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20211103.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-10",
+   "reference_month": "2021-10",
+   "date_et": "2021-11-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2021-11-05T12:30Z",
+   "t_ms": 1636115400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11052021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-11",
+   "reference_month": "2021-11",
+   "date_et": "2021-12-03",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2021-12-03T13:30Z",
+   "t_ms": 1638538200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2021/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12032021.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2021-12-14/12-15",
+   "meeting": "2021-12-14/12-15",
+   "meeting_type": "scheduled",
+   "date_et": "2021-12-15",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2021-12-15T19:00Z",
+   "t_ms": 1639594800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20211215.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2021-12",
+   "reference_month": "2021-12",
+   "date_et": "2022-01-07",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2022-01-07T13:30Z",
+   "t_ms": 1641562200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01072022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-01-25/01-26",
+   "meeting": "2022-01-25/01-26",
+   "meeting_type": "scheduled",
+   "date_et": "2022-01-26",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2022-01-26T19:00Z",
+   "t_ms": 1643223600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220126.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-01",
+   "reference_month": "2022-01",
+   "date_et": "2022-02-04",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2022-02-04T13:30Z",
+   "t_ms": 1643981400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02042022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-02",
+   "reference_month": "2022-02",
+   "date_et": "2022-03-04",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2022-03-04T13:30Z",
+   "t_ms": 1646400600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03042022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-03-15/03-16",
+   "meeting": "2022-03-15/03-16",
+   "meeting_type": "scheduled",
+   "date_et": "2022-03-16",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-03-16T18:00Z",
+   "t_ms": 1647453600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220316.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-03",
+   "reference_month": "2022-03",
+   "date_et": "2022-04-01",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-04-01T12:30Z",
+   "t_ms": 1648816200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04012022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-05-03/05-04",
+   "meeting": "2022-05-03/05-04",
+   "meeting_type": "scheduled",
+   "date_et": "2022-05-04",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-05-04T18:00Z",
+   "t_ms": 1651687200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220504.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-04",
+   "reference_month": "2022-04",
+   "date_et": "2022-05-06",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-05-06T12:30Z",
+   "t_ms": 1651840200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05062022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-05",
+   "reference_month": "2022-05",
+   "date_et": "2022-06-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-06-03T12:30Z",
+   "t_ms": 1654259400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06032022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-06-14/06-15",
+   "meeting": "2022-06-14/06-15",
+   "meeting_type": "scheduled",
+   "date_et": "2022-06-15",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-06-15T18:00Z",
+   "t_ms": 1655316000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220615.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-06",
+   "reference_month": "2022-06",
+   "date_et": "2022-07-08",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-07-08T12:30Z",
+   "t_ms": 1657283400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07082022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-07-26/07-27",
+   "meeting": "2022-07-26/07-27",
+   "meeting_type": "scheduled",
+   "date_et": "2022-07-27",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-07-27T18:00Z",
+   "t_ms": 1658944800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220727.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-07",
+   "reference_month": "2022-07",
+   "date_et": "2022-08-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-08-05T12:30Z",
+   "t_ms": 1659702600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08052022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-08",
+   "reference_month": "2022-08",
+   "date_et": "2022-09-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-09-02T12:30Z",
+   "t_ms": 1662121800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09022022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-09-20/09-21",
+   "meeting": "2022-09-20/09-21",
+   "meeting_type": "scheduled",
+   "date_et": "2022-09-21",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-09-21T18:00Z",
+   "t_ms": 1663783200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20220921.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-09",
+   "reference_month": "2022-09",
+   "date_et": "2022-10-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-10-07T12:30Z",
+   "t_ms": 1665145800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10072022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-11-01/11-02",
+   "meeting": "2022-11-01/11-02",
+   "meeting_type": "scheduled",
+   "date_et": "2022-11-02",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2022-11-02T18:00Z",
+   "t_ms": 1667412000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20221102.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-10",
+   "reference_month": "2022-10",
+   "date_et": "2022-11-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2022-11-04T12:30Z",
+   "t_ms": 1667565000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11042022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-11",
+   "reference_month": "2022-11",
+   "date_et": "2022-12-02",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2022-12-02T13:30Z",
+   "t_ms": 1669987800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2022/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12022022.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2022-12-13/12-14",
+   "meeting": "2022-12-13/12-14",
+   "meeting_type": "scheduled",
+   "date_et": "2022-12-14",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2022-12-14T19:00Z",
+   "t_ms": 1671044400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20221214.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2022-12",
+   "reference_month": "2022-12",
+   "date_et": "2023-01-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2023-01-06T13:30Z",
+   "t_ms": 1673011800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01062023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-01-31/02-01",
+   "meeting": "2023-01-31/02-01",
+   "meeting_type": "scheduled",
+   "date_et": "2023-02-01",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2023-02-01T19:00Z",
+   "t_ms": 1675278000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230201.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-01",
+   "reference_month": "2023-01",
+   "date_et": "2023-02-03",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2023-02-03T13:30Z",
+   "t_ms": 1675431000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02032023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-02",
+   "reference_month": "2023-02",
+   "date_et": "2023-03-10",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2023-03-10T13:30Z",
+   "t_ms": 1678455000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03102023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-03-21/03-22",
+   "meeting": "2023-03-21/03-22",
+   "meeting_type": "scheduled",
+   "date_et": "2023-03-22",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-03-22T18:00Z",
+   "t_ms": 1679508000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230322.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-03",
+   "reference_month": "2023-03",
+   "date_et": "2023-04-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-04-07T12:30Z",
+   "t_ms": 1680870600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04072023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-05-02/05-03",
+   "meeting": "2023-05-02/05-03",
+   "meeting_type": "scheduled",
+   "date_et": "2023-05-03",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-05-03T18:00Z",
+   "t_ms": 1683136800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230503.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-04",
+   "reference_month": "2023-04",
+   "date_et": "2023-05-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-05-05T12:30Z",
+   "t_ms": 1683289800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05052023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-05",
+   "reference_month": "2023-05",
+   "date_et": "2023-06-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-06-02T12:30Z",
+   "t_ms": 1685709000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06022023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-06-13/06-14",
+   "meeting": "2023-06-13/06-14",
+   "meeting_type": "scheduled",
+   "date_et": "2023-06-14",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-06-14T18:00Z",
+   "t_ms": 1686765600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230614.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-06",
+   "reference_month": "2023-06",
+   "date_et": "2023-07-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-07-07T12:30Z",
+   "t_ms": 1688733000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07072023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-07-25/07-26",
+   "meeting": "2023-07-25/07-26",
+   "meeting_type": "scheduled",
+   "date_et": "2023-07-26",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-07-26T18:00Z",
+   "t_ms": 1690394400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230726.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-07",
+   "reference_month": "2023-07",
+   "date_et": "2023-08-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-08-04T12:30Z",
+   "t_ms": 1691152200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08042023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-08",
+   "reference_month": "2023-08",
+   "date_et": "2023-09-01",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-09-01T12:30Z",
+   "t_ms": 1693571400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09012023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-09-19/09-20",
+   "meeting": "2023-09-19/09-20",
+   "meeting_type": "scheduled",
+   "date_et": "2023-09-20",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-09-20T18:00Z",
+   "t_ms": 1695232800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230920.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-09",
+   "reference_month": "2023-09",
+   "date_et": "2023-10-06",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-10-06T12:30Z",
+   "t_ms": 1696595400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10062023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-10-31/11-01",
+   "meeting": "2023-10-31/11-01",
+   "meeting_type": "scheduled",
+   "date_et": "2023-11-01",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2023-11-01T18:00Z",
+   "t_ms": 1698861600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20231101.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-10",
+   "reference_month": "2023-10",
+   "date_et": "2023-11-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2023-11-03T12:30Z",
+   "t_ms": 1699014600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11032023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-11",
+   "reference_month": "2023-11",
+   "date_et": "2023-12-08",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2023-12-08T13:30Z",
+   "t_ms": 1702042200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2023/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12082023.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2023-12-12/12-13",
+   "meeting": "2023-12-12/12-13",
+   "meeting_type": "scheduled",
+   "date_et": "2023-12-13",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2023-12-13T19:00Z",
+   "t_ms": 1702494000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20231213.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2023-12",
+   "reference_month": "2023-12",
+   "date_et": "2024-01-05",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2024-01-05T13:30Z",
+   "t_ms": 1704461400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01052024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-01-30/01-31",
+   "meeting": "2024-01-30/01-31",
+   "meeting_type": "scheduled",
+   "date_et": "2024-01-31",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2024-01-31T19:00Z",
+   "t_ms": 1706727600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240131.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-01",
+   "reference_month": "2024-01",
+   "date_et": "2024-02-02",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2024-02-02T13:30Z",
+   "t_ms": 1706880600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02022024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-02",
+   "reference_month": "2024-02",
+   "date_et": "2024-03-08",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2024-03-08T13:30Z",
+   "t_ms": 1709904600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03082024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-03-19/03-20",
+   "meeting": "2024-03-19/03-20",
+   "meeting_type": "scheduled",
+   "date_et": "2024-03-20",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2024-03-20T18:00Z",
+   "t_ms": 1710957600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240320.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-03",
+   "reference_month": "2024-03",
+   "date_et": "2024-04-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-04-05T12:30Z",
+   "t_ms": 1712320200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04052024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-04-30/05-01",
+   "meeting": "2024-04-30/05-01",
+   "meeting_type": "scheduled",
+   "date_et": "2024-05-01",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2024-05-01T18:00Z",
+   "t_ms": 1714586400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240501.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-04",
+   "reference_month": "2024-04",
+   "date_et": "2024-05-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-05-03T12:30Z",
+   "t_ms": 1714739400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05032024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-05",
+   "reference_month": "2024-05",
+   "date_et": "2024-06-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-06-07T12:30Z",
+   "t_ms": 1717763400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06072024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-06-11/06-12",
+   "meeting": "2024-06-11/06-12",
+   "meeting_type": "scheduled",
+   "date_et": "2024-06-12",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2024-06-12T18:00Z",
+   "t_ms": 1718215200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240612.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-06",
+   "reference_month": "2024-06",
+   "date_et": "2024-07-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-07-05T12:30Z",
+   "t_ms": 1720182600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07052024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-07-30/07-31",
+   "meeting": "2024-07-30/07-31",
+   "meeting_type": "scheduled",
+   "date_et": "2024-07-31",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2024-07-31T18:00Z",
+   "t_ms": 1722448800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240731.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-07",
+   "reference_month": "2024-07",
+   "date_et": "2024-08-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-08-02T12:30Z",
+   "t_ms": 1722601800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08022024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-08",
+   "reference_month": "2024-08",
+   "date_et": "2024-09-06",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-09-06T12:30Z",
+   "t_ms": 1725625800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09062024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-09-17/09-18",
+   "meeting": "2024-09-17/09-18",
+   "meeting_type": "scheduled",
+   "date_et": "2024-09-18",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2024-09-18T18:00Z",
+   "t_ms": 1726682400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240918.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-09",
+   "reference_month": "2024-09",
+   "date_et": "2024-10-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-10-04T12:30Z",
+   "t_ms": 1728045000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10042024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-10",
+   "reference_month": "2024-10",
+   "date_et": "2024-11-01",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2024-11-01T12:30Z",
+   "t_ms": 1730464200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11012024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-11-06/11-07",
+   "meeting": "2024-11-06/11-07",
+   "meeting_type": "scheduled",
+   "date_et": "2024-11-07",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2024-11-07T19:00Z",
+   "t_ms": 1731006000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20241107.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-11",
+   "reference_month": "2024-11",
+   "date_et": "2024-12-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2024-12-06T13:30Z",
+   "t_ms": 1733491800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2024/home.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12062024.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS yearly schedule; 08:30 ET stated for 2024)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2024-12-17/12-18",
+   "meeting": "2024-12-17/12-18",
+   "meeting_type": "scheduled",
+   "date_et": "2024-12-18",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2024-12-18T19:00Z",
+   "t_ms": 1734548400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20241218.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2024-12",
+   "reference_month": "2024-12",
+   "date_et": "2025-01-10",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2025-01-10T13:30Z",
+   "t_ms": 1736515800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01102025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-01-28/01-29",
+   "meeting": "2025-01-28/01-29",
+   "meeting_type": "scheduled",
+   "date_et": "2025-01-29",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2025-01-29T19:00Z",
+   "t_ms": 1738177200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250129.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-01",
+   "reference_month": "2025-01",
+   "date_et": "2025-02-07",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2025-02-07T13:30Z",
+   "t_ms": 1738935000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02072025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-02",
+   "reference_month": "2025-02",
+   "date_et": "2025-03-07",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2025-03-07T13:30Z",
+   "t_ms": 1741354200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03072025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-03-18/03-19",
+   "meeting": "2025-03-18/03-19",
+   "meeting_type": "scheduled",
+   "date_et": "2025-03-19",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-03-19T18:00Z",
+   "t_ms": 1742407200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250319.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-03",
+   "reference_month": "2025-03",
+   "date_et": "2025-04-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-04-04T12:30Z",
+   "t_ms": 1743769800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04042025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-04",
+   "reference_month": "2025-04",
+   "date_et": "2025-05-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-05-02T12:30Z",
+   "t_ms": 1746189000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05022025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-05-06/05-07",
+   "meeting": "2025-05-06/05-07",
+   "meeting_type": "scheduled",
+   "date_et": "2025-05-07",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-05-07T18:00Z",
+   "t_ms": 1746640800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250507.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-05",
+   "reference_month": "2025-05",
+   "date_et": "2025-06-06",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-06-06T12:30Z",
+   "t_ms": 1749213000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06062025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-06-17/06-18",
+   "meeting": "2025-06-17/06-18",
+   "meeting_type": "scheduled",
+   "date_et": "2025-06-18",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-06-18T18:00Z",
+   "t_ms": 1750269600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250618.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-06",
+   "reference_month": "2025-06",
+   "date_et": "2025-07-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-07-03T12:30Z",
+   "t_ms": 1751545800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07032025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false,
+   "note": "Thursday (Independence Day Friday 2025-07-04)"
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-07-29/07-30",
+   "meeting": "2025-07-29/07-30",
+   "meeting_type": "scheduled",
+   "date_et": "2025-07-30",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-07-30T18:00Z",
+   "t_ms": 1753898400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250730.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-07",
+   "reference_month": "2025-07",
+   "date_et": "2025-08-01",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-08-01T12:30Z",
+   "t_ms": 1754051400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08012025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-08",
+   "reference_month": "2025-08",
+   "date_et": "2025-09-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2025-09-05T12:30Z",
+   "t_ms": 1757075400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09052025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-09-16/09-17",
+   "meeting": "2025-09-16/09-17",
+   "meeting_type": "scheduled",
+   "date_et": "2025-09-17",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-09-17T18:00Z",
+   "t_ms": 1758132000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250917.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-10-28/10-29",
+   "meeting": "2025-10-28/10-29",
+   "meeting_type": "scheduled",
+   "date_et": "2025-10-29",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2025-10-29T18:00Z",
+   "t_ms": 1761760800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20251029.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-09",
+   "reference_month": "2025-09",
+   "date_et": "2025-11-20",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2025-11-20T13:30Z",
+   "t_ms": 1763645400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_11202025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false,
+   "note": "rescheduled from 2025-10-03 (lapse in appropriations)"
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2025-12-09/12-10",
+   "meeting": "2025-12-09/12-10",
+   "meeting_type": "scheduled",
+   "date_et": "2025-12-10",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2025-12-10T19:00Z",
+   "t_ms": 1765393200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20251210.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-11 (with the October 2025 establishment data)",
+   "reference_month": "2025-11 (with the October 2025 establishment data)",
+   "date_et": "2025-12-16",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2025-12-16T13:30Z",
+   "t_ms": 1765891800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2025/home.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/bls/news-release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_12162025.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "verified_official": false,
+   "note": "rescheduled from 2025-12-05; no separate October 2025 release"
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2025-12",
+   "reference_month": "2025-12",
+   "date_et": "2026-01-09",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2026-01-09T13:30Z",
+   "t_ms": 1767965400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_01092026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-01-27/01-28",
+   "meeting": "2026-01-27/01-28",
+   "meeting_type": "scheduled",
+   "date_et": "2026-01-28",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2026-01-28T19:00Z",
+   "t_ms": 1769626800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260128.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-01",
+   "reference_month": "2026-01",
+   "date_et": "2026-02-11",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2026-02-11T13:30Z",
+   "t_ms": 1770816600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm",
+    "https://www.bls.gov/news.release/archives/empsit_02112026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false,
+   "note": "rescheduled from 2026-02-06 (2026 lapse in appropriations)"
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-02",
+   "reference_month": "2026-02",
+   "date_et": "2026-03-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2026-03-06T13:30Z",
+   "t_ms": 1772803800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_03062026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-03-17/03-18",
+   "meeting": "2026-03-17/03-18",
+   "meeting_type": "scheduled",
+   "date_et": "2026-03-18",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-03-18T18:00Z",
+   "t_ms": 1773856800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260318.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-03",
+   "reference_month": "2026-03",
+   "date_et": "2026-04-03",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-04-03T12:30Z",
+   "t_ms": 1775219400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_04032026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-04-28/04-29",
+   "meeting": "2026-04-28/04-29",
+   "meeting_type": "scheduled",
+   "date_et": "2026-04-29",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-04-29T18:00Z",
+   "t_ms": 1777485600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260429.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-04",
+   "reference_month": "2026-04",
+   "date_et": "2026-05-08",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-05-08T12:30Z",
+   "t_ms": 1778243400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_05082026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-05",
+   "reference_month": "2026-05",
+   "date_et": "2026-06-05",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-06-05T12:30Z",
+   "t_ms": 1780662600000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_06052026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-06-16/06-17",
+   "meeting": "2026-06-16/06-17",
+   "meeting_type": "scheduled",
+   "date_et": "2026-06-17",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-06-17T18:00Z",
+   "t_ms": 1781719200000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260617.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-06",
+   "reference_month": "2026-06",
+   "date_et": "2026-07-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-07-02T12:30Z",
+   "t_ms": 1782995400000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_07022026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false,
+   "note": "Thursday (Independence Day observed Friday 2026-07-03)"
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-07-28/07-29",
+   "meeting": "2026-07-28/07-29",
+   "meeting_type": "scheduled",
+   "date_et": "2026-07-29",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-07-29T18:00Z",
+   "t_ms": 1785348000000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260729.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-07",
+   "reference_month": "2026-07",
+   "date_et": "2026-08-07",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-08-07T12:30Z",
+   "t_ms": 1786105800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_08072026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-08",
+   "reference_month": "2026-08",
+   "date_et": "2026-09-04",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-09-04T12:30Z",
+   "t_ms": 1788525000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_09042026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-09-15/09-16",
+   "meeting": "2026-09-15/09-16",
+   "meeting_type": "scheduled",
+   "date_et": "2026-09-16",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-09-16T18:00Z",
+   "t_ms": 1789581600000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20260916.htm"
+   ],
+   "evidence": "date and release time seen in a search excerpt of the official page (page not fetched)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-09",
+   "reference_month": "2026-09",
+   "date_et": "2026-10-02",
+   "time_et": "08:30",
+   "tz": "EDT",
+   "utc": "2026-10-02T12:30Z",
+   "t_ms": 1790944200000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "https://www.bls.gov/news.release/archives/empsit_10022026.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-10-27/10-28",
+   "meeting": "2026-10-27/10-28",
+   "meeting_type": "scheduled",
+   "date_et": "2026-10-28",
+   "time_et": "14:00",
+   "tz": "EDT",
+   "utc": "2026-10-28T18:00Z",
+   "t_ms": 1793210400000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20261028.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); meeting after the build date (scheduled)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-10",
+   "reference_month": "2026-10",
+   "date_et": "2026-11-06",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2026-11-06T13:30Z",
+   "t_ms": 1793971800000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2026 schedule, revised-dates page; 08:30 ET stated); release after the build date (scheduled)",
+   "verified_official": false
+  },
+  {
+   "kind": "NFP",
+   "label": "Employment Situation for 2026-11",
+   "reference_month": "2026-11",
+   "date_et": "2026-12-04",
+   "time_et": "08:30",
+   "tz": "EST",
+   "utc": "2026-12-04T13:30Z",
+   "t_ms": 1796391000000,
+   "source_urls": [
+    "https://www.bls.gov/schedule/2026/home.htm",
+    "https://www.bls.gov/schedule/news_release/empsit.htm"
+   ],
+   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only (one BLS mirror excerpt lists it; not seen on the main 2026 schedule); release after the build date (scheduled)",
+   "verified_official": false
+  },
+  {
+   "kind": "FOMC",
+   "label": "FOMC policy statement, meeting 2026-12-08/12-09",
+   "meeting": "2026-12-08/12-09",
+   "meeting_type": "scheduled",
+   "date_et": "2026-12-09",
+   "time_et": "14:00",
+   "tz": "EST",
+   "utc": "2026-12-09T19:00Z",
+   "t_ms": 1796842800000,
+   "source_urls": [
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20261209.htm"
+   ],
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); meeting after the build date (scheduled)",
+   "verified_official": false
+  }
+ ],
+ "counts": {
+  "FOMC": {
+   "2020": 10,
+   "2021": 8,
+   "2022": 8,
+   "2023": 8,
+   "2024": 8,
+   "2025": 8,
+   "2026": 8
+  },
+  "NFP": {
+   "2020": 12,
+   "2021": 12,
+   "2022": 12,
+   "2023": 12,
+   "2024": 12,
+   "2025": 11,
+   "2026": 12
+  }
+ }
+}
