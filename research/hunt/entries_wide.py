@@ -263,6 +263,8 @@ def hunt_raw(name: str, bars: Bars, value=None) -> tuple[np.ndarray, np.ndarray]
     h, l, c, qv = bars.h, bars.l, bars.c, bars.qv
     with np.errstate(invalid="ignore", divide="ignore"):
         if name == "E1":
+            if len(qv) and not np.isfinite(qv).any():
+                raise ValueError("E1 needs the quote volume: build_bars(..., qv=the 5m 'qv' array)")
             n = int(HUNT_MAIN["E1"]["channel"] if value is None else value)
             hh = _roll_prev(h, n, lambda w: w.max(1))
             ll = _roll_prev(l, n, lambda w: w.min(1))

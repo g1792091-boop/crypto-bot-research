@@ -370,6 +370,9 @@ def stage_check(ctx: Ctx, results: str, tables: bool = True) -> dict:
         files.append("paperbot/config.py differs from commit f1e824f")
     man = NI.manifest(ctx.ni, ctx.data)
     files += man["problems"]
+    for kind in ("orderflow", "daily"):
+        for f, v in sorted(man[kind].items()):
+            print(f"[check] metrics {f} sha256 {v['sha256']}", flush=True)
     tab = {}
     if tables:
         S = K.settings_vector()
@@ -405,6 +408,28 @@ def stage_check(ctx: Ctx, results: str, tables: bool = True) -> dict:
         raise SystemExit(3)
     print("[check] all inputs match", flush=True)
     return doc
+
+
+def require_checks(out: str) -> dict:
+    """PREREG 2.5: nothing runs before ``check`` passed on this OUT."""
+    path = os.path.join(out, "checks.json")
+    if not os.path.exists(path):
+        raise SystemExit(f"{path} missing: run the check stage first")
+    with open(path) as fh:
+        doc = json.load(fh)
+    if doc["file_problems"] or doc["recompute_failed"]:
+        raise SystemExit("checks.json has problems: " + "; ".join(doc["file_problems"] + doc["recompute_failed"]))
+    return doc
+
+
+def tables_unchanged(ctx: Ctx, doc: dict) -> None:
+    """Every outcome table read since must be the file ``check`` verified."""
+    want = {f"{k}.npz": v["sha256"] for k, v in doc["tables"].items()}
+    now = {os.path.basename(R.outcome_path(ctx.work, s, tf)): _sha(R.outcome_path(ctx.work, s, tf))
+           for s in SYMBOLS for tf in TFS}             # the files themselves (grid workers keep their own cache)
+    bad = [f for f, h in now.items() if want.get(f) != h]
+    if bad:
+        raise SystemExit(f"outcome tables changed since the check: {bad}")
 
 
 def verify_table(ctx: Ctx, sym: str, tf: str, S: np.ndarray, n: int = VERIFY_N) -> bool:
@@ -787,8 +812,8 @@ def stage_confirm(ctx: Ctx) -> dict:
 
 
 def metric_hashes(ctx: Ctx) -> dict:
-    p = os.path.join(ctx.ni, "manifest.json")
-    if not os.path.exists(p):
+    p = os.path.join(ctx.ni, "manifest.json") if ctx.ni else ""
+    if not p or not os.path.exists(p):
         return {}
     with open(p) as fh:
         m = json.load(fh)
@@ -923,9 +948,12 @@ def smoke(data: str, out: str) -> dict:
                         (("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"), ("v", "volume"))))
             rep["frames_equal"] &= bool(same)
             rep["bars"][f"{tf}_{sym}"] = int(len(close))
-            F = NI.funding(data, sym, months=("2020-01",))
-            keep = F["t"] < hi
-            F = {k: v[keep] for k, v in F.items()}
+            if NI.funding_files(data, sym, ("2020-01",)):
+                F = NI.funding(data, sym, months=("2020-01",))
+                F = {k: v[F["t"] < hi] for k, v in F.items()}
+            else:                                   # listed after 2020-01: no settlement in the slice
+                F = {"calc": np.zeros(0, np.int64), "t": np.zeros(0, np.int64), "rate": np.zeros(0),
+                     "hours": np.zeros(0), "f8": np.zeros(0)}
             day = D.bars(d["ts"], d["o"], d["h"], d["l"], d["c"], d["v"], D.DAY)
             for rule in coins:
                 kw = {}
@@ -988,12 +1016,15 @@ def main(argv=None) -> int:
     ctx = Ctx(a.data, a.work, a.ni, a.out, a.exchange)
     if a.stage in ("check", "all"):
         stage_check(ctx, a.results)
+    checked = require_checks(a.out)
     if a.stage in ("grid", "all"):
         stage_grid(ctx, a.procs)
+        tables_unchanged(ctx, checked)
     if a.stage in ("select", "all"):
         stage_select(a.out)
     if a.stage in ("confirm", "all"):
         stage_confirm(ctx)
+        tables_unchanged(ctx, checked)
     if a.stage in ("report", "all"):
         write_report(a.out)
     return 0

@@ -530,23 +530,43 @@ def world(NI):
     return World(NI)
 
 
-@pytest.mark.parametrize("cut", [T0 + 251 * DAY + 7 * HOUR + 13 * MIN, T0 + 318 * DAY + 4 * HOUR])
-def test_cutting_the_data_never_changes_earlier_signals(D, world, cut):
-    for rule in D.ORDER:
-        for tf in D.RULES[rule]["tfs"]:
-            full, part = world.market(D, rule, tf), world.market(D, rule, tf, cut)
-            seen = 0
-            for combo in D.grid(rule):
-                a, b = D.signals(rule, full, combo), D.signals(rule, part, combo)
-                for sym in SYMS:
-                    n = part.coins[sym].n
-                    assert np.array_equal(full.coins[sym].open_ms[:n], part.coins[sym].open_ms)
-                    assert part.coins[sym].close_ms[-1] <= cut
-                    for k in (0, 1):
-                        assert np.array_equal(a[sym][k][:n], b[sym][k]), (rule, tf, combo, sym, k)
-                    seen += int(a[sym][0][D.WARMUP_BARS:n].sum() + a[sym][1][D.WARMUP_BARS:n].sum())
-                    assert not (a[sym][0] & a[sym][1]).any()
-            assert seen > 0, (rule, tf)                  # the check is not empty
+def cut_mismatches(D, world, rule, tf, n_signal_cuts=4, n_random_cuts=2, seed=0):
+    """Cut every input at times X and compare each cut's signals with the full data's on the bars closing at or
+    before X. The cuts: the closes of bars where the full data signal (so the cut bar is the last bar the rule sees)
+    and random times. Returns (mismatches, signals seen before the cuts)."""
+    rng = np.random.default_rng(seed)
+    full = world.market(D, rule, tf)
+    combos = D.grid(rule)
+    fs = [D.signals(rule, full, c) for c in combos]
+    ends = [(r, sym, i) for r, f in enumerate(fs) for sym in SYMS
+            for i in np.flatnonzero(f[sym][0] | f[sym][1]) if i >= D.WARMUP_BARS]
+    span = full.coins["BTCUSDT"].close_ms
+    cuts = [int(full.coins[ends[k][1]].close_ms[ends[k][2]])
+            for k in rng.choice(len(ends), min(n_signal_cuts, len(ends)), replace=False)] if ends else []
+    cuts += [int(x) + 7 * MIN for x in rng.choice(span[len(span) // 2:], n_random_cuts, replace=False)]
+    bad, seen = [], len(ends)
+    for cut in cuts:
+        part = world.market(D, rule, tf, cut)
+        for r, combo in enumerate(combos):
+            b = D.signals(rule, part, combo)
+            for sym in SYMS:
+                n = part.coins[sym].n
+                assert np.array_equal(full.coins[sym].open_ms[:n], part.coins[sym].open_ms)
+                assert part.coins[sym].close_ms[-1] <= cut
+                for k in (0, 1):
+                    if not np.array_equal(fs[r][sym][k][:n], b[sym][k]):
+                        bad.append((cut, combo, sym, k))
+                assert not (b[sym][0] & b[sym][1]).any()
+    return bad, seen
+
+
+@pytest.mark.parametrize("rule", ["H3A_CROWD_FADE", "D04_FUNDING_FADE", "D05_FUNDING_TREND", "D06_OI_DIVERGENCE",
+                                  "D08_CROSS_COIN", "D10_VWAP_REVERT", "D01_VOL_SPIKE"])
+def test_cutting_the_data_never_changes_earlier_signals(D, world, rule):
+    for tf in D.RULES[rule]["tfs"]:
+        bad, seen = cut_mismatches(D, world, rule, tf)
+        assert not bad, (rule, tf, bad[:3])
+        assert seen > 0, (rule, tf)                      # the check is not empty
 
 
 # ------------------------------------------------------------------ test 4: selection and controls

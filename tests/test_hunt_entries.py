@@ -269,6 +269,8 @@ def test_e1_uses_quote_volume_and_e1_handmade():
     assert lg[-1] and lg.sum() == 1 and not sh.any()
     b2 = EW.build_bars(ts, o, h, l, c, v, "1h", v * c)
     assert not EW.hunt_raw("E1", b2)[0].any()         # the same bars with flat quote volume: no event
+    with pytest.raises(ValueError):                   # no quote volume given: refused, not silently empty
+        EW.hunt_raw("E1", EW.build_bars(ts, o, h, l, c, v, "1h"))
 
 
 # ------------------------------------------------------------------ no look-ahead
