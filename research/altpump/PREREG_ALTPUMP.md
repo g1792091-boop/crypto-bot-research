@@ -354,8 +354,10 @@ type, r = 2% and the test period. Seed = sha256 of ("altpump", control, variant 
 
 For each control and test month m: **d_m = ln M_m(pick) - mean over the 2,000 seeds of ln M_m(control seed)**.
 Synthetic checks of (b) (zero-edge random walks, 100 repetitions x 200 seeds): a pick firing in 3-day clusters had 81
-positions against 81.3 for (b) (191 for the uniform-day draw used before this revision); a no-skill long pick that
-fires only on lives >= 31 bars, in worlds where young listings drift down, no longer gains on (b).
+positions against 81.3 for (b) (191 for the uniform-day draw used before this revision; P(p_rank < 0.05) 8%, mean d
++0.0005 per month, se 0.0007); a no-skill long P4 pick that fires only on lives >= 31 bars, in worlds where young
+listings drift down, gained +0.0033 ln per month on the old (b) and +0.0008 (se 0.0005) on this one, with P(p_rank <
+0.05) 6% (12% before).
 
 ## 13. Pass rule (each pick, r = 2%, all must hold)
 
@@ -370,10 +372,11 @@ fires only on lives >= 31 bars, in worlds where young listings drift down, no lo
   and stays in the family.
   * Why not the plain percentile bootstrap (the share of resampled means <= 0): with 19 or 26 months it rejects too
     often, most for left-skewed monthly d, the shape of the short-side picks (many small wins, rare squeezes):
-    synthetic nulls at nominal 5%, n = 19: normal 6.3%, left-skewed 16.9%. The bootstrap-t corrects most of the skew
-    (left-skewed 9.9%) and the sign flip is exact for a symmetric null (heavy tails 5.4%); the larger of the two keeps
-    each one's protection (normal 4.9%). It is still somewhat liberal under strong left skew (about 10% at nominal
-    5%); the rank comparisons and the eight-way maximum add to it.
+    synthetic nulls at nominal 5%, n = 19: normal 6.3%, left-skewed (a mirrored lognormal, sigma 1) 16.9%. The
+    bootstrap-t corrects most of the skew and the sign flip is exact for a symmetric null; the larger of the two
+    rejects 4.3% (normal), 9.9% (left-skewed), 7.5% (mildly left-skewed, sigma 0.5), 5.3% (t, 3 df) and 0.9%
+    (right-skewed) under the same nulls (n = 26: 3.7%, 9.5%, 6.5%, 5.1%, 1.3%). It is still somewhat liberal under
+    strong left skew; the rank comparisons and the eight-way maximum add to it.
   * What T2 protects: control (a) protects against a rule whose gain is only its side (12 a); **control (b) is the
     timing control**. A pick must beat both.
 * **T3 multiple testing**: Benjamini-Hochberg at **q = 0.10** over the K picks' p_pick; the pick's p_pick must be
@@ -538,7 +541,9 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
   185 / 182, period 2: 559 / 374 (symbols with any bar in the period: 120 / 117, 302 / 297, 827 / 639); 9 symbols
   with a stretch of >= 30 days without a bar and about 50 with short ones (mostly 1 to 3 days, e.g. LTC 2022-02-26 ..
   2022-02-28); the TradFi symbols' first bars all on or after 2025-12-11 (PAXG excepted), in batches on the same days
-  (which gave the batch rule). The exclusion lists were written from symbol names and these dates.
+  (which gave the batch rule). The exclusion lists were written from symbol names and these dates. The review of
+  section 22 read the same calendar only (no value): the 103 stretches of 1 to 29 days without a bar split into 97
+  on the archive-hole days 2022-02-26 .. 28 and 2022-04-01 .. 02, 3 short gaps of BNX, and the 3 pauses of 3.1.
 * **The period-1 descriptive look (disclosed).** On 2026-10-11 the goal-50x review (scratchpad
   `goal50/scripts/universe_base.py`, numbers in its `angles.md`, section 6, idea 1; not in this repository) computed on
   the same daily file:
