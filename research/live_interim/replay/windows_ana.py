@@ -15,8 +15,9 @@ WIN = int(sys.argv[2]) if len(sys.argv) > 2 else 6
 cells = []
 for name, tf, close, x, pid, coin, side in rows:
     close, x, pid = np.array(close, np.int64), np.array(x, float), np.array(pid)
-    m = (pid == 0) | (pid == 1)
-    cells.append((name, tf, close[m], x[m]))
+    m = ((pid == 0) | (pid == 1)) & np.isfinite(x)
+    o = np.argsort(close[m], kind="stable")          # trades are stored coin by coin; windows need time order
+    cells.append((name, tf, close[m][o], x[m][o]))
 t0 = min(c[2].min() for c in cells if len(c[2]))
 t1 = max(c[2].max() for c in cells if len(c[2]))
 starts = np.arange(t0, t1 - (WIN + 30) * D, D)

@@ -86,7 +86,7 @@ def main(argv=None) -> int:
            f"시작 {day(d0)} · 마지막 거래 {day(last)} · {max(0, (last - d0) / 86_400_000):.1f}일 · "
            f"계좌 {len(accts)}개 · 거래 {len(trades)}건"]
     out.append("")
-    out.append("[묶음 × 봉] 계좌(거래 있는 계좌) | 거래 | 승률 | 거래당 | 5년 백테스트 거래당 | 늘어남/줄어듦/파산 | 잔고 중앙값")
+    out.append("[묶음 × 봉] 계좌(거래 있는 계좌) | 거래 | 승률 | 거래당 | 5년 백테스트 거래당(모든 신호 평균) | 늘어남/줄어듦/파산 | 잔고 중앙값")
     groups = defaultdict(list)
     for ac in accts.values():
         groups[(ac["group"], ac["timeframe"])].append(ac)
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
         else:
             mean = pct(s["mean"])
             med = f"${st.median(ac['equity'] for ac in acs):,.0f}"
-        bt = pct(BACKTEST.get(tf)) if g == "core" else "—"
+        bt = pct(BACKTEST.get(tf)) if g == "core" else "—"  # per signal, not per account trade
         out.append(f"{GROUP_KO.get(g, g)} {tf}: {len(acs)}({traded}) | {s['n']} | {win} | {mean} | {bt} | "
                    f"{up}/{down}/{bust} | {med}")
 
