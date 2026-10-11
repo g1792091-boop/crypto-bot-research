@@ -164,12 +164,16 @@ const el = await mountOn(doc(), live(101000, 2550), {});
 const auto = CH.copts.autoscaleInfoProvider;
 // bars 99,000-101,000 on screen: the stop (98,000) stays in the scale, the take-profit (106,000) is left off it
 out.scale = auto(() => ({priceRange: {minValue: 99000, maxValue: 101000}})).priceRange;
-out.near = auto(() => ({priceRange: {minValue: 97000, maxValue: 103500}})).priceRange;
 const CHART = await import("file://__CLJS__/screens/terminal-chart.js");
 out.band = [CHART.inBand({v: 106000}, {lo: 99000, hi: 101000}), CHART.inBand({v: 98000}, {lo: 99000, hi: 101000}),
   CHART.inBand({v: 150000, keep: true}, {lo: 99000, hi: 101000})];
+// the next repaint (a 5 s tick) names the take-profit left off the scale at the chart's edge
 await L.liveRefresh(); await tick(60);
 out.edge = el.querySelectorAll("span.tm-cedge").map((x) => (x.hidden ? "" : x.textContent)).filter(Boolean);
+// bars that reach near the take-profit: it is back inside the scale, and the edge label goes at the next repaint
+out.near = auto(() => ({priceRange: {minValue: 97000, maxValue: 103500}})).priceRange;
+await L.liveRefresh(); await tick(60);
+out.edge2 = el.querySelectorAll("span.tm-cedge").map((x) => (x.hidden ? "" : x.textContent)).filter(Boolean);
 // the table: the row element is the same after a 5 s tick, only its numbers change
 const row = el.querySelector("tr.click");
 const before = row.textContent;
@@ -185,6 +189,7 @@ out.band2 = q1(el, "div.tm-band");
     assert abs(o["near"]["maxValue"] - 106000) < 1e-9                  # a near take-profit stays in the scale
     assert o["band"] == [False, True, True]
     assert any(e.startswith("익절 106,000.0 ↑") and "차트 밖" in e for e in o["edge"]), o["edge"]
+    assert not any(e.startswith("익절") for e in o["edge2"]), o["edge2"]
     assert o["same"] and o["rowChanged"]
     assert "우리 포지션 · 후보" in o["top"] and "190계좌 열린 4" in o["band2"]
 
