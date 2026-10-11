@@ -49,7 +49,8 @@ Compute cost is not a constraint (a rented many-core server is allowed).
 * **(h) F4 out of the test:** the 38 watch picks were chosen after 2024-2026 was seen: select-only read (section 3).
 * **Deferred to round 2 (not in this addendum):** new-information entries, the loss-autopsy noise filters, custom
   values (section 14: each its own pre-registered study, designed and selected on 2021-2023 only, confirmed once per
-  version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper data).
+  version on the test period 2024-01-01 .. 2026-10-01, every look in the program-wide ledger, plus forward paper data
+  counted from the day its pre-registration is hashed).
 
 ## 1. Question
 
@@ -373,7 +374,8 @@ the F5 name. Distinct names among the candidates: 87.
 * **Seed subsets**: the pass uses seeds 1-1,000; each read uses the lowest-numbered subset named in it (1-200 or
   1-100; R1 rolling windows 1-100, or 1-50 when one 30-day window run takes more than 0.03 s, measured on synthetic bars
   before the run by `hunt.py benchwin` and written to `research/hunt/bench_window.json`, which counts only when it is
-  listed in the pin with a matching sha256; without it the subset is 1-100. No read times a run on the study's data).
+  listed in the pin with a matching sha256; without it the subset is 1-100. No read times a run on the study's data.
+  Measured 2026-10-11: 0.0097 s per 30-day window, so seeds 1-100).
 * **Goal reads report multiples** (owners (e)): x2, x5, x10, x20, x30, x50, x100 of the window's start.
 
 ### 7.2 Reads interface (code)
@@ -464,7 +466,9 @@ a DeepSeek row in the public output is refused).
 * **R23 October 2026** (`hunt.py october --data-oct DIR`): before the pin, the data.binance.vision daily files for
   2026-10-01 .. 2026-10-10 of the 30 coins (5m klines and 5m mark-price klines) are listed with the sha256 of their
   bytes in `research/hunt/october_files.json` (`hunt.py octlist --data-oct DIR`: each zip checked against its
-  `.CHECKSUM`, none opened), which `pinlist` then lists; they are downloaded and checksummed only, never opened before
+  `.CHECKSUM`, none opened), which `pinlist` then lists (2026-10-11: 560 of the 600 exist and are listed; the archive
+  has no files for those days of the 5m klines of EOSUSDT, MATICUSDT and TOMOUSDT and the mark klines of TOMOUSDT);
+  they are downloaded and checksummed only, never opened before
   `picks.json` and `test.json` exist. `october` refuses unless that list is in the pin with a matching sha256, and stops
   at any zip missing from the list, differing from it or without its `.CHECKSUM`. The loader puts them into the 5m npz
   layout (funding from daily files when present, else 0 and counted). Every tested pick
@@ -621,8 +625,12 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   appended to the pin before the paper bot starts or any forward comparison uses the band (the panel had R14 inside
   the test step; it is not built when this is written, so it is a separate pinned module with this order). For every
   passing pick, the v1 pick (H 15 allows a "v1 failed" shadow) and the passing basket: the 5 / 25 / 50 / 75 / 95
-  percentiles of the multiple of fresh $5,000 accounts over rolling windows of 21, 25 and 30 days (one start per UTC
-  day in test), at r = 0.5% and 1% (the H 15 / W 12 band for the mid-November review). Golden ledger: for each passing
+  percentiles of the multiple of fresh $5,000 accounts over rolling windows of 21, 25, 30, 40, 45 and 50 days (one
+  start per UTC day in test), at r = 0.5% and 1%. The mid-November review (H 15, W 12 and live gate (f)) takes the
+  forward record's multiple over its first N days from 2026-10-01 00:00 UTC, N = the longest of 40, 45 and 50 days
+  the record has reached on the review date (to 2026-11-10, 11-15, 11-20), and compares it with the N-day band; the
+  21-, 25- and 30-day bands serve a look at the record's first weeks the same way and decide nothing. Golden ledger:
+  for each passing
   pick, every signal, fill, D0, stop path, add, exit and funding cash flow of the last 90 test days (the paper bot's
   parity reference).
 * **R16 context split of the goal board.** For every R1 window, labels known at its start: BTCUSDT's previous-30-day
@@ -693,8 +701,10 @@ pass rule toward goal metrics.
 * Also reported per cell: the share of True bars that are not edge events (0 = the array is already an event), for the
   reference array.
 * Output: `research/hunt/out/wide/parity.json` (counts and shares only), part of the pin (section 10). It records the
-  sha256 of `entries_wide.py`, `parity_wide.py` and `hunt.py` it ran under; the pin check refuses unless it says pass,
-  was run on the hunt 5m files (`--five`) on the old six, and its recorded code equals the pinned files.
+  sha256 of `entries_wide.py`, `parity_wide.py` and `hunt.py` it ran under and, per old-six coin, the H 2 content hash
+  of the 5m file it read (`five_counts`); the pin check refuses unless it says pass, was run on the hunt 5m files
+  (`--five`) on the old six with the content hashes of `data_manifest.json`, and its recorded code equals the pinned
+  files.
 * A first run on the full grid's 1m archive binned to 5m (the adapter alone, 2026-10-11, signals only) gave 348 of 353
   cells identical and 11 differing bars in 5 cells (F6_VWAP_CROSS 15m / 30m / 1h, F6_VWAP_FAIL 30m / 1h; at most
   0.011%): a last-bit difference in the daily VWAP's volume sum flips an exact `>=` tie. The pinned run is the one on
@@ -705,6 +715,12 @@ pass rule toward goal metrics.
   float64 from the full grid's 1m archive matched except the VWAP ties above. No mismatch was excused and no cell was
   dropped: the 5m files and the engine's coin arrays became float64 and the data was rebuilt from the archive before
   the pin (section 16.5); the pinned `parity.json` is the run on the float64 files.
+* The run on the float64 hunt files (2026-10-11, signals only; the pinned `parity.json`) **passed**: 234 of 353 cells
+  identical; the largest share F2:N19_FIB_CHOP 1h at 0.19%, all of it excused (bars where the 5m and 1m archives
+  differ); the largest unexcused share F3:F14_SMT 30m at 0.07%. Unexcused differences are in 10 cells, each under
+  0.1%: F14_SMT 15m / 30m / 1h (from 2023-11-10: it reads BTCUSDT's bars as context, and BTC's bars differ beyond
+  tolerance that day, while the excuse window looks only at the traded coin's own bars), the VWAP ties above, and one
+  volume-sum tie each in V45_AMB 15m and OBV_S r2 30m.
 * F1 and F5 are this study's own code with no full-grid version: they are checked on synthetic bars (H 5 read bar by
   bar; famous.py's `donchian` and `tsmom` equality; no look-ahead), not by the parity run. `parity.json` records the
   sha256 of `entries_wide.py`, so it is rerun after the F5 addition.
@@ -818,21 +834,24 @@ pass rule toward goal metrics.
   mark-price read; (b) worst single-position loss <= 3U with R9's 25%-of-range stop fill; (c) worst rolling 30-day
   fresh-wallet multiple >= 0.70; (d) R10's instant loss if every open stop gaps 10% <= 25% of equity at every 5m close;
   (e) mean ln M > 0 under R9's impact model with Y = 1.0 at the live starting equity and at 10x it; (f) forward paper:
-  the replay reproduces >= 99% of positions (H 15) and the forward multiple lies inside the R14 band; (g) if the AI
+  the replay reproduces >= 99% of positions (H 15) and the forward multiple lies inside the R14 band (5th..95th
+  percentile, over the record's first N days as R14 says); (g) if the AI
   judge is used, R15's p95 events per day <= the owners' daily call cap. A size that fails any item is labelled "not
   live-ready at this size". The research verdict is untouched and real money stays the owners' decision.
 * Owner-facing goal numbers are multiples (owners (e)).
 * Nothing is tuned after the test period is seen. A bug found after the test is fixed in `DEVIATIONS.md`, the test
   rerun once, both results shown. Any changed rule (entries, numbers, gate, exits, size, K, batches, scores) is a new
   study with its own pre-registration. A later round designed and selected on 2021-2023 only is judged as section 14
-  says (one confirm per version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper data);
+  says (one confirm per version on the test period 2024-01-01 .. 2026-10-01, every look in the program-wide ledger,
+  plus forward paper data counted from the day its pre-registration is hashed);
   a change taken from a test-period figure (a read of section 7 on test, for example R5, R7, R16 or R20) is judged
   only on data after its fixing date.
 * **Two studies, one test period.** v1 and wide each have their own pass; the chance that at least one of the two
   passes by luck is larger than either alone. The report says this next to the two verdicts.
 * The mid-November review checks the paper bot as H 15 (it followed the rules; its forward multiple lies inside the
-  test period's rolling-window range; nothing broke). About six weeks of forward record (from 2026-10-01; the owners
-  watched its first days live, R23) cannot prove a trend system.
+  test period's rolling-window range: R14's band of 40, 45 or 50 days, the record's first N days; nothing broke).
+  About six weeks of forward record (from 2026-10-01; the owners watched its first days live, R23) cannot prove a
+  trend system.
 
 ## 13. Known limits (stated before any result)
 
@@ -881,13 +900,17 @@ rule).
 **How every later round is judged (owners' agreed process, 2026-10-11).** Each later round (new-information entries,
 loss-autopsy noise filters, custom values with a plateau rule, and any later version of them) is **its own
 pre-registered study**: it is designed and selected on **2021-2023 only** (no bar from 2024-01-01 on enters its design
-or its choice), then **confirmed once per version on 2024-01 .. 2026-10** with its rules, picks and pass fixed and
+or its choice), then **confirmed once per version on the test period 2024-01-01 .. 2026-10-01** (2024-01 .. 2026-09)
+with its rules, picks and pass fixed and
 hashed before that look; a new version is a new pre-registration and gets one new confirm look, never a rerun of an old
 one. **Every confirm look of every version counts in the program-wide ledger** (R13: a global BH at q = 0.10 and Holm
 at 0.05 over every test-period hypothesis of the program, this study's and v1's included), printed beside each round's
 verdict, so repeated looks at the same 2024-2026 months are paid for. **Forward paper data** (the paper bot records
-every system from 2026-10-01, section 12) is added to each round's verdict as the out-of-sample check. Each round's
-pre-registration states what of this study's test results its designers had seen.
+every system from 2026-10-01, section 12) is added to each round's verdict as the out-of-sample check, **counted only
+from the day the round's pre-registration is hashed**: the record before that day was on the paper bot's dashboard
+while the round was designed, so it is shown beside the verdict as seen data, never as out-of-sample. Each round's
+pre-registration states what of this study's test results and of the forward record (screens, systems, dates) its
+designers had seen.
 
 ## 15. Open questions (closed before the pin; default in brackets)
 
@@ -1052,5 +1075,12 @@ parity run below is signals only). Changes:
    owners when good strategies exist, recording every system from 2026-10-01 on the coins still trading (22 at
    2026-09-30); its lineup from `test.json`'s `lineup`; real money only from 정식, never before the mid-November review.
 3. **Later rounds** (sections 0.1, 12, 14, R13): the owners' process of 2026-10-11 (each round its own pre-registered
-   study, designed and selected on 2021-2023 only, confirmed once per version on 2024-01 .. 2026-10, every confirm look
-   in the program-wide ledger, plus forward paper data) replaces "forward data only".
+   study, designed and selected on 2021-2023 only, confirmed once per version on the test period 2024-01-01 ..
+   2026-10-01, every confirm look in the program-wide ledger, plus forward paper data counted only from the day its
+   pre-registration is hashed) replaces "forward data only".
+4. **Review before the pin** (sections 7.1, 7.3, 7.4, 8, 12, 14): `parity.json` records each old-six coin's 5m content
+   hash and the pin compares it with `data_manifest.json` (parity rerun under the final code); the float64 parity
+   result, the benchwin figure and the October file count written in; R14 gets 40-, 45- and 50-day bands, since the
+   forward record now starts 2026-10-01 and the 21-30-day lengths of the earlier plan no longer match the review; the
+   confirm window is written as the test period; forward data counts for a later round only from its hash date, since
+   the dashboard shows the record from 2026-10-01 to anyone designing it.
