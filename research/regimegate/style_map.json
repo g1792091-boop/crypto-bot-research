@@ -1,0 +1,427 @@
+{
+ "what": "Strategy style classes of the regime gate test (research/regimegate/PREREG_REGIMEGATE.md section 3), fixed 2026-10-11 before any gate result.",
+ "source": "docs/aibot/STRATEGY_CATALOG_KO.md, table '한눈에 보기 (91개)', column '성격' (rows 1-80). Rows 1-36: the measured trend ratio (share of entries in the direction of the previous 20 bars' move; >= 0.6 추세형, <= 0.4 되돌림형, else 섞임). Rows 37-80 (*): estimated from the rule's shape.",
+ "rules": {
+  "추세형": "trend",
+  "추세형 눌림": "trend",
+  "추세형 눌림 + 위치 필터": "trend",
+  "추세형(돌파 뒤 지속)": "trend",
+  "추세형(모멘텀)": "trend",
+  "반전 뒤 지속": "trend",
+  "되돌림형": "reversion",
+  "되돌림형 + 위치 필터": "reversion",
+  "섞임": "other",
+  "섞임(상대 강약)": "other",
+  "반전형": "other",
+  "신호 부족": "other"
+ },
+ "classes": [
+  "trend",
+  "reversion",
+  "other"
+ ],
+ "core": {
+  "S1_EMA_RSI_CHOP": {
+   "no": 1,
+   "catalog": "추세형 0.84",
+   "class": "trend"
+  },
+  "S2_ST_ROC": {
+   "no": 2,
+   "catalog": "추세형 0.60",
+   "class": "trend"
+  },
+  "S3_CMO_SANDWICH": {
+   "no": 3,
+   "catalog": "섞임 0.46",
+   "class": "other"
+  },
+  "S4_BB_BBP": {
+   "no": 4,
+   "catalog": "추세형 0.97",
+   "class": "trend"
+  },
+  "S5_DONCHIAN_MFI": {
+   "no": 5,
+   "catalog": "추세형 1.00",
+   "class": "trend"
+  },
+  "S6_EMA_DMI_ADX": {
+   "no": 6,
+   "catalog": "섞임 0.56",
+   "class": "other"
+  },
+  "N01_ST_EMA": {
+   "no": 7,
+   "catalog": "추세형 0.62",
+   "class": "trend"
+  },
+  "N02_ST_KST": {
+   "no": 8,
+   "catalog": "추세형 0.61",
+   "class": "trend"
+  },
+  "N03_ADX_GC": {
+   "no": 9,
+   "catalog": "추세형 0.99",
+   "class": "trend"
+  },
+  "N04_ST_KLINGER": {
+   "no": 10,
+   "catalog": "추세형 0.60",
+   "class": "trend"
+  },
+  "N05_PSAR_POC": {
+   "no": 11,
+   "catalog": "추세형 0.71",
+   "class": "trend"
+  },
+  "N06_MACD_ORB": {
+   "no": 12,
+   "catalog": "추세형 0.91",
+   "class": "trend"
+  },
+  "N07_ICHI_CMO": {
+   "no": 13,
+   "catalog": "추세형 0.68",
+   "class": "trend"
+  },
+  "N08_ICHI_WR": {
+   "no": 14,
+   "catalog": "섞임 0.58",
+   "class": "other"
+  },
+  "N09_ALLIG_AROON": {
+   "no": 15,
+   "catalog": "추세형 0.91",
+   "class": "trend"
+  },
+  "N10_HA_PSAR": {
+   "no": 16,
+   "catalog": "섞임 0.57",
+   "class": "other"
+  },
+  "N11_BREAKAWAY": {
+   "no": 17,
+   "catalog": "되돌림형 0.25",
+   "class": "reversion"
+  },
+  "N12_ICHI_AO": {
+   "no": 18,
+   "catalog": "추세형 0.85",
+   "class": "trend"
+  },
+  "N13_3OUTSIDE": {
+   "no": 19,
+   "catalog": "추세형 0.62",
+   "class": "trend"
+  },
+  "N14_ICHI_RSI": {
+   "no": 20,
+   "catalog": "신호 부족",
+   "class": "other"
+  },
+  "N15_KC_AO": {
+   "no": 21,
+   "catalog": "추세형 0.91",
+   "class": "trend"
+  },
+  "N16_BBRSI": {
+   "no": 22,
+   "catalog": "섞임 0.46",
+   "class": "other"
+  },
+  "N17_KC_RSI": {
+   "no": 23,
+   "catalog": "되돌림형 0.00",
+   "class": "reversion"
+  },
+  "N18_VWMA_MACD": {
+   "no": 24,
+   "catalog": "추세형 0.85",
+   "class": "trend"
+  },
+  "N19_FIB_CHOP": {
+   "no": 25,
+   "catalog": "추세형 0.94",
+   "class": "trend"
+  },
+  "N20_EMA9_CHOP": {
+   "no": 26,
+   "catalog": "섞임 0.55",
+   "class": "other"
+  },
+  "N21_ST_RSI_ADX": {
+   "no": 27,
+   "catalog": "신호 부족",
+   "class": "other"
+  },
+  "N22_VORTEX_PSAR": {
+   "no": 28,
+   "catalog": "섞임 0.50",
+   "class": "other"
+  },
+  "N23_HA_ST": {
+   "no": 29,
+   "catalog": "추세형 0.72",
+   "class": "trend"
+  },
+  "N24_DMI": {
+   "no": 30,
+   "catalog": "섞임 0.58",
+   "class": "other"
+  },
+  "N25_DST_CCI": {
+   "no": 31,
+   "catalog": "되돌림형 0.16",
+   "class": "reversion"
+  },
+  "V39_ALL": {
+   "no": 32,
+   "catalog": "섞임 0.57",
+   "class": "other"
+  },
+  "V45_AMB": {
+   "no": 33,
+   "catalog": "되돌림형 0.08",
+   "class": "reversion"
+  },
+  "OBV_S": {
+   "no": 34,
+   "catalog": "섞임 0.55",
+   "class": "other"
+  },
+  "OBV_B": {
+   "no": 35,
+   "catalog": "되돌림형 0.28",
+   "class": "reversion"
+  },
+  "DOGE": {
+   "no": 36,
+   "catalog": "추세형 0.87",
+   "class": "trend"
+  }
+ },
+ "ds": {
+  "F1_RSI_DIV": {
+   "no": 37,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F1_MOM_DIV": {
+   "no": 38,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F1_PVT_DIV": {
+   "no": 39,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F2_DEMARK": {
+   "no": 40,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F3_BOS": {
+   "no": 41,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F3_BOS_ZONE": {
+   "no": 42,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F3_HHHL": {
+   "no": 43,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F4_PULL": {
+   "no": 44,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F4_PULL_RSI": {
+   "no": 45,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F4_FAN": {
+   "no": 46,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F5_BOX": {
+   "no": 47,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F5_BOX_RSI": {
+   "no": 48,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F5_BOX_HTF": {
+   "no": 49,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F6_VWAP_CROSS": {
+   "no": 50,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F6_VWAP_FAIL": {
+   "no": 51,
+   "catalog": "추세형(돌파 뒤 지속)*",
+   "class": "trend"
+  },
+  "F7_RF_TRIPLE": {
+   "no": 52,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F7_RF_ONLY": {
+   "no": 53,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F8_VWICK": {
+   "no": 54,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F9_FVG": {
+   "no": 55,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F9_IFVG": {
+   "no": 56,
+   "catalog": "반전 뒤 지속*",
+   "class": "trend"
+  },
+  "F9_OB": {
+   "no": 57,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F9_BREAKER": {
+   "no": 58,
+   "catalog": "반전 뒤 지속*",
+   "class": "trend"
+  },
+  "F10_M2022": {
+   "no": 59,
+   "catalog": "반전형*",
+   "class": "other"
+  },
+  "F10_OTE": {
+   "no": 60,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F11_TSOUP": {
+   "no": 61,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F11_RAID": {
+   "no": 62,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F11_PO3": {
+   "no": 63,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F12_MSS": {
+   "no": 64,
+   "catalog": "반전형*",
+   "class": "other"
+  },
+  "F12_MSS_DISP": {
+   "no": 65,
+   "catalog": "반전형*",
+   "class": "other"
+  },
+  "F13_FVG_PD": {
+   "no": 66,
+   "catalog": "추세형 눌림 + 위치 필터*",
+   "class": "trend"
+  },
+  "F13_RAID_PD": {
+   "no": 67,
+   "catalog": "되돌림형 + 위치 필터*",
+   "class": "reversion"
+  },
+  "F14_SMT": {
+   "no": 68,
+   "catalog": "섞임(상대 강약)*",
+   "class": "other"
+  },
+  "F15_ASIA_BRK": {
+   "no": 69,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F15_ASIA_SWEEP": {
+   "no": 70,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F15_LON_BRK": {
+   "no": 71,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F15_OPEN0930": {
+   "no": 72,
+   "catalog": "추세형(모멘텀)*",
+   "class": "trend"
+  },
+  "F15_OPEN0000": {
+   "no": 73,
+   "catalog": "추세형(모멘텀)*",
+   "class": "trend"
+  },
+  "F15_ORB": {
+   "no": 74,
+   "catalog": "추세형*",
+   "class": "trend"
+  },
+  "F16_FIB382": {
+   "no": 75,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F16_FIB500": {
+   "no": 76,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F16_FIB618": {
+   "no": 77,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F16_FIB764": {
+   "no": 78,
+   "catalog": "추세형 눌림*",
+   "class": "trend"
+  },
+  "F17_Z": {
+   "no": 79,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  },
+  "F17_Z_HL": {
+   "no": 80,
+   "catalog": "되돌림형*",
+   "class": "reversion"
+  }
+ }
+}
