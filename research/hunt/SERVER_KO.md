@@ -45,6 +45,20 @@ apt-get update -y && apt-get install -y git tmux && git clone -q -b claude/keen-
   - 5/9: 받은 자료(가격·거래량·펀딩·마크 가격)가 고정된 자료와 **숫자 하나라도** 다르면 계산하지 않고 멈춥니다.
   - 여기까지(5/9 이전)에서 멈췄는데 개발자가 바로 못 고치면 **서버를 Destroy해도 잃는 것이 없습니다** (아직 계산 전).
 
+## 2-B. 자기 전에 미리 걸어 두기 (고정이 아직 안 됐을 때)
+
+두 분이 주무시기 전에 서버를 만들고 아래 **한 줄**을 붙여 넣어 두면, 서버가 2분마다 확인하다가 개발자가 시험 규칙을
+고정하는 순간 **알아서** 위의 1/9~9/9를 시작합니다. 커밋 번호를 적을 필요가 없습니다(개발자가 고정한 커밋을 서버가
+받아서 그대로 씁니다. 안전장치는 위와 같습니다). 알트 급등은 이미 끝나서 이번에는 돌리지 않습니다.
+
+```bash
+apt-get -o DPkg::Lock::Timeout=600 update -y && apt-get -o DPkg::Lock::Timeout=600 install -y git tmux && git clone -q -b claude/keen-pasteur-wav02u https://github.com/g1792091-boop/crypto-bot-research.git /root/hunt/crypto-bot-research && cp /root/hunt/crypto-bot-research/research/hunt/wait_go.sh /root/hunt/wait_go.sh && tmux new -s hunt "bash /root/hunt/wait_go.sh; bash"
+```
+
+- 화면에 "아직 고정 전입니다. 기다리는 중..."이 2분마다 나오면 정상입니다. 창을 닫고 주무셔도 됩니다.
+- 아침에: 아래 3번의 status 줄로 확인 → `끝.`이면 4번(결과 보내기) → 5번(Destroy).
+- 14시간 안에 고정이 안 오면 멈추고 그 말을 화면에 남깁니다 (그때는 Destroy해도 잃는 것이 없습니다).
+
 ## 3. 진행 보기 (언제든)
 
 ```bash
