@@ -109,13 +109,13 @@ class Store:
         rows = [tuple(r) for r in rows]
         if not rows:
             return 0, 0
+        prev = self.max_open(sym)
         seen, ins = self.now_ms(), self._next_ins()
         before = self.conn.total_changes
         self.conn.executemany("INSERT OR IGNORE INTO bars_5m VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                               [(sym, int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5]),
                                 float(r[6]), seen, ins) for r in rows])
         new = self.conn.total_changes - before
-        prev = self.max_open(sym)
         late = 0
         if prev is not None and new:
             late = int(self.conn.execute("SELECT COUNT(*) FROM bars_5m WHERE symbol = ? AND ins = ? AND open_ms < ?",

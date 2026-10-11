@@ -192,7 +192,7 @@ class Feed:
             if last is None:
                 continue
             end = last + FIVE
-            if wall - end > self.max_wait_ms:
+            if wall - end - FIVE >= self.max_wait_ms:          # its next bar has been due for MAX_WAIT_MS
                 stalled.append(sym)
                 continue
             ends.append(end)

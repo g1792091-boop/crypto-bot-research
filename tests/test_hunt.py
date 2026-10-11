@@ -1152,6 +1152,23 @@ def test_wide_select_and_test_resume_from_parts(tmp_path, monkeypatch):
 
 
 # ------------------------------------------------------------------ engine read options (panel 2026-10-11): bit-identity
+def _rand_sig(mk, tf, per_days, seed):
+    """Random signals on bars with ATR14 > 0 and a fill bar in the period (no 장세 label needed: short series)."""
+    rng = np.random.default_rng(seed)
+    K, J, S = [], [], []
+    for k in range(mk.K):
+        ser = H.series(mk.syms[k], tf)
+        cm = ser.bars.close_ms
+        _, ok = H.fill_index(mk, k, ser)
+        pool = np.flatnonzero((cm >= mk.start) & (cm < mk.end) & np.isfinite(ser.atr) & (ser.atr > 0) & ok)
+        n = int((mk.end - mk.start) / H.DAY_MS / per_days)
+        j = np.sort(rng.choice(pool, size=min(n, len(pool)), replace=False))
+        K.append(np.full(len(j), k, np.int64))
+        J.append(j.astype(np.int64))
+        S.append(np.where(rng.random(len(j)) < 0.5, 1, -1).astype(np.int64))
+    return {"tf": tf, "k": np.concatenate(K), "j": np.concatenate(J), "side": np.concatenate(S)}
+
+
 def _golden_digest(**kw):
     """The engine on a seeded synthetic 8-coin case (coin end, funding, three timeframes and sizes): sha256 of every
     decision output. GOLDEN_DIGEST was computed with the reviewed engine (commit a43f36c) before the read options
@@ -1163,21 +1180,23 @@ def _golden_digest(**kw):
     H.install(coins, fund)
     mk = H.Market(list(coins), (s0 + 31 * DAY, s0 + 50 * DAY), name="g")
     h = hashlib.sha256()
+    n = 0
     for tf, r, cost, cap, bdiv in (("15m", 0.005, "base", 0.04, 6.0), ("1h", 0.01, "x2", 0.04, 6.0),
-                                   ("4h", 0.05, "base", 0.4, 0.6)):
-        sig = H.synth_signals(mk, tf, 0.5, 21)
+                                   ("4h", 0.05, "base", 0.4, 0.6), ("30m", 0.02, "base", 0.16, 1.5)):
+        sig = _rand_sig(mk, tf, 0.25, 21)
         b = H.bank_for(mk, (tf,))
         c = H.build_cands(mk, b, [(sig, 1)])
         p = H.params(r, cost, cap, 5000.0, bdiv)
         for k, v in kw.items():
             p[H.PR_INDEX[k]] = v
         raw = H.simulate(mk, b, c, prm=p)
+        n += len(raw[4])
         for a in list(raw[:7]) + [raw[7][:4], raw[8], raw[9], raw[10][:7]]:
             h.update(np.ascontiguousarray(a).tobytes())
-    return h.hexdigest()
+    return h.hexdigest(), n
 
 
-GOLDEN_DIGEST = "d68f4e7ccd97556417366b24101dc29d6153f220659e0ecd84992670c46c7bcf"
+GOLDEN_DIGEST = ("d99d9b0110245102dcc440922accc3e697ad6d404b209e5e8b134a2200a76cca", 584)
 
 
 def test_engine_bit_identical_at_default_params():
@@ -1193,7 +1212,7 @@ def test_equity_path_peak_and_close_at_end():
     coins = {f"C{i}USDT": _wave_coin(f"C{i}USDT", 40, s0, 30 + i) for i in range(4)}
     H.install(coins)
     mk = H.Market(list(coins), (s0 + 31 * DAY, s0 + 40 * DAY), name="t")     # crosses a month end
-    sig = H.synth_signals(mk, "15m", 0.3, 5)
+    sig = _rand_sig(mk, "15m", 0.1, 5)
     b = H.bank_for(mk, ("15m",))
     c = H.build_cands(mk, b, [(sig, 0)])
     p = H.params()
@@ -1306,7 +1325,7 @@ def test_one_minute_bars_scale_every_time_length():
     assert mk1.T == 5 * mk5.T and mk1.bpd == 1440 and mk1.coin_end_t[1] == 5 * mk5.coin_end_t[1] + 4
     assert np.allclose(mk1.b_qv[::5][:50], mk5.b_qv[:50], rtol=1e-9)            # the same 24 h of quote volume
     for tf in ("15m", "1h"):
-        sig = H.synth_signals(mk5, tf, 0.4, 3)
+        sig = _rand_sig(mk5, tf, 0.2, 3)
         r5 = H.simulate(mk5, H.bank_for(mk5, (tf,)), H.build_cands(mk5, H.bank_for(mk5, (tf,)), [(sig, 0)]))
         r1 = H.simulate(mk1, H.bank_for(mk1, (tf,)), H.build_cands(mk1, H.bank_for(mk1, (tf,)), [(sig, 0)]))
         assert len(r5[4]) == len(r1[4]) > 5
