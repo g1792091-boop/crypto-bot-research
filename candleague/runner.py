@@ -152,7 +152,7 @@ def closed_trades(conn, accts: list[dict]) -> dict:
     for aid, d in conn.execute("SELECT account, data FROM trades ORDER BY account, exit_time, rowid"):
         if aid in book:
             t = json.loads(d)
-            book[aid].append({k: t.get(k) for k in TRADE_KEYS})
+            book[aid].append({k: _finite(t.get(k)) for k in TRADE_KEYS})
     return book
 
 
@@ -224,7 +224,13 @@ def judge(rows: list[dict]) -> dict:
 
 LAST_TRADES = 200
 TRADE_KEYS = ("symbol", "side", "entry_time", "entry_price", "exit_time", "exit_price", "exit_reason", "leverage",
-              "pnl", "roe")
+              "pnl", "roe", "stop_initial", "tp_price", "mae_price", "mfe_price")
+PRICE_KEYS = ("entry_price", "exit_price", "stop_initial", "tp_price", "mae_price", "mfe_price")
+
+
+def _finite(v):
+    """A stored NaN (a trade without a take-profit) as None: the snapshot is JSON a browser can read."""
+    return None if isinstance(v, float) and not math.isfinite(v) else v
 
 
 def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = START_MS,
@@ -244,7 +250,9 @@ def trade_book(conn, accts: list[dict], ds_money: bool = False, start_ms: int = 
         if hide:
             for t in last:                     # win / loss stays (a label); the money and the prices go
                 t["win"] = bool(t["pnl"] is not None and t["pnl"] > 0)
-                t["pnl"] = t["roe"] = t["entry_price"] = t["exit_price"] = None
+                t["pnl"] = t["roe"] = None
+                for k in PRICE_KEYS:
+                    t[k] = None
         out[a["id"]] = {"equity": None if hide else curve, "trades": last}
     return out
 

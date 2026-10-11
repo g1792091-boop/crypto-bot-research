@@ -130,6 +130,26 @@ def test_hidden_deepseek_keeps_its_labels(tmp_path):
     book = json.load(open(tmp_path / "snap" / "trades.json"))
     t = next(t for b in book.values() for t in b["trades"])
     assert t["pnl"] is None and t["roe"] is None and t["entry_price"] is None and t["exit_price"] is None
+    assert all(t[k] is None for k in RN.PRICE_KEYS)                    # the plan and the excursions are prices too
     assert isinstance(t["win"], bool) and t["symbol"] and t["side"] in (1, -1)
     w = doc["watch"]["pools"]["ds"]
     assert w["size"]["cand"]["wallet_sum"] is None and w["size"]["cand"]["accounts"] == 1
+
+
+def test_trades_carry_the_plan_and_read_as_json(tmp_path):
+    """The 진입 차트 draws each closed trade's first stop and take-profit and its best / worst point: those prices ride
+    in trades.json, a trade without a take-profit (stored NaN) reads as null, and the file is strict JSON."""
+    lg = _league(tmp_path / "a.db")
+    lg.advance(START + 2 * TP.DAY)
+    RN.write_snapshots(str(tmp_path / "snap"), lg, START + 2 * TP.DAY + 60_000)
+    raw = open(tmp_path / "snap" / "trades.json").read()
+    book = json.loads(raw, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))   # no NaN / Infinity
+    ts = [t for b in book.values() for t in b["trades"]]
+    assert ts and all(set(RN.TRADE_KEYS) <= set(t) for t in ts)
+    for t in ts:
+        assert t["stop_initial"] and t["mae_price"] and t["mfe_price"]
+        d = 1 if t["side"] > 0 else -1
+        assert d * (t["entry_price"] - t["stop_initial"]) > 0                  # the first stop is on the losing side
+        assert d * (t["mfe_price"] - t["entry_price"]) >= 0 >= d * (t["mae_price"] - t["entry_price"])
+        assert t["tp_price"] is None or d * (t["tp_price"] - t["entry_price"]) > 0
+    assert RN._finite(float("nan")) is None and RN._finite(1.5) == 1.5 and RN._finite("SL") == "SL"

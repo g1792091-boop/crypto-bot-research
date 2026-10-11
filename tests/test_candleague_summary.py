@@ -229,3 +229,31 @@ def test_trades_the_custom_numbers_added_and_left_out():
     assert w["pools"]["core"]["paired"]["cand_only"]["n"] == 2
     hid = SM.watch_summary(_accts(kind="ds", name="F5_BOX", tf="1h"), {"c1": cand, "c1-x": dflt}, MON + 30 * DAY)
     assert hid["picks"]["c1"]["paired"]["cand_only"]["mean"] is None and hid["pools"]["ds"]["paired"]["both"]["n"] == 1
+
+
+def test_trade_shape_in_r():
+    """How a strategy's trades went (진입 차트's section line): exit reasons, the median hold, and in R (|entry - first
+    stop|) the losers that first went +1R their way and the winners that first went 0.5R against; the R medians go
+    when money is hidden, the counts stay."""
+    H = 3_600_000
+
+    def tr(side, entry, stop, best, worst, exit_, pnl, why, hold=H):
+        return {"side": side, "entry_price": entry, "stop_initial": stop, "mfe_price": best, "mae_price": worst,
+                "exit_price": exit_, "pnl": pnl, "exit_reason": why, "entry_time": MON, "exit_time": MON + hold}
+    ts = [tr(1, 100.0, 98.0, 103.0, 99.5, 98.0, -40.0, "SL"),                  # +1.5R first, then stopped: gave back
+          tr(-1, 100.0, 102.0, 95.0, 101.2, 96.0, 80.0, "TP", 3 * H),          # 0.6R against first, then won: came back
+          tr(1, 100.0, 98.0, 100.4, 99.9, 100.2, 5.0, "LOCK", 2 * H),
+          {"side": 1, "pnl": -10.0, "exit_reason": "SL", "entry_time": MON, "exit_time": MON + H}]   # prices hidden
+    assert SM.r_marks(ts[0]) == (1.5, 0.25) and SM.r_marks(ts[3]) == (None, None)
+    b, w = SM.r_marks(ts[1])
+    assert abs(b - 2.5) < 1e-12 and abs(w - 0.6) < 1e-12
+    sh = SM.shape(ts, True)
+    assert sh["n"] == 4 and sh["wins"] == 2 and sh["reasons"] == {"SL": 2, "TP": 1, "LOCK": 1}
+    assert sh["r_n"] == 3 and sh["r_wins"] == 2 and sh["gave_back"] == 1 and sh["came_back"] == 1
+    assert sh["hold_med_ms"] == 1.5 * H and abs(sh["best_med"] - 1.5) < 1e-12 and abs(sh["worst_med"] - 0.25) < 1e-12
+    hid = SM.shape(ts, False)
+    assert hid["best_med"] is None and hid["worst_med"] is None and hid["gave_back"] == 1 and hid["reasons"]["SL"] == 2
+    w = SM.watch_summary(_accts(kind="ds", name="F5_BOX"), {"c1": ts}, MON + 2 * DAY)
+    assert w["strategies"]["F5_BOX"]["shape"]["n"] == 4 and w["strategies"]["F5_BOX"]["shape"]["best_med"] is None
+    assert w["picks"]["c1"]["shape"]["came_back"] == 1
+    assert SM.watch_summary(_accts(), {"c1": ts}, MON + 2 * DAY)["strategies"]["S2_ST_ROC"]["shape"]["best_med"] is not None

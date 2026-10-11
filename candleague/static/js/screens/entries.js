@@ -1,6 +1,8 @@
 // #/entries 진입 차트: one chart per pick, never several picks on one chart, grouped under each strategy with its entry
 // rule. A chart shows the candles of the pick's own timeframe around ONE entry of the chosen account (후보 by default):
-// the entry ▲▼, the exit ● with its reason, the entry price, and the stop / take-profit while the position is open.
+// the entry ▲▼, the exit ● with its reason, the entry and exit prices, and the stop / take-profit the trade was opened
+// with (the live ones while it is open). Each strategy's section says how its 후보 trades end (손절 · 익절 · 계단 잠금,
+// the median hold, in R the losers that first went +1R and the winners that first went −0.5R) and its pace toward 300.
 // ◀ ▶ walks through that account's entries (the open position first, then the closed trades, newest first). A card
 // loads its trades and candles only when it scrolls into view (38 charts never load at once).
 // Data: the shared snapshot (accounts, open positions), /api/trades/<account> per card, /api/klines?...&end= per entry.
@@ -15,6 +17,40 @@ const two = (n) => String(n).padStart(2, "0");
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
 const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
 const BEFORE = 40, AFTER = 20;            // bars shown before the entry and after the exit
+const R_TITLE = "R = 진입가와 처음 손절 사이 거리 (−1R = 처음 손절에 닿음 · 수수료 빼기 전 가격 기준)";
+const REASON_ORDER = ["SL", "TP", "LOCK", "LIQ"];
+
+/** A closed trade in R (|entry - first stop|): how far it went its way (best) and against it (worst) while open, and
+ *  where it closed; null when a price is hidden or missing. summary.r_marks's rule. */
+function rMarks(t) {
+  const ks = ["entry_price", "stop_initial", "mfe_price", "mae_price", "exit_price"];
+  if (ks.some((k) => t[k] == null || fmt.bad(t[k]))) return null;
+  const e = Number(t.entry_price), r = Math.abs(e - Number(t.stop_initial)), d = t.side > 0 ? 1 : -1;
+  if (!(r > 0)) return null;
+  return {best: Math.max(0, d * (Number(t.mfe_price) - e) / r), worst: Math.max(0, d * (e - Number(t.mae_price)) / r),
+    end: d * (Number(t.exit_price) - e) / r};
+}
+const rTxt = (x) => `${fmt.num(x, 1, true)}R`;
+function reasonParts(rs) {
+  const keys = [...REASON_ORDER.filter((k) => rs[k]), ...Object.keys(rs).filter((k) => !REASON_ORDER.includes(k))];
+  return keys.map((k) => `${reasonKo(k)} ${fmt.int(rs[k])}`);
+}
+
+/** How a strategy's (or a pick's) closed trades went, in one wrapped line of small facts (summary.shape). */
+function shapeLine(sh, who) {
+  if (!sh || !sh.n) return h("div", {class: "cl-eshape"}, h("span", {class: "muted"}, `${who}: 아직 닫힌 거래가 없습니다`));
+  const losers = sh.r_n - sh.r_wins;
+  return h("div", {class: "cl-eshape"},
+    h("span", null, h("b", null, who), ` 닫힌 ${fmt.int(sh.n)}번 · 이김 ${fmt.int(sh.wins)}`),
+    h("span", null, reasonParts(sh.reasons || {}).join(" · ")),
+    sh.hold_med_ms != null ? h("span", null, `보유 중앙 ${fmt.dur(sh.hold_med_ms / 1000)}`) : null,
+    sh.r_n ? h("span", {title: `진 거래 중, 먼저 이득 쪽으로 1R 이상 갔던 거래 (벌었다가 놓침) · ${R_TITLE}`},
+      `+1R 갔다가 진 거래 ${fmt.int(sh.gave_back)}/${fmt.int(losers)}`) : null,
+    sh.r_n ? h("span", {title: `이긴 거래 중, 먼저 손해 쪽으로 0.5R 이상 갔던 거래 (버텨서 이김) · ${R_TITLE}`},
+      `−0.5R 버티고 이긴 거래 ${fmt.int(sh.came_back)}/${fmt.int(sh.r_wins)}`) : null,
+    sh.best_med != null ? h("span", {title: `거래 중 가장 유리했던 / 불리했던 지점의 중앙값 · ${R_TITLE}`},
+      `가장 유리 중앙 ${rTxt(sh.best_med)} · 가장 불리 중앙 ${rTxt(-sh.worst_med)}`) : null);
+}
 
 export async function mount(el, ctx) {
   let meta = null;
@@ -45,7 +81,14 @@ export async function mount(el, ctx) {
     ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); const c = byEl.get(e.target); if (c) c.show(); } }, {rootMargin: "400px 0px"})
     : null;
   const byEl = new WeakMap();
+  const shapeBoxes = new Map();            // strategy name -> its section's shape + pace line (refreshed every snapshot)
   let sig = "";
+
+  function paintSection(box, name, d) {
+    const sw = ((d.watch || {}).strategies || {})[name];
+    box.hidden = !sw;
+    if (sw) put(box, shapeLine(sw.shape, "이 매매법 후보 전체"), LK.paceLine(d, sw.n, (d.watch || {}).min_trades || 300));
+  }
 
   function picksNow(d) {
     const ix = LK.index(d);
@@ -63,8 +106,13 @@ export async function mount(el, ctx) {
       st.strat, (v) => { st.strat = v; save(); paint(); }, "매매법"));
     const rows = picksNow(d);
     const s2 = rows.map((x) => x.a.id).join();
-    if (s2 === sig) { for (const x of rows) { const c = cards.get(x.a.id); if (c) c.update(x.a); } return; }
+    if (s2 === sig) {
+      for (const x of rows) { const c = cards.get(x.a.id); if (c) c.update(x.a); }
+      for (const [name, box] of shapeBoxes) paintSection(box, name, d);
+      return;
+    }
     sig = s2;
+    shapeBoxes.clear();
     for (const c of cards.values()) c.destroy();
     cards.clear();
     if (io) io.disconnect();
@@ -76,11 +124,15 @@ export async function mount(el, ctx) {
     put(list, order.map((name) => {
       const xs = groups.get(name).sort((a, b) => TFS.indexOf(a.c.tf) - TFS.indexOf(b.c.tf));
       const sm = LK.stratMeta(name, meta) || {};
+      const sbox = h("div", {class: "cl-eshapes"});
+      shapeBoxes.set(name, sbox);
+      paintSection(sbox, name, d);
       return ui.card({plate: LK.stratKo(name, meta), sub: `${name}${sm.family ? ` · ${sm.family}` : ""}`, cls: "cl-esec",
         acts: h("span", {class: "row wrap"}, LK.kindChip(xs[0].c.kind), h("a", {class: "btn-line", href: `#/strategies?s=${encodeURIComponent(name)}`}, "매매법 설명"))},
       sm.long || sm.short ? h("dl", {class: "cl-erule"},
         sm.long ? h("div", null, h("dt", null, h("span", {class: "side long"}, "롱")), h("dd", null, sm.long)) : null,
         sm.short ? h("div", null, h("dt", null, h("span", {class: "side short"}, "숏")), h("dd", null, sm.short)) : null) : null,
+      sbox,
       h("div", {class: "cl-egrid"}, xs.map((x) => {
         const card = makeCard(x.c, x.a);
         cards.set(x.a.id, card);
@@ -91,7 +143,8 @@ export async function mount(el, ctx) {
     }));
     const withEntry = rows.filter((x) => x.a.trades || x.a.open).length;
     info.textContent = `후보 ${rows.length}개 중 진입이 있는 것 ${withEntry}개 · ${ROLE_KO[st.role]} 계좌의 진입 · ` +
-      "차트마다 그 후보의 봉(15분 · 30분 · 1시간 · 4시간) · ◀ ▶로 다른 진입 · 한국 시각";
+      "차트마다 그 후보의 봉(15분 · 30분 · 1시간 · 4시간) · ◀ ▶로 다른 진입 · 한국 시각 · " +
+      "선: 진입가(점선) · 처음 손절(빨강) · 익절(초록, 계단 청산이면 없음) · 청산가 · " + R_TITLE;
   }
 
   // ------------------------------------------------------------ one pick's card
@@ -104,14 +157,23 @@ export async function mount(el, ctx) {
     const prev = h("button", {type: "button", class: "btn-line sm", "aria-label": "더 최근 진입", onclick: () => step(-1)}, "◀");
     const next = h("button", {type: "button", class: "btn-line sm", "aria-label": "이전 진입", onclick: () => step(1)}, "▶");
     const link = h("a", {class: "btn-line sm"}, "터미널");
+    const shapeEl = h("div", {class: "cl-epick"});
     const wrap = h("div", {class: "cl-ewrap"}, box, msgEl);
     const nav = h("div", {class: "cl-enav"}, prev, pos, next, h("span", {class: "grow"}), link);
     const el = h("article", {class: "cl-ecard"},
       h("div", {class: "cl-ehead"}, h("span", {class: "an-tf"}, tfKo(c.tf)), h("b", null, LK.stratKo(c.name, meta)), LK.roleChip(acct.role, ROLE_SHORT[acct.role]),
         h("span", {class: "grow"}), h("a", {class: "cl-elink", href: `#/account/${encodeURIComponent(acct.id)}`}, "계좌")),
-      nav,
+      shapeEl, nav,
       wrap, cap);
+    paintShape();
     paintNav();
+
+    function paintShape() {
+      const w = (LK.league() || {}).watch || {};
+      const sh = acct.role === "cand" ? ((w.picks || {})[c.id] || {}).shape : null;
+      shapeEl.hidden = !(sh && sh.n);
+      if (sh && sh.n) put(shapeEl, `닫힌 ${fmt.int(sh.n)}번 · ${reasonParts(sh.reasons || {}).join(" · ")}`);
+    }
 
     function entries() {
       const out = [];
@@ -145,6 +207,7 @@ export async function mount(el, ctx) {
     async function update(a2) {
       const opened = JSON.stringify(a2.open || null) !== JSON.stringify(acct.open || null);
       acct = a2;
+      paintShape();
       if (!loaded || (a2.trades === count && !opened)) return;
       const wasFirst = i === 0;
       if (!(await load()) || !ctx.alive()) return;
@@ -208,7 +271,8 @@ export async function mount(el, ctx) {
       makeChart();
       msg("");
       const n = b.t.length, dec = priceDec(b.c[n - 1]);
-      candles.applyOptions({priceFormat: {type: "price", precision: dec, minMove: 10 ** -dec}});
+      // the latest price line only while the position is open (a past trade's chart ends after its exit)
+      candles.applyOptions({priceFormat: {type: "price", precision: dec, minMove: 10 ** -dec}, priceLineVisible: !!it.open, lastValueVisible: !!it.open});
       candles.setData(b.t.map((t, k) => ({time: t / 1000, open: b.o[k], high: b.h[k], low: b.l[k], close: b.c[k]})));
       const barT = (ms) => (Math.floor(ms / tfms) * tfms) / 1000;
       const first = b.t[0];
@@ -227,8 +291,20 @@ export async function mount(el, ctx) {
       plines = [];
       const line = (p, col, title, style) => { if (p != null && !fmt.bad(p)) plines.push(candles.createPriceLine({price: p, color: col, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title})); };
       line(it.entry_price, color("--ink-2"), "진입가", 2);
-      if (it.open) { line(it.stop, color("--down"), "손절", 0); line(it.tp, color("--up"), "익절", 0); }
-      else line(it.exit_price, win(it) === false ? color("--down") : color("--up"), "청산가", 1);
+      // the plan the trade was opened with (the live stop / take-profit while open), kept in view by the price scale
+      const plan = it.open ? [it.stop, it.tp] : [it.stop_initial, it.tp_price];
+      // an exit at (about) a planned level shares that line instead of a second label on top of it
+      const near = (p) => !it.open && p != null && !fmt.bad(p) && it.exit_price != null && Math.abs(it.exit_price - p) <= Math.abs(it.exit_price) * 0.002;
+      const atStop = near(plan[0]), atTp = !atStop && near(plan[1]);
+      line(plan[0], color("--down"), it.open ? "손절" : atStop ? "처음 손절 = 청산" : "처음 손절", 0);
+      line(plan[1], color("--up"), atTp ? "익절 = 청산" : "익절", 0);
+      if (!it.open && !atStop && !atTp) line(it.exit_price, win(it) === false ? color("--down") : color("--up"), "청산가", 1);
+      const lv = plan.filter((p) => p != null && !fmt.bad(p)).map(Number);
+      candles.applyOptions({autoscaleInfoProvider: (orig) => {
+        const r = orig();
+        if (!r || !r.priceRange || !lv.length) return r;
+        return {...r, priceRange: {minValue: Math.min(r.priceRange.minValue, ...lv), maxValue: Math.max(r.priceRange.maxValue, ...lv)}};
+      }});
       const from = Math.max(first / 1000, barT(it.entry_time) - BEFORE * tfms / 1000);
       const to = it.open ? b.t[n - 1] / 1000 + 2 * tfms / 1000 : barT(it.exit_time) + Math.min(AFTER, 12) * tfms / 1000;
       try { chart.timeScale().setVisibleRange({from, to}); } catch (e) { chart.timeScale().fitContent(); }
@@ -248,7 +324,12 @@ export async function mount(el, ctx) {
             it.leverage ? h("span", {class: "muted"}, `${fmt.int(it.leverage)}배`) : null,
             it.roe == null ? h("span", {class: "muted"}, win(it) == null ? "" : win(it) ? "이김" : "짐")
               : h("span", {class: ["num", fmt.tone(it.roe)]}, `증거금 대비 ${fmt.pct(it.roe * 100, true, 1)}`),
-            h("span", {class: "muted"}, `보유 ${fmt.dur(hold / 1000)}`)));
+            h("span", {class: "muted"}, `보유 ${fmt.dur(hold / 1000)}`)),
+        it.open ? null : ((m) => (m ? h("div", {class: "cl-ecl", title: R_TITLE},
+          h("span", {class: "muted"}, "가장 유리"), h("span", {class: "num"}, rTxt(m.best)),
+          h("span", {class: "muted"}, "가장 불리"), h("span", {class: "num"}, rTxt(-m.worst)),
+          h("span", {class: "muted"}, "청산"), h("span", {class: ["num", fmt.tone(m.end)]}, rTxt(m.end)),
+          !win(it) && m.best >= 1 ? ui.pill("벌었다가 놓침", "warn") : null) : null))(rMarks(it)));
     }
     function destroy() {
       seq++;

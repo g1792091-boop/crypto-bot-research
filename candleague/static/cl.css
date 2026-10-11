@@ -212,6 +212,12 @@ tr.cl-bust td { opacity: .55; }
   font-size: var(--t-xs); background: color-mix(in srgb, var(--surface) 82%, transparent); border-radius: 8px; }
 .cl-emsg[hidden] { display: none; }
 .cl-ecap { display: grid; gap: 3px; font-size: var(--t-xs); }
+.cl-eshapes { display: grid; gap: 4px; }
+.cl-eshapes[hidden] { display: none; }
+.cl-eshape { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.cl-eshape b { color: var(--ink); margin-right: 4px; }
+.cl-epick { font-size: var(--t-xs); color: var(--muted); }
+.cl-epick[hidden] { display: none; }
 .cl-ecl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .cl-esel .select { min-width: 220px; }
 @media (max-width: 559px) { .cl-ebox { height: 210px; } .cl-esel .select { min-width: 0; width: 100%; } }

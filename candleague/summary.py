@@ -113,6 +113,56 @@ def paired_lists(cand: Iterable[dict], exitonly: Iterable[dict], tf_ms: int) -> 
     return both, only_a, [b[j][3] for j in range(len(b)) if not used[j]]
 
 
+def r_marks(t: dict) -> tuple[Optional[float], Optional[float]]:
+    """(best, worst) of one closed trade in R = |entry - first stop|: how far the price went its way (mfe_price) and
+    against it (mae_price) while it was open; (None, None) when a price is missing (hidden or not recorded)."""
+    try:
+        e, s0, fav, adv, side = (float(t[k]) for k in ("entry_price", "stop_initial", "mfe_price", "mae_price", "side"))
+    except (KeyError, TypeError, ValueError):
+        return None, None
+    r = abs(e - s0)
+    if not (r > 0 and all(map(np.isfinite, (e, fav, adv)))):
+        return None, None
+    d = 1.0 if side > 0 else -1.0
+    return max(0.0, d * (fav - e) / r), max(0.0, d * (e - adv) / r)
+
+
+def _median(xs: list) -> Optional[float]:
+    xs = sorted(xs)
+    if not xs:
+        return None
+    m = len(xs) // 2
+    return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+
+
+def shape(trades: Iterable[dict], show_money: bool) -> dict:
+    """What a strategy's trades look like (the 진입 차트 section line): how they ended (exit reason counts), the median
+    hold, the losers that had first gone +1R its way (gave it back), the winners that had first gone 0.5R against (came
+    back; both out of the trades whose R is known: r_n, r_wins), and the median best / worst in R. Counts stay when money
+    is hidden; the R medians go with the prices."""
+    n, wins, reasons, holds, gave, came, bests, worsts, r_n, r_wins = 0, 0, {}, [], 0, 0, [], [], 0, 0
+    for t in trades:
+        n += 1
+        won = float(t.get("pnl") or 0) > 0
+        wins += won
+        why = str(t.get("exit_reason") or "?")
+        reasons[why] = reasons.get(why, 0) + 1
+        if t.get("entry_time") is not None and t.get("exit_time") is not None:
+            holds.append(int(t["exit_time"]) - int(t["entry_time"]))
+        best, worst = r_marks(t)
+        if best is None:
+            continue
+        r_n += 1
+        r_wins += won
+        gave += (not won) and best >= 1.0
+        came += won and worst >= 0.5
+        bests.append(best)
+        worsts.append(worst)
+    return {"n": n, "wins": wins, "reasons": reasons, "hold_med_ms": _median(holds), "r_n": r_n, "r_wins": r_wins,
+            "gave_back": gave, "came_back": came,
+            "best_med": _median(bests) if show_money else None, "worst_med": _median(worsts) if show_money else None}
+
+
 def _agg(xs: list, show_money: bool) -> dict:
     return {"n": len(xs), "wins": sum(r > 0 for r in xs), "mean": (sum(xs) / len(xs)) if xs and show_money else None}
 
@@ -217,6 +267,8 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
                    "base_n": s["base"]["n"], "flip_n": s["flip"]["n"]}
             if show:
                 row.update(mean=cm, base_mean=bm, flip_mean=fm)
+            row["shape"] = shape([t for a in mine if a["name"] == name and a["role"] == "cand"
+                                  for t in book.get(a["id"], [])], show)
             strategies[name] = row
     picks, pooled_pairs = {}, {pool: ([], [], []) for pool in POOLS}
     ids = {a["id"] for a in accts}
@@ -224,6 +276,7 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
         if a["role"] == "cand":
             show = a["kind"] == "core" or ds_money
             picks[a["id"]] = splits(book.get(a["id"], []), show)
+            picks[a["id"]]["shape"] = shape(book.get(a["id"], []), show)
             if f"{a['id']}-x" in ids:        # what the custom numbers added and left out (the same exit on both sides)
                 lists = paired_lists(book.get(a["id"], []), book.get(f"{a['id']}-x", []), TF_MS.get(a["tf"], 3_600_000))
                 picks[a["id"]]["paired"] = {k: _agg(x, show) for k, x in zip(("both", "cand_only", "default_only"), lists)}
