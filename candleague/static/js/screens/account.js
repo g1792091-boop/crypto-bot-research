@@ -4,7 +4,7 @@
 // (the newest 200 the snapshot keeps). Data: the shared snapshot + /api/trades/<id> for the five.
 // 설치 뒤 진입만 (js/after.js, the switch under the head): the open-position pill, 지금 포지션 and the 거래 기록 keep only
 // what was entered after the install (a position entered before reads "설치 전 진입 · 숨김" where its pill would be; the
-// record's count says 설치 뒤만); the numbers, the five wallets' lines and the comparisons stay the full record from 10/01.
+// record's count says 설치 뒤만); the numbers, the five wallets' lines and the comparisons stay the full record from the start.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -15,7 +15,7 @@ import {posPill, pricesLive} from "../poskit.js";
 import {serverNow} from "../live.js";
 import {afterBar, afterOn, afterBook, openAfter, openBefore, beforeChip, afterEmpty} from "../after.js";
 
-/** Live ROE may be shown: the engine is not replaying from 10/01, wrote its record in the last 15 minutes, and the prices
+/** Live ROE may be shown: the engine is not catching up, wrote its record in the last 15 minutes, and the prices
  *  are live (poskit pricesLive). */
 const liveOk = (d) => !!d && !LK.catchingUp(d) && !(d.generated_ms && serverNow() - d.generated_ms > 15 * 60000) && pricesLive();
 

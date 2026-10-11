@@ -61,8 +61,17 @@ def _mark(ok: Optional[bool]) -> str:
     return "—" if ok is None else "▲" if ok else "▼"
 
 
-def _day(doc: dict) -> int:
-    return max(1, int((doc["done_ms"] - doc.get("start_ms", doc["done_ms"])) // 86_400_000) + 1)
+def _day(doc: dict, now_ms: int) -> int:
+    """The league's day in Korea (the start's KST date = 1일째 = D+0), as the dashboard's day pill counts it."""
+    start = doc.get("start_ms") or doc["done_ms"]
+    return max(1, (now_ms + KST) // 86_400_000 - (int(start) + KST) // 86_400_000 + 1)
+
+
+def start_line(doc: dict, now_ms: int) -> str:
+    """'D+1 · 10/11 12:00 시작부터 2일째': the league starts at its install time (owners 2026-10-12)."""
+    n = _day(doc, now_ms)
+    start = doc.get("start_ms")
+    return f"D+{n - 1} · {_kst(int(start)) + ' 시작부터 ' if start else ''}{n}일째"
 
 
 def summary_text(doc: dict, now_ms: Optional[int] = None) -> str:
@@ -71,7 +80,7 @@ def summary_text(doc: dict, now_ms: Optional[int] = None) -> str:
     acc = doc["accounts"]
     cands = [r for r in acc if r["role"] == "cand"]
     w = doc.get("watch") or {}
-    lines = [f"📊 아침 요약 · {NAME}", "", f"10/01부터 {_day(doc)}일째 · {_kst(doc['done_ms'])} KST까지 처리"]
+    lines = [f"📊 아침 요약 · {NAME}", "", start_line(doc, now_ms), f"{_kst(doc['done_ms'])} KST까지 처리"]
     today = next((c for c in w.get("checkpoints", []) if -1 < c.get("days_left", 1) <= 0), None)
     if today:                                                 # the checkpoint's day: its numbers are final from 09:00 KST
         lines.append(f"📌 오늘 {today['ko']} 날입니다 · 확정 결과는 대시보드 '점검 진행' 맨 위")

@@ -28,11 +28,16 @@ N_BOOT = 2000
 WEEK = 7 * 86_400_000
 MONDAY0 = 4 * 86_400_000              # 1970-01-05 was a Monday: UTC weeks start there
 UTC = datetime.timezone.utc
-# WATCH_PREREG 3: C1 one month after the start (2026-10-11), C2 two months, C3 again a month later if C2 did not pass
+# WATCH_PREREG 3: C1 one month after the start, C2 two months, C3 again a month later if C2 did not pass. The league
+# started on 2026-10-11 (installed about 12:00 KST, research/fullgrid/DEVIATIONS.md; since 2026-10-12 its record starts
+# at that install time), so the dates stay 11/11, 12/11 and 1/11.
 CHECKPOINTS = (
-    {"id": "C1", "date": "2026-11-11", "ko": "1차 점검", "what": "멈출지 보기: 후보 평균이 기본값과 동전 둘 다보다 나쁘면 그 묶음을 멈춤"},
-    {"id": "C2", "date": "2026-12-11", "ko": "2차 점검", "what": "통과 보기: 평균 > 0 (운 검사 p < 0.05) · 기본값보다 · 동전보다 나음 · 거래 300번 이상"},
-    {"id": "C3", "date": "2027-01-11", "ko": "3차 점검", "what": "2차에서 통과 못 한 묶음만 한 번 더 (같은 기준)"},
+    {"id": "C1", "date": "2026-11-11", "ko": "1차 점검", "after": "시작 후 한 달",
+     "what": "멈출지 보기: 후보 평균이 기본값과 동전 둘 다보다 나쁘면 그 묶음을 멈춤"},
+    {"id": "C2", "date": "2026-12-11", "ko": "2차 점검", "after": "시작 후 두 달",
+     "what": "통과 보기: 평균 > 0 (운 검사 p < 0.05) · 기본값보다 · 동전보다 나음 · 거래 300번 이상"},
+    {"id": "C3", "date": "2027-01-11", "ko": "3차 점검", "after": "시작 후 석 달",
+     "what": "2차에서 통과 못 한 묶음만 한 번 더 (같은 기준)"},
 )
 
 

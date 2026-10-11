@@ -54,7 +54,7 @@ export function originBox(c, meta) {
       src.band ? h("div", null, h("dt", null, "경고등 기준 (100번)"), h("dd", null, "하위 5% ", LK.ret(src.band["100"] && src.band["100"].p5))) : null,
       h("div", null, h("dt", null, "성격"), h("dd", null, LK.styleChip(pm.style), pm.trend_ratio != null ? h("span", {class: "muted"},
         ` 추세 비율 ${fmt.num(pm.trend_ratio, 2)} (${STYLE_DESC[pm.style] || ""})`) : null))),
-    h("p", {class: "note cl-caveat"}, "위 백테스트 숫자는 이 후보를 고를 때 이미 본 기간의 것이라 실제보다 좋게 나옵니다. 맞는지는 10/01 이후 후보 리그 성적으로만 확인합니다."),
+    h("p", {class: "note cl-caveat"}, "위 백테스트 숫자는 이 후보를 고를 때 이미 본 기간의 것이라 실제보다 좋게 나옵니다. 맞는지는 후보 리그를 켠 뒤(설치한 때부터)의 성적으로만 확인합니다."),
     Object.keys(states).length ? h("div", {class: "cl-states"}, h("span", {class: "muted"}, "장세별 승률 (2021~2026-09, 고를 때 쓴 기간 포함, 참고): "),
       STATE_ORDER.filter((k) => states[k] && states[k].n).map((k) => h("span", {class: "pp thin", title: `${k} ${states[k].n}번${states[k].mean != null ? ` · 한 번 평균 ${LK.retTxt(states[k].mean)}` : ""}`},
         `${k} ${states[k].n ? fmt.pct(states[k].win * 100, false, 0) : "—"} (${fmt.int(states[k].n)}번)`))) : null);

@@ -11,7 +11,7 @@
 // one more bar range above or below): a 3R take-profit 10 % away would squeeze the candles into a thin band, so a line
 // that far is left off the scale and named at the chart's edge instead ("익절 73,014.5 ↓ −11.6% · 차트 밖").
 // D11: a hidden DeepSeek position gets no line, no chip and no marks (counted in the key line only). While the engine
-// replays from 10/01 (or its record is old) the chips show no %: the positions are "그때 기준".
+// catches up (or its record is old) the chips show no %: the positions are "그때 기준".
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
@@ -270,7 +270,7 @@ export function termChart(ctx, st, hooks) {
     if (reset) {
       resetting += 1;
       key = k;
-      // a past trade older than the newest 1000 bars: the bars around it (/api/klines end=, from 10/01 on)
+      // a past trade older than the newest 1000 bars: the bars around it (/api/klines end=, from the start on)
       if (at && at < serverNow() - 900 * TF_MS[tf]) end = Math.round(at + 500 * TF_MS[tf]);
     }
     let d;

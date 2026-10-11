@@ -1,4 +1,4 @@
-// #/status 서버 상태: the engine (how far it has processed, how late, the catch-up from 10/01, the last pass's time),
+// #/status 서버 상태: the engine (its start, how far it has processed, how late, a catch-up's progress, the last pass's time),
 // the machine (load against its CPUs, the engine's memory), the live price feed of the terminal, the settings that
 // matter (DeepSeek money shown or hidden) and the engine's notes. Data: the shared snapshot + /api/live.
 import {h, put} from "../dom.js";
@@ -6,6 +6,9 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {freshLine, staleBanner} from "../poskit.js";
+
+/** How much of the span from the start to the time the record was written the engine has processed (a catch-up). */
+const catchShare = (d) => Math.max(0, Math.min(1, (d.done_ms - d.start_ms) / Math.max(1, d.generated_ms - d.start_ms)));
 
 export async function mount(el, ctx) {
   const tiles = h("div"), machine = h("div"), notes = h("div"), feed = h("div"), pos = h("div"), banner = h("div");
@@ -28,9 +31,9 @@ export async function mount(el, ctx) {
         ui.stat("처리한 시각", `${fmt.kst(d.done_ms)}`, "KST · 이 시각까지의 1분봉을 계산함"),
         ui.stat("늦음", lagMin < 60 ? `${fmt.int(lagMin)}분` : fmt.dur(lagMin * 60), "5분봉이 확정되는 대로 (보통 10분 안)"),
         ui.stat("기록 쓴 시각", fmt.kst(d.generated_ms), fmt.ago(d.generated_ms)),
-        ui.stat("10/01부터", `${fmt.int(LK.leagueDay(d))}일째`, d.started_ms ? `설치 ${fmt.kst(d.started_ms)}` : null)),
-      LK.catchingUp(d) ? ui.progress(Math.min(1, (d.done_ms - d.start_ms) / Math.max(1, d.started_ms - d.start_ms)),
-        `10/01부터 따라잡는 중 (설치 시각까지 ${fmt.pct(Math.min(100, 100 * (d.done_ms - d.start_ms) / Math.max(1, d.started_ms - d.start_ms)), false, 0)})`) : null,
+        ui.stat("시작부터", `${fmt.int(LK.leagueDay(d))}일째`, LK.replayedBefore(d) ? `${LK.startKo(d)} 시작 · 설치 ${fmt.kst(d.started_ms)}`
+          : `${LK.startKo(d)} 시작 (설치한 때)`)),
+      LK.catchingUp(d) ? ui.progress(catchShare(d), `따라잡는 중 (시작부터 기록 쓴 시각까지의 ${fmt.pct(100 * catchShare(d), false, 0)} 계산함)`) : null,
       h("dl", {class: "kv"},
         h("div", null, h("dt", null, "계좌"), h("dd", null, `${fmt.int(d.accounts.length)}개 (후보 ${fmt.int(d.accounts.filter((a) => a.role === "cand").length)}개 × 5종류, 기본값은 칸마다 1개)`)),
         h("div", null, h("dt", null, "딥시크 금액"), h("dd", null, d.ds_money ? "보임 (두 분 요청 2026-10-11)" : "숨김 (CANDLEAGUE_DS_MONEY=0)")),

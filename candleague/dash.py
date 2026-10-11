@@ -293,10 +293,15 @@ def pick_of(a: dict, cands: list) -> Optional[str]:
     return None
 
 
+CATCHING_MS = 30 * 60_000
+
+
 def catching_up(doc: dict) -> bool:
-    """lk.js catchingUp: still replaying from 10/01 after an install (processed time 30 min or more before the start)."""
-    st, done = doc.get("started_ms"), doc.get("done_ms")
-    return bool(st and done is not None and done < st - 30 * 60_000)
+    """lk.js catchingUp: the engine is catching up (its processed time was more than 30 minutes behind the clock when it
+    wrote the snapshot: right after an install or a start-over, or after an outage). Not the install time: a league
+    that starts at its install has no replay before it (owners 2026-10-12)."""
+    gen, done = doc.get("generated_ms"), doc.get("done_ms")
+    return bool(gen is not None and done is not None and gen - done > CATCHING_MS)
 
 
 def positions_doc(doc: Optional[dict], ex: Optional[dict], strict: bool = DS_MONEY_STRICT) -> dict:
@@ -452,7 +457,7 @@ PUBLIC_FILES = frozenset(("tokens.css", "base.css", "login.css", "login.js", "ic
 META_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "strategies_ko.json")
 
 
-KLINE_END_MIN = 1_790_812_800_000            # 2026-10-01 00:00 UTC: the league's first day (an older end is refused)
+KLINE_END_MIN = 1_790_812_800_000            # 2026-10-01 00:00 UTC: no league trade is older (an older end is refused)
 
 
 def klines_query(params, now_ms: Optional[int] = None) -> Optional[dict]:

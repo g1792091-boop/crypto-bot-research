@@ -5,7 +5,7 @@
 //   livePnl(p, mark)                 {mark, pnl, roe, liqGap, stopGap, tpGap} of one position at the mark (USDT, before the
 //                                    exit fee), null when hidden (D11), without a size or without a price (never a guess)
 //   gap(side, mark, line)            share of the mark the price still has to move to reach the line (> 0: not reached)
-//   liveAllowed(doc)                 false while the engine replays from 10/01 or its snapshot is over 15 minutes old:
+//   liveAllowed(doc)                 false while the engine catches up or its snapshot is over 15 minutes old:
 //                                    the positions are then "그때 기준" and no live P&L is shown (B2 / B8)
 //   pricesLive() / liveOk(doc)       the prices are live (or under a minute old); liveOk = liveAllowed and pricesLive:
 //                                    every live P&L, ROE and distance on 포지션, 터미널 and 순위표 asks this one
@@ -87,7 +87,7 @@ export function roeOf(side, lev, entry, mark) {
   if (e == null || m == null || L == null || !e) return null;
   return Number(side) * L * (m / e - 1);
 }
-/** True when live P&L may be shown for this snapshot (not replaying from 10/01, not over 15 minutes old). */
+/** True when live P&L may be shown for this snapshot (not catching up, not over 15 minutes old). */
 export const liveAllowed = (doc) => !!doc && !doc.status && !doc.catching_up && !doc.old;
 export const PX_GRACE_S = 60;                      // the last good prices count as live for this long (a short hiccup)
 /** True while the page's prices may carry live P&L: fresh (or test) prices, or the last good ones for at most a minute
@@ -194,13 +194,13 @@ export function freshLine(doc, o = {}) {
   return el;
 }
 
-/** The banner of a snapshot whose positions are not "now": the engine replaying from 10/01 (B2) or stopped (B8); null
- *  when all is well. */
+/** The banner of a snapshot whose positions are not "now": the engine catching up (B2: after the install, a start-over
+ *  or an outage) or stopped (B8); null when all is well. */
 export function staleBanner(doc) {
   if (!doc || doc.status) return null;
   if (doc.catching_up) {
-    return h("div", {class: "kp-banner warn", role: "status"}, h("b", null, "10/01부터 다시 계산 중"),
-      h("span", null, ` · 지금 ${fmt.kst(doc.done_ms)} KST까지 계산함 · 아래 포지션은 그 시각의 것이라 실시간 손익·거리는 감춥니다 (따라잡으면 저절로 보임)`));
+    return h("div", {class: "kp-banner warn", role: "status"}, h("b", null, "엔진이 따라잡는 중"),
+      h("span", null, ` · ${doc.start_ms ? `${fmt.kst(doc.start_ms)} 시작부터 ` : ""}지금 ${fmt.kst(doc.done_ms)} KST까지 계산함 · 아래 포지션은 그 시각의 것이라 실시간 손익·거리는 감춥니다 (따라잡으면 저절로 보임)`));
   }
   if (doc.old) {
     const age = snapAge(doc);

@@ -9,6 +9,7 @@ import {SKINS, TEXT_SIZES, NAV_POS, MOTIONS, skinNow, textNow, navNow, motionNow
   syncSwitches, startPref} from "./prefs.js";
 import * as fmt from "./fmt.js";
 import {installMs, afterWanted, setAfter} from "./after.js";
+import {startKo} from "./lk.js";
 
 const R = (x, y, w, hh) => s("rect", {x, y, width: w, height: hh});
 /** The pixel gear (16 x 16, currentColor). */
@@ -66,10 +67,11 @@ function body() {
   const startRow = row("첫 화면", "주소만 열었을 때 처음 보이는 화면 · 자동 = 넓은 창은 터미널, 휴대폰은 요약", sel);
   const motionRow = row("숫자 움직임", "줄이기 = 숫자가 굴러가거나 반짝이지 않고 바로 바뀝니다 (기기 설정의 '동작 줄이기'도 같은 효과)",
     choice("숫자 움직임", MOTIONS, motionNow(), (id) => { local.set("motion", id); applyMotion(id); }));
-  // 설치 뒤 진입만: only once the snapshot carries the install time (a change remounts the screen: app.js onAfterChange)
+  // 설치 뒤 진입만: only for an older record that replayed before its install (installMs null since the league starts at
+  // its install, owners 10/12; a change remounts the screen: app.js onAfterChange)
   const ims = installMs();
   const afterRow = ims == null ? null : row("설치 뒤 진입만",
-    `보기만 바뀝니다: 켜면 요약·포지션·터미널·체결 기록·순위표·계좌·진입 차트의 열린 포지션과 체결 목록에 설치(${fmt.kst(ims)}) 뒤에 들어간 것만 보입니다 · 순위·잔고·점검은 10/01부터 전체 기록`,
+    `보기만 바뀝니다: 켜면 요약·포지션·터미널·체결 기록·순위표·계좌·진입 차트의 열린 포지션과 체결 목록에 설치(${fmt.kst(ims)}) 뒤에 들어간 것만 보입니다 · 순위·잔고·점검은 ${startKo()}부터 전체 기록`,
     choice("설치 뒤 진입만", [{id: "off", ko: "끔"}, {id: "on", ko: "켬"}], afterWanted() ? "on" : "off", (id) => setAfter(id === "on")));
   const links = h("div", {class: "set-links"}, [["#/check", "점검 진행"], ["#/positions", "포지션"], ["#/status", "서버 상태"], ["#/howto", "읽는 법"]]
     .map(([href, ko]) => h("a", {class: "btn-line", href, onclick: () => closeSettings(true)}, ko)));

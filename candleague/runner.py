@@ -46,7 +46,6 @@ REPLAY_FROM_MS = 1_790_812_800_000      # 2026-10-01 00:00 UTC: where VERSION 1 
 DAY = 86_400_000
 FIVE = 300_000
 SETTLE_MS = 90_000
-CATCHING_MS = 30 * 60_000         # processed time this far behind the clock when the snapshot is written: "따라잡는 중"
 # Bump when the meaning of a replay changes: the league starts over FROM ITS RECORDED START (meta.start_ms).
 # 2 (owners 2026-10-12): the league starts at its install time; 1: replayed from 2026-10-01 (REPLAY_FROM_MS).
 VERSION = 2
@@ -398,20 +397,62 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
     return doc
 
 
+def parse_start(text: Optional[str]) -> Optional[int]:
+    """CANDLEAGUE_START / --start: a UTC time "2026-10-11T03:00Z" (or "2026-10-11 03:00") or epoch ms; None when empty.
+    Only a fresh database uses it (to rebuild a lost league.db from its known start); a recorded start always wins."""
+    import datetime
+    t = (text or "").strip()
+    if not t:
+        return None
+    if t.isdigit():
+        return int(t)
+    t = t.replace(" ", "T").rstrip("Zz")
+    d = datetime.datetime.fromisoformat(t)
+    return int(d.replace(tzinfo=d.tzinfo or datetime.timezone.utc).timestamp() * 1000)
+
+
+def backup_if_reset(db: str, accts: list[dict], now_ms: Optional[int] = None) -> Optional[str]:
+    """The install script's step while the engine is stopped, before the code swap: when this code would start the
+    league over (its fingerprint differs from the database's), copy the database next to it now (backup_db; the engine
+    finds this copy and does not make another). None when there is nothing to copy."""
+    if not os.path.exists(db):
+        return None
+    conn = sqlite3.connect(db, timeout=30)
+    try:
+        try:
+            meta = _get(conn, "meta")
+        except sqlite3.Error:
+            return None
+        if not meta or (meta.get("fingerprint") == fingerprint(accts) and meta.get("start_ms") is not None):
+            return None
+        return backup_db(conn, db, meta, int(time.time() * 1000) if now_ms is None else now_ms)
+    finally:
+        conn.close()
+
+
 def main(argv: Optional[list] = None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cmd", choices=("run", "once", "status"))
+    ap.add_argument("cmd", choices=("run", "once", "status", "backup"))
     ap.add_argument("--db", default=os.environ.get("CANDLEAGUE_DB", "/var/lib/candleague/league.db"))
     ap.add_argument("--snap", default=os.environ.get("CANDLEAGUE_SNAP", "/var/lib/candleague/snap"))
     ap.add_argument("--candidates", default=os.environ.get("CANDLEAGUE_CANDIDATES", C.DEFAULT_FILE))
+    ap.add_argument("--start", default=os.environ.get("CANDLEAGUE_START", ""),
+                    help="UTC start of a FRESH database only (rebuild a lost league.db), e.g. 2026-10-11T03:00Z")
     ap.add_argument("--every", type=int, default=300, help="seconds between passes (run)")
     a = ap.parse_args(argv)
     if a.cmd == "status":
         with open(os.path.join(a.snap, "league.json")) as fh:
             d = json.load(fh)
-        print(f"done {time.strftime('%Y-%m-%d %H:%M', time.gmtime(d['done_ms'] / 1000))} UTC, "
+        st = d.get("start_ms")
+        print(f"start {time.strftime('%Y-%m-%d %H:%M', time.gmtime(st / 1000)) if st else '-'} UTC, "
+              f"done {time.strftime('%Y-%m-%d %H:%M', time.gmtime(d['done_ms'] / 1000))} UTC, "
               f"lag {d['lag_s']}s, accounts {len(d['accounts'])}")
+        return 0
+    if a.cmd == "backup":
+        path = backup_if_reset(a.db, C.accounts(C.load(a.candidates)))
+        print(f"[후보 리그] 새로 시작하기 전 기록 복사: {path}" if path else "[후보 리그] 기록 복사 필요 없음 (이어서 계산)",
+              flush=True)
         return 0
     from paperbot import sweepsig
     from paperbot.binance import BinanceREST
@@ -427,10 +468,13 @@ def main(argv: Optional[list] = None) -> int:
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
     # owners 2026-10-11: DeepSeek money shown like core; 0 / off / false / no hides it again
     ds_money = os.environ.get("CANDLEAGUE_DS_MONEY", "1").strip().lower() not in ("0", "off", "false", "no")
-    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS)
+    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS, start_ms=parse_start(a.start),
+                db_path=a.db)
     from .notify import Notifier
     notifier = Notifier(conn)
-    print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, done {lg.done}", flush=True)
+    print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, start {_utc(lg.start_ms, '%Y-%m-%d %H:%M')} UTC, "
+          f"done {_utc(lg.done, '%Y-%m-%d %H:%M')} UTC", flush=True)
+    write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money)   # at once: a start-over replaces the old screens now
     while True:
         now = int(time.time() * 1000)
         t0 = time.monotonic()

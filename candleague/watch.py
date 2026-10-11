@@ -5,7 +5,7 @@ is still reported).
 
 Rules:
 * stall: the league's processed time (snap/league.json ``done_ms``) has not moved for STALL_MS (60 minutes; the engine
-  moves it every 5 minutes, and the catch-up from 10-01 after every day it replays). Counted from the later of when it
+  moves it every 5 minutes, and a catch-up after every day it replays). Counted from the later of when it
   last moved and the watch's own first check, so a fresh install is not reported before the engine had time.
 * stopped: ``systemctl is-active candleague-live.service`` says inactive or failed (unprivileged; no systemctl means
   "unknown", never a problem).

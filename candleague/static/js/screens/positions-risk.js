@@ -2,7 +2,7 @@
 // open position ranked by how far the mark price is from its liquidation price and from its stop / lock line, as bars
 // that move with the 5-second mark. A row pulses only for danger: within 0.5 % of its liquidation, or of a stop that would
 // close at a loss. A lock line (the stop already on the profit side) is drawn in the up colour as '잠금까지'.
-// While the engine replays from 10/01 (or its record is old) the live distances mean nothing: the rows then show the
+// While the engine catches up (or its record is old) the live distances mean nothing: the rows then show the
 // distances AT THE ENTRY (from the entry price), and say so; a lock line has no entry-time distance (it sits past the
 // entry on the profit side by design), so it reads "잠금 중" and ranks by its liquidation distance only. A hidden
 // DeepSeek position (D11: no prices) is not in the

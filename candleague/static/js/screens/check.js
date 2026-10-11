@@ -118,7 +118,7 @@ function timeline(cps) {
   return h("div", {class: "cl-cps"}, cps.map((c) => {
     const past = c.days_left <= 0;
     return h("div", {class: ["cl-cp", past ? "past" : ""]},
-      h("div", {class: "cl-cph"}, h("b", null, c.ko), h("span", {class: "num"}, fmt.date(c.ms)),
+      h("div", {class: "cl-cph"}, h("b", null, c.ko), h("span", {class: "num"}, fmt.date(c.ms)), c.after ? h("span", {class: "muted"}, c.after) : null,
         h("span", {class: "grow"}), past ? ui.pill("지남", "thin") : ui.pill(`D-${Math.ceil(c.days_left)}`, "accent")),
       h("p", null, c.what));
   }));

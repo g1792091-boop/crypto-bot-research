@@ -11,6 +11,10 @@
 # (candleague/data/candidates.json) and the dashboard only when its password, secret and address are set
 # (deploy/candleague/setup_env.sh fills them, with Telegram); the dashboard port opens on Tailscale only (firewall.sh).
 # Never touches the rule bot or the demo lab: none of their units or folders.
+# When the new code starts the league over (another candidate list or calculation; 2026-10-12: the league now starts at
+# its install time instead of a replay from 10/01), the whole old league.db is copied next to it first, with the engine
+# stopped, before the code swap (e.g. /var/lib/candleague/league_replay_from_1001_20261012.db; the engine finds that copy
+# and does not copy again). Never shown on the dashboard.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -167,6 +171,24 @@ for u in $UNITS; do
 done
 # shellcheck disable=SC2086
 if [ -n "$RUNNING" ]; then systemctl stop $RUNNING; fi
+
+echo "== league record (copied before a start-over; the engine is stopped)"
+LEAGUE_DB="$(envval CANDLEAGUE_DB)"; LEAGUE_DB="${LEAGUE_DB:-$LIB/league.db}"
+CAND_FILE="$(envval CANDLEAGUE_CANDIDATES)"
+if [ -f "$LEAGUE_DB" ] && [ "$CANDS" = 1 ]; then
+  set +e
+  BK_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LIB" \
+    PYTHONDONTWRITEBYTECODE=1 CANDLEAGUE_DB="$LEAGUE_DB" ${CAND_FILE:+CANDLEAGUE_CANDIDATES="$CAND_FILE"} \
+    "$VENV/bin/python" -m candleague backup 2>&1)"
+  BK_RC=$?
+  set -e
+  printf '%s\n' "$BK_OUT" | tail -n 5
+  if [ "$BK_RC" -ne 0 ]; then
+    echo "기록 복사를 여기서 못 했습니다. 엔진이 지우기 전에 다시 복사하고, 복사를 못 하면 지우지 않습니다."
+  fi
+else
+  echo "기록 없음 또는 후보 목록 없음: 복사할 것 없음"
+fi
 rm -rf "$APP.old"
 [ -d "$APP" ] && mv "$APP" "$APP.old"
 mv "$APP.new" "$APP"
@@ -176,7 +198,7 @@ if [ "$CANDS" = 1 ]; then
   systemctl enable --quiet candleague-live.service
   systemctl restart candleague-live.service || echo "엔진을 켜지 못했습니다: journalctl -u candleague-live -n 40 --no-pager"
   systemctl enable --quiet --now candleague-watch.timer || echo "감시 타이머를 켜지 못했습니다: systemctl status candleague-watch.timer"
-  echo "엔진: 켜짐 (처음에는 10월 1일부터 따라잡느라 몇 분~수십 분 걸립니다: journalctl -u candleague-live -f)"
+  echo "엔진: 켜짐 (켠 때부터 계산합니다. 새로 시작한 때는 처음 시작 시각부터 지금까지 따라잡느라 몇 분~수십 분: journalctl -u candleague-live -f)"
   echo "감시: 10분마다 (엔진이 1시간 넘게 멈추면 텔레그램으로 [후보 리그] 알림)"
 else
   echo "엔진: 후보 목록(candleague/data/candidates.json)이 아직 없어 켜지 않았습니다. 후보가 정해지면 git pull 후 다시 실행하세요."

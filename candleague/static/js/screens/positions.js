@@ -1,6 +1,6 @@
 // #/positions 포지션 · 모의 계좌의 열린 포지션, in the rule bot's v4 look (copied and adapted from
 // paperbot/dash/static/v4/screens/positions.js; nothing imported from it). From the top:
-//   the freshness line (엔진 기준 HH:MM · 시세 n초 전) and, while the engine replays from 10/01 or its record is old, a
+//   the freshness line (엔진 기준 HH:MM · 시세 n초 전) and, while the engine catches up or its record is old, a
 //   banner (no live P&L then: the positions are "그때 기준")
 //   the summary over the chosen 묶음 and coin: 미실현 손익 합계 (USDT) at the mark, 묶인 증거금 대비 %, 롱 · 숏, 수익 중 /
 //   손실 중, 묶인 증거금, hidden DeepSeek positions counted only; 가장 많이 버는·잃는 포지션
@@ -252,7 +252,7 @@ export async function mount(el, ctx) {
     const n = all().length;
     const before = st.doc.after ? st.doc.after.before.length : 0;
     if (!n && before) return afterEmpty("설치 뒤에 들어간 열린 포지션이 아직 없습니다",
-      `열린 포지션 ${fmt.int(before)}개는 모두 설치 전(10/01부터 다시 돌린 기록)에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다.`, {cls: "ps-empty"});
+      `열린 포지션 ${fmt.int(before)}개는 모두 설치 전(${LK.startKo()}부터 다시 돌린 기록)에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다.`, {cls: "ps-empty"});
     if (!n) return h("div", {class: "ps-empty"}, h("b", null, "지금 열린 포지션이 없습니다"),
       h("span", null, "엔진은 5분마다 신호를 확인합니다. 새 포지션은 들어간 뒤 5~10분 안에 여기에 나타납니다."),
       h("a", {class: "btn-line", href: "#/entries"}, "진입 차트 보기"));

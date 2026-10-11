@@ -9,7 +9,7 @@
 //   손절 주문  the stop, lock and take-profit prices every open position holds, the nearest to the price first (paper:
 //             nothing is sent to an exchange).
 // Numbers: P&L and ROE at the mark price, before the exit fee (js/poskit.js livePnl); size, margin and the liquidation
-// price are "진입 때 기준" (the server's rebuild). While the engine replays from 10/01 or its record is old, no live P&L,
+// price are "진입 때 기준" (the server's rebuild). While the engine catches up or its record is old, no live P&L,
 // ROE or distance is shown (the entry-time ones are, marked so; a lock line then reads "잠금 중", never "닿음"); the same
 // when the prices are over a minute old (poskit liveOk). On a phone the rows become small cards (no sideways page
 // scroll). The 5 s live tick only changes the numbers in their cells: the rows are built and ordered when the positions,
@@ -79,7 +79,7 @@ export function bottomTable(ctx, st, hooks) {
   const empty = (t) => h("p", {class: "tm-empty"}, t);
   const allowedNow = () => liveOk(T.doc);
   const stale = () => (T.doc && !T.doc.status && !allowedNow()
-    ? h("span", {class: "warn-t"}, T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 실시간 손익 감춤 · " : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익 감춤 · `) : null);
+    ? h("span", {class: "warn-t"}, T.doc.catching_up ? "엔진이 따라잡는 중: 실시간 손익 감춤 · " : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익 감춤 · `) : null);
   const posLink = () => h("a", {class: "tm-more", href: "#/positions"}, "포지션 화면 →");
 
   function inGrp() { return T.doc && !T.doc.status ? (T.doc.positions || []).filter((p) => inGroup(p, st.grp)) : []; }
@@ -236,7 +236,7 @@ export function bottomTable(ctx, st, hooks) {
     tabs.btn("pos").textContent = T.doc && !T.doc.status ? `포지션 ${fmt.int(all.length)}` : "포지션";
     if (!allowedNow()) {
       countTo(total, null);
-      totBox.title = T.doc && T.doc.catching_up ? "엔진이 10/01부터 따라잡는 중: 지금 가격으로 계산하지 않습니다" : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익을 감춥니다`;
+      totBox.title = T.doc && T.doc.catching_up ? "엔진이 따라잡는 중: 지금 가격으로 계산하지 않습니다" : `${waitKo(T.doc) || "엔진 기록이 멈춤"}: 실시간 손익을 감춥니다`;
       return;
     }
     let tot = 0, known = 0;

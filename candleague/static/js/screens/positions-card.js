@@ -149,7 +149,7 @@ export function priceLine(values, o = {}) {
 // ---------------------------------------------------------------- the card
 /**
  * posCard(p, o) -> <article> with .update(mark, allowed) (call it with real mark prices only: the numbers count to them;
- * allowed false = the engine is replaying from 10/01 or its record is old: no live P&L, no distances, waitKo says why) and
+ * allowed false = the engine is catching up or its record is old: no live P&L, no distances, waitKo says why) and
  * .setSpark(vals,
  * {note, live}). p: an /api/positions entry. o: {open, onToggle(id, open), href (ctx.href)}.
  */

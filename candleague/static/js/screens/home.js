@@ -3,9 +3,11 @@
 // five roles side by side, the picks' 상위 · 하위 5 by mean per trade, and the newest fills. Data: the shared snapshot
 // (league.json, app.js) and /api/fills. HONESTY: every number is the snapshot's; a pool's "지금이면" is a preview of the
 // pre-registered rule, never the checkpoint's verdict (that is computed on the day).
-// 설치 뒤 진입만 (js/after.js, the switch under the head): the 최근 체결 list, the 자리 비운 사이 trade count and the
-// 후보 열린 포지션 count keep only what was entered after the install (labelled 설치 뒤만); the wallets, the pools, the
-// ranking and the checkpoint numbers stay the full record from 10/01.
+// The league starts at its install time (owners 10/12): the 일정 card's first step, D+n and "n일째" come from the
+// snapshot's start_ms. 설치 뒤 진입만 (js/after.js, the switch under the head) shows only for an older record that
+// replayed from 10/01 before its install: the 최근 체결 list, the 자리 비운 사이 trade count and the 후보 열린 포지션 count
+// then keep only what was entered after the install (labelled 설치 뒤만); the wallets, the pools, the ranking and the
+// checkpoint numbers stay the full record from its start.
 import {h, s, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -46,7 +48,7 @@ export async function mount(el, ctx) {
   ctx.onLeague((d) => {
     if (!d.accounts) {
       put(hero, h("div", {class: "s2a-hrow"}, ui.plate("후보 리그")), h("p", {class: "dl-vbig warn"}, "준비 중"),
-        h("p", {class: "note"}, "엔진이 10월 1일부터 따라잡고 첫 기록을 쓰면 여기에 나옵니다 (설치 뒤 몇 분~수십 분)."));
+        h("p", {class: "note"}, "엔진이 시작(설치한 때)부터 계산해 첫 기록을 쓰면 여기에 나옵니다 (몇 분)."));
       return;
     }
     paintAway(d);
@@ -116,7 +118,7 @@ export async function mount(el, ctx) {
       h("div", {class: "s2a-hrow"}, ui.plate("다음 점검"), h("span", {class: "muted s2a-small"}, H.ko)),
       next ? h("p", {class: "dl-vbig ok"}, `${next.ko} `, h("em", null, fmt.mmdd(next.ms)), h("small", {class: "cl-dleft"}, ` D-${Math.ceil(next.days_left)}`))
         : h("p", {class: "dl-vbig warn"}, "점검 일정 끝"),
-      next ? h("p", {class: "note"}, next.what) : null,
+      next ? h("p", {class: "note"}, next.after ? `${next.after} · ${next.what}` : next.what) : null,
       line("core"), line("ds"),
       h("p", {class: "note"}, "‘지금이면’은 미리 정한 규칙을 오늘 숫자에 대어 본 참고입니다. 판정은 점검 날 한 번만 합니다. 실제 돈은 2차 통과 뒤 두 분이 정합니다."),
       h("div", {class: "row wrap"}, h("a", {class: "btn-y", href: "#/check"}, "점검 진행 자세히"),
@@ -127,8 +129,9 @@ export async function mount(el, ctx) {
     const w = d.watch || {};
     const cps = w.checkpoints || [];
     const nextI = cps.findIndex((c) => c.days_left > 0);
-    const steps = [{ko: "다시 돌리기 시작", ms: d.start_ms, done: true}, {ko: "설치", ms: d.started_ms, done: true},
-      ...cps.map((c, i) => ({ko: c.ko, ms: c.ms, done: c.days_left <= 0, now: i === nextI}))];
+    const first = LK.replayedBefore(d) ? [{ko: "다시 돌리기 시작", ms: d.start_ms, done: true}, {ko: "설치", ms: d.started_ms, done: true}]
+      : [{ko: `시작 ${fmt.hm(d.start_ms)} (설치)`, ms: d.start_ms, done: true}];
+    const steps = [...first, ...cps.map((c, i) => ({ko: c.ko, ms: c.ms, done: c.days_left <= 0, now: i === nextI}))];
     const min = w.min_trades || 300;
     const prog = (kind) => {
       const p = (w.pools || {})[kind];
@@ -139,8 +142,9 @@ export async function mount(el, ctx) {
     };
     put(goal,
       h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
-        ` (10/01부터 ${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
-      h("p", {class: "s2a-goalline"}, "10월 1일부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.",
+        ` (${LK.fromKo(d)} ${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
+      h("p", {class: "s2a-goalline"}, LK.replayedBefore(d) ? `${fmt.mmdd(d.start_ms)}부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`
+        : `봇을 켠 때(${LK.startKo(d)})부터 모든 계좌 $5,000으로 시작해 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`,
         h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
       h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, steps.map((x, i) => h("li", {class: x.now ? "now" : x.done ? "done" : "",
         "aria-current": x.now ? "step" : null}, h("span", {class: "s2a-sn"}, x.ms ? fmt.mmdd(x.ms) : String(i + 1)), x.ko))),
@@ -279,7 +283,7 @@ function ledBar() {
     const closed = ix.cands.reduce((a, x) => a + (x.trades || 0), 0);
     const ok = Object.values(d.judge || {}).filter((j) => j.verdict === "ok").length;
     const warn = Object.values(d.judge || {}).filter((j) => j.band && j.band.below).length;
-    cell("10/01부터", "다시 돌리기 시작부터 처리한 날 수").textContent = `${fmt.int(LK.leagueDay(d))}일째`;
+    cell("시작부터", `${LK.fromKo(d)} 처리한 날 수 (시작한 날 = 1일째)`).textContent = `${fmt.int(LK.leagueDay(d))}일째`;
     cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션${afterOn() ? " (설치 뒤에 들어간 것만)" : ""} (190계좌 전체: ${fmt.int(d.accounts.filter((a) => openAfter(a)).length)}개)`,
       `후보 열린 포지션${afterOn() ? " (설치 뒤만)" : ""}`).textContent = fmt.int(open);
     cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (190계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);

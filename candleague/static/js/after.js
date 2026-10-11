@@ -1,11 +1,13 @@
-// 설치 뒤 진입만 (owners 10/11: "설치 뒤(10월 11일 이후)에 들어간 것만 보기"): one per-device view switch. The league was
-// installed on 10/11 and replayed from 10/01, so positions the replay opened still show as open with old entry times.
+// 설치 뒤 진입만 (owners 10/11: "설치 뒤(10월 11일 이후)에 들어간 것만 보기"): one per-device view switch, for a record
+// that REPLAYED from 10/01 and was installed later (the league until 10/12): positions the replay opened still showed
+// as open with old entry times. SINCE 10/12 THE LEAGUE STARTS AT ITS INSTALL TIME (owners: "커스텀값 봇 돌린 시점부터
+// ... 규칙봇 형식처럼"): nothing lies before the install, so installMs() is null and every piece here hides itself (the
+// switch, its settings row, the chips) and every filter passes everything. It stays only for an older snapshot.
 // With the switch on, every list of OPEN POSITIONS and of CLOSED TRADES on 포지션 · 터미널 · 체결 기록 · 순위표 · 계좌
 // keeps only what was ENTERED at or after the install time (the snapshot's ``started_ms``: league meta, written when the
-// engine first started; lk.js catchingUp and status.js read the same field), and the counts and sums next to those lists
-// are recomputed over what is kept and say "설치 뒤만".
+// engine first started), and the counts and sums next to those lists are recomputed over what is kept and say "설치 뒤만".
 // A VIEW FILTER ONLY: rankings, wallets, 잔고 수익률, the checkpoint (점검) numbers and the coin-flip comparisons stay the full
-// record from 10/01, and the bar that holds the switch says so. Nothing here changes what the engine or the server does.
+// record from the start, and the bar that holds the switch says so. Nothing here changes what the engine or the server does.
 // Per browser (dom.js local: try/catch inside); a browser that cannot store it keeps the choice for this page only (until
 // a reload) and the switch says so. Hidden while the snapshot has no started_ms. app.js remounts the screen when the
 // switch changes (onAfterChange) and repaints the bars on a new snapshot; the pressed switch keeps its place on the
@@ -20,19 +22,24 @@
 //   afterEmpty(head, note) beforeChip(a)   a list the switch emptied (+ the "모두 보기" button) · in place of a hidden pill
 import {h, local} from "./dom.js";
 import * as fmt from "./fmt.js";
-import {league} from "./lk.js";
+import {league, REPLAY_GAP_MS} from "./lk.js";
 import {positionsDoc} from "./poskit.js";
 
 const KEY = "after";
 const fin = (x) => (x == null || x === "" || typeof x === "boolean" || !Number.isFinite(Number(x)) ? null : Number(x));
 
 // ---------------------------------------------------------------- the state
-/** The install time (ms): doc.started_ms when doc carries one, else the shared snapshot's (league.json meta), else the
- *  last /api/positions answer's (the same field, dash.py positions_doc); null when none of them has it. */
+/** The install time (ms) of a record that replayed before it: doc.started_ms when doc carries one, else the shared
+ *  snapshot's (league.json meta), else the last /api/positions answer's (the same field, dash.py positions_doc). Null
+ *  when none of them has it, AND when the record starts at the install (start_ms within 5 minutes before started_ms:
+ *  the league since 10/12), so the switch never shows where nothing lies before the install. */
 export function installMs(doc) {
   for (const d of [doc, league(), positionsDoc()]) {
     const v = d ? fin(d.started_ms) : null;
-    if (v != null && v > 0) return v;
+    if (v != null && v > 0) {
+      const s = fin(d.start_ms);
+      return s != null && v - s < REPLAY_GAP_MS ? null : v;
+    }
   }
   return null;
 }
@@ -139,9 +146,9 @@ export function afterBook(book, on = afterOn()) {
 }
 
 // ---------------------------------------------------------------- the pieces on the page
-const startKo = () => { const lg = league(); return lg && fin(lg.start_ms) ? fmt.mmdd(lg.start_ms) : "10/01"; };
+const startKo = () => { const lg = league(); return lg && fin(lg.start_ms) ? fmt.mmdd(lg.start_ms) : "시작"; };
 /** "설치 뒤만": the chip next to a count or a sum the switch recomputed (null while off). */
-export const afterTag = (doc) => (afterOn(doc) ? h("span", {class: "pp thin kp-after-tag", title: `설치(${fmt.kst(installMs(doc))} KST) 뒤에 들어간 것만 셉니다 · 끄면 10/01부터 전부`}, "설치 뒤만") : null);
+export const afterTag = (doc) => (afterOn(doc) ? h("span", {class: "pp thin kp-after-tag", title: `설치(${fmt.kst(installMs(doc))} KST) 뒤에 들어간 것만 셉니다 · 끄면 ${startKo()}부터 전부`}, "설치 뒤만") : null);
 /** " · 설치 뒤만" for a line of text ("" while off). */
 export const afterSuffix = (doc) => (afterOn(doc) ? " · 설치 뒤만" : "");
 /** The button that turns the switch off ("모두 보기"), for a list the switch left empty. */
@@ -161,8 +168,9 @@ export const beforeChip = (a, cut) => (openBefore(a, cut) ? h("span", {class: "p
 
 const BARS = new Set();
 /**
- * afterBar({cls, also}) -> the switch "○ 설치 뒤 진입만 (10/11 21:03 이후)" and its note "순위·잔고·점검은 10/01부터 전체
- * 기록" (also: more names for the note, e.g. "수익 차트"); hidden while the install time is unknown. el.repaint(doc?) (doc:
+ * afterBar({cls, also}) -> the switch "○ 설치 뒤 진입만 (10/11 21:03 이후)" and its note "순위·잔고·점검은 <start>부터
+ * 전체 기록" (also: more names for the note, e.g. "수익 차트"); hidden while the install time is unknown or nothing lies
+ * before it (installMs). el.repaint(doc?) (doc:
  * an answer that carries started_ms, e.g. /api/positions, for a page whose snapshot has not come yet).
  */
 export function afterBar(o = {}) {

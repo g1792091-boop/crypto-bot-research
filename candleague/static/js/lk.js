@@ -24,8 +24,8 @@ export async function getMeta() {
 }
 export const metaNow = () => META;
 
-/** Days since 10/01 (the replay's start) at the last processed time: "D+n". */
-/** Closed trades at a later date if the pace so far (10/01 to the processed time) holds; null before a full day. */
+/** Closed trades at a later date if the pace so far (the league's start to the processed time) holds; null before a
+ *  full day. */
 export function paceAt(d, n, ms) {
   const days = d && d.start_ms ? (d.done_ms - d.start_ms) / DAY : 0;
   if (!(days >= 1) || !(ms > d.done_ms)) return null;
@@ -43,18 +43,35 @@ export function paceLine(d, n, min = 300) {
     `이 속도면 ${parts.map((x) => `${fmt.mmdd(x.c.ms)}에 약 ${fmt.int(x.v)}번`).join(" · ")}${last < min ? ` (${fmt.int(min)}번 못 미침)` : ""}`);
 }
 
+// THE START (owners 10/12, "커스텀값 봇 돌린 시점부터 ... 규칙봇 형식처럼"): the league starts at its install time, every
+// account at $5,000 then; the snapshot's start_ms (league meta, the install time floored to 5 minutes) is the one
+// source of every "시작부터", "D+n" and "n일째" (no date is written into the page). started_ms is the install time.
+/** Days the engine has processed since the start (the start's day = 1일째). */
 export const leagueDay = (d) => (d && d.start_ms ? Math.max(1, Math.floor((d.done_ms - d.start_ms) / DAY) + 1) : 0);
-/** The calendar day of the league in Korea (10/01 = D+1), whatever the engine has processed: the top pill's "D+n" (a
- *  replay from 10/01 does not turn it back to D+4). ``now`` defaults to the device's clock. */
+/** The calendar day of the league in Korea (the start's KST date = 1일째), whatever the engine has processed: the top
+ *  pill's "n일째" (a catch-up does not turn it back). ``now`` defaults to the device's clock. */
 const KST_MS = 9 * 3600000;
 export const calDay = (d, now = Date.now()) => (d && d.start_ms
   ? Math.max(1, Math.floor((now + KST_MS) / DAY) - Math.floor((d.start_ms + KST_MS) / DAY) + 1) : 0);
 /** The "D+n" of the day pill, counted like the rule bot's (paperbot v4 core/shell.js: days gone since the start, the
- *  start day is D+0): 10/01 = D+0, 10/10 = D+9. calDay() stays the "n일째" (10/10 = 10일째). */
+ *  start day is D+0): started 10/11 -> 10/11 = D+0, 10/12 = D+1. calDay() stays the "n일째" (10/12 = 2일째). */
 export const dPlus = (d, now = Date.now()) => (d && d.start_ms ? Math.max(0, calDay(d, now) - 1) : 0);
+/** "10/11 12:00": the league's start in Korea time ("—" before the first snapshot). */
+export const startKo = (d = LEAGUE) => (d && d.start_ms ? fmt.kst(d.start_ms) : "—");
+/** "10/11 12:00 시작부터" (or "시작부터" before the first snapshot). */
+export const fromKo = (d = LEAGUE) => (d && d.start_ms ? `${fmt.kst(d.start_ms)} 시작부터` : "시작부터");
+/** "D+1 · 10/11 12:00 시작부터 2일째" (the day pill's panel, 요약's 일정). */
+export const dayLine = (d, now = Date.now()) => (d && d.start_ms ? `D+${dPlus(d, now)} · ${fromKo(d)} ${calDay(d, now)}일째` : "—");
+/** The start lies at the install: a league of the new kind (owners 10/12), nothing before it. False only for an older
+ *  snapshot that replayed from 10/01 and was installed later (the start is the install time floored to 5 minutes, so
+ *  up to 5 minutes before it). */
+export const REPLAY_GAP_MS = 5 * 60000;
+export const replayedBefore = (d) => !!(d && Number(d.start_ms) > 0 && Number(d.started_ms) > 0 && d.started_ms - d.start_ms >= REPLAY_GAP_MS);
 
-/** Still replaying from 10/01 after the install (the processed time has not reached the install time yet). */
-export const catchingUp = (d) => !!(d && d.started_ms && d.done_ms < d.started_ms - 30 * 60000);
+/** The engine is catching up: its processed time was more than 30 minutes behind the clock when it wrote the record
+ *  (right after the install or a start-over, or after an outage). dash.py catching_up is the same rule. */
+export const CATCHING_MS = 30 * 60000;
+export const catchingUp = (d) => !!(d && d.generated_ms != null && d.done_ms != null && d.generated_ms - d.done_ms > CATCHING_MS);
 
 /** Seconds since the engine wrote its record after which the record counts as late (warn) and stopped (bad): the same
  *  numbers as js/poskit.js SNAP_WARN_S / SNAP_OLD_S and the server's ``old`` flag (dash.py /api/positions), so the
@@ -67,7 +84,7 @@ export function health(d, now = serverNow()) {
   if (!d || !d.accounts) return {lv: "warn", ko: "엔진이 첫 기록을 아직 쓰지 않았습니다"};
   const sinceWrite = Math.max(0, now - (d.generated_ms || 0)), lag = Math.max(0, now - (d.done_ms || 0));
   if (sinceWrite > WRITE_OLD_S * 1000) return {lv: "bad", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전에 멈춤`};
-  if (catchingUp(d)) return {lv: "warn", ko: `10/01부터 따라잡는 중 (${fmt.kst(d.done_ms)}까지)`};
+  if (catchingUp(d)) return {lv: "warn", ko: `따라잡는 중 (${fromKo(d)} ${fmt.kst(d.done_ms)}까지 계산)`};
   if (sinceWrite > WRITE_WARN_S * 1000) return {lv: "warn", ko: `엔진 기록이 ${fmt.dur(sinceWrite / 1000)} 전 (조금 늦음)`};
   if (lag > 60 * 60000) return {lv: "bad", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음 (시세 연결 확인)`};
   if (lag > 30 * 60000) return {lv: "warn", ko: `처리가 ${fmt.dur(lag / 1000)} 늦음`};

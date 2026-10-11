@@ -4,7 +4,7 @@
 // (롱 n · 숏 n, the crowding dot), the price feed's state, the bar-close countdown and the KST clock — and under it the
 // band "후보 리그 지금": the engine's state, D+n and the next checkpoint, the open positions, the 후보 accounts' unrealized
 // total, today's closed 후보 trades and "엔진 기준 HH:MM (n분 전 씀) · 시세 n초 전". A banner says when the positions are
-// not "now" (the engine replaying from 10/01, or stopped): then no live P&L anywhere on the terminal.
+// not "now" (the engine catching up, or stopped): then no live P&L anywhere on the terminal.
 // The rule bot's market-wide cells (급등 · 급락 · 음펀비, AI 회의 줄) have no data source here: left out, never faked.
 // Over the band, its own thin line: the switch 설치 뒤 진입만 (js/after.js) and its note (the band itself has no room for
 // them without cutting the freshness line on a PC; above it, the switch does not move when the band's text changes);
@@ -51,7 +51,7 @@ export function topBar(ctx, st) {
   // ---- the band "후보 리그 지금" (each chip a link; a number that is not known is "—", never 0)
   const chip = (key, href, title) => h("a", {class: ["tm-bc", `c-${key}`], href, title});
   const cStatus = chip("status", "#/status", "엔진 상태 (누르면 서버 상태)");
-  const cDay = chip("day", "#/check", "10/01부터 한국 날짜로 며칠째 · 다음 점검까지 (누르면 점검 진행)");
+  const cDay = chip("day", "#/check", "리그 시작(설치한 때)부터 한국 날짜로 며칠째 (시작한 날 = D+0) · 다음 점검까지 (누르면 점검 진행)");
   const cOpen = chip("open", "#/positions", "지금 열린 포지션: 후보 리그 190계좌 전체 (묶음 고르기와 상관없이 · 누르면 포지션 화면)");
   const cUpnl = chip("upnl", "#/positions", "후보 계좌들의 미실현 손익 합계 (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)");
   const cToday = chip("today", "#/fills", "오늘(한국 날짜) 닫힌 후보 계좌 거래 (누르면 체결 기록)");

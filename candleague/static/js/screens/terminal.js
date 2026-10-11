@@ -3,7 +3,7 @@
 //   top     the coin, its big price, 24 h change, 거래대금, 마크, 펀딩 / 다음까지, 미결제약정, 24 h range, our positions
 //           on it, the price feed's state, the bar-close countdown, the KST clock; the band "후보 리그 지금" (engine,
 //           D+n and the next checkpoint, open positions, 후보 미실현, today's 후보 trades, "엔진 기준 HH:MM"); a banner
-//           while the engine replays from 10/01 or has stopped (then no live P&L anywhere)
+//           while the engine catches up or has stopped (then no live P&L anywhere)
 //   left    고른 포지션 (the selected account and its open position: 미실현 / ROE, prices, size, margin, 왜 N배, its five
 //           accounts) and 우리 봇 체결 (entries and exits as they come, the recent long / short bar)
 //   centre  the six coins (price, change, 롱 n · 숏 n, the crowding dot), the chart (1분 ~ 4시간; the selected

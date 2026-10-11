@@ -9,13 +9,13 @@
 // #/rank?g=<core|ds|cmp|flip|all>&sub=<quarter|exitonly|base> chooses the 묶음 (old ?role=&kind= links still work).
 // Units (D-3): the rank and the big % are 잔고 수익률 (wallet / 5,000 - 1, closed trades); every ▲▼ comparison is on
 // 한 번 평균 (the checkpoints' unit), so 순위표, 5계좌 비교 and 점검 진행 never contradict each other.
-// HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine replays from 10/01, its
+// HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine catches up, its
 // record is over 15 minutes old or the prices are over a minute old (poskit pricesLive); DeepSeek money follows the
 // snapshot's switch (hidden = counted only, everywhere).
 // 설치 뒤 진입만 (js/after.js, the switch under the head): the open-position pills on the rows, the 상위 · 하위 cards and
 // the 표 show only positions entered after the install (one entered before reads "설치 전 진입 · 숨김"), and the position
 // counts (포지션 중, the 묶음 cards' 포지션, 봉별 요약) are over those, labelled 설치 뒤만; the ranking, 잔고 수익률,
-// balances and every comparison stay the full record from 10/01.
+// balances and every comparison stay the full record from the start.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -43,7 +43,7 @@ export function groupFromQuery(q = {}) {
   }
   return null;
 }
-/** May live ROE be shown for this snapshot (not replaying from 10/01, written in the last 15 minutes)? And the
+/** May live ROE be shown for this snapshot (not catching up, written in the last 15 minutes)? And the
  *  positions-doc shape poskit's banner and freshness line read. */
 export function liveState(d, now = serverNow()) {
   if (!d || !d.accounts) return {allowed: false, doc: d ? {status: "준비 중"} : null};
@@ -86,7 +86,7 @@ export async function mount(el, ctx) {
   const table = rankTable({onRow: (a) => { location.hash = `#/account/${encodeURIComponent(a.id)}`; }, pill: (a) => mkPill(a)});
   const listNote = h("div");
   const listCard = ui.card({plate: "전체 목록", acts: [viewSeg, countEl], cls: "rk-listcard"}, filters.el, list.el, table.el, listNote,
-    h("p", {class: "assume"}, "모의 · 실제 시세 · 수수료·펀딩·슬리피지·강제청산 포함 · 10/01부터 실제 시세로 이어 돌린 기록 (백테스트 아님) · " +
+    h("p", {class: "assume"}, "모의 · 실제 시세 · 수수료·펀딩·슬리피지·강제청산 포함 · 리그를 켠 때(설치)부터 실제 시세로 이어 돌린 기록 (백테스트 아님) · " +
       "순위·수익률·잔고는 닫힌 거래 기준 (열린 포지션 손익 제외) · 포지션 ROE는 지금 마크 가격 기준 (나갈 때 수수료 전)"));
   const tfBody = h("div", {class: "rk-tfbody"});
   const tfSub = h("span", {class: "sub"});
@@ -162,11 +162,11 @@ export async function mount(el, ctx) {
     st.allowed = ls.allowed && fresh;
     const ok = px.state === "ok" || px.state === "fake";
     if (ls.doc && ls.doc.status) liveDot.set("엔진 기록 준비 중", "off");
-    else if (!ls.allowed) liveDot.set(ls.doc && ls.doc.catching_up ? "포지션 ROE 감춤 · 다시 계산 중" : "포지션 ROE 감춤 · 엔진 기록 멈춤", "warn");
+    else if (!ls.allowed) liveDot.set(ls.doc && ls.doc.catching_up ? "포지션 ROE 감춤 · 따라잡는 중" : "포지션 ROE 감춤 · 엔진 기록 멈춤", "warn");
     else if (ok) liveDot.set(`${px.state === "fake" ? "시험용 시세" : "실시간 시세"}${px.age_s == null ? "" : ` ${px.age_s < 60 ? `${Math.round(px.age_s)}초` : fmt.dur(px.age_s)} 전`} · ROE 5초마다`, "ok");
     else if (fresh) liveDot.set(`${pxAgeKo(px)} · ROE는 그 시세 기준`, "warn");
     else liveDot.set(`${px.state === "stale" ? pxAgeKo(px) : px.ko} · 포지션 ROE 감춤`, px.state === "stale" ? "warn" : "off");
-    liveDot.title = "열린 포지션의 ROE = 지금 마크 가격 기준 (나갈 때 수수료 전) · 엔진이 10/01부터 다시 계산하는 동안, 기록이 15분 넘게 멈추거나 시세가 1분 넘게 지난 값이면 감춥니다";
+    liveDot.title = "열린 포지션의 ROE = 지금 마크 가격 기준 (나갈 때 수수료 전) · 엔진이 따라잡는 동안, 기록이 15분 넘게 멈추거나 시세가 1분 넘게 지난 값이면 감춥니다";
     const key = ls.doc ? `${ls.doc.status || ""}|${ls.doc.catching_up}|${ls.doc.old}|${ls.doc.done_ms}` : "";
     if (force || key !== bannerKey) { bannerKey = key; put(banner, ls.doc ? staleBanner(ls.doc) : null); }
   }

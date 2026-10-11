@@ -1,15 +1,15 @@
 // 후보 리그 dashboard shell, in the rule bot's v4 look (paperbot/dash/static/v4 core/shell.js, strip.js, find.js,
 // settings.js; copied and adapted, nothing imported from it):
 //   top bar   brand · 글자 크기 · 화면 색 · 메뉴 위치 · 설정 (a PC with the menu on top) · 찾기 / · the day pill
-//             "D+10 · 1차 11/11 · 2차 12/11 · 3차 1/11 ▾" (days gone since 10/01 KST, counted like the rule bot's:
-//             10/01 = D+0; the next checkpoint lit; its popover has the processed time) · the engine dot · 모의
+//             "D+1 · 1차 11/11 · 2차 12/11 · 3차 1/11 ▾" (days gone since the league's start, the install, in KST,
+//             counted like the rule bot's: the start's day = D+0; the next checkpoint lit; its popover has the start
+//             and the processed time) · the engine dot · 모의
 //   menu      every screen its own plain text button, in groups with a thin line between them (거래 | 홈 | 매매법 | 안내),
 //             on top (wraps from 1200 px, one sideways row below) or, by choice, a left column from 1000 px; a phone also
 //             gets the bottom bar of the four groups
 //   landing   an empty address opens the 터미널 on a window 1100 px and wider, 요약 on a phone (설정 › 첫 화면 changes it)
-//   설치 뒤    the per-device view switch "설치 뒤 진입만" (js/after.js): the screens with lists of open positions and
-//             closed trades show it and filter through it; a change remounts the screen (like 글자 크기), a new snapshot
-//             repaints its label (the install time)
+//   설치 뒤    the per-device view switch "설치 뒤 진입만" (js/after.js), only for an older record that replayed from
+//             10/01 before its install: hidden since the league starts at its install (owners 10/12)
 //   data      one shared copy of the engine's snapshot (/api/league every 30 s, paused while the page is hidden) that
 //             every screen reads (ctx.onLeague); the live prices (js/live.js, ctx.onLive) and the open positions
 //             (js/poskit.js, ctx.onPositions) are polled once for the page while a screen listens
@@ -22,7 +22,7 @@ import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import {stamp, setPage} from "./ui.js";
 import {applySkin, skinNow, textSwitch, skinSwitch, navSwitch, textCycle, skinCycle, startPref} from "./prefs.js";
-import {setLeague, getMeta, leagueDay, calDay, dPlus, catchingUp, health} from "./lk.js";
+import {setLeague, getMeta, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore} from "./lk.js";
 import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
 import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js";
@@ -157,26 +157,35 @@ let doc = null;
 const checkpoints = () => ((doc && doc.watch && doc.watch.checkpoints) || []);
 const cpShort = (c) => `${String(c.ko || c.id).replace(" 점검", "")} ${fmt.mmdd(c.ms).replace(/^0/, "").replace("/0", "/")}`;
 function nextCp(now = serverNow()) { return checkpoints().find((c) => c.ms > now) || null; }
+/** The schedule's first steps: "10/11 12:00 시작 (설치)"; an older record that replayed from 10/01 before its install
+ *  keeps its two steps (다시 돌리기 시작, 설치). */
+function startSteps(d) {
+  if (!d || !d.start_ms) return [];
+  if (replayedBefore(d)) return [`${fmt.mmdd(d.start_ms)} 다시 돌리기 시작`, `${fmt.mmdd(d.started_ms)} 설치`];
+  return [`${fmt.kst(d.start_ms)} 시작 (설치)`];
+}
 function pillPanel() {
   const cps = checkpoints();
   const now = serverNow();
   const next = nextCp(now);
   const left = next ? Math.ceil((next.ms - now) / 86400000) : null;
   return h("div", {class: "tb-pin"},
-    h("div", {class: "tb-ph"}, h("b", null, doc && doc.start_ms ? `D+${dPlus(doc, now)} · 10/01부터 ${calDay(doc, now)}일째` : "일정"), h("span", {class: "grow"}),
+    h("div", {class: "tb-ph"}, h("b", null, doc && doc.start_ms ? dayLine(doc, now) : "일정"), h("span", {class: "grow"}),
       h("button", {class: "btn-line tb-x", type: "button", onclick: closePop}, "닫기")),
     h("p", {class: "tb-lead"}, next ? `다음: ${next.ko} ${fmt.mmdd(next.ms)} (${left}일 남음)` : "점검 일정 준비 중"),
     h("ol", {class: "steps dl-steps", "aria-label": "점검 일정"},
-      h("li", {class: "done"}, "10/01 다시 돌리기 시작"), h("li", {class: "done"}, "10/11 설치"),
+      startSteps(doc).map((x) => h("li", {class: "done"}, x)),
       cps.map((c) => h("li", {class: c === next ? "now" : c.ms <= now ? "done" : "", "aria-current": c === next ? "step" : null},
         `${c.ko} ${fmt.mmdd(c.ms)}`))),
-    next && next.what ? h("p", {class: "note"}, `${next.ko}: ${next.what}`) : null,
+    next && next.what ? h("p", {class: "note"}, `${next.ko}${next.after ? ` (${next.after})` : ""}: ${next.what}`) : null,
     h("dl", {class: "kv"},
-      h("div", null, h("dt", null, "오늘"), h("dd", null, doc && doc.start_ms ? `10/01부터 ${calDay(doc, now)}일째 (한국 날짜)` : "—")),
+      h("div", null, h("dt", null, "시작"), h("dd", null, !doc || !doc.start_ms ? "—" : replayedBefore(doc)
+        ? `${fmt.kst(doc.start_ms)} KST (다시 돌리기 시작 · 설치 ${fmt.kst(doc.started_ms)})` : `${fmt.kst(doc.start_ms)} KST (설치한 때 · 모든 계좌 $5,000)`)),
+      h("div", null, h("dt", null, "오늘"), h("dd", null, doc && doc.start_ms ? `${fromKo(doc)} ${calDay(doc, now)}일째 (한국 날짜)` : "—")),
       h("div", null, h("dt", null, "엔진이 계산한 시각"), h("dd", null, doc ? `${fmt.kst(doc.done_ms)} KST (${leagueDay(doc)}일째까지)` : "—")),
       h("div", null, h("dt", null, "기록 쓴 시각"), h("dd", null, doc ? `${fmt.kst(doc.generated_ms)} KST (${fmt.ago(doc.generated_ms, now)})` : "—"))),
-    doc && catchingUp(doc) ? h("p", {class: "kp-banner warn"}, h("b", null, "10/01부터 다시 계산 중"),
-      `지금 ${fmt.kst(doc.done_ms)}까지 · 다 따라잡으면 5분마다 이어서 계산합니다`) : null,
+    doc && catchingUp(doc) ? h("p", {class: "kp-banner warn"}, h("b", null, "엔진이 따라잡는 중"),
+      ` ${fromKo(doc)} 지금 ${fmt.kst(doc.done_ms)}까지 계산 · 다 따라잡으면 5분마다 이어서 계산합니다`) : null,
     h("p", {class: "note"}, "점검 날짜와 기준은 시작 전에 고정했습니다 (WATCH_PREREG). 엔진은 5분마다 이어서 계산합니다 (새 진입·청산은 몇 분 늦게 보임)."),
     h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: "#/check"}, "점검 진행"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법"),
       h("a", {class: "btn-line", href: "#/status"}, "서버 상태")));
@@ -195,7 +204,7 @@ function paintTop() {
     cps.map((c) => h("span", {class: ["d-cp", c === next ? "next" : c.ms <= now ? "done" : "later"]},
       h("span", {class: "d-dot", "aria-hidden": "true"}, "·"), cpShort(c), c.ms <= now ? " ✓" : null)),
     h("span", {class: "car", "aria-hidden": "true"}, "▾"));
-  pill.setAttribute("aria-label", `10월 1일부터 ${day}일째${next ? `, 다음 ${next.ko} ${fmt.mmdd(next.ms)}` : ""}. 누르면 일정`);
+  pill.setAttribute("aria-label", `${fromKo(doc)} ${day}일째${next ? `, 다음 ${next.ko} ${fmt.mmdd(next.ms)}` : ""}. 누르면 일정`);
   pill.title = next ? `다음 ${next.ko} ${fmt.mmdd(next.ms)} (${Math.ceil((next.ms - now) / 86400000)}일 남음)` : "";
   paintStamp();
 }
@@ -206,7 +215,7 @@ function paintStamp() {
   if (!doc || !doc.generated_ms) { stamp.textContent = "엔진 기록 준비 중"; stamp.classList.remove("warn"); return; }
   const now = serverNow();
   const age = Math.max(0, (now - doc.generated_ms) / 1000);
-  stamp.textContent = catchingUp(doc) ? `10/01부터 다시 계산 중 · ${fmt.kst(doc.done_ms)}까지` : `엔진 기준 ${fmt.kst(doc.done_ms)} KST · ${fmt.ago(doc.generated_ms, now)} 씀`;
+  stamp.textContent = catchingUp(doc) ? `따라잡는 중 · ${fmt.kst(doc.done_ms)}까지 계산` : `엔진 기준 ${fmt.kst(doc.done_ms)} KST · ${fmt.ago(doc.generated_ms, now)} 씀`;
   stamp.title = "엔진은 5분마다 계산해 기록을 씁니다. 이 화면의 숫자는 그 기록 기준입니다 (한국 시간).";
   stamp.classList.toggle("warn", catchingUp(doc) || age > 12 * 60);
 }

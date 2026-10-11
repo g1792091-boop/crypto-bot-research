@@ -11,7 +11,7 @@
 // /api/live (the last price per coin).
 // 설치 뒤 진입만 (js/after.js, the switch under the head): ◀ ▶ walks only the entries made after the install (an open
 // position or a closed trade entered before it is left out, and a card with none says how many it hid); the strategy
-// lines (닫힌 n번, 손절 · 익절, R) are the full record from 10/01.
+// lines (닫힌 n번, 손절 · 익절, R) are the full record from the start.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
