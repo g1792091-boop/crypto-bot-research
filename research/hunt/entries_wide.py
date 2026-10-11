@@ -16,6 +16,10 @@ Families (W2; each long and short; the strategies' own exits / take-profits / st
       timeframes the full grid defines them on (ds_defs.TFS_OF: the five F15 session definitions have no 4h).
   F4  the 38 watch picks (research/fullgrid/diag/watch_sel.json; the candidate league's candleague/data/
       candidates.json carries the same 38 combos), their own numbers, their own timeframe.
+  F5  the famous trend rules of research/famous/famous.py (owners 2026-10-11): TURTLE20 (Donchian 20/10), TURTLE55
+      (55/20), TSMOM7 and TSMOM28 (time-series momentum, weekly rebalance at the UTC Sunday close), as events: the
+      first bar the rule's long / short position turns on (``famous_raw``). The day lengths are converted to bars
+      of each timeframe (days x 96 / 48 / 24 / 6 on 15m / 30m / 1h / 4h).
   F2-F4 call exactly what research/fullgrid/run.signals calls: core_module(name).signals(df, tf, **combo) and
   ds_module().signals(df, tf, name, ctx, coin, cache, **combo) with coin = symbol minus its last letter and
   ctx = {"BTCUSD": BTC frame of the same timeframe} for every coin but BTCUSDT. The frame is the full grid's
@@ -44,9 +48,10 @@ first 5m open, high / low = extremes, close = last 5m close, volume = sum; a bin
 missing 5m bars inside is kept (partial); the first bin is dropped when the data starts after its open and the last
 bin when the data ends before its last 5m slot (a bin is never used before it is complete: no look-ahead).
 
-Systems (W4): (entry, timeframe, gate) for F1-F3 on 15m / 30m / 1h / 4h (F3 where defined) and F4 on its own
-timeframe, gates G1 and NONE: (3 + 36) x 4 x 2 + (39 x 4 + 5 x 3) x 2 + 38 x 2 = 312 + 342 + 76 = 730 systems
-(the design's "740" counted 44 x 4 DeepSeek cells; ds_defs raises on F15_* 4h, so those 5 x 2 systems do not exist).
+Systems (W4): (entry, timeframe, gate) for F1-F3 and F5 on 15m / 30m / 1h / 4h (F3 where defined) and F4 on its own
+timeframe, gates G1 and NONE: (3 + 36) x 4 x 2 + (39 x 4 + 5 x 3) x 2 + 38 x 2 + 4 x 4 x 2 = 312 + 342 + 76 + 32 =
+762 systems (the design's "740" counted 44 x 4 DeepSeek cells; ds_defs raises on F15_* 4h, so those 5 x 2 systems do
+not exist); 686 candidates (F1-F3, F5) and the 76 F4 select-only reads.
 System ids (PREREG_HUNT_WIDE 4): ``F<n>:<name>:<tf>:<gate>``, F4 ``F4:<name>:<tf>:<gate>:r<rank>``.
 
 Before the first F2-F4 signal of a process the full grid's pinned files are checked against
@@ -77,14 +82,22 @@ LEAGUE_CANDIDATES = os.path.join(ROOT, "candleague", "data", "candidates.json")
 TFS = ("15m", "30m", "1h", "4h")
 TF_MS = {"15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
 FIVE_MS = 300_000
-FAMILIES = ("F1", "F2", "F3", "F4")
+FAMILIES = ("F1", "F2", "F3", "F4", "F5")
 GATES = ("G1", "NONE")
 HUNT_NAMES = ("E1", "E2", "E3")
 HUNT_MAIN = {"E1": {"channel": 55}, "E2": {"window": 120}, "E3": {"threshold": 1.5}}
 E1_VOL_LEN, E1_VOL_MULT = 20, 2.0
 E2_BB_LEN, E2_BB_K, E2_PCT = 20, 2.0, 20.0
 E3_FAST, E3_SLOW, E3_SIDE_LEN = 14, 100, 20
-N_SYSTEMS = 730
+# F5 (owners 2026-10-11 (a)): the famous trend rules of research/famous/famous.py, lengths in days (converted to bars
+# of each timeframe: days x BARS_PER_DAY[tf]); kind "famous"
+FAMOUS_NAMES = ("TURTLE20", "TURTLE55", "TSMOM7", "TSMOM28")
+FAMOUS_COMBO = {"TURTLE20": {"entry_days": 20, "exit_days": 10}, "TURTLE55": {"entry_days": 55, "exit_days": 20},
+                "TSMOM7": {"lookback_days": 7}, "TSMOM28": {"lookback_days": 28}}
+DAY_MS = 86_400_000
+WEEK_MS = 7 * DAY_MS
+BARS_PER_DAY = {tf: DAY_MS // ms for tf, ms in TF_MS.items()}        # 15m 96, 30m 48, 1h 24, 4h 6
+N_SYSTEMS = 762
 
 
 # ------------------------------------------------------------------ the full grid's code, read-only
@@ -294,6 +307,86 @@ def hunt_raw(name: str, bars: Bars, value=None) -> tuple[np.ndarray, np.ndarray]
     raise ValueError(f"unknown hunt entry {name!r}")
 
 
+# ------------------------------------------------------------------ F5: famous trend rules (research/famous/famous.py)
+def turtle_state(h, l, c, n: int, m: int) -> tuple[np.ndarray, np.ndarray]:
+    """famous.donchian on any bars: position in {-1, 0, 1} known at each bar's close, and where it is defined.
+    Channels: highest high / lowest low of the n (entry) and m (exit) bars before t (t excluded). Per bar, in order:
+    a long exits when close < the m-bar low (a short when close > the m-bar high); then a flat or short position goes
+    long when close > the n-bar high, else a flat or long one goes short when close < the n-bar low. Undefined (pos 0)
+    until both channels exist."""
+    import pandas as pd
+    hh, ll = pd.Series(np.asarray(h, float)), pd.Series(np.asarray(l, float))
+    hi_n = hh.rolling(n).max().shift(1).to_numpy()
+    lo_n = ll.rolling(n).min().shift(1).to_numpy()
+    hi_m = hh.rolling(m).max().shift(1).to_numpy()
+    lo_m = ll.rolling(m).min().shift(1).to_numpy()
+    cc = np.asarray(c, float)
+    defined = np.isfinite(hi_n) & np.isfinite(lo_n) & np.isfinite(hi_m) & np.isfinite(lo_m) & np.isfinite(cc)
+    pos = np.zeros(len(cc), np.int8)
+    p = 0
+    dl, cl = defined.tolist(), cc.tolist()
+    hn, ln_, hm, lm = hi_n.tolist(), lo_n.tolist(), hi_m.tolist(), lo_m.tolist()
+    for i in range(len(cl)):
+        if not dl[i]:
+            continue
+        ci = cl[i]
+        if p > 0 and ci < lm[i]:
+            p = 0
+        elif p < 0 and ci > hm[i]:
+            p = 0
+        if p <= 0 and ci > hn[i]:
+            p = 1
+        elif p >= 0 and ci < ln_[i]:
+            p = -1
+        pos[i] = p
+    return pos, defined
+
+
+def tsmom_state(close_ms, c, lb: int) -> tuple[np.ndarray, np.ndarray]:
+    """famous.tsmom on any bars: at each weekly rebalance bar (the bar closing at Monday 00:00 UTC, i.e. at the close
+    of the UTC Sunday, as famous.weekly_mask on daily bars) the position becomes sign(close[t] / close[t - lb] - 1)
+    (0 when equal) and is held to the next rebalance; defined from the first rebalance bar with a defined return. A
+    missing rebalance bar (no 5m bar in that bin) keeps the position one more week."""
+    cc = np.asarray(c, float)
+    cm = np.asarray(close_ms, np.int64)
+    n = len(cc)
+    ret = np.full(n, np.nan)
+    if n > lb:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ret[lb:] = cc[lb:] / cc[:-lb] - 1.0
+    reb = (cm % DAY_MS == 0) & (((cm // DAY_MS) + 3) % 7 == 0)          # epoch day 0 = Thursday; Monday 00:00 UTC
+    sig = np.full(n, np.nan)
+    ok = reb & np.isfinite(ret)
+    sig[ok] = np.sign(ret[ok])
+    idx = np.where(np.isfinite(sig), np.arange(n), -1)
+    idx = np.maximum.accumulate(idx) if n else idx
+    defined = idx >= 0
+    pos = np.zeros(n, np.int8)
+    pos[defined] = sig[idx[defined]].astype(np.int8)
+    return pos, defined
+
+
+def famous_raw(name: str, bars: Bars, combo: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """F5 events (PREREG_HUNT_WIDE W 3.3): the famous rule's long (short) position turns on at bar t (it is long on
+    t and was not long on t-1), with the position defined on both t and t-1 (PREREG_HUNT 5). Lengths in days of
+    ``combo`` x BARS_PER_DAY[tf] bars. The rule's own exits only end a state (so a new event can follow); the hunt
+    machine exits the trade."""
+    combo = dict(FAMOUS_COMBO[name] if combo is None else combo)
+    bpd = BARS_PER_DAY[bars.tf]
+    if name.startswith("TURTLE"):
+        pos, defined = turtle_state(bars.h, bars.l, bars.c, int(combo["entry_days"]) * bpd,
+                                    int(combo["exit_days"]) * bpd)
+    elif name.startswith("TSMOM"):
+        pos, defined = tsmom_state(bars.close_ms, bars.c, int(combo["lookback_days"]) * bpd)
+    else:
+        raise ValueError(f"unknown famous rule {name!r}")
+    d_prev = np.r_[False, defined[:-1]]
+    lg, sh = pos > 0, pos < 0
+    el = lg & defined & d_prev & ~np.r_[False, lg[:-1]]
+    es = sh & defined & d_prev & ~np.r_[False, sh[:-1]]
+    return el, es
+
+
 def coin_of(sym: str) -> str:
     """The full grid's DeepSeek coin name: the symbol minus its last letter (BTCUSDT -> BTCUSD)."""
     return sym[:-1]
@@ -334,6 +427,9 @@ def events_on(spec: dict, bars: Bars, sym: str, btc: Bars | None = None) -> dict
         raise ValueError(f"system {spec.get('id')} is on {spec['tf']}, the bars are {bars.tf}")
     if spec["kind"] == "hunt":
         lg, sh = hunt_raw(spec["name"], bars, next(iter(spec["combo"].values())) if spec["combo"] else None)
+        el, es = rising(lg), rising(sh)
+    elif spec["kind"] == "famous":
+        lg, sh = famous_raw(spec["name"], bars, spec["combo"])
         el, es = rising(lg), rising(sh)
     else:
         lg, sh = grid_raw(spec["kind"], spec["name"], bars, sym, _combo_args(spec["combo"]), btc)
@@ -421,9 +517,10 @@ def _spec(family: str, name: str, kind: str, tf: str, gate: str, combo: dict, ra
 
 
 def systems() -> list[dict]:
-    """Every WIDE system (W4) in a fixed order: family F1..F4; F1 E1, E2, E3; F2 run.core_names() (sorted); F3
-    ds_defs.DEFS order; F4 watch_sel.json order; timeframes 15m, 30m, 1h, 4h; gates G1, NONE. ``id`` is stable
-    (family:name:tf:gate[:r<rank>]) and ``spec_sha`` hashes everything that decides the events."""
+    """Every WIDE system (W4) in a fixed order: family F1..F5; F1 E1, E2, E3; F2 run.core_names() (sorted); F3
+    ds_defs.DEFS order; F4 watch_sel.json order; F5 TURTLE20, TURTLE55, TSMOM7, TSMOM28; timeframes 15m, 30m, 1h,
+    4h; gates G1, NONE. ``id`` is stable (family:name:tf:gate[:r<rank>]) and ``spec_sha`` hashes everything that
+    decides the events."""
     R = fullgrid_run()
     D = R.ds_module()
     out = []
@@ -446,6 +543,10 @@ def systems() -> list[dict]:
     for p in watch_picks():
         for g in GATES:
             out.append(_spec("F4", p["name"], p["kind"], p["tf"], g, p["combo"], p["rank"], p["cand_id"]))
+    for name in FAMOUS_NAMES:
+        for tf in TFS:
+            for g in GATES:
+                out.append(_spec("F5", name, "famous", tf, g, FAMOUS_COMBO[name]))
     ids = [s["id"] for s in out]
     if len(set(ids)) != len(ids):
         raise RuntimeError("system ids are not unique")

@@ -9,6 +9,9 @@ research/hunt/PREREG_HUNT.md (study ``v1``) and research/hunt/PREREG_HUNT_WIDE.m
     python -m research.hunt.hunt datacheck --data <coins30 dir> --fg1m <fg1m dir>   (research/hunt/data_check.json)
     python -m research.hunt.hunt pinlist --study {v1,wide}            (the files the study's pin must list)
     python -m research.hunt.hunt bench --out <timing.json> [--procs 2] (synthetic bars only, no real price)
+    python -m research.hunt.hunt reads --study {v1,wide} --data <dir>  (the reads hook again, after test.json)
+    python -m research.hunt.hunt fidelity --study S --data <dir> --data1m <dir>  [--list-coins]   (R19, after test)
+    python -m research.hunt.hunt october --study S --data <dir> --data-oct <daily zips dir>       (R23, after test)
 
 ``select`` and ``test`` refuse to run unless the study's pin file (PREREG_HUNT.sha256 / PREREG_HUNT_WIDE.sha256, one
 line per file ``<sha256>  <path>``) matches every file it lists and lists every file of ``pinlist``: the prereg(s),
@@ -28,7 +31,16 @@ What runs where (section numbers "H n" = PREREG_HUNT.md, "W n" = PREREG_HUNT_WID
 * signal bars, indicators, label, entries: research/hunt/entries_wide.py (H 4-6, W 3), imported read-only.
 * the machine (H 7-10): ``_engine`` (numba), one wallet over a common 5m time axis of the period; the per-bar order is
   H 7.6; entries at a 5m open are decided on the state at the previous 5m close.
-* select / test / controls / bootstrap / BH / reads: H 11-14, W 5-7.
+* select / test / controls / bootstrap / BH / reads: H 11-14, W 5-7. Wide picks come in batches fixed at select (1군
+  1-10, 2군 11-20, 3군 21-30; W 5); the test opens batch n+1 only when >= 5 of batch n pass (W 6). Controls use seeds
+  1-1,000 (H 12, W 6). test.json carries the paper ``lineup`` (정식 / 참고 / excluded, W 12) and the live-gate spec.
+* reads after the verdict (W 7.1): ``reads_context`` builds the ctx a reads module gets; ``run_reads_hooks`` calls
+  research/hunt/reads_a.py ``run(ctx)`` when that file exists and is pinned, under the read guard (no file of the
+  study may change; D11 check of the public output). ``fidelity`` (R19: 1m last + mark bars, same engine) and
+  ``october`` (R23: daily archive files) are reads of the same kind.
+* engine read options (all off by default, the engine is then bit-identical to the reviewed one): bar length (5m / 1m),
+  per-bar equity path, close at the end, liquidation on mark price, the goal-mode bracket rule, fixed leverage
+  (rule-bot sizing), N4 = (1 + adds) x q x P0 (= 4 q P0 as written).
 
 Choices where the prereg leaves room are listed in ``CHOICES`` (also written into every output).
 No absolute path is written here: data comes from ``--data`` (or $HUNT_DATA), the DeepSeek money file (W 11, D11)
@@ -2112,6 +2124,8 @@ def _universe_and_data(args, end_key: str) -> tuple:
 COST2_KEYS = ("mean_lnM", "median_M", "q25_lnM", "q75_lnM", "share_M_lt_0_9", "worst_month", "max_dd", "bust",
               "end_multiple", "fees", "funding", "n_positions")
 ROLE_READ = "read only: numbers chosen after the test period was seen (W 5)"
+F5_NOTE = ("research/famous results of these rules on the old six (daily bars) have been read: the new-24 read is "
+           "shown next to an F5 pick (W 3.3)")
 
 
 def private_dir(args) -> str:
@@ -2147,6 +2161,8 @@ def _row_of(spec: dict, base: dict, cost2: dict, seconds: float) -> dict:
     """One select row: the W 5 fields, the H 10 metric set of the base run, the cost x2 summary."""
     ok, why = wide_eligible(base, cost2)
     row = {k: spec.get(k) for k in ("id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo")}
+    if spec.get("family") == "F5":
+        row["note"] = F5_NOTE
     row.update({"role": "candidate" if spec.get("family") in PICK_FAMILIES else ROLE_READ,
                 "eligible": ok, "fail": why, "score": base["mean_lnM"], "median_M": base["median_M"],
                 "n_positions": base["n_positions"], "bust": base["bust"], "win_share": base["win_share"],
@@ -2226,7 +2242,8 @@ def cmd_select(args) -> int:
         ch = wide_choose(rows)
         by_id = {s["id"]: s for s in specs}
         bno = {i: b + 1 for b, ids in enumerate(ch["batches"]) for i in ids}
-        picks = [{**by_id[i], "pick_no": n + 1, "batch": bno[i]} for n, i in enumerate(ch["picks"])]
+        picks = [{**by_id[i], "pick_no": n + 1, "batch": bno[i],
+                  **({"note": F5_NOTE} if by_id[i]["family"] == "F5" else {})} for n, i in enumerate(ch["picks"])]
         no_of = {p["id"]: p["pick_no"] for p in picks}
         batches = [[no_of[i] for i in ids] for ids in ch["batches"]]
         public, private = redact_rows(rows)
@@ -3241,7 +3258,8 @@ def cmd_october(args) -> int:
 
 # ------------------------------------------------------------------ DeepSeek money (W 11, D11)
 DS_ALLOWED = {"id", "family", "name", "strategy", "kind", "tf", "gate", "rank", "combo", "eligible", "fail",
-              "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label", "role"}
+              "n_positions", "win_share", "bust", "pick_no", "signal_counts", "seconds", "label", "role", "batch",
+              "note", "spec_sha", "cand_id"}
 DS_ALLOWED_CHECKS = {"P0", "P1", "P2_a", "P2_b", "P3", "P4", "rank_ok_a", "rank_ok_b", "bh_significant", "PASS",
                      "carried_by_old_six", "one_pct_also_passes", "batch"}
 
@@ -3399,7 +3417,9 @@ def cmd_report(args) -> int:
             n_el = sum(1 for r in sel["rows"] if r.get("eligible"))
             lines += [f"## 고르기: 시스템 {len(sel['rows'])}개, 자격 {n_el}개, 고른 것 {len(sel['picks'])}개 "
                       f"({sel['label']})", ""]
-            lines += [f"{i + 1}. {p}" for i, p in enumerate(sel["picks"])] + [""]
+            bsz = len((sel.get("batches") or [sel["picks"]])[0]) or 1
+            lines += [f"{i + 1}. {p} ({BATCH_LABELS[min(i // bsz, len(BATCH_LABELS) - 1)]})"
+                      for i, p in enumerate(sel["picks"])] + [""]
     if os.path.exists(tp):
         with open(tp) as fh:
             test = json.load(fh)
@@ -3413,15 +3433,28 @@ def cmd_report(args) -> int:
                       f"{v['carried_by_old_six']}", ""]
         else:
             v = test["verdict"]
-            lines += ["| 번호 | 시스템 | P0 | P1 | P3 | P4 | 순위a | 순위b | BH | 통과 |", "|---:|---|---|---|---|---|---|---|---|---|"]
+            lu = (test.get("lineup") or {}).get("picks", {})
+            lines += ["| 번호 | 묶음 | 시스템 | P0 | P1 | P3 | P4 | 순위a | 순위b | BH | 통과 | 종이 계좌 |",
+                      "|---:|---|---|---|---|---|---|---|---|---|---|---|"]
             for p in test["picks"]:
                 c = test["results"][p["id"]]["checks"]
                 yn = lambda b: "예" if b else "아니오"  # noqa: E731
-                lines.append(f"| {p['pick_no']} | {p['id']} | {yn(c.get('P0'))} | {yn(c.get('P1'))} | "
+                b_ = int(p.get("batch", 1))
+                lab = BATCH_LABELS[b_ - 1] if b_ <= len(BATCH_LABELS) else f"{b_}군"
+                lines.append(f"| {p['pick_no']} | {lab} | {p['id']} | {yn(c.get('P0'))} | {yn(c.get('P1'))} | "
                              f"{yn(c.get('P3'))} | {yn(c.get('P4'))} | {yn(c.get('rank_ok_a'))} | "
-                             f"{yn(c.get('rank_ok_b'))} | {yn(c.get('bh_significant'))} | {yn(c.get('PASS'))} |")
+                             f"{yn(c.get('rank_ok_b'))} | {yn(c.get('bh_significant'))} | {yn(c.get('PASS'))} | "
+                             f"{(lu.get(p['id']) or {}).get('lineup', '-')} |")
+            for bi in v.get("batches", []):
+                lines.append(f"* {bi['label']}: 통과 {bi['passes']}개 / {len(bi['pick_nos'])}개"
+                             + (" → 다음 묶음을 시험함" if bi["opens_next"] else ""))
+            if v.get("untested"):
+                lines.append(f"* 시험하지 않은 묶음의 후보 {len(v['untested'])}개 (앞 묶음 통과가 5개 미만): 시험 기간에 "
+                             "돌리지 않았습니다.")
             lines += ["", f"**넓게 통과: {'예' if v['wide_pass'] else '아니오'}** ({v['label']})", "",
-                      "v1과 넓게는 같은 시험 기간을 씁니다: 둘 중 하나가 운으로 통과할 가능성은 하나일 때보다 큽니다.", ""]
+                      "v1과 넓게는 같은 시험 기간을 씁니다: 둘 중 하나가 운으로 통과할 가능성은 하나일 때보다 큽니다.",
+                      "", "종이 계좌: 정식 = 연구 통과, 참고 = 정해 둔 7가지 조건을 모두 넘은 것(돈은 넣지 않음), "
+                      "제외 = 나머지. 실제 돈은 정식만, 앞으로의 기준을 넘은 뒤에 두 분이 정합니다.", ""]
             sz = {k: x for k, x in test.get("sizing", {}).items() if isinstance(x, dict)}
             if sz:
                 lines += ["## 크게 걸면 (참고, 통과 조건 아님)", "",
@@ -3590,6 +3623,9 @@ def cmd_bench(args) -> int:
         csig = control_a(mk, sig, rng_of("bench", s))
         run_signals(mk, [(csig, 0)], R_BASE)
     res["control_run_s"] = round((time.perf_counter() - t0) / 10, 4)
+    res["seeds"] = {"pass": N_SEEDS, "select_read": N_SEEDS_READ,
+                    "control_runs_per_pick": 4 * N_SEEDS + 2 * N_SEEDS_READ,
+                    "control_cpu_s_per_pick": round((4 * N_SEEDS + 2 * N_SEEDS_READ) * res["control_run_s"], 1)}
     res["extrapolation"] = extrapolate(res, EW)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w") as fh:
@@ -3613,8 +3649,8 @@ def extrapolate(res: dict, EW) -> dict:
     speed2 = w["procs_1"] / max(w["procs_2"], 1e-9)
     sel_runs = 2 * len(systems)
     sel_cpu = ev_sel + sel_runs * run_s
-    per_pick_runs = 2 + 200 + (2 + 200) + (2 + 200) + 2 + 2 + 2       # test, r=1%, select controls, reads
-    test_runs = 10 * per_pick_runs + 2 + 2 * 11
+    per_pick_runs = (2 + 2 * N_SEEDS) + (2 + 2 * N_SEEDS) + (2 + 2 * N_SEEDS_READ) + 2 + 2 + 2
+    test_runs = K_PICKS * per_pick_runs + 2 + 2 * 11       # batch 1; batches 2 and 3 (opened only by >= 5 passes) x2-3
     mean_cell = (cells["sum_s"] + n_f1_cells * f1) / max(cells["timed"] + n_f1_cells, 1)
     worst10 = sum(v for v, _ in cells["slowest"][:10])
     test_ev_typ, test_ev_worst = 10 * 30 * mean_cell * test_len, 30 * worst10 * test_len
@@ -3647,9 +3683,11 @@ def extrapolate(res: dict, EW) -> dict:
                       "process count); typical = mean cell time, worst = the 10 slowest cells",
                       "series (bars + ATR + 장세 label, 30 coins x 4 timeframes) are built once in the parent before "
                       "forking (serial; counted in full in the wall time)",
-                      f"test runs = 10 picks x {per_pick_runs} (base, cost x2, 200 controls at 0.5%; the same at 1%; "
-                      "the same in the select period; new-24 x2; extra 2020 x2; gate diagnostics x2, select only) + "
-                      "basket and sizing reads",
+                      f"test runs = 10 picks (batch 1) x {per_pick_runs} (base, cost x2, {2 * N_SEEDS} controls at "
+                      f"0.5% (seeds 1-{N_SEEDS} x (a, b)); the same at 1%; base, cost x2 and {2 * N_SEEDS_READ} "
+                      "controls in the select period; new-24 x2; extra 2020 x2; gate diagnostics x2, select only) + "
+                      "the basket; a 2군 / 3군 batch (opened only when >= 5 of the previous 10 pass) adds the same "
+                      "again; the reads module (reads_a, R1 ...) is not included",
                       "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up on this "
                       "shared 4-core machine",
                       "not included: loading the 30 coins' npz files (about 0.5 GB) and writing outputs"]}
