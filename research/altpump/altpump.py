@@ -2458,4 +2458,10 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run through the package module so that the numba cache (cache=True) is written and read under one module name:
+    # a cache written by the tests (research.altpump.altpump) could not be loaded by a __main__ run from another
+    # directory, and vice versa.
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from research.altpump import altpump as _pkg
+    sys.exit(_pkg.main())
