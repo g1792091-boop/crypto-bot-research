@@ -1,0 +1,3 @@
+# runtime data (store.db, events.db, run.db, snap/, private/): never committed
+*
+!.gitignore

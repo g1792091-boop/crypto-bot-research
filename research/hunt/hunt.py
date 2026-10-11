@@ -1697,10 +1697,12 @@ def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str =
         p = np.r_[p, np.zeros(NPR - len(p))]
         p[PR_BPD] = BARS_PER_DAY
     p[PR_BPD] = mk.bpd
-    if p[PR_LIQ_MARK] > 0.5 and not mk.mark:
+    liq_mark = p[PR_LIQ_MARK] > 0.5
+    if liq_mark and not mk.mark:
         raise ValueError("PR_LIQ_MARK needs a market built with mark=True")
-    return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c, mk.b_qv, mk.b_mo, mk.b_mh,
-                   mk.b_ml, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
+    lo_, lh_, ll_ = (mk.b_mo, mk.b_mh, mk.b_ml) if liq_mark else (mk.b_o, mk.b_h, mk.b_l)   # liquidation bars
+    return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c, mk.b_qv, lo_, lh_,
+                   ll_, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
                    br["lev"], br["mmr"], br["cum"], mk.large, bank.s_ct, bank.s_h, bank.s_l, bank.s_atr,
                    cands["t"], cands["bi"], cands["coin"], cands["side"], cands["d0"], cands["s0"], cands["s1"])
 

@@ -69,10 +69,28 @@ def fgrid(ms) -> np.ndarray:
     return ((np.asarray(ms, np.int64) + 30_000) // FIVE) * FIVE
 
 
+# ---------------------------------------------------------------- the hunt.py pieces huntbot calls
+ENGINE_API = ("Coin", "clean_5m", "install", "Market", "Series", "series", "system_signals", "bank_for", "build_cands",
+              "simulate", "summarize", "params", "gate_mask", "entry_events", "cell_key", "wide_systems", "v1_systems",
+              "run_system", "prepare_series", "pmap", "_compile_probe", "_ew", "_COINS", "_SERIES", "_EVENTS", "_SIGS",
+              "TF_ORDER", "D0_MULT", "TREND", "FIVE", "DAY_MS", "BARS_PER_DAY", "R_BASE", "R_ONE", "RISK_CAP", "B_DIV",
+              "SIZING_RS", "START_WALLET", "MAX_POS", "COSTS", "PR_SLIP", "EXIT_NAMES", "STOP_SRC_NAMES", "EX_END",
+              "EX_STOP", "EX_GAP", "EX_LIQ", "RF_PNL", "RF_U", "RF_P0", "RF_D0", "RF_Q1", "RF_XPX", "RF_LEV", "RF_PRICE",
+              "RF_EQ", "RF_FEES", "RF_FUND", "RI_COIN", "RI_SIDE", "RI_TIN", "RI_TOUT", "RI_ADDS", "RI_REASON",
+              "RI_CAND", "RI_SRC", "RI_LARGE", "RI_CUT", "RI_TRIED")
+
+
+def engine_api_problems() -> list:
+    """Names huntbot uses that research/hunt/hunt.py does not have (the engine is still being edited: a renamed
+    piece stops the runner at start with this list instead of failing in the middle of a cycle)."""
+    return [n for n in ENGINE_API if not hasattr(H, n)]
+
+
 # ---------------------------------------------------------------- code identity
 SIGNAL_GLOBS = (("research/hunt", ("entries_wide.py",)), ("research/fullgrid", None), ("research/entry_study/param_defs",
                 None), ("research/deepseek200", ("lib_c.py",)), ("research/library", ("lib.py",)),
-                ("research/search", ("search.py",)), ("third_party/sweep/harness", None),
+                ("research/search", ("search.py",)), ("research/famous", ("famous.py",)),
+                ("third_party/sweep/harness", None),
                 ("paperbot/dash/tools", ("regime5y.py",)))
 SIGNAL_FILES = ("research/fullgrid/diag/watch_sel.json", "research/fullgrid/PREREG.sha256",
                 "research/entry_study/DEFS_BC.sha256")
@@ -655,6 +673,10 @@ class Runner:
 
 
 def make_runner(notifier=True, log=print) -> Runner:
+    bad = engine_api_problems()
+    if bad:
+        raise SystemExit(f"{CFG.TAG} research/hunt/hunt.py lacks what huntbot calls: {', '.join(bad)} "
+                         "(the engine changed: update huntbot before installing this commit)")
     uni = CFG.load_universe()
     os.makedirs(CFG.data_dir(), exist_ok=True)
     store_path = CFG.path("store.db")

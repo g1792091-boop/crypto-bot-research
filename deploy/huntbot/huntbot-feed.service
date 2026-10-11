@@ -1,0 +1,40 @@
+# 추세 사냥 모의 봇: Binance USD-M public 5m bars, mark-price bars, funding and open interest into
+# /var/lib/huntbot/store.db, a pass shortly after every 5m close (the first passes download the history from
+# HUNTBOT_WARMUP_START). Public endpoints only: no key, no order code. Installed by deploy/huntbot/install_huntbot.sh.
+[Unit]
+Description=huntbot feed (public Binance bars, paper only)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=huntbot
+Group=huntbot
+UMask=0027
+WorkingDirectory=/opt/huntbot/app
+EnvironmentFile=/etc/huntbot/huntbot.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+UnsetEnvironment=HUNTBOT_TG_TOKEN HUNTBOT_TG_CHAT HUNTBOT_DASH_PASSWORD_HASH HUNTBOT_DASH_SECRET
+ExecStart=/opt/huntbot/venv/bin/python -m huntbot feed run
+Restart=always
+RestartSec=20
+KillMode=mixed
+TimeoutStopSec=30
+Nice=-2
+MemoryMax=1500M
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/huntbot
+
+[Install]
+WantedBy=multi-user.target

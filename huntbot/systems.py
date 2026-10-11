@@ -1,6 +1,7 @@
 """Which systems huntbot records, how they group into entry cells, the account variants and the lineup file.
 
-* Systems: every system of ``research.hunt.entries_wide.systems()`` (the wide study's 730) plus the v1 systems of
+* Systems: every system of ``research.hunt.entries_wide.systems()`` (the wide study's list: 730 when this was
+  written, 762 with the F5 famous rules; whatever the pinned file holds) plus the v1 systems of
   ``research.hunt.hunt.v1_systems()``. A v1 system that is the same entry, timeframe, numbers and gate as a wide one
   (all six are: v1 = F1 at the main numbers with gate G1) is recorded once, under the wide id, and its v1 id
   (``v1:E1:1h``) is an alias the lineup may use.
@@ -31,7 +32,8 @@ from . import config as CFG
 
 LABELS = ("정식", "참고")
 DS_KINDS = ("ds",)
-FAMILY_KO = {"F1": "사냥 진입 E1-E3", "F2": "기존 36 매매법", "F3": "딥시크 44", "F4": "관찰 후보 38"}
+FAMILY_KO = {"F1": "사냥 진입 E1-E3", "F2": "기존 36 매매법", "F3": "딥시크 44", "F4": "관찰 후보 38",
+             "F5": "유명 추세 규칙"}
 HUNT_KO = {"E1": "E1 돌파 55봉 + 거래량", "E2": "E2 볼린저 수축 뒤 돌파", "E3": "E3 변동성 확대"}
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 GATE_KO = {"G1": "추세장만", "NONE": "장세 무관"}
@@ -57,9 +59,13 @@ def is_ds(spec: dict) -> bool:
     return spec.get("kind") in DS_KINDS
 
 
+GATE_IDS = ("G1", "NONE", "TS")
+
+
 def cell_id(spec: dict) -> str:
+    """The system id without its gate part (``F<n>:<name>:<tf>:<gate>[:r<rank>]`` -> ``F<n>:<name>:<tf>[:r<rank>]``)."""
     parts = spec["id"].split(":")
-    if parts[0] in ("F1", "F2", "F3", "F4") and len(parts) >= 4:
+    if len(parts) >= 4 and parts[3] in GATE_IDS:
         return ":".join(parts[:3] + parts[4:])
     return f"{spec.get('family')}:{spec['name']}:{spec['tf']}"
 

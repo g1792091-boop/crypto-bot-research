@@ -1,0 +1,5 @@
+{
+ "version": 1,
+ "note": "추세 사냥 라인업: 백테스트 픽이 정해지면 채웁니다 (정식/참고). 비어 있어도 모든 시스템은 10/01부터 기록됩니다. 형식: huntbot/systems.py, 제안: python -m huntbot lineup suggest",
+ "accounts": []
+}

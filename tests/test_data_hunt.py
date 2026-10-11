@@ -230,7 +230,8 @@ def test_fidelity_funding_checksum_failure_is_not_complete(tmp_path):
     """A funding month that keeps failing its checksum: the coin is written (no funding file), COMPLETE is not."""
     src = str(tmp_path / "src")
     S = truth("2024-03-01", "2024-03-04", ONE, 5)
-    put(src, f"data/futures/um/monthly/klines/{SYM}/1m/{SYM}-1m-2024-03.zip", kline_csv(S, range(len(S["ts"])), ONE, True))
+    put(src, f"data/futures/um/monthly/klines/{SYM}/1m/{SYM}-1m-2024-03.zip",
+        kline_csv(S, range(len(S["ts"])), ONE, True))
     put(src, f"data/futures/um/monthly/markPriceKlines/{SYM}/1m/{SYM}-1m-2024-03.zip",
         mark_csv(S, range(len(S["ts"])), ONE, True))
     put(src, f"data/futures/um/monthly/fundingRate/{SYM}/{SYM}-fundingRate-2024-03.zip",

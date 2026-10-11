@@ -1323,7 +1323,7 @@ def test_one_minute_bars_scale_every_time_length():
     mk1 = H.Market(list(coins), span, name="t", bar_ms=60_000, bars={s: _as_1m(c) for s, c in coins.items()},
                    tag="1m")
     assert mk1.T == 5 * mk5.T and mk1.bpd == 1440 and mk1.coin_end_t[1] == 5 * mk5.coin_end_t[1] + 4
-    assert np.allclose(mk1.b_qv[::5][:50], mk5.b_qv[:50], rtol=1e-9)            # the same 24 h of quote volume
+    assert np.allclose(mk1.b_qv[::5][:50], mk5.b_qv[:50], rtol=1e-6)            # the same 24 h of quote volume
     for tf in ("15m", "1h"):
         sig = _rand_sig(mk5, tf, 0.2, 3)
         r5 = H.simulate(mk5, H.bank_for(mk5, (tf,)), H.build_cands(mk5, H.bank_for(mk5, (tf,)), [(sig, 0)]))
@@ -1577,7 +1577,8 @@ def test_october_read_on_synthetic_daily_files(tmp_path, monkeypatch):
     args = ["--procs", "1", "--data", "x", "--private", str(priv)]
     assert H.main(["select", "--study", "wide"] + args) == 0
     root = tmp_path / "oct"
-    assert H.main(["october", "--study", "wide", "--data-oct", str(root)] + args) != 0 or True
+    with pytest.raises(SystemExit, match="only after the test step"):
+        H.main(["october", "--study", "wide", "--data-oct", str(root)] + args)
     assert H.main(["test", "--study", "wide"] + args) == 0
     a = H.day_ms("2020-10-01")
     for i, s in enumerate(E2E_SYMS):

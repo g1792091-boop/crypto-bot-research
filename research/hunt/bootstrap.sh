@@ -542,7 +542,7 @@ fidelity() {
     if [ "$rc" != 1 ]; then
       warn "1분봉 받기가 끝나지 않아(받지 못한 코인 있음) 정밀 재확인을 건너뛰었습니다"; return 0
     fi
-    warn "정밀 재확인: 1분봉 자료에서 세 번 받아도 안 된 파일 (그 부분은 빠진 채 계산, 볼 때 감안): $(grep '^PROBLEM' <<<"$pr" | sed 's/^PROBLEM //' | tr '\n' ' ')"
+    warn "정밀 재확인: 1분봉 자료에서 세 번 받아도 안 된 파일 (그 부분은 빠진 채 계산, 볼 때 감안): $(grep '^PROBLEM' <<<"$pr" | sed 's/^PROBLEM //' | tr '\n' ' ' | sed 's/ *$//')"
   fi
   local fidarg=()
   grep -q -- "--fid" <<<"$help" && fidarg=(--fid "$FID")

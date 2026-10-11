@@ -12,7 +12,7 @@ const SIDE = {"1": "롱", "-1": "숏"};
 const REASON = {stop: "손절선", stop_gap_open: "갭 손절", liquidation: "청산가", period_end_marked: "보유 중",
   coin_end: "코인 거래 종료", bust_close: "파산 정리"};
 const SRC = {first_stop: "첫 손절선", add_moved_stop: "추가로 올린 손절선", chandelier: "추적 손절선"};
-const FAMILY = {F1: "사냥 E1-E3", F2: "기존 36", F3: "딥시크 44", F4: "관찰 후보 38"};
+const FAMILY = {F1: "사냥 E1-E3", F2: "기존 36", F3: "딥시크 44", F4: "관찰 후보 38", F5: "유명 추세 규칙"};
 const TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
 const GATE = {G1: "추세장만", NONE: "장세 무관"};
 const DS_NOTE = "딥시크 매매법: 금액·가격은 보이지 않게 정해져 있습니다 (D11)";
@@ -39,7 +39,7 @@ function card(title, ...kids) { return h("section", {class: "card"}, title ? h("
 function table(cols, rows, opts = {}) {
   const thead = h("thead", null, h("tr", null, cols.map((c) => h("th", {class: [c.num ? "num" : "", c.sort ? "sort" : ""],
     onclick: c.sort ? () => opts.onSort && opts.onSort(c.key) : null, title: c.title || null},
-    c.ko + (opts.sortKey === c.key ? (opts.sortDir > 0 ? " ▲" : " ▼") : "")))));
+    c.ko + (c.sort && opts.sortKey === c.key ? (opts.sortDir > 0 ? " ▲" : " ▼") : "")))));
   const tbody = h("tbody", null, rows.map((r) => h("tr", {class: [opts.rowClass ? opts.rowClass(r) : "", opts.onRow ? "click" : ""],
     onclick: opts.onRow ? () => opts.onRow(r) : null},
     cols.map((c) => { const v = c.get(r); return h("td", {class: [c.num ? "num" : "", c.cls ? c.cls(r) : ""]}, v == null ? "—" : v); }))));

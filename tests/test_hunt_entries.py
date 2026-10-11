@@ -6,7 +6,10 @@
 - the event rule (true on t, false on t-1) and the F1 entries against a slow bar-by-bar reading of PREREG_HUNT 5
 - no look-ahead: every entry cell's events at bar t are unchanged when the 5m bars after t are cut or replaced
   (BTC context too)
-- the system list: 730 systems, unique and stable ids, F4 = the candidate league's 38 watch picks
+- the system list: 762 systems (730 + the 32 F5 famous-rule systems), unique and stable ids, F4 = the candidate
+  league's 38 watch picks
+- F5: the turtle and time-series momentum states equal research/famous/famous.py on daily bars; the event is the
+  first bar the state turns on (both bars defined); day lengths in bars of each timeframe; weekly rebalance only
 """
 
 from __future__ import annotations
@@ -325,12 +328,17 @@ def test_gate():
 # ------------------------------------------------------------------ systems
 def test_systems_count_ids_stable():
     S = EW.systems()
-    assert len(S) == EW.N_SYSTEMS == 730
+    assert len(S) == EW.N_SYSTEMS == 762
     ids = [s["id"] for s in S]
     assert len(set(ids)) == len(ids)
     assert ids == [s["id"] for s in EW.systems()]
     fam = {f: sum(s["family"] == f for s in S) for f in EW.FAMILIES}
-    assert fam == {"F1": 24, "F2": 288, "F3": 342, "F4": 76}
+    assert fam == {"F1": 24, "F2": 288, "F3": 342, "F4": 76, "F5": 32}
+    assert sum(s["family"] != "F4" for s in S) == 686                # the candidates (owners 2026-10-11 (a))
+    assert len({s["strategy"] for s in S if s["family"] != "F4"}) == 87
+    f5 = [s for s in S if s["family"] == "F5"]
+    assert {s["name"] for s in f5} == set(EW.FAMOUS_NAMES) and {s["kind"] for s in f5} == {"famous"}
+    assert all(s["combo"] == EW.FAMOUS_COMBO[s["name"]] for s in f5)
     assert {s["gate"] for s in S} == {"G1", "NONE"}
     for s in S:
         want = f"{s['family']}:{s['name']}:{s['tf']}:{s['gate']}" + (f":r{s['rank']}" if s["family"] == "F4" else "")
@@ -348,10 +356,13 @@ def test_systems_count_ids_stable():
     # pinned id list: a change of the system list shows here
     digest = hashlib.sha256("\n".join(ids).encode()).hexdigest()
     assert digest == PINNED_IDS_SHA, digest
-    assert len(EW.entry_cells()) == 365
+    # the 730 systems of the reviewed list keep their ids and order; F5 is appended
+    assert hashlib.sha256("\n".join(ids[:730]).encode()).hexdigest() == PINNED_IDS_SHA_730
+    assert len(EW.entry_cells()) == 381
 
 
-PINNED_IDS_SHA = "2c470bf319f61da3ccb5b4091c7f6c286764991fb9768e4527e6685222a8e658"
+PINNED_IDS_SHA = "b0b9e2b5337f530cb2ece762000753956d6d4df6e81788f9634acce6d71c76db"
+PINNED_IDS_SHA_730 = "2c470bf319f61da3ccb5b4091c7f6c286764991fb9768e4527e6685222a8e658"
 
 
 def test_f4_is_the_league_watch_list():
@@ -390,3 +401,96 @@ def test_parity_reads_hunt_files_as_the_run_does(tmp_path):
     assert np.array_equal(t5, want_ts) and o.dtype == np.float64
     b = EW.build_bars(t5, o, h, lo, c, v, "1h")
     assert (int(d["ts"][24]) // 3_600_000) * 3_600_000 not in set(b.open_ms.tolist())   # the zero bin is no bar
+
+
+# ------------------------------------------------------------------ F5: famous trend rules (owners 2026-10-11 (a))
+def _famous():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("famous_ref", os.path.join(ROOT, "research", "famous", "famous.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _daily(n: int, seed: int):
+    import pandas as pd
+    rng = np.random.default_rng(seed)
+    reg = np.repeat(rng.choice([-1, 0, 1], size=n // 40 + 1), 40)[:n]
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.03, n) + reg * 0.01))
+    o = np.r_[c[0], c[:-1]]
+    h = np.maximum(o, c) * (1 + rng.uniform(0, 0.02, n))
+    lo = np.minimum(o, c) * (1 - rng.uniform(0, 0.02, n))
+    idx = pd.date_range("2020-01-01", periods=n, freq="D")
+    return pd.DataFrame({"open": o, "high": h, "low": lo, "close": c}, index=idx)
+
+
+@pytest.mark.parametrize("n,m", [(20, 10), (55, 20)])
+def test_turtle_state_equals_famous_donchian(n, m):
+    F = _famous()
+    d = _daily(900, 3)
+    want = F.donchian(d, n, m).to_numpy()
+    pos, defined = EW.turtle_state(d["high"].to_numpy(), d["low"].to_numpy(), d["close"].to_numpy(), n, m)
+    assert np.array_equal(pos, want.astype(np.int8))
+    assert not defined[:n].any() and defined[n:].all()
+    assert (pos == 1).sum() > 50 and (pos == -1).sum() > 50
+
+
+@pytest.mark.parametrize("lb", [7, 28])
+def test_tsmom_state_equals_famous_tsmom(lb):
+    """famous.tsmom rebalances at the close of each UTC Sunday (daily bar dated Sunday); on intraday bars that is the
+    bar closing at Monday 00:00 UTC."""
+    F = _famous()
+    d = _daily(700, 5)
+    want = F.tsmom(d, lb).to_numpy()
+    close_ms = (d.index.asi8 // 1_000_000) + DAY                    # a daily bar closes at the next 00:00
+    pos, defined = EW.tsmom_state(close_ms, d["close"].to_numpy(), lb)
+    assert np.array_equal(pos, want.astype(np.int8))
+    first = int(np.flatnonzero(defined)[0])
+    assert d.index[first].dayofweek == 6 and first >= lb and not defined[:first].any()
+
+
+def _slow_events(pos, defined):
+    lg, sh = np.zeros(len(pos), bool), np.zeros(len(pos), bool)
+    for t in range(1, len(pos)):
+        if defined[t] and defined[t - 1]:
+            lg[t] = pos[t] > 0 and not pos[t - 1] > 0
+            sh[t] = pos[t] < 0 and not pos[t - 1] < 0
+    return lg, sh
+
+
+@pytest.mark.parametrize("name", EW.FAMOUS_NAMES)
+@pytest.mark.parametrize("tf", ["15m", "1h", "4h"])
+def test_famous_events_are_first_bars_of_the_state(name, tf):
+    """W 3.3: an F5 event = the rule's long (short) position turns on at bar t (both bars defined); the lengths are
+    days x bars per day of the timeframe."""
+    d = synth(288 * 150, 41)
+    b = bars_of(d, tf)
+    el, es = EW.famous_raw(name, b)
+    bpd = EW.BARS_PER_DAY[tf]
+    assert bpd == {"15m": 96, "1h": 24, "4h": 6}[tf]
+    combo = EW.FAMOUS_COMBO[name]
+    if name.startswith("TURTLE"):
+        pos, defined = EW.turtle_state(b.h, b.l, b.c, combo["entry_days"] * bpd, combo["exit_days"] * bpd)
+    else:
+        pos, defined = EW.tsmom_state(b.close_ms, b.c, combo["lookback_days"] * bpd)
+    want = _slow_events(pos, defined)
+    assert np.array_equal(el, want[0]) and np.array_equal(es, want[1])
+    assert el.sum() + es.sum() > 0 and not (el & es).any()
+    if name.startswith("TSMOM"):                                  # events only at the weekly rebalance close
+        cm = b.close_ms[el | es]
+        assert np.all(cm % DAY == 0) and np.all(((cm // DAY) + 3) % 7 == 0)
+    spec = {"id": "t", "family": "F5", "name": name, "kind": "famous", "tf": tf, "gate": "NONE", "combo": combo}
+    ev = EW.events_on(spec, b, "ETHUSDT")
+    assert np.array_equal(ev["long"], el) and np.array_equal(ev["short"], es)
+
+
+def test_tsmom_events_are_the_same_moments_on_every_timeframe():
+    """The weekly rule is decided at the Monday 00:00 UTC close on every timeframe with the same day lookback, so on a
+    gap-free series its events fall on the same moments (only the stop, chandelier and gate timeframe differ)."""
+    d = synth(288 * 120, 43, t0=int(np.datetime64("2021-03-01", "ms").astype(np.int64)))
+    seen = {}
+    for tf in EW.TFS:
+        b = bars_of(d, tf)
+        el, es = EW.famous_raw("TSMOM7", b)
+        seen[tf] = (tuple(b.close_ms[el]), tuple(b.close_ms[es]))
+    assert len(set(seen.values())) == 1 and sum(len(x) for x in seen["1h"]) > 0

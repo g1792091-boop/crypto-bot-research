@@ -9,7 +9,6 @@ runner writes them; DeepSeek money is never in them, D11); never writes; never t
 "준비 중". The page builds every element with text nodes (static/js/dom.js): no HTML from strings.
 """
 
-from __future__ import annotations
 
 import asyncio
 import os

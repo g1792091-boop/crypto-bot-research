@@ -240,10 +240,12 @@ def sysl():
 
 def test_system_list_and_cells(sysl):
     systems, aliases, by_id = sysl
-    assert len(systems) == 730                                      # v1's six are F1 G1 systems: aliases, not extra
+    from research.hunt import entries_wide as EW
+    assert len(systems) == len(EW.systems()) >= 730                 # v1's six are F1 G1 systems: aliases, not extra
     assert aliases["v1:E1:1h"] == "F1:E1:1h:G1" and len(aliases) == 6
     cells = S.cells_of(systems)
-    assert len(cells) == 365 and all(len(c.systems) == 2 for c in cells.values())
+    assert len(cells) == len(systems) // 2 and all(len(c.systems) == 2 for c in cells.values())
+    assert all(":G1" not in c and ":NONE" not in c for c in cells)
     assert S.cell_id(by_id["F1:E2:4h:NONE"]) == "F1:E2:4h"
     f4 = next(s for s in systems if s["family"] == "F4")
     assert S.cell_id(f4).startswith("F4:") and S.cell_id(f4).endswith(f":r{f4['rank']}")

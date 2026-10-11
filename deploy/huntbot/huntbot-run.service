@@ -1,0 +1,41 @@
+# 추세 사냥 모의 봇: the replay paper runner. Every time the feed's completeness mark moves (every 5m bar) it replays
+# every hunt system from 2026-10-01 on the stored bars with research/hunt/hunt.py's own functions, writes the
+# dashboard's snapshots, the event ledger (events.db, for the AI judge later) and the lineup's Telegram messages.
+# Uses every CPU (HUNTBOT_PROCS=0); the feed runs at a higher priority so the bars keep coming.
+[Unit]
+Description=huntbot replay paper runner (paper only, no orders)
+After=network-online.target huntbot-feed.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=huntbot
+Group=huntbot
+UMask=0027
+WorkingDirectory=/opt/huntbot/app
+EnvironmentFile=/etc/huntbot/huntbot.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+Environment=NUMBA_CACHE_DIR=/var/lib/huntbot/numba NUMBA_NUM_THREADS=1
+UnsetEnvironment=HUNTBOT_DASH_PASSWORD_HASH HUNTBOT_DASH_SECRET
+ExecStart=/opt/huntbot/venv/bin/python -m huntbot run
+Restart=always
+RestartSec=30
+KillMode=mixed
+TimeoutStopSec=60
+Nice=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/huntbot
+
+[Install]
+WantedBy=multi-user.target
