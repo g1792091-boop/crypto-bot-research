@@ -373,20 +373,22 @@ def stage_check(ctx: Ctx, results: str, tables: bool = True) -> dict:
     tab = {}
     if tables:
         S = K.settings_vector()
-        for tf in TFS:
-            for sym in SYMBOLS:
+        for sym in SYMBOLS:                      # coin outermost: its 1m bars are read once
+            for tf in TFS:
                 name = f"{tf}_{sym}"
                 path = R.outcome_path(ctx.work, sym, tf)
                 if not os.path.exists(path):
                     files.append(f"outcomes/{name}.npz missing")
                     continue
                 T = table(ctx.work, sym, tf)
-                ci = coin_inputs(ctx, sym)
-                close = ci["frames"][tf]["open_ms"] + D.TF_MS[tf]
+                f = coin_inputs(ctx, sym)["frames"][tf]
                 tab[name] = {"sha256": T["sha256"]}
                 print(f"[check] outcomes/{name}.npz sha256 {T['sha256']}", flush=True)
-                if not np.array_equal(T["close"], close):
+                if not np.array_equal(T["close"], f["open_ms"] + D.TF_MS[tf]):
                     files.append(f"outcomes/{name}.npz close times differ from the frame")
+                    continue
+                if not np.array_equal(T["atr"], D.atr14(f["h"], f["l"], f["c"]), equal_nan=True):
+                    files.append(f"outcomes/{name}.npz ATR differs from the frame's ATR14")
                     continue
                 ok = verify_table(ctx, sym, tf, S)
                 tab[name]["recomputed_equal"] = ok
