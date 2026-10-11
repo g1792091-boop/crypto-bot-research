@@ -932,14 +932,16 @@ def smoke(data: str, out: str) -> dict:
     lo, hi = _ms(SMOKE[0]), _ms(SMOKE[1])
     sl = os.path.join(out, "smoke_1m")
     os.makedirs(os.path.join(sl, "1m"), exist_ok=True)
-    rep = {"bars": {}, "signals_outside_warmup": 0, "rules": [], "frames_equal": True}
+    rep = {"bars": {}, "signals_outside_warmup": 0, "rules": [], "frames_equal": True, "coins": []}
     for sym in SYMBOLS:
         z = R.DATA.load(data, sym)
         m = (z["ts"] >= lo) & (z["ts"] < hi)
-        np.savez(os.path.join(sl, "1m", f"{sym}.npz"), **{k: v[m] for k, v in z.items()})
+        if m.sum() >= 1440:                     # coins listed after the slice (SOL, DOGE) are left out
+            np.savez(os.path.join(sl, "1m", f"{sym}.npz"), **{k: v[m] for k, v in z.items()})
+            rep["coins"].append(sym)
     for tf in TFS:
         coins = {r: [] for r in D.ORDER if group(r) != "metrics" and tf in D.RULES[r]["tfs"]}
-        for sym in SYMBOLS:
+        for sym in rep["coins"]:
             d = R.DATA.load(sl, sym)
             b = D.bars(d["ts"], d["o"], d["h"], d["l"], d["c"], d["v"], D.TF_MS[tf])
             df, close = R.build_frame(sl, sym, tf)

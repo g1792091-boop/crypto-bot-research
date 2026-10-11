@@ -418,6 +418,7 @@ _SERIES: dict = {}         # (sym, tf) -> Series
 _EVENTS: dict = {}         # (cell key, sym) -> (long, short)
 _SIGS: dict = {}           # (market key, cell key, gate) -> signals
 _BANKS: dict = {}          # (market key, tfs) -> Bank
+_POOLS: dict = {}          # (market key, tf, coin) -> control (a) pool
 
 
 def install(coins: dict, funding: dict | None = None) -> None:
@@ -426,7 +427,7 @@ def install(coins: dict, funding: dict | None = None) -> None:
     _COINS.update(coins)
     _FUND.clear()
     _FUND.update(funding or {})
-    for d in (_SERIES, _EVENTS, _SIGS, _BANKS):
+    for d in (_SERIES, _EVENTS, _SIGS, _BANKS, _POOLS):
         d.clear()
 
 
@@ -510,8 +511,9 @@ class Market:
             fts, frate = _FUND.get(s, (np.zeros(0, np.int64), np.zeros(0)))
             g = ((np.asarray(fts, np.int64) + 30_000) // FIVE) * FIVE      # calc_time on the 5m grid
             keep = (g > self.start) & (g < self.end)
-            ft.append((g[keep] - self.start) // FIVE - 1)                   # charged after the bar ending at calc_time
-            fr.append(np.asarray(frate, np.float64)[keep])
+            order = np.argsort(g[keep], kind="stable")
+            ft.append(((g[keep] - self.start) // FIVE - 1)[order])          # charged after the bar ending at calc_time
+            fr.append(np.asarray(frate, np.float64)[keep][order])
             foff.append(foff[-1] + int(keep.sum()))
         cat = lambda xs, dt_: np.concatenate(xs).astype(dt_) if xs else np.zeros(0, dt_)  # noqa: E731
         self.b_off = np.asarray(off, np.int64)
@@ -1257,9 +1259,10 @@ def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, st
 
 
 def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str = "base",
-             risk_cap: float = RISK_CAP, start: float = START_WALLET) -> tuple:
+             risk_cap: float = RISK_CAP, start: float = START_WALLET, prm: np.ndarray | None = None) -> tuple:
     br = mk.br
-    return _engine(params(r, cost, risk_cap, start), mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c,
+    p = params(r, cost, risk_cap, start) if prm is None else prm
+    return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c,
                    mk.b_qv, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
                    br["lev"], br["mmr"], br["cum"], mk.large, bank.s_ct, bank.s_h, bank.s_l, bank.s_atr,
                    cands["t"], cands["bi"], cands["coin"], cands["side"], cands["d0"], cands["s0"], cands["s1"])
@@ -1357,11 +1360,16 @@ def run_system(mk: Market, spec: dict, r: float = R_BASE, cost: str = "base", ga
 
 # ------------------------------------------------------------------ controls (H 12), bootstrap, seed rank, BH (H 13)
 def control_pool(mk: Market, tf: str, k: int) -> np.ndarray:
-    ser = series(mk.syms[k], tf)
-    cm = ser.bars.close_ms
-    _, f_ok = fill_index(mk, k, ser)
-    ok = (cm >= mk.start) & (cm < mk.end) & (ser.code != UNKNOWN) & np.isfinite(ser.atr) & (ser.atr > 0) & f_ok
-    return np.flatnonzero(ok)
+    """H 12 (a) pool: the coin's signal bars with close in the period, a known 장세 label, ATR14 > 0 and a fill bar."""
+    key = (mk.key, tf, k)
+    pool = _POOLS.get(key)
+    if pool is None:
+        ser = series(mk.syms[k], tf)
+        cm = ser.bars.close_ms
+        _, f_ok = fill_index(mk, k, ser)
+        ok = (cm >= mk.start) & (cm < mk.end) & (ser.code != UNKNOWN) & np.isfinite(ser.atr) & (ser.atr > 0) & f_ok
+        pool = _POOLS[key] = np.flatnonzero(ok)
+    return pool
 
 
 def control_a(mk: Market, sig: dict, rng: np.random.Generator) -> dict:
@@ -2017,52 +2025,70 @@ def cmd_bench(args) -> int:
             ev[f"{spec['family']}:{spec['name']}:{spec['tf']}"] = round((time.perf_counter() - t0) / 2, 4)
     except Exception as e:  # pragma: no cover - timing only
         res["f2f3_error"] = repr(e)[:500]
-    res["events_s_per_coin_series_select_length"] = ev
-    f1 = [v for k, v in ev.items() if k.startswith("F1")]
-    f23_15 = [v for k, v in ev.items() if not k.startswith("F1") and k.endswith(":15m")]
-    f23_4h = [v for k, v in ev.items() if not k.startswith("F1") and k.endswith(":4h")]
-    # extrapolation
-    f23_mean_15 = float(np.mean(f23_15)) if f23_15 else 1.0
-    f23_mean_4h = float(np.mean(f23_4h)) if f23_4h else 0.1
-    tf_scale = {"15m": 1.0, "30m": 0.5, "1h": 0.25, "4h": f23_mean_4h / f23_mean_15 if f23_15 else 1 / 16}
-    cells = _group_cells(EW.systems())
-    ev_cpu = 0.0
-    for g in cells:
-        tf = g[0]["tf"]
-        if g[0]["kind"] == "hunt":
-            ev_cpu += 30 * (float(np.mean(f1)) if f1 else 0.1)
-        else:
-            ev_cpu += 30 * f23_mean_15 * tf_scale[tf]
-    n_sys = len(EW.systems())
-    sel_runs = 2 * n_sys
-    eng_cpu = sel_runs * run_s
-    ser_cpu = sum(ser_t.values())
-    test_runs = 10 * (2 + 200) + 10 * (2 + 200) + 10 * (2 + 200) + 10 * (2 + 2 + 4 * 2) + 3 * 2 + 4
-    test_months_ratio = 33 / 36
-    test_cpu = test_runs * run_s * (1.0 + 0.25) + 10 * 30 * f23_mean_15 * 1.2 + ser_cpu * 1.7
-    sel_cpu = ev_cpu + eng_cpu + ser_cpu
-    res["extrapolation"] = {
-        "systems": n_sys, "entry_cells": len(cells), "select_engine_runs": sel_runs,
-        "select_cpu_s": {"events": round(ev_cpu), "engine": round(eng_cpu), "series": round(ser_cpu),
-                         "total": round(sel_cpu)},
-        "select_wall_h": {"procs_2": round(sel_cpu / 2 / 3600 * 1.1, 2), "procs_32": round(sel_cpu / 32 / 3600 * 1.2
-                                                                                          + ser_cpu / 3600, 2)},
-        "test_engine_runs": test_runs,
-        "test_cpu_s": round(test_cpu),
-        "test_wall_h": {"procs_2": round(test_cpu / 2 / 3600 * 1.1, 2), "procs_32": round(test_cpu / 32 / 3600 * 1.2
-                                                                                         + ser_cpu * 1.7 / 3600, 2)},
-        "notes": ["engine s/run measured at the select length (36 months); test is 33 months plus reads at other "
-                  "lengths, x1.25 applied", f"test months / select months = {test_months_ratio:.3f}",
-                  "events: F2/F3 time measured on a random sample of 12 definitions at 15m / 4h on 2 synthetic coins "
-                  "of select length; 30m and 1h scaled by bar count", "series = bars + ATR + 장세 label for 30 coins "
-                  "x 4 timeframes, built once per process before forking",
-                  "test runs = per pick: base + cost x2 + 200 controls at 0.5%, the same at 1%, the same in the "
-                  "select period (controls read), new-24 x2, extra x2, gate diagnostics x4; + basket and sizing"]}
+    res["events_s_per_coin_series_42_months"] = ev
+    # one control run (draw + candidates + engine), as the test step runs 600 of them per pick
+    sig = synth_signals(mk, "1h", 2.0, 11)
+    t0 = time.perf_counter()
+    for s in range(10):
+        csig = control_a(mk, sig, rng_of("bench", s))
+        run_signals(mk, [(csig, 0)], R_BASE)
+    res["control_run_s"] = round((time.perf_counter() - t0) / 10, 4)
+    res["extrapolation"] = extrapolate(res, EW)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w") as fh:
         json.dump(res, fh, indent=1)
     print(json.dumps(res, indent=1))
     return 0
+
+
+def extrapolate(res: dict, EW) -> dict:
+    """Wall time of wide select and test from the synthetic measurements (all scalings written in ``notes``)."""
+    ev = res["events_s_per_coin_series_42_months"]
+    f1 = [v for k, v in ev.items() if k.startswith("F1")]
+    f23 = {tf: [v for k, v in ev.items() if not k.startswith("F1") and k.endswith(":" + tf)] for tf in TF_ORDER}
+    m15 = float(np.mean(f23["15m"])) if f23["15m"] else 1.0
+    m4h = float(np.mean(f23["4h"])) if f23["4h"] else m15 / 16
+    per_tf = {"15m": m15, "30m": m15 / 2, "1h": m15 / 4, "4h": m4h}       # 30m / 1h: by bar count
+    systems = EW.systems()
+    cells = _group_cells(systems)
+    sel_len, test_len = 48 / 42, 81 / 42        # data loaded: 2020-01..2024-01 / ..2026-10 vs the bench's 42 months
+    ev_sel = sum(30 * (float(np.mean(f1)) if (g[0]["kind"] == "hunt" and f1) else per_tf[g[0]["tf"]])
+                 for g in cells) * sel_len
+    run_s = float(np.mean([v["s_per_run_1proc"] for v in res["engine_run_s"].values()]))
+    ser = sum(res["series_build_s_30_coins"].values())
+    w = res["engine_40_runs_wall_s"]
+    speed2 = w["procs_1"] / max(w["procs_2"], 1e-9)
+    sel_runs = 2 * len(systems)
+    sel_cpu = ev_sel + sel_runs * run_s
+    per_pick_runs = 2 + 200 + (2 + 200) + (2 + 200) + 2 + 2 + 4       # test, r=1%, select controls, reads
+    test_runs = 10 * per_pick_runs + 2 + 2 * 11
+    test_cpu = test_runs * max(run_s, res["control_run_s"]) + 10 * 30 * m15 * test_len
+    ser_sel, ser_test = ser * sel_len, ser * test_len
+
+    def wall(cpu, ser_s, procs, eff):
+        return round((ser_s + cpu / (procs * eff)) / 3600, 2)
+    eff2 = speed2 / 2
+    return {"systems": len(systems), "entry_cells": len(cells), "select_engine_runs": sel_runs,
+            "engine_s_per_run": round(run_s, 4), "control_s_per_run": res["control_run_s"],
+            "speedup_2_procs_measured": round(speed2, 2),
+            "select_cpu_s": {"series_once": round(ser_sel), "events": round(ev_sel), "engine": round(sel_runs * run_s),
+                             "total": round(ser_sel + sel_cpu)},
+            "select_wall_h": {"here_2_procs": wall(sel_cpu, ser_sel, 2, eff2),
+                              "server_32_procs": wall(sel_cpu, ser_sel, 32, 0.85)},
+            "test_engine_runs": test_runs, "test_cpu_s": round(test_cpu + ser_test),
+            "test_wall_h": {"here_2_procs": wall(test_cpu, ser_test, 2, eff2),
+                            "server_32_procs": wall(test_cpu, ser_test, 32, 0.85)},
+            "notes": ["engine s/run measured on 36-month select periods with 1 signal per coin per 2 days; "
+                      "the test period is 33 months (used as is: slight overestimate)",
+                      "events: F1 real code; F2/F3 from a random sample of definitions at 15m and 4h on synthetic "
+                      "coins; 30m and 1h scaled from 15m by bar count; select data 48 months, test data 81 months "
+                      "(linear scaling from the bench's 42 months)",
+                      "series (bars + ATR + 장세 label, 30 coins x 4 timeframes) are built once in the parent before "
+                      "forking (serial; counted in full in the wall time)",
+                      f"test runs = 10 picks x {per_pick_runs} (base, cost x2, 200 controls at 0.5%; the same at 1%; "
+                      "the same in the select period; new-24 x2; extra 2020 x2; gate diagnostics x4) + basket and "
+                      "sizing reads",
+                      "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up"]}
 
 
 def _compile_probe() -> None:

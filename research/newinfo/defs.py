@@ -234,21 +234,21 @@ def metric_asof(t: np.ndarray, vals: np.ndarray, at: np.ndarray) -> np.ndarray:
     than at - 30 min (PREREG 2.4)."""
     t = np.asarray(t, np.int64)
     at = np.asarray(at, np.int64)
-    k = np.searchsorted(t, at - METRIC_LAG, side="right") - 1
-    kk = np.maximum(k, 0)
-    ok = (k >= 0) & (t[kk] >= at - METRIC_STALE) if len(t) else np.zeros(len(at), bool)
     if not len(t):
         return np.full(len(at), np.nan)
+    k = np.searchsorted(t, at - METRIC_LAG, side="right") - 1
+    kk = np.maximum(k, 0)
+    ok = (k >= 0) & (t[kk] >= at - METRIC_STALE)
     return np.where(ok, np.asarray(vals, float)[kk], np.nan)
 
 
 def settlement_rank(t: np.ndarray, x: np.ndarray, span_ms: int) -> tuple[np.ndarray, np.ndarray]:
     """Per settlement s: the rank (pandas pct, ties averaged) of x_s among the present x of the settlements with time
-    in (s - span, s], s included; and how many there are."""
+    in (s - span, s], s included and nothing after s (settlements in calc-time order); and how many there are."""
     t = np.asarray(t, np.int64)
     x = np.asarray(x, float)
     lo = np.searchsorted(t, t - span_ms, side="right")
-    hi = np.searchsorted(t, t, side="right")
+    hi = np.arange(1, len(t) + 1)
     r = np.full(len(t), np.nan)
     cnt = np.zeros(len(t), np.int64)
     for i in range(len(t)):
@@ -309,11 +309,6 @@ def _green(c: Coin) -> np.ndarray:
 
 def _red(c: Coin) -> np.ndarray:
     return c.c < c.o
-
-
-def _lt(a, b) -> np.ndarray:
-    with np.errstate(invalid="ignore"):
-        return np.asarray(a < b, bool)
 
 
 def _shift(x: np.ndarray, k: int, fill=np.nan) -> np.ndarray:
