@@ -187,7 +187,7 @@ Periods by the signal bar's close (UTC):
 
 H3A and D06 need the 5-minute metrics, which the archive has for five of the six coins only from 2021-12-01: their
 select period starts at the first full month of data for all six coins. Their trailing windows fill from each coin's
-first metrics day, so the first 15-62 days of data give no signal; and the account ratio's hole of 2021-12-30 ..
+first metrics day, so roughly the first 2 to 8 weeks of data give no signal; and the account ratio's hole of 2021-12-30 ..
 2022-01-19 (2.3) leaves H3A almost without signals until about February (14-day window) to mid-March 2022 (60-day
 window) on every coin, BTC included. Their extra period is BTC's earlier metrics (from 2020-09-01, windows filled from
 that day): one coin instead of six, so a weaker check than the others'; the report says so next to them.
@@ -195,7 +195,9 @@ that day): one coin instead of six, so a weaker check than the others'; the repo
 **6.1 Select** (select period only), per cell, over the (numbers, exit) pairs with >= 150 trades. Plateau score =
 median of the pair's mean per-trade P&L and its neighbours' (one number one step up or down with the same exit; or the
 next narrower / wider stop with the same take-profit rule among section 4's exits, same numbers; a neighbour with fewer
-than 150 trades counts as 0; a neighbour outside the grid does not count), as PREREG.md 6.1 / run.plateau_scores.
+than 150 trades counts as 0; a neighbour outside the grid does not count), as PREREG.md 6.1. run.plateau_scores'
+exit neighbours run over all 84 exits (tp3R|2's wider neighbour there is tp3R|2.5), so it is not called as is: the same
+rule is applied with section 4's neighbours.
 Picks: the top 3 pairs by plateau among those with plateau > 0 (ties: higher select mean, then grid order, then
 section 4's exit order). There is no live default, so no default comparison. At most 3 picks per cell, 42 in all.
 Pick id = "rule|tf|row|exit".

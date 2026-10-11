@@ -187,8 +187,9 @@ blocked. G3 appears as each line's all-signal mean.
 ## 7. Multiple lines
 
 Each evaluation has 8 verdict lines per read (16 with both reads). Some history lines can pass by chance; that is why a
-candidate needs the same line to pass in history **and** forward (independent data): for a gate with no real effect,
-about 0.05 x 0.05 per line, about 0.04 false candidates over the 16 lines.
+candidate needs the same line to pass in history **and** forward (independent data): for a gate with no timing effect,
+condition 5 alone passes about 5% of the time in each evaluation, so about 0.05 x 0.05 per line, about 0.04 false
+candidates over the 16 lines (the lines share data, so this is a rough figure).
 
 ## 8. What a result means
 
@@ -202,6 +203,10 @@ about 0.05 x 0.05 per line, about 0.04 false candidates over the 16 lines.
 * A candidate changes nothing by itself: the rule bot's 36, its accounts and its day-30 verdict are untouched, and no
   real money follows from this test. Putting a candidate filter into a paper design is the owners' decision.
 * A forward fail with about 25 days of data does not prove the gate useless; it means this test could not show it.
+  The power is low: the context study above estimated that live signals of all 36 need about 26-36 days to confirm a
+  0.10 R filter and about 165-224 days for a 0.04 R one (its five-year size), so only a large effect can pass forward.
+  A line that fails for too few trades (condition 1) is marked so in `decision.json` and the summary ("건수 부족"):
+  it was not testable in that evaluation, and it is still not a candidate.
 * Per-timeframe numbers can suggest where a filter works, but a timeframe-specific filter would need its own forward
   test.
 * Every result, pass or fail, goes into the results file and the owners' summary.
@@ -215,8 +220,16 @@ money figures are hidden by default; the rule-bot-only lines and the whole forwa
 ## 10. Code and running
 
 `gate.py` (this folder), reusing `research/fullgrid/run.py`, `regimes.py` and `kernel.py` read-only; its pure parts
-(style map coverage, gates, bootstrap, control, verdicts, decision, DeepSeek hiding) are checked on hand-made numbers by
-`tests/test_regimegate.py`. The pin lists `PREREG_REGIMEGATE.md`, `gate.py` and `style_map.json`.
+(style map coverage, gates, bootstraps, control, verdicts, decision, DeepSeek hiding, the pin check) are checked on
+hand-made numbers by `tests/test_regimegate.py`.
+
+The pin, `PREREG_REGIMEGATE.sha256` (paths from this folder, so `sha256sum -c PREREG_REGIMEGATE.sha256` works here),
+lists exactly: `PREREG_REGIMEGATE.md`, `gate.py`, `style_map.json`, the label code `../fullgrid/regimes.py`,
+`../../paperbot/dash/tools/regime5y.py` and `../../demobot/regime.py`, the brackets `../fullgrid/exchange.json`, and
+the leverage-group edges `../../paperbot/quality_edges.json`. `gate.py` refuses `history` and `forward` unless the pin
+lists exactly these and every hash matches, and unless the full grid's own preflight passes (`run.preflight`: its
+`PREREG.sha256`, the hash-locked strategy and strength definitions, so a refused strength definition cannot silently
+size every signal "normal"). Each output also records the commit and the hashes (`code`).
 
     python3 research/regimegate/gate.py history --data <fg1m> --work <fgwork> --out <OUT> [--procs N]
     python3 research/regimegate/gate.py forward --data <fg1m> --fwd <FWD> --out <OUT> [--procs N]
