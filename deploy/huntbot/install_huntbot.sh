@@ -27,7 +27,7 @@ ETC=/etc/huntbot
 ENVF=$ETC/huntbot.env
 UNITS="huntbot-feed.service huntbot-run.service huntbot-dash.service"
 # the only paths copied from the repository (the hunt engine and every module its entry definitions load)
-CODE_PATHS="huntbot research/__init__.py research/hunt research/fullgrid research/entry_study research/deepseek200 \
+CODE_PATHS="huntbot research/hunt research/fullgrid research/entry_study research/deepseek200 \
 research/library research/search research/famous third_party/sweep paperbot"
 DROP="research/entry_study/out research/entry_study/out_binance research/famous/out paperbot/dash/static"
 PIP_PKGS="numpy==2.0.2 pandas==2.3.3 numba==0.60.0 scipy>=1.11 fastapi>=0.110 uvicorn>=0.29"

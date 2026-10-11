@@ -510,7 +510,7 @@ fidelity() {
     warn "정밀 재확인 명령(hunt fidelity)이 이 코드에 아직 없어 건너뛰었습니다"
     return 0
   fi
-  if grep -q -- "--list-coins" <<<"$help"; then  # it reads the private file too, so DeepSeek picks' coins are in
+  if grep -q -- "--list-coins" <<<"$help"; then  # test.json keeps coins_traded for DeepSeek picks too (labels only)
     for st in v1 wide; do
       c=$("${HUNT[@]}" fidelity --study "$st" --list-coins --data "$DATA" --private "$PRIV" 2>>"$LOG") \
         || { warn "$st: 거래한 코인 목록을 못 받아 30개 코인 전부를 받습니다"; coins=""; break; }
