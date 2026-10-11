@@ -185,7 +185,9 @@ money figures are hidden by default; the rule-bot-only lines and the whole forwa
 
 ## 10. Code and running
 
-`gate.py` (this folder), reusing `research/fullgrid/run.py`, `regimes.py` and `kernel.py` read-only:
+`gate.py` (this folder), reusing `research/fullgrid/run.py`, `regimes.py` and `kernel.py` read-only; its pure parts
+(style map coverage, gates, bootstrap, control, verdicts, decision, DeepSeek hiding) are checked on hand-made numbers by
+`tests/test_regimegate.py`. The pin lists `PREREG_REGIMEGATE.md`, `gate.py` and `style_map.json`.
 
     python3 research/regimegate/gate.py history --data <fg1m> --work <fgwork> --out <OUT> [--procs N]
     python3 research/regimegate/gate.py forward --data <fg1m> --fwd <FWD> --out <OUT> [--procs N]

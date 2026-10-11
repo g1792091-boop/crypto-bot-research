@@ -15,15 +15,21 @@ history  Every signal of the 80 strategies' default numbers (rule bot 36 and Dee
 forward  The same for the rule bot's 36 on the live run's days: signal bars closing 2026-10-05 18:35 UTC .. the
          --last-day 00:00 UTC, 1m data to the end of --last-day (the full-grid archive DATA plus Binance's daily 1m and
          mark-price files of October in FWD/raw; October funding is not in the public archive yet: 0), the same kernel
-         (each signal alone, $5,000): FWD/<last day>/{1m,frames,outcomes}, OUT/parts/forward/*, OUT/forward.json.
-         Use a new OUT for a look with another --last-day (parts of another window are refused).
+         and the same research/fullgrid/exchange.json (each signal alone, $5,000): FWD/<last day>/{1m,frames,outcomes},
+         OUT/parts/forward/*, OUT/forward.json. Use a new OUT for a look with another --last-day (parts of another
+         window are refused).
 report   OUT/RESULTS_KO.md from whichever of history.json / forward.json exists, and OUT/decision.json when both do.
+
+history and forward run only when PREREG_REGIMEGATE.sha256 lists exactly PINNED and every hash matches, and the full
+grid's own preflight passes (its pinned rules, the hash-locked strategy and strength definitions).
 
 The gates (PREREG 4): G1 by 장세 (trend and other classes only in 추세장, reversion only in 횡보장), G2 by 변동성
 (trend and other only when 큼, reversion only when 작음), G3 none blocked (the baseline: every line's all-signal mean).
 Per gate and line: allowed mean - blocked mean > 0 with a one-sided block bootstrap p < 0.05 (UTC weeks in history,
-UTC days in forward), the allowed mean > 0, at least MIN_N allowed and blocked trades, and above a coin-flip control
-(1,000 draws blocking the same number of signals of every strategy x timeframe cell at random).
+UTC days in forward), the allowed mean > 0, at least MIN_N allowed and blocked trades, above a coin-flip control
+(1,000 draws blocking the same number of signals of every strategy x timeframe cell at random), and above that
+control's average with the same block bootstrap (the within-cell difference: the mix fixed and the time clustering
+kept).
 
 DeepSeek money (means, sums, differences) stays out of every output unless FULLGRID_DS_MONEY=1 (owners' D11): a line
 holding any DeepSeek trade keeps its counts, win rates, p-values and pass flags only.
@@ -59,6 +65,12 @@ K, DATA = R.K, R.DATA
 DS_MONEY = os.environ.get("FULLGRID_DS_MONEY") == "1"
 STYLE_PATH = os.path.join(HERE, "style_map.json")
 PIN_FILE = os.path.join(HERE, "PREREG_REGIMEGATE.sha256")
+# Every file that decides a label, a class, a rule or a trade's size and is not pinned by the full grid's own
+# PREREG.sha256 / DEFS_BC.sha256 (run.preflight checks those). Paths from this folder, so `sha256sum -c` works here.
+PINNED = ("PREREG_REGIMEGATE.md", "gate.py", "style_map.json",
+          "../fullgrid/regimes.py", "../../paperbot/dash/tools/regime5y.py", "../../demobot/regime.py",
+          "../fullgrid/exchange.json", "../../paperbot/quality_edges.json")
+EXCHANGE = os.path.join(FG, "exchange.json")                   # PREREG 5.2: the full grid's brackets, no other
 CLASSES = ("trend", "reversion", "other")
 CLASS_KO = {"trend": "추세형", "reversion": "되돌림형", "other": "그 밖(섞임·반전형·신호 부족)", "pooled": "전체"}
 GROUPS = ("pooled",) + CLASSES
@@ -107,22 +119,27 @@ def all_cells() -> tuple:
     return tuple(R.cells())
 
 
-def pin_problems() -> list[str]:
-    """PREREG_REGIMEGATE.sha256 must exist and match (the rules run exactly as pinned before any result)."""
-    if not os.path.exists(PIN_FILE):
+def pin_problems(pin_file: str = PIN_FILE) -> list[str]:
+    """PREREG_REGIMEGATE.sha256 must list exactly PINNED and every hash must match (the rules, the labels and the
+    sizing run exactly as pinned before any result)."""
+    if not os.path.exists(pin_file):
         return ["PREREG_REGIMEGATE.sha256 missing: pin the files before running"]
-    bad = []
-    for line in open(PIN_FILE, encoding="utf-8"):
+    bad, listed = [], []
+    for line in open(pin_file, encoding="utf-8"):
         if line.strip():
             h, f = line.split(None, 1)
-            if R._sha(os.path.join(HERE, f.strip())) != h:
-                bad.append(f"{f.strip()} does not match PREREG_REGIMEGATE.sha256")
+            f = f.strip().lstrip("*")                                   # sha256sum's binary-mode mark
+            listed.append(f)
+            p = os.path.join(HERE, f)
+            if not os.path.exists(p) or R._sha(p) != h:
+                bad.append(f"{f} does not match PREREG_REGIMEGATE.sha256")
+    if sorted(listed) != sorted(PINNED):
+        bad.append(f"PREREG_REGIMEGATE.sha256 must list exactly: {', '.join(PINNED)}")
     return bad
 
 
 def code_stamp() -> dict:
-    files = {f: R._sha(os.path.join(HERE, f)) for f in ("gate.py", "style_map.json", "PREREG_REGIMEGATE.md")
-             if os.path.exists(os.path.join(HERE, f))}
+    files = {f: R._sha(os.path.join(HERE, f)) for f in PINNED if os.path.exists(os.path.join(HERE, f))}
     return {"fullgrid": R.code_stamp(), "regimegate": files}
 
 
@@ -338,6 +355,44 @@ def boot_diff_p(block: np.ndarray, x: np.ndarray, allowed: np.ndarray, n_boot: i
     return (1 + bad) / (n_boot + 1)
 
 
+def _flip_excess(NA, SA, NB, SB):
+    """The gate's allowed - blocked difference minus the coin-flip control's expected one (the same count blocked at
+    random in every cell): (1/NA + 1/NB) * sum_c (nb_c * SA_c - na_c * SB_c) / n_c, over the last axis (cells)."""
+    N = NA + NB
+    with np.errstate(invalid="ignore", divide="ignore"):
+        within = np.where(N > 0, (NB * SA - NA * SB) / N, 0.0).sum(-1)
+        return within * (1.0 / NA.sum(-1) + 1.0 / NB.sum(-1))
+
+
+def boot_within_p(block: np.ndarray, cell: np.ndarray, x: np.ndarray, allowed: np.ndarray, n_boot: int,
+                  seed: int) -> tuple[float | None, float | None]:
+    """(one-sided block bootstrap p, observed value) of 'the gate beats the coin-flip control's average' (PREREG 6,
+    condition 5): within each cell the allowed - blocked difference, weighted by na_c * nb_c / n_c, which is exactly
+    the gate's difference minus what blocking the same count at random in every cell gives on average. The mix of
+    cells is held as in the control and whole blocks (weeks or days) are resampled as in boot_diff_p, so neither a
+    gate that blocks more of a bad strategy or timeframe nor clustered luck passes. A resample without an allowed or
+    a blocked signal counts against."""
+    if not allowed.any() or allowed.all():
+        return None, None
+    _b, bi = np.unique(block, return_inverse=True)
+    _c, ci = np.unique(cell, return_inverse=True)
+    W, C = int(bi.max()) + 1, int(ci.max()) + 1
+    k = bi.astype(np.int64) * C + ci
+    a = allowed.astype(float)
+    na, sa, nb, sb = (np.bincount(k, w, W * C).reshape(W, C) for w in (a, x * a, 1 - a, x * (1 - a)))
+    obs = float(_flip_excess(na.sum(0), sa.sum(0), nb.sum(0), sb.sum(0)))
+    rng = np.random.default_rng(seed)
+    bad, done = 0, 0
+    while done < n_boot:
+        m = min(200, n_boot - done)
+        pick = rng.integers(0, W, size=(m, W))
+        wt = np.bincount((np.arange(m)[:, None] * W + pick).ravel(), minlength=m * W).reshape(m, W).astype(float)
+        e = _flip_excess(wt @ na, wt @ sa, wt @ nb, wt @ sb)
+        bad += int((~(e > 0)).sum())
+        done += m
+    return (1 + bad) / (n_boot + 1), obs
+
+
 def flip_control(cell: np.ndarray, x: np.ndarray, blocked: dict, lines: np.ndarray, n_draws: int,
                  seed: int) -> dict:
     """Coin-flip control: each draw blocks, in every cell, as many signals as the gate blocked there, chosen at random
@@ -367,7 +422,7 @@ def flip_control(cell: np.ndarray, x: np.ndarray, blocked: dict, lines: np.ndarr
     return out
 
 
-def line_stats(x, allowed, block, cell_in_line, cell, ds_line, seed, flips, min_n, money) -> dict:
+def line_stats(x, allowed, block, cell_in_line, cell, ds_line, seed, seed_within, flips, min_n, money) -> dict:
     """One line's numbers and verdict (PREREG 6). ``flips``: this line's control draws."""
     m = cell_in_line[cell]
     xa, xb = x[m & allowed], x[m & ~allowed]
@@ -376,18 +431,21 @@ def line_stats(x, allowed, block, cell_in_line, cell, ds_line, seed, flips, min_
     mb = float(xb.mean()) if nb else None
     diff = ma - mb if na and nb else None
     p = boot_diff_p(block[m], x[m], allowed[m], N_BOOT, seed) if na and nb else None
+    wp, excess = (boot_within_p(block[m], cell[m], x[m], allowed[m], N_BOOT, seed_within) if na and nb
+                  else (None, None))
     fl = flips[np.isfinite(flips)]
     cp = float((1 + (fl >= diff).sum()) / (len(fl) + 1)) if diff is not None and len(fl) else None
     checks = {"trades": na >= min_n and nb >= min_n, "diff_positive": diff is not None and diff > 0,
               "boot": p is not None and p < ALPHA, "allowed_positive": ma is not None and ma > 0,
-              "control": cp is not None and cp < ALPHA}
+              "control": cp is not None and cp < ALPHA, "within": wp is not None and wp < ALPHA}
     d = {"n_all": int(m.sum()), "n_allowed": na, "n_blocked": nb,
          "share_blocked": nb / (na + nb) if na + nb else None,
          "win_allowed": float((xa > 0).mean()) if na else None, "win_blocked": float((xb > 0).mean()) if nb else None,
-         "p": p, "control_p": cp, "checks": checks, "pass": all(checks.values())}
+         "p": p, "control_p": cp, "within_p": wp, "checks": checks, "pass": all(checks.values())}
     if money or not ds_line:
         d.update({"mean_all": float(x[m].mean()) if m.any() else None, "mean_allowed": ma, "mean_blocked": mb,
-                  "diff": diff, "control_q95": float(np.quantile(fl, 0.95)) if len(fl) else None})
+                  "diff": diff, "control_q95": float(np.quantile(fl, 0.95)) if len(fl) else None,
+                  "diff_vs_flip": excess})
     return d
 
 
@@ -446,6 +504,7 @@ def evaluate(T: dict, ev: str, cells: tuple, money: bool = DS_MONEY, n_flip: int
                 ds_line = bool((kind_of[L[li]] == "ds").any())
                 st = line_stats(x, allow[g], blk, L[li], cell, ds_line,
                                 R._seed("regimegate", ev, read, g, key["universe"], key["group"], key["tf"]),
+                                R._seed("regimegate|within", ev, read, g, key["universe"], key["group"], key["tf"]),
                                 flips[g][:, li] if g in flips else np.zeros(0), MIN_N[ev], money)
                 if g in SWAPS:
                     st["pass"] = None                                   # descriptive: no verdict
@@ -500,14 +559,17 @@ def decide(hist: dict, fwd: dict) -> dict:
     """PREREG 8: a gate (pooled) or a class rule is a candidate filter only when its verdict line passes in history
     and in forward, per read."""
     def verdicts(doc):
-        return {(read, ln["gate"], ln["group"]): ln["pass"] for read, rd in doc["reads"].items()
+        return {(read, ln["gate"], ln["group"]): ln for read, rd in doc["reads"].items()
                 for ln in rd["lines"] if ln["role"] == "verdict" and ln["gate"] in GATES}
     h, f = verdicts(hist), verdicts(fwd)
     rows = []
     for key in h:
-        hp, fp = bool(h[key]), bool(f.get(key))
+        hp, fp = bool(h[key]["pass"]), bool(f.get(key, {}).get("pass"))
         word = ("candidate" if hp and fp else "not_confirmed" if hp else "forward_only" if fp else "fail")
-        rows.append({"read": key[0], "gate": key[1], "group": key[2], "history": hp, "forward": fp, "result": word})
+        # too few trades is still a fail of that line; flagged so the summary can say "could not be tested"
+        n_ok = {ev: bool(d.get(key, {}).get("checks", {}).get("trades")) for ev, d in (("history", h), ("forward", f))}
+        rows.append({"read": key[0], "gate": key[1], "group": key[2], "history": hp, "forward": fp, "result": word,
+                     "history_n_ok": n_ok["history"], "forward_n_ok": n_ok["forward"]})
     return {"rows": rows, "candidates": [r for r in rows if r["result"] == "candidate"]}
 
 
@@ -536,11 +598,10 @@ def main(argv=None) -> int:
     ap.add_argument("--fwd", help="forward: its own folder (raw/ and one <last day>/ with 1m/, frames/, outcomes/)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--last-day", default=FWD_LAST_DAY)
-    ap.add_argument("--exchange", default=os.path.join(FG, "exchange.json"))
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     a = ap.parse_args(argv)
     if a.stage in ("history", "forward"):
-        bad = pin_problems()
+        bad = pin_problems() + R.preflight()          # a refused strength definition would size everything 'normal'
         if bad:
             print("[regimegate] " + "; ".join(bad), flush=True)
             return 2
@@ -562,7 +623,7 @@ def main(argv=None) -> int:
                 last = R.frame(ddir, s, tf)[1][-1]
                 if not hi < last <= hi + DAY:                  # not the archive's, not a later day's
                     raise SystemExit(f"{s} {tf}: frames do not end on {a.last_day}: remove {ddir}/frames")
-        run_tables("forward", ddir, ddir, a.out, a.procs, FWD_FROM, hi, R.exchange(a.exchange, False))
+        run_tables("forward", ddir, ddir, a.out, a.procs, FWD_FROM, hi, R.exchange(EXCHANGE, False))
         doc = evaluate(load_table(a.out, "forward", FWD_FROM, hi), "forward", all_cells())
         doc.update({"window": ["2026-10-05 18:35", f"{a.last_day} 00:00"], "data_to": f"{a.last_day} 23:59",
                     "funding": "0 (October not in the archive)", "verdict_window": a.last_day == FWD_LAST_DAY,
@@ -603,7 +664,8 @@ def report_ko(docs: dict) -> str:
     L = ["# 장세 문지기 시험 결과", "",
          "규칙은 결과 전에 고정한 `PREREG_REGIMEGATE.md`입니다. 거래당 = 신호 하나를 혼자 $5,000 계좌로 거래했을 때 손익 ÷"
          " $5,000 (수수료·슬리피지·펀딩 포함). 통과 = 막은 신호보다 들인 신호가 낫고(부트스트랩 p < 0.05), 들인 신호 평균이"
-         " 플러스이고, 같은 수를 무작위로 막은 1,000번보다 낫고, 양쪽 모두 최소 건수 이상.",
+         " 플러스이고, 같은 수를 무작위로 막은 1,000번보다 낫고, 그 무작위 평균보다도 나은 것이 기간 묶음째 다시 뽑아도"
+         " 남고(묶음 p < 0.05), 양쪽 모두 최소 건수 이상.",
          "딥시크가 섞인 줄은 두 분 규칙(D11)대로 돈 숫자 없이 건수·승률·p·판정만 보입니다.", ""]
     if "decision" in docs:
         L += ["## 최종 판정 (과거와 실전 모두 통과해야 후보)", "", "| 청산 | 문지기 | 묶음 | 과거 | 실전 | 결과 |",
@@ -611,8 +673,10 @@ def report_ko(docs: dict) -> str:
         word = {"candidate": "**후보 필터** (paper만)", "not_confirmed": "확인 안 됨", "forward_only": "한 달만(후보 아님)",
                 "fail": "실패"}
         for r in docs["decision"]["rows"]:
-            L.append(f"| {READ_KO[r['read']]} | {r['gate']} | {CLASS_KO[r['group']]} | {'통과' if r['history'] else '-'} | "
-                     f"{'통과' if r['forward'] else '-'} | {word[r['result']]} |")
+            few = {ev: "" if r.get(f"{ev}_n_ok", True) else " (건수 부족)" for ev in ("history", "forward")}
+            L.append(f"| {READ_KO[r['read']]} | {r['gate']} | {CLASS_KO[r['group']]} | "
+                     f"{'통과' if r['history'] else '-'}{few['history']} | {'통과' if r['forward'] else '-'}{few['forward']} | "
+                     f"{word[r['result']]} |")
         L.append("")
     for ev in ("history", "forward"):
         if ev not in docs:
@@ -626,8 +690,8 @@ def report_ko(docs: dict) -> str:
         for read, rd in doc["reads"].items():
             L += [f"### {READ_KO[read]}", "",
                   f"신호 {rd['signals']:,}건 중 장세를 모르는 {rd['unknown_state']:,}건을 빼고 {rd['used']:,}건.", "",
-                  "| 문지기 | 묶음 | 들임 | 막음 | 전부(G3) | 들임 평균 | 막음 평균 | 차이 | p | 무작위 p | 판정 |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| 문지기 | 묶음 | 들임 | 막음 | 전부(G3) | 들임 평균 | 막음 평균 | 차이 | p | 무작위 p | 무작위 평균 대비 | "
+                  "묶음 p | 판정 |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
             for ln in rd["lines"]:
                 if ln["role"] != "verdict":
                     continue
@@ -635,17 +699,18 @@ def report_ko(docs: dict) -> str:
                 L.append(f"| {ln['gate']} | {CLASS_KO[ln['group']]} | {ln['n_allowed']:,} ({_w(ln['win_allowed'])}) | "
                          f"{ln['n_blocked']:,} ({_w(ln['win_blocked'])}) | {_pc(ln.get('mean_all'))} | "
                          f"{_pc(ln.get('mean_allowed'))} | {_pc(ln.get('mean_blocked'))} | {_pc(ln.get('diff'))} | "
-                         f"{_p(ln['p'])} | {_p(ln['control_p'])} | {v} |")
+                         f"{_p(ln['p'])} | {_p(ln['control_p'])} | {_pc(ln.get('diff_vs_flip'))} | "
+                         f"{_p(ln.get('within_p'))} | {v} |")
             L += ["", "봉별·묶음별 (참고, 판정 아님):", "",
-                  "| 문지기 | 매매법 | 봉 | 묶음 | 들임 | 막음 | 들임 평균 | 차이 | p | 무작위 p |",
-                  "|---|---|---|---|---|---|---|---|---|---|"]
+                  "| 문지기 | 매매법 | 봉 | 묶음 | 들임 | 막음 | 들임 평균 | 차이 | p | 무작위 p | 묶음 p |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
             for ln in rd["lines"]:
                 if ln["role"] in ("timeframe", "universe"):
                     who = {"all": "전부", "core": "규칙봇", "ds": "딥시크"}[ln["universe"]]
                     L.append(f"| {ln['gate']} | {who} | {ln['tf'] if ln['tf'] != 'all' else '전부'} | "
                              f"{CLASS_KO[ln['group']]} | {ln['n_allowed']:,} | {ln['n_blocked']:,} | "
                              f"{_pc(ln.get('mean_allowed'))} | {_pc(ln.get('diff'))} | {_p(ln['p'])} | "
-                             f"{_p(ln['control_p'])} |")
+                             f"{_p(ln['control_p'])} | {_p(ln.get('within_p'))} |")
             L += ["", "묶음 × 장 상황 (참고): 건수, 승률, 거래당", "", "| 매매법 | 묶음 | 기준 | 장 | 건수 | 승률 | 거래당 |",
                   "|---|---|---|---|---|---|---|"]
             for key, d in rd["states"].items():

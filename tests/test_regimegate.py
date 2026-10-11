@@ -174,3 +174,74 @@ def test_label_codes_read_the_signal_bar():
     reg, vol = GT.label_codes(t0 + M15 * np.array([1, 2, 3, 4]), st)
     assert [GT.REGIME[c] for c in reg] == ["추세장", "횡보장", "급변장", "모름"]
     assert [GT.VOL[c] for c in vol] == ["작음", "보통", "모름", "모름"]
+
+
+def test_load_table_refuses_another_window(tmp_path):
+    out = str(tmp_path)
+    for tf in GT.R.TFS:
+        for sym in GT.R.SYMBOLS:
+            p = GT.part_path(out, "forward", tf, sym)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            T = {k: np.zeros(2, dt) for k, dt in GT.DTYPES.items()}
+            np.savez(p, open_at_end=np.array([1, 0]), seconds=0.0, lo_ms=10, hi_ms=20, regime=np.ones(2, np.int8),
+                     vol=np.ones(2, np.int8), **T)
+    T = GT.load_table(out, "forward", 10, 20)
+    assert len(T["x0"]) == 48 and T["open_at_end"] == [24, 0]
+    try:
+        GT.load_table(out, "forward", 10, 21)
+    except SystemExit as exc:
+        assert "another window" in str(exc)
+    else:
+        raise AssertionError("a part of another window was accepted")
+
+
+def test_within_p_is_the_excess_over_the_coin_flip_average():
+    # the observed value equals the gate's difference minus the mean of the coin-flip draws
+    rng = np.random.default_rng(11)
+    n = 6000
+    cell = rng.integers(0, 4, n)
+    block = np.sort(rng.integers(0, 120, n))
+    allowed = rng.random(n) < np.array([0.2, 0.5, 0.7, 0.4])[cell]
+    x = rng.normal(0, 0.02, n) + np.array([-0.01, 0.0, 0.01, 0.005])[cell] + 0.004 * allowed
+    p, ex = GT.boot_within_p(block, cell, x, allowed, 400, 3)
+    lines = np.ones((1, 4), bool)
+    fl = GT.flip_control(cell, x, {"G": ~allowed}, lines, 4000, 5)["G"][:, 0]
+    diff = x[allowed].mean() - x[~allowed].mean()
+    assert abs(ex - (diff - fl.mean())) < 4 * fl.std() / np.sqrt(len(fl)) + 1e-12
+    assert p < 0.05
+    assert GT.boot_within_p(block, cell, x, np.ones(n, bool), 100, 3) == (None, None)
+
+
+def test_within_p_refuses_a_mix_effect_with_clustered_luck():
+    # no timing skill: the gate blocks half of the worse cell by a day-long state, and that cell's outcomes share a
+    # common shock per day which happens to be one null standard deviation better on the gate's days. The plain
+    # difference passes (the mix) and so does the coin-flip control (its draws are not clustered); condition 5 does not.
+    rng = np.random.default_rng(12)
+    days, per = 400, 200
+    block = np.repeat(np.arange(days), per)
+    cell = np.tile(np.r_[np.zeros(per // 2, int), np.ones(per // 2, int)], days)
+    state = rng.random(days) < 0.5                                  # the gate's state, constant over a day
+    luck = rng.normal(0, 0.008, days)
+    sd_null = 0.008 * np.sqrt(1 / state.sum() + 1 / (~state).sum())
+    luck[state] += sd_null - (luck[state].mean() - luck[~state].mean())
+    x = rng.normal(0, 0.01, len(block)) + np.where(cell == 1, -0.006 + luck[block], 0.0)
+    allowed = np.where(cell == 0, True, state[block])               # cell 0 always allowed, cell 1 by state
+    p2 = GT.boot_diff_p(block, x, allowed, 1000, 1)
+    fl = GT.flip_control(cell, x, {"G": ~allowed}, np.ones((1, 2), bool), 300, 2)["G"][:, 0]
+    diff = x[allowed].mean() - x[~allowed].mean()
+    cp = (1 + (fl >= diff).sum()) / (len(fl) + 1)
+    p5, _ex = GT.boot_within_p(block, cell, x, allowed, 1000, 1)
+    assert p2 < 0.05 and cp < 0.05                                  # conditions 2 and 4 alone would pass it
+    assert p5 > 0.05                                                # condition 5 does not
+
+
+def test_pin_must_list_exactly_the_pinned_files(tmp_path):
+    pin = tmp_path / "pin.sha256"
+    lines = [f"{GT.R._sha(os.path.join(GT.HERE, f))}  {f}" for f in GT.PINNED]
+    pin.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert GT.pin_problems(str(pin)) == []
+    pin.write_text("\n".join(lines[:3]) + "\n", encoding="utf-8")   # the three own files only: refused
+    assert any("exactly" in b for b in GT.pin_problems(str(pin)))
+    pin.write_text("\n".join(lines[:-1] + ["0" * 64 + "  " + GT.PINNED[-1]]) + "\n", encoding="utf-8")
+    assert any(GT.PINNED[-1] in b for b in GT.pin_problems(str(pin)))
+    assert GT.pin_problems(str(tmp_path / "none")) and "missing" in GT.pin_problems(str(tmp_path / "none"))[0]
