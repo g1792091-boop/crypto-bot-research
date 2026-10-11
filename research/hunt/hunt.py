@@ -1020,8 +1020,8 @@ def sort_cands(c: dict) -> dict:
 # ------------------------------------------------------------------ the engine (numba)
 # position state (one slot per coin: one position per coin, H 8)
 F_Q, F_COST, F_REFQ, F_Q1, F_U, F_D0, F_STOP, F_NEXT, F_MARGIN, F_B, F_LIQ, F_EXT, F_LAST, F_FEES, F_FUND, F_LEV, \
-    F_P0 = range(17)
-NF = 17
+    F_P0, F_TCAP = range(18)
+NF = 18
 P_OPEN, P_SIDE, P_TRIED, P_FILLED, P_BPTR, P_BEND, P_FPTR, P_FEND, P_SPTR, P_SEND, P_LARGE, P_REC, P_SRC, P_TIN, \
     P_CUT = range(15)
 NPI = 15
@@ -1031,8 +1031,9 @@ NRF = 11
 RI_COIN, RI_SIDE, RI_TIN, RI_TOUT, RI_ADDS, RI_REASON, RI_CAND, RI_SRC, RI_LARGE, RI_CUT, RI_TRIED = range(11)
 NRI = 11
 # exit reasons, stop sources
-EX_STOP, EX_GAP, EX_LIQ, EX_END, EX_COINEND, EX_BUST = range(6)
-EXIT_NAMES = ("stop", "stop_gap_open", "liquidation", "period_end_marked", "coin_end", "bust_close")
+EX_STOP, EX_GAP, EX_LIQ, EX_END, EX_COINEND, EX_BUST, EX_ENDCLOSE = range(7)
+EXIT_NAMES = ("stop", "stop_gap_open", "liquidation", "period_end_marked", "coin_end", "bust_close",
+              "period_end_closed")
 SRC_INIT, SRC_ADD, SRC_CHAND = range(3)
 STOP_SRC_NAMES = ("first_stop", "add_moved_stop", "chandelier")
 # counters
@@ -1041,24 +1042,37 @@ SKIP_NAMES = ("coin_has_position", "six_positions", "large_group_direction", "no
               "min_notional", "risk_cap", "bad_price")
 CUT_LIQ, CUT_MARGIN, CUT_FREE = range(3)
 CUT_NAMES = ("liquidity", "margin_budget", "free_wallet")
-AS_RISK, AS_MARGIN, AS_FREE, AS_MINNOT = range(4)
-ADD_SKIP_NAMES = ("risk_cap", "margin_budget", "free_wallet", "min_notional")
+AS_RISK, AS_MARGIN, AS_FREE, AS_MINNOT, AS_BRACKET = range(5)
+ADD_SKIP_NAMES = ("risk_cap", "margin_budget", "free_wallet", "min_notional", "bracket")
 CAP_SIX, CAP_LL, CAP_LS, CAP_RISK = range(4)
 CAP_NAMES = ("six_positions", "large_longs_3", "large_shorts_3", "risk_cap")
-# parameter vector
+# parameter vector. PR_BPD .. PR_FIXLEV are read options (all off by default: the engine is then the reviewed one,
+# bit for bit; tests/test_hunt.py checks it): bars per UTC day, per-bar equity path, close at the end, liquidation on
+# mark price, the goal-mode bracket rule (R1 machine B), rule-bot fixed leverage (R24).
 PR_START, PR_R, PR_CAP, PR_TAKER, PR_SLIP, PR_LIQF, PR_BUST, PR_CHAND, PR_BDIV, PR_LEVMAX, PR_LIQMULT, PR_MAXPOS, \
-    PR_MAXDIR, PR_NADDS = range(14)
+    PR_MAXDIR, PR_NADDS, PR_BPD, PR_EQPATH, PR_CLOSE_END, PR_LIQ_MARK, PR_BRK_Q1, PR_FIXLEV = range(20)
+NPR = 20
+PR_NAMES = ("PR_START", "PR_R", "PR_CAP", "PR_TAKER", "PR_SLIP", "PR_LIQF", "PR_BUST", "PR_CHAND", "PR_BDIV",
+            "PR_LEVMAX", "PR_LIQMULT", "PR_MAXPOS", "PR_MAXDIR", "PR_NADDS", "PR_BPD", "PR_EQPATH", "PR_CLOSE_END",
+            "PR_LIQ_MARK", "PR_BRK_Q1", "PR_FIXLEV")
+PR_INDEX = {n: i for i, n in enumerate(PR_NAMES)}
 
 
 @njit(cache=True)
-def _choose_lev(N4, B, d0_frac, lev_max, liq_mult, n, cap, lev, mmr):
-    """H 7.3: the smallest L in 1..lev_max with (i) L allowed by the bracket at N4, (ii) N4 / L <= B, (iii) 1/L - mmr
-    >= liq_mult x D0 / P0; else the largest L meeting (i) and (iii); 0 = none."""
-    b = -1
+def _tier(N, n, cap):
+    """Index of the bracket tier that holds notional N (-1 = above every tier)."""
     for i in range(n):
-        if N4 < cap[i]:
-            b = i
-            break
+        if N < cap[i]:
+            return i
+    return -1
+
+
+@njit(cache=True)
+def _choose_lev_at(Nb, N4, B, d0_frac, lev_max, liq_mult, n, cap, lev, mmr):
+    """H 7.3 with the bracket looked up at ``Nb`` (= N4 as written; = q x P0 in the goal-mode read): the smallest L in
+    1..lev_max with (i) L allowed by the bracket at Nb, (ii) N4 / L <= B, (iii) 1/L - mmr >= liq_mult x D0 / P0; else
+    the largest L meeting (i) and (iii); 0 = none."""
+    b = _tier(Nb, n, cap)
     if b < 0:
         return 0
     best = 0
@@ -1068,6 +1082,13 @@ def _choose_lev(N4, B, d0_frac, lev_max, liq_mult, n, cap, lev, mmr):
                 return L
             best = L
     return best
+
+
+@njit(cache=True)
+def _choose_lev(N4, B, d0_frac, lev_max, liq_mult, n, cap, lev, mmr):
+    """H 7.3: the smallest L in 1..lev_max with (i) L allowed by the bracket at N4, (ii) N4 / L <= B, (iii) 1/L - mmr
+    >= liq_mult x D0 / P0; else the largest L meeting (i) and (iii); 0 = none."""
+    return _choose_lev_at(N4, N4, B, d0_frac, lev_max, liq_mult, n, cap, lev, mmr)
 
 
 @njit(cache=True)
@@ -1095,7 +1116,9 @@ def _risk(k, ps, pi):
 
 @njit(cache=True)
 def _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n, cap, mmr, cum):
-    """H 7.4: one add of q at reference ``ref``; returns True when filled (stop moved, liquidation price updated)."""
+    """H 7.4: one add of q at reference ``ref``; returns True when filled (stop moved, liquidation price updated).
+    Goal-mode read only (F_TCAP finite): an add that would take the position's notional past its tier's cap is
+    skipped ('bracket')."""
     side = pi[k, P_SIDE]
     L = ps[k, F_LEV]
     afill = ref * (1.0 + side * slip)
@@ -1118,6 +1141,9 @@ def _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
         return False
     if qa * afill < min_not:
         askip[AS_MINNOT] += 1
+        return False
+    if ps[k, F_COST] + qa * afill > ps[k, F_TCAP]:
+        askip[AS_BRACKET] += 1
         return False
     Qn = ps[k, F_Q] + qa
     refqn = ps[k, F_REFQ] + qa * ref
@@ -1157,15 +1183,19 @@ def _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, 
 
 
 @njit(cache=True)
-def _bar(k, o, h, lo, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n_adds, n, cap, mmr, cum):
-    """H 7.6 for one position on one 5m bar (long; short mirror): 1. open at / beyond the liquidation price ->
+def _bar(k, o, h, lo, mo, mh, ml, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip, acut, n_adds, n, cap,
+         mmr, cum):
+    """H 7.6 for one position on one bar (long; short mirror): 1. open at / beyond the liquidation price ->
     liquidated at the open; 2. open at / beyond the stop -> exit at the open; 4. the bar reaches the next untried add
     level -> every add level it reaches fills in order first (each moving the stop and the liquidation price), also
     when the bar had reached the old stop; 3./4. then the low reaching the (moved) stop exits there, or the
-    liquidation price when it lies inside the stop (5.). Returns (code, price): -1 none, EX_STOP, EX_GAP, EX_LIQ."""
+    liquidation price when it lies inside the stop (5.). Liquidation is checked on (mo, mh, ml): the last-price bar
+    itself in the study (H 2), the mark-price bar in the fidelity read (a stop that the last price reaches while the
+    liquidation price lies beyond it exits first; a mark wick beyond the liquidation price liquidates otherwise).
+    Returns (code, price): -1 none, EX_STOP, EX_GAP, EX_LIQ."""
     side = pi[k, P_SIDE]
     if side > 0:
-        if o <= ps[k, F_LIQ]:
+        if mo <= ps[k, F_LIQ]:
             return EX_LIQ, o
         if o <= ps[k, F_STOP]:
             return EX_GAP, o
@@ -1177,12 +1207,18 @@ def _bar(k, o, h, lo, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip,
             ps[k, F_NEXT] = (ref if ok else lvl) + ps[k, F_D0]
         stop = ps[k, F_STOP]
         liq = ps[k, F_LIQ]
-        if lo <= stop or lo <= liq:
-            if liq > stop:
+        if liq > stop:
+            if ml <= liq:
                 return EX_LIQ, liq
-            return EX_STOP, stop
+            if lo <= stop:
+                return EX_STOP, stop
+        else:
+            if lo <= stop:
+                return EX_STOP, stop
+            if ml <= liq:
+                return EX_LIQ, liq
     else:
-        if o >= ps[k, F_LIQ]:
+        if mo >= ps[k, F_LIQ]:
             return EX_LIQ, o
         if o >= ps[k, F_STOP]:
             return EX_GAP, o
@@ -1194,10 +1230,16 @@ def _bar(k, o, h, lo, ps, pi, acc, others, cap_abs, taker, slip, min_not, askip,
             ps[k, F_NEXT] = (ref if ok else lvl) - ps[k, F_D0]
         stop = ps[k, F_STOP]
         liq = ps[k, F_LIQ]
-        if h >= stop or h >= liq:
-            if liq < stop:
+        if liq < stop:
+            if mh >= liq:
                 return EX_LIQ, liq
-            return EX_STOP, stop
+            if h >= stop:
+                return EX_STOP, stop
+        else:
+            if h >= stop:
+                return EX_STOP, stop
+            if mh >= liq:
+                return EX_LIQ, liq
     return -1, 0.0
 
 
@@ -1233,8 +1275,8 @@ def _close(k, X, reason, t, ps, pi, rf, ri, acc, taker, slip):
 
 
 @njit(cache=True)
-def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_rate, coin_end_t, min_not,
-            br_n, br_cap, br_lev, br_mmr, br_cum, large, s_ct, s_h, s_l, s_atr,
+def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_ml, f_off, f_t, f_rate, coin_end_t,
+            min_not, br_n, br_cap, br_lev, br_mmr, br_cum, large, s_ct, s_h, s_l, s_atr,
             c_t, c_bi, c_coin, c_side, c_d0, c_s0, c_s1):
     start_eq = prm[PR_START]
     r = prm[PR_R]
@@ -1250,10 +1292,15 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
     max_pos = int(prm[PR_MAXPOS])
     max_dir = int(prm[PR_MAXDIR])
     n_adds = int(prm[PR_NADDS])
+    bpd = int(prm[PR_BPD])
+    eqpath = prm[PR_EQPATH] > 0.5
+    close_end = prm[PR_CLOSE_END] > 0.5
+    brk_q1 = prm[PR_BRK_Q1] > 0.5
+    fixlev = int(prm[PR_FIXLEV])
     K = len(b_off) - 1
     n_m = len(month_t0) - 1
     T = month_t0[n_m]
-    n_days = T // 288
+    n_days = T // bpd
     nc = len(c_t)
     ps = np.zeros((K, NF))
     pi = np.zeros((K, NPI), np.int64)
@@ -1262,9 +1309,10 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
     month_eq = np.zeros(n_m)
     month_pos = np.zeros(n_m, np.int64)
     day_eq = np.zeros(n_days)
+    eqp = np.zeros(T if eqpath else 0)
     skip = np.zeros(8, np.int64)
     cut = np.zeros(3, np.int64)
-    askip = np.zeros(4, np.int64)
+    askip = np.zeros(5, np.int64)
     acut = np.zeros(2, np.int64)
     capt = np.zeros(4, np.int64)
     openl = np.zeros(max_pos + 1, np.int64)
@@ -1334,27 +1382,59 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
                 skip[SK_BAD] += 1
                 ci += 1
                 continue
-            U = r * E_prev
-            q = U / D0
-            cutf = 0
-            lc = liq_frac * b_qv[bi]
-            if q * P0 > lc:
-                q = lc / P0
-                cut[CUT_LIQ] += 1
-                cutf |= 1
-            N4 = 4.0 * q * P0
-            B = E_prev / b_div
             nb = br_n[k]
-            L = _choose_lev(N4, B, D0 / P0, lev_max, liq_mult, nb, br_cap[k], br_lev[k], br_mmr[k])
-            if L == 0:
-                skip[SK_LEV] += 1
-                ci += 1
-                continue
-            fill = P0 * (1.0 + side * slip)
-            if q * fill / L > B:
+            cutf = 0
+            tcap = np.inf
+            if fixlev > 0:
+                # R24 rule-bot sizing: leverage fixed (bracket (i) at the full notional), margin = L% of equity
+                L = fixlev
+                for _it in range(16):
+                    bt_ = _tier((L / 100.0) * E_prev * L, nb, br_cap[k])
+                    if bt_ < 0:
+                        L = 0
+                        break
+                    if L <= br_lev[k][bt_]:
+                        break
+                    L = br_lev[k][bt_]
+                if L <= 0:
+                    skip[SK_LEV] += 1
+                    ci += 1
+                    continue
+                B = (L / 100.0) * E_prev
+                fill = P0 * (1.0 + side * slip)
                 q = B * L / fill
-                cut[CUT_MARGIN] += 1
-                cutf |= 2
+                lc = liq_frac * b_qv[bi]
+                if q * P0 > lc:
+                    q = lc / P0
+                    cut[CUT_LIQ] += 1
+                    cutf |= 1
+                U = q * D0
+            else:
+                U = r * E_prev
+                q = U / D0
+                lc = liq_frac * b_qv[bi]
+                if q * P0 > lc:
+                    q = lc / P0
+                    cut[CUT_LIQ] += 1
+                    cutf |= 1
+                N4 = (1.0 + n_adds) * q * P0
+                B = E_prev / b_div
+                Nb = N4
+                if brk_q1:
+                    Nb = q * P0
+                    bt_ = _tier(Nb, nb, br_cap[k])
+                    if bt_ >= 0:
+                        tcap = br_cap[k][bt_]
+                L = _choose_lev_at(Nb, N4, B, D0 / P0, lev_max, liq_mult, nb, br_cap[k], br_lev[k], br_mmr[k])
+                if L == 0:
+                    skip[SK_LEV] += 1
+                    ci += 1
+                    continue
+                fill = P0 * (1.0 + side * slip)
+                if q * fill / L > B:
+                    q = B * L / fill
+                    cut[CUT_MARGIN] += 1
+                    cutf |= 2
             free = acc[0] - acc[1]
             if q * fill / L + taker * q * fill > free:
                 q = free / (fill * (1.0 / L + taker))
@@ -1397,6 +1477,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
             ps[k, F_FEES] = fee
             ps[k, F_LAST] = P0
             ps[k, F_EXT] = -np.inf if side > 0 else np.inf
+            ps[k, F_TCAP] = tcap
             acc[0] -= fee
             acc[1] += ps[k, F_MARGIN]
             acc[2] += fee
@@ -1437,7 +1518,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
             ci += 1
         if npos > 0:
             month_pos[m] = 1
-        # (c) every open position on this 5m bar (H 7.6), coin end, funding
+        # (c) every open position on this bar (H 7.6), coin end, funding
         ncur = npos
         for ii in range(npos):
             cur[ii] = openl[ii]
@@ -1457,8 +1538,9 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
                         kk = openl[jj]
                         if kk != k and pi[kk, P_OPEN] == 1:
                             others += _risk(kk, ps, pi)
-                code, X = _bar(k, b_o[bp], b_h[bp], b_l[bp], ps, pi, acc, others, risk_cap * E_prev, taker, slip,
-                               min_not[k], askip, acut, n_adds, br_n[k], br_cap[k], br_mmr[k], br_cum[k])
+                code, X = _bar(k, b_o[bp], b_h[bp], b_l[bp], b_mo[bp], b_mh[bp], b_ml[bp], ps, pi, acc, others,
+                               risk_cap * E_prev, taker, slip, min_not[k], askip, acut, n_adds, br_n[k], br_cap[k],
+                               br_mmr[k], br_cum[k])
                 if code >= 0:
                     _close(k, X, code, t, ps, pi, rf, ri, acc, taker, slip)
                     closed = True
@@ -1488,7 +1570,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
                         nlL -= 1
                     else:
                         nlS -= 1
-        # (d) mark to market at this 5m close (H 10): drawdown, bust, caps, month and day ends
+        # (d) mark to market at this bar's close (H 10): drawdown, bust, caps, month and day ends
         E = acc[0]
         tot = 0.0
         for ii in range(npos):
@@ -1516,19 +1598,29 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
             capt[CAP_RISK] += 1
         if t == month_t0[m + 1] - 1:
             month_eq[m] = E
-        if (t + 1) % 288 == 0:
-            day_eq[(t + 1) // 288 - 1] = E
+        if (t + 1) % bpd == 0:
+            day_eq[(t + 1) // bpd - 1] = E
+        if eqpath:
+            eqp[t] = E
         E_prev = E
         if bust_t >= 0:
             for mm in range(m, n_m):
                 month_eq[mm] = E
-            d0 = (t + 1) // 288
+            d0 = (t + 1) // bpd
             for dd in range(d0, n_days):
                 day_eq[dd] = E
+            if eqpath:
+                for tt in range(t + 1, T):
+                    eqp[tt] = E
             break
-    # open positions at the period end: marked at the last close, flagged (not closed, no exit cost)
+    E_marked = E
+    # open positions at the period end: marked at the last close and flagged (not closed, no exit cost); a read with
+    # PR_CLOSE_END closes them there with slippage and taker instead
     for ii in range(npos):
         k = openl[ii]
+        if close_end:
+            _close(k, ps[k, F_LAST], EX_ENDCLOSE, last_t, ps, pi, rf, ri, acc, taker, slip)
+            continue
         rec = pi[k, P_REC]
         un = pi[k, P_SIDE] * (ps[k, F_Q] * ps[k, F_LAST] - ps[k, F_COST])
         rf[rec, RF_PNL] = un - ps[k, F_FEES] + ps[k, F_FUND]
@@ -1541,7 +1633,12 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
         ri[rec, RI_TRIED] = pi[k, P_TRIED]
         ri[rec, RI_REASON] = EX_END
         ri[rec, RI_SRC] = pi[k, P_SRC]
-    stats = np.zeros(8)
+    if close_end and npos > 0:
+        E = acc[0]
+        month_eq[n_m - 1] = E
+        if n_days > 0 and T % bpd == 0:
+            day_eq[n_days - 1] = E
+    stats = np.zeros(10)
     stats[0] = maxdd
     stats[1] = bust_t
     stats[2] = acc[2]
@@ -1549,16 +1646,28 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, f_off, f_t, f_r
     stats[4] = E
     stats[5] = nrec
     stats[6] = T
-    return month_eq, month_pos, day_eq, rf[:nrec], ri[:nrec], skip, cut, askip, acut, capt, stats
+    stats[7] = peak
+    stats[8] = E_marked
+    return month_eq, month_pos, day_eq, rf[:nrec], ri[:nrec], skip, cut, askip, acut, capt, stats, eqp
 
 
 def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, start: float = START_WALLET,
            b_div: float = B_DIV):
     taker, slip = COSTS[cost]
-    p = np.zeros(14)
+    p = np.zeros(NPR)
     p[PR_START], p[PR_R], p[PR_CAP], p[PR_TAKER], p[PR_SLIP] = start, r, risk_cap, taker, slip
     p[PR_LIQF], p[PR_BUST], p[PR_CHAND], p[PR_BDIV], p[PR_LEVMAX] = LIQ_FRAC, BUST_FRAC, CHAND_MULT, b_div, LEV_MAX
     p[PR_LIQMULT], p[PR_MAXPOS], p[PR_MAXDIR], p[PR_NADDS] = LIQ_MULT, MAX_POS, MAX_DIR, N_ADDS
+    p[PR_BPD] = BARS_PER_DAY
+    return p
+
+
+def with_overrides(p: np.ndarray, overrides: dict | None) -> np.ndarray:
+    """A copy of the parameter vector with {PR_NAME (or index): value} applied (reads)."""
+    p = np.array(p, np.float64)
+    for k, v in (overrides or {}).items():
+        i = PR_INDEX[k] if isinstance(k, str) else int(k)
+        p[i] = float(v)
     return p
 
 
@@ -1566,9 +1675,15 @@ def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str =
              risk_cap: float = RISK_CAP, start: float = START_WALLET, prm: np.ndarray | None = None,
              b_div: float = B_DIV) -> tuple:
     br = mk.br
-    p = params(r, cost, risk_cap, start, b_div) if prm is None else prm
-    return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c,
-                   mk.b_qv, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
+    p = params(r, cost, risk_cap, start, b_div) if prm is None else np.array(prm, np.float64)
+    if len(p) < NPR:                                   # an older 14-slot vector: the new options off
+        p = np.r_[p, np.zeros(NPR - len(p))]
+        p[PR_BPD] = BARS_PER_DAY
+    p[PR_BPD] = mk.bpd
+    if p[PR_LIQ_MARK] > 0.5 and not mk.mark:
+        raise ValueError("PR_LIQ_MARK needs a market built with mark=True")
+    return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c, mk.b_qv, mk.b_mo, mk.b_mh,
+                   mk.b_ml, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
                    br["lev"], br["mmr"], br["cum"], mk.large, bank.s_ct, bank.s_h, bank.s_l, bank.s_atr,
                    cands["t"], cands["bi"], cands["coin"], cands["side"], cands["d0"], cands["s0"], cands["s1"])
 
@@ -1579,7 +1694,7 @@ def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool 
     """The H 10 metric set of one run. ``detail``: the per-year / side / group splits and positions per month;
     ``days`` (default = detail): the daily marked equity path."""
     days = detail if days is None else days
-    month_eq, month_pos, day_eq, rf, ri, skip, cut, askip, acut, capt, st = raw
+    month_eq, month_pos, day_eq, rf, ri, skip, cut, askip, acut, capt, st = raw[:11]
     n_m = len(month_eq)
     eq0 = np.r_[start, month_eq[:-1]]
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1637,7 +1752,7 @@ def summarize(mk: Market, raw: tuple, start: float = START_WALLET, detail: bool 
                                                 for i in range(len(CUT_NAMES))},
                     "share_adds_filled_of_tried": float(adds.sum() / tried) if tried else None})
         if detail:
-            t_in_ms = mk.start + ri[:, RI_TIN] * FIVE
+            t_in_ms = mk.start + ri[:, RI_TIN] * mk.step
             years = np.asarray([dt.datetime.fromtimestamp(x / 1000, dt.timezone.utc).year for x in t_in_ms])
             sym = np.asarray(mk.syms)[ri[:, RI_COIN]]
             old = np.isin(sym, OLD_SIX)
@@ -1926,11 +2041,13 @@ def wide_eligible(base: dict, cost2: dict) -> tuple:
     return (not why), why
 
 
-def wide_choose(rows: list, k_picks: int = K_PICKS) -> dict:
-    """W 5: order the eligible F1-F3 systems by score (mean ln M), ties median M, family, name, timeframe, G1 before
-    NONE; take one per strategy name until K. F4 rows are a read only (their numbers were chosen after this test
-    period was seen) and never a pick, also not in the 'no pick' fallback."""
-    fam = {"F1": 0, "F2": 1, "F3": 2, "F4": 3}
+def wide_choose(rows: list, k_picks: int = K_PICKS, n_batches: int = N_BATCHES) -> dict:
+    """W 5: order the eligible F1-F3 / F5 systems by score (mean ln M), ties median M, family, name, timeframe, G1
+    before NONE; take one per strategy name, up to ``n_batches`` x ``k_picks`` names. Positions 1..k are batch 1
+    (1군), k+1..2k batch 2 (2군), 2k+1..3k batch 3 (3군): membership is fixed here, before any test bar is read
+    (W 6 opens batch n+1 only when >= BATCH_TRIGGER of batch n pass). F4 rows are a read only (their numbers were
+    chosen after this test period was seen) and never a pick, also not in the 'no pick' fallback."""
+    fam = {"F1": 0, "F2": 1, "F3": 2, "F4": 3, "F5": 4}
     gate = {"G1": 0, "NONE": 1}
 
     def key(x):
@@ -1944,12 +2061,13 @@ def wide_choose(rows: list, k_picks: int = K_PICKS) -> dict:
             continue
         names.add(x["strategy"])
         picks.append(x["id"])
-        if len(picks) == k_picks:
+        if len(picks) == k_picks * n_batches:
             break
     if picks:
-        return {"picks": picks, "label": "picks"}
+        batches = [picks[i:i + k_picks] for i in range(0, len(picks), k_picks)]
+        return {"picks": picks, "batches": batches, "label": "picks"}
     best = sorted(cand, key=key)[0] if cand else None
-    return {"picks": [best["id"]] if best else [], "label": "no pick, fail"}
+    return {"picks": [best["id"]] if best else [], "batches": [[best["id"]]] if best else [], "label": "no pick, fail"}
 
 
 # ------------------------------------------------------------------ study steps
@@ -2667,7 +2785,7 @@ def _compile_probe() -> None:
     z = np.zeros(0)
     one = np.zeros(2, np.int64)
     one[1] = 288
-    _engine(params(), one, np.zeros(2, np.int64), z64, z, z, z, z, z, np.zeros(2, np.int64), z64, z,
+    _engine(params(), one, np.zeros(2, np.int64), z64, z, z, z, z, z, z, z, z, np.zeros(2, np.int64), z64, z,
             -np.ones(1, np.int64), np.full(1, 5.0), np.ones(1, np.int64), np.full((1, 1), np.inf),
             np.full((1, 1), 20, np.int64), np.full((1, 1), 0.025), np.zeros((1, 1)), np.zeros((1, 1), np.int64),
             z64, z, z, z, z64, z64, z64, z64, z, z64, z64)
