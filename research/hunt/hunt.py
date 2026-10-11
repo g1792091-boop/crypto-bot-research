@@ -79,7 +79,7 @@ D0_MULT = {"15m": 2.0, "30m": 2.0, "1h": 2.0, "4h": 1.5}      # H 7.2 / W 2
 CHAND_MULT = 3.0                                               # H 7.5
 START_WALLET = 5000.0                                          # H 10
 R_BASE, R_ONE = 0.005, 0.01
-SIZING_RS = (0.02, 0.05)                                       # W 7
+SIZING_RS = (0.02, 0.05)       # not used by the hunt (W 7's sizing read is replaced by R1); huntbot still imports it
 RISK_CAP = 0.04                                                # H 8
 MAX_POS, MAX_DIR, N_ADDS = 6, 3, 3                             # H 8, H 7.4
 LIQ_FRAC, LIQ_BARS = 0.001, 288                                # H 7.2 liquidity cut
@@ -123,6 +123,9 @@ DATA_CHECK_REL = "research/hunt/data_check.json"                # H 2: 5m vs the
 DATA_BUILD_REL = "research/hunt/data_build"                     # H 2: the data job's scripts (every file pinned)
 DATA_BUILDER_REL = "research/hunt/data_hunt.py"                 # the repository copy of the data builder (pinned)
 PARITY_REL = "research/hunt/out/wide/parity.json"               # W 8
+OCT_FILES_REL = "research/hunt/october_files.json"              # R23: the October daily zips' sha256, pinned before use
+BENCH_WINDOW_REL = "research/hunt/bench_window.json"            # W 7.1: one 30-day window run on synthetic bars
+PRETEST_REL = {"wide": "research/hunt/out/wide/pretest_reads.json"}   # W 7.3a: R4 select parts, R22 (2) spike ratio
 PARITY_CODE = ("entries_wide.py", "parity_wide.py", "hunt.py")  # parity.json must be made by these exact files
 OUT_REL = {"v1": "research/hunt/out/v1", "wide": "research/hunt/out/wide"}
 PICKS_REL = {"v1": "research/hunt/out/v1/pick.json", "wide": "research/hunt/out/wide/picks.json"}
@@ -171,14 +174,18 @@ CHOICES = [
     "W3.2: a bar with a long and a short event gives no entry and is counted 'both'; F2-F4 warm-up of 300 bars is "
     "applied by entries_wide.events_on; the event edge is taken before the gate (a run of True bars that starts on a "
     "bar the gate blocks gives no entry later in the run).",
-    "W5: picks come from F1-F3 only; the 76 F4 systems run in select as a labelled read (their numbers were chosen "
-    "after this test period was seen) and never in test; the 'no pick' fallback is the best F1-F3 system.",
+    "W5: picks come from F1-F3 and F5 only (the 686 candidates); the 76 F4 systems run in select as a labelled read "
+    "(their numbers were chosen after this test period was seen) and never in test, R22 included; the 'no pick' "
+    "fallback is the best F1-F3 or F5 system.",
     "W7: in the wide study the gate diagnostics run in the select period only (the other gate is a non-pick system); "
     "v1 runs them in select and test as H 14 says. In the 'no pick, fail' case the one system's reads run as a pick's.",
-    "W7 sizing read: r = 2% / 5% with the total open risk cap and the margin budget B both scaled by r / 0.5% "
-    "(B = equity / 6 x r / 0.5%), leverage as H 7.3 (20x cap, brackets, liquidation >= 1.5 x D0); the free wallet "
-    "still limits each fill. Realized unit risk (first unit q x D0 / equity at entry), cut shares and add shares are "
-    "reported next to every figure.",
+    "W7: the first draft's sizing read (r = 2% / 5%) is replaced by the R1 goal board of reads_a.py (machine A: open-"
+    "risk cap 4% x r / 0.5%, margin budget B = equity / 6 as written; machine B: goal-mode caps).",
+    "R24 (engine PR_FIXLEV): the rule bot's tier walk L, L - 10, ... down to 20x; per candidate margin = L% of equity "
+    "at the previous 5m close, notional = L x margin; taken when the bracket allows L at that notional, the first stop "
+    "lies inside the liquidation price by max(0.2% of the fill, 1 ATR14) and the loss at the stop (slippage and taker "
+    "both ways) is <= 15% of equity; no candidate -> skipped ('no_leverage', by the lowest tier's reason in "
+    "rulebot_skipped). Checked at entry on the planned unit; the liquidity and free-wallet cuts keep L.",
     "H10: select runs report the metric set without the daily equity path (by year / side / group included); test "
     "runs include it. DeepSeek rows keep only counts and labels in the repository (W 11).",
     "W3.3: F5 = famous.py's donchian / tsmom states on the system's own bars, day lengths x bars per day of the "
@@ -346,6 +353,10 @@ def required_files(study: str) -> list:
     need += signal_path_files(study)
     if os.path.exists(os.path.join(ROOT, EXCHANGE_REL)):
         need.append(EXCHANGE_REL)
+    if os.path.exists(os.path.join(ROOT, OCT_FILES_REL)):
+        need.append(OCT_FILES_REL)                 # R23: listed before the pin, opened only after test.json
+    if os.path.exists(os.path.join(ROOT, BENCH_WINDOW_REL)):
+        need.append(BENCH_WINDOW_REL)              # W 7.1: the 0.03 s rule's synthetic timing
     if os.path.exists(os.path.join(ROOT, DATA_BUILDER_REL)):
         need.append(DATA_BUILDER_REL)
     bdir = os.path.join(ROOT, DATA_BUILD_REL)
@@ -402,13 +413,17 @@ def check_pin(study: str, step: str) -> dict:
     _ew()                                         # the modules a run imports are part of the pin
     rows = read_pin(study)
     listed = {p: h for h, p in rows}
-    bad = []
-    for h, p in rows:
+    last = {p: i for i, (_h, p) in enumerate(rows)}
+    bad, superseded = [], []
+    for i, (h, p) in enumerate(rows):
         full = os.path.join(ROOT, p)
         if not os.path.exists(full):
             bad.append(f"missing {p}")
         elif sha256_file(full) != h:
-            bad.append(f"changed {p}")
+            if _is_reads_path(p) and last[p] != i and sha256_file(full) == rows[last[p]][0]:
+                superseded.append(p)              # an older line of a fixed reads module (post hoc, DEVIATIONS.md)
+            else:
+                bad.append(f"changed {p}")
     for p in required_files(study):
         if p not in listed:
             bad.append(f"not pinned {p}")
@@ -420,7 +435,18 @@ def check_pin(study: str, step: str) -> dict:
         bad.append(f"{picks} is not pinned: run select first")
     if bad:
         raise PinError(f"{PIN[study]} does not match: " + "; ".join(bad))
-    return {"pin_file": PIN[study], "pin_sha256": sha256_file(os.path.join(ROOT, PIN[study])), "files": len(rows)}
+    out = {"pin_file": PIN[study], "pin_sha256": sha256_file(os.path.join(ROOT, PIN[study])), "files": len(rows)}
+    if superseded:
+        out["superseded_reads_lines"] = sorted(set(superseded))
+        print(f"[pin] superseded (post hoc, DEVIATIONS.md): older lines of {out['superseded_reads_lines']}; a later "
+              f"line matches the current file", flush=True)
+    return out
+
+
+def _is_reads_path(p: str) -> bool:
+    """A reads module's pin line (research/hunt/reads_*.py): the only lines a later line of the same path may supersede
+    (a fixed reads module is appended again; the old line stays and is reported, W 7.1 read guard 3 and 5)."""
+    return p.startswith("research/hunt/reads_") and p.endswith(".py")
 
 
 def append_picks_line(study: str) -> str:
@@ -2372,21 +2398,6 @@ def _reads(study: str, spec: dict, mks: dict, procs: int) -> dict:
     return rd
 
 
-def _sizing(mk: Market, parts: list) -> dict:
-    """W 7 sizing read: r = 2% and 5%; the total open risk cap and the margin budget B scaled by r / 0.5%, leverage
-    as H 7.3 (20x cap); the full H 10 metric set plus the bet actually taken (realized unit risk, cut and add
-    shares)."""
-    out = {}
-    for r in SIZING_RS:
-        scale = r / R_BASE
-        s = run_signals(mk, parts, r, "base", RISK_CAP * scale, detail=True, days=False, b_div=B_DIV / scale)
-        s["requested_r"] = r
-        s["risk_cap"] = RISK_CAP * scale
-        s["margin_budget_of_equity"] = scale / B_DIV
-        out[f"{r:g}"] = s
-    return out
-
-
 def _test_markets(syms: list) -> dict:
     new = [s for s in syms if s not in OLD_SIX]
     mks = {"test": Market(syms, "test"), "select": Market(syms, "select"), "extra": Market(syms, "extra"),
@@ -2419,10 +2430,46 @@ def pick_batches(pk: dict) -> list:
     return [[{**by_no[int(n)], "batch": b + 1} for n in grp] for b, grp in enumerate(nos)]
 
 
+def pretest_status(study: str) -> dict:
+    """W 7.3a: whether the pre-test reads file (R4's select parts, R22 (2)'s select spike ratio) is in the pin with a
+    matching sha256 now. Without it those items are post hoc (computed after the verdict, DEVIATIONS.md)."""
+    rel = PRETEST_REL.get(study)
+    if rel is None:
+        return {"applies": False}
+    full = os.path.join(ROOT, rel)
+    try:
+        listed = {p: h for h, p in read_pin(study)}
+    except PinError:
+        listed = {}
+    ok = bool(os.path.exists(full) and listed.get(rel) == sha256_file(full))
+    return {"applies": True, "file": rel, "pinned_before_test": ok,
+            "label": "computed before test.json (W 7.3a)" if ok else
+            "absent when the test first started: R4's select parts and the R22 (2) select spike ratio are post hoc "
+            "(W 7.3a, DEVIATIONS.md)"}
+
+
+def first_test_start(args, study: str) -> dict:
+    """Read guard 3 (review): the reads lines of the pin (and the W 7.3a pre-test status) at the FIRST test start for
+    this picks file, written once to the private parts folder and never overwritten. A test that is interrupted and
+    rerun under a changed pin (a fresh parts folder) still compares reads lines with this first start, so a reads
+    line appended after any test part existed is never called 'predates test.json'."""
+    pk_sha = sha256_file(os.path.join(ROOT, PICKS_REL[study]))
+    path = os.path.join(private_dir(args), "parts", f"{study}_test_start_{pk_sha[:16]}.json")
+    if os.path.exists(path):
+        d = _read_part(path)
+        if d.get("picks_sha256") == pk_sha:
+            return d
+    d = {"picks_sha256": pk_sha, "first_test_start_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+         "reads_lines": reads_pinned_now(study), "pretest_reads": pretest_status(study)}
+    _write_part(path, d)
+    return d
+
+
 def cmd_test(args) -> int:
     study = args.study
     pin = check_pin(study, "test")
-    reads_at_start = reads_pinned_now(study)            # read guard 3: which reads lines predate test.json
+    marker = first_test_start(args, study)
+    reads_at_start = marker["reads_lines"]               # read guard 3: which reads lines predate test.json
     _compile_probe()
     if study == "wide":
         _ew().fullgrid_pins()
@@ -2445,6 +2492,7 @@ def cmd_test(args) -> int:
                               [spec["id"]] if verdict["v1_pass"] else [])
         test = {**_stamp(study, pin), "pick": spec, "result": blk, "verdict": verdict, "reads": rd,
                 "lineup": lineup, "live_gate_spec": LIVE_GATE, "reads_pinned_at_test": reads_at_start,
+                "test_first_started_utc": marker["first_test_start_utc"],
                 "data_counts": counts, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "test.json"), test)
         full = None
@@ -2495,6 +2543,8 @@ def cmd_test(args) -> int:
         public = redact_test(full)
         priv_sha = write_private(args, "wide_test_private.json", full)
         test = {**_stamp(study, pin), **public, "live_gate_spec": LIVE_GATE, "reads_pinned_at_test": reads_at_start,
+                "test_first_started_utc": marker["first_test_start_utc"],
+                "pretest_reads": marker.get("pretest_reads") or pretest_status(study),
                 "private_sha256": priv_sha, "data_counts": counts, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "test.json"), test)
     print(f"{study} test done in {time.time() - t0:.0f}s")
@@ -2504,7 +2554,9 @@ def cmd_test(args) -> int:
         import traceback
         traceback.print_exc()
         print(f"[reads] FAILED: {type(e).__name__}: {e}. test.json is written and unchanged; nothing of the read was "
-              f"written. Fix the reads module, then `python -m research.hunt.hunt reads --study {study}`.", flush=True)
+              f"written. Fix the reads module, append its new line to {PIN[study]} (the old line stays and is "
+              f"reported as superseded; a read whose line comes after test.json is post hoc: DEVIATIONS.md), then "
+              f"`python -m research.hunt.hunt reads --study {study}`.", flush=True)
     return 0
 
 
@@ -2520,9 +2572,9 @@ LINEUP_RULE = ("W 12 (owners 2026-10-11 (g)): 정식 = research PASS. 참고 = a
                "tested pick is excluded from the paper lineup. Real money only from 정식, after the forward criteria "
                "(H 15 / W 12) and the live-readiness gate.")
 HEADLINE_CELL = {"name": "R1 headline cell", "rows": "every R1 row", "period": "test", "windows": "UTC calendar months",
-                 "machine": "B (goal-mode)", "r": 0.05, "start_wallet": 1000.0, "level": 5000.0,
-                 "statistic": "share of test calendar months in which the fresh $1,000 account's marked equity "
-                              "touched $5,000 at any 5m close",
+                 "machine": "B (goal-mode)", "r": 0.05, "start_wallet": 1000.0, "level_x": 5.0,
+                 "statistic": "share of test calendar months in which a fresh account (start $1,000) touched x5 "
+                              "(marked equity at any 5m close >= 5 x its start)",
                  "interval": "Clopper-Pearson 95%",
                  "beside": ["control (a) share (seeds 1-1,000 pooled)", "control (b) share (seeds 1-1,000 pooled)",
                             "bust share"]}
@@ -2812,6 +2864,21 @@ def _row_list(study: str, tested: list, passing: list, label: str) -> list:
     return rows
 
 
+def pinned_window_seconds(study: str) -> dict:
+    """W 7.1: the 0.03 s rule's input = one 30-day window run measured on synthetic bars by ``benchwin``, used only
+    when research/hunt/bench_window.json is in the study's pin with a matching sha256; otherwise None, and the reads
+    use rolling control seeds 1-100 (a read never times a run on the study's data)."""
+    full = os.path.join(ROOT, BENCH_WINDOW_REL)
+    try:
+        listed = {p: h for h, p in read_pin(study)}
+    except PinError:
+        listed = {}
+    if not (os.path.exists(full) and listed.get(BENCH_WINDOW_REL) == sha256_file(full)):
+        return {"seconds": None, "source": f"no pinned {BENCH_WINDOW_REL}: rolling control seeds 1-100"}
+    d = _load_json_rel(BENCH_WINDOW_REL) or {}
+    return {"seconds": float(d["window_run_30d_s"]), "source": f"{BENCH_WINDOW_REL} (synthetic bars, pinned)"}
+
+
 def reads_context(study: str, *, args, pin, mks: dict, syms: list, test_doc: dict, full: dict | None,
                   reads_pin: dict, private_path: str) -> dict:
     """The context a reads module receives (reads interface api 1; PREREG_HUNT_WIDE W 7.1). Plain dict; the
@@ -2855,6 +2922,7 @@ def reads_context(study: str, *, args, pin, mks: dict, syms: list, test_doc: dic
     def run(what, start_ms, end_ms, **kw):
         return run_engine(what, start_ms, end_ms, mks=mks, universe=syms, **kw)
 
+    wsec = pinned_window_seconds(study)
     machine = {"defaults": {n: float(v) for n, v in zip(PR_NAMES, params())}, "index": dict(PR_INDEX),
                "constants": {"D0_MULT": dict(D0_MULT), "CHAND_MULT": CHAND_MULT, "B_DIV": B_DIV, "LEV_MAX": LEV_MAX,
                              "RISK_CAP": RISK_CAP, "MAX_POS": MAX_POS, "MAX_DIR": MAX_DIR, "N_ADDS": N_ADDS,
@@ -2868,6 +2936,8 @@ def reads_context(study: str, *, args, pin, mks: dict, syms: list, test_doc: dic
             "signals": signals, "control_signals": control_signals,
             "seeds": {"pass": N_SEEDS, "read_default": N_SEEDS_READ, "rolling": 100,
                       "seed_parts": control_seed_parts},
+            "window_seconds": wsec["seconds"], "window_seconds_source": wsec["source"],
+            "judge_usd_per_call": getattr(args, "judge_usd_per_call", None),
             "test_doc": copy.deepcopy(test_doc), "test_private": copy.deepcopy(full) if full is not None else None,
             "verdict": copy.deepcopy(test_doc["verdict"]), "out": {}, "private": {}, "private_path": private_path,
             "is_ds": lambda x: bool(x.get("is_ds")) if "members" in x else is_ds(x),
@@ -3060,11 +3130,13 @@ def scan_daily_archive(root: str) -> dict:
     return out
 
 
-def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: dict | None = None) -> dict:
+def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: dict | None = None,
+                       allowed: dict | None = None) -> dict:
     """R23 loader: data.binance.vision daily 5m kline, 5m mark-price kline and (if any) funding zips of ``sym`` for
     the UTC days in [start, end) -> the 5m npz layout (ts int64; o h l c v qv mo mh ml mc float32) and funding (ts,
     rate). Each zip with a ``.CHECKSUM`` file next to it is checked (sha256; a mismatch stops). Funding without a
-    daily file is 0 and counted (R23)."""
+    daily file is 0 and counted (R23). With ``allowed`` (the pinned october_files.json list, '<kind>/<file>' ->
+    sha256) a zip missing from the list, differing from it or without its .CHECKSUM stops before it is opened."""
     index = scan_daily_archive(root) if index is None else index
     days = [ms_str(d)[:10] for d in range(start_ms, end_ms, DAY_MS)]
     cnt = {"days": len(days), "kline_days": 0, "mark_days": 0, "funding_days": 0, "checksum_ok": 0,
@@ -3078,6 +3150,14 @@ def load_daily_archive(root: str, sym: str, start_ms: int, end_ms: int, index: d
                 continue
             ck = path + ".CHECKSUM"
             sha = sha256_file(path)
+            if allowed is not None:
+                key = f"{kind}/{os.path.basename(path)}"
+                if key not in allowed:
+                    raise SystemExit(f"{path}: not in {OCT_FILES_REL} (R23: only files listed before the pin)")
+                if allowed[key] != sha:
+                    raise SystemExit(f"{path}: sha256 differs from {OCT_FILES_REL}: stopped")
+                if not os.path.exists(ck):
+                    raise SystemExit(f"{path}: no .CHECKSUM file: stopped")
             if os.path.exists(ck):
                 with open(ck) as fh:
                     want = fh.read().split()[0].strip().lower()
@@ -3246,13 +3326,53 @@ def cmd_fidelity(args) -> int:
     return 0
 
 
-def october_coins(data_oct: str, syms: list, a: int, b: int) -> tuple:
+def october_list(study: str) -> dict:
+    """R23: the October daily zips listed before the pin ('<kind>/<file>' -> sha256 of the bytes): research/hunt/
+    october_files.json must exist and be in the study's pin with a matching sha256 (PinError otherwise)."""
+    full = os.path.join(ROOT, OCT_FILES_REL)
+    if not os.path.exists(full):
+        raise PinError(f"{OCT_FILES_REL} does not exist: the October files were not listed before the pin (R23)")
+    listed = {p: h for h, p in read_pin(study)}
+    if listed.get(OCT_FILES_REL) != sha256_file(full):
+        raise PinError(f"{OCT_FILES_REL} is not in {PIN[study]} with its current sha256 (R23)")
+    with open(full) as fh:
+        return dict(json.load(fh)["files"])
+
+
+def cmd_octlist(args) -> int:
+    """R23, before the pin: list the October daily zips of ``--data-oct`` (5m klines, 5m mark-price klines, funding
+    when present; 2026-10-01 .. 2026-10-10) with the sha256 of their bytes, each checked against its .CHECKSUM; no
+    zip is opened. Writes research/hunt/october_files.json (or --out), which pinlist then lists."""
+    if not args.data_oct:
+        raise SystemExit("--data-oct <folder with the daily archive zips> is needed")
+    a, b = OCT_PERIOD
+    files = {}
+    for (kind, sym, day), path in sorted(scan_daily_archive(args.data_oct).items()):
+        if not (a <= day < b):
+            continue
+        sha = sha256_file(path)
+        ck = path + ".CHECKSUM"
+        if not os.path.exists(ck):
+            raise SystemExit(f"{path}: no .CHECKSUM file: not listed")
+        with open(ck) as fh:
+            if fh.read().split()[0].strip().lower() != sha:
+                raise SystemExit(f"{path}: sha256 differs from its .CHECKSUM: not listed")
+        files[f"{kind}/{os.path.basename(path)}"] = sha
+    out = args.out or os.path.join(ROOT, OCT_FILES_REL)
+    doc = {"what": "R23: the October 2026 daily archive zips, sha256 of the bytes (checksummed only, never opened "
+                   "before picks.json and test.json exist)", "period": [a, b], "files": files}
+    _write_json(out, doc)
+    print(f"{len(files)} files -> {out}")
+    return 0
+
+
+def october_coins(data_oct: str, syms: list, a: int, b: int, allowed: dict | None = None) -> tuple:
     """The study coins with the October daily bars appended (R23); funding from daily files or 0 (counted)."""
     index = scan_daily_archive(data_oct)
     coins, fund, counts = {}, {}, {}
     for s in syms:
         c = _COINS[s]
-        d = load_daily_archive(data_oct, s, a, b, index)
+        d = load_daily_archive(data_oct, s, a, b, index, allowed=allowed)
         arr = d["arrays"]
         keep = arr["ts"] >= (int(c.ts[-1]) + FIVE if len(c.ts) else 0)
         (ts, o, h, lo, cc, v, qv), cnt = clean_5m(arr["ts"][keep], *(arr[k][keep] for k in ("o", "h", "l", "c", "v",
@@ -3280,6 +3400,7 @@ def cmd_october(args) -> int:
     if not args.data_oct:
         raise SystemExit("--data-oct <folder with the daily archive zips> is needed")
     pin = check_pin(study, "test")
+    allowed = october_list(study)                    # R23: only the zips listed (with sha256) before the pin
     _compile_probe()
     if study == "wide":
         _ew().fullgrid_pins()
@@ -3287,7 +3408,7 @@ def cmd_october(args) -> int:
     data, syms, counts = _universe_and_data(args, "test")
     a, b = (day_ms(x) for x in OCT_PERIOD)
     ta, tb = (day_ms(x) for x in PERIODS["test"])
-    coins, fund, oct_counts = october_coins(args.data_oct, syms, a, b)
+    coins, fund, oct_counts = october_coins(args.data_oct, syms, a, b, allowed)
     install(coins, fund)
     mk_oct = Market(syms, (a, b), name="october")
     mk_test = Market(syms, "test")
@@ -3541,7 +3662,7 @@ def cmd_report(args) -> int:
                       "v1과 넓게는 같은 시험 기간을 씁니다: 둘 중 하나가 운으로 통과할 가능성은 하나일 때보다 큽니다.",
                       "", "종이 계좌: 정식 = 연구 통과, 참고 = 정해 둔 7가지 조건을 모두 넘은 것(돈은 넣지 않음), "
                       "제외 = 나머지. 실제 돈은 정식만, 앞으로의 기준을 넘은 뒤에 두 분이 정합니다.", ""]
-            lines.append("크게 걸었을 때(목표판: 매달 새 $1,000, 5%를 걸어 $5,000에 닿은 달의 비율 등)는 시험이 끝난 뒤 "
+            lines.append("크게 걸었을 때(목표판: 매달 새 계좌로 5%를 걸어 5배에 닿은 달의 비율 등)는 시험이 끝난 뒤 "
                          "따로 계산하는 참고 분석(reads_a.json)에 있습니다. 참고 분석은 고른 것·합격·종이 계좌를 "
                          "바꾸지 않습니다.")
             lines.append("관찰 후보 38개(F4)는 시험 기간을 본 뒤 고른 숫자라서 고르기에서 참고로만 보고, "
@@ -3710,6 +3831,42 @@ def cmd_bench(args) -> int:
     return 0
 
 
+def bench_window_seconds(n_coins: int = 30, seed: int = 7) -> dict:
+    """W 7.1 0.03 s rule: seconds of one 30-day window run (fresh $1,000, machine A at r = 0.5%, a control (a) draw of
+    one 1h signal per coin per day, 30 synthetic coins), median of 5 after one warm-up. Synthetic bars only."""
+    syms = [f"W{i:02d}USDT" for i in range(n_coins)]
+    a, b = day_ms("2023-06-01"), day_ms("2024-03-01")
+    coins = {s: synth_coin(s, a, b, 4000 + i, 10.0 * (1 + i)) for i, s in enumerate(syms)}
+    install(coins, {s: synth_funding(a, b, 5000 + i) for i, s in enumerate(syms)})
+    mk = Market(syms, (day_ms("2024-01-01"), b), name="benchwin")
+    _G["mk"][mk.key] = mk
+    prepare_series(syms, ("1h",))
+    sig = synth_signals(mk, "1h", 1.0, seed)
+    cs = control_a(mk, sig, rng_of("benchwin", seed))
+    cs["syms"] = list(syms)
+    w0, w1 = mk.start, mk.start + 30 * DAY_MS
+    ts = []
+    for i in range(6):
+        t0 = time.perf_counter()
+        run_engine([(cs, 0)], w0, w1, start_wallet=1000.0, overrides={"PR_CAP": RISK_CAP, "PR_BDIV": B_DIV},
+                   close_end=True, universe=syms)
+        if i:
+            ts.append(time.perf_counter() - t0)
+    return {"what": "W 7.1: one 30-day window run on synthetic bars (no real price); > 0.03 s -> R1 rolling control "
+                    "seeds 1-50, else 1-100", "window_run_30d_s": float(np.median(ts)),
+            "runs_s": [round(x, 5) for x in ts], "coins": n_coins, "tf": "1h", "signals_per_coin_per_day": 1.0,
+            "cpu_count": os.cpu_count(), "utc": dt.datetime.now(dt.timezone.utc).isoformat()}
+
+
+def cmd_benchwin(args) -> int:
+    _compile_probe()
+    res = bench_window_seconds()
+    out = args.out or os.path.join(ROOT, BENCH_WINDOW_REL)
+    _write_json(out, res)
+    print(json.dumps(res, indent=1))
+    return 0
+
+
 def extrapolate(res: dict, EW) -> dict:
     """Wall time of wide select and test from the synthetic measurements (all scalings written in ``notes``)."""
     ev = res["events_s_per_coin_series_42_months"]
@@ -3785,7 +3942,7 @@ def _compile_probe() -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m research.hunt.hunt", description=__doc__.split("\n\n")[0])
     ap.add_argument("cmd", choices=("select", "test", "report", "universe", "bench", "datapin", "datacheck",
-                                    "pinlist", "reads", "fidelity", "october"))
+                                    "pinlist", "reads", "fidelity", "october", "octlist", "benchwin"))
     ap.add_argument("--study", choices=("v1", "wide"), default=None)
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--data", default=None)
@@ -3795,7 +3952,9 @@ def main(argv=None) -> int:
     ap.add_argument("--data1m", default=None, help="fidelity: folder with 1m/<SYM>.npz (data_hunt kind fidelity)")
     ap.add_argument("--fid", default=None, help="fidelity: same as --data1m (or $HUNT_FID)")
     ap.add_argument("--list-coins", action="store_true", help="fidelity: print the coins the tested picks traded")
-    ap.add_argument("--data-oct", default=None, help="october: folder with the daily archive zips (R23)")
+    ap.add_argument("--data-oct", default=None, help="october / octlist: folder with the daily archive zips (R23)")
+    ap.add_argument("--judge-usd-per-call", type=float, default=None,
+                    help="test / reads: the AI judge's cost per call for R15 (recorded in the read; else counts only)")
     args = ap.parse_args(argv)
     if args.cmd in ("select", "test", "report", "pinlist", "reads", "fidelity", "october") and args.study is None:
         ap.error("--study {v1,wide} is required for select, test, report, pinlist, reads, fidelity and october")
@@ -3823,6 +3982,10 @@ def main(argv=None) -> int:
             return cmd_fidelity(args)
         if args.cmd == "october":
             return cmd_october(args)
+        if args.cmd == "octlist":
+            return cmd_octlist(args)
+        if args.cmd == "benchwin":
+            return cmd_benchwin(args)
         if args.cmd == "bench":
             if not args.out:
                 raise SystemExit("--out <timing.json> needed")

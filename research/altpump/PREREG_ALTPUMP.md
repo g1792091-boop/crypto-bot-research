@@ -8,11 +8,11 @@ data (no entry, exit, size, P&L or multiple of any variant, in any period). But 
 forward returns close to three of them were computed on period 1 (section 21 b, c: the 7-day return after +30% days,
 about the gross outcome of P1 / P2_X30_H7, and the 30-day return from a listing's day-1 open, about P3L / P3S_K1_H28,
 with which side looked better), and long-side 30-day highs on all periods (21 a). Revised the same day after two code
-and bias reviews (section 22 lists every change; still no rule run on these data).** The open questions of section 20 are closed by the
-owners (or by the default written next to each) before the file is pinned. Pinning = `PREREG_ALTPUMP.sha256` over
-this file and the code of section 18; the code refuses the `select`, `test`, `board` and `pass2` steps without a
-matching pin. After the pin nothing here changes; a change goes to `research/altpump/DEVIATIONS.md` with its reason
-and date.
+and bias reviews (section 22 lists every change; still no rule run on these data).** The open questions of section 20
+are closed by the owners (or by the default written next to each) before the file is pinned. Pinning =
+`PREREG_ALTPUMP.sha256` over this file and the code of section 18; the code refuses the `select`, `test`, `board` and
+`pass2` steps without a matching pin. After the pin nothing here changes; a change goes to
+`research/altpump/DEVIATIONS.md` with its reason and date.
 
 Owners (2026-10-11): the goal is "1000달러로 1달만에 5000달러, 10000달러, 2만달러 ... 10만달러", and today: "규칙봇
 매매법 36개 + 딥시크 44개 + 커스텀봇 후보 38개 + 새 신호 3개 매매법들 이렇게만 테스트하면 될까? 더 많은 매매법을
@@ -36,10 +36,10 @@ such a rule turn $1,000 into x5 to x100 within one calendar month?
 
 * `data/universe/klines_1d.csv.gz` (sha256 `ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0`, checked
   at load against this value, which the pinned code holds as a constant, and against `data/universe/MANIFEST.json`;
-  either mismatch stops the run, so a rebuilt file with a regenerated MANIFEST does not run). Daily (1d) klines of the 864 USDT-M
-  perpetual symbols in the public archive (data.binance.vision), delisted and renamed ones included, 2020-01-01 to
-  2026-08-31, columns `symbol, open_time, open, high, low, close, volume, quote_volume, count, taker_buy_quote_volume`.
-  Day = the UTC day of `open_time`.
+  either mismatch stops the run, so a rebuilt file with a regenerated MANIFEST does not run). Daily (1d) klines of the
+  864 USDT-M perpetual symbols in the public archive (data.binance.vision), delisted and renamed ones included,
+  2020-01-01 to 2026-08-31, columns `symbol, open_time, open, high, low, close, volume, quote_volume, count,
+  taker_buy_quote_volume`. Day = the UTC day of `open_time`.
 * A row with `volume = 0` is **no bar** (the archive pads delisted symbols with flat zero-volume rows: 52,713 rows).
   Volume in every rule = `quote_volume` (USDT).
 * No funding, mark price, order book or intraday data in the first pass (costs: section 8; the second pass, section
@@ -132,17 +132,19 @@ but its "keep the small caps" reason was informed by that look. The number of tr
 ## 4. Daily bars, indicators, timing
 
 * One bar per symbol per UTC day. All indicators are computed per life, causally: the value on day d uses bars up to d.
-* **True range**: TR on a life's first bar = high - low; afterwards max(high, previous close) - min(low, previous close).
-  **ATR14**: the simple mean of the TRs so far while the life has fewer than 14 bars; on the 14th bar the mean of the
-  first 14 TRs; afterwards Wilder's (13 x previous ATR + TR) / 14.
-* **Daily return** r_d = close_d / close of the previous bar of the life - 1. **7-day return** = close_d / close of the
-  bar 7 bars earlier in the life - 1. **Neither reads across a gap (3.1)**: on the first bar after a gap the daily
+* **True range**: TR on a life's first bar (and on the first bar after a gap, below) = high - low; afterwards
+  max(high, previous close) - min(low, previous close). **ATR14**: the simple mean of the TRs so far while the life
+  has fewer than 14 bars; on the 14th bar the mean of the first 14 TRs; afterwards Wilder's (13 x previous ATR + TR) /
+  14.
+* **Daily return** r_d = close_d / close of the previous bar of the life - 1. **7-day return** = close_d / close of
+  the bar 7 bars earlier in the life - 1. **Neither reads across a gap (3.1)**: on the first bar after a gap the daily
   return is not defined (a 2- to 7-day move is not a day's move, so P1 / P2 cannot fire on it), and the 7-day return
   is defined only when its 8 bars lie on 8 consecutive days (for the 7 bars after a gap a symbol is not ranked by P4,
   rather than ranking a 10-day return against 7-day ones). On the first bar after a gap the TR = high - low, as on a
   life's first bar (a TR spanning the gap would inflate ATR and D0 for weeks), and the stable filter's returns of 3.3
-  (d) skip the return over the gap. All 100 gaps of the file lie in 2022 (period 1). **20-day mean volume** = mean quote volume of the 20 bars before day d (d
-  excluded). **30-day high / low** = highest high / lowest low of the 30 bars before day d (d excluded).
+  (d) skip the return over the gap. All 100 gaps of the file lie in 2022 (period 1). **20-day mean volume** = mean
+  quote volume of the 20 bars before day d (d excluded). **30-day high / low** = highest high / lowest low of the 30
+  bars before day d (d excluded).
 * **A signal on day d is known at d's close (00:00 UTC of d+1). Its entry fills at the open of the next bar.** No
   rule on day d reads any value of day d+1 or later. Two closes use the traded-day calendar (structure) of the next
   day and are not decisions: the exchange's forced close at a delisting or before a pause, and the close before a day
@@ -239,8 +241,9 @@ The order of prices inside a day is unknown; the worse order is always taken.
    **also when the low had already reached the old stop**. Then, if the day's low reaches the (moved) stop, the
    position exits there the same day. Filling first and exiting at the moved stop never loses less than exiting at the
    old stop without the adds (more units, a stop no looser, the haircut on every unit), so it is the worse order; this
-   is `PREREG_HUNT.md` 7.6 step 4, corrected there for the same reason (its change 6). The entry day is treated the
-   same way from its open on.
+   is `PREREG_HUNT.md` 7.6 step 4, corrected there for the same reason (its change 6).
+
+   The entry day is treated the same way (rules 3 and 4) from its open on.
 5. Exit H at the close (6.6), the forced closes of 6.8, then the chandelier update (6.5) and funding (section 8) at the
    close.
 
@@ -358,20 +361,22 @@ type, r = 2% and the test period. Seed = sha256 of ("altpump", control, variant 
   could have fired apart from its event: tradable (3.3), in the period with the next day in it and holding a bar, and
   the variant's own non-event conditions (P1 and P2: the life has >= 21 bars and the daily return is defined, i.e. not
   the first bar after a gap (4); P4: >= 31 bars, a defined 7-day return, at least 3N ranked symbols, not a partial
-  day; P3: none). **The whole signal calendar is moved by common random offsets**: per seed, offsets k_1, k_2, ...
-  (uniform on 0 .. D-1, D = the period's signal days; 1,000 of them) are drawn once and are **the same for every
-  symbol**; each pick signal that lies in its symbol's pool (a signal whose next day has no bar lapsed and is left out)
-  goes from signal day d to p0 + (d - p0 + k_j) mod D for the first j that lands it on a pool day of its symbol. Sides
-  stay. So the signals of different symbols on one day stay together as long as they land in their pools (a
-  market-wide pump day, a P4 breakout day or a listing batch stays one busy day, and the n_max and risk-cap cuts of that
-  day hit the control as they hit the pick), each symbol keeps its signal count and the spacing of its signals (a
-  multi-day pump fires P1 / P2 on consecutive days and the repeats are skipped because the symbol already holds a
-  position; P4 can re-fire inside a hold), and a signal whose symbol cannot trade on its k_1 day (not listed yet,
-  delisted, too young, under the volume floor) takes the next common offset instead of being dropped. Days the rule
-  could never trade (a listing's first 20-30 days, which the period-1 look found falling on average) are not in the
-  pool. **Validity check (reported beside the verdict, never a rule):** each comparison reports the pick's positions,
-  the control's mean positions and their ratio, flagged "not comparable" outside 0.8 .. 1.2, and the share of control
-  signals that moved with k_1 (kept their same-day company) and that no offset placed (dropped).
+  day; P3: none). **The whole signal calendar is moved by one common random offset**: per seed, k_1 uniform on 0 ..
+  D-1 (D = the period's signal days) is drawn once and is **the same for every symbol**; each pick signal that lies in
+  its symbol's pool (a signal whose next day has no bar lapsed and is left out) goes from signal day d to p0 + (d - p0
+  + k_1) mod D. Sides stay. So the signals of different symbols on one day stay together (a market-wide pump day, a P4
+  breakout day or a listing batch stays one busy day, and the n_max and risk-cap cuts of that day hit the control as
+  they hit the pick), and each symbol keeps the spacing of its signals (a multi-day pump fires P1 / P2 on consecutive
+  days and the repeats are skipped because the symbol already holds a position; P4 can re-fire inside a hold). A
+  moved signal that lands on a day outside its symbol's pool (not listed yet, delisted, too young, under the volume
+  floor): **P1, P2, P4: dropped** (counted; moving it elsewhere would spread a busy day's leftovers over free days);
+  **P3: it takes the next of a sequence of common offsets k_2, k_3, ... (up to 1,000, drawn once per seed)** until one
+  lands it in its pool, because a listing's signal belongs to its symbol's own young life, which most calendar offsets
+  miss (dropping would remove about half of the P3 signals). Days the rule could never trade (a listing's first 20-30
+  days, which the period-1 look found falling on average) are not in the pool. **Validity check (reported beside the
+  verdict, never a rule):** each comparison reports the pick's positions, the control's mean positions and their
+  ratio, flagged "not comparable" outside 0.8 .. 1.2, and the shares of control signals that moved with k_1 and that
+  were dropped.
 
 For each control and test month m: **d_m = ln M_m(pick) - mean over the 2,000 seeds of ln M_m(control seed)**.
 Synthetic checks of (b). The first review replaced a uniform-day draw with one circular offset per symbol over its
@@ -380,13 +385,17 @@ positions against 81.3 for that control, 191 for the uniform draw). The second r
 spreads signals that fire on many symbols on the same day: with n_max and the risk cap cutting the pick's busy days,
 that control opened 2.4 to 3.6 times the pick's positions and its bias changed sign with the market's drift (zero-edge
 GBM alts with a common factor, a pick firing on half the symbols on 20 days: long H7, zero drift, mean d +0.016 per
-month and P(p_boot < 0.05) 0.27; exit M, P(p_boot < 0.05) up to 0.69). With the common offsets: positions ratio 1.00
-and P(p_boot < 0.05) 0.05, P(p_rank < 0.05) 0.04 over 100 such worlds (the test in `tests/test_altpump.py`); in worlds
-where 60% of the symbols list and 40% delist inside the period, ratio 1.0 for signals spread over the days and about
-1.3 for the same-day clustered pick (some signals of a busy day take a later offset), with null rejections of
-p_boot and p_rank at 2 to 8% in every setting tried (long and short, zero and +-0.2% daily drift, exits M and H). On a
-synthetic universe with listings and delistings, a single common offset that dropped every signal landing outside its
-pool lost half of the P3 signals (ratio about 0.4); the offset sequence keeps them (ratio 0.9 to 1.0).
+month and P(p_boot < 0.05) 0.27; exit M, up to 0.69). With one common offset (same worlds, 80 worlds x 60 seeds per
+setting: long and short, exits M and H, zero and +-0.2% daily drift, all symbols trading the whole period or 60%
+listing and 40% delisting inside it, where 17% of the moved signals land off their pool and are dropped): positions
+ratio 1.00 to 1.01, P(p_boot < 0.05) and P(p_rank < 0.05) between 1.3% and 7.5%; 100 worlds of the first kind are a
+test in `tests/test_altpump.py` (ratio 1.00, 5% and 4%). The drops cost positions when the signals are spread over the
+days rather than clustered (ratio 0.88 to 0.91, rejections 0 to 10%, the control more often ahead of a no-skill pick
+than behind it). P3 (listings in batches, 40% of the lives ending inside the period, 60 worlds x 40 seeds): one offset
+with drops kept only 42-46% of the positions; the offset sequence keeps 88-96% (per-symbol offsets 112-122%), with
+rejections of 0 to 8%. The sequence suits batches of a few listings, not market-wide clusters: fed a pick firing on
+half of all symbols on one day it opens about 1.25 times the pick's positions (P(p_rank < 0.05) 12.5%), which is why
+P1, P2 and P4 drop instead.
 
 ## 13. Pass rule (each pick, r = 2%, all must hold)
 
@@ -411,12 +420,12 @@ pool lost half of the P3 signals (ratio about 0.4); the offset sequence keeps th
   * **What T2 cannot see: risk that did not happen in the test months.** A short-side pick with no edge whose losses
     come as rare squeezes ("many small wins, rare squeezes") passes every test on 19 or 26 months whenever no squeeze
     lands in them, and the larger of the two p's does not help (synthetic, mean-zero monthly d: squeezes in 3-5% of
-    months pass at nominal 5% in 20-50% of single periods, 5-26% of both). The control seeds do run into squeezes, so
-    a pick that missed them by luck also ranks high. The second pass (15) uses the same months and cannot fix this.
-    Therefore each test also reports a **squeeze stress read** (never a pass rule): the pick's worst single position in
-    U and its number of stop overruns (positions that lost more than 1.5 U: a gap, a fast day or a liquidation),
-    against the overrun rate of the control seeds' positions (a and b pooled) on the same symbols and side, the count
-    expected at that rate and the Poisson chance of seeing as few as the pick did.
+    months pass at nominal 5% in 20-56% of single periods and 5-26% of both; 9-13% at 10% of months). The control
+    seeds do run into squeezes, so a pick that missed them by luck also ranks high. The second pass (15) uses the same
+    months and cannot fix this. Therefore each test also reports a **squeeze stress read** (never a pass rule): the
+    pick's worst single position in U and its number of stop overruns (positions that lost more than 1.5 U: a gap, a
+    fast day or a liquidation), against the overrun rate of the control seeds' positions (a and b pooled) on the same
+    symbols and side, the count expected at that rate and the Poisson chance of seeing as few as the pick did.
 * **T3 multiple testing**: Benjamini-Hochberg at **q = 0.10** over the K picks' p_pick; the pick's p_pick must be
   rejected.
 
@@ -471,10 +480,10 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
   aside does not help) unless `DEVIATIONS.md` names that sha256 (a rerun after a bug fix, 17). The superseded line stays
   in the pin file.
 * **Run**: signals, universe and sizing exactly as the first pass (daily). Fills, stops, adds, chandelier updates
-  (still at daily closes) and liquidation run on the 5m bars in time order with the order of `PREREG_HUNT.md` 7.6
-  and 6.7 here (open beyond liquidation, open beyond the stop; a bar reaching the next add level fills every add level
-  it reaches first and then checks the moved stop; a bar reaching no add level checks the stop); **liquidation on 5m
-  mark price**; the stop-fill haircut of 6.7 inside each 5m bar; **funding = each archived funding event** at its time on
+  (still at daily closes) and liquidation run on the 5m bars in time order with the order of `PREREG_HUNT.md` 7.6 and
+  6.7 here (open beyond liquidation, open beyond the stop; a bar reaching the next add level fills every add level it
+  reaches first and then checks the moved stop; a bar reaching no add level checks the stop); **liquidation on 5m mark
+  price**; the stop-fill haircut of 6.7 inside each 5m bar; **funding = each archived funding event** at its time on
   every open position (sign as paid or received; on a day run on its daily bar, all of the day's events are charged
   before the bar). Taker 0.05% and slippage 0.10% as before. The closes of 6.8 stay.
 * **Rule**: T0 to T3 recomputed on the 5m run for the passing picks (controls re-run on 5m too; BH over the same K
@@ -515,25 +524,26 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
 * Code (to be written after this draft, before the pin): `research/altpump/altpump.py` (load and checksum, lives and
   listings, exclusions, point-in-time universe, indicators, the 28 entries, the position machine of section 6, the
   portfolio, controls, bootstrap and BH, goal board, the second-pass runner; CLI `select`, `test`, `board`, `report`,
-  `pass2`; pin check against `PREREG_ALTPUMP.sha256` like `research/fullgrid/run.py`).
-  `tests/test_altpump.py` on **synthetic data only**: worst-order fills (gap through the stop at the open; a bar
-  reaching an add level and the stop: every reached add first, a second reached add too, then the moved stop; a bar
-  reaching no add level: the stop at once); the stop-fill haircut (long, short, adds, a fill beyond
-  liquidation liquidates); no look-ahead (an entry decided on day d never reads day d+1: changing every value of d+1
-  onward leaves the day-d signal and size unchanged); listing day 0, archive-start and rename-successor handling,
-  relisting after 30 days, a 7-29-day pause (new life, no listing, the position closed at the last bar); the close
-  before a day without a bar; partial days (P4 not ranked, the event check looks past them); no daily or 7-day return
-  and no TR across a gap; delisting closes at the last bar's close; the universe floor point in time (a later volume spike does not make an earlier day tradable);
+  `pass2`; pin check against `PREREG_ALTPUMP.sha256` like `research/fullgrid/run.py`). `tests/test_altpump.py` on
+  **synthetic data only**: worst-order fills (gap through the stop at the open; a bar reaching an add level and the
+  stop: every reached add first, a second reached add too, then the moved stop; a bar reaching no add level: the stop
+  at once); the stop-fill haircut (long, short, adds, a fill beyond liquidation liquidates); no look-ahead (an entry
+  decided on day d never reads day d+1: changing every value of d+1 onward leaves the day-d signal and size
+  unchanged); listing day 0, archive-start and rename-successor handling, relisting after 30 days, a 7-29-day pause
+  (new life, no listing, the position closed at the last bar); the close before a day without a bar; partial days (P4
+  not ranked, the event check looks past them); no daily or 7-day return and no TR across a gap; delisting closes at
+  the last bar's close; the universe floor point in time (a later volume spike does not make an earlier day tradable);
   values outside a step's window never loaded; the pyramiding stop formula (P0, P0 + 0.667 D0, P0 + 1.25 D0 with full
   units); leverage choice and the 1.5x liquidation rule; caps; funding (the exit day included); control (b)'s pools
-  and common offsets (same-day signals of different symbols stay together, the count is kept), a zero-edge pick
-  clustered within or across symbols not favoured by it (about the pick's positions, null rejections near 5%); the
-  positions validity check and the squeeze stress read; bootstrap p (size under a skewed null) and BH on known inputs;
-  goal-board arithmetic (fresh $1,000, thresholds, bust), its add counts and the luck reference (random days, the
-  pick's side); the pin (the running code must be the pinned code; the data file must be the one of section 2);
-  run-once guards (outputs pinned when written, a rerun only with a DEVIATIONS entry naming the old sha256, pass2 only
-  on a pinned test.json, each missing 5m month written in DEVIATIONS); the second pass (5m order, mark-price
-  liquidation, funding events and the fixed fallback, a day without 5m data run on its daily bar).
+  and common offsets (same-day signals of different symbols stay together; P1 / P2 / P4 drop a signal off its pool, P3
+  retries and keeps the count), a zero-edge pick clustered within or across symbols not favoured by it (about the
+  pick's positions, null rejections near 5%); the positions validity check and the squeeze stress read; bootstrap p
+  (size under a skewed null) and BH on known inputs; goal-board arithmetic (fresh $1,000, thresholds, bust), its add
+  counts and the luck reference (random days, the pick's side); the pin (the running code must be the pinned code; the
+  data file must be the one of section 2); run-once guards (outputs pinned when written, a rerun only with a
+  DEVIATIONS entry naming the old sha256, pass2 only on a pinned test.json, each missing 5m month written in
+  DEVIATIONS); the second pass (5m order, mark-price liquidation, funding events and the fixed fallback, a day without
+  5m data run on its daily bar).
 * Pin: `PREREG_ALTPUMP.sha256` lists the sha256 of this file and `altpump.py`; `pick.json` is appended after
   selection, and `test.json`, `board.json` and `pass2.json` when they are written (15). The steps refuse unless the
   code that is running (not only the copy under `--root`) has the pinned sha256, and every output carries that sha256.
@@ -673,7 +683,7 @@ following; each is now part of the sections above, with a synthetic regression t
 |---|---|---|
 | 15 | A bar reaching both the next add level and the stop fills every add level it reaches first and then checks the moved stop (the draft took the stop first, and after an add exited before a second reached add): with the haircut the draft's order was the more favourable one, against "the worse order is always taken"; the hunt study had made the same correction (`PREREG_HUNT.md` change 6), and section 15's quote of its 7.6 is corrected | 6.7, 15, 18, README_KO |
 | 16 | No daily return, 7-day return or true range reads across a gap of 1 to 6 days (all 100 in 2022, period 1): P1 / P2 no longer fire on a multi-day move, P4 no longer ranks a 10-day return against 7-day ones, ATR is not inflated by the gap; control (b)'s pools follow | 3.1, 4, 12 |
-| 17 | Control (b) moves the whole signal calendar by common offsets instead of one offset per symbol: same-day signals of different symbols (pump days, breakouts, listing batches) had been spread, so the control opened 2.4-3.6x the pick's positions and its bias changed sign with the market's drift. Positions validity check reported | 12, 13, 16, README_KO |
+| 17 | Control (b) moves the whole signal calendar by one common offset (P1 / P2 / P4 drop a signal that lands off its pool; P3 takes the next of a sequence of common offsets) instead of one offset per symbol: same-day signals of different symbols (pump days, breakouts, listing batches) had been spread, so the control opened 2.4-3.6x the pick's positions and its bias changed sign with the market's drift. Positions validity check reported | 12, 13, 16, README_KO |
 | 18 | Goal board: the luck reference is the pick's signals on random days with its own side; the coin flip is "luck without the market side" (it cancels the market's direction and understated luck for a one-sided pick) | 14, 17, README_KO |
 | 19 | T2 cannot see a squeeze that did not happen in the test months (a no-edge short pick passes in 20-56% of single periods at 3-5% squeeze months): disclosed, with a reported squeeze stress read | 13, 16, 20, README_KO |
 | 20 | The pin covers the code that runs (its own sha256 against the pinned line), not only the copy under `--root`; every output carries it | 18 |

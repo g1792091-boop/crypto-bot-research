@@ -208,10 +208,15 @@ class Store:
             out.setdefault(r[0], []).append(r[1:])
         return out
 
-    def count_bars(self, sym: str, from_ms: int, to_ms: int) -> int:
-        """Stored bars of the coin with from_ms <= open < to_ms (a primary-key range count)."""
-        return int(self.conn.execute("SELECT COUNT(*) FROM bars_5m WHERE symbol = ? AND open_ms >= ? AND open_ms < ?",
-                                     (sym, int(from_ms), int(to_ms))).fetchone()[0])
+    def count_bars(self, sym: str, from_ms: int, to_ms: int, upto_ins: Optional[int] = None) -> int:
+        """Stored bars of the coin with from_ms <= open < to_ms (a primary-key range), only rows inserted up to
+        ``upto_ins`` when given."""
+        q = "SELECT COUNT(*) FROM bars_5m WHERE symbol = ? AND open_ms >= ? AND open_ms < ?"
+        args = [sym, int(from_ms), int(to_ms)]
+        if upto_ins is not None:
+            q += " AND ins <= ?"
+            args.append(int(upto_ins))
+        return int(self.conn.execute(q, args).fetchone()[0])
 
     def first_open(self, sym: str) -> Optional[int]:
         row = self.conn.execute("SELECT MIN(open_ms) FROM bars_5m WHERE symbol = ?", (sym,)).fetchone()

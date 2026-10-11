@@ -26,10 +26,18 @@ LIB=/var/lib/huntbot
 ETC=/etc/huntbot
 ENVF=$ETC/huntbot.env
 UNITS="huntbot-feed.service huntbot-run.service huntbot-dash.service"
-# the only paths copied from the repository (the hunt engine and every module its entry definitions load)
+# the only paths copied from the repository (the hunt engine and every module its entry definitions load). Of the rule
+# bot only the files the hunt's signal path loads (research/hunt/hunt.py signal_path_files("wide"); the 장세 label
+# and its imports): never its exchange, testnet, live or executor code (tests/test_huntbot_install.py checks the list)
+PAPERBOT_FILES="paperbot/__init__.py paperbot/config.py paperbot/dash/__init__.py paperbot/dash/tools/__init__.py \
+paperbot/dash/tools/regime5y.py paperbot/engine.py paperbot/entry_marks.py paperbot/ladder.py paperbot/levrule.py \
+paperbot/margin.py paperbot/models.py paperbot/notify.py paperbot/policy.py paperbot/sizing.py paperbot/sweepsig.py"
 CODE_PATHS="huntbot research/hunt research/fullgrid research/entry_study research/deepseek200 \
-research/library research/search research/famous third_party/sweep paperbot"
-DROP="research/entry_study/out research/entry_study/out_binance research/famous/out paperbot/dash/static"
+research/library research/search research/famous third_party/sweep $PAPERBOT_FILES"
+DROP="research/entry_study/out research/entry_study/out_binance research/famous/out research/fullgrid/dump_exchange.py"
+# no file of the copy may hold an order path or an exchange key name (paper only)
+ORDER_RE='/fapi/v1/order|/fapi/v2/account|X-MBX-APIKEY|api_secret|BINANCE_API_KEY'
+APT_LOCK="-o DPkg::Lock::Timeout=600"     # a new server's unattended-upgrades holds the apt lock for a few minutes
 PIP_PKGS="numpy==2.0.2 pandas==2.3.3 numba==0.60.0 scipy>=1.11 fastapi>=0.110 uvicorn>=0.29"
 
 if [ "$(id -u)" -ne 0 ]; then echo "root로 실행하세요: sudo bash $0"; exit 1; fi
@@ -52,7 +60,8 @@ dash_ready() {
 
 echo "== 1. 꾸러미 (python3-venv, git, sqlite3)"
 if ! python3 -c 'import ensurepip, venv' 2>/dev/null || ! command -v git >/dev/null || ! command -v sqlite3 >/dev/null; then
-  apt-get update -y -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv git sqlite3 >/dev/null
+  # shellcheck disable=SC2086
+  apt-get $APT_LOCK update -y -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get $APT_LOCK install -y -q python3-venv git sqlite3 >/dev/null
 fi
 if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
   echo "python3 3.10 이상이 필요합니다 (지금: $(python3 --version 2>&1))"; exit 1
@@ -100,6 +109,11 @@ install -d -m 755 "$APP.new"
 # shellcheck disable=SC2086
 git -C "$REPO_DIR" archive --format=tar "$COMMIT" -- $CODE_PATHS | tar -C "$APP.new" -xf -
 for d in $DROP; do rm -rf "${APP:?}.new/$d"; done
+if grep -rlE "$ORDER_RE" --include='*.py' --include='*.js' --include='*.sh' "$APP.new" >/dev/null 2>&1; then
+  grep -rlE "$ORDER_RE" --include='*.py' --include='*.js' --include='*.sh' "$APP.new" | sed "s|$APP.new/||" | head -n 5
+  rm -rf "$APP.new"
+  echo "주문·키 코드가 복사본에 있습니다 (위 파일): 설치를 멈춥니다. 개발자에게 알려 주세요."; exit 1
+fi
 printf '{"commit": "%s", "source": "install_huntbot.sh", "installed_at": "%s"}\n' "$COMMIT" "$(date -u +%FT%TZ)" \
   > "$APP.new/VERSION.json"
 chown -R root:huntbot "$APP.new"

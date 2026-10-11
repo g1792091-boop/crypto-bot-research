@@ -95,7 +95,7 @@ MIN_POS_SELECT = 35                                             # 11.2
 MIN_POS_TEST = {"p2": 26, "p3": 19}                             # 13 T0
 POS_TOL = 0.20                                                  # 12: a control's mean positions within +-20% of
                                                                 #     the pick's (validity check, reported)
-CTRL_B_TRIES = 1000                                             # 12 (b): common offsets drawn per seed
+CTRL_B_TRIES = 1000                                             # 12 (b): common offsets a P3 signal may try
 OVERRUN_U = 1.5                                                 # 13 stress read: a position losing more than 1.5 U
                                                                 #     (its stop overrun: gap, fast day, liquidation)
 GOAL50_BASELINE = ("goal-50x baseline (for scale only): coin flip on the big four at 1-minute fills, about 1% of "
@@ -1632,17 +1632,24 @@ def ctrl_a(sig: Sig, rng: np.random.Generator) -> Sig:
     return Sig(sig.day, sig.sym, np.where(rng.random(len(sig)) < 0.5, 1, -1).astype(np.int64))
 
 
-def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list, stats: dict | None = None) -> Sig:
-    """12 (b): the pick's signal calendar moved by common random offsets. Per seed, offsets k_1, k_2, ... (uniform on
-    0..D-1, D = the period's signal days p0 .. p1-2; CTRL_B_TRIES of them) are drawn once and are the same for every
-    symbol. Each pick signal that lies in its symbol's pool (Market.control_pools of the variant; a signal whose next
-    day has no bar lapsed and is left out) goes from day d to p0 + (d - p0 + k_j) mod D for the first j that lands it
-    on a pool day of its symbol. Sides stay. Signals of different symbols on one day move together as long as they
-    land in their pools (with k_1: a market-wide pump day or a listing batch stays one busy day, so the n_max and
-    risk-cap cuts of that day hit the control as they hit the pick), and a symbol's signals keep their spacing. A
-    signal whose symbol cannot trade on its k_1 day (not listed yet, delisted, too young, under the volume floor)
-    takes the next common offset instead of being dropped, so the control keeps the pick's count. ``stats`` (when
-    given) accumulates 'signals', 'first_offset' (landed with k_1) and 'dropped' (no offset landed it)."""
+def ctrl_b_tries(v: dict) -> int:
+    """12 (b): how many common offsets a signal may try: P3 (a listing's signal belongs to its symbol's own young
+    life, which a calendar offset mostly misses) takes the next offset until one lands; P1, P2 and P4 use one offset
+    (a signal that misses its pool is dropped: retries would spread a busy day's leftover signals over other days)."""
+    return CTRL_B_TRIES if v.get("family") == "P3" else 1
+
+
+def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list, stats: dict | None = None,
+           tries: int = 1) -> Sig:
+    """12 (b): the pick's signal calendar moved by common random offsets. Per seed, ``tries`` offsets k_1, k_2, ...
+    (uniform on 0..D-1, D = the period's signal days p0 .. p1-2) are drawn once and are the same for every symbol.
+    Each pick signal that lies in its symbol's pool (Market.control_pools of the variant; a signal whose next day has
+    no bar lapsed and is left out) goes from day d to p0 + (d - p0 + k_j) mod D for the first j that lands it on a
+    pool day of its symbol; a signal that no offset lands is dropped. Sides stay. Signals of different symbols on one
+    day move together as long as they land in their pools (a market-wide pump day, a breakout day or a listing batch
+    stays one busy day, so the n_max and risk-cap cuts of that day hit the control as they hit the pick), and a
+    symbol's signals keep their spacing. ``tries``: ctrl_b_tries(variant) (P3 1,000, else 1). ``stats`` (when given)
+    accumulates 'signals', 'first_offset' (landed with k_1) and 'dropped'."""
     empty = Sig(np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros(0, np.int64))
     if not len(sig):
         return sig
@@ -1650,7 +1657,7 @@ def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list, stats: d
     D = hi - lo
     if D <= 0:
         return empty
-    ks = rng.integers(0, D, size=CTRL_B_TRIES)
+    ks = rng.integers(0, D, size=max(1, int(tries)))
     Ds, Sy, Sd = [], [], []
     n_in = n_first = n_drop = 0
     for s in np.unique(sig.sym):
@@ -1664,7 +1671,7 @@ def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list, stats: d
             continue
         days, sides = sig.day[sel][inpool], sig.side[sel][inpool]
         new = np.full(len(days), -1, np.int64)
-        for j in range(CTRL_B_TRIES):
+        for j in range(len(ks)):
             todo = np.flatnonzero(new < 0)
             if not len(todo):
                 break
@@ -1771,7 +1778,7 @@ def run_controls(mk: Market, sig: Sig, v: dict, period: str, r: float = R_MAIN, 
     f_pos = f_over = 0
     for i in range(n_seeds):
         rng = ctrl_seed(ctl, v["id"], period, r, i)
-        cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools, st)
+        cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools, st, ctrl_b_tries(v))
         out = run_account(mk, cs, v, r=r, sub=sub)
         lnm[i] = month_ln(out)
         npos[i] = len(out.rf)
@@ -1964,7 +1971,7 @@ def board_block(mk: Market, sig: Sig, v: dict, period: str, r: float, n_seeds: i
         Ms, Bs, outs = [], [], AddsPool()
         for i in range(n_seeds):
             rng = ctrl_seed(ctl, v["id"], period, r, i)
-            cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools)
+            cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools, tries=ctrl_b_tries(v))
             o2 = run_account(mk, cs, v, r=r, monthly=True, sub=sub)
             m2, b2 = month_multiples(o2)
             Ms.append(m2)

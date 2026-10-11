@@ -691,17 +691,23 @@ def test_controls_a_and_b():
     assert np.array_equal(a1.side, a2.side) and np.array_equal(a1.day, s.day) and np.array_equal(a1.sym, s.sym)
     assert set(np.unique(a1.side)) <= {-1, 1}
     pools = mk.control_pools(v)
+    assert AP.ctrl_b_tries(v) == 1 and AP.ctrl_b_tries(AP.VARIANT["P3S_K1_M"]) == AP.CTRL_B_TRIES
     st = {}
-    b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools, st)
+    b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools, st, AP.ctrl_b_tries(v))
+    n_in = 0
     for sym in np.unique(s.sym):
         pool = pools[sym]
         mine = np.sort(s.day[s.sym == sym])
         inpool = mine[np.isin(mine, pool)]
+        n_in += len(inpool)
         got = np.sort(b.day[b.sym == sym])
-        assert len(got) == len(inpool)                                # the pick's count on the symbol is kept
+        assert len(got) <= len(inpool)                                # one offset: a signal off its pool is dropped
         assert set(got.tolist()) <= set(pool.tolist())
         assert (b.side[b.sym == sym] == 1).all()
-    assert st["signals"] == len(b) and st["dropped"] == 0 and 0 < st["first_offset"] <= st["signals"]
+    assert st["signals"] == n_in and st["first_offset"] == len(b) and st["dropped"] == n_in - len(b)
+    st3 = {}
+    b3 = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools, st3, AP.CTRL_B_TRIES)
+    assert len(b3) == n_in and st3["dropped"] == 0                    # with retries (P3): the count is kept
     t = pools[int(s.sym[0])]
     assert mk.trad[int(s.sym[0]), t].all() and mk.bar[int(s.sym[0]), t + 1].all()
     assert (t >= mk.p0).all() and (t <= mk.p1 - 2).all() and (mk.lbi[int(s.sym[0]), t] >= 20).all()
@@ -713,8 +719,8 @@ def test_controls_a_and_b():
 def test_ctrl_b_common_offset_keeps_same_day_signals_together():
     # 12 (b), second review: one offset for the whole calendar. Six symbols trading the whole period: every signal
     # moves by the same k (mod D), so the three symbols that fired together on one day still fire together, and each
-    # symbol's spacing is kept. A seventh symbol listed late: its signals whose k-day falls before its listing take
-    # the next common offset that lands in its pool instead of being dropped
+    # symbol's spacing is kept. A seventh symbol listed late: with one offset (P1, P2, P4) its signals whose k-day
+    # falls outside its pool are dropped and counted; with retries (P3) they take the next common offset that lands
     def moving(d0, d1):                                               # not a stable (3.3 d): closes move
         return [(d, 100, 104, 96, 100 + 3 * (d % 2), 1e9) for d in range(d0, d1)]
     bars = {f"F{i}USDT": moving(0, 200) for i in range(6)}
@@ -729,27 +735,36 @@ def test_ctrl_b_common_offset_keeps_same_day_signals_together():
     items = [(70, "F0USDT", 1), (70, "F1USDT", 1), (70, "F2USDT", 1), (71, "F0USDT", 1), (90, "F3USDT", 1),
              (95, "F4USDT", 1), (150, "LATEUSDT", 1), (152, "LATEUSDT", 1)]
     s = sig(mk, items)
+    orig = {}
+    for d_, s_ in zip(s.day, s.sym):
+        orig.setdefault(int(s_), []).append(int(d_))
+    dropped_any = False
     for seed in range(20):
-        st = {}
-        b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", "X", "syn", 0.02, seed), pools, st)
-        assert len(b) == len(s) and st["dropped"] == 0                 # the pick's count, nothing dropped
-        orig = {}
-        for d_, s_ in zip(s.day, s.sym):
-            orig.setdefault(int(s_), []).append(int(d_))
-        ks = set()
-        for s_ in full:
-            if s_ in orig:
-                got = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == s_)
-                k = (got[0] - sorted(orig[s_])[0]) % D
-                ks.add(k)
-                assert got == sorted(lo + (np.asarray(orig[s_]) - lo + k) % D)   # spacing kept (mod D)
-        assert len(ks) == 1                                           # one common offset for every symbol
-        k = ks.pop()
-        on = lo + (local(mk, 70) - lo + k) % D
-        assert {int(x) for d_, x in zip(b.day, b.sym) if d_ == on} >= {full[0], full[1], full[2]}
-        got_late = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == late)
-        assert len(got_late) == 2 and set(got_late) <= set(pools[late].tolist())
-        assert (b.side == 1).all()
+        for tries in (1, AP.CTRL_B_TRIES):
+            st = {}
+            b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", "X", "syn", 0.02, seed), pools, st, tries)
+            ks = set()
+            for s_ in full:
+                if s_ in orig:
+                    got = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == s_)
+                    k = (got[0] - sorted(orig[s_])[0]) % D
+                    ks.add(k)
+                    assert got == sorted(lo + (np.asarray(orig[s_]) - lo + k) % D)   # spacing kept (mod D)
+            assert len(ks) == 1                                       # one common offset for every symbol
+            k = ks.pop()
+            on = lo + (local(mk, 70) - lo + k) % D
+            assert {int(x) for d_, x in zip(b.day, b.sym) if d_ == on} >= {full[0], full[1], full[2]}
+            got_late = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == late)
+            assert set(got_late) <= set(pools[late].tolist()) and (b.side == 1).all()
+            k_days = lo + (np.asarray(orig[late]) - lo + k) % D
+            miss = int((~np.isin(k_days, pools[late])).sum())
+            if tries == 1:
+                assert len(got_late) == 2 - miss and st["dropped"] == miss and len(b) == len(s) - miss
+                dropped_any |= miss > 0
+            else:
+                assert len(got_late) == 2 and st["dropped"] == 0 and len(b) == len(s)
+                assert st["first_offset"] == len(s) - miss
+    assert dropped_any
 
 
 # ------------------------------------------------------------------ 14 goal board
@@ -791,6 +806,27 @@ def test_month_end_closes_open_positions_in_board_mode():
     out = AP.run_account(mk, sig(mk, [(25, "AAAUSDT", 1)]), VM, monthly=True)
     assert out.ri[0, AP.RI_REASON] == AP.EX_MEND and out.ri[0, AP.RI_TOUT] == local(mk, 30)
     assert out.rf[0, AP.R_XPX] == pytest.approx(100 * (1 - SLIP))
+
+
+def test_prereg_and_readme_statements():
+    # second review: the written rules must say what the code does and what was looked at
+    prereg = open(os.path.join(ROOT, AP.PREREG_REL), encoding="utf-8").read()
+    readme = open(os.path.join(ROOT, "research", "altpump", "README_KO.md"), encoding="utf-8").read()
+    flat_p = " ".join(prereg.split())
+    # 6.7 / 15: adds first (as PREREG_HUNT 7.6 step 4), and the hunt quote no longer says the stop comes first
+    assert "the stop counts first" not in flat_p and "low at the stop: stop first, then adds" not in flat_p
+    assert "also when the low had already reached the old stop" in flat_p
+    assert "(손절이 먼저" not in readme and "불타기가 먼저 체결" in " ".join(readme.split())
+    # status and 21: forward returns close to three rules were computed on period 1 (21 b, c)
+    assert "before any trading outcome of any rule below was computed" not in flat_p
+    assert "No entry, exit, P&L, multiple or forward return of any rule above was computed" not in flat_p
+    assert flat_p.count("gross forward returns close to three") == 2
+    assert "결과는 아직 하나도 없습니다" not in readme and "숏(되돌림) 쪽" in readme
+    # 12-14: control (b) moves the whole calendar; the luck reference keeps the pick's side; no 'for sure'
+    assert "one k per symbol" not in flat_p and "one common random offset" in flat_p
+    assert "luck without the market side" in flat_p and "same signals on random days" not in readme
+    assert "**둘 다** 확실히" not in readme and "같은 날수만큼 한꺼번에" in readme
+    assert "What T2 cannot see" in flat_p and "squeeze stress read" in flat_p
 
 
 # ------------------------------------------------------------------ pin
@@ -1167,7 +1203,7 @@ def _zero_world(S=24, seed=1, start="2021-01-01", end="2022-06-30"):
 def test_ctrl_b_zero_edge_clustered_pick_is_not_favoured():
     # a multi-day pump fires on consecutive days and the repeats are skipped (one position per symbol), so a pick
     # with clustered signals opens far fewer positions than the same number of spread-out random days (the old
-    # control (b)). The circular-shift control keeps the clusters: same positions, no edge for a no-skill pick.
+    # control (b)). The common-offset control keeps the clusters: same positions, no edge for a no-skill pick.
     mk = AP.Market(AP.Raw(_zero_world()), "2021-03-01", "2022-06-01", excluded=frozenset())
     v = AP.VARIANT["P1_X20_H7"]
     pools = mk.control_pools(v)

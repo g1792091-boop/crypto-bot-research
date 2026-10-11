@@ -237,7 +237,7 @@ screens.fills = async (el) => {
 screens.status = async (el) => {
   const d = await api("/api/status");
   if (missing(d)) { put(el, head("상태"), card(null, h("p", {class: "empty"}, "준비 중: 엔진이 아직 상태를 쓰지 않았습니다"))); return; }
-  const run = d.run || {}, feed = d.feed || {}, eng = d.engine || {}, ev = d.events || {}, sv = d.server || {};
+  const run = d.run || {}, feed = d.feed || {}, eng = d.engine || {}, ev = d.events || {}, sv = d.server || {}, tc = d.trades_changed || {};
   const lagMin = d.complete_ms ? (Date.now() - d.complete_ms) / 60000 : null;
   const runAgo = run.finished_ms ? (Date.now() - run.finished_ms) / 60000 : null;
   const pins = eng.pins || {};
@@ -257,7 +257,8 @@ screens.status = async (el) => {
           h("dt", null, "시스템"), h("dd", null, `${fmt.int((d.systems || {}).n)}개 (진입 칸 ${fmt.int((d.systems || {}).cells)}개)`),
           h("dt", null, "라인업 파일"), h("dd", null, (d.lineup || {}).error ? `오류: ${d.lineup.error}` : `${fmt.int((d.lineup || {}).accounts)}개 계좌 (정식 ${fmt.int(((d.lineup || {}).labels || {})["정식"])} · 참고 ${fmt.int(((d.lineup || {}).labels || {})["참고"])})`),
           h("dt", null, "이벤트 기록"), h("dd", null, `${fmt.int(ev.events)}개 (세대 ${ev.generation}, 나중에 채운 것 ${fmt.int(ev.backfilled)}, 결과 대기 ${fmt.int(ev.pending)})`),
-          h("dt", null, "다시 그려진 신호"), h("dd", {class: ev.repaints ? "warn" : ""}, ev.repaints ? `${fmt.int(ev.repaints)}개 (기록은 처음 본 대로 유지)` : "없음")),
+          h("dt", null, "다시 그려진 신호"), h("dd", {class: ev.repaints ? "warn" : ""}, ev.repaints ? `${fmt.int(ev.repaints)}개 (기록은 처음 본 대로 유지)` : "없음"),
+          h("dt", null, "나중에 바뀐 거래"), h("dd", {class: tc.changed ? "warn" : ""}, tc.changed ? `${fmt.int(tc.changed)}건 (그중 사라진 것 ${fmt.int(tc.gone)}건): 늦게 들어온 과거 자료로 다시 계산됨, 처음 본 것과 바뀐 것 모두 기록` : "없음")),
         (run.errors || []).length ? h("ul", {class: "log"}, run.errors.slice(0, 10).map((e) => h("li", null, e))) : null),
       card("코드와 서버", h("dl", {class: "kv"},
         h("dt", null, "엔진 (hunt.py)"), h("dd", {class: "mono small"}, (eng.hunt_sha256 || "—").slice(0, 16)),

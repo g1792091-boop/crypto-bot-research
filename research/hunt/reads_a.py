@@ -6,17 +6,20 @@ bot; no read chooses anything; this file writes no file (the hook writes ``ctx["
 
 What it computes
 * R1 goal board: per row, period (test = headline, select = "chosen here", extra 2020) and window set (UTC calendar
-  months; rolling 30-day windows, one per UTC start day), a fresh $1,000 account per window on machine A (as tested,
-  W 7 scaling of the open-risk cap and the margin budget) at r = 0.5/1/2/5/10/20% and machine B (goal-mode caps of
-  PREREG_ALTPUMP 7) at r = 5/10/20%: shares of windows ending >= x2 .. x100 and touching each level (marked equity at
-  any 5m close), bust share (< $100), median / worst / best window, days to the first x2 / x5, give-back, the
-  positions that made 80% of the gain, realised-risk columns; Clopper-Pearson 95% (calendar) and moving-block
-  bootstrap 90% (rolling); controls (a) and (b) on the same board (calendar: seeds 1-1,000 pooled; rolling: 1-100,
-  or 1-50 when a window run takes > 0.03 s) with pick minus control and its block-bootstrap 90% CI; the headline cell
-  and the size fixed on select.
-* Leverage read (owners (f)): the same board with rule-bot sizing at L = 20 / 30 / 40 (margin L% of equity, notional
-  L x margin, isolated, the engine's bracket rule) and the rule-bot check (the first stop inside the liquidation price
-  by max(0.2%, 1 ATR), else the entry is skipped and counted); liquidations, skipped entries, the wallet risk per stop.
+  months; rolling 30-day windows, one per UTC start day), a fresh $1,000 account per window on machine A (the tested
+  machine with the open-risk cap scaled by r / 0.5% and the margin budget B = equity / 6 as written, W 7.3 / Q8) at
+  r = 0.5/1/2/5/10/20% and machine B (goal-mode caps of PREREG_ALTPUMP 7) at r = 5/10/20%: shares of windows ending
+  >= x2 .. x100 and touching each level (marked equity at any 5m close), bust share (< $100), median / worst / best
+  window, days to the first x2 / x5, give-back, the positions that made 80% of the gain, realised-risk columns;
+  Clopper-Pearson 95% (calendar) and moving-block bootstrap 90% (rolling); controls (a) and (b) on the same board
+  (calendar: seeds 1-1,000 pooled; rolling: 1-100, or 1-50 when the pinned synthetic timing of one window run,
+  ctx['window_seconds'], is > 0.03 s; never timed on the study's data) with pick minus control and its block-bootstrap
+  90% CI; the headline cell and the size fixed on select.
+* Leverage read (owners (f), R24): the same board with the rule bot's sizing at L = 20 / 30 / 40, checked by the
+  engine at each entry (PR_FIXLEV): the tier walk L, L - 10, ... down to 20x, each candidate with margin = its L% of
+  equity and notional = L x margin, taken when the bracket allows it, the first stop lies inside its liquidation price
+  by max(0.2%, 1 ATR14) and the loss at the stop with costs is <= 15% of equity; else the entry is skipped and counted
+  by reason; liquidations, skipped entries, the leverage used and the wallet loss per stop.
 * Continuous-account reads (owners): best trough-to-peak run-up inside any 30 days and its dates, geometric mean
   monthly return, whole-period multiple, max drawdown and the longest time to recover, at r = 0.5% and 1% (the tested
   $5,000 accounts) and at the size fixed on select (fresh $1,000).
@@ -71,8 +74,8 @@ ALTPUMP_SCALE_LINE = "altpump coin-flip goal-50x baseline: about 1% of months (q
 RUNUP_DAYS = 30
 CONT_RS = (0.005, 0.01)                   # continuous reads on the tested accounts ($5,000)
 LEV_LS = (20, 30, 40)                     # owners (f): '20배·30배·40배 경우'
-LEV_BUF_MIN, LEV_BUF_ATR = 0.002, 1.0     # rule-bot check: stop inside liquidation by max(0.2%, 1 ATR)
-LEV_MAX_RUNS = 6                          # rule-bot check fixed point: at most 6 engine runs per window
+LEV_BUF_MIN, LEV_BUF_ATR = H.RB_BUFMIN, H.RB_BUFATR   # rule-bot check: stop inside liquidation by max(0.2%, 1 ATR)
+LEV_MAX_LOSS = H.RB_MAXLOSS               # rule-bot check: loss at the stop with costs <= 15% of equity
 CONC_TOP_POS, CONC_BIG_R = 0.10, 10.0     # R12: top 10% positions, positions >= 10R
 JUDGE_CAPS = {"month_usd": 700.0, "month_stop_usd": 665.0, "day_usd": 45.0}   # placeholder caps, commit ca7a302
 BURST_LEVELS = (10, 20, 30)
@@ -86,8 +89,8 @@ EFF_EVERY = 30                            # rolling realised-risk columns: every
 CHOICES = [
     "R1 touch / peak / days to a level: marked equity at every 5m close (engine path '5m' for the rows, the engine's "
     "5m peak for the controls); resolution '5m'.",
-    "R1 machine A = H 7-8 with the W 7 scaling: open-risk cap 4% x r / 0.5% and margin budget B = equity / 6 x r / "
-    "0.5% (both the tested values at r = 0.5%); machine B = PR_BRK_Q1, cap min(4r, 60%), n_max = PR_BDIV = "
+    "R1 machine A = H 7-8 with the open-risk cap 4% x r / 0.5% and the margin budget B = equity / 6 as written (W 7.3, "
+    "Q8 default; both the tested values at r = 0.5%); machine B = PR_BRK_Q1, cap min(4r, 60%), n_max = PR_BDIV = "
     "floor(cap / r), PR_LEVMAX 125 (the coin's bracket maximum binds; fallback coins 20).",
     "R1 windows end with every open position closed at the last 5m close with slippage and taker (headline); the "
     "marked end is shown next to it.",
@@ -95,16 +98,21 @@ CHOICES = [
     "window (signal bar closing inside, fill bar inside); a basket's control = each member's draw with the same seed "
     "number in one wallet, src = pick number.",
     "Extra 2020 windows start on the first UTC day (rounded up) on which a universe coin has a known 장세 label on one "
-    "of the row's timeframes; calendar months from the first month that starts on or after it.",
+    "of the row's timeframes; calendar months from the first month that starts on or after it. Extra 2020 has no W 6 "
+    "draws: its controls are drawn over the extra period with the W 6 seed parts and period 'extra'.",
+    "Rolling control seeds: 1-100, or 1-50 when ctx['window_seconds'] (one 30-day window run on synthetic bars, "
+    "pinned research/hunt/bench_window.json) is > 0.03 s; without it 1-100. No read times a run on the study's data.",
     "Rolling-share CI seed = seed_int(tag, 'goalboard', row, period, machine, r, 'boot'); pick-minus-control CI seed = "
     "seed_int(tag, 'goalboard', row, period, machine, r, windows, control, 'boot'); tag 'hunt-wide' / 'hunt'.",
     "Rolling realised-risk columns pool the positions of every 30th window (no overlap), so a position counts once.",
     "Size fixed on select: ctx['size_fixed_on_select'] over the select calendar-month cells of machines A and B.",
-    "Leverage read: engine PR_FIXLEV = L (margin L% of equity at the previous close, notional L x margin; the engine "
-    "lowers L to the bracket's maximum when L is not allowed at that notional), PR_NADDS 0 (the unit uses its whole "
-    "margin budget, so no add would find margin), PR_CAP 100 (off), PR_MAXPOS floor(100 / L). The rule-bot check is "
-    "applied here as a signal filter on the planned unit (before liquidity / wallet cuts) at the equity of the previous "
-    "5m close, taken from the run's own 5m path and iterated to a fixed point (at most 6 runs; non-convergence counted).",
+    "Leverage read: engine PR_FIXLEV = L with the rule bot's sizing checked at each entry on the planned unit (before "
+    "the liquidity and free-wallet cuts) at the equity of the previous 5m close: the tier walk L, L - 10, ... down to "
+    "20x, each candidate with margin = its L% of equity and notional = L x margin, taken when the bracket allows it at "
+    "that notional, the first stop lies inside its liquidation price by max(0.2% of the fill, 1 ATR14) and the loss at "
+    "the stop with slippage and taker both ways is <= 15% of equity (paperbot/sizing.py); none -> skipped, counted by "
+    "the lowest tier's reason. PR_NADDS 0 (the unit uses its whole margin share), PR_CAP 100 (off), PR_MAXPOS "
+    "floor(100 / L). One sequential run per window. Controls: calendar seeds 1-100; rolling the R1 subset.",
     "Continuous reads: r = 0.5% and 1% on the tested machine ($5,000, open positions marked at the period end), and "
     "the size fixed on select (fresh $1,000); 5m path.",
     "R15: gate-blocked (N) events = events on bars with a defined ATR14 and a fill bar that the row's gate blocks; "
@@ -175,9 +183,9 @@ def goal_mode_caps(r: float) -> tuple:
 
 def cell_overrides(machine: str, x) -> tuple:
     """(r, engine overrides) of a board cell: ("A", r), ("B", r) or ("L", leverage)."""
-    if machine == "A":
+    if machine == "A":                    # W 7.3 / Q8 default: the cap scales with r, B = equity / 6 as written
         s = x / H.R_BASE
-        return float(x), {"PR_CAP": H.RISK_CAP * s, "PR_BDIV": H.B_DIV / s}
+        return float(x), {"PR_CAP": H.RISK_CAP * s, "PR_BDIV": H.B_DIV}
     if machine == "B":
         cap, n = goal_mode_caps(x)
         return float(x), {"PR_BRK_Q1": 1, "PR_CAP": cap, "PR_MAXPOS": n, "PR_BDIV": float(n),
@@ -191,7 +199,8 @@ def cell_overrides(machine: str, x) -> tuple:
 def machine_spec(machine: str, x) -> dict:
     """Readable description of a cell's machine (written next to every figure)."""
     r, ov = cell_overrides(machine, x)
-    lab = {"A": "as tested (W 7 scaling of cap and B)", "B": "goal-mode machine, not the tested machine",
+    lab = {"A": "tested machine, open-risk cap x r / 0.5%, B = equity / 6",
+           "B": "goal-mode machine, not the tested machine",
            "L": "rule-bot sizing (leverage read), not the tested machine"}[machine]
     return {"machine": machine, "r": r if machine != "L" else None, "L": int(x) if machine == "L" else None,
             "overrides": ov, "label": lab}
@@ -210,9 +219,11 @@ def cell_key(machine: str, x) -> str:
     return f"L|{int(x)}x" if machine == "L" else f"{machine}|{x * 100:g}%"
 
 
-def rolling_control_seeds(seconds_per_window: float) -> int:
+def rolling_control_seeds(seconds_per_window: float | None) -> int:
     """Pre-declared: rolling-window controls use seeds 1-100, or 1-50 when one 30-day window run takes more than
-    0.03 s."""
+    0.03 s on synthetic bars (the pinned bench file); None (no pinned timing) -> 1-100."""
+    if seconds_per_window is None:
+        return ROLL_CTL_SEEDS
     return ROLL_CTL_SEEDS_SLOW if seconds_per_window > SLOW_WINDOW_S else ROLL_CTL_SEEDS
 
 
@@ -441,7 +452,7 @@ def check_headline_spec(spec: dict | None) -> None:
         return
     ok = (spec.get("period") == HEADLINE["period"] and abs(float(spec.get("r", -1)) - HEADLINE["r"]) < 1e-12
           and str(spec.get("machine", "")).startswith(HEADLINE["machine"])
-          and abs(float(spec.get("level", 0)) / float(spec.get("start_wallet", GOAL_START)) - 5.0) < 1e-9
+          and abs(float(spec.get("level_x", 0)) - 5.0) < 1e-9
           and "calendar" in str(spec.get("windows", "")))
     if not ok:
         raise ValueError(f"reads_a: ctx headline cell {spec} differs from {HEADLINE}")
@@ -449,7 +460,7 @@ def check_headline_spec(spec: dict | None) -> None:
 
 def headline_of(row_board: dict) -> dict | None:
     """The headline cell named before the test: per row, the share of test calendar months in which a fresh $1,000
-    at goal-mode r = 5% touched $5,000, with its Clopper-Pearson interval, beside the (a) and (b) pooled shares (seeds
+    at goal-mode r = 5% touched x5, with its Clopper-Pearson interval, beside the (a) and (b) pooled shares (seeds
     1-1,000) and the bust share. ``row_board`` = {period: {windows: {cell key: {"cell", "controls"}}}}."""
     h = HEADLINE
     c = row_board.get(h["period"], {}).get(h["windows"], {}).get(cell_key(h["machine"], h["r"]))
@@ -458,7 +469,7 @@ def headline_of(row_board: dict) -> dict | None:
     col = h["column"]
     cell, ctl = c["cell"], c.get("controls") or {}
     cc = {x: (ctl.get(x) or {}).get("columns", {}).get(col, {}) for x in ("a", "b")}
-    return {"what": "share of test calendar months where a fresh $1,000 at goal-mode r = 5% touched $5,000",
+    return {"what": "share of test calendar months where a fresh account (start $1,000) at goal-mode r = 5% touched x5",
             "share": cell["shares"][col], "ci": cell["ci"][col], "bust_share": cell["shares"]["bust"],
             "n_windows": cell["n_windows"], "control_a": cc["a"].get("control_pooled"),
             "control_b": cc["b"].get("control_pooled"), "control_seeds": (ctl.get("a") or {}).get("n_seeds"),
@@ -576,84 +587,142 @@ def liq_price(side: int, Q: float, cost: float, margin: float, mmr: float, cum: 
     return (cost + margin + cum) / (Q * (1.0 + mmr))
 
 
+def tier_chain(L: int) -> list:
+    """The rule bot's candidates for a requested L (paperbot/sizing.py with the v3 quality tiers; the engine's
+    PR_RB_FLOOR / PR_RB_STEP): L, L - 10, ... down to 20x (40: 40, 30, 20; 30: 30, 20; 20: 20). A larger L's chain
+    contains the smaller one's, so the leverage used never falls as L rises at the same equity."""
+    L = int(L)
+    lo = max(1, min(H.RB_FLOOR, L))
+    return list(range(L, lo - 1, -H.RB_STEP))
+
+
 def effective_L(L: int, equity: float, br: dict, k: int) -> int:
-    """The engine's fixed-leverage rule (R24): L, lowered to the bracket's maximum when L is not allowed at the
-    notional L x L% x equity (repeated); 0 when the notional is above every tier."""
+    """The bracket part of the tier walk (R24): the first candidate of tier_chain(L) that the bracket allows at its own
+    notional (L'% of equity x L'); 0 when none (the engine then skips the entry, 'bracket')."""
     n = int(br["n"][k])
-    for _ in range(16):
-        b = _tier((L / 100.0) * equity * L, br["cap"][k], n)
-        if b < 0:
-            return 0
-        if L <= int(br["lev"][k][b]):
-            return int(L)
-        L = int(br["lev"][k][b])
-    return int(L)
+    for Lt in tier_chain(L):
+        b = _tier((Lt / 100.0) * equity * Lt, br["cap"][k], n)
+        if b >= 0 and Lt <= int(br["lev"][k][b]):
+            return Lt
+    return 0
 
 
 def rulebot_unit(L: int, equity: float, P0: float, side: int, D0: float, atr: float, br: dict, k: int,
-                 slip: float = H.COSTS["base"][1]) -> dict:
-    """The planned first unit of the leverage read and the rule-bot check: leverage = effective_L (the bracket's
-    maximum when L is not allowed), margin = L% of equity, notional = L x margin (L = 20 -> 4x equity, 30 -> 9x,
-    40 -> 16x), isolated; ok when the first stop P0 -/+ D0 lies inside the liquidation price by at least
-    max(0.2% of the fill, 1 ATR). Reasons: 'bracket' (no tier holds the notional: the engine skips it as
-    no_leverage), 'liq_buffer'. Cuts after the check (liquidity, free wallet) are the engine's."""
-    Le = effective_L(L, equity, br, k)
-    out = {"L": int(L), "L_eff": Le, "ok": False, "reason": None}
-    if Le <= 0:
-        out["reason"] = "bracket"
-        return out
+                 slip: float = H.COSTS["base"][1], taker: float = H.COSTS["base"][0],
+                 max_loss: float = LEV_MAX_LOSS) -> dict:
+    """The engine's R24 sizing step in Python (hunt._engine with PR_FIXLEV; paperbot/sizing.py): for each candidate
+    L' of tier_chain(L), margin = L'% of equity, notional = L' x margin (20x -> 4x equity, 30x -> 9x, 40x -> 16x),
+    isolated; it passes when (1) the bracket allows L' at that notional, (2) the first stop P0 -/+ D0 lies inside the
+    liquidation price by at least max(0.2% of the fill, 1 ATR14) and (3) the loss at the stop, fill and exit slippage
+    and taker both ways, is <= 15% of equity. The first that passes is used ('L_eff'); none -> not ok, 'reason' = the
+    lowest tier's ('bracket', 'liq_buffer', 'max_loss'). Cuts after the check (liquidity, free wallet) are the
+    engine's and keep L."""
     fill = P0 * (1.0 + side * slip)
-    margin = Le / 100.0 * equity
-    q = margin * Le / fill
-    cost = q * fill
-    b = _tier(cost, br["cap"][k], int(br["n"][k]))
-    b = int(br["n"][k]) - 1 if b < 0 else b
-    liq = liq_price(side, q, cost, margin, float(br["mmr"][k][b]), float(br["cum"][k][b]))
     stop = P0 - side * D0
+    xpx = stop * (1.0 - side * slip)
     buf = max(LEV_BUF_MIN * fill, LEV_BUF_ATR * atr)
-    out.update({"q": q, "notional": cost, "margin": margin, "liq": liq, "stop": stop, "buffer": buf, "tier": b,
-                "wallet_risk_per_stop": q * D0 / equity})
-    if (stop - liq) * side < buf:
-        out["reason"] = "liq_buffer"
-        return out
-    out["ok"] = True
+    out = {"L": int(L), "L_eff": 0, "ok": False, "reason": None, "stop": stop, "buffer": buf, "tried": []}
+    n = int(br["n"][k])
+    for Lt in tier_chain(L):
+        margin = Lt / 100.0 * equity
+        q = margin * Lt / fill
+        cost = q * fill
+        b = _tier(cost, br["cap"][k], n)
+        if b < 0 or Lt > int(br["lev"][k][b]):
+            why = "bracket"
+        else:
+            liq = liq_price(side, q, cost, margin, float(br["mmr"][k][b]), float(br["cum"][k][b]))
+            loss = q * abs(fill - stop) + q * abs(stop - xpx) + taker * (cost + q * xpx)
+            if (stop - liq) * side < buf:
+                why = "liq_buffer"
+            elif loss > max_loss * equity:
+                why = "max_loss"
+            else:
+                out.update({"ok": True, "L_eff": int(Lt), "q": q, "notional": cost, "margin": margin, "liq": liq,
+                            "tier": b, "loss_at_stop": loss, "loss_at_stop_frac": loss / equity,
+                            "wallet_risk_per_stop": q * D0 / equity})
+                return out
+        out["tried"].append((int(Lt), why))
+        out["reason"] = why
     return out
 
 
 def lev_check(L: int, equity, P0, side, D0, atr, k, br: dict) -> np.ndarray:
-    """rulebot_unit(...)['ok'] or a bracket skip (left to the engine) for every signal (arrays)."""
+    """rulebot_unit(...)['ok'] for every signal (arrays); a non-positive equity, price or D0 is left to the engine
+    ('bad_price'). A mirror of the engine's check for tests and tables; the read itself runs it in the engine."""
     n = len(P0)
     ok = np.ones(n, bool)
     for i in range(n):
         if not (equity[i] > 0 and P0[i] > 0 and D0[i] > 0):
-            continue                                       # the engine skips it ('bad_price')
-        u = rulebot_unit(L, float(equity[i]), float(P0[i]), int(side[i]), float(D0[i]), float(atr[i]), br, int(k[i]))
-        ok[i] = u["ok"] or u["reason"] == "bracket"
+            continue
+        ok[i] = rulebot_unit(L, float(equity[i]), float(P0[i]), int(side[i]), float(D0[i]), float(atr[i]), br,
+                             int(k[i]))["ok"]
     return ok
 
 
-def stop_loss_frac(L: int, d0_over_p0, slip: float = H.COSTS["base"][1], taker: float = H.COSTS["base"][0]) -> dict:
-    """Wallet share lost at the first stop for a rule-bot unit at L (no bracket lowering): price only
-    (L x L% x D0 / P0 / (1 + slip)) and with costs (fill and exit slippage, taker both ways), long."""
-    d = np.asarray(d0_over_p0, float)
-    q_over = (L * L / 100.0) / (1.0 + slip)              # q x P0 / equity
-    fill, exitp = 1.0 + slip, (1.0 - d) * (1.0 - slip)   # in units of P0 (a short loses d x slip more)
-    return {"price_only": q_over * d, "with_costs": q_over * (fill - exitp) + taker * q_over * (fill + exitp)}
+def nominal_stop_loss(L: int, equity: float, P0: float, side: int, D0: float, br: dict, k: int,
+                      slip: float = H.COSTS["base"][1], taker: float = H.COSTS["base"][0]) -> dict:
+    """Wallet share lost at the first stop for a unit at L itself (margin L% of equity, notional L x margin; no tier
+    walk, no check): price only and with costs, each capped at what an isolated position can lose. A stop beyond the
+    liquidation price (bracket mmr at that notional) liquidates first: the loss is the margin plus the entry fee and
+    the stop is flagged 'beyond_liq'."""
+    fill = P0 * (1.0 + side * slip)
+    stop = P0 - side * D0
+    xpx = stop * (1.0 - side * slip)
+    margin = L / 100.0 * equity
+    q = margin * L / fill
+    cost = q * fill
+    n = int(br["n"][k])
+    b = _tier(cost, br["cap"][k], n)
+    b = n - 1 if b < 0 else b
+    liq = liq_price(side, q, cost, margin, float(br["mmr"][k][b]), float(br["cum"][k][b]))
+    beyond = (stop - liq) * side <= 0
+    price = q * D0
+    costs = q * abs(fill - stop) + q * abs(stop - xpx) + taker * (cost + q * xpx)
+    if beyond:
+        price = margin
+        costs = margin + taker * cost
+    return {"price_only": price / equity, "with_costs": costs / equity, "beyond_liq": bool(beyond),
+            "bracket_allows_L": bool(_tier(cost, br["cap"][k], n) >= 0 and L <= int(br["lev"][k][b]))}
 
 
-def wallet_risk_table(d0_over_p0, Ls=LEV_LS) -> dict:
-    """L -> the median (p10, p90) wallet risk per stop over the given D0 / P0 values (a row's gated signals), price
-    only and with costs, and the share of signals whose stop would cost the whole wallet or more."""
-    d = np.asarray(d0_over_p0, float)
-    d = d[np.isfinite(d) & (d > 0)]
+def wallet_risk_table(info: dict, br: dict, Ls=LEV_LS, equity: float = GOAL_START) -> dict:
+    """L -> the wallet share lost per first stop over a row's signals (``info``: P0, side, d0, atr, k arrays) at a fresh
+    ``equity``: (i) 'nominal', the unit at L itself, capped at the isolated margin plus fees, with the share of stops
+    beyond the liquidation price and of notionals the bracket does not allow at L; (ii) 'rule_bot', the engine's
+    tier walk and checks: the share taken, the leverage used, the skip shares by reason and the loss at the stop with
+    costs among the taken units (<= 15% by construction)."""
+    P0 = np.asarray(info.get("P0", []), float)
+    d0 = np.asarray(info.get("d0", []), float)
+    ok = np.isfinite(P0) & np.isfinite(d0) & (P0 > 0) & (d0 > 0)
+    idx = np.flatnonzero(ok)
+    side = np.asarray(info.get("side", []), np.int64)
+    atr = np.asarray(info.get("atr", []), float)
+    kk = np.asarray(info.get("k", []), np.int64)
     out = {}
     for L in Ls:
-        s = stop_loss_frac(L, d)
-        out[str(L)] = {"notional_over_equity": L * L / 100.0, "margin_over_equity": L / 100.0, "n": int(len(d)),
-                       "median": _med(s["price_only"]), "median_with_costs": _med(s["with_costs"]),
-                       "p10": _f(np.quantile(s["price_only"], 0.1)) if len(d) else None,
-                       "p90": _f(np.quantile(s["price_only"], 0.9)) if len(d) else None,
-                       "share_over_wallet": float((s["with_costs"] >= 1.0).mean()) if len(d) else None}
+        nom = [nominal_stop_loss(L, equity, P0[i], int(side[i]), d0[i], br, int(kk[i])) for i in idx]
+        rb = [rulebot_unit(L, equity, P0[i], int(side[i]), d0[i], float(atr[i]) if np.isfinite(atr[i]) else 0.0, br,
+                           int(kk[i])) for i in idx]
+        po = np.asarray([x["price_only"] for x in nom])
+        wc = np.asarray([x["with_costs"] for x in nom])
+        took = [x for x in rb if x["ok"]]
+        lt = np.asarray([x["loss_at_stop_frac"] for x in took])
+        n = len(idx)
+        out[str(L)] = {
+            "notional_over_equity": L * L / 100.0, "margin_over_equity": L / 100.0, "n": int(n), "equity": equity,
+            "nominal": {"median": _med(po), "median_with_costs": _med(wc),
+                        "p10": _f(np.quantile(po, 0.1)) if n else None, "p90": _f(np.quantile(po, 0.9)) if n else None,
+                        "share_stop_beyond_liquidation": _f(np.mean([x["beyond_liq"] for x in nom])) if n else None,
+                        "share_bracket_refuses_L": _f(np.mean([not x["bracket_allows_L"] for x in nom])) if n
+                        else None},
+            "rule_bot": {"share_taken": _f(len(took) / n) if n else None,
+                         "leverage_used": {str(Lt): _f(np.mean([x["L_eff"] == Lt for x in rb])) if n else None
+                                           for Lt in tier_chain(L)},
+                         "share_skipped_by": {r_: _f(np.mean([(not x["ok"]) and x["reason"] == r_ for x in rb]))
+                                              if n else None for r_ in H.RB_SKIP_NAMES},
+                         "median_loss_at_stop_with_costs": _med(lt),
+                         "p90_loss_at_stop_with_costs": _f(np.quantile(lt, 0.9)) if len(lt) else None}}
     return out
 
 
@@ -861,7 +930,8 @@ PUBLIC_KEYS = {"id", "row", "kind", "label", "role", "candidate", "machine", "wi
                "n_positions", "n_seeds", "resolution", "note", "L", "family", "name", "strategy", "tf", "gate",
                "pick_no", "batch", "members", "events", "gated", "gate_blocked", "days", "is_ds", "what", "lineup",
                "passed", "size_label"}
-COUNT_DICTS = {"skipped", "skipped_entries", "signal_counts", "skipped_by_reason_total"}   # {name: int} only
+COUNT_DICTS = {"skipped", "skipped_entries", "signal_counts", "skipped_by_reason_total", "rule_bot_skipped",
+               "engine_skipped"}                                                       # {name: int} only
 
 
 def _plain(v) -> bool:
@@ -966,40 +1036,15 @@ def _window_parts(parts: list, infos: list, a: int, b: int) -> tuple:
     return [(_subset(sig, m), src) for (sig, src), m in zip(parts, masks)], masks
 
 
-def _eprev(eqp, fill_ms, a: int, start: float) -> np.ndarray:
-    """Marked equity at the 5m close before each fill (the engine's sizing equity); the start wallet at step 0."""
-    t = (np.asarray(fill_ms, np.int64) - a) // FIVE
-    out = np.full(len(t), float(start))
-    eqp = np.asarray(eqp, float)
-    ok = (t >= 1) & (t - 1 < len(eqp))
-    out[ok] = eqp[t[ok] - 1]
-    return out
-
-
-def run_lev(run, parts: list, infos: list, a: int, b: int, L: int, br: dict, start: float = GOAL_START,
-            path: str = "5m", **kw) -> dict:
-    """One fresh-account window (or continuous run) at rule-bot leverage L with the rule-bot check as a signal filter:
-    the planned unit is checked at the equity of the previous 5m close from the run's own 5m path, rerun until the
-    kept set no longer changes (at most LEV_MAX_RUNS runs). Adds 'lev_buffer_skipped', 'lev_runs', 'lev_converged'."""
+def run_lev(run, parts: list, infos: list, a: int, b: int, L: int, start: float = GOAL_START, path: str = "5m",
+            **kw) -> dict:
+    """One fresh-account window (or continuous run) at rule-bot leverage L. The engine applies the rule bot's tier walk
+    and checks at each entry on the equity of the previous 5m close (PR_FIXLEV; one sequential run, no fixed point);
+    its skips per reason come back as 'rulebot_skipped'."""
     r, ov = cell_overrides("L", L)
-    wparts, masks = _window_parts(parts, infos, a, b)
-    winfo = [{k: v[m] for k, v in inf.items()} for inf, m in zip(infos, masks)]
-    keep = [lev_check(L, np.full(len(w["P0"]), start), w["P0"], w["side"], w["d0"], w["atr"], w["k"], br)
-            for w in winfo]
-    conv, res, runs = False, None, 0
-    for runs in range(1, LEV_MAX_RUNS + 1):
-        sub = [(_subset(sig, kp), src) for (sig, src), kp in zip(wparts, keep)]
-        res = run(sub, a, b, r=r, start_wallet=start, overrides=ov, path="5m", **kw)
-        E = [_eprev(res["equity_path"], w["fill"], a, start) for w in winfo]
-        nk = [lev_check(L, e, w["P0"], w["side"], w["d0"], w["atr"], w["k"], br) for e, w in zip(E, winfo)]
-        if all(np.array_equal(x, y) for x, y in zip(nk, keep)):
-            conv = True
-            break
-        keep = nk
-    res["lev_buffer_skipped"] = int(sum(int((~kp).sum()) for kp in keep))
-    res["lev_runs"], res["lev_converged"] = runs, conv
-    if path != "5m":
-        res["equity_path"] = None
+    wparts, _ = _window_parts(parts, infos, a, b)
+    res = run(wparts, a, b, r=r, start_wallet=start, overrides=ov, path=path, **kw)
+    res.setdefault("rulebot_skipped", {n: 0 for n in H.RB_SKIP_NAMES})
     return res
 
 
@@ -1007,7 +1052,7 @@ def _run_cell(cell: tuple, parts: list, infos: list, a: int, b: int, path: str) 
     ctx = _S["ctx"]
     machine, x = cell
     if machine == "L":
-        return run_lev(ctx["run"], parts, infos, a, b, int(x), _S["br"], GOAL_START, path=path, close_end=True)
+        return run_lev(ctx["run"], parts, infos, a, b, int(x), GOAL_START, path=path, close_end=True)
     r, ov = cell_overrides(machine, x)
     wparts, _ = _window_parts(parts, infos, a, b)
     return ctx["run"](wparts, a, b, r=r, start_wallet=GOAL_START, overrides=ov, path=path, close_end=True)
@@ -1029,8 +1074,9 @@ def _pick_rec(res: dict, keep_pos: bool) -> dict:
     rec["liquidations"] = int((reason == "liquidation").sum()) if len(reason) else 0
     rec["skipped"] = {k: int(v) for k, v in (res.get("skipped") or {}).items()}
     rec["adds_skipped_bracket"] = int((res.get("adds_skipped") or {}).get("bracket", 0))
-    rec["lev_buffer_skipped"] = res.get("lev_buffer_skipped")
-    rec["lev_unconverged"] = None if "lev_converged" not in res else int(not res["lev_converged"])
+    rb = res.get("rulebot_skipped") or {}
+    for n_ in H.RB_SKIP_NAMES:
+        rec[f"rb_{n_}"] = int(rb.get(n_, 0))
     if keep_pos and len(pnl):
         U = np.asarray(tr["U"], float)
         q1, d0 = np.asarray(tr["q1"], float), np.asarray(tr["D0"], float)
@@ -1043,7 +1089,7 @@ def _pick_rec(res: dict, keep_pos: bool) -> dict:
 
 
 REC_COLS = ("m_end", "m_marked", "peak_m", "give_back", "n80", "days_x2", "days_x5", "bits", "liquidations",
-            "adds_skipped_bracket", "lev_buffer_skipped", "lev_unconverged")
+            "adds_skipped_bracket") + tuple(f"rb_{n_}" for n_ in H.RB_SKIP_NAMES)
 POS_COLS = ("ratio", "cut", "adds", "lev", "risk_eq")
 
 
@@ -1161,26 +1207,6 @@ def _chunks(seq, n: int) -> list:
     return [seq[i:i + n] for i in range(0, len(seq), max(1, n))]
 
 
-def _measure_window_seconds(ctx: dict) -> float:
-    """Seconds per 30-day control window run (timing only; the results are discarded): control (a) seed 1 of the
-    first row, first rolling test window, machine A at r = 0.5%, median of 5 runs after one warm-up."""
-    rows = ctx["rows"]
-    if not rows:
-        return 0.0
-    row = rows[0]
-    a, b = _S["periods"]["test"]
-    a, b = a, a + ROLL_DAYS * DAY
-    parts = [(ctx["control_signals"](m, "a", "test", H.R_BASE, 1), src) for m, src in zip(row["members"], row["src"])]
-    infos = [sig_info(_S["live"], _S["syms"], sig) for sig, _ in parts]
-    ts = []
-    for i in range(6):
-        t0 = time.perf_counter()
-        _run_cell(("A", H.R_BASE), parts, infos, a, b, "day")
-        if i:
-            ts.append(time.perf_counter() - t0)
-    return float(np.median(ts))
-
-
 def _row_id(row: dict) -> str:
     return row["row"]
 
@@ -1219,13 +1245,11 @@ def run(ctx: dict) -> None:
             infos[(ri, p)] = [sig_info(live, syms, sig) for sig, _ in parts[(ri, p)]]
     _S.update(parts=parts, infos=infos)
     _S["win"] = _plan_windows(ctx, live)
-    sec = ctx.get("window_seconds")
-    measured = sec is None
-    if sec is None:
-        sec = _measure_window_seconds(ctx)
+    sec = ctx.get("window_seconds")               # pinned synthetic timing (benchwin) or None: never timed here
+    sec_src = ctx.get("window_seconds_source") or ("ctx" if sec is not None else "none: rolling control seeds 1-100")
     n_roll = rolling_control_seeds(sec)
     n_lev_roll = min(LEV_CTL_SEEDS, n_roll)
-    log(f"reads_a: {len(rows)} rows; one 30-day window run {sec:.4f}s -> rolling control seeds 1-{n_roll}")
+    log(f"reads_a: {len(rows)} rows; window seconds {sec} ({sec_src}) -> rolling control seeds 1-{n_roll}")
     reads_line = (ctx.get("reads_pin") or {}).get("listed_before_test_json")
 
     # ---------------------------------------------------------------- R1 board and the leverage read: rows
@@ -1259,7 +1283,7 @@ def run(ctx: dict) -> None:
         for group, cells in (("AB", _S["cells_ab"]), ("L", _S["cells_l"])):
             n_s = n_seeds_of[(kind, group)]
             for w in wch:
-                per = max(1, TASK_RUNS // max(1, len(w) * len(cells) * (2 if group == "L" else 1)))
+                per = max(1, TASK_RUNS // max(1, len(w) * len(cells)))
                 for ctl in ("a", "b"):
                     for sch in _chunks(range(1, n_s + 1), per):
                         ctasks.append((ri, p, kind, ctl, tuple(sch), tuple(w), group))
@@ -1318,11 +1342,12 @@ def run(ctx: dict) -> None:
                         rk, lv = cat("risk_eq"), cat("lev")
                         entry["leverage"] = {
                             "L": int(x), "liquidations": c["liquidations"],
-                            "rule_bot_check_skipped": int(np.nansum(T["lev_buffer_skipped"])),
+                            "rule_bot_skipped": {n_: int(np.nansum(T[f"rb_{n_}"])) for n_ in H.RB_SKIP_NAMES},
                             "engine_skipped": c["skipped"],
-                            "fixed_point_not_converged": int(np.nansum(T["lev_unconverged"])),
                             "median_wallet_risk_per_stop": _med(rk), "median_leverage_used": _med(lv),
-                            "share_leverage_lowered_by_bracket": _f((lv < int(x)).mean()) if len(lv) else None}
+                            "leverage_used": {str(Lt): _f((lv == Lt).mean()) if len(lv) else None
+                                              for Lt in tier_chain(int(x))},
+                            "share_leverage_below_L": _f((lv < int(x)).mean()) if len(lv) else None}
                         lb.setdefault(p, {}).setdefault(kind, {})[ck] = entry
                     else:
                         rb.setdefault(p, {}).setdefault(kind, {})[ck] = entry
@@ -1342,13 +1367,15 @@ def run(ctx: dict) -> None:
             for kind, cells in rb.get(p, {}).items():
                 for e in cells.values():
                     e["period_label"] = PERIOD_LABEL[p]
-        d0p = np.concatenate([inf["d0"] / inf["P0"] for inf in infos[(ri, "test")]]) if infos[(ri, "test")] \
-            else np.zeros(0)
+        tinf = infos[(ri, "test")]
+        sig_all = {c_: np.concatenate([inf[c_] for inf in tinf]) if tinf else np.zeros(0)
+                   for c_ in ("P0", "side", "d0", "atr", "k")}
         board[rid] = {**_row_meta(row), "periods": rb, "headline": headline_of(rb),
                       "size_fixed_on_select": None if fixed is None else {
                           "cell": cell_key(*fixed),
                           "test": rb.get("test", {}).get("calendar", {}).get(cell_key(*fixed))}}
-        lever[rid] = {**_row_meta(row), "periods": lb, "wallet_risk_table_test_signals": wallet_risk_table(d0p)}
+        lever[rid] = {**_row_meta(row), "periods": lb,
+                      "wallet_risk_table_test_signals": wallet_risk_table(sig_all, _S["br"])}
         _S.setdefault("fixed", {})[ri] = fixed
 
     # ---------------------------------------------------------------- continuous accounts (+ R12, R13, R15 inputs)
@@ -1452,7 +1479,8 @@ def run(ctx: dict) -> None:
                       "goal_mode_min_r": GOAL_MODE_MIN_R, "leverage": list(LEV_LS), "calendar_control_seeds":
                       CAL_CTL_SEEDS, "rolling_control_seeds": n_roll, "leverage_control_seeds_calendar":
                       LEV_CTL_SEEDS, "leverage_control_seeds_rolling": n_lev_roll,
-                      "window_run_seconds": round(sec, 5), "window_run_seconds_measured_here": measured,
+                      "window_run_seconds": None if sec is None else round(float(sec), 5),
+                      "window_run_seconds_source": sec_src,
                       "slow_window_s": SLOW_WINDOW_S, "mbb": [MBB_BLOCK, MBB_N, MBB_CONF], "cp_conf": CP_CONF},
         "notes": [INDEPENDENT_LINE, ALTPUMP_SCALE_LINE,
                   "The touch columns are descriptive and do not create a stop-at-target rule.",

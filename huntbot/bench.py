@@ -46,13 +46,15 @@ def synth_arrays(syms: list, start_ms: int, end_ms: int, seed: int = 0) -> dict:
 
 
 def store_insert(store, arrays: dict, from_ms: int, to_ms: int) -> None:
-    """Bars with from_ms <= open < to_ms and funding with from_ms <= time <= to_ms - 5m ... as the feed would."""
+    """Bars with from_ms <= open < to_ms and the funding due by the new mark (its time on the 5m grid in
+    (from_ms, to_ms]: the feed holds the mark before a funding time until its rate is stored), as the feed would."""
     for s, a in arrays.items():
         k = (a["ts"] >= from_ms) & (a["ts"] < to_ms)
         if k.any():
             store.insert_bars(s, zip(a["ts"][k].tolist(), a["o"][k].tolist(), a["h"][k].tolist(), a["l"][k].tolist(),
                                      a["c"][k].tolist(), a["v"][k].tolist(), a["qv"][k].tolist()))
-        kf = (a["fts"] >= from_ms) & (a["fts"] < to_ms)
+        g = ((np.asarray(a["fts"], np.int64) + 30_000) // FIVE) * FIVE
+        kf = (g > from_ms) & (g <= to_ms)
         if kf.any():
             store.insert_funding(s, zip(a["fts"][kf].tolist(), a["frate"][kf].tolist()))
         store.set_coin(s, status="TRADING", trading=1)

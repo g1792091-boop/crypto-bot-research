@@ -238,6 +238,14 @@ def server_info() -> dict:
             "runner_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)}
 
 
+def _trade_changes(R) -> Optional[dict]:
+    """Closed trades that changed after they were first shown (data for the past came in late); no money."""
+    try:
+        return R.trade_change_counts()
+    except Exception:  # noqa: BLE001  (a stub runner, a busy run.db)
+        return None
+
+
 def write_status(R, complete_ms: Optional[int], started_ms: int, info: Optional[dict],
                  extra: Optional[dict] = None) -> None:
     st = R.store
@@ -268,5 +276,5 @@ def write_status(R, complete_ms: Optional[int], started_ms: int, info: Optional[
                       "labels": {lb: sum(1 for a in R.lineup.get("accounts") or [] if a["label"] == lb)
                                  for lb in S.LABELS}},
            "systems": {"n": len(R.systems), "cells": len(R.cells), "aliases": R.aliases},
-           "events": R.ledger.counts(), "server": server_info(), "extra": extra}
+           "events": R.ledger.counts(), "trades_changed": _trade_changes(R), "server": server_info(), "extra": extra}
     write_json(R.snap, "status.json", doc)

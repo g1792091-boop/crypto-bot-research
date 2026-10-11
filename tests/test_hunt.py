@@ -705,6 +705,73 @@ def test_pin_refuses_changed_or_unlisted(tmp_path, monkeypatch):
         H.check_pin("v1", "select")
 
 
+def test_pin_superseded_reads_line(tmp_path, monkeypatch):
+    """Review: a fixed reads module could never pass check_pin again (its old line no longer matched). Now an older
+    research/hunt/reads_*.py line is reported as superseded when a later line of the same path matches; every other
+    path still needs an exact match."""
+    root = _pin_tree(tmp_path, monkeypatch, "wide")
+    pin = root / H.PIN["wide"]
+    ra = root / "research/hunt/reads_x.py"
+    ra.write_text("v1\n")
+    with open(pin, "a") as fh:
+        fh.write(f"{H.sha256_file(str(ra))}  research/hunt/reads_x.py\n")
+    assert "superseded_reads_lines" not in H.check_pin("wide", "select")
+    ra.write_text("v2 fixed\n")
+    with pytest.raises(H.PinError, match="changed research/hunt/reads_x.py"):
+        H.check_pin("wide", "select")                               # changed and not appended again
+    with open(pin, "a") as fh:
+        fh.write(f"{H.sha256_file(str(ra))}  research/hunt/reads_x.py\n")
+    assert H.check_pin("wide", "select")["superseded_reads_lines"] == ["research/hunt/reads_x.py"]
+    assert H.reads_pinned_now("wide")["research/hunt/reads_x.py"] == H.sha256_file(str(ra))
+    hp = root / "research/hunt/hunt.py"                              # no superseding for any other file
+    hp.write_text("edited\n")
+    with open(pin, "a") as fh:
+        fh.write(f"{H.sha256_file(str(hp))}  research/hunt/hunt.py\n")
+    with pytest.raises(H.PinError, match="changed research/hunt/hunt.py"):
+        H.check_pin("wide", "select")
+
+
+def test_first_test_start_marker_keeps_the_first_reads_lines(tmp_path, monkeypatch):
+    """Review: reads_pinned_at_test was taken at each test start, so a reads line appended after an interrupted test
+    had written parts (a changed pin -> fresh parts) was called 'predates test.json'. The first start per picks file
+    is now kept in the private folder and never overwritten."""
+    picks = tmp_path / "picks.json"
+    picks.write_text('{"picks": []}\n')
+    monkeypatch.setattr(H, "PICKS_REL", {"wide": str(picks), "v1": str(tmp_path / "pick.json")})
+    args = types.SimpleNamespace(private=str(tmp_path / "priv"), data=None)
+    lines = {"research/hunt/reads_a.py": "a" * 64}
+    monkeypatch.setattr(H, "reads_pinned_now", lambda study: dict(lines))
+    m1 = H.first_test_start(args, "wide")
+    assert m1["reads_lines"] == {"research/hunt/reads_a.py": "a" * 64}
+    assert m1["pretest_reads"]["applies"] and not m1["pretest_reads"]["pinned_before_test"]
+    lines["research/hunt/reads_a.py"] = "b" * 64                     # appended after the first start
+    m2 = H.first_test_start(args, "wide")
+    assert m2 == m1 and H.reads_pin_status("wide", "reads_zz", m2["reads_lines"])["listed_before_test_json"] is False
+    picks.write_text('{"picks": [1]}\n')                            # another picks file: its own first start
+    assert H.first_test_start(args, "wide")["reads_lines"] == {"research/hunt/reads_a.py": "b" * 64}
+
+
+def test_pinned_window_seconds_only_from_the_pin(tmp_path, monkeypatch):
+    """Review: the 0.03 s rule was timed at read time on the study's data; it now comes only from a pinned synthetic
+    bench file (benchwin), else seeds 1-100."""
+    root = _pin_tree(tmp_path, monkeypatch, "wide")
+    assert H.pinned_window_seconds("wide")["seconds"] is None
+    f = root / H.BENCH_WINDOW_REL
+    f.write_text(json.dumps({"window_run_30d_s": 0.05}))
+    assert H.pinned_window_seconds("wide")["seconds"] is None        # present but not pinned
+    with pytest.raises(H.PinError, match="not pinned research/hunt/bench_window.json"):
+        H.check_pin("wide", "select")                                # pinlist lists it when present
+    with open(root / H.PIN["wide"], "a") as fh:
+        fh.write(f"{H.sha256_file(str(f))}  {H.BENCH_WINDOW_REL}\n")
+    assert H.pinned_window_seconds("wide") == {"seconds": 0.05, "source": f"{H.BENCH_WINDOW_REL} (synthetic bars, "
+                                                                          "pinned)"}
+
+
+def test_bench_window_seconds_on_synthetic_bars():
+    res = H.bench_window_seconds(n_coins=3)
+    assert res["window_run_30d_s"] > 0 and len(res["runs_s"]) == 5 and "synthetic" in res["what"]
+
+
 def test_pin_requires_the_prereg_file_list(tmp_path, monkeypatch):
     """W 10: the wide pin must list parity.json, the full grid's inputs and regime5y.py; exchange30.json when present."""
     root = _pin_tree(tmp_path, monkeypatch, "wide")
@@ -1259,18 +1326,104 @@ def test_goal_mode_bracket_rule_skips_an_add_past_the_tier():
 
 
 def test_fixed_leverage_rule_bot_sizing_and_liquidation():
-    """R24 (owners (f)): leverage L fixed, margin = L% of equity, q = margin x L / fill; a stop beyond the
-    liquidation price is liquidated first (whole margin lost)."""
+    """R24 (owners (f)): leverage L fixed, margin = L% of equity, q = margin x L / fill; with the rule-bot checks
+    off, a stop beyond the liquidation price is liquidated first (whole margin lost); with them on (the read), the
+    same entry is never taken (stop outside the liquidation buffer) and is counted."""
     bars = [(100, 100.2, 99.9, 100.0), (100.0, 100.1, 97.0, 97.2)] + [(97.2, 97.3, 97.1, 97.2)] * 3
     mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288, qv=1e12)})
     p = H.params()
-    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_MAXPOS] = 20, 0, 100.0, 5
+    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_MAXPOS], p[H.PR_RB_CHECK] = 20, 0, 100.0, 5, 0
     out = H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 4.0}]), prm=p)
     rf, ri = rec(out)
     fill = 100 * (1 + SLIP)
     assert rf[H.RF_LEV] == 20 and rf[H.RF_Q1] == pytest.approx(0.2 * 5000 * 20 / fill)
     assert rf[H.RF_U] == pytest.approx(rf[H.RF_Q1] * 4.0)
     assert ri[H.RI_REASON] == H.EX_LIQ and rf[H.RF_PRICE] == pytest.approx(-0.2 * 5000)
+    p[H.PR_RB_CHECK] = 1
+    out = H.simulate(mk, no_bank(), cands(mk, [{"k": 0, "t": 0, "d0": 4.0}]), prm=p)
+    assert len(out[3]) == 0 and out[5][H.SK_LEV] == 1 and out[12].tolist() == [0, 1, 0]
+
+
+def _one_br(caps, levs, mmrs):
+    """A one-coin bracket dict in hunt's layout (cum as load_brackets builds it)."""
+    cum, rows = 0.0, []
+    for i, (c, lv, m) in enumerate(zip(caps, levs, mmrs)):
+        if i:
+            cum += caps[i - 1] * (m - mmrs[i - 1])
+        rows.append((c, lv, m, cum))
+    return {"n": np.array([len(rows)]), "cap": np.array([[r[0] for r in rows]]),
+            "lev": np.array([[r[1] for r in rows]], np.int64), "mmr": np.array([[r[2] for r in rows]]),
+            "cum": np.array([[r[3] for r in rows]]), "min_notional": np.array([5.0])}
+
+
+def _fixlev_run(mk, L, start, d0=1.0, atr=None, **pr):
+    p = H.params(start=start)
+    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_MAXPOS] = L, 0, 100.0, 5
+    for k, v in pr.items():
+        p[H.PR_INDEX[k]] = v
+    c = cands(mk, [{"k": 0, "t": 0, "d0": d0}])
+    if atr is not None:
+        c["atr"] = np.array([atr], np.float64)
+    return H.simulate(mk, no_bank(), c, prm=p)
+
+
+def test_fixed_leverage_tier_walk_is_monotone_in_L():
+    """R24 (review): the rule bot's tier walk (L, then each lower tier down to 20x, each with its own margin share)
+    never gives less leverage or notional to a larger L at the same equity. The old rule lowered 40x to the bracket's
+    maximum at the 40x notional (fallback table, $1,600: 10x, notional 1.0x equity) while 20x kept 4x equity."""
+    bars = [(100, 100.05, 99.95, 100.0)] * 5
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288, qv=1e12)})          # fallback brackets (20x to $25,000)
+    for start in (1000.0, 1600.0, 2800.0, 3000.0, 6000.0):
+        lev, notional = [], []
+        for L in (20, 30, 40):
+            out = _fixlev_run(mk, L, start)
+            rf, _ = rec(out)
+            lev.append(rf[H.RF_LEV])
+            notional.append(rf[H.RF_Q1] * 100 * (1 + SLIP) / start)
+        assert lev == sorted(lev) and notional == sorted(notional), (start, lev, notional)
+        assert lev == [20, 20, 20]                                   # fallback: 30x / 40x walk down to the 20x tier
+    out = _fixlev_run(mk, 40, 6300.0)                                # 20x needs 25,200 > 25,000: no tier passes
+    assert len(out[3]) == 0 and out[12].tolist() == [1, 0, 0] and out[5][H.SK_LEV] == 1
+    mk.br = _one_br((50_000.0, 250_000.0, np.inf), (125, 100, 20), (0.004, 0.005, 0.025))   # BTC-like brackets
+    lev = [rec(_fixlev_run(mk, L, 1000.0, d0=0.5))[0][H.RF_LEV] for L in (20, 30, 40)]
+    assert lev == [20, 30, 40]
+    assert rec(_fixlev_run(mk, 40, 1000.0, d0=1.0))[0][H.RF_LEV] == 30     # 40x at a 1% stop loses about 18%
+
+
+def test_fixed_leverage_max_loss_and_atr_buffer():
+    """R24 (review): the rule bot's third check, the loss at the first stop with slippage and taker both ways <= 15%
+    of equity, walks 40x down to 30x at D0 / P0 = 1.3% ($1,000, BTC-like brackets: 40x loses about 23%, 30x about
+    13%); the liquidation buffer uses max(0.2% of the fill, 1 ATR14) with the candidate's ATR."""
+    bars = [(100, 100.05, 99.95, 100.0)] * 5
+    mk = market({"AUSDT": coin("AUSDT", bars, pad_to=288, qv=1e12)})
+    mk.br = _one_br((50_000.0, 250_000.0, np.inf), (125, 100, 20), (0.004, 0.005, 0.025))
+    fill = 100 * (1 + SLIP)
+    stop = 100 - 1.3
+    xpx = stop * (1 - SLIP)
+
+    def loss(L):
+        q = (L / 100) * 1000.0 * L / fill
+        return q * (fill - stop) + q * (stop - xpx) + TAKER * (q * fill + q * xpx)
+    assert loss(40) > 0.15 * 1000 > loss(30)
+    assert rec(_fixlev_run(mk, 40, 1000.0, d0=1.3))[0][H.RF_LEV] == 30
+    assert rec(_fixlev_run(mk, 40, 1000.0, d0=1.3, PR_RB_MAXLOSS=1.0))[0][H.RF_LEV] == 40
+    out = _fixlev_run(mk, 30, 1000.0, d0=1.6)                        # 30x: about 15.3% > 15%; 20x passes
+    assert rec(out)[0][H.RF_LEV] == 20
+    out = _fixlev_run(mk, 20, 1000.0, d0=4.0)                        # 20x: 4 x 4% = 16% > 15%: skipped
+    assert len(out[3]) == 0 and out[12].tolist() == [0, 0, 1]
+    # ATR buffer: 40x liquidation about 97.9 and 30x about 97.1 lie within 2.0 of the stop at 98.7; 20x (95.4) passes
+    assert rec(_fixlev_run(mk, 40, 1000.0, d0=1.3, atr=2.0, PR_RB_MAXLOSS=1.0))[0][H.RF_LEV] == 20
+    assert rec(_fixlev_run(mk, 40, 1000.0, d0=1.3, atr=0.5, PR_RB_MAXLOSS=1.0))[0][H.RF_LEV] == 40
+
+
+def test_build_cands_carries_the_signal_bar_atr():
+    s0 = H.day_ms("2022-03-01")
+    coins = {f"C{i}USDT": H.synth_coin(f"C{i}USDT", s0, s0 + 12 * DAY, 40 + i, 20.0 * (i + 1)) for i in range(2)}
+    H.install(coins)
+    mk = H.Market(list(coins), (s0 + 6 * DAY, s0 + 12 * DAY), name="t")
+    sig = _rand_sig(mk, "1h", 0.5, 3)
+    c = H.build_cands(mk, H.bank_for(mk, ("1h",)), [(sig, 0)])
+    assert len(c["atr"]) == len(c["d0"]) > 0 and np.allclose(c["d0"], H.D0_MULT["1h"] * c["atr"])
 
 
 def _mark_coin(bars, marks):
@@ -1290,7 +1443,7 @@ def test_liquidation_on_mark_price_only_in_the_mark_read():
     H.install({"AUSDT": c})
     start = START
     p = H.params()
-    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP] = 20, 0, 100.0
+    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_RB_CHECK] = 20, 0, 100.0, 0   # the stop lies past liquidation
     rows = [{"k": 0, "t": 0, "d0": 4.0}]
     last = H.Market(["AUSDT"], (start, start + DAY), name="t")
     assert rec(H.simulate(last, no_bank(), cands(last, rows), prm=p))[1][H.RI_REASON] == H.EX_END
@@ -1411,7 +1564,8 @@ def test_live_gate_size_rule_and_intervals():
     assert H.size_fixed_on_select([cells[3]]) is None
     lo, hi = H.clopper_pearson(0, 33)
     assert lo == 0.0 and hi == pytest.approx(0.1058, abs=1e-3)              # panel: 0 of 33 allows up to 10.6%
-    assert H.HEADLINE_CELL["r"] == 0.05 and H.HEADLINE_CELL["level"] == 5000.0
+    assert H.HEADLINE_CELL["r"] == 0.05 and H.HEADLINE_CELL["level_x"] == 5.0
+    assert "$5,000" not in str(H.HEADLINE_CELL)                       # owners (e): multiples, not dollars
     assert H.HEADLINE_CELL["start_wallet"] == 1000.0 and H.HEADLINE_CELL["machine"].startswith("B")
 
 
@@ -1471,11 +1625,15 @@ def test_reads_hook_ctx_guard_and_d11(tmp_path, monkeypatch, mode):
                                                       else f(p)))(H.sha256_file))
     monkeypatch.setattr(H, "reads_pinned_now", lambda study: {} if mode == "unpinned"
                         else {"research/hunt/reads_fake.py": "f" * 64})
-    rc = H.main(["test", "--study", "wide"] + args)
+    rc = H.main(["test", "--study", "wide", "--judge-usd-per-call", "0.002"] + args)
     target = out / "wide" / "reads_fake.json"
     assert (out / "wide" / "test.json").exists()                  # the verdict is written before any read
     if mode == "ok":
         assert rc == 0 and target.exists()
+        assert fake.seen["judge_usd_per_call"] == 0.002 and fake.seen["window_seconds"] is None
+        tj = json.load(open(out / "wide" / "test.json"))
+        assert tj["pretest_reads"]["pinned_before_test"] is False and "post hoc" in tj["pretest_reads"]["label"]
+        assert tj["reads_pinned_at_test"] == {"research/hunt/reads_fake.py": "f" * 64}
         doc = json.load(open(target))
         assert doc["reads_line_predates_test_json"] is True and doc["out"]["rows"]
         assert doc["private_sha256"] == H.sha256_file(str(priv / "wide_reads_fake_private.json"))
@@ -1568,6 +1726,21 @@ def test_daily_archive_loader(tmp_path):
     assert arr["mo"][0] == np.float32(100.1)
     assert cnt["kline_days"] == 2 and cnt["mark_days"] == 1 and cnt["funding_zero_days"] == 3
     assert cnt["checksum_ok"] == 3 and len(r["arrays"]["funding"][0]) == 0
+    # R23 (review): with the pinned list a zip missing from it, differing from it or without .CHECKSUM stops
+    files = {f"{k}/{os.path.basename(p)}": H.sha256_file(p) for (k, _s, _d), p in H.scan_daily_archive(str(root)).items()}
+    assert len(files) == 3
+    H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY, allowed=files)
+    first = sorted(files)[0]
+    with pytest.raises(SystemExit, match="not in"):
+        H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY, allowed={k: v for k, v in files.items() if k != first})
+    with pytest.raises(SystemExit, match="differs from"):
+        H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY, allowed={**files, first: "0" * 64})
+    ck = next((root / "data/futures/um/daily/markPriceKlines/XUSDT/5m").glob("*.CHECKSUM"))
+    ck_text = ck.read_text()
+    ck.unlink()
+    with pytest.raises(SystemExit, match="no .CHECKSUM"):
+        H.load_daily_archive(str(root), "XUSDT", a, a + 3 * DAY, allowed=files)
+    ck.write_text(ck_text)
     bad = next((root / "data/futures/um/daily/klines/XUSDT/5m").glob("*.CHECKSUM"))
     bad.write_text("0" * 64 + "  x\n")
     with pytest.raises(SystemExit, match="CHECKSUM"):
@@ -1592,6 +1765,14 @@ def test_october_read_on_synthetic_daily_files(tmp_path, monkeypatch):
             sl = slice(d * 288, (d + 1) * 288)
             _daily_archive(root, s, H.ms_str(a + d * DAY)[:10], nc.ts[sl], nc.o[sl], nc.h[sl], nc.l[sl], nc.c[sl],
                            nc.v[sl], nc.qv[sl])
+    with pytest.raises(H.PinError):
+        H.october_list("wide")                                         # no list pinned: the read refuses
+    assert H.main(["october", "--study", "wide", "--data-oct", str(root)] + args) == 2
+    lst = tmp_path / "october_files.json"
+    assert H.main(["octlist", "--data-oct", str(root), "--out", str(lst)]) == 0
+    allowed = json.load(open(lst))["files"]
+    assert len(allowed) == 2 * 10 * len(E2E_SYMS)                      # klines + mark klines, 10 days
+    monkeypatch.setattr(H, "october_list", lambda study: dict(allowed))
     assert H.main(["october", "--study", "wide", "--data-oct", str(root)] + args) == 0
     doc = json.load(open(out / "wide" / "reads_october.json"))
     assert doc["note"] == H.OCT_NOTE and doc["period"] == ["2020-10-01", "2020-10-11"]

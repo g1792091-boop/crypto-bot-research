@@ -158,7 +158,14 @@ def engine_info(root: str = CFG.ROOT) -> dict:
 
 
 # ---------------------------------------------------------------- run.db (the runner's own small state)
+TRADE_COLS = (("out_ms", "INTEGER"), ("sig", "TEXT"), ("revisions", "INTEGER NOT NULL DEFAULT 0"), ("gone_ms", "INTEGER"))
+
+
 def open_run_db(path: str) -> sqlite3.Connection:
+    """run.db: kv (Telegram memory), runs (one row per cycle), trades_seen (every closed trade the first time it is
+    seen: ``data`` = that first version, money-free for DeepSeek accounts (D11); ``sig`` = the fingerprint of the
+    latest version; ``revisions`` / ``gone_ms`` when a later cycle gave it differently or not at all) and
+    trade_changes (one row per such change, the new version, money-free for DeepSeek accounts)."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -166,10 +173,39 @@ def open_run_db(path: str) -> sqlite3.Connection:
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS trades_seen (account TEXT NOT NULL, tkey TEXT NOT NULL, first_seen_ms INTEGER NOT NULL,
   engine TEXT, data TEXT NOT NULL, PRIMARY KEY (account, tkey)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS trade_changes (ts_ms INTEGER NOT NULL, account TEXT NOT NULL, tkey TEXT NOT NULL,
+  kind TEXT NOT NULL, complete_ms INTEGER, data TEXT);
 CREATE TABLE IF NOT EXISTS runs (started_ms INTEGER PRIMARY KEY, complete_ms INTEGER, seconds REAL, info TEXT);
+""")
+    have = {r[1] for r in conn.execute("PRAGMA table_info(trades_seen)")}
+    for name, typ in TRADE_COLS:                     # a run.db made before these columns existed
+        if name not in have:
+            conn.execute(f"ALTER TABLE trades_seen ADD COLUMN {name} {typ}")
+    conn.execute("CREATE INDEX IF NOT EXISTS trades_seen_out ON trades_seen (engine, out_ms)")
+    conn.commit()
+    return conn
+
+
+def open_private_db(path: str) -> sqlite3.Connection:
+    """<private>/trades_full.db: every version of every DeepSeek account's closed trade with its money (D11: never
+    served; the dashboard's sandbox cannot read the private folder)."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    conn = sqlite3.connect(path, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript("""
+CREATE TABLE IF NOT EXISTS trades_full (account TEXT NOT NULL, tkey TEXT NOT NULL, sig TEXT NOT NULL,
+  seen_ms INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (account, tkey, sig)) WITHOUT ROWID;
 """)
     conn.commit()
     return conn
+
+
+SIG_SKIP = ("i", "stop_now")                    # the record index and the stop in force are not part of a trade
+
+
+def trade_sig(t: dict) -> str:
+    body = json.dumps({k: t[k] for k in sorted(t) if k not in SIG_SKIP}, sort_keys=True, default=str)
+    return hashlib.sha256(body.encode()).hexdigest()[:20]
 
 
 def kv_get(conn, k, default=None):
@@ -225,11 +261,20 @@ def _task_events(task):
             else None
         lg, sh = H.entry_events(cell.spec, sym, ser, btc)
         cm = ser.bars.close_ms
-        fwd = cm >= R.fwd
+        keep = cm >= R.fwd
         lg, sh = np.asarray(lg, bool), np.asarray(sh, bool)
-        return (cid, sym, cm[lg & fwd].astype(np.int64), cm[sh & fwd].astype(np.int64),
-                int(cm[-1]) if len(cm) else None, len(H.series("BTCUSDT", cell.tf).bars) if btc is not None else None,
-                None)
+        last = int(cm[-1]) if len(cm) else None
+        if btc is not None:
+            # a DeepSeek definition reads BTC's bar of the same close time: a bin BTC does not have yet (BTC's bars
+            # late, the feed's mark released without them) is neither recorded nor frozen; it is computed again
+            # once BTC has it (stale_pairs: BTC's new bin)
+            bcm = btc.bars.close_ms
+            b_last = int(bcm[-1]) if len(bcm) else R.fwd - 1
+            keep &= cm <= b_last
+            if last is not None:
+                last = min(last, b_last)
+        return (cid, sym, cm[lg & keep].astype(np.int64), cm[sh & keep].astype(np.int64), last,
+                len(btc.bars) if btc is not None else None, None)
     except Exception as e:  # noqa: BLE001  one bad cell never stops the others
         return (cid, sym, None, None, None, None, f"{type(e).__name__}: {e}"[:300])
 
@@ -337,6 +382,9 @@ class Runner:
         self.keep_all_trades = False      # tests: every trade of every system in last_results
         self.errors: list = []
         self.reuse_series = True          # off for good if hunt.Series ever holds more than bars / ATR / label
+        self.started_ms = self.now_ms()
+        self._recorded_through = None
+        self.pdb = None
 
     def now_ms(self) -> int:
         return int(self.clock() * 1000)
@@ -367,10 +415,15 @@ class Runner:
             self.dirty.add(s)
 
     def sync_data(self) -> dict:
-        """New rows since the last read; a row older than a coin's newest bar reloads the coin (late bar)."""
-        stats = {"new": 0, "late": []}
-        rows_by = self.store.bars_since(self.last_ins)
+        """New rows since the last read; a row older than a coin's newest bar reloads the coin (late bar). The insert
+        sequence is read FIRST and only rows up to it are taken (a feed pass committing in between is read next
+        time, never skipped); then the newest two days of every coin are counted against the store (a hole reloads
+        the coin). Rows for bars before the last cycle's mark, a changed coin end or funding that came in late can
+        change trades already shown as closed: the next ``record_trades`` then compares every trade."""
+        stats = {"new": 0, "late": [], "reloaded": []}
         mx = self.store.max_ins()
+        rows_by = self.store.bars_since(self.last_ins, mx)
+        past = False
         for sym, rows in rows_by.items():
             if sym not in self.data:
                 continue
@@ -382,6 +435,8 @@ class Runner:
             if not fresh.any():
                 continue
             last = int(d["ts"][-1]) if len(d["ts"]) else -1
+            if self.done_ms is not None and (ts_new[fresh] < self.done_ms).any():
+                past = True
             if (ts_new[fresh] <= last).any():
                 self.data[sym] = self.store.load_bars(sym, self.warmup_ms)
                 self.dirty.add(sym)
@@ -393,11 +448,36 @@ class Runner:
                 d[k] = np.concatenate([d[k], arr[:, i]])
             stats["new"] += int(fresh.sum())
         self.last_ins = max(self.last_ins, mx)
+        for sym in self.syms:                               # the newest two days in memory = the store's
+            d = self.data.get(sym)
+            if d is None or not len(d["ts"]):
+                continue
+            hi = int(d["ts"][-1]) + FIVE
+            lo = max(self.warmup_ms, hi - 2 * DAY)
+            n_mem = int(np.searchsorted(d["ts"], hi) - np.searchsorted(d["ts"], lo))
+            if n_mem != self.store.count_bars(sym, lo, hi, upto_ins=mx):
+                self.data[sym] = self.store.load_bars(sym, self.warmup_ms)
+                self.dirty.add(sym)
+                stats["reloaded"].append(sym)
+                past = True
+                self.errors.append(f"data: {sym} had a hole in memory (bars since {CFG.ms_str(lo)} UTC); reloaded")
         coins = self.store.coins()
         for s in self.syms:
             e = (coins.get(s) or {}).get("end_ms")
-            self.coin_end[s] = int(e) if e is not None else None
-            self.funding[s] = self.store.load_funding(s, self.fwd - DAY)
+            e = int(e) if e is not None else None
+            if s in self.coin_end and self.coin_end[s] != e:
+                past = True
+            self.coin_end[s] = e
+            f = self.store.load_funding(s, self.fwd - DAY)
+            old = self.funding.get(s)
+            if old is not None and self.done_ms is not None:
+                n_old = int((fgrid(old[0]) <= self.done_ms).sum())
+                if int((fgrid(f[0]) <= self.done_ms).sum()) != n_old:
+                    past = True
+            self.funding[s] = f
+        if past and self.done_ms is not None:
+            self._recorded_through = None                   # compare every trade this cycle (record_trades)
+            stats["past_changed"] = True
         return stats
 
     def build_coins(self, complete_ms: int) -> tuple:
@@ -490,10 +570,9 @@ class Runner:
                     rows.append(self._event_row(cid, sym, side, int(ms)))
         n = self.ledger.add_events(rows)
         self.ledger.set_progress(progress)
-        if rep:
-            self.ledger.log_repaints(rep)
+        n_rep = self.ledger.log_repaints(rep) if rep else 0
         self.ledger.commit()
-        return {"pairs": len(pairs), "new": n, "repaints": len(rep), "errors": errs}
+        return {"pairs": len(pairs), "new": n, "repaints": n_rep, "errors": errs}
 
     def _event_row(self, cid: str, sym: str, side: str, ms: int) -> dict:
         c = self.cells[cid]
@@ -637,7 +716,9 @@ class Runner:
         # (5) the full snapshot
         t4 = time.monotonic()
         SN.write_all(self, mk, complete_ms, results, lineup_res)
-        self.record_trades(results, lineup_res)
+        changes = self.record_trades(results, lineup_res, complete_ms)
+        self.last_counts = dict(getattr(self, "last_counts", None) or {},
+                                trades_changed=self.trade_change_counts()["changed"])
         phase["snapshot_s"] = round(time.monotonic() - t4, 2)
         self.done_ms = complete_ms
         self.cycles += 1
@@ -645,7 +726,8 @@ class Runner:
         info = {"complete_ms": complete_ms, "seconds": round(time.monotonic() - t0, 2), "phase": phase,
                 "new_bins": len(new_bins), "events_lineup": ev1, "events_rest": ev2, "systems": len(results),
                 "actions": n_act, "sync": sync, "errors": self.errors[:20], "procs": self.procs,
-                "lineup_accounts": len(self.lineup["accounts"]), "catching_up": not caught_up}
+                "lineup_accounts": len(self.lineup["accounts"]), "catching_up": not caught_up,
+                "trades_changed": len(changes)}
         self.rdb.execute("INSERT OR REPLACE INTO runs VALUES (?, ?, ?, ?)", (started, complete_ms, info["seconds"],
                                                                             json.dumps(info)))
         self.rdb.execute("DELETE FROM runs WHERE started_ms < ?", (started - 14 * DAY,))
@@ -655,34 +737,101 @@ class Runner:
         SN.write_status(self, complete_ms, started, info)
         if self.notifier is not None:
             try:
+                self.notifier.after_trade_changes(self, [c for c in changes if c["account"].startswith("lineup:")])
                 self.notifier.after_cycle(self, info, caught_up)
             except Exception as e:  # noqa: BLE001
                 self.out(f"{CFG.TAG} telegram failed: {type(e).__name__}")
         return info
 
-    def record_trades(self, results: dict, lineup_res: dict) -> None:
-        """Every closed trade the first time it is seen (run.db; the record cannot change silently after a code
-        change: a later different version of the same trade is kept beside it)."""
+    def record_trades(self, results: dict, lineup_res: dict, complete_ms: Optional[int] = None) -> list:
+        """Every closed trade the first time it is seen (run.db ``trades_seen``), and every later change of one: a
+        closed trade that a later cycle gives differently (its fingerprint changed) or no longer gives is counted
+        (``revisions`` / ``gone_ms``) and its new version kept in ``trade_changes``. With the replay design a closed
+        trade changes only when data for the past came in late (a coin's bars after a stall the feed's mark did not
+        wait for, a late funding rate, a changed coin end) or the code changed. Compared: the closed trades the cycle
+        carries (every one when ``_recorded_through`` is None: the first cycle, or a cycle after data for the past
+        arrived, see ``sync_data``; else those closed within a day of the last cycle). DeepSeek accounts: money-free
+        rows here, every version with its money in <private>/trades_full.db (D11). Returns the changes."""
+        from .snapshot import public_trade
         now = self.now_ms()
         eng = (self.engine.get("hunt_sha256") or "")[:16]
         since = getattr(self, "_recorded_through", None)
-        rows = []
-        for acct, res in list(results.items()) + [(f"lineup:{k}", v) for k, v in lineup_res.items()]:
+        lo = None if since is None else since - DAY
+        ds_of = {a["id"]: a["ds"] for a in self.lineup.get("accounts") or []}
+        accts = [(sid, res, S.is_ds(self.by_id[sid]) if sid in self.by_id else False) for sid, res in results.items()]
+        accts += [(f"lineup:{k}", v, bool(ds_of.get(k))) for k, v in lineup_res.items()]
+        cur = {}
+        for acct, res, ds in accts:
             for t in res.get("trades", []):
-                if t["open"] or (since is not None and t["out_ms"] < since - DAY):
+                if t["open"] or (lo is not None and t["out_ms"] < lo):
                     continue
-                key = f"{t['coin']}|{t['side']}|{t['in_ms']}|{eng}"
-                rows.append((acct, key, now, eng, json.dumps(t)))
-        self.rdb.executemany("INSERT OR IGNORE INTO trades_seen VALUES (?, ?, ?, ?, ?)", rows)
+                cur[(acct, f"{t['coin']}|{t['side']}|{t['in_ms']}|{eng}")] = (t, ds)
+        present = {a for a, _, _ in accts}
+        q = "SELECT account, tkey, sig, gone_ms FROM trades_seen WHERE engine = ?"
+        args: list = [eng]
+        if lo is not None:
+            q += " AND out_ms >= ?"
+            args.append(int(lo))
+        known = {(a, k): (sg, gone) for a, k, sg, gone in self.rdb.execute(q, args) if a in present}
+        new_rows, changes, priv = [], [], []
+        for (acct, key), (t, ds) in cur.items():
+            sg = trade_sig(t)
+            pub = public_trade(t, ds) if ds else t
+            if ds:
+                priv.append((acct, key, sg, now, json.dumps(t)))
+            k = known.get((acct, key))
+            if k is None:
+                new_rows.append((acct, key, now, eng, json.dumps(pub), int(t["out_ms"]), sg))
+            elif k[0] != sg or k[1] is not None:
+                kind = "back" if k[1] is not None and k[0] == sg else "changed"
+                changes.append({"account": acct, "tkey": key, "kind": kind, "ds": ds, "trade": pub})
+                self.rdb.execute("UPDATE trades_seen SET sig = ?, revisions = revisions + ?, gone_ms = NULL, "
+                                 "out_ms = ? WHERE account = ? AND tkey = ?",
+                                 (sg, int(kind == "changed"), int(t["out_ms"]), acct, key))
+        for (acct, key), (sg, gone) in known.items():
+            if (acct, key) not in cur and gone is None:
+                changes.append({"account": acct, "tkey": key, "kind": "gone", "ds": None, "trade": None})
+                self.rdb.execute("UPDATE trades_seen SET gone_ms = ? WHERE account = ? AND tkey = ?", (now, acct, key))
+        if new_rows:
+            self.rdb.executemany("INSERT OR IGNORE INTO trades_seen (account, tkey, first_seen_ms, engine, data, out_ms, "
+                                 "sig) VALUES (?, ?, ?, ?, ?, ?, ?)", new_rows)
+        if changes:
+            self.rdb.executemany("INSERT INTO trade_changes VALUES (?, ?, ?, ?, ?, ?)",
+                                 [(now, c["account"], c["tkey"], c["kind"], complete_ms,
+                                   json.dumps(c["trade"]) if c["trade"] is not None else None) for c in changes])
+            self.out(f"{CFG.TAG} {len(changes)} closed trade(s) changed after data for the past came in "
+                     f"({sum(c['kind'] == 'gone' for c in changes)} gone)")
         self.rdb.commit()
-        self._recorded_through = self.done_ms
+        if priv:
+            if getattr(self, "pdb", None) is None:
+                self.pdb = open_private_db(os.path.join(self.private, "trades_full.db"))
+            self.pdb.executemany("INSERT OR IGNORE INTO trades_full VALUES (?, ?, ?, ?, ?)", priv)
+            self.pdb.commit()
+        self._recorded_through = self.done_ms if self.done_ms is not None else complete_ms
+        return changes
+
+    def trade_change_counts(self) -> dict:
+        """For the status screen: closed trades that later changed (this engine), and the newest changes."""
+        eng = (self.engine.get("hunt_sha256") or "")[:16]
+        n = self.rdb.execute("SELECT COUNT(*), SUM(gone_ms IS NOT NULL) FROM trades_seen WHERE engine = ? AND "
+                             "(revisions > 0 OR gone_ms IS NOT NULL)", (eng,)).fetchone()
+        last = self.rdb.execute("SELECT ts_ms, account, tkey, kind FROM trade_changes ORDER BY ts_ms DESC LIMIT 10")
+        return {"changed": int(n[0] or 0), "gone": int(n[1] or 0),
+                "last": [{"ts_ms": t, "account": a, "coin": k.split("|")[0], "side": int(k.split("|")[1]),
+                          "in_ms": int(k.split("|")[2]), "kind": kind} for t, a, k, kind in last]}
 
     # ------------------------------------------------------------ the service loop
-    def run_forever(self, poll_s: float = 5.0) -> None:
+    def run_forever(self, poll_s: float = 5.0, sleep=time.sleep, max_loops: Optional[int] = None) -> None:
+        """A cycle whenever the feed's mark moves (or the lineup file changes). Every loop, cycle or not, the
+        Telegram health check runs: a feed that stopped (no new mark, no heartbeat) is told even though no cycle runs,
+        and the 09:00 summary goes out on time."""
         self.out(f"{CFG.TAG} runner: {len(self.systems)} systems in {len(self.cells)} cells, procs {self.procs}, "
                  f"ledger generation {self.ledger.gen}")
+        self.started_ms = self.now_ms()
         last_lineup = None
-        while True:
+        n = 0
+        while max_loops is None or n < max_loops:
+            n += 1
             try:
                 comp = self.store.complete_ms()
                 lsha = CFG.sha256_file(self.lineup_path)
@@ -698,8 +847,13 @@ class Runner:
                     self.ledger.conn.rollback()
                 except Exception:  # noqa: BLE001
                     pass
-                time.sleep(30)
-            time.sleep(poll_s)
+                sleep(30)
+            if self.notifier is not None:
+                try:
+                    self.notifier.check_health(self)
+                except Exception as e:  # noqa: BLE001  Telegram never stops the runner
+                    self.out(f"{CFG.TAG} health check failed: {type(e).__name__}: {e}")
+            sleep(poll_s)
 
 
 def make_runner(notifier=True, log=print) -> Runner:

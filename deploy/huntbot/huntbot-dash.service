@@ -1,5 +1,7 @@
 # 추세 사냥 모의 봇 dashboard: read-only views of /var/lib/huntbot/snap behind a password (port 8092 by default), on
-# this server's Tailscale address only.
+# this server's Tailscale address only. Of /var/lib/huntbot it sees only snap/ (read-only): store.db, events.db,
+# run.db and private/ (DeepSeek money, D11) are invisible to it; /etc/huntbot (the env file with the Telegram token)
+# is invisible too (systemd reads EnvironmentFile before the sandbox, and the token is unset from its environment).
 [Unit]
 Description=huntbot dashboard (read-only)
 Wants=network-online.target
@@ -16,6 +18,8 @@ Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OPENBLAS_NUM_THREADS=1 
 Environment=HUNTBOT_SNAP=/var/lib/huntbot/snap
 UnsetEnvironment=HUNTBOT_TG_TOKEN HUNTBOT_TG_CHAT
 ExecStartPre=/bin/sh -c 'if [ -z "$$HUNTBOT_DASH_HOST" ]; then echo "HUNTBOT_DASH_HOST empty in /etc/huntbot/huntbot.env" >&2; exit 1; fi'
+# After a reboot the Tailscale address can appear a few seconds after the network: wait up to 60 s for it (ip needs
+# AF_NETLINK, allowed below).
 ExecStartPre=-/bin/sh -c 'n=0; until ip -4 -o addr show | grep -qF " inet $$HUNTBOT_DASH_HOST/" || [ $$n -ge 60 ]; do n=$$((n+1)); sleep 1; done'
 ExecStart=/opt/huntbot/venv/bin/python -m huntbot dash
 Restart=always
@@ -32,9 +36,10 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-ReadOnlyPaths=/var/lib/huntbot
-InaccessiblePaths=-/var/lib/huntbot/private
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+TemporaryFileSystem=/var/lib/huntbot:ro
+BindReadOnlyPaths=/var/lib/huntbot/snap
+InaccessiblePaths=-/etc/huntbot
 
 [Install]
 WantedBy=multi-user.target

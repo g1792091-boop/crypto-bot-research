@@ -20,7 +20,8 @@ Tables
 * view ``events_systems``: the same rows once per system (system id, gate, rule_action), as the judge spec names them.
 * ``progress``: per (generation, cell, symbol) the last signal-bar close the ledger covers.
 * ``repaints``: events a fresh computation of an already-recorded bar no longer gives (``vanished``) or newly gives
-  (``appeared``); the ledger keeps what was seen.
+  (``appeared``); the ledger keeps what was seen. One row per (generation, cell, symbol, side, bar, kind): the same
+  difference found again in a later cycle is not written again, so the count is the number of repainted signals.
 """
 
 from __future__ import annotations
@@ -71,6 +72,7 @@ class Ledger:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(SCHEMA)
+        self._repaints_once()
         self.engine_hash = engine_hash
         row = self.conn.execute("SELECT gen, signal_hash FROM generations ORDER BY gen DESC LIMIT 1").fetchone()
         if row is None or row[1] != signal_hash:
@@ -86,6 +88,18 @@ class Ledger:
 
     def now_ms(self) -> int:
         return int(self.clock() * 1000)
+
+    def _repaints_once(self) -> None:
+        """A repaint is written once (an events.db from before this rule may hold repeats: they are folded first)."""
+        try:
+            self.conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS repaints_once ON repaints "
+                              "(gen, cell, symbol, side, bar_close_ms, kind)")
+        except sqlite3.IntegrityError:
+            self.conn.execute("DELETE FROM repaints WHERE rowid NOT IN (SELECT MIN(rowid) FROM repaints GROUP BY gen, "
+                              "cell, symbol, side, bar_close_ms, kind)")
+            self.conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS repaints_once ON repaints "
+                              "(gen, cell, symbol, side, bar_close_ms, kind)")
+        self.conn.commit()
 
     # ------------------------------------------------------------ the book (frozen events) after a restart
     def load_book(self) -> dict:
@@ -127,10 +141,12 @@ class Ledger:
                               [(self.gen, c, s, int(t)) for c, s, t in items])
 
     def log_repaints(self, items: Iterable[tuple]) -> int:
+        """Returns how many repaints were new (one already written is not written again)."""
         now = self.now_ms()
         rows = [(now, self.gen, c, s, side, int(ms), kind) for c, s, side, ms, kind in items]
-        self.conn.executemany("INSERT INTO repaints VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
-        return len(rows)
+        before = self.conn.total_changes
+        self.conn.executemany("INSERT OR IGNORE INTO repaints VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        return self.conn.total_changes - before
 
     def pending_since(self) -> dict:
         """{cell: earliest bar close among its events without a final action} (this generation)."""
