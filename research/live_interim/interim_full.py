@@ -200,6 +200,10 @@ def day(ms: int) -> str:
     return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y-%m-%d")
 
 
+def hhmm(ms: int) -> str:
+    return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
 def tf_key(tf: str) -> int:
     return TF_ORDER.index(tf) if tf in TF_ORDER else 9
 
@@ -375,7 +379,7 @@ def main(argv=None) -> int:
     P("[규칙봇 paper v4 전체 성적]")
     cnt = Counter(ac["group"] for ac in accts.values())
     tcnt = Counter(t["group"] for t in trades)
-    P(f"시작 {day(d0)} · 마지막 거래 {day(last)} · {days:.1f}일 · 계좌 {len(accts)}개 · 거래 {len(trades)}건"
+    P(f"시작 {hhmm(d0)} UTC · 마지막 거래 {hhmm(last)} UTC · {days:.1f}일 · 계좌 {len(accts)}개 · 거래 {len(trades)}건"
       + (f" · 봇 시작 기록 {runs}번" if runs is not None else ""))
     P("묶음별 계좌(거래): " + " · ".join(f"{GROUP_KO.get(g, g)} {cnt[g]}({tcnt[g]}건)"
                                           for g in GROUP_KO if cnt[g]))
