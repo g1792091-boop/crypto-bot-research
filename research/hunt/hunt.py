@@ -20,8 +20,9 @@ line per file ``<sha256>  <path>``) matches every file it lists and lists every 
 this file, the hunt tests, research/hunt/universe30.json, data_manifest.json and data_check.json (H 2), every
 repository Python file the study's signal code loads (found by running each entry cell once on synthetic bars: the
 full grid's code, research/deepseek200/lib_c.py, research/fullgrid/memo.py, the vendored indicator code, regime5y...),
-and for wide parity.json, whose content must also say pass on the hunt 5m files under the current code (W 8). The
-data check (H 2) must say pass on the old six, and the data read must equal data_manifest.json's array hashes. ``test``
+and for wide parity.json, whose content must also say pass on the hunt 5m files of data_manifest.json (the old six's
+content hashes) under the current code (W 8). The data check (H 2) must say pass on the old six, and the data read
+must equal data_manifest.json's array hashes. ``test``
 also needs the picks line. ``select`` appends the picks line itself after writing the picks (PREREG_HUNT 11.3, WIDE 5)
 and refuses when one is already there. Long steps keep finished parts under the private folder and resume from them
 (same pin only); a worker that dies is replaced and its items sent again.

@@ -52,10 +52,12 @@ coin-flip sides?
   funding while a coin trades counts as 0 and is reported (the manifest shows none).
 * **Cross-check, before the pin:** for the current six coins, the 5m bars must match the full grid's 1m archive
   (`fg1m/1m/<SYM>.npz`) resampled to 5m (OHLC within 1e-6 relative; volume within 0.1%) on every bar both have; a
-  mismatch on more than 0.1% of the bars of any of the six stops the pin. The data job compared BTC closes only
-  (99.997% equal); the full check (six coins, open, high, low, close and volume) still has to run. Its per-coin counts
-  go into `research/hunt/data_check.json`, which the pin lists.
-* **Identity of the data.** The npz files stay outside the repository (about 1.1 GB as float64). Before the pin,
+  mismatch on more than 0.1% of the bars of any of the six stops the pin. Run on the float64 data on 2026-10-11 (per
+  coin counts in `research/hunt/data_check.json`, which the pin lists): **pass**, 7 to 9 bars per coin beyond tolerance
+  (BTC 9, ETH 9, SOL 9, DOGE 9, LTC 7, BCH 8: about 0.001% of the bars both have; limit 0.1%), the same counts as on
+  the float32 build.
+* **Identity of the data.** The npz files stay outside the repository (about 0.8 GB as float64: 806,755,443 bytes of
+  npz, measured 2026-10-11). Before the pin,
   `python -m research.hunt.hunt datapin --data <coins30>` writes `research/hunt/data_manifest.json`: the data folder's
   `manifest.json` copied in, plus, per coin, the sha256 of the arrays the study reads (5m: ts, o, h, l, c, v, qv;
   funding: ts, rate; in that order, as stored). Each array enters the hash as the line `name|dtype|shape` (shape
@@ -362,14 +364,16 @@ verdicts are never merged into one "the hunt passed".
   shown. **The rerun's verdict is the verdict**, whichever way it goes; a fix that changes a rule rather than the code's
   agreement with this file is not a bug fix. Any changed rule (gate, entries, numbers, exits, sizes) is a v2: it needs
   its own pre-registration. A v2 designed and selected on 2021-2023 only is judged as every later round
-  (`PREREG_HUNT_WIDE.md` W 14, owners 2026-10-11: one confirm look per version on 2024-01 .. 2026-10, every look counted
-  in the program-wide ledger, plus forward paper data); a change taken from what the test period showed (a read on
-  test, section 14) is judged only on data after its fixing date.
+  (`PREREG_HUNT_WIDE.md` W 14, owners 2026-10-11: one confirm look per version on the test period 2024-01-01 ..
+  2026-10-01, every look counted in the program-wide ledger, plus forward paper data counted only from the day its
+  pre-registration is hashed); a change taken from what the test period showed (a read on test, section 14) is judged
+  only on data after its fixing date.
 * The mid-November review sees about six weeks of forward record (from 2026-10-01; the owners watched its first days
   live, W R23): a handful of trends at most. It checks that the paper bot followed these rules (a replay of the same
   days from the archive reproduces its positions), that its forward multiple lies inside the 5th..95th percentile of
-  the test period's rolling windows of the same length (one start per UTC day), and that nothing broke. It cannot
-  prove the system makes money; it can show that it does not behave as tested.
+  the test period's rolling windows of about the same length (one start per UTC day; the R14 band of
+  `PREREG_HUNT_WIDE.md` W 7.4 at the listed length nearest to the record's days: 40, 45 or 50), and that nothing broke.
+  It cannot prove the system makes money; it can show that it does not behave as tested.
 * Every result, pass or fail, goes into `research/hunt/RESULTS_KO.md` and the owners' summary.
 
 ## 16. Code, compute, reproducibility
@@ -396,8 +400,8 @@ verdicts are never merged into one "the hunt passed".
   it ran under, and the content sha256 of every coin's data it read (section 2).
 * Compute: select is 24 accounts + diagnostics; test is the pick, 2 x 1,000 control accounts at r = 0.5% and again at
   r = 1%, 2 x 200 in the select period, the cost x2 and reads (one control run of 33 months on 30 coins took 0.15-0.21
-  s on synthetic bars, 2026-10-11: about 11-16 CPU-minutes for the pick's controls). Disk about 3 GB in total (the
-  float64 5m files about 1.1 GB, section 2).
+  s on synthetic bars, 2026-10-11: about 11-16 CPU-minutes for the pick's controls). Disk under 2 GB in total (the
+  float64 5m and funding files about 0.8 GB, measured, section 2).
 
 ## 17. Not in v1
 
@@ -526,5 +530,9 @@ Changes:
    the owners when good strategies exist, recording every hunt system from 2026-10-01 on the coins still trading (22
    at 2026-09-30); real money only from 정식, never before the mid-November review (W 12).
 3. **v2 and later rounds** (section 15): judged as `PREREG_HUNT_WIDE.md` W 14 (designed and selected on 2021-2023
-   only, one confirm look per version on 2024-01 .. 2026-10, every look in the program-wide ledger, plus forward paper
-   data); a change taken from a test-period read stays forward-only.
+   only, one confirm look per version on the test period 2024-01-01 .. 2026-10-01, every look in the program-wide
+   ledger, plus forward paper data counted only from the day the round's pre-registration is hashed); a change taken
+   from a test-period read stays forward-only.
+4. **Review before the pin** (sections 2, 15, 16): the cross-check result and the measured data size (about 0.8 GB)
+   written in; the mid-November forward comparison uses R14's 40-, 45- or 50-day band (the record now starts
+   2026-10-01, so the 21-30-day bands of the earlier plan no longer match its length).
