@@ -8,11 +8,12 @@ import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {ROLES, ROLE_KO, ROLE_DESC, tfKo, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 import {paramTable, originBox} from "./custom.js";
-import {posPill} from "../poskit.js";
+import {posPill, pricesLive} from "../poskit.js";
 import {serverNow} from "../live.js";
 
-/** Live ROE may be shown: the engine is not replaying from 10/01 and wrote its record in the last 15 minutes. */
-const liveOk = (d) => !!d && !LK.catchingUp(d) && !(d.generated_ms && serverNow() - d.generated_ms > 15 * 60000);
+/** Live ROE may be shown: the engine is not replaying from 10/01, wrote its record in the last 15 minutes, and the prices
+ *  are live (poskit pricesLive). */
+const liveOk = (d) => !!d && !LK.catchingUp(d) && !(d.generated_ms && serverNow() - d.generated_ms > 15 * 60000) && pricesLive();
 
 export async function mount(el, ctx) {
   let meta = null;
@@ -43,7 +44,7 @@ export async function mount(el, ctx) {
     ctx.setTitle(`${LK.pickKo(c, meta)} ${ROLE_KO[a.role]}`);
     // the open position with its live ROE (rule bot 순위표 pill); a hidden DeepSeek position: coin and side only
     const hid = LK.dsHidden(a) || (a.kind === "ds" && a.wallet == null);
-    pill = a.open ? posPill(hid ? {...a, open: {symbol: a.open.symbol, side: a.open.side, since: a.open.since}} : a, {allowed: liveOk(d)}) : null;
+    pill = a.open ? posPill(a, {allowed: liveOk(d), hidden: hid}) : null;
     put(head, ui.screenHead(`${LK.pickKo(c, meta)}`, `${ROLE_KO[a.role]} 계좌 · ${a.id}`,
       [h("a", {class: "btn-line", href: `#/terminal?acct=${encodeURIComponent(a.id)}`}, "터미널에서 보기"),
         h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(c.name)}`}, "커스텀값"),

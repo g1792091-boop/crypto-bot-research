@@ -9,15 +9,16 @@
 // #/rank?g=<core|ds|cmp|flip|all>&sub=<quarter|exitonly|base> chooses the 묶음 (old ?role=&kind= links still work).
 // Units (D-3): the rank and the big % are 잔고 수익률 (wallet / 5,000 - 1, closed trades); every ▲▼ comparison is on
 // 한 번 평균 (the checkpoints' unit), so 순위표, 5계좌 비교 and 점검 진행 never contradict each other.
-// HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine replays from 10/01 or
-// its record is over 15 minutes old; DeepSeek money follows the snapshot's switch (hidden = counted only, everywhere).
+// HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine replays from 10/01, its
+// record is over 15 minutes old or the prices are over a minute old (poskit pricesLive); DeepSeek money follows the
+// snapshot's switch (hidden = counted only, everywhere).
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow, liveState as priceState} from "../live.js";
-import {posPill, staleBanner} from "../poskit.js";
+import {posPill, staleBanner, pricesLive, pxAgeKo} from "../poskit.js";
 import {ROLES} from "../labels.js";
 import {okGroup, okSub, groupKo, groupRows, ranking, hidden, walletRet, rankCards, rankTiles} from "./rank-cards.js";
 import {rankRow, topBottom, listFilters, filterRows, sortRows, rankMemo, rankDeltas, motionNote} from "./rank-rows.js";
@@ -99,9 +100,8 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- pieces
   function mkPill(a) {
-    // a hidden DeepSeek account: only what the engine keeps for it (coin, side, since), whatever the snapshot carries
-    const x = hidden(a, st.d) && a.open ? {...a, open: {symbol: a.open.symbol, side: a.open.side, since: a.open.since}} : a;
-    const p = posPill(x, {allowed: st.allowed});
+    // a hidden DeepSeek account: the pill reads only its coin and side (poskit posPill hidden), whatever the snapshot carries
+    const p = posPill(a, {allowed: st.allowed, hidden: hidden(a, st.d)});
     if (p) pills.add(p);
     return p;
   }
@@ -147,15 +147,16 @@ export async function mount(el, ctx) {
   /** The live-ROE switch, the freshness line, and the banner (rebuilt only when its state changed, or with force). */
   function paintBanner(force) {
     const ls = liveState(st.d);
-    st.allowed = ls.allowed;
     const px = priceState();
+    const fresh = pricesLive(px);
+    st.allowed = ls.allowed && fresh;
     const ok = px.state === "ok" || px.state === "fake";
-    const age = px.age_s == null ? "" : ` ${px.age_s < 60 ? `${Math.round(px.age_s)}초` : fmt.dur(px.age_s)} 전`;
     if (ls.doc && ls.doc.status) liveDot.set("엔진 기록 준비 중", "off");
     else if (!ls.allowed) liveDot.set(ls.doc && ls.doc.catching_up ? "포지션 ROE 감춤 · 다시 계산 중" : "포지션 ROE 감춤 · 엔진 기록 멈춤", "warn");
-    else if (ok) liveDot.set(`${px.state === "fake" ? "시험용 시세" : "실시간 시세"}${age} · ROE 5초마다`, "ok");
-    else liveDot.set(px.ko, px.state === "stale" ? "warn" : "off");
-    liveDot.title = "열린 포지션의 ROE = 지금 마크 가격 기준 (나갈 때 수수료 전) · 엔진이 10/01부터 다시 계산하는 동안이나 기록이 15분 넘게 멈추면 감춥니다";
+    else if (ok) liveDot.set(`${pxAgeKo(px)} · ROE 5초마다`, "ok");
+    else if (fresh) liveDot.set(`${pxAgeKo(px)} · ROE는 그 시세 기준`, "warn");
+    else liveDot.set(`${px.state === "stale" ? pxAgeKo(px) : px.ko} · 포지션 ROE 감춤`, px.state === "stale" ? "warn" : "off");
+    liveDot.title = "열린 포지션의 ROE = 지금 마크 가격 기준 (나갈 때 수수료 전) · 엔진이 10/01부터 다시 계산하는 동안, 기록이 15분 넘게 멈추거나 시세가 1분 넘게 지난 값이면 감춥니다";
     const key = ls.doc ? `${ls.doc.status || ""}|${ls.doc.catching_up}|${ls.doc.old}|${ls.doc.done_ms}` : "";
     if (force || key !== bannerKey) { bannerKey = key; put(banner, ls.doc ? staleBanner(ls.doc) : null); }
   }
@@ -184,12 +185,14 @@ export async function mount(el, ctx) {
     paintList(!userSwitch);
     put(listNote, h("p", {class: "refnote"}, h("b", null, "참고"),
       " · 동전 ▲▼ = 같은 후보의 동전 계좌(방향만 동전)보다 거래 한 번 평균이 위·아래 · 1/4 크기는 낙폭으로만 비교 · 판정이 아닙니다. 판정은 점검 날(",
-      cpDates(d), ")에 점검 진행 화면의 기준으로만 합니다.", hidden({kind: "ds"}, d) ? " 딥시크는 금액 숨김 설정이라 개수와 점검 라벨만 보입니다 (순위 없이 맨 뒤)." : ""));
+      cpDates(d), ")에 점검 진행 화면의 기준으로만 합니다.", dsMoneyHidden(d) ? " 딥시크는 금액 숨김 설정이라 개수와 점검 라벨만 보입니다 (순위 없이 맨 뒤)." : ""));
     put(tfBody, tfSummary(d, st.ix, st.g, st.sub));
     tfSub.textContent = `${label} · 참고`;
     if (userSwitch) { K4.swap(tb.el); K4.swap(tfBody); }
     flushFlash();
   }
+  /** The snapshot hides DeepSeek money (its switch, or a DeepSeek account without its wallet): the footnote says so only then. */
+  const dsMoneyHidden = (d) => !(d && d.ds_money) || ((d && d.accounts) || []).some((a) => a.kind === "ds" && hidden(a, d));
   const cpDates = (d) => ((((d && d.watch) || {}).checkpoints) || []).map((c) => `${String(c.ko || c.id).replace(" 점검", "")} ${fmt.mmdd(c.ms).replace(/^0/, "").replace("/0", "/")}`).join(" · ") || "11/11 · 12/11 · 1/11";
   function pick(id) {
     const g = okGroup(id);

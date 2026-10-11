@@ -428,6 +428,26 @@ def _static_files() -> frozenset:
 
 
 STATIC_FILES = _static_files()
+STATIC_RESCAN_S = 10.0                        # a miss under /static/ looks at the folder again at most this often
+_static_seen = {"files": STATIC_FILES, "at": time.monotonic()}
+
+
+def static_known(name: str) -> bool:
+    """``name`` is a file /static/ may serve. The list is made when the server starts; a file added later (the code
+    updated without restarting candleague-dash) is found by one rescan on its first miss, at most every
+    STATIC_RESCAN_S seconds (so a stream of wrong names cannot make the server walk the folder on every request). The
+    rescan uses the same rule as the start-up list: only .js / .css / .svg files under static/."""
+    seen = _static_seen
+    if name in seen["files"]:
+        return True
+    now = time.monotonic()
+    if now - seen["at"] < STATIC_RESCAN_S:
+        return False
+    seen["at"] = now
+    seen["files"] = _static_files()
+    return name in seen["files"]
+
+
 PUBLIC_FILES = frozenset(("tokens.css", "base.css", "login.css", "login.js", "icon.svg"))   # the login page's own
 META_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "strategies_ko.json")
 
@@ -552,7 +572,7 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
 
     @app.get("/static/{name:path}")
     def static(name: str, req: Request):
-        if name not in STATIC_FILES or (name not in PUBLIC_FILES and not authed(req)):
+        if not static_known(name) or (name not in PUBLIC_FILES and not authed(req)):
             return Response(status_code=404)
         return FileResponse(os.path.join(STATIC, name), media_type=STATIC_TYPES[os.path.splitext(name)[1]],
                             headers={"Cache-Control": "no-cache"})

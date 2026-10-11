@@ -40,8 +40,9 @@ export function selPanel(ctx, st, hooks) {
     acct.exit_ko || (p && p.exit_ko) ? h("p", {class: "tm-exit"}, acct.exit_ko || p.exit_ko) : null];
     if (p) {
       const hid = hiddenPos(p);
-      kids.push(h("div", {class: "tm-selpos"}, sideTag(p.side), h("b", null, `${coinShort(p.coin)}USDT`), hid ? null : h("span", {class: "muted"}, ` · 격리 ${fmt.lev(p.lev)}`),
-        h("span", {class: "muted num"}, ` · ${fmt.kst(p.since)} 진입`)));
+      // the leverage and the entry time are one unit that wraps whole (a wrapped line never starts with "·")
+      kids.push(h("div", {class: "tm-selpos"}, sideTag(p.side), h("b", null, `${coinShort(p.coin)}USDT`),
+        h("span", {class: "muted num tm-selw"}, `${hid ? "" : `격리 ${fmt.lev(p.lev)} · `}${fmt.kst(p.since)} 진입`)));
       if (hid) {
         kids.push(h("p", {class: "tm-hidnote"}, h("b", null, "딥시크 금액 숨김"), " · 이 포지션은 방향·코인·시각만 보입니다 (가격·배수·손익은 두 분 설정으로 숨김, 개수만 셉니다)"));
       } else {

@@ -56,6 +56,9 @@ export function onLive(fn) {
 export const liveDoc = () => st.doc;
 /** The dashboard server's clock now (ms); the device's clock until the first answer. */
 export const serverNow = () => Date.now() + st.skew;
+/** Another answer that carries the server's clock (/api/positions server_ms) sets it while /api/live has not answered
+ *  yet, so the header dot and the ages use the server's clock on every screen. */
+export function noteServerMs(ms) { if (!st.doc && Number.isFinite(Number(ms)) && Number(ms) > 0) st.skew = Number(ms) - Date.now(); }
 /** Ask again now (after a screen opens). */
 export const liveRefresh = () => poll();
 

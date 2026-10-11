@@ -8,6 +8,7 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
+import {serverNow} from "../live.js";
 import {ROLES, ROLE_KO, KIND_LONG, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 
 const SHOW = 5;
@@ -128,7 +129,8 @@ export async function mount(el, ctx) {
         h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null), LK.paceLine(d, n, min));
     };
     put(goal,
-      h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.calDay(d)}`), " (10/01부터, 한국 날짜)")),
+      h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
+        ` (10/01부터 ${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
       h("p", {class: "s2a-goalline"}, "10월 1일부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.",
         h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
       h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, steps.map((x, i) => h("li", {class: x.now ? "now" : x.done ? "done" : "",
@@ -214,16 +216,19 @@ function ledBar() {
   const cap = h("p", {class: "led-cap"});
   const el = h("section", {class: "ledbar s2a-led", "aria-label": "후보 38개 합계 잔고"},
     h("div", null, h("div", {class: "led-k"}, h("span", {class: "t"}, "후보 계좌 합계 잔고"), live),
-      h("div", {class: "led-n"}, total, h("span", null, "USD")), h("div", {class: "led-chg"}, pctEl, absEl)),
+      h("div", {class: "led-n"}, total, h("span", null, "USDT")), h("div", {class: "led-chg"}, pctEl, absEl)),
     mid, right, cap);
   const cells = new Map();
   const cell = (k, title) => {
     if (!cells.has(k)) {
       const v = h("b", {class: "num"}, "—");
-      right.append(h("div", {title}, h("span", null, k), v));
-      cells.set(k, v);
+      const box = h("div", {title}, h("span", null, k), v);
+      right.append(box);
+      cells.set(k, {v, box});
     }
-    return cells.get(k);
+    const c = cells.get(k);
+    c.box.title = title;
+    return c.v;
   };
   el.update = (d) => {
     const ix = LK.index(d);
@@ -235,21 +240,23 @@ function ledBar() {
     K4.countTo(absEl, shown.length ? sum - init : null, {format: (v) => fmt.money(v, true), tone: true});
     const H = LK.health(d);
     live.className = ["led-live", H.lv === "ok" ? "" : "off"].filter(Boolean).join(" ");
-    live.textContent = H.lv === "ok" ? "■ 실시간" : H.lv === "warn" ? (LK.catchingUp(d) ? "■ 따라잡는 중" : "■ 늦음") : "■ 멈춤";
-    live.title = H.ko;
+    // the wallet is a closed-trade figure (open positions are not in it): "닫힌 거래 기준", never "실시간"
+    live.textContent = H.lv === "ok" ? "■ 닫힌 거래 기준" : H.lv === "warn" ? (LK.catchingUp(d) ? "■ 따라잡는 중" : "■ 늦음") : "■ 멈춤";
+    live.title = `엔진 상태: ${H.ko} · 합계 잔고는 닫힌 거래까지 (열린 포지션 손익은 포지션 화면)`;
     const wins = ix.cands.filter((c) => c.wallet != null && c.wallet > LK.EQUITY).length;
     put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 $5,000에서 시작`),
       h("span", null, `시작보다 많은 후보 ${fmt.int(wins)}개`)));
-    const open = d.accounts.filter((a) => a.open).length;
-    const closed = d.accounts.reduce((a, x) => a + (x.trades || 0), 0);
+    // this card is the 38 picks': their own open positions and closed trades (190계좌 totals are on 서버 상태 · 포지션)
+    const open = ix.cands.filter((a) => a.open).length;
+    const closed = ix.cands.reduce((a, x) => a + (x.trades || 0), 0);
     const ok = Object.values(d.judge || {}).filter((j) => j.verdict === "ok").length;
     const warn = Object.values(d.judge || {}).filter((j) => j.band && j.band.below).length;
     cell("10/01부터", "다시 돌리기 시작부터 처리한 날 수").textContent = `${fmt.int(LK.leagueDay(d))}일째`;
-    cell("열린 포지션", "190개 계좌 합계").textContent = fmt.int(open);
-    cell("닫힌 거래", "190개 계좌 합계").textContent = fmt.int(closed);
+    cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션 (190계좌 전체: ${fmt.int(d.accounts.filter((a) => a.open).length)}개)`).textContent = fmt.int(open);
+    cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (190계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);
     cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
     cell("경고등", "기존 36 후보 중 백테스트 예상 범위(하위 5%) 아래").textContent = fmt.int(warn);
-    cell("파산", "190개 계좌 중").textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
+    cell("파산 (190계좌)", "190개 계좌 중 파산한 계좌").textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
     cap.textContent = shown.length < ix.cands.length
       ? `합계는 금액이 보이는 후보 ${shown.length}개만 (딥시크 금액 숨김) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)`
       : "후보 38개 계좌의 지갑 합계 (닫힌 거래까지) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)";

@@ -20,7 +20,7 @@
 import {h, put} from "./dom.js";
 import {getJSON} from "./api.js";
 import * as fmt from "./fmt.js";
-import {markOf, liveState, serverNow} from "./live.js";
+import {markOf, liveState, serverNow, noteServerMs} from "./live.js";
 import {ROLE_SHORT, KIND_KO, sideKo, coinShort} from "./labels.js";
 
 export const POS_MS = 30000;
@@ -34,6 +34,7 @@ async function poll() {
   st.busy = true;
   try {
     const d = await getJSON("/api/positions");
+    if (d && d.server_ms) noteServerMs(d.server_ms);
     st.doc = d;
     st.at = Date.now();
     for (const fn of [...st.subs]) { try { fn(d); } catch (e) { console.error(e); } }

@@ -6,7 +6,10 @@
 // 익절 (green, dashed) and 청산 추정 (dotted, "진입 때 기준" from the server's rebuild) — and a small chip at the left for
 // up to five open positions of the chosen 묶음 on this coin ("롱 30배 +3.5%": live ROE at the mark price, before the exit
 // fee); a chip picks that position. Marks: the selected account's entries ▲▼ and exits ● on this coin (/api/trades/<id>).
-// The forming bar follows the page's 5 s live price; the last 50 bars are asked again every 15 s.
+// The forming bar follows the page's 5 s live price; the last 50 bars are asked again every 15 s. The price scale keeps
+// the selected position's entry in view, and its stop / take-profit only while they lie near the bars on screen (within
+// one more bar range above or below): a 3R take-profit 10 % away would squeeze the candles into a thin band, so a line
+// that far is left off the scale and named at the chart's edge instead ("익절 73,014.5 ↓ −11.6% · 차트 밖").
 // D11: a hidden DeepSeek position gets no line, no chip and no marks (counted in the key line only). While the engine
 // replays from 10/01 (or its record is old) the chips show no %: the positions are "그때 기준".
 import {h, put} from "../dom.js";
@@ -25,6 +28,15 @@ const MAX_CHIPS = 5;
 const NEAR = 0.0005;                    // entries this close share one chip (the rule bot's chart-lines.js)
 const CHIP_H = 20;
 
+/** Whether a line of the selected position stays inside the price scale: the entry always; a stop or take-profit while
+ *  it lies within one more bar range (at least 0.2 % of the price) above or below the visible bars, so the candles keep
+ *  at least about a third of the chart's height. */
+export function inBand(f, b) {
+  if (!f || f.keep || !b) return true;
+  const room = Math.max(b.hi - b.lo, Math.abs(b.hi) * 0.002);
+  return f.v >= b.lo - room && f.v <= b.hi + room;
+}
+
 /** termChart(ctx, st, hooks) -> {el, ready, setCoin(), setTf(), setSel(), onPositions(doc), onLive(), onBook(), tick(), dispose()}
  *  hooks: {onTf(tf), onPick(id), selPos() -> position|null, selAcct() -> account|null, book() -> {id, trades}|null} */
 export function termChart(ctx, st, hooks) {
@@ -40,13 +52,15 @@ export function termChart(ctx, st, hooks) {
   const tag = h("div", {class: "tm-ptag", hidden: true, "aria-hidden": "true"}, h("b", {class: "num"}, "—"), h("small", {class: "num"}, "—"));
   const chips = h("div", {class: "tm-chips"});
   const msg = h("div", {class: "tm-cmsg", hidden: true, role: "status"});
-  const wrap = h("div", {class: "tm-cwrap"}, box, legend, chips, tag, msg);
+  const edgeUp = h("span", {class: "tm-cedge up", hidden: true}), edgeDn = h("span", {class: "tm-cedge dn", hidden: true});
+  const wrap = h("div", {class: "tm-cwrap"}, box, legend, chips, tag, edgeUp, edgeDn, msg);
   const keyLine = h("div", {class: "tm-ckey"});
   const el = panel("차트", {cls: "tm-chart", acts: [tfBar, h("a", {class: "tm-more", href: "#/entries", title: "매매법마다 후보가 들어간 자리 (진입 차트 화면)"}, "진입 차트 →")]},
     wrap, keyLine);
 
   let C = null, candles = null, vol = null, ro = null, plines = [], first = null, lastBar = null, key = null, resetting = 0, endMode = false;
-  let doc = null, focus = [];       // focus: the selected position's entry / stop / take-profit (kept inside the price scale)
+  let doc = null, focus = [];       // focus: the selected position's entry / stop / take-profit [{v, ko, keep}]
+  let bars = null;                   // the visible bars' own price range at the last autoscale {lo, hi}
   let failed = false;
   const chipEls = new Map();         // group of position ids -> its chip button (kept across repaints)
 
@@ -70,7 +84,7 @@ export function termChart(ctx, st, hooks) {
     const y = candles.priceToCoordinate(lastBar.close);
     if (!sb || y == null || y < 0 || y > sb.H) { tag.hidden = true; return; }
     tag.hidden = false;
-    tag.style.transform = `translateY(${Math.round(y - 13)}px)`;
+    tag.style.transform = `translateY(${Math.round(y - 13 + (box.offsetTop || 0))}px)`;
     tag.style.width = sb.sw + "px";
   }
   function paintTag(prev) {
@@ -118,13 +132,16 @@ export function termChart(ctx, st, hooks) {
     if (!candles) { put(chips, null); return; }
     const sb = scaleBox();
     if (!sb) return;
-    const TOP = 26;                               // under the legend line
+    paintEdge(sb);
+    const oy = box.offsetTop || 0;                // a phone: the legend has its own line above the chart
+    const TOP = oy ? oy + 2 : 26;                 // under the legend line
     const items = chipGroups().map((g) => {
-      const raw = candles.priceToCoordinate(g.price);
+      const c = candles.priceToCoordinate(g.price);
+      const raw = c == null ? null : c + oy;
       let y, edge = "";
       if (raw == null) y = TOP;                                   // (no bars yet)
       else if (raw < TOP) { y = TOP; edge = "↑ "; }               // above what the chart shows
-      else if (raw > sb.H - CHIP_H / 2) { y = sb.H - CHIP_H; edge = "↓ "; }
+      else if (raw > oy + sb.H - CHIP_H / 2) { y = oy + sb.H - CHIP_H; edge = "↓ "; }
       else y = Math.max(TOP, raw - CHIP_H / 2);
       return {g, y, edge};
     }).sort((a, b) => a.y - b.y);
@@ -154,6 +171,22 @@ export function termChart(ctx, st, hooks) {
     for (const k of [...chipEls.keys()]) if (!keep.has(k)) chipEls.delete(k);
     const same = nodes.length === chips.childNodes.length && nodes.every((x, i) => chips.childNodes[i] === x);
     if (!same) put(chips, nodes);
+  }
+  /** The selected position's lines left off the price scale (too far from the bars on screen): named at the top or
+   *  the bottom edge of the chart with their distance from the price now. */
+  function paintEdge(sb) {
+    const off = bars ? focus.filter((f) => !inBand(f, bars)) : [];
+    const ref = lastBar ? lastBar.close : null;
+    const txt = (f) => `${f.ko} ${fmt.price(f.v)}${ref ? ` ${f.v > ref ? "↑" : "↓"} ${pctOf((f.v - ref) / ref, 1)}` : ""}`;
+    const ups = off.filter((f) => ref == null || f.v > ref), dns = off.filter((f) => ref != null && f.v <= ref);
+    const right = sb ? `${sb.sw + 6}px` : "70px";
+    for (const [node, xs, y] of [[edgeUp, ups, (box.offsetTop || 0) + (box.offsetTop ? 4 : 28)], [edgeDn, dns, null]]) {
+      node.hidden = !xs.length;
+      node.textContent = xs.length ? `${xs.map(txt).join(" · ")} · 차트 밖` : "";
+      node.style.right = right;
+      if (y != null) node.style.top = `${y}px`;
+      else if (sb) node.style.top = `${Math.round((box.offsetTop || 0) + sb.H * 0.84 - 22)}px`;
+    }
   }
   function paintKey() {
     const {all, shown, hidden} = coinPositions();
@@ -193,7 +226,7 @@ export function termChart(ctx, st, hooks) {
       }
     }
     const o = sel && sel.coin === st.coin && !hiddenPos(sel) ? sel : null;
-    if (o && inRange(o.since)) marks.push({time: barT(o.since), position: o.side > 0 ? "belowBar" : "aboveBar", shape: o.side > 0 ? "arrowUp" : "arrowDown", color: o.side > 0 ? cLong : cShort, text: `${sideKo(o.side)} 열림`});
+    if (o && inRange(o.since)) marks.push({time: barT(o.since), position: o.side > 0 ? "belowBar" : "aboveBar", shape: o.side > 0 ? "arrowUp" : "arrowDown", color: o.side > 0 ? cLong : cShort, text: sideKo(o.side)});
     marks.sort((a, b) => a.time - b.time);
     try { candles.setMarkers(marks); } catch (e) { /* a mark outside the data */ }
     for (const p of plines) { try { candles.removePriceLine(p); } catch (e) { /* gone */ } }
@@ -210,7 +243,8 @@ export function termChart(ctx, st, hooks) {
       if (o.stop != null) line(o.stop, o.stop_is_lock ? color("--up") : color("--down"), o.stop_is_lock ? "잠금" : "손절", 0, 2);
       if (o.tp != null) line(o.tp, color("--up"), "익절", 2, 1);
       if (o.liq != null) line(o.liq, color("--warn"), "청산 추정", 1, 1);
-      focus = [o.entry, o.stop, o.tp].filter((x) => x != null).map(Number);
+      focus = [{v: o.entry, ko: "진입", keep: true}, {v: o.stop, ko: o.stop_is_lock ? "잠금" : "손절"}, {v: o.tp, ko: "익절"}]
+        .filter((f) => f.v != null && Number.isFinite(Number(f.v))).map((f) => ({...f, v: Number(f.v)}));
     }
     try { C.priceScale("right").applyOptions({autoScale: true}); } catch (e) { /* the scale is busy */ }
     const s = acct ? `${LK.stratKo(acct.name)} · ${TF_SHORT[acct.tf] || acct.tf} · ${ROLE_SHORT[acct.role] || ""}${o ? ` · ${sideKo(o.side)} 열림` : ""}` : "";
@@ -332,11 +366,15 @@ export function termChart(ctx, st, hooks) {
     const up = color("--up"), down = color("--down");
     candles = C.addCandlestickSeries({upColor: up, downColor: down, borderVisible: false, wickUpColor: up, wickDownColor: down,
       lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1, priceLineColor: color("--accent"),
-      // the selected position's entry / stop / take-profit stay inside the price scale (never the liquidation line)
+      // the selected position's entry stays inside the price scale, its stop / take-profit only while near the bars on
+      // screen (inBand); never the liquidation line. The bars' own range is kept for the edge labels (paintEdge).
       autoscaleInfoProvider: (orig) => {
         const r = orig();
-        if (!r || !r.priceRange || !focus.length) return r;
-        return {...r, priceRange: {minValue: Math.min(r.priceRange.minValue, ...focus), maxValue: Math.max(r.priceRange.maxValue, ...focus)}};
+        if (!r || !r.priceRange) return r;
+        bars = {lo: r.priceRange.minValue, hi: r.priceRange.maxValue};
+        const vs = focus.filter((f) => inBand(f, bars)).map((f) => f.v);
+        if (!vs.length) return r;
+        return {...r, priceRange: {minValue: Math.min(r.priceRange.minValue, ...vs), maxValue: Math.max(r.priceRange.maxValue, ...vs)}};
       }});
     vol = C.addHistogramSeries({priceFormat: {type: "volume"}, priceScaleId: "", lastValueVisible: false, priceLineVisible: false});
     C.priceScale("").applyOptions({scaleMargins: {top: 0.84, bottom: 0}});

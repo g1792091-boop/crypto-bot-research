@@ -151,7 +151,8 @@
 .tm-selh .an { font-size: var(--t-sm); }
 .tm-selh .an-n { font-weight: 800; white-space: normal; }
 .tm-exit { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
-.tm-selpos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--t-xs); }
+.tm-selpos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--t-xs); }
+.tm-selw { white-space: nowrap; }
 .tm-hidnote { margin: 0; padding: 7px 9px; border: 1px dashed var(--line-2); border-radius: 6px; color: var(--ink-2); font-size: var(--t-2xs); line-height: 1.5; }
 .tm-hidnote b { color: var(--ink); }
 .tm-ledbox { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line-2);
@@ -251,7 +252,13 @@ button.tm-fr:hover { background: var(--surface-2); }
 .tm-chip.long { border-color: var(--up-line); }
 .tm-chip.short { border-color: var(--down-line); }
 .tm-chip.up b { color: var(--up); } .tm-chip.down b { color: var(--down); }
-.tm-chip small { color: var(--muted); font-size: var(--t-2xs); font-weight: 600; }
+.tm-chip small { color: var(--muted); font-size: var(--t-2xs); font-weight: 600; margin-left: 4px; }
+.tm-chip b { margin-left: 2px; }
+/* the selected position's stop / take-profit left off the price scale (too far from the bars): named at the edge */
+.tm-cedge { position: absolute; z-index: 3; max-width: 60%; padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; border: 1px dashed var(--line-2); background: var(--surface); color: var(--ink-2);
+  font: 600 var(--t-2xs)/16px var(--f-term); }
+.tm-cedge[hidden] { display: none; }
 .tm-chip.on { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); background: var(--surface-3, var(--surface-2)); }
 .tm-chip:hover { border-color: var(--accent-line); }
 .tm-cmsg { position: absolute; left: 50%; top: 42%; z-index: 5; transform: translateX(-50%); max-width: 90%; padding: 8px 12px; border-radius: 6px;
@@ -457,6 +464,9 @@ button.tm-cr:hover { background: var(--surface-2); }
   .tm-right { order: 2; }
   .tm-left { order: 3; }
   .tm-chart { height: 380px; flex: none; }
+  /* the OHLC line gets its own strip above the price pane (a line's label never sits on it) */
+  .tm-cbox { top: 24px; }
+  .tm-legend { top: 4px; right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tm-table { flex: none; }
   .tm-table .tm-tw { max-height: 560px; }
   .tm-selp { height: auto; max-height: 560px; }
