@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import datetime as dt
 import hashlib
 import importlib.util
 import json
