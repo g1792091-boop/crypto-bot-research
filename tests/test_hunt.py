@@ -1448,8 +1448,9 @@ class _FakeReads:
                               for r in ctx["rows"]]
         ctx["private"]["multiples"] = {p["id"]: res["multiple"]}
         if self.mode == "write":
+            self.writes = getattr(self, "writes", 0) + 1
             with open(os.path.join(H.ROOT, H.OUT_REL[ctx["study"]], "sneaky.json"), "w") as fh:
-                fh.write("{}")
+                fh.write(json.dumps({"n": self.writes}))
         if self.mode == "d11":
             ds = next(x for x in ctx["picks"] if x["is_ds"])
             ctx["out"][ds["id"]] = {"multiple": 1.5}
@@ -1486,7 +1487,10 @@ def test_reads_hook_ctx_guard_and_d11(tmp_path, monkeypatch, mode):
     elif mode == "unpinned":
         assert rc == 0 and not target.exists() and not fake.seen
     else:
-        assert rc == 2 and not target.exists()                     # ReadGuardError: nothing written
+        assert rc == 0 and not target.exists()                     # ReadGuardError: nothing written, verdict stands
+        assert json.load(open(out / "wide" / "test.json"))["verdict"]["wide_pass"]
+        assert H.main(["reads", "--study", "wide"] + args) == 2    # the reads command reports the refusal
+        assert not target.exists()
 
 
 # ------------------------------------------------------------------ R19 fidelity and R23 October (synthetic files only)

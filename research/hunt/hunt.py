@@ -181,6 +181,16 @@ CHOICES = [
     "reported next to every figure.",
     "H10: select runs report the metric set without the daily equity path (by year / side / group included); test "
     "runs include it. DeepSeek rows keep only counts and labels in the repository (W 11).",
+    "W3.3: F5 = famous.py's donchian / tsmom states on the system's own bars, day lengths x bars per day of the "
+    "timeframe; event = the first bar of a state with the state defined on t and t-1; TSMOM decides at bars closing "
+    "at Monday 00:00 UTC only.",
+    "W5/W6: the one-per-name walk runs to 30 names; batches of 10 are fixed in picks.json at select; a batch is "
+    "tested only when >= 5 of the previous batch PASS; BH within each batch; untested members never run on test.",
+    "W12 lineup: computed in the test step from the full figures (DeepSeek: the label and the failing conditions "
+    "only in public); 'no pick, fail' is excluded.",
+    "W7.1 reads: a reads module runs after test.json only when its file is pinned; the hook writes its outputs; any "
+    "change of a study file while it ran, or a float under a DeepSeek row in its public output, refuses the write; "
+    "a failed read never changes the test step's result.",
     "H2: data identity = sha256 over the arrays the study reads, in order, each as 'name|dtype|shape' newline then its "
     "raw C-order bytes (5m: ts o h l c v qv; funding: ts rate); compared with research/hunt/data_manifest.json at "
     "every select / test. Coin end and missing funding months come from that pinned manifest copy; a coin end at or "
@@ -2428,7 +2438,13 @@ def cmd_test(args) -> int:
                 "private_sha256": priv_sha, "data_counts": counts, "seconds": round(time.time() - t0, 1)}
         _write_json(os.path.join(out_dir, "test.json"), test)
     print(f"{study} test done in {time.time() - t0:.0f}s")
-    run_reads_hooks(args, study, pin, mks, syms, test, full)
+    try:                                   # the verdict stands whatever a read does; a failed read writes nothing
+        run_reads_hooks(args, study, pin, mks, syms, test, full)
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        print(f"[reads] FAILED: {type(e).__name__}: {e}. test.json is written and unchanged; nothing of the read was "
+              f"written. Fix the reads module, then `python -m research.hunt.hunt reads --study {study}`.", flush=True)
     return 0
 
 

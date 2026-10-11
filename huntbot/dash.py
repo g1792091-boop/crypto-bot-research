@@ -11,6 +11,7 @@ runner writes them; DeepSeek money is never in them, D11); never writes; never t
 
 
 import asyncio
+import re
 import os
 import sys
 import threading
@@ -218,8 +219,6 @@ def create_app(snap: str, password_hash: str, secret: bytes, open_: bool = False
             if not authed(req):
                 return JSONResponse({"error": "login"}, status_code=401)
             doc = cache.get(SNAP_FILES[key])
-            if key == "trades" and doc is not None:
-                doc = {k: v for k, v in doc.items() if k != "by_system"}
             return JSONResponse(doc if doc is not None else {"missing": True, "status": "준비 중"})
         route.__name__ = f"api_{key}"
         return route
@@ -229,15 +228,17 @@ def create_app(snap: str, password_hash: str, secret: bytes, open_: bool = False
 
     @app.get("/api/system/{sid:path}")
     def system(sid: str, req: Request):
-        """One system's row (systems.json) and its last 100 trades (trades.json)."""
+        """One system's row (systems.json), its last 100 trades and its equity by the hour (sys/<hash>.json)."""
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
         rows = (cache.get("systems.json") or {}).get("rows") or []
         row = next((r for r in rows if r.get("id") == sid), None)
         if row is None:
             return JSONResponse({"error": "unknown system"}, status_code=404)
-        trades = ((cache.get("trades.json") or {}).get("by_system") or {}).get(sid) or []
-        return JSONResponse({"row": row, "trades": trades})
+        f = row.get("file") or ""
+        doc = cache.get(f"sys/{f}") if re.fullmatch(r"[0-9a-f]{16}\.json", f) else None
+        doc = doc or {}
+        return JSONResponse({"row": row, "trades": doc.get("trades") or [], "hourly": doc.get("hourly")})
 
     return app
 

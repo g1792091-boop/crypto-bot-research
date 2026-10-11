@@ -86,10 +86,12 @@ def test_login_and_read_only_views(tmp_path, snapshot):
     for k in ("status", "lineup", "systems", "positions", "trades"):
         doc = c.get(f"/api/{k}").json()
         assert not doc.get("missing"), k
-    assert "by_system" not in c.get("/api/trades").json()
+    assert "recent" in c.get("/api/trades").json()
     sysrow = c.get(f"/api/system/{ds_id}").json()
-    assert sysrow["row"]["ds"] is True and "equity_now" not in sysrow["row"]
+    assert sysrow["row"]["ds"] is True and "equity_now" not in sysrow["row"] and sysrow["hourly"] is None
     assert all("pnl" not in t for t in sysrow["trades"])
+    core = c.get("/api/system/F1:E1:15m:NONE").json()
+    assert core["trades"] and len(core["hourly"]["eq"]) > 24
     assert c.get("/api/system/NOPE:X:1h:G1").status_code == 404
     assert c.post("/api/status").status_code in (404, 405)                    # nothing writes
     h = c.get("/").headers
@@ -175,11 +177,11 @@ def test_every_screen_renders_the_snapshots_without_error(tmp_path, snapshot):
         pytest.skip("node not installed")
     snap, ds_id = snapshot
     fx = {k: json.load(open(os.path.join(snap, f"{k}.json"))) for k in ("status", "lineup", "systems", "positions")}
-    tr = json.load(open(os.path.join(snap, "trades.json")))
-    fx["trades"] = {k: v for k, v in tr.items() if k != "by_system"}
+    fx["trades"] = json.load(open(os.path.join(snap, "trades.json")))
     rows = fx["systems"]["rows"]
-    sid = next(r["id"] for r in rows if r.get("closed"))
-    fx["system"] = {"row": next(r for r in rows if r["id"] == sid), "trades": tr["by_system"][sid]}
+    row = next(r for r in rows if r.get("closed") and not r["ds"])
+    sf = json.load(open(os.path.join(snap, "sys", row["file"])))
+    fx["system"] = {"row": row, "trades": sf["trades"], "hourly": sf.get("hourly")}
     shim = tmp_path / "shim.mjs"
     shim.write_text(SHIM)
     env = dict(os.environ, FIX=json.dumps(fx), APP="file://" + os.path.join(STATIC, "js", "app.js"))

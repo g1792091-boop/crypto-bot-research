@@ -5,7 +5,9 @@ Public (<snap>/, read by huntbot-dash, never written by it):
   lineup.json     the lineup accounts in full (equity by the hour, open positions with the stop in force, trades)
   systems.json    one row per recorded system (counts, labels; money for core systems only)
   positions.json  every open position of every system and lineup account
-  trades.json     per system its last 100 trades, and the newest 300 closed trades of all systems
+  trades.json     the newest 300 closed trades of all systems
+  sys/<h>.json    per system its last 100 trades and (core systems) its marked equity by the hour; ``h`` = the first
+                  16 hex of sha256(system id) (systems.json names it); rewritten only when its content changed
 
 D11: a DeepSeek system (kind "ds": F3, and F4 picks of DeepSeek strategies) and any lineup account holding one shows
 counts, win shares, labels, coins, sides, times and add counts only: no equity, P&L, multiple, drawdown, price, stop or
@@ -14,6 +16,7 @@ R. Their full figures go to <private>/deepseek.json (outside the snapshot folder
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -54,6 +57,27 @@ def write_json(folder: str, name: str, doc) -> str:
         json.dump(_clean(doc), fh, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     os.replace(tmp, p)
     return p
+
+
+def sys_file(sid: str) -> str:
+    return hashlib.sha256(sid.encode()).hexdigest()[:16] + ".json"
+
+
+def write_if_changed(R, folder: str, name: str, doc) -> bool:
+    """Atomic write only when the content differs from what this process last wrote (most systems are flat)."""
+    body = json.dumps(_clean(doc), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    h = hashlib.sha256(body.encode()).hexdigest()
+    seen = R.__dict__.setdefault("_sys_hash", {})
+    p = os.path.join(folder, name)
+    if seen.get(name) == h and os.path.exists(p):
+        return False
+    os.makedirs(folder, exist_ok=True)
+    tmp = os.path.join(folder, f".{name}.{os.getpid()}.tmp")
+    with open(tmp, "w") as fh:
+        fh.write(body)
+    os.replace(tmp, p)
+    seen[name] = h
+    return True
 
 
 def kst_day_start(ms: int) -> int:
@@ -135,13 +159,16 @@ def write_all(R, mk, complete_ms: int, results: dict, lineup_res: dict) -> None:
         for spec, _ in a["parts"]:
             if lab.get(spec["id"]) != "정식":
                 lab[spec["id"]] = a["label"]
-    rows, positions, by_sys, recent, priv = [], [], {}, [], []
+    rows, positions, recent, priv = [], [], [], []
+    sysdir = os.path.join(R.snap, "sys")
+    n_written = 0
     for s in R.systems:
         res = results.get(s["id"])
         ds = S.is_ds(s)
         base = {"id": s["id"], "cell": R.cell_of_sys[s["id"]], "family": s.get("family"), "name": s["name"],
                 "kind": s["kind"], "tf": s["tf"], "gate": s["gate"], "rank": s.get("rank"), "ds": ds,
-                "label_ko": S.label_ko(s), "lineup": lab.get(s["id"]), "ok": res is not None}
+                "label_ko": S.label_ko(s), "lineup": lab.get(s["id"]), "ok": res is not None,
+                "file": sys_file(s["id"])}
         if res is None:
             rows.append(base)
             continue
@@ -158,7 +185,10 @@ def write_all(R, mk, complete_ms: int, results: dict, lineup_res: dict) -> None:
         rows.append(row)
         tr = sorted(res["trades"], key=lambda t: t["in_ms"], reverse=True)
         pt = [public_trade(t, ds) for t in tr]
-        by_sys[s["id"]] = pt[:TRADES_PER_SYSTEM]
+        sdoc = {"id": s["id"], "ds": ds, "complete_ms": complete_ms, "trades": pt[:TRADES_PER_SYSTEM]}
+        if not ds:
+            sdoc["hourly"] = {"start_ms": mk.start, "step_ms": 3_600_000, "eq": res.get("hourly") or []}
+        n_written += write_if_changed(R, sysdir, base["file"], sdoc)
         for t in pt:
             if t["open"]:
                 positions.append({"account": s["id"], "system": s["id"], "lineup": lab.get(s["id"]), "ds": ds,
@@ -179,8 +209,8 @@ def write_all(R, mk, complete_ms: int, results: dict, lineup_res: dict) -> None:
                                         "months": list(mk.months), "rows": rows})
     write_json(R.snap, "positions.json", {"generated_ms": now, "complete_ms": complete_ms,
                                           "rows": lpos + positions})
-    write_json(R.snap, "trades.json", {"generated_ms": now, "complete_ms": complete_ms, "by_system": by_sys,
-                                       "recent": recent[:RECENT]})
+    write_json(R.snap, "trades.json", {"generated_ms": now, "complete_ms": complete_ms, "recent": recent[:RECENT],
+                                       "system_files_written": n_written})
     write_json(R.private, "deepseek.json", {"generated_ms": now, "complete_ms": complete_ms,
                                             "what": "DeepSeek systems' money (D11): never served, never sent",
                                             "systems": priv})

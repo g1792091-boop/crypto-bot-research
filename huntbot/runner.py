@@ -23,7 +23,8 @@ cycle to the next except two caches that never change a number:
 Work order of a cycle: (1) events of the lineup's cells, (2) the lineup accounts (dashboard first screen and Telegram
 are written right away), (3) events of every other cell, in a fork process pool (``HUNTBOT_PROCS``), (4) every system,
 by cell, in the pool, (5) the full snapshot and the ledger's actions. Positions still open are marked at the last
-close (the engine's period end). Outputs: <snap>/status.json, lineup.json, systems.json, positions.json, trades.json
+close (the engine's period end). Outputs: <snap>/status.json, lineup.json, systems.json, positions.json, trades.json,
+sys/<id hash>.json per system (its last 100 trades and its marked equity by the hour; rewritten only when it changed)
 (DeepSeek money never in them, D11), <private>/deepseek.json (DeepSeek money, never served), events.db, run.db.
 """
 
@@ -284,7 +285,8 @@ def _task_cell(task):
         out = {}
         for spec in cell.systems:
             res = E.run_account(mk, [(spec, 0)], var, last_step, want_probe=not S.is_ds(spec),
-                                action_events=evs if since is not None else None, since_ms=since)
+                                want_hourly=not S.is_ds(spec), action_events=evs if since is not None else None,
+                                since_ms=since)
             out[spec["id"]] = _slim(res, keep)
         return cid, out, None
     except Exception as e:  # noqa: BLE001

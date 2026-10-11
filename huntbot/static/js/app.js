@@ -201,7 +201,8 @@ screens.sys = async (el, arg) => {
   if (!r.ds) st.unshift(stat("지갑 (평가)", fmt.money(r.equity_now), mult(r.multiple), tone((r.multiple || 1) - 1)), stat("최대 낙폭", pctOf(r.max_dd)));
   put(el, head(r.label_ko, `${r.id} · ${FAMILY[r.family] || r.family}`),
     card([labelPill(r.lineup), r.ds ? pill("딥시크 · 금액 숨김", "ds") : null, "요약"], h("div", {class: "stats"}, st),
-      r.ds ? h("p", {class: "note"}, DS_NOTE) : spark(r.day_eq, null)),
+      r.ds ? h("p", {class: "note"}, DS_NOTE) : spark(d.hourly && d.hourly.eq && d.hourly.eq.length > 1 ? d.hourly.eq : r.day_eq,
+        d.hourly ? d.hourly.start_ms : null)),
     card("거래 (최근 100개, 새것 먼저)", d.trades.length ? table(tradeCols(!r.ds, false), d.trades) : h("p", {class: "note"}, "아직 없음")));
 };
 

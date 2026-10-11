@@ -386,8 +386,15 @@ def test_deepseek_money_never_served_or_sent(tmp_path, sysl):
     for f in ("positions.json", "trades.json"):
         doc = json.load(open(os.path.join(R.snap, f)))
         ds_rows = [x for x in doc.get("rows", []) + doc.get("recent", []) if x.get("ds")]
-        ds_rows += doc.get("by_system", {}).get(ds["id"], [])
         assert ds_rows and not (_walk_keys(ds_rows, set()) & MONEY_KEYS), f
+    sysdir = os.path.join(R.snap, "sys")
+    dsf = json.load(open(os.path.join(sysdir, SN.sys_file(ds["id"]))))
+    assert dsf["trades"] and not (_walk_keys(dsf, set()) & MONEY_KEYS)
+    cf = json.load(open(os.path.join(sysdir, SN.sys_file(core["id"]))))
+    assert cf["hourly"]["eq"] == [5000.0, 5010.0] and "pnl" in cf["trades"][0]
+    mtime = os.path.getmtime(os.path.join(sysdir, SN.sys_file(core["id"])))
+    SN.write_all(R, mk, T0, {ds["id"]: lres[accts[0]["id"]], core["id"]: lres[accts[1]["id"]]}, lres)
+    assert os.path.getmtime(os.path.join(sysdir, SN.sys_file(core["id"]))) == mtime        # unchanged: not rewritten
     priv = json.load(open(os.path.join(R.private, "deepseek.json")))
     assert priv["systems"][0]["equity_now"] == 5050.0                               # the private file keeps it
     # Telegram: the DeepSeek account's texts carry no $, price or R
