@@ -2126,7 +2126,7 @@ def _universe_and_data(args, end_key: str) -> tuple:
 
 
 COST2_KEYS = ("mean_lnM", "median_M", "q25_lnM", "q75_lnM", "share_M_lt_0_9", "worst_month", "max_dd", "bust",
-              "end_multiple", "fees", "funding", "n_positions")
+              "end_multiple", "fees", "funding", "n_positions", "lnM")      # lnM: the monthly series (R4, select only)
 ROLE_READ = "read only: numbers chosen after the test period was seen (W 5)"
 F5_NOTE = ("research/famous results of these rules on the old six (daily bars) have been read: the new-24 read is "
            "shown next to an F5 pick (W 3.3)")
@@ -2799,7 +2799,7 @@ def reads_context(study: str, *, args, pin, mks: dict, syms: list, test_doc: dic
             "helpers": {"summarize": summarize, "boot_p": boot_p, "seed_int": seed_int, "rng_of": rng_of, "bh": bh,
                         "month_starts": month_starts, "clopper_pearson": clopper_pearson, "ms_str": ms_str,
                         "day_ms": day_ms},
-            "log": lambda msg: print(f"[reads] {msg}", flush=True)}
+            "log": lambda msg: print(f"[reads] {msg}", flush=True), "hunt_module": sys.modules[__name__]}
 
 
 def run_reads_hooks(args, study: str, pin, mks: dict, syms: list, test_doc: dict, full: dict | None,
@@ -2923,6 +2923,7 @@ def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: i
             continue
         with np.load(p) as z:
             keys = set(z.files)
+            sha = content_sha({k: z[k] for k in CONTENT_KEYS["5m"]}, CONTENT_KEYS["5m"])
             ts = np.asarray(z["ts"], np.int64)
             cut = (ts >= start_ms) & (ts < end_ms)
             cols = [np.asarray(z[k])[cut] for k in ("o", "h", "l", "c", "v", "qv")]
@@ -2930,6 +2931,7 @@ def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: i
                    for k in ("mo", "mh", "ml")]
         (t2, o, h, lo, c, v, qv, mo, mh, ml), cnt = clean_5m(ts[cut], *cols, step=step, extra=tuple(mk_))
         cnt["bars_without_mark"] = int((~np.isfinite(np.asarray(mo, float))).sum())
+        cnt["content_sha256"] = sha
         coins[s] = Coin(s, t2, o, h, lo, c, v, qv, last_ms=_COINS[s].last_ms if s in _COINS else None,
                         counts=cnt, mark={"mo": mo, "mh": mh, "ml": ml})
         counts[s] = cnt

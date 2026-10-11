@@ -52,6 +52,7 @@ def store_insert(store, arrays: dict, from_ms: int, to_ms: int) -> None:
         if kf.any():
             store.insert_funding(s, zip(a["fts"][kf].tolist(), a["frate"][kf].tolist()))
         store.set_coin(s, status="TRADING", trading=1)
+        store.commit()
     store.put("complete_ms", int(to_ms))
     store.commit()
 
@@ -100,6 +101,7 @@ def bench_main(argv=None) -> int:
     ap.add_argument("--cells", default="all", choices=("all", "f1", "f1f2"))
     ap.add_argument("--dir", default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--disk", dest="memory", action="store_false", help="keep the synthetic store on disk")
     a = ap.parse_args(argv)
     from . import systems as S
     H._compile_probe()
@@ -117,7 +119,7 @@ def bench_main(argv=None) -> int:
         for x in (f, f + "-wal", f + "-shm"):
             if os.path.exists(os.path.join(d, x)):
                 os.remove(os.path.join(d, x))
-    store = make_store(os.path.join(d, "store.db"), syms, arrays, warm, at)
+    store = make_store(":memory:" if a.memory else os.path.join(d, "store.db"), syms, arrays, warm, at)
     res["store_build_s"] = round(time.perf_counter() - t0, 1)
     res["bars_per_coin"] = int(((arrays[syms[0]]["ts"] >= warm) & (arrays[syms[0]]["ts"] < at)).sum())
     systems, _ = S.system_list()

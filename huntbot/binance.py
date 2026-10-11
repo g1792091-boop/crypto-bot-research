@@ -1,7 +1,7 @@
 """The one door to Binance: public USD-M REST GETs only (no key, no signed endpoint, no order path).
 
 * host ``fapi.binance.com`` only, redirects refused, a fixed path whitelist (PATHS), timeout 10 s;
-* a request-weight budget per rolling minute (default 1,200 of Binance's 2,400) shared by every call of the process,
+* a request-weight budget per rolling minute (default 1,800 of Binance's 2,400) shared by every call of the process,
   plus the funding-rate endpoint's own budget (Binance: 500 per 5 minutes per IP; we use at most 240);
 * HTTP 429 / 418 wait for Retry-After (or 60 s) and try again; 5xx and network errors back off 1, 2, 4 s; at most
   ``max_tries`` tries, then ``BinanceDown``.
@@ -26,7 +26,7 @@ UA = "huntbot-feed (paper only, public data)"
 TIMEOUT_S = 10.0
 PATHS = frozenset(("/fapi/v1/klines", "/fapi/v1/markPriceKlines", "/fapi/v1/fundingRate", "/fapi/v1/premiumIndex",
                    "/fapi/v1/exchangeInfo", "/fapi/v1/openInterest", "/fapi/v1/time"))
-WEIGHT_PER_MIN = 1200
+WEIGHT_PER_MIN = 1800              # of Binance's 2,400 per IP; the server runs nothing else that calls Binance
 FUNDING_PER_5MIN = 240
 
 # fetch(url, headers, timeout) -> (status, body bytes, headers dict)

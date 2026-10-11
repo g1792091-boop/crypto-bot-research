@@ -319,7 +319,7 @@ class Runner:
     def pick_syms(self) -> list:
         if self.fixed_syms is not None:
             return list(self.fixed_syms)
-        cov = self.store.coverage()
+        cov = self.store.coverage(self.universe)
         coins = self.store.coins()
         out = []
         for s in self.universe:
@@ -637,15 +637,17 @@ class Runner:
         change: a later different version of the same trade is kept beside it)."""
         now = self.now_ms()
         eng = (self.engine.get("hunt_sha256") or "")[:16]
+        since = getattr(self, "_recorded_through", None)
         rows = []
         for acct, res in list(results.items()) + [(f"lineup:{k}", v) for k, v in lineup_res.items()]:
             for t in res.get("trades", []):
-                if t["open"]:
+                if t["open"] or (since is not None and t["out_ms"] < since - DAY):
                     continue
                 key = f"{t['coin']}|{t['side']}|{t['in_ms']}|{eng}"
                 rows.append((acct, key, now, eng, json.dumps(t)))
         self.rdb.executemany("INSERT OR IGNORE INTO trades_seen VALUES (?, ?, ?, ?, ?)", rows)
         self.rdb.commit()
+        self._recorded_through = self.done_ms
 
     # ------------------------------------------------------------ the service loop
     def run_forever(self, poll_s: float = 5.0) -> None:

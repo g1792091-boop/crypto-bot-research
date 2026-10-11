@@ -431,3 +431,23 @@ def test_telegram_lineup_only_silent_catch_up_and_summary(tmp_path, sysl):
     assert len(out) == 1 and out[0].startswith("📊 아침 요약") and "정식 1" in out[0]
     assert nt.after_cycle(R, {}, caught_up=True) == []
     assert all("disable_notification" not in t for t in sent) and len(sent) == 6
+
+
+def test_no_mark_until_every_coin_has_its_history(tmp_path):
+    ex, st, fd, clock = make_feed(tmp_path, now=T0 + 6 * FIVE)
+    orig = ex.fetch
+
+    def flaky(url, headers, timeout):
+        if "ETHUSDT" in url and "klines" in url:
+            return 500, b"", {}
+        return orig(url, headers, timeout)
+    ex.fetch = flaky
+    fd.client.fetch = flaky
+    fd.client.max_tries = 1
+    fd.refresh_exchange(force=True)
+    info = fd.cycle()
+    assert info["errors"] and st.max_open("BTCUSDT") is not None and st.max_open("ETHUSDT") is None
+    assert st.complete_ms() is None                                 # the runner does not start on a part of the coins
+    fd.client.fetch = orig
+    fd.cycle()
+    assert st.complete_ms() == T0 + 5 * FIVE + FIVE

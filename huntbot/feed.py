@@ -187,12 +187,18 @@ class Feed:
         wall = (now - self.settle_ms) // FIVE * FIVE
         ends, stalled = [], []
         coins = self.store.coins()
+        prev = self.store.complete_ms()
         for sym in self.trading():
             last = self.store.max_open(sym)
             if last is None:
+                if prev is None:                                # the first download is not finished: no mark yet
+                    return None
                 continue
             end = last + FIVE
-            if wall - end - FIVE >= self.max_wait_ms:          # its next bar has been due for MAX_WAIT_MS
+            # its next bar has been due for MAX_WAIT_MS: it stops holding the mark (only once a mark exists: while the
+            # first download runs, a coin whose history is still coming holds the mark back, so the runner never
+            # starts on a part of the coins)
+            if prev is not None and wall - end - FIVE >= self.max_wait_ms:
                 stalled.append(sym)
                 continue
             ends.append(end)
@@ -203,7 +209,6 @@ class Feed:
             exp = (coins.get(sym) or {}).get("expect_funding_ms")
             if exp is not None and now - int(exp) < self.max_wait_ms:
                 comp = min(comp, _grid(exp) - FIVE)
-        prev = self.store.complete_ms()
         if prev is not None:
             comp = max(comp, int(prev))
         self.store.put("complete_ms", int(comp))
@@ -268,10 +273,13 @@ class Feed:
     def run_forever(self, sleep=time.sleep) -> None:
         self.out(f"{CFG.TAG} feed: {len(self.universe)} coins in the universe, warm-up from "
                  f"{CFG.ms_str(self.warmup_ms)} UTC")
+        first = True
         while True:
             now = self.now_ms()
-            nxt = (now // FIVE + 1) * FIVE + self.settle_ms + 1_000
-            sleep(max(1.0, (nxt - now) / 1000))
+            if not first:                                       # the first pass at once (it is the history download)
+                nxt = (now // FIVE + 1) * FIVE + self.settle_ms + 1_000
+                sleep(max(1.0, (nxt - now) / 1000))
+            first = False
             try:
                 info = self.cycle()
                 if info["errors"]:

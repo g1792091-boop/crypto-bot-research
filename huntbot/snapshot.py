@@ -214,7 +214,7 @@ def write_status(R, complete_ms: Optional[int], started_ms: int, info: Optional[
     st = R.store
     try:
         coins = st.coins()
-        cov = st.coverage()
+        cov = st.coverage(R.universe)
         hb = st.heartbeats()
         log = st.recent_log(20)
         stalled = st.get("stalled", [])

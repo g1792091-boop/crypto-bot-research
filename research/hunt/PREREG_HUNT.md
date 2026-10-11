@@ -5,7 +5,8 @@
 
 **Status: DRAFT, written 2026-10-11 (KST), before any data for this study was downloaded and before any code for it
 existed. Reviewed and corrected the same day, before the pin, after the 30-coin data had been built and the code
-drafted; no trading outcome had been computed on any period (section 19.2 lists every change).** The open questions of
+drafted; no trading outcome had been computed on any period (section 19.2 lists every change). Extended the same day
+with the owners' decisions and the panel review, still before the pin and before any select or test (section 19.3).** The open questions of
 section 18 are closed by the owners (or by the default written next to each) before the file is pinned. Pinning =
 `PREREG_HUNT.sha256` over this file, the study's code and the files of section 16; the code refuses the `select` and
 `test` steps without a matching pin. After the pin nothing here changes; a change goes to `DEVIATIONS.md` with its
@@ -48,14 +49,21 @@ coin-flip sides?
   mismatch on more than 0.1% of the bars of any of the six stops the pin. The data job compared BTC closes only
   (99.997% equal); the full check (six coins, open, high, low, close and volume) still has to run. Its per-coin counts
   go into `research/hunt/data_check.json`, which the pin lists.
-* **Identity of the data.** The npz files stay outside the repository (about 0.55 GB). Before the pin, `manifest.json`
-  is copied to `research/hunt/data_manifest.json` and the data job's scripts (`c30.py`, `c30_fill.py`,
-  `write_universe_md.py`, `universe_addendum.py`) to `research/hunt/data_build/`; the pin lists them. Because a zip's
-  bytes change with its write time, identity is checked on content: `data_manifest.json` also holds, per coin, the
-  sha256 of the arrays the study reads (5m: ts, o, h, l, c, v, qv; funding: ts, rate; in that order, as stored), taken
-  once from the built files before the pin. `select` and `test` recompute them and stop on any difference, so a run on
-  another machine either copies the files or rebuilds them with the pinned scripts and must reproduce the same content.
-  Downloads at most 2 at a time. The run stops if free disk falls under 1 GB.
+* **Identity of the data.** The npz files stay outside the repository (about 0.55 GB). Before the pin,
+  `python -m research.hunt.hunt datapin --data <coins30>` writes `research/hunt/data_manifest.json`: the data folder's
+  `manifest.json` copied in, plus, per coin, the sha256 of the arrays the study reads (5m: ts, o, h, l, c, v, qv;
+  funding: ts, rate; in that order, as stored). Each array enters the hash as the line `name|dtype|shape` (shape
+  comma-joined) followed by its raw C-order bytes, so the hash depends on the array content only, not on the zip
+  container (a zip's bytes change with its write time). `python -m research.hunt.hunt datacheck --data <coins30>
+  --fg1m <fg1m>` runs the cross-check above and writes `research/hunt/data_check.json` (per coin: the counts, the
+  mismatch share and the content hash of the 5m data it checked). The data job's scripts (`c30.py`, `c30_fill.py`,
+  `write_universe_md.py`, `universe_addendum.py`) go to `research/hunt/data_build/` and the repository copy of the
+  builder is `research/hunt/data_hunt.py`; the pin lists them. `select` and `test` recompute the hashes of every coin
+  they load and stop on any difference, so a run on another machine either copies the files or rebuilds them with the
+  pinned scripts and must reproduce the same content. **Coin ends and missing funding months are read from
+  `data_manifest.json`** (the pinned copy, not the data folder's file), and a missing funding month counts only while
+  the coin trades (a month after its coin end is not a gap). Downloads at most 2 at a time. The run stops if free disk
+  falls under 1 GB.
 
 ## 3. Universe
 
@@ -177,6 +185,13 @@ is an approximation, not a verified lower bound: some small alts' real first tie
 6x-12x at r = 1%, so at the start wallet only the r = 1% account on the calmer alts could be cut by a tighter real
 table (its last add first). Every bracket table is a 2026 snapshot applied to 2020-2026. The per-coin source
 (exchange30 or fallback) and the leverage and margin cuts per coin are reported. Quantity steps are ignored.
+**Note on the third add and the margin (review).** N4 is taken at P0 while the adds fill higher (long), so the margin
+budget B can run out before the last add: whenever 0.12 / (D0 / P0) is a whole number of at most 20 (D0 = 1%, 2%, 4%
+of the price ...), L uses B exactly and the third add is always cut; on tight stops (D0 / P0 under about 0.5%) the
+first unit is already cut to B and no add finds room. A compounding account also crosses the $25,000 / $100,000 /
+$250,000 tiers and loses adds as it grows. So the "full units" stops of 7.4 (P0 + 0.667 D0, P0 + 1.25 D0) do not
+always hold. This is part of the machine as written; adds skipped and cut by margin are counted per run. The
+alternative (N4 at the planned add levels) is Q13.
 
 ### 7.4 Pyramiding (불타기)
 * Three add levels, each tried once, in order. Long: level 1 = P0 + D0; level n+1 = the reference price of add n (its
@@ -251,7 +266,10 @@ apply to limit orders; v1 uses none. **Cost x2** read: taker 0.10% and slippage 
 Periods by the signal bar's close (UTC): **select** 2021-01-01 .. 2024-01-01 (36 months), **test** 2024-01-01 ..
 2026-10-01 (33 months), **extra** 2020-01-01 .. 2021-01-01 (in practice 2020-07 .. 2020-12 on 3 to 12 coins: the 장세
 label needs 180 days of history, and the archive starts in 2020-01). Indicators and labels use all earlier bars as
-warm-up. The select step loads no 5m bar that opens at or after 2024-01-01 00:00 UTC.
+warm-up. **The select step uses no 5m bar that opens at or after 2024-01-01 00:00 UTC**: each coin's npz columns are
+decompressed whole for the content check (section 2) and cut at 2024-01-01 before anything else uses them, and of the
+manifest only what lies before that date is carried (a coin end or a missing funding month after it is not, so
+`select.json` holds nothing about 2024 or later).
 
 11.1 **Runs in select**: the 6 systems at r = 0.5% with the main number at its value and at its two neighbours
 (E1 channel 44 / 69; E2 window 96 / 150; E3 threshold 1.4 / 1.625, i.e. 1 + 0.5 x 0.8 and 1 + 0.5 x 1.25), and the 6
@@ -267,10 +285,12 @@ highest-scoring system is still run on the test period, labelled "no pick, fail"
 any test-period bar is read. The test period runs once. **The other five systems are not run on the test period in
 v1.**
 
-## 12. Controls (100 seeds each, same machine)
+## 12. Controls (1,000 seeds each, same machine)
 
 Both controls use exactly sections 7 to 10 (sizing, leverage, pyramiding, chandelier, portfolio, costs), the pick's
-timeframe, r and period. Seed number s = 1..100. RNG = numpy PCG64 seeded with the first 8 bytes (little-endian) of
+timeframe, r and period. Seed number s = 1..1,000 (owners 2026-10-11; the draft had 100: more seeds cut the Monte
+Carlo noise of d_m and of the seed rank, whose resolution becomes 0.001, and move no threshold). RNG = numpy PCG64
+seeded with the first 8 bytes (little-endian) of
 sha256 of the parts joined by "|": ("hunt", control, period, r, s), r written with Python's `%g` (for example
 `hunt|a|test|0.005|17`).
 
@@ -281,7 +301,9 @@ sha256 of the parts joined by "|": ("hunt", control, period, r, s), r written wi
   are long), so one bar is never both. Not gated (the gate is part of what is tested).
 * **(b) Coin-flip sides.** The pick's gated signals at the same coins and times, each side drawn by a fair coin.
 
-For each control: d_m = ln M_m(pick) - mean over the 100 seeds of ln M_m(control seed), per test month.
+For each control: d_m = ln M_m(pick) - mean over the 1,000 seeds of ln M_m(control seed), per test month. Reads use
+the lowest-numbered subsets named in each read (seeds 1-200 or 1-100); the select-period controls of section 14 use
+seeds 1-200.
 
 ## 13. Pass rules for v1 (test period, the pick, r = 0.5%, all must hold)
 
@@ -289,16 +311,17 @@ For each control: d_m = ln M_m(pick) - mean over the 100 seeds of ln M_m(control
 * **P1** median monthly multiple >= 1.0 after all costs, **and** mean monthly ln M > 0.
 * **P2** beats **both** controls: for (a) and for (b) separately, (i) mean of d_m > 0 with a one-sided month-block
   bootstrap p < 0.05 (resample the 33 months with replacement 10,000 times; p = (1 + resamples with mean d <= 0) /
-  10,001; seed as section 12 with "boot" in place of s), and (ii) the pick's mean monthly ln M is above at least 96 of
-  the 100 seeds' ((1 + seeds >= pick) / 101 < 0.05).
+  10,001; seed as section 12 with "boot" in place of s), and (ii) the pick's mean monthly ln M is above at least 951
+  of the 1,000 seeds' ((1 + seeds >= pick) / 1,001 < 0.05).
 * **P3** cost x2: median monthly multiple >= 1.0 **and** mean monthly ln M > 0 (the same two tests as P1).
 * **P4** max drawdown < 50%.
 
 **v1 PASS** = P0 to P4. The r = 1% account is reported with the same five checks as a separate line ("1% also
 passes": yes / no); it is not needed for v1 PASS. Inside v1 one system is tested once, so no multiple-testing
 correction applies inside v1. The wide addendum (`PREREG_HUNT_WIDE.md`) tests up to ten more systems on the same 33
-months, so the chance that at least one hunt system passes by luck is above 5%; the results page says so next to both
-verdicts, and the two verdicts are never merged into one "the hunt passed".
+months (and up to twenty more, in batches of ten, only when at least five of the previous ten pass), so the chance that
+at least one hunt system passes by luck is above 5%; the results page says so next to both verdicts, and the two
+verdicts are never merged into one "the hunt passed".
 
 ## 14. Reads that are reported, never a pass
 
@@ -307,14 +330,23 @@ verdicts, and the two verdicts are never merged into one "the hunt passed".
 * **Extra 2020**: the pick at both sizes.
 * **Gate diagnostics** for the pick, select and test: no gate; 추세장 or 급변장. They cannot replace v1's gate; a gate
   change is a v2 with its own forward-only test.
-* The r = 1% line, the cost x2 line at r = 1%, and the controls in the select period.
-
+* The r = 1% line (its controls also 1,000 seeds), the cost x2 line at r = 1%, and the controls in the select period
+  (seeds 1-200).
+* **Read guard (it covers every read of this file and of `PREREG_HUNT_WIDE.md` W 7).** (1) Reads run only on the
+  fixed rows (the pick, the "no pick, fail" system when that ran, and in the wide study its tested picks and
+  baskets), after `pick.json` is hashed. Nothing enters the selection. (2) Reads never change the pick, P0-P4, the
+  seed-rank parts, p, v1 PASS, the R14 band of the wide addendum or what goes to the paper bot. The code writes reads
+  only after `test.json` and the verdict exist, to their own files (`out/v1/reads_*.json`, `fidelity.json`), and
+  refuses to write when any file of the study changed while a read ran. (3) Read names and parameters are written in
+  `PREREG_HUNT_WIDE.md` W 7 before the pin; a reads module runs only when its file is listed in the pin file, and its
+  output says whether that line predates `test.json`. (4) A read added after the test is seen goes to
+  `DEVIATIONS.md`, marked post hoc. (5) The pass rules stay exactly as written.
 ## 15. What a result means, and after
 
 | result | then |
 |---|---|
-| v1 PASS | **forward paper bot from about 2026-10-20** on the coins of the 30 that still trade (22 at 2026-09-30; never a coin outside the 30, no new listings): the pick exactly as here, both sizes, $5,000 each, on the paper bot server (fapi reachable there), nothing else changed. **No real money before the mid-November 2026 review**; real money after it is the owners' decision only |
-| v1 fail (any P) | recorded as a fail with every number. No tuning on the test period. The owners may still run the pick as a paper shadow labelled "v1 failed"; it is not a candidate |
+| v1 PASS | **forward paper bot from about 2026-10-20** on the coins of the 30 that still trade (22 at 2026-09-30; never a coin outside the 30, no new listings): the pick exactly as here, both sizes, $5,000 each, on the paper bot server (fapi reachable there), nothing else changed. **No real money before the mid-November 2026 review**; real money after it is the owners' decision only, and only for a pick labelled 정식 that met the forward criteria and the live-readiness gate (`PREREG_HUNT_WIDE.md` W 12) |
+| v1 fail (any P) | recorded as a fail with every number. No tuning on the test period. The pick goes to the paper lineup as 참고 only when it meets the lineup rule of `PREREG_HUNT_WIDE.md` W 12 (computed in the test step and written to `test.json` as `lineup`), else it is excluded; it is not a candidate for real money |
 | no pick | as fail |
 
 * **Nothing is tuned after the test period is seen.** A bug found after the test run (the code not doing what this file
@@ -337,13 +369,24 @@ verdicts, and the two verdicts are never merged into one "the hunt passed".
   `tests/test_hunt.py` and `tests/test_hunt_entries.py` on synthetic bars (intrabar order 7.6, the add-stop formula,
   caps, leverage choice, liquidation price, funding sign, coin end, event definitions, seeds, the bootstrap). Reuses
   `regime5y` read-only. Touches nothing of the rule bot, the full grid's pinned files or the candidate league.
-* Pinned with this file: the code above, `research/hunt/universe30.json`, `research/hunt/exchange30.json`,
-  `research/hunt/data_manifest.json`, `research/hunt/data_check.json` and `research/hunt/data_build/` (section 2).
-* Commands: `hunt.py select --study v1`, `hunt.py test --study v1`, `hunt.py report --study v1`; outputs in
-  `research/hunt/out/v1/` (select.json, pick.json, test.json, RESULTS_KO.md), each with the git commit and the pin it
-  ran under, and the content sha256 of every coin's data it read (section 2).
-* Compute: at most 2 processes; select is 24 accounts + diagnostics, test is the pick, 200 control accounts, the cost
-  x2 and reads. Disk under 2 GB in total (section 2).
+* **The pin lists exactly what `python -m research.hunt.hunt pinlist --study v1` prints**: this file,
+  `research/hunt/hunt.py` and every `research/hunt` module the command imports (`entries_wide.py`), the hunt tests,
+  `paperbot/dash/tools/regime5y.py` and every other repository Python file the signal code loads (found by running
+  each v1 system once on synthetic bars), `research/hunt/universe30.json`, `research/hunt/exchange30.json` when it
+  exists, `research/hunt/data_manifest.json`, `research/hunt/data_check.json`, the data builder
+  `research/hunt/data_hunt.py` and every file under `research/hunt/data_build/` when they exist (section 2). Later lines
+  (the pick, then read modules) are appended. **`select` and `test` refuse** unless every listed file matches, every
+  file of `pinlist` is listed, and `data_check.json` says pass on the old six for the same data as
+  `data_manifest.json`. Because a paper-bot file is on the list, select and test run **from one fixed checkout** (a
+  separate worktree at the pinned commit), so paper-bot commits between the two steps do not stop the test (Q14).
+* Commands: `hunt.py select --study v1`, `hunt.py test --study v1`, `hunt.py report --study v1`; after the test, the
+  reads `hunt.py reads|fidelity|october --study v1` (`PREREG_HUNT_WIDE.md` W 7); outputs in `research/hunt/out/v1/`
+  (select.json, pick.json, test.json with `lineup`, reads files, RESULTS_KO.md), each with the git commit and the pin
+  it ran under, and the content sha256 of every coin's data it read (section 2).
+* Compute: select is 24 accounts + diagnostics; test is the pick, 2 x 1,000 control accounts at r = 0.5% and again at
+  r = 1%, 2 x 200 in the select period, the cost x2 and reads (one control run of 33 months on 30 coins took 0.15-0.21
+  s on synthetic bars, 2026-10-11: about 11-16 CPU-minutes for the pick's controls). Disk under 2 GB in total
+  (section 2).
 
 ## 17. Not in v1
 
@@ -383,7 +426,15 @@ verdicts, and the two verdicts are never merged into one "the hunt passed".
    check in the add bar; the large group by 30-day volume; P0 and the seed-rank part of P2. [Keep]
 10. **AI judgment** as a forward-only shadow (section 17). [Owners decide separately; not in v1]
 11. **Trend direction.** 추세장 does not require the EMA50 slope to agree with the trade side. [G1 as written]
-12. **October 2026** is outside the test (no full month). [Accept]
+12. **October 2026** is outside the test (no full month). [Accept; the October read of `PREREG_HUNT_WIDE.md` R23 is
+    a read only]
+13. **N4 at the planned add levels** (section 7.3 note). H 7.3 takes the planned full notional at P0 (N4 = 4 x q x P0),
+    so the third add is often cut by the margin budget. Alternative, a change of 7.3 before the pin for both studies:
+    N4 = q x (4 x P0 + 6 x D0) for a long (the four planned fills P0, P0 + D0, P0 + 2 D0, P0 + 3 D0; short 4 x P0 - 6
+    x D0) and the same in the per-unit budget check. [7.3 as written; the margin-limited adds counted and reported]
+14. **Paper-bot files in the pin** (section 16). The signal code imports `paperbot/dash/tools/regime5y.py` (and the
+    wide study's definitions import more paper-bot modules), so they are hashed, and a paper-bot commit between select
+    and test would stop the test. [Run select and test from one fixed checkout of the pinned commit]
 
 ## 19. Before this file was fixed
 
@@ -426,3 +477,22 @@ labelled "no results"). No pin file and no `research/hunt/out/` existed. The rev
    addendum's shared test period.
 10. Section 15: forward bot on the coins still trading, no new listings; after a bug fix the rerun's verdict counts.
 11. Section 17: masked-chart replay named as a weak pre-check only. Section 18: Q2, Q3, Q6 updated.
+
+### 19.3 Owners' decisions and panel review (2026-10-11, before the pin)
+
+Done after the engine review (105 tests) and before any select or test of either study; no trading outcome had been
+computed on any real price period. Changes:
+
+1. Section 2: the data identity as implemented (`datapin` -> `data_manifest.json`, the array hash rule
+   'name|dtype|shape' + raw C-order bytes; `datacheck` -> `data_check.json`; coin ends and missing funding months from
+   `data_manifest.json`, a funding gap counted only while the coin trades).
+2. Section 11: the select step's cut at 2024-01-01 written out (whole decompression for the content check, then the
+   cut; nothing of the manifest after it).
+3. Section 7.3: a note on the third add and the margin budget; Q13 states the alternative.
+4. **Sections 12-13: controls with 1,000 seeds** (owners 2026-10-11 (c)); the seed-rank part becomes (1 + seeds >=
+   pick) / 1,001 < 0.05. Select-period controls use seeds 1-200.
+5. Section 14: the read guard (panel), which also covers the wide addendum's reads.
+6. Section 15: the paper lineup rule of the wide addendum (owners (g)) also applies to the v1 pick; real money only
+   for a 정식 pick after the forward criteria and the live-readiness gate.
+7. Section 16: the pinned list is what `pinlist --study v1` prints; select and test refuse unless `data_check.json`
+   passes; one fixed checkout. Q13 and Q14 added.

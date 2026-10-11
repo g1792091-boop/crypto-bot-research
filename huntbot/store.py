@@ -54,10 +54,12 @@ def connect(path: str, readonly: bool = False) -> sqlite3.Connection:
     if readonly:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
     else:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        if path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         conn = sqlite3.connect(path, timeout=30)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA journal_size_limit=67108864")        # the WAL file shrinks back after a big backfill
         conn.executescript(SCHEMA)
         conn.commit()
     return conn
@@ -201,11 +203,16 @@ class Store:
         a = np.asarray(rows, dtype=object)
         return np.asarray(a[:, 0], np.int64), np.asarray(a[:, 1], np.float64)
 
-    def coverage(self) -> dict:
+    def coverage(self, symbols: Optional[list] = None) -> dict:
+        """{symbol: bars, first and last open} by the primary key (no table scan)."""
+        if symbols is None:
+            symbols = [r[0] for r in self.conn.execute("SELECT symbol FROM coins")]
         out = {}
-        for sym, n, a, b in self.conn.execute("SELECT symbol, COUNT(*), MIN(open_ms), MAX(open_ms) FROM bars_5m "
-                                              "GROUP BY symbol"):
-            out[sym] = {"bars": n, "first_ms": a, "last_ms": b}
+        for sym in symbols:
+            a, b, n = self.conn.execute("SELECT MIN(open_ms), MAX(open_ms), COUNT(*) FROM bars_5m WHERE symbol = ?",
+                                        (sym,)).fetchone()
+            if n:
+                out[sym] = {"bars": n, "first_ms": a, "last_ms": b}
         return out
 
     def recent_log(self, n: int = 20) -> list:
