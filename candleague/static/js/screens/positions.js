@@ -22,6 +22,8 @@ export async function mount(el, ctx) {
     ui.card({plate: "코인별", sub: "롱 · 숏 수 (모든 계좌)"}, sum),
     ui.card({plate: "열린 포지션", sub: "가격 변화 = 진입가에서 지금 가격까지 (방향 반영, 레버리지 전) · 증거금 대비 = 가격 변화 × 레버리지 (수수료 전) · 10초마다"}, table));
   const live = (c) => (st.live && st.live.coins ? st.live.coins.find((x) => x.coin === c) : null);
+  // the server kept an old price (Binance unreachable) or this browser has not had a fresh one for 30 s
+  const old = () => !st.live || st.live.stale || st.live.unavailable || !st.liveAt || Date.now() - st.liveAt > 30000;
   function paint() {
     const d = LK.league();
     if (!d || !d.accounts) { put(table, ui.none("준비 중")); return; }
@@ -43,7 +45,10 @@ export async function mount(el, ctx) {
     const rows = open.filter((a) => (st.role === "all" || a.role === st.role) && (st.coin === "all" || coinOf(a.open.symbol) === st.coin))
       .sort((a, b) => b.open.since - a.open.since);
     if (!rows.length) { put(table, ui.empty("조건에 맞는 열린 포지션이 없습니다")); return; }
-    put(table, ui.table([
+    const was = table.querySelector(".tbl-wrap");
+    const keepX = was ? was.scrollLeft : 0;  // a phone scrolled to the right columns stays there over the 10 s repaint
+    put(table, st.live && !st.live.off && old() ? h("p", {class: "note warn-t"}, `시세: 지난 값${st.live.generated_ms ? ` (${fmt.hms(st.live.generated_ms)})` : ""} · 바이낸스 연결 확인 중`) : null,
+      ui.table([
       {label: "계좌", l: true, get: (a) => h("span", null, LK.pickName(LK.pickOf(a, ix) || a, {code: false}), " ", LK.roleChip(a.role))},
       {label: "코인", l: true, get: (a) => h("b", null, coinShort(coinOf(a.open.symbol)))},
       {label: "방향", l: true, get: (a) => h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, sideKo(a.open.side))},
@@ -52,20 +57,34 @@ export async function mount(el, ctx) {
       {label: "가격 변화", get: (a) => {
         const r = live(coinOf(a.open.symbol));
         const m = a.open.entry != null && r && r.price != null ? a.open.side * (r.price / a.open.entry - 1) * 100 : null;
-        return m == null ? "—" : h("span", {class: ["num", fmt.tone(m)]}, fmt.pct(m, true, 2));
+        return m == null ? "—" : h("span", {class: ["num", old() ? "muted" : fmt.tone(m)]}, fmt.pct(m, true, 2));
       }},
-      {label: "증거금 대비", title: "가격 변화 × 레버리지 (바이낸스처럼 수수료 전)", get: (a) => {
+      {label: "증거금 대비", title: "가격 변화 × 레버리지 (바이낸스처럼 수수료 전, 최대 손실 −100%)", get: (a) => {
         const r = live(coinOf(a.open.symbol));
-        const m = a.open.entry != null && a.open.lev && r && r.price != null ? a.open.side * (r.price / a.open.entry - 1) * 100 * a.open.lev : null;
-        return m == null ? "—" : h("span", {class: ["num", fmt.tone(m)], title: `${fmt.int(a.open.lev)}배`}, fmt.pct(m, true, 1));
+        if (!(a.open.entry != null && a.open.lev && r && r.price != null)) return "—";
+        const m = Math.max(-100, a.open.side * (r.price / a.open.entry - 1) * 100 * a.open.lev);
+        // past the stop / take-profit: the engine books it at its next 5-minute pass, not at this number
+        const past = a.open.stop != null && a.open.side * (r.price - a.open.stop) <= 0 ? "손절선 지남"
+          : a.open.tp != null && a.open.side * (r.price - a.open.tp) >= 0 ? "익절선 지남" : null;
+        return h("span", {class: ["num", old() ? "muted" : fmt.tone(m)], title: `${fmt.int(a.open.lev)}배${past ? " · 다음 계산(5분마다)에 청산" : ""}`},
+          fmt.pct(m, true, 1), past ? h("small", {class: "warn-t"}, ` ${past}`) : null);
       }},
       {label: "손절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.stop == null ? "—" : px(a.open.stop))},
       {label: "익절", get: (a) => (LK.dsHidden(a) ? h("span", {class: "muted"}, "숨김") : a.open.tp == null ? h("span", {class: "muted"}, "계단 잠금") : px(a.open.tp))},
       {label: "진입 (KST)", get: (a) => h("span", {class: "num muted"}, fmt.kst(a.open.since))},
       {label: "보유", get: (a) => h("span", {class: "num muted"}, fmt.dur((Date.now() - a.open.since) / 1000))},
     ], rows, {cls: "lv-dense", onRow: (a) => { location.hash = `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(a.open.symbol)}`; }}));
+    const now = table.querySelector(".tbl-wrap");
+    if (now && keepX) now.scrollLeft = keepX;
   }
-  async function pollLive() { try { st.live = await ctx.api("/api/live"); } catch (e) { return; } paint(); }
+  async function pollLive() {
+    try {
+      const d = await ctx.api("/api/live");
+      st.live = d;
+      if (d && !d.stale && !d.unavailable && !d.off) st.liveAt = Date.now();
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    paint();
+  }
   ctx.onLeague(paint);
   await pollLive();
   ctx.every(10000, pollLive);

@@ -21,6 +21,7 @@ const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 :
 const px = (p) => (fmt.bad(p) ? "—" : fmt.num(p, priceDec(p)));
 const BEFORE = 40, AFTER = 20;            // bars shown before the entry and after the exit
 const LIVE_MS = 10_000, BARS_EVERY = 6;   // the price every 10 s; an open chart's latest bars every 6th time (1 min)
+const OLD_MS = 30_000;                    // no fresh price for this long: shown as 지난 값, never as now
 const R_TITLE = "R = 진입가와 처음 손절 사이 거리 (−1R = 처음 손절에 닿음 · 수수료 빼기 전 가격 기준)";
 const REASON_ORDER = ["SL", "TP", "LOCK", "LIQ"];
 
@@ -85,7 +86,10 @@ export async function mount(el, ctx) {
     ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); const c = byEl.get(e.target); if (c) c.show(); } }, {rootMargin: "400px 0px"})
     : null;
   const byEl = new WeakMap();
-  const prices = {map: null, off: false};  // coin -> last price (/api/live), shared by every card
+  // coin -> last price (/api/live), shared by every card; stale = the server could not refresh it (it keeps the last
+  // good one), at = when this browser last got a fresh one, made = the server's time of the value
+  const prices = {map: null, off: false, stale: false, fake: false, at: 0, made: null};
+  const priceOld = () => prices.stale || !prices.at || Date.now() - prices.at > OLD_MS;
   const shapeBoxes = new Map();            // strategy name -> its section's shape + pace line (refreshed every snapshot)
   let sig = "";
 
@@ -156,6 +160,7 @@ export async function mount(el, ctx) {
   function makeCard(c, a) {
     let acct = a, items = [], i = 0, loaded = false, failed = false, count = -1, chart = null, candles = null, plines = [], ro = null, seq = 0;
     let nowLine = null, liveRow = null, lastBar = 0, ticks = 0, barsBusy = false;
+    let drawnItem = null;                  // the item whose candles the chart holds (null while a draw is pending or failed)
     const box = h("div", {class: "cl-ebox"});
     const msgEl = h("div", {class: "cl-emsg"});
     const cap = h("div", {class: "cl-ecap"});
@@ -260,6 +265,7 @@ export async function mount(el, ctx) {
       if (!it) { if (acct.trades || acct.open) msg("불러오지 못했습니다"); return; }
       if (!L) { msg("차트 파일을 불러오지 못했습니다"); caption(it); return; }
       const my = ++seq;
+      drawnItem = null;                      // the chart still holds the previous item's candles until setData
       const coin = coinOf(it.symbol), tfms = TF_MS[c.tf];
       const endMs = it.open ? null : it.exit_time + AFTER * tfms;
       const span = Math.ceil(((it.open ? Date.now() : endMs) - it.entry_time) / tfms) + BEFORE;
@@ -281,6 +287,7 @@ export async function mount(el, ctx) {
       // the latest price line only while the position is open (a past trade's chart ends after its exit)
       candles.applyOptions({priceFormat: {type: "price", precision: dec, minMove: 10 ** -dec}, priceLineVisible: !!it.open, lastValueVisible: !!it.open});
       candles.setData(b.t.map((t, k) => ({time: t / 1000, open: b.o[k], high: b.h[k], low: b.l[k], close: b.c[k]})));
+      drawnItem = it;
       const barT = (ms) => (Math.floor(ms / tfms) * tfms) / 1000;
       const first = b.t[0];
       const cIn = color("--accent"), cInS = color("--warn", "--down"), cWin = color("--up"), cLoss = color("--down");
@@ -322,31 +329,38 @@ export async function mount(el, ctx) {
     }
 
     // ---------------------------------------------------------- an open position now (every LIVE_MS)
-    /** {price, move: 가격 % (side-signed), roe: 증거금 대비 % (move × leverage, before fees)} of the open item, or null. */
+    /** {price, move: 가격 % (side-signed), roe: 증거금 대비 % (move × leverage, before fees; never below −100%, an
+     *  isolated position's most), past: "stop" | "tp" when the price is beyond the stop / take-profit the engine has not
+     *  booked yet (it works every 5 minutes), old: the price is not fresh} of the open item, or null. */
     function liveNow(it) {
       const r = it && it.open && prices.map ? prices.map[coinOf(it.symbol)] : null;
       if (!r || r.price == null || fmt.bad(r.price) || it.entry_price == null || fmt.bad(it.entry_price)) return null;
       const move = it.side * (r.price / it.entry_price - 1) * 100;
-      return {price: r.price, move, roe: it.lev ? move * it.lev : null};
+      const beyond = (lvl, worse) => lvl != null && !fmt.bad(lvl) && (worse ? it.side * (r.price - lvl) <= 0 : it.side * (r.price - lvl) >= 0);
+      return {price: r.price, move, roe: it.lev ? Math.max(-100, move * it.lev) : null,
+        past: beyond(it.stop, true) ? "stop" : beyond(it.tp, false) ? "tp" : null, old: priceOld()};
     }
     function paintLive() {
       const it = items[i];
       const m = liveNow(it);
       if (liveRow) {
-        put(liveRow, m ? [h("span", {class: "muted"}, "지금"), h("span", {class: "num"}, px(m.price)),
-          h("span", {class: ["num", "cl-elive-pct", fmt.tone(m.move)]}, `가격 ${fmt.pct(m.move, true, 2)}`),
-          m.roe != null ? h("span", {class: ["num", "cl-elive-pct", fmt.tone(m.roe)]}, `증거금 대비 ${fmt.pct(m.roe, true, 1)}`) : null,
-          h("span", {class: "muted"}, `${it.lev ? `${fmt.int(it.lev)}배 · ` : ""}수수료 전 · 10초마다`)]
+        const tone = (x) => (m.old ? "muted" : fmt.tone(x));
+        put(liveRow, m ? [h("span", {class: "muted"}, m.old ? "지난 값" : "지금"), h("span", {class: "num"}, px(m.price)),
+          h("span", {class: ["num", "cl-elive-pct", tone(m.move)]}, `가격 ${fmt.pct(m.move, true, 2)}`),
+          m.roe != null ? h("span", {class: ["num", "cl-elive-pct", tone(m.roe)]}, `증거금 대비 ${fmt.pct(m.roe, true, 1)}`) : null,
+          m.past ? ui.pill(m.past === "stop" ? "손절선 지남 · 다음 계산(5분마다)에 청산" : "익절선 지남 · 다음 계산(5분마다)에 청산", "warn") : null,
+          h("span", {class: "muted"}, `${it.lev ? `${fmt.int(it.lev)}배 · ` : ""}수수료 전 · ` + (m.old
+            ? `시세 연결 확인 중${prices.made ? ` (${fmt.hms(prices.made)} 값)` : ""}` : prices.fake ? "연습용 가짜 시세" : "10초마다"))]
           : h("span", {class: "muted"}, !it || it.entry_price == null || prices.off ? "" : "지금 가격을 기다리는 중…"));
       }
-      if (!candles) return;
+      if (!candles || drawnItem !== it) return;  // the chart holds another item's candles (a draw is pending or failed)
       if (!m) {
         if (nowLine) { candles.removePriceLine(nowLine); plines = plines.filter((p) => p !== nowLine); nowLine = null; }
         if (it && it.open) candles.applyOptions({priceLineVisible: true, lastValueVisible: true});
         return;
       }
-      const opt = {price: m.price, color: m.move > 0 ? color("--up") : m.move < 0 ? color("--down") : color("--ink-2"), lineWidth: 1, lineStyle: 3,
-        axisLabelVisible: true, title: `지금 ${fmt.pct(m.roe != null ? m.roe : m.move, true, 1)}`};
+      const opt = {price: m.price, color: m.old ? color("--muted") : m.move > 0 ? color("--up") : m.move < 0 ? color("--down") : color("--ink-2"),
+        lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: `${m.old ? "지난 값" : "지금"} ${fmt.pct(m.roe != null ? m.roe : m.move, true, 1)}`};
       if (nowLine) nowLine.applyOptions(opt); else { nowLine = candles.createPriceLine(opt); plines.push(nowLine); }
       candles.applyOptions({priceLineVisible: false, lastValueVisible: false});   // the 지금 line carries the price
     }
@@ -357,13 +371,13 @@ export async function mount(el, ctx) {
     /** The latest bars of an open position's chart (the newest bar grows, a new one appears) without moving the view. */
     async function moreBars() {
       const it = items[i];
-      if (!it || !it.open || !candles || barsBusy) return;
+      if (!it || !it.open || !candles || drawnItem !== it || barsBusy) return;
       barsBusy = true;
       const my = seq;
       try {
         const d = await ctx.api(`/api/klines?coin=${coinOf(it.symbol)}&tf=${c.tf}&limit=50`);
         const b = d && d.bars;
-        if (my !== seq || !candles || !b || !b.t || !b.t.length) return;
+        if (my !== seq || !candles || drawnItem !== it || !b || !b.t || !b.t.length) return;
         if (b.t[0] > lastBar + TF_MS[c.tf]) { draw(); return; }        // away longer than these bars cover: draw again
         for (let k = 0; k < b.t.length; k++) {
           if (b.t[k] < lastBar) continue;
@@ -407,18 +421,23 @@ export async function mount(el, ctx) {
       seq++;
       if (ro) ro.disconnect();
       try { if (chart) chart.remove(); } catch (e) { /* gone */ }
-      chart = null; candles = null; nowLine = null;
+      chart = null; candles = null; nowLine = null; drawnItem = null;
     }
     return {el, show, update, destroy, tick};
   }
 
   async function pollLive() {
-    let d;
-    try { d = await ctx.api("/api/live"); } catch (e) { return; }
-    const map = {};
-    for (const r of (d && d.coins) || []) if (r && r.coin && r.price != null) map[r.coin] = r;
-    prices.off = !!(d && d.off);
-    prices.map = prices.off ? null : map;
+    let d = null;
+    try { d = await ctx.api("/api/live"); } catch (e) { if (e && e.name === "AbortError") return; }
+    if (d) {                                 // a failed request keeps the last prices, which then age into 지난 값
+      const map = {};
+      for (const r of d.coins || []) if (r && r.coin && r.price != null) map[r.coin] = r;
+      prices.off = !!d.off;
+      prices.stale = !!(d.stale || d.unavailable);
+      prices.fake = d.source === "fake";
+      if (prices.off) prices.map = null;
+      else if (Object.keys(map).length) { prices.map = map; prices.made = d.generated_ms || null; if (!prices.stale) prices.at = Date.now(); }
+    }
     for (const c of cards.values()) c.tick();
   }
   ctx.onLeague(paint);

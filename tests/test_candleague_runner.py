@@ -101,8 +101,8 @@ def test_deepseek_money_is_hidden_unless_allowed(tmp_path):
     # an open position carries its leverage (the 진입 차트 / 포지션 증거금 대비 % now); hidden it keeps coin, side, time only
     held = [r for r in RN.account_rows(lg.conn, lg.accts, lg.engines) if r["open"]]
     assert held and all(isinstance(r["open"]["lev"], int) and r["open"]["lev"] > 0 for r in held)
-    assert all(set(r["open"]) == {"symbol", "side", "since"} for r in RN.account_rows(lg.conn, accts, lg.engines)
-               if r["open"] and r["kind"] == "ds")
+    hidden = [r for r in RN.account_rows(lg.conn, [dict(a, kind="ds") for a in lg.accts], lg.engines) if r["open"]]
+    assert hidden and all(set(r["open"]) == {"symbol", "side", "since"} for r in hidden)
     doc = RN.write_snapshots(str(tmp_path / "snap"), lg, START + TP.DAY + 60_000)
     assert json.load(open(tmp_path / "snap" / "league.json"))["done_ms"] == doc["done_ms"] == START + TP.DAY
 
