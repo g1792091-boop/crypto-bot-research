@@ -849,11 +849,13 @@ def write_report(out: str) -> str:
         bad = [CHECK_KO[k] for k, v in r["checks"].items() if not v]
         verdict = "**후보**" if r["pass"] else "참고용 (" + ", ".join(bad) + ")"
         note = f" ({WEAK_NOTE[r['rule']]})" if r["rule"] in WEAK_NOTE else ""
+        extra_note = " (BTC 하나, 약한 확인)" if group(r["rule"]) == "metrics" else ""
+        win = "-" if r["test"]["win"] is None else f"{r['test']['win'] * 100:.1f}%"
+        p_txt = "-" if r["test_p"] is None else f"{r['test_p']:.3f}"
+        longs = "-" if r["test_long_share"] is None else f"{r['test_long_share'] * 100:.0f}%"
         L.append(f"| `{r['id']}` {json.dumps(r['combo'], ensure_ascii=False)}{note} | {_n(r['select'])} | "
-                 f"{_n(r['test'])} | {pct(r['test']['win'], 1) if r['test']['win'] is not None else '-'} | "
-                 f"{'-' if r['test_p'] is None else f'{r['test_p']:.3f}'} | {pct(r['flip_mean'])} | "
-                 f"{pct(r['same_side_mean'])} | {'-' if r['test_long_share'] is None else f'{r['test_long_share'] * 100:.0f}%'} | "
-                 f"{_n(r['cost']['x2'])} | {_n(r['cost']['x3'])} | {_n(r['extra'])} | {verdict} |")
+                 f"{_n(r['test'])} | {win} | {p_txt} | {pct(r['flip_mean'])} | {pct(r['same_side_mean'])} | {longs} | "
+                 f"{_n(r['cost']['x2'])} | {_n(r['cost']['x3'])} | {_n(r['extra'])}{extra_note} | {verdict} |")
     L += ["", "## 동전 던지기 10번 (시험 기간, 씨앗별 평균)", ""]
     for r in rows:
         L.append(f"- `{r['id']}`: " + ", ".join(pct(f) for f in r["flip_means"]))
@@ -874,7 +876,7 @@ def write_report(out: str) -> str:
     L += ["", "## 장세별 (시험 기간, 참고용)", "", "| 조합 | 추세장 | 횡보장 | 급변장 | 보통 | 모름 |", "|---|---|---|---|---|---|"]
     for r in rows:
         s = r["by_state_test"]
-        L.append(f"| `{r['id']}` | " + " | ".join(_n(s[k]) for k in ("추세장", "횡보장", "급변장", "보통", "모름")) + " |")
+        L.append(f"| `{r['id']}` | " + " | ".join(_n(s[k]) for k in STATES) + " |")
     L += ["", "## 코인·방향·연도별 (참고용)", ""]
     for r in rows:
         b = r["breakdowns"]
