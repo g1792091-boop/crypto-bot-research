@@ -1,0 +1,4037 @@
+{
+ "evaluation": "history",
+ "universe": "all",
+ "ds_money": false,
+ "reads": {
+  "ladder|2": {
+   "signals": 4602357,
+   "unknown_state": 13325,
+   "used": 4589032,
+   "open_at_end": 0,
+   "lines": [
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 4589032,
+     "n_allowed": 1173481,
+     "n_blocked": 3415551,
+     "share_blocked": 0.7442857230021495,
+     "win_allowed": 0.6397010262628879,
+     "win_blocked": 0.6425121451853596,
+     "p": 0.6591704147926037,
+     "control_p": 1.0,
+     "within_p": 0.9005497251374313,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2685737,
+     "n_allowed": 653023,
+     "n_blocked": 2032714,
+     "share_blocked": 0.75685519468213,
+     "win_allowed": 0.6534088385860835,
+     "win_blocked": 0.6383003216389517,
+     "p": 0.006496751624187906,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.038980509745127435,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 1154063,
+     "n_allowed": 348461,
+     "n_blocked": 805602,
+     "share_blocked": 0.6980572117813325,
+     "win_allowed": 0.6109607674890447,
+     "win_blocked": 0.6544795072504785,
+     "p": 0.9970014992503748,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 749232,
+     "n_allowed": 171997,
+     "n_blocked": 577235,
+     "share_blocked": 0.7704355927136054,
+     "win_allowed": 0.6458833584306704,
+     "win_blocked": 0.6406420262111618,
+     "p": 0.9975012493753124,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 2656579,
+     "n_allowed": 642765,
+     "n_blocked": 2013814,
+     "share_blocked": 0.7580478502615582,
+     "win_allowed": 0.6069978919200641,
+     "win_blocked": 0.6162401294260542,
+     "p": 0.8950524737631185,
+     "control_p": 1.0,
+     "within_p": 0.9105447276361819,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 1544251,
+     "n_allowed": 347887,
+     "n_blocked": 1196364,
+     "share_blocked": 0.7747212078865418,
+     "win_allowed": 0.6207734120562136,
+     "win_blocked": 0.6111609844495488,
+     "p": 0.21339330334832585,
+     "control_p": 0.05194805194805195,
+     "within_p": 0.2588705647176412,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 657274,
+     "n_allowed": 195002,
+     "n_blocked": 462272,
+     "share_blocked": 0.703317033687625,
+     "win_allowed": 0.5763684475031026,
+     "win_blocked": 0.6299862418662605,
+     "p": 0.95952023988006,
+     "control_p": 1.0,
+     "within_p": 0.9945027486256871,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 455054,
+     "n_allowed": 99876,
+     "n_blocked": 355178,
+     "share_blocked": 0.7805183560632365,
+     "win_allowed": 0.618817333493532,
+     "win_blocked": 0.615457601540636,
+     "p": 0.9975012493753124,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 1310183,
+     "n_allowed": 351023,
+     "n_blocked": 959160,
+     "share_blocked": 0.732080938311671,
+     "win_allowed": 0.6645091632172251,
+     "win_blocked": 0.6678260144292923,
+     "p": 0.623688155922039,
+     "control_p": 0.9760239760239761,
+     "within_p": 0.8050974512743628,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 770195,
+     "n_allowed": 201205,
+     "n_blocked": 568990,
+     "share_blocked": 0.7387609631327131,
+     "win_allowed": 0.6758082552620461,
+     "win_blocked": 0.6635512047663403,
+     "p": 0.00399800099950025,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.01199400299850075,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 333482,
+     "n_allowed": 99442,
+     "n_blocked": 234040,
+     "share_blocked": 0.7018069940806401,
+     "win_allowed": 0.6383721164095654,
+     "win_blocked": 0.6778713040505896,
+     "p": 0.9995002498750625,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 206506,
+     "n_allowed": 50376,
+     "n_blocked": 156130,
+     "share_blocked": 0.7560555141254975,
+     "win_allowed": 0.6709742734635541,
+     "win_blocked": 0.6683468904118363,
+     "p": 0.9650174912543729,
+     "control_p": 1.0,
+     "within_p": 0.9975012493753124,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 585185,
+     "n_allowed": 168981,
+     "n_blocked": 416204,
+     "share_blocked": 0.7112349086186419,
+     "win_allowed": 0.70540474964641,
+     "win_blocked": 0.7046640589710815,
+     "p": 0.5077461269365318,
+     "control_p": 0.5404595404595405,
+     "within_p": 0.5162418790604698,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 349618,
+     "n_allowed": 98300,
+     "n_blocked": 251318,
+     "share_blocked": 0.71883598670549,
+     "win_allowed": 0.7166225839267548,
+     "win_blocked": 0.702798844491839,
+     "p": 0.04447776111944028,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.05147426286856572,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 152504,
+     "n_allowed": 49921,
+     "n_blocked": 102583,
+     "share_blocked": 0.6726577663536694,
+     "win_allowed": 0.6817171130386009,
+     "win_blocked": 0.7065790628076777,
+     "p": 0.9440279860069966,
+     "control_p": 1.0,
+     "within_p": 0.9870064967516242,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 83063,
+     "n_allowed": 20760,
+     "n_blocked": 62303,
+     "share_blocked": 0.7500692245644872,
+     "win_allowed": 0.7092485549132947,
+     "win_blocked": 0.7090348779352519,
+     "p": 0.8615692153923038,
+     "control_p": 0.8501498501498501,
+     "within_p": 0.808095952023988,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 37085,
+     "n_allowed": 10712,
+     "n_blocked": 26373,
+     "share_blocked": 0.7111500606714305,
+     "win_allowed": 0.7526138909634055,
+     "win_blocked": 0.7471277442839267,
+     "p": 0.3423288355822089,
+     "control_p": 0.07692307692307693,
+     "within_p": 0.19740129935032483,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 21673,
+     "n_allowed": 5631,
+     "n_blocked": 16042,
+     "share_blocked": 0.7401836386287085,
+     "win_allowed": 0.7657609660806252,
+     "win_blocked": 0.7562024685201346,
+     "p": 0.248375812093953,
+     "control_p": 0.11688311688311688,
+     "within_p": 0.23638180909545228,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 10803,
+     "n_allowed": 4096,
+     "n_blocked": 6707,
+     "share_blocked": 0.6208460612792743,
+     "win_allowed": 0.72998046875,
+     "win_blocked": 0.7295363053526167,
+     "p": 0.45077461269365315,
+     "control_p": 0.4145854145854146,
+     "within_p": 0.4452773613193403,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 4609,
+     "n_allowed": 985,
+     "n_blocked": 3624,
+     "share_blocked": 0.7862876979822088,
+     "win_allowed": 0.7715736040609137,
+     "win_blocked": 0.739514348785872,
+     "p": 0.13993003498250875,
+     "control_p": 0.0999000999000999,
+     "within_p": 0.1504247876061969,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 2019500,
+     "n_allowed": 444714,
+     "n_blocked": 1574786,
+     "share_blocked": 0.7797900470413469,
+     "win_allowed": 0.6452821363842829,
+     "win_blocked": 0.6420510469359011,
+     "p": 0.18590704647676162,
+     "control_p": 0.5984015984015985,
+     "within_p": 0.5612193903048476,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.010445333951404139,
+     "mean_allowed": -0.010196177937206964,
+     "mean_blocked": -0.010515694729121033,
+     "diff": 0.00031951679191406963,
+     "control_q95": 0.0005289332675055031,
+     "diff_vs_flip": -3.124485998308181e-05
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1083217,
+     "n_allowed": 260919,
+     "n_blocked": 822298,
+     "share_blocked": 0.7591258261271749,
+     "win_allowed": 0.6526201618126698,
+     "win_blocked": 0.6372993732199276,
+     "p": 0.028985507246376812,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.05897051474262868,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.010036394804582198,
+     "mean_allowed": -0.00940836825367925,
+     "mean_blocked": -0.010235670565480373,
+     "diff": 0.0008273023118011234,
+     "control_q95": 0.0004478615441684311,
+     "diff_vs_flip": 0.0006052111679783404
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 415217,
+     "n_allowed": 71572,
+     "n_blocked": 343645,
+     "share_blocked": 0.8276274815337522,
+     "win_allowed": 0.618510031856033,
+     "win_blocked": 0.6583829242386765,
+     "p": 0.777111444277861,
+     "control_p": 1.0,
+     "within_p": 0.9740129935032483,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.011441713254051413,
+     "mean_allowed": -0.011797013216694,
+     "mean_blocked": -0.011367713839171944,
+     "diff": -0.0004292993775220563,
+     "control_q95": 0.0007273235882353268,
+     "diff_vs_flip": -0.0007678488262679935
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 521066,
+     "n_allowed": 112223,
+     "n_blocked": 408843,
+     "share_blocked": 0.7846280509570764,
+     "win_allowed": 0.6452955276547588,
+     "win_blocked": 0.6378805556167038,
+     "p": 0.9600199900049975,
+     "control_p": 1.0,
+     "within_p": 0.999000499750125,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.010501480794406227,
+     "mean_allowed": -0.011006881021181917,
+     "mean_blocked": -0.010362753875639247,
+     "diff": -0.0006441271455426695,
+     "control_q95": 0.000661487369757806,
+     "diff_vs_flip": -0.0009678920485341891
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 2569532,
+     "n_allowed": 728767,
+     "n_blocked": 1840765,
+     "share_blocked": 0.716381426656683,
+     "win_allowed": 0.6362952768168701,
+     "win_blocked": 0.6429066176290835,
+     "p": 0.9735132433783108,
+     "control_p": 1.0,
+     "within_p": 0.9810094952523738,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1602520,
+     "n_allowed": 392104,
+     "n_blocked": 1210416,
+     "share_blocked": 0.7553203704165938,
+     "win_allowed": 0.6539336502560545,
+     "win_blocked": 0.638980317510674,
+     "p": 0.004497751124437781,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.02848575712143928,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 738846,
+     "n_allowed": 276889,
+     "n_blocked": 461957,
+     "share_blocked": 0.6252412546051546,
+     "win_allowed": 0.6090093864328305,
+     "win_blocked": 0.6515757960156465,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 228166,
+     "n_allowed": 59774,
+     "n_blocked": 168392,
+     "share_blocked": 0.7380240701945076,
+     "win_allowed": 0.6469869843075585,
+     "win_blocked": 0.6473466673001093,
+     "p": 0.9985007496251874,
+     "control_p": 1.0,
+     "within_p": 0.9985007496251874,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 4589032,
+     "n_allowed": 1179772,
+     "n_blocked": 3409260,
+     "share_blocked": 0.7429148456580822,
+     "win_allowed": 0.6609200760824973,
+     "win_blocked": 0.6351744953450309,
+     "p": 0.0009995002498750624,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2685737,
+     "n_allowed": 618437,
+     "n_blocked": 2067300,
+     "share_blocked": 0.7697328517274774,
+     "win_allowed": 0.7040183559521827,
+     "win_blocked": 0.623413147583805,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 1154063,
+     "n_allowed": 396908,
+     "n_blocked": 757155,
+     "share_blocked": 0.6560777011307009,
+     "win_allowed": 0.5768868352363772,
+     "win_blocked": 0.6751259649609394,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 749232,
+     "n_allowed": 164427,
+     "n_blocked": 584805,
+     "share_blocked": 0.780539272214748,
+     "win_allowed": 0.7016670011616097,
+     "win_blocked": 0.625025435829037,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 2656579,
+     "n_allowed": 713333,
+     "n_blocked": 1943246,
+     "share_blocked": 0.7314843639131379,
+     "win_allowed": 0.6425750666238629,
+     "win_blocked": 0.6035159727589816,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 1544251,
+     "n_allowed": 384447,
+     "n_blocked": 1159804,
+     "share_blocked": 0.7510463001157195,
+     "win_allowed": 0.6922046471945418,
+     "win_blocked": 0.5871802476970247,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 657274,
+     "n_allowed": 221194,
+     "n_blocked": 436080,
+     "share_blocked": 0.6634675949451827,
+     "win_allowed": 0.5319222040380842,
+     "win_blocked": 0.6557512383048982,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 455054,
+     "n_allowed": 107692,
+     "n_blocked": 347362,
+     "share_blocked": 0.7633423725535871,
+     "win_allowed": 0.6926791219403484,
+     "win_blocked": 0.592482770136054,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 1310183,
+     "n_allowed": 325484,
+     "n_blocked": 984699,
+     "share_blocked": 0.7515736351334127,
+     "win_allowed": 0.679397451180396,
+     "win_blocked": 0.6628187903105416,
+     "p": 0.03498250874562719,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.017491254372813594,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 770195,
+     "n_allowed": 169462,
+     "n_blocked": 600733,
+     "share_blocked": 0.7799752010854394,
+     "win_allowed": 0.7169040846915533,
+     "win_blocked": 0.6526060662557243,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 333482,
+     "n_allowed": 113580,
+     "n_blocked": 219902,
+     "share_blocked": 0.659411902291578,
+     "win_allowed": 0.6107325233315725,
+     "win_blocked": 0.6946867240861838,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 206506,
+     "n_allowed": 42442,
+     "n_blocked": 164064,
+     "share_blocked": 0.7944757053063833,
+     "win_allowed": 0.7133971066396494,
+     "win_blocked": 0.6574995123854106,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 585185,
+     "n_allowed": 132061,
+     "n_blocked": 453124,
+     "share_blocked": 0.774326067824705,
+     "win_allowed": 0.7079607151240714,
+     "win_blocked": 0.7039794846443799,
+     "p": 0.8035982008995503,
+     "control_p": 0.7442557442557443,
+     "within_p": 0.632183908045977,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 349618,
+     "n_allowed": 61302,
+     "n_blocked": 288316,
+     "share_blocked": 0.8246600575485243,
+     "win_allowed": 0.7373821408763173,
+     "win_blocked": 0.7001588534802092,
+     "p": 0.006496751624187906,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0079960019990005,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 152504,
+     "n_allowed": 57037,
+     "n_blocked": 95467,
+     "share_blocked": 0.6259966951686513,
+     "win_allowed": 0.6703893963567509,
+     "win_blocked": 0.715200016759718,
+     "p": 0.9950024987506247,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 83063,
+     "n_allowed": 13722,
+     "n_blocked": 69341,
+     "share_blocked": 0.8348000914968157,
+     "win_allowed": 0.7326920274012535,
+     "win_blocked": 0.7044173000100951,
+     "p": 0.2983508245877061,
+     "control_p": 0.23176823176823177,
+     "within_p": 0.33033483258370816,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 37085,
+     "n_allowed": 8894,
+     "n_blocked": 28191,
+     "share_blocked": 0.7601725765134151,
+     "win_allowed": 0.7575893861029908,
+     "win_blocked": 0.7459118158277465,
+     "p": 0.16491754122938532,
+     "control_p": 0.001998001998001998,
+     "within_p": 0.02798600699650175,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 21673,
+     "n_allowed": 3226,
+     "n_blocked": 18447,
+     "share_blocked": 0.8511512019563512,
+     "win_allowed": 0.800991940483571,
+     "win_blocked": 0.7512874722177048,
+     "p": 0.0024987506246876563,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0024987506246876563,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": true,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 10803,
+     "n_allowed": 5097,
+     "n_blocked": 5706,
+     "share_blocked": 0.5281866148292141,
+     "win_allowed": 0.7276829507553463,
+     "win_blocked": 0.7315106905012267,
+     "p": 0.2913543228385807,
+     "control_p": 0.4945054945054945,
+     "within_p": 0.4752623688155922,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 4609,
+     "n_allowed": 571,
+     "n_blocked": 4038,
+     "share_blocked": 0.8761119548709048,
+     "win_allowed": 0.7793345008756567,
+     "win_blocked": 0.7417038137691927,
+     "p": 0.16391804097951024,
+     "control_p": 0.13586413586413587,
+     "within_p": 0.2158920539730135,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 2019500,
+     "n_allowed": 472427,
+     "n_blocked": 1547073,
+     "share_blocked": 0.7660673434018321,
+     "win_allowed": 0.6755816242509425,
+     "win_blocked": 0.6327406657604392,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null,
+     "mean_all": -0.010445333951404139,
+     "mean_allowed": -0.009156152071999081,
+     "mean_blocked": -0.010839009186988813,
+     "diff": 0.0016828571149897324,
+     "control_q95": 6.0431206293777e-05,
+     "diff_vs_flip": 0.0018041378964438744
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1083217,
+     "n_allowed": 245480,
+     "n_blocked": 837737,
+     "share_blocked": 0.773378741286372,
+     "win_allowed": 0.7049494867198958,
+     "win_blocked": 0.6222477937586617,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null,
+     "mean_all": -0.010036394804582198,
+     "mean_allowed": -0.007581915574253978,
+     "mean_blocked": -0.010755624779456139,
+     "diff": 0.00317370920520216,
+     "control_q95": 0.00013187578193495222,
+     "diff_vs_flip": 0.0032815565081550993
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 415217,
+     "n_allowed": 117955,
+     "n_blocked": 297262,
+     "share_blocked": 0.7159196275682354,
+     "win_allowed": 0.591403501335255,
+     "win_blocked": 0.6753604564323727,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.011441713254051413,
+     "mean_allowed": -0.013211577416773338,
+     "mean_blocked": -0.010739422590213234,
+     "diff": -0.002472154826560104,
+     "control_q95": 0.0005808425424449271,
+     "diff_vs_flip": -0.002692418138684239
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 521066,
+     "n_allowed": 108992,
+     "n_blocked": 412074,
+     "share_blocked": 0.790828800958036,
+     "win_allowed": 0.7005376541397533,
+     "win_blocked": 0.6233273635317929,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null,
+     "mean_all": -0.010501480794406227,
+     "mean_allowed": -0.008312841360420438,
+     "mean_blocked": -0.011080367570055696,
+     "diff": 0.002767526209635258,
+     "control_q95": 0.00014050072036923643,
+     "diff_vs_flip": 0.0029851452507568053
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 2569532,
+     "n_allowed": 707345,
+     "n_blocked": 1862187,
+     "share_blocked": 0.7247183533810826,
+     "win_allowed": 0.6511278089192686,
+     "win_blocked": 0.6371964791935504,
+     "p": 0.2158920539730135,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.026486756621689155,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1602520,
+     "n_allowed": 372957,
+     "n_blocked": 1229563,
+     "share_blocked": 0.7672684272271173,
+     "win_allowed": 0.7034054864233679,
+     "win_blocked": 0.6242071370072131,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0004997501249375312,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 738846,
+     "n_allowed": 278953,
+     "n_blocked": 459893,
+     "share_blocked": 0.6224477089948379,
+     "win_allowed": 0.5707484773420612,
+     "win_blocked": 0.6749743962182507,
+     "p": 1.0,
+     "control_p": 1.0,
+     "within_p": 1.0,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 228166,
+     "n_allowed": 55435,
+     "n_blocked": 172731,
+     "share_blocked": 0.757040926343101,
+     "win_allowed": 0.7038874357355461,
+     "win_blocked": 0.62907642519293,
+     "p": 0.0004997501249375312,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.0009995002498750624,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 4589032,
+     "n_allowed": 1550735,
+     "n_blocked": 3038297,
+     "share_blocked": 0.6620779719993236,
+     "win_allowed": 0.6268130918564423,
+     "win_blocked": 0.6494391430462526,
+     "p": 1.0,
+     "control_p": null,
+     "within_p": 1.0,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2685737,
+     "n_allowed": 1004497,
+     "n_blocked": 1681240,
+     "share_blocked": 0.6259883227583342,
+     "win_allowed": 0.6159779471715695,
+     "win_blocked": 0.6575057695510457,
+     "p": 1.0,
+     "control_p": null,
+     "within_p": 1.0,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 1154063,
+     "n_allowed": 374241,
+     "n_blocked": 779822,
+     "share_blocked": 0.6757187432575171,
+     "win_allowed": 0.6471311267338427,
+     "win_blocked": 0.6385598251908768,
+     "p": 0.8810594702648675,
+     "control_p": null,
+     "within_p": 0.8820589705147426,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 749232,
+     "n_allowed": 171997,
+     "n_blocked": 577235,
+     "share_blocked": 0.7704355927136054,
+     "win_allowed": 0.6458833584306704,
+     "win_blocked": 0.6406420262111618,
+     "p": 0.9970014992503748,
+     "control_p": null,
+     "within_p": 1.0,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 4589032,
+     "n_allowed": 1480460,
+     "n_blocked": 3108572,
+     "share_blocked": 0.6773916590688407,
+     "win_allowed": 0.6219647947259636,
+     "win_blocked": 0.6512366449932638,
+     "p": 0.7821089455272364,
+     "control_p": null,
+     "within_p": 0.8960519740129935,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2685737,
+     "n_allowed": 1015498,
+     "n_blocked": 1670239,
+     "share_blocked": 0.6218922403794563,
+     "win_allowed": 0.585386677275583,
+     "win_blocked": 0.6763786500015866,
+     "p": 1.0,
+     "control_p": null,
+     "within_p": 1.0,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 1154063,
+     "n_allowed": 300535,
+     "n_blocked": 853528,
+     "share_blocked": 0.7395852739408507,
+     "win_allowed": 0.7019548471891793,
+     "win_blocked": 0.6199960633980374,
+     "p": 0.0004997501249375312,
+     "control_p": null,
+     "within_p": 0.0004997501249375312,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 749232,
+     "n_allowed": 164427,
+     "n_blocked": 584805,
+     "share_blocked": 0.780539272214748,
+     "win_allowed": 0.7016670011616097,
+     "win_blocked": 0.625025435829037,
+     "p": 0.0004997501249375312,
+     "control_p": null,
+     "within_p": 0.0004997501249375312,
+     "pass": null
+    }
+   ],
+   "states": {
+    "all|trend|장세|추세장": {
+     "n": 653023,
+     "win": 0.6534088385860835
+    },
+    "all|trend|장세|횡보장": {
+     "n": 1004497,
+     "win": 0.6159779471715695
+    },
+    "all|trend|장세|급변장": {
+     "n": 310147,
+     "win": 0.718849448809758
+    },
+    "all|trend|장세|보통": {
+     "n": 718070,
+     "win": 0.6347361677830852
+    },
+    "all|trend|변동성|작음": {
+     "n": 1015498,
+     "win": 0.585386677275583
+    },
+    "all|trend|변동성|보통": {
+     "n": 1051802,
+     "win": 0.6601270961644873
+    },
+    "all|trend|변동성|큼": {
+     "n": 618437,
+     "win": 0.7040183559521827
+    },
+    "all|reversion|장세|추세장": {
+     "n": 374241,
+     "win": 0.6471311267338427
+    },
+    "all|reversion|장세|횡보장": {
+     "n": 348461,
+     "win": 0.6109607674890447
+    },
+    "all|reversion|장세|급변장": {
+     "n": 148295,
+     "win": 0.7213324791800129
+    },
+    "all|reversion|장세|보통": {
+     "n": 283066,
+     "win": 0.629171288674726
+    },
+    "all|reversion|변동성|작음": {
+     "n": 396908,
+     "win": 0.5768868352363772
+    },
+    "all|reversion|변동성|보통": {
+     "n": 456620,
+     "win": 0.6574679164294162
+    },
+    "all|reversion|변동성|큼": {
+     "n": 300535,
+     "win": 0.7019548471891793
+    },
+    "all|other|장세|추세장": {
+     "n": 171997,
+     "win": 0.6458833584306704
+    },
+    "all|other|장세|횡보장": {
+     "n": 329041,
+     "win": 0.6217036782650186
+    },
+    "all|other|장세|급변장": {
+     "n": 82380,
+     "win": 0.7202961883952416
+    },
+    "all|other|장세|보통": {
+     "n": 165814,
+     "win": 0.6386493299721374
+    },
+    "all|other|변동성|작음": {
+     "n": 293993,
+     "win": 0.5872452745473532
+    },
+    "all|other|변동성|보통": {
+     "n": 290812,
+     "win": 0.6632188492909509
+    },
+    "all|other|변동성|큼": {
+     "n": 164427,
+     "win": 0.7016670011616097
+    },
+    "core|trend|장세|추세장": {
+     "n": 260919,
+     "win": 0.6526201618126698,
+     "mean": -0.00940836825367925
+    },
+    "core|trend|장세|횡보장": {
+     "n": 421823,
+     "win": 0.6156041752109297,
+     "mean": -0.011011088113607362
+    },
+    "core|trend|장세|급변장": {
+     "n": 122011,
+     "win": 0.7194105449508651,
+     "mean": -0.0069377356527467685
+    },
+    "core|trend|장세|보통": {
+     "n": 278464,
+     "win": 0.6341861066421512,
+     "mean": -0.010506065949565813
+    },
+    "core|trend|변동성|작음": {
+     "n": 417551,
+     "win": 0.5841130784023988,
+     "mean": -0.01161301738256586
+    },
+    "core|trend|변동성|보통": {
+     "n": 420186,
+     "win": 0.6601433650811783,
+     "mean": -0.009903608913099177
+    },
+    "core|trend|변동성|큼": {
+     "n": 245480,
+     "win": 0.7049494867198958,
+     "mean": -0.007581915574253978
+    },
+    "core|reversion|장세|추세장": {
+     "n": 187450,
+     "win": 0.648380901573753,
+     "mean": -0.012320308992656652
+    },
+    "core|reversion|장세|횡보장": {
+     "n": 71572,
+     "win": 0.618510031856033,
+     "mean": -0.011797013216694
+    },
+    "core|reversion|장세|급변장": {
+     "n": 66719,
+     "win": 0.7157781141803684,
+     "mean": -0.008126024568190868
+    },
+    "core|reversion|장세|보통": {
+     "n": 89476,
+     "win": 0.6365394072153426,
+     "mean": -0.011789260454464066
+    },
+    "core|reversion|변동성|작음": {
+     "n": 117955,
+     "win": 0.591403501335255,
+     "mean": -0.013211577416773338
+    },
+    "core|reversion|변동성|보통": {
+     "n": 165316,
+     "win": 0.658720269060466,
+     "mean": -0.011498769364195032
+    },
+    "core|reversion|변동성|큼": {
+     "n": 131946,
+     "win": 0.6962090552195596,
+     "mean": -0.009788032087374384
+    },
+    "core|other|장세|추세장": {
+     "n": 112223,
+     "win": 0.6452955276547588,
+     "mean": -0.011006881021181917
+    },
+    "core|other|장세|횡보장": {
+     "n": 248854,
+     "win": 0.6202914158502576,
+     "mean": -0.011096860985009562
+    },
+    "core|other|장세|급변장": {
+     "n": 55465,
+     "win": 0.7178220499414045,
+     "mean": -0.0072163659413848474
+    },
+    "core|other|장세|보통": {
+     "n": 104524,
+     "win": 0.6373368795683289,
+     "mean": -0.010284579639848237
+    },
+    "core|other|변동성|작음": {
+     "n": 212949,
+     "win": 0.5878496729263815,
+     "mean": -0.0120562294936117
+    },
+    "core|other|변동성|보통": {
+     "n": 199125,
+     "win": 0.6612680477087257,
+     "mean": -0.010036757672959262
+    },
+    "core|other|변동성|큼": {
+     "n": 108992,
+     "win": 0.7005376541397533,
+     "mean": -0.008312841360420438
+    },
+    "ds|trend|장세|추세장": {
+     "n": 392104,
+     "win": 0.6539336502560545
+    },
+    "ds|trend|장세|횡보장": {
+     "n": 582674,
+     "win": 0.6162485369177276
+    },
+    "ds|trend|장세|급변장": {
+     "n": 188136,
+     "win": 0.7184855636348174
+    },
+    "ds|trend|장세|보통": {
+     "n": 439606,
+     "win": 0.6350845984813674
+    },
+    "ds|trend|변동성|작음": {
+     "n": 597947,
+     "win": 0.5862760411875969
+    },
+    "ds|trend|변동성|보통": {
+     "n": 631616,
+     "win": 0.6601162731786402
+    },
+    "ds|trend|변동성|큼": {
+     "n": 372957,
+     "win": 0.7034054864233679
+    },
+    "ds|reversion|장세|추세장": {
+     "n": 186791,
+     "win": 0.6458769426792511
+    },
+    "ds|reversion|장세|횡보장": {
+     "n": 276889,
+     "win": 0.6090093864328305
+    },
+    "ds|reversion|장세|급변장": {
+     "n": 81576,
+     "win": 0.7258752574286554
+    },
+    "ds|reversion|장세|보통": {
+     "n": 193590,
+     "win": 0.6257657936876905
+    },
+    "ds|reversion|변동성|작음": {
+     "n": 278953,
+     "win": 0.5707484773420612
+    },
+    "ds|reversion|변동성|보통": {
+     "n": 291304,
+     "win": 0.6567572020981518
+    },
+    "ds|reversion|변동성|큼": {
+     "n": 168589,
+     "win": 0.7064517851105351
+    },
+    "ds|other|장세|추세장": {
+     "n": 59774,
+     "win": 0.6469869843075585
+    },
+    "ds|other|장세|횡보장": {
+     "n": 80187,
+     "win": 0.6260865227530648
+    },
+    "ds|other|장세|급변장": {
+     "n": 26915,
+     "win": 0.7253947612855285
+    },
+    "ds|other|장세|보통": {
+     "n": 61290,
+     "win": 0.6408875836188611
+    },
+    "ds|other|변동성|작음": {
+     "n": 81044,
+     "win": 0.5856571738808548
+    },
+    "ds|other|변동성|보통": {
+     "n": 91687,
+     "win": 0.6674555825798641
+    },
+    "ds|other|변동성|큼": {
+     "n": 55435,
+     "win": 0.7038874357355461
+    }
+   },
+   "years": {
+    "G1|all|2021": {
+     "n_allowed": 161209,
+     "n_blocked": 469180,
+     "diff_positive": true
+    },
+    "G1|core|2021": {
+     "n_allowed": 62144,
+     "n_blocked": 220101,
+     "diff_positive": false,
+     "diff": -0.00010273268954118578
+    },
+    "G1|all|2022": {
+     "n_allowed": 214741,
+     "n_blocked": 570215,
+     "diff_positive": false
+    },
+    "G1|core|2022": {
+     "n_allowed": 83169,
+     "n_blocked": 267553,
+     "diff_positive": false,
+     "diff": -0.000132376570324921
+    },
+    "G1|all|2023": {
+     "n_allowed": 220243,
+     "n_blocked": 638447,
+     "diff_positive": false
+    },
+    "G1|core|2023": {
+     "n_allowed": 83053,
+     "n_blocked": 293739,
+     "diff_positive": true,
+     "diff": 0.00041807234084598015
+    },
+    "G1|all|2024": {
+     "n_allowed": 185315,
+     "n_blocked": 630215,
+     "diff_positive": false
+    },
+    "G1|core|2024": {
+     "n_allowed": 69338,
+     "n_blocked": 287890,
+     "diff_positive": true,
+     "diff": 0.0003228172919652692
+    },
+    "G1|all|2025": {
+     "n_allowed": 221242,
+     "n_blocked": 618473,
+     "diff_positive": true
+    },
+    "G1|core|2025": {
+     "n_allowed": 83279,
+     "n_blocked": 282010,
+     "diff_positive": true,
+     "diff": 0.0004581323252559142
+    },
+    "G1|all|2026": {
+     "n_allowed": 170731,
+     "n_blocked": 489021,
+     "diff_positive": true
+    },
+    "G1|core|2026": {
+     "n_allowed": 63731,
+     "n_blocked": 223493,
+     "diff_positive": true,
+     "diff": 0.000995773408847699
+    },
+    "G2|all|2021": {
+     "n_allowed": 136229,
+     "n_blocked": 494160,
+     "diff_positive": true
+    },
+    "G2|core|2021": {
+     "n_allowed": 53801,
+     "n_blocked": 228444,
+     "diff_positive": true,
+     "diff": 0.000543081203103939
+    },
+    "G2|all|2022": {
+     "n_allowed": 185706,
+     "n_blocked": 599250,
+     "diff_positive": true
+    },
+    "G2|core|2022": {
+     "n_allowed": 73721,
+     "n_blocked": 277001,
+     "diff_positive": true,
+     "diff": 0.0019508430050377557
+    },
+    "G2|all|2023": {
+     "n_allowed": 233505,
+     "n_blocked": 625185,
+     "diff_positive": true
+    },
+    "G2|core|2023": {
+     "n_allowed": 94169,
+     "n_blocked": 282623,
+     "diff_positive": true,
+     "diff": 0.002104373510986855
+    },
+    "G2|all|2024": {
+     "n_allowed": 227135,
+     "n_blocked": 588395,
+     "diff_positive": true
+    },
+    "G2|core|2024": {
+     "n_allowed": 93165,
+     "n_blocked": 264063,
+     "diff_positive": true,
+     "diff": 0.002166860301948254
+    },
+    "G2|all|2025": {
+     "n_allowed": 214428,
+     "n_blocked": 625287,
+     "diff_positive": true
+    },
+    "G2|core|2025": {
+     "n_allowed": 84542,
+     "n_blocked": 280747,
+     "diff_positive": true,
+     "diff": 0.0022119347328107275
+    },
+    "G2|all|2026": {
+     "n_allowed": 182769,
+     "n_blocked": 476983,
+     "diff_positive": true
+    },
+    "G2|core|2026": {
+     "n_allowed": 73029,
+     "n_blocked": 214195,
+     "diff_positive": true,
+     "diff": 0.0012417282980747863
+    }
+   }
+  },
+  "tp3R|4": {
+   "signals": 3495923,
+   "unknown_state": 3051,
+   "used": 3492872,
+   "open_at_end": 0,
+   "lines": [
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 3492872,
+     "n_allowed": 934599,
+     "n_blocked": 2558273,
+     "share_blocked": 0.7324267823155272,
+     "win_allowed": 0.25853440887482226,
+     "win_blocked": 0.25316649161367843,
+     "p": 0.047976011994003,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.03698150924537731,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2049245,
+     "n_allowed": 506630,
+     "n_blocked": 1542615,
+     "share_blocked": 0.7527723625042394,
+     "win_allowed": 0.26562382804018714,
+     "win_blocked": 0.25547528061117,
+     "p": 0.01199400299850075,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.01699150424787606,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 863810,
+     "n_allowed": 292078,
+     "n_blocked": 571732,
+     "share_blocked": 0.6618724024959193,
+     "win_allowed": 0.2505289682892926,
+     "win_blocked": 0.24516556708387846,
+     "p": 0.23788105947026486,
+     "control_p": 0.23176823176823177,
+     "within_p": 0.41379310344827586,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 579817,
+     "n_allowed": 135891,
+     "n_blocked": 443926,
+     "share_blocked": 0.7656312250244474,
+     "win_allowed": 0.24931010883722984,
+     "win_blocked": 0.2554479800687502,
+     "p": 0.8990504747626187,
+     "control_p": 0.99000999000999,
+     "within_p": 0.8345827086456772,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 2301616,
+     "n_allowed": 598959,
+     "n_blocked": 1702657,
+     "share_blocked": 0.7397658862295013,
+     "win_allowed": 0.2571812093983061,
+     "win_blocked": 0.25100357852462357,
+     "p": 0.028985507246376812,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.022488755622188907,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 1342016,
+     "n_allowed": 321261,
+     "n_blocked": 1020755,
+     "share_blocked": 0.7606131372502265,
+     "win_allowed": 0.26402208795963406,
+     "win_blocked": 0.25309109433703486,
+     "p": 0.012993503248375811,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.008995502248875561,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 563711,
+     "n_allowed": 185680,
+     "n_blocked": 378031,
+     "share_blocked": 0.6706113593667677,
+     "win_allowed": 0.2507809133993968,
+     "win_blocked": 0.24321550349045448,
+     "p": 0.14342828585707146,
+     "control_p": 0.012987012987012988,
+     "within_p": 0.19140429785107446,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 395889,
+     "n_allowed": 92018,
+     "n_blocked": 303871,
+     "share_blocked": 0.7675661612219586,
+     "win_allowed": 0.24621269751570346,
+     "win_blocked": 0.25368001553290703,
+     "p": 0.9315342328835582,
+     "control_p": 0.998001998001998,
+     "within_p": 0.8825587206396801,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 916691,
+     "n_allowed": 256323,
+     "n_blocked": 660368,
+     "share_blocked": 0.7203823316690139,
+     "win_allowed": 0.25843954697783655,
+     "win_blocked": 0.2558558258425605,
+     "p": 0.21989005497251374,
+     "control_p": 0.001998001998001998,
+     "within_p": 0.23938030984507747,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 542130,
+     "n_allowed": 142313,
+     "n_blocked": 399817,
+     "share_blocked": 0.7374928522679062,
+     "win_allowed": 0.2650214667669152,
+     "win_blocked": 0.25780544599154115,
+     "p": 0.1024487756121939,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.1329335332333833,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 229634,
+     "n_allowed": 78839,
+     "n_blocked": 150795,
+     "share_blocked": 0.6566754052100299,
+     "win_allowed": 0.2491406537373635,
+     "win_blocked": 0.24854272356510496,
+     "p": 0.48825587206396803,
+     "control_p": 0.9150849150849151,
+     "within_p": 0.6746626686656672,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 144927,
+     "n_allowed": 35171,
+     "n_blocked": 109756,
+     "share_blocked": 0.7573192020810477,
+     "win_allowed": 0.25265133206334767,
+     "win_blocked": 0.2588013411567477,
+     "p": 0.8000999500249875,
+     "control_p": 0.8731268731268731,
+     "within_p": 0.7076461769115442,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 269883,
+     "n_allowed": 78018,
+     "n_blocked": 191865,
+     "share_blocked": 0.7109191760874156,
+     "win_allowed": 0.2692071060524494,
+     "win_blocked": 0.2623980402887447,
+     "p": 0.20589705147426288,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.14642678660669664,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 162398,
+     "n_allowed": 42466,
+     "n_blocked": 119932,
+     "share_blocked": 0.7385066318550721,
+     "win_allowed": 0.2790232185748599,
+     "win_blocked": 0.26701797685355033,
+     "p": 0.1539230384807596,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.13093453273363317,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 69070,
+     "n_allowed": 26949,
+     "n_blocked": 42121,
+     "share_blocked": 0.6098306066309541,
+     "win_allowed": 0.2545548999962893,
+     "win_blocked": 0.2501127703520809,
+     "p": 0.4497751124437781,
+     "control_p": 0.5114885114885115,
+     "within_p": 0.48575712143928035,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 38415,
+     "n_allowed": 8603,
+     "n_blocked": 29812,
+     "share_blocked": 0.7760510217363009,
+     "win_allowed": 0.2666511681971405,
+     "win_blocked": 0.2611699986582584,
+     "p": 0.4332833583208396,
+     "control_p": 0.1028971028971029,
+     "within_p": 0.24987506246876562,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 4682,
+     "n_allowed": 1299,
+     "n_blocked": 3383,
+     "share_blocked": 0.7225544639043144,
+     "win_allowed": 0.2602001539645881,
+     "win_blocked": 0.29323086018326927,
+     "p": 0.8670664667666167,
+     "control_p": 0.9690309690309691,
+     "within_p": 0.7961019490254873,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "trend",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 2701,
+     "n_allowed": 590,
+     "n_blocked": 2111,
+     "share_blocked": 0.7815623843021103,
+     "win_allowed": 0.31864406779661014,
+     "win_blocked": 0.3112269066792989,
+     "p": 0.5177411294352824,
+     "control_p": 0.6493506493506493,
+     "within_p": 0.5362318840579711,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": true,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 1395,
+     "n_allowed": 610,
+     "n_blocked": 785,
+     "share_blocked": 0.5627240143369175,
+     "win_allowed": 0.17540983606557378,
+     "win_blocked": 0.2700636942675159,
+     "p": 0.9865067466266867,
+     "control_p": 1.0,
+     "within_p": 0.9865067466266867,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "all",
+     "group": "other",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 586,
+     "n_allowed": 99,
+     "n_blocked": 487,
+     "share_blocked": 0.8310580204778157,
+     "win_allowed": 0.43434343434343436,
+     "win_blocked": 0.25256673511293637,
+     "p": 0.0029985007496251873,
+     "control_p": 0.001998001998001998,
+     "within_p": 0.0034982508745627187,
+     "checks": {
+      "trades": false,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": true,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1551689,
+     "n_allowed": 358027,
+     "n_blocked": 1193662,
+     "share_blocked": 0.7692662640516238,
+     "win_allowed": 0.26357788658397274,
+     "win_blocked": 0.25380132734392147,
+     "p": 0.017991004497751123,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.010494752623688156,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null,
+     "mean_all": -0.004873553005497606,
+     "mean_allowed": -0.0018403415801040643,
+     "mean_blocked": -0.005783334490540586,
+     "diff": 0.0039429929104365215,
+     "control_q95": 0.0009372806086362599,
+     "diff_vs_flip": 0.0035106217248567005
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 840933,
+     "n_allowed": 207425,
+     "n_blocked": 633508,
+     "share_blocked": 0.7533394455919794,
+     "win_allowed": 0.27144269012896227,
+     "win_blocked": 0.2562540646684809,
+     "p": 0.0034982508745627187,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.004497751124437781,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": true,
+      "control": true,
+      "within": true
+     },
+     "pass": null,
+     "mean_all": -0.003548633129991797,
+     "mean_allowed": 0.001281830605285145,
+     "mean_blocked": -0.005130237372226812,
+     "diff": 0.006412067977511957,
+     "control_q95": 0.001246164049752209,
+     "diff_vs_flip": 0.0059059028966183015
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 301372,
+     "n_allowed": 60728,
+     "n_blocked": 240644,
+     "share_blocked": 0.7984948833999177,
+     "win_allowed": 0.2523712290870768,
+     "win_blocked": 0.24404099001013946,
+     "p": 0.1904047976011994,
+     "control_p": 0.12887112887112886,
+     "within_p": 0.28535732133933034,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.008390738954223079,
+     "mean_allowed": -0.006559901792205652,
+     "mean_blocked": -0.008852762022219763,
+     "diff": 0.002292860230014111,
+     "control_q95": 0.0026539975149946866,
+     "diff_vs_flip": 0.0008114431921444548
+    },
+    {
+     "gate": "G1",
+     "universe": "core",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 409384,
+     "n_allowed": 89874,
+     "n_blocked": 319510,
+     "share_blocked": 0.7804652844273348,
+     "win_allowed": 0.25299864254400606,
+     "win_blocked": 0.2562893180182154,
+     "p": 0.6766616691654173,
+     "control_p": 0.44755244755244755,
+     "within_p": 0.5012493753123438,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.005005916463594242,
+     "mean_allowed": -0.005857155263637139,
+     "mean_blocked": -0.004766474080210137,
+     "diff": -0.0010906811834270023,
+     "control_q95": -5.990633272652431e-05,
+     "diff_vs_flip": 6.666603431845722e-05
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1941183,
+     "n_allowed": 576572,
+     "n_blocked": 1364611,
+     "share_blocked": 0.7029790596764962,
+     "win_allowed": 0.25540262100830424,
+     "win_blocked": 0.25261118369997015,
+     "p": 0.16591704147926037,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.11444277861069466,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1208312,
+     "n_allowed": 299205,
+     "n_blocked": 909107,
+     "share_blocked": 0.752377697151067,
+     "win_allowed": 0.2615898798482646,
+     "win_blocked": 0.2549325876931978,
+     "p": 0.03948025987006497,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.05247376311844078,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 562438,
+     "n_allowed": 231350,
+     "n_blocked": 331088,
+     "share_blocked": 0.5886657729385283,
+     "win_allowed": 0.25004538577912255,
+     "win_blocked": 0.24598294109119026,
+     "p": 0.33233383308345826,
+     "control_p": 0.42957042957042957,
+     "within_p": 0.4737631184407796,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1",
+     "universe": "ds",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 170433,
+     "n_allowed": 46017,
+     "n_blocked": 124416,
+     "share_blocked": 0.7299994719332523,
+     "win_allowed": 0.2421061781515527,
+     "win_blocked": 0.2532873585390947,
+     "p": 0.992503748125937,
+     "control_p": 1.0,
+     "within_p": 0.9870064967516242,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 3492872,
+     "n_allowed": 763312,
+     "n_blocked": 2729560,
+     "share_blocked": 0.7814657966281043,
+     "win_allowed": 0.25230181105498145,
+     "win_blocked": 0.2552462667975791,
+     "p": 0.6481759120439781,
+     "control_p": 0.00999000999000999,
+     "within_p": 0.41629185407296354,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2049245,
+     "n_allowed": 317955,
+     "n_blocked": 1731290,
+     "share_blocked": 0.8448428567594407,
+     "win_allowed": 0.2568571024201538,
+     "win_blocked": 0.25819129088714193,
+     "p": 0.4052973513243378,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.33033483258370816,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 863810,
+     "n_allowed": 361167,
+     "n_blocked": 502643,
+     "share_blocked": 0.5818906935552958,
+     "win_allowed": 0.25006437465216924,
+     "win_blocked": 0.24476218707909989,
+     "p": 0.4337831084457771,
+     "control_p": 0.6393606393606394,
+     "within_p": 0.5377311344327836,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 579817,
+     "n_allowed": 84190,
+     "n_blocked": 495627,
+     "share_blocked": 0.8547990141717128,
+     "win_allowed": 0.24469651977669557,
+     "win_blocked": 0.255591402405438,
+     "p": 0.8590704647676162,
+     "control_p": 0.999000999000999,
+     "within_p": 0.8015992003998001,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": false
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 2301616,
+     "n_allowed": 525939,
+     "n_blocked": 1775677,
+     "share_blocked": 0.7714914216793766,
+     "win_allowed": 0.2504301829679868,
+     "win_blocked": 0.2532572083774245,
+     "p": 0.6271864067966016,
+     "control_p": 0.27172827172827174,
+     "within_p": 0.4592703648175912,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 1342016,
+     "n_allowed": 239883,
+     "n_blocked": 1102133,
+     "share_blocked": 0.8212517585483332,
+     "win_allowed": 0.25427395855479545,
+     "win_blocked": 0.2560199177413252,
+     "p": 0.3523238380809595,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.33883058470764615,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 563711,
+     "n_allowed": 219726,
+     "n_blocked": 343985,
+     "share_blocked": 0.6102151634436794,
+     "win_allowed": 0.24802253715991734,
+     "win_blocked": 0.2442286727618937,
+     "p": 0.7471264367816092,
+     "control_p": 0.997002997002997,
+     "within_p": 0.8070964517741129,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "15m",
+     "role": "timeframe",
+     "n_all": 395889,
+     "n_allowed": 66330,
+     "n_blocked": 329559,
+     "share_blocked": 0.8324530360782947,
+     "win_allowed": 0.2445047489823609,
+     "win_blocked": 0.25344172060238074,
+     "p": 0.7446276861569215,
+     "control_p": 0.97002997002997,
+     "within_p": 0.7006496751624188,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 916691,
+     "n_allowed": 182613,
+     "n_blocked": 734078,
+     "share_blocked": 0.8007911062724516,
+     "win_allowed": 0.25498184685646696,
+     "win_blocked": 0.25697541678132296,
+     "p": 0.6326836581709145,
+     "control_p": 0.07192807192807193,
+     "within_p": 0.4032983508245877,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 542130,
+     "n_allowed": 64178,
+     "n_blocked": 477952,
+     "share_blocked": 0.8816187999188386,
+     "win_allowed": 0.2640157063168064,
+     "win_blocked": 0.25912016269416177,
+     "p": 0.328335832083958,
+     "control_p": 0.001998001998001998,
+     "within_p": 0.32233883058470764,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 229634,
+     "n_allowed": 103458,
+     "n_blocked": 126176,
+     "share_blocked": 0.5494656714598013,
+     "win_allowed": 0.2508554195905585,
+     "win_blocked": 0.24702003550595994,
+     "p": 0.4292853573213393,
+     "control_p": 0.41858141858141856,
+     "within_p": 0.4672663668165917,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "30m",
+     "role": "timeframe",
+     "n_all": 144927,
+     "n_allowed": 14977,
+     "n_blocked": 129950,
+     "share_blocked": 0.8966583176357753,
+     "win_allowed": 0.24477532216064632,
+     "win_blocked": 0.2587533666794921,
+     "p": 0.8520739630184908,
+     "control_p": 0.994005994005994,
+     "within_p": 0.847576211894053,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 269883,
+     "n_allowed": 53721,
+     "n_blocked": 216162,
+     "share_blocked": 0.800947077066729,
+     "win_allowed": 0.261834291990097,
+     "win_blocked": 0.2649956976711911,
+     "p": 0.49825087456271866,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.1344327836081959,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 162398,
+     "n_allowed": 13753,
+     "n_blocked": 148645,
+     "share_blocked": 0.9153129964654737,
+     "win_allowed": 0.2677961172107904,
+     "win_blocked": 0.2703757274042181,
+     "p": 0.5037481259370314,
+     "control_p": 0.5034965034965035,
+     "within_p": 0.5022488755622189,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 69070,
+     "n_allowed": 37113,
+     "n_blocked": 31957,
+     "share_blocked": 0.46267554654698134,
+     "win_allowed": 0.26071726888152397,
+     "win_blocked": 0.2415433238414119,
+     "p": 0.02048975512243878,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.014492753623188406,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": true,
+      "allowed_positive": false,
+      "control": true,
+      "within": true
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "1h",
+     "role": "timeframe",
+     "n_all": 38415,
+     "n_allowed": 2855,
+     "n_blocked": 35560,
+     "share_blocked": 0.9256800728881948,
+     "win_allowed": 0.24763572679509632,
+     "win_blocked": 0.26358267716535433,
+     "p": 0.783608195902049,
+     "control_p": 0.9600399600399601,
+     "within_p": 0.769615192403798,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 4682,
+     "n_allowed": 1039,
+     "n_blocked": 3643,
+     "share_blocked": 0.7780862879111491,
+     "win_allowed": 0.2358036573628489,
+     "win_blocked": 0.29783145758989843,
+     "p": 0.9855072463768116,
+     "control_p": 0.7992007992007992,
+     "within_p": 0.735632183908046,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "trend",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 2701,
+     "n_allowed": 141,
+     "n_blocked": 2560,
+     "share_blocked": 0.9477971121806739,
+     "win_allowed": 0.3262411347517731,
+     "win_blocked": 0.312109375,
+     "p": 0.3698150924537731,
+     "control_p": 0.3076923076923077,
+     "within_p": 0.408295852073963,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 1395,
+     "n_allowed": 870,
+     "n_blocked": 525,
+     "share_blocked": 0.3763440860215054,
+     "win_allowed": 0.21724137931034482,
+     "win_blocked": 0.24761904761904763,
+     "p": 0.7916041979010495,
+     "control_p": 0.9470529470529471,
+     "within_p": 0.8710644677661169,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "all",
+     "group": "other",
+     "tf": "4h",
+     "role": "timeframe",
+     "n_all": 586,
+     "n_allowed": 28,
+     "n_blocked": 558,
+     "share_blocked": 0.9522184300341296,
+     "win_allowed": 0.35714285714285715,
+     "win_blocked": 0.27956989247311825,
+     "p": 0.3588205897051474,
+     "control_p": 0.24175824175824176,
+     "within_p": 0.3748125937031484,
+     "checks": {
+      "trades": false,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": true,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1551689,
+     "n_allowed": 293793,
+     "n_blocked": 1257896,
+     "share_blocked": 0.810662445889608,
+     "win_allowed": 0.2540394086993223,
+     "win_blocked": 0.25652836164515985,
+     "p": 0.545727136431784,
+     "control_p": 0.006993006993006993,
+     "within_p": 0.38980509745127434,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.004873553005497606,
+     "mean_allowed": -0.005088719472815609,
+     "mean_blocked": -0.004823298928902436,
+     "diff": -0.0002654205439131729,
+     "control_q95": -0.000520474976872229,
+     "diff_vs_flip": 0.00080157570861284
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 840933,
+     "n_allowed": 128449,
+     "n_blocked": 712484,
+     "share_blocked": 0.8472541807730224,
+     "win_allowed": 0.25937142367787996,
+     "win_blocked": 0.26011391132993866,
+     "p": 0.3843078460769615,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.3523238380809595,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.003548633129991797,
+     "mean_allowed": -0.0022925209712230535,
+     "mean_blocked": -0.0037750892338224607,
+     "diff": 0.0014825682625994071,
+     "control_q95": 0.0003703100886885014,
+     "diff_vs_flip": 0.0019508007932305983
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 301372,
+     "n_allowed": 107532,
+     "n_blocked": 193840,
+     "share_blocked": 0.6431918028217618,
+     "win_allowed": 0.2510973477662463,
+     "win_blocked": 0.24273627734213785,
+     "p": 0.2938530734632684,
+     "control_p": 0.2977022977022977,
+     "within_p": 0.4387806096951524,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.008390738954223079,
+     "mean_allowed": -0.007589263114861342,
+     "mean_blocked": -0.008835354616409656,
+     "diff": 0.0012460915015483137,
+     "control_q95": 0.001924346161913378,
+     "diff_vs_flip": 0.0003361487387280081
+    },
+    {
+     "gate": "G2",
+     "universe": "core",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 409384,
+     "n_allowed": 57812,
+     "n_blocked": 351572,
+     "share_blocked": 0.858782951947316,
+     "win_allowed": 0.24766484466892685,
+     "win_blocked": 0.25686630334611404,
+     "p": 0.7461269365317341,
+     "control_p": 0.8621378621378621,
+     "within_p": 0.6256871564217891,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null,
+     "mean_all": -0.005005916463594242,
+     "mean_allowed": -0.006650340631305202,
+     "mean_blocked": -0.004735509690632498,
+     "diff": -0.001914830940672704,
+     "control_q95": 0.0002679220600070992,
+     "diff_vs_flip": -0.000899212252394863
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "pooled",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1941183,
+     "n_allowed": 469519,
+     "n_blocked": 1471664,
+     "share_blocked": 0.7581273893290844,
+     "win_allowed": 0.2512145408386029,
+     "win_blocked": 0.2541504038965416,
+     "p": 0.7336331834082959,
+     "control_p": 0.1998001998001998,
+     "within_p": 0.45827086456771615,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "trend",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 1208312,
+     "n_allowed": 189506,
+     "n_blocked": 1018806,
+     "share_blocked": 0.843164679321235,
+     "win_allowed": 0.25515287114919843,
+     "win_blocked": 0.25684674020372866,
+     "p": 0.37031484257871067,
+     "control_p": 0.000999000999000999,
+     "within_p": 0.303848075962019,
+     "checks": {
+      "trades": true,
+      "diff_positive": true,
+      "boot": false,
+      "allowed_positive": false,
+      "control": true,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "reversion",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 562438,
+     "n_allowed": 253635,
+     "n_blocked": 308803,
+     "share_blocked": 0.5490436279198774,
+     "win_allowed": 0.24962643168332446,
+     "win_blocked": 0.2460338792045414,
+     "p": 0.5017491254372813,
+     "control_p": 0.7872127872127872,
+     "within_p": 0.5862068965517241,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G2",
+     "universe": "ds",
+     "group": "other",
+     "tf": "all",
+     "role": "universe",
+     "n_all": 170433,
+     "n_allowed": 26378,
+     "n_blocked": 144055,
+     "share_blocked": 0.8452295036759313,
+     "win_allowed": 0.23819091667298506,
+     "win_blocked": 0.2524799555725244,
+     "p": 0.9685157421289355,
+     "control_p": 1.0,
+     "within_p": 0.9720139930034982,
+     "checks": {
+      "trades": true,
+      "diff_positive": false,
+      "boot": false,
+      "allowed_positive": false,
+      "control": false,
+      "within": false
+     },
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 3492872,
+     "n_allowed": 1272874,
+     "n_blocked": 2219998,
+     "share_blocked": 0.6355795460011131,
+     "win_allowed": 0.2506964554229248,
+     "win_blocked": 0.2568425737320484,
+     "p": 0.9940029985007496,
+     "control_p": null,
+     "within_p": 0.9980009995002499,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2049245,
+     "n_allowed": 848347,
+     "n_blocked": 1200898,
+     "share_blocked": 0.5860197292173459,
+     "win_allowed": 0.25352008081598687,
+     "win_blocked": 0.26113791512684675,
+     "p": 0.9830084957521239,
+     "control_p": null,
+     "within_p": 0.9905047476261869,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 863810,
+     "n_allowed": 288636,
+     "n_blocked": 575174,
+     "share_blocked": 0.6658570750512265,
+     "win_allowed": 0.24305006998434014,
+     "win_blocked": 0.2489507522940884,
+     "p": 0.8250874562718641,
+     "control_p": null,
+     "within_p": 0.7701149425287356,
+     "pass": null
+    },
+    {
+     "gate": "G1s",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 579817,
+     "n_allowed": 135891,
+     "n_blocked": 443926,
+     "share_blocked": 0.7656312250244474,
+     "win_allowed": 0.24931010883722984,
+     "win_blocked": 0.2554479800687502,
+     "p": 0.889055472263868,
+     "control_p": null,
+     "within_p": 0.8335832083958021,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "pooled",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 3492872,
+     "n_allowed": 1160131,
+     "n_blocked": 2332741,
+     "share_blocked": 0.6678575682132067,
+     "win_allowed": 0.25716578558800685,
+     "win_blocked": 0.25332816630736116,
+     "p": 0.4207896051974013,
+     "control_p": null,
+     "within_p": 0.6411794102948526,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "trend",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 2049245,
+     "n_allowed": 923098,
+     "n_blocked": 1126147,
+     "share_blocked": 0.5495423924420946,
+     "win_allowed": 0.2611120379418003,
+     "win_blocked": 0.2554204735261027,
+     "p": 0.4827586206896552,
+     "control_p": null,
+     "within_p": 0.5542228885557221,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "reversion",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 863810,
+     "n_allowed": 152843,
+     "n_blocked": 710967,
+     "share_blocked": 0.8230594690962133,
+     "win_allowed": 0.24020072885248261,
+     "win_blocked": 0.2484362846658143,
+     "p": 0.8320839580209896,
+     "control_p": null,
+     "within_p": 0.7566216891554223,
+     "pass": null
+    },
+    {
+     "gate": "G2s",
+     "universe": "all",
+     "group": "other",
+     "tf": "all",
+     "role": "verdict",
+     "n_all": 579817,
+     "n_allowed": 84190,
+     "n_blocked": 495627,
+     "share_blocked": 0.8547990141717128,
+     "win_allowed": 0.24469651977669557,
+     "win_blocked": 0.255591402405438,
+     "p": 0.8505747126436781,
+     "control_p": null,
+     "within_p": 0.8105947026486756,
+     "pass": null
+    }
+   ],
+   "states": {
+    "all|trend|장세|추세장": {
+     "n": 506630,
+     "win": 0.26562382804018714
+    },
+    "all|trend|장세|횡보장": {
+     "n": 848347,
+     "win": 0.25352008081598687
+    },
+    "all|trend|장세|급변장": {
+     "n": 113360,
+     "win": 0.25796577275935073
+    },
+    "all|trend|장세|보통": {
+     "n": 580908,
+     "win": 0.25784461567063977
+    },
+    "all|trend|변동성|작음": {
+     "n": 923098,
+     "win": 0.2611120379418003
+    },
+    "all|trend|변동성|보통": {
+     "n": 808192,
+     "win": 0.2548552819132087
+    },
+    "all|trend|변동성|큼": {
+     "n": 317955,
+     "win": 0.2568571024201538
+    },
+    "all|reversion|장세|추세장": {
+     "n": 288636,
+     "win": 0.24305006998434014
+    },
+    "all|reversion|장세|횡보장": {
+     "n": 292078,
+     "win": 0.2505289682892926
+    },
+    "all|reversion|장세|급변장": {
+     "n": 54867,
+     "win": 0.2520823081269251
+    },
+    "all|reversion|장세|보통": {
+     "n": 228229,
+     "win": 0.2461781806869416
+    },
+    "all|reversion|변동성|작음": {
+     "n": 361167,
+     "win": 0.25006437465216924
+    },
+    "all|reversion|변동성|보통": {
+     "n": 349800,
+     "win": 0.2467552887364208
+    },
+    "all|reversion|변동성|큼": {
+     "n": 152843,
+     "win": 0.24020072885248261
+    },
+    "all|other|장세|추세장": {
+     "n": 135891,
+     "win": 0.24931010883722984
+    },
+    "all|other|장세|횡보장": {
+     "n": 279826,
+     "win": 0.256763131374497
+    },
+    "all|other|장세|급변장": {
+     "n": 29122,
+     "win": 0.2498454776457661
+    },
+    "all|other|장세|보통": {
+     "n": 134978,
+     "win": 0.2539302701180933
+    },
+    "all|other|변동성|작음": {
+     "n": 270423,
+     "win": 0.2590534089186201
+    },
+    "all|other|변동성|보통": {
+     "n": 225204,
+     "win": 0.2514342551642067
+    },
+    "all|other|변동성|큼": {
+     "n": 84190,
+     "win": 0.24469651977669557
+    },
+    "core|trend|장세|추세장": {
+     "n": 207425,
+     "win": 0.27144269012896227,
+     "mean": 0.001281830605285145
+    },
+    "core|trend|장세|횡보장": {
+     "n": 360500,
+     "win": 0.25418030513176143,
+     "mean": -0.006301830754211061
+    },
+    "core|trend|장세|급변장": {
+     "n": 45133,
+     "win": 0.2603416568807746,
+     "mean": -0.001165445569949789
+    },
+    "core|trend|장세|보통": {
+     "n": 227875,
+     "win": 0.25872517827756447,
+     "mean": -0.004062035657281544
+    },
+    "core|trend|변동성|작음": {
+     "n": 384006,
+     "win": 0.2618578876371723,
+     "mean": -0.004147572235445202
+    },
+    "core|trend|변동성|보통": {
+     "n": 328478,
+     "win": 0.2580751222304081,
+     "mean": -0.0033396393482254265
+    },
+    "core|trend|변동성|큼": {
+     "n": 128449,
+     "win": 0.25937142367787996,
+     "mean": -0.0022925209712230535
+    },
+    "core|reversion|장세|추세장": {
+     "n": 142958,
+     "win": 0.24206410274346313,
+     "mean": -0.00962666910821889
+    },
+    "core|reversion|장세|횡보장": {
+     "n": 60728,
+     "win": 0.2523712290870768,
+     "mean": -0.006559901792205652
+    },
+    "core|reversion|장세|급변장": {
+     "n": 25146,
+     "win": 0.24310029428139665,
+     "mean": -0.0076464958024353965
+    },
+    "core|reversion|장세|보통": {
+     "n": 72540,
+     "win": 0.24826302729528535,
+     "mean": -0.007745739154318393
+    },
+    "core|reversion|변동성|작음": {
+     "n": 107532,
+     "win": 0.2510973477662463,
+     "mean": -0.007589263114861342
+    },
+    "core|reversion|변동성|보통": {
+     "n": 127123,
+     "win": 0.24716219724204117,
+     "mean": -0.007156807718753082
+    },
+    "core|reversion|변동성|큼": {
+     "n": 66717,
+     "win": 0.23430310115862524,
+     "mean": -0.01203366864837747
+    },
+    "core|other|장세|추세장": {
+     "n": 89874,
+     "win": 0.25299864254400606,
+     "mean": -0.005857155263637139
+    },
+    "core|other|장세|횡보장": {
+     "n": 212814,
+     "win": 0.25747836138599905,
+     "mean": -0.004483947981586686
+    },
+    "core|other|장세|급변장": {
+     "n": 20791,
+     "win": 0.2510701745947766,
+     "mean": -0.0050508858825323195
+    },
+    "core|other|장세|보통": {
+     "n": 85905,
+     "win": 0.2546068331296199,
+     "mean": -0.005397546816027266
+    },
+    "core|other|변동성|작음": {
+     "n": 195960,
+     "win": 0.2607624004898959,
+     "mean": -0.0041807087996332416
+    },
+    "core|other|변동성|보통": {
+     "n": 155612,
+     "win": 0.25196000308459504,
+     "mean": -0.005434162638992614
+    },
+    "core|other|변동성|큼": {
+     "n": 57812,
+     "win": 0.24766484466892685,
+     "mean": -0.006650340631305202
+    },
+    "ds|trend|장세|추세장": {
+     "n": 299205,
+     "win": 0.2615898798482646
+    },
+    "ds|trend|장세|횡보장": {
+     "n": 487847,
+     "win": 0.2530322006694722
+    },
+    "ds|trend|장세|급변장": {
+     "n": 68227,
+     "win": 0.2563940961789321
+    },
+    "ds|trend|장세|보통": {
+     "n": 353033,
+     "win": 0.25727623196698324
+    },
+    "ds|trend|변동성|작음": {
+     "n": 539092,
+     "win": 0.2605807543053876
+    },
+    "ds|trend|변동성|보통": {
+     "n": 479714,
+     "win": 0.2526505376119938
+    },
+    "ds|trend|변동성|큼": {
+     "n": 189506,
+     "win": 0.25515287114919843
+    },
+    "ds|reversion|장세|추세장": {
+     "n": 145678,
+     "win": 0.24401762791910928
+    },
+    "ds|reversion|장세|횡보장": {
+     "n": 231350,
+     "win": 0.25004538577912255
+    },
+    "ds|reversion|장세|급변장": {
+     "n": 29721,
+     "win": 0.2596817065374651
+    },
+    "ds|reversion|장세|보통": {
+     "n": 155689,
+     "win": 0.24520679046046928
+    },
+    "ds|reversion|변동성|작음": {
+     "n": 253635,
+     "win": 0.24962643168332446
+    },
+    "ds|reversion|변동성|보통": {
+     "n": 222677,
+     "win": 0.2465229906995334
+    },
+    "ds|reversion|변동성|큼": {
+     "n": 86126,
+     "win": 0.24476929150314655
+    },
+    "ds|other|장세|추세장": {
+     "n": 46017,
+     "win": 0.2421061781515527
+    },
+    "ds|other|장세|횡보장": {
+     "n": 67012,
+     "win": 0.2544917328239718
+    },
+    "ds|other|장세|급변장": {
+     "n": 8331,
+     "win": 0.2467891009482655
+    },
+    "ds|other|장세|보통": {
+     "n": 49073,
+     "win": 0.2527459091557476
+    },
+    "ds|other|변동성|작음": {
+     "n": 74463,
+     "win": 0.2545559539637135
+    },
+    "ds|other|변동성|보통": {
+     "n": 69592,
+     "win": 0.25025865041958845
+    },
+    "ds|other|변동성|큼": {
+     "n": 26378,
+     "win": 0.23819091667298506
+    }
+   },
+   "years": {
+    "G1|all|2021": {
+     "n_allowed": 92317,
+     "n_blocked": 258949,
+     "diff_positive": true
+    },
+    "G1|core|2021": {
+     "n_allowed": 36047,
+     "n_blocked": 124223,
+     "diff_positive": true,
+     "diff": 0.007029668148999432
+    },
+    "G1|all|2022": {
+     "n_allowed": 157251,
+     "n_blocked": 403116,
+     "diff_positive": false
+    },
+    "G1|core|2022": {
+     "n_allowed": 61792,
+     "n_blocked": 191503,
+     "diff_positive": false,
+     "diff": -0.0023083356307261062
+    },
+    "G1|all|2023": {
+     "n_allowed": 192224,
+     "n_blocked": 534737,
+     "diff_positive": true
+    },
+    "G1|core|2023": {
+     "n_allowed": 73089,
+     "n_blocked": 247906,
+     "diff_positive": true,
+     "diff": 0.005665607802456149
+    },
+    "G1|all|2024": {
+     "n_allowed": 156579,
+     "n_blocked": 472062,
+     "diff_positive": true
+    },
+    "G1|core|2024": {
+     "n_allowed": 59230,
+     "n_blocked": 219187,
+     "diff_positive": true,
+     "diff": 0.0067383758602018885
+    },
+    "G1|all|2025": {
+     "n_allowed": 181918,
+     "n_blocked": 472257,
+     "diff_positive": true
+    },
+    "G1|core|2025": {
+     "n_allowed": 69482,
+     "n_blocked": 218348,
+     "diff_positive": true,
+     "diff": 0.008219113775986808
+    },
+    "G1|all|2026": {
+     "n_allowed": 154310,
+     "n_blocked": 417152,
+     "diff_positive": false
+    },
+    "G1|core|2026": {
+     "n_allowed": 58387,
+     "n_blocked": 192495,
+     "diff_positive": false,
+     "diff": -0.0015028102503979613
+    },
+    "G2|all|2021": {
+     "n_allowed": 67545,
+     "n_blocked": 283721,
+     "diff_positive": false
+    },
+    "G2|core|2021": {
+     "n_allowed": 24628,
+     "n_blocked": 135642,
+     "diff_positive": false,
+     "diff": -0.005299818750515778
+    },
+    "G2|all|2022": {
+     "n_allowed": 103065,
+     "n_blocked": 457302,
+     "diff_positive": true
+    },
+    "G2|core|2022": {
+     "n_allowed": 37396,
+     "n_blocked": 215899,
+     "diff_positive": true,
+     "diff": 0.002725402883724688
+    },
+    "G2|all|2023": {
+     "n_allowed": 171670,
+     "n_blocked": 555291,
+     "diff_positive": false
+    },
+    "G2|core|2023": {
+     "n_allowed": 67543,
+     "n_blocked": 253452,
+     "diff_positive": false,
+     "diff": -0.0026874236989964124
+    },
+    "G2|all|2024": {
+     "n_allowed": 142626,
+     "n_blocked": 486015,
+     "diff_positive": false
+    },
+    "G2|core|2024": {
+     "n_allowed": 56508,
+     "n_blocked": 221909,
+     "diff_positive": false,
+     "diff": -0.002162961693535327
+    },
+    "G2|all|2025": {
+     "n_allowed": 139544,
+     "n_blocked": 514631,
+     "diff_positive": false
+    },
+    "G2|core|2025": {
+     "n_allowed": 53013,
+     "n_blocked": 234817,
+     "diff_positive": false,
+     "diff": -0.004839772215341983
+    },
+    "G2|all|2026": {
+     "n_allowed": 138862,
+     "n_blocked": 432600,
+     "diff_positive": true
+    },
+    "G2|core|2026": {
+     "n_allowed": 54705,
+     "n_blocked": 196177,
+     "diff_positive": true,
+     "diff": 0.011083319015065218
+    }
+   }
+  }
+ },
+ "window": [
+  "2021-01-01",
+  "2026-10-01"
+ ],
+ "code": {
+  "fullgrid": {
+   "commit": "538c2b0c06bc93ca9a6554c4ac76212c1d7ca3f0",
+   "files": {
+    "data.py": "6691424b2e3774ff556beede18c190195a58d7023cad462832069990bb87f0e9",
+    "grid.py": "522cfb2ed620fe4758f7ef8280151152eeee23844aff7fc03dc2bf906f304a88",
+    "kernel.py": "a4995c15695c4870dbee13c0a7d42417f8da36238fe713d1c514968f076c0d16",
+    "memo.py": "30b5a25d09d065085f7353892c99c72c92790a19d2550d99fed7c30242dbf38a",
+    "ds_defs.py": "40a752cc2a65129c9452f573211912179a644429f91cc7cf947bd613a9e73a30",
+    "run.py": "4e02df9cbc69116fae2b517ce54fd27ac50384f8761e4c0de473e5d3cce0af17",
+    "PREREG.md": "cf5e7fbe18ba188490d6d92bb76942c8c25c6179a945aadcc24bc717402a6ad4"
+   }
+  },
+  "regimegate": {
+   "PREREG_REGIMEGATE.md": "1a5cc0a6b31145d1fa5d26c3830259dd3fc565096f2d01a32c8731f13f1cc3d9",
+   "gate.py": "59fcb5ddee1c4da18e723358a4711fbb9b2c580f688d5c5657ff2508ebaa3336",
+   "style_map.json": "2309c6083307d2ef2b786e33b95298d6efa577fecad45c691e06a403e1c9f924",
+   "../fullgrid/regimes.py": "934578ba49d0c99d6d47bf3b05726b033d3a23e80e98a4a855469fa22b38d699",
+   "../../paperbot/dash/tools/regime5y.py": "b055a412e308f8d75c1c9c8f01e7bdcbc734b583d93c3bd1cc67dbc15a9f5786",
+   "../../demobot/regime.py": "447bad91ab8907247440b05e8310a2e0504901efe40c89d10a3c303ad205fe40",
+   "../fullgrid/exchange.json": "176e234b3f84a96eecd2a0ea4e6b3e1ffbb3a40bf7fa77dbd994e33144413ffa",
+   "../../paperbot/quality_edges.json": "8b4fc48daf928c64a4f42b9f4b9afb703ed2459f819f19acbc780172671f43c8"
+  }
+ }
+}
