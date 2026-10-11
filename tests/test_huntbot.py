@@ -201,12 +201,22 @@ def test_feed_holds_the_mark_for_a_due_funding_rate(tmp_path):
 
 
 def test_coin_leaving_trading_gets_its_end(tmp_path):
+    """A coin ends only after FD.END_READS hourly non-TRADING reads spanning FD.END_SPAN_MS with no new bar (it is
+    polled all the while); its end is its last bar with volume."""
     ex, st, fd, clock = make_feed(tmp_path, now=T0 + 6 * FIVE)
     fd.backfill()
+    last = st.max_open("ETHUSDT")
     ex.status["ETHUSDT"] = "SETTLING"
-    fd.refresh_exchange(force=True)
+    ex.missing["ETHUSDT"] = {last + i * FIVE for i in range(1, 400)}      # no new bar after it stopped
+    for k in range(1, FD.END_READS + 1):                                # hourly reads 1..END_READS (3 h span)
+        ex.now = T0 + 6 * FIVE + k * 3_600_000 + 20_000
+        clock[0] = ex.now / 1000
+        fd.cycle()
+        c = st.coins()["ETHUSDT"]
+        if k < FD.END_READS:
+            assert c["trading"] == 1 and c["end_ms"] is None and "ETHUSDT" in fd.trading(), k
     c = st.coins()["ETHUSDT"]
-    assert c["trading"] == 0 and c["end_ms"] == st.max_open("ETHUSDT")
+    assert c["trading"] == 0 and c["end_ms"] == last
     assert fd.trading() == ["BTCUSDT"]
 
 

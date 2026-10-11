@@ -593,17 +593,14 @@ def test_v1_choose_plateau():
     assert H.v1_choose(rows)["label"] == "no pick, fail"
 
 
-def test_sizing_read_scales_the_risk_cap(monkeypatch):
-    seen = []
-
-    def fake(mk, parts, r, cost, risk_cap, detail=False, days=None, b_div=H.B_DIV):
-        seen.append((r, risk_cap, b_div, detail))
-        return {"mean_lnM": 0.0}
-    monkeypatch.setattr(H, "run_signals", fake)
-    out = H._sizing(None, [])
-    assert seen == [(0.02, pytest.approx(0.16), pytest.approx(1.5), True),
-                    (0.05, pytest.approx(0.40), pytest.approx(0.6), True)]
-    assert out["0.05"]["margin_budget_of_equity"] == pytest.approx(10 / 6) and out["0.02"]["requested_r"] == 0.02
+def test_retired_sizing_read_and_stale_choices_are_gone():
+    """Review: W 7's first-draft sizing read is replaced by R1 (reads_a.py); its dead code and its CHOICES text (B
+    scaled by r) were still stamped into every output. The CHOICES now say F1-F3 and F5 for the picks and fallback."""
+    assert not hasattr(H, "_sizing")
+    text = " ".join(H.CHOICES)
+    assert "W7 sizing read" not in text and "B = equity / 6 x r" not in text
+    assert "F1-F3 only" not in text and "F1-F3 and F5" in text and "best F1-F3 or F5 system" in text
+    assert H.PICK_FAMILIES == ("F1", "F2", "F3", "F5")
 
 
 def test_sizing_read_takes_the_bet_it_names():

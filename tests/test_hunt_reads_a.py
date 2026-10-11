@@ -64,8 +64,11 @@ def test_goal_mode_caps_copied_from_altpump():
 def test_cell_overrides():
     r, ov = RA.cell_overrides("A", H.R_BASE)
     assert r == H.R_BASE and ov == {"PR_CAP": pytest.approx(H.RISK_CAP), "PR_BDIV": pytest.approx(H.B_DIV)}
-    r, ov = RA.cell_overrides("A", 0.05)                      # W 7: cap 40%, B = equity / 6 x 10
-    assert ov["PR_CAP"] == pytest.approx(0.40) and ov["PR_BDIV"] == pytest.approx(0.6)
+    r, ov = RA.cell_overrides("A", 0.05)                      # W 7.3 / Q8 default: cap 40%, B = equity / 6 as written
+    assert ov["PR_CAP"] == pytest.approx(0.40) and ov["PR_BDIV"] == pytest.approx(H.B_DIV)
+    r, ov = RA.cell_overrides("A", 0.20)                      # review: B was scaled by r / 0.5% against the prereg
+    assert ov == {"PR_CAP": pytest.approx(1.60), "PR_BDIV": pytest.approx(6.0)}
+    assert "B = equity / 6" in RA.machine_spec("A", 0.10)["label"]
     r, ov = RA.cell_overrides("B", 0.20)
     assert ov == {"PR_BRK_Q1": 1, "PR_CAP": pytest.approx(0.6), "PR_MAXPOS": 3, "PR_BDIV": 3.0, "PR_LEVMAX": 125}
     r, ov = RA.cell_overrides("L", 30)
@@ -79,6 +82,8 @@ def test_cell_overrides():
 def test_rolling_control_seeds_guard():
     assert RA.rolling_control_seeds(0.01) == 100
     assert RA.rolling_control_seeds(0.031) == 50
+    assert RA.rolling_control_seeds(None) == 100                # no pinned synthetic timing: never timed on real data
+    assert not hasattr(RA, "_measure_window_seconds")
 
 
 # ------------------------------------------------------------------ one window
@@ -268,26 +273,37 @@ def _br(caps=(25_000.0, 100_000.0, np.inf), levs=(20, 10, 5), mmrs=(0.025, 0.05,
             "min_notional": np.array([5.0])}
 
 
-def test_effective_leverage_follows_the_engine_rule():
-    br = _br()
-    assert RA.effective_L(20, 1000.0, br, 0) == 20           # 4,000 notional: tier 0 allows 20x
-    assert RA.effective_L(30, 1000.0, br, 0) == 20           # 9,000 at 30x not allowed -> 20x (tier 0 maximum)
-    assert RA.effective_L(40, 10_000.0, br, 0) == 5          # 160,000 -> tier 2 (5x); 5% x 10,000 x 5 in tier 0
-    br2 = _br(caps=(25_000.0, 100_000.0), levs=(20, 10), mmrs=(0.025, 0.05))
-    assert RA.effective_L(20, 1_000_000.0, br2, 0) == 0      # notional above every tier: the engine skips it
+def test_tier_chain_and_effective_leverage_is_monotone():
+    """Review: the old rule lowered L to the bracket's maximum at L's own notional and never stepped back up, so 40x
+    could run at less leverage than 20x. The rule bot's tier walk (40 -> 30 -> 20, each with its own margin share)
+    is monotone in L at any equity."""
+    assert RA.tier_chain(40) == [40, 30, 20] and RA.tier_chain(30) == [30, 20] and RA.tier_chain(20) == [20]
+    br = _br()                                                  # the fallback table (20x to $25,000)
+    for eq in (1000.0, 1600.0, 2800.0, 3000.0, 6000.0, 6300.0, 10_000.0):
+        Ls = [RA.effective_L(L, eq, br, 0) for L in (20, 30, 40)]
+        assert Ls == sorted(Ls), (eq, Ls)
+        notional = [x * x / 100.0 for x in Ls]
+        assert notional == sorted(notional)
+    assert RA.effective_L(40, 1600.0, br, 0) == 20              # the old rule gave 10x (notional 1.0x equity)
+    assert RA.effective_L(20, 6300.0, br, 0) == 0               # 25,200 > 25,000 and no lower tier: skipped
+    btc = _br(caps=(50_000.0, 250_000.0, np.inf), levs=(125, 100, 20), mmrs=(0.004, 0.005, 0.025))
+    assert [RA.effective_L(L, 1000.0, btc, 0) for L in (20, 30, 40)] == [20, 30, 40]
+    assert RA.effective_L(40, 4000.0, btc, 0) == 40             # 64,000 -> the 100x tier still allows 40x
 
 
 def test_rulebot_unit_sizes_and_checks():
     br = _br()
     slip = H.COSTS["base"][1]
     u = RA.rulebot_unit(20, 1000.0, 100.0, 1, 2.0, 1.0, br, 0)
-    assert u["margin"] == pytest.approx(200.0) and u["notional"] == pytest.approx(4000.0)
-    assert u["q"] == pytest.approx(4000.0 / (100 * (1 + slip)))
+    assert u["L_eff"] == 0 and not u["ok"] and u["reason"] == "liq_buffer"
+    assert u["tried"] == [(20, "liq_buffer")]
     # liquidation at 20x, mmr 2.5%: about 2.6% below the fill; the stop is 2% below: gap 0.6 < 1 ATR (1.0) -> skip
-    assert not u["ok"] and u["reason"] == "liq_buffer"
-    assert u["liq"] == pytest.approx((u["notional"] - u["margin"]) / (u["q"] * (1 - 0.025)))
     u = RA.rulebot_unit(20, 1000.0, 100.0, 1, 1.0, 0.2, br, 0)   # stop 1% away, buffer max(0.2%, 0.2) -> ok
-    assert u["ok"] and u["wallet_risk_per_stop"] == pytest.approx(u["q"] * 1.0 / 1000.0)
+    assert u["ok"] and u["L_eff"] == 20 and u["margin"] == pytest.approx(200.0)
+    assert u["notional"] == pytest.approx(4000.0) and u["q"] == pytest.approx(4000.0 / (100 * (1 + slip)))
+    assert u["liq"] == pytest.approx((u["notional"] - u["margin"]) / (u["q"] * (1 - 0.025)))
+    assert u["wallet_risk_per_stop"] == pytest.approx(u["q"] * 1.0 / 1000.0)
+    assert u["loss_at_stop_frac"] > u["wallet_risk_per_stop"]
     s = RA.rulebot_unit(20, 1000.0, 100.0, -1, 1.0, 0.2, br, 0)  # short mirror
     assert s["ok"] and s["liq"] > s["stop"] > 100.0
     assert RA.rulebot_unit(20, 1e9, 100.0, 1, 1.0, 0.2, _br(caps=(25_000.0,), levs=(20,), mmrs=(0.025,)),
@@ -297,10 +313,59 @@ def test_rulebot_unit_sizes_and_checks():
     assert ok.tolist() == [False, True, True]                 # a zero equity is left to the engine ('bad_price')
 
 
-def test_run_lev_fixed_point():
-    """Signal 2 passes the check at the start equity but not at the equity its fill sees once signal 1 has run
-    (a higher tier): the second run drops it and the third confirms."""
-    br = _br(caps=(20_000.0, np.inf), levs=(50, 50), mmrs=(0.004, 0.05))
+def test_rulebot_max_loss_check():
+    """Review: the rule bot also rejects a size whose loss at the stop, costs included, exceeds 15% of equity
+    (paperbot/config.py max_loss_frac); BTC-like brackets, $1,000: 40x at a 1.3% stop loses about 23%."""
+    btc = _br(caps=(50_000.0, 250_000.0, np.inf), levs=(125, 100, 20), mmrs=(0.004, 0.005, 0.025))
+    u = RA.rulebot_unit(40, 1000.0, 100.0, 1, 1.3, 0.0, btc, 0)
+    assert u["ok"] and u["L_eff"] == 30 and u["tried"] == [(40, "max_loss")]
+    assert u["loss_at_stop_frac"] <= 0.15
+    assert RA.rulebot_unit(40, 1000.0, 100.0, 1, 1.3, 0.0, btc, 0, max_loss=1.0)["L_eff"] == 40
+    for L, d0 in ((40, 1.3), (30, 1.9), (40, 1.0)):            # the review's cases, each above 15% at its own L
+        x = RA.nominal_stop_loss(L, 1000.0, 100.0, 1, d0, btc, 0)
+        assert x["with_costs"] > 0.15 and RA.rulebot_unit(L, 1000.0, 100.0, 1, d0, 0.0, btc, 0)["L_eff"] < L
+    v = RA.rulebot_unit(20, 1000.0, 100.0, 1, 4.0, 0.0, btc, 0)  # 4 x 4% = 16% > 15% at the lowest tier
+    assert not v["ok"] and v["reason"] == "max_loss"
+
+
+def test_python_mirror_matches_the_engine():
+    """rulebot_unit's leverage equals the engine's at entry (PR_FIXLEV), over equities, stops, ATRs and brackets."""
+    import types
+    start = H.day_ms("2022-03-01")
+    n = 288 + 288
+    ts = start - 288 * FIVE + np.arange(n, dtype=np.int64) * FIVE
+    px = np.full(n, 100.0)
+    H.install({"AUSDT": H.Coin("AUSDT", ts, px, px + 0.05, px - 0.05, px, np.full(n, 1e10), np.full(n, 1e12))})
+    mk = H.Market(["AUSDT"], (start, start + DAY), name="mirror")
+    no_bank = lambda: types.SimpleNamespace(s_ct=np.zeros(0, np.int64), s_h=np.zeros(0), s_l=np.zeros(0),  # noqa
+                                            s_atr=np.zeros(0))
+
+    def cands(mk_, rows):
+        r = rows[0]
+        z = np.zeros(1, np.int64)
+        return {"t": np.array([r["t"]], np.int64), "bi": np.array([mk_.b_off[0]], np.int64), "coin": z,
+                "side": np.ones(1, np.int64), "d0": np.array([r["d0"]], np.float64), "s0": z, "s1": z,
+                "prio": np.zeros(1), "src": z}
+    for br in (_br(), _br(caps=(50_000.0, 250_000.0, np.inf), levs=(125, 100, 20), mmrs=(0.004, 0.005, 0.025))):
+        mk.br = br
+        for L in (20, 30, 40):
+            for eq in (1000.0, 1600.0, 3000.0, 6300.0):
+                for d0, atr in ((0.5, 0.0), (1.0, 0.3), (1.3, 0.0), (2.0, 1.0), (4.0, 0.0)):
+                    p = H.params(start=eq)
+                    p[H.PR_FIXLEV], p[H.PR_NADDS], p[H.PR_CAP], p[H.PR_MAXPOS] = L, 0, 100.0, 5
+                    c = cands(mk, [{"k": 0, "t": 0, "d0": d0}])
+                    c["atr"] = np.array([atr])
+                    out = H.simulate(mk, no_bank(), c, prm=p)
+                    u = RA.rulebot_unit(L, eq, 100.0, 1, d0, atr, br, 0)
+                    got = int(out[3][0, H.RF_LEV]) if len(out[3]) else 0
+                    assert got == u["L_eff"], (L, eq, d0, atr, got, u)
+                    if not u["ok"]:
+                        assert out[12][H.RB_SKIP_NAMES.index(u["reason"])] == 1
+
+
+def test_run_lev_is_one_engine_run():
+    """The rule-bot check runs inside the engine: run_lev makes one run with the L overrides and passes the engine's
+    skip counts through (no fixed point, no non-convergence)."""
     a = H.day_ms("2024-01-01")
     b = a + DAY
     sig = {"tf": "1h", "k": np.array([0, 0]), "j": np.array([1, 2]), "side": np.array([1, 1])}
@@ -310,33 +375,35 @@ def test_run_lev_fixed_point():
     calls = []
 
     def run(sub, a_, b_, **kw):
-        kept = sub[0][0]["j"].tolist()
-        calls.append(kept)
-        eqp = np.full((b_ - a_) // FIVE, 1000.0)
-        if 1 in kept:
-            eqp[10:] = 6000.0                                  # signal 1 made the wallet 6x by step 10
-        return {"equity_path": eqp, "end": eqp[-1], "end_marked": eqp[-1], "peak": eqp.max(), "bust": False}
-
-    # tier 0 (4,000 notional at $1,000): liquidation about 95.40, stop 96.4: gap 1.0 >= buffer 0.5 -> kept;
-    # tier 1 (24,000 at $6,000, mmr 5%, cum 920): liquidation about 95.99: gap 0.41 < 0.5 -> skipped
-    u0 = RA.rulebot_unit(20, 1000.0, 100.0, 1, 3.6, 0.5, br, 0)
-    u1 = RA.rulebot_unit(20, 6000.0, 100.0, 1, 3.6, 0.5, br, 0)
-    assert u0["ok"] and u0["tier"] == 0 and not u1["ok"] and u1["tier"] == 1 and u1["reason"] == "liq_buffer"
-    res = RA.run_lev(run, [(sig, 1)], [info], a, b, 20, br, close_end=True)
-    assert calls == [[1, 2], [1]] and res["lev_runs"] == 2 and res["lev_converged"]
-    assert res["lev_buffer_skipped"] == 1
+        calls.append((sub[0][0]["j"].tolist(), kw["overrides"], kw["path"]))
+        return {"end": 1000.0, "rulebot_skipped": {"bracket": 0, "liq_buffer": 1, "max_loss": 0}}
+    res = RA.run_lev(run, [(sig, 1)], [info], a, b, 30, close_end=True)
+    assert calls == [([1, 2], {"PR_FIXLEV": 30, "PR_NADDS": 0, "PR_CAP": 100.0, "PR_MAXPOS": 3}, "5m")]
+    assert res["rulebot_skipped"]["liq_buffer"] == 1
 
 
 def test_wallet_risk_table():
-    t = RA.wallet_risk_table(np.array([0.01, 0.02, 0.03]))
+    """Review: the old table printed L x L% x D0 / P0, which can exceed the isolated margin (a stop beyond the
+    liquidation price liquidates first). Now capped at margin + fees with the beyond-liquidation share, plus the rule
+    bot's walk at a fresh $1,000."""
+    br = _br()
+    info = {"P0": np.full(3, 100.0), "side": np.ones(3, np.int64), "d0": np.array([1.0, 2.0, 3.0]),
+            "atr": np.zeros(3), "k": np.zeros(3, np.int64)}
+    t = RA.wallet_risk_table(info, br)
     slip = H.COSTS["base"][1]
     assert set(t) == {"20", "30", "40"}
     assert t["20"]["notional_over_equity"] == 4.0 and t["40"]["notional_over_equity"] == 16.0
-    assert t["20"]["median"] == pytest.approx(4.0 / (1 + slip) * 0.02)
-    assert t["40"]["median"] == pytest.approx(16.0 / (1 + slip) * 0.02)
-    assert t["40"]["median_with_costs"] > t["40"]["median"]
-    assert t["40"]["share_over_wallet"] == 0.0
-    assert RA.wallet_risk_table([0.08])["40"]["share_over_wallet"] == 1.0
+    assert t["20"]["nominal"]["median"] == pytest.approx(4.0 / (1 + slip) * 0.02)
+    assert t["20"]["nominal"]["share_stop_beyond_liquidation"] == pytest.approx(1 / 3)   # 3% > about 2.6% at 20x
+    n40 = t["40"]["nominal"]
+    assert n40["median"] <= 0.40 + 1e-12 and n40["share_stop_beyond_liquidation"] == 1.0   # never above the margin
+    assert n40["median_with_costs"] <= 0.40 + H.COSTS["base"][0] * 16.0 + 1e-12
+    assert n40["share_bracket_refuses_L"] == 1.0                # fallback table: 40x is never allowed
+    rb = t["40"]["rule_bot"]
+    assert rb["share_taken"] == pytest.approx(2 / 3) and rb["leverage_used"] == {"40": 0.0, "30": 0.0,
+                                                                               "20": pytest.approx(2 / 3)}
+    assert rb["share_skipped_by"]["liq_buffer"] == pytest.approx(1 / 3)
+    assert rb["median_loss_at_stop_with_costs"] <= 0.15
 
 
 # ------------------------------------------------------------------ R15
@@ -522,7 +589,11 @@ def test_run_end_to_end_on_synthetic_coins(synth, monkeypatch):
     lev = out["leverage"]["pick:F2:AAA:1h:NONE"]
     lc = lev["periods"]["test"]["calendar"]["L|20x"]
     assert lc["leverage"]["L"] == 20 and lc["controls"]["a"]["n_seeds"] == 2
+    assert set(lc["leverage"]["rule_bot_skipped"]) == set(H.RB_SKIP_NAMES)
+    assert "fixed_point_not_converged" not in lc["leverage"]
     assert set(lev["wallet_risk_table_test_signals"]) == {"20", "30", "40"}
+    assert out["constants"]["window_run_seconds"] is None                  # no pinned timing: no timing on data
+    assert out["constants"]["rolling_control_seeds"] == RA.ROLL_CTL_SEEDS
     # DeepSeek row and the basket that holds it: labels and counts in public, everything in private
     pd = out["r1_goal_board"]["pick:F3:DSX:1h:NONE"]
     assert pd["note"] == RA.DS_NOTE and set(pd["headline"]) == {"what", "n_windows"}
