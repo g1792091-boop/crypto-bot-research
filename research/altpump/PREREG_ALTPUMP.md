@@ -3,7 +3,7 @@
 (한국어 설명: `README_KO.md`. 이 파일은 계산 전에 고정하는 규칙입니다. 결과를 본 뒤에는 바꾸지 않고, 바꿀 일이 생기면
 `DEVIATIONS.md`에 따로 적습니다.)
 
-**Status: DRAFT, written 2026-10-11 (KST), before any code for this study existed. No rule below has been run on these
+**Status: PINNED 2026-10-11 (KST) after two code reviews; section 20 closed with every default. Written the same day, before any code for this study existed. No rule below has been run on these
 data (no entry, exit, size, P&L or multiple of any variant, in any period). But before the rules were written, gross
 forward returns close to three of them were computed on period 1 (section 21 b, c: the 7-day return after +30% days,
 about the gross outcome of P1 / P2_X30_H7, and the 30-day return from a listing's day-1 open, about P3L / P3S_K1_H28,
@@ -566,6 +566,9 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
 * Delisting announcements (not in any archive).
 
 ## 20. Open questions (closed before the pin; default in brackets)
+
+**Closed 2026-10-11 (KST): every question takes the default in brackets.** The owners asked for plain answers and
+raised no objection to the defaults; none of them was changed after the reviews.
 
 1. **Volume floor** $5M on the 7-day median (3.3); its third reason is not blind to periods 2 and 3 (3.3, 21 a).
    [Keep]
