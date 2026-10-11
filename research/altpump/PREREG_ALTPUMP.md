@@ -644,7 +644,7 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
   `PREREG_HUNT.md` sections 7.4-7.6 adapted to daily bars, from the owners' trend-hunt brief, not from any run on
   these data.
 
-## 22. Changes after the review (2026-10-11, before the pin; no outcome of any rule computed on these data)
+## 22. Changes after the reviews (2026-10-11, before the pin; no rule run on these data)
 
 A code and bias review of the draft and its code (synthetic data only) found the following; each is now part of the
 sections above, with a synthetic regression test in `tests/test_altpump.py`.
@@ -665,3 +665,18 @@ sections above, with a synthetic regression test in `tests/test_altpump.py`.
 | 12 | Funding on the exit day (2 x 8h for an exit during or at the end of the day); pass 2: a symbol-day without archived events pays the fixed charge | 8, 15 |
 | 13 | `test`, `board` and `pass2 run` / `fetch` refuse a second run | 15, 18 |
 | 14 | The goal board reports adds per position, the share reaching each add, add skips and entry cuts by reason; at high r the machine is a one-unit trailing stop | 14 |
+
+A second code and bias review (synthetic data, and the traded-day calendar only; no value of the file read) found the
+following; each is now part of the sections above, with a synthetic regression test.
+
+| # | change | sections |
+|---|---|---|
+| 15 | A bar reaching both the next add level and the stop fills every add level it reaches first and then checks the moved stop (the draft took the stop first, and after an add exited before a second reached add): with the haircut the draft's order was the more favourable one, against "the worse order is always taken"; the hunt study had made the same correction (`PREREG_HUNT.md` change 6), and section 15's quote of its 7.6 is corrected | 6.7, 15, 18, README_KO |
+| 16 | No daily return, 7-day return or true range reads across a gap of 1 to 6 days (all 100 in 2022, period 1): P1 / P2 no longer fire on a multi-day move, P4 no longer ranks a 10-day return against 7-day ones, ATR is not inflated by the gap; control (b)'s pools follow | 3.1, 4, 12 |
+| 17 | Control (b) moves the whole signal calendar by common offsets instead of one offset per symbol: same-day signals of different symbols (pump days, breakouts, listing batches) had been spread, so the control opened 2.4-3.6x the pick's positions and its bias changed sign with the market's drift. Positions validity check reported | 12, 13, 16, README_KO |
+| 18 | Goal board: the luck reference is the pick's signals on random days with its own side; the coin flip is "luck without the market side" (it cancels the market's direction and understated luck for a one-sided pick) | 14, 17, README_KO |
+| 19 | T2 cannot see a squeeze that did not happen in the test months (a no-edge short pick passes in 20-56% of single periods at 3-5% squeeze months): disclosed, with a reported squeeze stress read | 13, 16, 20, README_KO |
+| 20 | The pin covers the code that runs (its own sha256 against the pinned line), not only the copy under `--root`; every output carries it | 18 |
+| 21 | The daily file must also match the sha256 of section 2 (a constant of the pinned code), not only the unpinned MANIFEST | 2 |
+| 22 | `test.json`, `board.json` and `pass2.json` are pinned when written; a rerun needs a DEVIATIONS entry naming the old sha256; pass2 needs a pinned `test.json`; `--accept-missing` needs every missing 5m month written in DEVIATIONS | 15, 18 |
+| 23 | Status line and section 21: gross forward returns close to P1 / P2_X30_H7 and P3_K1_H28 were computed on period 1 (21 b, c), so "no forward return of any rule computed" was wrong; README_KO says which side that look favoured | status, 21, README_KO |

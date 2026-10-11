@@ -74,6 +74,7 @@ class Feed:
         self.warmup_ms, self.clock, self.out = int(warmup_ms), clock, log
         self.settle_ms, self.max_wait_ms = settle_ms, max_wait_ms
         self.last_exchange_ms = 0
+        self.last_repair_ms = 0
 
     def now_ms(self) -> int:
         return int(self.clock() * 1000)
@@ -98,13 +99,13 @@ class Feed:
         info = self.client.exchange_info()
         st = {s.get("symbol"): s for s in (info.get("symbols") or []) if isinstance(s, dict)} \
             if isinstance(info, dict) else {}
-        self.last_exchange_ms = now
         bad = self._body_problem(st)
-        if bad:
+        if bad:                                             # not believed: nothing changes, read again next pass
             self.store.log("warn", f"exchangeInfo ignored: {bad}")
             self.out(f"{CFG.TAG} exchangeInfo ignored ({bad}): coin status unchanged")
             self.store.commit()
             return {}
+        self.last_exchange_ms = now
         self.store.put("exchange_n", len(st))
         known = self.store.coins()
         off = dict(self.store.get("off", {}) or {})
@@ -363,7 +364,9 @@ class Feed:
         t0 = time.monotonic()
         now = self.now_ms()
         errors = []
-        hourly = now - self.last_exchange_ms >= EXCHANGE_EVERY_MS
+        hourly = now - self.last_repair_ms >= EXCHANGE_EVERY_MS
+        if hourly:
+            self.last_repair_ms = now
         try:
             self.refresh_exchange()
         except BinanceError as e:
