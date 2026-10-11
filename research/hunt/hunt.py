@@ -2060,12 +2060,14 @@ def wide_eligible(base: dict, cost2: dict) -> tuple:
     return (not why), why
 
 
-def wide_choose(rows: list, k_picks: int = K_PICKS, n_batches: int = N_BATCHES) -> dict:
+def wide_choose(rows: list, k_picks: int | None = None, n_batches: int | None = None) -> dict:
     """W 5: order the eligible F1-F3 / F5 systems by score (mean ln M), ties median M, family, name, timeframe, G1
     before NONE; take one per strategy name, up to ``n_batches`` x ``k_picks`` names. Positions 1..k are batch 1
     (1군), k+1..2k batch 2 (2군), 2k+1..3k batch 3 (3군): membership is fixed here, before any test bar is read
     (W 6 opens batch n+1 only when >= BATCH_TRIGGER of batch n pass). F4 rows are a read only (their numbers were
     chosen after this test period was seen) and never a pick, also not in the 'no pick' fallback."""
+    k_picks = K_PICKS if k_picks is None else k_picks
+    n_batches = N_BATCHES if n_batches is None else n_batches
     fam = {"F1": 0, "F2": 1, "F3": 2, "F4": 3, "F5": 4}
     gate = {"G1": 0, "NONE": 1}
 

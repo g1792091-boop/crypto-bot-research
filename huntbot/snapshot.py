@@ -78,7 +78,7 @@ def _counts(trades: list) -> dict:
 
 def _money(res: dict) -> dict:
     s = res["summary"]
-    months = list(zip(s.get("months") or [], s.get("M") or []))
+    months = list(zip(res.get("month_names") or [], s.get("M") or []))
     return {"equity_now": res["equity_now"], "multiple": res["equity_now"] / 5000.0,
             "months": [[m, x] for m, x in months], "month_M": months[-1][1] if months else None,
             "max_dd": s.get("max_dd"), "fees": s.get("fees"), "funding": s.get("funding"),

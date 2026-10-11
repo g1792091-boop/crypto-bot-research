@@ -148,8 +148,8 @@ def calendar_windows(start_ms: int, end_ms: int, first_ms: int | None = None) ->
     ms = H.month_starts(int(start_ms), int(end_ms))
     out = [(int(a), int(b)) for a, b in zip(ms[:-1], ms[1:])]
     lo = int(start_ms) if first_ms is None else max(int(start_ms), int(first_ms))
-    return [w for w in out if w[0] >= lo and dt.datetime.fromtimestamp(w[0] / 1000, dt.timezone.utc).day == 1
-            and H.month_starts(w[0], w[1])[-2] == w[0]]
+    first_day = lambda ms: dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).day == 1  # noqa: E731
+    return [w for w in out if w[0] >= lo and first_day(w[0]) and first_day(w[1])]
 
 
 def rolling_windows(start_ms: int, end_ms: int, days: int = ROLL_DAYS, first_ms: int | None = None) -> list:
@@ -413,7 +413,7 @@ def control_columns(pick_bits, ctl_bits, windows: str, seed: int, levels=GOAL_LE
     return out
 
 
-def effective_risk(r: float, ratio, cut_bits, adds, lev, gross_max=None, brk_skips: int | None = None) -> dict:
+def effective_risk(r: float | None, ratio, cut_bits, adds, lev, gross_max=None, brk_skips: int | None = None) -> dict:
     """Realised risk next to the nominal r over a cell's positions (``ratio`` = q1 x D0 / U per position): effective r
     = r x median(ratio), the p90 of the ratio, the share of first units cut (any, and by reason: liquidity, margin
     budget, free wallet), the share of positions filling add 1, 2 and 3, the median leverage, the max gross notional /
@@ -424,9 +424,9 @@ def effective_risk(r: float, ratio, cut_bits, adds, lev, gross_max=None, brk_ski
         return {"nominal_r": r, "n_positions": 0}
     cut = np.asarray(cut_bits, np.int64)
     adds = np.asarray(adds, np.int64)
-    return {"nominal_r": r, "n_positions": int(n), "effective_r": _f(r * np.nanmedian(ratio)),
-            "ratio_median": _f(np.nanmedian(ratio)), "ratio_p90": _f(np.nanquantile(ratio, 0.9)),
-            "effective_r_p90": _f(r * np.nanquantile(ratio, 0.9)),
+    med, p90 = np.nanmedian(ratio), np.nanquantile(ratio, 0.9)
+    return {"nominal_r": r, "n_positions": int(n), "effective_r": None if r is None else _f(r * med),
+            "ratio_median": _f(med), "ratio_p90": _f(p90), "effective_r_p90": None if r is None else _f(r * p90),
             "share_first_unit_cut": float((cut != 0).mean()),
             "share_first_unit_cut_by": {H.CUT_NAMES[i]: float(((cut >> i) & 1).mean())
                                         for i in range(len(H.CUT_NAMES))},
@@ -435,13 +435,23 @@ def effective_risk(r: float, ratio, cut_bits, adds, lev, gross_max=None, brk_ski
             "adds_skipped_bracket": brk_skips}
 
 
-def headline_of(row_board: dict, spec: dict | None = None) -> dict | None:
+def check_headline_spec(spec: dict | None) -> None:
+    """The engine's HEADLINE_CELL (ctx['headline_cell']) must name this module's headline cell."""
+    if not spec:
+        return
+    ok = (spec.get("period") == HEADLINE["period"] and abs(float(spec.get("r", -1)) - HEADLINE["r"]) < 1e-12
+          and str(spec.get("machine", "")).startswith(HEADLINE["machine"])
+          and abs(float(spec.get("level", 0)) / float(spec.get("start_wallet", GOAL_START)) - 5.0) < 1e-9
+          and "calendar" in str(spec.get("windows", "")))
+    if not ok:
+        raise ValueError(f"reads_a: ctx headline cell {spec} differs from {HEADLINE}")
+
+
+def headline_of(row_board: dict) -> dict | None:
     """The headline cell named before the test: per row, the share of test calendar months in which a fresh $1,000
     at goal-mode r = 5% touched $5,000, with its Clopper-Pearson interval, beside the (a) and (b) pooled shares (seeds
     1-1,000) and the bust share. ``row_board`` = {period: {windows: {cell key: {"cell", "controls"}}}}."""
-    h = dict(HEADLINE)
-    if spec:
-        h.update({k: v for k, v in spec.items() if k in h})
+    h = HEADLINE
     c = row_board.get(h["period"], {}).get(h["windows"], {}).get(cell_key(h["machine"], h["r"]))
     if not c or not c["cell"].get("n_windows"):
         return None
@@ -518,18 +528,19 @@ def drawdown_recovery(t, eq) -> dict:
     out = {"max_dd": float(dd[j]), "dd_peak_day": _day(t[i]), "dd_trough_day": _day(t[j]),
            "dd_recover_days": float((t[r_ix] - t[i]) / DAY) if dd[j] > 0 else 0.0, "dd_recover_open": bool(open_),
            "dd_recover_day": None if open_ or dd[j] == 0 else _day(t[r_ix])}
-    # longest stretch under water: vectorised over the running peak (a new peak = a value >= every earlier value)
-    newpk = np.r_[True, eq[1:] >= pk[:-1]]
-    starts = np.flatnonzero(newpk)                       # indices where the path is at a (weakly) new high
-    gaps = np.diff(np.r_[starts, len(eq) - 1])           # steps from each high to the next high (or the end)
-    span = np.r_[t[starts[1:]], t[-1]] - t[starts]
-    last_open = len(eq) - 1 not in set(starts.tolist()) and starts[-1] < len(eq) - 1
-    best = int(np.argmax(span)) if len(span) else 0
-    lopen = bool(best == len(starts) - 1 and last_open)
-    longest = float(span[best] / DAY) if len(span) and gaps[best] > 0 else 0.0
-    lj = (starts[best + 1] if best + 1 < len(starts) else len(eq) - 1) if len(span) else 0
-    out.update({"longest_under_water_days": longest, "under_water_from": _day(t[starts[best]]),
-                "under_water_to": _day(t[lj]), "under_water_open": lopen})
+    peak_v, peak_i, under = eq[0], 0, False
+    longest, li, lj, lopen = 0.0, 0, 0, False
+    for k in range(1, len(eq)):
+        if eq[k] >= peak_v:
+            if under and (t[k] - t[peak_i]) / DAY > longest:
+                longest, li, lj, lopen = (t[k] - t[peak_i]) / DAY, peak_i, k, False
+            peak_v, peak_i, under = eq[k], k, False
+        else:
+            under = True
+    if under and (t[-1] - t[peak_i]) / DAY >= longest:
+        longest, li, lj, lopen = (t[-1] - t[peak_i]) / DAY, peak_i, len(eq) - 1, True
+    out.update({"longest_under_water_days": float(longest), "under_water_from": _day(t[li]),
+                "under_water_to": _day(t[lj]), "under_water_open": bool(lopen)})
     return out
 
 
@@ -992,22 +1003,6 @@ def run_lev(run, parts: list, infos: list, a: int, b: int, L: int, br: dict, sta
     return res
 
 
-def _free_window(a: int, b: int) -> None:
-    """Drop the window's cached market objects from the live module (memory only; decisions never read a cache that
-    is not rebuilt identically)."""
-    live = _S.get("live")
-    if live is None:
-        return
-    tag = f":{a}:{b}:"
-    for name in ("_MARKETS", "_BANKS", "_SIGS", "_POOLS"):
-        d = getattr(live, name, None)
-        if not isinstance(d, dict):
-            continue
-        for key in [x for x in d if (isinstance(x, tuple) and len(x) >= 2 and ((a in x and b in x) or
-                    (isinstance(x[0], str) and tag in x[0])))]:
-            d.pop(key, None)
-
-
 def _run_cell(cell: tuple, parts: list, infos: list, a: int, b: int, path: str) -> dict:
     ctx = _S["ctx"]
     machine, x = cell
@@ -1034,9 +1029,8 @@ def _pick_rec(res: dict, keep_pos: bool) -> dict:
     rec["liquidations"] = int((reason == "liquidation").sum()) if len(reason) else 0
     rec["skipped"] = {k: int(v) for k, v in (res.get("skipped") or {}).items()}
     rec["adds_skipped_bracket"] = int((res.get("adds_skipped") or {}).get("bracket", 0))
-    if "lev_buffer_skipped" in res:
-        rec["lev"] = {"buffer_skipped": res["lev_buffer_skipped"], "runs": res["lev_runs"],
-                      "converged": res["lev_converged"]}
+    rec["lev_buffer_skipped"] = res.get("lev_buffer_skipped")
+    rec["lev_unconverged"] = None if "lev_converged" not in res else int(not res["lev_converged"])
     if keep_pos and len(pnl):
         U = np.asarray(tr["U"], float)
         q1, d0 = np.asarray(tr["q1"], float), np.asarray(tr["D0"], float)
@@ -1048,18 +1042,34 @@ def _pick_rec(res: dict, keep_pos: bool) -> dict:
     return rec
 
 
+REC_COLS = ("m_end", "m_marked", "peak_m", "give_back", "n80", "days_x2", "days_x5", "bits", "liquidations",
+            "adds_skipped_bracket", "lev_buffer_skipped", "lev_unconverged")
+POS_COLS = ("ratio", "cut", "adds", "lev", "risk_eq")
+
+
 def _pick_task(task) -> tuple:
-    """Worker: one row, period, window set and chunk of windows; every cell (A, B, L) once per window (path 5m)."""
+    """Worker: one row, period, window set and chunk of windows; every cell (A, B, L) once per window (path 5m).
+    Returns per cell the window columns (``REC_COLS``, NaN = none), the summed engine skips and the realised-risk
+    position arrays of the windows that keep them."""
     ri, period, kind, wis = task
     parts, infos = _S["parts"][(ri, period)], _S["infos"][(ri, period)]
     wins = _S["win"][(ri, period, kind)]
-    out = {}
-    for wi in wis:
+    out = {cell: {"wi": np.asarray(wis, np.int64), "skipped": {}, "pos": [],
+                  **{c: np.full(len(wis), np.nan) for c in REC_COLS}} for cell in _S["cells"]}
+    for wj, wi in enumerate(wis):
         a, b = wins[wi]
         keep_pos = kind == "calendar" or wi % EFF_EVERY == 0
         for cell in _S["cells"]:
-            out[(wi, cell)] = _pick_rec(_run_cell(cell, parts, infos, a, b, "5m"), keep_pos)
-        _free_window(a, b)
+            rec = _pick_rec(_run_cell(cell, parts, infos, a, b, "5m"), keep_pos)
+            o = out[cell]
+            for c in REC_COLS:
+                o[c][wj] = np.nan if rec.get(c) is None else float(rec[c])
+            for k, v in rec["skipped"].items():
+                o["skipped"][k] = o["skipped"].get(k, 0) + int(v)
+            if "pos" in rec:
+                o["pos"].append(rec["pos"])
+    for o in out.values():
+        o["pos"] = {c: np.concatenate([q[c] for q in o["pos"]]) for c in POS_COLS} if o["pos"] else None
     return ri, period, kind, out
 
 
@@ -1075,7 +1085,7 @@ def _ctl_task(task) -> tuple:
         ps = [(ctx["control_signals"](m, ctl, period, H.R_BASE, s), src) for m, src in zip(row["members"], row["src"])]
         parts_s[s] = ps
         infos_s[s] = [sig_info(_S["live"], syms, sig) for sig, _ in ps]
-    out = {cell: np.zeros((len(seeds), len(wis)), np.int32) for cell in cells}
+    out = {cell: np.zeros((len(seeds), len(wis)), np.int16) for cell in cells}
     wins = _S["win"][(ri, period, kind)]
     for wj, wi in enumerate(wis):
         a, b = wins[wi]
@@ -1083,7 +1093,6 @@ def _ctl_task(task) -> tuple:
             for cell in cells:
                 res = _run_cell(cell, parts_s[s], infos_s[s], a, b, "day")
                 out[cell][si, wj] = bits_of(res["end"] / GOAL_START, res["peak"] / GOAL_START, res["bust"])
-        _free_window(a, b)
     return ri, period, kind, ctl, tuple(seeds), tuple(wis), out
 
 
@@ -1169,7 +1178,6 @@ def _measure_window_seconds(ctx: dict) -> float:
         _run_cell(("A", H.R_BASE), parts, infos, a, b, "day")
         if i:
             ts.append(time.perf_counter() - t0)
-    _free_window(a, b)
     return float(np.median(ts))
 
 
@@ -1190,6 +1198,7 @@ def _row_meta(row: dict) -> dict:
 def run(ctx: dict) -> None:
     """Fill ctx['out'] (public) and ctx['private'] (D11 and money of DeepSeek rows). Writes no file."""
     t_all = time.time()
+    check_headline_spec(ctx.get("headline_cell"))
     live = _live(ctx)
     log = ctx.get("log") or (lambda m: print(m, flush=True))
     tag = H.SEED_TAG["wide" if ctx["study"] == "wide" else "v1"]
@@ -1224,17 +1233,31 @@ def run(ctx: dict) -> None:
     for (ri, p, kind), wins in _S["win"].items():
         for ch in _chunks(range(len(wins)), len(wins) if kind == "calendar" else ROLL_WIN_CHUNK):
             ptasks.append((ri, p, kind, tuple(ch)))
-    precs: dict = {}
+    tabs: dict = {}
     for ri, p, kind, out in pmap(_pick_task, ptasks, procs, "reads_a R1 rows"):
-        precs.setdefault((ri, p, kind), {}).update(out)
+        n = len(_S["win"][(ri, p, kind)])
+        for cell, o in out.items():
+            T = tabs.get((ri, p, kind, cell))
+            if T is None:
+                T = tabs[(ri, p, kind, cell)] = {**{c: np.full(n, np.nan) for c in REC_COLS}, "skipped": {},
+                                                  "pos": [], "seen": np.zeros(n, bool)}
+            for c in REC_COLS:
+                T[c][o["wi"]] = o[c]
+            T["seen"][o["wi"]] = True
+            for k, v in o["skipped"].items():
+                T["skipped"][k] = T["skipped"].get(k, 0) + v
+            if o["pos"] is not None:
+                T["pos"].append(o["pos"])
     # ---------------------------------------------------------------- controls
+    n_seeds_of = {("calendar", "AB"): CAL_CTL_SEEDS, ("rolling", "AB"): n_roll,
+                  ("calendar", "L"): LEV_CTL_SEEDS, ("rolling", "L"): n_lev_roll}
     ctasks = []
     for (ri, p, kind), wins in _S["win"].items():
         if not wins:
             continue
         wch = _chunks(range(len(wins)), len(wins) if kind == "calendar" else ROLL_WIN_CHUNK)
-        for group, cells, n_s in (("AB", _S["cells_ab"], CAL_CTL_SEEDS if kind == "calendar" else n_roll),
-                                  ("L", _S["cells_l"], LEV_CTL_SEEDS if kind == "calendar" else n_lev_roll)):
+        for group, cells in (("AB", _S["cells_ab"]), ("L", _S["cells_l"])):
+            n_s = n_seeds_of[(kind, group)]
             for w in wch:
                 per = max(1, TASK_RUNS // max(1, len(w) * len(cells) * (2 if group == "L" else 1)))
                 for ctl in ("a", "b"):
@@ -1242,12 +1265,13 @@ def run(ctx: dict) -> None:
                         ctasks.append((ri, p, kind, ctl, tuple(sch), tuple(w), group))
     cbits: dict = {}
     for ri, p, kind, ctl, seeds, wis, out in pmap(_ctl_task, ctasks, procs, "reads_a R1 controls"):
+        n = len(_S["win"][(ri, p, kind)])
         for cell, mat in out.items():
-            d = cbits.setdefault((ri, p, kind, ctl, cell), {})
-            for si, s in enumerate(seeds):
-                row_ = d.setdefault(s, {})
-                for wj, wi in enumerate(wis):
-                    row_[wi] = int(mat[si, wj])
+            n_s = n_seeds_of[(kind, "L" if cell[0] == "L" else "AB")]
+            arr = cbits.get((ri, p, kind, ctl, cell))
+            if arr is None:
+                arr = cbits[(ri, p, kind, ctl, cell)] = np.full((n_s, n), -1, np.int16)
+            arr[np.ix_(np.asarray(seeds) - 1, np.asarray(wis))] = mat
     log(f"reads_a: board runs done ({time.time() - t_all:.0f}s)")
 
     # ---------------------------------------------------------------- R1 / leverage tables per row
@@ -1259,41 +1283,44 @@ def run(ctx: dict) -> None:
             for kind in ("calendar", "rolling"):
                 wins = _S["win"][(ri, p, kind)]
                 n = len(wins)
-                recs = precs.get((ri, p, kind), {})
                 for cell in _S["cells"]:
                     machine, x = cell
                     ck = cell_key(machine, x)
-                    rl = [recs[(wi, cell)] for wi in range(n)]
-                    tab = _tab_compact(rl)
-                    pos = [rr["pos"] for rr in rl if "pos" in rr]
+                    T = tabs.get((ri, p, kind, cell))
+                    if T is None:
+                        if n:
+                            raise RuntimeError(f"reads_a: no row result for {(ri, p, kind, cell)}")
+                        continue
+                    if not T["seen"].all():
+                        raise RuntimeError(f"reads_a: missing windows for {(ri, p, kind, cell)}")
+                    tab = {c: T[c] for c in ("m_end", "m_marked", "peak_m", "give_back", "n80", "days_x2", "days_x5")}
+                    tab["bits"] = T["bits"].astype(np.int64)
+                    tab["resolution"] = ["5m"]
+                    pos = T["pos"]
                     cat = (lambda k: np.concatenate([q[k] for q in pos]) if pos else np.zeros(0))  # noqa: E731
                     eff = effective_risk(cell_overrides(machine, x)[0] if machine != "L" else None, cat("ratio"),
                                          cat("cut"), cat("adds"), cat("lev"),
-                                         brk_skips=int(sum(rr["adds_skipped_bracket"] for rr in rl)))
-                    seed = goal_seed(tag, rid, p, machine, x)
-                    c = board_cell(tab, kind, seed, eff=eff)
+                                         brk_skips=int(np.nansum(T["adds_skipped_bracket"])))
+                    c = board_cell(tab, kind, goal_seed(tag, rid, p, machine, x), eff=eff)
                     c["machine"] = machine_spec(machine, x)
-                    c["skipped"] = _sum_counts([rr["skipped"] for rr in rl])
-                    c["liquidations"] = int(sum(rr["liquidations"] for rr in rl))
-                    pick_bits = tab["bits"]
+                    c["skipped"] = dict(T["skipped"])
+                    c["liquidations"] = int(np.nansum(T["liquidations"]))
                     ctl = {}
                     for cn in ("a", "b"):
-                        d = cbits.get((ri, p, kind, cn, cell), {})
-                        if d and n:
-                            mat = np.asarray([[d[s][wi] for wi in range(n)] for s in sorted(d)], np.int64)
-                            ctl[cn] = control_columns(pick_bits, mat, kind,
+                        mat = cbits.get((ri, p, kind, cn, cell))
+                        if mat is not None and n:
+                            if (mat < 0).any():
+                                raise RuntimeError(f"reads_a: missing control windows for {(ri, p, kind, cn, cell)}")
+                            ctl[cn] = control_columns(tab["bits"], mat.astype(np.int64), kind,
                                                       goal_seed(tag, rid, p, machine, x, kind, cn))
                     entry = {"cell": c, "controls": ctl}
                     if machine == "L":
-                        rk = np.concatenate([q["risk_eq"] for q in pos]) if pos else np.zeros(0)
-                        lv = cat("lev")
+                        rk, lv = cat("risk_eq"), cat("lev")
                         entry["leverage"] = {
                             "L": int(x), "liquidations": c["liquidations"],
-                            "rule_bot_check_skipped": int(sum(rr.get("lev", {}).get("buffer_skipped", 0)
-                                                              for rr in rl)),
+                            "rule_bot_check_skipped": int(np.nansum(T["lev_buffer_skipped"])),
                             "engine_skipped": c["skipped"],
-                            "fixed_point_not_converged": int(sum(1 for rr in rl
-                                                                 if not rr.get("lev", {}).get("converged", True))),
+                            "fixed_point_not_converged": int(np.nansum(T["lev_unconverged"])),
                             "median_wallet_risk_per_stop": _med(rk), "median_leverage_used": _med(lv),
                             "share_leverage_lowered_by_bracket": _f((lv < int(x)).mean()) if len(lv) else None}
                         lb.setdefault(p, {}).setdefault(kind, {})[ck] = entry
@@ -1317,7 +1344,7 @@ def run(ctx: dict) -> None:
                     e["period_label"] = PERIOD_LABEL[p]
         d0p = np.concatenate([inf["d0"] / inf["P0"] for inf in infos[(ri, "test")]]) if infos[(ri, "test")] \
             else np.zeros(0)
-        board[rid] = {**_row_meta(row), "periods": rb, "headline": headline_of(rb, ctx.get("headline_cell")),
+        board[rid] = {**_row_meta(row), "periods": rb, "headline": headline_of(rb),
                       "size_fixed_on_select": None if fixed is None else {
                           "cell": cell_key(*fixed),
                           "test": rb.get("test", {}).get("calendar", {}).get(cell_key(*fixed))}}
@@ -1328,8 +1355,6 @@ def run(ctx: dict) -> None:
     ctasks2 = []
     for ri in range(len(rows)):
         for p in READ_PERIODS:
-            if not any(len(sig["k"]) for sig, _ in parts[(ri, p)]) and p == "extra":
-                pass
             for r in CONT_RS:
                 ctasks2.append((ri, p, ("r", r)))
             fx = _S["fixed"].get(ri)
@@ -1450,22 +1475,6 @@ def _split_pair(pair: str, ids: list) -> tuple:
         if pair.startswith(a + "|") and pair[len(a) + 1:] in ids:
             return a, pair[len(a) + 1:]
     return pair, ""
-
-
-def _sum_counts(ds: list) -> dict:
-    out: dict = {}
-    for d in ds:
-        for k, v in d.items():
-            out[k] = out.get(k, 0) + int(v)
-    return out
-
-
-def _tab_compact(rl: list) -> dict:
-    """board_cell table from compact row records (``_pick_rec``)."""
-    col = lambda k: np.asarray([np.nan if r.get(k) is None else r[k] for r in rl], float)  # noqa: E731
-    return {"m_end": col("m_end"), "m_marked": col("m_marked"), "peak_m": col("peak_m"), "give_back": col("give_back"),
-            "n80": col("n80"), "days_x2": col("days_x2"), "days_x5": col("days_x5"),
-            "bits": np.asarray([r["bits"] for r in rl], np.int64), "resolution": ["5m"] if rl else []}
 
 
 def row_events(live, mk, spec: dict) -> dict:

@@ -222,7 +222,8 @@ def _slim(res: dict, keep_trades: bool = True) -> dict:
             "median_pnl_U", "exit_reasons", "exit_stop_source", "open_at_end", "leverage_median", "candidates",
             "signal_counts", "mean_lnM", "median_M", "share_add_level", "adds_per_month", "day_eq",
             "realized_unit_risk", "share_first_unit_cut")
-    out = {"summary": {k: s.get(k) for k in keys}, "equity_now": res["equity_now"], "bust_t": res["bust_t"]}
+    out = {"summary": {k: s.get(k) for k in keys}, "equity_now": res["equity_now"], "bust_t": res["bust_t"],
+           "month_names": res["months"]}
     if keep_trades:
         out["trades"] = res["trades"]
     if "hourly" in res:
@@ -594,6 +595,7 @@ class Runner:
         phase["snapshot_s"] = round(time.monotonic() - t4, 2)
         self.done_ms = complete_ms
         self.cycles += 1
+        self.last_results, self.last_lineup = results, lineup_res
         info = {"complete_ms": complete_ms, "seconds": round(time.monotonic() - t0, 2), "phase": phase,
                 "new_bins": len(new_bins), "events_lineup": ev1, "events_rest": ev2, "systems": len(results),
                 "actions": n_act, "sync": sync, "errors": self.errors[:20], "procs": self.procs,
