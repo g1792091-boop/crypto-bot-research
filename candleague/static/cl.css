@@ -143,18 +143,6 @@ tr.cl-bust td { opacity: .55; }
   border: 1px solid var(--line-2); background: var(--pill-bg); font-size: var(--t-xs); pointer-events: none; }
 
 /* 터미널 */
-.cl-tside { max-height: 300px; }
-.cl-tlist { display: grid; }
-.cl-ti { appearance: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 4px; border: 0; border-bottom: 1px solid var(--line);
-  background: none; color: inherit; font: inherit; font-size: var(--t-xs); text-align: left; cursor: pointer; }
-.cl-ti:hover { background: var(--surface-2); }
-.cl-ti.on { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-soft); }
-.cl-tin { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
-.cl-tkv { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-xs); }
-.cl-tkv > span { color: var(--muted); }
-.cl-tfive { display: grid; gap: 4px; }
-.cl-tfive .cl-fiverow { font-size: var(--t-xs); padding: 3px 2px; grid-template-columns: minmax(0, 1.3fr) auto auto minmax(0, 1fr); }
-.cl-tfive .cl-fiverow > :nth-child(5), .cl-tfive .cl-fiverow > :nth-child(6) { display: none; }
 
 /* 포지션 */
 .cl-coinsum { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }

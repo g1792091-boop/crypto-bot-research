@@ -324,7 +324,11 @@ out.whyQ = C.whyBox(P2).textContent;
 const marks = {BTCUSD: 97500, ETHUSD: 2400}, marks2 = {BTCUSD: 99000, ETHUSD: 2400};
 out.risk = R.rankRisk([P2, LEAK, P1, HID], (c) => marks[c] ?? null).map((x) => [x.p.id, Math.round(x.dLiq * 1e4)]);
 out.orders = O.orderList([P2, P1, LEAK, HID], (c) => marks2[c] ?? null).map((x) => x.p.id);
-out.ordersEntry = O.orderList([P2, P1], null, false).map((x) => [x.p.id, Math.round(x.d * 1e4)]);
+out.ordersEntry = O.orderList([P2, P1], null, false).map((x) => [x.p.id, x.d == null ? null : Math.round(x.d * 1e4), x.lockIdle]);
+// a lock line measured from the entry (catch-up / old record): "잠금 중", never "닿음", and no stop distance in the ladder
+const lockRow = O.orderRow(O.orderList([P2], null, false)[0], {live: false}).textContent;
+out.lockRow = lockRow;
+out.lockRisk = R.rankRisk([P2], null, false).map((x) => [x.dStop, x.lockIdle, Math.round(x.dLiq * 1e4)]);
 const pnl = {"core-DOGE-1h-1": 5, "core-OBV_S-1h-3-q": 9};
 out.sort = P.sortPositions([LEAK, P1, HID, P2], "pnl", (p) => pnl[p.id] ?? null, () => null).map((p) => p.id);
 out.sortLoss = P.sortPositions([LEAK, P1, HID, P2], "loss", (p) => pnl[p.id] ?? null, () => null).map((p) => p.id);
@@ -337,7 +341,10 @@ out.kst = O.kstMidnight(Date.UTC(2026, 9, 10, 16, 30)) === Date.UTC(2026, 9, 10,
     assert "증거금 1.3%" in o["whyQ"] and "40배" in o["whyQ"]
     assert o["risk"] == [["core-DOGE-1h-1", 62], ["core-OBV_S-1h-3-q", 667]]       # 0.62 % from liq vs 6.67 %
     assert o["orders"] == ["core-DOGE-1h-1", "core-OBV_S-1h-3-q"]                  # 1.01 % vs 2.08 % from the stop
-    assert o["ordersEntry"] == [["core-OBV_S-1h-3-q", -200], ["core-DOGE-1h-1", 200]]   # not live: from the entry
+    # not live: from the entry; the lock line (stop already on the profit side) has no distance and goes last
+    assert o["ordersEntry"] == [["core-DOGE-1h-1", 200, False], ["core-OBV_S-1h-3-q", None, True]]
+    assert "잠금 중 · 진입가보다 2.00% 아래" in o["lockRow"] and "닿음" not in o["lockRow"]
+    assert o["lockRisk"] == [[None, True, 240]]
     assert o["sort"][:2] == ["core-OBV_S-1h-3-q", "core-DOGE-1h-1"] and set(o["sort"][2:]) == {LEAK_ID, HID_ID}
     assert o["sortLoss"][:2] == ["core-DOGE-1h-1", "core-OBV_S-1h-3-q"] and set(o["sortLoss"][2:]) == {LEAK_ID, HID_ID}
     assert o["line"] == 1 and o["kst"]
