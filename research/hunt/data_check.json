@@ -1,0 +1,133 @@
+{
+ "what": "PREREG_HUNT 2 cross-check: 5m bars (as read: duplicates, zero volume, off-grid dropped) vs the full grid's 1m archive binned to 5m, on the bars both have; counts only",
+ "tolerance": {
+  "ohlc_rel": 1e-06,
+  "volume_rel": 0.001,
+  "max_share": 0.001
+ },
+ "written_utc": "2026-10-11 12:37",
+ "pass": true,
+ "coins": {
+  "BTCUSDT": {
+   "content_sha256": "e8e2eaa92380cef321899aa883bb9af9cff49ff427e7392d2f10de83ccc262d9",
+   "clean_counts": {
+    "rows": 709920,
+    "duplicates": 0,
+    "zero_volume": 66,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 709854,
+   "bars_1m_to_5m": 709873,
+   "common": 709854,
+   "only_5m": 0,
+   "only_1m": 19,
+   "ohlc_mismatch": 4,
+   "volume_mismatch": 9,
+   "mismatch": 9,
+   "mismatch_share": 1.2678663499818272e-05,
+   "first_mismatch": "2021-01-12 06:10"
+  },
+  "ETHUSDT": {
+   "content_sha256": "653e325529c795a28c108cf8aa49187b1d72356a588d26099c3bcba96e9861d9",
+   "clean_counts": {
+    "rows": 709920,
+    "duplicates": 0,
+    "zero_volume": 47,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 709873,
+   "bars_1m_to_5m": 709873,
+   "common": 709873,
+   "only_5m": 0,
+   "only_1m": 0,
+   "ohlc_mismatch": 3,
+   "volume_mismatch": 9,
+   "mismatch": 9,
+   "mismatch_share": 1.2678324150939675e-05,
+   "first_mismatch": "2021-01-12 06:10"
+  },
+  "SOLUSDT": {
+   "content_sha256": "214eaf64658a65c77762b957d5198e7d0532789c37f893653e7eb9c448a8d3b5",
+   "clean_counts": {
+    "rows": 635820,
+    "duplicates": 0,
+    "zero_volume": 47,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 635773,
+   "bars_1m_to_5m": 635773,
+   "common": 635773,
+   "only_5m": 0,
+   "only_1m": 0,
+   "ohlc_mismatch": 2,
+   "volume_mismatch": 9,
+   "mismatch": 9,
+   "mismatch_share": 1.4155995929364727e-05,
+   "first_mismatch": "2021-01-12 06:10"
+  },
+  "DOGEUSDT": {
+   "content_sha256": "cd8ce041996deb72bf144628fa6a5be89903616091b69504182cc23e1305f30b",
+   "clean_counts": {
+    "rows": 654804,
+    "duplicates": 0,
+    "zero_volume": 49,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 654755,
+   "bars_1m_to_5m": 654755,
+   "common": 654755,
+   "only_5m": 0,
+   "only_1m": 0,
+   "ohlc_mismatch": 4,
+   "volume_mismatch": 9,
+   "mismatch": 9,
+   "mismatch_share": 1.3745599499049263e-05,
+   "first_mismatch": "2021-01-12 06:10"
+  },
+  "LTCUSDT": {
+   "content_sha256": "4f98abf88b79bbb94c9ed4c07d9d8e0a8fa5ae24ceae9b49bbc9e867082399b8",
+   "clean_counts": {
+    "rows": 707519,
+    "duplicates": 0,
+    "zero_volume": 49,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 707470,
+   "bars_1m_to_5m": 707470,
+   "common": 707470,
+   "only_5m": 0,
+   "only_1m": 0,
+   "ohlc_mismatch": 2,
+   "volume_mismatch": 7,
+   "mismatch": 7,
+   "mismatch_share": 9.89441248392158e-06,
+   "first_mismatch": "2021-01-12 06:10"
+  },
+  "BCHUSDT": {
+   "content_sha256": "41383526b80c52fe021ac431071bb3c9c2ee0a5e8fac4498514b77b0ced81ea2",
+   "clean_counts": {
+    "rows": 709920,
+    "duplicates": 0,
+    "zero_volume": 49,
+    "off_grid": 0,
+    "non_finite": 0
+   },
+   "bars_5m": 709871,
+   "bars_1m_to_5m": 709871,
+   "common": 709871,
+   "only_5m": 0,
+   "only_1m": 0,
+   "ohlc_mismatch": 3,
+   "volume_mismatch": 8,
+   "mismatch": 8,
+   "mismatch_share": 1.1269653218683395e-05,
+   "first_mismatch": "2021-01-12 06:10"
+  }
+ },
+ "code_sha256": "1e040265c8efd61ee8a18ca135c167cb1fe49d0132088ed595feb4f0752a2ded"
+}
