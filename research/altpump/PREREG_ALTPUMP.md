@@ -65,9 +65,10 @@ Fixed list, 191 symbols, written here before any price was read (all with suffix
 * **Index products (6)**: BTCDOM, DEFI, BLUEBIRD, FOOTBALL, DOTECO, ALL (ALL as in `research/universe/xs.py`).
 * **Stable vs stable (1)**: USDC. Also, mechanically, any symbol-day of section 3.3 (d).
 * **TradFi-referenced perpetuals (184)**: stocks, ETFs, commodities, pre-IPO contracts and gold-backed tokens. They are
-  not crypto alts, they track outside markets and sessions, and they appear only from 2025-12-11 (inside period 2), so
-  keeping them would change the universe between periods and would put stock listings into P3. Reason for going
-  beyond the brief (which named stable-vs-stable and index products only): the question is about crypto alts.
+  not crypto alts, they track outside markets and sessions, and all but PAXG (2025-03-27) appear only from 2025-12-11
+  (inside period 2), so keeping them would change the universe between periods and would put stock listings into P3.
+  Reason for going beyond the brief (which named stable-vs-stable and index products only): the question is about
+  crypto alts.
   * Commodities and commodity-pegged (10): XAU, XAG, XPT, XPD, COPPER, NATGAS, BZ, CL, PAXG, XAUT.
   * ETFs, leveraged ETFs and equity indices (31): QQQ, SPY, IWM, SMH, XLE, XBI, GDX, URNM, EWJ, EWY, EWZ, EWT, SLX,
     SOXL, SOXS, TQQQ, SQQQ, TZA, UVXY, TBT, TMF, KORU, BITO, DRAM, KODEX200, CSOPSAMSUNG2L, CSOPSKHYNIX2L, MUU, SNXX,
@@ -96,12 +97,12 @@ close-to-close returns inside the life is >= 0.005 (a stable / pegged filter, th
 skipped while the life has fewer than 31 bars).
 
 **Why $5M** (fixed before any volume figure of this file was looked at): (i) the unit cap of section 6.2 is 0.1% of
-this median, so a $5M name allows a $5,000 unit, enough for wallets from $1,000 to about $25,000 at the risks of section
-14 before the cap binds; (ii) the 0.10% slippage assumption (section 8) is plausible only for orders around 0.1% of a
-day's volume in names trading several million dollars a day; (iii) a higher floor (the goal-50x look used $20M on one
-day's volume) would remove the small caps where the tail lives, a lower one would put most fills in books too thin for
-the cost model. The number of tradable symbols per day is reported by `select` and `test` (section 16); the floor does
-not change after the pin.
+this median, so a $5M name allows a $5,000 unit; with a stop 25% away the cap starts to bind at about $62,000 of
+equity at r = 2%, $25,000 at r = 5% and $6,000 at r = 20% (section 14), all above the owners' $1,000 start; (ii) the
+0.10% slippage assumption (section 8) is plausible only for orders around 0.1% of a day's volume in names trading
+several million dollars a day; (iii) a higher floor (the goal-50x look used $20M on one day's volume) would remove the
+small caps where the tail lives, a lower one would put most fills in books too thin for the cost model. The number
+of tradable symbols per day is reported by `select` and `test` (section 16); the floor does not change after the pin.
 
 ## 4. Daily bars, indicators, timing
 
@@ -288,8 +289,8 @@ type, r = 2% and the test period. Seed = sha256 of ("altpump", control, variant 
 * **(a) Coin-flip sides**: the pick's signals (every signal, taken or not) at the same symbols and days, each side
   drawn by a fair coin.
 * **(b) Random days**: for each symbol and side, the same number of signals as the pick had in the period, on days
-  drawn uniformly without replacement from that symbol's tradable days in the period (3.3) whose next day has a bar.
-  Same side as the pick's signals on that symbol.
+  drawn uniformly without replacement from that symbol's tradable days in the period (3.3) whose next day has a bar
+  (all of them if there are fewer). Same side as the pick's signals on that symbol.
 
 For each control and test month m: **d_m = ln M_m(pick) - mean over the 2,000 seeds of ln M_m(control seed)**.
 
@@ -433,8 +434,8 @@ The owners' own measure. For each pick, period 2 and period 3 (period 1 also sho
   last 2026-08-31; first-bar counts per period (all symbols / after the 3.2 exclusions): period 3: 120 / 117, period 1:
   185 / 182, period 2: 559 / 374 (symbols with any bar in the period: 120 / 117, 302 / 297, 827 / 639); 9 symbols
   with a stretch of >= 30 days without a bar and about 50 with short ones (mostly 1 to 3 days, e.g. LTC 2022-02-26 ..
-  2022-02-28); the TradFi symbols' first bars all on or after 2025-12-11, in batches on the same
-  days (which gave the batch rule). The exclusion lists were written from symbol names and these dates.
+  2022-02-28); the TradFi symbols' first bars all on or after 2025-12-11 (PAXG excepted), in batches on the same days
+  (which gave the batch rule). The exclusion lists were written from symbol names and these dates.
 * **The period-1 descriptive look (disclosed).** On 2026-10-11 the goal-50x review (scratchpad
   `goal50/scripts/universe_base.py`, numbers in its `angles.md`, section 6, idea 1; not in this repository) computed on
   the same daily file:

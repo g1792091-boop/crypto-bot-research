@@ -227,6 +227,7 @@ def hunt_modules() -> list:
 
 def check_pin(study: str, step: str) -> dict:
     """Refuse (PinError) unless every listed file matches and the required files are listed (W 10)."""
+    _ew()                                         # the modules a run imports are part of the pin
     rows = read_pin(study)
     listed = {p: h for h, p in rows}
     bad = []
@@ -696,8 +697,13 @@ def build_cands(mk: Market, bank: Bank, parts: list) -> dict:
     for x, v in cols.items():
         dt_ = np.float64 if x in ("d0", "prio") else np.int64
         out[x] = np.concatenate(v).astype(dt_) if v else np.zeros(0, dt_)
-    order = np.lexsort((out["coin"], out["src"], -out["prio"], out["t"]))
-    return {x: v[order] for x, v in out.items()}
+    return sort_cands(out)
+
+
+def sort_cands(c: dict) -> dict:
+    """Engine order: fill step; then 30-day quote volume, largest first (H 8); then pick number (W 7); then coin."""
+    order = np.lexsort((c["coin"], c["src"], -c["prio"], c["t"]))
+    return {x: np.asarray(v)[order] for x, v in c.items()}
 
 
 # ------------------------------------------------------------------ the engine (numba)
@@ -1592,6 +1598,8 @@ def _sel_task(task) -> list:
     """Wide select unit: one entry cell (events once), both gates x base / cost x2 (W 5)."""
     mkey, specs = task
     mk = _G["mk"][mkey]
+    _EVENTS.clear()                               # one entry cell per task: no cache grows across tasks
+    _SIGS.clear()
     out = []
     for spec in specs:
         t0 = time.time()
