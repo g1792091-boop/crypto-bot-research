@@ -28,18 +28,25 @@ mismatch stops the study. Chart bars: the full grid's frames (`run.frame`, UTC b
 daily bars (D05 only) the same way over UTC days.
 
 2.2 **Funding.** Settlements (calc time, rate, interval) from the same archive's monthly fundingRate files (verified
-against their .CHECKSUM by data.py), 2020-01 .. 2026-09 (SOL from 2020-09-13, DOGE from 2020-07-10). Interval = the
-file's `funding_interval_hours` where the file has that column, else the hours since the previous settlement. Rates
-are compared as 8-hour equivalents, f8 = rate x 8 / interval hours (SOL has about 100 settlements at 2- or 4-hour
-intervals). Neutral rate: 0.0001 (0.01% per 8 hours, the exchange's interest component).
+against their .CHECKSUM by data.py), 2020-01 .. 2026-09 (LTC from 2020-01-09, DOGE from 2020-07-10, SOL from
+2020-09-13). Interval = the file's `funding_interval_hours` (every monthly file of the six coins has that column,
+checked 2026-10-11: 8 hours everywhere except SOL's 99 settlements at 2 hours and 2 at 4 hours; a file without it stops
+the study). Every calc time lies within the first second of its minute (checked), so flooring to the minute moves none
+by more than a second. Rates are compared as 8-hour equivalents, f8 = rate x 8 / interval hours. Neutral rate: 0.0001
+(0.01% per 8 hours, the exchange's interest component).
 
 2.3 **Metrics (5 minutes).** `data/orderflow/<coin>_metrics_5m.csv.gz` (sha256 in data/orderflow/MANIFEST.json), plus
 the archive's daily metrics files of 2026-09-29 and 2026-09-30 (not yet published when that folder was made; the study
 downloads them from data.binance.vision, checks the published .CHECKSUM and records their sha256). First day in the
-archive (checked 2026-10-11 by HTTP status only): BTC 2020-09-01; ETH, SOL, DOGE, LTC, BCH 2021-12-01. Columns used:
-`count_long_short_ratio` (the long/short ratio of all accounts, "crowd") and `sum_open_interest` (open interest in coins,
-not USD, so a price move alone does not change it). A repeated stamp keeps the last row; a non-positive or non-numeric
-value is missing.
+archive (checked 2026-10-11 by HTTP status only; the review repeated it: BTC 2020-08-31 404 and 2020-09-01 200, the
+other five 2021-11-30 404 and 2021-12-01 200, ETH 2020-09-01 and 2021-06-01 404; the 2026-09-29 and -30 files and
+their .CHECKSUM 200): BTC 2020-09-01; ETH, SOL, DOGE, LTC, BCH 2021-12-01. Columns used: `count_long_short_ratio` (the
+long/short ratio of all accounts, "crowd") and `sum_open_interest` (open interest in coins, not USD, so a price move
+alone does not change it). Stamps are on the 5-minute marks from 00:00 UTC. A repeated stamp keeps the last row; a
+non-positive or non-numeric value is missing. Known holes (coverage only, all six coins alike):
+`count_long_short_ratio` from 2021-12-30 14:30 to 2022-01-19 13:20 and from 2024-02-16 13:30 to 2024-02-17 00:00;
+`sum_open_interest` from 2022-03-07 15:25 to 2022-03-08 01:10 and from 2024-02-16 13:30 to 2024-02-17 00:00. Their
+effect follows from 2.4's rules; nothing is filled.
 
 2.4 **Timing (no look-ahead).** A signal of the chart bar closing at T uses only:
 - prices and volumes of bars closing at or before T (the bar's own OHLCV is known at T);
