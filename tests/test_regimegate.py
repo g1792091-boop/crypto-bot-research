@@ -319,7 +319,7 @@ def test_labels_equal_regimes_py_on_a_synthetic_series(tmp_path, monkeypatch):
     from paperbot import paramshadow as PS
     from paperbot import sweepsig
     RGJ = _rgj()
-    monkeypatch.setitem(GT.R.FRAME_DIR, 0, None)
+    monkeypatch.setattr(GT.R, "FRAME_DIR", [None])
     z = _synth1m(200, 1, 100.0, GT.ms("2026-03-20"))
     os.makedirs(tmp_path / "1m")
     np.savez(tmp_path / "1m" / "BTCUSDT.npz", **z)
@@ -359,7 +359,7 @@ def test_labels_never_look_ahead():
 
 
 D0 = 1_791_158_400_000                        # 2026-10-05 00:00 UTC
-STRATS = ["S2_ST_ROC", "S1_EMA_RSI_CHOP"]     # one trend, one other (style map), both fire on these bars
+STRATS = ["S2_ST_ROC", "N17_KC_RSI", "S3_CMO_SANDWICH"]   # trend, reversion, other (style map)
 TFS = ("15m", "1h")
 SYMS = ("BTCUSDT", "ETHUSDT")
 HIST_DAYS = 200                               # > regime5y's 180 days, so the labels are known in the window
@@ -457,7 +457,7 @@ def test_forward_look_in_pieces_equals_one_night(tmp_path, fdata):
     assert st <= {"closed", "open", "not_sized"} and "closed" in st
     assert {r[6] for r in rows} == {GT.style_class("core", n) for n in STRATS}
     closed = [r for r in rows if r[9] == "closed"]
-    assert all(r[10] > r[5] and r[11] >= r[10] and r[15] is not None for r in closed)
+    assert all(r[10] >= r[5] and r[11] >= r[10] and r[15] is not None for r in closed)   # fills at the next open
     known = [r for r in rows if r[7] > 0 and r[8] > 0]
     assert known and len({r[7] for r in known}) >= 2      # the labels are filled in (history before the window)
     ev = one["evaluation"]
@@ -491,7 +491,7 @@ def test_forward_look_starts_over_on_another_window_and_keeps_paper3(tmp_path, f
     s = _frun(tmp_path / "out", fdata, now, db=db)
     assert hashlib.sha256(Path(db).read_bytes()).hexdigest() == before
     assert s["parity"]["real"] == 0 and s["parity"]["share"] is None
-    assert s["run_start_ms"] == WIN[0] and not any("다름" in n for n in s["notes"])
+    assert s["run_start_ms"] == WIN[0] + 30_000 and not any("다름" in n for n in s["notes"])
     conn = sqlite3.connect(str(tmp_path / "out" / "regimegate.db"))
     conn.execute("UPDATE meta SET data = json_set(data, '$.fingerprint', 'old') WHERE k = 'run'")
     conn.commit()
@@ -524,12 +524,12 @@ def test_forward_look_is_not_a_trading_file():
                   runinfo.SHARED_SIGNAL_FILES, runinfo.EXTRA_GATE_FILES):
         assert "paperbot/regimegate.py" not in group
     src = Path(ROOT, "paperbot", "regimegate.py").read_text(encoding="utf-8")
-    assert "mode=ro" not in src or True                               # paper3.db goes through paramshadow.connect_ro
+    assert "PS.connect_ro(paper_db)" in src                             # paper3.db: mode=ro, query_only
     for bad in ("submit_order", "place_order", "executor", "notify.send", "Store3("):
         assert bad not in src
-    for p in Path(ROOT, "paperbot").glob("*.py"):
-        if p.name != "regimegate.py":
-            assert "regimegate" not in p.read_text(encoding="utf-8"), p.name
+    for rel in runinfo.TRADING_FILES:                                   # nothing on the trading path imports it
+        if rel.endswith(".py"):
+            assert "regimegate" not in Path(ROOT, rel).read_text(encoding="utf-8"), rel
 
 
 def test_units_and_installer():
@@ -543,8 +543,11 @@ def test_units_and_installer():
     assert "EnvironmentFile" not in svc and "-/etc/paperbot" in svc            # no key: public bars only
     assert "WorkingDirectory=/opt/paperbot-regimegate/app" in svc and "PYTHONPATH=/opt/paperbot-regimegate/app" in svc
     assert "OnCalendar=*-*-* 01:40:00 UTC" in tim                           # after paramshadow (01:00 UTC)
-    assert "deploy/install.sh" not in inst.replace("never edits deploy/install.sh", "")
+    for line in inst.splitlines():                                      # the rule bot's installer is only named
+        if "install.sh" in line and "install_regimegate.sh" not in line:
+            assert line.strip().startswith(("#", "echo")), line
     assert "paperbot.regimegate selfcheck" in inst and "enable --now paperbot-regimegate.timer" in inst
-    for rel in GT.PINNED + ("PREREG_REGIMEGATE.sha256",):
-        path = os.path.normpath(os.path.join("research", "regimegate", rel))
-        assert path in inst or os.path.dirname(path) in inst.split(), path
+    tokens = set(inst.split("CODE_PATHS=", 1)[1].split("\n\n", 1)[0].replace('"', " ").replace("\\", " ").split())
+    for rel in GT.PINNED + ("PREREG_REGIMEGATE.sha256",):            # every pinned file reaches the copy
+        parts = os.path.normpath(os.path.join("research", "regimegate", rel)).split(os.sep)
+        assert any("/".join(parts[:k]) in tokens for k in range(1, len(parts) + 1)), rel

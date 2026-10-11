@@ -389,7 +389,16 @@ def run(paper_db: Optional[str], out_dir: str, source, rest, brackets: dict, spe
     stop = min(yesterday, last_day)
     remaining = max(0, (day_start(stop) - day_start(nxt)) // DAY + 1) if nxt <= stop else 0
     notes += live_code_notes(live_root)
-    conn = PS.connect_ro(paper_db) if paper_db and os.path.exists(paper_db) else None
+    conn = None
+    if paper_db and os.path.exists(paper_db):
+        try:
+            conn = PS.connect_ro(paper_db)
+            conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
+        except sqlite3.Error as exc:                 # the look does not need it: parity is left empty
+            if conn is not None:
+                conn.close()
+            notes.append(f"paper3.db를 읽지 못함({type(exc).__name__}): 실제 계좌와의 재현 비율은 비움")
+            conn = None
     try:
         summ = summarize(store, conn, names, tfs, win, through, last_day, now_ms, settings, notes, remaining, n_flip)
     finally:
@@ -494,7 +503,8 @@ def summarize(store, conn, names, tfs, win, through, last_day, now_ms, settings,
     end = day_start(through) + DAY if through else win[0]
     run_start = PS.run_start_ts(conn) if conn is not None else None
     if conn is None:
-        notes = notes + ["paper3.db 없음: 실제 계좌와의 재현 비율은 비움"]
+        if not any("paper3.db" in n for n in notes):
+            notes = notes + ["paper3.db 없음: 실제 계좌와의 재현 비율은 비움"]
     elif run_start is not None and abs(run_start - win[0]) >= MIN:
         notes = notes + [f"규칙봇 실행 시작({PS._md(utc_day(run_start))} {run_start % DAY // 60_000 // 60:02d}:"
                          f"{run_start % DAY // 60_000 % 60:02d} UTC)이 미리 정한 시작과 다름: 기간은 미리 정한 그대로"]

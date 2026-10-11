@@ -1,0 +1,43 @@
+# 장세 문지기 밤 계산 (paperbot/regimegate.py, docs/regime-gate-ko.md; research/regimegate/PREREG_REGIMEGATE.md 5.2):
+# every default signal of the rule bot's 36 strategies since the v4 run's start (10-05 18:35 UTC, to 10-30), each its
+# own $5,000 trade at the live exit, with the market state of its signal bar; the gates' allowed vs blocked signals.
+# A LOOK, never the verdict (that is research/regimegate/gate.py forward on Binance's public files, from 10-31).
+# NOT trading: paper3.db is opened read-only (mode=ro, query_only), no order, no account change, no Telegram of its own,
+# no key (public klines, mark prices and funding; the leverage brackets of the pinned research/fullgrid/exchange.json).
+# Runs from its own code copy (/opt/paperbot-regimegate/app, deploy/regimegate/install_regimegate.sh), never from the
+# rule bot's tree, which it only reads to note a different engine. Writes only /var/lib/paperbot/regimegate (the
+# folder is writable as for paperbot-paramshadow so SQLite can read paper3.db's write-ahead log; every other file and
+# folder there is read-only below). Exit 2 = it could not run (pin, definitions, bars): one Korean warning
+# (paperbot-failed@). Started by paperbot-regimegate.timer.
+[Unit]
+Description=paperbot regime-gate look of the 36 strategies (read-only, no orders)
+After=network-online.target paperbot-paramshadow.service
+Wants=network-online.target
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/paperbot-regimegate/app
+Environment=PYTHONDONTWRITEBYTECODE=1
+# this copy first, before the rule bot's tree that the venv's paperbot-app.pth adds
+Environment=PYTHONPATH=/opt/paperbot-regimegate/app
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.regimegate run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/regimegate
+# Below the live runner: low CPU and disk priority, bounded memory and time. One process. The first run fetches ~430
+# days of 5m bars per coin before the window (paced 1.5 s a call, ~13 minutes, the labels' history) and replays the
+# window so far; later nights fetch about one call per coin and replay one day.
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=1500M
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/shadow200 -/var/lib/paperbot/dscheck -/var/lib/paperbot/paramshadow -/var/lib/paperbot/lab -/var/lib/paperbot/ghcoin -/var/lib/paperbot/obsidian -/var/lib/paperbot/rehearsal -/var/lib/paperbot/failalert /opt/paperbot-regimegate -/opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

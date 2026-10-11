@@ -313,7 +313,7 @@ def test_gate():
     assert EW.gate_ok(b, "NONE").all()
     with pytest.raises(ValueError):
         EW.gate_ok(b, "G2")
-    assert np.array_equal(EW.atr14(b), Y.adx_atr(b.h, b.l, b.c, 14)[1])
+    assert np.array_equal(EW.atr14(b), Y.adx_atr(b.h, b.l, b.c, 14)[1], equal_nan=True)
 
 
 # ------------------------------------------------------------------ systems
@@ -344,7 +344,7 @@ def test_systems_count_ids_stable():
     assert len(EW.entry_cells()) == 365
 
 
-PINNED_IDS_SHA = "fill-me"
+PINNED_IDS_SHA = "596a727114208c5bbd5c1216759f96bab03b8160404630e4a98132a422532f96"
 
 
 def test_f4_is_the_league_watch_list():

@@ -1,0 +1,10 @@
+[Unit]
+Description=paperbot regime-gate look at 01:40 UTC (10:40 KST, after the custom-value shadow at 01:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 01:40:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
