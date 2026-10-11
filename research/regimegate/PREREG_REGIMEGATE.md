@@ -42,8 +42,8 @@ the ones it blocks, and do the let-through signals make money after costs?
 So the history part can be roughly reconstructed from published per-strategy tables; it is a check, not a blind test.
 The gate rules below come from the owners' words, and the classes from the catalog's style column (which describes the
 entries, not their results). G2 (volatility) was proposed after ANALYSIS 5-5 had noted a weak hint for a volatility
-split under the 4 ATR + 3R exit. **The forward part (section 5.2) is the blind test, and no gate becomes a candidate
-without it (section 8).**
+split under the 4 ATR + 3R exit. **The forward part (section 5.2) is the test that counts: nobody has cut its data by
+this gate's labels and classes, and no gate becomes a candidate without it (section 8).**
 
 **Smoke runs before pinning** (no result): synthetic tables only (`tests/test_regimegate.py`), and one plumbing run on
 2020-01-10 .. 2020-01-12 (BTC 15m, three cells) that checked array shapes and that the forward recomputation equals the
@@ -203,8 +203,9 @@ candidates over the 16 lines (the lines share data, so this is a rough figure).
 * A candidate changes nothing by itself: the rule bot's 36, its accounts and its day-30 verdict are untouched, and no
   real money follows from this test. Putting a candidate filter into a paper design is the owners' decision.
 * A forward fail with about 25 days of data does not prove the gate useless; it means this test could not show it.
-  The power is low: the context study above estimated that live signals of all 36 need about 26-36 days to confirm a
-  0.10 R filter and about 165-224 days for a 0.04 R one (its five-year size), so only a large effect can pass forward.
+  The power is low: the context study above estimated that the 36's live signals need about 36 (15m) / 26 (30m) days
+  to show a 0.10 R difference in one context split, and about 224 / 165 days for 0.04 R (the five-year size of such
+  effects), so only a large effect can pass forward.
   A line that fails for too few trades (condition 1) is marked so in `decision.json` and the summary ("건수 부족"):
   it was not testable in that evaluation, and it is still not a candidate.
 * Per-timeframe numbers can suggest where a filter works, but a timeframe-specific filter would need its own forward

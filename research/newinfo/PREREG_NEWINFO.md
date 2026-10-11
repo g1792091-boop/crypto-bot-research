@@ -7,8 +7,8 @@ Written 2026-10-11, before any result of these rules: no signal of the seven def
 real data. Owners' agreement of 2026-10-11, item (A): a pre-registered backtest of seven strategies that use
 information, or a use of it, the 80 strategies of the full grid (research/fullgrid) do not have: crowd positioning,
 funding, open interest and cross-coin strength (none of the 80 uses them); a fade toward the daily VWAP (two DeepSeek
-definitions of the full grid, the F6 pair, use the same daily VWAP but follow its crosses); volume spikes (some of the 80
-use volume, none a spike rule). Owners' words: friend: "추세장 횡보장 매매법을 찾아서 ...
+definitions of the full grid, the F6 pair, use the same daily VWAP but follow its crosses); volume spikes (some of the
+80 use volume, none a spike rule). Owners' words: friend: "추세장 횡보장 매매법을 찾아서 ...
 추세장이면 추세장 매매법을 사용 ... 횡보장이면 진입 금지"; owner: "횡보장에서도 발라먹고 추세장에서도 발라먹는 매매법",
 with the goal of growing a small amount fast. Item (B) of the same agreement, the regime-gate ("장세 문지기") shadow
 judged by 2026-10-31, is registered separately and changes nothing here.
@@ -53,10 +53,9 @@ effect follows from 2.4's rules; nothing is filled.
 - a 5-minute metrics row stamped t only when t + 5 min <= T: the bar's value is the row with the latest such t, and is
   missing when that t < T - 30 min;
 - a funding settlement from its calc time floored to the minute (the minute the 1m archive pays it on): the bar
-  closing at T sees the settlements whose floored calc time is <= T (every calc time is within T's first second,
-  2.2). The settled rate is the last value of the
-  estimated rate the exchange shows live, so a bot can know it at the settlement. A position filled at that minute
-  does not pay it (kernel.py: no funding on the entry minute);
+  closing at T sees the settlements whose floored calc time is <= T (every calc time is within its minute's first
+  second, 2.2). The settled rate is the last value of the estimated rate the exchange shows live, so a bot can know it
+  at the settlement. A position filled at that minute does not pay it (kernel.py: no funding on the entry minute);
 - for the daily VWAP, 1m bars with open < T;
 - other coins' bars closing at or before T;
 - a higher-timeframe bar only once it has closed (its close <= T).
@@ -186,11 +185,11 @@ Periods by the signal bar's close (UTC):
 | H3A, D06 (metrics) | 2021-12-01 .. 2024-01-01 | 2024-01-01 .. 2026-10-01 | BTC only, 2020-09-01 .. 2021-12-01 |
 
 H3A and D06 need the 5-minute metrics, which the archive has for five of the six coins only from 2021-12-01: their
-select period starts at the first full month of data for all six coins. Their trailing windows fill from each coin's
-first metrics day, so roughly the first 2 to 8 weeks of data give no signal; and the account ratio's hole of 2021-12-30 ..
-2022-01-19 (2.3) leaves H3A almost without signals until about February (14-day window) to mid-March 2022 (60-day
-window) on every coin, BTC included. Their extra period is BTC's earlier metrics (from 2020-09-01, windows filled from
-that day): one coin instead of six, so a weaker check than the others'; the report says so next to them.
+select period starts at the first full month of data for all six coins. Their trailing windows fill from each
+coin's first metrics day, so roughly the first 2 to 8 weeks of data give no signal; and the account ratio's hole of
+2021-12-30 .. 2022-01-19 (2.3) leaves H3A almost without signals until about February (14-day window) to mid-March 2022
+(60-day window) on every coin, BTC included. Their extra period is BTC's earlier metrics (from 2020-09-01, windows
+filled from that day): one coin instead of six, so a weaker check than the others'; the report says so next to them.
 
 **6.1 Select** (select period only), per cell, over the (numbers, exit) pairs with >= 150 trades. Plateau score =
 median of the pair's mean per-trade P&L and its neighbours' (one number one step up or down with the same exit; or the
@@ -205,10 +204,16 @@ Pick id = "rule|tf|row|exit".
 **6.2 Test.** All of:
 - a. >= 100 test trades;
 - b. mean > 0;
-- c. mean > the coin-flip mean. The pick's test-period signals with the side drawn by a coin, seeds s = 0 .. 9: long
+- c. mean > the coin-flip mean and mean > the same-side mean.
+  Coin-flip mean: the pick's test-period signals with the side drawn by a coin, seeds s = 0 .. 9: long
   when `int(sha256("newinfo-flip|<s>|<pick id>|<coin>|<signal close ms>")[:8], 16)` is even, else short; P&L from the
-  same outcome table, exit and size (a flipped signal the sizing rejects is not a trade). Coin-flip mean = the mean over
-  the 10 seeds of each seed's mean per trade;
+  same outcome table, exit and size (a flipped signal the sizing rejects is not a trade); the mean over the 10 seeds of
+  each seed's mean per trade. It tests the side at the pick's times.
+  Same-side mean: for each of the pick's test trades, the mean P&L of every test-period bar of the same coin and
+  timeframe taken on the same side with the pick's exit (that outcome table's `pnl_normal`, warm-up bars left out, NaN =
+  not a trade, left out); the same-side mean is the average of these values over the pick's test trades. It is what
+  the pick's sides on its coins earn on average at random bar closes, so a rule that is mostly long (or short) does
+  not pass on the market's drift over the test period alone;
 - d. one-sided week-block bootstrap p (run.boot_mean_p: all coins' trades of a UTC week from Monday together, 2,000
   resamples, p = (1 + resamples with mean <= 0) / 2,001, seed `run._seed("newinfo", rule, tf, row, exit, "test")`)
   passing Benjamini-Hochberg at FDR 10% over ALL picks of this batch (one family; a pick with < 100 test trades stays in
@@ -217,9 +222,9 @@ Pick id = "rule|tf|row|exit".
   cost each x 2 (PHASE2_PREREG.md 1; settings vector entries 0, 1, 5, 19; funding stays), the pick's test trades
   recomputed with `kernel.outcomes` (a signal the sizing rejects at x2 is not a trade).
 
-**6.3 Extra** (D01, D04, D05, D08, D10): >= 20 trades in 2020 and mean > 0.
+**6.3 Extra**: >= 20 trades in the rule's extra period (the table above; BTC only for H3A and D06) and mean > 0.
 
-**6.4** A pick passing 6.2 and, where it applies, 6.3 is a **candidate**.
+**6.4** A pick passing 6.2 and 6.3 is a **candidate**.
 
 **6.5** No candidate -> reported as "none". The criteria are not relaxed afterwards. No other cut of the results (per
 coin, side, market state, period, size) is a candidate. These rules are not searched again with other numbers on these
@@ -228,14 +233,15 @@ periods.
 ## 7. Reported with the result (never deciding)
 For every pick (marked 참고용 when it is not a candidate):
 - select / test / extra: trades, mean, win share, sum, at normal and at quarter size; the test p; each coin-flip seed's
-  mean; the test mean at cost x2 and x3.
+  mean; the same-side mean and the pick's share of long trades; the test mean at cost x2 and x3.
 - The account (kernel.account as PREREG.md 6.4: $5,000, one position at a time over the six coins, coin priority BTC,
   ETH, SOL, DOGE, LTC, BCH, compounding, bust below $10) from the rule's select start to 2026-10-01 and over the test
   period alone, at normal and quarter size: final wallet, maximum drawdown at closes, worst calendar month,
   liquidations, bust yes / no.
 - By market state (the 장세 labels of PHASE2_PREREG.md 7, regimes.py: 급변장 / 추세장 / 횡보장 / 보통 on the strategy's
-  own chart at the signal bar), test period: trades and mean per state. A reference for the regime-gate track; no
-  state-filtered rule is a candidate here (6.5).
+  own chart at the signal bar), test period: trades and mean per state. A reference only: no state-filtered rule is a
+  candidate here (6.5), and the regime gate (B) is pinned before this batch has results, so these figures cannot change
+  its rules.
 - Per coin, per side, per calendar year: trades and mean.
 Per cell: pairs with >= 150 select trades, pairs with plateau > 0, the best plateau.
 Files: OUT/select.json, OUT/confirm.json, OUT/RESULTS_KO.md (Korean).
@@ -244,18 +250,24 @@ Files: OUT/select.json, OUT/confirm.json, OUT/RESULTS_KO.md (Korean).
 - Candidates never trade real money directly and never enter the rule bot (paperbot's trading path is not touched).
   They go to a forward paper shadow (a `newinfo` pool in the 후보 리그 or a shadow of its own; same engine and v4
   settings), with per candidate, as WATCH_PREREG.md 1: `cand` (its numbers and exit, normal size), `quarter`, and
-  `flip` (its signal times, coin-flip sides). There is no `base` or `exitonly` (no live default exists).
+  `flip` (its signal times, coin-flip sides). There is no `base` or `exitonly` (no live default exists). Where it runs,
+  its start date and the dates of C1, C2 and C2's repeats are written to `DEVIATIONS_NEWINFO.md` before its first
+  replay; no forward trade of a candidate is looked at before that.
 - Forward data: from 2026-10-01 00:00 UTC (the first day after the study's data), replayed, then live, with the timing
   of 2.4. The exchange's REST history of the metrics series covers only the last 30 days, so the shadow keeps its own
   metrics history, seeded from the daily archive; a day whose live values differ from the archive's later daily file
-  is logged.
+  is logged. Live rows are put on the archive's stamps (the offset between the REST timestamp and the archive's
+  `create_time` for the same row is measured on the first day both exist and recorded) before 2.4's 5-minute rule is
+  applied, so forward and backtest use the same timing.
 - Checks as WATCH_PREREG.md 3, the batch's candidates as one pool: the warning band from each candidate's test-period
   trades (n = 10, 20, 30, 50, 100; 5th percentile); per account from 30 closed trades: mean > 0 and > its `flip`;
   **C1**, one month after the shadow starts: the pool stops when its `cand` mean is below its `flip` mean; **C2**, two
   months after the start: the pool passes when the `cand` pool mean is > 0 with a one-sided week-block bootstrap
-  p < 0.05 (2,000 resamples of the pool's weekly sums, seed sha256 of "newinfo|" + date), > the `flip` pool mean, and
+  p < 0.05 (2,000 resamples of the pool's weekly sums, seed sha256 of "newinfo|" + date), > the `flip` pool mean and
+  above the same-side pool mean (6.2c on the forward days: every forward bar of the trade's coin and timeframe on its
+  side with its exit, `kernel.outcomes` on the forward 1m data, averaged over the pool's closed `cand` trades), and
   there are >= 100 closed `cand` trades; with fewer trades C2 is repeated monthly, at most until four months after the
-  start, after which the pool ends without a verdict.
+  start, after which the pool ends without a verdict. Trades count when closed before 00:00 UTC of the check date.
 - A pool passing C2 lets the owners consider real money for its candidates only, at 1/4 size or smaller, with an
   amount they can lose, the executor's limits on and the testnet drill done. The decision is theirs. The 10/19 $100
   trial does not use these candidates.
@@ -273,29 +285,39 @@ than section 4's, leverage variants, market-state-specific rules.
 The runner prints the git commit and the sha256 of its code files, of the outcome tables it reads and of the metrics
 files. `PREREG_NEWINFO.sha256` pins this file; the code files (research/newinfo/) are added to it after review and
 before any run on real data beyond the smoke slice. Smoke runs on real data: prices and funding of 2020-01-01 ..
-2020-01-03 only, no number of them reported; the metrics code is tried on synthetic data only. Tests before the run,
-on synthetic data: (1) cutting the data at any time X leaves every signal of a bar closing at or before X unchanged,
-for every rule and timeframe; (2) a metrics row is never used before its stamp + 5 minutes, a settlement never before
-its floored calc time, a higher-timeframe bar never before its close; (3) every grid has exactly the size in section 3.
-The run uses at most 2 CPU cores.
+2020-01-03 only (inside every rule's 300-bar warm-up, so no signal and no outcome of a real period can appear), no
+number of them reported; the metrics code is tried on synthetic data only. Tests before the run, on synthetic data:
+(1) cutting the data at any time X leaves every signal of a bar closing at or before X unchanged, for every rule and
+timeframe; (2) a metrics row is never used before its stamp + 5 minutes, a settlement never before its floored calc
+time, a higher-timeframe bar never before its close; (3) every grid has exactly the size in section 3; (4) on synthetic
+outcome tables, the plateau with section 4's neighbours, the coin-flip and same-side means and the BH family equal a
+direct computation. The run uses at most 2 CPU cores.
 
 ## 11. Before this file was fixed (what was already known)
 - No signal of these seven definitions has been computed on real data. The data were looked at only for coverage: the
   first and last available metrics days (data/orderflow/MANIFEST.json and HTTP status), the funding interval hours per
-  coin, column names and the outcome tables' array shapes.
+  coin, column names and the outcome tables' array shapes. The review of 2026-10-11 added, also coverage only: the
+  holes of the two metrics columns (2.3), the funding files' interval column and calc-time seconds (2.2), the sha256 of
+  the archive files and of exchange.json (2.1, 2.5).
 - Earlier related tests whose results the authors had seen (other engines, costs, exits and periods; per trade at 1x):
-  - research/orderflow (2026-09-30; 70 combinations, 0 passed): the funding fade lost in both periods; the open-interest
-    rules lost in select and were near zero on check; the crowd fade H3A was the only rule positive in both periods
-    (+0.037% / +0.034%, p = 0.33).
-  - research/maker round 2: H3A with a limit entry, +0.23% / +0.18% (p = 0.01; not locked: too weak for the number of
-    tests, bust at 20x).
-  - research/library: the 4h volume spike in candle direction was positive in all three of its periods (+0.09% /
-    +0.41% / +1.79% without filter), long and short inconsistent, unusable at 20x.
-  - research/famous: daily cross-coin rotation and long/short lost on check.
+  - research/orderflow (2026-09-30; 70 combinations, 0 passed; select 2021-08 .. 2024-06, check 2024-07 .. 2026-09):
+    the funding fade lost in both periods; the open-interest rules lost in select and were near zero on check; the
+    crowd fade H3A was the only rule positive in both periods (+0.037% / +0.034%, p = 0.33).
+  - research/maker round 2 (same periods): H3A with a limit entry, +0.23% / +0.18% (p = 0.01; not locked: too weak for
+    the number of tests, bust at 20x).
+  - research/library (select 2021-08 .. 2024-06, check 2024-07 .. 2026-09, third period 2020-01 .. 2021-07): the 4h
+    volume spike in candle direction was positive in all three of its periods (+0.09% / +0.41% / +1.79% without
+    filter), long and short inconsistent, unusable at 20x.
+  - research/famous (2021-08 .. 2026-09): daily cross-coin rotation and long/short lost on check.
   - The full grid (2026-10-10): 0 of 711 picks passed; 4h carried the least cost; the 38 watch picks (chosen after the
-    test period) mostly use tp3R exits with wide stops. That informed section 4's exits; the coin-flip control (6.2c)
-    uses the same exit, so an exit alone cannot pass.
-- H3A and D01 are in this batch partly because of those positive numbers, and their test period here overlaps periods
-  already seen (2024-07 .. 2026-09 in research/orderflow, research/maker and research/library). A pass of theirs is
-  weaker evidence than a pass of a rule nobody had looked at; the report says so next to them, and only the forward
-  check (section 8) is clean evidence for them.
+    test period) mostly use tp3R exits with wide stops. That informed section 4's exits, so the exit list itself was
+    chosen with knowledge of this test period; both controls of 6.2c use the pick's exit, so an exit that earns at any
+    side or time does not make a pick pass by itself.
+- H3A and D01 are in this batch partly because of those positive numbers. H3A's select and test periods lie inside
+  the periods research/orderflow and research/maker had already shown, and so do the last four months of its BTC extra
+  period (2021-08 .. 2021-11); D01's select, test and extra (2020) periods all overlap research/library's three
+  periods. D04, D06 and D08 had related rules seen losing over 2021-08 .. 2026-09. A pass of H3A or D01 is weaker
+  evidence than a pass of a rule nobody had looked at; the report says so next to them.
+- The test period 2024-01 .. 2026-09 has also been used by the full grid (711 picks) and the studies above, so the
+  correction of 6.2d covers this batch only, not the searching done on that period before. For every rule here, only
+  the forward check (section 8) is clean evidence.
