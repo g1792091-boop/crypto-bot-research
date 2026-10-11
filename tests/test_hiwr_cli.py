@@ -285,7 +285,7 @@ def test_pinlist_is_deterministic_in_fresh_processes():
     H._REQUIRED.clear()
     b = H.required_files()
     assert a == b and a == sorted(a)
-    import research.hunt  # noqa: F401  (an extra module loaded here does not change the list)
+    __import__("importlib").import_module("research.hunt")    # an extra module loaded here changes nothing
     H._REQUIRED.clear()
     assert H.required_files() == a
     cli = subprocess.run([sys.executable, "-m", "research.hiwr.hiwr", "pinlist"], cwd=ROOT, capture_output=True,
@@ -609,3 +609,35 @@ def test_test_kit_folder_with_files_is_refused(tmp_path):
     (d / "1m" / "BTCUSDT.npz").write_bytes(b"x")
     with pytest.raises(H.PinError, match="before the picks"):
         H.ensure_test_kit(str(d), "a" * 64, {"pin_sha256": "b" * 64}, {"coins": {}})
+
+
+def test_pin_lines_cannot_be_superseded_except_reads(tmp_path, monkeypatch):
+    state = str(tmp_path)
+    os.makedirs(os.path.join(state, "research", "hiwr"))
+    monkeypatch.setattr(H, "STATE", [state])
+    monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_t.txt")
+    monkeypatch.setattr(H, "READS_RELS", ("research/hiwr/out/fake_reads.py",))
+    monkeypatch.setattr(H, "required_files", lambda: [H.MANIFEST_SEL_REL])
+    monkeypatch.setattr(H, "content_problems", lambda: [])
+    man = H.rpath(H.MANIFEST_SEL_REL)
+    with open(man, "w") as fh:
+        fh.write("{}")
+    rd = H.rpath("research/hiwr/out/fake_reads.py")
+    os.makedirs(os.path.dirname(rd))
+    with open(rd, "w") as fh:
+        fh.write("a = 1\n")
+    with open(H.rpath(H.PIN_REL), "w") as fh:
+        fh.write(f"{H.sha256_file(man)}  {H.MANIFEST_SEL_REL}\n")
+    H.append_pin("research/hiwr/out/fake_reads.py")
+    assert H.check_pin("select")["lines"] == 2
+    with open(rd, "w") as fh:
+        fh.write("a = 2\n")                                   # a fixed reads module, appended again: superseded
+    with pytest.raises(H.PinError, match="changed"):
+        H.check_pin("select")
+    H.append_pin("research/hiwr/out/fake_reads.py")
+    assert H.check_pin("select")["superseded_reads_lines"] == ["research/hiwr/out/fake_reads.py"]
+    with open(man, "w") as fh:
+        fh.write('{"x": 1}')                                   # any other file: an appended line does not help
+    H.append_pin(H.MANIFEST_SEL_REL)
+    with pytest.raises(H.PinError, match="changed research/hiwr/data_manifest_sel.json"):
+        H.check_pin("select")

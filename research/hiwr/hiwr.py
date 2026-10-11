@@ -374,13 +374,19 @@ def check_pin(step: str) -> dict:
     last = {}
     for h, p in rows:
         last[p] = h
-    bad = []
-    for p, h in last.items():
+    bad, superseded = [], []
+    cur: dict = {}
+    for h, p in rows:
         full = rpath(p)
-        if not os.path.exists(full):
+        if p not in cur:
+            cur[p] = sha256_file(full) if os.path.exists(full) else None
+        if cur[p] is None:
             bad.append(f"missing {p}")
-        elif sha256_file(full) != h:
-            bad.append(f"changed {p}")
+        elif cur[p] != h:
+            if p in READS_RELS and last[p] == cur[p]:
+                superseded.append(p)       # an older line of a fixed reads module: post hoc (DEVIATIONS.md)
+            else:
+                bad.append(f"changed {p}")
     for p in required_files():
         if p not in listed:
             bad.append(f"not pinned {p}")
@@ -390,8 +396,12 @@ def check_pin(step: str) -> dict:
     if step in ("test", "reads") and PICKS_REL not in listed:
         bad.append(f"{PICKS_REL} is not pinned: run select first")
     if bad:
-        raise PinError(f"{PIN_REL} does not match: " + "; ".join(bad))
-    return {"pin_file": PIN_REL, "pin_sha256": sha256_file(rpath(PIN_REL)), "lines": len(rows)}
+        raise PinError(f"{PIN_REL} does not match: " + "; ".join(sorted(set(bad))))
+    out = {"pin_file": PIN_REL, "pin_sha256": sha256_file(rpath(PIN_REL)), "lines": len(rows)}
+    if superseded:
+        out["superseded_reads_lines"] = sorted(set(superseded))
+        log(f"pin: older lines of {out['superseded_reads_lines']} are superseded (post hoc, DEVIATIONS.md)")
+    return out
 
 
 def stamp(pin: dict | None) -> dict:
