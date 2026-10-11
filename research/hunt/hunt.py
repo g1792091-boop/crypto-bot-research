@@ -1668,7 +1668,7 @@ def run_controls(mk: Market, spec: dict, study: str, r: float, procs: int, n_see
     sig = system_signals(mk, spec)
     tasks = [(mk.key, spec, study, ctl, s, r) for ctl in ("a", "b") for s in range(1, n_seeds + 1)]
     _G["mk"][mk.key] = mk
-    res = pmap(_control_task, tasks, procs)
+    res = pmap(_control_task, tasks, procs, label=f"controls {spec['id']} {mk.period} r={r:g}")
     out = {"a": [], "b": []}
     for (_, _, _, ctl, s, _), lnM in zip(tasks, res):
         out[ctl].append(lnM)
@@ -1718,15 +1718,65 @@ def judge(base: dict, cost2: dict, ctl: dict | None, study: str, spec: dict, per
 
 # ------------------------------------------------------------------ parallel map (fork: workers inherit the data)
 _G: dict = {"mk": {}}
+MAX_RESTARTS = 5
+PROGRESS_EVERY_S = 60.0
 
 
-def pmap(fn, tasks: list, procs: int) -> list:
-    if procs <= 1 or len(tasks) <= 1:
-        return [fn(t) for t in tasks]
+def _progress(label: str, done: int, n: int, t0: float, last: float) -> float:
+    now = time.time()
+    if label and (now - last >= PROGRESS_EVERY_S or (done == n and now - t0 >= 5.0)):
+        print(f"[{label}] {done}/{n} done, {now - t0:.0f}s", flush=True)
+        return now
+    return last
+
+
+def pmap(fn, tasks: list, procs: int, label: str = "") -> list:
+    """``[fn(t) for t in tasks]`` in ``procs`` forked processes (workers inherit the loaded data), results in task
+    order. Progress is printed every minute. A worker that dies (out of memory, killed) breaks the pool: the pool is
+    rebuilt with fewer workers and only the unfinished tasks are sent again, at most MAX_RESTARTS times, then the
+    step stops with a message (it never hangs). An exception inside ``fn`` stops the step at once."""
+    n = len(tasks)
+    t0 = last = time.time()
+    if procs <= 1 or n <= 1:
+        out = []
+        for i, t in enumerate(tasks):
+            out.append(fn(t))
+            last = _progress(label, i + 1, n, t0, last)
+        return out
     import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures.process import BrokenProcessPool
     ctx = mp.get_context("fork")
-    with ctx.Pool(min(procs, len(tasks))) as pool:
-        return pool.map(fn, tasks, chunksize=max(1, len(tasks) // (procs * 8)))
+    res: dict = {}
+    workers = min(procs, n)
+    for attempt in range(MAX_RESTARTS + 1):
+        todo = [i for i in range(n) if i not in res]
+        if not todo:
+            break
+        ex = ProcessPoolExecutor(min(workers, len(todo)), mp_context=ctx)
+        futs = {}
+        try:
+            futs = {ex.submit(fn, tasks[i]): i for i in todo}
+            for f in as_completed(futs):
+                res[futs[f]] = f.result()
+                last = _progress(label, len(res), n, t0, last)
+            ex.shutdown(wait=True)
+            break
+        except BrokenProcessPool:
+            for f, i in futs.items():                 # keep what finished before the pool broke
+                if f.done() and not f.cancelled() and f.exception() is None:
+                    res[i] = f.result()
+            ex.shutdown(wait=False, cancel_futures=True)
+            workers = max(1, workers * 3 // 4)
+            print(f"[{label or 'pmap'}] a worker died; {n - len(res)} of {n} left, restarting with {workers} "
+                  f"workers ({attempt + 1}/{MAX_RESTARTS})", flush=True)
+        except BaseException:
+            ex.shutdown(wait=False, cancel_futures=True)
+            raise
+    if len(res) < n:
+        raise SystemExit(f"[{label or 'pmap'}] workers keep dying (memory?): stopped with {n - len(res)} of {n} "
+                         "unfinished")
+    return [res[i] for i in range(n)]
 
 
 # ------------------------------------------------------------------ systems
