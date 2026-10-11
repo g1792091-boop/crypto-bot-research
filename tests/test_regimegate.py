@@ -1,13 +1,20 @@
 """research/regimegate/gate.py (PREREG_REGIMEGATE.md): the style map, the gates, the block bootstrap, the coin-flip
-control, the verdict lines and the decision, on hand-made numbers only (no market data)."""
+control, the verdict lines and the decision, on hand-made numbers only (no market data). Then the nightly look
+(paperbot/regimegate.py) on synthetic bars: its labels equal research/fullgrid/regimes.py, a night split in pieces gives
+the same signals and trades as one night, the window's edges, paper3.db untouched, the units and the installer."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import os
+import sqlite3
 import sys
+from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
