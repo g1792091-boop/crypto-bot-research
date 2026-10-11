@@ -357,8 +357,11 @@ Prices sit in an env-overridable, versioned table; owners re-check them in the c
   Not sent (`budget`) if month spend + open reservations + this > 95% of the monthly cap, or day spend + this > daily
   cap (open reservations are left out of the daily test on purpose: a burst bar of 30-40 parallel asks would otherwise
   block itself on worst-case reservations that a 55 s answer can never use).
-* Caps (owners may change before D0): console workspace `hunt-judge` monthly limit **$700**; code: stop all calls at
-  95% ($665), daily **$45**. Month and day boundaries are UTC (09:00 KST), as V3 8-1.
+* Caps (owners may change before D0): console workspace `hunt-judge` monthly limit **$2,000**; code: stop all calls at
+  95% ($1,900), daily **$120**. Month and day boundaries are UTC (09:00 KST), as V3 8-1. Raised from $700 / $45 on
+  2026-10-11 after the owners said cost does not matter ("비용은 신경 쓰지마 괜찮아"): the picks may be up to 10 or more
+  (wide hunt, batched test), so S1 volume can be several times the single-pick estimate. The caps only stop runaway
+  failures (a loop of calls); they are not a budget.
 * Shedding order, so a cap never removes judged asks before the twin: the S1 twin stops for the rest of the UTC day
   when day spend reaches 60% of the daily cap, and for the rest of the month when projected month-end spend exceeds
   95%; only then can the primary or S3 hit `budget`. (A heavy day of 60 S1 asks at long thinking costs about $52 with
@@ -602,9 +605,13 @@ Everything is console spend before tax; card charges add tax, foreign-payment fe
    Fable 5.1 with the Opus 5.5 twin recorded.
 2. Server-side refusal fallbacks: off by design (6.1). Default off.
 3. Ask N-class (gate-blocked) events in S1: default yes; requires the hunt bot to record every event (section 3).
-4. S3 with web search as a separate second discretionary account: default no in v1 (needs its own pre-registration).
-5. Caps $700/month, $45/day: default as written. The org-wide spend limit is shared with the V3 AI trader and the debate
-   room if they run in the same org: owners check the console (tier, org limit, data retention for Fable 5.1).
+4. S3 with web search as a separate second discretionary account (`AI_DISC_WEB`): default changed to **yes** on
+   2026-10-11 (owners: cost does not matter). It is a different kind of information (news), so it is its own account
+   with its own pre-registration and its own coin-flip comparison; it never mixes with `AI_DISC`. It starts with the
+   others if its pre-registration is pinned in time, otherwise later.
+5. Caps $2,000/month, $120/day (raised 2026-10-11, section 11). The org-wide spend limit is shared with the V3 AI trader
+   and the debate room if they run in the same org: owners check the console (tier, org limit, data retention for Fable
+   5.1).
 6. Key: default a new workspace `hunt-judge` with its own key and spend limit, placed by the owners with `sudoedit`.
    (Copying the existing server's key file server-to-server is possible but shares that workspace's limit.)
 7. PREREG_HUNT section 15 "paper bot server" -> the new server: must be changed before the hunt pin.
