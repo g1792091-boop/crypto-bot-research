@@ -6,6 +6,7 @@ import {h, s} from "./dom.js";
 import * as fmt from "./fmt.js";
 import {getJSON} from "./api.js";
 import {pill} from "./ui.js";
+import {acctFig} from "./v4kit.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO} from "./labels.js";
 
 export const EQUITY = 5000;
@@ -42,6 +43,11 @@ export function paceLine(d, n, min = 300) {
 }
 
 export const leagueDay = (d) => (d && d.start_ms ? Math.max(1, Math.floor((d.done_ms - d.start_ms) / DAY) + 1) : 0);
+/** The calendar day of the league in Korea (10/01 = D+1), whatever the engine has processed: the top pill's "D+n" (a
+ *  replay from 10/01 does not turn it back to D+4). ``now`` defaults to the device's clock. */
+const KST_MS = 9 * 3600000;
+export const calDay = (d, now = Date.now()) => (d && d.start_ms
+  ? Math.max(1, Math.floor((now + KST_MS) / DAY) - Math.floor((d.start_ms + KST_MS) / DAY) + 1) : 0);
 
 /** Still replaying from 10/01 after the install (the processed time has not reached the install time yet). */
 export const catchingUp = (d) => !!(d && d.started_ms && d.done_ms < d.started_ms - 30 * 60000);
@@ -96,6 +102,24 @@ export const kindChip = (kind) => h("span", {class: ["cl-kind", `k-${kind}`]}, K
 /** The role's coloured square and name (colour never alone: the name is always there). */
 export const roleChip = (role, short) => h("span", {class: ["cl-role", `r-${role}`]}, h("i", {"aria-hidden": "true"}), short ? short : ROLE_KO[role]);
 export const styleChip = (style) => (style ? h("span", {class: ["cl-style", `s-${style}`]}, STYLE_KO[style]) : null);
+
+/** The account's pixel character (v4kit acctFig): the hue by strategy (all five accounts of a pick look alike), the
+ *  role by its head: 동전 a coin, 1/4 a cap, 청산만 a visor, 기본값 grey, 후보 its own hair. aria-hidden. */
+const strHue = (s) => { let x = 2166136261; for (const c of String(s)) { x ^= c.codePointAt(0); x = Math.imul(x, 16777619); } return ((x >>> 0) % 12) * 30; };
+export function fig(a, size = 20) {
+  const role = a && a.role;
+  const kind = role === "flip" ? "flip" : role === "quarter" ? "adaptive" : role === "exitonly" ? "friend" : role === "base" ? "base" : "fixed";
+  return acctFig({id: (a && a.id) || "", kind}, size, {hue: strHue((a && a.name) || "")});
+}
+/** 잔고 수익률: the wallet against the $5,000 start (closed trades; a fraction), null when hidden or unknown. */
+export const walletRet = (a) => (a && a.wallet != null && Number.isFinite(Number(a.wallet)) ? Number(a.wallet) / EQUITY - 1 : null);
+/** The account against its pick's 동전 account on 한 번 평균 (better()): true / false / null (no flip, no trades, hidden). */
+export function vsFlip(a, ix = index()) {
+  const pk = pickOf(a, ix);
+  const flip = pk ? ix.byId[roleId(pk, "flip")] : null;
+  if (!a || !flip || flip.id === a.id) return null;
+  return better(a, flip);
+}
 
 /** True when this account's money is hidden by the server (DeepSeek with CANDLEAGUE_DS_MONEY=0), never for a row that
  *  simply has no trade yet. */

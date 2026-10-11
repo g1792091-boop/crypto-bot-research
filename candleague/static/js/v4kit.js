@@ -13,8 +13,8 @@ import {tfKo} from "./labels.js";
 
 // ================================================================ motion (v4 core/motion.js, the parts the demo uses)
 const RM = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : {matches: false};
-/** True when the viewer asked the system for less motion (every helper here then does nothing). */
-export const reduced = () => !!RM.matches;
+/** True when the viewer asked the system (or 설정 › 숫자 움직임 줄이기) for less motion (every helper here then does nothing). */
+export const reduced = () => !!RM.matches || (typeof document !== "undefined" && document.documentElement.dataset.motion === "less");
 /** True while the page is on screen (one-shots are skipped while it is hidden: nobody sees them). */
 export const visible = () => typeof document === "undefined" || !document.hidden;
 const still = () => reduced() || !visible();
@@ -158,11 +158,12 @@ export const STRAT_HUE = {S2: 42, N02: 185, N04: 300};
  * acctFig(account, size) -> <svg class="sfig"> the account's pixel character (v4 stratFigure recipe, 12 x 12 cells,
  * head and shoulders, fixed per account): the body hue by strategy, the hair by the account id; 자동 교체 wears a cap
  * (it changes its setting), 친구 규칙 a visor, a coin flip has a coin for a head (grey: the baseline), a private
- * plug-in a hood. aria-hidden: the name goes next to it. No idle motion (lists stay still).
+ * plug-in a hood, a 기본값 account (kind "base", 후보 리그) grey clothes. o.hue: the body hue (후보 리그: by strategy).
+ * aria-hidden: the name goes next to it. No idle motion (lists stay still).
  */
-export function acctFig(a, size = 20) {
+export function acctFig(a, size = 20, o = {}) {
   const kind = (a && a.kind) || "fixed", id = String((a && a.id) || ""), k = hash(id);
-  const hue = kind === "flip" ? null : kind === "private" ? 230 : STRAT_HUE[a && a.short] ?? (k % 12) * 30;
+  const hue = kind === "flip" ? null : o.hue != null ? o.hue : kind === "private" ? 230 : STRAT_HUE[a && a.short] ?? (k % 12) * 30;
   const kids = [px(0, 0, 12, 12, "abg")];
   if (kind === "flip") {
     kids.push(px(3, 1, 6, 6, "ac"), px(2, 2, 8, 4, "ac"), px(5, 2, 2, 4, "acs"), px(4, 3, 4, 2, "acs"), px(4, 7, 4, 1, "as"));

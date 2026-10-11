@@ -34,7 +34,8 @@ paperbot/dash/tools/regime5y.py paperbot/engine.py paperbot/entry_marks.py paper
 paperbot/margin.py paperbot/models.py paperbot/notify.py paperbot/policy.py paperbot/sizing.py paperbot/sweepsig.py"
 CODE_PATHS="huntbot research/hunt research/fullgrid research/entry_study research/deepseek200 \
 research/library research/search research/famous third_party/sweep $PAPERBOT_FILES"
-DROP="research/entry_study/out research/entry_study/out_binance research/famous/out research/fullgrid/dump_exchange.py"
+DROP="research/entry_study/out research/entry_study/out_binance research/famous/out research/fullgrid/dump_exchange.py \
+research/hunt/dump_exchange30.py"
 # no file of the copy may hold an order path or an exchange key name (paper only)
 ORDER_RE='/fapi/v1/order|/fapi/v2/account|X-MBX-APIKEY|api_secret|BINANCE_API_KEY'
 APT_LOCK="-o DPkg::Lock::Timeout=600"     # a new server's unattended-upgrades holds the apt lock for a few minutes

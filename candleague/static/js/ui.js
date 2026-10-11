@@ -170,3 +170,24 @@ export function progress(frac, text, cls) {
 
 /** A big "준비 중" / "기록 없음" line for a missing part of a file. */
 export const none = (text = "기록 없음") => h("p", {class: "empty"}, text);
+
+// ---------------------------------------------------------------- a screen's own stylesheet
+const CSS_LOADED = new Map();
+/** css("scr/rank.css") -> a Promise that resolves once that stylesheet (under /static/) is on the page (or failed, or
+ *  after 1.5 s: a screen never waits longer for its look). Loaded once per page; a screen calls it first in mount():
+ *  `await ui.css("scr/positions.css")` (or ctx.css). */
+export function css(href) {
+  const url = String(href).startsWith("/") ? String(href) : `/static/${href}`;
+  if (CSS_LOADED.has(url)) return CSS_LOADED.get(url);
+  const p = new Promise((resolve) => {
+    const link = h("link", {rel: "stylesheet", href: url});
+    let done = false;
+    const fin = () => { if (!done) { done = true; resolve(link); } };
+    link.addEventListener("load", fin);
+    link.addEventListener("error", fin);
+    setTimeout(fin, 1500);
+    document.head.append(link);
+  });
+  CSS_LOADED.set(url, p);
+  return p;
+}

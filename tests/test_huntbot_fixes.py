@@ -432,7 +432,7 @@ def test_dashboard_sees_only_snap_and_not_the_env_file():
 def _install_lists():
     sh = _read("install_huntbot.sh")
     pb = re.search(r'PAPERBOT_FILES="([^"]+)"', sh, re.S).group(1).replace("\\\n", " ").split()
-    drop = re.search(r'DROP="([^"]+)"', sh, re.S).group(1).split()
+    drop = re.search(r'DROP="([^"]+)"', sh, re.S).group(1).replace("\\\n", " ").split()
     return sh, pb, drop
 
 

@@ -75,3 +75,13 @@ export const textCycle = (onPick, cls) => cycler("text", TEXT_SIZES, textNow, ap
 /** The half-moon 화면 색 button: AI ↔ 클래식 (v4 skinCycle). */
 export const skinCycle = (onPick, cls) => cycler("skin", SKINS, skinNow, applySkin, onPick, {cls: ["skincyc", cls], label: "화면 색",
   title: "화면 색: 이 기기에만 기억합니다", kids: [h("i", {"aria-hidden": "true"})]});
+
+// ---------------------------------------------------------------- 설정 only (settings.js): 첫 화면, 숫자 움직임
+/** 숫자 움직임 줄이기: <html data-motion="less"> (v4kit.reduced() reads it, kit.css stops the animations). */
+export const MOTIONS = [{id: "full", ko: "보통"}, {id: "less", ko: "줄이기"}];
+export const motionNow = () => (document.documentElement.dataset.motion === "less" ? "less" : "full");
+export function applyMotion(id) {
+  if (id === "less") document.documentElement.dataset.motion = "less"; else delete document.documentElement.dataset.motion;
+}
+/** 첫 화면: "" = 자동 (a window 1100 px and wider opens the 터미널, a phone 요약), else a screen id. */
+export const startPref = () => { const v = local.get("start", ""); return typeof v === "string" ? v : ""; };
