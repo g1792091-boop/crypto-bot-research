@@ -353,10 +353,15 @@ class Raw:
             if o not in self.sym_ix or n_ not in self.sym_ix:
                 continue
             so, sn = self.sym_ix[o], self.sym_ix[n_]
-            ob, nb = np.flatnonzero(self.cal[so]), np.flatnonzero(self.cal[sn])
-            if not len(ob) or not len(nb):
+            nb = np.flatnonzero(self.cal[sn])
+            if not len(nb):
                 continue
-            diff = int(nb[0] - ob[-1])
+            # the old symbol's life before the new symbol's first bar (a later relisting of the old name, e.g. LIT,
+            # is another contract and does not count)
+            ol = np.flatnonzero((self.life_sym == so) & (self.life_first < nb[0]))
+            if not len(ol):
+                continue
+            diff = int(nb[0] - self.life_last[ol[-1]])
             if diff <= RENAME_DAYS:                               # first bar within 60 days after the old last bar
                 self.successor[n_] = (o, diff)
                 first_life = np.flatnonzero((self.life_sym == sn) & (self.life_no == 0))
