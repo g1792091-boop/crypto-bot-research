@@ -235,7 +235,9 @@ def fingerprint(settings: Settings, manifest: dict, win: tuple, brackets_doc: by
     h.update(json.dumps(asdict(settings), sort_keys=True, default=str).encode())
     h.update(json.dumps(manifest, sort_keys=True).encode())
     h.update(brackets_doc)
-    files = [os.path.join(ROOT, rel) for rel in PS.ENGINE_FILES + ("paperbot/paramshadow.py",)]
+    # this file too: a label is stored once, so a change to the label or replay code here must not mix with old rows
+    own = ("paperbot/paramshadow.py", "paperbot/regimegate.py")
+    files = [os.path.join(ROOT, rel) for rel in PS.ENGINE_FILES + own]
     files += [os.path.normpath(os.path.join(GT.HERE, rel)) for rel in GT.PINNED]
     for p in files:
         h.update(os.path.relpath(p, ROOT).encode() + b"\0" + (open(p, "rb").read() if os.path.exists(p) else b"-"))
@@ -633,10 +635,25 @@ def _lock(out_dir: str):
         fh.close()
 
 
+def foreign_modules(root: str = ROOT, live_root: str = LIVE_ROOT) -> list[str]:
+    """Loaded modules whose file is in the rule bot's tree instead of this copy. The venv's paperbot-app.pth puts that
+    tree on sys.path after this copy's PYTHONPATH, so a path the installer did not copy would load from it silently."""
+    if not live_root or not os.path.isdir(live_root) or os.path.realpath(live_root) == os.path.realpath(root):
+        return []
+    base = os.path.realpath(live_root) + os.sep
+    out = []
+    for name, mod in list(sys.modules.items()):
+        f = getattr(mod, "__file__", None)
+        if isinstance(f, str) and os.path.realpath(f).startswith(base):
+            out.append(name)
+    return sorted(out)
+
+
 def selfcheck() -> str:
     """What the installer runs as the job's user before the swap: the pin, the definitions, the strength files, the
-    style map covering the 36, the bracket table, the label code. Raises on a problem."""
-    from . import sweepsig
+    style map covering the 36, the bracket table, the label code, the run's own imports (all from this copy). Raises
+    on a problem."""
+    from . import binance, dscheck, recorder, sweepsig  # noqa: F401  binance, dscheck, recorder: run()'s late imports
     from .entry_marks import strength_module
     from .sigservice import strategy_names
     bad = pin_problems()
@@ -655,6 +672,10 @@ def selfcheck() -> str:
     exchange_tables()
     window()
     GT.RG.Y.regimes(np.ones(3), np.ones(3), np.ones(3), 15)
+    foreign = foreign_modules()
+    if foreign:
+        raise RegimeGateError(f"loaded from {LIVE_ROOT}, not this copy (missing from the installer's CODE_PATHS?): "
+                              + ", ".join(foreign[:8]))
     return f"selfcheck ok: {len(names)} strategies, window {_md(utc_day(window()[0]))} ~ {_md(utc_day(window()[1]))}"
 
 
