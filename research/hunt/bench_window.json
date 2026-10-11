@@ -1,0 +1,16 @@
+{
+ "what": "W 7.1: one 30-day window run on synthetic bars (no real price); > 0.03 s -> R1 rolling control seeds 1-50, else 1-100",
+ "window_run_30d_s": 0.0097411920032755,
+ "runs_s": [
+  0.00977,
+  0.00955,
+  0.00974,
+  0.00961,
+  0.01035
+ ],
+ "coins": 30,
+ "tf": "1h",
+ "signals_per_coin_per_day": 1.0,
+ "cpu_count": 4,
+ "utc": "2026-10-11T14:01:45.880778+00:00"
+}

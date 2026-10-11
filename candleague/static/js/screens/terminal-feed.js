@@ -25,7 +25,7 @@ export function coinStrip(ctx, st, onPick) {
     const px = h("span", {class: "num tm-wpx"}, "—"), chg = h("span", {class: "num tm-wch"}, "");
     const pos = h("span", {class: "tm-wpos muted"}, "—");
     const b = h("button", {type: "button", class: "tm-wr", role: "option", "aria-selected": String(c === st.coin), onclick: () => onPick(c),
-      title: `${coinShort(c)} 보기`}, h("span", {class: "tm-wtop"}, h("b", null, coinShort(c)), px, chg), pos);
+      title: `${coinShort(c)} 보기`}, h("span", {class: "tm-wtop"}, h("b", null, coinShort(c)), px), h("span", {class: "tm-wbot"}, chg, pos));
     rows.set(c, {b, px, chg, pos});
     return b;
   }));
@@ -51,7 +51,7 @@ export function coinStrip(ctx, st, onPick) {
       let pnl = 0, known = 0;
       if (allowed) for (const p of ps) { const u = livePnl(p, markOf(c)); if (u) { pnl += u.pnl; known += 1; } }
       const tone = known ? (Math.abs(pnl) < 0.005 ? "flat" : pnl > 0 ? "up" : "down") : "flat";
-      put(r.pos, L ? h("span", {class: "up"}, `롱 ${fmt.int(L)}`) : null, L && S ? " · " : null, S ? h("span", {class: "down"}, `숏 ${fmt.int(S)}`) : null,
+      put(r.pos, h("span", {class: "up"}, `${fmt.int(L)}↑`), " ", h("span", {class: "down"}, `${fmt.int(S)}↓`),
         k.on ? h("i", {class: "tm-crowd", "aria-label": "한 방향 몰림"}) : null, known ? h("i", {class: ["tm-wdot", tone], "aria-hidden": "true"}) : null);
       r.pos.className = "tm-wpos num";
       r.pos.title = `${coinShort(c)}에 열린 포지션 ${fmt.int(ps.length)}개 (롱 ${fmt.int(L)} · 숏 ${fmt.int(S)})`

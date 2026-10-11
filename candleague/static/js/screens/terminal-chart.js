@@ -22,6 +22,7 @@ import {panel, ping, mmss, TFS, TF_MS, TF_SHORT, hiddenPos, hiddenFill, pctOf} f
 const two = (x) => String(x).padStart(2, "0");
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
 const MAX_CHIPS = 5;
+const NEAR = 0.0005;                    // entries this close share one chip (the rule bot's chart-lines.js)
 const CHIP_H = 20;
 
 /** termChart(ctx, st, hooks) -> {el, ready, setCoin(), setTf(), setSel(), onPositions(doc), onLive(), onBook(), tick(), dispose()}
@@ -88,28 +89,54 @@ export function termChart(ctx, st, hooks) {
     shown.sort((a, b) => (b.id === st.sel) - (a.id === st.sel) || score(b) - score(a) || (b.since || 0) - (a.since || 0));
     return {all, shown, hidden: all.length - shown.length};
   }
+  /** the chips: positions of one side within 0.05 % of each other share one chip ("숏 20배 ×2 +11.0%": the group's
+   *  P&L over its margin); the five groups that matter most (the selected one first) */
+  function chipGroups() {
+    const allowed = liveAllowed(doc);
+    const groups = [];
+    for (const p of coinPositions().shown) {
+      const e = Number(p.entry);
+      const g = groups.find((x) => x.side === Number(p.side) && Math.abs(e - x.price) / x.price < NEAR);
+      if (g) g.items.push(p); else groups.push({side: Number(p.side), price: e, items: [p]});
+    }
+    for (const g of groups) {
+      let pnl = 0, mg = 0, known = 0;
+      for (const p of g.items) {
+        const u = allowed ? livePnl(p, markOf(p.coin)) : null;
+        if (u) { pnl += u.pnl; mg += Number(p.margin) || 0; known += 1; }
+      }
+      g.pnl = known === g.items.length && known ? pnl : null;
+      g.roe = g.pnl != null && mg > 0 ? pnl / mg : null;
+      g.on = g.items.some((p) => p.id === st.sel);
+    }
+    return groups.slice(0, MAX_CHIPS);
+  }
   function placeChips() {
     if (!candles) { put(chips, null); return; }
     const sb = scaleBox();
-    const {shown} = coinPositions();
-    const allowed = liveAllowed(doc);
-    const items = shown.slice(0, MAX_CHIPS).map((p) => {
-      const u = allowed ? livePnl(p, markOf(p.coin)) : null;
-      let y = candles.priceToCoordinate(Number(p.entry));
-      let edge = "";
-      if (!sb) return null;
-      if (y == null || y < 2) { y = 2; edge = "↑ "; } else if (y > sb.H - CHIP_H) { y = sb.H - CHIP_H; edge = "↓ "; } else y -= CHIP_H / 2;
-      return {p, u, y, edge};
-    }).filter(Boolean).sort((a, b) => a.y - b.y);
+    if (!sb) return;
+    const TOP = 26;                               // under the legend line
+    const items = chipGroups().map((g) => {
+      const raw = candles.priceToCoordinate(g.price);
+      let y, edge = "";
+      if (raw == null) y = TOP;                                   // (no bars yet)
+      else if (raw < TOP) { y = TOP; edge = "↑ "; }               // above what the chart shows
+      else if (raw > sb.H - CHIP_H / 2) { y = sb.H - CHIP_H; edge = "↓ "; }
+      else y = Math.max(TOP, raw - CHIP_H / 2);
+      return {g, y, edge};
+    }).sort((a, b) => a.y - b.y);
     for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < CHIP_H + 2) items[i].y = items[i - 1].y + CHIP_H + 2;
-    put(chips, items.map((x) => {
-      const on = x.p.id === st.sel;
-      const roeTxt = x.u && x.u.roe != null ? pctOf(x.u.roe, 1) : "";
-      return h("button", {type: "button", class: ["tm-chip", Number(x.p.side) > 0 ? "long" : "short", on ? "on" : "", x.u ? fmt.tone(x.u.pnl, roeTxt) : ""],
-        style: {transform: `translateY(${Math.round(x.y)}px)`},
-        title: `${LK.stratKo(x.p.name)} · ${ROLE_SHORT[x.p.role] || ""} · 진입 ${fmt.price(x.p.entry)}${x.edge ? " (차트 범위 밖)" : ""}${x.u ? " · ROE: 마크 가격 기준, 나갈 때 수수료 전" : ""} · 누르면 이 포지션의 선`,
-        onclick: () => hooks.onPick(x.p.id)},
-      x.edge, `${sideKo(x.p.side)} ${fmt.lev(x.p.lev)}`, roeTxt ? h("b", {class: "num"}, ` ${roeTxt}`) : null, h("small", null, ` ${ROLE_SHORT[x.p.role] || ""}`));
+    put(chips, items.map(({g, y, edge}) => {
+      const first = g.items[0], n = g.items.length;
+      const levs = new Set(g.items.map((p) => p.lev));
+      const roeTxt = g.roe != null ? pctOf(g.roe, 1) : "";
+      const names = g.items.slice(0, 4).map((p) => `${LK.stratKo(p.name)} (${ROLE_SHORT[p.role] || ""})`).join(", ") + (n > 4 ? ` 외 ${n - 4}개` : "");
+      return h("button", {type: "button", class: ["tm-chip", g.side > 0 ? "long" : "short", g.on ? "on" : "", g.pnl != null ? fmt.tone(g.pnl, roeTxt) : ""],
+        style: {transform: `translateY(${Math.round(y)}px)`},
+        title: `진입 ${fmt.price(g.price)} · ${names}${edge ? " · 차트 범위 밖" : ""}${roeTxt ? " · ROE: 마크 가격 기준, 나갈 때 수수료 전" : ""} · 누르면 이 포지션의 선`,
+        onclick: () => hooks.onPick(g.on ? st.sel : first.id)},
+      edge, `${sideKo(g.side)}${levs.size === 1 ? ` ${fmt.lev(first.lev)}` : ""}${n > 1 ? ` ×${n}` : ""}`, roeTxt ? h("b", {class: "num"}, ` ${roeTxt}`) : null,
+      n === 1 ? h("small", null, ` ${ROLE_SHORT[first.role] || ""}`) : null);
     }));
   }
   function paintKey() {
@@ -121,7 +148,7 @@ export function termChart(ctx, st, hooks) {
       h("span", null, h("i", {class: "k-ar"}), "진입 (롱 ▲ · 숏 ▼)"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
       h("span", {title: "고른 포지션의 진입선 (점선) · 손절선 (빨강) 또는 잠금선 (초록: 닿으면 수익으로 끝남) · 익절선 · 청산 추정 (진입 때 기준)"},
         h("i", {class: "k-ln"}), "진입·손절·청산선"),
-      h("span", {class: "tm-ckn"}, all.length ? `이 코인 ${fmt.int(all.length)}개 · 왼쪽 표시 ${fmt.int(Math.min(MAX_CHIPS, shown.length))}개${hidden ? ` · 딥시크 ${fmt.int(hidden)}개는 개수만` : ""}`
+      h("span", {class: "tm-ckn"}, all.length ? `이 코인 ${fmt.int(all.length)}개 · 왼쪽 표시 ${fmt.int(shown.length ? chipGroups().reduce((n, g) => n + g.items.length, 0) : 0)}개${hidden ? ` · 딥시크 ${fmt.int(hidden)}개는 개수만` : ""}`
         : "고른 묶음은 이 코인에 열린 포지션 없음"),
       hidSel ? h("span", {class: "warn-t"}, "딥시크 금액 숨김: 이 계좌의 선과 거래 표시 없음") : null);
   }
@@ -161,7 +188,7 @@ export function termChart(ctx, st, hooks) {
       plines.push(candles.createPriceLine({price: Number(price), color: c, lineWidth: width, lineStyle: style, axisLabelVisible: axis, title}));
     };
     // the other positions of this coin (the chips): a faint dotted entry line each
-    for (const p of coinPositions().shown.slice(0, MAX_CHIPS)) if (!o || p.id !== o.id) line(p.entry, color("--line-2", "--muted"), "", 3, 1, false);
+    for (const g of chipGroups()) if (!o || !g.items.some((p) => p.id === o.id)) line(g.price, color("--line-2", "--muted"), "", 3, 1, false);
     if (o) {
       line(o.entry, color("--ink-2"), `진입 ${sideKo(o.side)} ${fmt.lev(o.lev)}`, 2, 1);
       if (o.stop != null) line(o.stop, o.stop_is_lock ? color("--up") : color("--down"), o.stop_is_lock ? "잠금" : "손절", 0, 2);

@@ -182,7 +182,7 @@ export async function mount(el, ctx) {
       save();
       loadBook();
     }
-    top.onPositions(d); strip.onPositions(d); feed.onPositions(d); chart.onPositions(d); table.onPositions(d); mine.onPositions(d); sel.paint();
+    top.onPositions(d); strip.onPositions(d); feed.onPositions(d); chart.onPositions(d); table.onPositions(d); mine.onPositions(d); sel.refresh();
     const gen = d && d.generated_ms;
     if (gen && gen !== lastGen) {
       const again = lastGen != null;
@@ -198,9 +198,9 @@ export async function mount(el, ctx) {
       tfFromAcct = true;
       if (a.tf && a.tf !== st.tf) { st.tf = a.tf; chart.setTf(a.tf); save(); }
     }
-    top.onLeague(); sel.paint(); feed.repaint(); table.setSel(); mine.setSel();
+    top.onLeague(); sel.refresh(); feed.repaint(); table.setSel(); mine.setSel();
   });
-  ctx.onLive(() => { top.onLive(); strip.onLive(); chart.onLive(); table.onLive(); mine.onLive(); sel.paint(); });
+  ctx.onLive(() => { top.onLive(); strip.onLive(); chart.onLive(); table.onLive(); mine.onLive(); sel.refresh(); });
   ctx.every(30000, loadFills);
   ctx.every(120000, () => pnl.load());
   ctx.every(1000, () => { top.tick(); chart.tick(); ages(root); });

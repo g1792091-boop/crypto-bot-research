@@ -25,7 +25,8 @@ import {panel, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, short, fr
 export function selPanel(ctx, st, hooks) {
   const body = h("div", {class: "tm-sel"});
   const el = panel("고른 포지션", {cls: "tm-selp", scroll: true, tip: "표·차트·이 코인 포지션·체결에서 고른 계좌 (주소의 ?acct=로도 고름)"}, body);
-  const led = {pnl: h("b", {class: "num tm-led"}), roe: h("b", {class: "num tm-ledsm"})};
+  const led = {pnl: h("b", {class: "num tm-led"}), roe: h("b", {class: "num tm-ledsm"}), mark: h("b", {class: "num"}, "—")};
+  let shownKey = null;
   const kv = (k, v, title) => h("div", {class: "tm-kv", title}, h("span", null, k), v instanceof Node ? v : h("b", {class: "num"}, v ?? "—"));
   function paint() {
     const a = hooks.selAcct();
@@ -45,15 +46,12 @@ export function selPanel(ctx, st, hooks) {
         kids.push(h("p", {class: "tm-hidnote"}, h("b", null, "딥시크 금액 숨김"), " · 이 포지션은 방향·코인·시각만 보입니다 (가격·배수·손익은 두 분 설정으로 숨김, 개수만 셉니다)"));
       } else {
         const allowed = liveAllowed(doc);
-        const u = allowed ? livePnl(p, markOf(p.coin)) : null;
-        countTo(led.pnl, u ? u.pnl : null, {format: (v) => usdt(v), tone: true});
-        countTo(led.roe, u && u.roe != null ? u.roe : null, {format: (v) => pctOf(v, 2), tone: true});
+        live();
         kids.push(h("div", {class: "tm-ledbox"}, h("div", null, h("span", {class: "tm-ledk"}, "미실현 손익 (USDT)"), led.pnl),
           h("div", {class: "r"}, h("span", {class: "tm-ledk"}, "ROE"), led.roe),
           !allowed ? h("small", {class: "tm-lednote warn-t"}, doc && doc.catching_up ? "엔진이 따라잡는 중: 지금 가격으로 계산하지 않음" : "엔진 기록이 멈춤: 실시간 손익 감춤") : null));
-        const m = allowed ? markOf(p.coin) : null;
         kids.push(h("div", {class: "tm-kvs"},
-          kv("진입가", fmt.price(p.entry)), kv("마크", allowed ? fmt.price(m) : "—", "마크 가격 (엔진이 강제청산을 보는 가격)"),
+          kv("진입가", fmt.price(p.entry)), kv("마크", led.mark, "마크 가격 (엔진이 강제청산을 보는 가격)"),
           kv("청산가", h("b", {class: "num warn-t"}, fmt.price(p.liq)), "진입 때 기준 (펀딩이 쌓이면 조금 달라짐)"),
           kv(p.stop_is_lock ? "잠금선" : "손절선", h("b", {class: ["num", p.stop_is_lock ? "up" : "down"]}, fmt.price(p.stop)), p.stop_is_lock ? "닿으면 수익으로 끝나는 선 (계단 잠금)" : null),
           p.tp != null ? kv("익절", h("b", {class: "num up"}, fmt.price(p.tp))) : null,
@@ -86,8 +84,20 @@ export function selPanel(ctx, st, hooks) {
     kids.push(h("div", {class: "tm-links"}, h("a", {class: "btn-line", href: `#/account/${encodeURIComponent(acct.id)}`}, "계좌 자세히"),
       h("a", {class: "btn-line", href: "#/positions"}, "포지션 화면")));
     put(body, kids);
+    shownKey = key();
   }
-  return {el, paint};
+  /** the selection, its position and the snapshot it came from: a change rebuilds the panel, else only the live numbers move */
+  const key = () => { const a = hooks.selAcct(), p = hooks.selPos(), d = hooks.doc(), b = hooks.book(); return `${a ? a.id : ""}|${p ? `${p.id}:${p.since}` : ""}|${d ? d.generated_ms : ""}|${b ? `${b.id}:${(b.trades || []).length}` : ""}|${a ? a.trades : ""}`; };
+  /** the live numbers of the shown position at the mark (5 s): 미실현, ROE, 마크 */
+  function live() {
+    const p = hooks.selPos(), doc = hooks.doc();
+    const allowed = liveAllowed(doc);
+    const u = p && allowed && !hiddenPos(p) ? livePnl(p, markOf(p.coin)) : null;
+    countTo(led.pnl, u ? u.pnl : null, {format: (v) => usdt(v), tone: true});
+    countTo(led.roe, u && u.roe != null ? u.roe : null, {format: (v) => pctOf(v, 2), tone: true});
+    led.mark.textContent = u ? fmt.price(u.mark) : "—";
+  }
+  return {el, paint, live, refresh() { if (key() !== shownKey) paint(); else live(); }};
 }
 
 // ---------------------------------------------------------------- 이 코인 포지션
@@ -241,9 +251,9 @@ export function pnlPanel(ctx) {
     const w = opts.find((o) => o.id === P.win) || opts[opts.length - 1];
     const sr = series(cur, w.ms);
     countTo(big, sr.empty ? 0 : sr.total, {format: (v) => usdt(v), tone: true});
-    put(meta, h("span", null, `${KINDS.find((k) => k.id === P.kind).label} ${fmt.int(d.accounts)}계좌 · ${w.ms ? `최근 ${w.ko} · ` : ""}`),
+    put(meta, h("span", null, `${fmt.int(d.accounts)}계좌 · ${w.ms ? `최근 ${w.ko} · ` : ""}`),
       sr.empty ? h("span", null, "아직 닫힌 거래 없음") : h("span", null, `거래 ${fmt.int(sr.trades)} · `, h("b", {class: "up"}, `${fmt.int(sr.wins)}승`), " ", h("b", {class: "down"}, `${fmt.int(sr.losses)}패`)),
-      sr.empty ? null : h("span", {title: "실현 손익 선이 그 전 최고점(시작 0 포함)에서 가장 깊게 내려간 만큼 · 닫힌 거래만 · 참고"}, ` · 최대 낙폭 ${sr.mdd > 0 ? "−" : ""}${fmt.num(sr.mdd, 2)} USDT (참고)`),
+      sr.empty ? null : h("span", {title: "최대 낙폭: 실현 손익 선이 그 전 최고점(시작 0 포함)에서 가장 깊게 내려간 만큼 (USDT) · 닫힌 거래만 · 참고"}, ` · 최대 낙폭 ${sr.mdd > 0 ? "−" : ""}${fmt.num(sr.mdd, 0)} (참고)`),
       d.hidden ? h("span", {class: "muted"}, ` · 딥시크 ${fmt.int(d.hidden)}계좌는 금액 숨김이라 뺌`) : null,
       P.state === "failed" ? h("span", {class: "down"}, ` · 새로 받지 못함 (${fmt.ago(P.at, now)} 자료)`) : null);
     const td = todayOf(cur, now);
@@ -265,7 +275,7 @@ export function pnlPanel(ctx) {
       if (c.pad) return h("span", {class: "tm-cc pad", "aria-hidden": "true"});
       const has = c.v != null, zero = !has || Math.abs(c.v) < 0.5;
       const a = zero ? 0 : 0.2 + 0.55 * Math.min(1, Math.abs(c.v) / sc);
-      const lab = `${fmt.date(c.ms + 12 * H)} · ${c.state === "future" ? "아직 오지 않은 날" : c.state === "before" ? "시작 전" : !has ? "닫힌 거래 없음"
+      const lab = `${fmt.date(c.ms)} · ${c.state === "future" ? "아직 오지 않은 날" : c.state === "before" ? "시작 전" : !has ? "닫힌 거래 없음"
         : `실현 ${usdt(c.v)} USDT · 거래 ${fmt.int(c.n)} · 이김 ${fmt.int(c.w)}`}`;
       return h("span", {class: ["tm-cc", `s-${c.state}`, has ? (zero ? "flat" : c.v > 0 ? "up" : "down") : ""], style: {"--a": a.toFixed(3)}, title: lab, "aria-label": lab},
         h("span", {class: "dn num"}, String(c.d)), has ? h("span", {class: "dv num"}, zero ? "0" : short(c.v)) : null);
