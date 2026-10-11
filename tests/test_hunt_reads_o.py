@@ -132,6 +132,17 @@ def test_repository_calendar_schema_and_counts():
     # the rescheduled releases are on their actual dates
     dates = {e["date_et"] for e in nfp}
     assert {"2025-11-20", "2025-12-16", "2026-02-11"} <= dates and not {"2025-10-03", "2026-02-06"} & dates
+    # every NFP event names its reference month as YYYY-MM; the 2025-12-16 release is the November report
+    assert all(len(e["reference_month"]) == 7 for e in nfp)
+    assert next(e for e in nfp if e["date_et"] == "2025-12-16")["reference_month"] == "2025-11"
+    # the dates not used as a T are listed with a reason: 2020 notation votes without a policy statement, the
+    # longer-run-goals votes, the shutdown's original NFP dates
+    exc = {(x["kind"], x["date_et"]) for x in doc["excluded"]}
+    assert {("FOMC", "2020-03-18"), ("FOMC", "2020-03-19"), ("FOMC", "2020-03-31"), ("FOMC", "2020-08-27"),
+            ("FOMC", "2025-08-22"), ("NFP", "2025-10-03"), ("NFP", "2025-11-07"), ("NFP", "2025-12-05"),
+            ("NFP", "2026-02-06")} <= exc
+    fomc2020 = [e for e in doc["events"] if e["kind"] == "FOMC" and e["date_et"].startswith("2020")]
+    assert [e["meeting_type"] for e in fomc2020].count("notation_vote") == 1        # only March 23's statement
     # honest status: nothing was fetched, so nothing is marked verified, and the read would not run on it
     assert not any(e["verified_official"] for e in doc["events"])
     assert "UNVERIFIED" in doc["status"]
@@ -159,6 +170,15 @@ def test_calendar_schema_catches_errors():
     bad = copy.deepcopy(doc)
     bad["events"][5], bad["events"][6] = bad["events"][6], bad["events"][5]
     assert any("time order" in p for p in RO.validate_calendar(bad))
+    bad = copy.deepcopy(doc)
+    next(x for x in bad["events"] if x["kind"] == "NFP")["reference_month"] = "2019-12 (note)"
+    assert any("reference_month" in p for p in RO.validate_calendar(bad))
+    bad = copy.deepcopy(doc)
+    bad["excluded"].append({"kind": "NFP", "date_et": "2024-03-08", "why": "listed twice"})
+    assert any("also an event" in p for p in RO.validate_calendar(bad))
+    bad = copy.deepcopy(doc)
+    bad["excluded"].append({"kind": "FOMC", "date_et": "2024-01-01"})
+    assert any("needs kind, date_et and why" in p for p in RO.validate_calendar(bad))
 
 
 def _cal_tree(tmp_path, monkeypatch, verified: bool, pinned: bool):
@@ -200,6 +220,31 @@ def test_momentum_side_rule():
     side, ok = RO.momentum_from_closes(c, [3, 19, 20, 24, 25, 26])
     assert ok.tolist() == [False, False, True, True, True, True]
     assert side.tolist() == [0, 0, 1, 1, 0, -1]
+
+
+# ------------------------------------------------------------------ base positions removed (distinct, side-matched)
+def test_removed_base_positions_distinct_and_side_matched():
+    t = utc("2024-03-09 00:05")
+    taken = {(0, t, 1), (1, t, -1)}                                  # base positions: coin, fill, side
+    # two skipped signals (two basket members, 1h and 4h, both closing Sat 00:00) share one base position
+    coin, fill, side = [0, 0, 1, 1], [t, t, t, t], [1, 1, 1, -1]
+    assert RO.removed_base_positions(taken, coin, fill, side, [True, True, False, False]) == 1
+    # O1b: a skipped long does not match the base short at the same coin and fill
+    assert RO.removed_base_positions(taken, coin, fill, side, [False, False, True, False]) == 0
+    assert RO.removed_base_positions(taken, coin, fill, side, [True, True, True, True]) == 2
+    assert RO.removed_base_positions(set(), coin, fill, side, [True] * 4) == 0
+    assert RO.removed_base_positions(taken, [], [], [], []) == 0
+
+
+# ------------------------------------------------------------------ O3 plan (not computed; no edit of hunt.py)
+def test_o3_plan_is_a_separate_pinned_module_and_halves_every_cells_cap():
+    from research.hunt import reads_a as RA
+    txt = " ".join(RO.O3_NEEDS)
+    assert "research/hunt/reads_o3.py" in txt and "never an edit of hunt.py" in txt
+    assert "bit-identical" in txt and "PR_SIDECAP" not in txt and "SKIP_NAMES +=" not in txt
+    for cell in RA.board_cells():                                     # half of the cell's total open-risk cap
+        r, ov = RA.cell_overrides(*cell)
+        assert f"{r * 100:g}%: {ov['PR_CAP'] / 2 * 100:g}%" in txt, cell
 
 
 # ------------------------------------------------------------------ D11 redaction
@@ -312,6 +357,7 @@ def _ctx(synth, monkeypatch, picks=None):
                  ("E_TASK_SEEDS", 3)):
         monkeypatch.setattr(RO, k, v)
     monkeypatch.setattr(RO, "map_systems", lambda live: [dict(s) for s in MAP_SYSTEMS])
+    monkeypatch.setattr(RO, "_select_paths", lambda c: (str(synth["tmp"] / "absent_select.json"), None))
     return ctx
 
 
@@ -355,12 +401,24 @@ def test_run_end_to_end_on_synthetic_coins(synth, monkeypatch, tmp_path):
             if v != "base":
                 assert set(s["minus_base"]) >= {"mean_lnM", "mean_d_a", "mean_d_b", "n_positions"}
                 assert 0 <= s["base_positions_removed"] <= s["signals"]["skipped"]
+                assert s["base_positions_removed"] <= base["n_positions"]
         o4 = g["periods"][p]["O4"]
         assert o4["e"]["n_seeds"] == RO.E_SEEDS[p] and 0.0 < o4["e"]["seed_rank_p"] <= 1.0
         assert o4["f"]["signals"] == base["signals"]["gated"]
         assert o4["f"]["same_side"] <= o4["f"]["signals"]
     assert g["periods"]["test"]["O2"]["signals"]["skipped"] >= g["periods"]["test"]["O2_fomc"]["signals"]["skipped"]
     assert isinstance(g["momentum_only"], bool)
+    # the side-matched count finds the base positions the weekend rule removes (trade sides are +1 / -1 like signals)
+    assert sum(g["periods"][p]["O1"]["base_positions_removed"] for p in ("select", "test")) > 0
+    # by timeframe: all four timeframes in every variant and period, a note where no public row exists
+    for v in ("O1", "O1b", "O2", "O2_fomc"):
+        for p in ("select", "test"):
+            bt = out["by_timeframe"][v][p]
+            assert list(bt) == list(H.TF_ORDER)
+            assert bt["1h"]["rows"] == 1 and bt["4h"]["rows"] == 1
+            assert bt["15m"] == {"rows": 0, "note": RO.TF_NOTE_NONE}
+            assert bt["30m"] == {"rows": 0, "note": RO.TF_NOTE_DS_ONLY}          # the DeepSeek pick only
+            assert priv["by_timeframe_all_rows"][v][p]["30m"]["rows"] == 1
     # some runs (base, size fix) saw weekend signals; the per-variant filter of every run is checked in
     # test_controls_filtered_the_same_way
     assert sum(int(RO.is_weekend_close(RO.close_ms_of(H, SYMS, sig)).sum())
@@ -383,6 +441,9 @@ def test_run_end_to_end_on_synthetic_coins(synth, monkeypatch, tmp_path):
     assert "score" in mp["rows"]["F2:AAA:1h:NONE"] and priv["O1_select_map"]["rows"]["F3:DSX:30m:NONE"]["score"]
     assert set(mp["in_both"]) | set(mp["map_only"]) == set(mp["picks"])
     assert mp["official_members"][-1] == "F2:BBB:1h:NONE"         # untested batch members count as official members
+    assert list(mp["by_timeframe"]) == list(H.TF_ORDER)            # no select.json here: counts, no weekends column
+    assert mp["by_timeframe"]["1h"]["systems"] == 2 and mp["by_timeframe"]["1h"]["eligible_with_weekends"] is None
+    assert "select.json not found" in mp["select_table"]["note"] and mp["select_json_check"]["n"] == 0
     json.dumps(out)
     json.dumps(priv)
     # determinism: a second run gives the same figures
@@ -494,6 +555,86 @@ def test_select_map_equals_the_select_step_on_cut_data(synth, monkeypatch):
         RO._restore(H, snap)
     H._EVENTS.clear()
     H._SIGS.clear()
+
+
+def _select_rows_on_cut(synth, weekends: bool) -> list:
+    """The select step's rows for MAP_SYSTEMS on data cut at the select end (weekends included unless asked)."""
+    snap = RO._snapshot(H)
+    rows = []
+    try:
+        cut = {}
+        for s, c in synth["coins"].items():
+            k = int(np.searchsorted(c.ts, SELECT[1], "left"))
+            cut[s] = H.Coin(s, c.ts[:k].copy(), c.o[:k].copy(), c.h[:k].copy(), c.l[:k].copy(), c.c[:k].copy(),
+                            c.v[:k].copy(), c.qv[:k].copy())
+        fund = {s: (ts[ts < SELECT[1]], r[ts < SELECT[1]]) for s, (ts, r) in synth["fund"].items()}
+        H.install(cut, fund)
+        mk = H.Market(SYMS, SELECT, name="select")
+        for spec in MAP_SYSTEMS:
+            sig = H.system_signals(mk, spec)
+            if not weekends:
+                keep = ~RO.is_weekend_close(RO.close_ms_of(H, SYMS, sig))
+                sig = {"tf": sig["tf"], "k": sig["k"][keep], "j": sig["j"][keep], "side": sig["side"][keep]}
+            base = H.run_signals(mk, [(sig, 0)], H.R_BASE, "base")
+            c2 = H.run_signals(mk, [(sig, 0)], H.R_BASE, "x2")
+            ok, why = H.wide_eligible(base, c2)
+            rows.append({**{k: spec[k] for k in ("id", "family", "name", "strategy", "kind", "tf", "gate")},
+                         "eligible": ok, "fail": why, "score": base["mean_lnM"], "median_M": base["median_M"]})
+    finally:
+        RO._restore(H, snap)
+    H._EVENTS.clear()
+    H._SIGS.clear()
+    return rows
+
+
+def test_select_map_by_timeframe_against_select_json(synth, monkeypatch, tmp_path):
+    """The map's per-timeframe block (all four timeframes) sets the select step's rows (weekends included) beside the
+    map's (weekends skipped); the official members rerun with weekends on the cut data equal select.json's scores;
+    DeepSeek figures only in private (D11)."""
+    ctx = _ctx(synth, monkeypatch)
+    full = _select_rows_on_cut(synth, weekends=True)
+    no_wk = {r["id"]: r for r in _select_rows_on_cut(synth, weekends=False)}
+    pub_rows, priv_rows = H.redact_rows(full)
+    pub_p, priv_p = tmp_path / "select.json", tmp_path / "wide_select_private.json"
+    pub_p.write_text(json.dumps({"rows": pub_rows, "picks": ["F2:AAA:1h:NONE"]}))
+    priv_p.write_text(json.dumps({"rows": priv_rows}))
+    assert "score" not in next(r for r in pub_rows if r["kind"] == "ds")         # the public select file is redacted
+    monkeypatch.setattr(RO, "_select_paths", lambda c: (str(pub_p), str(priv_p)))
+    official = ["F2:AAA:1h:NONE", "F3:DSX:30m:NONE"]
+    pub, priv = RO.select_weekend_map(ctx, H, official)
+    by_id = {r["id"]: r for r in full}
+    assert pub["select_table"]["private_rows"] and pub["select_table"]["select_json_sha256"] == H.sha256_file(
+        str(pub_p))
+    # the cut data reproduce the select step: rerun with weekends == select.json's score, exactly
+    assert pub["select_json_check"]["n"] == pub["select_json_check"]["n_equal"] == 1          # public: no DeepSeek
+    assert priv["select_json_check"]["n"] == priv["select_json_check"]["n_equal"] == 2
+    assert priv["select_json_check"]["max_abs_diff"] == 0.0
+    assert priv["rows"]["F3:DSX:30m:NONE"]["score_with_weekends_rerun"] == by_id["F3:DSX:30m:NONE"]["score"]
+    for which, d in (("public", pub), ("private", priv)):
+        bt = d["by_timeframe"]
+        assert list(bt) == list(H.TF_ORDER), which
+        for tf in H.TF_ORDER:
+            rt = [s for s in MAP_SYSTEMS if s["tf"] == tf]
+            money = [s for s in rt if which == "private" or s["kind"] != "ds"]
+            b = bt[tf]
+            assert b["systems"] == len(rt) and b["systems_in_figures"] == len(money) == b["paired_systems"]
+            assert b["systems_not_in_select_json"] == 0
+            assert b["eligible_with_weekends"] == sum(by_id[s["id"]]["eligible"] for s in rt)
+            assert b["eligible_without_weekends"] == sum(no_wk[s["id"]]["eligible"] for s in rt)
+            if money:
+                assert b["median_score_with_weekends"] == pytest.approx(
+                    float(np.median([by_id[s["id"]]["score"] for s in money])))
+                assert b["median_score_without_weekends"] == pytest.approx(
+                    float(np.median([no_wk[s["id"]]["score"] for s in money])))
+                assert b["higher_without_weekends"] + b["lower_without_weekends"] + b["equal"] == len(money)
+            else:
+                assert b["median_score_with_weekends"] is None and b["median_score_change"] is None
+            assert b["picks_with_weekends_official"] == [i for i in official if i.split(":")[2] == tf]
+            assert set(b["picks_without_weekends_map"]) <= set(d["picks"])
+    assert pub["by_timeframe"]["30m"]["systems_in_figures"] == 0 and priv["by_timeframe"]["30m"]["paired_systems"] == 1
+    ds_ids = {"F3:DSX:30m:NONE"}
+    assert H.d11_problems({"O1_select_map": pub}, ds_ids) == []
+    assert H.d11_problems({"O1_select_map": priv}, ds_ids) != []                # the private copy holds the figures
 
 
 def test_o2_not_run_without_a_verified_pinned_calendar(synth, monkeypatch, tmp_path):

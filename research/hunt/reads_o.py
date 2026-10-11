@@ -17,13 +17,16 @@ What it computes, on the fixed ROWS (tested picks, the v1 pick, the baskets), se
 * O1 select-only map: the W 5 walk (eligibility, order, one per strategy name, batches of 10) rerun on the select
   period with the weekend-skip machine over the 686 candidate systems (F1-F3, F5), on the select data cut at the
   select end exactly as the select step loads it (no 5m bar at or after the select end is used, not even for
-  indicators). Lists what it would have picked. Those systems are never run on the test period here.
+  indicators). Lists what it would have picked and, per timeframe (all four), systems, eligible, median score and
+  picks beside the select step's own rows (weekends included, from select.json). Those systems are never run on the
+  test period here.
 * O2 macro blackout: as O1, skipping first-unit entries whose signal bar closes in [T - 120 min, T] (the bar closing
   at T included), T = an FOMC statement time or a US nonfarm payrolls (Employment Situation) release time; variant
   FOMC only. Dates and times from research/hunt/macro_calendar.json, read only when that file's line is in the pin
   with its current sha256 and every event that can touch a read period is marked verified from an official page.
-* O3 same-side risk cap: NOT computed. It needs the engine to block an entry or add by the open risk of all
-  same-side positions and a per-5m-close stress ledger; neither exists in the pinned engine (``O3_NEEDS``).
+* O3 same-side risk cap: NOT computed here. It needs an engine that blocks an entry or add by the open risk of all
+  same-side positions and a per-5m-close stress ledger; the pinned engine has neither, and hunt.py may not change
+  (it is in the pin). ``O3_NEEDS`` describes the separately pinned reads module that would do it.
 * O4 momentum control (f): the row's gated signal times and coins with side = sign(close of the signal bar - close
   20 bars before on the same series) (0 or fewer than 20 earlier bars: no entry, counted), one deterministic run of
   the tested machine; pick minus (f) monthly ln M and the share of the pick's sides equal to (f)'s. R6 (e)
@@ -82,6 +85,8 @@ CTL_SEEDS = 200                         # W 7.4a: controls (a) / (b) seeds 1-200
 E_SEEDS = {"test": 1000, "select": 200}  # R6: 1,000 seeds in test, 200 in select
 MOM_BARS = 20                           # R6 (e), O4 (f): close[t] - close[t - 20]
 BLACKOUT_MIN = 120                      # O2: [T - 120 min, T]
+SKIP_REASON = {"base": None, "O1": "weekend", "O1b": "weekend (longs only)", "O2": "macro blackout (FOMC, NFP)",
+               "O2_fomc": "macro blackout (FOMC)"}
 HEAD_COLS = ("end_ge_x2", "end_ge_x5", "touch_x2", "touch_x5", "bust")
 CTL_TASK_SEEDS = 25                     # control seeds per worker task
 E_TASK_SEEDS = 100
@@ -92,27 +97,44 @@ MOMENTUM_ONLY_LABEL = "momentum only: a plain momentum entry did as well"
 O5_NAME = "N17_KC_RSI"
 O5_LABEL = "anti-momentum entry (select period; also on the 5-year anti-edge list, which saw test months)"
 DS_NOTE = "DeepSeek row: figures in the private file (D11)"
+TF_NOTE_NONE = ("no tested single-timeframe row on this timeframe; the select-period comparison with and without "
+                "weekends for it is in O1_select_map.by_timeframe")
+TF_NOTE_DS_ONLY = "only DeepSeek rows on this timeframe: their counts are in the private file (by_timeframe_all_rows)"
 CAL_KINDS = ("FOMC", "NFP")
 CAL_TIME = {"FOMC": "14:00", "NFP": "08:30"}      # the usual release times (ET); exceptions are written per event
 CAL_HOSTS = {"FOMC": "https://www.federalreserve.gov/", "NFP": "https://www.bls.gov/"}
 CAL_YEARS = tuple(range(2020, 2027))
 
 O3_NEEDS = [
-    "Engine parameter PR_SIDECAP (fraction of equity; 0 = off, the default, so the tested machine stays bit-identical):"
-    " before a first unit or an add is taken, sum the open risk (_risk: quantity x distance from the fill to the "
-    "current stop, the same quantity the 4% total cap uses) of every open position on the same side, across all "
-    "coins, plus the new unit's risk; skip when the sum would exceed PR_SIDECAP x equity at the previous 5m close. "
-    "Machine A at r = 0.5%: PR_SIDECAP = 0.02 (half of the 4% cap); machine B: min(2r, 0.30).",
-    "Skip counters: SKIP_NAMES += 'side_cap' (first units) and ADD_SKIP_NAMES += 'side_cap' (adds), exported in "
-    "metrics like the other reasons, so O3 can report what the cap removed.",
-    "Stress ledger (decision path untouched; a test asserts equity and trades bit-identical with it on and off): at "
-    "every 5m close, per side, S_g = sum over open same-side positions of q x (close - stop x (1 - g)) for longs and "
-    "q x (stop x (1 + g) - close) for shorts, g = 0, 0.05, 0.10 (the loss to the current stop, plus a 5% and a 10% "
-    "gap through it); export the maximum of S_g / equity per side and g with its 5m step (date). The trade list "
-    "cannot give it: it has no stop path, no add fill times and no add quantities (adds can be cut by the margin "
-    "budget or the free wallet), so any reconstruction would be a second engine.",
-    "Then O3 = O1's summary on the changed machine (both periods, controls seeds 1-200 through the same cap, the R1 "
-    "headline shares at the size fixed on select) plus the stress line for the base and the capped machine.",
+    "Where: a new reads module, research/hunt/reads_o3.py, with its own pin line (W 7.1 (3)); never an edit of "
+    "hunt.py. hunt.py is in the wide pin, and check_pin refuses every later post-verdict step (hunt reads, october, "
+    "fidelity, this module's runner) once a pinned file other than research/hunt/reads_*.py changes ('no other pinned "
+    "file may be superseded'). reads_o3.py holds a copy of hunt._engine (numba) with the two additions below and is "
+    "called with exactly the arrays hunt.simulate passes, built by hunt's own Market, bank_for, build_cands, params "
+    "and with_overrides; hunt.summarize reads the result. The copy is a reads-only engine option in a reads file, "
+    "held to the standard W 7.2 sets for the engine read options inside hunt.py.",
+    "Identity test (W 7.2 standard): on seeded synthetic coins, the copy with the side cap off returns every output of "
+    "hunt._engine bit-identical (equity, trades, skip, cut and add counters), with the stress ledger off and again "
+    "with it on, at machine A and machine B cells and for a basket; the module also stores the sha256 of hunt.py and "
+    "refuses to run when it differs, so the copy can never drift from the pinned engine.",
+    "Side cap: one extra parameter SIDECAP (a fraction of equity; 0 = off). A first unit is taken only if the open "
+    "risk of every open position on its side, across all coins, plus q x D0 stays <= SIDECAP x equity at the previous "
+    "5m close; an add only if that side's open risk of the other positions plus the position's risk after the add "
+    "(the engine's own add check, with the moved stop) stays <= the same limit. Open risk = the engine's _risk "
+    "(sum q x (reference fill - current stop), shorts mirrored), the measure the total cap PR_CAP already uses. "
+    "Skipped entries and adds are counted as 'side_cap', first units and adds separately, exported like the other "
+    "skip reasons. SIDECAP = half of the cell's PR_CAP at every cell: machine A at r: 0.5 x 4% x r / 0.5% (r = 0.5%: "
+    "2%; 1%: 4%; 2%: 8%; 5%: 20%; 10%: 40%; 20%: 80%); machine B at r: 0.5 x min(4r, 60%) = min(2r, 30%) (5%: 10%; "
+    "10%: 20%; 20%: 30%). The headline board at the size fixed on select uses that cell's SIDECAP.",
+    "Stress ledger (decision path untouched): at every 5m close, per side, S_g = sum over open same-side positions of "
+    "q x (close - stop x (1 - g)) for longs and q x (stop x (1 + g) - close) for shorts, g = 0, 0.05, 0.10 (the loss "
+    "from the close to the current stop, plus a 5% and a 10% gap through it); per side and g, the maximum of S_g / "
+    "equity at that close and its 5m step (date) are exported. The trade list cannot give it: it has no stop path, no "
+    "add fill times and no add quantities (adds can be cut by the margin budget or the free wallet).",
+    "Then O3 = O1's summary on the side-capped machine (both periods, controls (a) / (b) seeds 1-200 through the "
+    "same cap, the R1 headline shares at the size fixed on select) plus the stress line for the base and the capped "
+    "machine. reads_o3.py's line is appended to the pin before it runs. If it is never built, O3 (named in W 7.4a "
+    "before the pin) is recorded in DEVIATIONS.md as not computed.",
 ]
 
 CHOICES = [
@@ -120,8 +142,9 @@ CHOICES = [
     "< Monday 00:00 (a bar closing Saturday 00:00 is a weekend bar; one closing Monday 00:00 is not). The rule is "
     "applied to the system's gated signals before the run (a skipped signal is never queued; a later signal on the "
     "same coin can then be taken, as when the engine skips one).",
-    "'weekend' / 'blackout' counts = gated signals removed (by side); 'base_positions_removed' = positions of the base "
-    "run whose signal is removed (matched on coin and fill bar).",
+    "'weekend' / 'blackout' counts = gated signals removed (by side); 'base_positions_removed' = distinct positions of "
+    "the base run whose signal is removed, matched on coin, fill bar and side (signals with the same coin, fill and "
+    "side share one signal close, so every variant skips all of them or none; each base position counts once).",
     "Controls: the pinned W 6 draws (ctx control_signals, seed parts with r = 0.5%), seeds 1-200, each draw filtered "
     "by the same rule on its own signal-bar close and side; a basket's control = each member's draw with the same "
     "seed in one wallet (src = pick number). d_m = ln M_m(row) - mean over seeds; the base machine is rerun with the "
@@ -142,7 +165,12 @@ CHOICES = [
     "seed rank = (1 + seeds with mean ln M >= the row's) / (n + 1). Label rule applied to pick and v1 rows.",
     "Select-only map: the select step's data cut (every coin's 5m bars and funding before the select end; the coin "
     "end as load_coin sets it), hunt's own system_signals / run_signals / wide_eligible / wide_choose, base cost and "
-    "cost x2 at r = 0.5% with the weekend rule; F4 never; the map's picks are compared with picks.json's members.",
+    "cost x2 at r = 0.5% with the weekend rule; F4 never; the map's picks are compared with picks.json's members. "
+    "Per timeframe (all four, also where no tested row exists): systems, eligible, median score and picks with "
+    "weekends (the select step's own rows: select.json, DeepSeek rows from the private select file) and without (the "
+    "map), and per system the change of score; the official members are also rerun with weekends on the cut data "
+    "and compared with select.json (the map is like for like only when they agree). Public: money figures over "
+    "non-DeepSeek systems; private: all.",
     "D11: rows that contain a DeepSeek pick and F3 rows of the map keep labels and counts in public (floats dropped); "
     "all figures in the private file.",
 ]
@@ -238,6 +266,17 @@ def momentum_sides(live, syms: list, sig: dict, n: int = MOM_BARS) -> tuple:
     return side, ok
 
 
+def removed_base_positions(taken, coin, fill, side, skipped) -> int:
+    """Distinct base-run positions whose signal a variant skips: ``taken`` = the base run's (coin, fill ms, side)
+    keys; ``coin`` / ``fill`` / ``side`` / ``skipped`` = per gated signal (all members of a row concatenated). A base
+    position is counted once, however many skipped signals share its coin, fill bar and side."""
+    taken = set(taken)
+    sk = np.asarray(skipped, bool)
+    keys = zip(np.asarray(coin, np.int64)[sk].tolist(), np.asarray(fill, np.int64)[sk].tolist(),
+               np.asarray(side, np.int64)[sk].tolist())
+    return len({x for x in keys if x in taken})
+
+
 def close_ms_of(live, syms: list, sig: dict) -> np.ndarray:
     k = np.asarray(sig["k"], np.int64)
     j = np.asarray(sig["j"], np.int64)
@@ -292,8 +331,9 @@ def calendar_counts(events: list) -> dict:
 def validate_calendar(doc: dict) -> list:
     """Schema and consistency of research/hunt/macro_calendar.json; [] when it is sound. Checked: the fields of every
     event, the ET -> UTC conversion (t_ms, utc, tz), the official host of every source URL, order and duplicates,
-    the counts written in the file, and the yearly counts (8 scheduled FOMC meetings, 12 Employment Situation
-    releases) unless the year is listed under count_exceptions with a reason."""
+    the counts written in the file, the yearly counts (8 scheduled FOMC meetings, 12 Employment Situation
+    releases) unless the year is listed under count_exceptions with a reason, an NFP event's reference month
+    (YYYY-MM) and the excluded list (kind, date and reason; never also an event)."""
     bad = []
     if not isinstance(doc, dict):
         return ["not a JSON object"]
@@ -334,6 +374,8 @@ def validate_calendar(doc: dict) -> list:
             bad.append(f"{tag}: source_urls must be official {CAL_HOSTS[e['kind']]} pages")
         if not isinstance(e.get("verified_official"), bool):
             bad.append(f"{tag}: verified_official must be true or false")
+        if e["kind"] == "NFP" and not re.fullmatch(r"\d{4}-\d{2}", str(e.get("reference_month"))):
+            bad.append(f"{tag}: reference_month must be YYYY-MM")
         key = (e["kind"], int(e["t_ms"]))
         if key in seen:
             bad.append(f"{tag}: duplicate {key}")
@@ -341,6 +383,13 @@ def validate_calendar(doc: dict) -> list:
         if last is not None and int(e["t_ms"]) < last:
             bad.append(f"{tag}: events not in time order")
         last = int(e["t_ms"])
+    listed = {(e["kind"], e["date_et"]) for e in ev if "kind" in e and "date_et" in e}
+    for i, x in enumerate(doc.get("excluded") or []):
+        if not isinstance(x, dict) or x.get("kind") not in CAL_KINDS or not re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}", str(x.get("date_et"))) or not str(x.get("why") or "").strip():
+            bad.append(f"excluded[{i}]: needs kind, date_et and why")
+        elif (x["kind"], x["date_et"]) in listed:
+            bad.append(f"excluded[{i}]: {x['kind']} {x['date_et']} is also an event")
     if bad:
         return bad
     cnt = calendar_counts(ev)
@@ -583,11 +632,12 @@ def _pick_task(task) -> tuple:
     tr = base.get("trades") or {}
     coin = np.asarray(tr.get("coin", []), np.int64)
     fill = a + np.asarray(tr.get("t_in", []), np.int64) * int(base.get("step_ms", FIVE))
+    side = np.asarray(tr.get("side", []), np.int64)
     out = {"metrics": {k: m.get(k) for k in ("mean_lnM", "median_lnM", "median_M", "win_share", "n_positions",
                                               "max_dd", "bust", "end_multiple", "months", "share_M_lt_0_9",
                                               "worst_month")},
            "lnM": list(m["lnM"]), "cost2": {k: mc.get(k) for k in ("mean_lnM", "median_M", "bust")},
-           "taken": (coin, fill), "skipped_engine": dict(m.get("skipped") or {})}
+           "taken": (coin, fill, side), "skipped_engine": dict(m.get("skipped") or {})}
     cell = _S["fixed"].get(ri)
     if cell is not None:
         out["bits"] = np.asarray([_bits(_cell_run(ctx["run"], parts, metas, wa, wb, cell))
@@ -743,7 +793,97 @@ def _map_task(task) -> list:
                      "win_share": base.get("win_share"), "max_dd": float(base["max_dd"]),
                      "gated": int(len(sig["k"])), "weekend_skipped": int(wk.sum()),
                      "weekend_skipped_long": int((wk & (np.asarray(sig["side"]) > 0)).sum())})
+        if spec["id"] in _S.get("map_recheck", ()):            # weekends included, same cut data: vs select.json
+            rows[-1]["score_with_weekends_rerun"] = float(live.run_signals(mk, [(sig, 0)], H.R_BASE,
+                                                                             "base")["mean_lnM"])
     return rows
+
+
+def _select_paths(ctx: dict) -> tuple:
+    """(public select.json, private select file) of the wide study: the select step's own rows (weekends included)."""
+    pub = os.path.join(H.ROOT, H.OUT_REL["wide"], "select.json")
+    pp = ctx.get("private_path")
+    return pub, (os.path.join(os.path.dirname(pp), "wide_select_private.json") if pp else None)
+
+
+def select_table(ctx: dict) -> tuple:
+    """({system id: select row}, info): the select step's rows, a DeepSeek row taken from the private select file
+    when it is there (the public file keeps its labels and counts only). Read only; empty when absent."""
+    pub_p, priv_p = _select_paths(ctx)
+    info = {"select_json": os.path.relpath(pub_p, H.ROOT) if pub_p.startswith(H.ROOT) else pub_p,
+            "select_json_sha256": None, "private_rows": False}
+    rows = {}
+    if not os.path.exists(pub_p):
+        info["note"] = "select.json not found: the weekends-included columns are absent"
+        return rows, info
+    info["select_json_sha256"] = H.sha256_file(pub_p)
+    with open(pub_p) as fh:
+        doc = json.load(fh)
+    for r in doc.get("rows") or []:
+        rows[r["id"]] = r
+    info["select_picks"] = list(doc.get("picks") or [])
+    if priv_p and os.path.exists(priv_p):
+        with open(priv_p) as fh:
+            for r in json.load(fh).get("rows") or []:
+                rows[r["id"]] = r
+        info["private_rows"] = True
+    else:
+        info["note"] = "private select file not found: DeepSeek rows have no weekends-included score here"
+    return rows, info
+
+
+def _med(x):
+    x = [float(v) for v in x if v is not None]
+    return _f(np.median(x)) if x else None
+
+
+def _tf_of_id(sid: str, tf_of: dict):
+    """A system's timeframe: from the map's rows, else the timeframe part of its id (family:name:tf:gate)."""
+    if sid in tf_of:
+        return tf_of[sid]
+    return next((x for x in str(sid).split(":") if x in H.TF_ORDER), None)
+
+
+def map_by_timeframe(rows: list, sel: dict, official: list, map_picks: list, public: bool) -> dict:
+    """O1 select map per timeframe (all four): systems, eligible, median score and picks with weekends (the select
+    step's rows ``sel``) and without (the map's ``rows``), and the per-system change of score. ``public``: money
+    figures over non-DeepSeek systems only (counts and eligibility over all systems; both are DeepSeek-safe labels)."""
+    tf_of = {r["id"]: r["tf"] for r in rows}
+    out = {}
+    for tf in H.TF_ORDER:
+        rt = [r for r in rows if r["tf"] == tf]
+        money = [r for r in rt if not (public and r.get("kind") == "ds")]
+        w_sc = {r["id"]: sel[r["id"]].get("score") for r in money if r["id"] in sel}
+        pairs = [(r["score"], w_sc[r["id"]]) for r in money if w_sc.get(r["id"]) is not None]
+        d = [a - b for a, b in pairs]
+        out[tf] = {
+            "systems": len(rt), "systems_in_figures": len(money),
+            "eligible_without_weekends": sum(1 for r in rt if r["eligible"]),
+            "eligible_with_weekends": (sum(1 for r in rt if (sel.get(r["id"]) or {}).get("eligible"))
+                                       if sel else None),
+            "systems_not_in_select_json": sum(1 for r in rt if r["id"] not in sel) if sel else None,
+            "median_score_without_weekends": _med([r["score"] for r in money]),
+            "median_score_with_weekends": _med(list(w_sc.values())),
+            "paired_systems": len(pairs), "median_score_change": _med(d),
+            "higher_without_weekends": sum(1 for x in d if x > 0),
+            "lower_without_weekends": sum(1 for x in d if x < 0), "equal": sum(1 for x in d if x == 0),
+            "picks_with_weekends_official": [i for i in official if _tf_of_id(i, tf_of) == tf],
+            "picks_without_weekends_map": [i for i in map_picks if tf_of.get(i) == tf]}
+        if not rt:
+            out[tf]["note"] = "no candidate system on this timeframe"
+    return out
+
+
+def _recheck(rows: list, sel: dict, public: bool) -> dict:
+    """The official members rerun with weekends on the map's cut data against select.json's score."""
+    xs = [(r["score_with_weekends_rerun"], (sel.get(r["id"]) or {}).get("score")) for r in rows
+          if "score_with_weekends_rerun" in r and not (public and r.get("kind") == "ds")]
+    xs = [(a, b) for a, b in xs if b is not None]
+    out = {"what": "official members rerun with weekends included on the map's cut data vs the select step's score "
+                   "(select.json); the map is like for like only when they agree", "n": len(xs),
+           "n_equal": sum(1 for a, b in xs if a == b)}
+    out["max_abs_diff"] = _f(max(abs(a - b) for a, b in xs)) if xs else None
+    return out
 
 
 def select_weekend_map(ctx: dict, live, official: list) -> tuple:
@@ -754,6 +894,8 @@ def select_weekend_map(ctx: dict, live, official: list) -> tuple:
     systems = map_systems(live)
     t0 = time.time()
     _S["live"] = live
+    _S["map_recheck"] = frozenset(official)
+    sel, sel_info = select_table(ctx)
     snap = _snapshot(live)
     try:
         coins, fund = truncated_data(live, syms, b)
@@ -790,7 +932,12 @@ def select_weekend_map(ctx: dict, live, official: list) -> tuple:
             "map_only": [i for i in ch["picks"] if i not in off],
             "official_only": [i for i in official if i not in pos],
             "weekend_skipped_total": int(sum(r["weekend_skipped"] for r in rows)),
-            "run_on_test": False, "seconds": round(time.time() - t0, 1)}
+            "select_table": sel_info, "run_on_test": False, "seconds": round(time.time() - t0, 1)}
+    picks_map = list(ch["picks"])
+    pub_head = {**head, "by_timeframe": map_by_timeframe(rows, sel, list(official), picks_map, True),
+                "select_json_check": _recheck(rows, sel, True)}
+    priv_head = {**head, "by_timeframe": map_by_timeframe(rows, sel, list(official), picks_map, False),
+                 "select_json_check": _recheck(rows, sel, False)}
     pub_rows, priv_rows = {}, {}
     for r in rows:
         priv_rows[r["id"]] = r                                 # private: every row with its figures
@@ -800,7 +947,7 @@ def select_weekend_map(ctx: dict, live, official: list) -> tuple:
             pub_rows[r["id"]] = red
         else:
             pub_rows[r["id"]] = r
-    return {**head, "rows": pub_rows}, {**head, "rows": priv_rows}
+    return {**pub_head, "rows": pub_rows}, {**priv_head, "rows": priv_rows}
 
 
 # ------------------------------------------------------------------ assembly helpers
@@ -811,6 +958,7 @@ def _summary(o: dict, ctl_lnm: dict, base_taken, skipped: dict, ctl_bits: dict |
     s["cost2_mean_lnM"] = _f(o["cost2"]["mean_lnM"])
     s["cost2_median_M"] = _f(o["cost2"]["median_M"])
     s["signals"] = skipped
+    s["engine_skipped"] = {k: int(v) for k, v in (o.get("skipped_engine") or {}).items()}
     if base_taken is not None:
         s["base_positions_removed"] = base_taken
     ctl = {}
@@ -935,8 +1083,7 @@ def run(ctx: dict) -> None:
         per = {}
         for p in O_PERIODS:
             base_o = pres[(ri, p, "base")]
-            coin_b, fill_b = base_o["taken"]
-            taken = set(zip(coin_b.tolist(), fill_b.tolist()))
+            taken = set(zip(*(x.tolist() for x in base_o["taken"])))
             pv = {}
             for v in variants:
                 o = pres[(ri, p, v)]
@@ -946,8 +1093,9 @@ def run(ctx: dict) -> None:
                 side = np.concatenate([m["side"] for m in allm]) if allm else np.zeros(0, np.int64)
                 kk = np.concatenate([m["k"] for m in allm]) if allm else np.zeros(0, np.int64)
                 fl = np.concatenate([m["fill"] for m in allm]) if allm else np.zeros(0, np.int64)
-                removed = sum(1 for x in zip(kk[sk].tolist(), fl[sk].tolist()) if x in taken)
-                counts = {"gated": int(len(sk)), "skipped": int(sk.sum()), "kept": int((~sk).sum()),
+                removed = removed_base_positions(taken, kk, fl, side, sk)
+                counts = {"reason": SKIP_REASON[v], "gated": int(len(sk)), "skipped": int(sk.sum()),
+                          "kept": int((~sk).sum()),
                           "skipped_long": int((sk & (side > 0)).sum()), "skipped_short": int((sk & (side < 0)).sum())}
                 ctl_l = {c: stack(clnm.get((ri, p, c, v), [])) for c in ("a", "b")}
                 ctl_b = {c: stack(cbits.get((ri, p, c, v), [])) for c in ("a", "b")} if fixed[ri] else None
@@ -1008,9 +1156,12 @@ def run(ctx: dict) -> None:
         for v in variants[1:]:
             for p in O_PERIODS:
                 for tf in H.TF_ORDER:
-                    sel = [(rid, r) for rid, r in out_rows.items() if r["kind"] in ("pick", "v1") and r["tfs"] == [tf]
-                           and (which == "all_rows" or not ds_of[rid])]
+                    one_tf = [(rid, r) for rid, r in out_rows.items() if r["kind"] in ("pick", "v1")
+                              and r["tfs"] == [tf]]
+                    sel = [(rid, r) for rid, r in one_tf if which == "all_rows" or not ds_of[rid]]
                     if not sel:
+                        by_tf[which].setdefault(v, {}).setdefault(p, {})[tf] = {
+                            "rows": 0, "note": (TF_NOTE_DS_ONLY if one_tf else TF_NOTE_NONE)}
                         continue
                     diffs = [r["periods"][p][v]["minus_base"]["mean_lnM"] for _, r in sel]
                     by_tf[which].setdefault(v, {}).setdefault(p, {})[tf] = {
@@ -1048,7 +1199,9 @@ def run(ctx: dict) -> None:
         "rows": pub_rows, "by_timeframe": by_tf["public_rows"],
         "O1_select_map": map_pub,
         "O3": {"status": "not computed in this round: the pinned engine cannot block entries or adds by the open "
-                         "risk of same-side positions and exports no per-5m stop path", "needs": O3_NEEDS},
+                         "risk of same-side positions and exports no per-5m stop path, and hunt.py may not change; "
+                         "planned as the separately pinned reads module research/hunt/reads_o3.py",
+               "needs": O3_NEEDS},
         "O4_label_rule": "a pick whose test mean d_m against R6 (e) or against (f) is <= 0: " + MOMENTUM_ONLY_LABEL,
         "O5": o5, "seconds": round(time.time() - t_all, 1)}))
     priv.update(plain({"what": "reads_o private part (D11): DeepSeek rows and map rows, all figures",

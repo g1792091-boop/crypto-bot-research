@@ -1124,3 +1124,26 @@ parity run below is signals only). Changes:
    forward record now starts 2026-10-01 and the 21-30-day lengths of the earlier plan no longer match the review; the
    confirm window is written as the test period; forward data counts for a later round only from its hash date, since
    the dashboard shows the record from 2026-10-01 to anyone designing it.
+
+### 16.6 Second pin before any data (2026-10-12, about 01:30 KST)
+
+The first pin (commit 90d3a882f2) never reached a computation. The server stopped at its self-check (bootstrap step
+2/9), before downloading any data, so no select, test, read or price of either study existed anywhere. The cause was
+in three synthetic tests only: they assumed `bench_window.json` and `october_files.json` were not pinned, and the pin
+then listed both. The code they test was right: a pinned timing gives `window_seconds` and a pinned October list
+lets R23 open its files. Changes in this second pin:
+
+1. `tests/test_hunt.py` (`_e2e_setup`) and `tests/test_hunt_reads_a.py` point their synthetic runs at absent bench and
+   October files, so the repo's pinned files never reach them. No other line of either test changed, and no study
+   code changed.
+2. `research/hunt/reads_o.py` (7.4a: O1 weekend version on all four timeframes, O1b longs only, the select-only
+   weekend-skip map, O2, O4 (e)/(f), O5) gets its pin line now, before the select step. So its reads line predates
+   `test.json`. `bootstrap.sh` runs it after the fidelity step (`python -m research.hunt.reads_o --study wide`);
+   a failure there only warns, and every other result is packed unchanged. It stays a read: it chooses nothing and
+   changes no pick, P0-P4, p, BH, PASS or lineup.
+3. O2 reports "not run": `research/hunt/macro_calendar.json` is not pinned, because none of its 141 events has been
+   checked against the official Federal Reserve and BLS pages (the pages could not be opened from the development
+   machine). Its line may be appended once, after every event is checked, and O2 then runs as a labelled read after
+   the test.
+4. O3 (same-side cap) is not computed in this run. It needs a separate engine copy with its own pin line (the spec is
+   `O3_NEEDS` in `reads_o.py`). If it is never built, that goes in DEVIATIONS.md.

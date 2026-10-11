@@ -554,6 +554,8 @@ def _ctx(synth, monkeypatch):
     test_doc = {"picks": picks, "verdict": {"passing": [], "label": "picks", "wide_pass": False},
                 "results": {p["id"]: {} for p in picks}, "lineup": {}}
     args = types.SimpleNamespace(procs=1, private=str(synth["tmp"]), data=str(synth["tmp"]))
+    # the repo's own pinned bench_window.json never reaches this synthetic run
+    monkeypatch.setattr(H, "BENCH_WINDOW_REL", str(synth["tmp"] / "absent_bench_window.json"))
     ctx = H.reads_context("wide", args=args, pin=None, mks=mks, syms=SYMS, test_doc=test_doc, full=None,
                           reads_pin={"listed_before_test_json": True}, private_path=str(synth["tmp"] / "p.json"))
     ctx["rows"] = [r for r in ctx["rows"] if r["kind"] != "v1"]

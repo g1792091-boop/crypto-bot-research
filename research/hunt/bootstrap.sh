@@ -69,6 +69,7 @@ TESTS=${HUNT_SELFCHECK_TESTS:-tests/test_hunt.py tests/test_hunt_entries.py test
 if [ "$DRYRUN" = 1 ]; then PY=${HUNT_PY:-python3}; else PY=${HUNT_PY:-$VENV/bin/python}; fi
 if [ -n "${HUNT_CMD:-}" ]; then read -r -a HUNT <<<"$HUNT_CMD"; else HUNT=("$PY" -m research.hunt.hunt); fi
 if [ -n "${ALTPUMP_CMD:-}" ]; then read -r -a AP <<<"$ALTPUMP_CMD"; else AP=("$PY" research/altpump/altpump.py); fi
+if [ -n "${READS_O_CMD:-}" ]; then read -r -a READS_O <<<"$READS_O_CMD"; else READS_O=("$PY" -m research.hunt.reads_o); fi
 AP_OUT=$REPO/research/altpump/out
 NCPU=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)    # nproc obeys OMP_NUM_THREADS, set to 1 below
 SELF=$REPO/research/hunt/bootstrap.sh
@@ -122,7 +123,8 @@ ap_files_left() {
 est_min() {
   case $1 in
     1) echo 4 ;; 2) echo 4 ;; 3) echo 1 ;; 4) echo 15 ;; 5) echo 2 ;;
-    6) echo $(( 15 + 20 * 32 / NCPU )) ;; 7) echo $(( 10 + $(ap_files_left) / 200 )) ;; 8) echo 30 ;; 9) echo 1 ;;
+    6) echo $(( 15 + 20 * 32 / NCPU )) ;; 7) echo $(( 10 + $(ap_files_left) / 200 )) ;; 8) echo $(( 30 + 60 * 32 / NCPU )) ;;
+    9) echo 1 ;;
     *) echo 0 ;;
   esac
 }
@@ -553,8 +555,19 @@ fidelity() {
       --private "$PRIV" >>"$LOG" 2>&1 || warn "$st 정밀 재확인 실패 (다른 결과는 그대로 묶습니다)"
   done
 }
-stage 8 "정밀 재확인 (고른 것이 거래한 코인만 1분봉·마크 가격으로 다시)"
+owner_reads() {              # PREREG_HUNT_WIDE 7.4a (O1 weekend version on all four timeframes, O1b, O2, O4, O5), pinned before the test
+  local out=research/hunt/out/wide/reads_o.json
+  if [ -s "$out" ]; then sub "건너뜀: 추가 분석 (이미 끝남)"; return 0; fi
+  [ -f research/hunt/reads_o.py ] || { warn "추가 분석(주말 뺀 버전 등): reads_o.py 없음"; return 0; }
+  [ -s research/hunt/out/wide/test.json ] || { warn "추가 분석(주말 뺀 버전 등): 넓게 시험 결과가 없어 건너뜀"; return 0; }
+  sub "추가 분석: 주말 뺀 버전(4개 봉)·롱만·FOMC/고용지표 시간 피하기·모멘텀 비교 (7.4a)"
+  timeout "${HUNT_READS_O_HOURS:-5}h" "${READS_O[@]}" --study wide --data "$DATA" --private "$PRIV" --procs "$PROCS" \
+    >>"$LOG" 2>&1 || warn "추가 분석(주말 뺀 버전 등)이 끝나지 않음 (run.log 참고, 다른 결과는 그대로 묶습니다)"
+}
+
+stage 8 "정밀 재확인 (고른 것이 거래한 코인만 1분봉·마크 가격으로 다시) + 추가 분석 (주말 뺀 버전 등)"
 fidelity || warn "정밀 재확인 단계에서 예상 못 한 오류 (다른 결과는 그대로 묶습니다)"
+owner_reads
 
 # ------------------------------------------------------------------ 9 pack
 ap_line() {
@@ -643,6 +656,7 @@ PYEOF
     if [ -s "$BASE/WARNINGS" ]; then echo "* 건너뛰거나 빠진 것이 있습니다: WARNINGS.txt"; else echo "* 건너뛴 것 없음"; fi
     echo
     echo "* hunt/v1, hunt/wide: 추세 사냥 출력 (select, pick(s), test, RESULTS_KO.md, fidelity가 있으면 fidelity.json)"
+    echo "* hunt/wide/reads_o.json: 추가 분석 (주말 뺀 버전 4개 봉, 롱만, FOMC/고용지표 시간, 모멘텀 비교; 7.4a)"
     echo "* altpump: 알트 급등 출력 (pass2_cache 제외)"
     echo "* pins: 고정 파일 (고르기 뒤 picks 줄이 붙은 것)"
     echo "* data: 받은 자료 목록(manifest), 고정 기준 두 개와의 비교(verify_5m.json, verify_5m_allkeys.json), 1분봉 목록"

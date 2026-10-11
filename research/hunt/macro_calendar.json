@@ -1,6 +1,6 @@
 {
  "what": "O2 macro blackout calendar (PREREG_HUNT_WIDE W 7.4a): FOMC policy-statement release times and US Employment Situation (nonfarm payrolls) release times, 2020-2026, in ET and UTC. Dates only: no market outcome was read to make it. research/hunt/reads_o.py uses it only when this file's line is in PREREG_HUNT_WIDE.sha256 with its sha256 and every event inside the read periods has verified_official true.",
- "status": "UNVERIFIED DRAFT: no official page could be fetched from the building session (the egress proxy denied CONNECT to www.federalreserve.gov and www.bls.gov; the fetch tool could not resolve them). Every date below was cross-checked only against search-engine excerpts of the official pages (field 'evidence'), or not at all where it says 'prior knowledge'. verified_official is false everywhere. To verify: open the two official pages named in 'how_to_verify', compare every date and time, set verified_official true on each event checked (fix any that differ), keep 'counts' equal to the events, then append this file's line to the pin before the read runs.",
+ "status": "UNVERIFIED DRAFT: no official page could be fetched from the building session (the egress proxy denied CONNECT to www.federalreserve.gov and www.bls.gov; the fetch tool could not resolve them). Every date below was cross-checked only against search-engine excerpts of the official pages (field 'evidence'), or not at all where it says 'prior knowledge'. verified_official is false everywhere. To verify: open the two official pages named in 'how_to_verify', compare every date and time, set verified_official true on each event checked (fix any that differ), keep 'counts' equal to the events, then append this file's line to the pin before the read runs. A second (review) session found no wrong, missing or mistimed event inside the read periods against domain-restricted search excerpts of the official pages, but could not open them either.",
  "how_to_verify": [
   "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm (2021-2027 meetings; each meeting's statement link and 'Released ... at 2:00 p.m.')",
   "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm (2020, incl. the unscheduled meetings and the March 23 notation vote)",
@@ -8,6 +8,8 @@
   "https://www.bls.gov/schedule/news_release/empsit.htm and https://www.bls.gov/bls/2025-lapse-revised-release-dates.htm (2025-2026 schedule and the rescheduled releases)"
  ],
  "built_utc": "2026-10-11T15:25Z",
+ "revised_utc": "2026-10-11T15:55Z",
+ "revision_note": "review round: 2020 notation votes and the 2025 shutdown's original NFP dates added to 'excluded'; reference_month of the 2025-12-16 release set to 2025-11; evidence of the review session's official-page excerpts added (2020-03-23 08:00 EDT header, 14:00 headers 2023-2025, five 2020 NFP dates, 2026-12-04). No date or time changed; verified_official stays false.",
  "dst_rule": "US Eastern: EDT (UTC-4) from the second Sunday of March to the first Sunday of November (02:00 local), EST (UTC-5) otherwise; all listed times are after 02:00 local",
  "definitions": {
   "FOMC": "T = release time of the FOMC's post-meeting monetary policy statement (14:00 ET for every scheduled meeting of 2020-2026; the 2020 unscheduled meetings and the 2020-03-23 notation vote at their own release times); meeting_type scheduled / unscheduled / notation_vote",
@@ -71,13 +73,38 @@
   },
   {
    "kind": "FOMC",
+   "date_et": "2020-03-19",
+   "why": "notation vote (2020 historical page) on the temporary U.S. dollar swap lines (Foreign Authorization and Directive): no FOMC policy statement, Board press release only"
+  },
+  {
+   "kind": "FOMC",
+   "date_et": "2020-03-31",
+   "why": "notation vote (April 28-29, 2020 minutes) establishing the FIMA repo facility: no FOMC policy statement"
+  },
+  {
+   "kind": "FOMC",
+   "date_et": "2020-08-27",
+   "why": "notation vote approving the revised Statement on Longer-Run Goals and Monetary Policy Strategy (press release monetary20200827a): not a policy-decision statement; same kind as 2025-08-22, so the owners' answer for 2025-08-22 applies to it too"
+  },
+  {
+   "kind": "FOMC",
    "date_et": "2025-08-22",
-   "why": "notation vote on the revised Statement on Longer-Run Goals and Monetary Policy Strategy: not a policy-decision statement (open for the owners: include it as a T?)"
+   "why": "notation vote on the revised Statement on Longer-Run Goals and Monetary Policy Strategy: not a policy-decision statement (open for the owners: include it, and 2020-08-27, as a T?)"
   },
   {
    "kind": "NFP",
    "date_et": "2025-10-03",
-   "why": "the September 2025 release was moved to 2025-11-20 (lapse in appropriations); no October 2025 release"
+   "why": "original date of the September 2025 report, moved to 2025-11-20 (2025 lapse in appropriations)"
+  },
+  {
+   "kind": "NFP",
+   "date_et": "2025-11-07",
+   "why": "original date of the October 2025 report: not published (BLS); its establishment survey data are in the 2025-12-16 release"
+  },
+  {
+   "kind": "NFP",
+   "date_et": "2025-12-05",
+   "why": "original date of the November 2025 report, moved to 2025-12-16"
   },
   {
    "kind": "NFP",
@@ -86,7 +113,7 @@
   }
  ],
  "count_exceptions": {
-  "FOMC:2020": "7 scheduled meetings held (March 17-18 cancelled) plus 2 unscheduled meetings and 1 notation vote with a policy statement: 10 statements",
+  "FOMC:2020": "7 scheduled meetings held (March 17-18 cancelled) plus 2 unscheduled meetings (statements of March 3 and March 15) plus the March 23 notation vote's policy statement: 10 statements. The 2020 page lists two notation votes (March 19, March 23) and the minutes record two more (March 31, August 27); only March 23 issued a policy statement (the other three are in 'excluded')",
   "NFP:2025": "11 releases: no October 2025 Employment Situation (BLS: October establishment data published with November's on 2025-12-16)"
  },
  "events": [
@@ -137,7 +164,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_02072020.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (jec_02072020 (Commissioner's statement on the Employment Situation))",
    "verified_official": false
   },
   {
@@ -204,7 +231,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomchistorical2020.htm",
     "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200323a.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched); the 08:00 ET release time is the agent's prior knowledge only (not seen)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (monetary20200323a: 'For release at 8:00 a.m. EDT')",
    "verified_official": false
   },
   {
@@ -220,7 +247,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_04032020.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (empsit_04032020)",
    "verified_official": false
   },
   {
@@ -254,7 +281,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_05082020.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (empsit_05082020.pdf ('embargoed until ... May 8, 2020'))",
    "verified_official": false
   },
   {
@@ -304,7 +331,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_07022020.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (archive index: Commissioner's statement of Jul 2, 2020)",
    "verified_official": false,
    "note": "Thursday (Independence Day observed Friday 2020-07-03)"
   },
@@ -439,7 +466,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_12042020.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (archive index: Commissioner's statement of Dec 4, 2020)",
    "verified_official": false
   },
   {
@@ -1222,7 +1249,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20230322.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (monetary20230322a1.pdf: 'For release at 2:00 p.m. EDT March 22, 2023')",
    "verified_official": false
   },
   {
@@ -1647,7 +1674,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240612.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (monetary20240612a1 (2:00 p.m. EDT))",
    "verified_official": false
   },
   {
@@ -1732,7 +1759,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20240918.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (monetary20240918a1 (2:00 p.m. EDT))",
    "verified_official": false
   },
   {
@@ -1817,7 +1844,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20241218.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (monetary20241218a1 (2:00 p.m. EST))",
    "verified_official": false
   },
   {
@@ -2082,7 +2109,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20250917.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (meeting page: 'Released ... at 2:00 p.m.')",
    "verified_official": false
   },
   {
@@ -2099,7 +2126,7 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20251029.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (meeting page: 'Released ... at 2:00 p.m.')",
    "verified_official": false
   },
   {
@@ -2117,7 +2144,7 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_11202025.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page); archive file empsit_11202025 seen by the review session",
    "verified_official": false,
    "note": "rescheduled from 2025-10-03 (lapse in appropriations)"
   },
@@ -2135,13 +2162,13 @@
     "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
     "https://www.federalreserve.gov/monetarypolicy/fomcpresconf20251210.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched); release time seen in the official release header by the review session of 2026-10-11 (search excerpt; page not fetched) (fomcprojtabl20251210 (2:00 p.m. EST))",
    "verified_official": false
   },
   {
    "kind": "NFP",
-   "label": "Employment Situation for 2025-11 (with the October 2025 establishment data)",
-   "reference_month": "2025-11 (with the October 2025 establishment data)",
+   "label": "Employment Situation for 2025-11",
+   "reference_month": "2025-11",
    "date_et": "2025-12-16",
    "time_et": "08:30",
    "tz": "EST",
@@ -2153,9 +2180,9 @@
     "https://www.bls.gov/bls/news-release/empsit.htm",
     "https://www.bls.gov/news.release/archives/empsit_12162025.htm"
    ],
-   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page)",
+   "evidence": "date seen in a search excerpt of the official page (page not fetched) (BLS 2025 schedule and the revised-dates page); archive file empsit_12162025 seen by the review session",
    "verified_official": false,
-   "note": "rescheduled from 2025-12-05; no separate October 2025 release"
+   "note": "rescheduled from 2025-12-05; also carries the October 2025 establishment survey data (no separate October 2025 release; the October household data were not collected)"
   },
   {
    "kind": "NFP",
@@ -2478,7 +2505,7 @@
     "https://www.bls.gov/schedule/2026/home.htm",
     "https://www.bls.gov/schedule/news_release/empsit.htm"
    ],
-   "evidence": "not seen in any official-page excerpt; the agent's prior knowledge only (one BLS mirror excerpt lists it; not seen on the main 2026 schedule); release after the build date (scheduled)",
+   "evidence": "date seen in a search excerpt of an official page by the review session of 2026-10-11 (page not fetched) (blsmon1.bls.gov, BLS's own host, lists 2026-12-04; not seen on www.bls.gov's 2026 schedule excerpt); release after the build date (scheduled)",
    "verified_official": false
   },
   {

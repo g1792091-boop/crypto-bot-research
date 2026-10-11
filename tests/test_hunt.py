@@ -889,6 +889,9 @@ def _e2e_setup(tmp_path, monkeypatch, force_pass=False):
     monkeypatch.setattr(H, "append_picks_line", lambda study: "0" * 64)
     monkeypatch.setattr(H, "READS_MODULES", ())                 # the reads hook is tested with its own fake module
     monkeypatch.setattr(H._ew(), "fullgrid_pins", lambda: {})
+    # the repo's own pinned bench_window.json and october_files.json never reach these synthetic runs
+    monkeypatch.setattr(H, "BENCH_WINDOW_REL", str(tmp_path / "absent_bench_window.json"))
+    monkeypatch.setattr(H, "OCT_FILES_REL", str(tmp_path / "absent_october_files.json"))
     out = tmp_path / "out"
     monkeypatch.setattr(H, "OUT_REL", {"v1": str(out / "v1"), "wide": str(out / "wide")})
     monkeypatch.setattr(H, "PICKS_REL", {"v1": str(out / "v1" / "pick.json"), "wide": str(out / "wide" / "picks.json")})
