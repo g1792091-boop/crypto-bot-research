@@ -89,8 +89,8 @@ exits); EMA_n = `fg_indicators.ema` (no value before n bars); green = C > O, red
 consecutive bars on which one side's condition holds (a missing value ends it); "once per episode" = only the first
 qualifying bar of an episode signals. The first 300 chart bars of each coin are warm-up only (as the full grid). Every
 grid is the full product of its values (no invalid combination); the value in bold is the catalog's proposal or the
-earlier test's value (a reference only: there is no default to beat). Grid order: parameters as listed, values ascending (off before on), first parameter outermost;
-neighbours (6.1) = one step in one parameter.
+earlier test's value (a reference only: there is no default to beat). Grid order: parameters as listed, values
+ascending (off before on), first parameter outermost; neighbours (6.1) = one step in one parameter.
 
 | ID | idea | information | timeframes | combinations |
 |---|---|---|---|---|
@@ -155,7 +155,8 @@ Grid: dist_atr (1.5, **2**, 3); skip_h (1, **2**, 4); lookback_bars (1, **3**, 6
 
 **3.7 D01_VOL_SPIKE.** V_i > vol_mult x mean(V of the `vol_len` bars before i) (library `VO2_VOL_SPIKE`: the volume
 average shifted by one bar); long when bar i is green, short when red. With `ema_filter` on, the long only when
-C_i > EMA_200_i and the short only when C_i < EMA_200_i. Every qualifying bar signals (as the library rule).
+C_i > EMA_200_i and the short only when C_i < EMA_200_i. Every qualifying bar signals (the library's entry condition;
+the library's engine held one position per coin and skipped signals meanwhile, while here every signal counts, 5).
 Grid: vol_mult (2, **3**, 4); vol_len (10, **20**, 40); ema_filter (**off**, on). 18.
 
 ## 4. Exits and sizing
