@@ -2514,7 +2514,7 @@ def evaluate_live_gate(inputs: dict) -> dict:
 
 def lineup_of(block: dict, label: str, passed: bool) -> dict:
     """W 12 lineup (g) of one tested pick from its test block (full figures; the label alone is public)."""
-    if label != "pick":
+    if label not in ("pick", "picks"):
         return {"lineup": "excluded", "why": ["no pick, fail"]}
     if passed:
         return {"lineup": "정식", "why": []}

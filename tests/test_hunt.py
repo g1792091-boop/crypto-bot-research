@@ -546,9 +546,14 @@ def test_wide_choose_one_per_name_and_order():
     # A once (its 4h), then ties at 0.04: higher median (E), then family F1 (D) before F2 (B); the F4 DOGE row is a
     # read only (W 5), so DOGE enters through its F2 row
     assert ch["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1", "F1:D:1h:G1", "F2:B:1h:G1", "F2:DOGE:1h:G1"]
-    assert H.wide_choose(rows, k_picks=2)["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1"]
+    assert ch["batches"] == [ch["picks"]]
+    # owners 2026-10-11 (b): batches of K fixed at select (1군, 2군, 3군), one per name over the whole walk
+    two = H.wide_choose(rows, k_picks=2)
+    assert two["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1", "F1:D:1h:G1", "F2:B:1h:G1", "F2:DOGE:1h:G1"]
+    assert two["batches"] == [["F2:A:4h:G1", "F2:E:1h:G1"], ["F1:D:1h:G1", "F2:B:1h:G1"], ["F2:DOGE:1h:G1"]]
+    assert H.wide_choose(rows, k_picks=2, n_batches=1)["picks"] == ["F2:A:4h:G1", "F2:E:1h:G1"]
     none = H.wide_choose([_row(0, "A", -0.1, eligible=False), _row(1, "B", -0.05, eligible=False)])
-    assert none == {"picks": ["F2:B:1h:G1"], "label": "no pick, fail"}
+    assert none == {"picks": ["F2:B:1h:G1"], "batches": [["F2:B:1h:G1"]], "label": "no pick, fail"}
 
 
 def test_f4_is_never_a_pick_nor_the_fallback():
@@ -557,10 +562,13 @@ def test_f4_is_never_a_pick_nor_the_fallback():
     rows = [_row(0, "DOGE", 0.30, fam="F4", tf="15m", rank=1), _row(1, "X", 0.01)]
     assert H.wide_choose(rows)["picks"] == ["F2:X:1h:G1"]
     only_f4 = [_row(0, "DOGE", 0.30, fam="F4", tf="15m", rank=1)]
-    assert H.wide_choose(only_f4) == {"picks": [], "label": "no pick, fail"}
+    assert H.wide_choose(only_f4) == {"picks": [], "batches": [], "label": "no pick, fail"}
     none = H.wide_choose([_row(0, "DOGE", 0.3, fam="F4", eligible=False, rank=1), _row(1, "B", -0.5, eligible=False)])
     assert none["picks"] == ["F2:B:1h:G1"]
-    assert H.PICK_FAMILIES == ("F1", "F2", "F3")
+    assert H.PICK_FAMILIES == ("F1", "F2", "F3", "F5")
+    # F5 (the famous trend rules) are candidates; ties: F1 < F2 < F3 < F5
+    f5 = [_row(0, "TURTLE20", 0.02, fam="F5"), _row(1, "B", 0.02)]
+    assert H.wide_choose(f5)["picks"] == ["F2:B:1h:G1", "F5:TURTLE20:1h:G1"]
 
 
 def test_wide_eligible():
@@ -799,7 +807,7 @@ def _e2e_setup(tmp_path, monkeypatch, force_pass=False):
                 "tf": tf, "gate": gate, "combo": {}}
     systems = [spec(f, n, k, tf, g) for f, n, k, tf in (("F1", "E1", "hunt", "1h"), ("F1", "E3", "hunt", "4h"),
                                                         ("F2", "X", "core", "1h"), ("F3", "F9_FVG", "ds", "4h"),
-                                                        ("F2", "X", "core", "4h"))
+                                                        ("F2", "X", "core", "4h"), ("F5", "TURTLE20", "famous", "1h"))
                for g in ("G1", "NONE")]
     monkeypatch.setattr(H, "PERIODS", {"extra": ("2020-06-01", "2020-07-01"), "select": ("2020-07-01", "2020-08-01"),
                                        "test": ("2020-08-01", "2020-10-01")})
@@ -811,6 +819,7 @@ def _e2e_setup(tmp_path, monkeypatch, force_pass=False):
     monkeypatch.setattr(H, "wide_systems", lambda: systems)
     monkeypatch.setattr(H, "check_pin", lambda study, step: {"pin_file": "x", "pin_sha256": "0" * 64, "files": 0})
     monkeypatch.setattr(H, "append_picks_line", lambda study: "0" * 64)
+    monkeypatch.setattr(H, "READS_MODULES", ())                 # the reads hook is tested with its own fake module
     monkeypatch.setattr(H._ew(), "fullgrid_pins", lambda: {})
     out = tmp_path / "out"
     monkeypatch.setattr(H, "OUT_REL", {"v1": str(out / "v1"), "wide": str(out / "wide")})
@@ -836,46 +845,53 @@ def test_end_to_end_wide(tmp_path, monkeypatch):
     assert H.main(["select", "--study", "wide", "--procs", "2", "--data", "x", "--private", str(priv)]) == 0
     assert loaded["select"] < H.day_ms("2020-08-01")                 # select reads no test bar
     sel = json.load(open(out / "wide" / "select.json"))
-    assert len(sel["rows"]) == 10 and sel["label"] == "picks"
+    assert len(sel["rows"]) == 12 and sel["label"] == "picks"
     ds = [r for r in sel["rows"] if r["kind"] == "ds"]
     assert ds and all("score" not in r and "median_M" not in r and "metrics" not in r for r in ds)       # D11
     core = [r for r in sel["rows"] if r["kind"] != "ds"]
     assert all({"by_year", "by_side", "by_group", "q75_lnM"} <= set(r["metrics"]) for r in core)         # H 10
     assert all("day_eq" not in r["metrics"] for r in core)
     parts = list((priv / "parts").glob("wide_select_*/cell_*.json"))
-    assert len(parts) == 5                                       # one part per entry cell (resume)
+    assert len(parts) == 6                                       # one part per entry cell (resume)
     assert sel["private_sha256"] == H.sha256_file(str(priv / "wide_select_private.json"))
-    picks = json.load(open(out / "wide" / "picks.json"))["picks"]
+    pk = json.load(open(out / "wide" / "picks.json"))
+    picks = pk["picks"]
     assert [p["pick_no"] for p in picks] == list(range(1, len(picks) + 1))
-    assert len({p["strategy"] for p in picks}) == len(picks) == 4                # one per name: E1 E3 X F9_FVG
+    assert len({p["strategy"] for p in picks}) == len(picks) == 5        # one per name: E1 E3 X F9_FVG TURTLE20
+    # batch membership fixed in picks.json at select (W 5): 5 names -> batch 1 only
+    assert pk["batches"] == [[1, 2, 3, 4, 5]] and all(p["batch"] == 1 for p in picks)
+    assert pk["batch_trigger"] == 5 and pk["batch_size"] == 10 and pk["batch_labels"][:2] == ["1군", "2군"]
+    assert all(p.get("note") == H.F5_NOTE for p in picks if p["family"] == "F5")
     assert H.main(["test", "--study", "wide", "--procs", "2", "--data", "x", "--private", str(priv)]) == 0
     test = json.load(open(out / "wide" / "test.json"))
-    assert test["verdict"]["wide_pass"] and len(test["verdict"]["passing"]) == 4
+    assert test["verdict"]["wide_pass"] and len(test["verdict"]["passing"]) == 5
+    assert test["verdict"]["batches_tested"] == [1] and test["verdict"]["untested"] == []
+    assert test["verdict"]["batches"][0]["passes"] == 5 and not test["verdict"]["batches"][0]["opens_next"]
+    assert "sizing" not in test                                  # replaced by the R1 goal board (reads, W 7)
+    # W 12 lineup: every PASS is 정식; the live-readiness gate is written with the test (spec only)
+    assert set(test["lineup"]["정식"]) == {p["id"] for p in picks} and test["lineup"]["rule"] == H.LINEUP_RULE
+    assert test["live_gate_spec"] == H.LIVE_GATE
     for p in picks:
         c = test["results"][p["id"]]["checks"]
-        assert c["PASS"] and c["bh_significant"]
+        assert c["PASS"] and c["bh_significant"] and c["batch"] == 1
         assert c["one_pct_also_passes"]
+        assert test["results"][p["id"]]["coins_traded"]
         if p["kind"] == "ds":
             assert "p_a" not in c and "base" in test["results"][p["id"]]
             assert set(test["reads"][p["id"]]["r1_checks"]) <= H.DS_ALLOWED_CHECKS
             assert "mean_lnM" not in test["results"][p["id"]]["base"]
-            assert isinstance(test["sizing"][p["id"]], str)
         else:
-            assert set(test["sizing"][p["id"]]) == {"0.02", "0.05"}
             r = test["reads"][p["id"]]
             assert set(r) == {"r1", "select_controls", "new24", "extra2020", "gate_diagnostics"}
-            assert len(r["r1"]["controls"]["a_mean_lnM"]) == 3
+            assert len(r["r1"]["controls"]["a_mean_lnM"]) == 3 == r["select_controls"]["controls"]["seeds"]
             # review finding: the other gate is a non-pick system; wide runs it in select only (W 6)
             assert all(set(g) == {"select"} for g in r["gate_diagnostics"].values())
-            # review finding: the sizing read reports the full H 10 set and the bet actually taken
-            for x in test["sizing"][p["id"]].values():
-                assert {"by_year", "by_side", "by_group", "q25_lnM", "share_M_lt_0_9", "top10_share_of_profit",
-                        "realized_unit_risk", "share_first_unit_cut", "time_at_cap"} <= set(x)
     assert isinstance(test["basket"], str)                                      # holds a DeepSeek pick
     full = json.load(open(priv / "wide_test_private.json"))
-    assert set(full["basket"]) == {"select", "test"} and "basket" in full["sizing"]
+    assert set(full["basket"]) == {"select", "test"}
     assert H.main(["report", "--study", "wide"]) == 0
-    assert "넓게 통과: 예" in (out / "wide" / "RESULTS_KO.md").read_text()
+    rep = (out / "wide" / "RESULTS_KO.md").read_text()
+    assert "넓게 통과: 예" in rep and "1군" in rep and "정식" in rep
 
 
 def test_end_to_end_v1(tmp_path, monkeypatch):
@@ -890,6 +906,7 @@ def test_end_to_end_v1(tmp_path, monkeypatch):
     c = test["result"]["checks"]
     assert {"P0", "P1", "P2", "P3", "P4", "p_a", "p_b", "rank_p_a", "rank_p_b"} <= set(c)
     assert set(test["verdict"]) == {"v1_pass", "label", "one_pct_also_passes", "carried_by_old_six"}
+    assert set(test["lineup"]["picks"]) == {pick["pick"]["id"]} and len(test["result"]["controls"]["a_mean_lnM"]) == 3
     assert set(test["reads"]["gate_diagnostics"]) == {"NONE", "TS"}
     assert all(set(g) == {"select", "test"} for g in test["reads"]["gate_diagnostics"].values())       # H 14
     assert len(test["result"]["base"]["day_eq"]) == 61 and test["result"]["base"]["months"] == 2
@@ -1111,7 +1128,7 @@ def test_wide_select_and_test_resume_from_parts(tmp_path, monkeypatch):
     calls.clear()
     monkeypatch.setattr(H, "_sel_task", lambda task: (calls.append(task[1][0]["id"]), real(task))[1])
     assert H.main(["select", "--study", "wide"] + args) == 0
-    assert len(calls) == 3                                     # only the three missing cells ran
+    assert len(calls) == 4                                     # only the four missing cells ran
     picks = json.load(open(out / "wide" / "picks.json"))["picks"]
     sel = json.load(open(out / "wide" / "select.json"))
     calls.clear()
