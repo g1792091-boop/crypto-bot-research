@@ -450,4 +450,4 @@ def test_no_mark_until_every_coin_has_its_history(tmp_path):
     assert st.complete_ms() is None                                 # the runner does not start on a part of the coins
     fd.client.fetch = orig
     fd.cycle()
-    assert st.complete_ms() == T0 + 5 * FIVE + FIVE
+    assert st.complete_ms() == T0 + 5 * FIVE                          # the 00:25 bar closes at 00:30 + settle

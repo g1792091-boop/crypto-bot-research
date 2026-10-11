@@ -5,7 +5,9 @@
 
 **Status: DRAFT, written 2026-10-11 (KST), before any code of either hunt study existed in the repository and before
 any hunt selection or test was run; reviewed and corrected the same day before the pin (section 16.2), still before any
-hunt selection or test.** The open questions of section 15 are closed by the owners (or by the default written next to
+hunt selection or test; extended the same day with the owners' decisions (a)-(h) and the panel review of 23 reads
+(section 0.1, section 16.3), still before any hunt selection or test and before any trading outcome on a real price
+period.** The open questions of section 15 are closed by the owners (or by the default written next to
 each) before the file is pinned. Pinning = `PREREG_HUNT_WIDE.sha256` over this file, `PREREG_HUNT.md`
 and the files of section 10; the code refuses the wide `select` and `test` steps without a matching pin. After the pin
 nothing here changes; a change goes to `research/hunt/DEVIATIONS.md` with its reason and date.
@@ -25,13 +27,36 @@ Compute cost is not a constraint (a rented many-core server is allowed).
 * Like v1, this is research only: it touches nothing of the rule bot, the candidate league, the full grid's pinned
   files or any account.
 
+### 0.1 Owners' decisions of 2026-10-11 (binding; where each is written)
+
+* **(a) More entries:** the four famous trend rules of `research/famous/famous.py` (turtle 20/10, turtle 55/20,
+  time-series momentum 7 and 28 days) as family **F5**, per-coin events on 15m / 30m / 1h / 4h, G1 and NONE: 32
+  systems. F1-F3 + F5 = **686 candidate systems**; F4 stays a select-only read (sections 3.3, 4).
+* **(b) "10개 넘게 좋은게 나오면":** batched test. Batch 1 = positions 1-10 of the one-per-name walk; BH q = 0.10
+  within each batch; if >= 5 of a batch PASS, the next 10 by select score are tested the same way; membership of every
+  batch is fixed in `picks.json` at select time, before any test bar; labels 1군 / 2군 / 3군 (sections 5, 6).
+* **(c) Controls:** 1,000 seeds each (was 100) (section 6; H 12).
+* **(d) Exits:** the six exit cells (chandelier 2 / 3 / 4.5 ATR x pyramiding 3 adds / none) are **reads on the fixed
+  picks, never selection choices** (R5; the panel rejected them as choices: winner's curse).
+* **(e) Goal "결국엔 수익률":** owner-facing goal reads report multiples (x2, x5, x10 ...), not dollars; a dollar figure
+  appears only as the fresh-wallet start ($1,000) or as an account size (R1, section 12).
+* **(f) Leverage "20배·30배·40배 경우":** a rule-bot-style sizing read (R24, section 7.3).
+* **(g) Paper lineup:** 정식 = research PASS; 참고 = a tested pick with test mean monthly ln M > 0, median monthly
+  multiple >= 1, beating both controls' means, cost x2 mean ln M > 0, max drawdown < 50%, no bust and its best month
+  < 50% of the total log gain; everything else is excluded from the paper lineup; real money only from 정식 after the
+  forward criteria (section 12).
+* **(h) F4 out of the test:** the 38 watch picks were chosen after 2024-2026 was seen: select-only read (section 3).
+* **Deferred to round 2 (not in this addendum):** new-information entries, the loss-autopsy noise filters, custom
+  values (section 14).
+
 ## 1. Question
 
 Among all entries already coded in this repository whose numbers were not chosen on the test period (v1's three, the
-rule bot's 36 and DeepSeek's 44 at their default numbers), each run through the one trend-hunt machine of H 2-4 and
-H 6-10 on 15m, 30m, 1h and 4h bars, with the 추세장 gate or without it: do the at most ten systems chosen on 2021-2023
-grow one wallet after all costs on 2024-01 .. 2026-09, and beat the same machine fed with random entry times and with
-coin-flip sides, after correcting for testing ten? (The 38 watch picks run through the same machine in the select
+rule bot's 36 and DeepSeek's 44 at their default numbers) and four famous trend rules (F5), each run through the one
+trend-hunt machine of H 2-4 and H 6-10 on 15m, 30m, 1h and 4h bars, with the 추세장 gate or without it: do the systems
+chosen on 2021-2023 (ten, then ten more only when at least five of the previous ten pass, at most thirty) grow one
+wallet after all costs on 2024-01 .. 2026-09, and beat the same machine fed with random entry times and with coin-flip
+sides, after correcting for testing ten at a time? (The 38 watch picks run through the same machine in the select
 period as a read only; section 3.)
 
 ## 2. The machine (W1): what is unchanged, what differs
@@ -43,12 +68,12 @@ and indicators), H 6 (the 장세 label and the G1 rule), H 7 (7.1 entry fill, 7.
 isolated margin, 7.4 pyramiding, 7.5 chandelier exit, 7.6 order inside a 5m bar: a bar that reaches an add level adds
 first and then checks the moved stop), H 8 (one wallet, one position per coin, 6 positions, 3 longs / 3 shorts in the
 large group, total open risk <= 4%, same-close order by 30-day quote volume), H 9 (costs and cost x2), H 10 (accounts,
-monthly multiple, bust, metrics), H 12 (controls (a) and (b), 100 seeds each), and, inside section 6, H 13's P0, P1,
-P3 and P4 (P3 = cost x2 median monthly multiple >= 1.0 and mean monthly ln M > 0).
+monthly multiple, bust, metrics), H 12 (controls (a) and (b), **1,000 seeds each**), and, inside section 6, H 13's P0,
+P1, P3 and P4 (P3 = cost x2 median monthly multiple >= 1.0 and mean monthly ln M > 0).
 
 **Differs (only these):**
 
-* **Entries** (H 5): replaced by the four families of section 3.
+* **Entries** (H 5): replaced by the five families of section 3 (F4 a select-only read).
 * **Timeframes** (H 4): 15m and 30m are added. Bins are UTC (15m at :00 :15 :30 :45; 30m at :00 :30), built from the
   5m bars exactly as H 4 builds 1h and 4h. The 장세 label on 15m and 30m uses `regime5y.TF_MIN` (15 and 30 minutes),
   which already has them.
@@ -59,9 +84,10 @@ P3 and P4 (P3 = cost x2 median monthly multiple >= 1.0 and mean monthly ln M > 0
   15 minutes). Unchanged otherwise.
 * **Gate** (H 6): two variants per entry, **G1** (an event passes only on a 추세장 signal bar, H 6 as written) and
   **NONE** (every event passes). For NONE, "gated signal" in H 8 and H 12 means every event.
-* **Size**: r = **0.5%** for selection and test. r = 1%, 2% and 5% are reads only (section 7; the 2% / 5% read scales
-  the margin budget with r, section 7).
-* **Selection, test rule and reads**: sections 5-7 here replace H 11, H 13 and H 14 for this study.
+* **Size**: r = **0.5%** for selection and test. r = 1% is a read (section 7); larger sizes are the R1 goal board and
+  the R24 leverage read (section 7.3), never a rule.
+* **Selection, test rule and reads**: sections 5-7 here replace H 11, H 13 and H 14 for this study (H 14's read guard
+  covers both).
 
 ## 3. Entry families (W2)
 
@@ -75,6 +101,7 @@ does the rest.
 | **F2** | the rule bot's 36 strategies = `research/fullgrid/run.core_names()` (the full grid's core set; `research/entry_study/param_defs/<NAME>.py`, pinned by `DEFS_BC.sha256`) | defaults, `run.default_combo("core", name)` |
 | **F3** | the 44 DeepSeek definitions = `run.ds_module().DEFS` (`research/fullgrid/ds_defs.py`) | defaults, `run.default_combo("ds", name)` |
 | **F4** | the 38 watch picks = `research/fullgrid/diag/watch_sel.json` (sha256 f6902feb42a7993098b794d0968bdf54fc2c3dbc43c0a6a0d7c56b43af53de56), the file the candidate league was built from (`candleague.candidates watch --select`); its 38 (kind, name, timeframe, numbers) equal those in `candleague/data/candidates.json`. **Select-period read only: never a pick, never run on the test period, not part of the BH family or of WIDE PASS** (below) | each pick's own numbers (`combo`), on its own timeframe only; its `exit` field is ignored |
+| **F5** | the four famous trend rules of `research/famous/famous.py` (`donchian`, `tsmom`): TURTLE20 (Donchian 20/10), TURTLE55 (Donchian 55/20), TSMOM7 and TSMOM28 (time-series momentum, weekly), as entry events (section 3.3); the rules' own exits are ignored | their famous.py numbers (days), converted to bars of each timeframe |
 
 **Why F4 is a read only.** The 38 picks' numbers were fitted on the same select window (2021-2023) and then kept
 because they were positive on the same test window (2024-01 .. 2026-09) and on 2020 (`research/fullgrid/WATCH_PREREG.md`
@@ -134,6 +161,35 @@ them, imported read-only:
 * H 8 unchanged: an event on a coin that holds a position (either side) is ignored; several gated signals at the same
   close are taken by 30-day quote volume.
 
+### 3.3 F5: the famous trend rules as events (`entries_wide.famous_raw`)
+
+The rules of `research/famous/famous.py`, which ran on daily bars of the old six, are applied on each system's own
+bars (15m, 30m, 1h, 4h, built as H 4). **Every length in days becomes days x bars per day of the timeframe** (96 on
+15m, 48 on 30m, 24 on 1h, 6 on 4h), counted in bars of the coin's series (a bin with no 5m bar is no bar, so a gap
+makes a lookback longer in time, as for every other entry).
+
+* **TURTLE20 / TURTLE55** (`famous.donchian(d, n, m)` with n / m = 20 / 10 and 55 / 20 days): channels = the highest
+  high and lowest low of the n (entry) and m (exit) bars before bar t (t excluded). The position (-1, 0, +1) is updated
+  at each bar's close, in famous.py's order: a long exits when close < the m-bar low (a short when close > the m-bar
+  high); then a flat or short position goes long when close > the n-bar high, else a flat or long one goes short when
+  close < the n-bar low. Defined once both channels exist.
+* **TSMOM7 / TSMOM28** (`famous.tsmom(d, lb)` with lb = 7 and 28 days): at each weekly rebalance bar, the bar whose
+  close is Monday 00:00 UTC (the close of the UTC Sunday, famous.py's `weekly_mask` on daily bars), the position
+  becomes sign(close[t] / close[t - lb bars] - 1) (0 when equal) and is held to the next rebalance; a rebalance with no
+  defined return keeps the previous position (famous.py's forward fill); defined from the first rebalance with a
+  defined return. A missing rebalance bar keeps the position one more week. On a gap-free series the decision moments
+  and the sign are therefore the same on all four timeframes; the four F5 timeframes of one TSMOM rule differ in the
+  stop, the chandelier and the gate label of their timeframe.
+* **Event** (H 5 / 3.2): a long (short) event on bar t = the position is +1 (-1) on t and was not on t-1, with the
+  position defined on both t and t-1. The rule's own exits only end a state, so a new event can follow; the hunt
+  machine (H 7) exits the trade. A flip from long to short in one bar is a short event. No 300-bar warm-up (that is the
+  full grid's convention for F2-F4); the definedness rule replaces it.
+* Tested on synthetic bars only: the states equal famous.py's `donchian` and `tsmom` on daily bars, the events are the
+  first bars of each state, TSMOM events fall only on Monday 00:00 closes, and no event changes when later bars change
+  (`tests/test_hunt_entries.py`). F5 is new code, so it has no full-grid parity check (section 8).
+* **Label (as F4's):** research/famous results of these rules on the old six (daily bars, 2021-2026) have been read by
+  the owners and the main session; the new-24 read is shown next to any F5 pick (`note` in picks.json).
+
 ## 4. Systems (W3, W4)
 
 A **system** = (entry, timeframe, gate). Its id: `F<n>:<name>:<tf>:<gate>` (F4 ids carry the pick's watch rank as
@@ -148,11 +204,14 @@ pick's timeframe. Gates: G1 and NONE for every one.
 | F2 | 36 | 36 x 4 = 144 | 2 | 288 |
 | F3 | 44 | 39 x 4 + 5 x 3 = 171 | 2 | 342 |
 | F4 (select read only) | 38 picks (16 strategy names) | 38 | 2 | 76 |
-| **total** | | **365** | | **730** (654 candidates F1-F3 + 76 F4 reads) |
+| F5 | 4 | 4 x 4 = 16 | 2 | 32 |
+| **total** | | **381** | | **762** (686 candidates F1-F3 + F5; 76 F4 reads) |
 
-The brief counted (3 + 36 + 44) x 4 x 2 + 38 x 2 = 740; the generating rule above gives **730** because the five
-session definitions have no 4h version (section 15 Q1). Of the 730, the **654 F1-F3 systems are the candidates** for
-the picks; the 76 F4 systems are run in the select period as a read only (section 3).
+The brief counted (3 + 36 + 44) x 4 x 2 + 38 x 2 = 740; the generating rule above gives **730** before F5 because the
+five session definitions have no 4h version (section 15 Q1); F5 adds 32. Of the 762, the **686 F1-F3 and F5 systems
+are the candidates** for the picks; the 76 F4 systems are run in the select period as a read only (section 3). Tries
+per strategy name stay 8 (6 for the five session names); no exit, stop-width, pyramid-depth, gate or size variant is a
+system (they are reads, section 7).
 
 **F1 names**: E1 E2 E3.
 **F2 names** (36): DOGE N01_ST_EMA N02_ST_KST N03_ADX_GC N04_ST_KLINGER N05_PSAR_POC N06_MACD_ORB N07_ICHI_CMO
@@ -168,9 +227,10 @@ F17_Z F17_Z_HL.
 N10_HA_PSAR 4h; N13_3OUTSIDE 30m 1h; N19_FIB_CHOP 15m 30m 4h; OBV_S 30m 1h 4h; S4_BB_BBP 30m 1h 4h (23 core);
 F10_OTE 1h 4h; F11_TSOUP 4h; F12_MSS_DISP 1h 4h; F1_PVT_DIV 1h; F5_BOX 15m 4h; F7_RF_ONLY 30m 1h 4h; F7_RF_TRIPLE 1h 4h;
 F9_FVG 1h 4h (15 DeepSeek). None of the 38 has its strategy's default numbers, so no F4 system repeats an F2/F3 one.
+**F5 names**: TURTLE20 TURTLE55 TSMOM7 TSMOM28.
 
-**Strategy name** (for the one-per-name rule of section 5): E1, E2, E3 for F1; the core or DeepSeek name for F2-F3.
-Distinct names among the candidates: 83.
+**Strategy name** (for the one-per-name rule of section 5): E1, E2, E3 for F1; the core or DeepSeek name for F2-F3;
+the F5 name. Distinct names among the candidates: 87.
 
 ## 5. Selection (W5)
 
@@ -179,25 +239,29 @@ Distinct names among the candidates: 83.
   and cut at 2024-01-01 before anything else uses them, and of the manifest only what lies before that date is carried
   (a coin end or a missing funding month after it is not, so `select.json` holds nothing about 2024 or later). Positions
   still open at the end are marked at the last 5m close (H 10).
-* Runs: every one of the 730 systems, **r = 0.5%**, one account (H 10: $5,000, compounding) at base costs and one at
+* Runs: every one of the 762 systems, **r = 0.5%**, one account (H 10: $5,000, compounding) at base costs and one at
   cost x2 (H 9). No neighbours and no plateau (H 11.1-11.2 do not apply). Each row of the select table carries the H 10
-  metric set of its base run (the per-year, per-side and per-group splits included; the daily equity path is kept for
-  test runs only) and the cost x2 summary; DeepSeek rows as section 11.
+  metric set of its base run (the per-year, per-side and per-group splits and the 36 monthly ln M included; the daily
+  equity path is kept for test runs only) and the cost x2 summary with its 36 monthly ln M (R4); DeepSeek rows as
+  section 11.
 * **Eligible** = all of: at least **72 positions**; mean monthly ln M **> 0**; **no bust**; mean monthly ln M at cost x2
   **> 0**.
 * **Score** = mean monthly ln M of the base-cost run (36 months).
-* **Order**: score, highest first. Ties: higher median monthly multiple; then family F1 < F2 < F3 < F4; then name
-  (ASCII); then timeframe 15m < 30m < 1h < 4h; then G1 before NONE; then (F4) lower watch rank.
-* **Picks**: walk down the ordered eligible **F1-F3** systems and take a system when no system of the same strategy name
-  is taken yet, until **K = 10** are taken. So at most one system per strategy name (its best timeframe / gate). Fewer
-  than 10 eligible names -> every eligible name's best system; K is then that number. F4 rows are never taken (section
-  3), whatever their score.
+* **Order**: score, highest first. Ties: higher median monthly multiple; then family F1 < F2 < F3 < F4 < F5; then
+  name (ASCII); then timeframe 15m < 30m < 1h < 4h; then G1 before NONE; then (F4) lower watch rank.
+* **Picks and batches** (owners (b)): walk down the ordered eligible **F1-F3 and F5** systems and take a system when no
+  system of the same strategy name is taken yet, until **30 names** are taken. So at most one system per strategy name
+  (its best timeframe / gate). Positions 1-10 are **batch 1 (1군)**, 11-20 **batch 2 (2군)**, 21-30 **batch 3
+  (3군)**; with fewer eligible names a batch holds what exists (K of a batch = its size). F4 rows are never taken
+  (section 3), whatever their score. **Membership of every batch is fixed here**, before any test bar is read;
+  batches are never re-ordered after a test result.
 * **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 system
   (eligibility ignored) is still run on the test period with its reads (section 7), labelled "no pick, fail"; no other
   system is.
-* `research/hunt/out/wide/picks.json` (each pick's system id, family, name, timeframe, gate, numbers and pick number
-  1..K) is written, and its sha256 appended to `PREREG_HUNT_WIDE.sha256`, **before any test-period bar is read**. The
-  test step refuses to start without that line, and the picks do not change after it.
+* `research/hunt/out/wide/picks.json` (each pick's system id, family, name, timeframe, gate, numbers, pick number 1..n
+  and batch number; the batches as lists of pick numbers; the batch size 10, the trigger 5 and the batch rule) is
+  written, and its sha256 appended to `PREREG_HUNT_WIDE.sha256`, **before any test-period bar is read**. The test step
+  refuses to start without that line, and the picks and batches do not change after it.
 
 ## 6. Test (W6)
 
