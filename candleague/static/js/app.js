@@ -7,6 +7,9 @@
 //             on top (wraps from 1200 px, one sideways row below) or, by choice, a left column from 1000 px; a phone also
 //             gets the bottom bar of the four groups
 //   landing   an empty address opens the 터미널 on a window 1100 px and wider, 요약 on a phone (설정 › 첫 화면 changes it)
+//   설치 뒤    the per-device view switch "설치 뒤 진입만" (js/after.js): the screens with lists of open positions and
+//             closed trades show it and filter through it; a change remounts the screen (like 글자 크기), a new snapshot
+//             repaints its label (the install time)
 //   data      one shared copy of the engine's snapshot (/api/league every 30 s, paused while the page is hidden) that
 //             every screen reads (ctx.onLeague); the live prices (js/live.js, ctx.onLive) and the open positions
 //             (js/poskit.js, ctx.onPositions) are polled once for the page while a screen listens
@@ -24,6 +27,7 @@ import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
 import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js";
 import {gearButton, settingsTab, openSettings, closeSettings, settingsOpen, setSettingsHooks} from "./settings.js";
+import {onAfterChange, syncAfter} from "./after.js";
 
 const GROUPS = [{id: "trade", ko: "거래"}, {id: "home", ko: "홈"}, {id: "method", ko: "매매법"}, {id: "info", ko: "안내"}];
 const MENU = [
@@ -215,6 +219,7 @@ async function pollLeague() {
     if (!doc || !d.accounts || d.generated_ms !== doc.generated_ms || d.done_ms !== doc.done_ms) {
       doc = d;
       setLeague(d);
+      syncAfter();
       paintTop();
       kickPositions();
       for (const fn of fns) { try { fn(d); } catch (e) { console.error(e); } }
@@ -353,6 +358,7 @@ window.addEventListener("resize", markWide);
 
 setFindScreens(MENU.map((m) => ({id: m.id, ko: m.ko, group: m.group, groupKo: groupKo(m.group), title: MENU_TITLE[m.id]})));
 setSettingsHooks({screens: MENU.map((m) => ({id: m.id, ko: m.ko})), autoStart, remount, onNav});
+onAfterChange(() => remount());
 applySkin(skinNow());
 buildTop();
 buildMenu();

@@ -13,7 +13,12 @@
 // The first position shown is an open 후보 position (the nearest to liquidation, else the biggest |P&L|, else the
 // newest); ?acct=&coin=&tf=&at= (from 포지션, 체결 기록, 순위표, 계좌, 찾기) pick an account, a coin, a timeframe, a trade.
 // Data: the page's /api/live (5 s), /api/positions (30 s and on every new engine snapshot), /api/fills (30 s),
-// /api/klines, /api/trades/<id>, /api/pnl. Paper only: no order buttons. D11: hidden DeepSeek money is never shown
+// /api/klines, /api/trades/<id>, /api/pnl. 설치 뒤 진입만 (js/after.js, the switch over the band): on, the positions, the
+// fills and the selected account's trades are filtered here, before any part sees them (side list, table, chart chips
+// and marks, the band's counts; the feed filters its events itself, it keeps a history); the raw answers are kept and
+// filtered again when the install time first becomes known (a cold load whose /api/fills answered before the snapshot
+// and the positions did) or changes. The 수익 차트 (realized, the wallet's record) stays whole. Paper only: no order
+// buttons. D11: hidden DeepSeek money is never shown
 // (count-only rows, chips, feed lines; the sums leave them out and say so). The rule bot's market-wide panels (big
 // trades, liquidations, order book, movers, the AI meeting line) have no data source here: left out, never faked.
 import {h, local} from "../dom.js";
@@ -28,6 +33,7 @@ import {termChart} from "./terminal-chart.js";
 import {bottomTable} from "./terminal-table.js";
 import {selPanel, coinPositions, pnlPanel} from "./terminal-side.js";
 import {ages, FOOT, TFS, hiddenPos} from "./terminal-kit.js";
+import {afterPositions, afterFills, afterBook, afterOn, installMs} from "../after.js";
 
 export const css = "scr/terminal.css";
 export const wide = true;
@@ -140,6 +146,16 @@ export async function mount(el, ctx) {
   }
 
   // ---------------------------------------------------------------- data
+  // 설치 뒤 진입만: the cut the shown fills / trades were filtered with (null: not filtered); the raw answers stay so
+  // that a cut known only later (the snapshot or the positions answered after /api/fills) filters them again
+  const cutNow = () => (afterOn() ? installMs() : null);
+  let rawFills = null, fillsCut = null, rawBook = null, bookCut = null, seenCut = null;
+  function recut() {
+    const k = cutNow();
+    if (rawFills && k !== fillsCut) { fillsCut = k; st.fills = afterFills(rawFills); table.onFills(st.fills, rawFills); top.onFills(st.fills); }
+    if (rawBook && k !== bookCut) { bookCut = k; st.book = {...afterBook(rawBook.b), id: rawBook.id}; chart.onBook(); sel.paint(); }
+    if (k !== seenCut) { seenCut = k; feed.repaint(); }
+  }
   let bookTok = 0;
   // a link to an account (?acct=) without a coin: the coin of its open position, else of its newest closed trade
   let coinFromBook = asked.acct && !asked.coin;
@@ -149,7 +165,9 @@ export async function mount(el, ctx) {
     try {
       const b = await ctx.api(`/api/trades/${encodeURIComponent(id)}`);
       if (tk !== bookTok || !ctx.alive()) return;
-      st.book = {...b, id};
+      rawBook = {b, id};
+      bookCut = cutNow();
+      st.book = {...afterBook(b), id};                     // 설치 뒤 진입만: its trades (the chart marks, 마지막 거래)
     } catch (e) { return; }
     if (coinFromBook && st.pos) {
       coinFromBook = false;
@@ -163,13 +181,15 @@ export async function mount(el, ctx) {
     let rows = null;
     try { rows = ((await ctx.api("/api/fills")) || {}).fills || []; } catch (e) { if (e && e.name === "AbortError") return; }
     if (!ctx.alive()) return;
-    if (rows) st.fills = rows;
-    feed.onFills(rows); table.onFills(rows); top.onFills(st.fills);
+    if (rows) { rawFills = rows; fillsCut = cutNow(); st.fills = afterFills(rows); }   // 설치 뒤 진입만: entered after the install
+    feed.onFills(rows); table.onFills(rows ? st.fills : null, rawFills); top.onFills(st.fills);
   }
 
   let firstPos = true, lastGen = null;
-  ctx.onPositions((d) => {
+  ctx.onPositions((d0) => {
+    const d = afterPositions(d0);                          // 설치 뒤 진입만: every part reads these positions
     st.pos = d;
+    top.onAfter(d0);
     if (firstPos && d && !d.status) {
       firstPos = false;
       if (!st.sel) {
@@ -183,6 +203,7 @@ export async function mount(el, ctx) {
       loadBook();
     }
     top.onPositions(d); strip.onPositions(d); feed.onPositions(d); chart.onPositions(d); table.onPositions(d); mine.onPositions(d); sel.refresh();
+    recut();
     const gen = d && d.generated_ms;
     if (gen && gen !== lastGen) {
       const again = lastGen != null;
@@ -199,6 +220,7 @@ export async function mount(el, ctx) {
       if (a.tf && a.tf !== st.tf) { st.tf = a.tf; chart.setTf(a.tf); save(); }
     }
     top.onLeague(); sel.refresh(); feed.repaint(); table.setSel(); mine.setSel();
+    recut();
   });
   ctx.onLive(() => { top.onLive(); strip.onLive(); chart.onLive(); table.onLive(); mine.onLive(); sel.refresh(); });
   ctx.every(30000, loadFills);

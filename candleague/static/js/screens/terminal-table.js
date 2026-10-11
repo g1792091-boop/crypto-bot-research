@@ -14,7 +14,9 @@
 // when the prices are over a minute old (poskit liveOk). On a phone the rows become small cards (no sideways page
 // scroll). The 5 s live tick only changes the numbers in their cells: the rows are built and ordered when the positions,
 // the tab or the 묶음 change (and once more when the first prices come), so a focused row or a click is never lost.
-// D11: a hidden DeepSeek position or trade is counted in the foot line only.
+// D11: a hidden DeepSeek position or trade is counted in the foot line only. 설치 뒤 진입만 (js/after.js): the positions and
+// fills come filtered by terminal.js; the head's 열린 n and 미실현 합계 then carry the 설치 뒤만 chip, the foot says 설치
+// 뒤만, and a tab the switch emptied says how many it hid, with the button that turns it off.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
@@ -23,6 +25,7 @@ import {POS_GROUPS, inGroup, livePnl, liveOk, waitKo, gap} from "../poskit.js";
 import {countTo, swap} from "../v4kit.js";
 import {coinShort, coinOf, reasonKo} from "../labels.js";
 import {panel, ratioBar, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, ping} from "./terminal-kit.js";
+import {afterEmpty, afterTag, keepFill, installMs} from "../after.js";
 
 const MAX = 40;
 const NARROW = "(max-width: 899px)";
@@ -45,7 +48,7 @@ function tabSeg(options, value, onChange) {
 /** bottomTable(ctx, st, hooks) -> {el, onPositions(doc), onLive(), onFills(rows), setCoin(), setSel(), setGroup()}
  *  hooks: {onPick(id), onCoin(coin), onGroup(id), onTrade({account, coin, at})} */
 export function bottomTable(ctx, st, hooks) {
-  const T = {tab: ["pos", "fills", "stops"].includes(local.get("tm-tab", "pos")) ? local.get("tm-tab", "pos") : "pos", doc: null, fills: null, fillsFailed: false};
+  const T = {tab: ["pos", "fills", "stops"].includes(local.get("tm-tab", "pos")) ? local.get("tm-tab", "pos") : "pos", doc: null, fills: null, fillsAll: null, fillsFailed: false};
   const tabs = tabSeg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], T.tab,
     (id) => { T.tab = id; local.set("tm-tab", id); render(true); });
   const grp = h("select", {class: "select tm-sel", "aria-label": "묶음 고르기", title: "묶음: 후보 · 1/4 · 청산만 · 기본값 · 동전 계좌, 또는 기존 36 · 딥시크 (전체 = 190계좌)"},
@@ -58,7 +61,8 @@ export function bottomTable(ctx, st, hooks) {
   const tbl = h("div", {class: "tm-tw"});
   const foot = h("div", {class: "tm-pf row"});
   const totBox = h("span", {class: "tm-ut", title: "고른 묶음의 미실현 손익 합계 (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)"}, "미실현 합계 ", total, " USDT");
-  const el = panel("우리 봇", {cls: "tm-table", lead: [tabs], acts: [grp, ratio, h("span", {class: "tm-ut n"}, "열린 ", openN), totBox]}, tbl, foot);
+  const aftSlot = h("span", {class: "tm-aft"});                      // 설치 뒤만: the chip on the head's count and sum
+  const el = panel("우리 봇", {cls: "tm-table", lead: [tabs], acts: [grp, ratio, h("span", {class: "tm-ut n"}, "열린 ", openN), totBox, aftSlot]}, tbl, foot);
   const cells = new Map();
   const cellOf = (id) => {
     let c = cells.get(id);
@@ -79,6 +83,11 @@ export function bottomTable(ctx, st, hooks) {
   const posLink = () => h("a", {class: "tm-more", href: "#/positions"}, "포지션 화면 →");
 
   function inGrp() { return T.doc && !T.doc.status ? (T.doc.positions || []).filter((p) => inGroup(p, st.grp)) : []; }
+  /** 설치 뒤 진입만: the open positions of the 묶음 the switch left out (entered before the install) */
+  const beforeN = () => (T.doc && T.doc.after ? T.doc.after.before.filter((p) => inGroup(p, st.grp)).length : 0);
+  const aftFoot = () => (T.doc && T.doc.after ? "설치 뒤만 · " : "");
+  const posGone = (what) => afterEmpty(`설치 뒤에 들어간 ${what} 아직 없습니다`,
+    `고른 묶음의 열린 포지션 ${fmt.int(beforeN())}개는 모두 설치 전에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다`, {cls: "tm-empty", sm: true});
 
   // ---------------------------------------------------------------- 포지션
   function posView() {
@@ -92,9 +101,9 @@ export function bottomTable(ctx, st, hooks) {
     const top = xs.slice(0, MAX);
     shownPos = top.map((x) => x.p);
     builtPriced = xs.filter((x) => x.u).length;
-    put(foot, h("span", {class: "muted"}, stale(), hid ? `딥시크 ${fmt.int(hid)}개 열림 (금액 숨김: 개수만, 합계에서 뺌) · ` : "",
+    put(foot, h("span", {class: "muted"}, stale(), aftFoot(), hid ? `딥시크 ${fmt.int(hid)}개 열림 (금액 숨김: 개수만, 합계에서 뺌) · ` : "",
       shown.length > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(shown.length)}개는 ` : ""), posLink());
-    if (!top.length) return empty(all.length ? "고른 묶음의 열린 포지션은 모두 딥시크 (개수만)" : "고른 묶음에 열린 포지션이 없습니다");
+    if (!top.length) return all.length ? empty("고른 묶음의 열린 포지션은 모두 딥시크 (개수만)") : beforeN() ? posGone("열린 포지션이") : empty("고른 묶음에 열린 포지션이 없습니다");
     for (const x of top) paintCells(x.p, x.u, allowed);
     if (narrowNow()) {
       return h("div", {class: "tm-cards"}, top.map((x) => {
@@ -133,8 +142,16 @@ export function bottomTable(ctx, st, hooks) {
     const shown = mine.filter((f) => !hiddenFill(f, ix.byId[f.account], dsm));
     const hid = mine.length - shown.length;
     const rows = shown.slice(0, MAX);
-    put(foot, h("span", {class: "muted"}, `최근 ${fmt.int(rows.length)}건${hid ? ` · 딥시크 ${fmt.int(hid)}건 (금액 숨김: 건수만)` : ""} · `), h("a", {class: "tm-more", href: "#/fills"}, "체결 기록 전체 →"));
-    if (!rows.length) return empty(hid ? "고른 묶음의 최근 체결은 모두 딥시크 (건수만)" : "고른 묶음에 닫힌 거래가 아직 없습니다");
+    put(foot, h("span", {class: "muted"}, `${aftFoot()}최근 ${fmt.int(rows.length)}건${hid ? ` · 딥시크 ${fmt.int(hid)}건 (금액 숨김: 건수만)` : ""} · `), h("a", {class: "tm-more", href: "#/fills"}, "체결 기록 전체 →"));
+    if (!rows.length) {
+      if (hid) return empty("고른 묶음의 최근 체결은 모두 딥시크 (건수만)");
+      // 설치 뒤 진입만 emptied it: the server's newest trades of the 묶음 that were entered before the install
+      const cut = installMs(T.doc);
+      const gone = T.fillsAll && T.fillsAll !== T.fills && cut != null ? T.fillsAll.filter((f) => !keepFill(f, cut)
+        && ((a) => (a ? inGroup(a, st.grp) : st.grp === "all"))(ix.byId[f.account])).length : 0;
+      return gone ? afterEmpty("설치 뒤에 들어간 닫힌 거래가 아직 없습니다", `고른 묶음의 최근 닫힌 거래 ${fmt.int(gone)}건은 설치 전에 들어간 거래라 숨겼습니다`, {cls: "tm-empty", sm: true})
+        : empty("고른 묶음에 닫힌 거래가 아직 없습니다");
+    }
     const pick = (f) => hooks.onTrade({account: f.account, coin: coinOf(f.symbol), at: f.entry_time});
     if (narrowNow()) {
       return h("div", {class: "tm-cards"}, rows.map((f) => h("button", {type: "button", class: "tm-pcard", onclick: () => pick(f)},
@@ -188,7 +205,7 @@ export function bottomTable(ctx, st, hooks) {
     shownStops = xs;
     const hid = inGrp().filter(hiddenPos).length;
     put(foot, h("span", {class: "muted"}, stale(), "모의 계좌의 손절·잠금·익절 가격 (거래소에 걸린 실제 주문 아님)", hid ? ` · 딥시크 ${fmt.int(hid)}개는 개수만` : ""));
-    if (!xs.length) return empty("걸린 손절이 없습니다");
+    if (!xs.length) return !inGrp().length && beforeN() ? posGone("포지션의 손절 주문이") : empty("걸린 손절이 없습니다");
     const KO = {stop: "손절", lock: "잠금", tp: "익절"};
     for (const x of xs) { x.dEl = h("b"); x.mEl = h("span"); paintDist(x); }
     if (narrowNow()) {
@@ -212,6 +229,7 @@ export function bottomTable(ctx, st, hooks) {
   // ---------------------------------------------------------------- the head and the render
   function paintHead() {
     const all = inGrp();
+    put(aftSlot, T.doc && T.doc.after ? afterTag(T.doc) : null);  // 설치 뒤 진입만: the count and the sum say so
     const L = all.filter((p) => Number(p.side) > 0).length, S = all.length - L;
     ratio.set({L, S}, (n, sh) => fmt.pct(sh * 100, false, 1));
     openN.textContent = T.doc && !T.doc.status ? fmt.int(all.length) : "—";
@@ -279,7 +297,8 @@ export function bottomTable(ctx, st, hooks) {
     el,
     onPositions(d) { T.doc = d; render(false); },
     onLive() { if (needRebuild()) render(false); else { paintHead(); liveOnly(); } },
-    onFills(rows) { if (rows == null) { T.fillsFailed = true; } else { const had = T.fills; T.fills = rows; T.fillsFailed = false; if (had && rows.length && had[0] !== rows[0]) ping(el); } if (T.tab === "fills" || !T.fills) render(false); },
+    /** rows: what the 체결 tab shows (filtered by terminal.js); all: the server's rows (how many the switch hid) */
+    onFills(rows, all) { if (rows == null) { T.fillsFailed = true; } else { const had = T.fills; T.fills = rows; T.fillsAll = all || rows; T.fillsFailed = false; if (had && rows.length && had[0] !== rows[0]) ping(el); } if (T.tab === "fills" || !T.fills) render(false); },
     setCoin() { render(false); },
     setSel() { render(false); },
     setGroup() { grp.value = st.grp; render(false); },

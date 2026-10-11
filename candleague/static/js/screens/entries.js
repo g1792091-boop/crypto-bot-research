@@ -9,12 +9,16 @@
 // under the chart; its latest bars come in every minute while the card is on screen.
 // Data: the shared snapshot (accounts, open positions), /api/trades/<account> per card, /api/klines?...&end= per entry,
 // /api/live (the last price per coin).
+// 설치 뒤 진입만 (js/after.js, the switch under the head): ◀ ▶ walks only the entries made after the install (an open
+// position or a closed trade entered before it is left out, and a card with none says how many it hid); the strategy
+// lines (닫힌 n번, 손절 · 익절, R) are the full record from 10/01.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {loadLwc, color, tok} from "../chart.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, TFS, TF_MS, tfKo, sideKo, reasonKo, coinOf, coinShort, roleId} from "../labels.js";
+import {afterBar, afterOn, keepPos, keepFill} from "../after.js";
 
 const two = (n) => String(n).padStart(2, "0");
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
@@ -73,6 +77,7 @@ export async function mount(el, ctx) {
   const list = h("div", {class: "stack"});
   el.append(
     ui.screenHead("진입 차트", "매매법마다 따로: 후보가 어디서 들어가고 어디서 나왔는지 · 차트 하나에 후보 하나"),
+    afterBar({cls: "cl-eafter", also: ["매매법 요약"]}),
     h("div", {class: "dl-fields"},
       ui.field("종류", ui.seg([{id: "all", label: "전체"}, {id: "core", label: "기존 36"}, {id: "ds", label: "딥시크"}], st.kind, (v) => { st.kind = v; save(); paint(); }, {label: "종류"})),
       ui.field("봉", ui.seg([{id: "all", label: "전체"}, ...TFS.map((t) => ({id: t, label: tfKo(t)}))], st.tf, (v) => { st.tf = v; save(); paint(); }, {label: "봉"})),
@@ -151,7 +156,7 @@ export async function mount(el, ctx) {
       })));
     }));
     const withEntry = rows.filter((x) => x.a.trades || x.a.open).length;
-    info.textContent = `후보 ${rows.length}개 중 진입이 있는 것 ${withEntry}개 · ${ROLE_KO[st.role]} 계좌의 진입 · ` +
+    info.textContent = `후보 ${rows.length}개 중 진입이 있는 것 ${withEntry}개 · ${ROLE_KO[st.role]} 계좌의 진입${afterOn() ? " (설치 뒤만: ◀ ▶는 설치 뒤에 들어간 진입만)" : ""} · ` +
       "차트마다 그 후보의 봉(15분 · 30분 · 1시간 · 4시간) · ◀ ▶로 다른 진입 · 한국 시각 · " +
       "선: 진입가(점선) · 처음 손절(빨강) · 익절(초록, 계단 청산이면 없음) · 청산가 · 열린 포지션은 '지금' 선과 +% −% (10초마다) · " + R_TITLE;
   }
@@ -159,6 +164,7 @@ export async function mount(el, ctx) {
   // ------------------------------------------------------------ one pick's card
   function makeCard(c, a) {
     let acct = a, items = [], i = 0, loaded = false, failed = false, count = -1, chart = null, candles = null, plines = [], ro = null, seq = 0;
+    let hiddenN = 0;                       // 설치 뒤 진입만: entries of this account left out (entered before the install)
     let nowLine = null, liveRow = null, lastBar = 0, ticks = 0, barsBusy = false;
     let drawnItem = null;                  // the item whose candles the chart holds (null while a draw is pending or failed)
     const box = h("div", {class: "cl-ebox"});
@@ -203,7 +209,10 @@ export async function mount(el, ctx) {
           count = -1;
         }
       }
-      items = [...entries(), ...trades];
+      const every = [...entries(), ...trades];
+      // 설치 뒤 진입만: the open position (its since) and the closed trades (their entry) from after the install
+      items = afterOn() ? every.filter((x) => (x.open ? keepPos({since: x.entry_time}) : keepFill(x))) : every;
+      hiddenN = every.length - items.length;
       if (!failed) count = n;
       if (i >= items.length) i = 0;
       return true;
@@ -235,7 +244,9 @@ export async function mount(el, ctx) {
     function paintNav() {
       const n = loaded ? items.length : (acct.trades || 0) + (acct.open ? 1 : 0);
       wrap.hidden = nav.hidden = !n;          // no entry yet: a short line instead of an empty chart
-      if (!n) put(cap, h("span", {class: "muted"}, failed ? "거래 기록을 불러오지 못했습니다 (잠시 뒤 다시)" : "아직 진입이 없습니다 · 들어가면 여기에 차트가 나옵니다"));
+      if (!n) put(cap, h("span", {class: "muted"}, failed ? "거래 기록을 불러오지 못했습니다 (잠시 뒤 다시)"
+        : loaded && hiddenN ? `설치 뒤에 들어간 진입이 아직 없습니다 · 설치 전 진입 ${fmt.int(hiddenN)}번은 '설치 뒤 진입만'에서 숨김`
+          : "아직 진입이 없습니다 · 들어가면 여기에 차트가 나옵니다"));
       pos.textContent = n ? `${i + 1} / ${n}` : "진입 없음";
       prev.disabled = i <= 0;
       next.disabled = i >= n - 1;
@@ -262,7 +273,7 @@ export async function mount(el, ctx) {
     }
     async function draw() {
       const it = items[i];
-      if (!it) { if (acct.trades || acct.open) msg("불러오지 못했습니다"); return; }
+      if (!it) { if ((acct.trades || acct.open) && !hiddenN) msg("불러오지 못했습니다"); return; }
       if (!L) { msg("차트 파일을 불러오지 못했습니다"); caption(it); return; }
       const my = ++seq;
       drawnItem = null;                      // the chart still holds the previous item's candles until setData

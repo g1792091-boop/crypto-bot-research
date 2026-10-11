@@ -2,6 +2,9 @@
 // trade, wallet, drawdown, the basis verdict and the warning light), the five wallets as lines over the same days, the
 // pick's custom values against the defaults with its exit, where the pick came from, and this account's closed trades
 // (the newest 200 the snapshot keeps). Data: the shared snapshot + /api/trades/<id> for the five.
+// 설치 뒤 진입만 (js/after.js, the switch under the head): the open-position pill, 지금 포지션 and the 거래 기록 keep only
+// what was entered after the install (a position entered before reads "설치 전 진입 · 숨김" where its pill would be; the
+// record's count says 설치 뒤만); the numbers, the five wallets' lines and the comparisons stay the full record from 10/01.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -10,6 +13,7 @@ import {ROLES, ROLE_KO, ROLE_DESC, tfKo, sideKo, reasonKo, coinOf, coinShort} fr
 import {paramTable, originBox} from "./custom.js";
 import {posPill, pricesLive} from "../poskit.js";
 import {serverNow} from "../live.js";
+import {afterBar, afterOn, afterBook, openAfter, openBefore, beforeChip, afterEmpty} from "../after.js";
 
 /** Live ROE may be shown: the engine is not replaying from 10/01, wrote its record in the last 15 minutes, and the prices
  *  are live (poskit pricesLive). */
@@ -26,7 +30,8 @@ export async function mount(el, ctx) {
     ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five),
     params,
     ui.card({plate: "거래 기록", sub: "이 계좌 · 최신 200번까지 · 코인을 누르면 터미널"}, trades));
-  el.append(head, body);
+  const afterEl = afterBar({cls: "cl-actafter"});
+  el.append(head, afterEl, body);
   let seen = null, pill = null, doc = null;
   ctx.onLive(() => { if (pill) pill.update({allowed: liveOk(doc)}); });
   ctx.onLeague(async (d) => {
@@ -44,13 +49,13 @@ export async function mount(el, ctx) {
     ctx.setTitle(`${LK.pickKo(c, meta)} ${ROLE_KO[a.role]}`);
     // the open position with its live ROE (rule bot 순위표 pill); a hidden DeepSeek position: coin and side only
     const hid = LK.dsHidden(a) || (a.kind === "ds" && a.wallet == null);
-    pill = a.open ? posPill(a, {allowed: liveOk(d), hidden: hid}) : null;
+    pill = openAfter(a) ? posPill(a, {allowed: liveOk(d), hidden: hid}) : null;
     put(head, ui.screenHead(`${LK.pickKo(c, meta)}`, `${ROLE_KO[a.role]} 계좌 · ${a.id}`,
       [h("a", {class: "btn-line", href: `#/terminal?acct=${encodeURIComponent(a.id)}`}, "터미널에서 보기"),
         h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(c.name)}`}, "커스텀값"),
         h("a", {class: "btn-line", href: "#/rank"}, "순위표")]),
     h("div", {class: "row wrap cl-acthead"}, LK.fig(a, 28), LK.roleChip(a.role), LK.kindChip(a.kind), LK.styleChip((LK.pickMeta(c.id, meta) || {}).style),
-      h("span", {class: "pp thin"}, a.exit_ko), pill, a.bust ? ui.pill("파산", "bad") : null, h("span", {class: "muted"}, ROLE_DESC[a.role])));
+      h("span", {class: "pp thin"}, a.exit_ko), pill || beforeChip(a), a.bust ? ui.pill("파산", "bad") : null, h("span", {class: "muted"}, ROLE_DESC[a.role])));
     const j = ix.judge[c.id];
     put(stats, h("div", {class: "stats cl-stats6"},
       ui.stat("거래", `${fmt.int(a.trades)}번`, a.trades < 30 ? "30번 전: 아직 판단 안 함" : `승 ${fmt.int(a.wins)} · 패 ${fmt.int(a.trades - a.wins)}`),
@@ -59,7 +64,9 @@ export async function mount(el, ctx) {
       ui.stat("잔고", LK.wallet(a), a.wallet != null ? fmt.pct(LK.walletChange(a), true, 1) + " (시작 $5,000)" : null),
       ui.stat("최대 낙폭", LK.ddTxt(a), "닫힌 거래 기준"),
       ui.stat(a.role === "cand" ? "기준" : "지금 포지션", a.role === "cand" ? h("span", null, LK.verdictPill(j), " ", LK.bandMark(j) || "")
-        : a.open ? h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`) : "없음")));
+        : openAfter(a) ? h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`)
+          : openBefore(a) ? h("span", {class: "muted", title: "설치 전에 들어간 포지션이라 '설치 뒤 진입만' 보기에서 숨김"}, "설치 전 진입 · 숨김") : "없음",
+      a.role !== "cand" && openBefore(a) ? "설치 뒤만 보는 중" : null)));
     put(five, LK.fiveRows(set));
     put(split, LK.sideSplit(((d.watch || {}).picks || {})[c.id], {hidden: LK.dsHidden(c)}),
       LK.pairedBox((((d.watch || {}).picks || {})[c.id] || {}).paired, {hidden: LK.dsHidden(c)}));
@@ -77,7 +84,11 @@ export async function mount(el, ctx) {
     put(chart, series.length ? LK.equityLines(series, {label: `${LK.pickKo(c, meta)} 계좌 5개 잔고`, until: d.done_ms})
       : ui.empty(a.kind === "ds" ? "딥시크 금액 숨김 설정이라 잔고 그래프가 없습니다" : "아직 끝난 거래가 없습니다"));
     const mine = books[ids.findIndex((x) => x.id === a.id)];
-    put(trades, tradeTable((mine && mine.trades) || [], a));
+    const kept = afterBook(mine);                            // 설치 뒤 진입만: the trades entered after the install
+    const nKept = (kept && kept.trades || []).length, nAll = (mine && mine.trades || []).length;
+    put(trades, afterOn() && kept ? h("p", {class: "note"}, `설치 뒤만 · ${fmt.int(nKept)}번 (이 목록의 전체 ${fmt.int(kept.all_trades || 0)}번 중)`) : null,
+      afterOn() && !nKept && nAll ? afterEmpty("설치 뒤에 들어간 끝난 거래가 아직 없습니다", `이 계좌의 최근 거래 ${fmt.int(nAll)}번은 모두 설치 전에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다`)
+        : tradeTable((kept && kept.trades) || [], a));
   });
 }
 

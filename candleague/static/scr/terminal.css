@@ -506,3 +506,22 @@ button.tm-cr:hover { background: var(--surface-2); }
   .tm-uline.run::after { animation: none; }
 }
 .tm[data-still="1"] .tm-uline.run::after { animation: none; }
+
+/* ---------------------------------------------------------------- 설치 뒤 진입만: its own thin line over the band */
+.tm-afterrow { margin: 0 -12px; padding: 3px 12px; border-top: 1px solid var(--line); background: var(--bg); min-width: 0; }
+.tm-afterrow:has(> .kp-after[hidden]) { display: none; }
+.tm-afterrow .tm-after { gap: 4px 12px; }
+.tm-afterrow .kp-after-tog { min-height: 24px; padding: 2px 10px; font-size: var(--t-2xs); }
+.tm-afterrow .kp-after-note { font-size: var(--t-2xs); }
+.tm-btag:empty { display: none; }
+.tm-btag .kp-after-tag { margin-left: 0; }
+.tm-aft:empty { display: none; }
+/* a list the switch emptied: the words and the "모두 보기" button, small, inside a panel */
+.tm-empty.kp-after-empty { display: grid; justify-items: center; gap: 6px; padding: 12px 6px; border: 0; text-align: center; white-space: normal; font-size: var(--t-2xs); }
+.tm-empty.kp-after-empty b { color: var(--ink-2); font-weight: 700; font-size: var(--t-xs); }
+/* on a phone the same size as the switch on the other screens (32 px, a finger's tap) */
+@media (max-width: 899px) {
+  .tm-afterrow { margin: 0 -10px; padding: 4px 10px; }
+  .tm-afterrow .kp-after-tog { min-height: 32px; padding: 5px 12px; font-size: var(--t-xs); }
+  .tm-afterrow .kp-after-note { font-size: var(--t-xs); }
+}

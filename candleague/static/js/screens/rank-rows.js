@@ -12,6 +12,7 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {TFS, tfKo, ROLE_SHORT, STYLE_KO} from "../labels.js";
 import {SMALL, hidden, walletRet, retPct, nameBits, kindKo, rowVsFlip} from "./rank-cards.js";
+import {openAfter, openBefore, afterOn} from "../after.js";
 
 // ---------------------------------------------------------------- ▲▼ since the last visit (a per-viewer convenience)
 /**
@@ -116,9 +117,12 @@ export function topBottom() {
       const n = shown.length;
       if (!n && hid.length) {
         // every account of the 묶음 is hidden: no ranking; the ones in a position now (count only), the rest in 전체 목록
-        const open = hid.filter((a) => a.open);
-        put(body, open.length ? col(o.label, `지금 포지션 있는 ${fmt.int(open.length)}개 · 개수만 (금액 숨김)`, open.map((a) => o.hidRow(a)))
-          : h("p", {class: "k4-wait"}, `${o.label} ${fmt.int(hid.length)}개 · 지금 열린 포지션 없음`));
+        // (설치 뒤 진입만: the ones whose position was entered before the install are not "없음", they are hidden)
+        const open = hid.filter((a) => openAfter(a)), pre = hid.filter((a) => openBefore(a));
+        put(body, open.length ? col(o.label, `지금 포지션 있는 ${fmt.int(open.length)}개${afterOn() ? " (설치 뒤만)" : ""} · 개수만 (금액 숨김)`, open.map((a) => o.hidRow(a)))
+          : h("p", {class: "k4-wait"}, pre.length
+            ? `${o.label} ${fmt.int(hid.length)}개 · 지금 열린 포지션 ${fmt.int(pre.length)}개는 모두 설치 전 진입 ('설치 뒤 진입만'에서 숨김)`
+            : `${o.label} ${fmt.int(hid.length)}개 · 지금 열린 포지션 없음`));
       }
       else if (!n) put(body, h("p", {class: "k4-wait"}, waiting.length ? "아직 순위를 매길 계좌가 없습니다 (첫 거래 뒤부터)" : "계좌가 없습니다"));
       else if (n <= 10) put(body, col(o.label, `전체 ${fmt.int(n)}개`, shown.map((a, i) => o.row(a, i + 1))));

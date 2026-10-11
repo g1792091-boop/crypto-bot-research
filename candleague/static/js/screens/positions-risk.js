@@ -6,7 +6,8 @@
 // distances AT THE ENTRY (from the entry price), and say so; a lock line has no entry-time distance (it sits past the
 // entry on the profit side by design), so it reads "잠금 중" and ranks by its liquidation distance only. A hidden
 // DeepSeek position (D11: no prices) is not in the
-// list; the note counts it. Rows open the 터미널 on that position (its entry / stop lines).
+// list; the note counts it. Rows open the 터미널 on that position (its entry / stop lines). The list comes filtered by the
+// screen (설치 뒤 진입만, js/after.js); the head says so while the switch is on.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as K4 from "../v4kit.js";
@@ -14,6 +15,7 @@ import {gap} from "../poskit.js";
 import {markOf} from "../live.js";
 import {coinShort} from "../labels.js";
 import {sideTag, nameNode, kindKo} from "./positions-card.js";
+import {afterSuffix} from "../after.js";
 
 export const LIQ_CAP = 0.10;       // a bar is empty at 10 % or more away from the liquidation price, full at 0
 export const STOP_CAP = 0.05;      // the stop bar: full at 0, empty at 5 % or more
@@ -76,19 +78,21 @@ export function riskLadder(ctx, o = {}) {
     r.row.classList.toggle("near", danger(x));
   };
   let order = "";
-  /** list: /api/positions entries (already filtered by the screen); live false: entry-time distances (why: the reason). */
-  const set = (list, markFn = markOf, live = true, why = "엔진이 따라잡는 중") => {
+  /** list: /api/positions entries (already filtered by the screen); live false: entry-time distances (why: the reason);
+   *  before: how many the screen's 설치 뒤 진입만 left out (said when the ladder is empty). */
+  const set = (list, markFn = markOf, live = true, why = "엔진이 따라잡는 중", before = 0) => {
     const ranked = rankRisk(list, markFn, live);
     const shown = ranked.slice(0, max);
-    const ids = shown.map((x) => x.p.id).join(",") + (live ? "" : "|e");
+    const ids = shown.map((x) => x.p.id).join(",") + (live ? "" : "|e") + (shown.length ? "" : `|b${before}`);
     const rs = shown.map((x) => { const r = rowOf(x); paintRow(r, x); r.row.classList.toggle("entry", !live); return r.row; });
     const hid = (list || []).filter((p) => p.hidden).length;
     if (ids !== order) {
       order = ids;
-      put(listEl, rs.length ? rs : h("p", {class: "empty"}, hid ? `딥시크 ${fmt.int(hid)}개는 가격이 숨겨져 사다리에 없습니다 (개수만)` : "열린 포지션이 없습니다"));
+      put(listEl, rs.length ? rs : h("p", {class: "empty"}, hid ? `딥시크 ${fmt.int(hid)}개는 가격이 숨겨져 사다리에 없습니다 (개수만)`
+        : before ? `설치 뒤에 들어간 열린 포지션이 없습니다 · 설치 전 진입 ${fmt.int(before)}개는 숨김 (설치 뒤 진입만)` : "열린 포지션이 없습니다"));
     }
     for (const id of [...rows.keys()]) if (!list.some((p) => p.id === id)) rows.delete(id);
-    sub.textContent = live ? "청산가·손절선까지 남은 거리 · 가까운 순" : `진입 때 거리 (${why}이라 지금 가격 기준은 감춤)`;
+    sub.textContent = (live ? "청산가·손절선까지 남은 거리 · 가까운 순" : `진입 때 거리 (${why}이라 지금 가격 기준은 감춤)`) + afterSuffix();
     more.textContent = (ranked.length > max ? `가까운 ${fmt.int(max)}개만 · 전체 ${fmt.int(ranked.length)}개 · ` : "") +
       (live ? "거리 = 지금 마크 가격에서 그 가격까지 (%) · 5초마다 서버 시세로 움직임." : "거리 = 진입가에서 그 가격까지 (%).") +
       (hid ? ` 딥시크 ${fmt.int(hid)}개는 가격이 숨겨져 빠짐 (개수만).` : "") + " 누르면 터미널에서 그 포지션.";

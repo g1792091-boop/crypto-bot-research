@@ -15,6 +15,7 @@ import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {markOf, serverNow} from "../live.js";
 import {inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
+import {afterEmpty} from "../after.js";
 import {countTo} from "../v4kit.js";
 import {coinShort, coinOf, sideKo, reasonKo, ROLE_KO, KIND_KO} from "../labels.js";
 import {panel, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, short, fromApi, series, windowsFor, axisTicks, todayOf,
@@ -68,8 +69,13 @@ export function selPanel(ctx, st, hooks) {
     } else {
       const book = hooks.book();
       const t = book && book.id === acct.id && book.trades ? book.trades[0] : null;
+      // 설치 뒤 진입만: an open position entered before the install is left out of every list; say so, never "없음"
+      const pre = doc && doc.after ? doc.after.before.find((x) => x.id === acct.id) : null;
+      if (pre) kids.push(h("p", {class: "tm-hidnote"}, h("b", null, "설치 전 진입이라 숨김"),
+        ` · 이 계좌의 열린 포지션은 ${fmt.kst(pre.since)}에 들어가 '설치 뒤 진입만' 보기에서 뺐습니다 (끄면 보임)`));
       const hidT = t ? hiddenFill(t, acct, doc && !doc.status ? !!doc.ds_money : !!(LK.league() && LK.league().ds_money)) : false;
-      kids.push(h("p", {class: "tm-empty l"}, "지금 열린 포지션 없음"),
+      if (!pre) kids.push(h("p", {class: "tm-empty l"}, "지금 열린 포지션 없음"));
+      kids.push(
         t ? h("p", {class: "tm-last"}, "마지막 거래 ", sideTag(t.side), ` ${coinShort(coinOf(t.symbol))} · ${reasonKo(t.exit_reason)} · ${fmt.kst(t.exit_time)}`,
           hidT ? h("span", {class: "muted"}, " · 금액 숨김") : h("b", {class: ["num", fmt.tone(t.pnl, usdt(t.pnl))]}, ` ${usdt(t.pnl)} USDT`)) : null);
     }
@@ -116,11 +122,18 @@ export function coinPositions(ctx, st, onPick) {
     const all = (doc.positions || []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
     const xs = all.filter((p) => !hiddenPos(p)).sort((a, b) => (b.since || 0) - (a.since || 0));
     const L = all.filter((p) => Number(p.side) > 0).length;
-    el.sub.textContent = `${coinShort(st.coin)} · ${fmt.int(all.length)}개 · 롱 ${fmt.int(L)} · 숏 ${fmt.int(all.length - L)}`;
+    el.sub.textContent = `${coinShort(st.coin)} · ${fmt.int(all.length)}개 · 롱 ${fmt.int(L)} · 숏 ${fmt.int(all.length - L)}${doc.after ? " · 설치 뒤만" : ""}`;
     const nHid = all.length - xs.length;
     other.hidden = !nHid;
     other.textContent = `딥시크 ${fmt.int(nHid)}개도 열림 (금액 숨김: 개수만)`;
-    if (!xs.length) { put(list, h("p", {class: "tm-empty"}, nHid ? "보이는 포지션 없음 (딥시크만)" : `고른 묶음은 ${coinShort(st.coin)}에 열린 포지션이 없습니다`)); return; }
+    // 설치 뒤 진입만: this coin's open positions of the 묶음 that the switch left out (entered before the install)
+    const pre = doc.after ? doc.after.before.filter((p) => p.coin === st.coin && inGroup(p, st.grp)).length : 0;
+    if (!xs.length) {
+      put(list, nHid ? h("p", {class: "tm-empty"}, "보이는 포지션 없음 (딥시크만)")
+        : pre ? afterEmpty(`설치 뒤에 들어간 ${coinShort(st.coin)} 포지션이 아직 없습니다`, `고른 묶음의 ${coinShort(st.coin)} 열린 포지션 ${fmt.int(pre)}개는 설치 전에 들어간 것이라 숨겼습니다`, {cls: "tm-empty", sm: true})
+          : h("p", {class: "tm-empty"}, `고른 묶음은 ${coinShort(st.coin)}에 열린 포지션이 없습니다`));
+      return;
+    }
     const nodes = xs.slice(0, 30).map((p) => {
       let r = rows.get(p.id);
       if (!r || r.key !== `${p.since}`) {

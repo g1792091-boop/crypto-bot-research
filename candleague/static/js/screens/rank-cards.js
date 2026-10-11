@@ -12,6 +12,7 @@ import * as fmt from "../fmt.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {ROLE_KO, ROLE_SHORT, KIND_KO, tfKo} from "../labels.js";
+import {openAfter, afterOn} from "../after.js";
 
 export const EQUITY = 5000;
 export const SMALL = 30;                         // 표본 적음 below the checkpoints' own floor (30 closed trades)
@@ -134,7 +135,7 @@ export function cardData(d, ix, id) {
   const shown = accts.filter((a) => !hidden(a, d));
   const out = {id, n: accts.length, shown: shown.length, hiddenN: accts.length - shown.length,
     med: K4.median(shown.map((a) => walletRet(a, d))), bust: accts.filter((a) => a.bust).length,
-    open: accts.filter((a) => a.open).length, strategies: new Set(accts.map((a) => a.name)).size,
+    open: accts.filter((a) => openAfter(a)).length, strategies: new Set(accts.map((a) => a.name)).size,
     pool: pooled(accts, d)};
   if (id === "core" || id === "ds") {
     out.vsFlip = tally(accts.map((c) => candVs(d, ix, c, "flip")));
@@ -213,7 +214,7 @@ export function rankCards(o = {}) {
         c.pool.title = "동전 계좌들의 모든 거래를 모은 한 번 평균 (숨긴 딥시크 계좌는 뺌)";
       }
       c.vs2.hidden = !c.vs2.textContent;
-      c.foot.textContent = `파산 ${fmt.int(x.bust)} · 포지션 ${fmt.int(x.open)}`;
+      c.foot.textContent = `파산 ${fmt.int(x.bust)} · 포지션 ${fmt.int(x.open)}${afterOn() ? " (설치\u00a0뒤만)" : ""}`;
       c.btn.setAttribute("aria-pressed", String(g.id === sel));
     }
   };
@@ -234,7 +235,8 @@ export function rankTiles() {
     if (key !== label) { for (const c of cnt) delete c.dataset.v; key = label; }
     const hid = rows.filter((a) => hidden(a, d)).length;
     cnt[0].update(rows.length);
-    cnt[1].update(rows.filter((a) => a.open).length);
+    cnt[1].update(rows.filter((a) => openAfter(a)).length);
+    sub[1].textContent = afterOn() ? "설치 뒤만 · 지금 열린 포지션 (엔진 기준)" : "지금 열린 포지션 (엔진 기준)";
     cnt[2].update(rows.filter((a) => !hidden(a, d) && a.wallet != null && Number(a.wallet) > EQUITY).length);
     cnt[3].update(rows.filter((a) => a.bust).length);
     sub[0].textContent = hid ? `${label} · 딥시크 ${fmt.int(hid)}개 금액 숨김` : label;

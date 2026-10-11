@@ -10,6 +10,7 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {TFS, tfKo, ROLE_SHORT} from "../labels.js";
 import {EQUITY, GROUPS, hidden, walletRet, retPct, nameBits, kindKo, candVs, rowVsFlip, cmpVsCand, groupRows, ranking} from "./rank-cards.js";
+import {openAfter, openBefore, afterOn, beforeChip} from "../after.js";
 
 const HID = "딥시크 금액 숨김 설정: 개수와 라벨만";
 const hid = (t = "숨김") => h("span", {class: "muted", title: HID}, t);
@@ -66,7 +67,8 @@ export function rankTable(o = {}) {
         get: (a) => { if (isHid(a)) return hid(); if (a.wallet == null) return "—"; const t = fmt.num(a.wallet, 2); return h("span", {class: ["num", fmt.tone(a.wallet - EQUITY, t)]}, t); }},
       {id: "dd", label: "최대 낙폭", sort: (a) => (isHid(a) ? null : a.max_dd), get: (a) => (isHid(a) ? hid() : LK.ddTxt(a))},
       {id: "pos", label: "상태", l: true, title: "열린 포지션 (ROE = 지금 마크 가격 기준, 나갈 때 수수료 전) · 파산 · 대기",
-        sort: (a) => (a.open ? 0 : a.bust ? 2 : 1), get: (a) => (a.bust ? K4.pill("파산", "bad") : a.open && o.pill ? o.pill(a) : h("span", {class: "muted"}, "대기"))},
+        sort: (a) => (openAfter(a) ? 0 : a.bust ? 2 : 1), get: (a) => (a.bust ? K4.pill("파산", "bad") : openAfter(a) && o.pill ? o.pill(a)
+          : openBefore(a) ? beforeChip(a) : h("span", {class: "muted"}, "대기"))},
       {id: "style", label: "성격", l: true, sort: (a) => ((LK.pickMeta((LK.pickOf(a, IX) || a).id) || {}).style || ""),
         get: (a) => LK.styleChip((LK.pickMeta((LK.pickOf(a, IX) || a).id) || {}).style) || "—"},
       {id: "exit", label: "익절 · 손절", l: true, get: (a) => h("span", {class: "cl-exit", title: a.exit_ko}, LK.exitShort(a.exit_ko))},
@@ -103,7 +105,7 @@ export function tfSummary(d, ix, g, sub) {
   const flips = (tf, kind) => accts.filter((a) => a.role === "flip" && (!tf || a.tf === tf) && (!kind || a.kind === kind));
   const common = [
     {label: "계좌", get: (r) => fmt.int(r.rows.length)},
-    {label: "포지션", get: (r) => fmt.int(r.rows.filter((a) => a.open).length)},
+    {label: afterOn() ? "포지션 (설치 뒤만)" : "포지션", get: (r) => fmt.int(r.rows.filter((a) => openAfter(a)).length)},
     {label: "파산", get: (r) => fmt.int(r.rows.filter((a) => a.bust).length)},
     {label: "잔고 중앙값", get: (r) => medWallet(r.rows)},
     {label: "최고 계좌", l: true, get: (r) => bestCell(best(r.rows))},

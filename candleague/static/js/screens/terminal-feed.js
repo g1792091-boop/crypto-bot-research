@@ -8,6 +8,10 @@
 //               hidden DeepSeek account (D11) is folded into count rows per minute ("딥시크 · 3건 · 개수만"); no price,
 //               leverage or money of theirs. The recent entries' long / short bar beneath. A row picks that account.
 // A row that really arrived while the page is open fades in once; ages ('6s', '4m') are repainted by the 1 s tick.
+// 설치 뒤 진입만 (js/after.js): terminal.js hands both parts the filtered positions; the feed keeps every event it has
+// seen and leaves out, when drawn, the ones whose trade was entered before the install (so a cut that becomes known
+// after the first fills, or a remount, never leaves pre-install rows behind); its head and the coin strip's counts say
+// 설치 뒤만, and a list the switch emptied says why with the button that turns it off.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
@@ -16,6 +20,7 @@ import {crowd, inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
 import {tickPrice, fadeIn, reduced, visible} from "../v4kit.js";
 import {COINS, coinShort, coinOf, sideKo, reasonKo} from "../labels.js";
 import {panel, ratioBar, ping, ageCell, acctLabel, hiddenFill, hiddenPos, usdt} from "./terminal-kit.js";
+import {afterOn, afterEmpty, enteredAfter, installMs} from "../after.js";
 
 // ---------------------------------------------------------------- the coin strip
 /** coinStrip(ctx, st, onPick) -> {el, setCoin(), onLive(), onPositions(doc), repaint()} */
@@ -31,6 +36,7 @@ export function coinStrip(ctx, st, onPick) {
   }));
   const el = h("nav", {class: "tm-coins", "aria-label": "코인 (후보 리그의 여섯 코인)"}, list);
   let doc = null;
+  const aftKo = () => (doc && doc.after ? " (설치 뒤만)" : "");
   function paintPrices() {
     for (const [c, r] of rows) {
       const lr = liveRow(c);
@@ -46,7 +52,7 @@ export function coinStrip(ctx, st, onPick) {
       if (!doc || doc.status) { put(r.pos, "—"); r.pos.className = "tm-wpos muted"; r.pos.title = doc ? "엔진 기록 준비 중" : "불러오는 중"; continue; }
       const ps = (doc.positions || []).filter((p) => p.coin === c && inGroup(p, st.grp));
       const L = ps.filter((p) => Number(p.side) > 0).length, S = ps.length - L, hid = ps.filter(hiddenPos).length;
-      if (!ps.length) { put(r.pos, "포지션 없음"); r.pos.className = "tm-wpos muted"; r.pos.title = `${coinShort(c)}에 열린 포지션이 없습니다 (고른 묶음)`; continue; }
+      if (!ps.length) { put(r.pos, "포지션 없음"); r.pos.className = "tm-wpos muted"; r.pos.title = `${coinShort(c)}에 열린 포지션이 없습니다 (고른 묶음${doc.after ? " · 설치 뒤만" : ""})`; continue; }
       const k = crowd({long: L, short: S});
       let pnl = 0, known = 0;
       if (allowed) for (const p of ps) { const u = livePnl(p, markOf(c)); if (u) { pnl += u.pnl; known += 1; } }
@@ -54,11 +60,13 @@ export function coinStrip(ctx, st, onPick) {
       put(r.pos, h("span", {class: "up"}, `${fmt.int(L)}↑`), " ", h("span", {class: "down"}, `${fmt.int(S)}↓`),
         k.on ? h("i", {class: "tm-crowd", "aria-label": "한 방향 몰림"}) : null, known ? h("i", {class: ["tm-wdot", tone], "aria-hidden": "true"}) : null);
       r.pos.className = "tm-wpos num";
-      r.pos.title = `${coinShort(c)}에 열린 포지션 ${fmt.int(ps.length)}개 (롱 ${fmt.int(L)} · 숏 ${fmt.int(S)})`
+      r.pos.title = `${coinShort(c)}에 ${doc.after ? "설치 뒤 " : ""}열린 포지션 ${fmt.int(ps.length)}개${aftKo()} (롱 ${fmt.int(L)} · 숏 ${fmt.int(S)})`
         + (k.on ? ` · 한 방향 몰림 (${Math.round(k.share * 100)}%가 ${k.side > 0 ? "롱" : "숏"})` : "")
-        + (known ? ` · 점 = 미실현 합계 ${usdt(pnl)} USDT (마크 가격, ${known}개)` : allowed ? "" : ` · 손익 점 없음 (${waitKo(doc)})`)
+        + (known ? ` · 점 = 미실현 합계${aftKo()} ${usdt(pnl)} USDT (마크 가격, ${known}개)` : allowed ? "" : ` · 손익 점 없음 (${waitKo(doc)})`)
         + (hid ? ` · 딥시크 ${hid}개는 개수만` : "");
+      r.pos.setAttribute("aria-label", r.pos.title);
     }
+    el.setAttribute("aria-label", `코인 (후보 리그의 여섯 코인${doc && doc.after ? " · 포지션 개수는 설치 뒤만" : ""})`);
   }
   return {
     el,
@@ -114,15 +122,22 @@ export function fillsFeed(ctx, st, onPick) {
       : {a, hid: false, lev: f.lev, price: f.entry};
   }
 
+  /** 설치 뒤 진입만: the cut (null while off or unknown) and whether an event's trade was entered before it */
+  const cutOf = () => (afterOn(st.pos) ? installMs(st.pos) : null);
+  const before = (e, cut) => cut != null && !enteredAfter(e.at, cut);
+  let hiddenBefore = 0;
   function models() {
     S.ev.sort((x, y) => y.t - x.t || (x.kind === "exit" ? -1 : 1));
     S.ev = S.ev.slice(0, 500);
     const out = [], fold = new Map();
+    const cut = cutOf();
+    hiddenBefore = 0;
     for (const e of S.ev) {
       if (out.length >= MAX_ROWS) break;
       const v = view(e);
       const a = v.a || {};
       if (!inGroup({role: a.role, kind: a.kind}, st.grp)) continue;
+      if (before(e, cut)) { hiddenBefore += 1; continue; }
       if (!v.hid) { out.push({id: e.key, one: e, v, live: e.live, t: e.t}); continue; }
       const k = `ds:${e.kind}:${Math.floor(e.t / 60000)}`;
       let m = fold.get(k);
@@ -155,6 +170,7 @@ export function fillsFeed(ctx, st, onPick) {
       h("span", {class: "tm-fc muted"}, [...m.coins].slice(0, 2).join("·")), h("span", {class: "pp thin tm-fv"}, "개수만"));
   }
   function render() {
+    el.sub.textContent = afterOn(st.pos) ? "설치 뒤만 · 누르면 그 계좌" : "190계좌 · 누르면 그 계좌";
     const ms = models();
     const nodes = [];
     const motionOk = !reduced() && visible();
@@ -172,13 +188,15 @@ export function fillsFeed(ctx, st, onPick) {
     const anyLive = ms.some((m) => m.live);
     for (const e of S.ev) e.live = false;
     if (!nodes.length) put(list, S.failed && !S.loaded ? h("p", {class: "tm-empty"}, "체결 기록을 불러오지 못함 · 30초마다 다시 받습니다")
-      : h("p", {class: "tm-empty"}, S.loaded ? "고른 묶음에 아직 체결이 없습니다" : "불러오는 중"));
+      : S.loaded && hiddenBefore ? afterEmpty("설치 뒤에 들어간 체결이 아직 없습니다", `고른 묶음의 최근 진입·청산 ${fmt.int(hiddenBefore)}건은 설치 전에 들어간 거래라 숨겼습니다`, {cls: "tm-empty", sm: true})
+        : h("p", {class: "tm-empty"}, S.loaded ? "고른 묶음에 아직 체결이 없습니다" : "불러오는 중"));
     else list.replaceChildren(...nodes);
     if (anyLive) ping(el);
     let L = 0, Sh = 0, n = 0;
+    const cut = cutOf();
     for (const e of S.ev) {
       const a = e.kind === "entry" ? acctOf(e) : null;
-      if (!a || !inGroup({role: a.role, kind: a.kind}, st.grp)) continue;
+      if (!a || !inGroup({role: a.role, kind: a.kind}, st.grp) || before(e, cut)) continue;
       if (e.side > 0) L += 1; else Sh += 1;
       if (++n >= 100) break;
     }

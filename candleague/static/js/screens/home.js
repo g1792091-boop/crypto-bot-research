@@ -3,6 +3,9 @@
 // five roles side by side, the picks' 상위 · 하위 5 by mean per trade, and the newest fills. Data: the shared snapshot
 // (league.json, app.js) and /api/fills. HONESTY: every number is the snapshot's; a pool's "지금이면" is a preview of the
 // pre-registered rule, never the checkpoint's verdict (that is computed on the day).
+// 설치 뒤 진입만 (js/after.js, the switch under the head): the 최근 체결 list, the 자리 비운 사이 trade count and the
+// 후보 열린 포지션 count keep only what was entered after the install (labelled 설치 뒤만); the wallets, the pools, the
+// ranking and the checkpoint numbers stay the full record from 10/01.
 import {h, s, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -10,6 +13,7 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow} from "../live.js";
 import {ROLES, ROLE_KO, KIND_LONG, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
+import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty, openAfter} from "../after.js";
 
 const SHOW = 5;
 
@@ -22,20 +26,23 @@ export async function mount(el, ctx) {
   const tb = h("div", {class: "k4-tb"});
   const fills = h("div");
   const away = h("div");
+  const fillsCard = ui.card({plate: "최근 체결", sub: "모든 계좌 · 누르면 그 계좌", acts: h("a", {class: "btn-line", href: "#/fills"}, "체결 기록 →")}, fills);
   el.append(
     ui.screenHead("요약", "후보 리그 한눈에 보기 · 커스텀값 후보 38개 × 계좌 5개"),
+    afterBar({cls: "s2a-after"}),
     away,
     h("div", {class: "s2a-wrap s2a-top"}, hero, goal),
     led,
     h("section", {class: "k4-sec", "aria-label": "묶음"}, K4.secRow("묶음", "기존 36 · 딥시크 따로 (점검도 묶음마다 따로)",
       h("a", {class: "btn-line", href: "#/check"}, "점검 진행 →")), pools),
     ui.card({plate: "상위 · 하위", sub: "후보 계좌의 거래 한 번 평균 (지갑 대비)", acts: h("a", {class: "btn-line", href: "#/rank"}, "순위표 →")}, tb),
-    ui.card({plate: "최근 체결", sub: "모든 계좌 · 누르면 그 계좌", acts: h("a", {class: "btn-line", href: "#/fills"}, "체결 기록 →")}, fills),
+    fillsCard,
     h("p", {class: "assume"}, "모의 계좌입니다 (가상 돈). 바이낸스 실제 시세로 계산하고 수수료·슬리피지·펀딩을 뺍니다. 주문은 넣지 않습니다."));
 
-  // 자리 비운 사이 state (declared before the first snapshot callback runs)
+  // 자리 비운 사이 state and the 최근 체결 rows (declared before the first snapshot callback runs)
   const prev = local.get("home-seen", null);
   let awayDone = false, awayTrades = null;
+  let fillRows = null, fillsKey = "";
   ctx.onLeague((d) => {
     if (!d.accounts) {
       put(hero, h("div", {class: "s2a-hrow"}, ui.plate("후보 리그")), h("p", {class: "dl-vbig warn"}, "준비 중"),
@@ -48,6 +55,7 @@ export async function mount(el, ctx) {
     led.update(d);
     paintPools(d);
     paintTopBottom(d);
+    paintFills();                       // the install time may come with this snapshot (설치 뒤 진입만)
   });
 
   // 자리 비운 사이: what changed since this viewer's previous visit (this device only; nothing is sent anywhere)
@@ -70,7 +78,7 @@ export async function mount(el, ctx) {
     for (const id of newBust) { const a = ix.byId[id]; if (a) changes.push(h("li", null, h("b", null, LK.pickKo(LK.pickOf(a, ix) || a)), ` ${a.role === "cand" ? "후보" : "비교"} 계좌 파산`)); }
     put(away, ui.card({plate: "자리 비운 사이", sub: `${fmt.kst(prev.t)} → ${fmt.kst(d.done_ms)} KST 처리분 · 이 기기에서 지난번에 본 뒤`, cls: "cl-away"},
       h("div", {class: "stats cl-stats3"},
-        ui.stat("닫힌 거래", awayTrades == null ? "…" : `${fmt.int(awayTrades.n)}번${awayTrades.more ? "+" : ""}`, awayTrades ? `이긴 거래 ${fmt.int(awayTrades.w)}번` : null),
+        ui.stat(`닫힌 거래${afterSuffix()}`, awayTrades == null ? "…" : `${fmt.int(awayTrades.n)}번${awayTrades.more ? "+" : ""}`, awayTrades ? `이긴 거래 ${fmt.int(awayTrades.w)}번` : null),
         ui.stat("기준 · 경고등 변화", `${fmt.int(changes.length)}건`, changes.length ? "아래 목록" : "변화 없음"),
         ui.stat("파산", `${fmt.int(newBust.length)}개`, "새로 멈춘 계좌")),
       changes.length ? h("ul", {class: "cl-notes"}, changes) : null));
@@ -79,9 +87,10 @@ export async function mount(el, ctx) {
     if (!prev || !prev.t) return;
     let f;
     try { f = await ctx.api("/api/fills"); } catch (e) { return; }
-    const rows = (f.fills || []).filter((t) => t.exit_time > prev.t);
+    const all = f.fills || [];
+    const rows = afterFills(all).filter((t) => t.exit_time > prev.t);      // 설치 뒤 진입만: entered after the install
     awayTrades = {n: rows.length, w: rows.filter((t) => (t.pnl != null ? t.pnl > 0 : t.roe != null ? t.roe > 0 : !!t.win)).length,
-      more: rows.length >= (f.fills || []).length && rows.length >= 300};
+      more: all.filter((t) => t.exit_time > prev.t).length >= all.length && all.length >= 300};
     const d = LK.league();
     if (d && d.accounts) paintAway(d);
   }
@@ -172,9 +181,26 @@ export async function mount(el, ctx) {
   async function loadFills() {
     let f;
     try { f = await ctx.api("/api/fills"); } catch (e) { return; }
+    fillRows = f.fills || [];
+    fillsKey = "";
+    paintFills();
+  }
+  /** the 8 newest (설치 뒤 진입만: of those entered after the install; filtered again when the install time comes) */
+  function paintFills() {
+    if (!fillRows) return;
+    const aft = afterOn();
+    const key = `${fillRows.length}|${fillRows.length ? fillRows[0].exit_time : ""}|${aft}`;
+    if (key === fillsKey) return;
+    fillsKey = key;
     const ix = LK.index();
-    const rows = (f.fills || []).slice(0, 8);
-    if (!rows.length) { put(fills, ui.empty("아직 끝난 거래가 없습니다")); return; }
+    const rows = afterFills(fillRows).slice(0, 8);
+    const fsub = fillsCard.querySelector(".sub");
+    if (fsub) fsub.textContent = aft ? "모든 계좌 · 설치 뒤만 · 누르면 그 계좌" : "모든 계좌 · 누르면 그 계좌";
+    if (!rows.length) {
+      put(fills, aft && fillRows.length ? afterEmpty("설치 뒤에 들어간 끝난 거래가 아직 없습니다", `최근 거래 ${fmt.int(fillRows.length)}번은 설치 전에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다`)
+        : ui.empty("아직 끝난 거래가 없습니다"));
+      return;
+    }
     put(fills, h("div", {class: "s2a-rows", role: "list"}, rows.slice(0, SHOW).map((t) => fillRow(t, ix))),
       rows.length > SHOW ? ui.disclosure(`${rows.length - SHOW}개 더 보기`, h("div", {class: "s2a-rows", role: "list"}, rows.slice(SHOW).map((t) => fillRow(t, ix)))) : null);
   }
@@ -219,15 +245,17 @@ function ledBar() {
       h("div", {class: "led-n"}, total, h("span", null, "USDT")), h("div", {class: "led-chg"}, pctEl, absEl)),
     mid, right, cap);
   const cells = new Map();
-  const cell = (k, title) => {
+  const cell = (k, title, label = k) => {
     if (!cells.has(k)) {
       const v = h("b", {class: "num"}, "—");
-      const box = h("div", {title}, h("span", null, k), v);
+      const kEl = h("span", null, label);
+      const box = h("div", {title}, kEl, v);
       right.append(box);
-      cells.set(k, {v, box});
+      cells.set(k, {v, box, kEl});
     }
     const c = cells.get(k);
     c.box.title = title;
+    c.kEl.textContent = label;
     return c.v;
   };
   el.update = (d) => {
@@ -247,12 +275,13 @@ function ledBar() {
     put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 $5,000에서 시작`),
       h("span", null, `시작보다 많은 후보 ${fmt.int(wins)}개`)));
     // this card is the 38 picks': their own open positions and closed trades (190계좌 totals are on 서버 상태 · 포지션)
-    const open = ix.cands.filter((a) => a.open).length;
+    const open = ix.cands.filter((a) => openAfter(a)).length;          // 설치 뒤 진입만: entered after the install
     const closed = ix.cands.reduce((a, x) => a + (x.trades || 0), 0);
     const ok = Object.values(d.judge || {}).filter((j) => j.verdict === "ok").length;
     const warn = Object.values(d.judge || {}).filter((j) => j.band && j.band.below).length;
     cell("10/01부터", "다시 돌리기 시작부터 처리한 날 수").textContent = `${fmt.int(LK.leagueDay(d))}일째`;
-    cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션 (190계좌 전체: ${fmt.int(d.accounts.filter((a) => a.open).length)}개)`).textContent = fmt.int(open);
+    cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션${afterOn() ? " (설치 뒤에 들어간 것만)" : ""} (190계좌 전체: ${fmt.int(d.accounts.filter((a) => openAfter(a)).length)}개)`,
+      `후보 열린 포지션${afterOn() ? " (설치 뒤만)" : ""}`).textContent = fmt.int(open);
     cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (190계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);
     cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
     cell("경고등", "기존 36 후보 중 백테스트 예상 범위(하위 5%) 아래").textContent = fmt.int(warn);

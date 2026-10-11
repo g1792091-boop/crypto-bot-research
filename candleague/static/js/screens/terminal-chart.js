@@ -18,6 +18,7 @@ import * as LK from "../lk.js";
 import {loadLwc, color, tok} from "../chart.js";
 import {liveRow, liveState, serverNow, markOf} from "../live.js";
 import {livePnl, liveOk, inGroup} from "../poskit.js";
+import {afterSuffix} from "../after.js";
 import {flashPrice} from "../v4kit.js";
 import {coinShort, coinOf, sideKo, reasonKo, ROLE_SHORT} from "../labels.js";
 import {panel, ping, mmss, TFS, TF_MS, TF_SHORT, hiddenPos, hiddenFill, pctOf} from "./terminal-kit.js";
@@ -202,8 +203,8 @@ export function termChart(ctx, st, hooks) {
       h("span", null, h("i", {class: "k-ar"}), "진입 (롱 ▲ · 숏 ▼)"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
       h("span", {title: "고른 포지션의 진입선 (점선) · 손절선 (빨강) 또는 잠금선 (초록: 닿으면 수익으로 끝남) · 익절선 · 청산 추정 (진입 때 기준)"},
         h("i", {class: "k-ln"}), "진입·손절·청산선"),
-      h("span", {class: "tm-ckn"}, all.length ? `이 코인 ${fmt.int(all.length)}개 · 왼쪽 표시 ${fmt.int(shown.length ? chipGroups().reduce((n, g) => n + g.items.length, 0) : 0)}개${hidden ? ` · 딥시크 ${fmt.int(hidden)}개는 개수만` : ""}`
-        : "고른 묶음은 이 코인에 열린 포지션 없음"),
+      h("span", {class: "tm-ckn"}, all.length ? `이 코인 ${fmt.int(all.length)}개 · 왼쪽 표시 ${fmt.int(shown.length ? chipGroups().reduce((n, g) => n + g.items.length, 0) : 0)}개${hidden ? ` · 딥시크 ${fmt.int(hidden)}개는 개수만` : ""}${doc && doc.after ? afterSuffix(doc) : ""}`
+        : `고른 묶음은 이 코인에 열린 포지션 없음${doc && doc.after ? afterSuffix(doc) : ""}`),
       hidSel ? h("span", {class: "warn-t"}, "딥시크 금액 숨김: 이 계좌의 선과 거래 표시 없음") : null);
   }
 

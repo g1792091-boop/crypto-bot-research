@@ -8,6 +8,9 @@
 //   tabs 포지션 n / 손절·잠금 주문 / 체결 기록; 묶음 and sort selects; the position cards (all open in a 2-3 column grid at
 //   1280 px and wider, one-line rows that open below), 12 per page
 //   the side card 위험 사다리 (청산까지 / 손절선까지)
+//   the switch 설치 뒤 진입만 (js/after.js) under the freshness line: on, the cards, the ladder, the orders, the 체결 기록
+//   tab, the coin chips, the 포지션 n tab and the summary keep only what was entered after the install (labelled 설치
+//   뒤만); a list it emptied says how many it hid (and offers to turn it off)
 // Data: /api/positions (poskit: every 30 s and on each new engine snapshot), /api/live (5 s: the mark), /api/klines 5m
 // (진입 뒤 가격, per coin, again after 5 minutes), /api/fills (체결 기록). Nothing here can place an order.
 import {h, put, local} from "../dom.js";
@@ -21,6 +24,7 @@ import {COINS, coinShort, KIND_KO} from "../labels.js";
 import {posCard, nameNode, usdt, HIDDEN_KO, HIDDEN_WHY} from "./positions-card.js";
 import {riskLadder} from "./positions-risk.js";
 import {ordersPane, tradesPane} from "./positions-orders.js";
+import {afterBar, afterPositions, afterTag, afterSuffix, afterEmpty} from "../after.js";
 
 export const css = "scr/positions.css";
 
@@ -112,6 +116,8 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- skeleton
   const fresh = freshLine(null, {cls: "ps-fresh"});
+  const afterEl = afterBar({cls: "ps-after"});
+  const sumTag = h("span", {class: "ps-aftertag"});
   const bannerSlot = h("div", {class: "ps-banner"});
   const sumNum = h("b", {class: "num ps-big ps-pnl"}, "—");
   const sumSub = h("span", {class: "s"}, "");
@@ -121,7 +127,7 @@ export async function mount(el, ctx) {
   const bestLine = h("div", {class: "ps-bw"});
   const sumCard = h("section", {class: "card ps-sum", "aria-label": "열린 포지션 요약"},
     h("div", {class: "stats"},
-      K4.stat(h("span", null, "미실현 손익 합계 (USDT) ", h("span", {class: "ps-tip", tabindex: "0", role: "note", title: ASSUME_KO, "aria-label": `설명: ${ASSUME_KO}`}, "ⓘ")), sumNum, sumSub),
+      K4.stat(h("span", null, "미실현 손익 합계 (USDT) ", sumTag, h("span", {class: "ps-tip", tabindex: "0", role: "note", title: ASSUME_KO, "aria-label": `설명: ${ASSUME_KO}`}, "ⓘ")), sumNum, sumSub),
       K4.stat("롱 · 숏", lsEl, nOpenSub)),
     h("div", {class: "ps-sumfoot"}, line, liveChip),
     ui.disclosure("가장 많이 버는·잃는 포지션", bestLine));
@@ -130,13 +136,15 @@ export async function mount(el, ctx) {
   const tabBody = h("div", {class: "stack"});
   const ladder = riskLadder(ctx);
   const side = h("div", {class: "stack ps-side"}, ladder.el);
-  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), fresh, bannerSlot, sumCard, coinBar,
+  el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션"), fresh, afterEl, bannerSlot, sumCard, coinBar,
     h("div", {class: "ps-cols"}, h("div", {class: "stack ps-main"}, tabBar, tabBody), side),
     h("p", {class: "assume once ps-assume"}, ASSUME_KO));
 
   // ---------------------------------------------------------------- data helpers
   const all = () => (st.doc && Array.isArray(st.doc.positions) ? st.doc.positions : []);
   const inScope = (p) => (!st.coin || p.coin === st.coin) && inGroup(p, st.grp);
+  /** 설치 뒤 진입만: the open positions in scope that the switch left out (entered before the install) */
+  const beforeIn = () => (st.doc && st.doc.after ? st.doc.after.before.filter(inScope).length : 0);
   const pnlOf = (p) => { if (!allowed()) return null; const u = livePnl(p); return u ? u.pnl : null; };
   const gapOf = (p) => { if (allowed()) { const u = livePnl(p); return u ? u.liqGap : null; } return p.liq_dist_entry ?? null; };
 
@@ -160,7 +168,7 @@ export async function mount(el, ctx) {
     };
     const opts = [{id: "", label: ["전체", h("small", {class: "ps-cnt"}, fmt.int(mine.length))]}, ...COINS.map((c) => ({id: c, label: lab(c)}))];
     put(coinBar, ui.seg(opts, st.coin, (v) => { st.coin = v; st.pin = null; local.set("ps-coin", v); st.countsKey = ""; renderAll(false); }, {label: "코인 고르기", cls: "scroll"}),
-      h("p", {class: "pos-note ps-skew-note"}, "↑ 롱 · ↓ 숏 개수",
+      h("p", {class: "pos-note ps-skew-note"}, "↑ 롱 · ↓ 숏 개수", afterSuffix(st.doc),
         skewed ? [" · ", h("i", {class: "ps-skew", "aria-hidden": "true"}), " 한 방향 몰림 (5개 이상 중 한쪽 80% 이상)"] : null,
         st.grp !== "all" ? ` · ${GROUP_KO[st.grp]} 묶음` : ""));
   };
@@ -182,7 +190,8 @@ export async function mount(el, ctx) {
     sumSub.className = "s " + (ok && t.priced ? fmt.tone(t.pnl) : "");
     lsEl.textContent = `${fmt.int(t.long)} · ${fmt.int(t.short)}`;
     const scope = [st.coin ? coinShort(st.coin) : "", GROUP_KO[st.grp] || ""].filter(Boolean).join(" · ");
-    nOpenSub.textContent = `열린 ${fmt.int(t.n)}개${scope ? " · " + scope : ""}`;
+    nOpenSub.textContent = `열린 ${fmt.int(t.n)}개${scope ? " · " + scope : ""}${afterSuffix(d)}`;
+    put(sumTag, afterTag(d));
     if (allHidden) put(line, h("span", {class: "muted", title: HIDDEN_WHY}, `딥시크 ${fmt.int(t.hidden)}개 (${HIDDEN_KO}: 서버가 금액·가격을 보내지 않아 합계가 없습니다)`));
     else put(line, ok ? ["수익 중 ", h("b", {class: "up"}, fmt.int(t.winning)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(t.losing)), " · "] : null,
       ok && t.unpriced ? [h("b", {class: "warn-t", title: "이 코인들은 지금 시세가 없어 손익 합계와 수익 중·손실 중에서 뺐습니다 (0으로 세지 않음)"},
@@ -241,11 +250,15 @@ export async function mount(el, ctx) {
     if (!st.doc) return h("p", {class: "empty"}, "불러오는 중");
     if (st.doc.status) return ui.missing("포지션 자료");
     const n = all().length;
+    const before = st.doc.after ? st.doc.after.before.length : 0;
+    if (!n && before) return afterEmpty("설치 뒤에 들어간 열린 포지션이 아직 없습니다",
+      `열린 포지션 ${fmt.int(before)}개는 모두 설치 전(10/01부터 다시 돌린 기록)에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다.`, {cls: "ps-empty"});
     if (!n) return h("div", {class: "ps-empty"}, h("b", null, "지금 열린 포지션이 없습니다"),
       h("span", null, "엔진은 5분마다 신호를 확인합니다. 새 포지션은 들어간 뒤 5~10분 안에 여기에 나타납니다."),
       h("a", {class: "btn-line", href: "#/entries"}, "진입 차트 보기"));
     return h("div", {class: "ps-empty"}, h("b", null, "조건에 맞는 열린 포지션이 없습니다"),
-      h("span", null, `${st.coin ? coinShort(st.coin) + " · " : ""}${GROUP_KO[st.grp] || ""} 묶음에는 없고, 전체로는 ${fmt.int(n)}개가 열려 있습니다.`),
+      h("span", null, `${st.coin ? coinShort(st.coin) + " · " : ""}${GROUP_KO[st.grp] || ""} 묶음에는 없고, 전체로는 ${fmt.int(n)}개가 열려 있습니다${st.doc.after ? " (설치 뒤만)" : ""}.` +
+        (beforeIn() ? ` 이 조건의 열린 포지션 ${fmt.int(beforeIn())}개는 설치 전에 들어간 것이라 숨겼습니다.` : "")),
       h("button", {class: "btn-line", type: "button", onclick: () => { st.coin = ""; st.grp = "all"; local.set("ps-coin", ""); local.set("ps-grp", "all"); grpSel.value = "all"; st.countsKey = ""; renderAll(false); }}, "전체 보기"));
   };
   const posPager = ui.pager({size: PAGE, render: (part) => h("div", {class: "ps-grid", role: "list"}, part.map(cardOf))});
@@ -264,8 +277,11 @@ export async function mount(el, ctx) {
   let tabKey = "";
   const renderTabBar = () => {
     const n = all().filter(inScope).length;
-    const opts = [{id: "pos", label: st.doc && !st.doc.status ? `포지션 ${fmt.int(n)}` : "포지션"}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
-    const key = opts.map((o) => o.label).join("|") + st.tab;
+    const known = !!(st.doc && !st.doc.status);
+    const aft = known && !!st.doc.after;                     // 설치 뒤 진입만: the count is over the kept positions
+    const posLabel = known ? `포지션 ${fmt.int(n)}` : "포지션";
+    const opts = [{id: "pos", label: aft ? [posLabel, afterTag(st.doc)] : posLabel}, {id: "ord", label: "손절·잠금 주문"}, {id: "trd", label: "체결 기록"}];
+    const key = [posLabel, aft, "손절·잠금 주문", "체결 기록"].join("|") + st.tab;
     if (key === tabKey) return;
     tabKey = key;
     put(tabBar, ui.seg(opts, st.tab, (v) => { st.tab = v; local.set("ps-tab", v); tabKey = ""; renderTabBar(); showTab(true); }, {label: "포지션 보기"}));
@@ -275,7 +291,7 @@ export async function mount(el, ctx) {
     if (tabBody.firstChild !== pane) put(tabBody, pane);
     if (animate) K4.swap(tabBody);
     if (st.tab === "trd") { if (!trPane.loaded) trPane.load(); else trPane.render(true); }
-    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, allowed(), false, waitKo());
+    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, allowed(), false, waitKo(), beforeIn());
   };
 
   // ---------------------------------------------------------------- render everything
@@ -300,8 +316,8 @@ export async function mount(el, ctx) {
     for (const id of [...cards.keys()]) if (!all().some((p) => p.id === id)) cards.delete(id);
     renderSum();
     if (!st.doc || st.doc.status) ladder.loading(st.doc ? "준비 중" : "불러오는 중");
-    else ladder.set(all().filter(inScope), markOf, ok, waitKo());
-    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, ok, keepPage, waitKo());
+    else ladder.set(all().filter(inScope), markOf, ok, waitKo(), beforeIn());
+    if (st.tab === "ord") ordPane.set(all().filter(inScope), markOf, ok, keepPage, waitKo(), beforeIn());
     if (st.tab === "trd" && trPane.loaded) trPane.render(keepPage);
     paintLive();
   }
@@ -321,8 +337,8 @@ export async function mount(el, ctx) {
     if (st.doc && !st.doc.status && st.sort !== "new" && (sortKnown() > st.sortedWith || ok !== st.sortedLive)) renderAll(true);
     else if (st.firstOpen && st.doc && !wide) renderAll(true);
     renderSum();
-    if (st.doc && !st.doc.status) ladder.set(all().filter(inScope), markOf, ok, waitKo());
-    if (st.tab === "ord" && st.doc) ordPane.set(all().filter(inScope), markOf, ok, true, waitKo());
+    if (st.doc && !st.doc.status) ladder.set(all().filter(inScope), markOf, ok, waitKo(), beforeIn());
+    if (st.tab === "ord" && st.doc) ordPane.set(all().filter(inScope), markOf, ok, true, waitKo(), beforeIn());
     paintLive();
   };
   const focusAcct = () => {
@@ -360,9 +376,11 @@ export async function mount(el, ctx) {
   renderTabBar();
   showTab(false);
   renderAll(true);
-  ctx.onPositions((d) => {
+  ctx.onPositions((d0) => {
+    const d = afterPositions(d0);                              // 설치 뒤 진입만: the positions entered after the install
     const gen = d ? `${d.generated_ms}|${d.done_ms}|${d.catching_up}|${d.old}` : "";
     st.doc = d;
+    afterEl.repaint(d0 || undefined);
     renderAll(true);
     if (gen !== st.lastGen) {
       st.lastGen = gen;

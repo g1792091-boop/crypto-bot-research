@@ -12,6 +12,10 @@
 // HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine replays from 10/01, its
 // record is over 15 minutes old or the prices are over a minute old (poskit pricesLive); DeepSeek money follows the
 // snapshot's switch (hidden = counted only, everywhere).
+// 설치 뒤 진입만 (js/after.js, the switch under the head): the open-position pills on the rows, the 상위 · 하위 cards and
+// the 표 show only positions entered after the install (one entered before reads "설치 전 진입 · 숨김"), and the position
+// counts (포지션 중, the 묶음 cards' 포지션, 봉별 요약) are over those, labelled 설치 뒤만; the ranking, 잔고 수익률,
+// balances and every comparison stay the full record from 10/01.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -23,6 +27,7 @@ import {ROLES} from "../labels.js";
 import {okGroup, okSub, groupKo, groupRows, ranking, hidden, walletRet, rankCards, rankTiles} from "./rank-cards.js";
 import {rankRow, topBottom, listFilters, filterRows, sortRows, rankMemo, rankDeltas, motionNote} from "./rank-rows.js";
 import {rankTable, tfSummary, csvRows, CSV_HEAD} from "./rank-table.js";
+import {afterBar, openAfter, openBefore, beforeChip} from "../after.js";
 
 export const css = "scr/rank.css";
 const OLD_S = 15 * 60;                 // the snapshot is "old" (B8): no live ROE
@@ -94,6 +99,7 @@ export async function mount(el, ctx) {
 
   el.append(
     ui.screenHead("순위표", "묶음을 고르면 아래가 모두 그 묶음으로 바뀝니다", csvBtn),
+    afterBar({cls: "rk-after"}),
     banner,
     h("section", {class: "k4-sec rk-sec", "aria-label": "묶음"}, K4.secRow("묶음", "같은 후보의 동전·기본값 계좌와 비교한 숫자는 모두 참고입니다 (판정은 점검 날에만)", allBtn), cards),
     tbCard, listCard, links, tfCard);
@@ -101,6 +107,10 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- pieces
   function mkPill(a) {
     // a hidden DeepSeek account: the pill reads only its coin and side (poskit posPill hidden), whatever the snapshot carries
+    // 설치 뒤 진입만: a position entered before the install gets the muted "설치 전 진입 · 숨김" chip instead of its pill
+    // (never a silent gap that reads as "no position"; the row's rank and numbers stay as they are)
+    if (openBefore(a)) return beforeChip(a);
+    if (!openAfter(a)) return null;
     const p = posPill(a, {allowed: st.allowed, hidden: hidden(a, st.d)});
     if (p) pills.add(p);
     return p;

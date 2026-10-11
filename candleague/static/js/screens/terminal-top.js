@@ -6,6 +6,10 @@
 // total, today's closed 후보 trades and "엔진 기준 HH:MM (n분 전 씀) · 시세 n초 전". A banner says when the positions are
 // not "now" (the engine replaying from 10/01, or stopped): then no live P&L anywhere on the terminal.
 // The rule bot's market-wide cells (급등 · 급락 · 음펀비, AI 회의 줄) have no data source here: left out, never faked.
+// Over the band, its own thin line: the switch 설치 뒤 진입만 (js/after.js) and its note (the band itself has no room for
+// them without cutting the freshness line on a PC; above it, the switch does not move when the band's text changes);
+// while it is on, the band's counts (열린, 후보 미실현, 오늘 후보 거래) and 우리 포지션 are over what was entered after
+// the install: the band's lead carries the 설치 뒤만 chip, 우리 포지션 says 설치 뒤만.
 // Data: the page's one /api/live poll (5 s), /api/positions (30 s and on each new snapshot), the shared snapshot.
 import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
@@ -15,6 +19,7 @@ import {freshLine, staleBanner, liveOk, waitKo, sums, crowd, inGroup, POS_GROUPS
 import {tickPrice} from "../v4kit.js";
 import {coinShort} from "../labels.js";
 import {usdt, usdKo, mmss, clockKst, kstMidnight, TF_MS, TF_SHORT} from "./terminal-kit.js";
+import {afterBar, afterOn, afterTag} from "../after.js";
 
 const FUND_HOT = 0.0005;                    // 5 times the usual 0.01 %: the caution colour, nothing below it
 const GROUP_KO = Object.fromEntries(POS_GROUPS.map((g) => [g.id, g.id === "all" ? "190계좌" : g.ko]));
@@ -51,10 +56,13 @@ export function topBar(ctx, st) {
   const cUpnl = chip("upnl", "#/positions", "후보 계좌들의 미실현 손익 합계 (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)");
   const cToday = chip("today", "#/fills", "오늘(한국 날짜) 닫힌 후보 계좌 거래 (누르면 체결 기록)");
   const fresh = freshLine(null, {cls: "tm-fresh"});
+  const after = afterBar({cls: "tm-after", also: ["수익 차트"]});
+  const bandTag = h("span", {class: "tm-btag"});                    // 설치 뒤만: the band's counts are over the kept ones
   const band = h("div", {class: "tm-band", role: "group", "aria-label": "후보 리그 한 줄 요약"},
-    h("span", {class: "tm-bl"}, "후보 리그 지금"), cStatus, cDay, cOpen, cUpnl, cToday, h("span", {class: "grow"}), fresh);
+    h("span", {class: "tm-bl"}, "후보 리그 지금"), bandTag, cStatus, cDay, cOpen, cUpnl, cToday, h("span", {class: "grow"}), fresh);
+  const afterRow = h("div", {class: "tm-afterrow"}, after);           // terminal.css: gone while the switch is hidden
   const banner = h("div", {class: "tm-banner"});
-  const el = h("header", {class: "tm-top", "aria-label": "시세와 후보 리그 요약"}, row, band, banner);
+  const el = h("header", {class: "tm-top", "aria-label": "시세와 후보 리그 요약"}, row, afterRow, band, banner);
 
   let doc = null, fills = [];
   function paintCoin() {
@@ -99,7 +107,8 @@ export function topBar(ctx, st) {
   }
   function paintOurs() {
     const g = GROUP_KO[st.grp] || "후보";
-    ours.k.textContent = `우리 포지션 · ${g}`;
+    // (on: "포지션 · 전체 · 설치 뒤만", as short as the usual label, so the PC's row does not cut it)
+    ours.k.textContent = afterOn(doc) ? `포지션 · ${st.grp === "all" ? "전체" : g} · 설치 뒤만` : `우리 포지션 · ${g}`;
     ours.el.title = `${st.grp === "all" ? "후보 리그 190계좌 전체" : `${g} 묶음`}가 이 코인에 연 포지션 (아래 표의 묶음 고르기를 따름 · 딥시크 금액 숨김이어도 개수는 셉니다)`;
     if (!doc || doc.status) { ours.v.textContent = "—"; return; }
     const ps = (doc.positions || []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
@@ -119,16 +128,23 @@ export function topBar(ctx, st) {
     if (d && d.start_ms) {
       put(cDay, h("b", null, `D+${LK.dPlus(d, now)}`), next ? ` · ${String(next.ko || next.id).replace(" 점검", "")} ${fmt.mmdd(next.ms).replace(/^0/, "").replace("/0", "/")}까지 ${Math.ceil((next.ms - now) / 86400000)}일` : " · 점검 끝");
     } else put(cDay, h("b", null, "D+—"));
+    const aft = afterOn(doc);
+    const upK = "후보 미실현 ";
+    put(bandTag, aft ? afterTag(doc) : null);
+    cUpnl.title = `후보 계좌들의 미실현 손익 합계${aft ? " (설치 뒤만: 설치 뒤에 들어간 포지션)" : ""} (마크 가격, 나갈 때 수수료 전 · 딥시크 금액 숨김이면 뺌)`;
+    cToday.title = `오늘(한국 날짜) 닫힌 후보 계좌 거래${aft ? " (설치 뒤만: 설치 뒤에 들어간 거래)" : ""} (누르면 체결 기록)`;
     if (!doc || doc.status) { put(cOpen, "열린 —"); put(cUpnl, "후보 미실현 —"); }
     else {
       const c = doc.counts || {};
-      put(cOpen, "190계좌 열린 ", h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
+      put(cOpen, aft ? "열린 " : "190계좌 열린 ", h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
         h("span", {class: "down"}, `숏 ${fmt.int(c.short || 0)}`));
+      cOpen.title = aft ? "지금 열린 포지션 중 설치 뒤에 들어간 것 (설치 뒤만 · 190계좌 · 누르면 포지션 화면)"
+        : "지금 열린 포지션: 후보 리그 190계좌 전체 (묶음 고르기와 상관없이 · 누르면 포지션 화면)";
       const cand = (doc.positions || []).filter((p) => inGroup(p, "cand"));
-      if (!liveOk(doc)) put(cUpnl, "후보 미실현 ", h("span", {class: "warn-t"}, doc.catching_up ? "따라잡는 중" : doc.old ? "엔진 멈춤" : `감춤 (${waitKo(doc)})`));
+      if (!liveOk(doc)) put(cUpnl, upK, h("span", {class: "warn-t"}, doc.catching_up ? "따라잡는 중" : doc.old ? "엔진 멈춤" : `감춤 (${waitKo(doc)})`));
       else {
         const s = sums(cand);
-        put(cUpnl, "후보 미실현 ", s.priced ? h("b", {class: ["num", fmt.tone(s.pnl, usdt(s.pnl))]}, `${usdt(s.pnl)} USDT`) : h("span", {class: "muted"}, cand.length ? "시세 없음" : "포지션 없음"),
+        put(cUpnl, upK, s.priced ? h("b", {class: ["num", fmt.tone(s.pnl, usdt(s.pnl))]}, `${usdt(s.pnl)} USDT`) : h("span", {class: "muted"}, cand.length ? "시세 없음" : "포지션 없음"),
           s.priced && s.unpriced ? h("small", {class: "warn-t"}, ` · 시세 없는 ${fmt.int(s.unpriced)}개 뺌`) : null,
           s.hidden ? h("small", {class: "muted"}, ` · 딥시크 ${fmt.int(s.hidden)}개 뺌`) : null);
       }
@@ -155,6 +171,8 @@ export function topBar(ctx, st) {
     setCoin() { px.dataset.pk = ""; paintCoin(); paintOurs(); },
     onLive() { paintCoin(); paintFeed(); paintBand(); },
     onPositions(d) { doc = d; paintOurs(); paintBand(); paintBanner(); },
+    /** the raw /api/positions answer (its started_ms: the switch's label before the snapshot has come) */
+    onAfter(d) { after.repaint(d || undefined); },
     setGroup() { paintOurs(); },
     onLeague() { paintBand(); },
     onFills(rows) { fills = rows || []; paintBand(); },

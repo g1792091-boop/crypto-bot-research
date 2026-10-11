@@ -5,6 +5,9 @@
 //   체결 기록       the league's newest closed trades (/api/fills: 300, every account) with 기간 · 결과 · 묶음 filters, a sum
 //                 line and rows; a row opens the 터미널 on that trade. The 체결 기록 screen (fills.js) uses the same rows.
 // D11: a hidden DeepSeek position / trade (the server sent no money) is only counted ("개수만", out of the sums).
+// 설치 뒤 진입만 (js/after.js): the orders come already filtered by the screen; the 체결 기록 keeps the trades ENTERED after
+// the install (one entered before it and closed after it is left out too), its sum line says 설치 뒤만, and a list the
+// switch emptied says how many it hid, with the button that turns it off.
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
@@ -13,6 +16,7 @@ import {gap, POS_GROUPS, inGroup} from "../poskit.js";
 import {markOf, serverNow} from "../live.js";
 import {coinShort, coinOf, reasonKo} from "../labels.js";
 import {sideTag, nameNode, usdt, dist, kindKo, HIDDEN_KO, HIDDEN_WHY} from "./positions-card.js";
+import {afterOn, keepFill, afterTag, afterEmpty} from "../after.js";
 
 const DAY = 86400000, KST = 9 * 3600000;
 /** Korea's midnight (ms) of the day ``ms`` falls in. */
@@ -49,21 +53,29 @@ export function orderRow(x, o = {}) {
     h("span", null, kindKo(p))));
 }
 
-/** ordersPane(ctx) -> {el, set(list, markFn, live, keepPage, why)} */
+/** ordersPane(ctx) -> {el, set(list, markFn, live, keepPage, why, before)}; before: how many open positions the screen's
+ *  설치 뒤 진입만 left out (an empty list then says so, with the button that turns it off). */
 export function ordersPane(ctx) {
   const pager = ui.pager({size: 12, empty: "걸려 있는 손절·잠금 주문이 없습니다",
     render: (part) => h("div", {class: "ps-list", role: "list"}, part)});
   const note = h("p", {class: "pos-note"});
-  const el = h("div", {class: "stack"}, pager.el, note);
-  let rowsLive = true;
-  const set = (list, markFn = markOf, live = true, keep = true, why = "엔진이 따라잡는 중") => {
+  const gone = h("div", {class: "ps-gone"});
+  const el = h("div", {class: "stack"}, gone, pager.el, note);
+  let rowsLive = true, goneN = -1;
+  const set = (list, markFn = markOf, live = true, keep = true, why = "엔진이 따라잡는 중", before = 0) => {
     rowsLive = live;
     const ords = orderList(list, markFn, live);
     pager.set(ords.map((x) => orderRow(x, {href: ctx && ctx.href, live: rowsLive})), keep);
+    const g = !(list || []).length && before ? before : 0;
+    if (g !== goneN) {
+      goneN = g;
+      put(gone, g ? afterEmpty("설치 뒤에 들어간 포지션의 주문이 아직 없습니다", `열린 포지션 ${fmt.int(g)}개는 설치 전에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다`) : null);
+    }
+    pager.el.hidden = !!g;
     const hid = (list || []).filter((p) => p.hidden).length;
     note.textContent = (live ? "지금 가격과 가까운 주문이 위. " : `${why}이라 진입가에서 잰 거리입니다. `) +
       "발동 시 손익은 나갈 때 수수료 전입니다. 모의 주문이라 거래소에는 아무것도 걸려 있지 않습니다 (엔진이 5분마다 1분봉으로 확인)." +
-      (hid ? ` 딥시크 ${fmt.int(hid)}개는 가격이 숨겨져 빠짐 (${HIDDEN_KO}).` : "");
+      (hid ? ` 딥시크 ${fmt.int(hid)}개는 가격이 숨겨져 빠짐 (${HIDDEN_KO}).` : "") + (afterOn() ? " 설치 뒤만 (설치 뒤에 들어간 포지션의 주문)." : "");
   };
   return {el, set};
 }
@@ -125,8 +137,9 @@ export function tradesPane(ctx, o = {}) {
     st.coin, (v) => { st.coin = v; render(false); }, {label: "코인", cls: "scroll"}) : null;
   const sum = h("div");
   const note = h("p", {class: "pos-note"});
+  const gone = h("div", {class: "ps-gone"});                          // 설치 뒤 진입만 emptied the list: why, and 모두 보기
   const pager = ui.pager({size: o.size || 12, empty: "조건에 맞는 체결이 없습니다", render: (part) => h("div", {class: "ps-list", role: "list"}, part)});
-  const el = h("div", {class: "stack"}, h("div", {class: "row wrap ps-filters"}, perSeg, resSeg, grpSel), coinSeg, sum, pager.el, note);
+  const el = h("div", {class: "stack"}, h("div", {class: "row wrap ps-filters"}, perSeg, resSeg, grpSel), coinSeg, sum, gone, pager.el, note);
   async function load() {
     if (st.busy) return;
     st.busy = true;
@@ -142,12 +155,15 @@ export function tradesPane(ctx, o = {}) {
     st.busy = false;
     if (ctx.alive()) render(true);
   }
-  function rows() {
+  /** the rows the filters keep (all: without 설치 뒤 진입만, to say how many it hid) */
+  function rows(all = false) {
     const ix = LK.index();
     const day0 = kstMidnight(serverNow());
     const coin = o.coin ? o.coin() : st.coin;
+    const after = !all && afterOn();
     return (st.fills || []).filter((f) => {
       const a = ix.byId[f.account];
+      if (after && !keepFill(f)) return false;               // 설치 뒤 진입만: entered at or after the install
       if (st.per === "today" && f.exit_time < day0) return false;
       if (coin && coinOf(f.symbol) !== coin) return false;
       if (st.grp !== "all" && !(a && inGroup(a, st.grp))) return false;
@@ -162,11 +178,18 @@ export function tradesPane(ctx, o = {}) {
     if (!st.fills) return;
     const ix = LK.index();
     const rs = rows();
-    put(sum, fillSum(rs, ix.byId));
+    const line = fillSum(rs, ix.byId);
+    const tag = afterTag();
+    if (tag) line.append(" ", tag);
+    put(sum, line);
     const now = serverNow();
     pager.set(rs.map((f) => fillRow(f, ix.byId[f.account], {href: ctx.href, now})), keep);
+    const hid = !rs.length && afterOn() ? rows(true).length : 0;
+    put(gone, hid ? afterEmpty("설치 뒤에 들어간 닫힌 거래가 아직 없습니다", `조건에 맞는 최근 거래 ${fmt.int(hid)}건은 설치 전에 들어간 것이라 '설치 뒤 진입만'에서 숨겼습니다`) : null);
+    pager.el.hidden = !!hid;
     const cut = st.fills.length >= 300;
     note.textContent = (st.per === "today" ? "오늘 = 한국 시각 0시부터 (서버 시계). " : "") +
+      (afterOn() ? "설치 뒤에 들어간 거래만 (설치 전에 들어가 설치 뒤에 닫힌 거래도 뺌). " : "") +
       (cut ? "서버가 최근 300건까지만 보냅니다. " : "") + "한 줄을 누르면 터미널에서 그 거래. 손익은 나갈 때 수수료·펀딩·슬리피지 뒤입니다.";
   }
   if (coinSeg) coinSeg.set("");

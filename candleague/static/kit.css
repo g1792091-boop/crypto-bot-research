@@ -121,3 +121,20 @@ html.set-open { overflow: hidden; }
 .find-o .find-k { width: 46px; }
 .find-o.k-pick .find-k { color: var(--series-core); }
 .find-o.k-term .find-k { color: var(--accent); }
+
+/* ---------------------------------------------------------------- 설치 뒤 진입만 (js/after.js afterBar / afterTag) */
+/* the switch (ui.js .dl-tog look: ○ off, ● on) and its note "순위·잔고·점검은 10/01부터 전체 기록", under a screen's head */
+.kp-after { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; min-width: 0; }
+.kp-after[hidden] { display: none; }
+.kp-after .kp-after-tog { flex: none; max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; padding-block: 5px; }
+.kp-after-note { flex: 0 1 auto; min-width: 0; color: var(--muted); font: 500 var(--t-xs)/1.45 var(--f-body); }
+.kp-after.on .kp-after-note { color: var(--ink-2); }
+/* the chip next to a count or a sum the switch recomputed; the chip in place of an open-position pill it hides */
+.kp-after-tag { margin-left: 4px; vertical-align: 1px; white-space: nowrap; }
+.kp-after-pre { color: var(--muted); border-style: dashed; white-space: nowrap; }
+/* a list the switch emptied: what is hidden and why, and "모두 보기 (설치 뒤 진입만 끄기)" */
+.kp-after-empty { display: grid; justify-items: start; gap: 6px; padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: var(--r-md);
+  color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
+.kp-after-empty b { color: var(--ink); font-size: var(--t-sm); }
+.kp-after-empty .btn-line { text-decoration: none; }
+.ps-gone:empty { display: none; }
