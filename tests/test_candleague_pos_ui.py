@@ -305,7 +305,7 @@ out.missing = el.textContent.includes("준비 중") && !el.querySelector("articl
 """)
     c = o["catch"]
     assert c["led"] == "—" and c["note"] == "엔진이 따라잡는 중"
-    assert "10/01부터 다시 계산 중" in c["banner"] and "엔진이 따라잡는 중: 실시간 손익 감춤" in c["sum"]
+    assert "엔진이 따라잡는 중" in c["banner"] and "엔진이 따라잡는 중: 실시간 손익 감춤" in c["sum"]
     assert "진입 때 거리" in c["ladder"] and "청산 3.10%" in c["ladder"]          # liq 96,900 from the entry 100,000
     assert "따라잡은 뒤" in c["mark"] and "101,000" not in c["mark"]
     assert "엔진 기록이" in o["old"]["banner"] and o["old"]["note"] == "엔진 기록이 멈춤"

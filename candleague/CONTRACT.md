@@ -25,8 +25,11 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
   the bar's close and fills at the next minute's open plus slippage. Stop distance = the exit's k x ATR14 of the chart;
   a structure exit carries `tp_struct = exits.structure_level(...)` of the signal bar. Leverage group: core from the
   strategy's strength definition as the live service (entry_marks), DeepSeek "normal" (as the study).
-* **Time**: from 2026-10-01 00:00 UTC (the first day after the study's data), caught up in day chunks on the first
-  start, then every minute (the last closed minute, after a settle wait like the rule bot's feed).
+* **Time**: from the league's install time (owners 2026-10-12, "규칙봇 형식처럼 봇 돌린 시점부터"; recorded once in the
+  database as meta.start_ms, floored to 5 minutes, and kept through every later start-over), caught up in day chunks
+  when behind, then every 5 minutes (the last closed minute, after a settle wait like the rule bot's feed). Until
+  2026-10-12 (VERSION 1) it replayed from 2026-10-01 00:00 UTC, the first day after the study's data; that record is
+  kept only as a copy next to the database (league_replay_from_1001_<UTC date>.db).
 * **Data**: Binance public REST only (klines, mark-price klines, funding history); no key, no order, ever.
 
 ## 2. Judging (fixed before any candidate runs)

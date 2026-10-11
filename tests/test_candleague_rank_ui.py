@@ -439,7 +439,7 @@ def test_live_roe_hidden_while_replaying_or_when_the_record_is_old(tmp_path):
     o = _run(tmp_path, _routes(_league(now, catching=True), now))
     f = o["first"]
     assert _row(f, "core-DOGE-15m-1")["pill"] == "BTC 롱 30배"
-    assert "10/01부터 다시 계산 중" in f["banner"] and "ROE 감춤" in f["live"]
+    assert "엔진이 따라잡는 중" in f["banner"] and "ROE 감춤" in f["live"]
     o = _run(tmp_path, _routes(_league(now, old=True), now))
     f = o["first"]
     assert _row(f, "core-DOGE-15m-1")["pill"] == "BTC 롱 30배"

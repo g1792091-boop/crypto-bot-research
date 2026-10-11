@@ -365,7 +365,7 @@ out.foot = q1(el, "div.tm-pf");
 out.lines = CH.cs.lines.map((x) => x.price);
 """)
     assert o["led"] == "—" and "따라잡는 중" in o["note"] and o["total"] == "—"
-    assert "후보 미실현 따라잡는 중" in o["band"] and "10/01부터 다시 계산 중" in o["banner"]
+    assert "후보 미실현 따라잡는 중" in o["band"] and "엔진이 따라잡는 중" in o["banner"]
     assert o["chips"] == ["롱 30배 후보"] and all("%" not in x for x in o["mine"])
     assert "+100.00" not in o["row"][0] and "96,900.0" in o["row"][0]
     assert 100000 in o["lines"] and 98000 in o["lines"] and 96900 in o["lines"]

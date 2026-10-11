@@ -38,7 +38,7 @@ def test_summary_text():
     t = N.summary_text(doc, KST9 + 60_000)
     lines = t.split("\n")
     assert lines[0] == "📊 아침 요약 · 후보 리그" and lines[1] == "" and lines[-1] == "10/05 09:01 KST"
-    assert "10/01부터 5일째 · 10/05 09:00 KST까지 처리" in t and "다음 점검: 1차 11/11 · 37일 남음" in t
+    assert "D+4 · 10/01 09:00 시작부터 5일째\n10/05 09:00 KST까지 처리" in t and "다음 점검: 1차 11/11 · 37일 남음" in t
     assert "  후보 거래 12번 · 한 번 평균 +0.40%" in t and "  기본값보다 ▲ · 동전보다 ▼" in t
     assert "딥시크 묶음 (후보 1개)" in t and "  후보 거래 7번 · 금액 숨김" in t and "  기본값보다 — · 동전보다 ▲" in t
     assert "1. S2_ST_ROC 15분 · +0.40% · 12번 · $5,200" in t and "(거래 30번 전이라 운이 큽니다. 판단은 하지 않습니다)" in t

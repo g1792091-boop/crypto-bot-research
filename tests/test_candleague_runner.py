@@ -110,7 +110,7 @@ def test_deepseek_money_is_hidden_unless_allowed(tmp_path):
 def test_final_end_waits_for_the_5m_bar():
     t = RN.FIVE * 1000
     assert RN.final_end(t + RN.SETTLE_MS) == t and RN.final_end(t + RN.SETTLE_MS - 1) == t - RN.FIVE
-    assert RN.START_MS == 1_790_812_800_000
+    assert RN.REPLAY_FROM_MS == 1_790_812_800_000 and RN.VERSION == 2       # 10/01: history only (owners 10/12)
 
 
 def test_forward_band_status():

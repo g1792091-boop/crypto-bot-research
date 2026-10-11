@@ -450,9 +450,11 @@ def main(argv: Optional[list] = None) -> int:
               f"lag {d['lag_s']}s, accounts {len(d['accounts'])}")
         return 0
     if a.cmd == "backup":
+        had = set(glob.glob(os.path.join(os.path.dirname(os.path.abspath(a.db)), "*.db")))
         path = backup_if_reset(a.db, C.accounts(C.load(a.candidates)))
-        print(f"[후보 리그] 새로 시작하기 전 기록 복사: {path}" if path else "[후보 리그] 기록 복사 필요 없음 (이어서 계산)",
-              flush=True)
+        print("[후보 리그] 기록 복사 필요 없음 (이어서 계산)" if not path else
+              f"[후보 리그] 새로 시작하기 전 기록을 이미 복사해 두었습니다: {path}" if path in had else
+              f"[후보 리그] 새로 시작하기 전 기록 복사: {path}", flush=True)
         return 0
     from paperbot import sweepsig
     from paperbot.binance import BinanceREST

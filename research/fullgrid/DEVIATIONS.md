@@ -82,3 +82,16 @@
   `run.py`'s family under its trade minimum), so the family size never shrinks. The strategy section is computed only
   when the snapshot carries both pools' money; otherwise the script says so instead of computing a smaller family. The
   script also refuses to give checkpoint numbers while the league has not processed past 00:00 UTC of the date.
+- 2026-10-12 about 08:10 KST, owners on the league dashboard after the "설치 뒤 진입만" switch: "거래기록은 왜 안보이는거야?
+  아니 커스텀값 봇 돌린 시점부터 원래 돌리고있었던 규칙봇 형식처럼 해야지 봇 돌린시점부터 거래 기록이랑 다 보이게". The
+  league now starts at its install time instead of a replay from 2026-10-01: on its first run the new code (candleague
+  VERSION 2) starts over from the install time recorded in the league database (meta.started_ms, 2026-10-11 about
+  03:00 UTC, floored to 5 minutes), every account at $5,000 then, and catches up to now; every trade, balance, rank and
+  day count is from that start on. This changes WATCH_PREREG section 1's "Time: replayed from 2026-10-01 00:00 UTC". The
+  checkpoint dates do not change: the start is 2026-10-11, so C1 = start + 1 month = 2026-11-11, C2 = 2026-12-11, the
+  repeat = 2027-01-11 (and the rule "trades closed before 00:00 UTC of the date" stays). The 2026-10-01 to 2026-10-11
+  replay record (data after the study's, so out of sample, but replayed, not live) is kept only as a copy of the old
+  database next to it (league_replay_from_1001_<UTC date>.db), not shown on the dashboard and not used by any checkpoint.
+  What it costs: about 10 fewer days of forward record at C1 (about 31 days from the start instead of about 41 from
+  10/01), so fewer trades toward the 300-trade condition at C2. No pick, account, rule, threshold or seed changes. The
+  start is recorded once and kept: a later code change that starts the league over starts again from the same start.
