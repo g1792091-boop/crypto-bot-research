@@ -10,8 +10,9 @@ and every F4 watch pick on its timeframe. The adapter's 5m bars: by default the 
 (entries_wide.resample_1m_to_5m: the comparison isolates the adapter); with --five, the hunt data's 5m files
 (<five>/5m/<SYM>.npz read as select / test read it: hunt.clean_5m drops duplicate, zero-volume, off-grid and
 non-finite rows; float64 as stored, no narrowing; PREREG_HUNT_WIDE 8 as written, data differences included; the dropped
-counts are reported per coin). The output's ``code`` holds the sha256 of entries_wide.py, parity_wide.py and hunt.py:
-the wide pin accepts parity.json only when they equal the pinned files and it says pass on the hunt 5m files.
+counts and the file's H 2 content hash are reported per coin under ``five_counts``). The output's ``code`` holds the
+sha256 of entries_wide.py, parity_wide.py and hunt.py: the wide pin accepts parity.json only when they equal the pinned
+files, it says pass on the hunt 5m files and each old-six coin's content hash equals research/hunt/data_manifest.json.
 
 Compared (PREREG_HUNT_WIDE 8) on the bars both series have (same bin), after both series' first run.WARMUP_BARS bars,
 per strategy x timeframe x side, for the raw arrays and for the events (entries_wide.rising, the full grid's arrays
@@ -60,13 +61,16 @@ def cell_key(c: dict) -> str:
 def five_of(R, fg1m: str, sym: str, five_dir: str | None = None) -> tuple:
     """(ts, o, h, l, c, v) 5m bars and their H 2 counts. With ``five_dir``: the hunt data's file read exactly as the
     select and test steps read it (hunt.clean_5m: duplicates, zero-quote-volume, off-grid and non-finite rows
-    dropped), so the parity checks the bars the run computes its signals on."""
+    dropped), so the parity checks the bars the run computes its signals on; the counts carry the file's H 2 content
+    hash (``content_sha256``, hunt.content_sha over ts o h l c v qv as stored)."""
     if five_dir:
         from research.hunt import hunt as H
         with np.load(os.path.join(five_dir, "5m", f"{sym}.npz")) as z:
-            cols = {k: z[k] for k in ("ts", "o", "h", "l", "c", "v", "qv")}
+            cols = {k: z[k] for k in H.CONTENT_KEYS["5m"]}
+        sha = H.content_sha(cols, H.CONTENT_KEYS["5m"])          # H 2 data identity (the pin compares it, W 8)
         (ts, o, h, lo, c, v, _qv), counts = H.clean_5m(cols["ts"], cols["o"], cols["h"], cols["l"], cols["c"],
                                                        cols["v"], cols["qv"])
+        counts["content_sha256"] = sha
         return (np.asarray(ts, np.int64), *(np.asarray(x, np.float64) for x in (o, h, lo, c, v))), counts
     d = R.minute_data(fg1m, sym)
     return EW.resample_1m_to_5m(d["ts"], d["o"], d["h"], d["l"], d["c"], d["v"]), {"source": "1m archive -> 5m"}

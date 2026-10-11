@@ -82,7 +82,6 @@ D0_MULT = {"15m": 2.0, "30m": 2.0, "1h": 2.0, "4h": 1.5}      # H 7.2 / W 2
 CHAND_MULT = 3.0                                               # H 7.5
 START_WALLET = 5000.0                                          # H 10
 R_BASE, R_ONE = 0.005, 0.01
-SIZING_RS = (0.02, 0.05)       # not used by the hunt (W 7's sizing read is replaced by R1); huntbot still imports it
 RISK_CAP = 0.04                                                # H 8
 MAX_POS, MAX_DIR, N_ADDS = 6, 3, 3                             # H 8, H 7.4
 LIQ_FRAC, LIQ_BARS = 0.001, 288                                # H 7.2 liquidity cut
@@ -381,7 +380,8 @@ def _load_json_rel(rel: str):
 
 def pin_content_problems(study: str) -> list:
     """What the pinned result files must say (H 2, W 8): data_check.json passes on the old six for the data of
-    data_manifest.json; for wide, parity.json passes on the hunt 5m files and was made by the current adapter code."""
+    data_manifest.json; for wide, parity.json passes on the hunt 5m files of data_manifest.json (each old-six coin's
+    5m content hash, recorded by parity_wide --five) and was made by the current adapter code."""
     bad = []
     dm, dc = _load_json_rel(DATA_MANIFEST_REL), _load_json_rel(DATA_CHECK_REL)
     if dc is not None:
@@ -403,6 +403,11 @@ def pin_content_problems(study: str) -> list:
                 bad.append(f"{PARITY_REL} was not run on the hunt 5m files (--five)")
             if list(pj.get("syms", [])) != list(OLD_SIX):
                 bad.append(f"{PARITY_REL} is not on the old six")
+            if dm is not None:
+                for s in OLD_SIX:
+                    got = ((pj.get("five_counts") or {}).get(s) or {}).get("content_sha256")
+                    if got != ((dm.get("content") or {}).get(s) or {}).get("5m"):
+                        bad.append(f"{PARITY_REL} ran on other {s} data than {DATA_MANIFEST_REL}")
             code = pj.get("code") or {}
             for f in PARITY_CODE:
                 if code.get(f) != sha256_file(os.path.join(HERE, f)):
@@ -542,6 +547,15 @@ def file_content_sha(path: str, kind: str) -> str | None:
         return None
     with np.load(path) as z:
         return content_sha({k: z[k] for k in CONTENT_KEYS[kind]}, CONTENT_KEYS[kind])
+
+
+def require_float64(path: str, arrays: dict) -> None:
+    """H 2: prices, volumes and mark-price OHLC are float64 throughout. A file holding any of them in another dtype
+    (a float32 copy rounds the exchange's decimals and flips exact indicator ties, W 8) is refused, naming the file."""
+    bad = {k: str(np.asarray(a).dtype) for k, a in arrays.items() if np.asarray(a).dtype != np.float64}
+    if bad:
+        raise ValueError(f"{path}: {', '.join(f'{k} is {d}' for k, d in sorted(bad.items()))}, not float64 "
+                         "(H 2: float64 throughout; rebuild the folder with research/hunt/data_hunt.py)")
 
 
 def load_coin(data_dir: str, sym: str, end_ms: int, manifest: dict | None = None) -> Coin:
@@ -3067,7 +3081,8 @@ def coins_traded_of(study: str, test_doc: dict) -> list:
 def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: int, step: int) -> tuple:
     """``<data_dir>/<sub>/<SYM>.npz`` bars (ts, o h l c v qv, mo mh ml) with open in [start, end), cleaned as H 2 on
     the ``step`` grid; mark columns kept (NaN where no mark bar). Coins without a file are left out (the market then
-    steps through their 5m bars). Returns ({sym: Coin}, {sym: counts})."""
+    steps through their 5m bars). A file whose price, volume or mark columns are not float64 is refused (H 2: float64
+    throughout). Returns ({sym: Coin}, {sym: counts})."""
     coins, counts = {}, {}
     for s in syms:
         p = os.path.join(data_dir, sub, f"{s}.npz")
@@ -3076,6 +3091,7 @@ def load_bar_coins(data_dir: str, sub: str, syms: list, start_ms: int, end_ms: i
             continue
         with np.load(p) as z:
             keys = set(z.files)
+            require_float64(p, {k: z[k] for k in ("o", "h", "l", "c", "v", "qv", "mo", "mh", "ml") if k in keys})
             sha = content_sha({k: z[k] for k in CONTENT_KEYS["5m"]}, CONTENT_KEYS["5m"])
             ts = np.asarray(z["ts"], np.int64)
             cut = (ts >= start_ms) & (ts < end_ms)
@@ -3927,7 +3943,8 @@ def extrapolate(res: dict, EW) -> dict:
                       "again; the reads module (reads_a, R1 ...) is not included",
                       "32 procs: 85% parallel efficiency assumed; 2 procs: the measured 40-run speed-up on this "
                       "shared 4-core machine",
-                      "not included: loading the 30 coins' npz files (about 0.5 GB) and writing outputs"]}
+                      "not included: loading the 30 coins' npz files (about 0.8 GB on disk; the float64 coin arrays take "
+                      "about 1.2 GB of memory) and writing outputs"]}
 
 
 def _compile_probe() -> None:
