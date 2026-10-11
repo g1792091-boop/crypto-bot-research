@@ -789,7 +789,7 @@ def test_pass2_slots_in_time_order_beat_the_daily_worst_order():
              if mk.bar[i, t]}
     slots[(i, t41)] = [(100, 100.2, 99.95), (100.1, 105, 100.1), (104.5, 104.6, 103)]  # low first, then the add
     sub = _sub_from_slots(mk, slots, 3)
-    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub)
+    out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub, stop_hc=0.0)
     assert out.ri[0, AP.RI_ADDS] == 1 and out.ri[0, AP.RI_REASON] == AP.EX_PEND
     # one slot per day equal to the daily bar reproduces the daily run exactly
     slots1 = {(i, t): [(mk.o[i, t], mk.h[i, t], mk.l[i, t])] for t in range(mk.T) if mk.bar[i, t]}
@@ -849,7 +849,6 @@ def test_pass2_day_without_5m_runs_on_the_daily_bar(tmp_path):
     out = AP.run_account(mk, sig(mk, [(39, "AAAUSDT", 1)]), VM, sub=sub)
     assert out.ri[0, AP.RI_REASON] == AP.EX_LIQ and out.ri[0, AP.RI_TOUT] == t42
     assert out.rf[0, AP.R_PNL] == pytest.approx(daily.rf[0, AP.R_PNL])
-    assert out.cnt[AP.C_DAYBAR] >= 1
     # 5m bars that do not reach the daily low (a hole inside the day) -> the day runs on the daily bar
     after2 = [(100, 100.5, 99.5, 100), (100, 100.5, 95.0, 99)]
     mk2, daily2 = one_pos({}, after2)
@@ -860,6 +859,7 @@ def test_pass2_day_without_5m_runs_on_the_daily_bar(tmp_path):
     assert sub2.slen[0, t41] == 1 and rep2["days_5m_short_of_daily_range"] == 1
     out2 = AP.run_account(mk2, sig(mk2, [(39, "AAAUSDT", 1)]), VM, sub=sub2)
     assert out2.ri[0, AP.RI_REASON] == daily2.ri[0, AP.RI_REASON] == AP.EX_STOP
+    assert out2.cnt[AP.C_DAYBAR] == 1 and out2.rf[0, AP.R_XPX] == pytest.approx(daily2.rf[0, AP.R_XPX])
 
 
 def _zip(name: str, text: str) -> bytes:
@@ -928,7 +928,7 @@ def test_pipeline_select_test_board(tmp_path):
             assert set(res["extra"][vid][p]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
             assert res["rows"][vid][p]["cmp"]["b"]["control_positions_mean"] is not None
     assert set(table[picks[0]]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
-    assert row["caps"] == {"n_max": 3, "risk_cap": pytest.approx(0.6)}
+    assert row["caps"] == {"n_max": 3, "risk_cap": pytest.approx(0.6), "margin_budget_per_position": "equity / 3"}
     assert board[picks[0]]["p1"]["r=0.02"]["label"] == "chosen here"
     AP._write_json(os.path.join(str(tmp_path), "t.json"), {"select": table, "test": res, "board": board})
 
@@ -963,12 +963,12 @@ def test_stop_fill_haircut_long_short_and_liquidation():
     ps[0, AP.F_LEV], ps[0, AP.F_B], ps[0, AP.F_MED7], ps[0, AP.F_LIQ], ps[0, AP.F_EXT] = 1.0, 1e9, 1e15, 0.0, 100.0
     acc = np.array([1e9, 500.0, 0.0, 0.0])
     cnt = np.zeros(AP.NCNT, np.int64)
-    bar = np.array([[101.0, 108.0, 100.5]]).T                       # o, h, l of one slot
+    bar = np.array([[101.0, 108.0, 101.5]]).T                       # o, h, l of one slot (low above the moved stop)
     code, _ = AP._slot(0, 0, True, bar[0], bar[1], bar[2], bar[0], bar[1], bar[2], ps, pi, acc, 0.0, 1e9, 0.0, 0.0,
                        0.0, 1.0, cnt, AP.BR_CAP, np.zeros(4), 1, 0.5)
     assert code == -1 and pi[0, AP.P_FILLED] == 1
     assert ps[0, AP.F_REFQ] == pytest.approx(500 + 5 * (104 + 0.5 * 4))
-    assert ps[0, AP.F_NEXT] == pytest.approx(106 + 4)
+    assert ps[0, AP.F_NEXT] == pytest.approx(106 + 4) and ps[0, AP.F_STOP] == pytest.approx((1030 - 20) / 10)
 
 
 def test_ctrl_b_pools_follow_the_variants_own_conditions():
@@ -1098,7 +1098,7 @@ def test_values_outside_the_step_window_are_never_loaded(tmp_path):
     assert np.array_equal(raw_w.cal, AP.Raw(df).cal)                  # the calendar is whole
     with pytest.raises(RuntimeError, match="section 10"):
         AP.Market(raw_w, *AP.PERIODS["p2"])
-    t_full = AP.step_select(AP.Raw(df), min_pos=5)
+    t_full = AP.step_select(AP.Raw(AP.read_frame(path)), min_pos=5)
     t_win = AP.step_select(raw_w, min_pos=5)
     assert json.dumps(t_full, sort_keys=True, default=str) == json.dumps(t_win, sort_keys=True, default=str)
 

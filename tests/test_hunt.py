@@ -1044,6 +1044,9 @@ def test_pin_requires_data_build_files(tmp_path, monkeypatch):
     (root / H.DATA_BUILD_REL / "c30.py").write_text("# builder\n")
     with pytest.raises(H.PinError, match="not pinned research/hunt/data_build/c30.py"):
         H.check_pin("v1", "select")
+    (root / H.DATA_BUILDER_REL).write_text("# data kit\n")
+    with pytest.raises(H.PinError, match="not pinned research/hunt/data_hunt.py"):
+        H.check_pin("v1", "select")
 
 
 # ------------------------------------------------------------------ robustness (review findings)

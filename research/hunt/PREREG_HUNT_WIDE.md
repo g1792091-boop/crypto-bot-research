@@ -4,8 +4,9 @@
 기계에 넣는 진입 신호만 넓힙니다. 결과를 본 뒤에는 바꾸지 않고, 바꿀 일이 생기면 `DEVIATIONS.md`에 따로 적습니다.)
 
 **Status: DRAFT, written 2026-10-11 (KST), before any code of either hunt study existed in the repository and before
-any hunt selection or test was run.** The open questions of section 15 are closed by the owners (or by the default
-written next to each) before the file is pinned. Pinning = `PREREG_HUNT_WIDE.sha256` over this file, `PREREG_HUNT.md`
+any hunt selection or test was run; reviewed and corrected the same day before the pin (section 16.2), still before any
+hunt selection or test.** The open questions of section 15 are closed by the owners (or by the default written next to
+each) before the file is pinned. Pinning = `PREREG_HUNT_WIDE.sha256` over this file, `PREREG_HUNT.md`
 and the files of section 10; the code refuses the wide `select` and `test` steps without a matching pin. After the pin
 nothing here changes; a change goes to `research/hunt/DEVIATIONS.md` with its reason and date.
 
@@ -26,19 +27,24 @@ Compute cost is not a constraint (a rented many-core server is allowed).
 
 ## 1. Question
 
-Among all entries already coded in this repository (v1's three, the rule bot's 36, DeepSeek's 44, the 38 watch picks),
-each run through the one trend-hunt machine of H 2-4 and H 6-10 on 15m, 30m, 1h and 4h bars, with the 추세장 gate or
-without it: do the at most ten systems chosen on 2021-2023 grow one wallet after all costs on 2024-01 .. 2026-09, and
-beat the same machine fed with random entry times and with coin-flip sides, after correcting for testing ten?
+Among all entries already coded in this repository whose numbers were not chosen on the test period (v1's three, the
+rule bot's 36 and DeepSeek's 44 at their default numbers), each run through the one trend-hunt machine of H 2-4 and
+H 6-10 on 15m, 30m, 1h and 4h bars, with the 추세장 gate or without it: do the at most ten systems chosen on 2021-2023
+grow one wallet after all costs on 2024-01 .. 2026-09, and beat the same machine fed with random entry times and with
+coin-flip sides, after correcting for testing ten? (The 38 watch picks run through the same machine in the select
+period as a read only; section 3.)
 
 ## 2. The machine (W1): what is unchanged, what differs
 
-**Unchanged, as written in `PREREG_HUNT.md`:** H 2 (data, checks, funding, storage), H 3 (the 30-coin universe, old six
-/ new 24, the large group), H 4 (bars and indicators), H 6 (the 장세 label and the G1 rule), H 7 (7.1 entry fill,
-7.2 first stop and unit, 7.3 leverage and isolated margin, 7.4 pyramiding, 7.5 chandelier exit, 7.6 order inside a 5m
-bar), H 8 (one wallet, one position per coin, 6 positions, 3 longs / 3 shorts in the large group, total open risk
-<= 4%, same-close order by 30-day quote volume), H 9 (costs and cost x2), H 10 (accounts, monthly multiple, bust,
-metrics), H 12 (controls (a) and (b), 100 seeds each).
+**Unchanged, as written in `PREREG_HUNT.md`:** H 2 (data, the 5m-vs-1m cross-check of the old six in
+`research/hunt/data_check.json`, the data identity of `research/hunt/data_manifest.json` checked at every select and
+test, funding, the 1 GB disk stop, storage), H 3 (the 30-coin universe, old six / new 24, the large group), H 4 (bars
+and indicators), H 6 (the 장세 label and the G1 rule), H 7 (7.1 entry fill, 7.2 first stop and unit, 7.3 leverage and
+isolated margin, 7.4 pyramiding, 7.5 chandelier exit, 7.6 order inside a 5m bar: a bar that reaches an add level adds
+first and then checks the moved stop), H 8 (one wallet, one position per coin, 6 positions, 3 longs / 3 shorts in the
+large group, total open risk <= 4%, same-close order by 30-day quote volume), H 9 (costs and cost x2), H 10 (accounts,
+monthly multiple, bust, metrics), H 12 (controls (a) and (b), 100 seeds each), and, inside section 6, H 13's P0, P1,
+P3 and P4 (P3 = cost x2 median monthly multiple >= 1.0 and mean monthly ln M > 0).
 
 **Differs (only these):**
 
@@ -53,7 +59,8 @@ metrics), H 12 (controls (a) and (b), 100 seeds each).
   15 minutes). Unchanged otherwise.
 * **Gate** (H 6): two variants per entry, **G1** (an event passes only on a 추세장 signal bar, H 6 as written) and
   **NONE** (every event passes). For NONE, "gated signal" in H 8 and H 12 means every event.
-* **Size**: r = **0.5%** for selection and test. r = 1%, 2% and 5% are reads only (section 7).
+* **Size**: r = **0.5%** for selection and test. r = 1%, 2% and 5% are reads only (section 7; the 2% / 5% read scales
+  the margin budget with r, section 7).
 * **Selection, test rule and reads**: sections 5-7 here replace H 11, H 13 and H 14 for this study.
 
 ## 3. Entry families (W2)
@@ -67,7 +74,16 @@ does the rest.
 | **F1** | E1 (Donchian 55 + volume), E2 (Bollinger squeeze release), E3 (ATR expansion), exactly H 5 | main number only (channel 55, window 120, threshold 1.5); no neighbours |
 | **F2** | the rule bot's 36 strategies = `research/fullgrid/run.core_names()` (the full grid's core set; `research/entry_study/param_defs/<NAME>.py`, pinned by `DEFS_BC.sha256`) | defaults, `run.default_combo("core", name)` |
 | **F3** | the 44 DeepSeek definitions = `run.ds_module().DEFS` (`research/fullgrid/ds_defs.py`) | defaults, `run.default_combo("ds", name)` |
-| **F4** | the 38 watch picks = `research/fullgrid/diag/watch_sel.json` (sha256 f6902feb42a7993098b794d0968bdf54fc2c3dbc43c0a6a0d7c56b43af53de56), the file the candidate league was built from (`candleague.candidates watch --select`); its 38 (kind, name, timeframe, numbers) equal those in `candleague/data/candidates.json` | each pick's own numbers (`combo`), on its own timeframe only; its `exit` field is ignored |
+| **F4** | the 38 watch picks = `research/fullgrid/diag/watch_sel.json` (sha256 f6902feb42a7993098b794d0968bdf54fc2c3dbc43c0a6a0d7c56b43af53de56), the file the candidate league was built from (`candleague.candidates watch --select`); its 38 (kind, name, timeframe, numbers) equal those in `candleague/data/candidates.json`. **Select-period read only: never a pick, never run on the test period, not part of the BH family or of WIDE PASS** (below) | each pick's own numbers (`combo`), on its own timeframe only; its `exit` field is ignored |
+
+**Why F4 is a read only.** The 38 picks' numbers were fitted on the same select window (2021-2023) and then kept
+because they were positive on the same test window (2024-01 .. 2026-09) and on 2020 (`research/fullgrid/WATCH_PREREG.md`
+0; `research/fullgrid/ANALYSIS_KO.md`, the 16 strategies "positive in both periods"). Their test result here would
+not be out of sample on any coin set: the new 24 coins trade in the same 2024-2026 market, move with the old six, and
+the DeepSeek picks read BTC context. A leaked p-value would also loosen Benjamini-Hochberg for the other picks. So F4
+systems are run in the select period (in the select table, labelled "read only: numbers chosen after the test period
+was seen") and nowhere else; the forward candidate league already tests these numbers honestly. The picks, the BH
+family and WIDE PASS come from F1-F3 only.
 
 ### 3.1 Signal arrays (F2-F4)
 
@@ -98,6 +114,20 @@ them, imported read-only:
   once when its state turns on and again only after it turns off and on. For an array that is already an event the
   rule changes nothing (except two True bars in a row, where only the first counts). Which arrays are states was looked
   at on synthetic bars only (section 16); on the old six's real bars it is reported by the parity check (section 8).
+* **This differs from the design brief**, which took an entry on every bar where an array fires and the first bar only
+  for arrays that are states. Kept on purpose (section 15 Q11): (i) control (a) draws, per coin and side, as many
+  random bars as the pick has gated signals (H 12); counting the continuation bars of a run as signals would give the
+  random control more entries than the pick can take (continuation bars mostly fall while the pick already holds that
+  coin), most for the arrays with many continuation bars; (ii) one rule for all families, the rule v1 uses. What it
+  costs: on the old six's real bars (parity check, section 8, signals only) the share of True bars that continue a run
+  is 0 in 216 of the 353 F2-F4 cells, about 0.85 for N17_KC_RSI and 0.66 for N18_VWMA_MACD (states), and 0.06-0.40 for
+  the mixed ones (F4_PULL about 0.31, F14_SMT and F2_DEMARK about 0.28, the F5_BOX family 0.12-0.23 (0.40 for the F4
+  F5_BOX 4h pick), V45_AMB about 0.17, N19_FIB_CHOP about 0.11, OBV_S 0.06-0.09); those continuation bars are not
+  entries.
+* **The edge is taken before the gate** (as in v1, where H 5 defines the event and H 6 gates it). Under G1 a run of True
+  bars that starts on a bar that is not 추세장 gives no entry, even when later bars of the run are 추세장; likewise a run
+  whose first bar is lost to a cap, a coin that holds a position, a missing fill bar or a missing ATR gives no entry
+  later in the run.
 * This differs on purpose from the full grid, where every True bar was a separate trade (full grid PREREG 5).
 * An event also needs ATR14 of the signal bar (D0, H 4). A bar with **both** a long and a short event on the same coin
   gives no entry (counted as "both sides", section 15 Q3).
@@ -117,11 +147,12 @@ pick's timeframe. Gates: G1 and NONE for every one.
 | F1 | 3 | 3 x 4 = 12 | 2 | 24 |
 | F2 | 36 | 36 x 4 = 144 | 2 | 288 |
 | F3 | 44 | 39 x 4 + 5 x 3 = 171 | 2 | 342 |
-| F4 | 38 picks (16 strategy names) | 38 | 2 | 76 |
-| **total** | | **365** | | **730** |
+| F4 (select read only) | 38 picks (16 strategy names) | 38 | 2 | 76 |
+| **total** | | **365** | | **730** (654 candidates F1-F3 + 76 F4 reads) |
 
 The brief counted (3 + 36 + 44) x 4 x 2 + 38 x 2 = 740; the generating rule above gives **730** because the five
-session definitions have no 4h version (section 15 Q1).
+session definitions have no 4h version (section 15 Q1). Of the 730, the **654 F1-F3 systems are the candidates** for
+the picks; the 76 F4 systems are run in the select period as a read only (section 3).
 
 **F1 names**: E1 E2 E3.
 **F2 names** (36): DOGE N01_ST_EMA N02_ST_KST N03_ADX_GC N04_ST_KLINGER N05_PSAR_POC N06_MACD_ORB N07_ICHI_CMO
@@ -138,25 +169,32 @@ N10_HA_PSAR 4h; N13_3OUTSIDE 30m 1h; N19_FIB_CHOP 15m 30m 4h; OBV_S 30m 1h 4h; S
 F10_OTE 1h 4h; F11_TSOUP 4h; F12_MSS_DISP 1h 4h; F1_PVT_DIV 1h; F5_BOX 15m 4h; F7_RF_ONLY 30m 1h 4h; F7_RF_TRIPLE 1h 4h;
 F9_FVG 1h 4h (15 DeepSeek). None of the 38 has its strategy's default numbers, so no F4 system repeats an F2/F3 one.
 
-**Strategy name** (for the one-per-name rule of section 5): E1, E2, E3 for F1; the core or DeepSeek name for F2-F4. An
-F4 pick counts under its strategy's name (F4 DOGE 15m and F2 DOGE 1h share the name DOGE). Distinct names: 83.
+**Strategy name** (for the one-per-name rule of section 5): E1, E2, E3 for F1; the core or DeepSeek name for F2-F3.
+Distinct names among the candidates: 83.
 
 ## 5. Selection (W5)
 
-* Period: **select 2021-01-01 .. 2024-01-01** by signal-bar close (H 11). The select step loads no 5m bar that opens at
-  or after 2024-01-01 00:00 UTC; positions still open there are marked at the last 5m close (H 10).
+* Period: **select 2021-01-01 .. 2024-01-01** by signal-bar close (H 11). The select step uses no 5m bar that opens at
+  or after 2024-01-01 00:00 UTC: each coin's npz columns are decompressed whole (their content hash is checked, H 2)
+  and cut at 2024-01-01 before anything else uses them, and of the manifest only what lies before that date is carried
+  (a coin end or a missing funding month after it is not, so `select.json` holds nothing about 2024 or later). Positions
+  still open at the end are marked at the last 5m close (H 10).
 * Runs: every one of the 730 systems, **r = 0.5%**, one account (H 10: $5,000, compounding) at base costs and one at
-  cost x2 (H 9). No neighbours and no plateau (H 11.1-11.2 do not apply).
+  cost x2 (H 9). No neighbours and no plateau (H 11.1-11.2 do not apply). Each row of the select table carries the H 10
+  metric set of its base run (the per-year, per-side and per-group splits included; the daily equity path is kept for
+  test runs only) and the cost x2 summary; DeepSeek rows as section 11.
 * **Eligible** = all of: at least **72 positions**; mean monthly ln M **> 0**; **no bust**; mean monthly ln M at cost x2
   **> 0**.
 * **Score** = mean monthly ln M of the base-cost run (36 months).
 * **Order**: score, highest first. Ties: higher median monthly multiple; then family F1 < F2 < F3 < F4; then name
   (ASCII); then timeframe 15m < 30m < 1h < 4h; then G1 before NONE; then (F4) lower watch rank.
-* **Picks**: walk down the ordered eligible systems and take a system when no system of the same strategy name is taken
-  yet, until **K = 10** are taken. So at most one system per strategy name (its best timeframe / gate / F4 pick).
-  Fewer than 10 eligible names -> every eligible name's best system; K is then that number.
-* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring system (any,
-  eligibility ignored) is still run on the test period, labelled "no pick, fail"; nothing else is.
+* **Picks**: walk down the ordered eligible **F1-F3** systems and take a system when no system of the same strategy name
+  is taken yet, until **K = 10** are taken. So at most one system per strategy name (its best timeframe / gate). Fewer
+  than 10 eligible names -> every eligible name's best system; K is then that number. F4 rows are never taken (section
+  3), whatever their score.
+* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 system
+  (eligibility ignored) is still run on the test period with its reads (section 7), labelled "no pick, fail"; no other
+  system is.
 * `research/hunt/out/wide/picks.json` (each pick's system id, family, name, timeframe, gate, numbers and pick number
   1..K) is written, and its sha256 appended to `PREREG_HUNT_WIDE.sha256`, **before any test-period bar is read**. The
   test step refuses to start without that line, and the picks do not change after it.
@@ -172,8 +210,8 @@ F4 pick counts under its strategy's name (F4 DOGE 15m and F2 DOGE 1h share the n
   d_m per control as H 12. (In the test period every coin is past its 180-day label history and its 300-bar warm-up,
   so the (a) pool is the same set of bars for G1 and NONE picks.)
 * **Per pick, as H 13:** **P0** at least 66 positions, a position open in at least 80% of the test months, no bust;
-  **P1** median monthly multiple >= 1.0 and mean monthly ln M > 0; **P3** cost x2 median monthly multiple >= 1.0;
-  **P4** max drawdown < 50%.
+  **P1** median monthly multiple >= 1.0 and mean monthly ln M > 0; **P3** cost x2 median monthly multiple >= 1.0 and
+  cost x2 mean monthly ln M > 0; **P4** max drawdown < 50%.
 * **P2, split:** p_a and p_b = the one-sided month-block bootstrap p of mean d_m for control (a) and for (b), as H 13
   (10,000 resamples of the 33 months; p = (1 + resamples with mean d <= 0) / 10,001; seed as above with "boot" in place
   of the seed number). **p = max(p_a, p_b).** **Seed-rank part**, for (a) and for (b) separately: (1 + seeds whose mean
@@ -186,6 +224,9 @@ F4 pick counts under its strategy's name (F4 DOGE 15m and F2 DOGE 1h share the n
 * **WIDE PASS** = at least one pick passes.
 * v1 runs unchanged and separately (H 11-13, its own pick and seeds). If v1's pick is also a wide pick, it is run in
   each study with that study's seeds; the two results are reported separately and neither counts for the other.
+* Long steps resume: each finished entry cell of select and each finished pick of test is written to the private
+  folder (outside the repository) under the pin's hash; a rerun under the same pin computes only what is missing and
+  gives the same result (section 10).
 
 ## 7. Reads (W7): reported, never a pass
 
@@ -199,14 +240,24 @@ For each pick unless stated (test period unless stated):
 * **One-wallet basket** of all passing picks (when at least two pass): one wallet, r = 0.5% per unit, H 8's caps
   shared by all of them (one position per coin across all picks, 6 positions, 3 / 3 in the large group, 4% total open
   risk). Same-close order: 30-day quote volume (H 8), then pick number. Select and test.
-* **Sizing read** for each passing pick and for the basket: **r = 2% and r = 5%**, the total open risk cap scaled by
-  r / 0.5% (16% at r = 2%, 40% at r = 5%), leverage as H 7.3 with its 20x cap and the margin budget B = equity / 6
-  unchanged (cuts and skipped adds counted), everything else as here. Reported: the **share of test months with
-  M >= 2, >= 10 and >= 30**, the **worst month**, **bust** (and its month), and the H 10 metric set. This is the honest
-  answer to the owners' goal ($1,000 -> $30,000-50,000 fast, x30-x50): it shows how often a larger bet gave such months
-  and how often it went bust, on data the choice never saw. It is not a pass and not a paper account (section 15 Q9).
+* **Sizing read** for each passing pick and for the basket: **r = 2% and r = 5%**, the total open risk cap **and the
+  margin budget** scaled by r / 0.5% (risk cap 16% / 40%; B = equity / 6 x 4 at 2%, x 10 at 5%), leverage as H 7.3
+  (the smallest L meeting the bracket, the budget and liquidation >= 1.5 x D0, at most 20x), the free wallet still
+  limiting every fill (cuts and skipped adds counted), everything else as here. With B unchanged the read would not
+  take the bet it names: at r = 5% and D0 = 1% of the price the first unit was cut to about 0.8% of equity and no add
+  found room (review, section 16.2). Even scaled, the brackets, the 20x cap and the wallet cut a tight-stop unit, so
+  next to every figure the read reports **the bet actually taken**: the median (and quartiles) of the first unit's
+  realized risk q x D0 / equity at entry, the share of first units cut (by liquidity, margin budget, free wallet) and
+  the share of tried adds that filled. Reported: the **share of test months with M >= 2, >= 10 and >= 30**, the
+  **worst month**, **bust** (and its month), and the full H 10 metric set. This is the honest answer to the owners'
+  goal ($1,000 -> $30,000-50,000 fast, x30-x50): it shows how often a larger bet gave such months and how often it went
+  bust, on data the choice never saw. It is not a pass and not a paper account (section 15 Q9).
 * Also reported, never a pass: the controls in the select period for each pick; the gate diagnostics of H 14 for each
-  pick; the select table of all 730 systems (section 11 for DeepSeek rows); the count of "both sides" bars.
+  pick **in the select period only** (the pick's entry and timeframe under the other gate is another of the 730
+  systems, so section 6 keeps it off the test period; v1 keeps H 14 as written); the select table of all 730 systems
+  (section 11 for DeepSeek rows); the count of "both sides" bars.
+* In the "no pick, fail" case the one system's reads run as a pick's (they are that system at another size, universe
+  or period, never another system); there is no sizing read or basket (no pick passes).
 
 ## 8. Parity (W8): the entries equal the full grid's, before the pin
 
@@ -214,7 +265,9 @@ For each pick unless stated (test period unless stated):
   every timeframe it has (144 + 171 = 315 cells) and the 38 F4 picks. **Signals only; no position, fill or outcome is
   computed.**
 * Reference: the full grid's own path, `run.build_frame` on the full grid's 1m archive (`<fg1m>/1m/<SYM>.npz`)
-  followed by the same calls as section 3.1. Adapter: section 3.1 on the 5m arrays of the hunt data.
+  followed by the same calls as section 3.1. Adapter: section 3.1 on the 5m arrays of the hunt data, read exactly as
+  select and test read them (H 2: duplicate, zero-volume, off-grid and non-finite rows dropped; the dropped counts are
+  reported per coin), so the parity checks the bars the run computes its signals on.
 * Compared on the bars both series have (same bin open time), after both series' first 300 bars; per strategy x
   timeframe x side, for the raw boolean arrays and for the edge events of 3.2.
 * **Mismatch share** = bars where the two differ / bars where either is True. A mismatch at bar t is **excused** when
@@ -225,7 +278,13 @@ For each pick unless stated (test period unless stated):
   pass is removed from the study before the pin, with its reason, and the counts of section 4 are corrected here.
 * Also reported per cell: the share of True bars that are not edge events (0 = the array is already an event), for the
   reference array.
-* Output: `research/hunt/out/wide/parity.json` (counts and shares only), part of the pin (section 10).
+* Output: `research/hunt/out/wide/parity.json` (counts and shares only), part of the pin (section 10). It records the
+  sha256 of `entries_wide.py`, `parity_wide.py` and `hunt.py` it ran under; the pin check refuses unless it says pass,
+  was run on the hunt 5m files (`--five`) on the old six, and its recorded code equals the pinned files.
+* A first run on the full grid's 1m archive binned to 5m (the adapter alone, 2026-10-11, signals only) gave 348 of 353
+  cells identical and 11 differing bars in 5 cells (F6_VWAP_CROSS 15m / 30m / 1h, F6_VWAP_FAIL 30m / 1h; at most
+  0.011%): a last-bit difference in the daily VWAP's volume sum flips an exact `>=` tie. The pinned run is the one on
+  the hunt files.
 
 ## 9. Data (W9)
 
@@ -245,16 +304,29 @@ For each pick unless stated (test period unless stated):
 * Command: `python -m research.hunt.hunt {select,test,report} --study {v1,wide} [--procs N] [--data DIR]`. `select`
   and `test` refuse to run unless the study's pin file (`PREREG_HUNT.sha256` for v1, `PREREG_HUNT_WIDE.sha256` for wide)
   matches every file it lists; `test` also needs the picks line (section 5).
-* `PREREG_HUNT_WIDE.sha256` lists: this file; `PREREG_HUNT.md`; `research/hunt/universe30.json`;
-  `research/hunt/exchange30.json` when it exists (H 7.3); every Python file under `research/hunt/` that the command
-  imports; the hunt tests under `tests/`; `research/hunt/out/wide/parity.json`; and, as read-only inputs checked by
-  hash, `research/fullgrid/diag/watch_sel.json`, `research/fullgrid/PREREG.sha256` (whose own list must match),
-  `research/entry_study/DEFS_BC.sha256` and `paperbot/dash/tools/regime5y.py`. Later, the picks line.
-* Outputs: `research/hunt/out/wide/` (select.json, picks.json, test.json, reads.json, parity.json and a Korean results
-  page), each stamped with the git commit and the sha256 of the pin file it ran under.
-* Compute: systems are independent, so select splits by system and test by pick x control seed; `--procs N` sets the
-  worker count (at most 2 on the development machine; any number on a rented server). Results do not depend on N:
-  seeds depend only on the parts written in section 6. No absolute path is written in the code.
+* `PREREG_HUNT_WIDE.sha256` lists exactly what `python -m research.hunt.hunt pinlist --study wide` prints: this file;
+  `PREREG_HUNT.md`; `research/hunt/universe30.json`, `data_manifest.json` and `data_check.json` (H 2), the data builder
+  `research/hunt/data_hunt.py` and every file under `research/hunt/data_build/` when they exist; `research/hunt/exchange30.json` when it exists (H 7.3); every
+  Python file under `research/hunt/` that the command imports; the hunt tests under `tests/`;
+  `research/hunt/out/wide/parity.json`; as read-only inputs checked by hash, `research/fullgrid/diag/watch_sel.json`,
+  `research/fullgrid/PREREG.sha256` (whose own list must match), `research/entry_study/DEFS_BC.sha256` and
+  `third_party/sweep/PREREG.sha256`; and **every repository Python file the signal code loads**, found by running each
+  of the 365 entry cells once on a short synthetic series and listing the loaded modules (among them
+  `research/deepseek200/lib_c.py`, whose helpers every DeepSeek definition calls, `research/fullgrid/memo.py`, which
+  wraps the core definitions' indicators, `paperbot/dash/tools/regime5y.py`, `paperbot/sweepsig.py`, the vendored
+  indicator code under `third_party/sweep/`, the 36 core definitions, and the paper-bot modules they import, read only).
+  `select` and `test` repeat the scan and refuse a file that is not listed. Later, the picks line. Because rule-bot
+  files are on that list, select and test run from one fixed checkout (a separate worktree at the pinned commit), so
+  rule-bot commits made between the two steps do not stop the test.
+* Outputs: `research/hunt/out/wide/` (select.json, picks.json, test.json with the reads inside it, parity.json and a
+  Korean results page), each stamped with the git commit and the sha256 of the pin file it ran under, and with the
+  content hash of every coin's data it read (H 2).
+* Compute: systems are independent, so select splits by entry cell and test by pick x control seed; `--procs N` sets
+  the worker count (at most 2 on the development machine; any number on a rented server). Results do not depend on N:
+  seeds depend only on the parts written in section 6. No absolute path is written in the code. Progress is printed
+  every minute. A worker that dies (out of memory, killed) is replaced and only its unfinished items are sent again
+  (with fewer workers; after five rebuilds the step stops with a message instead of hanging). Finished entry cells
+  (select) and picks (test) are kept under the private folder and reused by a rerun under the same pin.
 * Tests on synthetic bars only (the event edge rule, the 15m/30m D0 and chandelier, the selection order and
   one-per-name rule, BH, the scaled risk cap of the sizing read, refusal without a pin), in addition to v1's (H 16).
 * Run time is measured on synthetic bars once the code exists and written in `DEVIATIONS.md` before the run; if select
@@ -289,17 +361,31 @@ For each pick unless stated (test period unless stated):
 ## 13. Known limits (stated before any result)
 
 * **The old six are not blind.** The full grid's results for F2/F3 at default numbers (with the rule bot's exits) on
-  the old six, including 2024-2026, have been read by the owners and the main session. **The 38 F4 picks were chosen
-  after the full grid's test period and 2020 were seen** (WATCH_PREREG 0), so an F4 pick's test on the old six is not
-  out of sample. The new-24 read is the cleaner check and is shown next to every pick (section 15 Q2).
+  the old six, including 2024-2026, have been read by the owners and the main session. The default numbers were not
+  chosen on that period, but what was seen can steer later choices; the new-24 read is shown next to every pick. It
+  does not make a result clean: the new 24 coins trade in the same 2024-2026 market and move with the old six.
+* **The 38 F4 picks were chosen after the full grid's test period and 2020 were seen** (WATCH_PREREG 0): their test here
+  would be out of sample on no coin set, which is why F4 is a select-period read only (section 3).
 * **Winner's curse.** The best of 730 select runs looks better on 2021-2023 than it is. Only the single test, the
   controls and BH over K speak to that.
 * **Power.** 33 test months and BH over up to ten picks: a real but small edge may not pass.
 * The universe is a 2026 list (H 3, H 18 Q2). The strategies were written for the old six; DeepSeek definitions that
   read BTC context get BTCUSDT's bars on every coin.
-* The edge rule (3.2) makes state strategies enter less often than the full grid counted them.
+* The edge rule (3.2) makes state and mixed strategies enter less often than the full grid counted them, and under G1
+  a run that starts outside 추세장 gives no entry.
 * On 15m and 30m the first stop and the chandelier are tight relative to costs (5m fills, taker fees); this is part of
   what is tested, not a reason to change the costs.
+* **Pyramiding is margin-limited on tight stops and in larger accounts (H 7.3 as written).** The leverage H 7.3 (ii)
+  asks for is N4 / B = 24 x r / (D0 / P0), with N4 = 4 x q x P0 taken at P0, while the adds fill higher (long). With the
+  fallback brackets at r = 0.5% and a $5,000 wallet: D0 / P0 = 0.3% leaves no room for any add (L = 10, the first unit
+  is already cut to the budget); 0.5% leaves room for about 2.3 of the 3 adds (L = 20); 1% leaves 2.97, so the third
+  add is cut. Whenever 0.12 / (D0 / P0) is a whole number of at most 20 (D0 = 1%, 2%, 4% of the price ...), L uses B
+  exactly and the third add is always cut, so the "full units" stops of H 7.4 (P0 + 0.667 D0, P0 + 1.25 D0) do not hold
+  exactly. Tight stops are typical of the new 15m and 30m systems, so selection compares timeframes under this
+  asymmetry. N4 / B does not depend on the equity, but the bracket of N4 does: a compounding account crosses the
+  $25,000 / $100,000 / $250,000 tiers and loses adds as it grows. Counted per run (adds skipped and cut by margin);
+  a real bracket table (`exchange30.json`) changes the numbers; computing N4 at the planned add levels is section 15
+  Q14.
 
 ## 14. Not in this study
 
@@ -311,25 +397,40 @@ read); exits other than the chandelier; r above 0.5% as the rule; gates other th
 
 1. **730, not 740.** The five ET-session DeepSeek definitions exist only on 15m/30m/1h (`ds_defs.TFS_OF`); running them
    on 4h would use code the full grid never ran and cannot be parity-checked. [730; no 4h for those five]
-2. **F4 on the old six is not out of sample** (section 13). Alternative: an F4 pick (or every pick) passes only if its
-   new-24 test mean ln M > 0 as well. [Label only, as designed: "carried by the old six" and "numbers chosen after the
-   test was seen" shown next to the verdict]
+2. **F4 is not out of sample on any coin set** (section 3, 13): the new 24 share the 2024-2026 market. [Closed in
+   review: F4 is a select-period read only, never a pick, never in the BH family or WIDE PASS. The alternative of the
+   draft (F4 eligible, labelled) is rejected because a leaked p would also loosen BH for the other picks. For F1-F3
+   picks: "carried by the old six" stays a label, not a condition]
 3. **Long and short event on the same bar and coin.** [No entry; counted]
 4. **Mark price.** The new 5m files hold mark-price columns, but H 2 and H 7.6 check liquidation on last price and this
    study keeps the machine identical to v1. [Last price, as H 2; mark columns unread]
 5. **K = 10, one per name.** [Keep]
 6. **72 positions in 36 months** may exclude many 4h G1 systems. [Keep; the gate is not changed for it]
 7. **Score = mean ln M**; the median is only a tie-break here (v1 uses a median-based plateau). [Keep]
-8. **Sizing read**: the margin budget equity / 6 and 20x will cut 5% units; the read reports those cuts rather than
-   loosening them. [Keep]
+8. **Sizing read**: with B = equity / 6 a 5% unit is cut to about 1% or less and loses its adds, so the read would not
+   show what a 5% bet does. [B scaled with r (section 7); 20x cap and brackets unchanged; the realized unit risk, cut
+   and add shares reported next to every figure. Alternative: B unchanged, the read labelled "requested 2% / 5%, taken
+   about X%"]
 9. **Paper accounts at 2% or 5%.** [None; the owners decide after reading the sizing read, labelled as such]
 10. **Where it runs.** [The development machine at 2 processes if the measured time allows; otherwise a rented server
     started by the owners, same commit and pin]
-11. **State arrays and the edge rule** (3.2). [Edge rule for every family]
+11. **State arrays and the edge rule** (3.2). The design brief took every firing bar and the first bar only for state
+    arrays; this addendum takes the first bar of every run for every family (reasons and costs in 3.2). [Edge rule for
+    every family, taken before the gate. Alternative: the brief's rule with the state list fixed before the pin from
+    the parity reference (N17_KC_RSI and N18_VWMA_MACD, pooled continuation share >= 0.5; next highest F4_PULL 0.31),
+    accepting that control (a) then draws more random entries than the pick can take for the mixed arrays]
 12. **A strategy x timeframe failing parity** after a fix attempt. [Removed before the pin, recorded here]
-13. **No eligible system.** [As v1: the top system runs once, labelled "no pick, fail"]
+13. **No eligible system.** [As v1: the top F1-F3 system runs once with its reads, labelled "no pick, fail"]
+14. **N4 at the planned add levels** (section 13). H 7.3 takes the planned full notional at P0 (N4 = 4 x q x P0), so
+    the third add is often cut. Alternative for both studies, a change of H 7.3 before the pin: N4 = q x (4 x P0 + 6 x
+    D0) for a long (the four planned fills P0, P0 + D0, P0 + 2 D0, P0 + 3 D0; short: 4 x P0 - 6 x D0) and the same in
+    the per-unit budget check. [H 7.3 as written; the margin-limited adds counted and reported]
+15. **Rule-bot files in the pin** (section 10). The signal code imports paper-bot modules, so they are hashed. [Run
+    select and test from one fixed checkout of the pinned commit]
 
 ## 16. Before this file was fixed
+
+### 16.1 At the first draft (2026-10-11)
 
 * When this draft was written `research/hunt/` held only `PREREG_HUNT.md` and `README_KO.md` (both drafts under review,
   read only). No hunt code had run; no selection, test or account of either hunt study exists.
@@ -350,3 +451,33 @@ read); exits other than the chandelier; r above 0.5% as the rule; gates other th
   and the per-strategy reports (section 13).
 * The wide design (families, timeframes, gates, K, score, BH, reads) was set by the main session the same day in answer
   to the owners' question, before any hunt run.
+
+### 16.2 Review before the pin (2026-10-11, KST evening)
+
+Done after the code of section 10 had been drafted and tested on synthetic bars, and after the parity check of section
+8 had run on the full grid's 1m archive (signals only). No select or test of either hunt study had run; no trading
+outcome had been computed on any real price period; no 5m price of the 30 coins was opened for this review (the
+download was still running). The reviewers read the code, this file, `PREREG_HUNT.md`, the full grid's watch-list
+files and `manifest.json`'s coverage fields, and ran synthetic cases. Changes:
+
+1. **F4 is a select-period read only** (sections 1, 3, 4, 5, 6, 13, Q2): the watch picks' numbers were kept because of
+   this very test period and 2020; the picks, the BH family and WIDE PASS come from F1-F3.
+2. **The sizing read takes the bet it names** (section 7, Q8): the margin budget is scaled with r, and the bet
+   actually taken (realized unit risk, cut and add shares) is reported with the full H 10 set.
+3. **Gate diagnostics in the select period only** for wide (section 7): the other gate is a non-pick system.
+4. **3.2 states the deviation from the brief and the edge-before-gate effect** (Q11), with the continuation shares
+   measured by the parity check.
+5. **H 2 implemented as written**: the 5m-vs-1m cross-check (`datacheck` -> `data_check.json`), the data identity
+   (`datapin` -> `data_manifest.json`, checked at every select and test), the 1 GB disk stop; select carries nothing
+   of the manifest after its end, and missing funding months are those while the coin trades (section 5).
+6. **The pin covers the whole signal path and checks the result files' content** (section 10): lib_c.py, memo.py,
+   regime5y.py (now in the v1 pin too), the vendored code; parity.json must say pass on the hunt files under the
+   pinned code; data_check.json must say pass for the pinned data.
+7. **Parity reads the hunt files as the run does** (section 8: zero-volume and duplicate rows dropped).
+8. **P3 includes mean ln M > 0 at cost x2** (section 6), as H 13 after its own review; the H 7.6 add-first order of H's
+   review is in the code.
+9. **Robust, resumable runs** (section 10): a dead worker no longer hangs a step; finished cells and picks are reused.
+10. **Section 13**: pyramiding is margin-limited on tight stops and in larger accounts (with the arithmetic); Q14 (N4 at
+    the planned add levels) and Q15 (one fixed checkout) added. Section 10's output list corrected (the reads are in
+    test.json).
+

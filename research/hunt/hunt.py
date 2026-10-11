@@ -105,6 +105,7 @@ EXCHANGE_REL = "research/hunt/exchange30.json"
 DATA_MANIFEST_REL = "research/hunt/data_manifest.json"          # H 2: manifest copy + array content hashes
 DATA_CHECK_REL = "research/hunt/data_check.json"                # H 2: 5m vs the full grid's 1m, old six
 DATA_BUILD_REL = "research/hunt/data_build"                     # H 2: the data job's scripts (every file pinned)
+DATA_BUILDER_REL = "research/hunt/data_hunt.py"                 # the repository copy of the data builder (pinned)
 PARITY_REL = "research/hunt/out/wide/parity.json"               # W 8
 PARITY_CODE = ("entries_wide.py", "parity_wide.py", "hunt.py")  # parity.json must be made by these exact files
 OUT_REL = {"v1": "research/hunt/out/v1", "wide": "research/hunt/out/wide"}
@@ -319,6 +320,8 @@ def required_files(study: str) -> list:
     need += signal_path_files(study)
     if os.path.exists(os.path.join(ROOT, EXCHANGE_REL)):
         need.append(EXCHANGE_REL)
+    if os.path.exists(os.path.join(ROOT, DATA_BUILDER_REL)):
+        need.append(DATA_BUILDER_REL)
     bdir = os.path.join(ROOT, DATA_BUILD_REL)
     if os.path.isdir(bdir):
         for dp, _dn, fns in os.walk(bdir):
@@ -2340,7 +2343,7 @@ def cmd_report(args) -> int:
             sz = {k: x for k, x in test.get("sizing", {}).items() if isinstance(x, dict)}
             if sz:
                 lines += ["## 크게 걸면 (참고, 통과 조건 아님)", "",
-                          "| 시스템 | 요청 위험 | 실제 첫 단위 위험(중앙) | 2배 이상 달 | 10배 이상 달 | 30배 이상 달 | 가장 나쁜 달 | 파산 |",
+                          "| 시스템 | 요청 위험 | 실제 첫 단위 위험(중앙) | 2배+ 달 | 10배+ 달 | 30배+ 달 | 최악의 달 | 파산 |",
                           "|---|---:|---:|---:|---:|---:|---:|---|"]
                 for k, rr in sz.items():
                     for r_, x in rr.items():
@@ -2350,7 +2353,8 @@ def cmd_report(args) -> int:
                                      f"{x['share_M_ge_30'] * 100:.0f}% | {x['worst_month']:.2f} | "
                                      f"{'예 ' + str(x['bust_month']) if x['bust'] else '아니오'} |")
                 lines.append("")
-            lines.append("관찰 후보 38개(F4)는 시험 기간을 본 뒤 고른 숫자라서 고르기에서 참고로만 보고, 시험·통과에는 넣지 않았습니다.")
+            lines.append("관찰 후보 38개(F4)는 시험 기간을 본 뒤 고른 숫자라서 고르기에서 참고로만 보고, "
+                         "시험·통과에는 넣지 않았습니다.")
             lines.append("딥시크 매매법의 돈 숫자는 저장소 밖 파일에만 있습니다(D11).")
     path = os.path.join(out_dir, "RESULTS_KO.md")
     os.makedirs(out_dir, exist_ok=True)
