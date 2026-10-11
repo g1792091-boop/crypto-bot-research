@@ -18,11 +18,20 @@
     - `research/hunt/PREREG_HUNT_WIDE.md`: a9c9e34e... to f14d7c84...
   - `PREREG_HUNT_WIDE.sha256`, line appended: `research/hunt/reads_o.py` fffdd0af....
   - No line of any study code (hunt.py, entries, data, reads_a.py) changed.
-- **The server runs a later commit.** It runs the later GO commit named in `research/hunt/GO_COMMIT`. That commit
-  has the same pin files as ca561234bd and changes only unpinned files:
-  - `bootstrap.sh`: reads_a resumes after a restart; reads_o runs after fidelity; the restart line works inside tmux.
-  - `SERVER_KO.md`: times.
+- **The server runs a later commit.** It runs the code commit named in the owners' line
+  (`bootstrap.sh update <commit>`). The results record that commit in stamps/code_stamp.json (`git.commit` and the
+  settings' `HUNT_GO`). `research/hunt/GO_COMMIT` is read only by `wait_go.sh` on a new server; it is updated to the
+  same commit afterwards. The code commit has the same pin files as ca561234bd and changes only unpinned files:
+  - `bootstrap.sh`:
+    - A verdict written before a read stops is kept, and the run goes on.
+    - reads_a resumes once after a restart (`READS_A_TRIED`).
+    - A reads_o timeout (8 h) is reported apart from a failure.
+    - The restart line works inside tmux and is printed on its own line.
+    - The status and update messages are clearer.
+  - `SERVER_KO.md` (times and the restart line)
   - `READS_PLANNED.md`
   - this file
+  - the track 2 drafts `research/hiwr/PREREG_HIWR.md` and `research/hiwr/README_KO.md` (a separate study, not read
+    by the hunt)
 - **Not delivered in this run.** O2 does not run, because the calendar is unverified and unpinned. O3 is not
   computed. See PREREG_HUNT_WIDE 16.6 items 3 and 4, and READS_PLANNED.md P4.

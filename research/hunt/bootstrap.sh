@@ -34,7 +34,7 @@ BASE=${HUNT_BASE:-/root/hunt}
 mkdir -p "$BASE"
 # Settings of the first run are kept, so a restart (which passes no environment) runs with the same choices.
 SETTINGS=$BASE/settings.env
-PERSIST="HUNT_GO ALTPUMP HUNT_WORKERS HUNT_PROCS HUNT_FID_FROM HUNT_FID_TO"
+PERSIST="HUNT_GO ALTPUMP HUNT_WORKERS HUNT_PROCS HUNT_FID_FROM HUNT_FID_TO HUNT_READS_O_HOURS"
 GIVEN=""
 for v in $PERSIST; do
   if [ -z "${!v:-}" ]; then
@@ -99,14 +99,14 @@ die_fix() {                  # a stop only the developer can fix (code, pins, th
   say "이 화면을 그대로 복사해 개발자에게 보내 주세요."
   if computed; then keep_server; exit 1; fi
   say "아직 계산 전이라, 바로 못 고치면 서버를 Destroy해도 잃는 것이 없습니다."
-  say "개발자가 고쳤다고 하면: 개발자가 준 줄(bash $SELF update <커밋>)을 붙여 넣고, 그다음 이 줄로 이어서 합니다:"
-  say "  $RESTART"
+  say "개발자가 고쳤다고 하면: 개발자가 준 줄(bash $SELF update <커밋>)을 붙여 넣고, 그다음 아래 한 줄 전체로 이어서 합니다:"
+  echo "$RESTART" | tee -a "$LOG"
   exit 1
 }
 die_retry() {                # a stop that a later restart can get past (network, apt lock)
   say "멈춤: $*"
-  say "몇 분 뒤 이 줄을 붙여 넣으면 이어서 합니다 (끝난 것은 건너뜁니다):"
-  say "  $RESTART"
+  say "몇 분 뒤 아래 한 줄 전체를 붙여 넣으면 이어서 합니다 (끝난 것은 건너뜁니다):"
+  echo "$RESTART" | tee -a "$LOG"
   say "같은 멈춤이 두 번 나오면 이 화면을 그대로 복사해 개발자에게 보내 주세요."
   computed && keep_server
   exit 1
@@ -164,7 +164,8 @@ status() {
     if [ -f "$BASE/AP_PASS2_INCOMPLETE" ] && [ -f "$BASE/results.tgz" ]; then incomplete_msg; return; fi
     echo "지금 돌고 있지 않습니다. 마지막 기록:"
     grep -E "멈춤|\] [0-9]/$NST " "$LOG" 2>/dev/null | tail -3
-    echo "이어서 하려면: $RESTART"
+    echo "이어서 하려면 아래 한 줄 전체를 붙여 넣으세요:"
+    echo "$RESTART"
     return
   fi
   local n=0 name="설치 중" t0 el left t
@@ -185,7 +186,7 @@ status() {
   esac
   case "$n" in
     6) echo "  6/9는 판정 뒤 목표판·20/30/40배 표 계산까지 몇 시간(4~9시간) 걸릴 수 있습니다. 남은 시간이 그대로여도 정상이니 다시 시작하지 마세요." ;;
-    8) echo "  8/9의 추가 분석(주말 뺀 버전 등)은 최대 ${HUNT_READS_O_HOURS:-5}시간 걸릴 수 있습니다. 정상이니 다시 시작하지 마세요." ;;
+    8) echo "  8/9의 추가 분석(주말 뺀 버전 등)은 최대 ${HUNT_READS_O_HOURS:-8}시간 걸릴 수 있습니다. 정상이니 다시 시작하지 마세요." ;;
   esac
 }
 
@@ -244,8 +245,8 @@ update() {                   # update <commit>: the developer's fix, only while 
   case " $GIVEN " in *" HUNT_GO "*) ;; *) GIVEN="$GIVEN HUNT_GO" ;; esac
   save_settings
   rm -f "$BASE/CHECKED"
-  echo "코드를 ${want:0:10} 으로 바꿨습니다. (다시 시작 줄이 같이 있었다면 더 붙여 넣을 것 없음. 아니면 이 줄:)"
-  echo "  $RESTART"
+  echo "코드를 ${want:0:10} 으로 바꿨습니다. (다시 시작 줄이 같이 있었다면 더 붙여 넣을 것 없음. 아니면 아래 한 줄:)"
+  echo "$RESTART"
 }
 
 case "$MODE" in
@@ -436,12 +437,17 @@ hunt_select() {
   picks_pinned "$st" || die "$st 고르기는 끝났는데 고른 것이 고정 파일에 없습니다"
 }
 hunt_test() {
-  local st=$1 out=research/hunt/out/$1/test.json
+  local st=$1 out=research/hunt/out/$1/test.json rc=0
   if [ -s "$out" ]; then sub "건너뜀: $st 시험 (이미 끝남)"; return 0; fi
   picks_pinned "$st" || die "$st 시험 전에 고르기가 고정돼 있어야 합니다"
   sub "$st 시험 (2024-01 ~ 2026-09, 한 번만)"
-  "${HUNT[@]}" test --study "$st" --data "$DATA" --procs "$PROCS" --private "$PRIV" >>"$LOG" 2>&1 \
-    || die "$st 시험 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
+  "${HUNT[@]}" test --study "$st" --data "$DATA" --procs "$PROCS" --private "$PRIV" >>"$LOG" 2>&1 || rc=$?
+  if [ "$rc" != 0 ]; then
+    [ -s "$out" ] || die "$st 시험 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
+    # test.json is written (atomically) before the reads hook: the verdict stands; the read stopped (workers, memory, kill)
+    warn "$st 판정(test.json)은 쓰였고, 그 뒤 참고 분석에서 멈췄습니다 (종료 코드 $rc, run.log 참고; 다른 결과는 그대로 묶습니다)"
+    return 0                 # not marked as run here: ensure_reads_a tries the read once more
+  fi
   [ -s "$out" ] || die "$st 시험은 끝났는데 결과 파일($out)이 없습니다"
   TEST_RAN_HERE="$TEST_RAN_HERE $st"
 }
@@ -449,12 +455,20 @@ ensure_reads_a() {           # reads_a (R1 goal board, R24 20/30/40x, continuous
   local out=research/hunt/out/wide/reads_a.json   # a restart after test.json skips that step, so run the hook again
   [ -s research/hunt/out/wide/test.json ] || return 0
   [ -s "$out" ] && return 0
+  local tried=$BASE/READS_A_TRIED procs=$PROCS
   case " $TEST_RAN_HERE " in
-    *" wide "*) warn "목표판·20/30/40배 표(reads_a)가 시험 안에서 실패했습니다 (run.log의 [reads] 줄 참고; 같은 코드로 다시 해도 같으니 개발자에게 보내 주세요)"
+    *" wide "*) echo "$HEAD" > "$tried"     # a Python error inside the read: the same code fails the same way
+                warn "목표판·20/30/40배 표(reads_a)가 시험 안에서 실패했습니다 (run.log의 [reads] 줄 참고; 같은 코드로 다시 해도 같으니 개발자에게 보내 주세요)"
                 return 0 ;;
   esac
-  sub "목표판·20/30/40배 표 (reads_a): 시험은 이미 끝났는데 파일이 없어 이어서 계산합니다 (몇 시간)"
-  "${HUNT[@]}" reads --study wide --data "$DATA" --procs "$PROCS" --private "$PRIV" >>"$LOG" 2>&1 \
+  if [ "$(cat "$tried" 2>/dev/null)" = "$HEAD" ]; then
+    warn "목표판·20/30/40배 표(reads_a)는 이 코드로 이미 한 번 다시 해 봤고 끝나지 않아 또 하지 않습니다 (개발자에게 보내 주세요)"
+    return 0
+  fi
+  echo "$HEAD" > "$tried"
+  grep -qF "workers keep dying" "$LOG" 2>/dev/null && procs=$(( PROCS > 2 ? PROCS / 2 : 1 ))   # memory: half the workers
+  sub "목표판·20/30/40배 표 (reads_a): 판정은 끝났는데 파일이 없어 이어서 계산합니다 (몇 시간, 작업 ${procs}개)"
+  "${HUNT[@]}" reads --study wide --data "$DATA" --procs "$procs" --private "$PRIV" >>"$LOG" 2>&1 \
     || warn "목표판·20/30/40배 표(reads_a) 이어서 계산 실패 (run.log의 [reads] 줄 참고, 다른 결과는 그대로 묶습니다)"
   [ -s "$out" ] || warn "목표판·20/30/40배 표(reads_a.json)가 없습니다 (run.log의 [reads] 줄 참고)"
 }
@@ -584,10 +598,10 @@ owner_reads() {              # PREREG_HUNT_WIDE 7.4a (O1 weekend version on all 
   [ -s research/hunt/out/wide/test.json ] || { warn "추가 분석(주말 뺀 버전 등): 넓게 시험 결과가 없어 건너뜀"; return 0; }
   sub "추가 분석: 주말 뺀 버전(4개 봉)·롱만·FOMC/고용지표 시간 피하기·모멘텀 비교 (7.4a)"
   local rc=0
-  timeout "${HUNT_READS_O_HOURS:-5}h" "${READS_O[@]}" --study wide --data "$DATA" --private "$PRIV" --procs "$PROCS" \
+  timeout "${HUNT_READS_O_HOURS:-8}h" "${READS_O[@]}" --study wide --data "$DATA" --private "$PRIV" --procs "$PROCS" \
     >>"$LOG" 2>&1 || rc=$?
   if [ "$rc" = 124 ]; then
-    warn "추가 분석(주말 뺀 버전 등)이 ${HUNT_READS_O_HOURS:-5}시간 안에 끝나지 않아 멈췄습니다 (다른 결과는 그대로 묶습니다)"
+    warn "추가 분석(주말 뺀 버전 등)이 ${HUNT_READS_O_HOURS:-8}시간 안에 끝나지 않아 멈췄습니다 (다른 결과는 그대로 묶습니다)"
   elif [ "$rc" != 0 ]; then
     warn "추가 분석(주말 뺀 버전 등) 실패 (종료 코드 $rc, run.log 참고, 다른 결과는 그대로 묶습니다)"
   fi
@@ -687,12 +701,12 @@ PYEOF
     if [ -s research/hunt/out/wide/reads_o.json ]; then
       echo "* hunt/wide/reads_o.json: 추가 분석 (주말 뺀 버전 4개 봉, 롱만, FOMC/고용지표 시간, 모멘텀 비교; 7.4a)"
     else
-      echo "* hunt/wide/reads_o.json: 없음 (추가 분석이 끝나지 않음: WARNINGS.txt)"
+      echo "* hunt/wide/reads_o.json: 없음 (추가 분석이 끝나지 않았거나 실패: WARNINGS.txt)"
     fi
     if [ -s research/hunt/out/wide/reads_a.json ]; then
       echo "* hunt/wide/reads_a.json: 목표판(R1), 20/30/40배 표(R24), 계속 굴린 계좌"
     else
-      echo "* hunt/wide/reads_a.json: 없음 (목표판이 끝나지 않음: WARNINGS.txt)"
+      echo "* hunt/wide/reads_a.json: 없음 (목표판이 끝나지 않았거나 실패: WARNINGS.txt)"
     fi
     echo "* altpump: 알트 급등 출력 (pass2_cache 제외)"
     echo "* pins: 고정 파일 (고르기 뒤 picks 줄이 붙은 것)"
