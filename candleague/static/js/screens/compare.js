@@ -45,14 +45,14 @@ export async function mount(el, ctx) {
       ui.stat("후보 > 기본값", `${fmt.int(b1)} / ${fmt.int(b2)}`, "커스텀값+커스텀 청산이 지금 규칙봇 방식보다 나은 후보"),
       ui.stat("후보 > 동전", `${fmt.int(f1)} / ${fmt.int(f2)}`, "같은 시각 방향만 동전인 계좌보다 나은 후보 (참고)"),
       ui.stat("후보 > 청산만", `${fmt.int(x1)} / ${fmt.int(x2)}`, "청산만 바꾼 것보다 나음 = 숫자(커스텀값) 덕"),
-      ui.stat("1/4이 덜 흔들림", `${fmt.int(calm)} / ${fmt.int(calmer.length)}`, "1/4 크기의 최대 낙폭이 후보보다 작은 후보 (1/4은 한 번 평균도 약 1/4로 작게 나와 평균으로는 비교하지 않음)")),
+      ui.stat("1/4이 덜 흔들림", `${fmt.int(calm)} / ${fmt.int(calmer.length)}`, "1/4 크기의 최대 낙폭이 후보보다 작은 후보 (1/4은 증거금이 작아 한 번 평균의 크기가 달라서 평균으로는 비교하지 않음)")),
     h("p", {class: "note"}, "읽는 법: 후보 > 청산만이면 좋아진 몫은 숫자(커스텀값) 덕, 청산만 > 기본값이면 익절·손절 덕입니다. 동전보다 낫지 않으면 방향을 맞힌 게 아니라 운일 수 있습니다."));
     put(grid, h("div", {class: "tbl-wrap"}, h("table", {class: "tbl cl-cmp"},
       h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "후보"), ROLES.map((r) => h("th", {scope: "col"}, LK.roleChip(r))))),
       h("tbody", null, picks.map((c) => {
         const set = ix.sets[c.id];
-        // the best of the full-size accounts: 1/4 크기 risks a quarter of the margin, so its per-trade result is about a
-        // quarter as big either way (a size check, never "the best")
+        // the best of the full-size accounts: 1/4 크기 puts a quarter of the margin at risk (its leverage re-chosen by
+        // the same rule), so its per-trade result is on another scale (a size check, never "the best")
         const means = ROLES.map((r) => (r !== "quarter" && set[r] && set[r].trades && set[r].mean_ret != null ? set[r].mean_ret : null));
         const real = means.filter((m) => m != null);
         const best = real.length >= 2 ? Math.max(...real) : null;           // a lone account is never "the best"

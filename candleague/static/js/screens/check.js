@@ -159,8 +159,9 @@ function poolCard(kind, w) {
         h("span", {class: "grow"}), c2.all ? ui.pill("지금이면 통과", "good") : ui.pill("지금이면 아직", "thin")),
       h("ul", {class: "cl-checks"}, checks.map(([k, ok, extra]) => h("li", null, ui.mark(ok), h("span", null, k),
         extra ? h("small", {class: "muted"}, ` · ${extra}`) : null))),
-      ui.progress(Math.min(1, r.cand.n / min), `후보 거래 ${fmt.int(r.cand.n)} / ${fmt.int(min)}번`))),
+      ui.progress(Math.min(1, r.cand.n / min), `후보 거래 ${fmt.int(r.cand.n)} / ${fmt.int(min)}번`), LK.paceLine(LK.league(), r.cand.n, min))),
     shares(r, p.money),
+    LK.pairedBox(p.paired, {hidden: !p.money}),
     sizeBox(p),
     p.money ? null : h("p", {class: "note"}, "딥시크 금액 숨김 설정입니다 (CANDLEAGUE_DS_MONEY=0): 조건마다 넘었는지만 보입니다."));
 }
@@ -181,7 +182,7 @@ function sizeBox(p) {
   const z = p.size;
   if (!z) return null;
   const cell = (v, kind) => (v == null ? h("span", {class: "muted"}, p.money ? "—" : "숨김") : kind === "$" ? h("b", {class: "num"}, fmt.money(v)) : h("b", {class: "num"}, fmt.pct(v * 100, false, 1)));
-  return h("div", {class: "cl-sidebox"}, h("span", {class: "muted"}, "크기: 후보 계좌와 1/4 크기 계좌 (같은 신호 · 증거금만 1/4)"),
+  return h("div", {class: "cl-sidebox"}, h("span", {class: "muted"}, "크기: 후보 계좌와 1/4 크기 계좌 (같은 신호 · 증거금 비율 1/4 · 배수는 같은 규칙으로 다시 고름)"),
     h("div", {class: "cl-sizerow hd"}, h("span", null, ""), h("span", null, "닫힌 거래까지 잔고"), h("span", null, "낙폭 중앙값"), h("span", null, "가장 큰 낙폭")),
     ["cand", "quarter"].map((r) => h("div", {class: "cl-sizerow"}, LK.roleChip(r), cell(z[r].wallet_sum, "$"), cell(z[r].dd_median), cell(z[r].dd_max))),
     h("p", {class: "note"}, `계좌 ${fmt.int(z.cand.accounts)}개씩 · 각 $5,000에서 시작 (합계 시작 ${fmt.money(z.cand.accounts * 5000)}) · 점검처럼 닫힌 거래만 셉니다: 열린 포지션의 진입 수수료가 빠진 요약 화면의 잔고와 조금 다를 수 있습니다`));
@@ -197,17 +198,24 @@ function divBar(v, max) {
 function stratTable(w) {
   const rows = Object.entries(w.strategies || {}).map(([name, s]) => ({name, ...s}));
   if (!rows.length) return ui.none("준비 중");
+  const lastCp = ((w.checkpoints || []).slice(-1)[0] || {}).ms;
+  const paced = rows.map((r) => LK.paceAt(LK.league(), r.n, lastCp));
+  const reach = paced.some((v) => v == null) ? null : paced.filter((v) => v >= 300).length;
   rows.sort((a, b) => (a.kind === b.kind ? (b.mean ?? -1) - (a.mean ?? -1) || b.n - a.n : a.kind === "core" ? -1 : 1));
   return h("div", {class: "stack tight"}, ui.table([
     {label: "매매법", l: true, get: (r) => h("span", null, h("b", null, LK.stratKo(r.name)), h("small", {class: "cl-code"}, r.name))},
     {label: "종류", l: true, get: (r) => LK.kindChip(r.kind)},
     {label: "봉", l: true, get: (r) => h("span", {class: "cl-tfs"}, r.tfs.map((t) => h("span", {class: "an-tf"}, tfKo(t))))},
     {label: "후보 거래", get: (r) => h("span", null, `${fmt.int(r.n)}번 `, r.enough ? ui.pill("300번 넘음", "good") : h("small", {class: "muted"}, `/ 300`))},
+    {label: "01/11까지", title: "지금까지의 속도가 이어지면 3차 점검(01/11)까지 쌓일 후보 거래 수",
+      get: (r) => { const v = LK.paceAt(LK.league(), r.n, lastCp); return v == null ? "—" : h("span", {class: v < 300 ? "cl-pace short" : "num"}, `약 ${fmt.int(v)}번`); }},
     {label: "승률", get: (r) => (r.n ? fmt.pct((100 * r.wins) / r.n, false, 0) : "—")},
     {label: "한 번 평균", get: (r) => LK.ret(r.mean, {hiddenIf: r.kind === "ds" && !(LK.league() || {}).ds_money})},
     {label: "0보다", get: (r) => LK.vsMark(r.positive)},
     {label: "기본값보다", get: (r) => LK.vsMark(r.beats_base)},
     {label: "동전보다", get: (r) => LK.vsMark(r.beats_flip)},
   ], rows, {onRow: (r) => { location.hash = `#/strategies?s=${encodeURIComponent(r.name)}`; }}),
-  h("p", {class: "note"}, "매매법 묶음의 판정은 2차 점검부터, 그 매매법의 후보 거래를 모아 묶음과 같은 세 조건과 16개에 걸친 BH 10% 보정으로 합니다. 지금 표는 참고입니다."));
+  reach != null ? h("p", {class: reach < rows.length ? "note cl-caveat" : "note"}, `지금 속도면 01/11까지 300번에 닿는 매매법: ${fmt.int(reach)}개 / ${fmt.int(rows.length)}개. ` +
+    "300번 전인 매매법은 판정 대상이 아니라서(p = 1로 셈) 통과할 수 없습니다. 이 기준은 미리 정한 규칙의 글자 그대로이고, 바꾸려면 두 분이 1차 점검(11/11) 전에 정해 기록해야 합니다.") : null,
+  h("p", {class: "note"}, "매매법 묶음의 판정은 2차 점검부터: 그 매매법의 후보 거래를 모아 2차와 같은 세 조건(평균 > 0이고 운 검사 p < 0.05, 기본값보다 · 동전보다, 거래 300번 이상)과 16개에 걸친 BH 10% 보정. 지금 표는 참고입니다."));
 }

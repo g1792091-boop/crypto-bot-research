@@ -43,6 +43,11 @@ def test_summary_text():
     assert "딥시크 묶음 (후보 1개)" in t and "  후보 거래 7번 · 금액 숨김" in t and "  기본값보다 — · 동전보다 ▲" in t
     assert "1. S2_ST_ROC 15분 · +0.40% · 12번 · $5,200" in t and "(거래 30번 전이라 운이 큽니다. 판단은 하지 않습니다)" in t
     assert "(딥시크 후보 1개는 금액 숨김 설정이라 순위에서 빠짐)" in t and "후보 리그 · 종이 매매 (실제 돈 아님)" in t
+    assert "📌" not in t
+    doc["watch"]["checkpoints"] = [{"ko": "1차 점검", "ms": KST9, "days_left": -0.001},
+                                   {"ko": "2차 점검", "ms": KST9 + 30 * 86_400_000, "days_left": 29.999}]
+    t = N.summary_text(doc, KST9 + 60_000)                  # 11/11-like: the checkpoint's own morning
+    assert "📌 오늘 1차 점검 날입니다 · 확정 결과는 대시보드 '점검 진행' 맨 위" in t and "다음 점검: 2차" in t
 
 
 def test_korean_names_and_silent_sending(monkeypatch):

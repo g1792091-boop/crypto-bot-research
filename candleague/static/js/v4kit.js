@@ -317,7 +317,7 @@ export function groupCards(o = {}) {
     const med = liveNum(null, {format: pctFmt(1), tone: true, cls: "gm", flash: true});
     const name = h("span", {class: "gn"});
     const btn = h("button", {type: "button", class: "k4-gcard", "aria-pressed": "false", onclick: () => o.onPick && o.onPick(c.id)},
-      name, cnt, h("span", {class: "gmw"}, med, h("small", null, "중앙값")), vs, foot);
+      name, cnt, h("span", {class: "gmw"}, med, h("small", null, o.medLabel || "중앙값")), vs, foot);
     return {btn, name, cnt, med, vs, foot};
   }
   el.update = (cards, sel) => {

@@ -27,11 +27,19 @@ export async function mount(el, ctx) {
     if (!d || !d.accounts) { put(table, ui.none("준비 중")); return; }
     const ix = LK.index(d);
     const open = d.accounts.filter((a) => a.open);
+    // the 후보 accounts on the same coin and side at once move together: the pool's result rests on fewer bets
+    const cands = open.filter((a) => a.role === "cand");
+    const crowd = {};
+    for (const a of cands) { const k = `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`; crowd[k] = (crowd[k] || 0) + 1; }
+    const top = Object.entries(crowd).sort((x, y) => y[1] - x[1]).slice(0, 3);
     put(sum, h("div", {class: "cl-coinsum"}, COINS.map((c) => {
       const rows = open.filter((a) => coinOf(a.open.symbol) === c);
       return h("div", {class: "cl-coinbox"}, h("b", null, coinShort(c)), h("span", {class: "num"}, `${rows.length}개`),
         h("span", {class: "side long"}, `롱 ${rows.filter((a) => a.open.side > 0).length}`), h("span", {class: "side short"}, `숏 ${rows.filter((a) => a.open.side < 0).length}`));
-    })));
+    })), h("p", {class: "note"}, top.length
+      ? `후보 계좌 ${fmt.int(ix.cands.length)}개 중 ${fmt.int(cands.length)}개가 포지션 보유 · 가장 많이 겹친 곳: ${top.map(([k, n]) => `${k} ${n}개`).join(" · ")}. ` +
+        "같은 코인 · 같은 방향의 후보는 함께 벌고 함께 잃어서, 묶음 결과가 생각보다 적은 수의 시장 움직임에 기대게 됩니다."
+      : "지금 포지션을 가진 후보 계좌가 없습니다."));
     const rows = open.filter((a) => (st.role === "all" || a.role === st.role) && (st.coin === "all" || coinOf(a.open.symbol) === st.coin))
       .sort((a, b) => b.open.since - a.open.since);
     if (!rows.length) { put(table, ui.empty("조건에 맞는 열린 포지션이 없습니다")); return; }

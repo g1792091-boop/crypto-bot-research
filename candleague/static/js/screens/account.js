@@ -16,7 +16,7 @@ export async function mount(el, ctx) {
   const head = h("div"), stats = h("div"), chart = h("div"), five = h("div"), params = h("div"), trades = h("div"), split = h("div");
   const body = h("div", {class: "stack"}, stats,
     ui.card({plate: "잔고 흐름", sub: "같은 후보의 계좌 5개 · 닫힌 거래마다 · $5,000에서 시작"}, chart),
-    ui.card({plate: "롱 · 숏 · 코인별", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split),
+    ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split),
     ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five),
     params,
     ui.card({plate: "거래 기록", sub: "이 계좌 · 최신 200번까지 · 코인을 누르면 터미널"}, trades));
@@ -50,8 +50,9 @@ export async function mount(el, ctx) {
       ui.stat(a.role === "cand" ? "기준" : "지금 포지션", a.role === "cand" ? h("span", null, LK.verdictPill(j), " ", LK.bandMark(j) || "")
         : a.open ? h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`) : "없음")));
     put(five, LK.fiveRows(set));
-    put(split, LK.sideSplit(((d.watch || {}).picks || {})[c.id], {hidden: LK.dsHidden(c)}));
-    put(params, c.role === "cand" ? ui.card({plate: "커스텀값", sub: `${c.name} · ${tfKo(c.tf)} · 노란 글씨 = 기본값에서 바뀐 값`},
+    put(split, LK.sideSplit(((d.watch || {}).picks || {})[c.id], {hidden: LK.dsHidden(c)}),
+      LK.pairedBox((((d.watch || {}).picks || {})[c.id] || {}).paired, {hidden: LK.dsHidden(c)}));
+    put(params, c.role === "cand" ? ui.card({plate: "커스텀값", sub: `${c.name} · ${tfKo(c.tf)} · 색 글씨 = 기본값에서 바뀐 값 · 범위 끝 = 탐색한 가장 끝 값`},
       h("div", {class: "cl-pickgrid"}, h("div", {class: "stack tight"}, paramTable(c, set.base, meta),
         h("div", {class: "cl-exits"}, h("div", null, LK.roleChip("cand"), h("b", null, c.exit_ko)),
           h("div", null, LK.roleChip("base"), h("span", null, set.base ? set.base.exit_ko : "—")))),

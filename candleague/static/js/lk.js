@@ -23,6 +23,24 @@ export async function getMeta() {
 export const metaNow = () => META;
 
 /** Days since 10/01 (the replay's start) at the last processed time: "D+n". */
+/** Closed trades at a later date if the pace so far (10/01 to the processed time) holds; null before a full day. */
+export function paceAt(d, n, ms) {
+  const days = d && d.start_ms ? (d.done_ms - d.start_ms) / DAY : 0;
+  if (!(days >= 1) || !(ms > d.done_ms)) return null;
+  return Math.round(n + (n / days) * ((ms - d.done_ms) / DAY));
+}
+
+/** "이 속도면 12/11에 약 N번 · 01/11에 약 M번" toward the 300-trade condition (2차 and 3차 dates); warn colour when the
+ *  last date falls short. Nothing once the count is reached. */
+export function paceLine(d, n, min = 300) {
+  const cps = (((d && d.watch) || {}).checkpoints || []).filter((c) => c.id !== "C1" && c.ms > d.done_ms);
+  const parts = cps.map((c) => ({c, v: paceAt(d, n, c.ms)})).filter((x) => x.v != null);
+  if (n >= min || !parts.length) return null;
+  const last = parts[parts.length - 1].v;
+  return h("small", {class: ["cl-pace", last < min ? "short" : ""]},
+    `이 속도면 ${parts.map((x) => `${fmt.mmdd(x.c.ms)}에 약 ${fmt.int(x.v)}번`).join(" · ")}${last < min ? ` (${fmt.int(min)}번 못 미침)` : ""}`);
+}
+
 export const leagueDay = (d) => (d && d.start_ms ? Math.max(1, Math.floor((d.done_ms - d.start_ms) / DAY) + 1) : 0);
 
 /** Still replaying from 10/01 after the install (the processed time has not reached the install time yet). */
@@ -128,6 +146,34 @@ export function bandMark(j) {
     ? pill(`경고등 · ${fmt.int(j.band.n)}번 기준 아래`, "warn", `백테스트로 본 ${j.band.n}번 평균의 하위 5% (${retTxt(j.band.p5)})보다 낮음: 알림일 뿐 판정 아님`)
     : pill("예상 범위 안", "thin", `백테스트 ${j.band.n}번 평균의 하위 5% ${retTxt(j.band.p5)} 위`);
 }
+/** What the custom numbers changed, against the same exit on the default numbers (청산만 바꾼 기본값): the trades both
+ *  took, the ones only the custom numbers took, the ones the custom numbers left out. pr: {both, cand_only,
+ *  default_only} ({n, wins, mean}) from the snapshot's watch. */
+export function pairedBox(pr, o = {}) {
+  if (!pr) return null;
+  const row = (label, x, cls) => h("div", {class: "cl-srow wide"}, h("b", {class: cls || ""}, label),
+    h("span", {class: "num"}, `${fmt.int(x.n)}번`), h("span", {class: "num muted"}, x.n ? fmt.pct((100 * x.wins) / x.n, false, 0) : "—"),
+    x.mean == null && x.n && o.hidden ? h("span", {class: "muted"}, "숨김") : ret(x.mean));
+  return h("div", {class: "cl-sidebox"},
+    h("span", {class: "muted"}, "커스텀값이 바꾼 거래 (같은 익절·손절에 기본값 숫자를 쓴 계좌와 비교 · 같은 코인 · 방향을 한 봉 안에 들어가면 같은 거래)"),
+    row("둘 다 들어감", pr.both), row("커스텀값만 들어감", pr.cand_only, "accent"), row("커스텀값이 걸러냄", pr.default_only),
+    h("p", {class: "note"}, "커스텀값이 도움이 되려면, 새로 들어간 거래의 평균이 좋고 걸러낸 거래의 평균은 나빠야 합니다. 거래가 적으면 운입니다."));
+}
+
+/** Where a 후보's mean per trade sits against its own 5-year test (the band at the largest n reached: its 하위 5% and its
+ *  중앙값). {key: 0 below 하위 5% / 1 under 중앙값 / 2 at or over it / null not yet, el}. DeepSeek picks have no band. */
+export function bandPos(a) {
+  const band = a && a.source && a.source.band;
+  if (!band) return {key: null, el: h("span", {class: "muted"}, a && a.kind === "ds" ? "범위 없음" : "—")};
+  const all = Object.keys(band).map(Number).sort((x, y) => x - y);
+  const ns = all.filter((n) => n <= a.trades);
+  if (!ns.length || a.mean_ret == null) return {key: null, el: h("span", {class: "muted"}, `${all[0]}번부터`)};
+  const n = ns[ns.length - 1], b = band[String(n)];
+  const key = a.mean_ret < b.p5 ? 0 : a.mean_ret < b.median ? 1 : 2;
+  return {key, el: h("span", {class: ["pp", "thin", key === 0 ? "warn" : ""],
+    title: `시험 기간 ${n}번 평균의 범위: 하위 5% ${retTxt(b.p5)} · 중앙값 ${retTxt(b.median)} (지금 ${retTxt(a.mean_ret)})`},
+  ["하위 5% 아래", "중앙값 아래", "중앙값 이상"][key])};
+}
 export const smallN = (n, min = 30) => (n != null && n < min ? h("span", {class: "pp thin", title: `닫힌 거래 ${min}번 미만: 우연일 수 있습니다`}, "표본 적음") : null);
 
 // ---------------------------------------------------------------- the equity line of a pick's accounts (svg, one axis)
@@ -146,52 +192,69 @@ export function equityLines(series, o = {}) {
   const legend = h("div", {class: "cl-legend"}, series.map((x) => h("span", null, roleChip(x.role, ROLE_KO[x.role] || x.label))));
   const all = series.flatMap((x) => x.points || []);
   if (all.length < 3) { box.append(legend, h("p", {class: "empty"}, o.empty || "아직 끝난 거래가 없습니다")); return box; }
-  const W = 1000, H = o.h || 260, L = 64, R = 92, T = 12, B = 26;
+  // drawn at the box's real width (text stays its size on a phone); redrawn when the width changes
+  const H = o.h || 260, T = 12, B = 26;
   const t0 = Math.min(...all.map((p) => p[0])), t1 = Math.max(...all.map((p) => p[0]), t0 + 1);
   let y0 = Math.min(EQUITY, ...all.map((p) => p[1])), y1 = Math.max(EQUITY, ...all.map((p) => p[1]));
   if (y1 - y0 < 1) { y0 -= 50; y1 += 50; }
   const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
-  const X = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R), Y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
-  const kids = [];
-  for (let i = 0; i <= 4; i++) {
-    const v = y0 + ((y1 - y0) * i) / 4;
-    kids.push(s("line", {x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "gl"}), s("text", {x: L - 6, y: Y(v) + 4, "text-anchor": "end", class: "ax"}, fmt.money(v).replace(/\.\d+$/, "")));
-  }
-  kids.push(s("line", {x1: L, x2: W - R, y1: Y(EQUITY), y2: Y(EQUITY), class: "base"}));
-  kids.push(s("text", {x: L, y: H - 6, class: "ax"}, fmt.mmdd(t0)), s("text", {x: W - R, y: H - 6, "text-anchor": "end", class: "ax"}, fmt.mmdd(t1)));
-  const ends = [];
-  for (const x of series) {
-    const p = x.points || [];
-    if (p.length < 2) continue;
-    kids.push(s("path", {class: ["ln", `r-${x.role}`], d: p.map((q, i) => `${i ? "L" : "M"}${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join("")}));
-    const last = p[p.length - 1];
-    ends.push({y: Y(last[1]) + 4, text: ROLE_SHORT[x.role] || x.label, role: x.role});
-  }
-  ends.sort((a, b) => a.y - b.y);
-  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
-  for (const e of ends) kids.push(s("text", {x: W - R + 6, y: e.y, class: ["lab", `r-${e.role}`]}, e.text));
-  const cross = s("line", {y1: T, y2: H - B, class: "xh", visibility: "hidden"});
-  kids.push(cross);
-  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, class: "cl-eqsvg", role: "img", "aria-label": o.label || "잔고 그래프", preserveAspectRatio: "none"}, kids);
+  const wrap = h("div", {class: "cl-eqwrap"});
   const tip = h("div", {class: "cl-tip", hidden: true});
-  svg.addEventListener("pointermove", (ev) => {
-    const r = svg.getBoundingClientRect();
-    const x = ((ev.clientX - r.left) / r.width) * W;
-    if (x < L || x > W - R) { cross.setAttribute("visibility", "hidden"); tip.hidden = true; return; }
-    const t = t0 + ((x - L) / (W - L - R)) * (t1 - t0);
-    cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
-    const rows = series.map((q) => {
-      let v = null;
-      for (const p of q.points || []) { if (p[0] <= t) v = p[1]; else break; }
-      return h("div", null, roleChip(q.role, q.label), " ", h("b", {class: "num"}, v == null ? "—" : fmt.money(v)));
+  let drawn = 0;
+  function render(W) {
+    drawn = W;
+    const narrow = W < 560, L = narrow ? 52 : 64, R = narrow ? 58 : 92;
+    const X = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R), Y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+    const kids = [];
+    for (let i = 0; i <= 4; i++) {
+      const v = y0 + ((y1 - y0) * i) / 4;
+      kids.push(s("line", {x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "gl"}), s("text", {x: L - 6, y: Y(v) + 4, "text-anchor": "end", class: "ax"}, fmt.money(v).replace(/\.\d+$/, "")));
+    }
+    kids.push(s("line", {x1: L, x2: W - R, y1: Y(EQUITY), y2: Y(EQUITY), class: "base"}));
+    kids.push(s("text", {x: L, y: H - 6, class: "ax"}, fmt.mmdd(t0)), s("text", {x: W - R, y: H - 6, "text-anchor": "end", class: "ax"}, fmt.mmdd(t1)));
+    const ends = [];
+    for (const x of series) {
+      const p = x.points || [];
+      if (p.length < 2) continue;
+      kids.push(s("path", {class: ["ln", `r-${x.role}`], d: p.map((q, i) => `${i ? "L" : "M"}${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join("")}));
+      const last = p[p.length - 1];
+      ends.push({y: Y(last[1]) + 4, text: ROLE_SHORT[x.role] || x.label, role: x.role});
+    }
+    ends.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
+    for (const e of ends) kids.push(s("text", {x: W - R + 6, y: e.y, class: ["lab", `r-${e.role}`]}, e.text));
+    const cross = s("line", {y1: T, y2: H - B, class: "xh", visibility: "hidden"});
+    kids.push(cross);
+    const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "cl-eqsvg", role: "img", "aria-label": o.label || "잔고 그래프"}, kids);
+    svg.addEventListener("pointermove", (ev) => {
+      const r = svg.getBoundingClientRect();
+      const x = ((ev.clientX - r.left) / r.width) * W;
+      if (x < L || x > W - R) { cross.setAttribute("visibility", "hidden"); tip.hidden = true; return; }
+      const t = t0 + ((x - L) / (W - L - R)) * (t1 - t0);
+      cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+      const rows = series.map((q) => {
+        let v = null;
+        for (const p of q.points || []) { if (p[0] <= t) v = p[1]; else break; }
+        return h("div", null, roleChip(q.role, q.label), " ", h("b", {class: "num"}, v == null ? "—" : fmt.money(v)));
+      });
+      tip.replaceChildren(h("div", {class: "muted"}, `${fmt.kst(t)} KST`), ...rows);
+      tip.hidden = false;
+      const left = Math.min(ev.clientX - r.left + 12, r.width - 220);
+      tip.style.left = `${Math.max(0, left)}px`;
     });
-    tip.replaceChildren(h("div", {class: "muted"}, `${fmt.kst(t)} KST`), ...rows);
-    tip.hidden = false;
-    const left = Math.min(ev.clientX - r.left + 12, r.width - 220);
-    tip.style.left = `${Math.max(0, left)}px`;
-  });
-  svg.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); tip.hidden = true; });
-  box.append(legend, h("div", {class: "cl-eqwrap"}, svg, tip));
+    svg.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); tip.hidden = true; });
+    wrap.replaceChildren(svg, tip);
+  }
+  render(1000);
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => {
+      if (!wrap.isConnected) { ro.disconnect(); return; }
+      const W = Math.round(wrap.clientWidth);
+      if (W > 0 && Math.abs(W - drawn) > 4) render(Math.max(300, W));
+    });
+    ro.observe(wrap);
+  }
+  box.append(legend, wrap);
   return box;
 }
 

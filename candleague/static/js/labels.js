@@ -13,7 +13,7 @@ export const ROLE_KO = {cand: "후보", quarter: "1/4 크기", exitonly: "청산
 export const ROLE_SHORT = {cand: "후보", quarter: "1/4", exitonly: "청산만", base: "기본값", flip: "동전"};
 export const ROLE_DESC = {
   cand: "커스텀값 + 커스텀 익절·손절 · 규칙봇과 같은 크기",
-  quarter: "후보와 똑같이, 증거금만 1/4: 크기를 줄이면 덜 흔들리나",
+  quarter: "후보와 같은 신호, 증거금 비율만 1/4 (배수는 같은 규칙으로 다시 골라, 작은 포지션엔 더 높은 배수가 허용되기도 함): 크기를 줄이면 덜 흔들리나",
   exitonly: "숫자는 기본값, 익절·손절만 후보 것: 좋아진 게 숫자 덕인가 청산 덕인가",
   base: "기본값 + 지금 규칙봇 청산(계단 잠금, 2 ATR 손절): 규칙봇과 같은 조건",
   flip: "후보와 같은 시각에 들어가되 방향만 동전: 방향을 맞힌 건가 운인가",

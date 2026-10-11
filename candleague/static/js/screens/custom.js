@@ -18,6 +18,11 @@ export function paramTable(c, base, meta) {
   const sm = LK.stratMeta(c.name, meta);
   const params = sm ? sm.params : Object.keys(c.combo || {}).map((k) => ({name: k, ko: k, default: base && base.combo ? base.combo[k] : null}));
   const val = (v) => (Array.isArray(v) ? v.join(" / ") : v == null ? "—" : String(v));
+  const edges = (LK.pickMeta(c.id, meta) || {}).edges || {};
+  const edgeMark = (name) => (edges[name] ? h("span", {class: "pp thin warn cl-edge", title: edges[name] === "low"
+    ? "5년 탐색에서 시도한 가장 작은 값입니다. 더 작은 값이 더 나았을 수도, 우연히 끝에 걸렸을 수도 있습니다"
+    : "5년 탐색에서 시도한 가장 큰 값입니다. 더 큰 값이 더 나았을 수도, 우연히 끝에 걸렸을 수도 있습니다"},
+  edges[name] === "low" ? "범위 끝 ↓" : "범위 끝 ↑") : null);
   return h("div", {class: "tbl-wrap"}, h("table", {class: "tbl cl-params"},
     h("thead", null, h("tr", null, ["조절 값", "기본값", "커스텀값", "배수"].map((t, i) => h("th", {class: i === 0 ? "l" : "", scope: "col"}, t)))),
     h("tbody", null, params.map((p) => {
@@ -26,7 +31,7 @@ export function paramTable(c, base, meta) {
       const same = JSON.stringify(dv) === JSON.stringify(cv);
       const mult = typeof dv === "number" && typeof cv === "number" && dv !== 0 ? cv / dv : null;
       return h("tr", {class: same ? "cl-same" : "cl-changed"},
-        h("td", {class: "l"}, h("b", null, p.ko), h("small", {class: "cl-code"}, p.name)),
+        h("td", {class: "l"}, h("b", null, p.ko), h("small", {class: "cl-code"}, p.name), edgeMark(p.name) ? [" ", edgeMark(p.name)] : null),
         h("td", {class: "num"}, val(dv)),
         h("td", {class: "num"}, h("b", {class: same ? "" : "accent"}, val(cv))),
         h("td", {class: "num"}, same ? h("span", {class: "muted"}, "그대로") : mult != null ? h("span", {class: mult > 1 ? "cl-up" : "cl-dn"}, `×${fmt.num(mult, 2)}`) : "바뀜"));
@@ -69,7 +74,7 @@ export async function mount(el, ctx) {
       ui.field("종류", ui.seg([{id: "all", label: "전체"}, {id: "core", label: "기존 36"}, {id: "ds", label: "딥시크"}], st.kind, (v) => { st.kind = v; st.strat = "all"; save(); paint(); }, {label: "종류"})),
       ui.field("봉", ui.seg([{id: "all", label: "전체"}, ...TFS.map((t) => ({id: t, label: tfKo(t)}))], st.tf, (v) => { st.tf = v; save(); paint(); }, {label: "봉"})),
       ui.field("매매법", stratSel)),
-    h("p", {class: "note"}, "기본값 = 규칙봇이 지금 쓰는 숫자. 커스텀값 = 5년 탐색(기본의 ⅓배~3배, 9단계)에서 고른 숫자. 노란 글씨가 바뀐 값입니다. ",
+    h("p", {class: "note"}, "기본값 = 규칙봇이 지금 쓰는 숫자. 커스텀값 = 5년 탐색(기본의 ⅓배~3배, 9단계)에서 고른 숫자. 색 글씨(커스텀값 칸)가 바뀐 값, 배수는 노랑 = 키움 · 파랑 = 줄임, '범위 끝' = 5년 탐색이 시도한 가장 작은(↓)·큰(↑) 값. ",
       "익절·손절도 후보마다 84가지 중에서 골랐고, 기본값 계좌는 지금 규칙봇 청산(", LIVE_EXIT_KO, ")을 씁니다."),
     list);
 
@@ -98,7 +103,8 @@ export async function mount(el, ctx) {
           h("div", {class: "cl-exits"}, h("div", null, LK.roleChip("cand"), h("b", null, c.exit_ko)),
             h("div", null, LK.roleChip("base"), h("span", null, set.base ? set.base.exit_ko : LIVE_EXIT_KO)))),
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "어디서 왔나 · 성격"), originBox(c, meta),
-          h("h3", {class: "cl-h3"}, "지금 계좌 5개"), LK.fiveRows(set))));
+          h("h3", {class: "cl-h3"}, "지금 계좌 5개"), LK.fiveRows(set),
+          LK.pairedBox((((LK.league() || {}).watch || {}).picks || {})[c.id]?.paired, {hidden: LK.dsHidden(c)}))));
     }));
   }
   ctx.onLeague(paint);

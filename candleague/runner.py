@@ -146,11 +146,13 @@ def final_end(now_ms: int) -> int:
 
 # ---------------------------------------------------------------- summaries (dashboard, Telegram, judging)
 def closed_trades(conn, accts: list[dict]) -> dict:
-    """{account: its closed trades (dicts) in exit order}: one read for every summary of a snapshot."""
+    """{account: its closed trades in exit order, the TRADE_KEYS fields only}: one read for every summary of a
+    snapshot (the stored trade also carries its entry context, which no summary uses and would only take memory)."""
     book = {a["id"]: [] for a in accts}
     for aid, d in conn.execute("SELECT account, data FROM trades ORDER BY account, exit_time, rowid"):
         if aid in book:
-            book[aid].append(json.loads(d))
+            t = json.loads(d)
+            book[aid].append({k: t.get(k) for k in TRADE_KEYS})
     return book
 
 
@@ -317,7 +319,10 @@ def main(argv: Optional[list] = None) -> int:
     while True:
         now = int(time.time() * 1000)
         t0 = time.monotonic()
-        n = lg.advance(final_end(now), on_chunk=lambda: write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money))
+        catching = final_end(now) - lg.done > 3 * FIVE      # a catch-up writes after each day; a live pass once, below
+        n = lg.advance(final_end(now), on_chunk=(lambda: write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money))
+                       if catching else None)
+        now = int(time.time() * 1000)                        # after the pass: the snapshot's time, the caught-up test
         doc = write_snapshots(a.snap, lg, now, ds_money, pass_s=time.monotonic() - t0)
         notifier.after_pass(doc, now, caught_up=final_end(now) - lg.done < 3 * FIVE)
         if n:

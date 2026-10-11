@@ -72,6 +72,9 @@ def summary_text(doc: dict, now_ms: Optional[int] = None) -> str:
     cands = [r for r in acc if r["role"] == "cand"]
     w = doc.get("watch") or {}
     lines = [f"📊 아침 요약 · {NAME}", "", f"10/01부터 {_day(doc)}일째 · {_kst(doc['done_ms'])} KST까지 처리"]
+    today = next((c for c in w.get("checkpoints", []) if -1 < c.get("days_left", 1) <= 0), None)
+    if today:                                                 # the checkpoint's day: its numbers are final from 09:00 KST
+        lines.append(f"📌 오늘 {today['ko']} 날입니다 · 확정 결과는 대시보드 '점검 진행' 맨 위")
     nxt = next((c for c in w.get("checkpoints", []) if c.get("days_left", 0) > 0), None)
     if nxt:
         lines.append(f"다음 점검: {nxt['ko'].replace(' 점검', '')} {_kst(nxt['ms'], '%m/%d')} · {int(-(-nxt['days_left'] // 1))}일 남음")

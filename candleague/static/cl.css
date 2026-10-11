@@ -102,6 +102,7 @@ tr.cl-bust td { opacity: .55; }
 .tbl.cl-params td { vertical-align: middle; }
 .tbl.cl-params tr.cl-changed td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .tbl.cl-params td.l b { font-weight: 700; }
+.tbl.cl-params .cl-edge { margin-left: 6px; font-size: var(--t-2xs); padding: 0 6px; }
 .cl-up { color: var(--term-yellow); font-weight: 700; } .cl-dn { color: var(--smc-bos); font-weight: 700; }
 .cl-exits { display: grid; gap: 6px; }
 .cl-exits > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
@@ -132,7 +133,7 @@ tr.cl-bust td { opacity: .55; }
 .cl-eq { display: grid; gap: 8px; }
 .cl-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .cl-eqwrap { position: relative; }
-.cl-eqsvg { display: block; width: 100%; height: 280px; }
+.cl-eqsvg { display: block; width: 100%; height: auto; }
 .cl-eqsvg .gl { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cl-eqsvg .base { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cl-eqsvg .ax { fill: var(--muted); font-size: 12px; font-family: var(--f-term); }
@@ -171,10 +172,24 @@ tr.cl-bust td { opacity: .55; }
 .cl-srow { display: grid; grid-template-columns: 52px minmax(0, .8fr) minmax(0, .6fr) minmax(0, 1fr); gap: 10px; align-items: center;
   padding: 5px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
 .cl-srow > :nth-child(n+2) { text-align: right; }
+.cl-srow.wide { grid-template-columns: minmax(0, 1.6fr) minmax(0, .7fr) minmax(0, .6fr) minmax(0, 1fr); }
 .cl-scoins { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
 .cl-sidebox { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--t-xs); }
 .cl-share { display: grid; grid-template-columns: 64px minmax(80px, auto) minmax(0, 1fr); gap: 10px; align-items: center; font-size: var(--t-sm); }
-.cl-sizerow { display: grid; grid-template-columns: minmax(90px, 1fr) repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center; font-size: var(--t-sm); }
+.cl-sizerow { display: grid; grid-template-columns: minmax(56px, auto) max-content repeat(2, minmax(0, 1fr)); gap: 10px; align-items: center; font-size: var(--t-sm); }
 .cl-sizerow > :nth-child(n+2) { text-align: right; }
 .cl-sizerow.hd { color: var(--muted); font-size: var(--t-2xs); }
 .cl-caveat { color: var(--warn); }
+.cl-pace { display: block; color: var(--muted); font-size: var(--t-2xs); } .cl-pace.short { color: var(--warn); }
+
+/* phones: a table keeps its first column in view (names may wrap) and says when it scrolls (app.js marks .cl-more);
+   the 커스텀값 table wraps its long names so the default, custom value and multiple fit */
+@media (max-width: 559px) {
+  .tbl td:first-child, .tbl th:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+  .tbl td.l:first-child { white-space: normal; min-width: 7em; }
+  .tbl-wrap.cl-more::before { content: "옆으로 밀면 나머지 칸 →"; display: block; position: sticky; left: 0; text-align: right;
+    color: var(--muted); font-size: var(--t-2xs); padding: 0 4px 4px; }
+  .tbl.cl-params td.l { white-space: normal; }
+  .tbl.cl-params .cl-code { display: block; margin-left: 0; }
+  .tbl.cl-params .cl-edge { margin-left: 0; }
+}

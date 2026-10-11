@@ -202,3 +202,19 @@ def test_confirmed_checkpoints_after_their_date(tmp_path, monkeypatch):
     assert r["due"] == ["2026-11-11"] and r["results"]["2026-11-11"]["final"] is True
     pool = r["results"]["2026-11-11"]["pools"]["core"]
     assert pool["c1_stop"] is False and pool["roles"]["cand"]["n"] == 1 and abs(pool["roles"]["cand"]["mean"] - 0.02) < 1e-9
+
+
+def test_trades_file_is_read_again_when_it_changes(tmp_path):
+    """trades.json is parsed once per change and shared by /api/trades, /api/fills and /api/checkpoints."""
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    c = TestClient(D.create_app(str(snap), "", b"x" * 32, live=Live(mode="fake"), open_=True), base_url="http://league.test")
+    assert c.get("/api/trades/a").json() == {"equity": None, "trades": []}
+    t1 = {"exit_time": 1, "pnl": 1.0}
+    (snap / "trades.json").write_text(json.dumps({"a": {"equity": [[0, 5000]], "trades": [t1]}}))
+    assert c.get("/api/trades/a").json()["trades"] == [t1]
+    t2 = {"exit_time": 2, "pnl": -2.5}
+    (snap / "trades.json").write_text(json.dumps({"a": {"equity": [[0, 5000]], "trades": [t2, t1]}, "b": {"trades": []}}))
+    os.utime(snap / "trades.json", ns=(10**18, 10**18))
+    assert c.get("/api/trades/a").json()["trades"] == [t2, t1]
+    assert [f["exit_time"] for f in c.get("/api/fills").json()["fills"]] == [2, 1]

@@ -73,6 +73,50 @@ def splits(trades: Iterable[dict], show_money: bool) -> dict:
             "coins": {c: agg([r for _, cc, r in rows if cc == c]) for c in coins}}
 
 
+TF_MS = {"15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
+
+
+def _entries(trades: Iterable[dict]) -> list[tuple[int, str, int, float]]:
+    """(entry ms, symbol, side, P&L / wallet before) per closed trade, sorted by entry."""
+    eq, out = EQUITY, []
+    for t in trades:
+        p = float(t["pnl"])
+        out.append((int(t.get("entry_time") or 0), str(t.get("symbol") or ""), int(t.get("side") or 0),
+                    p / eq if eq > 0 else 0.0))
+        eq += p
+    return sorted(out)
+
+
+def paired_lists(cand: Iterable[dict], exitonly: Iterable[dict], tf_ms: int) -> tuple[list, list, list]:
+    """A 후보 account against its 청산만 바꾼 기본값 (the same exit on the default numbers): the results of the trades
+    both took (same coin and side, entered within one bar of each other), of the trades only the custom numbers took,
+    and of the trades only the default numbers took (the ones the custom numbers left out)."""
+    a, b = _entries(cand), _entries(exitonly)
+    used = [False] * len(b)
+    both, only_a = [], []
+    j0 = 0
+    for ta, sa, da, ra in a:
+        while j0 < len(b) and b[j0][0] < ta - tf_ms:
+            j0 += 1
+        hit = None
+        for j in range(j0, len(b)):
+            if b[j][0] > ta + tf_ms:
+                break
+            if not used[j] and b[j][1] == sa and b[j][2] == da:
+                hit = j
+                break
+        if hit is None:
+            only_a.append(ra)
+        else:
+            used[hit] = True
+            both.append(ra)
+    return both, only_a, [b[j][3] for j in range(len(b)) if not used[j]]
+
+
+def _agg(xs: list, show_money: bool) -> dict:
+    return {"n": len(xs), "wins": sum(r > 0 for r in xs), "mean": (sum(xs) / len(xs)) if xs and show_money else None}
+
+
 def _seed(*parts) -> int:
     """research/fullgrid/run.py _seed."""
     return int(hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:8], 16)
@@ -174,10 +218,17 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
             if show:
                 row.update(mean=cm, base_mean=bm, flip_mean=fm)
             strategies[name] = row
-    picks = {}
+    picks, pooled_pairs = {}, {pool: ([], [], []) for pool in POOLS}
+    ids = {a["id"] for a in accts}
     for a in accts:
         if a["role"] == "cand":
-            picks[a["id"]] = splits(book.get(a["id"], []), a["kind"] == "core" or ds_money)
+            show = a["kind"] == "core" or ds_money
+            picks[a["id"]] = splits(book.get(a["id"], []), show)
+            if f"{a['id']}-x" in ids:        # what the custom numbers added and left out (the same exit on both sides)
+                lists = paired_lists(book.get(a["id"], []), book.get(f"{a['id']}-x", []), TF_MS.get(a["tf"], 3_600_000))
+                picks[a["id"]]["paired"] = {k: _agg(x, show) for k, x in zip(("both", "cand_only", "default_only"), lists)}
+                for acc, x in zip(pooled_pairs[a["kind"]], lists):
+                    acc.extend(x)
     for pool in POOLS:
         show = pool == "core" or ds_money
         # the pool's long / short split over every cand account (each trade's own wallet-before unit)
@@ -208,6 +259,7 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
         pools[pool]["size"] = size
         pools[pool]["sides"] = {k: {"n": len(v), "wins": sum(r > 0 for r in v), "mean": (sum(v) / len(v)) if v and show else None}
                                 for k, v in both.items()}
+        pools[pool]["paired"] = {k: _agg(x, show) for k, x in zip(("both", "cand_only", "default_only"), pooled_pairs[pool])}
     checkpoints = []
     for c in CHECKPOINTS:
         ms = day_ms(c["date"])

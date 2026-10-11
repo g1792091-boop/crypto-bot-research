@@ -18,6 +18,7 @@ import json
 import math
 import os
 import sys
+import threading
 import time
 import urllib.parse
 from typing import Optional
@@ -215,6 +216,24 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         return FileResponse(os.path.join(STATIC, "icon.svg"), media_type="image/svg+xml")
 
     cp_cache: dict = {}
+    book_cache: dict = {}
+    book_lock = threading.Lock()
+
+    def read_book():
+        """trades.json, parsed once per change of the file and shared (several screens ask for it at once; parsing it
+        per request would grow with the league past the dashboard's memory cap). Callers never modify it."""
+        try:
+            st = os.stat(os.path.join(snap, "trades.json"))
+        except OSError:
+            return None
+        key = (st.st_mtime_ns, st.st_size)
+        with book_lock:
+            if book_cache.get("key") != key:
+                book = read_snap(snap, "trades.json")
+                rows = [{**t, "account": aid} for aid, b in (book or {}).items() for t in (b.get("trades") or [])]
+                rows.sort(key=lambda t: t.get("exit_time") or 0, reverse=True)
+                book_cache.update(key=key, doc=book, fills=rows[:300])
+            return book_cache["doc"], book_cache["fills"]
 
     @app.get("/api/checkpoints")
     def checkpoints(req: Request):
@@ -235,7 +254,7 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         except OSError:
             return JSONResponse({"due": [c["date"] for c in due], "results": {}, "status": "준비 중"})
         if cp_cache.get("key") != key:
-            league, book = read_snap(snap, "league.json"), read_snap(snap, "trades.json")
+            league, book = read_snap(snap, "league.json"), (read_book() or (None, None))[0]
             if not league or not league.get("accounts") or book is None:
                 return JSONResponse({"due": [c["date"] for c in due], "results": {}, "status": "준비 중"})
             res = {}
@@ -280,16 +299,13 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         """The league's newest closed trades over every account (newest first, at most 300)."""
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
-        book = read_snap(snap, "trades.json") or {}
-        rows = [{**t, "account": aid} for aid, b in book.items() for t in (b.get("trades") or [])]
-        rows.sort(key=lambda t: t.get("exit_time") or 0, reverse=True)
-        return JSONResponse({"fills": rows[:300]})
+        return JSONResponse({"fills": (read_book() or (None, []))[1]})
 
     @app.get("/api/trades/{aid}")
     def trades(aid: str, req: Request):
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
-        book = read_snap(snap, "trades.json") or {}
+        book = (read_book() or (None, None))[0] or {}
         return JSONResponse(book.get(aid) or {"equity": None, "trades": []})
 
     return app

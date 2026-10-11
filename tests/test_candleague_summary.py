@@ -207,3 +207,25 @@ def test_checkpoint_strategy_rule_and_completeness():
     assert res["complete"] is True
     late = WC.check({"accounts": accts, "done_ms": SM.day_ms("2026-12-10")}, book, "2026-12-11")
     assert late["complete"] is False
+
+
+def test_trades_the_custom_numbers_added_and_left_out():
+    """The 후보 against its 청산만 바꾼 기본값 (same exit, default numbers): a trade on the same coin and side entered
+    within one bar is shared; the rest are the custom numbers' own trades and the trades they left out."""
+    H = 3_600_000
+
+    def tr(entry, pnl, side=1, sym="BTCUSDT"):
+        return {"entry_time": entry, "exit_time": entry + 2 * H, "pnl": pnl, "side": side, "symbol": sym}
+    cand = [tr(MON, 100.0), tr(MON + 10 * H, -50.0), tr(MON + 20 * H, 200.0, side=-1)]
+    dflt = [tr(MON + H, 90.0), tr(MON + 20 * H, -40.0, side=1), tr(MON + 30 * H, -60.0)]
+    both, mine, left = SM.paired_lists(cand, dflt, H)
+    assert len(both) == 1 and abs(both[0] - 0.02) < 1e-12                 # MON vs MON + 1h: one bar apart, same side
+    assert len(mine) == 2 and len(left) == 2                                # the 20h pair differs in side: not shared
+    accts = _accts(tf="1h")
+    w = SM.watch_summary(accts, {"c1": cand, "c1-x": dflt}, MON + 30 * DAY)
+    pr = w["picks"]["c1"]["paired"]
+    assert pr["both"]["n"] == 1 and pr["cand_only"]["n"] == 2 and pr["default_only"]["n"] == 2
+    assert pr["cand_only"]["wins"] == 1 and pr["default_only"]["mean"] < 0
+    assert w["pools"]["core"]["paired"]["cand_only"]["n"] == 2
+    hid = SM.watch_summary(_accts(kind="ds", name="F5_BOX", tf="1h"), {"c1": cand, "c1-x": dflt}, MON + 30 * DAY)
+    assert hid["picks"]["c1"]["paired"]["cand_only"]["mean"] is None and hid["pools"]["ds"]["paired"]["both"]["n"] == 1

@@ -1,5 +1,5 @@
 {
- "_about": "후보 리그 대시보드의 한글 자료: 매매법 이름·진입 방식(docs/aibot/STRATEGY_CATALOG_KO.md), 조절 값의 뜻·기본값(candleague.candidates.params_of), 후보마다 성격(추세 비율, research/live_interim/replay/pick_character.py, 2021~2026-09 그 후보의 숫자와 청산). 딥시크 금액은 넣지 않습니다(D11). 장세별 값은 후보를 고를 때 쓴 기간이 섞여 크기는 실제보다 좋게 나오므로 어느 장에서 상대적으로 나았나만 참고합니다.",
+ "_about": "후보 리그 대시보드의 한글 자료: 매매법 이름·진입 방식(docs/aibot/STRATEGY_CATALOG_KO.md), 조절 값의 뜻·기본값(candleague.candidates.params_of), 후보마다 성격(추세 비율, research/live_interim/replay/pick_character.py, 2021~2026-09 그 후보의 숫자와 청산). 딥시크 금액은 넣지 않습니다(D11). 장세별 값은 후보를 고를 때 쓴 기간이 섞여 크기는 실제보다 좋게 나오므로 어느 장에서 상대적으로 나았나만 참고합니다. edges: the pick's numbers at the first or last value the 5-year search tried (research/fullgrid/edges.py).",
  "strategies": {
   "DOGE": {
    "kind": "core",
@@ -553,6 +553,9 @@
      "win": null,
      "mean": null
     }
+   },
+   "edges": {
+    "chop_max": "high"
    }
   },
   "core-DOGE-30m-1": {
@@ -579,7 +582,8 @@
      "win": 0.5,
      "mean": 0.12880615890026093
     }
-   }
+   },
+   "edges": {}
   },
   "core-DOGE-1h-1": {
    "trend_ratio": 0.996,
@@ -605,7 +609,8 @@
      "win": 0.3230769230769231,
      "mean": 0.021974926814436913
     }
-   }
+   },
+   "edges": {}
   },
   "core-DOGE-4h-1": {
    "trend_ratio": 0.819,
@@ -631,6 +636,10 @@
      "win": 0.296551724137931,
      "mean": 0.013470975682139397
     }
+   },
+   "edges": {
+    "stoch_len": "high",
+    "chop_max": "high"
    }
   },
   "core-N03_ADX_GC-15m-1": {
@@ -657,6 +666,10 @@
      "win": 0.5,
      "mean": 0.07670934498310089
     }
+   },
+   "edges": {
+    "adx_len": "low",
+    "adx_level": "high"
    }
   },
   "core-N03_ADX_GC-30m-3": {
@@ -683,6 +696,9 @@
      "win": 0.2914572864321608,
      "mean": 0.011573839001357555
     }
+   },
+   "edges": {
+    "ema_fast": "low"
    }
   },
   "core-N03_ADX_GC-1h-1": {
@@ -709,6 +725,9 @@
      "win": 0.3235294117647059,
      "mean": 0.02201754041016102
     }
+   },
+   "edges": {
+    "adx_len": "low"
    }
   },
   "core-N09_ALLIG_AROON-15m-3": {
@@ -735,6 +754,10 @@
      "win": 0.3269230769230769,
      "mean": 0.017736069858074188
     }
+   },
+   "edges": {
+    "lips_len": "high",
+    "aroon_len": "high"
    }
   },
   "core-N09_ALLIG_AROON-30m-1": {
@@ -761,6 +784,10 @@
      "win": 0.297029702970297,
      "mean": 0.012045281939208508
     }
+   },
+   "edges": {
+    "teeth_len": "high",
+    "aroon_len": "high"
    }
   },
   "core-N09_ALLIG_AROON-1h-1": {
@@ -787,6 +814,9 @@
      "win": 0.27205882352941174,
      "mean": 0.008640456013381481
     }
+   },
+   "edges": {
+    "aroon_len": "high"
    }
   },
   "core-N09_ALLIG_AROON-4h-1": {
@@ -813,7 +843,8 @@
      "win": 0.31125827814569534,
      "mean": 0.010676939971745014
     }
-   }
+   },
+   "edges": {}
   },
   "core-N10_HA_PSAR-4h-1": {
    "trend_ratio": 0.562,
@@ -839,6 +870,10 @@
      "win": 0.34673366834170855,
      "mean": 0.034661147743463516
     }
+   },
+   "edges": {
+    "sar_af_step": "high",
+    "wick_tol": "high"
    }
   },
   "core-N13_3OUTSIDE-30m-1": {
@@ -865,6 +900,9 @@
      "win": 0.3192090395480226,
      "mean": 0.01882011443376541
     }
+   },
+   "edges": {
+    "engulf_min": "high"
    }
   },
   "core-N13_3OUTSIDE-1h-1": {
@@ -891,6 +929,9 @@
      "win": 0.32432432432432434,
      "mean": 0.023739006370306015
     }
+   },
+   "edges": {
+    "prior_n": "low"
    }
   },
   "core-N19_FIB_CHOP-15m-1": {
@@ -917,6 +958,10 @@
      "win": 0.25,
      "mean": 0.0021609272807836533
     }
+   },
+   "edges": {
+    "touch_atr": "low",
+    "slope_thr": "high"
    }
   },
   "core-N19_FIB_CHOP-30m-1": {
@@ -943,6 +988,10 @@
      "win": null,
      "mean": null
     }
+   },
+   "edges": {
+    "range_len": "low",
+    "slope_thr": "high"
    }
   },
   "core-N19_FIB_CHOP-4h-1": {
@@ -969,6 +1018,10 @@
      "win": 0.4387755102040816,
      "mean": 0.08784634619951248
     }
+   },
+   "edges": {
+    "range_len": "high",
+    "fib_level": "low"
    }
   },
   "core-OBV_S-30m-2": {
@@ -995,6 +1048,11 @@
      "win": 0.27486437613019893,
      "mean": 0.0027017006650567055
     }
+   },
+   "edges": {
+    "stc_level": "low",
+    "stoch_k_smooth": "low",
+    "ao_slow_len": "high"
    }
   },
   "core-OBV_S-1h-3": {
@@ -1021,7 +1079,8 @@
      "win": 0.5637254901960784,
      "mean": 0.011456375941634178
     }
-   }
+   },
+   "edges": {}
   },
   "core-OBV_S-4h-1": {
    "trend_ratio": 0.511,
@@ -1047,6 +1106,9 @@
      "win": 0.3707865168539326,
      "mean": 0.03299640119075775
     }
+   },
+   "edges": {
+    "stoch_k_smooth": "low"
    }
   },
   "core-S4_BB_BBP-30m-1": {
@@ -1073,6 +1135,9 @@
      "win": 0.45228215767634855,
      "mean": 0.017907878383994102
     }
+   },
+   "edges": {
+    "sq_pct": "high"
    }
   },
   "core-S4_BB_BBP-1h-2": {
@@ -1099,6 +1164,9 @@
      "win": 0.31125827814569534,
      "mean": 0.017615018412470818
     }
+   },
+   "edges": {
+    "sq_lookback": "low"
    }
   },
   "core-S4_BB_BBP-4h-1": {
@@ -1125,7 +1193,8 @@
      "win": 0.43103448275862066,
      "mean": 0.056119125336408615
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F10_OTE-1h-1": {
    "trend_ratio": 0.521,
@@ -1147,7 +1216,8 @@
      "n": 621,
      "win": 0.2753623188405797
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F10_OTE-4h-1": {
    "trend_ratio": 0.431,
@@ -1169,7 +1239,8 @@
      "n": 126,
      "win": 0.3333333333333333
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F11_TSOUP-4h-1": {
    "trend_ratio": 0.019,
@@ -1191,6 +1262,9 @@
      "n": 277,
      "win": 0.296028880866426
     }
+   },
+   "edges": {
+    "min_age": "low"
    }
   },
   "ds-F12_MSS_DISP-1h-1": {
@@ -1213,6 +1287,9 @@
      "n": 162,
      "win": 0.2962962962962963
     }
+   },
+   "edges": {
+    "swing_k": "low"
    }
   },
   "ds-F12_MSS_DISP-4h-1": {
@@ -1235,7 +1312,8 @@
      "n": 140,
      "win": 0.35714285714285715
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F1_PVT_DIV-1h-1": {
    "trend_ratio": 0.436,
@@ -1257,6 +1335,9 @@
      "n": 381,
      "win": 0.2992125984251969
     }
+   },
+   "edges": {
+    "swing_k": "high"
    }
   },
   "ds-F5_BOX-15m-1": {
@@ -1279,6 +1360,9 @@
      "n": 0,
      "win": null
     }
+   },
+   "edges": {
+    "width_atr": "high"
    }
   },
   "ds-F5_BOX-4h-1": {
@@ -1301,6 +1385,10 @@
      "n": 204,
      "win": 0.36764705882352944
     }
+   },
+   "edges": {
+    "adx_max": "high",
+    "edge": "high"
    }
   },
   "ds-F7_RF_ONLY-30m-1": {
@@ -1323,6 +1411,9 @@
      "n": 427,
      "win": 0.29508196721311475
     }
+   },
+   "edges": {
+    "rf_mult": "high"
    }
   },
   "ds-F7_RF_ONLY-1h-3": {
@@ -1345,7 +1436,8 @@
      "n": 1024,
      "win": 0.267578125
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F7_RF_ONLY-4h-1": {
    "trend_ratio": 0.496,
@@ -1367,6 +1459,10 @@
      "n": 139,
      "win": 0.302158273381295
     }
+   },
+   "edges": {
+    "rf_period": "low",
+    "rf_mult": "low"
    }
   },
   "ds-F7_RF_TRIPLE-1h-1": {
@@ -1389,6 +1485,9 @@
      "n": 2132,
      "win": 0.27626641651031897
     }
+   },
+   "edges": {
+    "rf_mult": "high"
    }
   },
   "ds-F7_RF_TRIPLE-4h-1": {
@@ -1411,7 +1510,8 @@
      "n": 145,
      "win": 0.4413793103448276
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F9_FVG-1h-1": {
    "trend_ratio": 0.832,
@@ -1433,7 +1533,8 @@
      "n": 315,
      "win": 0.2507936507936508
     }
-   }
+   },
+   "edges": {}
   },
   "ds-F9_FVG-4h-1": {
    "trend_ratio": 0.693,
@@ -1455,6 +1556,9 @@
      "n": 291,
      "win": 0.30584192439862545
     }
+   },
+   "edges": {
+    "fvg_min_atr": "low"
    }
   }
  }

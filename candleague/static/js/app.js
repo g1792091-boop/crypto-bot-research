@@ -219,6 +219,17 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("hashchange", mountScreen);
 
+// a table wider than its box gets .cl-more (cl.css: on a phone its first column stays and a line says it scrolls)
+let wideTimer = 0;
+function markWide() {
+  clearTimeout(wideTimer);
+  wideTimer = setTimeout(() => {
+    for (const w of main.querySelectorAll(".tbl-wrap")) w.classList.toggle("cl-more", w.scrollWidth > w.clientWidth + 2);
+  }, 150);
+}
+new MutationObserver(markWide).observe(main, {childList: true, subtree: true});
+window.addEventListener("resize", markWide);
+
 applySkin(skinNow());
 buildMenu();
 paintTop();

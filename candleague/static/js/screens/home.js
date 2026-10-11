@@ -125,7 +125,7 @@ export async function mount(el, ctx) {
       if (!p) return null;
       const n = p.roles.cand.n;
       return h("div", {class: "cl-prog"}, h("div", {class: "cl-progh"}, h("b", null, kind === "core" ? "기존 36 후보 거래" : "딥시크 후보 거래"),
-        h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null));
+        h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null), LK.paceLine(d, n, min));
     };
     put(goal,
       h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.leagueDay(d)}`), " (10/01부터)")),
@@ -159,11 +159,12 @@ export async function mount(el, ctx) {
   function paintTopBottom(d) {
     const ix = LK.index(d);
     const ranked = ix.cands.filter((c) => c.trades && c.mean_ret != null).sort((a, b) => b.mean_ret - a.mean_ret);
+    const early = ranked.length && Math.max(...ranked.map((c) => c.trades)) < 30;   // no pick judged yet: say it is luck
     const col = (label, sub, rows, off) => h("div", {class: "k4-tbcol"}, h("div", {class: "k4-tbh"}, h("b", null, label), h("span", null, sub)),
       rows.length ? h("div", {role: "list"}, rows.map((c, i) => rankRow(c, off(i), ix))) : ui.empty("아직 끝난 거래가 없습니다"));
     const top = ranked.slice(0, SHOW), bot = ranked.slice(-SHOW).reverse().filter((c) => !top.includes(c));
-    put(tb, col("잘 되는 후보", "한 번 평균 상위 5", top, (i) => i + 1),
-      col("안 되는 후보", "한 번 평균 하위 5", bot, (i) => ranked.length - i));
+    put(tb, col("한 번 평균 높은 후보", early ? "상위 5 · 거래가 적어 아직 운이 큼" : "상위 5", top, (i) => i + 1),
+      col("한 번 평균 낮은 후보", early ? "하위 5 · 30번 전에는 판단하지 않음" : "하위 5", bot, (i) => ranked.length - i));
   }
 
   async function loadFills() {
@@ -234,7 +235,8 @@ function ledBar() {
     K4.countTo(absEl, shown.length ? sum - init : null, {format: (v) => fmt.money(v, true), tone: true});
     const H = LK.health(d);
     live.className = ["led-live", H.lv === "ok" ? "" : "off"].filter(Boolean).join(" ");
-    live.textContent = H.lv === "ok" ? "■ 실시간" : H.lv === "warn" ? "■ 따라잡는 중" : "■ 멈춤";
+    live.textContent = H.lv === "ok" ? "■ 실시간" : H.lv === "warn" ? (LK.catchingUp(d) ? "■ 따라잡는 중" : "■ 늦음") : "■ 멈춤";
+    live.title = H.ko;
     const wins = ix.cands.filter((c) => c.wallet != null && c.wallet > LK.EQUITY).length;
     put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 $5,000에서 시작`),
       h("span", null, `시작보다 많은 후보 ${fmt.int(wins)}개`)));
@@ -245,7 +247,7 @@ function ledBar() {
     cell("10/01부터", "다시 돌리기 시작부터 처리한 날 수").textContent = `${fmt.int(LK.leagueDay(d))}일째`;
     cell("열린 포지션", "190개 계좌 합계").textContent = fmt.int(open);
     cell("닫힌 거래", "190개 계좌 합계").textContent = fmt.int(closed);
-    cell("기준 통과", "30번 넘게 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
+    cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
     cell("경고등", "기존 36 후보 중 백테스트 예상 범위(하위 5%) 아래").textContent = fmt.int(warn);
     cell("파산", "190개 계좌 중").textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
     cap.textContent = shown.length < ix.cands.length
