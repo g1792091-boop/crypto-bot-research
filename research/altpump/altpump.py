@@ -1753,15 +1753,32 @@ ADD_SKIP_IX = (A_RISK, A_MARGIN, A_FREE, A_LIQUIDITY, A_MINNOT, A_LIQBEYOND)
 ENTRY_CUT_IX = (C_CUT_LIQ, C_CUT_MARGIN, C_CUT_FREE)
 
 
-def adds_stats(outs: list) -> dict:
-    """14: how the machine actually ran at this size, pooled over ``outs``: positions, first-unit risk / intended U,
-    adds per position, the share of positions reaching each add level, add skips by reason, entry cuts by reason. At
-    high r the margin budget B = E / n_max is often used up by the first unit, so few or no adds fill."""
-    ri = [o.ri for o in outs if len(o.ri)]
-    rf = [o.rf for o in outs if len(o.rf)]
-    adds = np.concatenate([x[:, RI_ADDS] for x in ri]) if ri else np.zeros(0, np.int64)
-    r1 = np.concatenate([x[:, R_RISK1] for x in rf]) if rf else np.zeros(0)
-    cnt = np.sum([o.cnt for o in outs], axis=0) if outs else np.zeros(NCNT, np.int64)
+class AddsPool:
+    """14: the small per-account pieces adds_stats needs (copies, so no account's full buffers are kept alive)."""
+
+    def __init__(self):
+        self.adds, self.r1, self.cnt = [], [], np.zeros(NCNT, np.int64)
+
+    def add(self, out: Out) -> None:
+        if len(out.ri):
+            self.adds.append(out.ri[:, RI_ADDS].copy())
+            self.r1.append(out.rf[:, R_RISK1].copy())
+        self.cnt += out.cnt
+
+
+def adds_stats(outs) -> dict:
+    """14: how the machine actually ran at this size, pooled over ``outs`` (a list of Out or an AddsPool): positions,
+    first-unit risk / intended U, adds per position, the share of positions reaching each add level, add skips by
+    reason, entry cuts by reason. At high r the margin budget B = E / n_max is often used up by the first unit, so few
+    or no adds fill."""
+    if not isinstance(outs, AddsPool):
+        pool = AddsPool()
+        for o in outs:
+            pool.add(o)
+        outs = pool
+    adds = np.concatenate(outs.adds) if outs.adds else np.zeros(0, np.int64)
+    r1 = np.concatenate(outs.r1) if outs.r1 else np.zeros(0)
+    cnt = outs.cnt
     n = len(adds)
     return {"positions": int(n), "first_unit_risk_over_U": _f(r1.mean()) if n else None,
             "adds_per_position": _f(adds.mean()) if n else None,
@@ -1777,14 +1794,14 @@ def board_block(mk: Market, sig: Sig, v: dict, period: str, r: float, n_seeds: i
     M, b = month_multiples(out)
     row = {"pick": board_stats(M, b), "first_unit_risk_over_U": _f(out.rf[:, R_RISK1].mean()) if len(out.rf) else None,
            "pick_machine": adds_stats([out])}
-    Ms, Bs, outs = [], [], []
+    Ms, Bs, outs = [], [], AddsPool()
     for i in range(n_seeds):
         cs = ctrl_a(sig, ctrl_seed("a", v["id"], period, r, i))
         o2 = run_account(mk, cs, v, r=r, monthly=True, sub=sub)
         m2, b2 = month_multiples(o2)
         Ms.append(m2)
         Bs.append(b2)
-        outs.append(o2)
+        outs.add(o2)
     row["coin_flip_pooled"] = board_stats(np.concatenate(Ms) if Ms else np.zeros(0),
                                           np.concatenate(Bs) if Bs else np.zeros(0, bool))
     row["coin_flip_machine"] = adds_stats(outs)
@@ -2244,7 +2261,7 @@ def bench(n_syms: int, out_path: str, n_seeds: int = N_SEEDS, n_boot: int = N_BO
     t0 = time.time()
     table, _, _ = step_select(raw)
     tm["select_s"] = round(time.time() - t0, 2)
-    tm["select_accounts"] = 2 * len(VARIANTS)
+    tm["select_accounts"] = (2 + len(STOP_HC_SENS)) * len(VARIANTS)
     tm["select_signals_total"] = int(sum(r["signals"] for r in table.values()))
     order = sorted(table, key=lambda vid: -(table[vid]["base"]["mean_ln"] or -9))
     picks, groups = [], set()
@@ -2258,7 +2275,7 @@ def bench(n_syms: int, out_path: str, n_seeds: int = N_SEEDS, n_boot: int = N_BO
     t0 = time.time()
     step_test(raw, picks, n_seeds=n_seeds, n_boot=n_boot, log=log)
     tm["test_with_controls_s"] = round(time.time() - t0, 2)
-    tm["test_accounts"] = len(picks) * 2 * (1 + 4 + 2 * n_seeds) + len(picks)
+    tm["test_accounts"] = len(picks) * 2 * (1 + 4 + len(STOP_HC_SENS) + 2 * n_seeds) + len(picks)
     t0 = time.time()
     step_board(raw, picks, n_seeds=n_seeds, log=log)
     tm["board_s"] = round(time.time() - t0, 2)

@@ -82,10 +82,14 @@ FALLBACK_MIN_NOTIONAL = 5.0
 PERIODS = {"select": ("2021-01-01", "2024-01-01"), "test": ("2024-01-01", "2026-10-01"),
            "extra": ("2020-01-01", "2021-01-01")}
 OLD_SIX = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
-N_SEEDS, N_BOOT = 100, 10_000
+N_SEEDS, N_BOOT = 1000, 10_000                                 # H 12 / W 6: seeds 1-1,000 (owners 2026-10-11 (c))
+N_SEEDS_READ = 200                                             # W 7: reads use seeds 1-200 (select-period controls)
 POS_PER_MONTH, MONTH_COVER, DD_MAX = 2, 0.80, 0.50             # H 11.2 / H 13
 P_ALPHA, BH_Q, K_PICKS = 0.05, 0.10, 10
-PICK_FAMILIES = ("F1", "F2", "F3")         # W 5: F4 (numbers chosen after this test period was seen) = select read only
+N_BATCHES, BATCH_TRIGGER = 3, 5            # W 5 / W 6: batches of K_PICKS (1군, 2군, 3군); next batch if >= 5 of 10 pass
+BATCH_LABELS = ("1군", "2군", "3군")
+PICK_FAMILIES = ("F1", "F2", "F3", "F5")   # W 5: F4 (numbers chosen after this test period was seen) = select read only
+LINEUP_TOP_MONTH_MAX = 0.50                # W 12 lineup (g): the best month < 50% of the total log gain
 SEED_TAG = {"v1": "hunt", "wide": "hunt-wide"}
 MIN_FREE_BYTES = 1024 ** 3                                     # H 2: stop when free disk falls under 1 GB
 XCHECK_TOL_PX, XCHECK_TOL_VOL, XCHECK_MAX_SHARE = 1e-6, 1e-3, 0.001   # H 2 cross-check of the old six
@@ -634,6 +638,9 @@ _EVENTS: dict = {}         # (cell key, sym) -> (long, short)
 _SIGS: dict = {}           # (market key, cell key, gate) -> signals
 _BANKS: dict = {}          # (market key, tfs) -> Bank
 _POOLS: dict = {}          # (market key, tf, coin) -> control (a) pool
+_LARGE: dict = {}          # (syms, calendar month start) -> large group row (H 3)
+_BRK: dict = {}            # syms -> brackets (H 7.3)
+_MARKETS: dict = {}        # (syms, start, end) -> Market (reads windows)
 
 
 def install(coins: dict, funding: dict | None = None) -> None:
@@ -642,7 +649,7 @@ def install(coins: dict, funding: dict | None = None) -> None:
     _COINS.update(coins)
     _FUND.clear()
     _FUND.update(funding or {})
-    for d in (_SERIES, _EVENTS, _SIGS, _BANKS, _POOLS):
+    for d in (_SERIES, _EVENTS, _SIGS, _BANKS, _POOLS, _LARGE, _BRK, _MARKETS):
         d.clear()
 
 
@@ -688,12 +695,24 @@ def prepare_series(syms, tfs) -> None:
             series(s, tf)
 
 
-# ------------------------------------------------------------------ market: the period's common 5m axis (H 8-10)
-class Market:
-    """The coins of one universe on one period's 5m axis [start, end): flat per-coin bars with their global step,
-    funding steps, coin ends, large group per month (H 3) and brackets."""
+# ------------------------------------------------------------------ market: the period's common bar axis (H 8-10)
+def calendar_month_start(ms: int) -> int:
+    d = dt.datetime.fromtimestamp(int(ms) / 1000, dt.timezone.utc)
+    return int(dt.datetime(d.year, d.month, 1, tzinfo=dt.timezone.utc).timestamp() * 1000)
 
-    def __init__(self, syms: list, period, name: str | None = None):
+
+class Market:
+    """The coins of one universe on one period's bar axis [start, end): flat per-coin bars with their global step,
+    funding steps, coin ends, large group per calendar month (H 3) and brackets.
+
+    The study runs on 5m bars (``bar_ms`` = 5 min, the bars of ``_COINS``). The fidelity read (R19) passes ``bars`` =
+    {sym: Coin} of 1m bars (``bar_ms`` = 1 min; a coin missing there keeps its 5m bars, each placed at its open
+    minute) and ``mark=True`` to give the engine the mark-price OHLC. Every length that is a time (the 24 h liquidity
+    window, a day of steps, the funding grid) is scaled from the bar length; signal bars, ATR, labels, the 30-day
+    priority and the large group always come from the study's 5m coins."""
+
+    def __init__(self, syms: list, period, name: str | None = None, bar_ms: int = FIVE, bars: dict | None = None,
+                 mark: bool = False, tag: str | None = None):
         if isinstance(period, str):
             a, b = PERIODS[period]
             self.period = period
@@ -703,53 +722,93 @@ class Market:
             self.period = name or f"{ms_str(self.start)}..{ms_str(self.end)}"
         if (self.end - self.start) % DAY_MS or self.start % DAY_MS:
             raise ValueError("a period starts and ends at 00:00 UTC")
+        self.step = int(bar_ms)
+        if self.step <= 0 or DAY_MS % self.step or FIVE % self.step:
+            raise ValueError("the bar length divides 5 minutes (1m or 5m)")
+        self.bpd = DAY_MS // self.step
+        self.src = _COINS if bars is None else bars
+        self.native = bars is None and self.step == FIVE and not mark
         self.syms = list(syms)
         self.K = len(self.syms)
-        self.T = (self.end - self.start) // FIVE
+        self.T = (self.end - self.start) // self.step
         self.key = f"{self.period}:{self.start}:{self.end}:" + ",".join(self.syms)
+        if not self.native:
+            self.key += f":{tag or 'bars'}:{self.step}:{int(mark)}"
         ms = month_starts(self.start, self.end)
         self.month_ms = np.asarray(ms, np.int64)
-        self.month_t0 = (self.month_ms - self.start) // FIVE
+        self.month_t0 = (self.month_ms - self.start) // self.step
         self.months = [month_key(x) for x in ms[:-1]]
+        liq_n = LIQ_BARS * FIVE // self.step                       # H 7.2: the 24 h before the fill bar
         off, bt, bo, bh, bl, bc, bq, p0s, p1s, cend = [0], [], [], [], [], [], [], [], [], []
+        mo_, mh_, ml_ = [], [], []
         foff, ft, fr = [0], [], []
+        self.bar_source = {}
         for s in self.syms:
-            c = _COINS[s]
+            c = self.src.get(s) if bars is not None else _COINS[s]
+            if c is None:                                          # fidelity: no 1m bars for this coin -> its 5m bars
+                c = _COINS[s]
+                self.bar_source[s] = "5m"
+            else:
+                self.bar_source[s] = f"{self.step // 60_000}m"
             p0 = int(np.searchsorted(c.ts, self.start, "left"))
             p1 = int(np.searchsorted(c.ts, self.end, "left"))
             p0s.append(p0)
             p1s.append(p1)
-            bt.append((c.ts[p0:p1] - self.start) // FIVE)
+            bt.append((c.ts[p0:p1] - self.start) // self.step)
             for dst, src in ((bo, c.o), (bh, c.h), (bl, c.l), (bc, c.c)):
                 dst.append(src[p0:p1].astype(np.float64))
+            if mark:
+                for dst, key, last in ((mo_, "mo", c.o), (mh_, "mh", c.h), (ml_, "ml", c.l)):
+                    mk_ = getattr(c, key, None)
+                    v = (last if mk_ is None else mk_)[p0:p1].astype(np.float64)
+                    if mk_ is not None:                            # a bar without a mark bar: last price
+                        bad = ~np.isfinite(v)
+                        v[bad] = np.asarray(last[p0:p1], np.float64)[bad]
+                    dst.append(v)
             idx = np.arange(p0, p1)
-            bq.append(c.cq[idx] - c.cq[np.maximum(0, idx - LIQ_BARS)])
+            bq.append(c.cq[idx] - c.cq[np.maximum(0, idx - liq_n)])
             off.append(off[-1] + (p1 - p0))
             ce = -1
-            if c.last_ms is not None and self.start <= c.last_ms < self.end - FIVE:
-                ce = int((c.last_ms - self.start) // FIVE)
+            last_ms = _COINS[s].last_ms if s in _COINS else c.last_ms
+            if last_ms is not None and self.start <= last_ms < self.end - FIVE:
+                if self.native:
+                    ce = int((last_ms - self.start) // FIVE)
+                else:                                              # the coin's last bar inside its last 5m bar
+                    i = int(np.searchsorted(c.ts, last_ms + FIVE, "left")) - 1
+                    ce = int((c.ts[i] - self.start) // self.step) if p0 <= i < p1 else -1
             cend.append(ce)
             fts, frate = _FUND.get(s, (np.zeros(0, np.int64), np.zeros(0)))
-            g = ((np.asarray(fts, np.int64) + 30_000) // FIVE) * FIVE      # calc_time on the 5m grid
+            g = ((np.asarray(fts, np.int64) + 30_000) // self.step) * self.step   # calc_time on the bar grid
             keep = (g > self.start) & (g < self.end)
             order = np.argsort(g[keep], kind="stable")
-            ft.append(((g[keep] - self.start) // FIVE - 1)[order])          # charged after the bar ending at calc_time
+            ft.append(((g[keep] - self.start) // self.step - 1)[order])   # charged after the bar ending at calc_time
             fr.append(np.asarray(frate, np.float64)[keep][order])
             foff.append(foff[-1] + int(keep.sum()))
         cat = lambda xs, dt_: np.concatenate(xs).astype(dt_) if xs else np.zeros(0, dt_)  # noqa: E731
         self.b_off = np.asarray(off, np.int64)
         self.b_t = cat(bt, np.int64)
         self.b_o, self.b_h, self.b_l, self.b_c, self.b_qv = (cat(x, np.float64) for x in (bo, bh, bl, bc, bq))
+        if mark:
+            self.b_mo, self.b_mh, self.b_ml = cat(mo_, np.float64), cat(mh_, np.float64), cat(ml_, np.float64)
+        else:                                                      # last price (the study: mark price unread, H 2)
+            self.b_mo, self.b_mh, self.b_ml = self.b_o, self.b_h, self.b_l
+        self.mark = bool(mark)
         self.p0, self.p1 = np.asarray(p0s, np.int64), np.asarray(p1s, np.int64)
         self.coin_end_t = np.asarray(cend, np.int64)
         self.f_off = np.asarray(foff, np.int64)
         self.f_t = cat(ft, np.int64)
         self.f_rate = cat(fr, np.float64)
         self.large = self._large()
-        br = load_brackets(self.syms)
-        self.br = br
+        self.br = brackets_for(self.syms)
         self.funding_missing = {s: [m for m in _COINS[s].counts.get("missing_months_funding", [])
                                     if self.months and self.months[0] <= m <= self.months[-1]] for s in self.syms}
+
+    def bar_coin(self, k: int):
+        """The coin whose bars this market steps through (5m study coins, or the fidelity bars)."""
+        s = self.syms[k]
+        if self.src is _COINS:
+            return _COINS[s]
+        return self.src.get(s) or _COINS[s]
 
     def qv_window(self, k: int, end_ms, days: int = PRIO_DAYS):
         """Quote volume of the coin's 5m bars with open in [end - days, end) (vectorised over end_ms)."""
@@ -759,20 +818,37 @@ class Market:
         return c.cq[b] - c.cq[a]
 
     def _large(self) -> np.ndarray:
+        """H 3: per month segment, the calendar month's large group (the 10 coins with the largest quote volume over
+        the 30 days before the calendar month's start; a window starting mid-month keeps its calendar month's group,
+        it is not recomputed at the window start)."""
         n_m = len(self.months)
         out = np.zeros((n_m, self.K), np.int64)
         for m in range(n_m):
-            t0 = int(self.month_ms[m])
-            vols = []
-            for k, s in enumerate(self.syms):
-                c = _COINS[s]
-                ok = len(c.ts) and c.ts[0] <= t0 - PRIO_DAYS * DAY_MS
-                vols.append(float(self.qv_window(k, t0)) if ok else -1.0)
-            order = sorted(range(self.K), key=lambda k: (-vols[k], k))
-            for k in order[:LARGE_N]:
-                if vols[k] > 0:
-                    out[m, k] = 1
+            t0 = calendar_month_start(int(self.month_ms[m]))
+            key = (tuple(self.syms), t0)
+            row = _LARGE.get(key)
+            if row is None:
+                vols = []
+                for k, s in enumerate(self.syms):
+                    c = _COINS[s]
+                    ok = len(c.ts) and c.ts[0] <= t0 - PRIO_DAYS * DAY_MS
+                    vols.append(float(self.qv_window(k, t0)) if ok else -1.0)
+                order = sorted(range(self.K), key=lambda k: (-vols[k], k))
+                row = np.zeros(self.K, np.int64)
+                for k in order[:LARGE_N]:
+                    if vols[k] > 0:
+                        row[k] = 1
+                _LARGE[key] = row
+            out[m] = row
         return out
+
+
+def brackets_for(syms: list) -> dict:
+    key = tuple(syms)
+    br = _BRK.get(key)
+    if br is None:
+        br = _BRK[key] = load_brackets(list(syms))
+    return br
 
 
 class Bank:
@@ -789,7 +865,7 @@ class Bank:
                 cm = ser.bars.close_ms
                 lo = int(np.searchsorted(cm, mk.start, "left"))
                 hi = int(np.searchsorted(cm, mk.end, "right"))
-                ct.append((cm[lo:hi] - mk.start) // FIVE)
+                ct.append((cm[lo:hi] - mk.start) // mk.step)
                 hh.append(ser.bars.h[lo:hi])
                 ll.append(ser.bars.l[lo:hi])
                 aa.append(ser.atr[lo:hi])
@@ -840,10 +916,13 @@ def gate_mask(ser: Series, gate: str) -> np.ndarray:
 
 
 def fill_index(mk: Market, k: int, ser: Series) -> tuple:
-    """(fill index into the coin's 5m arrays, ok) per signal bar: the first 5m bar after the close, inside the
-    period's loaded bars."""
-    c = _COINS[mk.syms[k]]
-    fi = np.asarray(ser.bars.first5, np.int64)
+    """(fill index into the market's bar arrays of the coin, ok) per signal bar: the first bar with open at or after
+    the signal bar's close, inside the period's loaded bars (5m: entries_wide's first5)."""
+    c = mk.bar_coin(k)
+    if mk.native:
+        fi = np.asarray(ser.bars.first5, np.int64)
+    else:
+        fi = np.searchsorted(c.ts, ser.bars.close_ms, "left").astype(np.int64)
     ok = fi < min(len(c.ts), int(mk.p1[k]))
     ok &= fi >= mk.p0[k]
     return fi, ok
@@ -889,9 +968,12 @@ def system_signals(mk: Market, spec: dict, gate: str | None = None) -> dict:
     return out
 
 
-def build_cands(mk: Market, bank: Bank, parts: list) -> dict:
+def build_cands(mk: Market, bank: Bank, parts: list, d0_scale: float = 1.0) -> dict:
     """Candidate entries for the engine from [(signals, src)] (src = pick number, 0 for one system), sorted by fill
-    step, then 30-day quote volume (largest first), then src, then universe order (H 8, W 7)."""
+    step, then 30-day quote volume (largest first), then src, then universe order (H 8, W 7). Only signals whose
+    signal bar closes in [start, end) and whose fill bar lies inside the market's bars are kept (a no-op for the
+    signals of ``system_signals`` and the controls on their own period; it slices a full-period draw to a window).
+    ``d0_scale`` multiplies D0 (R5 reads; 1.0 = as written)."""
     cols = {x: [] for x in ("t", "bi", "coin", "side", "d0", "s0", "s1", "prio", "src", "close", "j")}
     for sig, src in parts:
         tf = sig["tf"]
@@ -899,17 +981,23 @@ def build_cands(mk: Market, bank: Bank, parts: list) -> dict:
             sel = sig["k"] == k
             j, side = sig["j"][sel], sig["side"][sel]
             ser = series(mk.syms[k], tf)
-            c = _COINS[mk.syms[k]]
-            fi = ser.bars.first5[j]
-            fill_ms = c.ts[fi]
+            fi_all, ok_all = fill_index(mk, int(k), ser)
             close = ser.bars.close_ms[j]
+            keep = ok_all[j] & (close >= mk.start) & (close < mk.end)
+            if not keep.all():
+                j, side, close = j[keep], side[keep], close[keep]
+            if not len(j):
+                continue
+            c = mk.bar_coin(int(k))
+            fi = fi_all[j]
+            fill_ms = c.ts[fi]
             a, b, lo = bank.off[(tf, int(k))]
             cm = ser.bars.close_ms[lo:lo + (b - a)]
-            cols["t"].append((fill_ms - mk.start) // FIVE)
+            cols["t"].append((fill_ms - mk.start) // mk.step)
             cols["bi"].append(mk.b_off[k] + fi - mk.p0[k])
             cols["coin"].append(np.full(len(j), k, np.int64))
             cols["side"].append(side)
-            cols["d0"].append(D0_MULT[tf] * ser.atr[j])
+            cols["d0"].append(D0_MULT[tf] * ser.atr[j] if d0_scale == 1.0 else D0_MULT[tf] * d0_scale * ser.atr[j])
             cols["s0"].append(a + np.searchsorted(cm, fill_ms, "right"))
             cols["s1"].append(np.full(len(j), b, np.int64))
             cols["prio"].append(mk.qv_window(int(k), close))
