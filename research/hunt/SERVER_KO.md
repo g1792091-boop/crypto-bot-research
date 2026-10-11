@@ -70,16 +70,19 @@ bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh status
 
 ```
 진행 중: 6/9 추세 사냥 계산 (v1·넓게 고르기 → 두 시험, 작업 32개 동시에) (이 단계 12분째)
-  남은 시간: 약 64분 (어림, CPU 32개 기준; 처음 몇 분은 들쭉날쭉)
+  남은 시간: 약 600분 (어림, CPU 32개 기준; 처음 몇 분은 들쭉날쭉)
   지금: wide 시험 (2024-01 ~ 2026-09, 한 번만)
+  6/9는 판정 뒤 목표판·20/30/40배 표 계산까지 몇 시간(4~9시간) 걸릴 수 있습니다. 남은 시간이 그대로여도 정상이니 다시 시작하지 마세요.
 ```
 
 화면을 다시 보려면 `tmux attach -t hunt`.
 
 **멈췄다면 → 이어서 하기** (서버 재부팅, `멈춤:` 메시지, status가 "지금 돌고 있지 않습니다"): 아래를 붙여 넣으면 끝난 부분은
-건너뛰고 이어서 합니다 (tmux 창 안에서 붙여 넣어도 됩니다). 처음에 정한 설정은 서버에 남아 있어서 이 줄에는 따로 적을 것이
-없습니다. 돌고 있는 중에 붙여 넣으면 "이미 돌고 있습니다"만 나오고 아무것도 바뀌지 않습니다. 개발자가 준 줄에 다시 시작이
-같이 들어 있으면(줄 안에 `tmux respawn-pane`이 있으면) 이 줄을 더 붙여 넣을 필요가 없습니다.
+건너뛰고 이어서 합니다. 처음에 정한 설정은 서버에 남아 있어서 이 줄에는 따로 적을 것이 없습니다.
+멈춘 뒤의 tmux 창이나 새 SSH 창에서 붙여 넣으세요. **계산이 돌고 있는 tmux 화면 안에는 아무것도 붙여 넣지 마세요** (그 자리에서는
+끝난 뒤에 실행되어 마지막 화면을 지웁니다). 새 SSH 창(tmux 밖)에서 붙여 넣으면 "이미 돌고 있습니다"만 나오고 아무것도 바뀌지
+않습니다. 개발자가 준 줄에 다시 시작이 같이 들어 있으면(줄 안에 `tmux respawn-pane`이 있으면) 이 줄을 더 붙여 넣을 필요가
+없습니다.
 
 ```bash
 bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh idle && { tmux respawn-pane -k -t hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash" 2>/dev/null || tmux new -d -s hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash"; [ -n "$TMUX" ] || tmux attach -t hunt; }
@@ -91,8 +94,9 @@ bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh idle && { tmux re
 tail -50 /root/hunt/run.log
 ```
 
-**개발자가 "고쳤다"고 하면**: 개발자가 주는 줄(`bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh update 커밋번호`)을
-붙여 넣은 뒤, 위의 "이어서 하기" 줄을 붙여 넣습니다. 코드는 계산을 시작하기 전(6/9 전)에만 바꿀 수 있습니다.
+**개발자가 "고쳤다"고 하면**: 개발자가 주는 줄을 붙여 넣습니다. 그 줄에 `tmux respawn-pane`이 들어 있으면 그 한 줄로 끝입니다
+(이어서 하기 줄을 더 붙여 넣지 마세요). 없을 때만 그다음 위의 "이어서 하기" 줄을 붙여 넣습니다. 그 줄을 붙여 넣은 뒤 잠깐
+보이는 "tmux kill-session ..." 줄은 옛 코드의 안내이니 붙여 넣지 마세요. 코드는 계산을 시작하기 전(6/9 전)에만 바꿀 수 있습니다.
 
 ## 4. 끝나면: 결과 보내기
 
