@@ -58,7 +58,7 @@ such a rule turn $1,000 into x5 to x100 within one calendar month?
     same ticker; the archive cannot tell, so the rule is the same for all three. Any threshold from 4 to 18 days gives
     the same lives on this file (the other stretches are 1 to 3 days).
 * A stretch of **1 to 6 days without a bar inside a life** is a **gap** (103 in the file before this rule, 100 after
-  it: 98 of them are two archive holes, below; the others are 2 one-day and 1 three-day gap of BNX in 2022). The days
+  it: 97 of them are the two archive holes below; the other 3 are one-day and three-day gaps of BNX in 2022). The days
   of a gap are unknown, not quiet: a position never holds through one (6.8).
 * **Partial days (archive holes).** A day on which at least 10 lives that cover it, and at least 10% of them, have no
   bar is a partial day. On this file (traded-day calendar, structure only): 2022-02-26 .. 28 (48 of 136 lives lack a
@@ -244,7 +244,7 @@ stop is overrun.
 ### 6.8 Delisting, gaps, period end
 * **Delisting**: a position on a symbol whose life ends (3.1, a pause included) closes at the close of the life's
   last bar, market, with slippage and taker (the exchange settles delisted contracts near that time).
-* **Day without a bar inside a life** (a gap of 1 to 6 days, 3.1): the path through it is unknown (98 of the 100 gaps
+* **Day without a bar inside a life** (a gap of 1 to 6 days, 3.1): the path through it is unknown (97 of the 100 gaps
   are archive holes on days the market traded), so no position holds through it: a position open at the close of the
   bar before such a day closes at that close, market, with slippage and taker ("close before a day without a bar").
   This censors positions at times set by the archive, not by price. A signal whose fill day has no bar lapses (6.1).
@@ -592,7 +592,7 @@ sections above, with a synthetic regression test in `tests/test_altpump.py`.
 | 7 | Values outside a step's window are discarded at load, and a market outside them refuses to build | 10, 11.4 |
 | 8 | Stop-fill haircut f = 0.25 on stops and adds (a fill beyond liquidation liquidates); f = 0 and 0.5 reported | 6.4, 6.7, 16, 20 |
 | 9 | README_KO: test periods not "untouched"; the x50 / x10 counts labelled as a ceiling at the highs incl. the test periods; the 10-20% figure labelled a guess | README_KO |
-| 10 | Days without a bar inside a life (98 of 100 are archive holes): no position holds through them; partial days are not ranked by P4 | 3.1, 5, 6.8 |
+| 10 | Days without a bar inside a life (97 of 100 are archive holes): no position holds through them; partial days are not ranked by P4 | 3.1, 5, 6.8 |
 | 11 | A 7-29-day stop ends the life (forced close, fresh indicators, not a P3 listing): AERGO, BNX, PUMP | 3.1, 6.8 |
 | 12 | Funding on the exit day (2 x 8h for an exit during or at the end of the day); pass 2: a symbol-day without archived events pays the fixed charge | 8, 15 |
 | 13 | `test`, `board` and `pass2 run` / `fetch` refuse a second run | 15, 18 |
