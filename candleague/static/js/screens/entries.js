@@ -96,7 +96,7 @@ export async function mount(el, ctx) {
 
   // ------------------------------------------------------------ one pick's card
   function makeCard(c, a) {
-    let acct = a, items = [], i = 0, loaded = false, count = -1, chart = null, candles = null, plines = [], ro = null, seq = 0;
+    let acct = a, items = [], i = 0, loaded = false, failed = false, count = -1, chart = null, candles = null, plines = [], ro = null, seq = 0;
     const box = h("div", {class: "cl-ebox"});
     const msgEl = h("div", {class: "cl-emsg"});
     const cap = h("div", {class: "cl-ecap"});
@@ -122,11 +122,16 @@ export async function mount(el, ctx) {
     async function load() {
       const n = acct.trades;
       let trades = [];
+      failed = false;
       if (n) {
-        try { trades = ((await ctx.api(`/api/trades/${encodeURIComponent(acct.id)}`)) || {}).trades || []; } catch (e) { if (e && e.name === "AbortError") return false; trades = []; }
+        try { trades = ((await ctx.api(`/api/trades/${encodeURIComponent(acct.id)}`)) || {}).trades || []; } catch (e) {
+          if (e && e.name === "AbortError") return false;
+          failed = true;                         // shown as such, never as "no entry yet"; the next snapshot tries again
+          count = -1;
+        }
       }
       items = [...entries(), ...trades];
-      count = n;
+      if (!failed) count = n;
       if (i >= items.length) i = 0;
       return true;
     }
@@ -156,7 +161,7 @@ export async function mount(el, ctx) {
     function paintNav() {
       const n = loaded ? items.length : (acct.trades || 0) + (acct.open ? 1 : 0);
       wrap.hidden = nav.hidden = !n;          // no entry yet: a short line instead of an empty chart
-      if (!n) put(cap, h("span", {class: "muted"}, "아직 진입이 없습니다 · 들어가면 여기에 차트가 나옵니다"));
+      if (!n) put(cap, h("span", {class: "muted"}, failed ? "거래 기록을 불러오지 못했습니다 (잠시 뒤 다시)" : "아직 진입이 없습니다 · 들어가면 여기에 차트가 나옵니다"));
       pos.textContent = n ? `${i + 1} / ${n}` : "진입 없음";
       prev.disabled = i <= 0;
       next.disabled = i >= n - 1;
