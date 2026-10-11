@@ -3,7 +3,8 @@
 * host ``fapi.binance.com`` only, redirects refused, a fixed path whitelist (PATHS), timeout 10 s;
 * a request-weight budget per rolling minute (default 1,800 of Binance's 2,400) shared by every call of the process,
   plus the funding-rate endpoint's own budget (Binance: 500 per 5 minutes per IP; we use at most 240);
-* HTTP 429 / 418 wait for Retry-After (or 60 s) and try again; 5xx and network errors back off 1, 2, 4 s; at most
+* HTTP 429 / 418 wait for Retry-After (or 60 s) and try again; 5xx, network errors and broken HTTP replies
+  (``http.client.HTTPException``: a cut-off body, a bad status line) back off 1, 2, 4 s; at most
   ``max_tries`` tries, then ``BinanceDown``.
 
 ``fetch`` is injectable (tests pass a fake; the build machine cannot reach fapi.binance.com).
@@ -12,6 +13,7 @@
 from __future__ import annotations
 
 import collections
+import http.client
 import json
 import threading
 import time
@@ -127,8 +129,8 @@ class Client:
             self.used_weight += w
             try:
                 status, body, headers = self.fetch(url, {"User-Agent": UA, "Accept": "application/json"}, TIMEOUT_S)
-            except (OSError, ValueError) as e:                 # timeout, refused, DNS
-                status, body, headers = 0, b"", {}
+            except (OSError, ValueError, http.client.HTTPException) as e:   # timeout, refused, DNS, a cut-off body
+                status, body, headers = 0, b"", {}                             # (IncompleteRead, BadStatusLine, ...)
                 last = type(e).__name__
             if status == 200:
                 try:

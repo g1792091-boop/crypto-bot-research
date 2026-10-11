@@ -1007,7 +1007,7 @@ def build_cands(mk: Market, bank: Bank, parts: list, d0_scale: float = 1.0) -> d
     signal bar closes in [start, end) and whose fill bar lies inside the market's bars are kept (a no-op for the
     signals of ``system_signals`` and the controls on their own period; it slices a full-period draw to a window).
     ``d0_scale`` multiplies D0 (R5 reads; 1.0 = as written)."""
-    cols = {x: [] for x in ("t", "bi", "coin", "side", "d0", "s0", "s1", "prio", "src", "close", "j")}
+    cols = {x: [] for x in ("t", "bi", "coin", "side", "d0", "s0", "s1", "prio", "src", "close", "j", "atr")}
     for sig, src in parts:
         tf = sig["tf"]
         for k in np.unique(sig["k"]):
@@ -1031,6 +1031,7 @@ def build_cands(mk: Market, bank: Bank, parts: list, d0_scale: float = 1.0) -> d
             cols["coin"].append(np.full(len(j), k, np.int64))
             cols["side"].append(side)
             cols["d0"].append(D0_MULT[tf] * ser.atr[j] if d0_scale == 1.0 else D0_MULT[tf] * d0_scale * ser.atr[j])
+            cols["atr"].append(ser.atr[j])                     # R24's liquidation buffer (1 ATR14 of the signal bar)
             cols["s0"].append(a + np.searchsorted(cm, fill_ms, "right"))
             cols["s1"].append(np.full(len(j), b, np.int64))
             cols["prio"].append(mk.qv_window(int(k), close))
@@ -1039,7 +1040,7 @@ def build_cands(mk: Market, bank: Bank, parts: list, d0_scale: float = 1.0) -> d
             cols["j"].append(j)
     out = {}
     for x, v in cols.items():
-        dt_ = np.float64 if x in ("d0", "prio") else np.int64
+        dt_ = np.float64 if x in ("d0", "prio", "atr") else np.int64
         out[x] = np.concatenate(v).astype(dt_) if v else np.zeros(0, dt_)
     return sort_cands(out)
 
@@ -1079,16 +1080,25 @@ AS_RISK, AS_MARGIN, AS_FREE, AS_MINNOT, AS_BRACKET = range(5)
 ADD_SKIP_NAMES = ("risk_cap", "margin_budget", "free_wallet", "min_notional", "bracket")
 CAP_SIX, CAP_LL, CAP_LS, CAP_RISK = range(4)
 CAP_NAMES = ("six_positions", "large_longs_3", "large_shorts_3", "risk_cap")
-# parameter vector. PR_BPD .. PR_FIXLEV are read options (all off by default: the engine is then the reviewed one,
+# parameter vector. PR_BPD .. PR_RB_BUFATR are read options (all off by default: the engine is then the reviewed one,
 # bit for bit; tests/test_hunt.py checks it): bars per UTC day, per-bar equity path, close at the end, liquidation on
-# mark price, the goal-mode bracket rule (R1 machine B), rule-bot fixed leverage (R24).
+# mark price, the goal-mode bracket rule (R1 machine B), rule-bot fixed leverage (R24) with the rule bot's tier walk
+# and checks (PR_RB_*: used only when PR_FIXLEV > 0).
 PR_START, PR_R, PR_CAP, PR_TAKER, PR_SLIP, PR_LIQF, PR_BUST, PR_CHAND, PR_BDIV, PR_LEVMAX, PR_LIQMULT, PR_MAXPOS, \
-    PR_MAXDIR, PR_NADDS, PR_BPD, PR_EQPATH, PR_CLOSE_END, PR_LIQ_MARK, PR_BRK_Q1, PR_FIXLEV = range(20)
-NPR = 20
+    PR_MAXDIR, PR_NADDS, PR_BPD, PR_EQPATH, PR_CLOSE_END, PR_LIQ_MARK, PR_BRK_Q1, PR_FIXLEV, PR_RB_CHECK, \
+    PR_RB_FLOOR, PR_RB_STEP, PR_RB_MAXLOSS, PR_RB_BUFMIN, PR_RB_BUFATR = range(26)
+NPR = 26
 PR_NAMES = ("PR_START", "PR_R", "PR_CAP", "PR_TAKER", "PR_SLIP", "PR_LIQF", "PR_BUST", "PR_CHAND", "PR_BDIV",
             "PR_LEVMAX", "PR_LIQMULT", "PR_MAXPOS", "PR_MAXDIR", "PR_NADDS", "PR_BPD", "PR_EQPATH", "PR_CLOSE_END",
-            "PR_LIQ_MARK", "PR_BRK_Q1", "PR_FIXLEV")
+            "PR_LIQ_MARK", "PR_BRK_Q1", "PR_FIXLEV", "PR_RB_CHECK", "PR_RB_FLOOR", "PR_RB_STEP", "PR_RB_MAXLOSS",
+            "PR_RB_BUFMIN", "PR_RB_BUFATR")
 PR_INDEX = {n: i for i, n in enumerate(PR_NAMES)}
+# R24 rule-bot sizing (paperbot/sizing.py with the v3 quality tiers and paperbot/config.py): the tier walk L, L - 10,
+# ... down to 20x; a candidate passes when the bracket allows it at its notional, the first stop lies inside the
+# liquidation price by max(0.2% of the fill, 1 ATR14) and the loss at the stop (slippage and taker both ways) is at
+# most 15% of equity. Counted per reason when no candidate passes (raw[12]).
+RB_FLOOR, RB_STEP, RB_MAXLOSS, RB_BUFMIN, RB_BUFATR = 20, 10, 0.15, 0.002, 1.0
+RB_SKIP_NAMES = ("bracket", "liq_buffer", "max_loss")
 
 
 @njit(cache=True)
@@ -1310,7 +1320,7 @@ def _close(k, X, reason, t, ps, pi, rf, ri, acc, taker, slip):
 @njit(cache=True)
 def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_ml, f_off, f_t, f_rate, coin_end_t,
             min_not, br_n, br_cap, br_lev, br_mmr, br_cum, large, s_ct, s_h, s_l, s_atr,
-            c_t, c_bi, c_coin, c_side, c_d0, c_s0, c_s1):
+            c_t, c_bi, c_coin, c_side, c_d0, c_s0, c_s1, c_atr):
     start_eq = prm[PR_START]
     r = prm[PR_R]
     risk_cap = prm[PR_CAP]
@@ -1330,6 +1340,14 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_m
     close_end = prm[PR_CLOSE_END] > 0.5
     brk_q1 = prm[PR_BRK_Q1] > 0.5
     fixlev = int(prm[PR_FIXLEV])
+    rb_check = prm[PR_RB_CHECK] > 0.5
+    rb_floor = int(prm[PR_RB_FLOOR])
+    rb_step = int(prm[PR_RB_STEP])
+    if rb_step < 1:
+        rb_step = 1
+    rb_maxloss = prm[PR_RB_MAXLOSS]
+    rb_bufmin = prm[PR_RB_BUFMIN]
+    rb_bufatr = prm[PR_RB_BUFATR]
     K = len(b_off) - 1
     n_m = len(month_t0) - 1
     T = month_t0[n_m]
@@ -1344,6 +1362,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_m
     day_eq = np.zeros(n_days)
     eqp = np.zeros(T if eqpath else 0)
     skip = np.zeros(8, np.int64)
+    rbskip = np.zeros(3, np.int64)
     cut = np.zeros(3, np.int64)
     askip = np.zeros(5, np.int64)
     acut = np.zeros(2, np.int64)
@@ -1419,22 +1438,55 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_m
             cutf = 0
             tcap = np.inf
             if fixlev > 0:
-                # R24 rule-bot sizing: leverage fixed (bracket (i) at the full notional), margin = L% of equity
-                L = fixlev
-                for _it in range(16):
-                    bt_ = _tier((L / 100.0) * E_prev * L, nb, br_cap[k])
-                    if bt_ < 0:
-                        L = 0
+                # R24 rule-bot sizing (paperbot/sizing.py): the tier walk L, L - step, ... down to the floor; for
+                # each candidate margin = L% of equity at the previous close and notional = L x margin; it passes
+                # when (1) the bracket allows L at that notional, (2) the first stop lies inside the liquidation
+                # price by max(bufmin x fill, bufatr x ATR14) and (3) the loss at the stop, slippage and taker both
+                # ways, is <= maxloss x equity; the first that passes is used, else the entry is skipped (counted
+                # 'no_leverage' and, by the lowest tier's reason, in rbskip). The planned unit is checked before
+                # the liquidity and free-wallet cuts, which keep L (and so the liquidation price).
+                fill = P0 * (1.0 + side * slip)
+                stop0 = P0 - side * D0
+                xpx = stop0 * (1.0 - side * slip)
+                buf = rb_bufmin * fill
+                if rb_bufatr * c_atr[ci] > buf:
+                    buf = rb_bufatr * c_atr[ci]
+                lo_t = rb_floor if rb_floor < fixlev else fixlev
+                if lo_t < 1:
+                    lo_t = 1
+                L = 0
+                why = 0
+                Lt = fixlev
+                while Lt >= lo_t:
+                    Bt = (Lt / 100.0) * E_prev
+                    qt = Bt * Lt / fill
+                    nt = qt * fill
+                    bt_ = _tier(nt, nb, br_cap[k])
+                    if bt_ < 0 or Lt > br_lev[k][bt_]:
+                        why = 0
+                    elif rb_check:
+                        if side > 0:
+                            liq = (nt - Bt - br_cum[k][bt_]) / (qt * (1.0 - br_mmr[k][bt_]))
+                        else:
+                            liq = (nt + Bt + br_cum[k][bt_]) / (qt * (1.0 + br_mmr[k][bt_]))
+                        loss = qt * abs(fill - stop0) + qt * abs(stop0 - xpx) + taker * (nt + qt * xpx)
+                        if (stop0 - liq) * side < buf:
+                            why = 1
+                        elif loss > rb_maxloss * E_prev:
+                            why = 2
+                        else:
+                            L = Lt
+                            break
+                    else:
+                        L = Lt
                         break
-                    if L <= br_lev[k][bt_]:
-                        break
-                    L = br_lev[k][bt_]
+                    Lt -= rb_step
                 if L <= 0:
                     skip[SK_LEV] += 1
+                    rbskip[why] += 1
                     ci += 1
                     continue
                 B = (L / 100.0) * E_prev
-                fill = P0 * (1.0 + side * slip)
                 q = B * L / fill
                 lc = liq_frac * b_qv[bi]
                 if q * P0 > lc:
@@ -1681,7 +1733,7 @@ def _engine(prm, month_t0, b_off, b_t, b_o, b_h, b_l, b_c, b_qv, b_mo, b_mh, b_m
     stats[6] = T
     stats[7] = peak
     stats[8] = E_marked
-    return month_eq, month_pos, day_eq, rf[:nrec], ri[:nrec], skip, cut, askip, acut, capt, stats, eqp
+    return month_eq, month_pos, day_eq, rf[:nrec], ri[:nrec], skip, cut, askip, acut, capt, stats, eqp, rbskip
 
 
 def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, start: float = START_WALLET,
@@ -1692,6 +1744,8 @@ def params(r: float = R_BASE, cost: str = "base", risk_cap: float = RISK_CAP, st
     p[PR_LIQF], p[PR_BUST], p[PR_CHAND], p[PR_BDIV], p[PR_LEVMAX] = LIQ_FRAC, BUST_FRAC, CHAND_MULT, b_div, LEV_MAX
     p[PR_LIQMULT], p[PR_MAXPOS], p[PR_MAXDIR], p[PR_NADDS] = LIQ_MULT, MAX_POS, MAX_DIR, N_ADDS
     p[PR_BPD] = BARS_PER_DAY
+    p[PR_RB_CHECK], p[PR_RB_FLOOR], p[PR_RB_STEP] = 1.0, RB_FLOOR, RB_STEP
+    p[PR_RB_MAXLOSS], p[PR_RB_BUFMIN], p[PR_RB_BUFATR] = RB_MAXLOSS, RB_BUFMIN, RB_BUFATR
     return p
 
 
@@ -1709,9 +1763,8 @@ def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str =
              b_div: float = B_DIV) -> tuple:
     br = mk.br
     p = params(r, cost, risk_cap, start, b_div) if prm is None else np.array(prm, np.float64)
-    if len(p) < NPR:                                   # an older 14-slot vector: the new options off
-        p = np.r_[p, np.zeros(NPR - len(p))]
-        p[PR_BPD] = BARS_PER_DAY
+    if len(p) < NPR:                                   # an older 14- or 20-slot vector: the new slots at defaults
+        p = np.r_[p, params()[len(p):]]
     p[PR_BPD] = mk.bpd
     liq_mark = p[PR_LIQ_MARK] > 0.5
     if liq_mark and not mk.mark:
@@ -1720,7 +1773,8 @@ def simulate(mk: Market, bank: Bank, cands: dict, r: float = R_BASE, cost: str =
     return _engine(p, mk.month_t0, mk.b_off, mk.b_t, mk.b_o, mk.b_h, mk.b_l, mk.b_c, mk.b_qv, lo_, lh_,
                    ll_, mk.f_off, mk.f_t, mk.f_rate, mk.coin_end_t, br["min_notional"], br["n"], br["cap"],
                    br["lev"], br["mmr"], br["cum"], mk.large, bank.s_ct, bank.s_h, bank.s_l, bank.s_atr,
-                   cands["t"], cands["bi"], cands["coin"], cands["side"], cands["d0"], cands["s0"], cands["s1"])
+                   cands["t"], cands["bi"], cands["coin"], cands["side"], cands["d0"], cands["s0"], cands["s1"],
+                   np.asarray(cands["atr"], np.float64) if "atr" in cands else np.zeros(len(cands["t"])))
 
 
 # ------------------------------------------------------------------ metrics (H 10)
@@ -2723,11 +2777,13 @@ def run_engine(what, start_ms: int, end_ms: int, *, r: float = R_BASE, cost: str
     trades.update({k: ri[:, i].copy() for k, i in TRADE_I.items()})
     trades["sym"] = np.asarray(mk.syms, dtype=object)[ri[:, RI_COIN]] if len(ri) else np.zeros(0, object)
     trades["reason_name"] = np.asarray(EXIT_NAMES, dtype=object)[ri[:, RI_REASON]] if len(ri) else np.zeros(0, object)
+    rb = raw[12]
     return {"metrics": met, "start": float(start_wallet), "end": float(st[4]), "end_marked": float(st[8]),
             "multiple": float(st[4] / start_wallet), "peak": float(st[7]), "bust": bool(st[1] >= 0),
             "bust_step": int(st[1]), "equity_day": np.asarray(raw[2]), "equity_path": raw[11] if path == "5m" else None,
             "trades": trades, "skipped": met["skipped"], "cut": met["cut"], "adds_skipped": met["adds_skipped"],
-            "adds_cut": met["adds_cut"], "candidates": int(len(cands["t"])), "step_ms": int(mk.step)}
+            "adds_cut": met["adds_cut"], "candidates": int(len(cands["t"])), "step_ms": int(mk.step),
+            "rulebot_skipped": {n: int(rb[i]) for i, n in enumerate(RB_SKIP_NAMES)}}
 
 
 def _row_list(study: str, tested: list, passing: list, label: str) -> list:
@@ -3722,7 +3778,7 @@ def _compile_probe() -> None:
     _engine(params(), one, np.zeros(2, np.int64), z64, z, z, z, z, z, z, z, z, np.zeros(2, np.int64), z64, z,
             -np.ones(1, np.int64), np.full(1, 5.0), np.ones(1, np.int64), np.full((1, 1), np.inf),
             np.full((1, 1), 20, np.int64), np.full((1, 1), 0.025), np.zeros((1, 1)), np.zeros((1, 1), np.int64),
-            z64, z, z, z, z64, z64, z64, z64, z, z64, z64)
+            z64, z, z, z, z64, z64, z64, z64, z, z64, z64, z)
 
 
 # ------------------------------------------------------------------ CLI

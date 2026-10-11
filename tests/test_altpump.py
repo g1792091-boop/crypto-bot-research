@@ -2,25 +2,30 @@
 
 - fixed lists: 191 exclusions in their groups, 14 renames, 28 variants with section 5's ids, caps of section 7;
 - worst-order fills on daily bars (6.7): a gap through the stop fills at the open, a gap beyond liquidation loses the
-  margin, the stop counts before an add in the same bar, an add then the moved stop exits the same day (long and short);
-  the stop-fill haircut (a touched stop fills f of the way to the bar's extreme; a fill beyond liquidation liquidates;
-  buy-stop adds mirror it);
+  margin, a bar reaching an add level and the stop fills every reached add first and exits at the moved stop (long and
+  short; a second reached add too), a bar reaching no add level stops at once; the stop-fill haircut (a touched stop
+  fills f of the way to the bar's extreme; a fill beyond liquidation liquidates; buy-stop adds mirror it);
 - no look-ahead: changing every value of day d+1 onward (the fill open aside) leaves every day-d signal, indicator and
   the entry's size unchanged;
 - lives: listing day 0 (P3 K1 / K7), archive-start lives, rename successors (within / beyond 60 days), relisting after
   30 days without a bar, a 7..29-day pause ends a life (the restart is no listing), delisting closes at the last
   bar's close, a position closes at the close before a day without a bar inside a life, partial days (archive holes)
-  are not ranked by P4, zero-volume padding is no bar;
+  are not ranked by P4, zero-volume padding is no bar; no 1- or 7-day return and no TR reads across a gap;
 - the volume floor point in time (a later spike does not make an earlier day tradable), the stable filter;
 - the pyramiding stop formula (P0, P0 + 0.667 D0, P0 + 1.25 D0 with full units), leverage choice and the 1.5x rule,
   risk cap, n_max, liquidity cut, D0 cap, lapse, period end, hold exit, chandelier, funding (the exit day included);
 - bootstrap p (size under a skewed null), rank p and BH on known inputs; selection (groups, K, none eligible);
-  controls (a) and (b): (b) moves the pick's own signal pattern in time within the variant's eligible days, and a
-  zero-edge clustered pick against it is not favoured;
-- goal-board arithmetic: fresh $1,000 months, thresholds, bust; adds and add skips on every board row;
+  controls (a) and (b): (b) moves the whole signal calendar by common offsets (same-day signals of different symbols
+  stay together, the pick's count is kept), a zero-edge pick clustered within or across symbols is not favoured and
+  the control opens as many positions; the positions validity check; the squeeze stress read;
+- goal-board arithmetic: fresh $1,000 months, thresholds, bust; adds and add skips on every board row; the luck
+  reference (random days, the pick's side) beside the coin flip;
 - values outside a step's window are never loaded (select unchanged when they change);
-- pin refusals and run-once guards (test, board, pass2); the second pass (5m slots in time order, mark-price
-  liquidation, funding events and the fixed fallback, a day without 5m data runs on the daily bar, file converters);
+- pin refusals (the running code must be the pinned code; the data file must be the PREREG's), run-once guards
+  (test, board, pass2 outputs pinned when written; a rerun needs a DEVIATIONS entry naming the old sha256; pass2
+  needs a pinned test.json; --accept-missing needs each missing month listed); the second pass (5m slots in time
+  order, mark-price liquidation, funding events and the fixed fallback, a day without 5m data runs on the daily bar,
+  file converters);
 - the whole select -> test -> board pipeline on a small synthetic universe.
 """
 
@@ -686,29 +691,65 @@ def test_controls_a_and_b():
     assert np.array_equal(a1.side, a2.side) and np.array_equal(a1.day, s.day) and np.array_equal(a1.sym, s.sym)
     assert set(np.unique(a1.side)) <= {-1, 1}
     pools = mk.control_pools(v)
-    b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools)
-    multi = 0
+    st = {}
+    b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools, st)
     for sym in np.unique(s.sym):
         pool = pools[sym]
-        n = len(pool)
         mine = np.sort(s.day[s.sym == sym])
         inpool = mine[np.isin(mine, pool)]
         got = np.sort(b.day[b.sym == sym])
-        assert len(got) == len(inpool) and len(set(got.tolist())) == len(got)     # the pick's count on the symbol
+        assert len(got) == len(inpool)                                # the pick's count on the symbol is kept
         assert set(got.tolist()) <= set(pool.tolist())
         assert (b.side[b.sym == sym] == 1).all()
-        if len(inpool) > 1:                                           # one circular offset: spacing kept (mod n)
-            multi += 1
-            pp, pg = np.searchsorted(pool, inpool), np.searchsorted(pool, got)
-            want = np.sort((pp - pp[0]) % n)
-            assert any(np.array_equal(np.sort((pg - pg[k]) % n), want) for k in range(len(pg)))
-    assert multi > 0
+    assert st["signals"] == len(b) and st["dropped"] == 0 and 0 < st["first_offset"] <= st["signals"]
     t = pools[int(s.sym[0])]
     assert mk.trad[int(s.sym[0]), t].all() and mk.bar[int(s.sym[0]), t + 1].all()
     assert (t >= mk.p0).all() and (t <= mk.p1 - 2).all() and (mk.lbi[int(s.sym[0]), t] >= 20).all()
     assert np.array_equal(np.lexsort((b.sym, -mk.med7[b.sym, b.day], b.day)), np.arange(len(b)))
     b2 = AP.ctrl_b(mk, s, AP.ctrl_seed("b", v["id"], "p2", 0.02, 0), pools)
     assert np.array_equal(b.day, b2.day) and np.array_equal(b.sym, b2.sym)          # seeded
+
+
+def test_ctrl_b_common_offset_keeps_same_day_signals_together():
+    # 12 (b), second review: one offset for the whole calendar. Six symbols trading the whole period: every signal
+    # moves by the same k (mod D), so the three symbols that fired together on one day still fire together, and each
+    # symbol's spacing is kept. A seventh symbol listed late: its signals whose k-day falls before its listing take
+    # the next common offset that lands in its pool instead of being dropped
+    def moving(d0, d1):                                               # not a stable (3.3 d): closes move
+        return [(d, 100, 104, 96, 100 + 3 * (d % 2), 1e9) for d in range(d0, d1)]
+    bars = {f"F{i}USDT": moving(0, 200) for i in range(6)}
+    bars["LATEUSDT"] = moving(120, 200)
+    mk = market(bars, 60, 200)
+    v = AP.VARIANT["P1_X20_H7"]
+    pools = mk.control_pools(v)
+    lo, D = mk.p0, mk.p1 - 1 - mk.p0
+    full = [list(mk.syms).index(f"F{i}USDT") for i in range(6)]
+    assert all(np.array_equal(pools[i], np.arange(lo, lo + D)) for i in full)
+    late = list(mk.syms).index("LATEUSDT")
+    items = [(70, "F0USDT", 1), (70, "F1USDT", 1), (70, "F2USDT", 1), (71, "F0USDT", 1), (90, "F3USDT", 1),
+             (95, "F4USDT", 1), (150, "LATEUSDT", 1), (152, "LATEUSDT", 1)]
+    s = sig(mk, items)
+    for seed in range(20):
+        st = {}
+        b = AP.ctrl_b(mk, s, AP.ctrl_seed("b", "X", "syn", 0.02, seed), pools, st)
+        assert len(b) == len(s) and st["dropped"] == 0                 # the pick's count, nothing dropped
+        orig = {}
+        for d_, s_ in zip(s.day, s.sym):
+            orig.setdefault(int(s_), []).append(int(d_))
+        ks = set()
+        for s_ in full:
+            if s_ in orig:
+                got = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == s_)
+                k = (got[0] - sorted(orig[s_])[0]) % D
+                ks.add(k)
+                assert got == sorted(lo + (np.asarray(orig[s_]) - lo + k) % D)   # spacing kept (mod D)
+        assert len(ks) == 1                                           # one common offset for every symbol
+        k = ks.pop()
+        on = lo + (local(mk, 70) - lo + k) % D
+        assert {int(x) for d_, x in zip(b.day, b.sym) if d_ == on} >= {full[0], full[1], full[2]}
+        got_late = sorted(int(d_) for d_, x in zip(b.day, b.sym) if x == late)
+        assert len(got_late) == 2 and set(got_late) <= set(pools[late].tolist())
+        assert (b.side == 1).all()
 
 
 # ------------------------------------------------------------------ 14 goal board
@@ -784,6 +825,58 @@ def test_pin_refusals(tmp_path):
         fh.write("x")
     with pytest.raises(AP.PinError, match="changed research/altpump/PREREG_ALTPUMP.md"):
         AP.check_pin("pass2", root)
+
+
+def test_pin_covers_the_running_code(tmp_path, monkeypatch):
+    # 18, second review: check_pin hashed <root>/research/altpump/altpump.py, not the code that runs, so an edited
+    # copy run with --root pointing at an intact pinned tree passed. Now the running module's own file must match
+    import importlib.util
+    root = _fake_root(tmp_path / "pinned")
+    AP.write_pin(root)
+    assert AP.check_pin("select", root)["code_sha256"] == AP.sha256_file(os.path.join(root, AP.CODE_REL))
+    mod_dir = tmp_path / "modified"
+    os.makedirs(mod_dir)
+    src = open(os.path.join(ROOT, AP.CODE_REL)).read()
+    assert src.count("STOP_HC = 0.25 ") == 1
+    path = str(mod_dir / "altpump_modified.py")
+    with open(path, "w") as fh:
+        fh.write(src.replace("STOP_HC = 0.25 ", "STOP_HC = 0.0  "))
+    spec = importlib.util.spec_from_file_location("altpump_modified_copy", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.STOP_HC == 0.0
+    with pytest.raises(mod.PinError, match="running code .* is not the pinned research/altpump/altpump.py"):
+        mod.check_pin("select", root)
+    monkeypatch.setattr(AP, "git_commit", lambda root=None: "stub")
+    st = AP.stamp(root, None, "x")
+    assert st["code_sha256"] == AP.running_code_sha256() == AP.sha256_file(os.path.join(ROOT, AP.CODE_REL))
+
+
+def test_data_sha_must_be_the_prereg_file(tmp_path, monkeypatch):
+    # 2, second review: the daily file was checked only against MANIFEST.json (not pinned): a rebuilt file with a
+    # regenerated MANIFEST ran. Now the CLI also requires the sha256 that the pinned PREREG states in section 2
+    assert AP.DATA_SHA256 == "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0"
+    prereg = open(os.path.join(ROOT, AP.PREREG_REL)).read()
+    line = next(x for x in prereg.splitlines() if "klines_1d.csv.gz" in x)          # bootstrap.sh reads this line
+    assert AP.DATA_SHA256 in line
+    root = _fake_root(tmp_path)
+    os.makedirs(os.path.join(root, "data", "universe"))
+    data = os.path.join(root, AP.DATA_REL)
+    AP.synthetic_frame(3, start="2021-06-01", end="2021-08-31", seed=2).to_csv(data, index=False, compression="gzip")
+    json.dump({"files": {"klines_1d.csv.gz": {"sha256": AP.sha256_file(data)}}},
+              open(os.path.join(root, AP.MANIFEST_REL), "w"))            # a MANIFEST that matches the rebuilt file
+    AP.write_pin(root)
+    calls = []
+    monkeypatch.setattr(AP, "step_select", lambda raw, **k: (calls.append(1), ({}, {}, {}))[1])   # no outcome
+    with pytest.raises(RuntimeError, match="PREREG_ALTPUMP.md section 2"):
+        AP.main(["--root", root, "select"])
+    with pytest.raises(RuntimeError, match="PREREG_ALTPUMP.md section 2"):
+        AP.main(["--root", root, "check"])
+    assert not calls and len(AP.read_pin(root)) == 2                  # nothing ran, nothing pinned
+    with pytest.raises(RuntimeError, match="section 2"):
+        AP.load_raw(data, os.path.join(root, AP.MANIFEST_REL), want_sha=AP.DATA_SHA256)
+    raw, sha = AP.load_raw(data, os.path.join(root, AP.MANIFEST_REL), want_sha=AP.sha256_file(data))
+    assert sha == AP.sha256_file(data) and len(raw.syms) == 3
 
 
 def test_data_checksum_against_manifest(tmp_path):
@@ -978,7 +1071,14 @@ def test_pipeline_select_test_board(tmp_path):
     for vid in picks[:2]:
         for p in AP.TEST_PERIODS:
             assert set(res["extra"][vid][p]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
-            assert res["rows"][vid][p]["cmp"]["b"]["control_positions_mean"] is not None
+            cb = res["rows"][vid][p]["cmp"]["b"]
+            assert cb["control_positions_mean"] is not None and cb["control_signals_dropped_share"] is not None
+            if cb["pick_positions"]:
+                assert cb["positions_comparable"] == (abs(cb["positions_ratio"] - 1) <= AP.POS_TOL + 1e-12)
+            assert set(res["extra"][vid][p]["squeeze_stress"]) >= {"pick_worst_position_U", "pick_overruns",
+                                                                   "control_overrun_rate", "p_this_few_overruns"}
+        assert set(res["verdict"][vid]["controls_positions_comparable"]) == {"p2_a", "p2_b", "p3_a", "p3_b"}
+    assert row["random_days_pooled"]["months"] == 3 * 26 and "label" in row["random_days_pooled"]
     assert set(table[picks[0]]["stop_fill_sensitivity"]) == {"f=0", "f=0.5"}
     assert row["caps"] == {"n_max": 3, "risk_cap": pytest.approx(0.6), "margin_budget_per_position": "equity / 3"}
     assert board[picks[0]]["p1"]["r=0.02"]["label"] == "chosen here"
@@ -1112,7 +1212,88 @@ def test_ctrl_b_zero_edge_clustered_pick_is_not_favoured():
     assert 0.9 < np.mean(ratio_new) < 1.1                             # the new one matches the pick's positions
     d = np.asarray(d)
     assert abs(d.mean()) < 3 * d.std(ddof=1) / np.sqrt(len(d)) + 1e-4  # no systematic edge for a no-skill pick
-    assert low_p <= 5                                                 # p_rank < 0.10 in at most 5 of 16 reps
+    assert low_p <= 4                    # p_rank < 0.10 in at most 4 of 16 reps (Binomial(16, 0.1): P(>= 5) = 0.017)
+
+
+def _factor_world(seed, S=30, sf=0.03, se=0.03, mu=0.0, start="2021-01-01", end="2022-06-30"):
+    """Zero-edge GBM alts with a common market factor (alts move together) and an optional common drift."""
+    rng = np.random.default_rng(seed)
+    d0, d1 = AP.gday(start), AP.gday(end)
+    T = d1 - d0 + 1
+    ret = ((rng.standard_normal(T) * sf)[None, :] + rng.standard_normal((S, T)) * se
+           - 0.5 * (sf * sf + se * se) + mu)
+    c = 10.0 * np.exp(np.cumsum(ret, axis=1))
+    o = np.concatenate([c[:, :1] * np.exp(-ret[:, :1]), c[:, :-1]], axis=1)
+    sg = float(np.hypot(sf, se))
+    h = np.maximum(o, c) * np.exp(np.abs(rng.standard_normal((S, T))) * sg * 0.5)
+    l = np.minimum(o, c) * np.exp(-np.abs(rng.standard_normal((S, T))) * sg * 0.5)
+    s_ix, t_ix = np.nonzero(np.ones((S, T), bool))
+    names = np.asarray([f"Z{i:03d}USDT" for i in range(S)])
+    return pd.DataFrame({"symbol": names[s_ix], "open_time": (d0 + t_ix).astype(np.int64) * DAY,
+                         "open": o[s_ix, t_ix], "high": h[s_ix, t_ix], "low": l[s_ix, t_ix], "close": c[s_ix, t_ix],
+                         "volume": 5e8 / c[s_ix, t_ix], "quote_volume": np.full(len(s_ix), 5e8)})
+
+
+def _old_ctrl_b(mk, s, rng, pools):
+    """The draft's control (b), for comparison only: one circular offset per symbol over its own pool."""
+    D, Sy = [], []
+    for sym in np.unique(s.sym):
+        pool = pools[sym]
+        n = len(pool)
+        days = s.day[s.sym == sym]
+        pos = np.searchsorted(pool, days)
+        k = int(rng.integers(0, n))
+        D.append(pool[(pos + k) % n])
+        Sy.append(np.full(len(days), sym))
+    D, Sy = np.concatenate(D), np.concatenate(Sy)
+    o = mk.order(D, Sy)
+    return AP.Sig(D[o], Sy[o], np.ones(len(o), np.int64))
+
+
+def test_ctrl_b_zero_edge_pick_clustered_across_symbols():
+    # 12 (b), second review: a no-skill pick that fires on half the symbols at once on 15 event days (a market-wide
+    # pump day). Same-day signals beyond n_max and the risk cap are cut, so the pick opens few positions. The draft's
+    # per-symbol offset spread those signals over different days and opened ~3x as many (and paid ~3x the costs, a
+    # bias toward the pick); the common offset keeps the busy days busy: about the pick's positions, and the null
+    # rejects about as often as its nominal 5% over 100 zero-edge worlds with a common market factor
+    v = AP.VARIANT["P1_X20_H7"]
+    worlds, seeds = 100, 20
+    ratio, ratio_old, pb, pr, d = [], [], [], [], []
+    for w in range(worlds):
+        mk = AP.Market(AP.Raw(_factor_world(4000 + w)), "2021-03-01", "2022-06-01", excluded=frozenset())
+        pools = mk.control_pools(v)
+        g = np.random.default_rng(9000 + w)
+        D, Sy = [], []
+        for e in g.choice(np.arange(mk.p0 + 5, mk.p1 - 5), size=15, replace=False):
+            for s_ in np.flatnonzero(g.random(mk.S) < 0.5):
+                D.append(e)
+                Sy.append(s_)
+        D, Sy = np.asarray(D, np.int64), np.asarray(Sy, np.int64)
+        o = mk.order(D, Sy)
+        pick = AP.Sig(D[o], Sy[o], np.ones(len(o), np.int64))
+        po = AP.run_account(mk, pick, v)
+        lnm, npos = [], []
+        for i in range(seeds):
+            co = AP.run_account(mk, AP.ctrl_b(mk, pick, AP.ctrl_seed("b", v["id"], f"xs{w}", 0.02, i), pools), v)
+            lnm.append(AP.month_ln(co))
+            npos.append(len(co.rf))
+        lnm = np.asarray(lnm)
+        c = AP.compare(AP.month_ln(po), {"lnm": lnm, "means": lnm.mean(axis=1), "busts": 0,
+                                         "side_u": np.zeros((seeds, 2)), "positions": np.asarray(npos)},
+                       v["id"], f"xs{w}", "b", 0.02, 499, pick_positions=len(po.rf))
+        ratio.append(c["positions_ratio"])
+        pb.append(c["p_boot"])
+        pr.append(c["p_rank"])
+        d.append(c["mean_d"])
+        if w < 10:
+            old = [len(AP.run_account(mk, _old_ctrl_b(mk, pick, np.random.default_rng(w * 100 + i), pools), v).rf)
+                   for i in range(4)]
+            ratio_old.append(np.mean(old) / len(po.rf))
+    assert np.mean(ratio_old) > 2.0                                   # the draft's control: the bias is real here
+    assert 0.9 < np.mean(ratio) < 1.1                                 # the common offset: the pick's positions
+    assert np.mean(np.asarray(pb) < 0.05) <= 0.10 and np.mean(np.asarray(pr) < 0.05) <= 0.10
+    d = np.asarray(d)
+    assert abs(d.mean()) < 3 * d.std(ddof=1) / np.sqrt(len(d)) + 1e-4
 
 
 def test_boot_p_size_under_a_skewed_null():
@@ -1132,6 +1313,36 @@ def test_boot_p_size_under_a_skewed_null():
     assert old_left > 0.13                                            # the problem is real in this setting
     assert new_left < 0.125 and new_left < old_left - 0.04
     assert new_norm < 0.075
+
+
+def test_squeeze_stress_read():
+    # 13, second review: a mean-zero short pick with rare squeeze months passes T2 whenever no squeeze lands in the
+    # 19 / 26 test months. Reported beside the verdict: the pick's worst position in U and its stop overruns against
+    # the control seeds' overrun rate on the same symbols and side
+    from types import SimpleNamespace
+
+    def acct(pnl_u, syms, sides):
+        n = len(pnl_u)
+        rf = np.zeros((n, AP.NRF))
+        ri = np.zeros((n, AP.NRI), np.int64)
+        rf[:, AP.R_U] = 20.0
+        rf[:, AP.R_PNL] = np.asarray(pnl_u, float) * 20.0
+        ri[:, AP.RI_SYM] = syms
+        ri[:, AP.RI_SIDE] = sides
+        return SimpleNamespace(rf=rf, ri=ri)
+    pick = acct([0.3] * 29 + [-1.2], [1] * 30, [-1] * 30)             # 30 small wins and stops, no squeeze
+    ctl = acct([0.3] * 18 + [-3.0, -2.0] + [-4.0] * 5, [1] * 20 + [2] * 5, [-1] * 19 + [1] + [-1] * 5)
+    assert AP.overruns(ctl) == (25, 7)
+    assert AP.overruns(ctl, [1], -1) == (19, 1)                       # same symbols and side only
+    pos, over = AP.overruns(ctl, [1], -1)
+    st = AP.stress_read(pick, [{"focus_positions": pos * 10, "focus_overruns": over * 10 + 20}])
+    rate = (10 + 20) / 190
+    assert st["pick_overruns"] == 0 and st["pick_worst_position_U"] == pytest.approx(-1.2)
+    assert st["control_overrun_rate"] == pytest.approx(rate)
+    assert st["expected_overruns_at_control_rate"] == pytest.approx(30 * rate)
+    assert st["p_this_few_overruns"] == pytest.approx(np.exp(-30 * rate))
+    assert AP.stress_read(acct([], [], []), [])["p_this_few_overruns"] is None
+    assert AP._poisson_cdf(2, 3.0) == pytest.approx(np.exp(-3) * (1 + 3 + 4.5))
 
 
 def test_values_outside_the_step_window_are_never_loaded(tmp_path):
@@ -1180,6 +1391,56 @@ def test_partial_days_are_not_ranked_and_the_event_looks_past_them():
     assert ev2[15].tolist() == [False, False, False, True, False]
 
 
+def test_indicators_do_not_read_across_a_gap():
+    # 4 / 3.1, second review: an archive hole of days 40-42 (11 of 12 symbols lack bars: partial days). S00 rises 7% a
+    # day through it (no single day near +20%). Before the fix day 43's 1-day return was the 4-day move (+31%) and P1
+    # X20 / X30 fired on it; the 7-day return of the next 7 bars spanned 10 days; the TR spanning the hole inflated ATR
+    rows = {}
+    for i in range(15):
+        sym = f"S{i:02d}USDT"
+        px, b = 100.0, []
+        for d in range(60):
+            qv = 4e8 if (i == 0 and d == 43) else 1e8
+            o = px
+            px = px * 1.07 if (i == 0 and 40 <= d <= 43) else px * (1.03 if d % 2 else 0.97)
+            c = px
+            if i < 11 and 40 <= d <= 42:
+                continue
+            b.append((d, o, max(o, c) * 1.01, min(o, c) * 0.99, c, qv))
+        rows[sym] = b
+    raw = AP.Raw(frame(rows))
+    assert raw.partial[40:43].all() and raw.partial.sum() == 3
+    mk = AP.Market(raw, AP.day_str(G0 + 30), AP.day_str(G0 + 60), excluded=NOEX, warmup=30)
+    i0, i11 = list(mk.syms).index("S00USDT"), list(mk.syms).index("S11USDT")
+    t39, t43 = local(mk, 39), local(mk, 43)
+    assert np.isnan(mk.r1[i0, t43]) and np.isfinite(mk.r1[i0, local(mk, 44)])
+    assert mk.trad[i0, t43] and mk.lbi[i0, t43] >= 20 and mk.qv[i0, t43] >= 3 * mk.vm20[i0, t43]   # only r1 decides
+    for x in (20, 30):
+        assert not mk.mask(AP.VARIANT[f"P1_X{x}_M"])[i0, t43]
+    tr43 = mk.h[i0, t43] - mk.l[i0, t43]                               # no previous close across the hole
+    assert mk.atr[i0, t43] == pytest.approx((13 * mk.atr[i0, t39] + tr43) / 14)
+    r7 = mk.r7[i0]
+    assert np.isnan(r7[local(mk, 43):local(mk, 50)]).all()            # the 7 bars whose lookback spans the hole
+    assert r7[local(mk, 50)] == pytest.approx(mk.c[i0, local(mk, 50)] / mk.c[i0, t43] - 1)
+    assert np.isfinite(mk.r7[i11, local(mk, 43):local(mk, 50)]).all()  # a symbol with bars through the hole: as before
+    assert np.isfinite(mk.r1[i11, local(mk, 41)])
+    # the stable filter's std skips the return over the hole
+    t = local(mk, 45)
+    days = [d for d in range(60) if mk.bar[i0, local(mk, d)] and d <= 45]
+    lr = [np.log(mk.c[i0, local(mk, b)] / mk.c[i0, local(mk, a)]) for a, b in zip(days[:-1], days[1:]) if b - a == 1]
+    k_rets = [np.log(mk.c[i0, local(mk, b)] / mk.c[i0, local(mk, a)]) for a, b in zip(days[:-1], days[1:])][-30:]
+    want = [x for x, (a, b) in zip(k_rets, list(zip(days[:-1], days[1:]))[-30:]) if b - a == 1]
+    assert len(want) == 29 and lr[-29:] == pytest.approx(want)
+    assert mk.sd30[i0, t] == pytest.approx(np.std(want, ddof=1))
+    # control (b) pools: no P1 / P2 day without a 1-day return, no P4 day without a 7-day return
+    p1 = mk.control_pools(AP.VARIANT["P1_X20_M"])
+    assert t43 not in set(p1[i0].tolist()) and local(mk, 44) in set(p1[i0].tolist())
+    p4 = mk.control_pools({"family": "P4", "n": 1, "side": 1})       # 3 ranked symbols needed: S11..S14 have r7
+    assert (mk.n_ranked[t43:local(mk, 50)] == 4).all()
+    assert not set(p4[i0].tolist()) & set(range(t43, local(mk, 50))) and local(mk, 50) in set(p4[i0].tolist())
+    assert set(range(t43, local(mk, 50))) <= set(p4[i11].tolist())
+
+
 def test_pause_of_a_week_ends_the_life_and_closes_the_position():
     # 3.1 / 6.8: 10 days without a bar inside what used to be one life: the position closes at the last bar's close
     # (like a delisting) and the restart has fresh indicators and is not a P3 listing
@@ -1193,24 +1454,30 @@ def test_pause_of_a_week_ends_the_life_and_closes_the_position():
     assert out.ri[0, AP.RI_REASON] == AP.EX_DELIST and out.rf[0, AP.R_XPX] == pytest.approx(102 * (1 - SLIP))
 
 
-def _guard_root(tmp_path, passing=True):
+def _guard_root(tmp_path, monkeypatch, passing=True):
+    """A pinned fake root on SYNTHETIC data: select ran (pick.json pinned) and test ran (test.json pinned, as cmd_test
+    pins it). The synthetic file is not the PREREG's daily file, so DATA_SHA256 is set to its sha256 here; git and
+    every step that would compute an outcome are stubbed by the tests that run a step."""
     root = _fake_root(tmp_path)
     os.makedirs(os.path.join(root, "data", "universe"))
     data = os.path.join(root, AP.DATA_REL)
     AP.synthetic_frame(4, start="2024-05-01", end="2024-08-31", seed=1).to_csv(data, index=False, compression="gzip")
     json.dump({"files": {"klines_1d.csv.gz": {"sha256": AP.sha256_file(data)}}},
               open(os.path.join(root, AP.MANIFEST_REL), "w"))
+    monkeypatch.setattr(AP, "DATA_SHA256", AP.sha256_file(data))
+    monkeypatch.setattr(AP, "git_commit", lambda root=None: "stub")
     AP.write_pin(root)
     AP._write_json(os.path.join(root, AP.PICK_REL), {"status": "picked", "picks": ["P1_X20_M"]})
     AP.append_pick_line(root)
     AP._write_json(os.path.join(root, AP.OUT_REL, "test.json"),
                    {"verdict": {"P1_X20_M": {"PASS": passing}},
                     "traded_symbols": {"p2": {"P1_X20_M": ["S000USDT", "S001USDT"]}, "p3": {"P1_X20_M": []}}})
+    AP.append_pin_line(root, AP.out_rel("test.json"))
     return root
 
 
-def test_run_once_guards_for_test_board_and_pass2(tmp_path):
-    root = _guard_root(tmp_path)
+def test_run_once_guards_for_test_board_and_pass2(tmp_path, monkeypatch):
+    root = _guard_root(tmp_path, monkeypatch)
     out = os.path.join(root, AP.OUT_REL)
     with pytest.raises(AP.PinError, match="test.json exists"):
         AP.main(["--root", root, "test"])
@@ -1230,6 +1497,103 @@ def test_run_once_guards_for_test_board_and_pass2(tmp_path):
                              {"symbols": {"p2": ["S000USDT"], "p3": ["S000USDT"]}}, os.path.join(root, "cache"))
     assert inv["klines"] and all(x.startswith("p2 S000USDT 2024-0") for x in inv["klines"])
     assert AP.cache_digest(os.path.join(root, "nothing"))["files"] == 0
+
+
+def test_accept_missing_needs_each_missing_month_in_deviations(tmp_path, monkeypatch):
+    # 15, second review: --accept-missing used to pass with any DEVIATIONS.md, even an empty one
+    root = _guard_root(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(AP, "step_pass2", lambda raw, test, cache, **k: (calls.append(1), {})[1])   # no outcome
+    cache = os.path.join(root, "cache")
+    dev = os.path.join(root, AP.DEV_REL)
+    open(dev, "w").close()                                            # an empty DEVIATIONS.md
+    with pytest.raises(AP.PinError, match="Not in research/altpump/DEVIATIONS.md") as e:
+        AP.main(["--root", root, "pass2", "run", "--accept-missing", "--cache", cache])
+    assert "p2 S000USDT 2024-07" in str(e.value) and "no 5m klines" in str(e.value)
+    with open(dev, "w") as fh:                                        # one of the two months listed: still refused
+        fh.write("2026-10-20: 5m klines missing in the archive: p2 S000USDT 2024-07\n")
+    with pytest.raises(AP.PinError, match="p2 S000USDT 2024-08"):
+        AP.main(["--root", root, "pass2", "run", "--accept-missing", "--cache", cache])
+    assert not calls
+    with open(dev, "a") as fh:
+        fh.write("p2 S000USDT 2024-08\np2 S001USDT 2024-07\np2 S001USDT 2024-08\n")
+    with pytest.raises(AP.PinError, match="no 5m klines"):            # listed, but --accept-missing not given
+        AP.main(["--root", root, "pass2", "run", "--cache", cache])
+    AP.main(["--root", root, "pass2", "run", "--accept-missing", "--cache", cache])
+    assert calls == [1]
+    pinned = AP.read_pin(root)
+    assert pinned[-1][1] == AP.out_rel("pass2.json")                  # the output is pinned when written
+    assert pinned[-1][0] == AP.sha256_file(os.path.join(root, AP.OUT_REL, "pass2.json"))
+
+
+def test_run_once_outputs_are_pinned_and_a_rerun_needs_a_deviation(tmp_path, monkeypatch):
+    # 15 / 18, second review: moving out/test.json aside used to allow a second test run with no trace, and pass2
+    # trusted whichever test.json was there. Now test / board / pass2 append their output's sha256 to the pin file
+    root = _guard_root(tmp_path, monkeypatch)
+    out = os.path.join(root, AP.OUT_REL)
+    calls = []
+    fake = {"verdict": {"P1_X20_M": {"PASS": True}},
+            "traded_symbols": {"p2": {"P1_X20_M": ["S000USDT"]}, "p3": {"P1_X20_M": []}}}
+    monkeypatch.setattr(AP, "step_test", lambda raw, picks, **k: (calls.append("test"), json.loads(json.dumps(fake)))[1])
+    monkeypatch.setattr(AP, "step_board", lambda raw, picks, **k: (calls.append("board"), {})[1])
+    h_old = AP.live_once_lines(root)[AP.out_rel("test.json")]
+    os.rename(os.path.join(out, "test.json"), os.path.join(out, "test.json.old"))
+    with pytest.raises(AP.PinError, match="missing research/altpump/out/test.json"):
+        AP.main(["--root", root, "test"])                             # the pinned test.json must stay where it is
+    with pytest.raises(AP.PinError, match="not pinned: run test first|missing research/altpump/out/test.json"):
+        AP.main(["--root", root, "pass2", "plan"])
+    with open(os.path.join(root, AP.DEV_REL), "w") as fh:            # a documented rerun after a bug fix (17)
+        fh.write(f"2026-10-20: bug in X fixed; test rerun once; superseded test.json sha256 {h_old}\n")
+    AP.main(["--root", root, "test"])
+    assert calls == ["test"]
+    lines = [r for r in AP.read_pin(root) if r[1] == AP.out_rel("test.json")]
+    h_new = AP.sha256_file(os.path.join(out, "test.json"))
+    assert [h for h, _ in lines] == [h_old, h_new] and AP.live_once_lines(root)[AP.out_rel("test.json")] == h_new
+    assert AP.check_pin("pass2", root)["files"] == 5                  # prereg, code, pick, two test lines
+    os.rename(os.path.join(out, "test.json"), os.path.join(out, "test.json.second"))
+    with pytest.raises(AP.PinError, match="missing research/altpump/out/test.json"):
+        AP.main(["--root", root, "test"])                             # a second rerun needs its own entry
+    os.rename(os.path.join(out, "test.json.second"), os.path.join(out, "test.json"))
+    good = open(os.path.join(out, "test.json"), "rb").read()
+    with open(os.path.join(out, "test.json"), "a") as fh:            # an edited test.json: pass2 and board refuse
+        fh.write(" ")
+    for argv in (["pass2", "plan"], ["board"]):
+        with pytest.raises(AP.PinError, match="changed research/altpump/out/test.json"):
+            AP.main(["--root", root] + argv)
+    with open(os.path.join(out, "test.json"), "wb") as fh:           # back to the pinned bytes
+        fh.write(good)
+    # board: pinned when written; a second run refused even after the file is moved aside
+    AP.main(["--root", root, "board"])
+    assert calls == ["test", "board"] and AP.out_rel("board.json") in AP.live_once_lines(root)
+    os.rename(os.path.join(out, "board.json"), os.path.join(out, "board.json.old"))
+    with pytest.raises(AP.PinError, match="missing research/altpump/out/board.json"):
+        AP.main(["--root", root, "board"])
+
+
+def test_board_luck_reference_keeps_the_pick_side():
+    # 14, second review: every pick is one-sided, and coin-flip sides cancel the market's direction, so in a trending
+    # month a no-skill one-sided rule beats the coin flip at reaching x1.5 / x2: the coin-flip table understated luck.
+    # The board now puts control (b) beside the pick (the pick's signals on random days, its own side) as the luck
+    # reference, and labels the coin flip 'luck without the market side'
+    bars = {}
+    for i in range(6):
+        px, b_ = 10.0, []
+        for d in range(0, 125):
+            o = px
+            px *= 1.03 if (d + i) % 2 else 1.01                       # every coin rises ~2% a day
+            b_.append((d, o, max(o, px) * 1.005, min(o, px) * 0.995, px, 1e9))
+        bars[f"U{i}USDT"] = b_
+    mk = market(bars, 31, 120, warmup=31)                             # 2021-02-01 .. 2021-04-30: three months
+    v = AP.VARIANT["P1_X20_H7"]
+    items = [(d, f"U{i}USDT", 1) for d in (40, 41, 70, 71, 100, 101) for i in range(6)]
+    row = AP.board_block(mk, sig(mk, items), v, "syn", 0.02, n_seeds=30)
+    rd, cf, pk = row["random_days_pooled"], row["coin_flip_pooled"], row["pick"]
+    assert rd["months"] == cf["months"] == 30 * 3 and pk["months"] == 3
+    assert "luck reference" in rd["label"] and "without the market side" in cf["label"]
+    # the same side carries the trend as the pick does; random sides give half of it away
+    assert rd["median_multiple"] > cf["median_multiple"] + 0.05 and pk["median_multiple"] > cf["median_multiple"] + 0.05
+    assert abs(rd["median_multiple"] - pk["median_multiple"]) < 0.25 * abs(cf["median_multiple"] - pk["median_multiple"])
+    assert row["random_days_machine"]["positions"] > 0 and "coin_flip_machine" in row
 
 
 def test_board_rows_report_adds_and_their_skips_at_high_r():

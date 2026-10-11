@@ -15,8 +15,8 @@ nothing here changes; a change goes to `research/hunt/DEVIATIONS.md` with its re
 Owners (2026-10-11), on the v1 draft with its three entries: **"왜 3가지 신호밖에 없어?"** and, the same day, "하 너무
 복잡해 어떻게 해야 1달동안 성공의 매매법을 위해 제대로된 작업을 빠르게 할수 있다는거야? 결론이 뭐야". There is no good
 reason to stop at three when about 80 strategies' entries are already coded and pinned. This addendum feeds **every
-coded entry** into the same hunt machine, on four timeframes, with and without the gate, and picks at most ten for one
-test.
+coded entry** into the same hunt machine, on four timeframes, with and without the gate, and tests its picks ten at a
+time (at most thirty, in batches of ten: sections 5 and 6).
 Compute cost is not a constraint (a rented many-core server is allowed).
 
 ## 0. What this is
@@ -109,8 +109,9 @@ because they were positive on the same test window (2024-01 .. 2026-09) and on 2
 not be out of sample on any coin set: the new 24 coins trade in the same 2024-2026 market, move with the old six, and
 the DeepSeek picks read BTC context. A leaked p-value would also loosen Benjamini-Hochberg for the other picks. So F4
 systems are run in the select period (in the select table, labelled "read only: numbers chosen after the test period
-was seen") and nowhere else; the forward candidate league already tests these numbers honestly. The picks, the BH
-family and WIDE PASS come from F1-F3 only.
+was seen") and nowhere else, not even in the sealed post-verdict read R22; the forward candidate league already tests
+these numbers honestly. The picks, the BH family, WIDE PASS and the 'no pick, fail' system come from F1-F3 and F5 only
+(the 686 candidate systems).
 
 ### 3.1 Signal arrays (F2-F4)
 
@@ -255,8 +256,8 @@ the F5 name. Distinct names among the candidates: 87.
   (3군)**; with fewer eligible names a batch holds what exists (K of a batch = its size). F4 rows are never taken
   (section 3), whatever their score. **Membership of every batch is fixed here**, before any test bar is read;
   batches are never re-ordered after a test result.
-* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 system
-  (eligibility ignored) is still run on the test period with its reads (section 7), labelled "no pick, fail"; no other
+* **No eligible system**: the wide study fails at selection. As in H 11.2, the single highest-scoring F1-F3 or F5
+  system (eligibility ignored; F4 never) is still run on the test period with its reads (section 7), labelled "no pick, fail"; no other
   system is.
 * `research/hunt/out/wide/picks.json` (each pick's system id, family, name, timeframe, gate, numbers, pick number 1..n
   and batch number; the batches as lists of pick numbers; the batch size 10, the trigger 5 and the batch rule) is
@@ -299,9 +300,11 @@ the F5 name. Distinct names among the candidates: 87.
   folder (outside the repository) under the pin's hash; a rerun under the same pin computes only what is missing and
   gives the same result (section 10).
 * **Sealed post-verdict read (R22, panel amendment):** after `test.json` and the verdict are written and their sha256
-  appended to the pin, every system runs once on test at base cost, and each pick's entry neighbours run on test, for
-  R22. Per-system numbers go only to a sealed private file whose sha256 is in the repository; only R22's aggregates are
-  public. No system that is not a pick can become a candidate, a paper account or the basis of a v2 from this read.
+  appended to the pin, every one of the **686 candidate systems** (F1-F3 and F5, untested batch members included; **never
+  an F4 system**) runs once on test at base cost, and each pick's entry neighbours run on test, for R22. This is the
+  single sealed exception to "systems that are not tested picks are never run on the test period". Per-system numbers
+  go only to a sealed private file whose sha256 is in the repository; only R22's aggregates are public. No system that
+  is not a pick can become a candidate, a paper account or the basis of a v2 from this read.
 * **Paper lineup** (owners (g), written to `test.json` as `lineup` in the test step, labels only for DeepSeek): see
   section 12.
 
@@ -333,6 +336,11 @@ the F5 name. Distinct names among the candidates: 87.
    the all-K basket of batch 1 (one wallet, H 8 caps shared, same-close order by 30-day quote volume then pick number,
    labelled "not a candidate") and the passing basket when >= 2 pass. Members of untested batches are never run on
    test. Nothing enters the select table, except the select-only R4 and the R5 machine map, which choose nothing.
+   **Named exceptions** (each chooses nothing and is labelled): R4 (select runs of the 686 candidates; part (3)'s null
+   picks run on test as controls, not systems, after the verdict), the R5 machine map (select only, 686 candidates),
+   R22 (the sealed post-verdict read: the 686 candidates, untested batch members included, and the picks' entry
+   neighbours on test; never F4), R2 (d) (oracle entries, labelled HINDSIGHT CEILING) and R3 (hold baselines, not
+   systems). F4 systems run nowhere but the select table (section 3).
 2. Reads never change the picks, the batches, P0-P4, the seed-rank parts, p, BH, PASS, WIDE PASS or v1 PASS, the
    2군 / 3군 trigger, the R14 band, the lineup, or what goes to the paper bot. The code writes reads only after
    `test.json` and the verdict exist, to their own files (`out/<study>/reads_*.json`, `fidelity.json`), and refuses to
@@ -442,6 +450,17 @@ a DeepSeek row in the public output is refused).
   pick; it is extended day by day until the paper bot starts and doubles as its replay check. (The R1 ladder in
   October runs in a reads module.)
 
+### 7.3a Between `picks.json` and `test.json` (R4 select parts, R22 (2) select spike ratio)
+
+R4 (1), (2), (4) and the select replicates of (3), and R22 (2)'s select spike ratio, read only select bars and choose
+nothing. They are computed by their own pinned module after `picks.json` is hashed and **before `test.json` exists**,
+written to `research/hunt/out/wide/pretest_reads.json` (DeepSeek rows as section 11), and that file's sha256 is appended
+to the pin before the test step starts. The test step records in `test.json` (`pretest_reads`) whether that line was in
+the pin, with a matching file, when the test started. If it was not (that module is not built when this is written),
+these items are computed after the verdict, labelled **post hoc** and recorded in `DEVIATIONS.md`; the test step does
+not wait for them and nothing of the verdict depends on them. R4 (3)'s runs of the null picks on the test period are
+Phase B (after the verdict) in every case.
+
 ### 7.4 Phase B reads (computed after the verdict on the fixed ROWS by a separate module with its own pin line; they never choose anything)
 
 Each reads (a) and (b) through the same changed machine on the pinned W 6 draws (R1 convention) unless stated; seeds as
@@ -465,21 +484,22 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   low / high with the H 7.3 isolated formula and the bracket mmr at the entry notional (whole margin lost); funding as
   H 2; exit at the window's last 5m close with costs. R1's end and touch shares, liquidation share, median and worst
   window. Printed: "reference bets; the leverage with the best share is not advice".
-* **R4 selection-luck calibration (select only; after `picks.json` is hashed and before `test.json`).** Changes
-  nothing. (1) select.json stores each system's 36 monthly ln M at base cost and at cost x2 (DeepSeek rows in the
-  private file). (2) CSCV / PBO: 12 blocks of 3 consecutive months, all 924 half / half splits; per split the OOS
-  percentile of the IS-best system and the mean OOS percentile of the IS one-per-name top 10; PBO (share of splits with
-  the IS-best below the OOS median) and the slope of OOS on IS score. (3) Null of the max: 200 replicates with control
-  (a) twins and 200 with (b) twins (every system replaced by its twin: (a) random pool bars with the system's per-coin
-  and per-side select gated-signal counts; (b) its gated signals with fair-coin sides); seed parts ("hunt-wide-null",
-  system id, control, "select", "0.005", i); each twin at base cost and cost x2, then the exact W 5 eligibility, order,
-  one-per-name rule and K; null distributions of the 1st and 10th pick's score and of the number of eligible systems
-  and names; each real pick's percentile against the null at its rank; deflated score = score - null mean at that
-  rank; each replicate's null picks run once on test as controls (the mean select-to-test drop with no edge). (4)
-  Goal-score check: every system's touch-x5 share of select calendar months at goal-mode r = 5% (machine B); its
-  Spearman correlation with the W 5 score and how many of the official top 10 are in the goal-score top 10 (one per
-  name). No goal-score list is ever run on test. Public numbers cover F1, F2 and F5 rows; the all-rows version is
-  private (D11).
+* **R4 selection-luck calibration (select parts between `picks.json` and `test.json`, 7.3a; part (3)'s test runs
+  after the verdict).** Changes nothing. Systems = the **686 candidates** (F1-F3 and F5); F4 rows are never part of
+  (2)-(4) (section 3). (1) select.json stores each system's 36 monthly ln M at base cost and at cost x2 (DeepSeek rows
+  in the private file). (2) CSCV / PBO: 12 blocks of 3 consecutive months, all 924 half / half splits; per split the
+  OOS percentile of the IS-best system and the mean OOS percentile of the IS one-per-name top 10; PBO (share of splits
+  with the IS-best below the OOS median) and the slope of OOS on IS score. (3) Null of the max: 200 replicates with
+  control (a) twins and 200 with (b) twins (every candidate replaced by its twin: (a) random pool bars with the
+  system's per-coin and per-side select gated-signal counts; (b) its gated signals with fair-coin sides); seed parts
+  ("hunt-wide-null", system id, control, "select", "0.005", i); each twin at base cost and cost x2, then the exact W 5
+  eligibility, order, one-per-name rule and K; null distributions of the 1st and 10th pick's score and of the number
+  of eligible systems and names; each real pick's percentile against the null at its rank; deflated score = score -
+  null mean at that rank; after the verdict, each replicate's null picks run once on test as controls (the mean
+  select-to-test drop with no edge; this part reads test bars). (4) Goal-score check: every candidate's touch-x5 share
+  of select calendar months at goal-mode r = 5% (machine B); its Spearman correlation with the W 5 score and how many
+  of the official top 10 are in the goal-score top 10 (one per name). No goal-score list is ever run on test. Public
+  numbers cover F1, F2 and F5 rows; the all-rows version is private (D11).
 * **R5 machine sensitivity on the fixed picks (the six exit cells, owners (d)), plus a select-only machine map.** On
   ROWS, select and test, on the r = 0.5% continuous account and on R1 calendar months at goal-mode r = 5%. Cells:
   chandelier **2 / 3 / 4.5 ATR x adds 3 / 0** (the planned six; PR_CHAND and PR_NADDS); "off-virtual" at 3 ATR (no
@@ -570,7 +590,10 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   ledger: every test-period hypothesis of the program (the v1 pick, every tested batch, F5 picks, any read that prints a
   p) with a global BH at q = 0.10 and Holm at 0.05, printed next to the pinned per-batch verdicts with the line that
   two studies share one test period. DeepSeek rows: labels and ranks only in public.
-* **R14 forward band and golden ledger.** Computed once, right after the verdict, and never recomputed. For every
+* **R14 forward band and golden ledger.** Computed once, right after the verdict, and never recomputed: its module is
+  listed in the pin before `test.json` exists (read guard 3; a later line makes R14 post hoc) and its output's sha256 is
+  appended to the pin before the paper bot starts or any forward comparison uses the band (the panel had R14 inside
+  the test step; it is not built when this is written, so it is a separate pinned module with this order). For every
   passing pick, the v1 pick (H 15 allows a "v1 failed" shadow) and the passing basket: the 5 / 25 / 50 / 75 / 95
   percentiles of the multiple of fresh $5,000 accounts over rolling windows of 21, 25 and 30 days (one start per UTC
   day in test), at r = 0.5% and 1% (the H 15 / W 12 band for the mid-November review). Golden ledger: for each passing
@@ -603,14 +626,16 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   removed (hindsight sensitivity, labelled); (3) a point-in-time universe in which, each calendar month, only the 20 of
   the 30 coins with the largest previous-30-day quote volume can open positions. Mean ln M, median M, the R1 headline
   cell and pick minus (a) / (b). Labels only.
-* **R22 sealed post-verdict read** (section 6 amendment). (1) Every one of the 762 systems once on test at base cost
-  (r = 0.5%, continuous account). Public: the Spearman correlation of select vs test score (F1, F2 and F5 rows public;
-  all rows private), test mean ln M by select-score decile, the picks' percentile among all systems, and the share with
-  test mean ln M > 0 among select-eligible vs non-eligible systems; per-system test numbers only in a sealed private
-  file whose sha256 is in the repository. (2) Entry neighbours: for each numeric parameter of each pick the next lower
-  and next higher value from research/fullgrid/grid.values(), one at a time (F1: H 11.1's neighbours); in select, spike
-  ratio = pick score / median neighbour score, written next to picks.json before the test; on test aggregates only.
-  Nothing in this read can become a candidate, a paper account or the basis of a v2.
+* **R22 sealed post-verdict read** (section 6 amendment). (1) Every one of the **686 candidate systems** (F1-F3 and
+  F5, untested batch members included; **never an F4 system**: section 3) once on test at base cost (r = 0.5%,
+  continuous account). Public, with the R4 rule for D11: the Spearman correlation of select vs test score and test mean
+  ln M by select-score decile over the F1, F2 and F5 rows (all candidate rows private); the picks' percentile (a rank)
+  among the candidate systems; and the count and share of systems with test mean ln M > 0 among select-eligible vs
+  non-eligible candidates. Per-system test numbers only in a sealed private file whose sha256 is in the repository. (2)
+  Entry neighbours: for each numeric parameter of each pick the next lower and next higher value from
+  research/fullgrid/grid.values(), one at a time (F1: H 11.1's neighbours); in select, spike ratio = pick score /
+  median neighbour score, written before the test per 7.3a (else post hoc); on test aggregates only. Nothing in this
+  read can become a candidate, a paper account or the basis of a v2.
 
 ### 7.5 Not added (panel, rejected; recorded so that none comes back after the results)
 
@@ -803,9 +828,9 @@ study with its own pre-registration and forward data).
 1. **730, not 740.** The five ET-session DeepSeek definitions exist only on 15m/30m/1h (`ds_defs.TFS_OF`); running them
    on 4h would use code the full grid never ran and cannot be parity-checked. [730; no 4h for those five]
 2. **F4 is not out of sample on any coin set** (section 3, 13): the new 24 share the 2024-2026 market. [Closed in
-   review: F4 is a select-period read only, never a pick, never in the BH family or WIDE PASS. The alternative of the
-   draft (F4 eligible, labelled) is rejected because a leaked p would also loosen BH for the other picks. For F1-F3
-   picks: "carried by the old six" stays a label, not a condition]
+   review: F4 is a select-period read only, never a pick, never in the BH family or WIDE PASS, never run on test (R22
+   included). The alternative of the draft (F4 eligible, labelled) is rejected because a leaked p would also loosen BH
+   for the other picks. For F1-F3 and F5 picks: "carried by the old six" stays a label, not a condition]
 3. **Long and short event on the same bar and coin.** [No entry; counted]
 4. **Mark price.** The new 5m files hold mark-price columns, but H 2 and H 7.6 check liquidation on last price and this
    study keeps the machine identical to v1. [Last price, as H 2; mark columns unread]
@@ -828,7 +853,7 @@ study with its own pre-registration and forward data).
     the parity reference (N17_KC_RSI and N18_VWMA_MACD, pooled continuation share >= 0.5; next highest F4_PULL 0.31),
     accepting that control (a) then draws more random entries than the pick can take for the mixed arrays]
 12. **A strategy x timeframe failing parity** after a fix attempt. [Removed before the pin, recorded here]
-13. **No eligible system.** [As v1: the top F1-F3 system runs once with its reads, labelled "no pick, fail"]
+13. **No eligible system.** [As v1: the top F1-F3 or F5 system runs once with its reads, labelled "no pick, fail"]
 14. **N4 at the planned add levels** (section 13). H 7.3 takes the planned full notional at P0 (N4 = 4 x q x P0), so
     the third add is often cut. Alternative for both studies, a change of H 7.3 before the pin: N4 = q x (4 x P0 + 6 x
     D0) for a long (the four planned fills P0, P0 + D0, P0 + 2 D0, P0 + 3 D0; short: 4 x P0 - 6 x D0) and the same in

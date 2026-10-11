@@ -94,6 +94,14 @@ class Store:
     def commit(self) -> None:
         self.conn.commit()
 
+    def rollback(self) -> None:
+        """Roll back AND forget the cached newest bar per coin (the cache may name rows the rollback removed; a
+        stale cache would make the next pass start after them and leave a hole for good)."""
+        try:
+            self.conn.rollback()
+        finally:
+            self._max_open.clear()
+
     def _next_ins(self) -> int:
         n = int(self.get("ins_seq", 0)) + 1
         self.put("ins_seq", n)
@@ -187,13 +195,33 @@ class Store:
         rows = self.conn.execute(q + " ORDER BY open_ms", args).fetchall()
         return _cols(rows)
 
-    def bars_since(self, ins: int) -> dict:
-        """{sym: rows (open_ms, o, h, l, c, v, qv)} inserted with ins > ``ins``."""
+    def bars_since(self, ins: int, upto: Optional[int] = None) -> dict:
+        """{sym: rows (open_ms, o, h, l, c, v, qv)} inserted with ``ins`` < ins <= ``upto`` (the reader takes ``upto``
+        = max_ins() BEFORE this call: rows a feed pass commits in between are left for the next read, never
+        skipped)."""
         out: dict = {}
-        for r in self.conn.execute("SELECT symbol, open_ms, o, h, l, c, v, qv FROM bars_5m WHERE ins > ? "
-                                   "ORDER BY symbol, open_ms", (int(ins),)):
+        q, args = "SELECT symbol, open_ms, o, h, l, c, v, qv FROM bars_5m WHERE ins > ?", [int(ins)]
+        if upto is not None:
+            q += " AND ins <= ?"
+            args.append(int(upto))
+        for r in self.conn.execute(q + " ORDER BY symbol, open_ms", args):
             out.setdefault(r[0], []).append(r[1:])
         return out
+
+    def count_bars(self, sym: str, from_ms: int, to_ms: int) -> int:
+        """Stored bars of the coin with from_ms <= open < to_ms (a primary-key range count)."""
+        return int(self.conn.execute("SELECT COUNT(*) FROM bars_5m WHERE symbol = ? AND open_ms >= ? AND open_ms < ?",
+                                     (sym, int(from_ms), int(to_ms))).fetchone()[0])
+
+    def first_open(self, sym: str) -> Optional[int]:
+        row = self.conn.execute("SELECT MIN(open_ms) FROM bars_5m WHERE symbol = ?", (sym,)).fetchone()
+        return row[0] if row and row[0] is not None else None
+
+    def gaps(self, sym: str, from_ms: int = 0) -> list:
+        """[(first missing open, first open after the hole)] inside the coin's stored bars (open >= from_ms)."""
+        q = ("SELECT open_ms, nxt FROM (SELECT open_ms, LEAD(open_ms) OVER (ORDER BY open_ms) AS nxt FROM bars_5m "
+             "WHERE symbol = ? AND open_ms >= ?) WHERE nxt - open_ms > ?")
+        return [(int(a) + 300_000, int(b)) for a, b in self.conn.execute(q, (sym, int(from_ms), 300_000))]
 
     def load_funding(self, sym: str, from_ms: int = 0) -> tuple:
         rows = self.conn.execute("SELECT calc_ms, rate FROM funding WHERE symbol = ? AND calc_ms >= ? ORDER BY calc_ms",
