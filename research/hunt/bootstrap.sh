@@ -123,7 +123,8 @@ ap_files_left() {
 est_min() {
   case $1 in
     1) echo 4 ;; 2) echo 4 ;; 3) echo 1 ;; 4) echo 15 ;; 5) echo 2 ;;
-    6) echo $(( 15 + 20 * 32 / NCPU )) ;; 7) echo $(( 10 + $(ap_files_left) / 200 )) ;; 8) echo $(( 30 + 60 * 32 / NCPU )) ;;
+    6) echo $(( 15 + (20 + 420) * 32 / NCPU )) ;;     # select + test (about 35 min) + reads_a (4-9 h on 32 vCPU)
+    7) echo $(( 10 + $(ap_files_left) / 200 )) ;; 8) echo $(( 30 + 120 * 32 / NCPU )) ;;   # fidelity + reads_o (1.5-5 h)
     9) echo 1 ;;
     *) echo 0 ;;
   esac
@@ -437,13 +438,29 @@ hunt_test() {
   "${HUNT[@]}" test --study "$st" --data "$DATA" --procs "$PROCS" --private "$PRIV" >>"$LOG" 2>&1 \
     || die "$st 시험 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
   [ -s "$out" ] || die "$st 시험은 끝났는데 결과 파일($out)이 없습니다"
+  TEST_RAN_HERE="$TEST_RAN_HERE $st"
+}
+ensure_reads_a() {           # reads_a (R1 goal board, R24 20/30/40x, continuous accounts) runs inside `hunt test --study wide`;
+  local out=research/hunt/out/wide/reads_a.json   # a restart after test.json skips that step, so run the hook again
+  [ -s research/hunt/out/wide/test.json ] || return 0
+  [ -s "$out" ] && return 0
+  case " $TEST_RAN_HERE " in
+    *" wide "*) warn "목표판·20/30/40배 표(reads_a)가 시험 안에서 실패했습니다 (run.log의 [reads] 줄 참고; 같은 코드로 다시 해도 같으니 개발자에게 보내 주세요)"
+                return 0 ;;
+  esac
+  sub "목표판·20/30/40배 표 (reads_a): 시험은 이미 끝났는데 파일이 없어 이어서 계산합니다 (몇 시간)"
+  "${HUNT[@]}" reads --study wide --data "$DATA" --procs "$PROCS" --private "$PRIV" >>"$LOG" 2>&1 \
+    || warn "목표판·20/30/40배 표(reads_a) 이어서 계산 실패 (run.log의 [reads] 줄 참고, 다른 결과는 그대로 묶습니다)"
+  [ -s "$out" ] || warn "목표판·20/30/40배 표(reads_a.json)가 없습니다 (run.log의 [reads] 줄 참고)"
 }
 
 stage 6 "추세 사냥 계산 (v1·넓게 고르기 → 두 시험, 작업 ${PROCS}개 동시에)"
 hunt_select v1
 hunt_select wide
+TEST_RAN_HERE=""
 hunt_test v1
 hunt_test wide
+ensure_reads_a
 for st in v1 wide; do
   "${HUNT[@]}" report --study "$st" >>"$LOG" 2>&1 || warn "$st 결과 페이지(RESULTS_KO.md) 쓰기 실패"
 done
