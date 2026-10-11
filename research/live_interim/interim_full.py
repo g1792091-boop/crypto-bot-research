@@ -262,6 +262,13 @@ def range95(xs: list):
     return m - h, m + h
 
 
+def _by_day(rows: list) -> dict:
+    out = defaultdict(list)
+    for t in rows:
+        out[day(t["exit_time"])].append(t)
+    return out
+
+
 def load(db: str):
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -451,6 +458,10 @@ def main(argv=None) -> int:
         s = stats(rows)
         rtxt = "날 수 부족" if rg is None else f"{pct(rg[0])} ~ {pct(rg[1])}"
         P(f"{tf}: {pct(s['mean'])} ({rtxt}, {len(dm)}일) | {pct(bmean)} | {wr(s['win'])} / {wr(bwin)}")
+    P("봉 × 날짜(청산일, UTC): " + " / ".join(
+        f"{tf} " + " ".join(f"{d[5:]} {len(v)}건 {pct(st.mean(x['ret'] for x in v), 1)}"
+                            for d, v in sorted(_by_day([t for t in core if t['tf'] == tf]).items()))
+        for tf in CORE_TFS if any(t["tf"] == tf for t in core)))
     live_cells, bt_cells = [], []
     better, worse = [], []
     order = sorted((v[2], k) for k, v in BT.items() if v[0] and v[2] is not None)
