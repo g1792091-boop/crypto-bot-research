@@ -43,6 +43,9 @@ CODE_REL = "research/altpump/altpump.py"
 PIN_REL = "research/altpump/PREREG_ALTPUMP.sha256"
 OUT_REL = "research/altpump/out"
 PICK_REL = "research/altpump/out/pick.json"
+DEV_REL = "research/altpump/DEVIATIONS.md"
+RUN_ONCE = {"test": "test.json", "board": "board.json", "pass2": "pass2.json"}   # 15, 18: pinned when written
+DATA_SHA256 = "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0"  # 2: the daily file of the PREREG
 FUNDING_FLAG = "funding assumed 0.03%/8h"                       # 8: on every output
 LIQ_NOTE = ("daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill "
             "beyond it (6.7); the 5m pass (15) measures liquidations")
@@ -90,6 +93,11 @@ BH_Q = 0.10                                                     # 13
 K_PICKS = 5                                                     # 11.3
 MIN_POS_SELECT = 35                                             # 11.2
 MIN_POS_TEST = {"p2": 26, "p3": 19}                             # 13 T0
+POS_TOL = 0.20                                                  # 12: a control's mean positions within +-20% of
+                                                                #     the pick's (validity check, reported)
+CTRL_B_TRIES = 1000                                             # 12 (b): common offsets drawn per seed
+OVERRUN_U = 1.5                                                 # 13 stress read: a position losing more than 1.5 U
+                                                                #     (its stop overrun: gap, fast day, liquidation)
 GOAL50_BASELINE = ("goal-50x baseline (for scale only): coin flip on the big four at 1-minute fills, about 1% of "
                    "months reach x50")
 
@@ -244,13 +252,47 @@ def read_pin(root: str = ROOT) -> list:
     return rows
 
 
+def out_rel(name: str) -> str:
+    return f"{OUT_REL}/{name}"
+
+
+ONCE_RELS = frozenset(out_rel(n) for n in RUN_ONCE.values())
+
+
+def _dev_text(root: str) -> str:
+    path = os.path.join(root, DEV_REL)
+    if not os.path.exists(path):
+        return ""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def live_once_lines(root: str = ROOT, rows: list | None = None) -> dict:
+    """15, 17, 18: the pinned lines of run-once outputs (test.json, board.json, pass2.json) still in force: path ->
+    sha256 of the last such line. A line whose sha256 is named in DEVIATIONS.md was superseded by a documented rerun
+    after a bug fix (17) and is not in force."""
+    rows = read_pin(root) if rows is None else rows
+    dev = _dev_text(root)
+    return {p: h for h, p in rows if p in ONCE_RELS and h not in dev}
+
+
+def running_code_sha256() -> str:
+    """The sha256 of the code that is actually running (this module's own file), not of a copy under --root."""
+    return sha256_file(os.path.abspath(__file__))
+
+
 def check_pin(step: str, root: str = ROOT) -> dict:
-    """Refuse (PinError) unless every listed file matches and the required files are listed. select: pick.json must
-    not be pinned yet; test / board / pass2: pick.json must be pinned and unchanged."""
+    """Refuse (PinError) unless every listed file matches, the required files are listed and the running code is the
+    pinned code. select: pick.json must not be pinned yet; test / board / pass2: pick.json must be pinned and
+    unchanged; pass2: test.json must be pinned and unchanged too. A pinned run-once output (test.json, board.json,
+    pass2.json) whose sha256 DEVIATIONS.md names was superseded by a documented rerun (17) and is not checked."""
     rows = read_pin(root)
     listed = {p: h for h, p in rows}
+    dev = _dev_text(root)
     bad = []
     for h, p in rows:
+        if p in ONCE_RELS and h in dev:
+            continue
         full = os.path.join(root, p)
         if not os.path.exists(full):
             bad.append(f"missing {p}")
@@ -259,13 +301,20 @@ def check_pin(step: str, root: str = ROOT) -> dict:
     for p in (PREREG_REL, CODE_REL):
         if p not in listed:
             bad.append(f"not pinned {p}")
+    run_sha = running_code_sha256()
+    if CODE_REL in listed and listed[CODE_REL] != run_sha:
+        bad.append(f"the running code {os.path.abspath(__file__)} (sha256 {run_sha[:12]}) is not the pinned "
+                   f"{CODE_REL}")
     if step == "select" and PICK_REL in listed:
         bad.append(f"{PICK_REL} is already pinned: select ran; the picks do not change (11.4)")
     if step in ("test", "board", "pass2") and PICK_REL not in listed:
         bad.append(f"{PICK_REL} is not pinned: run select first (11.4)")
+    if step == "pass2" and out_rel("test.json") not in live_once_lines(root, rows):
+        bad.append(f"{out_rel('test.json')} is not pinned: run test first (15)")
     if bad:
         raise PinError(f"{PIN_REL} does not match: " + "; ".join(bad))
-    return {"pin_file": PIN_REL, "pin_sha256": sha256_file(os.path.join(root, PIN_REL)), "files": len(rows)}
+    return {"pin_file": PIN_REL, "pin_sha256": sha256_file(os.path.join(root, PIN_REL)), "files": len(rows),
+            "code_sha256": run_sha}
 
 
 def write_pin(root: str = ROOT) -> str:
@@ -278,11 +327,16 @@ def write_pin(root: str = ROOT) -> str:
     return path
 
 
-def append_pick_line(root: str = ROOT) -> str:
-    h = sha256_file(os.path.join(root, PICK_REL))
+def append_pin_line(root: str, rel: str) -> str:
+    """Append '<sha256>  <rel>' to the pin file (pick.json after select, 11.4; test / board / pass2 outputs, 18)."""
+    h = sha256_file(os.path.join(root, rel))
     with open(os.path.join(root, PIN_REL), "a") as fh:
-        fh.write(f"{h}  {PICK_REL}\n")
+        fh.write(f"{h}  {rel}\n")
     return h
+
+
+def append_pick_line(root: str = ROOT) -> str:
+    return append_pin_line(root, PICK_REL)
 
 
 # ------------------------------------------------------------------ data (section 2) and lives (3.1)
@@ -442,8 +496,15 @@ class Raw:
         self.life_listing = listing
 
 
-def load_raw(path: str, manifest_path: str | None = None, structure_only: bool = False, value_windows=None) -> tuple:
+def load_raw(path: str, manifest_path: str | None = None, structure_only: bool = False, value_windows=None,
+             want_sha: str | None = None) -> tuple:
+    """Read the daily file after its checksums: MANIFEST.json's (when given) and ``want_sha`` (the sha256 that the
+    pinned PREREG states in section 2, DATA_SHA256; the CLI always passes it), so a rebuilt file with a regenerated
+    MANIFEST does not run."""
     sha = check_data_sha(path, manifest_path) if manifest_path else sha256_file(path)
+    if want_sha is not None and sha != want_sha:
+        raise RuntimeError(f"{path}: sha256 {sha} != {want_sha}, the file pinned in PREREG_ALTPUMP.md section 2; "
+                           "stopping")
     return Raw(read_frame(path, structure_only, value_windows)), sha
 
 
@@ -452,7 +513,10 @@ def load_raw(path: str, manifest_path: str | None = None, structure_only: bool =
 def _indicators(bar, h, l, c, qv, lid):
     """Per symbol, per life segment inside the window, causal: ATR14 (young mean, then Wilder), 1- and 7-bar returns,
     20-bar mean volume (d excluded), 30-bar high / low (d excluded), 7-day median quote volume (days d-6..d), std of
-    the last (up to) 30 log returns (ddof 1)."""
+    the last (up to) 30 log returns (ddof 1). A gap inside a life (1 to 6 days without a bar, 3.1) is unknown, not
+    quiet, so nothing reads across it: on the first bar after a gap the 1-day return and the log return are not
+    defined (NaN; the std skips it) and the TR is high - low, like a life's first bar; the 7-day return is defined
+    only when its 8 bars lie on 8 consecutive days."""
     S, T = bar.shape
     atr = np.full((S, T), np.nan)
     r1 = np.full((S, T), np.nan)
@@ -479,7 +543,7 @@ def _indicators(bar, h, l, c, qv, lid):
             if k > 0 and lid[s, t] != lid[s, idx[k - 1]]:
                 seg = k
             j = k - seg
-            if j == 0:
+            if j == 0 or t - idx[k - 1] != 1:                 # a life's first bar, or the first bar after a gap
                 tr = h[s, t] - l[s, t]
                 lr[k] = np.nan
             else:
@@ -498,7 +562,7 @@ def _indicators(bar, h, l, c, qv, lid):
             else:
                 a = (13.0 * a + tr) / 14.0
             atr[s, t] = a
-            if j >= 7:
+            if j >= 7 and t - idx[k - 7] == 7:                # 8 bars on 8 consecutive days (no gap inside)
                 r7[s, t] = c[s, t] / c[s, idx[k - 7]] - 1.0
             if j >= 20:
                 tot = 0.0
@@ -525,15 +589,18 @@ def _indicators(bar, h, l, c, qv, lid):
             lo_k = seg + 1
             if k - 29 > lo_k:
                 lo_k = k - 29
-            cn = k - lo_k + 1
-            if cn >= 2:
-                mu = 0.0
-                for m in range(lo_k, k + 1):
+            cn = 0
+            mu = 0.0
+            for m in range(lo_k, k + 1):
+                if not np.isnan(lr[m]):                       # the return over a gap is not a daily return
                     mu += lr[m]
+                    cn += 1
+            if cn >= 2:
                 mu /= cn
                 v = 0.0
                 for m in range(lo_k, k + 1):
-                    v += (lr[m] - mu) ** 2
+                    if not np.isnan(lr[m]):
+                        v += (lr[m] - mu) ** 2
                 sd30[s, t] = np.sqrt(v / (cn - 1))
     return atr, r1, r7, vm20, hh30, ll30, med7, sd30
 
@@ -702,7 +769,8 @@ class Market:
     def control_pools(self, v: dict) -> list:
         """12 (b): per symbol, the days on which variant ``v`` could have fired apart from its event: tradable, in the
         period with the next day in it and holding a bar, and the variant's own non-event conditions (P1 / P2: the
-        life has >= 21 bars; P4: >= 31 bars, at least 3N ranked symbols, not a partial day; P3: none)."""
+        life has >= 21 bars and the 1-day return is defined (not the first bar after a gap, 4); P4: >= 31 bars, a
+        defined 7-day return, at least 3N ranked symbols, not a partial day; P3: none)."""
         ok = self.trad.copy()
         ok[:, :self.p0] = False
         ok[:, max(self.p0, self.p1 - 1):] = False
@@ -711,9 +779,10 @@ class Market:
         ok &= nxt
         fam = v["family"]
         if fam in ("P1", "P2"):
-            ok &= self.lbi >= 20
+            ok &= (self.lbi >= 20) & np.isfinite(self.r1)
         elif fam == "P4":
-            ok &= (self.lbi >= 30) & (self.n_ranked >= 3 * int(v["n"]))[None, :] & ~self.partial[None, :]
+            ok &= ((self.lbi >= 30) & np.isfinite(self.r7) & (self.n_ranked >= 3 * int(v["n"]))[None, :]
+                   & ~self.partial[None, :])
         elif fam != "P3":
             raise ValueError(fam)
         return [np.flatnonzero(ok[s]) for s in range(self.S)]
@@ -988,9 +1057,12 @@ def _stop_hit(side, stop, liq, h, l, mh, ml, hc):
 def _slot(k, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, others, cap_abs, taker, slip,
           min_not, liq_frac, cnt, br_cap, br_mmr, n_adds, hc):
     """6.7 / PREREG_HUNT 7.6 for one position on one (sub-)bar. Returns (code, price): -1 = still open. Order: open
-    beyond liquidation, open at or beyond the stop (fills at the open), the stop (hair-cut fill), then each add level
-    the bar reaches (a buy-stop add fills at the open when the open is beyond its level, else hc of the way from the
-    level to the bar's extreme), each followed by the moved-stop check."""
+    beyond liquidation, open at or beyond the stop (fills at the open); then every add level the bar reaches fills in
+    order (a buy-stop add fills at the open when the open is beyond its level, else hc of the way from the level to
+    the bar's extreme; each fill moves the stop and the liquidation price), also when the bar had reached the old
+    stop; then one check of the (moved) stop and the liquidation price (hair-cut fill). A bar that reaches no add
+    level checks the stop at once. Adds first is the worse order: filling and exiting at the moved stop never loses
+    less than exiting at the old stop without the adds (more units, a stop no looser, the haircut on every unit)."""
     o = sb_o[x]
     h = sb_h[x]
     l = sb_l[x]
@@ -1009,9 +1081,7 @@ def _slot(k, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, o
                 return EX_LIQ, ps[k, F_LIQ]
             if o >= ps[k, F_STOP]:
                 return EX_GAP, o
-    code, px = _stop_hit(side, ps[k, F_STOP], ps[k, F_LIQ], h, l, mh, ml, hc)
-    if code >= 0:
-        return code, px
+    # every add level the bar reaches, in order, before the stop (6.7 rule 3; PREREG_HUNT 7.6 step 4)
     while pi[k, P_TRIED] < n_adds and ((side > 0 and h >= ps[k, F_NEXT]) or (side < 0 and l <= ps[k, F_NEXT])):
         lvl = ps[k, F_NEXT]
         if side > 0:
@@ -1021,10 +1091,10 @@ def _slot(k, x, skip_open, sb_o, sb_h, sb_l, sb_mo, sb_mh, sb_ml, ps, pi, acc, o
         ok = _try_add(k, ref, ps, pi, acc, others, cap_abs, taker, slip, min_not, liq_frac, cnt, br_cap, br_mmr)
         pi[k, P_TRIED] += 1
         ps[k, F_NEXT] = (ref if ok else lvl) + side * ps[k, F_D0]
-        if ok:
-            code, px = _stop_hit(side, ps[k, F_STOP], ps[k, F_LIQ], h, l, mh, ml, hc)
-            if code >= 0:
-                return code, px
+    # then one check of the (moved) stop and liquidation price
+    code, px = _stop_hit(side, ps[k, F_STOP], ps[k, F_LIQ], h, l, mh, ml, hc)
+    if code >= 0:
+        return code, px
     if side > 0:
         if h > ps[k, F_EXT]:
             ps[k, F_EXT] = h
@@ -1074,7 +1144,7 @@ def _engine(prm, iprm, br_cap, br_lev, br_mmr, bar, o_d, c_d, atr, med7, delist,
             fe_rate, fe_mark, sig_day, sig_sym, sig_side):
     """One account (sections 6-9): continuous (iprm[IP_MONTHLY] = 0) or a fresh wallet every calendar month (14).
     Day order: (0) funding events at 00:00 (5m pass), (1) existing positions: liquidation / gap at the open, (2) the
-    entries of yesterday's signals at the open, (3) the intraday slots (stop first, then adds, moved-stop exit),
+    entries of yesterday's signals at the open, (3) the intraday slots (every reached add first, then the stop),
     (4) the close: hold exit, delisting close, close before a day without a bar, chandelier, funding, equity, bust,
     month / period end. A day with a daily bar and no sub-bars (sb_off < 0) runs on the daily bar itself (od_f, hd_f,
     ld_f = the daily o/h/l flattened [s * T + t], mark = price): no bar day is ever skipped (15).
@@ -1562,34 +1632,59 @@ def ctrl_a(sig: Sig, rng: np.random.Generator) -> Sig:
     return Sig(sig.day, sig.sym, np.where(rng.random(len(sig)) < 0.5, 1, -1).astype(np.int64))
 
 
-def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list) -> Sig:
-    """12 (b): per symbol, the pick's signals that lie in the symbol's pool (Market.control_pools of the variant),
-    moved together by one random circular offset over the pool: position i -> (i + k) mod n, k uniform on 0..n-1, one
-    k per symbol (symbols in index order). Keeps each symbol's count, the spacing and clustering of its signals (in
-    pool days) and their sides. A pick signal outside the pool (its next day has no bar: it lapsed) is not moved."""
+def ctrl_b(mk: Market, sig: Sig, rng: np.random.Generator, pools: list, stats: dict | None = None) -> Sig:
+    """12 (b): the pick's signal calendar moved by common random offsets. Per seed, offsets k_1, k_2, ... (uniform on
+    0..D-1, D = the period's signal days p0 .. p1-2; CTRL_B_TRIES of them) are drawn once and are the same for every
+    symbol. Each pick signal that lies in its symbol's pool (Market.control_pools of the variant; a signal whose next
+    day has no bar lapsed and is left out) goes from day d to p0 + (d - p0 + k_j) mod D for the first j that lands it
+    on a pool day of its symbol. Sides stay. Signals of different symbols on one day move together as long as they
+    land in their pools (with k_1: a market-wide pump day or a listing batch stays one busy day, so the n_max and
+    risk-cap cuts of that day hit the control as they hit the pick), and a symbol's signals keep their spacing. A
+    signal whose symbol cannot trade on its k_1 day (not listed yet, delisted, too young, under the volume floor)
+    takes the next common offset instead of being dropped, so the control keeps the pick's count. ``stats`` (when
+    given) accumulates 'signals', 'first_offset' (landed with k_1) and 'dropped' (no offset landed it)."""
+    empty = Sig(np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros(0, np.int64))
     if not len(sig):
         return sig
-    D, Sy, Sd = [], [], []
+    lo, hi = mk.p0, max(mk.p0, mk.p1 - 1)
+    D = hi - lo
+    if D <= 0:
+        return empty
+    ks = rng.integers(0, D, size=CTRL_B_TRIES)
+    Ds, Sy, Sd = [], [], []
+    n_in = n_first = n_drop = 0
     for s in np.unique(sig.sym):
         s = int(s)
         pool = pools[s]
-        n = len(pool)
-        if n == 0:
+        if not len(pool):
             continue
         sel = sig.sym == s
-        days, sides = sig.day[sel], sig.side[sel]
-        pos = np.searchsorted(pool, days)
-        inpool = (pos < n) & (pool[np.minimum(pos, n - 1)] == days)
+        inpool = np.isin(sig.day[sel], pool)
         if not inpool.any():
             continue
-        k = int(rng.integers(0, n))
-        newpos = (pos[inpool] + k) % n
-        D.append(pool[newpos].astype(np.int64))
-        Sy.append(np.full(len(newpos), s, np.int64))
-        Sd.append(sides[inpool].astype(np.int64))
-    if not D:
-        return Sig(np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros(0, np.int64))
-    day, sym, side = np.concatenate(D), np.concatenate(Sy), np.concatenate(Sd)
+        days, sides = sig.day[sel][inpool], sig.side[sel][inpool]
+        new = np.full(len(days), -1, np.int64)
+        for j in range(CTRL_B_TRIES):
+            todo = np.flatnonzero(new < 0)
+            if not len(todo):
+                break
+            cand = lo + (days[todo] - lo + ks[j]) % D
+            hit = np.isin(cand, pool)
+            new[todo[hit]] = cand[hit]
+            if j == 0:
+                n_first += int(hit.sum())
+        ok = new >= 0
+        n_in += len(days)
+        n_drop += int((~ok).sum())
+        Ds.append(new[ok])
+        Sy.append(np.full(int(ok.sum()), s, np.int64))
+        Sd.append(sides[ok].astype(np.int64))
+    if stats is not None:
+        for key, val in (("signals", n_in), ("first_offset", n_first), ("dropped", n_drop)):
+            stats[key] = stats.get(key, 0) + val
+    if not Ds:
+        return empty
+    day, sym, side = np.concatenate(Ds), np.concatenate(Sy), np.concatenate(Sd)
     o = mk.order(day, sym)
     return Sig(day[o], sym[o], side[o])
 
@@ -1647,43 +1742,101 @@ def bh(pvals, q: float = BH_Q) -> list:
     return out
 
 
+def overruns(out: Out, syms=None, side: int | None = None) -> tuple:
+    """13 stress read: (positions, positions that lost more than OVERRUN_U units) of one account, counting only the
+    positions on ``syms`` and on ``side`` when given."""
+    if not len(out.rf):
+        return 0, 0
+    sel = np.ones(len(out.rf), np.bool_)
+    if syms is not None:
+        sel &= np.isin(out.ri[:, RI_SYM], np.asarray(list(syms), np.int64))
+    if side is not None:
+        sel &= out.ri[:, RI_SIDE] == side
+    u = out.rf[sel, R_PNL] / out.rf[sel, R_U]
+    return int(sel.sum()), int((u < -OVERRUN_U).sum())
+
+
 def run_controls(mk: Market, sig: Sig, v: dict, period: str, r: float = R_MAIN, n_seeds: int = N_SEEDS,
-                 ctl: str = "a", sub: Sub | None = None) -> dict:
+                 ctl: str = "a", sub: Sub | None = None, focus_syms=None, focus_side: int | None = None) -> dict:
     """Section 12: n_seeds accounts of control ``ctl`` -> per-seed monthly ln M (post-bust months 0), the seeds'
-    means, per-side P&L in U, and the symbols they traded."""
+    means, per-side P&L in U, the symbols they traded, their positions, (b) the share of moved signals dropped, and
+    the positions and stop overruns on ``focus_syms`` / ``focus_side`` (the pick's symbols and side, 13 stress)."""
     pools = mk.control_pools(v) if ctl == "b" else None
     lnm = np.zeros((n_seeds, mk.n_months))
     side_u = np.zeros((n_seeds, 2))
     npos = np.zeros(n_seeds)
     busts = 0
     traded = set()
+    st = {}
+    f_pos = f_over = 0
     for i in range(n_seeds):
         rng = ctrl_seed(ctl, v["id"], period, r, i)
-        cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools)
+        cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools, st)
         out = run_account(mk, cs, v, r=r, sub=sub)
         lnm[i] = month_ln(out)
         npos[i] = len(out.rf)
         busts += int((out.m_state == 1).any())
+        if focus_syms is not None:
+            a, b = overruns(out, focus_syms, focus_side)
+            f_pos += a
+            f_over += b
         if len(out.rf):
             u = out.rf[:, R_PNL] / out.rf[:, R_U]
             sd = out.ri[:, RI_SIDE]
             side_u[i, 0] = u[sd > 0].sum()
             side_u[i, 1] = u[sd < 0].sum()
             traded.update(np.unique(out.ri[:, RI_SYM]).tolist())
-    return {"lnm": lnm, "means": lnm.mean(axis=1), "busts": busts, "side_u": side_u, "traded": traded,
-            "positions": npos}
+    res = {"lnm": lnm, "means": lnm.mean(axis=1), "busts": busts, "side_u": side_u, "traded": traded,
+           "positions": npos, "focus_positions": f_pos, "focus_overruns": f_over}
+    if ctl == "b":
+        n = st.get("signals", 0)
+        res["first_offset_share"] = st["first_offset"] / n if n else None
+        res["dropped_share"] = st["dropped"] / n if n else None
+    return res
 
 
 def compare(pick_ln: np.ndarray, ctl: dict, vid: str, period: str, ctl_name: str, r: float = R_MAIN,
-            n_boot: int = N_BOOT) -> dict:
-    """13 T2 for one period and control: d_m, p_boot, p_rank."""
+            n_boot: int = N_BOOT, pick_positions: int | None = None) -> dict:
+    """13 T2 for one period and control: d_m, p_boot, p_rank; and the validity check of 12: the control's mean
+    positions against the pick's (within +-POS_TOL: comparable; reported beside the verdict, never changes it)."""
     d = pick_ln - ctl["lnm"].mean(axis=0)
     pb = boot_p(d, rng_of("altpump", "boot", ctl_name, vid, period, r), n_boot)
     pr = rank_p(float(pick_ln.mean()), ctl["means"])
+    cpm = float(np.mean(ctl["positions"])) if "positions" in ctl else None
+    ratio = cpm / pick_positions if (cpm is not None and pick_positions) else None
     return {"mean_d": _f(d.mean()), "p_boot": pb, "p_rank": pr, "control_mean_ln": _f(ctl["means"].mean()),
             "control_busts": int(ctl["busts"]),
-            "control_positions_mean": _f(np.mean(ctl["positions"])) if "positions" in ctl else None,
+            "control_positions_mean": _f(cpm), "pick_positions": pick_positions,
+            "positions_ratio": _f(ratio),
+            "positions_comparable": None if ratio is None else bool(abs(ratio - 1.0) <= POS_TOL + 1e-12),
+            "control_signals_first_offset_share": _f(ctl.get("first_offset_share")),
+            "control_signals_dropped_share": _f(ctl.get("dropped_share")),
             "control_side_U_mean": {"long": _f(ctl["side_u"][:, 0].mean()), "short": _f(ctl["side_u"][:, 1].mean())}}
+
+
+def _poisson_cdf(x: int, lam: float) -> float:
+    if lam <= 0.0:
+        return 1.0
+    return float(min(1.0, sum(math.exp(-lam + i * math.log(lam) - math.lgamma(i + 1)) for i in range(int(x) + 1))))
+
+
+def stress_read(out: Out, ctls: list) -> dict:
+    """13 squeeze stress (reported, never a pass rule): the pick's worst single position in U and its count of stop
+    overruns (positions losing more than OVERRUN_U units), against the overrun rate of the control seeds' positions on
+    the same symbols and side (controls a and b pooled): the expected count at that rate and the chance of seeing this
+    few. A one-sided pick that met fewer squeezes than its controls may owe a pass to the months it happened to see."""
+    n = len(out.rf)
+    u = out.rf[:, R_PNL] / out.rf[:, R_U] if n else np.zeros(0)
+    po = int((u < -OVERRUN_U).sum())
+    cp = int(sum(c.get("focus_positions", 0) for c in ctls))
+    co = int(sum(c.get("focus_overruns", 0) for c in ctls))
+    rate = co / cp if cp else None
+    lam = rate * n if rate is not None else None
+    return {"overrun_U": OVERRUN_U, "pick_positions": n, "pick_worst_position_U": _f(u.min()) if n else None,
+            "pick_overruns": po, "control_positions_same_symbols_side": cp, "control_overruns": co,
+            "control_overrun_rate": _f(rate), "expected_overruns_at_control_rate": _f(lam),
+            "p_this_few_overruns": _f(_poisson_cdf(po, lam)) if lam is not None else None,
+            "note": "reported, never a pass rule (13)"}
 
 
 def judge(rows: dict, test_periods=TEST_PERIODS, min_pos=None, q: float = BH_Q) -> dict:
@@ -1699,7 +1852,10 @@ def judge(rows: dict, test_periods=TEST_PERIODS, min_pos=None, q: float = BH_Q) 
         t1 = all((rows[vid][p]["base"]["mean_ln"] or -1.0) > 0 for p in test_periods)
         ps = [rows[vid][p]["cmp"][c][k] for p in test_periods for c in ("a", "b") for k in ("p_boot", "p_rank")]
         p_pick = max(ps) if (t0 and t1) else 1.0
-        res[vid] = {"T0": t0, "T1": t1, "p_list": ps, "p_pick": p_pick}
+        comp = {f"{p}_{c}": rows[vid][p]["cmp"][c].get("positions_comparable") for p in test_periods
+                for c in ("a", "b")}
+        res[vid] = {"T0": t0, "T1": t1, "p_list": ps, "p_pick": p_pick,
+                    "controls_positions_comparable": comp}           # 12 validity check: reported, not a rule
         pvals.append(p_pick)
     rej = bh(pvals, q)
     for vid, rj in zip(ids, rej):
@@ -1788,23 +1944,37 @@ def adds_stats(outs) -> dict:
             "entry_cuts": {CNT_NAMES[i]: int(cnt[i]) for i in ENTRY_CUT_IX}}
 
 
+BOARD_LUCK = ("luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a "
+              "no-skill one-sided rule reaches high multiples about this often in the same months")
+BOARD_COIN = ("luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a "
+              "trending month they understate what luck gives a one-sided pick")
+
+
 def board_block(mk: Market, sig: Sig, v: dict, period: str, r: float, n_seeds: int = N_SEEDS,
                 sub: Sub | None = None) -> dict:
+    """14: the pick's fresh $1,000 months at size r and, pooled over the seeds, the same months for control (b) (the
+    pick's signals on random days with its own side: the luck reference) and control (a) (coin-flip sides: luck
+    without the market side)."""
     out = run_account(mk, sig, v, r=r, monthly=True, sub=sub)
     M, b = month_multiples(out)
     row = {"pick": board_stats(M, b), "first_unit_risk_over_U": _f(out.rf[:, R_RISK1].mean()) if len(out.rf) else None,
            "pick_machine": adds_stats([out])}
-    Ms, Bs, outs = [], [], AddsPool()
-    for i in range(n_seeds):
-        cs = ctrl_a(sig, ctrl_seed("a", v["id"], period, r, i))
-        o2 = run_account(mk, cs, v, r=r, monthly=True, sub=sub)
-        m2, b2 = month_multiples(o2)
-        Ms.append(m2)
-        Bs.append(b2)
-        outs.add(o2)
-    row["coin_flip_pooled"] = board_stats(np.concatenate(Ms) if Ms else np.zeros(0),
-                                          np.concatenate(Bs) if Bs else np.zeros(0, bool))
-    row["coin_flip_machine"] = adds_stats(outs)
+    pools = mk.control_pools(v)
+    for ctl, key in (("b", "random_days"), ("a", "coin_flip")):
+        Ms, Bs, outs = [], [], AddsPool()
+        for i in range(n_seeds):
+            rng = ctrl_seed(ctl, v["id"], period, r, i)
+            cs = ctrl_a(sig, rng) if ctl == "a" else ctrl_b(mk, sig, rng, pools)
+            o2 = run_account(mk, cs, v, r=r, monthly=True, sub=sub)
+            m2, b2 = month_multiples(o2)
+            Ms.append(m2)
+            Bs.append(b2)
+            outs.add(o2)
+        row[f"{key}_pooled"] = board_stats(np.concatenate(Ms) if Ms else np.zeros(0),
+                                           np.concatenate(Bs) if Bs else np.zeros(0, bool))
+        row[f"{key}_machine"] = adds_stats(outs)
+    row["random_days_pooled"]["label"] = BOARD_LUCK
+    row["coin_flip_pooled"]["label"] = BOARD_COIN
     row["caps"] = {"n_max": caps(r)[0], "risk_cap": caps(r)[1], "margin_budget_per_position": f"equity / {caps(r)[0]}"}
     return row
 
@@ -1815,8 +1985,8 @@ def periods_of(args) -> dict:
 
 
 def stamp(root: str, pin: dict | None, data_sha: str) -> dict:
-    return {"commit": git_commit(root), "pin": pin, "data_sha256": data_sha, "funding": FUNDING_FLAG,
-            "written_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M")}
+    return {"commit": git_commit(root), "pin": pin, "code_sha256": running_code_sha256(), "data_sha256": data_sha,
+            "funding": FUNDING_FLAG, "written_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M")}
 
 
 def step_select(raw: Raw, periods: dict = PERIODS, variants=None, k_picks: int = K_PICKS,
@@ -1864,10 +2034,13 @@ def step_test(raw: Raw, picks: list, periods: dict = PERIODS, n_seeds: int = N_S
                 ex["without_tradfi_exclusion"] = summarize(mk_all, run_account(mk_all, mk_all.signals(v), v),
                                                            detail=False)
             cmp_, syms = {}, set(np.unique(base_out.ri[:, RI_SYM]).tolist()) if len(base_out.ri) else set()
+            focus, ctls = sorted(syms), []
             for c in ("a", "b"):
-                ctl = run_controls(mk, sig, v, p, R_MAIN, n_seeds, c)
-                cmp_[c] = compare(pick_ln, ctl, vid, p, c, R_MAIN, n_boot)
+                ctl = run_controls(mk, sig, v, p, R_MAIN, n_seeds, c, focus_syms=focus, focus_side=v["side"])
+                cmp_[c] = compare(pick_ln, ctl, vid, p, c, R_MAIN, n_boot, pick_positions=len(base_out.rf))
                 syms |= ctl["traded"]
+                ctls.append({"focus_positions": ctl["focus_positions"], "focus_overruns": ctl["focus_overruns"]})
+            ex["squeeze_stress"] = stress_read(base_out, ctls)
             rows.setdefault(vid, {})[p] = {"base": base, "cmp": cmp_}
             extra.setdefault(vid, {})[p] = ex
             traded[p][vid] = sorted(mk.syms[list(syms)].tolist())
@@ -2140,9 +2313,13 @@ def step_pass2(raw: Raw, test: dict, cache: str, periods: dict = PERIODS, n_seed
             sig = mk.signals(v)
             out = run_account(mk, sig, v, sub=sub)
             base = summarize(mk, out)
-            cmp_ = {c: compare(month_ln(out), run_controls(mk, sig, v, p, R_MAIN, n_seeds, c, sub=sub), vid, p, c,
-                               R_MAIN, n_boot) for c in ("a", "b")}
-            rows.setdefault(vid, {})[p] = {"base": base, "cmp": cmp_}
+            focus = sorted(np.unique(out.ri[:, RI_SYM]).tolist()) if len(out.ri) else []
+            cmp_, ctls = {}, []
+            for c in ("a", "b"):
+                ctl = run_controls(mk, sig, v, p, R_MAIN, n_seeds, c, sub=sub, focus_syms=focus, focus_side=v["side"])
+                cmp_[c] = compare(month_ln(out), ctl, vid, p, c, R_MAIN, n_boot, pick_positions=len(out.rf))
+                ctls.append({"focus_positions": ctl["focus_positions"], "focus_overruns": ctl["focus_overruns"]})
+            rows.setdefault(vid, {})[p] = {"base": base, "cmp": cmp_, "squeeze_stress": stress_read(out, ctls)}
             for r in BOARD_RS:
                 board.setdefault(vid, {}).setdefault(p, {})[f"r={r:g}"] = board_block(mk, sig, v, p, r, n_seeds, sub)
             log(f"  pass2 {p} {vid} done")
@@ -2279,7 +2456,7 @@ def bench(n_syms: int, out_path: str, n_seeds: int = N_SEEDS, n_boot: int = N_BO
     t0 = time.time()
     step_board(raw, picks, n_seeds=n_seeds, log=log)
     tm["board_s"] = round(time.time() - t0, 2)
-    tm["board_accounts"] = len(picks) * 3 * len(BOARD_RS) * (1 + n_seeds)
+    tm["board_accounts"] = len(picks) * 3 * len(BOARD_RS) * (1 + 2 * n_seeds)
     tm["select_plus_test_s"] = round(tm["select_s"] + tm["test_with_controls_s"], 2)
     tm["all_steps_s"] = round(tm["select_s"] + tm["test_with_controls_s"] + tm["board_s"], 2)
     tm["n_syms"], tm["n_seeds"], tm["n_boot"] = n_syms, n_seeds, n_boot
@@ -2316,9 +2493,11 @@ def step_report(out_dir: str) -> str:
             for pp, rows in per.items():
                 for rk, row in rows.items():
                     pk, cf = row["pick"], row["coin_flip_pooled"]
+                    rd = row.get("random_days_pooled", {})
                     lines.append(f"  {vid} {pp} {rk}: >=x5 {pk['share_ge_x5']} >=x50 {pk['share_ge_x50']} bust "
-                                 f"{pk['bust_share']} worst {pk['worst_multiple']} | coin flip >=x5 "
-                                 f"{cf['share_ge_x5']} >=x50 {cf['share_ge_x50']}")
+                                 f"{pk['bust_share']} worst {pk['worst_multiple']} | luck (random days, same side) "
+                                 f">=x5 {rd.get('share_ge_x5')} >=x50 {rd.get('share_ge_x50')} | coin flip (luck "
+                                 f"without the market side) >=x5 {cf['share_ge_x5']} >=x50 {cf['share_ge_x50']}")
         lines.append(GOAL50_BASELINE)
     text = "\n".join(lines) + "\n"
     with open(os.path.join(out_dir, "report.txt"), "w") as fh:
@@ -2328,16 +2507,23 @@ def step_report(out_dir: str) -> str:
 
 # ------------------------------------------------------------------ CLI
 def _load_real(root: str, structure_only: bool = False, step: str | None = None) -> tuple:
-    """The daily file, checked against MANIFEST.json; values only inside the step's windows (section 10)."""
+    """The daily file, checked against MANIFEST.json and against the sha256 of PREREG section 2 (DATA_SHA256);
+    values only inside the step's windows (section 10)."""
     return load_raw(os.path.join(root, DATA_REL), os.path.join(root, MANIFEST_REL), structure_only,
-                    None if (structure_only or step is None) else step_windows(step))
+                    None if (structure_only or step is None) else step_windows(step), want_sha=DATA_SHA256)
 
 
 def _refuse_rerun(root: str, name: str, what: str) -> None:
+    """15, 18: a run-once step refuses while its output exists or while a pinned line of it is in force (a rerun after
+    a bug fix needs a DEVIATIONS.md entry that names the old output's sha256, 17)."""
     path = os.path.join(root, OUT_REL, name)
     if os.path.exists(path):
-        raise PinError(f"out/{name} exists: {what} is run once. A rerun after a bug fix needs its DEVIATIONS.md "
-                       "entry; move the old file aside first.")
+        raise PinError(f"out/{name} exists: {what} is run once. A rerun after a bug fix needs a {DEV_REL} entry "
+                       f"naming the old file's sha256 (its line in {PIN_REL}); move the old file aside first.")
+    h = live_once_lines(root).get(out_rel(name))
+    if h:
+        raise PinError(f"{out_rel(name)} ran already (sha256 {h} in {PIN_REL}): {what} is run once. A rerun after a "
+                       f"bug fix needs a {DEV_REL} entry that names this sha256 (17).")
 
 
 def cmd_select(args) -> int:
@@ -2377,8 +2563,10 @@ def cmd_test(args) -> int:
             res["verdict"][vid]["PASS"] = False
             res["verdict"][vid]["label"] = "no pick, fail"
     _write_json(path, {"stamp": stamp(root, pin, sha), **res})
+    h = append_pin_line(root, out_rel("test.json"))                  # 18: run once; pass2 reads only this file
     for vid, r in res["verdict"].items():
         print(f"test {vid}: PASS {r['PASS']}")
+    print(f"test.json pinned ({h[:12]})")
     return 0
 
 
@@ -2392,7 +2580,8 @@ def cmd_board(args) -> int:
     _write_json(os.path.join(root, OUT_REL, "board.json"), {"stamp": stamp(root, pin, sha), "board": res,
                                                             "baseline": GOAL50_BASELINE,
                                                             "note": "reported, never a pass rule (14)"})
-    print("board written")
+    h = append_pin_line(root, out_rel("board.json"))
+    print(f"board written and pinned ({h[:12]})")
     return 0
 
 
@@ -2417,15 +2606,22 @@ def cmd_pass2(args) -> int:
     raw, sha = _load_real(root, step="pass2")
     inv = pass2_inventory(raw, plan, cache)
     if inv["klines"]:
-        dev = os.path.join(root, "research", "altpump", "DEVIATIONS.md")
-        if not (args.accept_missing and os.path.exists(dev)):
-            raise PinError(f"pass2: {len(inv['klines'])} symbol-months with daily bars have no 5m klines in the cache "
-                           f"(first: {inv['klines'][:5]}). Fetch again; or list them in research/altpump/DEVIATIONS.md "
-                           "and rerun with --accept-missing (those days then run on the daily bar, 6.7 and 15).")
+        msg = (f"pass2: {len(inv['klines'])} symbol-months with daily bars have no 5m klines in the cache "
+               f"(first: {inv['klines'][:5]}). Fetch again; or write each of them (as listed, e.g. 'p2 SYMUSDT "
+               f"YYYY-MM') in {DEV_REL} and rerun with --accept-missing (those days then run on the daily bar, 6.7 "
+               "and 15).")
+        if not args.accept_missing:
+            raise PinError(msg)
+        dev = _dev_text(root)
+        unlisted = [x for x in inv["klines"] if x not in dev]
+        if unlisted:                                                  # 15: each missing symbol-month is written there
+            raise PinError(msg + f" Not in {DEV_REL} ({len(unlisted)}): {unlisted[:50]}")
     digest = cache_digest(cache)
     res = step_pass2(raw, test, cache)
     _write_json(os.path.join(root, OUT_REL, "pass2.json"), {"stamp": stamp(root, pin, sha), "cache": digest,
                                                            "inventory_missing": inv, **res})
+    h = append_pin_line(root, out_rel("pass2.json"))
+    print(f"pass2.json written and pinned ({h[:12]})")
     return 0
 
 

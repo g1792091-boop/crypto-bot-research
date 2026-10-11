@@ -6,6 +6,11 @@
         warm-up start to --at, then the runner: the catch-up cycle from 10/01, and cycles that end on a 5m bar, a 15m,
         a 30m, a 1h and a 4h close (the last is the worst case: every timeframe has a new bin). Times per phase.
 
+    python -m huntbot audit [--days 150] [--procs N] [--out FILE]
+        Repaint audit of every entry cell on synthetic bars: the events of a series cut at 80% and 90% of its length
+        must equal the full series' events on the same bars (a definition that looks ahead fails; the paper bot would
+        freeze what it saw, the backtest would not).
+
     python -m huntbot replay --from 2026-10-01 --to 2026-11-15 [--systems ID,ID] [--procs N] [--out FILE]
         hunt.py's batch backtest (``run_system``) on the stored bars of the window (the H 15 review check: the replay
         of the same days must give the forward record's positions; with the runner's data, exactly).
@@ -223,3 +228,76 @@ class _NullLedger:
 
     def load_book(self):
         return {}
+
+
+# ---------------------------------------------------------------- repaint audit (synthetic bars)
+_AU: dict = {}
+
+
+def _audit_task(task):
+    cid, cut = task
+    cell = _AU["cells"][cid]
+    btc = H.series("BTCUSDT", cell.tf) if cell.kind == "ds" else None
+    try:
+        lg, sh = H.entry_events(cell.spec, "AAAUSDT", H.series("AAAUSDT", cell.tf), btc)
+    except Exception as e:  # noqa: BLE001
+        return cid, cut, None, None, 0, f"{type(e).__name__}: {e}"[:200]
+    cm = H.series("AAAUSDT", cell.tf).bars.close_ms
+    return cid, cut, cm[np.asarray(lg, bool)], cm[np.asarray(sh, bool)], int(cm[-1]) if len(cm) else 0, None
+
+
+def audit_main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="python -m huntbot audit")
+    ap.add_argument("--days", type=int, default=150)
+    ap.add_argument("--procs", type=int, default=CFG.procs())
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    from . import systems as S
+    H._compile_probe()
+    systems, _ = S.system_list()
+    cells = S.cells_of(systems)
+    _AU["cells"] = cells
+    start = CFG.day_ms("2025-03-01")
+    end = start + a.days * DAY
+    arr = synth_arrays(["BTCUSDT", "AAAUSDT"], start, end, seed=21)
+    res: dict = {}
+    t0 = time.perf_counter()
+    for cut in (1.0, 0.9, 0.8):
+        stop = start + int((end - start) * cut) // FIVE * FIVE
+        coins = {}
+        for sym, x in arr.items():
+            k = x["ts"] < stop
+            coins[sym] = H.Coin(sym, x["ts"][k], x["o"][k], x["h"][k], x["l"][k], x["c"][k], x["v"][k], x["qv"][k],
+                                last_ms=2 ** 62)
+        H.install(coins, {})
+        H.prepare_series(["BTCUSDT", "AAAUSDT"], H.TF_ORDER)
+        for cid, c, lg, sh, last, err in H.pmap(_audit_task, [(cid, cut) for cid in cells], a.procs,
+                                                label=f"audit {cut}"):
+            res[(cid, c)] = (lg, sh, last, err)
+    out = {"what": "repaint audit on synthetic bars (no real price)", "days": a.days, "cells": len(cells),
+           "seconds": round(time.perf_counter() - t0, 1), "repaint": {}, "errors": {}}
+    for cid in cells:
+        full = res[(cid, 1.0)]
+        if full[3]:
+            out["errors"][cid] = full[3]
+            continue
+        for cut in (0.9, 0.8):
+            lg, sh, last, err = res[(cid, cut)]
+            if err:
+                out["errors"][f"{cid}@{cut}"] = err
+                continue
+            fl, fs = full[0][full[0] <= last], full[1][full[1] <= last]       # the bins the cut series has
+            d = {"long_only_full": np.setdiff1d(fl, lg).tolist(), "long_only_cut": np.setdiff1d(lg, fl).tolist(),
+                 "short_only_full": np.setdiff1d(fs, sh).tolist(), "short_only_cut": np.setdiff1d(sh, fs).tolist()}
+            if any(d.values()):
+                out["repaint"].setdefault(cid, {})[str(cut)] = {k: len(v) for k, v in d.items()} | {"last": last}
+    out["repaint_cells"] = sorted(out["repaint"])
+    txt = json.dumps(out, indent=1)
+    if a.out:
+        with open(a.out, "w") as fh:
+            fh.write(txt + "\n")
+    print(f"audit: {len(cells)} cells, {len(out['repaint'])} repaint, {len(out['errors'])} errors, "
+          f"{out['seconds']}s" + (f" -> {a.out}" if a.out else ""))
+    for cid in out["repaint_cells"]:
+        print("  repaint", cid, out["repaint"][cid])
+    return 0

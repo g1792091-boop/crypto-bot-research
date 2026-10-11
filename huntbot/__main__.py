@@ -5,6 +5,7 @@
     dash [hash]                                   huntbot-dash (read-only dashboard)
     lineup {show,suggest,check}                   the lineup file (huntbot/lineup.json)
     replay --from YYYY-MM-DD --to YYYY-MM-DD      batch backtest of stored bars (hunt.py), for the review's check
+    audit [--days N]                              repaint audit of every entry cell (synthetic bars)
     bench [--days N] [--coins N] [--procs N]      runtime on synthetic bars (no real price)
 """
 
@@ -48,6 +49,9 @@ def main(argv=None) -> int:
     if cmd == "replay":
         from .bench import replay_main
         return replay_main(rest)
+    if cmd == "audit":
+        from .bench import audit_main
+        return audit_main(rest)
     if cmd == "bench":
         from .bench import bench_main
         return bench_main(rest)

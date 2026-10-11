@@ -667,6 +667,7 @@ _POOLS: dict = {}          # (market key, tf, coin) -> control (a) pool
 _LARGE: dict = {}          # (syms, calendar month start) -> large group row (H 3)
 _BRK: dict = {}            # syms -> brackets (H 7.3)
 _MARKETS: dict = {}        # (syms, start, end) -> Market (reads windows)
+_FILLS: dict = {}          # (market key, tf, coin) -> (fill index, ok) per signal bar
 
 
 def install(coins: dict, funding: dict | None = None) -> None:
@@ -675,7 +676,7 @@ def install(coins: dict, funding: dict | None = None) -> None:
     _COINS.update(coins)
     _FUND.clear()
     _FUND.update(funding or {})
-    for d in (_SERIES, _EVENTS, _SIGS, _BANKS, _POOLS, _LARGE, _BRK, _MARKETS):
+    for d in (_SERIES, _EVENTS, _SIGS, _BANKS, _POOLS, _LARGE, _BRK, _MARKETS, _FILLS):
         d.clear()
 
 
@@ -945,6 +946,10 @@ def gate_mask(ser: Series, gate: str) -> np.ndarray:
 def fill_index(mk: Market, k: int, ser: Series) -> tuple:
     """(fill index into the market's bar arrays of the coin, ok) per signal bar: the first bar with open at or after
     the signal bar's close, inside the period's loaded bars (5m: entries_wide's first5)."""
+    key = (mk.key, ser.tf, int(k))
+    hit = _FILLS.get(key)
+    if hit is not None and hit[2] is ser:
+        return hit[0], hit[1]
     c = mk.bar_coin(k)
     if mk.native:
         fi = np.asarray(ser.bars.first5, np.int64)
@@ -952,6 +957,7 @@ def fill_index(mk: Market, k: int, ser: Series) -> tuple:
         fi = np.searchsorted(c.ts, ser.bars.close_ms, "left").astype(np.int64)
     ok = fi < min(len(c.ts), int(mk.p1[k]))
     ok &= fi >= mk.p0[k]
+    _FILLS[key] = (fi, ok, ser)
     return fi, ok
 
 
@@ -2669,7 +2675,7 @@ def market_for(syms: list, start_ms: int, end_ms: int, mks: dict | None = None) 
         old_key = next(iter(_MARKETS))
         old = _MARKETS.pop(old_key)
         _G["mk"].pop(old.key, None)
-        for cache in (_BANKS, _SIGS, _POOLS):
+        for cache in (_BANKS, _SIGS, _POOLS, _FILLS):
             for kk in [k for k in cache if k[0] == old.key]:
                 cache.pop(kk, None)
     return mk
@@ -2881,6 +2887,7 @@ def cmd_reads(args) -> int:
     """The reads hook again, after test.json exists (a reads module pinned after the test step)."""
     study = args.study
     test_doc = _load_test_doc(study)
+    check_pin(study, "test")                       # the code that made test.json is unchanged (before any reads import)
     full = None
     if study == "wide":
         pp = os.path.join(private_dir(args), "wide_test_private.json")
@@ -3449,10 +3456,11 @@ def cmd_report(args) -> int:
         if study == "v1":
             c = test["result"]["checks"]
             v = test["verdict"]
+            lu = ((test.get("lineup") or {}).get("picks") or {}).get(test["pick"]["id"], {})
             lines += [f"* P0 {c['P0']} · P1 {c['P1']} · P2 {c['P2']} (p_a {c['p_a']:.4f}, p_b {c['p_b']:.4f}) · "
                       f"P3 {c['P3']} · P4 {c['P4']}", f"* **v1 통과: {'예' if v['v1_pass'] else '아니오'}** "
                       f"({v['label']}); 1%도 통과: {v['one_pct_also_passes']}; 기존 6개가 끌고 감: "
-                      f"{v['carried_by_old_six']}", ""]
+                      f"{v['carried_by_old_six']}", f"* 종이 계좌: {lu.get('lineup', '-')}", ""]
         else:
             v = test["verdict"]
             lu = (test.get("lineup") or {}).get("picks", {})

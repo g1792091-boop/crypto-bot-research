@@ -813,9 +813,11 @@ study with its own pre-registration and forward data).
    >= 5 passes; membership fixed at select]
 6. **72 positions in 36 months** may exclude many 4h G1 systems. [Keep; the gate is not changed for it]
 7. **Score = mean ln M**; the median is only a tie-break here (v1 uses a median-based plateau). [Keep]
-8. **Sizing read**: replaced by the R1 goal board (section 7.3): machine A scales B and the open-risk cap with r as the
-   first draft's sizing read did; machine B is the goal-mode machine; the realised unit risk is reported next to every
-   figure. [As written in 7.3]
+8. **Sizing read**: replaced by the R1 goal board (section 7.3). Machine A is the tested machine with the open-risk cap
+   scaled by r / 0.5% and B = equity / 6 as written (panel: at higher r the margin budget and the brackets cut the
+   unit, and the realised risk is printed next to the nominal r); machine B is the goal-mode machine. Alternative: B
+   also scaled by r / 0.5% on machine A (the first draft's sizing read; the reads module drafted on 2026-10-11 codes
+   this). [Panel: B = equity / 6 on machine A]
 9. **Paper accounts at 2% or 5%.** [None; the owners decide after reading the goal board, labelled "goal-size paper,
    not tested"]
 10. **Where it runs.** [The development machine at 2 processes if the measured time allows; otherwise a rented server

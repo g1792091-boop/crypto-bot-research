@@ -161,16 +161,63 @@ def test_gap_beyond_liquidation_loses_the_margin():
     assert rf[AP.R_PRICE] == pytest.approx(-margin)
 
 
-def test_stop_before_add_in_the_same_bar():
+def test_add_before_stop_in_the_same_bar():
+    # 6.7 rule 3 (second review): a bar that reaches both the next add level and the stop fills the add first, moves
+    # the stop to S_req and exits there with the haircut (the worse order, as PREREG_HUNT 7.6 step 4). Long: P0 100,
+    # D0 4, stop 96, add level 104; the bar runs 95.5 .. 105
     f = AP.STOP_HC
     _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 105, 95.5, 100)])
     rf, ri = _rec(out)
-    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 0 and ri[AP.RI_TRIED] == 0
-    assert rf[AP.R_XPX] == pytest.approx((96 - f * (96 - 95.5)) * (1 - SLIP))
+    ref = 104 + f * (105 - 104)
+    sreq = (5 * 100 + 5 * ref - 20) / 10
+    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 1 and ri[AP.RI_TRIED] == 1
+    assert ri[AP.RI_SRC] == AP.SRC_ADD
+    assert rf[AP.R_XPX] == pytest.approx((sreq - f * (sreq - 95.5)) * (1 - SLIP))
+    # short mirror: stop 104, add level 96; the bar runs 95 .. 104.5
     _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 104.5, 95, 100)], side=-1)
     rf, ri = _rec(out)
-    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 0
-    assert rf[AP.R_XPX] == pytest.approx((104 + f * (104.5 - 104)) * (1 + SLIP))
+    ref = 96 - f * (96 - 95)
+    sreq = (5 * 100 + 5 * ref + 20) / 10
+    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_ADDS] == 1
+    assert rf[AP.R_XPX] == pytest.approx((sreq + f * (104.5 - sreq)) * (1 + SLIP))
+    # the add-first order never loses less than the stop-first one: compare with a bar that reaches the stop only
+    _, stop_only = one_pos({}, [(100, 100.5, 99.5, 100), (100, 103.9, 95.5, 100)])
+    _, both = one_pos({}, [(100, 100.5, 99.5, 100), (100, 105, 95.5, 100)])
+    assert stop_only.ri[0, AP.RI_ADDS] == 0 and both.rf[0, AP.R_PNL] < stop_only.rf[0, AP.R_PNL]
+    for f0 in (0.0, 0.5):                                             # f = 0: only the extra costs; f > 0: more
+        _, a = one_pos({}, [(100, 100.5, 99.5, 100), (100, 103.9, 95.5, 100)], stop_hc=f0)
+        _, b = one_pos({}, [(100, 100.5, 99.5, 100), (100, 105, 95.5, 100)], stop_hc=f0)
+        assert b.ri[0, AP.RI_ADDS] == 1 and b.rf[0, AP.R_PNL] < a.rf[0, AP.R_PNL]
+    # a bar that reaches the stop and no add level: the stop at once, no add tried
+    rf, ri = _rec(stop_only)
+    assert ri[AP.RI_REASON] == AP.EX_STOP and ri[AP.RI_TRIED] == 0
+    assert rf[AP.R_XPX] == pytest.approx((96 - f * (96 - 95.5)) * (1 - SLIP))
+
+
+def test_every_reached_add_fills_before_the_moved_stop_exit():
+    # 6.7 rule 3, case B: after add 1 fills, the bar also reaches add level 2; both fill before the stop is checked
+    # (the draft exited after add 1). r = 0.5% leaves margin for the adds: q = 1.25, D0 = 4, levels 104 then ref1 + 4
+    f = AP.STOP_HC
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 112, 99, 100)], r=0.005)
+    rf, ri = _rec(out)
+    ref1 = 104 + f * (112 - 104)
+    ref2 = (ref1 + 4) + f * (112 - (ref1 + 4))
+    assert ref1 + 4 <= 112 < ref2 + 4                                 # level 2 reached, level 3 not
+    sreq = (100 + ref1 + ref2 - 4) / 3                                # (sum q ref - U) / sum q, U = q D0
+    assert ri[AP.RI_ADDS] == 2 and ri[AP.RI_TRIED] == 2 and ri[AP.RI_REASON] == AP.EX_STOP
+    assert rf[AP.R_XPX] == pytest.approx((sreq - f * (sreq - 99)) * (1 - SLIP))
+    # worse than the draft's exit after add 1 at its moved stop (101 at f = 0.25: (100 + 106 - 4) / 2)
+    s1 = (100 + ref1 - 4) / 2
+    draft_price = 1.25 * ((s1 - f * (s1 - 99)) * (1 - SLIP) * 2 - 100 * (1 + SLIP) - ref1 * (1 + SLIP))
+    assert rf[AP.R_PRICE] < draft_price
+    # short mirror: the bar runs 88 .. 101; levels 96 and ref1 - 4
+    _, out = one_pos({}, [(100, 100.5, 99.5, 100), (100, 101, 88, 100)], side=-1, r=0.005)
+    rf, ri = _rec(out)
+    ref1 = 96 - f * (96 - 88)
+    ref2 = (ref1 - 4) - f * ((ref1 - 4) - 88)
+    sreq = (100 + ref1 + ref2 + 4) / 3
+    assert ri[AP.RI_ADDS] == 2 and ri[AP.RI_REASON] == AP.EX_STOP
+    assert rf[AP.R_XPX] == pytest.approx((sreq + f * (101 - sreq)) * (1 + SLIP))
 
 
 def test_add_then_moved_stop_exit_same_day():
