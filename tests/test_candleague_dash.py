@@ -74,7 +74,7 @@ def test_terminal_routes(tmp_path):
     assert [r["coin"] for r in live["coins"]] == ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD"]
     k = c.get("/api/klines?coin=ETHUSD&tf=1h&limit=120").json()
     assert k["coin"] == "ETHUSD" and len(k["bars"]["t"]) == 120 and set(k["bars"]) == {"t", "o", "h", "l", "c", "v"}
-    for bad in ("coin=XRPUSD&tf=15m", "coin=BTCUSD&tf=5m", "coin=BTCUSD&tf=15m&limit=10",
+    for bad in ("coin=XRPUSD&tf=15m", "coin=BTCUSD&tf=3m", "coin=BTCUSD&tf=15m&limit=10",
                 "coin=BTCUSD&tf=15m&limit=2000", "coin=BTCUSD&tf=15m&limit=x", "tf=15m"):
         assert c.get(f"/api/klines?{bad}").status_code == 400, bad
     assert c.get("/api/fills").json() == {"fills": []}
