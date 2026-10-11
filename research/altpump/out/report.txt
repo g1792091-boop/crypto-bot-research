@@ -1,0 +1,50 @@
+altpump report (funding assumed 0.03%/8h)
+select (period 1, r = 2%): status no_pick_fail, picks ['P3S_K7_H28']
+variant          signals   pos  mean lnM   x2 mean  bust
+P1_X20_M             859   102   -0.2586   -0.2913  True
+P1_X20_H7            859   407   -0.0142   -0.0233 False
+P1_X30_M             379   100   -0.1922   -0.2102  True
+P1_X30_H7            379   257   -0.0200   -0.0258 False
+P1_X50_M             107    85   -0.0749   -0.0758  True
+P1_X50_H7            107    98   -0.0099   -0.0118 False
+P2_X20_M             859   190   -0.1221   -0.1227  True
+P2_X20_H7            859   480   -0.0537   -0.0684 False
+P2_X30_M             379   200   -0.0799   -0.0856  True
+P2_X30_H7            379   300   -0.0364   -0.0416 False
+P2_X50_M             107   107   -0.0555   -0.0598 False
+P2_X50_H7            107   105   -0.0163   -0.0182 False
+P3L_K1_M             174   140   -0.0534   -0.0550 False
+P3L_K1_H28           174   101   -0.0187   -0.0225 False
+P3L_K7_M             180   133   -0.0546   -0.0586 False
+P3L_K7_H28           180   100   -0.0162   -0.0202 False
+P3S_K1_M             174   132   -0.0154   -0.0212 False
+P3S_K1_H28           174   109   -0.0020   -0.0050 False
+P3S_K7_M             180   120   -0.0154   -0.0213 False
+P3S_K7_H28           180   104   -0.0002   -0.0009 False
+P4L_N5_M             837   108   -0.2561   -0.2582  True
+P4L_N5_H28           837   216   -0.0365   -0.0545 False
+P4L_N10_M           1313   112   -0.2578   -0.2631  True
+P4L_N10_H28         1313   221   -0.0090   -0.0190 False
+P4S_N5_M             295   142   -0.0358   -0.0435 False
+P4S_N5_H28           295   113   -0.0045   -0.0113 False
+P4S_N10_M            562   155   -0.0345   -0.0460 False
+P4S_N10_H28          562   123   -0.0027   -0.0086 False
+test (periods 2 and 3):
+  P3S_K7_H28: T0 True T1 False p_pick 1.0000 BH False PASS False
+goal board (fresh $1,000 months; reported, never a pass rule):
+  P3S_K7_H28 p1 r=0.005: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.9799700004111175 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p1 r=0.02: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.9214364440541115 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p1 r=0.05: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.811222999289069 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p1 r=0.1: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.6514798564804072 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p1 r=0.2: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.5480880433016305 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p2 r=0.005: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.971413358563661 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p2 r=0.02: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.8878620698718914 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p2 r=0.05: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.7305875668029131 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p2 r=0.1: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.5780849223661234 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p2 r=0.2: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.5886168913421435 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.000576923076923077 >=x50 0.0
+  P3S_K7_H28 p3 r=0.005: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.9770938368262866 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p3 r=0.02: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.9094151230304397 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p3 r=0.05: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.7761555942395502 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p3 r=0.1: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.5872563586062721 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+  P3S_K7_H28 p3 r=0.2: >=x5 0.0 >=x50 0.0 bust 0.0 worst 0.4533004260264213 | luck (random days, same side) >=x5 0.0 >=x50 0.0 | coin flip (luck without the market side) >=x5 0.0 >=x50 0.0
+goal-50x baseline (for scale only): coin flip on the big four at 1-minute fills, about 1% of months reach x50

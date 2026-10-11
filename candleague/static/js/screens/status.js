@@ -5,12 +5,16 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
+import {freshLine, staleBanner} from "../poskit.js";
 
 export async function mount(el, ctx) {
-  const tiles = h("div"), machine = h("div"), notes = h("div"), feed = h("div");
+  const tiles = h("div"), machine = h("div"), notes = h("div"), feed = h("div"), pos = h("div"), banner = h("div");
+  const fresh = freshLine(null);
   el.append(
     ui.screenHead("서버 상태", "후보 리그 엔진 · 서버 · 시세"),
+    fresh, banner,
     ui.card({plate: "엔진"}, tiles),
+    ui.card({plate: "열린 포지션 기록", sub: "포지션 · 터미널 · 순위표가 읽는 것 (스냅샷의 열린 포지션 + 증거금·청산가 다시 계산)"}, pos),
     ui.card({plate: "서버", sub: "규칙봇과 같은 서버 · 후보 리그는 CPU 30% · 메모리 1.3 GB까지만 쓰도록 묶여 있습니다"}, machine),
     ui.card({plate: "터미널 시세", sub: "대시보드 서버가 바이낸스 공개 자료를 받아 잠깐 저장해 둔 것 (키 없음)"}, feed),
     ui.card({plate: "엔진 메모", sub: "신호 계산 중 생긴 일 (최근 20개)"}, notes));
@@ -42,6 +46,19 @@ export async function mount(el, ctx) {
     h("p", {class: "note"}, "부하는 서버 전체(규칙봇 포함)입니다. CPU 개수보다 계속 크면 새 서버로 옮기는 것을 생각해 보세요."));
     put(notes, (d.notes || []).length ? h("ul", {class: "cl-notes"}, d.notes.map((n) => h("li", null, n))) : ui.empty("메모 없음"));
   });
+  ctx.onPositions((p) => {
+    fresh.update(p);
+    put(banner, staleBanner(p));
+    if (!p || p.status || !p.counts) { put(pos, ui.empty("준비 중")); return; }
+    const c = p.counts;
+    put(pos, h("div", {class: "stack tight"}, h("div", {class: "stats cl-stats4"},
+      ui.stat("열린 포지션", `${fmt.int(c.open)}개`, `롱 ${fmt.int(c.long)} · 숏 ${fmt.int(c.short)}`),
+      ui.stat("금액 숨김", `${fmt.int(c.hidden)}개`, p.ds_money ? "딥시크 금액 보임" : "딥시크는 개수·방향만"),
+      ui.stat("기록 나이", p.snap_age_s == null ? "—" : fmt.dur(p.snap_age_s), p.old ? "15분 넘음: 엔진 확인" : "5분마다 새로 씀", p.old ? "warn" : ""),
+      ui.stat("증거금·청산가", p.exact ? "엔진 값 그대로" : "잔고·배수로 다시 계산", p.brackets || "거래소 표 없음: 청산가 빈칸")),
+    h("p", {class: "note"}, "증거금·크기·청산가는 진입 때 기준입니다 (그 뒤 펀딩으로 조금 달라질 수 있음). 손익은 화면이 실시간 마크 가격으로 계산합니다.")));
+  });
+  ctx.onLive(() => fresh.update());
   async function pollFeed() {
     let lv;
     try { lv = await ctx.api("/api/live"); } catch (e) { put(feed, ui.errorBox(e, pollFeed)); return; }

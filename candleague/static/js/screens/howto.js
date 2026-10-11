@@ -46,5 +46,5 @@ export async function mount(el) {
     ui.card({plate: "후보의 성격"}, h("dl", {class: "kv"}, Object.entries(STYLE_KO).map(([k, v]) => h("div", null, h("dt", null, LK.styleChip(k)), h("dd", null, STYLE_DESC[k])))),
       h("p", {class: "note"}, "추세 비율 = 들어간 방향이 직전 20봉 움직임과 같은 비율 (2021~2026-09, 그 후보의 숫자와 청산으로). 38개 중 추세 따라가기 28 · 섞임 7 · 되돌림 · 박스 3.")),
     ui.card({plate: "화면 안내"}, h("dl", {class: "kv"}, SCREENS.map(([k, v]) => h("div", null, h("dt", null, k), h("dd", null, v))))),
-    ui.card({plate: "실제 돈"}, h("p", null, "후보 리그는 종이 매매입니다. 2차 점검에서 묶음이 통과하고, 그 매매법도 통과했을 때만 두 분이 실제 돈을 검토할 수 있습니다: 1/4 크기 이하, 잃어도 되는 금액, 실행기 한도 켜고, 테스트넷 연습을 마친 뒤. 2차를 두 번 못 넘은 묶음은 끝납니다.")));
+    ui.card({plate: "실제 돈"}, h("p", null, "후보 리그는 모의 매매입니다 (가상 돈). 2차 점검에서 묶음이 통과하고, 그 매매법도 통과했을 때만 두 분이 실제 돈을 검토할 수 있습니다: 1/4 크기 이하, 잃어도 되는 금액, 실행기 한도 켜고, 테스트넷 연습을 마친 뒤. 2차를 두 번 못 넘은 묶음은 끝납니다.")));
 }

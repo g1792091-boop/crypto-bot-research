@@ -1,0 +1,39 @@
+/* 후보 리그: the menu in the rule bot's v4 way (paperbot/dash/static/v4/core/nav.css, copied and adapted): every screen its
+   own plain text button, the groups 거래 | 홈 | 매매법 | 안내 set apart by a thin line (demo4b.css .sg-sep, v4kit.css
+   .strip), the current one bold with the accent underline; one sideways row below 1200 px, wrapping rows from 1200 px;
+   by choice a left column from 1000 px (demo4b.css, group names shown there). A phone (below 900 px) also gets the bottom
+   bar of the four groups. Tokens only (both skins), font sizes only var(--t-*). */
+
+/* the bottom bar: four groups (base.css .botbar shows it below 900 px and keeps the page's foot clear of it; demo.css
+   had set its height to 0 when there was none) */
+:root { --bot-h: 56px; }
+@media (min-width: 900px) { :root { --bot-h: 0px; } }
+.botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.botbar a { min-width: 0; }
+.botbar a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.botbar a svg { width: 18px; height: 18px; }
+.botbar:empty { display: none; }
+.dl-foot { padding-bottom: 8px; }
+
+/* the row: a little more air between the groups than inside one (v4 15 px gap; the line sits in the middle) */
+.strip .sg-sep { flex: none; }
+.strip .sb { scroll-margin-inline: 80px; }
+/* a phone: 찾기 and 가 stay at the row's left edge while the buttons slide under them (v4kit.css .strip-lead) */
+.strip-lead .findsub svg { width: 14px; height: 14px; color: var(--accent); }
+/* the settings at the row's end (below 1200 px): 글자 크기 · 화면 색 · 메뉴 위치 · 설정 */
+.strip-tools .tb-btn.setsub { display: inline-flex; }
+.strip-tools .textsw + .skinsw { margin-left: 0; }
+@media (max-width: 759px) { .strip-tools .textsw { display: none; } }
+
+/* the top bar's settings on a PC (from 1200 px): 글자 크기 · 화면 색 (full from 1400 / 1680 px, one small button each
+   below) · 메뉴 위치 · 설정 */
+@media (min-width: 1200px) { .tt-set { display: inline-flex; align-items: center; gap: 5px; } }
+.tt-set .navsw { display: inline-flex; }
+.tt-set .tb-btn.setbtn { height: 34px; }
+
+/* 메뉴 위치 왼쪽: the group names over each group (demo4b.css), the settings at the column's foot */
+@media (min-width: 1000px) {
+  :root[data-nav="left"] .strip-lead { display: none; }
+  :root[data-nav="left"] .sg-k { color: var(--accent); }
+}
+@media (prefers-reduced-motion: reduce) { .botbar a, .sb { transition: none; } }

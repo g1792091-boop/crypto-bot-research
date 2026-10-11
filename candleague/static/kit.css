@@ -1,0 +1,123 @@
+/* 후보 리그: the shared kit's look (js/poskit.js, js/live.js, js/settings.js, the top bar's day pill) and the shell hooks
+   every screen can use. Copied and adapted from the rule bot's v4 (core/settings.css, screens/board.css home-pos chip,
+   screens/positions-kit.css banner). Tokens only (both skins: ai and classic), font sizes only var(--t-*). Class names:
+   kp- (kit), set- (설정, as v4), cl-day (the pill). Loaded last. */
+
+/* ---------------------------------------------------------------- shell hooks */
+/* a screen that exports `wide = true` (or calls ctx.wide()) gets the window's full width, like the rule bot's 터미널 */
+.screen[data-layout="wide"] { max-width: none; padding-inline: 12px; }
+@media (max-width: 599px) { .screen[data-layout="wide"] { padding-inline: var(--gutter); } }
+/* 설정 › 숫자 움직임 줄이기: as the system's reduced motion (v4kit.reduced() also reads it) */
+:root[data-motion="less"] *, :root[data-motion="less"] *::before, :root[data-motion="less"] *::after {
+  animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+/* the screens' stamp: "엔진 기준 10/10 09:00 KST · 3분 전 씀" (orange when old or replaying) */
+.dl-upd.warn { color: var(--warn); }
+/* a 기본값 account's pixel character: grey clothes and background (lk.js fig) */
+.sfig.k-base .abg { fill: var(--surface-3); }
+.sfig.k-base .ab, .sfig.k-base .ab2 { fill: var(--px-spec); }
+
+/* ---------------------------------------------------------------- the day pill: "D+11 · 1차 11/11 · 2차 12/11 · 3차 1/11 ▾" */
+.dchip.cl-day { flex: 0 1 auto; min-width: 0; gap: 0; padding: 0 12px; cursor: pointer; }
+.dchip.cl-day > * { flex: none; }
+.dchip.cl-day b { margin-right: 2px; }
+.cl-day .d-cp { color: var(--ink-2); font-weight: 700; }
+.cl-day .d-cp.next { color: var(--ink); font-weight: 800; }
+.cl-day .d-cp.done { color: var(--muted); }
+.cl-day .d-dot { color: var(--muted); padding: 0 6px; }
+.cl-day .car { margin-left: 6px; }
+.dchip.cl-day[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+.dchip.cl-day[aria-expanded="true"] b, .dchip.cl-day[aria-expanded="true"] .car, .dchip.cl-day[aria-expanded="true"] .d-cp,
+.dchip.cl-day[aria-expanded="true"] .d-dot { color: var(--accent-ink); }
+/* narrower windows keep D+n and the next checkpoint (the others are in its popover) */
+@media (max-width: 1099px) { .cl-day .d-cp:not(.next) { display: none; } }
+@media (max-width: 359px) { .cl-day .d-cp { display: none; } }
+.mocktag { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- freshness and banners (poskit freshLine / staleBanner) */
+.kp-fresh { margin: 0; color: var(--muted); font: 500 var(--t-xs)/1.45 var(--f-body); }
+.kp-fresh .kp-fe, .kp-fresh .kp-fp { white-space: nowrap; }
+.kp-fresh.warn { color: var(--warn); }
+.kp-banner { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 9px 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2); font-size: var(--t-sm); line-height: 1.5; }
+.kp-banner b { color: var(--ink); }
+.kp-banner.warn { border-color: var(--warn-line); background: var(--warn-soft); }
+.kp-banner.warn b { color: var(--warn); }
+.kp-banner.bad { border-color: var(--down-line); background: var(--down-soft); }
+.kp-banner.bad b { color: var(--down); }
+
+/* ---------------------------------------------------------------- the open-position pill (rule bot home-pos roe-live) */
+.kp-pill { display: inline-flex; align-items: baseline; gap: 6px; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--ink); font: 700 var(--t-xs)/1.6 var(--f-body); white-space: nowrap;
+  transition: box-shadow .4s, border-color .4s; }
+.kp-pill i { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.kp-pill.hid { color: var(--ink-2); }
+.kp-pill.hid i { background: var(--muted); }
+.kp-pill .kp-roe:empty { display: none; }
+.kp-pill.up { border-color: var(--up); box-shadow: 0 0 10px 0 color-mix(in srgb, var(--up) 45%, transparent); }
+.kp-pill.down { border-color: var(--down); box-shadow: 0 0 10px 0 color-mix(in srgb, var(--down) 45%, transparent); }
+.kp-pill.up .kp-roe { color: var(--up); }
+.kp-pill.down .kp-roe { color: var(--down); }
+.kp-pill.tick .kp-roe { animation: kp-tick .9s ease-out; }
+@keyframes kp-tick { from { opacity: .35; } to { opacity: 1; } }
+.kp-sides { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kp-crowd { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; background: var(--warn); vertical-align: middle; }
+@media (prefers-reduced-motion: reduce) { .kp-pill, .kp-pill.tick .kp-roe { transition: none; animation: none; } }
+
+/* ---------------------------------------------------------------- 설정 (js/settings.js; v4 core/settings.css) */
+html.set-open { overflow: hidden; }
+.set-scrim { position: fixed; inset: 0; z-index: 76; background: var(--scrim); opacity: 0; transition: opacity .22s var(--ease); }
+.set-scrim.in { opacity: 1; }
+.set { position: fixed; z-index: 77; left: 0; right: 0; bottom: 0; max-height: 92vh; display: flex; flex-direction: column; outline: none;
+  background: var(--frame); border-top: 1px solid var(--accent-line); transform: translateY(105%); transition: transform .26s var(--ease); }
+.set.in { transform: none; }
+.set-h { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: start; padding: 12px var(--gutter);
+  border-bottom: 1px solid var(--line); }
+.set-plate { font: 400 var(--t-xs)/1.4 var(--f-pixel); color: var(--accent); letter-spacing: .06em; }
+.set-plate::before { content: "◆ "; }
+.set-h h2 { grid-column: 1; font: 800 var(--t-lg)/1.3 var(--f-body); color: var(--ink); }
+.set-sub { grid-column: 1; color: var(--muted); font-size: var(--t-xs); }
+.set-x { grid-column: 2; grid-row: 1 / span 3; appearance: none; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--ink); font-size: var(--t-md); cursor: pointer; }
+.set-x:hover { border-color: var(--accent-line); }
+.set-b { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 14px; align-content: start;
+  padding: 12px var(--gutter) calc(20px + env(safe-area-inset-bottom, 0px)); }
+.set-b > * { min-width: 0; }
+.set-sec { display: grid; gap: 2px; padding: 4px 0 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.set-sh { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0; padding: 9px 12px 7px; border-bottom: 1px solid var(--line);
+  font: 800 var(--t-sm)/1.2 var(--f-body); color: var(--ink); }
+.set-sh::before { content: ""; align-self: center; display: inline-block; width: 3px; height: 12px; border-radius: 2px; background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow); }
+.set-sh small { flex-basis: 100%; color: var(--muted); font: 400 var(--t-2xs)/1.4 var(--f-body); }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; min-height: 48px; padding: 7px 12px; }
+.set-row + .set-row { border-top: 1px dashed var(--line); }
+.set-row.wide { grid-template-columns: minmax(0, 1fr); }
+.set-row.dim .set-l b { color: var(--ink-2); }
+.set-l { display: grid; gap: 2px; min-width: 0; }
+.set-l b { color: var(--ink); font: 700 var(--t-sm)/1.3 var(--f-body); }
+.set-l small { color: var(--muted); font: 400 var(--t-2xs)/1.4 var(--f-body); }
+.set-c { min-width: 0; display: flex; justify-content: flex-end; }
+.set-seg { flex-wrap: wrap; justify-content: flex-end; }
+.set-seg button { height: 32px; }
+.set-sel { width: 100%; max-width: 220px; height: 34px; }
+.set-links { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 4px; }
+.set-links .btn-line { text-decoration: none; }
+.set-keys { margin: 4px 12px 2px; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.9; }
+.set-keys kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--ink); font: 700 var(--t-2xs)/1 var(--f-term); }
+.set-foot { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
+@media (max-width: 419px) {
+  .set-row { grid-template-columns: minmax(0, 1fr); }
+  .set-c, .set-seg { justify-content: flex-start; }
+  .set-sel { max-width: none; }
+}
+@media (min-width: 760px) {
+  .set { left: auto; top: 0; width: min(460px, 100vw); max-height: none; border-top: 0; border-left: 1px solid var(--accent-line);
+    box-shadow: -16px 0 40px var(--card-shadow, transparent); transform: translateX(104%); }
+  .set-h { padding-top: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .set, .set-scrim { transition: none; } }
+
+/* 찾기 extras (the box itself is demo4b.css .find): the result kinds */
+.find-o .find-k { width: 46px; }
+.find-o.k-pick .find-k { color: var(--series-core); }
+.find-o.k-term .find-k { color: var(--accent); }

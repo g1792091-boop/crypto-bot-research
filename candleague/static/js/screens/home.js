@@ -30,7 +30,7 @@ export async function mount(el, ctx) {
       h("a", {class: "btn-line", href: "#/check"}, "점검 진행 →")), pools),
     ui.card({plate: "상위 · 하위", sub: "후보 계좌의 거래 한 번 평균 (지갑 대비)", acts: h("a", {class: "btn-line", href: "#/rank"}, "순위표 →")}, tb),
     ui.card({plate: "최근 체결", sub: "모든 계좌 · 누르면 그 계좌", acts: h("a", {class: "btn-line", href: "#/fills"}, "체결 기록 →")}, fills),
-    h("p", {class: "assume"}, "종이 계좌입니다. 바이낸스 실제 시세로 계산하고 수수료·슬리피지·펀딩을 뺍니다. 주문은 넣지 않습니다."));
+    h("p", {class: "assume"}, "모의 계좌입니다 (가상 돈). 바이낸스 실제 시세로 계산하고 수수료·슬리피지·펀딩을 뺍니다. 주문은 넣지 않습니다."));
 
   // 자리 비운 사이 state (declared before the first snapshot callback runs)
   const prev = local.get("home-seen", null);
@@ -128,7 +128,7 @@ export async function mount(el, ctx) {
         h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null), LK.paceLine(d, n, min));
     };
     put(goal,
-      h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.leagueDay(d)}`), " (10/01부터)")),
+      h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.calDay(d)}`), " (10/01부터, 한국 날짜)")),
       h("p", {class: "s2a-goalline"}, "10월 1일부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.",
         h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
       h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, steps.map((x, i) => h("li", {class: x.now ? "now" : x.done ? "done" : "",

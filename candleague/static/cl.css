@@ -11,10 +11,7 @@
 
 /* the brand mark */
 .cl-ic1 { fill: var(--accent); } .cl-ic2 { fill: var(--series-core); } .cl-ic3 { fill: var(--term-cyan); }
-.cl-tt { display: inline-flex; align-items: center; gap: 6px; }
-@media (max-width: 1399px) { .toptools .cl-tt { display: none; } }
-.cl-striptools { display: none; }
-@media (max-width: 1399px) { .cl-striptools { display: inline-flex; } }
+/* the top bar's settings (.tt-set) show from 1200 px, the menu row's end (.strip-tools) below: v4kit.css, nav.css */
 
 /* names and chips */
 .cl-an { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
