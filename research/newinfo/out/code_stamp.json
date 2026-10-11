@@ -1,0 +1,11 @@
+{
+ "commit": "913b276ad176300213a48255e69109cfc23e89a1",
+ "files": {
+  "data.py": "57c8ca6f6bb10da26919091c608f7a818ab992b96566912addf9f64c9659bd5e",
+  "defs.py": "fefb4097752cfb2cfa35bc1871a88be92623f8dddd2775a9d0ddf742d38b4851",
+  "run.py": "1e20b7b08baadc2ec558c38ec7a8bbd9c84ba65d2913d0cbe9744b30fe828a4f",
+  "PREREG_NEWINFO.md": "60792c771e8cf65824daacee047690d179cce37a7022d6306b4b34d1eb573294",
+  "fullgrid/kernel.py": "a4995c15695c4870dbee13c0a7d42417f8da36238fe713d1c514968f076c0d16",
+  "fullgrid/run.py": "4e02df9cbc69116fae2b517ce54fd27ac50384f8761e4c0de473e5d3cce0af17"
+ }
+}

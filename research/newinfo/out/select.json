@@ -1,0 +1,1273 @@
+{
+ "picks": [
+  {
+   "id": "H3A_CROWD_FADE|1h|4|tp3R|4",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "1h",
+   "row": 4,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 1,
+   "combo": {
+    "q": 0.02,
+    "window_d": 60,
+    "confirm": false
+   },
+   "select_n": 369,
+   "select_mean": 0.04104130478893838,
+   "plateau": 0.038527785236620184
+  },
+  {
+   "id": "H3A_CROWD_FADE|1h|5|tp3R|4",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "1h",
+   "row": 5,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 2,
+   "combo": {
+    "q": 0.02,
+    "window_d": 60,
+    "confirm": true
+   },
+   "select_n": 299,
+   "select_mean": 0.038527785236620184,
+   "plateau": 0.038527785236620184
+  },
+  {
+   "id": "H3A_CROWD_FADE|1h|3|tp3R|4",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "1h",
+   "row": 3,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 3,
+   "combo": {
+    "q": 0.02,
+    "window_d": 30,
+    "confirm": true
+   },
+   "select_n": 411,
+   "select_mean": 0.050356479058010446,
+   "plateau": 0.03661981665549721
+  },
+  {
+   "id": "H3A_CROWD_FADE|4h|0|tp3R|2",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "4h",
+   "row": 0,
+   "exit": "tp3R|2",
+   "exit_index": 3,
+   "rank": 1,
+   "combo": {
+    "q": 0.02,
+    "window_d": 14,
+    "confirm": false
+   },
+   "select_n": 259,
+   "select_mean": 0.04167170972207338,
+   "plateau": 0.031986466315084325
+  },
+  {
+   "id": "H3A_CROWD_FADE|4h|0|tp2R|2",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "4h",
+   "row": 0,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 2,
+   "combo": {
+    "q": 0.02,
+    "window_d": 14,
+    "confirm": false
+   },
+   "select_n": 259,
+   "select_mean": 0.0324384586806463,
+   "plateau": 0.030690865568357983
+  },
+  {
+   "id": "H3A_CROWD_FADE|4h|7|tp3R|2",
+   "rule": "H3A_CROWD_FADE",
+   "tf": "4h",
+   "row": 7,
+   "exit": "tp3R|2",
+   "exit_index": 3,
+   "rank": 3,
+   "combo": {
+    "q": 0.05,
+    "window_d": 14,
+    "confirm": true
+   },
+   "select_n": 272,
+   "select_mean": 0.03252906527589349,
+   "plateau": 0.030394286803685583
+  },
+  {
+   "id": "D04_FUNDING_FADE|1h|3|tp3R|2",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "1h",
+   "row": 3,
+   "exit": "tp3R|2",
+   "exit_index": 3,
+   "rank": 1,
+   "combo": {
+    "q": 0.025,
+    "lookback_d": 90,
+    "confirm": true
+   },
+   "select_n": 208,
+   "select_mean": 0.015785294549109843,
+   "plateau": 0.015395312727582532
+  },
+  {
+   "id": "D04_FUNDING_FADE|1h|4|tp3R|2",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "1h",
+   "row": 4,
+   "exit": "tp3R|2",
+   "exit_index": 3,
+   "rank": 2,
+   "combo": {
+    "q": 0.025,
+    "lookback_d": 180,
+    "confirm": false
+   },
+   "select_n": 504,
+   "select_mean": 0.014240348164642614,
+   "plateau": 0.014817830446112573
+  },
+  {
+   "id": "D04_FUNDING_FADE|1h|2|tp3R|2",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "1h",
+   "row": 2,
+   "exit": "tp3R|2",
+   "exit_index": 3,
+   "rank": 3,
+   "combo": {
+    "q": 0.025,
+    "lookback_d": 90,
+    "confirm": false
+   },
+   "select_n": 467,
+   "select_mean": 0.015395312727582532,
+   "plateau": 0.012352171524880676
+  },
+  {
+   "id": "D04_FUNDING_FADE|4h|16|tp2R|2",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "4h",
+   "row": 16,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 1,
+   "combo": {
+    "q": 0.1,
+    "lookback_d": 180,
+    "confirm": false
+   },
+   "select_n": 269,
+   "select_mean": 0.019885653373698763,
+   "plateau": 0.017651379192770253
+  },
+  {
+   "id": "D04_FUNDING_FADE|4h|14|tp2R|2",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "4h",
+   "row": 14,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 2,
+   "combo": {
+    "q": 0.1,
+    "lookback_d": 90,
+    "confirm": false
+   },
+   "select_n": 261,
+   "select_mean": 0.01889896138760322,
+   "plateau": 0.013805337755356804
+  },
+  {
+   "id": "D04_FUNDING_FADE|4h|16|tp3R|1.5",
+   "rule": "D04_FUNDING_FADE",
+   "tf": "4h",
+   "row": 16,
+   "exit": "tp3R|1.5",
+   "exit_index": 2,
+   "rank": 3,
+   "combo": {
+    "q": 0.1,
+    "lookback_d": 180,
+    "confirm": false
+   },
+   "select_n": 485,
+   "select_mean": 0.012340013129809467,
+   "plateau": 0.009338771263864024
+  },
+  {
+   "id": "D05_FUNDING_TREND|1h|18|tp3R|4",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "1h",
+   "row": 18,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 1,
+   "combo": {
+    "trend_ema": 300,
+    "trigger_ema": 10,
+    "fund_pct": 30
+   },
+   "select_n": 855,
+   "select_mean": 0.0329144590256507,
+   "plateau": 0.024627070932619753
+  },
+  {
+   "id": "D05_FUNDING_TREND|1h|9|tp3R|4",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "1h",
+   "row": 9,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 2,
+   "combo": {
+    "trend_ema": 200,
+    "trigger_ema": 10,
+    "fund_pct": 30
+   },
+   "select_n": 828,
+   "select_mean": 0.02829001078625088,
+   "plateau": 0.019311176736726422
+  },
+  {
+   "id": "D05_FUNDING_TREND|1h|0|tp3R|4",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "1h",
+   "row": 0,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 3,
+   "combo": {
+    "trend_ema": 100,
+    "trigger_ema": 10,
+    "fund_pct": 30
+   },
+   "select_n": 842,
+   "select_mean": 0.01964076338092533,
+   "plateau": 0.0186534231007914
+  },
+  {
+   "id": "D05_FUNDING_TREND|4h|25|tp3R|1.5",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "4h",
+   "row": 25,
+   "exit": "tp3R|1.5",
+   "exit_index": 2,
+   "rank": 1,
+   "combo": {
+    "trend_ema": 300,
+    "trigger_ema": 40,
+    "fund_pct": 50
+   },
+   "select_n": 151,
+   "select_mean": 0.02077804846282037,
+   "plateau": 0.019099280688730694
+  },
+  {
+   "id": "D05_FUNDING_TREND|4h|16|tp3R|1.5",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "4h",
+   "row": 16,
+   "exit": "tp3R|1.5",
+   "exit_index": 2,
+   "rank": 2,
+   "combo": {
+    "trend_ema": 200,
+    "trigger_ema": 40,
+    "fund_pct": 50
+   },
+   "select_n": 156,
+   "select_mean": 0.021170272038151056,
+   "plateau": 0.01809968426823616
+  },
+  {
+   "id": "D05_FUNDING_TREND|4h|26|tp3R|1.5",
+   "rule": "D05_FUNDING_TREND",
+   "tf": "4h",
+   "row": 26,
+   "exit": "tp3R|1.5",
+   "exit_index": 2,
+   "rank": 3,
+   "combo": {
+    "trend_ema": 300,
+    "trigger_ema": 40,
+    "fund_pct": 70
+   },
+   "select_n": 228,
+   "select_mean": 0.019286722631046648,
+   "plateau": 0.01809968426823616
+  },
+  {
+   "id": "D06_OI_DIVERGENCE|1h|4|tp3R|3",
+   "rule": "D06_OI_DIVERGENCE",
+   "tf": "1h",
+   "row": 4,
+   "exit": "tp3R|3",
+   "exit_index": 4,
+   "rank": 1,
+   "combo": {
+    "window_h": 12,
+    "oi_z": 1.0,
+    "z_lookback_d": 30
+   },
+   "select_n": 314,
+   "select_mean": 0.010830495221789475,
+   "plateau": 0.008746307171848534
+  },
+  {
+   "id": "D06_OI_DIVERGENCE|1h|3|tp3R|3",
+   "rule": "D06_OI_DIVERGENCE",
+   "tf": "1h",
+   "row": 3,
+   "exit": "tp3R|3",
+   "exit_index": 4,
+   "rank": 2,
+   "combo": {
+    "window_h": 12,
+    "oi_z": 1.0,
+    "z_lookback_d": 15
+   },
+   "select_n": 385,
+   "select_mean": 0.006662119121907594,
+   "plateau": 0.006662119121907594
+  },
+  {
+   "id": "D06_OI_DIVERGENCE|1h|1|tp3R|3",
+   "rule": "D06_OI_DIVERGENCE",
+   "tf": "1h",
+   "row": 1,
+   "exit": "tp3R|3",
+   "exit_index": 4,
+   "rank": 3,
+   "combo": {
+    "window_h": 12,
+    "oi_z": 0.5,
+    "z_lookback_d": 30
+   },
+   "select_n": 780,
+   "select_mean": 0.011122224728266399,
+   "plateau": 0.006176997916742021
+  },
+  {
+   "id": "D08_CROSS_COIN|1h|3|tp3R|4",
+   "rule": "D08_CROSS_COIN",
+   "tf": "1h",
+   "row": 3,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 1,
+   "combo": {
+    "rank_bars": 12,
+    "rebalance_bars": 6,
+    "abs_filter": true
+   },
+   "select_n": 1070,
+   "select_mean": 0.010723542999998432,
+   "plateau": 0.006983574854379401
+  },
+  {
+   "id": "D08_CROSS_COIN|1h|4|tp3R|4",
+   "rule": "D08_CROSS_COIN",
+   "tf": "1h",
+   "row": 4,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 2,
+   "combo": {
+    "rank_bars": 12,
+    "rebalance_bars": 12,
+    "abs_filter": false
+   },
+   "select_n": 924,
+   "select_mean": 0.00397399722626715,
+   "plateau": 0.006299156100536071
+  },
+  {
+   "id": "D08_CROSS_COIN|1h|7|tp3R|4",
+   "rule": "D08_CROSS_COIN",
+   "tf": "1h",
+   "row": 7,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 3,
+   "combo": {
+    "rank_bars": 24,
+    "rebalance_bars": 3,
+    "abs_filter": true
+   },
+   "select_n": 2047,
+   "select_mean": 0.0045464766963872316,
+   "plateau": 0.005158928410503158
+  },
+  {
+   "id": "D08_CROSS_COIN|4h|1|tp2R|2",
+   "rule": "D08_CROSS_COIN",
+   "tf": "4h",
+   "row": 1,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 1,
+   "combo": {
+    "rank_bars": 12,
+    "rebalance_bars": 3,
+    "abs_filter": true
+   },
+   "select_n": 199,
+   "select_mean": 0.007064552125918805,
+   "plateau": 0.0035322760629594024
+  },
+  {
+   "id": "D08_CROSS_COIN|4h|12|tp2R|2",
+   "rule": "D08_CROSS_COIN",
+   "tf": "4h",
+   "row": 12,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 2,
+   "combo": {
+    "rank_bars": 48,
+    "rebalance_bars": 3,
+    "abs_filter": false
+   },
+   "select_n": 419,
+   "select_mean": 0.0028560442898893697,
+   "plateau": 0.001978440969757697
+  },
+  {
+   "id": "D08_CROSS_COIN|4h|13|tp2R|2",
+   "rule": "D08_CROSS_COIN",
+   "tf": "4h",
+   "row": 13,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 3,
+   "combo": {
+    "rank_bars": 48,
+    "rebalance_bars": 3,
+    "abs_filter": true
+   },
+   "select_n": 209,
+   "select_mean": 0.0011008376496260245,
+   "plateau": 0.001978440969757697
+  },
+  {
+   "id": "D10_VWAP_REVERT|1h|12|tp3R|4",
+   "rule": "D10_VWAP_REVERT",
+   "tf": "1h",
+   "row": 12,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 1,
+   "combo": {
+    "dist_atr": 2.0,
+    "skip_h": 2,
+    "lookback_bars": 1
+   },
+   "select_n": 582,
+   "select_mean": 0.007756533376437282,
+   "plateau": 0.007239637425213698
+  },
+  {
+   "id": "D10_VWAP_REVERT|1h|13|tp3R|4",
+   "rule": "D10_VWAP_REVERT",
+   "tf": "1h",
+   "row": 13,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 2,
+   "combo": {
+    "dist_atr": 2.0,
+    "skip_h": 2,
+    "lookback_bars": 3
+   },
+   "select_n": 672,
+   "select_mean": 0.007239637425213698,
+   "plateau": 0.00571874376357653
+  },
+  {
+   "id": "D10_VWAP_REVERT|1h|15|tp3R|4",
+   "rule": "D10_VWAP_REVERT",
+   "tf": "1h",
+   "row": 15,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 3,
+   "combo": {
+    "dist_atr": 2.0,
+    "skip_h": 4,
+    "lookback_bars": 1
+   },
+   "select_n": 582,
+   "select_mean": 0.007756533376437282,
+   "plateau": 0.004780100693398091
+  },
+  {
+   "id": "D01_VOL_SPIKE|1h|7|tp3R|4",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "1h",
+   "row": 7,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 1,
+   "combo": {
+    "vol_mult": 3.0,
+    "vol_len": 10,
+    "ema_filter": true
+   },
+   "select_n": 1215,
+   "select_mean": 0.012778554111719131,
+   "plateau": 0.008294020859807374
+  },
+  {
+   "id": "D01_VOL_SPIKE|1h|17|tp3R|3",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "1h",
+   "row": 17,
+   "exit": "tp3R|3",
+   "exit_index": 4,
+   "rank": 2,
+   "combo": {
+    "vol_mult": 4.0,
+    "vol_len": 40,
+    "ema_filter": true
+   },
+   "select_n": 812,
+   "select_mean": 0.007385367614772226,
+   "plateau": 0.007312701386484471
+  },
+  {
+   "id": "D01_VOL_SPIKE|1h|11|tp3R|4",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "1h",
+   "row": 11,
+   "exit": "tp3R|4",
+   "exit_index": 5,
+   "rank": 3,
+   "combo": {
+    "vol_mult": 3.0,
+    "vol_len": 40,
+    "ema_filter": true
+   },
+   "select_n": 1077,
+   "select_mean": 0.006806393927905774,
+   "plateau": 0.007023214543051245
+  },
+  {
+   "id": "D01_VOL_SPIKE|4h|5|tp2R|2",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "4h",
+   "row": 5,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 1,
+   "combo": {
+    "vol_mult": 2.0,
+    "vol_len": 40,
+    "ema_filter": true
+   },
+   "select_n": 269,
+   "select_mean": 0.027101752261690048,
+   "plateau": 0.023480250557845736
+  },
+  {
+   "id": "D01_VOL_SPIKE|4h|4|tp2R|2",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "4h",
+   "row": 4,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 2,
+   "combo": {
+    "vol_mult": 2.0,
+    "vol_len": 40,
+    "ema_filter": false
+   },
+   "select_n": 427,
+   "select_mean": 0.020623403494475317,
+   "plateau": 0.02047928386885233
+  },
+  {
+   "id": "D01_VOL_SPIKE|4h|3|tp2R|2",
+   "rule": "D01_VOL_SPIKE",
+   "tf": "4h",
+   "row": 3,
+   "exit": "tp2R|2",
+   "exit_index": 1,
+   "rank": 3,
+   "combo": {
+    "vol_mult": 2.0,
+    "vol_len": 20,
+    "ema_filter": true
+   },
+   "select_n": 331,
+   "select_mean": 0.026337097621216155,
+   "plateau": 0.02033516424322935
+  }
+ ],
+ "cells": [
+  {
+   "rule": "H3A_CROWD_FADE",
+   "tf": "1h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 108,
+   "plateau_positive": 89,
+   "best_plateau": 0.038527785236620184,
+   "select_signals": [
+    2371,
+    1855,
+    1506,
+    1175,
+    1012,
+    822,
+    2687,
+    2171,
+    1799,
+    1484,
+    1328,
+    1110,
+    2993,
+    2508,
+    2117,
+    1748,
+    1670,
+    1390
+   ],
+   "picks": [
+    [
+     4,
+     5
+    ],
+    [
+     5,
+     5
+    ],
+    [
+     3,
+     5
+    ]
+   ]
+  },
+  {
+   "rule": "H3A_CROWD_FADE",
+   "tf": "4h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 57,
+   "plateau_positive": 57,
+   "best_plateau": 0.031986466315084325,
+   "select_signals": [
+    1320,
+    1065,
+    845,
+    691,
+    594,
+    506,
+    1590,
+    1335,
+    1053,
+    900,
+    799,
+    713,
+    1766,
+    1552,
+    1299,
+    1148,
+    1041,
+    934
+   ],
+   "picks": [
+    [
+     0,
+     3
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     7,
+     3
+    ]
+   ]
+  },
+  {
+   "rule": "D04_FUNDING_FADE",
+   "tf": "1h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 99,
+   "plateau_positive": 30,
+   "best_plateau": 0.015395312727582532,
+   "select_signals": [
+    960,
+    483,
+    1040,
+    506,
+    1134,
+    588,
+    1600,
+    813,
+    1851,
+    931,
+    1917,
+    963,
+    2846,
+    1435,
+    3184,
+    1591,
+    3276,
+    1633
+   ],
+   "picks": [
+    [
+     3,
+     3
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "rule": "D04_FUNDING_FADE",
+   "tf": "4h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 22,
+   "plateau_positive": 12,
+   "best_plateau": 0.017651379192770253,
+   "select_signals": [
+    958,
+    472,
+    1037,
+    503,
+    1128,
+    568,
+    1597,
+    795,
+    1843,
+    920,
+    1901,
+    953,
+    2837,
+    1454,
+    3168,
+    1617,
+    3239,
+    1620
+   ],
+   "picks": [
+    [
+     16,
+     1
+    ],
+    [
+     14,
+     1
+    ],
+    [
+     16,
+     2
+    ]
+   ]
+  },
+  {
+   "rule": "D05_FUNDING_TREND",
+   "tf": "1h",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 162,
+   "plateau_positive": 127,
+   "best_plateau": 0.024627070932619753,
+   "select_signals": [
+    2935,
+    5018,
+    7643,
+    2067,
+    3548,
+    5403,
+    1569,
+    2609,
+    3961,
+    2844,
+    4905,
+    7538,
+    1996,
+    3435,
+    5281,
+    1461,
+    2469,
+    3804,
+    2919,
+    4968,
+    7553,
+    2058,
+    3483,
+    5324,
+    1495,
+    2499,
+    3823
+   ],
+   "picks": [
+    [
+     18,
+     5
+    ],
+    [
+     9,
+     5
+    ],
+    [
+     0,
+     5
+    ]
+   ]
+  },
+  {
+   "rule": "D05_FUNDING_TREND",
+   "tf": "4h",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 48,
+   "plateau_positive": 32,
+   "best_plateau": 0.019099280688730694,
+   "select_signals": [
+    779,
+    1274,
+    1843,
+    577,
+    905,
+    1298,
+    472,
+    700,
+    955,
+    864,
+    1319,
+    1886,
+    603,
+    901,
+    1293,
+    500,
+    705,
+    962,
+    883,
+    1283,
+    1782,
+    601,
+    866,
+    1207,
+    489,
+    677,
+    896
+   ],
+   "picks": [
+    [
+     25,
+     2
+    ],
+    [
+     16,
+     2
+    ],
+    [
+     26,
+     2
+    ]
+   ]
+  },
+  {
+   "rule": "D06_OI_DIVERGENCE",
+   "tf": "1h",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 120,
+   "plateau_positive": 16,
+   "best_plateau": 0.008746307171848534,
+   "select_signals": [
+    2094,
+    1939,
+    1851,
+    1015,
+    926,
+    846,
+    497,
+    438,
+    386,
+    1387,
+    1263,
+    1170,
+    698,
+    611,
+    550,
+    340,
+    297,
+    256,
+    930,
+    830,
+    739,
+    470,
+    394,
+    352,
+    217,
+    198,
+    162
+   ],
+   "picks": [
+    [
+     4,
+     4
+    ],
+    [
+     3,
+     4
+    ],
+    [
+     1,
+     4
+    ]
+   ]
+  },
+  {
+   "rule": "D06_OI_DIVERGENCE",
+   "tf": "4h",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 16,
+   "plateau_positive": 0,
+   "best_plateau": 0.0,
+   "select_signals": [
+    1389,
+    1315,
+    1250,
+    739,
+    676,
+    636,
+    386,
+    340,
+    314,
+    911,
+    852,
+    787,
+    480,
+    425,
+    378,
+    238,
+    208,
+    186,
+    589,
+    538,
+    484,
+    341,
+    280,
+    231,
+    147,
+    135,
+    112
+   ],
+   "picks": []
+  },
+  {
+   "rule": "D08_CROSS_COIN",
+   "tf": "1h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 108,
+   "plateau_positive": 16,
+   "best_plateau": 0.006983574854379401,
+   "select_signals": [
+    17520,
+    13315,
+    8760,
+    6637,
+    4380,
+    3312,
+    17520,
+    13248,
+    8760,
+    6608,
+    4380,
+    3303,
+    17520,
+    13344,
+    8760,
+    6671,
+    4380,
+    3322
+   ],
+   "picks": [
+    [
+     3,
+     5
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     7,
+     5
+    ]
+   ]
+  },
+  {
+   "rule": "D08_CROSS_COIN",
+   "tf": "4h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 44,
+   "plateau_positive": 5,
+   "best_plateau": 0.0035322760629594024,
+   "select_signals": [
+    4380,
+    3322,
+    2190,
+    1676,
+    1096,
+    840,
+    4380,
+    3307,
+    2190,
+    1650,
+    1096,
+    824,
+    4380,
+    3259,
+    2190,
+    1631,
+    1096,
+    820
+   ],
+   "picks": [
+    [
+     1,
+     1
+    ],
+    [
+     12,
+     1
+    ],
+    [
+     13,
+     1
+    ]
+   ]
+  },
+  {
+   "rule": "D10_VWAP_REVERT",
+   "tf": "30m",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 162,
+   "plateau_positive": 0,
+   "best_plateau": -0.006212200266843907,
+   "select_signals": [
+    28490,
+    30662,
+    35034,
+    28433,
+    30609,
+    34981,
+    27942,
+    30167,
+    34527,
+    16995,
+    18611,
+    22035,
+    16989,
+    18606,
+    22030,
+    16874,
+    18490,
+    21917,
+    4984,
+    5610,
+    6977,
+    4984,
+    5610,
+    6977,
+    4983,
+    5609,
+    6975
+   ],
+   "picks": []
+  },
+  {
+   "rule": "D10_VWAP_REVERT",
+   "tf": "1h",
+   "combos": 27,
+   "exits": 6,
+   "with_min_trades": 153,
+   "plateau_positive": 12,
+   "best_plateau": 0.007239637425213698,
+   "select_signals": [
+    7965,
+    8837,
+    10254,
+    7962,
+    8835,
+    10252,
+    7917,
+    8801,
+    10218,
+    3564,
+    4047,
+    4860,
+    3564,
+    4047,
+    4860,
+    3559,
+    4044,
+    4857,
+    527,
+    643,
+    799,
+    527,
+    643,
+    799,
+    527,
+    643,
+    799
+   ],
+   "picks": [
+    [
+     12,
+     5
+    ],
+    [
+     13,
+     5
+    ],
+    [
+     15,
+     5
+    ]
+   ]
+  },
+  {
+   "rule": "D01_VOL_SPIKE",
+   "tf": "1h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 108,
+   "plateau_positive": 69,
+   "best_plateau": 0.008294020859807374,
+   "select_signals": [
+    14623,
+    9459,
+    14308,
+    9239,
+    14479,
+    9266,
+    5303,
+    3714,
+    5423,
+    3885,
+    5512,
+    3890,
+    2375,
+    1784,
+    2490,
+    1891,
+    2623,
+    1966
+   ],
+   "picks": [
+    [
+     7,
+     5
+    ],
+    [
+     17,
+     4
+    ],
+    [
+     11,
+     5
+    ]
+   ]
+  },
+  {
+   "rule": "D01_VOL_SPIKE",
+   "tf": "4h",
+   "combos": 18,
+   "exits": 6,
+   "with_min_trades": 40,
+   "plateau_positive": 38,
+   "best_plateau": 0.023480250557845736,
+   "select_signals": [
+    3281,
+    2081,
+    3155,
+    2006,
+    3203,
+    2032,
+    1007,
+    708,
+    1032,
+    737,
+    1119,
+    782,
+    404,
+    307,
+    449,
+    335,
+    487,
+    355
+   ],
+   "picks": [
+    [
+     5,
+     1
+    ],
+    [
+     4,
+     1
+    ],
+    [
+     3,
+     1
+    ]
+   ]
+  }
+ ],
+ "missing": [],
+ "exits": [
+  "ladder|2",
+  "tp2R|2",
+  "tp3R|1.5",
+  "tp3R|2",
+  "tp3R|3",
+  "tp3R|4"
+ ],
+ "code": {
+  "commit": "cac97bc179cb47ce14e32a272089999d8a6a4ee7",
+  "files": {
+   "data.py": "57c8ca6f6bb10da26919091c608f7a818ab992b96566912addf9f64c9659bd5e",
+   "defs.py": "fefb4097752cfb2cfa35bc1871a88be92623f8dddd2775a9d0ddf742d38b4851",
+   "run.py": "1e20b7b08baadc2ec558c38ec7a8bbd9c84ba65d2913d0cbe9744b30fe828a4f",
+   "PREREG_NEWINFO.md": "60792c771e8cf65824daacee047690d179cce37a7022d6306b4b34d1eb573294",
+   "fullgrid/kernel.py": "a4995c15695c4870dbee13c0a7d42417f8da36238fe713d1c514968f076c0d16",
+   "fullgrid/run.py": "4e02df9cbc69116fae2b517ce54fd27ac50384f8761e4c0de473e5d3cce0af17"
+  }
+ },
+ "rule": {
+  "min_select": 150,
+  "top_per_cell": 3,
+  "plateau": "median of self and +-1-step neighbours (numbers; section 4's stop chain)"
+ }
+}
