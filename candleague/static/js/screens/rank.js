@@ -153,7 +153,7 @@ export async function mount(el, ctx) {
     const ok = px.state === "ok" || px.state === "fake";
     if (ls.doc && ls.doc.status) liveDot.set("엔진 기록 준비 중", "off");
     else if (!ls.allowed) liveDot.set(ls.doc && ls.doc.catching_up ? "포지션 ROE 감춤 · 다시 계산 중" : "포지션 ROE 감춤 · 엔진 기록 멈춤", "warn");
-    else if (ok) liveDot.set(`${pxAgeKo(px)} · ROE 5초마다`, "ok");
+    else if (ok) liveDot.set(`${px.state === "fake" ? "시험용 시세" : "실시간 시세"}${px.age_s == null ? "" : ` ${px.age_s < 60 ? `${Math.round(px.age_s)}초` : fmt.dur(px.age_s)} 전`} · ROE 5초마다`, "ok");
     else if (fresh) liveDot.set(`${pxAgeKo(px)} · ROE는 그 시세 기준`, "warn");
     else liveDot.set(`${px.state === "stale" ? pxAgeKo(px) : px.ko} · 포지션 ROE 감춤`, px.state === "stale" ? "warn" : "off");
     liveDot.title = "열린 포지션의 ROE = 지금 마크 가격 기준 (나갈 때 수수료 전) · 엔진이 10/01부터 다시 계산하는 동안, 기록이 15분 넘게 멈추거나 시세가 1분 넘게 지난 값이면 감춥니다";

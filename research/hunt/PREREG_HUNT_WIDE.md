@@ -47,6 +47,9 @@ Compute cost is not a constraint (a rented many-core server is allowed).
   < 50% of the total log gain; everything else is excluded from the paper lineup; real money only from 정식 after the
   forward criteria (section 12).
 * **(h) F4 out of the test:** the 38 watch picks were chosen after 2024-2026 was seen: select-only read (section 3).
+* **(i) 15m stays** (about 23:20 KST, after the loss autopsy recommended dropping it): the candidates are unchanged.
+* **(j) "주말 뺀 버전이랑 주말 포함한 버전도 둘다"** (about 23:50 KST): the study is reported both with weekends (the
+  tested machine) and without them, on all four timeframes, plus the autopsy's other machine-level options (7.4a).
 * **Deferred to round 2 (not in this addendum):** new-information entries, the loss-autopsy noise filters, custom
   values (section 14: each its own pre-registered study, designed and selected on 2021-2023 only, confirmed once per
   version on the test period 2024-01-01 .. 2026-10-01, every look in the program-wide ledger, plus forward paper data
@@ -670,6 +673,43 @@ named; DeepSeek rows per D11; old six and new 24 reported separately where a coi
   research/fullgrid/grid.values(), one at a time (F1: H 11.1's neighbours); in select, spike ratio = pick score /
   median neighbour score, written before the test per 7.3a (else post hoc); on test aggregates only. Nothing in this
   read can become a candidate, a paper account or the basis of a v2.
+
+### 7.4a Owners' late additions after the loss autopsy (2026-10-11, about 23:20-23:50 KST, before the pin)
+
+Reads only, in the Phase B module with its own pin line (7.4); none of them chooses a system or changes picks, P0-P4,
+p, BH, PASS or the lineup. Source of O1-O5: `research/autopsy/LOSS_AUTOPSY.md` section 2.2 (select period only). The
+owners kept 15m in the candidates (O6 of the autopsy declined) and asked that the study be analysed **both with and
+without weekends, on all four timeframes**.
+
+* **O1 weekend version.** Weekend = the signal bar closes (UTC) at or after Saturday 00:00 and before Monday 00:00. The
+  fixed ROWS run through the same machine with every first-unit entry whose signal bar closes in the weekend skipped
+  (counted as "weekend", not queued); adds, stops, chandelier and exits unchanged. All four timeframes (the autopsy saw
+  no weekend effect at 4h and a slightly worse core 4h without weekends, so 4h is reported, not presumed). Reported
+  beside the base (weekend included) with the same summary for each row: mean and median monthly ln M, win share,
+  positions, max drawdown, cost x2 mean ln M, controls (a) / (b) seeds 1-200 drawn through the same changed machine
+  (their weekend draws skipped the same way), pick-minus-control mean d_m, and the R1 headline shares (end and touch
+  >= x2 and >= x5) at the size fixed on select; select and test side by side. **O1b**: the same with only longs skipped.
+  Plus a select-period-only map: the section 5 walk rerun with the weekend-skip machine on select (what it would have
+  picked); those systems are not run on test here; a later round confirms any such pick once (section 14, program
+  ledger).
+* **O2 macro blackout.** As O1, skipping first-unit entries whose signal bar closes in [T - 120 min, T] (the bar closing
+  at T included), T = an FOMC statement time or a US nonfarm payrolls release time; variant: FOMC only. The official
+  dates 2020-2026 (federalreserve.gov, bls.gov) are written to `research/hunt/macro_calendar.json` and its line is
+  appended to the pin before the read runs (dates only; no outcome is read to make it).
+* **O3 same-side risk cap and stress line.** As O1, with one more limit: an entry or add is taken only if the open risk
+  of all positions on that side, across all coins, stays at or below half the total open-risk cap after it (machine A
+  at r = 0.5%: 2% of equity; machine B: min(2r, 30%)). Stress line at every 5m close: the sum over same-side open
+  positions of the loss to the current stop, plus a 5% and a 10% gap; its maximum as a share of equity, with the date.
+* **O4 momentum control at the pick's own times.** (f) = the pick's gated signal times and coins with side = sign(close
+  of the signal bar minus the close 20 bars before) (0: no entry, counted), through the same machine (one deterministic
+  run). Reported: pick minus (f) monthly ln M and the share of the pick's sides equal to (f)'s. Pre-registered label: a
+  pick whose test mean d_m against R6 (e) or against (f) is <= 0 is labelled "momentum only: a plain momentum entry did
+  as well".
+* **O5 label.** N17_KC_RSI rows carry "anti-momentum entry (select period; also on the 5-year anti-edge list, which saw
+  test months)" in the select table; no flipped system is added.
+
+Each of O1-O4 counts as one confirm look in the program-wide ledger (section 6); any of them becomes a rule only
+through a later round with its own pre-registration (section 14).
 
 ### 7.5 Not added (panel, rejected; recorded so that none comes back after the results)
 

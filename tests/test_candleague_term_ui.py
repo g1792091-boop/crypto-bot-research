@@ -282,7 +282,7 @@ out.feed3 = el.querySelectorAll("button.tm-fr").map((x) => x.textContent);
     assert o["led"] == "+100.00" and o["roe"] == "+30.00%"
     assert "BTCUSDT" in o["sel"] and "격리 30배" in o["sel"] and "손절에 닿으면−200.00 USDT" in o["sel"] and "왜 30배" in o["sel"]
     assert o["total"] == "+100.00" and "후보 미실현 +100.00 USDT" in o["band"] and "열린 4 · 롱 2 · 숏 2" in o["band"]
-    assert "D+11" in o["band"] and "11/" in o["band"]                       # the calendar day and the next checkpoint
+    assert "D+10" in o["band"] and "11/" in o["band"]     # days gone since 10/01 (the rule bot's D+n: 10/01 = D+0), next checkpoint
     assert o["rows"] == 1 and o["tableTab"].startswith("포지션 2")             # 묶음 후보: P1 shown, the hidden one counted
     prices = {p: t for p, t in o["lines"]}
     assert prices[100000].startswith("진입 롱 30배") and prices[98000] == "손절" and prices[106000] == "익절" and prices[96900] == "청산 추정"

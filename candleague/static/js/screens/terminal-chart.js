@@ -226,7 +226,7 @@ export function termChart(ctx, st, hooks) {
       }
     }
     const o = sel && sel.coin === st.coin && !hiddenPos(sel) ? sel : null;
-    if (o && inRange(o.since)) marks.push({time: barT(o.since), position: o.side > 0 ? "belowBar" : "aboveBar", shape: o.side > 0 ? "arrowUp" : "arrowDown", color: o.side > 0 ? cLong : cShort, text: sideKo(o.side)});
+    if (o && inRange(o.since)) marks.push({time: barT(o.since), position: o.side > 0 ? "belowBar" : "aboveBar", shape: o.side > 0 ? "arrowUp" : "arrowDown", color: o.side > 0 ? cLong : cShort, text: `${sideKo(o.side)} 열림`});
     marks.sort((a, b) => a.time - b.time);
     try { candles.setMarkers(marks); } catch (e) { /* a mark outside the data */ }
     for (const p of plines) { try { candles.removePriceLine(p); } catch (e) { /* gone */ } }
