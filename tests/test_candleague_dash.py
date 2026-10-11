@@ -63,7 +63,8 @@ def test_terminal_routes(tmp_path):
     snap.mkdir()
     c = _client(snap)
     vendor = "/static/vendor/lightweight-charts.standalone.production.js"
-    for url in ("/api/live", "/api/klines?coin=BTCUSD&tf=15m&limit=300", "/api/fills"):
+    for url in ("/api/live", "/api/klines?coin=BTCUSD&tf=15m&limit=300", "/api/fills", "/api/positions", "/api/sparks",
+                "/api/pnl"):
         assert c.get(url).status_code == 401, url
     assert c.get(vendor).status_code == 404                                 # the chart file needs a session too
     assert c.get("/static/tokens.css").status_code == 200                   # the login page's look does not
@@ -98,7 +99,8 @@ def test_static_kit_and_meta(tmp_path):
         assert c.get(f"/static/{f}").status_code == 200, f
     assert c.get("/static/cl.css").status_code == 404 and c.get("/api/meta").status_code == 401
     assert c.post("/login", content="password=pw-123", follow_redirects=False, headers=FORM).status_code == 303
-    for f in ("cl.css", "js/app.js", "js/lk.js", "js/screens/home.js", "js/screens/check.js", "js/screens/terminal.js"):
+    for f in ("cl.css", "nav.css", "kit.css", "js/app.js", "js/lk.js", "js/live.js", "js/poskit.js", "js/find.js",
+              "js/settings.js", "js/screens/home.js", "js/screens/check.js", "js/screens/terminal.js"):
         r = c.get(f"/static/{f}")
         assert r.status_code == 200 and r.headers["content-type"].split(";")[0] in ("text/css", "text/javascript"), f
     for bad in ("/static/js/../../dash.py", "/static/login.html", "/static/index.html", "/static/js/nope.js"):
@@ -242,3 +244,69 @@ def test_klines_before_a_past_entry():
     assert "endTime" not in seen[-1]
     fk = Live(mode="fake", clock=lambda: now / 1000).klines("ETHUSD", "1h", 120, 1_791_504_000_000)
     assert len(fk["bars"]["t"]) == 120 and max(fk["bars"]["t"]) < 1_791_504_000_000
+
+
+def test_shell_menu_header_and_screen_hooks():
+    """The rule bot's shell: the menu in groups 거래 | 홈 | 매매법 | 안내 with every screen a text button (터미널 first), the
+    phone's bottom bar, 찾기 (/), 설정 (,), the day pill and 모의 in the top bar; a screen module may bring its own css and
+    ask for the full width; the three live screens are routed."""
+    import re
+    root = os.path.join(ROOT, "candleague", "static")
+    app = open(os.path.join(root, "js", "app.js")).read()
+    groups = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"\}', re.search(r"const GROUPS = \[(.*?)\];", app, re.S).group(1))
+    assert groups == [("trade", "거래"), ("home", "홈"), ("method", "매매법"), ("info", "안내")]
+    menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
+    assert [m[0] for m in menu] == ["terminal", "positions", "entries", "fills", "home", "rank", "check", "compare", "weekly",
+                                    "strategies", "custom", "status", "howto"]
+    assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=[g[0] for g in groups].index)   # groups stay together
+    assert "mod.css" in app and "mod.wide" in app and "onPositions" in app and "onLive" in app
+    assert 'innerWidth >= WIDE_PX ? "terminal" : "home"' in app                    # the landing (D-2)
+    index = open(os.path.join(root, "index.html")).read()
+    for needle in ('id="findbtn"', 'id="botbar"', 'class="dchip cl-day"', ">모의</span>", "/static/nav.css", "/static/kit.css"):
+        assert needle in index, needle
+    for f in ("nav.css", "kit.css"):
+        css = open(os.path.join(root, f)).read()
+        assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsl\(", css), f          # colours only from the tokens
+        for m in re.finditer(r"font(?:-size)?:\s*([^;]+);", css):
+            assert "var(--t-" in m.group(1) or m.group(1).strip() == "inherit", (f, m.group(0))
+
+
+def test_position_kit_math():
+    """js/poskit.js (node): P&L and ROE at the mark, the distances to the lines, the crowding rule, the totals that leave
+    hidden positions out; nothing without a size or a price."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        return
+    kit = os.path.join(ROOT, "candleague", "static", "js", "poskit.js")
+    code = f"""
+import * as K from "file://{kit}";
+const p = {{side: 1, qty: 2, entry: 100, margin: 10, liq: 96, stop: 98, stop_is_lock: false, tp: 104, coin: "BTCUSD", hidden: false}};
+const s = {{side: -1, qty: 1, entry: 50, margin: 5, liq: 55, stop: 49, stop_is_lock: true, tp: null, coin: "ETHUSD", hidden: false}};
+const hid = {{side: 1, qty: null, entry: null, margin: null, coin: "SOLUSD", hidden: true}};
+const out = {{
+  a: K.livePnl(p, 101), b: K.livePnl(s, 51), h: K.livePnl(hid, 1), n: K.livePnl(p, null),
+  g: [K.gap(1, 100, 95), K.gap(-1, 100, 105), K.gap(1, 100, 101)],
+  r: K.roeOf(-1, 30, 100, 99),
+  c: [K.crowd({{long: 4, short: 1}}), K.crowd({{long: 1, short: 3}}), K.crowd({{long: 0, short: 0}})],
+  t: (({{coins, ...x}}) => x)(K.sums([p, s, hid], (c) => ({{BTCUSD: 101, ETHUSD: 51}})[c] ?? null)),
+  ok: [K.liveAllowed({{catching_up: false, old: false}}), K.liveAllowed({{catching_up: true}}), K.liveAllowed({{old: true}}), K.liveAllowed(null)],
+  grp: K.POS_GROUPS.map((x) => x.id).join(","), ing: [K.inGroup({{role: "flip", kind: "ds"}}, "ds"), K.inGroup({{role: "flip", kind: "ds"}}, "cand")],
+}};
+console.log(JSON.stringify(out));
+"""
+    r = subprocess.run([node, "--input-type=module", "-e", code], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr[:600]
+    o = json.loads(r.stdout)
+    assert o["a"]["pnl"] == 2 and o["a"]["roe"] == 0.2 and abs(o["a"]["liqGap"] - 5 / 101) < 1e-12
+    assert abs(o["a"]["stopGap"] - 3 / 101) < 1e-12 and o["a"]["lockGap"] is None and abs(o["a"]["tpGap"] - 3 / 101) < 1e-12
+    assert o["b"]["pnl"] == -1 and o["b"]["roe"] == -0.2 and o["b"]["stopGap"] is None and abs(o["b"]["lockGap"] + 2 / 51) < 1e-12
+    assert o["h"] is None and o["n"] is None
+    assert o["g"] == [0.05, 0.05, -0.01] and abs(o["r"] - 0.3) < 1e-12
+    assert [c["on"] for c in o["c"]] == [True, False, False] and o["c"][0]["side"] == 1
+    t = o["t"]
+    assert (t["n"], t["long"], t["short"], t["hidden"], t["priced"], t["winning"], t["losing"]) == (3, 2, 1, 1, 2, 1, 1)
+    assert t["pnl"] == 1 and t["margin"] == 15 and abs(t["roe"] - 1 / 15) < 1e-12
+    assert o["ok"] == [True, False, False, False]
+    assert o["grp"] == "all,cand,quarter,exitonly,base,flip,core,ds" and o["ing"] == [True, False]
