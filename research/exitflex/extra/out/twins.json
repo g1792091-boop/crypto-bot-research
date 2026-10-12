@@ -1,0 +1,1387 @@
+{
+ "section": "TW",
+ "stage": "twins",
+ "meta": {
+  "o7_commit": "d861c84f1eaba53b68446766426e4d1c01d7c7f2",
+  "extra_pin_sha256": "4a91b1bf296e10cb5aec2925bb1aa488ddb24fd594e8f6667d77ca9c37b64eee",
+  "select_json": {
+   "file": "select.json",
+   "sha256": "58d848442389ecb035fe6d882462f4e2306964785049c442a1e098ce40880171",
+   "mtime_utc": "2026-10-12T13:02:38Z"
+  },
+  "select_ko": {
+   "file": "SELECT_KO.md",
+   "sha256": "4d7536171c73f047f4e540016af156604564590fc90f2bc1935e5a0feb60a4a7",
+   "mtime_utc": "2026-10-12T13:02:38Z"
+  },
+  "run_start_utc": "2026-10-12T14:56:38Z",
+  "run_end_utc": "2026-10-12T15:01:24Z",
+  "results_dir": "results",
+  "o8_breach": false,
+  "fix": null,
+  "accounts": {
+   "x": 6764,
+   "house": 6536,
+   "house_e0": 76,
+   "flip": 64638,
+   "total": 78014
+  },
+  "files": 16644,
+  "removed": [],
+  "f11_mark": {
+   "x": true,
+   "house": true
+  },
+  "twins_ds_sha256": "c706ab7a1fa20f05e5ffdd35ca33524f073590c9dbb7c8aaecf85dc3919431ba",
+  "private_section_sha256": "a97cc1eee937759a66e07d10e124099c4eba8c4eb97b2f37e4d6f4ac1667a7de"
+ },
+ "pools": {
+  "core": {
+   "n_units": 23,
+   "eligible_ids": [],
+   "thin_ids": {
+    "x": [
+     "core-DOGE-4h-1-x",
+     "core-N19_FIB_CHOP-4h-1-x"
+    ],
+    "house": [
+     "base-core-DOGE-4h"
+    ],
+    "flip": [
+     "core-N19_FIB_CHOP-4h-1-flip"
+    ]
+   },
+   "removed": {
+    "strategies": [],
+    "units": 0
+   },
+   "f11_note": {
+    "pick": false,
+    "x": false,
+    "house": false
+   },
+   "rows": [
+    {
+     "id": "E0",
+     "kind": "pick",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 23,
+     "entered": 3308,
+     "skipped": 11853,
+     "rejected": 13278,
+     "closed": 3308,
+     "win_share": 0.3521765417170496,
+     "hold": {
+      "median": 17.683333333333334,
+      "p90": 100.47333333333336,
+      "share_gt4": 0.8370616686819831,
+      "share_gt8": 0.7185610640870617,
+      "share_gt18": 0.4954655380894801
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2139,
+      "LOCK": 0,
+      "LIQ": 1,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 1162,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 6
+     },
+     "G": 0.020375780789486184,
+     "busts": 0,
+     "final_multiple_median": 1.9253590424208413,
+     "max_dd_median": 0.3326232174525129
+    },
+    {
+     "id": "E0",
+     "kind": "x",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 23,
+     "entered": 8029,
+     "skipped": 51012,
+     "rejected": 14346,
+     "closed": 8029,
+     "win_share": 0.2842197035745423,
+     "hold": {
+      "median": 13.566666666666666,
+      "p90": 75.24666666666666,
+      "share_gt4": 0.8129281355087806,
+      "share_gt8": 0.6517623614397808,
+      "share_gt18": 0.419603935732968
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 5743,
+      "LOCK": 0,
+      "LIQ": 1,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 2269,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 16
+     },
+     "G": -0.02644610981068909,
+     "busts": 0,
+     "final_multiple_median": 0.6588111519079554,
+     "max_dd_median": 0.7408922396735755
+    },
+    {
+     "id": "E0",
+     "kind": "house",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": "= 기본값 계좌",
+     "same_as_f3": null,
+     "n_units": 23,
+     "entered": 23773,
+     "skipped": 21046,
+     "rejected": 11983,
+     "closed": 23773,
+     "win_share": 0.7036974719219282,
+     "hold": {
+      "median": 1.2333333333333334,
+      "p90": 6.8,
+      "share_gt4": 0.20073192276952845,
+      "share_gt8": 0.07807176208303537,
+      "share_gt18": 0.017162327009632775
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 6819,
+      "LOCK": 16951,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 3
+     },
+     "G": -0.07737522181085142,
+     "busts": 6,
+     "final_multiple_median": 0.15421399740278394,
+     "max_dd_median": 0.8498461206393667
+    },
+    {
+     "id": "E0",
+     "kind": "flip",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 23,
+     "entered": {
+      "seed_median": 3314.5,
+      "seed_min": 3273.0,
+      "seed_max": 3364.0
+     },
+     "skipped": 11671.0,
+     "rejected": 13460.5,
+     "closed": 3314.5,
+     "win_share": 0.3035123595752794,
+     "hold": {
+      "seed_median": {
+       "median": 16.625,
+       "p90": 100.59916666666666,
+       "share_gt4": 0.8124238746673993,
+       "share_gt8": 0.6872806206678672,
+       "share_gt18": 0.4822209531610186
+      },
+      "seed_min": {
+       "median": 16.191666666666666,
+       "p90": 95.13333333333334,
+       "share_gt4": 0.802416918429003,
+       "share_gt8": 0.6793544457978076,
+       "share_gt18": 0.4746268656716418
+      },
+      "seed_max": {
+       "median": 17.333333333333332,
+       "p90": 102.6666666666667,
+       "share_gt4": 0.8200421306048751,
+       "share_gt8": 0.6990671080349082,
+       "share_gt18": 0.4899878640776699
+      }
+     },
+     "reasons": {
+      "NONE": 0.0,
+      "SL": 2302.0,
+      "LOCK": 0.0,
+      "LIQ": 1.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 999.0,
+      "RULE": 0.0,
+      "RAND": 0.0,
+      "END": 6.5
+     },
+     "G": {
+      "seed_median": 0.00012472900684143317,
+      "seed_min": -0.004745971594864017,
+      "seed_max": 0.004382554965785182
+     },
+     "busts": {
+      "seed_median": 0.0,
+      "seed_min": 0.0,
+      "seed_max": 0.0
+     },
+     "final_multiple_median": {
+      "seed_median": 0.9934991496328422,
+      "seed_min": 0.8029432553678907,
+      "seed_max": 1.2367351077650988
+     },
+     "max_dd_median": {
+      "seed_median": 0.4701289834147327,
+      "seed_min": 0.3744858373728397,
+      "seed_max": 0.5486794109290315
+     }
+    }
+   ],
+   "table1": [
+    {
+     "kind": "cand",
+     "size": 1.0,
+     "name_ko": "후보",
+     "n_units": 23,
+     "entered": 3183,
+     "skipped": 11648,
+     "rejected": 13608,
+     "closed": 3183,
+     "win_share": 0.35375431982406536,
+     "hold": {
+      "median": 17.683333333333334,
+      "p90": 100.29666666666667,
+      "share_gt4": 0.837574615142947,
+      "share_gt8": 0.7172478793590952,
+      "share_gt18": 0.4948162111215834
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2054,
+      "LOCK": 0,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 1123,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 6
+     },
+     "G": 0.028006444435607517,
+     "busts": 0,
+     "final_multiple_median": 2.670913242182083,
+     "max_dd_median": 0.806385266220447
+    },
+    {
+     "kind": "quarter",
+     "size": 0.25,
+     "name_ko": "1/4 크기",
+     "n_units": 23,
+     "entered": 3308,
+     "skipped": 11853,
+     "rejected": 13278,
+     "closed": 3308,
+     "win_share": 0.3521765417170496,
+     "hold": {
+      "median": 17.683333333333334,
+      "p90": 100.47333333333336,
+      "share_gt4": 0.8370616686819831,
+      "share_gt8": 0.7185610640870617,
+      "share_gt18": 0.4954655380894801
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2139,
+      "LOCK": 0,
+      "LIQ": 1,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 1162,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 6
+     },
+     "G": 0.020375780789486184,
+     "busts": 0,
+     "final_multiple_median": 1.9253590424208413,
+     "max_dd_median": 0.3326232174525129
+    },
+    {
+     "kind": "exitonly",
+     "size": 1.0,
+     "name_ko": "청산만 바꾼 기본값",
+     "n_units": 23,
+     "entered": 5333,
+     "skipped": 32516,
+     "rejected": 13918,
+     "closed": 5333,
+     "win_share": 0.2812675792237015,
+     "hold": {
+      "median": 16.216666666666665,
+      "p90": 81.32000000000001,
+      "share_gt4": 0.8511156947309206,
+      "share_gt8": 0.7014813425839115,
+      "share_gt18": 0.46577911119444965
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 3830,
+      "LOCK": 0,
+      "LIQ": 1,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 1493,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 9
+     },
+     "G": -0.09095212561093423,
+     "busts": 8,
+     "final_multiple_median": 0.036128737192800936,
+     "max_dd_median": 0.990803119487624
+    },
+    {
+     "kind": "exitonly",
+     "size": 0.25,
+     "name_ko": "청산만 바꾼 기본값",
+     "n_units": 23,
+     "entered": 8029,
+     "skipped": 51012,
+     "rejected": 14346,
+     "closed": 8029,
+     "win_share": 0.2842197035745423,
+     "hold": {
+      "median": 13.566666666666666,
+      "p90": 75.24666666666666,
+      "share_gt4": 0.8129281355087806,
+      "share_gt8": 0.6517623614397808,
+      "share_gt18": 0.419603935732968
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 5743,
+      "LOCK": 0,
+      "LIQ": 1,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 2269,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 16
+     },
+     "G": -0.02644610981068909,
+     "busts": 0,
+     "final_multiple_median": 0.6588111519079554,
+     "max_dd_median": 0.7408922396735755
+    },
+    {
+     "kind": "base",
+     "size": 1.0,
+     "name_ko": "기본값",
+     "n_units": 23,
+     "entered": 11028,
+     "skipped": 8815,
+     "rejected": 9918,
+     "closed": 11028,
+     "win_share": 0.7179905694595575,
+     "hold": {
+      "median": 1.4,
+      "p90": 8.0,
+      "share_gt4": 0.23277112803772215,
+      "share_gt8": 0.0994740660137831,
+      "share_gt18": 0.024483133841131665
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 3030,
+      "LOCK": 7998,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 0
+     },
+     "G": -0.11152176768613851,
+     "busts": 13,
+     "final_multiple_median": 0.001968256820128504,
+     "max_dd_median": 0.9981020108090377
+    },
+    {
+     "kind": "base",
+     "size": 0.25,
+     "name_ko": "기본값",
+     "n_units": 23,
+     "entered": 23773,
+     "skipped": 21046,
+     "rejected": 11983,
+     "closed": 23773,
+     "win_share": 0.7036974719219282,
+     "hold": {
+      "median": 1.2333333333333334,
+      "p90": 6.8,
+      "share_gt4": 0.20073192276952845,
+      "share_gt8": 0.07807176208303537,
+      "share_gt18": 0.017162327009632775
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 6819,
+      "LOCK": 16951,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 3
+     },
+     "G": -0.07737522181085142,
+     "busts": 6,
+     "final_multiple_median": 0.15421399740278394,
+     "max_dd_median": 0.8498461206393667
+    },
+    {
+     "kind": "flip",
+     "size": 1.0,
+     "name_ko": "동전 던지기(리그와 같은 동전, 실제 크기)",
+     "n_units": 23,
+     "entered": 3279,
+     "skipped": 11450,
+     "rejected": 13710,
+     "closed": 3279,
+     "win_share": 0.2958218969197926,
+     "hold": {
+      "median": 16.2,
+      "p90": 94.03666666666672,
+      "share_gt4": 0.8170173833485819,
+      "share_gt8": 0.6849649283318084,
+      "share_gt18": 0.478194571515706
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2307,
+      "LOCK": 0,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 965,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 7
+     },
+     "G": -0.04818979225972214,
+     "busts": 0,
+     "final_multiple_median": 0.22431314392523527,
+     "max_dd_median": 0.9586879739712817
+    },
+    {
+     "kind": "flip",
+     "size": 0.25,
+     "name_ko": "동전 던지기(리그와 같은 동전, 1/4 크기)",
+     "n_units": 23,
+     "entered": 3321,
+     "skipped": 11616,
+     "rejected": 13502,
+     "closed": 3321,
+     "win_share": 0.295091839807287,
+     "hold": {
+      "median": 16.4,
+      "p90": 95.13333333333334,
+      "share_gt4": 0.8169226136705812,
+      "share_gt8": 0.686841312857573,
+      "share_gt18": 0.47937368262571517
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2339,
+      "LOCK": 0,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 975,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 7
+     },
+     "G": -0.004014623878941156,
+     "busts": 0,
+     "final_multiple_median": 0.8990356175511015,
+     "max_dd_median": 0.5159905166486698
+    },
+    {
+     "kind": "flip20",
+     "size": 0.25,
+     "name_ko": "동전 20번(1/4 크기)",
+     "n_units": 23,
+     "entered": {
+      "seed_median": 3314.5,
+      "seed_min": 3273.0,
+      "seed_max": 3364.0
+     },
+     "skipped": 11671.0,
+     "rejected": 13460.5,
+     "closed": 3314.5,
+     "win_share": 0.3035123595752794,
+     "hold": {
+      "seed_median": {
+       "median": 16.625,
+       "p90": 100.59916666666666,
+       "share_gt4": 0.8124238746673993,
+       "share_gt8": 0.6872806206678672,
+       "share_gt18": 0.4822209531610186
+      },
+      "seed_min": {
+       "median": 16.191666666666666,
+       "p90": 95.13333333333334,
+       "share_gt4": 0.802416918429003,
+       "share_gt8": 0.6793544457978076,
+       "share_gt18": 0.4746268656716418
+      },
+      "seed_max": {
+       "median": 17.333333333333332,
+       "p90": 102.6666666666667,
+       "share_gt4": 0.8200421306048751,
+       "share_gt8": 0.6990671080349082,
+       "share_gt18": 0.4899878640776699
+      }
+     },
+     "reasons": {
+      "NONE": 0.0,
+      "SL": 2302.0,
+      "LOCK": 0.0,
+      "LIQ": 1.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 999.0,
+      "RULE": 0.0,
+      "RAND": 0.0,
+      "END": 6.5
+     },
+     "G": {
+      "seed_median": 0.00012472900684143317,
+      "seed_min": -0.004745971594864017,
+      "seed_max": 0.004382554965785182
+     },
+     "busts": {
+      "seed_median": 0.0,
+      "seed_min": 0.0,
+      "seed_max": 0.0
+     },
+     "final_multiple_median": {
+      "seed_median": 0.9934991496328422,
+      "seed_min": 0.8029432553678907,
+      "seed_max": 1.2367351077650988
+     },
+     "max_dd_median": {
+      "seed_median": 0.4701289834147327,
+      "seed_min": 0.3744858373728397,
+      "seed_max": 0.5486794109290315
+     }
+    }
+   ],
+   "table4": [
+    {
+     "id": "E0",
+     "n_units": 23,
+     "G_pick": 0.020375780789486184,
+     "G_x": -0.02644610981068909,
+     "pick_above": 21
+    }
+   ]
+  },
+  "ds": {
+   "n_units": 15,
+   "eligible_ids": [
+    "F2.n50.b"
+   ],
+   "thin_ids": {
+    "x": [
+     "ds-F10_OTE-4h-1-x",
+     "ds-F5_BOX-4h-1-x",
+     "ds-F7_RF_ONLY-4h-1-x"
+    ],
+    "house": [
+     "base-ds-F5_BOX-4h"
+    ],
+    "flip": [
+     "ds-F5_BOX-4h-1-flip",
+     "ds-F7_RF_ONLY-4h-1-flip"
+    ]
+   },
+   "removed": {
+    "strategies": [],
+    "units": 0
+   },
+   "f11_note": {
+    "pick": true,
+    "x": true,
+    "house": true
+   },
+   "rows": [
+    {
+     "id": "E0",
+     "kind": "pick",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": 1587,
+     "skipped": 21171,
+     "rejected": 37084,
+     "closed": 1587,
+     "win_share": 0.3011972274732199,
+     "hold": {
+      "median": 33.21666666666667,
+      "p90": 182.23000000000002,
+      "share_gt4": 0.931316950220542,
+      "share_gt8": 0.8443604284814115,
+      "share_gt18": 0.6710775047258979
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1104,
+      "LOCK": 0,
+      "LIQ": 2,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 471,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 10
+     }
+    },
+    {
+     "id": "E0",
+     "kind": "x",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": 2518,
+     "skipped": 34868,
+     "rejected": 24863,
+     "closed": 2518,
+     "win_share": 0.26092136616362194,
+     "hold": {
+      "median": 24.025,
+      "p90": 150.4,
+      "share_gt4": 0.8725178713264495,
+      "share_gt8": 0.7593328038125496,
+      "share_gt18": 0.5873709293089754
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1855,
+      "LOCK": 0,
+      "LIQ": 3,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 651,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 9
+     }
+    },
+    {
+     "id": "E0",
+     "kind": "house",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": "= 기본값 계좌",
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": 15393,
+     "skipped": 24500,
+     "rejected": 19458,
+     "closed": 15393,
+     "win_share": 0.7215617488468784,
+     "hold": {
+      "median": 1.8333333333333333,
+      "p90": 10.546666666666685,
+      "share_gt4": 0.29935685051646854,
+      "share_gt8": 0.1468199831092055,
+      "share_gt18": 0.04164230494380563
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 4166,
+      "LOCK": 11225,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 2
+     }
+    },
+    {
+     "id": "E0",
+     "kind": "flip",
+     "size": 0.25,
+     "order": 0,
+     "name_ko": "지금 청산(E0)",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": {
+      "seed_median": 1614.5,
+      "seed_min": 1571.0,
+      "seed_max": 1648.0
+     },
+     "skipped": 21120.5,
+     "rejected": 37103.5,
+     "closed": 1614.5,
+     "win_share": 0.2668073685569704,
+     "hold": {
+      "seed_median": {
+       "median": 31.93333333333333,
+       "p90": 182.655,
+       "share_gt4": 0.8972436700474595,
+       "share_gt8": 0.8083962868319272,
+       "share_gt18": 0.6496079735755337
+      },
+      "seed_min": {
+       "median": 30.4,
+       "p90": 172.13333333333333,
+       "share_gt4": 0.8917886696371737,
+       "share_gt8": 0.7899262899262899,
+       "share_gt18": 0.6273671350030544
+      },
+      "seed_max": {
+       "median": 34.35,
+       "p90": 190.4833333333335,
+       "share_gt4": 0.9081697276757441,
+       "share_gt8": 0.8210140500916311,
+       "share_gt18": 0.667296786389414
+      }
+     },
+     "reasons": {
+      "NONE": 0.0,
+      "SL": 1171.5,
+      "LOCK": 0.0,
+      "LIQ": 2.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 418.5,
+      "RULE": 0.0,
+      "RAND": 0.0,
+      "END": 9.5
+     }
+    },
+    {
+     "id": "F2.n50.b",
+     "kind": "pick",
+     "size": 0.25,
+     "order": 18,
+     "name_ko": "이동평균 이탈",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "hold": {
+      "median": 14.0,
+      "p90": 72.5,
+      "share_gt4": 0.7820593809222994,
+      "share_gt8": 0.6244472520530638,
+      "share_gt18": 0.4162981680353759
+     },
+     "entered": 3166,
+     "entered_e0": 1587,
+     "entered_change_pct": 99.49590422180215,
+     "dir_hold": "짧아짐",
+     "dir_entries": "늘어남"
+    },
+    {
+     "id": "F2.n50.b",
+     "kind": "x",
+     "size": 0.25,
+     "order": 18,
+     "name_ko": "이동평균 이탈",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": 6364,
+     "entered_e0": 2518,
+     "entered_change_pct": 152.74027005559967,
+     "skipped": 28539,
+     "skipped_e0": 34868,
+     "rejected": 27346,
+     "closed": 6364,
+     "win_share": 0.34726587052168445,
+     "hold": {
+      "median": 7.0,
+      "p90": 45.0,
+      "share_gt4": 0.6530483972344437,
+      "share_gt8": 0.46401634192331864,
+      "share_gt18": 0.27294154619736016
+     },
+     "hold_e0": {
+      "median": 24.025,
+      "p90": 150.4,
+      "share_gt4": 0.8725178713264495,
+      "share_gt8": 0.7593328038125496,
+      "share_gt18": 0.5873709293089754
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1124,
+      "LOCK": 0,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 5235,
+      "RAND": 0,
+      "END": 5
+     },
+     "reasons_e0": {
+      "NONE": 0,
+      "SL": 1855,
+      "LOCK": 0,
+      "LIQ": 3,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 651,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 9
+     },
+     "dir_hold": "짧아짐",
+     "dir_entries": "늘어남"
+    },
+    {
+     "id": "F2.n50.b",
+     "kind": "house",
+     "size": 0.25,
+     "order": 18,
+     "name_ko": "이동평균 이탈",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": 9109,
+     "entered_e0": 15393,
+     "entered_change_pct": -40.82375105567466,
+     "skipped": 39674,
+     "skipped_e0": 24500,
+     "rejected": 13466,
+     "closed": 9109,
+     "win_share": 0.31990339224942366,
+     "hold": {
+      "median": 6.483333333333333,
+      "p90": 44.0,
+      "share_gt4": 0.6120320562081458,
+      "share_gt8": 0.4397848281918981,
+      "share_gt18": 0.2664397848281919
+     },
+     "hold_e0": {
+      "median": 1.8333333333333333,
+      "p90": 10.546666666666685,
+      "share_gt4": 0.29935685051646854,
+      "share_gt8": 0.1468199831092055,
+      "share_gt18": 0.04164230494380563
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 2890,
+      "LOCK": 0,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 6212,
+      "RAND": 0,
+      "END": 7
+     },
+     "reasons_e0": {
+      "NONE": 0,
+      "SL": 4166,
+      "LOCK": 11225,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 2
+     },
+     "dir_hold": "길어짐",
+     "dir_entries": "줄어듦"
+    },
+    {
+     "id": "F2.n50.b",
+     "kind": "flip",
+     "size": 0.25,
+     "order": 18,
+     "name_ko": "이동평균 이탈",
+     "mark": null,
+     "same_as_f3": null,
+     "n_units": 15,
+     "entered": {
+      "seed_median": 3223.0,
+      "seed_min": 3194.0,
+      "seed_max": 3252.0
+     },
+     "entered_e0": {
+      "seed_median": 1614.5,
+      "seed_min": 1571.0,
+      "seed_max": 1648.0
+     },
+     "entered_change_pct": 99.84533359630252,
+     "skipped": 17974.5,
+     "skipped_e0": 21120.5,
+     "rejected": 38657.0,
+     "closed": 3223.0,
+     "win_share": 0.3452901146915849,
+     "hold": {
+      "seed_median": {
+       "median": 13.0,
+       "p90": 65.0,
+       "share_gt4": 0.7774343095517845,
+       "share_gt8": 0.6222665234055178,
+       "share_gt18": 0.4047008294588688
+      },
+      "seed_min": {
+       "median": 13.0,
+       "p90": 60.450000000000045,
+       "share_gt4": 0.7709617755856967,
+       "share_gt8": 0.6130232558139534,
+       "share_gt18": 0.3946798639034952
+      },
+      "seed_max": {
+       "median": 14.0,
+       "p90": 68.20000000000027,
+       "share_gt4": 0.7831624728176453,
+       "share_gt8": 0.6343143393863494,
+       "share_gt18": 0.41337480559875583
+      }
+     },
+     "hold_e0": {
+      "seed_median": {
+       "median": 31.93333333333333,
+       "p90": 182.655,
+       "share_gt4": 0.8972436700474595,
+       "share_gt8": 0.8083962868319272,
+       "share_gt18": 0.6496079735755337
+      },
+      "seed_min": {
+       "median": 30.4,
+       "p90": 172.13333333333333,
+       "share_gt4": 0.8917886696371737,
+       "share_gt8": 0.7899262899262899,
+       "share_gt18": 0.6273671350030544
+      },
+      "seed_max": {
+       "median": 34.35,
+       "p90": 190.4833333333335,
+       "share_gt4": 0.9081697276757441,
+       "share_gt8": 0.8210140500916311,
+       "share_gt18": 0.667296786389414
+      }
+     },
+     "reasons": {
+      "NONE": 0.0,
+      "SL": 694.0,
+      "LOCK": 0.0,
+      "LIQ": 0.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 0.0,
+      "RULE": 2517.0,
+      "RAND": 0.0,
+      "END": 5.0
+     },
+     "reasons_e0": {
+      "NONE": 0.0,
+      "SL": 1171.5,
+      "LOCK": 0.0,
+      "LIQ": 2.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 418.5,
+      "RULE": 0.0,
+      "RAND": 0.0,
+      "END": 9.5
+     },
+     "dir_hold": "짧아짐",
+     "dir_entries": "늘어남"
+    }
+   ],
+   "table1": [
+    {
+     "kind": "cand",
+     "size": 1.0,
+     "name_ko": "후보",
+     "n_units": 15,
+     "entered": 1564,
+     "skipped": 20800,
+     "rejected": 37478,
+     "closed": 1564,
+     "win_share": 0.3024296675191816,
+     "hold": {
+      "median": 33.13333333333333,
+      "p90": 181.89000000000004,
+      "share_gt4": 0.9315856777493606,
+      "share_gt8": 0.8433503836317136,
+      "share_gt18": 0.6739130434782609
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1086,
+      "LOCK": 0,
+      "LIQ": 2,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 466,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 10
+     }
+    },
+    {
+     "kind": "quarter",
+     "size": 0.25,
+     "name_ko": "1/4 크기",
+     "n_units": 15,
+     "entered": 1587,
+     "skipped": 21171,
+     "rejected": 37084,
+     "closed": 1587,
+     "win_share": 0.3011972274732199,
+     "hold": {
+      "median": 33.21666666666667,
+      "p90": 182.23000000000002,
+      "share_gt4": 0.931316950220542,
+      "share_gt8": 0.8443604284814115,
+      "share_gt18": 0.6710775047258979
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1104,
+      "LOCK": 0,
+      "LIQ": 2,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 471,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 10
+     }
+    },
+    {
+     "kind": "exitonly",
+     "size": 1.0,
+     "name_ko": "청산만 바꾼 기본값",
+     "n_units": 15,
+     "entered": 1959,
+     "skipped": 27550,
+     "rejected": 24801,
+     "closed": 1959,
+     "win_share": 0.27462991322103114,
+     "hold": {
+      "median": 27.166666666666668,
+      "p90": 166.58000000000004,
+      "share_gt4": 0.8968861664114344,
+      "share_gt8": 0.7942827973455845,
+      "share_gt18": 0.624298111281266
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1415,
+      "LOCK": 0,
+      "LIQ": 3,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 534,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 7
+     }
+    },
+    {
+     "kind": "exitonly",
+     "size": 0.25,
+     "name_ko": "청산만 바꾼 기본값",
+     "n_units": 15,
+     "entered": 2518,
+     "skipped": 34868,
+     "rejected": 24863,
+     "closed": 2518,
+     "win_share": 0.26092136616362194,
+     "hold": {
+      "median": 24.025,
+      "p90": 150.4,
+      "share_gt4": 0.8725178713264495,
+      "share_gt8": 0.7593328038125496,
+      "share_gt18": 0.5873709293089754
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1855,
+      "LOCK": 0,
+      "LIQ": 3,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 651,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 9
+     }
+    },
+    {
+     "kind": "base",
+     "size": 1.0,
+     "name_ko": "기본값",
+     "n_units": 15,
+     "entered": 7132,
+     "skipped": 9221,
+     "rejected": 16238,
+     "closed": 7132,
+     "win_share": 0.737801458216489,
+     "hold": {
+      "median": 2.05,
+      "p90": 11.665000000000008,
+      "share_gt4": 0.33286595625350535,
+      "share_gt8": 0.16545148625911385,
+      "share_gt18": 0.050616937745372965
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1817,
+      "LOCK": 5314,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 1
+     }
+    },
+    {
+     "kind": "base",
+     "size": 0.25,
+     "name_ko": "기본값",
+     "n_units": 15,
+     "entered": 15393,
+     "skipped": 24500,
+     "rejected": 19458,
+     "closed": 15393,
+     "win_share": 0.7215617488468784,
+     "hold": {
+      "median": 1.8333333333333333,
+      "p90": 10.546666666666685,
+      "share_gt4": 0.29935685051646854,
+      "share_gt8": 0.1468199831092055,
+      "share_gt18": 0.04164230494380563
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 4166,
+      "LOCK": 11225,
+      "LIQ": 0,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 0,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 2
+     }
+    },
+    {
+     "kind": "flip",
+     "size": 1.0,
+     "name_ko": "동전 던지기(리그와 같은 동전, 실제 크기)",
+     "n_units": 15,
+     "entered": 1483,
+     "skipped": 15714,
+     "rejected": 37039,
+     "closed": 1483,
+     "win_share": 0.26972353337828725,
+     "hold": {
+      "median": 32.06666666666667,
+      "p90": 181.31666666666663,
+      "share_gt4": 0.9002022926500337,
+      "share_gt8": 0.8044504383007417,
+      "share_gt18": 0.6439649359406608
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1079,
+      "LOCK": 0,
+      "LIQ": 2,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 393,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 9
+     }
+    },
+    {
+     "kind": "flip",
+     "size": 0.25,
+     "name_ko": "동전 던지기(리그와 같은 동전, 1/4 크기)",
+     "n_units": 15,
+     "entered": 1595,
+     "skipped": 21312,
+     "rejected": 36935,
+     "closed": 1595,
+     "win_share": 0.26332288401253917,
+     "hold": {
+      "median": 33.3,
+      "p90": 187.36333333333363,
+      "share_gt4": 0.9015673981191222,
+      "share_gt8": 0.8075235109717869,
+      "share_gt18": 0.6526645768025079
+     },
+     "reasons": {
+      "NONE": 0,
+      "SL": 1171,
+      "LOCK": 0,
+      "LIQ": 2,
+      "OPEN": 0,
+      "REJECT": 0,
+      "NOFILL": 0,
+      "NOATR": 0,
+      "TP": 412,
+      "RULE": 0,
+      "RAND": 0,
+      "END": 10
+     }
+    },
+    {
+     "kind": "flip20",
+     "size": 0.25,
+     "name_ko": "동전 20번(1/4 크기)",
+     "n_units": 15,
+     "entered": {
+      "seed_median": 1614.5,
+      "seed_min": 1571.0,
+      "seed_max": 1648.0
+     },
+     "skipped": 21120.5,
+     "rejected": 37103.5,
+     "closed": 1614.5,
+     "win_share": 0.2668073685569704,
+     "hold": {
+      "seed_median": {
+       "median": 31.93333333333333,
+       "p90": 182.655,
+       "share_gt4": 0.8972436700474595,
+       "share_gt8": 0.8083962868319272,
+       "share_gt18": 0.6496079735755337
+      },
+      "seed_min": {
+       "median": 30.4,
+       "p90": 172.13333333333333,
+       "share_gt4": 0.8917886696371737,
+       "share_gt8": 0.7899262899262899,
+       "share_gt18": 0.6273671350030544
+      },
+      "seed_max": {
+       "median": 34.35,
+       "p90": 190.4833333333335,
+       "share_gt4": 0.9081697276757441,
+       "share_gt8": 0.8210140500916311,
+       "share_gt18": 0.667296786389414
+      }
+     },
+     "reasons": {
+      "NONE": 0.0,
+      "SL": 1171.5,
+      "LOCK": 0.0,
+      "LIQ": 2.0,
+      "OPEN": 0.0,
+      "REJECT": 0.0,
+      "NOFILL": 0.0,
+      "NOATR": 0.0,
+      "TP": 418.5,
+      "RULE": 0.0,
+      "RAND": 0.0,
+      "END": 9.5
+     }
+    }
+   ]
+  }
+ }
+}
