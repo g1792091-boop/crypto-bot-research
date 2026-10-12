@@ -610,7 +610,6 @@ def pretest_run(ctx, real_units: dict, picks_pub: dict, picks_priv: dict, parts_
     names_order = names_order or [r["name"] for r in picks_pub["names"]]
     n_rep = SR.N_REP if n_rep is None else int(n_rep)
     rows = {r["name"]: r for r in picks_pub["names"]}
-    priv_rows = {r["name"]: r for r in picks_priv.get("rows", [])}
     fam = {nm: real_units[nm]["family"] for nm in names_order}
     real = SR.search(real_units, names_order, real=True)
     peaks = {nm: real["per_name"][nm]["peak"] for nm in names_order}

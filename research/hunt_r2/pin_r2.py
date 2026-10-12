@@ -122,9 +122,10 @@ def own_files(root: str = ROOT) -> list:
     bench_r2.json (each when it exists; counts.json and bench_r2.json are required by ``check_pin``)."""
     out = [DESIGN, COUNTS, BENCH]
     d = os.path.join(root, "research", "hunt_r2")
-    out += [f"research/hunt_r2/{f}" for f in sorted(os.listdir(d)) if f.endswith(".py")]
+    out += [f"research/hunt_r2/{f}" for f in sorted(os.listdir(d)) if f.endswith(".py")] if os.path.isdir(d) else []
     t = os.path.join(root, "tests")
-    out += [f"tests/{f}" for f in sorted(os.listdir(t)) if f.startswith("test_hunt_r2") and f.endswith(".py")]
+    out += [f"tests/{f}" for f in sorted(os.listdir(t)) if f.startswith("test_hunt_r2") and f.endswith(".py")] \
+        if os.path.isdir(t) else []
     out += [k for k in KIT if os.path.exists(os.path.join(root, k))]
     return out
 

@@ -112,10 +112,11 @@ def private_doc(public: dict, rel: str, priv_dir: str | None) -> tuple:
 def _row(rid: str, study: str, kind: str, p, deepseek: bool, source: str, status: str | None = None,
          note: str | None = None) -> dict:
     ok = p is not None and np.isfinite(float(p))
+    st = status or ("published" if ok else "p not available")
+    if not ok and "not available" not in st and "p = 1" not in st:
+        st += "; p not available: p = 1"
     r = {"id": rid, "study": study, "kind": kind, "p": float(p) if ok else 1.0, "deepseek": bool(deepseek),
-         "source": source, "p_status": status or ("published" if ok else "p not available")}
-    if not ok:
-        r["p_status"] = "p not available"
+         "source": source, "p_status": st}
     if note:
         r["note"] = note
     return r
