@@ -931,8 +931,9 @@ The runner writes `out/select.json` and the Korean report `out/SELECT_KO.md`. Fo
 with its own table), hold hours and entries come before any growth figure, in the table and in the report's text.
 **As built, every row of `select.json` and every row of the table is a pool row**: hold hours, entries, skipped and
 rejected signals, win share, exit reasons and the other counts are summed over the pool's picks. There is no per-pick
-table in `select.json` or `SELECT_KO.md`; the per-pick numbers stay in the per-account result files, which nobody opens
-(section 7). The report shows:
+table of hold, entries or counts in `select.json` or `SELECT_KO.md`; those numbers stay in the per-account result
+files, which nobody opens (section 7, which also names the one per-pick number, M_p on choosable core rows). The report
+shows:
 * first, E0's row: median hold hours, the shares of trades held over 4 h, 8 h and 18 h, trades entered, signals
   skipped while holding, win share;
 * then **every one of the 86 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
@@ -1055,12 +1056,12 @@ The growth figures of the choosable core rows and every pooled label and count o
 state included) go to `out/select.json`. The growth figures of the core rows marked "선택 불가" are not in it: the
 runner writes them to `$WORK/<pin8>/results/select/core_not_choosable.json` (with `SELECT_TABLE.csv` and `run_info.json`,
 the commit and versions of the run, beside it), outside the repository and not opened. The DeepSeek money figures go
-to `$WORK/<pin8>/ds_private/select_ds.json`, whose sha256 is written into `select.json`. The private DeepSeek owner report (section 3) is written to
-`$WORK/<pin8>/ds_private/owner_report_select.md` in the same run, and its sha256 is written into `select.json`
-(`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `timing.json` was appended to
-`PREREG_EXITFLEX.sha256` before the select run (the select stage refuses without it, 13); the sha256 of `select.json` and
-of `SELECT_KO.md` are appended, committed and pushed before the report goes to the owners, so the menu they see is the
-one that was hashed. Before showing the private report, the main session checks that its
+to `$WORK/<pin8>/ds_private/select_ds.json`, whose sha256 is written into `select.json`. The private DeepSeek owner
+report (section 3) is written to `$WORK/<pin8>/ds_private/owner_report_select.md` in the same run, and its sha256 is
+written into `select.json` (`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `timing.json`
+was appended to `PREREG_EXITFLEX.sha256` before the select run (the select stage refuses without it, 13); the sha256 of
+`select.json` and of `SELECT_KO.md` are appended, committed and pushed before the report goes to the owners, so the
+menu they see is the one that was hashed. Before showing the private report, the main session checks that its
 sha256 equals the committed one. It shows the private report in the chat with the owners (section 3), in the same turn
 as or before it sends `SELECT_KO.md` by its channel; the 48 h clock of 8.3 starts at that sending. Right after sending,
 and before reading any answer, the main session writes the sending time (UTC and KST), the channel, the time at which
@@ -1247,9 +1248,9 @@ league starts.
    `rule_league.db`. The accounts and ids of 11.2 (`-n`, `-nq`, `-e`, `-eq`, `-nflip`, `-eflip`) replace the first
    draft's `-f` family. `runner.fingerprint` covers every account of the new database.
 2. **Both pools.** The first draft's `pick_list` refused every DeepSeek pick ("DeepSeek never gets rule accounts,
-   D11"); that refusal is removed. D11 governs what is shown, not what runs: DeepSeek rule accounts run like the current league's
-   DeepSeek accounts, and their money on the league's own screens follows the league's dashboard setting (section 3);
-   this study's committed notes and reports carry none.
+   D11"); that refusal is removed. D11 governs what is shown, not what runs: DeepSeek rule accounts run like the
+   current league's DeepSeek accounts, and their money on the league's own screens follows the league's dashboard
+   setting (section 3); this study's committed notes and reports carry none.
 3. **Per-close rule inputs** (`chunk_rule`): for every account whose exit has a rule (`-n`, `-nq`, `-nflip`), every
    chart close of every coin: close, ATR14, EMA(n), swing confirmations, both raw signal flags, the strategy's own
    component booleans of both sides (Appendix A), plus the 15m closes for q15. `league.chunk_signals` today sends only
@@ -1258,10 +1259,11 @@ league starts.
    `long_exit` / `short_exit` flag, had no arming, no per-position level test, and a target only when the rule carried
    `use_target`. Run as it was, it would have fired at the first check on an N03_ADX_GC long entered after an EMA
    whipsaw (rule C3 forbids that), and it could not express the level tests of N13_3OUTSIDE, N19_FIB_CHOP and five
-   DeepSeek strategies. Required: each component carries its kind (state or event) with C3 arming from i0; per-position levels
-   and targets, fixed at i0, travel in the signal's meta (`meta['native_inv']`, `meta['native_tgt']`) and the level
-   is tested at every close; F11.a and F11.b are the mode (5.2, rule C8), not a `use_target` flag; flipped positions follow
-   11.2; the arrays come from `research/exitflex/native.py` and `native_ds.py`, the same code the study runs.
+   DeepSeek strategies. Required: each component carries its kind (state or event) with C3 arming from i0;
+   per-position levels and targets, fixed at i0, travel in the signal's meta (`meta['native_inv']`,
+   `meta['native_tgt']`) and the level is tested at every close; F11.a and F11.b are the mode (5.2, rule C8), not a
+   `use_target` flag; flipped positions follow 11.2; the arrays come from `research/exitflex/native.py` and
+   `native_ds.py`, the same code the study runs.
 5. **Guard**: the league asserts that no offered bar carries both flags (section 3).
 6. **Step order** stays in `RuleMixin.step` (`candleague/rulex.py`): funding; then, if a rule exit is due at this
    minute and the open gaps past neither liquidation, the stop nor the take-profit, close as RULE; then entries
@@ -1328,7 +1330,7 @@ league starts.
 | 11 daily marks | built. Table `acct_mark`, written at every 00:00 UTC in the same commit |
 | 12 snapshot | built. Per account `hold_stats` (count, median hold, shares over 4 h, 8 h and 18 h) over every closed trade since the start, and the `acct_day` counts; the checks do not use `LAST_TRADES` |
 | 13 end-to-end parity | built on **synthetic data only**: `tests/test_exitflex_league_parity.py` (six coins, 62 days of 1m bars of which the first 52 are warm-up and the last 10 judged; missing minutes, halts, gaps, a restart in the middle of open positions; F1-F10 with F7h in both modes and q15, F11 and F12 through a synthetic native provider, coin-flip accounts, negative controls). **Open**: the run over at least 60 days of archive data before 2026-10-01 with the real arrays of `native.py` and `native_ds.py`, and the window-length check of the sub-bullets above |
-| 14 check data | built. `forward_check` reads `trades`, `acct_day` and `acct_mark`; `public_view` keeps DeepSeek to labels, counts, win shares and hold hours; the command is `python -m candleague.rulex checks c1|c2|repeat` (11.5) |
+| 14 check data | built. `forward_check` reads `trades`, `acct_day` and `acct_mark`; `public_view` keeps DeepSeek to labels, counts, win shares and hold hours; the command is `python -m candleague.rulex checks` with `c1`, `c2` or `repeat` (11.5) |
 
 **Restart to-do.** All of this is done at restart time, after the owners' OK. None of it is pinned here, and none of it
 changes a rule of this file.
@@ -1341,7 +1343,8 @@ changes a rule of this file.
   `rules.json`, the parity test). At the restart the main session records their sha256 and the commit in the deviation
   entry, and the parity test is run on exactly those files.
 * **Old record.** Stop the engine; copy the old database and its start file next to them and move the originals out of
-  the way, or point `CANDLEAGUE_DB` to a new file (11.3). `python -m candleague backup` makes the database copy.
+  the way, or point `CANDLEAGUE_DB` to a new file (11.3). `python -m candleague backup` makes the database copy when
+  the code would start the league over (its fingerprint differs from the database's); a copy by hand is as good.
 * **Environment file** (`/etc/candleague/candleague.env`, read by `candleague-live.service`): remove `CANDLEAGUE_START`;
   set `CANDLEAGUE_EXPECT_START` to the install time the restart script wrote down; set `CANDLEAGUE_RULES` only when the
   rules file is not at its default path; leave `CANDLEAGUE_DS_MONEY` as it is (section 3).
@@ -1408,7 +1411,14 @@ changes a rule of this file.
 * **DeepSeek pool**: C1 and C2 are computed the same way from the server database (11.4 item 14) and shown as labels
   (stop or continue; shown ahead or not), with trade counts, win shares and hold hours only (D11).
 * The checks are computed by a script committed before C1, which reads only the league database tables named in 11.4
-  (`trades`, `acct_day`, `acct_mark`) and this file's rules (as WATCH_PREREG 5).
+  (`trades`, `acct_day`, `acct_mark`) and this file's rules (as WATCH_PREREG 5). **As built** the script is
+  `python -m candleague.rulex checks c1|c2|repeat --db <league database> --install <install time, with its time zone
+  or in epoch ms> [--rules F] [--candidates F] [--private DIR] [--skip core,ds]`. It opens the database read-only and
+  prints the Korean text of the check (per pool: the label, then hold hours and entries per role, for core the growth
+  figures, then the conditions); for DeepSeek it prints labels, counts, win shares and hold hours only (D11); the full report, DeepSeek money included, is written
+  only to `--private`, a folder outside the repository. A pool with a `no_entry_from_ms` in the rules file counts as
+  stopped at C1 and has no C2; `--skip` names the pools that were shown ahead at C2 and are not asked again at the
+  repeat. The C1 run also prints the `no_entry_from_ms` line for the pools it stops. It edits no file.
 
 ### 11.6 Real money
 
@@ -1918,7 +1928,8 @@ Real money is not decided by this study. That stays the owners' decision under t
   DeepSeek-carrying committed file of the confirm stage, so the audit has to read it and not only the json), after the
   files of a rerun, and after each entry this study writes into a `DEVIATIONS.md`. A file that fails is not sent or
   committed; the main session fixes the text (the redaction of section 3) and the audit runs again.
-  * A1: T1-T8 rerun at the run's commit.
+  * A1: T1-T8 rerun at the run's commit (as built, `audit` reruns `test_exitflex.py`; `test_native.py` is run by hand at
+    the pin, 13).
   * A2: for every account, signals offered = entered + skipped + rejected + no fill + after bust.
   * A3: every RULE and RAND exit lies at the check minute of one of the position's checks, at that minute's open
     with slippage.
@@ -2529,9 +2540,9 @@ Made on 2026-10-12 (UTC), after the code was built and before the pin, by a sub-
 the folder, `tests/test_exitflex_league_parity.py` and the headers and relevant functions of `candleague/rulex.py` and
 `candleague/runner.py`; ran `runner_x.py pin-lines` and `--help`; and ran the tests on synthetic data (156 passed in
 `test_exitflex.py`; 288 passed and 83 skipped in `test_native.py`, run without the 1m folder so that its real-bar tests
-skip; 380 passed in `tests/test_candleague_rulex.py` plus `tests/test_exitflex_league_parity.py`). No rule of sections
-1-10 was changed; every item below makes the text say what the code does. The main session's statement in section 15 is
-unchanged.
+skip; 380 passed in `tests/test_candleague_rulex.py` plus `tests/test_exitflex_league_parity.py`). No rule that decides
+a result (the engine, the variants, the placebo, the gates, the default, the confirm test) was changed; every item below
+makes the text say what the code does or how the study is run. The main session's statement in section 15 is unchanged.
 
 1. **Section 13: the pins, `make-pin`, `make-cut`, the stage chain.** The pinned-files paragraph and the table now
    match `REQUIRED_PINS` of `runner_x.py` and what `pin-lines` prints: this file, `data_pin.json`, all nine `.py` files
@@ -2600,9 +2611,9 @@ unchanged.
 **Found while aligning and left as it is:** the install script's `CODE_PATHS` and `backup` environment (11.4, restart
 to-do); the parity test over 60 days of archive data (11.4 item 13); `select_report_ko` without a hunt line (17 item
 4a); the C1 command that prints rather than writes `no_entry_from_ms` (11.4 item 9, restart to-do). The addendum of
-section 15 says Verification sub-agents read files "between about 06:40 and 07:30 UTC"; this sub-session's machine clock
-read 07:14-07:25 UTC while it worked, so the end time of that sentence is later than the clock it saw. The sentence is the
-main session's own and is not edited here; the main session may check it before the hash.
+section 15 says that verification sub-agents read files "between about 06:40 and 07:30 UTC"; this sub-session's
+machine clock read 07:14-07:28 UTC while it worked, i.e. before the 07:30 of that sentence, which may be an estimate. The
+sentence is the main session's own wording and is not edited here; the main session may check it before the hash.
 
 ## Appendix A. Each strategy's own exit (family F11)
 
