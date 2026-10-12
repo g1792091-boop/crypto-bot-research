@@ -990,39 +990,60 @@ before `test.json` exists).
 
 ### 17.4 Compute plan (Vultr)
 
-The server recipe is the hunt's: CPU Optimized, 32 vCPU, Tokyo, Ubuntu 24.04, about $1 an hour, Destroy when done.
+The server recipe is the hunt's: CPU Optimized `vx1-g-32c-128g` (32 vCPU, 128 GB), Tokyo, Ubuntu 24.04, about $1.2 an
+hour, the server's own disk (at least 60 GB free; no Block Storage), Destroy when done.
 
 | step | estimate on 32 vCPU |
 |---|---|
-| 1m download and build, 30 coins, 2020-01 .. 2023-12 (about 3.5 GB of zips, about 4.9 GB of npz) | 25-35 min |
-| exit-event tables, 4 timeframes x 30 coins | about 40 CPU-min; 2-3 min wall |
-| signals of 1,015,563 combos on SEL-cut frames, plus per-pair trade-list sums over the 162 exit configs | about 175-200 CPU-h; 6-7 h wall |
-| plateau, accounts, f_path and f* (1m mark-to-market, 10,000 bootstrap paths per bisection step) for pairs passing B; SEL coin-flip seeds 1-200 for those still eligible | about 1 h |
-| **select, in total** | **about 8-9 h, about $8-10** |
-| confirm stage, after the picks' hash: TEST 1m download (about 2.3 GB of zips), the picks only, 2 x 100,000 control seeds (sums over precomputed outcomes; 1,000 with accounts), the reads | about 1 h |
+| install, self-check (the hiwr tests and the full grid's kernel, run and memo tests), pin check | about 15 min |
+| 1m download and build, 30 coins, 2020-01 .. 2023-12 (about 3.5 GB of zips, about 4.9 GB of npz); every array re-hashed against the pinned manifest | 30-60 min |
+| chart frames and exit-event tables, 4 timeframes x 30 coins | about 10 min |
+| the grid: signals of 1,015,563 combos on SEL-cut frames and the per-pair sums over the 162 exit configs | about 260 CPU-h (15m 132, 30m 76, 1h 40, 4h 13); about 8 h wall, 10.5 h with a 1.3 margin; the longest task about 4 h |
+| eligibility (10.3 d, e) of the pairs passing (a)-(c): trade lists, the f_path and f* scans (8.4), SEL coin-flip seeds 1-200; tasks of at most 8 (15m) to 64 (4h) pairs | 0.5-3 h (it depends on how many pairs pass (a)-(c)) |
+| **select, in total** | **about 10-14 h** |
+| confirm stage, after the picks line: TEST 1m download (about 2.3 GB of zips), the picks only, 2 x 100,000 control seeds (1,000 with accounts), p_boot, the ledger | 1-2 h |
+| reads, the picks in parallel; no pick starts after 12 h, the rest is listed as missing | 0.5-3 h |
+| **total** | **about 12-20 h, about $15-25** |
 
-**Basis for the estimates:**
-* The scratch prototype ran on this shared 4-core box with one process, 6 coins, SEL and default numbers: 15m 1,243 s,
-  30m 584 s, 1h 178 s, 4h 32 s.
-* The full grid's own estimate was 70-80 CPU-h for 6 coins over 2020-2026.
-* 30 coins give about 5.0 times the 6-coin SEL bars.
+**Basis for the estimates** (2026-10-12, on this shared 4-core box, SEL-cut data of the old six only):
+* Grid: every 1h cell run as one whole-cell task on SEL-cut BTC (`hiwrbuild/fix/timing`, the memo kept as on the
+  server), calibrated for the box's load on two cells timed alone (N01_ST_EMA 82.7 s, N25_DST_CCI 85.0 s); each cell's
+  memo saving at 1h applied to the cold per-combo rates measured on 15m, 30m and 1h (3 old coins, 27-combo samples)
+  and extrapolated to 4h; BTC (the longest history) stands for each of the 30 coins; split cells pay the cold rate.
+  Total 261 CPU-h; with the cold rates alone (no memo saving) it would be 429 CPU-h, about 13.4 h wall. The memo saves
+  7-14x on N01_ST_EMA, N05_PSAR_POC and N25_DST_CCI and almost nothing on N22_VORTEX_PSAR at 15m (its whole cell,
+  1,356 s on BTC, cost as much as cold samples; hence its split). The wall time is the total over 32 workers (heaviest
+  tasks first), since no task is longer than about 4 h.
+* Sizes (8.4): the f_path scan runs the account at every grid size up to the first failure in one compiled loop; the
+  f* scan's bootstrap (10,000 paths) runs once per structure run plus a bisection inside the failing run. On the real
+  SEL 4h case of 15.4 (S4_BB_BBP default, 1% stop, +0.44% maker TP, 6 old coins) that took 0.8 s per pair (584 account
+  runs, 12 bootstraps; f_path 5.83, f* 3.85, the same as the plain scan of every grid size, which took 12.9 s); the
+  old bisection took about 1.4 s. So the eligibility step costs about what it did before.
 
-**Which server (Q15, decided 2026-10-12).** Track 2 runs on its **own server, after the hunt server is gone**. The
-owners: "32 vcpu로 두대를 못돌리는거야? 그러면 따로 돌려야지". Vultr's monthly fee limit already refused a 64 vCPU server,
-so two 32 vCPU servers at once would likely be refused too. The order:
-1. The code is written, reviewed and pinned (the kit). Nothing of track 2 runs before that.
-2. The hunt (track 1) finishes on `hunt-compute`, its results are pushed, and the owners Destroy that server. Track 2
-   never touches `/root/hunt` and never runs beside the hunt.
-3. The owners create a new server, `hiwr-compute`, with the same recipe (32 vCPU), and paste one line from
-   `research/hiwr/SERVER_KO.md`. Like the hunt's `wait_go.sh`, that line clones the branch, waits until the pinned
-   commit is published on it, checks the pins, and starts `select`. If the pin is already published, it starts at once.
-4. After `select` the results are pushed and the server is Destroyed.
+**Which server, and the order (Q15, decided 2026-10-12).** Track 2 runs on its **own server, after the hunt server is
+gone**. The owners: "32 vcpu로 두대를 못돌리는거야? 그러면 따로 돌려야지". Vultr's monthly fee limit already refused a 64
+vCPU server, so two 32 vCPU servers at once would likely be refused too.
+1. The code is reviewed. The data pin is made on the development machine (section 3), the pin is written, and the
+   pinned commit is published as `research/hiwr/GO_COMMIT` on the branch. Nothing of track 2 runs before that.
+2. The hunt (track 1) finishes on `hunt-compute`, its results are pushed, and the owners Destroy that server. Its
+   published test files are merged into this branch before `GO_COMMIT` when they exist, so the ledger can read them
+   (13). Track 2 never touches `/root/hunt` and never runs beside the hunt.
+3. The owners create a new server, `hiwr-compute`, with the same recipe and paste one line from
+   `research/hiwr/SERVER_KO.md`. It clones the branch and waits for `GO_COMMIT` (`wait_go.sh`; a restart line or a
+   reboot during the wait goes back to waiting). Then one run on this one server: install and self-check, the pin
+   check, the practice kit's download and its check against the pinned manifest, `select`, the picks line appended to
+   the server's pin (10.6), the confirm stage (its download only after that line), the reads, the report and the pack.
+4. The owners push the results (the pin with the picks line, `picks.json`, select, test, ledger and reads files, the
+   confirm-kit marker, stage times and the code stamp) and Destroy the server. The private DeepSeek figures stay in
+   `private.tgz` on the owners' PC.
 
 Notes:
-* The confirm stage downloads its own data. It needs the picks' hash in the pin (10.6) and can run later on any server.
-* A server rented while it waits costs about $1 an hour (Vultr bills a stopped server too), so it is created only after
-  step 2.
-* This dev box cannot hold the 30-coin 1m data (about 2 GB free, shared).
+* A restart after a crash resumes on the same server (every stage skips what is done). Running the confirm stage on
+  another server would need the private picks file of the DeepSeek picks; it is a fallback, not the plan.
+* A server rented while it waits costs about $1.2 an hour (Vultr bills a stopped server too), so it is created only
+  after step 2.
+* The development machine has about 2 GB of free disk (shared) and cannot hold the 30-coin 1m data on disk; the data
+  pin is built in RAM (`/dev/shm`) and deleted afterwards (section 3).
 
 ## 18. DeepSeek (D11)
 
@@ -1195,8 +1216,8 @@ decimals. Their confirmed findings changed this file:
 두대를 못돌리는거야? 그러면 따로 돌려야지"). All other questions closed at their defaults (section 21). Changed with them:
 the status line, 1, 2.1 (the net price table per tier and TP fill; gross becomes read R4), 2.2, 6.2, 6.3, 7.2, 7.3,
 7.7, 8.4, 10.3 (e), R2, R4, R7, 15 (net numbers), 16.1, 17.1, 17.4 (server plan; the 5-step row and the paragraph on a
-server the owners had created are removed), 19, 20, 21 (a decision log), 22.1 and 22.3. The status stays DRAFT: no
-code exists yet.
+server the owners had created are removed), 19, 20, 21 (a decision log), 22.1 and 22.3. The status stayed DRAFT: no
+code existed yet then (it was written next, 22.6).
 
 **Why a re-run.** The feasibility's net rows (22.1) priced the maker TP at ROE / L + 0.14%, not the registered + 0.09%,
 used 7 of the 9 stops and did not skip a stop inside the TP. Their counts were 0 / 0 / 0 / 6 (15m / 30m / 1h / 4h) with
@@ -1212,10 +1233,47 @@ rebuilds them in at most 15 minutes per timeframe on one core).
   2024-01-01 on was read, computed or printed.
 * Rules: the 36 core strategies at default numbers; 30x / 40x / 50x; TP steps at the net reading (taker + 0.14%, maker
   + 0.09%) and at the gross reading for comparison; all 9 stops; the stop-inside-TP skip (7.3); the maker TP filled at
-  T (7.2); the house buffer; with and without weekends; three coin-flip seeds; cost x2 with the TP price unchanged.
+  T (7.2); the house buffer; with and without weekends; three coin-flip seeds; cost x2 with the TP's price move t
+  unchanged (the TP price followed the cost-x2 fill, as 7.7 now says).
 * Parity with the feasibility code: on every setting both runs share and where no stop-inside-TP skip applies, the
   taker results are identical (trade counts and sums of r); the maker sums differ by at most 0.004 in total, from the
   fill at T on a gapped open. The account script (`acct_net.py`, built on the review's independent minute loop)
   reproduced the 8 passers' trade lists (trades, win rate, mean and cost-x2 mean to four decimals).
 * Results: section 15 (counts, plateau, coin-flip check, maker realism, sizes).
 
+### 22.6 Code review fixes (2026-10-12, SEL only and synthetic data)
+
+The code of 17.1 was written and reviewed (five lenses: the prereg, the engine, the statistics, the server
+operations, and a skeptic pass on every finding). What changed, here and in the code:
+* **The data pin can be made** (3, 17.3): `data.py kit` builds the practice kit one coin at a time; the data pin is
+  made on the development machine in RAM before the pin. The build checks every coin's span against section 4 (a coin
+  that "ends" because a monthly file is missing stops it). The data command line refuses confirm-period months.
+* **f_path and f*** (8.4) are now 0.01 below the first failing grid size, found by an upward scan, instead of a 40-step
+  bisection that could stop below the first failure or land on a feasible island above failing sizes (the reviewers'
+  hand-built BTC + SAND account: ok to 3.03, failing 3.04-3.97, ok again from 3.98; the bisection returned 9.0, the
+  scan returns 3.03). The realized-DD bracket is gone. The bootstrap rule (a resample keeps the SEL-path N / wallet)
+  and the seed strings are written into 8.4, 12 and 3.
+* **The ledger** (13) reads the hunt's files where its push publishes them and is printed as incomplete, with no BH or
+  Holm count, while any hypothesis is missing; `hiwr ledger` recomputes it later. Before, a missing hunt file shrank
+  the family and a lone p of 0.004 "passed" Holm.
+* **The server flow** (10.6, 17.4, 16.1) is the kit's: one server runs select, the picks line, the confirm stage and
+  the reads; why a local picks line is enough is in 10.6.
+* **The compute plan** (17.2, 17.4): whole-cell grid tasks keep the indicator memo per coin (up to 14x cheaper per
+  combo than the 27-combo samples with a cold memo on which the earlier 33-43 h select estimate rested); three
+  memo-poor cells are split (`GRID_CHUNK_OF`). Re-measured: select about 10-14 h, the whole run about 12-20 h.
+* **Rules the code applied but this file did not state**, now written: the entry minute after a minute without
+  trades (7.1), the skip order and the "no entry or ATR" skip (7.3, R11), Lq fixed at the entry (7.4), a fill beyond
+  the margin is a liquidation (7.5), the coin end at a 3-day gap and the period-end mark net of a market exit (7.6),
+  the cost-x2 TP (7.7), the exit-minute and bust rules (8.3), base and quote volume and the daily-file rule (3), the
+  notional caps (4), six per-pair sums (17.2), the import list (17.1).
+* **One rule fixed in the code**: funding paid before a liquidation now stays paid (7.5; it was refunded at the
+  liquidation). This changes only liquidated trades' results, so the parity with the prototype's net rows (counts
+  identical, sums within float32) holds except on those trades.
+* **Smaller fixes**: proxy coins are labelled in every output (4); the mean in % of the wallet at f* is reported
+  (8.1); a pick without a TEST trade gets p = 1 and fails T5; select refuses after the confirm look; the eligibility
+  files are kept per mode; a memory or OS error is never recorded as a failed combo; an error message that reached
+  the published log no longer prints a mean (D11); the reads run in parallel with one file per pick and a time limit;
+  16 says how a bug-fix rerun is made; SERVER_KO: the waiter shows in status and a pasted restart line waits again,
+  `update` stays open after a select that refused before computing, a fallback size, no Block Storage.
+* All of it was checked on synthetic data and on the old six's SEL-cut 1m data only. Nothing from 2024-01-01 on was
+  read, computed or printed, and no outcome of 2020 was used.

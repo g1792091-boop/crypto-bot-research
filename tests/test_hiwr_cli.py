@@ -384,7 +384,9 @@ def world(tmp_path_factory):
     mp.setattr(D, "KIT_TEST", ("2021-03", "2021-04"))
     mp.setattr(R, "WARMUP_BARS", 60)
     mp.setattr(R, "CHUNK", 2)                            # two grid tasks per cell
-    mp.setattr(H, "ELIG_PAIRS", {"1h": 1})
+    mp.setattr(H, "ELIG_PAIRS", {"1h": 150})
+    l30 = [c for c in W.exit_configs() if c["L"] == 30 and c["fill"] == 1]     # 27 exits (30x, maker): fewer pairs
+    mp.setattr(H, "exit_configs", lambda: [dict(c) for c in l30])
     mp.setattr(H, "N_SEEDS", 2000)
     mp.setattr(H, "N_ACCT_SEEDS", 20)
     mp.setattr(H, "N_PBOOT", 2000)
@@ -397,6 +399,11 @@ def world(tmp_path_factory):
     mp.setattr(H, "HUNT_MANIFEST_REL", hman)
     mp.setattr(H, "HUNT_TESTS", ())
     H._FRAMES[0] = None
+    prereg = "research/hiwr/out/PREREG_copy.md"               # a copy: editing the real file mid-run changes nothing
+    os.makedirs(os.path.dirname(os.path.join(state, prereg)), exist_ok=True)
+    with open(os.path.join(ROOT, H.PREREG_REL)) as src, open(os.path.join(state, prereg), "w") as dst:
+        dst.write(src.read())
+    mp.setattr(H, "PREREG_REL", prereg)
     req = [H.PREREG_REL, H.MANIFEST_SEL_REL, H.CHECK_SEL_REL]
     mp.setattr(H, "required_files", lambda: list(req))
     calls = []
@@ -494,10 +501,10 @@ def test_e2e_grid_sums_equal_a_direct_recount(world):
     work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
     S, fails, metas = H.cell_sums(work, "core", "SYN_A", "1h")
     assert not fails and len(metas) == 2
-    cfgs = W.exit_configs()
+    cfgs = H.exit_configs()
     H.CTX["dirs"] = {"frames_SEL": os.path.join(work, "frames"), "tables_SEL": os.path.join(work, "tables")}
     H.use_frames(H.CTX["dirs"]["frames_SEL"])
-    tot = {ci: [0, 0.0, 0] for ci in (0, 1, 57, 161)}
+    tot = {ci: [0, 0.0, 0] for ci in (0, 1, 13, 26)}
     for c, sym in enumerate(SYMS):
         T = H.load_tables(H.table_dir(H.CTX["dirs"]["tables_SEL"], sym, "1h"))
         lo, sh = _fake_signals("core", "SYN_A", sym, "1h", {"w": 3})
@@ -516,7 +523,7 @@ def test_e2e_grid_sums_equal_a_direct_recount(world):
 def test_e2e_lazy_and_all_give_the_same_pick(world):
     work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
     sel = _load(world, "select.json")
-    cfgs = W.exit_configs()
+    cfgs = H.exit_configs()
     for kind, name in (("core", "SYN_A"), ("ds", "SYN_DS")):
         S, _f, _m = H.cell_sums(work, kind, name, "1h")
         pr = H.cell_pairs(S, H.combo_neighbours(kind, name), cfgs)
@@ -596,6 +603,7 @@ def test_e2e_reads(world):
 def test_select_refuses_a_changed_pin(world, monkeypatch):
     monkeypatch.setattr(H, "STATE", [world["state"]])
     monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_e2e.txt")
+    monkeypatch.setattr(H, "PREREG_REL", "research/hiwr/out/PREREG_copy.md")
     monkeypatch.setattr(H, "required_files", lambda: [H.PREREG_REL, H.MANIFEST_SEL_REL, H.CHECK_SEL_REL])
     with pytest.raises(H.PinError, match="already pinned"):
         H.check_pin("select")
@@ -666,11 +674,12 @@ def test_e2e_proxy_labels_and_wallet_mean(world):
     assert "mean_wallet_at_f_star" not in test["results"][ds["id"]]["test"]          # D11
 
 
-def test_eligibility_files_are_kept_apart_by_mode(world, tmp_path):
+def test_eligibility_files_are_kept_apart_by_mode(world, tmp_path, monkeypatch):
     """A select resumed in the other eligibility mode never reads the first mode's files (it picked another pair and
     lost or doubled pairs before)."""
+    monkeypatch.setattr(H, "ELIG_PAIRS", {"1h": 20})
     work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
-    cfgs = W.exit_configs()
+    cfgs = H.exit_configs()
     S, _f, _m = H.cell_sums(work, "core", "SYN_A", "1h")
     pr = H.cell_pairs(S, H.combo_neighbours("core", "SYN_A"), cfgs)
     cell = [(("core", "SYN_A", "1h"), pr)]
@@ -729,7 +738,7 @@ def test_trade_list_mismatch_message_has_no_figures(world, monkeypatch):
     work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
     H.CTX["dirs"] = {"frames_SEL": os.path.join(work, "frames"), "tables_SEL": os.path.join(work, "tables")}
     S, _f, _m = H.cell_sums(work, "ds", "SYN_DS", "1h")
-    pr = H.cell_pairs(S, H.combo_neighbours("ds", "SYN_DS"), W.exit_configs())
+    pr = H.cell_pairs(S, H.combo_neighbours("ds", "SYN_DS"), H.exit_configs())
     p = dict(pr["abc"][0], mean=pr["abc"][0]["mean"] + 0.0123)
     with pytest.raises(RuntimeError) as e:
         H.eval_pairs("ds", "SYN_DS", "1h", [p])
@@ -768,6 +777,31 @@ def test_a_pick_without_test_trades_gets_p_1_and_no_T5():
     fl = H.flip_control(np.array([np.nan, np.nan]), np.array([np.nan, np.nan]), np.array([0, 1]), 2, "TEST", "x",
                         range(1, 11))
     assert not np.isfinite(fl["obs"]) and H.p_seeds(fl["mean"], fl["obs"]) == 1.0
+    none = {"n": 0, "win": float("nan"), "mean": float("nan"), "mean_x2": float("nan")}
+    c = H.confirm_checks(none, {"dd": 0.0, "bust": False}, 0.3, 1 / 1001, 1 / 1001)       # the old floor p: still no T5
+    assert not any(c[k] for k in ("T0", "T1", "T3", "T4", "T5")) and c["T2"]
+    some = {"n": 150, "win": 0.8, "mean": 0.001, "mean_x2": 0.0005}
+    assert all(H.confirm_checks(some, {"dd": 0.1, "bust": False}, 0.3, 0.001, 0.002).values())
+
+
+def test_grid_tasks_keep_memo_cells_whole_and_split_memo_poor_ones(monkeypatch):
+    """17.2: a task is the whole cell (the memo serves it per coin) except the full grid's split cells and the three
+    memo-poor cells of GRID_CHUNK_OF; the split never changes a sum (test_e2e_grid_sums_equal_a_direct_recount runs a
+    split cell)."""
+    monkeypatch.setattr(R, "CHUNK", 10 ** 6)                  # the real grid, whatever an e2e fixture patched
+    monkeypatch.setattr(H, "cell_grid", lambda kind, name: R.cell_grid(kind, name))
+    monkeypatch.setattr(H, "cells_all", lambda: [c for c in R.cells() if c[2] in ("15m", "30m", "1h", "4h")])
+    tasks = H.grid_tasks([("core", "N01_ST_EMA", "15m"), ("core", "N22_VORTEX_PSAR", "15m"), ("core", "V39_ALL", "1h"),
+                          ("core", "N04_ST_KLINGER", "4h")])
+    by = {}
+    for kind, name, tf, c0, c1 in tasks:
+        by.setdefault(name, []).append(c1 - c0)
+    n01 = len(H.cell_grid("core", "N01_ST_EMA")[2])
+    assert by["N01_ST_EMA"] == [n01]
+    assert max(by["N22_VORTEX_PSAR"]) == 729 and sum(by["N22_VORTEX_PSAR"]) == len(H.cell_grid("core",
+                                                                                                 "N22_VORTEX_PSAR")[2])
+    assert max(by["V39_ALL"]) == 729 and max(by["N04_ST_KLINGER"]) == 2187
+    assert len(H.grid_tasks(H.cells_all())) < 1000
 
 
 def _hunt_test_files(root, v1_p=0.03, wide=(("W1", 0.2), ("W2", 0.4)), ds=("WDS",)):
@@ -820,6 +854,7 @@ def test_ledger_reads_the_published_hunt_files_and_never_shrinks_the_family(tmp_
 def test_ledger_command_rebuilds_without_touching_the_verdict(world, tmp_path, monkeypatch):
     monkeypatch.setattr(H, "STATE", [world["state"]])
     monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_e2e.txt")
+    monkeypatch.setattr(H, "PREREG_REL", "research/hiwr/out/PREREG_copy.md")
     monkeypatch.setattr(H, "required_files", lambda: [H.PREREG_REL, H.MANIFEST_SEL_REL, H.CHECK_SEL_REL])
     test_before = H.sha256_file(H.out_path("test.json"))
     v_before = _load(world, "ledger.json").get("version", 1)

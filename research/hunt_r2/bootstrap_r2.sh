@@ -22,9 +22,14 @@
 #   HUNT_R2_DRYENV=<file> bash bootstrap_r2.sh --dry-run [run|status|idle|update <commit>|push]
 # The file sets HUNT_R2_BASE, HUNT_R2_REPO (scratch) and any of: HUNT_R2_PY, HUNT_R2_CMD (the hunt_r2 command line),
 # HUNT_R2_DATA_CMD (data_hunt), HUNT_R2_DATA, HUNT_R2_SELFCHECK_TESTS, HUNT_R2_TMUX (e.g. "tmux -L r2reh"),
-# HUNT_R2_RETRY_SLEEP, HUNT_R2_READS_WALL_S (a short reads wall), HUNT_R2_INBOX, HUNT_R2_GO, HUNT_R2_DRY_WAIT (no go commit: hand over to
-# wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the scratch clone's origin), HUNT_R2_GIT_REHEARSAL (update fetches and checks out
-# from the scratch clone's origin).
+# HUNT_R2_RETRY_SLEEP, HUNT_R2_READS_WALL_S and HUNT_R2_TICK (a short reads wall), HUNT_R2_INBOX, HUNT_R2_GO,
+# HUNT_R2_DRY_WAIT (no go commit: hand over to wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the
+# scratch clone's origin), HUNT_R2_GIT_REHEARSAL (update fetches and checks out from the scratch clone's origin).
+#
+# Developer notes: the ledger inputs (PREREG 8) are taken, in order, from the go commit's own tree (research/hunt/out/...,
+# research/hunt/results/hunt/..., research/hiwr/out/..., research/hiwr/results/hiwr/..., research/fullgrid/results/) and
+# else from the branches hunt-results, hiwr-results and fullgrid-results-20261010-1602 (else the newest "<name>-*");
+# research/hunt_r2/results/ledger/ledger_inputs.txt lists what was used. Putting the files in the go commit wins.
 set -uo pipefail
 
 MODE=run
@@ -144,13 +149,24 @@ die_retry() {                # a stop that a later restart can get past (network
   exit 1
 }
 
+STEP_POS=0                   # the log size when the current step started: its failure is read from its own lines only
+mark_step() { STEP_POS=$({ wc -c < "$LOG" || echo 0; } 2>/dev/null | tr -dc '0-9'); STEP_POS=${STEP_POS:-0}; }
+step_log() { tail -c +$(( STEP_POS + 1 )) "$LOG" 2>/dev/null; }
+refused_step() { step_log | grep -qa "^refused:"; }
+memory_step() {              # memory_step <exit code>: killed (137, the kernel's out-of-memory kill) or pool workers died
+  [ "${1:-0}" = 137 ] && return 0
+  step_log | grep -qaE "workers keep dying|a worker died|MemoryError"
+}
+
 # ------------------------------------------------------------------ time estimates (see SERVER_R2_KO "걸리는 시간")
-# CPU-minutes measured 2026-10-12 (research/hunt_r2/SERVER_R2_KO.md, basis there) and spread over EFF = 70% of the
-# vCPUs (18-27 effective cores of 32 if they are SMT threads), rounded up. The select step prints "[<part>] done/n done,
-# <s>s" every minute; status turns the running part's own pace into its remaining time and adds the parts after it.
+# Conservative CPU-minutes from the 2026-10-12 measurement (SERVER_R2_KO.md "걸리는 시간", basis there): store units
+# timed on practice-period signals of 2 coins x 30, engine seconds by event density on synthetic bars, nulls at each
+# name's heaviest anchor x 1.3, store x 1.5. Spread over EFF = 60% of the vCPUs (about 19 effective cores of 32 if they
+# are SMT threads), rounded up. The select step prints "[<part>] done/n done, <s>s" every minute; status turns the running
+# part's own pace into its remaining time and adds the parts after it.
 SEL_PARTS="event store (name, timeframe, coin)|(a′) event histograms|real Stage 0 + A|null (b′) units|null (a′) units|box store|box checks"
-SEL_CPU_MIN="1500 10 90 4500 4500 30 30"     # per part, the conservative end (null CPU at 0.33 s per engine run)
-EFF=$(( NCPU * 7 / 10 )); [ "$EFF" -lt 1 ] && EFF=1
+SEL_CPU_MIN="380 10 40 4000 4000 120 60"     # per part (expected about half: nulls 63 CPU-h, store 4.2 CPU-h)
+EFF=$(( NCPU * 6 / 10 )); [ "$EFF" -lt 1 ] && EFF=1
 cpu_wall() { echo $(( ($1 + EFF - 1) / EFF )); }          # CPU-minutes -> wall minutes on this server
 picks_b1() { cat "$BASE/PICKS_B1" 2>/dev/null; }
 sel_plan_from() {            # wall minutes of select parts i.. (0-based) plus the serial parts (load, shifts, picks)
@@ -166,12 +182,12 @@ est_min() {
     1) echo 6 ;; 2) echo 8 ;; 3) echo 2 ;; 4) echo 20 ;; 5) echo 6 ;;
     6) sel_plan_from 0 ;;
     7) echo 1 ;;
-    8) echo $(( 15 + $(cpu_wall 240) )) ;;                       # pretest: CSCV / shifts in one process + 2-4 CPU-h
+    8) echo $(( 15 + $(cpu_wall 300) )) ;;                       # pretest: CSCV / null summary in one process + <= 5 CPU-h
     9) local b; b=$(picks_b1); [ "$b" = 0 ] && { echo 2; return; }
-       echo $(( 5 + ${b:-10} * $(cpu_wall 60) )) ;;              # per tested pick about 3,150 runs (<= 60 CPU-min)
+       echo $(( 5 + ${b:-10} * $(cpu_wall 30) )) ;;              # per tested pick about 3,150 runs (<= 30 CPU-min)
     10) local b; b=$(picks_b1); [ "$b" = 0 ] && { echo 0; return; }
-        local m=$(( ( ${b:-10} + 2 ) * $(cpu_wall 1300) )) cap=$(( READS_HOURS * 60 ))
-        [ "$m" -gt "$cap" ] && m=$cap; echo "$m" ;;               # rows x about 21 CPU-h, capped at the wall
+        local m=$(( ( ${b:-10} + 1 ) * $(cpu_wall 3000) )) cap=$(( READS_HOURS * 60 ))
+        [ "$m" -gt "$cap" ] && m=$cap; echo "$m" ;;               # rows (picks + basket) x <= 50 CPU-h (reads_a), capped
     11) echo 4 ;;
     *) echo 0 ;;
   esac
@@ -288,7 +304,7 @@ status() {
        fi ;;
   esac
   case "$n" in
-    6) echo "  6/$NST 고르기가 가장 깁니다(5~15시간). 무거운 작업이 먼저 돌아 처음 몇 분의 남은 시간은 길게 나옵니다."
+    6) echo "  6/$NST 고르기가 가장 깁니다 (32 vCPU에서 약 3~8시간). 무거운 작업이 먼저 돌아 처음 몇 분의 남은 시간은 길게 나옵니다."
        echo "  남은 시간이 그대로여도 정상이니 다시 시작하지 마세요."
        echo "  $(inbox_line)" ;;
     8|9) echo "  $(inbox_line)" ;;
@@ -656,12 +672,13 @@ if pinned "$PICKS_REL"; then
 else
   touch "$BASE/SELECT_RAN"
   mkdir -p "$PRIV"
-  sub "고르기 시작 (5~15시간; 진행: bash $SELF status)"
-  if ! run_select "$PROCS"; then
-    tail -40 "$LOG" | grep -q "^refused:" && die_fix "고르기 거부: $(grep -a '^refused:' "$LOG" | tail -1 | cut -c1-300)"
-    if tail -40 "$LOG" | grep -qE "workers keep dying|a worker died|MemoryError|Killed"; then
+  sub "고르기 시작 (32 vCPU에서 약 3~8시간; 진행: bash $SELF status)"
+  mark_step; rc=0; run_select "$PROCS" || rc=$?
+  if [ "$rc" != 0 ]; then
+    refused_step && die_fix "고르기 거부: $(step_log | grep -a '^refused:' | tail -1 | cut -c1-300)"
+    if memory_step "$rc"; then
       sub "고르기 작업 일부가 끝나지 않아 한 번 더 이어서 합니다 (끝난 조각은 건너뜀, 작업 ${HALF}개)"
-      run_select "$HALF" || die_retry "고르기가 두 번 끝나지 않았습니다 (메모리?; tail -50 $LOG)"
+      mark_step; run_select "$HALF" || die_retry "고르기가 두 번 끝나지 않았습니다 (메모리?; tail -50 $LOG)"
     else
       die "고르기 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
     fi
@@ -697,11 +714,12 @@ else
     mv "$PRETEST_REL" "$BASE/pretest_reads.unpinned.$(date +%s).json"
     sub "고정 줄이 없는 시험 전 표를 치우고 다시 계산합니다"
   fi
-  if ! run_pretest "$PROCS"; then
-    if tail -40 "$LOG" | grep -qE "workers keep dying|a worker died|MemoryError|Killed"; then
+  mark_step; rc=0; run_pretest "$PROCS" || rc=$?
+  if [ "$rc" != 0 ]; then
+    if memory_step "$rc"; then
       [ -f "$PRETEST_REL" ] && ! pinned "$PRETEST_REL" && mv "$PRETEST_REL" "$BASE/pretest_reads.unpinned.$(date +%s).json"
       sub "시험 전 표를 작업 ${HALF}개로 한 번 더 합니다"
-      run_pretest "$HALF" || warn "시험 전 표 실패 (판정과는 관계없음; 나중에 계산하면 '사후'; tail -50 $LOG)"
+      mark_step; run_pretest "$HALF" || warn "시험 전 표 실패 (판정과는 관계없음; 나중에 계산하면 '사후'; tail -50 $LOG)"
     else
       warn "시험 전 표 실패 (판정과는 관계없음; 나중에 계산하면 '사후'; run.log의 마지막 부분 참고)"
     fi
@@ -801,14 +819,15 @@ else
     warn "고정 줄이 없는 test.json을 치우고 다시 씁니다 (조각 파일에서 같은 결과; 치운 파일: $BASE/test.unpinned.*.json)"
   fi
   ledger_inputs
-  if ! run_test "$PROCS"; then
-    tail -40 "$LOG" | grep -q "^refused:" && die "시험 거부: $(grep -a '^refused:' "$LOG" | tail -1 | cut -c1-300)"
-    if tail -40 "$LOG" | grep -qE "workers keep dying|a worker died|MemoryError|Killed"; then
+  mark_step; rc=0; run_test "$PROCS" || rc=$?
+  if [ "$rc" != 0 ]; then
+    refused_step && die "시험 거부: $(step_log | grep -a '^refused:' | tail -1 | cut -c1-300)"
+    if memory_step "$rc"; then
       [ -f "$TEST_REL" ] && ! pinned "$TEST_REL" && mv "$TEST_REL" "$BASE/test.unpinned.$(date +%s).json"
       sub "시험 작업 일부가 끝나지 않아 한 번 더 이어서 합니다 (끝난 픽은 건너뜀, 작업 ${HALF}개)"
-      run_test "$HALF" || die_retry "시험이 두 번 끝나지 않았습니다 (메모리?; tail -50 $LOG)"
+      mark_step; run_test "$HALF" || die_retry "시험이 두 번 끝나지 않았습니다 (메모리?; tail -50 $LOG)"
     else
-      die "시험 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
+      die_retry "시험이 끝나지 않았습니다 (종료 코드 $rc). 다시 시작하면 끝난 픽은 건너뜁니다"
     fi
   fi
   pinned "$TEST_REL" || die "시험은 끝났는데 test.json이 고정 파일에 없습니다"
@@ -825,6 +844,7 @@ reads_once() {               # reads_once <procs>: one reads run within the wall
   left=$(( READS_WALL_S - used ))
   [ "$left" -le 5 ] && return 124
   sub "참고 분석 (r=1%·대조 → 주말 → 목표판 순서; 끝난 모듈은 건너뜀; ${READS_HOURS}시간 중 $(( left / 60 ))분 남음, 작업 ${procs}개)"
+  mark_step
   "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$procs" >>"$LOG" 2>&1 &
   to=$!
   t0=$(date +%s)
@@ -842,6 +862,7 @@ reads_once() {               # reads_once <procs>: one reads run within the wall
   echo $(( used + $(date +%s) - t0 )) > "$BASE/READS_USED_S"
   [ -n "$timed" ] && return 124
   [ "$rc" = 0 ] && return 0
+  memory_step "$rc" && return 2
   return 1
 }
 reads_stage() {
@@ -849,7 +870,7 @@ reads_stage() {
   if [ "$P" = 0 ]; then sub "고른 것이 없어 참고 분석도 없습니다 (9.1: 행이 없음)"; return 0; fi
   if [ -f "$BASE/READS_DONE" ]; then sub "건너뜀: 참고 분석 (이미 끝남)"; return 0; fi
   reads_once "$PROCS" || rc=$?
-  if [ "$rc" = 1 ] && tail -60 "$LOG" | grep -qE "workers keep dying|a worker died|MemoryError|Killed"; then
+  if [ "$rc" = 2 ]; then
     sub "참고 분석 작업 일부가 끝나지 않아 작업 ${HALF}개로 한 번 더 합니다 (끝난 모듈은 건너뜀)"
     rc=0; reads_once "$HALF" || rc=$?
   fi

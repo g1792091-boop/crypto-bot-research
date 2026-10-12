@@ -739,6 +739,14 @@ def test_stopping_and_restoring_in_the_middle_gives_identical_later_trades(rule)
             assert split == whole and w_split == w_whole, (rule, seed, every)
         total += len(whole)
         rule_exits += sum(t["exit_reason"] == "RULE" for t in whole)
+        # every RULE exit is at the open of a check minute of the account's schedule, with slippage, after its entry
+        sched = RX.sched_of(a)
+        checks = {r["t"] for r in world[1] if r["k"] == sched}
+        opens = {t: b[SYM].open for t, b, _f in world[0]}
+        for t in whole:
+            if t["exit_reason"] == "RULE":
+                assert t["exit_time"] in checks and t["exit_time"] > t["entry_time"]
+                assert t["exit_price"] == pytest.approx(opens[t["exit_time"]] * (1 - t["side"] * SLIP))
     assert total > 3 and rule_exits >= 1, (rule, total, rule_exits)
 
 
@@ -1160,7 +1168,7 @@ def test_a_rule_league_starts_at_its_install_and_a_change_keeps_the_old_database
     c.close()
     # the main league's record and its own backup rule are untouched
     assert _trades(main) == before and not list(tmp_path.glob("league_from_*.db"))
-    again = _league_reopen = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
+    again = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
     assert not again.reset and again.start_ms == rl.start_ms                       # a plain restart continues
     # backup_if_reset for the install script works on the rule database too
     rules.write_text(json.dumps({"variants": ["F7.N4.a"]}))
@@ -1257,3 +1265,98 @@ def _trades_of(db):
         return c.execute("SELECT account, exit_time, data FROM trades ORDER BY account, exit_time, rowid").fetchall()
     finally:
         c.close()
+
+
+def test_the_backup_command_copies_the_rule_database_before_a_change(tmp_path, monkeypatch, capsys):
+    cands = _rule_cands("15m", "tp1R|1")
+    _main_env(monkeypatch, tmp_path, cands, START + DAY)
+    db, rules = tmp_path / "league.db", tmp_path / "rules.json"
+    rules.write_text(json.dumps({"variants": ["F7.N2.a"]}))
+    rl = RN.make_rule_league(str(rules), cands, str(tmp_path / RX.DB_NAME), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA),
+                             TP._steps_from(DATA), TP.SYMS, log=lambda s: None, clock=lambda: START)
+    rl.advance(START + 6 * 3_600_000)
+    RN.open_db(str(db)).close()
+    capsys.readouterr()
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
+    assert "규칙 리그: 기록 복사 필요 없음" in capsys.readouterr().out and not list(tmp_path.glob("rule_league_from_*.db"))
+    rules.write_text(json.dumps({"variants": ["F7.N3.a"]}))                        # the install changes the rules
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
+    out = capsys.readouterr().out
+    assert "규칙 리그: 새로 시작하기 전 기록 복사" in out and len(list(tmp_path.glob("rule_league_from_*.db"))) == 1
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0          # a second run finds its copy
+    assert "이미 복사해 두었습니다" in capsys.readouterr().out
+
+
+def test_q15_on_a_1h_pick_in_the_league_checks_on_15m_closes_and_survives_restarts(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "Strategies", StubStrategies)
+    cands = _rule_cands("1h", "tp1R|1")
+    mk = lambda db: _league(db, rule="F1.w2.b.q15", tf="1h", exit_="tp1R|1", cands=cands)  # noqa: E731
+    full = mk(tmp_path / "f.db")
+    full.advance(START + 3 * DAY)
+    rows = _trades(full)
+    pid = "core-S2-1h-1-f"
+    rule_exits = [r for r in rows if r[0] == pid and r[3] == "RULE"]
+    assert len(rows) > 20 and rule_exits
+    off_hour = [r for r in rule_exits if (r[2] // 60_000) % 60 != 0]
+    assert off_hour, "a 15m check never acted between two hourly closes"                  # the q15 schedule is in use
+    base = _league(tmp_path / "b.db", rule="F1.w2.a", tf="1h", exit_="tp1R|1", cands=cands)
+    base.advance(START + 3 * DAY)
+    assert all((r[2] // 60_000) % 60 == 0 for r in _trades(base) if r[3] == "RULE")        # the base variant: hourly only
+    lg, t = mk(tmp_path / "g.db"), START
+    for step in (7, 3, 25, 1, 40, 13, 90, 5, 61, 2, 150):
+        t += step * RN.FIVE
+        lg.advance(t)
+        lg = mk(tmp_path / "g.db")
+        assert lg.restore_notes == [], (t, lg.restore_notes)
+    lg.advance(START + 3 * DAY)
+    assert _trades(lg) == rows
+    # restarts right on 15m closes, with a position held: the check of that close is still waiting in the queue
+    lg, t, queued = mk(tmp_path / "h.db"), START + 72 * RN.FIVE, 0
+    lg.advance(t)
+    for _ in range(200):
+        t += 3 * RN.FIVE
+        lg.advance(t)
+        lg = mk(tmp_path / "h.db")
+        assert lg.restore_notes == []
+        queued += sum(1 for x in lg.rule_accts if lg.engines[x["id"]].position is not None
+                      and lg.engines[x["id"]].position.signal.meta["rx"]["q"])
+        if queued >= 3:
+            break
+    assert queued >= 3
+    lg.advance(START + 3 * DAY)
+    assert _trades(lg) == rows
+
+
+def test_a_chunk_without_a_pick_close_still_gets_its_15m_records(monkeypatch):
+    """The live pass is 5 minutes long: most chunks hold no hourly close, and q15 needs the 15m ones all the same."""
+    cfg = RX.normalize_config({"variants": ["F1.w3.a.q15"]})
+    accts = [a for a in RX.accounts(_rule_cands("1h"), cfg) if a["id"].endswith("-f")]
+    lo, hi = START + 3 * HOUR + 5 * MIN, START + 3 * HOUR + 20 * MIN                  # one 15m close (03:15), no hourly one
+    by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, lo, hi, START, StubStrategies())
+    recs = [(c, o.d["k"], o.d["sym"]) for c, items in by.items() for _a, o in items if isinstance(o, RX.RuleClose)]
+    assert sorted(recs) == sorted((START + 3 * HOUR + 15 * MIN, "q", s) for s in TP.SYMS)
+    # a chunk with neither gives nothing, and the base variant gets no 15m record
+    by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, lo, lo + 5 * MIN, START, StubStrategies())
+    assert not by
+    base = [a for a in RX.accounts(_rule_cands("1h"), RX.normalize_config({"variants": ["F1.w3.a"]})) if a["id"].endswith("-f")]
+    by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), base, TP.SYMS, lo, hi, START, StubStrategies())
+    assert not by
+
+
+def test_five_minute_pieces_equal_one_run_for_q15(tmp_path, monkeypatch):
+    """The service's own pass is 5 minutes: around a 15m-check exit, pieces of 5 minutes give the run of one chunk."""
+    monkeypatch.setattr(L, "Strategies", StubStrategies)
+    cands = _rule_cands("1h", "tp1R|1")
+    mk = lambda db: _league(db, rule="F1.w2.b.q15", tf="1h", exit_="tp1R|1", cands=cands)  # noqa: E731
+    scout = mk(tmp_path / "s.db")
+    scout.advance(START + 3 * DAY)
+    first = min(r[2] for r in _trades(scout) if r[0] == "core-S2-1h-1-f" and r[3] == "RULE" and (r[2] // MIN) % 60 != 0)
+    a = (first - 4 * HOUR) // RN.FIVE * RN.FIVE                                       # four hours before it
+    whole, pieces = mk(tmp_path / "w.db"), mk(tmp_path / "p.db")
+    whole.advance(a)
+    pieces.advance(a)
+    whole.advance(a + 6 * HOUR)
+    for t in range(a + RN.FIVE, a + 6 * HOUR + 1, RN.FIVE):
+        pieces.advance(t)
+    assert _trades(pieces) == _trades(whole) and any(r[2] == first for r in _trades(whole))
+    assert RN._get(pieces.conn, "engines") == RN._get(whole.conn, "engines")

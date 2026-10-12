@@ -1217,7 +1217,8 @@ def account_summary(res: dict) -> dict:
 def size_pair(mk: Market, cand: dict, cfg: dict, tf: str, pid: str, period_name: str = "SEL") -> dict:
     per = PER(period_name)
     draws = A.boot_draws(per, pid, period_name, N_F95)
-    return A.sizes(lambda f: A.account(mk.store, cand, mk.coins, cfg, f, per), A.CAP[tf], float(cfg["L"]), per, draws)
+    return A.sizes(lambda f: A.account(mk.store, cand, mk.coins, cfg, f, per), A.CAP[tf], float(cfg["L"]), per, draws,
+                   scan=A.path_scanner(mk.store, cand, mk.coins, cfg, per))
 
 
 def eval_pairs(kind: str, name: str, tf: str, pairs: list) -> list:
@@ -1631,13 +1632,9 @@ def test_pick(pick: dict) -> dict:
     for i in range(len(tc["chosen"])):
         acc_b.append(time_account(mk, clusters, tc["chosen"][i], gclose, take, coin_rows, cfg, f, per))
     pb = p_boot(tr["close"][ok], tr["r"][ok], "TEST", pid)
-    t0_ok = st["n"] >= MIN_TEST
-    checks = {"T0": bool(t0_ok), "T1": bool(st["n"] and st["win"] >= A.MIN_WIN),
-              "T2": bool(acc["dd"] <= cap and not acc["bust"]), "T3": bool(st["n"] and st["mean"] > 0),
-              "T4": bool(st["n"] and st.get("mean_x2", -1) > 0),
-              "T5": bool(st["n"] and p_a < T5_ALPHA and p_b < T5_ALPHA)}
+    checks = confirm_checks(st, acc, cap, p_a, p_b)
     st["mean_wallet_at_f_star"] = f * st["mean"] if st["n"] else None                  # 8.1: f* x r
-    p = float(max(pb, p_a, p_b)) if t0_ok else 1.0
+    p = float(max(pb, p_a, p_b)) if checks["T0"] else 1.0
     return {"id": pid, "kind": pick["kind"], "name": pick["name"], "tf": tf, "test": st,
             "account": account_summary(acc), "cap": cap, "f_star": f,
             "controls": {"a": control_summary(fl["mean"], fl["win"], fl["n"], p_a, acc_a, cap) | {
@@ -1649,6 +1646,15 @@ def test_pick(pick: dict) -> dict:
                          "bars": int(take.shape[1])}},
             "p_boot": pb, "p_a": p_a, "p_b": p_b, "p": p, "checks": checks,
             "seed_means": {"a": float(np.nanmean(fl["mean"])), "b": float(np.nanmean(tc["mean"]))}}
+
+
+def confirm_checks(st: dict, acc: dict, cap: float, p_a: float, p_b: float) -> dict:
+    """T0-T5 of section 12 from the TEST trade list, the account at f* and the two control p-values. A pick without a
+    TEST trade passes none of the trade checks and not T5 (its p-values are 1)."""
+    n = st["n"]
+    return {"T0": bool(n >= MIN_TEST), "T1": bool(n and st["win"] >= A.MIN_WIN),
+            "T2": bool(acc["dd"] <= cap and not acc["bust"]), "T3": bool(n and st["mean"] > 0),
+            "T4": bool(n and st.get("mean_x2", -1) > 0), "T5": bool(n and p_a < T5_ALPHA and p_b < T5_ALPHA)}
 
 
 def cat_pieces(pieces: list) -> dict:
@@ -1869,7 +1875,7 @@ def write_ledger(args, blocks: list, ds_ids: set) -> dict:
             os.replace(priv_path, os.path.join(private_dir(args), f"ledger_private_v{old}.json"))
     lpub, lpriv = ledger(blocks, getattr(args, "ledger_extra", None), getattr(args, "hunt_private", None))
     lpriv_sha = write_private(args, "ledger_private.json", dict(lpriv, version=version))
-    doc = dict(lpub, version=version, private_sha256=lpriv_sha,
+    doc = dict(lpub, version=version, private_sha256=lpriv_sha, stamp=stamp(None),
                test_json_sha256=sha256_file(out_path("test.json")) if os.path.exists(out_path("test.json")) else None)
     write_public(pub_path, doc, ds_ids)
     log(f"ledger v{version}: {doc['status']}, {doc['hypotheses']} hypotheses"
@@ -1880,8 +1886,8 @@ def write_ledger(args, blocks: list, ds_ids: set) -> dict:
 
 def cmd_ledger(args) -> int:
     """13: the program-wide ledger again, after test.json: from test_private.json (checked against test.json), the
-    hunt's published test files and the list of other hypotheses. No test-period data is read; no verdict changes."""
-    check_pin("test")
+    hunt's published test files and the list of other hypotheses. No test-period data is read; no verdict changes. No
+    pin check: it runs later, wherever the private test file is, on whatever commit (the ledger stamps its code)."""
     if not os.path.exists(out_path("test.json")):
         raise SystemExit("the ledger needs test.json (run test first)")
     test_doc = load_json(out_path("test.json"))

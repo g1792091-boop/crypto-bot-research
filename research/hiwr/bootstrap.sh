@@ -139,8 +139,8 @@ die_retry() {                # a stop that a later restart can get past (network
 # BTC (every 1h cell as one whole-cell task; 15m and 30m scaled per cell by the measured bar-count ratio), times 30
 # coins: GRID_CPU_MIN CPU-minutes in all, x1.3 margin included; the longest task after GRID_CHUNK_OF about
 # GRID_LONG_MIN minutes. The wall time is the larger of the total over the workers and the longest task.
-GRID_CPU_MIN=@@GRID_CPU_MIN@@
-GRID_LONG_MIN=@@GRID_LONG_MIN@@
+GRID_CPU_MIN=20400
+GRID_LONG_MIN=312
 picks_n() { cat "$BASE/PICKS_N" 2>/dev/null; }
 select_est() {
   local par lp
@@ -153,7 +153,7 @@ reads_est() {
   local p cap; p=$(picks_n); cap=$(awk -v h="$READS_HOURS" 'BEGIN{printf "%d", h * 60}')
   if [ -z "$p" ]; then echo 120; return; fi
   [ "$p" = 0 ] && { echo 0; return; }
-  p=$(( p * 6 + 10 )); [ "$p" -gt "$cap" ] && p=$cap
+  p=$(( (p + NCPU - 1) / NCPU )); p=$(( p * 12 + 15 )); [ "$p" -gt "$cap" ] && p=$cap   # picks in parallel, 12 min each
   echo "$p"
 }
 est_min() {

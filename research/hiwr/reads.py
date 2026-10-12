@@ -478,10 +478,10 @@ def run(ctx: dict) -> tuple:
     _RUN.clear()
     _RUN.update(H=H, mks=mks, fdir={"SEL": fsel, "TEST": ftest, "EXTRA": fsel}, groups=groups, picks=picks, pdir=pdir)
     hours = getattr(args, "reads_hours", None)
-    deadline = time.time() + float(hours) * 3600 if hours else None
+    deadline = time.time() + float(hours) * 3600 if hours is not None else None
     todo = [i for i, p in enumerate(picks) if not os.path.exists(pick_file(pdir, i, p["id"]))]
     log(f"[reads] {len(todo)} of {len(picks)} picks to do, {procs} at once"
-        + (f", no new pick after {hours} h" if hours else ""))
+        + (f", no new pick after {hours} h" if hours is not None else ""))
     stopped = 0
     with cf.ProcessPoolExecutor(min(procs, max(1, len(todo))), mp_context=mp.get_context("fork")) as ex:
         pending, nxt = set(), 0

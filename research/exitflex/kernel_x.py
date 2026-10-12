@@ -24,8 +24,8 @@ each coin's rows):
   PT  float64 (n, 9): close ms, close, ATR14, EMA(n) of the variant, low, high, structure_levels(w) second output at the
                       bar (highest confirmed swing low below the close), first output (lowest swing high above it), the
                       minute index of the bar's close (kernel._entry_index on the coin's minutes, -1 none).
-  PF  int8 (n, 6):    swing low at the bar (strict, +-w bars), swing high, long signal, short signal, F11 long exit,
-                      F11 short exit.
+  PF  int8 (n, 16):   swing low at the bar (strict, +-w bars), swing high, long signal, short signal, then the F11
+                      components of the long side (6 columns) and of the short side (6): 0 false, 1 true, 2 NaN (unknown).
   QT  float64 (nq, 4): the 15m bars of a q15 variant: close ms, close, minute index of the close, index of the latest
                       pick-timeframe bar closed at or before it (rows of ``qst``/``qen`` per coin).
 Rule parameters ``rp`` (float64 vector, indices RP_*): family, swing width w, chandelier multiple m, arm level P (R), give-
@@ -72,8 +72,11 @@ F_NONE, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11 = range(12)
 # chart array columns
 C_CMS, C_CL, C_ATR, C_EMA, C_LO, C_HI, C_SLO, C_SHI, C_MIN = range(9)
 NPT = 9
-P_SWL, P_SWH, P_SIGL, P_SIGS, P_XL, P_XS = range(6)
-NPF = 6
+NC = 6                                         # F11 components per side
+P_SWL, P_SWH, P_SIGL, P_SIGS = range(4)
+P_CL0, P_CS0 = 4, 4 + NC                       # F11 component columns: long side, short side (0 false, 1 true, 2 NaN)
+NPF = 4 + 2 * NC
+CK_NONE, CK_STATE, CK_EVENT = 0, 1, 2          # component kinds (prereg A.0 rule C3)
 Q_CMS, Q_CL, Q_MIN, Q_PT = range(4)
 NQT = 4
 # rule parameter vector
@@ -165,11 +168,17 @@ def _first_close_after(QT, t):
 @njit
 def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
              tp_kind, tp_val, ladder, first_lock, step, gap, tp_price,
-             force_end, rp, i0, PT, PF, QT, plc, hz, seed_base, coin, num, den, trace):
+             force_end, rp, i0, PT, PF, QT, plc, hz, seed_base, coin, num, den, trace, ckind, lvl):
     """kernel._trade + rule/placebo exits + forced period end. One position from entry minute e (fill at o[e]) until an
     exit or ``end`` (exclusive; the period's last minute is end - 1). Returns (wallet change, exit minute index, reason,
     leverage, exit price (0 when still open), checks made, minutes where stop and take-profit were both touched).
-    ``trace`` (rows x TRACE_COLS, zero rows in production) records each check's frozen decision state."""
+    ``trace`` (rows x TRACE_COLS, zero rows in production) records each check's frozen decision state.
+    F11 (the strategy's own exit, prereg Appendix A): ``ckind`` (2 x NC, CK_*) gives the kind of each component of the long
+    and of the short side, the component values are PF columns P_CL0 / P_CS0 +; ``lvl`` is the position's invalidation level
+    (NaN none; a close beyond it, below for a long, is one more state component). A state component is armed once it has been
+    false at some chart close in [i0, i - 1] and then fires where it is true; an event component fires where it is true on a
+    bar after i0; a NaN (2) neither fires nor arms; the bars of a merged check are walked in time order and the check fires if
+    any bar fires."""
     taker, slip, rt, maker = S[0], S[1], S[5], S[19]
     raw = o[e]
     fill = raw * (1 + side * slip)
@@ -205,6 +214,16 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
     ref = np.nan
     ema_armed = False
     armed = False
+    car = np.zeros(NC + 1, np.bool_)
+    kbase = 0 if side > 0 else NC
+    pcol = P_CL0 if side > 0 else P_CS0
+    has_lvl = np.isfinite(lvl)
+    if fam == F11:
+        for c in range(NC):
+            if ckind[kbase + c] == CK_STATE:
+                car[c] = PF[i0, pcol + c] == 0
+        if has_lvl and np.isfinite(PT[i0, C_CL]):
+            car[NC] = side * (lvl - PT[i0, C_CL]) <= 0
     if fam != F_NONE:
         if fam == F1 or fam == F6 or fam == F8 or fam == F9:
             ref = PT[i0, C_SLO] if side > 0 else PT[i0, C_SHI]
@@ -274,8 +293,27 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
                     if PF[ib, P_SIGS if side > 0 else P_SIGL] == 1:
                         opp_any = True
                 if fam == F11:
-                    if PF[ib, P_XL if side > 0 else P_XS] == 1:
-                        opp_any = True
+                    for c in range(NC):
+                        kd = ckind[kbase + c]
+                        if kd == CK_NONE:
+                            continue
+                        vv = PF[ib, pcol + c]
+                        if vv == 2:
+                            continue
+                        if kd == CK_EVENT:
+                            if vv == 1:
+                                opp_any = True
+                        elif vv == 1:
+                            if car[c]:
+                                opp_any = True
+                        else:
+                            car[c] = True
+                    if has_lvl and np.isfinite(PT[ib, C_CL]):
+                        if side * (lvl - PT[ib, C_CL]) > 0:
+                            if car[NC]:
+                                opp_any = True
+                        else:
+                            car[NC] = True
             pi = bi
             fr = fpaid / notional
             rc = (side * (px - fill) - fill * (rt + fr)) / stop_dist
@@ -429,7 +467,7 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
 @njit
 def account_x(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig_close, sig_side, sig_atr, sig_best,
               sig_i0, qty_steps, min_notionals, stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap, sig_tp,
-              force_end, rp, PT, PF, cst, cen, QT, qst, qen, plc, hz, seed_base, num, den):
+              force_end, rp, PT, PF, cst, cen, QT, qst, qen, plc, hz, seed_base, num, den, ckind, sig_lvl, bar_ms):
     """kernel.account + rules. One account over several coins (1m arrays concatenated; coin c is [starts[c], ends[c]),
     ``ends`` = the period's end, exclusive). Every signal is offered, in the order given (fill time, coin priority).
     Returns per signal: status (0 skipped, 1 entered, 2 rejected, 3 no fill, 4 not taken after bust), P&L, fill time (ms),
@@ -437,8 +475,11 @@ def account_x(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig
     take-profit were both touched. ``num`` / ``den`` (N_AGE x 2 x 2, int64) collect the realised hazard counts of a rule
     run; a placebo run (plc) reads ``hz`` of the same shape.
     After a RULE or RAND exit at minute j the account is free for signals that fill at j's open (busy_until = exit - 1 ms);
-    after every other exit the kernel's rule stands."""
+    after every other exit the kernel's rule stands.
+    ``bar_ms`` is the bar length of the minute arrays: a signal's fill is kernel._entry_index(ts, close + 60,000 - bar_ms)
+    (the replica's close shift; 60,000 for the study's 1m bars). ``sig_lvl`` / ``ckind``: F11 (see _trade_x)."""
     n = len(sig_coin)
+    shift = 60000 - bar_ms
     status = np.zeros(n, np.int8)
     pnl = np.zeros(n)
     entry_ts = np.full(n, -1, np.int64)
@@ -456,7 +497,7 @@ def account_x(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig
         c = sig_coin[q]
         a, b = starts[c], ends[c]
         tsc = ts[a:b]
-        e = _entry_index(tsc, sig_close[q])
+        e = _entry_index(tsc, sig_close[q] + shift)
         if e < 0 or (force_end and e >= b - a - 1):
             status[q] = 3
             continue
@@ -475,7 +516,7 @@ def account_x(S, brs, ts, o, h, l, mo, mh, ml, fund, starts, ends, sig_coin, sig
             S, brs[c], tsc, o[a:b], h[a:b], l[a:b], mo[a:b], mh[a:b], ml[a:b], fund[a:b], e, b - a, sig_side[q],
             stop_atr * x, x, sig_best[q], wallet, qty_steps[c], min_notionals[c], tp_kind, tp_val, ladder, first_lock,
             step, gap, sig_tp[q], force_end, rp, sig_i0[q], PT[cst[c]:cen[c]], PF[cst[c]:cen[c]], QT[qst[c]:qen[c]], plc,
-            hz, seed_base, c, num, den, tr0)
+            hz, seed_base, c, num, den, tr0, ckind, sig_lvl[q])
         both_total += bt
         if r == R_REJECT:
             status[q] = 2
@@ -597,21 +638,32 @@ def variant_by_id(vid: str) -> Variant:
 
 
 def register_f11(provider, modes=("a", "b")) -> None:
-    """Plug-in point of the native exit (F11). ``provider(pick, sym, df, close_ms, signal_long, signal_short)`` returns
-    (long_exit, short_exit, target_long, target_short): per chart bar of the pick's timeframe, two boolean arrays (the
-    native exit is true at that bar's close for a long / a short) and two float arrays (the per-signal target price of a
-    signal on that bar, NaN = none). The kernel treats the exit arrays like F3's opposite signal (checked at each close
-    of the pick's timeframe, OR over bars merged into one check, exit at the check minute's open, RULE) and a finite
-    target as a take-profit limit at that price (TP_STRUCT: filled at the level, maker, only when it lies beyond the
-    fill), in both modes. Its placebo stratum has precondition z = 0 (like F3). Nothing else is defined here."""
+    """Plug-in point of the strategy's own exit (F11, prereg 5.2 and Appendix A). The kernel mechanics of rules C1-C8 are
+    here; the per-strategy definitions are not (they come from native.py / native_ds.py). ``provider(pick, sym, df,
+    close_ms, signal_long, signal_short)`` returns either a dict
+        {"comp_long": [(kind, array), ...], "comp_short": [...], "lvl_long": array|None, "lvl_short": array|None,
+         "tgt_long": array|None, "tgt_short": array|None}
+    (kind 'state' or 'event'; every array has one entry per chart bar of the pick's timeframe: booleans, or floats with NaN
+    for 'neither fires nor arms'; ``lvl_*`` is the per-signal invalidation level and ``tgt_*`` the per-signal target, both
+    indexed by the signal bar, NaN elsewhere and where there is none; at most NC components per side), or the simple
+    4-tuple (long_exit, short_exit, target_long, target_short) of per-bar boolean exit arrays (event components) and
+    per-signal targets. F11.a keeps the pick's take-profit; F11.b has the strategy's target or none (TP_STRUCT rule:
+    used only when it lies beyond the fill, filled at the level or at a gapped open, maker). Its placebo stratum has
+    precondition z = 0 (like F3)."""
     F11_REGISTRY["provider"] = provider
     F11_REGISTRY["modes"] = tuple(modes)
+
+
+def clear_f11() -> None:
+    F11_REGISTRY["provider"] = None
 
 
 def exit_of_pick(pick: dict, variant: Variant) -> tuple:
     """(stop x ATR, tp kind, tp value, ladder, first lock, lock step, gap) of the pick under the variant: the pick's own
     exit (E0, mode a) or its stop alone (mode b: no take-profit and no lock)."""
     stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap = K.exit_args(pick["exit_index"])
+    if variant.fam == F11 and variant.mode == "b":
+        return stop_atr, TP_STRUCT, 0.0, False, first_lock, step, gap     # the strategy's target (NaN: none), never the pick's
     if variant.mode == "b":
         return stop_atr, TP_NONE, 0.0, False, first_lock, step, gap
     return stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap
@@ -636,11 +688,7 @@ def simulate(market, pdata, variant: Variant, scale: float = 0.25, period: str =
     S = market.S(scale) if S is None else S
     off = pdata.offered(period, market) if offered is None else offered
     stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap = exit_of_pick(pdata.pick, variant)
-    sig_tp = np.full(len(off["coin"]), np.nan)
-    if variant.fam == F11:
-        sig_tp = pdata.targets(off)
-        if np.isfinite(sig_tp).any():
-            tp_kind = TP_STRUCT
+    sig_tp = pdata.targets(off) if (variant.fam == F11 and variant.mode == "b") else np.full(len(off["coin"]), np.nan)
     rp, PT, PF, QT, cst, cen, qst, qen = pdata.chart(variant)
     num, den = new_counts()
     if hz is None:
@@ -652,8 +700,43 @@ def simulate(market, pdata, variant: Variant, scale: float = 0.25, period: str =
                     market.cat["mh"], market.cat["ml"], market.cat["fund"], market.starts, ends, off["coin"], off["close"],
                     off["side"], off["atr"], off["best"], off["i0"], market.qty_steps, market.min_notionals, stop_atr,
                     tp_kind, tp_val, ladder, first_lock, step, gap, sig_tp, bool(force_end), rp, PT, PF, cst, cen, QT, qst,
-                    qen, bool(placebo), np.ascontiguousarray(hz, dtype=np.float64), int(seed_base), num, den)
+                    qen, bool(placebo), np.ascontiguousarray(hz, dtype=np.float64), int(seed_base), num, den, pdata.ckind,
+                    off["lvl"] if variant.fam == F11 else np.full(len(off["coin"]), np.nan), int(market.bar_ms))
     r = Result()
     (r.status, r.pnl, r.entry_ts, r.exit_ts, r.reason, r.lev, r.xpx, r.wallet, r.both) = out
     r.num, r.den, r.sig, r.w0, r.variant, r.scale, r.period = num, den, off, float(S[10]), variant, scale, period
     return r
+
+
+def simulate_trade(market, pdata, variant: Variant, off: dict, q: int, scale: float = 0.25, period: str = "select",
+                   force_end: bool = True, plc: bool = False, hz: np.ndarray | None = None, seed_base: int = 0,
+                   trace_rows: int = 0, equity: float = 5000.0, tp_price: float = float("nan"), minutes: dict | None = None,
+                   chart: tuple | None = None, e_override: int | None = None) -> tuple:
+    """One position of offered signal ``q`` (``off`` = ``pdata.offered(period)``), alone at ``equity``, with an optional
+    decision trace (one row per check, TRACE_COLS columns). ``minutes`` = optional replacement arrays of the signal's coin
+    (o, h, l, mo, mh, ml, fund; same length as the period's minutes of the coin) and ``chart`` = optional replacement
+    (PT, PF, QT) of the coin: used by the causality tests (T5) to change what lies after a check. Returns
+    (kernel tuple (wallet change, exit minute index, reason, leverage, exit price, checks, both-touched), num, den, trace)."""
+    c = int(off["coin"][q])
+    a = int(market.starts[c])
+    b = int(market.period_end(period)[c]) if force_end else int(market.ends[c])
+    tsc = market.cat["ts"][a:b]
+    e = int(_entry_index(tsc, off["close"][q] + 60000 - market.bar_ms)) if e_override is None else e_override
+    stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap = exit_of_pick(pdata.pick, variant)
+    rp, PT, PF, QT, cst, cen, qst, qen = pdata.chart(variant)
+    if chart is None:
+        PT, PF, QT = PT[cst[c]:cen[c]], PF[cst[c]:cen[c]], QT[qst[c]:qen[c]]
+    else:
+        PT, PF, QT = chart
+    num, den = new_counts()
+    trace = new_trace(trace_rows)
+    hz = np.zeros((N_AGE, 2, 2)) if hz is None else np.ascontiguousarray(hz, dtype=np.float64)
+    m = minutes or {}
+    arr = {k: m[k] if k in m else market.cat[k][a:b] for k in ("o", "h", "l", "mo", "mh", "ml", "fund")}
+    atr = float(off["atr"][q])
+    out = _trade_x(market.S(scale), market.brs[c], tsc, arr["o"], arr["h"], arr["l"], arr["mo"], arr["mh"], arr["ml"],
+                   arr["fund"], e, b - a, int(off["side"][q]), stop_atr * atr, atr, bool(off["best"][q]), equity,
+                   market.qty_steps[c], market.min_notionals[c], tp_kind, tp_val, ladder, first_lock, step, gap,
+                   tp_price, bool(force_end), rp, int(off["i0"][q]), PT, PF, QT, bool(plc), hz, int(seed_base), c, num, den, trace,
+                   pdata.ckind, float(off["lvl"][q]) if variant.fam == F11 else float("nan"))
+    return out, num, den, trace

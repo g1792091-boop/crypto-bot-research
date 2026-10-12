@@ -240,24 +240,30 @@ def _tup(c: dict) -> dict:
     return {k: (tuple(v) if isinstance(v, list) else v) for k, v in c.items()}
 
 
-def picks(watch_sel: str | None = None, candidates: str | None = None) -> list:
-    """The 23 core rows of watch_sel.json: id ``core-<name>-<tf>-<rank>`` (checked against candleague's candidates.json),
-    name, tf, combo, exit name and index in kernel.EXITS."""
-    rows = [r for r in json.load(open(watch_sel or WATCH_SEL)) if r["kind"] == "core"]
+def picks(watch_sel: str | None = None, candidates: str | None = None, pool: str | None = None) -> list:
+    """The 38 rows of watch_sel.json (23 ``core`` and 15 ``ds``; ``pool`` = 'core' or 'ds' keeps one): id
+    ``<kind>-<name>-<tf>-<rank>`` (checked against candleague's candidates.json, whose fields id, kind, name, tf, exit and
+    combo are the only ones read), kind, name, tf, combo, exit name, its index in kernel.EXITS and the pool."""
+    rows = json.load(open(watch_sel or WATCH_SEL))
     names = [e[0] for e in K.EXITS]
     out = []
     for r in rows:
-        out.append({"id": f"core-{r['name']}-{r['tf']}-{int(r['rank'])}", "kind": "core", "name": r["name"], "tf": r["tf"],
-                    "combo": _tup(json.loads(r["combo"])), "exit": r["exit"], "exit_index": names.index(r["exit"]),
-                    "rank": int(r["rank"])})
-    if len(out) != 23:
-        raise RuntimeError(f"expected 23 core picks, got {len(out)}")
+        out.append({"id": f"{r['kind']}-{r['name']}-{r['tf']}-{int(r['rank'])}", "kind": r["kind"], "pool": r["kind"],
+                    "name": r["name"], "tf": r["tf"], "combo": _tup(json.loads(r["combo"])), "exit": r["exit"],
+                    "exit_index": names.index(r["exit"]), "rank": int(r["rank"])})
     cpath = candidates or CANDIDATES
     if os.path.exists(cpath):
-        cands = [c for c in json.load(open(cpath))["candidates"] if c["kind"] == "core"]
-        if sorted(c["id"] for c in cands) != sorted(p["id"] for p in out):
-            raise RuntimeError("candidates.json and watch_sel.json disagree on the core picks")
-    return out
+        cands = json.load(open(cpath))["candidates"]
+        by_id = {c["id"]: c for c in cands}
+        if sorted(by_id) != sorted(p["id"] for p in out):
+            raise RuntimeError("candidates.json and watch_sel.json disagree on the picks")
+        for p in out:
+            c = by_id[p["id"]]
+            if (c["kind"], c["name"], c["tf"], c["exit"]) != (p["kind"], p["name"], p["tf"], p["exit"]) or _tup(c["combo"]) != p["combo"]:
+                raise RuntimeError(f"{p['id']}: candidates.json and watch_sel.json disagree")
+    if len(out) != 38 or sum(p["kind"] == "core" for p in out) != 23:
+        raise RuntimeError(f"expected 23 core and 15 ds picks, got {len(out)}")
+    return [p for p in out if pool in (None, p["pool"])]
 
 
 def pick_by_id(pid: str) -> dict:
@@ -280,9 +286,12 @@ class RealProvider:
         return self.R.frame(self.data_dir, sym, tf)
 
     def signals(self, pick: dict, sym: str) -> tuple:
-        return self.R.signals(self.data_dir, "core", pick["name"], sym, pick["tf"], pick["combo"])
+        return self.R.signals(self.data_dir, pick["kind"], pick["name"], sym, pick["tf"], pick["combo"])
 
     def best(self, pick: dict, sym: str) -> tuple:
+        if pick["kind"] == "ds":                       # DeepSeek is always 'normal' (run.trade_table, the league)
+            n = len(self.frame(sym, pick["tf"])[0])
+            return np.zeros(n, bool), np.zeros(n, bool)
         return self.R.best_flags(self.data_dir, pick["name"], sym, pick["tf"])
 
     def atr(self, df) -> np.ndarray:
@@ -366,6 +375,7 @@ class Market:
         self.min_notionals = np.array([ex[s][2] for s in R.SYMBOLS])
         self._S = {}
         self._pend = {}
+        self.bar_ms = MIN                       # bar length of the minute arrays (the study runs 1m bars only)
 
     def ts(self, c: int) -> np.ndarray:
         return self.cat["ts"][self.starts[c]:self.ends[c]]
@@ -396,15 +406,48 @@ class Market:
 
 
 # ------------------------------------------------------------------ one pick: chart bars, signals, offered signals
+def _tri(a) -> np.ndarray:
+    """0 / 1 / 2 (NaN) int8 values of a component array (booleans, or floats with NaN for 'unknown')."""
+    a = np.asarray(a)
+    if a.dtype == bool:
+        return a.astype(np.int8)
+    a = a.astype(float)
+    return np.where(np.isnan(a), 2, (a != 0).astype(np.int8)).astype(np.int8)
+
+
+def normalize_f11(ret, n: int) -> dict:
+    """The provider's return value as a dict of lists / arrays of length ``n`` (see kernel_x.register_f11)."""
+    nan = np.full(n, np.nan)
+    if isinstance(ret, dict):
+        out = {"comp_long": list(ret.get("comp_long") or []), "comp_short": list(ret.get("comp_short") or []),
+               "lvl_long": ret.get("lvl_long"), "lvl_short": ret.get("lvl_short"), "tgt_long": ret.get("tgt_long"),
+               "tgt_short": ret.get("tgt_short")}
+    else:
+        lx, sx, tl, ts_ = ret
+        out = {"comp_long": [("event", lx)], "comp_short": [("event", sx)], "lvl_long": None, "lvl_short": None,
+               "tgt_long": tl, "tgt_short": ts_}
+    for k in ("lvl_long", "lvl_short", "tgt_long", "tgt_short"):
+        out[k] = nan if out[k] is None else np.asarray(out[k], float)
+    for k in ("comp_long", "comp_short"):
+        if len(out[k]) > KX.NC:
+            raise ValueError(f"F11: at most {KX.NC} components per side")
+        for kind, arr in out[k]:
+            if kind not in ("state", "event") or len(arr) != n:
+                raise ValueError("F11: a component is (kind in 'state' / 'event', array of one value per chart bar)")
+    return out
+
+
 class PickData:
-    """A pick's chart data over all coins (concatenated) and the arrays each variant's kernel run reads."""
+    """A pick's chart data over all coins (concatenated) and the arrays each variant's kernel run reads. ``f11`` = the
+    provider of the strategy's own exit (kernel_x.register_f11), or None."""
 
     def __init__(self, market: Market, pick: dict, provider, f11=None):
         self.market, self.pick, self.provider = market, pick, provider
         self.tf = pick["tf"]
         self.tf_ms = TF_MS[self.tf]
         n_c = len(market.symbols)
-        cl_ms, cl, hi, lo, atr, mn, sl, ss, bl, bs, pid, xl, xs, tl, ts_ = ([] for _ in range(15))
+        cl_ms, cl, hi, lo, atr, mn, sl, ss, bl, bs, pid, tl, ts_, ll, ls = ([] for _ in range(15))
+        comps = []
         self.frames = []
         for c, sym in enumerate(market.symbols):
             df, close = provider.frame(sym, self.tf)
@@ -417,32 +460,48 @@ class PickData:
             hi.append(df["high"].to_numpy(float))
             lo.append(df["low"].to_numpy(float))
             atr.append(provider.atr(df))
-            mn.append(self._minute_of(market.ts(c), np.asarray(close, np.int64)))
+            mn.append(self._minute_of(market.ts(c), np.asarray(close, np.int64), market.bar_ms))
             sl.append(np.asarray(lo_s, np.int8))
             ss.append(np.asarray(sh_s, np.int8))
             bl.append(np.asarray(b_l, bool))
             bs.append(np.asarray(b_s, bool))
             pid.append(np.asarray(provider.period_ids(np.asarray(close, np.int64)), np.int8))
             if f11 is not None:
-                a, b, ta, tb = f11(pick, sym, df, close, np.asarray(lo_s, bool), np.asarray(sh_s, bool))
-                xl.append(np.asarray(a, np.int8))
-                xs.append(np.asarray(b, np.int8))
-                tl.append(np.asarray(ta, float))
-                ts_.append(np.asarray(tb, float))
+                r = normalize_f11(f11(pick, sym, df, close, np.asarray(lo_s, bool), np.asarray(sh_s, bool)), n)
+                comps.append(r)
+                tl.append(r["tgt_long"])
+                ts_.append(r["tgt_short"])
+                ll.append(r["lvl_long"])
+                ls.append(r["lvl_short"])
             else:
-                xl.append(np.zeros(n, np.int8))
-                xs.append(np.zeros(n, np.int8))
-                tl.append(np.full(n, np.nan))
-                ts_.append(np.full(n, np.nan))
+                nan = np.full(n, np.nan)
+                comps.append(None)
+                tl.append(nan)
+                ts_.append(nan)
+                ll.append(nan)
+                ls.append(nan)
         self.n_bars = [len(x) for x in cl]
         self.cst = np.r_[0, np.cumsum(self.n_bars)[:-1]].astype(np.int64)
         self.cen = np.cumsum(self.n_bars).astype(np.int64)
         cat = np.concatenate
         self.b_cms, self.b_cl, self.b_hi, self.b_lo, self.b_atr, self.b_min = (cat(cl_ms), cat(cl), cat(hi), cat(lo), cat(atr),
                                                                               cat(mn).astype(np.float64))
-        self.b_sl, self.b_ss, self.b_xl, self.b_xs = cat(sl), cat(ss), cat(xl), cat(xs)
-        self.b_tl, self.b_ts = cat(tl), cat(ts_)
+        self.b_sl, self.b_ss = cat(sl), cat(ss)
+        self.b_tl, self.b_ts, self.b_ll, self.b_ls = cat(tl), cat(ts_), cat(ll), cat(ls)
         self.best_l, self.best_s, self.pid = cat(bl), cat(bs), cat(pid)
+        # F11 component columns (0 false, 1 true, 2 NaN) and kinds
+        self.b_comp = np.zeros((len(self.b_cl), 2 * KX.NC), np.int8)
+        self.ckind = np.zeros(2 * KX.NC, np.int8)
+        if f11 is not None:
+            for side_i, key in enumerate(("comp_long", "comp_short")):
+                for k in range(KX.NC):
+                    kinds = {r[key][k][0] for r in comps if len(r[key]) > k}
+                    lens = {len(r[key]) for r in comps}
+                    if len(lens) != 1 or len(kinds) > 1:
+                        raise ValueError("F11: the components of a strategy must be the same for every coin")
+                    if kinds:
+                        self.ckind[side_i * KX.NC + k] = KX.CK_STATE if kinds == {"state"} else KX.CK_EVENT
+                        self.b_comp[:, side_i * KX.NC + k] = cat([_tri(r[key][k][1]) for r in comps])
         self._sw: dict = {}
         self._ema: dict = {}
         self._q = None
@@ -451,10 +510,10 @@ class PickData:
         self._n_coins = n_c
 
     @staticmethod
-    def _minute_of(ts: np.ndarray, close_ms: np.ndarray) -> np.ndarray:
+    def _minute_of(ts: np.ndarray, close_ms: np.ndarray, bar_ms: int = MIN) -> np.ndarray:
         """kernel._entry_index of every close: the minute that opens at the close, one later when the minute before it is
-        missing, -1 when the data ends first."""
-        j = np.searchsorted(ts, close_ms - MIN, side="left") + 1
+        missing, -1 when the data ends first (``bar_ms``: the bar length of the minute arrays, 60,000 for 1m)."""
+        j = np.searchsorted(ts, close_ms - bar_ms, side="left") + 1
         j[j >= len(ts)] = -1
         return j
 
@@ -492,7 +551,7 @@ class PickData:
                 m = np.empty((len(df), KX.NQT))
                 m[:, KX.Q_CMS] = close
                 m[:, KX.Q_CL] = df["close"].to_numpy(float)
-                m[:, KX.Q_MIN] = self._minute_of(self.market.ts(c), close)
+                m[:, KX.Q_MIN] = self._minute_of(self.market.ts(c), close, self.market.bar_ms)
                 m[:, KX.Q_PT] = np.searchsorted(pcl, close, side="right") - 1
                 rows.append(m)
                 qst.append(pos)
@@ -511,7 +570,7 @@ class PickData:
             return KX.rp_vector(), PT, PF, QT, z, z, z, z
         q15 = bool(v.q15) and self.tf in ("1h", "4h")
         key = (v.params.get("w", 0) if v.fam in (KX.F1, KX.F6, KX.F8, KX.F9) else 0,
-               v.params.get("n", 0) if v.fam == KX.F2 else 0, q15, v.fam == KX.F11 or v.fam == KX.F3)
+               v.params.get("n", 0) if v.fam == KX.F2 else 0, q15, v.fam in (KX.F3, KX.F11), v.fam == KX.F11)
         if key not in self._chart:
             self._chart.clear()                                # keep one set: a chart is up to ~100 MB
             n = len(self.b_cl)
@@ -528,7 +587,8 @@ class PickData:
                 PT[:, KX.C_SLO] = np.nan
                 PT[:, KX.C_SHI] = np.nan
             PF[:, KX.P_SIGL], PF[:, KX.P_SIGS] = self.b_sl, self.b_ss
-            PF[:, KX.P_XL], PF[:, KX.P_XS] = self.b_xl, self.b_xs
+            if key[4]:
+                PF[:, KX.P_CL0:KX.P_CL0 + 2 * KX.NC] = self.b_comp
             if q15:
                 QT, qst, qen = self.q15()
             else:
@@ -560,7 +620,7 @@ class PickData:
             atr = self.b_atr[a:b][idx]
             close = self.b_cms[a:b][idx].astype(np.int64)
             tsp = market.cat["ts"][market.starts[c]:pend[c]]
-            j0 = np.searchsorted(tsp, close - MIN, side="left")
+            j0 = np.searchsorted(tsp, close - market.bar_ms, side="left")
             e = j0 + 1
             ok = np.isfinite(atr) & (atr > 0) & (e <= len(tsp) - 2)
             idx, side, atr, close, e = idx[ok], side[ok], atr[ok], close[ok], e[ok]
@@ -579,23 +639,27 @@ class PickData:
         out["side"] = out["side"].astype(np.int64)
         out["i0"] = out["i0"].astype(np.int64)
         out["best"] = out["best"].astype(np.bool_)
-        out["tp_idx"] = (self.cst[out["coin"]] + out["i0"]) if len(order) else np.zeros(0, np.int64)
+        ix = (self.cst[out["coin"]] + out["i0"]) if len(order) else np.zeros(0, np.int64)
+        out["tp_idx"] = ix
+        out["lvl"] = np.where(out["side"] > 0, self.b_ll[ix], self.b_ls[ix]) if len(ix) else np.zeros(0)
         self._off[period] = out
         return out
 
     def targets(self, off: dict) -> np.ndarray:
-        """F11's per-signal target price (NaN none): the pick's target array at the signal bar, by side."""
+        """F11's per-signal target price (NaN none): the strategy's target array at the signal bar, by side."""
         ix = off["tp_idx"]
         return np.where(off["side"] > 0, self.b_tl[ix], self.b_ts[ix]) if len(ix) else np.zeros(0)
 
 
 # ------------------------------------------------------------------ test T3: the last 50 chart bars before a cut
-def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50, widths=(2, 3, 5), emas=(10, 20, 50)) -> dict:
+def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50, widths=(2, 3, 5), emas=(10, 20, 50),
+             f11=None) -> dict:
     """The arrays test T3 compares between cut and full data: for every coin and timeframe the last ``n_last`` chart bars
     that close at or before ``cut_ms``: close ms, OHLC, ATR14, EMA(10, 20, 50), the swing flags with their confirmation bar
     (bars whose swing is not confirmed by the last bar read -1), the starting references of F1, F1's reference path from
     each of these bars to the last bar (long and short), the 15m bars, and for every pick its two signal flags and its two
-    leverage groups on those bars. Returned as a flat dict of numpy arrays."""
+    leverage groups on those bars - and, with an F11 provider, its components of both sides, levels and targets. Returned as a
+    flat dict of numpy arrays."""
     out = {}
     for sym in symbols:
         for tf in TFS:
@@ -639,6 +703,13 @@ def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50,
             out[key + "close_ms"] = close[idx]
             out[key + "sig_long"], out[key + "sig_short"] = np.asarray(lo, bool)[idx], np.asarray(sh, bool)[idx]
             out[key + "best_long"], out[key + "best_short"] = np.asarray(bl, bool)[idx], np.asarray(bs, bool)[idx]
+            if f11 is not None:
+                r = normalize_f11(f11(p, sym, df, close, np.asarray(lo, bool), np.asarray(sh, bool)), len(df))
+                for side_name in ("long", "short"):
+                    for k, (kind, arr) in enumerate(r["comp_" + side_name]):
+                        out[key + f"comp_{side_name}{k}_{kind}"] = _tri(arr)[idx]
+                    out[key + "lvl_" + side_name] = r["lvl_" + side_name][idx]
+                    out[key + "tgt_" + side_name] = r["tgt_" + side_name][idx]
     return out
 
 

@@ -172,12 +172,12 @@ def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_poole
             "eligible": bool(c1 and c2 and c3 and c4), "p95": p95, "need_picks": need}
 
 
-def choose_variants(rows: list) -> list:
-    """Section 8: at most 2 eligible variants: the highest median over the picks of M_p, then the highest from a different
-    group. Ties go to fewer parameters, then to the canonical order. ``rows``: dicts with id, group, nparams, order,
-    eligible, median_Mp."""
+def choose_variants(rows: list, by: str = "M") -> list:
+    """Section 8.4 (the default): per pool, at most 2 eligible variants: the highest M_P(V) (``by`` = 'M'; 'median_Mp'
+    ranks by the median over the picks of M_p instead), then the highest from a different group. Ties go to fewer
+    parameters, then to the canonical order. ``rows``: dicts with id, group, nparams, order, eligible and the ranking key."""
     el = [r for r in rows if r["eligible"]]
-    key = lambda r: (-r["median_Mp"], r["nparams"], r["order"])   # noqa: E731
+    key = lambda r: (-r[by], r["nparams"], r["order"])   # noqa: E731
     el.sort(key=key)
     if not el:
         return []
@@ -248,3 +248,32 @@ def confirm_verdict(sig: bool, M: float, placebo_pooled: np.ndarray | None, is_f
     c3 = entered >= entered_e0
     return {"holm": bool(sig), "beats_placebo_p95": bool(c2), "entries": bool(c3), "p95": p95,
             "pass": bool(sig and c2 and c3)}
+
+
+def summarize_light(res, edges: np.ndarray) -> dict:
+    """The part of ``summarize`` a placebo account keeps: monthly log growth, final wallet, counts, exit reasons, hold
+    statistics (median, 90th percentile, shares held more than 4 / 8 / 18 h) and the maximum drawdown."""
+    st = res.status
+    ent = np.flatnonzero(st == 1)
+    closed = ent[res.reason[ent] != KX.R_OPEN]
+    g, _W = monthly_g(res.exit_ts[ent], res.pnl[ent], res.w0, edges)
+    eq = res.w0 + np.cumsum(res.pnl[closed])
+    peak = np.maximum.accumulate(np.r_[res.w0, eq])
+    dd = float(np.max(1 - np.r_[res.w0, eq] / peak)) if len(eq) else 0.0
+    hold = (res.exit_ts[ent] - res.entry_ts[ent]) / 3_600_000.0
+    hs = hold_stats(hold)
+    return {"g": g, "w_end": float(res.wallet), "max_dd": dd,
+            "counts": np.array([len(st), len(ent), len(closed), int((st == 0).sum()), int((st == 2).sum()), int((st == 3).sum()),
+                                int((st == 4).sum()), int(res.wallet < 10.0), int(res.both), 0,
+                                int((res.pnl[closed] > 0).sum())], np.int64),
+            "reasons": np.bincount(res.reason[ent], minlength=12).astype(np.int64),
+            "hold": np.array([hs["median"], hs["p90"]] + [hs[f"share_gt{h}"] for h in HOLD_HOURS]),
+            "num": res.num, "den": res.den}
+
+
+def stack_light(items: list) -> dict:
+    """Stack ``summarize_light`` results of several seeds: arrays get a leading seed axis; the hazard counts are summed."""
+    out = {k: np.stack([np.asarray(it[k]) for it in items]) for k in ("g", "w_end", "max_dd", "counts", "reasons", "hold")}
+    out["num"] = np.sum([it["num"] for it in items], axis=0)
+    out["den"] = np.sum([it["den"] for it in items], axis=0)
+    return out

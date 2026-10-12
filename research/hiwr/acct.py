@@ -370,6 +370,84 @@ def _account(ts, o, h, l, c, mo, mh, ml, fc, seg_off, seg_kind,
     return wal, dd, ddr, worst, bust, open_end, bad
 
 
+@njit(cache=True)
+def _path_scan(ts, o, h, l, c, mo, mh, ml, fc, seg_off, seg_kind, q_seg, q_e, q_coin, q_side, q_D, q_atr,
+               t, maker, pierce, L, w0, bust_w, tk, mk, slip, buf_min, buf_atr, br, br_n, caps, mins, bounds,
+               top, cap, max_loss, valid_out, same_out):
+    """8.4 (i) and (ii) for k = 1, 2, .. top (f = k / 100) until the first failure; returns 0.01 below it in hundredths
+    (``top`` when none fails). valid_out[k]: the account at k has a structure (no bust, no cut taken trade);
+    same_out[k]: its structure (statuses of every candidate; result, phase and exit minute of every taken trade)
+    equals the one at k - 1. The same ``_account`` as ``account``, without its Python wrapper."""
+    n = len(q_seg)
+    st = np.zeros(n, np.int8)
+    st0 = np.zeros(n, np.int8)
+    cut = np.zeros(n, np.bool_)
+    N_ = np.zeros(n)
+    W_ = np.zeros(n)
+    r_ = np.zeros(n)
+    r0 = np.zeros(n)
+    kd = np.zeros(n, np.int8)
+    ph = np.zeros(n, np.int8)
+    ph0 = np.zeros(n, np.int8)
+    xm = np.zeros(n, np.int64)
+    xm0 = np.zeros(n, np.int64)
+    fe = np.zeros(n)
+    u_ = np.zeros(n)
+    d1 = np.zeros(n)
+    d2 = np.zeros(n)
+    meq = np.zeros(len(bounds))
+    prev = False
+    for k in range(1, top + 1):
+        f = k / 100.0
+        cut[:] = False
+        wal, dd, ddr, worst, bust, open_end, bad = _account(
+            ts, o, h, l, c, mo, mh, ml, fc, seg_off, seg_kind, q_seg, q_e, q_coin, q_side, q_D, q_atr,
+            t, maker, pierce, L, f, w0, bust_w, tk, mk, slip, buf_min, buf_atr, br, br_n, caps, mins, bounds,
+            st, cut, N_, W_, r_, kd, ph, xm, fe, u_, d1, d2, meq)
+        valid = (not bust) and bad == 0
+        if valid:
+            for q in range(n):
+                if st[q] == 1 and cut[q]:
+                    valid = False
+                    break
+        same = False
+        if valid and prev:
+            same = True
+            for q in range(n):
+                if st[q] != st0[q] or (st[q] == 1 and (r_[q] != r0[q] or ph[q] != ph0[q] or xm[q] != xm0[q])):
+                    same = False
+                    break
+        valid_out[k] = valid
+        same_out[k] = same
+        for q in range(n):
+            st0[q] = st[q]
+            r0[q] = r_[q]
+            ph0[q] = ph[q]
+            xm0[q] = xm[q]
+        prev = valid
+        if not (dd <= cap and worst <= max_loss):
+            return k - 1
+    return top
+
+
+def path_scanner(store: Store, cand: dict, coins: list[dict], cfg: dict, period: tuple, w0: float = START):
+    """For ``sizes(scan=...)``: (cap, max_loss, top) -> (k_path, valid, same) by ``_path_scan``, the account of
+    ``account`` at every grid size up to the first failure, in one compiled loop."""
+    L = float(cfg["L"])
+    br, br_n, caps, mins = coin_params(coins, L)
+    bounds = month_bounds(period)
+
+    def scan(cap: float, max_loss: float, top: int):
+        valid = np.zeros(top + 2, np.bool_)
+        same = np.zeros(top + 2, np.bool_)
+        kp = _path_scan(*store.args(), cand["seg"], cand["e"], cand["coin"], cand["side"], cand["D"], cand["atr"],
+                        float(cfg["t"]), bool(cfg["fill"] == 1), 0.0, L, float(w0), BUST * w0, W.TAKER, W.MAKER,
+                        W.SLIP, W.BUF_MIN, W.BUF_ATR, br, br_n, caps, mins, bounds, int(top), float(cap),
+                        float(max_loss), valid, same)
+        return int(kp), valid, same
+    return scan
+
+
 def account(store: Store, cand: dict, coins: list[dict], cfg: dict, f: float, period: tuple, w0: float = START,
             pierce: float = 0.0, cost: int = 1) -> dict:
     """The one-at-a-time account of one pair at size f (notional = f x wallet) over ``period`` = (start, end) ms.
@@ -410,6 +488,12 @@ def account(store: Store, cand: dict, coins: list[dict], cfg: dict, f: float, pe
 # ------------------------------------------------------------------ monthly return (8.5)
 def month_bounds(period: tuple) -> np.ndarray:
     """UTC month starts after the period start, through the period end (each = the end of a month)."""
+    return _month_bounds(int(period[0]), int(period[1])).copy()
+
+
+@__import__("functools").lru_cache(maxsize=16)
+def _month_bounds(p0: int, p1: int) -> np.ndarray:
+    period = (p0, p1)
     import pandas as pd
     a = pd.Timestamp(period[0], unit="ms", tz="UTC")
     b = pd.Timestamp(period[1], unit="ms", tz="UTC")
@@ -564,10 +648,11 @@ def bootstrap_scan(boot_ok, sig: dict, top: int) -> int:
 
 
 def sizes(run_at, cap: float, L: float, period: tuple, draws: np.ndarray, q: float = Q_BOOT,
-          max_loss: float = MAX_LOSS, exact_boot: bool = False) -> dict:
+          max_loss: float = MAX_LOSS, exact_boot: bool = False, scan=None) -> dict:
     """f_path and f* of one pair (8.4) on the 0.01 grid: ``run_at(f)`` returns the SEL ``account`` at size f.
     f_path = 0.01 below the first grid size that breaks (i) or (ii) (or L^2 / 100, iii); f* = 0.01 below the first grid
-    size up to f_path whose bootstrap 95th percentile is above the cap (i'). ``exact_boot``: evaluate the bootstrap at
+    size up to f_path whose bootstrap 95th percentile is above the cap (i'). ``scan`` (``path_scanner``): the f_path
+    scan in one compiled loop over the same account (tests compare both). ``exact_boot``: evaluate the bootstrap at
     every grid size (the plain scan; tests compare it with the run-and-bisect speed-up)."""
     top = int(round(L * L))                                # (iii) margin at most L% of the wallet: f <= L^2 / 100
     sig: dict = {}
@@ -586,7 +671,19 @@ def sizes(run_at, cap: float, L: float, period: tuple, draws: np.ndarray, q: flo
         sig[k] = structure(a)
         return a["dd"] <= cap and a["worst_loss"] <= max_loss
 
-    kp = first_fail_scan(ok_path, top)
+    if scan is None:
+        kp = first_fail_scan(ok_path, top)
+    else:
+        kp, valid, same = scan(cap, max_loss, top)
+        n_acc[0] += min(kp + 1, top)
+        run = 0
+        for k in range(1, kp + 1):                         # structures as run numbers: equal only inside a run
+            if not valid[k]:
+                sig[k] = None
+                continue
+            if not same[k]:
+                run += 1
+            sig[k] = run
     bq: dict = {}
 
     def boot(k):

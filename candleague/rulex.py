@@ -31,6 +31,17 @@ What this module is
   their own (own database, own start, own fingerprint, ``runner.make_rule_league``), so the existing record is
   neither reset nor replayed.
 
+Readings of the pre-registration that the code fixes (change them here, in ``decide``, if section 5 says otherwise)
+----------------------------------------------------------------------------------------------------------------
+* F8 and F9 arm and test at the same check close, like F5 ("the arming one included"): Rpk >= P at a check arms the rule
+  and the break is tested at that very close.
+* Several chart closes that reach one minute (a minute missing, a restart, a chunk end) make one check on the latest
+  closed bar: the levels (F1 reference, F2 arm, F4 ATR) are updated with every bar in between, F3 sees an opposite flag on
+  any of them, F7 is a clock test, F4, F5 and F10 read X, T_X and the funding of the earlier minutes.
+* A check whose coin has no bar at the minute waits for the coin's next bar; records that arrive before the position
+  exists, or at or before the signal bar's close, are dropped (the first check is the next close).
+* The decision is made at the start of ``step`` from the state before the minute, executed after the minute's funding.
+
 F11 plug-in (the strategy's own exit; its definition arrives later, nothing is invented here)
 ---------------------------------------------------------------------------------------------
 ``register_f11(strategy name, fn)`` with ``fn(df, tf, combo) -> {"long_exit": bool[n], "short_exit": bool[n],
@@ -87,17 +98,17 @@ FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11")
 Q15_FAMILIES = ("F1", "F4", "F9")
 _N = r"\d+(?:\.\d+)?"
 _PAT = {
-    "F1": rf"F1\.w(?P<w>\d+)\.(?P<mode>[ab])(?P<q>\.q15)?",
-    "F2": rf"F2\.n(?P<n>\d+)\.(?P<mode>[ab])",
-    "F3": rf"F3\.(?P<mode>[ab])",
+    "F1": r"F1\.w(?P<w>\d+)\.(?P<mode>[ab])(?P<q>\.q15)?",
+    "F2": r"F2\.n(?P<n>\d+)\.(?P<mode>[ab])",
+    "F3": r"F3\.(?P<mode>[ab])",
     "F4": rf"F4\.m(?P<m>{_N})\.(?P<mode>[ab])(?P<q>\.q15)?",
     "F5": rf"F5\.P(?P<P>{_N})\.g(?P<g>\d+)\.(?P<mode>[ab])",
     "F6": rf"F6\.w(?P<w>\d+)\.d(?P<d>{_N})",
-    "F7": rf"F7\.N(?P<N>\d+)\.(?P<mode>[ab])",
+    "F7": r"F7\.N(?P<N>\d+)\.(?P<mode>[ab])",
     "F8": rf"F8\.w(?P<w>\d+)\.P(?P<P>{_N})\.(?P<mode>[ab])",
-    "F9": rf"F9\.(?P<mode>[ab])(?P<q>\.q15)?",
-    "F10": rf"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
-    "F11": rf"F11\.(?P<mode>[ab])",
+    "F9": r"F9\.(?P<mode>[ab])(?P<q>\.q15)?",
+    "F10": r"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
+    "F11": r"F11\.(?P<mode>[ab])",
 }
 F9_FIXED = {"w": 3, "P": 1.0, "d": 0.5}
 KO = {"F1": "구조 이탈", "F2": "이동평균 이탈", "F3": "반대 신호", "F4": "샹들리에 추적", "F5": "수익 반납",
@@ -744,15 +755,15 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
             t_open = (df["ts"].astype("int64") // 1_000_000).to_numpy(np.int64)
             close = t_open + span
             idx = np.flatnonzero((close > max(start, run_start)) & (close <= end) & (np.arange(len(df)) >= w))
-            if not len(idx):
-                continue
-            pack = FramePack(lib, df)
             pack15 = None
-            if any(sched_of(a) == "q" for a in group):
+            if any(sched_of(a) == "q" for a in group):             # 15m closes come between the pick's own closes
                 f15 = chart_frame(lib, cols_of[sym], "15m")
                 c15 = (f15["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + TF_MS["15m"]
                 i15 = np.flatnonzero((c15 > max(start, run_start)) & (c15 <= end))
                 pack15 = (np.asarray(f15["close"], float), c15, i15)
+            if not len(idx) and (pack15 is None or not len(pack15[2])):
+                continue
+            pack = FramePack(lib, df)
             cache: dict = {}
             strength: dict = {}
             f11c: dict = {}

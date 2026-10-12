@@ -717,6 +717,8 @@ def test_sizes_on_a_non_monotone_bracket_account():
     draws = np.random.default_rng(1).integers(0, nw, (200, nw))
     out = A.sizes(run, 0.30, 30.0, period, draws)
     assert out["f_path"]["f"] == (first_bad - 1) / 100
+    out2 = A.sizes(run, 0.30, 30.0, period, draws, scan=A.path_scanner(store, cand, [BTC, SAND], MAKER30, period))
+    assert out2["f_path"]["f"] == out["f_path"]["f"] and out2["f_star"]["f"] == out["f_star"]["f"]
     assert all(ok[:first_bad - 1])
     assert out["f_star"]["f"] <= out["f_path"]["f"]
 
@@ -745,11 +747,23 @@ def test_bootstrap_scan_equals_the_plain_scan_on_capped_alt_accounts(seed):
     nw = A.week_ids([], period)[1]
     draws = np.random.default_rng(seed).integers(0, nw, (300, nw))
     run = lambda f: A.account(store, ca, cx, cfg, f, period)    # noqa: E731
+    scanner = A.path_scanner(store, ca, cx, cfg, period)
     for cap in (0.30, 0.15):
-        fast = A.sizes(run, cap, float(L), period, draws)
+        fast = A.sizes(run, cap, float(L), period, draws, scan=scanner)
+        plain = A.sizes(run, cap, float(L), period, draws)
         slow = A.sizes(run, cap, float(L), period, draws, exact_boot=True)
-        assert fast["f_path"]["f"] == slow["f_path"]["f"] and fast["f_star"]["f"] == slow["f_star"]["f"]
-        assert fast["scan"]["bootstraps"] <= slow["scan"]["bootstraps"]
+        for x in (fast, plain):
+            assert x["f_path"]["f"] == slow["f_path"]["f"] and x["f_star"]["f"] == slow["f_star"]["f"]
+            assert x["f_star"]["boot_q95"] == slow["f_star"]["boot_q95"]
+        assert fast["scan"]["bootstraps"] == plain["scan"]["bootstraps"] <= slow["scan"]["bootstraps"]
+        # the compiled scan's structure runs equal the Python structure() of each account
+        kp, valid, same = scanner(cap, 0.15, int(L * L))
+        assert kp == int(round(fast["f_path"]["f"] * 100))
+        prev = None
+        for k in range(1, kp + 1):
+            sg = A.structure(run(k / 100))
+            assert valid[k] == (sg is not None) and same[k] == (sg is not None and sg == prev)
+            prev = sg
         kp = int(round(fast["f_path"]["f"] * 100))
         for k in range(1, kp + 1, 3):
             x = run(k / 100)
@@ -762,7 +776,7 @@ def test_structure_runs_share_one_monotone_drawdown():
     a, T, cfg, cand, store, period, _res = _random_account(21, 1.0)
     nw = A.week_ids([], period)[1]
     draws = np.random.default_rng(9).integers(0, nw, (200, nw))
-    prev_sig, prev_dd = None, None
+    prev_sig, prev_dd, prev_res_dd = None, None, None
     seen = 0
     for k in range(50, 400, 5):
         res = A.account(store, cand, [BTC], cfg, k / 100, period)

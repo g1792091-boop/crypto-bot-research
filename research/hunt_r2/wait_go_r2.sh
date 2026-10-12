@@ -16,7 +16,7 @@
 # "waiting" and a pasted restart line changes nothing. bootstrap_r2.sh started without a go commit (the restart line
 # after a reboot, or after the hours below) hands over to this script again.
 #
-# WAIT_HOURS (default 24): give up after this long with a message; the restart line of SERVER_R2_KO 3 waits again.
+# WAIT_HOURS (default 12): give up after this long with a message; the restart line of SERVER_R2_KO 3 waits again.
 # Rehearsal: HUNT_R2_REPO (a scratch clone), HUNT_R2_BASE, HUNT_R2_BRANCH, WAIT_POLL (seconds), WAIT_HOURS,
 # HUNT_R2_WAIT_EXEC (a command run in place of bootstrap_r2.sh; it gets HUNT_R2_GO and HUNT_R2_BASE in its environment).
 
@@ -26,7 +26,7 @@ BASE=${HUNT_R2_BASE:-$(dirname "$REPO")}
 BR=${HUNT_R2_BRANCH:-claude/keen-pasteur-wav02u}
 MARK=research/hunt_r2/GO_COMMIT
 POLL=${WAIT_POLL:-120}
-deadline=$(( $(date +%s) + ${WAIT_HOURS:-24} * 3600 ))
+deadline=$(( $(date +%s) + ${WAIT_HOURS:-12} * 3600 ))
 
 case "$REPO" in
   /root/hunt|/root/hunt/*|/root/hiwr|/root/hiwr/*) echo "2차는 1차·2번 트랙 폴더를 쓰지 않습니다: $REPO"; exit 1 ;;
@@ -55,7 +55,7 @@ while :; do
     echo "$(date -u +%H:%M) UTC 인터넷 확인 실패, 잠시 뒤 다시 시도합니다"
   fi
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "${WAIT_HOURS:-24}시간 동안 고정된 커밋이 오지 않았습니다. 개발자에게 이 화면을 보내 주세요 (서버는 Destroy해도 잃는 것 없음)."
+    echo "${WAIT_HOURS:-12}시간 동안 고정된 커밋이 오지 않았습니다. 개발자에게 이 화면을 보내 주세요 (서버는 Destroy해도 잃는 것 없음)."
     echo "다시 기다리려면 SERVER_R2_KO 3번의 '이어서 하기' 줄을 붙여 넣으세요."
     exit 1
   fi
