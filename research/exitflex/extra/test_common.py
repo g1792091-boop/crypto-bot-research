@@ -421,8 +421,9 @@ def test_ds_row_check_allows_count_class_rows(xw):
 def test_ds_row_check_refuses_money_and_unknown_fields(key):
     with pytest.raises(XC.Refused):
         XC.ds_row_check({**DS_ROW_X, key: 1.0})
-    with pytest.raises(XC.Refused):
-        XC.ds_row_check({**DS_ROW_X, "by_coin": {"BTC": {"n": 3, key: 1.0}}} if key != "median" else {"by_coin": {"BTC": {"pnl": 1}}})
+    if key != "median":                                                  # 'median' is a nested hold statistic, never a row field
+        with pytest.raises(XC.Refused):
+            XC.ds_row_check({**DS_ROW_X, "by_coin": {"BTC": {"n": 3, key: 1.0}}})
 
 
 def test_ds_row_check_refuses_nested_and_text_figures():
@@ -491,21 +492,25 @@ def test_the_private_extra_report_passes_A8_3_and_ends_with_the_owners_line(xw, 
     os.remove(os.path.join(ctx.out_dir, "same.md"))
 
 
-def test_run_record_disk_rules_and_parts(xw, ctx):
+def test_run_record_disk_rules_and_parts(xw, ctx, monkeypatch):
+    free = {"b": int(1.6 * XC.GB)}
+    monkeypatch.setattr(XC.shutil, "disk_usage", lambda _p: types.SimpleNamespace(total=0, used=0, free=free["b"]))
     rec = XC.run_record(ctx, "extra-reads", {"need_bytes": 1, "procs": 3})
     assert rec["stage"] == "extra-reads" and rec["pin8"] == xw.ph[:8] and rec["procs"] == 3 and rec["end_utc"] is None
     assert rec["start_utc"].endswith("Z") and "head" in rec and rec["extra_pin8"] == RX.sha256_file(XC.extra_sha_file(xw.lay))[:8]
     rec.part("X-001", seconds=1.5, accounts=0, bytes=0, dropped=[])
     rec["dropped"].append("X-022 fixed leverage")
-    rec.check_disk(0)
+    rec.check_disk(0.5 * XC.GB)                                           # 1.6 GB free: writing 0.5 GB leaves 1.1 GB
     with pytest.raises(XC.Refused):
-        rec.check_disk(1e15)
+        rec.check_disk(0.7 * XC.GB)                                       # would leave less than 1 GB
     assert rec.finish()["end_utc"] and json.loads(json.dumps(rec))["parts"]["X-001"]["seconds"] == 1.5
     with XC.run_record(ctx, "twins", {}) as r2:
         assert r2["need_bytes"] == XC.DISK_NEED_DEFAULT
     assert r2["end_utc"] is not None
+    free["b"] = int(1.4 * XC.GB)                                          # under 1 GB + 0.5 GB: refused at the start
     with pytest.raises(XC.Refused):
-        XC.run_record(ctx, "extra-reads", {"need_bytes": 1e15})
+        XC.run_record(ctx, "extra-reads", {})
+    assert XC.run_record(ctx, "extra-reads", {"need_bytes": 0.8 * XC.GB})["free_bytes_start"] == free["b"]
     assert XC.DISK_NEED_DEFAULT + XC.DISK_MARGIN == 1.5 * XC.GB and XC.DISK_STOP == 1.0 * XC.GB and len(XC.CAP_DROP_ORDER) == 6
 
 
@@ -557,9 +562,9 @@ def test_c12_to_c17_units_marks_lines_and_shares():
     assert line.startswith("이 표의 칸은 18개, 그중 건수 적음 3개입니다.") and "약 0.9개" in line and line.endswith("실제로 벗어난 칸은 2개입니다.")
     assert XC.c16_note(-0.1) == XC.W["W12"] and XC.c16_note(0.0) == XC.W["W12"] and XC.c16_note(0.2) == ""
     assert XC.own_growth_log([{"w_end": 5000 * math.exp(0.36), "w0": 5000.0}, {"w_end": 5000.0, "w0": 5000.0}]) == pytest.approx(0.005)
-    assert np.allclose(XC.c17_shares([0.0005, 0.0005], 0.001), [0.5, 0.5])
-    assert XC.c17_shares([0.0005, 0.0004], 0.0009) is None and XC.c17_shares([0.004, -0.003], 0.001) is None
-    assert np.allclose(XC.c17_shares([0.003, -0.002], 0.001), [3.0, -2.0])
+    assert np.allclose(XC.c17_shares([0.001, 0.001], 0.002), [0.5, 0.5])
+    assert XC.c17_shares([0.0005, 0.0004], 0.0009) is None and XC.c17_shares([0.008, -0.006], 0.002) is None
+    assert np.allclose(XC.c17_shares([0.006, -0.004], 0.002), [3.0, -2.0])
     assert XC.W["W15"].startswith("이득이 작아") and XC.TAG_TABLE == "참고용 · 고르는 데 안 씀"
 
 

@@ -588,6 +588,8 @@ def placebo(ctx: Ctx, pick, vid: str) -> dict:
     p = ctx.pick(pick)
     if vid not in ctx.choosable.get(p["pool"], set()):
         raise Refused(f"placebo blocks are read for choosable rows only: {vid} in {p['pool']}")
+    if not KX.has_placebo(KX.variant_by_id(vid)):
+        raise Refused(f"{vid} has no placebo (A 6)")
     if ctx.n_seeds:
         tags = [RX.plc_tag(a, b) for a, b in RX.seed_blocks(ctx.n_seeds)]
     else:
