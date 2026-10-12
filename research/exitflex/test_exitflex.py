@@ -2173,35 +2173,37 @@ import runner_x as RX  # noqa: E402
 
 def test_variants_registry_matches_the_prereg_list(f11_on):
     vs = KX.variants()
-    assert len(vs) == 86 and len({v.id for v in vs}) == 86
+    assert len(vs) == 88 and len({v.id for v in vs}) == 88
     ids = [v.id for v in vs]
     for must in ("F1.w3.a", "F1.w3.b.q15", "F2.n20.b", "F3.a", "F4.m1.5.a", "F4.m2.b.q15", "F5.P1.5.g25.a", "F6.w2.d0", "F6.w2.d0.5",
                  "F7.N24.b", "F7h.H8.a", "F7h.H4.b", "F7h.H16.a", "F8.w3.P1.a", "F9.a", "F9.b.q15", "F10.N6.a", "F11.a", "F11.b",
-                 "F12.a", "F12.b", "F5.P1.g50.b"):
+                 "F12.a", "F12.b", "F13.a", "F13.b", "F5.P1.g50.b"):
         assert must in ids
     assert ids[:6] == ["F1.w2.a", "F1.w2.b", "F1.w3.a", "F1.w3.b", "F1.w5.a", "F1.w5.b"]
-    assert ids[-4:] == ["F11.a", "F11.b", "F12.a", "F12.b"]
+    assert ids[-6:] == ["F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b"]
     by = {}
     for v in vs:
         by.setdefault(v.famname + (".q15" if v.q15 else ""), []).append(v)
     assert {k: len(x) for k, x in by.items()} == {"F1": 6, "F1.q15": 6, "F2": 6, "F3": 2, "F4": 6, "F4.q15": 6, "F5": 12, "F6": 6, "F7": 6,
-                                                  "F7h": 6, "F8": 12, "F9": 2, "F9.q15": 2, "F10": 4, "F11": 2, "F12": 2}
+                                                  "F7h": 6, "F8": 12, "F9": 2, "F9.q15": 2, "F10": 4, "F11": 2, "F12": 2, "F13": 2}
     assert all(v.mode == "a" for v in by["F6"])
     assert {v.famname: v.group for v in vs} == {"F1": "S", "F2": "M", "F3": "O", "F4": "C", "F5": "G", "F6": "S", "F7": "T", "F7h": "T",
-                                                "F8": "S", "F9": "S", "F10": "L", "F11": "N", "F12": "A"}
+                                                "F8": "S", "F9": "S", "F10": "L", "F11": "N", "F12": "A", "F13": "P"}
     npar = {k: {v.nparams for v in x} for k, x in by.items()}
     assert npar["F3"] == {0} and npar["F11"] == {0} and npar["F9"] == {3} and npar["F9.q15"] == {4} and npar["F1"] == {1}
     assert npar["F1.q15"] == {2} and npar["F5"] == {2} and npar["F6"] == {2} and npar["F8"] == {2} and npar["F4.q15"] == {2}
-    assert npar["F7h"] == {1} and npar["F12"] == {8}
-    assert [v.order for v in vs] == list(range(1, 87))
-    assert KX.F11_REGISTRY["modes"] == ("a", "b") and len(KX.variants(include_f11=False)) == 82
-    # 5.3: 74 variants outside F7 and F7h reach the placebo step (F12 has one); the loss-cut categories; the default set D has 35
-    assert sum(PL.has_placebo(v) for v in vs) == 74 and not any(PL.has_placebo(v) for v in by["F7"] + by["F7h"])
+    assert npar["F7h"] == {1} and npar["F12"] == {8} and npar["F13"] == {0}
+    assert [v.order for v in vs] == list(range(1, 89))
+    assert KX.F11_REGISTRY["modes"] == ("a", "b") and len(KX.variants(include_f11=False)) == 84      # F11 and F12 need the provider; F13 does not
+    # 5.3: 74 variants outside F7, F7h and F13 reach the placebo step (F12 has one); the loss-cut categories; the default set D has 37
+    assert sum(PL.has_placebo(v) for v in vs) == 74 and not any(PL.has_placebo(v) for v in by["F7"] + by["F7h"] + by["F13"])
     cls = {k: {MT.loss_class(v) for v in x} for k, x in by.items()}
     assert cls["F5"] == {"L0"} and cls["F8"] == {"L0"} and cls["F10"] == {"L0"} and cls["F9"] == {"L1"} and cls["F9.q15"] == {"L1"}
     assert cls["F1"] == {"L2"} and cls["F1.q15"] == {"L2"} and cls["F11"] == {"L3"} and cls["F12"] == {"L3"} and cls["F7h"] == {"L3"}
+    assert cls["F13"] == {"L0"}
     assert {MT.loss_class(v) for v in by["F6"] if v.params["d"] == 0.5} == {"L1"} and {MT.loss_class(v) for v in by["F6"] if v.params["d"] == 0} == {"L2"}
-    assert sum(MT.in_default_set(v) for v in vs) == 35 and not any(MT.in_default_set(v) for v in by["F12"])
+    assert sum(MT.in_default_set(v) for v in vs) == 37 and not any(MT.in_default_set(v) for v in by["F12"])
+    assert all(MT.in_default_set(v) for v in by["F13"]) and sum(MT.in_default_set(v) for v in vs if v.famname != "F13") == 35
     # F12's fixed values are the middle of each grid (5.2), the larger of a two-value grid
     assert KX.F12_PARAMS == {"w": 3, "n": 20, "m": 2.0, "P": 1.5, "g": 0.5, "d": 0.5, "H": 8, "N": 12}
     assert [b for _n, b in KX.COMP_NAMES] == [1, 2, 4, 8, 16, 32, 64, 128, 256]
@@ -2383,7 +2385,7 @@ def test_bar_ms_parameter_reproduces_the_replica_close_shift(tmp_path):
 
 # ====================================================================================================== runner: stages on a synthetic universe
 SYN_VARIANTS = ["F1.w3.a", "F2.n20.b", "F3.a", "F4.m2.b", "F4.m2.a.q15", "F5.P1.g50.a", "F6.w2.d0", "F7.N12.a", "F7h.H8.a", "F8.w3.P1.a",
-                "F9.a", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b"]
+                "F9.a", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b"]
 
 
 def syn_pick(kind, tf, exit_name, n=1):
@@ -2410,7 +2412,7 @@ def syn_cfg(tmp, period="select", stage=None, n_seeds=20, procs=1, variants=SYN_
 
 
 FORCED_PAIRS = {("F1.w3.a", "core"), ("F4.m2.b", "core"), ("F11.a", "core"), ("F7.N12.a", "core"), ("F7h.H8.a", "core"), ("F12.a", "core"),
-                ("F1.w3.a", "ds"), ("F4.m2.b", "ds"), ("F3.a", "ds"), ("F12.b", "ds"), ("F7h.H8.a", "ds")}
+                ("F1.w3.a", "ds"), ("F4.m2.b", "ds"), ("F3.a", "ds"), ("F12.b", "ds"), ("F7h.H8.a", "ds"), ("F13.a", "core"), ("F13.b", "ds")}
 
 
 def forced_gates(cfg, orig):
@@ -2461,7 +2463,7 @@ def test_runner_select_writes_the_documented_files_and_keeps_deepseek_money_priv
             assert r["label"] == ("선택 가능" if r["eligible"] else "선택 불가") and r["loss_class"] in ("L0", "L1", "L2", "L3")
             assert set(r["gates"]) == {"g1", "g2", "g3", "g4"} and set(r["hold_by_state"]) == {"추세장", "횡보장", "급변장", "보통", "모름"}
             assert {"median", "p90", "share_gt4", "share_gt8", "share_gt18"} <= set(r["hold"])
-            assert (r["gates"]["g3"] == "n/a") == (r["family"] in ("F7", "F7h"))
+            assert (r["gates"]["g3"] == "n/a") == (r["family"] in ("F7", "F7h", "F13"))
             assert r["gates"]["g3"] != "not_run" or not r["step2"]
         assert set(pool["e0"]["hold_by_state"]) == {"추세장", "횡보장", "급변장", "보통", "모름"}
     f12 = [r for r in core["variants"] if r["family"] == "F12"]
@@ -3320,3 +3322,338 @@ def test_review_confirm_refuses_before_computing_on_a_changed_module_or_engine(t
             RX.finish_confirm(cfg, bad_sel, choice)
         assert not os.path.exists(results) and not os.path.exists(os.path.join(cfg.store.private_dir(), "results"))     # nothing was computed
     KX.clear_f11()
+
+
+# ====================================================================================================== F13: the engine's stepped lock
+# PREREG_EXITFLEX 5.2 (F13): the pick's hard stop and the rule bot's stepped lock (paperbot/ladder.py: first lock 10% net ROE, 5% steps, a step
+# arms at lock + 2%; net ROE after costs on isolated margin; applies from the next minute; only tightens), with the pick's own fixed
+# take-profit kept (F13.a) or none (F13.b). No rule decision, no check, no placebo. The expected prices below are written with the
+# engine's own module (``LD``), not with the kernel's inline formulas.
+LEV13 = 30                     # best=False at quarter size with a 4 ATR stop on a price of 100: the first candidate (30x) fits
+RT13 = 0.0014                  # the round trip of taker fee and slippage (S[5])
+FILL13 = 100.0 * (1 + FILL_SLIP)           # a long's fill at the open of 100
+
+
+def lock_px(side, fill, roe, fr=0.0, lev=LEV13):
+    """The stop price that locks net ROE ``roe`` (the engine's roe_price)."""
+    return LD.roe_price(side, fill, lev, roe, RT13, fr)
+
+
+def f13_path(peak, fall_to=99.0, climb=20, fall=40, flat=0):
+    """Three flat hours (the signal bar is the third: the fill is the open of minute 180), ``flat`` flat minutes, a climb to ``peak`` over
+    ``climb`` minutes and a fall to ``fall_to`` over ``fall`` minutes."""
+    return H(100, 100, 100) + ([(flat, 100.0)] if flat else []) + [(climb, peak), (fall, fall_to)]
+
+
+def first_cross(s, side, level, after):
+    """The first minute after ``after`` whose range touches ``level`` against the position (a low at or under it for a long)."""
+    o, h, l = s.mk.cat["o"], s.mk.cat["h"], s.mk.cat["l"]
+    for j in range(after + 1, len(o)):
+        if (side > 0 and l[j] <= level) or (side < 0 and h[j] >= level):
+            return j
+    raise AssertionError("never crossed")
+
+
+def peak_minute(s, side):
+    ext = s.mk.cat["h"][:600] if side > 0 else -s.mk.cat["l"][:600]
+    return int(np.argmax(ext))
+
+
+def exit_price_at(s, j, side, level):
+    """The exit price of a stop at ``level`` in minute j: the open (with slippage) when the open is already beyond it, else the level."""
+    o = float(s.mk.cat["o"][j])
+    if (o - level) * side <= 0:
+        return o * (1 - side * FILL_SLIP)
+    return level * (1 - side * FILL_SLIP)
+
+
+@pytest.mark.parametrize("mir", MIR)
+@pytest.mark.parametrize("pick_exit", ["tp3R|4", "roe50|4"])
+@pytest.mark.parametrize("n", range(7))
+def test_t2_f13_the_lock_arms_at_12_and_steps_with_the_best_price(tmp_path, vendor, mir, pick_exit, n):
+    """The best price between +12% + 5% x n and +12% + 5% x (n + 1) net ROE locks 10% + 5% x n (12 -> 10, 17 -> 15, 22 -> 20, 27 -> 25, 32 -> 30
+    ...): a fall to that price exits there as a LOCK, at the next minute that touches it, with slippage, taker; mode b gives the same trade."""
+    side = side_of(mir)
+    arm = lambda k: lock_px(1, FILL13, 0.12 + 0.05 * k)            # noqa: E731  the long's arming prices
+    peak = 0.5 * (arm(n) + arm(n + 1))                              # inside the band of step n (a margin of +-0.08, far above the mirror's rounding)
+    s = Scen(tmp_path, f13_path(peak), longs=[2], side_mirror=mir, exit_name=pick_exit)
+    t, tb, t0 = s.trade("F13.a"), s.trade("F13.b"), s.trade("E0")
+    assert t["lev"] == LEV13 and s.off["side"][0] == side
+    fill = s.open_at(180) * (1 + side * FILL_SLIP)
+    want = lock_px(side, fill, 0.10 + 0.05 * n)
+    jp = peak_minute(s, side)
+    j = first_cross(s, side, want, jp)
+    assert t["reason"] == KX.R_LOCK and t["off"] == j > jp
+    assert t["px"] == pytest.approx(exit_price_at(s, j, side, want), rel=1e-12)
+    # never below the locked ROE: the exit price is the lock price less the slippage of any stop
+    assert side * (t["px"] / (1 - side * FILL_SLIP) - want) >= -1e-9 * want
+    assert (tb["j"], tb["reason"], tb["px"], tb["d"]) == (t["j"], t["reason"], t["px"], t["d"])        # no take-profit was reached: a and b agree
+    assert t0["reason"] != KX.R_LOCK and t0["d"] != t["d"]                                           # E0 has no lock: the trade differs
+    if n == 0 and not mir and pick_exit == "tp3R|4":                       # the long's numbers written out
+        assert fill == pytest.approx(100.02, rel=1e-12)
+        assert t["px"] == pytest.approx(100.02 * (1 + 0.10 / 30 + 0.0014) * (1 - 0.0002), rel=1e-12)
+    # a gain of at least +12% that falls back to the lock pays at least the locked ROE less the stop's own slippage (positive wallet change)
+    assert t["d"] > 0
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f13_below_the_first_trigger_there_is_no_lock_and_the_hard_stop_works(tmp_path, vendor, mir):
+    side = side_of(mir)
+    arm0 = lock_px(1, FILL13, 0.12)
+    s = Scen(tmp_path, f13_path(arm0 - 0.06, fall_to=97.0, fall=60), longs=[2], side_mirror=mir)
+    for vid in ("F13.a", "F13.b"):
+        t = s.trade(vid)
+        stop = 100.0 - side * 4 * 0.3
+        assert t["reason"] == KX.R_SL and t["px"] == pytest.approx(stop * (1 - side * FILL_SLIP), rel=1e-12) and t["d"] < 0
+    # and +12% reached exactly by the best price (the trigger itself, with the kernel's 1e-12 tolerance) arms the first lock
+    s2 = Scen(tmp_path / "x", f13_path(arm0 + 0.01, fall_to=97.0, fall=60), longs=[2], side_mirror=mir)
+    t = s2.trade("F13.a")
+    assert t["reason"] == KX.R_LOCK
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f13_the_lock_is_raised_by_the_best_price_of_a_minute_and_applies_from_the_next_minute(tmp_path, vendor, mir):
+    """A wick up to the band of step 1 in minute 190 (low back under the lock price in the same minute) raises the lock after that
+    minute; the minute itself does not exit (the order of the high and the low is unknown: the low is taken first); the next minute opens
+    beyond the new stop and exits at its open as a LOCK, with slippage."""
+    side = side_of(mir)
+    arm = lambda k: lock_px(1, FILL13, 0.12 + 0.05 * k)            # noqa: E731
+    wick = 0.5 * (arm(1) + arm(2))
+    s = Scen(tmp_path, H(100, 100, 100, 100, 100, 100), longs=[2], highs={190: wick}, lows={190: 99.9}, side_mirror=mir)
+    for vid in ("F13.a", "F13.b"):
+        t = s.trade(vid)
+        assert t["reason"] == KX.R_LOCK and t["off"] == 191, (vid, KX.REASON_NAMES[t["reason"]], t["off"])
+        assert t["px"] == pytest.approx(s.open_at(191) * (1 - side * FILL_SLIP), rel=1e-12)
+    # the same wick below the first trigger: no lock, the flat path runs to the period end
+    s2 = Scen(tmp_path / "w", H(100, 100, 100, 100, 100, 100), longs=[2], highs={190: arm(0) - 0.06}, lows={190: 99.9}, side_mirror=mir)
+    t = s2.trade("F13.a")
+    expect_exit(s2, t, last_offset(s2), KX.R_END, side=side)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f13_the_same_minute_hits_the_hard_stop_before_the_lock_can_exist(tmp_path, vendor, mir):
+    """Minute 190 reaches the arming price and the hard stop: the stop wins (SL, not LOCK), whatever the order inside the minute."""
+    side = side_of(mir)
+    s = Scen(tmp_path, H(100, 100, 100, 100, 100, 100), longs=[2], highs={190: lock_px(1, FILL13, 0.20)}, lows={190: 98.0}, side_mirror=mir)
+    for vid in ("F13.a", "F13.b"):
+        t = s.trade(vid)
+        assert t["reason"] == KX.R_SL and t["off"] == 190
+        assert t["px"] == pytest.approx((100.0 - side * 1.2) * (1 - side * FILL_SLIP), rel=1e-12)
+
+
+@pytest.mark.parametrize("mir", MIR)
+@pytest.mark.parametrize("pick_exit,tp_at", [("tp3R|4", 103.6), ("roe50|4", None)])
+def test_t2_f13_a_keeps_the_picks_take_profit_and_b_has_none(tmp_path, vendor, mir, pick_exit, tp_at):
+    side = side_of(mir)
+    s = Scen(tmp_path, H(100, 100, 100) + [(150, 110.0)], longs=[2], side_mirror=mir, exit_name=pick_exit)
+    ta, tb = s.trade("F13.a"), s.trade("F13.b")
+    fill = s.open_at(180) * (1 + side * FILL_SLIP)
+    tp = 100.0 + side * 3 * 1.2 if tp_at else fill * (1.0 + side * (0.5 / LEV13 + RT13))      # 3R from the reference; net ROE 50%
+    assert ta["reason"] == KX.R_TP and ta["px"] == pytest.approx(tp, rel=1e-12)
+    assert ta["off"] == first_cross_tp(s, side, tp)
+    expect_exit(s, tb, last_offset(s), KX.R_END, side=side)                                        # a climb never gives back: the lock never exits
+    assert tb["both"] == 0 and ta["both"] == 0
+
+
+def first_cross_tp(s, side, tp):
+    h, l = s.mk.cat["h"], s.mk.cat["l"]
+    for j in range(181, len(h)):
+        if (side > 0 and h[j] > tp) or (side < 0 and l[j] < tp):
+            return j
+    raise AssertionError
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f13_lock_and_take_profit_in_the_same_minute(tmp_path, vendor, mir):
+    """(1) A minute that touches the take-profit and would arm the lock: the take-profit exits (maker), the lock is not raised. In mode b,
+    with no take-profit, the same minute raises the lock to the step of its high and the next open below it exits as a LOCK.
+    (2) A minute that touches both the take-profit and the lock stop: the stop wins (the kernel's stop-first rule), counted as 'both'."""
+    side = side_of(mir)
+    tp = 100.0 + side * 3.6
+    s = Scen(tmp_path, H(100, 100, 100, 100, 100, 100), longs=[2], highs={190: 104.0}, side_mirror=mir)
+    ta, tb = s.trade("F13.a"), s.trade("F13.b")
+    assert ta["reason"] == KX.R_TP and ta["off"] == 190 and ta["px"] == pytest.approx(tp, rel=1e-12) and ta["both"] == 0
+    assert tb["reason"] == KX.R_LOCK and tb["off"] == 191                                       # the lock stepped far up with the 104
+    assert tb["px"] == pytest.approx(s.open_at(191) * (1 - side * FILL_SLIP), rel=1e-12)
+    # (2) lock 10% armed by a climb to inside the first band, then a minute at the lock's side with a high through the take-profit
+    arm = lambda k: lock_px(1, FILL13, 0.12 + 0.05 * k)            # noqa: E731
+    top = 0.5 * (arm(0) + arm(1))
+    s2 = Scen(tmp_path / "b", H(100, 100, 100) + [(20, top), (30, top), (30, top)], longs=[2], highs={210: 104.0}, lows={210: 100.3},
+              side_mirror=mir)
+    fill = s2.open_at(180) * (1 + side * FILL_SLIP)
+    want = lock_px(side, fill, 0.10)
+    for vid, both in (("F13.a", 1), ("F13.b", 0)):
+        t = s2.trade(vid)
+        assert t["reason"] == KX.R_LOCK and t["off"] == 210, (vid, KX.REASON_NAMES[t["reason"]], t["off"])
+        assert t["px"] == pytest.approx(want * (1 - side * FILL_SLIP), rel=1e-12) and t["both"] == both
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f13_the_lock_counts_funding_in_its_net_roe(tmp_path, vendor, mir):
+    """Funding paid before the lock is armed moves both the arming price and the locked price by the funding share of the notional."""
+    side = side_of(mir)
+    rate = 0.003 * side                               # the position pays 0.3% of its notional (the sign follows the side)
+    notional_share = side * 100.0 * rate / (100.0 * (1 + side * FILL_SLIP))        # funding paid / notional entry (mark open 100 at minute 195)
+    arm = lambda k: lock_px(1, FILL13, 0.12 + 0.05 * k, fr=notional_share)         # noqa: E731  (the long's arming prices; fr is the same for the mirror)
+    peak = 0.5 * (arm(0) + arm(1))
+    s = Scen(tmp_path, f13_path(peak, flat=15), longs=[2], side_mirror=mir, fund_at={195: rate})
+    t = s.trade("F13.a")
+    fill = s.open_at(180) * (1 + side * FILL_SLIP)
+    fr = side * float(s.mk.cat["mo"][195]) * rate / fill
+    assert fr == pytest.approx(0.003, rel=2e-3)
+    want = lock_px(side, fill, 0.10, fr=fr)
+    jp = peak_minute(s, side)
+    assert t["reason"] == KX.R_LOCK and t["off"] == first_cross(s, side, want, jp)
+    assert t["px"] == pytest.approx(exit_price_at(s, t["off"], side, want), rel=1e-12)
+    # the same path with no funding: the price moved less than the funding-adjusted trigger, so the first lock is the same step but
+    # nothing arms below the shifted trigger: a peak under the shifted arming price exits by the hard stop
+    peak_lo = 0.5 * (lock_px(1, FILL13, 0.12) + arm(0))        # above the no-funding trigger, below the funding-shifted one
+    s2 = Scen(tmp_path / "lo", f13_path(peak_lo, fall_to=97.0, fall=60, flat=15), longs=[2], side_mirror=mir, fund_at={195: rate})
+    assert s2.trade("F13.a")["reason"] == KX.R_SL
+
+
+def test_t2_f13_exit_tuples_of_every_pick_exit_are_the_stop_the_lock_and_the_take_profit():
+    """kernel_x.exit_of_pick for F13 on each of the 84 pick exits: the pick's stop; the pick's take-profit in a and none in b; the engine's lock
+    (10%, 5%, 2%) in both; F13.b equals the kernel's own 'ladder|k' rule, and F13.a on tp2R equals 'ladder_tp2R'."""
+    fa, fb = KX.variant_by_id("F13.a"), KX.variant_by_id("F13.b")
+    names = [e[0] for e in K.EXITS]
+    assert (fa.group, fb.group, fa.famname, fa.nparams, fa.mode, fb.mode, fa.q15) == ("P", "P", "F13", 0, "a", "b", False)
+    for i, e in enumerate(K.EXITS):
+        stop_atr, kind, val = K.exit_args(i)[:3]
+        k = e[1]
+        a, b = KX.exit_of_pick({"exit_index": i}, fa), KX.exit_of_pick({"exit_index": i}, fb)
+        assert a == (stop_atr, kind, val, True, 0.10, 0.05, 0.02) and b == (stop_atr, KX.TP_NONE, 0.0, True, 0.10, 0.05, 0.02), e[0]
+        assert b == K.exit_args(names.index(f"ladder|{k:g}"))
+        if e[0].startswith("tp2R|"):
+            assert a == K.exit_args(names.index(f"ladder_tp2R|{k:g}"))
+    assert KX.F13_LOCK == (0.10, 0.05, 0.02) == (LD.LadderSpec().first_lock, LD.LadderSpec().step, LD.LadderSpec().trigger_gap)
+    # E0 and the other families are unchanged: the pick's own exit stays what it was
+    assert KX.exit_of_pick({"exit_index": 0}, KX.E0) == K.exit_args(0)
+    # the chart side: no rule vector, no chart arrays
+    assert KX.rp_vector()[KX.RP_FAM] == 0 and fa.rp(900_000, False)[KX.RP_FAM] == 0 and np.array_equal(fa.rp(900_000, False), KX.rp_vector())
+
+
+@pytest.mark.parametrize("scale", [0.25, 1.0])
+def test_t1_f13_account_equals_the_kernels_lock_on_every_pick_exit(scale):
+    """T1 for F13: the numba kernel_x with the F13 exit tuple equals ``kernel.account`` run with the same arguments (trade, exit minute,
+    reason, leverage, final wallet), on both worlds and both sizes, for every fourth of the 84 pick exits in both modes."""
+    kinds = set()
+    for seed, vol, gp in ((3, 0.0009, 0.0), (4, 0.004, 0.003)):
+        mk, sig = acct_world(seed, vol=vol, open_gap_p=gp)
+        S = mk.S(scale)
+        for i in range(0, len(K.EXITS), 4):
+            for vid in ("F13.a", "F13.b"):
+                ex_args = KX.exit_of_pick({"exit_index": i}, KX.variant_by_id(vid))
+                st, pnl, ext, rs, lv, w = kernel_account(mk, sig, S, ex_args)
+                o = kx_account(mk, sig, S, ex_args)
+                assert np.array_equal(st, o[0]) and np.array_equal(pnl, o[1]) and np.array_equal(ext, o[3])
+                assert np.array_equal(rs, o[4]) and np.array_equal(lv, o[5]) and w == o[7], (K.EXITS[i][0], vid)
+                kinds |= set(rs[st == 1].tolist())
+    assert {K.R_LOCK, K.R_SL, K.R_TP} <= kinds
+
+
+def test_t1_f13_b_is_the_full_grids_ladder_rule_and_f13_a_on_tp2r_is_its_ladder_tp2r():
+    mk, sig = acct_world(6)
+    S = mk.S(0.25)
+    names = [e[0] for e in K.EXITS]
+    for pick_exit, vid, equal_to in (("tp3R|4", "F13.b", "ladder|4"), ("roe50|3", "F13.b", "ladder|3"), ("tp2R|2.5", "F13.a", "ladder_tp2R|2.5"),
+                                      ("tp2R|1", "F13.a", "ladder_tp2R|1")):
+        ex_args = KX.exit_of_pick({"exit_index": names.index(pick_exit)}, KX.variant_by_id(vid))
+        a = kernel_account(mk, sig, S, ex_args)
+        b = kernel_account(mk, sig, S, K.exit_args(names.index(equal_to)))
+        assert all(np.array_equal(x, y) for x, y in zip(a[:5], b[:5])) and a[5] == b[5], (pick_exit, vid, equal_to)
+
+
+@pytest.mark.parametrize("tf", ["15m", "1h"])
+def test_t2_f13_kernel_equals_the_plain_python_reference_on_random_paths(tmp_path, vendor, tf):
+    """The numba kernel and the stateless reference (the lock written with paperbot/ladder.py) give the same trade for F13.a and F13.b, on
+    random worlds with gaps, outages, open gaps, funding and a mark price."""
+    mk, prov, pd_ = diff_world(tmp_path, tf)
+    off = pd_.offered("select", mk)
+    assert len(off["coin"]) >= 10
+    n = n_lock = 0
+    for vid in ("F13.a", "F13.b"):
+        v = KX.variant_by_id(vid)
+        for q in range(min(len(off["coin"]), 40)):
+            bad = compare_trade(mk, prov, pd_, v, off, q)
+            assert not bad, (tf, vid, q, bad[:3])
+            out = call_trade_x(mk, pd_, v, off, q)[0]
+            n += 1
+            n_lock += out[2] == KX.R_LOCK
+    assert n >= 60 and n_lock >= 8, (n, n_lock)
+
+
+def test_t4_f13_has_no_placebo_and_is_never_a_step_2_pair():
+    for vid in ("F13.a", "F13.b"):
+        v = KX.variant_by_id(vid)
+        assert not PL.has_placebo(v) and not KX.has_placebo(v)
+    assert not any(PL.has_placebo(v) for v in KX.variants() if v.famname == "F13") and PL.has_placebo(KX.variant_by_id("F5.P1.g50.a"))
+    # gate 3 does not apply to it: the same eligibility path as F7 and F7h (is_f7), M > 0, 60% of the picks, entries
+    pl = np.linspace(-0.01, 0.01, 200)
+    assert MT.eligibility(0.005, [0.01] * 14 + [-0.01] * 9, 100, 100, None, RX.no_placebo_gate(KX.variant_by_id("F13.a")))["eligible"]
+    assert not MT.eligibility(0.005, [0.01] * 14 + [-0.01] * 9, 100, 100, None, RX.no_placebo_gate(KX.variant_by_id("F3.a")))["eligible"]
+    assert all(RX.no_placebo_gate(KX.variant_by_id(v)) for v in ("F7.N12.a", "F7h.H8.b", "F13.a", "F13.b"))
+    assert not any(RX.no_placebo_gate(KX.variant_by_id(v)) for v in ("F1.w3.a", "F4.m2.b", "F5.P1.g50.a", "F9.a", "F10.N6.a"))
+
+
+def test_t4_f13_refuses_a_placebo_run(tmp_path, vendor):
+    s = Scen(tmp_path, H(100, 100, 100, 100.5, 100.8, 100.6, 100.0, 100.0), longs=[2])
+    with pytest.raises(ValueError, match="no placebo"):
+        s.account("F13.a", placebo=True)
+
+
+def test_t5_f13_the_stop_in_force_at_minute_j_depends_only_on_minutes_before_j(tmp_path, vendor):
+    """Causality of the lock: replace every minute from the exit minute x on (OHLC, mark and funding) by another path: no exit before x is
+    possible and the minutes up to x - 1 are unchanged; replace every minute from x + 1 on: the trade is identical."""
+    w = DIFF_WORLDS["1h"]
+    coins = {SYMS[i]: synth_coin(71 + i, w["days"], (100.0, 3000.0)[i], vol=0.0012, drop=0.003, outages=2) for i in range(2)}
+    mk, prov, pd_ = build_world(coins, tmp_path / "a", pick=make_pick("1h", w["exit"]), prov_kw=dict(warm=False))
+    off = pd_.offered("select", mk)
+    rng = np.random.default_rng(9)
+    n_same = n_before = n_lock = 0
+    for vid in ("F13.a", "F13.b"):
+        v = KX.variant_by_id(vid)
+        for q in rng.permutation(len(off["coin"]))[:25]:
+            out = KX.simulate_trade(mk, pd_, v, off, int(q), 0.25, "select", True)[0]
+            d, x, r = out[0], out[1], out[2]
+            c = int(off["coin"][q])
+            if r in (KX.R_REJECT, KX.R_OPEN) or x < 3 or x + 2 >= len(coins[SYMS[c]]["ts"]):
+                continue
+            n_lock += r == KX.R_LOCK
+            for idx, same in ((x + 1, True), (x, False)):
+                new = rewrite_after(coins[SYMS[c]], idx, seed=int(q) * 7 + 1, vol=0.004)
+                mins = {k: new[k] for k in ("o", "h", "l", "mo", "mh", "ml", "fund")}
+                out2 = KX.simulate_trade(mk, pd_, v, off, int(q), 0.25, "select", True, minutes=mins)[0]
+                if same:
+                    assert out2[:5] == out[:5], (vid, int(q), out[:5], out2[:5])
+                    n_same += 1
+                else:
+                    assert out2[1] >= x, (vid, int(q), out2[1], x)        # nothing of minute x or later can have ended the trade earlier
+                    n_before += 1
+    assert n_same >= 20 and n_before >= 20 and n_lock >= 5, (n_same, n_before, n_lock)
+
+
+def test_t7_f13_is_group_p_l0_in_set_d_and_the_claim_is_the_locks(f11_on):
+    vs = KX.variants()
+    f13 = [v for v in vs if v.famname == "F13"]
+    assert [v.id for v in f13] == ["F13.a", "F13.b"] and {v.group for v in f13} == {"P"} and {v.nparams for v in f13} == {0}
+    assert {MT.loss_class(v) for v in f13} == {"L0"} and all(MT.in_default_set(v) for v in f13)
+    assert all(not any(MT.in_default_set(v) for v in vs if v.famname == "F12") for _ in (0,))
+    assert sum(MT.in_default_set(v) for v in vs) == 37 and len(vs) == 88 and sum(PL.has_placebo(v) for v in vs) == 74
+    assert [v.id for v in vs][-2:] == ["F13.a", "F13.b"] and [v.order for v in vs] == list(range(1, 89))
+    want = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and makes "
+            "no claim beyond that")
+    assert MT.claim_of("F13.a") == MT.claim_of("F13.b") == MT.CLAIM_F13 == want == RX.CLAIM_EN["f13"]
+    assert RX.claim_key(KX.variant_by_id("F13.b")) == "f13" and "10%" in RX.CLAIM_KO["f13"] and "12%" in RX.CLAIM_KO["f13"]
+    assert RX.FAMILY_KO["F13"] and "계단" in RX.FAMILY_KO["F13"]
+    # F12 does not contain F13: its nine components are F1, F2, F3, F4, F5, F6, F7h, F10, F11
+    assert [n for n, _b in KX.COMP_NAMES] == ["F1", "F2", "F3", "F4", "F5", "F6", "F7h", "F10", "F11"] and "F13" not in KX.F12_PARAMS
+
+
+def test_t7_the_default_of_8_4_can_take_f13_and_ranks_it_by_hold_like_any_set_d_variant():
+    fast = fake_row("F13.a", "P", 0, 1, True, 1.0)
+    rows = [fast, fake_row("F13.b", "P", 0, 2, True, 3.0), fake_row("F5.P1.g25.a", "G", 2, 3, True, 6.0), fake_row("F1.w3.a", "S", 1, 4, True, 0.5)]
+    rows[0]["in_default_set"] = rows[1]["in_default_set"] = True
+    rows[2]["in_default_set"] = True
+    rows[3]["in_default_set"] = False                                   # F1 is L2: outside set D, whatever its hold
+    assert MT.default_choice(rows) == ["F13.a", "F5.P1.g25.a"]          # F13.b is the same group as F13.a: skipped for the second place

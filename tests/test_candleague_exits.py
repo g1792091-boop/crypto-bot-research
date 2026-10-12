@@ -169,7 +169,7 @@ def test_lock_exit_builds_the_lock_plus_rule_from_a_picks_exit_name():
         X.lock_exit("lock+tp9R|2", "a")
 
 
-F13_PICK_EXITS = ("tp3R|4", "roe50|4", "tp2R|2", "tp1.5R|2.5", "roe10|3")
+F13_PICK_EXITS = ("tp3R|4", "roe50|4", "tp2R|2", "tp1.5R|2.5", "roe20|3")
 F13_MINUTES = 12_000                  # a shorter path than the 84-rule test above keeps this test to a minute or two
 
 
@@ -228,7 +228,7 @@ def test_f13_engine_gives_the_kernels_trade(pick_exit, mode):
 
 def test_f13_lock_plus_a_roe_take_profit_reaches_the_take_profit_and_the_lock():
     """The lock with a take-profit at net ROE (the one combination that none of the 84 rules has): both exits occur and equal the kernel."""
-    name, args = X.lock_exit("roe10|3", "a"), _f13_args("roe10|3", "a")
+    name, args = X.lock_exit("roe20|3", "a"), _f13_args("roe20|3", "a")
     data = TK.synth_1m(F13_MINUTES, seed=19)
     rng = np.random.default_rng(5)
     seen = set()
