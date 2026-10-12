@@ -69,7 +69,7 @@ export async function mount(el, ctx) {
   function paintBasis(d) {
     const ix = LK.index(d);
     const by = {ok: [], not_yet: [], early: []};
-    for (const c of ix.cands) by[(ix.judge[c.id] || {}).verdict || "early"].push(c);
+    for (const c of ix.cands) (by[(ix.judge[c.id] || {}).verdict || "early"] || by.early).push(c);     // "na" (no 기본값 · 동전): not judged
     put(basis, h("div", {class: "stats cl-stats3"},
       ui.stat("기준 통과", fmt.int(by.ok.length), "세 조건 모두", "good"),
       ui.stat("기준 미달", fmt.int(by.not_yet.length), "30번 이상이지만 하나 이상 못 넘음"),
