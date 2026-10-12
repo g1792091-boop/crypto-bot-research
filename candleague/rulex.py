@@ -464,11 +464,11 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
 OWNER_MAX = 8
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
-TP_NAMES = tuple(r[0] for r in X.TP_RULES)
+TP_NAMES = tuple(r[0] for r in X.TP_RULES) + (X.ULAD,)
 WEEKEND_KO = "토 00:00 ~ 월 00:00 UTC (한국 토 09:00 ~ 월 09:00)"
 WEEKEND_REASON = "weekend off: no new entry from a signal bar closing Sat 00:00 - Mon 00:00 UTC"
 
@@ -482,6 +482,8 @@ def is_weekend(ms: int) -> bool:
 def _owner_words(e: dict) -> tuple:
     """(short label, what it does, what it is for) in plain Korean for an owner-exit entry the file does not describe itself."""
     r, tp = e["rule"], e["tp"]
+    if e.get("coin_of"):
+        return ("동전", "같은 청산 · 방향만 같은 신호 시각에 동전으로 정함 · 시장 방향 덕을 가리는 대조 계좌", "번 것이 시장 방향 덕인지 가르는 대조")
     if e["kind"] == "own":
         return "지금", "후보의 지금 익절·손절 그대로 (비교 기준)", "다른 계좌들이 이보다 나은가를 보는 기준"
     if r is not None and r["family"] == "F2":
@@ -494,6 +496,10 @@ def _owner_words(e: dict) -> tuple:
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
     if r is not None:
         return KO[r["family"]], f"{rule_ko(r)} · 손절은 그대로", "이 청산 규칙이 지금 청산보다 나은가"
+    if tp == X.ULAD:
+        cap = f" · 손절은 후보의 것, 단 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else " · 손절은 후보의 것 그대로"
+        return ("계단", "수수료 뺀 순수익이 +13%에 닿으면 +10%에 손절선을 올리고, +20%면 +15%, +25%면 +20%, +30%면 +25% (이후 5%씩) · 고정 익절 없음" + cap,
+                "손절을 좁히면 승률과 손실이 어떻게 달라지나" if e.get("stop_max") else "계단식 익절로 승률을 지키며 나오면 나은가")
     if tp is not None:
         ko = X.TP_KO[tp]
         kind, val = {x[0]: (x[1], x[2]) for x in X.TP_RULES}[tp]
@@ -530,8 +536,14 @@ def _owner_entry(x, i: int) -> dict:
         if not isinstance(tp, str) or tp not in TP_NAMES:
             raise RuleConfigError(f"rule config: {where} exit {tp!r} is not a take-profit rule of candleague.exits ({', '.join(TP_NAMES)}); "
                                   "the pick's own stop multiple is kept, so name the take-profit only (e.g. 'roe50')")
-        if {r[0]: r[1] for r in X.TP_RULES}[tp] == X.TP_STRUCT:
+        if tp != X.ULAD and {r[0]: r[1] for r in X.TP_RULES}[tp] == X.TP_STRUCT:
             raise RuleConfigError(f"rule config: {where} exit {tp!r} needs a structure level the league does not hand in here")
+    sm = x.get("stop_max")
+    if sm is not None and (isinstance(sm, bool) or not isinstance(sm, (int, float)) or float(sm) not in X.STOPS or tp is None):
+        raise RuleConfigError(f"rule config: {where} stop_max must be one of the stops {list(X.STOPS)} and needs an 'exit'")
+    coin = x.get("coin_of")
+    if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None):
+        raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit'")
     wk = x.get("weekend_off", False)
     if not isinstance(wk, bool):
         raise RuleConfigError(f"rule config: {where} weekend_off must be true or false")
@@ -540,10 +552,12 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} size must be a number in (0, 1] (1 = the league's live size)")
     kind = "rule" if rule is not None else "exit" if tp is not None else "weekend" if wk else "own"
     role = "cand" if kind == "own" and float(size) == 1.0 else suffix[1:]
+    if coin is not None and role == "cand":
+        raise RuleConfigError(f"rule config: {where} cannot be both the current exit and a coin flip")
     if role != "cand" and role in OWNER_RESERVED:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
-         "size": float(size)}
+         "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -566,6 +580,12 @@ def normalize_owner(doc: dict) -> dict:
         seen = [e[key] for e in out]
         if len(set(seen)) != len(seen):
             raise RuleConfigError(f"rule config: owner_exits repeat a {key} ({seen})")
+    by_suffix = {e["suffix"]: e for e in out}
+    for e in out:
+        if e["coin_of"] is not None and (e["coin_of"] not in by_suffix or by_suffix[e["coin_of"]]["coin_of"] is not None
+                                         or by_suffix[e["coin_of"]]["tp"] is None):
+            raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} coin_of {e['coin_of']!r} must name another entry with an "
+                                  "'exit' that is not a coin twin itself")
     own = [e for e in out if e["role"] == "cand"]
     if len(own) != 1:
         raise RuleConfigError("rule config: owner_exits must hold the pick's current exit once (an entry with no rule, no exit, no "
@@ -584,8 +604,10 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
     """The owner-exit league's accounts: per pick (the listed ones, else every candidate) one account per entry of
     ``cfg["owner_exits"]``, id ``<pick id><suffix>``, in the file's order. The current-exit account (role ``cand``) keeps the pick's
     source (its backtest band and rank) and is the ``of`` of the others. A take-profit entry runs "<take-profit>|<the pick's own
-    stop multiple>"; a pick whose own exit is already that one gets no such account (its current-exit account is it). Each carries
-    ``ox`` (the entry's role, suffix and Korean words) and ``weekend_off`` when the entry has the weekend switch."""
+    stop multiple>" (``stop_max``: at most that multiple); a pick whose own exit is already that one, or an earlier entry of the same
+    pick that runs it, gets no such account. An entry with ``coin_of`` is that other entry's account with a seeded coin for the side
+    at the pick's signal times (``coin``). Each carries ``ox`` (the entry's role, suffix and Korean words) and ``weekend_off`` when
+    the entry has the weekend switch."""
     ents = cfg["owner_exits"]
     own = next(e for e in ents if e["role"] == "cand")
     out = []
@@ -593,24 +615,42 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
         pid = c["id"]
         k = c["exit"].split("|", 1)[1]
         cand_id = pid + own["suffix"]
+        made, seen = {}, {}
         for e in ents:
-            exit_ = f"{e['tp']}|{k}" if e["tp"] else c["exit"]
-            if e["tp"] and exit_ == c["exit"]:
-                continue                                      # the pick's own exit already: no duplicate account
+            exit_ = c["exit"]
+            tgt = None
+            if e["tp"]:
+                kk = k if e["stop_max"] is None else f"{min(float(k), e['stop_max']):g}"
+                exit_ = f"{e['tp']}|{kk}"
+            if e["coin_of"]:
+                tgt = made.get(e["coin_of"])
+                if tgt is None:
+                    continue                                  # that entry made no account for this pick
+                exit_ = tgt["exit"]
+            elif e["tp"]:
+                key = (exit_, bool(e["weekend_off"]), e["size"])
+                if exit_ == c["exit"] or key in seen:
+                    continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
+                seen[key] = e["suffix"]
             src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
             if e["role"] == "cand":
                 src = {**(c.get("source") or {}), **src}
+            elif tgt is not None:
+                src["coin_of"] = tgt["id"]
             elif e["rule"] is not None:
                 src["rule"] = e["rule"]["id"]
             elif e["tp"]:
                 src["exit_of"] = c["exit"]
             a = {**{q: c[q] for q in ("kind", "name", "tf", "combo")}, "exit": exit_, "id": pid + e["suffix"], "role": e["role"],
-                 "of": pid if e["role"] == "cand" else cand_id, "pick": pid, "size": e["size"],
+                 "of": (tgt["id"] if tgt is not None else pid if e["role"] == "cand" else cand_id), "pick": pid, "size": e["size"],
                  "rule": dict(e["rule"]) if e["rule"] is not None else dict(NO_RULE), "source": src,
                  "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
             a["ox"]["rule"] = e["rule"]["id"] if e["rule"] is not None else None
             if e["weekend_off"]:
                 a["weekend_off"] = True
+            if tgt is not None:
+                a["coin"] = True
+            made[e["suffix"]] = a
             out.append(a)
     return out
 
@@ -642,7 +682,7 @@ def check(cands: list[dict], cfg: dict) -> list[str]:
         if not C.ID_RE.match(a["id"]) or a["id"] in seen:
             bad.append(f"{a['id']}: bad or repeated id")
         seen.add(a["id"])
-        if a["exit"] not in X.BY_NAME:
+        if not X.known(a["exit"]):
             bad.append(f"{a['id']}: exit {a['exit']!r} unknown")
         else:
             try:
@@ -679,6 +719,7 @@ def code_version(rule: dict) -> str:
         v += "|" + native_hash()
     if rule.get("family") in LOCK_FAMILIES:                  # the lock's numbers are part of what an F13 account means
         v += "|lock" + ",".join(format(x, "g") for x in X.LOCK)
+    v += "|ulad" + ",".join(format(x, "g") for x in (*X.ULAD_FIRST, *X.ULAD_SECOND, X.ULAD_STEP))   # the owners' ladder (exit ladderU)
     return v
 
 
@@ -1378,7 +1419,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                     if not (math.isfinite(at) and at > 0):
                         continue                                      # live: NO_ATR, never traded
                     s0 = 1 if lo[i] else -1                           # the strategy's side at this bar
-                    s = flip_of(a, int(close[i])) if a["role"] == ROLE_FLIP else s0
+                    s = flip_of(a, int(close[i])) if (a["role"] == ROLE_FLIP or a.get("coin")) else s0
                     meta = {"stop_dist": spec["stop_atr"] * at, "account": a["id"],
                             "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
                     if rule["family"] is not None:

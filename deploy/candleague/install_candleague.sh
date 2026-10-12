@@ -145,9 +145,10 @@ CANDS=0
 # reads the accounts the engine will run (a rules file that cannot be run stops here, before the swap) and the backup step checks the start
 RULES_VAL="$(envval CANDLEAGUE_RULES)"
 EXPECT_VAL="$(envval CANDLEAGUE_EXPECT_START)"
+CANDS_VAL="$(envval CANDLEAGUE_CANDIDATES)"      # the candidate file the engine will run (the owner-exit league: /etc/candleague/candidates.json)
 set +e
 SC_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LIB" \
-  PYTHONDONTWRITEBYTECODE=1 ${RULES_VAL:+CANDLEAGUE_RULES="$RULES_VAL"} "$VENV/bin/python" -c '
+  PYTHONDONTWRITEBYTECODE=1 ${RULES_VAL:+CANDLEAGUE_RULES="$RULES_VAL"} ${CANDS_VAL:+CANDLEAGUE_CANDIDATES="$CANDS_VAL"} "$VENV/bin/python" -c '
 import os
 import sys
 from paperbot import sweepsig
@@ -157,7 +158,7 @@ from paperbot.config import V3_SYMBOLS
 runner.load_exchange(runner.EXCHANGE_FILE, V3_SYMBOLS)   # the leverage table and order-size rules of the study
 print(len(candidates.ds_defs().DEFS), "DeepSeek definitions load")
 if sys.argv[1] == "1":
-    c = candidates.load()
+    c = candidates.load(os.environ.get("CANDLEAGUE_CANDIDATES") or candidates.DEFAULT_FILE)
     print(f"{len(c)} candidates ok")
     accts = runner.league_accounts(os.environ.get("CANDLEAGUE_RULES", ""), c)     # refuses a rules file that cannot be run
     print(f"{len(accts)} accounts" + (" (rules file)" if any(a.get("rule") for a in accts) else ""))

@@ -25,6 +25,7 @@ import numpy as np
 
 from paperbot.config import v3_settings
 from paperbot.engine import PaperEngine
+from paperbot.ladder import net_roe, roe_price, tighten
 from paperbot.policy import OwnerPolicy
 from paperbot.sizing import tp_from_roe
 
@@ -100,13 +101,47 @@ def lock_exit(name: str, mode: str = "a") -> str:
     return f"{_EXISTING_LOCK_PLUS[rule]}|{k}" if rule in _EXISTING_LOCK_PLUS else f"{LOCK_PREFIX}{rule}|{k}"
 
 
+# ---- the owners' own stepped lock (owners 2026-10-13): "13%가 되면 10% 자동익절, 20%가 되면 15%, 25%가 되면 20%, 30%가 되면 25%"
+# Names "ladderU|<k>": the pick's stop of k x ATR14 and a lock on net ROE (after fees, slippage and funding, as the rule bot's ladder):
+# best net ROE >= 13% locks 10%, >= 20% locks 15%, then 5% more for every 5% more (25 -> 20, 30 -> 25, 35 -> 30 ...). No fixed take-profit.
+ULAD = "ladderU"
+ULAD_FIRST = (0.13, 0.10)                    # (best net ROE that arms the first lock, the net ROE it locks)
+ULAD_SECOND = (0.20, 0.15)
+ULAD_STEP = 0.05
+
+
+def user_lock_for(best: float):
+    """The highest lock armed by a best net ROE under the owners' ladder, or None below 13%."""
+    if best < ULAD_FIRST[0] - 1e-12:
+        return None
+    if best < ULAD_SECOND[0] - 1e-12:
+        return ULAD_FIRST[1]
+    return round(ULAD_SECOND[1] + ULAD_STEP * math.floor((best - ULAD_SECOND[0]) / ULAD_STEP + 1e-9), 10)
+
+
+def _user_ladder_spec(name: str):
+    """The kernel-style row of "ladderU|<k>" ((name, k, TP_NONE, 0, True, 0.10, 0.05, 0.03)), or None when ``name`` is not one."""
+    if not name.startswith(ULAD + "|"):
+        return None
+    k = name.split("|", 1)[1]
+    try:
+        kf = float(k)
+    except ValueError:
+        return None
+    if f"{kf:g}" != k or kf not in STOPS:
+        return None
+    return (name, kf, TP_NONE, 0.0, True, ULAD_FIRST[1], ULAD_STEP, round(ULAD_FIRST[0] - ULAD_FIRST[1], 6))
+
+
 def known(name: str) -> bool:
     """Whether ``spec`` can read this exit name: one of the 84, or "lock+<take-profit rule>|<k>"."""
-    return name in BY_NAME or _lock_plus_spec(name) is not None
+    return name in BY_NAME or _lock_plus_spec(name) is not None or _user_ladder_spec(name) is not None
 
 
 def exit_ko(name: str) -> str:
     rule, k = name.split("|")
+    if rule == ULAD:
+        return f"두 분 계단 익절(13%→10%, 20%→15%, 25%→20%, 30%→25%…) · 손절 {k} ATR"
     if rule.startswith(LOCK_PREFIX):
         return f"계단 잠금 10%부터 + {TP_KO[rule[len(LOCK_PREFIX):]]} · 손절 {k} ATR"
     return f"{TP_KO[rule]} · 손절 {k} ATR"
@@ -116,7 +151,7 @@ def spec(name: str) -> dict:
     """{stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap} of an exit rule (KeyError for an unknown name)."""
     e = BY_NAME.get(name)
     if e is None:
-        e = _lock_plus_spec(name)
+        e = _lock_plus_spec(name) or _user_ladder_spec(name)
         if e is None:
             raise KeyError(name)
     return dict(zip(("stop_atr", "tp_kind", "tp_val", "ladder", "first_lock", "step", "gap"), e[1:]))
@@ -178,6 +213,21 @@ class LadderTP(PaperEngine):
         return ok
 
 
+class UserLadder(PaperEngine):
+    """The owners' stepped lock (``ULAD``): the engine's own ``_raise_lock`` with ``user_lock_for`` in place of the rule bot's ``LadderSpec``;
+    the stop, fills, fees and the rest are the plain engine's, and no take-profit."""
+
+    def _raise_lock(self, p) -> None:
+        fund = p.funding_paid / p.notional_entry if p.notional_entry else 0.0
+        rt = self.s.round_trip_cost
+        best = net_roe(p.side, p.entry_price, p.mfe_price, p.leverage, rt, fund)
+        lock = user_lock_for(best)
+        if lock is None or (p.lock_roe is not None and lock <= p.lock_roe + 1e-12):
+            return
+        p.stop_price = tighten(p.side, p.stop_price, roe_price(p.side, p.entry_price, p.leverage, lock, rt, fund))
+        p.lock_roe = lock
+
+
 def settings_for(name: str, size: float = 1.0, **kw):
     """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides). ``size``
     multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector)."""
@@ -200,6 +250,8 @@ def make_engine(name: str, brackets: dict, specs: dict, book=None, size: float =
     tp_struct for a structure rule); ``size`` scales the margin fractions (settings_for)."""
     s, st = spec(name), settings_for(name, size=size, **kw)
     extra = {} if book is None else {"book": book}
+    if name.startswith(ULAD + "|"):
+        return UserLadder(st, brackets, symbol_specs=specs, **extra)
     if s["ladder"] and s["tp_kind"] == TP_STRUCT:
         return LadderTP(st, brackets, symbol_specs=specs, struct=True, **extra)
     if s["ladder"] and s["tp_kind"] == TP_R:

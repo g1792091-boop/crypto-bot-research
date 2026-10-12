@@ -107,6 +107,7 @@ def fingerprint(accts: list[dict]) -> str:
     body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
                        + ([a["rule"], RX.code_version(a["rule"]), a.get("no_entry_from_ms")] if a.get("rule") else [])
                        + (["weekend_off"] if a.get("weekend_off") else [])
+                       + (["coin"] if a.get("coin") else [])
                        for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time;
     #                                                         the owner-exit league's weekend switch (an account without it: as before)
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()

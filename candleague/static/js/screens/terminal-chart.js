@@ -252,6 +252,16 @@ export function termChart(ctx, st, hooks) {
       focus = [{v: o.entry, ko: "진입", keep: true}, {v: o.stop, ko: o.stop_is_lock ? "잠금" : "손절"}, {v: o.tp, ko: "익절"}]
         .filter((f) => f.v != null && Number.isFinite(Number(f.v))).map((f) => ({...f, v: Number(f.v)}));
     }
+    // the other accounts of the same pick that hold a position on this coin (the owner-exit league: the same signal, another exit):
+    // each one's stop / lock and take-profit as a thin dashed line titled with the account kind, so every exit shows on one chart
+    if (o && o.pick) {
+      for (const p of coinPositions().shown) {
+        if (p.id === o.id || p.pick !== o.pick) continue;
+        const tag = ROLE_SHORT[p.role] || "";
+        if (p.stop != null) line(p.stop, p.stop_is_lock ? color("--up") : color("--down"), `${tag} ${p.stop_is_lock ? "잠금" : "손절"}`, 2, 1);
+        if (p.tp != null) line(p.tp, color("--up"), `${tag} 익절`, 2, 1);
+      }
+    }
     try { C.priceScale("right").applyOptions({autoScale: true}); } catch (e) { /* the scale is busy */ }
     const s = acct ? `${LK.stratKo(acct.name)} · ${TF_SHORT[acct.tf] || acct.tf} · ${ROLE_SHORT[acct.role] || ""}${o ? ` · ${sideKo(o.side)} 열림` : ""}` : "";
     el.sub.textContent = s;
