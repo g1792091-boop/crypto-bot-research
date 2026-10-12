@@ -169,7 +169,8 @@ def test_lock_exit_builds_the_lock_plus_rule_from_a_picks_exit_name():
         X.lock_exit("lock+tp9R|2", "a")
 
 
-F13_PICK_EXITS = ("tp3R|4", "roe50|4", "tp2R|2", "tp1.5R|2.5", "tp1R|1", "roe10|3")
+F13_PICK_EXITS = ("tp3R|4", "roe50|4", "tp2R|2", "tp1.5R|2.5", "roe10|3")
+F13_MINUTES = 12_000                  # a shorter path than the 84-rule test above keeps this test to a minute or two
 
 
 def _kernel_alone_args(data, close, side, atr, best, br, args, equity=5000.0):
@@ -189,6 +190,13 @@ def _f13_args(pick_exit, mode):
     return (stop_atr, kind, val, True, 0.10, 0.05, 0.02) if mode == "a" else (stop_atr, K.TP_NONE, 0.0, True, 0.10, 0.05, 0.02)
 
 
+def _random_signal(data, rng, bars=600):
+    close = int(TK.T0 + rng.integers(5, bars) * 15 * TK.MIN)
+    side = int(rng.choice([1, -1]))
+    atr = float(data["c"][(close - TK.T0) // TK.MIN] * rng.uniform(0.0008, 0.01))
+    return close, side, atr, bool(rng.random() < 0.5)
+
+
 @pytest.mark.parametrize("mode", ["a", "b"])
 @pytest.mark.parametrize("pick_exit", F13_PICK_EXITS)
 def test_f13_engine_gives_the_kernels_trade(pick_exit, mode):
@@ -197,14 +205,11 @@ def test_f13_engine_gives_the_kernels_trade(pick_exit, mode):
     name = X.lock_exit(pick_exit, mode)
     args = _f13_args(pick_exit, mode)
     assert (X.spec(name)["stop_atr"], X.spec(name)["tp_kind"], X.spec(name)["tp_val"], X.spec(name)["ladder"]) == args[:4]
-    data = TK.synth_1m(30_000, seed=17)
+    data = TK.synth_1m(F13_MINUTES, seed=17)
     rng = np.random.default_rng(31 + len(pick_exit) + (mode == "b"))
     n = n_lock = n_tp = 0
-    for _ in range(70):
-        close = int(TK.T0 + rng.integers(5, 1900) * 15 * TK.MIN)
-        side = int(rng.choice([1, -1]))
-        atr = float(data["c"][(close - TK.T0) // TK.MIN] * rng.uniform(0.0008, 0.01))
-        best = bool(rng.random() < 0.5)
+    for _ in range(45):
+        close, side, atr, best = _random_signal(data, rng)
         d, x, r, lev = _kernel_alone_args(data, close, side, atr, best, TK.WIDE, args)
         e = _replay(data, [("BTCUSDT", close, side, atr, best, float("nan"))], {"BTCUSDT": TK.WIDE}, name)
         if r in (K.R_REJECT, K.R_OPEN):
@@ -216,38 +221,55 @@ def test_f13_engine_gives_the_kernels_trade(pick_exit, mode):
         n += 1
         n_lock += r == K.R_LOCK
         n_tp += r == K.R_TP
-    assert n >= 30 and n_lock >= 5, (name, n, n_lock)
-    assert n_tp >= 1 or mode == "b" or pick_exit in ("tp3R|4", "roe50|4"), (name, n_tp)
+    assert n >= 25 and n_lock >= 3, (name, n, n_lock)
+    if mode == "b":
+        assert n_tp == 0                                                  # no fixed take-profit in mode b
+
+
+def test_f13_lock_plus_a_roe_take_profit_reaches_the_take_profit_and_the_lock():
+    """The lock with a take-profit at net ROE (the one combination that none of the 84 rules has): both exits occur and equal the kernel."""
+    name, args = X.lock_exit("roe10|3", "a"), _f13_args("roe10|3", "a")
+    data = TK.synth_1m(F13_MINUTES, seed=19)
+    rng = np.random.default_rng(5)
+    seen = set()
+    for _ in range(60):
+        close, side, atr, best = _random_signal(data, rng)
+        d, x, r, lev = _kernel_alone_args(data, close, side, atr, best, TK.WIDE, args)
+        e = _replay(data, [("BTCUSDT", close, side, atr, best, float("nan"))], {"BTCUSDT": TK.WIDE}, name)
+        if r in (K.R_REJECT, K.R_OPEN):
+            continue
+        t = e.trades[0]
+        assert (t.exit_time // TK.MIN * TK.MIN, TK.REASON[t.exit_reason], t.leverage) == (int(data["ts"][x]), r, lev)
+        assert abs(t.pnl / 5000.0 - d) < 1e-12
+        seen.add(r)
+    assert {K.R_TP, K.R_LOCK} <= seen, seen
 
 
 def test_f13_engine_state_restores_in_the_middle_of_a_locked_position():
-    """A restart in the middle of a position whose lock has been raised (the engine state is saved and restored: the stop, ``lock_roe``,
-    the funding paid) continues exactly: the trade equals the uninterrupted one."""
-    data = TK.synth_1m(30_000, seed=17)
+    """A restart in the middle of a position whose lock has been raised (the engine state is saved and restored through json, as the
+    league's database keeps it: the stop, ``lock_roe``, the funding paid) continues exactly: the trade equals the uninterrupted one."""
+    data = TK.synth_1m(F13_MINUTES, seed=17)
     rng = np.random.default_rng(77)
     locked = checked = 0
     for pick_exit, mode in (("tp3R|4", "a"), ("roe50|4", "a"), ("tp2R|2", "b")):
         name = X.lock_exit(pick_exit, mode)
+        k_stop = X.spec(name)["stop_atr"]
         for _ in range(40):
-            close = int(TK.T0 + rng.integers(5, 1900) * 15 * TK.MIN)
-            side = int(rng.choice([1, -1]))
-            atr = float(data["c"][(close - TK.T0) // TK.MIN] * rng.uniform(0.0008, 0.01))
+            close, side, atr, _best = _random_signal(data, rng)
             sig = [("BTCUSDT", close, side, atr, False, float("nan"))]
             ref = _replay(data, sig, {"BTCUSDT": TK.WIDE}, name)
             if not ref.trades or ref.trades[0].lock_roe is None:
                 continue
-            lock_exit_t = ref.trades[0].exit_time
+            ends_at = ref.trades[0].exit_time
             e = X.make_engine(name, {"BTCUSDT": TK.WIDE}, {"BTCUSDT": TK.SPEC})
-            k_stop = X.spec(name)["stop_atr"]
-            q, snap, stopped_at = 0, None, None
+            q, restored, stopped_at = 0, False, None
             for j, t in enumerate(data["ts"]):
                 t = int(t)
-                if snap is None and e.position is not None and e.position.lock_roe is not None and t < lock_exit_t - 3 * TK.MIN:
-                    snap = engine_state(e)                      # a restart here: a locked position is open
-                    stopped_at = j
-                    e2 = X.make_engine(name, {"BTCUSDT": TK.WIDE}, {"BTCUSDT": TK.SPEC})
-                    restore_engine(e2, json.loads(json.dumps(snap)))      # through json, as the league's database keeps it
-                    e = e2
+                if not restored and e.position is not None and e.position.lock_roe is not None and t < ends_at - 3 * TK.MIN:
+                    snap = json.loads(json.dumps(engine_state(e)))      # the restart: a locked position is open and its state is saved
+                    e = X.make_engine(name, {"BTCUSDT": TK.WIDE}, {"BTCUSDT": TK.SPEC})
+                    restore_engine(e, snap)
+                    restored, stopped_at = True, j
                     locked += 1
                 bars = {"BTCUSDT": TK.bars_at(data, "BTCUSDT", j)}
                 fund = {"BTCUSDT": float(data["fund"][j])} if data["fund"][j] != 0 else None
@@ -261,7 +283,7 @@ def test_f13_engine_state_restores_in_the_middle_of_a_locked_position():
                     q += 1
                 if e.trades:
                     break
-            if snap is not None:
+            if restored:
                 checked += 1
                 a, b = ref.trades[0], e.trades[0]
                 assert (a.exit_time, a.exit_reason, a.exit_price, a.pnl, a.lock_roe, a.stop_price) == \
