@@ -1,7 +1,7 @@
 {
  "section": "TW",
  "stage": "twins check",
- "commit": "4f25cc1c65524a6386092a455370729fccc7a214",
+ "commit": "7d9063fe18d9d9f03e2a071e1bb2faa36beb9748",
  "TW-C3": {
   "pass": true,
   "accounts": 3230,
@@ -42,8 +42,8 @@
   "research/exitflex/extra/test_common.py": "c89fefea24e3e80aac69369355770ec9f33e71194dbcb133030aa7ae9103270f",
   "research/exitflex/extra/test_reads_a.py": "dc3f3e32b54ab408413c9c804b6b0019e84cd18a73281a5ff67ab93121c33a91",
   "research/exitflex/extra/test_reads_b.py": "656e60f619988820b10f745384cbfd544768aa235a4eff23b34bbf8a79970c8e",
-  "research/exitflex/extra/test_twins.py": "05941ada6ac6fe233eb270ab94c6537342853510f8f0f88275c2062ca805b2ad",
-  "research/exitflex/extra/twins.py": "85e42f36379679cdc8081fb7266c2187e1647630502c9cab5fcbcb212b7a8753",
+  "research/exitflex/extra/test_twins.py": "f716c79e4eaef01f2be5d4508a14cae61eb73e5584320196c75db4714df5adde",
+  "research/exitflex/extra/twins.py": "7e8008168af60d2934c01191ca92a67947ad8506906a031e437ba01c339bca4f",
   "candleague/league.py": "841850c9486472e7a56c4167e073dcc7069b23c5c2e1e866d82fab3ea807ab58",
   "candleague/candidates.py": "6b924adac1cc2cc1d97304b2f723c816c7d7f57743994a7bcfe79be2a0ad4beb",
   "candleague/exits.py": "1e3c71302e90b1ecd1d26fe811d030ab39a11acfd53d0fd4669b2646db37563d",
@@ -85,7 +85,6 @@
   "research/fullgrid/grid.py": "522cfb2ed620fe4758f7ef8280151152eeee23844aff7fc03dc2bf906f304a88",
   "research/fullgrid/memo.py": "30b5a25d09d065085f7353892c99c72c92790a19d2550d99fed7c30242dbf38a",
   "research/exitflex/test_native.py": "d8f722ae29e9fce6c918f44349c9c5df3811bddfa92f16050ad8258bbf1fce96",
-  "research/exitflex/out/timing.json": "3651db07b5f428aa8f2bf78bcf77d5a58c81182ed57f7c4b43294797bcacb98f",
-  "research/exitflex/extra/out/twins_check.json": "1992d7d260a34cae23a0b5d3be6b7d92c47f1d7aa6d40fa9c5584bc52dfba376"
+  "research/exitflex/out/timing.json": "3651db07b5f428aa8f2bf78bcf77d5a58c81182ed57f7c4b43294797bcacb98f"
  }
 }
