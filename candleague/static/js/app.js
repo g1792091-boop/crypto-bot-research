@@ -185,7 +185,7 @@ function pillPanel() {
       h("div", null, h("dt", null, "엔진이 계산한 시각"), h("dd", null, doc ? `${fmt.kst(doc.done_ms)} KST (${leagueDay(doc)}일째까지)` : "—")),
       h("div", null, h("dt", null, "기록 쓴 시각"), h("dd", null, doc ? `${fmt.kst(doc.generated_ms)} KST (${fmt.ago(doc.generated_ms, now)})` : "—"))),
     doc && catchingUp(doc) ? h("p", {class: "kp-banner warn"}, h("b", null, "엔진이 따라잡는 중"),
-      ` ${fromKo(doc)} 지금 ${fmt.kst(doc.done_ms)}까지 계산 · 다 따라잡으면 5분마다 이어서 계산합니다`) : null,
+      h("span", null, `${fromKo(doc)} ${fmt.kst(doc.done_ms)}까지 계산 · 다 따라잡으면 5분마다 이어서 계산합니다`)) : null,
     h("p", {class: "note"}, "점검 날짜와 기준은 시작 전에 고정했습니다 (WATCH_PREREG). 엔진은 5분마다 이어서 계산합니다 (새 진입·청산은 몇 분 늦게 보임)."),
     h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: "#/check"}, "점검 진행"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법"),
       h("a", {class: "btn-line", href: "#/status"}, "서버 상태")));
@@ -222,9 +222,14 @@ function paintStamp() {
 
 // ---------------------------------------------------------------- the shared snapshot
 const fns = new Set();
+let codeSeen = null;            // the installed commit this page was loaded with (dash.py /api/league ``code``)
 async function pollLeague() {
   try {
     const d = await getJSON("/api/league");
+    if (d && d.code) {                       // an update was installed while this page was open: load the new screens
+      if (codeSeen && d.code !== codeSeen) { location.reload(); return; }
+      codeSeen = d.code;
+    }
     if (!doc || !d.accounts || d.generated_ms !== doc.generated_ms || d.done_ms !== doc.done_ms) {
       doc = d;
       setLeague(d);

@@ -43,6 +43,9 @@ export async function mount(el, ctx) {
 
   // 자리 비운 사이 state and the 최근 체결 rows (declared before the first snapshot callback runs)
   const prev = local.get("home-seen", null);
+  /** The previous visit saw this same record (same start): a record that started over (10/12: from the install time)
+   *  is never compared with the one before it. */
+  const samePrev = (d) => !!(prev && prev.t && d && prev.start === d.start_ms);
   let awayDone = false, awayTrades = null;
   let fillRows = null, fillsKey = "";
   ctx.onLeague((d) => {
@@ -63,12 +66,13 @@ export async function mount(el, ctx) {
   // 자리 비운 사이: what changed since this viewer's previous visit (this device only; nothing is sent anywhere)
   function paintAway(d) {
     const ix = LK.index(d);
-    const now = {t: d.done_ms, judge: Object.fromEntries(ix.cands.map((c) => {
+    const now = {t: d.done_ms, start: d.start_ms, judge: Object.fromEntries(ix.cands.map((c) => {
       const j = ix.judge[c.id] || {};
       return [c.id, [j.verdict || "early", !!(j.band && j.band.below)]];
     })), bust: d.accounts.filter((a) => a.bust).map((a) => a.id)};
-    if (!awayDone) { local.set("home-seen", now); awayDone = true; }
-    if (!prev || !prev.t || prev.t >= d.done_ms) { put(away, null); return; }
+    // saved once per visit, never while the engine catches up (that visit's numbers are not the record's yet)
+    if (!awayDone && !LK.catchingUp(d)) { local.set("home-seen", now); awayDone = true; }
+    if (!samePrev(d) || prev.t >= d.done_ms) { put(away, null); return; }
     const changes = [];
     for (const c of ix.cands) {
       const was = (prev.judge || {})[c.id], is = now.judge[c.id];
@@ -86,7 +90,7 @@ export async function mount(el, ctx) {
       changes.length ? h("ul", {class: "cl-notes"}, changes) : null));
   }
   async function loadAwayTrades() {
-    if (!prev || !prev.t) return;
+    if (!prev || !prev.t || (LK.league() && LK.league().start_ms && !samePrev(LK.league()))) return;
     let f;
     try { f = await ctx.api("/api/fills"); } catch (e) { return; }
     const all = f.fills || [];
@@ -130,7 +134,7 @@ export async function mount(el, ctx) {
     const cps = w.checkpoints || [];
     const nextI = cps.findIndex((c) => c.days_left > 0);
     const first = LK.replayedBefore(d) ? [{ko: "다시 돌리기 시작", ms: d.start_ms, done: true}, {ko: "설치", ms: d.started_ms, done: true}]
-      : [{ko: `시작 ${fmt.hm(d.start_ms)} (설치)`, ms: d.start_ms, done: true}];
+      : [{ko: `${fmt.hm(d.start_ms)} 시작 (설치)`, ms: d.start_ms, done: true}];
     const steps = [...first, ...cps.map((c, i) => ({ko: c.ko, ms: c.ms, done: c.days_left <= 0, now: i === nextI}))];
     const min = w.min_trades || 300;
     const prog = (kind) => {

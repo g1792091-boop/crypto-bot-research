@@ -69,10 +69,13 @@ export const dayLine = (d, now = Date.now()) => (d && d.start_ms ? `D+${dPlus(d,
 export const REPLAY_GAP_MS = 5 * 60000;
 export const replayedBefore = (d) => !!(d && Number(d.start_ms) > 0 && Number(d.started_ms) > 0 && d.started_ms - d.start_ms >= REPLAY_GAP_MS);
 
-/** The engine is catching up: its processed time was more than 30 minutes behind the clock when it wrote the record
- *  (right after the install or a start-over, or after an outage). dash.py catching_up is the same rule. */
+/** The engine is catching up: the snapshot's own ``catching`` (the engine writes it true only right after a start-over
+ *  or a computed chunk while its processed time is more than 30 minutes behind, so a crash loop or a stuck engine never
+ *  reads as catching up: it shows by its age and its lag, red); a snapshot without the field (written before 10/12) by
+ *  the lag alone. dash.py catching_up is the same rule. */
 export const CATCHING_MS = 30 * 60000;
-export const catchingUp = (d) => !!(d && d.generated_ms != null && d.done_ms != null && d.generated_ms - d.done_ms > CATCHING_MS);
+export const catchingUp = (d) => (!d ? false : typeof d.catching === "boolean" ? d.catching
+  : !!(d.generated_ms != null && d.done_ms != null && d.generated_ms - d.done_ms > CATCHING_MS));
 
 /** Seconds since the engine wrote its record after which the record counts as late (warn) and stopped (bad): the same
  *  numbers as js/poskit.js SNAP_WARN_S / SNAP_OLD_S and the server's ``old`` flag (dash.py /api/positions), so the

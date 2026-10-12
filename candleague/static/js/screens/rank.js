@@ -59,7 +59,14 @@ export async function mount(el, ctx) {
   const fromQ = groupFromQuery(q);
   const st = {g: fromQ ? fromQ.g : okGroup(local.get("rank-group", "core")) || "core", sub: fromQ ? fromQ.sub : okSub(local.get("rank-sub", "all")),
     view: local.get("rank-view", "card") === "table" ? "table" : "card", d: null, ix: null, allowed: false, sparks: new Map(), sparkAt: null,
-    sparkNew: false, prevRet: null, moved: new Map(), memo: rankMemo("rank-memo")};
+    sparkNew: false, prevRet: null, moved: new Map(), memo: null};
+  /** ▲▼ since the last visit, per record: the key carries the league's start, so a record that started over (10/12:
+   *  from the install time) is never compared with the balances of the one before it. */
+  const memoOf = (d) => {
+    const key = `rank-memo|${(d && d.start_ms) || 0}`;
+    if (!st.memo || st.memo.key !== key) st.memo = {...rankMemo(key), key};
+    return st.memo;
+  };
   const pills = new Set();
   const save = () => { local.set("rank-group", st.g); local.set("rank-sub", st.sub); ctx.setQuery(st.g === "core" ? {} : st.g === "cmp" && st.sub !== "all" ? {g: st.g, sub: st.sub} : {g: st.g}); };
 
@@ -179,7 +186,7 @@ export async function mount(el, ctx) {
     st.ix = LK.index(d);
     st.rows = groupRows(d, st.g, st.sub);
     st.rk = ranking(d, st.rows);
-    st.deltas = rankDeltas(st.memo.base, st.rk.shown, d);
+    st.deltas = rankDeltas(memoOf(d).base, st.rk.shown, d);
     paintBanner(true);
     cards.update(d, st.ix, st.g);
     allBtn.setAttribute("aria-pressed", String(st.g === "all"));
@@ -190,7 +197,7 @@ export async function mount(el, ctx) {
     tiles.update(d, st.rows, label);
     const hidRow = (a) => row(a, null);
     tb.set({label, rk: st.rk, row: (a, rk) => row(a, rk), hidRow});
-    put(moNote, motionNote(st.memo.base, st.rk.shown, {sparks: st.sparks.size > 0}));
+    put(moNote, motionNote(memoOf(d).base, st.rk.shown, {sparks: st.sparks.size > 0}));
     paintView();
     paintList(!userSwitch);
     put(listNote, h("p", {class: "refnote"}, h("b", null, "참고"),
@@ -247,7 +254,7 @@ export async function mount(el, ctx) {
     st.d = d;
     render(false);
     st.moved = new Map();
-    st.memo.save(Object.fromEntries(ranking(d, d.accounts).shown.map((a) => [a.id, walletRet(a, d)])));
+    if (!LK.catchingUp(d)) memoOf(d).save(Object.fromEntries(ranking(d, d.accounts).shown.map((a) => [a.id, walletRet(a, d)])));
     loadSparks(d);
   });
   ctx.onLive(() => { if (st.d) { paintBanner(); tickPills(); } });

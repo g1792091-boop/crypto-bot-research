@@ -14,13 +14,18 @@ Results are the same whether a day is processed at once or in 5-minute pieces (t
 
 The start (owners 2026-10-12: "커스텀값 봇 돌린 시점부터 ... 규칙봇 형식처럼"): every account starts with $5,000 at the
 league's start ``meta.start_ms`` and every trade, balance and day count is from then on. The start is recorded once and
-kept: a fresh database starts at its first run (floored to the 5-minute grid; CANDLEAGUE_START rebuilds a lost
-database from a known start), and a league that starts over (another candidate list, a new VERSION) starts again from
-the SAME recorded start, never from a later 'now'. VERSION 1 (until 2026-10-12) replayed from 2026-10-01 and recorded
-only its install time (``meta.started_ms``); its first run under VERSION 2 starts over from that install time.
+kept (league_start): in the database, and in a small file next to it (<stem>_start.json, start_file) that VERSION 1
+code, a lost database or a start-over never touch. A fresh database starts at its first run (floored to the 5-minute
+grid; CANDLEAGUE_START, with its time zone, rebuilds a lost database AND file from a known start), and a league that
+starts over (another candidate list, a new VERSION) starts again from the SAME recorded start, never from a later
+'now'. VERSION 1 (until 2026-10-12) replayed from 2026-10-01 and recorded only its install time
+(``meta.started_ms``); its first run under VERSION 2 starts over from that install time.
 Before a start-over deletes anything, the whole old database is copied next to it (``backup_db``: e.g.
 league_replay_from_1001_20261012.db; the install script makes the same copy before the code swap and the engine does
 not copy twice). The copies are never shown on the dashboard.
+Catching up (the snapshot's ``catching``) is said only by a snapshot written right after the league started over or
+after a committed chunk, while the processed time is more than 30 minutes behind: a restart that makes no progress (a
+crash loop, Binance down) writes nothing, so the dashboard shows the engine as stopped, not as catching up.
 """
 
 from __future__ import annotations
@@ -52,6 +57,8 @@ VERSION = 2
 CARRY_KEYS = ("summary_day",)     # kv kept through a start-over (no second 09:00 summary on the day of an update)
 EQUITY = 5000.0
 MIN_TRADES = 30
+CATCHING_MS = 30 * 60_000        # the snapshot's ``catching``: processed time this far behind the clock (dash.py, lk.js)
+PROGRESS_MS = 15 * 60_000        # ... and a chunk committed (or the league started over) at most this long before
 
 
 def open_db(path: str) -> sqlite3.Connection:
@@ -82,21 +89,70 @@ def fingerprint(accts: list[dict]) -> str:
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
-def league_start(meta: dict, fresh_ms: int, now_ms: int) -> tuple[int, int]:
-    """(start_ms, started_ms) of a league that starts (over) now from the database's old ``meta``.
+def league_start(meta: dict, now_ms: int, saved: Optional[dict] = None,
+                 explicit: Optional[int] = None) -> tuple[int, int]:
+    """(start_ms, started_ms) of a league that starts (over) now, from the database's old ``meta``, the start file next
+    to it (``saved``: {start_ms, started_ms}) and an explicit start (CANDLEAGUE_START / --start), in this order:
 
-    The start is the recorded meta.start_ms when there is one (a later VERSION or candidate list keeps it); a VERSION 1
-    record (replayed from 2026-10-01, no start recorded) starts at its install time meta.started_ms; a fresh database
-    at ``fresh_ms``. Floored to the engine's 5-minute grid (``done`` is always a 5-minute boundary). started_ms, the
-    time the league was first installed, is kept as it is (``now_ms`` for a fresh database)."""
-    started = int(meta.get("started_ms") or now_ms)
+    1. the database's recorded start (meta.start_ms; a later VERSION or candidate list keeps it) and its install time;
+    2. the start file (written with every start: it survives a database that VERSION 1 code started over without
+       recording a start, e.g. after moving back to app.old, and a lost database);
+    3. an explicit start (a lost database and file rebuilt from a known start): it is the install time too, so the
+       dashboard shows no replay before an install;
+    4. a VERSION 1 record (replayed from 2026-10-01, no start recorded): its install time meta.started_ms;
+    5. a fresh database: now.
+
+    The start is floored to the engine's 5-minute grid (``done`` is always a 5-minute boundary); started_ms, the time
+    the league was first installed, is kept as it is."""
     if meta.get("start_ms") is not None:
         start = int(meta["start_ms"])
+        started = int(meta.get("started_ms") or (saved or {}).get("started_ms") or start)
+    elif saved:
+        start, started = int(saved["start_ms"]), int(saved["started_ms"])
+    elif explicit is not None:
+        start = started = int(explicit)
     elif meta.get("started_ms"):
-        start = started
+        start = started = int(meta["started_ms"])
     else:
-        start = int(fresh_ms)
+        start = started = int(now_ms)
     return start // FIVE * FIVE, started
+
+
+def start_file(db_path: str) -> str:
+    """<stem>_start.json next to the database (league_start.json for league.db): the league's start and install time."""
+    folder = os.path.dirname(os.path.abspath(db_path))
+    return os.path.join(folder, f"{os.path.splitext(os.path.basename(db_path))[0]}_start.json")
+
+
+def read_start_file(db_path: Optional[str]) -> Optional[dict]:
+    """{start_ms, started_ms} from start_file(db_path); None when there is none or it cannot be read."""
+    if not db_path:
+        return None
+    try:
+        with open(start_file(db_path)) as fh:
+            d = json.load(fh)
+        return {"start_ms": int(d["start_ms"]), "started_ms": int(d["started_ms"])}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def write_start_file(db_path: str, start_ms: int, started_ms: int, log: Callable[[str], None] = print) -> None:
+    """Write start_file(db_path) atomically; a failure is logged (the database still records the start)."""
+    path = start_file(db_path)
+    tmp = f"{path}.{os.getpid()}.part"
+    try:
+        with open(tmp, "w") as fh:
+            json.dump({"start_ms": int(start_ms), "started_ms": int(started_ms),
+                       "start_utc": _utc(int(start_ms), "%Y-%m-%dT%H:%MZ"),
+                       "note": "후보 리그의 시작 시각 (지우지 마세요: 엔진이 다시 계산할 때 이 시각부터 시작합니다)"}, fh,
+                      ensure_ascii=False)
+        os.replace(tmp, path)
+    except OSError as exc:
+        log(f"[후보 리그] 시작 시각 파일을 쓰지 못했습니다 ({type(exc).__name__}): {path}")
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _utc(ms: int, fmt: str) -> str:
@@ -158,22 +214,30 @@ def backup_db(conn, db_path: str, meta: dict, now_ms: int) -> str:
 class League:
     """The league's accounts and their engines over the database ``conn``.
 
-    ``start_ms`` is only the start of a league with nothing recorded yet (a fresh database; default: now floored to
-    5 minutes). ``db_path`` (the file of ``conn``) is where a start-over keeps its copy of the old record; without it
-    (tests on a database of their own) nothing is copied."""
+    ``start_ms`` is an explicit start (CANDLEAGUE_START), used only when neither the database nor its start file
+    records one (league_start). ``db_path`` (the file of ``conn``) is where a start-over keeps its copy of the old
+    record and where the start file lives; without it (tests on a database of their own) nothing is copied or written
+    next to it. ``reset`` is True when this construction started the league (over); ``advanced_ms`` is the wall time
+    of the last start-over or committed chunk of this process (None before either: the snapshot then never says
+    'catching up')."""
 
     def __init__(self, conn, accts: list[dict], brackets: dict, specs: dict, lib, source,
                  fetch_steps: Callable, symbols, start_ms: Optional[int] = None, log: Callable[[str], None] = print,
-                 db_path: Optional[str] = None, now_ms: Optional[int] = None):
+                 db_path: Optional[str] = None, now_ms: Optional[int] = None,
+                 clock: Optional[Callable[[], int]] = None):
         self.conn, self.accts, self.brackets, self.specs = conn, accts, brackets, specs
         self.lib, self.source, self.fetch_steps, self.symbols = lib, source, fetch_steps, list(symbols)
         self.log = log
+        self.clock = clock or (lambda: int(time.time() * 1000))
         self.strategies = L.Strategies()
-        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        now = self.clock() if now_ms is None else int(now_ms)
         meta = _get(conn, "meta") or {}
+        saved = read_start_file(db_path)
         fp = fingerprint(accts)
-        if meta.get("fingerprint") != fp or meta.get("start_ms") is None:
-            start, started = league_start(meta, now if start_ms is None else int(start_ms), now)
+        self.reset = meta.get("fingerprint") != fp or meta.get("start_ms") is None
+        self.advanced_ms: Optional[int] = None
+        if self.reset:
+            start, started = league_start(meta, now, saved, start_ms)
             backup = None
             if meta and db_path:
                 backup = backup_db(conn, db_path, meta, now)          # raises: nothing is deleted without a copy
@@ -191,13 +255,16 @@ class League:
                 if v is not None:
                     _put(conn, k, v)
             conn.commit()
+            self.advanced_ms = now
         self.meta = meta
         self.start_ms = int(meta["start_ms"])
+        if db_path and saved != {"start_ms": self.start_ms, "started_ms": int(meta.get("started_ms") or self.start_ms)}:
+            write_start_file(db_path, self.start_ms, int(meta.get("started_ms") or self.start_ms), log)
         self.engines = L.make_engines(accts, brackets, specs)
-        saved = _get(conn, "engines") or {}
+        saved_engines = _get(conn, "engines") or {}
         for aid, e in self.engines.items():
-            if aid in saved:
-                restore_engine(e, saved[aid])
+            if aid in saved_engines:
+                restore_engine(e, saved_engines[aid])
         self.active = {a for a, e in self.engines.items() if e.position is not None or e.pending}
 
     @property
@@ -225,6 +292,7 @@ class League:
             _put(self.conn, "engines", {aid: engine_state(e) for aid, e in self.engines.items()})
             _put(self.conn, "meta", self.meta)
             self.conn.commit()
+            self.advanced_ms = self.clock()
             n += 1
             if on_chunk is not None:
                 on_chunk()
@@ -381,6 +449,14 @@ def server_info(pass_s: Optional[float] = None) -> dict:
             "pass_s": None if pass_s is None else round(pass_s, 2)}
 
 
+def catching(league: "League", now_ms: int) -> bool:
+    """The snapshot's ``catching`` (dash.py catching_up, lk.js catchingUp): processed time more than CATCHING_MS behind
+    ``now_ms`` AND progress just made (a start-over or a committed chunk within PROGRESS_MS). A snapshot written
+    without progress says False, so a stuck engine shows by its lag ('처리가 늦음'), never as 'catching up'."""
+    adv = league.advanced_ms
+    return bool(adv is not None and now_ms - adv <= PROGRESS_MS and now_ms - league.done > CATCHING_MS)
+
+
 def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = False,
                     pass_s: Optional[float] = None) -> dict:
     book = closed_trades(league.conn, league.accts)
@@ -388,7 +464,7 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
     # the verdicts from the full rows (labels and counts only: a hidden DeepSeek pick still gets its pass / fail label)
     verdicts = judge(rows if ds_money else account_rows(league.conn, league.accts, league.engines, True, book))
     doc = {"generated_ms": now_ms, "done_ms": league.done, "lag_s": max(0, (now_ms - league.done) // 1000),
-           "start_ms": league.start_ms, "started_ms": league.meta.get("started_ms"), "accounts": rows,
+           "catching": catching(league, now_ms), "start_ms": league.start_ms, "started_ms": league.meta.get("started_ms"), "accounts": rows,
            "judge": verdicts, "notes": league.meta.get("notes", []), "ds_money": ds_money,
            "watch": SM.watch_summary(league.accts, book, now_ms, ds_money), "server": server_info(pass_s)}
     os.makedirs(snap, exist_ok=True)
@@ -398,17 +474,73 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
 
 
 def parse_start(text: Optional[str]) -> Optional[int]:
-    """CANDLEAGUE_START / --start: a UTC time "2026-10-11T03:00Z" (or "2026-10-11 03:00") or epoch ms; None when empty.
-    Only a fresh database uses it (to rebuild a lost league.db from its known start); a recorded start always wins."""
+    """CANDLEAGUE_START / --start: a time WITH its time zone ("2026-10-11T12:00+09:00", "2026-10-11T03:00Z") or epoch
+    ms; None when empty. A time without a zone is refused (12:00 read as UTC would start 9 hours late), and so is
+    anything else that is not a time: ValueError with the reason in Korean. Only a league with no recorded start uses
+    it (league_start)."""
     import datetime
     t = (text or "").strip()
     if not t:
         return None
     if t.isdigit():
         return int(t)
-    t = t.replace(" ", "T").rstrip("Zz")
-    d = datetime.datetime.fromisoformat(t)
-    return int(d.replace(tzinfo=d.tzinfo or datetime.timezone.utc).timestamp() * 1000)
+    iso = t.replace(" ", "T")
+    if iso[-1:] in ("Z", "z"):
+        iso = iso[:-1] + "+00:00"
+    try:
+        d = datetime.datetime.fromisoformat(iso)
+    except ValueError:
+        raise ValueError(f"CANDLEAGUE_START {t!r}: 시각으로 읽을 수 없습니다 (예: 2026-10-11T12:00+09:00)") from None
+    if d.tzinfo is None:
+        raise ValueError(f"CANDLEAGUE_START {t!r}: 시간대를 붙여 주세요 (한국 시각이면 2026-10-11T12:00+09:00)")
+    return int(d.timestamp() * 1000)
+
+
+def recorded_start(conn, db_path: Optional[str]) -> bool:
+    """The league already records its start (in the database or in its start file): CANDLEAGUE_START is not used."""
+    try:
+        meta = _get(conn, "meta") or {}
+    except sqlite3.Error:
+        meta = {}
+    return meta.get("start_ms") is not None or read_start_file(db_path) is not None
+
+
+def explicit_start(text: Optional[str], conn, db_path: Optional[str], log: Callable[[str], None] = print) -> Optional[int]:
+    """The CANDLEAGUE_START a league would use: None when it is empty or a start is already recorded (then it is not
+    even read, so a stray value never stops the engine); else parse_start (a bad value raises: a wrong start would be
+    recorded for good)."""
+    if not (text or "").strip():
+        return None
+    if recorded_start(conn, db_path):
+        log("[후보 리그] CANDLEAGUE_START는 쓰지 않습니다 (시작 시각이 이미 기록되어 있음)")
+        return None
+    return parse_start(text)
+
+
+def plan_start(db: str, accts: list[dict], explicit: Optional[int] = None,
+               now_ms: Optional[int] = None) -> Optional[tuple[bool, int, int]]:
+    """(starts over, start_ms, started_ms) the code would use on its next construction over the database ``db``;
+    None when there is no database."""
+    if not os.path.exists(db):
+        return None
+    conn = sqlite3.connect(db, timeout=30)
+    try:
+        try:
+            meta = _get(conn, "meta") or {}
+        except sqlite3.Error:
+            meta = {}
+    finally:
+        conn.close()
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    reset = meta.get("fingerprint") != fingerprint(accts) or meta.get("start_ms") is None
+    if not reset:
+        return False, int(meta["start_ms"]), int(meta.get("started_ms") or meta["start_ms"])
+    start, started = league_start(meta, now, read_start_file(db), explicit)
+    return True, start, started
+
+
+def _kst(ms: int) -> str:
+    return _utc(ms + 9 * 3_600_000, "%m/%d %H:%M")
 
 
 def backup_if_reset(db: str, accts: list[dict], now_ms: Optional[int] = None) -> Optional[str]:
@@ -438,7 +570,8 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--snap", default=os.environ.get("CANDLEAGUE_SNAP", "/var/lib/candleague/snap"))
     ap.add_argument("--candidates", default=os.environ.get("CANDLEAGUE_CANDIDATES", C.DEFAULT_FILE))
     ap.add_argument("--start", default=os.environ.get("CANDLEAGUE_START", ""),
-                    help="UTC start of a FRESH database only (rebuild a lost league.db), e.g. 2026-10-11T03:00Z")
+                    help="start of a league with no recorded start only (rebuild a lost league.db and its start file), "
+                         "with its time zone, e.g. 2026-10-11T12:00+09:00")
     ap.add_argument("--every", type=int, default=300, help="seconds between passes (run)")
     a = ap.parse_args(argv)
     if a.cmd == "status":
@@ -450,11 +583,28 @@ def main(argv: Optional[list] = None) -> int:
               f"lag {d['lag_s']}s, accounts {len(d['accounts'])}")
         return 0
     if a.cmd == "backup":
+        accts = C.accounts(C.load(a.candidates))
+        explicit = None
+        if os.path.exists(a.db):
+            c = sqlite3.connect(a.db, timeout=30)
+            try:
+                explicit = explicit_start(a.start, c, a.db, log=lambda s: print(s, flush=True))
+            except ValueError as exc:
+                print(f"[후보 리그] {exc}", flush=True)
+                return 1
+            finally:
+                c.close()
         had = set(glob.glob(os.path.join(os.path.dirname(os.path.abspath(a.db)), "*.db")))
-        path = backup_if_reset(a.db, C.accounts(C.load(a.candidates)))
+        path = backup_if_reset(a.db, accts)
         print("[후보 리그] 기록 복사 필요 없음 (이어서 계산)" if not path else
               f"[후보 리그] 새로 시작하기 전 기록을 이미 복사해 두었습니다: {path}" if path in had else
               f"[후보 리그] 새로 시작하기 전 기록 복사: {path}", flush=True)
+        plan = plan_start(a.db, accts, explicit)
+        if plan:
+            reset, st, started = plan
+            print(f"[후보 리그] {'새 시작' if reset else '시작 그대로'}: {_kst(st)} KST"
+                  f" (설치한 때 {_kst(started)} KST)" + (" · 모든 계좌 $5,000으로 이 시각부터 다시 계산" if reset else ""),
+                  flush=True)
         return 0
     from paperbot import sweepsig
     from paperbot.binance import BinanceREST
@@ -470,19 +620,24 @@ def main(argv: Optional[list] = None) -> int:
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
     # owners 2026-10-11: DeepSeek money shown like core; 0 / off / false / no hides it again
     ds_money = os.environ.get("CANDLEAGUE_DS_MONEY", "1").strip().lower() not in ("0", "off", "false", "no")
-    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS, start_ms=parse_start(a.start),
+    try:
+        explicit = explicit_start(a.start, conn, a.db, log=lambda s: print(s, flush=True))
+    except ValueError as exc:            # only for a league with no recorded start: refuse rather than record a wrong one
+        raise SystemExit(f"[후보 리그] {exc}") from None
+    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS, start_ms=explicit,
                 db_path=a.db)
     from .notify import Notifier
     notifier = Notifier(conn)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, start {_utc(lg.start_ms, '%Y-%m-%d %H:%M')} UTC, "
           f"done {_utc(lg.done, '%Y-%m-%d %H:%M')} UTC", flush=True)
-    write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money)   # at once: a start-over replaces the old screens now
+    if lg.reset:          # a start-over replaces the old screens at once; a plain restart writes only after progress
+        write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money)
     while True:
         now = int(time.time() * 1000)
         t0 = time.monotonic()
-        catching = final_end(now) - lg.done > 3 * FIVE      # a catch-up writes after each day; a live pass once, below
+        catching_up = final_end(now) - lg.done > 3 * FIVE    # a catch-up writes after each day; a live pass once, below
         n = lg.advance(final_end(now), on_chunk=(lambda: write_snapshots(a.snap, lg, int(time.time() * 1000), ds_money))
-                       if catching else None)
+                       if catching_up else None)
         now = int(time.time() * 1000)                        # after the pass: the snapshot's time, the caught-up test
         doc = write_snapshots(a.snap, lg, now, ds_money, pass_s=time.monotonic() - t0)
         notifier.after_pass(doc, now, caught_up=final_end(now) - lg.done < 3 * FIVE)

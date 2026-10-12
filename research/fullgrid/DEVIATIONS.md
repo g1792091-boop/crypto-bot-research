@@ -95,3 +95,15 @@
   What it costs: about 10 fewer days of forward record at C1 (about 31 days from the start instead of about 41 from
   10/01), so fewer trades toward the 300-trade condition at C2. No pick, account, rule, threshold or seed changes. The
   start is recorded once and kept: a later code change that starts the league over starts again from the same start.
+- 2026-10-12 KST, later the same day, adding to and correcting the entry above (before the update reaches the server):
+  (a) The owners decided this while the dashboard showed the 2026-10-01 to 2026-10-11 replay record's results. Their
+  reason, in their words above, is how the record is shown (trades visible from when the bot was started, like the rule
+  bot), not those results; no pick, rule, threshold or date was chosen or changed on them. (b) The copy kept
+  (league_replay_from_1001_<UTC date>.db) holds the 10/01 replay AND the live record from the install (2026-10-11 about
+  03:00 UTC) to the update, about one day. The new record recomputes that install-to-update stretch on the update's
+  first run from the same final Binance 1m data a live run reads, with the same engine (results do not depend on how
+  the time is cut into pieces), so it is what a live run from the start would have given; like the replay it is
+  computed after the fact, but only over days after the start. (c) As a reference that decides nothing, the C1 and C2
+  reports will also show the two pools' numbers of the 10/01-10/11 replay from that copy next to the checkpoint's own,
+  so a reader can see whether leaving those days out changed the picture. (d) The start is also written next to the
+  database (league_start.json), so a lost database, or code from before this change run by mistake, cannot move it.

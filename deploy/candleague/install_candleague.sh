@@ -13,8 +13,11 @@
 # Never touches the rule bot or the demo lab: none of their units or folders.
 # When the new code starts the league over (another candidate list or calculation; 2026-10-12: the league now starts at
 # its install time instead of a replay from 10/01), the whole old league.db is copied next to it first, with the engine
-# stopped, before the code swap (e.g. /var/lib/candleague/league_replay_from_1001_20261012.db; the engine finds that copy
-# and does not copy again). Never shown on the dashboard.
+# stopped (also when it was crash-looping), before the code swap (e.g.
+# /var/lib/candleague/league_replay_from_1001_20261012.db; the engine finds that copy and does not copy again), and the
+# start it will use is printed ("새 시작: 10/11 12:00 KST"); if the copy fails, nothing is swapped. Never shown on the
+# dashboard. app.old (the previous copy) is NOT a way back past 2026-10-12: code from before that starts the league
+# over from 10/01 again without a copy (the start itself survives in league_start.json).
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -165,26 +168,41 @@ echo "== systemd units"
 for u in $UNITS; do install -m 644 "$HERE/$u" "/etc/systemd/system/$u"; done
 systemctl daemon-reload
 
+# what to bring back if this update stops before the swap: every unit that is running OR waiting to restart (a
+# crash-looping engine is "activating", not "active")
 RUNNING=""
 for u in $UNITS; do
-  if systemctl is-active --quiet "$u" 2>/dev/null; then RUNNING="$RUNNING $u"; fi
+  case "$(systemctl is-active "$u" 2>/dev/null || true)" in active|activating|reloading) RUNNING="$RUNNING $u" ;; esac
 done
+# stop the engine and the watch whatever their state: stopping also cancels a pending automatic restart, so the old
+# engine cannot start again (and write more) while its record is copied and the code is swapped
 # shellcheck disable=SC2086
-if [ -n "$RUNNING" ]; then systemctl stop $RUNNING; fi
+systemctl stop candleague-live.service candleague-watch.timer candleague-watch.service $RUNNING 2>/dev/null || true
+if systemctl is-active --quiet candleague-live.service 2>/dev/null; then
+  rm -rf "$APP.new"
+  # shellcheck disable=SC2086
+  [ -n "$RUNNING" ] && systemctl start $RUNNING 2>/dev/null || true
+  echo "엔진을 멈추지 못해 바꾸지 않았습니다. 이 화면을 개발자에게 보내 주세요: systemctl status candleague-live --no-pager"; exit 1
+fi
 
 echo "== league record (copied before a start-over; the engine is stopped)"
 LEAGUE_DB="$(envval CANDLEAGUE_DB)"; LEAGUE_DB="${LEAGUE_DB:-$LIB/league.db}"
 CAND_FILE="$(envval CANDLEAGUE_CANDIDATES)"
+START_VAL="$(envval CANDLEAGUE_START)"
 if [ -f "$LEAGUE_DB" ] && [ "$CANDS" = 1 ]; then
   set +e
   BK_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LIB" \
     PYTHONDONTWRITEBYTECODE=1 CANDLEAGUE_DB="$LEAGUE_DB" ${CAND_FILE:+CANDLEAGUE_CANDIDATES="$CAND_FILE"} \
-    "$VENV/bin/python" -m candleague backup 2>&1)"
+    ${START_VAL:+CANDLEAGUE_START="$START_VAL"} "$VENV/bin/python" -m candleague backup 2>&1)"
   BK_RC=$?
   set -e
-  printf '%s\n' "$BK_OUT" | tail -n 5
+  printf '%s\n' "$BK_OUT" | tail -n 8
   if [ "$BK_RC" -ne 0 ]; then
-    echo "기록 복사를 여기서 못 했습니다. 엔진이 지우기 전에 다시 복사하고, 복사를 못 하면 지우지 않습니다."
+    # like the selfcheck: nothing swapped, the old engine back as it was
+    rm -rf "$APP.new"
+    # shellcheck disable=SC2086
+    [ -n "$RUNNING" ] && systemctl start $RUNNING 2>/dev/null || true
+    echo "기록 복사 단계가 실패해 아무것도 바꾸지 않았습니다 (exit $BK_RC, 이유는 위 줄; 이전 코드가 그대로 돕니다). 이 화면을 개발자에게 보내 주세요."; exit 1
   fi
 else
   echo "기록 없음 또는 후보 목록 없음: 복사할 것 없음"

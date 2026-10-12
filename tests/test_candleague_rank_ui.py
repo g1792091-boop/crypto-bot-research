@@ -204,7 +204,8 @@ const all = C.ranking(d, d.accounts);
 res.csv = T.csvRows(d, ix, all.shown.concat(all.waiting, all.hid), all.rank);
 res.csvHead = T.CSV_HEAD;
 res.query = out.query;
-res.memo = store.get("cl-rank-memo") ? JSON.parse(store.get("cl-rank-memo")) : null;
+const memoKey = "cl-rank-memo|" + doc.start_ms;            // per record: a start-over is not compared with the one before
+res.memo = store.get(memoKey) ? JSON.parse(store.get(memoKey)) : null;
 res.groupFromQuery = [{g: "ds"}, {g: "cmp", sub: "base"}, {g: "nope"}, {role: "flip"}, {role: "quarter"}, {role: "cand", kind: "ds"}, {}].map((q) => R.groupFromQuery(q));
 const order = W.sortRows(d.accounts.filter((a) => C.inGroup(a, "all")), "ret", d, all.rank).map((a) => a.id);
 res.sorted = order;
@@ -453,7 +454,10 @@ def test_rank_arrows_since_the_last_visit_and_old_links(tmp_path):
     ?role= / ?kind= links pick the matching 묶음."""
     now = int(time.time() * 1000)
     prev = {"prev": {"ts": now - 3 * 3_600_000, "v": {"core-DOGE-15m-1": -0.5, "core-N03_ADX_GC-1h-2": 0.5}}}
+    key = f"cl-rank-memo|{_league(now)['start_ms']}"                       # the memory belongs to this record (its start)
     o = _run(tmp_path, _routes(_league(now), now), local={"cl-rank-memo": json.dumps(prev)})
+    assert all("▲" not in r["rk"] and "▼" not in r["rk"] for r in o["first"]["rows"])   # a visit to an older record: no arrows
+    o = _run(tmp_path, _routes(_league(now), now), local={key: json.dumps(prev)})
     f = o["first"]
     top = {r["id"]: r for r in f["rows"] if r["top"]}
     assert top["core-DOGE-15m-1"]["rk"] == "1▲1" and top["core-N03_ADX_GC-1h-2"]["rk"] == "2▼1"

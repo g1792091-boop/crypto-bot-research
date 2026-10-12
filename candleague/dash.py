@@ -297,9 +297,13 @@ CATCHING_MS = 30 * 60_000
 
 
 def catching_up(doc: dict) -> bool:
-    """lk.js catchingUp: the engine is catching up (its processed time was more than 30 minutes behind the clock when it
-    wrote the snapshot: right after an install or a start-over, or after an outage). Not the install time: a league
-    that starts at its install has no replay before it (owners 2026-10-12)."""
+    """lk.js catchingUp: the engine is catching up. The snapshot's own ``catching`` (runner.catching: processed time
+    more than 30 minutes behind AND progress just made, so a crash loop or a stuck engine never reads as catching up);
+    a snapshot without it (written before 2026-10-12) by the lag alone. Never the install time: a league that starts at
+    its install has no replay before it (owners 2026-10-12)."""
+    c = doc.get("catching")
+    if isinstance(c, bool):
+        return c
     gen, done = doc.get("generated_ms"), doc.get("done_ms")
     return bool(gen is not None and done is not None and gen - done > CATCHING_MS)
 
@@ -354,7 +358,7 @@ def positions_doc(doc: Optional[dict], ex: Optional[dict], strict: bool = DS_MON
     return {"ds_money": bool(doc.get("ds_money")) and not strict, "exact": bool(out) and exact_all,
             "brackets": ex["source"] if ex else None, "generated_ms": doc.get("generated_ms"),
             "done_ms": doc.get("done_ms"), "start_ms": doc.get("start_ms"), "started_ms": doc.get("started_ms"),
-            "positions": out, "counts": counts}
+            "catching": doc.get("catching"), "positions": out, "counts": counts}
 
 
 SPARK_N = 30
@@ -506,6 +510,16 @@ def host_ok(header: str, hosts) -> bool:
     import socket
     me = socket.gethostname().lower().split(".")[0]
     return bool(me) and (h == me or (h.startswith(me + ".") and h.endswith(".ts.net")))
+
+
+def code_version() -> Optional[str]:
+    """The installed code's commit from VERSION.json next to the code (install_candleague.sh writes it into
+    /opt/candleague/app); None in a checkout without it."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION.json")) as fh:
+            return str(json.load(fh).get("commit") or "") or None
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: bool = False, hosts=None,
@@ -692,11 +706,16 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
             return JSONResponse({"error": "coin / tf / limit"}, status_code=400)
         return JSONResponse(finite_json(live.klines(q["coin"], q["tf"], q["limit"], q["end"])))
 
+    code = code_version()
+
     @app.get("/api/league")
     def league(req: Request):
+        """The snapshot as served, plus ``code`` (the installed commit) when the install script wrote VERSION.json: an
+        open page reloads itself when it changes, so an update never leaves a tab on the old screens."""
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
-        return JSONResponse(read_league() or {"status": "준비 중"})
+        doc = read_league() or {"status": "준비 중"}
+        return JSONResponse({**doc, "code": code} if code else doc)
 
     @app.get("/api/positions")
     def positions(req: Request):

@@ -200,12 +200,12 @@ export function staleBanner(doc) {
   if (!doc || doc.status) return null;
   if (doc.catching_up) {
     return h("div", {class: "kp-banner warn", role: "status"}, h("b", null, "엔진이 따라잡는 중"),
-      h("span", null, ` · ${doc.start_ms ? `${fmt.kst(doc.start_ms)} 시작부터 ` : ""}지금 ${fmt.kst(doc.done_ms)} KST까지 계산함 · 아래 포지션은 그 시각의 것이라 실시간 손익·거리는 감춥니다 (따라잡으면 저절로 보임)`));
+      h("span", null, `${doc.start_ms ? `${fmt.kst(doc.start_ms)} 시작부터 ` : ""}${fmt.kst(doc.done_ms)} KST까지 계산함 · 아래 포지션은 그 시각의 것이라 실시간 손익·거리는 감춥니다 (따라잡으면 저절로 보임)`));
   }
   if (doc.old) {
     const age = snapAge(doc);
     return h("div", {class: "kp-banner bad", role: "status"}, h("b", null, `엔진 기록이 ${age == null ? "오래" : fmt.dur(age)} 전에 멈춤`),
-      h("span", null, " · 아래 포지션은 그때 기준이라 이미 닫혔을 수 있습니다 · 실시간 손익은 감춥니다 (서버 상태 화면에서 확인)"));
+      h("span", null, "아래 포지션은 그때 기준이라 이미 닫혔을 수 있습니다 · 실시간 손익은 감춥니다 (서버 상태 화면에서 확인)"));
   }
   return null;
 }

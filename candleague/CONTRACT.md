@@ -26,7 +26,9 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
   a structure exit carries `tp_struct = exits.structure_level(...)` of the signal bar. Leverage group: core from the
   strategy's strength definition as the live service (entry_marks), DeepSeek "normal" (as the study).
 * **Time**: from the league's install time (owners 2026-10-12, "규칙봇 형식처럼 봇 돌린 시점부터"; recorded once in the
-  database as meta.start_ms, floored to 5 minutes, and kept through every later start-over), caught up in day chunks
+  database as meta.start_ms, floored to 5 minutes, and in league_start.json next to it, and kept through every later
+  start-over, a lost database and older code run by mistake; CANDLEAGUE_START, with its time zone, only when neither
+  records one), caught up in day chunks
   when behind, then every 5 minutes (the last closed minute, after a settle wait like the rule bot's feed). Until
   2026-10-12 (VERSION 1) it replayed from 2026-10-01 00:00 UTC, the first day after the study's data; that record is
   kept only as a copy next to the database (league_replay_from_1001_<UTC date>.db).
@@ -53,7 +55,11 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
 | services | `candleague-live.service` (engine; CPUQuota 30%, MemoryMax 1.3 GB), `candleague-dash.service`, `candleague-watch.timer` (every 10 min: engine stopped or processed time still for 1 h -> Telegram, at most every 3 h, and a recovery message) |
 | setup | `install_candleague.sh` (code, venv, units; engine + watch only with a candidate list), `setup_env.sh` (Telegram copied on the server from the demo lab bot, dashboard address / secret / password; values never printed), `firewall.sh` (8091 on tailscale0 only) |
 
-Telegram: every message starts with `[후보 리그]`; a 09:00 KST summary and bust notices only.
+Telegram: every message starts with `[후보 리그]`; a 09:00 KST summary, bust and warning-light notices (once caught up),
+and after a start-over that recomputed a span from the start one `🔄 새로 시작` notice once caught up (counting that span's
+busts and warning lights instead of separate notices). The snapshot's `catching` is true only in a snapshot written
+right after a start-over or a computed chunk while the processed time is more than 30 minutes behind; a restart that
+makes no progress writes no snapshot, so the dashboard shows a stuck engine by its age and lag.
 
 ## 4. Rules both sides keep
 

@@ -2,7 +2,10 @@
 title line '<what> · 후보 리그' (or '<what> · <pick>'), a blank line, short lines, the KST time last; plain text; every
 message silent (owners 2026-10-05, "전부 다 무음으로"). Sent: a 09:00 KST summary once a day once the league is caught up
 (the two pools against their 기본값 and 동전, the next checkpoint, the picks doing best and worst, the counts), a notice
-when an account goes bust and one when a core pick falls below its forward band (WATCH_PREREG 3.1). Token and chat from
+when an account goes bust and one when a core pick falls below its forward band (WATCH_PREREG 3.1), both once the league
+is caught up (a catch-up finds them in past prices: they wait for it), and after a start-over that recomputed a span
+from the league's start (2026-10-12: from the install time) one '🔄 새로 시작' notice once it has caught up, with the new
+record's bust and warning counts in it instead of separate bust and warning notices for that span. Token and chat from
 the environment (CANDLEAGUE_TG_TOKEN, CANDLEAGUE_TG_CHAT: 1-4 chat ids, comma separated); without them nothing is sent.
 DeepSeek money follows the snapshot (CANDLEAGUE_DS_MONEY, shown by default since the owners' 2026-10-11 request)."""
 
@@ -130,6 +133,26 @@ def bust_text(rows: list[dict], now_ms: int) -> str:
     return "\n".join(lines)
 
 
+RESTART_SPAN_MS = 30 * 60_000      # a start-over that recomputed more than this from its start says so once
+
+
+def restart_text(doc: dict, meta: dict, now_ms: int) -> str:
+    """'🔄 새로 시작 · 후보 리그': the league started over from its start and has caught up (sent once, then live)."""
+    acc = doc["accounts"]
+    start = int(meta.get("start_ms") or doc.get("start_ms") or doc["done_ms"])
+    busts = sum(1 for r in acc if r["bust"])
+    warn = sum(1 for j in (doc.get("judge") or {}).values() if (j.get("band") or {}).get("below"))
+    trades = sum(int(r.get("trades") or 0) for r in acc)
+    lines = [f"🔄 새로 시작 · {NAME}", "",
+             f"{_kst(start)} KST 시작부터 모든 계좌 $5,000으로 다시 계산했습니다",
+             f"{_kst(doc['done_ms'])} KST까지 따라잡았고, 이제 5분마다 이어 갑니다",
+             f"새 기록: 닫힌 거래 {trades:,}번 · 파산 {busts} · 경고등 {warn}" + (" (대시보드에서 확인)" if busts or warn else "")]
+    if meta.get("backup"):
+        lines.append("이전 기록은 서버에 복사해 두었습니다 (대시보드에는 안 나옴)")
+    lines += [f"{NAME} · 종이 매매 (실제 돈 아님)", "", f"{_kst(now_ms)} KST"]
+    return "\n".join(lines)
+
+
 def band_text(r: dict, b: dict, now_ms: int) -> str:
     return "\n".join([f"⚠ {NAME} 경고등 · {pick_ko(r)}", "",
                       f"거래 {b['n']}번 기준 한 번 평균 {_pct(r['mean_ret'])}",
@@ -163,22 +186,34 @@ class Notifier:
         self.conn.commit()
 
     def after_pass(self, doc: dict, now_ms: int, caught_up: bool) -> list[str]:
-        """Messages for this pass (sent when a sender is set): new busts, and the day's summary from 09:00 KST once
-        the league is caught up. Returns the texts."""
+        """Messages for this pass (sent when a sender is set): once the league is caught up, new busts and warning
+        lights (or, the first time after a start-over that recomputed a span, one '새로 시작' notice that counts them),
+        and the day's summary from 09:00 KST. Returns the texts."""
         out = []
-        seen = set(self._get("busts_told") or [])
-        new = [r for r in doc["accounts"] if r["bust"] and r["id"] not in seen]
-        if new:
-            out.append(bust_text(new, now_ms))
-            self._put("busts_told", sorted(seen | {r["id"] for r in new}))
-        told = set(self._get("band_told") or [])
+        meta = self._get("meta") or {}
+        reset = meta.get("reset_ms")
+        restarted = reset is not None and self._get("start_told") != reset      # (re)started, not yet said
         acc = {r["id"]: r for r in doc["accounts"]}
-        low = [(cid, j["band"]) for cid, j in doc.get("judge", {}).items()
-               if j.get("band") and j["band"]["below"] and cid not in told and cid in acc]
-        for cid, b in low:
-            out.append(band_text(acc[cid], b, now_ms))
-        if low:
-            self._put("band_told", sorted(told | {cid for cid, _b in low}))
+        if caught_up and restarted:
+            if reset - int(meta.get("start_ms") or reset) > RESTART_SPAN_MS:
+                out.append(restart_text(doc, meta, now_ms))
+                self._put("busts_told", sorted(r["id"] for r in doc["accounts"] if r["bust"]))
+                self._put("band_told", sorted(cid for cid, j in (doc.get("judge") or {}).items()
+                                              if (j.get("band") or {}).get("below") and cid in acc))
+            self._put("start_told", reset)
+        elif caught_up:
+            seen = set(self._get("busts_told") or [])
+            new = [r for r in doc["accounts"] if r["bust"] and r["id"] not in seen]
+            if new:
+                out.append(bust_text(new, now_ms))
+                self._put("busts_told", sorted(seen | {r["id"] for r in new}))
+            told = set(self._get("band_told") or [])
+            low = [(cid, j["band"]) for cid, j in doc.get("judge", {}).items()
+                   if j.get("band") and j["band"]["below"] and cid not in told and cid in acc]
+            for cid, b in low:
+                out.append(band_text(acc[cid], b, now_ms))
+            if low:
+                self._put("band_told", sorted(told | {cid for cid, _b in low}))
         day = time.strftime("%Y-%m-%d", time.gmtime((now_ms + KST) / 1000))
         hour = time.gmtime((now_ms + KST) / 1000).tm_hour
         if caught_up and hour >= SUMMARY_HOUR_KST and self._get("summary_day") != day:

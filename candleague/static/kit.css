@@ -123,7 +123,8 @@ html.set-open { overflow: hidden; }
 .find-o.k-term .find-k { color: var(--accent); }
 
 /* ---------------------------------------------------------------- 설치 뒤 진입만 (js/after.js afterBar / afterTag) */
-/* the switch (ui.js .dl-tog look: ○ off, ● on) and its note "순위·잔고·점검은 10/01부터 전체 기록", under a screen's head */
+/* the switch (ui.js .dl-tog look: ○ off, ● on) and its note "순위·잔고·점검은 시작부터 전체 기록", under a screen's head
+   (only for an older record that replayed before its install: hidden since the league starts at its install, 10/12) */
 .kp-after { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; min-width: 0; }
 .kp-after[hidden] { display: none; }
 .kp-after .kp-after-tog { flex: none; max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; padding-block: 5px; }
