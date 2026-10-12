@@ -2513,7 +2513,7 @@ def test_select_report_tells_the_owners_about_the_hunt_read_before_they_choose(s
     for must in ("사냥 시험", "2026-10-12", "06:38 UTC", "샹들리에", "2024-01~2026-09", "4번", "12번", "01:48 UTC", "어떤 선택에도 쓰지 않았고"):
         assert must in line, must
     # the exit menu was in git before the results existed, except F13 (added about 07:51 UTC at the owners' request from the rule bot's own ladder)
-    for must in ("13번(계단 잠금)을 뺀 나머지", "약 07:51 UTC", "요청(메시지 8, 9)", "paperbot/ladder.py", "숫자는 쓰지 않았습니다"):
+    for must in ("13번(계단 잠금)을 뺀 나머지", "약 07:51 UTC", "요청(오늘 오후 말씀)", "paperbot/ladder.py", "숫자는 쓰지 않았습니다"):
         assert must in line, must
     assert "딥시크" not in line and "%" not in line and "배" not in line.replace("검증을 맡은", "")
     assert MT.audit_text(line) == [] and RX.audit_a8_file(cfg.lay.out_file("SELECT_KO.md")) == []

@@ -672,7 +672,8 @@ choose, no q15.
   the 10% lock in place of its own (no pick has one, section 3).
 * **Everything else is the pick's.** Entries, sizing, leverage, the fill minute, liquidation, funding, the period-end close and the
   free fill minute after an exit are as for E0: a LOCK exit, like a stop, does not free its minute (only RULE and RAND do, section 4).
-* **No decision, no check.** F13 reads no chart bar, no indicator, no signal and no check schedule: `rp` is the zero vector and the
+* **No decision, no check.** F13 reads no chart bar, no indicator, no signal and no check schedule: `rp` is E0's vector (family 0, which reads
+  nothing from it; its only non-zero entry is F12's component mask, which family 0 never reads) and the
   variant differs from E0 only in the exit arguments of `kernel_x.exit_of_pick` (the same function that gives mode (b) its
   arguments). The parity with `kernel._trade` for the same arguments is test T1.
 * **Not part of F12.** F12's nine components are F1, F2, F3, F4, F5, F6, F7h, F10 and F11 (above); F13 is not a tenth. F12.a keeps
@@ -1162,8 +1163,10 @@ Written into `select.json` and the Korean report:
   acts only on 15m and 30m picks), beats E0 and a random exit with the same 8-hour clock and timing profile". No claim
   that stacking beats a single rule, that all nine act on every pick, or that F12 is the best exit);
 * F7 and F7h: "beats E0 by holding less; no claim about reading the market".
-* F13: "closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and
-  makes no claim beyond that". There is no random-exit claim, because F13 has no placebo gate (section 6): a PASS shows that
+* F13: "closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%, except by the slippage of a
+  stop and at a gapped open, which can lie anywhere; it reads no structure and makes no claim beyond that" (the clause after the
+  comma is the limit of 5.2, "Category": the stop of the next minute fills a little lower, and the minute that arms the lock is
+  not protected, because the new stop applies from the next minute). There is no random-exit claim, because F13 has no placebo gate (section 6): a PASS shows that
   F13 beat E0's growth over the 33 months (the Holm test of 9) and kept the entries, and the claim says no more. The Korean
   report prints the same sentence in Korean (12% -> 10%, 17% -> 15%, 22% -> 20% ...).
 
@@ -1303,7 +1306,7 @@ Per pick of a pool with a PASS, five accounts:
   take-profit. It runs at quarter size because C1 and C2 compare it with `-nq`. Under F12 the flip runs the same nine
   components at the same values; its F3 is the pick's signal of the side opposite to the flip's side, and its F11 part
   follows the F11 rules below. Under F13 it runs the same exit as `-nq` (the pick's take-profit and the stepped lock, or the lock
-  alone), on the plain engine, with the flip's side, the pick's stop distance and the engine's lock.
+  alone), on the plain engine of that exit (with the C1 gate of 11.4 item 9), with the flip's side, the pick's stop distance and the engine's lock.
   * For F11, let s be the strategy's side at the signal bar, side' the flip's side and f' the flip's fill. When side'
     = s, the flip uses the strategy's own level and target unchanged. When side' = -s, it uses the bar components of
     its own side under rule C3 (a state component that is true at i0 waits until it has been false at a close), and a
@@ -1460,8 +1463,9 @@ league starts.
 | 14 check data | built. `forward_check` reads `trades`, `acct_day` and `acct_mark`; `public_view` keeps DeepSeek to labels, counts, win shares and hold hours; the command is `python -m candleague.rulex checks` with `c1`, `c2` or `repeat` (11.5) |
 
 **F13 (16.6) in the league.** F13 adds no account and changes no id or count: `-n`, `-nq` and `-nflip` run `candleague.exits.lock_exit` of the
-pick's own exit (`rulex.exit_name`) on the plain engine, built by `rulex.make_engine`; `rulex.chunk_rule` hands them signals with
-the pick's stop distance and no chart record; the twins are untouched; the fingerprint carries the rule and the lock's numbers
+pick's own exit (`rulex.exit_name`) on the plain engine of that exit, built by `rulex.make_engine` as `LockEngine` / `LockLadderEngine`
+(the `RuleMixin` gate and no rule, so that `no_entry_from_ms` of 11.4 item 9 stops their new entries like every other account of the new exit;
+seventh pass); `rulex.chunk_rule` hands them signals with the pick's stop distance and no chart record; the twins are untouched; the fingerprint carries the rule and the lock's numbers
 (`rulex.code_version`). The parity test of item 13 covers F13 (above).
 
 **Restart to-do.** All of this is done at restart time, after the owners' OK. None of it is pinned here, and none of it
@@ -1590,7 +1594,10 @@ Real money is not decided by this study. That stays the owners' decision under t
      were then opened and that they contain test-period (2024-01..2026-09) outcomes of chandelier-exit trend systems.
      F4's confirm (and the chandelier leg of F12) is therefore knowingly a second look at chandelier exits on
      2024-2026. No hunt number was used for any choice in this study: the variant menu, F4 included, is in git history
-     before those results existed. The owners are told so in the select report (section 17, item 4a). The clean check
+     before those results existed, **except F13** (the stepped lock, 16.6): F13 was added after the hunt read (it first
+     appears in git at about 07:51 UTC, the hunt results having been opened from about 06:38 UTC), at the owners' request
+     (their messages 8 and 9), and its numbers are the rule bot's own ladder, `paperbot/ladder.py`; no hunt number was
+     used for it. The owners are told so in the select report (section 17, item 4a). The clean check
      is the league's forward record.
   2. **2021-2023 was used for both, parts of it were looked at, and the owners' choice is not blind to 2024-2026.** E0
      was chosen on 2021-2023 (the plateau rule), which tilts the select step against the variants. The best of 88
@@ -1690,7 +1697,11 @@ Real money is not decided by this study. That stays the owners' decision under t
       on holds and no take-profit, so a trade that never reaches +12% can be held for days; the hold columns show it. (f) F13.a on
       a trade whose own take-profit lies below +12% net ROE (a take-profit of a few R when the ATR is very small) hits the
       take-profit before the lock can arm; nothing special is done for it. (g) A pass of F13 is a pass of this exit on these 38
-      picks; it says nothing about the 5% lock or about an exit that reads structure.
+      picks; it says nothing about the 5% lock or about an exit that reads structure. (h) F13 is "not tuned" in its numbers (the engine's own),
+      not in its history: F13.b is the full grid's row "ladder|k" on the pick's stop, and F13.a on a 2R pick is the row "ladder_tp2R|k",
+      and those rows are among the 84 exits on which E0 was chosen on 2021-2023 (Known limit 2) and whose 2024-2026 per-trade results the
+      owners have seen. The plateau selection of E0 therefore tilts F13.b's select result against it, and F13.b's confirm is not independent
+      of the grid. No number changes; the owners read F13's table with this in mind (README_KO says it in one line).
 
 ## 13. Reproducibility
 
@@ -1699,7 +1710,7 @@ Real money is not decided by this study. That stays the owners' decision under t
     cache rules below; the offered-signal table (`offered`) with the market-state code of each signal bar (below);
   * `kernel_x.py`: the engine, the 88 variants including F7h, F12 and F13 (the module lists the 82 of F1-F10, adds the 2 of
     F11 and the 2 of F12 once the F11 provider of `native.py` and `native_ds.py` is registered, which the runner does, and the
-    2 of F13, which need no provider: F13 is only the exit arguments of `exit_of_pick`, `rp` is the zero vector and no chart
+    2 of F13, which need no provider: F13 is only the exit arguments of `exit_of_pick`, `rp` is E0's vector (family 0) and no chart
     array is read);
   * `native.py` (the eight core strategies' own exits) and `native_ds.py` (the eight DeepSeek strategies'), Appendix A;
   * `runner_x.py`: the stages as command-line steps (`make-pin`, `pin-lines`, `make-cut`, `timing`, `select`,
@@ -1955,7 +1966,7 @@ Real money is not decided by this study. That stays the owners' decision under t
         take-profit and ends at the lock or END; a climb through 3R (or net ROE 50%) exits at the take-profit in mode a;
       * funding paid before the lock moves the arming and the locked price by its share of the notional;
       * the exit arguments of every one of the 84 pick exits in both modes (the pick's stop and take-profit, the lock, no
-        take-profit in b), and `rp` equal to the zero vector;
+        take-profit in b), and `rp` equal to E0's vector (family 0);
       * a differential test of the numba kernel against a plain-Python reference that writes the lock with
         `paperbot/ladder.py`, on random worlds of 15m and 1h picks;
   * **T3 causality of the inputs.** At each of these 21 cut times (UTC), the cut arrays and the full arrays must agree
@@ -2006,17 +2017,19 @@ Real money is not decided by this study. That stays the owners' decision under t
     from the select-period cut arrays: change the OHLC and mark of minute j and of every later minute, and of every
     chart bar closing after the check close. The rule decision at j (for F12 the decision and the `tr_comp` set), the
     placebo stratum at j and every arm flag must stay identical. Only decisions are compared; no P&L is kept. **F13** has no
-    decision; its causality is that the stop in force at minute j depends only on minutes before j: on sampled trades of F13.a
-    and F13.b, replacing every minute from the exit minute x + 1 on leaves the trade identical (minute, reason, price,
-    wallet change), and replacing every minute from x on never lets the trade end before x.
+    decision and no check; its causality is that the stop in force at minute j depends only on minutes before j: on sampled
+    trades of F13.a and F13.b, replacing every minute from the exit minute x + 1 on leaves the trade identical (minute,
+    reason, price, wallet change), and replacing every minute from x on never lets the trade end before x. **This is tested
+    on synthetic paths only** (`test_exitflex.py`): the real-data `check` T5 samples (trade, check) pairs, a trade without a
+    check cannot be sampled, so F13 is not in its list (`MIDDLE_VARIANTS`, 18 variants); the sample per pick and variant (2) is the same as with F13 in the list.
   * **T6 native parity.** `native.py`, where it re-derives an entry (N13_3OUTSIDE), and `native_ds.py` reproduce
     `run.signals` bar for bar; DOGE's components reproduce the source's `long_exit` and `short_exit`; every final
     DeepSeek signal bar receives its levels (Appendix A). F12's F11 component reads the same arrays, levels and
     targets as F11 (the same objects): with the other eight components switched off, F12.a equals F11.a and F12.b equals
     F11.b trade for trade on sampled picks of all 16 strategies.
   * **T7 selection logic**, on synthetic `select.json`-shaped inputs with no real figure:
-    * the gates per pool (14 of 23 core picks, 9 of 15 DeepSeek picks; a zero M_p does not count), F7 and F7h exempt
-      from gate 3, and the gate-failure counts in sequence (8.2);
+    * the gates per pool (14 of 23 core picks, 9 of 15 DeepSeek picks; a zero M_p does not count), F7, F7h and F13
+      exempt from gate 3, and the gate-failure counts in sequence (8.2);
     * the default of 8.4 per pool: only set D, shortest pooled median hold first, ties by parameter count then
       canonical order, the second from a different group, "none" when no candidate; applied only to a pool with no
       answer before its deadline; an explicit "없음" stays none;
@@ -2043,7 +2056,8 @@ Real money is not decided by this study. That stays the owners' decision under t
       group), the order of the variants is 1 to 88 with F13 last, and the counts of 5.3 (88 variants, 74 with a placebo, 37 in
       D, 35 outside F13);
     * `claim_of` gives the 8.5 wording for F7, F7h, F11, F12, F13 and the rest (F13: "closes by the engine's stepped profit
-      lock: after +12% net ROE it never gives back below +10%; it reads no structure and makes no claim beyond that");
+      lock: after +12% net ROE it never gives back below +10%, except by the slippage of a stop and at a gapped open, which can lie
+      anywhere; it reads no structure and makes no claim beyond that");
     * the select report and the confirm report carry the fixed hunt-read line (17 item 4a): `SELECT_KO.md` and `REPORT_KO.md`
       hold `HUNT_READ_KO` of `runner_x.py` near the top, it passes audit A8 and carries no number of any result;
   * **T8 market-state labels** (section 7), on built paths and on the select-period cut arrays, printing counts only:
@@ -2836,11 +2850,12 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
    take-profit, the lock alone: the rule bot's exit). The pick's hard stop stays in both. The lock is the kernel's: net ROE after
    costs on isolated margin, applied from the next minute, only tightening. Only the 10% start (no 5% or 20% start). In
    `kernel_x.py` it is the exit arguments of `exit_of_pick` `(stop_atr, tp kind or TP_NONE, tp value, True, 0.10, 0.05, 0.02)`
-   with `rp` the zero vector; the constants are asserted equal to the kernel's "ladder" row. Group P; parameter count 0; loss class
+   with `rp` E0's vector (family 0; see 5.2); the constants are asserted equal to the kernel's "ladder" row. Group P; parameter count 0; loss class
    L0 (it can cut only after a gain); in the default set D; **no placebo** (its exit is an intrabar price-level stop, not a decision
    at a chart close; it is treated like F7 and F7h in eligibility, with the reason stated in 6 and z = 0 where a table needs a
-   value); the claim of 8.5 is the one the owners were promised in words: "closes by the engine's stepped profit lock: after
-   +12% net ROE it never gives back below +10%; it reads no structure and makes no claim beyond that". **F12 does not contain
+   value); the claim of 8.5 is the one the owners were promised in words, with the limit of 5.2 added in the seventh pass (item 13
+   below): "closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%, except by the slippage of a
+   stop and at a gapped open, which can lie anywhere; it reads no structure and makes no claim beyond that". **F12 does not contain
    F13** (5.2, 1 Q-D, 12).
 2. **Counts recomputed** from the code (`kernel_x.variants()` with the F11 provider registered): **88 variants** (was 86: 82 of
    F1-F10, 2 of F11, 2 of F12, 2 of F13), **89 arms** (was 87), step-1 accounts 89 x 38 x 2 = **6,764** (was 6,612), variants with
@@ -2870,7 +2885,7 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
 6. **The pin-blockers of section 17 closed.** (4a) `select_report_ko` and `confirm_report_ko` of `runner_x.py` carry a fixed line, `HUNT_READ_KO`,
    telling the owners that the round-1 hunt results (with test-period outcomes of chandelier-exit trend systems) were opened by the main
    session before the hash and what the addendum of section 15 says; a test checks it in `SELECT_KO.md` and `REPORT_KO.md` and that it passes
-   audit A8; Known limit 1 stays as written. (6) The main session **confirmed option (a)** for the F12 placebo on 2026-10-12 (16.4 item 11,
+   audit A8; Known limit 1 stays as written (the seventh pass adds the F13 exception to it, to 17 item 4a, to `HUNT_READ_KO` and to README_KO: item 12 below). (6) The main session **confirmed option (a)** for the F12 placebo on 2026-10-12 (16.4 item 11,
    section 17 item 6). (7) The main session **confirmed** that the league's dashboard, snapshots and Telegram notices follow the league's own
    DeepSeek-money setting and that this study's files carry none (3, 11.4 item 2, 11.5; section 17 item 7); the owners are not asked.
 7. **The "Repo HEAD" sentence of 13** now reads: the parent of the commit that adds `PREREG_EXITFLEX.sha256` (see `git log`); the repo is
@@ -3553,8 +3568,9 @@ stage was run on real market data: the real-data checks are open items.
    the top of `SELECT_KO.md` and of `REPORT_KO.md` (the first option of the earlier text: a code change, `test_exitflex.py`
    rerun, pin lines recomputed). It says what the addendum says (the time, what was opened, that test-period outcomes of
    chandelier-exit trend systems are in it, that no hunt number was used for any choice, that the exit menu was in git before
-   the results existed) and carries no number of any result. A test checks that the line is in both reports and passes audit
-   A8. Known limit 1 stays "in the select report". README_KO's disclosure line says the same.
+   the results existed **except F13**, which was added after the hunt read at the owners' request from the rule bot's own
+   ladder, with no hunt number used for it) and carries no number of any result. A test checks that the line is in both reports and passes audit
+   A8. Known limit 1 (with its F13 exception, seventh pass) says "in the select report". README_KO's disclosure line says the same.
 5. [x] (6th) `README_KO.md` agrees with sections 1, 3, 5.2, 7 and 8 (it is not pinned): 88 variants; number 12 and which of
    its legs can act; number 13, the stepped lock (12% -> 10%, 17% -> 15%, 22% -> 20% ...), its claim and that 12 does not contain it; no fixed percent; the market-state table; the private DeepSeek report with its confirm interval and
    the redaction of figures in the owners' words; the answer format (id, 계열, `.a` and `.b`, a sample reply); the
@@ -3563,7 +3579,8 @@ stage was run on real market data: the real-data checks are open items.
 6. [x] **Main session's decision, F12's placebo: CONFIRMED on 2026-10-12, option (a).** Section 6 gives the F12 placebo F12's
    own clock (16.4 item 11), and the code and its tests are built that way. Options (b) h = 1 above F12's cap and (c) no
    F12 placebo are not taken; nothing in 6, 8.1, 8.5, Known limits 9 and 17, T4, 5.3's placebo counts or the code changes.
-7. [x] **Main session's decision, the league dashboard: CONFIRMED on 2026-10-12.** The league's dashboard, snapshots and
+7. [x] **Main session's decision, the league dashboard: CONFIRMED on 2026-10-12** (as recorded by the sixth pass from the main session's brief
+   of that day; the sub-session could not check it elsewhere, so the main session reads this item and item 6 against its own decisions before the hash). The league's dashboard, snapshots and
    Telegram notices follow the league's own DeepSeek-money setting (on by default since 2026-10-11) and this study's files
    carry none (3, 11.4 item 2, 11.5). The owners are not asked; 3, 11.4 item 2, 11.5 and README_KO stand as written. The
    setting itself is not changed by this file.
@@ -3579,7 +3596,7 @@ stage was run on real market data: the real-data checks are open items.
 10. [x] (6th) `kernel_x.py`: `variants()` returns the 88 ids of 5.3 (`_VARIANTS` holds the 82 of F1-F10 and asserts it; the 2
     of F11 and the 2 of F12 are added when the F11 provider is registered, which the runner does and requires; the 2 of F13,
     which need no provider, come last; F13 is the exit arguments of `exit_of_pick` with the lock `F13_LOCK`, asserted equal to
-    the kernel's "ladder" row, `rp` the zero vector, group P, no placebo); F7h; the
+    the kernel's "ladder" row, `rp` E0's vector (family 0), group P, no placebo); F7h; the
     F11 mechanics of Appendix A; F12 as in 5.2 (nine components at the table's values, one RULE exit at the first firing
     check, `tr_comp` bit mask, a component mask for tests, pick-close checks only, F12.b keeps the native target); the
     result carries `tr_state`. (5th) **The F12 placebo clock (6):** in a placebo run of F12 the position exits at its
@@ -3590,7 +3607,7 @@ stage was run on real market data: the real-data checks are open items.
 11. [x] `placebo.py`: seed base without the pick id; (5th) key = coin index (the position in `SYMBOLS`, which is the
     priority order BTC, ETH, SOL, DOGE, LTC, BCH) x 2^36 + the millisecond close of the latest closed chart bar of the
     check // 60,000, as the code has it today (T4 pins it on a hand-computed example); strata z of section 6 including
-    F12's (F6 adds nothing); no placebo for F7 and F7h; F11.b and F12.b keep the native target; (5th) the F12 clock of
+    F12's (F6 adds nothing); no placebo for F7, F7h and F13; F11.b and F12.b keep the native target; (5th) the F12 clock of
     item 10 in the table builder and the runner.
 12. [x] `metrics.py`: no "core pool only" header; gates per pool (14 of 23, 9 of 15); `choose_variants` replaced by the
     default of 8.4 (set D of 37 variants, shortest pooled median hold, ties by parameter count then canonical order, at
