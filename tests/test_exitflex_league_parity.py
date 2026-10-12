@@ -777,3 +777,70 @@ def test_the_rule_league_places_a_plain_account_next_to_it_where_the_study_does(
         res, off = world.study("1h", "E0", size)
         n += compare_account(world, res, off, played, account("E0", size, tf, exit_)["id"], f"E0 {size:g}")
     assert n >= 10
+
+
+# ====================================================================================================== F11 / F12: the comparison has teeth
+def test_the_native_exits_are_exercised_by_the_world(world):
+    """Harness sanity for F11 and F12: the strategy's own invalidation fires, F11.b / F12.b exit on the native target (a maker limit),
+    F12 records exits where several components fired at one check, coin flips on the other side of the strategy exit on their mirrored
+    level and target, and state components wait for their arm (a trade held past a true state flag)."""
+    n = {"rule": 0, "tp": 0, "multi": 0, "single": 0, "flip_rule": 0, "flip_tp": 0, "other_side": 0}
+    for name in ("1h", "15m", "30m", "4h"):
+        for rid in NATIVE:
+            res, off = world.study(name, rid, 0.25)
+            for k in np.flatnonzero(res.status == 1):
+                if res.reason[k] == KX.R_RULE and rid.startswith("F11"):
+                    n["rule"] += 1
+                if res.reason[k] == KX.R_TP and rid.endswith("b"):
+                    n["tp"] += 1
+                if rid.startswith("F12") and res.reason[k] == KX.R_RULE:
+                    bits = bin(int(res.comp[k])).count("1")
+                    n["multi" if bits >= 2 else "single"] += 1
+    for rid in NATIVE:
+        res, off = world.study("1h", rid, 0.25, flip=True)
+        base_side = world.offered("1h", COMBOS["1h"][1])[1]["side"]
+        n["other_side"] += int((off["side"] != base_side).sum())
+        for k in np.flatnonzero(res.status == 1):
+            if rid.startswith("F11") and res.reason[k] == KX.R_RULE:
+                n["flip_rule"] += 1
+            if rid.startswith("F11") and rid.endswith("b") and res.reason[k] == KX.R_TP:
+                n["flip_tp"] += 1
+    assert n["rule"] >= 20 and n["tp"] >= 5 and n["multi"] >= 1 and n["single"] >= 5, n
+    assert n["flip_rule"] >= 5 and n["flip_tp"] >= 1 and n["other_side"] >= 20, n
+
+
+def test_negative_control_the_comparison_catches_a_native_exit_without_the_arm_of_rule_c3(world):
+    """A state component that fires whenever it is true (no arm: it was true at the signal bar, so the first check closes the trade)
+    is the draft's F11. On the same data the league must differ from the study."""
+    def unarmed(rx, side, r):
+        any_ = False
+        vals = r.get("nl" if side > 0 else "ns") or []
+        for c, kind in enumerate(rx["ck"]):
+            vv = vals[c] if c < len(vals) else 2
+            if vv == 1:
+                any_ = True
+        lvl = rx.get("lvl")
+        if lvl is not None and side * (lvl - r["c"]) > 0:
+            any_ = True
+        return any_
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(RX, "_native_bar", unarmed)
+        played = world.league_run("1h", rules=["F11.a", "F11.b", "F12.a"], sizes=(0.25,), flips=(), tag="-ctl-arm")
+    assert len(accounts_that_differ(world, "1h", played, ["F11.a", "F11.b", "F12.a"])) >= 2
+
+
+def test_negative_control_the_comparison_catches_a_coin_flip_that_keeps_the_strategys_level_and_target(world):
+    """A flip on the other side of the strategy that keeps the strategy's own level and target (instead of the levels mirrored around
+    its fill) must differ from the kernel run with the mirrored ones."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(RX, "flip_levels", lambda s0, side, fill, inv, tgt: (inv, tgt))
+        played = world.league_run("1h", rules=["F11.b"], sizes=(0.25,), flips=("F11.a", "F11.b"), tag="-ctl-flip")
+    tf, exit_ = COMBOS["1h"][:2]
+    bad = 0
+    for rid in ("F11.a", "F11.b"):
+        res, off = world.study("1h", rid, 0.25, flip=True)
+        try:
+            compare_account(world, res, off, played, account(rid, 0.25, tf, exit_, True)["id"], f"flip {rid}")
+        except AssertionError:
+            bad += 1
+    assert bad >= 1
