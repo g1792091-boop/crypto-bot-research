@@ -650,7 +650,7 @@ def test_negative_control_the_comparison_catches_a_league_that_reads_the_union_o
     """paramshadow.replay_day (the union of the coins' minutes: a signal whose coin has no bar at its minute is rejected, one whose
     close minute is the coin's first goes a minute early, a check likewise) is the league as it was: the same data must now
     show a difference, or the parity test above could not tell the two replays apart."""
-    def union_of_minutes(engines, active, by_close, steps, brackets, seen, fund_wait=None):
+    def union_of_minutes(engines, active, by_close, steps, brackets, seen, fund_wait=None, stats=None, last_close=None):
         PS.replay_day(engines, active, by_close, steps, brackets)
     with pytest.MonkeyPatch.context() as m:
         m.setattr(RX, "replay_day", union_of_minutes)
@@ -683,9 +683,9 @@ def test_negative_control_the_comparison_catches_halted_minutes_kept_as_minutes(
     them, still on each coin's own minutes, must show a difference on the same data."""
     real = RX.replay_day
 
-    def halted_minutes_kept(engines, active, by_close, steps, brackets, seen, fund_wait=None):
+    def halted_minutes_kept(engines, active, by_close, steps, brackets, seen, fund_wait=None, stats=None, last_close=None):
         steps = [(t, {s: replace(b, volume=None) for s, b in bars.items()}, fund) for t, bars, fund in steps]
-        real(engines, active, by_close, steps, brackets, seen, fund_wait)
+        real(engines, active, by_close, steps, brackets, seen, fund_wait, stats, last_close)
     with pytest.MonkeyPatch.context() as m:
         m.setattr(RX, "replay_day", halted_minutes_kept)
         played = world.league_run("1h", rules=CONTROL_RULES, sizes=(0.25,), flips=(), tag="-ctl-flat")
