@@ -908,8 +908,10 @@ def picks_doc(names_order: list, real_units: dict, real: dict, hz: dict, box: di
                         "id": L.system_id(u["family"], nm, u["anchor_tf"], u["anchor_gate"], lat.combos[pk])})
         if u["family"] == "F3":
             rows_priv.append(money)
-        else:
-            row.update({k: v for k, v in money.items() if k != "name"})
+        else:                                   # F1 / F2 / F5: the figures join the public row (the box's too)
+            row.update({k: v for k, v in money.items() if k not in ("name", "box")})
+            if "box" in money:
+                row["box"].update(money["box"])
             rows_priv.append(money)
         rows_pub.append(row)
     ds_ranks = {rank_of[c["name"]] for c in real["ranked"] if real_units[c["name"]]["family"] == "F3"}

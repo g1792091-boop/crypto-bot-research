@@ -190,7 +190,7 @@ def replay(prep: dict, units: dict, names_order: list, s: int, min_pos: int, mod
 
 def cscv(units: dict, names_order: list, mode: str = "strict", top: int = TOP) -> dict:
     """``units`` = the real search's ``select_r2.name_unit(real=True)`` results by name."""
-    IS = splits()
+    IS = splits(N_BLOCKS, BLOCK_MONTHS)
     nsp = len(IS)
     prep, pool = _prep(units, names_order, IS)
     w1, w10, is1, oos1, top1 = [], [], [], [], []

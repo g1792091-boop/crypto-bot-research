@@ -33,6 +33,12 @@ GATE_KO = {"G1": "추세장만", "NONE": "문지기 없음"}
 HURDLE_KO = {"taken": "통과", "failed (a′)": "탈락: 시각 밀기(a′)", "failed (b′)": "탈락: 동전(b′)",
              "failed both": "탈락: 둘 다", "not taken (below a failed rank)": "앞 순위 탈락으로 멈춤"}
 SECRET = "비공개(딥시크)"
+LINEUP_KO = {"정식": "정식", "참고": "참고", "excluded": "제외"}
+LABEL_KO = {"edge of the coarse lattice": "눈금 끝(½배·2배)",
+            "every coarse neighbour positive: yes": "옆 숫자 모두 플러스: 예",
+            "every coarse neighbour positive: no": "옆 숫자 모두 플러스: 아니오",
+            "same numbers as an F4 watch pick": "F4 관찰 후보와 같은 숫자",
+            "same event list as another coarse point": "다른 점과 신호가 같음"}
 BOARD_LABEL = "고르는 기간 성적, 골라서 부풀려진 값, 시험 아님"
 
 
@@ -200,7 +206,7 @@ def sec_names(pk, r1lab) -> list:
             score = SECRET
         else:
             score = f"{mult(r.get('P_c_peak'))} / {mult(r.get('P_c_default'))}"
-        lab = [x for x in r.get("labels") or [] if x != "old six not blind"]
+        lab = [LABEL_KO.get(x, x) for x in r.get("labels") or [] if x != "old six not blind"]
         if "pick_no" in r:
             lab = [f"픽 {r['pick_no']} ({r['batch']}군)"] + lab
         if r1lab and r["name"] in r1lab.get("anchor_default", {}):
@@ -233,7 +239,7 @@ def sec_test(test) -> list:
             ([] if c.get("bh_significant") else ["BH"])
         verdict = "**통과**" if c.get("PASS") else "불통과(" + ", ".join(fails) + ")"
         lab = (tu.get("label") or {}).get("ko", "-")
-        ln = (lineup.get(p["id"]) or {}).get("lineup", "-")
+        ln = LINEUP_KO.get((lineup.get(p["id"]) or {}).get("lineup"), "-")
         if _is_ds(p):
             oks = " / ".join("예" if c.get("rank_ok_" + k) else "아니오" for k in ("a", "b", "bc", "ac"))
             out.append(f"| {p.get('pick_no')} | {p['name']} | {p['tf']} {p['gate']} | {verdict} | {SECRET} | | | "

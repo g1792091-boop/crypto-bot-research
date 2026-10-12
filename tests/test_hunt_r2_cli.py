@@ -363,22 +363,14 @@ def _tree(repo):
         fh.write("".join(f"{_sha(files[r])}  {r}\n" for r in files))
 
 
-@pytest.fixture(scope="module")
-def e2e(tmp_path_factory):
-    if "done" in _E:
-        return _E
-    mp = pytest.MonkeyPatch()
-    base = tmp_path_factory.mktemp("r2e2e")
-    repo, priv, data = str(base / "repo"), str(base / "priv"), str(base / "data")
-    os.makedirs(data)
-    _tree(repo)
+def _patch(mp, repo):
+    """The synthetic world and the small numbers every end-to-end run uses (periods, loader, seeds, names)."""
     coins = {s: H.synth_coin(s, S0, S0 + SPAN_DAYS * DAY, 70 + i, 10.0 * (i + 1)) for i, s in enumerate(SYMS)}
     fund = {s: H.synth_funding(S0, S0 + SPAN_DAYS * DAY, 80 + i) for i, s in enumerate(SYMS)}
     loads = []
 
     def fake_load(data_dir, syms, end_ms):
-        picks_pinned = PN.PICKS in PN.listed_now(repo)
-        loads.append((int(end_ms), picks_pinned))
+        loads.append((int(end_ms), PN.PICKS in PN.listed_now(repo)))
         cut = {s: _cut_coin(coins[s], end_ms) for s in syms}
         fd = {s: (fund[s][0][fund[s][0] < end_ms], fund[s][1][fund[s][0] < end_ms]) for s in syms}
         H.install(cut, fd)
@@ -405,6 +397,18 @@ def e2e(tmp_path_factory):
                       (RA, "ROLL_CTL_SEEDS", 2), (RA, "ROLL_CTL_SEEDS_SLOW", 2), (RA, "LEV_CTL_SEEDS", 2),
                       (RA, "MBB_N", 100)):
         mp.setattr(mod, k, v)
+    CF.clear_caches()
+    return loads
+
+
+@pytest.fixture(scope="module")
+def e2e(tmp_path_factory):
+    mp = pytest.MonkeyPatch()
+    base = tmp_path_factory.mktemp("r2e2e")
+    repo, priv, data = str(base / "repo"), str(base / "priv"), str(base / "data")
+    os.makedirs(data)
+    _tree(repo)
+    loads = _patch(mp, repo)
     args = ["--data", data, "--private", priv, "--procs", "2"]
     import time as _t
     t0 = _t.time()
@@ -598,10 +602,56 @@ def test_cli_refuses_without_the_lines(tmp_path, monkeypatch):
     for cmd in ("test", "pretest", "reads"):
         assert HR.main([cmd, *common]) == 2                       # no picks line
     assert called == []
+    with pytest.raises(SystemExit, match="outside the repository"):
+        HR.main(["select", "--data", str(tmp_path), "--private", os.path.join(repo, "x")])
+    assert called == []
     with open(os.path.join(repo, PN.R2_PIN)) as fh:
         txt = fh.read().splitlines()
     with open(os.path.join(repo, PN.R2_PIN), "w") as fh:          # design hash not first: every step refuses
         fh.write("\n".join(txt[1:] + txt[:1]) + "\n")
-    assert HR.main(["select", *common]) == 2 and called == []
-    with pytest.raises(SystemExit, match="outside the repository"):
-        HR.main(["select", "--data", str(tmp_path), "--private", os.path.join(repo, "x")])
+    for cmd in ("select", "test", "pretest", "reads"):
+        assert HR.main([cmd, *common]) == 2
+    assert called == []
+
+
+def test_e2e_deepseek_pick_through_test_reads_and_report(tmp_path, monkeypatch):
+    """A hand-made picks.json (pinned) with a DeepSeek pick and an F5 pick: the test step, the reads and the report
+    keep every DeepSeek money figure out of the public files (D11)."""
+    repo, priv, data = str(tmp_path / "repo"), str(tmp_path / "priv"), str(tmp_path / "data")
+    os.makedirs(data)
+    _tree(repo)
+    loads = _patch(monkeypatch, repo)
+    rows = []
+    for no, (nm, fam, tf) in enumerate((("F3_BOS", "F3", "1h"), ("TSMOM7", "F5", "4h")), start=1):
+        lat = L.coarse(nm)
+        peak = lat.combos[[i for i in range(len(lat)) if i != lat.default][0]]
+        rows.append({"family": fam, "name": nm, "anchor": {"tf": tf, "gate": "NONE"}, "default": L.default_combo(nm),
+                     "peak": peak, "candidate": True, "rank": no, "hurdle": "taken", "labels": [], "pick_no": no,
+                     "batch": 1, "id": L.system_id(fam, nm, tf, "NONE", peak)})
+    _write(repo, PN.PICKS, {"names": rows, "picks": rows, "batches": [[1, 2]], "label": "picks",
+                            "pin": {"pin_sha256": "0" * 64}})
+    PN.append_line(PN.PICKS, repo)
+    assert HR.main(["test", "--data", data, "--private", priv, "--procs", "2",
+                    "--ledger-private", str(tmp_path)]) == 0
+    assert HR.main(["report", "--private", priv]) == 0
+    assert loads and all(pinned for _e, pinned in loads)
+    ds = {rows[0]["id"], f"pick:{rows[0]['id']}", "basket_batch1"}
+    out_dir = os.path.join(repo, "research/hunt_r2/out")
+    for f in ("test.json", "reads_rows.json", "reads_weekend.json", "reads_goal.json"):
+        with open(os.path.join(out_dir, f)) as fh:
+            doc = json.load(fh)
+        assert CF.d11_problems(doc, ds, f) == [] and H.d11_problems(doc, ds) == [], f
+    with open(os.path.join(out_dir, "test.json")) as fh:
+        test = json.load(fh)
+    blk = test["results"][rows[0]["id"]]
+    assert blk["note"] == CF.DS_NOTE and "p" not in blk["checks"] and "PASS" in blk["checks"]
+    assert "p" in test["results"][rows[1]["id"]]["checks"]
+    lrows = {r["id"]: r for r in test["ledger"]["prints"]["A"]["rows"]}
+    assert "p" not in lrows[rows[0]["id"]] and "p" in lrows[rows[1]["id"]]
+    with open(os.path.join(priv, "test_private.json")) as fh:
+        full = json.load(fh)
+    assert "p" in full["results"][rows[0]["id"]]["checks"]                 # the private file keeps every figure
+    with open(os.path.join(out_dir, RP.REPORT)) as fh:
+        rep = fh.read()
+    lines = [ln for ln in rep.splitlines() if "| F3_BOS |" in ln]
+    assert lines and all("×" not in ln and "%" not in ln for ln in lines)
