@@ -397,6 +397,10 @@ def sec_reads(reads: dict, test) -> list:
         out.append(f"* {rid} 주말: 시험 기간 주말 포함 {mult((t.get('base') or {}).get('mean_lnM'))}, 주말 제외 "
                    f"{mult((t.get('O1') or {}).get('mean_lnM'))}, 롱만 제외 {mult((t.get('O1b') or {}).get('mean_lnM'))}"
                    + ("; 모멘텀만으로도 비슷함" if r.get("momentum_only") else ""))
+    st = (reads.get("reads_status.json") or {}).get("status") or {}
+    left = [k for k, v in st.items() if v != "written"]
+    if left:
+        out.append("* 끝나지 않은 참고 분석: " + ", ".join(f"{k} ({st[k]})" for k in left))
     out += ["", "주말·크기·모멘텀 같은 규칙은 여기서 정하지 않습니다. 정하려면 다음 라운드에서 앞으로의 자료로만 확인합니다.", ""]
     return out
 
@@ -407,7 +411,7 @@ def build(root: str = ROOT, private_dir: str | None = None) -> str:
     pre = _load(os.path.join(out_dir, "pretest_reads.json"))
     test = _load(os.path.join(out_dir, "test.json"))
     reads = {}
-    for f in ("reads_rows.json", "reads_weekend.json", "reads_goal.json"):
+    for f in ("reads_rows.json", "reads_weekend.json", "reads_goal.json", "reads_status.json"):
         d = _load(os.path.join(out_dir, f))
         if d is not None:
             reads[f] = d

@@ -239,8 +239,10 @@ def rebuild_open(o: dict, wallet: float, size: float, ex: Optional[dict]) -> dic
     return {"qty": qty, "margin": margin, "equity_at_entry": eq0, "liq": liq, "exact": False}
 
 
-RULE_KO = ("규칙: 좋은 자리는 50배(증거금 50%) → 40배(40%), 보통 자리는 30배(30%) → 20배(20%) 순서로 시도하고, "
-           "손절선이 청산가 안쪽에 여유를 두고 손절 손실이 잔고의 15% 이하인 첫 배수로 들어갑니다")
+RULE_KO = ("규칙: 좋은 자리는 50배(증거금 50%) → 40배(40%) → 30배(30%) → 20배(20%), 보통 자리는 30배 → 20배 순서로 "
+           "시도해, 거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 여유 · 손절 손실이 "
+           "잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다")
+RULE_SHORT_KO = "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수"
 
 
 def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[float]) -> dict:
@@ -274,7 +276,8 @@ def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[f
         parts.append(f"증거금 {margin_pct * 100:.4g}%")
     if liq_dist is not None:
         parts.append(f"진입 때 청산까지 {liq_dist * 100:.1f}%")
-    return {"group_ko": group, "head_ko": " · ".join(parts), "lev_ko": lev_ko, "sub_ko": sub, "rule_ko": RULE_KO}
+    return {"group_ko": group, "head_ko": " · ".join(parts), "lev_ko": lev_ko, "sub_ko": sub, "rule_ko": RULE_KO,
+            "rule_short_ko": RULE_SHORT_KO}
 
 
 POS_MONEY = ("lev", "entry", "stop", "tp", "stop_is_lock", "wallet", "equity_at_entry", "qty", "notional", "margin",
@@ -477,20 +480,31 @@ def max_stop(margin_frac: float, lev: int) -> float:
 
 def rule_steps(ex: Optional[dict], equity: float = RULE_EQUITY) -> list[dict]:
     """The leverage steps in the order the engine tries them: leverage, group (best = 좋은 자리, normal = 보통), the
-    margin share (후보 and the 1/4 account), the widest stop the 15% loss check lets through, and per coin the distance
-    from the entry to the liquidation price of a long at that leverage (the coin's bracket at the order's size)."""
+    margin share (후보 and the 1/4 account), the widest stop the 15% loss check lets through, and per coin the
+    exchange's own check (paperbot.sizing.size_position's first: the coin's bracket at the order's notional must allow
+    this leverage; ``cap`` / ``q_cap`` the bracket's maximum, ``blocked`` / ``q_blocked`` the coins where it does not)
+    and the distance from the entry to the liquidation price of a long at that leverage (``liq`` at the 후보 account's
+    notional, ``q_liq`` at the 1/4 account's: a smaller order falls in a lower bracket; None where the step is blocked)."""
     from paperbot.config import V3_QUALITY_TIERS
     from paperbot.margin import liquidation_price
     out = []
     for t in V3_QUALITY_TIERS:
         for lev in t.leverages:
             row = {"lev": int(lev), "group": t.name, "margin": t.margin_frac, "q_margin": round(t.margin_frac * QUARTER, 6),
-                   "max_stop": max_stop(t.margin_frac, lev), "q_max_stop": max_stop(t.margin_frac * QUARTER, lev), "liq": {}}
+                   "max_stop": max_stop(t.margin_frac, lev), "q_max_stop": max_stop(t.margin_frac * QUARTER, lev),
+                   "notional": equity * t.margin_frac * lev, "q_notional": equity * t.margin_frac * QUARTER * lev,
+                   "liq": {}, "q_liq": {}, "cap": {}, "q_cap": {}, "blocked": [], "q_blocked": []}
             for sym, br in sorted(((ex or {}).get("brackets") or {}).items()):
-                notional = equity * t.margin_frac * lev
-                qty = notional / 100.0
-                liq = liquidation_price(1, qty, 100.0, notional / lev, br.for_notional(notional))
-                row["liq"][sym[:-1] if sym.endswith("USDT") else sym] = (100.0 - liq) / 100.0
+                coin = sym[:-1] if sym.endswith("USDT") else sym
+                for key, notional in (("", row["notional"]), ("q_", row["q_notional"])):
+                    b = br.for_notional(notional)
+                    row[key + "cap"][coin] = int(b.max_leverage)
+                    if lev > b.max_leverage:
+                        row[key + "blocked"].append(coin)
+                        row[key + "liq"][coin] = None
+                        continue
+                    liq = liquidation_price(1, notional / 100.0, 100.0, notional / lev, b)
+                    row[key + "liq"][coin] = (100.0 - liq) / 100.0
             out.append(row)
     return out
 
@@ -506,12 +520,17 @@ def tp_info(exit_name: str) -> dict:
             "stop_atr": s["stop_atr"]}
 
 
-def breakeven(tp: dict, stop_pct: Optional[float] = None, tp_pct: Optional[float] = None, cost: float = 0.0) -> Optional[float]:
+def breakeven(tp: dict, stop_pct: Optional[float] = None, tp_pct: Optional[float] = None, cost: float = 0.0,
+              win_cost: Optional[float] = None) -> Optional[float]:
     """The win rate a fixed take-profit needs to break even: before costs 1 / (1 + m) for a take-profit at m x R; with
-    the stop and take-profit distances (shares of the entry) and the round-trip cost (fees and slippage, a share of the
-    position) (d + cost) / (d + tp). None for a lock exit (its winners have no fixed size)."""
+    the stop and take-profit distances (shares of the entry) and the costs (fees and slippage, shares of the position):
+    ``cost`` of a trade that ends at the stop (taker in, slippage in, slippage out, taker out) and ``win_cost`` of one
+    that ends at the take-profit (a limit order: taker in, slippage in, the maker fee out; ``cost`` when not given),
+    p x (tp - win_cost) = (1 - p) x (d + cost). None for a lock exit (its winners have no fixed size)."""
     if stop_pct is not None and tp_pct is not None and stop_pct > 0 and tp_pct > 0:
-        return min(1.0, (stop_pct + cost) / (stop_pct + tp_pct))
+        wc = cost if win_cost is None else win_cost
+        loss, gain = stop_pct + cost, tp_pct - wc
+        return 1.0 if gain <= 0 else min(1.0, loss / (loss + gain))
     if tp["kind"] == "R" and tp["val"]:
         return 1.0 / (1.0 + float(tp["val"]))
     return None
@@ -580,6 +599,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
     from paperbot.config import V3_P_BEST
     st = _settings(LIVE_EXIT, 1.0)
     rt = st.round_trip_cost
+    win_rt = st.taker_fee + st.slippage_frac + st.maker_fee      # in at market, out at the take-profit's limit order
     accts = doc["accounts"]
     by_id = {a.get("id"): a for a in accts}
     cands = [a for a in accts if a.get("role") == "cand"]
@@ -634,7 +654,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
                 else:
                     tp_pct = None
                 now[coin] = {"price": x["price"], "atr_pct": x["pct"], "stop_pct": stop_pct, "tp_pct": tp_pct,
-                             "be_cost": breakeven(tp, stop_pct, tp_pct, rt) if tp["kind"] in ("R", "roe") else None,
+                             "be_cost": breakeven(tp, stop_pct, tp_pct, rt, win_rt) if tp["kind"] in ("R", "roe") else None,
                              "base_stop_pct": X.stop_dist(LIVE_EXIT, x["atr"]) / x["price"], "lev": lev}
             row["now"] = now
         picks[c["id"]] = row
@@ -643,9 +663,10 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
         exits[c.get("exit")] = exits.get(c.get("exit"), 0) + 1
     return {"generated_ms": doc.get("generated_ms"), "start_ms": doc.get("start_ms"), "done_ms": doc.get("done_ms"),
             "ds_money": bool(doc.get("ds_money")) and not strict,
-            "costs": {"taker": st.taker_fee, "slip": st.slippage_frac, "round_trip": rt, "max_loss": st.max_loss_frac,
-                      "buffer_atr": st.liq_buffer_atr_mult, "buffer_min": st.liq_buffer_min_frac},
+            "costs": {"taker": st.taker_fee, "maker": st.maker_fee, "slip": st.slippage_frac, "round_trip": rt, "win_cost": win_rt,
+                      "max_loss": st.max_loss_frac, "buffer_atr": st.liq_buffer_atr_mult, "buffer_min": st.liq_buffer_min_frac},
             "steps": rule_steps(ex), "p_best": dict(V3_P_BEST), "base_exit": LIVE_EXIT, "base_exit_ko": X.exit_ko(LIVE_EXIT),
+            "base_tp": tp_info(LIVE_EXIT),
             "exits": exits, "used_all": used_all, "hidden_accounts": hidden_n, "picks": picks}
 
 

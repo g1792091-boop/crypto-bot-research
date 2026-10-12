@@ -73,6 +73,9 @@ CHOICES = [
     "checks as 7.1 (P0, P1, P3, P4, the four seed-rank parts, p = max(p_a, p_b)); no BH (a read).",
     "9.2 select-period controls: seeds 1-200 of (a), (b) and (b-c), every (a-c) shift of the select period, r = 0.5%.",
     "9.2 'carried by the old six': a passing pick whose new-24 test mean ln M is <= 0 (W 7.0).",
+    "9.3: each weekend variant's pick-minus-control d_m (controls (a) and (b), seeds 1-200 through the same "
+    "weekend-skip machine) carries a month 90% CI (100,000 resamples, seed parts ('hunt-r2', 'weekend', period, "
+    "control, 'ci')), added to reads_o's summary.",
 ]
 
 
@@ -198,20 +201,32 @@ def make_ctx(*, args, pin, mks: dict, syms: list, test_doc: dict, full: dict, re
 
 @contextlib.contextmanager
 def round2_reads_o():
-    """reads_o on round 2: O2 is not a round-2 read (its calendar status says so) and round 1's select map is not
-    run."""
-    cal, smap = RO.calendar_status, RO.select_weekend_map
+    """reads_o on round 2: O2 is not a round-2 read (its calendar status says so), round 1's select map is not run,
+    and each control's pick-minus-control d_m gets its month 90% CI (9.3)."""
+    cal, smap, summ = RO.calendar_status, RO.select_weekend_map, RO._summary
 
     def no_o2(study, periods=None):
         return {"file": RO.CALENDAR_REL, "run": False, "pinned": False, "problems": [],
                 "reason": "O2 is not a round-2 read (PREREG_HUNT_R2 8, 9.3: O1, O1b and O4 only)"}
+
+    def with_ci(o, ctl_lnm, base_taken, skipped, ctl_bits, cell, period):
+        s = summ(o, ctl_lnm, base_taken, skipped, ctl_bits, cell, period)
+        lnm = np.asarray(o["lnM"], float)
+        for cn, mat in ctl_lnm.items():
+            mat = np.asarray(mat, float)
+            if cn in s.get("controls", {}) and mat.size and mat.shape[1] == len(lnm):
+                d = lnm - mat.mean(axis=0)
+                s["controls"][cn]["ci90_mean_d"] = CF.month_ci(d, H.seed_int(CF.SEED_TAG, "weekend", period, cn,
+                                                                             "ci"))
+        return s
     RO.calendar_status = no_o2
     RO.select_weekend_map = lambda ctx, live, off: ({"not_run": "round 1's select map; round 2's select-period "
                                                                 "weekend tables are in pretest_reads.json (6)"}, {})
+    RO._summary = with_ci
     try:
         yield
     finally:
-        RO.calendar_status, RO.select_weekend_map = cal, smap
+        RO.calendar_status, RO.select_weekend_map, RO._summary = cal, smap, summ
 
 
 # ------------------------------------------------------------------ the rows module (9.2)
@@ -351,4 +366,8 @@ def run_reads(*, args, pin, mks: dict, syms: list, test_doc: dict, full: dict, p
         SR.write_json(out_path, doc)
         status[name] = "written"
         print(f"[reads r2] {name}: written {os.path.relpath(out_path, root)} in {time.time() - t0:.0f}s", flush=True)
+    SR.write_json(os.path.join(root, OUT_REL, "reads_status.json"),
+                  {"what": "PREREG_HUNT_R2 9.1: which reads ran; unfinished ones are listed (12-hour wall)",
+                   "status": status, "wall_hours_used": round((time.time() - t_start) / 3600, 2),
+                   "written_utc": H.ms_str(int(time.time() * 1000))})
     return status

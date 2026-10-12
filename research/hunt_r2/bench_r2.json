@@ -1,0 +1,56 @@
+{
+ "what": "PREREG_HUNT_R2 11 bench: synthetic bars only (seeded random walks), no real price",
+ "machine": {
+  "cpu_count": 4
+ },
+ "coins": 30,
+ "select_months": 36,
+ "synth_build_s": 1.39,
+ "market_and_series_s": 15.49,
+ "signal_s_per_combo_per_coin_15m": {
+  "N05_PSAR_POC": 6.1566,
+  "V45_AMB": 2.6983,
+  "V39_ALL": 3.0902,
+  "F16_FIB618": 0.222,
+  "F10_M2022": 0.1519,
+  "E1": 0.0323,
+  "TURTLE55": 0.0778
+ },
+ "engine_s_per_run": {
+  "5/day@15m:15m": 0.3326,
+  "5/day@15m:30m": 0.2681,
+  "5/day@15m:1h": 0.2393,
+  "5/day@15m:4h": 0.1721,
+  "10/day@15m:15m": 0.4859,
+  "10/day@15m:30m": 0.3302,
+  "10/day@15m:1h": 0.2317,
+  "10/day@15m:4h": 0.1735,
+  "15/day@15m:15m": 0.5791,
+  "15/day@15m:30m": 0.3781,
+  "15/day@15m:1h": 0.2567,
+  "15/day@15m:4h": 0.1753
+ },
+ "extrapolation": {
+  "cpu_h": {
+   "event_store": 20.9,
+   "real": 0.73,
+   "nulls": 146.8,
+   "box_worst": 1.1,
+   "select_total": 169.6
+  },
+  "select_wall_h_at_effective_cores": {
+   "18": 9.42,
+   "27": 6.28
+  },
+  "above_the_line": false,
+  "line": "select above 15 h wall at 18 effective cores: tell the owners before renting; nothing is cut (11)",
+  "notes": [
+   "signal seconds per combo per coin measured on 15m; other timeframes scaled by bar count (30m / 2, 1h / 4, 4h / 16); names not timed use the median of the timed light names",
+   "engine seconds per run = the mean over the densities and timeframes (no density mix of the real names is assumed)",
+   "nulls: 400 replicates x (4,369 + 8) runs, base cost only",
+   "box: the worst case, every one of the 85 names taken at 15m (80 points x base and cost x2)",
+   "parallel efficiency 100% at the effective core count (18-27 effective of 32 vCPU)"
+  ]
+ },
+ "seconds": 54.7
+}

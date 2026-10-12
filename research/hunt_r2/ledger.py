@@ -124,8 +124,8 @@ def _row(rid: str, study: str, kind: str, p, deepseek: bool, source: str, status
 
 # ------------------------------------------------------------------ round 1 (hunt v1, wide and its reads)
 def round1_rows(root: str, priv_dir: str | None) -> tuple:
-    """(tested rows, listed-only rows, inputs, looks) of hunt v1 and wide."""
-    rows, listed, inputs, looks = [], [], [], []
+    """(tested rows, listed-only rows, inputs, looks, pending) of hunt v1 and wide."""
+    rows, listed, inputs, looks, pending = [], [], [], [], []
     p1 = os.path.join(root, R1_V1_TEST)
     v1 = _load(p1)
     inputs.append({"file": R1_V1_TEST, "sha256": sha256_or_none(p1)})
@@ -173,7 +173,11 @@ def round1_rows(root: str, priv_dir: str | None) -> tuple:
                                  "p not available (DeepSeek read: private, not read (8))" if ds else None))
             for o in ("O1", "O2", "O3", "O4"):
                 looks.append({"study": "hunt wide", "look": f"read {o}", "status": "run"})
-    return rows, listed, inputs, looks
+        else:                                   # O4 (e) prints a p per row: a look not yet run, at its maximum
+            n = len(wide.get("picks") or []) + 3
+            pending.append({"study": "hunt wide reads O4", "hypotheses": n,
+                            "why": "reads_o.json absent: one O4 (e) p per tested pick, the v1 pick and 2 baskets"})
+    return rows, listed, inputs, looks, pending
 
 
 # ------------------------------------------------------------------ track 2
@@ -302,7 +306,7 @@ def snapshot(root: str = ROOT, priv_dir: str | None = None, r2_full: dict | None
     ``public_root`` = where the other studies' public outputs lie under their repository paths (default: the
     repository; on the round-2 server, the folder the server kit fetches the results branches into)."""
     when = when or dt.datetime.now(dt.timezone.utc)
-    r1, listed, inputs, looks = round1_rows(public_root or root, priv_dir)
+    r1, listed, inputs, looks, pend1 = round1_rows(public_root or root, priv_dir)
     t2, l2, in2, lk2, pend2 = track2_rows(root, priv_dir, public_root)
     r2 = round2_rows(r2_full)
     ex, pend_x, in_x = extra_rows(extra)
@@ -317,7 +321,7 @@ def snapshot(root: str = ROOT, priv_dir: str | None = None, r2_full: dict | None
     looks += lk2
     fg, in_fg = fullgrid_rows(fullgrid_confirm, root)
     Aplus = A_rows + fg
-    pend = pending_looks(root, have, r2_full is not None) + pend2 + pend_x
+    pend = pending_looks(root, have, r2_full is not None) + pend1 + pend2 + pend_x
     L_rows = list(Aplus)
     for pnd in pend:
         for i in range(int(pnd["hypotheses"])):

@@ -35,6 +35,7 @@ export async function mount(el, ctx) {
     card);
 
   let R = null;
+  let more = false;                                      // a phone shows the first LIST_FOLD rows until "나머지 보기"
   function pickRows(d) {
     const ix = LK.index(d);
     return ix.cands.filter((c) => (st.kind === "all" || c.kind === st.kind) && (st.tf === "all" || c.tf === st.tf) && (st.strat === "all" || c.name === st.strat))
@@ -52,15 +53,17 @@ export async function mount(el, ctx) {
     put(stratSel, ui.select([{id: "all", label: `전체 (${names.length}개)`}, ...names.map((n) => ({id: n, label: `${LK.stratKo(n, meta)} (${n})`}))],
       st.strat, (v) => { st.strat = v; save(); paint(); }, "매매법"));
     const rows = pickRows(d);
-    if (!st.pick || !ix.byId[st.pick]) st.pick = rows.length ? rows[0].id : null;
-    put(list, rows.length ? h("div", {class: "rl-list"}, rows.map((c) => pickRow(c, R, st.pick === c.id, () => {
+    const was = st.pick;
+    st.pick = choosePick(st.pick, ix, rows);
+    if (st.pick !== was) save();
+    put(list, rows.length ? pickList(rows, R, st.pick, (c) => {
       st.pick = c.id; save(); paint();
       const t = document.getElementById("rl-pick");
       if (t && t.scrollIntoView) requestAnimationFrame(() => t.scrollIntoView({block: "start", behavior: "smooth"}));
-    }))) : ui.empty("맞는 후보가 없습니다"));
+    }, {more, onMore: () => { more = true; paint(); }}) : ui.empty("맞는 후보가 없습니다"));
     const c = st.pick ? ix.byId[st.pick] : null;
     const p = c && R && R.picks ? R.picks[c.id] : null;
-    put(card, c ? ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.name} · ${c.exit_ko}`, cls: "rl-pickcard",
+    put(card, c ? ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.exit_ko} · 매매법 코드 ${c.name}`, cls: "rl-pickcard",
       acts: h("span", {class: "row wrap"}, LK.kindChip(c.kind), p ? h("span", {class: ["pp", "thin", p.best_ok ? "accent" : ""]}, p.best_ok ? "좋은 자리 가능" : "늘 보통 자리") : null)},
     p ? RK.pickRuleBody(p, R) : ui.none(R ? "이 후보의 규칙을 찾지 못했습니다" : "불러오는 중")) : null);
   }
@@ -77,45 +80,100 @@ export async function mount(el, ctx) {
   }
 }
 
+/** The pick a ?pick= or a click asked for, if it is a pick in the list as filtered: an account id of the league
+ *  (청산만, 1/4, 동전, 기본값) means its pick; anything else, or a pick the filters leave out, gives the first row. */
+export function choosePick(want, ix, rows) {
+  let id = null;
+  if (want && ix.byId[want]) {
+    const pk = LK.pickOf(ix.byId[want], ix);
+    id = pk && ix.cands.some((c) => c.id === pk.id) ? pk.id : null;
+  }
+  if (!id || !rows.some((c) => c.id === id)) id = rows.length ? rows[0].id : null;
+  return id;
+}
+
+/** How many rows a phone shows before "나머지 N개 보기" (the chosen one always shows). */
+export const LIST_FOLD = 8;
+const LIST_COLS = ["매매법 · 봉", "익절", "손절", "본전 승률 (비용 전)", "배수 순서", "후보 계좌가 쓴 배수"];
+/** The picks' list: a header row (a PC; a phone labels each cell), the 기존 36 and the 딥시크 picks under their own
+ *  divider, the rows past LIST_FOLD folded on a phone. */
+export function pickList(rows, R, on, onPick, o = {}) {
+  const kinds = new Set(rows.map((c) => c.kind));
+  const out = [h("div", {class: "rl-listhd", "aria-hidden": "true"}, LIST_COLS.map((t) => h("span", null, t)))];
+  let prev = null;
+  rows.forEach((c, i) => {
+    if (kinds.size > 1 && c.kind !== prev) {
+      const n = rows.filter((x) => x.kind === c.kind).length;
+      const folded = i >= LIST_FOLD && !rows.some((x) => x.kind === c.kind && x.id === on);
+      out.push(h("div", {class: ["rl-divider", folded ? "rl-extra" : ""]}, LK.kindChip(c.kind), h("span", {class: "muted"}, ` ${fmt.int(n)}개`,
+        c.kind === "ds" ? " · 진입 강도 점수가 없어 늘 보통 자리 (30배부터)" : " · 좋은 자리면 50배부터")));
+    }
+    prev = c.kind;
+    out.push(pickRow(c, R, on === c.id, () => onPick(c), {extra: i >= LIST_FOLD}));
+  });
+  const hidden = rows.length > LIST_FOLD ? rows.length - LIST_FOLD : 0;
+  return h("div", {class: ["rl-list", o.more ? "open" : ""]}, out,
+    hidden ? h("button", {type: "button", class: ["btn-line", "rl-more"], onclick: () => (o.onMore ? o.onMore() : null)}, `나머지 ${fmt.int(hidden)}개 보기`) : null);
+}
+
 /** One pick in the list: the timeframe, the name, the exit split in 익절 / 손절, the break-even, the leverage steps and
  *  what its 후보 account used. A button (keyboard too). */
-export function pickRow(c, R, on, onPick) {
+export function pickRow(c, R, on, onPick, o = {}) {
   const p = R && R.picks ? R.picks[c.id] : null;
-  return h("button", {type: "button", class: ["rl-row", on ? "on" : ""], "aria-pressed": String(!!on), onclick: onPick,
+  return h("button", {type: "button", class: ["rl-row", on ? "on" : "", o.extra ? "rl-extra" : ""], "aria-pressed": String(!!on), onclick: onPick,
     title: `${c.name} · ${c.id}`},
   h("span", {class: "rl-rn"}, h("span", {class: "an-tf"}, tfKo(c.tf)), h("b", null, LK.stratKo(c.name)), c.source && c.source.rank > 1 ? h("small", {class: "cl-code"}, `${c.source.rank}순위`) : null),
-  h("span", {class: "rl-rx", dataset: {k: "익절"}}, p ? RK.tpShort(p.tp) : c.exit_ko),
+  h("span", {class: "rl-rx rl-rtp", dataset: {k: "익절"}, title: p ? RK.tpShort(p.tp) : c.exit_ko}, p ? RK.tpTiny(p.tp, {long: true}) : c.exit_ko),
   h("span", {class: "rl-rx", dataset: {k: "손절"}}, p ? `${fmt.num(p.stop_atr, p.stop_atr % 1 ? 1 : 0)} ATR` : "—"),
-  h("span", {class: "rl-rx num", dataset: {k: "본전"}}, p && p.breakeven != null ? RK.share(p.breakeven, 0) : p && p.tp.kind === "roe" ? "배수따라" : "—"),
-  h("span", {class: "rl-rx", dataset: {k: "배수"}}, p ? (p.best_ok ? "50→20배" : "30→20배") : "—"),
-  h("span", {class: "rl-rx rl-ru", dataset: {k: "실제"}}, p ? RK.usedChips(((p.roles || {}).cand || {}).used) : "—"));
+  h("span", {class: "rl-rx num", dataset: {k: "본전"}}, p && p.breakeven != null ? RK.share(p.breakeven, 0) : p && p.tp.kind === "roe" ? "배수에 따라" : "—"),
+  h("span", {class: "rl-rx", dataset: {k: "배수"}}, p ? (p.best_ok ? "50→40→30→20배" : "30→20배") : "—"),
+  h("span", {class: "rl-rx rl-ru", dataset: {k: "후보가 쓴 배수"}}, p ? RK.usedChips(((p.roles || {}).cand || {}).used) : "—"));
 }
 
 /** The owners' three questions answered from the data: the exits, the leverage, the start. */
 export function answersBody(d, R) {
   const ix = LK.index(d);
   const n = ix.cands.length;
-  const ex = {};
-  for (const c of ix.cands) ex[c.exit_ko] = (ex[c.exit_ko] || 0) + 1;
+  const picks = R && R.picks ? ix.cands.map((c) => R.picks[c.id]).filter(Boolean) : [];
   const tpCount = {};
   const stopCount = {};
-  for (const c of ix.cands) {
-    const [tp, sl] = String(c.exit_ko || "").split(" · ");
-    tpCount[tp] = (tpCount[tp] || 0) + 1;
-    stopCount[sl] = (stopCount[sl] || 0) + 1;
+  if (picks.length === n && n) {
+    for (const p of picks) {
+      const k = RK.tpTiny(p.tp);
+      tpCount[k] = (tpCount[k] || 0) + 1;
+      const sk = `${fmt.num(p.stop_atr, p.stop_atr % 1 ? 1 : 0)} ATR`;
+      stopCount[sk] = (stopCount[sk] || 0) + 1;
+    }
+  } else {
+    for (const c of ix.cands) {
+      const [tp, sl] = String(c.exit_ko || "").split(" · ");
+      const tk = String(tp || "").replace(/^고정 익절\s*/, "");
+      tpCount[tk] = (tpCount[tk] || 0) + 1;
+      const sk = String(sl || "").replace(/^손절\s*/, "");
+      stopCount[sk] = (stopCount[sk] || 0) + 1;
+    }
   }
   const list = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${fmt.int(v)}개`).join(" · ");
+  const fixed = picks.filter((p) => p.tp && (p.tp.kind === "R" || p.tp.kind === "roe")).length;
+  const locks = picks.length - fixed;
+  const r3 = picks.filter((p) => p.tp && p.tp.kind === "R" && p.tp.val === 3).length;
+  const baseKo = (R && R.base_exit_ko) || "계단 잠금 10%부터 · 손절 2 ATR";
+  const exitHead = !picks.length ? [`후보 ${fmt.int(n)}개는 5년 탐색(84가지 청산 중)에서 각자 고른 익절·손절을 씁니다. `]
+    : !locks ? [`후보 ${fmt.int(n)}개 모두 5년 탐색(84가지 청산 중)에서 각자 고른 `, h("b", null, "고정 익절"), "과 ", h("b", null, "ATR 손절"), "을 씁니다. 계단 잠금을 쓰는 후보는 없습니다. "]
+      : [`후보 ${fmt.int(n)}개 중 ${fmt.int(fixed)}개는 `, h("b", null, "고정 익절"), `, ${fmt.int(locks)}개는 `, h("b", null, "계단 잠금"), "을 씁니다 (5년 탐색에서 각자 고른 것). 손절은 모두 ATR 손절입니다. "];
   const used = R && R.used_all ? R.used_all.cand || {} : null;
   const usedN = used ? Object.values(used).reduce((s, v) => s + v, 0) : 0;
+  const blk = RK.blockedWords(R, "");
   return h("dl", {class: "rl-qa"},
-    h("div", null, h("dt", null, "익절·손절은 어떻게?"), h("dd", null,
-      `후보 ${fmt.int(n)}개 모두 5년 탐색(84가지 청산 중)에서 각자 고른 `, h("b", null, "고정 익절"), "과 ", h("b", null, "ATR 손절"), "을 씁니다. 계단 잠금을 쓰는 후보는 없습니다. ",
+    h("div", null, h("dt", null, "익절·손절은 어떻게?"), h("dd", null, exitHead,
       h("br"), h("span", {class: "muted"}, `익절: ${list(tpCount)}`), h("br"), h("span", {class: "muted"}, `손절: ${list(stopCount)}`),
-      h("br"), "R = 진입가에서 손절까지의 거리. 3R 익절이면 손절 거리의 3배 가면 익절하고, 4번 중 1번만 이겨도 본전(비용 전)입니다. 기본값 계좌만 규칙봇의 지금 청산(계단 잠금 10%부터 · 손절 2 ATR)을 씁니다.")),
+      h("br"), "R = 진입가에서 손절까지의 거리.", r3 ? " 3R 익절이면 손절 거리의 3배 가면 익절하고, 4번 중 1번만 이겨도 본전(비용 전)입니다." : "",
+      ` 기본값 계좌만 규칙봇의 지금 청산(${baseKo})을 씁니다.`)),
     h("div", null, h("dt", null, "배수(레버리지)는?"), h("dd", null,
-      "규칙봇과 같은 규칙입니다. 좋은 자리(기존 36 매매법의 진입 강도 점수 상위)는 50배 → 40배, 보통 자리는 30배 → 20배 순서로 시도하고, ",
-      "손절선이 청산가 안쪽에 1 ATR 이상 여유가 있고 손절 손실이 잔고의 15% 이하인 첫 배수로 들어갑니다. 증거금은 잔고의 배수% (30배면 30%). ",
-      "손절이 넓을수록 배수가 내려가고, 어느 배수도 안 되면 들어가지 않습니다. 딥시크는 늘 보통 자리입니다.",
+      "규칙봇과 같은 규칙입니다. 좋은 자리(기존 36 매매법의 진입 강도 점수 상위)는 50배 → 40배 → 30배 → 20배, 보통 자리는 30배 → 20배 순서로 시도해, ",
+      "거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 1 ATR 이상 여유 · 손절 손실이 잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다. ",
+      "증거금은 잔고의 배수% (30배면 30%). 손절이 넓을수록 배수가 내려가고, 어느 배수도 안 되면 들어가지 않습니다. 딥시크는 늘 보통 자리입니다.",
+      blk ? ` 거래소 한도: 후보 크기에서는 ${blk}라서 다음 배수로 내려갑니다 (1/4 계좌는 주문이 작아 덜 걸림).` : "",
       used ? [h("br"), h("span", {class: "muted"}, usedN ? "후보 계좌가 지금까지 쓴 배수: " : "후보 계좌는 아직 닫힌 거래가 없습니다"), usedN ? RK.usedChips(used) : null] : null)),
     h("div", null, h("dt", null, "언제부터?"), h("dd", null,
       d.start_ms ? [h("b", null, `${LK.startKo(d)} KST`), " (설치한 때)부터입니다. 모든 계좌가 그때 $5,000으로 시작했고, 거래·잔고·날짜(시작한 날 = D+0)는 모두 그때부터 셉니다. ",

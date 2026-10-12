@@ -250,11 +250,12 @@ def test_ledger_three_prints_on_a_temporary_tree(tmp_path):
     assert [r["holm_005"] for r in A["rows"]] == holm.tolist()
     # before round 2's test and track 2's test: pending looks count in (L) at their maximum, p = 1
     os.remove(os.path.join(root, LG.T2_TEST))
+    os.remove(os.path.join(root, LG.R1_WIDE_READS_O))
     _write(root, LG.R2_PICKS, {"picks": [{"id": "a"}, {"id": "b"}, {"id": "c"}]})
     snap2 = LG.snapshot(root, priv, None, None)
     pend = {x["study"]: x["hypotheses"] for x in snap2["pending_looks_in_L"]}
-    assert pend == {"hunt-r2 v1": 6, "track 2 (hiwr v1)": LG.T2_MAX}
-    assert snap2["prints"]["L"]["m"] == snap2["prints"]["A+"]["m"] + 6 + LG.T2_MAX
+    assert pend == {"hunt-r2 v1": 6, "track 2 (hiwr v1)": LG.T2_MAX, "hunt wide reads O4": 2 + 3}
+    assert snap2["prints"]["L"]["m"] == snap2["prints"]["A+"]["m"] + 6 + LG.T2_MAX + 5
     assert snap2["prints"]["A+"]["m"] == snap2["prints"]["A"]["m"] + 711 + 38       # full grid without a file: p = 1
 
 
@@ -535,6 +536,13 @@ def test_e2e_reads_written_under_the_guard(e2e):
             os.path.join(out_dir, "test.json"))
     rw = _out(e2e, "reads_weekend.json")["out"]
     assert rw["calendar"]["run"] is False and "not a round-2 read" in rw["calendar"]["reason"]
+    assert "O2" not in rw["constants"]["variants"]
+    some = next(r for r in rw["rows"].values() if "note" not in r)
+    ci = some["periods"]["test"]["O1"]["controls"]["a"]["ci90_mean_d"]
+    assert ci[0] <= some["periods"]["test"]["O1"]["controls"]["a"]["mean_d"] <= ci[1]
+    assert RO._summary.__name__ == "_summary"                            # round 1's function restored
+    assert _out(e2e, "reads_status.json")["status"] == {"rows": "written", "reads_o": "written",
+                                                        "reads_a": "written"}
     rr = _out(e2e, "reads_rows.json")["out"]["rows"]
     test = _out(e2e, "test.json")
     assert set(rr) == {f"pick:{p['id']}" for p in test["picks"]}

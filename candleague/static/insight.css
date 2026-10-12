@@ -64,19 +64,27 @@
 .rl-coinh b { font-family: var(--f-term); color: var(--ink); }
 .rl-coinh span { font-size: var(--t-2xs); }
 .rl-cdl { margin: 0; display: grid; gap: 1px; }
-.rl-cdl > div { display: flex; justify-content: space-between; gap: 6px; font-size: var(--t-xs); }
+.rl-cdl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 6px; font-size: var(--t-xs); min-width: 0; }
 .rl-cdl dt { color: var(--muted); white-space: nowrap; }
-.rl-cdl dd { margin: 0; color: var(--ink); text-align: right; white-space: nowrap; }
+/* a long value ("둘 다 못 들어감") wraps, or drops under its label, instead of pushing the page sideways */
+.rl-cdl dd { margin: 0 0 0 auto; color: var(--ink); text-align: right; white-space: normal; min-width: 0; overflow-wrap: anywhere; }
 .rl-five { display: grid; gap: 2px; }
-.rl-frow { display: grid; grid-template-columns: minmax(84px, .6fr) minmax(0, 1.6fr) 54px minmax(0, 1.2fr); gap: 10px; align-items: center; padding: 6px;
+.rl-frow { display: grid; grid-template-columns: minmax(84px, .6fr) minmax(0, 1.6fr) 72px minmax(0, 1.2fr); gap: 10px; align-items: center; padding: 6px;
   border-radius: var(--r-sm); color: inherit; text-decoration: none; font-size: var(--t-sm); }
 .rl-frow:hover { background: var(--surface-2); }
 .rl-fexit { color: var(--ink-2); min-width: 0; }
 @media (max-width: 559px) {
   .rl-frow { grid-template-columns: minmax(0, 1fr) auto; }
   .rl-frow .rl-fexit { grid-column: 1 / -1; order: 3; font-size: var(--t-xs); }
-  .rl-frow .rl-used { grid-column: 1 / -1; order: 4; }
+  .rl-frow .rl-fused { grid-column: 1 / -1; order: 4; }
 }
+.rl-fused { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+/* 계좌 자세히 of an account whose exit is not the pick's (기본값): its own exit first */
+.rl-own { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.rl-ownh { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink); }
+.rl-own .rl-kv > div { border-bottom-color: var(--accent-line); }
+.rl-block { color: var(--warn); font-weight: 700; }
+.rl-liqc { display: grid; gap: 2px; }
 /* the compact box (커스텀값, 계좌 자세히) */
 .rl-box { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
 .rl-bl { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.55; }
@@ -92,9 +100,12 @@
 .rl-qa dd b { color: var(--ink); }
 @media (max-width: 599px) { .rl-qa > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .rl-list { display: grid; gap: 2px; margin-top: 8px; }
-.rl-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 70px 64px 76px minmax(0, 1.2fr);
+.rl-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) 64px 76px 112px minmax(0, 1.1fr);
   gap: 10px; align-items: center; padding: 8px 8px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--t-sm); color: var(--ink-2);
   border: 1px solid transparent; }
+.rl-listhd { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) 64px 76px 112px minmax(0, 1.1fr); gap: 10px; align-items: end; padding: 2px 9px 4px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.3; border-bottom: 1px solid var(--line-2); }
+.rl-divider { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 10px 8px 4px; font-size: var(--t-xs); border-bottom: 1px solid var(--line); }
+.rl-more { display: none; }
 .rl-row:hover { background: var(--surface-2); }
 .rl-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rl-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
@@ -102,10 +113,15 @@
 .rl-rn b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-rx { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 759px) {
+  .rl-listhd { display: none; }
   .rl-row { grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; gap: 4px 12px; padding: 10px 8px; }
   .rl-rn { grid-column: 1 / -1; }
   .rl-rx[data-k]::before { content: attr(data-k) " "; color: var(--muted); font-size: var(--t-2xs); }
-  .rl-ru { grid-column: 1 / -1; }
+  .rl-rtp { grid-column: 1 / -1; white-space: normal; }
+  .rl-ru { grid-column: 1 / -1; white-space: normal; }
+  /* the first rows only, until "나머지 N개 보기" (the chosen pick always shows) */
+  .rl-list:not(.open) .rl-row.rl-extra:not(.on), .rl-list:not(.open) .rl-divider.rl-extra { display: none; }
+  .rl-list:not(.open) .rl-more { display: inline-flex; justify-self: start; margin-top: 6px; }
 }
 .rl-pickcard { scroll-margin-top: 96px; }
 
