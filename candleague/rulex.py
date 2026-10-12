@@ -1030,17 +1030,22 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
 
 
 # ====================================================================== the league side: signals and records per chunk
-def _sides(lo_i: bool, sh_i: bool) -> list:
-    """Both sides when both flags are true, the long first (PREREG 3 and 11.3)."""
-    return ([1] if lo_i else []) + ([-1] if sh_i else [])
+class BothFlags(RuntimeError):
+    """A chart bar carries both a long and a short flag of one pick (PREREG 3: no pick does; the league asserts it and stops)."""
+
+
+def native_arrays(a: dict, sym: str, df, close, lo, sh, btc) -> dict:
+    """The strategy's own exit arrays of account ``a`` on ``sym``'s chart frame, normalized (``normalize_native``)."""
+    ret = native_provider()(a, sym, df, close, lo, sh, btc)
+    return normalize_native(ret, len(df))
 
 
 def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: int, end: int, run_start: int,
                strategies: Optional[L.Strategies] = None, log: Callable[[str], None] = lambda s: None) -> tuple:
     """The rule accounts' signals and chart records of the chart bars closing in (max(start, run_start), end]:
-    ({bar close: [(account id, Signal or RuleClose)]}, [notes]). Twins and rule accounts offer every flag (both sides
-    when both are true, long first); a coin flip takes one signal per signal bar with its seeded side; a rule account
-    also gets a RuleClose for every chart close of every coin (and every 15m close for q15 on 1h / 4h picks)."""
+    ({bar close: [(account id, Signal or RuleClose)]}, [notes]). Twins and rule accounts offer every flag; a bar that carries both
+    a long and a short flag stops the run (``BothFlags``, PREREG 3); a coin flip takes one signal per signal bar with its seeded
+    side; a rule account also gets a RuleClose for every chart close of every coin (and every 15m close for q15 on 1h / 4h picks)."""
     from paperbot.sigservice import window_5m
     S = strategies or L.Strategies()
     ra = [a for a in accts if a.get("rule")]
@@ -1072,7 +1077,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
             pack = FramePack(lib, df)
             cache: dict = {}
             strength: dict = {}
-            f11c: dict = {}
+            natc: dict = {}
             recs: dict = {}                       # the same records serve every account with the same pick and needs
             for a in group:
                 key = (a["kind"], a["name"], repr(sorted(a["combo"].items())))
@@ -1083,6 +1088,8 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                         notes.append(f"{a['id']} {sym} {tf}: 신호 계산 실패 ({type(exc).__name__}), 이 구간 신호 없음")
                         cache[key] = (np.zeros(len(df), bool), np.zeros(len(df), bool))
                 lo, sh = cache[key]
+                if len(idx) and bool((lo[idx] & sh[idx]).any()):
+                    raise BothFlags(f"{a['id']} {sym} {tf}: a chart bar carries both a long and a short flag (PREREG 3)")
                 smod = S.strength(a["name"]) if a["kind"] == "core" else None
                 if smod is not None and a["name"] not in strength:
                     try:
@@ -1093,32 +1100,36 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                     except Exception as exc:  # noqa: BLE001  live: a failed strength sizes 'normal'
                         strength[a["name"]] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
                 rule, spec = a["rule"], X.spec(a["exit"])
-                f11 = None
-                if rule["family"] == "F11":
-                    if key not in f11c:
-                        f11c[key] = _f11_arrays(a, df, tf)
-                    f11 = f11c[key]
+                nat = None
+                if rule["family"] in NATIVE_FAMILIES:
+                    if key not in natc:
+                        natc[key] = native_arrays(a, sym, df, close, lo, sh, frames.get("BTCUSDT"))
+                    nat = natc[key]
                 for pos in np.flatnonzero(lo[idx] | sh[idx]):
                     i = int(idx[pos])
                     at = float(pack.atr()[i])
                     if not (math.isfinite(at) and at > 0):
                         continue                                      # live: NO_ATR, never traded
-                    sides = [flip_of(a, int(close[i]))] if a["role"] == ROLE_FLIP else _sides(bool(lo[i]), bool(sh[i]))
-                    for s in sides:
-                        meta = {"stop_dist": spec["stop_atr"] * at, "account": a["id"],
-                                "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
-                        if rule["family"] is not None:
-                            meta["style"] = f"rule:{rule['id']}"
-                            meta["rx0"] = entry_seed(pack, rule, i, s, f11)
-                        sig = Signal(ts=int(close[i]) - 1, symbol=sym, timeframe=tf, strategy_id=a["name"], side=s,
-                                     stop_price=0.0, tier="best", atr=at, meta=meta)
-                        by_close.setdefault(int(close[i]), []).append((a["id"], sig))
+                    s0 = 1 if lo[i] else -1                           # the strategy's side at this bar
+                    s = flip_of(a, int(close[i])) if a["role"] == ROLE_FLIP else s0
+                    meta = {"stop_dist": spec["stop_atr"] * at, "account": a["id"],
+                            "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
+                    if rule["family"] is not None:
+                        meta["style"] = f"rule:{rule['id']}"
+                        meta["rx0"] = entry_seed(pack, rule, i, s, nat)
+                        if nat is not None:             # the strategy's level and target (mirrored at the fill for a flip: new_rx)
+                            k0 = "l" if s0 > 0 else "s"
+                            meta["native_inv"], meta["native_tgt"], meta["native_s"] = (
+                                _fin(nat["lvl"][k0][i]), _fin(nat["tgt"][k0][i]), s0)
+                    sig = Signal(ts=int(close[i]) - 1, symbol=sym, timeframe=tf, strategy_id=a["name"], side=s,
+                                 stop_price=0.0, tier="best", atr=at, meta=meta)
+                    by_close.setdefault(int(close[i]), []).append((a["id"], sig))
                 if rule["family"] is None:
                     continue
                 needs = rule_needs(rule)
                 rk = (key, json.dumps(needs, sort_keys=True))
                 if rk not in recs:
-                    recs[rk] = [close_record(pack, int(i), sym, int(close[i]), needs, lo, sh, f11) for i in idx]
+                    recs[rk] = [close_record(pack, int(i), sym, int(close[i]), needs, lo, sh, nat) for i in idx]
                 for i, rec in zip(idx, recs[rk]):
                     by_close.setdefault(int(close[i]), []).append((a["id"], RuleClose(rec)))
                 if sched_of(a) == "q" and pack15 is not None:
@@ -1151,10 +1162,14 @@ def account_records(lib, source, a: dict, sym: str, lo_ms: int, hi_ms: int,
     idx = np.flatnonzero((close > lo_ms) & (close <= hi_ms) & (np.arange(len(df)) >= w))
     pack = FramePack(lib, df)
     needs = rule_needs(rule)
-    lo, sh = S.signals(a, df, sym, None) if needs["flags"] else (None, None)
-    f11 = _f11_arrays(a, df, tf) if rule["family"] == "F11" else None
+    btc = None
+    if a["kind"] == "ds" and sym != "BTCUSDT":                  # the DeepSeek strategies read BTC's chart as context
+        bcols = source.load("BTCUSDT", lo_ms - window_5m(lib, tf) * FIVE, hi_ms)
+        btc = rule_frame(lib, bcols, tf, hi_ms)
+    lo, sh = S.signals(a, df, sym, btc) if (needs["flags"] or needs["nat"]) else (None, None)
+    nat = native_arrays(a, sym, df, close, lo, sh, btc) if needs["nat"] else None
     for i in idx:
-        out.append(close_record(pack, int(i), sym, int(close[i]), needs, lo, sh, f11))
+        out.append(close_record(pack, int(i), sym, int(close[i]), needs, lo, sh, nat))
     if sched_of(a) == "q":
         f15 = rule_frame(lib, cols, "15m", hi_ms)
         c15 = (f15["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + TF_MS["15m"]
@@ -1170,7 +1185,11 @@ def _due(sig, prev: Optional[int]) -> bool:
     return prev is None or sig.ts + 1 - MIN <= prev
 
 
-def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen: dict, fund_wait: Optional[dict] = None) -> None:
+_OUTCOME_COL = {"ENTERED": 0, "SKIPPED": 1, "REJECTED": 2}
+
+
+def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen: dict, fund_wait: Optional[dict] = None,
+               stats: Optional[dict] = None, last_close: Optional[dict] = None) -> None:
     """``paramshadow.replay_day`` for a league that must place fills and checks on the minutes the study's kernel uses
     (PREREG 3, 5.1 and 11.4 item 13): the kernel reads each coin's OWN minutes (kernel._entry_index on the coin's array),
     the league's steps are the union of the coins' minutes, so a minute missing for one coin while the others trade
@@ -1189,7 +1208,11 @@ def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen
     paramshadow.replay_day: only busy engines are stepped, a signal or record is submitted after the step of the minute
     that ends at its bar's close (or after the first step past it), and a close after the day's last step goes in at the
     end (pending into the next day). With no minute missing for a single coin and none without trades it gives the same
-    trades as paramshadow.replay_day."""
+    trades as paramshadow.replay_day.
+
+    Counters (PREREG 11.4 item 10; ``paramshadow.replay_day`` clears ``e.outcomes`` at every step and so keeps none): with ``stats`` a
+    dict, every signal outcome is counted before it is cleared, ``stats[(account id, UTC day of the decision)] = [entered, skipped while
+    holding, rejected]``. ``last_close`` {coin: the last close price seen} is kept for the daily marks (11.4 item 11)."""
     closes = sorted(by_close)
     k = 0
     fund_wait = {} if fund_wait is None else fund_wait
@@ -1211,13 +1234,19 @@ def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen
                     e.pending = [g for g, o in zip(e.pending, ok) if o]
             stamp_ref(e, tb)
             e.step(tb, funding)
+            if stats is not None:
+                for o in e.outcomes:
+                    row = stats.setdefault((aid, int(o.step_ts) // DAY * DAY), [0, 0, 0])
+                    row[_OUTCOME_COL.get(o.status, 2)] += 1
             e.outcomes.clear()
             if held:
                 e.pending = held + e.pending
             if e.position is None and not e.pending:
                 active.discard(aid)
-        for s in tb:
+        for s, b in tb.items():
             seen[s] = ts
+            if last_close is not None:
+                last_close[s] = float(b.close)
         while k < len(closes) and closes[k] <= ts + MIN:
             for aid, sig in by_close[closes[k]]:
                 engines[aid].submit(sig)
@@ -1227,6 +1256,18 @@ def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen
         for aid, sig in by_close[c]:
             engines[aid].submit(sig)
             active.add(aid)
+
+
+def mark_value(e, last_close: dict) -> float:
+    """PREREG 11.4 item 11: the account's realised wallet plus, when a position is open, its mark value: the last 1m close (last
+    price) of the held coin, less the taker fee and the slippage of a market exit, after the funding the position had paid by then
+    (the engine's wallet already holds the entry fee and the funding)."""
+    p = e.position
+    if p is None:
+        return float(e.wallet)
+    px = float(last_close.get(p.symbol, p.entry_price))
+    out = px * (1 - p.side * e.s.slippage_frac)
+    return float(e.wallet + p.side * p.qty * (out - p.entry_price) - p.qty * out * e.s.taker_fee)
 
 
 # ====================================================================== the restore check
@@ -1242,6 +1283,22 @@ def _same(a, b) -> bool:
     return a == b
 
 
+class IncompleteBars(RuntimeError):
+    """The bars fetched for a recomputation do not reach as far as the league itself has seen: the answer was cut short."""
+
+
+def check_coverage(steps, sym: str, entry_time: int, seen: Optional[dict]) -> None:
+    """A recomputation from fetched bars must cover the position: a bar at the entry minute, and a last bar as late as the league's own
+    last minute of the coin (``seen``). ``paperbot.paramshadow.make_fetcher`` stops quietly on an empty page, so a short answer would
+    otherwise 'correct' a saved state to a wrong one (review): this raises, and ``audit_restored`` then keeps the saved state."""
+    times = [t for t, bars, _f in steps if sym in bars and not (bars[sym].volume is not None and bars[sym].volume == 0.0)]
+    if entry_time not in times:
+        raise IncompleteBars(f"{sym}: no bar at the entry minute in the fetched bars")
+    want = None if seen is None else seen.get(sym)
+    if want is not None and max(times) < int(want):
+        raise IncompleteBars(f"{sym}: the fetched bars end at {max(times)}, before the league's last minute {int(want)}")
+
+
 def recompute_rx(lg, a: dict, p) -> dict:
     """The rule state of the open position ``p`` of account ``a`` as it should be at the league's ``done`` time, from
     the bars alone: the seed of the signal, the chart records closed since, and the position's minutes (the favourable
@@ -1249,11 +1306,15 @@ def recompute_rx(lg, a: dict, p) -> dict:
     rule, sym = a["rule"], p.symbol
     tf_ms, sched = TF_MS[a["tf"]], sched_of(a)
     c0 = int(p.signal.ts) + 1
-    rx = new_rx(rule, tf_ms, c0, p.signal.meta.get("rx0") or {}, p.signal.atr, p.entry_price, p.entry_time)
+    meta = p.signal.meta
+    seed = dict(meta.get("rx0") or {})
+    seed.update(inv=meta.get("native_inv"), tgt=meta.get("native_tgt"), s0=meta.get("native_s"))
+    rx = new_rx(rule, tf_ms, c0, seed, p.signal.atr, p.entry_price, p.entry_time, p.side)
     done = lg.done
     recs = sorted(account_records(lg.lib, lg.source, a, sym, c0, done, lg.strategies),
                   key=lambda r: (r["t"], 0 if r["k"] == "p" else 1))
     steps = lg.fetch_steps(None, [sym], p.entry_time // FIVE * FIVE, done)
+    check_coverage(steps, sym, p.entry_time, getattr(lg, "seen", None))
     rt = lg.engines[a["id"]].s.round_trip_cost
     R, side, qty = float(p.signal.meta["stop_dist"]), p.side, p.qty
     fpaid, mfe, ri, prev, fwait = 0.0, p.entry_price, 0, p.entry_time, 0.0
@@ -1324,17 +1385,20 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("cmd", choices=("check", "accounts", "ids"))
     ap.add_argument("--rules", default=None, help=f"rule config (default {DEFAULT_FILE}, env {RULES_ENV})")
     ap.add_argument("--candidates", default=C.DEFAULT_FILE)
+    ap.add_argument("--all", action="store_true", help="ids: the 86 study ids (F11 and F12 included)")
     a = ap.parse_args(argv)
     if a.cmd == "ids":
-        print("\n".join(study_ids()))
+        print("\n".join(study_ids() + (native_ids() if a.all else [])))
         return 0
     try:
+        cfg = load_config(a.rules)
         accts = load_accounts(a.rules, C.load(a.candidates))
     except RuleConfigError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
     if accts is None:
-        print("no rule config file: the league creates no rule account")
+        print("no rule config file: the league creates no rule account" if cfg is None else
+              "the rule config is not enabled (\"enabled\": true is the owners' OK): the league creates no rule account")
         return 0
     if a.cmd == "accounts":
         print("\n".join(x["id"] for x in accts))

@@ -2476,6 +2476,7 @@ def test_ds_mirror_symmetry(name):
     assert ds_same(lg, msh) and ds_same(sh, mlg) and lg.sum() >= 3
     r, mr = calc(df, tf, name, combo), calc(mdf, tf, name, combo)
     assert ds_same(r.lx, mr.sx) and ds_same(r.sx, mr.lx)
+    assert ds_same(r.z_l, mr.z_s) and ds_same(r.z_s, mr.z_l)                    # the live-level flags mirror too
     for a, b in ((r.inv_l, mr.inv_s), (r.inv_s, mr.inv_l), (r.tgt_l, mr.tgt_s), (r.tgt_s, mr.tgt_l)):
         assert ds_same(fin(a), fin(b))
         assert np.allclose(AXIS - a[fin(a)], b[fin(b)], rtol=0, atol=1e-9)
@@ -2488,8 +2489,13 @@ def cut_points(df, tf, name, combo, n_signal=4):
     return sorted({int(i) for i in pick if i >= 100} | {len(df) // 3, len(df) // 2, len(df) - 5})
 
 
+def arrs(r):
+    """The six arrays of A.0 and the two z flags of a native_ds result."""
+    return [*r, r.z_l, r.z_s]
+
+
 def upto(r, i):
-    return [a[:i + 1] for a in r]
+    return [a[:i + 1] for a in arrs(r)]
 
 
 @pytest.mark.parametrize("name", ND.NAMES)
@@ -2500,7 +2506,7 @@ def test_ds_causality_prefix_and_perturbed_future(name):
     full = calc(df, tf, name, combo)
     for i in cut_points(df, tf, name, combo):
         cut = calc(prefix(df, i), tf, name, combo)
-        assert all(ds_same(a, b) for a, b in zip(upto(full, i), cut)), (name, i, "prefix")
+        assert all(ds_same(a, b) for a, b in zip(upto(full, i), upto(cut, i))), (name, i, "prefix")
         for seed in (11, 12):
             pert = calc(perturb_after(df, i, seed), tf, name, combo)
             assert all(ds_same(a, b) for a, b in zip(upto(full, i), upto(pert, i))), (name, i, seed, "perturbed")
@@ -2513,7 +2519,7 @@ def test_ds_causality_of_the_higher_timeframe_inputs_of_f7_rf_triple(tf, combo):
     full = calc(df, tf, "F7_RF_TRIPLE", combo)
     for i in range(300, 330):
         cut = calc(prefix(df, i), tf, "F7_RF_TRIPLE", combo)
-        assert all(ds_same(a, b) for a, b in zip(upto(full, i), cut)), i
+        assert all(ds_same(a, b) for a, b in zip(upto(full, i), upto(cut, i))), i
 
 
 def test_ds_f7_rf_only_is_the_opposite_signal_exit():
@@ -2555,7 +2561,7 @@ def real_inputs(real, sym, tf):
     """(chart frame, ctx, coin) of the select-period bars; ``real`` is the module's ``real`` fixture."""
     df, close_ms = R.frame(real.dir, sym, tf)
     assert close_ms.max() <= CUT_MS                                          # no chart bar closes after the cut
-    ctx = None if sym == "BTCUSDT" else {"BTCUSD": R.frame(real_dir, "BTCUSDT", tf)[0]}
+    ctx = None if sym == "BTCUSDT" else {"BTCUSD": R.frame(real.dir, "BTCUSDT", tf)[0]}
     return df, ctx, sym[:-1]
 
 
@@ -2601,7 +2607,7 @@ def test_ds_real_causality(real, pick):
         cuts |= {int(sigs[len(sigs) // 2]), int(sigs[-1])}
     for i in sorted(cuts):
         cut = ND.native(prefix(df, i), tf, name, combo, ctx_cut(ctx, i), coin)
-        assert all(ds_same(a, b) for a, b in zip(upto(full, i), cut)), (pick["id"], i, "prefix")
+        assert all(ds_same(a, b) for a, b in zip(upto(full, i), upto(cut, i))), (pick["id"], i, "prefix")
     i = int(sigs[len(sigs) // 2]) if len(sigs) else n // 2
     pert = ND.native(perturb_after(df, i, 5), tf, name, combo, ctx, coin)
     assert all(ds_same(a, b) for a, b in zip(upto(full, i), upto(pert, i))), (pick["id"], i, "perturbed")

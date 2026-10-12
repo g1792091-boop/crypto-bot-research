@@ -70,6 +70,13 @@ def open_db(path: str) -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS trades (account TEXT NOT NULL, exit_time INTEGER NOT NULL, "
                  "data TEXT NOT NULL)")
     conn.execute("CREATE INDEX IF NOT EXISTS trades_acct ON trades (account, exit_time)")
+    # PREREG_EXITFLEX 11.4 items 10-11 (rule accounts only; empty in a league without them): per account and UTC day the signals decided
+    # (offered = entered + skipped while holding + rejected) and the trades closed; at every 00:00 UTC the realised wallet and the mark
+    conn.execute("CREATE TABLE IF NOT EXISTS acct_day (account TEXT NOT NULL, day INTEGER NOT NULL, offered INTEGER NOT NULL, "
+                 "entered INTEGER NOT NULL, skipped INTEGER NOT NULL, rejected INTEGER NOT NULL, closed INTEGER NOT NULL, "
+                 "PRIMARY KEY (account, day))")
+    conn.execute("CREATE TABLE IF NOT EXISTS acct_mark (account TEXT NOT NULL, day INTEGER NOT NULL, wallet REAL NOT NULL, "
+                 "marked REAL NOT NULL, PRIMARY KEY (account, day))")
     conn.commit()
     return conn
 
@@ -86,7 +93,8 @@ def _put(conn, k: str, v) -> None:
 def fingerprint(accts: list[dict]) -> str:
     import hashlib
     body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
-                       + ([a["rule"]] if a.get("rule") else []) for a in accts], sort_keys=True)     # rule accounts: + the rule
+                       + ([a["rule"], RX.code_version(a["rule"]), a.get("no_entry_from_ms")] if a.get("rule") else [])
+                       for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
@@ -212,11 +220,31 @@ def backup_db(conn, db_path: str, meta: dict, now_ms: int) -> str:
     return path
 
 
+class StartMismatch(RuntimeError):
+    """The league's start is not the install time it was told to expect (PREREG_EXITFLEX 11.3): it stops before any trade is shown."""
+
+
+def check_expected_start(start_ms: int, expect_ms: Optional[int], where: str = "") -> None:
+    """PREREG 11.3: the league's start must equal the install time floored to 5 minutes. A lost database AND start file would
+    otherwise start the league at 'now' without a word and move every C1 / C2 date, which count days from the install. ``expect_ms``
+    None = no expectation (the league as before). Raises StartMismatch with the way out (CANDLEAGUE_START = the install time)."""
+    if expect_ms is None:
+        return
+    want = int(expect_ms) // FIVE * FIVE
+    if int(start_ms) != want:
+        raise StartMismatch(
+            f"{where}시작 시각 {_utc(int(start_ms), '%Y-%m-%d %H:%M')} UTC가 설치 시각 {_utc(want, '%Y-%m-%d %H:%M')} UTC(5분 단위)와 다릅니다. "
+            f"리그를 멈춥니다. 데이터베이스와 시작 시각 파일이 모두 없어졌다면 CANDLEAGUE_START={_utc(want, '%Y-%m-%dT%H:%MZ')} 로 "
+            f"설치 시각부터 다시 만드세요.")
+
+
 class League:
     """The league's accounts and their engines over the database ``conn``.
 
     ``start_ms`` is an explicit start (CANDLEAGUE_START), used only when neither the database nor its start file
-    records one (league_start). ``db_path`` (the file of ``conn``) is where a start-over keeps its copy of the old
+    records one (league_start). ``expect_start_ms`` (CANDLEAGUE_EXPECT_START: the install time the restart script wrote down,
+    PREREG_EXITFLEX 11.3) is checked against the start BEFORE anything is deleted or written: a different start raises
+    StartMismatch (``check_expected_start``). ``db_path`` (the file of ``conn``) is where a start-over keeps its copy of the old
     record and where the start file lives; without it (tests on a database of their own) nothing is copied or written
     next to it. ``reset`` is True when this construction started the league (over); ``advanced_ms`` is the wall time
     of the last start-over or committed chunk of this process (None before either: the snapshot then never says
@@ -225,7 +253,7 @@ class League:
     def __init__(self, conn, accts: list[dict], brackets: dict, specs: dict, lib, source,
                  fetch_steps: Callable, symbols, start_ms: Optional[int] = None, log: Callable[[str], None] = print,
                  db_path: Optional[str] = None, now_ms: Optional[int] = None,
-                 clock: Optional[Callable[[], int]] = None):
+                 clock: Optional[Callable[[], int]] = None, expect_start_ms: Optional[int] = None):
         self.conn, self.accts, self.brackets, self.specs = conn, accts, brackets, specs
         self.lib, self.source, self.fetch_steps, self.symbols = lib, source, fetch_steps, list(symbols)
         self.log = log
@@ -237,17 +265,31 @@ class League:
         fp = fingerprint(accts)
         self.reset = meta.get("fingerprint") != fp or meta.get("start_ms") is None
         self.advanced_ms: Optional[int] = None
+        if not self.reset:
+            check_expected_start(int(meta["start_ms"]), expect_start_ms, "데이터베이스의 ")
         if self.reset:
             start, started = league_start(meta, now, saved, start_ms)
+            check_expected_start(start, expect_start_ms)                # before anything is copied, deleted or written
             backup = None
             if meta and db_path:
                 backup = backup_db(conn, db_path, meta, now)          # raises: nothing is deleted without a copy
             if meta:
                 log(f"후보 목록이나 계산 방식이 바뀌어 시작 시각({_utc(start, '%m-%d %H:%M')} UTC)부터 새로 계산합니다"
                     + (f" (이전 기록 복사: {os.path.basename(backup)})" if backup else ""))
+            else:                                                     # a fresh database: say where its start came from, loudly (11.3)
+                src = ("데이터베이스에 기록된 시작" if meta.get("start_ms") is not None else
+                       "시작 시각 파일" if saved else "CANDLEAGUE_START" if start_ms is not None else "지금(기록된 시작 없음)")
+                old = sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(db_path)),
+                                                    os.path.splitext(os.path.basename(db_path))[0] + "_*.db"))) if db_path else []
+                log(f"[후보 리그] 새 데이터베이스를 만듭니다: 시작 {_utc(start, '%Y-%m-%d %H:%M')} UTC ({src})"
+                    + (f"; 같은 폴더에 이전 기록 복사 {len(old)}개가 있습니다 ({os.path.basename(old[-1])})" if old else ""))
+                if src.startswith("지금") and (saved is None and old or expect_start_ms is None and db_path):
+                    log("[후보 리그] 경고: 시작 시각이 지금으로 정해졌습니다. 설치 시각과 다르면 CANDLEAGUE_EXPECT_START를 주어 막으세요")
             keep = {k: _get(conn, k) for k in CARRY_KEYS}
             conn.execute("DELETE FROM kv")
             conn.execute("DELETE FROM trades")
+            conn.execute("DELETE FROM acct_day")
+            conn.execute("DELETE FROM acct_mark")
             meta = {"fingerprint": fp, "done": start, "start_ms": start, "started_ms": started, "reset_ms": now}
             if backup:
                 meta["backup"] = os.path.basename(backup)
@@ -260,6 +302,9 @@ class League:
         self.meta = meta
         self.start_ms = int(meta["start_ms"])
         if db_path and saved != {"start_ms": self.start_ms, "started_ms": int(meta.get("started_ms") or self.start_ms)}:
+            if saved is not None and not self.reset:
+                log(f"[후보 리그] 시작 시각 파일({_utc(saved['start_ms'], '%Y-%m-%d %H:%M')} UTC)이 데이터베이스의 시작"
+                    f"({_utc(self.start_ms, '%Y-%m-%d %H:%M')} UTC)과 달라 데이터베이스의 값으로 고칩니다")
             write_start_file(db_path, self.start_ms, int(meta.get("started_ms") or self.start_ms), log)
         self.engines = L.make_engines(accts, brackets, specs)
         saved_engines = _get(conn, "engines") or {}
