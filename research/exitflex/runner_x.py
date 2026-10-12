@@ -436,16 +436,25 @@ def _worker(task):
     return pid, (run_pick_step1(cfg, pick, arg) if kind == 1 else run_pick_step2(cfg, pick, arg))
 
 
-def run_tasks(cfg: Config, tasks: list, label: str) -> None:
-    """Run (kind, pick id, arg) tasks on ``cfg.procs`` processes (forked: the loaded arrays are shared); progress lines only."""
+def run_tasks(cfg: Config, tasks: list, label: str, quiet: bool = False) -> None:
+    """Run (kind, pick id, arg) tasks on ``cfg.procs`` processes (forked: the loaded arrays are shared); progress lines only.
+    ``quiet`` (the placebo steps, prereg 14 and 16.7): a line gives the count done and the seconds only, no pick and no number of
+    files, since a pick's number of placebo files would show how many variants of its pool passed gates 1, 2 and 4."""
     _CFG["cfg"] = cfg
     done = 0
     t0 = time.time()
+
+    def line(pid, n):
+        if quiet:
+            progress(f"[{label}] {done}/{len(tasks)} ({time.time() - t0:.0f}s)")
+        else:
+            progress(f"[{label}] {done}/{len(tasks)} {pid} ({n} new files, {time.time() - t0:.0f}s)")
+
     if cfg.procs <= 1 or len(tasks) <= 1:
         for t in tasks:
             pid, n = _worker(t)
             done += 1
-            progress(f"[{label}] {done}/{len(tasks)} {pid} ({n} new files, {time.time() - t0:.0f}s)")
+            line(pid, n)
         return
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -454,7 +463,7 @@ def run_tasks(cfg: Config, tasks: list, label: str) -> None:
         for f in as_completed(futs):
             pid, n = f.result()
             done += 1
-            progress(f"[{label}] {done}/{len(tasks)} {pid} ({n} new files, {time.time() - t0:.0f}s)")
+            line(pid, n)
 
 
 # ------------------------------------------------------------------ select: gates of step 1 and the placebo pairs of step 2
@@ -849,7 +858,7 @@ def select_plan(cfg: Config, run: bool) -> tuple:
     pairs = step2_pairs(cfg, gates)
     s2 = {p["id"]: [vid for vid, pool in pairs if pool == p["pool"]] for p in picks}
     if run:
-        run_tasks(cfg, [(2, pid, vids) for pid, vids in s2.items() if vids], "select step 2")
+        run_tasks(cfg, [(2, pid, vids) for pid, vids in s2.items()], "select step 2", quiet=True)
     if not all_present(cfg, expected_files(cfg, pv, s2)):
         refuse("step 2 is incomplete")
     return picks, pv, gates, pairs, s2
@@ -1213,7 +1222,7 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
     pv = {p["id"]: chosen[p["pool"]] for p in picks}
     if not all_present(cfg, expected_files(cfg, pv)):
         refuse("confirm step 1 is incomplete")
-    run_tasks(cfg, [(2, pid, vids) for pid, vids in s2_vids.items() if vids], "confirm placebos")
+    run_tasks(cfg, [(2, pid, vids) for pid, vids in s2_vids.items()], "confirm placebos", quiet=True)
     if not all_present(cfg, expected_files(cfg, pv, s2_vids)):
         refuse("confirm placebos are incomplete")
     out_p, ps, e0_ps = {}, {}, {}
@@ -1521,7 +1530,8 @@ T5_DRAW_CAP = 20     # at most T5_DRAW_CAP x per draws for one (pick, variant)
 def check_t5(cfg: Config, per_pool: int = T5_PER_POOL, seed: int = 11) -> dict:
     """T5 on the real arrays: ``per_pool`` sampled (trade, check) pairs per pool over the families at their middle parameter
     and F11 in both modes. A drawn signal whose trade has no check (it ends before its first check, or no size fits it) gives
-    no pair, so for each pick and variant the draws go on until ``per`` pairs are found, at most ``T5_DRAW_CAP`` x ``per``
+    no pair, so for each pick and variant the draws go on until ``per`` drawn trades with a check are found (each gives one
+    pair per mode: two for a variant with a placebo, its rule run and its placebo run), at most ``T5_DRAW_CAP`` x ``per``
     draws (the dry run of 2026-10-12 found 285 pairs in the DeepSeek pool with one round of ``per`` draws). Returns
     {pool: (pairs checked, pairs failed)}."""
     rng = np.random.default_rng(seed)
@@ -1541,14 +1551,16 @@ def check_t5(cfg: Config, per_pool: int = T5_PER_POOL, seed: int = 11) -> dict:
                 while got < per and draws < T5_DRAW_CAP * per:
                     draws += 1
                     q = int(rng.integers(0, len(off["coin"])))
+                    hit = False
                     for plc in ((False, True) if PL.has_placebo(v) else (False,)):
                         hz = np.where(rng.random((KX.N_AGE, 2, 2)) < 0.3, 0.0, rng.uniform(0.0, 0.2, (KX.N_AGE, 2, 2)))
                         kk = None if rng.random() < 0.3 else int(rng.integers(1, 40))
                         r = causality_pair(cfg, pdata, v, off, q, kk, rng, plc, hz)
                         if r is not None:
                             n += 1
-                            got += 1
+                            hit = True
                             bad += (not r)
+                    got += hit
         res[pool] = (n, bad)
         progress(f"[T5] {pool}: {n} pairs, {'pass' if bad == 0 and n >= per_pool else 'FAIL'}")
     return res
@@ -1577,7 +1589,7 @@ def label_causal_pair(reg, h: np.ndarray, l: np.ndarray, c: np.ndarray, i0: int,
     return bool(ok)
 
 
-def check_t8(cfg: Config, per_pool: int = 500, seed: int = 17) -> dict:
+def check_t8(cfg: Config, per_pool: int = T5_PER_POOL, seed: int = 17) -> dict:
     """T8 (prereg 13) on the real arrays: ``per_pool`` sampled offered signals per pool; the market-state label of the signal does not change
     when every chart bar after the signal bar is replaced (random and extreme values), and the label from the arrays truncated at
     the signal bar equals the label from the full arrays. Returns {pool: (signals checked, signals failed)}; counts only."""
@@ -1602,7 +1614,7 @@ def check_t8(cfg: Config, per_pool: int = 500, seed: int = 17) -> dict:
                 n += 1
                 bad += (not ok)
         res[pool] = (n, bad)
-        progress(f"[T8] {pool}: {n} signals, {'pass' if bad == 0 and n > 0 else 'FAIL'}")
+        progress(f"[T8] {pool}: {n} signals, {'pass' if bad == 0 and n >= per_pool else 'FAIL'}")
     return res
 
 
@@ -1611,7 +1623,7 @@ def stage_check(lay: Layout, which: list, picks_filter=None) -> bool:
     ok = True
     cfg = None
     if any(x in which for x in ("t1", "t5", "t8")):
-        cfg = real_config(lay, "check", pin, ph, 1, N_SEEDS_FULL, allow_no_f11=True)
+        cfg = real_config(lay, "check", pin, ph, 1, N_SEEDS_FULL, allow_no_f11="t5" not in which)   # T5 covers F11 and F12 in both modes
     if "t1" in which:
         ok &= all(r for _p, r in check_t1(cfg, picks_filter))
     if "t5" in which:
