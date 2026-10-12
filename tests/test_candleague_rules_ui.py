@@ -187,7 +187,8 @@ out.fall = WK.waterfall(ins["core-DOGE-15m-1"]).map((x) => [x.key, Math.round(x.
     assert p["day30"] == pytest.approx(lg["start_ms"] + 30 / (251 / 1004) * DAY)
     assert [round(x["n"], 3) for x in p["at"]] == [round(251 / 1004 * (c["ms"] - lg["start_ms"]) / DAY, 3) for c in lg["watch"]["checkpoints"]]
     assert o["paceNull"] is None
-    assert "5년 시험 속도 하루 약 0.25번" in o["paceTxt"] and "(실제 12번)" in o["paceTxt"] and "30번은" in o["paceTxt"]
+    assert "하루 약 0.25번 → 지금쯤 많아야 약" in o["paceTxt"] and "(실제 12번)" in o["paceTxt"] and "30번은 빨라도" in o["paceTxt"]
+    assert "한 번에 포지션 하나" in o["paceTxt"] and "꽤 느림" not in o["paceTxt"]
     # the league: DOGE beats its flip, N03 does not, F10 beats its flip; base comparisons likewise from mean_ret
     assert o["luck"]["flip"]["k"] == 2 and o["luck"]["flip"]["n"] == 4 and o["luck"]["flip"]["tone"] == "inside"
     assert "동전보다 나은 후보" in o["luckTxt"] and "운만으로" in o["luckTxt"] and "경고등 켜진 후보" in o["luckTxt"]
@@ -225,36 +226,42 @@ out.rows = body.querySelectorAll(".rl-frow").map((r) => [r.getAttribute("href"),
 out.roles = txt(RK.rolesTable());
 out.terms = body.querySelectorAll(".rl-term").map((a) => a.getAttribute("href"));
 """)
-    assert o["short"] == ["고정 익절 3R", "고정 익절 수익 50%", "계단 잠금 10%부터", "계단 잠금 + 익절 2R"]
+    assert o["short"] == ["고정 익절 3R", "고정 익절 증거금 대비 +50%", "계단 잠금 10%부터", "계단 잠금 + 익절 2R"]
     assert "손절 거리의 3배" in o["words"][0] and "예: 손절이 1% 아래면 익절은 3% 위" in o["words"][0]
     assert "20배면 약 2.6%" in o["words"][1] and "30배면 약 1.8%" in o["words"][1]
     assert "+12%가 되면 손절선을 +10% 자리로" in o["words"][2] and "5%씩" in o["words"][2]
     assert "15분봉 최근 14개" in o["stop"][1] and "× 4만큼" in o["stop"][1] and "움직이지 않습니다" in o["stop"][1]
     assert "1시간봉" in o["stop"][2] and "계단 잠금으로 손절선이 올라갑니다" in o["stop"][2]
-    assert o["be"].startswith("25% (비용 전)") and "4번 중 1번만 이겨도 본전" in o["be"] and "수수료·슬리피지(왕복 0.14%)" in o["be"]
+    assert o["be"].startswith("25% (비용 전)") and "4번 중 1번만 이겨도 본전" in o["be"]
+    assert "수수료·슬리피지(손절로 끝나면 0.14%, 지정가 익절로 끝나면 0.09%)" in o["be"]
     assert "좋은 자리" in o["lev"] and "50배 → 40배 → 30배 → 20배" in o["lev"] and "약 22%" in o["lev"]
     assert "딥시크 매매법은 진입 강도 점수가 없어서" in o["levDs"] and "30배 → 20배" in o["levDs"]
     assert o["pair"] == ["40배 / 30배", "못 들어감", "—"]
-    assert o["used"] == [["30배 3", "20배 9"], "아직 없음", "숨김"]
+    assert o["used"] == [["30배 3번", "20배 9번"], "아직 없음", "숨김"]
     assert "고정 익절 3R = 손절 거리의 3배 가면 지정가로" in o["box"] and "4 ATR = 15분봉 평균 움직임의 4배" in o["box"]
     assert "25% (비용 전)" in o["box"] and "좋은 자리 50→40→30→20배" in o["box"] and "계단 잠금 10%부터 · 손절 2 ATR" in o["box"]
+    assert "움직이지 않음" in o["box"]
     assert "익절·손절·배수 자세히" in o["boxBare"] and "고정 익절 3R · 손절 4 ATR" in o["boxBare"]
     r = o["rule"]
-    for needle in ("두 가지 안전 검사를 모두 통과한 첫 배수", "들어가지 않고 건너뜁니다", "50배", "0.48% · 1/4은 2.3%", "BTC 1.6%",
+    for needle in ("거래소 한도 안이고 두 가지 안전 검사를 모두 통과한 첫 배수", "들어가지 않고 건너뜁니다", "50배", "0.48% · 1/4은 2.3%", "BTC 1.6%",
+                   "진입 때 청산까지 (후보 · 1/4 크기)", "LTC·BCH 거래소 한도로 불가", "50배 LTC · BCH (거래소가 40배까지)",
+                   "1/4 계좌는 주문이 작아 이 한도에 걸리지 않습니다", "거래소 한도",
                    "청산 검사", "손실 검사", "잔고의 15% 이하", "손절이 넓을수록 배수가 내려갑니다", "40배(한도 0.82%)",
                    "잔고 $5,000에서 30배면 증거금 $1,500, 포지션 $45,000", "지금까지 실제로 쓴 배수"):
         assert needle in r, needle
     assert "지금 이 숫자면" in o["pick"] and "‘좋은 자리 / 보통 자리’" in o["pick"]
-    assert len(o["tiles"]) == 6 and o["tiles"][0].startswith("BTCATR 0.13%") and "후보 배수40배 / 30배" in o["tiles"][0]
-    assert "1/4 배수50배 / 30배" in o["tiles"][0] and "본전 승률" in o["tiles"][0]
+    assert len(o["tiles"]) == 6 and o["tiles"][0].startswith("BTCATR 0.13%") and "후보 (좋은/보통)40배 / 30배" in o["tiles"][0]
+    assert "1/4 (좋은/보통)50배 / 30배" in o["tiles"][0] and "본전 (비용 포함)" in o["tiles"][0]
     assert [h for h, _ in o["rows"]] == ["#/account/core-DOGE-15m-1", "#/account/core-DOGE-15m-1-q", "#/account/core-DOGE-15m-1-x",
                                          "#/account/base-core-DOGE-15m", "#/account/core-DOGE-15m-1-flip"]
     assert "계단 잠금 10%부터 · 손절 2 ATR" in o["rows"][3][1] and "증거금 1/4" in o["rows"][1][1] and "방향은 동전" in o["rows"][4][1]
-    assert "30배 12" in o["rows"][0][1]
+    assert "30배 12번" in o["rows"][0][1] and "거래 12번" in o["rows"][0][1] and "쓴 배수" in o["rows"][0][1]
     for needle in ("후보", "1/4 크기", "청산만 바꾼 기본값", "기본값", "동전 던지기", "증거금만 1/4 (50배 12.5%", "동전 던지기 (좋은 자리 여부도",
                    "좋아진 게 숫자 덕인가 익절·손절 덕인가", "방향을 맞힌 건가 운인가"):
         assert needle in o["roles"], needle
     assert "#/howto?q=ATR" in o["terms"] and "#/howto?q=%EC%A2%8B%EC%9D%80%20%EC%9E%90%EB%A6%AC" in o["terms"]
+    # the 4 ATR pick against the 기본값's 2 ATR: the base is narrower, so its leverage tends to be higher
+    assert "손절이 2 ATR로 이 후보(4 ATR)보다 좁아서" in o["pick"]
 
 
 def test_rules_screen(tmp_path):
@@ -275,15 +282,17 @@ out.pressed2 = el.querySelectorAll(".rl-row").filter((b) => b.getAttribute("aria
 """)
     a = o["answers"]
     assert "후보 5개 모두 5년 탐색(84가지 청산 중)에서 각자 고른 고정 익절과 ATR 손절" in a
-    assert "익절: 고정 익절 3R 5개" in a and "손절 4 ATR 1개" in a and "손절 2 ATR 4개" in a
+    assert "익절: 3R 5개" in a and "손절: 2 ATR 4개 · 4 ATR 1개" in a and "계단 잠금을 쓰는 후보는 없습니다" in a
     assert "규칙봇과 같은 규칙" in a and "1 ATR 이상 여유" in a and "잔고의 15% 이하" in a and "딥시크는 늘 보통 자리" in a
-    assert "후보 계좌가 지금까지 쓴 배수" in a and "30배 48" in a
+    assert "50배 → 40배 → 30배 → 20배, 보통 자리는 30배 → 20배" in a and "거래소가 그 주문 크기에 허용하는 배수" in a
+    assert "후보 크기에서는 50배 LTC · BCH (거래소가 40배까지)" in a
+    assert "후보 계좌가 지금까지 쓴 배수" in a and "30배 48번" in a
     assert re.search(r"\d\d/\d\d \d\d:\d\d KST \(설치한 때\)부터", a) and "$5,000으로 시작" in a and "D+10" in a
     assert len(o["rows"]) == 5
     pressed = [t for t, p in o["rows"] if p == "true"]
-    assert len(pressed) == 1 and "ICT OTE" in pressed[0] and "고정 익절 3R" in pressed[0] and "30→20배" in pressed[0]
-    assert "4 ATR" in [t for t, _ in o["rows"] if "도지 봇" in t][0] and "50→20배" in [t for t, _ in o["rows"] if "도지 봇" in t][0]
-    assert "ICT OTE · 1시간" in o["card"] and "늘 보통 자리" in o["card"] and "지금 이 숫자면" in o["card"]
+    assert len(pressed) == 1 and "ICT OTE" in pressed[0] and "3R (손절 거리의 3배)" in pressed[0] and "30→20배" in pressed[0]
+    assert "4 ATR" in [t for t, _ in o["rows"] if "도지 봇" in t][0] and "50→40→30→20배" in [t for t, _ in o["rows"] if "도지 봇" in t][0]
+    assert "ICT OTE · 1시간" in o["card"] and "늘 보통 자리" in o["card"] and "지금 이 숫자면" in o["card"] and "매매법 코드 F10_OTE" in o["card"]
     assert "배수(레버리지) 규칙" in o["page"] and "계좌 5개는 무엇이 다른가" in o["page"] and "후보마다 익절 · 손절" in o["page"]
     assert "도지 봇 · 15분" in o["card2"] and "좋은 자리 가능" in o["card2"] and len(o["pressed2"]) == 1 and "도지 봇" in o["pressed2"][0]
 
@@ -368,14 +377,15 @@ out.howOn = how.querySelector(".gl-list").children.filter((d) => d.classList.con
 out.how = txt(how);
 """)
     c = o["custom"]
-    assert "익절 · 손절 · 배수" in c and "고정 익절 3R = 손절 거리의 3배 가면 지정가로" in c and "5년 시험 속도 vs 지금" in c
+    assert "익절 · 손절 · 배수" in c and "고정 익절 3R = 손절 거리의 3배 가면 지정가로" in c and "5년 시험 속도(많아야) vs 지금" in c
     assert "익절·손절·배수 자세히 (지금 코인별 배수)" in c
     assert o["accountWhy"] and "왜 +24.0%인가" in o["account"] and "익절 · 손절 · 배수" in o["account"] and "지금 이 숫자면" in o["account"]
     ch = o["check"]
     assert "운 vs 실력" in ch and "동전보다 나은 후보" in ch and "후보마다 속도 · 연패" in ch and "5년 속도면 지금쯤" in ch
     assert len(o["paceRows"]) == 5 and any("도지 봇" in r and "12번" in r for r in o["paceRows"])
     assert "손절 8 · 익절 4" in o["compare"] and "진입: 커스텀값" in o["compare"] and "방향: 동전 던지기" in o["compare"]
-    assert "묶음 레이스" in o["weekly"] and "동전 가운데 절반" in o["weekly"] and o["raceSvg"] >= 1
+    assert "묶음 레이스" in o["weekly"] and "동전 계좌 가운데 50%" in o["weekly"] and o["raceSvg"] >= 1
+    assert "운만으로" not in o["weekly"] and "1시간마다 · " in o["weekly"] and "개 점" in o["weekly"] and "칸 (" not in o["weekly"]
     assert "동전보다 나은 후보 2 / 4" in o["home"]
     assert "#/rules?s=DOGE" in o["stratLinks"]
     assert o["gl"] == ["ATR", "배수", None]

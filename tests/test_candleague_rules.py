@@ -203,6 +203,38 @@ def test_rule_steps():
     assert D.rule_steps(None)[0]["liq"] == {}
 
 
+def test_rule_steps_carry_the_exchanges_limit():
+    """size_position's first check: the coin's bracket at the order's notional. With $5,000, 50x is a $125,000 order
+    and LTC / BCH allow only 40x there (the 후보 account steps down), while the 1/4 account's $31,250 order allows 50x.
+    The step table says so instead of a liquidation distance, and the leverage the engine gives agrees."""
+    steps = D.rule_steps(EX)
+    s50 = steps[0]
+    assert s50["notional"] == pytest.approx(125_000.0) and s50["q_notional"] == pytest.approx(31_250.0)
+    assert sorted(s50["blocked"]) == ["BCHUSD", "LTCUSD"] and s50["q_blocked"] == []
+    assert s50["cap"]["LTCUSD"] == 40 and s50["cap"]["BCHUSD"] == 40 and s50["q_cap"]["LTCUSD"] == 50
+    assert s50["liq"]["LTCUSD"] is None and s50["liq"]["BCHUSD"] is None
+    assert s50["q_liq"]["LTCUSD"] == pytest.approx(0.0117, abs=5e-4) and s50["liq"]["BTCUSD"] == pytest.approx(s50["q_liq"]["BTCUSD"])
+    # every other step is allowed everywhere at both sizes (exchange.json as committed)
+    assert all(not s["blocked"] and not s["q_blocked"] for s in steps[1:])
+    # a smaller order falls in a lower bracket: the 1/4 account's liquidation is farther on SOL / DOGE at 50x
+    assert s50["q_liq"]["SOLUSD"] > s50["liq"]["SOLUSD"]
+    # what the step table says is what the engine does: a tight stop at a 좋은 자리
+    for sym in ("LTCUSDT", "BCHUSDT"):
+        assert D.lev_now("tp3R|1", 1.0, "best", 100.0, 0.1, sym, EX) == 40
+        assert D.lev_now("tp3R|1", 0.25, "best", 100.0, 0.1, sym, EX) == 50
+    assert D.lev_now("tp3R|1", 1.0, "best", 100.0, 0.1, "BTCUSDT", EX) == 50
+    assert D.rule_steps(None)[0]["blocked"] == [] and D.rule_steps(None)[0]["cap"] == {}
+
+
+def test_rule_words_of_the_position_card():
+    """The position card's rule (why_lev): all four steps of a 좋은 자리, the exchange's limit and the two checks; a
+    short line for the card face."""
+    w = D.why_lev({"kind": "core", "role": "cand"}, 30, 0.3, 0.03)
+    assert "50배(증거금 50%) → 40배(40%) → 30배(30%) → 20배(20%)" in w["rule_ko"] and "보통 자리는 30배 → 20배" in w["rule_ko"]
+    assert "거래소가 그 주문 크기에 허용하는 배수" in w["rule_ko"] and "잔고의 15% 이하" in w["rule_ko"]
+    assert w["rule_short_ko"] == "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수"
+
+
 def test_leverage_now_follows_the_engines_rule():
     from paperbot.sizing import size_position
     price, sym = 60000.0, "BTCUSDT"
@@ -232,6 +264,10 @@ def test_exit_words_breakeven_and_good_spots():
     assert D.breakeven(D.tp_info("ladder|2")) is None and D.breakeven(D.tp_info("roe50|4")) is None
     # with costs: (d + cost) / (d + tp); 3R at a 1% stop and 0.14% round trip = 28.5%
     assert D.breakeven(D.tp_info("tp3R|4"), 0.01, 0.03, 0.0014) == pytest.approx(0.285)
+    # the take-profit is a limit order (maker): a win costs 0.09%, a stop 0.14%: (d + c) / ((d + c) + (tp - w))
+    assert D.breakeven(D.tp_info("tp3R|4"), 0.01, 0.03, 0.0014, 0.0009) == pytest.approx(0.0114 / 0.0405)
+    assert D.breakeven(D.tp_info("tp3R|4"), 0.005, 0.015, 0.0014, 0.0009) == pytest.approx(0.0064 / 0.0205)
+    assert D.breakeven(D.tp_info("tp3R|4"), 0.0002, 0.0006, 0.0014, 0.0009) == 1.0      # costs eat the take-profit
     assert D.best_ok({"kind": "core", "name": "DOGE", "tf": "15m"}) is True
     assert D.best_ok({"kind": "core", "name": "DOGE", "tf": "4h"}) is False                # no entry-strength edges there
     assert D.best_ok({"kind": "ds", "name": "F5_BOX", "tf": "15m"}) is False
@@ -353,7 +389,11 @@ def test_rules_route(tmp_path):
     btc = p["now"]["BTCUSD"]
     atr = r["atr"]["15m"]["BTCUSD"]
     assert btc["stop_pct"] == pytest.approx(2 * atr["pct"]) and btc["tp_pct"] == pytest.approx(2 * btc["stop_pct"])
-    assert btc["be_cost"] == pytest.approx((btc["stop_pct"] + 0.0014) / (3 * btc["stop_pct"]))
+    # a stop costs the 0.14% round trip, the take-profit's limit order 0.09% (taker + slippage in, maker out)
+    assert r["costs"]["win_cost"] == pytest.approx(0.0009) and r["costs"]["maker"] == 0.0002
+    d = btc["stop_pct"]
+    assert btc["be_cost"] == pytest.approx((d + 0.0014) / ((d + 0.0014) + (2 * d - 0.0009)))
+    assert r["base_tp"] == D.tp_info("ladder|2")
     assert set(btc["lev"]["cand"]) == {"normal"} and btc["lev"]["cand"]["normal"] in (0, 20, 30)
     assert btc["lev"]["cand"]["normal"] == D.lev_now("tp2R|2", 1.0, "normal", atr["price"], atr["atr"], "BTCUSDT", EX)
     assert btc["lev"]["quarter"]["normal"] >= btc["lev"]["cand"]["normal"]

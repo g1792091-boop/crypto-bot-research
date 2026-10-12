@@ -17,6 +17,8 @@ const LADDER_GAP = 0.02, LADDER_STEP = 0.05;                     // config ladde
 export const share = (x, dec = 1) => (x == null || !Number.isFinite(Number(x)) ? "—" : fmt.pct(Number(x) * 100, false, dec));
 const num1 = (x) => { const v = Math.round(Number(x) * 1000) / 1000; return fmt.num(v, v % 1 ? 1 : 0); };
 const coinKo = (c) => String(c || "").replace(/USDT?$/, "");
+/** Coins in the league's order (BTC, ETH, SOL, DOGE, LTC, BCH). */
+const byCoin = (xs) => [...xs].sort((a, b) => COINS6.indexOf(a) - COINS6.indexOf(b));
 /** A link to a term of 읽는 법's 용어 사전 (#/howto?q=ATR). */
 export const term = (word, label) => h("a", {class: "rl-term", href: `#/howto?q=${encodeURIComponent(word)}`, title: `${word}: 읽는 법 › 용어 사전`}, label || word);
 
@@ -152,7 +154,7 @@ export function rolesTable() {
 /** The coins the exchange's limit takes out of a step, in words: [{lev, coins, cap}] for the 후보 (key "") or the
  *  1/4 (key "q_") size. */
 export function blockedSteps(r, key = "") {
-  return ((r && r.steps) || []).map((s) => ({lev: s.lev, coins: s[`${key}blocked`] || [], cap: s[`${key}cap`] || {}}))
+  return ((r && r.steps) || []).map((s) => ({lev: s.lev, coins: byCoin(s[`${key}blocked`] || []), cap: s[`${key}cap`] || {}}))
     .filter((x) => x.coins.length);
 }
 /** "50배 LTC · BCH (거래소가 40배까지)" for the blocked steps of one size; null when none. */
@@ -170,7 +172,7 @@ function liqCell(liq, blocked) {
   const range = v.length ? `${share(Math.min(...v), 1)}~${share(Math.max(...v), 1)}` : null;
   const btc = liq && liq.BTCUSD != null ? `BTC ${share(liq.BTCUSD, 1)}` : null;
   const head = btc ? `${btc}${range ? ` (코인 ${range})` : ""}` : range || "—";
-  return blocked && blocked.length ? [head, " · ", h("b", {class: "rl-block"}, `${blocked.map(coinKo).join("·")} 거래소 한도로 불가`)] : head;
+  return blocked && blocked.length ? [head, " · ", h("b", {class: "rl-block"}, `${byCoin(blocked).map(coinKo).join("·")} 거래소 한도로 불가`)] : head;
 }
 /** The steps the engine tries, the exchange's limit and the two safety checks with their numbers, and the leverages
  *  the league actually used. */
