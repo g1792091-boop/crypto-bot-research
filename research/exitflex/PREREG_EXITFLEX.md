@@ -1,17 +1,23 @@
 # Flexible exits for the 38 league watch picks: pre-registration (exitflex v1)
 
+**Status.** Pin commit: see the commit message of the commit that adds `PREREG_EXITFLEX.sha256`. That commit hashes this
+file; the pin time (UTC and KST) is written in its message and not in this file.
+
 (한국어 요약: `README_KO.md`.) This file is fixed before this study's own runs produce any number. It is pinned by
 `PREREG_EXITFLEX.sha256` together with the code and inputs of section 13. Changes after the pin go to `DEVIATIONS.md`
 in this folder, dated and with the reason, never into this file. Select-period numbers of E0 on the core picks have been
-seen by the main session; section 15 lists them and says what follows. Section 16 lists what changed in each revision
-and why. Appendix A writes out each strategy's own exit (family F11). Section 17, after Appendix A, is the main
-session's checklist of what must hold before this file is hashed.
+seen by the main session, and so have the round-1 trend-hunt results (the dated addendum in section 15, which changes
+Known limit 1); section 15 lists what was seen and says what follows. Section 16 lists what changed in each revision
+and why (16.5: the alignment with the code as built, made just before the pin). Appendix A writes out each strategy's own
+exit (family F11). Section 17, after Appendix A, is the main session's checklist of what must hold before this file is
+hashed, with what is already true ticked and what is still open listed.
 
 First draft 2026-10-12 01:41 UTC; revised 2026-10-12 (UTC) after two design reviews; revised again 2026-10-12 (about
 02:40 UTC) after the owners' four later messages below; revised a third time 2026-10-12 after two reviews of the second
 revision (section 16.3); revised a fourth time 2026-10-12 (after about 12:20 KST) for the main session's decisions and
 the owners' three latest messages below (section 16.4); revised a fifth time 2026-10-12 after two reviews of the fourth
-revision (section 16.4, items 9 on). Owners' first request, about the 후보 리그 ("커스텀값 봇"),
+revision (section 16.4, items 9 on); aligned with the code as built, just before the pin (section 16.5). Owners'
+first request, about the 후보 리그 ("커스텀값 봇"),
 where a SOL long had been held about 18 h at +43% ROE under a fixed 3R take-profit and a 4 ATR stop:
 "익절구조를 과거 백테스트를 돌려서 좋게 잡은건 좋은데 포지션 보유시간이 길어지면 진입횟수에도 영향을 끼치잖아 ... 18시간씩
 보유하고있으면 솔직히 좀 그래 예를들어 롱을 잡아서 +60%까지 갔다가 롱구조가 무너지거나 더이상 안오를꺼 같으면 빠르게
@@ -816,13 +822,21 @@ the 2 of F12.)
   signal in the period has M_p = 0.
 * Pooled, per pool P: M_P(V) = the mean over the pool's picks of M_p(V). The monthly pooled difference is D_m^P(V) =
   the mean over the pool's picks of [g_m(V) - g_m(E0)]; M_P(V) is the mean of D_m^P(V) over the months.
-* **Hold time and entries, reported first** for E0, V and the placebo median, per pick and pooled per pool, at quarter
-  size (and at live size beside):
+* **Hold time and entries, reported first** for E0 and V, **pooled per pool**, at quarter size (and at live size
+  beside). **As built**, the committed `select.json` and `confirm.json` carry these pooled numbers only, in every row:
+  no per-pick table of hold, entries, skipped or rejected signals is committed anywhere. The per-pick numbers exist only
+  in the per-account result files (`$WORK/<pin8>/results/<stage>/`, DeepSeek picks under `ds_private/results/<stage>/`),
+  which nobody opens (sections 3 and 14). The one per-pick number in a committed file is M_p of each core pick on a
+  choosable core row of `select.json` (field `Mp`, the input of gate 2); DeepSeek rows have none.
   * median and 90th-percentile hold (hours from fill to exit), and the shares of trades held more than 4 h, 8 h and
-    18 h, over all closed trades of the pool's accounts together;
+    18 h, over all closed trades of the pool's accounts together (the json's `hold` holds all five; the Korean tables
+    print the median and the three shares);
   * trades entered (status 1) and trades closed; signals skipped while a position was open (status 0) and signals
-    rejected (status 2);
-  * entries made at the open of a rule-exit minute.
+    rejected (status 2), each summed over the pool's picks;
+  * entries made at the open of a rule-exit minute;
+  * for the placebo, `select.json` gives (core, choosable rows) the 5th, 50th and 95th percentiles of the pooled
+    monthly growth difference and the median number of trades entered over the seeds. The placebo's hold statistics per
+    seed stay in its result files.
 * **Hold hours by market state at entry** (message 7; descriptive; a column of information, not a gate, not in the
   default of 8.4, not a placebo stratum, not a choice per state):
   * **State.** The label "장세" of `research/fullgrid/regimes.py`, which takes it from
@@ -855,17 +869,22 @@ the 2 of F12.)
     owners' remark that the hold they want "depends on the market"; it cannot create a rule per market state (section
     12): a rule for one state is a new pre-registration.
   * Where it is produced is in section 13 (code) and tested by T8.
-* Reported beside it, deciding nothing, per pick and pooled, for E0, V and the placebo median:
-  * the same metric at live size, and busts at live size;
+* Reported beside it, deciding nothing, **pooled per pool** (as built, see above), for E0 and V:
+  * the same metric at live size, and busts at live size (core, choosable rows: the `live` field; for every row the
+    live-size hold, entries, skipped and rejected counts);
   * trades changed: V's trades with no E0 trade of the same (coin, side, fill minute, exit minute, exit reason),
     count and share;
   * exit reasons (TP, SL, RULE, RAND, LIQ, END); for F12 also, per component, the exits where it fired and where it
     fired alone (`tr_comp`, 5.2), in total and split by the pick's timeframe;
   * win share (closed trades with a wallet change > 0);
-  * the maximum drawdown of the wallet at closes, busts and the final wallet multiple;
+  * the maximum drawdown of the wallet at closes, busts and the final wallet multiple: per account, in the result
+    files. The committed files carry the median over the pool's picks: `select.json` for E0 only (core:
+    `max_dd_median`, `final_multiple_median`), `confirm.json` for each core pair (same fields); a variant's drawdown and
+    final multiple in the select period are in no committed file. For DeepSeek they are in the private owner reports
+    (section 3);
   * the minutes where the stop and the take-profit were both touched (decided stop-first), per arm;
-  * the realised hazard table h;
-  * the placebo's 5th, 50th and 95th percentiles.
+  * the realised hazard table h (summed over the pool's picks);
+  * the placebo's 5th, 50th and 95th percentiles (above).
 * **What a round trip costs** (the engine's own figures, `config.v3_settings`; written here so that the reports can
   print them next to hold times):
   * at market on both sides (exits RULE, RAND, SL, END): taker 0.05% plus slippage 0.02% on each side, 0.14% of the
