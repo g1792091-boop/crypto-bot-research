@@ -37,6 +37,15 @@ What this module is
   account's realised wallet and its mark value (table ``acct_mark``); all in the commit of the chunk. ``no_entry_from_ms`` on an
   account of the new exit stops its new entries from that time (the C1 script sets it; it is part of the fingerprint).
 
+F13 (the rule bot's stepped profit lock; PREREG 5.2, ``exits.lock_exit``)
+------------------------------------------------------------------------
+"F13.a" (the pick's own fixed take-profit kept and the stepped lock added) and "F13.b" (no fixed take-profit, the lock alone: the rule bot's
+exit) make no decision at a chart close and read no chart data. The pick's hard stop (k x ATR14) stays. The three accounts of the new exit
+(``-n``, ``-nq``, ``-nflip``) simply run another exit of ``candleague.exits`` on the plain engine: ``exit_name(a)`` = ``exits.lock_exit`` of the
+pick's own exit ("tp3R|4" -> "lock+tp3R|4", mode b "ladder|4"). Their signals carry the same stop distance; no ``RuleClose`` is handed in, no
+``meta['rx']`` exists, a restart restores the position, its stop and its lock (``lock_roe``) with the engine state. The twins (``-e``, ``-eq``)
+and every account id and count are unchanged.
+
 F11 and F12 (the strategy's own exit; all nine at once; PREREG 5.2 and Appendix A)
 ----------------------------------------------------------------------------------
 The strategy's component arrays, levels and targets come from a provider (``register_native``; production:
@@ -116,8 +125,9 @@ class RuleConfigError(ValueError):
 
 
 # ====================================================================== the rule interface
-FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F7h", "F8", "F9", "F10", "F11", "F12")
+FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F7h", "F8", "F9", "F10", "F11", "F12", "F13")
 NATIVE_FAMILIES = ("F11", "F12")       # the families that read the strategy's own exit arrays
+LOCK_FAMILIES = ("F13",)               # the stepped lock: another exit of candleague.exits, no rule state and no chart records
 Q15_FAMILIES = ("F1", "F4", "F9")
 _N = r"\d+(?:\.\d+)?"
 _PAT = {
@@ -134,6 +144,7 @@ _PAT = {
     "F10": r"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
     "F11": r"F11\.(?P<mode>[ab])",
     "F12": r"F12\.(?P<mode>[ab])",
+    "F13": r"F13\.(?P<mode>[ab])",
 }
 F9_FIXED = {"w": 3, "P": 1.0, "d": 0.5}
 # F12's fixed values (PREREG 5.2: the middle of each component's grid, the larger of a two-value grid); equal to kernel_x.F12_PARAMS
@@ -141,7 +152,8 @@ F12_PARAMS = {"w": 3, "n": 20, "m": 2.0, "P": 1.5, "g": 0.5, "d": 0.5, "H": 8, "
 # F12 component bits of the exit mask (PREREG 5.2), the order of kernel_x.COMP_NAMES
 CB = {"F1": 1, "F2": 2, "F3": 4, "F4": 8, "F5": 16, "F6": 32, "F7h": 64, "F10": 128, "F11": 256}
 KO = {"F1": "구조 이탈", "F2": "이동평균 이탈", "F3": "반대 신호", "F4": "샹들리에 추적", "F5": "수익 반납",
-      "F6": "조기 손절", "F7": "시간 청산", "F7h": "시계 시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산", "F12": "아홉 가지 동시"}
+      "F6": "조기 손절", "F7": "시간 청산", "F7h": "시계 시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산", "F12": "아홉 가지 동시",
+      "F13": "규칙봇 계단 잠금(12%→10%, 17%→15%…)"}
 
 
 def _num(x) -> float:
@@ -179,6 +191,8 @@ def rule_id(r: dict) -> str:
         return f"F10.N{r['N']}.{m}"
     if f == "F12":
         return f"F12.{m}"
+    if f == "F13":
+        return f"F13.{m}"
     return f"F11.{m}"
 
 
@@ -287,8 +301,22 @@ def study_ids() -> list[str]:
 
 
 def native_ids() -> list[str]:
-    """F11 and F12, the 4 variants that read the strategy's own exit (86 with ``study_ids``)."""
+    """F11 and F12, the 4 variants that read the strategy's own exit (86 with ``study_ids``; 88 with ``lock_ids``)."""
     return ["F11.a", "F11.b", "F12.a", "F12.b"]
+
+
+def lock_ids() -> list[str]:
+    """F13, the 2 variants of the stepped lock (the pick's own take-profit kept; the lock alone). 88 with ``study_ids`` and ``native_ids``."""
+    return ["F13.a", "F13.b"]
+
+
+def exit_name(a: dict) -> str:
+    """The exit of ``candleague.exits`` that account ``a`` runs: the pick's own (``a['exit']``), except under F13 where it is the pick's exit with
+    the stepped lock added (mode a) or the lock alone (mode b), ``exits.lock_exit``."""
+    rule = a.get("rule") or NO_RULE
+    if rule.get("family") in LOCK_FAMILIES:
+        return X.lock_exit(a["exit"], rule["mode"])
+    return a["exit"]
 
 
 def effective_q15(rule: dict, tf: str) -> bool:
@@ -319,7 +347,7 @@ def rule_ko(rule: Optional[dict]) -> str:
             "F5": f"{_fmt(rule.get('P', 0))}R 뒤 {int(round(rule.get('g', 0) * 100))}% 반납",
             "F6": f"스윙 {rule.get('w')}봉, 손실 {_fmt(rule.get('d', 0))}R 이상",
             "F7": f"{rule.get('N')}봉", "F7h": f"{rule.get('H')}시간", "F8": f"스윙 {rule.get('w')}봉, {_fmt(rule.get('P', 0))}R 뒤",
-            "F9": "", "F10": f"{rule.get('N')}봉", "F11": "", "F12": ""}[f]
+            "F9": "", "F10": f"{rule.get('N')}봉", "F11": "", "F12": "", "F13": ""}[f]
     mode = "익절 유지" if rule["mode"] == "a" else "익절 없음"
     return f"{KO[f]}{' (' + bits + ')' if bits else ''} · {mode}" + (" · 15분 확인" if rule.get("q15") else "")
 
@@ -429,6 +457,12 @@ def check(cands: list[dict], cfg: dict) -> list[str]:
         seen.add(a["id"])
         if a["exit"] not in X.BY_NAME:
             bad.append(f"{a['id']}: exit {a['exit']!r} unknown")
+        else:
+            try:
+                if not X.known(exit_name(a)):
+                    bad.append(f"{a['id']}: exit {exit_name(a)!r} unknown")
+            except (KeyError, ValueError):
+                bad.append(f"{a['id']}: exit {a['exit']!r} has no F13 form")
     if any(a["rule"]["family"] in NATIVE_FAMILIES for a in accts):
         try:
             native_provider()
@@ -456,6 +490,8 @@ def code_version(rule: dict) -> str:
     v = str(RULEX_VERSION)
     if rule.get("family") in NATIVE_FAMILIES:
         v += "|" + native_hash()
+    if rule.get("family") in LOCK_FAMILIES:                  # the lock's numbers are part of what an F13 account means
+        v += "|lock" + ",".join(format(x, "g") for x in X.LOCK)
     return v
 
 
@@ -1009,10 +1045,12 @@ class RuleLadderEngine(RuleMixin, X.LadderTP):
 def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     """The engine of a rule-league account. The twins (no rule) are the plain engines of candleague.exits; a rule
     account is the same set-up (the pick's exit, ``size``) as a RuleMixin engine: mode a keeps the exit's own
-    take-profit, mode b has none and no lock."""
+    take-profit, mode b has none and no lock. An F13 account (the stepped lock) is the plain engine of the exit with the lock added."""
     rule, name, size = a.get("rule") or NO_RULE, a["exit"], a.get("size", 1.0)
     if rule.get("family") is None:
         return X.make_engine(name, brackets, specs, book=a["id"], size=size)
+    if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits on the plain engine
+        return X.make_engine(exit_name(a), brackets, specs, book=a["id"], size=size)
     s, st = X.spec(name), X.settings_for(name, size=size)
     if rule["mode"] == "b":
         st = replace(st, tp_mode="fixed")                  # no take-profit and no stepped lock
@@ -1100,7 +1138,8 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                             strength[a["name"]] = {"arrays": smod.strength(df.copy(), tf)}
                     except Exception as exc:  # noqa: BLE001  live: a failed strength sizes 'normal'
                         strength[a["name"]] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
-                rule, spec = a["rule"], X.spec(a["exit"])
+                rule, spec = a["rule"], X.spec(exit_name(a))
+                decides = rule["family"] not in (None,) + LOCK_FAMILIES        # F13 makes no decision at a chart close: no seed, no record
                 nat = None
                 if rule["family"] in NATIVE_FAMILIES:
                     if key not in natc:
@@ -1117,6 +1156,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                             "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
                     if rule["family"] is not None:
                         meta["style"] = f"rule:{rule['id']}"
+                    if decides:
                         meta["rx0"] = entry_seed(pack, rule, i, s, nat)
                         if nat is not None:             # the strategy's level and target (mirrored at the fill for a flip: new_rx)
                             k0 = "l" if s0 > 0 else "s"
@@ -1125,7 +1165,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                     sig = Signal(ts=int(close[i]) - 1, symbol=sym, timeframe=tf, strategy_id=a["name"], side=s,
                                  stop_price=0.0, tier="best", atr=at, meta=meta)
                     by_close.setdefault(int(close[i]), []).append((a["id"], sig))
-                if rule["family"] is None:
+                if not decides:
                     continue
                 needs = rule_needs(rule)
                 rk = (key, json.dumps(needs, sort_keys=True))
@@ -1358,7 +1398,7 @@ def audit_restored(lg, log: Callable[[str], None] = print) -> list[str]:
     notes = []
     for a in lg.accts:
         rule = a.get("rule")
-        if not rule or rule.get("family") is None:
+        if not rule or rule.get("family") is None or rule["family"] in LOCK_FAMILIES:      # no rule state to recompute (F13: the engine's own lock)
             continue
         p = lg.engines[a["id"]].position
         if p is None:
@@ -1623,10 +1663,10 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("cmd", choices=("check", "accounts", "ids"))
     ap.add_argument("--rules", default=None, help=f"rule config (default {DEFAULT_FILE}, env {RULES_ENV})")
     ap.add_argument("--candidates", default=C.DEFAULT_FILE)
-    ap.add_argument("--all", action="store_true", help="ids: the 86 study ids (F11 and F12 included)")
+    ap.add_argument("--all", action="store_true", help="ids: the 88 study ids (F11, F12 and F13 included)")
     a = ap.parse_args(argv)
     if a.cmd == "ids":
-        print("\n".join(study_ids() + (native_ids() if a.all else [])))
+        print("\n".join(study_ids() + (native_ids() + lock_ids() if a.all else [])))
         return 0
     try:
         cfg = load_config(a.rules)

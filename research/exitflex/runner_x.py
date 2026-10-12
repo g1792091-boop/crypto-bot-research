@@ -369,7 +369,7 @@ def real_config(lay: Layout, stage: str, pin: dict, pin_hash: str, procs: int, n
     if prov11 is not None:
         KX.register_f11(prov11)
     elif not allow_no_f11:
-        refuse("native.py / native_ds.py (families F11 and F12) are not available: the pre-registered menu has 86 variants")
+        refuse("native.py / native_ds.py (families F11 and F12) are not available: the pre-registered menu has 88 variants")
     vs = KX.variants() if variants is None else variants
     KX.warm_up(market)                                       # compile before the workers fork
     return Config(lay, pin, pin_hash, stage, period, market, DX.picks(), vs,
@@ -381,7 +381,7 @@ def report_config(lay: Layout, stage: str, pin: dict, pin_hash: str, n_seeds: in
     and no way to compute a pick (``make_pickdata`` raises)."""
     prov11 = f11_provider_from_modules(None, *try_load_native())
     if prov11 is None:
-        refuse("native.py / native_ds.py (families F11 and F12) are not available: the pre-registered menu has 86 variants")
+        refuse("native.py / native_ds.py (families F11 and F12) are not available: the pre-registered menu has 88 variants")
     KX.register_f11(prov11)
 
     def no_compute(_pick):
@@ -485,7 +485,7 @@ def step1_gates(cfg: Config) -> dict:
 
 
 def step2_pairs(cfg: Config, gates: dict) -> list:
-    """The (variant id, pool) pairs that get a placebo: outside F7 and passing gates 1, 2 and 4 (prereg 6, two steps)."""
+    """The (variant id, pool) pairs that get a placebo: outside F7, F7h and F13 and passing gates 1, 2 and 4 (prereg 6, two steps)."""
     return [(v.id, pool) for pool in cfg.pool_names() for v in cfg.variants
             if PL.has_placebo(v) and gates[(v.id, pool)]["g1"] and gates[(v.id, pool)]["g2"] and gates[(v.id, pool)]["g4"]]
 
@@ -507,23 +507,34 @@ def placebo_pooled(cfg: Config, vid: str, pool: str, e0_g: dict) -> tuple:
 # ------------------------------------------------------------------ the select summary (select.json, SELECT_KO.md, ds_private)
 FAMILY_KO = {"F1": "구조 무너짐", "F2": "이동평균 이탈", "F3": "반대 신호", "F4": "고점 대비 되돌림(샹들리에)", "F5": "수익 반납",
              "F6": "빠른 손절(손실 중 구조 무너짐)", "F7": "시간 제한(봉 개수)", "F7h": "시간 제한(시계 시간)", "F8": "수익 뒤 구조 무너짐",
-             "F9": "두 분 규칙 그대로", "F10": "멈춤(새 고점 없음)", "F11": "매매법 자체 청산", "F12": "9가지 청산 동시 적용"}
+             "F9": "두 분 규칙 그대로", "F10": "멈춤(새 고점 없음)", "F11": "매매법 자체 청산", "F12": "9가지 청산 동시 적용",
+             "F13": "규칙봇 계단 잠금(12%→10%, 17%→15%, 22%→20%...)"}
 LOSS_CLASS_KO = {"L0": "L0 손실은 못 끊음(수익이 난 뒤에만 / 수익 중일 때만)", "L1": "L1 손실 0.5R 이상일 때 구조 무너짐",
                  "L2": "L2 작은 손실에도 구조 무너짐(진입가 근처 손절 가능)", "L3": "L3 구조 말고 다른 이유로도(이동평균·반대 신호·고점 대비·시간·매매법 자체)"}
-CLAIM_EN = {"rule": MT.claim_of("F1.w3.a"), "f11": MT.claim_of("F11.a"), "f12": MT.claim_of("F12.a"), "f7": MT.claim_of("F7.N12.a")}
+CLAIM_EN = {"rule": MT.claim_of("F1.w3.a"), "f11": MT.claim_of("F11.a"), "f12": MT.claim_of("F12.a"), "f7": MT.claim_of("F7.N12.a"),
+            "f13": MT.claim_of("F13.a")}
 # prereg 8.5 (F12): the fixed combination, the 7 / 8 legs, the 8-hour clock, and the three things it does not claim
 CLAIM_KO = {"rule": "지금 청산(E0)과, 같은 패턴의 무작위 청산보다 낫다", "f11": "매매법 자체 청산이 지금 청산과 같은 패턴의 무작위 청산보다 낫다",
             "f12": ("아홉 가지 청산을 이 고정된 조합 그대로 쓰면(1시간·4시간 매매법에서는 아홉 중 최대 7개, 15분·30분 매매법에서는 최대 8개가 "
                     "매매를 끝낼 수 있음: F6은 청산 시점을 바꾸지 않고 F10은 15분·30분 매매법에서만 작동) 지금 청산(E0)과, 같은 8시간 시계와 "
                     "같은 패턴의 무작위 청산보다 낫다. 쌓으면 단일 규칙보다 낫다거나, 아홉 개가 모든 매매법에서 다 작동한다거나, "
                     "F12가 최고의 청산이라는 뜻은 아님"),
-            "f7": "오래 안 들고 있는 것만으로 낫다(차트를 읽는다는 뜻은 아님)"}
+            "f7": "오래 안 들고 있는 것만으로 낫다(차트를 읽는다는 뜻은 아님)",
+            "f13": ("규칙봇의 계단 잠금으로 나온다: 순수익률이 12%를 찍은 뒤에는 10% 아래로 내려오지 않게 잠그고, 17%면 15%, 22%면 20%로 올린다. "
+                    "차트의 구조는 읽지 않고, 그 이상은 말하지 않는다")}
 DS_ALLOWED = MT.DS_ALLOWED
 GATE_KO = {"pass": "통과", "fail": "탈락", "not_run": "안 돌림", "n/a": "해당 없음"}
 
 
 def claim_key(v) -> str:
-    return "f7" if v.fam in (KX.F7, KX.F7H) else ("f11" if v.fam == KX.F11 else ("f12" if v.fam == KX.F12 else "rule"))
+    return ("f7" if v.fam in (KX.F7, KX.F7H) else "f13" if v.fam == KX.F13 else
+            ("f11" if v.fam == KX.F11 else ("f12" if v.fam == KX.F12 else "rule")))
+
+
+def no_placebo_gate(v) -> bool:
+    """Gate 3 of 8.1 does not apply: the clock families F7 and F7h (they read only the clock) and F13 (the stepped lock, an
+    intrabar price-level stop that reads no chart close; prereg 6)."""
+    return v.fam in (KX.F7, KX.F7H, KX.F13)
 
 
 def _pool_load(cfg: Config, pool: str, arm: str, tag: str) -> dict:
@@ -538,7 +549,7 @@ def variant_row(cfg: Config, v, pool: str, e0q: dict, e0live: dict, gates: dict,
     live = MT.pool_summary(_pool_load(cfg, pool, v.id, SIZE_TAG[1.0]), e0live, cfg.pools)[pool]
     g = gates[(v.id, pool)]
     in2 = (v.id, pool) in pairs
-    clock = v.fam in (KX.F7, KX.F7H)
+    clock = no_placebo_gate(v)
     plc = pooled = None
     if in2:
         pooled, _mp_plc, stacks = placebo_pooled(cfg, v.id, pool, {i: e0q[i]["g"] for i in e0q})
@@ -663,14 +674,26 @@ def comp_table_ko(P: dict) -> list:
     return out + [""]
 
 
+# prereg 17 item 4a, section 15 (the dated addendum) and Known limit 1: a fixed line of the select report and of the confirm report. The
+# main session read the round-1 hunt results (with test-period outcomes of chandelier-exit trend systems) before this file was hashed;
+# the owners are told so in the report itself. It carries no number of any result.
+HUNT_READ_KO = ("**미리 밝혀 둘 점 (고르시기 전에 읽어 주세요)**: 이 시험의 규칙을 잠그기 전인 2026-10-12 약 06:38 UTC(한국 시각 15:38)에 "
+                "메인 세션이 사냥 시험 1차 결과(넓은 시험의 판정표, 결과 요약 문서, 실행 기록의 끝부분)를 열어 봤고, 검증을 맡은 보조 에이전트들이 "
+                "나머지 결과 파일을 약 06:40~07:30 UTC에 읽어 그 요약을 메인 세션이 봤습니다. 그 결과에는 샹들리에 청산을 쓰는 추세 시스템의 "
+                "2024-01~2026-09 기간 결과가 들어 있습니다. 그래서 4번(샹들리에)과 12번 안의 샹들리에 부분을 2024~2026으로 확인하는 것은 "
+                "저희에게 이미 한 번 본 종류의 청산을 다시 보는 셈입니다(영문 사전 등록 15절의 날짜 붙은 추가 기록과 한계 1). 사냥 시험의 숫자는 "
+                "이 시험의 어떤 선택에도 쓰지 않았고, 샹들리에를 포함한 청산 후보 목록은 그 결과가 나오기 약 4시간 전(2026-10-12 01:48 UTC)에 "
+                "이미 깃에 올라가 있었습니다. 가장 깨끗한 확인은 새 리그의 앞으로 쌓이는 기록입니다.")
+
+
 def select_report_ko(doc: dict) -> str:
-    """The Korean report of prereg 8.2: per pool E0's row, then all 86 variants (choosable first, then '선택 불가'), hold time and
+    """The Korean report of prereg 8.2: per pool E0's row, then all 88 variants (choosable first, then '선택 불가'), hold time and
     entries first, then the second table (hold hours by market state). DeepSeek rows carry no money figure; non-choosable core
     rows no growth figure."""
-    L = ["# 유연한 청산 시험: 고르기 결과 (2021~2023, 1/4 크기 계좌)", "",
+    L = ["# 유연한 청산 시험: 고르기 결과 (2021~2023, 1/4 크기 계좌)", "", HUNT_READ_KO, "",
          "표의 순서: 보유시간과 진입 횟수가 먼저입니다. 시장가로 한 번 사고 파는 데 드는 비용은 포지션 금액의 약 0.14%입니다 (30배면 증거금의 4.2%).",
          "더 짧게 들면 진입이 늘지만, 늘어난 진입이 이 비용보다 더 벌어야 계좌가 커집니다. 선택 가능은 관문 4개(성장 > 0, 60% 이상의 매매법에서 나음,",
-         f"같은 패턴의 무작위 청산 {doc['n_seeds']}번의 상위 5% 초과, 진입 횟수 유지)를 모두 넘은 방식입니다(시간 제한 F7·F7h는 3번 관문이 없음). "
+         f"같은 패턴의 무작위 청산 {doc['n_seeds']}번의 상위 5% 초과, 진입 횟수 유지)를 모두 넘은 방식입니다(시간 제한 F7·F7h와 계단 잠금 F13은 3번 관문이 없음). "
          "풀마다 서로 다른 그룹에서 최대 2개, 또는 \"없음\"을 골라 주세요.", ""]
     for pool, name in (("core", "코어 23개"), ("ds", "딥시크 15개")):
         if pool not in doc["pools"]:
@@ -845,7 +868,7 @@ def write_select_outputs(cfg: Config, timing: dict | None, gates: dict, pairs: l
         write_json(os.path.join(cfg.store.work, cfg.store.pin8, "results", cfg.stage, "core_not_choosable.json"), hidden)
     doc = {"study": "exitflex v1", "stage": "select", "pin": cfg.pin_hash, "versions": versions(),
            "modules": loaded_module_hashes(cfg.lay.root), "engine": DX.engine_fingerprint(cfg.market), "n_seeds": cfg.n_seeds, "variants": vids_all,
-           "f11": any(v.fam == KX.F11 for v in cfg.variants), "complete_menu": len(vids_all) == 86,
+           "f11": any(v.fam == KX.F11 for v in cfg.variants), "complete_menu": len(vids_all) == 88,
            "timing_sha256": sha256_file(cfg.lay.out_file("timing.json")) if os.path.exists(cfg.lay.out_file("timing.json")) else None,
            "ds_private_sha256": ds_sha, "ds_owner_report_sha256": ds_report_sha, "step2_pairs": {f"{vid}|{pool}": True for vid, pool in pairs}, "pools": doc_pools,
            "timing": timing}
@@ -877,7 +900,7 @@ def report_select(cfg: Config, timing: dict | None = None) -> dict:
 
 
 def stage_timing(lay: Layout, procs: int = CPUS_ASSUMED) -> dict:
-    """Seconds only. In one process on the select-period cut arrays: E0, and one placebo seed of every variant outside F7 on
+    """Seconds only. In one process on the select-period cut arrays: E0, and one placebo seed of every variant outside F7, F7h and F13 on
     one pick (the hazard table is that variant's own account on the pick, computed and discarded). The projected step-2
     wall time = (sum of the one-seed placebo times) x picks x 200 seeds / 4 CPUs; more than 8 h means 100 seeds."""
     pin, ph = gate_pin(lay)
@@ -1222,7 +1245,7 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
         s = x["s"]
         key = f"{vid}|{pool}"
         info = (choice.get("pools") or {}).get(pool, {})
-        clock = x["v"].fam in (KX.F7, KX.F7H)
+        clock = no_placebo_gate(x["v"])
         verdict = MT.confirm_verdict(holm[key], s["M"], x["pooled"], clock, s["entered"], s["entered_e0"])
         row = {"id": vid, "pool": pool, "holm_significant": verdict["holm"], "beats_placebo_p95": verdict["beats_placebo_p95"],
                "entries_ok": verdict["entries"], "pass": verdict["pass"], "label": "PASS" if verdict["pass"] else "FAIL",
@@ -1277,7 +1300,7 @@ def confirm_report_ko(doc: dict, extra_messages: list | None = None) -> str:
     """out/REPORT_KO.md (prereg 9): per pool hold hours and entries against E0 first, then PASS or FAIL, then for core M, p and the
     95% interval; DeepSeek rows carry labels, counts, win share and hold hours only. Whether the owners or the default chose each
     pair and whether it is also what the default would have taken; freeze breaches and messages received after choice.json."""
-    L = ["# 유연한 청산 시험: 확인 결과 (2024-01 ~ 2026-09, 한 번만 돌림)", ""]
+    L = ["# 유연한 청산 시험: 확인 결과 (2024-01 ~ 2026-09, 한 번만 돌림)", "", HUNT_READ_KO, ""]
     for b in doc.get("freeze_breaches") or []:
         L += [f"**동결 위반**: {b}", ""]
     L += ["확인 결과는 PASS(성장이 구간 검정을 통과하고 무작위 청산 상위 5%를 넘고 진입 횟수를 유지) 또는 FAIL입니다. FAIL은 이번 검정에서 이득이 안 보였다는 뜻이지 이득이 없다는 증명이 아닙니다.", ""]
@@ -1330,7 +1353,7 @@ def stage_confirm(lay: Layout, procs: int, rerun: bool = False) -> dict:
     if choice.get("pin") != ph or sel.get("pin") != ph:
         refuse("select.json / choice.json were made under another pin")
     if not sel.get("complete_menu"):
-        refuse("select.json was made without the complete menu of 86 variants")
+        refuse("select.json was made without the complete menu of 88 variants")
     first = json.load(open(lay.out_file("choice.json")))
     bad = MT.validate_choice_doc(sel, choice, sent, first if r2 else None) + MT.material_problems(first)
     if bad:
@@ -1350,7 +1373,7 @@ def stage_confirm(lay: Layout, procs: int, rerun: bool = False) -> dict:
 
 # ------------------------------------------------------------------ real-data checks T1, T3, T5 (pass / fail and counts only)
 MIDDLE_VARIANTS = ("F1.w3.a", "F1.w3.a.q15", "F2.n20.a", "F3.a", "F4.m2.a", "F4.m2.a.q15", "F5.P1.5.g25.a", "F6.w3.d0.5", "F7.N24.a",
-                   "F7h.H8.a", "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b")
+                   "F7h.H8.a", "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b")
 T3_CUTS = tuple(dt.datetime(y, m, 1, tzinfo=dt.timezone.utc) for y in (2021, 2022, 2023) for m in (2, 4, 6, 8, 10, 12)) + (
     dt.datetime(2022, 6, 15, 13, 37, tzinfo=dt.timezone.utc), dt.datetime(2023, 3, 17, 7, 5, tzinfo=dt.timezone.utc),
     dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc))
