@@ -1080,6 +1080,12 @@ def require_select(tl: TLayout, rerun: bool) -> dict:
     return json.load(open(tl.a.out_file(select_names(rerun)[0]), encoding="utf-8"))
 
 
+def is_check_file(path: str) -> bool:
+    """twins_check.json (or _r2) itself: a rerun of check after TW.10 finds its earlier line in the pin file, so neither check nor
+    require_check records or compares the file's own hash (DEVIATIONS.md, [extra/twins] 2026-10-12, second entry)."""
+    return os.path.basename(path) in ("twins_check.json", "twins_check_r2.json")
+
+
 def require_check(tl: TLayout) -> dict:
     """out/twins_check.json listed in PREREG_EXITFLEX_EXTRA.sha256 with its present hash, saying pass, and recording for every file
     listed there at check time the hash that file has now."""
@@ -1090,6 +1096,8 @@ def require_check(tl: TLayout) -> dict:
         refuse("twins_check.json does not say pass")
     for rel, h in (doc.get("hashes") or {}).items():
         p = os.path.join(tl.root, rel)
+        if is_check_file(p):
+            continue                                       # its own earlier line, listed before a rerun of check (TW.10)
         if not os.path.exists(p) or sha(p) != h:
             refuse(f"{rel} changed since twins check")
     return doc
@@ -1534,7 +1542,7 @@ def cmd_check(tl: TLayout, procs: int = 3) -> bool:
         res = run_checks(ctx)
         pins = RX.read_sha_file(tl.xlay())
         doc = {"section": "TW", "stage": "twins check", "commit": git_out(tl.root, "rev-parse", "HEAD"), **res,
-               "hashes": {os.path.relpath(p, tl.root): h for p, h in pins.items()}}
+               "hashes": {os.path.relpath(p, tl.root): h for p, h in pins.items() if not is_check_file(p)}}
         write_committed(tl, "twins_check.json", dumps(doc))
     for k in ("TW-C1", "TW-C2", "TW-C3", "TW-C4"):
         say(f"[twins check] {k} {'pass' if res[k]['pass'] else 'FAIL'}" + ("" if k != "TW-C2" else f" (strategies removed: {len(res['removed'])})"))

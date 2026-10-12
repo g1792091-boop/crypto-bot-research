@@ -783,6 +783,14 @@ def test_tw_t12_gate_prints_its_own_line_and_refuses_each_change(tmp_path, capsy
     open(t.out_file("twins_check.json"), "w").write(json.dumps(good))
     pin_extra(t, t.out_file("twins_check.json"))
     assert TW.require_check(t)["pass"]
+    # a rerun of check (TW.10): the pin file already lists the earlier twins_check.json, whose old hash the new file may carry
+    again = {**good, "hashes": {os.path.relpath(p, t.root): h for p, h in RX.read_sha_file(t.xlay()).items()}, "rerun": True}
+    assert "exitflex/extra/out/twins_check.json" in again["hashes"] or any(k.endswith("twins_check.json") for k in again["hashes"])
+    open(t.out_file("twins_check.json"), "w").write(json.dumps(again))
+    pin_extra(t, t.out_file("twins_check.json"))
+    assert TW.require_check(t)["pass"]
+    assert TW.is_check_file(t.out_file("twins_check.json")) and TW.is_check_file("x/twins_check_r2.json")
+    assert not TW.is_check_file(os.path.join(t.extra_dir, "twins.py"))
     # free disk below need + 0.5 GB (simulated); then enough: the run gets to the cut, finds none and refuses without making it
     monkeypatch.setattr(TW, "free_bytes", lambda path: int(1.2e9))
     with pytest.raises(SystemExit, match="free disk"):

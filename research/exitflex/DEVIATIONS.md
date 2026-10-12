@@ -36,3 +36,15 @@ E.0 item 2 and TW.10).
   drops is printed and written to `extra_reads.json`.
 * The private extra report is written by the rerun, after `TWINS_KO.md`'s private section exists. The first run wrote
   it before the twins report existed.
+
+## [extra/twins] 2026-10-12 15:23 UTC 2026-10-13 00:23 KST
+
+* What failed: after the fix above, `twins.py check` was rerun (pass) and its new file pinned, but `twins.py report`
+  refused: "twins_check.json changed since twins check". `check` records the pinned hash of every file listed in
+  `PREREG_EXITFLEX_EXTRA.sha256`, and on a rerun that list already holds the earlier `twins_check.json`. The new file
+  therefore carried its own old hash, which can never match. The first check did not meet this, because the file was
+  not listed yet.
+* Fix: `twins.py` gets `is_check_file(path)`. `check` no longer records the hash of `twins_check.json` (or `_r2`), and
+  `require_check` skips that entry. A test in `test_twins.py` covers a rerun of check whose file carries the earlier
+  line. Extra tests: 183 passed. No rule and no twin computation changes, and no twin output was opened.
+* Then: the new lines of `twins.py` and `test_twins.py` under this entry, `check` again, its line, `report`, `audit`.
