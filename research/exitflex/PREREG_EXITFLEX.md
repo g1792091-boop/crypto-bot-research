@@ -2286,6 +2286,18 @@ Real money is not decided by this study. That stays the owners' decision under t
   `test_candleague_rulex.py`, `test_exitflex_league_parity.py` and `tests/test_fullgrid_kernel.py`'s helpers. It opened no
   performance figure of any period, no `holdcost`, hunt, autopsy, league or track-2 result, no `out/` file and no DeepSeek
   money figure. It did not touch the main session's statement or the dated addendum below it.
+* **The seventh pass** (2026-10-12, afternoon, after two reviews of the sixth pass; section 16.6 items 11-22) was written by a further
+  sub-session under the rules of the sixth: it edits only the study folder's `.py` files, this file, `README_KO.md`,
+  `candleague/rulex.py`, `candleague/exits.py` (adding rules only; it changed none), `candleague/runner.py` and `league.py` only if needed
+  (it changed neither) and the three test files; it commits and pushes nothing, creates no `data_pin.json` and runs none of `make-pin`,
+  `make-cut`, `select`, `timing` and `confirm`; it prints and saves no performance figure of any real period (its tests use synthetic data
+  and print pass or fail; `test_native.py`, run with `EXITFLEX_REQUIRE_REAL=1`, compares booleans). It read: the two review reports as given
+  in its task text (findings only); this file and `README_KO.md`; `research/exitflex/metrics.py`, `runner_x.py` (`HUNT_READ_KO`, the claim
+  tables, `MIDDLE_VARIANTS`, `causality_pair`, `check_t5`) and the parts of `test_exitflex.py` it changed; `candleague/exits.py`,
+  `candleague/rulex.py` (`RuleMixin`, `make_engine`, `accounts`, `chunk_rule`), the lines of the league's `runner.py` that set `rx_seen`, and
+  the three test files; the commit times of `git log` for the study folder (times only). It opened no performance figure of any period, no
+  `holdcost`, hunt, autopsy, league or track-2 result, no `out/` file and no DeepSeek money figure. It did not touch the main session's
+  statement or the dated addendum below it.
 * **Main session's statement**, inserted verbatim (line breaks added only):
 
   ```text
@@ -2853,7 +2865,7 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
    with `rp` E0's vector (family 0; see 5.2); the constants are asserted equal to the kernel's "ladder" row. Group P; parameter count 0; loss class
    L0 (it can cut only after a gain); in the default set D; **no placebo** (its exit is an intrabar price-level stop, not a decision
    at a chart close; it is treated like F7 and F7h in eligibility, with the reason stated in 6 and z = 0 where a table needs a
-   value); the claim of 8.5 is the one the owners were promised in words, with the limit of 5.2 added in the seventh pass (item 13
+   value); the claim of 8.5 is the one the owners were promised in words, with the limit of 5.2 added in the seventh pass (item 12
    below): "closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%, except by the slippage of a
    stop and at a gapped open, which can lie anywhere; it reads no structure and makes no claim beyond that". **F12 does not contain
    F13** (5.2, 1 Q-D, 12).
@@ -2885,7 +2897,7 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
 6. **The pin-blockers of section 17 closed.** (4a) `select_report_ko` and `confirm_report_ko` of `runner_x.py` carry a fixed line, `HUNT_READ_KO`,
    telling the owners that the round-1 hunt results (with test-period outcomes of chandelier-exit trend systems) were opened by the main
    session before the hash and what the addendum of section 15 says; a test checks it in `SELECT_KO.md` and `REPORT_KO.md` and that it passes
-   audit A8; Known limit 1 stays as written (the seventh pass adds the F13 exception to it, to 17 item 4a, to `HUNT_READ_KO` and to README_KO: item 12 below). (6) The main session **confirmed option (a)** for the F12 placebo on 2026-10-12 (16.4 item 11,
+   audit A8; the sixth pass did not change Known limit 1 (the seventh pass adds the F13 exception to it, to 17 item 4a, to `HUNT_READ_KO` and to README_KO: item 11 below). (6) The main session **confirmed option (a)** for the F12 placebo on 2026-10-12 (16.4 item 11,
    section 17 item 6). (7) The main session **confirmed** that the league's dashboard, snapshots and Telegram notices follow the league's own
    DeepSeek-money setting and that this study's files carry none (3, 11.4 item 2, 11.5; section 17 item 7); the owners are not asked.
 7. **The "Repo HEAD" sentence of 13** now reads: the parent of the commit that adds `PREREG_EXITFLEX.sha256` (see `git log`); the repo is
@@ -2905,6 +2917,62 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
    The restarts of the parity test that sit in locked positions are put one millisecond before the exit minute of a lock exit
    (the study stamps a minute by its open, the league's bars by their close); the negative control for a restore that forgets
    the raised lock fails the comparison there, which restarts five minutes earlier did not.
+
+**The seventh pass: fixes after two reviews of the sixth pass** (2026-10-12, the same afternoon, before the hash; a further sub-session under the
+rules of section 15 with the limits of the sixth: it committed and pushed nothing, created no `data_pin.json`, ran none of `make-pin`, `make-cut`,
+`select`, `timing` and `confirm`, and printed and saved no performance figure of any real period). Items 11-20 are its changes, item 21 its test
+results and item 22 what it did not take.
+
+11. **The disclosure is exact about F13.** The sixth pass said that the exit menu was in git before the hunt results existed; that is false for
+    the two F13 variants. F13 first appears in git at about 07:51 UTC, the hunt results having been opened from about 06:38 UTC. Known limit 1, 17
+    item 4a, `HUNT_READ_KO` of `runner_x.py` (the line at the top of `SELECT_KO.md` and `REPORT_KO.md`) and README_KO's disclosure bullet now say:
+    the menu was in git before the results existed **except F13**, which was added after the hunt read at the owners' request (their messages 8
+    and 9) from the rule bot's own ladder, `paperbot/ladder.py`, and no hunt number was used for it. The test of `HUNT_READ_KO` checks the new
+    clause. The dated addendum of section 15 (the main session's own words, byte-identical) says that "the variant menu ... is in git history before
+    these results existed"; read it together with this item: it predates F13 and is not edited.
+12. **The F13 claim carries the limit of 5.2.** "Never gives back below +10%" overstated what 5.2 itself says: the exit lies at or above +10% less the
+    slippage of a stop (about 0.6 points of ROE at 30x, 1 point at 50x), or at a gapped open, which can lie anywhere, and the minute that arms the
+    lock is unprotected because the new stop applies from the next minute. The owners' words are kept and one clause is added (8.5, T7 in 13, item 1
+    above): "... except by the slippage of a stop and at a gapped open, which can lie anywhere ...". `metrics.CLAIM_F13`, `runner_x.CLAIM_KO["f13"]`
+    (in Korean: "손절이 체결될 때의 미끄러짐과, 다음 봉이 잠금선 아래에서 갭으로 시작하는 경우는 예외"), README_KO and the T7 test string changed
+    together. A main session that prefers the owners' words alone takes that clause out of these places; nothing else depends on it.
+13. **`rp` of F13 is E0's vector** (family 0), not "the zero vector": `rp_vector()` holds F12's component mask (511) in its last entry, which
+    family 0 never reads. 5.2, 13, T1, item 1 above and 17 item 10 say so. The test asserted equality with `rp_vector()` already; no code changed.
+14. **T5 and F13** (13): F13.a and F13.b were in the real-data T5 list (`MIDDLE_VARIANTS`), but `causality_pair` skips a trade without a check, which is
+    every F13 trade, so every F13 sample was dropped. They are taken out of the list (18 variants; the sample per pick and variant, 2, is the same), and
+    T5 says that F13's causality is checked on synthetic paths only. A test pins the list.
+15. **No gate 3 for F13**, wording: T7 ("F7, F7h and F13 exempt from gate 3"), 17 item 11 and the docstrings of `metrics.eligibility`,
+    `metrics.gate_failure_counts` and `metrics.confirm_verdict` named only F7 and F7h; F13 is added. The parameter `is_f7` of `eligibility` and
+    `confirm_verdict` is renamed `no_gate3` (every caller passes it by position). The behaviour was right already (`runner_x.no_placebo_gate`).
+16. **F13 and the C1 stop** (the league; a review probe found that an F13 pool stopped by C1 went on opening trades). `rulex.make_engine` returned
+    the plain engine of the lock exit for F13, without the `RuleMixin` gate that refuses a new entry from `no_entry_from_ms` (11.4 item 9), and it
+    never set the field, although `accounts()` puts it on the `-n`, `-nq` and `-nflip` accounts and the fingerprint covers it. F13 accounts are now
+    `LockEngine` (exits on a `PaperEngine`) or `LockLadderEngine` (exits on `LadderTP`): the `RuleMixin` classes with `rx_rule` None, so `step` and
+    `submit` are the plain engine's, with `rx_no_entry_from` set from the account. `candleague/exits.py` is unchanged. Tests in
+    `tests/test_candleague_rulex.py`: the engines of the F13 accounts (class, settings, policy, take-profit fields against `exits.make_engine`), an
+    F13 version of the "no new entry from a time" test (both modes, both sides: refused at the stop time, an entry before it closes by its lock, a
+    later signal refused, a control without the field) and of the start-over test (league, F13.a, three days); both fail without the fix (mutation
+    check). The parity test still passes: the gate refuses only entries at or after the stop time. Account ids, counts and the fingerprint are unchanged.
+17. **The lock + net-ROE take-profit is now in the league parity.** In the 30m "roe50|4" combination F13.a has one take-profit exit per size, which did
+    not carry the price of the lock's net-ROE take-profit (a mutation of `tp_from_roe` in `exits.LadderTP` passed all 291 tests of the file). The
+    parity test gets a combination "30m-roe20" ("roe20|2", F13.a and F13.b, E0) in which F13.a closes eight to ten trades per size at the take-profit,
+    most of them after the lock was raised, and a test that counts them and compares each with the study; the same mutation now fails two tests of the file.
+18. **Known limit 19 (h)** and README_KO: F13.b is the full grid's row "ladder|k" and F13.a on a 2R pick is "ladder_tp2R|k"; those rows are among the 84
+    exits on which E0 was chosen and whose 2024-2026 per-trade results the owners saw. The select result of F13.b is tilted against it by E0's plateau
+    selection, and its confirm is not independent of the grid. No number changes.
+19. **Provenance of 17 items 6 and 7.** The two decisions are ticked "CONFIRMED on 2026-10-12" on the strength of the main session's brief of that day,
+    which the sixth pass could not check elsewhere; item 7 says so and asks the main session to read items 6 and 7 against its own decisions before the
+    hash. They are not changed in substance.
+20. **Noted, not changed.** The sixth pass changed the `metrics.loss_class` docstring from "at least 0.5R" to "deeper than 0.5R" (it agrees with
+    15 definition 21, a strict inequality; no code changed). `git diff` of the study folder against the commit before the sixth pass also shows
+    `research/hunt/POWER_R1_KO.md` and `RESULTS_R1_SELECT_KO.md`: they came from other auto-commits, not from this build.
+21. **Test results of the seventh pass** (working tree, 2026-10-12, synthetic data; counts only): `test_exitflex.py` 212 passed (was 211; one test
+    added); `EXITFLEX_REQUIRE_REAL=1 test_native.py` 371 passed, 0 skipped; `tests/test_exitflex_league_parity.py` 295 passed (was 291: the combination
+    "30m-roe20" and its test); `tests/test_candleague_*.py` 340 passed (was 335: five tests added to `test_candleague_rulex.py`, 134 now, with
+    `test_candleague_exits.py` at 32). `runner_x.py pin-lines` prints 35 lines; the 25 first-8-hex entries of the table in 13 are unchanged (none of the
+    25 input files was edited).
+22. **Not taken.** Nothing in the two reviews was rejected. Where a review left a choice (the claim wording, the T5 list), item 12 and item 14 say what was
+    chosen and why.
 
 **Not done, and why (sixth pass):**
 
@@ -3539,7 +3607,7 @@ For the main session and the coders. This file is hashed, and the pin commit mad
 below is true; parts C and D are the pin itself. Each line is checked by a command, a test or a read. Names of functions
 and fields are those of this file (section 13 is the contract); if the coder used other names, section 13 is edited
 first. Items marked (5th) were added or changed by the fifth pass (16.4, items 9 on), items marked (6th) by the sixth pass (16.6:
-F13 and the final items). **Marks (16.5, 2026-10-12; updated in 16.6):**
+F13 and the final items), items marked (7th) by the seventh pass (16.6 items 11-22: fixes after two reviews). **Marks (16.5, 2026-10-12; updated in 16.6):**
 `[x]` true now; `[~]` true in part, the rest being in the list "Open for the main session" at the end of this section;
 `[ ]` open. Everything marked true was checked on the working tree by a read, a grep or a test on synthetic data. No
 stage was run on real market data: the real-data checks are open items.
@@ -3619,7 +3687,7 @@ stage was run on real market data: the real-data checks are open items.
 14. [~] `native.py` and `native_ds.py` exist and follow Appendix A. Their synthetic tests pass (`test_native.py`, run
     without the 1m folder: 288 passed, 83 skipped); the 83 skipped are the real-bar tests (O3). (6th) Run again in the
    working tree on 2026-10-12 with the 1m folder and `EXITFLEX_REQUIRE_REAL=1`: 371 passed, 0 skipped (booleans only, no
-   figure printed); the pass at the pin commit is still O3.
+   figure printed); (7th) again after the seventh pass's changes: 371 passed, 0 skipped; the pass at the pin commit is still O3.
 15. [x] `runner_x.py`: the required pins include `native.py`, `native_ds.py`, `paperbot/dash/tools/regime5y.py` and
     `research/fullgrid/regimes.py` (and, as built, the eight further inputs of section 13); the second table of 8.2 and
     the F12 component counts, in total and split by pick timeframe (5th), are printed; the private owner reports are
@@ -3640,10 +3708,10 @@ stage was run on real market data: the real-data checks are open items.
     the key example, 5th**), T5 (F12), T6 (F12 equals F11 with the other eight off), T7 (gates per pool, the default,
     the group rule, `choice.json` checks, the D11 whitelist with the owner-report rules, **the free-text tripwire and
     the redaction, 5th**, the 88 / 74 / 37 counts, `claim_of`, F13 (6th)) and T8 (state labels). They print pass or fail and
-    counts only. In the working tree on 2026-10-12: (6th) 211 passed (was 156; synthetic data, about 2.3 minutes). The pass
-    "at the pin commit" is O3. The league side, which is not pinned: (6th) `tests/test_candleague_rulex.py` (129 tests) and
-    `tests/test_exitflex_league_parity.py` (291 tests) gave 420 passed in the working tree (was 380), `tests/test_candleague_*.py`
-    as a whole 335 passed, `tests/test_candleague_exits.py` among them with the 84 rules byte-identical.
+    counts only. In the working tree on 2026-10-12: (6th) 211 passed (was 156; synthetic data, about 2.3 minutes); (7th) 212 passed. The pass
+    "at the pin commit" is O3. The league side, which is not pinned: (7th) `tests/test_candleague_rulex.py` (134 tests) and
+    `tests/test_exitflex_league_parity.py` (295 tests) gave 429 passed in the working tree (6th: 420 of 129 + 291), `tests/test_candleague_*.py`
+    as a whole 340 passed (6th: 335), `tests/test_candleague_exits.py` among them with the 84 rules byte-identical.
 
 **C. Pins to compute** (the main session; this is the pin commit itself)
 
@@ -3676,8 +3744,8 @@ stage was run on real market data: the real-data checks are open items.
 
 **F. Open for the main session** (16.5; in this order)
 
-* **O1. Finish the text. Done in 16.6 (2026-10-12):** items 4a, 6 and 7 are decided and ticked and the "Repo HEAD" sentence is
-  written; only item 4 (the DeepSeek drafter's blindness statement) would still change the text, and only if a statement
+* **O1. Finish the text. Done in 16.6 (2026-10-12, sixth and seventh pass):** items 4a, 6 and 7 are decided and ticked (the main session reads 6 and 7
+  against its own decisions, 16.6 item 19) and the "Repo HEAD" sentence is written; only item 4 (the DeepSeek drafter's blindness statement) would still change the text, and only if a statement
   arrives. After this the file is final: its sha256 is the first line of `pin-lines`, so it is not edited again before the
   pin commit. `README_KO.md` is not pinned and can still change.
 * **O2. Choose the pin time** (item 18), UTC and KST.
