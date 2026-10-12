@@ -1,0 +1,44 @@
+{
+ "sent_utc": "2026-10-12T15:44:55Z",
+ "sent_kst": "2026-10-13T00:44:55+09:00",
+ "channel": "this Claude Code session's chat with the owners: SELECT_KO.md, EXTRA_READS_KO.md, EXTRA_READS_APPENDIX_KO.md and TWINS_KO.md as file cards in one message, with the Korean explanation",
+ "ds_report_shown_utc": "2026-10-12T15:44:55Z",
+ "ds_report_shown_kst": "2026-10-13T00:44:55+09:00",
+ "ds_report_shown_note": "owner_report_select.md (sha256 checked equal to select.json ds_owner_report_sha256 before showing) and owner_report_extra.md were shown in the chat text of the same turn, just before the files were sent: the private report's rows for E0 and the one choosable id, the extra report's part 핵심 and the twins' private section, condensed into the chat text; the appendix (부록 B) is shown in the chat on request. Nothing of them was written to a committed file or a logged channel.",
+ "freeze_note": "From this sending until choice.json is hashed and pushed, the main session opens and sends no 2024-2026 exit result: no hunt test-period read (round 1 or round 2), no track-2 result, no ledger print, no full-grid extract, no other file with 2024-2026 trades or accounts by exit. Hunt round 2 and track 2 are not run before the hash. The main session also opens no candidate-league record during the freeze. Questions about such material are answered after the hash.",
+ "extra_note": {
+  "O7": {
+   "commit": "d861c84f1eaba53b68446766426e4d1c01d7c7f2",
+   "utc": "2026-10-12T12:58:58Z"
+  },
+  "O8": {
+   "commit": "176e8174fe426f681d3507dbbd4c6cfb36e94db0",
+   "utc": "2026-10-12T14:40:30Z"
+  },
+  "select_pin_ok": {
+   "head": "d861c84f1e",
+   "utc": "2026-10-12T12:59:08Z",
+   "note": "the [pin ok] line at the select start; select exit 0 at 2026-10-12T13:02:39Z"
+  },
+  "post_run_audits": "runner_x.py audit --stage select A1-A9 pass at HEAD 176e817; hashes of select.json and SELECT_KO.md pushed in f8c7e65 before any select output was opened",
+  "same_message": {
+   "answer": "yes",
+   "files": [
+    "SELECT_KO.md",
+    "EXTRA_READS_KO.md",
+    "EXTRA_READS_APPENDIX_KO.md",
+    "TWINS_KO.md"
+   ],
+   "utc": "2026-10-12T15:44:55Z"
+  },
+  "deviations": "research/exitflex/DEVIATIONS.md: [extra/twins] TW-A5 NaN compare, [extra/reads] X-028 DeepSeek label, [extra/twins] check rerun self-hash; all extra outputs rerun and audited after the fixes (commit 8abceaa)",
+  "time_cap_drops": [
+   "X-041 c = 1.5",
+   "X-043 live size",
+   "X-002"
+  ],
+  "dropped_at_o8": "tier C (16 reads), E.0 item 2 a"
+ },
+ "extra_shown_utc": "2026-10-12T15:44:55Z",
+ "ds_owner_report_extra_sha256": "57af4d9cd47a35a80705cd66614131ddc5ef3539833aa56a4580e89cc669c8f9"
+}
