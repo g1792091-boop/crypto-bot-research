@@ -826,7 +826,7 @@ def test_records_are_known_at_the_close_and_equal_a_frame_cut_there():
     """A record is the same whether the frame holds only the bars up to its close or more: nothing after the close is read."""
     df = _frame("1h")
     pack = RX.FramePack(LIB, df)
-    needs = {"atr": True, "ema": [10, 50], "sw": [2, 3, 5], "flags": False, "xf": False}
+    needs = {"atr": True, "ema": [10, 50], "sw": [2, 3, 5], "flags": False, "nat": False}
     close = (df["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + 3_600_000
     full = {}
     for i in range(len(df) - 400, len(df) - 380):
@@ -1347,59 +1347,118 @@ def test_snapshots_of_the_rule_league(tmp_path, whole):
 
 
 # ---------------------------------------------------------------- a fresh start from the install time, the old database kept
-def test_a_rule_league_starts_at_its_install_and_a_change_keeps_the_old_database(tmp_path):
-    rules = tmp_path / "rules.json"
+def _restarted(db, rule, cands=None, **kw):
+    """The restarted league (PREREG 11.4 item 1) over its own database: a League with the accounts of 11.2."""
+    cands = cands or _rule_cands("15m", "tp1R|1")
+    kw.setdefault("log", lambda s: None)
+    return RN.League(RN.open_db(str(db)), RX.accounts(cands, cfg_of(rule)), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA),
+                     TP._steps_from(DATA), TP.SYMS, db_path=str(db), **kw)
+
+
+def test_the_restarted_league_starts_at_its_install_and_a_change_keeps_the_old_database(tmp_path):
     NOW = START + 5 * 3_600_000 + 123_456
-    main_db = tmp_path / "league.db"
-    main = RN.League(RN.open_db(str(main_db)), C.accounts(_rule_cands("15m", "tp1R|1")), TP.BRACKETS, TP.SPECS, LIB,
-                     PS.FrameSource(DATA), TP._steps_from(DATA), TP.SYMS, start_ms=START, log=lambda s: None, db_path=str(main_db))
-    main.advance(START + DAY)
-    before = _trades(main)
-    args = dict(brackets=TP.BRACKETS, specs=TP.SPECS, lib=LIB, source=PS.FrameSource(DATA), fetch_steps=TP._steps_from(DATA),
-                symbols=TP.SYMS, log=lambda s: None, clock=lambda: NOW)
-    assert RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args) is None
-    assert not (tmp_path / RX.DB_NAME).exists()                                    # no config file: no rule league
-    rules.write_text(rules_doc("F7.N2.a"))
-    rl = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
+    db = tmp_path / "league_new.db"
+    rl = _restarted(db, "F7.N2.a", clock=lambda: NOW)
     assert rl.reset and rl.start_ms == NOW // RN.FIVE * RN.FIVE and rl.done == rl.start_ms
-    assert os.path.exists(tmp_path / "rule_league_start.json") and not list(tmp_path.glob("rule_league_from_*.db"))
+    assert os.path.exists(tmp_path / "league_new_start.json") and not list(tmp_path.glob("league_new_from_*.db"))
     rl.advance(rl.start_ms + 2 * 3_600_000 * 12)
     rows = _trades(rl)
     assert rows and min(r[1] for r in rows) > rl.start_ms                          # nothing before the install
     # the rules change: the old database is copied next to it first, the league starts over from the same start
-    rules.write_text(rules_doc("F7.N3.a"))
-    rl2 = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
+    rl2 = _restarted(db, "F7.N3.a", clock=lambda: NOW + 3_600_000)
     assert rl2.reset and rl2.start_ms == rl.start_ms and _trades(rl2) == []
-    copies = list(tmp_path.glob("rule_league_from_*.db"))
+    copies = list(tmp_path.glob("league_new_from_*.db"))
     assert len(copies) == 1
     c = sqlite3.connect(f"file:{copies[0]}?immutable=1", uri=True)
     assert c.execute("SELECT COUNT(*) FROM trades").fetchone()[0] == len(rows)
     c.close()
-    # the main league's record and its own backup rule are untouched
-    assert _trades(main) == before and not list(tmp_path.glob("league_from_*.db"))
-    again = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
+    again = _restarted(db, "F7.N3.a", clock=lambda: NOW + 7_200_000)
     assert not again.reset and again.start_ms == rl.start_ms                       # a plain restart continues
-    # backup_if_reset for the install script works on the rule database too
-    rules.write_text(rules_doc("F7.N4.a"))
-    accts = RX.load_accounts(str(rules), _rule_cands("15m", "tp1R|1"))
-    assert RN.plan_start(str(tmp_path / RX.DB_NAME), accts)[0] is True
+    # backup_if_reset for the install script works on this database
+    assert RN.plan_start(str(db), RX.accounts(_rule_cands("15m", "tp1R|1"), cfg_of("F7.N4.a")))[0] is True
 
 
-def test_the_shared_fetch_asks_once_for_the_same_minutes():
-    calls = []
+def test_the_start_guard_stops_a_league_whose_start_is_not_the_install_time(tmp_path):
+    """PREREG 11.3: a lost database AND start file would start the league at 'now' without a word; with the install time given the
+    league refuses before anything is written, and the way out (CANDLEAGUE_START = the install time) rebuilds from the right start."""
+    install = START + 7 * 3_600_000 + 61_000                                       # 07:01:01
+    want = install // RN.FIVE * RN.FIVE
+    db = tmp_path / "league_new.db"
+    logs = []
+    ok = _restarted(db, "F7.N2.a", clock=lambda: install, expect_start_ms=install, log=logs.append)
+    assert ok.start_ms == want and any("새 데이터베이스" in x and "지금(기록된 시작 없음)" in x for x in logs)
+    ok.advance(want + 3 * 3_600_000)
+    kept = _trades(ok)
+    assert kept
+    # the database and the start file are both lost, the service starts hours later: 'now' is not the install time
+    os.remove(db)
+    for ext in ("-wal", "-shm"):
+        if os.path.exists(str(db) + ext):
+            os.remove(str(db) + ext)
+    os.remove(tmp_path / "league_new_start.json")
+    later = install + 5 * 3_600_000
+    with pytest.raises(RN.StartMismatch, match="CANDLEAGUE_START="):
+        _restarted(db, "F7.N2.a", clock=lambda: later, expect_start_ms=install)
+    assert not (tmp_path / "league_new_start.json").exists()                       # nothing was written
+    # without the expectation the league as before starts at 'now' - but says so loudly
+    logs.clear()
+    quiet = _restarted(db, "F7.N2.a", clock=lambda: later, log=logs.append)
+    assert quiet.start_ms == later // RN.FIVE * RN.FIVE and any("경고" in x and "EXPECT_START" in x for x in logs)
+    os.remove(db)
+    os.remove(tmp_path / "league_new_start.json")
+    # the way out: the install time as the explicit start rebuilds the same league
+    rebuilt = _restarted(db, "F7.N2.a", clock=lambda: later, expect_start_ms=install, start_ms=install)
+    assert rebuilt.start_ms == want
+    rebuilt.advance(want + 3 * 3_600_000)
+    assert _trades(rebuilt) == kept
+    # a database that records another start than the install time is refused as well (an old copy restored over the current one)
+    with pytest.raises(RN.StartMismatch, match="데이터베이스의"):
+        _restarted(db, "F7.N2.a", clock=lambda: later, expect_start_ms=install + 3_600_000)
+    # the start file that disagrees with the database is corrected, and said so
+    json.dump({"start_ms": want + 3_600_000, "started_ms": want + 3_600_000}, open(tmp_path / "league_new_start.json", "w"))
+    logs.clear()
+    fixed = _restarted(db, "F7.N2.a", clock=lambda: later, log=logs.append)
+    assert fixed.start_ms == want and any("시작 시각 파일" in x and "고칩니다" in x for x in logs)
+    assert json.load(open(tmp_path / "league_new_start.json"))["start_ms"] == want
+    # the check itself
+    RN.check_expected_start(want, None)
+    RN.check_expected_start(want, install)
+    with pytest.raises(RN.StartMismatch):
+        RN.check_expected_start(want + RN.FIVE, install)
 
-    def fetch(rest, syms, s, e):
-        calls.append((tuple(syms), s, e))
-        return [(s, {}, {})]
-    sf = RN.SharedFetch(fetch)
-    sf.fresh(None, ["A", "B"], 1, 2)
-    sf.reuse(None, ["A", "B"], 1, 2)
-    sf.reuse(None, ["A"], 1, 2)                                   # another set of coins: asked again
-    sf.fresh(None, ["A", "B"], 1, 2)                               # the main league always asks Binance
-    assert calls == [(("A", "B"), 1, 2), (("A",), 1, 2), (("A", "B"), 1, 2)]
+
+def test_the_rule_state_audit_keeps_the_saved_state_when_the_fetched_bars_are_cut_short(tmp_path):
+    """make_fetcher stops quietly on an empty page: a short answer must not 'correct' a saved state to a wrong one."""
+    db = tmp_path / "g.db"
+    lg = _restarted(db, "F1.w2.a", start_ms=START)
+    held, t = None, START
+    while t < START + 3 * DAY and held is None:
+        t += 3 * RN.FIVE
+        lg.advance(t)
+        held = next((a for a in lg.rule_accts if lg.engines[a["id"]].position is not None and a["rule"]["family"]), None)
+    assert held is not None
+    aid = held["id"]
+    rx = json.loads(json.dumps(lg.engines[aid].position.signal.meta["rx"]))
+    st = RN._get(lg.conn, "engines")
+    damaged = st[aid]["position"]["signal"]["meta"]["rx"]
+    damaged["tx"] -= 7 * 3_600_000                                                    # a wrong saved state ...
+    RN._put(lg.conn, "engines", st)
+    lg.conn.commit()
+    full = TP._steps_from(DATA)
+    # ... and a fetch that ends before the league's own last minute (the quiet break on an empty page)
+    short = lambda _r, syms, s, e: [x for x in full(None, syms, s, e) if x[0] < e - 30 * 60_000]      # noqa: E731
+    cut = RN.League(RN.open_db(str(db)), lg.accts, TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA), short, TP.SYMS,
+                    log=lambda s: None, db_path=str(db))
+    assert cut.restore_notes and "다시 계산하지 못했습니다" in cut.restore_notes[0] and "저장된 상태를 그대로" in cut.restore_notes[0]
+    assert cut.engines[aid].position.signal.meta["rx"]["tx"] == damaged["tx"]          # kept, not 'corrected' to the short answer
+    ok = _restarted(db, "F1.w2.a")                                                     # the complete answer corrects it
+    assert ok.restore_notes and ok.engines[aid].position.signal.meta["rx"]["tx"] == rx["tx"]
+    with pytest.raises(RX.IncompleteBars):
+        RX.check_coverage([], "BTCUSDT", START, {"BTCUSDT": START})
+    assert RX.check_coverage(full(None, ["BTCUSDT"], START, START + 3 * 60_000), "BTCUSDT", START, None) is None
 
 
-# ---------------------------------------------------------------- the service loop: both leagues, one failing never stops the other
+# ---------------------------------------------------------------- the service loop: the restarted league replaces the candidate accounts
 def _main_env(monkeypatch, tmp_path, cands, now_ms):
     import paperbot.binance as BN
 
@@ -1418,54 +1477,45 @@ def _main_env(monkeypatch, tmp_path, cands, now_ms):
     clock = types.SimpleNamespace(time=lambda: now_ms / 1000, monotonic=real.monotonic, strftime=real.strftime,
                                   gmtime=real.gmtime, sleep=lambda s: None)
     monkeypatch.setattr(RN, "time", clock)
-    for k in ("CANDLEAGUE_START", "CANDLEAGUE_RULES", "CANDLEAGUE_RULE_DB", "CANDLEAGUE_RULE_SNAP", "CANDLEAGUE_RULE_START"):
+    for k in ("CANDLEAGUE_START", "CANDLEAGUE_EXPECT_START", "CANDLEAGUE_RULES"):
         monkeypatch.delenv(k, raising=False)
 
 
-def test_the_service_runs_the_rule_league_next_to_the_main_one(tmp_path, monkeypatch, capsys):
+def test_the_service_runs_the_restarted_league_only_when_the_rules_file_is_enabled(tmp_path, monkeypatch, capsys):
     cands = _rule_cands("15m", "tp1R|1")
     NOW = START + 2 * DAY + 600_000 + 95_000
     _main_env(monkeypatch, tmp_path, cands, NOW)
     db, snap, rules = tmp_path / "league.db", tmp_path / "snap", tmp_path / "rules.json"
     iso = "2026-10-05T00:00Z"
-    args = ["once", "--db", str(db), "--snap", str(snap), "--start", iso, "--rule-start", iso, "--rules", str(rules)]
-    # no rule config: the main league alone, no rule database, no rule snapshot
+    args = ["once", "--db", str(db), "--snap", str(snap), "--start", iso, "--rules", str(rules)]
+    # no rules file: the candidate league as before
     assert RN.main(args) == 0
-    main_doc = json.load(open(snap / "league.json"))
-    assert not (tmp_path / RX.DB_NAME).exists() and not (snap / "rule").exists() and main_doc["done_ms"] == START + 2 * DAY + 600_000
+    old_doc = json.load(open(snap / "league.json"))
+    assert old_doc["done_ms"] == START + 2 * DAY + 600_000 and not any(a.get("rule") for a in old_doc["accounts"])
     only = _trades_of(db)
-    # a config file: the rule league appears, with its own database, start file and snapshots
+    # a file that is not enabled starts nothing
+    rules.write_text(json.dumps({"pools": {"core": "F7.N2.a"}}))
+    assert RN.main(args) == 0 and _trades_of(db) == only
+    # enabled: the league IS the restarted league - the old record is copied next to the database, the start is kept
     rules.write_text(rules_doc("F7.N2.a"))
     assert RN.main(args) == 0
-    assert (tmp_path / RX.DB_NAME).exists() and (tmp_path / "rule_league_start.json").exists()
-    rdoc = json.load(open(snap / "rule" / "league.json"))
-    assert rdoc["start_ms"] == START and rdoc["done_ms"] == main_doc["done_ms"] and len(rdoc["accounts"]) == 5
-    assert any(t["exit_reason"] == "RULE" for t in json.load(open(snap / "rule" / "trades.json"))["core-S2-15m-1-nq"]["trades"])
-    assert json.load(open(snap / "league.json"))["accounts"] == main_doc["accounts"]          # the main league did not move
-    assert _trades_of(db) == only
-    # a config that cannot be run never stops the main league
+    doc = json.load(open(snap / "league.json"))
+    assert doc["start_ms"] == START and doc["done_ms"] == old_doc["done_ms"] and len(doc["accounts"]) == 5
+    assert {a["id"].rsplit("-", 1)[1] for a in doc["accounts"]} == {"n", "nq", "e", "eq", "nflip"}
+    assert list(tmp_path.glob("league_from_*.db")) and not (tmp_path / RX.DB_NAME).exists()
+    nq = next(a for a in doc["accounts"] if a["id"].endswith("-nq"))
+    assert nq["hold"]["n"] > 0 and {"offered", "entered", "skipped", "rejected", "closed"} == set(nq["counts"])      # items 10 and 12
+    assert any(t["exit_reason"] == "RULE" for t in json.load(open(snap / "trades.json"))["core-S2-15m-1-nq"]["trades"])
+    # a rules file that is enabled and cannot be run stops the service (it never runs the old accounts in its place)
     rules.write_text(rules_doc("F2.n10.a.q15"))
-    assert RN.main(args) == 0
-    out = capsys.readouterr().out
-    assert "규칙 리그를 열지 못했습니다" in out and _trades_of(db) == only
-    # a rule league that fails in a pass is reopened from its database and the main league goes on
+    with pytest.raises(SystemExit):
+        RN.main(args)
+    # the install-time guard: a start that is not the expected install time stops the service before any trade is shown
     rules.write_text(rules_doc("F7.N2.a"))
-    boom = {"n": 0}
-    orig = RX.chunk_rule
-
-    def flaky(*a, **k):
-        boom["n"] += 1
-        raise RuntimeError("boom")
-    monkeypatch.setattr(RX, "chunk_rule", flaky)
-    later = START + 2 * DAY + 1_200_000 + 95_000                                 # ten minutes on
-    monkeypatch.setattr(RN, "time", types.SimpleNamespace(time=lambda: later / 1000, monotonic=RN.time.monotonic,
-                                                          strftime=RN.time.strftime, gmtime=RN.time.gmtime,
-                                                          sleep=lambda s: None))
-    assert RN.main(args) == 0
-    out = capsys.readouterr().out
-    assert boom["n"] >= 1 and "규칙 리그 처리 실패" in out
-    assert json.load(open(snap / "league.json"))["done_ms"] == START + 2 * DAY + 1_200_000      # the main league moved on
-    monkeypatch.setattr(RX, "chunk_rule", orig)
+    with pytest.raises(SystemExit):
+        RN.main(args + ["--expect-start", "2026-10-05T00:05Z"])
+    assert RN.main(args + ["--expect-start", iso]) == 0
+    assert "시작 시각" in capsys.readouterr().out
 
 
 def _trades_of(db):
@@ -1476,24 +1526,28 @@ def _trades_of(db):
         c.close()
 
 
-def test_the_backup_command_copies_the_rule_database_before_a_change(tmp_path, monkeypatch, capsys):
+def test_the_backup_command_copies_the_database_before_the_restart_and_checks_the_install_time(tmp_path, monkeypatch, capsys):
     cands = _rule_cands("15m", "tp1R|1")
     _main_env(monkeypatch, tmp_path, cands, START + DAY)
     db, rules = tmp_path / "league.db", tmp_path / "rules.json"
-    rules.write_text(rules_doc("F7.N2.a"))
-    rl = RN.make_rule_league(str(rules), cands, str(tmp_path / RX.DB_NAME), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA),
-                             TP._steps_from(DATA), TP.SYMS, log=lambda s: None, clock=lambda: START)
-    rl.advance(START + 6 * 3_600_000)
-    RN.open_db(str(db)).close()
+    old = RN.League(RN.open_db(str(db)), C.accounts(cands), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA), TP._steps_from(DATA),
+                    TP.SYMS, start_ms=START, log=lambda s: None, db_path=str(db))
+    old.advance(START + 6 * 3_600_000)
     capsys.readouterr()
-    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
-    assert "규칙 리그: 기록 복사 필요 없음" in capsys.readouterr().out and not list(tmp_path.glob("rule_league_from_*.db"))
-    rules.write_text(rules_doc("F7.N3.a"))                        # the install changes the rules
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0               # no rules file: the candidate accounts, nothing to copy
+    assert "기록 복사 필요 없음" in capsys.readouterr().out and not list(tmp_path.glob("league_from_*.db"))
+    rules.write_text(rules_doc("F7.N2.a"))                                                # the restart: another account set
     assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
     out = capsys.readouterr().out
-    assert "규칙 리그: 새로 시작하기 전 기록 복사" in out and len(list(tmp_path.glob("rule_league_from_*.db"))) == 1
-    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0          # a second run finds its copy
+    assert "새로 시작하기 전 기록 복사" in out and len(list(tmp_path.glob("league_from_*.db"))) == 1
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0               # a second run finds its copy
     assert "이미 복사해 두었습니다" in capsys.readouterr().out
+    install = "2026-10-05T00:00Z"
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules), "--expect-start", install]) == 0
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules), "--expect-start", "2026-10-05T01:00Z"]) == 1
+    assert "설치 시각" in capsys.readouterr().out
+    rules.write_text(rules_doc("F2.n10.a.q15"))
+    assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 1
 
 
 def test_q15_on_a_1h_pick_in_the_league_checks_on_15m_closes_and_survives_restarts(tmp_path, monkeypatch):
