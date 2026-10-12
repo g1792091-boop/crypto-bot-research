@@ -225,3 +225,15 @@ def test_every_pick_of_the_owner_file_has_numbers_other_than_the_default():
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     same = [c["id"] for c in owner if all(C._plain(C.default_combo(c["kind"], c["name"])[k]) == C._plain(v) for k, v in c["combo"].items())]
     assert same == []
+
+
+def test_the_quick_stop_entry_builds_for_every_owner_pick_and_runs_the_studys_rule():
+    """The owners asked for a quick stop when the view breaks: the study's F6 (swing 3, loss of at least 0.5 R) as one more account kind."""
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"].insert(5, {"suffix": "-fq", "rule": "F6.w3.d0.5", "label_ko": "빠른 손절 (관점 무너지면)"})
+    cfg = RX.normalize_owner(doc)
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts(owner, cfg)
+    fq = [a for a in accts if a["role"] == "fq"]
+    assert len(fq) == len(owner) and all(a["rule"]["id"] == "F6.w3.d0.5" and a["exit"] == next(c for c in owner if c["id"] == a["pick"])["exit"] for a in fq)
+    assert RX.check(owner, cfg) == [] and RX.rule_needs(fq[0]["rule"])["sw"] == [3]
