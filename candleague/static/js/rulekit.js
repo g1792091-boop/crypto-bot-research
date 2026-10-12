@@ -123,12 +123,12 @@ export const ROLE_RULE = {
     why: "크기를 줄이면 덜 흔들리나 · 손실 검사가 4배 느슨해서 후보보다 높은 배수가 나오기도 함"},
   exitonly: {nums: "기본값 (규칙봇 숫자)", exit: "후보 것", size: "규칙봇과 같음", dir: "신호대로", why: "좋아진 게 숫자 덕인가 익절·손절 덕인가"},
   base: {nums: "기본값 (규칙봇 숫자)", exit: "지금 규칙봇 것: 계단 잠금 10%부터 · 손절 2 ATR", size: "규칙봇과 같음", dir: "신호대로", why: "규칙봇과 같은 조건 (그 칸에 하나)"},
-  flip: {nums: "후보와 같은 시각에만 들어감", exit: "후보 것", size: "규칙봇과 같음", dir: "동전 던지기 (좋은 자리 여부도 동전 방향으로 다시 봄)",
+  flip: {nums: "후보와 같은 시각 (숫자로 고르지 않음)", exit: "후보 것", size: "규칙봇과 같음", dir: "동전 던지기 (좋은 자리 여부도 동전 방향으로 다시 봄)",
     why: "방향을 맞힌 건가 운인가"},
 };
 /** The five accounts side by side: numbers, exit, size, direction, what it is for (rows on a phone, a table on a PC). */
 export function rolesTable() {
-  const cols = [["nums", "진입 숫자"], ["exit", "익절·손절"], ["size", "크기 · 배수"], ["dir", "방향"], ["why", "보려는 것"]];
+  const cols = [["nums", "진입"], ["exit", "익절·손절"], ["size", "크기 · 배수"], ["dir", "방향"], ["why", "보려는 것"]];
   return h("div", {class: "rl-roles", role: "table", "aria-label": "계좌 5개가 다른 점"},
     h("div", {class: "rl-rrow rl-rhd", role: "row"}, h("span", {role: "columnheader"}, "계좌"), cols.map(([, k]) => h("span", {role: "columnheader"}, k))),
     ROLES.map((r) => h("div", {class: ["rl-rrow", `r-${r}`], role: "row"}, h("span", {class: "rl-rname", role: "rowheader"}, LK.roleChip(r)),
@@ -162,8 +162,8 @@ export function levRuleBody(r) {
       h("div", {class: "rl-step rl-stephd", role: "row"}, ["배수", "누가 시도", "증거금 (잔고 중)", "손절 거리 한도 (손실 검사)", "진입 때 청산까지"].map((t) => h("span", {role: "columnheader"}, t))),
       rows),
     h("ol", {class: "rl-checks"},
-      h("li", null, h("b", null, "청산 검사"), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위 표의 마지막 칸).`),
-      h("li", null, h("b", null, "손실 검사"), ` · 손절에 닿았을 때 잃는 돈(수수료·슬리피지 포함)이 잔고의 ${share(c.max_loss, 0)} 이하여야 합니다. 그래서 배수마다 쓸 수 있는 손절 거리에 한도가 있습니다 (위 표의 넷째 칸).`)),
+      h("li", null, h("b", null, "청산 검사"), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위의 ‘진입 때 청산까지’).`),
+      h("li", null, h("b", null, "손실 검사"), ` · 손절에 닿았을 때 잃는 돈(수수료·슬리피지 포함)이 잔고의 ${share(c.max_loss, 0)} 이하여야 합니다. 그래서 배수마다 쓸 수 있는 손절 거리에 한도가 있습니다 (위의 ‘손절 거리 한도’).`)),
     h("p", null, "그래서 ", h("b", null, "손절이 넓을수록 배수가 내려갑니다"), `. 예를 들어 손절이 1%면 좋은 자리라도 50배(한도 ${share((r.steps[0] || {}).max_stop, 2)})와 40배(한도 ${share((r.steps[1] || {}).max_stop, 2)})는 손실 검사에 걸려 30배로 들어갑니다. `,
       wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 20~30배가 많고, ` : "", "손절 2 ATR인 기본값 계좌는 40·50배가 더 자주 나옵니다."),
     h("p", null, term("증거금"), " = 그 거래에 거는 돈 (잔고 × 비율). ", term("포지션 크기"), " = 증거금 × 배수. 예: 잔고 $5,000에서 30배면 증거금 $1,500, 포지션 $45,000. ",

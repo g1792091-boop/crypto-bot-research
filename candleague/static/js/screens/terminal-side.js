@@ -181,7 +181,7 @@ export function pnlPanel(ctx) {
   h("div", {class: "tm-phero"}, segBox, h("span", {class: "tm-pnum"}, big, h("span", {class: "tm-punit"}, "USDT"))),
   meta, chartBox,
   h("div", {class: "tm-today"}, h("span", {class: "tm-tdt"}, "오늘 수익"), todayK, h("span", {class: "grow"}), todayV, h("span", {class: "tm-punit"}, "USDT")),
-  h("div", {class: "tm-calh"}, h("span", {class: "tm-calt"}, "수익 캘린더"), calMonth, h("span", {class: "grow"}), h("a", {class: "tm-more", href: "#/weekly"}, "주간 흐름 →")),
+  h("div", {class: "tm-calh"}, h("span", {class: "tm-calt"}, "수익 캘린더"), calMonth, h("span", {class: "grow"}), h("a", {class: "tm-more", href: "#/weekly"}, "흐름 →")),
   calBox);
 
   function setKind(id) {

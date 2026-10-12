@@ -25,7 +25,7 @@ export async function mount(el, ctx) {
     ui.card({plate: "한눈에", sub: "같은 기간 · 같은 시세 · 거래 한 번 평균으로 비교 (참고)"}, sum),
     ui.card({plate: "후보마다 5계좌", sub: "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌 · 후보 아래 작은 줄 = 후보 계좌가 나간 이유 · 수수료·펀딩 · 최장 연패 (최근 200번까지)"}, grid),
     ui.card({plate: "계좌 5개가 뭔가요", acts: h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수 →")}, h("dl", {class: "kv"}, ROLES.map((r) => h("div", null, h("dt", null, LK.roleChip(r)),
-      h("dd", null, ROLE_DESC[r], h("br"), h("small", {class: "muted"}, `숫자 ${ROLE_RULE[r].nums} · 익절·손절 ${ROLE_RULE[r].exit} · 크기 ${ROLE_RULE[r].size} · 방향 ${ROLE_RULE[r].dir}`)))))));
+      h("dd", null, ROLE_DESC[r], h("br"), h("small", {class: "muted"}, `진입: ${ROLE_RULE[r].nums} · 익절·손절: ${ROLE_RULE[r].exit} · 크기: ${ROLE_RULE[r].size} · 방향: ${ROLE_RULE[r].dir}`)))))));
 
   let INS = null;
   function paint() {

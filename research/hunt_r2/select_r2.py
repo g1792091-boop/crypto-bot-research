@@ -489,8 +489,10 @@ def run_sig(mk, sig: dict, cost: str = "base", detail: bool = False) -> dict:
 # ------------------------------------------------------------------ one name: Stage 0 + Stage A
 def name_unit(ctx: Ctx, name: str, transform=None, real: bool = False, anchor: int | None = None) -> dict:
     """Stage 0 (the name's default systems on every slot) and Stage A (every coarse point at the anchor) for the real
-    search (``real``: base + cost x2, the monthly series) or one null replicate (``transform`` = FlipTable /
-    a function sig -> (sig, counts); base only). Arrays over the coarse points; NaN where a point does not exist."""
+    search (``real``: base + cost x2, the monthly series) or one null replicate (``transform`` = FlipTable or ShiftA,
+    anything with ``apply(ctx, sig) -> (sig, counts)``; base only). The replicate's own Stage 0 chooses its anchor
+    unless ``anchor`` (a slot index) is forced (timing only). Arrays over the coarse points; NaN where a point does not
+    exist."""
     lat = L.coarse(name)
     t0 = time.time()
     tfs = L.tfs_of(name)
@@ -761,7 +763,7 @@ def null_replicates(null: str, reps: list, names_order: list, procs: int, parts:
 
 def hurdle(real: dict, null_a: dict, null_b: dict) -> dict:
     """4.3: the step-down walk of the real ranked candidates against both nulls' rank-r scores."""
-    R = max(1, len(real["ranked"]))
+    R = max(len(real["ranked"]), MAX_PICKS)       # 5: percentiles also at ranks held by no real candidate (to 30)
     sa = null_rank_scores([null_a[i]["P"] for i in sorted(null_a)], R)
     sb = null_rank_scores([null_b[i]["P"] for i in sorted(null_b)], R)
     steps = step_down([c["P"] for c in real["ranked"]], sa, sb)

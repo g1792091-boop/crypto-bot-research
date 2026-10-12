@@ -369,22 +369,19 @@ def test_non_default_f1_combos_reach_every_engine_entry_point(world):
     for name, over in (("E1", {"vol_len": 40, "vol_mult": 2.5}), ("E3", {"slow": 200})):
         combo = {**L.default_combo(name), **over}
         tf = "15m"
-        K, J, S, Kd, Jd, Sd = [], [], [], [], [], []
+        K, J, S, Jd = [], [], [], []
         for k, s in enumerate(SYMS):
             ser = H.series(s, tf)
             el, es = E.SeriesEvents(name, ser.bars, s).events(combo)
-            dl, ds = EW.events_on({"id": "x", "name": name, "kind": "hunt", "tf": tf,
-                                   "combo": EW.HUNT_MAIN[name]}, ser.bars, s)["long"], None
+            dl = EW.events_on({"id": "x", "name": name, "kind": "hunt", "tf": tf,
+                               "combo": EW.HUNT_MAIN[name]}, ser.bars, s)["long"]
             ok = ctx.ok(tf, k) & (ser.bars.close_ms >= mk.start) & (ser.bars.close_ms < mk.end)
             for side, ev in ((1, el), (-1, es)):
                 jj = np.flatnonzero(ev & ok & ~(el & es))
                 K.append(np.full(len(jj), k))
                 J.append(jj)
                 S.append(np.full(len(jj), side))
-            jd = np.flatnonzero(dl & ok)
-            Kd.append(np.full(len(jd), k))
-            Jd.append(jd)
-            Sd.append(np.ones(len(jd)))
+            Jd.append(np.flatnonzero(dl & ok))
         sig = SR.canon_sig(tf, np.concatenate(K), np.concatenate(J), np.concatenate(S))
         assert len(sig["k"]) > 0
         r2_long = sig["j"][sig["side"] > 0]
@@ -739,7 +736,7 @@ def test_default_in_effect_shares_the_default_run(world, monkeypatch):
 
 
 def test_search_and_results_do_not_depend_on_worker_count(world):
-    ctx = world
+    assert world.root == _W["root"]
     order = [n for _f, n in L.names() if n in NAMES]
     one = H.pmap(_unit_task, [(n, 4) for n in order], 1)
     two = H.pmap(_unit_task, [(n, 4) for n in order], 2)

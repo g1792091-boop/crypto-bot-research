@@ -20,7 +20,7 @@ export async function mount(el, ctx) {
   const st = {kind: q.kind || "all", tf: q.tf || "all", strat: q.s || "all", pick: q.pick || null};
   const save = () => ctx.setQuery(Object.fromEntries(Object.entries({kind: st.kind, tf: st.tf, s: st.strat, pick: st.pick})
     .filter(([, v]) => v && v !== "all")));
-  const answers = h("div"), rule = h("div"), list = h("div"), card = h("div", {id: "rl-pick"}), stratSel = h("span");
+  const answers = h("div"), rule = h("div"), list = h("div"), card = h("div", {id: "rl-pick"}), stratSel = h("span", {class: "rl-sel"});
   el.append(
     ui.screenHead("익절·손절·배수", "후보마다 익절·손절을 어떻게 잡았고, 배수(레버리지)와 증거금은 어떻게 정하나"),
     ui.card({plate: "짧은 답", cls: "rl-answers"}, answers),
