@@ -1,0 +1,90 @@
+{
+ "section": "TW",
+ "stage": "twins check",
+ "commit": "f8c7e65bf9f54ebf6dc82097cf8b04da8c17cf09",
+ "TW-C3": {
+  "pass": true,
+  "accounts": 3230,
+  "signals": 88281
+ },
+ "TW-C1": {
+  "pass": true,
+  "accounts": 152
+ },
+ "TW-C2": {
+  "pass": true,
+  "units": 38,
+  "removed": []
+ },
+ "TW-C5": {
+  "x": true,
+  "house": true,
+  "accounts": 12
+ },
+ "TW-C4": {
+  "pass": true
+ },
+ "need_gb": 0.8,
+ "removed": [],
+ "f11_mark": {
+  "x": true,
+  "house": true
+ },
+ "pass": true,
+ "hashes": {
+  "research/exitflex/PREREG_EXITFLEX_EXTRA.md": "eb6b7cb43dd1563c058251fc5a914df531e99703ec358d2cf63b7ac68a6106bb",
+  "research/exitflex/extra/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "research/exitflex/extra/common.py": "ebbd0ebe168d0b534d5ebb3583717c352f6232666465ae22fc324620bed0bd81",
+  "research/exitflex/extra/reads.py": "af687ef9b089e25ca10f00f0f029b93b154b89103ea2e58227da518d110950a2",
+  "research/exitflex/extra/reads_a.py": "283457ee16862789b52020d941e412a512d72deaff06272f95d8c85e83956419",
+  "research/exitflex/extra/reads_b.py": "4dbebfaadbc4d2a6c29719216a0a5e5db88fe93a5c05019d9fafb93a4df738c1",
+  "research/exitflex/extra/reads_lib.py": "bae0653f9c0dca71dbc3d28cd4a432bfc3d7a20610b18d7fa3c0105d0b6138dc",
+  "research/exitflex/extra/test_common.py": "c89fefea24e3e80aac69369355770ec9f33e71194dbcb133030aa7ae9103270f",
+  "research/exitflex/extra/test_reads_a.py": "dc3f3e32b54ab408413c9c804b6b0019e84cd18a73281a5ff67ab93121c33a91",
+  "research/exitflex/extra/test_reads_b.py": "b1dc9bde6dc21e580facc2af486a8157e7e1c986380adf6d60a66ade84e8297f",
+  "research/exitflex/extra/test_twins.py": "03739f2c5859938fd230781f70aa68a61d5d1e3043208259616a3ad0bd5b905b",
+  "research/exitflex/extra/twins.py": "8a624172567bd175d12c54734c5706f9a17518c2f00c50c173a481e84fc77c5e",
+  "candleague/league.py": "841850c9486472e7a56c4167e073dcc7069b23c5c2e1e866d82fab3ea807ab58",
+  "candleague/candidates.py": "6b924adac1cc2cc1d97304b2f723c816c7d7f57743994a7bcfe79be2a0ad4beb",
+  "candleague/exits.py": "1e3c71302e90b1ecd1d26fe811d030ab39a11acfd53d0fd4669b2646db37563d",
+  "candleague/notify.py": "84d56cf789acd6a8090f797a8e7e1477965547aff9883ec765d56c28e703e131",
+  "paperbot/paramshadow.py": "e5ae18784387bb2c1cce2597cb479550b3f81a3860b4b509d5eea25dd2804c35",
+  "research/exitflex/PREREG_EXITFLEX.md": "f9a71b3514197411a11b2e35c516b905ebe0bc0290d78d61257cefeabe86f01f",
+  "research/exitflex/data_pin.json": "4856adbe4509c0e803f2972cfef32f060442088b901f646c753c439bdfd8695c",
+  "research/exitflex/data_x.py": "f76180301fc58b7a523ee6c3d7de0f65298a6b1aee35af834c7247ce91e96e03",
+  "research/exitflex/kernel_x.py": "7a557613f43de65a13fa327a122369d1f8d7556829c647d4cd3e41dc1435878f",
+  "research/exitflex/placebo.py": "ec75fab610e4e83e4df1ddceb08180922c703586015a0f26f43b996580a729b8",
+  "research/exitflex/metrics.py": "439a5ea26b2a486a173208cbd499cd53be9cfac54769622bebe7f17aaaead605",
+  "research/exitflex/runner_x.py": "bef5b40a7fa991a63674d5b0ff2f4166fb3253f80cba17652c5bc5cc0074fead",
+  "research/exitflex/test_exitflex.py": "a17eebad365057edded14f24a1c0e47202b793fe252b39060847cec83133dc00",
+  "research/exitflex/native.py": "760c89b1ae0181b37e5a788a78ca7a65c7b9a1baa05144ea643d5214eab46d90",
+  "research/exitflex/native_ds.py": "8987b1534848aea4e15d11b82dcb2ea73f12ad92206845a37eaf2d4a1e126dc8",
+  "paperbot/dash/tools/regime5y.py": "b055a412e308f8d75c1c9c8f01e7bdcbc734b583d93c3bd1cc67dbc15a9f5786",
+  "research/fullgrid/regimes.py": "934578ba49d0c99d6d47bf3b05726b033d3a23e80e98a4a855469fa22b38d699",
+  "research/fullgrid/kernel.py": "a4995c15695c4870dbee13c0a7d42417f8da36238fe713d1c514968f076c0d16",
+  "research/fullgrid/run.py": "4e02df9cbc69116fae2b517ce54fd27ac50384f8761e4c0de473e5d3cce0af17",
+  "research/fullgrid/sizing.py": "3dc00c24448a6456947c691def8ed8313c17f226b39706d52b1f06b41c441548",
+  "research/fullgrid/data.py": "6691424b2e3774ff556beede18c190195a58d7023cad462832069990bb87f0e9",
+  "research/fullgrid/ds_defs.py": "40a752cc2a65129c9452f573211912179a644429f91cc7cf947bd613a9e73a30",
+  "research/fullgrid/exchange.json": "176e234b3f84a96eecd2a0ea4e6b3e1ffbb3a40bf7fa77dbd994e33144413ffa",
+  "research/fullgrid/diag/watch_sel.json": "f6902feb42a7993098b794d0968bdf54fc2c3dbc43c0a6a0d7c56b43af53de56",
+  "candleague/data/candidates.json": "dd627ec0159fc7d6d08e28f9b67ea0d922914124cc495e172d9a7822f70ea564",
+  "paperbot/quality_edges.json": "8b4fc48daf928c64a4f42b9f4b9afb703ed2459f819f19acbc780172671f43c8",
+  "third_party/sweep/harness/vendor/fg_indicators.py": "bf43c1b805463a012c76dec0114adff027a06e23dfc7268e092c496ff35fdb8d",
+  "third_party/sweep/harness/vendor/pine_indicators.py": "938c954509ced6c9bf869512efc60233bd510fe76bb1e49b41f75ab08e41b2ff",
+  "research/deepseek200/lib_c.py": "3210c6024d39ec1bfd12e95d9c602510dac7667f1f955a5bae1dfc150d696b63",
+  "research/library/lib.py": "5c3e1083c734e8079df64d3a501ef7c7b0fbb8819c7c67087ba01ff213a999ce",
+  "research/search/search.py": "06920240b6f56e954e1896c16fed7c58b8fb8b3d95d73109efa0d1dcced43ce3",
+  "research/entry_study/DEFS_BC.sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+  "paperbot/config.py": "a5b64e3c0e6f99545ac03247cd64ccde25b9d90dba2716f1d55a1759a4906a99",
+  "paperbot/ladder.py": "6bd368105d1d2b554ee63371dd023213cbcb1ea088e6d5b9acd2c2ff54d223f4",
+  "paperbot/margin.py": "005db5e72d93e57109c68c2b8c8cdaa45a5a4a8679dd0990d50b5e0a51c6f834",
+  "paperbot/levrule.py": "79b77d5fda0ebbdcc04701a2b7e19cf728641a6ab4e0a18ff3023caa2c536d32",
+  "paperbot/entry_marks.py": "01b2d91833d42c4a54b8f3a1b846b21627e6450292f4c0f02c91718fec11f639",
+  "paperbot/sweepsig.py": "422fd374eafb26c621de10019820a73ab538d0a3ec469edcd82fd8971e6fc432",
+  "research/fullgrid/grid.py": "522cfb2ed620fe4758f7ef8280151152eeee23844aff7fc03dc2bf906f304a88",
+  "research/fullgrid/memo.py": "30b5a25d09d065085f7353892c99c72c92790a19d2550d99fed7c30242dbf38a",
+  "research/exitflex/test_native.py": "d8f722ae29e9fce6c918f44349c9c5df3811bddfa92f16050ad8258bbf1fce96",
+  "research/exitflex/out/timing.json": "3651db07b5f428aa8f2bf78bcf77d5a58c81182ed57f7c4b43294797bcacb98f"
+ }
+}
