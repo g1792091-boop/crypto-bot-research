@@ -45,6 +45,7 @@ from paperbot.paramshadow import replay_day
 from . import candidates as C
 from . import exits as X
 from . import league as L
+from . import rulex as RX
 from . import summary as SM
 
 REPLAY_FROM_MS = 1_790_812_800_000      # 2026-10-01 00:00 UTC: where VERSION 1 replayed from (history; nothing starts there now)
@@ -85,7 +86,7 @@ def _put(conn, k: str, v) -> None:
 def fingerprint(accts: list[dict]) -> str:
     import hashlib
     body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
-                       for a in accts], sort_keys=True)
+                       + ([a["rule"]] if a.get("rule") else []) for a in accts], sort_keys=True)     # rule accounts: + the rule
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
@@ -266,6 +267,13 @@ class League:
             if aid in saved_engines:
                 restore_engine(e, saved_engines[aid])
         self.active = {a for a, e in self.engines.items() if e.position is not None or e.pending}
+        # rule accounts (candleague.rulex): their signals and chart records come from RX.chunk_rule, the others from
+        # L.chunk_signals; a restored rule position's state is checked against a recomputation from the bars
+        self.rule_accts = [a for a in accts if a.get("rule")]
+        self.plain_accts = [a for a in accts if not a.get("rule")]
+        self.restore_notes: list[str] = []
+        if any(self.engines[a["id"]].position is not None for a in self.rule_accts):
+            self.restore_notes = RX.audit_restored(self, log)
 
     @property
     def done(self) -> int:
@@ -278,8 +286,16 @@ class League:
         while self.done < end:
             a = self.done
             b = min(end, (a // DAY + 1) * DAY)
-            by_close, notes = L.chunk_signals(self.lib, self.source, self.accts, self.symbols, a, b, self.start_ms,
-                                              self.strategies)
+            by_close, notes = L.chunk_signals(self.lib, self.source, self.plain_accts if self.rule_accts else self.accts,
+                                              self.symbols, a, b, self.start_ms, self.strategies) \
+                if (self.plain_accts or not self.rule_accts) else ({}, [])
+            if self.rule_accts:
+                rule_close, rule_notes = RX.chunk_rule(self.lib, self.source, self.rule_accts, self.symbols, a, b,
+                                                       self.start_ms, self.strategies)
+                for close, items in rule_close.items():
+                    by_close.setdefault(close, []).extend(items)
+                notes = self.restore_notes + notes + rule_notes
+                self.restore_notes = []
             steps = self.fetch_steps(None, self.symbols, a, b)
             replay_day(self.engines, self.active, by_close, steps, self.brackets)
             rows = []
@@ -355,6 +371,8 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False,
                "open": None if pos is None else {"symbol": pos.symbol, "side": pos.side, "entry": pos.entry_price,
                                                  "stop": pos.stop_price, "tp": None if math.isnan(pos.tp_price)
                                                  else pos.tp_price, "since": pos.entry_time, "lev": pos.leverage}}
+        if a.get("rule"):
+            row.update(rule=a["rule"].get("id"), rule_ko=RX.rule_ko(a["rule"]), pick=a.get("pick"))
         if a["kind"] == "ds" and not ds_money:
             for k in ("mean_ret", "wallet", "max_dd"):
                 row[k] = None
