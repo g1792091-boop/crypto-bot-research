@@ -112,6 +112,7 @@ TABLE1_LINES = (
     "리그의 동전 계좌는 실제 크기로 돌고, 이 표의 동전은 1/4 크기입니다.",
     "5년 연구 성적표의 같은 칸 숫자와 다릅니다. 이번 계산은 2021~2023년, 한 번에 한 자리, 1분봉이고, 자리를 잡고 있는 동안 놓친 신호까지 셉니다.",
     "이 표의 차이로 리그 계좌를 고르거나 바꾸지 않습니다.")
+FLIP20_LINE = "'동전 20번' 줄은 20번 던진 결과의 가운데 값이고, 보유 시간과 진입 칸에는 [가장 낮은 ~ 가장 높은] 값도 적었습니다."
 FLIP_LIVE_LINE = ("'실제 크기' 동전 줄은 리그의 동전 계좌와 같은 크기로 1번째 동전의 지금 청산만 한 번 더 계산한 것입니다"
                   "(나머지 동전 계산은 모두 1/4 크기).")
 CARD_D_LINES = (
@@ -651,11 +652,11 @@ def pool_doc(ctx: Ctx, F: Files, sel: dict, pool: str) -> dict:
               t1("flip", 1.0, ROLE_KO["flip"] + "(리그와 같은 동전, 실제 크기)", fig(live0, live0)),
               t1("flip", 0.25, ROLE_KO["flip"] + "(리그와 같은 동전, 1/4 크기)", fig(seed0, seed0)),
               t1("flip20", 0.25, "동전 20번(1/4 크기)", E0F["flip"])]
-    thin = {"x": [x_id(p) for p, s in zip(picks, e0["x"]) if thin(MT.count(s, "entered"))],
+    thin_ids = {"x": [x_id(p) for p, s in zip(picks, e0["x"]) if thin(MT.count(s, "entered"))],
             "house": [base_id(p) for p, s in zip(picks, e0["house"]) if thin(MT.count(s, "entered"))],
             "flip": [flip_id(p, 0) for p, s in zip(picks, seed0) if thin(MT.count(s, "entered"))]}
     rem = sorted({strategy(p) for p in picks if strategy(p) in ctx.removed})
-    return {"n_units": N, "eligible_ids": elig, "thin_ids": thin,
+    return {"n_units": N, "eligible_ids": elig, "thin_ids": thin_ids,
             "removed": {"strategies": rem, "units": sum(strategy(p) in ctx.removed for p in picks)},
             "f11_note": {"pick": f7, "x": bool(f7 and ctx.f11_mark.get("x")), "house": bool(f7 and ctx.f11_mark.get("house"))},
             "rows": rows, "table1": table1, "table4": t4}
@@ -841,20 +842,25 @@ def _has(r: dict) -> bool:
     return r.get("n_units", 0) > 0 and "entered" in r
 
 
-def _mark(r: dict, P: dict) -> str:
-    out = []
+def _suffix(r: dict, P: dict, extra=(), f11: bool = True) -> str:
+    """The cell's notes in one parenthesis (the given counts, the mark, a TW-C2 removal with its unit count), then the F11 = F3 note."""
+    notes = list(extra)
     if r.get("mark") and not (r["id"] == "E0" and r["kind"] == "house"):
-        out.append(r["mark"] + (f" {P['n_units'] - r['n_units']}칸" if r["mark"] == MARK_REMOVED else ""))
-    if r.get("same_as_f3"):
-        out.append(F11_NOTE)
-    return " ".join(out)
+        notes.append(r["mark"] + (f" {P['n_units'] - r['n_units']}칸" if r["mark"] == MARK_REMOVED else ""))
+    out = f" ({', '.join(notes)})" if notes else ""
+    return out + (f" {F11_NOTE}" if f11 and r.get("same_as_f3") else "")
 
 
-def _word(r: dict, key: str, P: dict) -> str:
+def _part(r: dict, key: str, P: dict, extra=()) -> str:
+    """One kind of a card line: '<kind> <word> (notes)', or the mark alone when the kind has no figure."""
     if not _has(r):
-        return r.get("mark") or "-"
-    m = _mark(r, P)
-    return r[key] + (f" ({m})" if m else "")
+        return r.get("mark") if r.get("mark") == MARK_NO_FLIP else f"{KIND_KO[r['kind']]} {r.get('mark') or '-'}"
+    return f"{KIND_KO[r['kind']]} {r[key]}{_suffix(r, P, extra, False)}"
+
+
+def _card_label(I: dict, vid: str) -> str:
+    r = I[(vid, "pick")]
+    return _label(r) + (f" {F11_NOTE}" if r.get("same_as_f3") else "")
 
 
 def card_a(P: dict) -> list:
@@ -863,9 +869,9 @@ def card_a(P: dict) -> list:
     if not P["eligible_ids"]:
         L.append("선택 가능한 청산이 없어 지금 청산(E0) 줄만 있습니다.")
     for vid in P["eligible_ids"]:
-        hold = " · ".join(f"{KIND_KO[k]} {_word(I[(vid, k)], 'dir_hold', P)}" for k in KINDS)
-        ent = " · ".join(f"{KIND_KO[k]} {_word(I[(vid, k)], 'dir_entries', P)}" for k in KINDS)
-        L.append(f"- {_label(I[(vid, 'pick')])}: 보유 시간 {hold} / 진입 {ent}")
+        hold = " · ".join(_part(I[(vid, k)], "dir_hold", P) for k in KINDS)
+        ent = " · ".join(_part(I[(vid, k)], "dir_entries", P) for k in KINDS)
+        L.append(f"- {_card_label(I, vid)}: 보유 시간 {hold} / 진입 {ent}")
     return L + ["", CARD_A_LINE, ""]
 
 
@@ -875,8 +881,7 @@ def _cell2(r: dict, P: dict) -> str:
     h = r["hold"]["seed_median"] if "seed_median" in r["hold"] else r["hold"]
     ent = r["entered"]["seed_median"] if isinstance(r["entered"], dict) else r["entered"]
     c = "-" if r["id"] == "E0" else f_chg(r["entered_change_pct"])
-    m = _mark(r, P)
-    return f"{f_h(h['median'])} / {f_sh(h['share_gt4'])} / {f_n(ent)} / {c}" + (f" ({m})" if m else "")
+    return f"{f_h(h['median'])} / {f_sh(h['share_gt4'])} / {f_n(ent)} / {c}" + _suffix(r, P)
 
 
 def table2(P: dict) -> list:
@@ -898,7 +903,7 @@ def table1(P: dict) -> list:
         hv = (lambda k, fn: f_rng({s: h[s][k] for s in h}, fn)) if "seed_median" in h else (lambda k, fn: fn(h[k]))
         rows.append([r["name_ko"], "1" if r["size"] == 1.0 else "1/4", hv("median", f_h), hv("share_gt4", f_sh), hv("share_gt8", f_sh),
                      hv("share_gt18", f_sh), seeds(r["entered"], f_n), f_n(r["skipped"]), f_n(r["rejected"]), f_sh(r["win_share"])])
-    return L + m_table(head, rows, False) + [t for x in TABLE1_LINES + (FLIP_LIVE_LINE,) for t in (x, "")]
+    return L + m_table(head, rows, False) + [t for x in TABLE1_LINES + (FLIP_LIVE_LINE, FLIP20_LINE) for t in (x, "")]
 
 
 def _gcell(r: dict, P: dict, with_side: bool) -> str:
@@ -906,10 +911,8 @@ def _gcell(r: dict, P: dict, with_side: bool) -> str:
         return r.get("mark") or "-"
     v = r["G"] if r["id"] == "E0" else r["M"]
     s = f_rng(v, f_g) if isinstance(v, dict) else f_g(v)
-    if with_side and r["id"] != "E0" and r["kind"] != "pick":
-        s += f" ({r['same_side']})"
-    m = _mark(r, P)
-    return s + (f" ({m})" if m else "")
+    side = (r["same_side"],) if (with_side and r["id"] != "E0" and r["kind"] != "pick") else ()
+    return s + _suffix(r, P, side)
 
 
 def card_d(P: dict, private: bool) -> list:
@@ -921,13 +924,13 @@ def card_d(P: dict, private: bool) -> list:
         parts = []
         for k in KINDS:
             r = I[(vid, k)]
-            w = _word(r, "dir_growth", P)
+            extra = ()
             if _has(r) and k in ("x", "house"):
-                w += f" ({r['n_units']}칸 중 나아진 칸 {r['n_pos']})"
+                extra = (f"{r['n_units']}칸 중 나아진 칸 {r['n_pos']}",)
             elif _has(r) and k == "flip":
-                w += f" ({N_SEEDS}번 중 나아진 번 {r['n_pos']})"
-            parts.append(f"{KIND_KO[k]} {w}")
-        L.append(m_line(f"- {_label(I[(vid, 'pick')])}: " + " · ".join(parts), private))
+                extra = (f"{N_SEEDS}번 중 나아진 번 {r['n_pos']}",)
+            parts.append(_part(r, "dir_growth", P, extra))
+        L.append(m_line(f"- {_card_label(I, vid)}: " + " · ".join(parts), private))
     return L + [""] + [t for x in CARD_D_LINES for t in (m_line(x, private), "")]
 
 
@@ -939,6 +942,7 @@ def table3(P: dict, private: bool) -> list:
     head = ["청산", "픽", "청산만 바꾼 기본값", "규칙봇 청산 위에", "동전 20번"]
     rows = [[_label(I[(vid, "pick")])] + [_gcell(I[(vid, k)], P, True) for k in KINDS] for vid in ["E0"] + P["eligible_ids"]]
     L += m_table(head, rows, private)
+    L += [m_line("괄호 안: 같은 쪽 = 픽과 같은 방향, 반대 쪽 = 픽과 반대 방향, 0 = 어느 한쪽의 차이가 0이라 방향이 없음.", private), ""]
     L += [m_line("표 3b. 칸 수와 동전 수(나아짐 = 같은 계좌의 지금 청산보다 한 달 성장이 큼).", private), ""]
     head = ["청산", "나아진 칸: 청산만 바꾼 기본값", "나아진 칸: 규칙봇 청산 위에", "픽과 같은 쪽 칸: 청산만 바꾼 기본값",
             "픽과 같은 쪽 칸: 규칙봇 청산 위에", "나아진 동전"]
@@ -1279,7 +1283,7 @@ def run_checks(ctx: Ctx, c4: bool = True) -> dict:
     out["TW-C5"] = {"x": bool(c5["x"] and n5 > 0), "house": bool(c5["house"] and n5 > 0), "accounts": n5}
     if c4:
         t = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", os.path.join(HERE, "test_twins.py"), "-k",
-                            "tw_t1 or tw_t3"], capture_output=True, text=True, cwd=ctx.tl.root,
+                            "tw_t1_ or tw_t3_"], capture_output=True, text=True, cwd=ctx.tl.root,
                            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
         out["TW-C4"] = {"pass": t.returncode == 0}
     else:
@@ -1588,7 +1592,7 @@ def cmd_audit(tl: TLayout, rerun: bool = False, private: bool = False) -> bool:
         res = audit_private(tl, paths, rerun)
     else:
         sel = require_select(tl, rerun)
-        chk = json.load(open(tl.out_file("twins_check.json"), encoding="utf-8"))
+        chk = require_check(tl)
         iso = {}
         with isolated(tl, paths, "audit", iso):
             sfx = None
