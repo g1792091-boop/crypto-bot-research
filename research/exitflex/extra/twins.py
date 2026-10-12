@@ -414,6 +414,11 @@ def run_all(ctx: Ctx, quiet: bool = False) -> int:
 
 
 # ------------------------------------------------------------------ metrics (TW.4)
+def thin(entered: int) -> bool:
+    """거래 적음: the unit's own E0 entered fewer than 30 trades at quarter size in the 36 months (29 is thin, 30 is not)."""
+    return entered < THIN_ENTRIES
+
+
 def pct(m: float) -> float:
     return 100.0 * (math.exp(m) - 1.0)
 
@@ -646,9 +651,9 @@ def pool_doc(ctx: Ctx, F: Files, sel: dict, pool: str) -> dict:
               t1("flip", 1.0, ROLE_KO["flip"] + "(리그와 같은 동전, 실제 크기)", fig(live0, live0)),
               t1("flip", 0.25, ROLE_KO["flip"] + "(리그와 같은 동전, 1/4 크기)", fig(seed0, seed0)),
               t1("flip20", 0.25, "동전 20번(1/4 크기)", E0F["flip"])]
-    thin = {"x": [x_id(p) for p, s in zip(picks, e0["x"]) if MT.count(s, "entered") < THIN_ENTRIES],
-            "house": [base_id(p) for p, s in zip(picks, e0["house"]) if MT.count(s, "entered") < THIN_ENTRIES],
-            "flip": [flip_id(p, 0) for p, s in zip(picks, seed0) if MT.count(s, "entered") < THIN_ENTRIES]}
+    thin = {"x": [x_id(p) for p, s in zip(picks, e0["x"]) if thin(MT.count(s, "entered"))],
+            "house": [base_id(p) for p, s in zip(picks, e0["house"]) if thin(MT.count(s, "entered"))],
+            "flip": [flip_id(p, 0) for p, s in zip(picks, seed0) if thin(MT.count(s, "entered"))]}
     rem = sorted({strategy(p) for p in picks if strategy(p) in ctx.removed})
     return {"n_units": N, "eligible_ids": elig, "thin_ids": thin,
             "removed": {"strategies": rem, "units": sum(strategy(p) in ctx.removed for p in picks)},
@@ -1561,13 +1566,19 @@ def cmd_report(tl: TLayout, rerun: bool = False, o8: bool = False, fix: int | No
                 "run_start_utc": rec.get("start_utc"), "run_end_utc": rec.get("end_utc"),
                 "results_dir": os.path.basename(ctx.paths.results["core"]), "o8_breach": bool(o8),
                 "fix": {"n": fix, "note": fix_note, "utc": utc_now()} if fix else None}
-        doc, md, ds_text, private = build_report(ctx, sel, meta)
-        write_private(ctx, ctx.paths.private_md, private)
-        write_private(ctx, ctx.paths.ds_json, ds_text)
         sfx = f"_fix{fix}" if fix else ("_r2" if rerun else "")
-        write_committed(tl, f"twins{sfx}.json", dumps(doc))
-        write_committed(tl, f"TWINS_KO{sfx}.md", md)
+        write_report(ctx, sel, meta, sfx)
     say(f"[twins report] written: out/twins{sfx}.json, out/TWINS_KO{sfx}.md and the private section")
+
+
+def write_report(ctx: Ctx, sel: dict, meta: dict, sfx: str = "") -> dict:
+    """The private section and twins_ds.json first (their sha256 go into twins.json), then twins.json and TWINS_KO.md."""
+    doc, md, ds_text, private = build_report(ctx, sel, meta)
+    write_private(ctx, ctx.paths.private_md, private)
+    write_private(ctx, ctx.paths.ds_json, ds_text)
+    write_committed(ctx.tl, f"twins{sfx}.json", dumps(doc))
+    write_committed(ctx.tl, f"TWINS_KO{sfx}.md", md)
+    return doc
 
 
 def cmd_audit(tl: TLayout, rerun: bool = False, private: bool = False) -> bool:
