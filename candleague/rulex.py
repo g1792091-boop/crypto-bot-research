@@ -719,7 +719,6 @@ def code_version(rule: dict) -> str:
         v += "|" + native_hash()
     if rule.get("family") in LOCK_FAMILIES:                  # the lock's numbers are part of what an F13 account means
         v += "|lock" + ",".join(format(x, "g") for x in X.LOCK)
-    v += "|ulad" + ",".join(format(x, "g") for x in (*X.ULAD_FIRST, *X.ULAD_SECOND, X.ULAD_STEP))   # the owners' ladder (exit ladderU)
     return v
 
 

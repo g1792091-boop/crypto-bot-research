@@ -218,3 +218,10 @@ def test_the_owner_candidates_file_is_the_38_picks_plus_eleven_weak_clue_picks()
     cfg = RX.normalize_owner(LINEUP)
     accts = RX.owner_accounts(owner, cfg)
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
+
+
+def test_every_pick_of_the_owner_file_has_numbers_other_than_the_default():
+    """The owners asked that every account of the new league run the chosen custom numbers, so none may be the default set."""
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    same = [c["id"] for c in owner if all(C._plain(C.default_combo(c["kind"], c["name"])[k]) == C._plain(v) for k, v in c["combo"].items())]
+    assert same == []

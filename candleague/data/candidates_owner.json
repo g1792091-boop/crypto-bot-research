@@ -1625,22 +1625,22 @@
    "variants": []
   },
   {
-   "id": "ds-F15_ORB-1h-1",
+   "id": "ds-F15_ORB-4h-2",
    "kind": "ds",
    "name": "F15_ORB",
-   "tf": "1h",
+   "tf": "4h",
    "combo": {
-    "orb_bars": 2
+    "orb_bars": 3
    },
-   "exit": "tp3R|4",
+   "exit": "tp3R|2.5",
    "source": {
-    "rank": 1,
+    "rank": 2,
     "row": null,
     "passed": false,
     "watch": false,
     "tier": "weak",
-    "test_n": 2462,
-    "select_n": 1745
+    "test_n": 497,
+    "select_n": 348
    },
    "variants": []
   },

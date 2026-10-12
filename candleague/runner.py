@@ -108,6 +108,7 @@ def fingerprint(accts: list[dict]) -> str:
                        + ([a["rule"], RX.code_version(a["rule"]), a.get("no_entry_from_ms")] if a.get("rule") else [])
                        + (["weekend_off"] if a.get("weekend_off") else [])
                        + (["coin"] if a.get("coin") else [])
+                       + (["ulad", list(X.ULAD_FIRST + X.ULAD_SECOND + (X.ULAD_STEP,))] if str(a["exit"]).startswith(X.ULAD + "|") else [])
                        for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time;
     #                                                         the owner-exit league's weekend switch (an account without it: as before)
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()

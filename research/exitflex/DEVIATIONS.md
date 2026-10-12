@@ -62,3 +62,12 @@ E.0 item 2 and TW.10).
 * What it can still influence is later work. The conditional-rules study now being designed (research/condrules) uses
   2021-2023 as its select period on these picks. That study's pre-registration records this look, and its menu and
   portfolio rules may not use per-pick results.
+
+## [league] 2026-10-13 (after the study: choice and confirm are hashed)
+
+* `candleague/exits.py` is in the pin of the extra code (`PREREG_EXITFLEX_EXTRA.sha256`). The owners' league work added to it after the study
+  ended: the exit family "ladderU|<k>" (the owners' stepped lock 13% -> 10%, 20% -> 15%, 25% -> 20%, 30% -> 25%), `user_lock_for`, the
+  `UserLadder` engine and their branches in `spec`, `known`, `exit_ko` and `make_engine`. Nothing the study used changed: the 84 rules,
+  `lock_exit`, the F13 names and every existing function behave as before (the league's tests, including the study's parity test, pass).
+* `candleague/rulex.py`, `candleague/runner.py`, `candleague/notify.py` and `candleague/candidates.py`'s consumers changed for the owner-exit
+  league (rules file form "owner_exits"). No study result, gate, choice or report is touched. The study's own outputs stay as hashed.
