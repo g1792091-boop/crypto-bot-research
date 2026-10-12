@@ -1666,7 +1666,7 @@ def test_a_start_over_after_the_stop_time_is_set_gives_the_same_trades_as_the_ru
     assert _trades(start_over) == c
 
 
-def test_counters_marks_and_snapshot_fields(whole):
+def test_counters_marks_and_snapshot_fields(whole, tmp_path):
     conn = whole.conn
     rows = conn.execute("SELECT account, day, offered, entered, skipped, rejected, closed FROM acct_day").fetchall()
     assert rows and all(r[2] == r[3] + r[4] + r[5] for r in rows)                      # offered = entered + skipped + rejected
@@ -1709,7 +1709,7 @@ def test_counters_marks_and_snapshot_fields(whole):
                 realised = 5000.0 + sum(p for _en, ex, p in trades.get(a["id"], []) if ex < d)
                 assert w == pytest.approx(realised, rel=1e-7) and m == w
     # the snapshot: hold-time aggregates and the counters of every rule account
-    doc = RN.write_snapshots("/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/snap_cnt", whole, START + 3 * DAY + 60_000)
+    doc = RN.write_snapshots(str(tmp_path / "snap_cnt"), whole, START + 3 * DAY + 60_000)
     for r in doc["accounts"]:
         assert set(r["hold"]) == {"n", "median", "share_gt4", "share_gt8", "share_gt18"} and r["hold"]["n"] == n_trades.get(r["id"], 0)
         assert r["counts"]["closed"] == n_trades.get(r["id"], 0)
@@ -1727,3 +1727,160 @@ def test_mark_value_is_the_wallet_after_a_market_exit_at_the_last_close(side):
     assert RX.mark_value(closed, {}) == closed.wallet
     # the marked value is below the open position's unrealised value by the exit costs, and falls with an adverse close
     assert RX.mark_value(held, {SYM: P0 - side * 100}) < m
+
+
+# ---------------------------------------------------------------- the forward checks C1 / C2 (PREREG 11.5, 11.4 item 14)
+import datetime as _dt
+
+
+def _ms(y, m, d, hh=0, mm=0):
+    return int(_dt.datetime(y, m, d, hh, mm, tzinfo=_dt.timezone.utc).timestamp() * 1000)
+
+
+def test_check_times_months_and_week_bounds():
+    inst = _ms(2026, 10, 14, 13, 7)                                              # a Wednesday
+    assert [RX.check_time(inst, w) for w in ("c1", "c2", "repeat")] == [_ms(2026, 11, 13), _ms(2026, 12, 14), _ms(2027, 1, 14)]
+    assert RX.monthly_growth(5000.0, inst, RX.check_time(inst, "c1")) == 0.0
+    days = (RX.check_time(inst, "c1") - inst) / DAY_MS
+    assert RX.monthly_growth(5500.0, inst, RX.check_time(inst, "c1")) == pytest.approx(math.log(1.1) / (days / (365.25 / 12)))
+    t = RX.check_time(inst, "c2")                                                # Monday 2026-12-14
+    b = RX.week_bounds(inst, t)
+    mondays = [_ms(2026, 10, 19) + 7 * k * DAY_MS for k in range(9)]            # 10-19 ... 12-14
+    assert mondays[-1] == t and b == [inst] + mondays[1:]                       # the first part-week joins the first full week; T is a Monday
+    assert all(_dt.datetime.fromtimestamp(x / 1000, _dt.timezone.utc).weekday() == 0 for x in b[1:])
+    t2 = RX.check_time(inst, "c1")                                              # Friday 2026-11-13: the last Monday (11-09) is merged into the last week
+    b2 = RX.week_bounds(inst, t2)
+    assert b2[0] == inst and b2[-1] == t2 and b2[1] == _ms(2026, 10, 26) and b2[-2] == _ms(2026, 11, 2) and len(b2) == 4
+    mon = _ms(2026, 10, 12)                                                      # an install exactly on a Monday: no part-week
+    assert RX.week_bounds(mon, mon + 14 * DAY_MS) == [mon, mon + 7 * DAY_MS, mon + 14 * DAY_MS]
+    assert RX.week_bounds(inst, inst + 3 * DAY_MS) == [inst, inst + 3 * DAY_MS]  # no Monday in between: one week
+    assert RX.week_bounds(inst, _ms(2026, 10, 19, 0)) == [inst, _ms(2026, 10, 19)]
+
+
+DAY_MS = 86_400_000
+
+
+def test_the_sign_flip_test_is_exact_and_random_above_twenty_weeks():
+    import itertools
+    d = [0.02, -0.01, 0.03, 0.005, -0.004, 0.012, 0.0, 0.02]
+    obs = np.mean(d)
+    want = np.mean([np.mean([e * x for e, x in zip(es, d)]) >= obs - 1e-12 for es in itertools.product((-1, 1), repeat=len(d))])
+    assert RX.sign_flip_p(d, 1) == pytest.approx(want) and RX.sign_flip_p(d, 999) == RX.sign_flip_p(d, 1)    # exact: no seed
+    assert RX.sign_flip_p([0.01] * 9, 1) == pytest.approx(1 / 2 ** 9)                       # every week positive: only the all-plus pattern
+    assert RX.sign_flip_p([-0.01] * 5, 1) == 1.0 and RX.sign_flip_p([0.0] * 6, 1) == 1.0     # ties count (>=)
+    big = list(np.random.default_rng(3).normal(0.004, 0.01, 21))
+    p1, p2 = RX.sign_flip_p(big, 123), RX.sign_flip_p(big, 123)
+    assert p1 == p2 and (p1 * 20_001) == pytest.approx(round(p1 * 20_001)) and 0 < p1 < 1
+    assert RX.seed_of("exitflex", "league", "core", "2026-12-14") == int(hashlib.sha256(b"exitflex|league|core|2026-12-14").hexdigest()[:8], 16)
+
+
+def _sub(tmp_path, name):
+    (tmp_path / name).mkdir()
+    return tmp_path / name
+
+
+def _check_world(tmp_path, daily, trades_nq=200, install=None):
+    """A league database with hand-made marks: ``daily`` = {role: per-day growth of the marked wallet}, the same for every pick of
+    both pools; trades for the -nq accounts. Returns (conn, accts, install)."""
+    install = install or _ms(2026, 10, 14, 13, 7)
+    cands = [c for c in C.load() if c["id"] in ("core-DOGE-15m-1", "core-DOGE-30m-1", "ds-F10_OTE-1h-1", "ds-F10_OTE-4h-1")]
+    accts = RX.accounts(cands, RX.normalize_config({"pools": {"core": "F9.a", "ds": "F9.a"}}))
+    conn = RN.open_db(str(tmp_path / "chk.db"))
+    first = (install // DAY_MS + 1) * DAY_MS
+    for a in accts:
+        role = a["id"][len(a["pick"]):].lstrip("-")
+        g = daily.get(role, 0.0)
+        for k in range(0, 100):
+            day = first + k * DAY_MS
+            w = 5000.0 * math.exp(g * ((day - install) / DAY_MS))
+            conn.execute("INSERT INTO acct_mark VALUES (?, ?, ?, ?)", (a["id"], day, w * 0.999, w))
+        if role == "nq":
+            for i in range(trades_nq // 2):
+                t0 = install + (i + 1) * 3_600_000 * 5
+                conn.execute("INSERT INTO trades VALUES (?, ?, ?)", (a["id"], t0 + 3_600_000 * (1 + i % 9),
+                             json.dumps({"entry_time": t0, "exit_time": t0 + 3_600_000 * (1 + i % 9), "pnl": 1.0 if i % 3 else -2.0})))
+            conn.execute("INSERT INTO acct_day VALUES (?, ?, ?, ?, ?, ?, ?)", (a["id"], first, trades_nq, trades_nq // 2, 3, 1, trades_nq // 2))
+    conn.commit()
+    return conn, accts, install
+
+
+def test_c1_stops_a_pool_whose_new_exit_is_below_its_e0_and_its_coin_flip(tmp_path):
+    conn, accts, inst = _check_world(tmp_path, {"nq": 0.001, "eq": 0.003, "nflip": 0.002})
+    r = RX.forward_check(conn, accts, inst, "c1")
+    t = RX.check_time(inst, "c1")
+    for pool in ("core", "ds"):
+        i = r["pools"][pool]
+        assert i["label"] == "stop" and i["no_entry_from_ms"] == t and i["conds"] == {"nq_below_eq": True, "nq_below_flip": True}
+        assert i["g"]["nq"] < i["g"]["nflip"] < i["g"]["eq"] and i["g_realised"]["nq"] < i["g"]["nq"]     # the realised-only wallet is below the mark
+    # stopped only when it is below BOTH: better than the coin flip (or than E0) continues
+    for k, daily in enumerate(({"nq": 0.001, "eq": 0.003, "nflip": 0.0005}, {"nq": 0.004, "eq": 0.003, "nflip": 0.0005},
+                               {"nq": 0.002, "eq": 0.0, "nflip": 0.003}, {"nq": 0.002, "eq": 0.002, "nflip": 0.002})):
+        c_, a_, i_ = _check_world(_sub(tmp_path, f"x{k}"), daily)
+        r2 = RX.forward_check(c_, a_, i_, "c1")
+        assert r2["pools"]["core"]["label"] == "continue" and r2["pools"]["core"]["no_entry_from_ms"] is None, daily
+    # no mark yet at the check time: not decided
+    c3 = RN.open_db(str(tmp_path / "empty.db"))
+    assert RX.forward_check(c3, accts, inst, "c1")["pools"]["core"]["label"].startswith("not yet")
+    # the pool already stopped has no check
+    r3 = RX.forward_check(conn, accts, inst, "c2", stopped=("core",))
+    assert r3["pools"]["core"]["label"] == "stopped at C1" and r3["pools"]["ds"]["label"] in ("shown ahead", "not shown ahead")
+
+
+def test_c2_needs_all_four_conditions_and_the_repeat_uses_the_tighter_limit(tmp_path):
+    conn, accts, inst = _check_world(tmp_path, {"nq": 0.004, "eq": 0.001, "nflip": 0.0005})
+    r = RX.forward_check(conn, accts, inst, "c2")
+    i = r["pools"]["core"]
+    assert i["conds"] == {"beats_e0_and_sign_flip": True, "beats_flip": True, "trades_150": True, "positive": True} and i["label"] == "shown ahead"
+    assert i["p"] == pytest.approx(1 / 2 ** i["n_weeks"]) and i["p_limit"] == 0.03 and 7 <= i["n_weeks"] <= 9      # every week better: the smallest p
+    assert len(i["weekly_diffs"]) == i["n_weeks"] and all(x > 0 for x in i["weekly_diffs"])
+    # fewer than 150 closed trades of the -nq accounts: not shown ahead although it beat E0 and the flip
+    conn_f, accts_f, _ = _check_world(_sub(tmp_path, "few"), {"nq": 0.004, "eq": 0.001, "nflip": 0.0005}, trades_nq=60)
+    assert RX.forward_check(conn_f, accts_f, inst, "c2")["pools"]["core"]["conds"]["trades_150"] is False
+    # the new exit's accounts did not grow: G(nq) <= 0 although better than E0 and the flip
+    c_neg, a_neg, _ = _check_world(_sub(tmp_path, "neg"), {"nq": -0.0005, "eq": -0.002, "nflip": -0.003})
+    ng = RX.forward_check(c_neg, a_neg, inst, "c2")["pools"]["core"]
+    assert ng["conds"]["positive"] is False and ng["conds"]["beats_e0_and_sign_flip"] and ng["label"] == "not shown ahead"
+    # a coin flip better than the new exit
+    c_fl, a_fl, _ = _check_world(_sub(tmp_path, "fl"), {"nq": 0.004, "eq": 0.001, "nflip": 0.006})
+    assert RX.forward_check(c_fl, a_fl, inst, "c2")["pools"]["core"]["conds"]["beats_flip"] is False
+    # the repeat at 92 days: p < 0.02 over all the days from the restart (13 weeks: 2^-13 is far below), pools already shown ahead are skipped
+    rr = RX.forward_check(conn, accts, inst, "repeat", skip=("ds",))
+    assert rr["time_ms"] == RX.check_time(inst, "repeat") and rr["pools"]["core"]["p_limit"] == 0.02 and rr["pools"]["ds"]["label"] == "already shown ahead"
+    assert rr["pools"]["core"]["n_weeks"] >= 12
+    # weekly differences equal the marks' log changes at the week boundaries (hand check of the first and last week)
+    first, last = RX.week_bounds(inst, RX.check_time(inst, "c2"))[:2], RX.week_bounds(inst, RX.check_time(inst, "c2"))[-2:]
+    wk = lambda g, a, b: g * ((b - a) / DAY_MS)  # noqa: E731
+    assert i["weekly_diffs"][0] == pytest.approx(wk(0.004, first[0], first[1]) - wk(0.001, first[0], first[1]))
+    assert i["weekly_diffs"][-1] == pytest.approx(wk(0.004, last[0], last[1]) - wk(0.001, last[0], last[1]))
+
+
+def test_the_public_view_keeps_deepseek_to_labels_counts_win_shares_and_hold_hours(tmp_path, capsys):
+    conn, accts, inst = _check_world(tmp_path, {"nq": 0.004, "eq": 0.001, "nflip": 0.0005})
+    rep = RX.forward_check(conn, accts, inst, "c2")
+    pv = RX.public_view(rep)
+    assert "g" in pv["pools"]["core"] and "p" in pv["pools"]["core"]                 # the core pool in full
+    ds = pv["pools"]["ds"]
+    assert set(ds) <= set(RX.DS_PUBLIC_KEYS) and "g" not in ds and "p" not in ds and "weekly_diffs" not in ds and "g_realised" not in ds
+    assert set(ds["conds"].values()) <= {True, False} and set(ds["counts"]["nq"]) == {"offered", "entered", "skipped", "rejected", "closed"}
+    text = RX.format_check(rep)
+    assert "딥시크" in text and "월 로그성장" in text
+    ds_part = text.split("- 딥시크")[1]
+    assert "월 로그성장" not in ds_part and "p = " not in ds_part
+    # the command line: the checks read the database, print the public text, write the full report only to a private folder
+    db = tmp_path / "league.db"
+    import shutil as _sh
+    conn.commit()
+    conn.close()
+    _sh.copy(tmp_path / "chk.db", db)
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps({"enabled": True, "pools": {"core": "F9.a", "ds": "F9.a"}, "picks": ["core-DOGE-15m-1", "core-DOGE-30m-1", "ds-F10_OTE-1h-1", "ds-F10_OTE-4h-1"]}))
+    iso = "2026-10-14T13:07Z"
+    assert RX.main(["checks", "c1", "--db", str(db), "--install", iso, "--rules", str(rules), "--private", str(tmp_path / "priv")]) == 0
+    out = capsys.readouterr().out
+    assert "[C1]" in out and "딥시크" in out and "continue" in out
+    assert json.load(open(tmp_path / "priv" / "check_c1.json"))["pools"]["ds"]["g"]["nq"] > 0                # the private file holds the figure
+    assert "g_realised" not in out.split("딥시크")[1]
+    assert RX.main(["checks", "c2", "--db", str(db), "--install", iso, "--rules", str(rules)]) == 0
+    assert "shown ahead" in capsys.readouterr().out
+    rules.write_text(json.dumps({"pools": {"core": "F9.a"}}))
+    assert RX.main(["checks", "c1", "--db", str(db), "--install", iso, "--rules", str(rules)]) == 2             # not enabled: nothing to check

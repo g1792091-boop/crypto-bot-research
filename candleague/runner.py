@@ -23,6 +23,15 @@ starts over (another candidate list, a new VERSION) starts again from the SAME r
 Before a start-over deletes anything, the whole old database is copied next to it (``backup_db``: e.g.
 league_replay_from_1001_20261012.db; the install script makes the same copy before the code swap and the engine does
 not copy twice). The copies are never shown on the dashboard.
+The restarted league (research/exitflex/PREREG_EXITFLEX.md section 11): when the rules file (candleague/data/rules.json,
+CANDLEAGUE_RULES) exists and is enabled ("enabled": true is the owners' OK), the league's accounts are candleague/rulex.py's (PREREG
+11.2: -n, -nq, -e, -eq, -nflip, or -e, -eq, -eflip in a pool without a new exit; both pools), in the database given by --db, instead of the
+candidate accounts; there is no second side league. The install script copies the old database first (``backup``), the start is the
+new install time, and the install time written down by the restart script (CANDLEAGUE_EXPECT_START / --expect-start) is checked against
+the start before anything is deleted or written (``check_expected_start``): a lost database AND start file would otherwise start the
+league at 'now' without a word and move every C1 / C2 date (PREREG 11.3). A fresh database says loudly where its start came from.
+Per commit the league also writes ``acct_day`` (signals decided, trades closed, per account and UTC day) and, at every 00:00 UTC,
+``acct_mark`` (the realised wallet and the mark value of an open position): PREREG 11.4 items 10-11; the C1 / C2 script reads them.
 Catching up (the snapshot's ``catching``) is said only by a snapshot written right after the league started over or
 after a committed chunk, while the processed time is more than 30 minutes behind: a restart that makes no progress (a
 crash loop, Binance down) writes nothing, so the dashboard shows the engine as stopped, not as catching up.

@@ -77,6 +77,7 @@ import json
 import math
 import os
 import re
+import time
 from dataclasses import replace
 from typing import Callable, Iterable, Optional
 
@@ -98,7 +99,7 @@ Q15_TFS = ("1h", "4h")                       # the picks on which a q15 variant 
 LOOKBACK = X.STRUCT_LOOKBACK
 RULES_ENV = "CANDLEAGUE_RULES"
 DEFAULT_FILE = os.path.join(C.ROOT, "candleague", "data", "rules.json")
-DB_NAME = "rule_league.db"             # the side league of the first draft (kept as a name for the backup helpers; the restarted league has its own db)
+DB_NAME = "rule_league.db"             # the first draft's side-league database: no longer created (the restarted league IS the league, in --db)
 REL_TOL = 1e-7
 RULEX_VERSION = 2                      # the meaning of a rule account: part of the fingerprint of rule accounts only (runner.fingerprint)
 POOLS = ("core", "ds")
@@ -1377,10 +1378,247 @@ def audit_restored(lg, log: Callable[[str], None] = print) -> list[str]:
     return notes
 
 
+# ====================================================================== forward checks C1 / C2 (PREREG 11.5, 11.4 item 14)
+# The script that decides, from the league database alone (tables trades, acct_day, acct_mark), whether the new exit of a pool stops
+# (C1, install + 30 days) or is shown ahead (C2, install + 61 days, the repeat at + 92). It prints DeepSeek as labels, counts, win shares
+# and hold hours only (D11); the full figures go to a private folder on request.
+CHECK_DAYS = {"c1": 30, "c2": 61, "repeat": 92}
+P_LIMIT = {"c2": 0.03, "repeat": 0.02}                 # the exact sign-flip test of C2 and of its repeat
+INITIAL_EQUITY = 5000.0
+MONTH_DAYS = 365.25 / 12
+MIN_TRADES_C2 = 150
+EXACT_MAX_WEEKS = 20
+N_RANDOM_PATTERNS = 20_000
+ROLE_SUFFIX = {"nq": "-nq", "eq": "-eq", "nflip": "-nflip", "n": "-n", "e": "-e"}
+DS_PUBLIC_KEYS = ("new_exit", "label", "conds", "trades_nq", "n_weeks", "hold", "win_share", "counts", "stopped_before")
+
+
+def check_time(install_ms: int, which: str) -> int:
+    """00:00 UTC of the install's UTC date + 30 / 61 / 92 days (11.5)."""
+    return (int(install_ms) // DAY + CHECK_DAYS[which]) * DAY
+
+
+def seed_of(*parts) -> int:
+    """run._seed: the first 8 hex digits of the sha256 of the '|'-joined parts."""
+    import hashlib
+    return int(hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:8], 16)
+
+
+def monthly_growth(w_end: float, install_ms: int, t_ms: int, w0: float = INITIAL_EQUITY) -> float:
+    """G = ln(W_T / 5,000) / months, months = days / (365.25 / 12), days from the install to T (11.5)."""
+    months = (int(t_ms) - int(install_ms)) / DAY / MONTH_DAYS
+    return math.log(max(float(w_end), 1e-12) / w0) / months
+
+
+def week_bounds(install_ms: int, t_ms: int) -> list[int]:
+    """The week boundaries of C2's sign-flip test (11.5): UTC weeks from Monday 00:00; the part-week from the install to the first Monday
+    is merged into the first full week, the part-week from the last Monday to the check time into the last full week. [install, ..., T]."""
+    first_monday = (int(install_ms) // DAY + (4 - int(install_ms) // DAY) % 7) * DAY       # 1970-01-01 was a Thursday: Monday = day % 7 == 4
+    mons = list(range(first_monday + (0 if first_monday >= install_ms else 7 * DAY), int(t_ms) + 1, 7 * DAY))
+    mons = [m for m in mons if install_ms <= m <= t_ms]
+    b = list(mons) if mons and mons[0] == install_ms else [int(install_ms)] + mons[1:]
+    if b[-1] != t_ms:
+        if len(b) >= 2:
+            b[-1] = int(t_ms)                                    # the last Monday is dropped: its part-week is merged
+        else:
+            b.append(int(t_ms))
+    return b
+
+
+def sign_flip_p(d: list[float], seed: int) -> float:
+    """One-sided sign-flip p of the mean of the weekly differences ``d`` (11.5): the share of the 2^n sign patterns e whose mean of
+    e_w x d_w is >= the observed mean of d_w, all patterns counted (n <= 20); above 20 weeks 20,000 random patterns with ``seed``,
+    p = (1 + count) / 20,001."""
+    d = np.asarray(d, float)
+    n = len(d)
+    obs = d.mean()
+    tol = 1e-12 * max(1.0, float(np.abs(d).max()) if n else 1.0)
+    if n <= EXACT_MAX_WEEKS:
+        signs = ((np.arange(2 ** n)[:, None] >> np.arange(n)[None, :]) & 1) * 2 - 1
+        return float(((signs * d[None, :]).mean(axis=1) >= obs - tol).mean())
+    e = np.random.default_rng(seed).choice([-1.0, 1.0], size=(N_RANDOM_PATTERNS, n))
+    return float((1 + int(((e * d[None, :]).mean(axis=1) >= obs - tol).sum())) / (N_RANDOM_PATTERNS + 1))
+
+
+def _marks(conn, t_ms: int) -> dict:
+    return {a: (float(w), float(m)) for a, w, m in conn.execute("SELECT account, wallet, marked FROM acct_mark WHERE day = ?", (int(t_ms),))}
+
+
+def _mark_series(conn, aid: str, bounds: list[int], install_ms: int) -> list[float]:
+    """The marked wallet at every week boundary (5,000 at the install)."""
+    out = [INITIAL_EQUITY]
+    for b in bounds[1:]:
+        row = conn.execute("SELECT marked FROM acct_mark WHERE account = ? AND day = ?", (aid, int(b))).fetchone()
+        if row is None:
+            raise LookupError(f"{aid}: no mark at {b}")
+        out.append(float(row[0]))
+    return out
+
+
+def _trade_rows(conn, aid: str, t_ms: int) -> list[dict]:
+    out = []
+    for (d,) in conn.execute("SELECT data FROM trades WHERE account = ? AND exit_time < ? ORDER BY exit_time, rowid", (aid, int(t_ms))):
+        out.append(json.loads(d))
+    return out
+
+
+def _hold(trades: list[dict]) -> dict:
+    h = sorted((t["exit_time"] - t["entry_time"]) / 3_600_000.0 for t in trades)
+    if not h:
+        return {"n": 0, "median": None, "share_gt4": None, "share_gt8": None, "share_gt18": None}
+    mid = h[len(h) // 2] if len(h) % 2 else (h[len(h) // 2 - 1] + h[len(h) // 2]) / 2
+    return {"n": len(h), "median": round(mid, 3), **{f"share_gt{x}": round(sum(v > x for v in h) / len(h), 4) for x in (4, 8, 18)}}
+
+
+def forward_check(conn, accts: list[dict], install_ms: int, which: str, stopped=(), skip=()) -> dict:
+    """C1 (``which`` = "c1"), C2 ("c2") or the repeat ("repeat") of PREREG 11.5 from the league database ``conn`` (tables trades, acct_day,
+    acct_mark) and the league's accounts ``accts`` (rulex.accounts): per pool with a new exit, the pooled monthly log growth G of its
+    -nq, -eq and -nflip accounts at the check time T (the daily mark of 11.4 item 11, the realised-only wallet beside), then
+    C1: stop when G(nq) < G(eq) and G(nq) < G(nflip); C2: shown ahead when G(nq) > G(eq) with the sign-flip test on the weekly
+    differences below its limit, G(nq) > G(nflip), at least 150 closed -nq trades and G(nq) > 0. ``stopped``: pools stopped at C1
+    (no C2); ``skip``: pools already shown ahead (not asked again at the repeat). Returns the full report (the DeepSeek money in it is
+    for the private folder: ``public_view``)."""
+    t = check_time(install_ms, which)
+    report = {"which": which, "time_ms": t, "install_ms": int(install_ms), "days": (t - install_ms) / DAY, "pools": {}}
+    marks = _marks(conn, t)
+    by_pick: dict = {}
+    for a in accts:
+        by_pick.setdefault(a["pick"], {})[a["id"][len(a["pick"]):]] = a
+    for pool in POOLS:
+        picks = [pk for pk, r in by_pick.items() if next(iter(r.values()))["kind"] == pool]
+        new = [pk for pk in picks if "-nq" in by_pick[pk]]
+        if not picks or not new:
+            continue
+        rule = by_pick[new[0]]["-nq"]["rule"]["id"]
+        info: dict = {"new_exit": rule, "picks": len(new)}
+        if pool in stopped:
+            info.update(label="stopped at C1", stopped_before=True)
+            report["pools"][pool] = info
+            continue
+        if pool in skip:
+            info.update(label="already shown ahead")
+            report["pools"][pool] = info
+            continue
+        if any(by_pick[pk][ROLE_SUFFIX["nq"]]["id"] not in marks for pk in new):
+            info.update(label="not yet (no mark at the check time)")
+            report["pools"][pool] = info
+            continue
+        g, gr, win, hold, counts, mret = {}, {}, {}, {}, {}, {}
+        for role in ("nq", "eq", "nflip"):
+            ids = [by_pick[pk][ROLE_SUFFIX[role]]["id"] for pk in new]
+            g[role] = float(np.mean([monthly_growth(marks[i][1], install_ms, t) for i in ids]))
+            gr[role] = float(np.mean([monthly_growth(marks[i][0], install_ms, t) for i in ids]))
+            rows = [r for i in ids for r in _trade_rows(conn, i, t)]
+            hold[role] = _hold(rows)
+            win[role] = (sum(r["pnl"] > 0 for r in rows) / len(rows)) if rows else None
+            ct = conn.execute(f"SELECT SUM(offered), SUM(entered), SUM(skipped), SUM(rejected), SUM(closed) FROM acct_day WHERE day < ? AND account IN "
+                              f"({','.join('?' * len(ids))})", (t, *ids)).fetchone()
+            counts[role] = dict(zip(("offered", "entered", "skipped", "rejected", "closed"), (int(x or 0) for x in ct)))
+            eq, rets = INITIAL_EQUITY, []
+            for r in sorted(rows, key=lambda r: r["exit_time"]):          # the per-trade line (core only): P&L as a fraction of the wallet before
+                rets.append(r["pnl"] / eq if eq > 0 else 0.0)
+                eq += r["pnl"]
+            mret[role] = float(np.mean(rets)) if rets else None
+        info.update(g=g, g_realised=gr, mean_trade_return=mret, hold=hold, win_share=win, counts=counts,
+                    trades_nq=counts["nq"]["closed"])
+        if which == "c1":
+            stop = g["nq"] < g["eq"] and g["nq"] < g["nflip"]
+            info.update(label="stop" if stop else "continue", stop=stop, conds={"nq_below_eq": g["nq"] < g["eq"], "nq_below_flip": g["nq"] < g["nflip"]})
+            info["no_entry_from_ms"] = t if stop else None
+        else:
+            bounds = week_bounds(install_ms, t)
+            diffs = []
+            for w in range(1, len(bounds)):
+                dn = [math.log(max(s[w], 1e-12) / max(s[w - 1], 1e-12)) for s in (_mark_series(conn, by_pick[pk][ROLE_SUFFIX["nq"]]["id"], bounds, install_ms) for pk in new)]
+                de = [math.log(max(s[w], 1e-12) / max(s[w - 1], 1e-12)) for s in (_mark_series(conn, by_pick[pk][ROLE_SUFFIX["eq"]]["id"], bounds, install_ms) for pk in new)]
+                diffs.append(float(np.mean(dn)) - float(np.mean(de)))
+            day = time.strftime("%Y-%m-%d", time.gmtime(t / 1000))
+            p = sign_flip_p(diffs, seed_of("exitflex", "league", pool, day))
+            conds = {"beats_e0_and_sign_flip": g["nq"] > g["eq"] and p < P_LIMIT[which], "beats_flip": g["nq"] > g["nflip"],
+                     "trades_150": counts["nq"]["closed"] >= MIN_TRADES_C2, "positive": g["nq"] > 0}
+            info.update(p=p, n_weeks=len(diffs), weekly_diffs=diffs, p_limit=P_LIMIT[which], conds=conds,
+                        shown_ahead=all(conds.values()), label="shown ahead" if all(conds.values()) else "not shown ahead")
+        report["pools"][pool] = info
+    return report
+
+
+def public_view(report: dict) -> dict:
+    """What may be printed or committed (D11): the core pool in full; the DeepSeek pool as labels, counts, win shares and hold hours only."""
+    out = json.loads(json.dumps(report))
+    for pool, info in out["pools"].items():
+        if pool == "ds":
+            out["pools"][pool] = {k: v for k, v in info.items() if k in DS_PUBLIC_KEYS}
+            if "conds" in out["pools"][pool]:
+                out["pools"][pool]["conds"] = dict(info["conds"])          # pass / fail labels
+    return out
+
+
+def format_check(report: dict) -> str:
+    """The Korean text of a check (public part only): hold hours and entries first, then the labels, for core the figures."""
+    pv = public_view(report)
+    t = time.strftime("%Y-%m-%d", time.gmtime(pv["time_ms"] / 1000))
+    L_ = [f"[{pv['which'].upper()}] {t} 00:00 UTC (설치 후 {pv['days']:.0f}일)"]
+    for pool, name in (("core", "코어"), ("ds", "딥시크")):
+        i = pv["pools"].get(pool)
+        if i is None:
+            continue
+        L_.append(f"- {name}: 새 청산 {i['new_exit']} → {i['label']}")
+        for role in ("nq", "eq", "nflip"):
+            h, c = (i.get("hold") or {}).get(role), (i.get("counts") or {}).get(role)
+            if h and c:
+                L_.append(f"    {role}: 보유 중앙값 {h['median']}시간 (>4h {h['share_gt4']}, >8h {h['share_gt8']}, >18h {h['share_gt18']}), "
+                          f"진입 {c['entered']}, 놓침 {c['skipped']}, 거절 {c['rejected']}, 청산 {c['closed']}, 승률 {(i['win_share'] or {}).get(role)}")
+        if pool == "core" and "g" in i:
+            L_.append("    월 로그성장 G: " + ", ".join(f"{r} {v:+.5f}" for r, v in i["g"].items()) + (f"; p = {i['p']:.4f} (주 {i['n_weeks']}개)" if "p" in i else ""))
+        if i.get("conds"):
+            L_.append("    조건: " + ", ".join(f"{k} {'예' if v else '아니오'}" for k, v in i["conds"].items()))
+    return "\n".join(L_)
+
+
+def checks_main(argv: list) -> int:
+    import argparse
+    import sqlite3
+    import sys
+    ap = argparse.ArgumentParser(description="후보 리그 앞으로의 점검 C1 / C2 (PREREG_EXITFLEX 11.5)")
+    ap.add_argument("which", choices=tuple(CHECK_DAYS))
+    ap.add_argument("--db", required=True, help="the league database (tables trades, acct_day, acct_mark)")
+    ap.add_argument("--install", required=True, help="the install time (with its time zone, or epoch ms): the restart's start")
+    ap.add_argument("--rules", default=None)
+    ap.add_argument("--candidates", default=C.DEFAULT_FILE)
+    ap.add_argument("--private", default=None, help="a folder outside the repository for the full report (DeepSeek money included)")
+    ap.add_argument("--skip", default="", help="pools already shown ahead (the repeat), comma separated")
+    a = ap.parse_args(argv)
+    from . import runner as RN
+    install = RN.parse_start(a.install)
+    cfg = load_config(a.rules)
+    if cfg is None or not cfg["enabled"]:
+        print("no enabled rule config: nothing to check", file=sys.stderr)
+        return 2
+    accts = accounts(C.load(a.candidates), cfg)
+    stopped = [p for p in POOLS if cfg["no_entry_from_ms"].get(p)]
+    conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
+    try:
+        rep = forward_check(conn, accts, install, a.which, stopped, [x for x in a.skip.split(",") if x])
+    finally:
+        conn.close()
+    if a.private:
+        os.makedirs(a.private, exist_ok=True)
+        with open(os.path.join(a.private, f"check_{a.which}.json"), "w") as fh:
+            json.dump(rep, fh, ensure_ascii=False, indent=1)
+    print(format_check(rep))
+    if a.which == "c1":
+        print(json.dumps({"no_entry_from_ms": {p: i.get("no_entry_from_ms") for p, i in rep["pools"].items() if i.get("no_entry_from_ms")}}))
+    return 0
+
+
 # ====================================================================== command line
 def main(argv: Optional[list] = None) -> int:
     import argparse
     import sys
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "checks":                           # python -m candleague.rulex checks c1|c2|repeat --db ... --install ...
+        return checks_main(argv[1:])
     ap = argparse.ArgumentParser(description="후보 리그 규칙 계좌")
     ap.add_argument("cmd", choices=("check", "accounts", "ids"))
     ap.add_argument("--rules", default=None, help=f"rule config (default {DEFAULT_FILE}, env {RULES_ENV})")
