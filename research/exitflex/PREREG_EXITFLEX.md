@@ -8,7 +8,8 @@ file; the pin time (UTC and KST) is written in its message and not in this file.
 in this folder, dated and with the reason, never into this file. Select-period numbers of E0 on the core picks have been
 seen by the main session, and so have the round-1 trend-hunt results (the dated addendum in section 15, which changes
 Known limit 1); section 15 lists what was seen and says what follows. Section 16 lists what changed in each revision
-and why (16.5: the alignment with the code as built, made just before the pin). Appendix A writes out each strategy's own
+and why (16.5: the alignment with the code as built, made just before the pin; 16.6: the stepped-lock family F13 and the final
+items). Appendix A writes out each strategy's own
 exit (family F11). Section 17, after Appendix A, is the main session's checklist of what must hold before this file is
 hashed, with what is already true ticked and what is still open listed.
 
@@ -16,8 +17,9 @@ First draft 2026-10-12 01:41 UTC; revised 2026-10-12 (UTC) after two design revi
 02:40 UTC) after the owners' four later messages below; revised a third time 2026-10-12 after two reviews of the second
 revision (section 16.3); revised a fourth time 2026-10-12 (after about 12:20 KST) for the main session's decisions and
 the owners' three latest messages below (section 16.4); revised a fifth time 2026-10-12 after two reviews of the fourth
-revision (section 16.4, items 9 on); aligned with the code as built, just before the pin (section 16.5). Owners'
-first request, about the 후보 리그 ("커스텀값 봇"),
+revision (section 16.4, items 9 on); aligned with the code as built, just before the pin (section 16.5); then, still before the
+hash, the owners' stepped-lock request (messages 8 and 9 below) added as family F13 and the last pin-blockers closed (section
+16.6). Owners' first request, about the 후보 리그 ("커스텀값 봇"),
 where a SOL long had been held about 18 h at +43% ROE under a fixed 3R take-profit and a 4 ATR stop:
 "익절구조를 과거 백테스트를 돌려서 좋게 잡은건 좋은데 포지션 보유시간이 길어지면 진입횟수에도 영향을 끼치잖아 ... 18시간씩
 보유하고있으면 솔직히 좀 그래 예를들어 롱을 잡아서 +60%까지 갔다가 롱구조가 무너지거나 더이상 안오를꺼 같으면 빠르게
@@ -48,6 +50,16 @@ take-profit and had been held 16-18 h):
 7. "기준은 정확히 못정하겠어 장에 따라 다르잖아 솔직히" (They cannot fix a hold-time target; it depends on the market.
    Section 7, hold hours by market state.)
 
+**Owners' messages of the afternoon of 2026-10-12** (after the fifth pass and the alignment; verbatim, two messages):
+
+8. "잠금 수익 최소 10%로 해주고 12%되면 10%잠금 계단식익절로 무슨말인지 알지?" (They mean the rule bot's own stepped profit lock,
+   `paperbot/ladder.py` `LadderSpec`: first lock 0.10, step 0.05, trigger gap 0.02, so a best net ROE of 12% locks 10%. Only the
+   10% start; no 5% or 20% start. They had noticed that the 38 picks use fixed 3R, 2R and net-ROE take-profits, that none uses
+   this lock, and that the list of this study did not have it. Sections 1 and 5.2, family F13.)
+9. "12%되면 10% 20%면 15% 30%면 25% 이런식 무슨느낌인지 알지?" (The same lock in their words. The engine's ladder gives exactly
+   their examples: a best net ROE of 12% locks 10%; 20% lies in [17%, 22%) and locks 15%; 30% lies in [27%, 32%) and locks 25%.
+   The triggers are 12%, 17%, 22%, 27%, 32% ... and the locks 10%, 15%, 20%, 25%, 30% ... in 5% steps, without end.)
+
 **What the main session promised them** (in Korean, before this revision), and where this file carries it out:
 
 * (a) nine kinds of exit: structure break, moving-average break, opposite signal, chandelier trail, profit giveback,
@@ -60,8 +72,9 @@ take-profit and had been held 16-18 h):
   moving average, an opposite signal, a trail, the clock or a strategy's non-structure condition. Section 5.3 sorts
   every variant by what it can cut a loss on; the select report shows that category on every row (8.2); and the
   default of 8.4 takes only variants that cut a loss before the hard stop on a structure break at a loss deeper than
-  0.5R (Rc < -0.5), or not at all before a gain. Variants outside that set can be run only when the owners choose them
-  by name.
+  0.5R (Rc < -0.5), or not at all before a gain (F13, the stepped lock of 5.2, cuts nothing before a gain; it is the one exit
+  that acts inside a minute, as a price-level stop, and not at a bar close). Variants outside that set can be run only when
+  the owners choose them by name.
 * (c) a select-period (2021-2023) table by hold time in hours and by entries, from which the owners choose; then one
   confirm on 2024-2026. Sections 8 and 9. The table lists every variant, choosable or not (8.2).
 * (d) all 38 league picks, DeepSeek included, DeepSeek shown without money in every committed file and committed
@@ -73,6 +86,9 @@ take-profit and had been held 16-18 h):
 * (f) if nothing passes, they are told plainly and decide with us. Sections 8.6 and 11.1.
 * (g) hold hours overall and by market state at entry as information columns, because the owners cannot fix one
   hold-time target ("장에 따라 다르잖아", message 7). Sections 7, 8.2 and 9. They decide nothing.
+* (h) the owners' stepped lock (messages 8 and 9): the rule bot's own profit lock, 12% -> 10%, 17% -> 15%, 22% -> 20% ..., as
+  family F13 in two variants (the pick's own take-profit kept, or the lock alone). Sections 1, 5.2 and 5.3. F12 does not
+  contain it.
 
 ## 1. Questions
 
@@ -107,13 +123,22 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   nine rules at work on every pick: F6 never moves F12's exit, and F10 can act only on the 13 picks of 15m and 30m, so
   on the other 25 picks (1h and 4h) at most seven of the nine can end a trade and on the 13 at most eight (5.2, Known
   limit 17). Q-C is therefore answered for this one fixed combination only.
+* **Q-D (the owners' stepped lock, messages 8 and 9): does the rule bot's own profit lock beat the pick's current exit?** F13
+  (5.2) keeps the pick's hard stop and adds the engine's stepped lock: once the best price has reached +12% net ROE the stop
+  never lies below +10%; at +17% it lies at +15%, at +22% at +20%, and so on in 5% steps. F13.a keeps the pick's own fixed
+  take-profit as well; F13.b has no fixed take-profit, the lock alone (the rule bot's own exit). It is a candidate like every
+  other variant: same gates (except the placebo gate, which it does not have, section 6), same choice by the owners, same
+  single confirm. It reads no chart structure. It is none of the nine kinds the owners named before, and **F12 does not contain
+  F13** (5.2): F12 has no lock.
 * **No fixed percent anywhere (owners' message 6).** The "+60%" and "-40%" in the owners' first request were examples,
   and the "+60% ROE ... -40% ROE" figures in this file are always examples of R, never rule values. No rule of this
-  study fires on a fixed percent of price or of ROE. Every threshold is read per trade: R (the net R of the trade's own
+  study except F13 fires on a fixed percent of price or of ROE. Every threshold is read per trade: R (the net R of the trade's own
   stop distance, which is k x ATR14 of its own signal bar, section 4), an ATR multiple (F4), a count of bars or hours
   (F7, F7h, F10), the trade's own swing structure (F1, F6, F8, F9) or a level fixed at that trade's signal bar (F11).
-  The only fixed percent left is not a rule of this study: the net ROE 50% take-profit of core-OBV_S-1h-3, which is
-  part of that pick's E0 and stays in mode (a). The grids are checked for arms like this:
+  The fixed percents left are not thresholds chosen for this study: the net ROE 50% take-profit of core-OBV_S-1h-3, which is
+  part of that pick's E0 and stays in mode (a), and the stepped lock of F13 (12%, 17%, 22% ... net ROE locking 10%, 15%, 20% ...),
+  which the owners asked for by name (messages 8 and 9) and which is the rule bot's own ladder in `paperbot/ladder.py`, fixed
+  before this study and tuned on no result; F13 has one ladder and no grid. The grids are checked for arms like this:
   * **Arm in R**: F5 (P = 1, 1.5, 2 R; 12 variants), F8 (P = 1, 2 R; 12), F6.d0.5 (a loss deeper than 0.5R; 3), F9 and
     F9 q15 (P = 1R and d = 0.5R; 4).
   * **No arm** (the rule adapts to each trade with no threshold): F1 and F1 q15 (a structure break at any profit or any
@@ -123,6 +148,8 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
     loss side, F9 with both. F5 and F8 have **no no-arm cell**: their smallest arm is 1R, and a giveback from any
     profit (F5 with P = 0) is not in the grid, so it is not tested (Known limit 16). The count of variants is not
     changed for it.
+  * **Fixed percent of net ROE, no grid**: F13 (the engine's lock, 2 variants). It is not in R: the lock fires at the same net
+    ROE whatever the stop distance, as the rule bot does, so at another leverage it sits at another price (Known limit 19).
 * **Hold time comes first in every table.** The owners want a day-trading feel ("단타"), not swing holds. A shorter
   hold pays only when the extra entries earn more than their costs (section 7 gives the engine's cost of one round
   trip). The study decides on account growth. Hold hours and entries lead every table so that the owners choose with
@@ -381,9 +408,10 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   5. An open beyond the take-profit (fixed or native): exit at the open, maker (TP).
   6. **New: execution.** If the position is still open and step 0 decided to exit, it exits at j's open with slippage
      and taker: RULE for a rule exit, RAND for a placebo exit. A forced period-end close due at j does the same (END).
-  7. The minute's range. A low (long) or high (short) through the stop exits at the stop with slippage (SL). Otherwise a
-     mark low or high through liquidation liquidates. Otherwise a range through the take-profit exits at the
-     take-profit, maker (TP). The stepped lock, which no pick uses, is unchanged.
+  7. The minute's range. A low (long) or high (short) through the stop exits at the stop with slippage (SL, or LOCK once a
+     lock has raised the stop). Otherwise a mark low or high through liquidation liquidates. Otherwise a range through the
+     take-profit exits at the take-profit, maker (TP). Otherwise the stepped lock steps up from the minute's best price, to
+     apply from the next minute. The lock is the kernel's, unchanged; no pick uses it, and only F13 switches it on (5.2).
 
   The entry minute e gets the range checks for stop, liquidation and take-profit only: no gap check, no decision and no
   lock, as in the kernel. X starts at the fill price and includes minute e's high (long) or low (short), as the
@@ -435,14 +463,16 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   signals and ATR.
 * Every variant keeps the pick's hard stop, sizing and leverage (k x ATR14 of the signal bar) as the backstop. A rule
   never moves the hard stop. Every early exit is decided at a bar close and executed at the next minute's open; no rule
-  acts inside a bar.
+  acts inside a bar. The one exception is F13 (5.2): the engine's stepped lock is not a rule decided at a bar close but an
+  intrabar stop at a price level that follows the best price and only tightens; the hard stop stands below it until it does.
 * **Mode (a)**: the pick's own take-profit stays (3R for 21 core picks and all 15 DeepSeek picks, 2R for
   core-S4_BB_BBP-30m-1, net ROE 50% for core-OBV_S-1h-3). **Mode (b)**: no fixed take-profit and no lock, so the rule,
-  the hard stop, liquidation or the period end closes the trade. The two exceptions are F11.b and F12.b, which keep the
-  strategy's own target where Appendix A defines one.
+  the hard stop, liquidation or the period end closes the trade. The exceptions are F11.b and F12.b, which keep the
+  strategy's own target where Appendix A defines one, and F13.b, which has no fixed take-profit but is the stepped lock
+  itself (there the lock, the hard stop, liquidation or the period end closes the trade).
 * Each rule of F1-F10 is written below for a long. The short is mirrored: high and low swap, above and below swap, max
   and min swap. F11's short side is written out per strategy in Appendix A. F12 stacks F1, F2, F3, F4, F5, F6, F7h, F10
-  and F11 and adds no rule of its own.
+  and F11 and adds no rule of its own; F13 is not one of them and F12 has no lock.
 
 ### 5.2 Families (owners' words in brackets)
 
@@ -603,6 +633,59 @@ choose, no q15.
   cut some trades that would have reached the take-profit. Whether the extra entries pay for the costs of section 7 is
   what the table shows. F12 is not in the default set D (5.3) because it cuts a loss on any structure break.
 
+**F13 stepped lock** ["잠금 수익 최소 10%로 해주고 12%되면 10%잠금 계단식익절", "12%되면 10% 20%면 15% 30%면 25%", messages 8 and 9], group P, modes
+(a) and (b), no parameter to choose, no q15, no check at a chart close, no chart data.
+* **Rule: the engine's own stepped lock** (`paperbot/ladder.py` `LadderSpec`; the kernel's `TP_RULES` row "ladder"; the arguments
+  `ladder=True, first_lock=0.10, step=0.05, trigger_gap=0.02` of `kernel._trade` and `_trade_x`). The best net ROE of the open
+  position is the one of the favourable extreme X (section 4: the highest high since the fill for a long, the lowest low for a
+  short, **including the minute just played**). When it reaches a trigger, the stop moves to the price that locks the matching
+  net ROE:
+
+  | best net ROE reaches | the stop locks net ROE |
+  |---|---|
+  | 12% | 10% |
+  | 17% | 15% |
+  | 22% | 20% |
+  | 27% | 25% |
+  | 32% | 30% |
+  | ... in steps of 5%, without end | ... |
+
+  In the engine's words: the first lock is 10%, each further lock is 5% higher, and a lock arms when the best net ROE is at
+  least the lock + 2% (the trigger gap). The lock for a best net ROE b is 10% + 5% x n with n = floor((b - 12%) / 5%) once b >= 12%,
+  and none below 12% (`LadderSpec.lock_for`, written with a 1e-12 and a 1e-9 tolerance on the two comparisons, as the kernel has
+  them). The owners' examples are this ladder: a best of 20% locks 15%, a best of 30% locks 25%.
+* **Net ROE and the locked price.** The kernel's own formulas of section 4: net ROE(P) = lev x (side x (P / fill - 1) - rt - f)
+  with the funding share f paid so far, after taker fees and slippage (rt = 0.0014) on isolated margin; the locked stop price for a
+  lock L is fill x (1 + side x (L / lev + rt + f)) (`paperbot/ladder.py` `roe_price`). Both use the leverage the account got at the
+  entry, so at another size (another leverage tier) the same net ROE is another price (Known limit 19).
+* **When it acts.** At the end of every minute j after the entry minute, once the stop, liquidation and take-profit of that
+  minute have been checked (section 4, step 7), the best net ROE including minute j's extreme is computed; if it arms a higher
+  lock than the one held, the stop becomes the tighter of the held stop and the locked price. **The new stop applies from minute
+  j + 1.** The order of the high and the low inside a minute is unknown, so the conservative reading is that the low (for a long) came
+  first and met the old stop (`paperbot/ladder.py` states the same). It only tightens: a lock is never lowered, and a lock already
+  set is not recomputed when funding is paid later (it moves only when a higher step arms). The entry minute gives no lock step, as
+  in the kernel. A hit of the stop exits at the stop price with slippage, taker, recorded **LOCK** once a lock has been raised and SL
+  before; an open beyond the stop (a gap) exits at the open with slippage (5.4 item 12).
+* **Modes.** F13.a keeps the pick's own fixed take-profit (3R, 2R or net ROE 50%) **and** adds the lock. F13.b has no fixed
+  take-profit: the lock alone, which is the rule bot's own exit (the full grid's "ladder|k" on the pick's stop). The pick's hard
+  stop (k x ATR14) stays in both and works until a lock replaces it with a tighter stop. A pick that already had a lock would get
+  the 10% lock in place of its own (no pick has one, section 3).
+* **Everything else is the pick's.** Entries, sizing, leverage, the fill minute, liquidation, funding, the period-end close and the
+  free fill minute after an exit are as for E0: a LOCK exit, like a stop, does not free its minute (only RULE and RAND do, section 4).
+* **No decision, no check.** F13 reads no chart bar, no indicator, no signal and no check schedule: `rp` is the zero vector and the
+  variant differs from E0 only in the exit arguments of `kernel_x.exit_of_pick` (the same function that gives mode (b) its
+  arguments). The parity with `kernel._trade` for the same arguments is test T1.
+* **Not part of F12.** F12's nine components are F1, F2, F3, F4, F5, F6, F7h, F10 and F11 (above); F13 is not a tenth. F12.a keeps
+  the pick's take-profit and has no lock, F12.b has neither. No variant of F1-F12 adds the lock.
+* **Category.** Group P (profit protection: its own group, so that the owners can choose it with a variant of any other group).
+  Loss class L0 (5.3): the lock exists only after the best price has reached +12% net ROE, so it cuts nothing before a gain; the
+  trade it ends lies at or above +10% net ROE less the slippage of a stop (about 0.6 points of ROE at 30x, 1 point at 50x), or at a gapped open,
+  which can lie anywhere (the same remark as for F5 and F8). It is in the default set D (8.4). **No placebo** (section 6).
+* **What we expect, not a result.** The lock turns a pullback of a trade that has reached +12% into an exit near +10% and so
+  shortens such holds; in mode (a) it can also end a trade that would have gone on to its take-profit after a pullback; in mode
+  (b) a trade that never reaches +12% is held to the hard stop or the period end, as E0's trades that reach neither target are.
+  Whether this pays for the entries it frees and the take-profits it gives up is what the table shows.
+
 ### 5.3 The list (count)
 
 | family | group | parameters | modes | variants |
@@ -623,14 +706,15 @@ choose, no q15.
 | F10 | L | N = 6, 12 | a, b | 4 |
 | F11 | N | one definition per strategy (Appendix A) | a, b | 2 |
 | F12 | A | all nine at once, values fixed in 5.2 | a, b | 2 |
-| **total** | | | | **86** |
+| F13 | P | none (the engine's stepped lock, fixed in 5.2) | a, b | 2 |
+| **total** | | | | **88** |
 
-Plus the reference E0. Every variant runs on every pick of both pools. (The 86 are the 82 of F1-F10, the 2 of F11 and
-the 2 of F12.)
+Plus the reference E0. Every variant runs on every pick of both pools. (The 88 are the 82 of F1-F10, the 2 of F11, the 2 of
+F12 and the 2 of F13.)
 
 * **Ids**: `F1.w3.a`, `F1.w3.b.q15`, `F2.n20.b`, `F3.a`, `F4.m1.5.a`, `F4.m2.b.q15`, `F5.P1.5.g25.a`, `F6.w2.d0`,
   `F6.w2.d0.5`, `F7.N24.b`, `F7h.H8.a`, `F8.w3.P1.a`, `F9.a`, `F9.b.q15`, `F10.N6.a`, `F11.a`, `F11.b`, `F12.a`,
-  `F12.b`.
+  `F12.b`, `F13.a`, `F13.b`.
 * **Groups** (used in section 8 so that two variants chosen in one pool are not near copies):
   * S, structure: F1, F1 q15, F6, F8, F9, F9 q15;
   * M, moving average: F2;
@@ -641,11 +725,13 @@ the 2 of F12.)
   * L, stall: F10;
   * N, the strategy's own exit: F11;
   * A, all at once: F12 (its own group, so the owners can choose F12 with a variant of any other group, and so that
-    F12, which holds an F7h leg, is not counted as a time stop).
+    F12, which holds an F7h leg, is not counted as a time stop);
+  * P, profit protection, the stepped lock: F13 (its own group: it is not a structure, moving-average, giveback or time rule, so
+    the owners can choose it together with a variant of any other group, F5's giveback and F12 included).
 * **Canonical order**, used for ties, tables and seeds: the table's rows in order. Inside a row, parameters ascending in
   the order written (F5 by P then g, F6 by w then d, F8 by w then P), then mode a before b.
 * **Parameter count**: the numeric parameters plus one for q15. Modes are not counted.
-  * 0: F3, F11.
+  * 0: F3, F11, F13 (the lock's three numbers are the engine's, not parameters of this study).
   * 1: F1, F2, F4, F7, F7h, F10.
   * 2: F1 q15, F4 q15, F5, F6, F8.
   * 3: F9. 4: F9 q15.
@@ -653,7 +739,7 @@ the 2 of F12.)
 * **What each variant can cut a loss on** before the hard stop (promise (b); shown on every row of the select report,
   8.2). Four categories:
   * **L0, no early loss cut before a gain**: F5 and F8 act only after Rpk has reached +P R (a later exit can still
-    land below the fill after a fall), F10 only while Rc > 0.
+    land below the fill after a fall), F10 only while Rc > 0, F13 only after the best price has reached +12% net ROE (5.2).
   * **L1, structure break at a loss deeper than 0.5R (Rc < -0.5)**: F6.w*.d0.5, F9, F9 q15 (F9 and F9 q15 also have
     F8's leg after a gain).
   * **L2, structure break at any loss**: F1, F1 q15, F6.w*.d0. They keep promise (b) as worded, but they can cut a
@@ -662,19 +748,20 @@ the 2 of F12.)
     m = 1.5 on a 4 ATR stop can cut near -0.4R), F7 and F7h (the clock), F11 (each strategy's own invalidation, which
     for DOGE, N03_ADX_GC, N09_ALLIG_AROON, N10_HA_PSAR, OBV_S, S4_BB_BBP and the two range-filter strategies is not a
     structure level; Appendix A), and F12 (all of these at once: it includes F1 at any loss, F2, F3, F4, F7h and F11).
-  * The **default set D** of 8.4 is L0 and L1: F5 (12), F6.w*.d0.5 (3), F8 (12), F9 (2), F9 q15 (2), F10 (4); 35
-    variants. L2 and L3 variants, F12 included, run only when the owners name them.
-* **Runs** (E0 and 86 variants = 87 arms):
-  * Select, step 1: E0 plus 86 variants, x 38 picks x 2 sizes = 87 x 38 x 2 = 6,612 accounts.
-  * Select, step 2 (placebos, section 6): only for the (variant, pool) pairs outside F7 and F7h that pass gates 1, 2
-    and 4 of 8.1 in step 1. At most 74 variants (86 less the 12 of F7 and F7h; F12 has a placebo) x 23 core picks x 200
-    seeds = 340,400 and 74 x 15 x 200 = 222,000 DeepSeek placebo accounts, 562,400 in all, at quarter size.
+  * The **default set D** of 8.4 is L0 and L1: F5 (12), F6.w*.d0.5 (3), F8 (12), F9 (2), F9 q15 (2), F10 (4), F13 (2); 37
+    variants (35 before F13 was added, 16.6). L2 and L3 variants, F12 included, run only when the owners name them.
+* **Runs** (E0 and 88 variants = 89 arms):
+  * Select, step 1: E0 plus 88 variants, x 38 picks x 2 sizes = 89 x 38 x 2 = 6,764 accounts.
+  * Select, step 2 (placebos, section 6): only for the (variant, pool) pairs outside F7, F7h and F13 that pass gates 1, 2
+    and 4 of 8.1 in step 1. At most 74 variants (88 less the 12 of F7 and F7h and the 2 of F13; F12 has a placebo) x 23 core
+    picks x 200 seeds = 340,400 and 74 x 15 x 200 = 222,000 DeepSeek placebo accounts, 562,400 in all, at quarter size.
   * Confirm: at most (1 + 2) x 38 x 2 = 228 accounts (E0 and up to two chosen variants per pool), plus at most
-    2 x 38 x 200 = 15,200 placebo accounts. (Unchanged by F12: a chosen F12 is one of the two.)
+    2 x 38 x 200 = 15,200 placebo accounts. (Unchanged by F12 and F13: a chosen F12 or F13 is one of the two, and F13 has no
+    placebo.)
 * **Compute and the seed count (fixed now).**
   * Everything runs on 1m bars. Step 1 is cheap; step 2 is the cost.
   * Before the select run the runner's timing stage runs, in one process on the select-period cut arrays, E0 and one
-    placebo seed of each of the 74 variants outside F7 and F7h on one pick, `core-DOGE-15m-1` (a 15m pick: the most check
+    placebo seed of each of the 74 variants outside F7, F7h and F13 on one pick, `core-DOGE-15m-1` (a 15m pick: the most check
     closes per hold). Each placebo uses the hazard table of its variant's own account on that pick, which is computed
     and discarded. The stage writes only seconds.
   * Projected step-2 wall time = (the sum of the 74 one-seed times) x 38 picks x 200 seeds / 4 CPUs. This is the worst
@@ -732,12 +819,38 @@ the 2 of F12.)
     stop, take-profit or liquidation applies is subject to item 1 like any rule. F7h and the hard stop on the same
     minute: item 6 applies. A bar that fires F3 and F11 of a reversing strategy at once gives one exit and one
     reversal entry (item 8).
+12. **F13, the stepped lock** (5.2). The lock changes only the stop price, so every case is one of the kernel's own, in its order
+    (section 4, steps 3-7):
+    * **A lock and the pick's take-profit in the same minute (mode a).** The order is stop, liquidation, take-profit, then the
+      lock. A minute that touches the take-profit exits at the take-profit (maker, TP) and raises no lock: the position is gone. A
+      minute that touches both the stop (the hard stop or a lock raised earlier) and the take-profit counts as a stop (the
+      kernel's stop-first rule; it is added to the number of minutes where stop and take-profit were both touched, section 7). A
+      minute that raises the lock and touches neither leaves the new stop to the next minute.
+    * **Lock, then stop: the kernel's order.** A lock raised at the end of minute j is in force from minute j + 1. In minute j
+      itself the earlier stop is the stop, even if that minute's low (long) lies below the new lock price: the minute does not exit
+      by the lock it has just raised. At j + 1 an open at or beyond the new stop exits at that open with slippage (taker, LOCK, and
+      the minute is not freed for entries); otherwise a range through the stop exits at the stop price with slippage.
+    * **Mode b has no take-profit.** Nothing is touched on the way up; the hard stop, the lock, liquidation or the period end (END)
+      closes the trade. A trade that never reaches +12% net ROE is held to the hard stop or END, as in E0.
+    * **A gap.** At a minute's open the order is liquidation (mark), then the stop (hard stop or lock) gap, then the take-profit
+      gap (mode a), as in section 4; a gapped open beyond a lock exits at the open, which can lie below the locked price and even
+      below the fill.
+    * **Funding.** The net ROE includes the funding paid before the minute (f of 5.2). A lock set earlier keeps its price. Funding
+      paid at the exit minute is paid by a position closed at that minute's open, as in item 7.
+    * **The entry minute** gives no lock step (as in the kernel); its range checks the hard stop only.
+    * **Size.** The lock is in net ROE, and the leverage can differ between the quarter-size and the live-size account of one
+      signal (sizing picks the tier that fits), so the two can lock at different prices (Known limit 19).
+    * **A short** is the mirror image: lows and highs swap, the lock lies below the entry reference, and the best price is the
+      lowest low.
 
 ## 6. Placebo
 
 * **Purpose.** A rule that only shortens holds frees the account more often. A random exit with the same timing profile
   shortens holds in the same way. A Q-B rule must beat it to be described as reading the market. F7 and F7h have no
-  placebo: they read nothing by design, and a placebo with their timing profile would be the time stop itself. F12 does
+  placebo: they read nothing by design, and a placebo with their timing profile would be the time stop itself. F13 has none
+  either: it makes no decision at a chart close but is an intrabar stop at a price that follows the best price (5.2), so it has no
+  check schedule, no check index and no frozen state to match, and it reads no chart, so there is nothing for a random exit to be
+  separated from; it is judged on growth, entries and the single confirm. F12 does
   have one: although it holds an F7h leg, eight of its nine components read the market, and Q-C asks whether stacking
   them does more than leaving at random with F12's timing profile. So that the comparison is not one of clocks, the F12
   placebo carries F12's own 8-hour clock exactly (below): the clock is the same and only the exits before it are random.
@@ -765,6 +878,9 @@ the 2 of F12.)
       where F1 fires, and F1's precondition, a reference, is in the list already. Because F11's z is 1 at nearly every
       check, F12's z is 1 at nearly every check and its placebo matches age and profit sign only (Known limit 9);
     * F3, F4, F4 q15, F10: z = 0 always.
+    * F13: no placebo and so no stratum; where a table needs a value, z = 0, as for F7 and F7h. The reason is stated here: its exit
+      is an intrabar price-level stop (5.2), not a decision at a chart close, so there is no check, no check index k and no frozen
+      state to stratify.
 
   All of it uses the frozen state of step 0, so the placebo, like the rule, sees nothing of minute j.
 * **Hazard.** For each variant V, pick p and period, from V's quarter-size account:
@@ -802,7 +918,7 @@ the 2 of F12.)
 * **Placebo pooled mean** for seed s and pool P = the mean over the pool's picks of the placebo's M_p: its monthly log
   growth minus E0's, computed as in section 7.
 * **Two steps** (select only). Step 1 runs E0 and every variant on every pick. Step 2 runs the placebo of V in pool P
-  only when V is outside F7 and F7h and passes gates 1, 2 and 4 of 8.1 in P. This gives exactly the eligible set that
+  only when V is outside F7, F7h and F13 and passes gates 1, 2 and 4 of 8.1 in P. This gives exactly the eligible set that
   running every placebo would give: a variant is eligible only if all its gates pass, and gate 3 is the only one that
   needs a placebo. The hazard table comes from V's own step-1 account on each pick, and a placebo's draws depend only
   on (V, period, seed, coin, time), so a placebo's result does not depend on which other placebos run. What differs
@@ -874,7 +990,7 @@ the 2 of F12.)
     live-size hold, entries, skipped and rejected counts);
   * trades changed: V's trades with no E0 trade of the same (coin, side, fill minute, exit minute, exit reason),
     count and share;
-  * exit reasons (TP, SL, RULE, RAND, LIQ, END); for F12 also, per component, the exits where it fired and where it
+  * exit reasons (TP, SL, LOCK, RULE, RAND, LIQ, END; LOCK is a stop hit after the stepped lock of F13 raised it); for F12 also, per component, the exits where it fired and where it
     fired alone (`tr_comp`, 5.2), in total and split by the pick's timeframe;
   * win share (closed trades with a wallet change > 0);
   * the maximum drawdown of the wallet at closes, busts and the final wallet multiple: per account, in the result
@@ -882,12 +998,12 @@ the 2 of F12.)
     `max_dd_median`, `final_multiple_median`), `confirm.json` for each core pair (same fields); a variant's drawdown and
     final multiple in the select period are in no committed file. For DeepSeek they are in the private owner reports
     (section 3);
-  * the minutes where the stop and the take-profit were both touched (decided stop-first), per arm;
+  * the minutes where the stop (a lock raised by F13 is the stop) and the take-profit were both touched (decided stop-first), per arm;
   * the realised hazard table h (summed over the pool's picks);
   * the placebo's 5th, 50th and 95th percentiles (above).
 * **What a round trip costs** (the engine's own figures, `config.v3_settings`; written here so that the reports can
   print them next to hold times):
-  * at market on both sides (exits RULE, RAND, SL, END): taker 0.05% plus slippage 0.02% on each side, 0.14% of the
+  * at market on both sides (exits RULE, RAND, SL, LOCK, END): taker 0.05% plus slippage 0.02% on each side, 0.14% of the
     position's notional (`rt` = `S[5]` = 0.0014);
   * with a take-profit limit (TP): 0.05% + 0.02% at entry and 0.02% maker at exit, 0.09%;
   * as a share of margin, these are times the leverage: at 30x, 4.2% (2.7% at a limit); at 20x, 2.8%; at 40x, 5.6%;
@@ -917,13 +1033,14 @@ A variant V is **eligible in pool P** when all of these hold on the pool's picks
 1. M_P(V) > 0.
 2. M_p(V) > 0 on at least 60% of the pool's picks: 14 of the 23 core picks, 9 of the 15 DeepSeek picks. A pick with no
    signal, or where V changed no trade, has M_p = 0 and does not count.
-3. Except F7 and F7h: M_P(V) is above the 95th percentile (numpy's percentile, linear) of V's placebo pooled means in
+3. Except F7, F7h and F13 (they have no placebo, section 6): M_P(V) is above the 95th percentile (numpy's percentile, linear) of V's placebo pooled means in
    P.
 4. The trades entered at quarter size, summed over the pool's picks, are >= E0's.
 
 The gates are filters: only eligible variants can be shown as choosable, chosen or confirmed. They are not relaxed after
 any number is seen. F12.a and F12.b are judged on the same four gates as every other variant; F12 has a placebo (6),
-with F12's own 8-hour clock, so gate 3 applies to it.
+with F12's own 8-hour clock, so gate 3 applies to it. F13.a and F13.b are judged on gates 1, 2 and 4; gate 3 does not apply to
+them (no placebo), exactly as for F7 and F7h, and the report marks it "해당 없음".
 
 ### 8.2 The select report
 
@@ -936,7 +1053,7 @@ files, which nobody opens (section 7, which also names the one per-pick number, 
 shows:
 * first, E0's row: median hold hours, the shares of trades held over 4 h, 8 h and 18 h, trades entered, signals
   skipped while holding, win share;
-* then **every one of the 86 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
+* then **every one of the 88 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
   part in canonical order, with, in this column order (growth is column 6, after hold hours and entries):
   1. id, plain Korean name, group, parameter count;
   2. **hold**: median hold in hours and the shares of trades held over 4 h, 8 h and 18 h (quarter size, over all closed
@@ -945,7 +1062,7 @@ shows:
      holding, E0's skipped count beside it;
   4. what it can cut a loss on before the hard stop: its category L0-L3 (5.3), and whether it is in the default set D;
   5. a pass or fail mark for each gate of 8.1 (gate 3: "안 돌림" when the pair failed gate 1, 2 or 4 and so never
-     reached step 2; "해당 없음" for F7 and F7h), and the label "선택 가능" or "선택 불가";
+     reached step 2; "해당 없음" for F7, F7h and F13), and the label "선택 가능" or "선택 불가";
   6. core, choosable rows only: M_P(V), the pooled quarter-size monthly log growth difference against E0, also written
      as a percent per month (100 x (e^M - 1)); and, reported only, the same at live size. No growth figure on a core
      row marked "선택 불가". DeepSeek rows: no money figure of any kind (D11);
@@ -954,10 +1071,13 @@ shows:
      and a mark on the variants the default of 8.4 would take in that pool (the default ranks by hold hours, so the
      mark carries no money figure in either pool);
 * **a second table per pool, directly after the first**, with no growth column: hold hours by market state at entry
-  (section 7) for E0 and each of the 86 variants, in the same order, per state (추세장, 횡보장, 급변장, 보통, 모름) the
+  (section 7) for E0 and each of the 88 variants, in the same order, per state (추세장, 횡보장, 급변장, 보통, 모름) the
   number of trades, the median hold in hours and the shares held over 4 h, 8 h and 18 h; cells under 100 trades marked
   건수 적음. Select-period trades only. It is information (section 7), and the report says so in one line;
 * for F12 rows, the exits by component (5.2) as counts, in total and split by the pick's timeframe;
+* for F13 rows, nothing extra: the row is read like any other. It shows the plain Korean name "규칙봇 계단 잠금(12%→10%,
+  17%→15%, 22%→20%...)", group P, 0 parameters, category L0, "in the default set D: yes", gate 3 "해당 없음", the claim of 8.5
+  on a choosable row, and exit reasons in which LOCK stands beside TP and SL (mode b has no TP);
 * the number of variants failing the gates per pool, counted in sequence: gate 1; gate 2 among those passing 1; gate
   4 among those passing 1 and 2; gate 3 among those that reached step 2. No figure of a failing variant beyond the
   columns above and the second table (which splits column 2 by market state).
@@ -1019,9 +1139,10 @@ line asks the owners to name variants by id and not by any figure (section 3).
 Applied only to a pool that got no answer before its deadline (8.3):
 * The candidates are the variants choosable in that pool **and** in the default set D (5.3: categories L0 and L1,
   which cut a loss before the hard stop only on a structure break at a loss deeper than 0.5R, or not at all before a
-  gain). Variants of L2 and L3 are never taken by default; F12 (L3, group A) is never taken by default. The default
-  uses hold hours and no money figure, DeepSeek included, and the owners' view of the private report (section 3) does
-  not change it.
+  gain). The set has 37 variants: the 35 of F5, F6.d0.5, F8, F9, F9 q15 and F10, and the 2 of F13, which is L0 (the lock
+  cuts nothing before a gain, 5.3). Variants of L2 and L3 are never taken by default; F12 (L3, group A) is never taken by
+  default. The default uses hold hours and no money figure, DeepSeek included, and the owners' view of the private report
+  (section 3) does not change it.
 * First: the candidate with the shortest median hold in hours (quarter size, over all closed trades of the pool's
   accounts, as in section 7). Second: the candidate with the shortest median hold among those of a different group
   from the first. At most 2. Ties go to fewer parameters, then to the canonical order. No candidate: "none" for that
@@ -1035,17 +1156,21 @@ Applied only to a pool that got no answer before its deadline (8.3):
 ### 8.5 What a chosen variant may claim
 
 Written into `select.json` and the Korean report:
-* outside F7 and F7h: "beats E0 and beats a random exit with its timing profile" (for F11: "the strategy's own exit
+* outside F7, F7h and F13: "beats E0 and beats a random exit with its timing profile" (for F11: "the strategy's own exit
   beats E0 and a random exit with its timing profile"; for F12: "this fixed combination of the nine exits, of which at
   most seven can end a trade on a 1h or 4h pick and at most eight on a 15m or 30m pick (F6 never moves the exit, F10
   acts only on 15m and 30m picks), beats E0 and a random exit with the same 8-hour clock and timing profile". No claim
   that stacking beats a single rule, that all nine act on every pick, or that F12 is the best exit);
 * F7 and F7h: "beats E0 by holding less; no claim about reading the market".
+* F13: "closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and
+  makes no claim beyond that". There is no random-exit claim, because F13 has no placebo gate (section 6): a PASS shows that
+  F13 beat E0's growth over the 33 months (the Holm test of 9) and kept the entries, and the claim says no more. The Korean
+  report prints the same sentence in Korean (12% -> 10%, 17% -> 15%, 22% -> 20% ...).
 
 ### 8.6 No eligible variant
 
 With no choosable variant in a pool the result for that pool is "none". The owners still get the full table of 8.2
-(hold hours, entries and gate marks of all 86 variants), so they can see where each variant fell short and decide with
+(hold hours, entries and gate marks of all 88 variants), so they can see where each variant fell short and decide with
 the main session (promise (f)). With none in both pools, or "없음" or no variant in either, the study ends: nothing
 runs on the confirm period and nothing enters the ledger. The owners are told plainly. The criteria are not relaxed
 and no variant is re-tuned on this result. A new idea is a new pre-registration with its own select step.
@@ -1074,7 +1199,7 @@ and, privately, `select_ds_r2.json` and `owner_report_select_r2.md`, with its ow
 ## 9. Confirm rule (2024-01-01 .. 2026-10-01, once)
 
 * The confirm run covers E0 and each chosen V on its pool's picks, at quarter size (deciding) and live size (reported).
-  For a chosen V outside F7 and F7h it also runs V's placebo in that pool: 200 seeds, with the hazard table that V
+  For a chosen V outside F7, F7h and F13 it also runs V's placebo in that pool: 200 seeds, with the hazard table that V
   realised in this period on each pick.
 * **Tests**: one per chosen (V, pool) pair, at most 4. Each is a one-sided circular moving-block bootstrap of the 33
   monthly D_m^P(V), blocks of 3 consecutive calendar months, 2,000 resamples, seed
@@ -1088,7 +1213,7 @@ and, privately, `select_ds_r2.json` and `owner_report_select_r2.md`, with its ow
   file, D11; M and the interval, not p, are in the private owner report of section 3).
 * **PASS** for (V, P) needs all three:
   1. (V, P) is Holm-significant.
-  2. Except F7 and F7h: M_P(V) is above the 95th percentile of V's 200 confirm-period placebo pooled means in P.
+  2. Except F7, F7h and F13: M_P(V) is above the 95th percentile of V's 200 confirm-period placebo pooled means in P.
   3. The trades entered over the pool's picks at quarter size are >= E0's.
 * A PASS carries the claim of 8.5 and nothing more.
 * A FAIL means this test did not show a gain. It does not show that there is none. The Korean report says so and, for
@@ -1102,7 +1227,7 @@ and, privately, `select_ds_r2.json` and `owner_report_select_r2.md`, with its ow
   gives, per pool, the hold hours by market state at entry (section 7) for E0 and each chosen V: confirm-period trades,
   labelled from the full arrays with the same code, information only and no part of PASS or FAIL. For a chosen F12 it
   gives the exits by component (5.2), in total and split by the pick's timeframe.
-* Q-A on confirm, descriptive and outside the ledger: for each chosen V outside F7 and F7h, the placebo's median pooled
+* Q-A on confirm, descriptive and outside the ledger: for each chosen V outside F7, F7h and F13, the placebo's median pooled
   mean against E0 (core), with the block-bootstrap p of the placebo's seed-mean D_m.
 * It runs once. Bugs are handled by section 14. No other cut (a pick, a coin, a side, a year, a size, a market state)
   is a pass.
@@ -1177,7 +1302,8 @@ Per pick of a pool with a PASS, five accounts:
   and the pool's new exit with the same exit kinds as `-nq`: the same rule, the same mode, the same kind of
   take-profit. It runs at quarter size because C1 and C2 compare it with `-nq`. Under F12 the flip runs the same nine
   components at the same values; its F3 is the pick's signal of the side opposite to the flip's side, and its F11 part
-  follows the F11 rules below.
+  follows the F11 rules below. Under F13 it runs the same exit as `-nq` (the pick's take-profit and the stepped lock, or the lock
+  alone), on the plain engine, with the flip's side, the pick's stop distance and the engine's lock.
   * For F11, let s be the strategy's side at the signal bar, side' the flip's side and f' the flip's fill. When side'
     = s, the flip uses the strategy's own level and target unchanged. When side' = -s, it uses the bar components of
     its own side under rule C3 (a state component that is true at i0 waits until it has been false at a close), and a
@@ -1233,8 +1359,9 @@ Per pick of a pool with a PASS, five accounts:
 `candleague/rulex.py` (`parse_rule`, `load_config`, `accounts`, `load_accounts`, `RuleMixin`, `RuleEngine`,
 `RuleLadderEngine`, `make_engine`, `chunk_rule`, `replay_day`, `audit_restored`, `register_native`,
 `load_native_provider`, `forward_check`, `public_view`, `checks_main`), `candleague/runner.py` (`league_accounts`,
-`check_expected_start`, the tables `acct_day` and `acct_mark`, `hold_stats`) and the tests
-`tests/test_candleague_rulex.py` and `tests/test_exitflex_league_parity.py`; the study side is
+`check_expected_start`, the tables `acct_day` and `acct_mark`, `hold_stats`), `candleague/exits.py` (the 84 exit rules, unchanged,
+and `lock_exit`, which builds the F13 exit from a pick's own exit name) and the tests `tests/test_candleague_rulex.py`,
+`tests/test_candleague_exits.py` and `tests/test_exitflex_league_parity.py`; the study side is
 `research/exitflex/kernel_x.py`. The first draft's names are gone. There is **no side league**: no `rule_league.db`
 (`rulex.DB_NAME` stays in the module as history and no file of that name is created), no `-f`, `-f-live`, `-f-flip`,
 `-f0`, `-f0-live` accounts and no `runner.make_rule_league`; the draft's `register_f11` is `register_native`. The
@@ -1323,14 +1450,19 @@ league starts.
 | 4 F11 as Appendix A | built. Component kinds, C3 arming, levels and targets in `meta['native_inv']` and `meta['native_tgt']`, flips mirrored (`flip_levels`); the arrays come from `native.py` and `native_ds.py` through `load_native_provider` |
 | 5 guard | built. `chunk_rule` stops with `BothFlags` when a bar carries both flags |
 | 6 step order | built in `RuleMixin.step` |
-| 7 rule state | built. `meta['rx']` is saved and restored with the engine state and recomputed by `audit_restored`; F12 keeps all nine components and `rx['comp']` |
+| 7 rule state | built. `meta['rx']` is saved and restored with the engine state and recomputed by `audit_restored`; F12 keeps all nine components and `rx['comp']`. F13 keeps no rule state: its stop and `lock_roe` are part of the engine state, and `audit_restored` skips it |
 | 8 native target | built. `tp_price` is set only beyond `entry_price`, without the lock |
 | 9 no new entry from a time | built. The field `no_entry_from_ms` per pool of the rules file goes onto the pool's `-n`, `-nq` and `-nflip` accounts and into the fingerprint. The C1 command **prints** the value (11.5) and does not edit the rules file: it is copied into `rules.json` by hand (restart to-do), and the changed fingerprint starts the league over from the same recorded start, with a copy of the old record first |
 | 10 counters | built. Table `acct_day`, written in the chunk's commit |
 | 11 daily marks | built. Table `acct_mark`, written at every 00:00 UTC in the same commit |
 | 12 snapshot | built. Per account `hold_stats` (count, median hold, shares over 4 h, 8 h and 18 h) over every closed trade since the start, and the `acct_day` counts; the checks do not use `LAST_TRADES` |
-| 13 end-to-end parity | built on **synthetic data only**: `tests/test_exitflex_league_parity.py` (six coins, 62 days of 1m bars of which the first 52 are warm-up and the last 10 judged; missing minutes, halts, gaps, a restart in the middle of open positions; F1-F10 with F7h in both modes and q15, F11 and F12 through a synthetic native provider, coin-flip accounts, negative controls). **Open**: the run over at least 60 days of archive data before 2026-10-01 with the real arrays of `native.py` and `native_ds.py`, and the window-length check of the sub-bullets above |
+| 13 end-to-end parity | built on **synthetic data only**: `tests/test_exitflex_league_parity.py` (six coins, 62 days of 1m bars of which the first 52 are warm-up and the last 10 judged; missing minutes, halts, gaps, a restart in the middle of open positions; F1-F10 with F7h in both modes and q15, F11 and F12 through a synthetic native provider, coin-flip accounts, negative controls; F13.a and F13.b at both sizes and as coin flips, with restarts in the middle of positions whose lock is raised and a negative control for a restore that forgets the lock). **Open**: the run over at least 60 days of archive data before 2026-10-01 with the real arrays of `native.py` and `native_ds.py`, and the window-length check of the sub-bullets above |
 | 14 check data | built. `forward_check` reads `trades`, `acct_day` and `acct_mark`; `public_view` keeps DeepSeek to labels, counts, win shares and hold hours; the command is `python -m candleague.rulex checks` with `c1`, `c2` or `repeat` (11.5) |
+
+**F13 (16.6) in the league.** F13 adds no account and changes no id or count: `-n`, `-nq` and `-nflip` run `candleague.exits.lock_exit` of the
+pick's own exit (`rulex.exit_name`) on the plain engine, built by `rulex.make_engine`; `rulex.chunk_rule` hands them signals with
+the pick's stop distance and no chart record; the twins are untouched; the fingerprint carries the rule and the lock's numbers
+(`rulex.code_version`). The parity test of item 13 covers F13 (above).
 
 **Restart to-do.** All of this is done at restart time, after the owners' OK. None of it is pinned here, and none of it
 changes a rule of this file.
