@@ -1192,9 +1192,9 @@ def test_accounts_exist_only_with_an_enabled_config_and_follow_the_prereg(tmp_pa
                 {"pools": {"core": "F1.w3.a"}, "picks": ["nope"]}, {"pools": {"core": "F1.w3.a"}, "picks": 3},
                 {"pools": {"core": "F1.w3.a"}, "enabled": "yes"}, {"pools": {"core": "F1.w3.a"}, "no_entry_from_ms": {"core": -5}},
                 {"pools": {"core": "F1.w3.a"}, "no_entry_from_ms": {"x": 5}}, {"variants": ["F1.w3.a"]}, [1]):
-        path.write_text(json.dumps(bad))
+        path.write_text(json.dumps({"enabled": True, **bad} if isinstance(bad, dict) and "enabled" not in bad else bad))
         with pytest.raises(RX.RuleConfigError):
-            RX.load_config(str(path))
+            RX.load_accounts(str(path), cands)
     path.write_text("not json")
     with pytest.raises(RX.RuleConfigError):
         RX.load_config(str(path))
@@ -1623,3 +1623,107 @@ def test_five_minute_pieces_equal_one_run_for_q15(tmp_path, monkeypatch):
         pieces.advance(t)
     assert _trades(pieces) == _trades(whole) and any(r[2] == first for r in _trades(whole))
     assert RN._get(pieces.conn, "engines") == RN._get(whole.conn, "engines")
+
+
+# ---------------------------------------------------------------- PREREG 11.4 items 9-12: stop time, counters, daily marks, snapshot
+def test_no_entry_from_a_time_refuses_new_entries_and_lets_an_open_position_close_by_its_own_rules():
+    recs = [rec(chk(k), 1, 0) for k in (1, 2, 3, 4, 5)]
+    a = acct("F7.N2.a")
+    a["no_entry_from_ms"] = at(J0)
+    e = RX.make_engine(a, BR, SP)
+    assert e.rx_no_entry_from == at(J0)
+    e = run(a, Path(), 1, recs=recs, engine=e)
+    assert e.position is None and not e.trades                                  # the entry minute is the stop time: refused
+    b = dict(a, no_entry_from_ms=at(J0) + 1)                                     # the entry minute is before the stop time
+    e2 = run(b, Path(), 1, recs=recs, engine=RX.make_engine(b, BR, SP))
+    assert e2.trades and e2.trades[0].entry_time == at(J0) and e2.trades[0].exit_reason == "RULE"      # an open position closes by its rule
+    # a second signal after the stop time is refused while the first position was entered before it and closed by the rule
+    late = chk(4)
+    c = dict(a, no_entry_from_ms=late - MIN)
+    e3 = run(c, Path(), 1, sigs=((C0, None), (late, None)), recs=recs, engine=RX.make_engine(c, BR, SP))
+    assert len(e3.trades) == 1 and e3.position is None and not e3.pending
+
+
+def test_a_start_over_after_the_stop_time_is_set_gives_the_same_trades_as_the_run_that_set_it(tmp_path):
+    cands = _rule_cands("15m", "tp1R|1")
+    mk = lambda db, **kw: RN.League(RN.open_db(str(db)), RX.accounts(cands, RX.normalize_config(  # noqa: E731
+        {"pools": {"core": "F7.N2.a"}, **kw})), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA), TP._steps_from(DATA), TP.SYMS,
+        start_ms=START, log=lambda s: None, db_path=str(db))
+    plain = mk(tmp_path / "a.db")
+    plain.advance(START + 3 * DAY)
+    stop = START + DAY + 7 * 3_600_000
+    cut = mk(tmp_path / "b.db", no_entry_from_ms={"core": stop})
+    cut.advance(START + 3 * DAY)
+    p, c = _trades(plain), _trades(cut)
+    new = {"core-S2-15m-1-n", "core-S2-15m-1-nq", "core-S2-15m-1-nflip"}
+    assert all(r[1] < stop for r in c if r[0] in new) and any(r[1] < stop for r in c if r[0] in new)
+    assert [r for r in c if r[0] in new] == [r for r in p if r[0] in new and r[1] < stop]
+    assert [r for r in c if r[0] not in new] == [r for r in p if r[0] not in new]                    # the E0 accounts go on
+    # the same field set on a database that already holds the run: it starts over (fingerprint) and reproduces
+    start_over = mk(tmp_path / "a.db", no_entry_from_ms={"core": stop})
+    assert start_over.reset and start_over.start_ms == START
+    start_over.advance(START + 3 * DAY)
+    assert _trades(start_over) == c
+
+
+def test_counters_marks_and_snapshot_fields(whole):
+    conn = whole.conn
+    rows = conn.execute("SELECT account, day, offered, entered, skipped, rejected, closed FROM acct_day").fetchall()
+    assert rows and all(r[2] == r[3] + r[4] + r[5] for r in rows)                      # offered = entered + skipped + rejected
+    per = {}
+    for aid, day, off, ent, skp, rej, clo in rows:
+        t = per.setdefault(aid, [0, 0, 0, 0, 0])
+        for k, v in enumerate((off, ent, skp, rej, clo)):
+            t[k] += v
+    n_trades = dict(conn.execute("SELECT account, COUNT(*) FROM trades GROUP BY account").fetchall())
+    for a in whole.accts:
+        aid, e = a["id"], whole.engines[a["id"]]
+        off, ent, skp, rej, clo = per.get(aid, [0] * 5)
+        assert clo == n_trades.get(aid, 0)                                             # trades closed
+        assert ent - clo == (1 if e.position is not None else 0)                       # entered = closed + the open one
+    # every signal submitted is decided or still pending
+    by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), whole.rule_accts, TP.SYMS, START, START + 3 * DAY, START)
+    sub = {}
+    for items in by.values():
+        for aid, o in items:
+            if isinstance(o, Signal):
+                sub[aid] = sub.get(aid, 0) + 1
+    for a in whole.accts:
+        assert sub.get(a["id"], 0) == per.get(a["id"], [0] * 5)[0] + len(whole.engines[a["id"]].pending), a["id"]
+    # skipped-while-holding signals exist (the study never counted them) and a day with a trade closed carries it
+    assert sum(v[2] for v in per.values()) > 0
+    # the marks: 00:00 UTC of the days inside the run, for every account, the wallet and the mark
+    days = sorted({r[0] for r in conn.execute("SELECT day FROM acct_mark")})
+    assert days == [START + DAY, START + 2 * DAY, START + 3 * DAY]
+    marks = {(a, d): (w, m) for a, d, w, m in conn.execute("SELECT account, day, wallet, marked FROM acct_mark")}
+    assert len(marks) == 3 * len(whole.accts)
+    trades = {}
+    for a, entry, exit_, _r, pnl in _trades(whole):
+        trades.setdefault(a, []).append((entry, exit_, pnl))
+    for a in whole.accts:
+        for d in days:
+            w, m = marks[(a["id"], d)]
+            pos = whole.engines[a["id"]].position
+            held = any(en < d <= ex for en, ex, _p in trades.get(a["id"], [])) or (pos is not None and pos.entry_time < d)
+            if not held:
+                realised = 5000.0 + sum(p for _en, ex, p in trades.get(a["id"], []) if ex < d)
+                assert w == pytest.approx(realised, rel=1e-7) and m == w
+    # the snapshot: hold-time aggregates and the counters of every rule account
+    doc = RN.write_snapshots("/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/snap_cnt", whole, START + 3 * DAY + 60_000)
+    for r in doc["accounts"]:
+        assert set(r["hold"]) == {"n", "median", "share_gt4", "share_gt8", "share_gt18"} and r["hold"]["n"] == n_trades.get(r["id"], 0)
+        assert r["counts"]["closed"] == n_trades.get(r["id"], 0)
+        if r["hold"]["n"]:
+            assert 0 <= r["hold"]["share_gt18"] <= r["hold"]["share_gt8"] <= r["hold"]["share_gt4"] <= 1 and r["hold"]["median"] > 0
+
+
+@SIDES
+def test_mark_value_is_the_wallet_after_a_market_exit_at_the_last_close(side):
+    held = run(acct("F7.N2.a"), Path(), side)
+    assert held.position is not None
+    m = RX.mark_value(held, {SYM: P0})
+    closed = run(acct("F7.N2.a"), Path(), side, recs=[rec(chk(k), side, 0) for k in (1, 2, 3)])
+    assert closed.position is None and m == pytest.approx(closed.wallet, rel=1e-12)
+    assert RX.mark_value(closed, {}) == closed.wallet
+    # the marked value is below the open position's unrealised value by the exit costs, and falls with an adverse close
+    assert RX.mark_value(held, {SYM: P0 - side * 100}) < m
