@@ -3017,7 +3017,9 @@ def test_t7_claims_and_the_loss_categories(f11_on):
     assert MT.claim_of("F9.a") == MT.claim_of("F1.w3.a") == "beats E0 and beats a random exit with its timing profile"
     assert [RX.claim_key(KX.variant_by_id(v)) for v in ("F7.N12.a", "F7h.H4.a", "F11.a", "F12.a", "F3.a")] == ["f7", "f7", "f11", "f12", "rule"]
     # the runner's English claims are the metrics' (one source), and the Korean F12 claim keeps the 7 / 8 legs, the 8-hour clock and the three limits
-    assert RX.CLAIM_EN == {"rule": MT.claim_of("F9.a"), "f11": MT.claim_of("F11.b"), "f12": MT.claim_of("F12.b"), "f7": MT.claim_of("F7h.H8.a")}
+    assert RX.CLAIM_EN == {"rule": MT.claim_of("F9.a"), "f11": MT.claim_of("F11.b"), "f12": MT.claim_of("F12.b"), "f7": MT.claim_of("F7h.H8.a"),
+                           "f13": MT.claim_of("F13.a")}
+    assert MT.claim_of("F13.a") == MT.claim_of("F13.b") == MT.CLAIM_F13 and RX.claim_key(KX.variant_by_id("F13.b")) == "f13"
     ko = RX.CLAIM_KO["f12"]
     assert all(x in ko for x in ("최대 7개", "최대 8개", "F6", "F10", "8시간", "단일 규칙", "모든 매매법", "최고의 청산"))
 
@@ -3120,7 +3122,7 @@ def test_review_report_is_read_only_byte_stable_and_computes_nothing(syn_select,
     lay = cfg.lay
     try:
         rc = RX.report_config(lay, "select", cfg.pin, cfg.pin_hash, 20)
-        assert rc.market is None and len(rc.variants) == 86
+        assert rc.market is None and len(rc.variants) == 88
         with pytest.raises(RuntimeError, match="read-only"):
             rc.make_pickdata(rc.picks[0])
     finally:

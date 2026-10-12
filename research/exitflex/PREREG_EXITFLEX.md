@@ -1077,7 +1077,7 @@ shows:
 * for F12 rows, the exits by component (5.2) as counts, in total and split by the pick's timeframe;
 * for F13 rows, nothing extra: the row is read like any other. It shows the plain Korean name "규칙봇 계단 잠금(12%→10%,
   17%→15%, 22%→20%...)", group P, 0 parameters, category L0, "in the default set D: yes", gate 3 "해당 없음", the claim of 8.5
-  on a choosable row, and exit reasons in which LOCK stands beside TP and SL (mode b has no TP);
+  on a choosable row. Its exit reasons in `select.json` (section 7) show LOCK beside TP and SL (mode b has no TP);
 * the number of variants failing the gates per pool, counted in sequence: gate 1; gate 2 among those passing 1; gate
   4 among those passing 1 and 2; gate 3 among those that reached step 2. No figure of a failing variant beyond the
   columns above and the second table (which splits column 2 by market state).
