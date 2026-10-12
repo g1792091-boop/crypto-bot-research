@@ -271,6 +271,14 @@ class League:
         # L.chunk_signals; a restored rule position's state is checked against a recomputation from the bars
         self.rule_accts = [a for a in accts if a.get("rule")]
         self.plain_accts = [a for a in accts if not a.get("rule")]
+        # a league with rule accounts places fills and checks on each coin's own minutes, as the study's kernel does
+        # (RX.replay_day): {coin: its last minute present} and {coin: funding waiting for the coin's next minute}, kept in
+        # the database with the engines
+        self.seen: dict = {k: int(v) for k, v in (_get(conn, "seen") or {}).items()} if self.rule_accts else {}
+        self.fund_wait: dict = {k: float(v) for k, v in (_get(conn, "fund_wait") or {}).items()} if self.rule_accts else {}
+        if self.rule_accts:
+            for e in self.engines.values():
+                e.rx_seen = self.seen
         self.restore_notes: list[str] = []
         if any(self.engines[a["id"]].position is not None for a in self.rule_accts):
             self.restore_notes = RX.audit_restored(self, log)
@@ -299,7 +307,10 @@ class League:
                 notes = self.restore_notes + notes + rule_notes
                 self.restore_notes = []
             steps = self.fetch_steps(None, self.symbols, a, b)
-            replay_day(self.engines, self.active, by_close, steps, self.brackets)
+            if self.rule_accts:
+                RX.replay_day(self.engines, self.active, by_close, steps, self.brackets, self.seen, self.fund_wait)
+            else:
+                replay_day(self.engines, self.active, by_close, steps, self.brackets)
             rows = []
             for aid, e in self.engines.items():
                 rows += [(aid, int(t.exit_time), json.dumps(asdict(t))) for t in e.trades]
@@ -308,6 +319,9 @@ class League:
             self.meta["done"] = b
             self.meta["notes"] = notes[-20:]
             _put(self.conn, "engines", {aid: engine_state(e) for aid, e in self.engines.items()})
+            if self.rule_accts:
+                _put(self.conn, "seen", self.seen)
+                _put(self.conn, "fund_wait", self.fund_wait)
             _put(self.conn, "meta", self.meta)
             self.conn.commit()
             self.advanced_ms = self.clock()

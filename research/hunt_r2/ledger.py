@@ -4,11 +4,16 @@ with a global Benjamini-Hochberg at q = 0.10, Holm at 0.05 and its m.
 * **(A) tested:** every test-period hypothesis of the hunt program with a p on the snapshot date: the v1 pick; every
   tested wide pick; every round-1 read that prints a test-period p (the r = 1% line of each tested pick, H 13 / W 7;
   O4's R6 (e) momentum-control p per row, W 7.4a); track 2's tested picks (p = 1 when T0 fails, as its own family);
-  round 2's p (7.1) and p_tune (7.2). Picks that are hashed but not yet tested are listed separately, not in m.
+  round 2's p (7.1) and p_tune (7.2), and round 2's own read p-values once its reads exist (the r = 1% line of each
+  row, 9.2, and O4's R6 (e) p per row, 9.2 / W 7.4a), as round 1's. Picks that are hashed but not yet tested are
+  listed separately, not in m.
 * **(A+):** (A) plus the full grid's 711 test-period hypotheses (p from its published confirm file when given and
   readable, else 1) and the 38 F4 watch picks at p = 1.
 * **(L) live gate:** (A+) plus every confirm look whose pre-registration is hashed but not yet run, at its maximum
-  number of hypotheses with p = 1 (so deciding early buys nothing).
+  number of hypotheses with p = 1 (so deciding early buys nothing); round 2's reads that print a p count here at their
+  maximum until they exist. Every ``research/*/*.sha256`` of the checkout must be in the pinned registry
+  (``ledger_registry.json``) or named by a ``--ledger-extra`` row ("prereg"); otherwise (L) is printed "incomplete"
+  (no rejection, no live-gate pass) until the new study is registered with its maximum.
 
 Inputs (8): each study's public test.json and reads files, read at their fixed paths; DeepSeek p-values from the
 private files the owners copy to the server (``--ledger-private DIR``): each file's sha256 must equal the hash printed
@@ -49,12 +54,17 @@ T2_MAX = 315                                 # T2 11: K = 1 per cell, up to 315 
 R2_PIN = "research/hunt_r2/PREREG_HUNT_R2.sha256"
 R2_PICKS = "research/hunt_r2/out/picks.json"
 R2_TEST = "research/hunt_r2/out/test.json"
+R2_READS_ROWS = "research/hunt_r2/out/reads_rows.json"
+R2_READS_O = "research/hunt_r2/out/reads_weekend.json"
+R2_READS_PRIVATE = {R2_READS_ROWS: "r2_rows_private.json", R2_READS_O: "r2_reads_o_private.json"}
+REGISTRY = "research/hunt_r2/ledger_registry.json"
+LEDGER_EXTRA = "research/hunt_r2/ledger_extra.json"
 F4_WATCH = "research/fullgrid/diag/watch_sel.json"
 PRIVATE_FILES = {R1_WIDE_TEST: "wide_test_private.json", T2_TEST: "test_private.json"}
-MAX_HYP = {"hunt v1": 2, "hunt wide": 30 + 30 + 33, "hunt-r2 v1": 60, "track 2 (hiwr v1)": T2_MAX}
+MAX_HYP = {"hunt v1": 2, "hunt wide": 30 + 30 + 33, "hunt-r2 v1": 30 * 2 + 30 + 32, "track 2 (hiwr v1)": T2_MAX}
 MAX_NOTE = {"hunt v1": "the v1 pick and its r = 1% line",
             "hunt wide": "30 picks, their 30 r = 1% lines and 33 O4 (e) rows (30 picks, the v1 pick, 2 baskets)",
-            "hunt-r2 v1": "30 picks x (p, p_tune)",
+            "hunt-r2 v1": "30 picks x (p, p_tune), their 30 r = 1% lines and 32 O4 (e) rows (30 picks, 2 baskets)",
             "track 2 (hiwr v1)": "K = 1 per cell, up to 315 picks (T2 11)"}
 NOTES = ["Four studies share one 33-month period (2024-01 .. 2026-09): hunt v1 / wide, track 2, round 2 and the full "
          "grid's custom values.",
@@ -62,7 +72,12 @@ NOTES = ["Four studies share one 33-month period (2024-01 .. 2026-09): hunt v1 /
          "Track 2's rows enter p = max(p_boot, p_a, p_b) (100,000 seeds, floor about 1e-5); p = 1 when T0 fails.",
          "Round 2's rows enter p (7.1) and p_tune (7.2), each the larger of a 100,000-resample bootstrap p and the "
          "one-sided t_32 p.",
-         "The ledger changes no verdict of any study (8); print (L) is the live gate of 10.2 for round-2 정식 picks."]
+         "The ledger changes no verdict of any study (8); print (L) is the live gate of 10.2 for round-2 정식 picks.",
+         "Beside track 2's own ledger (T2 13, research/hiwr): the same round-1 and track-2 confirm rows enter with the "
+         "same ids and p (a parity test checks it). Intended differences: this ledger enters p = 1 for a row whose p is "
+         "missing (listed 'p not available') where track 2's prints 'incomplete'; it adds round 1's and round 2's read "
+         "p-values (r = 1% line, O4 (e)), the full grid's 711 and the 38 F4 picks (A+) and the hashed-not-run looks at "
+         "their maximum (L)."]
 
 
 def holm(pvals, alpha: float = HOLM_ALPHA) -> list:
@@ -214,17 +229,111 @@ def track2_rows(root: str, priv_dir: str | None, pub_root: str | None = None) ->
 
 
 # ------------------------------------------------------------------ round 2 (this study)
-def round2_rows(test_full: dict | None) -> list:
-    """Round 2's p (7.1) and p_tune (7.2) of every tested pick, from the test step's full blocks."""
-    rows = []
-    for p in (test_full or {}).get("picks") or []:
+def round2_row_ids(test_full: dict | None) -> list:
+    """9.1 ROWS of round 2 (as reads_r2.rows_of): every tested pick, the batch-1 basket when K >= 2, the passing basket
+    when at least two pass."""
+    picks = list((test_full or {}).get("picks") or [])
+    ids = [f"pick:{p['id']}" for p in picks]
+    if sum(1 for p in picks if int(p.get("batch", 1)) == 1) >= 2:
+        ids.append("basket_batch1")
+    if len(((test_full or {}).get("verdict") or {}).get("passing") or []) >= 2:
+        ids.append("basket_passing")
+    return ids
+
+
+def _r2_read_private(root: str, rel: str, pub: dict, r2_private: str | None) -> tuple:
+    if not r2_private:
+        return None, "round 2's private folder not given"
+    path = os.path.join(r2_private, R2_READS_PRIVATE[rel])
+    if not os.path.exists(path):
+        return None, f"{R2_READS_PRIVATE[rel]} absent"
+    if H.sha256_file(path) != (pub or {}).get("private_sha256"):
+        return None, f"{R2_READS_PRIVATE[rel]} sha256 differs from {os.path.basename(rel)}'s private_sha256"
+    return _load(path), "private file sha256 checked"
+
+
+def round2_rows(test_full: dict | None, root: str | None = None, r2_private: str | None = None) -> tuple:
+    """Round 2's p (7.1) and p_tune (7.2) of every tested pick, from the test step's full blocks; and, once its reads
+    exist, the r = 1% line p of every row (reads_rows.json) and O4's R6 (e) p per row (reads_weekend.json), DeepSeek
+    rows from round 2's private reads files after their sha256 check. Returns (rows, inputs, pending): a read not yet
+    written counts in (L) at its maximum."""
+    rows, inputs, pending = [], [], []
+    picks = (test_full or {}).get("picks") or []
+    ds_of = {}
+    for p in picks:
         blk = test_full["results"][p["id"]]
         ds = p.get("family") == "F3" or p.get("kind") == "ds"
+        ds_of[f"pick:{p['id']}"] = ds
         rows.append(_row(p["id"], "hunt-r2 v1", "confirm (R2 PASS, 7.1)", blk["checks"].get("p"), ds, R2_TEST,
                          "this test step"))
         rows.append(_row(f"{p['id']} tune", "hunt-r2 v1", "confirm (TUNED BETTER, 7.2)", blk["tune"].get("p_tune"),
                          ds, R2_TEST, "this test step"))
-    return rows
+    if not picks or root is None:
+        return rows, inputs, pending
+    rids = round2_row_ids(test_full)
+    for rid in rids:
+        if rid.startswith("basket"):
+            ds_of[rid] = any(p.get("family") == "F3" or p.get("kind") == "ds" for p in picks)
+    for rel, kind, path_of, why in (
+            (R2_READS_ROWS, "read (r = 1% line, 9.2)", lambda r: ((r.get("r1_line") or {}).get("checks") or {}).get("p"),
+             "one r = 1% line p per row (9.2)"),
+            (R2_READS_O, "read (O4, R6 (e), 9.2)",
+             lambda r: ((((r.get("periods") or {}).get("test") or {}).get("O4") or {}).get("e") or {}).get("p_boot"),
+             "one O4 (e) p per row (9.2)")):
+        full = os.path.join(root, rel)
+        doc = _load(full)
+        inputs.append({"file": rel, "sha256": sha256_or_none(full)})
+        if doc is None:
+            pending.append({"study": f"hunt-r2 v1 reads {os.path.basename(rel)}", "hypotheses": len(rids),
+                            "why": f"{os.path.basename(rel)} absent: {why}, at its maximum"})
+            continue
+        out_rows = ((doc.get("out") or {}).get("rows") or {})
+        priv, pst = (None, None)
+        if any(ds_of.get(r) for r in rids):
+            priv, pst = _r2_read_private(root, rel, doc, r2_private)
+            inputs.append({"file": f"(private) {R2_READS_PRIVATE[rel]}", "status": pst})
+        priv_rows = ((priv or {}).get("rows") or {}) if priv else {}
+        for rid in rids:
+            r = out_rows.get(rid) or {}
+            pv, st = path_of(r), None
+            if pv is None and ds_of.get(rid):
+                pv = path_of(priv_rows.get(rid) or {})
+                st = "private file (sha256 checked)" if pv is not None else f"p not available ({pst})"
+            rows.append(_row(f"{rid} {'r=1%' if rel == R2_READS_ROWS else 'O4 (e)'}", "hunt-r2 v1", kind, pv,
+                             bool(ds_of.get(rid)), rel, st))
+    return rows, inputs, pending
+
+
+# ------------------------------------------------------------------ the registry of hashed pre-registrations (L)
+def registry(root: str) -> dict:
+    return (_load(os.path.join(root, REGISTRY)) or {}).get("files") or {}
+
+
+def unregistered(root: str, extra_preregs: set) -> list:
+    """Every research/*/*.sha256 of the checkout that the pinned registry does not know (or whose first line, the
+    design hash, differs from the registry's) and no --ledger-extra row names: print (L) is then incomplete."""
+    import glob
+    reg = registry(root)
+    out = []
+    for full in sorted(glob.glob(os.path.join(root, "research", "*", "*.sha256"))):
+        rel = os.path.relpath(full, root)
+        if rel in extra_preregs:
+            continue
+        first = None
+        try:
+            with open(full) as fh:
+                for ln in fh:
+                    if ln.strip():
+                        first = ln.split()[0]
+                        break
+        except OSError:
+            first = None
+        known = reg.get(rel)
+        if known is None:
+            out.append({"file": rel, "why": "not in the registry"})
+        elif known.get("first_line_sha256") and known["first_line_sha256"] != first:
+            out.append({"file": rel, "why": "its first line (design hash) differs from the registry's"})
+    return out
 
 
 # ------------------------------------------------------------------ full grid and F4 (A+)
@@ -269,8 +378,11 @@ def pending_looks(root: str, have: set, r2_tested: bool) -> list:
         pk = _load(os.path.join(root, R2_PICKS))
         n = len((pk or {}).get("picks") or []) if pk else None
         if pk is None or n:
-            out.append({"study": "hunt-r2 v1", "hypotheses": 2 * n if n else MAX_HYP["hunt-r2 v1"],
-                        "why": "picks hashed, test not run: picks x (p, p_tune)" if n else MAX_NOTE["hunt-r2 v1"]})
+            b1 = len(((pk or {}).get("batches") or [[]])[0]) if n else 0
+            rows = (n or 0) + (1 if b1 >= 2 else 0) + (1 if (n or 0) >= 2 else 0)
+            out.append({"study": "hunt-r2 v1", "hypotheses": 2 * n + 2 * rows if n else MAX_HYP["hunt-r2 v1"],
+                        "why": "picks hashed, test not run: picks x (p, p_tune) and each row's r = 1% line and O4 (e) "
+                               "(rows = picks and baskets)" if n else MAX_NOTE["hunt-r2 v1"]})
     return out
 
 
@@ -283,33 +395,47 @@ def extra_rows(path: str | None) -> tuple:
     for r in doc:
         if r.get("status") == "pending":
             pending.append({"study": str(r.get("study", r.get("id"))), "hypotheses": int(r.get("hypotheses", 1)),
-                            "why": "--ledger-extra"})
+                            "why": "--ledger-extra", "prereg": r.get("prereg")})
         else:
             rows.append(_row(str(r["id"]), str(r.get("study", "extra")), str(r.get("kind", "confirm")), r.get("p"),
                              bool(r.get("deepseek", False)), path))
+            if r.get("prereg"):
+                rows[-1]["prereg"] = r["prereg"]
     return rows, pending, [{"file": path, "sha256": H.sha256_file(path) if os.path.exists(path) else None}]
 
 
 # ------------------------------------------------------------------ the three prints
-def one_print(rows: list) -> dict:
+def one_print(rows: list, incomplete: list | None = None) -> dict:
+    """BH and Holm over ``rows``; with ``incomplete`` (hashed pre-registrations the ledger cannot count) nothing is
+    rejected and the print says so."""
+    if incomplete:
+        out = [dict(r, bh_q10=None, holm_005=None) for r in rows]
+        return {"m": len(out), "status": "incomplete", "missing": incomplete, "bh_rejections": None,
+                "holm_rejections": None, "rows": out}
     pv = [r["p"] for r in rows]
     b, h = bh(pv, BH_Q), holm(pv, HOLM_ALPHA)
     out = [dict(r, bh_q10=bool(x), holm_005=bool(y)) for r, x, y in zip(rows, b, h)]
-    return {"m": len(out), "bh_rejections": [r["id"] for r in out if r["bh_q10"]],
+    return {"m": len(out), "status": "complete", "bh_rejections": [r["id"] for r in out if r["bh_q10"]],
             "holm_rejections": [r["id"] for r in out if r["holm_005"]], "rows": out}
 
 
 def snapshot(root: str = ROOT, priv_dir: str | None = None, r2_full: dict | None = None,
              fullgrid_confirm: str | None = None, extra: str | None = None, when: dt.datetime | None = None,
-             public_root: str | None = None) -> dict:
+             public_root: str | None = None, r2_private: str | None = None) -> dict:
     """The dated ledger (full: every p). ``r2_full`` = round 2's full test document (None before its test).
     ``public_root`` = where the other studies' public outputs lie under their repository paths (default: the
-    repository; on the round-2 server, the folder the server kit fetches the results branches into)."""
+    repository; on the round-2 server, the folder the server kit fetches the results branches into).
+    ``r2_private`` = round 2's own private folder (its DeepSeek read p-values). ``extra`` defaults to the pinned
+    research/hunt_r2/ledger_extra.json."""
     when = when or dt.datetime.now(dt.timezone.utc)
+    if extra is None and os.path.exists(os.path.join(root, LEDGER_EXTRA)):
+        extra = os.path.join(root, LEDGER_EXTRA)
     r1, listed, inputs, looks, pend1 = round1_rows(public_root or root, priv_dir)
     t2, l2, in2, lk2, pend2 = track2_rows(root, priv_dir, public_root)
-    r2 = round2_rows(r2_full)
+    r2, in_r2, pend_r2 = round2_rows(r2_full, root, r2_private)
     ex, pend_x, in_x = extra_rows(extra)
+    pre_x = {r.get("prereg") for r in ex + pend_x if r.get("prereg")}
+    missing = unregistered(root, pre_x)
     have = {r["study"] for r in r1}
     A_rows = r1 + t2 + r2 + ex
     if r2_full is not None:
@@ -321,28 +447,33 @@ def snapshot(root: str = ROOT, priv_dir: str | None = None, r2_full: dict | None
     looks += lk2
     fg, in_fg = fullgrid_rows(fullgrid_confirm, root)
     Aplus = A_rows + fg
-    pend = pending_looks(root, have, r2_full is not None) + pend1 + pend2 + pend_x
+    pend = pending_looks(root, have, r2_full is not None) + pend1 + pend2 + pend_r2 + pend_x
     L_rows = list(Aplus)
     for pnd in pend:
         for i in range(int(pnd["hypotheses"])):
             L_rows.append(_row(f"{pnd['study']} pending {i + 1}", pnd["study"], "hashed, not yet run (p = 1)", 1.0,
                                False, "pending look", "p = 1 by rule (8)"))
-    prints = {"A": one_print(A_rows), "A+": one_print(Aplus), "L": one_print(L_rows)}
+    prints = {"A": one_print(A_rows), "A+": one_print(Aplus), "L": one_print(L_rows, missing)}
     for k, txt in (("A", "tested: every test-period hypothesis of the hunt program with a p on this date"),
                    ("A+", "tested + the full grid's 711 and the 38 F4 watch picks (p = 1)"),
                    ("L", "live gate: A+ plus every hashed-but-not-run confirm look at its maximum, p = 1")):
         prints[k]["what"] = txt
     gate = {}
     if r2_full is not None:
-        lrej = set(prints["L"]["bh_rejections"])
+        lrej = set(prints["L"]["bh_rejections"] or [])
         for pid in (r2_full.get("verdict") or {}).get("passing") or []:
+            if missing:
+                gate[pid] = {"passes_print_L": False, "label": "정식 (장부 미완성: 등록 안 된 사전 등록이 있음)"}
+                continue
             gate[pid] = {"passes_print_L": pid in lrej,
                          "label": "정식" if pid in lrej else "정식 (장부 미통과)"}
     return {"what": "PREREG_HUNT_R2 8: program-wide ledger snapshot (global BH q = 0.10, Holm 0.05)",
             "date_utc": when.isoformat(), "q": BH_Q, "holm_alpha": HOLM_ALPHA, "prints": prints,
             "listed_not_counted": listed + l2, "pending_looks_in_L": pend, "looks": looks,
             "looks_count": sum(1 for x in looks if x["status"] in ("run", "after the verdict")),
-            "round2_live_gate": gate, "inputs": inputs + in2 + in_fg + in_x, "notes": NOTES,
+            "round2_live_gate": gate, "inputs": inputs + in2 + in_r2 + in_fg + in_x, "notes": NOTES,
+            "registry": {"file": REGISTRY, "sha256": sha256_or_none(os.path.join(root, REGISTRY)),
+                         "unregistered": missing},
             "line": "four studies share one 33-month period"}
 
 

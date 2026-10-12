@@ -4,11 +4,11 @@ numbers only) and a private file outside the repository (D11, its sha256 in the 
 only (2021-01-01 .. 2024-01-01) and choose nothing. They run whether or not any name is taken.
 
 * **CSCV / PBO** (as W R4 (2)) over the real Stage 0 and Stage A runs only: 12 blocks of 3 months, all 924 half / half
-  splits; Stage 0 and Stage A replayed on the in-sample (IS) half (position minimum 36); the replay's rank-1 and top-10
-  candidate peaks, their out-of-sample (OOS) relative rank among the selectable systems (omega = average rank /
-  (N + 1)), PBO = share of splits with logit(omega) <= 0, the slope of OOS on IS. Stage A ran only at each name's real
-  anchor: ``mode="strict"`` gives a name whose IS anchor moved no candidate in that split (counted ``anchor_moved``);
-  ``mode="fixed"`` uses the real anchor's lattice whatever the IS anchor (printed beside, labelled).
+  splits; Stage 0 and Stage A replayed on the in-sample (IS) half (position minimum 36): Stage 0 re-chooses each name's
+  anchor on the IS months and Stage A runs at that IS anchor (``slot_units`` runs every coarse point at every slot,
+  base and cost x2, from the store, for these reads only); the replay's rank-1 and top-10 candidate peaks, their
+  out-of-sample (OOS) relative rank among the 4,369 selectable systems of the real search (omega = average rank /
+  (N + 1)), PBO = share of splits with logit(omega) <= 0, the slope of OOS on IS.
 * **Null summary:** per rank the q50 / q75 / q90 / q95 of the rank-r null score in each null (public at ranks held by
   F1, F2 or F5 candidates or by no real candidate), the null candidates per replicate, the (a′) drop shares, redraws
   and near-zero shifts, and N_eff (the number of independent draws from the null's pooled per-point P_c distribution
@@ -17,10 +17,11 @@ only (2021-01-01 .. 2024-01-01) and choose nothing. They run whether or not any 
   close[t - 20]) on the system's timeframe (a zero or undefined return drops the event), base cost; per real
   candidate the (c′) P_c of the same point at the same anchor and the rank-r score of the (c′) search; label "no
   better than plain momentum at the same times" when the real P_c is not above that (c′) P_c. Removes nothing.
-* **Selection lift on 2023:** Stage 0 + A chosen on 2021-2022 (position minimum 48) from the same runs' monthly ln M,
-  measured on 2023: per name H(peak) - median H over the name's coarse lattice; the median and the share above 0.
-* **Leave-one-year-out:** Stage 0 + A chosen on each pair of years (minimum 48); per name how often the full-period
-  peak or one of its coarse neighbours returns.
+* **Selection lift on 2023:** Stage 0 + A chosen on 2021-2022 (position minimum 48) from the same runs' monthly ln M
+  (the anchor re-chosen on 2021-2022, as CSCV), measured on 2023: per name H(peak) - median H over the name's coarse
+  lattice at that anchor; the median and the share above 0.
+* **Leave-one-year-out:** Stage 0 + A chosen on each pair of years (minimum 48, anchors re-chosen); per name how often
+  the full-period peak or one of its coarse neighbours returns at the full-period anchor.
 * **Near-miss table:** names that failed exactly one condition (the candidate rule, one null only, the box plateau).
 * **Spike ratio:** S / P_c and S by year (2021, 2022, 2023) for each pick and each candidate.
 * **Weekend map:** Stage A rerun on the real anchors under the O1 weekend-skip machine; what it would have picked
@@ -73,9 +74,10 @@ VARIANTS = ("base", "O1", "O1b")
 VARIANT_KO = {"base": "주말 포함", "O1": "주말 제외 (O1)", "O1b": "주말 롱만 제외 (O1b)"}
 DS_NOTE = "DeepSeek row: figures in the private file (D11)"
 CHOICES = [
-    "6 CSCV: Stage A ran only at each name's real anchor (4.1); 'strict' gives a name whose in-sample anchor moved no "
-    "candidate in that split (counted anchor_moved); 'fixed' uses the real anchor's lattice whatever the in-sample "
-    "anchor; both printed, labelled. The same two modes are printed for the 2023 lift and leave-one-year-out.",
+    "6 CSCV, the 2023 lift and leave-one-year-out: Stage 0 is re-chosen on the in-sample months and Stage A runs at "
+    "that in-sample anchor; every coarse point at every (timeframe, gate) slot is run once for these reads (base and "
+    "cost x2, monthly series, from the store). omega's pool stays the 4,369 selectable systems of the real search; a "
+    "rank-1 peak at another slot is ranked against that pool as one more member.",
     "6 CSCV quantities: in-sample S and S2 = mean ln M over the in-sample months; n = positions opened in in-sample "
     "months; bust = the bust month is in-sample; median_M over the in-sample months; OOS score = mean ln M over the "
     "OOS months; omega = average rank / (N + 1) among the selectable systems; PBO = share of splits with "
@@ -88,7 +90,8 @@ CHOICES = [
     "the 'same point at the same anchor' runs Stage A at the real anchor under (c′) when the (c′) anchor differs.",
     "6 2023 lift: per name with an in-sample (2021-2022) peak; H = mean monthly ln M over 2023 at base cost; the "
     "median H over the name's existing coarse points at the anchor.",
-    "6 near-miss: 'candidate rule' = a peak exists but P_c(peak) <= P_c(default); 'one null only' = the hurdle label "
+    "6 near-miss: 'candidate rule' = a peak exists but it is the default or a default in effect, or P_c(peak) <= "
+    "P_c(default); 'one null only' = the hurdle label "
     "'failed (a′)' or 'failed (b′)'; 'box plateau' = taken, box failed.",
     "6 owner board: windows are the select period's UTC calendar months (fresh $1,000 each, open positions closed at "
     "the window end as reads_a does); the headline cell is machine B at r = 5% (touch x5); the size fixed on select is "
@@ -129,9 +132,24 @@ def omega(x: float, pool: np.ndarray) -> float:
     return (lt + (eq + 1.0) / 2.0) / (len(pool) + 1.0)
 
 
-def _prep(units: dict, names_order: list, IS: np.ndarray) -> tuple:
-    """Per name the IS / OOS statistics of every Stage 0 row and coarse point for the IS masks ``IS`` (splits, 36);
-    and the pool of OOS scores of the selectable systems (Stage 0 systems and the non-default coarse points)."""
+def _slot_stats(su: dict, IS: np.ndarray, npt: int) -> dict:
+    ex = np.asarray(su["exists"], bool)
+    lnM = np.zeros((npt, IS.shape[1]))
+    lnM2 = np.zeros((npt, IS.shape[1]))
+    pos = np.zeros((npt, IS.shape[1]))
+    bm = np.full(npt, -1, np.int64)
+    for i in np.flatnonzero(ex):
+        lnM[i], lnM2[i], pos[i], bm[i] = su["lnM"][i], su["lnM2"][i], su["pos_month"][i], su["bust_month"][i]
+    S, n, bust, O = _is_stats(lnM, pos, bm, IS)
+    S2 = lnM2 @ IS.astype(float).T / IS.sum(axis=1)
+    return dict(S=S, S2=S2, n=n, bust=bust, O=O, ex=ex, deff=np.asarray(su["default_eff"], bool))
+
+
+def _prep(units: dict, names_order: list, IS: np.ndarray, slots: dict | None = None) -> tuple:
+    """Per name the IS / OOS statistics of every Stage 0 row and, per (timeframe, gate) slot in ``slots`` ({name:
+    {slot: unit}}; default: the real anchor only), of every coarse point, for the IS masks ``IS`` (splits, months);
+    and the pool of OOS scores of the selectable systems (Stage 0 systems and the non-default coarse points at the real
+    anchors)."""
     prep, pool_O = {}, []
     for nm in names_order:
         u = units[nm]
@@ -142,73 +160,83 @@ def _prep(units: dict, names_order: list, IS: np.ndarray) -> tuple:
         r_bm = np.asarray([r["bust_month"] for r in rows], np.int64)
         rS, rn, rb, rO = _is_stats(r_lnM, r_pos, r_bm, IS)
         r_med = np.stack([np.median(np.exp(r_lnM[:, m]), axis=1) for m in IS], axis=1)
-        ex = np.asarray(u["exists"], bool)
         npt = len(lat)
-        lnM = np.zeros((npt, IS.shape[1]))
-        lnM2 = np.zeros((npt, IS.shape[1]))
-        pos = np.zeros((npt, IS.shape[1]))
-        bm = np.full(npt, -1, np.int64)
-        for i in np.flatnonzero(ex):
-            lnM[i], lnM2[i], pos[i], bm[i] = u["lnM"][i], u["lnM2"][i], u["pos_month"][i], u["bust_month"][i]
-        S, n, bust, O = _is_stats(lnM, pos, bm, IS)
-        S2 = lnM2 @ IS.astype(float).T / IS.sum(axis=1)
-        prep[nm] = dict(rows=rows, rS=rS, rn=rn, rb=rb, r_med=r_med, S=S, S2=S2, n=n, bust=bust, O=O, ex=ex, lat=lat)
+        have = (slots or {}).get(nm) or {u["anchor"]: u}
+        sl = {int(a): _slot_stats(su, IS, npt) for a, su in have.items()}
+        if u["anchor"] not in sl:
+            sl[u["anchor"]] = _slot_stats(u, IS, npt)
+        prep[nm] = dict(rows=rows, rS=rS, rn=rn, rb=rb, r_med=r_med, lat=lat, slots=sl, anchor=int(u["anchor"]))
         pool_O.append(rO)                                         # Stage 0: every default system
-        sel = ex.copy()
+        d = sl[u["anchor"]]
+        sel = d["ex"].copy()
         sel[lat.default] = False                                   # the default point is the Stage 0 system there
-        pool_O.append(O[sel])
+        pool_O.append(d["O"][sel])
     return prep, np.concatenate(pool_O, axis=0) if pool_O else np.zeros((0, len(IS)))
 
 
-def replay(prep: dict, units: dict, names_order: list, s: int, min_pos: int, mode: str) -> dict:
-    """Stage 0 + Stage A replayed on split ``s`` of ``prep``: per name the 4.2 result (absent when the IS anchor
-    moved in strict mode), the ranked candidates and the names whose IS anchor moved."""
-    anchors, per, moved = {}, {}, []
+def replay(prep: dict, names_order: list, s: int, min_pos: int) -> dict:
+    """Stage 0 + Stage A replayed on split ``s`` of ``prep``: each name's anchor re-chosen on the IS months, Stage A at
+    that slot; per name the 4.2 result (with its ``slot``), the ranked candidates, the names whose IS anchor differs
+    from the full-period anchor (``moved``) and those whose IS slot has no runs (``missing``; none when ``slot_units``
+    ran)."""
+    anchors, slot_of, per, moved, missing = {}, {}, {}, [], []
     for nm in names_order:
         p = prep[nm]
         rows = [{"tf": r["tf"], "gate": r["gate"], "S": p["rS"][i, s], "n": p["rn"][i, s],
                  "bust": bool(p["rb"][i, s]), "median_M": p["r_med"][i, s], "min_pos": min_pos}
                 for i, r in enumerate(p["rows"])]
         a = SR.anchor_slot(rows)
-        if a != units[nm]["anchor"]:
+        if a != p["anchor"]:
             moved.append(nm)
-            if mode == "strict":
-                continue
-        anchors[nm] = (units[nm]["anchor_tf"], units[nm]["anchor_gate"])
+        if a not in p["slots"]:
+            missing.append(nm)
+            continue
+        slot_of[nm] = a
+        anchors[nm] = (p["rows"][a]["tf"], p["rows"][a]["gate"])
     fm = SR.foreign_masks(names_order, anchors)
     cands = []
     for nm in anchors:
         p = prep[nm]
-        st = SR.stage_a(p["lat"], p["S"][:, s], p["n"][:, s], p["bust"][:, s], p["ex"], S2=p["S2"][:, s],
-                        default_eff=units[nm]["default_eff"], foreign=fm.get(nm), min_pos=min_pos)
+        d = p["slots"][slot_of[nm]]
+        st = SR.stage_a(p["lat"], d["S"][:, s], d["n"][:, s], d["bust"][:, s], d["ex"], S2=d["S2"][:, s],
+                        default_eff=d["deff"], foreign=fm.get(nm), min_pos=min_pos)
+        st["slot"] = slot_of[nm]
         if st["candidate"]:
             cands.append({"name": nm, "family": p["lat"].family, "P": st["P_peak"], "P2": st["P2_peak"],
-                          "peak": st["peak"]})
+                          "peak": st["peak"], "slot": slot_of[nm]})
         per[nm] = st
-    return {"per": per, "ranked": SR.rank_candidates(cands), "moved": moved}
+    return {"per": per, "ranked": SR.rank_candidates(cands), "moved": moved, "missing": missing}
 
 
-def cscv(units: dict, names_order: list, mode: str = "strict", top: int = TOP) -> dict:
-    """``units`` = the real search's ``select_r2.name_unit(real=True)`` results by name."""
+def cscv(units: dict, names_order: list, slots: dict | None = None, top: int = TOP) -> dict:
+    """``units`` = the real search's ``select_r2.name_unit(real=True)`` results by name; ``slots`` = ``slot_units``
+    ({name: {slot: unit}}; without it only the real anchors exist and a split whose IS anchor moved has no lattice for
+    that name, counted ``slots_missing``)."""
     IS = splits(N_BLOCKS, BLOCK_MONTHS)
     nsp = len(IS)
-    prep, pool = _prep(units, names_order, IS)
+    prep, pool = _prep(units, names_order, IS, slots)
     w1, w10, is1, oos1, top1 = [], [], [], [], []
     moved = {nm: 0 for nm in names_order}
+    missing = {nm: 0 for nm in names_order}
+    other_slot = 0
     for s in range(nsp):
-        rp = replay(prep, units, names_order, s, CSCV_MIN_POS, mode)
+        rp = replay(prep, names_order, s, CSCV_MIN_POS)
         for nm in rp["moved"]:
             moved[nm] += 1
+        for nm in rp["missing"]:
+            missing[nm] += 1
         ranked = rp["ranked"]
         if not ranked:
             continue
         col = pool[:, s]
-        oms = [omega(prep[c["name"]]["O"][c["peak"], s], col) for c in ranked[:top]]
+        oms = [omega(prep[c["name"]]["slots"][c["slot"]]["O"][c["peak"], s], col) for c in ranked[:top]]
         c1 = ranked[0]
+        d1 = prep[c1["name"]]["slots"][c1["slot"]]
+        other_slot += int(c1["slot"] != prep[c1["name"]]["anchor"])
         w1.append(oms[0])
         w10.append(float(np.mean(oms)))
-        is1.append(float(prep[c1["name"]]["S"][c1["peak"], s]))
-        oos1.append(float(prep[c1["name"]]["O"][c1["peak"], s]))
+        is1.append(float(d1["S"][c1["peak"], s]))
+        oos1.append(float(d1["O"][c1["peak"], s]))
         top1.append(c1["name"])
     w1a = np.asarray(w1)
     with np.errstate(divide="ignore"):
@@ -216,12 +244,13 @@ def cscv(units: dict, names_order: list, mode: str = "strict", top: int = TOP) -
     slope = intercept = None
     if len(is1) >= 2 and np.ptp(is1) > 0:
         slope, intercept = (float(x) for x in np.polyfit(np.asarray(is1), np.asarray(oos1), 1))
-    return {"mode": mode, "splits": nsp, "splits_with_candidate": len(w1), "systems": int(pool.shape[0]),
-            "pbo": float((lam <= 0).mean()) if len(lam) else None,
+    return {"anchors": "re-chosen on the in-sample months (6)", "splits": nsp, "splits_with_candidate": len(w1),
+            "systems": int(pool.shape[0]), "pbo": float((lam <= 0).mean()) if len(lam) else None,
             "median_omega_rank1": float(np.median(w1a)) if len(w1a) else None,
             "mean_omega_top10": float(np.mean(w10)) if w10 else None,
             "slope_oos_on_is": slope, "intercept": intercept, "anchor_moved": moved,
-            "rank1_names": {nm: top1.count(nm) for nm in sorted(set(top1))},
+            "slots_missing": {nm: v for nm, v in missing.items() if v},
+            "rank1_at_another_slot": other_slot, "rank1_names": {nm: top1.count(nm) for nm in sorted(set(top1))},
             "per_split": {"omega_rank1": w1, "mean_omega_top10": w10, "is_rank1": is1, "oos_rank1": oos1}}
 
 
@@ -231,49 +260,97 @@ def year_masks(n_months: int = 36) -> dict:
     return {"2021-2022": yrs < 2, "2021+2023": yrs != 1, "2022-2023": yrs > 0}
 
 
-def lift_2023(units: dict, names_order: list, mode: str = "strict") -> dict:
-    """6: chosen on 2021-2022, measured on 2023: per name H(peak) - median H over its coarse lattice."""
+def _slot_name(p: dict, a: int) -> str:
+    r = p["rows"][a]
+    return f"{r['tf']} {r['gate']}"
+
+
+def lift_2023(units: dict, names_order: list, slots: dict | None = None) -> dict:
+    """6: chosen on 2021-2022 (anchors re-chosen), measured on 2023: per name H(peak) - median H over its coarse lattice
+    at that anchor."""
     IS = year_masks()["2021-2022"][None, :]
-    prep, _ = _prep(units, names_order, IS)
-    rp = replay(prep, units, names_order, 0, WF_MIN_POS, mode)
+    prep, _ = _prep(units, names_order, IS, slots)
+    rp = replay(prep, names_order, 0, WF_MIN_POS)
     per = {}
     for nm, st in rp["per"].items():
         if st["peak"] < 0:
             continue
         p = prep[nm]
-        Hs = p["O"][:, 0]
-        per[nm] = {"lift": float(Hs[st["peak"]] - np.median(Hs[p["ex"]])), "candidate": bool(st["candidate"]),
-                   "peak": p["lat"].combos[st["peak"]]}
+        d = p["slots"][st["slot"]]
+        Hs = d["O"][:, 0]
+        per[nm] = {"lift": float(Hs[st["peak"]] - np.median(Hs[d["ex"]])), "candidate": bool(st["candidate"]),
+                   "peak": p["lat"].combos[st["peak"]], "anchor": _slot_name(p, st["slot"]),
+                   "anchor_moved": bool(st["slot"] != p["anchor"])}
     lifts = np.asarray([v["lift"] for v in per.values()], float)
-    return {"mode": mode, "names_with_peak": len(per), "anchor_moved": rp["moved"],
-            "median_lift": float(np.median(lifts)) if len(lifts) else None,
+    return {"anchors": "re-chosen on 2021-2022", "names_with_peak": len(per), "anchor_moved": rp["moved"],
+            "slots_missing": rp["missing"], "median_lift": float(np.median(lifts)) if len(lifts) else None,
             "share_above_0": float((lifts > 0).mean()) if len(lifts) else None, "per_name": per}
 
 
-def leave_one_year_out(units: dict, names_order: list, full_peaks: dict, mode: str = "strict") -> dict:
-    """6: per name how often (0-3) the full-period peak or one of its coarse neighbours returns when Stage 0 + A is
-    chosen on each pair of years."""
+def leave_one_year_out(units: dict, names_order: list, full_peaks: dict, slots: dict | None = None) -> dict:
+    """6: per name how often (0-3) the full-period peak or one of its coarse neighbours returns, at the full-period
+    anchor, when Stage 0 + A is chosen on each pair of years (anchors re-chosen)."""
     masks = year_masks()
     IS = np.asarray([masks[k] for k in masks])
-    prep, _ = _prep(units, names_order, IS)
+    prep, _ = _prep(units, names_order, IS, slots)
     per = {nm: {"returns": 0, "pairs": {}} for nm, pk in full_peaks.items() if pk is not None and pk >= 0}
-    moved = {}
+    moved, missing = {}, {}
     for s, key in enumerate(masks):
-        rp = replay(prep, units, names_order, s, WF_MIN_POS, mode)
-        moved[key] = rp["moved"]
+        rp = replay(prep, names_order, s, WF_MIN_POS)
+        moved[key], missing[key] = rp["moved"], rp["missing"]
         for nm in per:
             st = rp["per"].get(nm)
             pk = full_peaks[nm]
             lat = L.coarse(nm)
-            got = None if st is None else st["peak"]
-            back = bool(got is not None and got >= 0 and (got == pk or got in set(int(x) for x in lat.nb[pk]
-                                                                                   if x >= 0)))
-            per[nm]["pairs"][key] = "anchor moved" if st is None else ("no peak" if got < 0 else
-                                                                       ("returns" if back else "elsewhere"))
+            if st is None:
+                per[nm]["pairs"][key] = "slot not run"
+                continue
+            got = st["peak"]
+            same_slot = st["slot"] == prep[nm]["anchor"]
+            back = bool(got >= 0 and same_slot and (got == pk or got in {int(x) for x in lat.nb[pk] if x >= 0}))
+            per[nm]["pairs"][key] = ("no peak" if got < 0 else "returns" if back else
+                                     "elsewhere" if same_slot else f"another anchor ({_slot_name(prep[nm], st['slot'])})")
             per[nm]["returns"] += int(back)
-    return {"mode": mode, "anchor_moved": moved, "per_name": per,
-            "names": len(per), "share_returning_3_of_3": float(np.mean([v["returns"] == 3 for v in per.values()]))
-            if per else None}
+    return {"anchors": "re-chosen on each pair of years", "anchor_moved": moved, "slots_missing": missing,
+            "per_name": per, "names": len(per),
+            "share_returning_3_of_3": float(np.mean([v["returns"] == 3 for v in per.values()])) if per else None}
+
+
+def _slot_task(task) -> dict:
+    """Worker: Stage A of one name at one forced (timeframe, gate) slot, base and cost x2 with monthly series."""
+    name, a, part = task
+    if part and os.path.exists(part):
+        with open(part, "rb") as fh:
+            return pickle.load(fh)
+    u = SR.name_unit(_P["ctx"], name, real=True, anchor=a)
+    keep = {k: u[k] for k in ("name", "family", "anchor", "anchor_tf", "anchor_gate", "S", "S2", "n", "bust", "exists",
+                              "default_eff", "lnM", "lnM2", "pos_month", "bust_month", "runs", "seconds")}
+    if part:
+        H.disk_check(part)
+        os.makedirs(os.path.dirname(part), exist_ok=True)
+        with open(part + ".tmp", "wb") as fh:
+            pickle.dump(keep, fh)
+        os.replace(part + ".tmp", part)
+    return keep
+
+
+def slot_units(ctx, real_units: dict, names_order: list, procs: int, parts: str | None = None) -> dict:
+    """6: every coarse point at every (timeframe, gate) slot of every name, base and cost x2, monthly series (signals
+    from the store, select bars only): {name: {slot: unit}}; the real anchor's slot is the select step's own unit.
+    About 26,000 systems x 2 costs; resumable per (name, slot)."""
+    _P["ctx"] = ctx
+    SR._RUN["ctx"] = ctx
+    tasks = []
+    for nm in sorted(names_order, key=lambda x: -SR.unit_weight(x)):
+        u = real_units[nm]
+        for a in range(len(u["stage0"])):
+            if a != u["anchor"]:
+                tasks.append((nm, a, os.path.join(parts, "slots", f"{nm}_{a}.pkl") if parts else None))
+    res = H.pmap(_slot_task, tasks, procs, label="pretest Stage A at every slot")
+    out = {nm: {int(real_units[nm]["anchor"]): real_units[nm]} for nm in names_order}
+    for (nm, a, _p), u in zip(tasks, res):
+        out[nm][a] = u
+    return out
 
 
 # ------------------------------------------------------------------ transforms for replays through the engine
@@ -363,10 +440,12 @@ def null_summary(parts_sel: str | None, names_order: list, n_rep: int, public_ra
     R = max(SR.MAX_PICKS, len([r for r in picks_pub.get("names", []) if r.get("candidate")]))
     for null in ("a", "b"):
         reps, pooled, ncand, missing = [], [], [], 0
+        shifts = picks_pub.get("null_shifts") or {}
         for i in range(1, n_rep + 1):
             units = {}
+            j = int((shifts.get(str(i)) or {}).get("j") or 0) if null == "a" else 0
             for nm in names_order:
-                p = os.path.join(parts_sel, f"null_{null}", f"{i:03d}", f"{nm}.json") if parts_sel else None
+                p = SR.null_part(parts_sel, null, i, nm, j)
                 if not p or not os.path.exists(p):
                     missing += 1
                     continue
@@ -616,9 +695,11 @@ def _ds_redact(obj):
 
 
 def pretest_run(ctx, real_units: dict, picks_pub: dict, picks_priv: dict, parts_sel: str | None, procs: int,
-                names_order: list | None = None, n_rep: int | None = None) -> tuple:
-    """(public, private) pretest_reads documents. ``ctx`` = the select market's ``select_r2.Ctx`` on the event store."""
+                names_order: list | None = None, n_rep: int | None = None, parts_pre: str | None = None) -> tuple:
+    """(public, private) pretest_reads documents. ``ctx`` = the select market's ``select_r2.Ctx`` on the event store;
+    ``parts_pre`` = this step's own resumable part folder (Stage A at every slot)."""
     t0 = time.time()
+    SR.raise_nofile()
     names_order = names_order or [r["name"] for r in picks_pub["names"]]
     n_rep = SR.N_REP if n_rep is None else int(n_rep)
     rows = {r["name"]: r for r in picks_pub["names"]}
@@ -633,33 +714,36 @@ def pretest_run(ctx, real_units: dict, picks_pub: dict, picks_priv: dict, parts_
 
     n_months = len(real_units[names_order[0]]["stage0"][0]["lnM"]) if names_order else 0
     need = N_BLOCKS * BLOCK_MONTHS
-    # CSCV (both modes)
+    slots = None
+    if n_months in (need, 36):                 # Stage A at every slot: the IS replays re-choose the anchors (6)
+        slots = slot_units(ctx, real_units, names_order, procs, parts_pre)
+    # CSCV
     if n_months == need:
-        full_cscv = {m: cscv(real_units, names_order, m) for m in ("strict", "fixed")}
+        full_cscv = cscv(real_units, names_order, slots)
         priv["cscv"] = full_cscv
-        pub["cscv"] = {m: {k: v for k, v in c.items() if k != "per_split"} for m, c in full_cscv.items()}
+        pub["cscv"] = {k: v for k, v in full_cscv.items() if k != "per_split"}
     else:
         pub["cscv"] = {"status": f"not computed: the select period has {n_months} months, CSCV needs {need}"}
     # null summary
     pub["null_summary"], priv["null_summary"] = null_summary(parts_sel, names_order, n_rep, public_ranks, picks_pub)
     # 2023 lift, leave-one-year-out (counts and lifts; DeepSeek per-name lifts private)
-    for key, fn in (("lift_2023", lambda m: lift_2023(real_units, names_order, m)),
-                    ("leave_one_year_out", lambda m: leave_one_year_out(real_units, names_order, peaks, m))):
+    for key, fn in (("lift_2023", lambda: lift_2023(real_units, names_order, slots)),
+                    ("leave_one_year_out", lambda: leave_one_year_out(real_units, names_order, peaks, slots))):
         if n_months != 36:
             pub[key] = {"status": f"not computed: the select period has {n_months} months, the read needs 36"}
             continue
-        full = {m: fn(m) for m in ("strict", "fixed")}
+        full = fn()
         priv[key] = full
-        pub[key] = {m: dict(v, per_name={nm: (x if fam[nm] != "F3" or key == "leave_one_year_out" else
-                                              _ds_redact(x)) for nm, x in v["per_name"].items()})
-                    for m, v in full.items()}
+        pub[key] = dict(full, per_name={nm: (x if fam[nm] != "F3" or key == "leave_one_year_out" else
+                                             _ds_redact(x)) for nm, x in full["per_name"].items()})
     # near-miss table
     nm_rows = []
     for nm in names_order:
         r = rows[nm]
         why = None
         if r["peak"] != "no peak" and not r["candidate"]:
-            why = "candidate rule (P_c(peak) <= P_c(default))"
+            why = (f"candidate rule (the peak is {r['peak_is']})" if r.get("peak_is") else
+                   "candidate rule (P_c(peak) <= P_c(default))")
         elif r.get("hurdle") in ("failed (a′)", "failed (b′)"):
             why = f"one null only: {r['hurdle']}"
         elif r.get("box") and not r["box"].get("plateau"):

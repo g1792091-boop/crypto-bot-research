@@ -10,6 +10,7 @@
     python research/exitflex/runner_x.py confirm-report [--extra-messages F]          # rewrite REPORT_KO.md from confirm.json
     python research/exitflex/runner_x.py check    [--which t1,t3,t5]                 # the real-data parts of T1, T3, T5
     python research/exitflex/runner_x.py audit    --stage select|confirm             # A1-A9, pass / fail only
+    python research/exitflex/runner_x.py audit-file --path F [--path F2 ...] [--after MARK]   # A8 + A9 on files before they are sent or committed
 
 Every stage after make-pin REFUSES to run unless data_pin.json exists, every file listed in PREREG_EXITFLEX.sha256 still has
 its hash, the required files are listed, and the previous stage's file is listed there with the hash it has now:
@@ -1090,12 +1091,13 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
     diff = [k for k, h in sel.get("modules", {}).items() if modules.get(k) != h]
     if diff:
         refuse("module files changed since the select run: " + ", ".join(diff[:5]))
+    csfx = "_r2" if cfg.stage == "confirm_r2" else ""                      # a confirm rerun (section 14) writes the *_r2 names
     ds_sha = ds_report_sha = None
     if private:
-        ds_path = os.path.join(cfg.store.private_dir(), "confirm_ds.json")
+        ds_path = os.path.join(cfg.store.private_dir(), f"confirm_ds{csfx}.json")
         write_json(ds_path, {"note": "DeepSeek money figures and p values (D11): read only by the runner", **private})
         ds_sha = sha256_file(ds_path)
-        ds_report_sha = write_owner_report(cfg, "confirm", private)
+        ds_report_sha = write_owner_report(cfg, "confirm", private, csfx)
     e0_rows = {pool: {"hold": e0_ps[pool]["hold"], "hold_by_state": e0_ps[pool]["hold_by_state"], "entered": e0_ps[pool]["entered"],
                       "skipped": e0_ps[pool]["skipped"], "closed": e0_ps[pool]["closed"], "win_share": e0_ps[pool]["win_share"],
                       "reasons": dict(zip(MT.REASONS, e0_ps[pool]["reasons"]))} for pool in e0_ps}
@@ -1107,8 +1109,8 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
            "e0": e0_rows, "pairs": res, "ds_private_sha256": ds_sha, "ds_owner_report_sha256": ds_report_sha,
            "freeze_breaches": list(choice.get("freeze_breaches") or []), "late_messages": list(choice.get("late_messages") or []),
            "line": "this confirm uses the same 33 months as the full grid, the hunt (v1, wide, round 2) and track 2"}
-    write_json(cfg.lay.out_file("confirm.json"), doc)
-    with open(cfg.lay.out_file("REPORT_KO.md"), "w", encoding="utf-8") as fh:
+    write_json(cfg.lay.out_file(f"confirm{csfx}.json"), doc)
+    with open(cfg.lay.out_file(f"REPORT_KO{csfx}.md"), "w", encoding="utf-8") as fh:
         fh.write(confirm_report_ko(doc))
     return doc
 
@@ -1142,7 +1144,9 @@ def confirm_report_ko(doc: dict, extra_messages: list | None = None) -> str:
             if r["pass"]:
                 L += [f"말할 수 있는 것: {r['claim']}", ""]
             if "comp_fired" in r:
-                L += ["F12 요소별 청산 수(발동 / 혼자 발동): " + ", ".join(f"{n} {r['comp_fired'][n]}/{r['comp_alone'][n]}" for n in MT.COMP_LABELS), ""]
+                L += ["F12 요소별 청산 수(발동 / 혼자 발동, 비트 순서): " + ", ".join(f"{n} {r['comp_fired'][n]}/{r['comp_alone'][n]}" for n in MT.COMP_LABELS)]
+                L += [f"  - {tf} 봉 {c['n_picks']}개: " + ", ".join(f"{n} {c['fired'][n]}/{c['alone'][n]}" for n in MT.COMP_LABELS)
+                      for tf, c in (r.get("comp_by_tf") or {}).items()] + [""]
         L += [f"### {name}: 장세별 보유시간 (확인 기간 매매, 참고 정보이며 PASS/FAIL에 들어가지 않음)", ""]
         L += state_table_ko({"e0": e0, "variants": rows})
     if doc.get("late_messages") or extra_messages:
@@ -1151,9 +1155,10 @@ def confirm_report_ko(doc: dict, extra_messages: list | None = None) -> str:
     return "\n".join(L)
 
 
-def stage_confirm(lay: Layout, procs: int) -> dict:
-    """The confirm run, once (a rerun is possible only under section 14). Needs select.json, SELECT_KO.md, timing.json, sent.json and
-    choice.json (and choice_r2.json when it exists) pinned with their present hashes."""
+def stage_confirm(lay: Layout, procs: int, rerun: bool = False) -> dict:
+    """The confirm run, once. A rerun (section 14, a bug found after a PASS) writes confirm_r2.json, REPORT_KO_r2.md and, privately,
+    confirm_ds_r2.json and owner_report_confirm_r2.md; it needs confirm.json to exist. Needs select.json, SELECT_KO.md, timing.json,
+    sent.json and choice.json (and choice_r2.json when it exists) pinned with their present hashes."""
     pin, ph = gate_pin(lay)
     for name in ("select.json", "SELECT_KO.md", "timing.json", "sent.json", "choice.json"):
         require_pinned_file(lay, lay.out_file(name), name)
@@ -1172,9 +1177,12 @@ def stage_confirm(lay: Layout, procs: int) -> dict:
     bad = MT.validate_choice_doc(sel, choice, sent, first if r2 else None)
     if bad:
         refuse("choice does not validate: " + "; ".join(bad))
-    if os.path.exists(lay.out_file("confirm.json")):
-        refuse("confirm.json exists: the confirm runs once; a rerun is a section 14 matter (move the old file first)")
-    cfg = real_config(lay, "confirm", pin, ph, procs, N_SEEDS_FULL)
+    if rerun:
+        if not os.path.exists(lay.out_file("confirm.json")) or os.path.exists(lay.out_file("confirm_r2.json")):
+            refuse("a confirm rerun needs confirm.json and runs once (confirm_r2.json exists or confirm.json is missing)")
+    elif os.path.exists(lay.out_file("confirm.json")):
+        refuse("confirm.json exists: the confirm runs once; a rerun is a section 14 matter (--rerun)")
+    cfg = real_config(lay, "confirm_r2" if rerun else "confirm", pin, ph, procs, N_SEEDS_FULL)
     for vid in choice["core"] + choice["ds"]:
         KX.variant_by_id(vid)
     return finish_confirm(cfg, sel, choice)
@@ -1464,18 +1472,77 @@ def audit_e0_against_kernel(cfg: Config, picks: list) -> bool:
     return bool(ok)
 
 
+A8_SCOPE = ("select.json", "confirm.json", "sent.json", "choice.json", "SELECT_KO.md", "REPORT_KO.md", "select_r2.json", "SELECT_KO_r2.md",
+            "sent_r2.json", "choice_r2.json", "confirm_r2.json", "REPORT_KO_r2.md")
+
+
+def audit_a8_file(path: str, after: str | None = None) -> list:
+    """A8 on one file before it is sent or committed (select, sent, choice, confirm, report, ledger print, rerun files, DEVIATIONS entries):
+    the problems found, [] = pass. Tables: every DeepSeek row carries only the allowed fields; DeepSeek sections of the Korean reports show
+    no money; free text (messages, questions, the freeze note, DEVIATIONS entries, prose): the tripwire of ``MT.audit_text``. ``after`` = a
+    marker: only the text after its first occurrence is read (the entries of this study in a shared DEVIATIONS.md)."""
+    name = os.path.basename(path)
+    text = open(path, encoding="utf-8").read()
+    if after and after in text:
+        text = text.split(after, 1)[1]
+    bad = []
+    if name.endswith(".json"):
+        doc = json.loads(text)
+        if name.startswith("select"):
+            bad += MT.d11_problems(select_doc=doc)
+        elif name.startswith("confirm"):
+            bad += MT.d11_problems(confirm_doc=doc)
+        bad += ["free text: " + ln[:60] for ln in MT.audit_text("\n".join(MT.json_strings(doc)))]
+    else:
+        if name.startswith("SELECT_KO"):
+            bad += MT.d11_problems(select_md=text)
+        elif name.startswith("REPORT_KO"):
+            bad += MT.d11_problems(report_md=text)
+        bad += ["free text: " + ln[:60] for ln in MT.audit_text(text)]
+    return bad
+
+
+def audit_a9_file(path: str) -> list:
+    """A9 on one file: the state counts of every row sum to its closed trades (select.json, confirm.json); the state tables printed in a Korean
+    report equal its json's (SELECT_KO.md against select.json, REPORT_KO.md against confirm.json in the same folder)."""
+    name, folder = os.path.basename(path), os.path.dirname(path)
+    bad = []
+    if name.endswith(".json") and name.startswith(("select", "confirm")):
+        doc = json.load(open(path, encoding="utf-8"))
+        rows = []
+        for pool, P in (doc.get("pools") or {}).items():
+            rows += [(f"{pool}/E0", P["e0"])] + [(f"{pool}/{r['id']}", r) for r in P["variants"]]
+        rows += list((doc.get("pairs") or {}).items()) + [(f"{k}/E0", r) for k, r in (doc.get("e0") or {}).items()]
+        for label, r in rows:
+            if "hold_by_state" in r and "closed" in r and sum(c["n"] for c in r["hold_by_state"].values()) != r["closed"]:
+                bad.append(f"{label}: state counts do not sum to the closed trades")
+    elif name.endswith(".md") and name.startswith(("SELECT_KO", "REPORT_KO")):
+        sfx = "_r2" if name.endswith("_r2.md") else ""
+        md_lines = {ln.strip() for ln in open(path, encoding="utf-8").read().splitlines()}
+        if name.startswith("SELECT_KO"):
+            doc = json.load(open(os.path.join(folder, f"select{sfx}.json"), encoding="utf-8"))
+            tables = [state_table_ko(P) for P in doc["pools"].values()]
+        else:
+            doc = json.load(open(os.path.join(folder, f"confirm{sfx}.json"), encoding="utf-8"))
+            tables = [state_table_ko({"e0": doc["e0"][pool], "variants": [r for r in doc["pairs"].values() if r["pool"] == pool]}) for pool in doc["e0"]]
+        for t in tables:
+            if not all(ln.strip() in md_lines for ln in t if ln.strip()):
+                bad.append(f"{name}: a state table differs from the json's counts")
+    return bad
+
+
 def audit_a8(lay: Layout, stage: str, work: str, pin_hash: str) -> bool:
-    """A8: no committed file of this study holds a DeepSeek money figure or p value (every DeepSeek row carries only the allowed
-    fields; the DeepSeek sections of the Korean reports show no money); the stage's private owner report exists under
-    $WORK/<pin8>/ds_private/, its sha256 equals ds_owner_report_sha256, it lies outside the repository, git lists no owner_report
-    file, no committed file holds a line of it, and it holds no p value."""
+    """A8 for a stage: every file of the scope that exists passes ``audit_a8_file``; and the stage's private owner report exists under
+    $WORK/<pin8>/ds_private/ (``_r2`` for a rerun), its sha256 equals ``ds_owner_report_sha256`` in the stage's json, it lies outside the
+    repository, git lists no owner_report file, no committed file contains a line of it, it holds no p value and its last line asks the
+    owners to name variants by id."""
     import re
-    jname, mname = ("select.json", "SELECT_KO.md") if stage == "select" else ("confirm.json", "REPORT_KO.md")
+    jname = "select.json" if stage == "select" else "confirm.json"
+    ok = True
+    for name in A8_SCOPE:
+        if os.path.exists(lay.out_file(name)):
+            ok &= not audit_a8_file(lay.out_file(name))
     doc = json.load(open(lay.out_file(jname)))
-    md = open(lay.out_file(mname), encoding="utf-8").read() if os.path.exists(lay.out_file(mname)) else None
-    bad = MT.d11_problems(select_doc=doc if stage == "select" else None, confirm_doc=doc if stage == "confirm" else None,
-                          select_md=md if stage == "select" else None, report_md=md if stage == "confirm" else None)
-    ok = not bad
     rp = os.path.join(work, DX.pin8(pin_hash), "ds_private", f"owner_report_{stage}.md")
     want = doc.get("ds_owner_report_sha256")
     if want is not None or os.path.exists(rp):
@@ -1484,8 +1551,8 @@ def audit_a8(lay: Layout, stage: str, work: str, pin_hash: str) -> bool:
         if os.path.exists(rp):
             text = open(rp, encoding="utf-8").read()
             ok &= re.search(r"\bp\s*[=<>]|p값|p-value", text, re.I) is None
-            committed = [lay.out_file(n) for n in ("select.json", "SELECT_KO.md", "confirm.json", "REPORT_KO.md", "sent.json", "choice.json")]
-            lines = {ln.strip() for c in committed if os.path.exists(c) for ln in open(c, encoding="utf-8").read().splitlines()}
+            ok &= bool(text.strip()) and text.strip().splitlines()[-1].strip() == OWNER_REPORT_LAST_LINE
+            lines = {ln.strip() for c in A8_SCOPE if os.path.exists(lay.out_file(c)) for ln in open(lay.out_file(c), encoding="utf-8").read().splitlines()}
             ok &= not any(len(ln.strip()) >= 20 and re.search(r"[0-9A-Za-z가-힣]", ln) and ln.strip() in lines for ln in text.splitlines())
     try:
         tracked = subprocess.run(["git", "-C", lay.root, "ls-files"], capture_output=True, text=True, timeout=60).stdout.split("\n")
@@ -1547,7 +1614,7 @@ def stage_audit(lay: Layout, stage: str, procs: int = 1) -> bool:
             a3 &= audit_check_minutes(cfg, pdata, v, KX.simulate(cfg.market, pdata, v, 0.25, cfg.period))
     res["A3"] = bool(a3)
     res["A8"] = audit_a8(lay, stage, pin["work"], ph)
-    res["A9"] = audit_a9(cfg, pv)
+    res["A9"] = audit_a9(cfg, pv) and not any(audit_a9_file(lay.out_file(n)) for n in A8_SCOPE if os.path.exists(lay.out_file(n)))
     t = subprocess.run([sys.executable, "-m", "pytest", "-q", os.path.join(HERE, "test_exitflex.py")], capture_output=True, text=True)
     res["A1"] = t.returncode == 0
     for k in sorted(res):
@@ -1568,6 +1635,7 @@ def main(argv=None) -> int:
     for name in ("select", "report", "confirm"):
         sp = sub.add_parser(name)
         sp.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2)))
+    sub.choices["confirm"].add_argument("--rerun", action="store_true", help="section 14: confirm_r2.json, REPORT_KO_r2.md")
     sub.choices["select"].add_argument("--rerun", action="store_true", help="section 14: a fresh stage select_r2 (select_r2.json, SELECT_KO_r2.md)")
     ch = sub.add_parser("choice")
     ch.add_argument("--input", required=True, help="JSON: messages [{time_utc, text, answers{core, ds}}], questions [{time_utc, text, pools}], "
@@ -1578,6 +1646,9 @@ def main(argv=None) -> int:
     cr.add_argument("--extra-messages", default=None, help="JSON list of owner messages received after choice.json was hashed")
     ck = sub.add_parser("check")
     ck.add_argument("--which", default="t1,t3,t5")
+    af = sub.add_parser("audit-file", help="A8 and A9 on files before they are sent or committed (pass / fail only)")
+    af.add_argument("--path", action="append", required=True)
+    af.add_argument("--after", default=None, help="read only the text after this marker (the entries of this study in a shared DEVIATIONS.md)")
     au = sub.add_parser("audit")
     au.add_argument("--stage", choices=("select", "confirm"), required=True)
     t3 = sub.add_parser("t3-side")
@@ -1608,10 +1679,17 @@ def main(argv=None) -> int:
         with open(lay.out_file("REPORT_KO.md"), "w", encoding="utf-8") as fh:
             fh.write(confirm_report_ko(json.load(open(lay.out_file("confirm.json"))), extra))
     elif a.cmd == "confirm":
-        stage_confirm(lay, a.procs)
-        progress("[confirm] done: out/confirm.json, out/REPORT_KO.md")
+        stage_confirm(lay, a.procs, a.rerun)
+        progress("[confirm] done: out/confirm" + ("_r2" if a.rerun else "") + ".json and its report")
     elif a.cmd == "check":
         return 0 if stage_check(lay, a.which.split(",")) else 1
+    elif a.cmd == "audit-file":
+        ok = True
+        for pth in a.path:
+            b8, b9 = audit_a8_file(pth, a.after), audit_a9_file(pth)
+            ok &= not b8 and not b9
+            progress(f"[audit-file] {os.path.basename(pth)} A8 {'pass' if not b8 else 'FAIL'} A9 {'pass' if not b9 else 'FAIL'}")
+        return 0 if ok else 1
     elif a.cmd == "audit":
         return 0 if stage_audit(lay, a.stage) else 1
     elif a.cmd == "t3-side":

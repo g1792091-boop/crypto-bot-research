@@ -150,16 +150,18 @@ def exits_at(e, j, reason="RULE"):
 # ---------------------------------------------------------------- the rule interface
 def test_every_study_id_round_trips():
     ids = RX.study_ids()
-    assert len(ids) == 76 and len(set(ids)) == 76
+    assert len(ids) == 82 and len(set(ids)) == 82            # F1-F10, F7h included (PREREG 5.3)
     for i in ids:
         r = RX.parse_rule(i)
         assert r["id"] == i and RX.parse_rule(r)["id"] == i
     assert RX.parse_rule("F5.P1.5.g25.a") == {"id": "F5.P1.5.g25.a", "family": "F5", "mode": "a", "q15": False,
                                               "P": 1.5, "g": 0.25}
     assert RX.parse_rule("F6.w2.d0.5")["mode"] == "a" and RX.parse_rule("F9.b.q15")["w"] == 3
+    assert RX.parse_rule("F7h.H8.b") == {"id": "F7h.H8.b", "family": "F7h", "mode": "b", "q15": False, "H": 8}
     d = RX.parse_rule({"family": "F4", "m": 2, "mode": "b", "q15": True})
     assert d["id"] == "F4.m2.b.q15" and d["m"] == 2.0
-    for bad in ("F2.n20.b.q15", "F6.w2.d0.b", "F13.a", "F1.w3", "F1.w0.a", "F9.a.q16", "X", "F4.m0.a", "F5.P1.g100.a"):
+    for bad in ("F2.n20.b.q15", "F6.w2.d0.b", "F13.a", "F1.w3", "F1.w0.a", "F9.a.q16", "X", "F4.m0.a", "F5.P1.g100.a", "F7h.H8",
+                "F7h.N8.a", "F7h.H0.a", "F7h.H8.a.q15"):
         with pytest.raises(RX.RuleConfigError):
             RX.parse_rule(bad)
     with pytest.raises(RX.RuleConfigError):
@@ -1002,7 +1004,7 @@ def test_the_command_line_checks_the_config(tmp_path, capsys):
     assert RX.main(["check", "--rules", str(tmp_path / "none.json")]) == 0 and "no rule config" in capsys.readouterr().out
     p.write_text(json.dumps({"variants": ["F3.z"]}))
     assert RX.main(["check", "--rules", str(p)]) == 2
-    assert RX.main(["ids"]) == 0 and capsys.readouterr().out.count("\n") == 76
+    assert RX.main(["ids"]) == 0 and capsys.readouterr().out.count("\n") == 82
 
 
 # ---------------------------------------------------------------- the league, end to end, on the shadow's synthetic bars

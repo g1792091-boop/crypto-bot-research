@@ -1536,23 +1536,27 @@ def test_t6_f12_with_one_component_enabled_equals_that_family_and_with_only_f11_
         coins = {SYMS[i]: synth_coin(61 + i, w["days"], (100.0, 3000.0)[i], vol=w["vol"], drop=0.003, open_gap_p=0.0004, outages=2) for i in range(2)}
         mk, prov_, pd_ = build_world(coins, tmp_path / tf, pick=make_pick(tf, w["exit"]), prov_kw=dict(warm=False), f11=prov)
         off = pd_.offered("select", mk)
+        def no_target(pick, sym, df, close, sl, ss):                       # F12.b keeps the strategy's target where there is one; F1.b has none
+            return dict(prov(pick, sym, df, close, sl, ss), tgt_long=None, tgt_short=None)
+        pd_nt = DX.PickData(mk, pd_.pick, prov_, f11=no_target)
         for bit, fid in pairs:
             for mode in ("a", "b"):
                 if fid.startswith("F6") and mode == "b":
                     continue
                 fam = KX.variant_by_id(fid if fid.startswith("F6") else f"{fid}.{mode}")
                 v12 = f12_variant(bit, mode)
+                pdx = pd_ if (bit == KX.CB_F11 or mode == "a") else pd_nt
                 for q in range(0, len(off["coin"]), max(1, len(off["coin"]) // 18)):
-                    a = call_trade_x(mk, pd_, fam, off, q)[0]
-                    b = call_trade_x(mk, pd_, v12, off, q)[0]
+                    a = call_trade_x(mk, pdx, fam, off, q)[0]
+                    b = call_trade_x(mk, pdx, v12, off, q)[0]
                     assert a[:7] == b[:7], (tf, fid, mode, q, a, b)
                     assert b[7] in (0, bit) and (b[7] == bit) == (b[2] == KX.R_RULE)
                     n_cmp += 1
                     n_exit += b[2] == KX.R_RULE
                     if KX.has_placebo(fam) and bit not in (KX.CB_F6, KX.CB_F7H):
                         hz = random_hz(q + 1)
-                        pa = call_trade_x(mk, pd_, fam, off, q, plc=True, hz=hz, seed=q + 5)[0]
-                        pb = call_trade_x(mk, pd_, v12, off, q, plc=True, hz=hz, seed=q + 5)[0]
+                        pa = call_trade_x(mk, pdx, fam, off, q, plc=True, hz=hz, seed=q + 5)[0]
+                        pb = call_trade_x(mk, pdx, v12, off, q, plc=True, hz=hz, seed=q + 5)[0]
                         assert pa[:7] == pb[:7] and pb[7] == 0, (tf, fid, mode, q, "placebo")
         # F6 lies within F1: whenever the full F12 fires F6, it fires F1 too
         for vid in ("F12.a", "F12.b"):
@@ -1896,6 +1900,37 @@ def test_t2_f12_nine_components_one_exit_every_firing_component_recorded(tmp_pat
     s = MT.summarize(s2.account("F12.a"), MT.month_edges("select"))
     assert s["comp_fired"][0] == 1 and s["comp_alone"][0] == 0 and s["comp_fired"][5] == 1 and s["comp_alone"][5] == 0
     assert MT.COMP_LABELS == ("F1", "F2", "F3", "F4", "F5", "F6", "F7h", "F10", "F11")
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f12_first_trigger_wins_ties_record_every_component_and_components_act_alone(tmp_path, vendor, mir, f11_on):
+    sd = side_of(mir)
+    kw = dict(longs=[1], side_mirror=mir, ema=np.full(40, 90.0), f11=f11_provider([]))
+    # a rise to 103, then 102.3: the chandelier (X - 2 ATR = 102.4) fires first, alone; the giveback (needs <= half the peak) does not yet
+    s1 = Scen(tmp_path / "a", H(100, 100, 103, 102.3, 101.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0), **kw)
+    t = s1.trade("F12.a")
+    expect_exit(s1, t, 4 * 60, side=sd)
+    assert t["comp"] == KX.CB_F4 and t["checks"] == 2          # the later firing of F5 is never recorded: the position is gone
+    # a rise to 103, then 101.0 at once: F4 and F5 fire at the same check; one exit, both recorded, the same minute and price as F4 alone
+    s2 = Scen(tmp_path / "b", H(100, 100, 103, 101.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0), **kw)
+    t = s2.trade("F12.a")
+    expect_exit(s2, t, 4 * 60, side=sd)
+    assert t["comp"] == KX.CB_F4 | KX.CB_F5 == 24
+    only4 = s2.trade("F4.m2.a")
+    assert only4["off"] == t["off"] and only4["px"] == t["px"] and only4["d"] == pytest.approx(t["d"], rel=1e-12)
+    # each component alone (the mask of the tests): the same exit as that family, and only the family's bit in the record
+    for bit, vid in ((KX.CB_F4, "F4.m2.a"), (KX.CB_F5, "F5.P1.5.g50.a")):
+        a = s2.trade(vid)
+        v = f12_variant(bit)
+        out = call_trade_x(s2.mk, s2.pd, v, s2.off, 0, scale=s2.scale, trace_rows=64)
+        assert out[0][:7] == (a["d"], a["j"], a["reason"], a["lev"], a["px"], a["checks"], a["both"]) and out[0][7] == bit
+    # the mask is a bit mask over the nine components in the reports' order
+    assert [n for n, _b in KX.COMP_NAMES] == ["F1", "F2", "F3", "F4", "F5", "F6", "F7h", "F10", "F11"]
+    # F3: the pick's opposite signal fires alone; F12.b has no fixed take-profit
+    s3 = Scen(tmp_path / "c", H(100, 100, 100, 100, 100, 100), longs=[1], shorts=[3], side_mirror=mir, ema=np.full(40, 90.0), f11=f11_provider([]))
+    t = s3.trade("F12.a")
+    expect_exit(s3, t, 4 * 60, side=sd)                          # the signal bar 3 closes at 4 h
+    assert t["comp"] == KX.CB_F3
 
 
 def test_t2_f11_coin_flip_positions_use_mirrored_levels_and_targets():
@@ -2440,8 +2475,14 @@ def test_runner_select_writes_the_documented_files_and_keeps_deepseek_money_priv
         assert (("선택 가능" in line) == r["eligible"]) and (("%" in line) == r["eligible"])
     committed_lines = {x.strip() for x in txt.splitlines()} | {x.strip() for x in open(os.path.join(out, "select.json"), encoding="utf-8").read().splitlines()}
     assert "p값" not in rtxt and not any(ln.strip() in committed_lines for ln in rtxt.splitlines() if len(ln.strip()) >= 20 and any(ch.isalnum() for ch in ln))
+    assert rtxt.strip().splitlines()[-1] == RX.OWNER_REPORT_LAST_LINE and "id로" in RX.OWNER_REPORT_LAST_LINE
+    for r in f12:                                                                    # F12's component counts split by the pick's timeframe (15m, 30m, 1h, 4h)
+        assert set(r["comp_by_tf"]) == {"1h", "4h"} and all(set(c) == {"fired", "alone", "n_picks"} for c in r["comp_by_tf"].values())
+        assert [sum(c["fired"].values()) for c in r["comp_by_tf"].values()] and sum(sum(c["fired"].values()) for c in r["comp_by_tf"].values()) == sum(r["comp_fired"].values())
     assert RX.audit_a8(cfg.lay, "select", cfg.pin["work"], cfg.pin_hash)
     assert RX.audit_a9(cfg, {p["id"]: [v.id for v in cfg.variants] for p in cfg.picks})
+    assert RX.audit_a9_file(cfg.lay.out_file("select.json")) == [] and RX.audit_a9_file(cfg.lay.out_file("SELECT_KO.md")) == []
+    assert RX.audit_a8_file(cfg.lay.out_file("SELECT_KO.md")) == [] and RX.audit_a8_file(cfg.lay.out_file("select.json")) == []
 
 
 def test_runner_step2_runs_exactly_the_placebos_that_pass_gates_1_2_4(syn_select):
@@ -2667,7 +2708,8 @@ def fake_select(pin="ab" * 32):
     return doc
 
 
-SENT = {"sent_utc": "2026-10-12T12:00:00Z", "sent_kst": "2026-10-12T21:00:00+09:00", "channel": "chat", "freeze_note": "x"}
+SENT = {"sent_utc": "2026-10-12T12:00:00Z", "sent_kst": "2026-10-12T21:00:00+09:00", "ds_report_shown_utc": "2026-10-12T11:58:00Z",
+        "ds_report_shown_kst": "2026-10-12T20:58:00+09:00", "channel": "chat", "freeze_note": "x"}
 
 
 def when(hours):
@@ -2801,13 +2843,20 @@ def test_t7_stage_choice_writes_choice_json_from_the_pinned_chain(tmp_path):
     RX.write_json(lay.out_file("sent.json"), SENT)
     for n in ("select.json", "SELECT_KO.md", "timing.json", "sent.json"):
         pin_add(lay, lay.out_file(n))
-    inp = {"messages": [msg(5, core=["F8.w2.P1.a"], ds="없음")], "questions": [{"time_utc": when(2), "text": "정말요?", "pools": ["ds"]}],
+    figure_text = "딥시크 F9.a 월 3.5%라서 그걸로 하고 싶었는데, 지갑 2배도 보여서요. 코어는 F8.w2.P1.a 로 갈게요"
+    inp = {"messages": [dict(msg(5, core=["F8.w2.P1.a"], ds="없음"), text=figure_text)],
+           "questions": [{"time_utc": when(2), "text": "정말요? F9.a 와 F5.P1.g25.a 중에서요", "pools": ["ds"]}],
            "material_received": ["ANALYSIS_KO.md"], "freeze_breaches": []}
     doc = RX.stage_choice(lay, inp, now_utc=when(10))
     j = json.load(open(lay.out_file("choice.json")))
+    # the DeepSeek money figures of the owners' words are replaced by the marker before the file is written; the rest is verbatim; the hash of the original is private
+    assert j["messages"][0]["text"] == "딥시크 F9.a 월 [딥시크 금액 삭제]라서 그걸로 하고 싶었는데, 지갑 [딥시크 금액 삭제]도 보여서요. 코어는 F8.w2.P1.a 로 갈게요"
+    assert j["redacted_figures"] == 2 and j["ds_report_shown_utc"] == SENT["ds_report_shown_utc"] and MT.audit_text("\n".join(MT.json_strings(j))) == []
+    om = json.load(open(os.path.join(pin["work"], DX.pin8(ph), "ds_private", "owner_messages.json")))
+    assert om["items"][0]["sha256_unredacted"] == __import__("hashlib").sha256(figure_text.encode("utf-8")).hexdigest() and "3.5" not in json.dumps(om)
     assert j["core"] == ["F8.w2.P1.a"] and j["ds"] == [] and j["sent_utc"] == SENT["sent_utc"] and j["sent_kst"] == SENT["sent_kst"]
     assert j["select_sha256"] == DX.sha256_file(lay.out_file("select.json")) and j["sent_sha256"] == DX.sha256_file(lay.out_file("sent.json"))
-    assert j["messages"] == inp["messages"] and j["questions"] == inp["questions"] and j["material_received"] == ["ANALYSIS_KO.md"]
+    assert j["questions"] == inp["questions"] and j["material_received"] == ["ANALYSIS_KO.md"] and len(j["messages"]) == 1
     assert j["pools"]["ds"]["deadline_utc"] == when(48) and j["pools"]["core"]["answer"] == ["F8.w2.P1.a"]
     # an id that is not choosable is refused; so is an input file that changed select.json after it was pinned
     with pytest.raises(RX.StageRefused, match="not choosable"):
@@ -2843,6 +2892,76 @@ def test_t7_d11_whitelist_refuses_a_planted_deepseek_money_figure_or_p_value():
         assert MT.d11_problems(None, None, f"## 딥시크 15개\n{line}\n", None), line
         assert MT.d11_problems(None, None, None, f"### F1 (딥시크)\n## 딥시크\n{line}\n"), line
         assert not MT.d11_problems(None, None, f"## 코어 23개\n{line}\n## 딥시크 15개\nok\n", None), line      # core text may show money
+
+
+def test_t7_free_text_tripwire_and_redaction():
+    flagged = ["딥시크 F9.a 월 3.5%로 하겠습니다", "ds-F10_OTE-1h-1 은 지갑 2배", "DeepSeek 성장 0.4 정도", "딥시크 낙폭 12 라서", "ds-F1_PVT_DIV-1h-1 drawdown 30", "딥시크 2x 였지요",
+               "딥시크 p값 0.03"]
+    clean = ["딥시크 F9.a 로 하겠습니다", "코어는 월 3.5% 입니다", "ds-F10_OTE-1h-1 과 ds-F9_FVG-4h-1 중 2개", "딥시크 4시간 넘게 든 비율", "## 딥시크 15개", "딥시크 F9.a [딥시크 금액 삭제]"]
+    assert all(MT.audit_text(x) == [x] for x in flagged) and all(MT.audit_text(x) == [] for x in clean)
+    for x in flagged:
+        red, n = MT.redact_ds_money(x)
+        assert n >= 1 and MT.audit_text(red) == [] and MT.DS_MARKER in red
+        for ident in ("F9.a", "ds-F10_OTE-1h-1", "ds-F1_PVT_DIV-1h-1"):
+            assert (ident in x) == (ident in red)                                          # identifiers keep their digits
+    for x in clean:
+        assert MT.redact_ds_money(x) == (x, 0)                                             # the rest stays verbatim
+    assert MT.redact_ds_money("코어 월 3.5%\n딥시크 월 3.5%\n")[0] == "코어 월 3.5%\n딥시크 월 [딥시크 금액 삭제]\n"
+    assert list(MT.json_strings({"a": ["x", {"b": "y"}], "c": 3})) == ["x", "y"]
+
+
+def test_t7_choice_needs_the_private_report_shown_at_or_before_the_sending():
+    sel = fake_select()
+    now = RX._parse_utc(when(10))
+    ok = {"messages": [msg(5, core=["F8.w2.P1.a"], ds=["F9.a"])]}
+    RX.build_choice(sel, SENT, ok, now)
+    with pytest.raises(RX.StageRefused, match="ds_report_shown_utc missing"):
+        RX.build_choice(sel, {k: v for k, v in SENT.items() if not k.startswith("ds_report")}, ok, now)
+    with pytest.raises(RX.StageRefused, match="shown after"):
+        RX.build_choice(sel, dict(SENT, ds_report_shown_utc="2026-10-12T12:01:00Z", ds_report_shown_kst="2026-10-12T21:01:00+09:00"), ok, now)
+    with pytest.raises(RX.StageRefused, match="ds_report_shown_kst"):
+        RX.build_choice(sel, dict(SENT, ds_report_shown_kst="2026-10-12T20:00:00+09:00"), ok, now)
+    core_only = {"pin": sel["pin"], "pools": {"core": sel["pools"]["core"]}}                       # no DeepSeek pool: nothing to show
+    RX.build_choice(core_only, {k: v for k, v in SENT.items() if not k.startswith("ds_report")}, {"messages": [msg(5, core=["F8.w2.P1.a"])]}, now)
+
+
+def test_t7_a8_and_a9_run_on_each_file_before_it_is_sent(tmp_path):
+    row = {"id": "F1.w3.a", "family": "F1", "group": "S", "hold": {"median": 5.0, "p90": 9.0, "share_gt4": 0.5, "share_gt8": 0.2, "share_gt18": 0.0},
+           "entered": 100, "entered_e0": 90, "closed": 7, "win_share": 0.4, "reasons": {"SL": 3, "RULE": 4}, "eligible": True,
+           "hold_by_state": {st: {"n": n, "median": 3.0, "p90": 4.0, "share_gt4": 0.0, "share_gt8": 0.0, "share_gt18": 0.0, "few": True}
+                             for st, n in zip(("추세장", "횡보장", "급변장", "보통", "모름"), (3, 2, 0, 1, 1))}}
+    e0 = {k: row[k] for k in ("hold", "entered", "closed", "win_share", "reasons", "hold_by_state")} | {"skipped": 1}
+    def write(name, body):
+        p = tmp_path / name
+        p.write_text(body if isinstance(body, str) else json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        return str(p)
+    sel = {"pools": {"ds": {"n_picks": 15, "e0": e0, "variants": [row], "eligible_ids": ["F1.w3.a"], "default_ids": [], "gate_fail_counts": {}}}}
+    p = write("select.json", sel)
+    assert RX.audit_a8_file(p) == [] and RX.audit_a9_file(p) == []
+    bad_sel = json.loads(json.dumps(sel))
+    bad_sel["pools"]["ds"]["variants"][0]["M"] = 0.01
+    assert RX.audit_a8_file(write("select.json", bad_sel))
+    bad_sel = json.loads(json.dumps(sel))
+    bad_sel["pools"]["ds"]["variants"][0]["hold_by_state"]["보통"]["n"] = 5                        # the state counts no longer sum to the closed trades
+    assert RX.audit_a9_file(write("select.json", bad_sel))
+    write("select.json", sel)
+    ds_part = "\n".join(RX.state_table_ko(sel["pools"]["ds"]))
+    md = f"## 딥시크 15개\n\n### 딥시크 15개: 장세별 보유시간\n\n{ds_part}\n"
+    pm = write("SELECT_KO.md", md)
+    assert RX.audit_a8_file(pm) == [] and RX.audit_a9_file(pm) == []                                 # the table in the report equals the json's
+    assert RX.audit_a9_file(write("SELECT_KO.md", md.replace("| 3 / 3.0", "| 4 / 3.0")))
+    assert RX.audit_a8_file(write("SELECT_KO.md", md + "딥시크 F9.a 월 +3.1%\n"))
+    # free text anywhere: sent, choice, a DEVIATIONS entry
+    assert RX.audit_a8_file(write("sent.json", {"freeze_note": "x", "note": "딥시크 F9.a 3% 라서"}))
+    assert RX.audit_a8_file(write("sent.json", {"freeze_note": "x", "note": "딥시크 F9.a [딥시크 금액 삭제] 라서"})) == []
+    assert RX.audit_a8_file(write("DEVIATIONS.md", "old entry\n딥시크 지갑 2배\n## exitflex entry\nok\n"), after="## exitflex entry") == []
+    assert RX.audit_a8_file(write("DEVIATIONS.md", "old entry\n딥시크 지갑 2배\n## exitflex entry\nok\n"))
+    # the command line prints pass / fail only and returns the verdict
+    assert RX.main(["audit-file", "--path", str(tmp_path / "select.json"), "--path", str(tmp_path / "sent.json")]) in (0, 1)
+    write("sent.json", {"freeze_note": "x"})
+    assert RX.main(["audit-file", "--path", str(tmp_path / "select.json"), "--path", str(tmp_path / "sent.json")]) == 0
+    write("sent.json", {"freeze_note": "딥시크 F9 월 4%"})
+    assert RX.main(["audit-file", "--path", str(tmp_path / "sent.json")]) == 1
 
 
 def test_t7_claims_and_the_loss_categories(f11_on):

@@ -7,7 +7,10 @@
 * stage cache folders ``$WORK/<pin8>/<stage>/`` (deleted when a stage starts, ``run.FRAME_DIR`` points into them);
 * the 23 picks, their chart bars, signals, leverage groups and the offered signals of a period (prereg 3);
 * the chart arrays the kernel reads for each variant (swings, EMA, starting references, 15m bars of q15 variants);
-* ``snapshot`` for test T3 (the last 50 chart bars before a cut, compared between cut and full data).
+* ``snapshot`` for test T3 (the last 50 chart bars before a cut, compared between cut and full data, the market-state codes included);
+* the market state of each signal bar (prereg 7): ``regime_codes`` runs ``paperbot/dash/tools/regime5y.py`` (loaded by path, its
+  thresholds asserted equal to the pre-registered values) on the pick's own chart bars of each coin; ``PickData.offered`` carries the
+  code of every offered signal's bar in the column ``state`` (int8: 모름 0, 추세장 1, 횡보장 2, 급변장 3, 보통 4).
 
 Nothing here prints or saves a performance figure. Loading is ``research/fullgrid/data.py`` ``load`` through
 ``research/fullgrid/run.py`` unchanged.

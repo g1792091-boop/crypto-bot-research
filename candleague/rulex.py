@@ -38,9 +38,19 @@ Readings of the pre-registration that the code fixes (change them here, in ``dec
 * Several chart closes that reach one minute (a minute missing, a restart, a chunk end) make one check on the latest
   closed bar: the levels (F1 reference, F2 arm, F4 ATR) are updated with every bar in between, F3 sees an opposite flag on
   any of them, F7 is a clock test, F4, F5 and F10 read X, T_X and the funding of the earlier minutes.
-* A check whose coin has no bar at the minute waits for the coin's next bar; records that arrive before the position
-  exists, or at or before the signal bar's close, are dropped (the first check is the next close).
 * The decision is made at the start of ``step`` from the state before the minute, executed after the minute's funding.
+* Fills and checks sit on each coin's OWN minutes, as the study's kernel reads them (``kernel._entry_index`` on the coin's
+  array, PREREG 3, 5.1 and 11.4 item 13), not on the union of the coins' minutes that the league steps on: a signal fills at
+  the coin's first minute after the coin's first minute at or after the bar's close minus one minute, a chart record is read at
+  the same minute (``replay_day``, ``decide_ready``; the league keeps {coin: last minute present} with its engines). A signal
+  or check whose coin has no bar at the minute waits for the coin's next bar.
+* A record whose close is after the signal bar's close but reaches the engine while the signal still waits for its minute (the
+  coin's minutes were missing for a whole bar) travels with the pending signal (``meta["rx_early"]``) and becomes the position's
+  first check, read at the entry minute + 1 (PREREG 5.1: "if j <= e, then j = e + 1"). Records at or before the signal bar's
+  close are never a check.
+* Chart bars come from the 5m klines up to the chunk's end (``rule_frame``): a bin that closes at or before the end is kept even
+  when its last 5m klines are missing ("a bin with minutes missing inside is kept as built", PREREG 2); ``chart_frame`` would drop
+  it and, as the next chunk starts after its close, lose that close for good.
 
 F11 plug-in (the strategy's own exit; its definition arrives later, nothing is invented here)
 ---------------------------------------------------------------------------------------------
@@ -65,7 +75,7 @@ import numpy as np
 
 from paperbot.engine import PaperEngine
 from paperbot.models import Signal
-from paperbot.paramshadow import _strength_feats, chart_frame
+from paperbot.paramshadow import _strength_feats, chart_frame, stamp_ref
 from paperbot.policy import OwnerPolicy
 
 from . import candidates as C
@@ -94,7 +104,7 @@ class RuleConfigError(ValueError):
 
 
 # ====================================================================== the rule interface
-FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11")
+FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F7h", "F8", "F9", "F10", "F11")
 Q15_FAMILIES = ("F1", "F4", "F9")
 _N = r"\d+(?:\.\d+)?"
 _PAT = {
@@ -105,6 +115,7 @@ _PAT = {
     "F5": rf"F5\.P(?P<P>{_N})\.g(?P<g>\d+)\.(?P<mode>[ab])",
     "F6": rf"F6\.w(?P<w>\d+)\.d(?P<d>{_N})",
     "F7": r"F7\.N(?P<N>\d+)\.(?P<mode>[ab])",
+    "F7h": r"F7h\.H(?P<H>\d+)\.(?P<mode>[ab])",
     "F8": rf"F8\.w(?P<w>\d+)\.P(?P<P>{_N})\.(?P<mode>[ab])",
     "F9": r"F9\.(?P<mode>[ab])(?P<q>\.q15)?",
     "F10": r"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
@@ -112,7 +123,7 @@ _PAT = {
 }
 F9_FIXED = {"w": 3, "P": 1.0, "d": 0.5}
 KO = {"F1": "구조 이탈", "F2": "이동평균 이탈", "F3": "반대 신호", "F4": "샹들리에 추적", "F5": "수익 반납",
-      "F6": "조기 손절", "F7": "시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산"}
+      "F6": "조기 손절", "F7": "시간 청산", "F7h": "시계 시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산"}
 
 
 def _num(x) -> float:
@@ -140,6 +151,8 @@ def rule_id(r: dict) -> str:
         return f"F6.w{r['w']}.d{_fmt(r['d'])}"
     if f == "F7":
         return f"F7.N{r['N']}.{m}"
+    if f == "F7h":
+        return f"F7h.H{r['H']}.{m}"
     if f == "F8":
         return f"F8.w{r['w']}.P{_fmt(r['P'])}.{m}"
     if f == "F9":
@@ -155,7 +168,7 @@ def parse_rule(x) -> dict:
     if isinstance(x, dict) and x.get("family") is None and "id" in x:
         x = x["id"]
     if isinstance(x, str):
-        fam = re.match(r"F(\d+)", x)
+        fam = re.match(r"F(\d+h?)", x)
         if not fam or f"F{fam.group(1)}" not in _PAT:
             raise RuleConfigError(f"rule {x!r}: unknown family")
         m = re.fullmatch(_PAT[f"F{fam.group(1)}"], x)
@@ -163,7 +176,7 @@ def parse_rule(x) -> dict:
             raise RuleConfigError(f"rule {x!r}: not written the way the study writes it")
         g = m.groupdict()
         d = {"family": f"F{fam.group(1)}", "mode": g.get("mode") or "a", "q15": bool(g.get("q"))}
-        for k in ("w", "n", "N"):
+        for k in ("w", "n", "N", "H"):
             if g.get(k) is not None:
                 d[k] = int(g[k])
         for k in ("m", "P", "d"):
@@ -223,6 +236,8 @@ def _normalize(d: dict, src) -> dict:
         need("d", float, 0.0)
     if fam in ("F7", "F10"):
         need("N", int, 1)
+    if fam == "F7h":
+        need("H", int, 1)
     if fam == "F9":
         out.update(F9_FIXED)
     if fam == "F11":
@@ -232,7 +247,8 @@ def _normalize(d: dict, src) -> dict:
 
 
 def study_ids() -> list[str]:
-    """The study's 76 variant ids in its canonical order (PREREG 5.3)."""
+    """The study's 82 rule variant ids of F1-F10 (F7h included) in its canonical order (PREREG 5.3; F11 and F12 are the strategies'
+    own exits and come with them)."""
     out = []
     modes = ("a", "b")
     out += [f"F1.w{w}.{m}" for w in (2, 3, 5) for m in modes]
@@ -244,6 +260,7 @@ def study_ids() -> list[str]:
     out += [f"F5.P{p}.g{g}.{m}" for p in ("1", "1.5", "2") for g in (25, 50) for m in modes]
     out += [f"F6.w{w}.d{d}" for w in (2, 3, 5) for d in ("0", "0.5")]
     out += [f"F7.N{n}.{m}" for n in (12, 24, 48) for m in modes]
+    out += [f"F7h.H{h}.{m}" for h in (4, 8, 16) for m in modes]
     out += [f"F8.w{w}.P{p}.{m}" for w in (2, 3, 5) for p in ("1", "2") for m in modes]
     out += [f"F9.{m}" for m in modes] + [f"F9.{m}.q15" for m in modes]
     out += [f"F10.N{n}.{m}" for n in (6, 12) for m in modes]
@@ -275,7 +292,7 @@ def rule_ko(rule: Optional[dict]) -> str:
     bits = {"F1": f"스윙 {rule.get('w')}봉", "F2": f"EMA {rule.get('n')}", "F3": "", "F4": f"ATR x{_fmt(rule.get('m', 0))}",
             "F5": f"{_fmt(rule.get('P', 0))}R 뒤 {int(round(rule.get('g', 0) * 100))}% 반납",
             "F6": f"스윙 {rule.get('w')}봉, 손실 {_fmt(rule.get('d', 0))}R 이상",
-            "F7": f"{rule.get('N')}봉", "F8": f"스윙 {rule.get('w')}봉, {_fmt(rule.get('P', 0))}R 뒤",
+            "F7": f"{rule.get('N')}봉", "F7h": f"{rule.get('H')}시간", "F8": f"스윙 {rule.get('w')}봉, {_fmt(rule.get('P', 0))}R 뒤",
             "F9": "", "F10": f"{rule.get('N')}봉", "F11": ""}[f]
     mode = "익절 유지" if rule["mode"] == "a" else "익절 없음"
     return f"{KO[f]}{' (' + bits + ')' if bits else ''} · {mode}" + (" · 15분 확인" if rule.get("q15") else "")
@@ -442,6 +459,31 @@ def _fin(v) -> Optional[float]:
     return v if math.isfinite(v) else None
 
 
+def rule_frame(lib, cols: tuple, tf: str, end: int):
+    """``paramshadow.chart_frame`` for the rule league: chart bars of ``tf`` from the 5m bars [.., ``end``), a partial bin at the
+    start dropped and every bin that closes at or before ``end`` kept, even when its last 5m bars are missing (the coin's
+    minutes were gone for a while at the end of the chunk). ``chart_frame`` keeps a bin only when it closes at or before the
+    last 5m bar's close, which would lose the close (its signal and its check) of a bin whose tail is missing at a chunk's end,
+    for good, because the next chunk starts after that close. The study keeps such a bin as built (PREREG 2: "a bin with minutes
+    missing inside is kept as built"); a bin with no 5m bar does not exist, and a 5m bar without volume is no bar (the study's data.py
+    drops the minutes without trades). With nothing missing and no 5m bar without volume it is chart_frame."""
+    import pandas as pd
+    ts, o, h, l, c, v = cols
+    if len(ts):
+        traded = ~(np.asarray(v, float) == 0.0)         # a 5m interval without a trade is flat and is not market data (data.py)
+        if not traded.all():
+            ts, o, h, l, c, v = (np.asarray(a)[traded] for a in cols)
+    if not len(ts):
+        return chart_frame(lib, (ts, o, h, l, c, v), tf)
+    df5 = pd.DataFrame({"ts": pd.to_datetime(np.asarray(ts, dtype=np.int64), unit="ms", utc=True), "open": o, "high": h,
+                        "low": l, "close": c, "volume": v})
+    r = lib.resample_ohlcv(df5, tf)
+    t = (r["ts"].astype("int64") // 1_000_000).to_numpy(np.int64)
+    df = r.loc[(t >= int(ts[0])) & (t + TF_MS[tf] <= int(end))].reset_index(drop=True)
+    df.attrs["tf"] = tf
+    return df
+
+
 class RuleClose:
     """A chart close handed to a rule engine through ``submit`` (the dict ``d`` is plain JSON: see ``close_record``)."""
     __slots__ = ("d",)
@@ -531,6 +573,8 @@ def new_rx(rule: dict, tf_ms: int, c0: int, seed: dict, atr: Optional[float], fi
         rx["armed"] = False
     if f == "F7":
         rx["dl"] = int(c0) + int(rule["N"]) * int(tf_ms)
+    if f == "F7h":                                                  # clock hours from the signal bar's close (PREREG 5.2)
+        rx["dl"] = int(c0) + int(rule["H"]) * 3_600_000
     if f == "F4":
         rx["atr"] = None if atr is None else float(atr)
     return rx
@@ -597,7 +641,7 @@ def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, r
         return bool(rx["armed"] and rc <= (1 - rule["g"]) * rpk)
     if fam == "F6":
         return bool(brk and rc < -rule["d"])
-    if fam == "F7":
+    if fam in ("F7", "F7h"):
         return chk["t"] >= rx["dl"]
     if fam == "F8":
         if rpk >= rule["P"]:
@@ -610,6 +654,22 @@ def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, r
     if fam == "F10":
         return bool(rc > 0 and chk["t"] - rx["tx"] >= rule["N"] * tf_ms)
     return xit                                                     # F11
+
+
+def decide_ready(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, rt: float, f: float, X_: float,
+                 tf_ms: int, prev: Optional[int]) -> bool:
+    """``decide`` on the queued chart records whose check minute has come. A record closing at C is read at the coin's
+    first minute after the coin's first minute at or after C - 1 minute (kernel._entry_index on the coin's own minutes,
+    PREREG 5.1): ``prev``, the coin's previous minute present, must be at or after C - 1 minute; the others stay queued.
+    ``prev`` None = no gating (every queued record is read, the single-coin case)."""
+    if prev is not None and rx["q"]:
+        wait = [r for r in rx["q"] if r["t"] - MIN > prev]
+        if wait:
+            rx["q"] = [r for r in rx["q"] if r["t"] - MIN <= prev]
+            fire = decide(rule, sched, rx, side, fill, R, rt, f, X_, tf_ms)
+            rx["q"] = wait
+            return fire
+    return decide(rule, sched, rx, side, fill, R, rt, f, X_, tf_ms)
 
 
 def track_extreme(rx: dict, side: int, mfe: float, open_time: int) -> None:
@@ -632,14 +692,24 @@ class RuleMixin:
     rx_rule: Optional[dict] = None
     rx_sched: str = "p"
     rx_tf_ms: int = 0
+    rx_seen: Optional[dict] = None       # {coin: its previous minute present} (the league's, see replay_day); None = no gating
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
+            d = signal.d
+            if self.rx_rule is None:
+                return
             p = self.position
-            if p is not None and self.rx_rule is not None and signal.d["sym"] == p.symbol:
+            if p is not None and d["sym"] == p.symbol:
                 rx = p.signal.meta.get("rx")
-                if rx is not None and signal.d["t"] > rx["c0"]:
-                    rx["q"].append(dict(signal.d))
+                if rx is not None and d["t"] > rx["c0"]:
+                    rx["q"].append(dict(d))
+            for s in self.pending:
+                # a signal of this coin is still waiting for its minute (the coin's minutes are missing for a while): the
+                # close is a check of the position it may open, and is read at the entry minute + 1 (PREREG 5.1: "if
+                # j <= e, then j = e + 1"); it travels with the pending signal
+                if s.symbol == d["sym"] and d["t"] > s.ts + 1:
+                    s.meta.setdefault("rx_early", []).append(dict(d))
             return
         super().submit(signal)
 
@@ -648,8 +718,9 @@ class RuleMixin:
         if ok and self.rx_rule is not None:
             p = self.position
             seed = p.signal.meta.get("rx0") or {}
-            p.signal.meta["rx"] = new_rx(self.rx_rule, self.rx_tf_ms, p.signal.ts + 1, seed, p.signal.atr, p.entry_price,
-                                         bar.open_time)
+            rx = new_rx(self.rx_rule, self.rx_tf_ms, p.signal.ts + 1, seed, p.signal.atr, p.entry_price, bar.open_time)
+            rx["q"] = [dict(r) for r in p.signal.meta.pop("rx_early", ()) if r["t"] > rx["c0"]]
+            p.signal.meta["rx"] = rx
             t = seed.get("target")
             if self.rx_rule.get("use_target") and t is not None and math.isfinite(t) and (t - p.entry_price) * p.side > 0:
                 p.tp_price = float(t)
@@ -657,8 +728,9 @@ class RuleMixin:
 
     def _rx_decide(self, p, rx) -> bool:
         f = p.funding_paid / p.notional_entry if p.notional_entry else 0.0
-        return decide(self.rx_rule, self.rx_sched, rx, p.side, p.entry_price, float(p.signal.meta["stop_dist"]),
-                      self.s.round_trip_cost, f, p.mfe_price, self.rx_tf_ms)
+        prev = None if self.rx_seen is None else self.rx_seen.get(p.symbol)
+        return decide_ready(self.rx_rule, self.rx_sched, rx, p.side, p.entry_price, float(p.signal.meta["stop_dist"]),
+                            self.s.round_trip_cost, f, p.mfe_price, self.rx_tf_ms, prev)
 
     @staticmethod
     def _gapped(p, bar) -> bool:
@@ -746,7 +818,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
         frames, cols_of = {}, {}
         for sym in symbols:
             cols_of[sym] = source.load(sym, start - window_5m(lib, tf) * FIVE, end)
-            frames[sym] = chart_frame(lib, cols_of[sym], tf)
+            frames[sym] = rule_frame(lib, cols_of[sym], tf, end)
         for sym in symbols:
             df = frames[sym]
             if len(df) <= w:
@@ -757,7 +829,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
             idx = np.flatnonzero((close > max(start, run_start)) & (close <= end) & (np.arange(len(df)) >= w))
             pack15 = None
             if any(sched_of(a) == "q" for a in group):             # 15m closes come between the pick's own closes
-                f15 = chart_frame(lib, cols_of[sym], "15m")
+                f15 = rule_frame(lib, cols_of[sym], "15m", end)
                 c15 = (f15["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + TF_MS["15m"]
                 i15 = np.flatnonzero((c15 > max(start, run_start)) & (c15 <= end))
                 pack15 = (np.asarray(f15["close"], float), c15, i15)
@@ -837,7 +909,7 @@ def account_records(lib, source, a: dict, sym: str, lo_ms: int, hi_ms: int,
     tf, rule = a["tf"], a["rule"]
     span, w = TF_MS[tf], lib.warmup_bars(tf)
     cols = source.load(sym, lo_ms - window_5m(lib, tf) * FIVE, hi_ms)
-    df = chart_frame(lib, cols, tf)
+    df = rule_frame(lib, cols, tf, hi_ms)
     out = []
     if len(df) <= w:
         return out
@@ -850,11 +922,77 @@ def account_records(lib, source, a: dict, sym: str, lo_ms: int, hi_ms: int,
     for i in idx:
         out.append(close_record(pack, int(i), sym, int(close[i]), needs, lo, sh, f11))
     if sched_of(a) == "q":
-        f15 = chart_frame(lib, cols, "15m")
+        f15 = rule_frame(lib, cols, "15m", hi_ms)
         c15 = (f15["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + TF_MS["15m"]
         for j in np.flatnonzero((c15 > lo_ms) & (c15 <= hi_ms)):
             out.append({"k": "q", "sym": sym, "t": int(c15[j]), "c": float(f15["close"].iloc[j])})
     return out
+
+
+# ====================================================================== the replay: the study's per-coin minutes
+def _due(sig, prev: Optional[int]) -> bool:
+    """A pending signal may fill at its coin's minute when the coin's previous minute present is at or after the signal
+    bar's close minus one minute (``prev`` None: not known, so yes)."""
+    return prev is None or sig.ts + 1 - MIN <= prev
+
+
+def replay_day(engines: dict, active: set, by_close: dict, steps, brackets, seen: dict, fund_wait: Optional[dict] = None) -> None:
+    """``paramshadow.replay_day`` for a league that must place fills and checks on the minutes the study's kernel uses
+    (PREREG 3, 5.1 and 11.4 item 13): the kernel reads each coin's OWN minutes (kernel._entry_index on the coin's array),
+    the league's steps are the union of the coins' minutes, so a minute missing for one coin while the others trade
+    (a bin's last minute, a zero-volume minute the study drops) must not move a fill or a check.
+
+    * A signal fills at the first step of its coin after the coin's first minute at or after the bar's close minus one
+      minute (the kernel's ``j0 + 1``): a pending signal whose coin has no bar at this step waits (paramshadow's
+      engine would reject it, "no next bar"), and so does one whose coin's previous minute present is earlier than the
+      close minus one minute (the close minute was the coin's own first minute).
+    * A chart record is read at the same minute (``decide_ready``, through ``engine.rx_seen``).
+    * A coin's minute without trades (volume 0: the archive writes an exchange halt as flat bars) is no minute, as data.py drops
+      it; a funding settlement that falls on a minute the coin does not have is paid at the coin's next minute present
+      (data.py: "the next minute when that one is missing"), kept in ``fund_wait`` until then.
+    ``seen`` is {coin: the coin's last minute present}, updated here after each step, and ``fund_wait`` {coin: funding
+    waiting for the coin's next minute}; the league keeps both across chunks and restarts. Everything else is
+    paramshadow.replay_day: only busy engines are stepped, a signal or record is submitted after the step of the minute
+    that ends at its bar's close (or after the first step past it), and a close after the day's last step goes in at the
+    end (pending into the next day). With no minute missing for a single coin and none without trades it gives the same
+    trades as paramshadow.replay_day."""
+    closes = sorted(by_close)
+    k = 0
+    fund_wait = {} if fund_wait is None else fund_wait
+    for ts, bars, funding in steps:
+        tb = {s: b for s, b in bars.items() if s in brackets and not (b.volume is not None and b.volume == 0.0)}
+        if funding or fund_wait:
+            funding = dict(funding or {})
+            for s in [s for s in funding if s in brackets and s not in tb]:   # not the coin's minute: its next one
+                fund_wait[s] = fund_wait.get(s, 0.0) + funding.pop(s)
+            for s in [s for s in tb if s in fund_wait]:
+                funding[s] = funding.get(s, 0.0) + fund_wait.pop(s)
+        for aid in sorted(active if tb else ()):
+            e = engines[aid]
+            held = []
+            if e.pending:
+                ok = [g.symbol in tb and _due(g, seen.get(g.symbol)) for g in e.pending]
+                held = [g for g, o in zip(e.pending, ok) if not o]
+                if held:
+                    e.pending = [g for g, o in zip(e.pending, ok) if o]
+            stamp_ref(e, tb)
+            e.step(tb, funding)
+            e.outcomes.clear()
+            if held:
+                e.pending = held + e.pending
+            if e.position is None and not e.pending:
+                active.discard(aid)
+        for s in tb:
+            seen[s] = ts
+        while k < len(closes) and closes[k] <= ts + MIN:
+            for aid, sig in by_close[closes[k]]:
+                engines[aid].submit(sig)
+                active.add(aid)
+            k += 1
+    for c in closes[k:]:
+        for aid, sig in by_close[c]:
+            engines[aid].submit(sig)
+            active.add(aid)
 
 
 # ====================================================================== the restore check
@@ -884,19 +1022,28 @@ def recompute_rx(lg, a: dict, p) -> dict:
     steps = lg.fetch_steps(None, [sym], p.entry_time // FIVE * FIVE, done)
     rt = lg.engines[a["id"]].s.round_trip_cost
     R, side, qty = float(p.signal.meta["stop_dist"]), p.side, p.qty
-    fpaid, mfe, ri = 0.0, p.entry_price, 0
+    fpaid, mfe, ri, prev, fwait = 0.0, p.entry_price, 0, p.entry_time, 0.0
     for t, bars, fund in steps:
         b = bars.get(sym)
-        if b is None or b.open_time < p.entry_time or b.open_time >= done:
+        if b is not None and b.volume is not None and b.volume == 0.0:
+            b = None                                          # a minute without trades is no minute (replay_day)
+        if b is None:
+            if p.entry_time <= t < done:
+                fwait += fund.get(sym, 0.0)                   # a settlement at a minute the coin lacks waits for its next one
+            continue
+        if b.open_time < p.entry_time or b.open_time >= done:
             continue
         entry = b.open_time == p.entry_time
+        rate = fund.get(sym, 0.0) + fwait
+        fwait = 0.0
         if not entry:
             if rx["q"]:
-                decide(rule, sched, rx, side, p.entry_price, R, rt, fpaid / (qty * p.entry_price), mfe, tf_ms)
-            if fund.get(sym):
-                fpaid += side * qty * b.m_open * fund[sym]
+                decide_ready(rule, sched, rx, side, p.entry_price, R, rt, fpaid / (qty * p.entry_price), mfe, tf_ms, prev)
+            if rate:
+                fpaid += side * qty * b.m_open * rate
         mfe = max(mfe, b.high) if side > 0 else min(mfe, b.low)
         track_extreme(rx, side, mfe, b.open_time)
+        prev = b.open_time
         while ri < len(recs) and recs[ri]["t"] <= b.open_time + MIN:
             if recs[ri]["t"] > c0:
                 rx["q"].append(dict(recs[ri]))

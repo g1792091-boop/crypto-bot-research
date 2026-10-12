@@ -1,0 +1,210 @@
+{
+ "what": "PREREG_HUNT_R2 8 (L): every pre-registration hash file under research/*/ known at round 2's code pin. A ledger snapshot lists research/*/*.sha256 in its checkout; a file not listed here (or whose first line differs) and not covered by a --ledger-extra row ('prereg': its path) makes print (L) 'incomplete': no rejection is printed and no round-2 pick passes the live gate (10.2) until it is registered with its maximum number of hypotheses.",
+ "written": "2026-10-12",
+ "files": {
+  "research/altpump/PREREG_ALTPUMP.sha256": {
+   "study": "altpump",
+   "ledger": "none",
+   "first_line_sha256": "3e4c23c0f3154780f86c98d0de208f51e2ab38d2aba1bd40e433655fc9ed73ca",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/btc_pre2021/PREREG_BTC_PRE2021.sha256": {
+   "study": "btc_pre2021",
+   "ledger": "none",
+   "first_line_sha256": "068dfcbae834cb9e1fec951dc6490dcb77d62322207dc8ae52d22a2ba85cd1b6",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/chart_review/PREREG_CHART.sha256": {
+   "study": "chart_review",
+   "ledger": "none",
+   "first_line_sha256": "47e909ec5b1532568df1712152ff28441a957336509706e7bb04b059f4f5d88e",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/chart_review/PRERULES_CHART.sha256": {
+   "study": "chart_review",
+   "ledger": "none",
+   "first_line_sha256": "77a00004b2567ebc79773705ff9ad729cb3027274ebc7debd8b4f22607233989",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/deepseek200/FORWARD_PREREG.sha256": {
+   "study": "deepseek200",
+   "ledger": "none",
+   "first_line_sha256": "e39fce2f7aab6407ea03dd992b47cca38ebb6557a47ee3e23894ea77095d2f17",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/deepseek200/PREREG_DEEPSEEK200.sha256": {
+   "study": "deepseek200",
+   "ledger": "none",
+   "first_line_sha256": "c2113ffacd8085cdad2074c64d78e2e1bdb69d2e75d3cbe196326c7d3028783e",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/diagnosis/PREREG_DIAG.sha256": {
+   "study": "diagnosis",
+   "ledger": "none",
+   "first_line_sha256": "0ed7868a4486cb6fc7a4287eb82b05d147e21b2d15e9beef37cdfa57aac8bdc5",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/entry_study/CODE_TRENDLINE.sha256": {
+   "study": "trendline code pin",
+   "ledger": "none",
+   "first_line_sha256": "b6ab42e777b2ffcd3c9b123c58f0c6c91ea6bce7290a9be76bdfc81ec30621ef",
+   "why": "a code pin, not a pre-registration"
+  },
+  "research/entry_study/DEFS_BC.sha256": {
+   "study": "entry study code pin",
+   "ledger": "none",
+   "first_line_sha256": "7998a42cc5d514f1518224a4f00b937a14435b2fb20a9a9047c278f90f5efd0e",
+   "why": "a code pin, not a pre-registration"
+  },
+  "research/entry_study/PREREG_ENTRY.sha256": {
+   "study": "entry_study",
+   "ledger": "none",
+   "first_line_sha256": "b945605218cc5df784b3818db9a8d05c23419e46e8029e4f7f26c472147914fa",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/entry_study/PREREG_TRENDLINE.sha256": {
+   "study": "entry_study",
+   "ledger": "none",
+   "first_line_sha256": "f2bf70403d8efae26d4d15fb5b97c7c1e099c7bb31635d65eda4b8d3f232e0c3",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/exitstyle/PREREG_EXITSTYLE.sha256": {
+   "study": "exitstyle",
+   "ledger": "none",
+   "first_line_sha256": "9d2a72e05196d8d3efa389baf10af06f2867b920e118c8c700f80878f0f37fbc",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/famous/PREREG_FAMOUS.sha256": {
+   "study": "famous",
+   "ledger": "none",
+   "first_line_sha256": "7eb89e873ea0c08d3dc5b342f274e365a9bbe572bcb5e8005d97e04d899c31da",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/fullgrid/PHASE2_AMEND_1.sha256": {
+   "study": "full grid phase 2 amendment",
+   "ledger": "A+",
+   "first_line_sha256": "192685f2c925a12365e8292e3e8bf49cbd80acd8a2e6c994f3def32f9e2df4f2",
+   "why": "amends phase 2; no new confirm look"
+  },
+  "research/fullgrid/PHASE2_PREREG.sha256": {
+   "study": "full grid phase 2",
+   "ledger": "A+",
+   "first_line_sha256": "00a7a2f259f62f9bb6676c42ab73c0dfbd494234f2cb05c50a21a00b05856395",
+   "why": "reads of the full grid's picks; its hypotheses are the 711 of (A+)"
+  },
+  "research/fullgrid/PREREG.sha256": {
+   "study": "full grid",
+   "ledger": "A+",
+   "first_line_sha256": "cf5e7fbe18ba188490d6d92bb76942c8c25c6179a945aadcc24bc717402a6ad4",
+   "why": "its 711 test-period picks counted in (A+) (8)"
+  },
+  "research/fullgrid/WATCH_PREREG.sha256": {
+   "study": "full grid F4 watch picks",
+   "ledger": "A+",
+   "first_line_sha256": "680e2dd5fd54aa1d0d9e27781e6d58fe4aed8eae76319d86f94f0b2106da6319",
+   "why": "the 38 watch picks counted in (A+) at p = 1 (8)"
+  },
+  "research/hunt/PREREG_HUNT.sha256": {
+   "study": "hunt v1",
+   "ledger": "A",
+   "first_line_sha256": "ade282e8f38a611d23a32721692747e0c77b0512fefb31c23d689e6b0d007468",
+   "why": "counted in (A) from its test.json (8)"
+  },
+  "research/hunt/PREREG_HUNT_WIDE.sha256": {
+   "study": "hunt wide",
+   "ledger": "A",
+   "first_line_sha256": "ade282e8f38a611d23a32721692747e0c77b0512fefb31c23d689e6b0d007468",
+   "why": "counted in (A) from its test.json and reads (8)"
+  },
+  "research/hunt_r2/PREREG_HUNT_R2.sha256": {
+   "study": "hunt-r2 v1",
+   "ledger": "A",
+   "first_line_sha256": "bb7fc9432b88324266c296d27c76629e1da54297eaff810294c3be14c9848fd8",
+   "why": "this study (8)"
+  },
+  "research/levstop/PREREG_LEVSTOP.sha256": {
+   "study": "levstop",
+   "ledger": "none",
+   "first_line_sha256": "1b497ac996cfd68a728d59fbcb2da05643037b68b0dc8c7685efd3e111ccfc22",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/library/PREREG_LIBRARY.sha256": {
+   "study": "library",
+   "ledger": "none",
+   "first_line_sha256": "a03710d2511a14a24fd3801dde7ae91d786e86cc3b876365906423c53b86f586",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/library/PREREG_LIBRARY_B.sha256": {
+   "study": "library",
+   "ledger": "none",
+   "first_line_sha256": "97c3d214d262e626b5f62811107b3b83c863c3785565aac77dcf4571eac91519",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/maker/PREREG_ROUND2.sha256": {
+   "study": "maker",
+   "ledger": "none",
+   "first_line_sha256": "4a509e1bb250bc442c8555434d5dab131c464ce29c9986cde86d267a87fb76a2",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/newinfo/PREREG_NEWINFO.sha256": {
+   "study": "newinfo",
+   "ledger": "none",
+   "first_line_sha256": "60792c771e8cf65824daacee047690d179cce37a7022d6306b4b34d1eb573294",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/orderflow/PREREG_ORDERFLOW.sha256": {
+   "study": "orderflow",
+   "ledger": "none",
+   "first_line_sha256": "b4980d05c484ccdd6be8f6ff5f9f8b533b732cda684b9e0cf5c2a0eea14ed8c4",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/paper_rules/PREREG_RULES.sha256": {
+   "study": "paper_rules",
+   "ledger": "none",
+   "first_line_sha256": "28b1733984064346094d0542c7eb564fc3f618023a4a68ce182ea34b717d980e",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/reel5m/PREREG_REEL5M.sha256": {
+   "study": "reel5m",
+   "ledger": "none",
+   "first_line_sha256": "835f786a965b8d9a268a99c576128bb7789dc8ddf06212eefcba745f7aca402a",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/regimegate/PREREG_REGIMEGATE.sha256": {
+   "study": "regimegate",
+   "ledger": "none",
+   "first_line_sha256": "1a5cc0a6b31145d1fa5d26c3830259dd3fc565096f2d01a32c8731f13f1cc3d9",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/round3/PREREG_ROUND3.sha256": {
+   "study": "round3",
+   "ledger": "none",
+   "first_line_sha256": "03eeb478b8a19ced82e6c137403eb32aa7478f9f7cce2f2cd6b14a4087f1abb5",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/search/PREREG_SEARCH.sha256": {
+   "study": "search",
+   "ledger": "none",
+   "first_line_sha256": "2f9a1038519362fcd26d51b2765104dc4faf7f310c772200979a9d9d6284dd08",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/st_custom/PREREG.sha256": {
+   "study": "st_custom",
+   "ledger": "none",
+   "first_line_sha256": "94a311f021665470291ba00d9eee7f6a3967666a39adb8c8f8c115a28c055e57",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/verify/PREREG_VERIFY.sha256": {
+   "study": "verify",
+   "ledger": "none",
+   "first_line_sha256": "efaf9aa86b92ea4d1ecb77103c0a55a14fde380441e35be20f3d4a7ab562911c",
+   "why": "run before round 2's design hash (2026-10-12); not a confirm look of the hunt program's family of 8 (A: hunt v1, wide, track 2, round 2; A+: the full grid and F4)"
+  },
+  "research/hiwr/PREREG_HIWR.sha256": {
+   "study": "track 2 (hiwr v1)",
+   "ledger": "A",
+   "first_line_sha256": null,
+   "why": "counted in (A) from its test.json, or in (L) at its maximum while hashed and not run (8); not hashed at round 2's code pin, so any first line is accepted"
+  }
+ }
+}

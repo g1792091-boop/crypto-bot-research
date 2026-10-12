@@ -26,10 +26,12 @@
 # HUNT_R2_DRY_WAIT (no go commit: hand over to wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the
 # scratch clone's origin), HUNT_R2_GIT_REHEARSAL (update fetches and checks out from the scratch clone's origin).
 #
-# Developer notes: the ledger inputs (PREREG 8) are taken, in order, from the go commit's own tree (research/hunt/out/...,
-# research/hunt/results/hunt/..., research/hiwr/out/..., research/hiwr/results/hiwr/..., research/fullgrid/results/) and
-# else from the branches hunt-results, hiwr-results and fullgrid-results-20261010-1602 (else the newest "<name>-*");
-# research/hunt_r2/results/ledger/ledger_inputs.txt lists what was used. Putting the files in the go commit wins.
+# Developer notes: the ledger inputs (PREREG 8) are fetched at stage 9 only, from the branches hunt-results,
+# hiwr-results and fullgrid-results-20261010-1602 (else the newest "<name>-*"), never from the go commit's tree: the
+# pinned commit holds no round-1 output (0.3; check_pin('select') refuses one). research/hunt_r2/results/ledger/
+# ledger_inputs.txt lists what was used. The owners' private p files are matched to the public outputs by sha256, so
+# their archive names and order do not matter. Round 1's public select / picks files for the results page's labels are
+# fetched at stage 11, after test.json is pinned. HUNT_R2_NCPU (rehearsal only) fakes the CPU count for status times.
 set -uo pipefail
 
 MODE=run
@@ -107,6 +109,9 @@ if [ "$DRYRUN" = 1 ]; then PY=${HUNT_R2_PY:-python3}; else PY=${HUNT_R2_PY:-$VEN
 if [ -n "${HUNT_R2_CMD:-}" ]; then read -r -a R2 <<<"$HUNT_R2_CMD"; else R2=("$PY" -m research.hunt_r2.hunt_r2); fi
 if [ -n "${HUNT_R2_DATA_CMD:-}" ]; then read -r -a DH <<<"$HUNT_R2_DATA_CMD"; else DH=("$PY" -m research.hunt.data_hunt); fi
 NCPU=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)    # nproc obeys OMP_NUM_THREADS, set to 1 below
+[ "$DRYRUN" = 1 ] && [ -n "${HUNT_R2_NCPU:-}" ] && NCPU=$HUNT_R2_NCPU
+# the event store keeps memory maps open: raise the open-file limit (Ubuntu's SSH / tmux default soft limit is 1024)
+ulimit -n 65536 2>/dev/null || ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
 SELF=$REPO/research/hunt_r2/bootstrap_r2.sh
 NST=11
 TM=${HUNT_R2_TMUX:-tmux}
@@ -120,9 +125,9 @@ warn() {                     # something skipped that does not stop the run (lis
   say "  · 참고: $*"
   grep -qxF "$*" "$BASE/WARNINGS" 2>/dev/null || echo "$*" >> "$BASE/WARNINGS"
 }
-computed() {                 # anything computed on this server: stage 6 started, or select ran here
-  grep -qE '^([6-9]|1[01])\|' "$BASE/STAGES" 2>/dev/null && return 0
-  [ -f "$BASE/SELECT_RAN" ]
+computed() {                 # anything computed on this server: select began computing (its own marker), or later
+  grep -qE '^([7-9]|1[01])\|' "$BASE/STAGES" 2>/dev/null && return 0
+  [ -f "$BASE/SELECT_RAN" ] || [ -f "$PRIV/SELECT_STARTED" ]
 }
 keep_server() { say "계산한 것이 이 서버에 있으니, 개발자 답이 올 때까지 서버를 지우지(Destroy) 마세요."; }
 die() {                      # a stop: send the screen
@@ -164,8 +169,8 @@ memory_step() {              # memory_step <exit code>: killed (137, the kernel'
 # name's heaviest anchor x 1.3, store x 1.5. Spread over EFF = 60% of the vCPUs (about 19 effective cores of 32 if they
 # are SMT threads), rounded up. The select step prints "[<part>] done/n done, <s>s" every minute; status turns the running
 # part's own pace into its remaining time and adds the parts after it.
-SEL_PARTS="event store (name, timeframe, coin)|(a′) event histograms|real Stage 0 + A|null (b′) units|null (a′) units|box store|box checks"
-SEL_CPU_MIN="380 10 40 4000 4000 120 60"     # per part (expected about half: nulls 63 CPU-h, store 4.2 CPU-h)
+SEL_PARTS="event store (name, timeframe, coin)|real Stage 0 + A|null (b′) units|null (a′) units|box store|box checks"
+SEL_CPU_MIN="380 40 4000 4000 120 60"        # per part (expected about half: nulls 63 CPU-h, store 4.2 CPU-h)
 EFF=$(( NCPU * 6 / 10 )); [ "$EFF" -lt 1 ] && EFF=1
 cpu_wall() { echo $(( ($1 + EFF - 1) / EFF )); }          # CPU-minutes -> wall minutes on this server
 picks_b1() { cat "$BASE/PICKS_B1" 2>/dev/null; }
@@ -182,7 +187,7 @@ est_min() {
     1) echo 6 ;; 2) echo 8 ;; 3) echo 2 ;; 4) echo 20 ;; 5) echo 6 ;;
     6) sel_plan_from 0 ;;
     7) echo 1 ;;
-    8) echo $(( 15 + $(cpu_wall 300) )) ;;                       # pretest: CSCV / null summary in one process + <= 5 CPU-h
+    8) echo $(( 15 + $(cpu_wall 660) )) ;;                       # pretest: CSCV / null summary in one process, Stage A at every slot (<= 6 CPU-h) + <= 5 CPU-h
     9) local b; b=$(picks_b1); [ "$b" = 0 ] && { echo 2; return; }
        echo $(( 5 + ${b:-10} * $(cpu_wall 30) )) ;;              # per tested pick about 3,150 runs (<= 30 CPU-min)
     10) local b; b=$(picks_b1); [ "$b" = 0 ] && { echo 0; return; }
@@ -193,28 +198,46 @@ est_min() {
   esac
 }
 left_from() { local s=0 k; for k in $(seq "$1" "$NST"); do s=$(( s + $(est_min "$k") )); done; echo "$s"; }
+verdict_from() { local s=0 k; for k in $(seq "$1" 9); do s=$(( s + $(est_min "$k") )); done; echo "$s"; }   # stages i..9
 hm() { local m=$1; if [ "$m" -ge 120 ]; then echo "약 $(( m / 60 ))시간 $(( m % 60 ))분"; else echo "약 ${m}분"; fi; }
 last_prog() {                # the last "[part] done/n done, Xs" line the current stage wrote to the log
+  last_progs | tail -1
+}
+last_progs() {               # every "[part] done/n done, Xs" line of the current stage (this run of it)
   local pos; pos=$(cat "$BASE/STAGE_POS" 2>/dev/null); pos=${pos:-0}
-  tail -c +$(( pos + 1 )) "$LOG" 2>/dev/null | grep -aoE '^\[[^]]+\] [0-9]+/[0-9]+ done, [0-9]+s' | tail -1
+  tail -c +$(( pos + 1 )) "$LOG" 2>/dev/null | grep -aoE '^\[[^]]+\] [0-9]+/[0-9]+ done, [0-9]+s'
+}
+prog_field() {               # prog_field <line> <label|ndone|n|sec>
+  case $2 in
+    label) sed -E 's/^\[([^]]+)\].*/\1/' <<<"$1" ;;
+    ndone) sed -E 's/^\[[^]]+\] ([0-9]+)\/.*/\1/' <<<"$1" ;;
+    n) sed -E 's/^\[[^]]+\] [0-9]+\/([0-9]+) .*/\1/' <<<"$1" ;;
+    sec) sed -E 's/.* ([0-9]+)s$/\1/' <<<"$1" ;;
+  esac
 }
 sel_left() {                 # select: the running part's remaining time at its own pace + the planned later parts
-  local p label dn n sec i=0 k part left
+  local p p0 label dn n sec dn0 sec0 i=0 k part left plan
   p=$(last_prog)
   [ -n "$p" ] || { est_min 6; return; }
-  label=$(sed -E 's/^\[([^]]+)\].*/\1/' <<<"$p")
-  dn=$(sed -E 's/^\[[^]]+\] ([0-9]+)\/.*/\1/' <<<"$p")
-  n=$(sed -E 's/^\[[^]]+\] [0-9]+\/([0-9]+) .*/\1/' <<<"$p")
-  sec=$(sed -E 's/.* ([0-9]+)s$/\1/' <<<"$p")
+  label=$(prog_field "$p" label); dn=$(prog_field "$p" ndone); n=$(prog_field "$p" n); sec=$(prog_field "$p" sec)
   k=-1
   while IFS= read -r part; do
     [ "$part" = "$label" ] && k=$i
     i=$(( i + 1 ))
   done < <(tr '|' '\n' <<<"$SEL_PARTS")
   [ "$k" -lt 0 ] && { est_min 6; return; }
+  plan=$(cpu_wall "$(cut -d' ' -f$(( k + 1 )) <<<"$SEL_CPU_MIN")")
+  # the pace between the part's last two lines: a restart counts its finished parts as done in its first minute,
+  # so a single line's average pace is too fast; with one line only, the planned time for the rest is used instead
+  p0=$(last_progs | grep -aF "[$label] " | tail -2 | head -1)
+  dn0=$(prog_field "$p0" ndone); sec0=$(prog_field "$p0" sec)
   if [ "$dn" -ge "$n" ]; then left=0
-  elif [ "$dn" -gt 0 ]; then left=$(( sec * (n - dn) / dn / 60 + 1 ))
-  else left=$(cpu_wall "$(cut -d' ' -f$(( k + 1 )) <<<"$SEL_CPU_MIN")"); fi
+  elif [ "$p0" != "$p" ] && [ "$dn" -gt "$dn0" ] && [ "$sec" -gt "$sec0" ]; then
+    left=$(( (sec - sec0) * (n - dn) / (dn - dn0) / 60 + 1 ))
+  else
+    left=$(( plan * (n - dn) / n + 1 ))
+    if [ "$dn" -gt 0 ]; then local avg=$(( sec * (n - dn) / dn / 60 + 1 )); [ "$avg" -gt "$left" ] && left=$avg; fi
+  fi
   echo $(( left + $(sel_plan_from $(( k + 1 ))) ))
 }
 ko_part() {
@@ -229,12 +252,18 @@ ko_part() {
   esac
 }
 
+times_line() {               # times_line <minutes to the end of stage 9 or ""> <current stage>: the two time lines
+  local v=$1 n=$2 r
+  r=$(( $(est_min 10) + $(est_min 11) ))
+  [ "$n" -ge 10 ] && { echo "판정은 끝났습니다. 참고 분석(최대 ${READS_HOURS}시간)과 묶기까지 최대 $(hm "$r")"; return; }
+  echo "판정까지 $(hm "$v"); 참고 분석(고른 것이 있을 때만, 최대 ${READS_HOURS}시간) 포함 최대 $(hm $(( v + r )))"
+}
 stage() {                    # stage <n> <name>
   local now; now=$(date +%s)
   echo "$1|$2|$now" > "$BASE/STAGE"
   echo "$1|$2|$now" >> "$BASE/STAGES"
   { wc -c < "$LOG" || echo 0; } 2>/dev/null | tr -dc '0-9' > "$BASE/STAGE_POS"
-  say "$1/$NST $2  (남은 시간 $(hm "$(left_from "$1")"), 어림)"
+  say "$1/$NST $2  ($(times_line "$(verdict_from "$1")" "$1"), 어림)"
 }
 
 waiting() {                  # wait_go_r2.sh polling for the go commit (WAITING holds its pid)
@@ -290,9 +319,14 @@ status() {
   if [ "$n" = 6 ]; then left=$(sel_left)
   else left=$(( $(est_min "$n") - el )); fi
   [ "$left" -lt 1 ] && left=1
-  [ "$n" -lt "$NST" ] && left=$(( left + $(left_from $(( n + 1 ))) ))
+  [ "$n" -lt 9 ] && left=$(( left + $(verdict_from $(( n + 1 ))) ))
   echo "진행 중: $n/$NST $name (이 단계 ${el}분째)"
-  echo "  남은 시간: $(hm "$left") (어림, CPU ${NCPU}개 기준; 길게 잡은 값)"
+  if [ "$n" -ge 10 ]; then
+    echo "  $(times_line "$left" "$n") (어림)"
+  else
+    echo "  판정까지: $(hm "$left") (어림, CPU ${NCPU}개 기준; 길게 잡은 값)"
+    echo "  참고 분석(고른 것이 있을 때만, 최대 ${READS_HOURS}시간)까지 포함하면 최대: $(hm $(( left + $(est_min 10) + $(est_min 11) )))"
+  fi
   last=$(grep -aF "  · " "$LOG" 2>/dev/null | tail -1)
   [ -n "$last" ] && echo "  지금: ${last#*· }"
   case "$n" in
@@ -305,11 +339,10 @@ status() {
   esac
   case "$n" in
     6) echo "  6/$NST 고르기가 가장 깁니다 (32 vCPU에서 약 3~8시간). 무거운 작업이 먼저 돌아 처음 몇 분의 남은 시간은 길게 나옵니다."
-       echo "  남은 시간이 그대로여도 정상이니 다시 시작하지 마세요."
-       echo "  $(inbox_line)" ;;
-    8|9) echo "  $(inbox_line)" ;;
+       echo "  남은 시간이 그대로여도 정상이니 다시 시작하지 마세요." ;;
     10) echo "  10/$NST 참고 분석은 최대 ${READS_HOURS}시간입니다. 판정은 이미 끝났고(test.json), 정상이니 다시 시작하지 마세요." ;;
   esac
+  [ "$n" -le 9 ] && [ ! -f "$BASE/LEDGER_TAKEN" ] && echo "  $(inbox_line)"
 }
 
 push() {
@@ -474,6 +507,26 @@ elif sub == "ledgercheck":               # ledgercheck <public root> <private di
         else:
             st = "비공개 파일 sha256 다름 → 딥시크 줄 p = 1"
         print(f"LEDGER {label}: {st}")
+elif sub == "pickprivate":               # pickprivate <public root> <private dir> <candidates>: sha256 only
+    pub, priv, cand = args
+    files = sorted(glob.glob(os.path.join(cand, "*.json")))
+    shas = {f: sha(f) for f in files}
+    for prel, fname in (("research/hunt/out/wide/test.json", "wide_test_private.json"),
+                        ("research/hiwr/out/test.json", "test_private.json")):
+        pp, dst = os.path.join(pub, prel), os.path.join(priv, fname)
+        want = None
+        if os.path.exists(pp):
+            try:
+                want = json.load(open(pp)).get("private_sha256")
+            except Exception:  # noqa: BLE001
+                want = None
+        hit = next((f for f in files if want and shas[f] == want), None)
+        if hit:
+            os.replace(hit, dst)
+            files.remove(hit)
+            print(f"private {fname} <- candidate {os.path.basename(hit)} (sha256 matches {prel})")
+        else:
+            print(f"private {fname}: no candidate matches {prel}'s private_sha256 ({len(files)} candidates)")
 elif sub == "verdict":                   # one public line of test.json (counts and yes / no only)
     doc = json.load(open(f"{OUT}/test.json"))
     v = doc.get("verdict") or {}
@@ -585,7 +638,7 @@ FREEG=$(df -BG --output=avail "$BASE" | tail -1 | tr -dc '0-9')
 MEMG=$(free -g | awk '/Mem/{print $2}')
 say "코드 ${HEAD:0:10}, CPU ${NCPU}개, 메모리 ${MEMG}GB, 디스크 여유 ${FREEG}GB"
 [ "$DRYRUN" = 1 ] || [ "${FREEG:-0}" -ge 40 ] || [ -f "$BASE/DATA_VERIFIED" ] \
-  || die "디스크 여유가 40GB보다 적습니다(${FREEG}GB). 서버를 Destroy하고 디스크 100GB로 다시 만드세요."
+  || die "디스크 여유가 40GB보다 적습니다(${FREEG}GB; 서버에 딸린 디스크만 씁니다, Block Storage 아님). 이 화면을 개발자에게 보내 주세요 (아직 계산 전이라 Destroy해도 잃는 것이 없습니다)."
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1
 PROCS=$NCPU
 [ "${MEMG:-0}" -ge 2 ] && [ $(( MEMG / 2 )) -lt "$PROCS" ] && PROCS=$(( MEMG / 2 ))   # about 2 GB per worker at most
@@ -620,7 +673,7 @@ pin_check() {                # pin_check <select|pretest|test|reads>: the code's
 stage 3 "고정 확인 (설계 해시 첫 줄, 2차 코드·시험·서버 키트, 1차 엔진 파일이 1차 고정값 그대로인지)"
 [ -f "$PIN_REL" ] || die_fix "$PIN_REL 가 없습니다: 2차가 아직 고정되지 않았습니다"
 [ -f "$REF" ] || die_fix "자료 기준 파일이 없습니다: $REF"
-if grep -q "  $PICKS_REL\$" "$PIN_REL" && [ ! -f "$BASE/SELECT_RAN" ]; then
+if grep -q "  $PICKS_REL\$" "$PIN_REL" && [ ! -f "$BASE/SELECT_RAN" ] && [ ! -f "$PRIV/SELECT_STARTED" ]; then
   die_fix "고정 파일에 이미 고른 것(picks) 줄이 있습니다. 이 서버에서 고르기 전이므로 있으면 안 됩니다 (받은 커밋 확인)"
 fi
 if pinned "$TEST_REL"; then step="reads"; elif pinned "$PICKS_REL"; then step="test"; else step="select"; fi
@@ -670,10 +723,10 @@ stage 6 "고르기 (2021~2023만: 85개 이름의 숫자, 가짜 탐색 400번 �
 if pinned "$PICKS_REL"; then
   sub "건너뜀: 고르기 (이미 끝나 고정됨)"
 else
-  touch "$BASE/SELECT_RAN"
-  mkdir -p "$PRIV"
+  mkdir -p "$PRIV"                # the select step writes $PRIV/SELECT_STARTED once its checks pass and it computes
   sub "고르기 시작 (32 vCPU에서 약 3~8시간; 진행: bash $SELF status)"
   mark_step; rc=0; run_select "$PROCS" || rc=$?
+  [ -f "$PRIV/SELECT_STARTED" ] && touch "$BASE/SELECT_RAN"
   if [ "$rc" != 0 ]; then
     refused_step && die_fix "고르기 거부: $(step_log | grep -a '^refused:' | tail -1 | cut -c1-300)"
     if memory_step "$rc"; then
@@ -705,10 +758,20 @@ fi
 # ------------------------------------------------------------------ 8 select-only reads (before test.json)
 run_pretest() { "${R2[@]}" pretest --data "$DATA" --private "$PRIV" --procs "$1" >>"$LOG" 2>&1; }
 stage 8 "시험 전 표 (2021~2023만: CSCV, 모멘텀 비교, 주말 표, 두 분용 표; 고르는 데 쓰지 않음)"
+pretest_stop() {             # a pretest failure stops before the one-look test (6: these reads are pre-test only then)
+  say "멈춤: 시험 전 표 실패 ($1). 시험(9/$NST)은 아직 하지 않았습니다."
+  say "이 화면과 tail -50 $LOG 를 개발자에게 보내 주세요. 개발자가 고치거나, 시험 전 표 없이 가자고 하면"
+  say "  touch $BASE/SKIP_PRETEST  을 붙여 넣은 뒤 아래 줄로 이어서 합니다 (그때 시험 전 표는 '사후'로 남습니다):"
+  echo "$RESTART" | tee -a "$LOG"
+  keep_server
+  exit 1
+}
 if pinned "$PRETEST_REL"; then
   sub "건너뜀: 시험 전 표 (이미 끝나 고정됨)"
 elif [ -s "$TEST_REL" ]; then
   warn "시험 전 표가 시험 뒤로 밀렸습니다 (나중에 계산하면 '사후'로 표시)"
+elif [ -f "$BASE/SKIP_PRETEST" ]; then
+  warn "시험 전 표를 건너뛰었습니다 (개발자 판단, SKIP_PRETEST; 나중에 계산하면 '사후')"
 else
   if [ -f "$PRETEST_REL" ]; then                 # written but its line not appended (stopped between the two)
     mv "$PRETEST_REL" "$BASE/pretest_reads.unpinned.$(date +%s).json"
@@ -716,15 +779,17 @@ else
   fi
   mark_step; rc=0; run_pretest "$PROCS" || rc=$?
   if [ "$rc" != 0 ]; then
+    refused_step && pretest_stop "거부: $(step_log | grep -a '^refused:' | tail -1 | cut -c1-200)"
     if memory_step "$rc"; then
       [ -f "$PRETEST_REL" ] && ! pinned "$PRETEST_REL" && mv "$PRETEST_REL" "$BASE/pretest_reads.unpinned.$(date +%s).json"
       sub "시험 전 표를 작업 ${HALF}개로 한 번 더 합니다"
-      mark_step; run_pretest "$HALF" || warn "시험 전 표 실패 (판정과는 관계없음; 나중에 계산하면 '사후'; tail -50 $LOG)"
+      mark_step; run_pretest "$HALF" || pretest_stop "작업 ${HALF}개로도 끝나지 않음 (메모리?)"
     else
-      warn "시험 전 표 실패 (판정과는 관계없음; 나중에 계산하면 '사후'; run.log의 마지막 부분 참고)"
+      pretest_stop "종료 코드 $rc"
     fi
   fi
-  pinned "$PRETEST_REL" && sub "시험 전 표 고정됨 (pretest_reads.json)"
+  if pinned "$PRETEST_REL"; then sub "시험 전 표 고정됨 (pretest_reads.json)"
+  else pretest_stop "pretest_reads.json이 고정 파일에 없습니다"; fi
 fi
 
 # ------------------------------------------------------------------ 9 test (one look) with the ledger inputs
@@ -738,16 +803,9 @@ fetch_branch() {             # fetch_branch <name>: the exact branch, else the n
   c=$(git -C "$REPO" ls-remote --heads origin "$b-*" 2>>"$LOG" | awk '{print $2}' | sed 's#^refs/heads/##' | sort | tail -1)
   [ -n "$c" ] && git -C "$REPO" fetch -q origin "+refs/heads/$c:refs/remotes/origin/$c" >>"$LOG" 2>&1 && echo "origin/$c"
 }
-put_public() {               # put_public <dest under LPUB> <suffix> <ref or ""> <checkout paths...>
-  local dst=$1 suf=$2 ref=$3 p src
-  shift 3
+put_public() {               # put_public <dest under LPUB> <suffix> <ref or "">: from the results branch only (0.3)
+  local dst=$1 suf=$2 ref=$3 src
   mkdir -p "$(dirname "$LPUB/$dst")"
-  for p in "$@"; do
-    if [ -f "$REPO/$p" ]; then
-      cp "$REPO/$p" "$LPUB/$dst" && echo "$dst <- checkout:$p $(sha256sum "$LPUB/$dst" | cut -c1-16)" >> "$BASE/ledger_inputs.txt"
-      return 0
-    fi
-  done
   [ -n "$ref" ] || { echo "$dst <- none" >> "$BASE/ledger_inputs.txt"; return 1; }
   src=$(src_from_ref "$ref" "$suf")
   if [ -n "$src" ] && git -C "$REPO" show "$ref:$src" > "$LPUB/$dst.tmp" 2>>"$LOG"; then
@@ -771,43 +829,51 @@ ledger_inputs() {            # PREREG 8: the other studies' public outputs, the 
     [ "$k" -lt 3 ] && sleep "$RSLEEP"
   done
   echo "refs: round 1 ${r1:-none}, track 2 ${t2:-none}, full grid ${fg:-none}" >> "$BASE/ledger_inputs.txt"
-  put_public research/hunt/out/v1/test.json hunt/v1/test.json "$r1" research/hunt/out/v1/test.json \
-    research/hunt/results/hunt/v1/test.json || warn "장부: 1차 v1 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
-  put_public research/hunt/out/wide/test.json hunt/wide/test.json "$r1" research/hunt/out/wide/test.json \
-    research/hunt/results/hunt/wide/test.json || warn "장부: 1차 넓게(wide) 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
-  put_public research/hunt/out/wide/reads_o.json hunt/wide/reads_o.json "$r1" research/hunt/out/wide/reads_o.json \
-    research/hunt/results/hunt/wide/reads_o.json || warn "장부: 1차 추가 분석(reads_o.json)이 없습니다 (O4 줄은 최대 개수, p = 1)"
-  put_public research/hiwr/out/test.json hiwr/out/test.json "$t2" research/hiwr/out/test.json \
-    research/hiwr/results/hiwr/out/test.json || warn "장부: 2번 트랙 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
-  put_public research/hiwr/picks.json hiwr/picks.json "$t2" research/hiwr/picks.json research/hiwr/results/hiwr/picks.json \
-    || true
-  if put_public fullgrid_confirm.json fullgrid/results/confirm.json "$fg" research/fullgrid/results/confirm.json; then
+  echo "$r1" > "$BASE/R1_REF"
+  put_public research/hunt/out/v1/test.json hunt/v1/test.json "$r1" \
+    || warn "장부: 1차 v1 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
+  put_public research/hunt/out/wide/test.json hunt/wide/test.json "$r1" \
+    || warn "장부: 1차 넓게(wide) 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
+  put_public research/hunt/out/wide/reads_o.json hunt/wide/reads_o.json "$r1" \
+    || warn "장부: 1차 추가 분석(reads_o.json)이 없습니다 (O4 줄은 최대 개수, p = 1)"
+  put_public research/hiwr/out/test.json hiwr/out/test.json "$t2" \
+    || warn "장부: 2번 트랙 시험 결과를 찾지 못했습니다 (장부에는 '아직 안 돈 시험'으로 셈)"
+  put_public research/hiwr/picks.json hiwr/picks.json "$t2" || true
+  if put_public fullgrid_confirm.json fullgrid/results/confirm.json "$fg"; then
     FG_ARGS=(--fullgrid-confirm "$LPUB/fullgrid_confirm.json")
   else
     FG_ARGS=()
     warn "장부: 풀그리드 confirm.json을 받지 못했습니다 (711줄은 p = 1)"
   fi
-  # the owners' private files (8): only the two p files are taken out of their *.tgz; nobody opens them
+  # the owners' private files (8): every member named wide_test_private.json or test_private.json is taken out of
+  # every *.tgz to a numbered candidate file (nobody opens them); the one whose sha256 equals the public output's
+  # private_sha256 is kept, so the archives' names and order do not matter
+  local cand="${LPRIV:?}/candidates" n=0
+  rm -rf "${cand:?}"; mkdir -p "$cand"
   for f in "$INBOX"/*.tgz "$INBOX"/*.tar.gz; do
     [ -f "$f" ] || continue
     case "$f" in "$BASE"/*) continue ;; esac
     list=$(tar -tzf "$f" 2>>"$LOG") || { warn "장부: 풀 수 없는 파일 $(basename "$f")"; continue; }
-    for want in wide_test_private.json test_private.json; do
-      m=$(printf '%s\n' "$list" | awk -F/ -v w="$want" '$NF == w { print NF "\t" $0 }' | sort -n | head -1 | cut -f2)
+    while IFS= read -r m; do
       [ -n "$m" ] || continue
-      if tar -xzf "$f" -O "$m" > "$LPRIV/$want.tmp" 2>>"$LOG"; then
-        mv "$LPRIV/$want.tmp" "$LPRIV/$want"
-        echo "private $want <- $(basename "$f"):$m" >> "$BASE/ledger_inputs.txt"
+      n=$(( n + 1 ))
+      if tar -xzf "$f" -O "$m" > "$cand/$n.json" 2>>"$LOG"; then
+        echo "candidate $n <- $(basename "$f"):$m" >> "$BASE/ledger_inputs.txt"
       else
-        rm -f "$LPRIV/$want.tmp"
+        rm -f "${cand:?}/$n.json"
       fi
-    done
+    done < <(printf '%s\n' "$list" | awk -F/ '$NF == "wide_test_private.json" || $NF == "test_private.json"')
   done
+  helper pickprivate "$LPUB" "$LPRIV" "$cand" 2>>"$LOG" >> "$BASE/ledger_inputs.txt"
+  rm -rf "${cand:?}"
+  touch "$BASE/LEDGER_TAKEN"
   helper ledgercheck "$LPUB" "$LPRIV" 2>>"$LOG" | while IFS= read -r l; do sub "$l"; done
 }
 run_test() {
+  local ex=()
+  [ -f "$REPO/research/hunt_r2/ledger_extra.json" ] && ex=(--ledger-extra "$REPO/research/hunt_r2/ledger_extra.json")
   "${R2[@]}" test --data "$DATA" --private "$PRIV" --procs "$1" --no-reads --ledger-private "$LPRIV" \
-    --ledger-public "$LPUB" "${FG_ARGS[@]}" >>"$LOG" 2>&1
+    --ledger-public "$LPUB" "${FG_ARGS[@]}" "${ex[@]}" >>"$LOG" 2>&1
 }
 stage 9 "시험 (2024-01 ~ 2026-09, 1군부터, 한 번만) + 프로그램 전체 장부"
 FG_ARGS=()
@@ -845,7 +911,7 @@ reads_once() {               # reads_once <procs>: one reads run within the wall
   [ "$left" -le 5 ] && return 124
   sub "참고 분석 (r=1%·대조 → 주말 → 목표판 순서; 끝난 모듈은 건너뜀; ${READS_HOURS}시간 중 $(( left / 60 ))분 남음, 작업 ${procs}개)"
   mark_step
-  "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$procs" >>"$LOG" 2>&1 &
+  "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$procs" --wall-s "$left" >>"$LOG" 2>&1 &
   to=$!
   t0=$(date +%s)
   trap 'stop_tree "$to"; exit 1' HUP INT TERM      # a pane kill or Ctrl+C stops the read with the run
@@ -927,11 +993,18 @@ pack() {
   return 0
 }
 stage 11 "결과 페이지·결과 묶기"
-"${R2[@]}" report --private "$PRIV" >>"$LOG" 2>&1 || warn "결과 페이지(RESULTS_R2_KO.md) 쓰기 실패"
+if pinned "$TEST_REL"; then                   # 5: round 1's public select / picks only after round 2's test.json is pinned
+  r1ref=$(cat "$BASE/R1_REF" 2>/dev/null)
+  [ -n "$r1ref" ] || r1ref=$(fetch_branch "$R1_BRANCH")
+  put_public research/hunt/out/wide/select.json hunt/wide/select.json "$r1ref" || true
+  put_public research/hunt/out/wide/picks.json hunt/wide/picks.json "$r1ref" || true
+  put_public research/hunt/out/wide/test.json hunt/wide/test.json "$r1ref" || true
+fi
+"${R2[@]}" report --private "$PRIV" --ledger-public "$LPUB" >>"$LOG" 2>&1 || warn "결과 페이지(RESULTS_R2_KO.md) 쓰기 실패"
 pack || die "결과 묶기 실패 (tail -50 $LOG)"
 rm -f "$BASE/RUNNING"
 touch "$BASE/DONE"
 say "끝. 결과 $(du -h "$BASE/results.tgz" | cut -f1): $BASE/results.tgz"
 [ -s "$BASE/verdict_line.txt" ] && say "$(cat "$BASE/verdict_line.txt")"
 if [ -s "$BASE/WARNINGS" ]; then say "참고(건너뛴 것):"; sed 's/^/  - /' "$BASE/WARNINGS" | tee -a "$LOG"; fi
-say "보내기: bash $SELF push   (그다음 Vultr에서 서버 Destroy, 디스크 hunt-r2-disk도 삭제)"
+say "보내기: bash $SELF push   (그다음 Vultr에서 서버 Destroy)"

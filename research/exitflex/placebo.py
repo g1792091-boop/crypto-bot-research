@@ -10,12 +10,18 @@ sizing, period-end close and free fill minute; instead of V's rule it exits at a
      exists and Rc < -d; F2 armed before the check; F5 armed; F8 armed and a reference; F9 a reference and (armed or Rc <
      -0.5R); F11 a finite invalidation level or an armed / event component (and the strategy's own 'can fire here' flag);
      F3, F4, F4 q15, F10 always 0
+     F12 a swing reference exists, or F2 is armed, or F5 is armed, or F11's own z is 1 (F6's precondition adds nothing; F3, F4, F7h and
+     F10 set none)
 all computed from the state frozen at the end of the previous minute (the kernel's step 0), as the rule's own decision is.
+F12 carries its own 8-hour clock (prereg 6): the first pick-timeframe check at or after C0 + 8 h (the clock check) is left out of the
+hazard table (kernel_x counts neither its numerator nor its denominator), and the F12 placebo exits there with probability 1 and no
+draw; before it, it exits at u < h as any placebo does. Its holds therefore never exceed F12's.
 h comes from V's own quarter-size account of the same pick and period: RULE exits at checks of the stratum over the checks of
 the stratum at which the position was still open after steps 1-5 of the check's minute (kernel_x counts both).
 The draw of a check depends only on (V, period, seed, coin, check close time), not on the pick: u = (splitmix64(
-splitmix64(base) XOR key) >> 11) / 2^53, key = coin x 2^36 + close ms // 60,000, base = run._seed("exitflex", "placebo", V,
-period, s).
+splitmix64(base) XOR key) >> 11) / 2^53, key = coin index x 2^36 + close ms // 60,000 (the coin index is the position in the
+priority order BTC, ETH, SOL, DOGE, LTC, BCH; the close is that of the latest closed chart bar of the check), base =
+run._seed("exitflex", "placebo", V, period, s).
 
 The numba pieces (draw, age bucket, the check itself) live in kernel_x; this file holds the plain-Python references that the
 tests compare them with, the hazard tables, the seeds and the block runner.

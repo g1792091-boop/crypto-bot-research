@@ -10,9 +10,10 @@ ATR14, the 장세 label and the fill bar, exactly as ``hunt.system_signals`` use
 Pure rules (tested on hand-made tables): ``anchor_slot`` (4.1), ``plateau`` / ``stage_a`` (4.0, 4.2), ``foreign_masks``
 (3.6 two names), ``rank_candidates`` (4.2), ``null_rank_scores`` / ``step_down`` (4.3), ``box_check`` / ``box_best``
 (4.4). Null constructions (4.3): ``FlipTable`` ((b′): one coin per signal-bar close shared by every coin and system),
-``delta_days`` / ``Spans`` / ``shift_sig`` / ``choose_delta`` ((a′): whole-week common shift, per-coin circular wrap,
-drops counted, redraw above 10%). ``select_run`` runs the whole step on an installed market: the event store, the
-(a′) shifts, the real search, 200 replicates of each null, the hurdle, the box stage and ``picks.json``.
+``delta_days`` / ``Ctx.span`` / ``shift_sig`` / ``redraw_needed`` / ``near_zero`` ((a′): whole-week common shift, per-coin
+circular wrap, drops counted, a redraw when more than 10% of the replicate's own events are dropped). ``select_run``
+runs the whole step on an installed market: the event store, the real search, 200 replicates of each null (the (a′)
+redraws included), the hurdle, the box stage and ``picks.json``.
 
 Where the text leaves room, the reading taken is listed in ``CHOICES`` (also written into picks.json).
 """
@@ -53,14 +54,15 @@ GATE_RANK = {"G1": 0, "NONE": 1}
 BOX_MIN_SHARE = 2.0 / 3.0               # 4.4: at least 2/3 of the box points with n >= 72 and no bust
 
 CHOICES = [
-    "3.6 default in effect: the event list compared is the system's signal list as the engine receives it (all 30 "
-    "coins; coin, signal bar, side; after the gate, the both-sides rule, ATR14 > 0 and a fill bar); in a null "
-    "replicate the transformed lists are compared. A point with the default's list is never a peak or a pick and its "
-    "run is the default's run (the engine is deterministic); equal lists of two non-default points share one run and "
-    "stay separate points.",
-    "3.6 / 4.2: the default point and every default in effect are excluded from the peak search (3.6 'can never be a "
-    "peak'); a name whose best plateau is its default therefore has a peak whose P_c is not above the default's and "
-    "is no candidate, as 4.2 says.",
+    "3.6 default in effect: a combo whose gated select-period event list (all 30 coins; coin, signal bar, side; after "
+    "the gate, before the ATR14 / fill filters) equals its default's on the same timeframe and gate takes the "
+    "default's identity; its run is the default's run (equal gated lists give equal signal lists and the engine is "
+    "deterministic). A null replicate keeps the real identity (its transforms are functions of the list, so such a "
+    "point's transformed list is the default's). Equal lists of two non-default points share one run, stay separate "
+    "points and are labelled.",
+    "4.2 / 3.6: the peak is chosen over every coarse-eligible point, the default and defaults in effect included "
+    "(4.2); when the peak is the default or a default in effect the name is no candidate (4.2) and that point is never "
+    "a pick (3.6). A point another name owns (3.6 two names) is never this name's peak.",
     "3.6 two names: a system is 'reached' by a name when it is that name's default (run at every slot) or a coarse "
     "point at that name's anchor; a system reached by two names of one family code at the same (timeframe, gate) "
     "can be the peak only of the name nearer in log distance (tie: the earlier name in W 5 order).",
@@ -76,11 +78,13 @@ CHOICES = [
     "a fill bar and at least 300 bars of the series before it (W 3.1 warm-up); landing bars need a label, ATR14 > 0 and "
     "a fill bar (no bar at that close = dropped). Two events of one coin landing on one bar: one event when they have "
     "the same side, none when opposite (W 3.2's both-sides rule), counted 'collided'.",
-    "4.3 (a′) redraw: the 10% share is taken over the events of every system the search can run (each name's 8 "
-    "default systems and every coarse point at every slot, both gates; post gate / ATR / fill), so Δ_i is fixed before "
-    "any engine run of the replicate.",
+    "4.3 (a′) redraw: the share dropped is taken over the replicate's own events (every system its Stage 0 and Stage A "
+    "ran, all coins); a replicate above 10% is replayed whole at draw j + 1.",
     "4.4 box plateau: medians and the 2/3 share over the box points that exist (valid_r2 and not removed under 3.7), "
     "the centre included; box best ties: the earlier box point.",
+    "5 'same numbers as a full-grid select pick': the name and every number equal one of the full grid's 711 select "
+    "picks (research/hunt_r2/fullgrid_select_picks.json, extracted from its results branch with that file's sha256; "
+    "any timeframe and exit); a label only.",
 ]
 
 
@@ -142,11 +146,8 @@ def stage_a(lat, S, n, bust, exists, S2=None, default_eff=None, foreign=None, mi
             if use2:
                 pos &= S2 > 0
             elig &= ~(ex & ~pos[np.maximum(nb, 0)]).any(axis=1)
-    peakable = elig.copy()
-    peakable[lat.default] = False
-    if default_eff is not None:
-        peakable &= ~np.asarray(default_eff, bool)
-    if foreign is not None:
+    peakable = elig.copy()                     # 4.2: the default and defaults in effect stay in the peak search
+    if foreign is not None:                    # 3.6 two names: never this name's peak
         peakable &= ~np.asarray(foreign, bool)
     idx = np.flatnonzero(peakable)
     peak = -1
@@ -154,9 +155,12 @@ def stage_a(lat, S, n, bust, exists, S2=None, default_eff=None, foreign=None, mi
         p2 = P2[idx] if use2 else np.zeros(len(idx))
         order = np.lexsort((idx, -S[idx], -p2, -P[idx]))
         peak = int(idx[order[0]])
+    deff = np.zeros(npt, bool) if default_eff is None else np.asarray(default_eff, bool)
+    peak_is = None if peak < 0 else ("the default" if peak == lat.default else
+                                     ("a default in effect" if deff[peak] else None))
     P_def = float(P[lat.default])
-    cand = bool(peak >= 0 and P[peak] > P_def)
-    return {"P": P, "P2": P2, "eligible": elig, "peak": peak, "candidate": cand, "P_default": P_def,
+    cand = bool(peak >= 0 and peak_is is None and P[peak] > P_def)
+    return {"P": P, "P2": P2, "eligible": elig, "peak": peak, "peak_is": peak_is, "candidate": cand, "P_default": P_def,
             "P_peak": float(P[peak]) if peak >= 0 else None,
             "P2_peak": float(P2[peak]) if (peak >= 0 and use2) else None,
             "S_peak": float(S[peak]) if peak >= 0 else None, "n_points": int(npt)}
@@ -293,18 +297,44 @@ class Ctx:
 
 
 _UNITS: "OrderedDict" = OrderedDict()
-UNITS_LRU = 12
+UNITS_LRU = 8          # x 30 coins x 3 memory-mapped arrays = at most 720 open files per process
+NOFILE_WANT = 65536
+
+
+def raise_nofile(want: int = NOFILE_WANT) -> tuple:
+    """Raise this process's soft open-file limit towards ``want`` (never above the hard limit); forked workers
+    inherit it. Returns (soft, hard) after the change."""
+    try:
+        import resource
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        cap = want if hard == resource.RLIM_INFINITY else min(want, hard)
+        if soft != resource.RLIM_INFINITY and soft < cap:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (cap, hard))
+        return resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ImportError, ValueError, OSError):
+        return (None, None)
+
+
+def drop_units() -> None:
+    """Close every cached store unit (their memory maps and open files)."""
+    while _UNITS:
+        _k, us = _UNITS.popitem(last=False)
+        for u in us:
+            u.close()
 
 
 def load_units(root: str, part: str, name: str, tf: str, syms: list) -> list:
-    """The store units of one (name, timeframe), one per coin in universe order (kept in a small per-process cache)."""
+    """The store units of one (name, timeframe), one per coin in universe order (kept in a small per-process cache;
+    an evicted unit's maps are closed at once, so open files stay bounded)."""
     key = (root, part, name, tf, tuple(syms))
     u = _UNITS.pop(key, None)
     if u is None:
         u = [ST.StoreUnit(ST.unit_dir(root, part, name, tf, s)) for s in syms]
     _UNITS[key] = u
     while len(_UNITS) > UNITS_LRU:
-        _UNITS.popitem(last=False)
+        _k, old = _UNITS.popitem(last=False)
+        for x in old:
+            x.close()
     return u
 
 
@@ -330,6 +360,20 @@ def store_sig(ctx: Ctx, units: list, ci: int, gate: str, tf: str) -> dict:
         K.append(np.full(int(keep.sum()), k, np.int64))
     cat = lambda xs: np.concatenate(xs) if xs else np.zeros(0, np.int64)  # noqa: E731
     return {"tf": tf, "k": cat(K), "j": cat(J), "side": cat(S)}
+
+
+def gated_hash(units: list, ci: int, gate: str) -> str:
+    """3.6: sha256 of the combo's gated select-period event list over every coin (coin, signal bar, side), from the
+    store, after the gate and before the ATR14 / fill filters."""
+    h = hashlib.sha256(gate.encode())
+    for k, u in enumerate(units):
+        j, side, g1 = u.events(ci)
+        keep = (g1 == 1) if gate == "G1" else np.ones(len(j), bool)
+        jj, ss = np.asarray(j, np.int64)[keep], np.asarray(side, np.int64)[keep]
+        o = np.lexsort((-ss, jj))
+        h.update(np.int64(k).tobytes() + np.int64(len(jj)).tobytes())
+        h.update(np.ascontiguousarray(jj[o]).tobytes() + np.ascontiguousarray(ss[o]).tobytes())
+    return h.hexdigest()
 
 
 def sig_hash(sig: dict) -> str:
@@ -422,7 +466,7 @@ def shift_sig(ctx: Ctx, sig: dict, delta_ms: int) -> tuple:
 
 
 class ShiftA:
-    """(a′) replicate i with its chosen shift (``choose_delta``): ``apply`` = ``shift_sig``."""
+    """(a′) replicate i at draw j's shift (``delta_days(i, j)``): ``apply`` = ``shift_sig``."""
 
     def __init__(self, i: int, days: int):
         self.i, self.days = int(i), int(days)
@@ -431,32 +475,9 @@ class ShiftA:
         return shift_sig(ctx, sig, self.days * H.DAY_MS)
 
 
-def drop_share(ctx: Ctx, hist: dict, delta_ms: int) -> tuple:
-    """(a′) share of the events of ``hist`` ({(tf, k): (bar indices, counts)}) whose landing bar is not valid."""
-    tot = drop = 0
-    for (tf, k), (bars, cnt) in hist.items():
-        if not len(bars):
-            continue
-        sp = ctx.span(tf, k)
-        _, valid = landing(sp, sp["cm"][bars], delta_ms)
-        tot += int(cnt.sum())
-        drop += int(cnt[~valid].sum())
-    return (drop / tot if tot else 0.0), drop, tot
-
-
-def choose_delta(ctx: Ctx, hist: dict, i: int, max_share: float = DROP_MAX, max_draws: int = 1000) -> dict:
-    """(a′) replicate i: Δ_i with redraws j = 1, 2, ... while more than ``max_share`` of the events are dropped; the
-    coins whose effective shift lies within 8 weeks of 0 or of L_c (per timeframe)."""
-    draws = []
-    for j in range(max_draws):
-        d = delta_days(i, j)
-        share, drop, tot = drop_share(ctx, hist, d * H.DAY_MS)
-        draws.append({"j": j, "days": d, "share_dropped": share, "dropped": drop, "events": tot})
-        if share <= max_share:
-            break
-    else:
-        raise RuntimeError(f"(a′) replicate {i}: no shift with at most {max_share:.0%} dropped in {max_draws} draws")
-    dms = draws[-1]["days"] * H.DAY_MS
+def near_zero(ctx: Ctx, days: int) -> dict:
+    """(a′): per timeframe, the coins whose effective shift (Δ mod L_c) lies within 8 weeks of 0 or of L_c."""
+    dms = int(days) * H.DAY_MS
     near = {}
     for tf in H.TF_ORDER:
         lst = []
@@ -469,7 +490,14 @@ def choose_delta(ctx: Ctx, hist: dict, i: int, max_share: float = DROP_MAX, max_
                 lst.append(s)
         if lst:
             near[tf] = lst
-    return {"i": i, "days": draws[-1]["days"], "j": draws[-1]["j"], "draws": draws, "near_zero": near}
+    return near
+
+
+def redraw_needed(counts: dict, max_share: float = DROP_MAX) -> tuple:
+    """(a′) 4.3: (share dropped, redraw?) over the replicate's events (every system its search ran, all coins)."""
+    ev, dr = int(counts.get("events", 0)), int(counts.get("dropped", 0))
+    share = dr / ev if ev else 0.0
+    return share, share > max_share
 
 
 # ------------------------------------------------------------------ engine runs (round 1's public functions)
@@ -538,11 +566,13 @@ def name_unit(ctx: Ctx, name: str, transform=None, real: bool = False, anchor: i
     pos = [None] * npt if real else None
     bm = np.full(npt, -1, np.int64) if real else None
     hashes = [None] * npt
+    ghash = [None] * npt                        # 3.6: the gated event list (identity of a default in effect)
     by_hash: dict = {}
     d_hash = rows[a]["hash"]
     for i in range(npt):
         if not exists[i]:
             continue
+        ghash[i] = gated_hash(units, i, gate)
         if i == lat.default:
             sig = None
             h = d_hash
@@ -565,10 +595,11 @@ def name_unit(ctx: Ctx, name: str, transform=None, real: bool = False, anchor: i
         if real:
             S2[i] = o["x2"]["S"]
             lnM[i], lnM2[i], pos[i], bm[i] = o["lnM"], o["x2"]["lnM"], o["pos_month"], o["bust_month"]
-    deff = np.asarray([h == d_hash and i != lat.default for i, h in enumerate(hashes)], bool)
+    gd = ghash[lat.default]
+    deff = np.asarray([h is not None and h == gd and i != lat.default for i, h in enumerate(ghash)], bool)
     groups: dict = {}
-    for i, h in enumerate(hashes):
-        if h is not None and h != d_hash:
+    for i, h in enumerate(ghash):
+        if h is not None and h != gd:
             groups.setdefault(h, []).append(i)
     dups = [g for g in groups.values() if len(g) > 1]
     for r in rows:
@@ -624,44 +655,6 @@ def box_unit(ctx: Ctx, name: str, tf: str, gate: str, bx, removed: dict) -> dict
     return chk
 
 
-# ------------------------------------------------------------------ the select step: event histograms for (a′) redraws
-def unit_hist(ctx: Ctx, name: str, tf: str) -> dict:
-    """{(tf, k): (bars, counts)}: the signal bars of every system of one (name, timeframe) the search can run (every
-    coarse combo not removed under 3.7, both gates; after the gate, ATR14 and fill filters), with multiplicity."""
-    lat = L.coarse(name)
-    units = load_units(ctx.root, ctx.part, name, tf, ctx.syms)
-    rem = ST.removed_of(units)
-    out = {}
-    for k, u in enumerate(units):
-        ok = ctx.ok(tf, k)
-        acc = []
-        for ci in range(len(lat)):
-            if ci in rem:
-                continue
-            j, _side, g1 = u.events(ci)
-            keep = ok[j]
-            acc.append(j[keep])
-            acc.append(j[keep & (g1 == 1)])
-        allj = np.concatenate(acc).astype(np.int64) if acc else np.zeros(0, np.int64)
-        bars, cnt = np.unique(allj, return_counts=True)
-        out[(tf, k)] = (bars, cnt.astype(np.int64))
-    return out
-
-
-def merge_hist(parts: list) -> dict:
-    acc: dict = {}
-    for h in parts:
-        for key, (b, c) in h.items():
-            acc.setdefault(key, []).append((b, c))
-    out = {}
-    for key, lst in acc.items():
-        b = np.concatenate([x for x, _ in lst])
-        c = np.concatenate([y for _, y in lst])
-        ub, inv = np.unique(b, return_inverse=True)
-        out[key] = (ub, np.bincount(inv, weights=c, minlength=len(ub)).astype(np.int64))
-    return out
-
-
 # ------------------------------------------------------------------ the select step: units in forked workers
 _RUN: dict = {}          # set by the parent before a pmap: ctx, flip tables, shifts (workers inherit them by fork)
 
@@ -698,14 +691,17 @@ def write_json(path: str, obj) -> str:
 
 
 def _null_task(task) -> dict:
-    null, i, name, part = task
+    null, i, name, part, j = task
     if part and os.path.exists(part):
         with open(part) as fh:
             return json.load(fh)
     ctx = _RUN["ctx"]
-    tr = FlipTable(i, ctx.start, ctx.end) if null == "b" else ShiftA(i, _RUN["shift"][i])
-    if null == "b" and _RUN.get("flip", {}).get(i) is not None:
-        tr = _RUN["flip"][i]
+    if null == "b":
+        tr = _RUN.get("flip", {}).get(i)
+        if tr is None:
+            tr = FlipTable(i, ctx.start, ctx.end)
+    else:
+        tr = ShiftA(i, delta_days(i, j))
     out = compact(name_unit(ctx, name, transform=tr))
     if part:
         H.disk_check(part)
@@ -734,30 +730,77 @@ def unit_weight(name: str) -> int:
     return len(L.coarse(name)) * (1 + heavy.get(name, 0))
 
 
-def null_replicates(null: str, reps: list, names_order: list, procs: int, parts: str | None) -> dict:
-    """Every (replicate, name) unit of one null, heaviest first; then each replicate's search (4.3, base cost only).
-    Returns {i: {"P": candidate P_c list, "candidates": n, "runs": ..., "counts": ...}}."""
-    tasks = []
-    for i in reps:
-        for nm in names_order:
-            p = os.path.join(parts, f"null_{null}", f"{i:03d}", f"{nm}.json") if parts else None
-            tasks.append((null, i, nm, p))
+MAX_DRAWS = 1000                        # (a′): a replicate that needs more redraws stops the step
+
+
+def null_part(parts: str | None, null: str, i: int, name: str, j: int = 0) -> str | None:
+    """Part file of one (replicate, name) unit; an (a′) redraw j >= 1 has its own folder."""
+    if not parts:
+        return None
+    rep = f"{i:03d}" if (null == "b" or j == 0) else f"{i:03d}_j{j}"
+    return os.path.join(parts, f"null_{null}", rep, f"{name}.json")
+
+
+def _null_units(null: str, todo: dict, names_order: list, procs: int, parts: str | None) -> dict:
+    """{i: {name: unit}} for the replicates ``todo`` = {i: draw j}, heaviest units first."""
+    tasks = [(null, i, nm, null_part(parts, null, i, nm, j), j) for i, j in todo.items() for nm in names_order]
     order = sorted(range(len(tasks)), key=lambda t: (-unit_weight(tasks[t][2]), tasks[t][1], tasks[t][2]))
     res = H.pmap(_null_task, [tasks[t] for t in order], procs, label=f"null ({null}′) units")
-    by = {}
+    by: dict = {}
     for t, r in zip(order, res):
         by.setdefault(tasks[t][1], {})[tasks[t][2]] = expand(r)
+    return by
+
+
+def _sum_counts(units: dict) -> dict:
+    cnt = {"events": 0, "dropped": 0, "collided": 0, "flipped": 0}
+    for u in units.values():
+        for k, v in u["counts"].items():
+            cnt[k] = cnt.get(k, 0) + v
+    return cnt
+
+
+def null_replicates(null: str, reps: list, names_order: list, procs: int, parts: str | None) -> dict:
+    """Every (replicate, name) unit of one null, heaviest first; then each replicate's search (4.3, base cost only).
+    (a′): a replicate whose search dropped more than 10% of its events (every system it ran, all coins) is replayed
+    with the next draw j = 1, 2, ... (4.3). Returns {i: {"P": candidate P_c list, "candidates": n, "runs": ...,
+    "counts": ..., "shift" ((a′) only)}}."""
+    final: dict = {}
+    draws = {i: [] for i in reps}
+    todo = {i: 0 for i in reps}
+    while todo:
+        by = _null_units(null, todo, names_order, procs, parts)
+        nxt = {}
+        for i, j in todo.items():
+            if null != "a":
+                final[i] = by[i]
+                continue
+            cnt = _sum_counts(by[i])
+            share, again = redraw_needed(cnt)
+            draws[i].append({"j": j, "days": delta_days(i, j), "share_dropped": share, "dropped": cnt["dropped"],
+                             "events": cnt["events"]})
+            if not again:
+                final[i] = by[i]
+            elif j + 1 >= MAX_DRAWS:
+                raise RuntimeError(f"(a′) replicate {i}: no shift with at most {DROP_MAX:.0%} dropped in {MAX_DRAWS} "
+                                   "draws")
+            else:
+                nxt[i] = j + 1
+                print(f"(a′) replicate {i}: {share:.1%} of its events dropped at {delta_days(i, j)} days: redrawn "
+                      f"(j = {j + 1}, {delta_days(i, j + 1)} days)", flush=True)
+        todo = nxt
     out = {}
     for i in reps:
-        s = search(by[i], names_order, real=False)
-        cnt = {"events": 0, "dropped": 0, "collided": 0, "flipped": 0}
-        for u in by[i].values():
-            for k, v in u["counts"].items():
-                cnt[k] = cnt.get(k, 0) + v
+        units = final[i]
+        s = search(units, names_order, real=False)
         out[i] = {"P": [c["P"] for c in s["ranked"]], "candidates": len(s["ranked"]),
-                  "names": [c["name"] for c in s["ranked"]], "counts": cnt,
-                  "runs": int(sum(u["runs"] for u in by[i].values())),
-                  "anchors": {nm: [u["anchor_tf"], u["anchor_gate"]] for nm, u in by[i].items()}}
+                  "names": [c["name"] for c in s["ranked"]], "counts": _sum_counts(units),
+                  "runs": int(sum(u["runs"] for u in units.values())),
+                  "anchors": {nm: [u["anchor_tf"], u["anchor_gate"]] for nm, u in units.items()}}
+        if null == "a":
+            d = draws[i][-1]
+            out[i]["shift"] = {"days": d["days"], "j": d["j"], "draws": draws[i],
+                               "near_zero": near_zero(_RUN["ctx"], d["days"]) if "ctx" in _RUN else {}}
     return out
 
 
@@ -782,7 +825,10 @@ def _box_store_task(task):
 
 
 def _box_task(task):
-    name, tf, gate, peak_idx = task
+    name, tf, gate, peak_idx, part = task
+    if part and os.path.exists(part):
+        with open(part, "rb") as fh:
+            return pickle.load(fh)
     ctx = _RUN["ctx"]
     lat = L.coarse(name)
     bx = L.box(name, lat.combos[peak_idx])
@@ -791,12 +837,18 @@ def _box_task(task):
     res = box_unit(ctx, name, tf, gate, bx, rem)
     res["removed"] = {str(k): v for k, v in rem.items()}
     res["centre"] = bx.index(lat.combos[peak_idx])
+    if part:
+        H.disk_check(part)
+        os.makedirs(os.path.dirname(part), exist_ok=True)
+        with open(part + ".tmp", "wb") as fh:
+            pickle.dump(res, fh)
+        os.replace(part + ".tmp", part)
     return res
 
 
-def box_stage(ctx: Ctx, real_units: dict, ranked: list, steps: list, procs: int) -> dict:
+def box_stage(ctx: Ctx, real_units: dict, ranked: list, steps: list, procs: int, parts: str | None = None) -> dict:
     """Taken names in their order until 30 picks: each box (3.5) at the anchor, base and cost x2, must be a plateau;
-    the pick is the coarse peak (the box centre)."""
+    the pick is the coarse peak (the box centre). ``parts``: one resumable part file per box check."""
     taken = [c for c, s in zip(ranked, steps) if s["taken"]]
     if not taken:
         return {"picks": [], "boxes": {}}
@@ -808,8 +860,9 @@ def box_stage(ctx: Ctx, real_units: dict, ranked: list, steps: list, procs: int)
             jobs.append((c["name"], u["anchor_tf"], s, bx.combos, ctx.root))
     _RUN["ctx"] = ctx
     H.pmap(_box_store_task, jobs, procs, label="box store")
-    tasks = [(c["name"], real_units[c["name"]]["anchor_tf"], real_units[c["name"]]["anchor_gate"], c["peak"])
-             for c in taken]
+    tasks = [(c["name"], real_units[c["name"]]["anchor_tf"], real_units[c["name"]]["anchor_gate"], c["peak"],
+              os.path.join(parts, f"{c['name']}_{L.combo_sha(L.coarse(c['name']).combos[c['peak']])}.pkl")
+              if parts else None) for c in taken]
     res = H.pmap(_box_task, tasks, procs, label="box checks")
     boxes = {t[0]: r for t, r in zip(tasks, res)}
     picks = []
@@ -871,17 +924,71 @@ def labels_of(name: str, u: dict, peak: int) -> list:
         if any(p["name"] == name and L.canon({k: p["combo"][k] for k in combo}) == L.canon(combo)
                for p in _watch_picks()):
             out.append("same numbers as an F4 watch pick")
+        if fullgrid_matches(name, combo):
+            out.append(FG_LABEL)
     out.append("old six not blind")
     return out
 
 
 def _watch_picks() -> list:
+    """The 38 F4 watch picks (research/fullgrid/diag/watch_sel.json, a pinned read input): an unreadable file stops
+    the step, since picks.json is hashed once and its labels never change after (5)."""
     if "watch" not in _RUN:
         try:
             _RUN["watch"] = ST.E.EW.watch_picks()
-        except Exception:  # noqa: BLE001  the label is a read; a missing file leaves it out
-            _RUN["watch"] = []
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"the F4 watch list (a pinned read input) is unreadable: {type(e).__name__}: {e}") from e
     return _RUN["watch"]
+
+
+FG_PICKS_REL = "research/hunt_r2/fullgrid_select_picks.json"
+FG_LABEL = "same numbers as a full-grid select pick"
+
+
+def fullgrid_extract(select_json: str) -> dict:
+    """The full grid's 711 select picks (FG 6.1; its results branch, research/fullgrid/results/select.json) reduced to
+    identity and numbers (kind, name, timeframe, rank, exit, combo), with the source file's sha256: the pinned input of
+    the label 'same numbers as a full-grid select pick' (5). No money figure is kept (D11)."""
+    with open(select_json) as fh:
+        doc = json.load(fh)
+    rows = [{"kind": p["kind"], "name": p["name"], "tf": p["tf"], "rank": int(p["rank"]), "exit": p.get("exit"),
+             "combo": p["combo"]} for p in doc["picks"]]
+    return {"what": "PREREG_HUNT_R2 5: the full grid's select picks (numbers only), for the label "
+                    f"'{FG_LABEL}'; never a condition", "source": {"path": "research/fullgrid/results/select.json",
+                                                                    "sha256": H.sha256_file(select_json)},
+            "picks": rows, "n": len(rows)}
+
+
+def _same_numbers(a: dict, b: dict) -> bool:
+    if set(a) != set(b):
+        return False
+    for k in a:
+        x, y = a[k], b[k]
+        xs = list(x) if isinstance(x, (list, tuple)) else [x]
+        ys = list(y) if isinstance(y, (list, tuple)) else [y]
+        if len(xs) != len(ys) or not all(math.isclose(float(u), float(v), rel_tol=1e-9, abs_tol=1e-12)
+                                         for u, v in zip(xs, ys)):
+            return False
+    return True
+
+
+def _fg_picks() -> list:
+    """The pinned extract (an unreadable file stops the step, as the watch list)."""
+    if "fg" not in _RUN:
+        path = os.path.join(ROOT, FG_PICKS_REL)
+        try:
+            with open(path) as fh:
+                _RUN["fg"] = json.load(fh)["picks"]
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"{FG_PICKS_REL} (a pinned input of the labels of 5) is unreadable: "
+                               f"{type(e).__name__}: {e}") from e
+    return _RUN["fg"]
+
+
+def fullgrid_matches(name: str, combo: dict) -> list:
+    """The full-grid select picks with these numbers (name and every number equal; any timeframe and exit)."""
+    return [{"tf": p["tf"], "rank": p["rank"], "exit": p.get("exit")} for p in _fg_picks()
+            if p["name"] == name and _same_numbers(p["combo"], combo)]
 
 
 def _f(x):
@@ -902,6 +1009,7 @@ def picks_doc(names_order: list, real_units: dict, real: dict, hz: dict, box: di
         row = {"family": u["family"], "name": nm, "anchor": {"tf": u["anchor_tf"], "gate": u["anchor_gate"]},
                "default": lat.combos[lat.default], "peak": lat.combos[pk] if pk >= 0 else "no peak",
                "candidate": bool(st["candidate"]), "rank": rank_of.get(nm),
+               "peak_is": st.get("peak_is"),
                "hurdle": step_of[nm]["label"] if nm in step_of else None,
                "labels": labels_of(nm, u, pk)}
         money = {"name": nm, "P_c_peak": _f(st["P_peak"]), "P_c_default": _f(st["P_default"]),
@@ -913,6 +1021,8 @@ def picks_doc(names_order: list, real_units: dict, real: dict, hz: dict, box: di
                           "box_best": {"numbers": bx.combos[b["best"]] if b["best"] >= 0 else None,
                                        "label": "box best, never tested, inflated by the within-box choice"}}
             money["box"] = {"median_S": _f(b["median_S"]), "median_S2": _f(b["median_S2"]), "good": b["good"]}
+        if pk >= 0 and FG_LABEL in row["labels"]:
+            row["fullgrid_select_match"] = fullgrid_matches(nm, lat.combos[pk])
         if nm in pick_no:
             no = pick_no[nm]
             row.update({"pick_no": no, "batch": (no - 1) // 10 + 1,
@@ -961,17 +1071,13 @@ def _store_task(task):
     return 0
 
 
-def _hist_task(task):
-    name, tf = task
-    return unit_hist(_RUN["ctx"], name, tf)
-
-
 def select_run(mk, root: str, parts: str | None, procs: int, names_order: list | None = None,
                n_rep: int = N_REP) -> dict:
     """Section 4 on the installed market ``mk`` (the select period): store, real search, nulls, hurdle, box stage.
     ``names_order`` / ``n_rep`` other than the defaults are for tests only. Returns everything picks_doc needs and
     the real units (the private run folder keeps them for the select-only reads of section 6)."""
     names_order = names_order or [n for _f, n in L.names()]
+    raise_nofile()
     ctx = Ctx(mk, root)
     _RUN.clear()
     _RUN["ctx"] = ctx
@@ -981,14 +1087,7 @@ def select_run(mk, root: str, parts: str | None, procs: int, names_order: list |
              for tf in L.tfs_of(nm) for s in ctx.syms]
     H.pmap(_store_task, tasks, procs, label="event store (name, timeframe, coin)")
     t_store = time.time() - t0
-    hist = merge_hist(H.pmap(_hist_task, [(nm, tf) for nm in names_order for tf in L.tfs_of(nm)], procs,
-                             label="(a′) event histograms"))
     reps = list(range(1, n_rep + 1))
-    shifts = {i: choose_delta(ctx, hist, i) for i in reps}
-    _RUN["shift"] = {i: shifts[i]["days"] for i in reps}
-    for i, sh in shifts.items():
-        if sh["j"]:
-            print(f"(a′) replicate {i}: redrawn {sh['j']} time(s), {sh['days']} days", flush=True)
     _RUN["flip"] = {i: FlipTable(i, ctx.start, ctx.end) for i in reps}
     rp = os.path.join(parts, "real") if parts else None
     real_list = H.pmap(_real_task, [(nm, os.path.join(rp, f"{nm}.pkl") if rp else None)
@@ -999,8 +1098,13 @@ def select_run(mk, root: str, parts: str | None, procs: int, names_order: list |
     null_b = null_replicates("b", reps, names_order, procs, parts)
     null_a = null_replicates("a", reps, names_order, procs, parts)
     hz = hurdle(real, null_a, null_b)
-    box = box_stage(ctx, real_units, real["ranked"], hz["steps"], procs)
-    nulls = {"a": null_a, "b": null_b,
-             "shifts": {str(i): {k: v for k, v in sh.items() if k != "i"} for i, sh in shifts.items()}}
+    box = box_stage(ctx, real_units, real["ranked"], hz["steps"], procs,
+                    parts=os.path.join(parts, "box") if parts else None)
+    for i in reps:
+        if null_a[i]["shift"]["j"]:
+            print(f"(a′) replicate {i}: redrawn {null_a[i]['shift']['j']} time(s), {null_a[i]['shift']['days']} days",
+                  flush=True)
+    nulls = {"a": {i: {k: v for k, v in x.items() if k != "shift"} for i, x in null_a.items()}, "b": null_b,
+             "shifts": {str(i): null_a[i]["shift"] for i in reps}}
     return {"real_units": real_units, "real": real, "hurdle": hz, "box": box, "nulls": nulls,
             "seconds": {"store": round(t_store, 1), "total": round(time.time() - t0, 1)}}

@@ -10,9 +10,11 @@
     python -m research.hunt_r2.hunt_r2 test    --data DIR [--private DIR] [--procs N] [--no-reads]
                                                [--ledger-private DIR] [--ledger-public DIR] [--fullgrid-confirm FILE]
                                                [--ledger-extra FILE]
-    python -m research.hunt_r2.hunt_r2 reads   --data DIR [--private DIR] [--procs N]
-    python -m research.hunt_r2.hunt_r2 report  [--private DIR]
-    python -m research.hunt_r2.hunt_r2 ledger  [--private DIR] [--ledger-private DIR] [--out FILE]
+    python -m research.hunt_r2.hunt_r2 reads   --data DIR [--private DIR] [--procs N] [--wall-s SECONDS]
+    python -m research.hunt_r2.hunt_r2 report  [--private DIR] [--ledger-public DIR]
+    python -m research.hunt_r2.hunt_r2 ledger  [--private DIR] [--ledger-private DIR] [--ledger-public DIR] [--out FILE]
+    python -m research.hunt_r2.hunt_r2 fgpicks --from SELECT_JSON   (writes research/hunt_r2/fullgrid_select_picks.json
+                                                                    from the full grid's select.json; no price data)
 
 Guards (as the hunt): every step checks round 2's pin first (design hash first line, every listed file unchanged,
 every file of the pin list listed, the read-only inputs equal round 1's pinned hashes). ``select`` reads no 5m bar at
@@ -51,7 +53,7 @@ from research.hunt_r2 import select_r2 as SR  # noqa: E402
 OUT_REL = "research/hunt_r2/out"
 SELFCHECK_TESTS = ("tests/test_hunt_r2_core.py", "tests/test_hunt_r2_cli.py", "tests/test_hunt_r2_kit.py",
                    "tests/test_hunt.py", "tests/test_hunt_entries.py", "tests/test_data_hunt.py",
-                   "tests/test_altpump.py")
+                   "tests/test_altpump.py", "tests/test_hunt_reads_a.py", "tests/test_hunt_reads_o.py")
 
 
 class Refused(RuntimeError):
@@ -147,6 +149,9 @@ def cmd_select(args) -> int:
     tag = pin["pin_sha256"][:16]
     root = os.path.join(priv, "store")
     parts = os.path.join(priv, "parts", f"select_{tag}")
+    os.makedirs(priv, exist_ok=True)
+    with open(os.path.join(priv, "SELECT_STARTED"), "a") as fh:     # the kit's marker: computing began (update locks)
+        fh.write(f"{H.ms_str(int(time.time() * 1000))} pin {tag}\n")
     t0 = time.time()
     order = names_order()
     res = SR.select_run(mk, root, parts, args.procs, names_order=order, n_rep=SR.N_REP)
@@ -197,8 +202,9 @@ def cmd_pretest(args) -> int:
         lst = H.pmap(SR._real_task, [(nm, None) for nm in order], args.procs, label="pretest real units")
         units = {u["name"]: u for u in lst}
     t0 = time.time()
+    parts_pre = os.path.join(priv, "parts", f"pretest_{pin['pin_sha256'][:16]}")
     pub, prv = PT.pretest_run(ctx, units, pk, ppriv, parts_sel, args.procs, names_order=order,
-                              n_rep=int(pk.get("n_rep") or SR.N_REP))
+                              n_rep=int(pk.get("n_rep") or SR.N_REP), parts_pre=parts_pre)
     psha = SR.write_json(os.path.join(priv, "pretest_private.json"), prv)
     pub.update({**stamp(pin), "what": "PREREG_HUNT_R2 6: select-only reads (2021-2023 bars only); choose nothing",
                 "label": "computed after test.json: post hoc (6, DEVIATIONS.md)" if post_hoc else
@@ -237,7 +243,8 @@ def first_test_start(priv: str) -> dict:
 
 def ledger_snapshot(args, priv: str, full: dict | None) -> tuple:
     lp = args.ledger_private or os.path.join(priv, "ledger_inputs")
-    snap = LG.snapshot(ROOT, lp, full, args.fullgrid_confirm, args.ledger_extra, public_root=args.ledger_public)
+    snap = LG.snapshot(ROOT, lp, full, args.fullgrid_confirm, args.ledger_extra, public_root=args.ledger_public,
+                       r2_private=priv if priv and priv != "." else None)
     return LG.public_of(snap), snap
 
 
@@ -339,14 +346,27 @@ def cmd_reads(args) -> int:
     syms, counts, end = load_data(args, "test")
     mks = RR.read_markets(syms)
     H.prepare_series(syms, sorted({p["tf"] for p in full["picks"]}, key=H.TF_ORDER.index))
-    st = RR.run_reads(args=args, pin=pin, mks=mks, syms=syms, test_doc=doc, full=full, private_dir=priv, root=ROOT)
+    st = RR.run_reads(args=args, pin=pin, mks=mks, syms=syms, test_doc=doc, full=full, private_dir=priv, root=ROOT,
+                      wall_s=args.wall_s)
     print(f"[reads r2] {st}")
     return 0
 
 
 def cmd_report(args) -> int:
     priv = private_dir(args) if (args.private or args.data or os.environ.get("HUNT_DATA")) else None
-    print(RP.write(ROOT, priv))
+    print(RP.write(ROOT, priv, args.ledger_public))
+    return 0
+
+
+def cmd_fgpicks(args) -> int:
+    """5: the pinned extract of the full grid's 711 select picks (numbers only) for the label 'same numbers as a
+    full-grid select pick'."""
+    src = getattr(args, "from_", None)
+    if not src:
+        raise SystemExit("--from <the full grid's select.json> is needed")
+    doc = SR.fullgrid_extract(src)
+    SR.write_json(rp(SR.FG_PICKS_REL), doc)
+    print(f"{SR.FG_PICKS_REL}: {doc['n']} picks from {src} (sha256 {doc['source']['sha256'][:16]})")
     return 0
 
 
@@ -362,13 +382,13 @@ def cmd_ledger(args) -> int:
     if priv:
         SR.write_json(os.path.join(priv, os.path.basename(out).replace(".json", "_private.json")), snap)
     print(f"ledger written to {out}: m = A {pub['prints']['A']['m']}, A+ {pub['prints']['A+']['m']}, "
-          f"L {pub['prints']['L']['m']}")
+          f"L {pub['prints']['L']['m']} ({pub['prints']['L']['status']})")
     return 0
 
 
 COMMANDS = {"counts": cmd_counts, "pinlist": cmd_pinlist, "bench": cmd_bench, "selfcheck": cmd_selfcheck,
             "select": cmd_select, "pretest": cmd_pretest, "test": cmd_test, "reads": cmd_reads, "report": cmd_report,
-            "ledger": cmd_ledger}
+            "ledger": cmd_ledger, "fgpicks": cmd_fgpicks}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -386,6 +406,9 @@ def parser() -> argparse.ArgumentParser:
                                                           "the repository)")
     ap.add_argument("--fullgrid-confirm", default=None, help="test / ledger: the full grid's confirm.json (8, A+)")
     ap.add_argument("--ledger-extra", default=None, help="test / ledger: JSON list of further hypotheses (8)")
+    ap.add_argument("--wall-s", type=float, default=None, help="reads: seconds left of the 12-hour wall (9.1; the "
+                                                                    "server kit passes what is left over restarts)")
+    ap.add_argument("--from", dest="from_", default=None, help="fgpicks: the full grid's select.json")
     ap.add_argument("--coins", type=int, default=30, help="bench: synthetic coins")
     ap.add_argument("--months", type=int, default=36, help="bench: synthetic select months")
     ap.add_argument("--combos", type=int, default=2, help="bench: combos timed per heavy name")
@@ -394,6 +417,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
+    SR.raise_nofile()                  # the event store keeps memory maps open (Ubuntu's default soft limit is 1024)
     try:
         return COMMANDS[args.cmd](args)
     except (Refused, H.PinError, H.ReadGuardError) as e:

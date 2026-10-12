@@ -38,6 +38,15 @@ FIXED = ("research/hunt/hunt.py", "research/hunt/entries_wide.py", "research/hun
 READ_INPUTS = ("research/hunt/reads_a.py", "research/hunt/reads_o.py", "research/hunt/bench_window.json",
                "research/fullgrid/diag/watch_sel.json")
 NEVER = (R1_PIN,)                          # 2: never hashed (round 1 appends to it)
+# 0.3 blind code: round 2's pinned checkout holds no round-1 result (checked by existence only; never opened)
+R1_RESULTS = tuple(f"research/hunt/out/{d}/{f}" for d in ("v1", "wide")
+                   for f in ("select.json", "picks.json", "test.json", "reads_o.json", "reads_a.json")) + \
+    ("research/hunt/results",)
+
+
+def round1_results_in_tree(root: str = ROOT) -> list:
+    """Round-1 result files present in the checkout (existence only; nothing is opened)."""
+    return [p for p in R1_RESULTS if os.path.exists(os.path.join(root, p))]
 
 
 def sha256_file(path: str) -> str:
@@ -121,11 +130,15 @@ KIT = ("research/hunt_r2/bootstrap_r2.sh", "research/hunt_r2/wait_go_r2.sh", "re
 
 
 def own_files(root: str = ROOT) -> list:
-    """Round 2's own files the code pin lists (11): the design, the code, the tests, the server kit, counts.json and
-    bench_r2.json (each when it exists; counts.json and bench_r2.json are required by ``check_pin``)."""
+    """Round 2's own files the code pin lists (11): the design, the code, its JSON inputs (counts.json, bench_r2.json,
+    the full grid's select picks, the ledger registry and extra list), the tests and the server kit (each when it
+    exists; counts.json and bench_r2.json are required by ``check_pin``)."""
     out = [DESIGN, COUNTS, BENCH]
     d = os.path.join(root, "research", "hunt_r2")
-    out += [f"research/hunt_r2/{f}" for f in sorted(os.listdir(d)) if f.endswith(".py")] if os.path.isdir(d) else []
+    if os.path.isdir(d):
+        out += [f"research/hunt_r2/{f}" for f in sorted(os.listdir(d))
+                if f.endswith(".json") and f"research/hunt_r2/{f}" not in (COUNTS, BENCH)]
+        out += [f"research/hunt_r2/{f}" for f in sorted(os.listdir(d)) if f.endswith(".py")]
     t = os.path.join(root, "tests")
     out += [f"tests/{f}" for f in sorted(os.listdir(t)) if f.startswith("test_hunt_r2") and f.endswith(".py")] \
         if os.path.isdir(t) else []
@@ -150,8 +163,10 @@ def pinlist(root: str = ROOT, files: list | None = None) -> list:
 
 
 def pinlist_problems(root: str = ROOT, files: list | None = None) -> list:
-    """The inputs whose own hash differs from round 1's pinned hash (or that round 1 never pinned)."""
-    return engine_problems(files, None, root)
+    """The inputs whose own hash differs from round 1's pinned hash (or that round 1 never pinned), and any round-1
+    result in the checkout (0.3)."""
+    return engine_problems(files, None, root) + [f"round-1 output in the checkout (0.3: the pinned commit holds none): {p}"
+                                                 for p in round1_results_in_tree(root)]
 
 
 def check_pin(step: str, root: str = ROOT, files: list | None = None) -> dict:
@@ -185,6 +200,9 @@ def check_pin(step: str, root: str = ROOT, files: list | None = None) -> dict:
         raise ValueError(f"step {step!r}")
     if step == "select" and PICKS in listed:
         bad.append(f"{PICKS} is already pinned: select ran; the picks do not change")
+    if step == "select":
+        bad += [f"round-1 output in the checkout (0.3: round 2's pinned commit holds none; fetch the ledger inputs at "
+                f"the test step instead): {p}" for p in round1_results_in_tree(root)]
     if step in ("pretest", "test", "reads") and PICKS not in listed:
         bad.append(f"{PICKS} is not pinned: run select first")
     if step == "test" and TEST in listed:

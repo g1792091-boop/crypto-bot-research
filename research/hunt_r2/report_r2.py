@@ -5,7 +5,8 @@ DeepSeek row never shows a money figure (D11: numbers, ranks, counts and labels 
 It can be written at any stage (after select, after the pretest reads, after the test, after the reads); each section
 says what is not there yet. Two labels that need round 1's output ("기준 기본값 = 1차 시스템 <id>" with its round-1
 status, and the optional Stage 0 equal / not equal check of 4.1) are added only when round 2's test.json is in the pin
-(5, 4.1); they read round 1's public select / picks / test files by their fixed paths and print labels only.
+(5, 4.1); they read round 1's public select / picks / test files by their repository paths under ``r1_root`` (the
+server kit's ledger folder, filled from round 1's results branch; default: the checkout) and print labels only.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ LABEL_KO = {"edge of the coarse lattice": "눈금 끝(½배·2배)",
             "every coarse neighbour positive: yes": "옆 숫자 모두 플러스: 예",
             "every coarse neighbour positive: no": "옆 숫자 모두 플러스: 아니오",
             "same numbers as an F4 watch pick": "F4 관찰 후보와 같은 숫자",
+            "same numbers as a full-grid select pick": "풀그리드 고른 것과 같은 숫자(2024~2026에 이미 봄)",
             "same event list as another coarse point": "다른 점과 신호가 같음"}
 BOARD_LABEL = "고르는 기간 성적, 골라서 부풀려진 값, 시험 아님"
 
@@ -99,14 +101,16 @@ def _is_ds(row: dict) -> bool:
 
 
 # ------------------------------------------------------------------ round-1 labels (after round 2's test.json hash)
-def round1_labels(root: str, picks_pub: dict, private_dir: str | None = None) -> dict | None:
+def round1_labels(root: str, picks_pub: dict, private_dir: str | None = None, r1_root: str | None = None) -> dict | None:
     """5: 'anchor default = round-1 system <id>' with its round-1 status; 4.1's optional Stage 0 check (equal / not
-    equal per row). Only when round 2's test.json is in the pin; labels only."""
+    equal per row). Only when round 2's test.json is in the pin; labels only. ``r1_root``: where round 1's public files
+    lie under their repository paths (default: ``root``)."""
     if not PN.is_pinned(PN.TEST, root):
         return None
-    sel = _load(os.path.join(root, R1_SELECT)) or {}
-    pk1 = _load(os.path.join(root, R1_PICKS)) or {}
-    t1 = _load(os.path.join(root, R1_TEST)) or {}
+    base = r1_root or root
+    sel = _load(os.path.join(base, R1_SELECT)) or {}
+    pk1 = _load(os.path.join(base, R1_PICKS)) or {}
+    t1 = _load(os.path.join(base, R1_TEST)) or {}
     rows1 = {r.get("id"): r for r in sel.get("rows") or []}
     picks1 = {p.get("id") for p in pk1.get("picks") or []}
     tested1 = {p.get("id") for p in t1.get("picks") or []}
@@ -212,6 +216,8 @@ def sec_names(pk, r1lab) -> list:
         if r1lab and r["name"] in r1lab.get("anchor_default", {}):
             x = r1lab["anchor_default"][r["name"]]
             lab.append(f"기준 기본값 = 1차 시스템 {x['round1_id']} ({x['status']})")
+        if r.get("peak_is"):
+            lab.append("꼭대기가 기본값" if r["peak_is"] == "the default" else "꼭대기가 사실상 기본값(신호 같음)")
         out.append(f"| {FAM_KO.get(r['family'], r['family'])} | {r['name']} | {a['tf']} {GATE_KO.get(a['gate'], a['gate'])}"
                    f" | {change(r['default'], r['peak'])} | {'예' if r.get('candidate') else '아니오'} | "
                    f"{r.get('rank') or '-'} | {HURDLE_KO.get(r.get('hurdle'), r.get('hurdle') or '-')} | {bx} | {score} | "
@@ -344,15 +350,14 @@ def sec_pretest(pre) -> list:
     out = ["## 6. 시험 전 읽기 요약 (2021~2023만, 아무것도 고르지 않음)", ""]
     if pre is None:
         return out + ["아직 없음.", ""]
-    cs = (pre.get("cscv") or {}).get("strict") or {}
+    cs = pre.get("cscv") or {}
     if "pbo" in cs:
-        out.append(f"* 과적합 확률(CSCV PBO, 기준 자리 고정 안 함): {pct(cs.get('pbo'))}; 기준 자리 고정판: "
-                   f"{pct(((pre.get('cscv') or {}).get('fixed') or {}).get('pbo'))}")
-    lf = (pre.get("lift_2023") or {}).get("strict") or {}
+        out.append(f"* 과적합 확률(CSCV PBO; 반쪽 기간마다 기준 자리부터 다시 고름): {pct(cs.get('pbo'))}")
+    lf = pre.get("lift_2023") or {}
     if "median_lift" in lf:
-        out.append(f"* 2023 이득(2021~22로 고르고 2023에 잼): 중앙값 {mult(lf.get('median_lift'), 4)}, 플러스 비율 "
-                   f"{pct(lf.get('share_above_0'))}")
-    lo = (pre.get("leave_one_year_out") or {}).get("strict") or {}
+        out.append(f"* 2023 이득(2021~22로 기준 자리부터 고르고 2023에 잼): 중앙값 {mult(lf.get('median_lift'), 4)}, "
+                   f"플러스 비율 {pct(lf.get('share_above_0'))}")
+    lo = pre.get("leave_one_year_out") or {}
     if "share_returning_3_of_3" in lo:
         out.append(f"* 한 해 빼고 고르기: 세 번 모두 같은 꼭대기(또는 옆)로 돌아온 매매법 비율 {pct(lo.get('share_returning_3_of_3'))}")
     ns = (pre.get("null_summary") or {}).get("nulls") or {}
@@ -405,7 +410,7 @@ def sec_reads(reads: dict, test) -> list:
     return out
 
 
-def build(root: str = ROOT, private_dir: str | None = None) -> str:
+def build(root: str = ROOT, private_dir: str | None = None, r1_root: str | None = None) -> str:
     out_dir = os.path.join(root, OUT_REL)
     pk = _load(os.path.join(out_dir, "picks.json"))
     pre = _load(os.path.join(out_dir, "pretest_reads.json"))
@@ -421,13 +426,13 @@ def build(root: str = ROOT, private_dir: str | None = None) -> str:
     lines += sec_status(pk, pre, test, reads)
     lines += sec_verdict(pk, test)
     if pk is not None:
-        lines += sec_names(pk, round1_labels(root, pk, private_dir))
+        lines += sec_names(pk, round1_labels(root, pk, private_dir, r1_root))
     lines += sec_test(test)
     lines += sec_ledger(test)
     lines += sec_reference(pre)
     lines += sec_pretest(pre)
     lines += sec_reads(reads, test)
-    r1 = round1_labels(root, pk, private_dir) if pk is not None else None
+    r1 = round1_labels(root, pk, private_dir, r1_root) if pk is not None else None
     if r1 and r1.get("stage0"):
         s0 = r1["stage0"]
         lines += ["## 8. 1차와 같은지 (자동 확인, 2차 test.json 고정 뒤)", "",
@@ -435,10 +440,10 @@ def build(root: str = ROOT, private_dir: str | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write(root: str = ROOT, private_dir: str | None = None) -> str:
+def write(root: str = ROOT, private_dir: str | None = None, r1_root: str | None = None) -> str:
     path = os.path.join(root, OUT_REL, REPORT)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    txt = build(root, private_dir)
+    txt = build(root, private_dir, r1_root)
     tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w") as fh:
         fh.write(txt)
